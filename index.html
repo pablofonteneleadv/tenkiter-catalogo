@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<title>TENKiTER Modas — Catálogo</title>
+<style>
+  :root {
+    --preto: #0d0d0d;
+    --laranja: #ff7a1a;
+    --cinza: #f4f4f4;
+    --branco: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Roboto, Arial, sans-serif;
+    background: var(--cinza);
+    color: var(--preto);
+    padding-bottom: 40px;
+  }
+  header {
+    background: var(--preto);
+    color: var(--laranja);
+    padding: 20px 16px 14px;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 { margin: 0; font-size: 1.3rem; letter-spacing: 1px; }
+  header p { margin: 4px 0 0; font-size: 0.75rem; color: #ccc; }
+
+  .filtros {
+    background: var(--branco);
+    padding: 12px 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    position: sticky;
+    top: 68px;
+    z-index: 9;
+  }
+  .filtros input[type=text], .filtros input[type=number] {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+  }
+  .linha-preco { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .linha-preco span { font-size: 0.78rem; color: #888; white-space: nowrap; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .chip {
+    padding: 6px 12px;
+    border-radius: 16px;
+    border: 1px solid #ddd;
+    background: var(--branco);
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .chip.selecionado { background: var(--laranja); color: var(--preto); border-color: var(--laranja); font-weight: 700; }
+
+  .btn-limpar {
+    display: inline-block;
+    font-size: 0.75rem;
+    color: #999;
+    text-decoration: underline;
+    margin-top: 2px;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  main { padding: 14px; max-width: 900px; margin: 0 auto; }
+
+  #contagem { font-size: 0.8rem; color: #777; margin-bottom: 10px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  @media (min-width: 640px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (min-width: 900px) { .grid { grid-template-columns: repeat(4, 1fr); } }
+
+  .card {
+    background: var(--branco);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    cursor: pointer;
+  }
+  .card img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: #eee; display: block; }
+  .card-info { padding: 8px 10px 10px; }
+  .card-info .nome { font-size: 0.82rem; font-weight: 700; line-height: 1.2; margin-bottom: 3px; }
+  .card-info .preco { font-size: 0.78rem; color: #333; }
+  .card-info .preco span { color: #1a7a1a; font-weight: 700; }
+  .card-info .tags { font-size: 0.68rem; color: #999; margin-top: 3px; }
+
+  #vazio { text-align: center; color: #999; padding: 40px 20px; }
+
+  /* ---- Modal de detalhe ---- */
+  #overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 50;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  #overlay.aberto { display: flex; }
+  .modal {
+    background: var(--branco);
+    width: 100%;
+    max-width: 480px;
+    border-radius: 18px 18px 0 0;
+    max-height: 88vh;
+    overflow-y: auto;
+    animation: subir 0.2s ease-out;
+  }
+  @keyframes subir { from { transform: translateY(30px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+  .modal img { width: 100%; aspect-ratio: 1/1; object-fit: cover; }
+  .modal-foto-wrap { position: relative; }
+  .modal-foto-wrap img { cursor: pointer; }
+  .whatsapp-badge {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #25D366;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 20px;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  }
+  .modal-conteudo { padding: 16px; }
+  .modal-conteudo .nome { font-size: 1.1rem; font-weight: 800; }
+  .modal-conteudo .preco-linha { margin: 8px 0; font-size: 1rem; }
+  .modal-conteudo .preco-linha .cheio { color: #888; text-decoration: line-through; margin-right: 8px; font-size: 0.85rem; }
+  .modal-conteudo .preco-linha .avista { color: #1a7a1a; font-weight: 800; font-size: 1.2rem; }
+  .modal-conteudo .tags { font-size: 0.78rem; color: #888; margin-bottom: 10px; }
+  .modal-conteudo .desc { font-size: 0.88rem; color: #333; line-height: 1.4; }
+  .btn-fechar {
+    display: block;
+    width: calc(100% - 32px);
+    margin: 4px 16px 16px;
+    background: var(--preto);
+    color: var(--laranja);
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  .btn-anexar-foto {
+    display: block;
+    width: calc(100% - 32px);
+    margin: 0 16px 10px;
+    background: #25D366;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>TENKiTER MODAS</h1>
+  <p>Catálogo</p>
+</header>
+
+<div class="filtros">
+  <input type="text" id="busca" placeholder="Buscar produto...">
+
+  <div class="linha-preco">
+    <span>Preço</span>
+    <input type="number" id="preco-min" placeholder="Mín">
+    <span>—</span>
+    <input type="number" id="preco-max" placeholder="Máx">
+  </div>
+
+  <div class="chips" id="chips-categoria"></div>
+  <div class="chips" id="chips-genero"></div>
+
+  <button type="button" class="btn-limpar" id="btn-limpar">Limpar filtros</button>
+</div>
+
+<main>
+  <div id="contagem"></div>
+  <div class="grid" id="grid"></div>
+  <div id="vazio" style="display:none;">Nenhum produto encontrado com esses filtros.</div>
+</main>
+
+<div id="overlay">
+  <div class="modal" id="modal-conteudo"></div>
+</div>
+
+<script>
+  const API_URL = 'https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec';
+  const DESCONTO_AVISTA = 0.10;
+  const WHATSAPP_NUMERO = '5588993223998'; // DDI 55 + DDD 88 + número
+
+  let produtos = [];
+  let categoriasDisponiveis = new Set();
+  let generosDisponiveis = new Set();
+  let filtroCategorias = new Set();
+  let filtroGeneros = new Set();
+
+  function formatarReal(valor) {
+    return 'R$ ' + Number(valor).toFixed(2).replace('.', ',');
+  }
+
+  function listaDeTags(campo) {
+    return String(campo || '').split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  async function carregarCatalogo() {
+    const resp = await fetch(API_URL + '?action=list').then(r => r.json());
+    produtos = (resp.produtos || []).reverse();
+
+    produtos.forEach(p => {
+      listaDeTags(p.Categoria).forEach(c => categoriasDisponiveis.add(c));
+      listaDeTags(p.Genero).forEach(g => generosDisponiveis.add(g));
+    });
+
+    renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias);
+    renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros);
+    aplicarFiltros();
+    abrirProdutoDaURL();
+  }
+
+  function renderizarChipsFiltro(idContainer, valores, conjuntoFiltro) {
+    const container = document.getElementById(idContainer);
+    container.innerHTML = '';
+    Array.from(valores).sort().forEach(v => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip' + (conjuntoFiltro.has(v) ? ' selecionado' : '');
+      chip.textContent = v;
+      chip.addEventListener('click', () => {
+        if (conjuntoFiltro.has(v)) conjuntoFiltro.delete(v); else conjuntoFiltro.add(v);
+        chip.classList.toggle('selecionado');
+        aplicarFiltros();
+      });
+      container.appendChild(chip);
+    });
+  }
+
+  document.getElementById('busca').addEventListener('input', aplicarFiltros);
+  document.getElementById('preco-min').addEventListener('input', aplicarFiltros);
+  document.getElementById('preco-max').addEventListener('input', aplicarFiltros);
+  document.getElementById('btn-limpar').addEventListener('click', () => {
+    document.getElementById('busca').value = '';
+    document.getElementById('preco-min').value = '';
+    document.getElementById('preco-max').value = '';
+    filtroCategorias.clear();
+    filtroGeneros.clear();
+    renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias);
+    renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros);
+    aplicarFiltros();
+  });
+
+  function aplicarFiltros() {
+    const busca = document.getElementById('busca').value.trim().toLowerCase();
+    const min = parseFloat(document.getElementById('preco-min').value);
+    const max = parseFloat(document.getElementById('preco-max').value);
+
+    const filtrados = produtos.filter(p => {
+      if (busca && !String(p.Nome).toLowerCase().includes(busca)) return false;
+      if (!isNaN(min) && Number(p.Preco) < min) return false;
+      if (!isNaN(max) && Number(p.Preco) > max) return false;
+      if (filtroCategorias.size) {
+        const tags = listaDeTags(p.Categoria);
+        if (!tags.some(t => filtroCategorias.has(t))) return false;
+      }
+      if (filtroGeneros.size) {
+        const tags = listaDeTags(p.Genero);
+        if (!tags.some(t => filtroGeneros.has(t))) return false;
+      }
+      return true;
+    });
+
+    renderizarGrid(filtrados);
+  }
+
+  function renderizarGrid(lista) {
+    const grid = document.getElementById('grid');
+    const vazio = document.getElementById('vazio');
+    const contagem = document.getElementById('contagem');
+    contagem.textContent = lista.length + (lista.length === 1 ? ' produto' : ' produtos');
+
+    if (!lista.length) {
+      grid.innerHTML = '';
+      vazio.style.display = 'block';
+      return;
+    }
+    vazio.style.display = 'none';
+
+    grid.innerHTML = lista.map(p => {
+      const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
+      return `
+        <div class="card" data-id="${p.ID}">
+          <img src="${p.Foto_URL}" alt="${p.Nome}" loading="lazy">
+          <div class="card-info">
+            <div class="nome">${p.Nome}</div>
+            <div class="preco">${formatarReal(p.Preco)} <span>${formatarReal(avista)}</span></div>
+            <div class="tags">${p.Categoria}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    grid.querySelectorAll('.card').forEach(el => {
+      el.addEventListener('click', () => abrirDetalhe(el.dataset.id));
+    });
+  }
+
+  function abrirWhatsApp(p) {
+    const link = window.location.origin + window.location.pathname + '?id=' + p.ID;
+    const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
+    const texto = `Olá! Tenho interesse neste produto:\n*${p.Nome}* — ${formatarReal(avista)} à vista\n${link}`;
+    window.open('https://wa.me/' + WHATSAPP_NUMERO + '?text=' + encodeURIComponent(texto), '_blank');
+  }
+
+  async function compartilharComFoto(p) {
+    const link = window.location.origin + window.location.pathname + '?id=' + p.ID;
+    const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
+    const texto = `${p.Nome} — ${formatarReal(avista)} à vista\n${link}\n\nEnviar para a loja TENKiTER Modas (WhatsApp ${WHATSAPP_NUMERO})`;
+
+    let arquivoImagem = null;
+    try {
+      const blob = await fetch(p.Foto_URL).then(r => r.blob());
+      arquivoImagem = new File([blob], 'produto.jpg', { type: blob.type || 'image/jpeg' });
+    } catch (e) { arquivoImagem = null; }
+
+    if (navigator.share) {
+      try {
+        if (arquivoImagem && navigator.canShare && navigator.canShare({ files: [arquivoImagem] })) {
+          await navigator.share({ files: [arquivoImagem], text: texto });
+        } else {
+          await navigator.share({ text: texto });
+        }
+        return;
+      } catch (e) { /* cancelado */ }
+    } else {
+      alert('Seu navegador não suporta compartilhar arquivos diretamente. Vamos abrir o WhatsApp sem a foto anexada.');
+      abrirWhatsApp(p);
+    }
+  }
+
+  function abrirDetalhe(id) {
+    const p = produtos.find(x => String(x.ID) === String(id));
+    if (!p) return;
+    const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
+    document.getElementById('modal-conteudo').innerHTML = `
+      <div class="modal-foto-wrap">
+        <img src="${p.Foto_URL}" alt="${p.Nome}" id="modal-foto">
+        <div class="whatsapp-badge">📲 Toque na foto para chamar no WhatsApp</div>
+      </div>
+      <div class="modal-conteudo">
+        <div class="nome">${p.Nome}</div>
+        <div class="preco-linha">
+          <span class="cheio">${formatarReal(p.Preco)}</span>
+          <span class="avista">${formatarReal(avista)} à vista</span>
+        </div>
+        <div class="tags">${p.Categoria} · ${p.Genero}</div>
+        ${p.Descricao ? `<div class="desc">${p.Descricao}</div>` : ''}
+      </div>
+      <button class="btn-anexar-foto" id="btn-anexar-foto">📎 Compartilhar com a foto anexada</button>
+      <button class="btn-fechar" id="btn-fechar-modal">Fechar</button>
+    `;
+    document.getElementById('overlay').classList.add('aberto');
+    document.getElementById('btn-fechar-modal').addEventListener('click', fecharDetalhe);
+    document.getElementById('modal-foto').addEventListener('click', () => abrirWhatsApp(p));
+    document.getElementById('btn-anexar-foto').addEventListener('click', () => compartilharComFoto(p));
+
+    const url = new URL(window.location);
+    url.searchParams.set('id', p.ID);
+    window.history.replaceState({}, '', url);
+  }
+
+  function fecharDetalhe() {
+    document.getElementById('overlay').classList.remove('aberto');
+    const url = new URL(window.location);
+    url.searchParams.delete('id');
+    window.history.replaceState({}, '', url);
+  }
+
+  document.getElementById('overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'overlay') fecharDetalhe();
+  });
+
+  function abrirProdutoDaURL() {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    if (id) abrirDetalhe(id);
+  }
+
+  carregarCatalogo();
+</script>
+
+</body>
+</html>
