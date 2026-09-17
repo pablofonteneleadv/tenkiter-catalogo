@@ -84,6 +84,33 @@
   .chip.selecionado { background: var(--laranja); color: var(--preto); border-color: var(--laranja); font-weight: 700; }
   .chip.add { background: #f0f0f0; color: #666; border-style: dashed; }
 
+  details.selecao-expansivel {
+    margin-top: 12px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: #fff;
+  }
+  details.selecao-expansivel summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  details.selecao-expansivel summary::-webkit-details-marker { display: none; }
+  details.selecao-expansivel summary::after {
+    content: '▾';
+    font-size: 0.7rem;
+    color: #888;
+    margin-left: 8px;
+  }
+  details.selecao-expansivel[open] summary::after { content: '▴'; }
+  details.selecao-expansivel .resumo { font-weight: 400; color: #888; font-size: 0.78rem; margin-left: 6px; flex: 1; }
+  details.selecao-expansivel .chips { margin-top: 10px; }
+
   .checkbox-linha { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
   .checkbox-linha input { width: auto; }
   .checkbox-linha label { margin: 0; font-weight: 600; font-size: 0.85rem; }
@@ -215,11 +242,15 @@
       <label>Nome do produto</label>
       <input type="text" id="nome" required placeholder="Ex: Vestido floral longo">
 
-      <label>Categoria (pode marcar mais de uma — ex: conjunto = Blusas + Shorts)</label>
-      <div class="chips" id="chips-categoria"></div>
+      <details class="selecao-expansivel" id="details-categoria">
+        <summary>Categoria <span class="resumo" id="resumo-categoria">(nenhuma selecionada)</span></summary>
+        <div class="chips" id="chips-categoria"></div>
+      </details>
 
-      <label>Gênero (pode marcar mais de um)</label>
-      <div class="chips" id="chips-genero"></div>
+      <details class="selecao-expansivel" id="details-genero">
+        <summary>Gênero <span class="resumo" id="resumo-genero">(nenhum selecionado)</span></summary>
+        <div class="chips" id="chips-genero"></div>
+      </details>
 
       <div class="form-linha">
         <div>
@@ -323,11 +354,19 @@
     ]);
     categorias = rc.categorias || [];
     generos = rg.generos || [];
-    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', selecionadasCategorias, 'chips-categoria'));
-    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', selecionadosGeneros, 'chips-genero'));
+    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', selecionadasCategorias, 'chips-categoria'), 'resumo-categoria');
+    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', selecionadosGeneros, 'chips-genero'), 'resumo-genero');
   }
 
-  function renderizarChips(idContainer, valores, conjuntoSelecionado, aoAdicionarNovo) {
+  function atualizarResumo(idResumo, conjuntoSelecionado) {
+    const el = document.getElementById(idResumo);
+    if (!el) return;
+    el.textContent = conjuntoSelecionado.size
+      ? '(' + Array.from(conjuntoSelecionado).join(', ') + ')'
+      : (idResumo === 'resumo-categoria' ? '(nenhuma selecionada)' : '(nenhum selecionado)');
+  }
+
+  function renderizarChips(idContainer, valores, conjuntoSelecionado, aoAdicionarNovo, idResumo) {
     const container = document.getElementById(idContainer);
     container.innerHTML = '';
     valores.forEach(v => {
@@ -339,6 +378,7 @@
         if (conjuntoSelecionado.has(v)) conjuntoSelecionado.delete(v);
         else conjuntoSelecionado.add(v);
         chip.classList.toggle('selecionado');
+        if (idResumo) atualizarResumo(idResumo, conjuntoSelecionado);
       });
       container.appendChild(chip);
     });
@@ -348,6 +388,7 @@
     chipAdd.textContent = '+ Novo';
     chipAdd.addEventListener('click', aoAdicionarNovo);
     container.appendChild(chipAdd);
+    if (idResumo) atualizarResumo(idResumo, conjuntoSelecionado);
   }
 
   async function adicionarNovoValor(action, conjuntoSelecionado, idContainer) {
@@ -362,7 +403,8 @@
     await carregarListas();
     conjuntoSelecionado.add(novo.trim());
     renderizarChips(idContainer, action === 'addCategoria' ? categorias : generos, conjuntoSelecionado,
-      () => adicionarNovoValor(action, conjuntoSelecionado, idContainer));
+      () => adicionarNovoValor(action, conjuntoSelecionado, idContainer),
+      idContainer === 'chips-categoria' ? 'resumo-categoria' : 'resumo-genero');
   }
 
   // ---------- Preço à vista ----------
@@ -558,8 +600,8 @@
     fotoBase64 = null;
     selecionadasCategorias = new Set();
     selecionadosGeneros = new Set();
-    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', selecionadasCategorias, 'chips-categoria'));
-    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', selecionadosGeneros, 'chips-genero'));
+    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', selecionadasCategorias, 'chips-categoria'), 'resumo-categoria');
+    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', selecionadosGeneros, 'chips-genero'), 'resumo-genero');
     editandoId = null;
     document.getElementById('titulo-form').textContent = 'Novo produto';
     document.getElementById('btn-salvar').textContent = 'Cadastrar produto';
@@ -617,8 +659,8 @@
 
     selecionadasCategorias = new Set(String(p.Categoria || '').split(',').map(s => s.trim()).filter(Boolean));
     selecionadosGeneros = new Set(String(p.Genero || '').split(',').map(s => s.trim()).filter(Boolean));
-    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', selecionadasCategorias, 'chips-categoria'));
-    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', selecionadosGeneros, 'chips-genero'));
+    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', selecionadasCategorias, 'chips-categoria'), 'resumo-categoria');
+    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', selecionadosGeneros, 'chips-genero'), 'resumo-genero');
 
     fotoBase64 = null;
     if (p.Foto_URL) {
