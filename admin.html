@@ -6,13 +6,15 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#000000">
-<title>TENKiTER Modas — Cadastro</title>
+<title>TENKiTER Modas — Admin</title>
 <style>
   :root {
     --preto: #0d0d0d;
     --laranja: #ff7a1a;
     --cinza: #f4f4f4;
     --branco: #ffffff;
+    --verde: #198754;
+    --vermelho: #c62828;
   }
   * { box-sizing: border-box; }
   body {
@@ -32,6 +34,20 @@
   header p { margin: 4px 0 0; font-size: 0.75rem; color: #ccc; }
 
   main { padding: 16px; max-width: 480px; margin: 0 auto; }
+
+  /* ---- Dashboard ---- */
+  .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+  .dashboard-card {
+    background: var(--branco);
+    border-radius: 12px;
+    padding: 10px 6px;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .dashboard-card span { display: block; font-size: 0.68rem; color: #888; }
+  .dashboard-card strong { display: block; font-size: 1.3rem; margin-top: 2px; }
+  .dashboard-card.esgotados strong { color: var(--vermelho); }
+  .dashboard-card.disponiveis strong { color: var(--verde); }
 
   .card {
     background: var(--branco);
@@ -54,7 +70,8 @@
   textarea { resize: vertical; }
   input:focus, textarea:focus { outline: 2px solid var(--laranja); }
 
-  /* ---- Chips (múltipla escolha) ---- */
+  .form-linha { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
   .chip {
     padding: 8px 14px;
@@ -67,6 +84,10 @@
   .chip.selecionado { background: var(--laranja); color: var(--preto); border-color: var(--laranja); font-weight: 700; }
   .chip.add { background: #f0f0f0; color: #666; border-style: dashed; }
 
+  .checkbox-linha { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  .checkbox-linha input { width: auto; }
+  .checkbox-linha label { margin: 0; font-weight: 600; font-size: 0.85rem; }
+
   .foto-box {
     margin-top: 8px;
     border: 2px dashed #ccc;
@@ -75,15 +96,14 @@
     padding: 14px;
   }
   .foto-box input[type=file] { width: 100%; }
-  #preview-final { max-width: 160px; max-height: 160px; border-radius: 8px; margin-top: 10px; display: none; }
+  #preview-final { max-width: 140px; max-height: 175px; border-radius: 8px; margin-top: 10px; display: none; }
   .link-trocar { display: none; font-size: 0.8rem; color: #666; text-decoration: underline; margin-top: 6px; background:none; border:none; padding:0; width:auto; }
 
-  /* ---- Ajuste/corte de foto ---- */
   #crop-section { display: none; margin-top: 12px; }
   .crop-container {
     width: 100%;
-    max-width: 280px;
-    aspect-ratio: 1 / 1;
+    max-width: 260px;
+    aspect-ratio: 4 / 5;
     margin: 0 auto;
     overflow: hidden;
     position: relative;
@@ -106,12 +126,7 @@
   .btn-confirmar-corte { background: var(--laranja); color: var(--preto); margin-top: 10px; }
   .btn-outra-foto { background: #eee; color: #333; margin-top: 6px; font-size: 0.85rem; }
 
-  .preco-avista {
-    margin-top: 6px;
-    font-size: 0.9rem;
-    color: #1a7a1a;
-    font-weight: 600;
-  }
+  .preco-avista { margin-top: 6px; font-size: 0.9rem; color: #1a7a1a; font-weight: 600; }
 
   button {
     border: none;
@@ -122,87 +137,81 @@
     cursor: pointer;
     width: 100%;
   }
-  .btn-primario {
-    background: var(--laranja);
-    color: var(--preto);
-    margin-top: 18px;
-  }
-  .btn-primario:disabled { opacity: 0.5; }
+  .btn-primario { background: var(--laranja); color: var(--preto); margin-top: 18px; }
+  .btn-cancelar-edicao { background: #eee; color: #555; margin-top: 8px; font-size: 0.85rem; padding: 10px; }
 
   #status { text-align: center; font-size: 0.85rem; margin-top: 8px; min-height: 18px; }
 
   #fila-envio { margin-top: 10px; }
   .fila-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    background: #fff7ef;
-    border: 1px solid #ffd8ad;
-    border-radius: 8px;
-    padding: 8px 10px;
-    font-size: 0.8rem;
-    margin-bottom: 6px;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    background: #fff7ef; border: 1px solid #ffd8ad; border-radius: 8px;
+    padding: 8px 10px; font-size: 0.8rem; margin-bottom: 6px;
   }
   .fila-item.erro { background: #fdeaea; border-color: #f3b3b3; }
-  .fila-item .btn-retry {
-    width: auto;
-    padding: 5px 10px;
-    font-size: 0.72rem;
-    background: var(--preto);
-    color: var(--laranja);
-  }
+  .fila-item .btn-retry { width: auto; padding: 5px 10px; font-size: 0.72rem; background: var(--preto); color: var(--laranja); }
 
   .produto {
-    display: flex;
-    gap: 10px;
-    background: var(--branco);
-    border-radius: 12px;
-    padding: 10px;
-    margin-bottom: 10px;
-    align-items: flex-start;
+    display: flex; gap: 10px; background: var(--branco); border-radius: 12px;
+    padding: 10px; margin-bottom: 10px; align-items: flex-start; position: relative;
   }
-  .produto img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; background: #eee; }
+  .produto img { width: 56px; height: 70px; object-fit: cover; border-radius: 8px; background: #eee; }
   .produto-info { flex: 1; min-width: 0; }
   .produto-info .nome { font-weight: 700; font-size: 0.92rem; }
   .produto-info .preco { font-size: 0.82rem; color: #333; }
   .produto-info .preco span { color: #1a7a1a; font-weight: 700; }
   .produto-info .tags { font-size: 0.72rem; color: #888; }
   .produto-info .desc { font-size: 0.75rem; color: #555; margin-top: 3px; }
+  .selo-linha { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+  .selo { font-size: 0.62rem; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
+  .selo.novidade { background: var(--laranja); color: var(--preto); }
+  .selo.esgotado { background: var(--vermelho); color: #fff; }
+  .selo.estoque { background: #eee; color: #555; }
 
   .acoes { display: flex; flex-direction: column; gap: 6px; }
-  .acoes button {
-    padding: 6px 10px;
-    font-size: 0.75rem;
-    width: auto;
-    white-space: nowrap;
-  }
+  .acoes button { padding: 6px 10px; font-size: 0.72rem; width: auto; white-space: nowrap; }
+  .btn-editar { background: #eee; color: #333; }
   .btn-compartilhar { background: var(--preto); color: var(--laranja); }
   .btn-excluir { background: #f0f0f0; color: #a00; }
 
   h2.secao { font-size: 0.95rem; margin: 22px 0 10px; color: var(--preto); }
+
+  .busca-lista { margin-bottom: 12px; }
+  .busca-lista input {
+    width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 20px; font-size: 0.9rem;
+  }
 </style>
 </head>
 <body>
 
 <header>
   <h1>TENKiTER MODAS</h1>
-  <p>Cadastro rápido de catálogo</p>
+  <p>Painel de gestão do catálogo</p>
 </header>
 
 <main>
 
-  <!-- ===================== CONFIGURAÇÃO (edite aqui) ===================== -->
+  <!-- ===================== CONFIGURAÇÃO ===================== -->
   <script>
     const API_URL = 'https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec';
-    const SITE_URL = 'https://pablofonteneleadv.github.io/tenkiter-catalogo/';
-    const DESCONTO_AVISTA = 0.10; // 10% de desconto no pagamento à vista
-    const SAIDA_TAMANHO = 1080;   // resolução final da foto (px, quadrada) — boa qualidade para o Instagram
-    const SAIDA_QUALIDADE = 0.9;  // qualidade JPEG (0 a 1) — alta qualidade para postar no Stories
+    const DESCONTO_AVISTA = 0.10;
+    const SAIDA_LARGURA = 900;
+    const SAIDA_ALTURA = 1125;   // proporção 4:5, boa pra moda
+    const SAIDA_QUALIDADE = 0.88;
   </script>
 
+  <div class="dashboard">
+    <div class="dashboard-card"><span>Produtos</span><strong id="dash-total">0</strong></div>
+    <div class="dashboard-card disponiveis"><span>Disponíveis</span><strong id="dash-disponiveis">0</strong></div>
+    <div class="dashboard-card esgotados"><span>Esgotados</span><strong id="dash-esgotados">0</strong></div>
+  </div>
+
   <div class="card">
+    <h2 class="secao" style="margin-top:0;" id="titulo-form">Novo produto</h2>
+
     <form id="form-produto">
+      <input type="hidden" id="produto-id">
+
       <label>Nome do produto</label>
       <input type="text" id="nome" required placeholder="Ex: Vestido floral longo">
 
@@ -212,12 +221,36 @@
       <label>Gênero (pode marcar mais de um)</label>
       <div class="chips" id="chips-genero"></div>
 
-      <label>Preço (valor cheio)</label>
-      <input type="number" id="preco" step="0.01" min="0" required placeholder="Ex: 22,22" inputmode="decimal">
+      <div class="form-linha">
+        <div>
+          <label>Preço (valor cheio)</label>
+          <input type="number" id="preco" step="0.01" min="0" required placeholder="Ex: 22,22" inputmode="decimal">
+        </div>
+        <div>
+          <label>Estoque (quantidade)</label>
+          <input type="number" id="estoque" step="1" min="0" placeholder="Ex: 5">
+        </div>
+      </div>
       <div class="preco-avista" id="preco-avista"></div>
 
+      <div class="form-linha">
+        <div>
+          <label>Tamanhos</label>
+          <input type="text" id="tamanhos" placeholder="P, M, G, GG">
+        </div>
+        <div>
+          <label>Cores</label>
+          <input type="text" id="cores" placeholder="Preto, Branco, Rosa">
+        </div>
+      </div>
+
       <label>Descrição (opcional)</label>
-      <textarea id="descricao" rows="2" placeholder="Tecido, tamanhos disponíveis, detalhes..."></textarea>
+      <textarea id="descricao" rows="2" placeholder="Tecido, detalhes..."></textarea>
+
+      <div class="checkbox-linha">
+        <input type="checkbox" id="novidade">
+        <label for="novidade">Marcar como novidade</label>
+      </div>
 
       <label>Foto</label>
       <div class="foto-box">
@@ -242,12 +275,16 @@
       </div>
 
       <button type="submit" class="btn-primario" id="btn-salvar">Cadastrar produto</button>
+      <button type="button" class="btn-cancelar-edicao" id="btn-cancelar-edicao" style="display:none;">Cancelar edição</button>
       <div id="status"></div>
       <div id="fila-envio"></div>
     </form>
   </div>
 
   <h2 class="secao">Produtos cadastrados</h2>
+  <div class="busca-lista">
+    <input type="text" id="busca-admin" placeholder="🔎 Buscar produto...">
+  </div>
   <div id="lista-produtos"><p style="text-align:center;color:#999;">Carregando...</p></div>
 
 </main>
@@ -262,9 +299,20 @@
   let fotoMime = 'image/jpeg';
   let selecionadasCategorias = new Set();
   let selecionadosGeneros = new Set();
+  let editandoId = null;
 
   function formatarReal(valor) {
     return 'R$ ' + Number(valor).toFixed(2).replace('.', ',');
+  }
+
+  function estoqueInformado(p) {
+    return p.Estoque !== '' && p.Estoque !== undefined && p.Estoque !== null;
+  }
+  function estaEsgotado(p) {
+    return estoqueInformado(p) && Number(p.Estoque) <= 0;
+  }
+  function ehNovidade(p) {
+    return p.Novidade === true || String(p.Novidade).toUpperCase() === 'TRUE';
   }
 
   // ---------- Carregar categorias / gêneros ----------
@@ -275,8 +323,8 @@
     ]);
     categorias = rc.categorias || [];
     generos = rg.generos || [];
-    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', categorias, selecionadasCategorias, 'chips-categoria'));
-    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', generos, selecionadosGeneros, 'chips-genero'));
+    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', selecionadasCategorias, 'chips-categoria'));
+    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', selecionadosGeneros, 'chips-genero'));
   }
 
   function renderizarChips(idContainer, valores, conjuntoSelecionado, aoAdicionarNovo) {
@@ -302,7 +350,7 @@
     container.appendChild(chipAdd);
   }
 
-  async function adicionarNovoValor(action, listaAtual, conjuntoSelecionado, idContainer) {
+  async function adicionarNovoValor(action, conjuntoSelecionado, idContainer) {
     const novo = prompt('Digite o novo valor:');
     if (!novo || !novo.trim()) return;
     const resp = await fetch(API_URL, {
@@ -314,7 +362,7 @@
     await carregarListas();
     conjuntoSelecionado.add(novo.trim());
     renderizarChips(idContainer, action === 'addCategoria' ? categorias : generos, conjuntoSelecionado,
-      () => adicionarNovoValor(action, action === 'addCategoria' ? categorias : generos, conjuntoSelecionado, idContainer));
+      () => adicionarNovoValor(action, conjuntoSelecionado, idContainer));
   }
 
   // ---------- Preço à vista ----------
@@ -326,7 +374,7 @@
     box.textContent = `À vista (10% off): ${formatarReal(avista)}`;
   });
 
-  // ===================== FOTO: seleção, corte e compressão =====================
+  // ===================== FOTO: seleção, corte 4:5 e compressão =====================
   const cropSection = document.getElementById('crop-section');
   const cropContainer = document.getElementById('crop-container');
   const cropImg = document.getElementById('crop-img');
@@ -354,8 +402,9 @@
     crop.img = imagem;
     crop.naturalW = imagem.naturalWidth;
     crop.naturalH = imagem.naturalHeight;
-    const tamanhoContainer = cropContainer.clientWidth || 280;
-    crop.baseScale = Math.max(tamanhoContainer / crop.naturalW, tamanhoContainer / crop.naturalH);
+    const containerW = cropContainer.clientWidth || 260;
+    const containerH = cropContainer.clientHeight || 325;
+    crop.baseScale = Math.max(containerW / crop.naturalW, containerH / crop.naturalH);
     crop.zoom = 1;
     crop.offsetX = 0;
     crop.offsetY = 0;
@@ -394,10 +443,7 @@
   }, { passive: false });
 
   cropContainer.addEventListener('touchend', () => { arrastando = false; });
-
-  cropContainer.addEventListener('mousedown', (e) => {
-    arrastando = true; ultimoX = e.clientX; ultimoY = e.clientY;
-  });
+  cropContainer.addEventListener('mousedown', (e) => { arrastando = true; ultimoX = e.clientX; ultimoY = e.clientY; });
   window.addEventListener('mousemove', (e) => {
     if (!arrastando || !crop.img) return;
     crop.offsetX += (e.clientX - ultimoX);
@@ -412,23 +458,20 @@
     renderizarCorte();
   });
 
-  document.getElementById('btn-outra-foto').addEventListener('click', () => {
-    inputFoto.value = '';
-    inputFoto.click();
-  });
+  document.getElementById('btn-outra-foto').addEventListener('click', () => { inputFoto.value = ''; inputFoto.click(); });
 
   document.getElementById('btn-confirmar-corte').addEventListener('click', () => {
-    const tamanhoContainer = cropContainer.clientWidth || 280;
+    const containerW = cropContainer.clientWidth || 260;
     const escalaTotal = crop.baseScale * crop.zoom;
-    const escalaSaida = SAIDA_TAMANHO / tamanhoContainer;
+    const escalaSaida = SAIDA_LARGURA / containerW;
 
     const canvas = document.getElementById('canvas-oculto');
-    canvas.width = SAIDA_TAMANHO;
-    canvas.height = SAIDA_TAMANHO;
+    canvas.width = SAIDA_LARGURA;
+    canvas.height = SAIDA_ALTURA;
     const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, SAIDA_TAMANHO, SAIDA_TAMANHO);
+    ctx.clearRect(0, 0, SAIDA_LARGURA, SAIDA_ALTURA);
     ctx.save();
-    ctx.translate(SAIDA_TAMANHO / 2, SAIDA_TAMANHO / 2);
+    ctx.translate(SAIDA_LARGURA / 2, SAIDA_ALTURA / 2);
     ctx.scale(escalaSaida, escalaSaida);
     ctx.translate(crop.offsetX, crop.offsetY);
     ctx.drawImage(
@@ -450,12 +493,9 @@
     cropSection.style.display = 'none';
   });
 
-  linkTrocar.addEventListener('click', () => {
-    inputFoto.value = '';
-    inputFoto.click();
-  });
+  linkTrocar.addEventListener('click', () => { inputFoto.value = ''; inputFoto.click(); });
 
-  // ---------- Fila de envio em segundo plano ----------
+  // ---------- Fila de envio em segundo plano (cadastro e edição) ----------
   let filaEnvio = [];
 
   function renderizarFila() {
@@ -463,18 +503,16 @@
     if (!filaEnvio.length) { el.innerHTML = ''; return; }
     el.innerHTML = filaEnvio.map(item => `
       <div class="fila-item ${item.status === 'erro' ? 'erro' : ''}">
-        <span>${item.status === 'erro' ? '⚠️ Falhou: ' : '⏳ Enviando: '}${item.nome}</span>
+        <span>${item.status === 'erro' ? '⚠️ Falhou: ' : (item.dados.action === 'update' ? '⏳ Atualizando: ' : '⏳ Enviando: ')}${item.nome}</span>
         ${item.status === 'erro' ? `<button type="button" class="btn-retry" data-tempid="${item.tempId}">Tentar de novo</button>` : ''}
       </div>
     `).join('');
-    el.querySelectorAll('.btn-retry').forEach(btn => {
-      btn.addEventListener('click', () => tentarNovamente(btn.dataset.tempid));
-    });
+    el.querySelectorAll('.btn-retry').forEach(btn => btn.addEventListener('click', () => tentarNovamente(btn.dataset.tempid)));
   }
 
   function enviarEmSegundoPlano(dados) {
     const tempId = 'tmp' + Date.now() + Math.random().toString(36).slice(2);
-    filaEnvio.push({ tempId, nome: dados.nome, status: 'enviando', dados });
+    filaEnvio.push({ tempId, nome: dados.nome || '(editado)', status: 'enviando', dados });
     renderizarFila();
     executarEnvio(tempId);
   }
@@ -502,7 +540,7 @@
         if (resp.ok) {
           await carregarProdutos();
         } else {
-          alert('Erro ao cadastrar "' + item.dados.nome + '": ' + (resp.erro || 'desconhecido'));
+          alert('Erro ao salvar "' + (item.dados.nome || '') + '": ' + (resp.erro || 'desconhecido'));
         }
       })
       .catch(() => {
@@ -511,59 +549,124 @@
       });
   }
 
-  // ---------- Cadastrar produto (libera o formulário na hora, envia em segundo plano) ----------
-  document.getElementById('form-produto').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const status = document.getElementById('status');
-
-    if (!fotoBase64) { status.textContent = 'Selecione e ajuste uma foto.'; return; }
-    if (selecionadasCategorias.size === 0) { status.textContent = 'Escolha ao menos uma categoria.'; return; }
-    if (selecionadosGeneros.size === 0) { status.textContent = 'Escolha ao menos um gênero.'; return; }
-
-    const dados = {
-      action: 'create',
-      nome: document.getElementById('nome').value.trim(),
-      categoria: Array.from(selecionadasCategorias).join(', '),
-      genero: Array.from(selecionadosGeneros).join(', '),
-      preco: document.getElementById('preco').value,
-      descricao: document.getElementById('descricao').value.trim(),
-      fotoBase64: fotoBase64,
-      fotoMime: fotoMime
-    };
-
-    // Libera o formulário imediatamente para o próximo cadastro
+  function limparFormulario() {
     document.getElementById('form-produto').reset();
+    document.getElementById('produto-id').value = '';
     previewFinal.style.display = 'none';
     linkTrocar.style.display = 'none';
     document.getElementById('preco-avista').textContent = '';
     fotoBase64 = null;
     selecionadasCategorias = new Set();
     selecionadosGeneros = new Set();
-    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', categorias, selecionadasCategorias, 'chips-categoria'));
-    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', generos, selecionadosGeneros, 'chips-genero'));
+    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', selecionadasCategorias, 'chips-categoria'));
+    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', selecionadosGeneros, 'chips-genero'));
+    editandoId = null;
+    document.getElementById('titulo-form').textContent = 'Novo produto';
+    document.getElementById('btn-salvar').textContent = 'Cadastrar produto';
+    document.getElementById('btn-cancelar-edicao').style.display = 'none';
+  }
 
-    status.textContent = 'Produto adicionado — enviando em segundo plano.';
+  document.getElementById('btn-cancelar-edicao').addEventListener('click', limparFormulario);
+
+  // ---------- Cadastrar / Salvar edição ----------
+  document.getElementById('form-produto').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const status = document.getElementById('status');
+
+    const editando = !!editandoId;
+    if (!editando && !fotoBase64) { status.textContent = 'Selecione e ajuste uma foto.'; return; }
+    if (selecionadasCategorias.size === 0) { status.textContent = 'Escolha ao menos uma categoria.'; return; }
+    if (selecionadosGeneros.size === 0) { status.textContent = 'Escolha ao menos um gênero.'; return; }
+
+    const dados = {
+      action: editando ? 'update' : 'create',
+      nome: document.getElementById('nome').value.trim(),
+      categoria: Array.from(selecionadasCategorias).join(', '),
+      genero: Array.from(selecionadosGeneros).join(', '),
+      preco: document.getElementById('preco').value,
+      estoque: document.getElementById('estoque').value,
+      tamanhos: document.getElementById('tamanhos').value.trim(),
+      cores: document.getElementById('cores').value.trim(),
+      descricao: document.getElementById('descricao').value.trim(),
+      novidade: document.getElementById('novidade').checked
+    };
+    if (editando) dados.id = editandoId;
+    if (fotoBase64) { dados.fotoBase64 = fotoBase64; dados.fotoMime = fotoMime; }
+
+    limparFormulario();
+    status.textContent = editando ? 'Alterações adicionadas — salvando em segundo plano.' : 'Produto adicionado — enviando em segundo plano.';
     setTimeout(() => status.textContent = '', 2500);
 
     enviarEmSegundoPlano(dados);
   });
 
+  // ---------- Editar produto existente ----------
+  function editarProduto(id) {
+    const p = produtos.find(x => String(x.ID) === String(id));
+    if (!p) return;
+
+    editandoId = id;
+    document.getElementById('produto-id').value = id;
+    document.getElementById('nome').value = p.Nome || '';
+    document.getElementById('preco').value = p.Preco || '';
+    document.getElementById('estoque').value = estoqueInformado(p) ? p.Estoque : '';
+    document.getElementById('tamanhos').value = p.Tamanhos || '';
+    document.getElementById('cores').value = p.Cores || '';
+    document.getElementById('descricao').value = p.Descricao || '';
+    document.getElementById('novidade').checked = ehNovidade(p);
+
+    selecionadasCategorias = new Set(String(p.Categoria || '').split(',').map(s => s.trim()).filter(Boolean));
+    selecionadosGeneros = new Set(String(p.Genero || '').split(',').map(s => s.trim()).filter(Boolean));
+    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', selecionadasCategorias, 'chips-categoria'));
+    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', selecionadosGeneros, 'chips-genero'));
+
+    fotoBase64 = null;
+    if (p.Foto_URL) {
+      previewFinal.src = p.Foto_URL;
+      previewFinal.style.display = 'inline-block';
+      linkTrocar.style.display = 'inline-block';
+    }
+
+    const valor = parseFloat(p.Preco);
+    document.getElementById('preco-avista').textContent = !isNaN(valor) && valor > 0
+      ? `À vista (10% off): ${formatarReal(valor * (1 - DESCONTO_AVISTA))}` : '';
+
+    document.getElementById('titulo-form').textContent = 'Editando: ' + p.Nome;
+    document.getElementById('btn-salvar').textContent = 'Salvar alterações';
+    document.getElementById('btn-cancelar-edicao').style.display = 'block';
+
+    document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
+  }
+
   // ---------- Listar produtos ----------
   async function carregarProdutos() {
     const resp = await fetch(API_URL + '?action=list').then(r => r.json());
     produtos = (resp.produtos || []).reverse();
+    atualizarDashboard();
     renderizarProdutos();
   }
 
+  function atualizarDashboard() {
+    document.getElementById('dash-total').textContent = produtos.length;
+    document.getElementById('dash-disponiveis').textContent = produtos.filter(p => !estaEsgotado(p)).length;
+    document.getElementById('dash-esgotados').textContent = produtos.filter(p => estaEsgotado(p)).length;
+  }
+
+  document.getElementById('busca-admin').addEventListener('input', renderizarProdutos);
+
   function renderizarProdutos() {
+    const busca = document.getElementById('busca-admin').value.trim().toLowerCase();
+    const lista = produtos.filter(p => !busca || String(p.Nome).toLowerCase().includes(busca));
+
     const container = document.getElementById('lista-produtos');
-    if (!produtos.length) {
-      container.innerHTML = '<p style="text-align:center;color:#999;">Nenhum produto cadastrado ainda.</p>';
+    if (!lista.length) {
+      container.innerHTML = '<p style="text-align:center;color:#999;">Nenhum produto encontrado.</p>';
       return;
     }
     container.innerHTML = '';
-    produtos.forEach(p => {
+    lista.forEach(p => {
       const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
+      const esgotado = estaEsgotado(p);
       const div = document.createElement('div');
       div.className = 'produto';
       div.innerHTML = `
@@ -573,8 +676,13 @@
           <div class="preco">${formatarReal(p.Preco)} · à vista <span>${formatarReal(avista)}</span></div>
           <div class="tags">${p.Categoria} · ${p.Genero}</div>
           ${p.Descricao ? `<div class="desc">${p.Descricao}</div>` : ''}
+          <div class="selo-linha">
+            ${ehNovidade(p) ? '<span class="selo novidade">NOVIDADE</span>' : ''}
+            ${esgotado ? '<span class="selo esgotado">ESGOTADO</span>' : (estoqueInformado(p) ? `<span class="selo estoque">Estoque: ${p.Estoque}</span>` : '')}
+          </div>
         </div>
         <div class="acoes">
+          <button class="btn-editar" data-id="${p.ID}">✏️ Editar</button>
           <button class="btn-compartilhar" data-id="${p.ID}">📤 Stories</button>
           <button class="btn-excluir" data-id="${p.ID}">🗑 Excluir</button>
         </div>
@@ -582,12 +690,9 @@
       container.appendChild(div);
     });
 
-    container.querySelectorAll('.btn-excluir').forEach(btn => {
-      btn.addEventListener('click', () => excluirProduto(btn.dataset.id));
-    });
-    container.querySelectorAll('.btn-compartilhar').forEach(btn => {
-      btn.addEventListener('click', () => compartilharStories(btn.dataset.id));
-    });
+    container.querySelectorAll('.btn-editar').forEach(btn => btn.addEventListener('click', () => editarProduto(btn.dataset.id)));
+    container.querySelectorAll('.btn-excluir').forEach(btn => btn.addEventListener('click', () => excluirProduto(btn.dataset.id)));
+    container.querySelectorAll('.btn-compartilhar').forEach(btn => btn.addEventListener('click', () => compartilharStories(btn.dataset.id)));
   }
 
   // ---------- Excluir ----------
@@ -605,34 +710,27 @@
   async function compartilharStories(id) {
     const produto = produtos.find(p => String(p.ID) === String(id));
     if (!produto) return;
-    const link = SITE_URL + '?id=' + produto.ID;
+    const link = API_URL + '?action=share&id=' + produto.ID;
     const textoCompartilhar = `${produto.Nome} — ${formatarReal(produto.Preco)}\n${link}`;
 
-    try {
-      await navigator.clipboard.writeText(link);
-    } catch (e) { /* alguns navegadores exigem interação direta; segue mesmo assim */ }
+    try { await navigator.clipboard.writeText(link); } catch (e) {}
 
     let arquivoImagem = null;
     try {
       const blob = await fetch(produto.Foto_URL).then(r => r.blob());
       arquivoImagem = new File([blob], 'produto.jpg', { type: blob.type || 'image/jpeg' });
-    } catch (e) {
-      arquivoImagem = null;
-    }
+    } catch (e) { arquivoImagem = null; }
 
     if (navigator.share) {
       try {
-        // Importante: manda o link só dentro de "text" — nunca junto com "url" também,
-        // senão alguns apps (Instagram) colam o link duas vezes.
         if (arquivoImagem && navigator.canShare && navigator.canShare({ files: [arquivoImagem] })) {
           await navigator.share({ files: [arquivoImagem], text: textoCompartilhar });
         } else {
           await navigator.share({ text: textoCompartilhar });
         }
         return;
-      } catch (e) { /* usuário cancelou ou falhou — cai no aviso abaixo */ }
+      } catch (e) {}
     }
-
     alert('Link copiado! Abra a foto do produto, salve/segure para compartilhar, e cole o link no Stories.');
   }
 

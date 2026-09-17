@@ -13,6 +13,8 @@
     --laranja: #ff7a1a;
     --cinza: #f4f4f4;
     --branco: #ffffff;
+    --verde: #198754;
+    --vermelho: #c62828;
   }
   * { box-sizing: border-box; }
   body {
@@ -63,28 +65,18 @@
     cursor: pointer;
   }
   .chip.selecionado { background: var(--laranja); color: var(--preto); border-color: var(--laranja); font-weight: 700; }
+  .chip.novidade-chip.selecionado { background: var(--preto); color: var(--laranja); border-color: var(--preto); }
 
   .btn-limpar {
-    display: inline-block;
-    font-size: 0.75rem;
-    color: #999;
-    text-decoration: underline;
-    margin-top: 2px;
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
+    display: inline-block; font-size: 0.75rem; color: #999; text-decoration: underline;
+    margin-top: 2px; background: none; border: none; padding: 0; cursor: pointer;
   }
 
   main { padding: 14px; max-width: 900px; margin: 0 auto; }
 
   #contagem { font-size: 0.8rem; color: #777; margin-bottom: 10px; }
 
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
   @media (min-width: 640px) { .grid { grid-template-columns: repeat(3, 1fr); } }
   @media (min-width: 900px) { .grid { grid-template-columns: repeat(4, 1fr); } }
 
@@ -94,8 +86,16 @@
     overflow: hidden;
     box-shadow: 0 1px 4px rgba(0,0,0,0.08);
     cursor: pointer;
+    position: relative;
   }
-  .card img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: #eee; display: block; }
+  .card .img-wrap { position: relative; }
+  .card img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; background: #eee; display: block; }
+  .selo-card {
+    position: absolute; top: 8px; left: 8px;
+    font-size: 0.62rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; color: #fff;
+  }
+  .selo-card.novidade { background: var(--laranja); color: var(--preto); }
+  .selo-card.esgotado { background: var(--vermelho); }
   .card-info { padding: 8px 10px 10px; }
   .card-info .nome { font-size: 0.82rem; font-weight: 700; line-height: 1.2; margin-bottom: 3px; }
   .card-info .preco { font-size: 0.78rem; color: #333; }
@@ -106,71 +106,47 @@
 
   /* ---- Modal de detalhe ---- */
   #overlay {
-    display: none;
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.6);
-    z-index: 50;
-    align-items: flex-end;
-    justify-content: center;
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 50; align-items: flex-end; justify-content: center;
   }
   #overlay.aberto { display: flex; }
   .modal {
-    background: var(--branco);
-    width: 100%;
-    max-width: 480px;
-    border-radius: 18px 18px 0 0;
-    max-height: 88vh;
-    overflow-y: auto;
+    background: var(--branco); width: 100%; max-width: 480px;
+    border-radius: 18px 18px 0 0; max-height: 90vh; overflow-y: auto;
     animation: subir 0.2s ease-out;
   }
   @keyframes subir { from { transform: translateY(30px); opacity:0; } to { transform: translateY(0); opacity:1; } }
-  .modal img { width: 100%; aspect-ratio: 1/1; object-fit: cover; }
   .modal-foto-wrap { position: relative; }
-  .modal-foto-wrap img { cursor: pointer; }
+  .modal-foto-wrap img { width: 100%; aspect-ratio: 4/5; object-fit: cover; cursor: pointer; }
+  .modal-foto-wrap .selo-card { top: 12px; left: 12px; font-size: 0.7rem; padding: 4px 10px; }
   .whatsapp-badge {
-    position: absolute;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #25D366;
-    color: #fff;
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 6px 14px;
-    border-radius: 20px;
-    white-space: nowrap;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+    background: #25D366; color: #fff; font-size: 0.72rem; font-weight: 700;
+    padding: 6px 14px; border-radius: 20px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
   }
   .modal-conteudo { padding: 16px; }
   .modal-conteudo .nome { font-size: 1.1rem; font-weight: 800; }
   .modal-conteudo .preco-linha { margin: 8px 0; font-size: 1rem; }
   .modal-conteudo .preco-linha .cheio { color: #888; text-decoration: line-through; margin-right: 8px; font-size: 0.85rem; }
   .modal-conteudo .preco-linha .avista { color: #1a7a1a; font-weight: 800; font-size: 1.2rem; }
-  .modal-conteudo .tags { font-size: 0.78rem; color: #888; margin-bottom: 10px; }
-  .modal-conteudo .desc { font-size: 0.88rem; color: #333; line-height: 1.4; }
+  .modal-conteudo .tags { font-size: 0.78rem; color: #888; margin-bottom: 6px; }
+  .modal-conteudo .extra { font-size: 0.82rem; color: #444; margin-bottom: 4px; }
+  .modal-conteudo .desc { font-size: 0.88rem; color: #333; line-height: 1.4; margin-top: 8px; }
+
   .btn-fechar {
-    display: block;
-    width: calc(100% - 32px);
-    margin: 4px 16px 16px;
-    background: var(--preto);
-    color: var(--laranja);
-    border: none;
-    border-radius: 10px;
-    padding: 12px;
-    font-weight: 700;
-    font-size: 0.95rem;
+    display: block; width: calc(100% - 32px); margin: 4px 16px 16px;
+    background: var(--preto); color: var(--laranja); border: none;
+    border-radius: 10px; padding: 12px; font-weight: 700; font-size: 0.95rem;
   }
   .btn-anexar-foto {
-    display: block;
-    width: calc(100% - 32px);
-    margin: 0 16px 10px;
-    background: #25D366;
-    color: #fff;
-    border: none;
-    border-radius: 10px;
-    padding: 12px;
-    font-weight: 700;
-    font-size: 0.9rem;
+    display: block; width: calc(100% - 32px); margin: 0 16px 10px;
+    background: #25D366; color: #fff; border: none; border-radius: 10px;
+    padding: 12px; font-weight: 700; font-size: 0.9rem;
+  }
+  .aviso-esgotado {
+    display: block; width: calc(100% - 32px); margin: 0 16px 10px;
+    background: #eee; color: #888; border-radius: 10px; padding: 12px;
+    text-align: center; font-weight: 700; font-size: 0.9rem;
   }
 </style>
 </head>
@@ -191,6 +167,7 @@
     <input type="number" id="preco-max" placeholder="Máx">
   </div>
 
+  <div class="chips" id="chips-extra"></div>
   <div class="chips" id="chips-categoria"></div>
   <div class="chips" id="chips-genero"></div>
 
@@ -210,20 +187,29 @@
 <script>
   const API_URL = 'https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec';
   const DESCONTO_AVISTA = 0.10;
-  const WHATSAPP_NUMERO = '5588993223998'; // DDI 55 + DDD 88 + número
+  const WHATSAPP_NUMERO = '5588993223998';
 
   let produtos = [];
   let categoriasDisponiveis = new Set();
   let generosDisponiveis = new Set();
   let filtroCategorias = new Set();
   let filtroGeneros = new Set();
+  let apenasNovidades = false;
 
   function formatarReal(valor) {
     return 'R$ ' + Number(valor).toFixed(2).replace('.', ',');
   }
-
   function listaDeTags(campo) {
     return String(campo || '').split(',').map(s => s.trim()).filter(Boolean);
+  }
+  function estoqueInformado(p) {
+    return p.Estoque !== '' && p.Estoque !== undefined && p.Estoque !== null;
+  }
+  function estaEsgotado(p) {
+    return estoqueInformado(p) && Number(p.Estoque) <= 0;
+  }
+  function ehNovidade(p) {
+    return p.Novidade === true || String(p.Novidade).toUpperCase() === 'TRUE';
   }
 
   async function carregarCatalogo() {
@@ -235,10 +221,26 @@
       listaDeTags(p.Genero).forEach(g => generosDisponiveis.add(g));
     });
 
+    renderizarChipExtra();
     renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias);
     renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros);
     aplicarFiltros();
     abrirProdutoDaURL();
+  }
+
+  function renderizarChipExtra() {
+    const container = document.getElementById('chips-extra');
+    container.innerHTML = '';
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip novidade-chip' + (apenasNovidades ? ' selecionado' : '');
+    chip.textContent = '🆕 Novidades';
+    chip.addEventListener('click', () => {
+      apenasNovidades = !apenasNovidades;
+      chip.classList.toggle('selecionado');
+      aplicarFiltros();
+    });
+    container.appendChild(chip);
   }
 
   function renderizarChipsFiltro(idContainer, valores, conjuntoFiltro) {
@@ -267,6 +269,8 @@
     document.getElementById('preco-max').value = '';
     filtroCategorias.clear();
     filtroGeneros.clear();
+    apenasNovidades = false;
+    renderizarChipExtra();
     renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias);
     renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros);
     aplicarFiltros();
@@ -281,6 +285,7 @@
       if (busca && !String(p.Nome).toLowerCase().includes(busca)) return false;
       if (!isNaN(min) && Number(p.Preco) < min) return false;
       if (!isNaN(max) && Number(p.Preco) > max) return false;
+      if (apenasNovidades && !ehNovidade(p)) return false;
       if (filtroCategorias.size) {
         const tags = listaDeTags(p.Categoria);
         if (!tags.some(t => filtroCategorias.has(t))) return false;
@@ -310,9 +315,13 @@
 
     grid.innerHTML = lista.map(p => {
       const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
+      const esgotado = estaEsgotado(p);
       return `
         <div class="card" data-id="${p.ID}">
-          <img src="${p.Foto_URL}" alt="${p.Nome}" loading="lazy">
+          <div class="img-wrap">
+            <img src="${p.Foto_URL}" alt="${p.Nome}" loading="lazy">
+            ${esgotado ? '<span class="selo-card esgotado">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade">NOVIDADE</span>' : '')}
+          </div>
           <div class="card-info">
             <div class="nome">${p.Nome}</div>
             <div class="preco">${formatarReal(p.Preco)} <span>${formatarReal(avista)}</span></div>
@@ -328,14 +337,14 @@
   }
 
   function abrirWhatsApp(p) {
-    const link = window.location.origin + window.location.pathname + '?id=' + p.ID;
+    const link = API_URL + '?action=share&id=' + p.ID;
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const texto = `Olá! Tenho interesse neste produto:\n*${p.Nome}* — ${formatarReal(avista)} à vista\n${link}`;
     window.open('https://wa.me/' + WHATSAPP_NUMERO + '?text=' + encodeURIComponent(texto), '_blank');
   }
 
   async function compartilharComFoto(p) {
-    const link = window.location.origin + window.location.pathname + '?id=' + p.ID;
+    const link = API_URL + '?action=share&id=' + p.ID;
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const texto = `${p.Nome} — ${formatarReal(avista)} à vista\n${link}\n\nEnviar para a loja TENKiTER Modas (WhatsApp ${WHATSAPP_NUMERO})`;
 
@@ -353,7 +362,7 @@
           await navigator.share({ text: texto });
         }
         return;
-      } catch (e) { /* cancelado */ }
+      } catch (e) {}
     } else {
       alert('Seu navegador não suporta compartilhar arquivos diretamente. Vamos abrir o WhatsApp sem a foto anexada.');
       abrirWhatsApp(p);
@@ -364,10 +373,13 @@
     const p = produtos.find(x => String(x.ID) === String(id));
     if (!p) return;
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
+    const esgotado = estaEsgotado(p);
+
     document.getElementById('modal-conteudo').innerHTML = `
       <div class="modal-foto-wrap">
         <img src="${p.Foto_URL}" alt="${p.Nome}" id="modal-foto">
-        <div class="whatsapp-badge">📲 Toque na foto para chamar no WhatsApp</div>
+        ${esgotado ? '<span class="selo-card esgotado">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade">NOVIDADE</span>' : '')}
+        ${!esgotado ? '<div class="whatsapp-badge">📲 Toque na foto para chamar no WhatsApp</div>' : ''}
       </div>
       <div class="modal-conteudo">
         <div class="nome">${p.Nome}</div>
@@ -376,15 +388,21 @@
           <span class="avista">${formatarReal(avista)} à vista</span>
         </div>
         <div class="tags">${p.Categoria} · ${p.Genero}</div>
+        ${p.Tamanhos ? `<div class="extra"><strong>Tamanhos:</strong> ${p.Tamanhos}</div>` : ''}
+        ${p.Cores ? `<div class="extra"><strong>Cores:</strong> ${p.Cores}</div>` : ''}
         ${p.Descricao ? `<div class="desc">${p.Descricao}</div>` : ''}
       </div>
-      <button class="btn-anexar-foto" id="btn-anexar-foto">📎 Compartilhar com a foto anexada</button>
+      ${esgotado
+        ? '<div class="aviso-esgotado">Produto esgotado no momento</div>'
+        : '<button class="btn-anexar-foto" id="btn-anexar-foto">📎 Compartilhar com a foto anexada</button>'}
       <button class="btn-fechar" id="btn-fechar-modal">Fechar</button>
     `;
     document.getElementById('overlay').classList.add('aberto');
     document.getElementById('btn-fechar-modal').addEventListener('click', fecharDetalhe);
-    document.getElementById('modal-foto').addEventListener('click', () => abrirWhatsApp(p));
-    document.getElementById('btn-anexar-foto').addEventListener('click', () => compartilharComFoto(p));
+    if (!esgotado) {
+      document.getElementById('modal-foto').addEventListener('click', () => abrirWhatsApp(p));
+      document.getElementById('btn-anexar-foto').addEventListener('click', () => compartilharComFoto(p));
+    }
 
     const url = new URL(window.location);
     url.searchParams.set('id', p.ID);
