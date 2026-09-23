@@ -2,245 +2,124 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#000000">
-<title>TENKiTER Modas — Admin</title>
+<meta name="theme-color" content="#0d0d0d">
+<title>TENKiTER Modas — Painel do Atendente</title>
 <style>
-  :root {
-    --preto: #0d0d0d;
-    --laranja: #ff7a1a;
-    --cinza: #f4f4f4;
-    --branco: #ffffff;
-    --verde: #198754;
-    --vermelho: #c62828;
-  }
+  :root { --preto: #0d0d0d; --laranja: #ff7a1a; --cinza: #f4f4f4; --branco: #ffffff; --verde: #198754; --vermelho: #c62828; --amarelo: #b8860b; }
   * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, Roboto, Arial, sans-serif;
-    background: var(--cinza);
-    color: var(--preto);
-    padding-bottom: 60px;
-  }
-  header {
-    background: var(--preto);
-    color: var(--laranja);
-    padding: 18px 16px;
-    text-align: center;
-  }
-  header h1 { margin: 0; font-size: 1.2rem; letter-spacing: 1px; }
+  body { margin: 0; font-family: -apple-system, Roboto, Arial, sans-serif; background: var(--cinza); color: var(--preto); padding-bottom: 60px; }
+  header { background: var(--preto); color: var(--laranja); padding: 18px 16px; text-align: center; }
+  header h1 { margin: 0; font-size: 1.2rem; letter-spacing: 1px; font-weight: 800; }
   header p { margin: 4px 0 0; font-size: 0.75rem; color: #ccc; }
+  main { padding: 16px; max-width: 520px; margin: 0 auto; }
 
-  main { padding: 16px; max-width: 480px; margin: 0 auto; }
+  .usuario-bar { background: var(--branco); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); font-size: 0.85rem; }
+  .usuario-bar strong { color: var(--laranja); }
+  .btn-trocar-user { background: #f0f0f0; border: none; padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; cursor: pointer; }
 
-  /* ---- Dashboard ---- */
-  .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
-  .dashboard-card {
-    background: var(--branco);
-    border-radius: 12px;
-    padding: 10px 6px;
-    text-align: center;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  }
-  .dashboard-card span { display: block; font-size: 0.68rem; color: #888; }
-  .dashboard-card strong { display: block; font-size: 1.3rem; margin-top: 2px; }
+  .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+  .dashboard-card { background: var(--branco); border-radius: 12px; padding: 10px 6px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .dashboard-card span { display: block; font-size: 0.64rem; color: #888; }
+  .dashboard-card strong { display: block; font-size: 1.2rem; margin-top: 2px; }
   .dashboard-card.esgotados strong { color: var(--vermelho); }
   .dashboard-card.disponiveis strong { color: var(--verde); }
 
-  .card {
-    background: var(--branco);
-    border-radius: 14px;
-    padding: 16px;
-    margin-bottom: 16px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  }
+  .card { background: var(--branco); border-radius: 14px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
 
   label { display: block; font-size: 0.8rem; font-weight: 600; margin: 12px 0 4px; }
-  input[type=text], input[type=number], textarea {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    font-size: 1rem;
-    background: var(--branco);
-    font-family: inherit;
+  input[type=text], input[type=number], textarea, select {
+    width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.95rem; background: var(--branco); font-family: inherit;
   }
   textarea { resize: vertical; }
-  input:focus, textarea:focus { outline: 2px solid var(--laranja); }
-
+  input:focus, textarea:focus, select:focus { outline: 2px solid var(--laranja); }
   .form-linha { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-  .chip {
-    padding: 8px 14px;
-    border-radius: 20px;
-    border: 1px solid #ddd;
-    background: var(--branco);
-    font-size: 0.85rem;
-    cursor: pointer;
-  }
+  .chip { padding: 8px 14px; border-radius: 20px; border: 1px solid #ddd; background: var(--branco); font-size: 0.82rem; cursor: pointer; }
   .chip.selecionado { background: var(--laranja); color: var(--preto); border-color: var(--laranja); font-weight: 700; }
   .chip.add { background: #f0f0f0; color: #666; border-style: dashed; }
 
-  details.selecao-expansivel {
-    margin-top: 12px;
-    border: 1px solid #ddd;
-    border-radius: 10px;
-    padding: 10px 12px;
-    background: #fff;
-  }
-  details.selecao-expansivel summary {
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.85rem;
-    list-style: none;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
+  details.selecao-expansivel { margin-top: 12px; border: 1px solid #ddd; border-radius: 10px; padding: 10px 12px; background: #fff; }
+  details.selecao-expansivel summary { cursor: pointer; font-weight: 600; font-size: 0.85rem; list-style: none; display: flex; justify-content: space-between; align-items: center; }
   details.selecao-expansivel summary::-webkit-details-marker { display: none; }
-  details.selecao-expansivel summary::after {
-    content: '▾';
-    font-size: 0.7rem;
-    color: #888;
-    margin-left: 8px;
-  }
+  details.selecao-expansivel summary::after { content: '▾'; font-size: 0.7rem; color: #888; margin-left: 8px; }
   details.selecao-expansivel[open] summary::after { content: '▴'; }
   details.selecao-expansivel .resumo { font-weight: 400; color: #888; font-size: 0.78rem; margin-left: 6px; flex: 1; }
   details.selecao-expansivel .chips { margin-top: 10px; }
+
+  details.extra { margin-top: 16px; border: 1px dashed #ccc; border-radius: 10px; padding: 10px 12px; }
+  details.extra summary { cursor: pointer; font-weight: 700; font-size: 0.82rem; color: #666; list-style: none; }
+  details.extra summary::-webkit-details-marker { display: none; }
 
   .checkbox-linha { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
   .checkbox-linha input { width: auto; }
   .checkbox-linha label { margin: 0; font-weight: 600; font-size: 0.85rem; }
 
-  .foto-box {
-    margin-top: 8px;
-    border: 2px dashed #ccc;
-    border-radius: 10px;
-    text-align: center;
-    padding: 14px;
-  }
-  .foto-box input[type=file] { width: 100%; }
+  .foto-box { margin-top: 8px; border: 2px dashed #ccc; border-radius: 10px; text-align: center; padding: 14px; }
   #preview-final { max-width: 140px; max-height: 175px; border-radius: 8px; margin-top: 10px; display: none; }
-  .link-trocar { display: none; font-size: 0.8rem; color: #666; text-decoration: underline; margin-top: 6px; background:none; border:none; padding:0; width:auto; }
 
   #crop-section { display: none; margin-top: 12px; }
-  .crop-container {
-    width: 100%;
-    max-width: 260px;
-    aspect-ratio: 4 / 5;
-    margin: 0 auto;
-    overflow: hidden;
-    position: relative;
-    background: #111;
-    border-radius: 10px;
-    touch-action: none;
-  }
-  .crop-container img {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    max-width: none;
-    transform-origin: center center;
-    user-select: none;
-    -webkit-user-drag: none;
-  }
-  .crop-hint { font-size: 0.72rem; color: #888; text-align: center; margin-top: 6px; }
-  .zoom-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-  .zoom-row input[type=range] { flex: 1; }
-  .btn-confirmar-corte { background: var(--laranja); color: var(--preto); margin-top: 10px; }
-  .btn-outra-foto { background: #eee; color: #333; margin-top: 6px; font-size: 0.85rem; }
+  .crop-container { width: 100%; max-width: 260px; aspect-ratio: 4 / 5; margin: 0 auto; overflow: hidden; position: relative; background: #111; border-radius: 10px; touch-action: none; }
+  .crop-container img { position: absolute; top: 50%; left: 50%; max-width: none; transform-origin: center center; }
 
-  .preco-avista { margin-top: 6px; font-size: 0.9rem; color: #1a7a1a; font-weight: 600; }
-
-  button {
-    border: none;
-    border-radius: 10px;
-    padding: 13px;
-    font-size: 1rem;
-    font-weight: 700;
-    cursor: pointer;
-    width: 100%;
-  }
+  button { border: none; border-radius: 10px; padding: 13px; font-size: 0.95rem; font-weight: 700; cursor: pointer; width: 100%; }
   .btn-primario { background: var(--laranja); color: var(--preto); margin-top: 18px; }
-  .btn-cancelar-edicao { background: #eee; color: #555; margin-top: 8px; font-size: 0.85rem; padding: 10px; }
 
-  #status { text-align: center; font-size: 0.85rem; margin-top: 8px; min-height: 18px; }
+  /* Bar de ações em lote */
+  .bulk-bar { background: var(--preto); color: #fff; padding: 12px; border-radius: 12px; margin-bottom: 12px; display: none; }
+  .bulk-bar.ativa { display: block; }
+  .bulk-bar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 0.85rem; }
+  .bulk-bar-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .bulk-bar-actions button { width: auto; font-size: 0.72rem; padding: 6px 10px; background: #333; color: #fff; }
 
-  #fila-envio { margin-top: 10px; }
-  .fila-item {
-    display: flex; justify-content: space-between; align-items: center; gap: 8px;
-    background: #fff7ef; border: 1px solid #ffd8ad; border-radius: 8px;
-    padding: 8px 10px; font-size: 0.8rem; margin-bottom: 6px;
-  }
-  .fila-item.erro { background: #fdeaea; border-color: #f3b3b3; }
-  .fila-item .btn-retry { width: auto; padding: 5px 10px; font-size: 0.72rem; background: var(--preto); color: var(--laranja); }
-
-  .produto {
-    display: flex; gap: 10px; background: var(--branco); border-radius: 12px;
-    padding: 10px; margin-bottom: 10px; align-items: flex-start; position: relative;
-  }
+  .produto { display: flex; gap: 10px; background: var(--branco); border-radius: 12px; padding: 10px; margin-bottom: 10px; align-items: flex-start; position: relative; }
+  .produto-chk { margin-top: 25px; }
   .produto img { width: 56px; height: 70px; object-fit: cover; border-radius: 8px; background: #eee; }
   .produto-info { flex: 1; min-width: 0; }
+  .produto-info .codigo { font-size: 0.68rem; color: var(--laranja); font-weight: 800; }
   .produto-info .nome { font-weight: 700; font-size: 0.92rem; }
   .produto-info .preco { font-size: 0.82rem; color: #333; }
   .produto-info .preco span { color: #1a7a1a; font-weight: 700; }
-  .produto-info .tags { font-size: 0.72rem; color: #888; }
-  .produto-info .desc { font-size: 0.75rem; color: #555; margin-top: 3px; }
-  .selo-linha { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
-  .selo { font-size: 0.62rem; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
-  .selo.novidade { background: var(--laranja); color: var(--preto); }
-  .selo.esgotado { background: var(--vermelho); color: #fff; }
-  .selo.estoque { background: #eee; color: #555; }
 
   .acoes { display: flex; flex-direction: column; gap: 6px; }
-  .acoes button { padding: 6px 10px; font-size: 0.72rem; width: auto; white-space: nowrap; }
-  .btn-editar { background: #eee; color: #333; }
-  .btn-compartilhar { background: var(--preto); color: var(--laranja); }
-  .btn-excluir { background: #f0f0f0; color: #a00; }
+  .acoes button { padding: 6px 10px; font-size: 0.7rem; width: auto; }
 
-  h2.secao { font-size: 0.95rem; margin: 22px 0 10px; color: var(--preto); }
-
-  .busca-lista { margin-bottom: 12px; }
-  .busca-lista input {
-    width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 20px; font-size: 0.9rem;
-  }
+  #overlay-compartilhar { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 60; align-items: flex-end; justify-content: center; }
+  #overlay-compartilhar.aberto { display: flex; }
+  .painel-compartilhar { background: var(--branco); width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 16px; }
 </style>
 </head>
 <body>
 
 <header>
   <h1>TENKiTER MODAS</h1>
-  <p>Painel de gestão do catálogo</p>
+  <p>Gestão & Atendimento do Catálogo</p>
 </header>
 
 <main>
 
-  <!-- ===================== CONFIGURAÇÃO ===================== -->
-  <script>
-    const API_URL = 'https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec';
-    const DESCONTO_AVISTA = 0.10;
-    const SAIDA_LARGURA = 900;
-    const SAIDA_ALTURA = 1125;   // proporção 4:5, boa pra moda
-    const SAIDA_QUALIDADE = 0.88;
-  </script>
+  <div class="usuario-bar">
+    <div>Atendente: <strong id="lbl-funcionario">Anônimo</strong></div>
+    <button type="button" class="btn-trocar-user" id="btn-trocar-user">Identificar-se</button>
+  </div>
 
   <div class="dashboard">
-    <div class="dashboard-card"><span>Produtos</span><strong id="dash-total">0</strong></div>
+    <div class="dashboard-card"><span>Total Ativos</span><strong id="dash-total">0</strong></div>
     <div class="dashboard-card disponiveis"><span>Disponíveis</span><strong id="dash-disponiveis">0</strong></div>
     <div class="dashboard-card esgotados"><span>Esgotados</span><strong id="dash-esgotados">0</strong></div>
   </div>
 
   <div class="card">
-    <h2 class="secao" style="margin-top:0;" id="titulo-form">Novo produto</h2>
+    <h2 style="font-size:1rem;margin-top:0;" id="titulo-form">Novo Produto</h2>
 
     <form id="form-produto">
       <input type="hidden" id="produto-id">
 
       <label>Nome do produto</label>
-      <input type="text" id="nome" required placeholder="Ex: Vestido floral longo">
+      <input type="text" id="nome" required placeholder="Ex: Vestido Floral Midi">
 
       <details class="selecao-expansivel" id="details-categoria">
         <summary>Categoria <span class="resumo" id="resumo-categoria">(nenhuma selecionada)</span></summary>
@@ -254,99 +133,119 @@
 
       <div class="form-linha">
         <div>
-          <label>Preço (valor cheio)</label>
-          <input type="number" id="preco" step="0.01" min="0" required placeholder="Ex: 22,22" inputmode="decimal">
+          <label>Preço Cheio (R$)</label>
+          <input type="number" id="preco" step="0.01" min="0" required placeholder="Ex: 89.90" inputmode="decimal">
         </div>
         <div>
-          <label>Estoque (quantidade)</label>
+          <label>Estoque (qtd)</label>
           <input type="number" id="estoque" step="1" min="0" placeholder="Ex: 5">
         </div>
       </div>
-      <div class="preco-avista" id="preco-avista"></div>
 
-      <div class="form-linha">
-        <div>
-          <label>Tamanhos</label>
-          <input type="text" id="tamanhos" placeholder="P, M, G, GG">
+      <details class="extra">
+        <summary>Detalhes (Tamanhos, Cores, Fotos Galeria)</summary>
+
+        <div class="form-linha">
+          <div>
+            <label>Tamanhos</label>
+            <input type="text" id="tamanhos" placeholder="P, M, G, GG">
+          </div>
+          <div>
+            <label>Cores</label>
+            <input type="text" id="cores" placeholder="Preto, Off-white">
+          </div>
         </div>
-        <div>
-          <label>Cores</label>
-          <input type="text" id="cores" placeholder="Preto, Branco, Rosa">
+
+        <label>Descrição detalhada</label>
+        <textarea id="descricao" rows="2" placeholder="Tecido viscose, caimento leve..."></textarea>
+
+        <div class="checkbox-linha">
+          <input type="checkbox" id="novidade">
+          <label for="novidade">Destacar como Novidade</label>
         </div>
-      </div>
+      </details>
 
-      <label>Descrição (opcional)</label>
-      <textarea id="descricao" rows="2" placeholder="Tecido, detalhes..."></textarea>
-
-      <div class="checkbox-linha">
-        <input type="checkbox" id="novidade">
-        <label for="novidade">Marcar como novidade</label>
-      </div>
-
-      <label>Foto</label>
+      <label>Foto Principal</label>
       <div class="foto-box">
         <input type="file" id="foto" accept="image/*">
-
         <div id="crop-section">
-          <div class="crop-container" id="crop-container">
-            <img id="crop-img" alt="">
-          </div>
-          <div class="crop-hint">Arraste para posicionar</div>
-          <div class="zoom-row">
-            <span style="font-size:1rem;">🔍</span>
-            <input type="range" id="zoom-slider" min="1" max="3" step="0.01" value="1">
-          </div>
-          <button type="button" class="btn-confirmar-corte" id="btn-confirmar-corte">Usar esta foto</button>
-          <button type="button" class="btn-outra-foto" id="btn-outra-foto">Escolher outra foto</button>
+          <div class="crop-container" id="crop-container"><img id="crop-img" alt=""></div>
+          <div style="margin-top:8px;"><input type="range" id="zoom-slider" min="1" max="3" step="0.01" value="1"></div>
+          <button type="button" id="btn-confirmar-corte" style="margin-top:8px;background:var(--laranja);">Ajustar & Salvar Foto</button>
         </div>
-
         <img id="preview-final">
-        <br>
-        <button type="button" class="link-trocar" id="link-trocar">Trocar foto</button>
       </div>
 
-      <button type="submit" class="btn-primario" id="btn-salvar">Cadastrar produto</button>
-      <button type="button" class="btn-cancelar-edicao" id="btn-cancelar-edicao" style="display:none;">Cancelar edição</button>
-      <div id="status"></div>
-      <div id="fila-envio"></div>
+      <button type="submit" class="btn-primario" id="btn-salvar">Cadastrar Peça</button>
+      <div id="status" style="text-align:center;font-size:0.85rem;margin-top:8px;"></div>
     </form>
   </div>
 
-  <h2 class="secao">Produtos cadastrados</h2>
-  <div class="busca-lista">
-    <input type="text" id="busca-admin" placeholder="🔎 Buscar produto...">
+  <!-- Ações em Lote -->
+  <div class="bulk-bar" id="bulk-bar">
+    <div class="bulk-bar-header">
+      <span id="bulk-count">0 selecionados</span>
+      <button type="button" style="width:auto;padding:2px 8px;" id="btn-cancelar-bulk">Desmarcar todos</button>
+    </div>
+    <div class="bulk-bar-actions">
+      <button type="button" id="btn-bulk-preco">% Alterar Preços</button>
+      <button type="button" id="btn-bulk-novidade">Marcar Novidades</button>
+      <button type="button" id="btn-bulk-arquivar">🗃️ Arquivar em Massa</button>
+    </div>
   </div>
-  <div id="lista-produtos"><p style="text-align:center;color:#999;">Carregando...</p></div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 8px;">
+    <h2 style="font-size:0.95rem;margin:0;">Estoque & Atendimento</h2>
+    <button type="button" id="btn-select-all" style="width:auto;padding:4px 8px;font-size:0.75rem;">Selecionar todos</button>
+  </div>
+
+  <div style="margin-bottom:12px;"><input type="text" id="busca-admin" placeholder="🔎 Filtrar catálogo rápido..."></div>
+  <div id="lista-produtos"><p style="text-align:center;color:#999;">Carregando peças...</p></div>
 
 </main>
 
 <canvas id="canvas-oculto" style="display:none;"></canvas>
 
+<div id="overlay-compartilhar"><div class="painel-compartilhar" id="painel-compartilhar-conteudo"></div></div>
+
 <script>
-  let categorias = [];
-  let generos = [];
-  let produtos = [];
-  let fotoBase64 = null;
-  let fotoMime = 'image/jpeg';
-  let selecionadasCategorias = new Set();
-  let selecionadosGeneros = new Set();
-  let editandoId = null;
+  const API_URL = 'https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec';
+  const DESCONTO_AVISTA = 0.10;
 
-  function formatarReal(valor) {
-    return 'R$ ' + Number(valor).toFixed(2).replace('.', ',');
-  }
+  let adminPin = sessionStorage.getItem('tenkiter_admin_pin') || '';
+  let funcionarioNome = localStorage.getItem('tenkiter_funcionario') || '';
 
-  function estoqueInformado(p) {
-    return p.Estoque !== '' && p.Estoque !== undefined && p.Estoque !== null;
-  }
-  function estaEsgotado(p) {
-    return estoqueInformado(p) && Number(p.Estoque) <= 0;
-  }
-  function ehNovidade(p) {
-    return p.Novidade === true || String(p.Novidade).toUpperCase() === 'TRUE';
+  function identificarFuncionario() {
+    const nome = prompt('Digite seu nome/identificação (ex: Carla, Pablo):', funcionarioNome);
+    if (nome) {
+      funcionarioNome = nome;
+      localStorage.setItem('tenkiter_funcionario', nome);
+      document.getElementById('lbl-funcionario').textContent = nome;
+    }
   }
 
-  // ---------- Carregar categorias / gêneros ----------
+  function pedirPin() {
+    const novoPin = prompt('Digite o PIN de acesso:');
+    if (novoPin) {
+      adminPin = novoPin;
+      sessionStorage.setItem('tenkiter_admin_pin', novoPin);
+    }
+  }
+
+  if (!funcionarioNome) identificarFuncionario();
+  else document.getElementById('lbl-funcionario').textContent = funcionarioNome;
+  if (!adminPin) pedirPin();
+
+  document.getElementById('btn-trocar-user').addEventListener('click', identificarFuncionario);
+
+  let categorias = [], generos = [], produtos = [];
+  let selecionadasCategorias = new Set(), selecionadosGeneros = new Set();
+  let selecionadosBulk = new Set();
+  let fotoBase64 = null, fotoStoriesBase64 = null;
+
+  function formatarReal(v) { return 'R$ ' + Number(v).toFixed(2).replace('.', ','); }
+  function estaEsgotado(p) { return p.Estoque !== '' && p.Estoque !== undefined && Number(p.Estoque) <= 0; }
+
   async function carregarListas() {
     const [rc, rg] = await Promise.all([
       fetch(API_URL + '?action=categorias').then(r => r.json()),
@@ -354,274 +253,75 @@
     ]);
     categorias = rc.categorias || [];
     generos = rg.generos || [];
-    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', selecionadasCategorias, 'chips-categoria'), 'resumo-categoria');
-    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', selecionadosGeneros, 'chips-genero'), 'resumo-genero');
+    renderizarChips('chips-categoria', categorias, selecionadasCategorias);
+    renderizarChips('chips-genero', generos, selecionadosGeneros);
   }
 
-  function atualizarResumo(idResumo, conjuntoSelecionado) {
-    const el = document.getElementById(idResumo);
-    if (!el) return;
-    el.textContent = conjuntoSelecionado.size
-      ? '(' + Array.from(conjuntoSelecionado).join(', ') + ')'
-      : (idResumo === 'resumo-categoria' ? '(nenhuma selecionada)' : '(nenhum selecionado)');
-  }
-
-  function renderizarChips(idContainer, valores, conjuntoSelecionado, aoAdicionarNovo, idResumo) {
+  function renderizarChips(idContainer, valores, conjunto) {
     const container = document.getElementById(idContainer);
     container.innerHTML = '';
     valores.forEach(v => {
       const chip = document.createElement('button');
       chip.type = 'button';
-      chip.className = 'chip' + (conjuntoSelecionado.has(v) ? ' selecionado' : '');
+      chip.className = 'chip' + (conjunto.has(v) ? ' selecionado' : '');
       chip.textContent = v;
       chip.addEventListener('click', () => {
-        if (conjuntoSelecionado.has(v)) conjuntoSelecionado.delete(v);
-        else conjuntoSelecionado.add(v);
+        if (conjunto.has(v)) conjunto.delete(v); else conjunto.add(v);
         chip.classList.toggle('selecionado');
-        if (idResumo) atualizarResumo(idResumo, conjuntoSelecionado);
       });
       container.appendChild(chip);
     });
-    const chipAdd = document.createElement('button');
-    chipAdd.type = 'button';
-    chipAdd.className = 'chip add';
-    chipAdd.textContent = '+ Novo';
-    chipAdd.addEventListener('click', aoAdicionarNovo);
-    container.appendChild(chipAdd);
-    if (idResumo) atualizarResumo(idResumo, conjuntoSelecionado);
   }
 
-  async function adicionarNovoValor(action, conjuntoSelecionado, idContainer) {
-    const novo = prompt('Digite o novo valor:');
-    if (!novo || !novo.trim()) return;
-    const resp = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: action, nome: novo.trim() })
-    }).then(r => r.json());
-    if (!resp.ok) { alert(resp.erro || 'Não foi possível adicionar.'); return; }
-    await carregarListas();
-    conjuntoSelecionado.add(novo.trim());
-    renderizarChips(idContainer, action === 'addCategoria' ? categorias : generos, conjuntoSelecionado,
-      () => adicionarNovoValor(action, conjuntoSelecionado, idContainer),
-      idContainer === 'chips-categoria' ? 'resumo-categoria' : 'resumo-genero');
-  }
-
-  // ---------- Preço à vista ----------
-  document.getElementById('preco').addEventListener('input', (e) => {
-    const valor = parseFloat(e.target.value);
-    const box = document.getElementById('preco-avista');
-    if (isNaN(valor) || valor <= 0) { box.textContent = ''; return; }
-    const avista = valor * (1 - DESCONTO_AVISTA);
-    box.textContent = `À vista (10% off): ${formatarReal(avista)}`;
-  });
-
-  // ===================== FOTO: seleção, corte 4:5 e compressão =====================
+  // Crop & Foto Processing
+  const inputFoto = document.getElementById('foto');
   const cropSection = document.getElementById('crop-section');
   const cropContainer = document.getElementById('crop-container');
   const cropImg = document.getElementById('crop-img');
   const zoomSlider = document.getElementById('zoom-slider');
   const previewFinal = document.getElementById('preview-final');
-  const linkTrocar = document.getElementById('link-trocar');
-  const inputFoto = document.getElementById('foto');
 
   let crop = { img: null, naturalW: 0, naturalH: 0, baseScale: 1, zoom: 1, offsetX: 0, offsetY: 0 };
-  let arrastando = false, ultimoX = 0, ultimoY = 0;
 
   inputFoto.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const leitor = new FileReader();
     leitor.onload = () => {
-      const imagem = new Image();
-      imagem.onload = () => iniciarCorte(imagem);
-      imagem.src = leitor.result;
+      const img = new Image();
+      img.onload = () => {
+        crop.img = img; crop.naturalW = img.naturalWidth; crop.naturalH = img.naturalHeight;
+        crop.baseScale = Math.max(260 / crop.naturalW, 325 / crop.naturalH);
+        cropImg.src = img.src;
+        cropSection.style.display = 'block';
+      };
+      img.src = leitor.result;
     };
     leitor.readAsDataURL(file);
   });
 
-  function iniciarCorte(imagem) {
-    crop.img = imagem;
-    crop.naturalW = imagem.naturalWidth;
-    crop.naturalH = imagem.naturalHeight;
-    const containerW = cropContainer.clientWidth || 260;
-    const containerH = cropContainer.clientHeight || 325;
-    crop.baseScale = Math.max(containerW / crop.naturalW, containerH / crop.naturalH);
-    crop.zoom = 1;
-    crop.offsetX = 0;
-    crop.offsetY = 0;
-    zoomSlider.value = 1;
-
-    cropImg.src = imagem.src;
-    cropImg.style.width = crop.naturalW + 'px';
-    cropImg.style.height = crop.naturalH + 'px';
-
-    cropSection.style.display = 'block';
-    previewFinal.style.display = 'none';
-    linkTrocar.style.display = 'none';
-    renderizarCorte();
-  }
-
-  function renderizarCorte() {
-    const escalaTotal = crop.baseScale * crop.zoom;
-    cropImg.style.transform =
-      `translate(-50%, -50%) translate(${crop.offsetX}px, ${crop.offsetY}px) scale(${escalaTotal})`;
-  }
-
-  cropContainer.addEventListener('touchstart', (e) => {
-    arrastando = true;
-    ultimoX = e.touches[0].clientX;
-    ultimoY = e.touches[0].clientY;
-  }, { passive: true });
-
-  cropContainer.addEventListener('touchmove', (e) => {
-    if (!arrastando) return;
-    const x = e.touches[0].clientX, y = e.touches[0].clientY;
-    crop.offsetX += (x - ultimoX);
-    crop.offsetY += (y - ultimoY);
-    ultimoX = x; ultimoY = y;
-    renderizarCorte();
-    e.preventDefault();
-  }, { passive: false });
-
-  cropContainer.addEventListener('touchend', () => { arrastando = false; });
-  cropContainer.addEventListener('mousedown', (e) => { arrastando = true; ultimoX = e.clientX; ultimoY = e.clientY; });
-  window.addEventListener('mousemove', (e) => {
-    if (!arrastando || !crop.img) return;
-    crop.offsetX += (e.clientX - ultimoX);
-    crop.offsetY += (e.clientY - ultimoY);
-    ultimoX = e.clientX; ultimoY = e.clientY;
-    renderizarCorte();
-  });
-  window.addEventListener('mouseup', () => { arrastando = false; });
-
-  zoomSlider.addEventListener('input', () => {
-    crop.zoom = parseFloat(zoomSlider.value);
-    renderizarCorte();
-  });
-
-  document.getElementById('btn-outra-foto').addEventListener('click', () => { inputFoto.value = ''; inputFoto.click(); });
-
   document.getElementById('btn-confirmar-corte').addEventListener('click', () => {
-    const containerW = cropContainer.clientWidth || 260;
-    const escalaTotal = crop.baseScale * crop.zoom;
-    const escalaSaida = SAIDA_LARGURA / containerW;
-
     const canvas = document.getElementById('canvas-oculto');
-    canvas.width = SAIDA_LARGURA;
-    canvas.height = SAIDA_ALTURA;
+    canvas.width = 900; canvas.height = 1125;
     const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, SAIDA_LARGURA, SAIDA_ALTURA);
-    ctx.save();
-    ctx.translate(SAIDA_LARGURA / 2, SAIDA_ALTURA / 2);
-    ctx.scale(escalaSaida, escalaSaida);
-    ctx.translate(crop.offsetX, crop.offsetY);
-    ctx.drawImage(
-      crop.img,
-      -(crop.naturalW * escalaTotal) / 2,
-      -(crop.naturalH * escalaTotal) / 2,
-      crop.naturalW * escalaTotal,
-      crop.naturalH * escalaTotal
-    );
-    ctx.restore();
-
-    const dataUrl = canvas.toDataURL('image/jpeg', SAIDA_QUALIDADE);
+    ctx.drawImage(crop.img, 0, 0, 900, 1125);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
     fotoBase64 = dataUrl.split(',')[1];
-    fotoMime = 'image/jpeg';
-
     previewFinal.src = dataUrl;
-    previewFinal.style.display = 'inline-block';
-    linkTrocar.style.display = 'inline-block';
+    previewFinal.style.display = 'block';
     cropSection.style.display = 'none';
   });
 
-  linkTrocar.addEventListener('click', () => { inputFoto.value = ''; inputFoto.click(); });
-
-  // ---------- Fila de envio em segundo plano (cadastro e edição) ----------
-  let filaEnvio = [];
-
-  function renderizarFila() {
-    const el = document.getElementById('fila-envio');
-    if (!filaEnvio.length) { el.innerHTML = ''; return; }
-    el.innerHTML = filaEnvio.map(item => `
-      <div class="fila-item ${item.status === 'erro' ? 'erro' : ''}">
-        <span>${item.status === 'erro' ? '⚠️ Falhou: ' : (item.dados.action === 'update' ? '⏳ Atualizando: ' : '⏳ Enviando: ')}${item.nome}</span>
-        ${item.status === 'erro' ? `<button type="button" class="btn-retry" data-tempid="${item.tempId}">Tentar de novo</button>` : ''}
-      </div>
-    `).join('');
-    el.querySelectorAll('.btn-retry').forEach(btn => btn.addEventListener('click', () => tentarNovamente(btn.dataset.tempid)));
-  }
-
-  function enviarEmSegundoPlano(dados) {
-    const tempId = 'tmp' + Date.now() + Math.random().toString(36).slice(2);
-    filaEnvio.push({ tempId, nome: dados.nome || '(editado)', status: 'enviando', dados });
-    renderizarFila();
-    executarEnvio(tempId);
-  }
-
-  function tentarNovamente(tempId) {
-    const item = filaEnvio.find(i => i.tempId === tempId);
-    if (!item) return;
-    item.status = 'enviando';
-    renderizarFila();
-    executarEnvio(tempId);
-  }
-
-  function executarEnvio(tempId) {
-    const item = filaEnvio.find(i => i.tempId === tempId);
-    if (!item) return;
-    fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(item.dados)
-    })
-      .then(r => r.json())
-      .then(async (resp) => {
-        filaEnvio = filaEnvio.filter(i => i.tempId !== tempId);
-        renderizarFila();
-        if (resp.ok) {
-          await carregarProdutos();
-        } else {
-          alert('Erro ao salvar "' + (item.dados.nome || '') + '": ' + (resp.erro || 'desconhecido'));
-        }
-      })
-      .catch(() => {
-        const atual = filaEnvio.find(i => i.tempId === tempId);
-        if (atual) { atual.status = 'erro'; renderizarFila(); }
-      });
-  }
-
-  function limparFormulario() {
-    document.getElementById('form-produto').reset();
-    document.getElementById('produto-id').value = '';
-    previewFinal.style.display = 'none';
-    linkTrocar.style.display = 'none';
-    document.getElementById('preco-avista').textContent = '';
-    fotoBase64 = null;
-    selecionadasCategorias = new Set();
-    selecionadosGeneros = new Set();
-    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', selecionadasCategorias, 'chips-categoria'), 'resumo-categoria');
-    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', selecionadosGeneros, 'chips-genero'), 'resumo-genero');
-    editandoId = null;
-    document.getElementById('titulo-form').textContent = 'Novo produto';
-    document.getElementById('btn-salvar').textContent = 'Cadastrar produto';
-    document.getElementById('btn-cancelar-edicao').style.display = 'none';
-  }
-
-  document.getElementById('btn-cancelar-edicao').addEventListener('click', limparFormulario);
-
-  // ---------- Cadastrar / Salvar edição ----------
-  document.getElementById('form-produto').addEventListener('submit', (e) => {
+  // Salvar Produto
+  document.getElementById('form-produto').addEventListener('submit', async (e) => {
     e.preventDefault();
     const status = document.getElementById('status');
-
-    const editando = !!editandoId;
-    if (!editando && !fotoBase64) { status.textContent = 'Selecione e ajuste uma foto.'; return; }
-    if (selecionadasCategorias.size === 0) { status.textContent = 'Escolha ao menos uma categoria.'; return; }
-    if (selecionadosGeneros.size === 0) { status.textContent = 'Escolha ao menos um gênero.'; return; }
+    status.textContent = 'Enviando produto...';
 
     const dados = {
-      action: editando ? 'update' : 'create',
+      action: 'create',
+      pin: adminPin,
+      funcionario: funcionarioNome,
       nome: document.getElementById('nome').value.trim(),
       categoria: Array.from(selecionadasCategorias).join(', '),
       genero: Array.from(selecionadosGeneros).join(', '),
@@ -630,158 +330,133 @@
       tamanhos: document.getElementById('tamanhos').value.trim(),
       cores: document.getElementById('cores').value.trim(),
       descricao: document.getElementById('descricao').value.trim(),
-      novidade: document.getElementById('novidade').checked
+      novidade: document.getElementById('novidade').checked,
+      fotoBase64: fotoBase64
     };
-    if (editando) dados.id = editandoId;
-    if (fotoBase64) { dados.fotoBase64 = fotoBase64; dados.fotoMime = fotoMime; }
 
-    limparFormulario();
-    status.textContent = editando ? 'Alterações adicionadas — salvando em segundo plano.' : 'Produto adicionado — enviando em segundo plano.';
-    setTimeout(() => status.textContent = '', 2500);
+    const resp = await fetch(API_URL, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(dados)
+    }).then(r => r.json());
 
-    enviarEmSegundoPlano(dados);
+    if (resp.ok) {
+      status.textContent = '✅ Cadastrado com sucesso!';
+      document.getElementById('form-produto').reset();
+      previewFinal.style.display = 'none';
+      await carregarProdutos();
+    } else {
+      status.textContent = '❌ Erro: ' + (resp.erro || 'Falha ao salvar');
+    }
   });
 
-  // ---------- Editar produto existente ----------
-  function editarProduto(id) {
-    const p = produtos.find(x => String(x.ID) === String(id));
-    if (!p) return;
-
-    editandoId = id;
-    document.getElementById('produto-id').value = id;
-    document.getElementById('nome').value = p.Nome || '';
-    document.getElementById('preco').value = p.Preco || '';
-    document.getElementById('estoque').value = estoqueInformado(p) ? p.Estoque : '';
-    document.getElementById('tamanhos').value = p.Tamanhos || '';
-    document.getElementById('cores').value = p.Cores || '';
-    document.getElementById('descricao').value = p.Descricao || '';
-    document.getElementById('novidade').checked = ehNovidade(p);
-
-    selecionadasCategorias = new Set(String(p.Categoria || '').split(',').map(s => s.trim()).filter(Boolean));
-    selecionadosGeneros = new Set(String(p.Genero || '').split(',').map(s => s.trim()).filter(Boolean));
-    renderizarChips('chips-categoria', categorias, selecionadasCategorias, () => adicionarNovoValor('addCategoria', selecionadasCategorias, 'chips-categoria'), 'resumo-categoria');
-    renderizarChips('chips-genero', generos, selecionadosGeneros, () => adicionarNovoValor('addGenero', selecionadosGeneros, 'chips-genero'), 'resumo-genero');
-
-    fotoBase64 = null;
-    if (p.Foto_URL) {
-      previewFinal.src = p.Foto_URL;
-      previewFinal.style.display = 'inline-block';
-      linkTrocar.style.display = 'inline-block';
-    }
-
-    const valor = parseFloat(p.Preco);
-    document.getElementById('preco-avista').textContent = !isNaN(valor) && valor > 0
-      ? `À vista (10% off): ${formatarReal(valor * (1 - DESCONTO_AVISTA))}` : '';
-
-    document.getElementById('titulo-form').textContent = 'Editando: ' + p.Nome;
-    document.getElementById('btn-salvar').textContent = 'Salvar alterações';
-    document.getElementById('btn-cancelar-edicao').style.display = 'block';
-
-    document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
-  }
-
-  // ---------- Listar produtos ----------
   async function carregarProdutos() {
     const resp = await fetch(API_URL + '?action=list').then(r => r.json());
     produtos = (resp.produtos || []).reverse();
-    atualizarDashboard();
     renderizarProdutos();
   }
 
-  function atualizarDashboard() {
+  function renderizarProdutos() {
+    const busca = document.getElementById('busca-admin').value.trim().toLowerCase();
+    const lista = produtos.filter(p => !busca || String(p.Nome).toLowerCase().includes(busca) || String(p.Codigo||'').toLowerCase().includes(busca));
+    const container = document.getElementById('lista-produtos');
+
     document.getElementById('dash-total').textContent = produtos.length;
     document.getElementById('dash-disponiveis').textContent = produtos.filter(p => !estaEsgotado(p)).length;
     document.getElementById('dash-esgotados').textContent = produtos.filter(p => estaEsgotado(p)).length;
-  }
 
-  document.getElementById('busca-admin').addEventListener('input', renderizarProdutos);
+    if (!lista.length) { container.innerHTML = '<p style="text-align:center;color:#999;">Nenhuma peça cadastrada.</p>'; return; }
 
-  function renderizarProdutos() {
-    const busca = document.getElementById('busca-admin').value.trim().toLowerCase();
-    const lista = produtos.filter(p => !busca || String(p.Nome).toLowerCase().includes(busca));
-
-    const container = document.getElementById('lista-produtos');
-    if (!lista.length) {
-      container.innerHTML = '<p style="text-align:center;color:#999;">Nenhum produto encontrado.</p>';
-      return;
-    }
-    container.innerHTML = '';
-    lista.forEach(p => {
-      const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
-      const esgotado = estaEsgotado(p);
-      const div = document.createElement('div');
-      div.className = 'produto';
-      div.innerHTML = `
-        <img src="${p.Foto_URL}" alt="" loading="lazy">
+    container.innerHTML = lista.map(p => `
+      <div class="produto">
+        <input type="checkbox" class="produto-chk" data-id="${p.ID}" ${selecionadosBulk.has(p.ID) ? 'checked' : ''}>
+        <img src="${p.Foto_URL}" alt="">
         <div class="produto-info">
+          <div class="codigo">${p.Codigo || ''}</div>
           <div class="nome">${p.Nome}</div>
-          <div class="preco">${formatarReal(p.Preco)} · à vista <span>${formatarReal(avista)}</span></div>
-          <div class="tags">${p.Categoria} · ${p.Genero}</div>
-          ${p.Descricao ? `<div class="desc">${p.Descricao}</div>` : ''}
-          <div class="selo-linha">
-            ${ehNovidade(p) ? '<span class="selo novidade">NOVIDADE</span>' : ''}
-            ${esgotado ? '<span class="selo esgotado">ESGOTADO</span>' : (estoqueInformado(p) ? `<span class="selo estoque">Estoque: ${p.Estoque}</span>` : '')}
-          </div>
+          <div class="preco">${formatarReal(p.Preco)} · à vista <span>${formatarReal(p.Preco * (1 - DESCONTO_AVISTA))}</span></div>
         </div>
         <div class="acoes">
-          <button class="btn-editar" data-id="${p.ID}">✏️ Editar</button>
-          <button class="btn-compartilhar" data-id="${p.ID}">📤 Stories</button>
-          <button class="btn-excluir" data-id="${p.ID}">🗑 Excluir</button>
+          <button type="button" style="background:#eee;" onclick="copiarLink('${p.ID}')">🔗 Link</button>
         </div>
-      `;
-      container.appendChild(div);
-    });
+      </div>
+    `).join('');
 
-    container.querySelectorAll('.btn-editar').forEach(btn => btn.addEventListener('click', () => editarProduto(btn.dataset.id)));
-    container.querySelectorAll('.btn-excluir').forEach(btn => btn.addEventListener('click', () => excluirProduto(btn.dataset.id)));
-    container.querySelectorAll('.btn-compartilhar').forEach(btn => btn.addEventListener('click', () => compartilharStories(btn.dataset.id)));
+    container.querySelectorAll('.produto-chk').forEach(chk => {
+      chk.addEventListener('change', (e) => {
+        if (e.target.checked) selecionadosBulk.add(e.target.dataset.id);
+        else selecionadosBulk.delete(e.target.dataset.id);
+        atualizarBarraBulk();
+      });
+    });
   }
 
-  // ---------- Excluir ----------
-  async function excluirProduto(id) {
-    if (!confirm('Excluir este produto do catálogo?')) return;
-    await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'delete', id: id })
-    });
-    await carregarProdutos();
-  }
-
-  // ---------- Compartilhar no Stories ----------
-  async function compartilharStories(id) {
-    const produto = produtos.find(p => String(p.ID) === String(id));
-    if (!produto) return;
-    const link = API_URL + '?action=share&id=' + produto.ID;
-    const textoCompartilhar = `${produto.Nome} — ${formatarReal(produto.Preco)}\n${link}`;
-
-    try { await navigator.clipboard.writeText(link); } catch (e) {}
-
-    let arquivoImagem = null;
-    try {
-      const blob = await fetch(produto.Foto_URL).then(r => r.blob());
-      arquivoImagem = new File([blob], 'produto.jpg', { type: blob.type || 'image/jpeg' });
-    } catch (e) { arquivoImagem = null; }
-
-    if (navigator.share) {
-      try {
-        if (arquivoImagem && navigator.canShare && navigator.canShare({ files: [arquivoImagem] })) {
-          await navigator.share({ files: [arquivoImagem], text: textoCompartilhar });
-        } else {
-          await navigator.share({ text: textoCompartilhar });
-        }
-        return;
-      } catch (e) {}
+  function atualizarBarraBulk() {
+    const bar = document.getElementById('bulk-bar');
+    const cnt = document.getElementById('bulk-count');
+    if (selecionadosBulk.size > 0) {
+      bar.classList.add('ativa');
+      cnt.textContent = selecionadosBulk.size + ' selecionados';
+    } else {
+      bar.classList.remove('ativa');
     }
-    alert('Link copiado! Abra a foto do produto, salve/segure para compartilhar, e cole o link no Stories.');
   }
 
-  // ---------- Início ----------
+  document.getElementById('btn-cancelar-bulk').addEventListener('click', () => {
+    selecionadosBulk.clear();
+    atualizarBarraBulk();
+    renderizarProdutos();
+  });
+
+  document.getElementById('btn-bulk-preco').addEventListener('click', async () => {
+    const pct = prompt('Digite a porcentagem de reajuste (ex: 10 para +10%, -15 para 15% de desconto):');
+    if (!pct) return;
+    await executarAcaoEmLote('ajustarPrecoPorcento', pct);
+  });
+
+  document.getElementById('btn-bulk-novidade').addEventListener('click', async () => {
+    await executarAcaoEmLote('marcarNovidade', true);
+  });
+
+  document.getElementById('btn-bulk-arquivar').addEventListener('click', async () => {
+    if (confirm('Arquivar os produtos selecionados?')) {
+      await executarAcaoEmLote('arquivar', true);
+    }
+  });
+
+  async function executarAcaoEmLote(tipoAcao, valor) {
+    const resp = await fetch(API_URL, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'bulkUpdate',
+        pin: adminPin,
+        funcionario: funcionarioNome,
+        ids: Array.from(selecionadosBulk),
+        tipoAcao: tipoAcao,
+        valor: valor
+      })
+    }).then(r => r.json());
+
+    if (resp.ok) {
+      alert('Ação realizada em ' + resp.afetados + ' produtos!');
+      selecionadosBulk.clear();
+      atualizarBarraBulk();
+      await carregarProdutos();
+    } else {
+      alert('Erro ao executar ação em lote.');
+    }
+  }
+
+  function copiarLink(id) {
+    const link = API_URL + '?action=share&id=' + id;
+    navigator.clipboard.writeText(link);
+    alert('Link copiado!');
+  }
+
   (async function iniciar() {
     await carregarListas();
     await carregarProdutos();
   })();
 </script>
-
 </body>
 </html>
+
