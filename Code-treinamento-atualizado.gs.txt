@@ -1,0 +1,122 @@
+// TENKiTER Treinamento -- backend do site (Google Apps Script)
+//
+// O que faz:
+//  - doGet: lê a planilha "Funcionarios" e devolve a lista em JSON
+//    (nome, whatsapp, senha, nível) -- usado pro site fazer login e
+//    liberar os níveis.
+//  - doPost:
+//      action "registrar"  -> cadastra um novo funcionário no Nível 1
+//                              (usado pelo botão "Cadastre-se" do site)
+//      action "resultado"  -> registra o resultado de uma avaliação na
+//                              planilha "Resultados"
+//    Ambos só aceitam se o "token" enviado pelo site bater com o TOKEN
+//    abaixo.
+//
+// Como implantar (resumo -- passo a passo completo vai na mensagem):
+//  1. script.google.com -> Novo projeto -> apagar o código de exemplo
+//     e colar este arquivo inteiro.
+//  2. Implantar -> Nova implantação -> tipo "App da Web".
+//  3. "Executar como": Eu (sua conta). "Quem pode acessar": Qualquer pessoa.
+//  4. Autorizar o acesso quando o Google pedir.
+//  5. Copiar a URL do app da Web (termina em /exec) e me enviar.
+//
+// IMPORTANTE sobre a planilha "Funcionarios": a primeira linha (cabeçalho)
+// precisa ter as colunas, nesta ordem: Nome | WhatsApp | Senha | Nivel
+// (maiúscula/minúscula não importa). Todo cadastro feito pelo site entra
+// automaticamente com Nivel = 1. Para liberar o Nível 2 ou 3 de alguém,
+// edite direto essa coluna na planilha, mudando o número (1, 2 ou 3).
+
+var FUNCIONARIOS_SHEET_ID = "1FMJU_lGGN7nwhDXEnpRCcFdaSVzTWcbQjOZKvOA-dxY";
+var RESULTADOS_SHEET_ID   = "1yR1Yfm7dSN_rf0vk-J121rebEbY2ajdWVaR4WqDCZlY";
+var TOKEN = "tenkiter2026"; // tem que ser igual ao appsScriptToken do site (manual.html)
+
+function normalizarWhats_(w) {
+  var d = String(w || '').replace(/\D/g, '');
+  if (d.length >= 12 && d.slice(0, 2) === '55') d = d.slice(2);
+  return d;
+}
+
+function doGet(e) {
+  var ss = SpreadsheetApp.openById(FUNCIONARIOS_SHEET_ID);
+  var sheet = ss.getSheets()[0];
+  var rows = sheet.getDataRange().getValues();
+  var headers = rows.shift().map(function (h) {
+    return String(h).trim().toLowerCase();
+  });
+  var funcionarios = rows
+    .filter(function (r) { return r.join("").trim() !== ""; })
+    .map(function (r) {
+      var obj = {};
+      headers.forEach(function (h, i) { obj[h] = r[i]; });
+      return obj;
+    });
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true, funcionarios: funcionarios }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    if (data.token !== TOKEN) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, erro: "token inválido" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (data.action === 'registrar') return registrarFuncionario_(data);
+    return registrarResultado_(data); // compatível com chamadas antigas sem "action"
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, erro: String(err) }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function registrarFuncionario_(data) {
+  var nome = String(data.nome || '').trim();
+  var whatsapp = normalizarWhats_(data.whatsapp);
+  var senha = String(data.senha || '');
+
+  if (!nome || !whatsapp || !senha) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, erro: 'Nome, WhatsApp e senha são obrigatórios.' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var sheet = SpreadsheetApp.openById(FUNCIONARIOS_SHEET_ID).getSheets()[0];
+  var rows = sheet.getDataRange().getValues();
+  var headers = rows.shift().map(function (h) { return String(h).trim().toLowerCase(); });
+  var idxWhats = headers.indexOf('whatsapp');
+
+  var jaExiste = rows.some(function (r) {
+    return idxWhats !== -1 && normalizarWhats_(r[idxWhats]) === whatsapp;
+  });
+  if (jaExiste) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, erro: 'Já existe uma conta com esse WhatsApp.' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  sheet.appendRow([nome, whatsapp, senha, 1]); // Nível 1 por padrão -- Nome | WhatsApp | Senha | Nivel
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function registrarResultado_(data) {
+  var ss = SpreadsheetApp.openById(RESULTADOS_SHEET_ID);
+  var sheet = ss.getSheets()[0];
+  sheet.appendRow([
+    data.nome || "",
+    data.whatsapp || "",
+    data.nivel || "",
+    data.manual || "",
+    data.nota || "",
+    data.total || "",
+    data.data || ""
+  ]);
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true }))
+    .setMimeType(ContentService.MimeType.JSON);
+}

@@ -1,0 +1,652 @@
+// ===================== CONFIGURAÇÃO =====================
+const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl';
+const SHEET_PRODUTOS = 'Sheet1';
+const SHEET_CATEGORIAS = 'Categorias';
+const SHEET_GENEROS = 'Generos';
+const SHEET_HISTORICO = 'Historico';
+const SHEET_EVENTOS = 'Eventos';
+const SHEET_AUDITORIA = 'Acoes_Audit';
+const SITE_URL = 'https://tenkiter-catalogo.onrender.com/';
+
+const CATEGORIAS_PADRAO = [
+  'Blusas', 'Camisetas', 'Calças', 'Vestidos', 'Shorts', 'Saias',
+  'Conjuntos', 'Jaquetas', 'Moletons', 'Pijamas', 'Calçados', 'Acessórios'
+];
+
+const GENEROS_PADRAO = [
+  'Feminino Adulto', 'Masculino Adulto', 'Infantil Menina', 'Infantil Menino', 'Unissex'
+];
+
+function normalizar_(texto) {
+  return String(texto || '').trim().toLowerCase();
+}
+
+function escaparHtml_(texto) {
+  return String(texto || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function getSS_() {
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function getOrCreateSheet_(nome, headers) {
+  const ss = getSS_();
+  let sheet = ss.getSheetByName(nome);
+  if (!sheet) {
+    sheet = ss.insertSheet(nome);
+    if (headers && headers.length > 0) {
+      sheet.appendRow(headers);
+    }
+  }
+  return sheet;
+}
+
+function getListaValores_(nome, valoresPadrao) {
+  const sheet = getOrCreateSheet_(nome, ['Nome']);
+  const dados = sheet.getDataRange().getValues();
+  const valores = [];
+  for (let i = 1; i < dados.length; i++) {
+    if (dados[i][0]) valores.push(String(dados[i][0]).trim());
+  }
+  if (valores.length === 0 && valoresPadrao) {
+    valoresPadrao.forEach(v => {
+      sheet.appendRow([v]);
+      valores.push(v);
+    });
+  }
+  return valores;
+}
+
+/**
+ * Adiciona um valor novo (categoria ou gênero) numa lista, evitando duplicado.
+ * Esta função já era chamada pelo doPost (addCategoria/addGenero) mas não existia
+ * no arquivo anterior — corrigida aqui para não dar erro de servidor se essas
+ * ações forem usadas no futuro.
+ */
+function adicionarValorLista_(nomeSheet, valoresPadrao, novoValor) {
+  if (!novoValor || !String(novoValor).trim()) {
+    return { ok: false, erro: 'Valor vazio.' };
+  }
+  const valorLimpo = String(novoValor).trim();
+  const valores = getListaValores_(nomeSheet, valoresPadrao);
+  if (valores.some(v => normalizar_(v) === normalizar_(valorLimpo))) {
+    return { ok: true, jaExistia: true };
+  }
+  const sheet = getOrCreateSheet_(nomeSheet, ['Nome']);
+  sheet.appendRow([valorLimpo]);
+  return { ok: true };
+}
+
+function getProdutosSheet_() {
+  const ss = getSS_();
+  let sheet = ss.getSheetByName(SHEET_PRODUTOS);
+  if (!sheet) sheet = ss.getSheets()[0];
+  return sheet;
+}
+
+function salvarFotoDrive_(base64Data, mimeType, nomeArquivo) {
+  const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+  const bytes = Utilities.base64Decode(base64Data);
+  const blob = Utilities.newBlob(bytes, mimeType, nomeArquivo);
+  const file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return 'https://lh3.googleusercontent.com/d/' + file.getId();
+}
+
+function jsonResponse_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function validarPin_(body) {
+  const pinCorreto = PropertiesService.getScriptProperties().getProperty('ADMIN_PIN');
+  if (!pinCorreto) return true;
+  return String(body.pin || '') === String(pinCorreto);
+}
+
+/**
+ * Mesma checagem de PIN, mas para chamadas GET (que não têm corpo JSON,
+ * só parâmetros na URL). Usada pela ação 'historico'.
+ */
+function validarPinGet_(e) {
+  const pinCorreto = PropertiesService.getScriptProperties().getProperty('ADMIN_PIN');
+  if (!pinCorreto) return true;
+  return String(e.parameter.pin || '') === String(pinCorreto);
+}
+
+function proximoCodigo_() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const num = parseInt(props.getProperty('PROXIMO_CODIGO_NUM') || '0', 10) + 1;
+    props.setProperty('PROXIMO_CODIGO_NUM', String(num));
+    return 'TK-' + String(num).padStart(4, '0');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function registrarAudit_(funcionario, acao, produtoId, detalhe) {
+  const sheet = getOrCreateSheet_(SHEET_AUDITORIA, ['DataHora', 'Funcionario', 'Acao', 'ProdutoID', 'Detalhes']);
+  sheet.appendRow([new Date(), funcionario || 'Anônimo', acao, produtoId || '', JSON.stringify(detalhe || {})]);
+}
+
+function registrarHistorico_(acao, produto, anterior, funcionario) {
+  const sheet = getOrCreateSheet_(SHEET_HISTORICO, ['DataHora', 'Funcionario', 'Acao', 'ProdutoID', 'Codigo', 'Nome', 'PrecoAnterior', 'PrecoNovo', 'EstoqueAnterior', 'EstoqueNovo']);
+  sheet.appendRow([
+    new Date(), funcionario || 'Sistema', acao, produto.id || '', produto.codigo || '', produto.nome || '',
+    anterior && anterior.preco !== undefined ? anterior.preco : '',
+    produto.preco !== undefined ? produto.preco : '',
+    anterior && anterior.estoque !== undefined ? anterior.estoque : '',
+    produto.estoque !== undefined ? produto.estoque : ''
+  ]);
+  registrarAudit_(funcionario, acao, produto.id, { produto, anterior });
+}
+
+function buscarProdutoPorId_(id) {
+  const sheet = getProdutosSheet_();
+  const dados = sheet.getDataRange().getValues();
+  const headers = dados[0];
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(id)) {
+      const obj = {};
+      headers.forEach((h, idx) => obj[h] = dados[i][idx]);
+      return obj;
+    }
+  }
+  return null;
+}
+
+function paginaCompartilhamento_(id) {
+  const destino = SITE_URL + '?id=' + encodeURIComponent(id);
+  const produto = buscarProdutoPorId_(id);
+
+  if (!produto) {
+    const htmlSemProduto =
+      '<!DOCTYPE html><html><head>' +
+      '<script>try{(window.top||window).location.href=' + JSON.stringify(destino) + ';}catch(e){location.href=' + JSON.stringify(destino) + ';}</script>' +
+      '</head><body>Redirecionando... <a href="' + destino + '" target="_top">clique aqui</a></body></html>';
+    return HtmlService.createHtmlOutput(htmlSemProduto);
+  }
+
+  const preco = Number(produto.Preco) || 0;
+  const avista = (preco * 0.9).toFixed(2).replace('.', ',');
+  const precoCheio = preco.toFixed(2).replace('.', ',');
+  const codigo = produto.Codigo ? (' [' + produto.Codigo + ']') : '';
+  const titulo = '🔥 ' + produto.Nome + codigo + ' — R$ ' + avista + ' à vista';
+  const descricao = produto.Descricao
+    ? (produto.Descricao + ' | De R$ ' + precoCheio + ' por R$ ' + avista + ' à vista na TENKiTER Modas')
+    : ('De R$ ' + precoCheio + ' por R$ ' + avista + ' à vista. Confira detalhes e disponibilidade na TENKiTER Modas.');
+  const imagem = produto.Foto_URL || '';
+
+  const html = '<!DOCTYPE html><html lang="pt-BR"><head>' +
+    '<meta charset="UTF-8">' +
+    '<title>' + escaparHtml_(titulo) + '</title>' +
+    '<meta property="og:title" content="' + escaparHtml_(titulo) + '">' +
+    '<meta property="og:description" content="' + escaparHtml_(descricao) + '">' +
+    '<meta property="og:image" content="' + imagem + '">' +
+    '<meta property="og:image:width" content="900">' +
+    '<meta property="og:image:height" content="1125">' +
+    '<meta property="og:url" content="' + destino + '">' +
+    '<meta property="og:type" content="product">' +
+    '<meta name="twitter:card" content="summary_large_image">' +
+    '<meta name="twitter:title" content="' + escaparHtml_(titulo) + '">' +
+    '<meta name="twitter:description" content="' + escaparHtml_(descricao) + '">' +
+    '<meta name="twitter:image" content="' + imagem + '">' +
+    '<script>try{(window.top||window).location.href=' + JSON.stringify(destino) + ';}catch(e){location.href=' + JSON.stringify(destino) + ';}</script>' +
+    '</head><body>' +
+    '<p>Abrindo produto... <a href="' + destino + '" target="_top">clique aqui se não for redirecionado</a></p>' +
+    '</body></html>';
+
+  return HtmlService.createHtmlOutput(html);
+}
+
+function obterStats_() {
+  const ss = getSS_();
+  const sheetEventos = ss.getSheetByName(SHEET_EVENTOS);
+  const contagem = {};
+  let totalView = 0, totalWhats = 0;
+  if (sheetEventos) {
+    const dados = sheetEventos.getDataRange().getValues();
+    for (let i = 1; i < dados.length; i++) {
+      const pid = String(dados[i][1]);
+      const codigo = dados[i][2];
+      const tipo = dados[i][3];
+      if (!contagem[pid]) contagem[pid] = { visualizacao: 0, whatsapp: 0, codigo: codigo };
+      if (tipo === 'visualizacao') { contagem[pid].visualizacao++; totalView++; }
+      if (tipo === 'whatsapp') { contagem[pid].whatsapp++; totalWhats++; }
+    }
+  }
+  let maisVistoId = null, maiorViews = 0;
+  Object.keys(contagem).forEach(pid => {
+    if (contagem[pid].visualizacao > maiorViews) { maiorViews = contagem[pid].visualizacao; maisVistoId = pid; }
+  });
+  return jsonResponse_({
+    ok: true,
+    totalVisualizacoes: totalView,
+    totalWhatsapp: totalWhats,
+    produtoMaisVistoId: maisVistoId,
+    produtoMaisVistoCodigo: maisVistoId && contagem[maisVistoId] ? contagem[maisVistoId].codigo : '',
+    produtoMaisVistoViews: maiorViews
+  });
+}
+
+/**
+ * Devolve as últimas N linhas da aba Historico (mais recente primeiro),
+ * para a tela de Auditoria do admin. Protegida por PIN (?pin=...) igual
+ * às ações de escrita, já que mostra preços/estoque antigos e nome de
+ * funcionários.
+ */
+function obterHistorico_(e) {
+  const sheet = getOrCreateSheet_(SHEET_HISTORICO, ['DataHora', 'Funcionario', 'Acao', 'ProdutoID', 'Codigo', 'Nome', 'PrecoAnterior', 'PrecoNovo', 'EstoqueAnterior', 'EstoqueNovo']);
+  const dados = sheet.getDataRange().getValues();
+  const headers = dados[0];
+  const limite = Math.min(Number(e.parameter.limite) || 200, 1000);
+  const registros = [];
+  for (let i = dados.length - 1; i >= 1 && registros.length < limite; i--) {
+    const obj = {};
+    headers.forEach((h, idx) => obj[h] = dados[i][idx]);
+    registros.push(obj);
+  }
+  return jsonResponse_({ ok: true, registros: registros });
+}
+
+// ===================== GET =====================
+function doGet(e) {
+  const action = (e.parameter.action || 'list');
+
+  if (action === 'share') return paginaCompartilhamento_(e.parameter.id);
+  if (action === 'stats') return obterStats_();
+
+  if (action === 'historico') {
+    if (!validarPinGet_(e)) return jsonResponse_({ ok: false, erro: 'PIN incorreto.', pinInvalido: true });
+    return obterHistorico_(e);
+  }
+
+  if (action === 'list') {
+    const incluirTodos = e.parameter.todos === 'true';
+    const sheet = getProdutosSheet_();
+    const dados = sheet.getDataRange().getValues();
+    const headers = dados[0];
+    const produtos = [];
+    for (let i = 1; i < dados.length; i++) {
+      const linha = dados[i];
+      const obj = {};
+      headers.forEach((h, idx) => obj[h] = linha[idx]);
+      if (incluirTodos || normalizar_(obj.Status) === 'ativo') {
+        produtos.push(obj);
+      }
+    }
+    return jsonResponse_({ ok: true, produtos: produtos });
+  }
+
+  if (action === 'categorias') return jsonResponse_({ ok: true, categorias: getListaValores_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO) });
+  if (action === 'generos') return jsonResponse_({ ok: true, generos: getListaValores_(SHEET_GENEROS, GENEROS_PADRAO) });
+
+  return jsonResponse_({ ok: false, erro: 'Ação desconhecida: ' + action });
+}
+
+// ===================== POST =====================
+function doPost(e) {
+  const body = JSON.parse(e.postData.contents);
+  const action = body.action;
+
+  if (action === 'registrarEvento') return registrarEvento_(body);
+
+  const acoesProtegidas = ['create', 'update', 'delete', 'reativar', 'excluirPermanente', 'addCategoria', 'addGenero', 'bulkUpdate', 'gerarSeo', 'enviarPush'];
+  if (acoesProtegidas.indexOf(action) !== -1 && !validarPin_(body)) {
+    return jsonResponse_({ ok: false, erro: 'PIN incorreto.', pinInvalido: true });
+  }
+
+  if (action === 'create') return criarProduto_(body);
+  if (action === 'update') return atualizarProduto_(body);
+  if (action === 'delete') return deletarProduto_(body);
+  if (action === 'reativar') return reativarProduto_(body);
+  if (action === 'excluirPermanente') return excluirPermanentemente_(body);
+  if (action === 'bulkUpdate') return acaoEmLote_(body);
+  if (action === 'addCategoria') return jsonResponse_(adicionarValorLista_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO, body.nome));
+  if (action === 'addGenero') return jsonResponse_(adicionarValorLista_(SHEET_GENEROS, GENEROS_PADRAO, body.nome));
+  if (action === 'gerarSeo') return gerarSeoComGemini_(body);
+  if (action === 'enviarPush') return enviarPushOneSignal_(body.titulo, body.mensagem, body.url || SITE_URL);
+
+  return jsonResponse_({ ok: false, erro: 'Ação desconhecida: ' + action });
+}
+
+function registrarEvento_(body) {
+  const sheet = getOrCreateSheet_(SHEET_EVENTOS, ['DataHora', 'ProdutoID', 'Codigo', 'Tipo']);
+  sheet.appendRow([new Date(), body.produtoId || '', body.codigo || '', body.tipo || '']);
+  return jsonResponse_({ ok: true });
+}
+
+function processarGaleriaFotos_(fotosBase64Array, idProduto) {
+  if (!fotosBase64Array || !Array.isArray(fotosBase64Array) || fotosBase64Array.length === 0) return '';
+  const urls = [];
+  fotosBase64Array.forEach((b64, idx) => {
+    if (b64) {
+      const url = salvarFotoDrive_(b64, 'image/jpeg', 'produto_' + idProduto + '_galeria_' + idx + '.jpg');
+      urls.push(url);
+    }
+  });
+  return urls.join(',');
+}
+
+function criarProduto_(body) {
+  const sheet = getProdutosSheet_();
+  const id = new Date().getTime().toString();
+  const codigo = proximoCodigo_();
+  let fotoUrl = body.fotoUrlExistente || '';
+  let fotoStoriesUrl = body.fotoStoriesUrlExistente || '';
+
+  if (body.fotoBase64) {
+    fotoUrl = salvarFotoDrive_(body.fotoBase64, body.fotoMime || 'image/jpeg', 'produto_' + id + '.jpg');
+  }
+  if (body.fotoStoriesBase64) {
+    fotoStoriesUrl = salvarFotoDrive_(body.fotoStoriesBase64, 'image/jpeg', 'produto_' + id + '_stories.jpg');
+  }
+
+  const galeriaUrls = processarGaleriaFotos_(body.fotosGaleriaBase64, id);
+  const fotosGaleriaFinal = body.fotosGaleriaExistentes ? (body.fotosGaleriaExistentes + (galeriaUrls ? ',' + galeriaUrls : '')) : galeriaUrls;
+  const estoqueVal = body.estoque !== undefined && body.estoque !== '' ? Number(body.estoque) : '';
+
+  sheet.appendRow([
+    id,
+    body.nome || '',
+    body.categoria || '',
+    body.genero || '',
+    body.preco || '',
+    fotoUrl,
+    'Ativo',
+    new Date(),
+    body.descricao || '',
+    estoqueVal,
+    body.tamanhos || '',
+    body.cores || '',
+    !!body.novidade,
+    codigo,
+    fotoStoriesUrl,
+    fotosGaleriaFinal
+  ]);
+
+  registrarHistorico_('criar', { id: id, codigo: codigo, nome: body.nome, preco: body.preco, estoque: estoqueVal }, null, body.funcionario);
+
+  // Push automático de "novidade" — nunca deve impedir o cadastro do produto se falhar.
+  if (body.novidade && body.notificarPush) {
+    try {
+      enviarPushOneSignal_(
+        'Chegou novidade! 🆕',
+        body.nome ? ('Acabou de chegar: ' + body.nome) : 'Uma peça nova chegou na loja. Vem ver!',
+        SITE_URL + '?id=' + id
+      );
+    } catch (erroPush) {
+      // Silencioso de propósito: falha no push não pode derrubar o cadastro.
+    }
+  }
+
+  return jsonResponse_({ ok: true, id: id, codigo: codigo, fotoUrl: fotoUrl, fotoStoriesUrl: fotoStoriesUrl, fotosGaleria: fotosGaleriaFinal });
+}
+
+function atualizarProduto_(body) {
+  const sheet = getProdutosSheet_();
+  const dados = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(body.id)) {
+      const linha = i + 1;
+      let fotoUrl = dados[i][5];
+      let fotoStoriesUrl = dados[i][14];
+      let galeriaAtual = dados[i][15] || '';
+
+      if (body.fotoBase64) {
+        const sufixo = '_' + new Date().getTime();
+        fotoUrl = salvarFotoDrive_(body.fotoBase64, body.fotoMime || 'image/jpeg', 'produto_' + body.id + sufixo + '.jpg');
+      }
+      if (body.fotoStoriesBase64) {
+        const sufixo2 = '_' + new Date().getTime();
+        fotoStoriesUrl = salvarFotoDrive_(body.fotoStoriesBase64, 'image/jpeg', 'produto_' + body.id + sufixo2 + '_stories.jpg');
+      }
+
+      const novasGaleria = processarGaleriaFotos_(body.fotosGaleriaBase64, body.id);
+      let fotosGaleriaFinal = galeriaAtual;
+      if (body.fotosGaleriaExistentes !== undefined) {
+        fotosGaleriaFinal = body.fotosGaleriaExistentes + (novasGaleria ? ',' + novasGaleria : '');
+      } else if (novasGaleria) {
+        fotosGaleriaFinal = galeriaAtual ? (galeriaAtual + ',' + novasGaleria) : novasGaleria;
+      }
+
+      const anterior = { preco: dados[i][4], estoque: dados[i][9] };
+      const estoqueNovo = body.estoque !== undefined && body.estoque !== '' ? Number(body.estoque) : dados[i][9];
+
+      sheet.getRange(linha, 2, 1, 15).setValues([[
+        body.nome !== undefined ? body.nome : dados[i][1],
+        body.categoria !== undefined ? body.categoria : dados[i][2],
+        body.genero !== undefined ? body.genero : dados[i][3],
+        body.preco !== undefined ? body.preco : dados[i][4],
+        fotoUrl,
+        dados[i][6],
+        dados[i][7],
+        body.descricao !== undefined ? body.descricao : dados[i][8],
+        estoqueNovo,
+        body.tamanhos !== undefined ? body.tamanhos : dados[i][10],
+        body.cores !== undefined ? body.cores : dados[i][11],
+        body.novidade !== undefined ? !!body.novidade : dados[i][12],
+        dados[i][13],
+        fotoStoriesUrl,
+        fotosGaleriaFinal
+      ]]);
+
+      registrarHistorico_('editar',
+        { id: body.id, codigo: dados[i][13], nome: body.nome !== undefined ? body.nome : dados[i][1], preco: body.preco !== undefined ? body.preco : dados[i][4], estoque: estoqueNovo },
+        anterior, body.funcionario);
+
+      return jsonResponse_({ ok: true, id: body.id, fotoUrl: fotoUrl, fotoStoriesUrl: fotoStoriesUrl, fotosGaleria: fotosGaleriaFinal });
+    }
+  }
+  return jsonResponse_({ ok: false, erro: 'Produto não encontrado.' });
+}
+
+function acaoEmLote_(body) {
+  const ids = body.ids;
+  if (!ids || !Array.isArray(ids) || ids.length === 0) return jsonResponse_({ ok: false, erro: 'Nenhum produto selecionado.' });
+
+  const sheet = getProdutosSheet_();
+  const dados = sheet.getDataRange().getValues();
+  let afetados = 0;
+
+  for (let i = 1; i < dados.length; i++) {
+    const pid = String(dados[i][0]);
+    if (ids.indexOf(pid) !== -1) {
+      const linha = i + 1;
+      let precoAtual = Number(dados[i][4]) || 0;
+
+      if (body.tipoAcao === 'ajustarPrecoPorcento') {
+        const pct = Number(body.valor) || 0;
+        const novoPreco = Math.max(0, precoAtual * (1 + pct / 100));
+        sheet.getRange(linha, 5).setValue(novoPreco.toFixed(2));
+      } else if (body.tipoAcao === 'marcarNovidade') {
+        sheet.getRange(linha, 13).setValue(!!body.valor);
+      } else if (body.tipoAcao === 'alterarEstoque') {
+        sheet.getRange(linha, 10).setValue(Number(body.valor));
+      } else if (body.tipoAcao === 'arquivar') {
+        sheet.getRange(linha, 7).setValue('Inativo');
+      } else if (body.tipoAcao === 'reativar') {
+        sheet.getRange(linha, 7).setValue('Ativo');
+      }
+
+      registrarAudit_(body.funcionario, 'bulk_' + body.tipoAcao, pid, { valor: body.valor });
+      afetados++;
+    }
+  }
+
+  return jsonResponse_({ ok: true, afetados: afetados });
+}
+
+function deletarProduto_(body) {
+  const sheet = getProdutosSheet_();
+  const dados = sheet.getDataRange().getValues();
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(body.id)) {
+      sheet.getRange(i + 1, 7).setValue('Inativo');
+      registrarHistorico_('arquivar', { id: body.id, codigo: dados[i][13], nome: dados[i][1], preco: dados[i][4], estoque: dados[i][9] }, null, body.funcionario);
+      return jsonResponse_({ ok: true });
+    }
+  }
+  return jsonResponse_({ ok: false, erro: 'Produto não encontrado.' });
+}
+
+function reativarProduto_(body) {
+  const sheet = getProdutosSheet_();
+  const dados = sheet.getDataRange().getValues();
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(body.id)) {
+      sheet.getRange(i + 1, 7).setValue('Ativo');
+      registrarHistorico_('reativar', { id: body.id, codigo: dados[i][13], nome: dados[i][1], preco: dados[i][4], estoque: dados[i][9] }, null, body.funcionario);
+      return jsonResponse_({ ok: true });
+    }
+  }
+  return jsonResponse_({ ok: false, erro: 'Produto não encontrado.' });
+}
+
+/**
+ * Exclusão PERMANENTE de verdade: apaga a linha da planilha de produtos.
+ * Diferente de deletarProduto_ (que só arquiva). Não tem volta — por isso
+ * fica registrada no Historico ANTES de apagar a linha, então o registro
+ * de que aquele produto existiu (nome, código, preço) continua rastreável
+ * na aba Historico mesmo depois de removido do catálogo.
+ */
+function excluirPermanentemente_(body) {
+  const sheet = getProdutosSheet_();
+  const dados = sheet.getDataRange().getValues();
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(body.id)) {
+      registrarHistorico_('excluir_permanente',
+        { id: body.id, codigo: dados[i][13], nome: dados[i][1], preco: dados[i][4], estoque: dados[i][9] },
+        null, body.funcionario);
+      sheet.deleteRow(i + 1);
+      return jsonResponse_({ ok: true });
+    }
+  }
+  return jsonResponse_({ ok: false, erro: 'Produto não encontrado.' });
+}
+
+/**
+ * Gera título e descrição otimizados para busca usando a API do Gemini.
+ * A chave fica só no servidor (Script Properties), nunca é enviada ao
+ * navegador do cliente/atendente — por isso essa geração tem que passar
+ * por aqui e não pode ser feita direto no admin.html.
+ *
+ * CONFIGURAÇÃO NECESSÁRIA (uma vez só):
+ * 1. Gere uma chave gratuita em https://aistudio.google.com/apikey
+ * 2. No editor do Apps Script: ⚙️ Configurações do projeto → Propriedades
+ *    do script → Adicionar propriedade do script:
+ *    Nome: GEMINI_API_KEY   Valor: <sua chave>
+ * (Opcional) Nome: GEMINI_MODEL   Valor: gemini-2.0-flash (ou outro modelo)
+ */
+function gerarSeoComGemini_(body) {
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) {
+    return jsonResponse_({ ok: false, erro: 'Chave do Gemini não configurada no servidor. Veja as instruções no código (gerarSeoComGemini_).' });
+  }
+  const modelo = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL') || 'gemini-2.0-flash';
+
+  const prompt = 'Você é especialista em SEO para e-commerce de moda no Brasil. ' +
+    'Gere um título curto (máximo 60 caracteres) e uma descrição (2 a 3 frases, até 300 caracteres), ' +
+    'otimizados para busca (Google e redes sociais), para este produto de roupa:\n' +
+    'Nome atual: ' + (body.nome || '') + '\n' +
+    'Categoria: ' + (body.categoria || '') + '\n' +
+    'Gênero: ' + (body.genero || '') + '\n' +
+    (body.descricao ? ('Descrição atual: ' + body.descricao + '\n') : '') +
+    'Responda SOMENTE em JSON válido, sem markdown, no formato exato: {"titulo": "...", "descricao": "..."}';
+
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent?key=' + apiKey;
+  const payload = { contents: [{ parts: [{ text: prompt }] }] };
+
+  try {
+    const resp = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    const codigoResp = resp.getResponseCode();
+    const dadosResp = JSON.parse(resp.getContentText());
+
+    if (codigoResp !== 200) {
+      const msgErro = dadosResp.error && dadosResp.error.message ? dadosResp.error.message : ('HTTP ' + codigoResp);
+      return jsonResponse_({ ok: false, erro: 'Erro do Gemini: ' + msgErro });
+    }
+
+    let textoResp = (dadosResp.candidates && dadosResp.candidates[0] && dadosResp.candidates[0].content &&
+      dadosResp.candidates[0].content.parts && dadosResp.candidates[0].content.parts[0])
+      ? dadosResp.candidates[0].content.parts[0].text : '';
+    textoResp = textoResp.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+    let resultado;
+    try {
+      resultado = JSON.parse(textoResp);
+    } catch (erroParse) {
+      return jsonResponse_({ ok: false, erro: 'A IA respondeu num formato inesperado. Tente novamente.' });
+    }
+
+    return jsonResponse_({ ok: true, titulo: resultado.titulo || '', descricao: resultado.descricao || '' });
+  } catch (erroFetch) {
+    return jsonResponse_({ ok: false, erro: 'Falha ao conectar com o Gemini: ' + erroFetch.message });
+  }
+}
+
+/**
+ * Envia uma notificação push de verdade para todos os inscritos, via OneSignal.
+ * O OneSignal cuida de guardar quem se inscreveu e de toda a criptografia do
+ * Web Push — este backend só dispara um POST simples pra API REST dele.
+ *
+ * CONFIGURAÇÃO NECESSÁRIA (uma vez só):
+ * 1. No painel do OneSignal (onesignal.com) → seu app → Settings → Keys & IDs
+ * 2. Copie a "REST API Key" (essa é SEGREDA — nunca vai no common.js nem no chat)
+ * 3. No editor do Apps Script: ⚙️ Configurações do projeto → Propriedades
+ *    do script → Adicionar propriedade do script:
+ *    Nome: ONESIGNAL_REST_API_KEY   Valor: <sua REST API Key>
+ *    Nome: ONESIGNAL_APP_ID         Valor: 535f6b0d-c866-43c2-b241-43bd7ab62fae
+ *    (o App ID já está público no common.js também — não é segredo, só a chave REST é.)
+ */
+function enviarPushOneSignal_(titulo, mensagem, urlDestino) {
+  const appId = PropertiesService.getScriptProperties().getProperty('ONESIGNAL_APP_ID');
+  const restApiKey = PropertiesService.getScriptProperties().getProperty('ONESIGNAL_REST_API_KEY');
+
+  if (!appId || !restApiKey) {
+    return jsonResponse_({ ok: false, erro: 'OneSignal não configurado no servidor (faltam ONESIGNAL_APP_ID e/ou ONESIGNAL_REST_API_KEY nas Propriedades do Script). Veja as instruções no código (enviarPushOneSignal_).' });
+  }
+  if (!titulo || !mensagem) {
+    return jsonResponse_({ ok: false, erro: 'Título e mensagem são obrigatórios para enviar a notificação.' });
+  }
+
+  const payload = {
+    app_id: appId,
+    included_segments: ['Subscribed Users'],
+    headings: { en: titulo, pt: titulo },
+    contents: { en: mensagem, pt: mensagem },
+    url: urlDestino || SITE_URL
+  };
+
+  try {
+    const resp = UrlFetchApp.fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'Authorization': 'Basic ' + restApiKey },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    const codigoResp = resp.getResponseCode();
+    const dadosResp = JSON.parse(resp.getContentText());
+
+    if (codigoResp !== 200) {
+      const msgErro = (dadosResp.errors && dadosResp.errors.join(', ')) || ('HTTP ' + codigoResp);
+      return jsonResponse_({ ok: false, erro: 'Erro do OneSignal: ' + msgErro });
+    }
+
+    return jsonResponse_({ ok: true, id: dadosResp.id, destinatarios: dadosResp.recipients || 0 });
+  } catch (erroFetch) {
+    return jsonResponse_({ ok: false, erro: 'Falha ao conectar com o OneSignal: ' + erroFetch.message });
+  }
+}

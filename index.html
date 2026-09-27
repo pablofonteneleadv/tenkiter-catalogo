@@ -135,7 +135,10 @@
   .nav-inferior a { flex: 1; text-align: center; padding: 9px 4px 8px; color: #999; text-decoration: none; font-size: 0.68rem; font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .nav-inferior a .icone-nav { font-size: 1.15rem; }
   .nav-inferior a.ativo { color: var(--laranja); }
+
+  .btn-icone-header.ativado { color: var(--laranja); }
 </style>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 </head>
 <body>
 
@@ -150,6 +153,7 @@
     <div class="header-icones">
       <button type="button" class="btn-icone-header" id="btn-favoritos-header" title="Ver favoritos">❤️<span class="badge-contador" id="badge-favoritos" style="display:none;">0</span></button>
       <button type="button" class="btn-icone-header" id="btn-sacola-header" title="Abrir sacola de pedidos">🛍️<span class="badge-contador" id="badge-sacola" style="display:none;">0</span></button>
+      <button type="button" class="btn-icone-header" id="btn-push-header" title="Ativar notificações de novidades" style="display:none;">🔔</button>
     </div>
   </div>
 </header>
@@ -508,7 +512,8 @@
   });
 
   function abrirWhatsApp(p) {
-    const link = SITE_URL + '?id=' + p.ID;
+    // Link do Apps Script: gera prévia rica (com foto do produto) no WhatsApp e redireciona pro site.
+    const link = API_URL + '?action=share&id=' + p.ID;
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const codigo = p.Codigo ? ('\nCódigo: ' + p.Codigo) : '';
     const texto = `Olá! Quero garantir este produto:\n*${p.Nome}*${codigo}\n${formatarReal(avista)} à vista\n${link}`;
@@ -517,7 +522,7 @@
   }
 
   async function compartilharComFoto(p) {
-    const link = SITE_URL + '?id=' + p.ID;
+    const link = API_URL + '?action=share&id=' + p.ID;
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const texto = `${p.Nome} — ${formatarReal(avista)} à vista\n${link}\n\nLoja TENKiTER Modas (WhatsApp ${WHATSAPP_NUMERO})`;
     let arquivoImagem = null;
@@ -730,6 +735,47 @@
     const id = params.get('id');
     if (id) abrirDetalhe(id);
   }
+
+  /* ===================== Notificações push (OneSignal) ===================== */
+
+  (function configurarNotificacoesPush() {
+    const btnPush = document.getElementById('btn-push-header');
+    if (!ONESIGNAL_APP_ID) return; // não configurado ainda
+
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function (OneSignal) {
+      try {
+        await OneSignal.init({ appId: ONESIGNAL_APP_ID });
+
+        const atualizarIcone = () => {
+          const inscrito = OneSignal.User.PushSubscription.optedIn;
+          btnPush.textContent = inscrito ? '🔔' : '🔕';
+          btnPush.classList.toggle('ativado', !!inscrito);
+          btnPush.title = inscrito ? 'Notificações ativadas (toque para desativar)' : 'Ativar notificações de novidades';
+        };
+
+        btnPush.style.display = '';
+        atualizarIcone();
+
+        OneSignal.Notifications.addEventListener('permissionChange', atualizarIcone);
+        OneSignal.User.PushSubscription.addEventListener('change', atualizarIcone);
+
+        btnPush.addEventListener('click', async () => {
+          const inscritoAgora = OneSignal.User.PushSubscription.optedIn;
+          if (inscritoAgora) {
+            await OneSignal.User.PushSubscription.optOut();
+          } else if (OneSignal.Notifications.permission) {
+            await OneSignal.User.PushSubscription.optIn();
+          } else {
+            await OneSignal.Notifications.requestPermission();
+          }
+          atualizarIcone();
+        });
+      } catch (e) {
+        console.warn('OneSignal não pôde iniciar:', e);
+      }
+    });
+  })();
 
   carregarCatalogo();
 </script>

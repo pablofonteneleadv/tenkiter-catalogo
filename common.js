@@ -16,6 +16,12 @@ const SITE_URL = 'https://tenkiter-catalogo.onrender.com/';
 const DESCONTO_AVISTA = 0.10; // 10% de desconto no pagamento à vista
 const WHATSAPP_NUMERO = '5588993223998';
 
+// Notificações push (OneSignal). App ID é público (não é segredo) — pegue em
+// onesignal.com → seu app → Settings → Keys & IDs → "OneSignal App ID" e cole aqui.
+// A REST API Key é SEGREDA e NUNCA vai aqui — ela fica só no Apps Script
+// (Extensões > Propriedades do Script > ONESIGNAL_REST_API_KEY).
+const ONESIGNAL_APP_ID = '535f6b0d-c866-43c2-b241-43bd7ab62fae';
+
 function formatarReal(v) {
   return 'R$ ' + Number(v).toFixed(2).replace('.', ',');
 }

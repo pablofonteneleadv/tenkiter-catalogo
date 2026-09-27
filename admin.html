@@ -100,8 +100,28 @@
   .acoes button { padding: 6px 10px; font-size: 0.68rem; width: auto; }
   .acoes .btn-excluir { background: #fde3e3; color: var(--vermelho); }
   .acoes .btn-arquivar { background: #eee; color: #555; }
+  .acoes .btn-reativar { background: #e3f2e3; color: var(--verde); }
   .acoes .btn-duplicar { background: #e3f2e3; color: #1a7a1a; }
+  .acoes .btn-editar { background: #e3eafd; color: #1a4fa7; }
   .acoes .btn-arte { background: #ede3fd; color: #5a2ea6; }
+
+  .selo-inativo { display: inline-block; background: #eee; color: #888; font-size: 0.6rem; font-weight: 800; padding: 2px 7px; border-radius: 6px; margin-left: 6px; vertical-align: middle; }
+
+  .stats-panel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .stats-card { background: var(--branco); border-radius: 12px; padding: 10px 6px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .stats-card span { display: block; font-size: 0.6rem; color: #888; }
+  .stats-card strong { display: block; font-size: 1.05rem; margin-top: 2px; color: var(--laranja); }
+  .stats-card small { display: block; font-size: 0.58rem; color: #aaa; margin-top: 2px; }
+
+  .btn-seo-ia { background: #f3e8ff; color: #6b21a8; margin-top: 10px; }
+  .seo-sugestao { background: #f9f5ff; border: 1px solid #e3d3fb; border-radius: 10px; padding: 10px 12px; margin-top: 8px; font-size: 0.82rem; }
+  .seo-sugestao .campo { margin-bottom: 8px; }
+  .seo-sugestao .campo b { display: block; font-size: 0.68rem; color: #6b21a8; text-transform: uppercase; margin-bottom: 2px; }
+  .seo-sugestao button { width: auto; padding: 6px 10px; font-size: 0.7rem; margin: 2px 4px 0 0; }
+
+  .auditoria-item { border-bottom: 1px solid #eee; padding: 8px 0; font-size: 0.78rem; }
+  .auditoria-item .linha1 { display: flex; justify-content: space-between; font-weight: 700; }
+  .auditoria-item .linha2 { color: #777; font-size: 0.72rem; margin-top: 2px; }
 
   #overlay-compartilhar { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 60; align-items: flex-end; justify-content: center; }
   #overlay-compartilhar.aberto { display: flex; }
@@ -165,6 +185,32 @@
     <div class="dashboard-card esgotados"><span>Esgotados</span><strong id="dash-esgotados">0</strong></div>
   </div>
 
+  <div class="stats-panel" id="stats-panel">
+    <div class="stats-card"><span>👁️ Visualizações</span><strong id="stats-views">—</strong></div>
+    <div class="stats-card"><span>💬 Cliques WhatsApp</span><strong id="stats-whats">—</strong></div>
+    <div class="stats-card"><span>🔥 Mais visto</span><strong id="stats-mais-visto">—</strong><small id="stats-mais-visto-views"></small></div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+    <button type="button" id="btn-abrir-auditoria" style="background:#333;color:#fff;">📋 Auditoria</button>
+    <button type="button" id="btn-abrir-push" style="background:#0f5fa8;color:#fff;">📢 Enviar Notificação</button>
+    <a href="manual.html" target="_blank" style="text-decoration:none;background:var(--preto);color:var(--laranja);border:1px solid var(--laranja);border-radius:8px;padding:9px 14px;font-size:0.85rem;font-weight:700;display:inline-flex;align-items:center;">📖 Manual de Treinamento</a>
+  </div>
+
+  <div class="painel-push" id="painel-push" style="display:none;background:#eef6ff;border:1px solid #bcd9f5;border-radius:10px;padding:14px;margin-bottom:14px;">
+    <h3 style="margin:0 0 8px;font-size:0.95rem;">📢 Enviar Notificação para Assinantes</h3>
+    <p style="font-size:0.75rem;color:#555;margin:0 0 10px;">Vai para todos que ativaram as notificações no catálogo. Use para promoções, avisos gerais, etc.</p>
+    <label>Título</label>
+    <input type="text" id="push-titulo" maxlength="60" placeholder="Ex: Promoção de fim de semana! 🎉">
+    <label style="margin-top:8px;display:block;">Mensagem</label>
+    <textarea id="push-mensagem" rows="2" maxlength="150" placeholder="Ex: 20% off em toda a loja até domingo."></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button type="button" id="btn-enviar-push" style="background:#0f5fa8;color:#fff;">Enviar Agora</button>
+      <button type="button" id="btn-cancelar-push" style="background:#eee;color:#555;">Cancelar</button>
+    </div>
+    <div id="push-status" style="font-size:0.8rem;margin-top:8px;"></div>
+  </div>
+
   <div class="card">
     <h2 style="font-size:1rem;margin-top:0;" id="titulo-form">Novo Produto</h2>
 
@@ -212,9 +258,16 @@
         <label>Descrição detalhada</label>
         <textarea id="descricao" rows="2" placeholder="Tecido viscose, caimento leve..."></textarea>
 
+        <button type="button" class="btn-seo-ia" id="btn-seo-ia">✨ Gerar Título/Descrição com IA</button>
+        <div id="seo-sugestao-box"></div>
+
         <div class="checkbox-linha">
           <input type="checkbox" id="novidade">
           <label for="novidade">Destacar como Novidade</label>
+        </div>
+        <div class="checkbox-linha" id="linha-notificar-push" style="display:none;padding-left:22px;">
+          <input type="checkbox" id="notificarPush" checked>
+          <label for="notificarPush">📢 Notificar assinantes sobre esta novidade</label>
         </div>
       </details>
 
@@ -254,6 +307,7 @@
       <button type="button" id="btn-bulk-preco">% Alterar Preços</button>
       <button type="button" id="btn-bulk-novidade">Marcar Novidades</button>
       <button type="button" id="btn-bulk-arquivar">🗃️ Arquivar em Massa</button>
+      <button type="button" id="btn-bulk-reativar">🔄 Reativar em Massa</button>
     </div>
   </div>
 
@@ -440,40 +494,75 @@
     cropSection.style.display = 'none';
   });
 
-  /* ===================== Duplicar peça ===================== */
+  /* ===================== Duplicar / Editar peça ===================== */
 
-  function duplicarProduto(id) {
-    const p = produtos.find(x => String(x.ID) === String(id));
-    if (!p) return;
-    modoDuplicando = true;
+  let modoFormulario = 'novo'; // 'novo' | 'duplicando' | 'editando'
 
-    document.getElementById('nome').value = p.Nome + ' (cópia)';
+  function preencherFormComProduto(p) {
+    document.getElementById('nome').value = p.Nome;
     document.getElementById('preco').value = p.Preco;
     document.getElementById('estoque').value = p.Estoque || '';
     document.getElementById('tamanhos').value = p.Tamanhos || '';
     document.getElementById('cores').value = p.Cores || '';
     document.getElementById('descricao').value = p.Descricao || '';
     document.getElementById('novidade').checked = ehNovidade(p);
+    document.getElementById('linha-notificar-push').style.display = ehNovidade(p) ? 'flex' : 'none';
 
     selecionadasCategorias = new Set(String(p.Categoria || '').split(',').map(s => s.trim()).filter(Boolean));
     selecionadosGeneros = new Set(String(p.Genero || '').split(',').map(s => s.trim()).filter(Boolean));
     renderizarChips('chips-categoria', categorias, selecionadasCategorias);
     renderizarChips('chips-genero', generos, selecionadosGeneros);
+  }
+
+  function duplicarProduto(id) {
+    const p = produtos.find(x => String(x.ID) === String(id));
+    if (!p) return;
+    modoFormulario = 'duplicando';
+    document.getElementById('produto-id').value = '';
+
+    preencherFormComProduto(p);
+    document.getElementById('nome').value = p.Nome + ' (cópia)';
 
     fotoBase64 = null;
     previewFinal.style.display = 'none';
 
     document.getElementById('titulo-form').textContent = 'Duplicando: ' + p.Nome;
     document.getElementById('btn-salvar').textContent = 'Cadastrar Cópia';
+    document.getElementById('btn-cancelar-duplicar').textContent = 'Cancelar Duplicação / Novo Produto';
     document.getElementById('btn-cancelar-duplicar').style.display = 'block';
 
     alert('Dados copiados! Não esqueça de selecionar uma foto para esta peça antes de salvar.');
     document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
   }
 
+  function editarProduto(id) {
+    const p = produtos.find(x => String(x.ID) === String(id));
+    if (!p) return;
+    modoFormulario = 'editando';
+    document.getElementById('produto-id').value = p.ID;
+
+    preencherFormComProduto(p);
+
+    fotoBase64 = null;
+    if (p.Foto_URL) {
+      previewFinal.src = p.Foto_URL;
+      previewFinal.style.display = 'block';
+    } else {
+      previewFinal.style.display = 'none';
+    }
+
+    document.getElementById('titulo-form').textContent = 'Editando: ' + p.Nome;
+    document.getElementById('btn-salvar').textContent = 'Salvar Alterações';
+    document.getElementById('btn-cancelar-duplicar').textContent = 'Cancelar Edição';
+    document.getElementById('btn-cancelar-duplicar').style.display = 'block';
+
+    document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
+  }
+
   function cancelarDuplicacao() {
-    modoDuplicando = false;
+    modoFormulario = 'novo';
     document.getElementById('form-produto').reset();
+    document.getElementById('produto-id').value = '';
     selecionadasCategorias.clear(); selecionadosGeneros.clear();
     renderizarChips('chips-categoria', categorias, selecionadasCategorias);
     renderizarChips('chips-genero', generos, selecionadosGeneros);
@@ -482,18 +571,22 @@
     document.getElementById('titulo-form').textContent = 'Novo Produto';
     document.getElementById('btn-salvar').textContent = 'Cadastrar Peça';
     document.getElementById('btn-cancelar-duplicar').style.display = 'none';
+    document.getElementById('seo-sugestao-box').innerHTML = '';
   }
 
   document.getElementById('btn-cancelar-duplicar').addEventListener('click', cancelarDuplicacao);
 
-  // Salvar Produto
+  // Salvar Produto (criar, duplicar como novo, ou editar existente)
   document.getElementById('form-produto').addEventListener('submit', async (e) => {
     e.preventDefault();
     const status = document.getElementById('status');
-    status.textContent = 'Enviando produto...';
+    const idParaEditar = document.getElementById('produto-id').value;
+    const ehEdicao = modoFormulario === 'editando' && idParaEditar;
+
+    status.textContent = ehEdicao ? 'Salvando alterações...' : 'Enviando produto...';
 
     const dados = {
-      action: 'create',
+      action: ehEdicao ? 'update' : 'create',
       pin: adminPin,
       funcionario: funcionarioNome,
       nome: document.getElementById('nome').value.trim(),
@@ -507,16 +600,18 @@
       novidade: document.getElementById('novidade').checked,
       fotoBase64: fotoBase64
     };
+    if (ehEdicao) dados.id = idParaEditar;
+    if (!ehEdicao && dados.novidade) dados.notificarPush = document.getElementById('notificarPush').checked;
 
     const resultado = await enviarComFila(dados);
     atualizarBarraSync();
 
     if (resultado.ok && resultado.resp && resultado.resp.ok) {
-      status.textContent = '✅ Cadastrado com sucesso!';
+      status.textContent = ehEdicao ? '✅ Alterações salvas!' : '✅ Cadastrado com sucesso!';
       cancelarDuplicacao();
       await carregarProdutos();
     } else if (!resultado.ok && resultado.enfileirado) {
-      status.textContent = '📥 Sem conexão agora. A peça foi salva localmente e será enviada quando você tocar em "Sincronizar".';
+      status.textContent = '📥 Sem conexão agora. A ação foi salva localmente e será enviada quando você tocar em "Sincronizar".';
       cancelarDuplicacao();
     } else {
       status.textContent = '❌ Erro: ' + ((resultado.resp && resultado.resp.erro) || 'Falha ao salvar');
@@ -526,7 +621,7 @@
   async function carregarProdutos() {
     mostrarToastCarregando('Carregando peças...');
     try {
-      const resp = await fetch(API_URL + '?action=list').then(r => r.json());
+      const resp = await fetch(API_URL + '?action=list&todos=true').then(r => r.json());
       produtos = (resp.produtos || []).reverse();
     } catch (e) {
       esconderToastCarregando();
@@ -542,30 +637,36 @@
     const lista = produtos.filter(p => !busca || String(p.Nome).toLowerCase().includes(busca) || String(p.Codigo||'').toLowerCase().includes(busca));
     const container = document.getElementById('lista-produtos');
 
-    document.getElementById('dash-total').textContent = produtos.length;
-    document.getElementById('dash-disponiveis').textContent = produtos.filter(p => !estaEsgotado(p)).length;
-    document.getElementById('dash-esgotados').textContent = produtos.filter(p => estaEsgotado(p)).length;
+    const ativos = produtos.filter(p => !p.Status || String(p.Status).trim().toLowerCase() === 'ativo');
+    document.getElementById('dash-total').textContent = ativos.length;
+    document.getElementById('dash-disponiveis').textContent = ativos.filter(p => !estaEsgotado(p)).length;
+    document.getElementById('dash-esgotados').textContent = ativos.filter(p => estaEsgotado(p)).length;
 
     if (!lista.length) { container.innerHTML = '<p style="text-align:center;color:#999;">Nenhuma peça cadastrada.</p>'; return; }
 
-    container.innerHTML = lista.map(p => `
+    container.innerHTML = lista.map(p => {
+      const inativo = p.Status && String(p.Status).trim().toLowerCase() !== 'ativo';
+      return `
       <div class="produto">
         <input type="checkbox" class="produto-chk" data-id="${p.ID}" ${selecionadosBulk.has(p.ID) ? 'checked' : ''}>
         <img src="${p.Foto_URL}" alt="">
         <div class="produto-info">
-          <div class="codigo">${p.Codigo || ''}</div>
+          <div class="codigo">${p.Codigo || ''}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}</div>
           <div class="nome">${p.Nome}</div>
           <div class="preco">${formatarReal(p.Preco)} · à vista <span>${formatarReal(p.Preco * (1 - DESCONTO_AVISTA))}</span></div>
         </div>
         <div class="acoes">
           <button type="button" style="background:#eee;" data-link-id="${p.ID}">🔗 Link</button>
+          <button type="button" class="btn-editar" data-editar-id="${p.ID}">✏️ Editar</button>
           <button type="button" class="btn-duplicar" data-duplicar-id="${p.ID}">📋 Duplicar</button>
           <button type="button" class="btn-arte" data-arte-id="${p.ID}">🎨 Stories</button>
-          <button type="button" class="btn-arquivar" data-arquivar-id="${p.ID}">🗃️ Arquivar</button>
-          <button type="button" class="btn-excluir" data-excluir-id="${p.ID}">🗑️ Excluir</button>
+          ${inativo
+            ? `<button type="button" class="btn-reativar" data-reativar-id="${p.ID}">🔄 Reativar</button>`
+            : `<button type="button" class="btn-arquivar" data-arquivar-id="${p.ID}">🗃️ Arquivar</button>`}
+          <button type="button" class="btn-excluir" data-excluir-id="${p.ID}" data-codigo="${p.Codigo || ''}">🗑️ Excluir</button>
         </div>
       </div>
-    `).join('');
+    `; }).join('');
 
     container.querySelectorAll('.produto-chk').forEach(chk => {
       chk.addEventListener('change', (e) => {
@@ -575,10 +676,12 @@
       });
     });
     container.querySelectorAll('[data-link-id]').forEach(btn => btn.addEventListener('click', () => copiarLink(btn.dataset.linkId)));
+    container.querySelectorAll('[data-editar-id]').forEach(btn => btn.addEventListener('click', () => editarProduto(btn.dataset.editarId)));
     container.querySelectorAll('[data-duplicar-id]').forEach(btn => btn.addEventListener('click', () => duplicarProduto(btn.dataset.duplicarId)));
     container.querySelectorAll('[data-arte-id]').forEach(btn => btn.addEventListener('click', () => abrirCriadorDeArte(btn.dataset.arteId)));
     container.querySelectorAll('[data-arquivar-id]').forEach(btn => btn.addEventListener('click', () => arquivarUnico(btn.dataset.arquivarId)));
-    container.querySelectorAll('[data-excluir-id]').forEach(btn => btn.addEventListener('click', () => excluirUnico(btn.dataset.excluirId)));
+    container.querySelectorAll('[data-reativar-id]').forEach(btn => btn.addEventListener('click', () => reativarUnico(btn.dataset.reativarId)));
+    container.querySelectorAll('[data-excluir-id]').forEach(btn => btn.addEventListener('click', () => excluirPermanenteUnico(btn.dataset.excluirId, btn.dataset.codigo)));
   }
 
   function atualizarBarraBulk() {
@@ -620,6 +723,12 @@
     }
   });
 
+  document.getElementById('btn-bulk-reativar').addEventListener('click', async () => {
+    if (confirm('Reativar os produtos selecionados? Eles voltam a aparecer no catálogo público.')) {
+      await executarAcaoEmLote('reativar', true);
+    }
+  });
+
   async function executarAcaoEmLote(tipoAcao, valor) {
     const resultado = await enviarComFila({
       action: 'bulkUpdate',
@@ -645,10 +754,10 @@
     }
   }
 
-  /* ===================== Arquivar / Excluir por item ===================== */
+  /* ===================== Arquivar / Reativar / Excluir por item ===================== */
 
   async function arquivarUnico(id) {
-    if (!confirm('Arquivar esta peça? Ela deixa de aparecer no catálogo público.')) return;
+    if (!confirm('Arquivar esta peça? Ela deixa de aparecer no catálogo público (mas continua no admin, e pode ser reativada depois).')) return;
     const resultado = await enviarComFila({
       action: 'bulkUpdate', pin: adminPin, funcionario: funcionarioNome,
       ids: [id], tipoAcao: 'arquivar', valor: true
@@ -663,24 +772,56 @@
     }
   }
 
-  async function excluirUnico(id) {
-    if (!confirm('Excluir esta peça definitivamente? Esta ação não pode ser desfeita.')) return;
+  async function reativarUnico(id) {
     const resultado = await enviarComFila({
       action: 'bulkUpdate', pin: adminPin, funcionario: funcionarioNome,
-      ids: [id], tipoAcao: 'excluirDefinitivo', valor: true
+      ids: [id], tipoAcao: 'reativar', valor: true
     });
     atualizarBarraSync();
     if (resultado.ok && resultado.resp && resultado.resp.ok) {
       await carregarProdutos();
     } else if (!resultado.ok && resultado.enfileirado) {
-      alert('Sem conexão agora. Exclusão salva para sincronizar depois.');
+      alert('Sem conexão agora. Ação salva para sincronizar depois.');
     } else {
-      alert('O sistema atual pode ainda não ter suporte a exclusão definitiva. Use "Arquivar" por enquanto, ou confirme com o suporte técnico se essa ação foi implementada no backend.');
+      alert('Erro ao reativar. Tente novamente.');
+    }
+  }
+
+  /**
+   * Exclusão PERMANENTE de verdade — apaga a linha da planilha, sem volta.
+   * Por ser irreversível, pede uma confirmação mais forte que o simples
+   * confirm(): o atendente precisa digitar o código da peça pra confirmar.
+   */
+  async function excluirPermanenteUnico(id, codigo) {
+    if (!confirm('ATENÇÃO: isso apaga a peça para sempre da planilha (não é arquivar, é excluir de verdade). Não tem como desfazer. Continuar?')) return;
+
+    const digitado = prompt('Pra confirmar, digite o código da peça' + (codigo ? (' (' + codigo + ')') : '') + ':');
+    if (digitado === null) return;
+    if (codigo && digitado.trim().toUpperCase() !== String(codigo).trim().toUpperCase()) {
+      alert('Código não confere. Exclusão cancelada por segurança.');
+      return;
+    }
+
+    // Exclusão permanente exige conexão — não fica na fila offline (evita
+    // apagar algo em duplicidade ou fora de ordem quando a fila sincronizar depois).
+    try {
+      const resp = await fetch(API_URL, {
+        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'excluirPermanente', pin: adminPin, funcionario: funcionarioNome, id: id })
+      }).then(r => r.json());
+      if (resp.ok) {
+        await carregarProdutos();
+      } else {
+        alert('Erro ao excluir: ' + (resp.erro || 'falha desconhecida'));
+      }
+    } catch (e) {
+      alert('Sem conexão agora. Exclusão permanente exige internet — tente novamente quando estiver online.');
     }
   }
 
   function copiarLink(id) {
-    const link = SITE_URL + '?id=' + id;
+    // Link do Apps Script: gera prévia rica (com foto) no WhatsApp e redireciona pro site.
+    const link = API_URL + '?action=share&id=' + id;
     navigator.clipboard.writeText(link);
     alert('Link copiado!');
   }
@@ -947,10 +1088,190 @@
 
   document.getElementById('busca-admin').addEventListener('input', renderizarProdutos);
 
+  /* ===================== Estatísticas ===================== */
+
+  async function carregarStats() {
+    try {
+      const resp = await fetch(API_URL + '?action=stats').then(r => r.json());
+      if (!resp.ok) return;
+      document.getElementById('stats-views').textContent = resp.totalVisualizacoes || 0;
+      document.getElementById('stats-whats').textContent = resp.totalWhatsapp || 0;
+      if (resp.produtoMaisVistoId) {
+        document.getElementById('stats-mais-visto').textContent = resp.produtoMaisVistoCodigo || 'Ver produto';
+        document.getElementById('stats-mais-visto-views').textContent = resp.produtoMaisVistoViews + ' visualizações';
+      } else {
+        document.getElementById('stats-mais-visto').textContent = '—';
+        document.getElementById('stats-mais-visto-views').textContent = '';
+      }
+    } catch (e) {
+      // estatísticas são só um extra informativo — falha aqui não deve travar o admin
+    }
+  }
+
+  /* ===================== Notificações push (OneSignal) ===================== */
+
+  document.getElementById('novidade').addEventListener('change', () => {
+    document.getElementById('linha-notificar-push').style.display =
+      document.getElementById('novidade').checked ? 'flex' : 'none';
+  });
+
+  document.getElementById('btn-abrir-push').addEventListener('click', () => {
+    document.getElementById('painel-push').style.display = 'block';
+    document.getElementById('push-status').textContent = '';
+  });
+  document.getElementById('btn-cancelar-push').addEventListener('click', () => {
+    document.getElementById('painel-push').style.display = 'none';
+  });
+
+  document.getElementById('btn-enviar-push').addEventListener('click', async () => {
+    const titulo = document.getElementById('push-titulo').value.trim();
+    const mensagem = document.getElementById('push-mensagem').value.trim();
+    const statusPush = document.getElementById('push-status');
+
+    if (!titulo || !mensagem) {
+      statusPush.textContent = '⚠️ Preencha título e mensagem.';
+      return;
+    }
+    if (!confirm('Enviar esta notificação para todos os assinantes agora?')) return;
+
+    statusPush.textContent = 'Enviando...';
+    try {
+      const resp = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'enviarPush', pin: adminPin, titulo: titulo, mensagem: mensagem })
+      }).then(r => r.json());
+
+      if (resp.ok) {
+        statusPush.textContent = '✅ Notificação enviada! (' + (resp.destinatarios || 0) + ' assinantes)';
+        document.getElementById('push-titulo').value = '';
+        document.getElementById('push-mensagem').value = '';
+      } else {
+        statusPush.textContent = '❌ Erro: ' + (resp.erro || 'Falha ao enviar.');
+      }
+    } catch (e) {
+      statusPush.textContent = '❌ Sem conexão. Tente novamente.';
+    }
+  });
+
+  /* ===================== Auditoria ===================== */
+
+  document.getElementById('btn-abrir-auditoria').addEventListener('click', abrirAuditoria);
+
+  async function abrirAuditoria() {
+    const painel = document.getElementById('painel-compartilhar-conteudo');
+    painel.innerHTML = `
+      <h3 style="margin-top:0;">📋 Auditoria / Histórico</h3>
+      <input type="text" id="busca-auditoria" placeholder="🔎 Filtrar por atendente, produto ou ação...">
+      <div id="lista-auditoria" style="margin-top:10px;max-height:55vh;overflow-y:auto;"><p style="text-align:center;color:#999;">Carregando...</p></div>
+      <button type="button" id="btn-fechar-auditoria" style="background:#eee;color:#555;margin-top:12px;">Fechar</button>
+    `;
+    document.getElementById('overlay-compartilhar').classList.add('aberto');
+    document.getElementById('btn-fechar-auditoria').addEventListener('click', () => {
+      document.getElementById('overlay-compartilhar').classList.remove('aberto');
+    });
+
+    let registros = [];
+    try {
+      const resp = await fetch(API_URL + '?action=historico&pin=' + encodeURIComponent(adminPin) + '&limite=200').then(r => r.json());
+      if (resp.pinInvalido) {
+        document.getElementById('lista-auditoria').innerHTML = '<p style="text-align:center;color:#c62828;">PIN incorreto — não foi possível ver a auditoria.</p>';
+        return;
+      }
+      registros = resp.registros || [];
+    } catch (e) {
+      document.getElementById('lista-auditoria').innerHTML = '<p style="text-align:center;color:#c62828;">Não foi possível carregar a auditoria agora.</p>';
+      return;
+    }
+
+    function renderizarListaAuditoria() {
+      const termo = document.getElementById('busca-auditoria').value.trim().toLowerCase();
+      const filtrados = registros.filter(r => !termo ||
+        String(r.Funcionario || '').toLowerCase().includes(termo) ||
+        String(r.Nome || '').toLowerCase().includes(termo) ||
+        String(r.Codigo || '').toLowerCase().includes(termo) ||
+        String(r.Acao || '').toLowerCase().includes(termo)
+      );
+      const container = document.getElementById('lista-auditoria');
+      if (!filtrados.length) { container.innerHTML = '<p style="text-align:center;color:#999;">Nenhum registro encontrado.</p>'; return; }
+      container.innerHTML = filtrados.map(r => {
+        const data = r.DataHora ? new Date(r.DataHora).toLocaleString('pt-BR') : '';
+        const precos = (r.PrecoAnterior !== '' && r.PrecoAnterior !== undefined && String(r.PrecoAnterior) !== String(r.PrecoNovo))
+          ? ` · Preço: ${formatarReal(r.PrecoAnterior)} → ${formatarReal(r.PrecoNovo)}` : '';
+        return `
+          <div class="auditoria-item">
+            <div class="linha1"><span>${r.Acao || ''}</span><span>${data}</span></div>
+            <div class="linha2">${r.Funcionario || 'Sistema'} · ${r.Codigo || ''} ${r.Nome || ''}${precos}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    renderizarListaAuditoria();
+    document.getElementById('busca-auditoria').addEventListener('input', renderizarListaAuditoria);
+  }
+
+  /* ===================== Gerar SEO com IA (Gemini) ===================== */
+
+  document.getElementById('btn-seo-ia').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-seo-ia');
+    const box = document.getElementById('seo-sugestao-box');
+    const nomeAtual = document.getElementById('nome').value.trim();
+    if (!nomeAtual) { alert('Preencha ao menos o nome do produto antes de gerar com IA.'); return; }
+
+    btn.textContent = '✨ Gerando...';
+    box.innerHTML = '';
+
+    try {
+      const resp = await fetch(API_URL, {
+        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'gerarSeo', pin: adminPin,
+          nome: nomeAtual,
+          categoria: Array.from(selecionadasCategorias).join(', '),
+          genero: Array.from(selecionadosGeneros).join(', '),
+          descricao: document.getElementById('descricao').value.trim()
+        })
+      }).then(r => r.json());
+
+      btn.textContent = '✨ Gerar Título/Descrição com IA';
+
+      if (!resp.ok) {
+        box.innerHTML = `<div class="seo-sugestao" style="color:#c62828;">${resp.erro || 'Não foi possível gerar sugestão agora.'}</div>`;
+        return;
+      }
+
+      box.innerHTML = `
+        <div class="seo-sugestao">
+          <div class="campo"><b>Título sugerido</b>${resp.titulo || '—'}</div>
+          <div class="campo"><b>Descrição sugerida</b>${resp.descricao || '—'}</div>
+          <button type="button" id="btn-usar-titulo-seo" style="background:var(--laranja);">Usar Título</button>
+          <button type="button" id="btn-usar-descricao-seo" style="background:var(--laranja);">Usar Descrição</button>
+          <button type="button" id="btn-descartar-seo" style="background:#eee;color:#555;">Descartar</button>
+        </div>
+      `;
+      if (resp.titulo) {
+        document.getElementById('btn-usar-titulo-seo').addEventListener('click', () => {
+          document.getElementById('nome').value = resp.titulo;
+        });
+      }
+      if (resp.descricao) {
+        document.getElementById('btn-usar-descricao-seo').addEventListener('click', () => {
+          document.getElementById('descricao').value = resp.descricao;
+        });
+      }
+      document.getElementById('btn-descartar-seo').addEventListener('click', () => { box.innerHTML = ''; });
+    } catch (e) {
+      btn.textContent = '✨ Gerar Título/Descrição com IA';
+      box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">Sem conexão agora — tente novamente.</div>';
+    }
+  });
+
   (async function iniciar() {
     atualizarBarraSync();
     await carregarListas();
     await carregarProdutos();
+    await carregarStats();
   })();
 </script>
 </body>
