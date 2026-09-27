@@ -658,7 +658,7 @@
   }
 
   function copiarLink(id) {
-    const link = API_URL + '?action=share&id=' + id;
+    const link = SITE_URL + '?id=' + id;
     navigator.clipboard.writeText(link);
     alert('Link copiado!');
   }

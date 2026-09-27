@@ -11,7 +11,7 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="TENKiTER Modas — Catálogo Oficial">
 <meta property="og:description" content="Confira as peças disponíveis da TENKiTER Modas — Crateús, CE. Filtre por categoria, gênero e preço, e fale direto no WhatsApp.">
-<meta property="og:url" content="https://pablofonteneleadv.github.io/tenkiter-catalogo/">
+<meta property="og:url" content="https://tenkiter-catalogo.onrender.com/">
 <meta name="description" content="Catálogo digital da TENKiTER Modas — Crateús, CE.">
 <style>
   :root { --preto: #0d0d0d; --laranja: #ff7a1a; --cinza: #f4f4f4; --branco: #ffffff; --verde: #198754; --vermelho: #c62828; --amarelo: #b8860b; }
@@ -508,7 +508,7 @@
   });
 
   function abrirWhatsApp(p) {
-    const link = API_URL + '?action=share&id=' + p.ID;
+    const link = SITE_URL + '?id=' + p.ID;
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const codigo = p.Codigo ? ('\nCódigo: ' + p.Codigo) : '';
     const texto = `Olá! Quero garantir este produto:\n*${p.Nome}*${codigo}\n${formatarReal(avista)} à vista\n${link}`;
@@ -517,7 +517,7 @@
   }
 
   async function compartilharComFoto(p) {
-    const link = API_URL + '?action=share&id=' + p.ID;
+    const link = SITE_URL + '?id=' + p.ID;
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const texto = `${p.Nome} — ${formatarReal(avista)} à vista\n${link}\n\nLoja TENKiTER Modas (WhatsApp ${WHATSAPP_NUMERO})`;
     let arquivoImagem = null;
