@@ -16,14 +16,36 @@
 <style>
   :root { --preto: #0d0d0d; --laranja: #ff7a1a; --cinza: #f4f4f4; --branco: #ffffff; --verde: #198754; --vermelho: #c62828; --amarelo: #b8860b; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--cinza); color: var(--preto); padding-bottom: 50px; }
-  header { background: var(--preto); color: var(--laranja); padding: 18px 16px 12px; text-align: center; position: sticky; top: 0; z-index: 20; box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
-  header h1 { margin: 0; font-size: 1.3rem; letter-spacing: 1.5px; font-weight: 900; }
-  header p { margin: 3px 0 0; font-size: 0.75rem; color: #ccc; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--cinza); color: var(--preto); padding-bottom: 76px; }
+
+  header { background: var(--preto); background-image: linear-gradient(180deg, #0d0d0d 0%, #14140f 100%); border-bottom: 2px solid var(--laranja); color: var(--laranja); padding: 14px 14px 10px; position: sticky; top: 0; z-index: 20; box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+  .header-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; max-width: 900px; margin: 0 auto; }
+  .header-titulo { text-align: left; }
+  .header-titulo h1 { margin: 0; font-size: 1.2rem; letter-spacing: 1.5px; font-weight: 900; }
+  .header-titulo p { margin: 2px 0 0; font-size: 0.72rem; color: #ccc; }
+  .header-icones { display: flex; gap: 8px; align-items: center; }
+  .btn-icone-header { position: relative; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: var(--laranja); border-radius: 50%; width: 38px; height: 38px; font-size: 1.05rem; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .badge-contador { position: absolute; top: -4px; right: -4px; background: var(--laranja); color: var(--preto); font-size: 0.62rem; font-weight: 800; min-width: 17px; height: 17px; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
+
+  #toast-carregando { position: fixed; top: 0; left: 0; right: 0; z-index: 60; background: var(--preto); color: var(--laranja); text-align: center; font-size: 0.8rem; font-weight: 700; padding: 8px 12px; transform: translateY(-100%); transition: transform 0.25s ease-out; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  #toast-carregando.visivel { transform: translateY(0); }
+  .spinner-mini { width: 13px; height: 13px; border: 2px solid rgba(255,122,26,0.3); border-top-color: var(--laranja); border-radius: 50%; animation: girar 0.7s linear infinite; }
+  @keyframes girar { to { transform: rotate(360deg); } }
+
+  .pills-categoria { display: flex; gap: 6px; overflow-x: auto; padding: 10px 14px 0; max-width: 900px; margin: 0 auto; scrollbar-width: none; }
+  .pills-categoria::-webkit-scrollbar { display: none; }
+  .pill-cat { flex-shrink: 0; padding: 7px 14px; border-radius: 18px; border: 1px solid #ddd; background: var(--branco); font-size: 0.78rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .pill-cat.selecionado { background: var(--laranja); color: var(--preto); border-color: var(--laranja); }
+  .pill-cat.pill-mais { background: var(--preto); color: var(--laranja); border-color: var(--preto); font-weight: 700; }
 
   .filtros { background: var(--branco); padding: 12px 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); position: sticky; top: 62px; z-index: 19; }
+  .busca-wrap { position: relative; }
   .filtros input[type=text], .filtros input[type=number] { width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 20px; font-size: 0.9rem; margin-bottom: 8px; outline: none; }
+  .busca-wrap input[type=text] { padding-right: 42px; }
   .filtros input:focus { border-color: var(--laranja); }
+  .btn-voz { position: absolute; right: 6px; top: 6px; width: 30px; height: 30px; border-radius: 50%; border: none; background: #f0f0f0; color: #666; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .btn-voz.ouvindo { background: var(--vermelho); color: #fff; animation: pulsar 1s infinite; }
+  @keyframes pulsar { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
   .linha-preco { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
   .linha-preco span { font-size: 0.78rem; color: #777; white-space: nowrap; }
 
@@ -31,6 +53,7 @@
   .chip { padding: 6px 12px; border-radius: 16px; border: 1px solid #ddd; background: var(--branco); font-size: 0.75rem; cursor: pointer; transition: all 0.2s; }
   .chip.selecionado { background: var(--laranja); color: var(--preto); border-color: var(--laranja); font-weight: 700; }
   .chip.novidade-chip.selecionado { background: var(--preto); color: var(--laranja); border-color: var(--preto); }
+  .chip.favoritos-chip.selecionado { background: #c62828; color: #fff; border-color: #c62828; }
 
   details.selecao-expansivel { margin-top: 6px; border: 1px solid #eee; border-radius: 10px; padding: 8px 10px; background: #fff; }
   details.selecao-expansivel summary { cursor: pointer; font-weight: 600; font-size: 0.8rem; list-style: none; display: flex; justify-content: space-between; align-items: center; }
@@ -58,6 +81,7 @@
   .selo-card { position: absolute; top: 8px; left: 8px; font-size: 0.62rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; color: #fff; z-index: 2; }
   .selo-card.novidade { background: var(--laranja); color: var(--preto); }
   .selo-card.esgotado { background: var(--vermelho); }
+  .btn-favorito-card { position: absolute; top: 6px; right: 6px; z-index: 3; background: rgba(255,255,255,0.9); border: none; border-radius: 50%; width: 28px; height: 28px; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; cursor: pointer; }
   .card-info { padding: 8px 10px 10px; }
   .card-info .codigo { font-size: 0.62rem; color: var(--laranja); font-weight: 800; }
   .card-info .nome { font-size: 0.84rem; font-weight: 700; line-height: 1.25; margin-bottom: 4px; color: #111; }
@@ -72,8 +96,8 @@
   #vazio { text-align: center; color: #888; padding: 40px 20px; font-size: 0.9rem; }
   .btn-carregar-mais { max-width: 300px; margin: 20px auto 0; display: block; background: var(--branco); color: var(--preto); border: 1px solid #ccc; padding: 12px; border-radius: 10px; font-weight: 700; cursor: pointer; }
 
-  #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: flex-end; justify-content: center; backdrop-filter: blur(2px); }
-  #overlay.aberto { display: flex; }
+  #overlay, #overlay-sacola { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: flex-end; justify-content: center; backdrop-filter: blur(2px); }
+  #overlay.aberto, #overlay-sacola.aberto { display: flex; }
   .modal { background: var(--branco); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; max-height: 92vh; overflow-y: auto; animation: subir 0.22s ease-out; position: relative; }
   @keyframes subir { from { transform: translateY(40px); opacity:0; } to { transform: translateY(0); opacity:1; } }
 
@@ -96,17 +120,47 @@
   .btn-principal-cta { display: block; width: calc(100% - 32px); margin: 12px 16px 8px; background: var(--verde); color: #fff; border: none; border-radius: 12px; padding: 16px; font-weight: 800; font-size: 1.05rem; cursor: pointer; text-align: center; }
   .btn-secundario-cta { display: block; width: calc(100% - 32px); margin: 0 16px 8px; background: #f0f0f0; color: var(--preto); border: none; border-radius: 12px; padding: 12px; font-weight: 700; font-size: 0.85rem; cursor: pointer; text-align: center; }
   .btn-fechar { display: block; width: calc(100% - 32px); margin: 4px 16px 16px; background: var(--preto); color: var(--laranja); border: none; border-radius: 12px; padding: 12px; font-weight: 700; font-size: 0.95rem; cursor: pointer; }
+
+  /* Sacola */
+  .item-sacola { display: flex; gap: 10px; align-items: center; padding: 10px 16px; border-bottom: 1px solid #eee; }
+  .item-sacola img { width: 48px; height: 60px; object-fit: cover; border-radius: 6px; background: #eee; }
+  .item-sacola .info { flex: 1; min-width: 0; }
+  .item-sacola .info .nome { font-size: 0.85rem; font-weight: 700; }
+  .item-sacola .info .preco { font-size: 0.78rem; color: #1a7a1a; font-weight: 700; }
+  .item-sacola .btn-remover { background: none; border: none; color: #c62828; font-size: 1.1rem; cursor: pointer; padding: 4px 8px; }
+  #sacola-vazia { text-align: center; color: #888; padding: 30px 20px; font-size: 0.88rem; }
+
+  /* Nav inferior fixa */
+  .nav-inferior { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: var(--preto); border-top: 1px solid rgba(255,255,255,0.08); display: flex; box-shadow: 0 -2px 10px rgba(0,0,0,0.2); }
+  .nav-inferior a { flex: 1; text-align: center; padding: 9px 4px 8px; color: #999; text-decoration: none; font-size: 0.68rem; font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .nav-inferior a .icone-nav { font-size: 1.15rem; }
+  .nav-inferior a.ativo { color: var(--laranja); }
 </style>
 </head>
 <body>
 
+<div id="toast-carregando"><span class="spinner-mini"></span><span id="texto-toast">Carregando produtos...</span></div>
+
 <header>
-  <h1>TENKiTER MODAS</h1>
-  <p>Catálogo Digital — Crateús / CE</p>
+  <div class="header-linha">
+    <div class="header-titulo">
+      <h1>TENKiTER MODAS</h1>
+      <p>Catálogo Digital — Crateús / CE</p>
+    </div>
+    <div class="header-icones">
+      <button type="button" class="btn-icone-header" id="btn-favoritos-header" title="Ver favoritos">❤️<span class="badge-contador" id="badge-favoritos" style="display:none;">0</span></button>
+      <button type="button" class="btn-icone-header" id="btn-sacola-header" title="Abrir sacola de pedidos">🛍️<span class="badge-contador" id="badge-sacola" style="display:none;">0</span></button>
+    </div>
+  </div>
 </header>
 
+<div class="pills-categoria" id="pills-categoria"></div>
+
 <div class="filtros">
-  <input type="text" id="busca" placeholder="🔎 Buscar por produto, código ou estilo...">
+  <div class="busca-wrap">
+    <input type="text" id="busca" placeholder="🔎 Buscar por produto, código ou estilo...">
+    <button type="button" class="btn-voz" id="btn-voz" title="Buscar por comando de voz">🎤</button>
+  </div>
   <div class="linha-preco">
     <span>Preço:</span>
     <input type="number" id="preco-min" placeholder="Mín R$">
@@ -140,9 +194,19 @@
 
 <div id="overlay"><div class="modal" id="modal-conteudo"></div></div>
 
+<div id="overlay-sacola">
+  <div class="modal" id="sacola-conteudo"></div>
+</div>
+
+<nav class="nav-inferior">
+  <a href="index.html" class="ativo"><span class="icone-nav">👗</span>Catálogo</a>
+  <a href="admin.html"><span class="icone-nav">🔧</span>Área de Gestão</a>
+</nav>
+
 <script src="common.js"></script>
 <script>
   const POR_PAGINA = 24;
+  const QTD_PILLS_CATEGORIA = 6;
 
   let produtos = [];
   let listaFiltradaAtual = [];
@@ -152,6 +216,7 @@
   let filtroCategorias = new Set();
   let filtroGeneros = new Set();
   let apenasNovidades = false;
+  let apenasFavoritos = false;
 
   function listaDeTags(c) { return String(c || '').split(',').map(s => s.trim()).filter(Boolean); }
 
@@ -216,25 +281,40 @@
     }
   });
 
+  function mostrarToastCarregando(texto) {
+    const toast = document.getElementById('toast-carregando');
+    document.getElementById('texto-toast').textContent = texto || 'Carregando produtos...';
+    toast.classList.add('visivel');
+  }
+
+  function esconderToastCarregando() {
+    document.getElementById('toast-carregando').classList.remove('visivel');
+  }
+
   async function carregarCatalogo() {
     lerFiltrosURL();
+    mostrarToastCarregando('Carregando produtos...');
     try {
       const resp = await fetch(API_URL + '?action=list').then(r => r.json());
       produtos = (resp.produtos || []).reverse();
     } catch (e) {
+      esconderToastCarregando();
       document.getElementById('contagem').textContent = '';
       const vazio = document.getElementById('vazio');
       vazio.textContent = 'Não foi possível carregar o catálogo agora. Verifique sua internet e tente novamente em instantes.';
       vazio.style.display = 'block';
       return;
     }
+    esconderToastCarregando();
     produtos.forEach(p => {
       listaDeTags(p.Categoria).forEach(c => categoriasDisponiveis.add(c));
       listaDeTags(p.Genero).forEach(g => generosDisponiveis.add(g));
     });
     renderizarChipExtra();
+    renderizarPillsCategoria();
     renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias, 'resumo-categoria');
     renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
+    atualizarBadges();
     aplicarFiltros();
     abrirProdutoDaURL();
   }
@@ -242,12 +322,55 @@
   function renderizarChipExtra() {
     const container = document.getElementById('chips-extra');
     container.innerHTML = '';
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'chip novidade-chip' + (apenasNovidades ? ' selecionado' : '');
-    chip.textContent = '🆕 Apenas Novidades';
-    chip.addEventListener('click', () => { apenasNovidades = !apenasNovidades; chip.classList.toggle('selecionado'); aplicarFiltros(); });
-    container.appendChild(chip);
+
+    const chipNovidade = document.createElement('button');
+    chipNovidade.type = 'button';
+    chipNovidade.className = 'chip novidade-chip' + (apenasNovidades ? ' selecionado' : '');
+    chipNovidade.textContent = '🆕 Apenas Novidades';
+    chipNovidade.addEventListener('click', () => { apenasNovidades = !apenasNovidades; chipNovidade.classList.toggle('selecionado'); aplicarFiltros(); });
+    container.appendChild(chipNovidade);
+
+    const chipFavoritos = document.createElement('button');
+    chipFavoritos.type = 'button';
+    chipFavoritos.className = 'chip favoritos-chip' + (apenasFavoritos ? ' selecionado' : '');
+    chipFavoritos.textContent = '❤️ Favoritos';
+    chipFavoritos.addEventListener('click', () => { apenasFavoritos = !apenasFavoritos; chipFavoritos.classList.toggle('selecionado'); aplicarFiltros(); });
+    container.appendChild(chipFavoritos);
+  }
+
+  function renderizarPillsCategoria() {
+    const container = document.getElementById('pills-categoria');
+    container.innerHTML = '';
+    const todas = Array.from(categoriasDisponiveis).sort();
+    const principais = todas.slice(0, QTD_PILLS_CATEGORIA);
+    const resto = todas.length - principais.length;
+
+    principais.forEach(v => {
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'pill-cat' + (filtroCategorias.has(v) ? ' selecionado' : '');
+      pill.textContent = v;
+      pill.addEventListener('click', () => {
+        if (filtroCategorias.has(v)) filtroCategorias.delete(v); else filtroCategorias.add(v);
+        renderizarPillsCategoria();
+        renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias, 'resumo-categoria');
+        aplicarFiltros();
+      });
+      container.appendChild(pill);
+    });
+
+    if (resto > 0) {
+      const maisBtn = document.createElement('button');
+      maisBtn.type = 'button';
+      maisBtn.className = 'pill-cat pill-mais';
+      maisBtn.textContent = '+' + resto + ' Mais';
+      maisBtn.addEventListener('click', () => {
+        const details = document.getElementById('details-categoria');
+        details.open = true;
+        details.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      container.appendChild(maisBtn);
+    }
   }
 
   function atualizarResumoFiltro(idResumo, conjunto) {
@@ -267,6 +390,7 @@
         if (conjunto.has(v)) conjunto.delete(v); else conjunto.add(v);
         chip.classList.toggle('selecionado');
         if (idResumo) atualizarResumoFiltro(idResumo, conjunto);
+        if (idContainer === 'chips-categoria') renderizarPillsCategoria();
         aplicarFiltros();
       });
       container.appendChild(chip);
@@ -281,8 +405,9 @@
     document.getElementById('busca').value = '';
     document.getElementById('preco-min').value = '';
     document.getElementById('preco-max').value = '';
-    filtroCategorias.clear(); filtroGeneros.clear(); apenasNovidades = false;
+    filtroCategorias.clear(); filtroGeneros.clear(); apenasNovidades = false; apenasFavoritos = false;
     renderizarChipExtra();
+    renderizarPillsCategoria();
     renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias, 'resumo-categoria');
     renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
     aplicarFiltros();
@@ -299,6 +424,7 @@
       if (!isNaN(min) && Number(p.Preco) < min) return false;
       if (!isNaN(max) && Number(p.Preco) > max) return false;
       if (apenasNovidades && !ehNovidade(p)) return false;
+      if (apenasFavoritos && !ehFavorito(p.ID)) return false;
       if (filtroCategorias.size) { const tags = listaDeTags(p.Categoria); if (!tags.some(t => filtroCategorias.has(t))) return false; }
       if (filtroGeneros.size) { const tags = listaDeTags(p.Genero); if (!tags.some(t => filtroGeneros.has(t))) return false; }
       return true;
@@ -328,11 +454,13 @@
       const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
       const esgotado = estaEsgotado(p);
       const disp = nivelDisponibilidade(p);
+      const favoritado = ehFavorito(p.ID);
       return `
         <div class="card" data-id="${p.ID}">
           <div class="img-wrap">
             <img src="${p.Foto_URL}" alt="${p.Nome}" loading="lazy">
             ${esgotado ? '<span class="selo-card esgotado">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade">NOVIDADE</span>' : '')}
+            <button type="button" class="btn-favorito-card" data-fav-id="${p.ID}" title="Favoritar">${favoritado ? '❤️' : '🤍'}</button>
           </div>
           <div class="card-info">
             ${p.Codigo ? `<div class="codigo">${p.Codigo}</div>` : ''}
@@ -346,8 +474,38 @@
     }).join('');
 
     btnMais.style.display = lista.length > itensVisiveis ? 'block' : 'none';
-    grid.querySelectorAll('.card').forEach(el => el.addEventListener('click', () => abrirDetalhe(el.dataset.id)));
+    grid.querySelectorAll('.card').forEach(el => el.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-favorito-card')) return;
+      abrirDetalhe(el.dataset.id);
+    }));
+    grid.querySelectorAll('.btn-favorito-card').forEach(btn => btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.favId;
+      const agoraFavorito = toggleFavorito(id);
+      btn.textContent = agoraFavorito ? '❤️' : '🤍';
+      atualizarBadges();
+      if (apenasFavoritos) aplicarFiltros();
+    }));
   }
+
+  function atualizarBadges() {
+    const qtdFav = getFavoritos().length;
+    const badgeFav = document.getElementById('badge-favoritos');
+    badgeFav.textContent = qtdFav;
+    badgeFav.style.display = qtdFav > 0 ? 'flex' : 'none';
+
+    const qtdSacola = getSacola().length;
+    const badgeSacola = document.getElementById('badge-sacola');
+    badgeSacola.textContent = qtdSacola;
+    badgeSacola.style.display = qtdSacola > 0 ? 'flex' : 'none';
+  }
+
+  document.getElementById('btn-favoritos-header').addEventListener('click', () => {
+    apenasFavoritos = !apenasFavoritos;
+    renderizarChipExtra();
+    aplicarFiltros();
+    document.querySelector('main').scrollIntoView({ behavior: 'smooth' });
+  });
 
   function abrirWhatsApp(p) {
     const link = API_URL + '?action=share&id=' + p.ID;
@@ -388,6 +546,8 @@
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const esgotado = estaEsgotado(p);
     const disp = nivelDisponibilidade(p);
+    const favoritado = ehFavorito(p.ID);
+    const naSacola = estaNaSacola(p.ID);
 
     const fotosGaleria = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',').map(s=>s.trim()).filter(Boolean));
 
@@ -417,16 +577,28 @@
       ${esgotado
         ? '<div style="margin:12px 16px;padding:12px;background:#eee;color:#777;text-align:center;font-weight:700;border-radius:10px;">Produto Indisponível no momento</div>'
         : `<button class="btn-principal-cta" id="btn-quero">💬 CONVERSAR COM ATENDENTE NO WHATSAPP</button>
+           <button class="btn-secundario-cta" id="btn-sacola-modal">${naSacola ? '✓ Adicionado à Sacola (toque para remover)' : '🛍️ Adicionar à Sacola'}</button>
            <button class="btn-secundario-cta" id="btn-anexar-foto">📎 Compartilhar Foto e Link</button>`}
+      <button class="btn-secundario-cta" id="btn-favorito-modal">${favoritado ? '❤️ Nos seus Favoritos (toque para remover)' : '🤍 Salvar na Lista de Desejos'}</button>
       <button class="btn-fechar" id="btn-fechar-modal">Fechar</button>
     `;
 
     document.getElementById('overlay').classList.add('aberto');
     document.getElementById('btn-fechar-modal').addEventListener('click', fecharDetalhe);
+    document.getElementById('btn-favorito-modal').addEventListener('click', () => {
+      toggleFavorito(p.ID);
+      atualizarBadges();
+      abrirDetalhe(id);
+    });
 
     if (!esgotado) {
       document.getElementById('btn-quero').addEventListener('click', () => abrirWhatsApp(p));
       document.getElementById('btn-anexar-foto').addEventListener('click', () => compartilharComFoto(p));
+      document.getElementById('btn-sacola-modal').addEventListener('click', () => {
+        if (estaNaSacola(p.ID)) removerDaSacola(p.ID); else adicionarNaSacola(p.ID);
+        atualizarBadges();
+        abrirDetalhe(id);
+      });
     }
 
     const thumbs = document.querySelectorAll('.thumb-item');
@@ -449,6 +621,109 @@
   }
 
   document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') fecharDetalhe(); });
+
+  /* ===================== Sacola ===================== */
+
+  function abrirSacola() {
+    const ids = getSacola();
+    const itens = ids.map(id => produtos.find(p => String(p.ID) === String(id))).filter(Boolean);
+    const container = document.getElementById('sacola-conteudo');
+
+    if (!itens.length) {
+      container.innerHTML = `
+        <div class="modal-conteudo">
+          <div class="nome" style="margin-bottom:10px;">🛍️ Sua Sacola</div>
+          <div id="sacola-vazia">Sua sacola está vazia. Adicione peças pelo botão "Adicionar à Sacola" dentro de cada produto.</div>
+        </div>
+        <button class="btn-fechar" id="btn-fechar-sacola">Fechar</button>
+      `;
+    } else {
+      const total = itens.reduce((soma, p) => soma + Number(p.Preco) * (1 - DESCONTO_AVISTA), 0);
+      container.innerHTML = `
+        <div class="modal-conteudo" style="padding-bottom:0;">
+          <div class="nome" style="margin-bottom:4px;">🛍️ Sua Sacola (${itens.length})</div>
+        </div>
+        ${itens.map(p => `
+          <div class="item-sacola">
+            <img src="${p.Foto_URL}" alt="${p.Nome}">
+            <div class="info">
+              <div class="nome">${p.Nome}</div>
+              <div class="preco">${formatarReal(Number(p.Preco) * (1 - DESCONTO_AVISTA))} à vista</div>
+            </div>
+            <button type="button" class="btn-remover" data-remover-id="${p.ID}" title="Remover da sacola">✕</button>
+          </div>
+        `).join('')}
+        <div class="modal-conteudo">
+          <div class="preco-linha"><strong>Total estimado à vista:</strong> <span class="avista">${formatarReal(total)}</span></div>
+        </div>
+        <button class="btn-principal-cta" id="btn-enviar-sacola">💬 ENVIAR PEDIDO COMBINADO NO WHATSAPP</button>
+        <button class="btn-secundario-cta" id="btn-limpar-sacola">🗑️ Esvaziar Sacola</button>
+        <button class="btn-fechar" id="btn-fechar-sacola">Fechar</button>
+      `;
+
+      container.querySelectorAll('[data-remover-id]').forEach(btn => btn.addEventListener('click', () => {
+        removerDaSacola(btn.dataset.removerId);
+        atualizarBadges();
+        abrirSacola();
+      }));
+
+      document.getElementById('btn-enviar-sacola').addEventListener('click', () => {
+        let texto = 'Olá! Quero fazer um pedido com estas peças:\n\n';
+        itens.forEach(p => {
+          const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
+          const codigo = p.Codigo ? (' (' + p.Codigo + ')') : '';
+          texto += `• ${p.Nome}${codigo} — ${formatarReal(avista)} à vista\n`;
+        });
+        texto += `\nTotal estimado à vista: ${formatarReal(total)}`;
+        window.open('https://wa.me/' + WHATSAPP_NUMERO + '?text=' + encodeURIComponent(texto), '_blank');
+      });
+
+      document.getElementById('btn-limpar-sacola').addEventListener('click', () => {
+        if (confirm('Esvaziar toda a sacola?')) {
+          limparSacola();
+          atualizarBadges();
+          abrirSacola();
+        }
+      });
+    }
+
+    container.querySelectorAll('#btn-fechar-sacola').forEach(btn => btn.addEventListener('click', fecharSacola));
+    document.getElementById('overlay-sacola').classList.add('aberto');
+  }
+
+  function fecharSacola() {
+    document.getElementById('overlay-sacola').classList.remove('aberto');
+  }
+
+  document.getElementById('btn-sacola-header').addEventListener('click', abrirSacola);
+  document.getElementById('overlay-sacola').addEventListener('click', (e) => { if (e.target.id === 'overlay-sacola') fecharSacola(); });
+
+  /* ===================== Busca por voz ===================== */
+
+  (function configurarBuscaPorVoz() {
+    const btnVoz = document.getElementById('btn-voz');
+    const ReconhecimentoVoz = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!ReconhecimentoVoz) { btnVoz.style.display = 'none'; return; }
+
+    const reconhecimento = new ReconhecimentoVoz();
+    reconhecimento.lang = 'pt-BR';
+    reconhecimento.interimResults = false;
+    reconhecimento.maxAlternatives = 1;
+
+    reconhecimento.addEventListener('result', (e) => {
+      const texto = e.results[0][0].transcript;
+      const busca = document.getElementById('busca');
+      busca.value = texto;
+      busca.dispatchEvent(new Event('input'));
+    });
+    reconhecimento.addEventListener('end', () => btnVoz.classList.remove('ouvindo'));
+    reconhecimento.addEventListener('error', () => btnVoz.classList.remove('ouvindo'));
+
+    btnVoz.addEventListener('click', () => {
+      btnVoz.classList.add('ouvindo');
+      try { reconhecimento.start(); } catch (e) { btnVoz.classList.remove('ouvindo'); }
+    });
+  })();
 
   function abrirProdutoDaURL() {
     const params = new URLSearchParams(window.location.search);

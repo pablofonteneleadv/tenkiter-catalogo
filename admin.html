@@ -9,16 +9,27 @@
 <title>TENKiTER Modas — Painel do Atendente</title>
 <style>
   :root { --preto: #0d0d0d; --laranja: #ff7a1a; --cinza: #f4f4f4; --branco: #ffffff; --verde: #198754; --vermelho: #c62828; --amarelo: #b8860b; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, Roboto, Arial, sans-serif; background: var(--cinza); color: var(--preto); padding-bottom: 60px; }
-  header { background: var(--preto); color: var(--laranja); padding: 18px 16px; text-align: center; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: -apple-system, Roboto, Arial, sans-serif; background: var(--cinza); color: var(--preto); padding-bottom: 76px; }
+  header { background: var(--preto); color: var(--laranja); padding: 18px 16px; text-align: center; position: sticky; top: 0; z-index: 20; }
   header h1 { margin: 0; font-size: 1.2rem; letter-spacing: 1px; font-weight: 800; }
   header p { margin: 4px 0 0; font-size: 0.75rem; color: #ccc; }
   main { padding: 16px; max-width: 520px; margin: 0 auto; }
 
-  .usuario-bar { background: var(--branco); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); font-size: 0.85rem; }
+  #toast-carregando { position: fixed; top: 0; left: 0; right: 0; z-index: 60; background: var(--preto); color: var(--laranja); text-align: center; font-size: 0.8rem; font-weight: 700; padding: 8px 12px; transform: translateY(-100%); transition: transform 0.25s ease-out; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  #toast-carregando.visivel { transform: translateY(0); }
+  .spinner-mini { width: 13px; height: 13px; border: 2px solid rgba(255,122,26,0.3); border-top-color: var(--laranja); border-radius: 50%; animation: girar 0.7s linear infinite; }
+  @keyframes girar { to { transform: rotate(360deg); } }
+
+  .usuario-bar { background: var(--branco); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); font-size: 0.85rem; gap: 6px; }
   .usuario-bar strong { color: var(--laranja); }
-  .btn-trocar-user { background: #f0f0f0; border: none; padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; cursor: pointer; }
+  .usuario-bar .botoes-user { display: flex; gap: 6px; flex-shrink: 0; }
+  .btn-trocar-user, .btn-sair { background: #f0f0f0; border: none; padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; cursor: pointer; white-space: nowrap; }
+  .btn-sair { background: #fde3e3; color: var(--vermelho); font-weight: 700; }
+
+  .sync-bar { background: #fff3e0; border: 1px solid #ffcc80; color: #7a4a00; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; font-size: 0.78rem; display: none; align-items: center; justify-content: space-between; gap: 8px; }
+  .sync-bar.ativa { display: flex; }
+  .sync-bar button { width: auto; padding: 6px 10px; font-size: 0.72rem; background: var(--preto); color: var(--laranja); }
 
   .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
   .dashboard-card { background: var(--branco); border-radius: 12px; padding: 10px 6px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
@@ -67,6 +78,7 @@
 
   button { border: none; border-radius: 10px; padding: 13px; font-size: 0.95rem; font-weight: 700; cursor: pointer; width: 100%; }
   .btn-primario { background: var(--laranja); color: var(--preto); margin-top: 18px; }
+  .btn-cancelar-duplicar { background: #eee; color: #555; margin-top: 8px; display: none; }
 
   /* Bar de ações em lote */
   .bulk-bar { background: var(--preto); color: #fff; padding: 12px; border-radius: 12px; margin-bottom: 12px; display: none; }
@@ -84,15 +96,26 @@
   .produto-info .preco { font-size: 0.82rem; color: #333; }
   .produto-info .preco span { color: #1a7a1a; font-weight: 700; }
 
-  .acoes { display: flex; flex-direction: column; gap: 6px; }
-  .acoes button { padding: 6px 10px; font-size: 0.7rem; width: auto; }
+  .acoes { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+  .acoes button { padding: 6px 10px; font-size: 0.68rem; width: auto; }
+  .acoes .btn-excluir { background: #fde3e3; color: var(--vermelho); }
+  .acoes .btn-arquivar { background: #eee; color: #555; }
+  .acoes .btn-duplicar { background: #e3f2e3; color: #1a7a1a; }
+  .acoes .btn-arte { background: #ede3fd; color: #5a2ea6; }
 
   #overlay-compartilhar { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 60; align-items: flex-end; justify-content: center; }
   #overlay-compartilhar.aberto { display: flex; }
-  .painel-compartilhar { background: var(--branco); width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 16px; }
+  .painel-compartilhar { background: var(--branco); width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 16px; max-height: 90vh; overflow-y: auto; }
+
+  .nav-inferior { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: var(--preto); border-top: 1px solid rgba(255,255,255,0.08); display: flex; box-shadow: 0 -2px 10px rgba(0,0,0,0.2); }
+  .nav-inferior a { flex: 1; text-align: center; padding: 9px 4px 8px; color: #999; text-decoration: none; font-size: 0.68rem; font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .nav-inferior a .icone-nav { font-size: 1.15rem; }
+  .nav-inferior a.ativo { color: var(--laranja); }
 </style>
 </head>
 <body>
+
+<div id="toast-carregando"><span class="spinner-mini"></span><span id="texto-toast">Carregando peças...</span></div>
 
 <header>
   <h1>TENKiTER MODAS</h1>
@@ -103,7 +126,15 @@
 
   <div class="usuario-bar">
     <div>Atendente: <strong id="lbl-funcionario">Anônimo</strong></div>
-    <button type="button" class="btn-trocar-user" id="btn-trocar-user">Identificar-se</button>
+    <div class="botoes-user">
+      <button type="button" class="btn-trocar-user" id="btn-trocar-user">Identificar-se</button>
+      <button type="button" class="btn-sair" id="btn-sair">Sair</button>
+    </div>
+  </div>
+
+  <div class="sync-bar" id="sync-bar">
+    <span id="sync-texto">0 ações pendentes de conexão</span>
+    <button type="button" id="btn-sincronizar">🔄 Sincronizar</button>
   </div>
 
   <div class="dashboard">
@@ -177,9 +208,19 @@
       </div>
 
       <button type="submit" class="btn-primario" id="btn-salvar">Cadastrar Peça</button>
+      <button type="button" class="btn-cancelar-duplicar" id="btn-cancelar-duplicar">Cancelar Duplicação / Novo Produto</button>
       <div id="status" style="text-align:center;font-size:0.85rem;margin-top:8px;"></div>
     </form>
   </div>
+
+  <details class="extra" id="details-config">
+    <summary>⚙️ Configurações Avançadas (URL do sistema)</summary>
+    <label>Endereço da API (Apps Script)</label>
+    <input type="text" id="input-api-url" placeholder="https://script.google.com/...">
+    <button type="button" id="btn-salvar-api-url" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar Endereço Personalizado</button>
+    <button type="button" id="btn-restaurar-api-url" style="margin-top:8px;background:#eee;color:#555;">Restaurar Endereço Padrão</button>
+    <p style="font-size:0.72rem;color:#888;margin-top:8px;">Só mude isto se um novo endereço do sistema for informado. Um endereço errado impede o catálogo de carregar.</p>
+  </details>
 
   <!-- Ações em Lote -->
   <div class="bulk-bar" id="bulk-bar">
@@ -205,8 +246,14 @@
 </main>
 
 <canvas id="canvas-oculto" style="display:none;"></canvas>
+<canvas id="canvas-stories" style="display:none;"></canvas>
 
 <div id="overlay-compartilhar"><div class="painel-compartilhar" id="painel-compartilhar-conteudo"></div></div>
+
+<nav class="nav-inferior">
+  <a href="index.html"><span class="icone-nav">👗</span>Catálogo</a>
+  <a href="admin.html" class="ativo"><span class="icone-nav">🔧</span>Área de Gestão</a>
+</nav>
 
 <script src="common.js"></script>
 <script>
@@ -236,18 +283,82 @@
 
   document.getElementById('btn-trocar-user').addEventListener('click', identificarFuncionario);
 
+  document.getElementById('btn-sair').addEventListener('click', () => {
+    if (confirm('Sair do painel? Será preciso digitar o PIN novamente da próxima vez.')) {
+      sessionStorage.removeItem('tenkiter_admin_pin');
+      window.location.reload();
+    }
+  });
+
+  /* ===================== Configurações de API_URL ===================== */
+
+  document.getElementById('input-api-url').value = API_URL;
+
+  document.getElementById('btn-salvar-api-url').addEventListener('click', () => {
+    const novoUrl = document.getElementById('input-api-url').value.trim();
+    if (!novoUrl) return;
+    if (!confirm('Trocar o endereço do sistema? Só faça isso se você recebeu um novo endereço oficial.')) return;
+    definirApiUrlPersonalizada(novoUrl);
+    alert('Endereço salvo! A página vai recarregar para aplicar a mudança.');
+    window.location.reload();
+  });
+
+  document.getElementById('btn-restaurar-api-url').addEventListener('click', () => {
+    if (!confirm('Restaurar o endereço padrão do sistema?')) return;
+    restaurarApiUrlPadrao();
+    alert('Endereço padrão restaurado! A página vai recarregar.');
+    window.location.reload();
+  });
+
+  /* ===================== Fila offline / Sincronização ===================== */
+
+  function atualizarBarraSync() {
+    const qtd = getFilaOffline().length;
+    const bar = document.getElementById('sync-bar');
+    document.getElementById('sync-texto').textContent = qtd + (qtd === 1 ? ' ação pendente de conexão' : ' ações pendentes de conexão');
+    bar.classList.toggle('ativa', qtd > 0);
+  }
+
+  document.getElementById('btn-sincronizar').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-sincronizar');
+    btn.textContent = 'Sincronizando...';
+    const resultado = await sincronizarFilaOffline();
+    atualizarBarraSync();
+    btn.textContent = '🔄 Sincronizar';
+    if (resultado.restantes > 0) {
+      alert(resultado.enviados + ' ação(ões) enviada(s). Ainda há ' + resultado.restantes + ' pendente(s) — verifique sua internet.');
+    } else if (resultado.enviados > 0) {
+      alert('Tudo sincronizado! ' + resultado.enviados + ' ação(ões) enviada(s) com sucesso.');
+    }
+    await carregarProdutos();
+  });
+
   let categorias = [], generos = [], produtos = [];
   let selecionadasCategorias = new Set(), selecionadosGeneros = new Set();
   let selecionadosBulk = new Set();
-  let fotoBase64 = null, fotoStoriesBase64 = null;
+  let fotoBase64 = null;
+  let modoDuplicando = false;
+
+  function mostrarToastCarregando(texto) {
+    const toast = document.getElementById('toast-carregando');
+    document.getElementById('texto-toast').textContent = texto || 'Carregando peças...';
+    toast.classList.add('visivel');
+  }
+  function esconderToastCarregando() {
+    document.getElementById('toast-carregando').classList.remove('visivel');
+  }
 
   async function carregarListas() {
-    const [rc, rg] = await Promise.all([
-      fetch(API_URL + '?action=categorias').then(r => r.json()),
-      fetch(API_URL + '?action=generos').then(r => r.json())
-    ]);
-    categorias = rc.categorias || [];
-    generos = rg.generos || [];
+    try {
+      const [rc, rg] = await Promise.all([
+        fetch(API_URL + '?action=categorias').then(r => r.json()),
+        fetch(API_URL + '?action=generos').then(r => r.json())
+      ]);
+      categorias = rc.categorias || [];
+      generos = rg.generos || [];
+    } catch (e) {
+      categorias = []; generos = [];
+    }
     renderizarChips('chips-categoria', categorias, selecionadasCategorias);
     renderizarChips('chips-genero', generos, selecionadosGeneros);
   }
@@ -307,6 +418,52 @@
     cropSection.style.display = 'none';
   });
 
+  /* ===================== Duplicar peça ===================== */
+
+  function duplicarProduto(id) {
+    const p = produtos.find(x => String(x.ID) === String(id));
+    if (!p) return;
+    modoDuplicando = true;
+
+    document.getElementById('nome').value = p.Nome + ' (cópia)';
+    document.getElementById('preco').value = p.Preco;
+    document.getElementById('estoque').value = p.Estoque || '';
+    document.getElementById('tamanhos').value = p.Tamanhos || '';
+    document.getElementById('cores').value = p.Cores || '';
+    document.getElementById('descricao').value = p.Descricao || '';
+    document.getElementById('novidade').checked = ehNovidade(p);
+
+    selecionadasCategorias = new Set(String(p.Categoria || '').split(',').map(s => s.trim()).filter(Boolean));
+    selecionadosGeneros = new Set(String(p.Genero || '').split(',').map(s => s.trim()).filter(Boolean));
+    renderizarChips('chips-categoria', categorias, selecionadasCategorias);
+    renderizarChips('chips-genero', generos, selecionadosGeneros);
+
+    fotoBase64 = null;
+    previewFinal.style.display = 'none';
+
+    document.getElementById('titulo-form').textContent = 'Duplicando: ' + p.Nome;
+    document.getElementById('btn-salvar').textContent = 'Cadastrar Cópia';
+    document.getElementById('btn-cancelar-duplicar').style.display = 'block';
+
+    alert('Dados copiados! Não esqueça de selecionar uma foto para esta peça antes de salvar.');
+    document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function cancelarDuplicacao() {
+    modoDuplicando = false;
+    document.getElementById('form-produto').reset();
+    selecionadasCategorias.clear(); selecionadosGeneros.clear();
+    renderizarChips('chips-categoria', categorias, selecionadasCategorias);
+    renderizarChips('chips-genero', generos, selecionadosGeneros);
+    fotoBase64 = null;
+    previewFinal.style.display = 'none';
+    document.getElementById('titulo-form').textContent = 'Novo Produto';
+    document.getElementById('btn-salvar').textContent = 'Cadastrar Peça';
+    document.getElementById('btn-cancelar-duplicar').style.display = 'none';
+  }
+
+  document.getElementById('btn-cancelar-duplicar').addEventListener('click', cancelarDuplicacao);
+
   // Salvar Produto
   document.getElementById('form-produto').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -329,24 +486,32 @@
       fotoBase64: fotoBase64
     };
 
-    const resp = await fetch(API_URL, {
-      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(dados)
-    }).then(r => r.json());
+    const resultado = await enviarComFila(dados);
+    atualizarBarraSync();
 
-    if (resp.ok) {
+    if (resultado.ok && resultado.resp && resultado.resp.ok) {
       status.textContent = '✅ Cadastrado com sucesso!';
-      document.getElementById('form-produto').reset();
-      previewFinal.style.display = 'none';
+      cancelarDuplicacao();
       await carregarProdutos();
+    } else if (!resultado.ok && resultado.enfileirado) {
+      status.textContent = '📥 Sem conexão agora. A peça foi salva localmente e será enviada quando você tocar em "Sincronizar".';
+      cancelarDuplicacao();
     } else {
-      status.textContent = '❌ Erro: ' + (resp.erro || 'Falha ao salvar');
+      status.textContent = '❌ Erro: ' + ((resultado.resp && resultado.resp.erro) || 'Falha ao salvar');
     }
   });
 
   async function carregarProdutos() {
-    const resp = await fetch(API_URL + '?action=list').then(r => r.json());
-    produtos = (resp.produtos || []).reverse();
+    mostrarToastCarregando('Carregando peças...');
+    try {
+      const resp = await fetch(API_URL + '?action=list').then(r => r.json());
+      produtos = (resp.produtos || []).reverse();
+    } catch (e) {
+      esconderToastCarregando();
+      document.getElementById('lista-produtos').innerHTML = '<p style="text-align:center;color:#c62828;">Não foi possível carregar o catálogo agora. Verifique sua internet.</p>';
+      return;
+    }
+    esconderToastCarregando();
     renderizarProdutos();
   }
 
@@ -371,7 +536,11 @@
           <div class="preco">${formatarReal(p.Preco)} · à vista <span>${formatarReal(p.Preco * (1 - DESCONTO_AVISTA))}</span></div>
         </div>
         <div class="acoes">
-          <button type="button" style="background:#eee;" onclick="copiarLink('${p.ID}')">🔗 Link</button>
+          <button type="button" style="background:#eee;" data-link-id="${p.ID}">🔗 Link</button>
+          <button type="button" class="btn-duplicar" data-duplicar-id="${p.ID}">📋 Duplicar</button>
+          <button type="button" class="btn-arte" data-arte-id="${p.ID}">🎨 Stories</button>
+          <button type="button" class="btn-arquivar" data-arquivar-id="${p.ID}">🗃️ Arquivar</button>
+          <button type="button" class="btn-excluir" data-excluir-id="${p.ID}">🗑️ Excluir</button>
         </div>
       </div>
     `).join('');
@@ -383,6 +552,11 @@
         atualizarBarraBulk();
       });
     });
+    container.querySelectorAll('[data-link-id]').forEach(btn => btn.addEventListener('click', () => copiarLink(btn.dataset.linkId)));
+    container.querySelectorAll('[data-duplicar-id]').forEach(btn => btn.addEventListener('click', () => duplicarProduto(btn.dataset.duplicarId)));
+    container.querySelectorAll('[data-arte-id]').forEach(btn => btn.addEventListener('click', () => abrirCriadorDeArte(btn.dataset.arteId)));
+    container.querySelectorAll('[data-arquivar-id]').forEach(btn => btn.addEventListener('click', () => arquivarUnico(btn.dataset.arquivarId)));
+    container.querySelectorAll('[data-excluir-id]').forEach(btn => btn.addEventListener('click', () => excluirUnico(btn.dataset.excluirId)));
   }
 
   function atualizarBarraBulk() {
@@ -398,6 +572,12 @@
 
   document.getElementById('btn-cancelar-bulk').addEventListener('click', () => {
     selecionadosBulk.clear();
+    atualizarBarraBulk();
+    renderizarProdutos();
+  });
+
+  document.getElementById('btn-select-all').addEventListener('click', () => {
+    produtos.forEach(p => selecionadosBulk.add(String(p.ID)));
     atualizarBarraBulk();
     renderizarProdutos();
   });
@@ -419,25 +599,61 @@
   });
 
   async function executarAcaoEmLote(tipoAcao, valor) {
-    const resp = await fetch(API_URL, {
-      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'bulkUpdate',
-        pin: adminPin,
-        funcionario: funcionarioNome,
-        ids: Array.from(selecionadosBulk),
-        tipoAcao: tipoAcao,
-        valor: valor
-      })
-    }).then(r => r.json());
+    const resultado = await enviarComFila({
+      action: 'bulkUpdate',
+      pin: adminPin,
+      funcionario: funcionarioNome,
+      ids: Array.from(selecionadosBulk),
+      tipoAcao: tipoAcao,
+      valor: valor
+    });
+    atualizarBarraSync();
 
-    if (resp.ok) {
-      alert('Ação realizada em ' + resp.afetados + ' produtos!');
+    if (resultado.ok && resultado.resp && resultado.resp.ok) {
+      alert('Ação realizada em ' + resultado.resp.afetados + ' produtos!');
       selecionadosBulk.clear();
       atualizarBarraBulk();
       await carregarProdutos();
+    } else if (!resultado.ok && resultado.enfileirado) {
+      alert('Sem conexão agora. A ação foi salva e será enviada quando você tocar em "Sincronizar".');
+      selecionadosBulk.clear();
+      atualizarBarraBulk();
     } else {
       alert('Erro ao executar ação em lote.');
+    }
+  }
+
+  /* ===================== Arquivar / Excluir por item ===================== */
+
+  async function arquivarUnico(id) {
+    if (!confirm('Arquivar esta peça? Ela deixa de aparecer no catálogo público.')) return;
+    const resultado = await enviarComFila({
+      action: 'bulkUpdate', pin: adminPin, funcionario: funcionarioNome,
+      ids: [id], tipoAcao: 'arquivar', valor: true
+    });
+    atualizarBarraSync();
+    if (resultado.ok && resultado.resp && resultado.resp.ok) {
+      await carregarProdutos();
+    } else if (!resultado.ok && resultado.enfileirado) {
+      alert('Sem conexão agora. Ação salva para sincronizar depois.');
+    } else {
+      alert('Erro ao arquivar. Tente novamente.');
+    }
+  }
+
+  async function excluirUnico(id) {
+    if (!confirm('Excluir esta peça definitivamente? Esta ação não pode ser desfeita.')) return;
+    const resultado = await enviarComFila({
+      action: 'bulkUpdate', pin: adminPin, funcionario: funcionarioNome,
+      ids: [id], tipoAcao: 'excluirDefinitivo', valor: true
+    });
+    atualizarBarraSync();
+    if (resultado.ok && resultado.resp && resultado.resp.ok) {
+      await carregarProdutos();
+    } else if (!resultado.ok && resultado.enfileirado) {
+      alert('Sem conexão agora. Exclusão salva para sincronizar depois.');
+    } else {
+      alert('O sistema atual pode ainda não ter suporte a exclusão definitiva. Use "Arquivar" por enquanto, ou confirme com o suporte técnico se essa ação foi implementada no backend.');
     }
   }
 
@@ -447,11 +663,118 @@
     alert('Link copiado!');
   }
 
+  /* ===================== Criar Arte (Stories) ===================== */
+
+  function abrirCriadorDeArte(id) {
+    const p = produtos.find(x => String(x.ID) === String(id));
+    if (!p) return;
+    const painel = document.getElementById('painel-compartilhar-conteudo');
+    painel.innerHTML = `
+      <h3 style="margin-top:0;">🎨 Arte para Stories</h3>
+      <p style="font-size:0.82rem;color:#666;">Gerando imagem 1080x1920 para o Instagram/WhatsApp Stories...</p>
+      <div id="preview-arte" style="text-align:center;margin:12px 0;"><span style="color:#999;">Processando...</span></div>
+      <button type="button" id="btn-baixar-arte" style="background:var(--laranja);margin-bottom:8px;display:none;">⬇️ Baixar Imagem</button>
+      <button type="button" id="btn-fechar-arte" style="background:#eee;color:#555;">Fechar</button>
+    `;
+    document.getElementById('overlay-compartilhar').classList.add('aberto');
+    document.getElementById('btn-fechar-arte').addEventListener('click', () => {
+      document.getElementById('overlay-compartilhar').classList.remove('aberto');
+    });
+    gerarImagemStories(p);
+  }
+
+  function gerarImagemStories(p) {
+    const canvas = document.getElementById('canvas-stories');
+    canvas.width = 1080; canvas.height = 1920;
+    const ctx = canvas.getContext('2d');
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        // fundo preto
+        ctx.fillStyle = '#0d0d0d';
+        ctx.fillRect(0, 0, 1080, 1920);
+
+        // foto do produto, centralizada, cobrindo a área superior
+        const areaFotoAltura = 1350;
+        const escala = Math.max(1080 / img.naturalWidth, areaFotoAltura / img.naturalHeight);
+        const w = img.naturalWidth * escala, h = img.naturalHeight * escala;
+        ctx.drawImage(img, (1080 - w) / 2, (areaFotoAltura - h) / 2, w, h);
+
+        // faixa laranja com nome da loja
+        ctx.fillStyle = '#ff7a1a';
+        ctx.fillRect(0, areaFotoAltura, 1080, 8);
+
+        // textos
+        ctx.fillStyle = '#ff7a1a';
+        ctx.font = 'bold 46px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('TENKiTER MODAS', 540, areaFotoAltura + 90);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 54px sans-serif';
+        quebrarTextoCanvas(ctx, p.Nome, 540, areaFotoAltura + 175, 960, 60);
+
+        const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
+        ctx.fillStyle = '#7ee787';
+        ctx.font = 'bold 64px sans-serif';
+        ctx.fillText(formatarReal(avista) + ' à vista', 540, areaFotoAltura + 330);
+
+        ctx.fillStyle = '#aaaaaa';
+        ctx.font = '38px sans-serif';
+        ctx.fillText('Chama no WhatsApp: ' + WHATSAPP_NUMERO, 540, areaFotoAltura + 400);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        document.getElementById('preview-arte').innerHTML = `<img src="${dataUrl}" style="max-width:100%;max-height:340px;border-radius:10px;">`;
+        const btnBaixar = document.getElementById('btn-baixar-arte');
+        btnBaixar.style.display = 'block';
+        btnBaixar.onclick = () => {
+          const a = document.createElement('a');
+          a.href = dataUrl;
+          a.download = 'stories-' + (p.Codigo || p.ID) + '.jpg';
+          a.click();
+        };
+      } catch (erroCanvas) {
+        document.getElementById('preview-arte').innerHTML = '<p style="color:#c62828;font-size:0.82rem;">Não foi possível gerar a imagem automaticamente (a foto está hospedada num serviço que bloqueia esse tipo de uso). Use o botão "🔗 Link" ou salve a foto manualmente para postar.</p>';
+      }
+    };
+    img.onerror = () => {
+      document.getElementById('preview-arte').innerHTML = '<p style="color:#c62828;font-size:0.82rem;">Não foi possível carregar a foto do produto para gerar a arte.</p>';
+    };
+    img.src = p.Foto_URL;
+  }
+
+  function quebrarTextoCanvas(ctx, texto, x, y, larguraMax, alturaLinha) {
+    const palavras = String(texto).split(' ');
+    let linha = '';
+    let linhas = [];
+    palavras.forEach(palavra => {
+      const teste = linha ? linha + ' ' + palavra : palavra;
+      if (ctx.measureText(teste).width > larguraMax && linha) {
+        linhas.push(linha);
+        linha = palavra;
+      } else {
+        linha = teste;
+      }
+    });
+    if (linha) linhas.push(linha);
+    linhas = linhas.slice(0, 2);
+    const inicioY = y - ((linhas.length - 1) * alturaLinha) / 2;
+    linhas.forEach((l, i) => ctx.fillText(l, x, inicioY + i * alturaLinha));
+  }
+
+  document.getElementById('overlay-compartilhar').addEventListener('click', (e) => {
+    if (e.target.id === 'overlay-compartilhar') e.target.classList.remove('aberto');
+  });
+
+  document.getElementById('busca-admin').addEventListener('input', renderizarProdutos);
+
   (async function iniciar() {
+    atualizarBarraSync();
     await carregarListas();
     await carregarProdutos();
   })();
 </script>
 </body>
 </html>
-
