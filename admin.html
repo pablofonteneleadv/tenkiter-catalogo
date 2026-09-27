@@ -107,6 +107,28 @@
   #overlay-compartilhar.aberto { display: flex; }
   .painel-compartilhar { background: var(--branco); width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 16px; max-height: 90vh; overflow-y: auto; }
 
+  /* Prévia ao vivo da Arte para Stories */
+  .arte-preview-card { width: 260px; margin: 0 auto; background: #0d0d0d; border-radius: 18px; overflow: hidden; box-shadow: 0 4px 18px rgba(0,0,0,0.35); }
+  .arte-preview-topo { text-align: center; padding: 10px 10px 6px; }
+  .arte-preview-loja { color: var(--laranja); font-weight: 800; font-size: 0.92rem; letter-spacing: 0.5px; }
+  .arte-preview-sub { color: #888; font-size: 0.52rem; letter-spacing: 1px; margin-top: 1px; }
+  .arte-preview-foto-wrap { position: relative; width: 100%; aspect-ratio: 4 / 5; background: #111; }
+  .arte-preview-foto-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .arte-preview-badge { position: absolute; top: 8px; left: 8px; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: 0.58rem; padding: 4px 8px; border-radius: 6px; }
+  .arte-preview-badge:empty { display: none; }
+  .arte-preview-codigo { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.65); color: #fff; font-weight: 700; font-size: 0.58rem; padding: 4px 8px; border-radius: 6px; }
+  .arte-preview-info { padding: 10px 14px 16px; text-align: center; }
+  .arte-preview-nome { color: #fff; font-weight: 800; font-size: 0.9rem; }
+  .arte-preview-cat { color: #999; font-size: 0.66rem; margin-top: 2px; }
+  .arte-preview-de { color: #999; font-size: 0.66rem; margin-top: 8px; text-decoration: line-through; }
+  .arte-preview-preco { color: #7ee787; font-weight: 800; font-size: 1.2rem; margin-top: 2px; }
+  .arte-preview-btn { margin-top: 10px; background: var(--verde); color: #fff; font-weight: 700; font-size: 0.74rem; padding: 8px; border-radius: 10px; }
+  .arte-preview-atendente { color: #777; font-size: 0.58rem; margin-top: 6px; }
+
+  .arte-thumbs { display: flex; gap: 8px; margin-top: 8px; overflow-x: auto; }
+  .arte-thumb { width: 48px; height: 60px; object-fit: cover; border-radius: 6px; cursor: pointer; opacity: 0.55; border: 2px solid transparent; flex-shrink: 0; }
+  .arte-thumb.selecionada { opacity: 1; border-color: var(--laranja); }
+
   .nav-inferior { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: var(--preto); border-top: 1px solid rgba(255,255,255,0.08); display: flex; box-shadow: 0 -2px 10px rgba(0,0,0,0.2); }
   .nav-inferior a { flex: 1; text-align: center; padding: 9px 4px 8px; color: #999; text-decoration: none; font-size: 0.68rem; font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .nav-inferior a .icone-nav { font-size: 1.15rem; }
@@ -666,38 +688,85 @@
   /* ===================== Criar Arte (Stories) ===================== */
 
   const OPCOES_SELO_ARTE = ['NOVIDADE', 'ÚLTIMAS PEÇAS', 'PROMOÇÃO', 'REPOSIÇÃO', 'DESTAQUE', 'Nenhum'];
-  let configArteAtual = { selo: '', precoStory: '' };
+  let configArteAtual = { selo: '', precoStory: '', foto: '' };
 
   function abrirCriadorDeArte(id) {
     const p = produtos.find(x => String(x.ID) === String(id));
     if (!p) return;
     const avistaPadrao = (Number(p.Preco) * (1 - DESCONTO_AVISTA)).toFixed(2);
-    configArteAtual = { selo: ehNovidade(p) ? 'NOVIDADE' : 'DESTAQUE', precoStory: avistaPadrao };
-    renderizarConfigArte(p);
+    const fotos = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',').map(s => s.trim()).filter(Boolean));
+    configArteAtual = { selo: ehNovidade(p) ? 'NOVIDADE' : 'DESTAQUE', precoStory: avistaPadrao, foto: fotos[0] };
+    renderizarConfigArte(p, fotos);
     document.getElementById('overlay-compartilhar').classList.add('aberto');
   }
 
-  function renderizarConfigArte(p) {
+  function renderizarConfigArte(p, fotos) {
     const painel = document.getElementById('painel-compartilhar-conteudo');
+    const subtitulo = [p.Genero, p.Categoria].filter(Boolean).join(' • ');
+
     painel.innerHTML = `
-      <h3 style="margin-top:0;">🎨 Configurar Arte para Stories</h3>
-      <p style="font-size:0.8rem;color:#666;margin-top:-6px;">${p.Nome}</p>
+      <h3 style="margin-top:0;text-align:center;">🎨 Arte para Stories</h3>
+
+      <div class="arte-preview-card" id="arte-preview-card">
+        <div class="arte-preview-topo">
+          <div class="arte-preview-loja">TENKiTER MODAS</div>
+          <div class="arte-preview-sub">CATÁLOGO EXCLUSIVO</div>
+        </div>
+        <div class="arte-preview-foto-wrap">
+          <img id="arte-preview-foto" src="${fotos[0]}" alt="">
+          <span class="arte-preview-badge" id="arte-preview-badge"></span>
+          ${p.Codigo ? `<span class="arte-preview-codigo">${p.Codigo}</span>` : ''}
+        </div>
+        <div class="arte-preview-info">
+          <div class="arte-preview-nome">${p.Nome}</div>
+          ${subtitulo ? `<div class="arte-preview-cat">${subtitulo}</div>` : ''}
+          <div class="arte-preview-de" id="arte-preview-de" style="display:none;"></div>
+          <div class="arte-preview-preco" id="arte-preview-preco"></div>
+          <div class="arte-preview-btn">📱 Peça pelo WhatsApp</div>
+          ${funcionarioNome ? `<div class="arte-preview-atendente">Atendimento com ${funcionarioNome}</div>` : ''}
+        </div>
+      </div>
+
+      ${fotos.length > 1 ? `
+        <label>Escolher foto do produto</label>
+        <div class="arte-thumbs" id="arte-thumbs">
+          ${fotos.map((f, i) => `<img src="${f}" class="arte-thumb${i === 0 ? ' selecionada' : ''}" data-foto="${f}">`).join('')}
+        </div>
+      ` : ''}
 
       <label>Selo / Badge</label>
       <div class="chips" id="chips-selo-arte">
         ${OPCOES_SELO_ARTE.map(s => `<button type="button" class="chip${configArteAtual.selo === s ? ' selecionado' : ''}" data-selo="${s}">${s}</button>`).join('')}
       </div>
-
-      <label>Texto do selo personalizado (opcional, substitui a opção acima)</label>
-      <input type="text" id="input-selo-custom" placeholder="Ex: FRETE GRÁTIS, ÚLTIMA PEÇA...">
+      <input type="text" id="input-selo-custom" placeholder="Ou digite um selo personalizado...">
 
       <label>Preço a exibir no Story (R$)</label>
       <input type="number" id="input-preco-arte" step="0.01" min="0" value="${configArteAtual.precoStory}">
-      <p style="font-size:0.72rem;color:#888;margin-top:4px;">Pode ajustar para um valor promocional só desta arte — não altera o preço cadastrado no catálogo.</p>
+      <p style="font-size:0.72rem;color:#888;margin-top:4px;">Só muda o valor mostrado nesta arte — não altera o preço cadastrado no catálogo.</p>
 
-      <button type="button" id="btn-gerar-arte" style="background:var(--laranja);margin-top:14px;">🎨 Gerar Arte</button>
+      <div id="status-arte" style="text-align:center;font-size:0.8rem;margin-top:8px;min-height:18px;"></div>
+      <button type="button" id="btn-baixar-arte" style="background:var(--laranja);margin-top:6px;">⬇️ Baixar Imagem</button>
       <button type="button" id="btn-fechar-arte-config" style="background:#eee;color:#555;margin-top:8px;">Fechar</button>
     `;
+
+    function atualizarPreviewAoVivo() {
+      const custom = document.getElementById('input-selo-custom').value.trim();
+      const seloFinal = custom || (configArteAtual.selo === 'Nenhum' ? '' : configArteAtual.selo);
+      document.getElementById('arte-preview-badge').textContent = seloFinal;
+
+      const precoInput = document.getElementById('input-preco-arte').value;
+      const precoStory = precoInput !== '' ? Number(precoInput) : Number(p.Preco) * (1 - DESCONTO_AVISTA);
+      const precoCheio = Number(p.Preco);
+      const elDe = document.getElementById('arte-preview-de');
+      if (precoStory < precoCheio - 0.009) {
+        elDe.textContent = 'De ' + formatarReal(precoCheio);
+        elDe.style.display = 'block';
+      } else {
+        elDe.style.display = 'none';
+      }
+      document.getElementById('arte-preview-preco').textContent = formatarReal(precoStory) + ' à vista';
+      configArteAtual.precoStory = precoInput;
+    }
 
     painel.querySelectorAll('#chips-selo-arte .chip').forEach(chip => {
       chip.addEventListener('click', () => {
@@ -705,39 +774,38 @@
         chip.classList.add('selecionado');
         configArteAtual.selo = chip.dataset.selo;
         document.getElementById('input-selo-custom').value = '';
+        atualizarPreviewAoVivo();
       });
     });
+    document.getElementById('input-selo-custom').addEventListener('input', atualizarPreviewAoVivo);
+    document.getElementById('input-preco-arte').addEventListener('input', atualizarPreviewAoVivo);
+
+    if (fotos.length > 1) {
+      painel.querySelectorAll('.arte-thumb').forEach(thumb => {
+        thumb.addEventListener('click', () => {
+          painel.querySelectorAll('.arte-thumb').forEach(t => t.classList.remove('selecionada'));
+          thumb.classList.add('selecionada');
+          configArteAtual.foto = thumb.dataset.foto;
+          document.getElementById('arte-preview-foto').src = thumb.dataset.foto;
+        });
+      });
+    }
 
     document.getElementById('btn-fechar-arte-config').addEventListener('click', () => {
       document.getElementById('overlay-compartilhar').classList.remove('aberto');
     });
 
-    document.getElementById('btn-gerar-arte').addEventListener('click', () => {
+    document.getElementById('btn-baixar-arte').addEventListener('click', () => {
       const custom = document.getElementById('input-selo-custom').value.trim();
-      const seloFinal = custom || configArteAtual.selo;
-      const precoFinal = document.getElementById('input-preco-arte').value;
-      configArteAtual.precoStory = precoFinal;
-      renderizarPreviewArte(p, {
-        selo: seloFinal === 'Nenhum' ? '' : seloFinal,
-        precoStory: precoFinal ? Number(precoFinal) : (Number(p.Preco) * (1 - DESCONTO_AVISTA))
-      });
+      const seloFinal = custom || (configArteAtual.selo === 'Nenhum' ? '' : configArteAtual.selo);
+      const precoInput = document.getElementById('input-preco-arte').value;
+      const precoStory = precoInput !== '' ? Number(precoInput) : Number(p.Preco) * (1 - DESCONTO_AVISTA);
+      const status = document.getElementById('status-arte');
+      status.textContent = 'Gerando imagem...';
+      gerarEBaixarImagemStories(p, { selo: seloFinal, precoStory: precoStory, foto: configArteAtual.foto }, status);
     });
-  }
 
-  function renderizarPreviewArte(p, config) {
-    const painel = document.getElementById('painel-compartilhar-conteudo');
-    painel.innerHTML = `
-      <h3 style="margin-top:0;">🎨 Arte para Stories</h3>
-      <div id="preview-arte" style="text-align:center;margin:12px 0;"><span style="color:#999;">Processando...</span></div>
-      <button type="button" id="btn-baixar-arte" style="background:var(--laranja);margin-bottom:8px;display:none;">⬇️ Baixar Imagem</button>
-      <button type="button" id="btn-voltar-config-arte" style="background:#eee;color:#555;margin-bottom:8px;">⬅️ Ajustar Selo/Preço</button>
-      <button type="button" id="btn-fechar-arte" style="background:#eee;color:#555;">Fechar</button>
-    `;
-    document.getElementById('btn-fechar-arte').addEventListener('click', () => {
-      document.getElementById('overlay-compartilhar').classList.remove('aberto');
-    });
-    document.getElementById('btn-voltar-config-arte').addEventListener('click', () => renderizarConfigArte(p));
-    gerarImagemStories(p, config);
+    atualizarPreviewAoVivo();
   }
 
   function desenharRetanguloArredondado(ctx, x, y, w, h, raio) {
@@ -750,7 +818,7 @@
     ctx.closePath();
   }
 
-  function gerarImagemStories(p, config) {
+  function gerarEBaixarImagemStories(p, config, status) {
     const canvas = document.getElementById('canvas-stories');
     canvas.width = 1080; canvas.height = 1920;
     const ctx = canvas.getContext('2d');
@@ -839,23 +907,19 @@
         }
 
         const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-        document.getElementById('preview-arte').innerHTML = `<img src="${dataUrl}" style="max-width:100%;max-height:400px;border-radius:10px;">`;
-        const btnBaixar = document.getElementById('btn-baixar-arte');
-        btnBaixar.style.display = 'block';
-        btnBaixar.onclick = () => {
-          const a = document.createElement('a');
-          a.href = dataUrl;
-          a.download = 'stories-' + (p.Codigo || p.ID) + '.jpg';
-          a.click();
-        };
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = 'stories-' + (p.Codigo || p.ID) + '.jpg';
+        a.click();
+        if (status) status.textContent = '✅ Imagem baixada! Confira sua pasta de downloads.';
       } catch (erroCanvas) {
-        document.getElementById('preview-arte').innerHTML = '<p style="color:#c62828;font-size:0.82rem;">Não foi possível gerar a imagem automaticamente (a foto está hospedada num serviço que bloqueia esse tipo de uso). Use o botão "🔗 Link" ou salve a foto manualmente para postar.</p>';
+        if (status) status.textContent = '❌ Não foi possível gerar a imagem (a foto está hospedada num serviço que bloqueia esse tipo de uso). Use o botão "🔗 Link" ou salve a foto manualmente para postar.';
       }
     };
     img.onerror = () => {
-      document.getElementById('preview-arte').innerHTML = '<p style="color:#c62828;font-size:0.82rem;">Não foi possível carregar a foto do produto para gerar a arte.</p>';
+      if (status) status.textContent = '❌ Não foi possível carregar a foto selecionada para gerar a arte.';
     };
-    img.src = p.Foto_URL;
+    img.src = config.foto || p.Foto_URL;
   }
 
   function quebrarTextoCanvas(ctx, texto, x, y, larguraMax, alturaLinha) {
