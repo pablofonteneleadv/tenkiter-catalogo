@@ -208,10 +208,8 @@
 
 <div id="overlay-compartilhar"><div class="painel-compartilhar" id="painel-compartilhar-conteudo"></div></div>
 
+<script src="common.js"></script>
 <script>
-  const API_URL = 'https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec';
-  const DESCONTO_AVISTA = 0.10;
-
   let adminPin = sessionStorage.getItem('tenkiter_admin_pin') || '';
   let funcionarioNome = localStorage.getItem('tenkiter_funcionario') || '';
 
@@ -242,9 +240,6 @@
   let selecionadasCategorias = new Set(), selecionadosGeneros = new Set();
   let selecionadosBulk = new Set();
   let fotoBase64 = null, fotoStoriesBase64 = null;
-
-  function formatarReal(v) { return 'R$ ' + Number(v).toFixed(2).replace('.', ','); }
-  function estaEsgotado(p) { return p.Estoque !== '' && p.Estoque !== undefined && Number(p.Estoque) <= 0; }
 
   async function carregarListas() {
     const [rc, rg] = await Promise.all([

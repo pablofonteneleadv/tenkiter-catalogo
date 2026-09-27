@@ -8,6 +8,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0d0d0d">
 <title>TENKiTER Modas — Catálogo Oficial</title>
+<meta property="og:type" content="website">
+<meta property="og:title" content="TENKiTER Modas — Catálogo Oficial">
+<meta property="og:description" content="Confira as peças disponíveis da TENKiTER Modas — Crateús, CE. Filtre por categoria, gênero e preço, e fale direto no WhatsApp.">
+<meta property="og:url" content="https://pablofonteneleadv.github.io/tenkiter-catalogo/">
+<meta name="description" content="Catálogo digital da TENKiTER Modas — Crateús, CE.">
 <style>
   :root { --preto: #0d0d0d; --laranja: #ff7a1a; --cinza: #f4f4f4; --branco: #ffffff; --verde: #198754; --vermelho: #c62828; --amarelo: #b8860b; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -135,10 +140,8 @@
 
 <div id="overlay"><div class="modal" id="modal-conteudo"></div></div>
 
+<script src="common.js"></script>
 <script>
-  const API_URL = 'https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec';
-  const DESCONTO_AVISTA = 0.10;
-  const WHATSAPP_NUMERO = '5588993223998';
   const POR_PAGINA = 24;
 
   let produtos = [];
@@ -150,11 +153,7 @@
   let filtroGeneros = new Set();
   let apenasNovidades = false;
 
-  function formatarReal(v) { return 'R$ ' + Number(v).toFixed(2).replace('.', ','); }
   function listaDeTags(c) { return String(c || '').split(',').map(s => s.trim()).filter(Boolean); }
-  function estoqueInformado(p) { return p.Estoque !== '' && p.Estoque !== undefined && p.Estoque !== null; }
-  function estaEsgotado(p) { return estoqueInformado(p) && Number(p.Estoque) <= 0; }
-  function ehNovidade(p) { return p.Novidade === true || String(p.Novidade).toUpperCase() === 'TRUE'; }
 
   function nivelDisponibilidade(p) {
     if (!estoqueInformado(p)) return null;
@@ -219,8 +218,16 @@
 
   async function carregarCatalogo() {
     lerFiltrosURL();
-    const resp = await fetch(API_URL + '?action=list').then(r => r.json());
-    produtos = (resp.produtos || []).reverse();
+    try {
+      const resp = await fetch(API_URL + '?action=list').then(r => r.json());
+      produtos = (resp.produtos || []).reverse();
+    } catch (e) {
+      document.getElementById('contagem').textContent = '';
+      const vazio = document.getElementById('vazio');
+      vazio.textContent = 'Não foi possível carregar o catálogo agora. Verifique sua internet e tente novamente em instantes.';
+      vazio.style.display = 'block';
+      return;
+    }
     produtos.forEach(p => {
       listaDeTags(p.Categoria).forEach(c => categoriasDisponiveis.add(c));
       listaDeTags(p.Genero).forEach(g => generosDisponiveis.add(g));
