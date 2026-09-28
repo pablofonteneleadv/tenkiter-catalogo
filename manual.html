@@ -195,6 +195,38 @@ th{background:var(--surface-2); font-weight:700;}
 }
 .toast.show{opacity:1;}
 .muted-note{color:var(--muted); font-size:0.85rem; margin-top:6px;}
+.admin-btn-topbar{background:var(--accent-2); color:#fff; border-color:var(--accent-2); font-weight:700;}
+.admin-shell{max-width:1100px; margin:0 auto; padding:20px;}
+.admin-tabs{display:flex; gap:8px; border-bottom:1px solid var(--border); margin-bottom:18px; flex-wrap:wrap;}
+.admin-tab{padding:10px 16px; border:none; background:transparent; color:var(--muted); font-weight:600; cursor:pointer; border-bottom:2px solid transparent; font-size:0.92rem;}
+.admin-tab.active{color:var(--accent); border-bottom-color:var(--accent-2);}
+.admin-panel{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px; overflow-x:auto;}
+.admin-table{width:100%; border-collapse:collapse; font-size:0.88rem; min-width:560px;}
+.admin-table th{text-align:left; color:var(--muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap;}
+.admin-table td{padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:middle;}
+.admin-table tr:last-child td{border-bottom:none;}
+.badge-ativo{background:var(--good-bg); color:var(--good-text); border-radius:20px; padding:3px 10px; font-size:0.78rem; font-weight:700;}
+.badge-inativo{background:var(--danger-bg); color:var(--danger); border-radius:20px; padding:3px 10px; font-size:0.78rem; font-weight:700;}
+.badge-aprovado{background:var(--good-bg); color:var(--good-text); border-radius:20px; padding:2px 9px; font-size:0.76rem; font-weight:700;}
+.badge-reprovado{background:var(--danger-bg); color:var(--danger); border-radius:20px; padding:2px 9px; font-size:0.76rem; font-weight:700;}
+.admin-sel{padding:5px 8px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-weight:600; font-size:0.85rem;}
+.admin-mini-btn{padding:5px 10px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:0.8rem; font-weight:600; cursor:pointer; margin-right:4px;}
+.admin-mini-btn:hover{border-color:var(--accent-2);}
+.admin-toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:10px; flex-wrap:wrap;}
+.admin-gaps{margin-top:22px;}
+.admin-gaps h4{margin:0 0 10px;}
+.gap-row{display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:0.86rem;}
+.gap-row:last-child{border-bottom:none;}
+.gap-count{color:var(--danger); font-weight:700; white-space:nowrap;}
+.cms-card{border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:12px; background:var(--surface-2);}
+.cms-card h4{margin:0 0 10px;}
+.cms-row{display:flex; gap:14px; flex-wrap:wrap; align-items:center;}
+.cms-field{display:flex; flex-direction:column; gap:4px; font-size:0.82rem; color:var(--muted); font-weight:600;}
+.cms-field input{padding:7px 10px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); width:120px;}
+@media (max-width:680px){
+  .admin-shell{padding:14px;}
+  .admin-toolbar{flex-direction:column; align-items:stretch;}
+}
 </style>
 
 <div id="app"></div>
@@ -247,16 +279,71 @@ async function loadRoster(){
         // Se o mesmo WhatsApp aparece em mais de uma linha da planilha (ex: um
         // cadastro duplicado), nunca deixa isso REBAIXAR o nível de acesso --
         // fica sempre o maior nível já visto pra esse WhatsApp.
+        var statusAnterior = byWhats[whatsapp] ? byWhats[whatsapp].status : 'ativo';
+        var statusDessaLinha = String(row.status||'ativo').trim().toLowerCase() || 'ativo';
         byWhats[whatsapp] = {
           whatsapp: whatsapp,
           name: String(row.nome||'').trim() || whatsapp,
           level: Math.max(nivelAnterior, nivelDessaLinha),
-          password: String(row.senha||'')
+          password: String(row.senha||''),
+          // se aparecer duplicado com status diferente, fica ativo se qualquer uma das linhas estiver ativa
+          status: (statusAnterior === 'ativo' || statusDessaLinha === 'ativo') ? 'ativo' : 'inativo'
         };
       });
       DATA.roster = Object.keys(byWhats).map(function(k){ return byWhats[k]; });
     }
   }catch(e){ /* mantém o cadastro-semente -- o site continua funcionando */ }
+}
+
+var quizConfig = {}; // { '1': {pass:0.7, count:0}, ... } -- vem do Code.gs (ConfigQuiz), 'count'=0 significa "todas as perguntas"
+async function loadQuizConfig(){
+  if (!DATA.appsScriptUrl) return;
+  try{
+    var res = await fetch(DATA.appsScriptUrl + '?action=config_quiz', { method:'GET' });
+    if (!res.ok) return;
+    var json = await res.json();
+    if (json && json.ok && Array.isArray(json.configs)){
+      json.configs.forEach(function(c){
+        quizConfig[String(c.nivel)] = {
+          pass: (Number(c.notaaprovacaopct) || 70) / 100,
+          count: Number(c.perguntasportentativa) || 0
+        };
+      });
+    }
+  }catch(e){ /* usa a nota de aprovação padrão embutida no manual */ }
+}
+function quizPassFor(level){
+  return (quizConfig[level] && quizConfig[level].pass) || DATA.quizzes[level].pass;
+}
+function shuffleArray(arr){
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--){
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+/**
+ * Monta o conjunto de perguntas de UMA tentativa: sorteia X das N perguntas
+ * do banco (se configurado) e embaralha as alternativas de cada uma,
+ * remapeando qual índice é a correta -- assim ninguém decora a posição.
+ */
+function buildQuizAttempt(level){
+  var quiz = DATA.quizzes[level];
+  var cfg = quizConfig[level];
+  var count = cfg && cfg.count > 0 ? Math.min(cfg.count, quiz.questions.length) : quiz.questions.length;
+  var chosen = shuffleArray(quiz.questions).slice(0, count);
+  var questions = chosen.map(function(q){
+    var order = shuffleArray(q.options.map(function(_, i){ return i; }));
+    var newCorrect = order.indexOf(q.correct);
+    return {
+      q: q.q,
+      explain: q.explain,
+      options: order.map(function(i){ return q.options[i]; }),
+      correct: newCorrect
+    };
+  });
+  return { title: quiz.title, questions: questions };
 }
 
 async function submitResult(payload){
@@ -384,9 +471,9 @@ async function doCadastro(){
   if(!resp || !resp.ok){
     err.textContent = (resp && resp.erro) || 'Não foi possível cadastrar agora. Tente de novo.'; err.style.display='block'; return;
   }
-  var entry = { whatsapp: whatsapp, name: nome, level: 1, password: senha };
+  var entry = { whatsapp: whatsapp, name: nome, level: 1, password: senha, status: 'ativo' };
   DATA.roster.push(entry);
-  state.user = { whatsapp: entry.whatsapp, name: entry.name, level: entry.level };
+  state.user = { whatsapp: entry.whatsapp, name: entry.name, level: entry.level, password: entry.password };
   ls_set('tm_session', { whatsapp: entry.whatsapp });
   toast('Conta criada! Bem-vindo(a).');
   goHome();
@@ -403,7 +490,10 @@ async function doLogin(){
   if(!entry || entry.password !== pass){
     err.textContent = 'WhatsApp ou senha incorretos.'; err.style.display = 'block'; return;
   }
-  state.user = { whatsapp: normWhats(entry.whatsapp), name: entry.name, level: entry.level };
+  if(String(entry.status||'ativo').toLowerCase() === 'inativo'){
+    err.textContent = 'Essa conta está desativada. Fale com a gestão.'; err.style.display = 'block'; return;
+  }
+  state.user = { whatsapp: normWhats(entry.whatsapp), name: entry.name, level: entry.level, password: entry.password };
   ls_set('tm_session', { whatsapp: normWhats(entry.whatsapp) });
   goHome();
 }
@@ -413,7 +503,11 @@ function tryRestoreSession(){
   if(!sess) return false;
   var entry = DATA.roster.find(function(r){ return normWhats(r.whatsapp) === normWhats(sess.whatsapp); });
   if(!entry) return false;
-  state.user = { whatsapp: normWhats(entry.whatsapp), name: entry.name, level: entry.level };
+  if(String(entry.status||'ativo').toLowerCase() === 'inativo'){
+    try{ localStorage.removeItem('tm_session'); }catch(e){}
+    return false;
+  }
+  state.user = { whatsapp: normWhats(entry.whatsapp), name: entry.name, level: entry.level, password: entry.password };
   return true;
 }
 
@@ -425,16 +519,20 @@ function logout(){
 
 /* ---------------- top bar ---------------- */
 function renderTopbar(){
+  var isAdmin = state.user.level >= 10;
   return '<div class="topbar">' +
     '<div class="brand" style="cursor:pointer" id="brand-home"><span class="mark">TM</span>Treinamento TENKiTER</div>' +
     '<div class="topbar-right">' +
       '<span>' + esc(state.user.name) + '</span>' +
+      (isAdmin ? '<button class="btn admin-btn-topbar" id="btn-admin-rh">⚙️ Painel do RH / Admin</button>' : '') +
       '<button class="btn btn-ghost" id="btn-logout">Sair</button>' +
     '</div></div>';
 }
 function wireTopbar(){
   document.getElementById('brand-home').addEventListener('click', goHome);
   document.getElementById('btn-logout').addEventListener('click', logout);
+  var btnAdmin = document.getElementById('btn-admin-rh');
+  if (btnAdmin) btnAdmin.addEventListener('click', openAdminPanel);
 }
 
 /* ---------------- home ---------------- */
@@ -550,17 +648,20 @@ function wireManual(level){
 /* ---------------- quiz view ---------------- */
 function openQuiz(level){
   state.view = 'quiz'; state.manual = level;
+  state.quizAttempt = buildQuizAttempt(level);
   render();
   window.scrollTo(0,0);
 }
 
 function renderQuizIntro(level){
-  var quiz = DATA.quizzes[level];
+  if (!state.quizAttempt) state.quizAttempt = buildQuizAttempt(level);
+  var quiz = state.quizAttempt;
+  var pass = quizPassFor(level);
   var last = ls_get(quizKey(state.user.whatsapp, level), null);
   return '<div class="main" style="max-width:700px; margin:0 auto;">' +
     '<button class="btn btn-ghost" id="back-to-manual">← Voltar ao manual</button>' +
     '<h1 class="manual-title" style="margin-top:16px">' + esc(quiz.title) + '</h1>' +
-    '<p class="manual-sub">' + quiz.questions.length + ' perguntas de múltipla escolha. Nota de aprovação: ' + Math.round(quiz.pass*100) + '%.</p>' +
+    '<p class="manual-sub">' + quiz.questions.length + ' perguntas de múltipla escolha. Nota de aprovação: ' + Math.round(pass*100) + '%.</p>' +
     (last ? '<p class="muted-note">Sua última tentativa: ' + last.score + '/' + last.total + ' (' + last.date + ')</p>' : '') +
     '<form id="quiz-form">' +
       quiz.questions.map(function(q, qi){
@@ -579,7 +680,7 @@ function renderQuizIntro(level){
 }
 
 function wireQuizIntro(level){
-  document.getElementById('back-to-manual').addEventListener('click', function(){ state.view='manual'; render(); });
+  document.getElementById('back-to-manual').addEventListener('click', function(){ state.view='manual'; state.quizAttempt = null; render(); });
   document.getElementById('quiz-form').addEventListener('submit', function(e){
     e.preventDefault();
     gradeQuiz(level);
@@ -587,8 +688,9 @@ function wireQuizIntro(level){
 }
 
 function gradeQuiz(level){
-  var quiz = DATA.quizzes[level];
+  var quiz = state.quizAttempt || buildQuizAttempt(level);
   var score = 0;
+  var erros = [];
   quiz.questions.forEach(function(q, qi){
     var qEl = document.querySelector('.quiz-q[data-qi="'+qi+'"]');
     var picked = qEl.querySelector('input[name="q'+qi+'"]:checked');
@@ -599,7 +701,8 @@ function gradeQuiz(level){
       if (oi === q.correct) optEl.classList.add('correct-answer');
       else if (oi === pickedVal) optEl.classList.add('wrong-answer');
     });
-    if (pickedVal === q.correct) score++;
+    if (pickedVal === q.correct){ score++; }
+    else { erros.push({ pergunta: q.q, resposta: pickedVal >= 0 ? q.options[pickedVal] : '(em branco)', correta: q.options[q.correct] }); }
     var ex = document.createElement('div');
     ex.className = 'explain';
     ex.textContent = q.explain;
@@ -607,10 +710,11 @@ function gradeQuiz(level){
   });
   var total = quiz.questions.length;
   var pct = score/total;
-  var passed = pct >= quiz.pass;
+  var passed = pct >= quizPassFor(level);
   var date = new Date().toLocaleDateString('pt-BR');
+  state.quizAttempt = null;
   ls_set(quizKey(state.user.whatsapp, level), { score: score, total: total, date: date });
-  submitResult({ action:'resultado', nome: state.user.name, whatsapp: state.user.whatsapp, nivel: state.user.level, manual: DATA.titles[level], nota: score, total: total, data: date });
+  submitResult({ action:'resultado', nome: state.user.name, whatsapp: state.user.whatsapp, nivel: state.user.level, manual: DATA.titles[level], nota: score, total: total, data: date, errosDetalhados: JSON.stringify(erros) });
 
   var waText = encodeURIComponent(state.user.name + ' concluiu a avaliação do ' + DATA.titles[level] + ': ' + score + '/' + total + ' (' + Math.round(pct*100) + '%) em ' + date + '.');
   var waHtml = '';
@@ -638,6 +742,246 @@ function gradeQuiz(level){
   });
 }
 
+/* ---------------- painel do RH / Admin (nivel 10+) ---------------- */
+function openAdminPanel(){
+  state.view = 'admin'; state.adminTab = state.adminTab || 'equipe'; state.adminData = null;
+  render();
+  fetchAdminData();
+}
+
+async function fetchAdminData(){
+  var resp = await submitResult({
+    action: 'relatorio_equipe',
+    whatsappAdmin: state.user.whatsapp,
+    senhaAdmin: state.user.password
+  });
+  if (!resp || !resp.ok){
+    toast((resp && resp.erro) || 'Não foi possível carregar os dados da equipe.');
+    return;
+  }
+  state.adminData = { funcionarios: resp.funcionarios || [], resultados: resp.resultados || [] };
+  if (state.view === 'admin') render();
+}
+
+function renderAdminPanel(){
+  var tabs = [
+    { id:'equipe', label:'Equipe & Permissões' },
+    { id:'desempenho', label:'Raio-X de Desempenho' },
+    { id:'conteudo', label:'Conteúdo & Provas' }
+  ];
+  var tabsHtml = tabs.map(function(t){
+    return '<button class="admin-tab' + (state.adminTab===t.id?' active':'') + '" data-tab="' + t.id + '">' + t.label + '</button>';
+  }).join('');
+  var body;
+  if (!state.adminData){
+    body = '<div class="admin-panel">Carregando dados da equipe...</div>';
+  } else if (state.adminTab === 'desempenho'){
+    body = renderTabDesempenho();
+  } else if (state.adminTab === 'conteudo'){
+    body = renderTabConteudo();
+  } else {
+    body = renderTabEquipe();
+  }
+  return '<div class="admin-shell">' +
+    '<div class="hero"><h1>Painel do RH / Admin</h1><p>Gestão da equipe, acompanhamento das avaliações e configuração dos manuais.</p></div>' +
+    '<div class="admin-tabs">' + tabsHtml + '</div>' +
+    body +
+  '</div>';
+}
+
+function wireAdminPanel(){
+  document.querySelectorAll('.admin-tab').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      state.adminTab = btn.getAttribute('data-tab');
+      render();
+    });
+  });
+  if (!state.adminData) return;
+  if (state.adminTab === 'desempenho') wireTabDesempenho();
+  else if (state.adminTab === 'conteudo') wireTabConteudo();
+  else wireTabEquipe();
+}
+
+/* ---- Aba 1: Equipe & Permissões ---- */
+function renderTabEquipe(){
+  var rows = state.adminData.funcionarios.map(function(f){
+    var whats = normWhats(f.whatsapp);
+    var nivel = parseInt(f.nivel, 10) || 1;
+    var status = String(f.status || 'ativo').toLowerCase();
+    var ativo = status !== 'inativo';
+    return '<tr data-whats="' + esc(whats) + '">' +
+      '<td>' + esc(f.nome || '') + '</td>' +
+      '<td>' + esc(whats) + '</td>' +
+      '<td><select class="admin-sel admin-level-sel">' +
+        [1,2,3,10].map(function(n){ return '<option value="'+n+'"' + (n===nivel?' selected':'') + '>' + (n===10?'10 · Admin':n) + '</option>'; }).join('') +
+      '</select></td>' +
+      '<td><span class="' + (ativo?'badge-ativo':'badge-inativo') + '">' + (ativo?'Ativo':'Inativo') + '</span></td>' +
+      '<td>' +
+        '<button type="button" class="admin-mini-btn admin-toggle-status" data-ativo="' + (ativo?'1':'0') + '">' + (ativo?'Desativar':'Reativar') + '</button>' +
+        '<button type="button" class="admin-mini-btn admin-reset-pass">Resetar senha</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+  return '<div class="admin-panel">' +
+    '<table class="admin-table"><thead><tr><th>Nome</th><th>WhatsApp</th><th>Nível</th><th>Status</th><th>Ações</th></tr></thead>' +
+    '<tbody>' + rows + '</tbody></table>' +
+  '</div>';
+}
+
+function wireTabEquipe(){
+  document.querySelectorAll('#app .admin-level-sel').forEach(function(sel){
+    sel.addEventListener('change', async function(){
+      var whats = sel.closest('tr').getAttribute('data-whats');
+      var resp = await submitResult({
+        action:'atualizar_nivel_user', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
+        whatsappAlvo: whats, novoNivel: parseInt(sel.value, 10)
+      });
+      if (!resp || !resp.ok){ toast((resp && resp.erro) || 'Não foi possível atualizar o nível.'); return; }
+      toast('Nível atualizado.');
+      if (whats === state.user.whatsapp){ state.user.level = parseInt(sel.value, 10); }
+      await loadRoster();
+      fetchAdminData();
+    });
+  });
+  document.querySelectorAll('#app .admin-toggle-status').forEach(function(btn){
+    btn.addEventListener('click', async function(){
+      var whats = btn.closest('tr').getAttribute('data-whats');
+      var ativoAgora = btn.getAttribute('data-ativo') === '1';
+      var novoStatus = ativoAgora ? 'Inativo' : 'Ativo';
+      if (whats === state.user.whatsapp && novoStatus === 'Inativo'){
+        toast('Você não pode desativar a própria conta por aqui.'); return;
+      }
+      var resp = await submitResult({
+        action:'alterar_status_user', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
+        whatsappAlvo: whats, novoStatus: novoStatus
+      });
+      if (!resp || !resp.ok){ toast((resp && resp.erro) || 'Não foi possível alterar o status.'); return; }
+      toast(novoStatus === 'Ativo' ? 'Funcionário reativado.' : 'Funcionário desativado.');
+      await loadRoster();
+      fetchAdminData();
+    });
+  });
+  document.querySelectorAll('#app .admin-reset-pass').forEach(function(btn){
+    btn.addEventListener('click', async function(){
+      var whats = btn.closest('tr').getAttribute('data-whats');
+      var nova = prompt('Nova senha para ' + whats + ' (mínimo 4 caracteres):');
+      if (nova === null) return;
+      if (nova.length < 4){ toast('A senha precisa ter pelo menos 4 caracteres.'); return; }
+      var resp = await submitResult({
+        action:'resetar_senha_user', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
+        whatsappAlvo: whats, novaSenha: nova
+      });
+      if (!resp || !resp.ok){ toast((resp && resp.erro) || 'Não foi possível resetar a senha.'); return; }
+      toast('Senha redefinida.');
+    });
+  });
+}
+
+/* ---- Aba 2: Raio-X de Desempenho ---- */
+function renderTabDesempenho(){
+  var resultados = state.adminData.resultados.slice().sort(function(a,b){ return (b.dataHora||'').localeCompare(a.dataHora||''); });
+  var rows = resultados.map(function(r){
+    var pct = Number(r.percentual) || 0;
+    var passou = pct >= 70; // referência simples pra visão geral do RH
+    var dataFmt = r.dataHora ? new Date(r.dataHora).toLocaleString('pt-BR') : '';
+    return '<tr>' +
+      '<td>' + esc(dataFmt) + '</td>' +
+      '<td>' + esc(r.nome || '') + '</td>' +
+      '<td>' + esc(r.manual || '') + '</td>' +
+      '<td>' + esc(r.nota) + '/' + esc(r.total) + '</td>' +
+      '<td>' + pct + '%</td>' +
+      '<td><span class="' + (passou?'badge-aprovado':'badge-reprovado') + '">' + (passou?'Aprovado':'Reprovado') + '</span></td>' +
+    '</tr>';
+  }).join('');
+
+  var contagemErros = {};
+  resultados.forEach(function(r){
+    var erros = [];
+    try{ erros = JSON.parse(r.errosDetalhados || '[]'); }catch(e){}
+    erros.forEach(function(er){
+      var chave = er.pergunta || '';
+      if (!chave) return;
+      contagemErros[chave] = (contagemErros[chave] || 0) + 1;
+    });
+  });
+  var gaps = Object.keys(contagemErros).map(function(k){ return { pergunta: k, n: contagemErros[k] }; })
+    .sort(function(a,b){ return b.n - a.n; }).slice(0, 8);
+  var gapsHtml = gaps.length ? gaps.map(function(g){
+    return '<div class="gap-row"><span>' + esc(g.pergunta) + '</span><span class="gap-count">' + g.n + ' erro' + (g.n>1?'s':'') + '</span></div>';
+  }).join('') : '<p class="sub">Ainda não há erros suficientes registrados pra apontar um padrão.</p>';
+
+  return '<div class="admin-panel">' +
+    '<div class="admin-toolbar"><span class="sub">' + resultados.length + ' avaliações registradas</span>' +
+      '<button type="button" class="btn" id="btn-export-csv">⬇️ Exportar relatório em CSV</button>' +
+    '</div>' +
+    '<table class="admin-table"><thead><tr><th>Data/Hora</th><th>Nome</th><th>Manual</th><th>Nota</th><th>%</th><th>Status</th></tr></thead>' +
+    '<tbody>' + (rows || '<tr><td colspan="6">Nenhuma avaliação registrada ainda.</td></tr>') + '</tbody></table>' +
+    '<div class="admin-gaps"><h4>📊 Análise de gaps de conhecimento</h4>' +
+      '<p class="sub">Perguntas em que a equipe mais erra -- use como pauta de reforço presencial.</p>' +
+      gapsHtml +
+    '</div>' +
+  '</div>';
+}
+
+function wireTabDesempenho(){
+  var btn = document.getElementById('btn-export-csv');
+  if (!btn) return;
+  btn.addEventListener('click', function(){
+    var resultados = state.adminData.resultados;
+    var linhas = ['DataHora;WhatsApp;Nome;Nivel;Manual;Nota;Total;Percentual'];
+    resultados.forEach(function(r){
+      linhas.push([r.dataHora, r.whatsapp, r.nome, r.nivel, r.manual, r.nota, r.total, r.percentual]
+        .map(function(v){ return String(v==null?'':v).replace(/;/g, ','); }).join(';'));
+    });
+    var blob = new Blob([linhas.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'relatorio-treinamento-tenkiter.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  });
+}
+
+/* ---- Aba 3: Conteúdo & Provas (config de nota e randomização) ---- */
+function renderTabConteudo(){
+  var cards = ['1','2','3'].map(function(level){
+    var totalPerguntas = DATA.quizzes[level] ? DATA.quizzes[level].questions.length : 0;
+    var cfg = quizConfig[level] || { pass: DATA.quizzes[level] ? DATA.quizzes[level].pass : 0.7, count: 0 };
+    return '<div class="cms-card" data-nivel="' + level + '">' +
+      '<h4>' + esc(DATA.titles[level]) + ' <span class="sub">(banco com ' + totalPerguntas + ' perguntas)</span></h4>' +
+      '<div class="cms-row">' +
+        '<label class="cms-field">Nota de aprovação (%)<input type="number" class="cms-pass" min="1" max="100" value="' + Math.round(cfg.pass*100) + '"></label>' +
+        '<label class="cms-field">Perguntas por tentativa<input type="number" class="cms-count" min="0" max="' + totalPerguntas + '" value="' + cfg.count + '" title="0 = usa todas as perguntas do banco"></label>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  return '<div class="admin-panel">' +
+    '<p class="sub">Ajuste a nota mínima de aprovação e quantas perguntas do banco sorteiam por tentativa (0 = usa todas). As alternativas são sempre embaralhadas.</p>' +
+    cards +
+    '<button type="button" class="btn btn-primary" id="btn-salvar-config">Salvar configuração</button>' +
+  '</div>';
+}
+
+function wireTabConteudo(){
+  var btn = document.getElementById('btn-salvar-config');
+  btn.addEventListener('click', async function(){
+    var configs = Array.prototype.map.call(document.querySelectorAll('.cms-card'), function(card){
+      return {
+        nivel: card.getAttribute('data-nivel'),
+        notaAprovacaoPct: parseInt(card.querySelector('.cms-pass').value, 10) || 70,
+        perguntasPorTentativa: parseInt(card.querySelector('.cms-count').value, 10) || 0
+      };
+    });
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    var resp = await submitResult({
+      action:'salvar_config_quiz', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password, configs: configs
+    });
+    btn.disabled = false; btn.textContent = 'Salvar configuração';
+    if (!resp || !resp.ok){ toast((resp && resp.erro) || 'Não foi possível salvar.'); return; }
+    await loadQuizConfig();
+    toast('Configuração salva!');
+  });
+}
+
 /* ---------------- root render ---------------- */
 function render(){
   if (state.view === 'login' || !state.user){ renderLogin(); return; }
@@ -651,12 +995,17 @@ function render(){
     app.innerHTML = renderTopbar() + '<div class="shell">' + renderQuizIntro(state.manual) + '</div>';
     wireTopbar();
     wireQuizIntro(state.manual);
+  } else if (state.view === 'admin'){
+    if (state.user.level < 10){ goHome(); return; }
+    app.innerHTML = renderTopbar() + renderAdminPanel();
+    wireTopbar();
+    wireAdminPanel();
   }
 }
 
 /* ---------------- boot ---------------- */
 (async function boot(){
-  await loadRoster();
+  await Promise.all([loadRoster(), loadQuizConfig()]);
   if (tryRestoreSession()){ goHome(); } else { renderLogin(); }
 })();
 
