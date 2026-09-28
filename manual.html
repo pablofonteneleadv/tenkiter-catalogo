@@ -387,7 +387,10 @@ async function doLogin(){
   if(!whatsapp || !pass){ err.textContent = 'Preencha WhatsApp e senha.'; err.style.display='block'; return; }
   var entry = DATA.roster.find(function(r){ return normWhats(r.whatsapp) === whatsapp; });
   if(!entry || entry.password !== pass){
-    err.textContent = 'WhatsApp ou senha incorretos.'; err.style.display = 'block'; return;
+    var dbg = !entry
+      ? ('nenhuma conta com o WhatsApp "' + whatsapp + '" (contas carregadas: ' + DATA.roster.map(function(r){return normWhats(r.whatsapp);}).join(', ') + ')')
+      : ('achei a conta, mas a senha não bate (digitada: "' + pass + '", esperada: "' + entry.password + '")');
+    err.textContent = 'WhatsApp ou senha incorretos. [debug: ' + dbg + ']'; err.style.display = 'block'; return;
   }
   state.user = { whatsapp: normWhats(entry.whatsapp), name: entry.name, level: entry.level };
   ls_set('tm_session', { whatsapp: normWhats(entry.whatsapp) });
