@@ -6,12 +6,24 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0d0d0d">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <title>TENKiTER Modas — Painel do Atendente</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap">
 <style>
-  :root { --preto: #0d0d0d; --laranja: #ff7a1a; --cinza: #f4f4f4; --branco: #ffffff; --verde: #198754; --vermelho: #c62828; --amarelo: #b8860b; }
+  :root { --preto: #0d0d0d; --laranja: #E67E22; --ouro: #F39C12; --cinza: #F5F1E8; --branco: #ffffff; --verde: #198754; --vermelho: #c62828; --amarelo: #b8860b; }
+  input, button, select, textarea { font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; }
+  h1, h2, h3 { font-family: "Poppins", sans-serif; font-weight: 800; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin: 0; font-family: -apple-system, Roboto, Arial, sans-serif; background: var(--cinza); color: var(--preto); padding-bottom: 76px; }
+  body { margin: 0; font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; background: var(--cinza); color: var(--preto); padding-bottom: 76px; }
   header { background: var(--preto); color: var(--laranja); padding: 18px 16px; text-align: center; position: sticky; top: 0; z-index: 20; }
+  .header-brand-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .header-logo-img { height: 32px; width: auto; }
   header h1 { margin: 0; font-size: 1.2rem; letter-spacing: 1px; font-weight: 800; }
   header p { margin: 4px 0 0; font-size: 0.75rem; color: #ccc; }
   main { padding: 16px; max-width: 520px; margin: 0 auto; }
@@ -160,7 +172,10 @@
 <div id="toast-carregando"><span class="spinner-mini"></span><span id="texto-toast">Carregando peças...</span></div>
 
 <header>
-  <h1>TENKiTER MODAS</h1>
+  <div class="header-brand-row">
+    <img src="logo-mark.png" alt="TENKiTER" class="header-logo-img">
+    <h1>TENKiTER MODAS</h1>
+  </div>
   <p>Gestão & Atendimento do Catálogo</p>
 </header>
 

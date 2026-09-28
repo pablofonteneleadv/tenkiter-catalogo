@@ -1,12 +1,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TENKiTER Modas — Treinamento</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<meta name="theme-color" content="#0d0d0d">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800&family=Inter:wght@400;500;600;700&display=swap">
 <style>
 :root{
-  --bg:#FAF9F5; --surface:#FFFFFF; --surface-2:#F1EEE7; --border:#E3DFD4;
+  --bg:#F5F1E8; --surface:#FFFFFF; --surface-2:#F1EEE7; --border:#E3DFD4;
   --text:#1C1B18; --muted:#6B675E;
-  --accent:#0d0d0d; --accent-2:#ff7a1a; --accent-soft:#FFF0E4;
+  --accent:#0d0d0d; --accent-2:#E67E22; --accent-3:#F39C12; --accent-soft:#FFF0E4;
   --warn-bg:#FFF3CD; --warn-border:#E0A800; --warn-text:#5C4600;
   --tip-bg:#FFF0E4; --tip-border:#ff7a1a; --tip-text:#8a3d00;
   --good-bg:#E6F4EA; --good-border:#2F9E52; --good-text:#1E5631;
@@ -17,7 +25,7 @@
   :root:not([data-theme="light"]){
     --bg:#14161C; --surface:#1C1F27; --surface-2:#242833; --border:#333846;
     --text:#ECEBE7; --muted:#9C998F;
-    --accent:#ff7a1a; --accent-2:#ff9c4d; --accent-soft:#2E2419;
+    --accent:#E67E22; --accent-2:#F39C12; --accent-soft:#2E2419;
     --warn-bg:#3A3013; --warn-border:#C99A2E; --warn-text:#F2D888;
     --good-bg:#17301F; --good-border:#3FAE66; --good-text:#A9E0BB;
     --tip-bg:#2E2419; --tip-border:#ff9c4d; --tip-text:#FFCB94;
@@ -28,7 +36,7 @@
 :root[data-theme="dark"]{
   --bg:#14161C; --surface:#1C1F27; --surface-2:#242833; --border:#333846;
   --text:#ECEBE7; --muted:#9C998F;
-  --accent:#ff7a1a; --accent-2:#ff9c4d; --accent-soft:#2E2419;
+  --accent:#E67E22; --accent-2:#F39C12; --accent-soft:#2E2419;
   --warn-bg:#3A3013; --warn-border:#C99A2E; --warn-text:#F2D888;
   --good-bg:#17301F; --good-border:#3FAE66; --good-text:#A9E0BB;
   --tip-bg:#2E2419; --tip-border:#ff9c4d; --tip-text:#FFCB94;
@@ -37,7 +45,7 @@
 }
 *{box-sizing:border-box;}
 body{background:var(--bg); color:var(--text); font-family:"Inter",system-ui,sans-serif; margin:0; -webkit-font-smoothing:antialiased;}
-h1,h2,h3,.display{font-family:"Fraunces",Georgia,serif; text-wrap:balance;}
+h1,h2,h3,.display{font-family:"Poppins",sans-serif; font-weight:800; text-wrap:balance;}
 a{color:var(--accent-2);}
 button{font-family:inherit;}
 #app{min-height:100%; display:flex; flex-direction:column;}
@@ -49,8 +57,9 @@ button{font-family:inherit;}
   padding:14px 20px; background:var(--surface); border-bottom:1px solid var(--border);
   gap:12px; flex-wrap:wrap;
 }
-.brand{display:flex; align-items:center; gap:10px; font-family:"Fraunces",serif; font-weight:600; font-size:1.15rem; color:var(--accent);}
-.brand .mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:"Fraunces",serif;font-weight:700;font-size:0.95rem;}
+.brand{display:flex; align-items:center; gap:10px; font-family:"Poppins",sans-serif; font-weight:700; font-size:1.15rem; color:var(--accent);}
+.brand .mark{width:30px;height:30px;border-radius:8px;background:#0d0d0d;color:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.mark img{width:76%;height:76%;object-fit:contain;}
 .topbar-right{display:flex; align-items:center; gap:14px; font-size:0.9rem; color:var(--muted);}
 .btn{
   border:1px solid var(--border); background:var(--surface); color:var(--text);
@@ -98,7 +107,7 @@ button{font-family:inherit;}
   background:var(--surface); border:1px solid var(--border); border-radius:16px;
   padding:36px 32px; width:100%; max-width:380px; box-shadow:0 1px 3px rgba(0,0,0,.04);
 }
-.login-card .mark{width:46px;height:46px;border-radius:12px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:"Fraunces",serif;font-weight:700;font-size:1.3rem;margin-bottom:16px;}
+.login-card .mark{width:46px;height:46px;border-radius:12px;background:#0d0d0d;color:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:16px;}
 .login-card h1{font-size:1.4rem; margin:0 0 4px;}
 .login-card p.sub{color:var(--muted); font-size:0.9rem; margin:0 0 22px;}
 .field{margin-bottom:14px;}
@@ -185,7 +194,7 @@ th{background:var(--surface-2); font-weight:700;}
 .quiz-result{
   background:var(--accent-soft); border-radius:14px; padding:24px; text-align:center; margin-bottom:22px;
 }
-.quiz-result .score{font-family:"Fraunces",serif; font-size:2.4rem; color:var(--accent); font-weight:700;}
+.quiz-result .score{font-family:"Poppins",sans-serif; font-size:2.4rem; color:var(--accent); font-weight:800;}
 .quiz-result .verdict{font-weight:700; margin-top:4px;}
 .quiz-actions{display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap;}
 .toast{
@@ -417,7 +426,7 @@ function renderLogin(){
   var app = document.getElementById('app');
   app.innerHTML =
     '<div class="login-wrap"><div class="login-card">' +
-      '<div class="mark">TM</div>' +
+      '<div class="mark"><img src="icon-192.png" alt="TENKiTER"></div>' +
       '<h1>Portal de treinamento</h1>' +
       '<p class="sub">TENKiTER Modas — entre com seu WhatsApp e senha.</p>' +
       '<div class="login-error" id="login-error"></div>' +
@@ -435,7 +444,7 @@ function renderCadastro(){
   var app = document.getElementById('app');
   app.innerHTML =
     '<div class="login-wrap"><div class="login-card">' +
-      '<div class="mark">TM</div>' +
+      '<div class="mark"><img src="icon-192.png" alt="TENKiTER"></div>' +
       '<h1>Criar conta</h1>' +
       '<p class="sub">Nível 1 fica liberado assim que você cadastra. Os níveis seguintes são liberados pela gestão.</p>' +
       '<div class="login-error" id="login-error"></div>' +
@@ -521,7 +530,7 @@ function logout(){
 function renderTopbar(){
   var isAdmin = state.user.level >= 10;
   return '<div class="topbar">' +
-    '<div class="brand" style="cursor:pointer" id="brand-home"><span class="mark">TM</span>Treinamento TENKiTER</div>' +
+    '<div class="brand" style="cursor:pointer" id="brand-home"><span class="mark"><img src="icon-192.png" alt="TENKiTER"></span>Treinamento TENKiTER</div>' +
     '<div class="topbar-right">' +
       '<span>' + esc(state.user.name) + '</span>' +
       (isAdmin ? '<button class="btn admin-btn-topbar" id="btn-admin-rh">⚙️ Painel do RH / Admin</button>' : '') +
