@@ -1,3 +1,5 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TENKiTER Modas — Treinamento</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap">
 <style>
@@ -228,12 +230,11 @@ function normWhats(w){
   return d;
 }
 
-window.__rosterDebug = { status: 'não rodou ainda' };
 async function loadRoster(){
-  if (!DATA.appsScriptUrl) { window.__rosterDebug = { status: 'sem appsScriptUrl configurada' }; return; }
+  if (!DATA.appsScriptUrl) return;
   try{
     var res = await fetch(DATA.appsScriptUrl, { method:'GET' });
-    if (!res.ok) { window.__rosterDebug = { status: 'HTTP ' + res.status + ' ' + res.statusText }; return; }
+    if (!res.ok) return;
     var json = await res.json();
     if (json && json.ok && Array.isArray(json.funcionarios)){
       var byWhats = {};
@@ -254,13 +255,8 @@ async function loadRoster(){
         };
       });
       DATA.roster = Object.keys(byWhats).map(function(k){ return byWhats[k]; });
-      window.__rosterDebug = { status: 'ok', total: DATA.roster.length };
-    } else {
-      window.__rosterDebug = { status: 'resposta sem ok/funcionarios', resposta: json };
     }
-  }catch(e){
-    window.__rosterDebug = { status: 'erro de rede/CORS: ' + (e && e.message) };
-  }
+  }catch(e){ /* mantém o cadastro-semente -- o site continua funcionando */ }
 }
 
 async function submitResult(payload){
@@ -342,7 +338,6 @@ function renderLogin(){
       '<div class="field"><label>Senha</label><input type="password" id="login-pass" autocomplete="current-password"></div>' +
       '<button class="btn btn-primary" id="login-btn">Entrar</button>' +
       '<p class="sub" style="margin:14px 0 0;text-align:center;">Ainda não tem conta? <a href="#" id="link-cadastro">Cadastre-se</a></p>' +
-      '<p style="margin:14px 0 0;text-align:center;font-size:0.68rem;color:var(--muted);">[debug] planilha: ' + esc(JSON.stringify(window.__rosterDebug)) + '</p>' +
     '</div></div>';
   document.getElementById('login-btn').addEventListener('click', doLogin);
   document.getElementById('login-pass').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
@@ -406,10 +401,7 @@ async function doLogin(){
   if(!whatsapp || !pass){ err.textContent = 'Preencha WhatsApp e senha.'; err.style.display='block'; return; }
   var entry = DATA.roster.find(function(r){ return normWhats(r.whatsapp) === whatsapp; });
   if(!entry || entry.password !== pass){
-    var dbg = !entry
-      ? ('nenhuma conta com o WhatsApp "' + whatsapp + '" (contas carregadas: ' + DATA.roster.map(function(r){return normWhats(r.whatsapp);}).join(', ') + ')')
-      : ('achei a conta, mas a senha não bate (digitada: "' + pass + '", esperada: "' + entry.password + '")');
-    err.textContent = 'WhatsApp ou senha incorretos. [debug: ' + dbg + ']'; err.style.display = 'block'; return;
+    err.textContent = 'WhatsApp ou senha incorretos.'; err.style.display = 'block'; return;
   }
   state.user = { whatsapp: normWhats(entry.whatsapp), name: entry.name, level: entry.level };
   ls_set('tm_session', { whatsapp: normWhats(entry.whatsapp) });
