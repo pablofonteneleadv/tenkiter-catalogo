@@ -283,6 +283,29 @@ var PABLO_WHATSAPP = ""; // e.g. "5588999999999" -- set this to enable the Whats
 
 var state = { user:null, view:'login', manual:null };
 
+/* ---------------- navegação (botão voltar do celular) ----------------
+ * Sem isso, o app nunca registrava "telas" no histórico do navegador --
+ * então o botão/gesto de voltar do Android/iPhone não tinha pra onde ir
+ * dentro do site e saía direto do Chrome. Cada tela empurra uma entrada
+ * no histórico; "popstate" (o voltar do celular) só troca a tela atual,
+ * sem empurrar entrada nova -- senão o botão voltar nunca andaria pra trás.
+ */
+var suprimirHistorico = false;
+function empurrarHistorico(view, manual){
+  if (suprimirHistorico) return;
+  try{ history.pushState({ view: view, manual: manual || null }, ''); }catch(e){}
+}
+window.addEventListener('popstate', function(e){
+  if (!state.user) return; // tela de login/cadastro -- deixa o navegador seguir o padrão dele
+  suprimirHistorico = true;
+  var st = e.state || { view: 'home' };
+  if (st.view === 'manual' && st.manual){ openManual(st.manual); }
+  else if (st.view === 'quiz' && st.manual){ openQuiz(st.manual); }
+  else if (st.view === 'admin'){ openAdminPanel(); }
+  else { goHome(); }
+  suprimirHistorico = false;
+});
+
 function ls_get(key, fallback){
   try{ var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }catch(e){ return fallback; }
 }
@@ -635,6 +658,7 @@ function goHome(){
       '<div class="hero"><h1>Oi, ' + esc(state.user.name) + '!</h1><p>Seu nível de acesso é ' + state.user.level + '. Escolha um manual para continuar.</p></div>' +
       '<div class="cards">' + (cards || '<p class="sub">Nenhum manual disponível ainda.</p>') + '</div>' +
     '</div></div>';
+  empurrarHistorico('home', null);
   wireTopbar();
   document.querySelectorAll('.card').forEach(function(el){
     el.addEventListener('click', function(){
@@ -648,6 +672,7 @@ function goHome(){
 function openManual(level){
   state.view = 'manual'; state.manual = level;
   render();
+  empurrarHistorico('manual', level);
   setTimeout(function(){
     var first = document.querySelector('.chapter');
     if (first) first.scrollIntoView({block:'start'});
@@ -759,6 +784,7 @@ function openQuiz(level){
   state.view = 'quiz'; state.manual = level;
   state.quizAttempt = buildQuizAttempt(level);
   render();
+  empurrarHistorico('quiz', level);
   window.scrollTo(0,0);
 }
 
@@ -789,7 +815,7 @@ function renderQuizIntro(level){
 }
 
 function wireQuizIntro(level){
-  document.getElementById('back-to-manual').addEventListener('click', function(){ state.view='manual'; state.quizAttempt = null; render(); });
+  document.getElementById('back-to-manual').addEventListener('click', function(){ state.quizAttempt = null; openManual(level); });
   document.getElementById('quiz-form').addEventListener('submit', function(e){
     e.preventDefault();
     gradeQuiz(level);
@@ -855,6 +881,7 @@ function gradeQuiz(level){
 function openAdminPanel(){
   state.view = 'admin'; state.adminTab = state.adminTab || 'equipe'; state.adminData = null;
   render();
+  empurrarHistorico('admin', null);
   fetchAdminData();
 }
 

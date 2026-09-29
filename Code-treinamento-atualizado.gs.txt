@@ -497,10 +497,12 @@ function analisarDocManual_(docId) {
         continue; // título do documento -- o título do manual já vem da configuração no site
       }
 
+      if (texto.trim() === '' && !imagensDoParagrafo.length) continue; // parágrafo realmente vazio -- nem cria capítulo "Geral" à toa
+
       var cap = garantirCapitulo();
       imagensDoParagrafo.forEach(function (img) { cap.blocks.push(img); });
 
-      if (texto.trim() === '') continue; // parágrafo vazio (texto ou só imagem já tratada acima)
+      if (texto.trim() === '') continue; // só tinha imagem, já foi adicionada acima
 
       if (heading === DocumentApp.ParagraphHeading.SUBTITLE) {
         cap.blocks.push({ type: 'quote', text: texto });
@@ -511,7 +513,9 @@ function analisarDocManual_(docId) {
         cap.blocks.push({ type: 'quote', text: mQuote[1] });
         continue;
       }
-      var negrito = par.editAsText().isBold(0, Math.max(texto.length - 1, 0));
+      // isBold() sem argumentos: true = parágrafo todo em negrito, false = nada,
+      // null = misturado (nesse caso trata como não-negrito, pra não travar a sincronização).
+      var negrito = par.editAsText().isBold();
       cap.blocks.push({ type: 'p', text: texto, bold: negrito === true });
 
     } else if (tipo === DocumentApp.ElementType.LIST_ITEM) {
