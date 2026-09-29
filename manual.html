@@ -269,6 +269,60 @@ th{background:var(--surface-2); font-weight:700;}
   .admin-shell{padding:14px;}
   .admin-toolbar{flex-direction:column; align-items:stretch;}
 }
+
+/* ---------- avatar / menu do funcionário ---------- */
+.avatar, .avatar-fallback{
+  width:38px; height:38px; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center;
+  background:var(--accent-soft); color:var(--accent-2); font-weight:700; font-size:0.85rem; border:1px solid var(--border);
+}
+.avatar img{width:100%; height:100%; object-fit:cover;}
+.avatar-sm{width:34px; height:34px;}
+.avatar-menu-wrap{position:relative;}
+.avatar-menu-btn{position:relative; background:none; border:none; padding:0; cursor:pointer; display:flex; align-items:center; border-radius:50%;}
+.avatar-menu-btn:focus-visible{outline:2px solid var(--accent-2); outline-offset:2px;}
+.avatar-badge{position:absolute; top:-1px; right:-1px; width:11px; height:11px; border-radius:50%; background:var(--accent-2); border:2px solid var(--surface);}
+.avatar-dropdown{
+  position:absolute; top:calc(100% + 10px); right:0; min-width:200px; background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.15); padding:8px; z-index:30;
+}
+.avatar-dropdown-name{padding:8px 10px 6px; font-weight:700; font-size:0.9rem; border-bottom:1px solid var(--border); margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.avatar-dropdown-item{
+  display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; text-align:left; background:none; border:none;
+  padding:9px 10px; border-radius:8px; cursor:pointer; font-size:0.9rem; font-weight:600; color:var(--text); font-family:inherit;
+}
+.avatar-dropdown-item:hover{background:var(--surface-2);}
+.avatar-dropdown-pct{font-size:0.72rem; font-weight:700; color:var(--accent-2); background:var(--accent-soft); padding:2px 7px; border-radius:20px;}
+
+/* ---------- banner "complete seu perfil" ---------- */
+.perfil-banner{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  background:var(--warn-bg); border:1px solid var(--warn-border); color:var(--warn-text);
+  padding:12px 16px; border-radius:12px; margin-bottom:18px; font-size:0.9rem; font-weight:600;
+}
+.btn-sm{padding:6px 12px; font-size:0.82rem;}
+
+/* ---------- página de perfil ---------- */
+.progress-bar{height:6px; border-radius:4px; background:var(--surface-2); overflow:hidden;}
+.progress-bar > div{height:100%; background:var(--accent-2);}
+.progress-label{font-size:0.78rem; color:var(--muted);}
+.perfil-header{margin-bottom:18px;}
+.perfil-progress{margin-top:10px; max-width:340px;}
+.perfil-completo{color:var(--accent-2); font-weight:700; margin-top:8px;}
+.perfil-secao{font-size:0.95rem; margin:22px 0 10px; padding-top:14px; border-top:1px solid var(--border);}
+.perfil-secao:first-of-type{border-top:none; padding-top:0; margin-top:8px;}
+.perfil-fotos{display:flex; gap:22px; flex-wrap:wrap; margin-bottom:8px;}
+.perfil-foto-box{display:flex; flex-direction:column; align-items:center; gap:8px;}
+.perfil-foto-preview, .perfil-foto-placeholder{
+  width:96px; height:96px; border-radius:50%; object-fit:cover; background:var(--accent-soft); color:var(--accent-2);
+  display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.3rem; border:1px solid var(--border);
+}
+.perfil-foto-preview.perfil-foto-corpo, .perfil-foto-placeholder.perfil-foto-corpo{border-radius:14px; width:96px; height:128px;}
+.perfil-error{color:var(--danger); background:var(--danger-bg); border-radius:8px; padding:9px 12px; font-size:0.85rem; margin-bottom:10px; display:none;}
+
+@media (max-width:520px){
+  .avatar-dropdown{right:-8px;}
+  .perfil-fotos{gap:14px;}
+}
 </style>
 
 <div id="app"></div>
@@ -302,6 +356,7 @@ window.addEventListener('popstate', function(e){
   if (st.view === 'manual' && st.manual){ openManual(st.manual); }
   else if (st.view === 'quiz' && st.manual){ openQuiz(st.manual); }
   else if (st.view === 'admin'){ openAdminPanel(); }
+  else if (st.view === 'perfil'){ openPerfil(); }
   else { goHome(); }
   suprimirHistorico = false;
 });
@@ -327,6 +382,56 @@ function normWhats(w){
   return d;
 }
 
+/**
+ * Monta o objeto state.user a partir de uma entrada do roster (login,
+ * cadastro ou restauração de sessão) -- um único lugar pra garantir que
+ * TODOS os campos de perfil sempre acompanham o usuário logado.
+ */
+function userFromRosterEntry(entry){
+  return {
+    whatsapp: normWhats(entry.whatsapp),
+    name: entry.name,
+    level: entry.level,
+    password: entry.password,
+    dataNascimento: entry.dataNascimento || '',
+    instagram: entry.instagram || '',
+    cep: entry.cep || '',
+    endereco: entry.endereco || '',
+    bairro: entry.bairro || '',
+    cidade: entry.cidade || '',
+    estado: entry.estado || '',
+    altura: entry.altura || '',
+    peso: entry.peso || '',
+    fotoPerfilUrl: entry.fotoPerfilUrl || '',
+    fotoCorpoUrl: entry.fotoCorpoUrl || ''
+  };
+}
+
+/**
+ * Lista dos campos "interessantes" de perfil que contam pra barra de 100%.
+ * Pra pedir um dado novo no futuro, basta adicionar aqui -- a mensagem de
+ * "complete seu perfil" na home volta a aparecer sozinha pra quem ainda não
+ * preencheu, mesmo quem já estava em 100% antes.
+ */
+var PERFIL_CAMPOS = [
+  { chave: 'dataNascimento', label: 'Data de nascimento' },
+  { chave: 'instagram', label: 'Instagram' },
+  { chave: 'cep', label: 'CEP' },
+  { chave: 'endereco', label: 'Endereço' },
+  { chave: 'bairro', label: 'Bairro' },
+  { chave: 'cidade', label: 'Cidade' },
+  { chave: 'estado', label: 'Estado' },
+  { chave: 'altura', label: 'Altura' },
+  { chave: 'peso', label: 'Peso' },
+  { chave: 'fotoPerfilUrl', label: 'Foto de perfil' },
+  { chave: 'fotoCorpoUrl', label: 'Foto de corpo inteiro' }
+];
+function perfilCompletude(user){
+  var total = PERFIL_CAMPOS.length;
+  var done = PERFIL_CAMPOS.filter(function(c){ return String((user && user[c.chave]) || '').trim() !== ''; }).length;
+  return { total: total, done: done, pct: total ? Math.round(done/total*100) : 100 };
+}
+
 async function loadRoster(){
   if (!DATA.appsScriptUrl) return;
   try{
@@ -346,13 +451,28 @@ async function loadRoster(){
         // fica sempre o maior nível já visto pra esse WhatsApp.
         var statusAnterior = byWhats[whatsapp] ? byWhats[whatsapp].status : 'ativo';
         var statusDessaLinha = String(row.status||'ativo').trim().toLowerCase() || 'ativo';
+        var anterior = byWhats[whatsapp] || {};
         byWhats[whatsapp] = {
           whatsapp: whatsapp,
           name: String(row.nome||'').trim() || whatsapp,
           level: Math.max(nivelAnterior, nivelDessaLinha),
           password: String(row.senha||''),
           // se aparecer duplicado com status diferente, fica ativo se qualquer uma das linhas estiver ativa
-          status: (statusAnterior === 'ativo' || statusDessaLinha === 'ativo') ? 'ativo' : 'inativo'
+          status: (statusAnterior === 'ativo' || statusDessaLinha === 'ativo') ? 'ativo' : 'inativo',
+          // dados de perfil -- vêm da planilha (colunas criadas sozinhas quando o
+          // funcionário preenche pela primeira vez); mantém o valor anterior se a
+          // linha duplicada não tiver esse campo preenchido.
+          dataNascimento: String(row.datanascimento || anterior.dataNascimento || ''),
+          instagram: String(row.instagram || anterior.instagram || ''),
+          cep: String(row.cep || anterior.cep || ''),
+          endereco: String(row.endereco || anterior.endereco || ''),
+          bairro: String(row.bairro || anterior.bairro || ''),
+          cidade: String(row.cidade || anterior.cidade || ''),
+          estado: String(row.estado || anterior.estado || ''),
+          altura: String(row.altura || anterior.altura || ''),
+          peso: String(row.peso || anterior.peso || ''),
+          fotoPerfilUrl: String(row.fotoperfilurl || anterior.fotoPerfilUrl || ''),
+          fotoCorpoUrl: String(row.fotocorpourl || anterior.fotoCorpoUrl || '')
         };
       });
       DATA.roster = Object.keys(byWhats).map(function(k){ return byWhats[k]; });
@@ -532,18 +652,40 @@ function renderCadastro(){
       '<div class="field"><label>Nome</label><input type="text" id="cad-nome" autocomplete="name"></div>' +
       '<div class="field"><label>WhatsApp</label><input type="tel" id="cad-whats" autocomplete="username" placeholder="88999999999"></div>' +
       '<div class="field"><label>Senha</label><input type="password" id="cad-senha" autocomplete="new-password"></div>' +
+      '<div class="field"><label>Data de nascimento</label><input type="date" id="cad-nascimento"></div>' +
+      '<div class="field"><label>Instagram</label><input type="text" id="cad-instagram" placeholder="@seuusuario" value="@"></div>' +
       '<button class="btn btn-primary" id="cad-btn">Criar conta</button>' +
       '<p class="sub" style="margin:14px 0 0;text-align:center;">Já tem conta? <a href="#" id="link-login">Entrar</a></p>' +
     '</div></div>';
   document.getElementById('link-login').addEventListener('click', function(e){ e.preventDefault(); renderLogin(); });
   document.getElementById('cad-btn').addEventListener('click', doCadastro);
   document.getElementById('cad-senha').addEventListener('keydown', function(e){ if(e.key==='Enter') doCadastro(); });
+  wireInstagramField(document.getElementById('cad-instagram'));
+}
+
+/**
+ * Mantém o campo de Instagram sempre começando com "@" -- não dá pra validar
+ * ao vivo se o perfil existe de verdade (o Instagram bloqueia esse tipo de
+ * consulta vinda do navegador), então a validação aqui é só de formato.
+ */
+function normInstagram(v){
+  var s = String(v||'').trim().replace(/^@+/, '').replace(/\s+/g, '');
+  return s ? '@' + s : '';
+}
+function wireInstagramField(input){
+  if (!input) return;
+  input.addEventListener('focus', function(){
+    if (input.value === '@' && input.setSelectionRange) input.setSelectionRange(1,1);
+  });
+  input.addEventListener('blur', function(){ input.value = normInstagram(input.value) || '@'; });
 }
 
 async function doCadastro(){
   var nome = document.getElementById('cad-nome').value.trim();
   var whatsapp = normWhats(document.getElementById('cad-whats').value);
   var senha = document.getElementById('cad-senha').value;
+  var dataNascimento = document.getElementById('cad-nascimento').value;
+  var instagram = normInstagram(document.getElementById('cad-instagram').value);
   var err = document.getElementById('login-error');
   err.style.display = 'none';
   if(!nome || !whatsapp || !senha){ err.textContent = 'Preencha nome, WhatsApp e senha.'; err.style.display='block'; return; }
@@ -556,14 +698,20 @@ async function doCadastro(){
   }
   var btn = document.getElementById('cad-btn');
   btn.disabled = true; btn.textContent = 'Cadastrando...';
-  var resp = await submitResult({ action:'registrar', nome: nome, whatsapp: whatsapp, senha: senha });
+  var resp = await submitResult({
+    action:'registrar', nome: nome, whatsapp: whatsapp, senha: senha,
+    dataNascimento: dataNascimento, instagram: instagram
+  });
   btn.disabled = false; btn.textContent = 'Criar conta';
   if(!resp || !resp.ok){
     err.textContent = (resp && resp.erro) || 'Não foi possível cadastrar agora. Tente de novo.'; err.style.display='block'; return;
   }
-  var entry = { whatsapp: whatsapp, name: nome, level: 1, password: senha, status: 'ativo' };
+  var entry = {
+    whatsapp: whatsapp, name: nome, level: 1, password: senha, status: 'ativo',
+    dataNascimento: dataNascimento, instagram: instagram
+  };
   DATA.roster.push(entry);
-  state.user = { whatsapp: entry.whatsapp, name: entry.name, level: entry.level, password: entry.password };
+  state.user = userFromRosterEntry(entry);
   ls_set('tm_session', { whatsapp: entry.whatsapp });
   toast('Conta criada! Bem-vindo(a).');
   goHome();
@@ -583,7 +731,7 @@ async function doLogin(){
   if(String(entry.status||'ativo').toLowerCase() === 'inativo'){
     err.textContent = 'Essa conta está desativada. Fale com a gestão.'; err.style.display = 'block'; return;
   }
-  state.user = { whatsapp: normWhats(entry.whatsapp), name: entry.name, level: entry.level, password: entry.password };
+  state.user = userFromRosterEntry(entry);
   ls_set('tm_session', { whatsapp: normWhats(entry.whatsapp) });
   goHome();
 }
@@ -597,7 +745,7 @@ function tryRestoreSession(){
     try{ localStorage.removeItem('tm_session'); }catch(e){}
     return false;
   }
-  state.user = { whatsapp: normWhats(entry.whatsapp), name: entry.name, level: entry.level, password: entry.password };
+  state.user = userFromRosterEntry(entry);
   return true;
 }
 
@@ -608,14 +756,37 @@ function logout(){
 }
 
 /* ---------------- top bar ---------------- */
+function avatarIniciais(nome){
+  var partes = String(nome||'').trim().split(/\s+/);
+  var i1 = partes[0] ? partes[0][0] : '';
+  var i2 = partes.length > 1 ? partes[partes.length-1][0] : '';
+  return (i1 + i2).toUpperCase() || '?';
+}
+function avatarHtml(user, size){
+  var cls = 'avatar' + (size ? ' avatar-' + size : '');
+  if (user.fotoPerfilUrl){
+    return '<span class="' + cls + '"><img src="' + esc(user.fotoPerfilUrl) + '" alt=""></span>';
+  }
+  return '<span class="' + cls + ' avatar-fallback">' + esc(avatarIniciais(user.name)) + '</span>';
+}
 function renderTopbar(){
   var isAdmin = state.user.level >= 10;
+  var comp = perfilCompletude(state.user);
   return '<div class="topbar">' +
     '<div class="brand" style="cursor:pointer" id="brand-home"><span class="mark"><img src="icon-192.png" alt="TENKiTER"></span>Treinamento TENKiTER</div>' +
     '<div class="topbar-right">' +
-      '<span>' + esc(state.user.name) + '</span>' +
       (isAdmin ? '<button class="btn admin-btn-topbar" id="btn-admin-rh">⚙️ Painel do RH / Admin</button>' : '') +
-      '<button class="btn btn-ghost" id="btn-logout">Sair</button>' +
+      '<div class="avatar-menu-wrap">' +
+        '<button class="avatar-menu-btn" id="btn-avatar-menu" aria-label="Menu do funcionário">' +
+          avatarHtml(state.user, 'sm') +
+          (comp.pct < 100 ? '<span class="avatar-badge" title="Complete seu perfil"></span>' : '') +
+        '</button>' +
+        '<div class="avatar-dropdown" id="avatar-dropdown" hidden>' +
+          '<div class="avatar-dropdown-name">' + esc(state.user.name) + '</div>' +
+          '<button class="avatar-dropdown-item" id="btn-ir-perfil">👤 Perfil' + (comp.pct < 100 ? ' <span class="avatar-dropdown-pct">' + comp.pct + '%</span>' : '') + '</button>' +
+          '<button class="avatar-dropdown-item" id="btn-logout">Sair</button>' +
+        '</div>' +
+      '</div>' +
     '</div></div>';
 }
 function wireTopbar(){
@@ -623,6 +794,178 @@ function wireTopbar(){
   document.getElementById('btn-logout').addEventListener('click', logout);
   var btnAdmin = document.getElementById('btn-admin-rh');
   if (btnAdmin) btnAdmin.addEventListener('click', openAdminPanel);
+  var btnMenu = document.getElementById('btn-avatar-menu');
+  var dropdown = document.getElementById('avatar-dropdown');
+  if (btnMenu && dropdown){
+    btnMenu.addEventListener('click', function(e){
+      e.stopPropagation();
+      dropdown.hidden = !dropdown.hidden;
+    });
+    document.getElementById('btn-ir-perfil').addEventListener('click', function(){ dropdown.hidden = true; openPerfil(); });
+  }
+}
+// Listener único (registrado uma vez só) que fecha o menu do avatar clicando
+// fora dele -- procura os elementos atuais na hora do clique, então continua
+// funcionando mesmo depois de renderizações trocarem o HTML da topbar.
+document.addEventListener('click', function(e){
+  var dropdown = document.getElementById('avatar-dropdown');
+  var btnMenu = document.getElementById('btn-avatar-menu');
+  if (dropdown && !dropdown.hidden && !dropdown.contains(e.target) && e.target !== btnMenu){ dropdown.hidden = true; }
+});
+
+/* ---------------- perfil ---------------- */
+function openPerfil(){
+  state.view = 'perfil';
+  render();
+  empurrarHistorico('perfil', null);
+}
+
+/**
+ * Redimensiona uma imagem escolhida pelo funcionário no navegador antes de
+ * enviar -- evita foto de celular de vários MB pesando no upload e na
+ * planilha/Drive. Devolve uma data URL JPEG já no tamanho máximo indicado.
+ */
+function resizeImageFile(file, maxDim, quality){
+  return new Promise(function(resolve, reject){
+    var reader = new FileReader();
+    reader.onerror = function(){ reject(new Error('Não foi possível ler o arquivo.')); };
+    reader.onload = function(){
+      var img = new Image();
+      img.onerror = function(){ reject(new Error('Arquivo não é uma imagem válida.')); };
+      img.onload = function(){
+        var w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim){
+          if (w >= h){ h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality || 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderPerfil(){
+  var u = state.user;
+  var comp = perfilCompletude(u);
+  function campo(id, label, value, type, extra){
+    return '<div class="field"><label>' + esc(label) + '</label><input type="' + (type||'text') + '" id="' + id + '" value="' + esc(value||'') + '"' + (extra||'') + '></div>';
+  }
+  return '<div class="shell"><div class="main" style="max-width:640px">' +
+    '<div class="perfil-header">' +
+      '<h1>Meu perfil</h1>' +
+      (comp.pct < 100
+        ? '<div class="perfil-progress"><div class="progress-bar"><div style="width:' + comp.pct + '%"></div></div><p class="progress-label">' + comp.done + ' de ' + comp.total + ' informações preenchidas (' + comp.pct + '%)</p></div>'
+        : '<p class="perfil-completo">✓ Perfil 100% completo, obrigado!</p>') +
+    '</div>' +
+    '<div class="perfil-fotos">' +
+      '<div class="perfil-foto-box">' +
+        (u.fotoPerfilUrl ? '<img src="' + esc(u.fotoPerfilUrl) + '" class="perfil-foto-preview" id="preview-foto-perfil">' : '<div class="perfil-foto-placeholder" id="preview-foto-perfil">' + esc(avatarIniciais(u.name)) + '</div>') +
+        '<label class="btn btn-ghost btn-sm">Foto de perfil<input type="file" accept="image/*" id="input-foto-perfil" style="display:none"></label>' +
+      '</div>' +
+      '<div class="perfil-foto-box">' +
+        (u.fotoCorpoUrl ? '<img src="' + esc(u.fotoCorpoUrl) + '" class="perfil-foto-preview perfil-foto-corpo" id="preview-foto-corpo">' : '<div class="perfil-foto-placeholder perfil-foto-corpo" id="preview-foto-corpo">📷</div>') +
+        '<label class="btn btn-ghost btn-sm">Foto de corpo inteiro<input type="file" accept="image/*" id="input-foto-corpo" style="display:none"></label>' +
+      '</div>' +
+    '</div>' +
+    '<div class="perfil-error" id="perfil-error"></div>' +
+    '<h3 class="perfil-secao">Dados pessoais</h3>' +
+    campo('perfil-nascimento', 'Data de nascimento', u.dataNascimento, 'date') +
+    campo('perfil-instagram', 'Instagram', u.instagram || '@', 'text') +
+    campo('perfil-altura', 'Altura (cm)', u.altura, 'number', ' min="0" step="1" placeholder="Ex: 170"') +
+    campo('perfil-peso', 'Peso (kg)', u.peso, 'number', ' min="0" step="0.1" placeholder="Ex: 68"') +
+    '<h3 class="perfil-secao">Endereço</h3>' +
+    campo('perfil-cep', 'CEP', u.cep, 'text', ' placeholder="00000-000"') +
+    campo('perfil-endereco', 'Endereço (rua e número)', u.endereco, 'text') +
+    campo('perfil-bairro', 'Bairro', u.bairro, 'text') +
+    campo('perfil-cidade', 'Cidade', u.cidade, 'text') +
+    campo('perfil-estado', 'Estado', u.estado, 'text', ' maxlength="2" placeholder="CE"') +
+    '<button class="btn btn-primary" id="perfil-salvar" style="margin-top:16px">Salvar alterações</button>' +
+  '</div></div>';
+}
+
+function wirePerfil(){
+  wireInstagramField(document.getElementById('perfil-instagram'));
+
+  var cepInput = document.getElementById('perfil-cep');
+  cepInput.addEventListener('blur', async function(){
+    var cep = cepInput.value.replace(/\D/g,'');
+    if (cep.length !== 8) return;
+    try{
+      var res = await fetch('https://viacep.com.br/ws/' + cep + '/json/');
+      var json = await res.json();
+      if (json && !json.erro){
+        document.getElementById('perfil-endereco').value = json.logradouro || document.getElementById('perfil-endereco').value;
+        document.getElementById('perfil-bairro').value = json.bairro || document.getElementById('perfil-bairro').value;
+        document.getElementById('perfil-cidade').value = json.localidade || document.getElementById('perfil-cidade').value;
+        document.getElementById('perfil-estado').value = json.uf || document.getElementById('perfil-estado').value;
+      }
+    }catch(e){ /* sem conexão com o ViaCEP -- funcionário preenche na mão mesmo */ }
+  });
+
+  function wireFoto(inputId, previewId, tipo){
+    document.getElementById(inputId).addEventListener('change', async function(e){
+      var file = e.target.files && e.target.files[0];
+      if (!file) return;
+      var err = document.getElementById('perfil-error');
+      err.style.display = 'none';
+      try{
+        var dataUrl = await resizeImageFile(file, tipo === 'corpo' ? 1280 : 640, 0.82);
+        var preview = document.getElementById(previewId);
+        if (preview.tagName === 'IMG'){ preview.src = dataUrl; }
+        else {
+          var img = document.createElement('img');
+          img.id = previewId; img.className = preview.className; img.src = dataUrl;
+          preview.replaceWith(img);
+        }
+        var resp = await submitResult({ action:'enviar_foto_perfil', whatsapp: state.user.whatsapp, senha: state.user.password, tipo: tipo, fotoBase64: dataUrl });
+        if (!resp || !resp.ok){
+          err.textContent = (resp && resp.erro) || 'Não foi possível enviar a foto agora.'; err.style.display = 'block'; return;
+        }
+        if (tipo === 'corpo') state.user.fotoCorpoUrl = resp.url; else state.user.fotoPerfilUrl = resp.url;
+        var rosterEntry = DATA.roster.find(function(r){ return normWhats(r.whatsapp) === state.user.whatsapp; });
+        if (rosterEntry){ if (tipo === 'corpo') rosterEntry.fotoCorpoUrl = resp.url; else rosterEntry.fotoPerfilUrl = resp.url; }
+        toast('Foto enviada!');
+      }catch(ex){
+        err.textContent = 'Não foi possível processar essa imagem.'; err.style.display = 'block';
+      }
+    });
+  }
+  wireFoto('input-foto-perfil', 'preview-foto-perfil', 'perfil');
+  wireFoto('input-foto-corpo', 'preview-foto-corpo', 'corpo');
+
+  document.getElementById('perfil-salvar').addEventListener('click', async function(){
+    var btn = this;
+    var err = document.getElementById('perfil-error');
+    err.style.display = 'none';
+    var instagram = normInstagram(document.getElementById('perfil-instagram').value);
+    var campos = {
+      dataNascimento: document.getElementById('perfil-nascimento').value,
+      instagram: instagram,
+      altura: document.getElementById('perfil-altura').value,
+      peso: document.getElementById('perfil-peso').value,
+      cep: document.getElementById('perfil-cep').value,
+      endereco: document.getElementById('perfil-endereco').value,
+      bairro: document.getElementById('perfil-bairro').value,
+      cidade: document.getElementById('perfil-cidade').value,
+      estado: document.getElementById('perfil-estado').value
+    };
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    var resp = await submitResult({ action:'atualizar_perfil', whatsapp: state.user.whatsapp, senha: state.user.password, campos: campos });
+    btn.disabled = false; btn.textContent = 'Salvar alterações';
+    if (!resp || !resp.ok){
+      err.textContent = (resp && resp.erro) || 'Não foi possível salvar agora. Tente de novo.'; err.style.display = 'block'; return;
+    }
+    Object.keys(campos).forEach(function(k){ state.user[k] = campos[k]; });
+    var rosterEntry = DATA.roster.find(function(r){ return normWhats(r.whatsapp) === state.user.whatsapp; });
+    if (rosterEntry){ Object.keys(campos).forEach(function(k){ rosterEntry[k] = campos[k]; }); }
+    toast('Perfil atualizado!');
+    render();
+  });
 }
 
 /* ---------------- home ---------------- */
@@ -653,13 +996,23 @@ function goHome(){
       ) : '<div class="progress-label">Peça à gestão pra liberar este manual</div>') +
     '</div>';
   }).join('');
+  var comp = perfilCompletude(state.user);
+  var bannerPerfil = comp.pct < 100
+    ? '<div class="perfil-banner" id="perfil-banner">' +
+        '<span>📋 Complete seu perfil (' + comp.pct + '% preenchido) — leva menos de um minuto.</span>' +
+        '<a href="#" id="link-completar-perfil" class="btn btn-primary btn-sm">Completar perfil</a>' +
+      '</div>'
+    : '';
   app.innerHTML = renderTopbar() +
     '<div class="shell"><div class="main" style="max-width:900px">' +
+      bannerPerfil +
       '<div class="hero"><h1>Oi, ' + esc(state.user.name) + '!</h1><p>Seu nível de acesso é ' + state.user.level + '. Escolha um manual para continuar.</p></div>' +
       '<div class="cards">' + (cards || '<p class="sub">Nenhum manual disponível ainda.</p>') + '</div>' +
     '</div></div>';
   empurrarHistorico('home', null);
   wireTopbar();
+  var linkPerfil = document.getElementById('link-completar-perfil');
+  if (linkPerfil) linkPerfil.addEventListener('click', function(e){ e.preventDefault(); openPerfil(); });
   document.querySelectorAll('.card').forEach(function(el){
     el.addEventListener('click', function(){
       var id = el.getAttribute('data-manual');
@@ -1267,6 +1620,10 @@ function render(){
     app.innerHTML = renderTopbar() + renderAdminPanel();
     wireTopbar();
     wireAdminPanel();
+  } else if (state.view === 'perfil'){
+    app.innerHTML = renderTopbar() + renderPerfil();
+    wireTopbar();
+    wirePerfil();
   }
 }
 

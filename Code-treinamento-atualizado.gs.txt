@@ -231,6 +231,8 @@ function doPost(e) {
       case 'sincronizar_manual':       return sincronizarManual_(data);
       case 'atualizar_manual_config':  return atualizarManualConfig_(data);
       case 'excluir_manual':           return excluirManual_(data);
+      case 'atualizar_perfil':         return atualizarPerfilUsuario_(data);
+      case 'enviar_foto_perfil':       return enviarFotoPerfil_(data);
       default:                         return registrarResultado_(data); // 'resultado' e chamadas antigas
     }
   } catch (err) {
@@ -242,6 +244,8 @@ function registrarFuncionario_(data) {
   var nome = String(data.nome || '').trim();
   var whatsapp = normalizarWhats_(data.whatsapp);
   var senha = String(data.senha || '');
+  var dataNascimento = String(data.dataNascimento || '').trim();
+  var instagram = String(data.instagram || '').trim();
 
   if (!nome || !whatsapp || !senha) {
     return jsonOut_({ ok: false, erro: 'Nome, WhatsApp e senha são obrigatórios.' });
@@ -254,7 +258,114 @@ function registrarFuncionario_(data) {
   }
 
   sheet.appendRow([nome, whatsapp, senha, 1, 'Ativo']); // Nome | WhatsApp | Senha | Nivel | Status
+  if (dataNascimento) gravarCampoFuncionario_(whatsapp, 'datanascimento', 'DataNascimento', dataNascimento);
+  if (instagram) gravarCampoFuncionario_(whatsapp, 'instagram', 'Instagram', instagram);
   return jsonOut_({ ok: true });
+}
+
+/**
+ * Localiza a linha do WhatsApp na planilha Funcionarios e grava UM campo,
+ * criando a coluna no fim da planilha na hora se ela ainda não existir --
+ * é assim que os campos novos do perfil (data de nascimento, Instagram,
+ * endereço, altura, peso, fotos...) vão aparecendo na planilha sozinhos,
+ * sem precisar editar a estrutura dela na mão.
+ */
+function gravarCampoFuncionario_(whatsapp, colunaChave, colunaBonita, valor) {
+  var alvo = normalizarWhats_(whatsapp);
+  var sheet = getFuncionariosSheet_();
+  var dados = sheet.getDataRange().getValues();
+  var headers = dados[0].map(function (h) { return String(h).trim().toLowerCase(); });
+  var idxWhats = headers.indexOf('whatsapp');
+  var idxColuna = headers.indexOf(colunaChave);
+  if (idxColuna === -1) {
+    idxColuna = headers.length;
+    sheet.getRange(1, idxColuna + 1).setValue(colunaBonita);
+  }
+  for (var i = 1; i < dados.length; i++) {
+    if (idxWhats !== -1 && normalizarWhats_(dados[i][idxWhats]) === alvo) {
+      sheet.getRange(i + 1, idxColuna + 1).setValue(valor);
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Pasta do Drive onde ficam as fotos de perfil e de corpo inteiro enviadas
+ * pelos funcionários, compartilhadas como "qualquer pessoa com o link pode
+ * ver" (mesmo esquema das imagens dos manuais).
+ */
+function getPastaFotosPerfil_() {
+  var nome = 'TENKiTER Treinamento - Fotos de Perfil';
+  var pastas = DriveApp.getFoldersByName(nome);
+  if (pastas.hasNext()) return pastas.next();
+  return DriveApp.createFolder(nome);
+}
+
+/**
+ * O próprio funcionário atualiza os campos do seu perfil (autenticado por
+ * whatsapp+senha, não precisa ser admin). Só grava as chaves conhecidas em
+ * "campos" -- nada de deixar o cliente escrever em coluna arbitrária.
+ */
+function atualizarPerfilUsuario_(data) {
+  var whatsapp = normalizarWhats_(data.whatsapp);
+  var entry = lerFuncionarios_().filter(function (f) { return normalizarWhats_(f.whatsapp) === whatsapp; })[0];
+  if (!entry || String(entry.senha) !== String(data.senha)) {
+    return jsonOut_({ ok: false, erro: 'WhatsApp ou senha incorretos.' });
+  }
+  var COLUNAS = {
+    nome: 'Nome', datanascimento: 'DataNascimento', instagram: 'Instagram',
+    cep: 'CEP', endereco: 'Endereco', bairro: 'Bairro', cidade: 'Cidade', estado: 'Estado',
+    altura: 'Altura', peso: 'Peso'
+  };
+  var campos = data.campos || {};
+  var gravouAlgo = false;
+  Object.keys(campos).forEach(function (chave) {
+    var chaveNorm = String(chave).toLowerCase();
+    var colunaBonita = COLUNAS[chaveNorm];
+    if (!colunaBonita) return; // ignora qualquer campo que não esteja na lista permitida
+    gravarCampoFuncionario_(whatsapp, chaveNorm, colunaBonita, campos[chave]);
+    gravouAlgo = true;
+  });
+  if (!gravouAlgo) return jsonOut_({ ok: false, erro: 'Nada para salvar.' });
+  return jsonOut_({ ok: true });
+}
+
+/**
+ * Recebe uma foto (perfil ou corpo inteiro) em base64 -- já redimensionada
+ * no navegador antes de enviar, pra não pesar -- salva como arquivo no
+ * Drive e grava o link na planilha.
+ */
+function enviarFotoPerfil_(data) {
+  var whatsapp = normalizarWhats_(data.whatsapp);
+  var entry = lerFuncionarios_().filter(function (f) { return normalizarWhats_(f.whatsapp) === whatsapp; })[0];
+  if (!entry || String(entry.senha) !== String(data.senha)) {
+    return jsonOut_({ ok: false, erro: 'WhatsApp ou senha incorretos.' });
+  }
+  var tipo = data.tipo === 'corpo' ? 'corpo' : 'perfil';
+  var base64 = String(data.fotoBase64 || '');
+  var m = base64.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]+)$/);
+  if (!m) return jsonOut_({ ok: false, erro: 'Formato de imagem inválido.' });
+  var bytes;
+  try {
+    bytes = Utilities.base64Decode(m[2]);
+  } catch (err) {
+    return jsonOut_({ ok: false, erro: 'Não foi possível ler a imagem enviada.' });
+  }
+  if (bytes.length > 6 * 1024 * 1024) {
+    return jsonOut_({ ok: false, erro: 'Imagem grande demais (máximo 6MB).' });
+  }
+  var blob = Utilities.newBlob(bytes, m[1], whatsapp + '-' + tipo);
+  var pasta = getPastaFotosPerfil_();
+  var arquivo = pasta.createFile(blob);
+  arquivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  var url = 'https://drive.google.com/uc?export=view&id=' + arquivo.getId();
+  if (tipo === 'corpo') {
+    gravarCampoFuncionario_(whatsapp, 'fotocorpourl', 'FotoCorpoURL', url);
+  } else {
+    gravarCampoFuncionario_(whatsapp, 'fotoperfilurl', 'FotoPerfilURL', url);
+  }
+  return jsonOut_({ ok: true, url: url });
 }
 
 function registrarResultado_(data) {
