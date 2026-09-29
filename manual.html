@@ -161,6 +161,19 @@ button{font-family:inherit;}
 .chapter h3{font-size:1.15rem; margin:0;}
 .read-toggle{display:flex; align-items:center; gap:6px; font-size:0.78rem; color:var(--muted); cursor:pointer; white-space:nowrap; user-select:none;}
 .read-toggle input{accent-color:var(--good-border);}
+.read-toggle-big{
+  display:flex; align-items:center; justify-content:center; gap:10px; user-select:none; cursor:pointer;
+  margin:20px auto 8px; padding:14px 22px; max-width:440px; text-align:center;
+  border:2px solid var(--accent-2); border-radius:12px; background:var(--accent-soft);
+  font-weight:700; font-size:0.94rem; color:var(--text); transition:background .15s, border-color .15s, color .15s;
+}
+.read-toggle-big input{width:19px; height:19px; accent-color:var(--good-border); cursor:pointer; flex-shrink:0;}
+.read-toggle-big.done{border-color:var(--good-border); background:var(--good-bg); color:var(--good-text);}
+.quiz-cta{margin:44px 0 10px; padding:26px 20px; text-align:center; border-top:2px dashed var(--border);}
+.quiz-cta .btn-lg{font-size:1.05rem; padding:14px 30px; border-radius:11px;}
+.quiz-cta-locked .btn-lg{opacity:.42; filter:grayscale(.4); cursor:not-allowed;}
+.quiz-cta-msg{display:inline-block; margin:14px auto 0; padding:9px 16px; border-radius:8px; max-width:440px;
+  background:var(--danger-bg); color:var(--danger); font-size:0.86rem; font-weight:600;}
 .chapter p{line-height:1.6; margin:0 0 12px; max-width:68ch;}
 .chapter p.p-bold{font-weight:700;}
 .chapter ul{margin:0 0 12px; padding-left:22px; max-width:68ch;}
@@ -654,9 +667,6 @@ function renderManual(level){
       navHtml += '<a class="nav-chapter' + (done?' done':'') + '" href="#ch-' + chId + '" data-ch="' + chId + '"><span class="dot"></span>' + esc(ch.title) + '</a>';
     });
   });
-  if (DATA.quizzes[level]){
-    navHtml += '<div class="nav-quiz-link" id="nav-quiz">Fazer avaliação →</div>';
-  }
 
   var bodyHtml = '<div class="manual-title">' + esc(DATA.titles[level]) + '</div>' +
     '<p class="manual-sub">' + esc(DATA.blurbs[level]) + '</p>';
@@ -667,9 +677,12 @@ function renderManual(level){
       var chId = level+'-'+pi+'-'+ci;
       var done = !!progress[chId];
       bodyHtml += '<div class="chapter" id="ch-' + chId + '">' +
-        '<div class="chapter-head"><h3>' + esc(ch.title) + '</h3>' +
-        '<label class="read-toggle"><input type="checkbox" data-ch="' + chId + '" ' + (done?'checked':'') + '> já li</label></div>' +
+        '<div class="chapter-head"><h3>' + esc(ch.title) + '</h3></div>' +
         renderBlocks(ch.blocks) +
+        '<label class="read-toggle-big' + (done?' done':'') + '">' +
+          '<input type="checkbox" data-ch="' + chId + '" ' + (done?'checked':'') + '>' +
+          '<span>' + (done ? '✓ Você confirmou que leu este capítulo' : 'Confirmo que li este capítulo') + '</span>' +
+        '</label>' +
       '</div>';
     });
   });
@@ -681,16 +694,42 @@ function renderManual(level){
     '</table></div>';
   }
 
+  if (DATA.quizzes[level]){
+    var prog = manualProgress(level);
+    var liberado = prog.total > 0 && prog.done >= prog.total;
+    bodyHtml += '<div class="quiz-cta' + (liberado ? '' : ' quiz-cta-locked') + '" id="quiz-cta">' +
+      '<button type="button" class="btn btn-primary btn-lg" id="btn-ir-avaliacao"' + (liberado ? '' : ' disabled') + '>Fazer avaliação →</button>' +
+      '<p class="quiz-cta-msg" id="quiz-cta-msg" style="display:' + (liberado ? 'none' : 'block') + '">⚠️ A avaliação libera só depois de confirmar a leitura de todos os capítulos deste manual.</p>' +
+    '</div>';
+  }
+
   return '<button type="button" class="btn-toc-toggle" id="btn-toc-toggle">☰ Índice do manual</button>' +
     '<div class="sidebar" id="manual-sidebar">' + navHtml + '</div><div class="main">' + bodyHtml + '</div>';
 }
 
+function updateQuizCta(level){
+  var cta = document.getElementById('quiz-cta');
+  if (!cta) return;
+  var prog = manualProgress(level);
+  var liberado = prog.total > 0 && prog.done >= prog.total;
+  cta.classList.toggle('quiz-cta-locked', !liberado);
+  var btn = document.getElementById('btn-ir-avaliacao');
+  if (btn) btn.disabled = !liberado;
+  var msg = document.getElementById('quiz-cta-msg');
+  if (msg) msg.style.display = liberado ? 'none' : 'block';
+}
+
 function wireManual(level){
-  document.querySelectorAll('.read-toggle input').forEach(function(cb){
+  document.querySelectorAll('.read-toggle-big input').forEach(function(cb){
     cb.addEventListener('change', function(){
-      setChapterRead(cb.getAttribute('data-ch'), cb.checked);
-      var link = document.querySelector('.nav-chapter[data-ch="'+cb.getAttribute('data-ch')+'"]');
+      var chId = cb.getAttribute('data-ch');
+      setChapterRead(chId, cb.checked);
+      var link = document.querySelector('.nav-chapter[data-ch="'+chId+'"]');
       if(link) link.classList.toggle('done', cb.checked);
+      var label = cb.closest('.read-toggle-big');
+      label.classList.toggle('done', cb.checked);
+      label.querySelector('span').textContent = cb.checked ? '✓ Você confirmou que leu este capítulo' : 'Confirmo que li este capítulo';
+      updateQuizCta(level);
     });
   });
   var sidebar = document.getElementById('manual-sidebar');
@@ -708,8 +747,11 @@ function wireManual(level){
       if (sidebar && window.innerWidth <= 860) sidebar.classList.remove('aberto');
     });
   });
-  var qlink = document.getElementById('nav-quiz');
-  if (qlink) qlink.addEventListener('click', function(){ openQuiz(level); });
+  var btnAval = document.getElementById('btn-ir-avaliacao');
+  if (btnAval) btnAval.addEventListener('click', function(){
+    if (btnAval.disabled) return;
+    openQuiz(level);
+  });
 }
 
 /* ---------------- quiz view ---------------- */
