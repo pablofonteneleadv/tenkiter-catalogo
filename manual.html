@@ -242,6 +242,15 @@ th{background:var(--surface-2); font-weight:700;}
 .cms-chapter-editor label{display:flex; flex-direction:column; gap:4px; font-size:0.82rem; color:var(--muted); font-weight:600;}
 .cms-chapter-editor input, .cms-chapter-editor textarea{padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-family:inherit; font-size:0.9rem; width:100%;}
 .cms-chapter-editor textarea{resize:vertical;}
+.manual-img-wrap{margin:18px 0;}
+.manual-img-wrap img{display:block; max-width:100%; height:auto; border-radius:10px;}
+.manual-card{border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:12px; background:var(--surface-2);}
+.manual-card-row{display:flex; gap:14px; flex-wrap:wrap;}
+.manual-field{display:flex; flex-direction:column; gap:4px; font-size:0.82rem; color:var(--muted); font-weight:600; margin-bottom:10px; flex:1; min-width:140px;}
+.manual-field input, .manual-field select{padding:8px 10px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit; font-size:0.9rem; width:100%;}
+.manual-card-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;}
+.manual-card-actions .btn{font-size:0.85rem; padding:7px 12px;}
+.manual-atualizado{margin-top:8px;}
 
 @media (max-width:680px){
   .admin-shell{padding:14px;}
@@ -336,43 +345,24 @@ function quizPassFor(level){
   return (quizConfig[level] && quizConfig[level].pass) || DATA.quizzes[level].pass;
 }
 
-/* ---- conversao texto simples <-> blocos do manual (usado pelo editor de conteudo do RH) ---- */
-function blocksToText(blocks){
-  return (blocks||[]).map(function(b){
-    if (b.type === 'quote') return '> ' + b.text;
-    if (b.type === 'bul') return '  '.repeat(b.level||0) + '- ' + b.text;
-    return b.bold ? ('**' + b.text + '**') : b.text;
-  }).join('\n');
-}
-function textToBlocks(text){
-  return String(text||'').split('\n').filter(function(l){ return l.trim() !== ''; }).map(function(line){
-    var mQuote = line.match(/^\s*>\s?(.*)$/);
-    if (mQuote) return { type:'quote', text: mQuote[1] };
-    var mBul = line.match(/^(\s*)-\s?(.*)$/);
-    if (mBul) return { type:'bul', level: Math.floor(mBul[1].length/2), text: mBul[2] };
-    var mBold = line.match(/^\*\*(.*)\*\*$/);
-    if (mBold) return { type:'p', text: mBold[1], bold:true };
-    return { type:'p', text: line, bold:false };
-  });
-}
-
-var manualContentLoaded = {}; // niveis que ja tem conteudo salvo pelo RH (sobrescreve o embutido)
-async function loadManualContent(){
+/* ---- manuais cadastrados como Google Docs (lista + conteúdo já sincronizado) ---- */
+async function loadManuaisList(){
   if (!DATA.appsScriptUrl) return;
   try{
-    var res = await fetch(DATA.appsScriptUrl + '?action=conteudo_manual', { method:'GET' });
+    var res = await fetch(DATA.appsScriptUrl + '?action=manuais_lista', { method:'GET' });
     if (!res.ok) return;
     var json = await res.json();
-    if (json && json.ok && json.conteudo){
-      Object.keys(json.conteudo).forEach(function(nivel){
-        var parts = json.conteudo[nivel];
-        if (Array.isArray(parts) && parts.length && DATA.manuals[nivel]){
-          DATA.manuals[nivel].parts = parts;
-          manualContentLoaded[nivel] = true;
-        }
+    if (json && json.ok && Array.isArray(json.manuais)){
+      state.manuaisList = json.manuais;
+      state.manualMeta = {};
+      json.manuais.forEach(function(m){
+        state.manualMeta[m.id] = m;
+        DATA.manuals[m.id] = { parts: Array.isArray(m.parts) ? m.parts : [] };
+        DATA.titles[m.id] = m.titulo;
+        DATA.blurbs[m.id] = m.blurb;
       });
     }
-  }catch(e){ /* mantem o conteudo padrao embutido no arquivo */ }
+  }catch(e){ /* mantém os manuais-semente embutidos no arquivo, se ainda não migrou nenhum */ }
 }
 function shuffleArray(arr){
   var a = arr.slice();
@@ -464,6 +454,11 @@ function renderBlocks(blocks){
           html += '<tr>' + row.map(function(c){ return (ri===0 ? '<th>' : '<td>') + esc(c) + (ri===0?'</th>':'</td>'); }).join('') + '</tr>';
         });
         html += '</table></div>';
+      } else if (b.type === 'img'){
+        html += '<div class="manual-img-wrap"><img src="' + esc(b.src) + '" alt=""' +
+          (b.width ? ' width="' + Math.round(b.width) + '"' : '') +
+          (b.height ? ' height="' + Math.round(b.height) + '"' : '') +
+          ' loading="lazy"></div>';
       }
     }
   });
@@ -595,32 +590,43 @@ function wireTopbar(){
 }
 
 /* ---------------- home ---------------- */
+function manualNivelMinimo(id){
+  var meta = state.manualMeta && state.manualMeta[id];
+  return meta ? meta.nivelMinimo : (parseInt(id,10) || 1);
+}
+
 function goHome(){
   state.view = 'home'; state.manual = null;
   var app = document.getElementById('app');
-  var cards = ['1','2','3'].map(function(level){
-    var unlocked = state.user.level >= parseInt(level,10);
-    var prog = unlocked ? manualProgress(level) : null;
-    return '<div class="card ' + (unlocked?'':'locked') + '" data-level="' + level + '">' +
-      '<div class="level-tag">Nível ' + level + (unlocked ? '' : ' · bloqueado') + '</div>' +
-      '<h3>' + esc(DATA.titles[level]) + '</h3>' +
-      '<p>' + esc(DATA.blurbs[level]) + '</p>' +
+  var manualIds = (state.manuaisList && state.manuaisList.length)
+    ? state.manuaisList.map(function(m){ return m.id; })
+    : ['1','2','3']; // ninguém migrou pro Google Docs ainda -- usa os 3 manuais-semente embutidos
+  var cards = manualIds.map(function(id){
+    var nivelMinimo = manualNivelMinimo(id);
+    var unlocked = state.user.level >= nivelMinimo;
+    var prog = unlocked ? manualProgress(id) : null;
+    var titulo = DATA.titles[id] || ('Manual ' + id);
+    var blurb = DATA.blurbs[id] || '';
+    return '<div class="card ' + (unlocked?'':'locked') + '" data-manual="' + esc(id) + '">' +
+      '<div class="level-tag">Nível ' + nivelMinimo + (unlocked ? '' : ' · bloqueado') + '</div>' +
+      '<h3>' + esc(titulo) + '</h3>' +
+      '<p>' + esc(blurb) + '</p>' +
       (unlocked ? (
         '<div class="progress-bar"><div style="width:' + prog.pct + '%"></div></div>' +
         '<div class="progress-label">' + prog.done + ' de ' + prog.total + ' capítulos lidos</div>'
-      ) : '<div class="progress-label">Peça à gestão pra liberar este nível</div>') +
+      ) : '<div class="progress-label">Peça à gestão pra liberar este manual</div>') +
     '</div>';
   }).join('');
   app.innerHTML = renderTopbar() +
     '<div class="shell"><div class="main" style="max-width:900px">' +
       '<div class="hero"><h1>Oi, ' + esc(state.user.name) + '!</h1><p>Seu nível de acesso é ' + state.user.level + '. Escolha um manual para continuar.</p></div>' +
-      '<div class="cards">' + cards + '</div>' +
+      '<div class="cards">' + (cards || '<p class="sub">Nenhum manual disponível ainda.</p>') + '</div>' +
     '</div></div>';
   wireTopbar();
   document.querySelectorAll('.card').forEach(function(el){
     el.addEventListener('click', function(){
-      var level = el.getAttribute('data-level');
-      if (state.user.level >= parseInt(level,10)) openManual(level);
+      var id = el.getAttribute('data-manual');
+      if (state.user.level >= manualNivelMinimo(id)) openManual(id);
     });
   });
 }
@@ -648,7 +654,9 @@ function renderManual(level){
       navHtml += '<a class="nav-chapter' + (done?' done':'') + '" href="#ch-' + chId + '" data-ch="' + chId + '"><span class="dot"></span>' + esc(ch.title) + '</a>';
     });
   });
-  navHtml += '<div class="nav-quiz-link" id="nav-quiz">Fazer avaliação →</div>';
+  if (DATA.quizzes[level]){
+    navHtml += '<div class="nav-quiz-link" id="nav-quiz">Fazer avaliação →</div>';
+  }
 
   var bodyHtml = '<div class="manual-title">' + esc(DATA.titles[level]) + '</div>' +
     '<p class="manual-sub">' + esc(DATA.blurbs[level]) + '</p>';
@@ -1000,13 +1008,15 @@ function wireTabDesempenho(){
   });
 }
 
-/* ---- Aba 3: Conteúdo & Provas (config de nota e randomização) ---- */
+/* ---- Aba 3: Conteúdo & Provas (config de nota/randomização + gestão dos manuais) ---- */
 function renderTabConteudo(){
-  var cards = ['1','2','3'].map(function(level){
-    var totalPerguntas = DATA.quizzes[level] ? DATA.quizzes[level].questions.length : 0;
-    var cfg = quizConfig[level] || { pass: DATA.quizzes[level] ? DATA.quizzes[level].pass : 0.7, count: 0 };
-    return '<div class="cms-card" data-nivel="' + level + '">' +
-      '<h4>' + esc(DATA.titles[level]) + ' <span class="sub">(banco com ' + totalPerguntas + ' perguntas)</span></h4>' +
+  var quizLevels = Object.keys(DATA.quizzes || {});
+  var cards = quizLevels.map(function(level){
+    var totalPerguntas = DATA.quizzes[level].questions.length;
+    var cfg = quizConfig[level] || { pass: DATA.quizzes[level].pass, count: 0 };
+    var titulo = DATA.titles[level] || ('Manual ' + level);
+    return '<div class="cms-card" data-nivel="' + esc(level) + '">' +
+      '<h4>' + esc(titulo) + ' <span class="sub">(banco com ' + totalPerguntas + ' perguntas)</span></h4>' +
       '<div class="cms-row">' +
         '<label class="cms-field">Nota de aprovação (%)<input type="number" class="cms-pass" min="1" max="100" value="' + Math.round(cfg.pass*100) + '"></label>' +
         '<label class="cms-field">Perguntas por tentativa<input type="number" class="cms-count" min="0" max="' + totalPerguntas + '" value="' + cfg.count + '" title="0 = usa todas as perguntas do banco"></label>' +
@@ -1014,66 +1024,51 @@ function renderTabConteudo(){
     '</div>';
   }).join('');
 
-  state.cmsEditLevel = state.cmsEditLevel || '1';
-  var editLevel = state.cmsEditLevel;
-  var parts = DATA.manuals[editLevel].parts;
-  var partsHtml = parts.map(function(part, pi){
-    var chapterRows = part.chapters.map(function(ch, ci){
-      var isOpen = !!(state.cmsOpenChapter && state.cmsOpenChapter.pi === pi && state.cmsOpenChapter.ci === ci);
-      return '<div class="cms-chapter-row">' +
-        '<div class="cms-chapter-head">' +
-          '<span>' + esc(ch.title) + '</span>' +
-          '<span>' +
-            '<button type="button" class="admin-mini-btn cms-edit-btn" data-pi="' + pi + '" data-ci="' + ci + '">' + (isOpen ? 'Fechar' : 'Editar') + '</button>' +
-            '<button type="button" class="admin-mini-btn cms-del-btn" data-pi="' + pi + '" data-ci="' + ci + '">Remover</button>' +
-          '</span>' +
-        '</div>' +
-        (isOpen ?
-          '<div class="cms-chapter-editor">' +
-            '<label><span>Título do capítulo</span><input type="text" class="cms-cap-title" value="' + esc(ch.title) + '"></label>' +
-            '<label><span>Texto (uma linha = parágrafo · "- " = tópico · "&gt; " = citação · **negrito**)</span>' +
-              '<textarea class="cms-cap-body" rows="10">' + esc(blocksToText(ch.blocks)) + '</textarea></label>' +
-            '<button type="button" class="btn btn-primary cms-save-chapter" data-pi="' + pi + '" data-ci="' + ci + '">Salvar capítulo</button>' +
-          '</div>'
-        : '') +
-      '</div>';
-    }).join('');
-    return '<div class="cms-part">' +
-      '<div class="cms-part-head"><h4>' + esc(part.title) + '</h4>' +
-        '<button type="button" class="admin-mini-btn cms-add-chapter-btn" data-pi="' + pi + '">+ Capítulo</button>' +
+  var manuais = state.manuaisList || [];
+  var manuaisHtml = manuais.map(function(m){
+    return '<div class="manual-card" data-manual-id="' + esc(m.id) + '">' +
+      '<div class="manual-card-row">' +
+        '<label class="manual-field" style="flex:2"><span>Título</span><input type="text" class="manual-titulo-input" value="' + esc(m.titulo) + '"></label>' +
+        '<label class="manual-field"><span>Nível mínimo</span><select class="manual-nivel-sel">' +
+          [1,2,3,4,5,6,7,8,9,10].map(function(n){ return '<option value="'+n+'"' + (n===m.nivelMinimo?' selected':'') + '>' + n + (n===10?' · Admin':'') + '</option>'; }).join('') +
+        '</select></label>' +
       '</div>' +
-      (chapterRows || '<p class="sub">Nenhum capítulo nesta parte ainda.</p>') +
+      '<label class="manual-field"><span>Descrição curta (aparece no card)</span><input type="text" class="manual-blurb-input" value="' + esc(m.blurb) + '"></label>' +
+      '<div class="manual-card-actions">' +
+        '<a class="btn" href="' + esc(m.docUrl) + '" target="_blank" rel="noopener">📝 Abrir no Google Docs</a>' +
+        '<button type="button" class="btn manual-sync-btn">🔄 Sincronizar agora</button>' +
+        '<button type="button" class="btn manual-del-btn" style="color:var(--danger)">Excluir</button>' +
+      '</div>' +
+      '<div class="sub manual-atualizado">' + (m.atualizadoEm ? ('Atualizado em ' + new Date(m.atualizadoEm).toLocaleString('pt-BR')) : 'Ainda não sincronizado') + '</div>' +
     '</div>';
   }).join('');
 
+  var migrarBanner = '';
+  if (!manuais.length){
+    migrarBanner = '<div class="callout callout-tip">' +
+      'Nenhum manual foi migrado para o Google Docs ainda. Clique abaixo pra migrar os 3 manuais atuais de uma vez -- cada um vira um Google Doc que dá pra editar texto, imagem e organização direto por lá.' +
+      '<div style="margin-top:10px"><button type="button" class="btn btn-primary" id="btn-migrar-manuais">Migrar manuais para o Google Docs</button></div>' +
+    '</div>';
+  }
+
   return '<div class="admin-panel">' +
     '<p class="sub">Ajuste a nota mínima de aprovação e quantas perguntas do banco sorteiam por tentativa (0 = usa todas). As alternativas são sempre embaralhadas.</p>' +
-    cards +
-    '<button type="button" class="btn btn-primary" id="btn-salvar-config">Salvar configuração</button>' +
+    (cards || '<p class="sub">Nenhuma avaliação configurada ainda.</p>') +
+    (cards ? '<button type="button" class="btn btn-primary" id="btn-salvar-config">Salvar configuração das avaliações</button>' : '') +
     '<div class="cms-editor">' +
-      '<div class="admin-toolbar"><h4 style="margin:0">✏️ Editor de conteúdo do manual</h4>' +
-        '<select class="admin-sel" id="cms-editor-level">' +
-          ['1','2','3'].map(function(l){ return '<option value="' + l + '"' + (l === editLevel ? ' selected' : '') + '>' + esc(DATA.titles[l]) + '</option>'; }).join('') +
-        '</select>' +
+      '<div class="admin-toolbar"><h4 style="margin:0">📚 Manuais</h4>' +
+        '<button type="button" class="btn btn-primary" id="btn-novo-manual">+ Novo manual</button>' +
       '</div>' +
-      '<p class="sub">Clique em "Editar" pra mudar o texto de um capítulo, ou use os botões pra adicionar capítulos e partes novas. Cada capítulo salvo já fica disponível pra equipe na hora.</p>' +
-      partsHtml +
-      '<button type="button" class="admin-mini-btn" id="cms-add-part-btn" style="margin-top:10px;">+ Nova parte</button>' +
+      '<p class="sub">O texto, as imagens (pode redimensionar arrastando a alça do canto) e a organização de cada manual agora são editados direto no Google Docs: use "Título 1" pra separar partes, "Título 2" pra separar capítulos, e arraste trechos pra reorganizar. Depois de editar, clique em "Sincronizar agora" pra atualizar o site.</p>' +
+      migrarBanner +
+      (manuaisHtml || '<p class="sub">Nenhum manual cadastrado ainda.</p>') +
     '</div>' +
   '</div>';
 }
 
-async function salvarConteudoNivel_(level){
-  return submitResult({
-    action: 'salvar_conteudo_manual',
-    whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
-    nivel: level, parts: DATA.manuals[level].parts
-  });
-}
-
 function wireTabConteudo(){
-  var btn = document.getElementById('btn-salvar-config');
-  btn.addEventListener('click', async function(){
+  var btnCfg = document.getElementById('btn-salvar-config');
+  if (btnCfg) btnCfg.addEventListener('click', async function(){
     var configs = Array.prototype.map.call(document.querySelectorAll('.cms-card'), function(card){
       return {
         nivel: card.getAttribute('data-nivel'),
@@ -1081,83 +1076,107 @@ function wireTabConteudo(){
         perguntasPorTentativa: parseInt(card.querySelector('.cms-count').value, 10) || 0
       };
     });
-    btn.disabled = true; btn.textContent = 'Salvando...';
+    btnCfg.disabled = true; btnCfg.textContent = 'Salvando...';
     var resp = await submitResult({
       action:'salvar_config_quiz', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password, configs: configs
     });
-    btn.disabled = false; btn.textContent = 'Salvar configuração';
+    btnCfg.disabled = false; btnCfg.textContent = 'Salvar configuração das avaliações';
     if (!resp || !resp.ok){ toast((resp && resp.erro) || 'Não foi possível salvar.'); return; }
     await loadQuizConfig();
     toast('Configuração salva!');
   });
 
-  var levelSel = document.getElementById('cms-editor-level');
-  if (levelSel) levelSel.addEventListener('change', function(){
-    state.cmsEditLevel = levelSel.value;
-    state.cmsOpenChapter = null;
+  var btnMigrar = document.getElementById('btn-migrar-manuais');
+  if (btnMigrar) btnMigrar.addEventListener('click', async function(){
+    if (!confirm('Isso cria um Google Doc pra cada manual atual (Iniciando, Estágio, Avançado), já com todo o texto que existe hoje. Continuar?')) return;
+    btnMigrar.disabled = true;
+    var niveis = ['1','2','3'];
+    for (var i = 0; i < niveis.length; i++){
+      var nivel = niveis[i];
+      if (!DATA.manuals[nivel] || !DATA.titles[nivel]) continue;
+      btnMigrar.textContent = 'Migrando ' + DATA.titles[nivel] + '...';
+      var resp = await submitResult({
+        action: 'criar_manual_de_conteudo',
+        whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
+        manualId: nivel, titulo: DATA.titles[nivel], blurb: DATA.blurbs[nivel],
+        nivelMinimo: parseInt(nivel, 10), parts: DATA.manuals[nivel].parts
+      });
+      if (!resp || !resp.ok){
+        toast('Erro ao migrar ' + DATA.titles[nivel] + ': ' + ((resp && resp.erro) || 'falha desconhecida'));
+        btnMigrar.disabled = false; btnMigrar.textContent = 'Migrar manuais para o Google Docs';
+        return;
+      }
+    }
+    toast('Manuais migrados! Agora é só editar pelo Google Docs.');
+    await loadManuaisList();
     render();
   });
 
-  document.querySelectorAll('.cms-edit-btn').forEach(function(btnEl){
-    btnEl.addEventListener('click', function(){
-      var pi = parseInt(btnEl.getAttribute('data-pi'), 10), ci = parseInt(btnEl.getAttribute('data-ci'), 10);
-      var isOpen = state.cmsOpenChapter && state.cmsOpenChapter.pi === pi && state.cmsOpenChapter.ci === ci;
-      state.cmsOpenChapter = isOpen ? null : { pi: pi, ci: ci };
+  var btnNovo = document.getElementById('btn-novo-manual');
+  if (btnNovo) btnNovo.addEventListener('click', async function(){
+    var titulo = prompt('Título do novo manual:');
+    if (!titulo) return;
+    var blurb = prompt('Descrição curta (aparece no card do manual):') || '';
+    var nivelMinimo = parseInt(prompt('A partir de qual nível esse manual fica liberado (1 a 10)?', '1'), 10) || 1;
+    var resp = await submitResult({
+      action: 'criar_manual_vazio', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
+      titulo: titulo, blurb: blurb, nivelMinimo: nivelMinimo
+    });
+    if (!resp || !resp.ok){ toast((resp && resp.erro) || 'Não foi possível criar o manual.'); return; }
+    toast('Manual criado! Abrindo o Google Docs...');
+    if (resp.docUrl) window.open(resp.docUrl, '_blank');
+    await loadManuaisList();
+    render();
+  });
+
+  document.querySelectorAll('.manual-titulo-input, .manual-blurb-input, .manual-nivel-sel').forEach(function(input){
+    input.addEventListener('change', async function(){
+      var card = input.closest('.manual-card');
+      var manualId = card.getAttribute('data-manual-id');
+      var resp = await submitResult({
+        action: 'atualizar_manual_config', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
+        manualId: manualId,
+        titulo: card.querySelector('.manual-titulo-input').value.trim(),
+        blurb: card.querySelector('.manual-blurb-input').value.trim(),
+        nivelMinimo: parseInt(card.querySelector('.manual-nivel-sel').value, 10)
+      });
+      if (!resp || !resp.ok){ toast((resp && resp.erro) || 'Não foi possível salvar.'); return; }
+      toast('Manual atualizado.');
+      await loadManuaisList();
+    });
+  });
+
+  document.querySelectorAll('.manual-sync-btn').forEach(function(btnEl){
+    btnEl.addEventListener('click', async function(){
+      var card = btnEl.closest('.manual-card');
+      var manualId = card.getAttribute('data-manual-id');
+      btnEl.disabled = true; btnEl.textContent = 'Sincronizando...';
+      var resp = await submitResult({
+        action: 'sincronizar_manual', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
+        manualId: manualId
+      });
+      btnEl.disabled = false; btnEl.textContent = '🔄 Sincronizar agora';
+      if (!resp || !resp.ok){ toast((resp && resp.erro) || 'Não foi possível sincronizar.'); return; }
+      toast('Manual atualizado a partir do Google Docs!');
+      await loadManuaisList();
       render();
     });
   });
 
-  document.querySelectorAll('.cms-save-chapter').forEach(function(btnEl){
+  document.querySelectorAll('.manual-del-btn').forEach(function(btnEl){
     btnEl.addEventListener('click', async function(){
-      var pi = parseInt(btnEl.getAttribute('data-pi'), 10), ci = parseInt(btnEl.getAttribute('data-ci'), 10);
-      var level = state.cmsEditLevel;
-      var editorEl = btnEl.closest('.cms-chapter-editor');
-      var title = editorEl.querySelector('.cms-cap-title').value.trim() || 'Sem título';
-      var body = editorEl.querySelector('.cms-cap-body').value;
-      DATA.manuals[level].parts[pi].chapters[ci] = { title: title, blocks: textToBlocks(body) };
-      btnEl.disabled = true; btnEl.textContent = 'Salvando...';
-      var resp = await salvarConteudoNivel_(level);
-      btnEl.disabled = false; btnEl.textContent = 'Salvar capítulo';
-      if (!resp || !resp.ok){ toast((resp && resp.erro) || 'Não foi possível salvar o capítulo.'); return; }
-      toast('Capítulo salvo!');
-      state.cmsOpenChapter = null;
-      render();
-    });
-  });
-
-  document.querySelectorAll('.cms-del-btn').forEach(function(btnEl){
-    btnEl.addEventListener('click', async function(){
-      var pi = parseInt(btnEl.getAttribute('data-pi'), 10), ci = parseInt(btnEl.getAttribute('data-ci'), 10);
-      if (!confirm('Remover este capítulo? Essa ação não pode ser desfeita.')) return;
-      var level = state.cmsEditLevel;
-      DATA.manuals[level].parts[pi].chapters.splice(ci, 1);
-      var resp = await salvarConteudoNivel_(level);
+      var card = btnEl.closest('.manual-card');
+      var manualId = card.getAttribute('data-manual-id');
+      if (!confirm('Remover este manual do site? O Google Doc continua existindo no Drive, só deixa de aparecer aqui.')) return;
+      var resp = await submitResult({
+        action: 'excluir_manual', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
+        manualId: manualId
+      });
       if (!resp || !resp.ok){ toast((resp && resp.erro) || 'Não foi possível remover.'); return; }
-      toast('Capítulo removido.');
-      state.cmsOpenChapter = null;
+      toast('Manual removido do site.');
+      await loadManuaisList();
       render();
     });
-  });
-
-  document.querySelectorAll('.cms-add-chapter-btn').forEach(function(btnEl){
-    btnEl.addEventListener('click', function(){
-      var pi = parseInt(btnEl.getAttribute('data-pi'), 10);
-      var level = state.cmsEditLevel;
-      var novoTitulo = prompt('Título do novo capítulo:');
-      if (!novoTitulo) return;
-      DATA.manuals[level].parts[pi].chapters.push({ title: novoTitulo, blocks: [{ type:'p', text:'', bold:false }] });
-      state.cmsOpenChapter = { pi: pi, ci: DATA.manuals[level].parts[pi].chapters.length - 1 };
-      render();
-    });
-  });
-
-  var addPartBtn = document.getElementById('cms-add-part-btn');
-  if (addPartBtn) addPartBtn.addEventListener('click', function(){
-    var level = state.cmsEditLevel;
-    var novoTitulo = prompt('Título da nova parte:');
-    if (!novoTitulo) return;
-    DATA.manuals[level].parts.push({ title: novoTitulo, chapters: [] });
-    render();
   });
 }
 
@@ -1184,7 +1203,7 @@ function render(){
 
 /* ---------------- boot ---------------- */
 (async function boot(){
-  await Promise.all([loadRoster(), loadQuizConfig(), loadManualContent()]);
+  await Promise.all([loadRoster(), loadQuizConfig(), loadManuaisList()]);
   if (tryRestoreSession()){ goHome(); } else { renderLogin(); }
 })();
 

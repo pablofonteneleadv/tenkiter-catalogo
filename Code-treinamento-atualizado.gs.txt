@@ -1,11 +1,20 @@
-// TENKiTER Treinamento -- backend do site (Google Apps Script) -- v2
+// TENKiTER Treinamento -- backend do site (Google Apps Script) -- v3
+//
+// NOVIDADE DA v3: os manuais agora são editados como Google Docs de verdade
+// (texto, imagens redimensionáveis, capítulos organizados por título) em vez
+// de um editor de texto dentro do site. O RH clica em "Abrir no Google Docs",
+// edita por lá como quiser, e depois clica em "Sincronizar agora" no Painel
+// pra trazer o que foi editado pro site.
 //
 // O que faz:
 //  - doGet:
 //      (sem action, ou action=funcionarios) -> lê "Funcionarios" e devolve a
 //        lista em JSON (nome, whatsapp, senha, nivel, status) -- login e níveis.
 //      action=config_quiz -> lê "ConfigQuiz" e devolve nota de aprovação e
-//        quantidade de perguntas por tentativa, por nível.
+//        quantidade de perguntas por tentativa, por nível/manual.
+//      action=manuais_lista -> lê a aba "Manuais" e devolve todos os manuais
+//        cadastrados (título, descrição, nível mínimo, link do Google Doc e o
+//        conteúdo já processado da última sincronização).
 //  - doPost:
 //      action "registrar"          -> cadastra um novo funcionário, Nível 1, Status Ativo
 //      action "resultado"          -> grava o resultado de uma avaliação em "Resultados"
@@ -15,6 +24,17 @@
 //      action "resetar_senha_user"   -> [Admin nível 10+] define nova senha pra alguém
 //      action "salvar_config_quiz"   -> [Admin nível 10+] grava nota de aprovação e
 //                                        quantidade de perguntas por tentativa
+//      action "criar_manual_vazio"       -> [Admin nível 10+] cria um Google Doc novo
+//                                            (em branco) e cadastra como manual novo
+//      action "criar_manual_de_conteudo" -> [Admin nível 10+] cria um Google Doc já
+//                                            preenchido a partir de um conteúdo enviado
+//                                            (usado na migração dos manuais antigos)
+//      action "sincronizar_manual"       -> [Admin nível 10+] relê o Google Doc de um
+//                                            manual e atualiza o conteúdo mostrado no site
+//      action "atualizar_manual_config"  -> [Admin nível 10+] muda título, descrição
+//                                            e/ou nível mínimo de acesso de um manual
+//      action "excluir_manual"           -> [Admin nível 10+] tira um manual do site
+//                                            (o Google Doc continua existindo no Drive)
 //    Todos exigem "token" batendo com TOKEN. As ações de Admin também exigem
 //    "whatsappAdmin"/"senhaAdmin" de uma conta com Nivel >= 10 e Status Ativo
 //    -- o nível não é confiado vindo do site, é sempre reconferido aqui no servidor.
@@ -25,6 +45,12 @@
 //  3. Implantar -> Gerenciar implantações -> editar a implantação "App da Web" ativa
 //     (não criar uma nova, pra manter a mesma URL) -> Nova versão -> Implantar.
 //  4. "Executar como": Eu (sua conta). "Quem pode acessar": Qualquer pessoa.
+//  5. IMPORTANTE: essa versão usa Google Docs e Google Drive além da Planilha
+//     (pra criar/ler os manuais e guardar as imagens). Na primeira vez que
+//     alguém clicar em "Migrar manuais", "Sincronizar" ou "+ Novo manual", o
+//     Google vai pedir autorização de novo (mesma tela de sempre: Revisar
+//     permissões -> Avançado -> Acessar [projeto] (não seguro) -> Permitir) --
+//     é normal, só acontece uma vez.
 //
 // IMPORTANTE sobre a planilha "Funcionarios": cabeçalho precisa ter, nesta
 // ordem: Nome | WhatsApp | Senha | Nivel | Status
@@ -37,13 +63,32 @@
 //
 // Nesta MESMA planilha de Funcionarios, crie também uma aba chamada
 // "ConfigQuiz" com o cabeçalho: Nivel | NotaAprovacaoPct | PerguntasPorTentativa
-// -- uma linha por nível (1, 2, 3). Se a aba não existir, o sistema cria ela
-// sozinho na primeira vez com valores padrão (70% de aprovação, todas as
-// perguntas do banco).
+// -- uma linha por manual que tiver prova. Se a aba não existir, o sistema
+// cria ela sozinho na primeira vez com valores padrão (70% de aprovação,
+// todas as perguntas do banco).
+//
+// A aba "Manuais" (ManualId | Titulo | Blurb | NivelMinimo | DocId | Ordem |
+// CacheJSON | AtualizadoEm) se cria sozinha na primeira vez que alguém criar
+// ou migrar um manual pelo Painel do RH -- não precisa mexer nela na mão.
+// "NivelMinimo" decide quem enxerga o manual: qualquer funcionário com Nivel
+// igual ou maior já tem acesso (então Nível 10 sempre vê todos os manuais).
+// A coluna CacheJSON guarda o conteúdo já processado do Google Doc, pra não
+// precisar reabrir o Doc toda vez que alguém acessa o site -- por isso, se um
+// manual crescer MUITO (muito texto ou muitas imagens), pode em algum
+// momento esbarrar no limite de ~50 mil caracteres por célula do Google
+// Sheets; se isso acontecer, o botão "Sincronizar" avisa com um erro em vez
+// de travar o site.
+//
+// As imagens dos manuais ficam guardadas numa pasta do Google Drive chamada
+// "TENKiTER Treinamento - Imagens dos Manuais" (criada sozinha na primeira
+// sincronização que encontrar uma imagem), compartilhadas como "qualquer
+// pessoa com o link pode ver" -- é assim que elas aparecem pro time sem
+// precisar login no Drive.
 
 var FUNCIONARIOS_SHEET_ID = "1FMJU_lGGN7nwhDXEnpRCcFdaSVzTWcbQjOZKvOA-dxY";
 var RESULTADOS_SHEET_ID   = "1yR1Yfm7dSN_rf0vk-J121rebEbY2ajdWVaR4WqDCZlY";
 var TOKEN = "tenkiter2026"; // tem que ser igual ao appsScriptToken do site (manual.html)
+var PASTA_IMAGENS_NOME = "TENKiTER Treinamento - Imagens dos Manuais";
 
 function normalizarWhats_(w) {
   var d = String(w || '').replace(/\D/g, '');
@@ -72,6 +117,16 @@ function getConfigQuizSheet_() {
   return sheet;
 }
 
+function getManuaisSheet_() {
+  var ss = SpreadsheetApp.openById(FUNCIONARIOS_SHEET_ID);
+  var sheet = ss.getSheetByName('Manuais');
+  if (!sheet) {
+    sheet = ss.insertSheet('Manuais');
+    sheet.appendRow(['ManualId', 'Titulo', 'Blurb', 'NivelMinimo', 'DocId', 'Ordem', 'CacheJSON', 'AtualizadoEm']);
+  }
+  return sheet;
+}
+
 function lerFuncionarios_() {
   var sheet = getFuncionariosSheet_();
   var rows = sheet.getDataRange().getValues();
@@ -87,10 +142,40 @@ function lerFuncionarios_() {
 }
 
 /**
+ * Lê a aba "Manuais" inteira e devolve uma lista pronta pro site consumir,
+ * já ordenada pela coluna Ordem. O CacheJSON é o conteúdo (partes/capítulos/
+ * blocos) da última vez que alguém clicou em "Sincronizar agora".
+ */
+function lerManuais_() {
+  var sheet = getManuaisSheet_();
+  var dados = sheet.getDataRange().getValues();
+  dados.shift(); // cabeçalho
+  return dados
+    .filter(function (r) { return String(r[0]).trim() !== ''; })
+    .map(function (r) {
+      var parts = [];
+      try { parts = JSON.parse(r[6] || '[]'); } catch (e) { parts = []; }
+      return {
+        id: String(r[0]),
+        titulo: r[1] || '',
+        blurb: r[2] || '',
+        nivelMinimo: parseInt(r[3], 10) || 1,
+        docId: r[4] || '',
+        docUrl: r[4] ? ('https://docs.google.com/document/d/' + r[4] + '/edit') : '',
+        ordem: Number(r[5]) || 0,
+        parts: parts,
+        atualizadoEm: r[7] instanceof Date ? r[7].toISOString() : String(r[7] || '')
+      };
+    })
+    .sort(function (a, b) { return a.ordem - b.ordem; });
+}
+
+/**
  * Confere se whatsapp+senha pertence a uma conta Nivel >= 10 e Ativa.
  * NUNCA confia no nível que o front-end diz que o usuário tem -- sempre
  * reconfere direto na planilha, porque essas ações mexem em dados de todo
- * mundo (mudar nível, resetar senha, ver notas da equipe inteira).
+ * mundo (mudar nível, resetar senha, ver notas da equipe inteira, criar e
+ * editar manuais).
  */
 function verificarAdmin_(whatsapp, senha) {
   var alvo = normalizarWhats_(whatsapp);
@@ -119,6 +204,10 @@ function doGet(e) {
     return jsonOut_({ ok: true, configs: configs });
   }
 
+  if (action === 'manuais_lista') {
+    return jsonOut_({ ok: true, manuais: lerManuais_() });
+  }
+
   // padrão: lista de funcionários (login e níveis)
   return jsonOut_({ ok: true, funcionarios: lerFuncionarios_() });
 }
@@ -131,13 +220,18 @@ function doPost(e) {
     }
 
     switch (data.action) {
-      case 'registrar':            return registrarFuncionario_(data);
-      case 'relatorio_equipe':     return relatorioEquipe_(data);
-      case 'atualizar_nivel_user': return atualizarNivelUser_(data);
-      case 'alterar_status_user':  return alterarStatusUser_(data);
-      case 'resetar_senha_user':   return resetarSenhaUser_(data);
-      case 'salvar_config_quiz':   return salvarConfigQuiz_(data);
-      default:                     return registrarResultado_(data); // 'resultado' e chamadas antigas
+      case 'registrar':                return registrarFuncionario_(data);
+      case 'relatorio_equipe':         return relatorioEquipe_(data);
+      case 'atualizar_nivel_user':     return atualizarNivelUser_(data);
+      case 'alterar_status_user':      return alterarStatusUser_(data);
+      case 'resetar_senha_user':       return resetarSenhaUser_(data);
+      case 'salvar_config_quiz':       return salvarConfigQuiz_(data);
+      case 'criar_manual_vazio':       return criarManualVazio_(data);
+      case 'criar_manual_de_conteudo': return criarManualDeConteudo_(data);
+      case 'sincronizar_manual':       return sincronizarManual_(data);
+      case 'atualizar_manual_config':  return atualizarManualConfig_(data);
+      case 'excluir_manual':           return excluirManual_(data);
+      default:                         return registrarResultado_(data); // 'resultado' e chamadas antigas
     }
   } catch (err) {
     return jsonOut_({ ok: false, erro: String(err) });
@@ -285,7 +379,7 @@ function salvarConfigQuiz_(data) {
   configs.forEach(function (cfg) {
     var achou = false;
     for (var i = 1; i < dados.length; i++) {
-      if (parseInt(dados[i][idxNivel], 10) === parseInt(cfg.nivel, 10)) {
+      if (String(dados[i][idxNivel]) === String(cfg.nivel)) {
         sheet.getRange(i + 1, idxNota + 1).setValue(Number(cfg.notaAprovacaoPct) || 70);
         sheet.getRange(i + 1, idxQtd + 1).setValue(Number(cfg.perguntasPorTentativa) || 0);
         achou = true;
@@ -297,4 +391,291 @@ function salvarConfigQuiz_(data) {
     }
   });
   return jsonOut_({ ok: true });
+}
+
+/* ===================== Manuais em Google Docs (Nível 10+) ===================== */
+
+/**
+ * Pasta do Drive onde ficam as imagens extraídas dos manuais. Criada
+ * sozinha na primeira vez que uma sincronização encontrar uma imagem.
+ */
+function getPastaImagens_() {
+  var pastas = DriveApp.getFoldersByName(PASTA_IMAGENS_NOME);
+  if (pastas.hasNext()) return pastas.next();
+  return DriveApp.createFolder(PASTA_IMAGENS_NOME);
+}
+
+/**
+ * Extrai uma imagem inline do Google Doc, salva como arquivo separado no
+ * Drive (compartilhado como "qualquer pessoa com o link pode ver") e devolve
+ * um bloco {type:'img'} pronto pro site -- em vez de guardar a imagem inteira
+ * em base64 dentro do JSON (o que estouraria rápido o limite de ~50 mil
+ * caracteres por célula da planilha).
+ */
+function extrairImagemDrive_(imagemInline, pasta) {
+  var blob = imagemInline.getBlob();
+  var arquivo = pasta.createFile(blob);
+  arquivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return {
+    type: 'img',
+    src: 'https://drive.google.com/uc?export=view&id=' + arquivo.getId(),
+    width: imagemInline.getWidth(),
+    height: imagemInline.getHeight()
+  };
+}
+
+/**
+ * Lê um Google Doc inteiro e transforma em {parts:[{title, chapters:[{title,
+ * blocks}]}]} -- o mesmo formato que o site já usava. Convenções:
+ *  - Título 1 (Heading 1)  -> nova PARTE do manual
+ *  - Título 2 ou 3         -> novo CAPÍTULO dentro da parte atual
+ *  - Subtítulo (Subtitle)  -> vira uma citação em destaque
+ *  - Texto começando com "> "  -> também vira citação (alternativa ao Subtítulo)
+ *  - Lista com marcadores   -> vira tópicos (mantém o nível de indentação)
+ *  - Texto todo em negrito  -> vira parágrafo em destaque
+ *  - Imagem dentro do texto -> extraída pro Drive e inserida como bloco de imagem,
+ *    já no tamanho (largura/altura) em que foi deixada no Doc
+ */
+function analisarDocManual_(docId) {
+  var doc = DocumentApp.openById(docId);
+  var body = doc.getBody();
+  var pastaImagens = null; // só cria/abre a pasta se realmente aparecer uma imagem
+  var parts = [];
+  var parteAtual = null;
+  var capituloAtual = null;
+
+  function garantirParte() {
+    if (!parteAtual) {
+      parteAtual = { title: 'Geral', chapters: [] };
+      parts.push(parteAtual);
+    }
+    return parteAtual;
+  }
+  function garantirCapitulo() {
+    garantirParte();
+    if (!capituloAtual) {
+      capituloAtual = { title: 'Introdução', blocks: [] };
+      parteAtual.chapters.push(capituloAtual);
+    }
+    return capituloAtual;
+  }
+
+  var total = body.getNumChildren();
+  for (var i = 0; i < total; i++) {
+    var el = body.getChild(i);
+    var tipo = el.getType();
+
+    if (tipo === DocumentApp.ElementType.PARAGRAPH) {
+      var par = el.asParagraph();
+      var heading = par.getHeading();
+      var texto = par.getText();
+
+      // imagens inline dentro deste parágrafo
+      var imagensDoParagrafo = [];
+      var nFilhos = par.getNumChildren();
+      for (var j = 0; j < nFilhos; j++) {
+        var filho = par.getChild(j);
+        if (filho.getType() === DocumentApp.ElementType.INLINE_IMAGE) {
+          if (!pastaImagens) pastaImagens = getPastaImagens_();
+          imagensDoParagrafo.push(extrairImagemDrive_(filho.asInlineImage(), pastaImagens));
+        }
+      }
+
+      if (heading === DocumentApp.ParagraphHeading.HEADING1) {
+        parteAtual = { title: texto || 'Parte', chapters: [] };
+        parts.push(parteAtual);
+        capituloAtual = null;
+        continue;
+      }
+      if (heading === DocumentApp.ParagraphHeading.HEADING2 || heading === DocumentApp.ParagraphHeading.HEADING3) {
+        garantirParte();
+        capituloAtual = { title: texto || 'Capítulo', blocks: [] };
+        parteAtual.chapters.push(capituloAtual);
+        continue;
+      }
+      if (heading === DocumentApp.ParagraphHeading.TITLE) {
+        continue; // título do documento -- o título do manual já vem da configuração no site
+      }
+
+      var cap = garantirCapitulo();
+      imagensDoParagrafo.forEach(function (img) { cap.blocks.push(img); });
+
+      if (texto.trim() === '') continue; // parágrafo vazio (texto ou só imagem já tratada acima)
+
+      if (heading === DocumentApp.ParagraphHeading.SUBTITLE) {
+        cap.blocks.push({ type: 'quote', text: texto });
+        continue;
+      }
+      var mQuote = texto.match(/^>\s?(.*)$/);
+      if (mQuote) {
+        cap.blocks.push({ type: 'quote', text: mQuote[1] });
+        continue;
+      }
+      var negrito = par.editAsText().isBold(0, Math.max(texto.length - 1, 0));
+      cap.blocks.push({ type: 'p', text: texto, bold: negrito === true });
+
+    } else if (tipo === DocumentApp.ElementType.LIST_ITEM) {
+      var item = el.asListItem();
+      var txt2 = item.getText();
+      if (txt2.trim() === '') continue;
+      garantirCapitulo().blocks.push({ type: 'bul', level: item.getNestingLevel() || 0, text: txt2 });
+
+    } else if (tipo === DocumentApp.ElementType.INLINE_IMAGE) {
+      // imagem solta fora de um parágrafo normal (raro, mas cobre o caso)
+      if (!pastaImagens) pastaImagens = getPastaImagens_();
+      garantirCapitulo().blocks.push(extrairImagemDrive_(el.asInlineImage(), pastaImagens));
+    }
+  }
+
+  return parts;
+}
+
+/**
+ * Escreve um conteúdo {parts:[...]} dentro de um Google Doc recém-criado --
+ * usado só na migração dos 3 manuais antigos, pra já nascerem preenchidos
+ * com o texto que já existia no site.
+ */
+function escreverDocDeParts_(doc, parts) {
+  var body = doc.getBody();
+  body.clear();
+  (parts || []).forEach(function (part) {
+    body.appendParagraph(part.title || 'Parte').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    (part.chapters || []).forEach(function (ch) {
+      body.appendParagraph(ch.title || 'Capítulo').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+      (ch.blocks || []).forEach(function (b) {
+        if (b.type === 'bul') {
+          var li = body.appendListItem(b.text || '');
+          li.setNestingLevel(b.level || 0);
+          li.setGlyphType(DocumentApp.GlyphType.BULLET);
+        } else if (b.type === 'quote') {
+          body.appendParagraph(b.text || '').setHeading(DocumentApp.ParagraphHeading.SUBTITLE);
+        } else if (b.type === 'img') {
+          // imagens antigas (se algum dia existiram em base64) não são recriadas
+          // automaticamente no Doc -- a partir de agora, imagem se adiciona direto no Doc.
+        } else {
+          var p = body.appendParagraph(b.text || '');
+          p.setHeading(DocumentApp.ParagraphHeading.NORMAL);
+          if (b.bold) p.editAsText().setBold(true);
+        }
+      });
+    });
+  });
+}
+
+/**
+ * Cria o Google Doc (vazio ou já preenchido) e registra a linha na aba
+ * "Manuais". Devolve o id gerado, o id do Doc e o link de edição.
+ */
+function criarManualRegistro_(manualId, titulo, blurb, nivelMinimo, parts) {
+  var doc = DocumentApp.create(titulo || 'Novo manual');
+  var docId = doc.getId();
+  if (parts && parts.length) {
+    escreverDocDeParts_(doc, parts);
+  } else {
+    doc.getBody().appendParagraph('Capítulo 1').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+    doc.getBody().appendParagraph('Escreva aqui o conteúdo do capítulo...');
+  }
+  doc.saveAndClose();
+
+  var sheet = getManuaisSheet_();
+  var dados = sheet.getDataRange().getValues();
+  var maxOrdem = 0;
+  for (var i = 1; i < dados.length; i++) { maxOrdem = Math.max(maxOrdem, Number(dados[i][5]) || 0); }
+
+  sheet.appendRow([
+    manualId, titulo || '', blurb || '', parseInt(nivelMinimo, 10) || 1,
+    docId, maxOrdem + 1, JSON.stringify(parts || []), new Date()
+  ]);
+  return { manualId: manualId, docId: docId, docUrl: 'https://docs.google.com/document/d/' + docId + '/edit' };
+}
+
+function criarManualVazio_(data) {
+  if (!verificarAdmin_(data.whatsappAdmin, data.senhaAdmin)) {
+    return jsonOut_({ ok: false, erro: 'Acesso negado: essa ação exige uma conta de Nível 10 (Admin/RH).' });
+  }
+  var titulo = String(data.titulo || '').trim();
+  if (!titulo) return jsonOut_({ ok: false, erro: 'Dê um título para o novo manual.' });
+  var manualId = 'm' + new Date().getTime();
+  var info = criarManualRegistro_(manualId, titulo, data.blurb || '', data.nivelMinimo || 1, []);
+  return jsonOut_({ ok: true, manualId: info.manualId, docUrl: info.docUrl });
+}
+
+function criarManualDeConteudo_(data) {
+  if (!verificarAdmin_(data.whatsappAdmin, data.senhaAdmin)) {
+    return jsonOut_({ ok: false, erro: 'Acesso negado: essa ação exige uma conta de Nível 10 (Admin/RH).' });
+  }
+  var titulo = String(data.titulo || '').trim();
+  if (!titulo || !Array.isArray(data.parts)) {
+    return jsonOut_({ ok: false, erro: 'Formato inválido.' });
+  }
+  var manualId = String(data.manualId || ('m' + new Date().getTime()));
+  var jaExiste = lerManuais_().some(function (m) { return m.id === manualId; });
+  if (jaExiste) return jsonOut_({ ok: false, erro: 'Já existe um manual cadastrado com esse identificador.' });
+  var info = criarManualRegistro_(manualId, titulo, data.blurb || '', data.nivelMinimo || 1, data.parts);
+  return jsonOut_({ ok: true, manualId: info.manualId, docUrl: info.docUrl });
+}
+
+function sincronizarManual_(data) {
+  if (!verificarAdmin_(data.whatsappAdmin, data.senhaAdmin)) {
+    return jsonOut_({ ok: false, erro: 'Acesso negado: essa ação exige uma conta de Nível 10 (Admin/RH).' });
+  }
+  var manualId = String(data.manualId || '');
+  var sheet = getManuaisSheet_();
+  var dados = sheet.getDataRange().getValues();
+  for (var i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === manualId) {
+      var docId = dados[i][4];
+      if (!docId) return jsonOut_({ ok: false, erro: 'Este manual não tem um Google Doc associado.' });
+      var parts;
+      try {
+        parts = analisarDocManual_(docId);
+      } catch (err) {
+        return jsonOut_({ ok: false, erro: 'Não foi possível ler o Google Doc: ' + String(err) });
+      }
+      var partsJson = JSON.stringify(parts);
+      if (partsJson.length > 45000) {
+        return jsonOut_({ ok: false, erro: 'Este manual ficou grande demais pra salvar (limite da planilha). Fale com o suporte pra dividir em dois manuais.' });
+      }
+      sheet.getRange(i + 1, 7).setValue(partsJson);
+      var agora = new Date();
+      sheet.getRange(i + 1, 8).setValue(agora);
+      return jsonOut_({ ok: true, parts: parts, atualizadoEm: agora.toISOString() });
+    }
+  }
+  return jsonOut_({ ok: false, erro: 'Manual não encontrado.' });
+}
+
+function atualizarManualConfig_(data) {
+  if (!verificarAdmin_(data.whatsappAdmin, data.senhaAdmin)) {
+    return jsonOut_({ ok: false, erro: 'Acesso negado: essa ação exige uma conta de Nível 10 (Admin/RH).' });
+  }
+  var manualId = String(data.manualId || '');
+  var sheet = getManuaisSheet_();
+  var dados = sheet.getDataRange().getValues();
+  for (var i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === manualId) {
+      if (data.titulo != null) sheet.getRange(i + 1, 2).setValue(String(data.titulo));
+      if (data.blurb != null) sheet.getRange(i + 1, 3).setValue(String(data.blurb));
+      if (data.nivelMinimo != null) sheet.getRange(i + 1, 4).setValue(parseInt(data.nivelMinimo, 10) || 1);
+      if (data.ordem != null) sheet.getRange(i + 1, 6).setValue(Number(data.ordem) || 0);
+      return jsonOut_({ ok: true });
+    }
+  }
+  return jsonOut_({ ok: false, erro: 'Manual não encontrado.' });
+}
+
+function excluirManual_(data) {
+  if (!verificarAdmin_(data.whatsappAdmin, data.senhaAdmin)) {
+    return jsonOut_({ ok: false, erro: 'Acesso negado: essa ação exige uma conta de Nível 10 (Admin/RH).' });
+  }
+  var manualId = String(data.manualId || '');
+  var sheet = getManuaisSheet_();
+  var dados = sheet.getDataRange().getValues();
+  for (var i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === manualId) {
+      sheet.deleteRow(i + 1);
+      return jsonOut_({ ok: true });
+    }
+  }
+  return jsonOut_({ ok: false, erro: 'Manual não encontrado.' });
 }
