@@ -311,7 +311,7 @@ th{background:var(--surface-2); font-weight:700;}
 .perfil-secao{font-size:0.95rem; margin:22px 0 10px; padding-top:14px; border-top:1px solid var(--border);}
 .perfil-secao:first-of-type{border-top:none; padding-top:0; margin-top:8px;}
 .perfil-fotos{display:flex; gap:22px; flex-wrap:wrap; margin-bottom:8px;}
-.perfil-foto-box{display:flex; flex-direction:column; align-items:center; gap:8px;}
+.perfil-foto-box{display:flex; flex-direction:column; align-items:center; gap:8px; position:relative;}
 .perfil-foto-preview, .perfil-foto-placeholder{
   width:96px; height:96px; border-radius:50%; object-fit:cover; background:var(--accent-soft); color:var(--accent-2);
   display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.3rem; border:1px solid var(--border);
@@ -865,11 +865,13 @@ function renderPerfil(){
     '<div class="perfil-fotos">' +
       '<div class="perfil-foto-box">' +
         (u.fotoPerfilUrl ? '<img src="' + esc(u.fotoPerfilUrl) + '" class="perfil-foto-preview" id="preview-foto-perfil">' : '<div class="perfil-foto-placeholder" id="preview-foto-perfil">' + esc(avatarIniciais(u.name)) + '</div>') +
-        '<label class="btn btn-ghost btn-sm">Foto de perfil<input type="file" accept="image/*" id="input-foto-perfil" style="display:none"></label>' +
+        '<button type="button" class="btn btn-ghost btn-sm" id="btn-foto-perfil">Foto de perfil</button>' +
+        '<input type="file" accept="image/*" id="input-foto-perfil" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">' +
       '</div>' +
       '<div class="perfil-foto-box">' +
         (u.fotoCorpoUrl ? '<img src="' + esc(u.fotoCorpoUrl) + '" class="perfil-foto-preview perfil-foto-corpo" id="preview-foto-corpo">' : '<div class="perfil-foto-placeholder perfil-foto-corpo" id="preview-foto-corpo">📷</div>') +
-        '<label class="btn btn-ghost btn-sm">Foto de corpo inteiro<input type="file" accept="image/*" id="input-foto-corpo" style="display:none"></label>' +
+        '<button type="button" class="btn btn-ghost btn-sm" id="btn-foto-corpo">Foto de corpo inteiro</button>' +
+        '<input type="file" accept="image/*" id="input-foto-corpo" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">' +
       '</div>' +
     '</div>' +
     '<div class="perfil-error" id="perfil-error"></div>' +
@@ -907,8 +909,11 @@ function wirePerfil(){
     }catch(e){ /* sem conexão com o ViaCEP -- funcionário preenche na mão mesmo */ }
   });
 
-  function wireFoto(inputId, previewId, tipo){
-    document.getElementById(inputId).addEventListener('change', async function(e){
+  function wireFoto(inputId, previewId, tipo, btnId){
+    var input = document.getElementById(inputId);
+    var btn = document.getElementById(btnId);
+    if (btn) btn.addEventListener('click', function(){ input.click(); });
+    input.addEventListener('change', async function(e){
       var file = e.target.files && e.target.files[0];
       if (!file) return;
       var err = document.getElementById('perfil-error');
@@ -935,8 +940,8 @@ function wirePerfil(){
       }
     });
   }
-  wireFoto('input-foto-perfil', 'preview-foto-perfil', 'perfil');
-  wireFoto('input-foto-corpo', 'preview-foto-corpo', 'corpo');
+  wireFoto('input-foto-perfil', 'preview-foto-perfil', 'perfil', 'btn-foto-perfil');
+  wireFoto('input-foto-corpo', 'preview-foto-corpo', 'corpo', 'btn-foto-corpo');
 
   document.getElementById('perfil-salvar').addEventListener('click', async function(){
     var btn = this;
