@@ -124,7 +124,13 @@ async function iniciar() {
   if (!r.ok) return falhaInicial(r.semPermissao ? 'Seu perfil não permite ver currículos. Peça ao Admin total para liberar "Ver dados pessoais dos colegas".' : r.erro);
   novos = r.curriculos; STATUS = r.status; MOTIVOS = r.motivos; carregou.novos = true;
   const abrir = (new URLSearchParams(location.search).get('abrir') || '').replace(/\D/g, '');
+  const irParaAntigos = new URLSearchParams(location.search).get('aba') === 'antigos';
   if (abrir) { busca = abrir; }
+  if (irParaAntigos) {
+    aba = 'antigos'; desenhar(); await carregarAntigos();
+    if (abrir) { const it = document.querySelector('.item'); if (it) { it.classList.add('aberto'); it.scrollIntoView({ block: 'start' }); } }
+    return;
+  }
   desenhar();
   if (abrir) { const it = document.querySelector('.item'); if (it) { it.classList.add('aberto'); it.scrollIntoView({ block: 'start' }); } }
 }

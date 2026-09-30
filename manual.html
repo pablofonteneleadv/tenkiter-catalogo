@@ -1587,7 +1587,7 @@ function renderAdminPanel(){
   }).join('');
   var body;
   if (state.adminTab === 'curriculos'){
-    body = '<div class="admin-panel" style="padding:0;background:transparent;box-shadow:none"><iframe id="cv-frame" src="curriculos.html?embed=1' + (state.cvAbrir ? '&abrir=' + encodeURIComponent(state.cvAbrir) : '') + '" title="Currículos" style="width:100%;height:900px;border:0;display:block;background:transparent"></iframe></div>';
+    body = '<div class="admin-panel" style="padding:0;background:transparent;box-shadow:none"><iframe id="cv-frame" src="curriculos.html?embed=1' + (state.cvAbrir ? '&abrir=' + encodeURIComponent(state.cvAbrir) : '') + (state.cvAbrirAntigo ? '&aba=antigos' : '') + '" title="Currículos" style="width:100%;height:900px;border:0;display:block;background:transparent"></iframe></div>';
   } else if (!state.adminData && state.adminTab !== 'acessos'){
     body = '<div class="admin-panel">Carregando dados da equipe...</div>';
   } else if (state.adminTab === 'acessos'){
@@ -1613,7 +1613,7 @@ window.addEventListener('message', function(ev){
 function wireAdminPanel(){
   document.querySelectorAll('.admin-tab').forEach(function(btn){
     btn.addEventListener('click', function(){
-      state.adminTab = btn.getAttribute('data-tab'); if (state.adminTab === 'curriculos') state.cvAbrir = '';
+      state.adminTab = btn.getAttribute('data-tab'); if (state.adminTab === 'curriculos'){ state.cvAbrir = ''; state.cvAbrirAntigo = false; }
       render();
     });
   });
@@ -2142,9 +2142,11 @@ function acessosCard(p){
         '<select class="admin-sel ac-perfil" aria-label="Perfil">' + opts + '</select>' +
         '<button type="button" class="admin-mini-btn ac-abrir">' + (aberto ? '▾' : '▸') + ' Permissões (' + qtd + ')' + (diffs ? ' ✱' + diffs : '') + '</button>' +
         (p.curriculo ? '<button type="button" class="admin-mini-btn ac-vercv">📄 Ver currículo</button>' : '') +
+        (p.curriculoAntigo ? '<button type="button" class="admin-mini-btn ac-vercvantigo">📄 Currículo antigo</button>' : '') +
         (p.fotoCorpoUrl ? '<button type="button" class="admin-mini-btn ac-corpo">🧍 Foto de corpo inteiro</button>' : '') +
         '<button type="button" class="admin-mini-btn ac-status" data-ativo="' + (ativo ? '1' : '0') + '">' + (ativo ? 'Desativar' : 'Reativar') + '</button>' +
         '<button type="button" class="admin-mini-btn ac-reset">Resetar senha</button>' +
+        '<button type="button" class="admin-mini-btn ac-excluir" style="color:#b00020">🗑️ Excluir</button>' +
       '</div>' +
     '</div>' + permsHtml + '</div>';
 }
@@ -2301,8 +2303,19 @@ function wireTabAcessos(){
   lista.addEventListener('click', async function(e){
     var p = pessoaDe(e.target); if (!p) return;
     var btn = e.target.closest('button'); if (!btn) return;
-    if (btn.classList.contains('ac-vercv')){ state.cvAbrir = p.whatsapp; state.adminTab = 'curriculos'; render(); return; }
+    if (btn.classList.contains('ac-vercv')){ state.cvAbrir = p.whatsapp; state.cvAbrirAntigo = false; state.adminTab = 'curriculos'; render(); return; }
+    if (btn.classList.contains('ac-vercvantigo')){ state.cvAbrir = p.whatsapp; state.cvAbrirAntigo = true; state.adminTab = 'curriculos'; render(); return; }
     if (btn.classList.contains('ac-corpo')){ abrirFotoGrande(p.fotoCorpoUrl, p.nome + ' — corpo inteiro', p.whatsapp); return; }
+    if (btn.classList.contains('ac-excluir')){
+      if (!confirm('Excluir definitivamente ' + p.nome + ' (' + p.whatsapp + ')? Isso apaga o cadastro da pessoa e não pode ser desfeito.')) return;
+      if (!confirm('Tem certeza mesmo? Não tem como voltar atrás depois disso.')) return;
+      btn.disabled = true;
+      var rex = await acessosReq({ action: 'acessos_excluir', whatsappAlvo: p.whatsapp });
+      if (!rex || !rex.ok){ btn.disabled = false; toast((rex && rex.erro) || 'Não foi possível excluir.'); return; }
+      toast('Pessoa excluída.');
+      await carregarAcessos();
+      return;
+    }
     if (btn.classList.contains('ac-abrir')){ a.abertos[p.whatsapp] = !a.abertos[p.whatsapp]; pintarAcessos(); return; }
     if (btn.classList.contains('ac-status')){
       var ativoAgora = btn.getAttribute('data-ativo') === '1';
