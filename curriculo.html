@@ -40,6 +40,9 @@
   .btn-l { background:none; color:#666; text-decoration:underline; font-weight:500; font-size:.85rem; width:auto; padding:6px 0; }
   button:disabled { opacity:.55; cursor:wait; }
   .erro { background:#fde3e3; color:var(--vermelho); padding:10px 12px; border-radius:9px; font-size:.9rem; margin-top:14px; font-weight:600; }
+  .secao-situacoes { background:#fff4e5; border:2px solid var(--laranja); border-radius:14px; padding:16px 16px 6px; margin:34px 0 18px; }
+  .secao-situacoes h3 { margin:0 0 10px; font-size:1.3rem; color:var(--laranja); }
+  .secao-situacoes p { margin:0 0 10px; font-size:.95rem; line-height:1.5; }
   .aviso { background:#eef6ff; color:#1b4b7a; padding:10px 12px; border-radius:9px; font-size:.88rem; margin-bottom:12px; }
   .ref { background:#f6f6f6; border-radius:9px; padding:10px 12px; font-size:.84rem; color:#444; margin:8px 0; white-space:pre-wrap; }
   .ref b { display:block; margin-bottom:3px; color:#222; }
@@ -70,7 +73,7 @@ const OP = {
   moradia: ['Crateús, na cidade', 'Interior de Crateús, vou e volto todo dia', 'Interior de Crateús, mas tenho onde ficar na cidade', 'Outra cidade, vou e volto todo dia', 'Outra cidade, mas tenho onde ficar em Crateús', 'Nenhuma das anteriores'],
   chegada: ['A pé', 'Moto ou bicicleta', 'Transporte público ou carona', 'Outro'],
   vaga: ['Atendimento e vendas', 'Caixa', 'Reposição e estoque', 'Organização e provador', 'Liderança (sub encarregada ou encarregada)', 'Qualquer vaga'],
-  salario: ['R$ 700', 'R$ 800', 'R$ 1.000', 'R$ 1.200', 'Acima de R$ 1.621,00'],
+  salario: ['Acima de R$ 700', 'Acima de R$ 800', 'Acima de R$ 1.000', 'Acima de R$ 1.200', 'Acima de R$ 1.621,00'],
   inicio: ['Imediatamente', 'Em até 3 dias', 'Em até 15 dias', 'Em até 30 dias', 'Mais de 30 dias'],
   simnao: ['Sim', 'Não'],
   horario: ['Só pela manhã (a partir das 7:30h)', 'Só pela tarde (até 18:00h)', 'Manhã e tarde (com horário de almoço)'],
@@ -126,20 +129,21 @@ function condicionais() {
   mostra('bloco-ref', radio('referencia') === OP.referencia[0]);
 }
 
-/* ==== 1. e-mail ==== */
-function viewEmail(msg) {
+/* ==== 1. WhatsApp ==== */
+function viewWhats(msg) {
   tela(`${progresso(3)}<div class="card">
     <h2>Envie seu currículo</h2>
     <p class="sub">Leva poucos minutos. Se você já preencheu nosso formulário antes, vamos buscar seus dados para você não digitar tudo de novo.</p>
-    <label class="campo" for="email">Seu e-mail</label>
-    <input type="email" id="email" name="email" autocomplete="email" inputmode="email" value="${esc(S.email)}" placeholder="voce@exemplo.com">
+    <label class="campo" for="whats0">Seu WhatsApp (com DDD)</label>
+    <input type="tel" id="whats0" name="whats0" autocomplete="tel" inputmode="tel" placeholder="(88) 9 9999-9999" value="${esc(S.login ? S.login.whatsapp : S.whats)}" ${S.login ? 'disabled' : ''}>
     <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
     <button class="btn-p" id="ok">Continuar</button></div>`);
   const b = document.getElementById('ok');
   b.onclick = async () => {
-    const em = val('email').toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) return erroBox('Digite um e-mail válido.');
-    S.email = em; carregando(b, true);
-    const r = await api('curriculo_iniciar', { email: em }); carregando(b, false);
+    let w = (S.login ? S.login.whatsapp : val('whats0')).replace(/\D/g, ''); if (w.length >= 12 && w.startsWith('55')) w = w.slice(2);
+    if (w.length < 10 || w.length > 11) return erroBox('Digite o WhatsApp com DDD.');
+    S.whats = w; carregando(b, true);
+    const r = await api('curriculo_iniciar', { whatsapp: w }); carregando(b, false);
     if (!r.ok) return erroBox(r.erro);
     if (r.modo === 'retomar') {
       if (S.login) { const rs = await api('curriculo_retomar', { whatsapp: S.login.whatsapp, sessao: S.login.sessao }); if (rs.ok) return entrarRetomada(rs); }
@@ -184,17 +188,17 @@ function viewVerificar(aviso) {
 function viewRetomar(msg) {
   tela(`${progresso(8)}<div class="card">
     <h2>Que bom ver você de novo!</h2>
-    <p class="sub">Já existe um cadastro com <b>${esc(S.email)}</b>. Digite a senha que você criou para continuar ou atualizar seu currículo.</p>
+    <p class="sub">Já existe um cadastro com o WhatsApp <b>${esc(S.whats)}</b>. Digite a senha que você criou para continuar ou atualizar seu currículo.</p>
     <label class="campo" for="senha">Sua senha</label>
     <input type="password" id="senha" name="senha" autocomplete="current-password">
     <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
     <button class="btn-p" id="ok">Entrar</button>
     <button class="btn-s" id="voltar">Voltar</button></div>`);
-  document.getElementById('voltar').onclick = () => viewEmail();
+  document.getElementById('voltar').onclick = () => viewWhats();
   const b = document.getElementById('ok');
   b.onclick = async () => {
     const senha = document.getElementById('senha').value; if (!senha) return erroBox('Digite a senha.');
-    carregando(b, true); const r = await api('curriculo_retomar', { email: S.email, senha }); carregando(b, false);
+    carregando(b, true); const r = await api('curriculo_retomar', { whatsapp: S.whats, senha }); carregando(b, false);
     if (!r.ok) return erroBox(r.erro);
     entrarRetomada(r);
   };
@@ -223,9 +227,9 @@ function viewCadastro(aviso) {
     <h2>Seus dados</h2>
     <p class="sub">Esses dados também criam seu acesso ao nosso site (catálogo e treinamento).</p>
     ${aviso ? `<div class="aviso">${esc(aviso)}</div>` : ''}
-    <label class="campo">E-mail</label><input type="email" value="${esc(S.email)}" disabled>
+    <label class="campo" for="email">E-mail</label><input type="email" id="email" name="email" autocomplete="email" inputmode="email" value="${esc(S.email || p.email || '')}" placeholder="voce@exemplo.com">
     <label class="campo" for="nome">Nome completo</label><input type="text" id="nome" name="nome" autocomplete="name" value="${esc(p.nome || '')}">
-    <label class="campo" for="whats">Seu WhatsApp (com DDD)</label><input type="tel" id="whats" name="whats" autocomplete="tel" inputmode="tel" placeholder="(88) 9 9999-9999" value="${esc(S.login ? S.login.whatsapp : (p.whatsapp || ''))}" ${S.login ? 'disabled' : ''}>
+    <label class="campo" for="whats">Seu WhatsApp (com DDD)</label><input type="tel" id="whats" name="whats" autocomplete="tel" inputmode="tel" placeholder="(88) 9 9999-9999" value="${esc(S.login ? S.login.whatsapp : (S.whats || p.whatsapp || ''))}" ${S.login ? 'disabled' : ''}>
     ${S.login ? '<div class="aviso">Você já está logada no nosso site, então não precisa criar senha.</div>' : `<label class="campo" for="senha">Crie uma senha <span class="obs">Mínimo 4 caracteres. É a mesma senha do nosso site: se você já tem cadastro nele, use a sua senha de sempre.</span></label>
     <input type="password" id="senha" name="senha" autocomplete="new-password">`}
     <label class="campo">Onde você mora?</label>
@@ -241,6 +245,7 @@ function viewCadastro(aviso) {
     <button class="btn-p" id="ok">Continuar</button></div>`);
   const b = document.getElementById('ok');
   b.onclick = async () => {
+    const email = val('email').toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return erroBox('Digite um e-mail válido.');
     const nome = val('nome'), whats = (S.login ? S.login.whatsapp : val('whats')).replace(/\D/g, ''), senha = S.login ? '' : document.getElementById('senha').value, nasc = val('nasc');
     if (nome.split(/\s+/).length < 2) return erroBox('Digite seu nome completo.');
     if (whats.length < 10 || whats.length > 13) return erroBox('Digite o WhatsApp com DDD.');
@@ -252,7 +257,8 @@ function viewCadastro(aviso) {
     if (ida === null) return erroBox('Digite sua data de nascimento.');
     if (ida < 18 && S.idadeOk !== nasc) return confirmarIdade(ida, nasc, b);
     carregando(b, true);
-    const r = await api('curriculo_cadastro', { email: S.email, nome, whatsapp: whats, senha, sessao: S.login ? S.login.sessao : '', moradia: radio('moradia'), chegada: radio('chegada'), lgpd: true, dataNascimento: nasc, cvToken: S.cvToken });
+    S.email = email;
+    const r = await api('curriculo_cadastro', { email, nome, whatsapp: whats, senha, sessao: S.login ? S.login.sessao : '', moradia: radio('moradia'), chegada: radio('chegada'), lgpd: true, dataNascimento: nasc, cvToken: S.cvToken });
     carregando(b, false);
     if (!r.ok) return erroBox(r.erro);
     S.nome = r.nome; S.whats = r.whatsapp; S.sessao = r.sessao; S.fotoUrl = r.fotoUrl || '';
@@ -404,8 +410,12 @@ function viewPerfil(msg) {
   if (p === 2) corpo = `
     <label class="campo">Qual sua escolaridade?</label>${radios('escolaridade', OP.escolaridade, d.escolaridade)}
     ${S.prefill && S.prefill.estudosAnterior ? `<div class="ref"><b>O que você escreveu antes (só para consulta):</b>${esc(S.prefill.estudosAnterior)}</div>` : ''}
-    <label class="campo" for="cursos">Cursos que ajudam na vaga <span class="obs">Opcional.</span></label><input type="text" id="cursos" name="cursos" maxlength="300" value="${esc(d.cursos || '')}">
-    <h3>Como você agiria?</h3>
+    <label class="campo" for="cursos">Observações ou cursos que você ache que sirvam para a vaga <span class="obs">Opcional.</span></label><textarea id="cursos" name="cursos" maxlength="600" style="min-height:150px">${esc(d.cursos || '')}</textarea>
+    <div class="secao-situacoes">
+      <h3>Como você agiria?</h3>
+      <p><b>Agora são perguntas de situação.</b> Vamos te mostrar 4 situações que acontecem numa loja. Escolha a opção que você faria <b>de verdade</b>, o jeito certo para você.</p>
+      <p>Se essa situação nunca aconteceu com você, <b>imagine</b> e responda como você agiria. Não existe resposta para agradar: queremos entender seu jeito de pensar.</p>
+    </div>
     <label class="campo">Um cliente chega irritado com uma troca que não pode ser feita. O que você faz?</label>${radios('troca', OP.troca, d.troca)}
     <label class="campo">Você viu uma colega errando o troco no caixa, com a loja cheia. O que você faz?</label>${radios('troco', OP.troco, d.troco)}
     <label class="campo">A meta do dia está longe de ser batida. O que você faz?</label>${radios('meta', OP.meta, d.meta)}
@@ -507,7 +517,7 @@ function viewFim() {
     const r = await api('curriculo_retomar', { whatsapp: S.login.whatsapp, sessao: S.login.sessao });
     if (r.ok) return entrarRetomada(r);
   }
-  viewEmail();
+  viewWhats();
 })();
 </script>
 </body>

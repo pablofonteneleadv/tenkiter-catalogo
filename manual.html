@@ -380,7 +380,9 @@ th{background:var(--surface-2); font-weight:700;}
 .ds-grupo[open] > summary{border-bottom:1px solid var(--border); margin-bottom:8px;}
 .ds-whats{font-size:.78rem; color:var(--muted); font-weight:400; margin-left:4px;}
 .ds-resumo{font-size:.8rem; color:var(--muted);}
-.ds-tent{padding:8px 0; border-bottom:1px solid var(--border); font-size:.86rem;}
+.ds-tent{padding:8px 44px 8px 0; border-bottom:1px solid var(--border); font-size:.86rem; position:relative;}
+.ds-del{position:absolute; top:6px; right:0; background:none; border:1px solid var(--border); border-radius:8px; width:36px; height:36px; font-size:1.05rem; cursor:pointer; line-height:1;}
+.ds-del:hover{border-color:var(--danger,#b00); background:var(--surface);}
 .ds-tent:last-child{border-bottom:none;}
 .ds-tent-top{display:flex; flex-direction:column; gap:2px;}
 .ds-meta{color:var(--muted); font-size:.8rem;}
@@ -1395,16 +1397,59 @@ function wireManual(level){
 }
 
 /* ---------------- quiz view ---------------- */
+var MAX_TENTATIVAS_AVALIACAO = 3;
+function tentativasKey(whatsapp, level){ return 'tm_tent_' + whatsapp + '_' + level; }
+function tentativasFeitas(level){
+  if (state.quizTent && state.quizTent.ok){ return Number(state.quizTent.contagem[DATA.titles[level]]) || 0; } // vale a planilha
+  var n = Number(ls_get(tentativasKey(state.user.whatsapp, level), 0)) || 0; // sem conexão: usa o contador do aparelho
+  var last = ls_get(quizKey(state.user.whatsapp, level), null);
+  return Math.max(n, last ? 1 : 0);
+}
+async function carregarTentativas(level){
+  state.quizTent = null;
+  var resp = await submitResult({ action: 'avaliacoes_contagem', whatsapp: state.user.whatsapp, senha: state.user.password });
+  state.quizTent = (resp && resp.ok) ? { ok: true, contagem: resp.contagem || {}, max: resp.max } : { ok: false };
+  if (resp && resp.ok && resp.max) MAX_TENTATIVAS_AVALIACAO = Number(resp.max) || MAX_TENTATIVAS_AVALIACAO;
+  if (state.view === 'quiz' && state.quizGate) render();
+}
 function openQuiz(level){
-  state.view = 'quiz'; state.manual = level;
+  state.view = 'quiz'; state.manual = level; state.quizGate = true; state.quizTent = null;
+  carregarTentativas(level);
   state.quizAttempt = buildQuizAttempt(level);
   render();
   empurrarHistorico('quiz', level);
   window.scrollTo(0,0);
 }
 
+function renderQuizGate(level){
+  if (!state.quizTent){
+    return '<div class="main" style="max-width:700px; margin:0 auto;"><button class="btn btn-ghost" id="back-to-manual">← Voltar ao manual</button>' +
+      '<h1 class="manual-title" style="margin-top:16px">Antes de começar a avaliação</h1><p class="muted-note">Verificando suas avaliações…</p></div>';
+  }
+  var feitas = tentativasFeitas(level);
+  var restam = Math.max(0, MAX_TENTATIVAS_AVALIACAO - feitas);
+  var last = ls_get(quizKey(state.user.whatsapp, level), null);
+  var total = state.quizAttempt ? state.quizAttempt.questions.length : DATA.quizzes[level].questions.length;
+  return '<div class="main" style="max-width:700px; margin:0 auto;">' +
+    '<button class="btn btn-ghost" id="back-to-manual">← Voltar ao manual</button>' +
+    '<h1 class="manual-title" style="margin-top:16px">Antes de começar a avaliação</h1>' +
+    '<div class="quiz-gate" style="background:var(--accent-soft);border:2px solid var(--accent-2);border-radius:14px;padding:16px;margin:14px 0">' +
+      '<p style="margin:0 0 6px"><b>Avaliações já feitas:</b> ' + feitas + ' de ' + MAX_TENTATIVAS_AVALIACAO + '</p>' +
+      '<p style="margin:0 0 6px"><b>Ainda restam:</b> ' + restam + '</p>' +
+      '<p style="margin:0 0 6px"><b>Perguntas nesta avaliação:</b> ' + total + '</p>' +
+      (last ? '<p style="margin:0">Sua última nota: ' + last.score + '/' + last.total + ' (' + last.date + ')</p>' : '') +
+    '</div>' +
+    '<p>Cada avaliação que você faz <b>fica salva</b> e mostra o seu <b>bom-senso</b> nas escolhas. Por isso, só comece quando puder <b>se concentrar</b>, sem estar atendendo cliente nem correndo.</p>' +
+    (restam > 0
+      ? '<label class="read-toggle-big"><input type="checkbox" id="gate-ok"><span>Confirmo que li o manual com atenção e que estou num momento tranquilo para fazer a avaliação</span></label>' +
+        '<button type="button" class="btn btn-primary btn-lg" id="gate-start" disabled style="margin-top:12px">Começar avaliação →</button>'
+      : '<p class="muted-note"><b>Você já usou as ' + MAX_TENTATIVAS_AVALIACAO + ' avaliações.</b> Fale com a Karla ou com o Pablo para liberar uma nova.</p>') +
+  '</div>';
+}
+
 function renderQuizIntro(level){
   if (!state.quizAttempt) state.quizAttempt = buildQuizAttempt(level);
+  if (state.quizGate) return renderQuizGate(level);
   var quiz = state.quizAttempt;
   var pass = quizPassFor(level);
   var last = ls_get(quizKey(state.user.whatsapp, level), null);
@@ -1430,7 +1475,19 @@ function renderQuizIntro(level){
 }
 
 function wireQuizIntro(level){
-  document.getElementById('back-to-manual').addEventListener('click', function(){ state.quizAttempt = null; openManual(level); });
+  document.getElementById('back-to-manual').addEventListener('click', function(){ state.quizAttempt = null; state.quizGate = false; openManual(level); });
+  if (state.quizGate){
+    if (!state.quizTent) return;
+    var ok = document.getElementById('gate-ok'), go = document.getElementById('gate-start');
+    if (ok && go){
+      ok.addEventListener('change', function(){ go.disabled = !ok.checked; });
+      go.addEventListener('click', function(){
+        if (go.disabled || tentativasFeitas(level) >= MAX_TENTATIVAS_AVALIACAO) return;
+        state.quizGate = false; render(); window.scrollTo(0,0);
+      });
+    }
+    return;
+  }
   document.getElementById('quiz-form').addEventListener('submit', function(e){
     e.preventDefault();
     gradeQuiz(level);
@@ -1464,7 +1521,9 @@ function gradeQuiz(level){
   var date = new Date().toLocaleDateString('pt-BR');
   state.quizAttempt = null;
   ls_set(quizKey(state.user.whatsapp, level), { score: score, total: total, date: date });
-  submitResult({ action:'resultado', nome: state.user.name, whatsapp: state.user.whatsapp, senha: state.user.password, nivel: state.user.level, manual: DATA.titles[level], nota: score, total: total, data: date, errosDetalhados: JSON.stringify(erros) });
+  ls_set(tentativasKey(state.user.whatsapp, level), tentativasFeitas(level) + 1);
+  state.pendingSubmit = submitResult({ action:'resultado', nome: state.user.name, whatsapp: state.user.whatsapp, senha: state.user.password, nivel: state.user.level, manual: DATA.titles[level], nota: score, total: total, data: date, errosDetalhados: JSON.stringify(erros) });
+  state.pendingSubmit.then(function(r){ if (r && r.ok === false && r.erro) toast(r.erro); });
 
   var waText = encodeURIComponent(state.user.name + ' concluiu a avaliação do ' + DATA.titles[level] + ': ' + score + '/' + total + ' (' + Math.round(pct*100) + '%) em ' + date + '.');
   var waHtml = '';
@@ -1483,7 +1542,7 @@ function gradeQuiz(level){
       '</div>' +
     '</div>';
   document.getElementById('quiz-result').scrollIntoView({behavior:'smooth', block:'start'});
-  document.getElementById('retry-quiz').addEventListener('click', function(){ render(); });
+  document.getElementById('retry-quiz').addEventListener('click', async function(){ state.quizGate = true; state.quizTent = null; render(); try{ await state.pendingSubmit; }catch(e){} carregarTentativas(level); window.scrollTo(0,0); });
   document.getElementById('copy-result').addEventListener('click', function(){
     var text = decodeURIComponent(waText);
     if(navigator.clipboard && navigator.clipboard.writeText){
@@ -1671,7 +1730,9 @@ function dsTentativaHtml(r, comNome){
   } else if (Number(r.nota) === Number(r.total) && Number(r.total) > 0){
     errosHtml = '<div class="ds-ok">Gabaritou 🎯</div>';
   }
-  return '<div class="ds-tent">' +
+  var lixeira = (r.linha && temPerm('gerir_acessos'))
+    ? '<button type="button" class="ds-del" title="Excluir esta avaliação" aria-label="Excluir esta avaliação" data-linha="' + esc(r.linha) + '" data-dh="' + esc(r.dataHora) + '" data-whats="' + esc(normWhats(r.whatsapp)) + '" data-nome="' + esc(r.nome || '') + '">🗑️</button>' : '';
+  return '<div class="ds-tent">' + lixeira +
     '<div class="ds-tent-top">' +
       (comNome ? '<div class="ds-nome"><strong>' + esc(r.nome || '(sem nome)') + '</strong> <span class="ds-whats">' + esc(normWhats(r.whatsapp)) + '</span></div>' : '') +
       '<div class="ds-meta"><span>' + esc(dsDataFmt(r)) + '</span> · <span>' + esc(r.manual || '') + '</span></div>' +
@@ -1784,6 +1845,17 @@ function wireTabDesempenho(){
   if (lista) lista.addEventListener('toggle', function(ev){
     var d = ev.target; if (d && d.classList && d.classList.contains('ds-grupo')) e.abertos[d.getAttribute('data-chave')] = d.open;
   }, true);
+  if (lista) lista.addEventListener('click', async function(ev){
+    var b = ev.target.closest ? ev.target.closest('.ds-del') : null;
+    if (!b) return;
+    if (!confirm('Excluir esta avaliação de ' + (b.getAttribute('data-nome') || b.getAttribute('data-whats')) + '? Isso não pode ser desfeito.')) return;
+    b.disabled = true;
+    var resp = await submitResult({ action: 'excluir_avaliacao', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
+      linha: b.getAttribute('data-linha'), dataHora: b.getAttribute('data-dh'), whatsappAvaliacao: b.getAttribute('data-whats') });
+    if (!resp || !resp.ok){ b.disabled = false; toast((resp && resp.erro) || 'Não foi possível excluir.'); return; }
+    toast('Avaliação excluída.');
+    fetchAdminData();
+  });
   var btn = document.getElementById('btn-export-csv');
   if (!btn) return;
   btn.addEventListener('click', function(){
