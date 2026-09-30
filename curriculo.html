@@ -248,7 +248,9 @@ function viewCadastro(aviso) {
     if (!radio('moradia')) return erroBox('Escolha onde você mora.');
     if (!radio('chegada')) return erroBox('Diga como você chegaria ao trabalho.');
     if (!document.querySelector('input[name="lgpd"]').checked) return erroBox('Marque a autorização para continuar.');
-    if (idade(nasc) === null) return erroBox('Digite sua data de nascimento.');
+    const ida = idade(nasc);
+    if (ida === null) return erroBox('Digite sua data de nascimento.');
+    if (ida < 18 && S.idadeOk !== nasc) return confirmarIdade(ida, nasc, b);
     carregando(b, true);
     const r = await api('curriculo_cadastro', { email: S.email, nome, whatsapp: whats, senha, sessao: S.login ? S.login.sessao : '', moradia: radio('moradia'), chegada: radio('chegada'), lgpd: true, dataNascimento: nasc, cvToken: S.cvToken });
     carregando(b, false);
@@ -257,6 +259,21 @@ function viewCadastro(aviso) {
     if (r.menor) return viewMenor();
     viewInstagram(p.instagram || '');
   };
+}
+
+/* Confirma a idade antes de tratar como menor (pode ser engano de digitação) */
+function confirmarIdade(ida, nasc, b) {
+  erroBox('');
+  let box = document.getElementById('conf-idade');
+  if (!box) { box = document.createElement('div'); box.id = 'conf-idade'; box.style.cssText = 'background:#fff3e0;border:2px solid var(--laranja);border-radius:12px;padding:14px;margin-top:16px'; b.parentNode.insertBefore(box, b); }
+  const [a, m, d] = nasc.split('-');
+  box.innerHTML = `<p style="margin:0 0 6px"><b>Só para confirmar:</b> pela data que você digitou (${d}/${m}/${a}), você tem <b>${ida} ${ida === 1 ? 'ano' : 'anos'}</b>. Está certo?</p>
+    <p style="margin:0 0 10px;font-size:.85rem;color:#555">Currículo só é aceito a partir dos 18 anos. Se foi engano na data, corrija agora.</p>
+    <button class="btn-p" id="idade-sim" style="margin-top:0">Sim, tenho ${ida} ${ida === 1 ? 'ano' : 'anos'}</button>
+    <button class="btn-s" id="idade-nao">Não, vou corrigir a data</button>`;
+  document.getElementById('idade-sim').onclick = () => { S.idadeOk = nasc; box.remove(); b.click(); };
+  document.getElementById('idade-nao').onclick = () => { box.remove(); S.idadeOk = null; const n = document.getElementById('nasc'); n.focus(); try { n.showPicker && n.showPicker(); } catch (e) {} };
+  box.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 /* ==== menor de 18 ==== */
