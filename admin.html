@@ -154,7 +154,8 @@
   .arte-preview-cat { color: #999; font-size: 0.66rem; margin-top: 2px; }
   .arte-preview-de { color: #999; font-size: 0.66rem; margin-top: 8px; text-decoration: line-through; }
   .arte-preview-preco { color: #7ee787; font-weight: 800; font-size: 1.2rem; margin-top: 2px; }
-  .arte-preview-btn { margin-top: 10px; background: var(--verde); color: #fff; font-weight: 700; font-size: 0.74rem; padding: 8px; border-radius: 10px; }
+  .arte-preview-btn { margin-top: 10px; float: left; border: 1px dashed #555; color: #777; font-size: 0.55rem; padding: 6px 30px; border-radius: 8px; }
+  .arte-preview-atendente { clear: both; }
   .arte-preview-atendente { color: #777; font-size: 0.58rem; margin-top: 6px; }
 
   .arte-thumbs { display: flex; gap: 8px; margin-top: 8px; overflow-x: auto; }
@@ -1260,7 +1261,7 @@
           ${subtitulo ? `<div class="arte-preview-cat">${subtitulo}</div>` : ''}
           <div class="arte-preview-de" id="arte-preview-de" style="display:none;"></div>
           <div class="arte-preview-preco" id="arte-preview-preco"></div>
-          <div class="arte-preview-btn">📱 Peça pelo WhatsApp</div>
+          <div class="arte-preview-btn">espaço do link</div>
           ${funcionarioNome ? `<div class="arte-preview-atendente">Atendimento com ${escaparHtml(funcionarioNome)}</div>` : ''}
         </div>
       </div>
@@ -1434,14 +1435,14 @@
         ctx.font = 'bold 66px sans-serif';
         ctx.fillText(formatarReal(config.precoStory) + ' à vista', 540, yPreco);
 
-        ctx.fillStyle = '#dddddd';
-        ctx.font = '36px sans-serif';
-        ctx.fillText('📱 Peça pelo WhatsApp: ' + WHATSAPP_NUMERO, 540, yPreco + 75);
+        // Espaço reservado (x 40–650, y 1752–1856) para colar o adesivo de link do Instagram. Fica vazio de propósito.
 
         if (funcionarioNome) {
           ctx.fillStyle = '#777777';
-          ctx.font = '28px sans-serif';
-          ctx.fillText('Atendimento com ' + funcionarioNome, 540, yPreco + 130);
+          ctx.font = '26px sans-serif';
+          ctx.textAlign = 'right';
+          ctx.fillText('Atendimento com ' + funcionarioNome, 1040, 1752 + 60);
+          ctx.textAlign = 'center';
         }
 
         const dataUrl = canvas.toDataURL('image/jpeg', 0.92);

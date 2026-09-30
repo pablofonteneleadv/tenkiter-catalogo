@@ -238,6 +238,8 @@ th{background:var(--surface-2); font-weight:700;}
 .ac-card.ac-off{opacity:.65;}
 .ac-head{display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center;}
 .ac-sub{font-size:.8rem; color:var(--muted); margin-top:2px;}
+.ac-ordem{display:flex; gap:14px; flex-wrap:wrap; margin:10px 0; font-size:.85rem; font-weight:600;}
+.ac-ordem select{width:auto; display:inline-block;}
 .ac-actions{display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
 .ac-you{font-size:.7rem; background:var(--accent-2); color:#fff; border-radius:10px; padding:1px 7px; margin-left:4px;}
 .ac-perms{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);}
@@ -994,6 +996,7 @@ function renderTopbar(){
         '<div class="avatar-dropdown" id="avatar-dropdown" hidden>' +
           '<div class="avatar-dropdown-name">' + esc(state.user.name) + '</div>' +
           '<button class="avatar-dropdown-item" id="btn-ir-perfil">👤 Perfil' + (comp.pct < 100 ? ' <span class="avatar-dropdown-pct">' + comp.pct + '%</span>' : '') + '</button>' +
+          '<a class="avatar-dropdown-item" href="curriculo.html" style="display:block;text-decoration:none">📄 Meu currículo</a>' +
           (temPerm('catalogo_admin') ? '<a class="avatar-dropdown-item" href="admin.html" style="display:block;text-decoration:none">🛍️ Admin do catálogo</a>' : '') +
           '<button class="avatar-dropdown-item" id="btn-logout">Sair</button>' +
         '</div>' +
@@ -1518,14 +1521,14 @@ function renderAdminPanel(){
   if (!servidorAcessos && temPerm('equipe_relatorio')) tabs.push({ id:'equipe', label:'Equipe & Permissões' });
   if (temPerm('equipe_relatorio')) tabs.push({ id:'desempenho', label:'Raio-X de Desempenho' });
   if (temPerm('gerir_manuais')) tabs.push({ id:'conteudo', label:'Conteúdo & Provas' });
-  if (temPerm('dados_pessoais')) tabs.push({ id:'curriculos', label:'📄 Currículos' });
+  if (temPerm('dados_pessoais') || temPerm('gerir_acessos')) tabs.push({ id:'curriculos', label:'📄 Currículos' });
   if (!tabs.some(function(t){ return t.id === state.adminTab; })) state.adminTab = tabs.length ? tabs[0].id : 'equipe';
   var tabsHtml = tabs.map(function(t){
     return '<button class="admin-tab' + (state.adminTab===t.id?' active':'') + '" data-tab="' + t.id + '">' + t.label + '</button>';
   }).join('');
   var body;
   if (state.adminTab === 'curriculos'){
-    body = '<div class="admin-panel" style="padding:0;background:transparent;box-shadow:none"><iframe id="cv-frame" src="curriculos.html?embed=1" title="Currículos" style="width:100%;height:900px;border:0;display:block;background:transparent"></iframe></div>';
+    body = '<div class="admin-panel" style="padding:0;background:transparent;box-shadow:none"><iframe id="cv-frame" src="curriculos.html?embed=1' + (state.cvAbrir ? '&abrir=' + encodeURIComponent(state.cvAbrir) : '') + '" title="Currículos" style="width:100%;height:900px;border:0;display:block;background:transparent"></iframe></div>';
   } else if (!state.adminData && state.adminTab !== 'acessos'){
     body = '<div class="admin-panel">Carregando dados da equipe...</div>';
   } else if (state.adminTab === 'acessos'){
@@ -1551,7 +1554,7 @@ window.addEventListener('message', function(ev){
 function wireAdminPanel(){
   document.querySelectorAll('.admin-tab').forEach(function(btn){
     btn.addEventListener('click', function(){
-      state.adminTab = btn.getAttribute('data-tab');
+      state.adminTab = btn.getAttribute('data-tab'); if (state.adminTab === 'curriculos') state.cvAbrir = '';
       render();
     });
   });
@@ -2000,7 +2003,7 @@ function permObj(x){
   return x || {};
 }
 function acessosEstado(){
-  if (!state.acessos) state.acessos = { pessoas: [], perfis: [], permissoes: [], busca: '', filtro: null, contagem: {}, truncado: false, abertos: {}, carregado: false, erro: '', totalClientes: 0, criando: false, log: null, eu: '' };
+  if (!state.acessos) state.acessos = { pessoas: [], perfis: [], permissoes: [], busca: '', ordem: 'nome', fCv: 'todos', filtro: null, contagem: {}, truncado: false, abertos: {}, carregado: false, erro: '', totalClientes: 0, criando: false, log: null, eu: '' };
   return state.acessos;
 }
 async function carregarAcessos(){
@@ -2053,10 +2056,12 @@ function acessosCard(p){
     '<div class="ac-head">' +
       '<div class="ac-foto-col">' + acFotoHtml(p) + '</div>' +
       '<div class="ac-id"><strong>' + esc(p.nome || '(sem nome)') + '</strong>' + (p.whatsapp === a.eu ? ' <span class="ac-you">você</span>' : '') +
-        '<div class="ac-sub">' + esc(p.whatsapp) + ' · <span class="' + (ativo ? 'badge-ativo' : 'badge-inativo') + '">' + (ativo ? 'Ativo' : 'Inativo') + '</span></div></div>' +
+        '<div class="ac-sub">' + esc(p.whatsapp) + ' · <span class="' + (ativo ? 'badge-ativo' : 'badge-inativo') + '">' + (ativo ? 'Ativo' : 'Inativo') + '</span></div>' +
+        '<div class="ac-sub">Cadastro: ' + (p.cadastro ? esc(acDataBr(p.cadastro)) : '<em>sem data (conta antiga)</em>') + (p.curriculo === 'enviado' ? ' · <span style="color:#198754;font-weight:700">📄 currículo feito</span>' : (p.curriculo === 'andamento' ? ' · 📄 currículo em andamento' : (p.curriculo === 'menor' ? ' · 📄 menor de 18' : ''))) + '</div></div>' +
       '<div class="ac-actions">' +
         '<select class="admin-sel ac-perfil" aria-label="Perfil">' + opts + '</select>' +
         '<button type="button" class="admin-mini-btn ac-abrir">' + (aberto ? '▾' : '▸') + ' Permissões (' + qtd + ')' + (diffs ? ' ✱' + diffs : '') + '</button>' +
+        (p.curriculo ? '<button type="button" class="admin-mini-btn ac-vercv">📄 Ver currículo</button>' : '') +
         (p.fotoCorpoUrl ? '<button type="button" class="admin-mini-btn ac-corpo">🧍 Foto de corpo inteiro</button>' : '') +
         '<button type="button" class="admin-mini-btn ac-status" data-ativo="' + (ativo ? '1' : '0') + '">' + (ativo ? 'Desativar' : 'Reativar') + '</button>' +
         '<button type="button" class="admin-mini-btn ac-reset">Resetar senha</button>' +
@@ -2075,8 +2080,25 @@ function acessosPerfilMarcado(p, a){
 }
 function acessosVisiveis(){
   var a = acessosEstado();
-  return a.pessoas.filter(function(p){ return acessosPerfilMarcado(p, a) && acessosCasaBusca(p, a); });
+  var l = a.pessoas.filter(function(p){
+    if (!(acessosPerfilMarcado(p, a) && acessosCasaBusca(p, a))) return false;
+    if (a.fCv === 'com') return p.curriculo === 'enviado';
+    if (a.fCv === 'sem') return p.curriculo !== 'enviado';
+    return true;
+  });
+  var nome = function(x, y){ return String(x.nome || '').localeCompare(String(y.nome || ''), 'pt-BR'); };
+  if (a.ordem === 'novos' || a.ordem === 'antigos'){
+    var dir = a.ordem === 'novos' ? 1 : -1;
+    l = l.slice().sort(function(x, y){
+      var dx = x.cadastro || '', dy = y.cadastro || '';
+      if (!dx && !dy) return nome(x, y);
+      if (!dx) return 1; if (!dy) return -1;   // sem data (contas antigas) sempre no fim
+      return dx === dy ? nome(x, y) : (dx < dy ? dir : -dir);
+    });
+  } else { l = l.slice().sort(nome); }
+  return l;
 }
+function acDataBr(iso){ var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; }
 function acessosListaHtml(){
   var a = acessosEstado();
   if (!a.carregado) return '<p class="sub">Carregando acessos...</p>';
@@ -2116,6 +2138,8 @@ function renderTabAcessos(){
       '<span><button type="button" class="admin-mini-btn" id="ac-nova">+ Nova pessoa</button><button type="button" class="admin-mini-btn" id="ac-log">Histórico</button><button type="button" class="admin-mini-btn" id="ac-recarregar">↻ Atualizar</button></span>' +
     '</div>' +
     '<div class="ac-filtro" id="ac-filtro">' + filtroAcessosHtml() + '</div>' +
+    '<div class="ac-ordem"><label>Ordenar: <select id="ac-ordem" class="admin-sel"><option value="nome"' + (a.ordem === 'nome' ? ' selected' : '') + '>Nome (A–Z)</option><option value="novos"' + (a.ordem === 'novos' ? ' selected' : '') + '>Cadastro: mais recentes</option><option value="antigos"' + (a.ordem === 'antigos' ? ' selected' : '') + '>Cadastro: mais antigos</option></select></label> ' +
+      '<label>Currículo: <select id="ac-fcv" class="admin-sel"><option value="todos"' + (a.fCv === 'todos' ? ' selected' : '') + '>Todos</option><option value="com"' + (a.fCv === 'com' ? ' selected' : '') + '>Só quem já fez</option><option value="sem"' + (a.fCv === 'sem' ? ' selected' : '') + '>Só quem não fez</option></select></label></div>' +
     '<div class="ac-form" id="ac-form-nova"' + (a.criando ? '' : ' hidden') + '>' +
       '<input id="ac-n-nome" placeholder="Nome"><input id="ac-n-whats" placeholder="WhatsApp com DDD" inputmode="tel"><input id="ac-n-senha" placeholder="Senha (mín. 4)">' +
       '<select id="ac-n-perfil" class="admin-sel">' + perfOpts + '</select>' +
@@ -2133,6 +2157,9 @@ function wireTabAcessos(){
     clearTimeout(timer);
     timer = setTimeout(function(){ a.busca = busca.value.trim(); pintarAcessos(); }, 60);
   });
+  var ordSel = document.getElementById('ac-ordem'), fcvSel = document.getElementById('ac-fcv');
+  if (ordSel) ordSel.addEventListener('change', function(){ a.ordem = ordSel.value; pintarAcessos(); });
+  if (fcvSel) fcvSel.addEventListener('change', function(){ a.fCv = fcvSel.value; pintarAcessos(); });
   var fil = document.getElementById('ac-filtro'), timerFiltro = null;
   function recarregarFiltro(){ pintarFiltroAcessos(); pintarAcessos(); }
   if (fil){
@@ -2194,6 +2221,7 @@ function wireTabAcessos(){
   lista.addEventListener('click', async function(e){
     var p = pessoaDe(e.target); if (!p) return;
     var btn = e.target.closest('button'); if (!btn) return;
+    if (btn.classList.contains('ac-vercv')){ state.cvAbrir = p.whatsapp; state.adminTab = 'curriculos'; render(); return; }
     if (btn.classList.contains('ac-corpo')){ abrirFotoGrande(p.fotoCorpoUrl, p.nome + ' — corpo inteiro'); return; }
     if (btn.classList.contains('ac-abrir')){ a.abertos[p.whatsapp] = !a.abertos[p.whatsapp]; pintarAcessos(); return; }
     if (btn.classList.contains('ac-status')){

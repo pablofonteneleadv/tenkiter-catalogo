@@ -303,7 +303,7 @@ function viewInstagram(inicial, msg) {
     const ig = val('insta'); if (!ig) return erroBox('Digite seu @ do Instagram.');
     carregando(b, true); const r = await api('curriculo_instagram', { whatsapp: S.whats, sessao: S.sessao, instagram: ig }); carregando(b, false);
     if (!r.ok) return erroBox(r.erro);
-    S.d.instagram = ig; if (S.fotoUrl) { S.passo = 0; viewPerfil(); } else viewFoto();
+    S.d.instagram = ig; if (S.fotoUrl) { S.passo = S.passoSalvo != null ? S.passoSalvo : 0; viewPerfil(); } else viewFoto();
   };
   document.getElementById('sem').onclick = async () => {
     const r = await api('curriculo_instagram', { whatsapp: S.whats, sessao: S.sessao, semInstagram: true });
@@ -354,7 +354,7 @@ function viewFoto(msg) {
       const st = await api('curriculo_status', { whatsapp: S.whats, sessao: S.sessao });
       if (st.ok && st.estado === 'completo') return viewFim();
     }
-    S.passo = 0; viewPerfil();
+    S.passo = S.passoSalvo != null ? S.passoSalvo : 0; viewPerfil();
   };
 }
 function viewSemInstagram() {
@@ -371,6 +371,7 @@ function viewSemInstagram() {
 const PASSOS = ['Vaga e horários', 'Experiência', 'Estudos e perfil', 'Para finalizar'];
 function viewPerfil(msg) {
   const d = S.d, p = S.passo;
+  msg = msg || '';
   let corpo = '';
   if (p === 0) corpo = `
     <label class="campo">Para qual vaga você está se candidatando? <span class="obs">Pode marcar mais de uma.</span></label>${caixas('vaga', OP.vaga, d.vaga)}
@@ -417,7 +418,7 @@ function viewPerfil(msg) {
     <label class="campo" for="conheceAlguem">Conhece alguém que trabalha ou trabalhou aqui? <span class="obs">Opcional. Escreva o nome.</span></label><input type="text" id="conheceAlguem" name="conheceAlguem" maxlength="200" value="${esc(d.conheceAlguem || '')}">
     <label class="campo" for="obs">Alguma observação? <span class="obs">Opcional.</span></label><textarea id="obs" name="obs" maxlength="600">${esc(d.obs || '')}</textarea>`;
   tela(`${progresso(30 + p * 17)}<div class="card">
-    <p class="sub" style="margin-bottom:4px">Etapa ${p + 1} de ${PASSOS.length}</p><h2>${PASSOS[p]}</h2>
+    <p class="sub" style="margin-bottom:4px">Etapa ${p + 1} de ${PASSOS.length}</p><h2>${PASSOS[p]}</h2>${S.enviado && p === 0 ? '<p class="sub" style="background:#e8f5ec;border-radius:9px;padding:9px 11px;margin:8px 0">✅ Você já enviou seu currículo. Pode rever e atualizar as respostas; ao final, toque em <b>Enviar currículo</b> de novo para salvar.</p>' : ''}
     ${corpo}
     <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
     <button class="btn-p" id="ok">${p === PASSOS.length - 1 ? 'Enviar currículo' : 'Continuar'}</button>
@@ -428,10 +429,21 @@ function viewPerfil(msg) {
   b.onclick = async () => {
     coletar(); const e = validarPasso(p); if (e) return erroBox(e);
     if (p < PASSOS.length - 1) { S.passo++; return viewPerfil(); }
+    if (!S.fotoUrl) return travaFinal('foto');
     carregando(b, true); const r = await api('curriculo_finalizar', { whatsapp: S.whats, sessao: S.sessao, dados: S.d }); carregando(b, false);
-    if (!r.ok) return erroBox(r.erro);
+    if (!r.ok) { if (/foto de perfil/i.test(r.erro || '')) return travaFinal('foto'); if (/Instagram/i.test(r.erro || '')) return travaFinal('insta'); return erroBox(r.erro); }
     viewFim();
   };
+}
+/* Sem foto de perfil (ou sem Instagram) o currículo NÃO é salvo: leva a pessoa para completar e volta ao final. */
+function travaFinal(o) {
+  S.passoSalvo = S.passo;
+  const e = document.getElementById('erro'); if (!e) return;
+  e.classList.remove('oculto');
+  e.innerHTML = o === 'foto' ? 'Seu currículo só pode ser salvo <b>com foto de perfil</b>. <button class="btn-s" id="trava-go" style="margin-top:8px">Enviar minha foto agora</button>'
+    : 'Seu currículo só pode ser salvo <b>com Instagram válido</b>. <button class="btn-s" id="trava-go" style="margin-top:8px">Informar meu Instagram agora</button>';
+  document.getElementById('trava-go').onclick = () => { coletar(); o === 'foto' ? viewFoto() : viewInstagram(S.d.instagram || ''); };
+  e.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 function coletar() {
   const d = S.d, t = n => { if (document.querySelector('[name="' + n + '"]')) d[n] = val(n); };
@@ -479,7 +491,13 @@ function viewFim() {
     <div class="emoji">✅</div>
     <h2>Currículo enviado!</h2>
     <p>Obrigado, ${esc((S.nome || '').split(' ')[0])}! Recebemos suas informações. Se houver uma vaga com o seu perfil, entramos em contato pelo WhatsApp.</p>
-    <p class="sub">Seus dados ficam guardados por até 2 anos. Para atualizar o currículo ou pedir a exclusão, fale com a loja: (88) 99322-3998.</p>
+    <div style="background:#fff3e0;border:2px solid var(--laranja);border-radius:12px;padding:14px;margin:16px 0;text-align:left">
+      <p style="margin:0 0 8px"><b>📚 Aproveite enquanto espera</b></p>
+      <p style="margin:0 0 8px">Mesmo sem ter entrado na nossa loja, <b>você já tem um manual de treinamento liberado</b> no nosso site de cursos.</p>
+      <p style="margin:0 0 12px">Conhecer o conteúdo <b>antes da entrevista soma pontos</b>: mostra interesse e já te deixa por dentro do jeito TENKiTER de atender.</p>
+      <a href="${SITE_MANUAL}" style="display:block;text-align:center;background:var(--preto);color:var(--laranja);text-decoration:none;padding:13px;border-radius:10px;font-weight:800">Acessar o site de treinamento</a>
+    </div>
+    <p class="sub">Seu currículo continua salvo: para rever ou atualizar quando quiser, entre no site de treinamento e toque na sua foto de perfil → <b>Meu currículo</b>. Seus dados ficam guardados por até 2 anos; para pedir a exclusão, fale com a loja: (88) 99322-3998.</p>
     <div class="links"><a href="${SITE_CATALOGO}">Conhecer o catálogo</a></div></div>`);
 }
 

@@ -86,8 +86,12 @@ async function iniciar() {
   const u = await conferirSessao();
   if (!u) return telaLogin('');
   if (u.semRede) { $('app').innerHTML = '<div class="erro">Sem conexão. Tente de novo.</div>'; return; }
-  if (!temPermissao(u, 'dados_pessoais')) { $('app').innerHTML = '<div class="card"><h3 style="margin-top:0">Sem acesso</h3><p>Seu perfil não permite ver currículos. Peça ao Admin total para liberar "Ver dados pessoais dos colegas".</p></div>'; return; }
-  sessao = u; await carregarNovos(); desenhar();
+  if (!temPermissao(u, 'dados_pessoais') && !temPermissao(u, 'gerir_acessos')) { $('app').innerHTML = '<div class="card"><h3 style="margin-top:0">Sem acesso</h3><p>Seu perfil não permite ver currículos. Peça ao Admin total para liberar "Ver dados pessoais dos colegas".</p></div>'; return; }
+  sessao = u; await carregarNovos();
+  const abrir = (new URLSearchParams(location.search).get('abrir') || '').replace(/\D/g, '');
+  if (abrir) { busca = abrir; }
+  desenhar();
+  if (abrir) { const it = document.querySelector('.item'); if (it) { it.classList.add('aberto'); it.scrollIntoView({ block: 'start' }); } }
 }
 async function carregarNovos() {
   const r = await chamar('curriculos_listar'); if (!r.ok) return erro(r.erro);
