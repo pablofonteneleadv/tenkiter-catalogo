@@ -194,6 +194,7 @@
   .env-item .env-txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .env-item.env-enviando { border-left-color: var(--laranja); background: #fff6ec; }
   .env-item.env-ok { border-left-color: #2e7d32; background: #edf7ee; }
+  .env-item.env-aviso { border-left-color: #f9a825; background: #fff8e1; }
   .env-item.env-erro { border-left-color: #c62828; background: #fdecec; }
   .env-item.env-offline { border-left-color: #1565c0; background: #eaf2fc; }
   .env-item button { border: none; border-radius: 8px; padding: 5px 9px; font-weight: 700; font-size: 0.75rem; cursor: pointer; background: #333; color: #fff; }
@@ -899,6 +900,7 @@
     if (it.estado === 'fila') return '⏳ ' + o + '"' + it.titulo + '" na fila...';
     if (it.estado === 'enviando') return '<span class="env-spin">⏳</span> Enviando ' + (it.temVideo ? 'com vídeo (pode levar minutos) ' : '') + '"' + it.titulo + '"...';
     if (it.estado === 'ok') return '✅ "' + it.titulo + '" salvo!';
+    if (it.estado === 'aviso') return '⚠️ "' + it.titulo + '": ' + it.msg;
     if (it.estado === 'offline') return '📥 "' + it.titulo + '": sem conexão. Guardado no aparelho; envie com "Sincronizar".';
     return '❌ "' + it.titulo + '": ' + it.msg;
   }
@@ -911,6 +913,11 @@
       // título vem do formulário: entra como texto, nunca como HTML
       const html = textoEnvio(Object.assign({}, it, { titulo: escaparHtml(it.titulo), msg: escaparHtml(it.msg) }));
       t.innerHTML = html; linha.appendChild(t);
+      if (it.estado === 'aviso') {
+        const b0 = document.createElement('button'); b0.type = 'button'; b0.textContent = 'Entendi';
+        b0.addEventListener('click', () => { envios.splice(envios.indexOf(it), 1); desenharEnvios(); });
+        linha.appendChild(b0);
+      }
       if (it.estado === 'erro') {
         const b1 = document.createElement('button'); b1.type = 'button'; b1.textContent = 'Tentar de novo';
         b1.addEventListener('click', () => { it.estado = 'fila'; it.msg = ''; desenharEnvios(); processarEnvios(); });
@@ -922,6 +929,17 @@
     });
   }
   function sumirDepois(it, ms) { setTimeout(() => { const i = envios.indexOf(it); if (i !== -1 && (it.estado === 'ok' || it.estado === 'offline')) { envios.splice(i, 1); desenharEnvios(); } }, ms); }
+
+  function conferirSalvo(it, resp) {
+    const d = it.dados, id = String((resp && resp.id) || d.id || '');
+    const p = produtos.find(x => String(x.ID) === id);
+    if (!p) return '';
+    const esperadas = Math.min(8, String(d.fotosGaleriaExistentes || '').split(',').filter(Boolean).length + (d.fotosGaleriaBase64 || []).length);
+    const tem = String(p.Fotos_Galeria || '').split(',').filter(Boolean).length;
+    if (tem < esperadas) return 'foi salvo, mas as fotos extras não voltaram na lista (' + tem + ' de ' + esperadas + '). Confira se o script do catálogo é a versão mais nova.';
+    if (d.videoBase64 && !String(p.Video_URL || '').trim()) return 'foi salvo, mas o vídeo não voltou na lista. Confira se o script do catálogo é a versão mais nova.';
+    return '';
+  }
 
   async function enviarItem(it) {
     const dados = Object.assign({}, it.dados, { pin: adminPin, funcionario: funcionarioNome });
@@ -937,7 +955,10 @@
     }
     atualizarBarraSync();
     if (resultado.ok && resultado.resp && resultado.resp.ok) {
-      it.estado = 'ok'; sumirDepois(it, 6000); carregarProdutos();
+      // confere de verdade: recarrega a lista e vê se as fotos/vídeo voltaram (não basta o servidor dizer "ok")
+      try { await carregarProdutos(); } catch (e) {}
+      const aviso = conferirSalvo(it, resultado.resp);
+      if (aviso) { it.estado = 'aviso'; it.msg = aviso; } else { it.estado = 'ok'; sumirDepois(it, 6000); }
     } else if (!resultado.ok && resultado.enfileirado) {
       it.estado = 'offline'; sumirDepois(it, 15000);
     } else if (resultado.semFila) {

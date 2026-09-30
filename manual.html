@@ -247,6 +247,16 @@ th{background:var(--surface-2); font-weight:700;}
 .ac-diff{color:var(--accent-2); font-weight:600;}
 .ac-busca{flex:1; min-width:180px; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text);}
 .ac-check{font-size:.85rem; display:flex; align-items:center; gap:6px;}
+.ac-head{align-items:flex-start;}
+.ac-id{flex:1; min-width:150px;}
+.ac-foto-col{flex:0 0 auto;}
+.ac-foto{width:54px; height:54px; border-radius:50%; object-fit:cover; display:block; background:var(--surface);}
+.ac-foto-vazia{display:flex; align-items:center; justify-content:center; font-weight:800; color:var(--muted); border:1px solid var(--border);}
+.foto-grande{position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.86); display:flex; align-items:center; justify-content:center; padding:14px;}
+.foto-grande-box{position:relative; max-width:96vw; max-height:94vh; display:flex; flex-direction:column; align-items:center; gap:8px;}
+.foto-grande-box img{max-width:96vw; max-height:84vh; object-fit:contain; border-radius:12px; background:#111;}
+.foto-grande-x{position:absolute; top:-6px; right:-6px; width:38px; height:38px; border-radius:50%; border:none; background:#fff; color:#111; font-size:1.1rem; font-weight:800; cursor:pointer; z-index:2;}
+.foto-grande-leg{color:#fff; font-size:.85rem;}
 .ac-filtro{display:flex; flex-wrap:wrap; gap:6px 8px; align-items:center; margin:0 0 12px;}
 .ac-filtro-t{font-size:.8rem; color:var(--muted); font-weight:700;}
 .ac-chip{display:inline-flex; align-items:center; gap:5px; font-size:.82rem; padding:5px 10px; border:1px solid var(--border); border-radius:999px; background:var(--surface); cursor:pointer;}
@@ -351,6 +361,24 @@ th{background:var(--surface-2); font-weight:700;}
   .avatar-dropdown{right:-8px;}
   .perfil-fotos{gap:14px;}
 }
+.ds-filtros{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px;}
+.ds-grupo{border:1px solid var(--border); border-radius:10px; margin-bottom:10px; background:var(--surface-2); padding:0 12px;}
+.ds-grupo > summary{cursor:pointer; padding:12px 0; display:flex; flex-direction:column; gap:2px; list-style:none;}
+.ds-grupo > summary::-webkit-details-marker{display:none;}
+.ds-grupo[open] > summary{border-bottom:1px solid var(--border); margin-bottom:8px;}
+.ds-whats{font-size:.78rem; color:var(--muted); font-weight:400; margin-left:4px;}
+.ds-resumo{font-size:.8rem; color:var(--muted);}
+.ds-tent{padding:8px 0; border-bottom:1px solid var(--border); font-size:.86rem;}
+.ds-tent:last-child{border-bottom:none;}
+.ds-tent-top{display:flex; flex-direction:column; gap:2px;}
+.ds-meta{color:var(--muted); font-size:.8rem;}
+.ds-erros{margin-top:6px;}
+.ds-erros summary{cursor:pointer; color:var(--danger,#b00); font-weight:600; font-size:.82rem;}
+.ds-erro{margin:8px 0 0; padding:8px 10px; border-left:3px solid var(--danger,#b00); background:var(--surface); border-radius:6px;}
+.ds-q{font-weight:600;}
+.ds-resp{color:var(--danger,#b00); margin-top:3px;}
+.ds-certa{color:var(--muted); font-size:.8rem; margin-top:2px;}
+.ds-ok{margin-top:4px; font-size:.8rem; color:var(--accent-2); font-weight:600;}
 </style>
 
 <div id="app"></div>
@@ -1562,31 +1590,98 @@ function wireTabEquipe(){
 }
 
 /* ---- Aba 2: Raio-X de Desempenho ---- */
-function renderTabDesempenho(){
-  var resultados = state.adminData.resultados.slice().sort(function(a,b){ return (b.dataHora||'').localeCompare(a.dataHora||''); });
-  var rows = resultados.map(function(r){
-    var pct = Number(r.percentual) || 0;
-    var passou = pct >= 70; // referência simples pra visão geral do RH
-    var dataFmt = r.dataHora ? new Date(r.dataHora).toLocaleString('pt-BR') : '';
-    return '<tr>' +
-      '<td>' + esc(dataFmt) + '</td>' +
-      '<td>' + esc(r.nome || '') + '</td>' +
-      '<td>' + esc(r.manual || '') + '</td>' +
-      '<td>' + esc(r.nota) + '/' + esc(r.total) + '</td>' +
-      '<td>' + pct + '%</td>' +
-      '<td><span class="' + (passou?'badge-aprovado':'badge-reprovado') + '">' + (passou?'Aprovado':'Reprovado') + '</span></td>' +
-    '</tr>';
+function desempEstado(){
+  if (!state.desemp) state.desemp = { busca: '', ordem: 'nome', manual: '', agrupar: true, abertos: {} };
+  return state.desemp;
+}
+function dsTxt(s){ return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function dsErros(r){
+  var lista = [];
+  try{ lista = JSON.parse(r.errosDetalhados || '[]'); }catch(e){}
+  return Array.isArray(lista) ? lista.filter(function(x){ return x && x.pergunta; }) : [];
+}
+function dsDataFmt(r){
+  var d = r.dataHora ? new Date(r.dataHora) : null;
+  return d && !isNaN(d) ? d.toLocaleString('pt-BR') : '—';
+}
+function dsTempo(r){ var d = r.dataHora ? new Date(r.dataHora) : null; return d && !isNaN(d) ? d.getTime() : 0; }
+function dsChave(r){ var w = normWhats(r.whatsapp); return w || ('nome:' + dsTxt(r.nome)); }
+function dsTentativaHtml(r, comNome){
+  var pct = Number(r.percentual) || 0, passou = pct >= 70, erros = dsErros(r);
+  var errosHtml = '';
+  if (erros.length){
+    errosHtml = '<details class="ds-erros"><summary>Ver ' + erros.length + ' erro' + (erros.length > 1 ? 's' : '') + '</summary>' +
+      erros.map(function(e){
+        return '<div class="ds-erro"><div class="ds-q">' + esc(e.pergunta) + '</div>' +
+          '<div class="ds-resp">Respondeu: <strong>' + esc(e.resposta || '(em branco)') + '</strong></div>' +
+          (e.correta ? '<div class="ds-certa">Certa: ' + esc(e.correta) + '</div>' : '') + '</div>';
+      }).join('') + '</details>';
+  } else if (Number(r.nota) === Number(r.total) && Number(r.total) > 0){
+    errosHtml = '<div class="ds-ok">Gabaritou 🎯</div>';
+  }
+  return '<div class="ds-tent">' +
+    '<div class="ds-tent-top">' +
+      (comNome ? '<div class="ds-nome"><strong>' + esc(r.nome || '(sem nome)') + '</strong> <span class="ds-whats">' + esc(normWhats(r.whatsapp)) + '</span></div>' : '') +
+      '<div class="ds-meta"><span>' + esc(dsDataFmt(r)) + '</span> · <span>' + esc(r.manual || '') + '</span></div>' +
+      '<div class="ds-nota"><strong>' + esc(r.nota) + '/' + esc(r.total) + '</strong> · ' + pct + '% <span class="' + (passou ? 'badge-aprovado' : 'badge-reprovado') + '">' + (passou ? 'Aprovado' : 'Reprovado') + '</span></div>' +
+    '</div>' + errosHtml + '</div>';
+}
+function dsFiltrados(){
+  var e = desempEstado(), q = dsTxt(e.busca), d = String(e.busca || '').replace(/\D/g, '');
+  var lista = state.adminData.resultados.filter(function(r){
+    if (e.manual && String(r.manual || '') !== e.manual) return false;
+    if (!q) return true;
+    return dsTxt(r.nome).indexOf(q) !== -1 || (d && normWhats(r.whatsapp).indexOf(d) !== -1);
+  });
+  return lista;
+}
+function dsListaHtml(){
+  var e = desempEstado(), lista = dsFiltrados();
+  if (!lista.length) return '<p class="sub">Nenhuma avaliação encontrada.</p>';
+  function porData(a, b){ return dsTempo(b) - dsTempo(a); }
+  if (!e.agrupar){
+    var flat = lista.slice();
+    if (e.ordem === 'nome') flat.sort(function(a, b){ return dsTxt(a.nome).localeCompare(dsTxt(b.nome)) || porData(a, b); });
+    else if (e.ordem === 'maior') flat.sort(function(a, b){ return (Number(b.percentual) || 0) - (Number(a.percentual) || 0); });
+    else if (e.ordem === 'menor') flat.sort(function(a, b){ return (Number(a.percentual) || 0) - (Number(b.percentual) || 0); });
+    else flat.sort(porData);
+    return flat.map(function(r){ return dsTentativaHtml(r, true); }).join('');
+  }
+  var grupos = {}, ordemChaves = [];
+  lista.forEach(function(r){
+    var k = dsChave(r);
+    if (!grupos[k]) { grupos[k] = { chave: k, nome: r.nome || '(sem nome)', whatsapp: normWhats(r.whatsapp), tentativas: [] }; ordemChaves.push(k); }
+    grupos[k].tentativas.push(r);
+    if (r.nome) grupos[k].nome = r.nome;
+  });
+  var gs = ordemChaves.map(function(k){
+    var g = grupos[k]; g.tentativas.sort(porData);
+    g.ultima = g.tentativas[0];
+    g.melhor = g.tentativas.reduce(function(m, t){ return Math.max(m, Number(t.percentual) || 0); }, 0);
+    g.erros = g.tentativas.reduce(function(m, t){ return m + dsErros(t).length; }, 0);
+    return g;
+  });
+  if (e.ordem === 'nome') gs.sort(function(a, b){ return dsTxt(a.nome).localeCompare(dsTxt(b.nome)); });
+  else if (e.ordem === 'maior') gs.sort(function(a, b){ return b.melhor - a.melhor; });
+  else if (e.ordem === 'menor') gs.sort(function(a, b){ return a.melhor - b.melhor; });
+  else gs.sort(function(a, b){ return dsTempo(b.ultima) - dsTempo(a.ultima); });
+  return gs.map(function(g){
+    var aberto = !!e.abertos[g.chave];
+    return '<details class="ds-grupo" data-chave="' + esc(g.chave) + '"' + (aberto ? ' open' : '') + '>' +
+      '<summary><span class="ds-nome"><strong>' + esc(g.nome) + '</strong> <span class="ds-whats">' + esc(g.whatsapp) + '</span></span>' +
+      '<span class="ds-resumo">' + g.tentativas.length + ' prova' + (g.tentativas.length > 1 ? 's' : '') + ' · melhor ' + g.melhor + '%' + (g.erros ? ' · ' + g.erros + ' erro' + (g.erros > 1 ? 's' : '') : '') + '</span></summary>' +
+      g.tentativas.map(function(t){ return dsTentativaHtml(t, false); }).join('') +
+    '</details>';
   }).join('');
+}
+function renderTabDesempenho(){
+  var e = desempEstado();
+  var resultados = state.adminData.resultados;
+  var manuais = []; resultados.forEach(function(r){ var m = String(r.manual || ''); if (m && manuais.indexOf(m) === -1) manuais.push(m); });
 
   var contagemErros = {};
   resultados.forEach(function(r){
-    var erros = [];
-    try{ erros = JSON.parse(r.errosDetalhados || '[]'); }catch(e){}
-    erros.forEach(function(er){
-      var chave = er.pergunta || '';
-      if (!chave) return;
-      contagemErros[chave] = (contagemErros[chave] || 0) + 1;
-    });
+    dsErros(r).forEach(function(er){ contagemErros[er.pergunta] = (contagemErros[er.pergunta] || 0) + 1; });
   });
   var gaps = Object.keys(contagemErros).map(function(k){ return { pergunta: k, n: contagemErros[k] }; })
     .sort(function(a,b){ return b.n - a.n; }).slice(0, 8);
@@ -1595,27 +1690,57 @@ function renderTabDesempenho(){
   }).join('') : '<p class="sub">Ainda não há erros suficientes registrados pra apontar um padrão.</p>';
 
   return '<div class="admin-panel">' +
-    '<div class="admin-toolbar"><span class="sub">' + resultados.length + ' avaliações registradas</span>' +
+    '<div class="admin-toolbar"><span class="sub" id="ds-contagem"></span>' +
       '<button type="button" class="btn" id="btn-export-csv">⬇️ Exportar relatório em CSV</button>' +
     '</div>' +
-    '<table class="admin-table"><thead><tr><th>Data/Hora</th><th>Nome</th><th>Manual</th><th>Nota</th><th>%</th><th>Status</th></tr></thead>' +
-    '<tbody>' + (rows || '<tr><td colspan="6">Nenhuma avaliação registrada ainda.</td></tr>') + '</tbody></table>' +
+    '<div class="ds-filtros">' +
+      '<input type="search" id="ds-busca" class="ac-busca" placeholder="Buscar por nome ou WhatsApp" value="' + esc(e.busca) + '">' +
+      '<select id="ds-ordem" class="admin-sel" aria-label="Ordenar">' +
+        '<option value="nome"' + (e.ordem === 'nome' ? ' selected' : '') + '>Ordem: nome (A–Z)</option>' +
+        '<option value="recente"' + (e.ordem === 'recente' ? ' selected' : '') + '>Ordem: mais recentes</option>' +
+        '<option value="maior"' + (e.ordem === 'maior' ? ' selected' : '') + '>Ordem: maior nota</option>' +
+        '<option value="menor"' + (e.ordem === 'menor' ? ' selected' : '') + '>Ordem: menor nota</option>' +
+      '</select>' +
+      '<select id="ds-manual" class="admin-sel" aria-label="Manual"><option value="">Todos os manuais</option>' +
+        manuais.map(function(m){ return '<option value="' + esc(m) + '"' + (e.manual === m ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') + '</select>' +
+      '<label class="ac-check"><input type="checkbox" id="ds-agrupar"' + (e.agrupar ? ' checked' : '') + '> Agrupar por pessoa</label>' +
+    '</div>' +
+    '<div id="ds-lista">' + dsListaHtml() + '</div>' +
     '<div class="admin-gaps"><h4>📊 Análise de gaps de conhecimento</h4>' +
       '<p class="sub">Perguntas em que a equipe mais erra -- use como pauta de reforço presencial.</p>' +
       gapsHtml +
     '</div>' +
   '</div>';
 }
-
+function pintarDesempenho(){
+  var el = document.getElementById('ds-lista'); if (el) el.innerHTML = dsListaHtml();
+  var c = document.getElementById('ds-contagem');
+  if (c){ var n = dsFiltrados().length, t = state.adminData.resultados.length; c.textContent = (n === t ? t + ' avaliações registradas' : n + ' de ' + t + ' avaliações'); }
+}
 function wireTabDesempenho(){
+  var e = desempEstado();
+  pintarDesempenho();
+  var busca = document.getElementById('ds-busca');
+  if (busca) busca.addEventListener('input', function(){ e.busca = busca.value.trim(); pintarDesempenho(); });
+  var ordem = document.getElementById('ds-ordem');
+  if (ordem) ordem.addEventListener('change', function(){ e.ordem = ordem.value; pintarDesempenho(); });
+  var man = document.getElementById('ds-manual');
+  if (man) man.addEventListener('change', function(){ e.manual = man.value; pintarDesempenho(); });
+  var agr = document.getElementById('ds-agrupar');
+  if (agr) agr.addEventListener('change', function(){ e.agrupar = agr.checked; pintarDesempenho(); });
+  var lista = document.getElementById('ds-lista');
+  if (lista) lista.addEventListener('toggle', function(ev){
+    var d = ev.target; if (d && d.classList && d.classList.contains('ds-grupo')) e.abertos[d.getAttribute('data-chave')] = d.open;
+  }, true);
   var btn = document.getElementById('btn-export-csv');
   if (!btn) return;
   btn.addEventListener('click', function(){
-    var resultados = state.adminData.resultados;
-    var linhas = ['DataHora;WhatsApp;Nome;Nivel;Manual;Nota;Total;Percentual'];
+    var resultados = dsFiltrados();
+    var linhas = ['DataHora;WhatsApp;Nome;Nivel;Manual;Nota;Total;Percentual;Erros'];
     resultados.forEach(function(r){
-      linhas.push([r.dataHora, r.whatsapp, r.nome, r.nivel, r.manual, r.nota, r.total, r.percentual]
-        .map(function(v){ return String(v==null?'':v).replace(/;/g, ','); }).join(';'));
+      var errosTxt = dsErros(r).map(function(x){ return x.pergunta + ' => ' + (x.resposta || '(em branco)'); }).join(' | ');
+      linhas.push([r.dataHora, r.whatsapp, r.nome, r.nivel, r.manual, r.nota, r.total, r.percentual, errosTxt]
+        .map(function(v){ return String(v==null?'':v).replace(/;/g, ',').replace(/[\r\n]+/g, ' '); }).join(';'));
     });
     var blob = new Blob([linhas.join('\n')], { type: 'text/csv;charset=utf-8;' });
     var a = document.createElement('a');
@@ -1829,18 +1954,30 @@ function acessosEstado(){
 }
 async function carregarAcessos(){
   var a = acessosEstado();
-  var escolhidos = a.filtro ? Object.keys(a.filtro).filter(function(k){ return a.filtro[k]; }) : undefined;
-  var resp = await acessosReq({ action: 'acessos_listar', busca: a.busca, perfis: escolhidos });
+  var resp = await acessosReq({ action: 'acessos_listar', todos: true });
   if (!resp || !resp.ok){
     a.erro = (resp && resp.erro) || 'Não foi possível carregar os acessos.';
   } else {
     a.erro = ''; a.pessoas = resp.pessoas || []; a.perfis = resp.perfis || []; a.permissoes = resp.permissoes || [];
     a.totalClientes = resp.totalClientes || 0; a.eu = resp.eu || state.user.whatsapp;
-    a.contagem = resp.contagem || {}; a.truncado = !!resp.truncado;
+    a.contagem = {}; a.pessoas.forEach(function(x){ a.contagem[x.perfil] = (a.contagem[x.perfil] || 0) + 1; }); a.truncado = !!resp.truncado;
     if (!a.filtro){ a.filtro = {}; a.perfis.forEach(function(x){ a.filtro[x.nome] = (String(x.nome).toLowerCase() !== 'cliente'); }); }
   }
   a.carregado = true;
   if (state.view === 'admin' && state.adminTab === 'acessos'){ pintarFiltroAcessos(); pintarAcessos(); }
+}
+function acFotoHtml(p){
+  if (p.fotoPerfilUrl) return '<img class="ac-foto" referrerpolicy="no-referrer" alt="" src="' + esc(fotoUrlOk(p.fotoPerfilUrl)) + '">';
+  return '<span class="ac-foto ac-foto-vazia">' + esc(avatarIniciais(p.nome)) + '</span>';
+}
+function abrirFotoGrande(url, legenda){
+  var ov = document.createElement('div'); ov.className = 'foto-grande';
+  ov.innerHTML = '<div class="foto-grande-box"><button type="button" class="foto-grande-x" aria-label="Fechar">✕</button><img referrerpolicy="no-referrer" alt="" src="' + esc(fotoUrlOk(url)) + '"><div class="foto-grande-leg">' + esc(legenda || '') + '</div></div>';
+  function fechar(){ if (ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', tecla); }
+  function tecla(ev){ if (ev.key === 'Escape') fechar(); }
+  ov.addEventListener('click', function(ev){ if (ev.target === ov || ev.target.className === 'foto-grande-x') fechar(); });
+  document.addEventListener('keydown', tecla);
+  document.body.appendChild(ov);
 }
 function acessosCard(p){
   var a = acessosEstado();
@@ -1863,22 +2000,41 @@ function acessosCard(p){
   }).join('') + '</div>') : '';
   return '<div class="ac-card' + (ativo ? '' : ' ac-off') + '" data-whats="' + esc(p.whatsapp) + '">' +
     '<div class="ac-head">' +
+      '<div class="ac-foto-col">' + acFotoHtml(p) + '</div>' +
       '<div class="ac-id"><strong>' + esc(p.nome || '(sem nome)') + '</strong>' + (p.whatsapp === a.eu ? ' <span class="ac-you">você</span>' : '') +
         '<div class="ac-sub">' + esc(p.whatsapp) + ' · <span class="' + (ativo ? 'badge-ativo' : 'badge-inativo') + '">' + (ativo ? 'Ativo' : 'Inativo') + '</span></div></div>' +
       '<div class="ac-actions">' +
         '<select class="admin-sel ac-perfil" aria-label="Perfil">' + opts + '</select>' +
         '<button type="button" class="admin-mini-btn ac-abrir">' + (aberto ? '▾' : '▸') + ' Permissões (' + qtd + ')' + (diffs ? ' ✱' + diffs : '') + '</button>' +
+        (p.fotoCorpoUrl ? '<button type="button" class="admin-mini-btn ac-corpo">🧍 Foto de corpo inteiro</button>' : '') +
         '<button type="button" class="admin-mini-btn ac-status" data-ativo="' + (ativo ? '1' : '0') + '">' + (ativo ? 'Desativar' : 'Reativar') + '</button>' +
         '<button type="button" class="admin-mini-btn ac-reset">Resetar senha</button>' +
       '</div>' +
     '</div>' + permsHtml + '</div>';
 }
+function acTxt(s){ return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function acessosCasaBusca(p, a){
+  var q = acTxt(a.busca), d = String(a.busca || '').replace(/\D/g, '');
+  if (!q) return true;
+  return acTxt(p.nome).indexOf(q) !== -1 || (d && String(p.whatsapp).indexOf(d) !== -1);
+}
+function acessosPerfilMarcado(p, a){
+  if (!a.filtro || !(p.perfil in a.filtro)) return true; // perfil que não está na lista (renomeado): nunca some
+  return !!a.filtro[p.perfil];
+}
+function acessosVisiveis(){
+  var a = acessosEstado();
+  return a.pessoas.filter(function(p){ return acessosPerfilMarcado(p, a) && acessosCasaBusca(p, a); });
+}
 function acessosListaHtml(){
   var a = acessosEstado();
   if (!a.carregado) return '<p class="sub">Carregando acessos...</p>';
   if (a.erro) return '<p class="sub" style="color:var(--danger,#b00)">' + esc(a.erro) + '</p>';
-  if (!a.pessoas.length) return '<p class="sub">Ninguém encontrado.' + ((a.filtro && !Object.keys(a.filtro).some(function(k){ return a.filtro[k]; }) ? ' Marque pelo menos um perfil acima.' : (a.busca ? '' : ' Confira os perfis marcados acima.'))) + '</p>';
-  return (a.truncado ? '<p class="sub">Mostrando as 300 primeiras. Use a busca ou desmarque perfis para afinar.</p>' : '') + a.pessoas.map(acessosCard).join('');
+  var vis = acessosVisiveis();
+  var fora = a.busca ? a.pessoas.filter(function(p){ return !acessosPerfilMarcado(p, a) && acessosCasaBusca(p, a); }).length : 0;
+  var notaFora = fora ? '<p class="sub">Mais ' + fora + ' resultado(s) em perfis desmarcados acima.</p>' : '';
+  if (!vis.length) return notaFora + '<p class="sub">Ninguém encontrado.' + ((a.filtro && !Object.keys(a.filtro).some(function(k){ return a.filtro[k]; }) ? ' Marque pelo menos um perfil acima.' : (a.busca ? '' : ' Confira os perfis marcados acima.'))) + '</p>';
+  return (a.truncado ? '<p class="sub">Mostrando as 300 primeiras. Use a busca ou desmarque perfis para afinar.</p>' : '') + notaFora + vis.map(acessosCard).join('');
 }
 function filtroAcessosHtml(){
   var a = acessosEstado();
@@ -1906,7 +2062,7 @@ function renderTabAcessos(){
     '<p class="sub" style="margin-top:0">Escolha um <strong>perfil</strong> para marcar as permissões padrão. Depois, dentro de <em>Permissões</em>, marque ou desmarque o que quiser para aquela pessoa (✱ = diferente do padrão do perfil). Vale na hora, no portal e no catálogo.</p>' + dicas +
     '<div class="admin-toolbar">' +
       '<input type="search" id="ac-busca" placeholder="Buscar por nome ou WhatsApp" value="' + esc(a.busca) + '" class="ac-busca">' +
-      '<span><button type="button" class="admin-mini-btn" id="ac-nova">+ Nova pessoa</button><button type="button" class="admin-mini-btn" id="ac-log">Histórico</button></span>' +
+      '<span><button type="button" class="admin-mini-btn" id="ac-nova">+ Nova pessoa</button><button type="button" class="admin-mini-btn" id="ac-log">Histórico</button><button type="button" class="admin-mini-btn" id="ac-recarregar">↻ Atualizar</button></span>' +
     '</div>' +
     '<div class="ac-filtro" id="ac-filtro">' + filtroAcessosHtml() + '</div>' +
     '<div class="ac-form" id="ac-form-nova"' + (a.criando ? '' : ' hidden') + '>' +
@@ -1924,10 +2080,10 @@ function wireTabAcessos(){
   var busca = document.getElementById('ac-busca'), timer = null;
   if (busca) busca.addEventListener('input', function(){
     clearTimeout(timer);
-    timer = setTimeout(function(){ a.busca = busca.value.trim(); carregarAcessos(); }, 350);
+    timer = setTimeout(function(){ a.busca = busca.value.trim(); pintarAcessos(); }, 60);
   });
   var fil = document.getElementById('ac-filtro'), timerFiltro = null;
-  function recarregarFiltro(){ clearTimeout(timerFiltro); timerFiltro = setTimeout(function(){ carregarAcessos(); }, 250); }
+  function recarregarFiltro(){ pintarFiltroAcessos(); pintarAcessos(); }
   if (fil){
     fil.addEventListener('change', function(e){
       var c = e.target; if (!c || !c.getAttribute || c.getAttribute('data-perfil') === null) return;
@@ -1936,7 +2092,7 @@ function wireTabAcessos(){
     fil.addEventListener('click', function(e){
       var id = e.target && e.target.id; if (id !== 'ac-todos' && id !== 'ac-nenhum') return;
       a.filtro = a.filtro || {}; a.perfis.forEach(function(x){ a.filtro[x.nome] = (id === 'ac-todos'); });
-      pintarFiltroAcessos(); recarregarFiltro();
+      recarregarFiltro();
     });
   }
   var nova = document.getElementById('ac-nova');
@@ -1954,6 +2110,8 @@ function wireTabAcessos(){
     a.criando = false; ['ac-n-nome', 'ac-n-whats', 'ac-n-senha'].forEach(function(i){ document.getElementById(i).value = ''; });
     await carregarAcessos();
   });
+  var recarregar = document.getElementById('ac-recarregar');
+  if (recarregar) recarregar.addEventListener('click', async function(){ recarregar.disabled = true; await carregarAcessos(); recarregar.disabled = false; toast('Lista atualizada.'); });
   var logBtn = document.getElementById('ac-log');
   if (logBtn) logBtn.addEventListener('click', async function(){
     var box = document.getElementById('ac-log-box');
@@ -1985,6 +2143,7 @@ function wireTabAcessos(){
   lista.addEventListener('click', async function(e){
     var p = pessoaDe(e.target); if (!p) return;
     var btn = e.target.closest('button'); if (!btn) return;
+    if (btn.classList.contains('ac-corpo')){ abrirFotoGrande(p.fotoCorpoUrl, p.nome + ' — corpo inteiro'); return; }
     if (btn.classList.contains('ac-abrir')){ a.abertos[p.whatsapp] = !a.abertos[p.whatsapp]; pintarAcessos(); return; }
     if (btn.classList.contains('ac-status')){
       var ativoAgora = btn.getAttribute('data-ativo') === '1';
