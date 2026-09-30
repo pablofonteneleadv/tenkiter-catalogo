@@ -62,14 +62,35 @@ if (window.parent !== window && /[?&]embed=1/.test(location.search)) {
 const E = escaparHtml;
 let sessao = null, novos = [], antigos = [], STATUS = [], MOTIVOS = [], aba = 'novos', busca = '', fStatus = '', fEtapa = '', carregou = { novos: false, antigos: false };
 
+function fotoUrlOk(u) {
+  u = String(u || '');
+  const m = u.match(/drive\.google\.com\/(?:uc\?(?:[^#]*&)?id=|file\/d\/|open\?id=|thumbnail\?(?:[^#]*&)?id=)([\w-]+)/) || u.match(/googleusercontent\.com\/d\/([\w-]+)/);
+  return m ? 'https://lh3.googleusercontent.com/d/' + m[1] : u;
+}
+// se a imagem não abrir: 1) endereço alternativo do Drive, 2) o script lê o arquivo no Drive e devolve a foto, 3) desiste
+function fotoErro(img) {
+  const m = String(img.src).match(/googleusercontent\.com\/d\/([\w-]+)/);
+  if (m && !img.dataset.t1) { img.dataset.t1 = '1'; img.src = 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w400'; return; }
+  if (img.dataset.w && !img.dataset.t2) {
+    img.dataset.t2 = '1';
+    chamar('curriculos_foto', { alvo: img.dataset.w }).then(r => { if (r && r.ok) img.src = r.dataUrl; else img.style.visibility = 'hidden'; });
+    return;
+  }
+  img.style.visibility = 'hidden';
+}
+
 async function chamar(action, corpo) {
   const s = getSessao(); if (!s) return { ok: false, erro: 'Entre de novo.', sessaoInvalida: true };
-  try {
-    const r = await fetch(TREIN_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ token: TREIN_TOKEN, action, whatsapp: s.whatsapp, sessao: s.sessao }, corpo || {})) });
-    const j = await r.json();
-    if (j && (j.sessaoInvalida)) { limparSessao(); }
-    return j;
-  } catch (e) { return { ok: false, erro: 'Sem conexão.' }; }
+  for (let tentativa = 1; tentativa <= 2; tentativa++) {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 30000);
+    try {
+      const r = await fetch(TREIN_URL, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ token: TREIN_TOKEN, action, whatsapp: s.whatsapp, sessao: s.sessao }, corpo || {})) });
+      const j = await r.json(); clearTimeout(t);
+      if (j && (j.sessaoInvalida)) { limparSessao(); }
+      return j;
+    } catch (e) { clearTimeout(t); /* o Apps Script às vezes demora a "acordar": tenta mais uma vez */ }
+  }
+  return { ok: false, erro: 'Sem conexão ou o servidor demorou demais.' };
 }
 
 function telaLogin(msg) {
@@ -82,12 +103,26 @@ function telaLogin(msg) {
     iniciar();
   };
 }
+const EMBUTIDO = /[?&]embed=1/.test(location.search);
+function falhaInicial(msg) {
+  $('app').innerHTML = `<div class="card"><h3 style="margin-top:0">Não foi possível carregar</h3><p>${E(msg || 'Tente de novo.')}</p><button id="tentar">Tentar de novo</button></div>`;
+  $('tentar').onclick = () => { $('app').innerHTML = '<div class="card">Carregando…</div>'; iniciar(); };
+}
 async function iniciar() {
-  const u = await conferirSessao();
-  if (!u) return telaLogin('');
-  if (u.semRede) { $('app').innerHTML = '<div class="erro">Sem conexão. Tente de novo.</div>'; return; }
-  if (!temPermissao(u, 'dados_pessoais') && !temPermissao(u, 'gerir_acessos')) { $('app').innerHTML = '<div class="card"><h3 style="margin-top:0">Sem acesso</h3><p>Seu perfil não permite ver currículos. Peça ao Admin total para liberar "Ver dados pessoais dos colegas".</p></div>'; return; }
-  sessao = u; await carregarNovos();
+  if (EMBUTIDO) {
+    // dentro do portal a pessoa já está logada; o servidor confere a permissão a cada pedido (não depende do outro servidor)
+    const s = getSessao(); if (!s) return falhaInicial('Sua sessão expirou. Saia e entre de novo no portal.');
+    sessao = { whatsapp: s.whatsapp };
+  } else {
+    const u = await Promise.race([conferirSessao(), new Promise(res => setTimeout(() => res({ semRede: true }), 30000))]);
+    if (!u) return telaLogin('');
+    if (u.semRede) return falhaInicial('Sem conexão ou o servidor demorou demais.');
+    if (!temPermissao(u, 'dados_pessoais') && !temPermissao(u, 'gerir_acessos')) { $('app').innerHTML = '<div class="card"><h3 style="margin-top:0">Sem acesso</h3><p>Seu perfil não permite ver currículos. Peça ao Admin total para liberar "Ver dados pessoais dos colegas".</p></div>'; return; }
+    sessao = u;
+  }
+  const r = await chamar('curriculos_listar');
+  if (!r.ok) return falhaInicial(r.semPermissao ? 'Seu perfil não permite ver currículos. Peça ao Admin total para liberar "Ver dados pessoais dos colegas".' : r.erro);
+  novos = r.curriculos; STATUS = r.status; MOTIVOS = r.motivos; carregou.novos = true;
   const abrir = (new URLSearchParams(location.search).get('abrir') || '').replace(/\D/g, '');
   if (abrir) { busca = abrir; }
   desenhar();
@@ -152,8 +187,8 @@ const CAMPOS = [
 function itemNovo(r) {
   const d = document.createElement('div'); d.className = 'item';
   const dl = CAMPOS.map(([g, cs]) => `<div class="grupo">${g}</div>` + cs.filter(([k]) => r[k]).map(([k, rot]) => `<dt>${rot}</dt><dd>${E(k === 'Nascimento' || k === 'Retomar18Em' ? fmtData(r[k]) : (k === 'EnviadoEm' || k === 'LGPD_Aceite' ? new Date(r[k]).toLocaleString('pt-BR') : r[k]))}</dd>`).join('')).join('');
-  d.innerHTML = `<div class="topo"><div style="display:flex;gap:10px;align-items:center">${r.FotoUrl ? `<img src="${E(r.FotoUrl)}" referrerpolicy="no-referrer" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none">` : '<div style="width:44px;height:44px;border-radius:50%;background:#eee;flex:none"></div>'}<div><div class="nome">${E(r.Nome)}</div><div class="meta">${E(r.Idade ? r.Idade + ' anos · ' : '')}${E(r.Moradia || '')}${r.Etapa === 'Menor de 18' ? ' · faz 18 em ' + fmtData(r.Retomar18Em) : ''}</div></div></div><div>${tagEtapa(r)} <span class="tag">${E(r.Status || 'Novo')}</span></div></div>
-    <div class="det">${r.FotoUrl ? `<div style="margin:12px 0"><img src="${E(r.FotoUrl)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:220px;width:100%;border-radius:12px"></div>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}</div>
+  d.innerHTML = `<div class="topo"><div style="display:flex;gap:10px;align-items:center">${r.FotoUrl ? `<img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none">` : '<div style="width:44px;height:44px;border-radius:50%;background:#eee;flex:none"></div>'}<div><div class="nome">${E(r.Nome)}</div><div class="meta">${E(r.Idade ? r.Idade + ' anos · ' : '')}${E(r.Moradia || '')}${r.Etapa === 'Menor de 18' ? ' · faz 18 em ' + fmtData(r.Retomar18Em) : ''}</div></div></div><div>${tagEtapa(r)} <span class="tag">${E(r.Status || 'Novo')}</span></div></div>
+    <div class="det">${r.FotoUrl ? `<div style="margin:12px 0"><img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:220px;width:100%;border-radius:12px"></div>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}</div>
     ${r.LegadoChamar ? `<div class="aviso">Anotação antiga da planilha ("chamar?"): <b>${E(r.LegadoChamar)}</b></div>` : ''}
     <div class="edit"><div class="linha"><select data-k="st">${STATUS.map(s => `<option ${s === (r.Status || 'Novo') ? 'selected' : ''}>${E(s)}</option>`).join('')}</select>
     <select data-k="mo"><option value="">Motivo (se descartada ou desistiu)</option>${MOTIVOS.map(s => `<option ${s === r.Motivo ? 'selected' : ''}>${E(s)}</option>`).join('')}</select></div>

@@ -2020,13 +2020,21 @@ async function carregarAcessos(){
   a.carregado = true;
   if (state.view === 'admin' && state.adminTab === 'acessos'){ pintarFiltroAcessos(); pintarAcessos(); }
 }
+/** Plano B da foto: o script lê o arquivo no Drive e devolve a imagem (não depende do link público). */
+function fotoFallback(img, alvo, tipo){
+  if (img.dataset.fb || !state.user){ img.style.visibility = 'hidden'; return; }
+  img.dataset.fb = '1';
+  submitResult({ action:'curriculos_foto', whatsapp: state.user.whatsapp, sessao: state.user.password, alvo: alvo, tipo: tipo || 'perfil' }).then(function(r){
+    if (r && r.ok) img.src = r.dataUrl; else img.style.visibility = 'hidden';
+  });
+}
 function acFotoHtml(p){
-  if (p.fotoPerfilUrl) return '<img class="ac-foto" referrerpolicy="no-referrer" alt="" src="' + esc(fotoUrlOk(p.fotoPerfilUrl)) + '">';
+  if (p.fotoPerfilUrl) return '<img class="ac-foto" referrerpolicy="no-referrer" alt="" src="' + esc(fotoUrlOk(p.fotoPerfilUrl)) + '" onerror="fotoFallback(this,\'' + esc(p.whatsapp) + '\')">';
   return '<span class="ac-foto ac-foto-vazia">' + esc(avatarIniciais(p.nome)) + '</span>';
 }
-function abrirFotoGrande(url, legenda){
+function abrirFotoGrande(url, legenda, alvoFoto){
   var ov = document.createElement('div'); ov.className = 'foto-grande';
-  ov.innerHTML = '<div class="foto-grande-box"><button type="button" class="foto-grande-x" aria-label="Fechar">✕</button><img referrerpolicy="no-referrer" alt="" src="' + esc(fotoUrlOk(url)) + '"><div class="foto-grande-leg">' + esc(legenda || '') + '</div></div>';
+  ov.innerHTML = '<div class="foto-grande-box"><button type="button" class="foto-grande-x" aria-label="Fechar">✕</button><img referrerpolicy="no-referrer" alt="" src="' + esc(fotoUrlOk(url)) + '" onerror="fotoFallback(this,\'' + esc(alvoFoto || '') + '\',\'corpo\')"><div class="foto-grande-leg">' + esc(legenda || '') + '</div></div>';
   function fechar(){ if (ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', tecla); }
   function tecla(ev){ if (ev.key === 'Escape') fechar(); }
   ov.addEventListener('click', function(ev){ if (ev.target === ov || ev.target.className === 'foto-grande-x') fechar(); });
@@ -2222,7 +2230,7 @@ function wireTabAcessos(){
     var p = pessoaDe(e.target); if (!p) return;
     var btn = e.target.closest('button'); if (!btn) return;
     if (btn.classList.contains('ac-vercv')){ state.cvAbrir = p.whatsapp; state.adminTab = 'curriculos'; render(); return; }
-    if (btn.classList.contains('ac-corpo')){ abrirFotoGrande(p.fotoCorpoUrl, p.nome + ' — corpo inteiro'); return; }
+    if (btn.classList.contains('ac-corpo')){ abrirFotoGrande(p.fotoCorpoUrl, p.nome + ' — corpo inteiro', p.whatsapp); return; }
     if (btn.classList.contains('ac-abrir')){ a.abertos[p.whatsapp] = !a.abertos[p.whatsapp]; pintarAcessos(); return; }
     if (btn.classList.contains('ac-status')){
       var ativoAgora = btn.getAttribute('data-ativo') === '1';
