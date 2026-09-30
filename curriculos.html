@@ -41,10 +41,12 @@
   .oculto { display:none !important; }
   .nav-inferior { position:fixed; bottom:0; left:0; right:0; z-index:50; background:var(--preto); display:flex; }
   .nav-inferior a { flex:1; text-align:center; padding:9px 4px; color:#999; text-decoration:none; font-size:.68rem; font-weight:700; } .nav-inferior a.ativo { color:var(--laranja); }
+  html.embed header, html.embed .nav-inferior { display:none; } html.embed body { padding-bottom:0; background:transparent; } html.embed main { padding:0; max-width:none; }
   @media(max-width:560px){ dl { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
+<script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed');</script>
 <header>Currículos</header>
 <main id="app"><div class="card">Carregando…</div></main>
 <nav class="nav-inferior"><a href="index.html">👗<br>Catálogo</a><a href="admin.html">🔧<br>Gestão</a><a href="curriculos.html" class="ativo">📄<br>Currículos</a></nav>
@@ -53,6 +55,10 @@
 const TREIN_URL = 'https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec'; // mesmo backend do treinamento (manual.html)
 const TREIN_TOKEN = 'tenkiter2026';
 const $ = id => document.getElementById(id);
+if (window.parent !== window && /[?&]embed=1/.test(location.search)) {
+  const avisar = () => { try { parent.postMessage({ tkCvAlt: document.body.offsetHeight }, location.origin); } catch (e) {} };
+  new ResizeObserver(avisar).observe(document.body); window.addEventListener('load', avisar); setInterval(avisar, 1500);
+}
 const E = escaparHtml;
 let sessao = null, novos = [], antigos = [], STATUS = [], MOTIVOS = [], aba = 'novos', busca = '', fStatus = '', fEtapa = '', carregou = { novos: false, antigos: false };
 
