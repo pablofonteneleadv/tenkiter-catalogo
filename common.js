@@ -38,6 +38,96 @@ function ehNovidade(p) {
   return p.Novidade === true || String(p.Novidade).toUpperCase() === 'TRUE';
 }
 
+
+/* ===================== v2: sessão única (portal + admin + catálogo) =====================
+ * O login é o mesmo do portal de treinamento (WhatsApp + senha, cadastro único).
+ * A sessão fica em localStorage 'tm_session' -- a mesma chave do portal -- então
+ * entrar em um lugar vale nos outros. Guarda só um token, nunca a senha. */
+const SESSAO_CHAVE = 'tm_session';
+
+function normalizarWhats(w) {
+  let d = String(w || '').replace(/\D/g, '');
+  if (d.length >= 12 && d.slice(0, 2) === '55') d = d.slice(2);
+  return d;
+}
+
+function getSessao() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSAO_CHAVE) || 'null');
+    return s && s.whatsapp && s.sessao ? s : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function salvarSessao(whatsapp, token) {
+  try { localStorage.setItem(SESSAO_CHAVE, JSON.stringify({ whatsapp: whatsapp, sessao: token })); } catch (e) {}
+}
+
+function limparSessao() {
+  try { localStorage.removeItem(SESSAO_CHAVE); } catch (e) {}
+}
+
+/** POST simples ao backend; nunca lança (devolve { ok:false, semRede:true } sem internet). */
+async function apiPost(corpo) {
+  try {
+    const resp = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(corpo)
+    });
+    return await resp.json();
+  } catch (e) {
+    return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.', semRede: true };
+  }
+}
+
+/** Pergunta a versão ao backend. null = sem rede; {} = backend antigo (sem contas). */
+async function versaoServidor() {
+  try {
+    const resp = await fetch(API_URL + '?action=versao');
+    const j = await resp.json();
+    return j && j.ok ? j : {};
+  } catch (e) {
+    return null;
+  }
+}
+
+async function entrarComSenha(whatsapp, senha) {
+  const r = await apiPost({ action: 'login', whatsapp: normalizarWhats(whatsapp), senha: senha });
+  if (r && r.ok && r.sessao && r.usuario) salvarSessao(r.usuario.whatsapp, r.sessao);
+  return r;
+}
+
+/** Confere a sessão salva. Devolve o usuário ({name, permissoes...}), null se não há/expirou, ou { semRede:true }. */
+async function conferirSessao() {
+  const s = getSessao();
+  if (!s) return null;
+  const r = await apiPost({ action: 'sessao', whatsapp: s.whatsapp, sessao: s.sessao });
+  if (r && r.ok && r.usuario) {
+    if (r.sessao && r.sessao !== s.sessao) salvarSessao(r.usuario.whatsapp, r.sessao);
+    return r.usuario;
+  }
+  if (r && r.semRede) return { semRede: true };
+  if (r && (r.sessaoInvalida || r.inativa)) limparSessao();
+  return null;
+}
+
+async function registrarClienteApi(nome, whatsapp, senha) {
+  const r = await apiPost({ action: 'registrar_cliente', nome: nome, whatsapp: normalizarWhats(whatsapp), senha: senha });
+  if (r && r.ok && r.sessao && r.usuario) salvarSessao(r.usuario.whatsapp, r.sessao);
+  return r;
+}
+
+function temPermissao(usuario, chave) {
+  return !!(usuario && Array.isArray(usuario.permissoes) && usuario.permissoes.indexOf(chave) !== -1);
+}
+
+/** Escapa texto vindo da planilha antes de colocar em HTML (nomes/descrições nunca viram código). */
+function escaparHtml(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
 /* ===================== Configurações (API_URL editável) ===================== */
 
 function definirApiUrlPersonalizada(url) {
@@ -76,6 +166,7 @@ function toggleFavorito(id) {
     atuais.push(idStr);
   }
   localStorage.setItem('tenkiter_favoritos', JSON.stringify(atuais));
+  if (typeof salvarContaClienteDepois === 'function') salvarContaClienteDepois();
   return atuais.includes(idStr);
 }
 
@@ -91,6 +182,7 @@ function getSacola() {
 
 function salvarSacola(lista) {
   localStorage.setItem('tenkiter_sacola', JSON.stringify(lista));
+  if (typeof salvarContaClienteDepois === 'function') salvarContaClienteDepois();
 }
 
 function estaNaSacola(id) {
@@ -117,6 +209,38 @@ function limparSacola() {
   salvarSacola([]);
 }
 
+
+/* ===================== v2: favoritos e sacola na conta do cliente ===================== */
+
+/** Une o que está neste aparelho com o que está salvo na conta (nada se perde) e grava o resultado nos dois lados. */
+async function sincronizarContaCliente() {
+  const s = getSessao();
+  if (!s) return { ok: false };
+  const r = await apiPost({ action: 'cliente_dados', whatsapp: s.whatsapp, sessao: s.sessao });
+  if (!r || !r.ok) return { ok: false, sessaoInvalida: !!(r && (r.sessaoInvalida || r.exigeLogin)) };
+  _contaSincronizada = true; // a partir daqui mudanças locais já podem ser gravadas na conta
+  const uniao = (a, b) => Array.from(new Set((a || []).concat(b || []).map(String)));
+  const favoritos = uniao(getFavoritos(), r.favoritos);
+  const sacola = uniao(getSacola(), r.sacola);
+  localStorage.setItem('tenkiter_favoritos', JSON.stringify(favoritos));
+  salvarSacola(sacola);
+  await apiPost({ action: 'cliente_salvar', whatsapp: s.whatsapp, sessao: s.sessao, favoritos: favoritos, sacola: sacola });
+  return { ok: true, favoritos: favoritos, sacola: sacola };
+}
+
+let _contaSincronizada = false;
+let _timerSalvarConta = null;
+/** Agenda o envio de favoritos/sacola para a conta (junta várias mudanças seguidas). Sem login: não faz nada. */
+function salvarContaClienteDepois() {
+  if (!getSessao() || !_contaSincronizada) return; // antes da 1ª sincronização, gravar poderia apagar o que já está na conta
+  clearTimeout(_timerSalvarConta);
+  _timerSalvarConta = setTimeout(() => {
+    const s = getSessao();
+    if (!s) return;
+    apiPost({ action: 'cliente_salvar', whatsapp: s.whatsapp, sessao: s.sessao, favoritos: getFavoritos(), sacola: getSacola() });
+  }, 800);
+}
+
 /* ===================== Fila offline (retry de ações do admin quando a internet cai) ===================== */
 
 function getFilaOffline() {
@@ -128,13 +252,21 @@ function getFilaOffline() {
 }
 
 function salvarFilaOffline(lista) {
-  localStorage.setItem('tenkiter_fila_offline', JSON.stringify(lista));
+  try {
+    localStorage.setItem('tenkiter_fila_offline', JSON.stringify(lista));
+    return true;
+  } catch (e) {
+    return false; // sem espaço no navegador (fotos grandes na fila)
+  }
 }
 
 function enfileirarAcaoOffline(corpo) {
   const fila = getFilaOffline();
   fila.push({ corpo: corpo, criadoEm: new Date().toISOString() });
-  salvarFilaOffline(fila);
+  if (!salvarFilaOffline(fila)) {
+    fila.pop();
+    if (typeof alert === 'function') alert('Sem internet e sem espaço para guardar esta ação (foto muito grande). Tente de novo quando a internet voltar.');
+  }
   return fila.length;
 }
 
@@ -163,17 +295,38 @@ async function enviarComFila(corpo) {
  * Para no primeiro erro de rede (mantém o resto na fila para tentar depois).
  * Retorna { enviados, restantes }.
  */
+let _sincronizandoFila = false;
 async function sincronizarFilaOffline() {
+  if (_sincronizandoFila) return { enviados: 0, restantes: getFilaOffline().length, ocupado: true };
+  _sincronizandoFila = true;
+  try { return await _sincronizarFilaOffline(); } finally { _sincronizandoFila = false; }
+}
+function _donoDoToken(t) { const m = /^tk2\.(\d+)\./.exec(String(t || '')); return m ? m[1] : ''; }
+async function _sincronizarFilaOffline() {
   const fila = getFilaOffline();
-  let enviados = 0;
+  let enviados = 0, recusadas = 0;
   while (fila.length > 0) {
     const item = fila[0];
     try {
-      await fetch(API_URL, {
+      let resp = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(item.corpo)
       }).then(r => r.json());
+      const falhaDeAcesso = (r) => r && r.ok === false && (r.exigeLogin || r.sessaoInvalida || r.pinInvalido || r.inativa || r.bloqueado);
+      const donoAntigo = _donoDoToken(item.corpo.pin), donoAtual = typeof credencialAdmin === 'function' ? _donoDoToken(credencialAdmin()) : '';
+      // só reaproveita a credencial de agora se a ação era da MESMA pessoa (ou do PIN antigo): nunca troca o autor
+      if (falhaDeAcesso(resp) && typeof credencialAdmin === 'function' && credencialAdmin() && item.corpo.pin !== credencialAdmin() && (!donoAntigo || donoAntigo === donoAtual)) {
+        // login trocado/expirado desde que a ação entrou na fila: tenta 1 vez com a credencial atual
+        item.corpo.pin = credencialAdmin();
+        resp = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(item.corpo)
+        }).then(r => r.json());
+      }
+      if (falhaDeAcesso(resp)) break; // sem acesso agora: mantém na fila em vez de perder
+      if (resp && resp.ok === false) recusadas++; // o servidor recusou (ex.: sem permissão): não adianta reenviar
       fila.shift();
       enviados++;
       salvarFilaOffline(fila);
@@ -181,5 +334,5 @@ async function sincronizarFilaOffline() {
       break;
     }
   }
-  return { enviados: enviados, restantes: fila.length };
+  return { enviados: enviados, restantes: fila.length, recusadas: recusadas };
 }

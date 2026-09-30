@@ -165,9 +165,39 @@
   .nav-inferior a { flex: 1; text-align: center; padding: 9px 4px 8px; color: #999; text-decoration: none; font-size: 0.68rem; font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .nav-inferior a .icone-nav { font-size: 1.15rem; }
   .nav-inferior a.ativo { color: var(--laranja); }
+  /* v2: login único */
+  #login-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.88); display: none; align-items: center; justify-content: center; padding: 16px; }
+  #login-overlay.visivel { display: flex; }
+  .lo-box { background: #fff; border-radius: 16px; padding: 22px 20px; width: 100%; max-width: 380px; }
+  .lo-box h2 { margin: 0 0 6px; font-size: 1.1rem; }
+  .lo-box p { margin: 0 0 12px; font-size: 0.85rem; color: #555; }
+  .lo-box input { width: 100%; padding: 12px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 10px; font-size: 1rem; }
+  .lo-box button.lo-principal { width: 100%; padding: 12px; border: none; border-radius: 10px; background: var(--laranja); color: #fff; font-weight: 800; font-size: 1rem; cursor: pointer; }
+  .lo-erro { color: #c62828; font-size: 0.85rem; min-height: 1.1em; margin-bottom: 6px; }
+  .lo-links { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; font-size: 0.8rem; }
+  .lo-link { background: none; border: none; color: #0f5fa8; cursor: pointer; padding: 0; font-size: 0.8rem; text-decoration: underline; }
+  .sem-cadastrar .btn-editar, .sem-cadastrar .btn-duplicar, .sem-cadastrar #btn-bulk-novidade { display: none !important; }
+  .sem-excluir .btn-arquivar, .sem-excluir .btn-reativar, .sem-excluir .btn-excluir, .sem-excluir #btn-bulk-arquivar, .sem-excluir #btn-bulk-reativar { display: none !important; }
+  .sem-precos #btn-bulk-preco { display: none !important; }
+  .sem-auditoria #btn-abrir-auditoria, .sem-push #btn-abrir-push, .sem-portal a[href="manual.html"] { display: none !important; }
 </style>
 </head>
 <body>
+
+<div id="login-overlay" role="dialog" aria-modal="true" aria-labelledby="lo-titulo">
+  <div class="lo-box">
+    <h2 id="lo-titulo">Entrar na Área de Gestão</h2>
+    <p>Use o mesmo WhatsApp e a mesma senha do portal de treinamento.</p>
+    <input type="tel" id="lo-whats" placeholder="WhatsApp com DDD" autocomplete="username" inputmode="tel">
+    <input type="password" id="lo-senha" placeholder="Senha" autocomplete="current-password">
+    <div class="lo-erro" id="lo-erro"></div>
+    <button type="button" class="lo-principal" id="lo-entrar">Entrar</button>
+    <div class="lo-links">
+      <button type="button" class="lo-link" id="lo-pin" hidden>Entrar com o PIN antigo</button>
+      <a href="index.html" class="lo-link">Voltar ao catálogo</a>
+    </div>
+  </div>
+</div>
 
 <div id="toast-carregando"><span class="spinner-mini"></span><span id="texto-toast">Carregando peças...</span></div>
 
@@ -182,7 +212,7 @@
 <main>
 
   <div class="usuario-bar">
-    <div>Atendente: <strong id="lbl-funcionario">Anônimo</strong></div>
+    <div>Atendente: <strong id="lbl-funcionario">Anônimo</strong> <span id="lbl-perfil" style="font-size:0.72rem;color:#777;"></span></div>
     <div class="botoes-user">
       <button type="button" class="btn-trocar-user" id="btn-trocar-user">Identificar-se</button>
       <button type="button" class="btn-sair" id="btn-sair">Sair</button>
@@ -350,6 +380,13 @@
 <script>
   let adminPin = sessionStorage.getItem('tenkiter_admin_pin') || '';
   let funcionarioNome = localStorage.getItem('tenkiter_funcionario') || '';
+  let modoLogin = false;      // true: o servidor tem contas (WhatsApp + senha + permissões)
+  let pinAindaAtivo = false;  // o PIN antigo ainda vale no servidor
+  let usuarioAdmin = null;    // quem está logado (modo login)
+  let servidorComContas = false; // o backend já tem contas/permissões (v2)
+
+  /** Credencial que as ações enviam no campo "pin": o token de login, ou o PIN antigo. */
+  function credencialAdmin() { return adminPin; }
 
   function identificarFuncionario() {
     const nome = prompt('Digite seu nome/identificação (ex: Carla, Pablo):', funcionarioNome);
@@ -368,15 +405,131 @@
     }
   }
 
-  if (!funcionarioNome) identificarFuncionario();
-  else document.getElementById('lbl-funcionario').textContent = funcionarioNome;
-  if (!adminPin) pedirPin();
+  /* ---------- v2: login único ---------- */
+  const NOMES_PERMISSOES = [
+    ['sem-cadastrar', 'catalogo_cadastrar'], ['sem-excluir', 'catalogo_excluir'], ['sem-precos', 'catalogo_precos'],
+    ['sem-auditoria', 'catalogo_auditoria'], ['sem-push', 'catalogo_push'], ['sem-portal', 'portal']
+  ];
+
+  function aplicarPermissoes(usuario) {
+    NOMES_PERMISSOES.forEach(([classe, chave]) => document.body.classList.toggle(classe, !temPermissao(usuario, chave)));
+    const card = document.getElementById('form-produto').closest('.card');
+    if (card) card.style.display = temPermissao(usuario, 'catalogo_cadastrar') ? '' : 'none';
+  }
+
+  function mostrarLogin(mensagem) {
+    const ov = document.getElementById('login-overlay');
+    ov.classList.add('visivel');
+    document.getElementById('lo-erro').textContent = mensagem || '';
+    document.getElementById('lo-pin').hidden = !pinAindaAtivo;
+    const s = getSessao();
+    if (s && !document.getElementById('lo-whats').value) document.getElementById('lo-whats').value = s.whatsapp;
+    setTimeout(() => document.getElementById(document.getElementById('lo-whats').value ? 'lo-senha' : 'lo-whats').focus(), 50);
+  }
+
+  function esconderLogin() { document.getElementById('login-overlay').classList.remove('visivel'); }
+
+  function aplicarUsuario(usuario) {
+    usuarioAdmin = usuario;
+    const s = getSessao();
+    adminPin = s ? s.sessao : '';
+    sessionStorage.removeItem('tenkiter_admin_pin');
+    funcionarioNome = usuario.name || funcionarioNome;
+    localStorage.setItem('tenkiter_funcionario', funcionarioNome);
+    document.getElementById('lbl-funcionario').textContent = funcionarioNome;
+    document.getElementById('lbl-perfil').textContent = usuario.perfil ? '· ' + usuario.perfil : '';
+    document.getElementById('btn-trocar-user').style.display = 'none';
+    aplicarPermissoes(usuario);
+    esconderLogin();
+  }
+
+  function usarPinAntigo() {
+    modoLogin = false;
+    usuarioAdmin = null;
+    NOMES_PERMISSOES.forEach(([classe]) => document.body.classList.remove(classe));
+    const card = document.getElementById('form-produto').closest('.card');
+    if (card) card.style.display = '';
+    document.getElementById('btn-trocar-user').style.display = '';
+    document.getElementById('lbl-perfil').textContent = '';
+    if (!funcionarioNome) identificarFuncionario();
+    else document.getElementById('lbl-funcionario').textContent = funcionarioNome;
+    if (!adminPin || adminPin.indexOf('tk') === 0) { adminPin = ''; pedirPin(); }
+    if (adminPin) esconderLogin();
+  }
+
+  document.getElementById('lo-entrar').addEventListener('click', async () => {
+    const btn = document.getElementById('lo-entrar');
+    const w = document.getElementById('lo-whats').value, senha = document.getElementById('lo-senha').value;
+    if (!w || !senha) { document.getElementById('lo-erro').textContent = 'Preencha WhatsApp e senha.'; return; }
+    btn.disabled = true; btn.textContent = 'Entrando...';
+    const r = await entrarComSenha(w, senha);
+    btn.disabled = false; btn.textContent = 'Entrar';
+    if (!r || !r.ok) { document.getElementById('lo-erro').textContent = (r && r.erro) || 'WhatsApp ou senha incorretos.'; return; }
+    if (!temPermissao(r.usuario, 'catalogo_admin')) {
+      document.getElementById('lo-erro').textContent = 'Sua conta não tem acesso à Área de Gestão. Fale com a gestão.';
+      return;
+    }
+    document.getElementById('lo-senha').value = '';
+    modoLogin = true;
+    aplicarUsuario(r.usuario);
+  });
+  document.getElementById('lo-senha').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('lo-entrar').click(); });
+  document.getElementById('lo-pin').addEventListener('click', usarPinAntigo);
+
+  // Respostas do servidor que pedem login de novo ou negam permissão (vale para TODAS as chamadas ao backend).
+  let ultimoAvisoPermissao = 0;
+  const fetchOriginal = window.fetch.bind(window);
+  window.fetch = async function (...args) {
+    const resposta = await fetchOriginal(...args);
+    try {
+      const alvo = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
+      if (servidorComContas && alvo.indexOf(API_URL) === 0) resposta.clone().json().then(tratarRespostaAcesso).catch(() => {});
+    } catch (e) {}
+    return resposta;
+  };
+  function tratarRespostaAcesso(j) {
+    if (!j || j.ok !== false) return;
+    if (j.semPermissao) {
+      if (Date.now() - ultimoAvisoPermissao > 3000) { ultimoAvisoPermissao = Date.now(); alert(j.erro || 'Você não tem permissão para essa ação.'); }
+      return;
+    }
+    if (j.exigeLogin || j.sessaoInvalida || j.inativa || j.pinInvalido) {
+      if (j.sessaoInvalida || j.inativa) limparSessao();
+      modoLogin = true; // o PIN não vale mais: daqui em diante é login
+      mostrarLogin(j.erro || 'Entre de novo para continuar.');
+    }
+  }
+
+  (async function iniciarAcesso() {
+    const v = await versaoServidor();
+    if (v === null) {
+      // sem internet agora: se já havia login, segue com o token guardado; senão, como sempre foi
+      const s = getSessao();
+      if (s) { modoLogin = true; adminPin = s.sessao; document.getElementById('lbl-funcionario').textContent = funcionarioNome || s.whatsapp; document.getElementById('btn-trocar-user').style.display = 'none'; return; }
+      return usarPinAntigo();
+    }
+    if (!v.acessos) return usarPinAntigo(); // backend antigo: PIN, exatamente como antes
+    servidorComContas = true;
+    modoLogin = true;
+    pinAindaAtivo = !!v.pinAtivo;
+    const usr = await conferirSessao();
+    if (usr && usr.semRede) { const s = getSessao(); if (s) { adminPin = s.sessao; document.getElementById('btn-trocar-user').style.display = 'none'; return; } }
+    if (usr && temPermissao(usr, 'catalogo_admin')) return aplicarUsuario(usr);
+    if (!usr && pinAindaAtivo && adminPin && adminPin.indexOf('tk') !== 0) {
+      // sessão do PIN antigo deste aparelho: segue usando enquanto o PIN valer
+      modoLogin = false;
+      document.getElementById('lbl-funcionario').textContent = funcionarioNome || 'Anônimo';
+      return;
+    }
+    mostrarLogin(usr ? 'Sua conta não tem acesso à Área de Gestão. Fale com a gestão.' : '');
+  })();
 
   document.getElementById('btn-trocar-user').addEventListener('click', identificarFuncionario);
 
   document.getElementById('btn-sair').addEventListener('click', () => {
-    if (confirm('Sair do painel? Será preciso digitar o PIN novamente da próxima vez.')) {
+    if (confirm(modoLogin ? 'Sair da conta? Você também sai do portal de treinamento neste aparelho.' : 'Sair do painel? Será preciso digitar o PIN novamente da próxima vez.')) {
       sessionStorage.removeItem('tenkiter_admin_pin');
+      if (modoLogin) limparSessao();
       window.location.reload();
     }
   });
@@ -663,22 +816,22 @@
       const inativo = p.Status && String(p.Status).trim().toLowerCase() !== 'ativo';
       return `
       <div class="produto">
-        <input type="checkbox" class="produto-chk" data-id="${p.ID}" ${selecionadosBulk.has(p.ID) ? 'checked' : ''}>
-        <img src="${p.Foto_URL}" alt="">
+        <input type="checkbox" class="produto-chk" data-id="${escaparHtml(p.ID)}" ${selecionadosBulk.has(p.ID) ? 'checked' : ''}>
+        <img src="${escaparHtml(p.Foto_URL)}" alt="">
         <div class="produto-info">
-          <div class="codigo">${p.Codigo || ''}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}</div>
-          <div class="nome">${p.Nome}</div>
+          <div class="codigo">${escaparHtml(p.Codigo || '')}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}</div>
+          <div class="nome">${escaparHtml(p.Nome)}</div>
           <div class="preco">${formatarReal(p.Preco)} · à vista <span>${formatarReal(p.Preco * (1 - DESCONTO_AVISTA))}</span></div>
         </div>
         <div class="acoes">
-          <button type="button" style="background:#eee;" data-link-id="${p.ID}">🔗 Link</button>
-          <button type="button" class="btn-editar" data-editar-id="${p.ID}">✏️ Editar</button>
-          <button type="button" class="btn-duplicar" data-duplicar-id="${p.ID}">📋 Duplicar</button>
-          <button type="button" class="btn-arte" data-arte-id="${p.ID}">🎨 Stories</button>
+          <button type="button" style="background:#eee;" data-link-id="${escaparHtml(p.ID)}">🔗 Link</button>
+          <button type="button" class="btn-editar" data-editar-id="${escaparHtml(p.ID)}">✏️ Editar</button>
+          <button type="button" class="btn-duplicar" data-duplicar-id="${escaparHtml(p.ID)}">📋 Duplicar</button>
+          <button type="button" class="btn-arte" data-arte-id="${escaparHtml(p.ID)}">🎨 Stories</button>
           ${inativo
-            ? `<button type="button" class="btn-reativar" data-reativar-id="${p.ID}">🔄 Reativar</button>`
-            : `<button type="button" class="btn-arquivar" data-arquivar-id="${p.ID}">🗃️ Arquivar</button>`}
-          <button type="button" class="btn-excluir" data-excluir-id="${p.ID}" data-codigo="${p.Codigo || ''}">🗑️ Excluir</button>
+            ? `<button type="button" class="btn-reativar" data-reativar-id="${escaparHtml(p.ID)}">🔄 Reativar</button>`
+            : `<button type="button" class="btn-arquivar" data-arquivar-id="${escaparHtml(p.ID)}">🗃️ Arquivar</button>`}
+          <button type="button" class="btn-excluir" data-excluir-id="${escaparHtml(p.ID)}" data-codigo="${escaparHtml(p.Codigo || '')}">🗑️ Excluir</button>
         </div>
       </div>
     `; }).join('');
@@ -869,24 +1022,24 @@
           <div class="arte-preview-sub">CATÁLOGO EXCLUSIVO</div>
         </div>
         <div class="arte-preview-foto-wrap">
-          <img id="arte-preview-foto" src="${fotos[0]}" alt="">
+          <img id="arte-preview-foto" src="${escaparHtml(fotos[0])}" alt="">
           <span class="arte-preview-badge" id="arte-preview-badge"></span>
-          ${p.Codigo ? `<span class="arte-preview-codigo">${p.Codigo}</span>` : ''}
+          ${p.Codigo ? `<span class="arte-preview-codigo">${escaparHtml(p.Codigo)}</span>` : ''}
         </div>
         <div class="arte-preview-info">
-          <div class="arte-preview-nome">${p.Nome}</div>
+          <div class="arte-preview-nome">${escaparHtml(p.Nome)}</div>
           ${subtitulo ? `<div class="arte-preview-cat">${subtitulo}</div>` : ''}
           <div class="arte-preview-de" id="arte-preview-de" style="display:none;"></div>
           <div class="arte-preview-preco" id="arte-preview-preco"></div>
           <div class="arte-preview-btn">📱 Peça pelo WhatsApp</div>
-          ${funcionarioNome ? `<div class="arte-preview-atendente">Atendimento com ${funcionarioNome}</div>` : ''}
+          ${funcionarioNome ? `<div class="arte-preview-atendente">Atendimento com ${escaparHtml(funcionarioNome)}</div>` : ''}
         </div>
       </div>
 
       ${fotos.length > 1 ? `
         <label>Escolher foto do produto</label>
         <div class="arte-thumbs" id="arte-thumbs">
-          ${fotos.map((f, i) => `<img src="${f}" class="arte-thumb${i === 0 ? ' selecionada' : ''}" data-foto="${f}">`).join('')}
+          ${fotos.map((f, i) => `<img src="${escaparHtml(f)}" class="arte-thumb${i === 0 ? ' selecionada' : ''}" data-foto="${escaparHtml(f)}">`).join('')}
         </div>
       ` : ''}
 
@@ -1215,8 +1368,8 @@
           ? ` · Preço: ${formatarReal(r.PrecoAnterior)} → ${formatarReal(r.PrecoNovo)}` : '';
         return `
           <div class="auditoria-item">
-            <div class="linha1"><span>${r.Acao || ''}</span><span>${data}</span></div>
-            <div class="linha2">${r.Funcionario || 'Sistema'} · ${r.Codigo || ''} ${r.Nome || ''}${precos}</div>
+            <div class="linha1"><span>${escaparHtml(r.Acao || '')}</span><span>${data}</span></div>
+            <div class="linha2">${escaparHtml(r.Funcionario || 'Sistema')} · ${escaparHtml(r.Codigo || '')} ${escaparHtml(r.Nome || '')}${precos}</div>
           </div>
         `;
       }).join('');
@@ -1252,14 +1405,14 @@
       btn.textContent = '✨ Gerar Título/Descrição com IA';
 
       if (!resp.ok) {
-        box.innerHTML = `<div class="seo-sugestao" style="color:#c62828;">${resp.erro || 'Não foi possível gerar sugestão agora.'}</div>`;
+        box.innerHTML = `<div class="seo-sugestao" style="color:#c62828;">${escaparHtml(resp.erro || 'Não foi possível gerar sugestão agora.')}</div>`;
         return;
       }
 
       box.innerHTML = `
         <div class="seo-sugestao">
-          <div class="campo"><b>Título sugerido</b>${resp.titulo || '—'}</div>
-          <div class="campo"><b>Descrição sugerida</b>${resp.descricao || '—'}</div>
+          <div class="campo"><b>Título sugerido</b>${escaparHtml(resp.titulo || '—')}</div>
+          <div class="campo"><b>Descrição sugerida</b>${escaparHtml(resp.descricao || '—')}</div>
           <button type="button" id="btn-usar-titulo-seo" style="background:var(--laranja);">Usar Título</button>
           <button type="button" id="btn-usar-descricao-seo" style="background:var(--laranja);">Usar Descrição</button>
           <button type="button" id="btn-descartar-seo" style="background:#eee;color:#555;">Descartar</button>

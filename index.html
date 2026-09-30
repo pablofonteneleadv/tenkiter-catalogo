@@ -148,10 +148,31 @@
   .nav-inferior a.ativo { color: var(--laranja); }
 
   .btn-icone-header.ativado { color: var(--laranja); }
+  /* v2: conta de cliente */
+  #modal-conta { position: fixed; inset: 0; z-index: 150; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; padding: 16px; }
+  #modal-conta.visivel { display: flex; }
+  .conta-box { background: var(--branco); border-radius: 16px; padding: 20px; width: 100%; max-width: 380px; position: relative; }
+  .conta-box h2 { margin: 0 0 4px; font-size: 1.1rem; }
+  .conta-box p { margin: 0 0 12px; font-size: 0.85rem; color: #555; }
+  .conta-box input { width: 100%; padding: 12px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 10px; font-size: 1rem; }
+  .conta-box .conta-principal { width: 100%; padding: 12px; border: none; border-radius: 10px; background: var(--laranja); color: #fff; font-weight: 800; font-size: 1rem; cursor: pointer; }
+  .conta-box .conta-secundario { width: 100%; padding: 11px; border: 1px solid #ccc; border-radius: 10px; background: #fff; font-weight: 700; cursor: pointer; }
+  .conta-abas { display: flex; gap: 6px; margin-bottom: 12px; }
+  .conta-abas button { flex: 1; padding: 8px; border: none; border-radius: 8px; background: #eee; font-weight: 700; cursor: pointer; }
+  .conta-abas button.ativa { background: var(--preto); color: var(--laranja); }
+  .conta-erro { color: #c62828; font-size: 0.85rem; min-height: 1.1em; margin-bottom: 6px; }
+  .conta-fechar { position: absolute; top: 8px; right: 12px; background: none; border: none; font-size: 1.4rem; cursor: pointer; color: #777; }
 </style>
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 </head>
 <body>
+
+<div id="modal-conta" role="dialog" aria-modal="true" aria-labelledby="conta-titulo">
+  <div class="conta-box">
+    <button type="button" class="conta-fechar" id="conta-fechar" aria-label="Fechar">×</button>
+    <div id="conta-corpo"></div>
+  </div>
+</div>
 
 <div id="toast-carregando"><span class="spinner-mini"></span><span id="texto-toast">Carregando produtos...</span></div>
 
@@ -165,6 +186,7 @@
       </div>
     </div>
     <div class="header-icones">
+      <button type="button" class="btn-icone-header" id="btn-conta-header" title="Minha conta" style="display:none;">👤</button>
       <button type="button" class="btn-icone-header" id="btn-favoritos-header" title="Ver favoritos">❤️<span class="badge-contador" id="badge-favoritos" style="display:none;">0</span></button>
       <button type="button" class="btn-icone-header" id="btn-sacola-header" title="Abrir sacola de pedidos">🛍️<span class="badge-contador" id="badge-sacola" style="display:none;">0</span></button>
       <button type="button" class="btn-icone-header" id="btn-push-header" title="Ativar notificações de novidades" style="display:none;">🔔</button>
@@ -474,17 +496,17 @@
       const disp = nivelDisponibilidade(p);
       const favoritado = ehFavorito(p.ID);
       return `
-        <div class="card" data-id="${p.ID}">
+        <div class="card" data-id="${escaparHtml(p.ID)}">
           <div class="img-wrap">
-            <img src="${p.Foto_URL}" alt="${p.Nome}" loading="lazy">
+            <img src="${escaparHtml(p.Foto_URL)}" alt="${escaparHtml(p.Nome)}" loading="lazy">
             ${esgotado ? '<span class="selo-card esgotado">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade">NOVIDADE</span>' : '')}
-            <button type="button" class="btn-favorito-card" data-fav-id="${p.ID}" title="Favoritar">${favoritado ? '❤️' : '🤍'}</button>
+            <button type="button" class="btn-favorito-card" data-fav-id="${escaparHtml(p.ID)}" title="Favoritar">${favoritado ? '❤️' : '🤍'}</button>
           </div>
           <div class="card-info">
-            ${p.Codigo ? `<div class="codigo">${p.Codigo}</div>` : ''}
-            <div class="nome">${p.Nome}</div>
+            ${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}
+            <div class="nome">${escaparHtml(p.Nome)}</div>
             <div class="preco">${formatarReal(p.Preco)} <span>${formatarReal(avista)}</span></div>
-            <div class="tags">${p.Categoria}</div>
+            <div class="tags">${escaparHtml(p.Categoria)}</div>
             ${disp && !esgotado ? `<div class="disponibilidade ${disp.classe}">${disp.texto}</div>` : ''}
           </div>
         </div>
@@ -530,7 +552,7 @@
     const link = API_URL + '?action=share&id=' + p.ID;
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const codigo = p.Codigo ? ('\nCódigo: ' + p.Codigo) : '';
-    const texto = `Olá! Quero garantir este produto:\n*${p.Nome}*${codigo}\n${formatarReal(avista)} à vista\n${link}`;
+    const texto = `Olá! Quero garantir este produto:\n*${escaparHtml(p.Nome)}*${codigo}\n${formatarReal(avista)} à vista\n${link}`;
     registrarEvento(p.ID, p.Codigo, 'whatsapp');
     window.open('https://wa.me/' + WHATSAPP_NUMERO + '?text=' + encodeURIComponent(texto), '_blank');
   }
@@ -538,7 +560,7 @@
   async function compartilharComFoto(p) {
     const link = API_URL + '?action=share&id=' + p.ID;
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
-    const texto = `${p.Nome} — ${formatarReal(avista)} à vista\n${link}\n\nLoja TENKiTER Modas (WhatsApp ${WHATSAPP_NUMERO})`;
+    const texto = `${escaparHtml(p.Nome)} — ${formatarReal(avista)} à vista\n${link}\n\nLoja TENKiTER Modas (WhatsApp ${WHATSAPP_NUMERO})`;
     let arquivoImagem = null;
     try {
       const blob = await fetch(p.Foto_URL).then(r => r.blob());
@@ -572,7 +594,7 @@
 
     document.getElementById('modal-conteudo').innerHTML = `
       <div class="carrossel-wrap">
-        <img id="foto-principal-modal" src="${p.Foto_URL}" alt="${p.Nome}">
+        <img id="foto-principal-modal" src="${escaparHtml(p.Foto_URL)}" alt="${escaparHtml(p.Nome)}">
         ${esgotado ? '<span class="selo-card esgotado" style="top:12px;left:12px;font-size:0.7rem;">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade" style="top:12px;left:12px;font-size:0.7rem;">NOVIDADE</span>' : '')}
       </div>
       ${fotosGaleria.length > 1 ? `
@@ -581,16 +603,16 @@
         </div>
       ` : ''}
       <div class="modal-conteudo">
-        ${p.Codigo ? `<div class="codigo">${p.Codigo}</div>` : ''}
-        <div class="nome">${p.Nome}</div>
+        ${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}
+        <div class="nome">${escaparHtml(p.Nome)}</div>
         <div class="preco-linha">
           <span class="cheio">${formatarReal(p.Preco)}</span>
           <span class="avista">${formatarReal(avista)} à vista</span>
         </div>
-        <div class="tags">${p.Categoria} · ${p.Genero}</div>
-        ${p.Tamanhos ? `<div class="extra"><strong>Tamanhos:</strong> ${p.Tamanhos}</div>` : ''}
-        ${p.Cores ? `<div class="extra"><strong>Cores:</strong> ${p.Cores}</div>` : ''}
-        ${p.Descricao ? `<div class="desc">${p.Descricao}</div>` : ''}
+        <div class="tags">${escaparHtml(p.Categoria)} · ${escaparHtml(p.Genero)}</div>
+        ${p.Tamanhos ? `<div class="extra"><strong>Tamanhos:</strong> ${escaparHtml(p.Tamanhos)}</div>` : ''}
+        ${p.Cores ? `<div class="extra"><strong>Cores:</strong> ${escaparHtml(p.Cores)}</div>` : ''}
+        ${p.Descricao ? `<div class="desc">${escaparHtml(p.Descricao)}</div>` : ''}
         ${disp ? `<div class="disponibilidade ${disp.classe}" style="margin-top:10px;font-size:0.8rem;">${disp.texto}</div>` : ''}
       </div>
       ${esgotado
@@ -664,12 +686,12 @@
         </div>
         ${itens.map(p => `
           <div class="item-sacola">
-            <img src="${p.Foto_URL}" alt="${p.Nome}">
+            <img src="${escaparHtml(p.Foto_URL)}" alt="${escaparHtml(p.Nome)}">
             <div class="info">
-              <div class="nome">${p.Nome}</div>
+              <div class="nome">${escaparHtml(p.Nome)}</div>
               <div class="preco">${formatarReal(Number(p.Preco) * (1 - DESCONTO_AVISTA))} à vista</div>
             </div>
-            <button type="button" class="btn-remover" data-remover-id="${p.ID}" title="Remover da sacola">✕</button>
+            <button type="button" class="btn-remover" data-remover-id="${escaparHtml(p.ID)}" title="Remover da sacola">✕</button>
           </div>
         `).join('')}
         <div class="modal-conteudo">
@@ -691,7 +713,7 @@
         itens.forEach(p => {
           const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
           const codigo = p.Codigo ? (' (' + p.Codigo + ')') : '';
-          texto += `• ${p.Nome}${codigo} — ${formatarReal(avista)} à vista\n`;
+          texto += `• ${escaparHtml(p.Nome)}${codigo} — ${formatarReal(avista)} à vista\n`;
         });
         texto += `\nTotal estimado à vista: ${formatarReal(total)}`;
         window.open('https://wa.me/' + WHATSAPP_NUMERO + '?text=' + encodeURIComponent(texto), '_blank');
@@ -790,6 +812,95 @@
       }
     });
   })();
+
+  /* ===================== v2: conta de cliente (favoritos e sacola salvos) ===================== */
+  try { (function contaCliente() {
+    const btn = document.getElementById('btn-conta-header');
+    const ov = document.getElementById('modal-conta');
+    const corpo = document.getElementById('conta-corpo');
+    let usuario = null;
+    let aba = 'entrar';
+
+    function el(tag, props, filhos) {
+      const e = document.createElement(tag);
+      Object.keys(props || {}).forEach(k => { if (k === 'text') e.textContent = props[k]; else e[k] = props[k]; });
+      (filhos || []).forEach(f => e.appendChild(f));
+      return e;
+    }
+
+    function atualizarBotao() {
+      btn.textContent = usuario ? (String(usuario.name || '?').trim().charAt(0).toUpperCase() || '👤') : '👤';
+      btn.title = usuario ? 'Minha conta (' + usuario.name + ')' : 'Entrar ou criar conta';
+      btn.classList.toggle('ativado', !!usuario);
+    }
+
+    async function sincronizar() {
+      const r = await sincronizarContaCliente();
+      if (r && r.ok) { atualizarBadges(); if (produtos.length) aplicarFiltros(); }
+      return r;
+    }
+
+    async function depoisDeEntrar(u) {
+      usuario = u;
+      atualizarBotao();
+      ov.classList.remove('visivel');
+      await sincronizar();
+    }
+
+    function desenhar(erro) {
+      corpo.textContent = '';
+      if (usuario) {
+        corpo.appendChild(el('h2', { id: 'conta-titulo', text: 'Olá, ' + usuario.name + '!' }));
+        corpo.appendChild(el('p', { text: 'Seus favoritos e sua sacola ficam salvos na sua conta e aparecem em qualquer aparelho em que você entrar.' }));
+        const sair = el('button', { type: 'button', className: 'conta-secundario', id: 'conta-sair', text: 'Sair da conta' });
+        sair.addEventListener('click', () => { limparSessao(); usuario = null; atualizarBotao(); ov.classList.remove('visivel'); });
+        corpo.appendChild(sair);
+        return;
+      }
+      corpo.appendChild(el('h2', { id: 'conta-titulo', text: 'Minha conta' }));
+      corpo.appendChild(el('p', { text: 'Entre para guardar seus favoritos e sua sacola e vê-los em qualquer aparelho. Você continua podendo navegar sem conta.' }));
+      const abas = el('div', { className: 'conta-abas' });
+      [['entrar', 'Entrar'], ['criar', 'Criar conta']].forEach(([id, rotulo]) => {
+        const b = el('button', { type: 'button', text: rotulo, className: aba === id ? 'ativa' : '' });
+        b.addEventListener('click', () => { aba = id; desenhar(); });
+        abas.appendChild(b);
+      });
+      corpo.appendChild(abas);
+      const nome = el('input', { type: 'text', id: 'conta-nome', placeholder: 'Seu nome', autocomplete: 'name' });
+      const whats = el('input', { type: 'tel', id: 'conta-whats', placeholder: 'WhatsApp com DDD', autocomplete: 'username', inputMode: 'tel' });
+      const senha = el('input', { type: 'password', id: 'conta-senha', placeholder: aba === 'criar' ? 'Crie uma senha (mín. 4)' : 'Senha', autocomplete: aba === 'criar' ? 'new-password' : 'current-password' });
+      if (aba === 'criar') corpo.appendChild(nome);
+      corpo.appendChild(whats); corpo.appendChild(senha);
+      corpo.appendChild(el('div', { className: 'conta-erro', id: 'conta-erro', text: erro || '' }));
+      const ok = el('button', { type: 'button', className: 'conta-principal', id: 'conta-ok', text: aba === 'criar' ? 'Criar conta' : 'Entrar' });
+      async function enviar() {
+        const erroEl = document.getElementById('conta-erro');
+        if (!whats.value || !senha.value || (aba === 'criar' && !nome.value.trim())) { erroEl.textContent = 'Preencha todos os campos.'; return; }
+        if (aba === 'criar' && senha.value.length < 4) { erroEl.textContent = 'A senha precisa ter pelo menos 4 caracteres.'; return; }
+        ok.disabled = true; const rotulo = ok.textContent; ok.textContent = 'Aguarde...';
+        const r = aba === 'criar' ? await registrarClienteApi(nome.value.trim(), whats.value, senha.value) : await entrarComSenha(whats.value, senha.value);
+        ok.disabled = false; ok.textContent = rotulo;
+        if (!r || !r.ok || !r.usuario) { erroEl.textContent = (r && r.erro) || 'Não foi possível agora. Tente de novo.'; return; }
+        depoisDeEntrar(r.usuario);
+      }
+      ok.addEventListener('click', enviar);
+      senha.addEventListener('keydown', (e) => { if (e.key === 'Enter') enviar(); });
+      corpo.appendChild(ok);
+    }
+
+    btn.addEventListener('click', () => { desenhar(); ov.classList.add('visivel'); });
+    document.getElementById('conta-fechar').addEventListener('click', () => ov.classList.remove('visivel'));
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('visivel'); });
+
+    // só aparece se o backend já tem contas; catálogo antigo segue exatamente como era
+    (async () => {
+      const v = await versaoServidor();
+      if (!v || !v.acessos) return;
+      btn.style.display = '';
+      const u = await conferirSessao();
+      if (u && !u.semRede) { usuario = u; atualizarBotao(); sincronizar(); }
+    })();
+  })(); } catch (erroConta) { console.warn('Conta de cliente indisponível:', erroConta); }
 
   carregarCatalogo();
 </script>
