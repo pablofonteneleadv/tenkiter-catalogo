@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d0d0d">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<title>Trabalhe na TENKiTER Modas</title>
+<style>
+  :root { --preto:#0d0d0d; --laranja:#E67E22; --ouro:#F39C12; --cinza:#F5F1E8; --branco:#fff; --verde:#198754; --vermelho:#c62828; --borda:#ddd; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Inter",-apple-system,Roboto,Arial,sans-serif; background:var(--cinza); color:var(--preto); line-height:1.45; }
+  header { background:var(--preto); color:var(--laranja); padding:18px 16px; text-align:center; }
+  header img { height:34px; vertical-align:middle; margin-right:8px; }
+  header h1 { display:inline; font-size:1.05rem; vertical-align:middle; letter-spacing:.3px; }
+  main { max-width:620px; margin:0 auto; padding:16px 16px 60px; }
+  .card { background:var(--branco); border-radius:14px; padding:18px 16px; box-shadow:0 1px 4px rgba(0,0,0,.08); margin-bottom:16px; }
+  h2 { font-size:1.15rem; margin:0 0 6px; }
+  h3 { font-size:.98rem; margin:22px 0 4px; }
+  p.sub { color:#555; font-size:.9rem; margin:0 0 14px; }
+  label.campo { display:block; font-weight:600; font-size:.9rem; margin:16px 0 6px; }
+  .obs { font-weight:400; color:#666; font-size:.82rem; display:block; margin-top:2px; }
+  .obs-destaque { background:#fff4e5; border-left:3px solid var(--laranja); padding:8px 10px; border-radius:6px; font-size:.84rem; margin:6px 0 8px; font-weight:500; }
+  input[type=text], input[type=email], input[type=password], input[type=tel], input[type=number], input[type=date], textarea {
+    width:100%; padding:11px 12px; border:1px solid var(--borda); border-radius:9px; font-size:1rem; font-family:inherit; background:#fff; }
+  textarea { min-height:90px; resize:vertical; }
+  input:focus, textarea:focus { outline:2px solid var(--laranja); border-color:transparent; }
+  .opcao { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border:1px solid var(--borda); border-radius:9px; margin-bottom:7px; cursor:pointer; background:#fff; font-size:.94rem; }
+  .opcao input { margin-top:3px; accent-color:var(--laranja); flex:none; width:18px; height:18px; }
+  .opcao:has(input:checked) { border-color:var(--laranja); background:#fff4e5; }
+  button { font-family:inherit; font-size:1rem; font-weight:700; border:0; border-radius:10px; padding:13px 16px; cursor:pointer; width:100%; }
+  .btn-p { background:var(--laranja); color:var(--preto); margin-top:20px; }
+  .btn-s { background:#eee; color:#333; margin-top:10px; }
+  .btn-l { background:none; color:#666; text-decoration:underline; font-weight:500; font-size:.85rem; width:auto; padding:6px 0; }
+  button:disabled { opacity:.55; cursor:wait; }
+  .erro { background:#fde3e3; color:var(--vermelho); padding:10px 12px; border-radius:9px; font-size:.9rem; margin-top:14px; font-weight:600; }
+  .aviso { background:#eef6ff; color:#1b4b7a; padding:10px 12px; border-radius:9px; font-size:.88rem; margin-bottom:12px; }
+  .ref { background:#f6f6f6; border-radius:9px; padding:10px 12px; font-size:.84rem; color:#444; margin:8px 0; white-space:pre-wrap; }
+  .ref b { display:block; margin-bottom:3px; color:#222; }
+  .prog { height:6px; background:#e7e2d6; border-radius:4px; margin-bottom:14px; overflow:hidden; }
+  .prog i { display:block; height:100%; background:var(--laranja); transition:width .3s; }
+  .lgpd { font-size:.84rem; }
+  .oculto { display:none !important; }
+  .grande { text-align:center; padding:26px 18px; }
+  .grande .emoji { font-size:2.2rem; }
+  .links a { display:block; background:var(--preto); color:var(--laranja); text-decoration:none; padding:12px; border-radius:10px; font-weight:700; margin-top:10px; text-align:center; }
+  .linha2 { display:flex; gap:10px; } .linha2 > * { flex:1; }
+</style>
+</head>
+<body>
+<header><img src="logo-mark.png" alt="" onerror="this.style.display='none'"><h1>TENKiTER Modas · Trabalhe com a gente</h1></header>
+<main><div id="app"></div></main>
+
+<script>
+/* ==== configuração ==== */
+const API = 'https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec'; // mesmo backend do treinamento (manual.html)
+const TOKEN = 'tenkiter2026';
+const SITE_CATALOGO = 'https://tenkiter-catalogo.onrender.com/';
+const SITE_MANUAL = 'https://tenkiter-catalogo.onrender.com/manual.html';
+const LGPD_TEXTO = 'Autorizo a TENKiTER Modas a guardar meus dados por até 2 anos, apenas para o cadastro e processos seletivos. Posso pedir a exclusão a qualquer momento pelo WhatsApp da loja: (88) 99322-3998.';
+
+/* Alternativas: TÊM que ser idênticas às do servidor (CV_OP em Code-treinamento-v4.1.gs.txt) */
+const OP = {
+  moradia: ['Crateús, na cidade', 'Interior de Crateús, vou e volto todo dia', 'Interior de Crateús, mas tenho onde ficar na cidade', 'Outra cidade, vou e volto todo dia', 'Outra cidade, mas tenho onde ficar em Crateús', 'Nenhuma das anteriores'],
+  chegada: ['A pé', 'Moto ou bicicleta', 'Transporte público ou carona', 'Outro'],
+  vaga: ['Atendimento e vendas', 'Caixa', 'Reposição e estoque', 'Organização e provador', 'Liderança (sub encarregada ou encarregada)', 'Qualquer vaga'],
+  salario: ['R$ 700', 'R$ 800', 'R$ 1.000', 'R$ 1.200', 'Acima de R$ 1.621,00'],
+  inicio: ['Imediatamente', 'Em até 3 dias', 'Em até 15 dias', 'Em até 30 dias', 'Mais de 30 dias'],
+  simnao: ['Sim', 'Não'],
+  horario: ['Só pela manhã (a partir das 7:30h)', 'Só pela tarde (até 18:00h)', 'Manhã e tarde (com horário de almoço)'],
+  fora: ['Somente horário comercial', 'Horário de comércio, inclusive domingos e feriados quando a loja abrir'],
+  tipos: ['Loja de roupas ou moda', 'Outro comércio (mercado, farmácia etc.)', 'Restaurante ou lanchonete', 'Vendas por conta própria', 'Escritório ou serviços', 'Nenhum'],
+  tarefas: ['Atender e vender', 'Caixa', 'Conferir e repor mercadoria', 'Vitrine', 'Sistema de vendas', 'WhatsApp ou Instagram', 'Nenhuma'],
+  referencia: ['Sim, informo o contato', 'Prefiro informar depois', 'Não'],
+  escolaridade: ['Fundamental incompleto', 'Fundamental completo', 'Médio incompleto', 'Médio completo', 'Superior ou técnico em andamento', 'Superior ou técnico completo'],
+  troca: ['Escuto, explico a regra com calma e ofereço a solução possível', 'Chamo a encarregada', 'Faço a troca para evitar confusão', 'Explico que é a política da loja e encerro'],
+  troco: ['Aviso a colega discretamente na hora', 'Converso com ela depois do movimento', 'Aviso a encarregada', 'Não me envolvo'],
+  meta: ['Aumento o ritmo e abordo mais clientes', 'Peço ajuda a uma colega mais experiente', 'Aviso a chefia e pergunto o que fazer', 'Espero o movimento melhorar'],
+  tres: ['Cumprimento os três e atendo por ordem de chegada', 'Atendo quem parece mais disposto a comprar', 'Peço ajuda a uma colega', 'Atendo um sem falar com os outros'],
+  motiva: ['Comissão e meta', 'Crescer na empresa', 'Estabilidade', 'Bom ambiente', 'Atender bem o cliente'],
+  origem: ['Instagram', 'Indicação', 'Cliente da loja', 'Cartaz na loja', 'Outro']
+};
+
+/* ==== utilidades ==== */
+const $app = document.getElementById('app');
+function loginLocal() { try { const x = JSON.parse(localStorage.getItem('tm_session') || 'null'); return x && x.whatsapp && x.sessao ? x : null; } catch (e) { return null; } }
+const S = { login: loginLocal(), fotoUrl: '', enviado: false, email: '', cvToken: '', prefill: {}, nome: '', whats: '', sessao: '', d: {}, desafio: null, trocou: false, passo: 0 };
+function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+async function api(action, corpo) {
+  try {
+    const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ token: TOKEN, action }, corpo || {})) });
+    return await r.json();
+  } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.' }; }
+}
+function tela(html) { $app.innerHTML = html; window.scrollTo(0, 0); }
+function erroBox(msg) { const e = document.getElementById('erro'); if (e) { e.textContent = msg || ''; e.classList.toggle('oculto', !msg); if (msg) e.scrollIntoView({ block: 'center', behavior: 'smooth' }); } }
+function carregando(btn, on) { if (btn) { btn.disabled = on; btn.dataset.t = btn.dataset.t || btn.textContent; btn.textContent = on ? 'Aguarde…' : btn.dataset.t; } }
+const val = n => { const e = document.querySelector('[name="' + n + '"]'); return e ? e.value.trim() : ''; };
+const radio = n => { const e = document.querySelector('input[name="' + n + '"]:checked'); return e ? e.value : ''; };
+const checks = n => Array.from(document.querySelectorAll('input[name="' + n + '"]:checked')).map(e => e.value);
+function radios(n, lista, atual) { return lista.map(o => `<label class="opcao"><input type="radio" name="${n}" value="${esc(o)}" ${o === atual ? 'checked' : ''}><span>${esc(o)}</span></label>`).join(''); }
+function caixas(n, lista, atuais, max) { return lista.map(o => `<label class="opcao"><input type="checkbox" name="${n}" value="${esc(o)}" ${(atuais || []).indexOf(o) !== -1 ? 'checked' : ''} ${max ? 'data-max="' + max + '"' : ''}><span>${esc(o)}</span></label>`).join(''); }
+function progresso(p) { return `<div class="prog"><i style="width:${p}%"></i></div>`; }
+function idade(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); if (!m) return null; const h = new Date(); let i = h.getFullYear() - +m[1]; if (h.getMonth() + 1 < +m[2] || (h.getMonth() + 1 === +m[2] && h.getDate() < +m[3])) i--; return i; }
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.matches && t.matches('input[type=checkbox][data-max]')) {
+    const max = +t.dataset.max; const marcados = document.querySelectorAll('input[name="' + t.name + '"]:checked');
+    if (marcados.length > max) { t.checked = false; alert('Escolha no máximo ' + max + '.'); }
+  }
+  condicionais();
+});
+function condicionais() {
+  const mostra = (id, ok) => { const el = document.getElementById(id); if (el) el.classList.toggle('oculto', !ok); };
+  mostra('bloco-horarios', radio('ritmo') === 'Não');
+  mostra('nota-ritmo-sim', radio('ritmo') === 'Sim');
+  mostra('bloco-experiencia', radio('jaTrabalhou') === 'Sim');
+  mostra('bloco-nao-trabalhou', radio('jaTrabalhou') === 'Não');
+  mostra('bloco-lider', radio('liderou') === 'Sim');
+  mostra('bloco-ref', radio('referencia') === OP.referencia[0]);
+}
+
+/* ==== 1. e-mail ==== */
+function viewEmail(msg) {
+  tela(`${progresso(3)}<div class="card">
+    <h2>Envie seu currículo</h2>
+    <p class="sub">Leva poucos minutos. Se você já preencheu nosso formulário antes, vamos buscar seus dados para você não digitar tudo de novo.</p>
+    <label class="campo" for="email">Seu e-mail</label>
+    <input type="email" id="email" name="email" autocomplete="email" inputmode="email" value="${esc(S.email)}" placeholder="voce@exemplo.com">
+    <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
+    <button class="btn-p" id="ok">Continuar</button></div>`);
+  const b = document.getElementById('ok');
+  b.onclick = async () => {
+    const em = val('email').toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) return erroBox('Digite um e-mail válido.');
+    S.email = em; carregando(b, true);
+    const r = await api('curriculo_iniciar', { email: em }); carregando(b, false);
+    if (!r.ok) return erroBox(r.erro);
+    if (r.modo === 'retomar') {
+      if (S.login) { const rs = await api('curriculo_retomar', { whatsapp: S.login.whatsapp, sessao: S.login.sessao }); if (rs.ok) return entrarRetomada(rs); }
+      return viewRetomar();
+    }
+    if (r.modo === 'verificar') { S.desafio = r; S.trocou = false; S.mostradas = null; S.passo = 0; return viewVerificar(); }
+    viewCadastro(r.esgotado ? 'Não conseguimos confirmar seus dados antigos. Sem problema: preencha de novo, é rapidinho.' : '');
+  };
+}
+
+/* ==== 2. verificação (3 perguntas) ==== */
+function viewVerificar(aviso) {
+  const perguntas = S.desafio.perguntas;
+  S.mostradas = S.mostradas || perguntas.slice(0, 3).map(p => p.id);
+  const lista = S.mostradas.map(id => perguntas.find(p => p.id === id));
+  const temExtra = !S.trocou && perguntas.length > 3;
+  tela(`${progresso(8)}<div class="card">
+    <h2>Só para confirmar que é você</h2>
+    <p class="sub">Você já preencheu nosso formulário antes. Responda 3 perguntas rápidas sobre o que você informou naquela vez.</p>
+    ${aviso ? `<div class="aviso">${esc(aviso)}</div>` : ''}
+    ${lista.map((p, i) => `<h3>${i + 1}. ${esc(p.texto)}</h3>${radios('v_' + p.id, p.opcoes, '')}${temExtra ? `<button class="btn-l" data-troca="${esc(p.id)}">Não tenho certeza — outra pergunta</button>` : ''}`).join('')}
+    <div class="erro oculto" id="erro"></div>
+    <button class="btn-p" id="ok">Confirmar</button>
+    <button class="btn-s" id="novo">Prefiro preencher tudo de novo</button></div>`);
+  document.querySelectorAll('[data-troca]').forEach(b => b.onclick = () => {
+    const sai = b.dataset.troca; const ent = perguntas.find(p => S.mostradas.indexOf(p.id) === -1);
+    S.mostradas = S.mostradas.map(id => id === sai ? ent.id : id); S.trocou = true; viewVerificar();
+  });
+  document.getElementById('novo').onclick = () => { S.mostradas = null; viewCadastro(''); };
+  const ok = document.getElementById('ok');
+  ok.onclick = async () => {
+    const respostas = {}; for (const id of S.mostradas) { const v = radio('v_' + id); if (!v) return erroBox('Responda as 3 perguntas.'); respostas[id] = v; }
+    carregando(ok, true); const r = await api('curriculo_verificar', { desafioId: S.desafio.desafioId, respostas }); carregando(ok, false);
+    if (!r.ok) return erroBox(r.erro);
+    if (r.verificado) { S.cvToken = r.cvToken; S.prefill = r.prefill || {}; S.mostradas = null; return viewCadastro('Pronto! Preenchemos o que já sabíamos. Confira e corrija se precisar.'); }
+    if (r.esgotado) { S.mostradas = null; return viewCadastro('Não conseguimos confirmar seus dados antigos. Sem problema: preencha de novo, é rapidinho.'); }
+    viewVerificar('Alguma resposta não bateu. Você tem mais uma tentativa.');
+  };
+}
+
+/* ==== retomar (quem já começou) ==== */
+function viewRetomar(msg) {
+  tela(`${progresso(8)}<div class="card">
+    <h2>Que bom ver você de novo!</h2>
+    <p class="sub">Já existe um cadastro com <b>${esc(S.email)}</b>. Digite a senha que você criou para continuar ou atualizar seu currículo.</p>
+    <label class="campo" for="senha">Sua senha</label>
+    <input type="password" id="senha" name="senha" autocomplete="current-password">
+    <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
+    <button class="btn-p" id="ok">Entrar</button>
+    <button class="btn-s" id="voltar">Voltar</button></div>`);
+  document.getElementById('voltar').onclick = () => viewEmail();
+  const b = document.getElementById('ok');
+  b.onclick = async () => {
+    const senha = document.getElementById('senha').value; if (!senha) return erroBox('Digite a senha.');
+    carregando(b, true); const r = await api('curriculo_retomar', { email: S.email, senha }); carregando(b, false);
+    if (!r.ok) return erroBox(r.erro);
+    entrarRetomada(r);
+  };
+}
+function entrarRetomada(r) {
+  S.nome = r.nome; S.whats = r.whatsapp; S.sessao = r.sessao; S.fotoUrl = r.fotoUrl || ''; S.enviado = !!r.enviado; if (r.email) S.email = r.email;
+  S.d = dadosDoServidor(r.dados || {});
+  if (r.menor) return viewMenor();
+  if (r.etapa === 'Instagram' || r.etapa === 'Sem Instagram') return viewInstagram(S.d.instagram || '');
+  if (r.etapa === 'Foto') return viewFoto();
+  S.passo = 0; viewPerfil();
+}
+function dadosDoServidor(x) {
+  const lista = t => t ? String(t).split(' | ').filter(Boolean) : [];
+  return { instagram: x.Instagram, vaga: lista(x.Vaga), salario: x.Salario, inicio: x.Inicio, ritmo: x.Ritmo, horario: x.Horario, fora: x.ForaHorario, impedimento: x.Impedimento,
+    jaTrabalhou: x.JaTrabalhou, ultEmpresa: x.UltEmpresa, ultFuncao: x.UltFuncao, ultMeses: x.UltMeses, ultMotivo: x.UltMotivo, tiposEmpresa: lista(x.TiposEmpresa), tarefas: lista(x.Tarefas),
+    liderou: x.Liderou, liderQuantos: x.LiderQuantos, referencia: x.Referencia, refContato: x.RefContato, escolaridade: x.Escolaridade, cursos: x.Cursos, troca: x.Q_Troca, troco: x.Q_Troco,
+    meta: x.Q_Meta, tres: x.Q_TresClientes, motiva: lista(x.Motiva), situacao: x.Situacao, porQue: x.PorQue, origem: x.Origem, conheceAlguem: x.ConheceAlguem, obs: x.Obs };
+}
+
+/* ==== 3. cadastro (dados do site + moradia + LGPD + nascimento) ==== */
+function viewCadastro(aviso) {
+  const p = S.prefill || {};
+  const hoje = new Date().toISOString().slice(0, 10);
+  tela(`${progresso(15)}<div class="card">
+    <h2>Seus dados</h2>
+    <p class="sub">Esses dados também criam seu acesso ao nosso site (catálogo e treinamento).</p>
+    ${aviso ? `<div class="aviso">${esc(aviso)}</div>` : ''}
+    <label class="campo">E-mail</label><input type="email" value="${esc(S.email)}" disabled>
+    <label class="campo" for="nome">Nome completo</label><input type="text" id="nome" name="nome" autocomplete="name" value="${esc(p.nome || '')}">
+    <label class="campo" for="whats">Seu WhatsApp (com DDD)</label><input type="tel" id="whats" name="whats" autocomplete="tel" inputmode="tel" placeholder="(88) 9 9999-9999" value="${esc(S.login ? S.login.whatsapp : (p.whatsapp || ''))}" ${S.login ? 'disabled' : ''}>
+    ${S.login ? '<div class="aviso">Você já está logada no nosso site, então não precisa criar senha.</div>' : `<label class="campo" for="senha">Crie uma senha <span class="obs">Mínimo 4 caracteres. É a mesma senha do nosso site: se você já tem cadastro nele, use a sua senha de sempre.</span></label>
+    <input type="password" id="senha" name="senha" autocomplete="new-password">`}
+    <label class="campo">Onde você mora?</label>
+    <div class="obs-destaque">Damos preferência a quem mora perto da loja.</div>
+    ${radios('moradia', OP.moradia, p.moradia || '')}
+    <label class="campo">Como você chegaria ao trabalho?</label>
+    ${radios('chegada', OP.chegada, '')}
+    <label class="campo">Autorização de uso dos dados (LGPD)</label>
+    <label class="opcao lgpd"><input type="checkbox" name="lgpd" value="1"><span>${esc(LGPD_TEXTO)}</span></label>
+    <label class="campo" for="nasc">Data de nascimento</label>
+    <input type="date" id="nasc" name="nasc" max="${hoje}" min="1930-01-01">
+    <div class="erro oculto" id="erro"></div>
+    <button class="btn-p" id="ok">Continuar</button></div>`);
+  const b = document.getElementById('ok');
+  b.onclick = async () => {
+    const nome = val('nome'), whats = (S.login ? S.login.whatsapp : val('whats')).replace(/\D/g, ''), senha = S.login ? '' : document.getElementById('senha').value, nasc = val('nasc');
+    if (nome.split(/\s+/).length < 2) return erroBox('Digite seu nome completo.');
+    if (whats.length < 10 || whats.length > 13) return erroBox('Digite o WhatsApp com DDD.');
+    if (!S.login && senha.length < 4) return erroBox('A senha precisa ter pelo menos 4 caracteres.');
+    if (!radio('moradia')) return erroBox('Escolha onde você mora.');
+    if (!radio('chegada')) return erroBox('Diga como você chegaria ao trabalho.');
+    if (!document.querySelector('input[name="lgpd"]').checked) return erroBox('Marque a autorização para continuar.');
+    if (idade(nasc) === null) return erroBox('Digite sua data de nascimento.');
+    carregando(b, true);
+    const r = await api('curriculo_cadastro', { email: S.email, nome, whatsapp: whats, senha, sessao: S.login ? S.login.sessao : '', moradia: radio('moradia'), chegada: radio('chegada'), lgpd: true, dataNascimento: nasc, cvToken: S.cvToken });
+    carregando(b, false);
+    if (!r.ok) return erroBox(r.erro);
+    S.nome = r.nome; S.whats = r.whatsapp; S.sessao = r.sessao; S.fotoUrl = r.fotoUrl || '';
+    if (r.menor) return viewMenor();
+    viewInstagram(p.instagram || '');
+  };
+}
+
+/* ==== menor de 18 ==== */
+function viewMenor() {
+  const primeiro = esc((S.nome || '').split(' ')[0] || '');
+  tela(`${progresso(100)}<div class="card grande">
+    <div class="emoji">💛</div>
+    <h2>Obrigado pelo interesse${primeiro ? ', ' + primeiro : ''}!</h2>
+    <p>No momento, nossas vagas são somente para <b>maiores de 18 anos</b>, então não vamos seguir com o currículo agora.</p>
+    <p>Mas seu cadastro <b>foi salvo</b>: você já é cliente da TENKiTER Modas e aluna do nosso site de treinamento.</p>
+    <p>Quando você completar 18 anos, teremos muito prazer em retomar seu currículo e conversar com você. Até lá, continue acompanhando a gente!</p>
+    <div class="links"><a href="${SITE_CATALOGO}">Ver o catálogo da loja</a><a href="${SITE_MANUAL}">Acessar o site de treinamento</a></div></div>`);
+}
+
+/* ==== 4. Instagram obrigatório ==== */
+function viewInstagram(inicial, msg) {
+  tela(`${progresso(25)}<div class="card">
+    <h2>Seu Instagram</h2>
+    <p class="sub">O Instagram é obrigatório para concluir o currículo: é por lá que conhecemos você melhor.</p>
+    <label class="campo" for="insta">Seu @ do Instagram</label>
+    <input type="text" id="insta" name="insta" placeholder="@seuusuario" autocapitalize="none" autocorrect="off" value="${esc(inicial || '')}">
+    <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
+    <button class="btn-p" id="ok">Continuar</button>
+    <button class="btn-s" id="sem">Não tenho Instagram</button></div>`);
+  const b = document.getElementById('ok');
+  b.onclick = async () => {
+    const ig = val('insta'); if (!ig) return erroBox('Digite seu @ do Instagram.');
+    carregando(b, true); const r = await api('curriculo_instagram', { whatsapp: S.whats, sessao: S.sessao, instagram: ig }); carregando(b, false);
+    if (!r.ok) return erroBox(r.erro);
+    S.d.instagram = ig; if (S.fotoUrl) { S.passo = 0; viewPerfil(); } else viewFoto();
+  };
+  document.getElementById('sem').onclick = async () => {
+    const r = await api('curriculo_instagram', { whatsapp: S.whats, sessao: S.sessao, semInstagram: true });
+    if (!r.ok) return erroBox(r.erro);
+    viewSemInstagram();
+  };
+}
+/* ==== 4b. foto de perfil (obrigatória) ==== */
+function reduzirImagem(arquivo, maxLado, qualidade) {
+  return new Promise((ok, falha) => {
+    const img = new Image(), url = URL.createObjectURL(arquivo);
+    img.onload = () => {
+      const k = Math.min(1, maxLado / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', qualidade));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); falha(new Error('imagem')); };
+    img.src = url;
+  });
+}
+function viewFoto(msg) {
+  tela(`${progresso(28)}<div class="card">
+    <h2>Sua foto de perfil</h2>
+    <p class="sub">A foto é obrigatória no currículo. Envie uma foto <b>atual do seu rosto</b>, com boa luz. Não precisa ser de corpo inteiro.</p>
+    <div style="text-align:center;margin:10px 0">
+      <div id="prev" style="width:150px;height:150px;border-radius:50%;background:#eee;margin:0 auto 12px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:2.4rem">${S.fotoUrl ? `<img src="${esc(S.fotoUrl)}" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover" alt="">` : '📷'}</div>
+      <input type="file" id="arq" accept="image/*" hidden>
+      <button class="btn-s" id="esc" style="margin-top:0">${S.fotoUrl ? 'Trocar foto' : 'Escolher foto'}</button>
+    </div>
+    <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
+    <button class="btn-p" id="ok" ${S.fotoUrl ? '' : 'disabled'}>Continuar</button></div>`);
+  document.getElementById('esc').onclick = () => document.getElementById('arq').click();
+  document.getElementById('arq').onchange = async e => {
+    const f = e.target.files && e.target.files[0]; if (!f) return; erroBox('');
+    const bt = document.getElementById('esc'); carregando(bt, true);
+    try {
+      const dataUrl = await reduzirImagem(f, 640, 0.82);
+      const r = await api('enviar_foto_perfil', { whatsapp: S.whats, senha: S.sessao, tipo: 'perfil', fotoBase64: dataUrl });
+      if (!r.ok) throw new Error(r.erro || 'Não foi possível enviar a foto agora.');
+      S.fotoUrl = r.url; document.getElementById('prev').innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover" alt="">`;
+      document.getElementById('ok').disabled = false;
+    } catch (x) { erroBox(x.message === 'imagem' ? 'Não foi possível ler essa imagem. Tente outra foto.' : x.message); }
+    carregando(bt, false); bt.textContent = 'Trocar foto';
+  };
+  document.getElementById('ok').onclick = async () => {
+    if (!S.fotoUrl) return erroBox('Envie sua foto para continuar.');
+    if (S.enviado) { // currículo já enviado antes: só faltava a foto
+      const st = await api('curriculo_status', { whatsapp: S.whats, sessao: S.sessao });
+      if (st.ok && st.estado === 'completo') return viewFim();
+    }
+    S.passo = 0; viewPerfil();
+  };
+}
+function viewSemInstagram() {
+  tela(`${progresso(25)}<div class="card grande">
+    <div class="emoji">📱</div>
+    <h2>Quase lá${S.nome ? ', ' + esc(S.nome.split(' ')[0]) : ''}!</h2>
+    <p>Para concluir o currículo, precisamos de um <b>Instagram válido</b>. É por lá que conhecemos você melhor e divulgamos as vagas (<b>@tenkitermodasceara</b>).</p>
+    <p>Seu cadastro de cliente e aluna <b>já está salvo</b>. Crie seu Instagram (leva poucos minutos) e volte por este mesmo link, com o mesmo e-mail: retomamos de onde você parou.</p>
+    <button class="btn-s" id="v">Já criei, quero continuar</button></div>`);
+  document.getElementById('v').onclick = () => viewInstagram('');
+}
+
+/* ==== 5. perfil (blocos B a F) ==== */
+const PASSOS = ['Vaga e horários', 'Experiência', 'Estudos e perfil', 'Para finalizar'];
+function viewPerfil(msg) {
+  const d = S.d, p = S.passo;
+  let corpo = '';
+  if (p === 0) corpo = `
+    <label class="campo">Para qual vaga você está se candidatando? <span class="obs">Pode marcar mais de uma.</span></label>${caixas('vaga', OP.vaga, d.vaga)}
+    <label class="campo">Qual salário você espera receber?</label>${radios('salario', OP.salario, d.salario)}
+    <label class="campo">Quando você poderia começar?</label>${radios('inicio', OP.inicio, d.inicio)}
+    <label class="campo">A loja dá preferência a quem consegue trabalhar de manhã e à tarde, no horário do comércio de Crateús (abrindo quando todos abrem). Você consegue trabalhar assim?</label>${radios('ritmo', OP.simnao, d.ritmo)}
+    <div id="nota-ritmo-sim" class="aviso oculto">Ótimo! Vamos registrar: manhã e tarde (com horário de almoço) e horário de comércio, inclusive domingos e feriados quando a loja abrir.</div>
+    <div id="bloco-horarios" class="oculto">
+      <label class="campo">Qual seu horário disponível?</label>${radios('horario', OP.horario, d.horario)}
+      <label class="campo">Você trabalha fora do horário comercial?</label>${radios('fora', OP.fora, d.fora)}
+    </div>
+    <label class="campo" for="impedimento">Algum impedimento de horário? <span class="obs">Opcional.</span></label><input type="text" id="impedimento" name="impedimento" maxlength="300" value="${esc(d.impedimento || '')}">`;
+  if (p === 1) corpo = `
+    <label class="campo">Você já trabalhou? (com ou sem carteira assinada)</label>${radios('jaTrabalhou', OP.simnao, d.jaTrabalhou)}
+    <div id="bloco-nao-trabalhou" class="aviso oculto">Sem problema! Vamos direto para a próxima etapa.</div>
+    <div id="bloco-experiencia" class="oculto">
+      ${S.prefill && S.prefill.expAnterior ? `<div class="ref"><b>O que você escreveu antes (só para consulta):</b>${esc(S.prefill.expAnterior)}</div>` : ''}
+      <h3>Seu último trabalho</h3>
+      <label class="campo" for="ultEmpresa">Empresa</label><input type="text" id="ultEmpresa" name="ultEmpresa" maxlength="120" value="${esc(d.ultEmpresa || '')}">
+      <label class="campo" for="ultFuncao">Função</label><input type="text" id="ultFuncao" name="ultFuncao" maxlength="120" value="${esc(d.ultFuncao || '')}">
+      <label class="campo" for="ultMeses">Quanto tempo trabalhou (em meses)?</label><input type="number" id="ultMeses" name="ultMeses" min="0" max="600" inputmode="numeric" value="${esc(d.ultMeses || '')}">
+      <label class="campo" for="ultMotivo">Motivo da saída</label><input type="text" id="ultMotivo" name="ultMotivo" maxlength="200" value="${esc(d.ultMotivo || '')}">
+      <label class="campo">Já trabalhou em: <span class="obs">Pode marcar mais de uma.</span></label>${caixas('tiposEmpresa', OP.tipos, d.tiposEmpresa)}
+      <label class="campo">Quais tarefas você já fez? <span class="obs">Pode marcar mais de uma.</span></label>${caixas('tarefas', OP.tarefas, d.tarefas)}
+      <label class="campo">Já liderou uma equipe?</label>${radios('liderou', OP.simnao, d.liderou)}
+      <div id="bloco-lider" class="oculto"><label class="campo" for="liderQuantos">Quantas pessoas e por quanto tempo?</label><input type="text" id="liderQuantos" name="liderQuantos" maxlength="150" value="${esc(d.liderQuantos || '')}"></div>
+      <label class="campo">Podemos pedir referência ao seu último trabalho?</label>${radios('referencia', OP.referencia, d.referencia)}
+      <div id="bloco-ref" class="oculto"><label class="campo" for="refContato">Nome e telefone da referência</label><input type="text" id="refContato" name="refContato" maxlength="150" value="${esc(d.refContato || '')}"></div>
+    </div>`;
+  if (p === 2) corpo = `
+    <label class="campo">Qual sua escolaridade?</label>${radios('escolaridade', OP.escolaridade, d.escolaridade)}
+    ${S.prefill && S.prefill.estudosAnterior ? `<div class="ref"><b>O que você escreveu antes (só para consulta):</b>${esc(S.prefill.estudosAnterior)}</div>` : ''}
+    <label class="campo" for="cursos">Cursos que ajudam na vaga <span class="obs">Opcional.</span></label><input type="text" id="cursos" name="cursos" maxlength="300" value="${esc(d.cursos || '')}">
+    <h3>Como você agiria?</h3>
+    <label class="campo">Um cliente chega irritado com uma troca que não pode ser feita. O que você faz?</label>${radios('troca', OP.troca, d.troca)}
+    <label class="campo">Você viu uma colega errando o troco no caixa, com a loja cheia. O que você faz?</label>${radios('troco', OP.troco, d.troco)}
+    <label class="campo">A meta do dia está longe de ser batida. O que você faz?</label>${radios('meta', OP.meta, d.meta)}
+    <label class="campo">Em um dia movimentado, chegam 3 clientes ao mesmo tempo. O que você faz?</label>${radios('tres', OP.tres, d.tres)}
+    <label class="campo">O que mais te motiva no trabalho? <span class="obs">Escolha até 2.</span></label>${caixas('motiva', OP.motiva, d.motiva, 2)}
+    <label class="campo" for="situacao">Fale de uma situação em que você resolveu um problema (no trabalho, nos estudos ou em casa).</label><textarea id="situacao" name="situacao" maxlength="1200">${esc(d.situacao || '')}</textarea>
+    <label class="campo" for="porQue">Por que você quer trabalhar na TENKiTER?</label><textarea id="porQue" name="porQue" maxlength="800">${esc(d.porQue || '')}</textarea>`;
+  if (p === 3) corpo = `
+    <label class="campo">Como você conheceu a vaga?</label>${radios('origem', OP.origem, d.origem)}
+    <label class="campo" for="conheceAlguem">Conhece alguém que trabalha ou trabalhou aqui? <span class="obs">Opcional. Escreva o nome.</span></label><input type="text" id="conheceAlguem" name="conheceAlguem" maxlength="200" value="${esc(d.conheceAlguem || '')}">
+    <label class="campo" for="obs">Alguma observação? <span class="obs">Opcional.</span></label><textarea id="obs" name="obs" maxlength="600">${esc(d.obs || '')}</textarea>`;
+  tela(`${progresso(30 + p * 17)}<div class="card">
+    <p class="sub" style="margin-bottom:4px">Etapa ${p + 1} de ${PASSOS.length}</p><h2>${PASSOS[p]}</h2>
+    ${corpo}
+    <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
+    <button class="btn-p" id="ok">${p === PASSOS.length - 1 ? 'Enviar currículo' : 'Continuar'}</button>
+    ${p > 0 ? '<button class="btn-s" id="volta">Voltar</button>' : ''}</div>`);
+  condicionais();
+  if (p > 0) document.getElementById('volta').onclick = () => { coletar(); S.passo--; viewPerfil(); };
+  const b = document.getElementById('ok');
+  b.onclick = async () => {
+    coletar(); const e = validarPasso(p); if (e) return erroBox(e);
+    if (p < PASSOS.length - 1) { S.passo++; return viewPerfil(); }
+    carregando(b, true); const r = await api('curriculo_finalizar', { whatsapp: S.whats, sessao: S.sessao, dados: S.d }); carregando(b, false);
+    if (!r.ok) return erroBox(r.erro);
+    viewFim();
+  };
+}
+function coletar() {
+  const d = S.d, t = n => { if (document.querySelector('[name="' + n + '"]')) d[n] = val(n); };
+  const rd = n => { if (document.querySelector('input[name="' + n + '"]')) d[n] = radio(n); };
+  const ck = n => { if (document.querySelector('input[name="' + n + '"]')) d[n] = checks(n); };
+  ['vaga', 'tiposEmpresa', 'tarefas', 'motiva'].forEach(ck);
+  ['salario', 'inicio', 'ritmo', 'horario', 'fora', 'jaTrabalhou', 'liderou', 'referencia', 'escolaridade', 'troca', 'troco', 'meta', 'tres', 'origem'].forEach(rd);
+  ['impedimento', 'ultEmpresa', 'ultFuncao', 'ultMeses', 'ultMotivo', 'liderQuantos', 'refContato', 'cursos', 'situacao', 'porQue', 'conheceAlguem', 'obs'].forEach(t);
+}
+function validarPasso(p) {
+  const d = S.d, f = x => !x || (Array.isArray(x) && !x.length);
+  if (p === 0) {
+    if (f(d.vaga)) return 'Escolha a vaga que você procura.';
+    if (f(d.salario)) return 'Escolha o salário que você espera.';
+    if (f(d.inicio)) return 'Diga quando você poderia começar.';
+    if (f(d.ritmo)) return 'Responda se você consegue trabalhar no horário do comércio.';
+    if (d.ritmo === 'Não' && f(d.horario)) return 'Escolha seu horário disponível.';
+    if (d.ritmo === 'Não' && f(d.fora)) return 'Diga se você trabalha fora do horário comercial.';
+  }
+  if (p === 1) {
+    if (f(d.jaTrabalhou)) return 'Responda se você já trabalhou.';
+    if (d.jaTrabalhou === 'Sim') {
+      if (f(d.ultEmpresa) || f(d.ultFuncao) || f(d.ultMotivo) || d.ultMeses === '' || d.ultMeses == null) return 'Preencha empresa, função, tempo e motivo da saída.';
+      if (f(d.tiposEmpresa)) return 'Escolha os tipos de empresa em que você já trabalhou.';
+      if (f(d.tarefas)) return 'Escolha as tarefas que você já fez.';
+      if (f(d.liderou)) return 'Responda se você já liderou uma equipe.';
+      if (d.liderou === 'Sim' && f(d.liderQuantos)) return 'Diga quantas pessoas e por quanto tempo.';
+      if (f(d.referencia)) return 'Responda sobre a referência.';
+      if (d.referencia === OP.referencia[0] && f(d.refContato)) return 'Informe nome e telefone da referência.';
+    }
+  }
+  if (p === 2) {
+    if (f(d.escolaridade)) return 'Escolha sua escolaridade.';
+    if (f(d.troca) || f(d.troco) || f(d.meta) || f(d.tres)) return 'Responda as 4 perguntas de "Como você agiria?".';
+    if (f(d.motiva)) return 'Escolha até 2 coisas que mais te motivam.';
+    if (!d.situacao || d.situacao.length < 10) return 'Conte uma situação em que você resolveu um problema.';
+    if (!d.porQue || d.porQue.length < 5) return 'Conte por que você quer trabalhar na TENKiTER.';
+  }
+  if (p === 3 && f(d.origem)) return 'Diga como conheceu a vaga.';
+  return '';
+}
+
+function viewFim() {
+  tela(`${progresso(100)}<div class="card grande">
+    <div class="emoji">✅</div>
+    <h2>Currículo enviado!</h2>
+    <p>Obrigado, ${esc((S.nome || '').split(' ')[0])}! Recebemos suas informações. Se houver uma vaga com o seu perfil, entramos em contato pelo WhatsApp.</p>
+    <p class="sub">Seus dados ficam guardados por até 2 anos. Para atualizar o currículo ou pedir a exclusão, fale com a loja: (88) 99322-3998.</p>
+    <div class="links"><a href="${SITE_CATALOGO}">Conhecer o catálogo</a></div></div>`);
+}
+
+(async () => {
+  if (S.login) {
+    tela('<div class="card grande">Carregando…</div>');
+    const r = await api('curriculo_retomar', { whatsapp: S.login.whatsapp, sessao: S.login.sessao });
+    if (r.ok) return entrarRetomada(r);
+  }
+  viewEmail();
+})();
+</script>
+</body>
+</html>

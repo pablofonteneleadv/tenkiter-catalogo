@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d0d0d">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<title>Currículos — TENKiTER Modas</title>
+<style>
+  :root { --preto:#0d0d0d; --laranja:#E67E22; --cinza:#F5F1E8; --branco:#fff; --verde:#198754; --vermelho:#c62828; --borda:#ddd; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Inter",-apple-system,Roboto,Arial,sans-serif; background:var(--cinza); color:var(--preto); line-height:1.4; padding-bottom:70px; }
+  header { background:var(--preto); color:var(--laranja); padding:16px; text-align:center; position:sticky; top:0; z-index:20; font-weight:700; }
+  main { max-width:860px; margin:0 auto; padding:14px; }
+  .card { background:var(--branco); border-radius:12px; padding:14px; margin-bottom:12px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  input, select, textarea, button { font-family:inherit; font-size:.95rem; }
+  input, select, textarea { width:100%; padding:10px 12px; border:1px solid var(--borda); border-radius:8px; background:#fff; }
+  textarea { min-height:70px; resize:vertical; }
+  button { border:0; border-radius:9px; padding:10px 14px; font-weight:700; cursor:pointer; background:var(--preto); color:var(--laranja); }
+  button.sec { background:#eee; color:#333; } button:disabled { opacity:.6; }
+  .abas { display:flex; gap:8px; margin-bottom:12px; } .abas button { flex:1; background:#e7e2d6; color:#333; } .abas button.on { background:var(--laranja); color:var(--preto); }
+  .filtros { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; } .filtros input { grid-column:1/-1; }
+  .item { background:#fff; border-radius:12px; margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,.08); overflow:hidden; }
+  .topo { padding:12px 14px; cursor:pointer; display:flex; gap:10px; align-items:center; justify-content:space-between; }
+  .nome { font-weight:700; } .meta { font-size:.8rem; color:#666; }
+  .tag { font-size:.72rem; font-weight:700; padding:3px 9px; border-radius:99px; background:#eee; white-space:nowrap; }
+  .tag.ok { background:#dff3e7; color:var(--verde); } .tag.al { background:#fff0d9; color:#a35a00; } .tag.ru { background:#fde3e3; color:var(--vermelho); }
+  .det { display:none; padding:0 14px 14px; border-top:1px solid #eee; } .item.aberto .det { display:block; }
+  dl { display:grid; grid-template-columns:170px 1fr; gap:6px 12px; margin:12px 0; font-size:.88rem; } dt { color:#666; } dd { margin:0; white-space:pre-wrap; word-break:break-word; }
+  .grupo { font-size:.72rem; font-weight:800; letter-spacing:.5px; color:var(--laranja); text-transform:uppercase; grid-column:1/-1; margin-top:8px; }
+  .edit { display:grid; gap:8px; background:#faf7f0; padding:10px; border-radius:10px; }
+  .linha { display:flex; gap:8px; flex-wrap:wrap; } .linha > * { flex:1; min-width:140px; }
+  .acoes a { display:inline-block; background:var(--preto); color:var(--laranja); text-decoration:none; padding:8px 12px; border-radius:8px; font-weight:700; font-size:.85rem; margin:0 6px 6px 0; }
+  .aviso { background:#eef6ff; color:#1b4b7a; padding:10px 12px; border-radius:9px; font-size:.86rem; margin-bottom:12px; }
+  .erro { background:#fde3e3; color:var(--vermelho); padding:10px 12px; border-radius:9px; font-size:.9rem; margin:10px 0; font-weight:600; }
+  .oculto { display:none !important; }
+  .nav-inferior { position:fixed; bottom:0; left:0; right:0; z-index:50; background:var(--preto); display:flex; }
+  .nav-inferior a { flex:1; text-align:center; padding:9px 4px; color:#999; text-decoration:none; font-size:.68rem; font-weight:700; } .nav-inferior a.ativo { color:var(--laranja); }
+  @media(max-width:560px){ dl { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>Currículos</header>
+<main id="app"><div class="card">Carregando…</div></main>
+<nav class="nav-inferior"><a href="index.html">👗<br>Catálogo</a><a href="admin.html">🔧<br>Gestão</a><a href="curriculos.html" class="ativo">📄<br>Currículos</a></nav>
+<script src="common.js"></script>
+<script>
+const TREIN_URL = 'https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec'; // mesmo backend do treinamento (manual.html)
+const TREIN_TOKEN = 'tenkiter2026';
+const $ = id => document.getElementById(id);
+const E = escaparHtml;
+let sessao = null, novos = [], antigos = [], STATUS = [], MOTIVOS = [], aba = 'novos', busca = '', fStatus = '', fEtapa = '', carregou = { novos: false, antigos: false };
+
+async function chamar(action, corpo) {
+  const s = getSessao(); if (!s) return { ok: false, erro: 'Entre de novo.', sessaoInvalida: true };
+  try {
+    const r = await fetch(TREIN_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ token: TREIN_TOKEN, action, whatsapp: s.whatsapp, sessao: s.sessao }, corpo || {})) });
+    const j = await r.json();
+    if (j && (j.sessaoInvalida)) { limparSessao(); }
+    return j;
+  } catch (e) { return { ok: false, erro: 'Sem conexão.' }; }
+}
+
+function telaLogin(msg) {
+  $('app').innerHTML = `<div class="card"><h3 style="margin-top:0">Entrar</h3><p style="font-size:.9rem;color:#555">Use o mesmo WhatsApp e a mesma senha do portal e do admin.</p>
+    <input id="w" type="tel" placeholder="WhatsApp com DDD" autocomplete="username" style="margin-bottom:8px"><input id="s" type="password" placeholder="Senha" autocomplete="current-password">
+    <div class="erro ${msg ? '' : 'oculto'}" id="er">${E(msg || '')}</div><button id="go" style="width:100%;margin-top:8px">Entrar</button></div>`;
+  $('go').onclick = async () => {
+    $('go').disabled = true; const r = await entrarComSenha($('w').value, $('s').value); $('go').disabled = false;
+    if (!r || !r.ok) return telaLogin((r && r.erro) || 'Não foi possível entrar.');
+    iniciar();
+  };
+}
+async function iniciar() {
+  const u = await conferirSessao();
+  if (!u) return telaLogin('');
+  if (u.semRede) { $('app').innerHTML = '<div class="erro">Sem conexão. Tente de novo.</div>'; return; }
+  if (!temPermissao(u, 'dados_pessoais')) { $('app').innerHTML = '<div class="card"><h3 style="margin-top:0">Sem acesso</h3><p>Seu perfil não permite ver currículos. Peça ao Admin total para liberar "Ver dados pessoais dos colegas".</p></div>'; return; }
+  sessao = u; await carregarNovos(); desenhar();
+}
+async function carregarNovos() {
+  const r = await chamar('curriculos_listar'); if (!r.ok) return erro(r.erro);
+  novos = r.curriculos; STATUS = r.status; MOTIVOS = r.motivos; carregou.novos = true;
+}
+async function carregarAntigos() {
+  $('lista').innerHTML = '<div class="card">Carregando a planilha antiga…</div>';
+  const r = await chamar('curriculos_antigos'); if (!r.ok) return erro(r.erro);
+  antigos = r.antigos; carregou.antigos = true; desenhar();
+}
+function erro(m) { const el = document.createElement('div'); el.className = 'erro'; el.textContent = m || 'Erro.'; $('app').prepend(el); }
+
+function diasPara(iso) { if (!iso) return null; const d = new Date(iso + 'T00:00:00'); return Math.ceil((d - new Date()) / 86400000); }
+function fmtData(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || ''); }
+function wa(tel) { let d = String(tel || '').replace(/\D/g, ''); if (d.length <= 11) d = '55' + d; return 'https://wa.me/' + d; }
+function ig(h) { return 'https://instagram.com/' + String(h || '').replace(/^@/, ''); }
+
+function desenhar() {
+  $('app').innerHTML = `<div class="abas"><button id="t1" class="${aba === 'novos' ? 'on' : ''}">Currículos novos (${novos.length})</button><button id="t2" class="${aba === 'antigos' ? 'on' : ''}">Planilha antiga${carregou.antigos ? ' (' + antigos.length + ')' : ''}</button></div>
+    <div class="filtros"><input id="q" type="search" placeholder="Buscar nome, telefone, texto…" value="${E(busca)}">
+    ${aba === 'novos' ? `<select id="fs"><option value="">Todos os status</option>${STATUS.map(s => `<option ${s === fStatus ? 'selected' : ''}>${E(s)}</option>`).join('')}</select>
+    <select id="fe">${['', 'Enviado', 'Perfil', 'Instagram', 'Sem Instagram', 'Menor de 18'].map(x => `<option value="${x}" ${x === fEtapa ? 'selected' : ''}>${x ? E(x) : 'Todas as etapas'}</option>`).join('')}</select>` : ''}</div>
+    <div id="lista"></div>`;
+  $('t1').onclick = () => { aba = 'novos'; desenhar(); };
+  $('t2').onclick = () => { aba = 'antigos'; carregou.antigos ? desenhar() : (desenhar(), carregarAntigos()); };
+  $('q').oninput = e => { busca = e.target.value; lista(); };
+  if (aba === 'novos') { $('fs').onchange = e => { fStatus = e.target.value; lista(); }; $('fe').onchange = e => { fEtapa = e.target.value; lista(); }; }
+  lista();
+}
+function lista() {
+  const q = busca.toLowerCase(); const box = $('lista');
+  if (aba === 'novos') {
+    let l = novos.filter(r => (!fStatus || r.Status === fStatus) && (!fEtapa || r.Etapa === fEtapa) && (!q || JSON.stringify(r).toLowerCase().includes(q)));
+    l.sort((a, b) => (fEtapa === 'Menor de 18' ? String(a.Retomar18Em).localeCompare(String(b.Retomar18Em)) : String(b.Atualizado).localeCompare(String(a.Atualizado))));
+    const menores = novos.filter(r => r.Etapa === 'Menor de 18' && diasPara(r.Retomar18Em) !== null && diasPara(r.Retomar18Em) <= 60 && diasPara(r.Retomar18Em) >= -365);
+    box.innerHTML = (menores.length ? `<div class="aviso">🎂 <b>Completam 18 anos em breve:</b> ${menores.sort((a, b) => a.Retomar18Em.localeCompare(b.Retomar18Em)).map(r => `${E(r.Nome)} (${fmtData(r.Retomar18Em)})`).join(' · ')}</div>` : '') +
+      (l.length ? '' : '<div class="card">Nenhum currículo com esses filtros.</div>');
+    l.forEach(r => box.append(itemNovo(r)));
+  } else {
+    let l = antigos.filter(r => !q || JSON.stringify(r).toLowerCase().includes(q));
+    l.sort((a, b) => b.linha - a.linha);
+    box.innerHTML = '<div class="aviso">Respostas do formulário antigo (leitura). Sua anotação na coluna <b>"chamar?"</b> é gravada direto na planilha. Foto, doenças, filhos, estado civil e família não aparecem aqui.</div>';
+    l.slice(0, 150).forEach(r => box.append(itemAntigo(r)));
+    if (l.length > 150) box.append(Object.assign(document.createElement('div'), { className: 'card', textContent: `Mostrando 150 de ${l.length}. Use a busca para filtrar.` }));
+  }
+}
+function tagEtapa(r) {
+  const c = r.Etapa === 'Enviado' ? 'ok' : (r.Etapa === 'Menor de 18' ? 'ru' : 'al');
+  return `<span class="tag ${c}">${E(r.Etapa)}</span>`;
+}
+const CAMPOS = [
+  ['Contato', [['WhatsApp', 'WhatsApp'], ['Email', 'E-mail'], ['Instagram', 'Instagram'], ['Nascimento', 'Nascimento'], ['Idade', 'Idade'], ['Moradia', 'Onde mora'], ['Chegada', 'Como chegaria']]],
+  ['Vaga e condições', [['Vaga', 'Vaga'], ['Salario', 'Salário esperado'], ['Inicio', 'Pode começar'], ['Ritmo', 'Trabalha no horário do comércio'], ['Horario', 'Horário disponível'], ['ForaHorario', 'Fora do horário comercial'], ['Impedimento', 'Impedimento de horário']]],
+  ['Experiência', [['JaTrabalhou', 'Já trabalhou'], ['UltEmpresa', 'Última empresa'], ['UltFuncao', 'Função'], ['UltMeses', 'Meses'], ['UltMotivo', 'Motivo da saída'], ['TiposEmpresa', 'Tipos de empresa'], ['Tarefas', 'Tarefas'], ['Liderou', 'Já liderou'], ['LiderQuantos', 'Liderança'], ['Referencia', 'Referência'], ['RefContato', 'Contato da referência']]],
+  ['Estudos e perfil', [['Escolaridade', 'Escolaridade'], ['Cursos', 'Cursos'], ['Q_Troca', 'Cliente irritado (troca)'], ['Q_Troco', 'Colega errando o troco'], ['Q_Meta', 'Meta longe'], ['Q_TresClientes', 'Três clientes juntos'], ['Motiva', 'O que motiva'], ['Situacao', 'Problema que resolveu'], ['PorQue', 'Por que a TENKiTER']]],
+  ['Encerramento', [['Origem', 'Como conheceu a vaga'], ['ConheceAlguem', 'Conhece alguém aqui'], ['Obs', 'Observações'], ['EnviadoEm', 'Enviado em'], ['LGPD_Aceite', 'Autorização LGPD em']]]
+];
+function itemNovo(r) {
+  const d = document.createElement('div'); d.className = 'item';
+  const dl = CAMPOS.map(([g, cs]) => `<div class="grupo">${g}</div>` + cs.filter(([k]) => r[k]).map(([k, rot]) => `<dt>${rot}</dt><dd>${E(k === 'Nascimento' || k === 'Retomar18Em' ? fmtData(r[k]) : (k === 'EnviadoEm' || k === 'LGPD_Aceite' ? new Date(r[k]).toLocaleString('pt-BR') : r[k]))}</dd>`).join('')).join('');
+  d.innerHTML = `<div class="topo"><div style="display:flex;gap:10px;align-items:center">${r.FotoUrl ? `<img src="${E(r.FotoUrl)}" referrerpolicy="no-referrer" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none">` : '<div style="width:44px;height:44px;border-radius:50%;background:#eee;flex:none"></div>'}<div><div class="nome">${E(r.Nome)}</div><div class="meta">${E(r.Idade ? r.Idade + ' anos · ' : '')}${E(r.Moradia || '')}${r.Etapa === 'Menor de 18' ? ' · faz 18 em ' + fmtData(r.Retomar18Em) : ''}</div></div></div><div>${tagEtapa(r)} <span class="tag">${E(r.Status || 'Novo')}</span></div></div>
+    <div class="det">${r.FotoUrl ? `<div style="margin:12px 0"><img src="${E(r.FotoUrl)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:220px;width:100%;border-radius:12px"></div>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}</div>
+    ${r.LegadoChamar ? `<div class="aviso">Anotação antiga da planilha ("chamar?"): <b>${E(r.LegadoChamar)}</b></div>` : ''}
+    <div class="edit"><div class="linha"><select data-k="st">${STATUS.map(s => `<option ${s === (r.Status || 'Novo') ? 'selected' : ''}>${E(s)}</option>`).join('')}</select>
+    <select data-k="mo"><option value="">Motivo (se descartada ou desistiu)</option>${MOTIVOS.map(s => `<option ${s === r.Motivo ? 'selected' : ''}>${E(s)}</option>`).join('')}</select></div>
+    <textarea data-k="no" placeholder="Suas anotações">${E(r.Nota || '')}</textarea><button data-k="sv">Salvar</button><span data-k="ms" class="meta"></span></div>
+    <dl>${dl}</dl></div>`;
+  d.querySelector('.topo').onclick = () => d.classList.toggle('aberto');
+  d.querySelector('[data-k=sv]').onclick = async e => {
+    const b = e.target, ms = d.querySelector('[data-k=ms]'); b.disabled = true; ms.textContent = '';
+    const st = d.querySelector('[data-k=st]').value, mo = d.querySelector('[data-k=mo]').value, no = d.querySelector('[data-k=no]').value;
+    const x = await chamar('curriculos_atualizar', { cvId: r.CvId, status: st, motivo: mo, nota: no }); b.disabled = false;
+    if (!x.ok) { ms.textContent = x.erro || 'Erro ao salvar'; return; }
+    r.Status = st; r.Motivo = mo; r.Nota = no; ms.textContent = 'Salvo ✓'; d.querySelectorAll('.topo .tag')[1].textContent = st;
+  };
+  return d;
+}
+function itemAntigo(r) {
+  const d = document.createElement('div'); d.className = 'item';
+  const linhas = [['Telefone', r.tel], ['E-mail', r.email], ['Instagram', r.insta], ['Idade', r.idade], ['Onde mora', r.moradia], ['Salário que pediu', r.salario], ['Experiência como encarregada', r.encarregada], ['Experiências', r.exp], ['Estudos', r.estudos], ['Disponibilidade', r.disp], ['Sobre ela', r.sobre], ['Como seria útil', r.util], ['Observações dela', r.obs]];
+  d.innerHTML = `<div class="topo"><div><div class="nome">${E(r.nome || '(sem nome)')}</div><div class="meta">${E(r.ts)} ${r.idade ? '· ' + E(r.idade) + ' anos' : ''}${r.chamar ? ' · ' + E(r.chamar.slice(0, 40)) : ''}</div></div><div>${r.atualizou ? '<span class="tag ok">já atualizou</span>' : ''}</div></div>
+    <div class="det"><div class="acoes">${r.tel ? `<a href="${wa(r.tel)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${r.insta ? `<a href="${ig(r.insta)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}</div>
+    <div class="edit"><textarea data-k="no" placeholder='Coluna "chamar?"'>${E(r.chamar || '')}</textarea><button data-k="sv">Salvar na planilha</button><span data-k="ms" class="meta"></span></div>
+    <dl>${linhas.filter(x => x[1]).map(x => `<dt>${x[0]}</dt><dd>${E(x[1])}</dd>`).join('')}</dl></div>`;
+  d.querySelector('.topo').onclick = () => d.classList.toggle('aberto');
+  d.querySelector('[data-k=sv]').onclick = async e => {
+    const b = e.target, ms = d.querySelector('[data-k=ms]'); b.disabled = true; const t = d.querySelector('[data-k=no]').value;
+    const x = await chamar('curriculos_antigos_nota', { linha: r.linha, texto: t }); b.disabled = false;
+    ms.textContent = x.ok ? 'Salvo na planilha ✓' : (x.erro || 'Erro ao salvar'); if (x.ok) r.chamar = t;
+  };
+  return d;
+}
+iniciar();
+</script>
+</body>
+</html>

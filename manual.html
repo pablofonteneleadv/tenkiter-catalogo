@@ -333,6 +333,14 @@ th{background:var(--surface-2); font-weight:700;}
   background:var(--warn-bg); border:1px solid var(--warn-border); color:var(--warn-text);
   padding:12px 16px; border-radius:12px; margin-bottom:18px; font-size:0.9rem; font-weight:600;
 }
+/* ---------- aviso "currículo" (tela inicial) ---------- */
+.cv-aviso{border-radius:16px; padding:20px 20px; margin-bottom:22px; background:var(--accent-2); color:#0d0d0d; box-shadow:0 4px 14px rgba(230,126,34,.35);}
+.cv-aviso h2{margin:0 0 6px; font-size:1.25rem;}
+.cv-aviso p{margin:0 0 10px; font-size:0.95rem; font-weight:500;}
+.cv-aviso ul{margin:0 0 12px; padding-left:20px; font-size:0.92rem; font-weight:600;}
+.cv-aviso a.cv-btn{display:inline-block; background:#0d0d0d; color:#F39C12; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:800; font-size:1rem;}
+.cv-aviso.cv-incompleto{background:#c62828; color:#fff; box-shadow:0 4px 14px rgba(198,40,40,.35);}
+.cv-aviso.cv-incompleto a.cv-btn{background:#fff; color:#c62828;}
 .btn-sm{padding:6px 12px; font-size:0.82rem;}
 
 /* ---------- página de perfil ---------- */
@@ -1225,10 +1233,12 @@ function goHome(){
     '<div class="shell"><div class="main" style="max-width:900px">' +
       bannerPerfil +
       '<div class="hero"><h1>Oi, ' + esc(state.user.name) + '!</h1><p>' + (state.user.perfil ? ('Seu perfil: ' + esc(state.user.perfil) + '. ') : ('Seu nível de acesso é ' + state.user.level + '. ')) + 'Escolha um manual para continuar.</p></div>' +
+      '<div id="cv-slot"></div>' +
       '<div class="cards">' + (cards || '<p class="sub">Nenhum manual disponível ainda.</p>') + '</div>' +
     '</div></div>';
   empurrarHistorico('home', null);
   wireTopbar();
+  carregarAvisoCurriculo();
   var linkPerfil = document.getElementById('link-completar-perfil');
   if (linkPerfil) linkPerfil.addEventListener('click', function(e){ e.preventDefault(); openPerfil(); });
   document.querySelectorAll('.card').forEach(function(el){
@@ -1237,6 +1247,27 @@ function goHome(){
       if (podeManual(id)) openManual(id);
     });
   });
+}
+
+/* ---------------- aviso do currículo (só para Aluno/Novato; some quando o currículo está completo) ---------------- */
+async function carregarAvisoCurriculo(){
+  if (!state.user) return;
+  var perfil = String(state.user.perfil || '').toLowerCase();
+  if (perfil !== 'aluno' && perfil !== 'novato') return;
+  var st = state.cvStatus;
+  if (!st || Date.now() - st.t > 60000){
+    var r = await submitResult({ action:'curriculo_status', whatsapp: state.user.whatsapp, sessao: state.user.password });
+    if (!r || !r.ok) return; // sem rede ou servidor antigo: sem aviso, nada quebra
+    st = { t: Date.now(), r: r }; state.cvStatus = st;
+  }
+  var slot = document.getElementById('cv-slot');
+  if (!slot || state.view !== 'home') return;
+  var r2 = st.r;
+  if (r2.estado === 'nenhum'){
+    slot.innerHTML = '<div class="cv-aviso"><h2>📄 Faça seu currículo</h2><p>Quer crescer com a gente? Envie seu currículo para a TENKiTER Modas. Leva poucos minutos.</p><a class="cv-btn" href="curriculo.html">Fazer meu currículo</a></div>';
+  } else if (r2.estado === 'incompleto'){
+    slot.innerHTML = '<div class="cv-aviso cv-incompleto"><h2>⚠️ Seu currículo está incompleto</h2><p>Falta pouco! Ainda falta:</p><ul>' + (r2.faltando || []).map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul><a class="cv-btn" href="curriculo.html">Completar agora</a></div>';
+  } else { slot.innerHTML = ''; }
 }
 
 /* ---------------- manual view ---------------- */
