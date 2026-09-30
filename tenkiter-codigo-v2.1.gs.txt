@@ -1,0 +1,1478 @@
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v2.1
+//
+// NOVIDADE v2.1: galeria de até 8 fotos + 1 vídeo (até 20 MB) por produto (coluna Video_URL criada sozinha).
+//
+// NOVIDADE DA v2.0 -- LOGIN ÚNICO E PERMISSÕES NO ADMIN
+//  - O admin do catálogo passa a aceitar o MESMO login do portal (WhatsApp + senha,
+//    cadastro único). Cada ação exige a permissão certa (cadastrar, excluir, preço
+//    em lote, auditoria, notificações). Quem mexeu fica registrado com o nome real.
+//  - O PIN antigo CONVIVE até você desligar (desligarPinLegado): assim ninguém fica
+//    sem acesso enquanto os atendentes ganham conta. Depois de desligar, só login.
+//  - Conta de cliente: cadastro pelo próprio catálogo, com favoritos e sacola salvos
+//    na conta (aba Clientes_Dados). O catálogo continua abrindo sem login.
+//  - Requer a v4.0 do script de treinamento (é ela que cria as colunas de permissões
+//    e o painel "Acessos"). Os dois scripts leem a MESMA planilha de pessoas.
+//
+// ---- histórico: v1.1 ----
+// O que mudou em relação à versão anterior (NADA muda para quem usa o site/admin):
+//  - Lista de produtos e estatísticas com cache curto (60s/120s) e cache
+//    invalidado na hora quando alguém cadastra/edita/arquiva/exclui: o catálogo
+//    abre mais rápido e a planilha é menos exigida.
+//  - Edições, arquivar, reativar, excluir e ações em lote passam por uma trava
+//    (dois atendentes mexendo ao mesmo tempo não se atropelam mais; excluir uma
+//    linha enquanto outra pessoa edita podia gravar na linha errada).
+//  - fazerBackupAgora(): cópia da planilha do catálogo no Drive (guarda as 8 mais
+//    recentes). Para automatizar: Gatilhos -> Adicionar -> fazerBackupAgora ->
+//    Baseado em tempo -> Contador semanal.
+//  - diagnostico(): mostra no Log o estado do sistema (sem revelar nada sensível).
+//  - GET ?action=versao para conferir qual versão está no ar.
+//  Nenhuma coluna, aba ou formato de resposta foi alterado.
+//
+// ===================== CONFIGURAÇÃO =====================
+const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl';
+const SHEET_PRODUTOS = 'Sheet1';
+const SHEET_CATEGORIAS = 'Categorias';
+const SHEET_GENEROS = 'Generos';
+const SHEET_HISTORICO = 'Historico';
+const SHEET_EVENTOS = 'Eventos';
+const SHEET_AUDITORIA = 'Acoes_Audit';
+const SITE_URL = 'https://tenkiter-catalogo.onrender.com/';
+const PESSOAS_PLANILHA_ID = '1FMJU_lGGN7nwhDXEnpRCcFdaSVzTWcbQjOZKvOA-dxY'; // planilha única de pessoas (a mesma do script de treinamento)
+const SHEET_CLIENTES = 'Clientes_Dados';
+
+const CATEGORIAS_PADRAO = [
+  'Blusas', 'Camisetas', 'Calças', 'Vestidos', 'Shorts', 'Saias',
+  'Conjuntos', 'Jaquetas', 'Moletons', 'Pijamas', 'Calçados', 'Acessórios'
+];
+
+const GENEROS_PADRAO = [
+  'Feminino Adulto', 'Masculino Adulto', 'Infantil Menina', 'Infantil Menino', 'Unissex'
+];
+
+function normalizar_(texto) {
+  return String(texto || '').trim().toLowerCase();
+}
+
+function escaparHtml_(texto) {
+  return String(texto || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function getSS_() {
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function getOrCreateSheet_(nome, headers) {
+  const ss = getSS_();
+  let sheet = ss.getSheetByName(nome);
+  if (!sheet) {
+    sheet = ss.insertSheet(nome);
+    if (headers && headers.length > 0) {
+      sheet.appendRow(headers);
+    }
+  }
+  return sheet;
+}
+
+function getListaValores_(nome, valoresPadrao) {
+  const sheet = getOrCreateSheet_(nome, ['Nome']);
+  const dados = sheet.getDataRange().getValues();
+  const valores = [];
+  for (let i = 1; i < dados.length; i++) {
+    if (dados[i][0]) valores.push(String(dados[i][0]).trim());
+  }
+  if (valores.length === 0 && valoresPadrao) {
+    valoresPadrao.forEach(v => {
+      sheet.appendRow([v]);
+      valores.push(v);
+    });
+  }
+  return valores;
+}
+
+/**
+ * Adiciona um valor novo (categoria ou gênero) numa lista, evitando duplicado.
+ * Esta função já era chamada pelo doPost (addCategoria/addGenero) mas não existia
+ * no arquivo anterior — corrigida aqui para não dar erro de servidor se essas
+ * ações forem usadas no futuro.
+ */
+function adicionarValorLista_(nomeSheet, valoresPadrao, novoValor) {
+  if (!novoValor || !String(novoValor).trim()) {
+    return { ok: false, erro: 'Valor vazio.' };
+  }
+  const valorLimpo = String(novoValor).trim();
+  const valores = getListaValores_(nomeSheet, valoresPadrao);
+  if (valores.some(v => normalizar_(v) === normalizar_(valorLimpo))) {
+    return { ok: true, jaExistia: true };
+  }
+  const sheet = getOrCreateSheet_(nomeSheet, ['Nome']);
+  sheet.appendRow([valorLimpo]);
+  return { ok: true };
+}
+
+function getProdutosSheet_() {
+  const ss = getSS_();
+  let sheet = ss.getSheetByName(SHEET_PRODUTOS);
+  if (!sheet) sheet = ss.getSheets()[0];
+  return sheet;
+}
+
+function salvarFotoDrive_(base64Data, mimeType, nomeArquivo) {
+  const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+  const bytes = Utilities.base64Decode(base64Data);
+  const blob = Utilities.newBlob(bytes, mimeType, nomeArquivo);
+  const file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return 'https://lh3.googleusercontent.com/d/' + file.getId();
+}
+
+const MAX_FOTOS_GALERIA = 8;
+const MAX_VIDEO_BYTES = 20 * 1024 * 1024; // 20 MB (limite prático de um envio pelo Apps Script)
+
+/** Salva 1 vídeo no Drive e devolve o link de visualização (para <iframe>). */
+function salvarVideoDrive_(base64Data, mimeType, nomeBase) {
+  const permitidos = { 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm', 'video/3gpp': '3gp' };
+  const mime = String(mimeType || 'video/mp4').toLowerCase();
+  if (!permitidos[mime]) throw new Error('Formato de vídeo não aceito. Use MP4, MOV ou WEBM.');
+  const bytes = Utilities.base64Decode(base64Data);
+  if (bytes.length > MAX_VIDEO_BYTES) throw new Error('Vídeo grande demais (máximo 20 MB). Encurte ou reduza a qualidade e tente de novo.');
+  const blob = Utilities.newBlob(bytes, mime, nomeBase + '.' + permitidos[mime]);
+  const file = DriveApp.getFolderById(DRIVE_FOLDER_ID).createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return 'https://drive.google.com/file/d/' + file.getId() + '/preview';
+}
+
+/** Coluna Video_URL da planilha de produtos (criada na hora se ainda não existir). */
+function colunaVideo_(sheet) {
+  const n = Math.max(sheet.getLastColumn(), 1);
+  const cab = sheet.getRange(1, 1, 1, n).getValues()[0].map(function (h) { return String(h).trim(); });
+  const i = cab.indexOf('Video_URL');
+  if (i !== -1) return i + 1;
+  const col = cab.length + 1;
+  sheet.getRange(1, col).setValue('Video_URL');
+  return col;
+}
+function gravarVideo_(sheet, linha, url) {
+  sheet.getRange(linha, colunaVideo_(sheet)).setValue(url);
+}
+function limitarGaleria_(lista) {
+  return String(lista || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean).slice(0, MAX_FOTOS_GALERIA).join(',');
+}
+
+function jsonResponse_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function validarPin_(body) {
+  const pinCorreto = PropertiesService.getScriptProperties().getProperty('ADMIN_PIN');
+  if (!pinCorreto) return true;
+  return String(body.pin || '') === String(pinCorreto);
+}
+
+/**
+ * Mesma checagem de PIN, mas para chamadas GET (que não têm corpo JSON,
+ * só parâmetros na URL). Usada pela ação 'historico'.
+ */
+function validarPinGet_(e) {
+  const pinCorreto = PropertiesService.getScriptProperties().getProperty('ADMIN_PIN');
+  if (!pinCorreto) return true;
+  return String(e.parameter.pin || '') === String(pinCorreto);
+}
+
+function proximoCodigo_() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const num = parseInt(props.getProperty('PROXIMO_CODIGO_NUM') || '0', 10) + 1;
+    props.setProperty('PROXIMO_CODIGO_NUM', String(num));
+    return 'TK-' + String(num).padStart(4, '0');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function registrarAudit_(funcionario, acao, produtoId, detalhe) {
+  const sheet = getOrCreateSheet_(SHEET_AUDITORIA, ['DataHora', 'Funcionario', 'Acao', 'ProdutoID', 'Detalhes']);
+  sheet.appendRow([new Date(), acTexto_(funcionario || 'Anônimo'), acao, produtoId || '', JSON.stringify(detalhe || {})]);
+}
+
+function registrarHistorico_(acao, produto, anterior, funcionario) {
+  const sheet = getOrCreateSheet_(SHEET_HISTORICO, ['DataHora', 'Funcionario', 'Acao', 'ProdutoID', 'Codigo', 'Nome', 'PrecoAnterior', 'PrecoNovo', 'EstoqueAnterior', 'EstoqueNovo']);
+  sheet.appendRow([
+    new Date(), acTexto_(funcionario || 'Sistema'), acao, produto.id || '', produto.codigo || '', acTexto_(produto.nome || ''),
+    anterior && anterior.preco !== undefined ? anterior.preco : '',
+    produto.preco !== undefined ? produto.preco : '',
+    anterior && anterior.estoque !== undefined ? anterior.estoque : '',
+    produto.estoque !== undefined ? produto.estoque : ''
+  ]);
+  registrarAudit_(funcionario, acao, produto.id, { produto, anterior });
+}
+
+function buscarProdutoPorId_(id) {
+  const sheet = getProdutosSheet_();
+  const dados = sheet.getDataRange().getValues();
+  const headers = dados[0];
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(id)) {
+      const obj = {};
+      headers.forEach((h, idx) => obj[h] = dados[i][idx]);
+      return obj;
+    }
+  }
+  return null;
+}
+
+function paginaCompartilhamento_(id) {
+  const destino = SITE_URL + '?id=' + encodeURIComponent(id);
+  const produto = buscarProdutoPorId_(id);
+
+  if (!produto) {
+    const htmlSemProduto =
+      '<!DOCTYPE html><html><head>' +
+      '<script>try{(window.top||window).location.href=' + JSON.stringify(destino) + ';}catch(e){location.href=' + JSON.stringify(destino) + ';}</script>' +
+      '</head><body>Redirecionando... <a href="' + destino + '" target="_top">clique aqui</a></body></html>';
+    return HtmlService.createHtmlOutput(htmlSemProduto);
+  }
+
+  const preco = Number(produto.Preco) || 0;
+  const avista = (preco * 0.9).toFixed(2).replace('.', ',');
+  const precoCheio = preco.toFixed(2).replace('.', ',');
+  const codigo = produto.Codigo ? (' [' + produto.Codigo + ']') : '';
+  const titulo = '🔥 ' + produto.Nome + codigo + ' — R$ ' + avista + ' à vista';
+  const descricao = produto.Descricao
+    ? (produto.Descricao + ' | De R$ ' + precoCheio + ' por R$ ' + avista + ' à vista na TENKiTER Modas')
+    : ('De R$ ' + precoCheio + ' por R$ ' + avista + ' à vista. Confira detalhes e disponibilidade na TENKiTER Modas.');
+  const imagem = produto.Foto_URL || '';
+
+  const html = '<!DOCTYPE html><html lang="pt-BR"><head>' +
+    '<meta charset="UTF-8">' +
+    '<title>' + escaparHtml_(titulo) + '</title>' +
+    '<meta property="og:title" content="' + escaparHtml_(titulo) + '">' +
+    '<meta property="og:description" content="' + escaparHtml_(descricao) + '">' +
+    '<meta property="og:image" content="' + imagem + '">' +
+    '<meta property="og:image:width" content="900">' +
+    '<meta property="og:image:height" content="1125">' +
+    '<meta property="og:url" content="' + destino + '">' +
+    '<meta property="og:type" content="product">' +
+    '<meta name="twitter:card" content="summary_large_image">' +
+    '<meta name="twitter:title" content="' + escaparHtml_(titulo) + '">' +
+    '<meta name="twitter:description" content="' + escaparHtml_(descricao) + '">' +
+    '<meta name="twitter:image" content="' + imagem + '">' +
+    '<script>try{(window.top||window).location.href=' + JSON.stringify(destino) + ';}catch(e){location.href=' + JSON.stringify(destino) + ';}</script>' +
+    '</head><body>' +
+    '<p>Abrindo produto... <a href="' + destino + '" target="_top">clique aqui se não for redirecionado</a></p>' +
+    '</body></html>';
+
+  return HtmlService.createHtmlOutput(html);
+}
+
+function obterStats_() {
+  const ss = getSS_();
+  const sheetEventos = ss.getSheetByName(SHEET_EVENTOS);
+  const contagem = {};
+  let totalView = 0, totalWhats = 0;
+  if (sheetEventos) {
+    const dados = sheetEventos.getDataRange().getValues();
+    for (let i = 1; i < dados.length; i++) {
+      const pid = String(dados[i][1]);
+      const codigo = dados[i][2];
+      const tipo = dados[i][3];
+      if (!contagem[pid]) contagem[pid] = { visualizacao: 0, whatsapp: 0, codigo: codigo };
+      if (tipo === 'visualizacao') { contagem[pid].visualizacao++; totalView++; }
+      if (tipo === 'whatsapp') { contagem[pid].whatsapp++; totalWhats++; }
+    }
+  }
+  let maisVistoId = null, maiorViews = 0;
+  Object.keys(contagem).forEach(pid => {
+    if (contagem[pid].visualizacao > maiorViews) { maiorViews = contagem[pid].visualizacao; maisVistoId = pid; }
+  });
+  return jsonResponse_({
+    ok: true,
+    totalVisualizacoes: totalView,
+    totalWhatsapp: totalWhats,
+    produtoMaisVistoId: maisVistoId,
+    produtoMaisVistoCodigo: maisVistoId && contagem[maisVistoId] ? contagem[maisVistoId].codigo : '',
+    produtoMaisVistoViews: maiorViews
+  });
+}
+
+/**
+ * Devolve as últimas N linhas da aba Historico (mais recente primeiro),
+ * para a tela de Auditoria do admin. Protegida por PIN (?pin=...) igual
+ * às ações de escrita, já que mostra preços/estoque antigos e nome de
+ * funcionários.
+ */
+function obterHistorico_(e) {
+  const sheet = getOrCreateSheet_(SHEET_HISTORICO, ['DataHora', 'Funcionario', 'Acao', 'ProdutoID', 'Codigo', 'Nome', 'PrecoAnterior', 'PrecoNovo', 'EstoqueAnterior', 'EstoqueNovo']);
+  const dados = sheet.getDataRange().getValues();
+  const headers = dados[0];
+  const limite = Math.min(Number(e.parameter.limite) || 200, 1000);
+  const registros = [];
+  for (let i = dados.length - 1; i >= 1 && registros.length < limite; i--) {
+    const obj = {};
+    headers.forEach((h, idx) => obj[h] = dados[i][idx]);
+    registros.push(obj);
+  }
+  return jsonResponse_({ ok: true, registros: registros });
+}
+
+/* ====================================================================
+ * BLOCO COMPARTILHADO DE ACESSOS -- IDÊNTICO nos dois scripts
+ * (treinamento e catálogo). Se mudar aqui, mude nos dois.
+ *
+ * Modelo: UMA planilha de pessoas (aba 1 da planilha de Funcionarios).
+ * Cada pessoa tem um Perfil (atalho) + uma coluna por permissão
+ * ("perm_..." com caixinha). O Perfil só serve pra marcar as caixinhas de
+ * uma vez; o que vale é o que está marcado em cada linha.
+ * Célula de permissão em branco = herda do perfil (ou do Nivel antigo).
+ * Requer, definido no script que usa o bloco: PESSOAS_PLANILHA_ID.
+ * ==================================================================== */
+
+var AC_LIMITE_TENTATIVAS = 8;
+var AC_BLOQUEIO_SEGUNDOS = 15 * 60;
+
+var AC_PERMISSOES = [
+  { chave: 'portal',                grupo: 'Portal de aprendizagem', rotulo: 'Acessar o portal' },
+  { chave: 'manual_1',              grupo: 'Portal de aprendizagem', rotulo: 'Manual Iniciando' },
+  { chave: 'manual_2',              grupo: 'Portal de aprendizagem', rotulo: 'Manual Estágio' },
+  { chave: 'manual_3',              grupo: 'Portal de aprendizagem', rotulo: 'Manual Avançado' },
+  { chave: 'avaliacoes',            grupo: 'Portal de aprendizagem', rotulo: 'Fazer avaliações' },
+  { chave: 'catalogo_admin',        grupo: 'Catálogo (loja)',        rotulo: 'Entrar no admin do catálogo' },
+  { chave: 'catalogo_cadastrar',    grupo: 'Catálogo (loja)',        rotulo: 'Cadastrar e editar produtos' },
+  { chave: 'catalogo_excluir',      grupo: 'Catálogo (loja)',        rotulo: 'Arquivar e excluir produtos' },
+  { chave: 'catalogo_precos',       grupo: 'Catálogo (loja)',        rotulo: 'Alterar preços em lote' },
+  { chave: 'catalogo_auditoria',    grupo: 'Catálogo (loja)',        rotulo: 'Ver auditoria' },
+  { chave: 'catalogo_push',         grupo: 'Catálogo (loja)',        rotulo: 'Enviar notificações' },
+  { chave: 'equipe_relatorio',      grupo: 'Equipe',                 rotulo: 'Ver relatório e notas da equipe' },
+  { chave: 'gerir_manuais',         grupo: 'Equipe',                 rotulo: 'Gerir manuais e provas' },
+  { chave: 'dados_pessoais',        grupo: 'Equipe',                 rotulo: 'Ver dados pessoais dos colegas' },
+  { chave: 'gerir_acessos',         grupo: 'Sistema',                rotulo: 'Gerir acessos (Admin total)' },
+  { chave: 'cliente',               grupo: 'Cliente',                rotulo: 'Conta de cliente (favoritos e sacola salvos)' }
+];
+
+var AC_PERFIS_BASE_ALUNO = ['portal', 'manual_1', 'avaliacoes', 'cliente'];
+var AC_PERFIS_BASE_FUNC = ['portal', 'manual_1', 'manual_2', 'manual_3', 'avaliacoes', 'catalogo_admin', 'catalogo_cadastrar', 'cliente'];
+var AC_PERFIS_BASE_ENC = AC_PERFIS_BASE_FUNC.concat(['catalogo_excluir', 'catalogo_precos', 'catalogo_auditoria', 'equipe_relatorio']);
+var AC_PERFIS_BASE_ADMIN = AC_PERFIS_BASE_ENC.concat(['catalogo_push', 'gerir_manuais', 'dados_pessoais']);
+
+var AC_PERFIS_PADRAO = [
+  { nome: 'Cliente',     desc: 'Só a conta de cliente (favoritos e sacola salvos).', perms: ['cliente'] },
+  { nome: 'Aluno',       desc: 'Portal, manual Iniciando e avaliações.', perms: AC_PERFIS_BASE_ALUNO },
+  { nome: 'Novato',      desc: 'Portal, manual Iniciando e avaliações.', perms: AC_PERFIS_BASE_ALUNO },
+  { nome: 'Estagiário',  desc: 'Manuais Iniciando e Estágio; cadastra produtos no catálogo.', perms: ['portal', 'manual_1', 'manual_2', 'avaliacoes', 'catalogo_admin', 'catalogo_cadastrar', 'cliente'] },
+  { nome: 'Funcionário', desc: 'Manuais 1 a 3, avaliações e catálogo do dia a dia.', perms: AC_PERFIS_BASE_FUNC },
+  { nome: 'Equipe do site', desc: 'Só o catálogo (cadastra produtos). Não acessa o portal de aprendizagem.', perms: ['catalogo_admin', 'catalogo_cadastrar', 'cliente'] },
+  { nome: 'Encarregado', desc: 'Funcionário + arquivar/excluir, preço em lote, auditoria e relatório da equipe.', perms: AC_PERFIS_BASE_ENC },
+  { nome: 'Admin',       desc: 'Encarregado + notificações, gerir manuais e ver dados pessoais.', perms: AC_PERFIS_BASE_ADMIN },
+  { nome: 'Admin total', desc: 'Tudo, incluindo gerir acessos.', perms: AC_PERMISSOES.map(function (p) { return p.chave; }) }
+];
+
+function acNorm_(s) {
+  return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+function acWhats_(w) {
+  var d = String(w || '').replace(/\D/g, '');
+  if (d.length >= 12 && d.slice(0, 2) === '55') d = d.slice(2);
+  return d;
+}
+/** Texto vindo de fora nunca vira fórmula na planilha: se começa com = + - @ ganha um apóstrofo (o Sheets guarda como texto puro). */
+function acTexto_(v) {
+  var t = String(v == null ? '' : v);
+  return /^[=+\-@\t\r]/.test(t) ? "'" + t : t;
+}
+function acBool_(v) {
+  if (v === true || v === 1) return true;
+  if (v === false || v === 0) return false;
+  var s = String(v == null ? '' : v).trim().toLowerCase();
+  if (s === 'true' || s === 'sim' || s === '1') return true;
+  if (s === 'false' || s === 'nao' || s === 'não' || s === '0') return false;
+  return null; // em branco / indefinido -> herda
+}
+
+/* ---------- planilha e configuração compartilhada ---------- */
+function acSS_() { return SpreadsheetApp.openById(PESSOAS_PLANILHA_ID); }
+function acPlanilha_() { return acSS_().getSheets()[0]; }
+
+function acAba_(nome, cabecalho, esconder) {
+  var ss = acSS_();
+  var aba = ss.getSheetByName(nome);
+  if (!aba) {
+    aba = ss.insertSheet(nome);
+    if (cabecalho && cabecalho.length) aba.appendRow(cabecalho);
+    if (esconder && aba.hideSheet) aba.hideSheet();
+  }
+  return aba;
+}
+function acConfigGet_(chave) {
+  var aba = acAba_('_Config', ['Chave', 'Valor'], true);
+  var dados = aba.getDataRange().getValues();
+  for (var i = 1; i < dados.length; i++) if (String(dados[i][0]) === chave) return String(dados[i][1] == null ? '' : dados[i][1]);
+  return '';
+}
+function acConfigSet_(chave, valor) {
+  var aba = acAba_('_Config', ['Chave', 'Valor'], true);
+  var dados = aba.getDataRange().getValues();
+  for (var i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === chave) { aba.getRange(i + 1, 2).setValue(valor); return; }
+  }
+  aba.appendRow([chave, valor]);
+}
+var ac_segredoMemoria_ = null;
+function acSegredo_() {
+  if (ac_segredoMemoria_) return ac_segredoMemoria_;
+  var s = acConfigGet_('SESSION_SECRET');
+  if (s) { ac_segredoMemoria_ = s; return s; }
+  var props = PropertiesService.getScriptProperties();
+  s = props.getProperty('SESSION_SECRET') || (Utilities.getUuid() + Utilities.getUuid());
+  acConfigSet_('SESSION_SECRET', s);
+  ac_segredoMemoria_ = s;
+  return s;
+}
+function acSenhasEmHash_() {
+  var v = acConfigGet_('SENHAS_EM_HASH');
+  if (v) return v === 'true';
+  if (PropertiesService.getScriptProperties().getProperty('SENHAS_EM_HASH') === 'true') {
+    acConfigSet_('SENHAS_EM_HASH', 'true');
+    return true;
+  }
+  return false;
+}
+
+/* ---------- senha, hash e token ---------- */
+function acBytesHex_(bytes) {
+  return bytes.map(function (b) { var v = (b < 0 ? b + 256 : b).toString(16); return v.length === 1 ? '0' + v : v; }).join('');
+}
+function acSha256Hex_(texto) {
+  return acBytesHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, texto, Utilities.Charset.UTF_8));
+}
+function acHashSenha_(senha) {
+  var sal = Utilities.getUuid().replace(/-/g, '').slice(0, 16);
+  return 'h1$' + sal + '$' + acSha256Hex_(sal + ':' + senha);
+}
+function acGuardarSenha_(senha) { return acSenhasEmHash_() ? acHashSenha_(senha) : String(senha); }
+function acIguais_(a, b) {
+  a = String(a); b = String(b);
+  if (a.length !== b.length) return false;
+  var r = 0;
+  for (var i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+function acSenhaSimples_(guardada, informado) {
+  guardada = String(guardada == null ? '' : guardada);
+  informado = String(informado == null ? '' : informado);
+  if (!informado) return false;
+  if (guardada.indexOf('h1$') === 0) {
+    var p = guardada.split('$');
+    if (p.length !== 3) return false;
+    return acIguais_(acSha256Hex_(p[1] + ':' + informado), p[2]);
+  }
+  return acIguais_(guardada, informado);
+}
+function acHmac_(whats, guardada) {
+  return acBytesHex_(Utilities.computeHmacSha256Signature(whats + '|' + String(guardada), acSegredo_()));
+}
+/** Token de sessão (autodescritivo): tk2.<whatsapp>.<assinatura>. Só vale enquanto a senha guardada não mudar. */
+function acToken_(whats, guardada) { return 'tk2.' + whats + '.' + acHmac_(whats, guardada); }
+function acEhToken_(cred) { var s = String(cred || ''); return s.indexOf('tk1.') === 0 || s.indexOf('tk2.') === 0; }
+function acCredencialConfere_(linha, cred) {
+  cred = String(cred == null ? '' : cred);
+  var whats = acWhats_(linha.whatsapp);
+  if (cred.indexOf('tk2.') === 0) {
+    var p = cred.split('.');
+    return p.length === 3 && p[1] === whats && acIguais_(acHmac_(whats, linha.senha), p[2]);
+  }
+  if (cred.indexOf('tk1.') === 0) return acIguais_('tk1.' + acHmac_(whats, linha.senha), cred);
+  return acSenhaSimples_(linha.senha, cred);
+}
+
+/* ---------- limite de tentativas ---------- */
+function acBloqueado_(w) { return parseInt(CacheService.getScriptCache().get('lf_' + w) || '0', 10) >= AC_LIMITE_TENTATIVAS; }
+function acFalha_(w) {
+  var c = CacheService.getScriptCache();
+  c.put('lf_' + w, String(parseInt(c.get('lf_' + w) || '0', 10) + 1), AC_BLOQUEIO_SEGUNDOS);
+}
+function acLimpaFalhas_(w) { CacheService.getScriptCache().remove('lf_' + w); }
+
+/* ---------- leitura das pessoas ---------- */
+function acCabecalhos_(sh) {
+  var n = sh.getLastColumn();
+  if (n < 1) return [];
+  return sh.getRange(1, 1, 1, n).getValues()[0].map(function (h) { return String(h).trim().toLowerCase(); });
+}
+function acObj_(headers, valores, numLinha) {
+  var o = { __row: numLinha };
+  headers.forEach(function (h, i) { if (h) o[h] = valores[i]; });
+  return o;
+}
+/** Só as linhas de UM WhatsApp (lê a coluna de WhatsApp inteira e depois só as linhas certas -- rápido mesmo com muitos clientes). */
+function acLinhasDoWhats_(whatsapp) {
+  var alvo = acWhats_(whatsapp);
+  if (!alvo) return [];
+  var sh = acPlanilha_();
+  var ultima = sh.getLastRow();
+  if (ultima < 2) return [];
+  var headers = acCabecalhos_(sh);
+  var iw = headers.indexOf('whatsapp');
+  if (iw === -1) return [];
+  var col = sh.getRange(2, iw + 1, ultima - 1, 1).getValues();
+  var out = [];
+  for (var i = 0; i < col.length; i++) {
+    if (acWhats_(col[i][0]) === alvo) {
+      var n = i + 2;
+      out.push(acObj_(headers, sh.getRange(n, 1, 1, headers.length).getValues()[0], n));
+    }
+  }
+  return out;
+}
+function acTodasLinhas_() {
+  var sh = acPlanilha_();
+  var dados = sh.getDataRange().getValues();
+  if (dados.length < 2) return [];
+  var headers = dados[0].map(function (h) { return String(h).trim().toLowerCase(); });
+  var out = [];
+  for (var i = 1; i < dados.length; i++) {
+    if (dados[i].join('').trim() === '') continue;
+    out.push(acObj_(headers, dados[i], i + 1));
+  }
+  return out;
+}
+
+/* ---------- perfis e permissões ---------- */
+function acChaves_() { return AC_PERMISSOES.map(function (p) { return p.chave; }); }
+function acPerfilPadraoObj_(p) {
+  var perms = {};
+  acChaves_().forEach(function (k) { perms[k] = p.perms.indexOf(k) !== -1; });
+  return { nome: p.nome, desc: p.desc, perms: perms };
+}
+/** Lê a aba "Perfis" (editável por você); se não existir, usa os perfis de fábrica. */
+function acPerfis_() {
+  var mapa = {}, ordem = [];
+  var aba = acSS_().getSheetByName('Perfis');
+  if (aba && aba.getLastRow() >= 2) {
+    var dados = aba.getDataRange().getValues();
+    var h = dados[0].map(function (x) { return String(x).trim().toLowerCase(); });
+    for (var i = 1; i < dados.length; i++) {
+      var nome = String(dados[i][h.indexOf('perfil')] || '').trim();
+      if (!nome) continue;
+      var perms = {};
+      acChaves_().forEach(function (k) {
+        var idx = h.indexOf('perm_' + k);
+        var b = idx === -1 ? null : acBool_(dados[i][idx]);
+        perms[k] = b === true;
+      });
+      mapa[acNorm_(nome)] = { nome: nome, desc: String(dados[i][h.indexOf('descricao')] || ''), perms: perms };
+      ordem.push(acNorm_(nome));
+    }
+  }
+  if (!ordem.length) {
+    AC_PERFIS_PADRAO.forEach(function (p) { var o = acPerfilPadraoObj_(p); mapa[acNorm_(p.nome)] = o; ordem.push(acNorm_(p.nome)); });
+  }
+  return { mapa: mapa, ordem: ordem };
+}
+/** Modelo de fábrica de um perfil (usado se o nome não existir mais na aba Perfis: ninguém fica sem acesso por causa de um renomeio). */
+function acPerfilDeFabrica_(nome) {
+  var p = AC_PERFIS_PADRAO.filter(function (x) { return acNorm_(x.nome) === acNorm_(nome); })[0];
+  return p ? acPerfilPadraoObj_(p) : null;
+}
+function acPerfilLegado_(nivel) {
+  var n = parseInt(nivel, 10) || 1;
+  if (n >= 10) return 'Admin total';
+  if (n >= 3) return 'Funcionário'; // 4 a 9 (não usados pelo painel) contam como Funcionário
+  if (n === 2) return 'Estagiário';
+  return 'Novato';
+}
+function acNivelDe_(perms) {
+  if (perms.gerir_acessos) return 10;
+  if (perms.manual_3) return 3;
+  if (perms.manual_2) return 2;
+  if (perms.portal || perms.manual_1) return 1;
+  return 0;
+}
+/** Permissões efetivas de UMA linha: caixinha marcada/desmarcada vale; em branco herda do perfil (ou do Nivel antigo). */
+function acPermsDaLinha_(linha, perfis) {
+  perfis = perfis || acPerfis_();
+  var nomePerfil = String(linha.perfil || '').trim() || acPerfilLegado_(linha.nivel);
+  var base = (perfis.mapa[acNorm_(nomePerfil)] || perfis.mapa[acNorm_(acPerfilLegado_(linha.nivel))] || acPerfilDeFabrica_(nomePerfil) || acPerfilDeFabrica_(acPerfilLegado_(linha.nivel)) || { perms: {} }).perms;
+  var out = {};
+  acChaves_().forEach(function (k) {
+    var b = acBool_(linha['perm_' + k]);
+    out[k] = b === null ? base[k] === true : b;
+  });
+  return out;
+}
+function acPermsLista_(perms) { return acChaves_().filter(function (k) { return perms[k]; }); }
+
+/* ---------- verificação de credenciais ---------- */
+/**
+ * Confere whatsapp + (senha OU token de sessão). Se o mesmo WhatsApp aparecer em
+ * mais de uma linha, une as permissões e fica ativo se qualquer linha estiver ativa.
+ * Devolve { ok, usuario, sessao } ou { ok:false, erro, inativa?, bloqueado? }.
+ */
+function acVerificar_(whatsapp, cred) {
+  cred = String(cred == null ? '' : cred);
+  if (cred.indexOf('tk2.') === 0) {
+    var dono = acWhats_(cred.split('.')[1] || '');
+    // um token só fala pelo seu dono: se o pedido cita OUTRO WhatsApp, é tentativa de se passar por alguém
+    if (acWhats_(whatsapp) && dono && acWhats_(whatsapp) !== dono) return { ok: false, sessaoInvalida: true, erro: 'Sessão inválida. Entre de novo.' };
+    whatsapp = dono || whatsapp;
+  }
+  var alvo = acWhats_(whatsapp);
+  if (!alvo || !cred) return { ok: false, erro: 'WhatsApp ou senha incorretos.' };
+  var ehToken = acEhToken_(cred);
+  if (!ehToken && acBloqueado_(alvo)) {
+    return { ok: false, bloqueado: true, erro: 'Muitas tentativas erradas. Aguarde 15 minutos ou fale com a gestão.' };
+  }
+  var linhas = acLinhasDoWhats_(alvo);
+  var conferem = linhas.filter(function (l) { return acCredencialConfere_(l, cred); });
+  var bateu = conferem[0];
+  if (!bateu) {
+    if (!ehToken) acFalha_(alvo);
+    return { ok: false, erro: ehToken ? 'Sessão expirada. Entre de novo.' : 'WhatsApp ou senha incorretos.', sessaoInvalida: ehToken };
+  }
+  acLimpaFalhas_(alvo);
+  var perfis = acPerfis_();
+  var ativa = false, nome = '', perms = {}, perfil = '', pessoal = {};
+  // só contam as linhas que a credencial abriu E que estão ativas (uma linha antiga suspensa não empresta poder à outra)
+  var ativas = conferem.filter(function (l) { return String(l.status || 'Ativo').trim().toLowerCase() !== 'inativo'; });
+  ativa = ativas.length > 0;
+  ativas.forEach(function (l) {
+    nome = String(l.nome || '').trim() || nome;
+    var p = acPermsDaLinha_(l, perfis);
+    acChaves_().forEach(function (k) { if (p[k]) perms[k] = true; });
+    perfil = String(l.perfil || '').trim() || perfil || acPerfilLegado_(l.nivel);
+    ['datanascimento', 'instagram', 'cep', 'endereco', 'bairro', 'cidade', 'estado', 'altura', 'peso', 'fotoperfilurl', 'fotocorpourl'].forEach(function (c) {
+      var v = l[c];
+      if (v !== undefined && v !== '' && v !== null) pessoal[c] = Object.prototype.toString.call(v) === '[object Date]' ? v.toISOString() : String(v);
+    });
+  });
+  if (!ativa) return { ok: false, inativa: true, erro: 'Essa conta está desativada. Fale com a gestão.' };
+  var usuario = {
+    whatsapp: alvo, name: nome || alvo, status: 'ativo', perfil: perfil,
+    level: acNivelDe_(perms), permissoes: acPermsLista_(perms),
+    dataNascimento: pessoal.datanascimento || '', instagram: pessoal.instagram || '', cep: pessoal.cep || '',
+    endereco: pessoal.endereco || '', bairro: pessoal.bairro || '', cidade: pessoal.cidade || '', estado: pessoal.estado || '',
+    altura: pessoal.altura || '', peso: pessoal.peso || '',
+    fotoPerfilUrl: pessoal.fotoperfilurl || '', fotoCorpoUrl: pessoal.fotocorpourl || ''
+  };
+  return { ok: true, usuario: usuario, sessao: acToken_(alvo, bateu.senha) };
+}
+/** Exige login válido E uma permissão. Devolve { ok, usuario } ou { ok:false, erro, semPermissao? }. */
+function acExigir_(whatsapp, cred, permissao) {
+  var v = acVerificar_(whatsapp, cred);
+  if (!v.ok) return v;
+  if (permissao && v.usuario.permissoes.indexOf(permissao) === -1) {
+    return { ok: false, semPermissao: true, erro: 'Seu acesso não permite esta ação. Fale com a gestão.' };
+  }
+  return v;
+}
+
+/* ---------- escrita ---------- */
+function acGarantirColunas_() {
+  var sh = acPlanilha_();
+  var headers = acCabecalhos_(sh);
+  var faltam = [];
+  if (headers.indexOf('perfil') === -1) faltam.push({ chave: 'perfil', nome: 'Perfil' });
+  acChaves_().forEach(function (k) { if (headers.indexOf('perm_' + k) === -1) faltam.push({ chave: 'perm_' + k, nome: 'perm_' + k }); });
+  if (headers.indexOf('nivel') === -1) faltam.unshift({ chave: 'nivel', nome: 'Nivel' });
+  if (headers.indexOf('status') === -1) faltam.unshift({ chave: 'status', nome: 'Status' });
+  if (faltam.length) {
+    var col = headers.length + 1;
+    faltam.forEach(function (f) { sh.getRange(1, col).setValue(f.nome); col++; });
+  }
+  return sh;
+}
+/** Marca as caixinhas visuais nas colunas de permissão (só estética; o valor continua TRUE/FALSE). */
+function acCaixinhas_() {
+  var sh = acPlanilha_();
+  var headers = acCabecalhos_(sh);
+  var ultima = sh.getLastRow();
+  if (ultima < 2) return;
+  var regra = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+  acChaves_().forEach(function (k) {
+    var i = headers.indexOf('perm_' + k);
+    // validação de caixinha NÃO altera o que já está marcado (insertCheckboxes() desmarcaria tudo)
+    if (i !== -1) { try { sh.getRange(2, i + 1, ultima - 1, 1).setDataValidation(regra); } catch (e) {} }
+  });
+}
+/** Caixinhas visuais só na linha nova (quando alguém se cadastra). */
+function acCaixinhaLinha_(sh, headers, numLinha) {
+  try {
+    var regra = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    acChaves_().forEach(function (k) {
+      var i = headers.indexOf('perm_' + k);
+      if (i !== -1) sh.getRange(numLinha, i + 1).setDataValidation(regra);
+    });
+  } catch (e) {}
+}
+/** Grava só as células que mudaram (uma linha), sem reinterpretar o resto dela. */
+function acRegravarLinha_(sh, headers, numLinha, mudancas) {
+  var atuais = sh.getRange(numLinha, 1, 1, headers.length).getValues()[0];
+  Object.keys(mudancas).forEach(function (chave) {
+    var i = headers.indexOf(chave);
+    if (i === -1) return;
+    var novo = mudancas[chave];
+    if (String(atuais[i]) === String(novo)) return; // já está assim: não mexe
+    var celula = sh.getRange(numLinha, i + 1);
+    // texto puro nas colunas de texto: preserva zeros à esquerda (senha "0123") e nunca vira fórmula
+    if (typeof novo === 'string' && chave !== 'nivel' && chave.indexOf('perm_') !== 0) celula.setNumberFormat('@');
+    celula.setValue(novo);
+  });
+}
+function acMudancasPerfil_(perfilNome, perms) {
+  var m = { perfil: perfilNome, nivel: acNivelDe_(perms) };
+  acChaves_().forEach(function (k) { m['perm_' + k] = perms[k] === true; });
+  return m;
+}
+function acLog_(quemNome, quemWhats, alvo, acao, detalhe) {
+  var aba = acAba_('Acessos_Log', ['DataHora', 'Quem', 'QuemWhatsApp', 'Alvo', 'Acao', 'Detalhe']);
+  aba.appendRow([new Date(), quemNome || '', quemWhats || '', alvo || '', acao || '', detalhe || '']);
+}
+/** Cria uma pessoa nova com o perfil dado (todas as caixinhas explícitas). */
+function acRegistrar_(nome, whatsapp, senha, perfilNome, extras) {
+  var w = acWhats_(whatsapp);
+  nome = String(nome || '').trim();
+  senha = String(senha || '');
+  if (!nome || !w || !senha) return { ok: false, erro: 'Nome, WhatsApp e senha são obrigatórios.' };
+  if (senha.length < 4) return { ok: false, erro: 'A senha precisa ter pelo menos 4 caracteres.' };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    if (acLinhasDoWhats_(w).length) return { ok: false, erro: 'Já existe uma conta com esse WhatsApp.' };
+    var sh = acGarantirColunas_();
+    var headers = acCabecalhos_(sh);
+    var perfis = acPerfis_();
+    var perfil = perfis.mapa[acNorm_(perfilNome)];
+    if (!perfil) {
+      // perfil apagado/renomeado na aba Perfis: usa o modelo de fábrica (nunca "o primeiro da lista", que poderia ser Admin)
+      var padrao = AC_PERFIS_PADRAO.filter(function (p) { return acNorm_(p.nome) === acNorm_(perfilNome); })[0];
+      if (!padrao) return { ok: false, erro: 'Perfil não encontrado.' };
+      perfil = acPerfilPadraoObj_(padrao);
+    }
+    var m = acMudancasPerfil_(perfil.nome, perfil.perms);
+    m.nome = nome; m.whatsapp = w; m.senha = acGuardarSenha_(senha); m.status = 'Ativo';
+    extras = extras || {};
+    Object.keys(extras).forEach(function (k) { if (extras[k]) m[String(k).toLowerCase()] = extras[k]; });
+    var linha = headers.map(function (h) { return m[h] !== undefined ? m[h] : ''; });
+    var novaLinha = sh.getLastRow() + 1;
+    // texto puro nas colunas de texto (não vira fórmula, não perde zero à esquerda)
+    headers.forEach(function (h, i) {
+      if (h && h !== 'nivel' && h.indexOf('perm_') !== 0 && linha[i] !== '') sh.getRange(novaLinha, i + 1).setNumberFormat('@');
+    });
+    sh.getRange(novaLinha, 1, 1, headers.length).setValues([linha]);
+    acCaixinhaLinha_(sh, headers, novaLinha);
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+
+// ===================== v2.0: autorização do admin e conta de cliente =====================
+
+/** Que permissão cada ação do admin exige. */
+const PERMISSAO_POR_ACAO_ = {
+  create: 'catalogo_cadastrar', update: 'catalogo_cadastrar', addCategoria: 'catalogo_cadastrar', addGenero: 'catalogo_cadastrar',
+  gerarSeo: 'catalogo_cadastrar', delete: 'catalogo_excluir', reativar: 'catalogo_excluir', excluirPermanente: 'catalogo_excluir',
+  enviarPush: 'catalogo_push'
+};
+const PERMISSAO_POR_LOTE_ = {
+  ajustarPrecoPorcento: 'catalogo_precos', marcarNovidade: 'catalogo_cadastrar', alterarEstoque: 'catalogo_cadastrar',
+  arquivar: 'catalogo_excluir', reativar: 'catalogo_excluir'
+};
+
+function permissaoDaAcao_(body) {
+  if (body.action === 'bulkUpdate') return PERMISSAO_POR_LOTE_[body.tipoAcao] || 'catalogo_precos';
+  return PERMISSAO_POR_ACAO_[body.action] || null;
+}
+
+function pinLegadoAtivo_() {
+  return PropertiesService.getScriptProperties().getProperty('PIN_LEGADO') !== 'false';
+}
+
+/**
+ * Autoriza uma ação protegida. Aceita (1) sessão de login + permissão, ou
+ * (2) o PIN antigo, enquanto ele estiver ligado. Devolve { ok, nome? } ou { ok:false, erro, ... }.
+ */
+function autorizarAcao_(credencial, whatsapp, permissao, bodyPin) {
+  const cred = String(credencial || '');
+  if (acEhToken_(cred)) {
+    const v = acExigir_(whatsapp, cred, permissao);
+    if (!v.ok) return v;
+    if (v.usuario.permissoes.indexOf('catalogo_admin') === -1) {
+      return { ok: false, semPermissao: true, erro: 'Seu acesso não inclui o admin do catálogo. Fale com a gestão.' };
+    }
+    return { ok: true, nome: v.usuario.name, whatsapp: v.usuario.whatsapp, via: 'login' };
+  }
+  if (!pinLegadoAtivo_()) {
+    return { ok: false, exigeLogin: true, pinInvalido: true, erro: 'Entre com seu WhatsApp e senha para continuar.' };
+  }
+  const pinCorreto = PropertiesService.getScriptProperties().getProperty('ADMIN_PIN');
+  if (!pinCorreto) return { ok: true, via: 'pin' };
+  if (acBloqueado_('pin')) return { ok: false, bloqueado: true, pinInvalido: true, erro: 'Muitas tentativas de PIN. Aguarde 15 minutos ou entre com seu login.' };
+  if (String(bodyPin == null ? cred : bodyPin) === String(pinCorreto)) return { ok: true, via: 'pin' };
+  acFalha_('pin');
+  return { ok: false, pinInvalido: true, erro: 'PIN incorreto.' };
+}
+
+function respostaNegada_(a) {
+  return jsonResponse_({
+    ok: false, erro: a.erro || 'Acesso negado.', pinInvalido: !!a.pinInvalido, exigeLogin: !!a.exigeLogin,
+    semPermissao: !!a.semPermissao, sessaoInvalida: !!a.sessaoInvalida, inativa: !!a.inativa, bloqueado: !!a.bloqueado
+  });
+}
+
+function loginPessoa_(body) {
+  const v = acVerificar_(body.whatsapp, body.senha);
+  if (!v.ok) return jsonResponse_({ ok: false, erro: v.erro, inativa: !!v.inativa, bloqueado: !!v.bloqueado });
+  return jsonResponse_({ ok: true, usuario: v.usuario, sessao: v.sessao });
+}
+
+function sessaoPessoa_(body) {
+  const v = acVerificar_(body.whatsapp, body.sessao);
+  if (!v.ok) return jsonResponse_({ ok: false, erro: v.erro, inativa: !!v.inativa, sessaoInvalida: true });
+  return jsonResponse_({ ok: true, usuario: v.usuario, sessao: v.sessao });
+}
+
+function registrarCliente_(body) {
+  // freio simples contra cadastro em massa (vale para o site todo)
+  const cache = CacheService.getScriptCache();
+  const feitos = parseInt(cache.get('reg_hora') || '0', 10);
+  if (feitos >= 60) return jsonResponse_({ ok: false, erro: 'Muitos cadastros agora. Tente de novo em alguns minutos.' });
+  cache.put('reg_hora', String(feitos + 1), 3600);
+  const r = acRegistrar_(body.nome, body.whatsapp, body.senha, 'Cliente', {});
+  if (!r.ok) return jsonResponse_({ ok: false, erro: r.erro });
+  const v = acVerificar_(body.whatsapp, body.senha);
+  if (v.ok) return jsonResponse_({ ok: true, usuario: v.usuario, sessao: v.sessao });
+  return jsonResponse_({ ok: true });
+}
+
+function limparIds_(lista) {
+  if (!Array.isArray(lista)) return [];
+  const vistos = {}, out = [];
+  lista.forEach(function (x) {
+    const s = String(x == null ? '' : x).slice(0, 40);
+    if (s && !vistos[s] && out.length < 300) { vistos[s] = true; out.push(s); }
+  });
+  return out;
+}
+
+function linhaDoCliente_(aba, whats) {
+  const ultima = aba.getLastRow();
+  if (ultima < 2) return -1;
+  const col = aba.getRange(2, 1, ultima - 1, 1).getValues();
+  for (let i = 0; i < col.length; i++) if (acWhats_(col[i][0]) === whats) return i + 2;
+  return -1;
+}
+
+function clienteDados_(body) {
+  const v = acExigir_(body.whatsapp, body.sessao, 'cliente');
+  if (!v.ok) return respostaNegada_(v);
+  const aba = getOrCreateSheet_(SHEET_CLIENTES, ['WhatsApp', 'Favoritos', 'Sacola', 'AtualizadoEm']);
+  const n = linhaDoCliente_(aba, v.usuario.whatsapp);
+  let favoritos = [], sacola = [];
+  if (n !== -1) {
+    const r = aba.getRange(n, 1, 1, 4).getValues()[0];
+    try { favoritos = limparIds_(JSON.parse(r[1] || '[]')); } catch (e) {}
+    try { sacola = limparIds_(JSON.parse(r[2] || '[]')); } catch (e) {}
+  }
+  return jsonResponse_({ ok: true, favoritos: favoritos, sacola: sacola });
+}
+
+function clienteSalvar_(body) {
+  const v = acExigir_(body.whatsapp, body.sessao, 'cliente');
+  if (!v.ok) return respostaNegada_(v);
+  const favoritos = JSON.stringify(limparIds_(body.favoritos));
+  const sacola = JSON.stringify(limparIds_(body.sacola));
+  const trava = LockService.getScriptLock();
+  try { trava.waitLock(15000); } catch (e) { return jsonResponse_({ ok: false, erro: 'Tente de novo em instantes.' }); }
+  try {
+    const aba = getOrCreateSheet_(SHEET_CLIENTES, ['WhatsApp', 'Favoritos', 'Sacola', 'AtualizadoEm']);
+    const n = linhaDoCliente_(aba, v.usuario.whatsapp);
+    const linha = [v.usuario.whatsapp, favoritos, sacola, new Date()];
+    if (n === -1) aba.appendRow(linha); else aba.getRange(n, 1, 1, 4).setValues([linha]);
+  } finally {
+    trava.releaseLock();
+  }
+  return jsonResponse_({ ok: true });
+}
+
+/** Desliga o PIN antigo: a partir daqui o admin só abre com login (WhatsApp + senha) e permissão. */
+function desligarPinLegado() {
+  PropertiesService.getScriptProperties().setProperty('PIN_LEGADO', 'false');
+  Logger.log('PIN antigo DESLIGADO. Só login com permissão. Para voltar: religarPinLegado().');
+}
+function religarPinLegado() {
+  PropertiesService.getScriptProperties().setProperty('PIN_LEGADO', 'true');
+  Logger.log('PIN antigo LIGADO de novo.');
+}
+
+// ===================== v1.1: cache, trava e backup =====================
+
+const TAM_PEDACO_CACHE = 30000; // caracteres por pedaço (limite do Google é ~100KB por valor)
+
+function versaoCacheProdutos_() {
+  return PropertiesService.getScriptProperties().getProperty('CACHE_V') || '0';
+}
+
+/** Chamado depois de qualquer alteração em produtos: descarta todas as listas em cache. */
+function invalidarCacheProdutos_() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty('CACHE_V', String((parseInt(props.getProperty('CACHE_V') || '0', 10) || 0) + 1));
+  } catch (erro) { /* cache é só um extra: nunca pode derrubar um cadastro */ }
+}
+
+function cacheLerGrande_(chave) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const n = parseInt(cache.get(chave + ':n') || '0', 10);
+    if (!n) return null;
+    const chaves = [];
+    for (let i = 0; i < n; i++) chaves.push(chave + ':' + i);
+    const partes = cache.getAll(chaves);
+    let texto = '';
+    for (let i = 0; i < n; i++) {
+      const p = partes[chaves[i]];
+      if (p === undefined || p === null) return null;
+      texto += p;
+    }
+    return texto;
+  } catch (erro) { return null; }
+}
+
+function cacheGravarGrande_(chave, texto, segundos) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const n = Math.ceil(texto.length / TAM_PEDACO_CACHE);
+    const lote = {};
+    for (let i = 0; i < n; i++) lote[chave + ':' + i] = texto.substr(i * TAM_PEDACO_CACHE, TAM_PEDACO_CACHE);
+    lote[chave + ':n'] = String(n);
+    cache.putAll(lote, segundos);
+  } catch (erro) { /* sem cache, o site só fica um pouco mais lento */ }
+}
+
+function respostaTexto_(texto) {
+  return ContentService.createTextOutput(texto).setMimeType(ContentService.MimeType.JSON);
+}
+
+function statsComCache_() {
+  const chave = 'stats';
+  const emCache = cacheLerGrande_(chave);
+  if (emCache) return respostaTexto_(emCache);
+  const saida = obterStats_();
+  cacheGravarGrande_(chave, saida.getContent(), 120);
+  return saida;
+}
+
+const ACOES_QUE_ALTERAM_PRODUTOS_ = ['create', 'update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate'];
+// "create" só acrescenta no fim da planilha (e o código sequencial já tem trava própria);
+// as demais mexem em linhas que já existem e por isso entram na fila:
+const ACOES_COM_TRAVA_ = ['update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate'];
+
+/**
+ * Backup: copia a planilha do catálogo para uma pasta do Drive e mantém só as
+ * 8 cópias mais recentes (as mais antigas vão pra lixeira, recuperáveis por 30 dias).
+ */
+function fazerBackupAgora() {
+  const nomePasta = 'TENKiTER - Backups (catálogo)';
+  const pastas = DriveApp.getFoldersByName(nomePasta);
+  const pasta = pastas.hasNext() ? pastas.next() : DriveApp.createFolder(nomePasta);
+  const carimbo = Utilities.formatDate(new Date(), 'America/Fortaleza', 'yyyy-MM-dd HH-mm');
+  const prefixo = 'Backup Catalogo ';
+  DriveApp.getFileById(getSS_().getId()).makeCopy(prefixo + carimbo, pasta);
+  const copias = [];
+  const it = pasta.getFiles();
+  while (it.hasNext()) {
+    const f = it.next();
+    if (f.getName().indexOf(prefixo) === 0) copias.push(f);
+  }
+  copias.sort((a, b) => b.getDateCreated() - a.getDateCreated());
+  copias.slice(8).forEach(f => f.setTrashed(true));
+  Logger.log('Backup do catálogo feito em ' + carimbo + '.');
+}
+
+/** Mostra o estado no Log (Execuções / Registro de execução). Não revela PIN nem chaves. */
+function diagnostico() {
+  const props = PropertiesService.getScriptProperties();
+  const dados = getProdutosSheet_().getDataRange().getValues();
+  const headers = dados[0];
+  const idxStatus = headers.indexOf('Status');
+  let ativos = 0;
+  for (let i = 1; i < dados.length; i++) {
+    if (idxStatus === -1 || normalizar_(dados[i][idxStatus]) === 'ativo') ativos++;
+  }
+  const eventos = getSS_().getSheetByName(SHEET_EVENTOS);
+  Logger.log('Versão: catálogo v2.1');
+  Logger.log('Produtos: ' + (dados.length - 1) + ' (ativos: ' + ativos + ')');
+  const pinLigado = pinLegadoAtivo_();
+  Logger.log('PIN antigo: ' + (pinLigado ? 'LIGADO' : 'desligado (só login com permissão)'));
+  if (pinLigado) Logger.log('PIN do admin configurado: ' + (props.getProperty('ADMIN_PIN') ? 'SIM' : 'NÃO -- ATENÇÃO: sem PIN qualquer pessoa consegue cadastrar/apagar produtos enquanto o PIN antigo estiver ligado'));
+  const pessoas = acTodasLinhas_();
+  const comPerfil = pessoas.filter(function (l) { return String(l.perfil || '').trim(); }).length;
+  Logger.log('Pessoas no cadastro único: ' + pessoas.length + ' (com perfil migrado: ' + comPerfil + ')');
+  Logger.log('Gemini configurado: ' + (props.getProperty('GEMINI_API_KEY') ? 'sim' : 'não'));
+  Logger.log('OneSignal configurado: ' + ((props.getProperty('ONESIGNAL_APP_ID') && props.getProperty('ONESIGNAL_REST_API_KEY')) ? 'sim' : 'não'));
+  Logger.log('Linhas na aba Eventos: ' + (eventos ? eventos.getLastRow() - 1 : 0));
+  Logger.log('Versão do cache: ' + versaoCacheProdutos_());
+}
+
+// ===================== GET =====================
+function doGet(e) {
+  const action = (e.parameter.action || 'list');
+
+  if (action === 'share') return paginaCompartilhamento_(e.parameter.id);
+  if (action === 'stats') return statsComCache_();
+  if (action === 'versao') return jsonResponse_({ ok: true, versao: 'catalogo-2.1', acessos: true, pinAtivo: pinLegadoAtivo_() });
+
+  if (action === 'historico') {
+    const aut = autorizarAcao_(e.parameter.sessao || e.parameter.pin, e.parameter.whatsapp, 'catalogo_auditoria', e.parameter.pin);
+    if (!aut.ok) return respostaNegada_(aut);
+    return obterHistorico_(e);
+  }
+
+  if (action === 'list') {
+    const incluirTodos = e.parameter.todos === 'true';
+    const chaveCache = 'lista:' + (incluirTodos ? 't' : 'a') + ':' + versaoCacheProdutos_();
+    const emCache = cacheLerGrande_(chaveCache);
+    if (emCache) return respostaTexto_(emCache);
+    const sheet = getProdutosSheet_();
+    const dados = sheet.getDataRange().getValues();
+    const headers = dados[0];
+    const produtos = [];
+    for (let i = 1; i < dados.length; i++) {
+      const linha = dados[i];
+      const obj = {};
+      headers.forEach((h, idx) => obj[h] = linha[idx]);
+      if (incluirTodos || normalizar_(obj.Status) === 'ativo') {
+        produtos.push(obj);
+      }
+    }
+    const textoLista = JSON.stringify({ ok: true, produtos: produtos });
+    cacheGravarGrande_(chaveCache, textoLista, 60);
+    return respostaTexto_(textoLista);
+  }
+
+  if (action === 'categorias') return jsonResponse_({ ok: true, categorias: getListaValores_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO) });
+  if (action === 'generos') return jsonResponse_({ ok: true, generos: getListaValores_(SHEET_GENEROS, GENEROS_PADRAO) });
+
+  return jsonResponse_({ ok: false, erro: 'Ação desconhecida: ' + action });
+}
+
+// ===================== POST =====================
+function doPost(e) {
+  let body;
+  try {
+    body = JSON.parse(e.postData.contents);
+  } catch (erroParse) {
+    return jsonResponse_({ ok: false, erro: 'Requisição inválida.' });
+  }
+  const action = body.action;
+
+  // ---- abertas (não exigem permissão de gestão)
+  if (action === 'registrarEvento') return registrarEvento_(body);
+  if (action === 'login') return loginPessoa_(body);
+  if (action === 'sessao') return sessaoPessoa_(body);
+  if (action === 'registrar_cliente') return registrarCliente_(body);
+  if (action === 'cliente_dados') return clienteDados_(body);
+  if (action === 'cliente_salvar') return clienteSalvar_(body);
+
+  // ---- protegidas: login + permissão (ou PIN antigo enquanto ligado)
+  const permissao = permissaoDaAcao_(body);
+  if (!permissao) return despacharPost_(body); // ação desconhecida
+  const aut = autorizarAcao_(body.sessao || body.pin, body.whatsapp, permissao, body.pin);
+  if (!aut.ok) return respostaNegada_(aut);
+  if (aut.nome) body.funcionario = aut.nome; // auditoria com o nome verdadeiro de quem fez
+
+  if (ACOES_QUE_ALTERAM_PRODUTOS_.indexOf(action) === -1) return despacharPost_(body);
+  if (ACOES_COM_TRAVA_.indexOf(action) === -1) {
+    try { return despacharPost_(body); } finally { invalidarCacheProdutos_(); }
+  }
+  const trava = LockService.getScriptLock();
+  try {
+    trava.waitLock(30000);
+  } catch (erroTrava) {
+    return jsonResponse_({ ok: false, erro: 'O sistema está salvando outra alteração agora. Tente de novo em alguns segundos.' });
+  }
+  try {
+    return despacharPost_(body);
+  } finally {
+    invalidarCacheProdutos_();
+    trava.releaseLock();
+  }
+}
+
+function despacharPost_(body) {
+  const action = body.action;
+
+  if (action === 'registrarEvento') return registrarEvento_(body);
+
+  if (action === 'create') return criarProduto_(body);
+  if (action === 'update') return atualizarProduto_(body);
+  if (action === 'delete') return deletarProduto_(body);
+  if (action === 'reativar') return reativarProduto_(body);
+  if (action === 'excluirPermanente') return excluirPermanentemente_(body);
+  if (action === 'bulkUpdate') return acaoEmLote_(body);
+  if (action === 'addCategoria') return jsonResponse_(adicionarValorLista_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO, body.nome));
+  if (action === 'addGenero') return jsonResponse_(adicionarValorLista_(SHEET_GENEROS, GENEROS_PADRAO, body.nome));
+  if (action === 'gerarSeo') return gerarSeoComGemini_(body);
+  if (action === 'enviarPush') return enviarPushOneSignal_(body.titulo, body.mensagem, body.url || SITE_URL);
+
+  return jsonResponse_({ ok: false, erro: 'Ação desconhecida: ' + action });
+}
+
+function registrarEvento_(body) {
+  const sheet = getOrCreateSheet_(SHEET_EVENTOS, ['DataHora', 'ProdutoID', 'Codigo', 'Tipo']);
+  sheet.appendRow([new Date(), acTexto_(String(body.produtoId || '').slice(0, 60)), acTexto_(String(body.codigo || '').slice(0, 60)), acTexto_(String(body.tipo || '').slice(0, 30))]);
+  return jsonResponse_({ ok: true });
+}
+
+function processarGaleriaFotos_(fotosBase64Array, idProduto) {
+  if (!fotosBase64Array || !Array.isArray(fotosBase64Array) || fotosBase64Array.length === 0) return '';
+  const urls = [];
+  fotosBase64Array.forEach((b64, idx) => {
+    if (b64) {
+      const url = salvarFotoDrive_(b64, 'image/jpeg', 'produto_' + idProduto + '_galeria_' + idx + '.jpg');
+      urls.push(url);
+    }
+  });
+  return urls.join(',');
+}
+
+function criarProduto_(body) {
+  const sheet = getProdutosSheet_();
+  const id = new Date().getTime().toString();
+  const codigo = proximoCodigo_();
+  let fotoUrl = body.fotoUrlExistente || '';
+  let fotoStoriesUrl = body.fotoStoriesUrlExistente || '';
+
+  if (body.fotoBase64) {
+    fotoUrl = salvarFotoDrive_(body.fotoBase64, body.fotoMime || 'image/jpeg', 'produto_' + id + '.jpg');
+  }
+  if (body.fotoStoriesBase64) {
+    fotoStoriesUrl = salvarFotoDrive_(body.fotoStoriesBase64, 'image/jpeg', 'produto_' + id + '_stories.jpg');
+  }
+
+  const galeriaUrls = processarGaleriaFotos_(body.fotosGaleriaBase64, id);
+  const fotosGaleriaFinal = limitarGaleria_(body.fotosGaleriaExistentes ? (body.fotosGaleriaExistentes + (galeriaUrls ? ',' + galeriaUrls : '')) : galeriaUrls);
+  const estoqueVal = body.estoque !== undefined && body.estoque !== '' ? Number(body.estoque) : '';
+
+  let videoUrl = '';
+  try {
+    if (body.videoBase64) videoUrl = salvarVideoDrive_(body.videoBase64, body.videoMime, 'produto_' + id + '_video');
+  } catch (erroVideo) {
+    return jsonResponse_({ ok: false, erro: String(erroVideo.message || erroVideo) });
+  }
+
+  sheet.appendRow([
+    id,
+    acTexto_(body.nome || ''),
+    acTexto_(body.categoria || ''),
+    acTexto_(body.genero || ''),
+    body.preco || '',
+    fotoUrl,
+    'Ativo',
+    new Date(),
+    acTexto_(body.descricao || ''),
+    estoqueVal,
+    acTexto_(body.tamanhos || ''),
+    acTexto_(body.cores || ''),
+    !!body.novidade,
+    codigo,
+    fotoStoriesUrl,
+    fotosGaleriaFinal
+  ]);
+
+  if (videoUrl) gravarVideo_(sheet, sheet.getLastRow(), videoUrl);
+
+  registrarHistorico_('criar', { id: id, codigo: codigo, nome: body.nome, preco: body.preco, estoque: estoqueVal }, null, body.funcionario);
+
+  // Push automático de "novidade" — nunca deve impedir o cadastro do produto se falhar.
+  if (body.novidade && body.notificarPush) {
+    try {
+      enviarPushOneSignal_(
+        'Chegou novidade! 🆕',
+        body.nome ? ('Acabou de chegar: ' + body.nome) : 'Uma peça nova chegou na loja. Vem ver!',
+        SITE_URL + '?id=' + id
+      );
+    } catch (erroPush) {
+      // Silencioso de propósito: falha no push não pode derrubar o cadastro.
+    }
+  }
+
+  return jsonResponse_({ ok: true, id: id, codigo: codigo, fotoUrl: fotoUrl, fotoStoriesUrl: fotoStoriesUrl, fotosGaleria: fotosGaleriaFinal, videoUrl: videoUrl });
+}
+
+function atualizarProduto_(body) {
+  const sheet = getProdutosSheet_();
+  const dados = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(body.id)) {
+      const linha = i + 1;
+      let fotoUrl = dados[i][5];
+      let fotoStoriesUrl = dados[i][14];
+      let galeriaAtual = dados[i][15] || '';
+
+      if (body.fotoBase64) {
+        const sufixo = '_' + new Date().getTime();
+        fotoUrl = salvarFotoDrive_(body.fotoBase64, body.fotoMime || 'image/jpeg', 'produto_' + body.id + sufixo + '.jpg');
+      }
+      if (body.fotoStoriesBase64) {
+        const sufixo2 = '_' + new Date().getTime();
+        fotoStoriesUrl = salvarFotoDrive_(body.fotoStoriesBase64, 'image/jpeg', 'produto_' + body.id + sufixo2 + '_stories.jpg');
+      }
+
+      const novasGaleria = processarGaleriaFotos_(body.fotosGaleriaBase64, body.id);
+      let fotosGaleriaFinal = galeriaAtual;
+      if (body.fotosGaleriaExistentes !== undefined) {
+        fotosGaleriaFinal = body.fotosGaleriaExistentes + (novasGaleria ? ',' + novasGaleria : '');
+      } else if (novasGaleria) {
+        fotosGaleriaFinal = galeriaAtual ? (galeriaAtual + ',' + novasGaleria) : novasGaleria;
+      }
+
+      fotosGaleriaFinal = limitarGaleria_(fotosGaleriaFinal);
+      let videoUrlNovo = null; // null = não mexe no vídeo atual
+      try {
+        if (body.videoBase64) videoUrlNovo = salvarVideoDrive_(body.videoBase64, body.videoMime, 'produto_' + body.id + '_video_' + new Date().getTime());
+        else if (body.removerVideo === true) videoUrlNovo = '';
+      } catch (erroVideo) {
+        return jsonResponse_({ ok: false, erro: String(erroVideo.message || erroVideo) });
+      }
+      const anterior = { preco: dados[i][4], estoque: dados[i][9] };
+      const estoqueNovo = body.estoque !== undefined && body.estoque !== '' ? Number(body.estoque) : dados[i][9];
+
+      sheet.getRange(linha, 2, 1, 15).setValues([[
+        body.nome !== undefined ? acTexto_(body.nome) : dados[i][1],
+        body.categoria !== undefined ? acTexto_(body.categoria) : dados[i][2],
+        body.genero !== undefined ? acTexto_(body.genero) : dados[i][3],
+        body.preco !== undefined ? body.preco : dados[i][4],
+        fotoUrl,
+        dados[i][6],
+        dados[i][7],
+        body.descricao !== undefined ? acTexto_(body.descricao) : dados[i][8],
+        estoqueNovo,
+        body.tamanhos !== undefined ? acTexto_(body.tamanhos) : dados[i][10],
+        body.cores !== undefined ? acTexto_(body.cores) : dados[i][11],
+        body.novidade !== undefined ? !!body.novidade : dados[i][12],
+        dados[i][13],
+        fotoStoriesUrl,
+        fotosGaleriaFinal
+      ]]);
+
+      registrarHistorico_('editar',
+        { id: body.id, codigo: dados[i][13], nome: body.nome !== undefined ? body.nome : dados[i][1], preco: body.preco !== undefined ? body.preco : dados[i][4], estoque: estoqueNovo },
+        anterior, body.funcionario);
+
+      if (videoUrlNovo !== null) gravarVideo_(sheet, linha, videoUrlNovo);
+      return jsonResponse_({ ok: true, id: body.id, fotoUrl: fotoUrl, fotoStoriesUrl: fotoStoriesUrl, fotosGaleria: fotosGaleriaFinal, videoUrl: videoUrlNovo });
+    }
+  }
+  return jsonResponse_({ ok: false, erro: 'Produto não encontrado.' });
+}
+
+function acaoEmLote_(body) {
+  const ids = body.ids;
+  if (!ids || !Array.isArray(ids) || ids.length === 0) return jsonResponse_({ ok: false, erro: 'Nenhum produto selecionado.' });
+
+  const sheet = getProdutosSheet_();
+  const dados = sheet.getDataRange().getValues();
+  let afetados = 0;
+
+  for (let i = 1; i < dados.length; i++) {
+    const pid = String(dados[i][0]);
+    if (ids.indexOf(pid) !== -1) {
+      const linha = i + 1;
+      let precoAtual = Number(dados[i][4]) || 0;
+
+      if (body.tipoAcao === 'ajustarPrecoPorcento') {
+        const pct = Number(body.valor) || 0;
+        const novoPreco = Math.max(0, precoAtual * (1 + pct / 100));
+        sheet.getRange(linha, 5).setValue(novoPreco.toFixed(2));
+      } else if (body.tipoAcao === 'marcarNovidade') {
+        sheet.getRange(linha, 13).setValue(!!body.valor);
+      } else if (body.tipoAcao === 'alterarEstoque') {
+        sheet.getRange(linha, 10).setValue(Number(body.valor));
+      } else if (body.tipoAcao === 'arquivar') {
+        sheet.getRange(linha, 7).setValue('Inativo');
+      } else if (body.tipoAcao === 'reativar') {
+        sheet.getRange(linha, 7).setValue('Ativo');
+      }
+
+      registrarAudit_(body.funcionario, 'bulk_' + body.tipoAcao, pid, { valor: body.valor });
+      afetados++;
+    }
+  }
+
+  return jsonResponse_({ ok: true, afetados: afetados });
+}
+
+function deletarProduto_(body) {
+  const sheet = getProdutosSheet_();
+  const dados = sheet.getDataRange().getValues();
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(body.id)) {
+      sheet.getRange(i + 1, 7).setValue('Inativo');
+      registrarHistorico_('arquivar', { id: body.id, codigo: dados[i][13], nome: dados[i][1], preco: dados[i][4], estoque: dados[i][9] }, null, body.funcionario);
+      return jsonResponse_({ ok: true });
+    }
+  }
+  return jsonResponse_({ ok: false, erro: 'Produto não encontrado.' });
+}
+
+function reativarProduto_(body) {
+  const sheet = getProdutosSheet_();
+  const dados = sheet.getDataRange().getValues();
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(body.id)) {
+      sheet.getRange(i + 1, 7).setValue('Ativo');
+      registrarHistorico_('reativar', { id: body.id, codigo: dados[i][13], nome: dados[i][1], preco: dados[i][4], estoque: dados[i][9] }, null, body.funcionario);
+      return jsonResponse_({ ok: true });
+    }
+  }
+  return jsonResponse_({ ok: false, erro: 'Produto não encontrado.' });
+}
+
+/**
+ * Exclusão PERMANENTE de verdade: apaga a linha da planilha de produtos.
+ * Diferente de deletarProduto_ (que só arquiva). Não tem volta — por isso
+ * fica registrada no Historico ANTES de apagar a linha, então o registro
+ * de que aquele produto existiu (nome, código, preço) continua rastreável
+ * na aba Historico mesmo depois de removido do catálogo.
+ */
+function excluirPermanentemente_(body) {
+  const sheet = getProdutosSheet_();
+  const dados = sheet.getDataRange().getValues();
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(body.id)) {
+      registrarHistorico_('excluir_permanente',
+        { id: body.id, codigo: dados[i][13], nome: dados[i][1], preco: dados[i][4], estoque: dados[i][9] },
+        null, body.funcionario);
+      sheet.deleteRow(i + 1);
+      return jsonResponse_({ ok: true });
+    }
+  }
+  return jsonResponse_({ ok: false, erro: 'Produto não encontrado.' });
+}
+
+/**
+ * Gera título e descrição otimizados para busca usando a API do Gemini.
+ * A chave fica só no servidor (Script Properties), nunca é enviada ao
+ * navegador do cliente/atendente — por isso essa geração tem que passar
+ * por aqui e não pode ser feita direto no admin.html.
+ *
+ * CONFIGURAÇÃO NECESSÁRIA (uma vez só):
+ * 1. Gere uma chave gratuita em https://aistudio.google.com/apikey
+ * 2. No editor do Apps Script: ⚙️ Configurações do projeto → Propriedades
+ *    do script → Adicionar propriedade do script:
+ *    Nome: GEMINI_API_KEY   Valor: <sua chave>
+ * (Opcional) Nome: GEMINI_MODEL   Valor: gemini-2.0-flash (ou outro modelo)
+ */
+function gerarSeoComGemini_(body) {
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) {
+    return jsonResponse_({ ok: false, erro: 'Chave do Gemini não configurada no servidor. Veja as instruções no código (gerarSeoComGemini_).' });
+  }
+  const modelo = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL') || 'gemini-2.0-flash';
+
+  const prompt = 'Você é especialista em SEO para e-commerce de moda no Brasil. ' +
+    'Gere um título curto (máximo 60 caracteres) e uma descrição (2 a 3 frases, até 300 caracteres), ' +
+    'otimizados para busca (Google e redes sociais), para este produto de roupa:\n' +
+    'Nome atual: ' + (body.nome || '') + '\n' +
+    'Categoria: ' + (body.categoria || '') + '\n' +
+    'Gênero: ' + (body.genero || '') + '\n' +
+    (body.descricao ? ('Descrição atual: ' + body.descricao + '\n') : '') +
+    'Responda SOMENTE em JSON válido, sem markdown, no formato exato: {"titulo": "...", "descricao": "..."}';
+
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent?key=' + apiKey;
+  const payload = { contents: [{ parts: [{ text: prompt }] }] };
+
+  try {
+    const resp = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    const codigoResp = resp.getResponseCode();
+    const dadosResp = JSON.parse(resp.getContentText());
+
+    if (codigoResp !== 200) {
+      const msgErro = dadosResp.error && dadosResp.error.message ? dadosResp.error.message : ('HTTP ' + codigoResp);
+      return jsonResponse_({ ok: false, erro: 'Erro do Gemini: ' + msgErro });
+    }
+
+    let textoResp = (dadosResp.candidates && dadosResp.candidates[0] && dadosResp.candidates[0].content &&
+      dadosResp.candidates[0].content.parts && dadosResp.candidates[0].content.parts[0])
+      ? dadosResp.candidates[0].content.parts[0].text : '';
+    textoResp = textoResp.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+    let resultado;
+    try {
+      resultado = JSON.parse(textoResp);
+    } catch (erroParse) {
+      return jsonResponse_({ ok: false, erro: 'A IA respondeu num formato inesperado. Tente novamente.' });
+    }
+
+    return jsonResponse_({ ok: true, titulo: resultado.titulo || '', descricao: resultado.descricao || '' });
+  } catch (erroFetch) {
+    return jsonResponse_({ ok: false, erro: 'Falha ao conectar com o Gemini: ' + erroFetch.message });
+  }
+}
+
+/**
+ * Envia uma notificação push de verdade para todos os inscritos, via OneSignal.
+ * O OneSignal cuida de guardar quem se inscreveu e de toda a criptografia do
+ * Web Push — este backend só dispara um POST simples pra API REST dele.
+ *
+ * CONFIGURAÇÃO NECESSÁRIA (uma vez só):
+ * 1. No painel do OneSignal (onesignal.com) → seu app → Settings → Keys & IDs
+ * 2. Copie a "REST API Key" (essa é SEGREDA — nunca vai no common.js nem no chat)
+ * 3. No editor do Apps Script: ⚙️ Configurações do projeto → Propriedades
+ *    do script → Adicionar propriedade do script:
+ *    Nome: ONESIGNAL_REST_API_KEY   Valor: <sua REST API Key>
+ *    Nome: ONESIGNAL_APP_ID         Valor: 535f6b0d-c866-43c2-b241-43bd7ab62fae
+ *    (o App ID já está público no common.js também — não é segredo, só a chave REST é.)
+ */
+function enviarPushOneSignal_(titulo, mensagem, urlDestino) {
+  const appId = PropertiesService.getScriptProperties().getProperty('ONESIGNAL_APP_ID');
+  const restApiKey = PropertiesService.getScriptProperties().getProperty('ONESIGNAL_REST_API_KEY');
+
+  if (!appId || !restApiKey) {
+    return jsonResponse_({ ok: false, erro: 'OneSignal não configurado no servidor (faltam ONESIGNAL_APP_ID e/ou ONESIGNAL_REST_API_KEY nas Propriedades do Script). Veja as instruções no código (enviarPushOneSignal_).' });
+  }
+  if (!titulo || !mensagem) {
+    return jsonResponse_({ ok: false, erro: 'Título e mensagem são obrigatórios para enviar a notificação.' });
+  }
+
+  const payload = {
+    app_id: appId,
+    included_segments: ['Subscribed Users'],
+    headings: { en: titulo, pt: titulo },
+    contents: { en: mensagem, pt: mensagem },
+    url: urlDestino || SITE_URL
+  };
+
+  try {
+    const resp = UrlFetchApp.fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'Authorization': 'Basic ' + restApiKey },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    const codigoResp = resp.getResponseCode();
+    const dadosResp = JSON.parse(resp.getContentText());
+
+    if (codigoResp !== 200) {
+      const msgErro = (dadosResp.errors && dadosResp.errors.join(', ')) || ('HTTP ' + codigoResp);
+      return jsonResponse_({ ok: false, erro: 'Erro do OneSignal: ' + msgErro });
+    }
+
+    return jsonResponse_({ ok: true, id: dadosResp.id, destinatarios: dadosResp.recipients || 0 });
+  } catch (erroFetch) {
+    return jsonResponse_({ ok: false, erro: 'Falha ao conectar com o OneSignal: ' + erroFetch.message });
+  }
+}

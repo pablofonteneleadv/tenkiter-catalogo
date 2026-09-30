@@ -1,0 +1,1694 @@
+// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v4.0
+//
+// NOVIDADE DA v4.0 -- CADASTRO ÚNICO COM PERFIS E PERMISSÕES
+//  - Uma pessoa por linha na aba 1 da planilha (a mesma "Funcionarios" de sempre).
+//    Ganha a coluna "Perfil" e uma coluna por permissão (perm_...), com caixinha.
+//  - Perfis (Cliente, Aluno, Novato, Estagiário, Funcionário, Encarregado, Admin,
+//    Admin total) são só ATALHOS: escolher um perfil marca as caixinhas de uma vez,
+//    e depois você marca/desmarca qualquer uma só daquela pessoa. Os perfis de
+//    fábrica podem ser editados na aba "Perfis".
+//  - Quem já existe é migrado sem perder nada: rode migrarParaAcessosUnificados()
+//    (faz backup antes). Até rodar, o sistema deriva as permissões do Nivel antigo.
+//  - Login único: o mesmo login vale no portal e no admin do catálogo (o token de
+//    sessão é verificado pelos dois scripts). Painel "Acessos" no Painel do RH.
+//  - Tudo da v3.2 (login no servidor, lista fechável, backup, hash) continua aqui.
+//
+// NOVIDADE DA v3.2 (segurança + backup, SEM mexer nas colunas da planilha e
+// SEM tirar ninguém do ar -- tudo é compatível com o site atual):
+//  - Login conferido AQUI no servidor (action "login" / "sessao"), com
+//    bloqueio de 15 min depois de 8 senhas erradas seguidas.
+//  - O site novo não precisa mais baixar a lista de funcionários com senha.
+//    A lista antiga continua funcionando ATÉ você rodar fecharListaPublica()
+//    (passo 3 do passo a passo). Se algo der errado: reabrirListaLegado().
+//  - relatorio_equipe (Painel do RH) nunca mais devolve a coluna de senha.
+//  - Backup automático em cópia (fazerBackupAgora) das duas planilhas.
+//  - migrarSenhasParaHash(): OPCIONAL, guarda as senhas embaralhadas (hash)
+//    depois de fazer backup. Só rode quando tudo estiver estável.
+//  - diagnostico(): mostra o estado sem revelar nenhuma senha.
+//
+// NOVIDADE DA v3.1: ao sincronizar um manual, tudo que vem ANTES do primeiro
+// Título 1 do Google Doc (título do documento, subtítulo, sumário...) é
+// ignorado -- não vira mais a parte "Geral" nem o capítulo "Introdução".
+// (Se o Doc não tiver nenhum Título 1, o comportamento antigo continua.)
+//
+// NOVIDADE DA v3: os manuais agora são editados como Google Docs de verdade
+// (texto, imagens redimensionáveis, capítulos organizados por título) em vez
+// de um editor de texto dentro do site. O RH clica em "Abrir no Google Docs",
+// edita por lá como quiser, e depois clica em "Sincronizar agora" no Painel
+// pra trazer o que foi editado pro site.
+//
+// O que faz:
+//  - doGet:
+//      (sem action, ou action=funcionarios) -> lê "Funcionarios" e devolve a
+//        lista em JSON (nome, whatsapp, senha, nivel, status) -- login e níveis.
+//      action=config_quiz -> lê "ConfigQuiz" e devolve nota de aprovação e
+//        quantidade de perguntas por tentativa, por nível/manual.
+//      action=manuais_lista -> lê a aba "Manuais" e devolve todos os manuais
+//        cadastrados (título, descrição, nível mínimo, link do Google Doc e o
+//        conteúdo já processado da última sincronização).
+//  - doPost:
+//      action "registrar"          -> cadastra um novo funcionário, Nível 1, Status Ativo
+//      action "resultado"          -> grava o resultado de uma avaliação em "Resultados"
+//      action "relatorio_equipe"   -> [Admin nível 10+] devolve funcionários + resultados
+//      action "atualizar_nivel_user" -> [Admin nível 10+] muda o nível de um funcionário
+//      action "alterar_status_user"  -> [Admin nível 10+] ativa/desativa um funcionário
+//      action "resetar_senha_user"   -> [Admin nível 10+] define nova senha pra alguém
+//      action "salvar_config_quiz"   -> [Admin nível 10+] grava nota de aprovação e
+//                                        quantidade de perguntas por tentativa
+//      action "criar_manual_vazio"       -> [Admin nível 10+] cria um Google Doc novo
+//                                            (em branco) e cadastra como manual novo
+//      action "criar_manual_de_conteudo" -> [Admin nível 10+] cria um Google Doc já
+//                                            preenchido a partir de um conteúdo enviado
+//                                            (usado na migração dos manuais antigos)
+//      action "sincronizar_manual"       -> [Admin nível 10+] relê o Google Doc de um
+//                                            manual e atualiza o conteúdo mostrado no site
+//      action "atualizar_manual_config"  -> [Admin nível 10+] muda título, descrição
+//                                            e/ou nível mínimo de acesso de um manual
+//      action "excluir_manual"           -> [Admin nível 10+] tira um manual do site
+//                                            (o Google Doc continua existindo no Drive)
+//    Todos exigem "token" batendo com TOKEN. As ações de Admin também exigem
+//    "whatsappAdmin"/"senhaAdmin" de uma conta com Nivel >= 10 e Status Ativo
+//    -- o nível não é confiado vindo do site, é sempre reconferido aqui no servidor.
+//
+// Como implantar a v4.0 SEM derrubar o site (a ordem importa):
+//  0. Cole este arquivo, salve e crie NOVA VERSÃO da implantação (mesma URL).
+//     Aceite a nova autorização se o Google pedir. O site continua igual.
+//  1. No editor, escolha migrarParaAcessosUnificados e clique em Executar
+//     (faz backup e cria Perfil + caixinhas na planilha). Depois rode diagnostico.
+//  2. Suba os arquivos novos do site (manual.html, admin.html, index.html, common.js).
+//  3. Confira o painel "Acessos" e o login; só então fecharListaPublica.
+// (Instruções da v3.2, ainda valem:)
+//  1. Cole este arquivo, salve, e crie NOVA VERSÃO da implantação existente
+//     (mesma URL). O site atual continua funcionando igualzinho.
+//  2. Suba o manual.html novo (ele detecta a v3.2 sozinho e passa a usar o
+//     login pelo servidor).
+//  3. Só depois: no editor, escolha fecharListaPublica e clique em Executar.
+//  4. Rode diagnostico (confere) e fazerBackupAgora (faz o primeiro backup).
+//  5. OPCIONAL, dias depois: migrarSenhasParaHash.
+//
+// Como implantar (passo a passo geral):
+//  1. script.google.com -> abrir o projeto existente (ou criar um novo)
+//  2. Apagar o código antigo e colar este arquivo inteiro.
+//  3. Implantar -> Gerenciar implantações -> editar a implantação "App da Web" ativa
+//     (não criar uma nova, pra manter a mesma URL) -> Nova versão -> Implantar.
+//  4. "Executar como": Eu (sua conta). "Quem pode acessar": Qualquer pessoa.
+//  5. IMPORTANTE: essa versão usa Google Docs e Google Drive além da Planilha
+//     (pra criar/ler os manuais e guardar as imagens). Na primeira vez que
+//     alguém clicar em "Migrar manuais", "Sincronizar" ou "+ Novo manual", o
+//     Google vai pedir autorização de novo (mesma tela de sempre: Revisar
+//     permissões -> Avançado -> Acessar [projeto] (não seguro) -> Permitir) --
+//     é normal, só acontece uma vez.
+//
+// IMPORTANTE sobre a planilha "Funcionarios": cabeçalho precisa ter, nesta
+// ordem: Nome | WhatsApp | Senha | Nivel | Status
+// (a coluna Status é nova -- se não existir ainda, adicione "Status" na
+// primeira linha e escreva "Ativo" em todas as linhas já existentes; quem não
+// tiver essa coluna preenchida é tratado como Ativo por padrão, então nada
+// quebra se você esquecer uma linha).
+//
+// Para dar acesso de Admin/RH a alguém, basta colocar 10 na coluna Nivel.
+//
+// Nesta MESMA planilha de Funcionarios, crie também uma aba chamada
+// "ConfigQuiz" com o cabeçalho: Nivel | NotaAprovacaoPct | PerguntasPorTentativa
+// -- uma linha por manual que tiver prova. Se a aba não existir, o sistema
+// cria ela sozinho na primeira vez com valores padrão (70% de aprovação,
+// todas as perguntas do banco).
+//
+// A aba "Manuais" (ManualId | Titulo | Blurb | NivelMinimo | DocId | Ordem |
+// CacheJSON | AtualizadoEm) se cria sozinha na primeira vez que alguém criar
+// ou migrar um manual pelo Painel do RH -- não precisa mexer nela na mão.
+// "NivelMinimo" decide quem enxerga o manual: qualquer funcionário com Nivel
+// igual ou maior já tem acesso (então Nível 10 sempre vê todos os manuais).
+// A coluna CacheJSON guarda o conteúdo já processado do Google Doc, pra não
+// precisar reabrir o Doc toda vez que alguém acessa o site -- por isso, se um
+// manual crescer MUITO (muito texto ou muitas imagens), pode em algum
+// momento esbarrar no limite de ~50 mil caracteres por célula do Google
+// Sheets; se isso acontecer, o botão "Sincronizar" avisa com um erro em vez
+// de travar o site.
+//
+// As imagens dos manuais ficam guardadas numa pasta do Google Drive chamada
+// "TENKiTER Treinamento - Imagens dos Manuais" (criada sozinha na primeira
+// sincronização que encontrar uma imagem), compartilhadas como "qualquer
+// pessoa com o link pode ver" -- é assim que elas aparecem pro time sem
+// precisar login no Drive.
+
+var FUNCIONARIOS_SHEET_ID = "1FMJU_lGGN7nwhDXEnpRCcFdaSVzTWcbQjOZKvOA-dxY";
+var RESULTADOS_SHEET_ID   = "1yR1Yfm7dSN_rf0vk-J121rebEbY2ajdWVaR4WqDCZlY";
+var PESSOAS_PLANILHA_ID = FUNCIONARIOS_SHEET_ID; // a planilha única de pessoas/acessos
+var TOKEN = "tenkiter2026"; // tem que ser igual ao appsScriptToken do site (manual.html)
+var PASTA_IMAGENS_NOME = "TENKiTER Treinamento - Imagens dos Manuais";
+
+function normalizarWhats_(w) {
+  var d = String(w || '').replace(/\D/g, '');
+  if (d.length >= 12 && d.slice(0, 2) === '55') d = d.slice(2);
+  return d;
+}
+
+function jsonOut_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/* ====================================================================
+ * BLOCO COMPARTILHADO DE ACESSOS -- IDÊNTICO nos dois scripts
+ * (treinamento e catálogo). Se mudar aqui, mude nos dois.
+ *
+ * Modelo: UMA planilha de pessoas (aba 1 da planilha de Funcionarios).
+ * Cada pessoa tem um Perfil (atalho) + uma coluna por permissão
+ * ("perm_..." com caixinha). O Perfil só serve pra marcar as caixinhas de
+ * uma vez; o que vale é o que está marcado em cada linha.
+ * Célula de permissão em branco = herda do perfil (ou do Nivel antigo).
+ * Requer, definido no script que usa o bloco: PESSOAS_PLANILHA_ID.
+ * ==================================================================== */
+
+var AC_LIMITE_TENTATIVAS = 8;
+var AC_BLOQUEIO_SEGUNDOS = 15 * 60;
+
+var AC_PERMISSOES = [
+  { chave: 'portal',                grupo: 'Portal de aprendizagem', rotulo: 'Acessar o portal' },
+  { chave: 'manual_1',              grupo: 'Portal de aprendizagem', rotulo: 'Manual Iniciando' },
+  { chave: 'manual_2',              grupo: 'Portal de aprendizagem', rotulo: 'Manual Estágio' },
+  { chave: 'manual_3',              grupo: 'Portal de aprendizagem', rotulo: 'Manual Avançado' },
+  { chave: 'avaliacoes',            grupo: 'Portal de aprendizagem', rotulo: 'Fazer avaliações' },
+  { chave: 'catalogo_admin',        grupo: 'Catálogo (loja)',        rotulo: 'Entrar no admin do catálogo' },
+  { chave: 'catalogo_cadastrar',    grupo: 'Catálogo (loja)',        rotulo: 'Cadastrar e editar produtos' },
+  { chave: 'catalogo_excluir',      grupo: 'Catálogo (loja)',        rotulo: 'Arquivar e excluir produtos' },
+  { chave: 'catalogo_precos',       grupo: 'Catálogo (loja)',        rotulo: 'Alterar preços em lote' },
+  { chave: 'catalogo_auditoria',    grupo: 'Catálogo (loja)',        rotulo: 'Ver auditoria' },
+  { chave: 'catalogo_push',         grupo: 'Catálogo (loja)',        rotulo: 'Enviar notificações' },
+  { chave: 'equipe_relatorio',      grupo: 'Equipe',                 rotulo: 'Ver relatório e notas da equipe' },
+  { chave: 'gerir_manuais',         grupo: 'Equipe',                 rotulo: 'Gerir manuais e provas' },
+  { chave: 'dados_pessoais',        grupo: 'Equipe',                 rotulo: 'Ver dados pessoais dos colegas' },
+  { chave: 'gerir_acessos',         grupo: 'Sistema',                rotulo: 'Gerir acessos (Admin total)' },
+  { chave: 'cliente',               grupo: 'Cliente',                rotulo: 'Conta de cliente (favoritos e sacola salvos)' }
+];
+
+var AC_PERFIS_BASE_ALUNO = ['portal', 'manual_1', 'avaliacoes', 'cliente'];
+var AC_PERFIS_BASE_FUNC = ['portal', 'manual_1', 'manual_2', 'manual_3', 'avaliacoes', 'catalogo_admin', 'catalogo_cadastrar', 'cliente'];
+var AC_PERFIS_BASE_ENC = AC_PERFIS_BASE_FUNC.concat(['catalogo_excluir', 'catalogo_precos', 'catalogo_auditoria', 'equipe_relatorio']);
+var AC_PERFIS_BASE_ADMIN = AC_PERFIS_BASE_ENC.concat(['catalogo_push', 'gerir_manuais', 'dados_pessoais']);
+
+var AC_PERFIS_PADRAO = [
+  { nome: 'Cliente',     desc: 'Só a conta de cliente (favoritos e sacola salvos).', perms: ['cliente'] },
+  { nome: 'Aluno',       desc: 'Portal, manual Iniciando e avaliações.', perms: AC_PERFIS_BASE_ALUNO },
+  { nome: 'Novato',      desc: 'Portal, manual Iniciando e avaliações.', perms: AC_PERFIS_BASE_ALUNO },
+  { nome: 'Estagiário',  desc: 'Manuais Iniciando e Estágio; cadastra produtos no catálogo.', perms: ['portal', 'manual_1', 'manual_2', 'avaliacoes', 'catalogo_admin', 'catalogo_cadastrar', 'cliente'] },
+  { nome: 'Funcionário', desc: 'Manuais 1 a 3, avaliações e catálogo do dia a dia.', perms: AC_PERFIS_BASE_FUNC },
+  { nome: 'Equipe do site', desc: 'Só o catálogo (cadastra produtos). Não acessa o portal de aprendizagem.', perms: ['catalogo_admin', 'catalogo_cadastrar', 'cliente'] },
+  { nome: 'Encarregado', desc: 'Funcionário + arquivar/excluir, preço em lote, auditoria e relatório da equipe.', perms: AC_PERFIS_BASE_ENC },
+  { nome: 'Admin',       desc: 'Encarregado + notificações, gerir manuais e ver dados pessoais.', perms: AC_PERFIS_BASE_ADMIN },
+  { nome: 'Admin total', desc: 'Tudo, incluindo gerir acessos.', perms: AC_PERMISSOES.map(function (p) { return p.chave; }) }
+];
+
+function acNorm_(s) {
+  return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+function acWhats_(w) {
+  var d = String(w || '').replace(/\D/g, '');
+  if (d.length >= 12 && d.slice(0, 2) === '55') d = d.slice(2);
+  return d;
+}
+/** Texto vindo de fora nunca vira fórmula na planilha: se começa com = + - @ ganha um apóstrofo (o Sheets guarda como texto puro). */
+function acTexto_(v) {
+  var t = String(v == null ? '' : v);
+  return /^[=+\-@\t\r]/.test(t) ? "'" + t : t;
+}
+function acBool_(v) {
+  if (v === true || v === 1) return true;
+  if (v === false || v === 0) return false;
+  var s = String(v == null ? '' : v).trim().toLowerCase();
+  if (s === 'true' || s === 'sim' || s === '1') return true;
+  if (s === 'false' || s === 'nao' || s === 'não' || s === '0') return false;
+  return null; // em branco / indefinido -> herda
+}
+
+/* ---------- planilha e configuração compartilhada ---------- */
+function acSS_() { return SpreadsheetApp.openById(PESSOAS_PLANILHA_ID); }
+function acPlanilha_() { return acSS_().getSheets()[0]; }
+
+function acAba_(nome, cabecalho, esconder) {
+  var ss = acSS_();
+  var aba = ss.getSheetByName(nome);
+  if (!aba) {
+    aba = ss.insertSheet(nome);
+    if (cabecalho && cabecalho.length) aba.appendRow(cabecalho);
+    if (esconder && aba.hideSheet) aba.hideSheet();
+  }
+  return aba;
+}
+function acConfigGet_(chave) {
+  var aba = acAba_('_Config', ['Chave', 'Valor'], true);
+  var dados = aba.getDataRange().getValues();
+  for (var i = 1; i < dados.length; i++) if (String(dados[i][0]) === chave) return String(dados[i][1] == null ? '' : dados[i][1]);
+  return '';
+}
+function acConfigSet_(chave, valor) {
+  var aba = acAba_('_Config', ['Chave', 'Valor'], true);
+  var dados = aba.getDataRange().getValues();
+  for (var i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === chave) { aba.getRange(i + 1, 2).setValue(valor); return; }
+  }
+  aba.appendRow([chave, valor]);
+}
+var ac_segredoMemoria_ = null;
+function acSegredo_() {
+  if (ac_segredoMemoria_) return ac_segredoMemoria_;
+  var s = acConfigGet_('SESSION_SECRET');
+  if (s) { ac_segredoMemoria_ = s; return s; }
+  var props = PropertiesService.getScriptProperties();
+  s = props.getProperty('SESSION_SECRET') || (Utilities.getUuid() + Utilities.getUuid());
+  acConfigSet_('SESSION_SECRET', s);
+  ac_segredoMemoria_ = s;
+  return s;
+}
+function acSenhasEmHash_() {
+  var v = acConfigGet_('SENHAS_EM_HASH');
+  if (v) return v === 'true';
+  if (PropertiesService.getScriptProperties().getProperty('SENHAS_EM_HASH') === 'true') {
+    acConfigSet_('SENHAS_EM_HASH', 'true');
+    return true;
+  }
+  return false;
+}
+
+/* ---------- senha, hash e token ---------- */
+function acBytesHex_(bytes) {
+  return bytes.map(function (b) { var v = (b < 0 ? b + 256 : b).toString(16); return v.length === 1 ? '0' + v : v; }).join('');
+}
+function acSha256Hex_(texto) {
+  return acBytesHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, texto, Utilities.Charset.UTF_8));
+}
+function acHashSenha_(senha) {
+  var sal = Utilities.getUuid().replace(/-/g, '').slice(0, 16);
+  return 'h1$' + sal + '$' + acSha256Hex_(sal + ':' + senha);
+}
+function acGuardarSenha_(senha) { return acSenhasEmHash_() ? acHashSenha_(senha) : String(senha); }
+function acIguais_(a, b) {
+  a = String(a); b = String(b);
+  if (a.length !== b.length) return false;
+  var r = 0;
+  for (var i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+function acSenhaSimples_(guardada, informado) {
+  guardada = String(guardada == null ? '' : guardada);
+  informado = String(informado == null ? '' : informado);
+  if (!informado) return false;
+  if (guardada.indexOf('h1$') === 0) {
+    var p = guardada.split('$');
+    if (p.length !== 3) return false;
+    return acIguais_(acSha256Hex_(p[1] + ':' + informado), p[2]);
+  }
+  return acIguais_(guardada, informado);
+}
+function acHmac_(whats, guardada) {
+  return acBytesHex_(Utilities.computeHmacSha256Signature(whats + '|' + String(guardada), acSegredo_()));
+}
+/** Token de sessão (autodescritivo): tk2.<whatsapp>.<assinatura>. Só vale enquanto a senha guardada não mudar. */
+function acToken_(whats, guardada) { return 'tk2.' + whats + '.' + acHmac_(whats, guardada); }
+function acEhToken_(cred) { var s = String(cred || ''); return s.indexOf('tk1.') === 0 || s.indexOf('tk2.') === 0; }
+function acCredencialConfere_(linha, cred) {
+  cred = String(cred == null ? '' : cred);
+  var whats = acWhats_(linha.whatsapp);
+  if (cred.indexOf('tk2.') === 0) {
+    var p = cred.split('.');
+    return p.length === 3 && p[1] === whats && acIguais_(acHmac_(whats, linha.senha), p[2]);
+  }
+  if (cred.indexOf('tk1.') === 0) return acIguais_('tk1.' + acHmac_(whats, linha.senha), cred);
+  return acSenhaSimples_(linha.senha, cred);
+}
+
+/* ---------- limite de tentativas ---------- */
+function acBloqueado_(w) { return parseInt(CacheService.getScriptCache().get('lf_' + w) || '0', 10) >= AC_LIMITE_TENTATIVAS; }
+function acFalha_(w) {
+  var c = CacheService.getScriptCache();
+  c.put('lf_' + w, String(parseInt(c.get('lf_' + w) || '0', 10) + 1), AC_BLOQUEIO_SEGUNDOS);
+}
+function acLimpaFalhas_(w) { CacheService.getScriptCache().remove('lf_' + w); }
+
+/* ---------- leitura das pessoas ---------- */
+function acCabecalhos_(sh) {
+  var n = sh.getLastColumn();
+  if (n < 1) return [];
+  return sh.getRange(1, 1, 1, n).getValues()[0].map(function (h) { return String(h).trim().toLowerCase(); });
+}
+function acObj_(headers, valores, numLinha) {
+  var o = { __row: numLinha };
+  headers.forEach(function (h, i) { if (h) o[h] = valores[i]; });
+  return o;
+}
+/** Só as linhas de UM WhatsApp (lê a coluna de WhatsApp inteira e depois só as linhas certas -- rápido mesmo com muitos clientes). */
+function acLinhasDoWhats_(whatsapp) {
+  var alvo = acWhats_(whatsapp);
+  if (!alvo) return [];
+  var sh = acPlanilha_();
+  var ultima = sh.getLastRow();
+  if (ultima < 2) return [];
+  var headers = acCabecalhos_(sh);
+  var iw = headers.indexOf('whatsapp');
+  if (iw === -1) return [];
+  var col = sh.getRange(2, iw + 1, ultima - 1, 1).getValues();
+  var out = [];
+  for (var i = 0; i < col.length; i++) {
+    if (acWhats_(col[i][0]) === alvo) {
+      var n = i + 2;
+      out.push(acObj_(headers, sh.getRange(n, 1, 1, headers.length).getValues()[0], n));
+    }
+  }
+  return out;
+}
+function acTodasLinhas_() {
+  var sh = acPlanilha_();
+  var dados = sh.getDataRange().getValues();
+  if (dados.length < 2) return [];
+  var headers = dados[0].map(function (h) { return String(h).trim().toLowerCase(); });
+  var out = [];
+  for (var i = 1; i < dados.length; i++) {
+    if (dados[i].join('').trim() === '') continue;
+    out.push(acObj_(headers, dados[i], i + 1));
+  }
+  return out;
+}
+
+/* ---------- perfis e permissões ---------- */
+function acChaves_() { return AC_PERMISSOES.map(function (p) { return p.chave; }); }
+function acPerfilPadraoObj_(p) {
+  var perms = {};
+  acChaves_().forEach(function (k) { perms[k] = p.perms.indexOf(k) !== -1; });
+  return { nome: p.nome, desc: p.desc, perms: perms };
+}
+/** Lê a aba "Perfis" (editável por você); se não existir, usa os perfis de fábrica. */
+function acPerfis_() {
+  var mapa = {}, ordem = [];
+  var aba = acSS_().getSheetByName('Perfis');
+  if (aba && aba.getLastRow() >= 2) {
+    var dados = aba.getDataRange().getValues();
+    var h = dados[0].map(function (x) { return String(x).trim().toLowerCase(); });
+    for (var i = 1; i < dados.length; i++) {
+      var nome = String(dados[i][h.indexOf('perfil')] || '').trim();
+      if (!nome) continue;
+      var perms = {};
+      acChaves_().forEach(function (k) {
+        var idx = h.indexOf('perm_' + k);
+        var b = idx === -1 ? null : acBool_(dados[i][idx]);
+        perms[k] = b === true;
+      });
+      mapa[acNorm_(nome)] = { nome: nome, desc: String(dados[i][h.indexOf('descricao')] || ''), perms: perms };
+      ordem.push(acNorm_(nome));
+    }
+  }
+  if (!ordem.length) {
+    AC_PERFIS_PADRAO.forEach(function (p) { var o = acPerfilPadraoObj_(p); mapa[acNorm_(p.nome)] = o; ordem.push(acNorm_(p.nome)); });
+  }
+  return { mapa: mapa, ordem: ordem };
+}
+/** Modelo de fábrica de um perfil (usado se o nome não existir mais na aba Perfis: ninguém fica sem acesso por causa de um renomeio). */
+function acPerfilDeFabrica_(nome) {
+  var p = AC_PERFIS_PADRAO.filter(function (x) { return acNorm_(x.nome) === acNorm_(nome); })[0];
+  return p ? acPerfilPadraoObj_(p) : null;
+}
+function acPerfilLegado_(nivel) {
+  var n = parseInt(nivel, 10) || 1;
+  if (n >= 10) return 'Admin total';
+  if (n >= 3) return 'Funcionário'; // 4 a 9 (não usados pelo painel) contam como Funcionário
+  if (n === 2) return 'Estagiário';
+  return 'Novato';
+}
+function acNivelDe_(perms) {
+  if (perms.gerir_acessos) return 10;
+  if (perms.manual_3) return 3;
+  if (perms.manual_2) return 2;
+  if (perms.portal || perms.manual_1) return 1;
+  return 0;
+}
+/** Permissões efetivas de UMA linha: caixinha marcada/desmarcada vale; em branco herda do perfil (ou do Nivel antigo). */
+function acPermsDaLinha_(linha, perfis) {
+  perfis = perfis || acPerfis_();
+  var nomePerfil = String(linha.perfil || '').trim() || acPerfilLegado_(linha.nivel);
+  var base = (perfis.mapa[acNorm_(nomePerfil)] || perfis.mapa[acNorm_(acPerfilLegado_(linha.nivel))] || acPerfilDeFabrica_(nomePerfil) || acPerfilDeFabrica_(acPerfilLegado_(linha.nivel)) || { perms: {} }).perms;
+  var out = {};
+  acChaves_().forEach(function (k) {
+    var b = acBool_(linha['perm_' + k]);
+    out[k] = b === null ? base[k] === true : b;
+  });
+  return out;
+}
+function acPermsLista_(perms) { return acChaves_().filter(function (k) { return perms[k]; }); }
+
+/* ---------- verificação de credenciais ---------- */
+/**
+ * Confere whatsapp + (senha OU token de sessão). Se o mesmo WhatsApp aparecer em
+ * mais de uma linha, une as permissões e fica ativo se qualquer linha estiver ativa.
+ * Devolve { ok, usuario, sessao } ou { ok:false, erro, inativa?, bloqueado? }.
+ */
+function acVerificar_(whatsapp, cred) {
+  cred = String(cred == null ? '' : cred);
+  if (cred.indexOf('tk2.') === 0) {
+    var dono = acWhats_(cred.split('.')[1] || '');
+    // um token só fala pelo seu dono: se o pedido cita OUTRO WhatsApp, é tentativa de se passar por alguém
+    if (acWhats_(whatsapp) && dono && acWhats_(whatsapp) !== dono) return { ok: false, sessaoInvalida: true, erro: 'Sessão inválida. Entre de novo.' };
+    whatsapp = dono || whatsapp;
+  }
+  var alvo = acWhats_(whatsapp);
+  if (!alvo || !cred) return { ok: false, erro: 'WhatsApp ou senha incorretos.' };
+  var ehToken = acEhToken_(cred);
+  if (!ehToken && acBloqueado_(alvo)) {
+    return { ok: false, bloqueado: true, erro: 'Muitas tentativas erradas. Aguarde 15 minutos ou fale com a gestão.' };
+  }
+  var linhas = acLinhasDoWhats_(alvo);
+  var conferem = linhas.filter(function (l) { return acCredencialConfere_(l, cred); });
+  var bateu = conferem[0];
+  if (!bateu) {
+    if (!ehToken) acFalha_(alvo);
+    return { ok: false, erro: ehToken ? 'Sessão expirada. Entre de novo.' : 'WhatsApp ou senha incorretos.', sessaoInvalida: ehToken };
+  }
+  acLimpaFalhas_(alvo);
+  var perfis = acPerfis_();
+  var ativa = false, nome = '', perms = {}, perfil = '', pessoal = {};
+  // só contam as linhas que a credencial abriu E que estão ativas (uma linha antiga suspensa não empresta poder à outra)
+  var ativas = conferem.filter(function (l) { return String(l.status || 'Ativo').trim().toLowerCase() !== 'inativo'; });
+  ativa = ativas.length > 0;
+  ativas.forEach(function (l) {
+    nome = String(l.nome || '').trim() || nome;
+    var p = acPermsDaLinha_(l, perfis);
+    acChaves_().forEach(function (k) { if (p[k]) perms[k] = true; });
+    perfil = String(l.perfil || '').trim() || perfil || acPerfilLegado_(l.nivel);
+    ['datanascimento', 'instagram', 'cep', 'endereco', 'bairro', 'cidade', 'estado', 'altura', 'peso', 'fotoperfilurl', 'fotocorpourl'].forEach(function (c) {
+      var v = l[c];
+      if (v !== undefined && v !== '' && v !== null) pessoal[c] = Object.prototype.toString.call(v) === '[object Date]' ? v.toISOString() : String(v);
+    });
+  });
+  if (!ativa) return { ok: false, inativa: true, erro: 'Essa conta está desativada. Fale com a gestão.' };
+  var usuario = {
+    whatsapp: alvo, name: nome || alvo, status: 'ativo', perfil: perfil,
+    level: acNivelDe_(perms), permissoes: acPermsLista_(perms),
+    dataNascimento: pessoal.datanascimento || '', instagram: pessoal.instagram || '', cep: pessoal.cep || '',
+    endereco: pessoal.endereco || '', bairro: pessoal.bairro || '', cidade: pessoal.cidade || '', estado: pessoal.estado || '',
+    altura: pessoal.altura || '', peso: pessoal.peso || '',
+    fotoPerfilUrl: pessoal.fotoperfilurl || '', fotoCorpoUrl: pessoal.fotocorpourl || ''
+  };
+  return { ok: true, usuario: usuario, sessao: acToken_(alvo, bateu.senha) };
+}
+/** Exige login válido E uma permissão. Devolve { ok, usuario } ou { ok:false, erro, semPermissao? }. */
+function acExigir_(whatsapp, cred, permissao) {
+  var v = acVerificar_(whatsapp, cred);
+  if (!v.ok) return v;
+  if (permissao && v.usuario.permissoes.indexOf(permissao) === -1) {
+    return { ok: false, semPermissao: true, erro: 'Seu acesso não permite esta ação. Fale com a gestão.' };
+  }
+  return v;
+}
+
+/* ---------- escrita ---------- */
+function acGarantirColunas_() {
+  var sh = acPlanilha_();
+  var headers = acCabecalhos_(sh);
+  var faltam = [];
+  if (headers.indexOf('perfil') === -1) faltam.push({ chave: 'perfil', nome: 'Perfil' });
+  acChaves_().forEach(function (k) { if (headers.indexOf('perm_' + k) === -1) faltam.push({ chave: 'perm_' + k, nome: 'perm_' + k }); });
+  if (headers.indexOf('nivel') === -1) faltam.unshift({ chave: 'nivel', nome: 'Nivel' });
+  if (headers.indexOf('status') === -1) faltam.unshift({ chave: 'status', nome: 'Status' });
+  if (faltam.length) {
+    var col = headers.length + 1;
+    faltam.forEach(function (f) { sh.getRange(1, col).setValue(f.nome); col++; });
+  }
+  return sh;
+}
+/** Marca as caixinhas visuais nas colunas de permissão (só estética; o valor continua TRUE/FALSE). */
+function acCaixinhas_() {
+  var sh = acPlanilha_();
+  var headers = acCabecalhos_(sh);
+  var ultima = sh.getLastRow();
+  if (ultima < 2) return;
+  var regra = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+  acChaves_().forEach(function (k) {
+    var i = headers.indexOf('perm_' + k);
+    // validação de caixinha NÃO altera o que já está marcado (insertCheckboxes() desmarcaria tudo)
+    if (i !== -1) { try { sh.getRange(2, i + 1, ultima - 1, 1).setDataValidation(regra); } catch (e) {} }
+  });
+}
+/** Caixinhas visuais só na linha nova (quando alguém se cadastra). */
+function acCaixinhaLinha_(sh, headers, numLinha) {
+  try {
+    var regra = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+    acChaves_().forEach(function (k) {
+      var i = headers.indexOf('perm_' + k);
+      if (i !== -1) sh.getRange(numLinha, i + 1).setDataValidation(regra);
+    });
+  } catch (e) {}
+}
+/** Grava só as células que mudaram (uma linha), sem reinterpretar o resto dela. */
+function acRegravarLinha_(sh, headers, numLinha, mudancas) {
+  var atuais = sh.getRange(numLinha, 1, 1, headers.length).getValues()[0];
+  Object.keys(mudancas).forEach(function (chave) {
+    var i = headers.indexOf(chave);
+    if (i === -1) return;
+    var novo = mudancas[chave];
+    if (String(atuais[i]) === String(novo)) return; // já está assim: não mexe
+    var celula = sh.getRange(numLinha, i + 1);
+    // texto puro nas colunas de texto: preserva zeros à esquerda (senha "0123") e nunca vira fórmula
+    if (typeof novo === 'string' && chave !== 'nivel' && chave.indexOf('perm_') !== 0) celula.setNumberFormat('@');
+    celula.setValue(novo);
+  });
+}
+function acMudancasPerfil_(perfilNome, perms) {
+  var m = { perfil: perfilNome, nivel: acNivelDe_(perms) };
+  acChaves_().forEach(function (k) { m['perm_' + k] = perms[k] === true; });
+  return m;
+}
+function acLog_(quemNome, quemWhats, alvo, acao, detalhe) {
+  var aba = acAba_('Acessos_Log', ['DataHora', 'Quem', 'QuemWhatsApp', 'Alvo', 'Acao', 'Detalhe']);
+  aba.appendRow([new Date(), quemNome || '', quemWhats || '', alvo || '', acao || '', detalhe || '']);
+}
+/** Cria uma pessoa nova com o perfil dado (todas as caixinhas explícitas). */
+function acRegistrar_(nome, whatsapp, senha, perfilNome, extras) {
+  var w = acWhats_(whatsapp);
+  nome = String(nome || '').trim();
+  senha = String(senha || '');
+  if (!nome || !w || !senha) return { ok: false, erro: 'Nome, WhatsApp e senha são obrigatórios.' };
+  if (senha.length < 4) return { ok: false, erro: 'A senha precisa ter pelo menos 4 caracteres.' };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    if (acLinhasDoWhats_(w).length) return { ok: false, erro: 'Já existe uma conta com esse WhatsApp.' };
+    var sh = acGarantirColunas_();
+    var headers = acCabecalhos_(sh);
+    var perfis = acPerfis_();
+    var perfil = perfis.mapa[acNorm_(perfilNome)];
+    if (!perfil) {
+      // perfil apagado/renomeado na aba Perfis: usa o modelo de fábrica (nunca "o primeiro da lista", que poderia ser Admin)
+      var padrao = AC_PERFIS_PADRAO.filter(function (p) { return acNorm_(p.nome) === acNorm_(perfilNome); })[0];
+      if (!padrao) return { ok: false, erro: 'Perfil não encontrado.' };
+      perfil = acPerfilPadraoObj_(padrao);
+    }
+    var m = acMudancasPerfil_(perfil.nome, perfil.perms);
+    m.nome = nome; m.whatsapp = w; m.senha = acGuardarSenha_(senha); m.status = 'Ativo';
+    extras = extras || {};
+    Object.keys(extras).forEach(function (k) { if (extras[k]) m[String(k).toLowerCase()] = extras[k]; });
+    var linha = headers.map(function (h) { return m[h] !== undefined ? m[h] : ''; });
+    var novaLinha = sh.getLastRow() + 1;
+    // texto puro nas colunas de texto (não vira fórmula, não perde zero à esquerda)
+    headers.forEach(function (h, i) {
+      if (h && h !== 'nivel' && h.indexOf('perm_') !== 0 && linha[i] !== '') sh.getRange(novaLinha, i + 1).setNumberFormat('@');
+    });
+    sh.getRange(novaLinha, 1, 1, headers.length).setValues([linha]);
+    acCaixinhaLinha_(sh, headers, novaLinha);
+  } finally {
+    lock.releaseLock();
+  }
+  return { ok: true };
+}
+
+
+/* ===================== v4: ligação do bloco com este script ===================== */
+
+var LIMITE_TENTATIVAS = AC_LIMITE_TENTATIVAS;
+
+function prop_(nome) { return PropertiesService.getScriptProperties().getProperty(nome); }
+function setProp_(nome, valor) { PropertiesService.getScriptProperties().setProperty(nome, valor); }
+function listaFechada_() { return prop_('LISTA_FECHADA') === 'true'; }
+
+/** Nome antigo, ainda usado pelo perfil/foto/resultado. */
+function verificarUsuario_(whatsapp, credencial) { return acVerificar_(whatsapp, credencial); }
+
+function negarAcesso_(v) {
+  return jsonOut_({
+    ok: false, erro: v.erro || 'Acesso negado.', semPermissao: !!v.semPermissao,
+    sessaoInvalida: !!v.sessaoInvalida, inativa: !!v.inativa, bloqueado: !!v.bloqueado
+  });
+}
+/** Ações de gestão: quem faz é sempre reconferido AQUI (login + permissão), nunca confiado vindo do site. */
+function exigirPerm_(data, permissao) {
+  return acExigir_(data.whatsappAdmin || data.whatsapp, data.senhaAdmin || data.senha || data.sessao, permissao);
+}
+
+function loginUsuario_(data) {
+  var v = acVerificar_(data.whatsapp, data.senha);
+  if (!v.ok) return jsonOut_({ ok: false, erro: v.erro, inativa: !!v.inativa, bloqueado: !!v.bloqueado });
+  return jsonOut_({ ok: true, usuario: v.usuario, sessao: v.sessao });
+}
+
+function sessaoUsuario_(data) {
+  var v = acVerificar_(data.whatsapp, data.sessao);
+  if (!v.ok) return jsonOut_({ ok: false, erro: v.erro, inativa: !!v.inativa, sessaoInvalida: true });
+  return jsonOut_({ ok: true, usuario: v.usuario, sessao: v.sessao });
+}
+
+var CAMPOS_PESSOAIS_ = ['datanascimento', 'instagram', 'cep', 'endereco', 'bairro', 'cidade', 'estado', 'altura', 'peso', 'fotoperfilurl', 'fotocorpourl'];
+
+/** Tira a coluna de senha (e, sem a permissão certa, os dados pessoais) de uma lista de pessoas. */
+function semSenha_(lista, comDadosPessoais) {
+  return lista.map(function (f) {
+    var o = {};
+    Object.keys(f).forEach(function (k) {
+      if (k === 'senha' || k === '__row') return;
+      if (!comDadosPessoais && CAMPOS_PESSOAIS_.indexOf(k) !== -1) return;
+      o[k] = f[k];
+    });
+    return o;
+  });
+}
+
+function getFuncionariosSheet_() {
+  return SpreadsheetApp.openById(FUNCIONARIOS_SHEET_ID).getSheets()[0];
+}
+
+function getConfigQuizSheet_() {
+  var ss = SpreadsheetApp.openById(FUNCIONARIOS_SHEET_ID);
+  var sheet = ss.getSheetByName('ConfigQuiz');
+  if (!sheet) {
+    sheet = ss.insertSheet('ConfigQuiz');
+    sheet.appendRow(['Nivel', 'NotaAprovacaoPct', 'PerguntasPorTentativa']);
+    sheet.appendRow([1, 70, 0]);
+    sheet.appendRow([2, 70, 0]);
+    sheet.appendRow([3, 70, 0]);
+  }
+  return sheet;
+}
+
+function getManuaisSheet_() {
+  var ss = SpreadsheetApp.openById(FUNCIONARIOS_SHEET_ID);
+  var sheet = ss.getSheetByName('Manuais');
+  if (!sheet) {
+    sheet = ss.insertSheet('Manuais');
+    sheet.appendRow(['ManualId', 'Titulo', 'Blurb', 'NivelMinimo', 'DocId', 'Ordem', 'CacheJSON', 'AtualizadoEm']);
+  }
+  return sheet;
+}
+
+function lerFuncionarios_() {
+  var sheet = getFuncionariosSheet_();
+  var rows = sheet.getDataRange().getValues();
+  var headers = rows.shift().map(function (h) { return String(h).trim().toLowerCase(); });
+  return rows
+    .filter(function (r) { return r.join("").trim() !== ""; })
+    .map(function (r) {
+      var obj = {};
+      headers.forEach(function (h, i) { obj[h] = r[i]; });
+      if (!obj.status) obj.status = 'Ativo'; // linhas antigas sem a coluna Status contam como Ativo
+      return obj;
+    });
+}
+
+/**
+ * Lê a aba "Manuais" inteira e devolve uma lista pronta pro site consumir,
+ * já ordenada pela coluna Ordem. O CacheJSON é o conteúdo (partes/capítulos/
+ * blocos) da última vez que alguém clicou em "Sincronizar agora".
+ */
+function lerManuais_() {
+  var sheet = getManuaisSheet_();
+  var dados = sheet.getDataRange().getValues();
+  dados.shift(); // cabeçalho
+  return dados
+    .filter(function (r) { return String(r[0]).trim() !== ''; })
+    .map(function (r) {
+      var parts = [];
+      try { parts = JSON.parse(r[6] || '[]'); } catch (e) { parts = []; }
+      return {
+        id: String(r[0]),
+        titulo: r[1] || '',
+        blurb: r[2] || '',
+        nivelMinimo: parseInt(r[3], 10) || 1,
+        docId: r[4] || '',
+        docUrl: r[4] ? ('https://docs.google.com/document/d/' + r[4] + '/edit') : '',
+        ordem: Number(r[5]) || 0,
+        parts: parts,
+        atualizadoEm: r[7] instanceof Date ? r[7].toISOString() : String(r[7] || '')
+      };
+    })
+    .sort(function (a, b) { return a.ordem - b.ordem; });
+}
+
+function verificarAdmin_(whatsapp, senha) {
+  var v = acExigir_(whatsapp, senha, 'gerir_acessos');
+  return !!v.ok;
+}
+
+function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) || 'funcionarios';
+
+  if (action === 'config_quiz') {
+    var sheet = getConfigQuizSheet_();
+    var rows = sheet.getDataRange().getValues();
+    var headers = rows.shift().map(function (h) { return String(h).trim().toLowerCase(); });
+    var configs = rows
+      .filter(function (r) { return r.join("").trim() !== ""; })
+      .map(function (r) {
+        var obj = {};
+        headers.forEach(function (h, i) { obj[h] = r[i]; });
+        return obj;
+      });
+    return jsonOut_({ ok: true, configs: configs });
+  }
+
+  if (action === 'manuais_lista') {
+    return jsonOut_({ ok: true, manuais: lerManuais_() });
+  }
+
+  if (action === 'versao') {
+    return jsonOut_({ ok: true, versao: '4.0', acessos: true, listaFechada: listaFechada_() });
+  }
+
+  // padrão: lista de funcionários (login e níveis) -- formato ANTIGO, só existe
+  // enquanto a lista não for fechada (fecharListaPublica). Depois disso o
+  // site novo faz login pelo servidor e nada sensível sai por aqui.
+  if (listaFechada_()) return jsonOut_({ ok: true, funcionarios: [], listaFechada: true });
+  return jsonOut_({ ok: true, funcionarios: listaLegadaSegura_() });
+}
+
+/** Lista do modo antigo: só pessoas com acesso ao portal e sem as colunas novas. Clientes e equipe do site nunca aparecem aqui. */
+function listaLegadaSegura_() {
+  var perfis = acPerfis_();
+  return lerFuncionarios_().filter(function (f) {
+    return acPermsDaLinha_(f, perfis).portal === true;
+  }).map(function (f) {
+    var o = {};
+    Object.keys(f).forEach(function (k) { if (k !== 'perfil' && k.indexOf('perm_') !== 0) o[k] = f[k]; });
+    return o;
+  });
+}
+
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    if (data.token !== TOKEN) {
+      return jsonOut_({ ok: false, erro: "token inválido" });
+    }
+
+    switch (data.action) {
+      case 'acessos_listar':           return acessosListar_(data);
+      case 'acessos_perfil':           return acessosPerfilAcao_(data);
+      case 'acessos_permissao':        return acessosPermissaoAcao_(data);
+      case 'acessos_status':           return alterarStatusUser_(data);
+      case 'acessos_criar':            return acessosCriarAcao_(data);
+      case 'acessos_log':              return acessosLogAcao_(data);
+      case 'login':                    return loginUsuario_(data);
+      case 'sessao':                   return sessaoUsuario_(data);
+      case 'registrar':                return registrarFuncionario_(data);
+      case 'relatorio_equipe':         return relatorioEquipe_(data);
+      case 'atualizar_nivel_user':     return atualizarNivelUser_(data);
+      case 'alterar_status_user':      return alterarStatusUser_(data);
+      case 'resetar_senha_user':       return resetarSenhaUser_(data);
+      case 'salvar_config_quiz':       return salvarConfigQuiz_(data);
+      case 'criar_manual_vazio':       return criarManualVazio_(data);
+      case 'criar_manual_de_conteudo': return criarManualDeConteudo_(data);
+      case 'sincronizar_manual':       return sincronizarManual_(data);
+      case 'atualizar_manual_config':  return atualizarManualConfig_(data);
+      case 'excluir_manual':           return excluirManual_(data);
+      case 'atualizar_perfil':         return atualizarPerfilUsuario_(data);
+      case 'enviar_foto_perfil':       return enviarFotoPerfil_(data);
+      default:
+        if (data.action && data.action !== 'resultado') return jsonOut_({ ok: false, erro: 'Ação desconhecida.' });
+        return registrarResultado_(data); // 'resultado' e chamadas antigas (sem ação)
+    }
+  } catch (err) {
+    return jsonOut_({ ok: false, erro: String(err) });
+  }
+}
+
+function registrarFuncionario_(data) {
+  var nome = String(data.nome || '').trim();
+  var whatsapp = normalizarWhats_(data.whatsapp);
+  var senha = String(data.senha || '');
+  var dataNascimento = String(data.dataNascimento || '').trim();
+  var instagram = String(data.instagram || '').trim();
+
+  if (!nome || !whatsapp || !senha) {
+    return jsonOut_({ ok: false, erro: 'Nome, WhatsApp e senha são obrigatórios.' });
+  }
+  // Cadastro aberto ao público sempre entra com o perfil mais básico (Aluno, ou
+  // Cliente se vier do catálogo). Quem sobe de perfil é o Admin total, no painel.
+  var perfilInicial = data.origem === 'catalogo' ? 'Cliente' : 'Aluno';
+  var cacheReg = CacheService.getScriptCache();
+  var feitosReg = parseInt(cacheReg.get('reg_hora') || '0', 10);
+  if (feitosReg >= 120) return jsonOut_({ ok: false, erro: 'Muitos cadastros agora. Tente de novo em alguns minutos.' });
+  cacheReg.put('reg_hora', String(feitosReg + 1), 3600);
+  var r = acRegistrar_(nome, whatsapp, senha, perfilInicial, {});
+  if (!r.ok) return jsonOut_({ ok: false, erro: r.erro });
+  if (dataNascimento) gravarCampoFuncionario_(whatsapp, 'datanascimento', 'DataNascimento', dataNascimento);
+  if (instagram) gravarCampoFuncionario_(whatsapp, 'instagram', 'Instagram', instagram);
+  // site novo já entra logado; site antigo ignora esses campos extras
+  var v = acVerificar_(whatsapp, senha);
+  if (v.ok) return jsonOut_({ ok: true, usuario: v.usuario, sessao: v.sessao });
+  return jsonOut_({ ok: true });
+}
+
+/**
+ * Localiza a linha do WhatsApp na planilha Funcionarios e grava UM campo,
+ * criando a coluna no fim da planilha na hora se ela ainda não existir --
+ * é assim que os campos novos do perfil (data de nascimento, Instagram,
+ * endereço, altura, peso, fotos...) vão aparecendo na planilha sozinhos,
+ * sem precisar editar a estrutura dela na mão.
+ */
+function gravarCampoFuncionario_(whatsapp, colunaChave, colunaBonita, valor) {
+  var alvo = normalizarWhats_(whatsapp);
+  var sheet = getFuncionariosSheet_();
+  var dados = sheet.getDataRange().getValues();
+  var headers = dados[0].map(function (h) { return String(h).trim().toLowerCase(); });
+  var idxWhats = headers.indexOf('whatsapp');
+  var idxColuna = headers.indexOf(colunaChave);
+  if (idxColuna === -1) {
+    idxColuna = headers.length;
+    sheet.getRange(1, idxColuna + 1).setValue(colunaBonita);
+  }
+  for (var i = 1; i < dados.length; i++) {
+    if (idxWhats !== -1 && normalizarWhats_(dados[i][idxWhats]) === alvo) {
+      sheet.getRange(i + 1, idxColuna + 1).setNumberFormat('@').setValue(String(valor == null ? '' : valor));
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Pasta do Drive onde ficam as fotos de perfil e de corpo inteiro enviadas
+ * pelos funcionários, compartilhadas como "qualquer pessoa com o link pode
+ * ver" (mesmo esquema das imagens dos manuais).
+ */
+function getPastaFotosPerfil_() {
+  var nome = 'TENKiTER Treinamento - Fotos de Perfil';
+  var pastas = DriveApp.getFoldersByName(nome);
+  if (pastas.hasNext()) return pastas.next();
+  return DriveApp.createFolder(nome);
+}
+
+/**
+ * O próprio funcionário atualiza os campos do seu perfil (autenticado por
+ * whatsapp+senha, não precisa ser admin). Só grava as chaves conhecidas em
+ * "campos" -- nada de deixar o cliente escrever em coluna arbitrária.
+ */
+function atualizarPerfilUsuario_(data) {
+  var whatsapp = normalizarWhats_(data.whatsapp);
+  var vu = verificarUsuario_(whatsapp, data.senha);
+  if (!vu.ok) {
+    return jsonOut_({ ok: false, erro: vu.erro || 'WhatsApp ou senha incorretos.' });
+  }
+  var COLUNAS = {
+    nome: 'Nome', datanascimento: 'DataNascimento', instagram: 'Instagram',
+    cep: 'CEP', endereco: 'Endereco', bairro: 'Bairro', cidade: 'Cidade', estado: 'Estado',
+    altura: 'Altura', peso: 'Peso'
+  };
+  var campos = data.campos || {};
+  var gravouAlgo = false;
+  Object.keys(campos).forEach(function (chave) {
+    var chaveNorm = String(chave).toLowerCase();
+    var colunaBonita = COLUNAS[chaveNorm];
+    if (!colunaBonita) return; // ignora qualquer campo que não esteja na lista permitida
+    gravarCampoFuncionario_(whatsapp, chaveNorm, colunaBonita, campos[chave]);
+    gravouAlgo = true;
+  });
+  if (!gravouAlgo) return jsonOut_({ ok: false, erro: 'Nada para salvar.' });
+  return jsonOut_({ ok: true });
+}
+
+/**
+ * Recebe uma foto (perfil ou corpo inteiro) em base64 -- já redimensionada
+ * no navegador antes de enviar, pra não pesar -- salva como arquivo no
+ * Drive e grava o link na planilha.
+ */
+function enviarFotoPerfil_(data) {
+  var whatsapp = normalizarWhats_(data.whatsapp);
+  var vu = verificarUsuario_(whatsapp, data.senha);
+  if (!vu.ok) {
+    return jsonOut_({ ok: false, erro: vu.erro || 'WhatsApp ou senha incorretos.' });
+  }
+  var tipo = data.tipo === 'corpo' ? 'corpo' : 'perfil';
+  var base64 = String(data.fotoBase64 || '');
+  var m = base64.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]+)$/);
+  if (!m) return jsonOut_({ ok: false, erro: 'Formato de imagem inválido.' });
+  var bytes;
+  try {
+    bytes = Utilities.base64Decode(m[2]);
+  } catch (err) {
+    return jsonOut_({ ok: false, erro: 'Não foi possível ler a imagem enviada.' });
+  }
+  if (bytes.length > 6 * 1024 * 1024) {
+    return jsonOut_({ ok: false, erro: 'Imagem grande demais (máximo 6MB).' });
+  }
+  var blob = Utilities.newBlob(bytes, m[1], whatsapp + '-' + tipo);
+  var pasta = getPastaFotosPerfil_();
+  var arquivo = pasta.createFile(blob);
+  arquivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  var url = 'https://lh3.googleusercontent.com/d/' + arquivo.getId();
+  if (tipo === 'corpo') {
+    gravarCampoFuncionario_(whatsapp, 'fotocorpourl', 'FotoCorpoURL', url);
+  } else {
+    gravarCampoFuncionario_(whatsapp, 'fotoperfilurl', 'FotoPerfilURL', url);
+  }
+  return jsonOut_({ ok: true, url: url });
+}
+
+function registrarResultado_(data) {
+  // Lista fechada = modo seguro: só grava nota de quem está logado de verdade
+  // (impede alguém de forjar resultado só sabendo o WhatsApp de outra pessoa).
+  if (listaFechada_()) {
+    var vr = acExigir_(data.whatsapp, data.senha, 'avaliacoes');
+    if (!vr.ok) return jsonOut_({ ok: false, erro: vr.semPermissao ? vr.erro : 'Sessão inválida. Saia e entre de novo para registrar sua nota.' });
+    data.whatsapp = vr.usuario.whatsapp;
+  }
+  var sheet = SpreadsheetApp.openById(RESULTADOS_SHEET_ID).getSheets()[0];
+  var total = Number(data.total) || 0;
+  var nota = Number(data.nota) || 0;
+  var pct = total > 0 ? Math.round((nota / total) * 100) : 0;
+  sheet.appendRow([
+    new Date(),
+    normalizarWhats_(data.whatsapp),
+    acTexto_(data.nome || ""),
+    data.nivel || "",
+    acTexto_(data.manual || ""),
+    nota,
+    total,
+    pct,
+    acTexto_(data.errosDetalhados || "")
+  ]); // DataHora | WhatsApp | Nome | Nivel | Manual | Nota | Total | Percentual | ErrosDetalhados
+  return jsonOut_({ ok: true });
+}
+
+/* ===================== Ações de Admin/RH (Nível 10+) ===================== */
+
+function relatorioEquipe_(data) {
+  var _ac = exigirPerm_(data, 'equipe_relatorio');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  var sheetResultados = SpreadsheetApp.openById(RESULTADOS_SHEET_ID).getSheets()[0];
+  var linhas = sheetResultados.getDataRange().getValues();
+  linhas.shift(); // cabeçalho
+  var resultados = linhas
+    .filter(function (r) { return r.join("").trim() !== ""; })
+    .map(function (r) {
+      return {
+        dataHora: r[0] instanceof Date ? r[0].toISOString() : String(r[0] || ''),
+        whatsapp: r[1] || '',
+        nome: r[2] || '',
+        nivel: r[3] || '',
+        manual: r[4] || '',
+        nota: r[5] || 0,
+        total: r[6] || 0,
+        percentual: r[7] || 0,
+        errosDetalhados: r[8] || ''
+      };
+    });
+  var comPessoais = _ac.usuario.permissoes.indexOf('dados_pessoais') !== -1;
+  return jsonOut_({ ok: true, funcionarios: semSenha_(lerFuncionarios_(), comPessoais), resultados: resultados });
+}
+
+function atualizarNivelUser_(data) {
+  var _ac = exigirPerm_(data, 'gerir_acessos');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  var novoNivel = parseInt(data.novoNivel, 10);
+  if ([1, 2, 3, 10].indexOf(novoNivel) === -1) {
+    return jsonOut_({ ok: false, erro: 'Nível inválido.' });
+  }
+  return jsonOut_(acessosDefinirPerfil_(data.whatsappAlvo, acPerfilLegado_(novoNivel), _ac.usuario));
+}
+
+function alterarStatusUser_(data) {
+  var _ac = exigirPerm_(data, 'gerir_acessos');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  return jsonOut_(acessosDefinirStatus_(data.whatsappAlvo, String(data.novoStatus) === 'Inativo' ? 'Inativo' : 'Ativo', _ac.usuario));
+}
+
+function resetarSenhaUser_(data) {
+  var _ac = exigirPerm_(data, 'gerir_acessos');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  var novaSenha = String(data.novaSenha || '');
+  if (novaSenha.length < 4) {
+    return jsonOut_({ ok: false, erro: 'A nova senha precisa ter pelo menos 4 caracteres.' });
+  }
+  var linhas = acLinhasDoWhats_(data.whatsappAlvo);
+  if (!linhas.length) return jsonOut_({ ok: false, erro: 'Funcionário não encontrado.' });
+  var sh = acPlanilha_(), headers = acCabecalhos_(sh);
+  var guardar = acGuardarSenha_(novaSenha);
+  linhas.forEach(function (l) { acRegravarLinha_(sh, headers, l.__row, { senha: guardar }); });
+  acLog_(_ac.usuario.name, _ac.usuario.whatsapp, acWhats_(data.whatsappAlvo), 'senha_resetada', '');
+  return jsonOut_({ ok: true });
+}
+
+/**
+ * Localiza a linha do WhatsApp alvo na planilha Funcionarios e atualiza UMA
+ * coluna (identificada pelo nome do cabeçalho, minúsculo). Cria a coluna
+ * Status na hora, se a planilha ainda não tiver ela.
+ */
+function editarLinhaFuncionario_(whatsappAlvo, nomeColuna, novoValor) {
+  var alvo = normalizarWhats_(whatsappAlvo);
+  var sheet = getFuncionariosSheet_();
+  var dados = sheet.getDataRange().getValues();
+  var headers = dados[0].map(function (h) { return String(h).trim().toLowerCase(); });
+  var idxWhats = headers.indexOf('whatsapp');
+  var idxColuna = headers.indexOf(nomeColuna);
+
+  if (idxColuna === -1) {
+    // planilha antiga sem essa coluna ainda (normalmente "status") -- cria no fim
+    idxColuna = headers.length;
+    sheet.getRange(1, idxColuna + 1).setValue(nomeColuna === 'status' ? 'Status' : nomeColuna);
+  }
+
+  for (var i = 1; i < dados.length; i++) {
+    if (idxWhats !== -1 && normalizarWhats_(dados[i][idxWhats]) === alvo) {
+      sheet.getRange(i + 1, idxColuna + 1).setValue(novoValor);
+      return jsonOut_({ ok: true });
+    }
+  }
+  return jsonOut_({ ok: false, erro: 'Funcionário não encontrado.' });
+}
+
+function salvarConfigQuiz_(data) {
+  var _ac = exigirPerm_(data, 'gerir_manuais');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  var configs = data.configs; // [{nivel, notaAprovacaoPct, perguntasPorTentativa}, ...]
+  if (!Array.isArray(configs)) {
+    return jsonOut_({ ok: false, erro: 'Formato inválido de configuração.' });
+  }
+  var sheet = getConfigQuizSheet_();
+  var dados = sheet.getDataRange().getValues();
+  var headers = dados[0].map(function (h) { return String(h).trim().toLowerCase(); });
+  var idxNivel = headers.indexOf('nivel');
+  var idxNota = headers.indexOf('notaaprovacaopct');
+  var idxQtd = headers.indexOf('perguntasportentativa');
+
+  configs.forEach(function (cfg) {
+    var achou = false;
+    for (var i = 1; i < dados.length; i++) {
+      if (String(dados[i][idxNivel]) === String(cfg.nivel)) {
+        sheet.getRange(i + 1, idxNota + 1).setValue(Number(cfg.notaAprovacaoPct) || 70);
+        sheet.getRange(i + 1, idxQtd + 1).setValue(Number(cfg.perguntasPorTentativa) || 0);
+        achou = true;
+        break;
+      }
+    }
+    if (!achou) {
+      sheet.appendRow([cfg.nivel, Number(cfg.notaAprovacaoPct) || 70, Number(cfg.perguntasPorTentativa) || 0]);
+    }
+  });
+  return jsonOut_({ ok: true });
+}
+
+/* ===================== Manuais em Google Docs (Nível 10+) ===================== */
+
+/**
+ * Pasta do Drive onde ficam as imagens extraídas dos manuais. Criada
+ * sozinha na primeira vez que uma sincronização encontrar uma imagem.
+ */
+function getPastaImagens_() {
+  var pastas = DriveApp.getFoldersByName(PASTA_IMAGENS_NOME);
+  if (pastas.hasNext()) return pastas.next();
+  return DriveApp.createFolder(PASTA_IMAGENS_NOME);
+}
+
+/**
+ * Extrai uma imagem inline do Google Doc, salva como arquivo separado no
+ * Drive (compartilhado como "qualquer pessoa com o link pode ver") e devolve
+ * um bloco {type:'img'} pronto pro site -- em vez de guardar a imagem inteira
+ * em base64 dentro do JSON (o que estouraria rápido o limite de ~50 mil
+ * caracteres por célula da planilha).
+ */
+function extrairImagemDrive_(imagemInline, pasta) {
+  var blob = imagemInline.getBlob();
+  var arquivo = pasta.createFile(blob);
+  arquivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return {
+    type: 'img',
+    src: 'https://lh3.googleusercontent.com/d/' + arquivo.getId(),
+    width: imagemInline.getWidth(),
+    height: imagemInline.getHeight()
+  };
+}
+
+/**
+ * Lê um Google Doc inteiro e transforma em {parts:[{title, chapters:[{title,
+ * blocks}]}]} -- o mesmo formato que o site já usava. Convenções:
+ *  - Título 1 (Heading 1)  -> nova PARTE do manual
+ *  - Título 2 ou 3         -> novo CAPÍTULO dentro da parte atual
+ *  - Subtítulo (Subtitle)  -> vira uma citação em destaque
+ *  - Texto começando com "> "  -> também vira citação (alternativa ao Subtítulo)
+ *  - Lista com marcadores   -> vira tópicos (mantém o nível de indentação)
+ *  - Texto todo em negrito  -> vira parágrafo em destaque
+ *  - Imagem dentro do texto -> extraída pro Drive e inserida como bloco de imagem,
+ *    já no tamanho (largura/altura) em que foi deixada no Doc
+ *  - TUDO que vem antes do primeiro Título 1 (título do documento, subtítulo,
+ *    sumário...) é ignorado: é só apresentação do Doc, não vira parte nem
+ *    capítulo no site. (Se o Doc não tiver nenhum Título 1, nada é ignorado.)
+ */
+function analisarDocManual_(docId) {
+  var doc = DocumentApp.openById(docId);
+  var body = doc.getBody();
+  var pastaImagens = null; // só cria/abre a pasta se realmente aparecer uma imagem
+  var parts = [];
+  var parteAtual = null;
+  var capituloAtual = null;
+
+  function garantirParte() {
+    if (!parteAtual) {
+      parteAtual = { title: 'Geral', chapters: [] };
+      parts.push(parteAtual);
+    }
+    return parteAtual;
+  }
+  function garantirCapitulo() {
+    garantirParte();
+    if (!capituloAtual) {
+      capituloAtual = { title: 'Introdução', blocks: [] };
+      parteAtual.chapters.push(capituloAtual);
+    }
+    return capituloAtual;
+  }
+
+  var total = body.getNumChildren();
+
+  // Tudo antes do primeiro Título 1 (título, subtítulo, sumário) é só
+  // apresentação do Doc: não vira parte nem capítulo no site.
+  var inicio = 0;
+  for (var k = 0; k < total; k++) {
+    var elK = body.getChild(k);
+    if (elK.getType() === DocumentApp.ElementType.PARAGRAPH &&
+        elK.asParagraph().getHeading() === DocumentApp.ParagraphHeading.HEADING1) {
+      inicio = k;
+      break;
+    }
+  }
+
+  for (var i = inicio; i < total; i++) {
+    var el = body.getChild(i);
+    var tipo = el.getType();
+
+    if (tipo === DocumentApp.ElementType.PARAGRAPH) {
+      var par = el.asParagraph();
+      var heading = par.getHeading();
+      var texto = par.getText();
+
+      // imagens inline dentro deste parágrafo
+      var imagensDoParagrafo = [];
+      var nFilhos = par.getNumChildren();
+      for (var j = 0; j < nFilhos; j++) {
+        var filho = par.getChild(j);
+        if (filho.getType() === DocumentApp.ElementType.INLINE_IMAGE) {
+          if (!pastaImagens) pastaImagens = getPastaImagens_();
+          imagensDoParagrafo.push(extrairImagemDrive_(filho.asInlineImage(), pastaImagens));
+        }
+      }
+
+      if (heading === DocumentApp.ParagraphHeading.HEADING1) {
+        parteAtual = { title: texto || 'Parte', chapters: [] };
+        parts.push(parteAtual);
+        capituloAtual = null;
+        continue;
+      }
+      if (heading === DocumentApp.ParagraphHeading.HEADING2 || heading === DocumentApp.ParagraphHeading.HEADING3) {
+        garantirParte();
+        capituloAtual = { title: texto || 'Capítulo', blocks: [] };
+        parteAtual.chapters.push(capituloAtual);
+        continue;
+      }
+      if (heading === DocumentApp.ParagraphHeading.TITLE) {
+        continue; // título do documento -- o título do manual já vem da configuração no site
+      }
+
+      if (texto.trim() === '' && !imagensDoParagrafo.length) continue; // parágrafo realmente vazio -- nem cria capítulo "Geral" à toa
+
+      var cap = garantirCapitulo();
+      imagensDoParagrafo.forEach(function (img) { cap.blocks.push(img); });
+
+      if (texto.trim() === '') continue; // só tinha imagem, já foi adicionada acima
+
+      if (heading === DocumentApp.ParagraphHeading.SUBTITLE) {
+        cap.blocks.push({ type: 'quote', text: texto });
+        continue;
+      }
+      var mQuote = texto.match(/^>\s?(.*)$/);
+      if (mQuote) {
+        cap.blocks.push({ type: 'quote', text: mQuote[1] });
+        continue;
+      }
+      // isBold() sem argumentos: true = parágrafo todo em negrito, false = nada,
+      // null = misturado (nesse caso trata como não-negrito, pra não travar a sincronização).
+      var negrito = par.editAsText().isBold();
+      cap.blocks.push({ type: 'p', text: texto, bold: negrito === true });
+
+    } else if (tipo === DocumentApp.ElementType.LIST_ITEM) {
+      var item = el.asListItem();
+      var txt2 = item.getText();
+      if (txt2.trim() === '') continue;
+      garantirCapitulo().blocks.push({ type: 'bul', level: item.getNestingLevel() || 0, text: txt2 });
+
+    } else if (tipo === DocumentApp.ElementType.INLINE_IMAGE) {
+      // imagem solta fora de um parágrafo normal (raro, mas cobre o caso)
+      if (!pastaImagens) pastaImagens = getPastaImagens_();
+      garantirCapitulo().blocks.push(extrairImagemDrive_(el.asInlineImage(), pastaImagens));
+    }
+  }
+
+  return parts;
+}
+
+/**
+ * Escreve um conteúdo {parts:[...]} dentro de um Google Doc recém-criado --
+ * usado só na migração dos 3 manuais antigos, pra já nascerem preenchidos
+ * com o texto que já existia no site.
+ */
+function escreverDocDeParts_(doc, parts) {
+  var body = doc.getBody();
+  body.clear();
+  (parts || []).forEach(function (part) {
+    body.appendParagraph(part.title || 'Parte').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    (part.chapters || []).forEach(function (ch) {
+      body.appendParagraph(ch.title || 'Capítulo').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+      (ch.blocks || []).forEach(function (b) {
+        if (b.type === 'bul') {
+          var li = body.appendListItem(b.text || '');
+          li.setNestingLevel(b.level || 0);
+          li.setGlyphType(DocumentApp.GlyphType.BULLET);
+        } else if (b.type === 'quote') {
+          body.appendParagraph(b.text || '').setHeading(DocumentApp.ParagraphHeading.SUBTITLE);
+        } else if (b.type === 'img') {
+          // imagens antigas (se algum dia existiram em base64) não são recriadas
+          // automaticamente no Doc -- a partir de agora, imagem se adiciona direto no Doc.
+        } else {
+          var p = body.appendParagraph(b.text || '');
+          p.setHeading(DocumentApp.ParagraphHeading.NORMAL);
+          if (b.bold) p.editAsText().setBold(true);
+        }
+      });
+    });
+  });
+}
+
+/**
+ * Cria o Google Doc (vazio ou já preenchido) e registra a linha na aba
+ * "Manuais". Devolve o id gerado, o id do Doc e o link de edição.
+ */
+function criarManualRegistro_(manualId, titulo, blurb, nivelMinimo, parts) {
+  var doc = DocumentApp.create(titulo || 'Novo manual');
+  var docId = doc.getId();
+  if (parts && parts.length) {
+    escreverDocDeParts_(doc, parts);
+  } else {
+    doc.getBody().appendParagraph('Capítulo 1').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+    doc.getBody().appendParagraph('Escreva aqui o conteúdo do capítulo...');
+  }
+  doc.saveAndClose();
+
+  var sheet = getManuaisSheet_();
+  var dados = sheet.getDataRange().getValues();
+  var maxOrdem = 0;
+  for (var i = 1; i < dados.length; i++) { maxOrdem = Math.max(maxOrdem, Number(dados[i][5]) || 0); }
+
+  sheet.appendRow([
+    manualId, titulo || '', blurb || '', parseInt(nivelMinimo, 10) || 1,
+    docId, maxOrdem + 1, JSON.stringify(parts || []), new Date()
+  ]);
+  return { manualId: manualId, docId: docId, docUrl: 'https://docs.google.com/document/d/' + docId + '/edit' };
+}
+
+function criarManualVazio_(data) {
+  var _ac = exigirPerm_(data, 'gerir_manuais');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  var titulo = String(data.titulo || '').trim();
+  if (!titulo) return jsonOut_({ ok: false, erro: 'Dê um título para o novo manual.' });
+  var manualId = 'm' + new Date().getTime();
+  var info = criarManualRegistro_(manualId, titulo, data.blurb || '', data.nivelMinimo || 1, []);
+  return jsonOut_({ ok: true, manualId: info.manualId, docUrl: info.docUrl });
+}
+
+function criarManualDeConteudo_(data) {
+  var _ac = exigirPerm_(data, 'gerir_manuais');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  var titulo = String(data.titulo || '').trim();
+  if (!titulo || !Array.isArray(data.parts)) {
+    return jsonOut_({ ok: false, erro: 'Formato inválido.' });
+  }
+  var manualId = String(data.manualId || ('m' + new Date().getTime()));
+  var jaExiste = lerManuais_().some(function (m) { return m.id === manualId; });
+  if (jaExiste) return jsonOut_({ ok: false, erro: 'Já existe um manual cadastrado com esse identificador.' });
+  var info = criarManualRegistro_(manualId, titulo, data.blurb || '', data.nivelMinimo || 1, data.parts);
+  return jsonOut_({ ok: true, manualId: info.manualId, docUrl: info.docUrl });
+}
+
+function sincronizarManual_(data) {
+  var _ac = exigirPerm_(data, 'gerir_manuais');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  var manualId = String(data.manualId || '');
+  var sheet = getManuaisSheet_();
+  var dados = sheet.getDataRange().getValues();
+  for (var i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === manualId) {
+      var docId = dados[i][4];
+      if (!docId) return jsonOut_({ ok: false, erro: 'Este manual não tem um Google Doc associado.' });
+      var parts;
+      try {
+        parts = analisarDocManual_(docId);
+      } catch (err) {
+        return jsonOut_({ ok: false, erro: 'Não foi possível ler o Google Doc: ' + String(err) });
+      }
+      var partsJson = JSON.stringify(parts);
+      if (partsJson.length > 45000) {
+        return jsonOut_({ ok: false, erro: 'Este manual ficou grande demais pra salvar (limite da planilha). Fale com o suporte pra dividir em dois manuais.' });
+      }
+      sheet.getRange(i + 1, 7).setValue(partsJson);
+      var agora = new Date();
+      sheet.getRange(i + 1, 8).setValue(agora);
+      return jsonOut_({ ok: true, parts: parts, atualizadoEm: agora.toISOString() });
+    }
+  }
+  return jsonOut_({ ok: false, erro: 'Manual não encontrado.' });
+}
+
+function atualizarManualConfig_(data) {
+  var _ac = exigirPerm_(data, 'gerir_manuais');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  var manualId = String(data.manualId || '');
+  var sheet = getManuaisSheet_();
+  var dados = sheet.getDataRange().getValues();
+  for (var i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === manualId) {
+      if (data.titulo != null) sheet.getRange(i + 1, 2).setValue(String(data.titulo));
+      if (data.blurb != null) sheet.getRange(i + 1, 3).setValue(String(data.blurb));
+      if (data.nivelMinimo != null) sheet.getRange(i + 1, 4).setValue(parseInt(data.nivelMinimo, 10) || 1);
+      if (data.ordem != null) sheet.getRange(i + 1, 6).setValue(Number(data.ordem) || 0);
+      return jsonOut_({ ok: true });
+    }
+  }
+  return jsonOut_({ ok: false, erro: 'Manual não encontrado.' });
+}
+
+function excluirManual_(data) {
+  var _ac = exigirPerm_(data, 'gerir_manuais');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  var manualId = String(data.manualId || '');
+  var sheet = getManuaisSheet_();
+  var dados = sheet.getDataRange().getValues();
+  for (var i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === manualId) {
+      sheet.deleteRow(i + 1);
+      return jsonOut_({ ok: true });
+    }
+  }
+  return jsonOut_({ ok: false, erro: 'Manual não encontrado.' });
+}
+
+
+/* ===================== v3.2: operação (rodar pelo editor do Apps Script) ===================== */
+
+/**
+ * PASSO 3 (depois que o site novo estiver no ar): fecha a lista pública.
+ * A partir daqui o endereço do script deixa de entregar funcionários/senhas.
+ */
+function fecharListaPublica() {
+  setProp_('LISTA_FECHADA', 'true');
+  Logger.log('Lista pública FECHADA. Se algum acesso quebrar, rode reabrirListaLegado().');
+}
+
+/** Desfaz o passo 3 (volta ao comportamento antigo) -- só pra emergência. */
+function reabrirListaLegado() {
+  setProp_('LISTA_FECHADA', 'false');
+  Logger.log('Lista pública REABERTA (modo antigo).');
+}
+
+function getPastaBackups_() {
+  var nome = 'TENKiTER - Backups (treinamento)';
+  var pastas = DriveApp.getFoldersByName(nome);
+  return pastas.hasNext() ? pastas.next() : DriveApp.createFolder(nome);
+}
+
+/**
+ * Copia as planilhas de Funcionarios e Resultados para a pasta de backups
+ * do Drive e mantém só as 8 cópias mais recentes de cada. Para automatizar:
+ * Gatilhos (relógio, menu à esquerda) -> Adicionar gatilho -> fazerBackupAgora
+ * -> Baseado em tempo -> Contador semanal.
+ */
+function fazerBackupAgora() {
+  var pasta = getPastaBackups_();
+  var carimbo = Utilities.formatDate(new Date(), 'America/Fortaleza', 'yyyy-MM-dd HH-mm');
+  var alvos = [
+    { nome: 'Funcionarios+Manuais', id: FUNCIONARIOS_SHEET_ID },
+    { nome: 'Resultados', id: RESULTADOS_SHEET_ID }
+  ];
+  alvos.forEach(function (a) {
+    DriveApp.getFileById(a.id).makeCopy('Backup ' + a.nome + ' ' + carimbo, pasta);
+    var copias = [];
+    var it = pasta.getFiles();
+    while (it.hasNext()) {
+      var f = it.next();
+      if (f.getName().indexOf('Backup ' + a.nome + ' ') === 0) copias.push(f);
+    }
+    copias.sort(function (x, y) { return y.getDateCreated() - x.getDateCreated(); });
+    copias.slice(8).forEach(function (f) { f.setTrashed(true); });
+  });
+  Logger.log('Backup feito em ' + carimbo + '.');
+}
+
+function migrarSenhasParaHash() {
+  if (!listaFechada_()) {
+    Logger.log('PARE: primeiro rode fecharListaPublica (e confira o login novo). Embaralhar senhas com a lista aberta quebraria o login do site antigo.');
+    return;
+  }
+  fazerBackupAgora(); // se o backup falhar, o erro para tudo aqui
+  var sheet = getFuncionariosSheet_();
+  var dados = sheet.getDataRange().getValues();
+  var headers = dados[0].map(function (h) { return String(h).trim().toLowerCase(); });
+  var idx = headers.indexOf('senha');
+  if (idx === -1) throw new Error('Coluna Senha não encontrada.');
+  var convertidas = 0;
+  for (var i = 1; i < dados.length; i++) {
+    var atual = String(dados[i][idx] == null ? '' : dados[i][idx]);
+    if (atual && atual.indexOf('h1$') !== 0) {
+      sheet.getRange(i + 1, idx + 1).setNumberFormat('@').setValue(acHashSenha_(atual));
+      convertidas++;
+    }
+  }
+  acConfigSet_('SENHAS_EM_HASH', 'true'); // vale para os DOIS scripts (portal e catálogo)
+  Logger.log('Senhas embaralhadas: ' + convertidas + '. Novos cadastros e resets também serão embaralhados.');
+}
+
+function diagnostico() {
+  var linhas = acTodasLinhas_();
+  var hash = linhas.filter(function (f) { return String(f.senha).indexOf('h1$') === 0; }).length;
+  var ativos = linhas.filter(function (f) { return String(f.status || 'Ativo').toLowerCase() !== 'inativo'; }).length;
+  var perfis = acPerfis_();
+  var porPerfil = {}, admins = 0, semMigrar = 0;
+  linhas.forEach(function (l) {
+    var nome = String(l.perfil || '').trim();
+    if (!nome) semMigrar++;
+    porPerfil[nome || '(sem perfil: ainda vem do Nivel)'] = (porPerfil[nome || '(sem perfil: ainda vem do Nivel)'] || 0) + 1;
+    if (String(l.status || 'Ativo').toLowerCase() !== 'inativo' && acPermsDaLinha_(l, perfis).gerir_acessos) admins++;
+  });
+  Logger.log('Versão: 4.0');
+  Logger.log('Pessoas: ' + linhas.length + ' (ativas: ' + ativos + ')');
+  Logger.log('Admins totais ativos: ' + admins + (admins < 1 ? '  <-- ATENÇÃO: ninguém consegue gerir acessos' : ''));
+  Logger.log('Por perfil: ' + JSON.stringify(porPerfil));
+  Logger.log('Migração de acessos: ' + (semMigrar ? ('PENDENTE (' + semMigrar + ' sem perfil) -- rode migrarParaAcessosUnificados') : 'feita'));
+  Logger.log('Senhas embaralhadas: ' + hash + ' de ' + linhas.length);
+  Logger.log('Lista pública fechada: ' + (listaFechada_() ? 'SIM' : 'NÃO (modo antigo ainda ativo)'));
+  Logger.log('Manuais cadastrados: ' + lerManuais_().length);
+}
+
+
+/* ===================== v4: Painel "Acessos" (só Admin total) ===================== */
+
+/** Preenche caixinhas/perfil em branco com o que a pessoa já tinha (perfil ou Nivel antigo). Devolve quantas linhas mexeu. */
+function reconciliarLinhas_(maximo) {
+  var sh = acGarantirColunas_();
+  var headers = acCabecalhos_(sh);
+  var perfis = acPerfis_();
+  var mexeu = 0;
+  var linhas = acTodasLinhas_();
+  for (var i = 0; i < linhas.length && mexeu < (maximo || 200); i++) {
+    var l = linhas[i];
+    var precisa = !String(l.perfil || '').trim();
+    if (!precisa) acChaves_().forEach(function (k) { if (acBool_(l['perm_' + k]) === null) precisa = true; });
+    if (!precisa) continue;
+    var nomePerfil = String(l.perfil || '').trim() || acPerfilLegado_(l.nivel);
+    if (String(l.perfil || '').trim() && !perfis.mapa[acNorm_(nomePerfil)]) continue; // perfil renomeado/apagado na aba Perfis: não mexe nessa pessoa
+    var perms = acPermsDaLinha_(l, perfis);
+    var m = acMudancasPerfil_((perfis.mapa[acNorm_(nomePerfil)] || {}).nome || nomePerfil, perms);
+    acRegravarLinha_(sh, headers, l.__row, m);
+    mexeu++;
+  }
+  return mexeu;
+}
+
+function acAdminsAtivos_(excluirWhats) {
+  var perfis = acPerfis_();
+  var vistos = {}, n = 0;
+  acTodasLinhas_().forEach(function (l) {
+    var w = acWhats_(l.whatsapp);
+    if (!w || w === excluirWhats || vistos[w]) return;
+    if (String(l.status || 'Ativo').trim().toLowerCase() === 'inativo') return;
+    if (acPermsDaLinha_(l, perfis).gerir_acessos) { vistos[w] = true; n++; }
+  });
+  return n;
+}
+
+function acessosListar_(data) {
+  var _ac = exigirPerm_(data, 'gerir_acessos');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  reconciliarLinhas_(200);
+  var perfis = acPerfis_();
+  var busca = acNorm_(data.busca || '');
+  var incluirClientes = data.incluirClientes === true;
+  var pessoas = [], totalClientes = 0, vistos = {};
+  acTodasLinhas_().forEach(function (l) {
+    var w = acWhats_(l.whatsapp);
+    if (!w || vistos[w]) return;
+    vistos[w] = true;
+    var nomePerfil = String(l.perfil || '').trim() || acPerfilLegado_(l.nivel);
+    var ehCliente = acNorm_(nomePerfil) === 'cliente';
+    if (ehCliente) totalClientes++;
+    var bate = !busca || acNorm_(l.nome).indexOf(busca) !== -1 || w.indexOf(busca.replace(/\D/g, '') || '§') !== -1;
+    if (busca ? !bate : (ehCliente && !incluirClientes)) return;
+    pessoas.push({
+      whatsapp: w, nome: String(l.nome || ''), perfil: nomePerfil,
+      status: String(l.status || 'Ativo'), nivel: parseInt(l.nivel, 10) || 0,
+      permissoes: acPermsDaLinha_(l, perfis)
+    });
+  });
+  pessoas.sort(function (a, b) { return a.nome.localeCompare(b.nome); });
+  if (pessoas.length > 300) pessoas = pessoas.slice(0, 300);
+  return jsonOut_({
+    ok: true, eu: _ac.usuario.whatsapp, pessoas: pessoas, totalClientes: totalClientes,
+    perfis: perfis.ordem.map(function (k) { var p = perfis.mapa[k]; return { nome: p.nome, desc: p.desc, permissoes: p.perms }; }),
+    permissoes: AC_PERMISSOES
+  });
+}
+
+function acessosDefinirPerfilSemTrava_(whatsappAlvo, nomePerfil, quem) {
+  var alvo = acWhats_(whatsappAlvo);
+  var perfis = acPerfis_();
+  var perfil = perfis.mapa[acNorm_(nomePerfil)];
+  if (!perfil) return { ok: false, erro: 'Perfil desconhecido.' };
+  var linhas = acLinhasDoWhats_(alvo);
+  if (!linhas.length) return { ok: false, erro: 'Pessoa não encontrada.' };
+  if (!perfil.perms.gerir_acessos && acAdminsAtivos_(alvo) < 1) {
+    return { ok: false, erro: 'Precisa sobrar pelo menos um Admin total ativo. Passe o cargo a outra pessoa antes.' };
+  }
+  var anterior = String(linhas[0].perfil || '').trim() || acPerfilLegado_(linhas[0].nivel);
+  var sh = acGarantirColunas_(), headers = acCabecalhos_(sh);
+  linhas.forEach(function (l) { acRegravarLinha_(sh, headers, l.__row, acMudancasPerfil_(perfil.nome, perfil.perms)); });
+  acLog_(quem.name, quem.whatsapp, alvo, 'perfil', anterior + ' -> ' + perfil.nome);
+  return { ok: true };
+}
+
+function acessosPerfilAcao_(data) {
+  var _ac = exigirPerm_(data, 'gerir_acessos');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  return jsonOut_(acessosDefinirPerfil_(data.whatsappAlvo, data.perfil, _ac.usuario));
+}
+
+function acessosDefinirPermissaoSemTrava_(whatsappAlvo, chave, valor, quem) {
+  var alvo = acWhats_(whatsappAlvo);
+  if (acChaves_().indexOf(chave) === -1) return { ok: false, erro: 'Permissão desconhecida.' };
+  var linhas = acLinhasDoWhats_(alvo);
+  if (!linhas.length) return { ok: false, erro: 'Pessoa não encontrada.' };
+  valor = valor === true;
+  if (chave === 'gerir_acessos' && !valor && acAdminsAtivos_(alvo) < 1) {
+    return { ok: false, erro: 'Precisa sobrar pelo menos um Admin total ativo. Passe o cargo a outra pessoa antes.' };
+  }
+  var perfis = acPerfis_();
+  var sh = acGarantirColunas_(), headers = acCabecalhos_(sh);
+  linhas.forEach(function (l) {
+    var perms = acPermsDaLinha_(l, perfis);
+    perms[chave] = valor;
+    var nomePerfil = String(l.perfil || '').trim() || acPerfilLegado_(l.nivel);
+    acRegravarLinha_(sh, headers, l.__row, acMudancasPerfil_(nomePerfil, perms)); // caixinhas todas explícitas; o rótulo do perfil fica
+  });
+  acLog_(quem.name, quem.whatsapp, alvo, valor ? 'permissao_marcada' : 'permissao_desmarcada', chave);
+  return { ok: true };
+}
+
+function acessosPermissaoAcao_(data) {
+  var _ac = exigirPerm_(data, 'gerir_acessos');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  return jsonOut_(acessosDefinirPermissao_(data.whatsappAlvo, String(data.chave || ''), data.valor === true, _ac.usuario));
+}
+
+function acessosDefinirStatusSemTrava_(whatsappAlvo, novoStatus, quem) {
+  var alvo = acWhats_(whatsappAlvo);
+  var linhas = acLinhasDoWhats_(alvo);
+  if (!linhas.length) return { ok: false, erro: 'Funcionário não encontrado.' };
+  if (novoStatus === 'Inativo' && acAdminsAtivos_(alvo) < 1) {
+    var perfis = acPerfis_();
+    if (linhas.some(function (l) { return acPermsDaLinha_(l, perfis).gerir_acessos; })) {
+      return { ok: false, erro: 'Precisa sobrar pelo menos um Admin total ativo. Passe o cargo a outra pessoa antes.' };
+    }
+  }
+  var sh = acGarantirColunas_(), headers = acCabecalhos_(sh);
+  linhas.forEach(function (l) { acRegravarLinha_(sh, headers, l.__row, { status: novoStatus }); });
+  acLog_(quem.name, quem.whatsapp, alvo, 'status', novoStatus);
+  return { ok: true };
+}
+
+function acessosCriarAcao_(data) {
+  var _ac = exigirPerm_(data, 'gerir_acessos');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  var perfis = acPerfis_();
+  if (!perfis.mapa[acNorm_(data.perfil)]) return jsonOut_({ ok: false, erro: 'Perfil desconhecido.' });
+  var r = acRegistrar_(data.nome, data.whatsappNovo, data.senhaNova, data.perfil, {});
+  if (r.ok) acLog_(_ac.usuario.name, _ac.usuario.whatsapp, acWhats_(data.whatsappNovo), 'criada', 'perfil ' + data.perfil);
+  return jsonOut_(r);
+}
+
+function acessosLogAcao_(data) {
+  var _ac = exigirPerm_(data, 'gerir_acessos');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  var aba = acSS_().getSheetByName('Acessos_Log');
+  var registros = [];
+  if (aba && aba.getLastRow() >= 2) {
+    var dados = aba.getDataRange().getValues();
+    var limite = Math.min(Number(data.limite) || 60, 300);
+    for (var i = dados.length - 1; i >= 1 && registros.length < limite; i--) {
+      registros.push({
+        dataHora: Object.prototype.toString.call(dados[i][0]) === '[object Date]' ? dados[i][0].toISOString() : String(dados[i][0]),
+        quem: String(dados[i][1] || ''), alvo: String(dados[i][3] || ''), acao: String(dados[i][4] || ''), detalhe: String(dados[i][5] || '')
+      });
+    }
+  }
+  return jsonOut_({ ok: true, registros: registros });
+}
+
+/* ===================== v4: migração (rodar pelo editor) ===================== */
+
+function garantirAbaPerfis_() {
+  var ss = acSS_();
+  if (!ss.getSheetByName('Perfis')) {
+    var cab = ['Perfil', 'Descricao'].concat(acChaves_().map(function (k) { return 'perm_' + k; }));
+    var aba = ss.insertSheet('Perfis');
+    aba.appendRow(cab);
+    AC_PERFIS_PADRAO.forEach(function (p) {
+      var o = acPerfilPadraoObj_(p);
+      aba.appendRow([p.nome, p.desc].concat(acChaves_().map(function (k) { return o.perms[k] === true; })));
+    });
+    try { aba.getRange(2, 3, AC_PERFIS_PADRAO.length, acChaves_().length).setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build()); } catch (e) {}
+  }
+  if (!ss.getSheetByName('Permissoes')) {
+    var ab2 = ss.insertSheet('Permissoes');
+    ab2.appendRow(['Chave', 'Grupo', 'O que libera']);
+    AC_PERMISSOES.forEach(function (p) { ab2.appendRow(['perm_' + p.chave, p.grupo, p.rotulo]); });
+  }
+}
+
+/**
+ * PASSO DA MIGRAÇÃO. Faz backup, cria as colunas Perfil e perm_... na aba de
+ * pessoas, cria as abas Perfis e Permissoes, e converte cada Nivel antigo em
+ * perfil + caixinhas: 1 = Novato, 2 = Estagiário, 3 = Funcionário, 10 = Admin total.
+ * Não apaga nada e pode ser rodada de novo sem problema.
+ */
+function migrarParaAcessosUnificados() {
+  fazerBackupAgora();
+  acGarantirColunas_();
+  garantirAbaPerfis_();
+  var mexeu = reconciliarLinhas_(100000);
+  acCaixinhas_();
+  var admins = acAdminsAtivos_('');
+  acLog_('sistema', '', '', 'migracao', mexeu + ' pessoas convertidas');
+  Logger.log('Migração concluída: ' + mexeu + ' pessoas convertidas. Admins totais ativos: ' + admins);
+  if (admins < 1) Logger.log('ATENÇÃO: ninguém ficou como Admin total. Coloque TRUE em perm_gerir_acessos para você na planilha.');
+  if (!listaFechada_()) Logger.log('LEMBRETE: a lista pública antiga ainda está aberta. Depois de conferir o login e o painel Acessos, rode fecharListaPublica.');
+}
+
+
+/** Executa uma alteração de acesso uma de cada vez (evita dois admins se removendo ao mesmo tempo). */
+function acComTrava_(fn) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (e) { return { ok: false, erro: 'O sistema está ocupado agora. Tente de novo em alguns segundos.' }; }
+  try { return fn(); } finally { lock.releaseLock(); }
+}
+function acessosDefinirPerfil_(a, b, c) { return acComTrava_(function () { return acessosDefinirPerfilSemTrava_(a, b, c); }); }
+function acessosDefinirPermissao_(a, b, c, d) { return acComTrava_(function () { return acessosDefinirPermissaoSemTrava_(a, b, c, d); }); }
+function acessosDefinirStatus_(a, b, c) { return acComTrava_(function () { return acessosDefinirStatusSemTrava_(a, b, c); }); }

@@ -180,6 +180,15 @@
   .sem-excluir .btn-arquivar, .sem-excluir .btn-reativar, .sem-excluir .btn-excluir, .sem-excluir #btn-bulk-arquivar, .sem-excluir #btn-bulk-reativar { display: none !important; }
   .sem-precos #btn-bulk-preco { display: none !important; }
   .sem-auditoria #btn-abrir-auditoria, .sem-push #btn-abrir-push, .sem-portal a[href="manual.html"] { display: none !important; }
+  .dica-midia { font-size: 0.75rem; color: #777; margin-top: 8px; }
+  .galeria-grid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
+  .galeria-item { position: relative; width: 74px; height: 92px; }
+  .galeria-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; }
+  .galeria-item button { position: absolute; top: -6px; right: -6px; width: 24px; height: 24px; border-radius: 50%; border: none; background: #c62828; color: #fff; font-size: 0.8rem; cursor: pointer; padding: 0; line-height: 24px; }
+  .galeria-item .novo { position: absolute; left: 4px; bottom: 4px; background: var(--laranja); color: #fff; font-size: 0.6rem; font-weight: 800; padding: 1px 5px; border-radius: 6px; }
+  #video-preview { display: none; width: 100%; max-width: 260px; max-height: 300px; margin: 10px auto 0; border-radius: 8px; background: #000; }
+  #video-atual { display: none; margin-top: 10px; font-size: 0.85rem; }
+  #btn-remover-video { display: none; margin-top: 8px; background: #c62828; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 700; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -325,6 +334,22 @@
           <button type="button" id="btn-confirmar-corte" style="margin-top:8px;background:var(--laranja);">Ajustar & Salvar Foto</button>
         </div>
         <img id="preview-final">
+      </div>
+
+      <label>Mais fotos <span id="galeria-contador">(0 de 8)</span></label>
+      <div class="foto-box" id="galeria-box">
+        <input type="file" id="galeria-input" accept="image/*" multiple>
+        <div id="galeria-grid" class="galeria-grid"></div>
+        <div class="dica-midia">Até 8 fotos além da principal. Toque no ✕ para tirar uma.</div>
+      </div>
+
+      <label>Vídeo da peça (1 só, até 20 MB)</label>
+      <div class="foto-box" id="video-box">
+        <input type="file" id="video-input" accept="video/mp4,video/quicktime,video/webm">
+        <video id="video-preview" controls playsinline preload="metadata"></video>
+        <div id="video-atual">🎬 Esta peça já tem um vídeo salvo. <a id="video-atual-link" href="#" target="_blank" rel="noopener">Ver</a></div>
+        <button type="button" id="btn-remover-video">Remover vídeo</button>
+        <div class="dica-midia">MP4, MOV ou WEBM. O vídeo vai direto ao servidor (não fica guardado se estiver sem internet).</div>
       </div>
 
       <button type="submit" class="btn-primario" id="btn-salvar">Cadastrar Peça</button>
@@ -581,6 +606,113 @@
   let selecionadasCategorias = new Set(), selecionadosGeneros = new Set();
   let selecionadosBulk = new Set();
   let fotoBase64 = null;
+
+  /* ===================== v2.1: fotos extras (até 8) e vídeo (1) ===================== */
+  const MAX_GALERIA = 8, MAX_VIDEO_MB = 20;
+  let galeriaItens = [];      // { url } já salva  |  { b64, prev } nova
+  let videoNovo = null;       // { b64, mime, prev }
+  let videoAtual = '';        // link do vídeo já salvo
+  let removerVideo = false;
+
+  function idDoVideoSalvo(u) { const m = /^https:\/\/drive\.google\.com\/file\/d\/([\w-]+)\//.exec(String(u || '')); return m ? m[1] : ''; }
+
+  function desenharGaleria() {
+    const grid = document.getElementById('galeria-grid');
+    grid.innerHTML = '';
+    galeriaItens.forEach((it, idx) => {
+      const box = document.createElement('div'); box.className = 'galeria-item';
+      const img = document.createElement('img'); img.alt = ''; img.referrerPolicy = 'no-referrer';
+      img.src = it.url || it.prev;
+      const x = document.createElement('button'); x.type = 'button'; x.textContent = '✕'; x.title = 'Tirar esta foto';
+      x.addEventListener('click', () => { galeriaItens.splice(idx, 1); desenharGaleria(); });
+      box.appendChild(img); box.appendChild(x);
+      if (!it.url) { const n = document.createElement('span'); n.className = 'novo'; n.textContent = 'NOVA'; box.appendChild(n); }
+      grid.appendChild(box);
+    });
+    document.getElementById('galeria-contador').textContent = '(' + galeriaItens.length + ' de ' + MAX_GALERIA + ')';
+    document.getElementById('galeria-input').disabled = galeriaItens.length >= MAX_GALERIA;
+  }
+
+  function desenharVideo() {
+    const prev = document.getElementById('video-preview');
+    const atual = document.getElementById('video-atual');
+    const btn = document.getElementById('btn-remover-video');
+    prev.style.display = 'none'; atual.style.display = 'none'; btn.style.display = 'none';
+    if (videoNovo) {
+      prev.src = videoNovo.prev; prev.style.display = 'block';
+      btn.textContent = 'Remover este vídeo'; btn.style.display = 'inline-block';
+    } else if (videoAtual && !removerVideo && idDoVideoSalvo(videoAtual)) {
+      document.getElementById('video-atual-link').href = 'https://drive.google.com/file/d/' + idDoVideoSalvo(videoAtual) + '/view';
+      atual.style.display = 'block';
+      btn.textContent = 'Remover vídeo da peça'; btn.style.display = 'inline-block';
+    } else {
+      prev.removeAttribute('src');
+    }
+  }
+
+  function zerarMidia(p) {
+    if (videoNovo && videoNovo.prev) URL.revokeObjectURL(videoNovo.prev);
+    galeriaItens = p ? String(p.Fotos_Galeria || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, MAX_GALERIA).map(u => ({ url: u })) : [];
+    videoNovo = null; removerVideo = false; videoAtual = p ? String(p.Video_URL || '') : '';
+    document.getElementById('galeria-input').value = '';
+    document.getElementById('video-input').value = '';
+    desenharGaleria(); desenharVideo();
+  }
+
+  function lerFotoReduzida(file) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onerror = () => reject(new Error('leitura'));
+      fr.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('imagem'));
+        img.onload = () => {
+          const lado = 1200, esc = Math.min(1, lado / Math.max(img.width, img.height));
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(img.width * esc)); c.height = Math.max(1, Math.round(img.height * esc));
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          const url = c.toDataURL('image/jpeg', 0.85);
+          resolve({ b64: url.split(',')[1], prev: url });
+        };
+        img.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+
+  document.getElementById('galeria-input').addEventListener('change', async (e) => {
+    const arquivos = Array.from(e.target.files || []);
+    e.target.value = '';
+    const vagas = MAX_GALERIA - galeriaItens.length;
+    if (arquivos.length > vagas) alert('Cabem só mais ' + vagas + ' foto(s) (máximo ' + MAX_GALERIA + '). As primeiras ' + vagas + ' foram aproveitadas.');
+    for (const f of arquivos.slice(0, Math.max(vagas, 0))) {
+      if (!/^image\//.test(f.type)) continue;
+      try { galeriaItens.push(await lerFotoReduzida(f)); } catch (err) { alert('Não consegui ler a foto "' + f.name + '".'); }
+    }
+    desenharGaleria();
+  });
+
+  document.getElementById('video-input').addEventListener('change', (e) => {
+    const f = (e.target.files || [])[0];
+    if (!f) return;
+    if (!/^video\/(mp4|quicktime|webm)$/.test(f.type)) { alert('Formato não aceito. Use MP4, MOV ou WEBM.'); e.target.value = ''; return; }
+    if (f.size > MAX_VIDEO_MB * 1024 * 1024) { alert('Vídeo com ' + (f.size / 1048576).toFixed(1) + ' MB. O máximo é ' + MAX_VIDEO_MB + ' MB — encurte o vídeo ou reduza a qualidade.'); e.target.value = ''; return; }
+    const fr = new FileReader();
+    fr.onload = () => {
+      if (videoNovo && videoNovo.prev) URL.revokeObjectURL(videoNovo.prev);
+      videoNovo = { b64: String(fr.result).split(',')[1], mime: f.type, prev: URL.createObjectURL(f) };
+      removerVideo = false;
+      desenharVideo();
+    };
+    fr.onerror = () => alert('Não consegui ler o vídeo.');
+    fr.readAsDataURL(f);
+  });
+
+  document.getElementById('btn-remover-video').addEventListener('click', () => {
+    if (videoNovo) { if (videoNovo.prev) URL.revokeObjectURL(videoNovo.prev); videoNovo = null; document.getElementById('video-input').value = ''; }
+    else if (videoAtual) removerVideo = true;
+    desenharVideo();
+  });
   let modoDuplicando = false;
 
   function mostrarToastCarregando(texto) {
@@ -693,6 +825,7 @@
 
     fotoBase64 = null;
     previewFinal.style.display = 'none';
+    zerarMidia(null);
 
     document.getElementById('titulo-form').textContent = 'Duplicando: ' + p.Nome;
     document.getElementById('btn-salvar').textContent = 'Cadastrar Cópia';
@@ -712,6 +845,7 @@
     preencherFormComProduto(p);
 
     fotoBase64 = null;
+    zerarMidia(p);
     if (p.Foto_URL) {
       previewFinal.src = p.Foto_URL;
       previewFinal.style.display = 'block';
@@ -736,6 +870,7 @@
     renderizarChips('chips-genero', generos, selecionadosGeneros);
     fotoBase64 = null;
     previewFinal.style.display = 'none';
+    zerarMidia(null);
     document.getElementById('titulo-form').textContent = 'Novo Produto';
     document.getElementById('btn-salvar').textContent = 'Cadastrar Peça';
     document.getElementById('btn-cancelar-duplicar').style.display = 'none';
@@ -766,12 +901,30 @@
       cores: document.getElementById('cores').value.trim(),
       descricao: document.getElementById('descricao').value.trim(),
       novidade: document.getElementById('novidade').checked,
-      fotoBase64: fotoBase64
+      fotoBase64: fotoBase64,
+      fotosGaleriaExistentes: galeriaItens.filter(i => i.url).map(i => i.url).join(','),
+      fotosGaleriaBase64: galeriaItens.filter(i => i.b64).map(i => i.b64)
     };
+    if (videoNovo) { dados.videoBase64 = videoNovo.b64; dados.videoMime = videoNovo.mime; }
+    else if (ehEdicao && removerVideo) dados.removerVideo = true;
     if (ehEdicao) dados.id = idParaEditar;
     if (!ehEdicao && dados.novidade) dados.notificarPush = document.getElementById('notificarPush').checked;
 
-    const resultado = await enviarComFila(dados);
+    const btnSalvar = document.getElementById('btn-salvar');
+    btnSalvar.disabled = true;
+    let resultado;
+    try {
+      if (dados.videoBase64) {
+        // vídeo é grande demais para a fila offline: vai direto e, se falhar, avisa
+        status.textContent = 'Enviando vídeo... pode levar alguns minutos, não feche esta tela.';
+        try {
+          const resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(dados) }).then(r => r.json());
+          resultado = { ok: true, resp: resp };
+        } catch (errRede) { resultado = { ok: false, semFila: true }; }
+      } else {
+        resultado = await enviarComFila(dados);
+      }
+    } finally { btnSalvar.disabled = false; }
     atualizarBarraSync();
 
     if (resultado.ok && resultado.resp && resultado.resp.ok) {
@@ -781,6 +934,8 @@
     } else if (!resultado.ok && resultado.enfileirado) {
       status.textContent = '📥 Sem conexão agora. A ação foi salva localmente e será enviada quando você tocar em "Sincronizar".';
       cancelarDuplicacao();
+    } else if (resultado.semFila) {
+      status.textContent = '❌ Não consegui enviar o vídeo (internet ou arquivo pesado demais). Nada foi salvo — tente de novo com boa conexão ou um vídeo menor.';
     } else {
       status.textContent = '❌ Erro: ' + ((resultado.resp && resultado.resp.erro) || 'Falha ao salvar');
     }

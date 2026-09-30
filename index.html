@@ -599,9 +599,10 @@
       </div>
       ${fotosGaleria.length > 1 ? `
         <div class="thumbs-galeria">
-          ${fotosGaleria.map((f, idx) => `<img src="${f}" class="thumb-item ${idx===0?'ativa':''}" data-src="${f}">`).join('')}
+          ${fotosGaleria.map((f, idx) => `<img src="${escaparHtml(f)}" class="thumb-item ${idx===0?'ativa':''}" data-src="${escaparHtml(f)}">`).join('')}
         </div>
       ` : ''}
+      ${idVideoSeguro(p.Video_URL) ? `<div class="video-produto" id="video-produto"><button type="button" class="btn-secundario-cta" id="btn-video">▶ Ver vídeo da peça</button></div>` : ''}
       <div class="modal-conteudo">
         ${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}
         <div class="nome">${escaparHtml(p.Nome)}</div>
@@ -642,6 +643,18 @@
       });
     }
 
+    const btnVideo = document.getElementById('btn-video');
+    if (btnVideo) btnVideo.addEventListener('click', () => {
+      const idv = idVideoSeguro(p.Video_URL);
+      if (!idv) return;
+      const fr = document.createElement('iframe');
+      fr.src = 'https://drive.google.com/file/d/' + idv + '/preview';
+      fr.allow = 'autoplay; fullscreen'; fr.allowFullscreen = true; fr.setAttribute('loading', 'lazy');
+      fr.style.cssText = 'width:100%;height:340px;border:0;border-radius:10px;background:#000;';
+      const caixa = document.getElementById('video-produto');
+      caixa.innerHTML = ''; caixa.style.padding = '8px 12px'; caixa.appendChild(fr);
+    });
+
     const thumbs = document.querySelectorAll('.thumb-item');
     thumbs.forEach(t => t.addEventListener('click', () => {
       thumbs.forEach(x => x.classList.remove('ativa'));
@@ -652,6 +665,11 @@
     const url = new URL(window.location);
     url.searchParams.set('id', p.ID);
     window.history.replaceState({}, '', url);
+  }
+
+  function idVideoSeguro(u) {
+    const m = /^https:\/\/drive\.google\.com\/file\/d\/([\w-]+)\/preview$/.exec(String(u || ''));
+    return m ? m[1] : '';
   }
 
   function fecharDetalhe() {

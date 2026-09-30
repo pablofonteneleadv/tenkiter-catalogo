@@ -924,10 +924,15 @@ function avatarIniciais(nome){
   var i2 = partes.length > 1 ? partes[partes.length-1][0] : '';
   return (i1 + i2).toUpperCase() || '?';
 }
+function fotoUrlOk(u){
+  u = String(u || '');
+  var m = u.match(/drive\.google\.com\/(?:uc\?(?:[^#]*&)?id=|file\/d\/|open\?id=)([\w-]+)/);
+  return m ? 'https://lh3.googleusercontent.com/d/' + m[1] : u;
+}
 function avatarHtml(user, size){
   var cls = 'avatar' + (size ? ' avatar-' + size : '');
   if (user.fotoPerfilUrl){
-    return '<span class="' + cls + '"><img src="' + esc(user.fotoPerfilUrl) + '" alt=""></span>';
+    return '<span class="' + cls + '"><img referrerpolicy="no-referrer" src="' + esc(fotoUrlOk(user.fotoPerfilUrl)) + '" alt=""></span>';
   }
   return '<span class="' + cls + ' avatar-fallback">' + esc(avatarIniciais(user.name)) + '</span>';
 }
@@ -1027,7 +1032,7 @@ function renderPerfil(){
     '</div>' +
     '<div class="perfil-fotos">' +
       '<div class="perfil-foto-box">' +
-        (u.fotoPerfilUrl ? '<img src="' + esc(u.fotoPerfilUrl) + '" class="perfil-foto-preview" id="preview-foto-perfil">' : '<div class="perfil-foto-placeholder" id="preview-foto-perfil">' + esc(avatarIniciais(u.name)) + '</div>') +
+        (u.fotoPerfilUrl ? '<img referrerpolicy="no-referrer" src="' + esc(fotoUrlOk(u.fotoPerfilUrl)) + '" class="perfil-foto-preview" id="preview-foto-perfil">' : '<div class="perfil-foto-placeholder" id="preview-foto-perfil">' + esc(avatarIniciais(u.name)) + '</div>') +
         '<span class="perfil-foto-legenda">Foto de perfil</span>' +
         '<div class="perfil-foto-uploader">' +
           '<button type="button" class="btn btn-primary btn-sm" id="btn-foto-perfil-label">' + (u.fotoPerfilUrl ? 'Trocar foto' : 'Enviar foto') + '</button>' +
@@ -1035,7 +1040,7 @@ function renderPerfil(){
         '</div>' +
       '</div>' +
       '<div class="perfil-foto-box">' +
-        (u.fotoCorpoUrl ? '<img src="' + esc(u.fotoCorpoUrl) + '" class="perfil-foto-preview perfil-foto-corpo" id="preview-foto-corpo">' : '<div class="perfil-foto-placeholder perfil-foto-corpo" id="preview-foto-corpo">📷</div>') +
+        (u.fotoCorpoUrl ? '<img referrerpolicy="no-referrer" src="' + esc(fotoUrlOk(u.fotoCorpoUrl)) + '" class="perfil-foto-preview perfil-foto-corpo" id="preview-foto-corpo">' : '<div class="perfil-foto-placeholder perfil-foto-corpo" id="preview-foto-corpo">📷</div>') +
         '<span class="perfil-foto-legenda">Foto de corpo inteiro</span>' +
         '<div class="perfil-foto-uploader">' +
           '<button type="button" class="btn btn-primary btn-sm" id="btn-foto-corpo-label">' + (u.fotoCorpoUrl ? 'Trocar foto' : 'Enviar foto') + '</button>' +
