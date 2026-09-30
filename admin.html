@@ -189,6 +189,16 @@
   #video-preview { display: none; width: 100%; max-width: 260px; max-height: 300px; margin: 10px auto 0; border-radius: 8px; background: #000; }
   #video-atual { display: none; margin-top: 10px; font-size: 0.85rem; }
   #btn-remover-video { display: none; margin-top: 8px; background: #c62828; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 700; cursor: pointer; }
+  #fila-envios { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .env-item { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; padding: 8px 10px; border-radius: 10px; background: #f3f3f3; border-left: 4px solid #999; }
+  .env-item .env-txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .env-item.env-enviando { border-left-color: var(--laranja); background: #fff6ec; }
+  .env-item.env-ok { border-left-color: #2e7d32; background: #edf7ee; }
+  .env-item.env-erro { border-left-color: #c62828; background: #fdecec; }
+  .env-item.env-offline { border-left-color: #1565c0; background: #eaf2fc; }
+  .env-item button { border: none; border-radius: 8px; padding: 5px 9px; font-weight: 700; font-size: 0.75rem; cursor: pointer; background: #333; color: #fff; }
+  .env-spin { display: inline-block; animation: env-gira 1s linear infinite; }
+  @keyframes env-gira { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -355,6 +365,7 @@
       <button type="submit" class="btn-primario" id="btn-salvar">Cadastrar Peça</button>
       <button type="button" class="btn-cancelar-duplicar" id="btn-cancelar-duplicar">Cancelar Duplicação / Novo Produto</button>
       <div id="status" style="text-align:center;font-size:0.85rem;margin-top:8px;"></div>
+      <div id="fila-envios" aria-live="polite"></div>
     </form>
   </div>
 
@@ -879,19 +890,85 @@
 
   document.getElementById('btn-cancelar-duplicar').addEventListener('click', cancelarDuplicacao);
 
-  // Salvar Produto (criar, duplicar como novo, ou editar existente)
-  document.getElementById('form-produto').addEventListener('submit', async (e) => {
+  // Salvar Produto (criar, duplicar ou editar): vai para uma fila e sobe em segundo plano.
+  // O formulário libera na hora para cadastrar a próxima peça; os envios saem um de cada vez.
+  const envios = []; let processandoEnvios = false; let seqEnvios = 0;
+
+  function textoEnvio(it) {
+    const o = it.ehEdicao ? 'Alterações de ' : 'Cadastro de ';
+    if (it.estado === 'fila') return '⏳ ' + o + '"' + it.titulo + '" na fila...';
+    if (it.estado === 'enviando') return '<span class="env-spin">⏳</span> Enviando ' + (it.temVideo ? 'com vídeo (pode levar minutos) ' : '') + '"' + it.titulo + '"...';
+    if (it.estado === 'ok') return '✅ "' + it.titulo + '" salvo!';
+    if (it.estado === 'offline') return '📥 "' + it.titulo + '": sem conexão. Guardado no aparelho; envie com "Sincronizar".';
+    return '❌ "' + it.titulo + '": ' + it.msg;
+  }
+  function desenharEnvios() {
+    const box = document.getElementById('fila-envios');
+    box.innerHTML = '';
+    envios.forEach((it) => {
+      const linha = document.createElement('div'); linha.className = 'env-item env-' + (it.estado === 'fila' ? 'enviando' : it.estado);
+      const t = document.createElement('div'); t.className = 'env-txt';
+      // título vem do formulário: entra como texto, nunca como HTML
+      const html = textoEnvio(Object.assign({}, it, { titulo: escaparHtml(it.titulo), msg: escaparHtml(it.msg) }));
+      t.innerHTML = html; linha.appendChild(t);
+      if (it.estado === 'erro') {
+        const b1 = document.createElement('button'); b1.type = 'button'; b1.textContent = 'Tentar de novo';
+        b1.addEventListener('click', () => { it.estado = 'fila'; it.msg = ''; desenharEnvios(); processarEnvios(); });
+        const b2 = document.createElement('button'); b2.type = 'button'; b2.textContent = 'Descartar'; b2.style.background = '#777';
+        b2.addEventListener('click', () => { envios.splice(envios.indexOf(it), 1); desenharEnvios(); });
+        linha.appendChild(b1); linha.appendChild(b2);
+      }
+      box.appendChild(linha);
+    });
+  }
+  function sumirDepois(it, ms) { setTimeout(() => { const i = envios.indexOf(it); if (i !== -1 && (it.estado === 'ok' || it.estado === 'offline')) { envios.splice(i, 1); desenharEnvios(); } }, ms); }
+
+  async function enviarItem(it) {
+    const dados = Object.assign({}, it.dados, { pin: adminPin, funcionario: funcionarioNome });
+    let resultado;
+    if (dados.videoBase64) {
+      // vídeo é grande demais para a fila offline: vai direto e, se falhar, dá para tentar de novo
+      try {
+        const resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(dados) }).then(r => r.json());
+        resultado = { ok: true, resp: resp };
+      } catch (errRede) { resultado = { ok: false, semFila: true }; }
+    } else {
+      resultado = await enviarComFila(dados);
+    }
+    atualizarBarraSync();
+    if (resultado.ok && resultado.resp && resultado.resp.ok) {
+      it.estado = 'ok'; sumirDepois(it, 6000); carregarProdutos();
+    } else if (!resultado.ok && resultado.enfileirado) {
+      it.estado = 'offline'; sumirDepois(it, 15000);
+    } else if (resultado.semFila) {
+      it.estado = 'erro'; it.msg = 'não consegui enviar o vídeo (internet ou arquivo pesado). Nada foi salvo.';
+    } else {
+      it.estado = 'erro'; it.msg = (resultado.resp && resultado.resp.erro) || 'falha ao salvar';
+    }
+  }
+  async function processarEnvios() {
+    if (processandoEnvios) return;
+    processandoEnvios = true;
+    try {
+      for (;;) {
+        const it = envios.find(e => e.estado === 'fila');
+        if (!it) break;
+        it.estado = 'enviando'; desenharEnvios();
+        try { await enviarItem(it); } catch (err) { it.estado = 'erro'; it.msg = 'erro inesperado'; }
+        desenharEnvios();
+      }
+    } finally { processandoEnvios = false; }
+  }
+  window.addEventListener('beforeunload', (ev) => {
+    if (envios.some(e => e.estado === 'fila' || e.estado === 'enviando')) { ev.preventDefault(); ev.returnValue = ''; }
+  });
+
+  document.getElementById('form-produto').addEventListener('submit', (e) => {
     e.preventDefault();
-    const status = document.getElementById('status');
     const idParaEditar = document.getElementById('produto-id').value;
     const ehEdicao = modoFormulario === 'editando' && idParaEditar;
-
-    status.textContent = ehEdicao ? 'Salvando alterações...' : 'Enviando produto...';
-
     const dados = {
       action: ehEdicao ? 'update' : 'create',
-      pin: adminPin,
-      funcionario: funcionarioNome,
       nome: document.getElementById('nome').value.trim(),
       categoria: Array.from(selecionadasCategorias).join(', '),
       genero: Array.from(selecionadosGeneros).join(', '),
@@ -910,35 +987,10 @@
     if (ehEdicao) dados.id = idParaEditar;
     if (!ehEdicao && dados.novidade) dados.notificarPush = document.getElementById('notificarPush').checked;
 
-    const btnSalvar = document.getElementById('btn-salvar');
-    btnSalvar.disabled = true;
-    let resultado;
-    try {
-      if (dados.videoBase64) {
-        // vídeo é grande demais para a fila offline: vai direto e, se falhar, avisa
-        status.textContent = 'Enviando vídeo... pode levar alguns minutos, não feche esta tela.';
-        try {
-          const resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(dados) }).then(r => r.json());
-          resultado = { ok: true, resp: resp };
-        } catch (errRede) { resultado = { ok: false, semFila: true }; }
-      } else {
-        resultado = await enviarComFila(dados);
-      }
-    } finally { btnSalvar.disabled = false; }
-    atualizarBarraSync();
-
-    if (resultado.ok && resultado.resp && resultado.resp.ok) {
-      status.textContent = ehEdicao ? '✅ Alterações salvas!' : '✅ Cadastrado com sucesso!';
-      cancelarDuplicacao();
-      await carregarProdutos();
-    } else if (!resultado.ok && resultado.enfileirado) {
-      status.textContent = '📥 Sem conexão agora. A ação foi salva localmente e será enviada quando você tocar em "Sincronizar".';
-      cancelarDuplicacao();
-    } else if (resultado.semFila) {
-      status.textContent = '❌ Não consegui enviar o vídeo (internet ou arquivo pesado demais). Nada foi salvo — tente de novo com boa conexão ou um vídeo menor.';
-    } else {
-      status.textContent = '❌ Erro: ' + ((resultado.resp && resultado.resp.erro) || 'Falha ao salvar');
-    }
+    envios.push({ chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao, temVideo: !!dados.videoBase64, dados: dados, estado: 'fila', msg: '' });
+    cancelarDuplicacao(); // libera o formulário já
+    document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima peça.';
+    desenharEnvios(); processarEnvios();
   });
 
   async function carregarProdutos() {
@@ -1144,7 +1196,7 @@
 
   function copiarLink(id) {
     // Link do Apps Script: gera prévia rica (com foto) no WhatsApp e redireciona pro site.
-    const link = API_URL + '?action=share&id=' + id;
+    const link = SITE_URL + '?id=' + encodeURIComponent(id);
     navigator.clipboard.writeText(link);
     alert('Link copiado!');
   }

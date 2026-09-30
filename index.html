@@ -114,6 +114,12 @@
 
   .carrossel-wrap { position: relative; width: 100%; aspect-ratio: 4/5; background: #111; }
   .carrossel-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .slide-area { position: absolute; inset: 0; overflow: hidden; }
+  .slide-area iframe { width: 100%; height: 100%; border: 0; display: block; background: #000; }
+  .seta-slide { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(255,255,255,0.88); color: #222; font-size: 1.5rem; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; padding: 0 0 3px; }
+  .seta-slide.esq { left: 8px; } .seta-slide.dir { right: 8px; }
+  .contador-slide { position: absolute; right: 10px; bottom: 10px; z-index: 3; background: rgba(0,0,0,0.6); color: #fff; font-size: 0.72rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; pointer-events: none; }
+  .thumb-video { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; background: #222; color: #fff; font-size: 1.3rem; opacity: 0.8; }
   .thumbs-galeria { display: flex; gap: 6px; padding: 8px 12px; overflow-x: auto; background: #fafafa; border-bottom: 1px solid #eee; }
   .thumb-item { width: 50px; height: 62px; object-fit: cover; border-radius: 6px; cursor: pointer; opacity: 0.6; border: 2px solid transparent; }
   .thumb-item.ativa { opacity: 1; border-color: var(--laranja); }
@@ -549,7 +555,7 @@
 
   function abrirWhatsApp(p) {
     // Link do Apps Script: gera prévia rica (com foto do produto) no WhatsApp e redireciona pro site.
-    const link = API_URL + '?action=share&id=' + p.ID;
+    const link = SITE_URL + '?id=' + encodeURIComponent(p.ID);
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const codigo = p.Codigo ? ('\nCódigo: ' + p.Codigo) : '';
     const texto = `Olá! Quero garantir este produto:\n*${escaparHtml(p.Nome)}*${codigo}\n${formatarReal(avista)} à vista\n${link}`;
@@ -558,7 +564,7 @@
   }
 
   async function compartilharComFoto(p) {
-    const link = API_URL + '?action=share&id=' + p.ID;
+    const link = SITE_URL + '?id=' + encodeURIComponent(p.ID);
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const texto = `${escaparHtml(p.Nome)} — ${formatarReal(avista)} à vista\n${link}\n\nLoja TENKiTER Modas (WhatsApp ${WHATSAPP_NUMERO})`;
     let arquivoImagem = null;
@@ -591,18 +597,21 @@
     const naSacola = estaNaSacola(p.ID);
 
     const fotosGaleria = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',').map(s=>s.trim()).filter(Boolean));
+    const idVid = idVideoSeguro(p.Video_URL);
+    const totalSlides = fotosGaleria.length + (idVid ? 1 : 0);
 
     document.getElementById('modal-conteudo').innerHTML = `
       <div class="carrossel-wrap">
-        <img id="foto-principal-modal" src="${escaparHtml(p.Foto_URL)}" alt="${escaparHtml(p.Nome)}">
+        <div class="slide-area" id="slide-area"><img id="foto-principal-modal" src="${escaparHtml(p.Foto_URL)}" alt="${escaparHtml(p.Nome)}"></div>
+        ${totalSlides > 1 ? `<button type="button" class="seta-slide esq" id="seta-esq" aria-label="Anterior">‹</button><button type="button" class="seta-slide dir" id="seta-dir" aria-label="Próxima">›</button><span class="contador-slide" id="contador-slide">1 / ${totalSlides}</span>` : ''}
         ${esgotado ? '<span class="selo-card esgotado" style="top:12px;left:12px;font-size:0.7rem;">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade" style="top:12px;left:12px;font-size:0.7rem;">NOVIDADE</span>' : '')}
       </div>
-      ${fotosGaleria.length > 1 ? `
+      ${totalSlides > 1 ? `
         <div class="thumbs-galeria">
-          ${fotosGaleria.map((f, idx) => `<img src="${escaparHtml(f)}" class="thumb-item ${idx===0?'ativa':''}" data-src="${escaparHtml(f)}">`).join('')}
+          ${fotosGaleria.map((f, idx) => `<img src="${escaparHtml(f)}" class="thumb-item ${idx===0?'ativa':''}" data-idx="${idx}" alt="">`).join('')}
+          ${idVid ? `<div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div>` : ''}
         </div>
       ` : ''}
-      ${idVideoSeguro(p.Video_URL) ? `<div class="video-produto" id="video-produto"><button type="button" class="btn-secundario-cta" id="btn-video">▶ Ver vídeo da peça</button></div>` : ''}
       <div class="modal-conteudo">
         ${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}
         <div class="nome">${escaparHtml(p.Nome)}</div>
@@ -643,24 +652,41 @@
       });
     }
 
-    const btnVideo = document.getElementById('btn-video');
-    if (btnVideo) btnVideo.addEventListener('click', () => {
-      const idv = idVideoSeguro(p.Video_URL);
-      if (!idv) return;
-      const fr = document.createElement('iframe');
-      fr.src = 'https://drive.google.com/file/d/' + idv + '/preview';
-      fr.allow = 'autoplay; fullscreen'; fr.allowFullscreen = true; fr.setAttribute('loading', 'lazy');
-      fr.style.cssText = 'width:100%;height:340px;border:0;border-radius:10px;background:#000;';
-      const caixa = document.getElementById('video-produto');
-      caixa.innerHTML = ''; caixa.style.padding = '8px 12px'; caixa.appendChild(fr);
-    });
-
+    // galeria: setas, deslizar o dedo, miniaturas e teclado; o vídeo é o último slide (só carrega quando chega nele)
+    const slides = fotosGaleria.map(u => ({ tipo: 'foto', url: u })).concat(idVid ? [{ tipo: 'video', id: idVid }] : []);
+    const area = document.getElementById('slide-area');
     const thumbs = document.querySelectorAll('.thumb-item');
-    thumbs.forEach(t => t.addEventListener('click', () => {
-      thumbs.forEach(x => x.classList.remove('ativa'));
-      t.classList.add('ativa');
-      document.getElementById('foto-principal-modal').src = t.dataset.src;
-    }));
+    let atual = 0;
+    function mostrarSlide(i) {
+      atual = (i + slides.length) % slides.length;
+      const s = slides[atual];
+      area.innerHTML = '';
+      if (s.tipo === 'foto') {
+        const im = document.createElement('img'); im.id = 'foto-principal-modal'; im.alt = p.Nome; im.src = s.url;
+        area.appendChild(im);
+      } else {
+        const fr = document.createElement('iframe');
+        fr.src = 'https://drive.google.com/file/d/' + s.id + '/preview';
+        fr.allow = 'autoplay; fullscreen'; fr.allowFullscreen = true; fr.title = 'Vídeo da peça';
+        area.appendChild(fr);
+      }
+      const c = document.getElementById('contador-slide'); if (c) c.textContent = (atual + 1) + ' / ' + slides.length;
+      thumbs.forEach((t, k) => t.classList.toggle('ativa', k === atual));
+      const ativa = thumbs[atual]; if (ativa && ativa.scrollIntoView) ativa.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+    if (slides.length > 1) {
+      document.getElementById('seta-esq').addEventListener('click', () => mostrarSlide(atual - 1));
+      document.getElementById('seta-dir').addEventListener('click', () => mostrarSlide(atual + 1));
+      thumbs.forEach(t => t.addEventListener('click', () => mostrarSlide(parseInt(t.dataset.idx, 10) || 0)));
+      let x0 = null;
+      area.addEventListener('touchstart', (ev) => { x0 = ev.touches[0].clientX; }, { passive: true });
+      area.addEventListener('touchend', (ev) => {
+        if (x0 === null) return;
+        const dx = ev.changedTouches[0].clientX - x0; x0 = null;
+        if (Math.abs(dx) > 50) mostrarSlide(atual + (dx < 0 ? 1 : -1));
+      });
+      window.__navSlide = (d) => mostrarSlide(atual + d);
+    } else { window.__navSlide = null; }
 
     const url = new URL(window.location);
     url.searchParams.set('id', p.ID);
@@ -671,6 +697,10 @@
     const m = /^https:\/\/drive\.google\.com\/file\/d\/([\w-]+)\/preview$/.exec(String(u || ''));
     return m ? m[1] : '';
   }
+  document.addEventListener('keydown', (ev) => {
+    if (!window.__navSlide || !document.getElementById('overlay').classList.contains('aberto')) return;
+    if (ev.key === 'ArrowLeft') window.__navSlide(-1); else if (ev.key === 'ArrowRight') window.__navSlide(1);
+  });
 
   function fecharDetalhe() {
     document.getElementById('overlay').classList.remove('aberto');

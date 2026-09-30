@@ -411,7 +411,7 @@ function acPerfilLegado_(nivel) {
   if (n >= 10) return 'Admin total';
   if (n >= 3) return 'Funcionário'; // 4 a 9 (não usados pelo painel) contam como Funcionário
   if (n === 2) return 'Estagiário';
-  return 'Novato';
+  return 'Aluno'; // quem se cadastrou no portal é Aluno; "Novato" é escolha manual da gestão
 }
 function acNivelDe_(perms) {
   if (perms.gerir_acessos) return 10;
@@ -823,6 +823,14 @@ function registrarFuncionario_(data) {
   if (feitosReg >= 120) return jsonOut_({ ok: false, erro: 'Muitos cadastros agora. Tente de novo em alguns minutos.' });
   cacheReg.put('reg_hora', String(feitosReg + 1), 3600);
   var r = acRegistrar_(nome, whatsapp, senha, perfilInicial, {});
+  if (!r.ok && perfilInicial === 'Aluno') {
+    // Cliente do catálogo que agora se cadastra no portal: com a MESMA senha, sobe de Cliente para Aluno (nunca mais que isso)
+    var ex = acVerificar_(whatsapp, senha);
+    if (ex.ok && ex.usuario && acNorm_(ex.usuario.perfil) === 'cliente') {
+      var up = acessosDefinirPerfil_(whatsapp, 'Aluno', { name: ex.usuario.name, whatsapp: ex.usuario.whatsapp });
+      if (up && up.ok) r = { ok: true };
+    }
+  }
   if (!r.ok) return jsonOut_({ ok: false, erro: r.erro });
   if (dataNascimento) gravarCampoFuncionario_(whatsapp, 'datanascimento', 'DataNascimento', dataNascimento);
   if (instagram) gravarCampoFuncionario_(whatsapp, 'instagram', 'Instagram', instagram);
@@ -1523,7 +1531,9 @@ function acessosListar_(data) {
   var perfis = acPerfis_();
   var busca = acNorm_(data.busca || '');
   var incluirClientes = data.incluirClientes === true;
-  var pessoas = [], totalClientes = 0, vistos = {};
+  var filtroPerfis = null;
+  if (Array.isArray(data.perfis)) { filtroPerfis = {}; data.perfis.forEach(function (n) { filtroPerfis[acNorm_(n)] = true; }); }
+  var pessoas = [], totalClientes = 0, vistos = {}, contagem = {};
   acTodasLinhas_().forEach(function (l) {
     var w = acWhats_(l.whatsapp);
     if (!w || vistos[w]) return;
@@ -1531,8 +1541,11 @@ function acessosListar_(data) {
     var nomePerfil = String(l.perfil || '').trim() || acPerfilLegado_(l.nivel);
     var ehCliente = acNorm_(nomePerfil) === 'cliente';
     if (ehCliente) totalClientes++;
+    contagem[nomePerfil] = (contagem[nomePerfil] || 0) + 1;
     var bate = !busca || acNorm_(l.nome).indexOf(busca) !== -1 || w.indexOf(busca.replace(/\D/g, '') || '§') !== -1;
-    if (busca ? !bate : (ehCliente && !incluirClientes)) return;
+    // com texto na busca, procura em TODOS os perfis (ninguém "some" por causa de um filtro esquecido)
+    var passaFiltro = busca ? true : (filtroPerfis ? !!filtroPerfis[acNorm_(nomePerfil)] : (!ehCliente || incluirClientes));
+    if (!passaFiltro || (busca && !bate)) return;
     pessoas.push({
       whatsapp: w, nome: String(l.nome || ''), perfil: nomePerfil,
       status: String(l.status || 'Ativo'), nivel: parseInt(l.nivel, 10) || 0,
@@ -1540,9 +1553,10 @@ function acessosListar_(data) {
     });
   });
   pessoas.sort(function (a, b) { return a.nome.localeCompare(b.nome); });
-  if (pessoas.length > 300) pessoas = pessoas.slice(0, 300);
+  var truncado = pessoas.length > 300;
+  if (truncado) pessoas = pessoas.slice(0, 300);
   return jsonOut_({
-    ok: true, eu: _ac.usuario.whatsapp, pessoas: pessoas, totalClientes: totalClientes,
+    ok: true, eu: _ac.usuario.whatsapp, pessoas: pessoas, totalClientes: totalClientes, contagem: contagem, truncado: truncado,
     perfis: perfis.ordem.map(function (k) { var p = perfis.mapa[k]; return { nome: p.nome, desc: p.desc, permissoes: p.perms }; }),
     permissoes: AC_PERMISSOES
   });
@@ -1692,3 +1706,19 @@ function acComTrava_(fn) {
 function acessosDefinirPerfil_(a, b, c) { return acComTrava_(function () { return acessosDefinirPerfilSemTrava_(a, b, c); }); }
 function acessosDefinirPermissao_(a, b, c, d) { return acComTrava_(function () { return acessosDefinirPermissaoSemTrava_(a, b, c, d); }); }
 function acessosDefinirStatus_(a, b, c) { return acComTrava_(function () { return acessosDefinirStatusSemTrava_(a, b, c); }); }
+
+
+/** Rode UMA vez: quem hoje está como "Novato" passa a "Aluno" (mesmas permissões). Novato daqui pra frente é só escolha manual no painel. */
+function converterNovatosEmAlunos() {
+  var linhas = acTodasLinhas_(), sh = acGarantirColunas_(), headers = acCabecalhos_(sh), perfis = acPerfis_();
+  var aluno = perfis.mapa[acNorm_('Aluno')] || acPerfilDeFabrica_('Aluno');
+  var n = 0;
+  linhas.forEach(function (l) {
+    if (acNorm_(l.perfil) !== 'novato') return;
+    acRegravarLinha_(sh, headers, l.__row, acMudancasPerfil_(aluno.nome, aluno.perms));
+    n++;
+  });
+  if (n) acLog_('Sistema', '', '', 'perfil', n + ' Novato(s) -> Aluno');
+  Logger.log('Novatos convertidos em Alunos: ' + n);
+  return n;
+}

@@ -51,3 +51,8 @@ Arquivos que mudaram: os 2 scripts, `manual.html`, `admin.html`, `index.html`.
 3. Suba `manual.html`, `admin.html`, `index.html` no GitHub (substituindo) e aguarde o deploy do Render.
 Fotos de perfil antigas: o portal converte o link sozinho, não precisa reenviar.
 Vídeo: MP4/MOV/WEBM, até 20 MB, 1 por peça. Fotos extras: até 8, além da principal.
+
+---
+## Atualização 3 (filtro de perfis, Aluno/Cliente, salvar em segundo plano, galeria com setas, link do Render)
+Mesmos 6 arquivos: 2 scripts (Nova versão nos dois) + manual.html, admin.html, index.html no GitHub.
+Depois de atualizar o script do treinamento, rode UMA vez a função `converterNovatosEmAlunos` (Executar) para quem hoje está "Novato" virar "Aluno".

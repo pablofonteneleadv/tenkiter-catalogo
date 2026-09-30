@@ -247,6 +247,11 @@ th{background:var(--surface-2); font-weight:700;}
 .ac-diff{color:var(--accent-2); font-weight:600;}
 .ac-busca{flex:1; min-width:180px; padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text);}
 .ac-check{font-size:.85rem; display:flex; align-items:center; gap:6px;}
+.ac-filtro{display:flex; flex-wrap:wrap; gap:6px 8px; align-items:center; margin:0 0 12px;}
+.ac-filtro-t{font-size:.8rem; color:var(--muted); font-weight:700;}
+.ac-chip{display:inline-flex; align-items:center; gap:5px; font-size:.82rem; padding:5px 10px; border:1px solid var(--border); border-radius:999px; background:var(--surface); cursor:pointer;}
+.ac-chip:has(input:checked){border-color:var(--accent-2); background:rgba(230,126,34,.12);}
+.ac-n{font-size:.72rem; color:var(--muted);}
 .ac-form{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; padding:10px; border:1px dashed var(--border); border-radius:10px;}
 .ac-form[hidden]{display:none;}
 .ac-form input{padding:7px 9px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); flex:1; min-width:130px;}
@@ -1819,20 +1824,23 @@ function permObj(x){
   return x || {};
 }
 function acessosEstado(){
-  if (!state.acessos) state.acessos = { pessoas: [], perfis: [], permissoes: [], busca: '', clientes: false, abertos: {}, carregado: false, erro: '', totalClientes: 0, criando: false, log: null, eu: '' };
+  if (!state.acessos) state.acessos = { pessoas: [], perfis: [], permissoes: [], busca: '', filtro: null, contagem: {}, truncado: false, abertos: {}, carregado: false, erro: '', totalClientes: 0, criando: false, log: null, eu: '' };
   return state.acessos;
 }
 async function carregarAcessos(){
   var a = acessosEstado();
-  var resp = await acessosReq({ action: 'acessos_listar', busca: a.busca, incluirClientes: a.clientes });
+  var escolhidos = a.filtro ? Object.keys(a.filtro).filter(function(k){ return a.filtro[k]; }) : undefined;
+  var resp = await acessosReq({ action: 'acessos_listar', busca: a.busca, perfis: escolhidos });
   if (!resp || !resp.ok){
     a.erro = (resp && resp.erro) || 'Não foi possível carregar os acessos.';
   } else {
     a.erro = ''; a.pessoas = resp.pessoas || []; a.perfis = resp.perfis || []; a.permissoes = resp.permissoes || [];
     a.totalClientes = resp.totalClientes || 0; a.eu = resp.eu || state.user.whatsapp;
+    a.contagem = resp.contagem || {}; a.truncado = !!resp.truncado;
+    if (!a.filtro){ a.filtro = {}; a.perfis.forEach(function(x){ a.filtro[x.nome] = (String(x.nome).toLowerCase() !== 'cliente'); }); }
   }
   a.carregado = true;
-  if (state.view === 'admin' && state.adminTab === 'acessos') pintarAcessos();
+  if (state.view === 'admin' && state.adminTab === 'acessos'){ pintarFiltroAcessos(); pintarAcessos(); }
 }
 function acessosCard(p){
   var a = acessosEstado();
@@ -1869,8 +1877,20 @@ function acessosListaHtml(){
   var a = acessosEstado();
   if (!a.carregado) return '<p class="sub">Carregando acessos...</p>';
   if (a.erro) return '<p class="sub" style="color:var(--danger,#b00)">' + esc(a.erro) + '</p>';
-  if (!a.pessoas.length) return '<p class="sub">Ninguém encontrado.' + (a.totalClientes && !a.clientes && !a.busca ? ' Há ' + a.totalClientes + ' cliente(s) ocultos — marque "Mostrar clientes".' : '') + '</p>';
-  return a.pessoas.map(acessosCard).join('');
+  if (!a.pessoas.length) return '<p class="sub">Ninguém encontrado.' + ((a.filtro && !Object.keys(a.filtro).some(function(k){ return a.filtro[k]; }) ? ' Marque pelo menos um perfil acima.' : (a.busca ? '' : ' Confira os perfis marcados acima.'))) + '</p>';
+  return (a.truncado ? '<p class="sub">Mostrando as 300 primeiras. Use a busca ou desmarque perfis para afinar.</p>' : '') + a.pessoas.map(acessosCard).join('');
+}
+function filtroAcessosHtml(){
+  var a = acessosEstado();
+  if (!a.perfis.length) return '';
+  return '<span class="ac-filtro-t">Mostrar:</span>' + a.perfis.map(function(x){
+    var n = a.contagem[x.nome] || 0;
+    return '<label class="ac-chip"><input type="checkbox" data-perfil="' + esc(x.nome) + '"' + (a.filtro && a.filtro[x.nome] ? ' checked' : '') + '> ' + esc(x.nome) + ' <span class="ac-n">' + n + '</span></label>';
+  }).join('') + '<button type="button" class="admin-mini-btn" id="ac-todos">Todos</button><button type="button" class="admin-mini-btn" id="ac-nenhum">Nenhum</button>';
+}
+function pintarFiltroAcessos(){
+  var el = document.getElementById('ac-filtro');
+  if (el) el.innerHTML = filtroAcessosHtml();
 }
 function pintarAcessos(){
   var el = document.getElementById('acessos-lista');
@@ -1886,9 +1906,9 @@ function renderTabAcessos(){
     '<p class="sub" style="margin-top:0">Escolha um <strong>perfil</strong> para marcar as permissões padrão. Depois, dentro de <em>Permissões</em>, marque ou desmarque o que quiser para aquela pessoa (✱ = diferente do padrão do perfil). Vale na hora, no portal e no catálogo.</p>' + dicas +
     '<div class="admin-toolbar">' +
       '<input type="search" id="ac-busca" placeholder="Buscar por nome ou WhatsApp" value="' + esc(a.busca) + '" class="ac-busca">' +
-      '<label class="ac-check"><input type="checkbox" id="ac-clientes"' + (a.clientes ? ' checked' : '') + '> Mostrar clientes' + (a.totalClientes ? ' (' + a.totalClientes + ')' : '') + '</label>' +
       '<span><button type="button" class="admin-mini-btn" id="ac-nova">+ Nova pessoa</button><button type="button" class="admin-mini-btn" id="ac-log">Histórico</button></span>' +
     '</div>' +
+    '<div class="ac-filtro" id="ac-filtro">' + filtroAcessosHtml() + '</div>' +
     '<div class="ac-form" id="ac-form-nova"' + (a.criando ? '' : ' hidden') + '>' +
       '<input id="ac-n-nome" placeholder="Nome"><input id="ac-n-whats" placeholder="WhatsApp com DDD" inputmode="tel"><input id="ac-n-senha" placeholder="Senha (mín. 4)">' +
       '<select id="ac-n-perfil" class="admin-sel">' + perfOpts + '</select>' +
@@ -1906,8 +1926,19 @@ function wireTabAcessos(){
     clearTimeout(timer);
     timer = setTimeout(function(){ a.busca = busca.value.trim(); carregarAcessos(); }, 350);
   });
-  var cl = document.getElementById('ac-clientes');
-  if (cl) cl.addEventListener('change', function(){ a.clientes = cl.checked; carregarAcessos(); });
+  var fil = document.getElementById('ac-filtro'), timerFiltro = null;
+  function recarregarFiltro(){ clearTimeout(timerFiltro); timerFiltro = setTimeout(function(){ carregarAcessos(); }, 250); }
+  if (fil){
+    fil.addEventListener('change', function(e){
+      var c = e.target; if (!c || !c.getAttribute || c.getAttribute('data-perfil') === null) return;
+      a.filtro = a.filtro || {}; a.filtro[c.getAttribute('data-perfil')] = c.checked; recarregarFiltro();
+    });
+    fil.addEventListener('click', function(e){
+      var id = e.target && e.target.id; if (id !== 'ac-todos' && id !== 'ac-nenhum') return;
+      a.filtro = a.filtro || {}; a.perfis.forEach(function(x){ a.filtro[x.nome] = (id === 'ac-todos'); });
+      pintarFiltroAcessos(); recarregarFiltro();
+    });
+  }
   var nova = document.getElementById('ac-nova');
   if (nova) nova.addEventListener('click', function(){ a.criando = !a.criando; pintarAcessos(); });
   var salvar = document.getElementById('ac-n-salvar');

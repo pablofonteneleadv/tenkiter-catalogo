@@ -582,7 +582,7 @@ function acPerfilLegado_(nivel) {
   if (n >= 10) return 'Admin total';
   if (n >= 3) return 'Funcionário'; // 4 a 9 (não usados pelo painel) contam como Funcionário
   if (n === 2) return 'Estagiário';
-  return 'Novato';
+  return 'Aluno'; // quem se cadastrou no portal é Aluno; "Novato" é escolha manual da gestão
 }
 function acNivelDe_(perms) {
   if (perms.gerir_acessos) return 10;
