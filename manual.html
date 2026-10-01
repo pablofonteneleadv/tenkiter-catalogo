@@ -2167,11 +2167,11 @@ function cvMensagemCobranca(p){
     ? 'Vi que você ainda não fez seu currículo com a gente.'
     : 'Vi que seu currículo ainda está em andamento — *falta só ' + cvFaltaTexto(p.curriculoEtapa) + '.*';
   return 'Oi' + (nome ? ', ' + nome : '') + '! \n\n' +
-    'Aqui é da TENKiTER Modas de Crateús😊\n\n' +
+    'Aqui é da TENKiTER Modas de Crateús\n\n' +
     linha + '\n\n' +
     'É rapidinho: entra no nosso site https://tenkiter-catalogo.onrender.com/manual.html , faça login com o WhatsApp e a senha que você colocou. \n\n' +
-    'Na tela inicial vai aparecer um aviso ⚠️ *Seu currículo está incompleto* com um botão *Completar agora* — aperte nele e vá apertando *Avançar* até o final.\n\n' +
-    'Qualquer dúvida, é só chamar por aqui que te ajudo! 🙏';
+    'Na tela inicial vai aparecer um aviso *Seu currículo está incompleto* com um botão *Completar agora* — aperte nele e vá apertando *Avançar* até o final.\n\n' +
+    'Qualquer dúvida, é só chamar por aqui que te ajudo!';
 }
 function cvLinkCobranca(p){ return 'https://wa.me/55' + String(p.whatsapp || '').replace(/\D/g, '') + '?text=' + encodeURIComponent(cvMensagemCobranca(p)); }
 function acTxt(s){ return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }

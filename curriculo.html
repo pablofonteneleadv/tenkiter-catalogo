@@ -93,7 +93,7 @@ const OP = {
 /* ==== utilidades ==== */
 const $app = document.getElementById('app');
 function loginLocal() { try { const x = JSON.parse(localStorage.getItem('tm_session') || 'null'); return x && x.whatsapp && x.sessao ? x : null; } catch (e) { return null; } }
-const S = { login: loginLocal(), fotoUrl: '', enviado: false, email: '', cvToken: '', prefill: {}, nome: '', whats: '', sessao: '', d: {}, desafio: null, trocou: false, passo: 0 };
+const S = { login: loginLocal(), fotoUrl: '', enviado: false, email: '', cvToken: '', prefill: {}, nome: '', whats: '', sessao: '', d: {}, desafio: null, trocou: false, passo: 0, tmp: {} };
 function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 async function api(action, corpo) {
   try {
@@ -246,54 +246,94 @@ function dadosDoServidor(x) {
     meta: x.Q_Meta, tres: x.Q_TresClientes, motiva: lista(x.Motiva), situacao: x.Situacao, porQue: x.PorQue, origem: x.Origem, conheceAlguem: x.ConheceAlguem, obs: x.Obs };
 }
 
-/* ==== 3. cadastro (dados do site + moradia + LGPD + nascimento) ==== */
+/* ==== 3. cadastro — dividido em 3 telas curtas para reduzir abandono ====
+   Antes era uma tela só com 8 perguntas (dados + moradia + LGPD + nascimento),
+   e era onde mais gente travava e sumia. Agora: passo A (dados simples e
+   rápidos, "ganho fácil"), passo B (moradia/chegada) e passo C (só no fim,
+   nascimento + autorização, bem mais curta e sem parecer "contrato"). */
 function viewCadastro(aviso) {
   const p = S.prefill || {};
-  tela(`${progresso(15)}<div class="card">
+  tela(`${progresso(12)}<div class="card">
     <h2>Seus dados</h2>
-    <p class="sub">Esses dados também criam seu acesso ao nosso site (catálogo e treinamento).</p>
+    <p class="sub">Esses dados também criam seu acesso ao nosso site (catálogo e treinamento). São só 4 perguntas rápidas.</p>
     ${aviso ? `<div class="aviso">${esc(aviso)}</div>` : ''}
-    <label class="campo" for="email">E-mail</label><input type="email" id="email" name="email" autocomplete="email" inputmode="email" value="${esc(S.email || p.email || '')}" placeholder="voce@exemplo.com">
-    <label class="campo" for="nome">Nome completo</label><input type="text" id="nome" name="nome" autocomplete="name" value="${esc(p.nome || '')}">
-    <label class="campo" for="whats">Seu WhatsApp (com DDD)</label><input type="tel" id="whats" name="whats" autocomplete="tel" inputmode="tel" placeholder="(88) 9 9999-9999" value="${esc(S.login ? S.login.whatsapp : normWhats11(S.whats || p.whatsapp || ''))}" ${S.login ? 'disabled' : ''}>
+    <label class="campo" for="email">E-mail</label><input type="email" id="email" name="email" autocomplete="email" inputmode="email" value="${esc(S.tmp.email || S.email || p.email || '')}" placeholder="voce@exemplo.com">
+    <label class="campo" for="nome">Nome completo</label><input type="text" id="nome" name="nome" autocomplete="name" value="${esc(S.tmp.nome || p.nome || '')}">
+    <label class="campo" for="whats">Seu WhatsApp (com DDD)</label><input type="tel" id="whats" name="whats" autocomplete="tel" inputmode="tel" placeholder="(88) 9 9999-9999" value="${esc(S.login ? S.login.whatsapp : normWhats11(S.tmp.whats || S.whats || p.whatsapp || ''))}" ${S.login ? 'disabled' : ''}>
     ${S.login ? '<div class="aviso">Você já está logada no nosso site, então não precisa criar senha.</div>' : `<label class="campo" for="senha">Crie uma senha <span class="obs">Mínimo 4 caracteres. É a mesma senha do nosso site: se você já tem cadastro nele, use a sua senha de sempre.</span></label>
-    <input type="password" id="senha" name="senha" autocomplete="new-password">`}
-    <label class="campo">Onde você mora?</label>
-    <div class="obs-destaque">Damos preferência a quem mora perto da loja.</div>
-    ${radios('moradia', OP.moradia, p.moradia || '')}
-    <label class="campo">Como você chegaria ao trabalho?</label>
-    ${radios('chegada', OP.chegada, '')}
-    <label class="campo">Autorização de uso dos dados (LGPD)</label>
-    <label class="opcao lgpd"><input type="checkbox" name="lgpd" value="1"><span>${esc(LGPD_TEXTO)}</span></label>
-    <label class="campo" for="nasc">Data de nascimento</label>
-    <input type="text" id="nasc" name="nasc" inputmode="numeric" placeholder="dd/mm/aaaa" maxlength="10">
+    <input type="password" id="senha" name="senha" autocomplete="new-password" value="${esc(S.tmp.senha || '')}">`}
     <div class="erro oculto" id="erro"></div>
     <button class="btn-p" id="ok">Continuar</button></div>`);
-  wireNasc(document.getElementById('nasc'));
   const b = document.getElementById('ok');
-  b.onclick = async () => {
+  b.onclick = () => {
     const email = val('email').toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return erroBox('Digite um e-mail válido.');
     const nome = val('nome'), whats = normWhats11(S.login ? S.login.whatsapp : val('whats')), senha = S.login ? '' : document.getElementById('senha').value;
-    const nascDigitado = val('nasc');
     if (nome.split(/\s+/).length < 2) return erroBox('Digite seu nome completo.');
     if (whats.length < 10 || whats.length > 13) return erroBox('Digite o WhatsApp com DDD.');
     if (!S.login && senha.length < 4) return erroBox('A senha precisa ter pelo menos 4 caracteres.');
+    S.tmp.email = email; S.tmp.nome = nome; S.tmp.whats = whats; S.tmp.senha = senha; S.email = email;
+    viewMoradia('');
+  };
+}
+
+/* ==== 3b. onde mora / como chega (tela curta, separada) ==== */
+function viewMoradia(aviso) {
+  const p = S.prefill || {};
+  tela(`${progresso(17)}<div class="card">
+    <h2>Onde você mora?</h2>
+    <p class="sub">Só mais duas perguntas rápidas.</p>
+    ${aviso ? `<div class="aviso">${esc(aviso)}</div>` : ''}
+    <div class="obs-destaque">Damos preferência a quem mora perto da loja.</div>
+    ${radios('moradia', OP.moradia, S.tmp.moradia || p.moradia || '')}
+    <label class="campo">Como você chegaria ao trabalho?</label>
+    ${radios('chegada', OP.chegada, S.tmp.chegada || '')}
+    <div class="erro oculto" id="erro"></div>
+    <button class="btn-p" id="ok">Continuar</button>
+    <button class="btn-s" id="voltar">Voltar</button></div>`);
+  document.getElementById('voltar').onclick = () => viewCadastro('');
+  const b = document.getElementById('ok');
+  b.onclick = () => {
     if (!radio('moradia')) return erroBox('Escolha onde você mora.');
     if (!radio('chegada')) return erroBox('Diga como você chegaria ao trabalho.');
+    S.tmp.moradia = radio('moradia'); S.tmp.chegada = radio('chegada');
+    viewFinalizar('');
+  };
+}
+
+/* ==== 3c. nascimento + autorização (LGPD) — agora é a última telinha do
+   cadastro, curta e sem parecer "contrato": texto reduzido a uma linha, com
+   um link "Ver detalhes" para quem quiser o texto completo. ==== */
+function viewFinalizar(aviso) {
+  tela(`${progresso(22)}<div class="card">
+    <h2>Só mais um passo!</h2>
+    <p class="sub">É o último antes de começar seu currículo de verdade.</p>
+    ${aviso ? `<div class="aviso">${esc(aviso)}</div>` : ''}
+    <label class="campo" for="nasc">Data de nascimento</label>
+    <input type="text" id="nasc" name="nasc" inputmode="numeric" placeholder="dd/mm/aaaa" maxlength="10" value="${esc(S.tmp.nascTxt || '')}">
+    <label class="opcao lgpd"><input type="checkbox" name="lgpd" value="1" ${S.tmp.lgpd ? 'checked' : ''}><span>Autorizo a TENKiTER a usar meus dados só para este cadastro e processo seletivo. <a href="#" id="verLgpd" style="color:var(--laranja);font-weight:600">Ver detalhes</a></span></label>
+    <div class="erro oculto" id="erro"></div>
+    <button class="btn-p" id="ok">Enviar</button>
+    <button class="btn-s" id="voltar">Voltar</button></div>`);
+  document.getElementById('voltar').onclick = () => viewMoradia('');
+  document.getElementById('verLgpd').onclick = e => { e.preventDefault(); alert(LGPD_TEXTO); };
+  wireNasc(document.getElementById('nasc'));
+  const b = document.getElementById('ok');
+  b.onclick = async () => {
+    const nascDigitado = val('nasc');
     if (!document.querySelector('input[name="lgpd"]').checked) return erroBox('Marque a autorização para continuar.');
     if (!nascValida(nascDigitado)) return erroBox('Data de nascimento inválida. Use o formato dd/mm/aaaa.');
     const nasc = nascISO(nascDigitado);
     const ida = idade(nasc);
     if (ida === null) return erroBox('Digite sua data de nascimento.');
+    S.tmp.nascTxt = nascDigitado; S.tmp.lgpd = true;
     if (ida < 18 && S.idadeOk !== nasc) return confirmarIdade(ida, nasc, b);
     carregando(b, true);
-    S.email = email;
-    const r = await api('curriculo_cadastro', { email, nome, whatsapp: whats, senha, sessao: S.login ? S.login.sessao : '', moradia: radio('moradia'), chegada: radio('chegada'), lgpd: true, dataNascimento: nasc, cvToken: S.cvToken });
+    const r = await api('curriculo_cadastro', { email: S.tmp.email, nome: S.tmp.nome, whatsapp: S.tmp.whats, senha: S.tmp.senha, sessao: S.login ? S.login.sessao : '', moradia: S.tmp.moradia, chegada: S.tmp.chegada, lgpd: true, dataNascimento: nasc, cvToken: S.cvToken });
     carregando(b, false);
     if (!r.ok) return erroBox(r.erro);
     S.nome = r.nome; S.whats = r.whatsapp; S.sessao = r.sessao; S.fotoUrl = r.fotoUrl || '';
     if (r.menor) return viewMenor();
-    viewInstagram(p.instagram || '');
+    viewInstagram((S.prefill || {}).instagram || '');
   };
 }
 
