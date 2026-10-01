@@ -165,17 +165,26 @@ function viewWhats(msg) {
     const w = normWhats11(S.login ? S.login.whatsapp : val('whats0'));
     if (w.length < 10 || w.length > 11) return erroBox('Digite o WhatsApp com DDD.');
     S.whats = w; carregando(b, true);
+    if (S.login) {
+      // Já está logada no site (ex: veio pelo botão "Completar agora" do manual.html). Nunca manda
+      // de volta pro manual.html aqui -- isso criava um vai-e-volta sem fim, porque quem está
+      // logada SEMPRE tem conta, e o manual.html manda de volta pra cá. Em vez disso, continua
+      // (ou começa, se ainda não existir) o currículo dela direto.
+      const rs = await api('curriculo_retomar', { whatsapp: S.login.whatsapp, sessao: S.login.sessao });
+      carregando(b, false);
+      if (rs.ok) return entrarRetomada(rs);
+      if (rs.sessaoInvalida) { try { localStorage.removeItem('tm_session'); } catch (e) {} S.login = null; return viewWhats('Sua sessão expirou. Digite seu WhatsApp para continuar.'); }
+      return viewCadastro(''); // conta existe mas ainda não tem currículo começado
+    }
     const r = await api('curriculo_iniciar', { whatsapp: w }); carregando(b, false);
     if (!r.ok) return erroBox(r.erro);
     if (r.modo === 'conta') {
-      // já é conta de verdade no site (funcionária, aluna etc.): entra pelo portal com a senha de
-      // sempre -- lá, se faltar currículo, o próprio portal já mostra o aviso pra completar.
+      // já é conta de verdade no site (funcionária, aluna etc.) mas não estava logada aqui: entra
+      // pelo portal com a senha de sempre -- lá, se faltar currículo, o próprio portal já mostra
+      // o aviso pra completar (e o botão já volta logada, sem cair aqui de novo).
       location.href = SITE_MANUAL; return;
     }
-    if (r.modo === 'retomar') {
-      if (S.login) { const rs = await api('curriculo_retomar', { whatsapp: S.login.whatsapp, sessao: S.login.sessao }); if (rs.ok) return entrarRetomada(rs); }
-      return viewRetomar();
-    }
+    if (r.modo === 'retomar') return viewRetomar();
     if (r.modo === 'verificar') { S.desafio = r; S.trocou = false; S.mostradas = null; S.passo = 0; return viewVerificar(); }
     viewCadastro(r.esgotado ? 'Não conseguimos confirmar seus dados antigos. Sem problema: preencha de novo, é rapidinho.' : '');
   };
