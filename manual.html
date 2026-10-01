@@ -2144,7 +2144,7 @@ function acessosCard(p){
         '<select class="admin-sel ac-perfil" aria-label="Perfil">' + opts + '</select>' +
         '<button type="button" class="admin-mini-btn ac-abrir">' + (aberto ? '▾' : '▸') + ' Permissões (' + qtd + ')' + (diffs ? ' ✱' + diffs : '') + '</button>' +
         (p.curriculo ? '<button type="button" class="admin-mini-btn ac-vercv">📄 Ver currículo</button>' : '') +
-        (p.curriculo === 'andamento' ? '<a class="admin-mini-btn" target="_blank" rel="noopener" href="' + esc(cvLinkCobranca(p)) + '">📲 Cobrar currículo</a>' : '') +
+        (p.curriculo === 'andamento' || p.curriculo === '' ? '<a class="admin-mini-btn" target="_blank" rel="noopener" href="' + esc(cvLinkCobranca(p)) + '">📲 Cobrar currículo</a>' : '') +
         (p.curriculoAntigo ? '<button type="button" class="admin-mini-btn ac-vercvantigo">📄 Currículo antigo</button>' : '') +
         (p.fotoCorpoUrl ? '<button type="button" class="admin-mini-btn ac-corpo">🧍 Foto de corpo inteiro</button>' : '') +
         '<button type="button" class="admin-mini-btn ac-status" data-ativo="' + (ativo ? '1' : '0') + '">' + (ativo ? 'Desativar' : 'Reativar') + '</button>' +
@@ -2162,11 +2162,16 @@ function cvFaltaTexto(etapa){
 }
 function cvMensagemCobranca(p){
   var nome = cvPrimeiroNome(p.nome);
-  var falta = cvFaltaTexto(p.curriculoEtapa);
-  return 'Oi' + (nome ? ', ' + nome : '') + '! Aqui é da TENKiTER 😊\n\n' +
-    'Vi que seu currículo ainda está em andamento — falta só ' + falta + '.\n\n' +
-    'É rapidinho: entra no nosso site (' + location.origin + '/manual.html), faça login com o WhatsApp e a senha de sempre. Na tela inicial vai aparecer um aviso "⚠️ Seu currículo está incompleto" com um botão *Completar agora* — aperte nele e vá apertando *Avançar* até o final.\n\n' +
-    'Qualquer dúvida, é só chamar por aqui!';
+  var semCv = !p.curriculo;
+  var linha = semCv
+    ? 'Vi que você ainda não fez seu currículo com a gente.'
+    : 'Vi que seu currículo ainda está em andamento — *falta só ' + cvFaltaTexto(p.curriculoEtapa) + '.*';
+  return 'Oi' + (nome ? ', ' + nome : '') + '! \n\n' +
+    'Aqui é da TENKiTER Modas de Crateús😊\n\n' +
+    linha + '\n\n' +
+    'É rapidinho: entra no nosso site https://tenkiter-catalogo.onrender.com/manual.html , faça login com o WhatsApp e a senha que você colocou. \n\n' +
+    'Na tela inicial vai aparecer um aviso ⚠️ *Seu currículo está incompleto* com um botão *Completar agora* — aperte nele e vá apertando *Avançar* até o final.\n\n' +
+    'Qualquer dúvida, é só chamar por aqui que te ajudo! 🙏';
 }
 function cvLinkCobranca(p){ return 'https://wa.me/55' + String(p.whatsapp || '').replace(/\D/g, '') + '?text=' + encodeURIComponent(cvMensagemCobranca(p)); }
 function acTxt(s){ return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
