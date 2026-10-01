@@ -450,6 +450,8 @@ function normWhats(w){
   var d = String(w||'').replace(/\D/g,'');
   // Aceita com ou sem DDI 55 (ex: 5588999999999 e 88999999999 contam como o mesmo número).
   if (d.length >= 12 && d.slice(0,2) === '55') d = d.slice(2);
+  // Sempre 11 dígitos (ddd + 9 + nnnnnnnn): número antigo de 10 dígitos ganha o "9" de volta.
+  if (d.length === 10) d = d.slice(0,2) + '9' + d.slice(2);
   return d;
 }
 

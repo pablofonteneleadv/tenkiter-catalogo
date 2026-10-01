@@ -143,9 +143,13 @@ var PESSOAS_PLANILHA_ID = FUNCIONARIOS_SHEET_ID; // a planilha única de pessoas
 var TOKEN = "tenkiter2026"; // tem que ser igual ao appsScriptToken do site (manual.html)
 var PASTA_IMAGENS_NOME = "TENKiTER Treinamento - Imagens dos Manuais";
 
+/** Sempre devolve 11 dígitos quando dá: ddd + 9 + nnnnnnnn (ex.: 85991047615).
+ * Número antigo sem o nono dígito (10 dígitos) ganha o "9" de volta. Sem DDD (8-9 dígitos)
+ * não tem como adivinhar o DDD, então fica como está. */
 function normalizarWhats_(w) {
   var d = String(w || '').replace(/\D/g, '');
   if (d.length >= 12 && d.slice(0, 2) === '55') d = d.slice(2);
+  if (d.length === 10) d = d.slice(0, 2) + '9' + d.slice(2);
   return d;
 }
 
@@ -207,11 +211,7 @@ var AC_PERFIS_PADRAO = [
 function acNorm_(s) {
   return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 }
-function acWhats_(w) {
-  var d = String(w || '').replace(/\D/g, '');
-  if (d.length >= 12 && d.slice(0, 2) === '55') d = d.slice(2);
-  return d;
-}
+function acWhats_(w) { return normalizarWhats_(w); }
 /** Texto vindo de fora nunca vira fórmula na planilha: se começa com = + - @ ganha um apóstrofo (o Sheets guarda como texto puro). */
 function acTexto_(v) {
   var t = String(v == null ? '' : v);
@@ -227,7 +227,12 @@ function acBool_(v) {
 }
 
 /* ---------- planilha e configuração compartilhada ---------- */
-function acSS_() { return SpreadsheetApp.openById(PESSOAS_PLANILHA_ID); }
+/* Abrir uma planilha por ID tem um custo real (vai até o servidor do Sheets); guarda o "handle"
+ * pela duração desta execução para não abrir a MESMA planilha várias vezes no mesmo pedido
+ * (isso sozinho já deixa o painel de Acessos e o currículo bem mais rápidos de carregar). */
+var _ssCache_ = {};
+function abrirSS_(id) { return _ssCache_[id] || (_ssCache_[id] = SpreadsheetApp.openById(id)); }
+function acSS_() { return abrirSS_(PESSOAS_PLANILHA_ID); }
 function acPlanilha_() { return acSS_().getSheets()[0]; }
 
 function acAba_(nome, cabecalho, esconder) {
@@ -512,6 +517,7 @@ function acGarantirColunas_() {
   acChaves_().forEach(function (k) { if (headers.indexOf('perm_' + k) === -1) faltam.push({ chave: 'perm_' + k, nome: 'perm_' + k }); });
   if (headers.indexOf('nivel') === -1) faltam.unshift({ chave: 'nivel', nome: 'Nivel' });
   if (headers.indexOf('status') === -1) faltam.unshift({ chave: 'status', nome: 'Status' });
+  if (headers.indexOf('cadastro') === -1) faltam.unshift({ chave: 'cadastro', nome: 'Cadastro' });
   if (faltam.length) {
     var col = headers.length + 1;
     faltam.forEach(function (f) { sh.getRange(1, col).setValue(f.nome); col++; });
@@ -587,6 +593,7 @@ function acRegistrar_(nome, whatsapp, senha, perfilNome, extras) {
     }
     var m = acMudancasPerfil_(perfil.nome, perfil.perms);
     m.nome = nome; m.whatsapp = w; m.senha = acGuardarSenha_(senha); m.status = 'Ativo';
+    m.cadastro = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
     extras = extras || {};
     Object.keys(extras).forEach(function (k) { if (extras[k]) m[String(k).toLowerCase()] = extras[k]; });
     var linha = headers.map(function (h) { return m[h] !== undefined ? m[h] : ''; });
@@ -654,11 +661,11 @@ function semSenha_(lista, comDadosPessoais) {
 }
 
 function getFuncionariosSheet_() {
-  return SpreadsheetApp.openById(FUNCIONARIOS_SHEET_ID).getSheets()[0];
+  return abrirSS_(FUNCIONARIOS_SHEET_ID).getSheets()[0];
 }
 
 function getConfigQuizSheet_() {
-  var ss = SpreadsheetApp.openById(FUNCIONARIOS_SHEET_ID);
+  var ss = abrirSS_(FUNCIONARIOS_SHEET_ID);
   var sheet = ss.getSheetByName('ConfigQuiz');
   if (!sheet) {
     sheet = ss.insertSheet('ConfigQuiz');
@@ -671,7 +678,7 @@ function getConfigQuizSheet_() {
 }
 
 function getManuaisSheet_() {
-  var ss = SpreadsheetApp.openById(FUNCIONARIOS_SHEET_ID);
+  var ss = abrirSS_(FUNCIONARIOS_SHEET_ID);
   var sheet = ss.getSheetByName('Manuais');
   if (!sheet) {
     sheet = ss.insertSheet('Manuais');
@@ -796,6 +803,7 @@ function doPost(e) {
       case 'acessos_permissao':        return acessosPermissaoAcao_(data);
       case 'acessos_status':           return alterarStatusUser_(data);
       case 'acessos_criar':            return acessosCriarAcao_(data);
+      case 'acessos_excluir':          return acessosExcluirAcao_(data);
       case 'acessos_log':              return acessosLogAcao_(data);
       case 'login':                    return loginUsuario_(data);
       case 'sessao':                   return sessaoUsuario_(data);
@@ -969,7 +977,7 @@ function registrarResultado_(data) {
     if (!vr.ok) return jsonOut_({ ok: false, erro: vr.semPermissao ? vr.erro : 'Sessão inválida. Saia e entre de novo para registrar sua nota.' });
     data.whatsapp = vr.usuario.whatsapp;
   }
-  var sheet = SpreadsheetApp.openById(RESULTADOS_SHEET_ID).getSheets()[0];
+  var sheet = abrirSS_(RESULTADOS_SHEET_ID).getSheets()[0];
   var total = Number(data.total) || 0;
   var nota = Number(data.nota) || 0;
   var pct = total > 0 ? Math.round((nota / total) * 100) : 0;
@@ -992,7 +1000,7 @@ function registrarResultado_(data) {
 function relatorioEquipe_(data) {
   var _ac = exigirPerm_(data, 'equipe_relatorio');
   if (!_ac.ok) return negarAcesso_(_ac);
-  var sheetResultados = SpreadsheetApp.openById(RESULTADOS_SHEET_ID).getSheets()[0];
+  var sheetResultados = abrirSS_(RESULTADOS_SHEET_ID).getSheets()[0];
   var linhas = sheetResultados.getDataRange().getValues();
   linhas.shift(); // cabeçalho
   var resultados = linhas
@@ -1481,6 +1489,50 @@ function migrarSenhasParaHash() {
   Logger.log('Senhas embaralhadas: ' + convertidas + '. Novos cadastros e resets também serão embaralhados.');
 }
 
+/** Rode 1x (Executar): corrige números antigos sem o "9" (10 dígitos) nas planilhas de Pessoas e de
+ * Currículos, deixando todo mundo em ddd+9+nnnnnnnn (11 dígitos). Se dois números viram o mesmo depois
+ * de corrigido (duplicata), AVISA no log e não mexe -- você decide à mão o que fazer com essas. */
+function normalizarWhatsExistentes_() {
+  function corrigirAba(sh, colunaNome) {
+    var headers = acCabecalhos_(sh);
+    var iCol = headers.indexOf(colunaNome.toLowerCase());
+    if (iCol === -1) { Logger.log('Coluna "' + colunaNome + '" não encontrada em ' + sh.getName() + '.'); return; }
+    var ultima = sh.getLastRow();
+    if (ultima < 2) return;
+    var valores = sh.getRange(2, iCol + 1, ultima - 1, 1).getValues();
+    var vistos = {}; valores.forEach(function (v) { var d = String(v[0] || '').replace(/\D/g, ''); if (d) vistos[d] = (vistos[d] || 0) + 1; });
+    var feitos = 0, duplicadas = [];
+    for (var i = 0; i < valores.length; i++) {
+      var atual = String(valores[i][0] || '');
+      var novo = normalizarWhats_(atual);
+      if (!novo || novo === atual.replace(/\D/g, '')) continue;
+      if (vistos[novo]) { duplicadas.push(atual + ' -> ' + novo); continue; } // já existe alguém com o número corrigido: não mexe, avisa
+      sh.getRange(i + 2, iCol + 1).setNumberFormat('@').setValue(novo);
+      feitos++;
+    }
+    Logger.log(sh.getName() + ' (' + colunaNome + '): corrigidos ' + feitos + '.' + (duplicadas.length ? ' Duplicatas (não mexidas, resolva à mão): ' + duplicadas.join(', ') : ''));
+  }
+  corrigirAba(acPlanilha_(), 'Whatsapp');
+  corrigirAba(cvAbaNova_(), 'WhatsApp');
+}
+
+/** Rode 1x (Executar): preenche "Cadastro" com 27/09/2026 em quem já tinha conta e nunca teve essa data gravada.
+ * Novas contas (a partir de agora) já gravam a data e hora reais sozinhas -- não precisa rodar de novo depois. */
+function preencherCadastroAntigo_() {
+  var sh = acGarantirColunas_();
+  var headers = acCabecalhos_(sh);
+  var iCad = headers.indexOf('cadastro');
+  if (iCad === -1) { Logger.log('Não achei a coluna Cadastro.'); return; }
+  var linhas = acTodasLinhas_();
+  var feitos = 0;
+  linhas.forEach(function (l) {
+    if (acCadastroISO_(l.cadastro)) return; // já tem data: não mexe
+    sh.getRange(l.__row, iCad + 1).setNumberFormat('@').setValue('2026-09-27');
+    feitos++;
+  });
+  Logger.log('Datas de cadastro preenchidas (contas antigas): ' + feitos + ' de ' + linhas.length + '.');
+}
+
 function diagnostico() {
   var linhas = acTodasLinhas_();
   var hash = linhas.filter(function (f) { return String(f.senha).indexOf('h1$') === 0; }).length;
@@ -1540,6 +1592,37 @@ function acAdminsAtivos_(excluirWhats) {
   return n;
 }
 
+/** Normaliza uma data de cadastro (Date, ISO com hora, ou dd/mm/aaaa) para "aaaa-mm-dd". */
+function acCadastroISO_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v)) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  var s = String(v || '').trim();
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  return '';
+}
+/** Situação do currículo (novo sistema, por WhatsApp) e se existe resposta na planilha antiga. */
+function acCurriculoStatusMapa_() {
+  var novos = {}, legado = {};
+  try {
+    cvLerNovos_().rows.forEach(function (r) {
+      var w8 = cvW8_(r.WhatsApp);
+      if (!w8) return;
+      var etapa = String(r.Etapa || '');
+      var status = etapa === 'Enviado' ? 'enviado' : (etapa === 'Menor de 18' ? 'menor' : (etapa ? 'andamento' : ''));
+      if (status) novos[w8] = status;
+    });
+  } catch (e) {}
+  try {
+    cvLegadoRegs_().forEach(function (r) {
+      [r.tel, r.tel2, r.tel3].forEach(function (t) { var w8 = cvW8_(t); if (w8) legado[w8] = true; });
+    });
+  } catch (e) {}
+  return { novos: novos, legado: legado };
+}
 function acessosListar_(data) {
   var _ac = exigirPerm_(data, 'gerir_acessos');
   if (!_ac.ok) return negarAcesso_(_ac);
@@ -1549,6 +1632,7 @@ function acessosListar_(data) {
   var incluirClientes = data.incluirClientes === true;
   var filtroPerfis = null;
   if (Array.isArray(data.perfis)) { filtroPerfis = {}; data.perfis.forEach(function (n) { filtroPerfis[acNorm_(n)] = true; }); }
+  var cvMapa = acCurriculoStatusMapa_();
   var pessoas = [], totalClientes = 0, vistos = {}, contagem = {};
   acTodasLinhas_().forEach(function (l) {
     var w = acWhats_(l.whatsapp);
@@ -1562,10 +1646,14 @@ function acessosListar_(data) {
     // com texto na busca, procura em TODOS os perfis (ninguém "some" por causa de um filtro esquecido)
     var passaFiltro = busca ? true : (filtroPerfis ? !!filtroPerfis[acNorm_(nomePerfil)] : (!ehCliente || incluirClientes));
     if (!passaFiltro || (busca && !bate)) return;
+    var w8 = cvW8_(w);
     pessoas.push({
       whatsapp: w, nome: String(l.nome || ''), perfil: nomePerfil,
       status: String(l.status || 'Ativo'), nivel: parseInt(l.nivel, 10) || 0,
-      permissoes: acPermsDaLinha_(l, perfis)
+      permissoes: acPermsDaLinha_(l, perfis),
+      cadastro: acCadastroISO_(l.cadastro),
+      fotoPerfilUrl: String(l.fotoperfilurl || ''), fotoCorpoUrl: String(l.fotocorpourl || ''),
+      curriculo: cvMapa.novos[w8] || '', curriculoAntigo: !!cvMapa.legado[w8]
     });
   });
   pessoas.sort(function (a, b) { return a.nome.localeCompare(b.nome); });
@@ -1652,6 +1740,30 @@ function acessosCriarAcao_(data) {
   var r = acRegistrar_(data.nome, data.whatsappNovo, data.senhaNova, data.perfil, {});
   if (r.ok) acLog_(_ac.usuario.name, _ac.usuario.whatsapp, acWhats_(data.whatsappNovo), 'criada', 'perfil ' + data.perfil);
   return jsonOut_(r);
+}
+
+/** Apaga de vez o cadastro da pessoa (todas as linhas dela). Diferente de "Desativar": não tem volta. */
+function acessosExcluirSemTrava_(whatsappAlvo, quem) {
+  var alvo = acWhats_(whatsappAlvo);
+  if (!alvo) return { ok: false, erro: 'Pessoa não encontrada.' };
+  if (alvo === acWhats_(quem.whatsapp)) return { ok: false, erro: 'Você não pode excluir a própria conta.' };
+  var linhas = acLinhasDoWhats_(alvo);
+  if (!linhas.length) return { ok: false, erro: 'Pessoa não encontrada.' };
+  var perfis = acPerfis_();
+  var eraAdminAtivo = linhas.some(function (l) { return String(l.status || 'Ativo').trim().toLowerCase() !== 'inativo' && acPermsDaLinha_(l, perfis).gerir_acessos; });
+  if (eraAdminAtivo && acAdminsAtivos_(alvo) < 1) {
+    return { ok: false, erro: 'Precisa sobrar pelo menos um Admin total ativo. Passe o cargo a outra pessoa antes de excluir.' };
+  }
+  var nome = String(linhas[0].nome || '');
+  var sh = acPlanilha_();
+  linhas.map(function (l) { return l.__row; }).sort(function (a, b) { return b - a; }).forEach(function (n) { sh.deleteRow(n); });
+  acLog_(quem.name, quem.whatsapp, alvo, 'excluida', nome);
+  return { ok: true };
+}
+function acessosExcluirAcao_(data) {
+  var _ac = exigirPerm_(data, 'gerir_acessos');
+  if (!_ac.ok) return negarAcesso_(_ac);
+  return jsonOut_(acessosExcluirSemTrava_(data.whatsappAlvo, _ac.usuario));
 }
 
 function acessosLogAcao_(data) {
@@ -1771,7 +1883,7 @@ var CV_OP = {
     'Outra cidade, vou e volto todo dia', 'Outra cidade, mas tenho onde ficar em Crateús', 'Nenhuma das anteriores'],
   chegada: ['A pé', 'Moto ou bicicleta', 'Transporte público ou carona', 'Outro'],
   vaga: ['Atendimento e vendas', 'Caixa', 'Reposição e estoque', 'Organização e provador', 'Liderança (sub encarregada ou encarregada)', 'Qualquer vaga'],
-  salario: ['R$ 700', 'R$ 800', 'R$ 1.000', 'R$ 1.200', 'Acima de R$ 1.621,00'],
+  salario: ['Acima de R$ 700', 'Acima de R$ 800', 'Acima de R$ 1.000', 'Acima de R$ 1.200', 'Acima de R$ 1.621,00'],
   inicio: ['Imediatamente', 'Em até 3 dias', 'Em até 15 dias', 'Em até 30 dias', 'Mais de 30 dias'],
   simnao: ['Sim', 'Não'],
   horario: ['Só pela manhã (a partir das 7:30h)', 'Só pela tarde (até 18:00h)', 'Manhã e tarde (com horário de almoço)'],
@@ -1866,17 +1978,48 @@ function cvUlt4_(t) {
   var d = String(t || '').replace(/\D/g, '');
   return d.length >= 8 ? d.slice(-4) : '';
 }
+/** Últimos 8 dígitos (DDD + número, sem o 9º dígito às vezes ausente): a granularidade usada para achar/confirmar por WhatsApp. */
+function cvW8_(t) {
+  var d = String(t || '').replace(/\D/g, '');
+  return d.length >= 8 ? d.slice(-8) : '';
+}
+function cvNomeCurto_(nome) {
+  var partes = String(nome || '').trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return '';
+  return partes.length === 1 ? partes[0] : partes[0] + ' ' + partes[partes.length - 1];
+}
+function cvMaskEmail_(e) {
+  var m = /^([^@]+)@(.+)$/.exec(cvEmail_(e));
+  if (!m) return '';
+  var usuario = m[1];
+  return usuario.slice(0, Math.min(2, usuario.length)) + '***@' + m[2];
+}
+/** Data de nascimento da resposta ANTIGA (pode vir como objeto Date ou texto dd/mm/aaaa) em 'aaaa-mm-dd'. '' se não reconhecer. */
+function cvNascLegadoISO_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v)) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  var s = String(v || '').trim();
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  return '';
+}
 
-/** Interpreta a matriz da aba antiga (linha 1 = cabeçalho). */
+/** Interpreta a matriz da aba antiga (linha 1 = cabeçalho). Lê Telefone, Telefone 2 e Telefone 3. */
 function cvLegadoParse_(v) {
   if (!v || v.length < 2) return [];
   var h = v[0].map(cvNorm_);
   function idx(t, sem) { for (var i = 0; i < h.length; i++) if (h[i].indexOf(t) !== -1 && (!sem || h[i].indexOf(sem) === -1)) return i; return -1; }
+  function idxExato(t) { for (var i = 0; i < h.length; i++) if (h[i] === t) return i; return -1; }
   var I = {
     ts: idx('carimbo'), email: idx('e-mail'), insta: idx('instagram'), nasc: idx('data de nascimento'), moradia: idx('priorizamos'),
     idade: idx('idade atual'), salario: idx('salario'), sobre: idx('me fala sobre'), util: idx('seria util'), exp: idx('experiencias trabalhistas'),
-    estudos: idx('seus estudos'), disp: idx('disponibilidade'), nome: idx('nome completo'), tel: idx('telefone'), chamar: idx('chamar?'),
-    encarregada: idx('sub encarregada'), obs: idx('observac')
+    estudos: idx('seus estudos'), disp: idx('disponibilidade'), nome: idx('nome completo'),
+    tel: idxExato('telefone') !== -1 ? idxExato('telefone') : idx('telefone'),
+    tel2: idxExato('telefone 2'), tel3: idxExato('telefone 3'),
+    chamar: idx('chamar?'), encarregada: idx('sub encarregada'), obs: idx('observac')
   };
   var out = [];
   for (var i = 1; i < v.length; i++) {
@@ -1895,6 +2038,17 @@ function cvLegadoParse_(v) {
 function cvLegadoPorEmail_(regs, email) {
   var ach = null;
   for (var i = 0; i < regs.length; i++) if (regs[i].email === email) ach = regs[i]; // a mais recente vence
+  return ach;
+}
+/** Acha a resposta antiga pelo WhatsApp (últimos 8 dígitos), olhando Telefone, Telefone 2 e Telefone 3. A mais recente vence. */
+function cvRegBateWhats_(reg, w8) {
+  return !!w8 && (cvW8_(reg.tel) === w8 || cvW8_(reg.tel2) === w8 || cvW8_(reg.tel3) === w8);
+}
+function cvLegadoPorWhats_(regs, whatsapp) {
+  var w8 = cvW8_(whatsapp);
+  if (!w8) return null;
+  var ach = null;
+  for (var i = 0; i < regs.length; i++) if (cvRegBateWhats_(regs[i], w8)) ach = regs[i]; // a mais recente vence
   return ach;
 }
 
@@ -1923,6 +2077,45 @@ function cvGerarPerguntas_(reg, todos, email, hoje) {
   var mor = cvMoradiaLegado_(reg.moradia);
   if (mor) add('moradia', 'Onde você mora?', mor, CV_OP.moradia);
   var rng2 = cvRng_(cvHash_(email + '|ordem'));
+  return cvEmbaralhar_(pool, rng2).slice(0, 4);
+}
+
+/** As 4 perguntas exigidas: e-mail (mascarado), nome (primeiro+último), idade (pela data de nascimento) e endereço/moradia.
+ *  Instagram e ano de nascimento só entram como complemento, quando as 4 principais não dão as 4 perguntas.
+ *  Alternativas erradas vêm de outras candidatas e são sempre as mesmas para o mesmo WhatsApp (não dá pra "testar" e descobrir a certa). */
+function cvGerarPerguntasWhats_(reg, todos, whatsapp, hoje) {
+  var pool = [];
+  function add(id, texto, correta, errasCandidatas, formatar) {
+    var rng = cvRng_(cvHash_(whatsapp + '|' + id));
+    var erradas = cvEmbaralhar_(errasCandidatas.filter(function (x, i, a) { return x !== correta && a.indexOf(x) === i; }), rng).slice(0, 3);
+    if (erradas.length < 3) return false;
+    var fmt = formatar || function (x) { return String(x); };
+    var opcoes = cvEmbaralhar_([correta].concat(erradas), rng).map(fmt);
+    pool.push({ id: id, texto: texto, opcoes: opcoes, correta: fmt(correta) });
+    return true;
+  }
+  var nomeC = cvNomeCurto_(reg.nome);
+  if (nomeC) add('nome', 'Qual é o seu nome completo?', nomeC, todos.map(function (r) { return cvNomeCurto_(r.nome); }).filter(Boolean));
+  var emailM = cvMaskEmail_(reg.email);
+  if (emailM) add('email', 'Qual é o seu e-mail?', emailM, todos.map(function (r) { return cvMaskEmail_(r.email); }).filter(Boolean));
+  var nascISO = cvNascLegadoISO_(reg.nasc);
+  var ida = nascISO ? cvIdade_(nascISO, hoje) : null;
+  if (ida !== null) {
+    add('idade', 'Quantos anos você tem?', ida, todos.map(function (r) {
+      var iso = cvNascLegadoISO_(r.nasc); var a = iso ? cvIdade_(iso, hoje) : null; return a === null ? undefined : a;
+    }).filter(function (x) { return x !== undefined; }));
+  }
+  var mor = cvMoradiaLegado_(reg.moradia);
+  if (mor) add('moradia', 'Onde você mora?', mor, CV_OP.moradia);
+  if (pool.length < 4) {
+    var ano = cvAnoNasc_(reg.nasc, hoje);
+    if (ano) add('ano', 'Em que ano você nasceu?', ano, todos.map(function (r) { return cvAnoNasc_(r.nasc, hoje); }).filter(Boolean));
+  }
+  if (pool.length < 4) {
+    var ig = cvInstaNorm_(reg.insta);
+    if (ig) add('insta', 'Qual é o seu Instagram?', ig, todos.map(function (r) { return cvInstaNorm_(r.insta); }).filter(Boolean), function (x) { return '@' + x; });
+  }
+  var rng2 = cvRng_(cvHash_(whatsapp + '|ordem'));
   return cvEmbaralhar_(pool, rng2).slice(0, 4);
 }
 
@@ -1989,7 +2182,7 @@ function cvValidarFinal_(d) {
 
 /* ---------- planilha ---------- */
 
-function cvSS_() { return SpreadsheetApp.openById(CURRICULOS_SHEET_ID); }
+function cvSS_() { return abrirSS_(CURRICULOS_SHEET_ID); }
 
 function cvAbaNova_() {
   var ss = cvSS_();
@@ -2050,36 +2243,40 @@ function cvAgora_() { return new Date().toISOString(); }
 /* ---------- ações públicas ---------- */
 
 function cvIniciarAcao_(data) {
-  var email = cvEmail_(data.email);
-  if (!cvEmailValido_(email)) return jsonOut_({ ok: false, erro: 'Digite um e-mail válido.' });
+  var whats = normalizarWhats_(data.whatsapp);
+  if (whats.length < 10 || whats.length > 11) return jsonOut_({ ok: false, erro: 'Digite o WhatsApp com DDD.' });
+  // Já tem conta de verdade no site (funcionário, aluno etc.)? Então o lugar certo pra entrar é o
+  // portal (manual.html) com a senha de sempre -- lá ela já vê se falta currículo e manda terminar.
+  // Não faz sentido pedir senha de novo aqui, numa telinha separada só pro currículo.
+  if (acLinhasDoWhats_(whats).length) return jsonOut_({ ok: true, modo: 'conta' });
   var cache = CacheService.getScriptCache();
   var feitos = parseInt(cache.get('cv_ini_hora') || '0', 10);
   if (feitos >= 600) return jsonOut_({ ok: false, erro: 'Muitos acessos agora. Tente de novo em alguns minutos.' });
   cache.put('cv_ini_hora', String(feitos + 1), 3600);
 
   var novos = cvLerNovos_().rows;
-  if (cvAcharNovo_(novos, 'Email', email)) return jsonOut_({ ok: true, modo: 'retomar' });
+  if (cvAcharNovo_(novos, 'WhatsApp', whats)) return jsonOut_({ ok: true, modo: 'retomar' });
 
   var regs = cvLegadoRegs_();
-  var reg = cvLegadoPorEmail_(regs, email);
+  var reg = cvLegadoPorWhats_(regs, whats);
   if (!reg) return jsonOut_({ ok: true, modo: 'novo' });
-  var tent = parseInt(cache.get('cvv_' + cvHash_(email)) || '0', 10);
+  var tent = parseInt(cache.get('cvv_' + cvHash_(whats)) || '0', 10);
   if (tent >= CV_MAX_VERIFICACOES) return jsonOut_({ ok: true, modo: 'novo', esgotado: true });
-  var perguntas = cvGerarPerguntas_(reg, regs, email);
+  var perguntas = cvGerarPerguntasWhats_(reg, regs, whats);
   if (perguntas.length < 3) return jsonOut_({ ok: true, modo: 'novo' }); // dados antigos insuficientes: segue como candidata nova
   var id = Utilities.getUuid();
   var corretas = {};
   perguntas.forEach(function (p) { corretas[p.id] = p.correta; });
-  cache.put('cvd_' + id, JSON.stringify({ email: email, linha: reg.linha, corretas: corretas }), 900);
+  cache.put('cvd_' + id, JSON.stringify({ whatsapp: whats, linha: reg.linha, corretas: corretas }), 900);
   return jsonOut_({ ok: true, modo: 'verificar', desafioId: id, perguntas: perguntas.map(function (p) { return { id: p.id, texto: p.texto, opcoes: p.opcoes }; }) });
 }
 
 function cvVerificarAcao_(data) {
   var cache = CacheService.getScriptCache();
   var bruto = cache.get('cvd_' + String(data.desafioId || ''));
-  if (!bruto) return jsonOut_({ ok: false, erro: 'A verificação expirou. Digite o e-mail de novo.' });
+  if (!bruto) return jsonOut_({ ok: false, erro: 'A verificação expirou. Digite o WhatsApp de novo.' });
   var d = JSON.parse(bruto);
-  var chave = 'cvv_' + cvHash_(d.email);
+  var chave = 'cvv_' + cvHash_(d.whatsapp);
   var n = parseInt(cache.get(chave) || '0', 10);
   if (n >= CV_MAX_VERIFICACOES) return jsonOut_({ ok: true, verificado: false, esgotado: true });
   cache.put(chave, String(n + 1), 21600);
@@ -2092,14 +2289,14 @@ function cvVerificarAcao_(data) {
   }
   cache.remove('cvd_' + data.desafioId);
   var reg = cvLegadoRegs_().filter(function (r) { return r.linha === d.linha; })[0];
-  if (!reg || reg.email !== d.email) return jsonOut_({ ok: false, erro: 'Não foi possível carregar seus dados. Preencha como candidata nova.' });
+  if (!reg || !cvRegBateWhats_(reg, cvW8_(d.whatsapp))) return jsonOut_({ ok: false, erro: 'Não foi possível carregar seus dados. Preencha como candidata nova.' });
   var token = Utilities.getUuid();
-  cache.put('cvt_' + token, JSON.stringify({ email: d.email, linha: reg.linha }), 7200);
+  cache.put('cvt_' + token, JSON.stringify({ whatsapp: d.whatsapp, linha: reg.linha }), 7200);
   var ig = cvInstaNorm_(reg.insta);
   return jsonOut_({
     ok: true, verificado: true, cvToken: token,
     prefill: {
-      nome: cvTxt_(reg.nome, 120), whatsapp: normalizarWhats_(reg.tel), instagram: ig ? '@' + ig : '',
+      nome: cvTxt_(reg.nome, 120), email: cvEmail_(reg.email), whatsapp: d.whatsapp, instagram: ig ? '@' + ig : '',
       moradia: cvMoradiaLegado_(reg.moradia), expAnterior: cvTxtLongo_(reg.exp, 1200), estudosAnterior: cvTxtLongo_(reg.estudos, 600)
     }
   });
@@ -2147,7 +2344,7 @@ function cvCadastroAcao_(data) {
     var t = cache.get('cvt_' + String(data.cvToken));
     if (t) {
       var tk = JSON.parse(t);
-      if (tk.email === email) {
+      if (cvW8_(tk.whatsapp) === cvW8_(whats)) {
         legadoLinha = String(tk.linha);
         var rg = cvLegadoRegs_().filter(function (x) { return x.linha === tk.linha; })[0];
         if (rg) legadoChamar = cvTxtLongo_(rg.chamar, 500);
@@ -2156,8 +2353,7 @@ function cvCadastroAcao_(data) {
   }
   var resultado = cvComTrava_(function () {
     var L = cvLerNovos_();
-    var ex = cvAcharNovo_(L.rows, 'Email', email);
-    if (ex && ex.WhatsApp !== whats) return { erro: 'Esse e-mail já está ligado a outro WhatsApp. Fale com a loja.' };
+    var ex = cvAcharNovo_(L.rows, 'WhatsApp', whats); // a chave agora é o WhatsApp; o e-mail é só um campo editável
     var campos = {
       Atualizado: agora, Etapa: menor ? 'Menor de 18' : 'Instagram', Email: email, Nome: nome, WhatsApp: whats,
       Moradia: data.moradia, Chegada: data.chegada, LGPD_Aceite: agora, LGPD_Texto: CV_LGPD_TEXTO,
@@ -2242,12 +2438,12 @@ function cvRetomarAcao_(data) {
     row = cvAcharNovo_(L.rows, 'WhatsApp', v.usuario.whatsapp);
     if (!row) return jsonOut_({ ok: false, semCurriculo: true });
   } else {
-    var email = cvEmail_(data.email);
-    row = cvAcharNovo_(L.rows, 'Email', email);
+    var whatsRet = normalizarWhats_(data.whatsapp);
+    row = cvAcharNovo_(L.rows, 'WhatsApp', whatsRet);
     v = row ? acVerificar_(row.WhatsApp, String(data.senha || '')) : null;
     if (!v || !v.ok) {
       if (v && v.bloqueado) return jsonOut_({ ok: false, erro: v.erro });
-      return jsonOut_({ ok: false, erro: 'E-mail ou senha incorretos.' });
+      return jsonOut_({ ok: false, erro: 'WhatsApp ou senha incorretos.' });
     }
   }
   row = cvSincronizarNasc_(L, row, v.usuario);
@@ -2328,14 +2524,19 @@ function cvAdminAtualizarAcao_(data) {
 function cvAdminLegadoListarAcao_(data) {
   var v = exigirPerm_(data, 'dados_pessoais');
   if (!v.ok) return negarAcesso_(v);
-  var atualizaram = {};
-  cvLerNovos_().rows.forEach(function (r) { if (r.Etapa === 'Enviado') atualizaram[r.Email] = true; });
+  var atualizaramEmail = {}, atualizaramTel = {};
+  cvLerNovos_().rows.forEach(function (r) {
+    if (r.Etapa !== 'Enviado') return;
+    if (r.Email) atualizaramEmail[r.Email] = true;
+    var w8 = cvW8_(r.WhatsApp); if (w8) atualizaramTel[w8] = true;
+  });
   var regs = cvLegadoRegs_().map(function (r) {
     var ano = cvAnoNasc_(r.nasc);
+    var bateuTel = [r.tel, r.tel2, r.tel3].some(function (t) { var w8 = cvW8_(t); return w8 && atualizaramTel[w8]; });
     return {
       linha: r.linha, ts: r.ts, nome: r.nome, tel: r.tel, insta: r.insta, email: r.email, idade: r.idade || (ano ? String(new Date().getFullYear() - ano) : ''),
       moradia: r.moradia, salario: r.salario, encarregada: r.encarregada, exp: r.exp, estudos: r.estudos, disp: r.disp, sobre: r.sobre, util: r.util,
-      obs: r.obs, chamar: r.chamar, atualizou: !!atualizaram[r.email]
+      obs: r.obs, chamar: r.chamar, atualizou: !!(atualizaramEmail[r.email] || bateuTel)
     };
   });
   return jsonOut_({ ok: true, antigos: regs });

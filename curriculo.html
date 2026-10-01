@@ -111,6 +111,28 @@ function radios(n, lista, atual) { return lista.map(o => `<label class="opcao"><
 function caixas(n, lista, atuais, max) { return lista.map(o => `<label class="opcao"><input type="checkbox" name="${n}" value="${esc(o)}" ${(atuais || []).indexOf(o) !== -1 ? 'checked' : ''} ${max ? 'data-max="' + max + '"' : ''}><span>${esc(o)}</span></label>`).join(''); }
 function progresso(p) { return `<div class="prog"><i style="width:${p}%"></i></div>`; }
 function idade(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); if (!m) return null; const h = new Date(); let i = h.getFullYear() - +m[1]; if (h.getMonth() + 1 < +m[2] || (h.getMonth() + 1 === +m[2] && h.getDate() < +m[3])) i--; return i; }
+/* Data de nascimento como texto com máscara (dd/mm/aaaa) em vez de calendário nativo -- mais rápido de preencher no celular. */
+function maskNasc(v) {
+  const d = String(v || '').replace(/\D/g, '').slice(0, 8);
+  if (d.length > 4) return d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4);
+  if (d.length > 2) return d.slice(0, 2) + '/' + d.slice(2);
+  return d;
+}
+function nascValida(v) {
+  const m = String(v || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return false;
+  const dia = +m[1], mes = +m[2], ano = +m[3];
+  return mes >= 1 && mes <= 12 && dia >= 1 && dia <= 31 && ano >= 1900 && ano <= new Date().getFullYear();
+}
+function nascISO(v) { const m = String(v || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? m[3] + '-' + m[2] + '-' + m[1] : ''; }
+function wireNasc(input) { if (input) input.addEventListener('input', () => { input.value = maskNasc(input.value); }); }
+/* WhatsApp sempre com 11 dígitos (ddd + 9 + nnnnnnnn). Número antigo de 10 dígitos ganha o "9" de volta. */
+function normWhats11(w) {
+  let d = String(w || '').replace(/\D/g, '');
+  if (d.length >= 12 && d.startsWith('55')) d = d.slice(2);
+  if (d.length === 10) d = d.slice(0, 2) + '9' + d.slice(2);
+  return d;
+}
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.matches && t.matches('input[type=checkbox][data-max]')) {
@@ -140,11 +162,16 @@ function viewWhats(msg) {
     <button class="btn-p" id="ok">Continuar</button></div>`);
   const b = document.getElementById('ok');
   b.onclick = async () => {
-    let w = (S.login ? S.login.whatsapp : val('whats0')).replace(/\D/g, ''); if (w.length >= 12 && w.startsWith('55')) w = w.slice(2);
+    const w = normWhats11(S.login ? S.login.whatsapp : val('whats0'));
     if (w.length < 10 || w.length > 11) return erroBox('Digite o WhatsApp com DDD.');
     S.whats = w; carregando(b, true);
     const r = await api('curriculo_iniciar', { whatsapp: w }); carregando(b, false);
     if (!r.ok) return erroBox(r.erro);
+    if (r.modo === 'conta') {
+      // já é conta de verdade no site (funcionária, aluna etc.): entra pelo portal com a senha de
+      // sempre -- lá, se faltar currículo, o próprio portal já mostra o aviso pra completar.
+      location.href = SITE_MANUAL; return;
+    }
     if (r.modo === 'retomar') {
       if (S.login) { const rs = await api('curriculo_retomar', { whatsapp: S.login.whatsapp, sessao: S.login.sessao }); if (rs.ok) return entrarRetomada(rs); }
       return viewRetomar();
@@ -222,14 +249,13 @@ function dadosDoServidor(x) {
 /* ==== 3. cadastro (dados do site + moradia + LGPD + nascimento) ==== */
 function viewCadastro(aviso) {
   const p = S.prefill || {};
-  const hoje = new Date().toISOString().slice(0, 10);
   tela(`${progresso(15)}<div class="card">
     <h2>Seus dados</h2>
     <p class="sub">Esses dados também criam seu acesso ao nosso site (catálogo e treinamento).</p>
     ${aviso ? `<div class="aviso">${esc(aviso)}</div>` : ''}
     <label class="campo" for="email">E-mail</label><input type="email" id="email" name="email" autocomplete="email" inputmode="email" value="${esc(S.email || p.email || '')}" placeholder="voce@exemplo.com">
     <label class="campo" for="nome">Nome completo</label><input type="text" id="nome" name="nome" autocomplete="name" value="${esc(p.nome || '')}">
-    <label class="campo" for="whats">Seu WhatsApp (com DDD)</label><input type="tel" id="whats" name="whats" autocomplete="tel" inputmode="tel" placeholder="(88) 9 9999-9999" value="${esc(S.login ? S.login.whatsapp : (S.whats || p.whatsapp || ''))}" ${S.login ? 'disabled' : ''}>
+    <label class="campo" for="whats">Seu WhatsApp (com DDD)</label><input type="tel" id="whats" name="whats" autocomplete="tel" inputmode="tel" placeholder="(88) 9 9999-9999" value="${esc(S.login ? S.login.whatsapp : normWhats11(S.whats || p.whatsapp || ''))}" ${S.login ? 'disabled' : ''}>
     ${S.login ? '<div class="aviso">Você já está logada no nosso site, então não precisa criar senha.</div>' : `<label class="campo" for="senha">Crie uma senha <span class="obs">Mínimo 4 caracteres. É a mesma senha do nosso site: se você já tem cadastro nele, use a sua senha de sempre.</span></label>
     <input type="password" id="senha" name="senha" autocomplete="new-password">`}
     <label class="campo">Onde você mora?</label>
@@ -240,19 +266,23 @@ function viewCadastro(aviso) {
     <label class="campo">Autorização de uso dos dados (LGPD)</label>
     <label class="opcao lgpd"><input type="checkbox" name="lgpd" value="1"><span>${esc(LGPD_TEXTO)}</span></label>
     <label class="campo" for="nasc">Data de nascimento</label>
-    <input type="date" id="nasc" name="nasc" max="${hoje}" min="1930-01-01">
+    <input type="text" id="nasc" name="nasc" inputmode="numeric" placeholder="dd/mm/aaaa" maxlength="10">
     <div class="erro oculto" id="erro"></div>
     <button class="btn-p" id="ok">Continuar</button></div>`);
+  wireNasc(document.getElementById('nasc'));
   const b = document.getElementById('ok');
   b.onclick = async () => {
     const email = val('email').toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return erroBox('Digite um e-mail válido.');
-    const nome = val('nome'), whats = (S.login ? S.login.whatsapp : val('whats')).replace(/\D/g, ''), senha = S.login ? '' : document.getElementById('senha').value, nasc = val('nasc');
+    const nome = val('nome'), whats = normWhats11(S.login ? S.login.whatsapp : val('whats')), senha = S.login ? '' : document.getElementById('senha').value;
+    const nascDigitado = val('nasc');
     if (nome.split(/\s+/).length < 2) return erroBox('Digite seu nome completo.');
     if (whats.length < 10 || whats.length > 13) return erroBox('Digite o WhatsApp com DDD.');
     if (!S.login && senha.length < 4) return erroBox('A senha precisa ter pelo menos 4 caracteres.');
     if (!radio('moradia')) return erroBox('Escolha onde você mora.');
     if (!radio('chegada')) return erroBox('Diga como você chegaria ao trabalho.');
     if (!document.querySelector('input[name="lgpd"]').checked) return erroBox('Marque a autorização para continuar.');
+    if (!nascValida(nascDigitado)) return erroBox('Data de nascimento inválida. Use o formato dd/mm/aaaa.');
+    const nasc = nascISO(nascDigitado);
     const ida = idade(nasc);
     if (ida === null) return erroBox('Digite sua data de nascimento.');
     if (ida < 18 && S.idadeOk !== nasc) return confirmarIdade(ida, nasc, b);
