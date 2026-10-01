@@ -1872,9 +1872,9 @@ var CV_HEADERS = ['CvId','Criado','Atualizado','Etapa','Status','Motivo','Nota',
   'LGPD_Aceite','LGPD_Texto','Nascimento','Idade','Menor18','Retomar18Em','Instagram','Vaga','Salario','Inicio','Ritmo','Horario',
   'ForaHorario','Impedimento','JaTrabalhou','UltEmpresa','UltFuncao','UltMeses','UltMotivo','TiposEmpresa','Tarefas','Liderou',
   'LiderQuantos','Referencia','RefContato','Escolaridade','Cursos','Q_Troca','Q_Troco','Q_Meta','Q_TresClientes','Motiva',
-  'Situacao','PorQue','Origem','ConheceAlguem','Obs','LegadoLinha','LegadoChamar','EnviadoEm'];
+  'Situacao','PorQue','Origem','ConheceAlguem','Obs','LegadoLinha','LegadoChamar','EnviadoEm','AgendadoEm'];
 
-var CV_STATUS = ['Novo', 'Chamar', 'Contactada', 'Entrevista', 'Contratada', 'Descartada', 'Desistiu'];
+var CV_STATUS = ['Novo', 'Chamar', 'Contactada', 'Agendada', 'Entrevista', 'Contratada', 'Descartada', 'Desistiu'];
 var CV_MOTIVOS = ['Sem experiência', 'Horário incompatível', 'Mora longe', 'Escolaridade', 'Sem retorno', 'Perfil não adequado à vaga', 'Outro'];
 
 // Alternativas aceitas (o site usa exatamente estes textos; o servidor recusa qualquer outro valor)
@@ -2506,17 +2506,23 @@ function cvAdminListarAcao_(data) {
   var rows = cvLerNovos_().rows.map(function (r) { var o = {}; Object.keys(r).forEach(function (k) { if (k !== '__row') o[k] = r[k]; }); o.FotoUrl = fotos[acWhats_(r.WhatsApp)] || ''; return o; });
   return jsonOut_({ ok: true, curriculos: rows, status: CV_STATUS, motivos: CV_MOTIVOS });
 }
+/** 'aaaa-mm-ddThh:mm' (o formato que o <input type="datetime-local"> do navegador manda). */
+function cvAgendadoValido_(s) { return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(String(s || '')); }
+
 function cvAdminAtualizarAcao_(data) {
   var v = exigirPerm_(data, 'dados_pessoais');
   if (!v.ok) return negarAcesso_(v);
   var status = String(data.status || ''), motivo = String(data.motivo || '');
   if (!cvEm_(status, CV_STATUS)) return jsonOut_({ ok: false, erro: 'Status inválido.' });
   if (motivo && !cvEm_(motivo, CV_MOTIVOS)) return jsonOut_({ ok: false, erro: 'Motivo inválido.' });
+  var agendadoEm = String(data.agendadoEm || '');
+  if (agendadoEm && !cvAgendadoValido_(agendadoEm)) return jsonOut_({ ok: false, erro: 'Data/hora do agendamento inválida.' });
+  if (status === 'Agendada' && !agendadoEm) return jsonOut_({ ok: false, erro: 'Escolha o dia e a hora do agendamento.' });
   return cvComTrava_(function () {
     var L = cvLerNovos_();
     var row = cvAcharNovo_(L.rows, 'CvId', String(data.cvId || ''));
     if (!row) return jsonOut_({ ok: false, erro: 'Currículo não encontrado.' });
-    cvGravarLinha_(L.aba, L.headers, row.__row, { Status: status, Motivo: motivo, Nota: cvTxtLongo_(data.nota, 2000) });
+    cvGravarLinha_(L.aba, L.headers, row.__row, { Status: status, Motivo: motivo, Nota: cvTxtLongo_(data.nota, 2000), AgendadoEm: agendadoEm });
     return jsonOut_({ ok: true });
   });
 }
