@@ -1606,14 +1606,14 @@ function acCadastroISO_(v) {
 }
 /** Situação do currículo (novo sistema, por WhatsApp) e se existe resposta na planilha antiga. */
 function acCurriculoStatusMapa_() {
-  var novos = {}, legado = {};
+  var novos = {}, legado = {}, etapas = {};
   try {
     cvLerNovos_().rows.forEach(function (r) {
       var w8 = cvW8_(r.WhatsApp);
       if (!w8) return;
       var etapa = String(r.Etapa || '');
       var status = etapa === 'Enviado' ? 'enviado' : (etapa === 'Menor de 18' ? 'menor' : (etapa ? 'andamento' : ''));
-      if (status) novos[w8] = status;
+      if (status) { novos[w8] = status; etapas[w8] = etapa; }
     });
   } catch (e) {}
   try {
@@ -1621,7 +1621,7 @@ function acCurriculoStatusMapa_() {
       [r.tel, r.tel2, r.tel3].forEach(function (t) { var w8 = cvW8_(t); if (w8) legado[w8] = true; });
     });
   } catch (e) {}
-  return { novos: novos, legado: legado };
+  return { novos: novos, legado: legado, etapas: etapas };
 }
 function acessosListar_(data) {
   var _ac = exigirPerm_(data, 'gerir_acessos');
@@ -1653,7 +1653,7 @@ function acessosListar_(data) {
       permissoes: acPermsDaLinha_(l, perfis),
       cadastro: acCadastroISO_(l.cadastro),
       fotoPerfilUrl: String(l.fotoperfilurl || ''), fotoCorpoUrl: String(l.fotocorpourl || ''),
-      curriculo: cvMapa.novos[w8] || '', curriculoAntigo: !!cvMapa.legado[w8]
+      curriculo: cvMapa.novos[w8] || '', curriculoEtapa: cvMapa.etapas[w8] || '', curriculoAntigo: !!cvMapa.legado[w8]
     });
   });
   pessoas.sort(function (a, b) { return a.nome.localeCompare(b.nome); });

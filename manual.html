@@ -2144,6 +2144,7 @@ function acessosCard(p){
         '<select class="admin-sel ac-perfil" aria-label="Perfil">' + opts + '</select>' +
         '<button type="button" class="admin-mini-btn ac-abrir">' + (aberto ? '▾' : '▸') + ' Permissões (' + qtd + ')' + (diffs ? ' ✱' + diffs : '') + '</button>' +
         (p.curriculo ? '<button type="button" class="admin-mini-btn ac-vercv">📄 Ver currículo</button>' : '') +
+        (p.curriculo === 'andamento' ? '<a class="admin-mini-btn" target="_blank" rel="noopener" href="' + esc(cvLinkCobranca(p)) + '">📲 Cobrar currículo</a>' : '') +
         (p.curriculoAntigo ? '<button type="button" class="admin-mini-btn ac-vercvantigo">📄 Currículo antigo</button>' : '') +
         (p.fotoCorpoUrl ? '<button type="button" class="admin-mini-btn ac-corpo">🧍 Foto de corpo inteiro</button>' : '') +
         '<button type="button" class="admin-mini-btn ac-status" data-ativo="' + (ativo ? '1' : '0') + '">' + (ativo ? 'Desativar' : 'Reativar') + '</button>' +
@@ -2152,6 +2153,22 @@ function acessosCard(p){
       '</div>' +
     '</div>' + permsHtml + '</div>';
 }
+function cvPrimeiroNome(n){ return String(n || '').trim().split(/\s+/)[0] || ''; }
+function cvFaltaTexto(etapa){
+  if (etapa === 'Instagram') return 'informar o Instagram dela (ou avisar que não tem)';
+  if (etapa === 'Sem Instagram' || etapa === 'Foto') return 'enviar a foto de perfil';
+  if (etapa === 'Perfil') return 'responder as últimas perguntas e enviar';
+  return 'terminar as últimas etapas';
+}
+function cvMensagemCobranca(p){
+  var nome = cvPrimeiroNome(p.nome);
+  var falta = cvFaltaTexto(p.curriculoEtapa);
+  return 'Oi' + (nome ? ', ' + nome : '') + '! Aqui é da TENKiTER 😊\n\n' +
+    'Vi que seu currículo ainda está em andamento — falta só ' + falta + '.\n\n' +
+    'É rapidinho: entra no nosso site (' + location.origin + '/manual.html), faça login com o WhatsApp e a senha de sempre. Na tela inicial vai aparecer um aviso "⚠️ Seu currículo está incompleto" com um botão *Completar agora* — aperte nele e vá apertando *Avançar* até o final.\n\n' +
+    'Qualquer dúvida, é só chamar por aqui!';
+}
+function cvLinkCobranca(p){ return 'https://wa.me/55' + String(p.whatsapp || '').replace(/\D/g, '') + '?text=' + encodeURIComponent(cvMensagemCobranca(p)); }
 function acTxt(s){ return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 function acessosCasaBusca(p, a){
   var q = acTxt(a.busca), d = String(a.busca || '').replace(/\D/g, '');
@@ -2167,6 +2184,7 @@ function acessosVisiveis(){
   var l = a.pessoas.filter(function(p){
     if (!(acessosPerfilMarcado(p, a) && acessosCasaBusca(p, a))) return false;
     if (a.fCv === 'com') return p.curriculo === 'enviado';
+    if (a.fCv === 'andamento') return p.curriculo === 'andamento';
     if (a.fCv === 'sem') return p.curriculo !== 'enviado';
     return true;
   });
@@ -2223,7 +2241,7 @@ function renderTabAcessos(){
     '</div>' +
     '<div class="ac-filtro" id="ac-filtro">' + filtroAcessosHtml() + '</div>' +
     '<div class="ac-ordem"><label>Ordenar: <select id="ac-ordem" class="admin-sel"><option value="nome"' + (a.ordem === 'nome' ? ' selected' : '') + '>Nome (A–Z)</option><option value="novos"' + (a.ordem === 'novos' ? ' selected' : '') + '>Cadastro: mais recentes</option><option value="antigos"' + (a.ordem === 'antigos' ? ' selected' : '') + '>Cadastro: mais antigos</option></select></label> ' +
-      '<label>Currículo: <select id="ac-fcv" class="admin-sel"><option value="todos"' + (a.fCv === 'todos' ? ' selected' : '') + '>Todos</option><option value="com"' + (a.fCv === 'com' ? ' selected' : '') + '>Só quem já fez</option><option value="sem"' + (a.fCv === 'sem' ? ' selected' : '') + '>Só quem não fez</option></select></label></div>' +
+      '<label>Currículo: <select id="ac-fcv" class="admin-sel"><option value="todos"' + (a.fCv === 'todos' ? ' selected' : '') + '>Todos</option><option value="com"' + (a.fCv === 'com' ? ' selected' : '') + '>Só quem já fez</option><option value="andamento"' + (a.fCv === 'andamento' ? ' selected' : '') + '>Só em andamento</option><option value="sem"' + (a.fCv === 'sem' ? ' selected' : '') + '>Só quem não fez</option></select></label></div>' +
     '<div class="ac-form" id="ac-form-nova"' + (a.criando ? '' : ' hidden') + '>' +
       '<input id="ac-n-nome" placeholder="Nome"><input id="ac-n-whats" placeholder="WhatsApp com DDD" inputmode="tel"><input id="ac-n-senha" placeholder="Senha (mín. 4)">' +
       '<select id="ac-n-perfil" class="admin-sel">' + perfOpts + '</select>' +
