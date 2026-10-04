@@ -337,21 +337,10 @@
     document.getElementById('toast-carregando').classList.remove('visivel');
   }
 
-  async function carregarCatalogo() {
-    lerFiltrosURL();
-    mostrarToastCarregando('Carregando produtos...');
-    try {
-      const resp = await fetch(API_URL + '?action=list').then(r => r.json());
-      produtos = (resp.produtos || []).reverse();
-    } catch (e) {
-      esconderToastCarregando();
-      document.getElementById('contagem').textContent = '';
-      const vazio = document.getElementById('vazio');
-      vazio.textContent = 'Não foi possível carregar o catálogo agora. Verifique sua internet e tente novamente em instantes.';
-      vazio.style.display = 'block';
-      return;
-    }
-    esconderToastCarregando();
+  function aplicarProdutosRecebidos(lista) {
+    produtos = lista;
+    categoriasDisponiveis = new Set();
+    generosDisponiveis = new Set();
     produtos.forEach(p => {
       listaDeTags(p.Categoria).forEach(c => categoriasDisponiveis.add(c));
       listaDeTags(p.Genero).forEach(g => generosDisponiveis.add(g));
@@ -362,7 +351,46 @@
     renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
     atualizarBadges();
     aplicarFiltros();
-    abrirProdutoDaURL();
+  }
+
+  /**
+   * Carrega o catálogo. Se já existe uma lista salva localmente (de uma
+   * visita recente), mostra ela IMEDIATAMENTE — sem esperar a rede — e só
+   * depois busca a versão atual do servidor por trás ("stale-while-revalidate").
+   * Isso faz a página parecer instantânea mesmo em conexões lentas; o único
+   * custo é que, por 1-2 segundos, o visitante pode ver preço/estoque de
+   * poucos minutos atrás antes da tela se atualizar sozinha.
+   */
+  async function carregarCatalogo() {
+    lerFiltrosURL();
+    const cache = obterCatalogoCache();
+    const temCache = !!(cache && cache.produtos && cache.produtos.length);
+
+    if (temCache) {
+      aplicarProdutosRecebidos(cache.produtos);
+      abrirProdutoDaURL();
+    } else {
+      mostrarToastCarregando('Carregando produtos...');
+    }
+
+    try {
+      const resp = await fetch(API_URL + '?action=list').then(r => r.json());
+      const recebidos = (resp.produtos || []).reverse();
+      salvarCatalogoCache(recebidos);
+      aplicarProdutosRecebidos(recebidos);
+      if (!temCache) abrirProdutoDaURL();
+    } catch (e) {
+      if (!temCache) {
+        document.getElementById('contagem').textContent = '';
+        const vazio = document.getElementById('vazio');
+        vazio.textContent = 'Não foi possível carregar o catálogo agora. Verifique sua internet e tente novamente em instantes.';
+        vazio.style.display = 'block';
+      }
+      // Com cache: mantém o que já está na tela em vez de mostrar erro — o
+      // visitante continua vendo o catálogo (um pouco desatualizado) em vez de nada.
+    } finally {
+      esconderToastCarregando();
+    }
   }
 
   function renderizarChipExtra() {
@@ -444,9 +472,12 @@
     if (idResumo) atualizarResumoFiltro(idResumo, conjunto);
   }
 
-  document.getElementById('busca').addEventListener('input', aplicarFiltros);
-  document.getElementById('preco-min').addEventListener('input', aplicarFiltros);
-  document.getElementById('preco-max').addEventListener('input', aplicarFiltros);
+  // Debounce: espera 250ms sem digitar antes de refiltrar, em vez de
+  // recalcular e re-renderizar a grade a cada tecla (mais leve em celulares).
+  const aplicarFiltrosComDebounce = debounce(aplicarFiltros, 250);
+  document.getElementById('busca').addEventListener('input', aplicarFiltrosComDebounce);
+  document.getElementById('preco-min').addEventListener('input', aplicarFiltrosComDebounce);
+  document.getElementById('preco-max').addEventListener('input', aplicarFiltrosComDebounce);
   document.getElementById('btn-limpar').addEventListener('click', () => {
     document.getElementById('busca').value = '';
     document.getElementById('preco-min').value = '';

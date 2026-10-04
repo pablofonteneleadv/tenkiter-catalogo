@@ -241,6 +241,52 @@ function salvarContaClienteDepois() {
   }, 800);
 }
 
+/* ===================== Util: debounce ===================== */
+
+/**
+ * Agrupa chamadas seguidas numa só, disparando `fn` só depois que o
+ * usuário parar de digitar/agir por `espera` ms. Usado na busca do
+ * catálogo e do admin para não refiltrar/renderizar a cada tecla.
+ */
+function debounce(fn, espera) {
+  let temporizador = null;
+  return function (...args) {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => fn.apply(this, args), espera);
+  };
+}
+
+/* ===================== Cache local do catálogo (navegador do cliente) =====================
+ * Guarda a última lista de produtos recebida do servidor no localStorage,
+ * para a página mostrar algo instantaneamente na próxima visita (em vez de
+ * tela em branco esperando a rede) enquanto busca a versão atualizada por
+ * trás ("stale-while-revalidate"). Só é usado pelo catálogo público
+ * (index.html) — o admin sempre busca fresco, pois é onde se edita. */
+const CATALOGO_CACHE_CHAVE = 'tenkiter_catalogo_cache_v1';
+const CATALOGO_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutos
+
+function obterCatalogoCache() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CATALOGO_CACHE_CHAVE) || 'null');
+    if (!raw || !Array.isArray(raw.produtos)) return null;
+    return raw;
+  } catch (e) {
+    return null;
+  }
+}
+
+function salvarCatalogoCache(produtos) {
+  try {
+    localStorage.setItem(CATALOGO_CACHE_CHAVE, JSON.stringify({ produtos: produtos, salvoEm: Date.now() }));
+  } catch (e) {
+    // localStorage cheio/indisponível: sem cache local, mas a página continua funcionando normalmente.
+  }
+}
+
+function catalogoCacheEstaFresco(raw) {
+  return !!raw && typeof raw.salvoEm === 'number' && (Date.now() - raw.salvoEm) < CATALOGO_CACHE_TTL_MS;
+}
+
 /* ===================== Fila offline (retry de ações do admin quando a internet cai) ===================== */
 
 function getFilaOffline() {

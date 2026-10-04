@@ -1127,28 +1127,41 @@
     }
   });
 
-  async function executarAcaoEmLote(tipoAcao, valor) {
-    const resultado = await enviarComFila({
-      action: 'bulkUpdate',
-      pin: adminPin,
-      funcionario: funcionarioNome,
-      ids: Array.from(selecionadosBulk),
-      tipoAcao: tipoAcao,
-      valor: valor
+  const BOTOES_BULK_IDS = ['btn-bulk-preco', 'btn-bulk-novidade', 'btn-bulk-arquivar', 'btn-bulk-reativar'];
+  function travarBotoesBulk(travar) {
+    BOTOES_BULK_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = travar;
     });
-    atualizarBarraSync();
+  }
 
-    if (resultado.ok && resultado.resp && resultado.resp.ok) {
-      alert('Ação realizada em ' + resultado.resp.afetados + ' produtos!');
-      selecionadosBulk.clear();
-      atualizarBarraBulk();
-      await carregarProdutos();
-    } else if (!resultado.ok && resultado.enfileirado) {
-      alert('Sem conexão agora. A ação foi salva e será enviada quando você tocar em "Sincronizar".');
-      selecionadosBulk.clear();
-      atualizarBarraBulk();
-    } else {
-      alert('Erro ao executar ação em lote.');
+  async function executarAcaoEmLote(tipoAcao, valor) {
+    travarBotoesBulk(true);
+    try {
+      const resultado = await enviarComFila({
+        action: 'bulkUpdate',
+        pin: adminPin,
+        funcionario: funcionarioNome,
+        ids: Array.from(selecionadosBulk),
+        tipoAcao: tipoAcao,
+        valor: valor
+      });
+      atualizarBarraSync();
+
+      if (resultado.ok && resultado.resp && resultado.resp.ok) {
+        alert('Ação realizada em ' + resultado.resp.afetados + ' produtos!');
+        selecionadosBulk.clear();
+        atualizarBarraBulk();
+        await carregarProdutos();
+      } else if (!resultado.ok && resultado.enfileirado) {
+        alert('Sem conexão agora. A ação foi salva e será enviada quando você tocar em "Sincronizar".');
+        selecionadosBulk.clear();
+        atualizarBarraBulk();
+      } else {
+        alert('Erro ao executar ação em lote.');
+      }
+    } finally {
+      travarBotoesBulk(false);
     }
   }
 
@@ -1484,7 +1497,7 @@
     if (e.target.id === 'overlay-compartilhar') e.target.classList.remove('aberto');
   });
 
-  document.getElementById('busca-admin').addEventListener('input', renderizarProdutos);
+  document.getElementById('busca-admin').addEventListener('input', debounce(renderizarProdutos, 250));
 
   /* ===================== Estatísticas ===================== */
 
@@ -1522,6 +1535,8 @@
   });
 
   document.getElementById('btn-enviar-push').addEventListener('click', async () => {
+    const btnPush = document.getElementById('btn-enviar-push');
+    if (btnPush.disabled) return; // já está enviando — ignora clique duplo
     const titulo = document.getElementById('push-titulo').value.trim();
     const mensagem = document.getElementById('push-mensagem').value.trim();
     const statusPush = document.getElementById('push-status');
@@ -1532,6 +1547,9 @@
     }
     if (!confirm('Enviar esta notificação para todos os assinantes agora?')) return;
 
+    btnPush.disabled = true;
+    const textoOriginalBtn = btnPush.textContent;
+    btnPush.textContent = 'Enviando...';
     statusPush.textContent = 'Enviando...';
     try {
       const resp = await fetch(API_URL, {
@@ -1549,6 +1567,9 @@
       }
     } catch (e) {
       statusPush.textContent = '❌ Sem conexão. Tente novamente.';
+    } finally {
+      btnPush.disabled = false;
+      btnPush.textContent = textoOriginalBtn;
     }
   });
 
@@ -1606,7 +1627,7 @@
     }
 
     renderizarListaAuditoria();
-    document.getElementById('busca-auditoria').addEventListener('input', renderizarListaAuditoria);
+    document.getElementById('busca-auditoria').addEventListener('input', debounce(renderizarListaAuditoria, 250));
   }
 
   /* ===================== Gerar SEO com IA (Gemini) ===================== */
@@ -1616,7 +1637,9 @@
     const box = document.getElementById('seo-sugestao-box');
     const nomeAtual = document.getElementById('nome').value.trim();
     if (!nomeAtual) { alert('Preencha ao menos o nome do produto antes de gerar com IA.'); return; }
+    if (btn.disabled) return; // já está processando — ignora clique duplo
 
+    btn.disabled = true;
     btn.textContent = '✨ Gerando...';
     box.innerHTML = '';
 
@@ -1632,6 +1655,7 @@
         })
       }).then(r => r.json());
 
+      btn.disabled = false;
       btn.textContent = '✨ Gerar Título/Descrição com IA';
 
       if (!resp.ok) {
@@ -1660,6 +1684,7 @@
       }
       document.getElementById('btn-descartar-seo').addEventListener('click', () => { box.innerHTML = ''; });
     } catch (e) {
+      btn.disabled = false;
       btn.textContent = '✨ Gerar Título/Descrição com IA';
       box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">Sem conexão agora — tente novamente.</div>';
     }

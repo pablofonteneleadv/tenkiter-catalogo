@@ -1,4 +1,5 @@
 // ===================== CONFIGURAÇÃO =====================
+const VERSAO_BACKEND = '4.2';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl';
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -6,7 +7,20 @@ const SHEET_GENEROS = 'Generos';
 const SHEET_HISTORICO = 'Historico';
 const SHEET_EVENTOS = 'Eventos';
 const SHEET_AUDITORIA = 'Acoes_Audit';
+const SHEET_ERROS = 'Erros_Log';
 const SITE_URL = 'https://tenkiter-catalogo.onrender.com/';
+
+// Chaves e tempos (em segundos) do cache do servidor (CacheService).
+// Guardam resultado de leituras pesadas/repetidas para não bater na
+// planilha a cada requisição — reduz bastante a lentidão percebida.
+const CACHE_CHAVE_CATALOGO = 'catalogo_ativos_v42';
+const CACHE_TTL_CATALOGO = 120;        // 2 min — lista pública de produtos ativos
+const CACHE_CHAVE_CATEGORIAS = 'lista_categorias_v42';
+const CACHE_CHAVE_GENEROS = 'lista_generos_v42';
+const CACHE_TTL_LISTAS = 21600;        // 6h — categorias/gêneros mudam raramente
+const CACHE_CHAVE_STATS = 'stats_catalogo_v42';
+const CACHE_TTL_STATS = 180;           // 3 min — estatísticas podem ficar levemente desatualizadas
+const CACHE_TTL_RATE_LIMIT_EVENTO = 2; // segundos mínimos entre eventos repetidos do mesmo produto/tipo
 
 const CATEGORIAS_PADRAO = [
   'Blusas', 'Camisetas', 'Calças', 'Vestidos', 'Shorts', 'Saias',
@@ -95,9 +109,75 @@ function salvarFotoDrive_(base64Data, mimeType, nomeArquivo) {
   return 'https://lh3.googleusercontent.com/d/' + file.getId();
 }
 
+/**
+ * Move para a lixeira do Drive o arquivo antigo de foto quando ele é
+ * substituído por um novo upload — evita acumular fotos órfãs que nunca
+ * mais são usadas (gastam espaço e aparecem no "Meu Drive" sem necessidade).
+ * Usa lixeira (setTrashed) em vez de exclusão definitiva: se algo der
+ * errado (pegar o ID errado, link ainda em uso em algum compartilhamento
+ * antigo), o arquivo pode ser restaurado manualmente pela Lixeira do Drive
+ * por 30 dias. Nunca lança erro — falha aqui não pode travar a atualização
+ * do produto.
+ */
+function excluirFotoAntigaDrive_(urlAntiga, urlNova) {
+  if (!urlAntiga || urlAntiga === urlNova) return;
+  try {
+    const m = String(urlAntiga).match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (!m || !m[1]) return;
+    const fileId = m[1];
+    const file = DriveApp.getFileById(fileId);
+    file.setTrashed(true);
+  } catch (erro) {
+    logErroServidor_('excluirFotoAntigaDrive_', erro, { urlAntiga });
+  }
+}
+
 function jsonResponse_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Registra um erro inesperado na aba "Erros_Log", sem nunca lançar
+ * exceção por conta própria (se o log falhar, só ignora — logar erro
+ * não pode gerar outro erro). Usado pelos try/catch de doGet/doPost.
+ */
+function logErroServidor_(origem, erro, contexto) {
+  try {
+    const sheet = getOrCreateSheet_(SHEET_ERROS, ['DataHora', 'Origem', 'Mensagem', 'Stack', 'Contexto']);
+    sheet.appendRow([
+      new Date(), origem || '', (erro && erro.message) || String(erro),
+      (erro && erro.stack) || '', JSON.stringify(contexto || {})
+    ]);
+  } catch (erroLog) {
+    // Silencioso de propósito.
+  }
+}
+
+/**
+ * Roda fn() com o LockService do script travado, para impedir que duas
+ * edições simultâneas (dois atendentes ao mesmo tempo, ou um clique
+ * duplo) leiam a planilha, calculem algo e sobrescrevam uma a outra.
+ * Usada por todas as ações que fazem leitura+escrita na aba de produtos.
+ */
+function comTravaCatalogo_(fn) {
+  const lock = LockService.getScriptLock();
+  const obtida = lock.tryLock(10000);
+  if (!obtida) {
+    return jsonResponse_({ ok: false, erro: 'Sistema ocupado processando outra alteração. Tente novamente em alguns segundos.' });
+  }
+  try {
+    return fn();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Limpa o cache de catálogo/estatísticas após qualquer ação que altere produtos. */
+function invalidarCacheCatalogo_() {
+  try {
+    CacheService.getScriptCache().remove(CACHE_CHAVE_CATALOGO);
+  } catch (e) { /* silencioso */ }
 }
 
 function validarPin_(body) {
@@ -187,15 +267,15 @@ function paginaCompartilhamento_(id) {
     '<title>' + escaparHtml_(titulo) + '</title>' +
     '<meta property="og:title" content="' + escaparHtml_(titulo) + '">' +
     '<meta property="og:description" content="' + escaparHtml_(descricao) + '">' +
-    '<meta property="og:image" content="' + imagem + '">' +
+    '<meta property="og:image" content="' + escaparHtml_(imagem) + '">' +
     '<meta property="og:image:width" content="900">' +
     '<meta property="og:image:height" content="1125">' +
-    '<meta property="og:url" content="' + destino + '">' +
+    '<meta property="og:url" content="' + escaparHtml_(destino) + '">' +
     '<meta property="og:type" content="product">' +
     '<meta name="twitter:card" content="summary_large_image">' +
     '<meta name="twitter:title" content="' + escaparHtml_(titulo) + '">' +
     '<meta name="twitter:description" content="' + escaparHtml_(descricao) + '">' +
-    '<meta name="twitter:image" content="' + imagem + '">' +
+    '<meta name="twitter:image" content="' + escaparHtml_(imagem) + '">' +
     '<script>try{(window.top||window).location.href=' + JSON.stringify(destino) + ';}catch(e){location.href=' + JSON.stringify(destino) + ';}</script>' +
     '</head><body>' +
     '<p>Abrindo produto... <a href="' + destino + '" target="_top">clique aqui se não for redirecionado</a></p>' +
@@ -205,6 +285,10 @@ function paginaCompartilhamento_(id) {
 }
 
 function obterStats_() {
+  const cache = CacheService.getScriptCache();
+  const emCache = cache.get(CACHE_CHAVE_STATS);
+  if (emCache) return jsonResponse_(JSON.parse(emCache));
+
   const ss = getSS_();
   const sheetEventos = ss.getSheetByName(SHEET_EVENTOS);
   const contagem = {};
@@ -224,14 +308,16 @@ function obterStats_() {
   Object.keys(contagem).forEach(pid => {
     if (contagem[pid].visualizacao > maiorViews) { maiorViews = contagem[pid].visualizacao; maisVistoId = pid; }
   });
-  return jsonResponse_({
+  const resultado = {
     ok: true,
     totalVisualizacoes: totalView,
     totalWhatsapp: totalWhats,
     produtoMaisVistoId: maisVistoId,
     produtoMaisVistoCodigo: maisVistoId && contagem[maisVistoId] ? contagem[maisVistoId].codigo : '',
     produtoMaisVistoViews: maiorViews
-  });
+  };
+  try { cache.put(CACHE_CHAVE_STATS, JSON.stringify(resultado), CACHE_TTL_STATS); } catch (e) { /* silencioso */ }
+  return jsonResponse_(resultado);
 }
 
 /**
@@ -256,10 +342,20 @@ function obterHistorico_(e) {
 
 // ===================== GET =====================
 function doGet(e) {
+  try {
+    return doGetInterno_(e);
+  } catch (erro) {
+    logErroServidor_('doGet', erro, { parametros: e && e.parameter });
+    return jsonResponse_({ ok: false, erro: 'Erro interno no servidor: ' + erro.message });
+  }
+}
+
+function doGetInterno_(e) {
   const action = (e.parameter.action || 'list');
 
   if (action === 'share') return paginaCompartilhamento_(e.parameter.id);
   if (action === 'stats') return obterStats_();
+  if (action === 'versao') return jsonResponse_({ ok: true, versao: VERSAO_BACKEND });
 
   if (action === 'historico') {
     if (!validarPinGet_(e)) return jsonResponse_({ ok: false, erro: 'PIN incorreto.', pinInvalido: true });
@@ -268,6 +364,15 @@ function doGet(e) {
 
   if (action === 'list') {
     const incluirTodos = e.parameter.todos === 'true';
+    const cache = CacheService.getScriptCache();
+
+    // Só a lista pública (produtos ativos) é cacheada — a visão "todos" do
+    // admin precisa estar sempre fresca, já que é onde o cadastro/edição é feito.
+    if (!incluirTodos) {
+      const emCache = cache.get(CACHE_CHAVE_CATALOGO);
+      if (emCache) return jsonResponse_({ ok: true, produtos: JSON.parse(emCache) });
+    }
+
     const sheet = getProdutosSheet_();
     const dados = sheet.getDataRange().getValues();
     const headers = dados[0];
@@ -280,18 +385,51 @@ function doGet(e) {
         produtos.push(obj);
       }
     }
+
+    if (!incluirTodos) {
+      try { cache.put(CACHE_CHAVE_CATALOGO, JSON.stringify(produtos), CACHE_TTL_CATALOGO); } catch (erroCache) { /* silencioso */ }
+    }
+
     return jsonResponse_({ ok: true, produtos: produtos });
   }
 
-  if (action === 'categorias') return jsonResponse_({ ok: true, categorias: getListaValores_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO) });
-  if (action === 'generos') return jsonResponse_({ ok: true, generos: getListaValores_(SHEET_GENEROS, GENEROS_PADRAO) });
+  if (action === 'categorias') {
+    const cache = CacheService.getScriptCache();
+    const emCache = cache.get(CACHE_CHAVE_CATEGORIAS);
+    if (emCache) return jsonResponse_({ ok: true, categorias: JSON.parse(emCache) });
+    const categorias = getListaValores_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO);
+    try { cache.put(CACHE_CHAVE_CATEGORIAS, JSON.stringify(categorias), CACHE_TTL_LISTAS); } catch (erroCache) { /* silencioso */ }
+    return jsonResponse_({ ok: true, categorias: categorias });
+  }
+  if (action === 'generos') {
+    const cache = CacheService.getScriptCache();
+    const emCache = cache.get(CACHE_CHAVE_GENEROS);
+    if (emCache) return jsonResponse_({ ok: true, generos: JSON.parse(emCache) });
+    const generos = getListaValores_(SHEET_GENEROS, GENEROS_PADRAO);
+    try { cache.put(CACHE_CHAVE_GENEROS, JSON.stringify(generos), CACHE_TTL_LISTAS); } catch (erroCache) { /* silencioso */ }
+    return jsonResponse_({ ok: true, generos: generos });
+  }
 
   return jsonResponse_({ ok: false, erro: 'Ação desconhecida: ' + action });
 }
 
 // ===================== POST =====================
 function doPost(e) {
-  const body = JSON.parse(e.postData.contents);
+  let body;
+  try {
+    body = JSON.parse(e.postData.contents);
+  } catch (erroParse) {
+    return jsonResponse_({ ok: false, erro: 'Corpo da requisição inválido (JSON malformado).' });
+  }
+  try {
+    return doPostInterno_(body);
+  } catch (erro) {
+    logErroServidor_('doPost', erro, { action: body && body.action });
+    return jsonResponse_({ ok: false, erro: 'Erro interno no servidor: ' + erro.message });
+  }
+}
+
+function doPostInterno_(body) {
   const action = body.action;
 
   if (action === 'registrarEvento') return registrarEvento_(body);
@@ -301,14 +439,22 @@ function doPost(e) {
     return jsonResponse_({ ok: false, erro: 'PIN incorreto.', pinInvalido: true });
   }
 
-  if (action === 'create') return criarProduto_(body);
-  if (action === 'update') return atualizarProduto_(body);
-  if (action === 'delete') return deletarProduto_(body);
-  if (action === 'reativar') return reativarProduto_(body);
-  if (action === 'excluirPermanente') return excluirPermanentemente_(body);
-  if (action === 'bulkUpdate') return acaoEmLote_(body);
-  if (action === 'addCategoria') return jsonResponse_(adicionarValorLista_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO, body.nome));
-  if (action === 'addGenero') return jsonResponse_(adicionarValorLista_(SHEET_GENEROS, GENEROS_PADRAO, body.nome));
+  if (action === 'create') return comTravaCatalogo_(function () { return criarProduto_(body); });
+  if (action === 'update') return comTravaCatalogo_(function () { return atualizarProduto_(body); });
+  if (action === 'delete') return comTravaCatalogo_(function () { return deletarProduto_(body); });
+  if (action === 'reativar') return comTravaCatalogo_(function () { return reativarProduto_(body); });
+  if (action === 'excluirPermanente') return comTravaCatalogo_(function () { return excluirPermanentemente_(body); });
+  if (action === 'bulkUpdate') return comTravaCatalogo_(function () { return acaoEmLote_(body); });
+  if (action === 'addCategoria') {
+    const r = adicionarValorLista_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO, body.nome);
+    if (r.ok) { try { CacheService.getScriptCache().remove(CACHE_CHAVE_CATEGORIAS); } catch (e) { /* silencioso */ } }
+    return jsonResponse_(r);
+  }
+  if (action === 'addGenero') {
+    const r = adicionarValorLista_(SHEET_GENEROS, GENEROS_PADRAO, body.nome);
+    if (r.ok) { try { CacheService.getScriptCache().remove(CACHE_CHAVE_GENEROS); } catch (e) { /* silencioso */ } }
+    return jsonResponse_(r);
+  }
   if (action === 'gerarSeo') return gerarSeoComGemini_(body);
   if (action === 'enviarPush') return enviarPushOneSignal_(body.titulo, body.mensagem, body.url || SITE_URL);
 
@@ -316,6 +462,17 @@ function doPost(e) {
 }
 
 function registrarEvento_(body) {
+  // Limite de taxa simples: ignora eventos idênticos (mesmo produto+tipo)
+  // repetidos em menos de CACHE_TTL_RATE_LIMIT_EVENTO segundos — protege
+  // contra cliques duplicados/scripts e contra inflar a planilha de Eventos
+  // sem precisar de PIN (esse endpoint é público, de propósito).
+  const chaveRate = 'evt_' + (body.produtoId || '') + '_' + (body.tipo || '');
+  const cache = CacheService.getScriptCache();
+  if (cache.get(chaveRate)) {
+    return jsonResponse_({ ok: true, ignorado: true });
+  }
+  try { cache.put(chaveRate, '1', CACHE_TTL_RATE_LIMIT_EVENTO); } catch (e) { /* silencioso */ }
+
   const sheet = getOrCreateSheet_(SHEET_EVENTOS, ['DataHora', 'ProdutoID', 'Codigo', 'Tipo']);
   sheet.appendRow([new Date(), body.produtoId || '', body.codigo || '', body.tipo || '']);
   return jsonResponse_({ ok: true });
@@ -334,6 +491,33 @@ function processarGaleriaFotos_(fotosBase64Array, idProduto) {
 }
 
 function criarProduto_(body) {
+  // Validação mínima: sem nome ou preço válido não existe produto.
+  if (!body.nome || !String(body.nome).trim()) {
+    return jsonResponse_({ ok: false, erro: 'Nome do produto é obrigatório.' });
+  }
+  const precoNum = Number(body.preco);
+  if (!body.preco || isNaN(precoNum) || precoNum <= 0) {
+    return jsonResponse_({ ok: false, erro: 'Preço inválido — informe um valor maior que zero.' });
+  }
+
+  // Anti-duplicata: se já existe produto com mesmo nome+preço criado nos
+  // últimos 10 segundos, não cria de novo — protege contra duplo-clique
+  // no botão Salvar ou reenvio automático da fila offline.
+  const sheetCheck = getProdutosSheet_();
+  const dadosCheck = sheetCheck.getDataRange().getValues();
+  const agora = new Date().getTime();
+  for (let i = 1; i < dadosCheck.length; i++) {
+    const idLinha = String(dadosCheck[i][0]);
+    const nomeLinha = normalizar_(dadosCheck[i][1]);
+    const precoLinha = Number(dadosCheck[i][4]);
+    if (nomeLinha === normalizar_(body.nome) && precoLinha === precoNum) {
+      const criadoEm = parseInt(idLinha, 10);
+      if (!isNaN(criadoEm) && (agora - criadoEm) < 10000) {
+        return jsonResponse_({ ok: true, duplicado: true, id: idLinha, aviso: 'Produto idêntico já cadastrado há poucos segundos — cadastro ignorado para evitar duplicata.' });
+      }
+    }
+  }
+
   const sheet = getProdutosSheet_();
   const id = new Date().getTime().toString();
   const codigo = proximoCodigo_();
@@ -385,10 +569,18 @@ function criarProduto_(body) {
     }
   }
 
+  invalidarCacheCatalogo_();
   return jsonResponse_({ ok: true, id: id, codigo: codigo, fotoUrl: fotoUrl, fotoStoriesUrl: fotoStoriesUrl, fotosGaleria: fotosGaleriaFinal });
 }
 
 function atualizarProduto_(body) {
+  if (body.preco !== undefined && body.preco !== '') {
+    const precoNum = Number(body.preco);
+    if (isNaN(precoNum) || precoNum <= 0) {
+      return jsonResponse_({ ok: false, erro: 'Preço inválido — informe um valor maior que zero.' });
+    }
+  }
+
   const sheet = getProdutosSheet_();
   const dados = sheet.getDataRange().getValues();
 
@@ -398,14 +590,18 @@ function atualizarProduto_(body) {
       let fotoUrl = dados[i][5];
       let fotoStoriesUrl = dados[i][14];
       let galeriaAtual = dados[i][15] || '';
+      const fotoUrlAntiga = fotoUrl;
+      const fotoStoriesUrlAntiga = fotoStoriesUrl;
 
       if (body.fotoBase64) {
         const sufixo = '_' + new Date().getTime();
         fotoUrl = salvarFotoDrive_(body.fotoBase64, body.fotoMime || 'image/jpeg', 'produto_' + body.id + sufixo + '.jpg');
+        excluirFotoAntigaDrive_(fotoUrlAntiga, fotoUrl);
       }
       if (body.fotoStoriesBase64) {
         const sufixo2 = '_' + new Date().getTime();
         fotoStoriesUrl = salvarFotoDrive_(body.fotoStoriesBase64, 'image/jpeg', 'produto_' + body.id + sufixo2 + '_stories.jpg');
+        excluirFotoAntigaDrive_(fotoStoriesUrlAntiga, fotoStoriesUrl);
       }
 
       const novasGaleria = processarGaleriaFotos_(body.fotosGaleriaBase64, body.id);
@@ -441,6 +637,7 @@ function atualizarProduto_(body) {
         { id: body.id, codigo: dados[i][13], nome: body.nome !== undefined ? body.nome : dados[i][1], preco: body.preco !== undefined ? body.preco : dados[i][4], estoque: estoqueNovo },
         anterior, body.funcionario);
 
+      invalidarCacheCatalogo_();
       return jsonResponse_({ ok: true, id: body.id, fotoUrl: fotoUrl, fotoStoriesUrl: fotoStoriesUrl, fotosGaleria: fotosGaleriaFinal });
     }
   }
@@ -462,13 +659,16 @@ function acaoEmLote_(body) {
       let precoAtual = Number(dados[i][4]) || 0;
 
       if (body.tipoAcao === 'ajustarPrecoPorcento') {
-        const pct = Number(body.valor) || 0;
+        const pct = Number(body.valor);
+        if (isNaN(pct)) continue;
         const novoPreco = Math.max(0, precoAtual * (1 + pct / 100));
         sheet.getRange(linha, 5).setValue(novoPreco.toFixed(2));
       } else if (body.tipoAcao === 'marcarNovidade') {
         sheet.getRange(linha, 13).setValue(!!body.valor);
       } else if (body.tipoAcao === 'alterarEstoque') {
-        sheet.getRange(linha, 10).setValue(Number(body.valor));
+        const estoqueVal = Number(body.valor);
+        if (isNaN(estoqueVal)) continue;
+        sheet.getRange(linha, 10).setValue(estoqueVal);
       } else if (body.tipoAcao === 'arquivar') {
         sheet.getRange(linha, 7).setValue('Inativo');
       } else if (body.tipoAcao === 'reativar') {
@@ -480,6 +680,7 @@ function acaoEmLote_(body) {
     }
   }
 
+  invalidarCacheCatalogo_();
   return jsonResponse_({ ok: true, afetados: afetados });
 }
 
@@ -490,6 +691,7 @@ function deletarProduto_(body) {
     if (String(dados[i][0]) === String(body.id)) {
       sheet.getRange(i + 1, 7).setValue('Inativo');
       registrarHistorico_('arquivar', { id: body.id, codigo: dados[i][13], nome: dados[i][1], preco: dados[i][4], estoque: dados[i][9] }, null, body.funcionario);
+      invalidarCacheCatalogo_();
       return jsonResponse_({ ok: true });
     }
   }
@@ -503,6 +705,7 @@ function reativarProduto_(body) {
     if (String(dados[i][0]) === String(body.id)) {
       sheet.getRange(i + 1, 7).setValue('Ativo');
       registrarHistorico_('reativar', { id: body.id, codigo: dados[i][13], nome: dados[i][1], preco: dados[i][4], estoque: dados[i][9] }, null, body.funcionario);
+      invalidarCacheCatalogo_();
       return jsonResponse_({ ok: true });
     }
   }
@@ -525,6 +728,7 @@ function excluirPermanentemente_(body) {
         { id: body.id, codigo: dados[i][13], nome: dados[i][1], preco: dados[i][4], estoque: dados[i][9] },
         null, body.funcionario);
       sheet.deleteRow(i + 1);
+      invalidarCacheCatalogo_();
       return jsonResponse_({ ok: true });
     }
   }
