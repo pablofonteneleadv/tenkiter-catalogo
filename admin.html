@@ -201,6 +201,9 @@
   .env-item button { border: none; border-radius: 8px; padding: 5px 9px; font-weight: 700; font-size: 0.75rem; cursor: pointer; background: #333; color: #fff; }
   .env-spin { display: inline-block; animation: env-gira 1s linear infinite; }
   @keyframes env-gira { to { transform: rotate(360deg); } }
+  .env-progresso-wrap { margin-top: 6px; height: 6px; border-radius: 4px; background: #e2d9cc; overflow: hidden; }
+  .env-progresso-barra { height: 100%; background: var(--laranja); transition: width 0.2s linear; }
+  .env-progresso-txt { margin-top: 3px; font-size: 0.72rem; color: #806a4e; }
 </style>
 </head>
 <body>
@@ -924,6 +927,20 @@
       // título vem do formulário: entra como texto, nunca como HTML
       const html = textoEnvio(Object.assign({}, it, { titulo: escaparHtml(it.titulo), msg: escaparHtml(it.msg) }));
       t.innerHTML = html; linha.appendChild(t);
+      if (it.estado === 'enviando' && typeof it.progresso === 'number') {
+        const barraWrap = document.createElement('div'); barraWrap.className = 'env-progresso-wrap';
+        const barra = document.createElement('div'); barra.className = 'env-progresso-barra';
+        barra.style.width = Math.min(100, Math.round(it.progresso * 100)) + '%';
+        barraWrap.appendChild(barra);
+        t.appendChild(barraWrap);
+        const pct = document.createElement('div'); pct.className = 'env-progresso-txt';
+        let etaTxt;
+        if (it.etaSegundos == null) etaTxt = 'calculando tempo...';
+        else if (it.etaSegundos <= 1) etaTxt = 'menos de 1s restante';
+        else etaTxt = '~' + it.etaSegundos + 's restantes';
+        pct.textContent = Math.min(100, Math.round(it.progresso * 100)) + '% enviado · ' + etaTxt;
+        t.appendChild(pct);
+      }
       if (it.estado === 'aviso') {
         const b0 = document.createElement('button'); b0.type = 'button'; b0.textContent = 'Entendi';
         b0.addEventListener('click', () => { envios.splice(envios.indexOf(it), 1); desenharEnvios(); });
@@ -952,18 +969,53 @@
     return '';
   }
 
+  // Envia com acompanhamento real de progresso (XMLHttpRequest, que avisa quanto já subiu
+  // do corpo da requisição -- o fetch() não dá esse retorno em todos os navegadores).
+  function enviarComProgresso(dados, aoProgredir) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', API_URL);
+      xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+      const inicio = Date.now();
+      xhr.upload.onprogress = function (ev) {
+        if (!ev.lengthComputable || !aoProgredir) return;
+        const fracao = ev.loaded / ev.total;
+        const decorridos = (Date.now() - inicio) / 1000;
+        const taxa = ev.loaded / Math.max(decorridos, 0.05); // bytes por segundo
+        const restante = ev.total - ev.loaded;
+        const eta = taxa > 0 ? Math.max(0, Math.round(restante / taxa)) : null;
+        aoProgredir(fracao, eta);
+      };
+      xhr.onload = function () {
+        // mesmo comportamento do fetch(...).then(r => r.json()): tenta interpretar a resposta
+        // como JSON independente do status HTTP, e deixa o erro de parse rejeitar a promessa.
+        try { resolve(JSON.parse(xhr.responseText)); } catch (e) { reject(e); }
+      };
+      xhr.onerror = function () { reject(new Error('Falha de rede.')); };
+      xhr.send(JSON.stringify(dados));
+    });
+  }
+
   async function enviarItem(it) {
     const dados = Object.assign({}, it.dados, { pin: adminPin, funcionario: funcionarioNome });
     let resultado;
+    const aoProgredir = (fracao, eta) => { it.progresso = fracao; it.etaSegundos = eta; desenharEnvios(); };
     if (dados.videoBase64) {
       // vídeo é grande demais para a fila offline: vai direto e, se falhar, dá para tentar de novo
       try {
-        const resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(dados) }).then(r => r.json());
+        const resp = await enviarComProgresso(dados, aoProgredir);
         resultado = { ok: true, resp: resp };
       } catch (errRede) { resultado = { ok: false, semFila: true }; }
     } else {
-      resultado = await enviarComFila(dados);
+      try {
+        const resp = await enviarComProgresso(dados, aoProgredir);
+        resultado = { ok: true, resp: resp };
+      } catch (errRede) {
+        enfileirarAcaoOffline(dados);
+        resultado = { ok: false, enfileirado: true };
+      }
     }
+    it.progresso = null; it.etaSegundos = null;
     atualizarBarraSync();
     if (resultado.ok && resultado.resp && resultado.resp.ok) {
       // confere de verdade: recarrega a lista e vê se as fotos/vídeo voltaram (não basta o servidor dizer "ok")

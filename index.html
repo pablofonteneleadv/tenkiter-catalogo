@@ -698,10 +698,14 @@
         const im = document.createElement('img'); im.id = 'foto-principal-modal'; im.alt = p.Nome; im.src = s.url;
         area.appendChild(im);
       } else if (s.video.tipo === 'cloudinary') {
+        // Sem controles, em loop e mudo (autoplay só funciona mudo na maioria dos navegadores) --
+        // mostra só o vídeo rodando, sem barra por cima, do jeito que foi pedido.
         const vid = document.createElement('video');
-        vid.src = s.video.url; vid.controls = true; vid.playsInline = true;
+        vid.src = s.video.url;
+        vid.loop = true; vid.muted = true; vid.autoplay = true; vid.playsInline = true;
         vid.style.width = '100%'; vid.style.height = '100%'; vid.style.objectFit = 'contain';
         area.appendChild(vid);
+        vid.play().catch(() => {}); // alguns navegadores exigem chamar play() explicitamente mesmo com autoplay
       } else {
         const fr = document.createElement('iframe');
         fr.src = 'https://drive.google.com/file/d/' + s.video.id + '/preview';
