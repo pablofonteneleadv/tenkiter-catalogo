@@ -976,6 +976,7 @@
       const xhr = new XMLHttpRequest();
       xhr.open('POST', API_URL);
       xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+      xhr.timeout = 300000; // 5 min -- evita ficar "Enviando..." travado pra sempre numa conexão ruim
       const inicio = Date.now();
       xhr.upload.onprogress = function (ev) {
         if (!ev.lengthComputable || !aoProgredir) return;
@@ -989,9 +990,16 @@
       xhr.onload = function () {
         // mesmo comportamento do fetch(...).then(r => r.json()): tenta interpretar a resposta
         // como JSON independente do status HTTP, e deixa o erro de parse rejeitar a promessa.
-        try { resolve(JSON.parse(xhr.responseText)); } catch (e) { reject(e); }
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch (e) {
+          // resposta não era JSON -- guarda um pedacinho dela pra dar pra entender o motivo real
+          const trecho = String(xhr.responseText || '').slice(0, 140).replace(/\s+/g, ' ').trim();
+          reject(new Error('resposta inesperada do servidor, HTTP ' + xhr.status + (trecho ? ': "' + trecho + '"' : ' (vazia)')));
+        }
       };
-      xhr.onerror = function () { reject(new Error('Falha de rede.')); };
+      xhr.onerror = function () { reject(new Error('falha de conexão durante o envio')); };
+      xhr.ontimeout = function () { reject(new Error('demorou mais de 5 minutos e a conexão foi cancelada')); };
       xhr.send(JSON.stringify(dados));
     });
   }
@@ -1005,7 +1013,7 @@
       try {
         const resp = await enviarComProgresso(dados, aoProgredir);
         resultado = { ok: true, resp: resp };
-      } catch (errRede) { resultado = { ok: false, semFila: true }; }
+      } catch (errRede) { resultado = { ok: false, semFila: true, msgErro: (errRede && errRede.message) || '' }; }
     } else {
       try {
         const resp = await enviarComProgresso(dados, aoProgredir);
@@ -1025,7 +1033,8 @@
     } else if (!resultado.ok && resultado.enfileirado) {
       it.estado = 'offline'; sumirDepois(it, 15000);
     } else if (resultado.semFila) {
-      it.estado = 'erro'; it.msg = 'não consegui enviar o vídeo (internet ou arquivo pesado). Nada foi salvo.';
+      it.estado = 'erro';
+      it.msg = 'não consegui enviar o vídeo (' + (resultado.msgErro || 'internet ou arquivo pesado') + '). Nada foi salvo.';
     } else {
       it.estado = 'erro'; it.msg = (resultado.resp && resultado.resp.erro) || 'falha ao salvar';
     }
