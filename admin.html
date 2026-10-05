@@ -64,6 +64,9 @@
   .chip { padding: 8px 14px; border-radius: 20px; border: 1px solid #ddd; background: var(--branco); font-size: 0.82rem; cursor: pointer; }
   .chip.selecionado { background: var(--laranja); color: var(--preto); border-color: var(--laranja); font-weight: 700; }
   .chip.add { background: #f0f0f0; color: #666; border-style: dashed; }
+  .nova-categoria-linha { display: flex; gap: 8px; margin-top: 8px; }
+  .nova-categoria-linha input { flex: 1; min-width: 0; }
+  .nova-categoria-linha button { border: none; border-radius: 8px; padding: 0 14px; font-weight: 700; font-size: 0.82rem; cursor: pointer; background: var(--laranja); color: #fff; }
 
   details.selecao-expansivel { margin-top: 12px; border: 1px solid #ddd; border-radius: 10px; padding: 10px 12px; background: #fff; }
   details.selecao-expansivel summary { cursor: pointer; font-weight: 600; font-size: 0.85rem; list-style: none; display: flex; justify-content: space-between; align-items: center; }
@@ -82,11 +85,6 @@
   .checkbox-linha label { margin: 0; font-weight: 600; font-size: 0.85rem; }
 
   .foto-box { margin-top: 8px; border: 2px dashed #ccc; border-radius: 10px; text-align: center; padding: 14px; }
-  #preview-final { max-width: 140px; max-height: 175px; border-radius: 8px; margin-top: 10px; display: none; }
-
-  #crop-section { display: none; margin-top: 12px; }
-  .crop-container { width: 100%; max-width: 260px; aspect-ratio: 4 / 5; margin: 0 auto; overflow: hidden; position: relative; background: #111; border-radius: 10px; touch-action: none; }
-  .crop-container img { position: absolute; top: 50%; left: 50%; max-width: none; transform-origin: center center; }
 
   button { border: none; border-radius: 10px; padding: 13px; font-size: 0.95rem; font-weight: 700; cursor: pointer; width: 100%; }
   .btn-primario { background: var(--laranja); color: var(--preto); margin-top: 18px; }
@@ -182,23 +180,29 @@
   .sem-precos #btn-bulk-preco { display: none !important; }
   .sem-auditoria #btn-abrir-auditoria, .sem-push #btn-abrir-push, .sem-portal a[href="manual.html"] { display: none !important; }
   .dica-midia { font-size: 0.75rem; color: #777; margin-top: 8px; }
-  .galeria-grid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
-  .galeria-item { position: relative; width: 74px; height: 92px; }
-  .galeria-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; }
-  .galeria-item button { position: absolute; top: -6px; right: -6px; width: 24px; height: 24px; border-radius: 50%; border: none; background: #c62828; color: #fff; font-size: 0.8rem; cursor: pointer; padding: 0; line-height: 24px; }
-  .galeria-item .novo { position: absolute; left: 4px; bottom: 4px; background: var(--laranja); color: #fff; font-size: 0.6rem; font-weight: 800; padding: 1px 5px; border-radius: 6px; }
+  .galeria-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 10px; }
+  .galeria-item { position: relative; width: 86px; height: 107px; }
+  .galeria-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; display: block; }
+  .galeria-item.capa img { border-color: var(--laranja); }
+  .galeria-item .btn-remover { position: absolute; top: -6px; right: -6px; width: 24px; height: 24px; border-radius: 50%; border: none; background: #c62828; color: #fff; font-size: 0.8rem; cursor: pointer; padding: 0; line-height: 24px; z-index: 2; }
+  .galeria-item .selo-capa { position: absolute; top: 4px; left: 4px; background: var(--laranja); color: #fff; font-size: 0.6rem; font-weight: 800; padding: 2px 6px; border-radius: 6px; pointer-events: none; }
+  .galeria-item .novo { position: absolute; right: 4px; top: 4px; background: #333; color: #fff; font-size: 0.6rem; font-weight: 800; padding: 1px 5px; border-radius: 6px; pointer-events: none; }
+  .galeria-item .mover { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; border-radius: 0 0 6px 6px; overflow: hidden; }
+  .galeria-item .mover button { flex: 1; height: 24px; border: none; background: rgba(0,0,0,0.6); color: #fff; font-size: 0.85rem; cursor: pointer; padding: 0; line-height: 24px; }
+  .galeria-item .mover button:disabled { opacity: 0.35; cursor: default; }
   #video-preview { display: none; width: 100%; max-width: 260px; max-height: 300px; margin: 10px auto 0; border-radius: 8px; background: #000; }
   #video-atual { display: none; margin-top: 10px; font-size: 0.85rem; }
   #btn-remover-video { display: none; margin-top: 8px; background: #c62828; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 700; cursor: pointer; }
   #fila-envios { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
-  .env-item { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; padding: 8px 10px; border-radius: 10px; background: #f3f3f3; border-left: 4px solid #999; }
-  .env-item .env-txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .env-item { display: flex; flex-direction: column; align-items: stretch; gap: 8px; font-size: 0.82rem; padding: 8px 10px; border-radius: 10px; background: #f3f3f3; border-left: 4px solid #999; }
+  .env-item .env-txt { width: 100%; overflow-wrap: break-word; }
   .env-item.env-enviando { border-left-color: var(--laranja); background: #fff6ec; }
   .env-item.env-ok { border-left-color: #2e7d32; background: #edf7ee; }
   .env-item.env-aviso { border-left-color: #f9a825; background: #fff8e1; }
   .env-item.env-erro { border-left-color: #c62828; background: #fdecec; }
   .env-item.env-offline { border-left-color: #1565c0; background: #eaf2fc; }
-  .env-item button { border: none; border-radius: 8px; padding: 5px 9px; font-weight: 700; font-size: 0.75rem; cursor: pointer; background: #333; color: #fff; }
+  .env-botoes { display: flex; gap: 8px; }
+  .env-item button { border: none; border-radius: 8px; padding: 7px 10px; font-weight: 700; font-size: 0.75rem; cursor: pointer; background: #333; color: #fff; flex: 1; }
   .env-spin { display: inline-block; animation: env-gira 1s linear infinite; }
   @keyframes env-gira { to { transform: rotate(360deg); } }
   .env-progresso-wrap { margin-top: 6px; height: 6px; border-radius: 4px; background: #e2d9cc; overflow: hidden; }
@@ -289,14 +293,18 @@
       <label>Nome do produto</label>
       <input type="text" id="nome" required placeholder="Ex: Vestido Floral Midi">
 
-      <details class="selecao-expansivel" id="details-categoria">
-        <summary>Categoria <span class="resumo" id="resumo-categoria">(nenhuma selecionada)</span></summary>
-        <div class="chips" id="chips-categoria"></div>
-      </details>
-
       <details class="selecao-expansivel" id="details-genero">
         <summary>Gênero <span class="resumo" id="resumo-genero">(nenhum selecionado)</span></summary>
         <div class="chips" id="chips-genero"></div>
+      </details>
+
+      <details class="selecao-expansivel" id="details-categoria">
+        <summary>Categoria <span class="resumo" id="resumo-categoria">(nenhuma selecionada)</span></summary>
+        <div class="chips" id="chips-categoria"></div>
+        <div class="nova-categoria-linha" id="nova-categoria-linha" style="display:none;">
+          <input type="text" id="input-nova-categoria" placeholder="Nome da nova categoria" maxlength="40">
+          <button type="button" id="btn-confirmar-nova-categoria">Adicionar</button>
+        </div>
       </details>
 
       <div class="form-linha">
@@ -340,22 +348,11 @@
         </div>
       </details>
 
-      <label>Foto Principal</label>
-      <div class="foto-box">
-        <input type="file" id="foto" accept="image/*">
-        <div id="crop-section">
-          <div class="crop-container" id="crop-container"><img id="crop-img" alt=""></div>
-          <div style="margin-top:8px;"><input type="range" id="zoom-slider" min="1" max="3" step="0.01" value="1"></div>
-          <button type="button" id="btn-confirmar-corte" style="margin-top:8px;background:var(--laranja);">Ajustar & Salvar Foto</button>
-        </div>
-        <img id="preview-final">
-      </div>
-
-      <label>Mais fotos <span id="galeria-contador">(0 de 8)</span></label>
+      <label>Fotos <span id="galeria-contador">(0 de 8)</span></label>
       <div class="foto-box" id="galeria-box">
         <input type="file" id="galeria-input" accept="image/*" multiple>
         <div id="galeria-grid" class="galeria-grid"></div>
-        <div class="dica-midia">Até 8 fotos além da principal. Toque no ✕ para tirar uma.</div>
+        <div class="dica-midia">Até 8 fotos. Toque numa foto para torná-la a capa (fica com borda laranja). Use ‹ › para mudar a ordem. Toque no ✕ para tirar uma.</div>
       </div>
 
       <label>Vídeo da peça (1 só, até 20 MB)</label>
@@ -407,7 +404,6 @@
 
 </main>
 
-<canvas id="canvas-oculto" style="display:none;"></canvas>
 <canvas id="canvas-stories" style="display:none;"></canvas>
 
 <div id="overlay-compartilhar"><div class="painel-compartilhar" id="painel-compartilhar-conteudo"></div></div>
@@ -622,11 +618,11 @@
   let categorias = [], generos = [], produtos = [];
   let selecionadasCategorias = new Set(), selecionadosGeneros = new Set();
   let selecionadosBulk = new Set();
-  let fotoBase64 = null;
 
-  /* ===================== v2.1: fotos extras (até 8) e vídeo (1) ===================== */
+  /* ===================== v2.3: fotos unificadas (até 8, com capa e ordem) e vídeo (1) ===================== */
   const MAX_GALERIA = 8, MAX_VIDEO_MB = 20;
-  let galeriaItens = [];      // { url } já salva  |  { b64, prev } nova
+  // fotosItens: { url } já salva  |  { b64, prev } nova -- uma delas tem .capa = true (a foto principal).
+  let fotosItens = [];
   let videoNovo = null;       // { b64, mime, prev }
   let videoAtual = '';        // link do vídeo já salvo
   let removerVideo = false;
@@ -641,21 +637,51 @@
     return null;
   }
 
-  function desenharGaleria() {
+  // Garante que exatamente uma foto seja a capa (a primeira, se nenhuma estiver marcada).
+  function garantirCapa_() {
+    if (fotosItens.length === 0) return;
+    if (!fotosItens.some(i => i.capa)) fotosItens[0].capa = true;
+  }
+  function tornarCapa(idx) {
+    fotosItens.forEach((i, k) => { i.capa = (k === idx); });
+    desenharFotos();
+  }
+  function moverFoto(idx, direcao) {
+    const alvo = idx + direcao;
+    if (alvo < 0 || alvo >= fotosItens.length) return;
+    const tmp = fotosItens[idx]; fotosItens[idx] = fotosItens[alvo]; fotosItens[alvo] = tmp;
+    desenharFotos();
+  }
+  function desenharFotos() {
+    garantirCapa_();
     const grid = document.getElementById('galeria-grid');
     grid.innerHTML = '';
-    galeriaItens.forEach((it, idx) => {
-      const box = document.createElement('div'); box.className = 'galeria-item';
+    fotosItens.forEach((it, idx) => {
+      const box = document.createElement('div'); box.className = 'galeria-item' + (it.capa ? ' capa' : '');
       const img = document.createElement('img'); img.alt = ''; img.referrerPolicy = 'no-referrer';
       img.src = it.url || it.prev;
-      const x = document.createElement('button'); x.type = 'button'; x.textContent = '✕'; x.title = 'Tirar esta foto';
-      x.addEventListener('click', () => { galeriaItens.splice(idx, 1); desenharGaleria(); });
-      box.appendChild(img); box.appendChild(x);
+      img.title = 'Toque para tornar capa';
+      img.addEventListener('click', () => tornarCapa(idx));
+      box.appendChild(img);
+
+      if (it.capa) { const s = document.createElement('span'); s.className = 'selo-capa'; s.textContent = '★ CAPA'; box.appendChild(s); }
       if (!it.url) { const n = document.createElement('span'); n.className = 'novo'; n.textContent = 'NOVA'; box.appendChild(n); }
+
+      const x = document.createElement('button'); x.type = 'button'; x.className = 'btn-remover'; x.textContent = '✕'; x.title = 'Tirar esta foto';
+      x.addEventListener('click', () => { fotosItens.splice(idx, 1); desenharFotos(); });
+      box.appendChild(x);
+
+      const mover = document.createElement('div'); mover.className = 'mover';
+      const esq = document.createElement('button'); esq.type = 'button'; esq.textContent = '‹'; esq.title = 'Mover para trás';
+      esq.disabled = idx === 0; esq.addEventListener('click', () => moverFoto(idx, -1));
+      const dir = document.createElement('button'); dir.type = 'button'; dir.textContent = '›'; dir.title = 'Mover para frente';
+      dir.disabled = idx === fotosItens.length - 1; dir.addEventListener('click', () => moverFoto(idx, 1));
+      mover.appendChild(esq); mover.appendChild(dir); box.appendChild(mover);
+
       grid.appendChild(box);
     });
-    document.getElementById('galeria-contador').textContent = '(' + galeriaItens.length + ' de ' + MAX_GALERIA + ')';
-    document.getElementById('galeria-input').disabled = galeriaItens.length >= MAX_GALERIA;
+    document.getElementById('galeria-contador').textContent = '(' + fotosItens.length + ' de ' + MAX_GALERIA + ')';
+    document.getElementById('galeria-input').disabled = fotosItens.length >= MAX_GALERIA;
   }
 
   function desenharVideo() {
@@ -678,11 +704,17 @@
 
   function zerarMidia(p) {
     if (videoNovo && videoNovo.prev) URL.revokeObjectURL(videoNovo.prev);
-    galeriaItens = p ? String(p.Fotos_Galeria || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, MAX_GALERIA).map(u => ({ url: u })) : [];
+    if (p) {
+      const capa = String(p.Foto_URL || '').trim();
+      const resto = String(p.Fotos_Galeria || '').split(',').map(s => s.trim()).filter(Boolean);
+      fotosItens = (capa ? [{ url: capa, capa: true }] : []).concat(resto.map(u => ({ url: u }))).slice(0, MAX_GALERIA);
+    } else {
+      fotosItens = [];
+    }
     videoNovo = null; removerVideo = false; videoAtual = p ? String(p.Video_URL || '') : '';
     document.getElementById('galeria-input').value = '';
     document.getElementById('video-input').value = '';
-    desenharGaleria(); desenharVideo();
+    desenharFotos(); desenharVideo();
   }
 
   function lerFotoReduzida(file) {
@@ -709,13 +741,13 @@
   document.getElementById('galeria-input').addEventListener('change', async (e) => {
     const arquivos = Array.from(e.target.files || []);
     e.target.value = '';
-    const vagas = MAX_GALERIA - galeriaItens.length;
+    const vagas = MAX_GALERIA - fotosItens.length;
     if (arquivos.length > vagas) alert('Cabem só mais ' + vagas + ' foto(s) (máximo ' + MAX_GALERIA + '). As primeiras ' + vagas + ' foram aproveitadas.');
     for (const f of arquivos.slice(0, Math.max(vagas, 0))) {
       if (!/^image\//.test(f.type)) continue;
-      try { galeriaItens.push(await lerFotoReduzida(f)); } catch (err) { alert('Não consegui ler a foto "' + f.name + '".'); }
+      try { fotosItens.push(await lerFotoReduzida(f)); } catch (err) { alert('Não consegui ler a foto "' + f.name + '".'); }
     }
-    desenharGaleria();
+    desenharFotos();
   });
 
   document.getElementById('video-input').addEventListener('change', (e) => {
@@ -756,7 +788,7 @@
         fetch(API_URL + '?action=categorias').then(r => r.json()),
         fetch(API_URL + '?action=generos').then(r => r.json())
       ]);
-      categorias = rc.categorias || [];
+      categorias = (rc.categorias || []).sort((a, b) => a.localeCompare(b, 'pt-BR'));
       generos = rg.generos || [];
     } catch (e) {
       categorias = []; generos = [];
@@ -779,45 +811,48 @@
       });
       container.appendChild(chip);
     });
+    if (idContainer === 'chips-categoria') {
+      const chipNova = document.createElement('button');
+      chipNova.type = 'button'; chipNova.className = 'chip add'; chipNova.textContent = '+ Nova categoria';
+      chipNova.addEventListener('click', () => {
+        document.getElementById('nova-categoria-linha').style.display = 'flex';
+        document.getElementById('input-nova-categoria').focus();
+      });
+      container.appendChild(chipNova);
+    }
   }
 
-  // Crop & Foto Processing
-  const inputFoto = document.getElementById('foto');
-  const cropSection = document.getElementById('crop-section');
-  const cropContainer = document.getElementById('crop-container');
-  const cropImg = document.getElementById('crop-img');
-  const zoomSlider = document.getElementById('zoom-slider');
-  const previewFinal = document.getElementById('preview-final');
-
-  let crop = { img: null, naturalW: 0, naturalH: 0, baseScale: 1, zoom: 1, offsetX: 0, offsetY: 0 };
-
-  inputFoto.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const leitor = new FileReader();
-    leitor.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        crop.img = img; crop.naturalW = img.naturalWidth; crop.naturalH = img.naturalHeight;
-        crop.baseScale = Math.max(260 / crop.naturalW, 325 / crop.naturalH);
-        cropImg.src = img.src;
-        cropSection.style.display = 'block';
-      };
-      img.src = leitor.result;
-    };
-    leitor.readAsDataURL(file);
-  });
-
-  document.getElementById('btn-confirmar-corte').addEventListener('click', () => {
-    const canvas = document.getElementById('canvas-oculto');
-    canvas.width = 900; canvas.height = 1125;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(crop.img, 0, 0, 900, 1125);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-    fotoBase64 = dataUrl.split(',')[1];
-    previewFinal.src = dataUrl;
-    previewFinal.style.display = 'block';
-    cropSection.style.display = 'none';
+  // Nova categoria: manda pro servidor, entra na lista local já ordenada em ordem alfabética
+  // e fica selecionada (quem criou já vai usar na hora).
+  async function adicionarNovaCategoria() {
+    const input = document.getElementById('input-nova-categoria');
+    const nome = input.value.trim();
+    if (!nome) return;
+    const btn = document.getElementById('btn-confirmar-nova-categoria');
+    btn.disabled = true; btn.textContent = 'Adicionando...';
+    try {
+      const resp = await fetch(API_URL, {
+        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'addCategoria', nome: nome, pin: adminPin, funcionario: funcionarioNome })
+      }).then(r => r.json());
+      if (!resp.ok) { alert(resp.erro || 'Não consegui adicionar a categoria.'); return; }
+      if (!categorias.some(c => c.toLowerCase() === nome.toLowerCase())) {
+        categorias.push(nome);
+        categorias.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      }
+      selecionadasCategorias.add(categorias.find(c => c.toLowerCase() === nome.toLowerCase()) || nome);
+      input.value = '';
+      document.getElementById('nova-categoria-linha').style.display = 'none';
+      renderizarChips('chips-categoria', categorias, selecionadasCategorias);
+    } catch (e) {
+      alert('Sem conexão. Tente de novo.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Adicionar';
+    }
+  }
+  document.getElementById('btn-confirmar-nova-categoria').addEventListener('click', adicionarNovaCategoria);
+  document.getElementById('input-nova-categoria').addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); adicionarNovaCategoria(); }
   });
 
   /* ===================== Duplicar / Editar peça ===================== */
@@ -849,8 +884,6 @@
     preencherFormComProduto(p);
     document.getElementById('nome').value = p.Nome + ' (cópia)';
 
-    fotoBase64 = null;
-    previewFinal.style.display = 'none';
     zerarMidia(null);
 
     document.getElementById('titulo-form').textContent = 'Duplicando: ' + p.Nome;
@@ -870,14 +903,7 @@
 
     preencherFormComProduto(p);
 
-    fotoBase64 = null;
     zerarMidia(p);
-    if (p.Foto_URL) {
-      previewFinal.src = p.Foto_URL;
-      previewFinal.style.display = 'block';
-    } else {
-      previewFinal.style.display = 'none';
-    }
 
     document.getElementById('titulo-form').textContent = 'Editando: ' + p.Nome;
     document.getElementById('btn-salvar').textContent = 'Salvar Alterações';
@@ -894,8 +920,6 @@
     selecionadasCategorias.clear(); selecionadosGeneros.clear();
     renderizarChips('chips-categoria', categorias, selecionadasCategorias);
     renderizarChips('chips-genero', generos, selecionadosGeneros);
-    fotoBase64 = null;
-    previewFinal.style.display = 'none';
     zerarMidia(null);
     document.getElementById('titulo-form').textContent = 'Novo Produto';
     document.getElementById('btn-salvar').textContent = 'Cadastrar Peça';
@@ -942,16 +966,18 @@
         t.appendChild(pct);
       }
       if (it.estado === 'aviso') {
+        const botoes = document.createElement('div'); botoes.className = 'env-botoes';
         const b0 = document.createElement('button'); b0.type = 'button'; b0.textContent = 'Entendi';
         b0.addEventListener('click', () => { envios.splice(envios.indexOf(it), 1); desenharEnvios(); });
-        linha.appendChild(b0);
+        botoes.appendChild(b0); linha.appendChild(botoes);
       }
       if (it.estado === 'erro') {
+        const botoes = document.createElement('div'); botoes.className = 'env-botoes';
         const b1 = document.createElement('button'); b1.type = 'button'; b1.textContent = 'Tentar de novo';
         b1.addEventListener('click', () => { it.estado = 'fila'; it.msg = ''; desenharEnvios(); processarEnvios(); });
         const b2 = document.createElement('button'); b2.type = 'button'; b2.textContent = 'Descartar'; b2.style.background = '#777';
         b2.addEventListener('click', () => { envios.splice(envios.indexOf(it), 1); desenharEnvios(); });
-        linha.appendChild(b1); linha.appendChild(b2);
+        botoes.appendChild(b1); botoes.appendChild(b2); linha.appendChild(botoes);
       }
       box.appendChild(linha);
     });
@@ -1060,6 +1086,9 @@
     e.preventDefault();
     const idParaEditar = document.getElementById('produto-id').value;
     const ehEdicao = modoFormulario === 'editando' && idParaEditar;
+    garantirCapa_();
+    const capaItem = fotosItens.find(i => i.capa) || null;
+    const resto = fotosItens.filter(i => !i.capa);
     const dados = {
       action: ehEdicao ? 'update' : 'create',
       nome: document.getElementById('nome').value.trim(),
@@ -1071,9 +1100,12 @@
       cores: document.getElementById('cores').value.trim(),
       descricao: document.getElementById('descricao').value.trim(),
       novidade: document.getElementById('novidade').checked,
-      fotoBase64: fotoBase64,
-      fotosGaleriaExistentes: galeriaItens.filter(i => i.url).map(i => i.url).join(','),
-      fotosGaleriaBase64: galeriaItens.filter(i => i.b64).map(i => i.b64)
+      // capa: se for uma foto nova, manda os bytes; se já existia (ex.: o usuário trocou a capa
+      // por uma foto da galeria sem subir nada novo), manda só a URL que já existia.
+      fotoBase64: capaItem && capaItem.b64 ? capaItem.b64 : null,
+      fotoUrlExistente: capaItem && capaItem.url ? capaItem.url : '',
+      fotosGaleriaExistentes: resto.filter(i => i.url).map(i => i.url).join(','),
+      fotosGaleriaBase64: resto.filter(i => i.b64).map(i => i.b64)
     };
     if (videoNovo) { dados.videoBase64 = videoNovo.b64; dados.videoMime = videoNovo.mime; }
     else if (ehEdicao && removerVideo) dados.removerVideo = true;

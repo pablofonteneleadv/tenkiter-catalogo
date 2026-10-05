@@ -708,6 +708,11 @@
         vid.loop = true; vid.playsInline = true;
         vid.style.width = '100%'; vid.style.height = '100%'; vid.style.objectFit = 'contain';
         area.appendChild(vid);
+        // Toque no vídeo pausa; toque de novo continua -- sem ícone nem nada aparecendo por cima.
+        // Um swipe (troca de slide) não dispara isso: o navegador só sintetiza o "click" depois
+        // de um toque parado, não depois de um arrasto.
+        vid.style.cursor = 'pointer';
+        vid.addEventListener('click', () => { if (vid.paused) vid.play().catch(() => {}); else vid.pause(); });
         const tocarComSom = () => {
           vid.muted = false;
           const p = vid.play();

@@ -1,4 +1,11 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v2.2
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v2.3
+//
+// NOVIDADE v2.3 (sobre a v2.2, sem mexer em mais nada):
+//  - Editar produto: a capa (Foto_URL) agora pode ser trocada por uma foto que já
+//    existia (ex.: uma das fotos da galeria virou a capa), sem precisar reenviar os
+//    bytes da imagem. Só mexe se vier um fotoUrlExistente diferente do que já estava
+//    salvo; não apaga nada do Cloudinary nesse caso (a foto pode ter só mudado de
+//    lugar pra dentro da galeria, não foi removida).
 //
 // NOVIDADE v2.2 (sobre a v2.1 que já estava no ar, sem mexer no login/sessão/cache/trava que já existiam):
 //  - Fotos e vídeos novos passam a ir para o Cloudinary em vez do Drive (qualidade
@@ -49,7 +56,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-2.2';
+const VERSAO_CATALOGO = 'catalogo-2.3';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1513,6 +1520,11 @@ function atualizarProduto_(body) {
         const sufixo = '_' + new Date().getTime();
         fotoUrl = salvarFotoCloudinary_(body.fotoBase64, body.fotoMime || 'image/jpeg', 'produto_' + body.id + sufixo + '.jpg');
         excluirMidiaAntiga_(fotoUrlAntiga, fotoUrl);
+      } else if (body.fotoUrlExistente !== undefined && body.fotoUrlExistente && body.fotoUrlExistente !== fotoUrlAntiga) {
+        // Capa trocada por uma foto que já existia (ex.: virou capa uma das fotos da galeria) --
+        // só aponta pra ela, sem apagar nada do Cloudinary: ela pode ter só mudado de lugar pra
+        // dentro da galeria, não foi removida.
+        fotoUrl = body.fotoUrlExistente;
       }
       if (body.fotoStoriesBase64) {
         const sufixo2 = '_' + new Date().getTime();
