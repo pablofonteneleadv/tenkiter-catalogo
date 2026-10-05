@@ -1,4 +1,8 @@
-// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v4.1
+// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v4.2
+//
+// NOVIDADE DA v4.2 -- nenhuma alteração de função: só sincroniza o número da versão
+//  junto com o catálogo (que foi pra v2.2 na mesma rodada). O código abaixo é idêntico
+//  ao da v4.1 que já estava no ar.
 //
 // NOVIDADE DA v4.1 -- CURRÍCULOS: link público curriculo.html + painel curriculos.html.
 //  Só ACRESCENTA ações (curriculo_* e curriculos_*); nada do que existia foi alterado.
@@ -757,7 +761,7 @@ function doGet(e) {
   }
 
   if (action === 'versao') {
-    return jsonOut_({ ok: true, versao: '4.1', acessos: true, curriculos: true, listaFechada: listaFechada_() });
+    return jsonOut_({ ok: true, versao: '4.2', acessos: true, curriculos: true, listaFechada: listaFechada_() });
   }
 
   // padrão: lista de funcionários (login e níveis) -- formato ANTIGO, só existe
