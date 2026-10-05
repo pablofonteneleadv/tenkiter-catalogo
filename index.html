@@ -119,6 +119,7 @@
   .seta-slide { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(255,255,255,0.88); color: #222; font-size: 1.5rem; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; padding: 0 0 3px; }
   .seta-slide.esq { left: 8px; } .seta-slide.dir { right: 8px; }
   .contador-slide { position: absolute; right: 10px; bottom: 10px; z-index: 3; background: rgba(0,0,0,0.6); color: #fff; font-size: 0.72rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; pointer-events: none; }
+  .btn-ligar-som { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3; background: rgba(0,0,0,0.7); color: #fff; border: none; border-radius: 999px; padding: 7px 14px; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
   .thumb-video { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; background: #222; color: #fff; font-size: 1.3rem; opacity: 0.8; }
   .thumbs-galeria { display: flex; gap: 6px; padding: 8px 12px; overflow-x: auto; background: #fafafa; border-bottom: 1px solid #eee; }
   .thumb-item { width: 50px; height: 62px; object-fit: cover; border-radius: 6px; cursor: pointer; opacity: 0.6; border: 2px solid transparent; }
@@ -698,14 +699,34 @@
         const im = document.createElement('img'); im.id = 'foto-principal-modal'; im.alt = p.Nome; im.src = s.url;
         area.appendChild(im);
       } else if (s.video.tipo === 'cloudinary') {
-        // Sem controles, em loop e mudo (autoplay só funciona mudo na maioria dos navegadores) --
-        // mostra só o vídeo rodando, sem barra por cima, do jeito que foi pedido.
+        // Sem controles, em loop, com som -- o play() roda dentro do clique/toque/seta que troca
+        // de slide, e isso conta como gesto do usuário, então o navegador libera autoplay COM som.
+        // Se mesmo assim algum navegador bloquear o som, cai pro mudo (ao menos o vídeo roda) e
+        // mostra um toque rápido pra ligar o som, já que não tem barra de controle por cima.
         const vid = document.createElement('video');
         vid.src = s.video.url;
-        vid.loop = true; vid.muted = true; vid.autoplay = true; vid.playsInline = true;
+        vid.loop = true; vid.playsInline = true;
         vid.style.width = '100%'; vid.style.height = '100%'; vid.style.objectFit = 'contain';
         area.appendChild(vid);
-        vid.play().catch(() => {}); // alguns navegadores exigem chamar play() explicitamente mesmo com autoplay
+        const tocarComSom = () => {
+          vid.muted = false;
+          const p = vid.play();
+          if (p && p.catch) {
+            p.catch(() => {
+              vid.muted = true;
+              vid.play().catch(() => {});
+              const btnSom = document.createElement('button');
+              btnSom.type = 'button'; btnSom.className = 'btn-ligar-som'; btnSom.textContent = '🔇 Toque para ouvir';
+              btnSom.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                vid.muted = false; vid.play().catch(() => {});
+                btnSom.remove();
+              });
+              area.appendChild(btnSom);
+            });
+          }
+        };
+        tocarComSom();
       } else {
         const fr = document.createElement('iframe');
         fr.src = 'https://drive.google.com/file/d/' + s.video.id + '/preview';
