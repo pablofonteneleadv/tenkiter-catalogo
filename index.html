@@ -620,6 +620,36 @@
     abrirWhatsApp(p);
   }
 
+  // ===================== Overlays x botão/gesto "voltar" do Android =====================
+  // Sem isso, abrir um overlay (detalhe do produto, sacola) não empilha nada no histórico,
+  // então o primeiro "voltar" do Android sai direto do site. Abrir empilha uma entrada no
+  // histórico (só na transição fechado->aberto, nunca de novo se já estava aberto); fechar
+  // pelo botão/backdrop consome essa entrada (history.back()), e o popstate (que dispara tanto
+  // pelo "voltar" do Android quanto por esse history.back()) é quem realmente fecha na tela --
+  // assim os dois caminhos (botão "Fechar" e botão físico/gesto de voltar) sempre terminam no
+  // mesmo lugar: o catálogo, sem sair da Tenkiter.
+  function abrirComHistorico_(idOverlay, url) {
+    const el = document.getElementById(idOverlay);
+    if (!el || el.classList.contains('aberto')) return;
+    el.classList.add('aberto');
+    window.history.pushState({ overlay: idOverlay }, '', url || undefined);
+  }
+  function fecharComHistorico_(idOverlay) {
+    const el = document.getElementById(idOverlay);
+    if (!el || !el.classList.contains('aberto')) return;
+    if (window.history.state && window.history.state.overlay === idOverlay) {
+      window.history.back(); // o popstate abaixo fecha a tela quando essa volta acontecer
+    } else {
+      el.classList.remove('aberto'); // não tinha entrada empilhada (ex.: já veio por popstate) -- só fecha
+    }
+  }
+  window.addEventListener('popstate', () => {
+    ['overlay', 'overlay-sacola'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('aberto');
+    });
+  });
+
   function abrirDetalhe(id) {
     const p = produtos.find(x => String(x.ID) === String(id));
     if (!p) return;
@@ -668,7 +698,9 @@
       <button class="btn-fechar" id="btn-fechar-modal">Fechar</button>
     `;
 
-    document.getElementById('overlay').classList.add('aberto');
+    const urlAbertura = new URL(window.location);
+    urlAbertura.searchParams.set('id', p.ID);
+    abrirComHistorico_('overlay', urlAbertura);
     document.getElementById('btn-fechar-modal').addEventListener('click', fecharDetalhe);
     document.getElementById('btn-favorito-modal').addEventListener('click', () => {
       toggleFavorito(p.ID);
@@ -755,10 +787,6 @@
       });
       window.__navSlide = (d) => mostrarSlide(atual + d);
     } else { window.__navSlide = null; }
-
-    const url = new URL(window.location);
-    url.searchParams.set('id', p.ID);
-    window.history.replaceState({}, '', url);
   }
 
   // Reconhece tanto vídeo antigo (Drive, tocado num <iframe>) quanto vídeo novo (Cloudinary,
@@ -776,10 +804,7 @@
   });
 
   function fecharDetalhe() {
-    document.getElementById('overlay').classList.remove('aberto');
-    const url = new URL(window.location);
-    url.searchParams.delete('id');
-    window.history.replaceState({}, '', url);
+    fecharComHistorico_('overlay');
   }
 
   document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') fecharDetalhe(); });
@@ -850,11 +875,11 @@
     }
 
     container.querySelectorAll('#btn-fechar-sacola').forEach(btn => btn.addEventListener('click', fecharSacola));
-    document.getElementById('overlay-sacola').classList.add('aberto');
+    abrirComHistorico_('overlay-sacola');
   }
 
   function fecharSacola() {
-    document.getElementById('overlay-sacola').classList.remove('aberto');
+    fecharComHistorico_('overlay-sacola');
   }
 
   document.getElementById('btn-sacola-header').addEventListener('click', abrirSacola);

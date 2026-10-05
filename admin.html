@@ -1340,6 +1340,27 @@
     alert('Link copiado!');
   }
 
+  // ===================== Overlay x botão/gesto "voltar" do Android =====================
+  function abrirComHistorico_(idOverlay) {
+    const el = document.getElementById(idOverlay);
+    if (!el || el.classList.contains('aberto')) return;
+    el.classList.add('aberto');
+    window.history.pushState({ overlay: idOverlay }, '');
+  }
+  function fecharComHistorico_(idOverlay) {
+    const el = document.getElementById(idOverlay);
+    if (!el || !el.classList.contains('aberto')) return;
+    if (window.history.state && window.history.state.overlay === idOverlay) {
+      window.history.back();
+    } else {
+      el.classList.remove('aberto');
+    }
+  }
+  window.addEventListener('popstate', () => {
+    const el = document.getElementById('overlay-compartilhar');
+    if (el) el.classList.remove('aberto');
+  });
+
   /* ===================== Criar Arte (Stories) ===================== */
 
   const OPCOES_SELO_ARTE = ['NOVIDADE', 'ÚLTIMAS PEÇAS', 'PROMOÇÃO', 'REPOSIÇÃO', 'DESTAQUE', 'Nenhum'];
@@ -1352,7 +1373,7 @@
     const fotos = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',').map(s => s.trim()).filter(Boolean));
     configArteAtual = { selo: ehNovidade(p) ? 'NOVIDADE' : 'DESTAQUE', precoStory: avistaPadrao, foto: fotos[0] };
     renderizarConfigArte(p, fotos);
-    document.getElementById('overlay-compartilhar').classList.add('aberto');
+    abrirComHistorico_('overlay-compartilhar');
   }
 
   function renderizarConfigArte(p, fotos) {
@@ -1447,7 +1468,7 @@
     }
 
     document.getElementById('btn-fechar-arte-config').addEventListener('click', () => {
-      document.getElementById('overlay-compartilhar').classList.remove('aberto');
+      fecharComHistorico_('overlay-compartilhar');
     });
 
     document.getElementById('btn-baixar-arte').addEventListener('click', () => {
@@ -1597,7 +1618,7 @@
   }
 
   document.getElementById('overlay-compartilhar').addEventListener('click', (e) => {
-    if (e.target.id === 'overlay-compartilhar') e.target.classList.remove('aberto');
+    if (e.target.id === 'overlay-compartilhar') fecharComHistorico_('overlay-compartilhar');
   });
 
   document.getElementById('busca-admin').addEventListener('input', debounce(renderizarProdutos, 250));
@@ -1688,9 +1709,9 @@
       <div id="lista-auditoria" style="margin-top:10px;max-height:55vh;overflow-y:auto;"><p style="text-align:center;color:#999;">Carregando...</p></div>
       <button type="button" id="btn-fechar-auditoria" style="background:#eee;color:#555;margin-top:12px;">Fechar</button>
     `;
-    document.getElementById('overlay-compartilhar').classList.add('aberto');
+    abrirComHistorico_('overlay-compartilhar');
     document.getElementById('btn-fechar-auditoria').addEventListener('click', () => {
-      document.getElementById('overlay-compartilhar').classList.remove('aberto');
+      fecharComHistorico_('overlay-compartilhar');
     });
 
     let registros = [];
