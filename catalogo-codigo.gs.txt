@@ -1,4 +1,15 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v2.3
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v2.4
+//
+// NOVIDADE v2.4 (sobre a v2.3, sem mexer em mais nada):
+//  - Vídeo do produto: em vez de ir em base64 dentro do POST de criar/editar (que
+//    tem que caber inteiro numa execução do Apps Script, que tem limite de tempo e
+//    não aguenta bem um arquivo grande numa conexão móvel instável), o navegador
+//    agora sobe o vídeo DIRETO pro Cloudinary, usando uma assinatura de curta
+//    duração que esse backend fornece (ação "assinarUploadVideo", nunca expõe o
+//    api_secret). Depois manda só a URL resultante (videoUrlExistente) pra
+//    criar/editar o produto -- exatamente o mesmo esquema já usado pra foto de capa
+//    reaproveitada (fotoUrlExistente, v2.3). videoBase64 continua aceito por
+//    compatibilidade, mas deixa de ser o caminho usado pelo admin.
 //
 // NOVIDADE v2.3 (sobre a v2.2, sem mexer em mais nada):
 //  - Editar produto: a capa (Foto_URL) agora pode ser trocada por uma foto que já
@@ -56,7 +67,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-2.3';
+const VERSAO_CATALOGO = 'catalogo-2.4';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -238,6 +249,28 @@ function cldCredenciais_() {
     throw new Error('Cloudinary não configurado no servidor (faltam CLOUDINARY_CLOUD_NAME/CLOUDINARY_API_KEY/CLOUDINARY_API_SECRET nas Propriedades do Script).');
   }
   return { cloudName: cloudName, apiKey: apiKey, apiSecret: apiSecret };
+}
+
+/**
+ * v2.4: devolve os parâmetros assinados para o NAVEGADOR subir um vídeo DIRETO pro Cloudinary,
+ * sem passar o arquivo pelo Apps Script. Um vídeo pode levar minutos pra enviar numa rede móvel
+ * e o Apps Script tem limite de tempo de execução -- não é o lugar certo pra isso, e qualquer
+ * soluço no caminho derruba o envio inteiro. O Cloudinary é feito pra aguentar upload grande
+ * direto do navegador numa conexão instável. O api_secret nunca sai daqui -- só a assinatura.
+ */
+function assinarUploadVideo_(body) {
+  const cred = cldCredenciais_();
+  const timestamp = Math.floor(new Date().getTime() / 1000);
+  const paramsAssinados = 'folder=' + CLOUDINARY_PASTA + '&timestamp=' + timestamp;
+  const assinatura = cldHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_1, paramsAssinados + cred.apiSecret));
+  return jsonResponse_({
+    ok: true,
+    cloudName: cred.cloudName,
+    apiKey: cred.apiKey,
+    timestamp: timestamp,
+    folder: CLOUDINARY_PASTA,
+    signature: assinatura
+  });
 }
 
 /**
@@ -1007,7 +1040,7 @@ function acRegistrar_(nome, whatsapp, senha, perfilNome, extras) {
 const PERMISSAO_POR_ACAO_ = {
   create: 'catalogo_cadastrar', update: 'catalogo_cadastrar', addCategoria: 'catalogo_cadastrar', addGenero: 'catalogo_cadastrar',
   gerarSeo: 'catalogo_cadastrar', delete: 'catalogo_excluir', reativar: 'catalogo_excluir', excluirPermanente: 'catalogo_excluir',
-  enviarPush: 'catalogo_push'
+  enviarPush: 'catalogo_push', assinarUploadVideo: 'catalogo_cadastrar'
 };
 const PERMISSAO_POR_LOTE_ = {
   ajustarPrecoPorcento: 'catalogo_precos', marcarNovidade: 'catalogo_cadastrar', alterarEstoque: 'catalogo_cadastrar',
@@ -1374,6 +1407,7 @@ function despacharPost_(body) {
   if (action === 'addGenero') return jsonResponse_(adicionarValorLista_(SHEET_GENEROS, GENEROS_PADRAO, body.nome));
   if (action === 'gerarSeo') return gerarSeoComGemini_(body);
   if (action === 'enviarPush') return enviarPushOneSignal_(body.titulo, body.mensagem, body.url || SITE_URL);
+  if (action === 'assinarUploadVideo') return assinarUploadVideo_(body);
 
   return jsonResponse_({ ok: false, erro: 'Ação desconhecida: ' + action });
 }
@@ -1448,7 +1482,9 @@ function criarProduto_(body) {
   const fotosGaleriaFinal = limitarGaleria_(body.fotosGaleriaExistentes ? (body.fotosGaleriaExistentes + (galeriaUrls ? ',' + galeriaUrls : '')) : galeriaUrls);
   const estoqueVal = body.estoque !== undefined && body.estoque !== '' ? Number(body.estoque) : '';
 
-  let videoUrl = '';
+  // v2.4: o vídeo normalmente já chega como URL -- subiu direto do navegador pro Cloudinary antes
+  // dessa chamada (ver assinarUploadVideo_). videoBase64 continua funcionando como caminho antigo.
+  let videoUrl = body.videoUrlExistente || '';
   try {
     if (body.videoBase64) videoUrl = salvarVideoCloudinary_(body.videoBase64, body.videoMime, 'produto_' + id + '_video');
   } catch (erroVideo) {
@@ -1547,6 +1583,13 @@ function atualizarProduto_(body) {
           const videoUrlAntigo = dados[i][colunaVideo_(sheet) - 1] || '';
           videoUrlNovo = salvarVideoCloudinary_(body.videoBase64, body.videoMime, 'produto_' + body.id + '_video_' + new Date().getTime());
           excluirMidiaAntiga_(videoUrlAntigo, videoUrlNovo);
+        } else if (body.videoUrlExistente !== undefined && body.videoUrlExistente) {
+          // v2.4: vídeo novo subiu direto do navegador pro Cloudinary (ver assinarUploadVideo_) --
+          // aqui só aponta pra URL que já está lá e apaga a antiga (não existe "galeria" de vídeo,
+          // então ao contrário da capa de foto, aqui é sempre uma substituição de verdade).
+          const videoUrlAntigoDireto = dados[i][colunaVideo_(sheet) - 1] || '';
+          videoUrlNovo = body.videoUrlExistente;
+          if (videoUrlNovo !== videoUrlAntigoDireto) excluirMidiaAntiga_(videoUrlAntigoDireto, videoUrlNovo);
         } else if (body.removerVideo === true) {
           const videoUrlAntigo2 = dados[i][colunaVideo_(sheet) - 1] || '';
           videoUrlNovo = '';

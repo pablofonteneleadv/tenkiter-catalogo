@@ -361,7 +361,7 @@
         <video id="video-preview" controls playsinline preload="metadata"></video>
         <div id="video-atual">🎬 Esta peça já tem um vídeo salvo. <a id="video-atual-link" href="#" target="_blank" rel="noopener">Ver</a></div>
         <button type="button" id="btn-remover-video">Remover vídeo</button>
-        <div class="dica-midia">MP4, MOV ou WEBM. O vídeo vai direto ao servidor (não fica guardado se estiver sem internet).</div>
+        <div class="dica-midia">MP4, MOV ou WEBM. O vídeo exige internet na hora de salvar (não fica guardado pra enviar depois se cair a conexão).</div>
       </div>
 
       <button type="submit" class="btn-primario" id="btn-salvar">Cadastrar Peça</button>
@@ -623,7 +623,7 @@
   const MAX_GALERIA = 8, MAX_VIDEO_MB = 20;
   // fotosItens: { url } já salva  |  { b64, prev } nova -- uma delas tem .capa = true (a foto principal).
   let fotosItens = [];
-  let videoNovo = null;       // { b64, mime, prev }
+  let videoNovo = null;       // { file, mime, prev }
   let videoAtual = '';        // link do vídeo já salvo
   let removerVideo = false;
 
@@ -755,15 +755,12 @@
     if (!f) return;
     if (!/^video\/(mp4|quicktime|webm)$/.test(f.type)) { alert('Formato não aceito. Use MP4, MOV ou WEBM.'); e.target.value = ''; return; }
     if (f.size > MAX_VIDEO_MB * 1024 * 1024) { alert('Vídeo com ' + (f.size / 1048576).toFixed(1) + ' MB. O máximo é ' + MAX_VIDEO_MB + ' MB — encurte o vídeo ou reduza a qualidade.'); e.target.value = ''; return; }
-    const fr = new FileReader();
-    fr.onload = () => {
-      if (videoNovo && videoNovo.prev) URL.revokeObjectURL(videoNovo.prev);
-      videoNovo = { b64: String(fr.result).split(',')[1], mime: f.type, prev: URL.createObjectURL(f) };
-      removerVideo = false;
-      desenharVideo();
-    };
-    fr.onerror = () => alert('Não consegui ler o vídeo.');
-    fr.readAsDataURL(f);
+    // Guarda o arquivo original (não converte pra base64 aqui) -- o envio sobe o arquivo direto
+    // pro Cloudinary na hora de salvar, ver subirVideoDireto_.
+    if (videoNovo && videoNovo.prev) URL.revokeObjectURL(videoNovo.prev);
+    videoNovo = { file: f, mime: f.type, prev: URL.createObjectURL(f) };
+    removerVideo = false;
+    desenharVideo();
   });
 
   document.getElementById('btn-remover-video').addEventListener('click', () => {
@@ -991,7 +988,7 @@
     const esperadas = Math.min(8, String(d.fotosGaleriaExistentes || '').split(',').filter(Boolean).length + (d.fotosGaleriaBase64 || []).length);
     const tem = String(p.Fotos_Galeria || '').split(',').filter(Boolean).length;
     if (tem < esperadas) return 'foi salvo, mas as fotos extras não voltaram na lista (' + tem + ' de ' + esperadas + '). Confira se o script do catálogo é a versão mais nova.';
-    if (d.videoBase64 && !String(p.Video_URL || '').trim()) return 'foi salvo, mas o vídeo não voltou na lista. Confira se o script do catálogo é a versão mais nova.';
+    if (it.temVideo && !String(p.Video_URL || '').trim()) return 'foi salvo, mas o vídeo não voltou na lista. Confira se o script do catálogo é a versão mais nova.';
     return '';
   }
 
@@ -1030,51 +1027,117 @@
     });
   }
 
+  // Pede ao Apps Script uma assinatura Cloudinary de curta duração (chamada pequena e rápida --
+  // não carrega o vídeo, só autoriza o envio). O api_secret nunca sai do servidor.
+  async function pedirAssinaturaVideo_() {
+    const resp = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'assinarUploadVideo', pin: adminPin, funcionario: funcionarioNome })
+    }).then(r => r.json());
+    if (!resp.ok) throw new Error(resp.erro || 'não consegui autorizar o envio do vídeo');
+    return resp;
+  }
+
+  // Envia o arquivo de vídeo DIRETO pro Cloudinary (não passa pelo Apps Script) usando a
+  // assinatura obtida acima. Mesmo acompanhamento de progresso do enviarComProgresso.
+  function subirParaCloudinary_(file, assinatura, aoProgredir) {
+    return new Promise((resolve, reject) => {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('api_key', assinatura.apiKey);
+      form.append('timestamp', String(assinatura.timestamp));
+      form.append('folder', assinatura.folder);
+      form.append('signature', assinatura.signature);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', 'https://api.cloudinary.com/v1_1/' + assinatura.cloudName + '/video/upload');
+      xhr.timeout = 300000; // 5 min
+      const inicio = Date.now();
+      xhr.upload.onprogress = function (ev) {
+        if (!ev.lengthComputable || !aoProgredir) return;
+        const fracao = ev.loaded / ev.total;
+        const decorridos = (Date.now() - inicio) / 1000;
+        const taxa = ev.loaded / Math.max(decorridos, 0.05);
+        const restante = ev.total - ev.loaded;
+        const eta = taxa > 0 ? Math.max(0, Math.round(restante / taxa)) : null;
+        aoProgredir(fracao, eta);
+      };
+      xhr.onload = function () {
+        let dadosResp;
+        try { dadosResp = JSON.parse(xhr.responseText); } catch (e) { dadosResp = null; }
+        if (xhr.status >= 200 && xhr.status < 300 && dadosResp && dadosResp.secure_url) {
+          resolve(dadosResp.secure_url);
+        } else {
+          const msgErro = (dadosResp && dadosResp.error && dadosResp.error.message) || ('HTTP ' + xhr.status);
+          reject(new Error('Cloudinary: ' + msgErro));
+        }
+      };
+      xhr.onerror = function () { reject(new Error('falha de conexão durante o envio')); };
+      xhr.ontimeout = function () { reject(new Error('demorou mais de 5 minutos e a conexão foi cancelada')); };
+      xhr.send(form);
+    });
+  }
+
+  // Sobe o vídeo direto pro Cloudinary, sem passar pelo Apps Script: um vídeo pode levar minutos
+  // pra enviar numa rede móvel, e o Apps Script tem limite de tempo de execução e não foi feito
+  // pra aguentar isso -- qualquer soluço de conexão no meio do caminho derruba o envio inteiro
+  // mesmo com a internet "boa" (xhr.onerror não distingue um tranco passageiro de uma queda de
+  // verdade). O Cloudinary é feito pra receber arquivo grande direto do navegador e aguenta uma
+  // conexão instável muito melhor. Em caso de erro de conexão (não de timeout, nem de erro que o
+  // próprio Cloudinary devolveu), tenta de novo sozinho antes de desistir.
+  async function subirVideoDireto_(file, it, aoProgredir) {
+    const MAX_TENTATIVAS = 3;
+    let ultimoErro = '';
+    let tentativasFeitas = 0;
+    for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+      tentativasFeitas = tentativa;
+      it.tentativa = tentativa; it.maxTentativas = MAX_TENTATIVAS; desenharEnvios();
+      try {
+        const assinatura = await pedirAssinaturaVideo_();
+        const url = await subirParaCloudinary_(file, assinatura, aoProgredir);
+        it.tentativa = null; it.maxTentativas = null;
+        return url;
+      } catch (erro) {
+        ultimoErro = (erro && erro.message) || '';
+        const eErroDeConexao = /falha de conexão/.test(ultimoErro);
+        if (!eErroDeConexao || tentativa === MAX_TENTATIVAS) break;
+        it.progresso = null; it.etaSegundos = null; desenharEnvios();
+        await new Promise(r => setTimeout(r, 2500));
+      }
+    }
+    it.tentativa = null; it.maxTentativas = null;
+    const sufixoTentativas = tentativasFeitas > 1 ? (' (tentei ' + tentativasFeitas + ' vezes)') : '';
+    throw new Error(ultimoErro + sufixoTentativas);
+  }
+
   async function enviarItem(it) {
     const dados = Object.assign({}, it.dados, { pin: adminPin, funcionario: funcionarioNome });
-    let resultado;
     const aoProgredir = (fracao, eta) => { it.progresso = fracao; it.etaSegundos = eta; desenharEnvios(); };
-    if (dados.videoBase64) {
-      // vídeo é grande demais para a fila offline: vai direto. Um envio de vídeo pode levar
-      // minutos numa conexão móvel, e uma oscilação passageira de sinal no meio do caminho
-      // derruba a conexão mesmo com a internet "boa" -- isso aparece pro navegador como erro
-      // de rede (xhr.onerror), não como um erro do servidor. Por isso, só nesse tipo específico
-      // de falha, tenta de novo sozinho antes de desistir e mostrar erro pro usuário. Timeout ou
-      // erro que o próprio servidor devolveu não se beneficiam de tentar de novo, então nesses
-      // casos desiste já na primeira.
-      const MAX_TENTATIVAS = 3;
-      let ultimoErro = '';
-      let deuCerto = false;
-      let tentativasFeitas = 0;
-      for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
-        tentativasFeitas = tentativa;
-        it.tentativa = tentativa; it.maxTentativas = MAX_TENTATIVAS; desenharEnvios();
-        try {
-          const resp = await enviarComProgresso(dados, aoProgredir);
-          resultado = { ok: true, resp: resp };
-          deuCerto = true;
-          break;
-        } catch (errRede) {
-          ultimoErro = (errRede && errRede.message) || '';
-          const eErroDeConexao = /falha de conexão/.test(ultimoErro);
-          if (!eErroDeConexao || tentativa === MAX_TENTATIVAS) break;
-          it.progresso = null; it.etaSegundos = null; desenharEnvios();
-          await new Promise(r => setTimeout(r, 2500));
-        }
-      }
-      it.tentativa = null; it.maxTentativas = null;
-      if (!deuCerto) {
-        const sufixoTentativas = tentativasFeitas > 1 ? (' (tentei ' + tentativasFeitas + ' vezes)') : '';
-        resultado = { ok: false, semFila: true, msgErro: ultimoErro + sufixoTentativas };
-      }
-    } else {
+
+    if (it.videoArquivo) {
+      let urlVideo;
       try {
-        const resp = await enviarComProgresso(dados, aoProgredir);
-        resultado = { ok: true, resp: resp };
-      } catch (errRede) {
-        enfileirarAcaoOffline(dados);
-        resultado = { ok: false, enfileirado: true };
+        urlVideo = await subirVideoDireto_(it.videoArquivo, it, aoProgredir);
+      } catch (errVideo) {
+        it.progresso = null; it.etaSegundos = null;
+        atualizarBarraSync();
+        it.estado = 'erro';
+        it.msg = 'não consegui enviar o vídeo (' + ((errVideo && errVideo.message) || 'falha no envio') + '). Nada foi salvo.';
+        return;
       }
+      dados.videoUrlExistente = urlVideo;
+    }
+
+    // Daqui pra baixo "dados" nunca carrega o vídeo em si -- só a URL (quando houver) -- então
+    // esse envio é sempre pequeno e cabe normalmente na fila offline se a conexão cair.
+    let resultado;
+    try {
+      const resp = await enviarComProgresso(dados, aoProgredir);
+      resultado = { ok: true, resp: resp };
+    } catch (errRede) {
+      enfileirarAcaoOffline(dados);
+      resultado = { ok: false, enfileirado: true };
     }
     it.progresso = null; it.etaSegundos = null;
     atualizarBarraSync();
@@ -1085,9 +1148,6 @@
       if (aviso) { it.estado = 'aviso'; it.msg = aviso; } else { it.estado = 'ok'; sumirDepois(it, 6000); }
     } else if (!resultado.ok && resultado.enfileirado) {
       it.estado = 'offline'; sumirDepois(it, 15000);
-    } else if (resultado.semFila) {
-      it.estado = 'erro';
-      it.msg = 'não consegui enviar o vídeo (' + (resultado.msgErro || 'internet ou arquivo pesado') + '). Nada foi salvo.';
     } else {
       it.estado = 'erro'; it.msg = (resultado.resp && resultado.resp.erro) || 'falha ao salvar';
     }
@@ -1134,12 +1194,13 @@
       fotosGaleriaExistentes: resto.filter(i => i.url).map(i => i.url).join(','),
       fotosGaleriaBase64: resto.filter(i => i.b64).map(i => i.b64)
     };
-    if (videoNovo) { dados.videoBase64 = videoNovo.b64; dados.videoMime = videoNovo.mime; }
-    else if (ehEdicao && removerVideo) dados.removerVideo = true;
+    if (!videoNovo && ehEdicao && removerVideo) dados.removerVideo = true;
     if (ehEdicao) dados.id = idParaEditar;
     if (!ehEdicao && dados.novidade) dados.notificarPush = document.getElementById('notificarPush').checked;
 
-    envios.push({ chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao, temVideo: !!dados.videoBase64, dados: dados, estado: 'fila', msg: '' });
+    // O vídeo (se houver) NÃO vai dentro de "dados" -- ele sobe direto pro Cloudinary na hora do
+    // envio (enviarItem/subirVideoDireto_), e só a URL resultante entra no POST pro Apps Script.
+    envios.push({ chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao, temVideo: !!videoNovo, videoArquivo: videoNovo ? videoNovo.file : null, dados: dados, estado: 'fila', msg: '' });
     cancelarDuplicacao(); // libera o formulário já
     document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima peça.';
     desenharEnvios(); processarEnvios();
