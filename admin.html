@@ -1079,28 +1079,27 @@
     });
   }
 
-  // Sobe o vídeo direto pro Cloudinary, sem passar pelo Apps Script: um vídeo pode levar minutos
-  // pra enviar numa rede móvel, e o Apps Script tem limite de tempo de execução e não foi feito
-  // pra aguentar isso -- qualquer soluço de conexão no meio do caminho derruba o envio inteiro
-  // mesmo com a internet "boa" (xhr.onerror não distingue um tranco passageiro de uma queda de
-  // verdade). O Cloudinary é feito pra receber arquivo grande direto do navegador e aguenta uma
-  // conexão instável muito melhor. Em caso de erro de conexão (não de timeout, nem de erro que o
-  // próprio Cloudinary devolveu), tenta de novo sozinho antes de desistir.
-  async function subirVideoDireto_(file, it, aoProgredir) {
+  // Tenta de novo sozinho (até 3 vezes, com uma pausa curta entre elas) quando a falha for
+  // especificamente de CONEXÃO (xhr.onerror) -- um timeout ou um erro que o próprio servidor
+  // devolveu não se beneficiam de tentar de novo, então nesses casos desiste já na primeira.
+  // Usado tanto pro envio do vídeo quanto pro envio final dos dados do produto: nenhum dos dois
+  // deve desistir só porque uma única tentativa esbarrou numa oscilação passageira. Atualiza
+  // it.tentativa/it.maxTentativas pra aparecer "(tentativa X de 3)" na tela enquanto isso rola.
+  async function comTentativas_(it, tarefa) {
     const MAX_TENTATIVAS = 3;
-    let ultimoErro = '';
+    let ultimoErro = null;
     let tentativasFeitas = 0;
     for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
       tentativasFeitas = tentativa;
       it.tentativa = tentativa; it.maxTentativas = MAX_TENTATIVAS; desenharEnvios();
       try {
-        const assinatura = await pedirAssinaturaVideo_();
-        const url = await subirParaCloudinary_(file, assinatura, aoProgredir);
+        const resultado = await tarefa();
         it.tentativa = null; it.maxTentativas = null;
-        return url;
+        return resultado;
       } catch (erro) {
-        ultimoErro = (erro && erro.message) || '';
-        const eErroDeConexao = /falha de conexão/.test(ultimoErro);
+        ultimoErro = erro;
+        const msg = (erro && erro.message) || '';
+        const eErroDeConexao = /falha de conexão/.test(msg);
         if (!eErroDeConexao || tentativa === MAX_TENTATIVAS) break;
         it.progresso = null; it.etaSegundos = null; desenharEnvios();
         await new Promise(r => setTimeout(r, 2500));
@@ -1108,7 +1107,17 @@
     }
     it.tentativa = null; it.maxTentativas = null;
     const sufixoTentativas = tentativasFeitas > 1 ? (' (tentei ' + tentativasFeitas + ' vezes)') : '';
-    throw new Error(ultimoErro + sufixoTentativas);
+    throw new Error(((ultimoErro && ultimoErro.message) || '') + sufixoTentativas);
+  }
+
+  // Sobe o vídeo direto pro Cloudinary, sem passar pelo Apps Script: um vídeo pode levar minutos
+  // pra enviar numa rede móvel, e o Apps Script tem limite de tempo de execução e não foi feito
+  // pra aguentar isso -- qualquer soluço de conexão no meio do caminho derruba o envio inteiro
+  // mesmo com a internet "boa" (xhr.onerror não distingue um tranco passageiro de uma queda de
+  // verdade). O Cloudinary é feito pra receber arquivo grande direto do navegador e aguenta uma
+  // conexão instável muito melhor.
+  function subirVideoDireto_(file, it, aoProgredir) {
+    return comTentativas_(it, () => pedirAssinaturaVideo_().then((assinatura) => subirParaCloudinary_(file, assinatura, aoProgredir)));
   }
 
   async function enviarItem(it) {
@@ -1130,10 +1139,11 @@
     }
 
     // Daqui pra baixo "dados" nunca carrega o vídeo em si -- só a URL (quando houver) -- então
-    // esse envio é sempre pequeno e cabe normalmente na fila offline se a conexão cair.
+    // esse envio é sempre pequeno. Mesmo assim, só cai na fila offline depois de insistir: uma
+    // única tentativa falhar não quer dizer que o aparelho está mesmo sem internet.
     let resultado;
     try {
-      const resp = await enviarComProgresso(dados, aoProgredir);
+      const resp = await comTentativas_(it, () => enviarComProgresso(dados, aoProgredir));
       resultado = { ok: true, resp: resp };
     } catch (errRede) {
       enfileirarAcaoOffline(dados);
