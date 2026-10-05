@@ -810,6 +810,16 @@
     });
   }
 
+  // Converte a base64 "pura" (sem o prefixo "data:...;base64,") que lerFotoReduzida guarda em
+  // cada foto de volta pra um Blob, pra poder subir a foto direto pro Cloudinary (FormData) do
+  // mesmo jeito que o vídeo -- em vez de ir dentro do JSON do POST pro Apps Script.
+  function base64ParaBlob_(b64, mime) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime || 'image/jpeg' });
+  }
+
   document.getElementById('galeria-input').addEventListener('change', async (e) => {
     const arquivos = Array.from(e.target.files || []);
     e.target.value = '';
@@ -1057,7 +1067,9 @@
     const d = it.dados, id = String((resp && resp.id) || d.id || '');
     const p = produtos.find(x => String(x.ID) === id);
     if (!p) return '';
-    const esperadas = Math.min(8, String(d.fotosGaleriaExistentes || '').split(',').filter(Boolean).length + (d.fotosGaleriaBase64 || []).length);
+    // d.fotosGaleriaExistentes já inclui as fotos novas (suas URLs do Cloudinary foram coladas
+    // nele em enviarItem, antes do POST final), então não precisa somar nenhuma lista separada.
+    const esperadas = Math.min(8, String(d.fotosGaleriaExistentes || '').split(',').filter(Boolean).length);
     const tem = String(p.Fotos_Galeria || '').split(',').filter(Boolean).length;
     if (tem < esperadas) return 'foi salvo, mas as fotos extras não voltaram na lista (' + tem + ' de ' + esperadas + '). Confira se o script do catálogo é a versão mais nova.';
     if (it.temVideo && !String(p.Video_URL || '').trim()) return 'foi salvo, mas o vídeo não voltou na lista. Confira se o script do catálogo é a versão mais nova.';
@@ -1113,7 +1125,11 @@
   }
 
   // Pede ao Apps Script uma assinatura Cloudinary de curta duração (chamada pequena e rápida --
-  // não carrega o vídeo, só autoriza o envio). O api_secret nunca sai do servidor.
+  // não carrega o arquivo, só autoriza o envio). O api_secret nunca sai do servidor. Apesar do
+  // nome (ficou de quando só existia upload de vídeo), a assinatura não amarra o tipo de arquivo
+  // -- serve igual pra foto (ver subirFotoDireta_), porque o Cloudinary assina só "folder" e
+  // "timestamp": o tipo de recurso (image/video) é só parte da URL de destino, nunca entra na
+  // assinatura.
   async function pedirAssinaturaVideo_() {
     const inicio = Date.now();
     window.logDebug_('→ pedindo assinatura de upload ao Apps Script (action=assinarUploadVideo)');
@@ -1133,9 +1149,10 @@
     return resp;
   }
 
-  // Envia o arquivo de vídeo DIRETO pro Cloudinary (não passa pelo Apps Script) usando a
+  // Envia um arquivo (vídeo OU foto) DIRETO pro Cloudinary (não passa pelo Apps Script) usando a
   // assinatura obtida acima. Mesmo acompanhamento de progresso do enviarComProgresso.
-  function subirParaCloudinary_(file, assinatura, aoProgredir) {
+  // tipoRecurso: 'video' ou 'image' (decide o endpoint). rotulo: só pro texto do log.
+  function subirParaCloudinary_(file, assinatura, aoProgredir, tipoRecurso, rotulo) {
     return new Promise((resolve, reject) => {
       const form = new FormData();
       form.append('file', file);
@@ -1144,12 +1161,14 @@
       form.append('folder', assinatura.folder);
       form.append('signature', assinatura.signature);
 
-      const url = 'https://api.cloudinary.com/v1_1/' + assinatura.cloudName + '/video/upload';
+      const recurso = tipoRecurso || 'video';
+      const nomeRotulo = rotulo || (recurso === 'image' ? 'foto' : 'vídeo');
+      const url = 'https://api.cloudinary.com/v1_1/' + assinatura.cloudName + '/' + recurso + '/upload';
       const xhr = new XMLHttpRequest();
       xhr.open('POST', url);
       xhr.timeout = 300000; // 5 min
       const inicio = Date.now();
-      window.logDebug_('→ POST ' + url + '  (vídeo, ' + (file.size / 1048576).toFixed(2) + 'MB)');
+      window.logDebug_('→ POST ' + url + '  (' + nomeRotulo + ', ' + (file.size / 1048576).toFixed(2) + 'MB)');
       let ultimoMarco = -1;
       xhr.upload.onprogress = function (ev) {
         if (!ev.lengthComputable) return;
@@ -1178,11 +1197,11 @@
       };
       xhr.onerror = function () {
         const ms = Date.now() - inicio;
-        window.logDebug_('✗ ERRO DE REDE subindo o vídeo, em ' + ms + 'ms -- xhr.status=' + xhr.status + ' readyState=' + xhr.readyState + ' navigator.onLine=' + navigator.onLine);
+        window.logDebug_('✗ ERRO DE REDE subindo ' + nomeRotulo + ', em ' + ms + 'ms -- xhr.status=' + xhr.status + ' readyState=' + xhr.readyState + ' navigator.onLine=' + navigator.onLine);
         reject(new Error('falha de conexão durante o envio'));
       };
       xhr.ontimeout = function () {
-        window.logDebug_('✗ TIMEOUT subindo o vídeo depois de ' + (Date.now() - inicio) + 'ms');
+        window.logDebug_('✗ TIMEOUT subindo ' + nomeRotulo + ' depois de ' + (Date.now() - inicio) + 'ms');
         reject(new Error('demorou mais de 5 minutos e a conexão foi cancelada'));
       };
       xhr.send(form);
@@ -1229,13 +1248,24 @@
   // verdade). O Cloudinary é feito pra receber arquivo grande direto do navegador e aguenta uma
   // conexão instável muito melhor.
   function subirVideoDireto_(file, it, aoProgredir) {
-    return comTentativas_(it, () => pedirAssinaturaVideo_().then((assinatura) => subirParaCloudinary_(file, assinatura, aoProgredir)), 'vídeo→Cloudinary');
+    return comTentativas_(it, () => pedirAssinaturaVideo_().then((assinatura) => subirParaCloudinary_(file, assinatura, aoProgredir, 'video', 'vídeo')), 'vídeo→Cloudinary');
+  }
+
+  // Mesma lógica do vídeo, mas pra uma foto: a foto já chega aqui redimensionada e em base64
+  // (lerFotoReduzida), então primeiro converte pra Blob e sobe direto pro Cloudinary -- o POST
+  // final pro Apps Script nunca mais carrega bytes de foto, só a URL resultante. Isso elimina o
+  // POST grande (foto em base64 pesa ~33% mais que o arquivo original) que vinha dando "falha de
+  // conexão" (xhr.status=0, readyState=4) de forma consistente e sem relação real com o sinal.
+  function subirFotoDireta_(b64, it, aoProgredir) {
+    const blob = base64ParaBlob_(b64, 'image/jpeg');
+    return comTentativas_(it, () => pedirAssinaturaVideo_().then((assinatura) => subirParaCloudinary_(blob, assinatura, aoProgredir, 'image', 'foto')), 'foto→Cloudinary');
   }
 
   async function enviarItem(it) {
     const dados = Object.assign({}, it.dados, { pin: adminPin, funcionario: funcionarioNome });
     const aoProgredir = (fracao, eta) => { it.progresso = fracao; it.etaSegundos = eta; desenharEnvios(); };
-    window.logDebug_('════ começando envio de "' + it.titulo + '" (' + (it.ehEdicao ? 'edição' : 'novo') + (it.videoArquivo ? ', com vídeo' : '') + ') ════');
+    const temFotosNovas = !!(it.capaNovaB64 || (it.galeriaNovaB64 && it.galeriaNovaB64.length));
+    window.logDebug_('════ começando envio de "' + it.titulo + '" (' + (it.ehEdicao ? 'edição' : 'novo') + (it.videoArquivo ? ', com vídeo' : '') + (temFotosNovas ? ', com foto(s) nova(s)' : '') + ') ════');
 
     if (it.videoArquivo) {
       let urlVideo;
@@ -1252,9 +1282,34 @@
       dados.videoUrlExistente = urlVideo;
     }
 
-    // Daqui pra baixo "dados" nunca carrega o vídeo em si -- só a URL (quando houver) -- então
-    // esse envio é sempre pequeno. Mesmo assim, só cai na fila offline depois de insistir: uma
-    // única tentativa falhar não quer dizer que o aparelho está mesmo sem internet.
+    // Fotos novas (capa e/ou galeria) sobem direto pro Cloudinary, uma de cada vez, igual ao
+    // vídeo -- só depois disso o POST final pro Apps Script leva as URLs resultantes, nunca mais
+    // os bytes em base64 das fotos.
+    if (temFotosNovas) {
+      try {
+        if (it.capaNovaB64) {
+          dados.fotoUrlExistente = await subirFotoDireta_(it.capaNovaB64, it, aoProgredir);
+        }
+        if (it.galeriaNovaB64 && it.galeriaNovaB64.length) {
+          const urlsGaleria = String(dados.fotosGaleriaExistentes || '').split(',').filter(Boolean);
+          for (const b64 of it.galeriaNovaB64) {
+            urlsGaleria.push(await subirFotoDireta_(b64, it, aoProgredir));
+          }
+          dados.fotosGaleriaExistentes = urlsGaleria.join(',');
+        }
+      } catch (errFoto) {
+        it.progresso = null; it.etaSegundos = null;
+        atualizarBarraSync();
+        it.estado = 'erro';
+        it.msg = 'não consegui enviar a(s) foto(s) (' + ((errFoto && errFoto.message) || 'falha no envio') + '). Nada foi salvo.';
+        window.logDebug_('════ "' + it.titulo + '": desistiu no envio da(s) foto(s) -- ' + it.msg + ' ════');
+        return;
+      }
+    }
+
+    // Daqui pra baixo "dados" nunca carrega foto nem vídeo em si -- só as URLs (quando houver) --
+    // então esse envio é sempre pequeno. Mesmo assim, só cai na fila offline depois de insistir:
+    // uma única tentativa falhar não quer dizer que o aparelho está mesmo sem internet.
     let resultado;
     try {
       const resp = await comTentativas_(it, () => enviarComProgresso(dados, aoProgredir), 'salvar produto');
@@ -1315,22 +1370,31 @@
       cores: document.getElementById('cores').value.trim(),
       descricao: document.getElementById('descricao').value.trim(),
       novidade: document.getElementById('novidade').checked,
-      // capa: se for uma foto nova, manda os bytes; se já existia (ex.: o usuário trocou a capa
-      // por uma foto da galeria sem subir nada novo), manda só a URL que já existia.
-      fotoBase64: capaItem && capaItem.b64 ? capaItem.b64 : null,
+      // capa/galeria: manda só a URL de quem já existia (ex.: o usuário trocou a capa por uma
+      // foto da galeria sem subir nada novo). Foto NOVA não entra aqui -- sobe direto pro
+      // Cloudinary na hora do envio (ver capaNovaB64/galeriaNovaB64 abaixo e enviarItem).
       fotoUrlExistente: capaItem && capaItem.url ? capaItem.url : '',
-      fotosGaleriaExistentes: resto.filter(i => i.url).map(i => i.url).join(','),
-      fotosGaleriaBase64: resto.filter(i => i.b64).map(i => i.b64)
+      fotosGaleriaExistentes: resto.filter(i => i.url).map(i => i.url).join(',')
     };
     if (!videoNovo && ehEdicao && removerVideo) dados.removerVideo = true;
     if (ehEdicao) dados.id = idParaEditar;
     if (!ehEdicao && dados.novidade) dados.notificarPush = document.getElementById('notificarPush').checked;
 
-    window.logDebug_('botão "Cadastrar/Salvar" apertado -- "' + (dados.nome || '') + '" | ' + (ehEdicao ? 'edição' : 'novo') + ' | vídeo: ' + (videoNovo ? (videoNovo.file.size / 1048576).toFixed(2) + 'MB (' + videoNovo.file.type + ')' : 'nenhum') + ' | fotos novas: ' + fotosItens.filter(i => i.b64).length + ' | navigator.onLine=' + navigator.onLine);
+    const capaNovaB64 = capaItem && capaItem.b64 ? capaItem.b64 : null;
+    const galeriaNovaB64 = resto.filter(i => i.b64).map(i => i.b64);
+    const totalFotosNovas = (capaNovaB64 ? 1 : 0) + galeriaNovaB64.length;
 
-    // O vídeo (se houver) NÃO vai dentro de "dados" -- ele sobe direto pro Cloudinary na hora do
-    // envio (enviarItem/subirVideoDireto_), e só a URL resultante entra no POST pro Apps Script.
-    envios.push({ chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao, temVideo: !!videoNovo, videoArquivo: videoNovo ? videoNovo.file : null, dados: dados, estado: 'fila', msg: '' });
+    window.logDebug_('botão "Cadastrar/Salvar" apertado -- "' + (dados.nome || '') + '" | ' + (ehEdicao ? 'edição' : 'novo') + ' | vídeo: ' + (videoNovo ? (videoNovo.file.size / 1048576).toFixed(2) + 'MB (' + videoNovo.file.type + ')' : 'nenhum') + ' | fotos novas: ' + totalFotosNovas + ' | navigator.onLine=' + navigator.onLine);
+
+    // Vídeo e fotos novas NÃO vão dentro de "dados" -- sobem direto pro Cloudinary na hora do
+    // envio (enviarItem/subirVideoDireto_/subirFotoDireta_), e só as URLs resultantes entram no
+    // POST pro Apps Script, que assim nunca fica grande por causa de anexos.
+    envios.push({
+      chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao,
+      temVideo: !!videoNovo, videoArquivo: videoNovo ? videoNovo.file : null,
+      capaNovaB64: capaNovaB64, galeriaNovaB64: galeriaNovaB64,
+      dados: dados, estado: 'fila', msg: ''
+    });
     cancelarDuplicacao(); // libera o formulário já
     document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima peça.';
     desenharEnvios(); processarEnvios();
