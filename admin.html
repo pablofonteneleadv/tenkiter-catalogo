@@ -936,7 +936,7 @@
   function textoEnvio(it) {
     const o = it.ehEdicao ? 'Alterações de ' : 'Cadastro de ';
     if (it.estado === 'fila') return '⏳ ' + o + '"' + it.titulo + '" na fila...';
-    if (it.estado === 'enviando') return '<span class="env-spin">⏳</span> Enviando ' + (it.temVideo ? 'com vídeo (pode levar minutos) ' : '') + '"' + it.titulo + '"...';
+    if (it.estado === 'enviando') return '<span class="env-spin">⏳</span> Enviando ' + (it.temVideo ? 'com vídeo (pode levar minutos) ' : '') + '"' + it.titulo + '"...' + (it.tentativa > 1 ? ' (tentativa ' + it.tentativa + ' de ' + it.maxTentativas + ')' : '');
     if (it.estado === 'ok') return '✅ "' + it.titulo + '" salvo!';
     if (it.estado === 'aviso') return '⚠️ "' + it.titulo + '": ' + it.msg;
     if (it.estado === 'offline') return '📥 "' + it.titulo + '": sem conexão. Guardado no aparelho; envie com "Sincronizar".';
@@ -1035,11 +1035,38 @@
     let resultado;
     const aoProgredir = (fracao, eta) => { it.progresso = fracao; it.etaSegundos = eta; desenharEnvios(); };
     if (dados.videoBase64) {
-      // vídeo é grande demais para a fila offline: vai direto e, se falhar, dá para tentar de novo
-      try {
-        const resp = await enviarComProgresso(dados, aoProgredir);
-        resultado = { ok: true, resp: resp };
-      } catch (errRede) { resultado = { ok: false, semFila: true, msgErro: (errRede && errRede.message) || '' }; }
+      // vídeo é grande demais para a fila offline: vai direto. Um envio de vídeo pode levar
+      // minutos numa conexão móvel, e uma oscilação passageira de sinal no meio do caminho
+      // derruba a conexão mesmo com a internet "boa" -- isso aparece pro navegador como erro
+      // de rede (xhr.onerror), não como um erro do servidor. Por isso, só nesse tipo específico
+      // de falha, tenta de novo sozinho antes de desistir e mostrar erro pro usuário. Timeout ou
+      // erro que o próprio servidor devolveu não se beneficiam de tentar de novo, então nesses
+      // casos desiste já na primeira.
+      const MAX_TENTATIVAS = 3;
+      let ultimoErro = '';
+      let deuCerto = false;
+      let tentativasFeitas = 0;
+      for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+        tentativasFeitas = tentativa;
+        it.tentativa = tentativa; it.maxTentativas = MAX_TENTATIVAS; desenharEnvios();
+        try {
+          const resp = await enviarComProgresso(dados, aoProgredir);
+          resultado = { ok: true, resp: resp };
+          deuCerto = true;
+          break;
+        } catch (errRede) {
+          ultimoErro = (errRede && errRede.message) || '';
+          const eErroDeConexao = /falha de conexão/.test(ultimoErro);
+          if (!eErroDeConexao || tentativa === MAX_TENTATIVAS) break;
+          it.progresso = null; it.etaSegundos = null; desenharEnvios();
+          await new Promise(r => setTimeout(r, 2500));
+        }
+      }
+      it.tentativa = null; it.maxTentativas = null;
+      if (!deuCerto) {
+        const sufixoTentativas = tentativasFeitas > 1 ? (' (tentei ' + tentativasFeitas + ' vezes)') : '';
+        resultado = { ok: false, semFila: true, msgErro: ultimoErro + sufixoTentativas };
+      }
     } else {
       try {
         const resp = await enviarComProgresso(dados, aoProgredir);
