@@ -9,6 +9,11 @@
 const API_URL_PADRAO = 'https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec';
 let API_URL = localStorage.getItem('tenkiter_api_url_override') || API_URL_PADRAO;
 
+// Log de depuração opcional (liga/desliga pelo admin.html, botão "🪲 Log de Depuração").
+// Aqui é só o padrão "não faz nada" -- o admin.html troca por uma versão de verdade que grava
+// o que acontece; index.html nunca liga isso, então chamar continua seguro e sem custo lá.
+if (typeof window.logDebug_ !== 'function') window.logDebug_ = function () {};
+
 // Endereço público do catálogo (site que o cliente/atendente visita e onde os links compartilhados devem apontar).
 // NUNCA use API_URL para montar um link a ser compartilhado — API_URL é só o backend de dados.
 const SITE_URL = 'https://tenkitermodas.com.br/';
@@ -311,7 +316,10 @@ function enfileirarAcaoOffline(corpo) {
   fila.push({ corpo: corpo, criadoEm: new Date().toISOString() });
   if (!salvarFilaOffline(fila)) {
     fila.pop();
+    window.logDebug_('fila offline: SEM ESPAÇO pra guardar a ação "' + (corpo && corpo.action) + '" -- avisei o usuário e descartei');
     if (typeof alert === 'function') alert('Sem internet e sem espaço para guardar esta ação (foto muito grande). Tente de novo quando a internet voltar.');
+  } else {
+    window.logDebug_('fila offline: guardou a ação "' + (corpo && corpo.action) + '" -- agora tem ' + fila.length + ' pendente(s)');
   }
   return fila.length;
 }
@@ -350,6 +358,7 @@ async function sincronizarFilaOffline() {
 function _donoDoToken(t) { const m = /^tk2\.(\d+)\./.exec(String(t || '')); return m ? m[1] : ''; }
 async function _sincronizarFilaOffline() {
   const fila = getFilaOffline();
+  window.logDebug_('fila offline: começando a sincronizar (' + fila.length + ' pendente(s))');
   let enviados = 0, recusadas = 0;
   while (fila.length > 0) {
     const item = fila[0];
@@ -371,14 +380,17 @@ async function _sincronizarFilaOffline() {
           body: JSON.stringify(item.corpo)
         }).then(r => r.json());
       }
-      if (falhaDeAcesso(resp)) break; // sem acesso agora: mantém na fila em vez de perder
+      if (falhaDeAcesso(resp)) { window.logDebug_('fila offline: sem acesso agora pra ação "' + item.corpo.action + '" -- mantendo na fila'); break; }
       if (resp && resp.ok === false) recusadas++; // o servidor recusou (ex.: sem permissão): não adianta reenviar
+      window.logDebug_('fila offline: ação "' + item.corpo.action + '" enviada -- resp.ok=' + (resp && resp.ok));
       fila.shift();
       enviados++;
       salvarFilaOffline(fila);
     } catch (e) {
+      window.logDebug_('fila offline: parou de sincronizar -- ' + ((e && e.message) || e));
       break;
     }
   }
+  window.logDebug_('fila offline: sincronização terminou -- enviados=' + enviados + ' restantes=' + fila.length + ' recusadas=' + recusadas);
   return { enviados: enviados, restantes: fila.length, recusadas: recusadas };
 }

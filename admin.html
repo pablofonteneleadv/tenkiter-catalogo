@@ -380,6 +380,19 @@
     <p style="font-size:0.72rem;color:#888;margin-top:8px;">Só mude isto se um novo endereço do sistema for informado. Um endereço errado impede o catálogo de carregar.</p>
   </details>
 
+  <details class="extra" id="details-log-debug">
+    <summary>🪲 Log de Depuração</summary>
+    <p style="font-size:0.72rem;color:#888;margin:0 0 8px;">Grava, passo a passo, tudo que o sistema faz ao enviar um produto (pedido, resposta, erro, cada tentativa) — liga só na hora de reproduzir um problema, pra não ficar rodando à toa.</p>
+    <button type="button" id="btn-toggle-log-debug" style="background:var(--preto);color:var(--laranja);">🪲 Ligar Log</button>
+    <div id="log-debug-painel" style="display:none;margin-top:10px;">
+      <textarea id="log-debug-texto" readonly style="width:100%;height:220px;font-family:monospace;font-size:0.68rem;white-space:pre;box-sizing:border-box;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button type="button" id="btn-copiar-log-debug" style="background:var(--laranja);">📋 Copiar Log</button>
+        <button type="button" id="btn-limpar-log-debug" style="background:#eee;color:#555;">🗑️ Limpar</button>
+      </div>
+    </div>
+  </details>
+
   <!-- Ações em Lote -->
   <div class="bulk-bar" id="bulk-bar">
     <div class="bulk-bar-header">
@@ -425,6 +438,65 @@
 
   /** Credencial que as ações enviam no campo "pin": o token de login, ou o PIN antigo. */
   function credencialAdmin() { return adminPin; }
+
+  /* ===================== Log de depuração (opcional, liga/desliga pelo painel) =====================
+   * Grava, com hora exata, cada passo do envio de um produto (pedido feito, resposta recebida,
+   * cada tentativa, cada erro com o máximo de detalhe disponível no navegador) -- serve pra achar
+   * a causa real de uma falha que se repete, em vez de ficar só supondo. Fica desligado por padrão
+   * (não grava nada, não gasta nada) e o estado liga/desliga fica guardado no aparelho. */
+  let logDebugAtivo = localStorage.getItem('tenkiter_log_debug') === '1';
+  let logDebugEntradas = [];
+  try { logDebugEntradas = JSON.parse(localStorage.getItem('tenkiter_log_debug_entradas') || '[]'); } catch (e) { logDebugEntradas = []; }
+
+  function logDebugHora_() {
+    const d = new Date();
+    const dois = (n) => String(n).padStart(2, '0');
+    return dois(d.getHours()) + ':' + dois(d.getMinutes()) + ':' + dois(d.getSeconds()) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+  }
+  function atualizarTextoLogDebug_() {
+    const ta = document.getElementById('log-debug-texto');
+    if (!ta) return;
+    ta.value = logDebugEntradas.join('\n');
+    ta.scrollTop = ta.scrollHeight;
+  }
+  // Essa função SUBSTITUI o padrão "não faz nada" definido no common.js -- a partir daqui,
+  // toda chamada a logDebug_(...) em qualquer lugar (admin.html ou common.js) passa por aqui.
+  window.logDebug_ = function (msg) {
+    if (!logDebugAtivo) return;
+    logDebugEntradas.push(logDebugHora_() + '  ' + msg);
+    if (logDebugEntradas.length > 500) logDebugEntradas = logDebugEntradas.slice(-500);
+    try { localStorage.setItem('tenkiter_log_debug_entradas', JSON.stringify(logDebugEntradas)); } catch (e) { /* log grande demais pro navegador guardar -- segue só em memória */ }
+    atualizarTextoLogDebug_();
+  };
+  function atualizarBotaoLogDebug_() {
+    const btn = document.getElementById('btn-toggle-log-debug');
+    const painel = document.getElementById('log-debug-painel');
+    if (!btn || !painel) return;
+    btn.textContent = logDebugAtivo ? '🪲 Desligar Log (ligado agora)' : '🪲 Ligar Log';
+    btn.style.background = logDebugAtivo ? '#c62828' : 'var(--preto)';
+    btn.style.color = logDebugAtivo ? '#fff' : 'var(--laranja)';
+    painel.style.display = logDebugAtivo ? 'block' : 'none';
+  }
+  document.getElementById('btn-toggle-log-debug').addEventListener('click', () => {
+    logDebugAtivo = !logDebugAtivo;
+    localStorage.setItem('tenkiter_log_debug', logDebugAtivo ? '1' : '0');
+    atualizarBotaoLogDebug_();
+    if (logDebugAtivo) window.logDebug_('——— Log ligado ———');
+    atualizarTextoLogDebug_();
+  });
+  document.getElementById('btn-limpar-log-debug').addEventListener('click', () => {
+    logDebugEntradas = [];
+    try { localStorage.removeItem('tenkiter_log_debug_entradas'); } catch (e) {}
+    atualizarTextoLogDebug_();
+  });
+  document.getElementById('btn-copiar-log-debug').addEventListener('click', () => {
+    const texto = logDebugEntradas.length ? logDebugEntradas.join('\n') : '(log vazio -- ligue o log e reproduza o problema antes de copiar)';
+    navigator.clipboard.writeText(texto)
+      .then(() => alert('Log copiado! Cole numa mensagem e me mande.'))
+      .catch(() => alert('Não consegui copiar automaticamente. Toque e segure no texto do log pra selecionar e copiar manualmente.'));
+  });
+  atualizarBotaoLogDebug_();
+  atualizarTextoLogDebug_();
 
   function identificarFuncionario() {
     const nome = prompt('Digite seu nome/identificação (ex: Carla, Pablo):', funcionarioNome);
@@ -1001,6 +1073,8 @@
       xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
       xhr.timeout = 300000; // 5 min -- evita ficar "Enviando..." travado pra sempre numa conexão ruim
       const inicio = Date.now();
+      const corpo = JSON.stringify(dados);
+      window.logDebug_('→ POST ' + API_URL + '  (ação=' + dados.action + ', ' + corpo.length + ' bytes)');
       xhr.upload.onprogress = function (ev) {
         if (!ev.lengthComputable || !aoProgredir) return;
         const fracao = ev.loaded / ev.total;
@@ -1011,30 +1085,50 @@
         aoProgredir(fracao, eta);
       };
       xhr.onload = function () {
+        const ms = Date.now() - inicio;
         // mesmo comportamento do fetch(...).then(r => r.json()): tenta interpretar a resposta
         // como JSON independente do status HTTP, e deixa o erro de parse rejeitar a promessa.
         try {
-          resolve(JSON.parse(xhr.responseText));
+          const json = JSON.parse(xhr.responseText);
+          window.logDebug_('← HTTP ' + xhr.status + ' em ' + ms + 'ms -- resp.ok=' + json.ok + (json.ok === false ? (' erro="' + json.erro + '"') : ''));
+          resolve(json);
         } catch (e) {
           // resposta não era JSON -- guarda um pedacinho dela pra dar pra entender o motivo real
           const trecho = String(xhr.responseText || '').slice(0, 140).replace(/\s+/g, ' ').trim();
+          window.logDebug_('← HTTP ' + xhr.status + ' em ' + ms + 'ms -- resposta não era JSON: "' + trecho + '"');
           reject(new Error('resposta inesperada do servidor, HTTP ' + xhr.status + (trecho ? ': "' + trecho + '"' : ' (vazia)')));
         }
       };
-      xhr.onerror = function () { reject(new Error('falha de conexão durante o envio')); };
-      xhr.ontimeout = function () { reject(new Error('demorou mais de 5 minutos e a conexão foi cancelada')); };
-      xhr.send(JSON.stringify(dados));
+      xhr.onerror = function () {
+        const ms = Date.now() - inicio;
+        window.logDebug_('✗ ERRO DE REDE em ' + ms + 'ms -- xhr.status=' + xhr.status + ' readyState=' + xhr.readyState + ' navigator.onLine=' + navigator.onLine);
+        reject(new Error('falha de conexão durante o envio'));
+      };
+      xhr.ontimeout = function () {
+        window.logDebug_('✗ TIMEOUT depois de ' + (Date.now() - inicio) + 'ms');
+        reject(new Error('demorou mais de 5 minutos e a conexão foi cancelada'));
+      };
+      xhr.send(corpo);
     });
   }
 
   // Pede ao Apps Script uma assinatura Cloudinary de curta duração (chamada pequena e rápida --
   // não carrega o vídeo, só autoriza o envio). O api_secret nunca sai do servidor.
   async function pedirAssinaturaVideo_() {
-    const resp = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'assinarUploadVideo', pin: adminPin, funcionario: funcionarioNome })
-    }).then(r => r.json());
+    const inicio = Date.now();
+    window.logDebug_('→ pedindo assinatura de upload ao Apps Script (action=assinarUploadVideo)');
+    let resp;
+    try {
+      resp = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'assinarUploadVideo', pin: adminPin, funcionario: funcionarioNome })
+      }).then(r => r.json());
+    } catch (e) {
+      window.logDebug_('✗ ERRO DE REDE pedindo assinatura, em ' + (Date.now() - inicio) + 'ms -- ' + ((e && e.message) || e) + ' -- navigator.onLine=' + navigator.onLine);
+      throw new Error('falha de conexão durante o envio');
+    }
+    window.logDebug_('← assinatura em ' + (Date.now() - inicio) + 'ms -- ok=' + resp.ok + (resp.ok === false ? (' erro="' + resp.erro + '"') : ''));
     if (!resp.ok) throw new Error(resp.erro || 'não consegui autorizar o envio do vídeo');
     return resp;
   }
@@ -1050,13 +1144,19 @@
       form.append('folder', assinatura.folder);
       form.append('signature', assinatura.signature);
 
+      const url = 'https://api.cloudinary.com/v1_1/' + assinatura.cloudName + '/video/upload';
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', 'https://api.cloudinary.com/v1_1/' + assinatura.cloudName + '/video/upload');
+      xhr.open('POST', url);
       xhr.timeout = 300000; // 5 min
       const inicio = Date.now();
+      window.logDebug_('→ POST ' + url + '  (vídeo, ' + (file.size / 1048576).toFixed(2) + 'MB)');
+      let ultimoMarco = -1;
       xhr.upload.onprogress = function (ev) {
-        if (!ev.lengthComputable || !aoProgredir) return;
+        if (!ev.lengthComputable) return;
         const fracao = ev.loaded / ev.total;
+        const marco = Math.floor(fracao * 10); // loga de 10 em 10%, não a cada tick
+        if (marco !== ultimoMarco) { ultimoMarco = marco; window.logDebug_('  … enviado ' + Math.round(fracao * 100) + '% (' + (ev.loaded / 1048576).toFixed(2) + ' de ' + (ev.total / 1048576).toFixed(2) + 'MB) em ' + (Date.now() - inicio) + 'ms'); }
+        if (!aoProgredir) return;
         const decorridos = (Date.now() - inicio) / 1000;
         const taxa = ev.loaded / Math.max(decorridos, 0.05);
         const restante = ev.total - ev.loaded;
@@ -1064,17 +1164,27 @@
         aoProgredir(fracao, eta);
       };
       xhr.onload = function () {
+        const ms = Date.now() - inicio;
         let dadosResp;
         try { dadosResp = JSON.parse(xhr.responseText); } catch (e) { dadosResp = null; }
         if (xhr.status >= 200 && xhr.status < 300 && dadosResp && dadosResp.secure_url) {
+          window.logDebug_('← Cloudinary HTTP ' + xhr.status + ' em ' + ms + 'ms -- subiu, url=' + dadosResp.secure_url);
           resolve(dadosResp.secure_url);
         } else {
           const msgErro = (dadosResp && dadosResp.error && dadosResp.error.message) || ('HTTP ' + xhr.status);
+          window.logDebug_('← Cloudinary HTTP ' + xhr.status + ' em ' + ms + 'ms -- recusou: ' + msgErro);
           reject(new Error('Cloudinary: ' + msgErro));
         }
       };
-      xhr.onerror = function () { reject(new Error('falha de conexão durante o envio')); };
-      xhr.ontimeout = function () { reject(new Error('demorou mais de 5 minutos e a conexão foi cancelada')); };
+      xhr.onerror = function () {
+        const ms = Date.now() - inicio;
+        window.logDebug_('✗ ERRO DE REDE subindo o vídeo, em ' + ms + 'ms -- xhr.status=' + xhr.status + ' readyState=' + xhr.readyState + ' navigator.onLine=' + navigator.onLine);
+        reject(new Error('falha de conexão durante o envio'));
+      };
+      xhr.ontimeout = function () {
+        window.logDebug_('✗ TIMEOUT subindo o vídeo depois de ' + (Date.now() - inicio) + 'ms');
+        reject(new Error('demorou mais de 5 minutos e a conexão foi cancelada'));
+      };
       xhr.send(form);
     });
   }
@@ -1085,13 +1195,14 @@
   // Usado tanto pro envio do vídeo quanto pro envio final dos dados do produto: nenhum dos dois
   // deve desistir só porque uma única tentativa esbarrou numa oscilação passageira. Atualiza
   // it.tentativa/it.maxTentativas pra aparecer "(tentativa X de 3)" na tela enquanto isso rola.
-  async function comTentativas_(it, tarefa) {
+  async function comTentativas_(it, tarefa, rotulo) {
     const MAX_TENTATIVAS = 3;
     let ultimoErro = null;
     let tentativasFeitas = 0;
     for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
       tentativasFeitas = tentativa;
       it.tentativa = tentativa; it.maxTentativas = MAX_TENTATIVAS; desenharEnvios();
+      if (tentativa > 1) window.logDebug_('[' + (rotulo || '?') + '] tentativa ' + tentativa + ' de ' + MAX_TENTATIVAS);
       try {
         const resultado = await tarefa();
         it.tentativa = null; it.maxTentativas = null;
@@ -1100,6 +1211,7 @@
         ultimoErro = erro;
         const msg = (erro && erro.message) || '';
         const eErroDeConexao = /falha de conexão/.test(msg);
+        window.logDebug_('[' + (rotulo || '?') + '] tentativa ' + tentativa + ' falhou: ' + msg + (eErroDeConexao && tentativa < MAX_TENTATIVAS ? ' -- vou tentar de novo em 2.5s' : ' -- desistindo'));
         if (!eErroDeConexao || tentativa === MAX_TENTATIVAS) break;
         it.progresso = null; it.etaSegundos = null; desenharEnvios();
         await new Promise(r => setTimeout(r, 2500));
@@ -1117,12 +1229,13 @@
   // verdade). O Cloudinary é feito pra receber arquivo grande direto do navegador e aguenta uma
   // conexão instável muito melhor.
   function subirVideoDireto_(file, it, aoProgredir) {
-    return comTentativas_(it, () => pedirAssinaturaVideo_().then((assinatura) => subirParaCloudinary_(file, assinatura, aoProgredir)));
+    return comTentativas_(it, () => pedirAssinaturaVideo_().then((assinatura) => subirParaCloudinary_(file, assinatura, aoProgredir)), 'vídeo→Cloudinary');
   }
 
   async function enviarItem(it) {
     const dados = Object.assign({}, it.dados, { pin: adminPin, funcionario: funcionarioNome });
     const aoProgredir = (fracao, eta) => { it.progresso = fracao; it.etaSegundos = eta; desenharEnvios(); };
+    window.logDebug_('════ começando envio de "' + it.titulo + '" (' + (it.ehEdicao ? 'edição' : 'novo') + (it.videoArquivo ? ', com vídeo' : '') + ') ════');
 
     if (it.videoArquivo) {
       let urlVideo;
@@ -1133,6 +1246,7 @@
         atualizarBarraSync();
         it.estado = 'erro';
         it.msg = 'não consegui enviar o vídeo (' + ((errVideo && errVideo.message) || 'falha no envio') + '). Nada foi salvo.';
+        window.logDebug_('════ "' + it.titulo + '": desistiu no envio do vídeo -- ' + it.msg + ' ════');
         return;
       }
       dados.videoUrlExistente = urlVideo;
@@ -1143,9 +1257,10 @@
     // única tentativa falhar não quer dizer que o aparelho está mesmo sem internet.
     let resultado;
     try {
-      const resp = await comTentativas_(it, () => enviarComProgresso(dados, aoProgredir));
+      const resp = await comTentativas_(it, () => enviarComProgresso(dados, aoProgredir), 'salvar produto');
       resultado = { ok: true, resp: resp };
     } catch (errRede) {
+      window.logDebug_('[salvar produto] esgotou as tentativas (' + ((errRede && errRede.message) || '') + ') -- guardando na fila offline');
       enfileirarAcaoOffline(dados);
       resultado = { ok: false, enfileirado: true };
     }
@@ -1156,10 +1271,13 @@
       try { await carregarProdutos(); } catch (e) {}
       const aviso = conferirSalvo(it, resultado.resp);
       if (aviso) { it.estado = 'aviso'; it.msg = aviso; } else { it.estado = 'ok'; sumirDepois(it, 6000); }
+      window.logDebug_('════ "' + it.titulo + '": ' + (aviso ? ('salvo com aviso -- ' + aviso) : 'salvo com sucesso') + ' ════');
     } else if (!resultado.ok && resultado.enfileirado) {
       it.estado = 'offline'; sumirDepois(it, 15000);
+      window.logDebug_('════ "' + it.titulo + '": sem conexão, guardado no aparelho pra sincronizar depois ════');
     } else {
       it.estado = 'erro'; it.msg = (resultado.resp && resultado.resp.erro) || 'falha ao salvar';
+      window.logDebug_('════ "' + it.titulo + '": erro -- ' + it.msg + ' ════');
     }
   }
   async function processarEnvios() {
@@ -1170,7 +1288,7 @@
         const it = envios.find(e => e.estado === 'fila');
         if (!it) break;
         it.estado = 'enviando'; desenharEnvios();
-        try { await enviarItem(it); } catch (err) { it.estado = 'erro'; it.msg = 'erro inesperado'; }
+        try { await enviarItem(it); } catch (err) { it.estado = 'erro'; it.msg = 'erro inesperado'; window.logDebug_('════ "' + it.titulo + '": erro inesperado no JS -- ' + ((err && err.stack) || err) + ' ════'); }
         desenharEnvios();
       }
     } finally { processandoEnvios = false; }
@@ -1207,6 +1325,8 @@
     if (!videoNovo && ehEdicao && removerVideo) dados.removerVideo = true;
     if (ehEdicao) dados.id = idParaEditar;
     if (!ehEdicao && dados.novidade) dados.notificarPush = document.getElementById('notificarPush').checked;
+
+    window.logDebug_('botão "Cadastrar/Salvar" apertado -- "' + (dados.nome || '') + '" | ' + (ehEdicao ? 'edição' : 'novo') + ' | vídeo: ' + (videoNovo ? (videoNovo.file.size / 1048576).toFixed(2) + 'MB (' + videoNovo.file.type + ')' : 'nenhum') + ' | fotos novas: ' + fotosItens.filter(i => i.b64).length + ' | navigator.onLine=' + navigator.onLine);
 
     // O vídeo (se houver) NÃO vai dentro de "dados" -- ele sobe direto pro Cloudinary na hora do
     // envio (enviarItem/subirVideoDireto_), e só a URL resultante entra no POST pro Apps Script.
