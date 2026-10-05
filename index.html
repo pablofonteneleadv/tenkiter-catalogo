@@ -18,7 +18,7 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="TENKiTER Modas — Catálogo Oficial">
 <meta property="og:description" content="Confira as peças disponíveis da TENKiTER Modas — Crateús, CE. Filtre por categoria, gênero e preço, e fale direto no WhatsApp.">
-<meta property="og:url" content="https://tenkiter-catalogo.onrender.com/">
+<meta property="og:url" content="https://tenkitermodas.com.br/">
 <meta name="description" content="Catálogo digital da TENKiTER Modas — Crateús, CE.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap">
 <style>
@@ -585,8 +585,10 @@
   });
 
   function abrirWhatsApp(p) {
-    // Link do Apps Script: gera prévia rica (com foto do produto) no WhatsApp e redireciona pro site.
-    const link = SITE_URL + '?id=' + encodeURIComponent(p.ID);
+    // Link do Apps Script (endpoint de compartilhamento): gera prévia rica (com foto do
+    // produto) no WhatsApp e redireciona pro site. NUNCA usar SITE_URL + '?id=' direto aqui —
+    // essa página não tem og:image, então o WhatsApp mostraria uma prévia genérica sem foto.
+    const link = API_URL + '?action=share&id=' + encodeURIComponent(p.ID);
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const codigo = p.Codigo ? ('\nCódigo: ' + p.Codigo) : '';
     const texto = `Olá! Quero garantir este produto:\n*${escaparHtml(p.Nome)}*${codigo}\n${formatarReal(avista)} à vista\n${link}`;
@@ -595,7 +597,7 @@
   }
 
   async function compartilharComFoto(p) {
-    const link = SITE_URL + '?id=' + encodeURIComponent(p.ID);
+    const link = API_URL + '?action=share&id=' + encodeURIComponent(p.ID);
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const texto = `${escaparHtml(p.Nome)} — ${formatarReal(avista)} à vista\n${link}\n\nLoja TENKiTER Modas (WhatsApp ${WHATSAPP_NUMERO})`;
     let arquivoImagem = null;
@@ -684,7 +686,7 @@
     }
 
     // galeria: setas, deslizar o dedo, miniaturas e teclado; o vídeo é o último slide (só carrega quando chega nele)
-    const slides = fotosGaleria.map(u => ({ tipo: 'foto', url: u })).concat(idVid ? [{ tipo: 'video', id: idVid }] : []);
+    const slides = fotosGaleria.map(u => ({ tipo: 'foto', url: u })).concat(idVid ? [{ tipo: 'video', video: idVid }] : []);
     const area = document.getElementById('slide-area');
     const thumbs = document.querySelectorAll('.thumb-item');
     let atual = 0;
@@ -695,9 +697,14 @@
       if (s.tipo === 'foto') {
         const im = document.createElement('img'); im.id = 'foto-principal-modal'; im.alt = p.Nome; im.src = s.url;
         area.appendChild(im);
+      } else if (s.video.tipo === 'cloudinary') {
+        const vid = document.createElement('video');
+        vid.src = s.video.url; vid.controls = true; vid.playsInline = true;
+        vid.style.width = '100%'; vid.style.height = '100%'; vid.style.objectFit = 'contain';
+        area.appendChild(vid);
       } else {
         const fr = document.createElement('iframe');
-        fr.src = 'https://drive.google.com/file/d/' + s.id + '/preview';
+        fr.src = 'https://drive.google.com/file/d/' + s.video.id + '/preview';
         fr.allow = 'autoplay; fullscreen'; fr.allowFullscreen = true; fr.title = 'Vídeo da peça';
         area.appendChild(fr);
       }
@@ -724,9 +731,14 @@
     window.history.replaceState({}, '', url);
   }
 
+  // Reconhece tanto vídeo antigo (Drive, tocado num <iframe>) quanto vídeo novo (Cloudinary,
+  // tocado num <video> nativo). Devolve null se não houver vídeo ou o formato for desconhecido.
   function idVideoSeguro(u) {
-    const m = /^https:\/\/drive\.google\.com\/file\/d\/([\w-]+)\/preview$/.exec(String(u || ''));
-    return m ? m[1] : '';
+    const texto = String(u || '');
+    const mDrive = /^https:\/\/drive\.google\.com\/file\/d\/([\w-]+)\/preview$/.exec(texto);
+    if (mDrive) return { tipo: 'drive', id: mDrive[1] };
+    if (/^https:\/\/res\.cloudinary\.com\//.test(texto)) return { tipo: 'cloudinary', url: texto };
+    return null;
   }
   document.addEventListener('keydown', (ev) => {
     if (!window.__navSlide || !document.getElementById('overlay').classList.contains('aberto')) return;

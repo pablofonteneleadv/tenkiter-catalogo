@@ -11,7 +11,7 @@ let API_URL = localStorage.getItem('tenkiter_api_url_override') || API_URL_PADRA
 
 // Endereço público do catálogo (site que o cliente/atendente visita e onde os links compartilhados devem apontar).
 // NUNCA use API_URL para montar um link a ser compartilhado — API_URL é só o backend de dados.
-const SITE_URL = 'https://tenkiter-catalogo.onrender.com/';
+const SITE_URL = 'https://tenkitermodas.com.br/';
 
 const DESCONTO_AVISTA = 0.10; // 10% de desconto no pagamento à vista
 const WHATSAPP_NUMERO = '5588993223998';

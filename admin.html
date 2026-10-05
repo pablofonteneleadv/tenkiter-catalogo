@@ -628,7 +628,15 @@
   let videoAtual = '';        // link do vídeo já salvo
   let removerVideo = false;
 
-  function idDoVideoSalvo(u) { const m = /^https:\/\/drive\.google\.com\/file\/d\/([\w-]+)\//.exec(String(u || '')); return m ? m[1] : ''; }
+  // Reconhece tanto vídeo antigo (Drive) quanto vídeo novo (Cloudinary) salvo na peça.
+  // Devolve null se não houver vídeo ou o formato não for reconhecido.
+  function infoVideoSalvo_(u) {
+    const texto = String(u || '');
+    const mDrive = /^https:\/\/drive\.google\.com\/file\/d\/([\w-]+)\//.exec(texto);
+    if (mDrive) return { tipo: 'drive', id: mDrive[1] };
+    if (/^https:\/\/res\.cloudinary\.com\//.test(texto)) return { tipo: 'cloudinary', url: texto };
+    return null;
+  }
 
   function desenharGaleria() {
     const grid = document.getElementById('galeria-grid');
@@ -655,8 +663,9 @@
     if (videoNovo) {
       prev.src = videoNovo.prev; prev.style.display = 'block';
       btn.textContent = 'Remover este vídeo'; btn.style.display = 'inline-block';
-    } else if (videoAtual && !removerVideo && idDoVideoSalvo(videoAtual)) {
-      document.getElementById('video-atual-link').href = 'https://drive.google.com/file/d/' + idDoVideoSalvo(videoAtual) + '/view';
+    } else if (videoAtual && !removerVideo && infoVideoSalvo_(videoAtual)) {
+      const infoVid = infoVideoSalvo_(videoAtual);
+      document.getElementById('video-atual-link').href = infoVid.tipo === 'cloudinary' ? infoVid.url : ('https://drive.google.com/file/d/' + infoVid.id + '/view');
       atual.style.display = 'block';
       btn.textContent = 'Remover vídeo da peça'; btn.style.display = 'inline-block';
     } else {
@@ -1231,8 +1240,9 @@
   }
 
   function copiarLink(id) {
-    // Link do Apps Script: gera prévia rica (com foto) no WhatsApp e redireciona pro site.
-    const link = SITE_URL + '?id=' + encodeURIComponent(id);
+    // Link do Apps Script (endpoint de compartilhamento): gera prévia rica (com foto) no
+    // WhatsApp e redireciona pro site. NUNCA usar SITE_URL + '?id=' direto -- sem og:image.
+    const link = API_URL + '?action=share&id=' + encodeURIComponent(id);
     navigator.clipboard.writeText(link);
     alert('Link copiado!');
   }
