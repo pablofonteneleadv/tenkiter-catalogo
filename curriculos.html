@@ -205,11 +205,19 @@ function lista() {
   const q = busca.toLowerCase(); const box = $('lista');
   if (aba === 'novos') {
     let l;
-    if (soAgenda) {
-      l = novos.filter(r => r.Status === 'Agendada' && (!q || JSON.stringify(r).toLowerCase().includes(q)));
+    if (q) {
+      // Buscando: sempre varre TODOS os currículos novos, ignorando status/etapa/só-agenda --
+      // senão a pessoa que já mudou de status (ex: Contratada) some da busca por estar "escondida" no filtro antigo.
+      l = novos.filter(r => JSON.stringify(r).toLowerCase().includes(q));
+      l.sort((a, b) => {
+        const cmp = String(a.Criado || a.Atualizado || '').localeCompare(String(b.Criado || b.Atualizado || ''));
+        return ordemAsc ? cmp : -cmp;
+      });
+    } else if (soAgenda) {
+      l = novos.filter(r => r.Status === 'Agendada');
       l.sort((a, b) => String(a.AgendadoEm || '9999').localeCompare(String(b.AgendadoEm || '9999')));
     } else {
-      l = novos.filter(r => (!fStatus || r.Status === fStatus) && (!fEtapa || r.Etapa === fEtapa) && (!q || JSON.stringify(r).toLowerCase().includes(q)));
+      l = novos.filter(r => (!fStatus || r.Status === fStatus) && (!fEtapa || r.Etapa === fEtapa));
       l.sort((a, b) => {
         if (fEtapa === 'Menor de 18') return String(a.Retomar18Em).localeCompare(String(b.Retomar18Em));
         const cmp = String(a.Criado || a.Atualizado || '').localeCompare(String(b.Criado || b.Atualizado || ''));
@@ -218,8 +226,9 @@ function lista() {
     }
     const menores = novos.filter(r => r.Etapa === 'Menor de 18' && diasPara(r.Retomar18Em) !== null && diasPara(r.Retomar18Em) <= 60 && diasPara(r.Retomar18Em) >= -365);
     const paradas = novos.filter(r => (r.Status || 'Novo') === 'Novo' && diasDesde(r.Criado) !== null && diasDesde(r.Criado) >= 3);
-    box.innerHTML = (menores.length ? `<div class="aviso">🎂 <b>Completam 18 anos em breve:</b> ${menores.sort((a, b) => a.Retomar18Em.localeCompare(b.Retomar18Em)).map(r => `${E(r.Nome)} (${fmtData(r.Retomar18Em)})`).join(' · ')}</div>` : '') +
-      (paradas.length ? `<div class="aviso">⏳ <b>${paradas.length} parada${paradas.length > 1 ? 's' : ''} em "Novo" há 3+ dias</b> sem ninguém mexer.</div>` : '') +
+    box.innerHTML = (q ? `<div class="aviso">🔎 Buscando em <b>todos os currículos novos (${novos.length})</b> — os filtros de status/etapa/agenda ficam de lado enquanto você busca.</div>` : '') +
+      (!q && menores.length ? `<div class="aviso">🎂 <b>Completam 18 anos em breve:</b> ${menores.sort((a, b) => a.Retomar18Em.localeCompare(b.Retomar18Em)).map(r => `${E(r.Nome)} (${fmtData(r.Retomar18Em)})`).join(' · ')}</div>` : '') +
+      (!q && paradas.length ? `<div class="aviso">⏳ <b>${paradas.length} parada${paradas.length > 1 ? 's' : ''} em "Novo" há 3+ dias</b> sem ninguém mexer.</div>` : '') +
       (l.length ? '' : '<div class="card">Nenhum currículo com esses filtros.</div>');
     l.forEach(r => box.append(itemNovo(r)));
   } else {
