@@ -301,6 +301,23 @@ function linkCobrarProva(r, m) {
 function botaoAcao(href, texto) {
   return `<a href="${href}" target="_blank" rel="noopener" style="background:var(--preto);color:var(--laranja);text-decoration:none;padding:5px 10px;border-radius:7px;font-size:.78rem;font-weight:700;white-space:nowrap">${texto}</a>`;
 }
+function parseErros(json) {
+  let lista = []; try { lista = JSON.parse(json || '[]'); } catch (e) { lista = []; }
+  return Array.isArray(lista) ? lista.filter(x => x && x.pergunta) : [];
+}
+function errosHtml(ultima) {
+  const erros = parseErros(ultima.errosDetalhados);
+  if (!erros.length) {
+    if (Number(ultima.nota) === Number(ultima.total) && Number(ultima.total) > 0) return `<div style="margin-top:4px;font-size:.82rem;color:var(--verde);font-weight:700">Gabaritou 🎯</div>`;
+    return '';
+  }
+  return `<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--vermelho);font-weight:700;font-size:.82rem">Ver ${erros.length} erro${erros.length > 1 ? 's' : ''}</summary>` +
+    erros.map(er => `<div style="margin:7px 0 0;padding:8px 10px;border-left:3px solid var(--vermelho);background:#faf7f0;border-radius:6px">
+      <div style="font-weight:600">${E(er.pergunta)}</div>
+      <div style="color:var(--vermelho);margin-top:3px;font-size:.88rem">Respondeu: <b>${E(er.resposta || '(em branco)')}</b></div>
+      ${er.correta ? `<div style="color:#666;font-size:.8rem;margin-top:2px">Certa: ${E(er.correta)}</div>` : ''}
+    </div>`).join('') + '</details>';
+}
 function treinoHtml(r, x) {
   const leitura = x.leitura || [], resultados = x.resultados || [];
   if (!leitura.length) return '<div class="meta">Nenhum manual cadastrado ainda.</div>';
@@ -316,7 +333,7 @@ function treinoHtml(r, x) {
         <div><b>${E(m.titulo)}</b><br><span class="meta">${m.lidos} de ${m.total} capítulos lidos — ${statusLeitura}</span></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">${faltaLer ? botaoAcao(linkCobrarLeitura(r, m), '📖 Cobrar leitura') : ''}${faltaProva ? botaoAcao(linkCobrarProva(r, m), '📝 Cobrar prova') : ''}</div>
       </div>
-      ${ultima ? `<div class="meta" style="margin-top:4px">Última prova: <b>${ultima.nota}/${ultima.total}</b> (${ultima.percentual}%) em ${fmtDataHora(ultima.dataHora)}${provas.length > 1 ? ' · +' + (provas.length - 1) + ' tentativa(s) anterior(es)' : ''}${ultima.errosDetalhados ? `<div>Errou: ${E(ultima.errosDetalhados)}</div>` : ''}</div>` : ''}
+      ${ultima ? `<div class="meta" style="margin-top:4px">Última prova: <b>${ultima.nota}/${ultima.total}</b> (${ultima.percentual}%) em ${fmtDataHora(ultima.dataHora)}${provas.length > 1 ? ' · +' + (provas.length - 1) + ' tentativa(s) anterior(es)' : ''}</div>${errosHtml(ultima)}` : ''}
     </div>`;
   }).join('');
 }
