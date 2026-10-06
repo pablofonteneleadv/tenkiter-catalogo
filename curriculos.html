@@ -61,7 +61,10 @@ if (window.parent !== window && /[?&]embed=1/.test(location.search)) {
   new ResizeObserver(avisar).observe(document.body); window.addEventListener('load', avisar); setInterval(avisar, 1500);
 }
 const E = escaparHtml;
-let sessao = null, novos = [], antigos = [], STATUS = [], MOTIVOS = [], aba = 'novos', busca = '', fStatus = '', fEtapa = '', soAgenda = false, fStatusAnterior = '', carregou = { novos: false, antigos: false };
+let sessao = null, novos = [], antigos = [], STATUS = [], MOTIVOS = [], aba = 'novos', busca = '', fStatus = 'Novo', fEtapa = '', soAgenda = false, fStatusAnterior = '', carregou = { novos: false, antigos: false };
+let ordemAsc = false; // false = mais novo primeiro (padrão)
+let totalAntigos = 0, completoAntigos = false, buscandoAntigos = false, buscaAntigosTimer = null;
+let treinoCache = {}; // WhatsApp -> resposta de curriculos_treinamento já buscada (evita repetir a cada abrir/fechar)
 
 function fotoUrlOk(u) {
   u = String(u || '');
@@ -139,14 +142,21 @@ async function carregarNovos() {
   const r = await chamar('curriculos_listar'); if (!r.ok) return erro(r.erro);
   novos = r.curriculos; STATUS = r.status; MOTIVOS = r.motivos; carregou.novos = true;
 }
-async function carregarAntigos() {
-  $('lista').innerHTML = '<div class="card">Carregando a planilha antiga…</div>';
-  const r = await chamar('curriculos_antigos'); if (!r.ok) return erro(r.erro);
-  antigos = r.antigos; carregou.antigos = true; desenhar();
+async function carregarAntigos(tudo) {
+  // Escalonado: sem busca e sem "tudo", o servidor já devolve só um pedaço recente (rápido) --
+  // só lê a planilha antiga inteira quando alguém realmente busca algo ou pede "carregar tudo".
+  buscandoAntigos = true;
+  if (carregou.antigos) lista(); else $('app').innerHTML = '<div class="card">Carregando a planilha antiga…</div>';
+  const r = await chamar('curriculos_antigos', { busca: busca, tudo: !!tudo });
+  buscandoAntigos = false;
+  if (!r.ok) return erro(r.erro);
+  antigos = r.antigos; totalAntigos = r.total; completoAntigos = r.completo; carregou.antigos = true;
+  desenhar();
 }
 function erro(m) { const el = document.createElement('div'); el.className = 'erro'; el.textContent = m || 'Erro.'; $('app').prepend(el); }
 
 function diasPara(iso) { if (!iso) return null; const d = new Date(iso + 'T00:00:00'); return Math.ceil((d - new Date()) / 86400000); }
+function diasDesde(iso) { if (!iso) return null; const d = new Date(iso); if (isNaN(d)) return null; return Math.floor((Date.now() - d) / 86400000); }
 function fmtData(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || ''); }
 function fmtDataHora(dt) { const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(dt || ''); return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : (dt || ''); }
 function corStatus(s) { return s === 'Contratada' ? 'ok' : (s === 'Descartada' || s === 'Desistiu' || s === 'Demitida' ? 'ru' : (s === 'Agendada' ? 'al' : '')); }
@@ -169,15 +179,16 @@ function wa(tel) { let d = String(tel || '').replace(/\D/g, ''); if (d.length <=
 function ig(h) { return 'https://instagram.com/' + String(h || '').replace(/^@/, ''); }
 
 function desenhar() {
-  $('app').innerHTML = `<div class="abas"><button id="t1" class="${aba === 'novos' ? 'on' : ''}">Currículos novos (${novos.length})</button><button id="t2" class="${aba === 'antigos' ? 'on' : ''}">Planilha antiga${carregou.antigos ? ' (' + antigos.length + ')' : ''}</button></div>
+  $('app').innerHTML = `<div class="abas"><button id="t1" class="${aba === 'novos' ? 'on' : ''}">Currículos novos (${novos.length})</button><button id="t2" class="${aba === 'antigos' ? 'on' : ''}">Planilha antiga${carregou.antigos ? ' (' + totalAntigos + ')' : ''}</button></div>
     <div class="filtros"><input id="q" type="search" placeholder="Buscar nome, telefone, texto…" value="${E(busca)}">
-    ${aba === 'novos' ? `<select id="fs" ${soAgenda ? 'disabled' : ''}><option value="">Todos os status</option>${STATUS.map(s => `<option ${s === fStatus ? 'selected' : ''}>${E(s)}</option>`).join('')}</select>
+    ${aba === 'novos' ? `<select id="fs" ${soAgenda ? 'disabled' : ''}><option value="">Todos os status (${novos.length})</option>${STATUS.map(s => `<option value="${E(s)}" ${s === fStatus ? 'selected' : ''}>${E(s)} (${novos.filter(r => (r.Status || 'Novo') === s).length})</option>`).join('')}</select>
     <select id="fe" ${soAgenda ? 'disabled' : ''}>${['', 'Enviado', 'Perfil', 'Instagram', 'Sem Instagram', 'Menor de 18'].map(x => `<option value="${x}" ${x === fEtapa ? 'selected' : ''}>${x ? E(x) : 'Todas as etapas'}</option>`).join('')}</select>
-    <button id="fa" class="${soAgenda ? 'on' : ''}">📅 Só agenda (ordenado por dia e hora)</button>` : ''}</div>
+    <button id="fa" class="${soAgenda ? 'on' : ''}">📅 Só agenda (ordenado por dia e hora)</button>
+    <button id="ord" ${soAgenda ? 'disabled' : ''}>${ordemAsc ? '⬆️ Mais antigas primeiro' : '⬇️ Mais novas primeiro'}</button>` : ''}</div>
     <div id="lista"></div>`;
   $('t1').onclick = () => { aba = 'novos'; desenhar(); };
   $('t2').onclick = () => { aba = 'antigos'; carregou.antigos ? desenhar() : (desenhar(), carregarAntigos()); };
-  $('q').oninput = e => { busca = e.target.value; lista(); };
+  $('q').oninput = e => { busca = e.target.value; aba === 'antigos' ? buscarAntigosComDebounce() : lista(); };
   if (aba === 'novos') {
     $('fs').onchange = e => { fStatus = e.target.value; lista(); };
     $('fe').onchange = e => { fEtapa = e.target.value; lista(); };
@@ -186,6 +197,7 @@ function desenhar() {
       if (soAgenda) { fStatusAnterior = fStatus; fStatus = 'Agendada'; } else { fStatus = fStatusAnterior || ''; }
       desenhar();
     };
+    $('ord').onclick = () => { ordemAsc = !ordemAsc; desenhar(); };
   }
   lista();
 }
@@ -198,19 +210,37 @@ function lista() {
       l.sort((a, b) => String(a.AgendadoEm || '9999').localeCompare(String(b.AgendadoEm || '9999')));
     } else {
       l = novos.filter(r => (!fStatus || r.Status === fStatus) && (!fEtapa || r.Etapa === fEtapa) && (!q || JSON.stringify(r).toLowerCase().includes(q)));
-      l.sort((a, b) => (fEtapa === 'Menor de 18' ? String(a.Retomar18Em).localeCompare(String(b.Retomar18Em)) : String(b.Atualizado).localeCompare(String(a.Atualizado))));
+      l.sort((a, b) => {
+        if (fEtapa === 'Menor de 18') return String(a.Retomar18Em).localeCompare(String(b.Retomar18Em));
+        const cmp = String(a.Criado || a.Atualizado || '').localeCompare(String(b.Criado || b.Atualizado || ''));
+        return ordemAsc ? cmp : -cmp;
+      });
     }
     const menores = novos.filter(r => r.Etapa === 'Menor de 18' && diasPara(r.Retomar18Em) !== null && diasPara(r.Retomar18Em) <= 60 && diasPara(r.Retomar18Em) >= -365);
+    const paradas = novos.filter(r => (r.Status || 'Novo') === 'Novo' && diasDesde(r.Criado) !== null && diasDesde(r.Criado) >= 3);
     box.innerHTML = (menores.length ? `<div class="aviso">🎂 <b>Completam 18 anos em breve:</b> ${menores.sort((a, b) => a.Retomar18Em.localeCompare(b.Retomar18Em)).map(r => `${E(r.Nome)} (${fmtData(r.Retomar18Em)})`).join(' · ')}</div>` : '') +
+      (paradas.length ? `<div class="aviso">⏳ <b>${paradas.length} parada${paradas.length > 1 ? 's' : ''} em "Novo" há 3+ dias</b> sem ninguém mexer.</div>` : '') +
       (l.length ? '' : '<div class="card">Nenhum currículo com esses filtros.</div>');
     l.forEach(r => box.append(itemNovo(r)));
   } else {
-    let l = antigos.filter(r => !q || JSON.stringify(r).toLowerCase().includes(q));
-    l.sort((a, b) => b.linha - a.linha);
-    box.innerHTML = '<div class="aviso">Respostas do formulário antigo (leitura). Sua anotação na coluna <b>"chamar?"</b> é gravada direto na planilha. Foto, doenças, filhos, estado civil e família não aparecem aqui.</div>';
-    l.slice(0, 150).forEach(r => box.append(itemAntigo(r)));
-    if (l.length > 150) box.append(Object.assign(document.createElement('div'), { className: 'card', textContent: `Mostrando 150 de ${l.length}. Use a busca para filtrar.` }));
+    box.innerHTML = '<div class="aviso">Respostas do formulário antigo (leitura). Sua anotação na coluna <b>"chamar?"</b> é gravada direto na planilha. Foto, doenças, filhos, estado civil e família não aparecem aqui.</div>' +
+      (buscandoAntigos ? '<div class="card">Buscando…</div>' : '');
+    antigos.forEach(r => box.append(itemAntigo(r)));
+    if (!buscandoAntigos) {
+      if (busca) {
+        box.append(Object.assign(document.createElement('div'), { className: 'card', textContent: `Mostrando ${antigos.length} de ${totalAntigos} que batem com a busca.` }));
+      } else if (!completoAntigos) {
+        const btn = document.createElement('button'); btn.textContent = `Carregar tudo (${totalAntigos} ao todo)`; btn.style.width = '100%';
+        btn.onclick = () => carregarAntigos(true);
+        box.append(Object.assign(document.createElement('div'), { className: 'card' }));
+        box.lastChild.append(btn);
+      }
+    }
   }
+}
+function buscarAntigosComDebounce() {
+  clearTimeout(buscaAntigosTimer);
+  buscaAntigosTimer = setTimeout(() => carregarAntigos(), 350);
 }
 function tagEtapa(r) {
   const c = r.Etapa === 'Enviado' ? 'ok' : (r.Etapa === 'Menor de 18' ? 'ru' : 'al');
@@ -223,13 +253,80 @@ const CAMPOS = [
   ['Estudos e perfil', [['Escolaridade', 'Escolaridade'], ['Cursos', 'Cursos'], ['Q_Troca', 'Cliente irritado (troca)'], ['Q_Troco', 'Colega errando o troco'], ['Q_Meta', 'Meta longe'], ['Q_TresClientes', 'Três clientes juntos'], ['Motiva', 'O que motiva'], ['Situacao', 'Problema que resolveu'], ['PorQue', 'Por que a TENKiTER']]],
   ['Encerramento', [['Origem', 'Como conheceu a vaga'], ['ConheceAlguem', 'Conhece alguém aqui'], ['Obs', 'Observações'], ['EnviadoEm', 'Enviado em'], ['LGPD_Aceite', 'Autorização LGPD em']]]
 ];
+function desistiuAntes(r) {
+  if ((r.Status || '') === 'Desistiu') return false; // já mostra o status normal, não precisa duplicar o aviso
+  let hist = []; try { hist = JSON.parse(r.Historico || '[]'); } catch (e) { hist = []; }
+  return hist.some(h => h && h.status === 'Desistiu');
+}
+function primeiroNome(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+function faltaTexto(etapa) {
+  if (etapa === 'Instagram') return 'informar o Instagram dela (ou avisar que não tem)';
+  if (etapa === 'Sem Instagram' || etapa === 'Foto') return 'enviar a foto de perfil';
+  if (etapa === 'Perfil') return 'responder as últimas perguntas e enviar';
+  return 'terminar as últimas etapas';
+}
+function linkCobrarCurriculo(r) {
+  const nome = primeiroNome(r.Nome);
+  const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas de Crateús\n\n' +
+    'Vi que seu currículo ainda está em andamento — *falta só ' + faltaTexto(r.Etapa) + '.*\n\n' +
+    'É rapidinho: entra no nosso site https://tenkitermodas.com.br/manual.html , faça login com o WhatsApp e a senha que você colocou. \n\n' +
+    'Na tela inicial vai aparecer um aviso *Seu currículo está incompleto* com um botão *Completar agora* — aperte nele e vá apertando *Avançar* até o final.\n\n' +
+    'Qualquer dúvida, é só chamar por aqui que te ajudo!';
+  return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
+}
+function linkCobrarLeitura(r, m) {
+  const nome = primeiroNome(r.Nome);
+  const motivo = m.precisamReler ? ('tem um trecho atualizado do manual "' + m.titulo + '" pra você reler') : ('falta ler uma parte do manual "' + m.titulo + '"');
+  const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas.\n\nVi que ainda ' + motivo + '. É rapidinho: entra no portal (manual.html), faça login e continue de onde parou.\n\nQualquer dúvida, chama por aqui!';
+  return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
+}
+function linkCobrarProva(r, m) {
+  const nome = primeiroNome(r.Nome);
+  const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas.\n\nVi que você já terminou de ler o manual "' + m.titulo + '" mas ainda não fez a prova dele. Entra no portal (manual.html) e faz a avaliação quando puder!\n\nQualquer dúvida, chama por aqui!';
+  return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
+}
+function botaoAcao(href, texto) {
+  return `<a href="${href}" target="_blank" rel="noopener" style="background:var(--preto);color:var(--laranja);text-decoration:none;padding:5px 10px;border-radius:7px;font-size:.78rem;font-weight:700;white-space:nowrap">${texto}</a>`;
+}
+function treinoHtml(r, x) {
+  const leitura = x.leitura || [], resultados = x.resultados || [];
+  if (!leitura.length) return '<div class="meta">Nenhum manual cadastrado ainda.</div>';
+  return leitura.map(m => {
+    const provas = resultados.filter(rr => rr.manual === m.titulo);
+    const ultima = provas[0]; // o servidor já devolve mais recente primeiro
+    const faltaLer = m.faltam > 0 || m.precisamReler > 0;
+    const faltaProva = !ultima && !faltaLer && m.total > 0;
+    const statusLeitura = (!m.faltam && !m.precisamReler) ? 'leu tudo ✓' :
+      [m.precisamReler ? (m.precisamReler + ' pra reler (mudou)') : '', m.faltam ? ('falta ' + m.faltam) : ''].filter(Boolean).join(' · ');
+    return `<div style="padding:8px 0;border-bottom:1px solid #eee">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div><b>${E(m.titulo)}</b><br><span class="meta">${m.lidos} de ${m.total} capítulos lidos — ${statusLeitura}</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${faltaLer ? botaoAcao(linkCobrarLeitura(r, m), '📖 Cobrar leitura') : ''}${faltaProva ? botaoAcao(linkCobrarProva(r, m), '📝 Cobrar prova') : ''}</div>
+      </div>
+      ${ultima ? `<div class="meta" style="margin-top:4px">Última prova: <b>${ultima.nota}/${ultima.total}</b> (${ultima.percentual}%) em ${fmtDataHora(ultima.dataHora)}${provas.length > 1 ? ' · +' + (provas.length - 1) + ' tentativa(s) anterior(es)' : ''}${ultima.errosDetalhados ? `<div>Errou: ${E(ultima.errosDetalhados)}</div>` : ''}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+async function carregarTreino(r, slot) {
+  if (treinoCache[r.WhatsApp]) { slot.innerHTML = treinoHtml(r, treinoCache[r.WhatsApp]); return; }
+  slot.innerHTML = '<div class="meta">Carregando treinamento…</div>';
+  const x = await chamar('curriculos_treinamento', { whatsappAlvo: r.WhatsApp });
+  if (!x.ok) { slot.innerHTML = '<div class="meta">Não consegui carregar o treinamento (' + (x.erro || 'erro') + ').</div>'; return; }
+  treinoCache[r.WhatsApp] = x;
+  slot.innerHTML = treinoHtml(r, x);
+}
 function itemNovo(r) {
   const d = document.createElement('div'); d.className = 'item';
   const dl = CAMPOS.map(([g, cs]) => `<div class="grupo">${g}</div>` + cs.filter(([k]) => r[k]).map(([k, rot]) => `<dt>${rot}</dt><dd>${E(k === 'Nascimento' || k === 'Retomar18Em' ? fmtData(r[k]) : (k === 'EnviadoEm' || k === 'LGPD_Aceite' ? new Date(r[k]).toLocaleString('pt-BR') : (k === 'AgendadoEm' ? fmtDataHora(r[k]) : r[k])))}</dd>`).join('')).join('');
   const agendaMeta = r.Status === 'Agendada' && r.AgendadoEm ? ` · 📅 ${fmtDataHora(r.AgendadoEm)}` : '';
-  d.innerHTML = `<div class="topo"><div style="display:flex;gap:10px;align-items:center">${r.FotoUrl ? `<img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none">` : '<div style="width:44px;height:44px;border-radius:50%;background:#eee;flex:none"></div>'}<div><div class="nome">${E(r.Nome)}</div><div class="meta">${E(r.Idade ? r.Idade + ' anos · ' : '')}${E(r.Moradia || '')}${r.Etapa === 'Menor de 18' ? ' · faz 18 em ' + fmtData(r.Retomar18Em) : ''}${agendaMeta}</div></div></div><div>${tagEtapa(r)} <span class="tag ${corStatus(r.Status)}">${E(r.Status || 'Novo')}</span></div></div>
-    <div class="det">${r.FotoUrl ? `<div style="margin:12px 0"><img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:220px;width:100%;border-radius:12px"></div>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}</div>
+  const criadoTxt = r.Criado ? fmtData(r.Criado) : '';
+  const diasParada = (r.Status || 'Novo') === 'Novo' ? diasDesde(r.Criado) : null;
+  const paradaTxt = (diasParada !== null && diasParada >= 3) ? ` <span class="tag al" style="padding:1px 7px">⏳ ${diasParada}d parada</span>` : '';
+  const etapaBloqueiaCobranca = r.Etapa === 'Enviado' || r.Etapa === 'Menor de 18';
+  d.innerHTML = `<div class="topo"><div style="display:flex;gap:10px;align-items:center">${r.FotoUrl ? `<img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none">` : '<div style="width:44px;height:44px;border-radius:50%;background:#eee;flex:none"></div>'}<div><div class="nome">${E(r.Nome)}</div><div class="meta">${criadoTxt ? 'Cadastrada ' + criadoTxt + ' · ' : ''}${E(r.Idade ? r.Idade + ' anos · ' : '')}${E(r.Moradia || '')}${r.Etapa === 'Menor de 18' ? ' · faz 18 em ' + fmtData(r.Retomar18Em) : ''}${agendaMeta}${paradaTxt}</div></div></div><div>${tagEtapa(r)} <span class="tag ${corStatus(r.Status)}">${E(r.Status || 'Novo')}</span>${desistiuAntes(r) ? ' <span class="tag ru">↩️ já desistiu antes</span>' : ''}</div></div>
+    <div class="det">${r.FotoUrl ? `<div style="margin:12px 0"><img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:220px;width:100%;border-radius:12px"></div>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}${!etapaBloqueiaCobranca ? `<a href="${linkCobrarCurriculo(r)}" target="_blank" rel="noopener">📲 Cobrar currículo</a>` : ''}</div>
     ${r.LegadoChamar ? `<div class="aviso">Anotação antiga da planilha ("chamar?"): <b>${E(r.LegadoChamar)}</b></div>` : ''}
+    <div class="grupo">Treinamento</div><div data-k="treino" style="margin:4px 0 12px">Abra o card pra ver.</div>
     <div class="edit"><div class="linha"><select data-k="st">${STATUS.map(s => `<option ${s === (r.Status || 'Novo') ? 'selected' : ''}>${E(s)}</option>`).join('')}</select>
     <select data-k="mo"><option value="">Motivo (se descartada ou desistiu)</option>${MOTIVOS.map(s => `<option ${s === r.Motivo ? 'selected' : ''}>${E(s)}</option>`).join('')}</select></div>
     <div class="linha ${(r.Status || 'Novo') === 'Agendada' ? '' : 'oculto'}" data-k="aglinha"><input type="datetime-local" data-k="ag" value="${E(r.AgendadoEm || '')}"></div>
@@ -237,7 +334,11 @@ function itemNovo(r) {
     <textarea data-k="obsAlt" placeholder="Observação desta alteração (fica registrada no histórico)"></textarea>
     <textarea data-k="no" placeholder="Suas anotações gerais">${E(r.Nota || '')}</textarea><button data-k="sv">Salvar</button><span data-k="ms" class="meta"></span></div>
     <dl>${dl}</dl>${historicoHtml(r)}</div>`;
-  d.querySelector('.topo').onclick = () => d.classList.toggle('aberto');
+  d.querySelector('.topo').onclick = () => {
+    const abrindo = !d.classList.contains('aberto');
+    d.classList.toggle('aberto');
+    if (abrindo) carregarTreino(r, d.querySelector('[data-k=treino]'));
+  };
   d.querySelector('[data-k=st]').onchange = e => {
     const st = e.target.value;
     d.querySelector('[data-k=aglinha]').classList.toggle('oculto', st !== 'Agendada');

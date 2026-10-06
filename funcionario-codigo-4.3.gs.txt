@@ -1,4 +1,19 @@
-// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v4.2
+// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v4.3
+//
+// NOVIDADE DA v4.3 -- melhorias no painel de Currículos (só ACRESCENTA, nada do que existia foi
+//  alterado de comportamento pra quem já usa):
+//  - Status novo "Menor de 18" (CV_STATUS, no final da lista): cadastro de menor de idade agora
+//    cai direto nesse status (antes sempre caía em "Novo" misturado com o resto).
+//  - Status "Desistiu" ganha reativação: curriculo_status/curriculo_retomar agora informam isso
+//    pro site, e a candidata pode reativar o próprio currículo (ação curriculo_reativar).
+//  - curriculos_antigos agora é escalonado: sem busca, devolve só as últimas 80 linhas (não lê a
+//    aba inteira); com busca ou data.tudo=true, aí sim lê tudo e filtra no servidor.
+//  - Progresso de leitura dos manuais passa a ter uma cópia no servidor (aba "Progresso"), além do
+//    localStorage de sempre -- é o que permite o painel de Currículos mostrar quanto cada pessoa já
+//    leu. Cada capítulo ganha um id estável (pelo título) e um hash (pelo conteúdo) na sincronização
+//    do Google Doc, pra detectar sozinho quando um capítulo editado precisa ser lido de novo.
+//  - Nova ação curriculos_treinamento: progresso de leitura + notas de prova de uma pessoa, pro
+//    card do currículo.
 //
 // NOVIDADE DA v4.2 -- nenhuma alteração de função: só sincroniza o número da versão
 //  junto com o catálogo (que foi pra v2.2 na mesma rodada). O código abaixo é idêntico
@@ -691,6 +706,123 @@ function getManuaisSheet_() {
   return sheet;
 }
 
+/* ====================================================================
+ * PROGRESSO DE LEITURA DOS MANUAIS (servidor) -- v4.3
+ *
+ * Até aqui, "capítulo lido" só existia no navegador de cada funcionário
+ * (localStorage) -- ninguém de fora conseguia ver o progresso de ninguém.
+ * Esse bloco guarda uma CÓPIA no servidor (uma linha por WhatsApp, uma
+ * coluna JSON com todos os manuais) só pra isso aparecer no painel de
+ * Currículos. O navegador continua sendo a fonte rápida de verdade pro
+ * próprio funcionário (não depende de internet pra marcar/ver o progresso
+ * dele); o servidor é só o espelho que o RH enxerga.
+ *
+ * Cada capítulo marcado guarda o HASH do conteúdo na hora que foi lido
+ * (ver manHash_, calculado na sincronização do Google Doc). Se o RH edita
+ * o capítulo e sincroniza de novo, o hash muda -- na próxima vez que
+ * alguém olhar o progresso (seja a própria pessoa ou o RH), a comparação
+ * de hash já mostra sozinha "mudou, precisa reler", sem precisar varrer
+ * e "desmarcar" a leitura de todo mundo toda vez que alguém sincroniza.
+ * ==================================================================== */
+
+function getProgressoSheet_() {
+  var ss = abrirSS_(FUNCIONARIOS_SHEET_ID);
+  var sheet = ss.getSheetByName('Progresso');
+  if (!sheet) {
+    sheet = ss.insertSheet('Progresso');
+    sheet.appendRow(['WhatsApp', 'ProgressoJSON', 'AtualizadoEm']);
+  }
+  return sheet;
+}
+/** Id estável do capítulo, baseado só no TÍTULO (não na posição) -- sobrevive a arrastar/reordenar
+ *  capítulos e partes no Google Docs. Se o título mudar, o capítulo "vira" outro pro sistema (perde
+ *  o histórico de quem leu, volta a aparecer como não lido) -- é raro e nunca mistura com o errado. */
+function manCapId_(titulo, usados) {
+  var base = acNorm_(titulo).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'capitulo';
+  var id = base, n = 2;
+  while (usados[id]) { id = base + '-' + n; n++; }
+  usados[id] = true;
+  return id;
+}
+/** Hash do CONTEÚDO do capítulo (não precisa ser criptográfico -- só detectar mudança). */
+function manHash_(blocks) {
+  var txt = JSON.stringify(blocks || []);
+  return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, txt)).slice(0, 16);
+}
+function manAcharLinhaProgresso_(sheet, whats) {
+  var dados = sheet.getDataRange().getValues();
+  for (var i = 1; i < dados.length; i++) if (normalizarWhats_(dados[i][0]) === whats) return i + 1;
+  return 0;
+}
+function manLerProgresso_(whats) {
+  var sheet = getProgressoSheet_();
+  var linha = manAcharLinhaProgresso_(sheet, whats);
+  if (!linha) return {};
+  var json = sheet.getRange(linha, 2).getValue();
+  try { return JSON.parse(json || '{}'); } catch (e) { return {}; }
+}
+
+/** A pessoa logada marca (ou desmarca) um capítulo como lido -- grava no servidor além do
+ *  localStorage de sempre (que continua funcionando igual, até offline). Cada um só grava o
+ *  próprio progresso: confere a sessão de quem está logado, não recebe WhatsApp de outra pessoa. */
+function manMarcarLidoAcao_(data) {
+  var v = acVerificar_(data.whatsapp, data.sessao);
+  if (!v.ok) return jsonOut_({ ok: false, erro: v.erro, sessaoInvalida: true });
+  var manualId = String(data.manualId || ''), capId = String(data.capId || ''), hash = String(data.hash || '');
+  if (!manualId || !capId) return jsonOut_({ ok: false, erro: 'Capítulo inválido.' });
+  var whats = v.usuario.whatsapp;
+  return cvComTrava_(function () {
+    var sheet = getProgressoSheet_();
+    var linha = manAcharLinhaProgresso_(sheet, whats);
+    var prog = {};
+    if (linha) { try { prog = JSON.parse(sheet.getRange(linha, 2).getValue() || '{}'); } catch (e) { prog = {}; } }
+    if (!prog[manualId]) prog[manualId] = {};
+    if (data.lido === false) delete prog[manualId][capId];
+    else prog[manualId][capId] = { lido: true, hash: hash, em: cvAgora_() };
+    var json = JSON.stringify(prog);
+    if (linha) { sheet.getRange(linha, 2).setValue(json); sheet.getRange(linha, 3).setValue(new Date()); }
+    else { sheet.appendRow([whats, json, new Date()]); }
+    return jsonOut_({ ok: true });
+  });
+}
+
+/** Progresso de leitura (por manual, já comparado com o hash atual de cada capítulo) + notas de
+ *  prova de UMA pessoa -- usado no card do currículo em curriculos.html. Mesma permissão do resto
+ *  do painel de Currículos (dados_pessoais), não a de "relatório da equipe" (equipe_relatorio). */
+function cvTreinamentoPessoaAcao_(data) {
+  var v = exigirPerm_(data, 'dados_pessoais');
+  if (!v.ok) return negarAcesso_(v);
+  var whats = normalizarWhats_(data.whatsappAlvo);
+  if (!whats) return jsonOut_({ ok: false, erro: 'WhatsApp inválido.' });
+
+  var manuais = lerManuais_();
+  var progresso = manLerProgresso_(whats);
+  var leitura = manuais.map(function (m) {
+    var lidoDoManual = progresso[m.id] || {};
+    var total = 0, lidos = 0, precisamReler = 0;
+    (m.parts || []).forEach(function (parte) {
+      (parte.chapters || []).forEach(function (cap) {
+        total++;
+        var registro = lidoDoManual[cap.id];
+        if (registro && registro.lido && registro.hash === cap.hash) lidos++;
+        else if (registro && registro.lido) precisamReler++; // leu antes, mas o conteúdo mudou depois
+      });
+    });
+    return { manualId: m.id, titulo: m.titulo, total: total, lidos: lidos, precisamReler: precisamReler, faltam: total - lidos - precisamReler };
+  });
+
+  var linhas = abrirSS_(RESULTADOS_SHEET_ID).getSheets()[0].getDataRange().getValues();
+  linhas.shift();
+  var resultados = linhas
+    .filter(function (r) { return r.join('').trim() !== '' && normalizarWhats_(r[1]) === whats; })
+    .map(function (r) {
+      return { dataHora: r[0] instanceof Date ? r[0].toISOString() : String(r[0] || ''), nivel: r[3] || '', manual: r[4] || '', nota: r[5] || 0, total: r[6] || 0, percentual: r[7] || 0, errosDetalhados: r[8] || '' };
+    })
+    .sort(function (a, b) { return String(b.dataHora).localeCompare(String(a.dataHora)); });
+
+  return jsonOut_({ ok: true, leitura: leitura, resultados: resultados });
+}
+
 function lerFuncionarios_() {
   var sheet = getFuncionariosSheet_();
   var rows = sheet.getDataRange().getValues();
@@ -761,7 +893,7 @@ function doGet(e) {
   }
 
   if (action === 'versao') {
-    return jsonOut_({ ok: true, versao: '4.2', acessos: true, curriculos: true, listaFechada: listaFechada_() });
+    return jsonOut_({ ok: true, versao: '4.3', acessos: true, curriculos: true, listaFechada: listaFechada_() });
   }
 
   // padrão: lista de funcionários (login e níveis) -- formato ANTIGO, só existe
@@ -798,10 +930,13 @@ function doPost(e) {
       case 'curriculo_retomar':        return cvRetomarAcao_(data);
       case 'curriculo_status':         return cvStatusAcao_(data);
       case 'curriculo_finalizar':      return cvFinalizarAcao_(data);
+      case 'curriculo_reativar':       return cvReativarAcao_(data);
       case 'curriculos_listar':        return cvAdminListarAcao_(data);
       case 'curriculos_atualizar':     return cvAdminAtualizarAcao_(data);
       case 'curriculos_antigos':       return cvAdminLegadoListarAcao_(data);
       case 'curriculos_antigos_nota':  return cvAdminLegadoNotaAcao_(data);
+      case 'curriculos_treinamento':   return cvTreinamentoPessoaAcao_(data);
+      case 'manual_marcar_lido':       return manMarcarLidoAcao_(data);
       case 'acessos_listar':           return acessosListar_(data);
       case 'acessos_perfil':           return acessosPerfilAcao_(data);
       case 'acessos_permissao':        return acessosPermissaoAcao_(data);
@@ -1270,6 +1405,19 @@ function analisarDocManual_(docId) {
       garantirCapitulo().blocks.push(extrairImagemDrive_(el.asInlineImage(), pastaImagens));
     }
   }
+
+  // id + hash de cada capítulo, pro progresso de leitura (ver bloco "PROGRESSO DE LEITURA" mais
+  // abaixo): id vem só do TÍTULO (não da posição), pra sobreviver a arrastar/reordenar capítulos
+  // e partes no Google Docs; hash vem do CONTEÚDO, pra saber quando um capítulo já lido mudou e
+  // precisa ser lido de novo. Se o título do capítulo mudar, ele "vira" outro pro sistema -- perde
+  // o histórico de quem leu (volta a aparecer como não lido), nunca mistura com o capítulo errado.
+  var idsUsados = {};
+  parts.forEach(function (parte) {
+    (parte.chapters || []).forEach(function (cap) {
+      cap.id = manCapId_(cap.title, idsUsados);
+      cap.hash = manHash_(cap.blocks);
+    });
+  });
 
   return parts;
 }
@@ -1878,7 +2026,11 @@ var CV_HEADERS = ['CvId','Criado','Atualizado','Etapa','Status','Motivo','Nota',
   'LiderQuantos','Referencia','RefContato','Escolaridade','Cursos','Q_Troca','Q_Troco','Q_Meta','Q_TresClientes','Motiva',
   'Situacao','PorQue','Origem','ConheceAlguem','Obs','LegadoLinha','LegadoChamar','EnviadoEm','AgendadoEm','DataEvento','Historico'];
 
-var CV_STATUS = ['Novo', 'Chamar', 'Contactada', 'Agendada', 'Entrevista', 'Contratada', 'Demitida', 'Descartada', 'Desistiu'];
+// 'Menor de 18' fica no FINAL de propósito: candidatas menores de idade caem direto aqui no
+// cadastro (ver cvCadastroAcao_), fora da fila de quem já pode seguir o processo seletivo. O
+// gestor confere essa aba de vez em quando (o aviso "completam 18 anos em breve" já avisa sozinho)
+// e muda o status manualmente pra 'Novo' quando quiser trazer a pessoa de volta pro fluxo normal.
+var CV_STATUS = ['Novo', 'Chamar', 'Contactada', 'Agendada', 'Entrevista', 'Contratada', 'Demitida', 'Descartada', 'Desistiu', 'Menor de 18'];
 var CV_MOTIVOS = ['Sem experiência', 'Horário incompatível', 'Mora longe', 'Escolaridade', 'Sem retorno', 'Perfil não adequado à vaga', 'Outro'];
 
 // Alternativas aceitas (o site usa exatamente estes textos; o servidor recusa qualquer outro valor)
@@ -2011,8 +2163,11 @@ function cvNascLegadoISO_(v) {
   return '';
 }
 
-/** Interpreta a matriz da aba antiga (linha 1 = cabeçalho). Lê Telefone, Telefone 2 e Telefone 3. */
-function cvLegadoParse_(v) {
+/** Interpreta a matriz da aba antiga (linha 1 = cabeçalho). Lê Telefone, Telefone 2 e Telefone 3.
+ *  primeiraLinhaReal = número da linha da PLANILHA que corresponde a v[1] (o 2º item do array) --
+ *  só importa quando v não é a aba inteira (ver cvLegadoRegsRecentes_); o padrão (2) é o de sempre,
+ *  pra quando v vem de getDataRange() com a planilha inteira. */
+function cvLegadoParse_(v, primeiraLinhaReal) {
   if (!v || v.length < 2) return [];
   var h = v[0].map(cvNorm_);
   function idx(t, sem) { for (var i = 0; i < h.length; i++) if (h[i].indexOf(t) !== -1 && (!sem || h[i].indexOf(sem) === -1)) return i; return -1; }
@@ -2025,11 +2180,12 @@ function cvLegadoParse_(v) {
     tel2: idxExato('telefone 2'), tel3: idxExato('telefone 3'),
     chamar: idx('chamar?'), encarregada: idx('sub encarregada'), obs: idx('observac')
   };
+  var base = primeiraLinhaReal || 2;
   var out = [];
   for (var i = 1; i < v.length; i++) {
     var r = v[i];
     if (r.join('').trim() === '') continue;
-    var o = { linha: i + 1 };
+    var o = { linha: base + (i - 1) };
     Object.keys(I).forEach(function (k) {
       var x = I[k] === -1 ? '' : r[I[k]];
       o[k] = (k === 'nasc') ? x : (Object.prototype.toString.call(x) === '[object Date]' ? x.toISOString() : String(x == null ? '' : x).trim());
@@ -2038,6 +2194,19 @@ function cvLegadoParse_(v) {
     out.push(o);
   }
   return out;
+}
+/** Lê só as últimas N linhas de dados da aba antiga (cabeçalho + um pedaço do final), sem baixar a
+ *  aba inteira -- usado quando o painel abre "Planilha antiga" sem busca nenhuma, só pra não pesar
+ *  à toa num clique comum. Devolve também o total de linhas de dados (pra mostrar "tem mais X"). */
+function cvLegadoRegsRecentes_(n) {
+  var aba = cvLegadoAba_();
+  var ultimaLinha = aba.getLastRow();
+  var ultimaCol = Math.max(aba.getLastColumn(), 1);
+  if (ultimaLinha < 2) return { regs: [], total: 0 };
+  var header = aba.getRange(1, 1, 1, ultimaCol).getValues();
+  var primeira = Math.max(2, ultimaLinha - n + 1);
+  var dados = aba.getRange(primeira, 1, ultimaLinha - primeira + 1, ultimaCol).getValues();
+  return { regs: cvLegadoParse_(header.concat(dados), primeira), total: ultimaLinha - 1 };
 }
 function cvLegadoPorEmail_(regs, email) {
   var ach = null;
@@ -2357,7 +2526,7 @@ function cvCadastroAcao_(data) {
       Moradia: data.moradia, Chegada: data.chegada, LGPD_Aceite: agora, LGPD_Texto: CV_LGPD_TEXTO,
       Nascimento: data.dataNascimento, Idade: String(idade), Menor18: menor ? 'SIM' : 'NÃO', Retomar18Em: menor ? cvDia18_(data.dataNascimento) : ''
     };
-    if (!ex) { campos.CvId = Utilities.getUuid(); campos.Criado = agora; campos.Status = 'Novo'; campos.LegadoLinha = legadoLinha; campos.LegadoChamar = legadoChamar; }
+    if (!ex) { campos.CvId = Utilities.getUuid(); campos.Criado = agora; campos.Status = menor ? 'Menor de 18' : 'Novo'; campos.LegadoLinha = legadoLinha; campos.LegadoChamar = legadoChamar; }
     else if (ex.Etapa === 'Enviado' && !menor) campos.Etapa = 'Enviado';
     cvGravarLinha_(L.aba, L.headers, ex ? ex.__row : 0, campos);
     return { ok: true };
@@ -2459,7 +2628,23 @@ function cvRetomarAcao_(data) {
   ['Moradia', 'Chegada', 'Instagram', 'Vaga', 'Salario', 'Inicio', 'Ritmo', 'Horario', 'ForaHorario', 'Impedimento', 'JaTrabalhou', 'UltEmpresa', 'UltFuncao', 'UltMeses',
     'UltMotivo', 'TiposEmpresa', 'Tarefas', 'Liderou', 'LiderQuantos', 'Referencia', 'RefContato', 'Escolaridade', 'Cursos', 'Q_Troca', 'Q_Troco', 'Q_Meta', 'Q_TresClientes',
     'Motiva', 'Situacao', 'PorQue', 'Origem', 'ConheceAlguem', 'Obs'].forEach(function (k) { publico[k] = row[k]; });
-  return jsonOut_({ ok: true, menor: menor, nome: row.Nome, whatsapp: row.WhatsApp, email: row.Email, sessao: v.sessao, etapa: etapa, enviado: row.Etapa === 'Enviado', fotoUrl: foto, dados: publico });
+  return jsonOut_({ ok: true, menor: menor, nome: row.Nome, whatsapp: row.WhatsApp, email: row.Email, sessao: v.sessao, etapa: etapa, enviado: row.Etapa === 'Enviado', status: row.Status, fotoUrl: foto, dados: publico });
+}
+
+/** Candidata que já tinha desistido pede pra voltar a participar: volta o status pra 'Novo' e
+ *  registra no histórico. Só funciona em cima de quem está mesmo com status 'Desistiu' -- não dá
+ *  pra "reativar" quem já foi contratada, descartada etc. por engano. */
+function cvReativarAcao_(data) {
+  var x = cvLinhaDaConta_(data);
+  if (x.erro) return jsonOut_({ ok: false, erro: x.erro });
+  if (x.row.Status !== 'Desistiu') return jsonOut_({ ok: false, erro: 'Esse currículo não está marcado como desistiu.' });
+  var agora = cvAgora_();
+  var hist = [];
+  try { hist = JSON.parse(x.row.Historico || '[]'); } catch (e) { hist = []; }
+  hist.push({ status: 'Novo', quando: agora, obs: 'Candidata(o) reativou o próprio currículo pelo site.', registradoEm: agora });
+  if (hist.length > 50) hist = hist.slice(hist.length - 50);
+  cvComTrava_(function () { cvGravarLinha_(x.L.aba, x.L.headers, x.row.__row, { Atualizado: agora, Status: 'Novo', Historico: JSON.stringify(hist) }); });
+  return jsonOut_({ ok: true });
 }
 
 /** Situação do currículo de quem está logado no portal (para o aviso da tela inicial). */
@@ -2470,6 +2655,9 @@ function cvStatusAcao_(data) {
   var row = cvAcharNovo_(L.rows, 'WhatsApp', v.usuario.whatsapp);
   if (!row) return jsonOut_({ ok: true, estado: 'nenhum', faltando: [] });
   row = cvSincronizarNasc_(L, row, v.usuario);
+  // Status "Desistiu" é uma decisão explícita do RH -- tem prioridade sobre o aviso padrão de
+  // menor de idade (no raro caso de uma candidata menor que foi marcada como desistiu também).
+  if (row.Status === 'Desistiu') return jsonOut_({ ok: true, estado: 'desistiu', faltando: [] });
   var idade = cvIdade_(row.Nascimento);
   if (idade === null ? row.Menor18 === 'SIM' : idade < 18) return jsonOut_({ ok: true, estado: 'menor', faltando: [] });
   var faltando = [];
@@ -2540,17 +2728,21 @@ function cvAdminAtualizarAcao_(data) {
     return jsonOut_({ ok: true, historico: historicoJson });
   });
 }
-/** Respostas ANTIGAS (planilha do formulário). Fora de propósito: estado civil, filhos, família, doenças e foto. */
+/** Respostas ANTIGAS (planilha do formulário). Fora de propósito: estado civil, filhos, família, doenças e foto.
+ *  Carregamento escalonado, pra não pesar o dia a dia: sem busca e sem pedir "tudo", devolve só as
+ *  últimas 80 linhas (rápido, não lê a aba inteira). Com busca OU com data.tudo=true, aí sim lê a
+ *  aba inteira e filtra -- mais pesado, mas só acontece quando alguém realmente pede. */
 function cvAdminLegadoListarAcao_(data) {
   var v = exigirPerm_(data, 'dados_pessoais');
   if (!v.ok) return negarAcesso_(v);
+  var buscaNorm = cvNorm_(data.busca || '');
   var atualizaramEmail = {}, atualizaramTel = {};
   cvLerNovos_().rows.forEach(function (r) {
     if (r.Etapa !== 'Enviado') return;
     if (r.Email) atualizaramEmail[r.Email] = true;
     var w8 = cvW8_(r.WhatsApp); if (w8) atualizaramTel[w8] = true;
   });
-  var regs = cvLegadoRegs_().map(function (r) {
+  function montar(r) {
     var ano = cvAnoNasc_(r.nasc);
     var bateuTel = [r.tel, r.tel2, r.tel3].some(function (t) { var w8 = cvW8_(t); return w8 && atualizaramTel[w8]; });
     return {
@@ -2558,8 +2750,17 @@ function cvAdminLegadoListarAcao_(data) {
       moradia: r.moradia, salario: r.salario, encarregada: r.encarregada, exp: r.exp, estudos: r.estudos, disp: r.disp, sobre: r.sobre, util: r.util,
       obs: r.obs, chamar: r.chamar, atualizou: !!(atualizaramEmail[r.email] || bateuTel)
     };
-  });
-  return jsonOut_({ ok: true, antigos: regs });
+  }
+  var LIMITE_BUSCA = 300, LIMITE_PADRAO = 80;
+  if (buscaNorm || data.tudo === true) {
+    var regs = cvLegadoRegs_();
+    if (buscaNorm) regs = regs.filter(function (r) { return Object.keys(r).some(function (k) { return k !== 'linha' && cvNorm_(r[k]).indexOf(buscaNorm) !== -1; }); });
+    regs.sort(function (a, b) { return b.linha - a.linha; });
+    return jsonOut_({ ok: true, antigos: regs.slice(0, LIMITE_BUSCA).map(montar), total: regs.length, completo: !buscaNorm });
+  }
+  var r2 = cvLegadoRegsRecentes_(LIMITE_PADRAO);
+  var ordenados = r2.regs.slice().sort(function (a, b) { return b.linha - a.linha; });
+  return jsonOut_({ ok: true, antigos: ordenados.map(montar), total: r2.total, completo: false });
 }
 /** Grava a sua anotação na coluna "chamar?" da planilha antiga (o mesmo lugar onde você já anotava). */
 function cvAdminLegadoNotaAcao_(data) {

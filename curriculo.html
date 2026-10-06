@@ -242,10 +242,33 @@ function viewRetomar(msg) {
 function entrarRetomada(r) {
   S.nome = r.nome; S.whats = r.whatsapp; S.sessao = r.sessao; S.fotoUrl = r.fotoUrl || ''; S.enviado = !!r.enviado; if (r.email) S.email = r.email;
   S.d = dadosDoServidor(r.dados || {});
+  if (r.status === 'Desistiu') return viewDesistiu();
   if (r.menor) return viewMenor();
   if (r.etapa === 'Instagram' || r.etapa === 'Sem Instagram') return viewInstagram(S.d.instagram || '');
   if (r.etapa === 'Foto') return viewFoto();
   S.passo = 0; viewPerfil();
+}
+/* ==== quem marcou "desistiu" antes: oferece reativar o próprio currículo ==== */
+function viewDesistiu() {
+  const primeiro = esc((S.nome || '').split(' ')[0] || '');
+  tela(`${progresso(8)}<div class="card grande">
+    <div class="emoji">👋</div>
+    <h2>Que bom ver você de novo${primeiro ? ', ' + primeiro : ''}!</h2>
+    <p>Seu currículo ficou marcado como <b>desistência</b> da última vez. Se você mudou de ideia e quer voltar a concorrer à vaga, é só reativar.</p>
+    <div class="erro oculto" id="erro"></div>
+    <button class="btn-p" id="reativar">Quero reativar meu currículo</button>
+    <button class="btn-s" id="sair">Não, deixa como está</button></div>`);
+  document.getElementById('sair').onclick = () => { tela('<div class="card grande"><p>Tudo bem! Se mudar de ideia, é só voltar aqui.</p></div>'); };
+  const b = document.getElementById('reativar');
+  b.onclick = async () => {
+    carregando(b, true);
+    const r = await api('curriculo_reativar', { whatsapp: S.whats, sessao: S.sessao });
+    carregando(b, false);
+    if (!r.ok) return erroBox(r.erro || 'Não foi possível reativar agora. Tente de novo em alguns minutos.');
+    const rs = await api('curriculo_retomar', { whatsapp: S.whats, sessao: S.sessao });
+    if (!rs.ok) return erroBox(rs.erro || 'Reativamos, mas não conseguimos continuar automaticamente. Recarregue a página.');
+    entrarRetomada(rs);
+  };
 }
 function dadosDoServidor(x) {
   const lista = t => t ? String(t).split(' | ').filter(Boolean) : [];

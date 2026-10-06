@@ -149,6 +149,7 @@ button{font-family:inherit;}
 .nav-chapter.active{background:var(--accent-soft); color:var(--accent); font-weight:600;}
 .nav-chapter .dot{width:7px;height:7px;border-radius:50%;background:var(--border); flex-shrink:0;}
 .nav-chapter.done .dot{background:var(--good-border);}
+.nav-chapter.stale .dot{background:var(--warn-border);}
 .nav-quiz-link{display:block; margin-top:16px; padding:10px 12px; border-radius:9px; background:var(--accent-soft); color:var(--accent); font-weight:600; font-size:0.87rem; text-align:center; cursor:pointer;}
 
 /* ---------- manual content ---------- */
@@ -169,6 +170,7 @@ button{font-family:inherit;}
 }
 .read-toggle-big input{width:19px; height:19px; accent-color:var(--good-border); cursor:pointer; flex-shrink:0;}
 .read-toggle-big.done{border-color:var(--good-border); background:var(--good-bg); color:var(--good-text);}
+.chapter-stale-alert{border-radius:10px; padding:11px 14px; margin:0 0 14px; font-weight:600; max-width:68ch; border:1px solid var(--warn-border); background:var(--warn-bg); color:var(--warn-text); font-size:0.88rem;}
 .quiz-cta{margin:44px 0 10px; padding:26px 20px; text-align:center; border-top:2px dashed var(--border);}
 .quiz-cta .btn-lg{font-size:1.05rem; padding:14px 30px; border-radius:11px;}
 .quiz-cta-locked .btn-lg{opacity:.42; filter:grayscale(.4); cursor:not-allowed;}
@@ -345,6 +347,8 @@ th{background:var(--surface-2); font-weight:700;}
 .cv-aviso.cv-incompleto a.cv-btn{background:#fff; color:#c62828;}
 .cv-aviso.cv-completo{background:#0d0d0d; color:#fff; box-shadow:0 4px 14px rgba(0,0,0,.25);}
 .cv-aviso.cv-completo h2{color:#F39C12;}
+.cv-aviso.cv-desistiu{background:var(--warn-bg); color:var(--warn-text); box-shadow:none; border:1px solid var(--warn-border);}
+.cv-aviso.cv-desistiu a.cv-btn{background:var(--warn-border); color:#0d0d0d;}
 .btn-sm{padding:6px 12px; font-size:0.82rem;}
 
 /* ---------- página de perfil ---------- */
@@ -721,20 +725,47 @@ async function submitResult(payload){
 }
 
 function progressKey(whatsapp){ return 'tm_progress_' + whatsapp; }
+function progressHashKey(whatsapp){ return 'tm_progress_hash_' + whatsapp; }
 function quizKey(whatsapp, level){ return 'tm_quiz_' + whatsapp + '_' + level; }
 
 function getProgress(){ return ls_get(progressKey(state.user.whatsapp), {}); }
 function setChapterRead(chId, val){
   var p = getProgress(); p[chId] = val; ls_set(progressKey(state.user.whatsapp), p);
 }
+/* Mapa auxiliar, independente do progresso posicional acima (que não é tocado
+   pra não afetar quem já usa o manual hoje): guarda, por capId ESTÁVEL
+   (ch.id, vindo do sync com o Google Doc), qual era o hash do conteúdo na
+   última vez que a pessoa confirmou a leitura. Se o admin editar o capítulo
+   depois, o hash muda e detectamos que "precisa reler" sem precisar de nada
+   do servidor. */
+function getHashMap(){ return ls_get(progressHashKey(state.user.whatsapp), {}); }
+function setHashConfirmado(capId, hash){
+  var m = getHashMap(); m[capId] = hash; ls_set(progressHashKey(state.user.whatsapp), m);
+}
+/* Estado efetivo de um capítulo: leva em conta o "desmarca sozinho quando o
+   conteúdo muda" pedido pelo Pablo. done=false quando nunca leu OU quando o
+   conteúdo mudou desde a última leitura confirmada (precisaReler=true nesse
+   2º caso, pra mostrar o alerta certo). */
+function chapterStatus(level, pi, ci, ch){
+  var chId = level + '-' + pi + '-' + ci;
+  var p = getProgress();
+  var marcado = !!p[chId];
+  if (!marcado || !ch.id || !ch.hash) return { chId: chId, done: marcado, stale: false };
+  var hashMap = getHashMap();
+  var hashConfirmado = hashMap[ch.id];
+  if (hashConfirmado && hashConfirmado !== ch.hash){
+    if (p[chId]) setChapterRead(chId, false); // desmarca sozinho: o capítulo mudou depois que essa pessoa leu
+    return { chId: chId, done: false, stale: true };
+  }
+  return { chId: chId, done: marcado, stale: false };
+}
 function manualProgress(level){
   var content = DATA.manuals[level];
   var total = 0, done = 0;
-  var p = getProgress();
   content.parts.forEach(function(part, pi){
     part.chapters.forEach(function(ch, ci){
       total++;
-      if (p[level+'-'+pi+'-'+ci]) done++;
+      if (chapterStatus(level, pi, ci, ch).done) done++;
     });
   });
   return { total: total, done: done, pct: total ? Math.round(done/total*100) : 0 };
@@ -1270,6 +1301,9 @@ function cvBannerHtml(r){
   if (st === 'menor'){
     return '<div class="cv-aviso cv-completo"><h2>📄 Currículo</h2><p>Você está cadastrada(o) como cliente e aluno. Quando completar 18 anos, será um prazer retomar seu currículo com você.</p></div>';
   }
+  if (st === 'desistiu'){
+    return '<div class="cv-aviso cv-desistiu"><h2>👋 Seu currículo ficou pausado</h2><p>Da última vez, seu currículo foi marcado como desistência. Se mudou de ideia, você pode reativar em poucos segundos.</p><a class="cv-btn" href="curriculo.html">Reativar meu currículo</a></div>';
+  }
   // 'nenhum', servidor antigo ou sem rede: o cartão continua aparecendo
   return '<div class="cv-aviso"><h2>📄 Faça seu currículo</h2><p>Quer crescer com a gente? Envie seu currículo para a TENKiTER Modas. Leva poucos minutos.</p><a class="cv-btn" href="curriculo.html">Fazer meu currículo</a></div>';
 }
@@ -1300,15 +1334,13 @@ function openManual(level){
 
 function renderManual(level){
   var content = DATA.manuals[level];
-  var progress = getProgress();
 
   var navHtml = '';
   content.parts.forEach(function(part, pi){
     navHtml += '<div class="nav-part">' + esc(part.title) + '</div>';
     part.chapters.forEach(function(ch, ci){
-      var chId = level+'-'+pi+'-'+ci;
-      var done = !!progress[chId];
-      navHtml += '<a class="nav-chapter' + (done?' done':'') + '" href="#ch-' + chId + '" data-ch="' + chId + '"><span class="dot"></span>' + esc(ch.title) + '</a>';
+      var st = chapterStatus(level, pi, ci, ch);
+      navHtml += '<a class="nav-chapter' + (st.done?' done':'') + (st.stale?' stale':'') + '" href="#ch-' + st.chId + '" data-ch="' + st.chId + '"><span class="dot"></span>' + esc(ch.title) + (st.stale ? ' ⚠️' : '') + '</a>';
     });
   });
 
@@ -1318,14 +1350,14 @@ function renderManual(level){
   content.parts.forEach(function(part, pi){
     bodyHtml += '<h2 class="part-heading">' + esc(part.title) + '</h2>';
     part.chapters.forEach(function(ch, ci){
-      var chId = level+'-'+pi+'-'+ci;
-      var done = !!progress[chId];
-      bodyHtml += '<div class="chapter" id="ch-' + chId + '">' +
+      var st = chapterStatus(level, pi, ci, ch);
+      bodyHtml += '<div class="chapter" id="ch-' + st.chId + '" data-manual="' + esc(level) + '" data-capid="' + esc(ch.id || '') + '" data-caphash="' + esc(ch.hash || '') + '">' +
         '<div class="chapter-head"><h3>' + esc(ch.title) + '</h3></div>' +
+        (st.stale ? '<div class="chapter-stale-alert">⚠️ Esse capítulo foi atualizado depois que você leu. Dá uma olhada de novo e confirme a leitura.</div>' : '') +
         renderBlocks(ch.blocks) +
-        '<label class="read-toggle-big' + (done?' done':'') + '">' +
-          '<input type="checkbox" data-ch="' + chId + '" ' + (done?'checked':'') + '>' +
-          '<span>' + (done ? '✓ Você confirmou que leu este capítulo' : 'Confirmo que li este capítulo') + '</span>' +
+        '<label class="read-toggle-big' + (st.done?' done':'') + '">' +
+          '<input type="checkbox" data-ch="' + st.chId + '" ' + (st.done?'checked':'') + '>' +
+          '<span>' + (st.done ? '✓ Você confirmou que leu este capítulo' : 'Confirmo que li este capítulo') + '</span>' +
         '</label>' +
       '</div>';
     });
@@ -1367,13 +1399,31 @@ function wireManual(level){
   document.querySelectorAll('.read-toggle-big input').forEach(function(cb){
     cb.addEventListener('change', function(){
       var chId = cb.getAttribute('data-ch');
-      setChapterRead(chId, cb.checked);
+      setChapterRead(chId, cb.checked); // continua local-first, igual sempre foi -- a tela não espera o servidor
+      var chapterEl = cb.closest('.chapter');
+      var capId = chapterEl ? chapterEl.getAttribute('data-capid') : '';
+      var capHash = chapterEl ? chapterEl.getAttribute('data-caphash') : '';
       var link = document.querySelector('.nav-chapter[data-ch="'+chId+'"]');
       if(link) link.classList.toggle('done', cb.checked);
       var label = cb.closest('.read-toggle-big');
       label.classList.toggle('done', cb.checked);
       label.querySelector('span').textContent = cb.checked ? '✓ Você confirmou que leu este capítulo' : 'Confirmo que li este capítulo';
+      if (cb.checked && capId && capHash){
+        setHashConfirmado(capId, capHash); // marca o hash atual como "já visto nesta versão"
+        if (link) link.classList.remove('stale');
+        if (chapterEl){
+          chapterEl.classList.remove('is-stale');
+          var alerta = chapterEl.querySelector('.chapter-stale-alert');
+          if (alerta) alerta.remove();
+        }
+      }
       updateQuizCta(level);
+      // Sincroniza com o servidor só pra admin acompanhar à distância; nunca bloqueia nem
+      // atrasa a experiência de quem está lendo -- se falhar, fica só no localStorage mesmo.
+      if (capId && capHash){
+        submitResult({ action:'manual_marcar_lido', whatsapp: state.user.whatsapp, sessao: state.user.password,
+          manualId: level, capId: capId, hash: capHash, lido: cb.checked }).catch(function(){});
+      }
     });
   });
   var sidebar = document.getElementById('manual-sidebar');
