@@ -277,12 +277,16 @@ function linkCobrarCurriculo(r) {
 function linkCobrarLeitura(r, m) {
   const nome = primeiroNome(r.Nome);
   const motivo = m.precisamReler ? ('tem um trecho atualizado do manual "' + m.titulo + '" pra você reler') : ('falta ler uma parte do manual "' + m.titulo + '"');
-  const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas.\n\nVi que ainda ' + motivo + '. É rapidinho: entra no portal (manual.html), faça login e continue de onde parou.\n\nQualquer dúvida, chama por aqui!';
+  const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas.\n\nVi que ainda ' + motivo + '.\n\n' +
+    'É rapidinho: entra no nosso site https://tenkitermodas.com.br/manual.html , faça login com o WhatsApp e a senha que você colocou, e continue de onde parou.\n\n' +
+    'Qualquer dúvida, chama por aqui!';
   return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
 }
 function linkCobrarProva(r, m) {
   const nome = primeiroNome(r.Nome);
-  const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas.\n\nVi que você já terminou de ler o manual "' + m.titulo + '" mas ainda não fez a prova dele. Entra no portal (manual.html) e faz a avaliação quando puder!\n\nQualquer dúvida, chama por aqui!';
+  const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas.\n\nVi que você já terminou de ler o manual "' + m.titulo + '" mas ainda não fez a prova dele.\n\n' +
+    'É rapidinho: entra no nosso site https://tenkitermodas.com.br/manual.html , faça login com o WhatsApp e a senha que você colocou, e faz a avaliação quando puder.\n\n' +
+    'Qualquer dúvida, chama por aqui!';
   return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
 }
 function botaoAcao(href, texto) {
