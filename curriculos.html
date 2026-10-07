@@ -159,7 +159,9 @@ function diasPara(iso) { if (!iso) return null; const d = new Date(iso + 'T00:00
 function diasDesde(iso) { if (!iso) return null; const d = new Date(iso); if (isNaN(d)) return null; return Math.floor((Date.now() - d) / 86400000); }
 function fmtData(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || ''); }
 function fmtDataHora(dt) { const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(dt || ''); return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : (dt || ''); }
-function corStatus(s) { return s === 'Contratada' ? 'ok' : (s === 'Descartada' || s === 'Desistiu' || s === 'Demitida' ? 'ru' : (s === 'Agendada' ? 'al' : '')); }
+function corStatus(s) { return s === 'Contratada' ? 'ok' : (s === 'Descartada' || s === 'Desistiu' || s === 'Demitida' ? 'ru' : ((s === 'Agendada' || s === 'Estagiando') ? 'al' : '')); }
+function rotuloDataEvento(st) { return st === 'Estagiando' ? 'Data (início do estágio):' : 'Data (contratação/demissão):'; }
+function usaDataEvento(st) { return st === 'Contratada' || st === 'Demitida' || st === 'Estagiando'; }
 function historicoHtml(r) {
   let hist = []; try { hist = JSON.parse(r.Historico || '[]'); } catch (e) { hist = []; }
   if (!hist.length) return '<div data-k="hist"></div>';
@@ -360,7 +362,7 @@ function itemNovo(r) {
     <div class="edit"><div class="linha"><select data-k="st">${STATUS.map(s => `<option ${s === (r.Status || 'Novo') ? 'selected' : ''}>${E(s)}</option>`).join('')}</select>
     <select data-k="mo"><option value="">Motivo (se descartada ou desistiu)</option>${MOTIVOS.map(s => `<option ${s === r.Motivo ? 'selected' : ''}>${E(s)}</option>`).join('')}</select></div>
     <div class="linha ${(r.Status || 'Novo') === 'Agendada' ? '' : 'oculto'}" data-k="aglinha"><input type="datetime-local" data-k="ag" value="${E(r.AgendadoEm || '')}"></div>
-    <div class="linha ${['Contratada', 'Demitida'].indexOf(r.Status || 'Novo') !== -1 ? '' : 'oculto'}" data-k="devlinha"><span class="meta" style="flex:none;align-self:center">Data (contratação/demissão):</span><input type="date" data-k="dev" value="${E(r.DataEvento || new Date().toISOString().slice(0, 10))}"></div>
+    <div class="linha ${usaDataEvento(r.Status || 'Novo') ? '' : 'oculto'}" data-k="devlinha"><span class="meta" style="flex:none;align-self:center" data-k="devlabel">${rotuloDataEvento(r.Status || 'Novo')}</span><input type="date" data-k="dev" value="${E(r.DataEvento || new Date().toISOString().slice(0, 10))}"></div>
     <textarea data-k="obsAlt" placeholder="Observação desta alteração (fica registrada no histórico)"></textarea>
     <textarea data-k="no" placeholder="Suas anotações gerais">${E(r.Nota || '')}</textarea><button data-k="sv">Salvar</button><span data-k="ms" class="meta"></span></div>
     <dl>${dl}</dl>${historicoHtml(r)}</div>`;
@@ -372,18 +374,19 @@ function itemNovo(r) {
   d.querySelector('[data-k=st]').onchange = e => {
     const st = e.target.value;
     d.querySelector('[data-k=aglinha]').classList.toggle('oculto', st !== 'Agendada');
-    d.querySelector('[data-k=devlinha]').classList.toggle('oculto', st !== 'Contratada' && st !== 'Demitida');
+    d.querySelector('[data-k=devlinha]').classList.toggle('oculto', !usaDataEvento(st));
+    d.querySelector('[data-k=devlabel]').textContent = rotuloDataEvento(st);
   };
   d.querySelector('[data-k=sv]').onclick = async e => {
     const b = e.target, ms = d.querySelector('[data-k=ms]'); b.disabled = true; ms.textContent = '';
     const st = d.querySelector('[data-k=st]').value, mo = d.querySelector('[data-k=mo]').value, no = d.querySelector('[data-k=no]').value, ag = d.querySelector('[data-k=ag]').value;
     const dev = d.querySelector('[data-k=dev]').value, obsAlt = d.querySelector('[data-k=obsAlt]').value;
     if (st === 'Agendada' && !ag) { ms.textContent = 'Escolha o dia e a hora do agendamento.'; b.disabled = false; return; }
-    if ((st === 'Contratada' || st === 'Demitida') && !dev) { ms.textContent = 'Escolha a data.'; b.disabled = false; return; }
-    const x = await chamar('curriculos_atualizar', { cvId: r.CvId, status: st, motivo: mo, nota: no, agendadoEm: ag, observacao: obsAlt, dataEvento: (st === 'Contratada' || st === 'Demitida') ? dev : '' });
+    if (usaDataEvento(st) && !dev) { ms.textContent = 'Escolha a data.'; b.disabled = false; return; }
+    const x = await chamar('curriculos_atualizar', { cvId: r.CvId, status: st, motivo: mo, nota: no, agendadoEm: ag, observacao: obsAlt, dataEvento: usaDataEvento(st) ? dev : '' });
     b.disabled = false;
     if (!x.ok) { ms.textContent = x.erro || 'Erro ao salvar'; return; }
-    r.Status = st; r.Motivo = mo; r.Nota = no; r.AgendadoEm = ag; r.DataEvento = (st === 'Contratada' || st === 'Demitida') ? dev : r.DataEvento; r.Historico = x.historico || r.Historico;
+    r.Status = st; r.Motivo = mo; r.Nota = no; r.AgendadoEm = ag; r.DataEvento = usaDataEvento(st) ? dev : r.DataEvento; r.Historico = x.historico || r.Historico;
     d.querySelector('[data-k=obsAlt]').value = '';
     ms.textContent = 'Salvo ✓';
     const tags = d.querySelectorAll('.topo .tag'); tags[1].textContent = st; tags[1].className = 'tag ' + corStatus(st);

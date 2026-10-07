@@ -1,4 +1,10 @@
-// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v4.3
+// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v4.4
+//
+// NOVIDADE DA v4.4 -- ajustes no pipeline de status dos currículos (só ACRESCENTA):
+//  - Novo status "Estagiando" (CV_STATUS), entre "Entrevista" e "Contratada" -- ganha
+//    campo de data de início do estágio, igual já existia para contratação/demissão.
+//  - Status "Desistiu" sobe na lista: agora fica acima de "Demitida" (antes ficava
+//    depois de "Descartada").
 //
 // NOVIDADE DA v4.3 -- melhorias no painel de Currículos (só ACRESCENTA, nada do que existia foi
 //  alterado de comportamento pra quem já usa):
@@ -893,7 +899,7 @@ function doGet(e) {
   }
 
   if (action === 'versao') {
-    return jsonOut_({ ok: true, versao: '4.3', acessos: true, curriculos: true, listaFechada: listaFechada_() });
+    return jsonOut_({ ok: true, versao: '4.4', acessos: true, curriculos: true, listaFechada: listaFechada_() });
   }
 
   // padrão: lista de funcionários (login e níveis) -- formato ANTIGO, só existe
@@ -2030,7 +2036,7 @@ var CV_HEADERS = ['CvId','Criado','Atualizado','Etapa','Status','Motivo','Nota',
 // cadastro (ver cvCadastroAcao_), fora da fila de quem já pode seguir o processo seletivo. O
 // gestor confere essa aba de vez em quando (o aviso "completam 18 anos em breve" já avisa sozinho)
 // e muda o status manualmente pra 'Novo' quando quiser trazer a pessoa de volta pro fluxo normal.
-var CV_STATUS = ['Novo', 'Chamar', 'Contactada', 'Agendada', 'Entrevista', 'Contratada', 'Demitida', 'Descartada', 'Desistiu', 'Menor de 18'];
+var CV_STATUS = ['Novo', 'Chamar', 'Contactada', 'Agendada', 'Entrevista', 'Estagiando', 'Contratada', 'Desistiu', 'Demitida', 'Descartada', 'Menor de 18'];
 var CV_MOTIVOS = ['Sem experiência', 'Horário incompatível', 'Mora longe', 'Escolaridade', 'Sem retorno', 'Perfil não adequado à vaga', 'Outro'];
 
 // Alternativas aceitas (o site usa exatamente estes textos; o servidor recusa qualquer outro valor)
@@ -2718,7 +2724,7 @@ function cvAdminAtualizarAcao_(data) {
     var mudouStatus = row.Status !== status;
     if (mudouStatus || observacao) {
       var quando = status === 'Agendada' ? agendadoEm
-        : (status === 'Contratada' || status === 'Demitida') ? (dataEvento || new Date().toISOString().slice(0, 10))
+        : (status === 'Contratada' || status === 'Demitida' || status === 'Estagiando') ? (dataEvento || new Date().toISOString().slice(0, 10))
         : cvAgora_();
       hist.push({ status: status, quando: quando, obs: observacao, registradoEm: cvAgora_() });
       if (hist.length > 50) hist = hist.slice(hist.length - 50);
