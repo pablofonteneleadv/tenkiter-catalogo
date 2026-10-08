@@ -1,4 +1,17 @@
-// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v4.4
+// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v4.5
+//
+// NOVIDADE DA v4.5 -- conserta a raiz do bug "aluno leu tudo mas o painel mostra 0 lidos":
+//  - lerManuais_ agora SEMPRE recalcula id+hash de cada capítulo (manAtribuirIdsEHashes_),
+//    em vez de confiar no que já estava salvo na planilha. Antes, um manual criado por um
+//    caminho que não passa pelo parser do Doc (ex. criarManualDeConteudo_) ou sincronizado
+//    antes da v4.3 existir ficava com capítulos SEM id/hash para sempre -- e sem id/hash o
+//    navegador do aluno nunca manda a leitura pro servidor (fica só no localStorage dele),
+//    então o painel de Currículos mostrava "0 de N lidos" mesmo a pessoa tendo marcado tudo.
+//  - Nova ação manual_sincronizar_lote: ao abrir um manual, o navegador reenvia de uma vez
+//    todos os capítulos já confirmados localmente que o servidor ainda não tem registrados
+//    (cobre tanto quem ficou preso nesse bug quanto qualquer sincronização individual que
+//    tenha falhado por falta de rede) -- só soma leitura, nunca desmarca nada.
+//  - Nada do que já existia muda de comportamento pra quem não foi afetado pelo bug.
 //
 // NOVIDADE DA v4.4 -- ajustes no pipeline de status dos currículos (só ACRESCENTA):
 //  - Novo status "Estagiando" (CV_STATUS), entre "Entrevista" e "Contratada" -- ganha
@@ -755,6 +768,23 @@ function manHash_(blocks) {
   var txt = JSON.stringify(blocks || []);
   return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, txt)).slice(0, 16);
 }
+/** Garante id+hash em TODO capítulo de um manual, não importa de onde "parts" veio (Doc
+ *  sincronizado, manual criado em branco, importação em lote feita há tempos, etc.) -- chamada
+ *  sempre que manuais são lidos (ver lerManuais_), nunca só na hora da sincronização. Isso evita
+ *  que um manual antigo (salvo antes desse recurso existir, ou criado por outro caminho que não
+ *  passa pelo parser do Doc) fique com capítulos sem id/hash para sempre: sem id/hash, o
+ *  navegador do aluno nunca sincroniza a leitura com o servidor (só grava no localStorage dele),
+ *  e o painel de Currículos mostra "0 lidos" mesmo a pessoa tendo marcado tudo. */
+function manAtribuirIdsEHashes_(parts) {
+  var idsUsados = {};
+  (parts || []).forEach(function (parte) {
+    (parte.chapters || []).forEach(function (cap) {
+      cap.id = manCapId_(cap.title, idsUsados);
+      cap.hash = manHash_(cap.blocks);
+    });
+  });
+  return parts;
+}
 function manAcharLinhaProgresso_(sheet, whats) {
   var dados = sheet.getDataRange().getValues();
   for (var i = 1; i < dados.length; i++) if (normalizarWhats_(dados[i][0]) === whats) return i + 1;
@@ -789,6 +819,43 @@ function manMarcarLidoAcao_(data) {
     if (linha) { sheet.getRange(linha, 2).setValue(json); sheet.getRange(linha, 3).setValue(new Date()); }
     else { sheet.appendRow([whats, json, new Date()]); }
     return jsonOut_({ ok: true });
+  });
+}
+
+/** Sincronização EM LOTE: o navegador manda de uma vez todos os capítulos que já marcou como
+ *  lidos localmente (inclusive os antigos, de antes de existir id/hash pra esse manual, ou que
+ *  por qualquer motivo nunca tinham chegado no servidor). Roda sozinha ao abrir o manual, sem o
+ *  aluno precisar desmarcar/marcar capítulo de novo pra "destravar" a sincronização -- só soma
+ *  leituras, nunca desmarca nada (desmarcar continua sendo só pela ação manual_marcar_lido, capítulo
+ *  por capítulo, quando a pessoa desmarca a caixinha na tela). */
+function manSincronizarLoteAcao_(data) {
+  var v = acVerificar_(data.whatsapp, data.sessao);
+  if (!v.ok) return jsonOut_({ ok: false, erro: v.erro, sessaoInvalida: true });
+  var manualId = String(data.manualId || '');
+  var itens = Array.isArray(data.itens) ? data.itens : [];
+  if (!manualId || !itens.length) return jsonOut_({ ok: true, gravados: 0 });
+  var whats = v.usuario.whatsapp;
+  return cvComTrava_(function () {
+    var sheet = getProgressoSheet_();
+    var linha = manAcharLinhaProgresso_(sheet, whats);
+    var prog = {};
+    if (linha) { try { prog = JSON.parse(sheet.getRange(linha, 2).getValue() || '{}'); } catch (e) { prog = {}; } }
+    if (!prog[manualId]) prog[manualId] = {};
+    var gravados = 0;
+    itens.forEach(function (item) {
+      var capId = String(item && item.capId || ''), hash = String(item && item.hash || '');
+      if (!capId || !item.lido) return; // lote só soma leitura, nunca desmarca
+      var atual = prog[manualId][capId];
+      if (atual && atual.lido && atual.hash === hash) return; // já estava igual, não regrava à toa
+      prog[manualId][capId] = { lido: true, hash: hash, em: cvAgora_() };
+      gravados++;
+    });
+    if (gravados) {
+      var json = JSON.stringify(prog);
+      if (linha) { sheet.getRange(linha, 2).setValue(json); sheet.getRange(linha, 3).setValue(new Date()); }
+      else { sheet.appendRow([whats, json, new Date()]); }
+    }
+    return jsonOut_({ ok: true, gravados: gravados });
   });
 }
 
@@ -857,6 +924,10 @@ function lerManuais_() {
     .map(function (r) {
       var parts = [];
       try { parts = JSON.parse(r[6] || '[]'); } catch (e) { parts = []; }
+      // Sempre recalcula id+hash de cada capítulo na leitura (nunca confia só no que já estava
+      // salvo) -- ver manAtribuirIdsEHashes_. Cobre manuais salvos antes desse recurso existir ou
+      // criados por um caminho que não passa pelo parser do Doc (ex. criarManualDeConteudo_).
+      parts = manAtribuirIdsEHashes_(parts);
       return {
         id: String(r[0]),
         titulo: r[1] || '',
@@ -899,7 +970,7 @@ function doGet(e) {
   }
 
   if (action === 'versao') {
-    return jsonOut_({ ok: true, versao: '4.4', acessos: true, curriculos: true, listaFechada: listaFechada_() });
+    return jsonOut_({ ok: true, versao: '4.5', acessos: true, curriculos: true, listaFechada: listaFechada_() });
   }
 
   // padrão: lista de funcionários (login e níveis) -- formato ANTIGO, só existe
@@ -943,6 +1014,7 @@ function doPost(e) {
       case 'curriculos_antigos_nota':  return cvAdminLegadoNotaAcao_(data);
       case 'curriculos_treinamento':   return cvTreinamentoPessoaAcao_(data);
       case 'manual_marcar_lido':       return manMarcarLidoAcao_(data);
+      case 'manual_sincronizar_lote':  return manSincronizarLoteAcao_(data);
       case 'acessos_listar':           return acessosListar_(data);
       case 'acessos_perfil':           return acessosPerfilAcao_(data);
       case 'acessos_permissao':        return acessosPermissaoAcao_(data);
@@ -1412,19 +1484,8 @@ function analisarDocManual_(docId) {
     }
   }
 
-  // id + hash de cada capítulo, pro progresso de leitura (ver bloco "PROGRESSO DE LEITURA" mais
-  // abaixo): id vem só do TÍTULO (não da posição), pra sobreviver a arrastar/reordenar capítulos
-  // e partes no Google Docs; hash vem do CONTEÚDO, pra saber quando um capítulo já lido mudou e
-  // precisa ser lido de novo. Se o título do capítulo mudar, ele "vira" outro pro sistema -- perde
-  // o histórico de quem leu (volta a aparecer como não lido), nunca mistura com o capítulo errado.
-  var idsUsados = {};
-  parts.forEach(function (parte) {
-    (parte.chapters || []).forEach(function (cap) {
-      cap.id = manCapId_(cap.title, idsUsados);
-      cap.hash = manHash_(cap.blocks);
-    });
-  });
-
+  // id + hash de cada capítulo ficam por conta de lerManuais_ agora (manAtribuirIdsEHashes_),
+  // que roda em QUALQUER leitura, não só na sincronização -- ver o comentário lá.
   return parts;
 }
 

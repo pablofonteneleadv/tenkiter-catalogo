@@ -726,38 +726,58 @@ async function submitResult(payload){
 
 function progressKey(whatsapp){ return 'tm_progress_' + whatsapp; }
 function progressHashKey(whatsapp){ return 'tm_progress_hash_' + whatsapp; }
+function progressStableKey(whatsapp){ return 'tm_progress_estavel_' + whatsapp; }
 function quizKey(whatsapp, level){ return 'tm_quiz_' + whatsapp + '_' + level; }
 
+/* LEGADO (pré-id-estável): progresso guardado por POSIÇÃO (nível-parte-capítulo). Só existe pra
+   migrar quem já tinha leitura marcada antes desse recurso -- nunca mais é escrito. Guardar por
+   posição tem um defeito sério: se o Pablo reordena ou insere um capítulo no meio do manual, a
+   posição de tudo que vem depois muda, e a leitura "grudada" na posição passa a valer pro
+   capítulo ERRADO. Por isso a partir de agora o estado real mora em getStableProgress(),
+   indexado pelo id estável do capítulo (ch.id, que vem do TÍTULO e sobrevive a reordenar). */
 function getProgress(){ return ls_get(progressKey(state.user.whatsapp), {}); }
 function setChapterRead(chId, val){
   var p = getProgress(); p[chId] = val; ls_set(progressKey(state.user.whatsapp), p);
 }
-/* Mapa auxiliar, independente do progresso posicional acima (que não é tocado
-   pra não afetar quem já usa o manual hoje): guarda, por capId ESTÁVEL
-   (ch.id, vindo do sync com o Google Doc), qual era o hash do conteúdo na
-   última vez que a pessoa confirmou a leitura. Se o admin editar o capítulo
-   depois, o hash muda e detectamos que "precisa reler" sem precisar de nada
-   do servidor. */
 function getHashMap(){ return ls_get(progressHashKey(state.user.whatsapp), {}); }
-function setHashConfirmado(capId, hash){
-  var m = getHashMap(); m[capId] = hash; ls_set(progressHashKey(state.user.whatsapp), m);
+
+/* Fonte da verdade atual: mapa capId(estável) -> {lido, hash}. hash é o hash do capítulo no
+   momento em que a leitura foi confirmada -- se o conteúdo mudar depois (hash diferente), o
+   capítulo "destrava" sozinho como não lido de novo, sem precisar de nada do servidor. */
+function getStableProgress(){ return ls_get(progressStableKey(state.user.whatsapp), {}); }
+function setStableChapterRead(capId, hash, lido){
+  var m = getStableProgress();
+  if (lido) m[capId] = { lido: true, hash: hash };
+  else delete m[capId];
+  ls_set(progressStableKey(state.user.whatsapp), m);
 }
-/* Estado efetivo de um capítulo: leva em conta o "desmarca sozinho quando o
-   conteúdo muda" pedido pelo Pablo. done=false quando nunca leu OU quando o
-   conteúdo mudou desde a última leitura confirmada (precisaReler=true nesse
-   2º caso, pra mostrar o alerta certo). */
+
+/* Estado efetivo de um capítulo. Usa o mapa estável (por capId) como fonte principal; na
+   primeira vez que um capítulo com id estável é visto sem entrada nesse mapa, migra uma única
+   vez a partir do progresso-por-posição antigo (e do hash-map antigo), pra não fazer ninguém
+   perder leitura já marcada por causa dessa troca de chave. Quando o capítulo não tem id/hash
+   (não deveria mais acontecer, mas sem rede de segurança nenhuma trava), cai pro comportamento
+   antigo (só posição, sem detecção de "precisa reler"). */
 function chapterStatus(level, pi, ci, ch){
   var chId = level + '-' + pi + '-' + ci;
-  var p = getProgress();
-  var marcado = !!p[chId];
-  if (!marcado || !ch.id || !ch.hash) return { chId: chId, done: marcado, stale: false };
-  var hashMap = getHashMap();
-  var hashConfirmado = hashMap[ch.id];
-  if (hashConfirmado && hashConfirmado !== ch.hash){
-    if (p[chId]) setChapterRead(chId, false); // desmarca sozinho: o capítulo mudou depois que essa pessoa leu
-    return { chId: chId, done: false, stale: true };
+  if (!ch.id || !ch.hash){
+    var p = getProgress();
+    return { chId: chId, capId: null, done: !!p[chId], stale: false };
   }
-  return { chId: chId, done: marcado, stale: false };
+  var mapa = getStableProgress();
+  if (!(ch.id in mapa)){
+    var pLegado = getProgress();
+    if (pLegado[chId]){
+      var hashLegadoMap = getHashMap();
+      var hashLegado = hashLegadoMap[ch.id] || ch.hash;
+      setStableChapterRead(ch.id, hashLegado, true); // migra uma vez só
+      mapa = getStableProgress();
+    }
+  }
+  var entrada = mapa[ch.id];
+  if (!entrada) return { chId: chId, capId: ch.id, done: false, stale: false };
+  if (entrada.hash !== ch.hash) return { chId: chId, capId: ch.id, done: false, stale: true }; // mudou depois que leu
+  return { chId: chId, capId: ch.id, done: true, stale: false };
 }
 function manualProgress(level){
   var content = DATA.manuals[level];
@@ -769,6 +789,27 @@ function manualProgress(level){
     });
   });
   return { total: total, done: done, pct: total ? Math.round(done/total*100) : 0 };
+}
+
+/* Sincronização em lote: toda vez que o manual é aberto, reenvia pro servidor todos os
+   capítulos já confirmados localmente que tenham id estável -- cobre tanto quem já tinha lido
+   antes desse recurso existir (acabou de migrar acima) quanto qualquer sincronização individual
+   que tenha falhado por falta de rede. Só soma leitura, nunca desmarca; roda em segundo plano,
+   sem travar a tela nem avisar em caso de falha. */
+function sincronizarProgressoLote(level){
+  if (!DATA.appsScriptUrl) return;
+  var content = DATA.manuals[level];
+  if (!content) return;
+  var itens = [];
+  content.parts.forEach(function(part, pi){
+    part.chapters.forEach(function(ch, ci){
+      var st = chapterStatus(level, pi, ci, ch);
+      if (st.done && st.capId) itens.push({ capId: st.capId, hash: ch.hash, lido: true });
+    });
+  });
+  if (!itens.length) return;
+  submitResult({ action:'manual_sincronizar_lote', whatsapp: state.user.whatsapp, sessao: state.user.password,
+    manualId: level, itens: itens }).catch(function(){});
 }
 
 /* ---------------- render: blocks ---------------- */
@@ -1396,21 +1437,25 @@ function updateQuizCta(level){
 }
 
 function wireManual(level){
+  sincronizarProgressoLote(level); // reenvia pro servidor qualquer leitura já confirmada localmente que ainda não tenha chegado lá
   document.querySelectorAll('.read-toggle-big input').forEach(function(cb){
     cb.addEventListener('change', function(){
       var chId = cb.getAttribute('data-ch');
-      setChapterRead(chId, cb.checked); // continua local-first, igual sempre foi -- a tela não espera o servidor
       var chapterEl = cb.closest('.chapter');
       var capId = chapterEl ? chapterEl.getAttribute('data-capid') : '';
       var capHash = chapterEl ? chapterEl.getAttribute('data-caphash') : '';
+      if (capId && capHash){
+        setStableChapterRead(capId, capHash, cb.checked); // fonte da verdade: por id estável do capítulo
+      } else {
+        setChapterRead(chId, cb.checked); // sem id/hash (não devia mais acontecer): só fallback por posição
+      }
       var link = document.querySelector('.nav-chapter[data-ch="'+chId+'"]');
       if(link) link.classList.toggle('done', cb.checked);
       var label = cb.closest('.read-toggle-big');
       label.classList.toggle('done', cb.checked);
       label.querySelector('span').textContent = cb.checked ? '✓ Você confirmou que leu este capítulo' : 'Confirmo que li este capítulo';
-      if (cb.checked && capId && capHash){
-        setHashConfirmado(capId, capHash); // marca o hash atual como "já visto nesta versão"
-        if (link) link.classList.remove('stale');
+      if (cb.checked && link){
+        link.classList.remove('stale');
         if (chapterEl){
           chapterEl.classList.remove('is-stale');
           var alerta = chapterEl.querySelector('.chapter-stale-alert');
