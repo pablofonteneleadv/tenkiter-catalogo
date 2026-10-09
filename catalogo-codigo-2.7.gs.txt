@@ -1,4 +1,9 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v2.6
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v2.7
+//
+// NOVIDADE v2.7 -- corrige "fica só em Analisando": o gemini-3.8-flash estava sobrecarregado (~70 s
+//  até dar erro 503). Padrão agora gemini-3.5-flash; se um modelo falhar o sistema tenta outros
+//  (máx. 3) em vez de travar; gerarSeo e sugerirPorFoto passam a usar a mesma chamada
+//  (chamarGemini_). O modelo gemini-3.8-flash salvo pela tela da v2.6 é ignorado.
 //
 // NOVIDADE v2.6:
 //  - Chave e modelo do Gemini agora se configuram no admin (⚙️ Configurações Avançadas), sem editar
@@ -77,7 +82,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-2.6';
+const VERSAO_CATALOGO = 'catalogo-2.7';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1744,12 +1749,6 @@ function excluirPermanentemente_(body) {
  * (Opcional) Nome: GEMINI_MODEL   Valor: gemini-2.0-flash (ou outro modelo)
  */
 function gerarSeoComGemini_(body) {
-  const cfgIA = configIA_();
-  const apiKey = cfgIA.chave, modelo = cfgIA.modelo;
-  if (!apiKey) {
-    return jsonResponse_({ ok: false, erro: 'Chave do Gemini não configurada. No admin, abra ⚙️ Configurações Avançadas e cole a chave em "Inteligência artificial".' });
-  }
-
   const prompt = 'Você é especialista em SEO para e-commerce de moda no Brasil. ' +
     'Gere um título curto (máximo 60 caracteres) e uma descrição (2 a 3 frases, até 300 caracteres), ' +
     'otimizados para busca (Google e redes sociais), para este produto de roupa:\n' +
@@ -1758,56 +1757,56 @@ function gerarSeoComGemini_(body) {
     'Gênero: ' + (body.genero || '') + '\n' +
     (body.descricao ? ('Descrição atual: ' + body.descricao + '\n') : '') +
     'Responda SOMENTE em JSON válido, sem markdown, no formato exato: {"titulo": "...", "descricao": "..."}';
-
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent?key=' + apiKey;
-  const payload = { contents: [{ parts: [{ text: prompt }] }] };
-
-  try {
-    const resp = UrlFetchApp.fetch(url, {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    });
-    const codigoResp = resp.getResponseCode();
-    const dadosResp = JSON.parse(resp.getContentText());
-
-    if (codigoResp !== 200) {
-      const msgErro = dadosResp.error && dadosResp.error.message ? dadosResp.error.message : ('HTTP ' + codigoResp);
-      return jsonResponse_({ ok: false, erro: 'Erro do Gemini: ' + msgErro });
-    }
-
-    let textoResp = (dadosResp.candidates && dadosResp.candidates[0] && dadosResp.candidates[0].content &&
-      dadosResp.candidates[0].content.parts && dadosResp.candidates[0].content.parts[0])
-      ? dadosResp.candidates[0].content.parts[0].text : '';
-    textoResp = textoResp.replace(/```json/gi, '').replace(/```/g, '').trim();
-
-    let resultado;
-    try {
-      resultado = JSON.parse(textoResp);
-    } catch (erroParse) {
-      return jsonResponse_({ ok: false, erro: 'A IA respondeu num formato inesperado. Tente novamente.' });
-    }
-
-    return jsonResponse_({ ok: true, titulo: resultado.titulo || '', descricao: resultado.descricao || '' });
-  } catch (erroFetch) {
-    return jsonResponse_({ ok: false, erro: 'Falha ao conectar com o Gemini: ' + erroFetch.message });
-  }
+  const r = chamarGemini_({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.4 } });
+  if (!r.ok) return jsonResponse_({ ok: false, erro: r.erro });
+  let resultado;
+  try { resultado = JSON.parse(r.texto); } catch (erroParse) { return jsonResponse_({ ok: false, erro: 'A IA respondeu num formato inesperado. Tente novamente.' }); }
+  return jsonResponse_({ ok: true, titulo: resultado.titulo || '', descricao: resultado.descricao || '' });
 }
 
 /**
  * v2.6 -- chave e modelo do Gemini ficam nas Propriedades do script, mas agora se configuram
  * pelo próprio admin (⚙️ Configurações Avançadas), sem abrir o editor do Apps Script. A chave
  * NUNCA volta pro navegador (só "configurada ✓" + últimos 4 caracteres) e nunca vai pro GitHub.
- * Modelo padrão: gemini-3.8-flash (o gemini-2.0-flash foi desligado pelo Google).
+ * Modelo padrão: gemini-3.5-flash, com troca automática se falhar (o 2.0 foi desligado e o 3.8 vive sobrecarregado).
  */
-const MODELO_IA_PADRAO_ = 'gemini-3.8-flash';
+const MODELO_IA_PADRAO_ = 'gemini-3.5-flash';
+// Se o modelo escolhido falhar (sobrecarga, desligado, limite), tenta estes em ordem -- máx. 3 tentativas.
+const MODELOS_IA_RESERVA_ = ['gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite'];
 function configIA_() {
   const props = PropertiesService.getScriptProperties();
-  return {
-    chave: String(props.getProperty('GEMINI_API_KEY') || '').trim(),
-    modelo: String(props.getProperty('GEMINI_MODEL') || '').trim() || MODELO_IA_PADRAO_
-  };
+  let modelo = String(props.getProperty('GEMINI_MODEL') || '').trim();
+  // gemini-3.8-flash só chegou aqui porque a tela da v2.6 pré-preenchia o campo "Modelo" com o
+  // padrão da época e salvava junto com a chave; ele estava sobrecarregado (demorava ~70 s para
+  // dar erro 503). Tratado como "não escolhi nenhum" -- vale o padrão atual.
+  if (modelo === 'gemini-3.8-flash' || modelo === 'gemini-2.0-flash') modelo = '';
+  return { chave: String(props.getProperty('GEMINI_API_KEY') || '').trim(), modelo: modelo || MODELO_IA_PADRAO_ };
+}
+/** Chama o Gemini com troca automática de modelo. Devolve { ok, texto, modelo } ou { ok:false, erro }. */
+function chamarGemini_(payload) {
+  const cfg = configIA_();
+  if (!cfg.chave) return { ok: false, erro: 'Chave do Gemini não configurada. No admin, abra ⚙️ Configurações Avançadas e cole a chave em "Inteligência artificial".' };
+  const fila = [cfg.modelo].concat(MODELOS_IA_RESERVA_.filter(function (m) { return m !== cfg.modelo; })).slice(0, 3);
+  let ultimoErro = '';
+  for (let i = 0; i < fila.length; i++) {
+    try {
+      const resp = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + fila[i] + ':generateContent?key=' + cfg.chave,
+        { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+      const codigo = resp.getResponseCode();
+      let dados = {};
+      try { dados = JSON.parse(resp.getContentText()); } catch (e) { dados = {}; }
+      if (codigo === 200) {
+        const partes = (dados.candidates && dados.candidates[0] && dados.candidates[0].content && dados.candidates[0].content.parts) || [];
+        const texto = partes.map(function (x) { return x.text || ''; }).join('').replace(/```json/gi, '').replace(/```/g, '').trim();
+        if (texto) return { ok: true, texto: texto, modelo: fila[i] };
+        ultimoErro = 'resposta vazia (' + fila[i] + ')';
+        continue;
+      }
+      ultimoErro = (dados.error && dados.error.message ? dados.error.message : ('HTTP ' + codigo)) + ' (' + fila[i] + ')';
+      if (codigo === 400 || codigo === 401 || codigo === 403) break; // chave/pedido inválido: trocar de modelo não resolve
+    } catch (e) { ultimoErro = String(e.message || e) + ' (' + fila[i] + ')'; }
+  }
+  return { ok: false, erro: 'Erro do Gemini: ' + ultimoErro };
 }
 function statusConfigIA_() {
   const c = configIA_();
@@ -1839,9 +1838,6 @@ function salvarConfigIA_(body) {
  * body.fotos = [{ b64: '<jpeg base64 puro>' } | { url: 'https://res.cloudinary.com/...' }]
  */
 function sugerirPorFotoComGemini_(body) {
-  const cfgIA = configIA_();
-  const apiKey = cfgIA.chave, modelo = cfgIA.modelo;
-  if (!apiKey) return jsonResponse_({ ok: false, erro: 'Chave do Gemini não configurada. No admin, abra ⚙️ Configurações Avançadas e cole a chave em "Inteligência artificial".' });
 
   const fotos = Array.isArray(body.fotos) ? body.fotos.slice(0, 8) : [];
   if (!fotos.length) return jsonResponse_({ ok: false, erro: 'Adicione ao menos uma foto antes.' });
@@ -1877,23 +1873,14 @@ function sugerirPorFotoComGemini_(body) {
     'composição, tamanho nem preço. Se não dá pra saber pela foto, não mencione.\n' +
     'Nunca inclua preço.';
 
-  const payload = {
+  const resp = chamarGemini_({
     contents: [{ parts: [{ text: prompt }].concat(partesImagem) }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.3 }
-  };
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent?key=' + apiKey;
-
+  });
+  if (!resp.ok) return jsonResponse_({ ok: false, erro: resp.erro });
   try {
-    const resp = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
-    const dados = JSON.parse(resp.getContentText());
-    if (resp.getResponseCode() !== 200) {
-      return jsonResponse_({ ok: false, erro: 'Erro do Gemini: ' + (dados.error && dados.error.message ? dados.error.message : ('HTTP ' + resp.getResponseCode())) });
-    }
-    let texto = (dados.candidates && dados.candidates[0] && dados.candidates[0].content &&
-      dados.candidates[0].content.parts && dados.candidates[0].content.parts[0]) ? dados.candidates[0].content.parts[0].text : '';
-    texto = String(texto).replace(/```json/gi, '').replace(/```/g, '').trim();
     let r;
-    try { r = JSON.parse(texto); } catch (e) { return jsonResponse_({ ok: false, erro: 'A IA respondeu num formato inesperado. Tente novamente.' }); }
+    try { r = JSON.parse(resp.texto); } catch (e) { return jsonResponse_({ ok: false, erro: 'A IA respondeu num formato inesperado. Tente novamente.' }); }
 
     function soDaLista(valores, permitidos) {
       const mapa = {};
@@ -1908,14 +1895,15 @@ function sugerirPorFotoComGemini_(body) {
     return jsonResponse_({
       ok: true,
       fotosAnalisadas: partesImagem.length,
+      modelo: resp.modelo,
       nome: String(r.nome || '').slice(0, 80),
       generos: soDaLista(r.generos, listaGeneros),
       categorias: soDaLista(r.categorias, listaCategorias),
       cores: (Array.isArray(r.cores) ? r.cores : []).map(function (c) { return String(c).trim(); }).filter(Boolean).slice(0, 8),
       descricao: String(r.descricao || '').slice(0, 400)
     });
-  } catch (erroFetch) {
-    return jsonResponse_({ ok: false, erro: 'Falha ao conectar com o Gemini: ' + erroFetch.message });
+  } catch (erroIA) {
+    return jsonResponse_({ ok: false, erro: 'Falha ao processar a resposta da IA: ' + erroIA.message });
   }
 }
 

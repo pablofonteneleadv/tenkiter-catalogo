@@ -386,7 +386,7 @@
     <div id="ia-status" style="font-size:0.78rem;color:#777;margin:2px 0 6px;">Verificando...</div>
     <input type="password" id="input-ia-chave" placeholder="Cole aqui a chave do Gemini" autocomplete="off">
     <label style="margin-top:8px;">Modelo</label>
-    <input type="text" id="input-ia-modelo" placeholder="gemini-3.8-flash" autocomplete="off">
+    <input type="text" id="input-ia-modelo" placeholder="vazio = padrão do sistema" autocomplete="off">
     <button type="button" id="btn-salvar-ia" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar Configuração da IA</button>
     <button type="button" id="btn-apagar-ia" style="margin-top:8px;background:#eee;color:#555;">Apagar chave guardada</button>
     <p style="font-size:0.72rem;color:#888;margin-top:8px;">A chave fica guardada só no servidor e nunca volta para esta tela (aparece apenas "configurada" e os 4 últimos caracteres). Usada pelos botões "Preencher pela foto" e "Gerar Título/Descrição". Deixe a chave em branco para mudar só o modelo. Só quem é Admin total consegue salvar.</p>
@@ -2058,10 +2058,9 @@
     const el = document.getElementById('ia-status');
     if (!r || !r.ok) { el.style.color = '#c62828'; el.textContent = (r && r.erro) || 'Não consegui consultar agora.'; return; }
     el.style.color = r.temChave ? '#2e7d32' : '#c62828';
-    el.textContent = r.temChave ? ('✓ Chave configurada (termina em ' + r.fim + ')') : '✗ Nenhuma chave configurada ainda';
-    const m = document.getElementById('input-ia-modelo');
-    if (!m.value) m.value = r.modelo || '';
-    m.placeholder = r.modeloPadrao || 'gemini-3.8-flash';
+    el.textContent = r.temChave ? ('✓ Chave configurada (termina em ' + r.fim + ') · modelo em uso: ' + (r.modelo || r.modeloPadrao)) : '✗ Nenhuma chave configurada ainda';
+    // o campo Modelo fica vazio de propósito (= usar o padrão do sistema, que troca de modelo sozinho se um falhar)
+    document.getElementById('input-ia-modelo').placeholder = 'vazio = padrão (' + (r.modeloPadrao || 'gemini-3.5-flash') + ')';
   }
   document.getElementById('details-config').addEventListener('toggle', async (e) => {
     if (!e.target.open) return;
@@ -2118,10 +2117,17 @@
         if (it.b64) fotos.push({ b64: await reduzirB64ParaIa_(it.b64) });
         else if (it.url) fotos.push({ url: it.url });
       }
-      const resp = await fetch(API_URL, {
-        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'sugerirPorFoto', pin: adminPin, fotos: fotos, categorias: categorias, generos: generos })
-      }).then(r => r.json());
+      const sess = (typeof getSessao === 'function' && getSessao()) || null;
+      const corpoIa = JSON.stringify({ action: 'sugerirPorFoto', pin: adminPin, sessao: adminPin, whatsapp: sess ? sess.whatsapp : '', fotos: fotos, categorias: categorias, generos: generos });
+      logDebug_('IA foto: enviando ' + fotos.length + ' foto(s), ' + Math.round(corpoIa.length / 1024) + ' KB');
+      const t0 = Date.now();
+      const ctrl = new AbortController();
+      const limite = setTimeout(() => ctrl.abort(), 100000); // não deixa a tela presa pra sempre
+      let resp;
+      try {
+        resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: corpoIa, signal: ctrl.signal }).then(r => r.json());
+      } finally { clearTimeout(limite); }
+      logDebug_('IA foto: resposta em ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s — ' + (resp && resp.ok ? ('ok, modelo ' + resp.modelo) : ('erro: ' + (resp && resp.erro))));
       btn.disabled = false; btn.textContent = rotuloOriginal;
       if (!resp.ok) {
         box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">' + escaparHtml(resp.erro || 'Não foi possível analisar agora.') + '</div>';
@@ -2153,7 +2159,9 @@
       document.getElementById('btn-foto-ia-descartar').addEventListener('click', () => { box.innerHTML = ''; });
     } catch (e) {
       btn.disabled = false; btn.textContent = rotuloOriginal;
-      box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">Sem conexão agora — tente novamente.</div>';
+      logDebug_('IA foto: falhou — ' + (e && e.name) + ': ' + (e && e.message));
+      const demorou = e && e.name === 'AbortError';
+      box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">' + (demorou ? 'A IA demorou demais para responder. Tente de novo em instantes.' : 'Sem conexão agora — tente novamente.') + '</div>';
     }
   });
 
