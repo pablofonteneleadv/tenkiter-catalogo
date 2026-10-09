@@ -1088,52 +1088,43 @@
     return '';
   }
 
-  // Envia com acompanhamento real de progresso (XMLHttpRequest, que avisa quanto já subiu
-  // do corpo da requisição -- o fetch() não dá esse retorno em todos os navegadores).
-  function enviarComProgresso(dados, aoProgredir) {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', API_URL);
-      xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
-      xhr.timeout = 300000; // 5 min -- evita ficar "Enviando..." travado pra sempre numa conexão ruim
-      const inicio = Date.now();
-      const corpo = JSON.stringify(dados);
-      window.logDebug_('→ POST ' + API_URL + '  (ação=' + dados.action + ', ' + corpo.length + ' bytes)');
-      xhr.upload.onprogress = function (ev) {
-        if (!ev.lengthComputable || !aoProgredir) return;
-        const fracao = ev.loaded / ev.total;
-        const decorridos = (Date.now() - inicio) / 1000;
-        const taxa = ev.loaded / Math.max(decorridos, 0.05); // bytes por segundo
-        const restante = ev.total - ev.loaded;
-        const eta = taxa > 0 ? Math.max(0, Math.round(restante / taxa)) : null;
-        aoProgredir(fracao, eta);
-      };
-      xhr.onload = function () {
-        const ms = Date.now() - inicio;
-        // mesmo comportamento do fetch(...).then(r => r.json()): tenta interpretar a resposta
-        // como JSON independente do status HTTP, e deixa o erro de parse rejeitar a promessa.
-        try {
-          const json = JSON.parse(xhr.responseText);
-          window.logDebug_('← HTTP ' + xhr.status + ' em ' + ms + 'ms -- resp.ok=' + json.ok + (json.ok === false ? (' erro="' + json.erro + '"') : ''));
-          resolve(json);
-        } catch (e) {
-          // resposta não era JSON -- guarda um pedacinho dela pra dar pra entender o motivo real
-          const trecho = String(xhr.responseText || '').slice(0, 140).replace(/\s+/g, ' ').trim();
-          window.logDebug_('← HTTP ' + xhr.status + ' em ' + ms + 'ms -- resposta não era JSON: "' + trecho + '"');
-          reject(new Error('resposta inesperada do servidor, HTTP ' + xhr.status + (trecho ? ': "' + trecho + '"' : ' (vazia)')));
-        }
-      };
-      xhr.onerror = function () {
-        const ms = Date.now() - inicio;
-        window.logDebug_('✗ ERRO DE REDE em ' + ms + 'ms -- xhr.status=' + xhr.status + ' readyState=' + xhr.readyState + ' navigator.onLine=' + navigator.onLine);
-        reject(new Error('falha de conexão durante o envio'));
-      };
-      xhr.ontimeout = function () {
-        window.logDebug_('✗ TIMEOUT depois de ' + (Date.now() - inicio) + 'ms');
-        reject(new Error('demorou mais de 5 minutos e a conexão foi cancelada'));
-      };
-      xhr.send(corpo);
-    });
+  // Envia o produto pro Apps Script. IMPORTANTE: usa fetch(), NÃO XMLHttpRequest com ouvinte de
+  // progresso. Quando um XHR tem xhr.upload.onprogress, o navegador é obrigado a fazer antes uma
+  // consulta CORS "preflight" (OPTIONS), que o Apps Script não responde -- o pedido morria em
+  // ~300 ms com xhr.status=0 ("falha de conexão") MESMO com internet boa, as 3 tentativas
+  // falhavam igual e o produto ia pra fila offline, que (usando fetch) enviava na hora. Como as
+  // fotos/vídeo sobem direto pro Cloudinary e este pedido tem só algumas centenas de bytes,
+  // barra de progresso aqui não faz diferença: aoProgredir só marca 100% quando termina.
+  async function enviarComProgresso(dados, aoProgredir) {
+    const corpo = JSON.stringify(dados);
+    const inicio = Date.now();
+    window.logDebug_('→ POST ' + API_URL + '  (ação=' + dados.action + ', ' + corpo.length + ' bytes, via fetch)');
+    const ctrl = new AbortController();
+    const limite = setTimeout(() => ctrl.abort(), 300000); // 5 min -- evita "Enviando..." travado pra sempre
+    let r, texto;
+    try {
+      r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: corpo, signal: ctrl.signal });
+      texto = await r.text();
+    } catch (e) {
+      const ms = Date.now() - inicio;
+      if (e && e.name === 'AbortError') {
+        window.logDebug_('✗ TIMEOUT depois de ' + ms + 'ms');
+        throw new Error('demorou mais de 5 minutos e a conexão foi cancelada');
+      }
+      window.logDebug_('✗ ERRO DE REDE em ' + ms + 'ms -- ' + ((e && e.message) || e) + ' navigator.onLine=' + navigator.onLine);
+      throw new Error('falha de conexão durante o envio');
+    } finally { clearTimeout(limite); }
+    const ms = Date.now() - inicio;
+    try {
+      const json = JSON.parse(texto);
+      window.logDebug_('← HTTP ' + r.status + ' em ' + ms + 'ms -- resp.ok=' + json.ok + (json.ok === false ? (' erro="' + json.erro + '"') : ''));
+      if (aoProgredir) aoProgredir(1, 0);
+      return json;
+    } catch (e) {
+      const trecho = String(texto || '').slice(0, 140).replace(/\s+/g, ' ').trim();
+      window.logDebug_('← HTTP ' + r.status + ' em ' + ms + 'ms -- resposta não era JSON: "' + trecho + '"');
+      throw new Error('resposta inesperada do servidor, HTTP ' + r.status + (trecho ? ': "' + trecho + '"' : ' (vazia)'));
+    }
   }
 
   // Pede ao Apps Script uma assinatura Cloudinary de curta duração (chamada pequena e rápida --
