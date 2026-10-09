@@ -354,6 +354,8 @@
         <div id="galeria-grid" class="galeria-grid"></div>
         <div class="dica-midia">Até 8 fotos. Toque numa foto para torná-la a capa (fica com borda laranja). Use ‹ › para mudar a ordem. Toque no ✕ para tirar uma.</div>
       </div>
+      <button type="button" class="btn-seo-ia" id="btn-foto-ia">📷 Preencher pela foto (IA olha todas as fotos)</button>
+      <div id="foto-ia-box"></div>
 
       <label>Vídeo da peça (1 só, até 20 MB)</label>
       <div class="foto-box" id="video-box">
@@ -2035,6 +2037,76 @@
     renderizarListaAuditoria();
     document.getElementById('busca-auditoria').addEventListener('input', debounce(renderizarListaAuditoria, 250));
   }
+
+  /* ===================== Preencher pela foto (IA olha TODAS as fotos) ===================== */
+  // Foto nova (b64) é reduzida mais ainda só pra análise (768px) -- a original, que vai pro
+  // catálogo, não é tocada. Foto já salva vai só a URL: o backend baixa já reduzida do Cloudinary.
+  function reduzirB64ParaIa_(b64) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onerror = () => resolve(b64);
+      img.onload = () => {
+        const esc = Math.min(1, 768 / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * esc)); c.height = Math.max(1, Math.round(img.height * esc));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', 0.8).split(',')[1]);
+      };
+      img.src = 'data:image/jpeg;base64,' + b64;
+    });
+  }
+
+  document.getElementById('btn-foto-ia').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-foto-ia');
+    const box = document.getElementById('foto-ia-box');
+    if (btn.disabled) return;
+    if (!fotosItens.length) { alert('Adicione ao menos uma foto antes.'); return; }
+    const rotuloOriginal = btn.textContent;
+    btn.disabled = true; btn.textContent = '📷 Analisando as fotos...'; box.innerHTML = '';
+    try {
+      const fotos = [];
+      for (const it of fotosItens) {
+        if (it.b64) fotos.push({ b64: await reduzirB64ParaIa_(it.b64) });
+        else if (it.url) fotos.push({ url: it.url });
+      }
+      const resp = await fetch(API_URL, {
+        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'sugerirPorFoto', pin: adminPin, fotos: fotos, categorias: categorias, generos: generos })
+      }).then(r => r.json());
+      btn.disabled = false; btn.textContent = rotuloOriginal;
+      if (!resp.ok) {
+        box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">' + escaparHtml(resp.erro || 'Não foi possível analisar agora.') + '</div>';
+        return;
+      }
+      const linhas = [
+        ['Nome', resp.nome], ['Gênero', (resp.generos || []).join(', ')], ['Categoria', (resp.categorias || []).join(', ')],
+        ['Cores', (resp.cores || []).join(', ')], ['Descrição', resp.descricao]
+      ];
+      box.innerHTML = '<div class="seo-sugestao"><div style="font-size:.8rem;color:#777;margin-bottom:6px;">Analisei ' + resp.fotosAnalisadas + ' foto(s). Confira antes de aplicar — preço, estoque e tamanhos continuam com você.</div>' +
+        linhas.map(l => '<div class="campo"><b>' + l[0] + '</b>' + escaparHtml(l[1] || '—') + '</div>').join('') +
+        '<button type="button" id="btn-foto-ia-vazios" style="background:var(--laranja);">Aplicar nos campos vazios</button>' +
+        '<button type="button" id="btn-foto-ia-tudo" style="background:var(--laranja);">Substituir tudo</button>' +
+        '<button type="button" id="btn-foto-ia-descartar" style="background:#eee;color:#555;">Descartar</button></div>';
+      const aplicar = (substituir) => {
+        const campo = (id, valor) => {
+          const el = document.getElementById(id);
+          if (valor && (substituir || !el.value.trim())) el.value = valor;
+        };
+        campo('nome', resp.nome); campo('descricao', resp.descricao); campo('cores', (resp.cores || []).join(', '));
+        (resp.generos || []).forEach(g => selecionadosGeneros.add(g));
+        (resp.categorias || []).forEach(c => selecionadasCategorias.add(c));
+        renderizarChips('chips-genero', generos, selecionadosGeneros);
+        renderizarChips('chips-categoria', categorias, selecionadasCategorias);
+        box.innerHTML = '';
+      };
+      document.getElementById('btn-foto-ia-vazios').addEventListener('click', () => aplicar(false));
+      document.getElementById('btn-foto-ia-tudo').addEventListener('click', () => aplicar(true));
+      document.getElementById('btn-foto-ia-descartar').addEventListener('click', () => { box.innerHTML = ''; });
+    } catch (e) {
+      btn.disabled = false; btn.textContent = rotuloOriginal;
+      box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">Sem conexão agora — tente novamente.</div>';
+    }
+  });
 
   /* ===================== Gerar SEO com IA (Gemini) ===================== */
 

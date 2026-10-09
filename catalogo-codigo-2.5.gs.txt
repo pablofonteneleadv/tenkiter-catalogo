@@ -1,4 +1,9 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v2.4
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v2.5
+//
+// NOVIDADE v2.5 (só ACRESCENTA, nada existente muda):
+//  - Nova ação sugerirPorFoto ("Preencher pela foto" no cadastro): o Gemini olha TODAS as fotos da
+//    peça e sugere nome, gênero, categoria (só das listas já cadastradas), cores e descrição.
+//    Nunca sugere preço/estoque/tamanhos. Usa a mesma GEMINI_API_KEY do gerarSeo.
 //
 // NOVIDADE v2.4 (sobre a v2.3, sem mexer em mais nada):
 //  - Vídeo do produto: em vez de ir em base64 dentro do POST de criar/editar (que
@@ -67,7 +72,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-2.4';
+const VERSAO_CATALOGO = 'catalogo-2.5';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1039,7 +1044,7 @@ function acRegistrar_(nome, whatsapp, senha, perfilNome, extras) {
 /** Que permissão cada ação do admin exige. */
 const PERMISSAO_POR_ACAO_ = {
   create: 'catalogo_cadastrar', update: 'catalogo_cadastrar', addCategoria: 'catalogo_cadastrar', addGenero: 'catalogo_cadastrar',
-  gerarSeo: 'catalogo_cadastrar', delete: 'catalogo_excluir', reativar: 'catalogo_excluir', excluirPermanente: 'catalogo_excluir',
+  gerarSeo: 'catalogo_cadastrar', sugerirPorFoto: 'catalogo_cadastrar', delete: 'catalogo_excluir', reativar: 'catalogo_excluir', excluirPermanente: 'catalogo_excluir',
   enviarPush: 'catalogo_push', assinarUploadVideo: 'catalogo_cadastrar'
 };
 const PERMISSAO_POR_LOTE_ = {
@@ -1406,6 +1411,7 @@ function despacharPost_(body) {
   if (action === 'addCategoria') return jsonResponse_(adicionarValorLista_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO, body.nome));
   if (action === 'addGenero') return jsonResponse_(adicionarValorLista_(SHEET_GENEROS, GENEROS_PADRAO, body.nome));
   if (action === 'gerarSeo') return gerarSeoComGemini_(body);
+  if (action === 'sugerirPorFoto') return sugerirPorFotoComGemini_(body);
   if (action === 'enviarPush') return enviarPushOneSignal_(body.titulo, body.mensagem, body.url || SITE_URL);
   if (action === 'assinarUploadVideo') return assinarUploadVideo_(body);
 
@@ -1777,6 +1783,96 @@ function gerarSeoComGemini_(body) {
     }
 
     return jsonResponse_({ ok: true, titulo: resultado.titulo || '', descricao: resultado.descricao || '' });
+  } catch (erroFetch) {
+    return jsonResponse_({ ok: false, erro: 'Falha ao conectar com o Gemini: ' + erroFetch.message });
+  }
+}
+
+/**
+ * v2.5 -- "Preencher pela foto": olha TODAS as fotos da peça (até 8) e sugere nome, gênero,
+ * categoria, cores e descrição. NUNCA sugere preço, estoque nem tamanhos (não dá pra saber
+ * pela foto). Gênero e categoria só podem ser valores que já existem nas listas da loja
+ * (o navegador manda as listas; o que a IA devolver fora delas é descartado aqui).
+ * Usa a mesma chave GEMINI_API_KEY / GEMINI_MODEL do gerarSeo -- nada novo pra configurar.
+ * body.fotos = [{ b64: '<jpeg base64 puro>' } | { url: 'https://res.cloudinary.com/...' }]
+ */
+function sugerirPorFotoComGemini_(body) {
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('GEMINI_API_KEY');
+  if (!apiKey) return jsonResponse_({ ok: false, erro: 'Chave do Gemini não configurada no servidor.' });
+  const modelo = props.getProperty('GEMINI_MODEL') || 'gemini-2.0-flash';
+
+  const fotos = Array.isArray(body.fotos) ? body.fotos.slice(0, 8) : [];
+  if (!fotos.length) return jsonResponse_({ ok: false, erro: 'Adicione ao menos uma foto antes.' });
+  const listaCategorias = (Array.isArray(body.categorias) ? body.categorias : []).map(String).slice(0, 80);
+  const listaGeneros = (Array.isArray(body.generos) ? body.generos : []).map(String).slice(0, 20);
+
+  const partesImagem = [];
+  fotos.forEach(function (f) {
+    try {
+      if (f && f.b64) {
+        partesImagem.push({ inline_data: { mime_type: 'image/jpeg', data: String(f.b64) } });
+      } else if (f && /^https:\/\/res\.cloudinary\.com\//.test(String(f.url || ''))) {
+        // reduz no próprio Cloudinary antes de baixar (rápido e barato); só aceita o nosso domínio
+        const pequena = String(f.url).replace('/upload/', '/upload/w_768,q_auto,f_jpg/');
+        const r = UrlFetchApp.fetch(pequena, { muteHttpExceptions: true });
+        if (r.getResponseCode() === 200) {
+          partesImagem.push({ inline_data: { mime_type: 'image/jpeg', data: Utilities.base64Encode(r.getContent()) } });
+        }
+      }
+    } catch (e) { /* foto que não deu pra ler é só ignorada; as outras seguem */ }
+  });
+  if (!partesImagem.length) return jsonResponse_({ ok: false, erro: 'Não consegui ler nenhuma das fotos. Tente de novo.' });
+
+  const prompt = 'Você cadastra roupas no catálogo de uma loja de moda brasileira. As imagens são fotos DA MESMA PEÇA ' +
+    '(ângulos diferentes). Olhe todas e responda SOMENTE em JSON válido, sem markdown, no formato exato: ' +
+    '{"nome": "...", "generos": [...], "categorias": [...], "cores": [...], "descricao": "..."}\n' +
+    'Regras:\n' +
+    '- nome: curto e claro, como "Vestido Floral Midi" ou "Camiseta Oversized Preta" (máx. 60 caracteres).\n' +
+    '- generos: escolha SOMENTE entre: ' + JSON.stringify(listaGeneros) + ' (vazio [] se nenhum servir).\n' +
+    '- categorias: escolha SOMENTE entre: ' + JSON.stringify(listaCategorias) + ' (vazio [] se nenhuma servir).\n' +
+    '- cores: cores que você VÊ na peça, em português, ex. ["Preto", "Off-white"].\n' +
+    '- descricao: 1 a 2 frases só com o que é visível (modelagem, estampa, detalhes). NÃO invente tecido, marca, ' +
+    'composição, tamanho nem preço. Se não dá pra saber pela foto, não mencione.\n' +
+    'Nunca inclua preço.';
+
+  const payload = {
+    contents: [{ parts: [{ text: prompt }].concat(partesImagem) }],
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.3 }
+  };
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent?key=' + apiKey;
+
+  try {
+    const resp = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+    const dados = JSON.parse(resp.getContentText());
+    if (resp.getResponseCode() !== 200) {
+      return jsonResponse_({ ok: false, erro: 'Erro do Gemini: ' + (dados.error && dados.error.message ? dados.error.message : ('HTTP ' + resp.getResponseCode())) });
+    }
+    let texto = (dados.candidates && dados.candidates[0] && dados.candidates[0].content &&
+      dados.candidates[0].content.parts && dados.candidates[0].content.parts[0]) ? dados.candidates[0].content.parts[0].text : '';
+    texto = String(texto).replace(/```json/gi, '').replace(/```/g, '').trim();
+    let r;
+    try { r = JSON.parse(texto); } catch (e) { return jsonResponse_({ ok: false, erro: 'A IA respondeu num formato inesperado. Tente novamente.' }); }
+
+    function soDaLista(valores, permitidos) {
+      const mapa = {};
+      permitidos.forEach(function (p) { mapa[p.toLowerCase()] = p; });
+      const out = [];
+      (Array.isArray(valores) ? valores : []).forEach(function (v) {
+        const achado = mapa[String(v).toLowerCase().trim()];
+        if (achado && out.indexOf(achado) === -1) out.push(achado);
+      });
+      return out;
+    }
+    return jsonResponse_({
+      ok: true,
+      fotosAnalisadas: partesImagem.length,
+      nome: String(r.nome || '').slice(0, 80),
+      generos: soDaLista(r.generos, listaGeneros),
+      categorias: soDaLista(r.categorias, listaCategorias),
+      cores: (Array.isArray(r.cores) ? r.cores : []).map(function (c) { return String(c).trim(); }).filter(Boolean).slice(0, 8),
+      descricao: String(r.descricao || '').slice(0, 400)
+    });
   } catch (erroFetch) {
     return jsonResponse_({ ok: false, erro: 'Falha ao conectar com o Gemini: ' + erroFetch.message });
   }

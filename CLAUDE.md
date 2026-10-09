@@ -9,8 +9,8 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
   `common.js` (config compartilhada — **única fonte de verdade** para `API_URL`/`SITE_URL`).
 - **Backend**: dois Apps Script Web Apps separados, versionados por nome de arquivo
   (`<nome>-<versão>.gs.txt`):
-  - `catalogo-codigo-2.4.gs.txt` — catálogo + autenticação central.
-  - `funcionario-codigo-4.4.gs.txt` — RH/treinamento/contratação.
+  - `catalogo-codigo-2.5.gs.txt` — catálogo + autenticação central.
+  - `funcionario-codigo-4.5.gs.txt` — RH/treinamento/contratação.
   - Arquivos antigos (`Code-treinamento-v4.0.gs.txt`, `v4.1.gs.txt`, `atualizado.gs.txt`,
     `tenkiter-codigo-v2.1.gs.txt`) são **históricos — não editar nem usar como referência**.
 
