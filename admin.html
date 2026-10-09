@@ -380,6 +380,16 @@
     <button type="button" id="btn-salvar-api-url" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar Endereço Personalizado</button>
     <button type="button" id="btn-restaurar-api-url" style="margin-top:8px;background:#eee;color:#555;">Restaurar Endereço Padrão</button>
     <p style="font-size:0.72rem;color:#888;margin-top:8px;">Só mude isto se um novo endereço do sistema for informado. Um endereço errado impede o catálogo de carregar.</p>
+
+    <hr style="border:none;border-top:1px dashed #ccc;margin:16px 0;">
+    <label>🤖 Inteligência artificial (Gemini) — chave</label>
+    <div id="ia-status" style="font-size:0.78rem;color:#777;margin:2px 0 6px;">Verificando...</div>
+    <input type="password" id="input-ia-chave" placeholder="Cole aqui a chave do Gemini" autocomplete="off">
+    <label style="margin-top:8px;">Modelo</label>
+    <input type="text" id="input-ia-modelo" placeholder="gemini-3.8-flash" autocomplete="off">
+    <button type="button" id="btn-salvar-ia" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar Configuração da IA</button>
+    <button type="button" id="btn-apagar-ia" style="margin-top:8px;background:#eee;color:#555;">Apagar chave guardada</button>
+    <p style="font-size:0.72rem;color:#888;margin-top:8px;">A chave fica guardada só no servidor e nunca volta para esta tela (aparece apenas "configurada" e os 4 últimos caracteres). Usada pelos botões "Preencher pela foto" e "Gerar Título/Descrição". Deixe a chave em branco para mudar só o modelo. Só quem é Admin total consegue salvar.</p>
   </details>
 
   <details class="extra" id="details-log-debug">
@@ -2037,6 +2047,45 @@
     renderizarListaAuditoria();
     document.getElementById('busca-auditoria').addEventListener('input', debounce(renderizarListaAuditoria, 250));
   }
+
+  /* ===================== Configuração da IA (chave/modelo do Gemini, guardados no servidor) ===================== */
+  async function chamarConfigIA_(extra) {
+    const sess = (typeof getSessao === 'function' && getSessao()) || null;
+    const corpo = Object.assign({ pin: adminPin, sessao: adminPin, whatsapp: sess ? sess.whatsapp : '' }, extra);
+    return fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(corpo) }).then(r => r.json());
+  }
+  function mostrarStatusIA_(r) {
+    const el = document.getElementById('ia-status');
+    if (!r || !r.ok) { el.style.color = '#c62828'; el.textContent = (r && r.erro) || 'Não consegui consultar agora.'; return; }
+    el.style.color = r.temChave ? '#2e7d32' : '#c62828';
+    el.textContent = r.temChave ? ('✓ Chave configurada (termina em ' + r.fim + ')') : '✗ Nenhuma chave configurada ainda';
+    const m = document.getElementById('input-ia-modelo');
+    if (!m.value) m.value = r.modelo || '';
+    m.placeholder = r.modeloPadrao || 'gemini-3.8-flash';
+  }
+  document.getElementById('details-config').addEventListener('toggle', async (e) => {
+    if (!e.target.open) return;
+    try { mostrarStatusIA_(await chamarConfigIA_({ action: 'statusConfigIA' })); }
+    catch (err) { mostrarStatusIA_({ ok: false, erro: 'Sem conexão agora.' }); }
+  });
+  document.getElementById('btn-salvar-ia').addEventListener('click', async () => {
+    const chave = document.getElementById('input-ia-chave').value.trim();
+    const modelo = document.getElementById('input-ia-modelo').value.trim();
+    const btn = document.getElementById('btn-salvar-ia');
+    btn.disabled = true;
+    try {
+      const r = await chamarConfigIA_({ action: 'salvarConfigIA', chave: chave, modelo: modelo });
+      mostrarStatusIA_(r);
+      if (r && r.ok) { document.getElementById('input-ia-chave').value = ''; alert('Configuração da IA salva!'); }
+      else alert((r && r.erro) || 'Não foi possível salvar.');
+    } catch (err) { alert('Sem conexão agora — tente novamente.'); }
+    btn.disabled = false;
+  });
+  document.getElementById('btn-apagar-ia').addEventListener('click', async () => {
+    if (!confirm('Apagar a chave do Gemini guardada no servidor? Os botões de IA param de funcionar até você colar uma chave de novo.')) return;
+    try { mostrarStatusIA_(await chamarConfigIA_({ action: 'salvarConfigIA', apagarChave: true })); }
+    catch (err) { alert('Sem conexão agora — tente novamente.'); }
+  });
 
   /* ===================== Preencher pela foto (IA olha TODAS as fotos) ===================== */
   // Foto nova (b64) é reduzida mais ainda só pra análise (768px) -- a original, que vai pro

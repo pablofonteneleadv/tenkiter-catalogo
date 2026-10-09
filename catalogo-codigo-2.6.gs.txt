@@ -1,4 +1,9 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v2.5
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v2.6
+//
+// NOVIDADE v2.6:
+//  - Chave e modelo do Gemini agora se configuram no admin (⚙️ Configurações Avançadas), sem editar
+//    o Apps Script: ações statusConfigIA / salvarConfigIA (só Admin total). Modelo padrão passa a
+//    gemini-3.8-flash (o 2.0-flash foi desligado pelo Google). A chave nunca volta pro navegador.
 //
 // NOVIDADE v2.5 (só ACRESCENTA, nada existente muda):
 //  - Nova ação sugerirPorFoto ("Preencher pela foto" no cadastro): o Gemini olha TODAS as fotos da
@@ -72,7 +77,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-2.5';
+const VERSAO_CATALOGO = 'catalogo-2.6';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1044,7 +1049,7 @@ function acRegistrar_(nome, whatsapp, senha, perfilNome, extras) {
 /** Que permissão cada ação do admin exige. */
 const PERMISSAO_POR_ACAO_ = {
   create: 'catalogo_cadastrar', update: 'catalogo_cadastrar', addCategoria: 'catalogo_cadastrar', addGenero: 'catalogo_cadastrar',
-  gerarSeo: 'catalogo_cadastrar', sugerirPorFoto: 'catalogo_cadastrar', delete: 'catalogo_excluir', reativar: 'catalogo_excluir', excluirPermanente: 'catalogo_excluir',
+  gerarSeo: 'catalogo_cadastrar', sugerirPorFoto: 'catalogo_cadastrar', statusConfigIA: 'gerir_acessos', salvarConfigIA: 'gerir_acessos', delete: 'catalogo_excluir', reativar: 'catalogo_excluir', excluirPermanente: 'catalogo_excluir',
   enviarPush: 'catalogo_push', assinarUploadVideo: 'catalogo_cadastrar'
 };
 const PERMISSAO_POR_LOTE_ = {
@@ -1412,6 +1417,8 @@ function despacharPost_(body) {
   if (action === 'addGenero') return jsonResponse_(adicionarValorLista_(SHEET_GENEROS, GENEROS_PADRAO, body.nome));
   if (action === 'gerarSeo') return gerarSeoComGemini_(body);
   if (action === 'sugerirPorFoto') return sugerirPorFotoComGemini_(body);
+  if (action === 'statusConfigIA') return statusConfigIA_();
+  if (action === 'salvarConfigIA') return salvarConfigIA_(body);
   if (action === 'enviarPush') return enviarPushOneSignal_(body.titulo, body.mensagem, body.url || SITE_URL);
   if (action === 'assinarUploadVideo') return assinarUploadVideo_(body);
 
@@ -1737,11 +1744,11 @@ function excluirPermanentemente_(body) {
  * (Opcional) Nome: GEMINI_MODEL   Valor: gemini-2.0-flash (ou outro modelo)
  */
 function gerarSeoComGemini_(body) {
-  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  const cfgIA = configIA_();
+  const apiKey = cfgIA.chave, modelo = cfgIA.modelo;
   if (!apiKey) {
-    return jsonResponse_({ ok: false, erro: 'Chave do Gemini não configurada no servidor. Veja as instruções no código (gerarSeoComGemini_).' });
+    return jsonResponse_({ ok: false, erro: 'Chave do Gemini não configurada. No admin, abra ⚙️ Configurações Avançadas e cole a chave em "Inteligência artificial".' });
   }
-  const modelo = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL') || 'gemini-2.0-flash';
 
   const prompt = 'Você é especialista em SEO para e-commerce de moda no Brasil. ' +
     'Gere um título curto (máximo 60 caracteres) e uma descrição (2 a 3 frases, até 300 caracteres), ' +
@@ -1789,6 +1796,41 @@ function gerarSeoComGemini_(body) {
 }
 
 /**
+ * v2.6 -- chave e modelo do Gemini ficam nas Propriedades do script, mas agora se configuram
+ * pelo próprio admin (⚙️ Configurações Avançadas), sem abrir o editor do Apps Script. A chave
+ * NUNCA volta pro navegador (só "configurada ✓" + últimos 4 caracteres) e nunca vai pro GitHub.
+ * Modelo padrão: gemini-3.8-flash (o gemini-2.0-flash foi desligado pelo Google).
+ */
+const MODELO_IA_PADRAO_ = 'gemini-3.8-flash';
+function configIA_() {
+  const props = PropertiesService.getScriptProperties();
+  return {
+    chave: String(props.getProperty('GEMINI_API_KEY') || '').trim(),
+    modelo: String(props.getProperty('GEMINI_MODEL') || '').trim() || MODELO_IA_PADRAO_
+  };
+}
+function statusConfigIA_() {
+  const c = configIA_();
+  return jsonResponse_({ ok: true, temChave: !!c.chave, fim: c.chave ? c.chave.slice(-4) : '', modelo: c.modelo, modeloPadrao: MODELO_IA_PADRAO_ });
+}
+function salvarConfigIA_(body) {
+  const props = PropertiesService.getScriptProperties();
+  if (body.apagarChave === true) props.deleteProperty('GEMINI_API_KEY');
+  const chave = String(body.chave || '').trim();
+  if (chave) {
+    if (!/^[A-Za-z0-9._\-]{20,200}$/.test(chave)) return jsonResponse_({ ok: false, erro: 'Essa chave parece incompleta ou com caracteres estranhos. Cole de novo, só a chave.' });
+    props.setProperty('GEMINI_API_KEY', chave);
+  }
+  if (typeof body.modelo === 'string') {
+    const modelo = body.modelo.trim();
+    if (!modelo) props.deleteProperty('GEMINI_MODEL');
+    else if (!/^[A-Za-z0-9._\-]{3,80}$/.test(modelo)) return jsonResponse_({ ok: false, erro: 'Nome de modelo inválido.' });
+    else props.setProperty('GEMINI_MODEL', modelo);
+  }
+  return statusConfigIA_();
+}
+
+/**
  * v2.5 -- "Preencher pela foto": olha TODAS as fotos da peça (até 8) e sugere nome, gênero,
  * categoria, cores e descrição. NUNCA sugere preço, estoque nem tamanhos (não dá pra saber
  * pela foto). Gênero e categoria só podem ser valores que já existem nas listas da loja
@@ -1797,10 +1839,9 @@ function gerarSeoComGemini_(body) {
  * body.fotos = [{ b64: '<jpeg base64 puro>' } | { url: 'https://res.cloudinary.com/...' }]
  */
 function sugerirPorFotoComGemini_(body) {
-  const props = PropertiesService.getScriptProperties();
-  const apiKey = props.getProperty('GEMINI_API_KEY');
-  if (!apiKey) return jsonResponse_({ ok: false, erro: 'Chave do Gemini não configurada no servidor.' });
-  const modelo = props.getProperty('GEMINI_MODEL') || 'gemini-2.0-flash';
+  const cfgIA = configIA_();
+  const apiKey = cfgIA.chave, modelo = cfgIA.modelo;
+  if (!apiKey) return jsonResponse_({ ok: false, erro: 'Chave do Gemini não configurada. No admin, abra ⚙️ Configurações Avançadas e cole a chave em "Inteligência artificial".' });
 
   const fotos = Array.isArray(body.fotos) ? body.fotos.slice(0, 8) : [];
   if (!fotos.length) return jsonResponse_({ ok: false, erro: 'Adicione ao menos uma foto antes.' });
