@@ -149,14 +149,23 @@
   .arte-preview-badge { position: absolute; top: 8px; left: 8px; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: 0.58rem; padding: 4px 8px; border-radius: 6px; }
   .arte-preview-badge:empty { display: none; }
   .arte-preview-codigo { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.65); color: #fff; font-weight: 700; font-size: 0.58rem; padding: 4px 8px; border-radius: 6px; }
-  .arte-preview-info { padding: 10px 14px 16px; text-align: center; }
-  .arte-preview-nome { color: #fff; font-weight: 800; font-size: 0.9rem; }
-  .arte-preview-cat { color: #999; font-size: 0.66rem; margin-top: 2px; }
-  .arte-preview-de { color: #999; font-size: 0.66rem; margin-top: 8px; text-decoration: line-through; }
-  .arte-preview-preco { color: #7ee787; font-weight: 800; font-size: 1.2rem; margin-top: 2px; }
-  .arte-preview-reserva { margin-top: 10px; float: left; width: 56%; height: 26px; } /* espaço do adesivo de link: reservado, mas vazio de propósito */
-  .arte-preview-atendente { clear: both; }
-  .arte-preview-atendente { color: #777; font-size: 0.58rem; margin-top: 6px; }
+  .arte-preview-info { padding: 8px 14px 0; text-align: center; height: 150px; display: flex; flex-direction: column; }
+  .arte-preview-corpo { flex: 1; display: flex; flex-direction: column; justify-content: center; min-height: 0; }
+  .arte-preview-nome { color: #fff; font-weight: 800; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .arte-preview-desc { color: #bbb; font-size: 0.6rem; line-height: 1.3; margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .arte-preview-cat { color: #999; font-size: 0.62rem; margin-top: 2px; }
+  .arte-preview-de { color: #999; font-size: 0.64rem; margin-top: 6px; text-decoration: line-through; }
+  .arte-preview-preco { color: #7ee787; font-weight: 800; font-size: 1.15rem; margin-top: 2px; }
+  .arte-preview-reserva { height: 30px; flex: none; } /* espaço do adesivo de link: reservado, mas vazio de propósito */
+  .arte-campo-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
+  .arte-campo-linha label { margin: 0; }
+  .arte-contador { font-size: 0.7rem; color: #888; white-space: nowrap; }
+  .arte-contador.cheio { color: #d9534f; font-weight: 700; }
+  .arte-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #555; cursor: pointer; white-space: nowrap; }
+  .arte-toggle input { width: auto; margin: 0; }
+  .arte-opcoes-extras { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; }
+  #input-nome-arte, #input-desc-arte { margin-top: 4px; }
+  #input-desc-arte { min-height: 64px; resize: vertical; font-family: inherit; }
 
   .arte-thumbs { display: flex; gap: 8px; margin-top: 8px; overflow-x: auto; }
   .arte-thumb { width: 48px; height: 60px; object-fit: cover; border-radius: 6px; cursor: pointer; opacity: 0.55; border: 2px solid transparent; flex-shrink: 0; }
@@ -1652,6 +1661,17 @@
 
   const OPCOES_SELO_ARTE = ['NOVIDADE', 'ÚLTIMAS PEÇAS', 'PROMOÇÃO', 'REPOSIÇÃO', 'DESTAQUE', 'Nenhum'];
   let configArteAtual = { selo: '', precoStory: '', foto: '' };
+  const ARTE_MAX_NOME = 30;   // cabe em UMA linha na arte (a fonte ainda encolhe sozinha se precisar)
+  const ARTE_MAX_DESC = 90;   // cabe em DUAS linhas na arte
+  function arteLerPref_() { try { return JSON.parse(localStorage.getItem('tenkiter_arte_pref') || '{}') || {}; } catch (e) { return {}; } }
+  function arteSalvarPref_(o) { try { localStorage.setItem('tenkiter_arte_pref', JSON.stringify(Object.assign(arteLerPref_(), o))); } catch (e) {} }
+  // descrição do cadastro encurtada na palavra (nunca corta no meio) para caber no limite
+  function arteDescPadrao_(p) {
+    const t = String(p.Descricao || '').replace(/\s+/g, ' ').trim();
+    if (t.length <= ARTE_MAX_DESC) return t;
+    const corte = t.slice(0, ARTE_MAX_DESC - 1);
+    return corte.slice(0, Math.max(corte.lastIndexOf(' '), 40)).replace(/[\s,;:.\-–]+$/, '') + '…';
+  }
 
   function abrirCriadorDeArte(id) {
     const p = produtos.find(x => String(x.ID) === String(id));
@@ -1666,6 +1686,12 @@
   function renderizarConfigArte(p, fotos) {
     const painel = document.getElementById('painel-compartilhar-conteudo');
     const subtitulo = [p.Genero, p.Categoria].filter(Boolean).join(' • ');
+    const pref = arteLerPref_();
+    const nomeInicial = String(p.Nome || '').slice(0, ARTE_MAX_NOME);
+    const descInicial = arteDescPadrao_(p);
+    const mostrarNomeIni = pref.nome !== false;
+    const mostrarDescIni = pref.desc === true && !!descInicial;
+    const mostrarCatIni = pref.cat !== false && !!subtitulo;
 
     painel.innerHTML = `
       <h3 style="margin-top:0;text-align:center;">🎨 Arte para Stories</h3>
@@ -1682,12 +1708,14 @@
           ${p.Codigo ? `<span class="arte-preview-codigo">${escaparHtml(p.Codigo)}</span>` : ''}
         </div>
         <div class="arte-preview-info">
-          <div class="arte-preview-nome">${escaparHtml(p.Nome)}</div>
-          ${subtitulo ? `<div class="arte-preview-cat">${subtitulo}</div>` : ''}
-          <div class="arte-preview-de" id="arte-preview-de" style="display:none;"></div>
-          <div class="arte-preview-preco" id="arte-preview-preco"></div>
+          <div class="arte-preview-corpo">
+            <div class="arte-preview-nome" id="arte-preview-nome"></div>
+            <div class="arte-preview-desc" id="arte-preview-desc"></div>
+            <div class="arte-preview-cat" id="arte-preview-cat"></div>
+            <div class="arte-preview-de" id="arte-preview-de" style="display:none;"></div>
+            <div class="arte-preview-preco" id="arte-preview-preco"></div>
+          </div>
           <div class="arte-preview-reserva"></div>
-          ${funcionarioNome ? `<div class="arte-preview-atendente">Atendimento com ${escaparHtml(funcionarioNome)}</div>` : ''}
         </div>
       </div>
 
@@ -1704,7 +1732,25 @@
       </div>
       <input type="text" id="input-selo-custom" placeholder="Ou digite um selo personalizado...">
 
-      <label>Preço a exibir no Story (R$)</label>
+      <div class="arte-campo-linha">
+        <label for="input-nome-arte">Nome na arte (1 linha)</label>
+        <span class="arte-contador" id="cont-nome-arte"></span>
+      </div>
+      <input type="text" id="input-nome-arte" maxlength="${ARTE_MAX_NOME}" value="${escaparHtml(nomeInicial)}" placeholder="Ex.: Vestido Princesa">
+      <div class="arte-campo-linha">
+        <label for="input-desc-arte">Descrição na arte (até 2 linhas)</label>
+        <span class="arte-contador" id="cont-desc-arte"></span>
+      </div>
+      <textarea id="input-desc-arte" maxlength="${ARTE_MAX_DESC}" placeholder="Ex.: Tecido leve e confortável, ideal para festas.">${escaparHtml(descInicial)}</textarea>
+
+      <div class="arte-opcoes-extras">
+        <label class="arte-toggle"><input type="checkbox" id="chk-nome-arte" ${mostrarNomeIni ? 'checked' : ''}> Mostrar nome</label>
+        <label class="arte-toggle"><input type="checkbox" id="chk-desc-arte" ${mostrarDescIni ? 'checked' : ''}> Mostrar descrição</label>
+        <label class="arte-toggle"><input type="checkbox" id="chk-cat-arte" ${mostrarCatIni ? 'checked' : ''} ${subtitulo ? '' : 'disabled'}> Mostrar categoria</label>
+      </div>
+      <p style="font-size:0.72rem;color:#888;margin-top:6px;">O que ficar desmarcado some da arte e o preço se reposiciona sozinho. Isso só vale para esta arte — o cadastro da peça não muda.</p>
+
+      <label style="margin-top:14px;">Preço a exibir no Story (R$)</label>
       <input type="number" id="input-preco-arte" step="0.01" min="0" value="${configArteAtual.precoStory}">
       <p style="font-size:0.72rem;color:#888;margin-top:4px;">Só muda o valor mostrado nesta arte — não altera o preço cadastrado no catálogo.</p>
 
@@ -1721,13 +1767,43 @@
       <button type="button" id="btn-fechar-arte-config" style="background:#eee;color:#555;margin-top:8px;">Fechar</button>
     `;
 
-    function atualizarPreviewAoVivo() {
+    // Lê tudo que está nos campos da arte (usado pela prévia e pelo botão Baixar)
+    function lerCamposArte_() {
       const custom = document.getElementById('input-selo-custom').value.trim();
       const seloFinal = custom || (configArteAtual.selo === 'Nenhum' ? '' : configArteAtual.selo);
-      document.getElementById('arte-preview-badge').textContent = seloFinal;
-
       const precoInput = document.getElementById('input-preco-arte').value;
       const precoStory = precoInput !== '' ? Number(precoInput) : Number(p.Preco) * (1 - DESCONTO_AVISTA);
+      const nome = document.getElementById('input-nome-arte').value.replace(/\s+/g, ' ').trim();
+      const desc = document.getElementById('input-desc-arte').value.replace(/\s+/g, ' ').trim();
+      return {
+        selo: seloFinal, precoStory: precoStory, precoInput: precoInput,
+        nome: document.getElementById('chk-nome-arte').checked ? nome : '',
+        desc: document.getElementById('chk-desc-arte').checked ? desc : '',
+        categoria: document.getElementById('chk-cat-arte').checked ? subtitulo : ''
+      };
+    }
+
+    function atualizarPreviewAoVivo() {
+      const c = lerCamposArte_();
+      document.getElementById('arte-preview-badge').textContent = c.selo;
+
+      const elNome = document.getElementById('arte-preview-nome');
+      elNome.textContent = c.nome; elNome.style.display = c.nome ? 'block' : 'none';
+      const elDesc = document.getElementById('arte-preview-desc');
+      elDesc.textContent = c.desc; elDesc.style.display = c.desc ? '-webkit-box' : 'none';
+      const elCat = document.getElementById('arte-preview-cat');
+      elCat.textContent = c.categoria; elCat.style.display = c.categoria ? 'block' : 'none';
+
+      // contadores (campo desmarcado fica esmaecido, mas o texto digitado é mantido)
+      const tn = document.getElementById('input-nome-arte').value.length;
+      const td = document.getElementById('input-desc-arte').value.length;
+      const cn = document.getElementById('cont-nome-arte'), cd = document.getElementById('cont-desc-arte');
+      cn.textContent = tn + '/' + ARTE_MAX_NOME; cn.classList.toggle('cheio', tn >= ARTE_MAX_NOME);
+      cd.textContent = td + '/' + ARTE_MAX_DESC; cd.classList.toggle('cheio', td >= ARTE_MAX_DESC);
+      document.getElementById('input-nome-arte').style.opacity = document.getElementById('chk-nome-arte').checked ? '1' : '0.45';
+      document.getElementById('input-desc-arte').style.opacity = document.getElementById('chk-desc-arte').checked ? '1' : '0.45';
+
+      const precoStory = c.precoStory;
       const precoCheio = Number(p.Preco);
       const elDe = document.getElementById('arte-preview-de');
       if (precoStory < precoCheio - 0.009) {
@@ -1737,7 +1813,7 @@
         elDe.style.display = 'none';
       }
       document.getElementById('arte-preview-preco').textContent = formatarReal(precoStory) + ' à vista';
-      configArteAtual.precoStory = precoInput;
+      configArteAtual.precoStory = c.precoInput;
       document.getElementById('input-link-arte').value = linkWhatsAppArte_(p, precoStory);
     }
 
@@ -1771,6 +1847,16 @@
     });
     document.getElementById('input-selo-custom').addEventListener('input', atualizarPreviewAoVivo);
     document.getElementById('input-preco-arte').addEventListener('input', atualizarPreviewAoVivo);
+    ['input-nome-arte', 'input-desc-arte'].forEach(id => document.getElementById(id).addEventListener('input', atualizarPreviewAoVivo));
+    [['chk-nome-arte', 'nome'], ['chk-desc-arte', 'desc'], ['chk-cat-arte', 'cat']].forEach(([id, chave]) => {
+      document.getElementById(id).addEventListener('change', (ev) => {
+        arteSalvarPref_({ [chave]: ev.target.checked });
+        // ao ligar a descrição/nome vazios, foca o campo para já digitar
+        if (ev.target.checked && chave === 'nome') document.getElementById('input-nome-arte').focus();
+        if (ev.target.checked && chave === 'desc') document.getElementById('input-desc-arte').focus();
+        atualizarPreviewAoVivo();
+      });
+    });
 
     if (fotos.length > 1) {
       painel.querySelectorAll('.arte-thumb').forEach(thumb => {
@@ -1789,13 +1875,10 @@
     });
 
     document.getElementById('btn-baixar-arte').addEventListener('click', () => {
-      const custom = document.getElementById('input-selo-custom').value.trim();
-      const seloFinal = custom || (configArteAtual.selo === 'Nenhum' ? '' : configArteAtual.selo);
-      const precoInput = document.getElementById('input-preco-arte').value;
-      const precoStory = precoInput !== '' ? Number(precoInput) : Number(p.Preco) * (1 - DESCONTO_AVISTA);
+      const c = lerCamposArte_();
       const status = document.getElementById('status-arte');
       status.textContent = 'Gerando imagem...';
-      gerarEBaixarImagemStories(p, { selo: seloFinal, precoStory: precoStory, foto: configArteAtual.foto }, status);
+      gerarEBaixarImagemStories(p, { selo: c.selo, precoStory: c.precoStory, foto: configArteAtual.foto, nome: c.nome, desc: c.desc, categoria: c.categoria }, status);
     });
 
     atualizarPreviewAoVivo();
@@ -1827,7 +1910,7 @@
         // foto do produto: aparece INTEIRA (nada cortado). Os espaços que sobram nas laterais/em
         // cima e embaixo são preenchidos com a própria foto ampliada, desfocada e escurecida --
         // antes a foto era cortada pra cobrir a área, e peças em foto vertical perdiam mangas e barra.
-        const areaFotoAltura = 1300;
+        const areaFotoAltura = 1240;
         ctx.save();
         ctx.beginPath(); ctx.rect(0, 0, 1080, areaFotoAltura); ctx.clip();
         const escalaFundo = Math.max(1080 / img.naturalWidth, areaFotoAltura / img.naturalHeight);
@@ -1843,17 +1926,18 @@
         ctx.drawImage(img, (1080 - w) / 2, (areaFotoAltura - h) / 2, w, h);
         ctx.restore();
 
-        // selo/badge sobre a foto
+        // selo e código ficam abaixo da barra do Instagram (nome da conta/minutagem cobrem os ~170px de cima)
+        const YTOPO = 190;
         if (config.selo) {
           ctx.font = 'bold 34px sans-serif';
           const larguraTexto = ctx.measureText(config.selo).width;
           const larguraSelo = larguraTexto + 60;
           ctx.fillStyle = '#ff7a1a';
-          desenharRetanguloArredondado(ctx, 40, 40, larguraSelo, 64, 10);
+          desenharRetanguloArredondado(ctx, 40, YTOPO, larguraSelo, 64, 10);
           ctx.fill();
           ctx.fillStyle = '#0d0d0d';
           ctx.textAlign = 'left';
-          ctx.fillText(config.selo, 70, 84);
+          ctx.fillText(config.selo, 70, YTOPO + 44);
         }
 
         // código do produto, se houver
@@ -1861,56 +1945,65 @@
           ctx.font = 'bold 30px sans-serif';
           const larguraCodigo = ctx.measureText(p.Codigo).width + 50;
           ctx.fillStyle = 'rgba(0,0,0,0.55)';
-          desenharRetanguloArredondado(ctx, 1040 - larguraCodigo, 40, larguraCodigo, 58, 10);
+          desenharRetanguloArredondado(ctx, 1040 - larguraCodigo, YTOPO, larguraCodigo, 64, 10);
           ctx.fill();
           ctx.fillStyle = '#ffffff';
           ctx.textAlign = 'right';
-          ctx.fillText(p.Codigo, 1010, 79);
+          ctx.fillText(p.Codigo, 1010, YTOPO + 43);
         }
 
         // faixa laranja separando foto do rodapé
         ctx.fillStyle = '#ff7a1a';
         ctx.fillRect(0, areaFotoAltura, 1080, 8);
 
-        // textos
+        // ---- rodapé: marca fixa + bloco dinâmico (nome / descrição / categoria / preço) ----
         ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         ctx.fillStyle = '#ff7a1a';
         ctx.font = 'bold 42px sans-serif';
-        ctx.fillText('TENKiTER MODAS', 540, areaFotoAltura + 80);
+        ctx.fillText('TENKiTER MODAS', 540, areaFotoAltura + 70);
 
-        const subtitulo = [p.Genero, p.Categoria].filter(Boolean).join(' • ');
-        if (subtitulo) {
-          ctx.fillStyle = '#999999';
-          ctx.font = '32px sans-serif';
-          ctx.fillText(subtitulo, 540, areaFotoAltura + 125);
+        // monta os blocos que existem; o que for vazio simplesmente não ocupa espaço
+        const blocos = [];
+        if (config.nome) {
+          let fs = 58;
+          ctx.font = 'bold ' + fs + 'px sans-serif';
+          while (fs > 36 && ctx.measureText(config.nome).width > 960) { fs -= 2; ctx.font = 'bold ' + fs + 'px sans-serif'; }
+          blocos.push({ h: fs + 14, cor: '#ffffff', font: 'bold ' + fs + 'px sans-serif', linhas: [config.nome], lh: fs + 14, gapDepois: 8 });
         }
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 54px sans-serif';
-        quebrarTextoCanvas(ctx, p.Nome, 540, areaFotoAltura + 210, 960, 60);
-
+        if (config.desc) {
+          ctx.font = '36px sans-serif';
+          const ld = linhasCanvas_(ctx, config.desc, 940, 2);
+          blocos.push({ h: ld.length * 46, cor: '#cfcfcf', font: '36px sans-serif', linhas: ld, lh: 46, gapDepois: 8 });
+        }
+        if (config.categoria) {
+          blocos.push({ h: 40, cor: '#999999', font: '30px sans-serif', linhas: [config.categoria], lh: 40, gapDepois: 8 });
+        }
         const precoCheio = Number(p.Preco);
-        const mostrarDe = config.precoStory < precoCheio - 0.009;
-        let yPreco = areaFotoAltura + 355;
-        if (mostrarDe) {
-          ctx.fillStyle = '#999999';
-          ctx.font = '34px sans-serif';
-          ctx.fillText('De ' + formatarReal(precoCheio), 540, yPreco);
-          yPreco += 60;
+        if (config.precoStory < precoCheio - 0.009) {
+          blocos.push({ h: 46, cor: '#999999', font: '32px sans-serif', linhas: ['De ' + formatarReal(precoCheio)], lh: 46, gapDepois: 2, riscado: true });
         }
-        ctx.fillStyle = '#7ee787';
-        ctx.font = 'bold 66px sans-serif';
-        ctx.fillText(formatarReal(config.precoStory) + ' à vista', 540, yPreco);
+        blocos.push({ h: 80, cor: '#7ee787', font: 'bold 64px sans-serif', linhas: [formatarReal(config.precoStory) + ' à vista'], lh: 80, gapDepois: 0 });
+
+        // centraliza o conjunto entre a marca e a zona do adesivo de link (y 1752+)
+        const regiaoTopo = areaFotoAltura + 105, regiaoBase = 1745;
+        const alturaTotal = blocos.reduce((t, b) => t + b.h + b.gapDepois, 0);
+        let y = regiaoTopo + Math.max(0, (regiaoBase - regiaoTopo - alturaTotal) / 2);
+        blocos.forEach(b => {
+          ctx.fillStyle = b.cor; ctx.font = b.font;
+          b.linhas.forEach((l, i) => {
+            const yl = y + i * b.lh + b.lh / 2;
+            ctx.fillText(l, 540, yl);
+            if (b.riscado) {
+              const lw = ctx.measureText(l).width;
+              ctx.fillRect(540 - lw / 2, yl, lw, 3);
+            }
+          });
+          y += b.h + b.gapDepois;
+        });
+        ctx.textBaseline = 'alphabetic';
 
         // Espaço reservado (x 40–650, y 1752–1856) para colar o adesivo de link do Instagram. Fica vazio de propósito.
-
-        if (funcionarioNome) {
-          ctx.fillStyle = '#777777';
-          ctx.font = '26px sans-serif';
-          ctx.textAlign = 'right';
-          ctx.fillText('Atendimento com ' + funcionarioNome, 1040, 1752 + 60);
-          ctx.textAlign = 'center';
-        }
 
         const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
         const a = document.createElement('a');
@@ -1926,6 +2019,27 @@
       if (status) status.textContent = '❌ Não foi possível carregar a foto selecionada para gerar a arte.';
     };
     img.src = config.foto || p.Foto_URL;
+  }
+
+  // Quebra o texto em até maxLinhas linhas de no máximo larguraMax px; se sobrar, termina com "…".
+  function linhasCanvas_(ctx, texto, larguraMax, maxLinhas) {
+    const palavras = String(texto).split(' ').filter(Boolean);
+    const linhas = [];
+    let linha = '', i = 0;
+    for (; i < palavras.length; i++) {
+      const teste = linha ? linha + ' ' + palavras[i] : palavras[i];
+      if (ctx.measureText(teste).width > larguraMax && linha) {
+        linhas.push(linha); linha = palavras[i];
+        if (linhas.length === maxLinhas) { linha = ''; break; }
+      } else { linha = teste; }
+    }
+    if (linha) linhas.push(linha);
+    if (i < palavras.length || linhas.length > maxLinhas) {
+      let ult = linhas[maxLinhas - 1] || '';
+      while (ult && ctx.measureText(ult + '…').width > larguraMax) ult = ult.slice(0, -1).trimEnd();
+      linhas.length = maxLinhas; linhas[maxLinhas - 1] = ult + '…';
+    }
+    return linhas.slice(0, maxLinhas);
   }
 
   function quebrarTextoCanvas(ctx, texto, x, y, larguraMax, alturaLinha) {
