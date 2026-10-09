@@ -154,7 +154,7 @@
   .arte-preview-cat { color: #999; font-size: 0.66rem; margin-top: 2px; }
   .arte-preview-de { color: #999; font-size: 0.66rem; margin-top: 8px; text-decoration: line-through; }
   .arte-preview-preco { color: #7ee787; font-weight: 800; font-size: 1.2rem; margin-top: 2px; }
-  .arte-preview-btn { margin-top: 10px; float: left; border: 1px dashed #555; color: #777; font-size: 0.55rem; padding: 6px 30px; border-radius: 8px; }
+  .arte-preview-reserva { margin-top: 10px; float: left; width: 56%; height: 26px; } /* espaço do adesivo de link: reservado, mas vazio de propósito */
   .arte-preview-atendente { clear: both; }
   .arte-preview-atendente { color: #777; font-size: 0.58rem; margin-top: 6px; }
 
@@ -1686,7 +1686,7 @@
           ${subtitulo ? `<div class="arte-preview-cat">${subtitulo}</div>` : ''}
           <div class="arte-preview-de" id="arte-preview-de" style="display:none;"></div>
           <div class="arte-preview-preco" id="arte-preview-preco"></div>
-          <div class="arte-preview-btn">espaço do link</div>
+          <div class="arte-preview-reserva"></div>
           ${funcionarioNome ? `<div class="arte-preview-atendente">Atendimento com ${escaparHtml(funcionarioNome)}</div>` : ''}
         </div>
       </div>
@@ -1707,6 +1707,14 @@
       <label>Preço a exibir no Story (R$)</label>
       <input type="number" id="input-preco-arte" step="0.01" min="0" value="${configArteAtual.precoStory}">
       <p style="font-size:0.72rem;color:#888;margin-top:4px;">Só muda o valor mostrado nesta arte — não altera o preço cadastrado no catálogo.</p>
+
+      <label style="margin-top:14px;">🔗 Link do adesivo (abre o WhatsApp de atendimento com a referência da peça)</label>
+      <input type="text" id="input-link-arte" readonly style="font-size:0.72rem;">
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button type="button" id="btn-copiar-link-arte" style="background:var(--preto);color:var(--laranja);">📋 Copiar link</button>
+        <button type="button" id="btn-testar-link-arte" style="background:#eee;color:#555;">Testar</button>
+      </div>
+      <p style="font-size:0.72rem;color:#888;margin-top:4px;">No Instagram, no Story, use o adesivo "Link" e cole este endereço no espaço reservado da arte. Quem tocar cai no WhatsApp da loja já com o nome, o código e o preço da peça escritos.</p>
 
       <div id="status-arte" style="text-align:center;font-size:0.8rem;margin-top:8px;min-height:18px;"></div>
       <button type="button" id="btn-baixar-arte" style="background:var(--laranja);margin-top:6px;">⬇️ Baixar Imagem</button>
@@ -1730,7 +1738,25 @@
       }
       document.getElementById('arte-preview-preco').textContent = formatarReal(precoStory) + ' à vista';
       configArteAtual.precoStory = precoInput;
+      document.getElementById('input-link-arte').value = linkWhatsAppArte_(p, precoStory);
     }
+
+    // Link wa.me com a referência da peça (nome + código + preço mostrado no Story) já escrita.
+    function linkWhatsAppArte_(prod, precoStory) {
+      const codigo = prod.Codigo ? ('\nCódigo: ' + prod.Codigo) : '';
+      const texto = 'Olá! Vi no Story e quero este produto:\n*' + prod.Nome + '*' + codigo + '\n' + formatarReal(precoStory) + ' à vista';
+      return 'https://wa.me/' + WHATSAPP_NUMERO + '?text=' + encodeURIComponent(texto);
+    }
+    document.getElementById('btn-copiar-link-arte').addEventListener('click', async () => {
+      const campo = document.getElementById('input-link-arte');
+      const status = document.getElementById('status-arte');
+      try { await navigator.clipboard.writeText(campo.value); }
+      catch (e) { campo.select(); campo.setSelectionRange(0, 99999); document.execCommand('copy'); }
+      status.textContent = '✅ Link copiado! Cole no adesivo "Link" do Instagram.';
+    });
+    document.getElementById('btn-testar-link-arte').addEventListener('click', () => {
+      window.open(document.getElementById('input-link-arte').value, '_blank');
+    });
 
     painel.querySelectorAll('#chips-selo-arte .chip').forEach(chip => {
       chip.addEventListener('click', () => {
