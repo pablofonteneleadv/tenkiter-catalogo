@@ -165,7 +165,7 @@
   .arte-toggle input { width: auto; margin: 0; }
   .arte-opcoes-extras { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; }
   #input-nome-arte, #input-desc-arte { margin-top: 4px; }
-  #input-desc-arte { min-height: 64px; resize: vertical; font-family: inherit; }
+  #input-desc-arte { height: 64px !important; min-height: 0 !important; max-height: 64px; resize: none; font-family: inherit; line-height: 1.35; overflow-y: auto; }
 
   .arte-thumbs { display: flex; gap: 8px; margin-top: 8px; overflow-x: auto; }
   .arte-thumb { width: 48px; height: 60px; object-fit: cover; border-radius: 6px; cursor: pointer; opacity: 0.55; border: 2px solid transparent; flex-shrink: 0; }
@@ -1741,7 +1741,7 @@
         <label for="input-desc-arte">Descrição na arte (até 2 linhas)</label>
         <span class="arte-contador" id="cont-desc-arte"></span>
       </div>
-      <textarea id="input-desc-arte" maxlength="${ARTE_MAX_DESC}" placeholder="Ex.: Tecido leve e confortável, ideal para festas.">${escaparHtml(descInicial)}</textarea>
+      <textarea id="input-desc-arte" rows="2" maxlength="${ARTE_MAX_DESC}" placeholder="Ex.: Tecido leve e confortável, ideal para festas.">${escaparHtml(descInicial)}</textarea>
 
       <div class="arte-opcoes-extras">
         <label class="arte-toggle"><input type="checkbox" id="chk-nome-arte" ${mostrarNomeIni ? 'checked' : ''}> Mostrar nome</label>
