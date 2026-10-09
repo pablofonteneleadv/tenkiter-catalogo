@@ -143,7 +143,9 @@
   .arte-preview-loja { color: var(--laranja); font-weight: 800; font-size: 0.92rem; letter-spacing: 0.5px; }
   .arte-preview-sub { color: #888; font-size: 0.52rem; letter-spacing: 1px; margin-top: 1px; }
   .arte-preview-foto-wrap { position: relative; width: 100%; aspect-ratio: 4 / 5; background: #111; }
-  .arte-preview-foto-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .arte-preview-foto-wrap { overflow: hidden; }
+  .arte-preview-fundo { position: absolute; inset: -12%; background-size: cover; background-position: center; filter: blur(14px) brightness(0.55); }
+  .arte-preview-foto-wrap img { position: relative; width: 100%; height: 100%; object-fit: contain; display: block; }
   .arte-preview-badge { position: absolute; top: 8px; left: 8px; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: 0.58rem; padding: 4px 8px; border-radius: 6px; }
   .arte-preview-badge:empty { display: none; }
   .arte-preview-codigo { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.65); color: #fff; font-weight: 700; font-size: 0.58rem; padding: 4px 8px; border-radius: 6px; }
@@ -1674,6 +1676,7 @@
           <div class="arte-preview-sub">CATÁLOGO EXCLUSIVO</div>
         </div>
         <div class="arte-preview-foto-wrap">
+          <div class="arte-preview-fundo" id="arte-preview-fundo" style="background-image:url('${escaparHtml(fotos[0])}')"></div>
           <img id="arte-preview-foto" src="${escaparHtml(fotos[0])}" alt="">
           <span class="arte-preview-badge" id="arte-preview-badge"></span>
           ${p.Codigo ? `<span class="arte-preview-codigo">${escaparHtml(p.Codigo)}</span>` : ''}
@@ -1748,6 +1751,7 @@
           thumb.classList.add('selecionada');
           configArteAtual.foto = thumb.dataset.foto;
           document.getElementById('arte-preview-foto').src = thumb.dataset.foto;
+          document.getElementById('arte-preview-fundo').style.backgroundImage = "url('" + thumb.dataset.foto + "')";
         });
       });
     }
@@ -1792,11 +1796,24 @@
         ctx.fillStyle = '#0d0d0d';
         ctx.fillRect(0, 0, 1080, 1920);
 
-        // foto do produto, centralizada, cobrindo a área superior
+        // foto do produto: aparece INTEIRA (nada cortado). Os espaços que sobram nas laterais/em
+        // cima e embaixo são preenchidos com a própria foto ampliada, desfocada e escurecida --
+        // antes a foto era cortada pra cobrir a área, e peças em foto vertical perdiam mangas e barra.
         const areaFotoAltura = 1300;
-        const escala = Math.max(1080 / img.naturalWidth, areaFotoAltura / img.naturalHeight);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(0, 0, 1080, areaFotoAltura); ctx.clip();
+        const escalaFundo = Math.max(1080 / img.naturalWidth, areaFotoAltura / img.naturalHeight);
+        const wf = img.naturalWidth * escalaFundo, hf = img.naturalHeight * escalaFundo;
+        let desfoqueOk = false;
+        try { ctx.filter = 'blur(40px)'; desfoqueOk = (ctx.filter === 'blur(40px)'); } catch (e) { desfoqueOk = false; }
+        ctx.drawImage(img, (1080 - wf) / 2, (areaFotoAltura - hf) / 2, wf, hf);
+        ctx.filter = 'none';
+        ctx.fillStyle = desfoqueOk ? 'rgba(13,13,13,0.45)' : 'rgba(13,13,13,0.82)'; // sem blur no aparelho: escurece mais pra não competir com a foto
+        ctx.fillRect(0, 0, 1080, areaFotoAltura);
+        const escala = Math.min(1080 / img.naturalWidth, areaFotoAltura / img.naturalHeight);
         const w = img.naturalWidth * escala, h = img.naturalHeight * escala;
         ctx.drawImage(img, (1080 - w) / 2, (areaFotoAltura - h) / 2, w, h);
+        ctx.restore();
 
         // selo/badge sobre a foto
         if (config.selo) {
