@@ -1744,7 +1744,9 @@
     // Link wa.me com a referência da peça (nome + código + preço mostrado no Story) já escrita.
     function linkWhatsAppArte_(prod, precoStory) {
       const codigo = prod.Codigo ? ('\nCódigo: ' + prod.Codigo) : '';
-      const texto = 'Olá! Vi no Story e quero este produto:\n*' + prod.Nome + '*' + codigo + '\n' + formatarReal(precoStory) + ' à vista';
+      // link curto da própria loja (domínio nosso, sem encurtador de terceiros): ?c=<código> abre a peça direto
+      const linkPeca = SITE_URL + (prod.Codigo ? ('?c=' + encodeURIComponent(prod.Codigo)) : ('?id=' + encodeURIComponent(prod.ID)));
+      const texto = 'Olá! Vi no Story e quero este produto:\n*' + prod.Nome + '*' + codigo + '\n' + formatarReal(precoStory) + ' à vista\n' + linkPeca;
       return 'https://wa.me/' + WHATSAPP_NUMERO + '?text=' + encodeURIComponent(texto);
     }
     document.getElementById('btn-copiar-link-arte').addEventListener('click', async () => {

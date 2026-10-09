@@ -914,7 +914,13 @@
 
   function abrirProdutoDaURL() {
     const params = new URLSearchParams(window.location.search);
-    const id = params.get('id');
+    let id = params.get('id');
+    // Link curto por código da peça: tenkitermodas.com.br/?c=TK-0008 (mais curto que ?id=...)
+    const cod = params.get('c');
+    if (!id && cod) {
+      const achado = produtos.find(x => String(x.Codigo || '').toLowerCase() === String(cod).trim().toLowerCase());
+      if (achado) id = achado.ID;
+    }
     if (id) abrirDetalhe(id);
   }
 
