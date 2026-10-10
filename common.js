@@ -175,6 +175,12 @@ function escaparHtml(v) {
   return String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
+/** Atributo src="..." já escapado, para montar <img> dentro de modelos de texto (innerHTML).
+ *  Escreva `<img ${atribSrc(url)} alt="">` e NUNCA `<img src="${url}">` dentro de um <script> de página HTML: o Chrome, ao ler a página aos pedaços
+ *  (principalmente quando ela passa pelo service worker), às vezes "enxerga" esse <img> no texto do script e pede uma foto chamada
+ *  `${...}` (404 no log, foto pedida à toa). Com `${atribSrc(...)}` o texto não parece mais um atributo src e o problema some. */
+function atribSrc(url) { return 'src="' + escaparHtml(url) + '"'; }
+
 /* ===================== Configurações (API_URL editável) ===================== */
 
 function definirApiUrlPersonalizada(url) {

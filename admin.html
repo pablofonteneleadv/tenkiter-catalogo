@@ -1877,7 +1877,7 @@
       return `
       <div class="produto${inativo ? ' arquivado' : ''}">
         <input type="checkbox" class="produto-chk" data-id="${idE}" aria-label="Selecionar ${escaparHtml(p.Nome)}" ${selecionadosBulk.has(String(p.ID)) ? 'checked' : ''}>
-        <img src="${escaparHtml(fotoMini(p.Foto_URL, 200))}" alt="" loading="lazy" decoding="async" width="64" height="80">
+        <img ${atribSrc(fotoMini(p.Foto_URL, 200))} alt="" loading="lazy" decoding="async" width="64" height="80">
         <div class="produto-info">
           <div class="codigo">${p.Codigo ? escaparHtml(p.Codigo) : '<span class="selo-inativo" style="background:#fff3e0;color:#7a4a00;margin-left:0">SEM CÓDIGO</span>'}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}${esg ? '<span class="sel-esg">ESGOTADO</span>' : ''}</div>
           <div class="nome">${escaparHtml(p.Nome)}</div>
@@ -2143,7 +2143,7 @@
         </div>
         <div class="arte-preview-foto-wrap">
           <div class="arte-preview-fundo" id="arte-preview-fundo" style="background-image:url('${escaparHtml(fotos[0])}')"></div>
-          <img id="arte-preview-foto" src="${escaparHtml(fotos[0])}" alt="">
+          <img id="arte-preview-foto" ${atribSrc(fotos[0])} alt="">
           <span class="arte-preview-badge" id="arte-preview-badge"></span>
           ${p.Codigo ? `<span class="arte-preview-codigo">${escaparHtml(p.Codigo)}</span>` : ''}
         </div>
@@ -2162,7 +2162,7 @@
       ${fotos.length > 1 ? `
         <label>Escolher foto do produto</label>
         <div class="arte-thumbs" id="arte-thumbs">
-          ${fotos.map((f, i) => `<img src="${escaparHtml(f)}" class="arte-thumb${i === 0 ? ' selecionada' : ''}" data-foto="${escaparHtml(f)}">`).join('')}
+          ${fotos.map((f, i) => `<img ${atribSrc(f)} class="arte-thumb${i === 0 ? ' selecionada' : ''}" data-foto="${escaparHtml(f)}">`).join('')}
         </div>
       ` : ''}
 

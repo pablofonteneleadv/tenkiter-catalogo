@@ -87,6 +87,13 @@ try:
         sw = open(os.path.join(RAIZ, "OneSignalSDKWorker.js"), encoding="utf-8").read()
         chk("limpeza: ao ativar, apaga os caches de versões antigas do site", "n.indexOf('tk-site-') === 0 && n !== CACHE_SITE" in sw and "var VERSAO = " in sw)
         chk("OneSignal bloqueado não derruba o worker (importScripts dentro de try)", "try { importScripts(" in sw)
+        # Chrome, ao ler uma página que passa pelo service worker aos pedaços, às vezes enxerga "<img src="${...}">" no texto do <script> e pede uma foto
+        # com o nome literal "${...}" (404). Reproduzido com servidor que entrega o HTML em pedaços de 8-20 KB. A regra do projeto: use atribSrc().
+        import re
+        for pagina in ("index.html", "admin.html"):
+            html = open(os.path.join(RAIZ, pagina), encoding="utf-8").read()
+            achados = re.findall(r"<(?:img|source|video)[^>\n]*(?:src|poster|srcset)=[\"'](?:\$\{|'\s*\+)", html)
+            chk("%s: nenhum <img src=\"${...}\"> escrito no texto da página (use atribSrc)" % pagina, not achados, achados[:2])
 finally:
     if srv: srv.terminate()
     shutil.rmtree(perfil, ignore_errors=True)

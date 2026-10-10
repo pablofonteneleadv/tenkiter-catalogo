@@ -134,10 +134,14 @@ Propriedades do Script do Apps Script, nunca no código versionado.
   `importScripts` do OneSignal vai dentro de `try/catch` (bloqueador de anúncios não pode derrubar o cache). Estratégia: rede primeiro para o
   site, cache primeiro para fotos; **admin, treinamentos e currículos nunca entram no cache** (dados de gente). Para forçar renovação em todos os
   aparelhos, troque `VERSAO` (hoje `tk-3.3.0`). Se mexer em arquivo do site que precise abrir offline, acrescente-o em `BASICO` no worker (e em `FORA_DO_CACHE` se for área interna).
-- **Peça de imagem por JS**: no modal da peça o `src` da foto é atribuído por JavaScript depois do `innerHTML` (com CSP por `<meta>` + service
-  worker, o Chrome chegou a pedir o texto literal `${...}` do template como URL — bug real). Não volte a montar `<img src="${...}">` em template
-  para essa foto. A CSP de `index.html` (`<meta http-equiv=Content-Security-Policy>`) precisa listar todo domínio novo em `connect-src`/`img-src`
-  (já inclui o Worker `tenkiter-og`).
+- **Nunca escreva `<img src="${...}">` em modelo de texto dentro de página HTML** (bug real, só aparecia no site publicado): o Chrome lê a página
+  aos pedaços — principalmente quando ela passa pelo service worker — e às vezes "enxerga" esse `<img>` dentro do `<script>`, pedindo uma foto
+  chamada literalmente `${escaparHtml(...)}` (404 no log). Use `<img ${atribSrc(url)} alt="">` (common.js; o texto deixa de parecer um `src`).
+  Em `index.html` e `admin.html` isso já vale e `tests/service_worker.py` falha se a forma antiga voltar. `curriculo.html`, `curriculos.html` e
+  `treinamentos.html` ainda têm `<img src="' + ... + '">`, mas não passam pelo service worker (e nunca deram o problema); se um dia passarem, troque
+  também. Para reproduzir: servidor local que entrega o `.html` em pedaços de 8–20 KB e service worker ligado. A foto principal do modal da peça
+  continua recebendo o `src` por JavaScript depois do `innerHTML`. A CSP de `index.html` (`<meta http-equiv=Content-Security-Policy>`) precisa
+  listar todo domínio novo em `connect-src`/`img-src` (já inclui o Worker `tenkiter-og`).
 - **Lista rápida (opcional)**: `buscarListaPublica()` (common.js) usa `LISTA_RAPIDA_URL` (vazia = desligada) e cai no Apps Script se o Worker falhar
   ou passar de 3,5 s. Todo `fetch(API_URL+'?action=list')` do catálogo passa por ela.
 - **Story em vídeo (admin, janela da arte)**: grava ~7 s no navegador (canvas + `MediaRecorder`). O resultado depende do navegador: MP4/H.264 serve

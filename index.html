@@ -912,7 +912,7 @@ catch (e) { window.__precargaLista = null; }
       return `
         <div class="card" data-id="${escaparHtml(p.ID)}">
           <div class="img-wrap">
-            <img src="${escaparHtml(fotoMini(p.Foto_URL, 480))}" alt="${escaparHtml(p.Nome)}" ${pos < 4 ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async">
+            <img ${atribSrc(fotoMini(p.Foto_URL, 480))} alt="${escaparHtml(p.Nome)}" ${pos < 4 ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async">
             ${esgotado ? '<span class="selo-card esgotado">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade">NOVIDADE</span>' : '')}
             <button type="button" class="btn-favorito-card" data-fav-id="${escaparHtml(p.ID)}" title="Favoritar" aria-label="${favoritado ? 'Remover dos favoritos' : 'Favoritar'}: ${escaparHtml(p.Nome)}" aria-pressed="${favoritado}">${favoritado ? '❤️' : '🤍'}</button>
             ${nFotos > 1 || temVideo ? `<span class="mini-selos" aria-hidden="true">${nFotos > 1 ? `<span class="mini-selo">📷 ${nFotos}</span>` : ''}${temVideo ? '<span class="mini-selo">▶ vídeo</span>' : ''}</span>` : ''}
@@ -1120,7 +1120,7 @@ catch (e) { window.__precargaLista = null; }
       </div>
       ${totalSlides > 1 ? `
         <div class="thumbs-galeria">
-          ${fotosGaleria.map((f, idx) => `<img src="${escaparHtml(fotoMini(f, 120))}" class="thumb-item ${idx===0?'ativa':''}" data-idx="${idx}" alt="" width="50" height="62" loading="lazy">`).join('')}
+          ${fotosGaleria.map((f, idx) => `<img ${atribSrc(fotoMini(f, 120))} class="thumb-item ${idx===0?'ativa':''}" data-idx="${idx}" alt="" width="50" height="62" loading="lazy">`).join('')}
           ${idVid ? `<div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div>` : ''}
         </div>
       ` : ''}
