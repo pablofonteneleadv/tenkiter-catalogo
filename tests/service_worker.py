@@ -34,7 +34,10 @@ try:
         install(ctx)   # o endereço do OneSignal cai no "abort" do mock: é exatamente o caso do bloqueador de anúncios
         pg = ctx.pages[0] if ctx.pages else ctx.new_page()
         pg.goto(BASE + "index.html"); pg.wait_for_timeout(4200)   # pwa.js registra 2,5 s depois do carregamento
-        ativo = pg.evaluate("""async()=>{const r=await navigator.serviceWorker.getRegistration('/'); if(!r) return 'sem registro'; await navigator.serviceWorker.ready; return (r.active&&r.active.state)||'?' }""")
+        # no site publicado a rede é mais lenta: o worker pode ainda estar "ativando" quando o 'ready' resolve; espera (até 12 s) o estado final
+        ativo = pg.evaluate("""async()=>{const r=await navigator.serviceWorker.getRegistration('/'); if(!r) return 'sem registro'; await navigator.serviceWorker.ready;
+          for (let i=0;i<60 && !(r.active && r.active.state==='activated');i++) await new Promise(ok=>setTimeout(ok,200));
+          return (r.active&&r.active.state)||'?' }""")
         chk("service worker registrado e ativo (mesmo com OneSignal bloqueado)", ativo == "activated", ativo)
         chk("é o arquivo único do OneSignal (não existe um segundo worker)", pg.evaluate("navigator.serviceWorker.getRegistration('/').then(r=>r.active.scriptURL)").endswith("/OneSignalSDKWorker.js"))
         pg.reload(); pg.wait_for_timeout(1800)
