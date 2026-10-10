@@ -61,7 +61,7 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
 - Miniatura **por produto**: Cloudflare Worker `tenkiter-og` (código em `og-worker/worker.js`, endereço
   `https://tenkiter-og.distkrpconfeccoes.workers.dev`) devolve HTML com `og:*` em `/p/<código>` e redireciona a pessoa para
   `?c=<código>`. No Render existe a regra Rewrite `/p/*` -> `<worker>/p/*` (confirmado: faz proxy, não redireciona). Se mudar
-  o código do Worker, publicar de novo na Cloudflare (painel ou API). `og-service/` (Node) é alternativa antiga, não usada. O Worker agora é **v2** (JSON-LD, `/sitemap.xml`, `/feed.csv|xml`, `/lista.json`) — guia de publicação em `og-worker/LEIA-ME.md`.
+  o código do Worker, publicar de novo na Cloudflare (painel ou API). `og-service/` (Node) é alternativa antiga, não usada. O Worker é **v2 e está PUBLICADO desde 10/10/2026** (publicado pela API da Cloudflare, `og-worker/publicar.py`; JSON-LD, `/sitemap.xml`, `/feed.csv|xml`, `/lista.json`) — guia de publicação em `og-worker/LEIA-ME.md`.
   `index.html` mantém `og:image` genérico (`og-banner.jpg`) para o link da loja em si.
 
 ## Instagram / redes sociais
@@ -142,7 +142,7 @@ Propriedades do Script do Apps Script, nunca no código versionado.
   também. Para reproduzir: servidor local que entrega o `.html` em pedaços de 8–20 KB e service worker ligado. A foto principal do modal da peça
   continua recebendo o `src` por JavaScript depois do `innerHTML`. A CSP de `index.html` (`<meta http-equiv=Content-Security-Policy>`) precisa
   listar todo domínio novo em `connect-src`/`img-src` (já inclui o Worker `tenkiter-og`).
-- **Lista rápida (opcional)**: `buscarListaPublica()` (common.js) usa `LISTA_RAPIDA_URL` (vazia = desligada) e cai no Apps Script se o Worker falhar
+- **Lista rápida (opcional, DESLIGADA de propósito)**: o Worker `/lista.json` mediu ~1,1 s (igual ao Apps Script) — falta cache de borda (KV) para valer a pena; não ligue antes disso. `buscarListaPublica()` (common.js) usa `LISTA_RAPIDA_URL` (vazia = desligada) e cai no Apps Script se o Worker falhar
   ou passar de 3,5 s. Todo `fetch(API_URL+'?action=list')` do catálogo passa por ela.
 - **Story em vídeo (admin, janela da arte)**: grava ~7 s no navegador (canvas + `MediaRecorder`). O resultado depende do navegador: MP4/H.264 serve
   ao Instagram; WebM ou VP9 pode ser recusado — o painel analisa os bytes reais do arquivo e dá o parecer (verde/atenção), nunca promete. Se o

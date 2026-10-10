@@ -11,7 +11,7 @@
    - Quem tinha WhatsApp de 10 dígitos na planilha precisa entrar de novo **uma vez** (mudança da v3.0 — igual ao portal).
 3. **Pixel / API de Conversões (quando quiser; o resto funciona sem isso).** Painel → *Integrações*: cole o ID do Pixel (só números) e, se for usar a API de Conversões, o token da Meta (fica só no servidor, nunca volta para a tela). Vazio = tudo desligado e o aviso de cookies nem aparece.
 4. **Instagram / Facebook / Google.** Painel → *Integrações* → copie o endereço do catálogo (CSV) e cadastre na Meta (Gerenciador de Comércio) / Google Merchant. A loja do Instagram depende da aprovação da Meta; postagem automática continua desligada (decisão do projeto).
-5. **Cloudflare / Render (opcional, melhora Google e velocidade):** siga `og-worker/LEIA-ME.md` (publicar o Worker v2, regras de rewrite no Render e, se quiser, ligar a lista rápida).
+5. **Cloudflare / Render (melhora o Google e o catálogo da Meta):** o Worker v2 **já está publicado** (10/10/2026) e `/p/<código>` no seu domínio já usa a versão nova. Falta só criar no Render as regras Rewrite de `/feed.csv`, `/feed.xml` e `/sitemap.xml` (e depois apagar o `sitemap.xml` do repositório) — passo a passo em `og-worker/LEIA-ME.md`. A lista rápida fica desligada (ainda não ganha velocidade).
 
 **Segurança — faça hoje:** apague do chat/arquivos qualquer token da Cloudflare, chave da API do Render e chave do Gemini que tenham sido colados em conversas; gere novos se precisar. Nada disso deve ir para o GitHub (o repositório é público).
 

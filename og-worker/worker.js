@@ -6,7 +6,8 @@
  *   /sitemap.xml     mapa do site com a página inicial e TODAS as peças ativas (/p/<código>) — para o Google achar cada peça.
  *   /feed.csv        catálogo para a Meta (Instagram/Facebook) e o Google Merchant, gerado da lista (funciona mesmo com o Apps Script antigo).
  *   /feed.xml        o mesmo catálogo em XML (Google Merchant).
- *   /lista.json      a lista pública de peças com cache de 60 s na borda da Cloudflare (o catálogo fica mais rápido; ver LISTA_RAPIDA_URL em common.js).
+ *   /lista.json      a lista pública de peças (CORS liberado; o navegador guarda 60 s). MEDIDO em 10/10/2026: ainda NÃO acelera (~1,1 s, igual ao Apps Script),
+ *                    porque o cache de verdade na borda (ex.: Workers KV) não foi feito; por isso LISTA_RAPIDA_URL (common.js) fica vazia.
  *
  * Sem segredos: API_URL e SITE_URL são públicos (o catálogo já é público). Nenhuma credencial entra neste arquivo.
  * Como publicar: painel Cloudflare > Workers & Pages > tenkiter-og > Edit code > colar este arquivo > Deploy.

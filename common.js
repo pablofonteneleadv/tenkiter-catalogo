@@ -20,7 +20,7 @@ const SITE_URL = 'https://tenkitermodas.com.br/';
 
 const DESCONTO_AVISTA = 0.10; // 10% de desconto no pagamento à vista
 
-/** Endereço RÁPIDO da lista de peças: o Worker da Cloudflare (og-worker) guarda a lista por 60 s e responde em /lista.json.
+/** Endereço RÁPIDO da lista de peças: o Worker da Cloudflare (og-worker) responde em /lista.json. ATENÇÃO: medido em 10/10/2026, ainda não é mais rápido que o Apps Script (falta cache de borda, ex. KV); deixe vazio.
  *  Vazio = desligado (padrão): o catálogo busca direto no Apps Script, como sempre. Para ligar, publique o Worker novo e cole aqui,
  *  por exemplo 'https://tenkiter-og.distkrpconfeccoes.workers.dev/lista.json'. Se o Worker falhar, o catálogo cai no Apps Script sozinho. */
 const LISTA_RAPIDA_URL = '';
