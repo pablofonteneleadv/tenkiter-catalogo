@@ -1,6 +1,9 @@
-// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v4.6
+// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v3.0
 //
-// NOVIDADE DA v4.6:
+// NOTA: a numeração passou a acompanhar a versão geral do sistema (v3.0). Esta é a continuação direta da 4.5
+// (que vem logo abaixo) -- o número menor NÃO é retrocesso.
+//
+// NOVIDADE DA v3.0:
 //  - Nova ação curriculos_foto: o painel de Currículos e o de Acessos já chamavam essa ação quando a foto
 //    do Drive não abre pelo link público, mas ela NÃO existia (a foto ficava escondida). Agora o script lê
 //    o arquivo no Drive e devolve a imagem (data URL). Exige a permissão dados_pessoais e só lê a foto de
@@ -979,7 +982,7 @@ function doGet(e) {
   }
 
   if (action === 'versao') {
-    return jsonOut_({ ok: true, versao: '4.6', acessos: true, curriculos: true, listaFechada: listaFechada_() });
+    return jsonOut_({ ok: true, versao: '3.0', acessos: true, curriculos: true, listaFechada: listaFechada_() });
   }
 
   // padrão: lista de funcionários (login e níveis) -- formato ANTIGO, só existe
@@ -1859,7 +1862,7 @@ function acCurriculoStatusMapa_() {
   return mapa;
 }
 /**
- * v4.6 -- Plano B da foto no painel de Currículos/Acessos: quando a imagem do Drive não abre pelos links
+ * v3.0 -- Plano B da foto no painel de Currículos/Acessos: quando a imagem do Drive não abre pelos links
  * de navegador, o script lê o arquivo e devolve em base64. Só lê a foto JÁ gravada na planilha da pessoa
  * (fotoperfilurl / fotocorpourl) -- o id do arquivo nunca vem do navegador. Exige dados_pessoais.
  */
