@@ -1,4 +1,19 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.0
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.1
+//
+// NOVIDADE v3.1 -- pedidos com acompanhamento, métricas reais, importação CSV, feed de catálogo e integrações (Pixel da Meta).
+// Só ACRESCENTA: nenhuma coluna, aba ou formato de resposta anterior mudou. O site continua funcionando com a v3.0 (os recursos novos
+// se ligam sozinhos quando o site vê pedidos/config em ?action=versao).
+//  - Pedidos: o cliente envia a sacola (criarPedido, aberto) e recebe um código PED-0001. O servidor RECALCULA os preços pela planilha
+//    (nunca confia no valor que o navegador mandou) e ignora peça arquivada/esgotada. Acompanhamento pelo cliente (consultarPedido):
+//    código + 4 últimos números do WhatsApp, com freio de tentativas; nunca devolve telefone nem endereço. Equipe: listarPedidos /
+//    atualizarPedido (etapas, nota interna, histórico de quem mudou). Aba nova: Pedidos. Permissão: a de cadastrar produtos.
+//  - Códigos faltantes: gerarCodigosFaltantes dá TK-#### às peças antigas sem código e acerta o contador (também roda no editor).
+//  - Métricas (metricas): só dados reais das abas Eventos e Pedidos (mais vistas, conversão para o WhatsApp, por dia, por categoria).
+//  - Importar produtos por CSV (importarProdutos): simular:true devolve a prévia sem gravar; depois a mesma chamada sem simular aplica.
+//  - Feed de catálogo para Meta/Instagram e Google (?action=feed&formato=csv|xml) e mapa do site (?action=sitemap).
+//  - Integrações: ?action=config (público: ID do Pixel e sinônimos de busca) e statusIntegracoes/salvarIntegracoes (só Admin total).
+//    O token da API de Conversões fica SÓ nas Propriedades do Script e nunca volta para o navegador. Sem Pixel/token, nada acontece.
+//  - Avisos (push): segmento opcional e histórico (aba Push_Historico). Lote: alterarCategoria. Descrição sem IA quando não há chave.
 //
 // NOVIDADE v3.0 -- WhatsApp normalizado IGUAL ao script de treinamento (acWhats_):
 //  - número antigo de 10 dígitos (sem o "9") agora vira ddd+9+8 dígitos (11), como já era no portal.
@@ -90,7 +105,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-3.0';
+const VERSAO_CATALOGO = 'catalogo-3.1';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1064,11 +1079,15 @@ function acRegistrar_(nome, whatsapp, senha, perfilNome, extras) {
 const PERMISSAO_POR_ACAO_ = {
   create: 'catalogo_cadastrar', update: 'catalogo_cadastrar', addCategoria: 'catalogo_cadastrar', addGenero: 'catalogo_cadastrar',
   gerarSeo: 'catalogo_cadastrar', sugerirPorFoto: 'catalogo_cadastrar', statusConfigIA: 'gerir_acessos', salvarConfigIA: 'gerir_acessos', delete: 'catalogo_excluir', reativar: 'catalogo_excluir', excluirPermanente: 'catalogo_excluir',
-  enviarPush: 'catalogo_push', assinarUploadVideo: 'catalogo_cadastrar'
+  enviarPush: 'catalogo_push', assinarUploadVideo: 'catalogo_cadastrar',
+  // v3.1 (só reaproveitam permissões que já existem -- não cria permissão nova, para não mexer no bloco compartilhado com o treinamento)
+  listarPedidos: 'catalogo_cadastrar', atualizarPedido: 'catalogo_cadastrar', gerarCodigosFaltantes: 'catalogo_cadastrar',
+  metricas: 'catalogo_auditoria', importarProdutos: 'catalogo_precos',
+  statusIntegracoes: 'gerir_acessos', salvarIntegracoes: 'gerir_acessos', pushHistorico: 'catalogo_push'
 };
 const PERMISSAO_POR_LOTE_ = {
   ajustarPrecoPorcento: 'catalogo_precos', marcarNovidade: 'catalogo_cadastrar', alterarEstoque: 'catalogo_cadastrar',
-  arquivar: 'catalogo_excluir', reativar: 'catalogo_excluir'
+  arquivar: 'catalogo_excluir', reativar: 'catalogo_excluir', alterarCategoria: 'catalogo_cadastrar'
 };
 
 function permissaoDaAcao_(body) {
@@ -1255,10 +1274,10 @@ function statsComCache_() {
   return saida;
 }
 
-const ACOES_QUE_ALTERAM_PRODUTOS_ = ['create', 'update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate'];
+const ACOES_QUE_ALTERAM_PRODUTOS_ = ['create', 'update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate', 'importarProdutos', 'gerarCodigosFaltantes'];
 // "create" só acrescenta no fim da planilha (e o código sequencial já tem trava própria);
 // as demais mexem em linhas que já existem e por isso entram na fila:
-const ACOES_COM_TRAVA_ = ['update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate'];
+const ACOES_COM_TRAVA_ = ['update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate', 'importarProdutos', 'gerarCodigosFaltantes'];
 
 /**
  * Backup: copia a planilha do catálogo para uma pasta do Drive e mantém só as
@@ -1294,7 +1313,7 @@ function diagnostico() {
     if (idxStatus === -1 || normalizar_(dados[i][idxStatus]) === 'ativo') ativos++;
   }
   const eventos = getSS_().getSheetByName(SHEET_EVENTOS);
-  Logger.log('Versão: catálogo v2.1');
+  Logger.log('Versão: ' + VERSAO_CATALOGO);
   Logger.log('Produtos: ' + (dados.length - 1) + ' (ativos: ' + ativos + ')');
   const pinLigado = pinLegadoAtivo_();
   Logger.log('PIN antigo: ' + (pinLigado ? 'LIGADO' : 'desligado (só login com permissão)'));
@@ -1325,7 +1344,13 @@ function doGetInterno_(e) {
 
   if (action === 'share') return paginaCompartilhamento_(e.parameter.id);
   if (action === 'stats') return statsComCache_();
-  if (action === 'versao') return jsonResponse_({ ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_() });
+  if (action === 'versao') return jsonResponse_({
+    ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
+    pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true
+  });
+  if (action === 'config') return configPublica_();
+  if (action === 'feed') return feedProdutos_(e.parameter.formato);
+  if (action === 'sitemap') return sitemapProdutos_();
 
   if (action === 'historico') {
     const aut = autorizarAcao_(e.parameter.sessao || e.parameter.pin, e.parameter.whatsapp, 'catalogo_auditoria', e.parameter.pin);
@@ -1390,6 +1415,8 @@ function doPostInterno_(body) {
   if (action === 'registrar_cliente') return registrarCliente_(body);
   if (action === 'cliente_dados') return clienteDados_(body);
   if (action === 'cliente_salvar') return clienteSalvar_(body);
+  if (action === 'criarPedido') return criarPedido_(body);
+  if (action === 'consultarPedido') return consultarPedido_(body);
 
   // ---- protegidas: login + permissão (ou PIN antigo enquanto ligado)
   const permissao = permissaoDaAcao_(body);
@@ -1433,7 +1460,15 @@ function despacharPost_(body) {
   if (action === 'sugerirPorFoto') return sugerirPorFotoComGemini_(body);
   if (action === 'statusConfigIA') return statusConfigIA_();
   if (action === 'salvarConfigIA') return salvarConfigIA_(body);
-  if (action === 'enviarPush') return enviarPushOneSignal_(body.titulo, body.mensagem, body.url || SITE_URL);
+  if (action === 'enviarPush') return enviarPushOneSignal_(body.titulo, body.mensagem, body.url || SITE_URL, body.segmento, body.funcionario);
+  if (action === 'pushHistorico') return listarPushHistorico_(body);
+  if (action === 'listarPedidos') return listarPedidos_(body);
+  if (action === 'atualizarPedido') return atualizarPedido_(body);
+  if (action === 'gerarCodigosFaltantes') return gerarCodigosFaltantes_(body);
+  if (action === 'metricas') return metricas_(body);
+  if (action === 'importarProdutos') return importarProdutos_(body);
+  if (action === 'statusIntegracoes') return statusIntegracoes_();
+  if (action === 'salvarIntegracoes') return salvarIntegracoes_(body);
   if (action === 'assinarUploadVideo') return assinarUploadVideo_(body);
 
   return jsonResponse_({ ok: false, erro: 'Ação desconhecida: ' + action });
@@ -1452,6 +1487,7 @@ function registrarEvento_(body) {
 
   const sheet = getOrCreateSheet_(SHEET_EVENTOS, ['DataHora', 'ProdutoID', 'Codigo', 'Tipo']);
   sheet.appendRow([new Date(), acTexto_(String(body.produtoId || '').slice(0, 60)), acTexto_(String(body.codigo || '').slice(0, 60)), acTexto_(String(body.tipo || '').slice(0, 30))]);
+  if (body.meta) enviarEventoMetaCapi_(body, String(body.tipo || '')); // v3.1: só faz algo se o Pixel + token estiverem configurados e a pessoa aceitou o aviso
   return jsonResponse_({ ok: true });
 }
 
@@ -1547,7 +1583,8 @@ function criarProduto_(body) {
       enviarPushOneSignal_(
         'Chegou novidade! 🆕',
         body.nome ? ('Acabou de chegar: ' + body.nome) : 'Uma peça nova chegou na loja. Vem ver!',
-        SITE_URL + '?id=' + id
+        SITE_URL + '?id=' + id,
+        '', body.funcionario
       );
     } catch (erroPush) {
       // Silencioso de propósito: falha no push não pode derrubar o cadastro.
@@ -1664,6 +1701,11 @@ function acaoEmLote_(body) {
   const sheet = getProdutosSheet_();
   const dados = sheet.getDataRange().getValues();
   let afetados = 0;
+  let categoriaLote = '';
+  if (body.tipoAcao === 'alterarCategoria') {
+    categoriaLote = categoriaExistenteOuNova_(body.valor);
+    if (!categoriaLote) return jsonResponse_({ ok: false, erro: 'Escolha a categoria.' });
+  }
 
   for (let i = 1; i < dados.length; i++) {
     const pid = String(dados[i][0]);
@@ -1682,6 +1724,8 @@ function acaoEmLote_(body) {
         const estoqueVal = Number(body.valor);
         if (isNaN(estoqueVal)) continue;
         sheet.getRange(linha, 10).setValue(estoqueVal);
+      } else if (body.tipoAcao === 'alterarCategoria') {
+        sheet.getRange(linha, 3).setValue(acTexto_(categoriaLote));
       } else if (body.tipoAcao === 'arquivar') {
         sheet.getRange(linha, 7).setValue('Inativo');
       } else if (body.tipoAcao === 'reativar') {
@@ -1767,9 +1811,10 @@ function gerarSeoComGemini_(body) {
     (body.descricao ? ('Descrição atual: ' + body.descricao + '\n') : '') +
     'Responda SOMENTE em JSON válido, sem markdown, no formato exato: {"titulo": "...", "descricao": "..."}';
   const r = chamarGemini_({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.4 } });
-  if (!r.ok) return jsonResponse_({ ok: false, erro: r.erro });
+  // v3.1: sem chave, ou se a IA falhar, o admin ainda recebe um texto pronto (montado só com o que a peça já tem -- não inventa nada)
+  if (!r.ok) { const local = descricaoLocal_(body); local.aviso = r.erro; return jsonResponse_(local); }
   let resultado;
-  try { resultado = JSON.parse(r.texto); } catch (erroParse) { return jsonResponse_({ ok: false, erro: 'A IA respondeu num formato inesperado. Tente novamente.' }); }
+  try { resultado = JSON.parse(r.texto); } catch (erroParse) { const local = descricaoLocal_(body); local.aviso = 'A IA respondeu num formato inesperado.'; return jsonResponse_(local); }
   return jsonResponse_({ ok: true, titulo: resultado.titulo || '', descricao: resultado.descricao || '' });
 }
 
@@ -1930,7 +1975,7 @@ function sugerirPorFotoComGemini_(body) {
  *    Nome: ONESIGNAL_APP_ID         Valor: 535f6b0d-c866-43c2-b241-43bd7ab62fae
  *    (o App ID já está público no common.js também — não é segredo, só a chave REST é.)
  */
-function enviarPushOneSignal_(titulo, mensagem, urlDestino) {
+function enviarPushOneSignal_(titulo, mensagem, urlDestino, segmento, funcionario) {
   const appId = PropertiesService.getScriptProperties().getProperty('ONESIGNAL_APP_ID');
   const restApiKey = PropertiesService.getScriptProperties().getProperty('ONESIGNAL_REST_API_KEY');
 
@@ -1941,9 +1986,12 @@ function enviarPushOneSignal_(titulo, mensagem, urlDestino) {
     return jsonResponse_({ ok: false, erro: 'Título e mensagem são obrigatórios para enviar a notificação.' });
   }
 
+  const segmentosOk = ['Subscribed Users'].concat(String(PropertiesService.getScriptProperties().getProperty('PUSH_SEGMENTOS') || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean));
+  const seg = segmento && segmentosOk.indexOf(String(segmento)) !== -1 ? String(segmento) : 'Subscribed Users';
+  if (urlDestino && !/^https:\/\//.test(String(urlDestino))) return jsonResponse_({ ok: false, erro: 'O link do aviso precisa começar com https://' });
   const payload = {
     app_id: appId,
-    included_segments: ['Subscribed Users'],
+    included_segments: [seg],
     headings: { en: titulo, pt: titulo },
     contents: { en: mensagem, pt: mensagem },
     url: urlDestino || SITE_URL
@@ -1965,6 +2013,7 @@ function enviarPushOneSignal_(titulo, mensagem, urlDestino) {
       return jsonResponse_({ ok: false, erro: 'Erro do OneSignal: ' + msgErro });
     }
 
+    registrarPushHistorico_(funcionario, titulo, mensagem, urlDestino, seg, dadosResp.recipients || 0, 'enviado');
     return jsonResponse_({ ok: true, id: dadosResp.id, destinatarios: dadosResp.recipients || 0 });
   } catch (erroFetch) {
     return jsonResponse_({ ok: false, erro: 'Falha ao conectar com o OneSignal: ' + erroFetch.message });
@@ -1972,3 +2021,685 @@ function enviarPushOneSignal_(titulo, mensagem, urlDestino) {
 }
 
 
+// ====================================================================
+// ===================== v3.1: pedidos, métricas, importação, feed, integrações =====================
+// ====================================================================
+// Tudo daqui para baixo é NOVO na v3.1 (nada acima foi trocado, só ligado em doGet/doPost e nas tabelas de permissão).
+
+const DESCONTO_AVISTA_ = 0.10;            // IGUAL ao DESCONTO_AVISTA de common.js (o site mostra o mesmo valor à vista)
+const FUSO_ = 'America/Fortaleza';
+const SHEET_PEDIDOS = 'Pedidos';
+const SHEET_PUSH_HIST = 'Push_Historico';
+const CABECALHOS_PEDIDOS_ = ['Codigo', 'Data', 'Atualizado', 'Nome', 'WhatsApp', 'Entrega', 'Endereco', 'Obs', 'Itens', 'Total', 'Status', 'Historico', 'Origem', 'NotaInterna'];
+const STATUS_PEDIDO_ = ['novo', 'em_atendimento', 'aguardando_pagamento', 'separacao', 'pronto', 'concluido', 'cancelado'];
+
+function dataBR_(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  if (isNaN(dt.getTime())) return '';
+  return Utilities.formatDate(dt, FUSO_, 'dd/MM/yyyy HH:mm');
+}
+/** Texto de fora: sem caracteres de controle, com limite de tamanho e sem virar fórmula na planilha. */
+function limparTexto_(v, max) {
+  return acTexto_(String(v == null ? '' : v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, max || 200));
+}
+function arredondar2_(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+function jsonSeguro_(txt, padrao) { try { const v = JSON.parse(txt); return v === null || v === undefined ? padrao : v; } catch (e) { return padrao; } }
+
+/** Linhas de uma aba como objetos {Coluna: valor, __linha: n}. Lê pelo NOME da coluna. */
+function linhasComoObjetos_(sheet) {
+  const dados = sheet.getDataRange().getValues();
+  if (dados.length < 2) return [];
+  const h = dados[0].map(function (x) { return String(x).trim(); });
+  const out = [];
+  for (let i = 1; i < dados.length; i++) {
+    const o = {};
+    h.forEach(function (k, j) { if (k) o[k] = dados[i][j]; });
+    o.__linha = i + 1;
+    out.push(o);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- PEDIDOS
+
+function codigoPedidoNormalizado_(v) {
+  const t = String(v == null ? '' : v).trim().toUpperCase().replace(/\s+/g, '');
+  const m = /^PED-?(\d{1,8})$/.exec(t);
+  return m ? 'PED-' + String(parseInt(m[1], 10)).padStart(4, '0') : '';
+}
+
+function pedidoPorCodigo_(codigo) {
+  const aba = getOrCreateSheet_(SHEET_PEDIDOS, CABECALHOS_PEDIDOS_);
+  const lista = linhasComoObjetos_(aba);
+  for (let i = lista.length - 1; i >= 0; i--) if (String(lista[i].Codigo) === codigo) return lista[i];
+  return null;
+}
+
+/** O que o CLIENTE pode ver do pedido (sem telefone, sem endereço, sem nota interna). */
+function pedidoParaCliente_(o) {
+  return {
+    codigo: String(o.Codigo), data: dataBR_(o.Data), atualizado: dataBR_(o.Atualizado), status: String(o.Status || 'novo'),
+    entrega: String(o.Entrega || 'retirada'), total: Number(o.Total) || 0,
+    itens: jsonSeguro_(o.Itens, []).map(function (i) { return { nome: i.nome, codigo: i.codigo || '' }; })
+  };
+}
+/** O que a EQUIPE vê (painel de pedidos). */
+function pedidoParaEquipe_(o) {
+  const base = pedidoParaCliente_(o);
+  base.nome = String(o.Nome || '');
+  base.whatsapp = acWhats_(o.WhatsApp);
+  base.endereco = String(o.Endereco || '');
+  base.obs = String(o.Obs || '');
+  base.nota = String(o.NotaInterna || '');
+  base.origem = String(o.Origem || '');
+  base.historico = jsonSeguro_(o.Historico, []).map(function (h) { return { quando: dataBR_(h.t), status: h.status, por: h.por || '' }; });
+  base.itens = jsonSeguro_(o.Itens, []);
+  return base;
+}
+
+/**
+ * Pedido vindo do site (ABERTO ao público, igual ao registrarEvento). O servidor NUNCA confia no preço que o site mandou:
+ * recebe só quais peças e os dados do cliente, e recalcula tudo pela planilha. Peça arquivada/esgotada/inexistente é ignorada.
+ * Freios: no máximo 6 pedidos/hora por WhatsApp e 150/hora no total; o mesmo cliente com as mesmas peças em 2 min devolve o MESMO pedido
+ * (duplo toque ou reenvio não cria dois).
+ */
+function criarPedido_(body) {
+  const nome = limparTexto_(body.nome, 80);
+  const whats = acWhats_(body.whatsapp);
+  const entrega = body.entrega === 'entrega' ? 'entrega' : 'retirada';
+  const endereco = entrega === 'entrega' ? limparTexto_(body.endereco, 300) : '';
+  const obs = limparTexto_(body.obs, 500);
+  if (nome.length < 2) return jsonResponse_({ ok: false, erro: 'Informe seu nome.' });
+  if (whats.length !== 11) return jsonResponse_({ ok: false, erro: 'Informe o WhatsApp com DDD.' });
+  if (entrega === 'entrega' && endereco.length < 8) return jsonResponse_({ ok: false, erro: 'Para entrega, informe rua, número e bairro.' });
+  const idsBrutos = Array.isArray(body.itens) ? body.itens.map(function (i) { return i && i.id != null ? i.id : ''; }) : [];
+  const ids = limparIds_(idsBrutos).slice(0, 30);
+  if (!ids.length) return jsonResponse_({ ok: false, erro: 'Escolha ao menos uma peça.' });
+
+  const cache = CacheService.getScriptCache();
+  const chaveDup = 'pd_' + acSha256Hex_(whats + '|' + ids.slice().sort().join(',') + '|' + entrega).slice(0, 40);
+  const jaFeito = cache.get(chaveDup);
+  if (jaFeito) { const r = jsonSeguro_(jaFeito, null); if (r && r.codigo) return jsonResponse_({ ok: true, codigo: r.codigo, total: r.total, repetido: true }); }
+  const chaveW = 'pw_' + whats;
+  const feitosW = parseInt(cache.get(chaveW) || '0', 10);
+  const feitosG = parseInt(cache.get('pg_hora') || '0', 10);
+  if (feitosW >= 6) return jsonResponse_({ ok: false, erro: 'Muitos pedidos deste número em pouco tempo. Fale com a loja pelo WhatsApp.' });
+  if (feitosG >= 150) return jsonResponse_({ ok: false, erro: 'Muitos pedidos agora. Tente de novo em alguns minutos ou fale com a loja.' });
+
+  const mapa = {};
+  linhasComoObjetos_(getProdutosSheet_()).forEach(function (p) { mapa[String(p.ID)] = p; });
+  const itens = [];
+  let soma = 0, ignorados = 0;
+  ids.forEach(function (id) {
+    const p = mapa[id];
+    const semEstoque = p && p.Estoque !== '' && p.Estoque !== null && p.Estoque !== undefined && Number(p.Estoque) <= 0;
+    const preco = p ? Number(p.Preco) : 0;
+    if (!p || normalizar_(p.Status) !== 'ativo' || semEstoque || !(preco > 0)) { ignorados++; return; }
+    const avista = preco * (1 - DESCONTO_AVISTA_);
+    soma += avista;
+    itens.push({ id: String(p.ID), codigo: String(p.Codigo || ''), nome: String(p.Nome || ''), preco: arredondar2_(avista) });
+  });
+  if (!itens.length) return jsonResponse_({ ok: false, erro: 'As peças escolhidas não estão mais disponíveis. Atualize o catálogo e escolha de novo.' });
+  const total = arredondar2_(soma);
+
+  const trava = LockService.getScriptLock();
+  try { trava.waitLock(20000); } catch (e) { return jsonResponse_({ ok: false, erro: 'O sistema está ocupado. Tente de novo em instantes.' }); }
+  let codigo;
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const num = (parseInt(props.getProperty('PROXIMO_PEDIDO_NUM') || '0', 10) || 0) + 1;
+    props.setProperty('PROXIMO_PEDIDO_NUM', String(num));
+    codigo = 'PED-' + String(num).padStart(4, '0');
+    const aba = getOrCreateSheet_(SHEET_PEDIDOS, CABECALHOS_PEDIDOS_);
+    const agora = new Date();
+    aba.appendRow([codigo, agora, agora, nome, whats, entrega, endereco, obs, JSON.stringify(itens), total, 'novo',
+      JSON.stringify([{ t: agora.toISOString(), status: 'novo', por: 'cliente' }]), limparTexto_(body.origem || 'site', 20), '']);
+  } finally {
+    trava.releaseLock();
+  }
+  try {
+    cache.put(chaveDup, JSON.stringify({ codigo: codigo, total: total }), 120);
+    cache.put(chaveW, String(feitosW + 1), 3600);
+    cache.put('pg_hora', String(feitosG + 1), 3600);
+  } catch (e) { /* os freios são um extra */ }
+  return jsonResponse_({ ok: true, codigo: codigo, total: total, ignorados: ignorados, itens: itens.map(function (i) { return { nome: i.nome, codigo: i.codigo }; }) });
+}
+
+/**
+ * Acompanhamento pelo cliente: exige o código E os 4 últimos números do WhatsApp usado no pedido. Nunca lista pedidos.
+ * Freio: 8 erros por código (e 400 no total) em 15 minutos bloqueiam novas tentativas.
+ * Resposta igual para "não existe" e "números não conferem" (não dá para descobrir quais códigos existem).
+ */
+function consultarPedido_(body) {
+  const codigo = codigoPedidoNormalizado_(body.codigo);
+  const final4 = String(body.final == null ? '' : body.final).replace(/\D/g, '').slice(-4);
+  if (!codigo || final4.length !== 4) return jsonResponse_({ ok: false, naoEncontrado: true });
+  const cache = CacheService.getScriptCache();
+  const ck = 'pc_' + codigo;
+  const falhas = parseInt(cache.get(ck) || '0', 10);
+  const globais = parseInt(cache.get('pc_global') || '0', 10);
+  if (falhas >= 8 || globais >= 400) return jsonResponse_({ ok: false, bloqueado: true });
+  const achado = pedidoPorCodigo_(codigo);
+  if (!achado || acWhats_(achado.WhatsApp).slice(-4) !== final4) {
+    try { cache.put(ck, String(falhas + 1), 900); cache.put('pc_global', String(globais + 1), 900); } catch (e) {}
+    return jsonResponse_({ ok: false, naoEncontrado: true });
+  }
+  return jsonResponse_({ ok: true, pedido: pedidoParaCliente_(achado) });
+}
+
+/** Painel da equipe: lista os pedidos (mais novos primeiro) com a contagem por etapa. */
+function listarPedidos_(body) {
+  const aba = getOrCreateSheet_(SHEET_PEDIDOS, CABECALHOS_PEDIDOS_);
+  const todas = linhasComoObjetos_(aba).reverse();
+  const filtro = body.status ? String(body.status) : '';
+  const limite = Math.max(1, Math.min(Number(body.limite) || 300, 1000));
+  const contagem = {};
+  const pedidos = [];
+  todas.forEach(function (o) {
+    const st = String(o.Status || 'novo');
+    contagem[st] = (contagem[st] || 0) + 1;
+    if (filtro && st !== filtro) return;
+    if (pedidos.length < limite) pedidos.push(pedidoParaEquipe_(o));
+  });
+  return jsonResponse_({ ok: true, pedidos: pedidos, contagem: contagem, total: todas.length });
+}
+
+/** Muda a etapa do pedido e/ou a nota interna. Cada mudança de etapa fica no histórico do pedido (com quem fez). */
+function atualizarPedido_(body) {
+  const codigo = codigoPedidoNormalizado_(body.codigo);
+  const status = body.status ? String(body.status) : '';
+  if (!codigo) return jsonResponse_({ ok: false, erro: 'Código do pedido inválido.' });
+  if (status && STATUS_PEDIDO_.indexOf(status) === -1) return jsonResponse_({ ok: false, erro: 'Etapa inválida.' });
+  const trava = LockService.getScriptLock();
+  try { trava.waitLock(20000); } catch (e) { return jsonResponse_({ ok: false, erro: 'O sistema está ocupado. Tente de novo em instantes.' }); }
+  try {
+    const aba = getOrCreateSheet_(SHEET_PEDIDOS, CABECALHOS_PEDIDOS_);
+    const dados = aba.getDataRange().getValues();
+    const h = dados[0].map(function (x) { return String(x).trim(); });
+    const col = function (nome) { return h.indexOf(nome); };
+    for (let i = dados.length - 1; i >= 1; i--) {
+      if (String(dados[i][col('Codigo')]) !== codigo) continue;
+      const linha = i + 1;
+      const agora = new Date();
+      if (status && status !== String(dados[i][col('Status')])) {
+        aba.getRange(linha, col('Status') + 1).setValue(status);
+        const hist = jsonSeguro_(dados[i][col('Historico')], []);
+        hist.push({ t: agora.toISOString(), status: status, por: String(body.funcionario || 'equipe').slice(0, 60) });
+        aba.getRange(linha, col('Historico') + 1).setValue(JSON.stringify(hist));
+      }
+      if (body.nota !== undefined) aba.getRange(linha, col('NotaInterna') + 1).setValue(limparTexto_(body.nota, 500));
+      aba.getRange(linha, col('Atualizado') + 1).setValue(agora);
+      registrarAudit_(body.funcionario, 'pedido_' + (status || 'nota'), '', { codigo: codigo, status: status });
+      const o = linhasComoObjetos_(aba).filter(function (x) { return x.__linha === linha; })[0];
+      return jsonResponse_({ ok: true, pedido: pedidoParaEquipe_(o) });
+    }
+    return jsonResponse_({ ok: false, erro: 'Pedido não encontrado.' });
+  } finally {
+    trava.releaseLock();
+  }
+}
+
+// ---------------------------------------------------------------- CÓDIGOS FALTANTES
+
+/**
+ * Dá um código TK-#### às peças que estão sem código (peças antigas, cadastradas antes do código existir) e acerta o contador
+ * para nunca repetir um código que já existe. Seguro para rodar mais de uma vez. Não mexe em quem já tem código.
+ */
+function gerarCodigosFaltantes_(body) {
+  const sheet = getProdutosSheet_();
+  garantirCabecalhos_(sheet);
+  const dados = sheet.getDataRange().getValues();
+  const h = dados[0].map(function (x) { return String(x).trim(); });
+  const iCod = h.indexOf('Codigo'), iId = h.indexOf('ID'), iNome = h.indexOf('Nome');
+  if (iCod === -1 || iId === -1) return jsonResponse_({ ok: false, erro: 'A planilha não tem as colunas ID/Codigo.' });
+  const props = PropertiesService.getScriptProperties();
+  const contador = parseInt(props.getProperty('PROXIMO_CODIGO_NUM') || '0', 10) || 0;
+  let maior = contador;
+  const vistos = {}, duplicados = [];
+  for (let i = 1; i < dados.length; i++) {
+    const c = String(dados[i][iCod] || '').trim().toUpperCase();
+    if (!c) continue;
+    if (vistos[c]) duplicados.push(c); else vistos[c] = true;
+    const m = /^TK-(\d+)$/.exec(c);
+    if (m) maior = Math.max(maior, parseInt(m[1], 10));
+  }
+  const geradas = [];
+  for (let i = 1; i < dados.length; i++) {
+    if (!String(dados[i][iId] || '').trim()) continue;
+    if (String(dados[i][iCod] || '').trim()) continue;
+    maior++;
+    const cod = 'TK-' + String(maior).padStart(4, '0');
+    sheet.getRange(i + 1, iCod + 1).setValue(cod);
+    geradas.push({ id: String(dados[i][iId]), nome: String(dados[i][iNome] || ''), codigo: cod });
+  }
+  if (maior > contador) props.setProperty('PROXIMO_CODIGO_NUM', String(maior));
+  if (geradas.length) registrarAudit_(body.funcionario, 'gerar_codigos', '', { quantidade: geradas.length, codigos: geradas.map(function (g) { return g.codigo; }) });
+  return jsonResponse_({ ok: true, geradas: geradas, duplicados: duplicados, contadorAjustado: maior > contador });
+}
+
+/** Para rodar direto no editor do Apps Script (Executar): mostra no Log quais peças ganharam código. */
+function gerarCodigosFaltantes() {
+  const trava = LockService.getScriptLock();
+  trava.waitLock(30000);
+  try {
+    const r = JSON.parse(gerarCodigosFaltantes_({ funcionario: 'editor do Apps Script' }).getContent());
+    invalidarCacheProdutos_();
+    Logger.log('Códigos gerados: ' + r.geradas.length + (r.geradas.length ? ' -> ' + r.geradas.map(function (g) { return g.codigo + ' (' + g.nome + ')'; }).join(', ') : ''));
+    if (r.duplicados && r.duplicados.length) Logger.log('ATENÇÃO: códigos repetidos na planilha: ' + r.duplicados.join(', '));
+  } finally {
+    trava.releaseLock();
+  }
+}
+
+// ---------------------------------------------------------------- MÉTRICAS (só dados REAIS da aba Eventos e Pedidos)
+
+function metricas_(body) {
+  const dias = Math.max(1, Math.min(Number(body.dias) || 30, 365));
+  const chave = 'metricas:' + dias + ':' + versaoCacheProdutos_();
+  const emCache = cacheLerGrande_(chave);
+  if (emCache) return respostaTexto_(emCache);
+
+  const agora = new Date();
+  const inicio = new Date(agora.getTime() - dias * 86400000);
+  const prods = {};
+  linhasComoObjetos_(getProdutosSheet_()).forEach(function (p) { prods[String(p.ID)] = p; });
+  const porDia = {};
+  for (let k = dias - 1; k >= 0; k--) porDia[Utilities.formatDate(new Date(agora.getTime() - k * 86400000), FUSO_, 'yyyy-MM-dd')] = { visualizacoes: 0, whatsapp: 0, pedidos: 0 };
+  const porPeca = {}, porCat = {};
+  let views = 0, whats = 0, eventosNoPeriodo = 0;
+  const aba = getSS_().getSheetByName(SHEET_EVENTOS);
+  if (aba && aba.getLastRow() > 1) {
+    const dados = aba.getDataRange().getValues();
+    for (let i = 1; i < dados.length; i++) {
+      const quando = dados[i][0] instanceof Date ? dados[i][0] : new Date(dados[i][0]);
+      if (isNaN(quando.getTime()) || quando < inicio) continue;
+      const tipo = String(dados[i][3] || '');
+      if (tipo !== 'visualizacao' && tipo !== 'whatsapp') continue;
+      eventosNoPeriodo++;
+      const dia = Utilities.formatDate(quando, FUSO_, 'yyyy-MM-dd');
+      const pid = String(dados[i][1]);
+      const peca = porPeca[pid] || (porPeca[pid] = { visualizacoes: 0, whatsapp: 0, codigo: String(dados[i][2] || '') });
+      const p = prods[pid];
+      const cats = p ? String(p.Categoria || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean) : [];
+      if (tipo === 'visualizacao') { views++; peca.visualizacoes++; if (porDia[dia]) porDia[dia].visualizacoes++; cats.forEach(function (c) { (porCat[c] = porCat[c] || { visualizacoes: 0, whatsapp: 0 }).visualizacoes++; }); }
+      else { whats++; peca.whatsapp++; if (porDia[dia]) porDia[dia].whatsapp++; cats.forEach(function (c) { (porCat[c] = porCat[c] || { visualizacoes: 0, whatsapp: 0 }).whatsapp++; }); }
+    }
+  }
+  const taxa = function (w, v) { return v > 0 ? Math.round((w / v) * 1000) / 10 : null; }; // WhatsApp por 100 visualizações
+
+  const topProdutos = Object.keys(porPeca).map(function (pid) {
+    const e = porPeca[pid], p = prods[pid];
+    return { id: pid, codigo: (p && p.Codigo) || e.codigo, nome: p ? String(p.Nome) : '(peça removida)', visualizacoes: e.visualizacoes, whatsapp: e.whatsapp, taxa: taxa(e.whatsapp, e.visualizacoes) };
+  }).sort(function (a, b) { return (b.visualizacoes + b.whatsapp) - (a.visualizacoes + a.whatsapp); }).slice(0, 10);
+  const categorias = Object.keys(porCat).map(function (c) {
+    return { nome: c, visualizacoes: porCat[c].visualizacoes, whatsapp: porCat[c].whatsapp, taxa: taxa(porCat[c].whatsapp, porCat[c].visualizacoes) };
+  }).sort(function (a, b) { return (b.visualizacoes + b.whatsapp) - (a.visualizacoes + a.whatsapp); });
+
+  const ped = { total: 0, valor: 0, porStatus: {}, concluidos: 0, valorConcluidos: 0 };
+  const abaPed = getSS_().getSheetByName(SHEET_PEDIDOS);
+  if (abaPed && abaPed.getLastRow() > 1) {
+    linhasComoObjetos_(abaPed).forEach(function (o) {
+      const quando = o.Data instanceof Date ? o.Data : new Date(o.Data);
+      if (isNaN(quando.getTime()) || quando < inicio) return;
+      const st = String(o.Status || 'novo');
+      ped.total++; ped.porStatus[st] = (ped.porStatus[st] || 0) + 1;
+      const dia = Utilities.formatDate(quando, FUSO_, 'yyyy-MM-dd');
+      if (porDia[dia]) porDia[dia].pedidos++;
+      if (st !== 'cancelado') ped.valor += Number(o.Total) || 0;
+      if (st === 'concluido') { ped.concluidos++; ped.valorConcluidos += Number(o.Total) || 0; }
+    });
+    ped.valor = arredondar2_(ped.valor); ped.valorConcluidos = arredondar2_(ped.valorConcluidos);
+  }
+  const resultado = {
+    ok: true, dias: dias, geradoEm: dataBR_(agora), semDados: eventosNoPeriodo === 0 && ped.total === 0,
+    totais: { visualizacoes: views, whatsapp: whats, whatsappPor100Visualizacoes: taxa(whats, views) },
+    porDia: Object.keys(porDia).sort().map(function (d) { return { dia: d, visualizacoes: porDia[d].visualizacoes, whatsapp: porDia[d].whatsapp, pedidos: porDia[d].pedidos }; }),
+    topProdutos: topProdutos, categorias: categorias, pedidos: ped
+  };
+  const texto = JSON.stringify(resultado);
+  cacheGravarGrande_(chave, texto, 120);
+  return respostaTexto_(texto);
+}
+
+// ---------------------------------------------------------------- IMPORTAR PRODUTOS (CSV): prévia (simular) e aplicação
+
+const CAMPOS_IMPORTACAO_ = ['codigo', 'id', 'nome', 'categoria', 'genero', 'preco', 'estoque', 'tamanhos', 'cores', 'descricao', 'novidade', 'status', 'foto_url'];
+
+/**
+ * Recebe linhas já lidas do CSV (chaves em CAMPOS_IMPORTACAO_). Acha a peça pelo código (ou ID); célula vazia = não mexe.
+ * Peça que não existe só é CRIADA se vier com nome, preço válido e foto (https). Com simular:true não grava nada e devolve o que ia acontecer
+ * (é a prévia que o painel mostra antes de confirmar). Máximo 300 linhas por vez.
+ */
+function importarProdutos_(body) {
+  const entrada = Array.isArray(body.linhas) ? body.linhas.slice(0, 300) : [];
+  if (!entrada.length) return jsonResponse_({ ok: false, erro: 'Nenhuma linha para importar.' });
+  const simular = body.simular === true;
+  const criar = body.criar !== false;
+  const sheet = getProdutosSheet_();
+  garantirCabecalhos_(sheet);
+  const dados = sheet.getDataRange().getValues();
+  const h = dados[0].map(function (x) { return String(x).trim(); });
+  const col = {};
+  ['ID', 'Nome', 'Categoria', 'Genero', 'Preco', 'Foto_URL', 'Status', 'Data', 'Descricao', 'Estoque', 'Tamanhos', 'Cores', 'Novidade', 'Codigo'].forEach(function (n) { col[n] = h.indexOf(n); });
+  const porCodigo = {}, porId = {};
+  let maiorExistente = 0; // o contador nunca pode ficar abaixo do maior código que já existe (senão repetiria um código)
+  for (let i = 1; i < dados.length; i++) {
+    const c = String(dados[i][col.Codigo] || '').trim().toUpperCase();
+    if (c) {
+      porCodigo[c] = i;
+      const m = /^TK-(\d+)$/.exec(c);
+      if (m) maiorExistente = Math.max(maiorExistente, parseInt(m[1], 10));
+    }
+    porId[String(dados[i][col.ID])] = i;
+  }
+  const atualizados = [], criados = [], ignorados = [], historico = [];
+  const props = PropertiesService.getScriptProperties();
+  let contador = Math.max(parseInt(props.getProperty('PROXIMO_CODIGO_NUM') || '0', 10) || 0, maiorExistente);
+  const categoriasNovas = {};
+  const mudancas = {}; // índice da linha -> linha nova (valores)
+  const tocadas = {};  // peças já vistas neste arquivo
+
+  entrada.forEach(function (l, n) {
+    const num = n + 2; // linha do arquivo (1 = cabeçalho)
+    const v = {};
+    CAMPOS_IMPORTACAO_.forEach(function (k) { v[k] = l && l[k] !== undefined && l[k] !== null ? String(l[k]).trim() : ''; });
+    const chaveCod = v.codigo.toUpperCase();
+    let i = chaveCod && porCodigo[chaveCod] !== undefined ? porCodigo[chaveCod] : (v.id && porId[v.id] !== undefined ? porId[v.id] : -1);
+    // valores validados
+    let preco = null, estoque = null, novidade = null;
+    if (v.preco !== '') { preco = Number(v.preco.replace(',', '.')); if (isNaN(preco) || preco <= 0) { ignorados.push({ linha: num, codigo: v.codigo, motivo: 'Preço inválido.' }); return; } }
+    if (v.estoque !== '') { estoque = Number(v.estoque.replace(',', '.')); if (isNaN(estoque) || estoque < 0) { ignorados.push({ linha: num, codigo: v.codigo, motivo: 'Estoque inválido.' }); return; } }
+    if (v.novidade !== '') { novidade = acBool_(v.novidade); if (novidade === null) { ignorados.push({ linha: num, codigo: v.codigo, motivo: 'Novidade: use sim ou não.' }); return; } }
+    let status = '';
+    if (v.status !== '') { status = normalizar_(v.status) === 'ativo' ? 'Ativo' : (['inativo', 'arquivado'].indexOf(normalizar_(v.status)) !== -1 ? 'Inativo' : null); if (status === null) { ignorados.push({ linha: num, codigo: v.codigo, motivo: 'Status: use Ativo ou Inativo.' }); return; } }
+
+    if (i !== -1) {
+      if (tocadas[i]) { ignorados.push({ linha: num, codigo: v.codigo, motivo: 'Peça repetida no arquivo (vale só a primeira linha).' }); return; }
+      const antes = dados[i].slice();
+      const nova = antes.slice();
+      const campos = [];
+      const set = function (nomeCol, rotulo, valor, atual) { if (String(valor) !== String(atual)) { nova[col[nomeCol]] = valor; campos.push(rotulo + ': ' + atual + ' → ' + valor); } };
+      if (v.nome) set('Nome', 'nome', limparTexto_(v.nome, 120), antes[col.Nome]);
+      if (v.categoria) { set('Categoria', 'categoria', limparTexto_(v.categoria, 120), antes[col.Categoria]); }
+      if (v.genero) set('Genero', 'gênero', limparTexto_(v.genero, 120), antes[col.Genero]);
+      if (preco !== null) set('Preco', 'preço', preco, antes[col.Preco]);
+      if (estoque !== null) set('Estoque', 'estoque', estoque, antes[col.Estoque]);
+      if (v.tamanhos) set('Tamanhos', 'tamanhos', limparTexto_(v.tamanhos, 120), antes[col.Tamanhos]);
+      if (v.cores) set('Cores', 'cores', limparTexto_(v.cores, 120), antes[col.Cores]);
+      if (v.descricao) set('Descricao', 'descrição', limparTexto_(v.descricao, 1000), antes[col.Descricao]);
+      if (novidade !== null) set('Novidade', 'novidade', novidade, acBool_(antes[col.Novidade]) === true);
+      if (status) set('Status', 'status', status, antes[col.Status]);
+      if (v.foto_url) {
+        if (/^https:\/\//.test(v.foto_url)) set('Foto_URL', 'foto', v.foto_url, antes[col.Foto_URL]);
+        else { ignorados.push({ linha: num, codigo: v.codigo, motivo: 'Foto: precisa começar com https://' }); return; }
+      }
+      tocadas[i] = true;
+      if (!campos.length) { ignorados.push({ linha: num, codigo: String(antes[col.Codigo] || v.codigo), motivo: 'Nada mudou.', semMudanca: true }); return; }
+      mudancas[i] = nova; tocadas[i] = true;
+      atualizados.push({ linha: num, id: String(antes[col.ID]), codigo: String(antes[col.Codigo] || ''), nome: String(nova[col.Nome]), campos: campos });
+      if ((preco !== null && String(antes[col.Preco]) !== String(preco)) || (estoque !== null && String(antes[col.Estoque]) !== String(estoque))) {
+        historico.push({ id: String(antes[col.ID]), codigo: String(antes[col.Codigo] || ''), nome: String(nova[col.Nome]), precoAnterior: antes[col.Preco], preco: nova[col.Preco], estoqueAnterior: antes[col.Estoque], estoque: nova[col.Estoque] });
+      }
+      if (v.categoria) categoriasNovas[limparTexto_(v.categoria, 120)] = true;
+      return;
+    }
+    // peça nova
+    if (!criar) { ignorados.push({ linha: num, codigo: v.codigo, motivo: 'Peça não encontrada (criação desligada).' }); return; }
+    if (!v.nome || preco === null || !/^https:\/\//.test(v.foto_url)) {
+      ignorados.push({ linha: num, codigo: v.codigo, motivo: 'Peça nova precisa de nome, preço e foto (https://).' });
+      return;
+    }
+    contador++;
+    const codigoNovo = 'TK-' + String(contador).padStart(4, '0');
+    const idNovo = String(new Date().getTime() + n);
+    const nova = [];
+    for (let k = 0; k < h.length; k++) nova.push('');
+    nova[col.ID] = idNovo; nova[col.Nome] = limparTexto_(v.nome, 120); nova[col.Categoria] = limparTexto_(v.categoria, 120); nova[col.Genero] = limparTexto_(v.genero, 120);
+    nova[col.Preco] = preco; nova[col.Foto_URL] = v.foto_url; nova[col.Status] = status || 'Ativo'; nova[col.Data] = new Date();
+    nova[col.Descricao] = limparTexto_(v.descricao, 1000); nova[col.Estoque] = estoque === null ? '' : estoque;
+    nova[col.Tamanhos] = limparTexto_(v.tamanhos, 120); nova[col.Cores] = limparTexto_(v.cores, 120); nova[col.Novidade] = novidade === true; nova[col.Codigo] = codigoNovo;
+    criados.push({ linha: num, id: idNovo, codigo: codigoNovo, nome: String(nova[col.Nome]), nova: nova });
+    if (v.categoria) categoriasNovas[limparTexto_(v.categoria, 120)] = true;
+  });
+
+  if (!simular) {
+    Object.keys(mudancas).forEach(function (idx) {
+      sheet.getRange(Number(idx) + 1, 1, 1, h.length).setValues([mudancas[idx].slice(0, h.length)]);
+    });
+    criados.forEach(function (c) { sheet.appendRow(c.nova); });
+    if (criados.length) props.setProperty('PROXIMO_CODIGO_NUM', String(contador));
+    Object.keys(categoriasNovas).forEach(function (c) { if (c) adicionarValorLista_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO, c); });
+    if (historico.length) {
+      const abaH = getOrCreateSheet_(SHEET_HISTORICO, ['DataHora', 'Funcionario', 'Acao', 'ProdutoID', 'Codigo', 'Nome', 'PrecoAnterior', 'PrecoNovo', 'EstoqueAnterior', 'EstoqueNovo']);
+      const quem = acTexto_(body.funcionario || 'Sistema'), agora = new Date();
+      const linhasH = historico.map(function (x) { return [agora, quem, 'importar_csv', x.id, x.codigo, acTexto_(x.nome), x.precoAnterior, x.preco, x.estoqueAnterior, x.estoque]; });
+      abaH.getRange(abaH.getLastRow() + 1, 1, linhasH.length, 10).setValues(linhasH);
+    }
+    registrarAudit_(body.funcionario, 'importar_csv', '', { atualizadas: atualizados.length, criadas: criados.length, ignoradas: ignorados.length });
+  }
+  return jsonResponse_({
+    ok: true, simulacao: simular, atualizados: atualizados, ignorados: ignorados,
+    criados: criados.map(function (c) { return { linha: c.linha, id: c.id, codigo: c.codigo, nome: c.nome }; })
+  });
+}
+
+// ---------------------------------------------------------------- FEED DE CATÁLOGO (Meta/Instagram e Google) e MAPA DO SITE
+
+function csvCampo_(v) {
+  const t = String(v == null ? '' : v);
+  return /[",\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+}
+function xmlEsc_(v) {
+  return String(v == null ? '' : v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function linkPecaSite_(p) {
+  const cod = String(p.Codigo || '').trim();
+  return cod ? SITE_URL + 'p/' + encodeURIComponent(cod) : SITE_URL + '?id=' + encodeURIComponent(p.ID);
+}
+/** Uma peça no formato do catálogo da Meta (colunas) — o mesmo vale para o Google Merchant (g:...). Preço = preço CHEIO (o à vista é desconto de pagamento, não promoção). */
+function itemFeed_(p) {
+  const cod = String(p.Codigo || '').trim();
+  const generos = normalizar_(p.Genero);
+  const estoqueInf = p.Estoque !== '' && p.Estoque !== null && p.Estoque !== undefined;
+  const galeria = String(p.Fotos_Galeria || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 9);
+  return {
+    id: cod || String(p.ID),
+    title: String(p.Nome || '').slice(0, 150),
+    description: String(p.Descricao || p.Nome || '').slice(0, 5000),
+    availability: estoqueInf && Number(p.Estoque) <= 0 ? 'out of stock' : 'in stock',
+    condition: 'new',
+    price: (Number(p.Preco) || 0).toFixed(2) + ' BRL',
+    link: linkPecaSite_(p),
+    image_link: String(p.Foto_URL || ''),
+    additional_image_link: galeria.join(','),
+    brand: 'TENKiTER Modas',
+    gender: /feminino|menina/.test(generos) ? 'female' : (/masculino|menino/.test(generos) ? 'male' : 'unisex'),
+    age_group: /infantil|menina|menino/.test(generos) ? 'kids' : 'adult',
+    color: String(p.Cores || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 3).join('/'),
+    product_type: String(p.Categoria || ''),
+    quantity_to_sell_on_facebook: estoqueInf ? String(Math.max(0, Number(p.Estoque) || 0)) : ''
+  };
+}
+const COLUNAS_FEED_ = ['id', 'title', 'description', 'availability', 'condition', 'price', 'link', 'image_link', 'additional_image_link', 'brand', 'gender', 'age_group', 'color', 'product_type', 'quantity_to_sell_on_facebook'];
+
+function feedProdutos_(formato) {
+  const fmt = formato === 'xml' ? 'xml' : 'csv';
+  const chave = 'feed:' + fmt + ':' + versaoCacheProdutos_();
+  let texto = cacheLerGrande_(chave);
+  if (!texto) {
+    const itens = linhasComoObjetos_(getProdutosSheet_()).filter(function (p) { return normalizar_(p.Status) === 'ativo' && String(p.Foto_URL || '').trim() && Number(p.Preco) > 0; }).map(itemFeed_);
+    if (fmt === 'csv') {
+      texto = [COLUNAS_FEED_.join(',')].concat(itens.map(function (it) { return COLUNAS_FEED_.map(function (c) { return csvCampo_(it[c]); }).join(','); })).join('\r\n') + '\r\n';
+    } else {
+      texto = '<?xml version="1.0" encoding="UTF-8"?>\n<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0"><channel>' +
+        '<title>TENKiTER Modas</title><link>' + xmlEsc_(SITE_URL) + '</link><description>Catálogo da TENKiTER Modas, Crateús-CE</description>' +
+        itens.map(function (it) {
+          return '<item>' + COLUNAS_FEED_.filter(function (c) { return String(it[c]).length; }).map(function (c) {
+            return '<g:' + c + '>' + xmlEsc_(it[c]) + '</g:' + c + '>';
+          }).join('') + '</item>';
+        }).join('') + '</channel></rss>';
+    }
+    cacheGravarGrande_(chave, texto, 300);
+  }
+  return ContentService.createTextOutput(texto).setMimeType(fmt === 'xml' ? ContentService.MimeType.XML : ContentService.MimeType.CSV);
+}
+
+/** Mapa do site (sitemap) com a página inicial e cada peça ativa (/p/<código>). Usado pelo Worker da Cloudflare (og-worker) quando publicado. */
+function sitemapProdutos_() {
+  const itens = linhasComoObjetos_(getProdutosSheet_()).filter(function (p) { return normalizar_(p.Status) === 'ativo' && String(p.Codigo || '').trim(); });
+  const urls = [SITE_URL, SITE_URL + 'privacidade.html'].concat(itens.map(linkPecaSite_));
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
+    urls.map(function (u) { return '<url><loc>' + xmlEsc_(u) + '</loc></url>'; }).join('') + '</urlset>';
+  return ContentService.createTextOutput(xml).setMimeType(ContentService.MimeType.XML);
+}
+
+// ---------------------------------------------------------------- INTEGRAÇÕES (Pixel da Meta, API de Conversões, sinônimos, segmentos de aviso)
+// Públicos (ficam em ?action=config): ID do Pixel e sinônimos. SEGREDOS (token da API de Conversões, código de teste): só aqui, nas Propriedades do Script —
+// nunca voltam para o navegador, nunca vão para o repositório.
+
+function linhasSinonimos_(texto) {
+  return String(texto || '').split(/\r?\n/).map(function (l) { return l.trim(); }).filter(function (l) { return /^[^=]{1,40}=[^=]{1,200}$/.test(l); }).slice(0, 100);
+}
+
+function configPublica_() {
+  const cache = CacheService.getScriptCache();
+  try { const c = cache.get('cfg_pub'); if (c) return respostaTexto_(c); } catch (e) {}
+  const props = PropertiesService.getScriptProperties();
+  const pixel = String(props.getProperty('META_PIXEL_ID') || '').trim();
+  const texto = JSON.stringify({ ok: true, config: { pixelId: /^\d{8,20}$/.test(pixel) ? pixel : '', sinonimos: linhasSinonimos_(props.getProperty('SINONIMOS_BUSCA')) } });
+  try { cache.put('cfg_pub', texto, 300); } catch (e) {}
+  return respostaTexto_(texto);
+}
+
+function statusIntegracoes_() {
+  const props = PropertiesService.getScriptProperties();
+  return jsonResponse_({
+    ok: true,
+    pixelId: String(props.getProperty('META_PIXEL_ID') || ''),
+    capiConfigurado: !!props.getProperty('META_CAPI_TOKEN'),
+    testeCodigo: String(props.getProperty('META_TEST_EVENT_CODE') || ''),
+    graphVersao: String(props.getProperty('META_GRAPH_VERSAO') || 'v23.0'),
+    sinonimos: String(props.getProperty('SINONIMOS_BUSCA') || ''),
+    segmentosPush: String(props.getProperty('PUSH_SEGMENTOS') || '')
+  });
+}
+
+function salvarIntegracoes_(body) {
+  const props = PropertiesService.getScriptProperties();
+  if (body.pixelId !== undefined) {
+    const id = String(body.pixelId).replace(/\s/g, '');
+    if (id && !/^\d{8,20}$/.test(id)) return jsonResponse_({ ok: false, erro: 'O ID do Pixel tem só números (de 8 a 20 dígitos).' });
+    if (id) props.setProperty('META_PIXEL_ID', id); else props.deleteProperty('META_PIXEL_ID');
+  }
+  if (body.limparTokenCapi === true) props.deleteProperty('META_CAPI_TOKEN');
+  else if (body.tokenCapi !== undefined && String(body.tokenCapi).trim()) {
+    const t = String(body.tokenCapi).trim();
+    if (!/^[A-Za-z0-9_\-|.]{20,400}$/.test(t)) return jsonResponse_({ ok: false, erro: 'Token inválido (confira se copiou inteiro, sem espaços).' });
+    props.setProperty('META_CAPI_TOKEN', t);
+  }
+  if (body.testeCodigo !== undefined) {
+    const c = String(body.testeCodigo).trim();
+    if (c && !/^[A-Za-z0-9_\-]{3,40}$/.test(c)) return jsonResponse_({ ok: false, erro: 'Código de teste inválido.' });
+    if (c) props.setProperty('META_TEST_EVENT_CODE', c); else props.deleteProperty('META_TEST_EVENT_CODE');
+  }
+  if (body.graphVersao !== undefined) {
+    const g = String(body.graphVersao).trim();
+    if (g && !/^v\d{1,2}\.\d$/.test(g)) return jsonResponse_({ ok: false, erro: 'Versão da API inválida (ex.: v23.0).' });
+    if (g) props.setProperty('META_GRAPH_VERSAO', g); else props.deleteProperty('META_GRAPH_VERSAO');
+  }
+  if (body.sinonimos !== undefined) {
+    const linhas = linhasSinonimos_(body.sinonimos);
+    if (linhas.length) props.setProperty('SINONIMOS_BUSCA', linhas.join('\n')); else props.deleteProperty('SINONIMOS_BUSCA');
+  }
+  if (body.segmentosPush !== undefined) {
+    const lista = String(body.segmentosPush).split(/[,\n]/).map(function (s) { return s.trim(); }).filter(function (s) { return /^[\w \-áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]{2,60}$/.test(s); }).slice(0, 20);
+    if (lista.length) props.setProperty('PUSH_SEGMENTOS', lista.join(',')); else props.deleteProperty('PUSH_SEGMENTOS');
+  }
+  try { CacheService.getScriptCache().remove('cfg_pub'); } catch (e) {}
+  registrarAudit_(body.funcionario, 'salvar_integracoes', '', { campos: Object.keys(body).filter(function (k) { return ['action', 'sessao', 'whatsapp', 'pin', 'funcionario', 'tokenCapi'].indexOf(k) === -1; }), tokenAlterado: !!(body.tokenCapi || body.limparTokenCapi) });
+  return statusIntegracoes_();
+}
+
+/**
+ * Repete um evento do site na API de Conversões da Meta (servidor -> Meta). SÓ roda se: o Pixel e o token estão configurados E o navegador mandou
+ * "meta" (o site só manda quando a pessoa aceitou o aviso do Pixel). Usa o mesmo event_id do navegador para a Meta não contar duas vezes.
+ * Qualquer falha é registrada em Erros_Log e IGNORADA — nunca atrapalha o registro do evento nem o site.
+ */
+function enviarEventoMetaCapi_(body, tipo) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const pixel = String(props.getProperty('META_PIXEL_ID') || '').trim();
+    const token = props.getProperty('META_CAPI_TOKEN');
+    if (!pixel || !token || !body.meta || typeof body.meta !== 'object') return;
+    const nome = tipo === 'whatsapp' ? 'Contact' : (tipo === 'visualizacao' ? 'ViewContent' : '');
+    if (!nome) return;
+    const evento = {
+      event_name: nome, event_time: Math.floor(new Date().getTime() / 1000), action_source: 'website',
+      event_source_url: String(body.meta.url || SITE_URL).slice(0, 500),
+      user_data: { client_user_agent: String(body.meta.ua || '').slice(0, 400) },
+      custom_data: { content_ids: [String(body.codigo || body.produtoId || '')], content_type: 'product' }
+    };
+    if (body.meta.eventId) evento.event_id = String(body.meta.eventId).slice(0, 100);
+    if (body.meta.fbp) evento.user_data.fbp = String(body.meta.fbp).slice(0, 200);
+    if (body.meta.fbc) evento.user_data.fbc = String(body.meta.fbc).slice(0, 300);
+    const corpo = { data: [evento] };
+    const teste = props.getProperty('META_TEST_EVENT_CODE');
+    if (teste) corpo.test_event_code = teste;
+    const versao = props.getProperty('META_GRAPH_VERSAO') || 'v23.0';
+    const resp = UrlFetchApp.fetch('https://graph.facebook.com/' + versao + '/' + pixel + '/events?access_token=' + encodeURIComponent(token), {
+      method: 'post', contentType: 'application/json', payload: JSON.stringify(corpo), muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() >= 300) logErroServidor_('metaCapi', new Error('HTTP ' + resp.getResponseCode() + ' ' + String(resp.getContentText()).slice(0, 300)), { evento: nome });
+  } catch (erro) {
+    logErroServidor_('metaCapi', erro, {});
+  }
+}
+
+// ---------------------------------------------------------------- HISTÓRICO DE AVISOS (push)
+
+function registrarPushHistorico_(funcionario, titulo, mensagem, url, segmento, destinatarios, resultado) {
+  try {
+    const aba = getOrCreateSheet_(SHEET_PUSH_HIST, ['DataHora', 'Funcionario', 'Titulo', 'Mensagem', 'Url', 'Segmento', 'Destinatarios', 'Resultado']);
+    aba.appendRow([new Date(), acTexto_(funcionario || 'Sistema'), acTexto_(titulo || ''), acTexto_(mensagem || ''), acTexto_(url || ''), acTexto_(segmento || ''), destinatarios || 0, acTexto_(resultado || '')]);
+  } catch (e) { /* o histórico é um extra: nunca derruba o envio */ }
+}
+
+function listarPushHistorico_(body) {
+  const aba = getOrCreateSheet_(SHEET_PUSH_HIST, ['DataHora', 'Funcionario', 'Titulo', 'Mensagem', 'Url', 'Segmento', 'Destinatarios', 'Resultado']);
+  const lista = linhasComoObjetos_(aba).reverse().slice(0, Math.max(1, Math.min(Number(body.limite) || 50, 200)));
+  const props = PropertiesService.getScriptProperties();
+  return jsonResponse_({
+    ok: true,
+    segmentos: ['Subscribed Users'].concat(String(props.getProperty('PUSH_SEGMENTOS') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean)),
+    historico: lista.map(function (o) { return { quando: dataBR_(o.DataHora), quem: String(o.Funcionario || ''), titulo: String(o.Titulo || ''), mensagem: String(o.Mensagem || ''), url: String(o.Url || ''), segmento: String(o.Segmento || ''), destinatarios: Number(o.Destinatarios) || 0, resultado: String(o.Resultado || '') }; })
+  });
+}
+
+// ---------------------------------------------------------------- AUXILIARES v3.1
+
+/** Categoria escolhida no lote: se já existe (sem acento/maiúscula) reaproveita a escrita que já existe; senão cadastra na lista. Devolve '' se vazia. */
+function categoriaExistenteOuNova_(valor) {
+  const nome = String(valor == null ? '' : valor).replace(/,/g, ' ').trim().slice(0, 60);
+  if (!nome) return '';
+  const lista = getListaValores_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO);
+  const alvo = acNorm_(nome);
+  for (let i = 0; i < lista.length; i++) if (acNorm_(lista[i]) === alvo) return lista[i];
+  adicionarValorLista_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO, nome);
+  return nome;
+}
+
+/** Título e descrição de busca montados SÓ com o que a peça já tem (nome, gênero, cores, descrição atual). Não inventa material, caimento nem promoção. */
+function descricaoLocal_(body) {
+  const nome = String(body.nome || '').trim();
+  const cat = String(body.categoria || '').split(',')[0].trim();
+  const gen = String(body.genero || '').trim().toLowerCase();
+  const cores = String(body.cores || '').split(',').map(function (c) { return c.trim(); }).filter(Boolean).slice(0, 3);
+  const atual = String(body.descricao || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+  const base = nome || cat || 'Peça';
+  const titulo = (base + ' | TENKiTER Modas').slice(0, 60);
+  let d = base + (gen ? ' (' + gen + ')' : '') + ' na TENKiTER Modas, em Crateús-CE.';
+  if (atual) d += ' ' + atual + (/[.!?]$/.test(atual) ? '' : '.');
+  if (cores.length) d += ' Cores: ' + cores.join(', ') + '.';
+  d += ' ' + Math.round(DESCONTO_AVISTA_ * 100) + '% de desconto à vista. Peça pelo WhatsApp.';
+  return { ok: true, titulo: titulo, descricao: d.slice(0, 300), local: true };
+}
