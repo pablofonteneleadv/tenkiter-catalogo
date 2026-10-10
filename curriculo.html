@@ -62,10 +62,10 @@
 
 <script>
 /* ==== configuração ==== */
-const API = 'https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec'; // mesmo backend do treinamento (manual.html)
+const API = 'https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec'; // mesmo backend do treinamento (treinamentos.html)
 const TOKEN = 'tenkiter2026';
 const SITE_CATALOGO = 'https://tenkitermodas.com.br/';
-const SITE_MANUAL = 'https://tenkitermodas.com.br/manual.html';
+const SITE_MANUAL = 'https://tenkitermodas.com.br/treinamentos.html';
 const LGPD_TEXTO = 'Autorizo a TENKiTER Modas a guardar meus dados por até 2 anos, apenas para o cadastro e processos seletivos. Posso pedir a exclusão a qualquer momento pelo WhatsApp da loja: (88) 99322-3998.';
 
 /* Alternativas: TÊM que ser idênticas às do servidor (CV_OP em Code-treinamento-v4.1.gs.txt) */
@@ -166,9 +166,9 @@ function viewWhats(msg) {
     if (w.length < 10 || w.length > 11) return erroBox('Digite o WhatsApp com DDD.');
     S.whats = w; carregando(b, true);
     if (S.login) {
-      // Já está logada no site (ex: veio pelo botão "Completar agora" do manual.html). Nunca manda
-      // de volta pro manual.html aqui -- isso criava um vai-e-volta sem fim, porque quem está
-      // logada SEMPRE tem conta, e o manual.html manda de volta pra cá. Em vez disso, continua
+      // Já está logada no site (ex: veio pelo botão "Completar agora" do treinamentos.html). Nunca manda
+      // de volta pro treinamentos.html aqui -- isso criava um vai-e-volta sem fim, porque quem está
+      // logada SEMPRE tem conta, e o treinamentos.html manda de volta pra cá. Em vez disso, continua
       // (ou começa, se ainda não existir) o currículo dela direto.
       const rs = await api('curriculo_retomar', { whatsapp: S.login.whatsapp, sessao: S.login.sessao });
       carregando(b, false);
@@ -622,5 +622,6 @@ function viewFim() {
   viewWhats();
 })();
 </script>
+<script src="nav.js" data-ativo="candidatura"></script>
 </body>
 </html>

@@ -5,7 +5,9 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
 ## Arquitetura (resumo — detalhes completos em README.md e LEIA-ME-ATUALIZAR.md)
 
 - **Frontend** hospedado no Render (site estático): `index.html` (catálogo público), `admin.html`
-  (painel do lojista), `curriculos.html`/`curriculo.html`/`manual.html` (RH/treinamento),
+  (painel do lojista), `curriculos.html` (gestão de currículos, só equipe)/`curriculo.html` (candidatura pública)/`treinamentos.html`
+  (portal de treinamento + painel do RH; era `manual.html`, que agora é só um redirecionamento — nunca divulgar o nome antigo),
+  `nav.js` (barra inferior ÚNICA de todas as páginas: para mudar menu/permissões, edite só ele),
   `common.js` (config compartilhada — **única fonte de verdade** para `API_URL`/`SITE_URL`).
 - **Backend**: dois Apps Script Web Apps separados, versionados por nome de arquivo
   (`<nome>-<versão>.gs.txt`):
@@ -20,7 +22,7 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
    compartilhável (WhatsApp, Stories). Link compartilhável é sempre `SITE_URL`. `index.html` e
    `admin.html` têm que apontar para a mesma `API_URL` — trocar só em `common.js`.
 2. **Toda mensagem enviada ao cliente/candidato (WhatsApp etc.) tem que ter o endereço completo e
-   clicável** (ex. `https://tenkitermodas.com.br/manual.html`), nunca só o nome do arquivo. "Tem
+   clicável** (ex. `https://tenkitermodas.com.br/treinamentos.html`), nunca só o nome do arquivo. "Tem
    que facilitar" — a pessoa só clica.
 3. **Busca sempre ignora filtros ativos.** Quando há termo de busca, ele busca em TUDO,
    independente de status/etapa/agenda selecionados — nunca ANDar busca com filtro.
@@ -47,6 +49,15 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
   - Para testar ações via **POST**, curl com User-Agent padrão cai na proteção
     anti-bot do Google (HTTP 405 + página de erro do Google Drive). Usar Python
     `urllib.request` com um header `User-Agent` de navegador — isso retorna o JSON real.
+
+## Link e miniatura do produto
+
+- Link público da peça: **sempre** `linkProduto(p)` (common.js) = `SITE_URL + '?c=<código>'`. Nunca montar a partir de
+  `API_URL` — o `?action=share` do Apps Script devolve HTML dentro de um iframe do Google, o WhatsApp não lê as meta
+  tags `og:*` dali e a mensagem mostrava o endereço do script sem miniatura (bug real, não repetir).
+- Miniatura **por produto** exige HTML com `og:*` no servidor: `og-service/` (Node sem dependências, ainda NÃO implantado;
+  precisa de um Web Service no Render + regra Rewrite `/p/*`). Enquanto isso, `index.html` tem `og:image` genérico
+  (`og-banner.jpg`).
 
 ## Instagram / redes sociais
 

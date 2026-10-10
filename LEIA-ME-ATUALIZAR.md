@@ -15,7 +15,7 @@ Nesse ponto os sites antigos continuam funcionando normalmente.
 2. Rode `diagnostico`. O **PIN antigo continua valendo** (convivência) — ninguém fica sem acesso.
 
 ## 3. Site (GitHub)
-Envie para o repositório, substituindo: `manual.html`, `admin.html`, `index.html`, `common.js` (pasta `site/`). Depois faça o deploy no Render (se não subir sozinho, me peça que eu disparo).
+Envie para o repositório, substituindo: `treinamentos.html`, `admin.html`, `index.html`, `common.js` (pasta `site/`). Depois faça o deploy no Render (se não subir sozinho, me peça que eu disparo).
 
 ## 4. Configurar as pessoas
 1. Entre no portal com seu WhatsApp e senha → **Painel do RH / Admin → Acessos**.
@@ -45,10 +45,10 @@ Envie para o repositório, substituindo: `manual.html`, `admin.html`, `index.htm
 ---
 ## Atualização: miniatura do perfil + até 8 fotos e 1 vídeo por peça
 
-Arquivos que mudaram: os 2 scripts, `manual.html`, `admin.html`, `index.html`.
+Arquivos que mudaram: os 2 scripts, `treinamentos.html`, `admin.html`, `index.html`.
 1. Script do treinamento → cole `Code-treinamento-v4.0.gs.txt` → Implantar > Gerenciar implantações > lápis > **Nova versão**.
 2. Script do catálogo → cole `tenkiter-codigo-v2.1.gs.txt` → **Nova versão**. Na 1ª vez que salvar um vídeo, o Google pode pedir para autorizar o acesso ao Drive: aceite.
-3. Suba `manual.html`, `admin.html`, `index.html` no GitHub (substituindo) e aguarde o deploy do Render.
+3. Suba `treinamentos.html`, `admin.html`, `index.html` no GitHub (substituindo) e aguarde o deploy do Render.
 Fotos de perfil antigas: o portal converte o link sozinho, não precisa reenviar.
 Vídeo: MP4/MOV/WEBM, até 20 MB, 1 por peça. Fotos extras: até 8, além da principal.
 

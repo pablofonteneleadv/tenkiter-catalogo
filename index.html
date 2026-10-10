@@ -19,6 +19,14 @@
 <meta property="og:title" content="TENKiTER Modas — Catálogo Oficial">
 <meta property="og:description" content="Confira as peças disponíveis da TENKiTER Modas — Crateús, CE. Filtre por categoria, gênero e preço, e fale direto no WhatsApp.">
 <meta property="og:url" content="https://tenkitermodas.com.br/">
+<meta property="og:site_name" content="TENKiTER Modas">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:image" content="https://tenkitermodas.com.br/og-banner.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="TENKiTER Modas — Catálogo Digital, Crateús/CE">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://tenkitermodas.com.br/og-banner.jpg">
 <meta name="description" content="Catálogo digital da TENKiTER Modas — Crateús, CE.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap">
 <style>
@@ -50,10 +58,22 @@
   .pill-cat.pill-mais { background: var(--preto); color: var(--laranja); border-color: var(--preto); font-weight: 700; }
 
   .filtros { background: var(--branco); padding: 12px 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); position: sticky; top: 62px; z-index: 19; }
-  .busca-wrap { position: relative; }
   .filtros input[type=text], .filtros input[type=number] { width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 20px; font-size: 0.9rem; margin-bottom: 8px; outline: none; }
-  .busca-wrap input[type=text] { padding-right: 42px; }
+  .busca-campo input[type=text] { padding-right: 42px; }
   .filtros input:focus { border-color: var(--laranja); }
+  /* v3.0: ao rolar para baixo os filtros se recolhem e fica só a busca; tocar na busca (ou em "Filtros") abre de novo,
+     como uma gaveta por cima da lista (sem empurrar o conteúdo, então a rolagem não pula). */
+  .busca-wrap { display: flex; gap: 8px; align-items: flex-start; }
+  .busca-campo { position: relative; flex: 1; min-width: 0; }
+  .btn-filtros-toggle { flex: none; display: none; align-items: center; gap: 4px; height: 40px; padding: 0 12px; border-radius: 20px; border: 1px solid #ddd; background: #fff; color: #333; font-size: 0.78rem; font-weight: 700; cursor: pointer; position: relative; }
+  .btn-filtros-toggle .badge-filtros { background: var(--laranja); color: var(--preto); border-radius: 10px; min-width: 18px; padding: 0 5px; font-size: 0.68rem; line-height: 18px; text-align: center; }
+  .filtros.compacto { padding-top: 8px; padding-bottom: 8px; }
+  .filtros.compacto .btn-filtros-toggle { display: inline-flex; }
+  .filtros.compacto .busca-campo input[type=text] { margin-bottom: 0; }
+  .filtros.compacto .filtros-extras { display: none; }
+  .filtros.compacto.aberto .filtros-extras { display: block; position: absolute; left: 0; right: 0; top: 100%; background: var(--branco); padding: 4px 14px 14px; max-height: calc(100vh - 190px); overflow-y: auto; box-shadow: 0 10px 18px rgba(0,0,0,0.18); border-radius: 0 0 14px 14px; }
+  .filtros.compacto.aberto .btn-filtros-toggle { background: var(--preto); color: var(--laranja); border-color: var(--preto); }
+
   .btn-voz { position: absolute; right: 6px; top: 6px; width: 30px; height: 30px; border-radius: 50%; border: none; background: #f0f0f0; color: #666; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .btn-voz.ouvindo { background: var(--vermelho); color: #fff; animation: pulsar 1s infinite; }
   @keyframes pulsar { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
@@ -157,10 +177,6 @@
   #sacola-vazia { text-align: center; color: #888; padding: 30px 20px; font-size: 0.88rem; }
 
   /* Nav inferior fixa */
-  .nav-inferior { position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: var(--preto); border-top: 1px solid rgba(255,255,255,0.08); display: flex; box-shadow: 0 -2px 10px rgba(0,0,0,0.2); }
-  .nav-inferior a { flex: 1; text-align: center; padding: 9px 4px 8px; color: #999; text-decoration: none; font-size: 0.68rem; font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-  .nav-inferior a .icone-nav { font-size: 1.15rem; }
-  .nav-inferior a.ativo { color: var(--laranja); }
 
   .btn-icone-header.ativado { color: var(--laranja); }
   /* v2: conta de cliente */
@@ -211,32 +227,39 @@
 
 <div class="pills-categoria" id="pills-categoria"></div>
 
-<div class="filtros">
+<div class="filtros" id="filtros">
   <div class="busca-wrap">
-    <input type="text" id="busca" placeholder="🔎 Buscar por produto, código ou estilo...">
-    <button type="button" class="btn-voz" id="btn-voz" title="Buscar por comando de voz">🎤</button>
+    <div class="busca-campo">
+      <input type="text" id="busca" placeholder="🔎 Buscar por produto, código ou estilo..." enterkeyhint="search">
+      <button type="button" class="btn-voz" id="btn-voz" title="Buscar por comando de voz">🎤</button>
+    </div>
+    <button type="button" class="btn-filtros-toggle" id="btn-filtros-toggle" aria-expanded="true" aria-controls="filtros-extras" title="Mostrar ou esconder os filtros">
+      <span aria-hidden="true">⚙️</span><span class="rot">Filtros</span><span class="badge-filtros" id="badge-filtros" hidden>0</span>
+    </button>
   </div>
-  <div class="linha-preco">
-    <span>Preço:</span>
-    <input type="number" id="preco-min" placeholder="Mín R$">
-    <span>até</span>
-    <input type="number" id="preco-max" placeholder="Máx R$">
-  </div>
-  <div class="chips" id="chips-extra"></div>
+  <div class="filtros-extras" id="filtros-extras">
+    <div class="linha-preco">
+      <span>Preço:</span>
+      <input type="number" id="preco-min" placeholder="Mín R$" inputmode="decimal">
+      <span>até</span>
+      <input type="number" id="preco-max" placeholder="Máx R$" inputmode="decimal">
+    </div>
+    <div class="chips" id="chips-extra"></div>
 
-  <details class="selecao-expansivel" id="details-categoria">
-    <summary>Categoria <span class="resumo" id="resumo-categoria">(todas)</span></summary>
-    <div class="chips" id="chips-categoria"></div>
-  </details>
+    <details class="selecao-expansivel" id="details-categoria">
+      <summary>Categoria <span class="resumo" id="resumo-categoria">(todas)</span></summary>
+      <div class="chips" id="chips-categoria"></div>
+    </details>
 
-  <details class="selecao-expansivel" id="details-genero">
-    <summary>Gênero <span class="resumo" id="resumo-genero">(todos)</span></summary>
-    <div class="chips" id="chips-genero"></div>
-  </details>
+    <details class="selecao-expansivel" id="details-genero">
+      <summary>Gênero <span class="resumo" id="resumo-genero">(todos)</span></summary>
+      <div class="chips" id="chips-genero"></div>
+    </details>
 
-  <div class="bar-acoes-filtros">
-    <button type="button" class="btn-limpar" id="btn-limpar">Limpar filtros</button>
-    <button type="button" class="btn-compartilhar-filtros" id="btn-share-filtros">🔗 Compartilhar esta seleção</button>
+    <div class="bar-acoes-filtros">
+      <button type="button" class="btn-limpar" id="btn-limpar">Limpar filtros</button>
+      <button type="button" class="btn-compartilhar-filtros" id="btn-share-filtros">🔗 Compartilhar esta seleção</button>
+    </div>
   </div>
 </div>
 
@@ -253,10 +276,7 @@
   <div class="modal" id="sacola-conteudo"></div>
 </div>
 
-<nav class="nav-inferior">
-  <a href="index.html" class="ativo"><span class="icone-nav">👗</span>Catálogo</a>
-  <a href="admin.html"><span class="icone-nav">🔧</span>Área de Gestão</a>
-</nav>
+
 
 <script src="common.js"></script>
 <script>
@@ -600,21 +620,20 @@
   });
 
   function abrirWhatsApp(p) {
-    // Link do Apps Script (endpoint de compartilhamento): gera prévia rica (com foto do
-    // produto) no WhatsApp e redireciona pro site. NUNCA usar SITE_URL + '?id=' direto aqui —
-    // essa página não tem og:image, então o WhatsApp mostraria uma prévia genérica sem foto.
-    const link = API_URL + '?action=share&id=' + encodeURIComponent(p.ID);
+    // Link do produto NO SITE (linkProduto, em common.js): ?c=<código>. Antes apontava para o Apps Script
+    // (endpoint de compartilhamento), que o WhatsApp não consegue ler -- aparecia o endereço do script e nada de miniatura.
+    const link = linkProduto(p);
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const codigo = p.Codigo ? ('\nCódigo: ' + p.Codigo) : '';
-    const texto = `Olá! Quero garantir este produto:\n*${escaparHtml(p.Nome)}*${codigo}\n${formatarReal(avista)} à vista\n${link}`;
+    const texto = `Olá! Quero garantir este produto:\n*${p.Nome}*${codigo}\n${formatarReal(avista)} à vista\n${link}`;
     registrarEvento(p.ID, p.Codigo, 'whatsapp');
     window.open('https://wa.me/' + WHATSAPP_NUMERO + '?text=' + encodeURIComponent(texto), '_blank');
   }
 
   async function compartilharComFoto(p) {
-    const link = API_URL + '?action=share&id=' + encodeURIComponent(p.ID);
+    const link = linkProduto(p);
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
-    const texto = `${escaparHtml(p.Nome)} — ${formatarReal(avista)} à vista\n${link}\n\nLoja TENKiTER Modas (WhatsApp ${WHATSAPP_NUMERO})`;
+    const texto = `${p.Nome} — ${formatarReal(avista)} à vista\n${link}\n\nLoja TENKiTER Modas (WhatsApp ${WHATSAPP_NUMERO})`;
     let arquivoImagem = null;
     try {
       const blob = await fetch(p.Foto_URL).then(r => r.blob());
@@ -1070,5 +1089,58 @@
 
   carregarCatalogo();
 </script>
+<script>
+/* v3.0 — filtros recolhíveis (só a busca fica visível ao rolar) */
+(function () {
+  const f = document.getElementById('filtros');
+  const busca = document.getElementById('busca');
+  const btn = document.getElementById('btn-filtros-toggle');
+  const badge = document.getElementById('badge-filtros');
+  if (!f || !busca || !btn) return;
+  let ultimoY = window.scrollY, yAbertura = 0;
+
+  function contarAtivos() {
+    let n = f.querySelectorAll('.filtros-extras .chip.selecionado').length;
+    if (document.getElementById('preco-min').value) n++;
+    if (document.getElementById('preco-max').value) n++;
+    return n;
+  }
+  function atualizarBadge() {
+    const n = contarAtivos();
+    badge.hidden = !n; badge.textContent = n;
+  }
+  function abrir() { yAbertura = window.scrollY; f.classList.add('aberto'); btn.setAttribute('aria-expanded', 'true'); }
+  function fechar() { f.classList.remove('aberto'); btn.setAttribute('aria-expanded', 'false'); }
+  function compactar(sim) {
+    if (sim === f.classList.contains('compacto')) return;
+    f.classList.toggle('compacto', sim);
+    if (sim) { fechar(); atualizarBadge(); } else { f.classList.remove('aberto'); btn.setAttribute('aria-expanded', 'true'); }
+  }
+
+  window.addEventListener('scroll', () => {
+    const y = window.scrollY, descendo = y > ultimoY;
+    ultimoY = y;
+    if (f.classList.contains('compacto')) {
+      if (y < 60) compactar(false);                                   // voltou ao topo: filtros completos de novo
+      else if (f.classList.contains('aberto') && Math.abs(y - yAbertura) > 140 && document.activeElement !== busca) fechar();
+    } else if (y > 230 && descendo) {
+      compactar(true);                                                // rolou para ver as fotos: recolhe
+    }
+  }, { passive: true });
+
+  busca.addEventListener('focus', () => { if (f.classList.contains('compacto')) abrir(); });
+  btn.addEventListener('click', () => { f.classList.contains('aberto') ? fechar() : abrir(); });
+  // tocar fora da barra fecha a gaveta
+  document.addEventListener('pointerdown', (ev) => {
+    if (f.classList.contains('compacto') && f.classList.contains('aberto') && !ev.target.closest('#filtros')) fechar();
+  });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') fechar(); });
+  // Enter na busca: fecha o teclado e mostra os resultados
+  busca.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { busca.blur(); if (f.classList.contains('compacto')) fechar(); } });
+  f.addEventListener('click', () => setTimeout(atualizarBadge, 0));
+  f.addEventListener('input', atualizarBadge);
+})();
+</script>
+<script src="nav.js" data-ativo="catalogo"></script>
 </body>
 </html>

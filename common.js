@@ -27,6 +27,13 @@ const WHATSAPP_NUMERO = '5588993223998';
 // (Extensões > Propriedades do Script > ONESIGNAL_REST_API_KEY).
 const ONESIGNAL_APP_ID = '535f6b0d-c866-43c2-b241-43bd7ab62fae';
 
+/** Link público da peça no SITE (nunca a API_URL). ?c=<código> é curto; sem código usa ?id=. Um lugar só: se um dia
+ *  existir uma rota com miniatura por produto, é só trocar aqui. */
+function linkProduto(p) {
+  const cod = p && (p.Codigo || p.codigo);
+  return SITE_URL + (cod ? ('?c=' + encodeURIComponent(cod)) : ('?id=' + encodeURIComponent(p.ID != null ? p.ID : p.id)));
+}
+
 function formatarReal(v) {
   return 'R$ ' + Number(v).toFixed(2).replace('.', ',');
 }

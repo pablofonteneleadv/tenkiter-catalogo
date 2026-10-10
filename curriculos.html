@@ -40,8 +40,6 @@
   .aviso { background:#eef6ff; color:#1b4b7a; padding:10px 12px; border-radius:9px; font-size:.86rem; margin-bottom:12px; }
   .erro { background:#fde3e3; color:var(--vermelho); padding:10px 12px; border-radius:9px; font-size:.9rem; margin:10px 0; font-weight:600; }
   .oculto { display:none !important; }
-  .nav-inferior { position:fixed; bottom:0; left:0; right:0; z-index:50; background:var(--preto); display:flex; }
-  .nav-inferior a { flex:1; text-align:center; padding:9px 4px; color:#999; text-decoration:none; font-size:.68rem; font-weight:700; } .nav-inferior a.ativo { color:var(--laranja); }
   html.embed header, html.embed .nav-inferior { display:none; } html.embed body { padding-bottom:0; background:transparent; } html.embed main { padding:0; max-width:none; }
   @media(max-width:560px){ dl { grid-template-columns:1fr; } }
 </style>
@@ -50,10 +48,10 @@
 <script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed');</script>
 <header>Currículos</header>
 <main id="app"><div class="card">Carregando…</div></main>
-<nav class="nav-inferior"><a href="index.html">👗<br>Catálogo</a><a href="admin.html">🔧<br>Gestão</a><a href="curriculos.html" class="ativo">📄<br>Currículos</a></nav>
+
 <script src="common.js"></script>
 <script>
-const TREIN_URL = 'https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec'; // mesmo backend do treinamento (manual.html)
+const TREIN_URL = 'https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec'; // mesmo backend do treinamento (treinamentos.html)
 const TREIN_TOKEN = 'tenkiter2026';
 const $ = id => document.getElementById(id);
 if (window.parent !== window && /[?&]embed=1/.test(location.search)) {
@@ -280,7 +278,7 @@ function linkCobrarCurriculo(r) {
   const nome = primeiroNome(r.Nome);
   const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas de Crateús\n\n' +
     'Vi que seu currículo ainda está em andamento — *falta só ' + faltaTexto(r.Etapa) + '.*\n\n' +
-    'É rapidinho: entra no nosso site https://tenkitermodas.com.br/manual.html , faça login com o WhatsApp e a senha que você colocou. \n\n' +
+    'É rapidinho: entra no nosso site https://tenkitermodas.com.br/treinamentos.html , faça login com o WhatsApp e a senha que você colocou. \n\n' +
     'Na tela inicial vai aparecer um aviso *Seu currículo está incompleto* com um botão *Completar agora* — aperte nele e vá apertando *Avançar* até o final.\n\n' +
     'Qualquer dúvida, é só chamar por aqui que te ajudo!';
   return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
@@ -289,14 +287,14 @@ function linkCobrarLeitura(r, m) {
   const nome = primeiroNome(r.Nome);
   const motivo = m.precisamReler ? ('tem um trecho atualizado do manual "' + m.titulo + '" pra você reler') : ('falta ler uma parte do manual "' + m.titulo + '"');
   const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas.\n\nVi que ainda ' + motivo + '.\n\n' +
-    'É rapidinho: entra no nosso site https://tenkitermodas.com.br/manual.html , faça login com o WhatsApp e a senha que você colocou, e continue de onde parou.\n\n' +
+    'É rapidinho: entra no nosso site https://tenkitermodas.com.br/treinamentos.html , faça login com o WhatsApp e a senha que você colocou, e continue de onde parou.\n\n' +
     'Qualquer dúvida, chama por aqui!';
   return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
 }
 function linkCobrarProva(r, m) {
   const nome = primeiroNome(r.Nome);
   const msg = 'Oi' + (nome ? ', ' + nome : '') + '! \n\nAqui é da TENKiTER Modas.\n\nVi que você já terminou de ler o manual "' + m.titulo + '" mas ainda não fez a prova dele.\n\n' +
-    'É rapidinho: entra no nosso site https://tenkitermodas.com.br/manual.html , faça login com o WhatsApp e a senha que você colocou, e faz a avaliação quando puder.\n\n' +
+    'É rapidinho: entra no nosso site https://tenkitermodas.com.br/treinamentos.html , faça login com o WhatsApp e a senha que você colocou, e faz a avaliação quando puder.\n\n' +
     'Qualquer dúvida, chama por aqui!';
   return wa(r.WhatsApp) + '?text=' + encodeURIComponent(msg);
 }
@@ -411,5 +409,6 @@ function itemAntigo(r) {
 }
 iniciar();
 </script>
+<script src="nav.js" data-ativo="curriculos"></script>
 </body>
 </html>
