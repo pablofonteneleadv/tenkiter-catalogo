@@ -20,7 +20,7 @@
 <title>TENKiTER Modas — Painel do Atendente</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap">
 <style>
-  :root { --preto: #0d0d0d; --laranja: #E67E22; --ouro: #F39C12; --cinza: #F5F1E8; --branco: #ffffff; --verde: #198754; --vermelho: #c62828; --amarelo: #b8860b; }
+  :root { --preto: #0d0d0d; --laranja: #E67E22; --laranja-txt: #A85200; --ouro: #F39C12; --cinza: #F5F1E8; --branco: #ffffff; --verde: #198754; --vermelho: #c62828; --amarelo: #8a6200; }
   input, button, select, textarea { font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; }
   h1, h2, h3 { font-family: "Poppins", sans-serif; font-weight: 800; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -38,7 +38,7 @@
   @keyframes girar { to { transform: rotate(360deg); } }
 
   .usuario-bar { background: var(--branco); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); font-size: 0.85rem; gap: 6px; }
-  .usuario-bar strong { color: var(--laranja); }
+  .usuario-bar strong { color: var(--laranja-txt); }
   .usuario-bar .botoes-user { display: flex; gap: 6px; flex-shrink: 0; }
   .btn-trocar-user, .btn-sair { background: #f0f0f0; border: none; padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; cursor: pointer; white-space: nowrap; }
   .btn-sair { background: #fde3e3; color: var(--vermelho); font-weight: 700; }
@@ -49,7 +49,7 @@
 
   .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
   .dashboard-card { background: var(--branco); border-radius: 12px; padding: 10px 6px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
-  .dashboard-card span { display: block; font-size: 0.64rem; color: #888; }
+  .dashboard-card span { display: block; font-size: 0.64rem; color: #666; }
   .dashboard-card strong { display: block; font-size: 1.2rem; margin-top: 2px; }
   .dashboard-card.esgotados strong { color: var(--vermelho); }
   .dashboard-card.disponiveis strong { color: var(--verde); }
@@ -71,14 +71,14 @@
   .chip.add { background: #f0f0f0; color: #666; border-style: dashed; }
   .nova-categoria-linha { display: flex; gap: 8px; margin-top: 8px; }
   .nova-categoria-linha input { flex: 1; min-width: 0; }
-  .nova-categoria-linha button { border: none; border-radius: 8px; padding: 0 14px; font-weight: 700; font-size: 0.82rem; cursor: pointer; background: var(--laranja); color: #fff; }
+  .nova-categoria-linha button { border: none; border-radius: 8px; padding: 0 14px; font-weight: 700; font-size: 0.82rem; cursor: pointer; background: var(--laranja); color: #0d0d0d; }
 
   details.selecao-expansivel { margin-top: 12px; border: 1px solid #ddd; border-radius: 10px; padding: 10px 12px; background: #fff; }
   details.selecao-expansivel summary { cursor: pointer; font-weight: 600; font-size: 0.85rem; list-style: none; display: flex; justify-content: space-between; align-items: center; }
   details.selecao-expansivel summary::-webkit-details-marker { display: none; }
-  details.selecao-expansivel summary::after { content: '▾'; font-size: 0.7rem; color: #888; margin-left: 8px; }
+  details.selecao-expansivel summary::after { content: '▾'; font-size: 0.7rem; color: #666; margin-left: 8px; }
   details.selecao-expansivel[open] summary::after { content: '▴'; }
-  details.selecao-expansivel .resumo { font-weight: 400; color: #888; font-size: 0.78rem; margin-left: 6px; flex: 1; }
+  details.selecao-expansivel .resumo { font-weight: 400; color: #666; font-size: 0.78rem; margin-left: 6px; flex: 1; }
   details.selecao-expansivel .chips { margin-top: 10px; }
 
   details.extra { margin-top: 16px; border: 1px dashed #ccc; border-radius: 10px; padding: 10px 12px; }
@@ -106,7 +106,7 @@
   .produto-chk { margin-top: 25px; }
   .produto img { width: 56px; height: 70px; object-fit: cover; border-radius: 8px; background: #eee; }
   .produto-info { flex: 1; min-width: 0; }
-  .produto-info .codigo { font-size: 0.68rem; color: var(--laranja); font-weight: 800; }
+  .produto-info .codigo { font-size: 0.68rem; color: var(--laranja-txt); font-weight: 800; }
   .produto-info .nome { font-weight: 700; font-size: 0.92rem; }
   .produto-info .preco { font-size: 0.82rem; color: #333; }
   .produto-info .preco span { color: #1a7a1a; font-weight: 700; }
@@ -120,13 +120,13 @@
   .acoes .btn-editar { background: #e3eafd; color: #1a4fa7; }
   .acoes .btn-arte { background: #ede3fd; color: #5a2ea6; }
 
-  .selo-inativo { display: inline-block; background: #eee; color: #888; font-size: 0.6rem; font-weight: 800; padding: 2px 7px; border-radius: 6px; margin-left: 6px; vertical-align: middle; }
+  .selo-inativo { display: inline-block; background: #eee; color: #666; font-size: 0.6rem; font-weight: 800; padding: 2px 7px; border-radius: 6px; margin-left: 6px; vertical-align: middle; }
 
   .stats-panel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
   .stats-card { background: var(--branco); border-radius: 12px; padding: 10px 6px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
-  .stats-card span { display: block; font-size: 0.6rem; color: #888; }
-  .stats-card strong { display: block; font-size: 1.05rem; margin-top: 2px; color: var(--laranja); }
-  .stats-card small { display: block; font-size: 0.58rem; color: #aaa; margin-top: 2px; }
+  .stats-card span { display: block; font-size: 0.66rem; color: #666; }
+  .stats-card strong { display: block; font-size: 1.05rem; margin-top: 2px; color: var(--laranja-txt); }
+  .stats-card small { display: block; font-size: 0.64rem; color: #666; margin-top: 2px; }
 
   .btn-seo-ia { background: #f3e8ff; color: #6b21a8; margin-top: 10px; }
   .seo-sugestao { background: #f9f5ff; border: 1px solid #e3d3fb; border-radius: 10px; padding: 10px 12px; margin-top: 8px; font-size: 0.82rem; }
@@ -136,7 +136,7 @@
 
   .auditoria-item { border-bottom: 1px solid #eee; padding: 8px 0; font-size: 0.78rem; }
   .auditoria-item .linha1 { display: flex; justify-content: space-between; font-weight: 700; }
-  .auditoria-item .linha2 { color: #777; font-size: 0.72rem; margin-top: 2px; }
+  .auditoria-item .linha2 { color: #666; font-size: 0.72rem; margin-top: 2px; }
 
   #overlay-compartilhar { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: flex-end; justify-content: center; }
   #overlay-compartilhar.aberto { display: flex; }
@@ -164,7 +164,7 @@
   .arte-preview-reserva { height: 30px; flex: none; } /* espaço do adesivo de link: reservado, mas vazio de propósito */
   .arte-campo-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
   .arte-campo-linha label { margin: 0; }
-  .arte-contador { font-size: 0.7rem; color: #888; white-space: nowrap; }
+  .arte-contador { font-size: 0.7rem; color: #666; white-space: nowrap; }
   .arte-contador.cheio { color: #d9534f; font-weight: 700; }
   .arte-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #555; cursor: pointer; white-space: nowrap; }
   .arte-toggle input { width: auto; margin: 0; }
@@ -183,7 +183,7 @@
   .lo-box h2 { margin: 0 0 6px; font-size: 1.1rem; }
   .lo-box p { margin: 0 0 12px; font-size: 0.85rem; color: #555; }
   .lo-box input { width: 100%; padding: 12px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 10px; font-size: 1rem; }
-  .lo-box button.lo-principal { width: 100%; padding: 12px; border: none; border-radius: 10px; background: var(--laranja); color: #fff; font-weight: 800; font-size: 1rem; cursor: pointer; }
+  .lo-box button.lo-principal { width: 100%; padding: 12px; border: none; border-radius: 10px; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: 1rem; cursor: pointer; }
   .lo-erro { color: #c62828; font-size: 0.85rem; min-height: 1.1em; margin-bottom: 6px; }
   .lo-links { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; font-size: 0.8rem; }
   .lo-link { background: none; border: none; color: #0f5fa8; cursor: pointer; padding: 0; font-size: 0.8rem; text-decoration: underline; }
@@ -191,13 +191,13 @@
   .sem-excluir .btn-arquivar, .sem-excluir .btn-reativar, .sem-excluir .btn-excluir, .sem-excluir #btn-bulk-arquivar, .sem-excluir #btn-bulk-reativar { display: none !important; }
   .sem-precos #btn-bulk-preco { display: none !important; }
   .sem-auditoria #btn-abrir-auditoria, .sem-push #btn-abrir-push, .sem-portal a[href="treinamentos.html"] { display: none !important; }
-  .dica-midia { font-size: 0.75rem; color: #777; margin-top: 8px; }
+  .dica-midia { font-size: 0.75rem; color: #666; margin-top: 8px; }
   .galeria-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 10px; }
   .galeria-item { position: relative; width: 86px; height: 107px; }
   .galeria-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; display: block; }
   .galeria-item.capa img { border-color: var(--laranja); }
   .galeria-item .btn-remover { position: absolute; top: -6px; right: -6px; width: 24px; height: 24px; border-radius: 50%; border: none; background: #c62828; color: #fff; font-size: 0.8rem; cursor: pointer; padding: 0; line-height: 24px; z-index: 2; }
-  .galeria-item .selo-capa { position: absolute; top: 4px; left: 4px; background: var(--laranja); color: #fff; font-size: 0.6rem; font-weight: 800; padding: 2px 6px; border-radius: 6px; pointer-events: none; }
+  .galeria-item .selo-capa { position: absolute; top: 4px; left: 4px; background: var(--laranja); color: #0d0d0d; font-size: 0.6rem; font-weight: 800; padding: 2px 6px; border-radius: 6px; pointer-events: none; }
   .galeria-item .novo { position: absolute; right: 4px; top: 4px; background: #333; color: #fff; font-size: 0.6rem; font-weight: 800; padding: 1px 5px; border-radius: 6px; pointer-events: none; }
   .galeria-item .mover { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; border-radius: 0 0 6px 6px; overflow: hidden; }
   .galeria-item .mover button { flex: 1; height: 24px; border: none; background: rgba(0,0,0,0.6); color: #fff; font-size: 0.85rem; cursor: pointer; padding: 0; line-height: 24px; }
@@ -235,7 +235,7 @@
   details.cartao-cad[open] > summary { background: var(--preto); color: var(--laranja); }
   .cad-corpo { padding: 4px 16px 18px; }
   .cad-corpo h2 { font-size: 1rem; margin: 12px 0 2px; }
-  .cad-sub { font-size: 0.78rem; color: #777; margin: 0 0 6px; }
+  .cad-sub { font-size: 0.78rem; color: #666; margin: 0 0 6px; }
   .passo { margin-top: 16px; padding: 12px; border: 1px solid #eee; border-radius: 12px; transition: border-color .2s, background .2s; }
   .passo.erro { border-color: var(--vermelho); background: #fff6f6; }
   .passo.ok { border-color: #bfe3cf; }
@@ -243,7 +243,7 @@
   .passo-tit .num { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--preto); color: var(--laranja); font-size: 0.72rem; display: inline-flex; align-items: center; justify-content: center; }
   .passo.ok .passo-tit .num { background: var(--verde); color: #fff; }
   .passo-tit .obg { color: var(--vermelho); font-style: normal; }
-  .passo-tit .opc, .passo-cont { font-weight: 400; font-size: 0.74rem; color: #888; }
+  .passo-tit .opc, .passo-cont { font-weight: 400; font-size: 0.74rem; color: #666; }
   .passo-cont { margin-left: auto; }
   .passo-msg { display: none; color: var(--vermelho); font-size: 0.78rem; font-weight: 600; margin-top: 6px; }
   .passo.erro .passo-msg { display: block; }
@@ -277,7 +277,7 @@
   .cat-item:last-child { border-bottom: none; }
   .cat-item.selecionado { background: #fff1e3; color: #a24a00; }
   .cat-item .marca { font-size: 1.1rem; color: var(--verde); }
-  .cat-vazio { padding: 18px 14px; font-size: 0.85rem; color: #777; text-align: center; }
+  .cat-vazio { padding: 18px 14px; font-size: 0.85rem; color: #666; text-align: center; }
   .cat-criar { background: #f0f0f0; color: #333; margin-bottom: 8px; }
 
   .lista-topo { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 8px; }
@@ -291,7 +291,7 @@
   .produto { padding: 12px; }
   .produto-chk { position: absolute; left: 17px; top: 17px; width: 22px; height: 22px; margin: 0; z-index: 2; accent-color: var(--laranja); }
   .acoes-linha > button { padding: 7px 10px; }
-  .produto-info .estoque-linha { font-size: 0.74rem; color: #777; margin-top: 2px; }
+  .produto-info .estoque-linha { font-size: 0.74rem; color: #666; margin-top: 2px; }
   .sel-esg { background: #fde3e3; color: var(--vermelho); font-size: 0.6rem; font-weight: 800; padding: 2px 7px; border-radius: 6px; margin-left: 6px; vertical-align: middle; }
   .acoes-linha { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
   .acoes-linha > button { width: auto; padding: 7px 11px; font-size: 0.74rem; border-radius: 9px; }
@@ -328,7 +328,7 @@
   </div>
 </div>
 
-<div id="toast-carregando"><span class="spinner-mini"></span><span id="texto-toast">Carregando peças...</span></div>
+<div id="toast-carregando" role="status" aria-live="polite"><span class="spinner-mini"></span><span id="texto-toast">Carregando peças...</span></div>
 
 <header>
   <div class="header-brand-row">
@@ -341,7 +341,7 @@
 <main>
 
   <div class="usuario-bar">
-    <div>Atendente: <strong id="lbl-funcionario">Anônimo</strong> <span id="lbl-perfil" style="font-size:0.72rem;color:#777;"></span></div>
+    <div>Atendente: <strong id="lbl-funcionario">Anônimo</strong> <span id="lbl-perfil" style="font-size:0.72rem;color:#666;"></span></div>
     <div class="botoes-user">
       <button type="button" class="btn-trocar-user" id="btn-trocar-user">Identificar-se</button>
       <button type="button" class="btn-sair" id="btn-sair">Sair</button>
@@ -537,22 +537,22 @@
     <input type="text" id="input-api-url" placeholder="https://script.google.com/...">
     <button type="button" id="btn-salvar-api-url" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar Endereço Personalizado</button>
     <button type="button" id="btn-restaurar-api-url" style="margin-top:8px;background:#eee;color:#555;">Restaurar Endereço Padrão</button>
-    <p style="font-size:0.72rem;color:#888;margin-top:8px;">Só mude isto se um novo endereço do sistema for informado. Um endereço errado impede o catálogo de carregar.</p>
+    <p style="font-size:0.72rem;color:#666;margin-top:8px;">Só mude isto se um novo endereço do sistema for informado. Um endereço errado impede o catálogo de carregar.</p>
 
     <hr style="border:none;border-top:1px dashed #ccc;margin:16px 0;">
     <label>🤖 Inteligência artificial (Gemini) — chave</label>
-    <div id="ia-status" style="font-size:0.78rem;color:#777;margin:2px 0 6px;">Verificando...</div>
+    <div id="ia-status" style="font-size:0.78rem;color:#666;margin:2px 0 6px;">Verificando...</div>
     <input type="password" id="input-ia-chave" placeholder="Cole aqui a chave do Gemini" autocomplete="off">
     <label style="margin-top:8px;">Modelo</label>
     <input type="text" id="input-ia-modelo" placeholder="vazio = padrão do sistema" autocomplete="off">
     <button type="button" id="btn-salvar-ia" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar Configuração da IA</button>
     <button type="button" id="btn-apagar-ia" style="margin-top:8px;background:#eee;color:#555;">Apagar chave guardada</button>
-    <p style="font-size:0.72rem;color:#888;margin-top:8px;">A chave fica guardada só no servidor e nunca volta para esta tela (aparece apenas "configurada" e os 4 últimos caracteres). Usada pelos botões "Preencher pela foto" e "Gerar Título/Descrição". Deixe a chave em branco para mudar só o modelo. Só quem é Admin total consegue salvar.</p>
+    <p style="font-size:0.72rem;color:#666;margin-top:8px;">A chave fica guardada só no servidor e nunca volta para esta tela (aparece apenas "configurada" e os 4 últimos caracteres). Usada pelos botões "Preencher pela foto" e "Gerar Título/Descrição". Deixe a chave em branco para mudar só o modelo. Só quem é Admin total consegue salvar.</p>
   </details>
 
   <details class="extra" id="details-log-debug">
     <summary>🪲 Log de Depuração</summary>
-    <p style="font-size:0.72rem;color:#888;margin:0 0 8px;">Grava, passo a passo, tudo que o sistema faz ao enviar um produto (pedido, resposta, erro, cada tentativa) — liga só na hora de reproduzir um problema, pra não ficar rodando à toa.</p>
+    <p style="font-size:0.72rem;color:#666;margin:0 0 8px;">Grava, passo a passo, tudo que o sistema faz ao enviar um produto (pedido, resposta, erro, cada tentativa) — liga só na hora de reproduzir um problema, pra não ficar rodando à toa.</p>
     <button type="button" id="btn-toggle-log-debug" style="background:var(--preto);color:var(--laranja);">🪲 Ligar Log</button>
     <div id="log-debug-painel" style="display:none;margin-top:10px;">
       <textarea id="log-debug-texto" readonly style="width:100%;height:220px;font-family:monospace;font-size:0.68rem;white-space:pre;box-sizing:border-box;"></textarea>
@@ -1759,7 +1759,7 @@
 
     const lista = listaVisivel_();
 
-    if (!lista.length) { container.innerHTML = '<p style="text-align:center;color:#999;padding:18px 0;">' + (busca ? 'Nenhuma peça com esse nome ou código.' : 'Nenhuma peça nesta lista.') + '</p>'; return; }
+    if (!lista.length) { container.innerHTML = '<p style="text-align:center;color:#666;padding:18px 0;">' + (busca ? 'Nenhuma peça com esse nome ou código.' : 'Nenhuma peça nesta lista.') + '</p>'; return; }
 
     container.innerHTML = lista.map(p => {
       const inativo = ehInativo_(p);
@@ -2079,11 +2079,11 @@
         <label class="arte-toggle"><input type="checkbox" id="chk-desc-arte" ${mostrarDescIni ? 'checked' : ''}> Mostrar descrição</label>
         <label class="arte-toggle"><input type="checkbox" id="chk-cat-arte" ${mostrarCatIni ? 'checked' : ''} ${subtitulo ? '' : 'disabled'}> Mostrar categoria</label>
       </div>
-      <p style="font-size:0.72rem;color:#888;margin-top:6px;">O que ficar desmarcado some da arte e o preço se reposiciona sozinho. Isso só vale para esta arte — o cadastro da peça não muda.</p>
+      <p style="font-size:0.72rem;color:#666;margin-top:6px;">O que ficar desmarcado some da arte e o preço se reposiciona sozinho. Isso só vale para esta arte — o cadastro da peça não muda.</p>
 
       <label style="margin-top:14px;">Preço a exibir no Story (R$)</label>
       <input type="number" id="input-preco-arte" step="0.01" min="0" value="${configArteAtual.precoStory}">
-      <p style="font-size:0.72rem;color:#888;margin-top:4px;">Só muda o valor mostrado nesta arte — não altera o preço cadastrado no catálogo.</p>
+      <p style="font-size:0.72rem;color:#666;margin-top:4px;">Só muda o valor mostrado nesta arte — não altera o preço cadastrado no catálogo.</p>
 
       <label style="margin-top:14px;">🔗 Link do adesivo (abre o WhatsApp de atendimento com a referência da peça)</label>
       <input type="text" id="input-link-arte" readonly style="font-size:0.72rem;">
@@ -2091,7 +2091,7 @@
         <button type="button" id="btn-copiar-link-arte" style="background:var(--preto);color:var(--laranja);">📋 Copiar link</button>
         <button type="button" id="btn-testar-link-arte" style="background:#eee;color:#555;">Testar</button>
       </div>
-      <p style="font-size:0.72rem;color:#888;margin-top:4px;">No Instagram, no Story, use o adesivo "Link" e cole este endereço no espaço reservado da arte. Quem tocar cai no WhatsApp da loja já com o nome, o código e o preço da peça escritos.</p>
+      <p style="font-size:0.72rem;color:#666;margin-top:4px;">No Instagram, no Story, use o adesivo "Link" e cole este endereço no espaço reservado da arte. Quem tocar cai no WhatsApp da loja já com o nome, o código e o preço da peça escritos.</p>
 
       <div id="status-arte" style="text-align:center;font-size:0.8rem;margin-top:8px;min-height:18px;"></div>
       <button type="button" id="btn-baixar-arte" style="background:var(--laranja);margin-top:6px;">⬇️ Baixar Imagem</button>
@@ -2481,7 +2481,7 @@
     painel.innerHTML = `
       <h3 style="margin-top:0;">📋 Auditoria / Histórico</h3>
       <input type="text" id="busca-auditoria" placeholder="🔎 Filtrar por atendente, produto ou ação...">
-      <div id="lista-auditoria" style="margin-top:10px;max-height:55vh;overflow-y:auto;"><p style="text-align:center;color:#999;">Carregando...</p></div>
+      <div id="lista-auditoria" style="margin-top:10px;max-height:55vh;overflow-y:auto;"><p style="text-align:center;color:#666;">Carregando...</p></div>
       <button type="button" id="btn-fechar-auditoria" style="background:#eee;color:#555;margin-top:12px;">Fechar</button>
     `;
     abrirComHistorico_('overlay-compartilhar');
@@ -2511,7 +2511,7 @@
         String(r.Acao || '').toLowerCase().includes(termo)
       );
       const container = document.getElementById('lista-auditoria');
-      if (!filtrados.length) { container.innerHTML = '<p style="text-align:center;color:#999;">Nenhum registro encontrado.</p>'; return; }
+      if (!filtrados.length) { container.innerHTML = '<p style="text-align:center;color:#666;">Nenhum registro encontrado.</p>'; return; }
       container.innerHTML = filtrados.map(r => {
         const data = r.DataHora ? new Date(r.DataHora).toLocaleString('pt-BR') : '';
         const precos = (r.PrecoAnterior !== '' && r.PrecoAnterior !== undefined && String(r.PrecoAnterior) !== String(r.PrecoNovo))
@@ -2618,7 +2618,7 @@
         ['Nome', resp.nome], ['Gênero', (resp.generos || []).join(', ')], ['Categoria', (resp.categorias || []).join(', ')],
         ['Cores', (resp.cores || []).join(', ')], ['Descrição', resp.descricao]
       ];
-      box.innerHTML = '<div class="seo-sugestao"><div style="font-size:.8rem;color:#777;margin-bottom:6px;">Analisei ' + resp.fotosAnalisadas + ' foto(s). Confira antes de aplicar — preço, estoque e tamanhos continuam com você.</div>' +
+      box.innerHTML = '<div class="seo-sugestao"><div style="font-size:.8rem;color:#666;margin-bottom:6px;">Analisei ' + resp.fotosAnalisadas + ' foto(s). Confira antes de aplicar — preço, estoque e tamanhos continuam com você.</div>' +
         linhas.map(l => '<div class="campo"><b>' + l[0] + '</b>' + escaparHtml(l[1] || '—') + '</div>').join('') +
         '<button type="button" id="btn-foto-ia-vazios" style="background:var(--laranja);">Aplicar nos campos vazios</button>' +
         '<button type="button" id="btn-foto-ia-tudo" style="background:var(--laranja);">Substituir tudo</button>' +
@@ -2713,5 +2713,6 @@
   })();
 </script>
 <script src="nav.js" data-ativo="gestao"></script>
+<script src="a11y.js"></script>
 </body>
 </html>

@@ -14,10 +14,11 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap">
 <title>Currículos — TENKiTER Modas</title>
 <style>
-  :root { --preto:#0d0d0d; --laranja:#E67E22; --cinza:#F5F1E8; --branco:#fff; --verde:#198754; --vermelho:#c62828; --borda:#ddd; }
+  :root { --preto:#0d0d0d; --laranja:#E67E22; --laranja-txt:#A85200; --cinza:#F5F1E8; --branco:#fff; --verde:#198754; --vermelho:#c62828; --borda:#ddd; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:"Inter",-apple-system,Roboto,Arial,sans-serif; background:var(--cinza); color:var(--preto); line-height:1.4; padding-bottom:70px; }
   header { background:var(--preto); background-image:linear-gradient(180deg,#0d0d0d 0%,#14140f 100%); border-bottom:2px solid var(--laranja); color:var(--laranja); padding:16px; text-align:center; position:sticky; top:0; z-index:20; font-weight:700; font-family:"Poppins",sans-serif; letter-spacing:.5px; }
+  header h1 { margin:0; font:inherit; }
   main { max-width:860px; margin:0 auto; padding:14px; }
   .card { background:var(--branco); border-radius:12px; padding:14px; margin-bottom:12px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
   input, select, textarea, button { font-family:inherit; font-size:.95rem; }
@@ -32,10 +33,10 @@
   .topo { padding:12px 14px; cursor:pointer; display:flex; gap:10px; align-items:center; justify-content:space-between; }
   .nome { font-weight:700; } .meta { font-size:.8rem; color:#666; }
   .tag { font-size:.72rem; font-weight:700; padding:3px 9px; border-radius:99px; background:#eee; white-space:nowrap; }
-  .tag.ok { background:#dff3e7; color:var(--verde); } .tag.al { background:#fff0d9; color:#a35a00; } .tag.ru { background:#fde3e3; color:var(--vermelho); }
+  .tag.ok { background:#dff3e7; color:#0f6a40; } .tag.al { background:#fff0d9; color:#a35a00; } .tag.ru { background:#fde3e3; color:var(--vermelho); }
   .det { display:none; padding:0 14px 14px; border-top:1px solid #eee; } .item.aberto .det { display:block; }
   dl { display:grid; grid-template-columns:170px 1fr; gap:6px 12px; margin:12px 0; font-size:.88rem; } dt { color:#666; } dd { margin:0; white-space:pre-wrap; word-break:break-word; }
-  .grupo { font-size:.72rem; font-weight:800; letter-spacing:.5px; color:var(--laranja); text-transform:uppercase; grid-column:1/-1; margin-top:8px; }
+  .grupo { font-size:.72rem; font-weight:800; letter-spacing:.5px; color:var(--laranja-txt); text-transform:uppercase; grid-column:1/-1; margin-top:8px; }
   .edit { display:grid; gap:8px; background:#faf7f0; padding:10px; border-radius:10px; }
   .linha { display:flex; gap:8px; flex-wrap:wrap; } .linha > * { flex:1; min-width:140px; }
   .acoes a { display:inline-block; background:var(--preto); color:var(--laranja); text-decoration:none; padding:8px 12px; border-radius:8px; font-weight:700; font-size:.85rem; margin:0 6px 6px 0; }
@@ -48,7 +49,7 @@
 </head>
 <body>
 <script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed');</script>
-<header>Currículos</header>
+<header><h1>Currículos</h1></header>
 <main id="app"><div class="card">Carregando…</div></main>
 
 <script src="common.js"></script>
@@ -187,8 +188,8 @@ function ig(h) { return 'https://instagram.com/' + String(h || '').replace(/^@/,
 function desenhar() {
   $('app').innerHTML = `<div class="abas"><button id="t1" class="${aba === 'novos' ? 'on' : ''}">Currículos novos (${novos.length})</button><button id="t2" class="${aba === 'antigos' ? 'on' : ''}">Planilha antiga${carregou.antigos ? ' (' + totalAntigos + ')' : ''}</button></div>
     <div class="filtros"><input id="q" type="search" placeholder="Buscar nome, telefone, texto…" value="${E(busca)}">
-    ${aba === 'novos' ? `<select id="fs" ${soAgenda ? 'disabled' : ''}><option value="">Todos os status (${novos.length})</option>${STATUS.map(s => `<option value="${E(s)}" ${s === fStatus ? 'selected' : ''}>${E(s)} (${novos.filter(r => (r.Status || 'Novo') === s).length})</option>`).join('')}</select>
-    <select id="fe" ${soAgenda ? 'disabled' : ''}>${['', 'Enviado', 'Perfil', 'Instagram', 'Sem Instagram', 'Menor de 18'].map(x => `<option value="${x}" ${x === fEtapa ? 'selected' : ''}>${x ? E(x) : 'Todas as etapas'}</option>`).join('')}</select>
+    ${aba === 'novos' ? `<select id="fs" aria-label="Filtrar por status" ${soAgenda ? 'disabled' : ''}><option value="">Todos os status (${novos.length})</option>${STATUS.map(s => `<option value="${E(s)}" ${s === fStatus ? 'selected' : ''}>${E(s)} (${novos.filter(r => (r.Status || 'Novo') === s).length})</option>`).join('')}</select>
+    <select id="fe" aria-label="Filtrar por etapa" ${soAgenda ? 'disabled' : ''}>${['', 'Enviado', 'Perfil', 'Instagram', 'Sem Instagram', 'Menor de 18'].map(x => `<option value="${x}" ${x === fEtapa ? 'selected' : ''}>${x ? E(x) : 'Todas as etapas'}</option>`).join('')}</select>
     <button id="fa" class="${soAgenda ? 'on' : ''}">📅 Só agenda (ordenado por dia e hora)</button>
     <button id="ord" ${soAgenda ? 'disabled' : ''}>${ordemAsc ? '⬆️ Mais antigas primeiro' : '⬇️ Mais novas primeiro'}</button>` : ''}</div>
     <div id="lista"></div>`;
@@ -416,5 +417,6 @@ function itemAntigo(r) {
 iniciar();
 </script>
 <script src="nav.js" data-ativo="curriculos"></script>
+<script src="a11y.js"></script>
 </body>
 </html>

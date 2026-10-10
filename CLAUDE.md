@@ -86,3 +86,22 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 - **Velocidade**: admin mostra a lista/categorias do cache do aparelho (`tenkiter_admin_prod_v1`, `tenkiter_admin_listas_v1`) e busca
   tudo em paralelo; treinamentos guarda só a lista de manuais (`tm_manuais_cache_v1`) — NUNCA guardar dados pessoais de funcionário/
   candidato em localStorage. Overlays/folhas usam `z-index:100` (a barra `nav.js` é 90; abaixo disso ela cobre os botões).
+
+## v3.2 — acessibilidade, busca e testes (convenções novas)
+
+- **`a11y.js`** (carregado em TODAS as páginas, logo depois de `nav.js`): liga `<label>` sem `for` ao campo seguinte, dá foco/Esc/Tab-preso
+  a janelas (`#overlay`, `#overlay-sacola`, `#overlay-compartilhar`, `.overlay-sheet`, `#modal-conta`, `#login-overlay` — abrem com a classe
+  `aberto`/`visivel`; uma janela nova precisa entrar na lista `JANELAS` do arquivo) e torna `.card[data-manual]`/`#brand-home`/`[data-tk-btn]`
+  focáveis por Tab + Enter/Espaço. Área clicável nova que não é `<button>`/`<a>`: use `data-tk-btn` ou, melhor, um botão de verdade.
+- **Cores de texto**: nunca `--laranja` (#E67E22) como cor de TEXTO sobre fundo claro (contraste 2,8:1) — use `--laranja-txt` (#A85200;
+  em `treinamentos.html` é `--accent-txt`). Botão com FUNDO laranja leva letra **preta** (#0d0d0d), nunca branca (em `treinamentos.html`:
+  `--on-accent`). Cinza de texto mínimo `#666` (nunca `#777/#888/#999` sobre branco).
+- `treinamentos.html` agora tem DOCTYPE/`<html lang>`/`<main id="app">` (antes abria em "modo antigo" do navegador). `#app` usa
+  `min-height: calc(100dvh - 76px)` por causa da barra inferior — se a altura da barra (`nav.js`) mudar, mude lá também.
+- **Catálogo**: busca tolerante (sem acento, vários termos, nome+código+categoria+gênero+cor+descrição, 1 letra errada); se a busca com os
+  filtros der zero, mostra a loja toda com aviso (busca nunca some por filtro escondido). No celular os filtros começam recolhidos (botão
+  Filtros). Endereço da peça aberta é `?c=<código>` (igual ao link compartilhado).
+- **Testes**: `tests/` (Playwright + Apps Script SIMULADO — não toca em planilha/WhatsApp). `python3 tests/rodar_tudo.py` roda lojista, cliente,
+  funcionária, teclado, busca e axe (acessibilidade) em ~2 min; `TK_BASE=https://tenkiter-catalogo.onrender.com/` testa o site publicado.
+  Rode antes de todo deploy que mexa em tela. Setup uma vez: `pip install playwright pillow`, `playwright install chromium` e baixar o
+  `axe.min.js` (comando no cabeçalho de `tests/rodar_tudo.py`).
