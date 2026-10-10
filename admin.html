@@ -252,6 +252,8 @@
 
   .btn-foto { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 16px 12px; border-radius: 12px; background: var(--preto); color: var(--laranja); font-weight: 800; font-size: 0.98rem; cursor: pointer; text-align: center; }
   .btn-foto:active { transform: scale(0.99); }
+  .btn-video { background: #f0f0f0; color: #333; border: 1px solid #ccc; }
+  #video-preview { margin-top: 10px; }
   .foto-box.cheia .btn-foto { opacity: .45; pointer-events: none; }
   .foto-box { border: none; padding: 0; margin-top: 0; }
 
@@ -420,8 +422,20 @@
         <input type="text" id="tamanhos" placeholder="Ou escreva: P, M, G, GG" autocomplete="off">
       </section>
 
+      <section class="passo" data-passo="video" id="passo-video">
+        <div class="passo-tit"><span class="num">7</span>Vídeo da peça <span class="opc">(opcional · 1 só · até 20 MB)</span></div>
+        <div class="foto-box" id="video-box">
+          <label class="btn-foto btn-video" for="video-input">🎬 Gravar ou escolher um vídeo</label>
+          <input type="file" id="video-input" accept="video/mp4,video/quicktime,video/webm" class="input-oculto">
+          <video id="video-preview" controls playsinline preload="metadata"></video>
+          <div id="video-atual">🎬 Esta peça já tem um vídeo salvo. <a id="video-atual-link" href="#" target="_blank" rel="noopener">Ver</a></div>
+          <button type="button" id="btn-remover-video">Remover vídeo</button>
+          <div class="dica-midia">MP4, MOV ou WEBM. O vídeo precisa de internet na hora de salvar.</div>
+        </div>
+      </section>
+
       <details class="extra" id="details-mais">
-        <summary>➕ Mais detalhes (cores, descrição, novidade, vídeo)</summary>
+        <summary>➕ Mais detalhes (cores, descrição, novidade)</summary>
 
         <label for="cores" style="margin-top:12px;">Cores</label>
         <div class="chips chips-rapidos" id="chips-cores"></div>
@@ -440,15 +454,6 @@
         <div class="checkbox-linha" id="linha-notificar-push" style="display:none;padding-left:22px;">
           <input type="checkbox" id="notificarPush" checked>
           <label for="notificarPush">📢 Avisar quem assina as notificações</label>
-        </div>
-
-        <label style="margin-top:16px;">Vídeo da peça (1 só, até 20 MB)</label>
-        <div class="foto-box" id="video-box" style="border:2px dashed #ccc;border-radius:10px;padding:14px;text-align:center;">
-          <input type="file" id="video-input" accept="video/mp4,video/quicktime,video/webm">
-          <video id="video-preview" controls playsinline preload="metadata"></video>
-          <div id="video-atual">🎬 Esta peça já tem um vídeo salvo. <a id="video-atual-link" href="#" target="_blank" rel="noopener">Ver</a></div>
-          <button type="button" id="btn-remover-video">Remover vídeo</button>
-          <div class="dica-midia">MP4, MOV ou WEBM. O vídeo precisa de internet na hora de salvar.</div>
         </div>
       </details>
 
@@ -1144,7 +1149,7 @@
     const chaves = falta.map(x => x[0]);
     document.querySelectorAll('#form-produto .passo').forEach(sec => {
       const k = sec.dataset.passo;
-      if (k === 'tamanhos') return;
+      if (k === 'tamanhos' || k === 'video') return;
       const ok = chaves.indexOf(k) === -1;
       sec.classList.toggle('ok', ok);
       if (ok) sec.classList.remove('erro');
