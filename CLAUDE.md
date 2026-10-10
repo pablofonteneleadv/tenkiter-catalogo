@@ -72,3 +72,17 @@ implementar integração automática de postagem sem o Pablo pedir explicitament
 Repositório é **público** — nunca commitar chaves, tokens, PIN em texto plano ou qualquer
 segredo. Credenciais/URLs sensíveis ficam só em variáveis de ambiente do Render ou nas
 Propriedades do Script do Apps Script, nunca no código versionado.
+
+## v3.1 — gestão/RH alinhados ao catálogo (convenções novas)
+
+- **Miniaturas**: toda foto de LISTA usa `fotoMini(url, largura)` (common.js: Google `lh3 /d/<id>` -> `=w<N>`, Cloudinary ->
+  `w_<N>,c_limit,f_auto,q_auto`). Foto grande (modal do produto, Stories, IA) usa a URL original.
+- **Cadastro de produto (admin.html)**: formulário em passos numerados dentro de `details#card-form`. Obrigatórios: foto, nome,
+  preço, "para quem é" e categoria (`faltasDoForm_()`); sem eles o envio não sai. Categoria = folha com busca (`#overlay-categorias`),
+  nunca todas as chips na tela; categoria nova que já existe (sem acento/maiúscula) reaproveita a existente. Os IDs antigos dos campos
+  foram mantidos (a IA e o envio dependem deles) — se mexer, preserve.
+- **Lista de peças (admin)**: filtros Ativas/Esgotadas/Arquivadas/Todas; **busca ignora o filtro** (regra 3). "Selecionar todos" vale só
+  para o que está na tela (`listaVisivel_()`).
+- **Velocidade**: admin mostra a lista/categorias do cache do aparelho (`tenkiter_admin_prod_v1`, `tenkiter_admin_listas_v1`) e busca
+  tudo em paralelo; treinamentos guarda só a lista de manuais (`tm_manuais_cache_v1`) — NUNCA guardar dados pessoais de funcionário/
+  candidato em localStorage. Overlays/folhas usam `z-index:100` (a barra `nav.js` é 90; abaixo disso ela cobre os botões).

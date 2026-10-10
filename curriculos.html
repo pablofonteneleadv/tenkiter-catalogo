@@ -9,13 +9,15 @@
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap">
 <title>Currículos — TENKiTER Modas</title>
 <style>
   :root { --preto:#0d0d0d; --laranja:#E67E22; --cinza:#F5F1E8; --branco:#fff; --verde:#198754; --vermelho:#c62828; --borda:#ddd; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:"Inter",-apple-system,Roboto,Arial,sans-serif; background:var(--cinza); color:var(--preto); line-height:1.4; padding-bottom:70px; }
-  header { background:var(--preto); color:var(--laranja); padding:16px; text-align:center; position:sticky; top:0; z-index:20; font-weight:700; }
+  header { background:var(--preto); background-image:linear-gradient(180deg,#0d0d0d 0%,#14140f 100%); border-bottom:2px solid var(--laranja); color:var(--laranja); padding:16px; text-align:center; position:sticky; top:0; z-index:20; font-weight:700; font-family:"Poppins",sans-serif; letter-spacing:.5px; }
   main { max-width:860px; margin:0 auto; padding:14px; }
   .card { background:var(--branco); border-radius:12px; padding:14px; margin-bottom:12px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
   input, select, textarea, button { font-family:inherit; font-size:.95rem; }
@@ -110,19 +112,23 @@ function falhaInicial(msg) {
   $('app').innerHTML = `<div class="card"><h3 style="margin-top:0">Não foi possível carregar</h3><p>${E(msg || 'Tente de novo.')}</p><button id="tentar">Tentar de novo</button></div>`;
   $('tentar').onclick = () => { $('app').innerHTML = '<div class="card">Carregando…</div>'; iniciar(); };
 }
+let pListaCv = null;
 async function iniciar() {
   if (EMBUTIDO) {
     // dentro do portal a pessoa já está logada; o servidor confere a permissão a cada pedido (não depende do outro servidor)
     const s = getSessao(); if (!s) return falhaInicial('Sua sessão expirou. Saia e entre de novo no portal.');
     sessao = { whatsapp: s.whatsapp };
   } else {
+    // v3.1: o pedido da lista sai junto com a conferência da sessão (o servidor de RH confere a permissão em cada pedido): uma espera a menos
+    pListaCv = getSessao() ? chamar('curriculos_listar') : null;
     const u = await Promise.race([conferirSessao(), new Promise(res => setTimeout(() => res({ semRede: true }), 30000))]);
     if (!u) return telaLogin('');
     if (u.semRede) return falhaInicial('Sem conexão ou o servidor demorou demais.');
     if (!temPermissao(u, 'dados_pessoais') && !temPermissao(u, 'gerir_acessos')) { $('app').innerHTML = '<div class="card"><h3 style="margin-top:0">Sem acesso</h3><p>Seu perfil não permite ver currículos. Peça ao Admin total para liberar "Ver dados pessoais dos colegas".</p></div>'; return; }
     sessao = u;
   }
-  const r = await chamar('curriculos_listar');
+  const r = pListaCv ? await pListaCv : await chamar('curriculos_listar');
+  pListaCv = null;
   if (!r.ok) return falhaInicial(r.semPermissao ? 'Seu perfil não permite ver currículos. Peça ao Admin total para liberar "Ver dados pessoais dos colegas".' : r.erro);
   novos = r.curriculos; STATUS = r.status; MOTIVOS = r.motivos; carregou.novos = true;
   const abrir = (new URLSearchParams(location.search).get('abrir') || '').replace(/\D/g, '');
