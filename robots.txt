@@ -1,0 +1,8 @@
+# TENKiTER Modas — o catálogo é público; as áreas internas (gestão, RH, currículos) não devem aparecer em buscadores.
+User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /treinamentos.html
+Disallow: /curriculos.html
+
+Sitemap: https://tenkitermodas.com.br/sitemap.xml

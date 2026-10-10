@@ -9,9 +9,12 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
   (portal de treinamento + painel do RH; era `manual.html`, que agora é só um redirecionamento — nunca divulgar o nome antigo),
   `nav.js` (barra inferior ÚNICA de todas as páginas: para mudar menu/permissões, edite só ele),
   `common.js` (config compartilhada — **única fonte de verdade** para `API_URL`/`SITE_URL`).
+  Também no front: `pedido.js` (sacola com formulário, pedido enviado, acompanhar pedido, favoritos, compartilhar seleção), `meta.js` (Pixel da
+  Meta, desligado por padrão), `pwa.js` (instalar o app + registra o service worker), `admin-gestao.js` (pedidos, números, importar CSV,
+  integrações, avisos no painel), `privacidade.html`, `404.html`, `site.webmanifest`, `robots.txt`, `sitemap.xml`.
 - **Backend**: dois Apps Script Web Apps separados, versionados por nome de arquivo
   (`<nome>-<versão>.gs.txt`):
-  - `catalogo-codigo-3.0.gs.txt` — catálogo + autenticação central.
+  - `catalogo-codigo-3.1.gs.txt` — catálogo + autenticação central + pedidos/métricas/importação/feed/integrações (v3.1).
   - `funcionario-codigo-3.0.gs.txt` — RH/treinamento/contratação.
   - Arquivos antigos (`Code-treinamento-v4.0.gs.txt`, `v4.1.gs.txt`, `atualizado.gs.txt`,
     `tenkiter-codigo-v2.1.gs.txt`) são **históricos — não editar nem usar como referência**.
@@ -58,7 +61,7 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
 - Miniatura **por produto**: Cloudflare Worker `tenkiter-og` (código em `og-worker/worker.js`, endereço
   `https://tenkiter-og.distkrpconfeccoes.workers.dev`) devolve HTML com `og:*` em `/p/<código>` e redireciona a pessoa para
   `?c=<código>`. No Render existe a regra Rewrite `/p/*` -> `<worker>/p/*` (confirmado: faz proxy, não redireciona). Se mudar
-  o código do Worker, publicar de novo na Cloudflare (painel ou API). `og-service/` (Node) é alternativa antiga, não usada.
+  o código do Worker, publicar de novo na Cloudflare (painel ou API). `og-service/` (Node) é alternativa antiga, não usada. O Worker agora é **v2** (JSON-LD, `/sitemap.xml`, `/feed.csv|xml`, `/lista.json`) — guia de publicação em `og-worker/LEIA-ME.md`.
   `index.html` mantém `og:image` genérico (`og-banner.jpg`) para o link da loja em si.
 
 ## Instagram / redes sociais
@@ -105,3 +108,46 @@ Propriedades do Script do Apps Script, nunca no código versionado.
   funcionária, teclado, busca e axe (acessibilidade) em ~2 min; `TK_BASE=https://tenkiter-catalogo.onrender.com/` testa o site publicado.
   Rode antes de todo deploy que mexa em tela. Setup uma vez: `pip install playwright pillow`, `playwright install chromium` e baixar o
   `axe.min.js` (comando no cabeçalho de `tests/rodar_tudo.py`).
+
+## v3.3 — pedidos, app instalável, medição e Story em vídeo (convenções novas)
+
+- **WhatsApp é SEMPRE o fixo da loja** (`WHATSAPP_NUMERO` / `linkWhatsApp`). Não existe número de atendente nem roteamento por atendente — foi
+  pedido e **recusado** pelo Pablo; não reintroduzir. Também recusados: tamanho/cor/quantidade escolhidos no modal e na sacola, CNPJ na
+  privacidade/rodapé, horário de funcionamento inventado e "3x sem juros" (só vale o que a loja realmente oferece: 10% à vista).
+  Endereço da loja (para textos/privacidade/JSON-LD): Rua Dr. Moreira da Rocha 759, Crateús-CE.
+- **Fluxo do pedido** (`pedido.js` + backend 3.1): sacola → formulário (nome, WhatsApp, entrega/retirada, observação) → `criarPedido` (aberto; o
+  servidor RECALCULA preços pela planilha e ignora peça arquivada/esgotada) → código `PED-0001` + mensagem de WhatsApp com links completos.
+  Cliente acompanha com código + 4 últimos números do WhatsApp (`consultarPedido`, freio de tentativas; nunca devolve telefone/endereço). Etapas:
+  novo → em_atendimento → aguardando_pagamento → separacao → pronto → concluido / cancelado. Texto que vai ao WhatsApp é **texto puro** (nunca
+  passa por `escaparHtml`: gerava `&amp;`). Dados do cliente só ficam no aparelho com "Lembrar meus dados" marcado.
+- **Compatibilidade com backend antigo**: o front consulta `?action=versao` (`versaoServidor()`) e liga cada recurso pela bandeira
+  (`pedidos, config, metricas, importacao, feed, integracoes, codigos, pushHistorico, loteCategoria`). Com o backend 3.0 o site funciona como
+  antes (pedido segue só pelo WhatsApp, painel sem as telas novas). Sempre teste com `install(ctx, versao="3.0")` em `tests/mock.py`. Ao
+  adicionar recurso novo no backend: nova bandeira em `versao` + front que só liga se ela existir.
+- **Pixel da Meta (`meta.js`)**: só liga com ID do Pixel (Gestão > Integrações; público, vem em `?action=config`) **e** consentimento do visitante
+  (LGPD, `tenkiter_consent_meta_v1`). Sem ID não há pedido de rede nem aviso. O token da API de Conversões é digitado uma vez no painel e fica **só
+  nas Propriedades do Script** (`META_CAPI_TOKEN`; nunca volta ao navegador nem vai ao GitHub). Navegador e servidor usam o MESMO `eventId`
+  (`novoEventId_`) para a Meta não contar duas vezes; `registrarEvento(..., semCapi=true)` só conta na planilha (usado no pedido com várias peças, que o Pixel conta uma vez só).
+  Integração com a sacola/loja do Instagram: só preparada (feed CSV/XML + Pixel); depende da Meta aprovar o comércio. Postagem automática
+  continua proibida (seção "Instagram").
+- **Service worker ÚNICO**: `OneSignalSDKWorker.js` faz OneSignal **e** cache offline (só pode haver um worker por escopo); `pwa.js` o registra.
+  `importScripts` do OneSignal vai dentro de `try/catch` (bloqueador de anúncios não pode derrubar o cache). Estratégia: rede primeiro para o
+  site, cache primeiro para fotos; **admin, treinamentos e currículos nunca entram no cache** (dados de gente). Para forçar renovação em todos os
+  aparelhos, troque `VERSAO` (hoje `tk-3.3.0`). Se mexer em arquivo do site que precise abrir offline, acrescente-o em `BASICO` no worker (e em `FORA_DO_CACHE` se for área interna).
+- **Peça de imagem por JS**: no modal da peça o `src` da foto é atribuído por JavaScript depois do `innerHTML` (com CSP por `<meta>` + service
+  worker, o Chrome chegou a pedir o texto literal `${...}` do template como URL — bug real). Não volte a montar `<img src="${...}">` em template
+  para essa foto. A CSP de `index.html` (`<meta http-equiv=Content-Security-Policy>`) precisa listar todo domínio novo em `connect-src`/`img-src`
+  (já inclui o Worker `tenkiter-og`).
+- **Lista rápida (opcional)**: `buscarListaPublica()` (common.js) usa `LISTA_RAPIDA_URL` (vazia = desligada) e cai no Apps Script se o Worker falhar
+  ou passar de 3,5 s. Todo `fetch(API_URL+'?action=list')` do catálogo passa por ela.
+- **Story em vídeo (admin, janela da arte)**: grava ~7 s no navegador (canvas + `MediaRecorder`). O resultado depende do navegador: MP4/H.264 serve
+  ao Instagram; WebM ou VP9 pode ser recusado — o painel analisa os bytes reais do arquivo e dá o parecer (verde/atenção), nunca promete. Se o
+  celular do Pablo só gerar WebM/VP9, o próximo investimento é converter para MP4 H.264 (ex.: Cloudinary) — **ainda não implementado**. O Story em
+  JPG segue idêntico (`gerarEBaixarImagemStories`).
+- **Toque**: alvo mínimo 24 px; links de nome da peça são `<button class="abrir-peca">` com `padding` (ver CSS do `index.html`).
+- **Testes novos** (todos em `python3 tests/rodar_tudo.py`, ~6 min; precisa de `ffmpeg` para o Story em vídeo e `node` para os dois últimos):
+  `jornada_pedido.py`, `admin_gestao.py`, `novas_telas.py` (axe/teclado das telas novas), `lista_rapida.py`, `story_video.py`, `service_worker.py`
+  (offline de verdade: perfil persistente + servidor desligado), `backend_gs.js` (roda o `.gs.txt` em memória) e `worker_og.js` (Worker v2). Fatos
+  do Playwright que custaram caro: bloqueie service workers nos testes comuns; `set_offline`/`route` NÃO afetam o que o service worker busca;
+  `route.fulfill` já injeta CORS (para simular bloqueio, devolva um `Access-Control-Allow-Origin` diferente).
+- **Nunca rodar `pkill -f` com texto que apareça no próprio comando** (mata o shell). Para encerrar servidores de teste use o PID.

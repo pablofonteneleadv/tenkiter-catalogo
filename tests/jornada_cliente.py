@@ -27,7 +27,7 @@ with sync_playwright() as p:
     pg.locator(".card").first.click(); pg.wait_for_timeout(700)
     chk("abre o produto (modal)",pg.locator("#foto-principal-modal").count()==1)
     chk("URL ganhou ?c=código",re.search(r"[?&]c=TK-",pg.url) is not None,pg.url)
-    btn=pg.locator("button:has-text('WhatsApp'), a:has-text('WhatsApp')").first
+    btn=pg.locator("#btn-quero")   # o botão principal da peça (o rodapé e o botão flutuante também têm WhatsApp, por isso o seletor é específico)
     chk("botão de WhatsApp existe",btn.count()>0)
     if btn.count():
         btn.click(); pg.wait_for_timeout(500)

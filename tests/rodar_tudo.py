@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Roda toda a bateria de testes do site (simula lojista, cliente, funcionária, acessibilidade, teclado, busca).
+"""Roda toda a bateria de testes do site (simula lojista, cliente, pedido, funcionária, acessibilidade, teclado, busca, painel de gestão,
+telas novas, service worker offline, Story em vídeo, lista rápida) e os testes de código sem navegador (backend do Apps Script e Worker da Cloudflare).
 
 Uso:
     pip install playwright pillow && playwright install chromium     (uma vez)
+    apt install ffmpeg      (para o teste do Story em vídeo; sem ele aquela bateria avisa e falha)
+    node (v18+) para os testes backend_gs.js e worker_og.js
     curl -L https://cdn.jsdelivr.net/npm/axe-core@4.10.2/axe.min.js -o tests/axe.min.js   (uma vez; não vai pro git)
     python3 tests/rodar_tudo.py                    # testa os arquivos desta pasta (sobe um servidor local sozinho)
     TK_BASE=https://tenkiter-catalogo.onrender.com/ python3 tests/rodar_tudo.py   # testa o site publicado
@@ -30,10 +33,22 @@ SUITES = [  # (arquivo, como saber que passou)
     ("jornada_funcionaria.py", lambda o: "FALHAS=1 ['progresso foi enviado ao servidor']" in o or "FALHAS=0" in o),  # manuais-semente não têm id de capítulo: não sincronizam
     ("teclado.py", lambda o: "FALHAS=0" in o),
     ("busca.py", lambda o: "FALHAS=0" in o),
+    ("jornada_pedido.py", lambda o: "FALHAS=0" in o),
+    ("admin_gestao.py", lambda o: "FALHAS=0" in o),
+    ("novas_telas.py", lambda o: "FALHAS=0" in o),
+    ("lista_rapida.py", lambda o: "FALHAS=0" in o),
+    ("story_video.py", lambda o: "FALHAS=0" in o),
+    ("service_worker.py", lambda o: "FALHAS=0" in o),   # sobe e DESLIGA o próprio servidor para testar "sem internet" de verdade
+    ("backend_gs.js", lambda o: "FALHAS=0" in o),        # backend do Apps Script rodando em memória (sem planilha real)
+    ("worker_og.js", lambda o: "FALHAS=0" in o),         # Worker da Cloudflare com o Apps Script simulado
 ]
+PROPRIO_SERVIDOR = {"service_worker.py"}   # no teste local, esta bateria cuida do próprio servidor (precisa desligá-lo)
 falhou = []
 for arq, passou in SUITES:
-    r = subprocess.run([sys.executable, os.path.join(AQUI, arq)], capture_output=True, text=True, timeout=900)
+    env = dict(os.environ)
+    if arq in PROPRIO_SERVIDOR and not BASE: env.pop("TK_BASE", None)
+    cmd = ["node", os.path.join(AQUI, arq)] if arq.endswith(".js") else [sys.executable, os.path.join(AQUI, arq)]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=900, env=env)
     out = r.stdout + r.stderr
     ok = r.returncode == 0 and passou(r.stdout)
     print(("✔ " if ok else "✘ ") + arq)

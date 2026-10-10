@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0d0d0d">
+<title>Página não encontrada — TENKiTER Modas</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<style>
+  :root { --preto:#0d0d0d; --laranja:#E67E22; --cinza:#F5F1E8; --verde:#198754; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--cinza); color: var(--preto); font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; text-align: center; }
+  main { max-width: 420px; }
+  img { width: 72px; height: auto; background: var(--preto); padding: 10px 14px; border-radius: 14px; }
+  h1 { font-size: 1.5rem; margin: 18px 0 6px; }
+  p { color: #444; line-height: 1.5; margin: 0 0 18px; }
+  a.botao { display: block; padding: 15px; border-radius: 12px; font-weight: 800; text-decoration: none; margin-bottom: 10px; }
+  a.principal { background: var(--laranja); color: #0d0d0d; }
+  a.zap { background: var(--verde); color: #fff; }
+  a:focus-visible { outline: 3px solid var(--preto); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <img src="/logo-mark.png" alt="TENKiTER Modas" width="72" height="119">
+  <h1>Não achamos essa página</h1>
+  <p>O endereço pode ter mudado ou a peça saiu do catálogo. Volte para a loja ou fale com a gente.</p>
+  <a class="botao principal" href="/">👗 Ver o catálogo</a>
+  <a class="botao zap" id="zap" href="https://wa.me/5588993223998?text=Ol%C3%A1!%20Procurei%20uma%20p%C3%A1gina%20no%20site%20e%20n%C3%A3o%20encontrei.">💬 Falar no WhatsApp</a>
+</main>
+<script src="/common.js"></script>
+<script>/* o número vem de common.js (fonte única); o link fixo acima é só reserva */
+try { document.getElementById("zap").href = "https://wa.me/" + WHATSAPP_NUMERO + "?text=" + encodeURIComponent("Olá! Procurei uma página no site e não encontrei."); } catch (e) {}</script>
+</body>
+</html>

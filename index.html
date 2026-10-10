@@ -31,7 +31,46 @@
 <meta property="og:image:alt" content="TENKiTER Modas — Catálogo Digital, Crateús/CE">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://tenkitermodas.com.br/og-banner.jpg">
-<meta name="description" content="Catálogo digital da TENKiTER Modas — Crateús, CE.">
+<meta name="description" content="Moda feminina, masculina e infantil na TENKiTER Modas, em Crateús-CE: vestidos, conjuntos, fantasias e muito mais. 10% de desconto à vista. Escolha no catálogo e peça pelo WhatsApp.">
+<link rel="canonical" href="https://tenkitermodas.com.br/">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<!-- v3.3: política de segurança de conteúdo. Fica aqui (e não em cabeçalho HTTP) porque o Render estático não deixa configurar cabeçalhos por arquivo.
+     Só libera o que o catálogo realmente usa: o próprio site, o Apps Script (dados), Cloudinary/Google (fotos e vídeos), OneSignal (avisos) e Meta (só se o Pixel for ligado no painel). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.onesignal.com https://*.onesignal.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.onesignal.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://tenkiter-og.distkrpconfeccoes.workers.dev https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com https://lh3.googleusercontent.com https://res.cloudinary.com https://drive.google.com https://onesignal.com https://*.onesignal.com https://www.facebook.com https://connect.facebook.net; frame-src https://drive.google.com https://*.onesignal.com https://onesignal.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<script src="common.js"></script>
+<script>
+/* v3.3: começa a buscar a lista de peças já aqui no <head> (antes do resto da página montar) -- o catálogo aparece mais cedo.
+   O endereço vem de common.js (API_URL, fonte única). carregarCatalogo() pega esta busca pronta. */
+try { window.__precargaLista = buscarListaPublica(); window.__precargaLista.catch(function () {}); }
+catch (e) { window.__precargaLista = null; }
+</script>
+<script type="application/ld+json" id="ld-loja">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "ClothingStore",
+      "@id": "https://tenkitermodas.com.br/#loja",
+      "name": "TENKiTER Modas",
+      "url": "https://tenkitermodas.com.br/",
+      "image": "https://tenkitermodas.com.br/og-banner.jpg",
+      "logo": "https://tenkitermodas.com.br/icon-512.png",
+      "telephone": "+55 88 99322-3998",
+      "address": { "@type": "PostalAddress", "streetAddress": "Rua Dr. Moreira da Rocha, 759", "addressLocality": "Crateús", "addressRegion": "CE", "addressCountry": "BR" },
+      "sameAs": ["https://instagram.com/tenkitermodasceara"]
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://tenkitermodas.com.br/#site",
+      "url": "https://tenkitermodas.com.br/",
+      "name": "TENKiTER Modas",
+      "inLanguage": "pt-BR",
+      "publisher": { "@id": "https://tenkitermodas.com.br/#loja" },
+      "potentialAction": { "@type": "SearchAction", "target": "https://tenkitermodas.com.br/?q={termo}", "query-input": "required name=termo" }
+    }
+  ]
+}
+</script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap">
 <style>
   :root { --preto: #0d0d0d; --laranja: #E67E22; --laranja-txt: #A85200; --ouro: #F39C12; --cinza: #F5F1E8; --branco: #ffffff; --verde: #198754; --vermelho: #c62828; --amarelo: #8a6200; }
@@ -77,6 +116,15 @@
   .filtros.compacto .filtros-extras { display: none; }
   .filtros.compacto.aberto .filtros-extras { display: block; position: absolute; left: 0; right: 0; top: 100%; background: var(--branco); padding: 4px 14px 14px; max-height: calc(100vh - 190px); overflow-y: auto; box-shadow: 0 10px 18px rgba(0,0,0,0.18); border-radius: 0 0 14px 14px; }
   .filtros.compacto.aberto .btn-filtros-toggle { background: var(--preto); color: var(--laranja); border-color: var(--preto); }
+  /* v3.3: no celular o painel já NASCE recolhido pelo CSS (antes o JS recolhia depois da página pintar e a lista pulava de lugar: CLS). */
+  @media (max-width: 600px) {
+    .filtros { padding-top: 8px; padding-bottom: 8px; }
+    .filtros .btn-filtros-toggle { display: inline-flex; }
+    .filtros .busca-campo input[type=text] { margin-bottom: 0; }
+    .filtros .filtros-extras { display: none; }
+    .filtros.aberto .filtros-extras { display: block; position: absolute; left: 0; right: 0; top: 100%; background: var(--branco); padding: 4px 14px 14px; max-height: calc(100vh - 190px); overflow-y: auto; box-shadow: 0 10px 18px rgba(0,0,0,0.18); border-radius: 0 0 14px 14px; }
+    .filtros.aberto .btn-filtros-toggle { background: var(--preto); color: var(--laranja); border-color: var(--preto); }
+  }
 
   .btn-voz { position: absolute; right: 4px; top: 4px; width: 36px; height: 36px; border-radius: 50%; border: none; background: #f0f0f0; color: #666; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .btn-voz.ouvindo { background: var(--vermelho); color: #fff; animation: pulsar 1s infinite; }
@@ -130,7 +178,7 @@
   .card-info .nome { font-size: 0.84rem; font-weight: 700; line-height: 1.25; margin-bottom: 4px; color: #111; }
   .card-info .preco { font-size: 0.78rem; color: #555; }
   .card-info .preco span { color: #1a7a1a; font-weight: 800; }
-  .card-info .nome .abrir-peca { all: unset; cursor: pointer; font: inherit; color: inherit; display: inline; }
+  .card-info .nome .abrir-peca { all: unset; cursor: pointer; font: inherit; color: inherit; display: inline-block; padding: 5px 0; min-height: 24px; box-sizing: border-box; }
   .card-info .nome .abrir-peca:focus-visible { outline: 2px solid var(--laranja-txt); outline-offset: 3px; border-radius: 3px; }
   .card:focus-within { border-radius: 14px; }
   .card-info .tags { font-size: 0.68rem; color: #666; margin-top: 3px; }
@@ -142,8 +190,8 @@
   #vazio { text-align: center; color: #666; padding: 40px 20px; font-size: 0.9rem; }
   .btn-carregar-mais { max-width: 300px; margin: 20px auto 0; display: block; background: var(--branco); color: var(--preto); border: 1px solid #ccc; padding: 12px; border-radius: 10px; font-weight: 700; cursor: pointer; }
 
-  #overlay, #overlay-sacola { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: flex-end; justify-content: center; backdrop-filter: blur(2px); }
-  #overlay.aberto, #overlay-sacola.aberto { display: flex; }
+  #overlay, #overlay-sacola, .overlay-sheet-loja { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: flex-end; justify-content: center; backdrop-filter: blur(2px); }
+  #overlay.aberto, #overlay-sacola.aberto, .overlay-sheet-loja.aberto { display: flex; }
   .modal { background: var(--branco); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; max-height: 92vh; overflow-y: auto; animation: subir 0.22s ease-out; position: relative; }
   @keyframes subir { from { transform: translateY(40px); opacity:0; } to { transform: translateY(0); opacity:1; } }
 
@@ -200,6 +248,126 @@
   .conta-abas button.ativa { background: var(--preto); color: var(--laranja); }
   .conta-erro { color: #c62828; font-size: 0.85rem; min-height: 1.1em; margin-bottom: 6px; }
   .conta-fechar { position: absolute; top: 8px; right: 12px; background: none; border: none; font-size: 1.4rem; cursor: pointer; color: #666; }
+  /* ======================= v3.3 ======================= */
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  body.tem-aviso-offline { padding-bottom: 120px; }
+
+  .beneficios { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 10px 14px 0; max-width: 900px; margin: 0 auto; min-height: 44px; } /* sem rolagem lateral: tudo cabe na tela */
+  .beneficios span { background: var(--branco); border: 1px solid #e6dfcf; border-radius: 12px; padding: 6px 6px; font-size: 0.7rem; font-weight: 700; color: #333; text-align: center; line-height: 1.25; display: flex; align-items: center; justify-content: center; }
+  @media (min-width: 600px) { .beneficios span { font-size: 0.78rem; padding: 7px 12px; } }
+
+  .barra-lista { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; margin-bottom: 8px; }
+  .barra-lista #contagem { margin-bottom: 0; flex: 1; min-width: 0; }
+  .ordem-wrap select { height: 38px; border: 1px solid #ccc; border-radius: 19px; background: var(--branco); padding: 0 12px; font-size: 0.78rem; font-weight: 700; color: #222; cursor: pointer; }
+
+  /* cartão: selos, ações rápidas */
+  .mini-selos { position: absolute; left: 8px; bottom: 8px; display: flex; gap: 4px; z-index: 2; pointer-events: none; }
+  .mini-selo { background: rgba(0,0,0,0.72); color: #fff; font-size: 0.64rem; font-weight: 700; padding: 3px 7px; border-radius: 999px; }
+  .selo-ultimas { position: absolute; right: 8px; bottom: 8px; z-index: 2; background: var(--amarelo); color: #fff; font-size: 0.64rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; pointer-events: none; }
+  .acoes-card { display: flex; gap: 6px; margin-top: 8px; }
+  .acoes-card button { flex: 1; min-height: 40px; border-radius: 10px; font-size: 0.74rem; font-weight: 800; cursor: pointer; border: 1px solid #ccc; background: #fff; color: #111; padding: 0 4px; }
+  .acoes-card .ac-pedir { background: var(--verde); border-color: var(--verde); color: #fff; }
+  .acoes-card .ac-sacola[aria-pressed="true"] { background: var(--preto); border-color: var(--preto); color: var(--laranja); }
+
+  /* vazio com WhatsApp */
+  #vazio .vazio-acoes { display: flex; flex-direction: column; gap: 8px; max-width: 320px; margin: 16px auto 0; }
+  .btn-zap, .btn-neutro { display: block; text-align: center; text-decoration: none; padding: 13px 14px; border-radius: 12px; font-weight: 800; font-size: 0.9rem; cursor: pointer; border: none; }
+  .btn-zap { background: var(--verde); color: #fff; }
+  .btn-neutro { background: #fff; color: var(--preto); border: 1px solid #ccc; }
+
+  /* rodapé */
+  .rodape { background: var(--preto); color: #ddd; padding: 26px 16px 22px; margin-top: 30px; font-size: 0.82rem; line-height: 1.55; }
+  .rodape-int { max-width: 900px; margin: 0 auto; display: grid; gap: 18px; grid-template-columns: 1fr; }
+  @media (min-width: 640px) { .rodape-int { grid-template-columns: 1.2fr 1fr; } }
+  .rodape h2 { font-size: 1rem; margin: 0 0 6px; color: var(--laranja); letter-spacing: 1px; }
+  .rodape address { font-style: normal; }
+  .rodape a { color: var(--laranja); font-weight: 700; text-decoration: none; }
+  .rodape a:hover { text-decoration: underline; }
+  .rodape ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .rodape li a, .rodape li button { display: inline-flex; align-items: center; min-height: 36px; }
+  .rodape .btn-instalar { background: none; border: 1px solid var(--laranja); color: var(--laranja); border-radius: 999px; padding: 0 14px; font-weight: 700; cursor: pointer; }
+  .rodape .nota { color: #bbb; font-size: 0.74rem; margin-top: 10px; }
+
+  /* botão flutuante do WhatsApp (sempre o número fixo da loja) */
+  .fab-zap { position: fixed; right: 14px; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); width: 56px; height: 56px; border-radius: 50%; background: var(--verde); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.3); z-index: 80; text-decoration: none; }
+  .fab-zap svg { width: 30px; height: 30px; fill: currentColor; }
+  .fab-zap:focus-visible { outline: 3px solid var(--preto); outline-offset: 3px; }
+
+  /* aviso de falta de internet */
+  #aviso-offline { position: fixed; left: 12px; right: 12px; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); z-index: 85; background: var(--preto); color: #fff; border: 1px solid var(--laranja); border-radius: 12px; padding: 10px 14px; font-size: 0.8rem; font-weight: 600; text-align: center; box-shadow: 0 4px 14px rgba(0,0,0,0.3); }
+  #aviso-offline[hidden] { display: none; }
+
+  /* folha (bottom sheet): alça, botão X, barra de compra fixa */
+  .modal { overscroll-behavior: contain; }
+  .modal.arrastando { transition: none; animation: none; }
+  .modal.voltando { transition: transform 0.2s ease-out; }
+  .sheet-handle { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 42px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.85); box-shadow: 0 0 4px rgba(0,0,0,0.4); z-index: 6; pointer-events: none; }
+  .sheet-handle.escura { background: #bbb; box-shadow: none; }
+  .btn-x-modal { position: absolute; top: 10px; right: 10px; z-index: 6; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(0,0,0,0.65); color: #fff; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .barra-compra { position: sticky; bottom: 0; z-index: 5; display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--branco); border-top: 1px solid #eee; box-shadow: 0 -4px 12px rgba(0,0,0,0.08); }
+  .barra-compra button, .barra-compra a { min-height: 48px; border-radius: 12px; font-weight: 800; font-size: 0.92rem; cursor: pointer; border: none; text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; }
+  .barra-compra .bc-sacola { flex: 0 0 38%; background: #f0f0f0; color: var(--preto); }
+  .barra-compra .bc-sacola[aria-pressed="true"] { background: var(--preto); color: var(--laranja); }
+  .barra-compra .bc-pedir { flex: 1; background: var(--verde); color: #fff; }
+  .barra-compra .bc-total { flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center; line-height: 1.15; }
+  .barra-compra .bc-total small { font-size: 0.68rem; color: #555; font-weight: 700; }
+  .barra-compra .bc-total strong { font-size: 1.05rem; color: #1a7a1a; }
+  .barra-compra .bc-aviso { flex: 1; background: #eee; color: #555; font-weight: 700; font-size: 0.82rem; padding: 0 8px; }
+  .linha-secundaria { display: flex; gap: 8px; padding: 0 16px 12px; }
+  .linha-secundaria button { flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid #ddd; background: #fafafa; font-weight: 700; font-size: 0.8rem; cursor: pointer; color: #222; }
+
+  /* sacola / pedido / favoritos / rastreio / seleção */
+  .sheet-topo { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 4px; gap: 8px; }
+  .sheet-topo .nome { font-size: 1.1rem; font-weight: 800; }
+  .sheet-topo .x { background: #f0f0f0; border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 1.05rem; cursor: pointer; flex: none; }
+  .form-pedido { padding: 4px 16px 6px; }
+  .form-pedido h3 { font-size: 0.95rem; margin: 10px 0 8px; font-family: "Inter", sans-serif; font-weight: 800; }
+  .form-pedido label { display: block; font-size: 0.78rem; font-weight: 700; margin: 8px 0 3px; color: #333; }
+  .form-pedido input[type=text], .form-pedido input[type=tel], .form-pedido textarea { width: 100%; border: 1px solid #ccc; border-radius: 10px; padding: 11px 12px; font-size: 0.95rem; background: #fff; }
+  .form-pedido textarea { min-height: 70px; resize: vertical; }
+  .form-pedido .opcoes { display: flex; gap: 8px; margin: 4px 0; }
+  .form-pedido .opcoes label { flex: 1; display: flex; align-items: center; gap: 8px; margin: 0; border: 1px solid #ccc; border-radius: 10px; padding: 11px 10px; min-height: 44px; font-size: 0.85rem; cursor: pointer; background: #fff; }
+  .form-pedido .opcoes input:checked + span { font-weight: 800; }
+  .form-pedido .lembrar { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-top: 10px; min-height: 36px; }
+  .form-pedido .erro-campo { color: var(--vermelho); font-size: 0.8rem; font-weight: 700; min-height: 1.1em; margin-top: 6px; }
+  .form-pedido input.invalido, .form-pedido textarea.invalido { border-color: var(--vermelho); }
+  .item-sacola .nome-btn { all: unset; cursor: pointer; font-weight: 700; font-size: 0.85rem; color: inherit; }
+  .item-sacola .btn-remover { min-width: 40px; min-height: 40px; }
+  .resumo-linha { display: flex; justify-content: space-between; padding: 4px 16px; font-size: 0.88rem; }
+  .pedido-ok { padding: 8px 16px 4px; text-align: center; }
+  .pedido-ok .selo-ok { width: 56px; height: 56px; border-radius: 50%; background: var(--verde); color: #fff; font-size: 1.8rem; display: flex; align-items: center; justify-content: center; margin: 8px auto; }
+  .pedido-ok .codigo-pedido { display: inline-block; font-size: 1.4rem; font-weight: 800; letter-spacing: 1px; background: var(--preto); color: var(--laranja); padding: 8px 16px; border-radius: 10px; margin: 8px 0; }
+  .pedido-ok p { font-size: 0.88rem; color: #333; line-height: 1.45; margin: 6px 0; }
+  .linha-linha { border: none; border-top: 1px solid #eee; margin: 10px 0; }
+  .etapas { list-style: none; margin: 10px 0 4px; padding: 0 16px; }
+  .etapas li { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; font-size: 0.88rem; color: #666; position: relative; }
+  .etapas li::before { content: ''; flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #bbb; background: #fff; margin-top: 2px; }
+  .etapas li.feita { color: #222; }
+  .etapas li.feita::before { background: var(--verde); border-color: var(--verde); }
+  .etapas li.atual { color: #111; font-weight: 800; }
+  .etapas li.atual::before { background: var(--laranja); border-color: var(--laranja); box-shadow: 0 0 0 4px rgba(230,126,34,0.25); }
+  .tag-cancelado { display: inline-block; background: var(--vermelho); color: #fff; font-weight: 800; padding: 4px 10px; border-radius: 8px; font-size: 0.8rem; }
+  .campo-rastreio { padding: 4px 16px; }
+  .campo-rastreio label { display: block; font-size: 0.78rem; font-weight: 700; margin: 8px 0 3px; }
+  .campo-rastreio input { width: 100%; border: 1px solid #ccc; border-radius: 10px; padding: 12px; font-size: 1rem; text-transform: uppercase; }
+  .campo-rastreio input.num { text-transform: none; letter-spacing: 4px; }
+  .preview-selecao { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 4px 16px 10px; }
+  .preview-selecao img { width: 100%; aspect-ratio: 4/5; object-fit: cover; border-radius: 8px; background: #eee; }
+  .link-selecao { width: calc(100% - 32px); margin: 0 16px 8px; padding: 11px 12px; border: 1px solid #ccc; border-radius: 10px; font-size: 0.8rem; background: #fafafa; color: #333; }
+  .texto-pequeno { font-size: 0.8rem; color: #555; padding: 0 16px; line-height: 1.4; }
+  .fav-linha { display: flex; gap: 10px; align-items: center; padding: 8px 16px; border-bottom: 1px solid #eee; }
+  .fav-linha img { width: 48px; height: 60px; object-fit: cover; border-radius: 6px; background: #eee; flex: none; }
+  .fav-linha .info { flex: 1; min-width: 0; }
+  .fav-linha .acoes { display: flex; gap: 4px; flex: none; }
+  .fav-linha .acoes button { min-width: 40px; min-height: 40px; border: 1px solid #ddd; background: #fff; border-radius: 10px; cursor: pointer; font-size: 0.95rem; }
+  .btn-instalar-topo { display: none; }
+
+  .cookie-aviso { position: fixed; left: 12px; right: 12px; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); z-index: 95; background: #fff; border: 1px solid #ccc; border-radius: 14px; padding: 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.25); font-size: 0.82rem; line-height: 1.45; max-width: 520px; margin: 0 auto; }
+  .cookie-aviso .linha { display: flex; gap: 8px; margin-top: 10px; }
+  .cookie-aviso button { flex: 1; min-height: 44px; border-radius: 10px; font-weight: 800; cursor: pointer; border: 1px solid #ccc; background: #fff; }
+  .cookie-aviso button.sim { background: var(--preto); color: var(--laranja); border-color: var(--preto); }
+  .cookie-aviso a { color: var(--laranja-txt); font-weight: 700; }
+  @media (prefers-reduced-motion: reduce) { .modal { animation: none; } .modal.voltando { transition: none; } }
 </style>
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 </head>
@@ -217,7 +385,7 @@
 <header>
   <div class="header-linha">
     <div class="header-titulo">
-      <img src="logo-mark.png" alt="TENKiTER" class="header-logo-img">
+      <img src="logo-mark.png" alt="TENKiTER" class="header-logo-img" width="23" height="38">
       <div class="header-titulo-textos">
         <h1>TENKiTER MODAS</h1>
         <p>Catálogo Digital — Crateús / CE</p>
@@ -232,6 +400,12 @@
   </div>
 </header>
 
+<section class="beneficios" aria-label="Vantagens da loja">
+  <span>💬 Peça pelo WhatsApp</span>
+  <span>💰 10% de desconto à vista</span>
+  <span>📍 Retire na loja, em Crateús</span>
+</section>
+
 <div class="pills-categoria" id="pills-categoria"></div>
 
 <div class="filtros" id="filtros" role="search" aria-label="Buscar e filtrar peças">
@@ -240,7 +414,7 @@
       <input type="text" id="busca" aria-label="Buscar por produto, código ou estilo" placeholder="🔎 Buscar por produto, código ou estilo..." enterkeyhint="search">
       <button type="button" class="btn-voz" id="btn-voz" title="Buscar por comando de voz" aria-label="Buscar por comando de voz">🎤</button>
     </div>
-    <button type="button" class="btn-filtros-toggle" id="btn-filtros-toggle" aria-expanded="true" aria-controls="filtros-extras" title="Mostrar ou esconder os filtros">
+    <button type="button" class="btn-filtros-toggle" id="btn-filtros-toggle" aria-expanded="false" aria-controls="filtros-extras" title="Mostrar ou esconder os filtros">
       <span aria-hidden="true">⚙️</span><span class="rot">Filtros</span><span class="badge-filtros" id="badge-filtros" hidden>0</span>
     </button>
   </div>
@@ -271,11 +445,45 @@
 </div>
 
 <main>
-  <div id="contagem">Carregando catálogo...</div>
+  <div class="barra-lista">
+    <div id="contagem" aria-live="polite">Carregando catálogo...</div>
+    <label class="ordem-wrap"><span class="sr-only">Ordenar as peças por</span>
+      <select id="ordem">
+        <option value="recentes">Mais recentes</option>
+        <option value="menor">Menor preço</option>
+        <option value="maior">Maior preço</option>
+        <option value="az">Nome (A–Z)</option>
+      </select>
+    </label>
+  </div>
   <div class="grid" id="grid"></div>
   <div id="vazio" style="display:none;">Nenhum produto encontrado para estes filtros.</div>
   <button type="button" class="btn-carregar-mais" id="btn-carregar-mais" style="display:none;">Carregar mais peças</button>
 </main>
+
+<footer class="rodape" id="rodape">
+  <div class="rodape-int">
+    <div>
+      <h2>TENKiTER MODAS</h2>
+      <address>📍 Rua Dr. Moreira da Rocha, 759 — Crateús, CE<br><a id="rod-mapa" href="https://www.google.com/maps/search/?api=1&amp;query=Rua+Dr.+Moreira+da+Rocha+759+Crateús+CE" target="_blank" rel="noopener">Ver no mapa</a></address>
+      <p class="nota">Preços e estoque podem mudar sem aviso. 10% de desconto no pagamento à vista.</p>
+    </div>
+    <ul>
+      <li><a id="rod-zap" href="#" target="_blank" rel="noopener">💬 WhatsApp da loja</a></li>
+      <li><a id="rod-insta" href="https://instagram.com/tenkitermodasceara" target="_blank" rel="noopener">📷 @tenkitermodasceara</a></li>
+      <li><a id="rod-rastrear" href="?pedido=">📦 Acompanhar meu pedido</a></li>
+      <li><a href="privacidade.html">🔒 Política de privacidade</a></li>
+      <li><button type="button" class="btn-instalar" id="btn-instalar" hidden>📲 Instalar o app no celular</button></li>
+    </ul>
+  </div>
+  <a class="fab-zap" id="fab-zap" href="#" target="_blank" rel="noopener" aria-label="Falar com a TENKiTER no WhatsApp">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+</a>
+</footer>
+
+<div id="aviso-offline" role="status" hidden>📡 Sem internet — mostrando o catálogo salvo neste aparelho.</div>
+
+<div id="overlay-favoritos" class="overlay-sheet-loja"><div class="modal" id="favoritos-conteudo" role="dialog" aria-modal="true" aria-label="Seus favoritos"></div></div>
 
 <div id="overlay"><div class="modal" id="modal-conteudo" role="dialog" aria-modal="true" aria-label="Detalhes da peça"></div></div>
 
@@ -283,9 +491,14 @@
   <div class="modal" id="sacola-conteudo" role="dialog" aria-modal="true" aria-label="Sua sacola"></div>
 </div>
 
+<div id="overlay-rastreio" class="overlay-sheet-loja"><div class="modal" id="rastreio-conteudo" role="dialog" aria-modal="true" aria-label="Acompanhar pedido"></div></div>
+
+<div id="overlay-selecao" class="overlay-sheet-loja"><div class="modal" id="selecao-conteudo" role="dialog" aria-modal="true" aria-label="Compartilhar seleção"></div></div>
 
 
-<script src="common.js"></script>
+
+<script src="meta.js"></script>
+<script src="pedido.js"></script>
 <script>
   const POR_PAGINA = 24;
   const QTD_PILLS_CATEGORIA = 6;
@@ -306,16 +519,21 @@
     if (!estoqueInformado(p)) return null;
     const n = Number(p.Estoque);
     if (n <= 0) return { texto: '🔴 Esgotado', classe: 'esgotado-txt' };
-    if (n <= 2) return { texto: '🟡 Poucas unidades', classe: 'poucas' };
+    if (n <= 2) return { texto: n === 1 ? '🟡 Última unidade' : '🟡 Últimas ' + n + ' unidades', classe: 'poucas' };
     return { texto: '🟢 Disponível', classe: 'disponivel' };
   }
 
-  function registrarEvento(produtoId, codigo, tipo) {
+  /** Identificador único de UM evento: o mesmo texto vai ao Pixel (navegador) e à API de Conversões (servidor) para a Meta não contar 2x. */
+  function novoEventId_(prefixo, id) { return prefixo + '-' + id + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+  /** eventId liga este registro ao evento do Pixel. semCapi=true: só conta na planilha (ex.: pedido com várias peças, que o Pixel conta uma vez só). */
+  function registrarEvento(produtoId, codigo, tipo, eventId, semCapi) {
     try {
-      fetch(API_URL, {
-        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'registrarEvento', produtoId: produtoId, codigo: codigo, tipo: tipo })
-      });
+      const corpo = { action: 'registrarEvento', produtoId: produtoId, codigo: codigo, tipo: tipo };
+      // Só se o Pixel estiver ligado e aceito: o servidor pode repetir o evento na API de Conversões da Meta (o token fica só no servidor).
+      const ck = !semCapi && window.TKMeta && TKMeta.cookies();
+      if (ck) { corpo.meta = { fbp: ck.fbp, fbc: ck.fbc, url: location.href, ua: navigator.userAgent }; if (eventId) corpo.meta.eventId = eventId; }
+      fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(corpo) });
     } catch (e) {}
   }
 
@@ -325,6 +543,7 @@
     if (params.has('min')) document.getElementById('preco-min').value = params.get('min');
     if (params.has('max')) document.getElementById('preco-max').value = params.get('max');
     if (params.get('novidade') === 'true') apenasNovidades = true;
+    if (params.has('ord') && ['recentes', 'menor', 'maior', 'az'].includes(params.get('ord'))) document.getElementById('ordem').value = params.get('ord');
     if (params.has('cat')) params.get('cat').split(',').forEach(c => filtroCategorias.add(c.trim()));
     if (params.has('gen')) params.get('gen').split(',').forEach(g => filtroGeneros.add(g.trim()));
   }
@@ -339,29 +558,14 @@
     if (min) url.searchParams.set('min', min); else url.searchParams.delete('min');
     if (max) url.searchParams.set('max', max); else url.searchParams.delete('max');
     if (apenasNovidades) url.searchParams.set('novidade', 'true'); else url.searchParams.delete('novidade');
+    const ord = document.getElementById('ordem').value;
+    if (ord && ord !== 'recentes') url.searchParams.set('ord', ord); else url.searchParams.delete('ord');
 
     if (filtroCategorias.size) url.searchParams.set('cat', Array.from(filtroCategorias).join(',')); else url.searchParams.delete('cat');
     if (filtroGeneros.size) url.searchParams.set('gen', Array.from(filtroGeneros).join(',')); else url.searchParams.delete('gen');
 
     window.history.replaceState({}, '', url);
   }
-
-  document.getElementById('btn-share-filtros').addEventListener('click', async () => {
-    atualizarURLComFiltros();
-    const link = window.location.href;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: 'TENKiTER Modas — Seleção Especial', text: 'Confira as peças selecionadas no catálogo da TENKiTER:', url: link });
-        return;
-      } catch(e) {}
-    }
-    try {
-      await navigator.clipboard.writeText(link);
-      alert('Link da seleção filtrada copiado com sucesso! Pode enviar ao cliente.');
-    } catch(e) {
-      prompt('Copie o link da seleção:', link);
-    }
-  });
 
   function mostrarToastCarregando(texto) {
     const toast = document.getElementById('toast-carregando');
@@ -387,7 +591,27 @@
     renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
     atualizarBadges();
     aplicarFiltros();
+    if (typeof aoAtualizarProdutos === 'function') aoAtualizarProdutos();
   }
+
+  /** Aviso "sem internet" (só aparece quando realmente está offline; o catálogo salvo continua na tela). */
+  function avisoOffline_(mostrar) {
+    const el = document.getElementById('aviso-offline');
+    if (el) el.hidden = !mostrar;
+    document.body.classList.toggle('tem-aviso-offline', !!mostrar);
+  }
+  async function atualizarListaSilencioso_() {
+    try {
+      const resp = await buscarListaPublica();
+      const recebidos = (resp.produtos || []).reverse();
+      salvarCatalogoCache(recebidos);
+      aplicarProdutosRecebidos(recebidos);
+      avisoOffline_(false);
+    } catch (e) { /* segue com o que já está na tela */ }
+  }
+  window.addEventListener('offline', () => avisoOffline_(true));
+  window.addEventListener('online', () => { avisoOffline_(false); atualizarListaSilencioso_(); });
+  if (navigator.onLine === false) avisoOffline_(true);
 
   /**
    * Carrega o catálogo. Se já existe uma lista salva localmente (de uma
@@ -415,23 +639,35 @@
     }
 
     try {
-      const resp = await fetch(API_URL + '?action=list').then(r => r.json());
+      const pre = window.__precargaLista; window.__precargaLista = null;   // busca iniciada no <head> (uma vez só)
+      const resp = await (pre || buscarListaPublica());
       const recebidos = (resp.produtos || []).reverse();
+      if (!Array.isArray(resp.produtos)) throw new Error('resposta sem lista');
       salvarCatalogoCache(recebidos);
       aplicarProdutosRecebidos(recebidos);
+      avisoOffline_(false);
       if (!temCache) abrirProdutoDaURL();
     } catch (e) {
       if (!temCache) {
         document.getElementById('grid').innerHTML = ''; // some o esqueleto
         document.getElementById('contagem').textContent = '';
         const vazio = document.getElementById('vazio');
-        vazio.textContent = 'Não foi possível carregar o catálogo agora. Verifique sua internet e tente de novo.';
+        vazio.textContent = '';
+        const msg = document.createElement('div');
+        msg.textContent = 'Não foi possível carregar o catálogo agora. Verifique sua internet e tente de novo.';
+        const acoes = document.createElement('div'); acoes.className = 'vazio-acoes';
         const tentar = document.createElement('button');
-        tentar.type = 'button'; tentar.textContent = '🔄 Tentar de novo';
-        tentar.style.cssText = 'display:block;width:auto;margin:14px auto 0;padding:10px 18px;border:none;border-radius:10px;background:var(--preto);color:var(--laranja);font-weight:700;cursor:pointer;';
+        tentar.type = 'button'; tentar.className = 'btn-neutro'; tentar.id = 'btn-tentar-de-novo'; tentar.textContent = '🔄 Tentar de novo';
         tentar.addEventListener('click', () => { vazio.style.display = 'none'; carregarCatalogo(); });
-        vazio.appendChild(tentar);
+        const zap = document.createElement('a');
+        zap.className = 'btn-zap'; zap.id = 'vazio-zap'; zap.target = '_blank'; zap.rel = 'noopener';
+        zap.href = linkWhatsApp('Olá! Não consegui abrir o catálogo no site. Pode me ajudar a escolher uma peça?');
+        zap.textContent = '💬 Falar com a loja no WhatsApp';
+        acoes.appendChild(tentar); acoes.appendChild(zap);
+        vazio.appendChild(msg); vazio.appendChild(acoes);
         vazio.style.display = 'block';
+      } else if (navigator.onLine === false) {
+        avisoOffline_(true);
       }
       // Com cache: mantém o que já está na tela em vez de mostrar erro — o
       // visitante continua vendo o catálogo (um pouco desatualizado) em vez de nada.
@@ -554,17 +790,36 @@
       if (filtroGeneros.size) { const tags = listaDeTags(p.Genero); if (!tags.some(t => filtroGeneros.has(t))) return false; }
       return true;
     };
-    const porBusca = termos.length ? produtos.filter(p => casaBusca(p, termos)) : produtos;
-    listaFiltradaAtual = porBusca.filter(passaFiltros);
+    let porBusca = termos.length ? produtos.filter(p => casaBusca(p, termos)) : produtos;
+    // Nada achou? Tenta sinônimos (camisa -> camiseta, blusa...) e avisa que são peças parecidas.
+    buscaPorSinonimo_ = '';
+    if (termos.length && !porBusca.length) {
+      const grupos = termos.map(t => [t].concat(sinonimosMapa_[t] || []));
+      if (grupos.some(g => g.length > 1)) {
+        const alt = produtos.filter(p => { const ind = indiceDe(p); return grupos.every(g => g.some(t => casaTermo(ind, t))); });
+        if (alt.length) { porBusca = alt; buscaPorSinonimo_ = busca; }
+      }
+    }
+    listaFiltradaAtual = ordenarLista_(porBusca.filter(passaFiltros));
     // Busca nunca pode "sumir" por causa de um filtro escondido na gaveta: se com os filtros deu zero, mostra o resultado da loja toda.
     buscaIgnorouFiltros = !!(termos.length && filtrosAtivos && !listaFiltradaAtual.length && porBusca.length);
-    if (buscaIgnorouFiltros) listaFiltradaAtual = porBusca;
+    if (buscaIgnorouFiltros) listaFiltradaAtual = ordenarLista_(porBusca);
     itensVisiveis = POR_PAGINA;
     renderizarGrid();
   }
 
   /* ---- busca tolerante: sem acento, vários termos, nome + categoria + gênero + cor + descrição, e 1 letra errada ---- */
   let buscaIgnorouFiltros = false;
+  let buscaPorSinonimo_ = '';
+  let sinonimosMapa_ = montarSinonimos(SINONIMOS_PADRAO);
+  function ordenarLista_(lista) {
+    const o = document.getElementById('ordem').value;
+    if (o === 'menor') return lista.slice().sort((a, b) => Number(a.Preco) - Number(b.Preco));
+    if (o === 'maior') return lista.slice().sort((a, b) => Number(b.Preco) - Number(a.Preco));
+    if (o === 'az') return lista.slice().sort((a, b) => String(a.Nome).localeCompare(String(b.Nome), 'pt-BR'));
+    return lista;                                   // "mais recentes": a ordem que o servidor mandou
+  }
+  document.getElementById('ordem').addEventListener('change', () => aplicarFiltros());
   const semAcentoBusca = (v) => String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const indiceBusca = new Map(); // ID -> { texto, palavras } (não grava nada no produto)
   function indiceDe(p) {
@@ -602,38 +857,66 @@
     renderizarGrid();
   });
 
+  function mostrarVazio_(mensagem) {
+    const vazio = document.getElementById('vazio');
+    const q = document.getElementById('busca').value.trim();
+    vazio.textContent = '';
+    const msg = document.createElement('div'); msg.textContent = mensagem; vazio.appendChild(msg);
+    const acoes = document.createElement('div'); acoes.className = 'vazio-acoes';
+    const zap = document.createElement('a');
+    zap.className = 'btn-zap'; zap.target = '_blank'; zap.rel = 'noopener'; zap.id = 'vazio-zap';
+    zap.href = linkWhatsApp(q ? 'Olá! Procuro: ' + q + '. Vocês têm?' : 'Olá! Vim pelo catálogo e quero ajuda para escolher.');
+    zap.textContent = q ? '💬 Perguntar no WhatsApp se tem “' + q + '”' : '💬 Falar com a loja no WhatsApp';
+    acoes.appendChild(zap);
+    const limpar = document.createElement('button');
+    limpar.type = 'button'; limpar.className = 'btn-neutro'; limpar.id = 'vazio-limpar'; limpar.textContent = 'Limpar busca e filtros';
+    limpar.addEventListener('click', () => document.getElementById('btn-limpar').click());
+    acoes.appendChild(limpar);
+    vazio.appendChild(acoes);
+    vazio.style.display = 'block';
+  }
+
   function renderizarGrid() {
     const grid = document.getElementById('grid');
     const vazio = document.getElementById('vazio');
     const contagem = document.getElementById('contagem');
     const btnMais = document.getElementById('btn-carregar-mais');
     const lista = listaFiltradaAtual;
+    const qtd = lista.length + (lista.length === 1 ? ' peça' : ' peças');
 
     contagem.textContent = buscaIgnorouFiltros
-      ? 'Nada com esses filtros — mostrando ' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + ' de toda a loja'
-      : lista.length + (lista.length === 1 ? ' peça disponível' : ' peças encontradas');
+      ? 'Nada com esses filtros — mostrando ' + qtd + ' de toda a loja'
+      : buscaPorSinonimo_
+        ? 'Nada com “' + buscaPorSinonimo_ + '” — mostrando ' + qtd + ' parecida' + (lista.length === 1 ? '' : 's')
+        : lista.length + (lista.length === 1 ? ' peça disponível' : ' peças encontradas');
     if (!lista.length) {
-      grid.innerHTML = ''; btnMais.style.display = 'none'; vazio.style.display = 'block';
+      grid.innerHTML = ''; btnMais.style.display = 'none';
       const q = document.getElementById('busca').value.trim();
-      vazio.textContent = q
+      mostrarVazio_(q
         ? 'Não achamos "' + q + '". Tente outra palavra (ex.: vestido, blusa, calça) ou o código da peça.'
-        : 'Nenhum produto encontrado para estes filtros.';
+        : 'Nenhum produto encontrado para estes filtros.');
       return;
     }
     vazio.style.display = 'none';
 
     const visiveis = lista.slice(0, itensVisiveis);
-    grid.innerHTML = visiveis.map(p => {
+    grid.innerHTML = visiveis.map((p, pos) => {
       const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
       const esgotado = estaEsgotado(p);
       const disp = nivelDisponibilidade(p);
       const favoritado = ehFavorito(p.ID);
+      const naSacola = estaNaSacola(p.ID);
+      const nFotos = 1 + String(p.Fotos_Galeria || '').split(',').map(x => x.trim()).filter(Boolean).length;
+      const temVideo = !!idVideoSeguro(p.Video_URL);
+      const ultimas = estoqueInformado(p) && !esgotado && Number(p.Estoque) <= 2;
       return `
         <div class="card" data-id="${escaparHtml(p.ID)}">
           <div class="img-wrap">
-            <img src="${escaparHtml(fotoMini(p.Foto_URL, 480))}" alt="${escaparHtml(p.Nome)}" loading="lazy" decoding="async">
+            <img src="${escaparHtml(fotoMini(p.Foto_URL, 480))}" alt="${escaparHtml(p.Nome)}" ${pos < 4 ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async">
             ${esgotado ? '<span class="selo-card esgotado">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade">NOVIDADE</span>' : '')}
             <button type="button" class="btn-favorito-card" data-fav-id="${escaparHtml(p.ID)}" title="Favoritar" aria-label="${favoritado ? 'Remover dos favoritos' : 'Favoritar'}: ${escaparHtml(p.Nome)}" aria-pressed="${favoritado}">${favoritado ? '❤️' : '🤍'}</button>
+            ${nFotos > 1 || temVideo ? `<span class="mini-selos" aria-hidden="true">${nFotos > 1 ? `<span class="mini-selo">📷 ${nFotos}</span>` : ''}${temVideo ? '<span class="mini-selo">▶ vídeo</span>' : ''}</span>` : ''}
+            ${ultimas ? '<span class="selo-ultimas" aria-hidden="true">' + (Number(p.Estoque) === 1 ? 'Última!' : 'Últimas ' + Number(p.Estoque)) + '</span>' : ''}
           </div>
           <div class="card-info">
             ${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}
@@ -641,6 +924,10 @@
             <div class="preco">${formatarReal(p.Preco)} <span>${formatarReal(avista)}</span></div>
             <div class="tags">${escaparHtml(p.Categoria)}</div>
             ${disp && !esgotado ? `<div class="disponibilidade ${disp.classe}">${disp.texto}</div>` : ''}
+            ${esgotado ? '' : `<div class="acoes-card">
+              <button type="button" class="ac-sacola" data-sac-id="${escaparHtml(p.ID)}" aria-pressed="${naSacola}" aria-label="${escaparHtml(p.Nome)}: sacola">${naSacola ? '✓ Na sacola' : '🛍️ Sacola'}</button>
+              <button type="button" class="ac-pedir" data-pedir-id="${escaparHtml(p.ID)}" aria-label="${escaparHtml(p.Nome)}: pedir no WhatsApp">💬 Pedir</button>
+            </div>`}
           </div>
         </div>
       `;
@@ -648,7 +935,7 @@
 
     btnMais.style.display = lista.length > itensVisiveis ? 'block' : 'none';
     grid.querySelectorAll('.card').forEach(el => el.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-favorito-card')) return;
+      if (e.target.closest('.btn-favorito-card, .acoes-card')) return;
       abrirDetalhe(el.dataset.id);
     }));
     grid.querySelectorAll('.btn-favorito-card').forEach(btn => btn.addEventListener('click', (e) => {
@@ -660,6 +947,16 @@
       btn.setAttribute('aria-label', (agoraFavorito ? 'Remover dos favoritos' : 'Favoritar') + ': ' + (btn.closest('.card').querySelector('.abrir-peca') || {}).textContent);
       atualizarBadges();
       if (apenasFavoritos) aplicarFiltros();
+    }));
+    grid.querySelectorAll('.ac-sacola').forEach(btn => btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const p = produtos.find(x => String(x.ID) === String(btn.dataset.sacId));
+      if (p) alternarSacola_(p);
+    }));
+    grid.querySelectorAll('.ac-pedir').forEach(btn => btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const p = produtos.find(x => String(x.ID) === String(btn.dataset.pedirId));
+      if (p) abrirWhatsApp(p);
     }));
   }
 
@@ -675,12 +972,27 @@
     badgeSacola.style.display = qtdSacola > 0 ? 'flex' : 'none';
   }
 
-  document.getElementById('btn-favoritos-header').addEventListener('click', () => {
-    apenasFavoritos = !apenasFavoritos;
-    renderizarChipExtra();
-    aplicarFiltros();
-    document.querySelector('main').scrollIntoView({ behavior: 'smooth' });
-  });
+  /** Põe ou tira a peça da sacola (cartão e folha usam a mesma função). Devolve true se agora está na sacola. */
+  function alternarSacola_(p) {
+    let agora;
+    if (estaNaSacola(p.ID)) { removerDaSacola(p.ID); agora = false; }
+    else { adicionarNaSacola(p.ID); agora = true; if (window.TKMeta) TKMeta.evento('AddToCart', dadosPixel_(p), novoEventId_('ac', p.ID)); }
+    atualizarBadges(); sincronizarBotoesCard_(p.ID);
+    return agora;
+  }
+  /** Mantém o ❤️ e o botão Sacola do cartão iguais ao estado real (a pessoa pode ter mudado dentro da folha). */
+  function sincronizarBotoesCard_(id) {
+    const card = document.querySelector('.card[data-id="' + String(id).replace(/"/g, '') + '"]');
+    if (!card) return;
+    const fav = card.querySelector('.btn-favorito-card');
+    if (fav) { const f = ehFavorito(id); fav.textContent = f ? '❤️' : '🤍'; fav.setAttribute('aria-pressed', String(f)); }
+    const sac = card.querySelector('.ac-sacola');
+    if (sac) { const n = estaNaSacola(id); sac.setAttribute('aria-pressed', String(n)); sac.textContent = n ? '✓ Na sacola' : '🛍️ Sacola'; }
+    if (apenasFavoritos && !ehFavorito(id)) aplicarFiltros();
+  }
+  function dadosPixel_(p) {
+    return { content_ids: [p.Codigo || String(p.ID)], content_name: p.Nome, content_type: 'product', value: Number(p.Preco) * (1 - DESCONTO_AVISTA), currency: 'BRL' };
+  }
 
   function abrirWhatsApp(p) {
     // Link do produto NO SITE (linkProduto, em common.js): ?c=<código>. Antes apontava para o Apps Script
@@ -689,14 +1001,16 @@
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const codigo = p.Codigo ? ('\nCódigo: ' + p.Codigo) : '';
     const texto = `Olá! Quero garantir este produto:\n*${p.Nome}*${codigo}\n${formatarReal(avista)} à vista\n${link}`;
-    registrarEvento(p.ID, p.Codigo, 'whatsapp');
-    window.open('https://wa.me/' + WHATSAPP_NUMERO + '?text=' + encodeURIComponent(texto), '_blank');
+    const eidContato = novoEventId_('ct', p.ID);
+    registrarEvento(p.ID, p.Codigo, 'whatsapp', eidContato);
+    if (window.TKMeta) TKMeta.evento('Contact', dadosPixel_(p), eidContato);
+    window.open(linkWhatsApp(texto), '_blank');   // sempre o WhatsApp da loja
   }
 
   async function compartilharComFoto(p) {
     const link = linkProduto(p);
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
-    const texto = `${p.Nome} — ${formatarReal(avista)} à vista\n${link}\n\nLoja TENKiTER Modas (WhatsApp ${WHATSAPP_NUMERO})`;
+    const texto = `${p.Nome} — ${formatarReal(avista)} à vista\n${link}\n\nTENKiTER Modas — WhatsApp: ${linkWhatsApp()}`;
     let arquivoImagem = null;
     try {
       const blob = await fetch(p.Foto_URL).then(r => r.blob());
@@ -724,51 +1038,89 @@
   // pelo "voltar" do Android quanto por esse history.back()) é quem realmente fecha na tela --
   // assim os dois caminhos (botão "Fechar" e botão físico/gesto de voltar) sempre terminam no
   // mesmo lugar: o catálogo, sem sair da Tenkiter.
+  // v3.3: pilha de janelas. Cada janela aberta empilha UMA entrada no histórico (com o nível n); o "voltar" fecha só a de cima
+  // (ex.: peça aberta de dentro dos favoritos volta para os favoritos, e o próximo "voltar" volta para a lista).
+  const pilhaOverlays_ = [];
   function abrirComHistorico_(idOverlay, url) {
     const el = document.getElementById(idOverlay);
     if (!el || el.classList.contains('aberto')) return;
     el.classList.add('aberto');
-    window.history.pushState({ overlay: idOverlay }, '', url || undefined);
+    pilhaOverlays_.push(idOverlay);
+    window.history.pushState({ overlay: idOverlay, n: pilhaOverlays_.length }, '', url || undefined);
   }
   function fecharComHistorico_(idOverlay) {
     const el = document.getElementById(idOverlay);
     if (!el || !el.classList.contains('aberto')) return;
-    if (window.history.state && window.history.state.overlay === idOverlay) {
-      window.history.back(); // o popstate abaixo fecha a tela quando essa volta acontecer
+    const topo = pilhaOverlays_[pilhaOverlays_.length - 1];
+    if (topo === idOverlay && window.history.state && window.history.state.overlay === idOverlay) {
+      window.history.back(); // o popstate abaixo fecha a janela quando essa volta acontecer
     } else {
       el.classList.remove('aberto'); // não tinha entrada empilhada (ex.: já veio por popstate) -- só fecha
+      const k = pilhaOverlays_.indexOf(idOverlay); if (k >= 0) pilhaOverlays_.splice(k, 1);
+      if (idOverlay === 'overlay') restaurarMeta_();
     }
   }
-  window.addEventListener('popstate', () => {
-    ['overlay', 'overlay-sacola'].forEach(id => {
+  window.addEventListener('popstate', (e) => {
+    const n = (e.state && e.state.n) || 0;
+    while (pilhaOverlays_.length > n) {
+      const id = pilhaOverlays_.pop();
       const el = document.getElementById(id);
       if (el) el.classList.remove('aberto');
-    });
+    }
+    if (pilhaOverlays_.indexOf('overlay') < 0) restaurarMeta_();
   });
+
+  // Título, descrição e dados estruturados da peça aberta (buscadores e abas do navegador); volta ao normal ao fechar.
+  const META_PADRAO_ = { titulo: document.title, descricao: (document.querySelector('meta[name="description"]') || {}).content || '' };
+  function definirMetaPeca_(p, avista) {
+    const cod = p.Codigo ? ' [' + p.Codigo + ']' : '';
+    document.title = p.Nome + cod + ' — ' + formatarReal(avista) + ' à vista | TENKiTER Modas';
+    const d = document.querySelector('meta[name="description"]');
+    if (d) d.content = (p.Descricao ? String(p.Descricao).slice(0, 110) + ' ' : '') + 'De ' + formatarReal(p.Preco) + ' por ' + formatarReal(avista) + ' à vista na TENKiTER Modas, Crateús-CE.';
+    let ld = document.getElementById('ld-produto');
+    if (!ld) { ld = document.createElement('script'); ld.type = 'application/ld+json'; ld.id = 'ld-produto'; document.head.appendChild(ld); }
+    const imgs = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',').map(x => x.trim()).filter(Boolean)).filter(Boolean);
+    const dados = {
+      '@context': 'https://schema.org', '@type': 'Product', name: p.Nome, image: imgs, description: p.Descricao || p.Nome,
+      sku: p.Codigo || String(p.ID), brand: { '@type': 'Brand', name: 'TENKiTER Modas' }, url: linkProduto(p),
+      offers: { '@type': 'Offer', url: linkProduto(p), priceCurrency: 'BRL', price: Number(avista).toFixed(2), availability: estaEsgotado(p) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock', itemCondition: 'https://schema.org/NewCondition', seller: { '@type': 'Organization', name: 'TENKiTER Modas' } }
+    };
+    ld.textContent = JSON.stringify(dados);
+  }
+  function restaurarMeta_() {
+    document.title = META_PADRAO_.titulo;
+    const d = document.querySelector('meta[name="description"]'); if (d) d.content = META_PADRAO_.descricao;
+    const ld = document.getElementById('ld-produto'); if (ld) ld.remove();
+  }
 
   function abrirDetalhe(id) {
     const p = produtos.find(x => String(x.ID) === String(id));
     if (!p) return;
-    registrarEvento(p.ID, p.Codigo, 'visualizacao');
+    const eidVista = novoEventId_('vc', p.ID);
+    registrarEvento(p.ID, p.Codigo, 'visualizacao', eidVista);
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const esgotado = estaEsgotado(p);
     const disp = nivelDisponibilidade(p);
     const favoritado = ehFavorito(p.ID);
     const naSacola = estaNaSacola(p.ID);
+    definirMetaPeca_(p, avista);
+    if (window.TKMeta) TKMeta.evento('ViewContent', dadosPixel_(p), eidVista);
 
     const fotosGaleria = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',').map(s=>s.trim()).filter(Boolean));
     const idVid = idVideoSeguro(p.Video_URL);
     const totalSlides = fotosGaleria.length + (idVid ? 1 : 0);
 
     document.getElementById('modal-conteudo').innerHTML = `
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <button type="button" class="btn-x-modal" id="btn-fechar-modal" aria-label="Fechar">✕</button>
       <div class="carrossel-wrap">
-        <div class="slide-area" id="slide-area"><img id="foto-principal-modal" src="${escaparHtml(p.Foto_URL)}" alt="${escaparHtml(p.Nome)}"></div>
+        <div class="slide-area" id="slide-area"><img id="foto-principal-modal" alt="${escaparHtml(p.Nome)}"></div>
         ${totalSlides > 1 ? `<button type="button" class="seta-slide esq" id="seta-esq" aria-label="Anterior">‹</button><button type="button" class="seta-slide dir" id="seta-dir" aria-label="Próxima">›</button><span class="contador-slide" id="contador-slide">1 / ${totalSlides}</span>` : ''}
         ${esgotado ? '<span class="selo-card esgotado" style="top:12px;left:12px;font-size:0.7rem;">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade" style="top:12px;left:12px;font-size:0.7rem;">NOVIDADE</span>' : '')}
       </div>
       ${totalSlides > 1 ? `
         <div class="thumbs-galeria">
-          ${fotosGaleria.map((f, idx) => `<img src="${escaparHtml(f)}" class="thumb-item ${idx===0?'ativa':''}" data-idx="${idx}" alt="">`).join('')}
+          ${fotosGaleria.map((f, idx) => `<img src="${escaparHtml(fotoMini(f, 120))}" class="thumb-item ${idx===0?'ativa':''}" data-idx="${idx}" alt="" width="50" height="62" loading="lazy">`).join('')}
           ${idVid ? `<div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div>` : ''}
         </div>
       ` : ''}
@@ -785,34 +1137,49 @@
         ${p.Descricao ? `<div class="desc">${escaparHtml(p.Descricao)}</div>` : ''}
         ${disp ? `<div class="disponibilidade ${disp.classe}" style="margin-top:10px;font-size:0.8rem;">${disp.texto}</div>` : ''}
       </div>
-      ${esgotado
-        ? '<div style="margin:12px 16px;padding:12px;background:#eee;color:#666;text-align:center;font-weight:700;border-radius:10px;">Produto Indisponível no momento</div>'
-        : `<button class="btn-principal-cta" id="btn-quero">💬 CONVERSAR COM ATENDENTE NO WHATSAPP</button>
-           <button class="btn-secundario-cta" id="btn-sacola-modal">${naSacola ? '✓ Adicionado à Sacola (toque para remover)' : '🛍️ Adicionar à Sacola'}</button>
-           <button class="btn-secundario-cta" id="btn-anexar-foto">📎 Compartilhar Foto e Link</button>`}
-      <button class="btn-secundario-cta" id="btn-favorito-modal">${favoritado ? '❤️ Nos seus Favoritos (toque para remover)' : '🤍 Salvar na Lista de Desejos'}</button>
-      <button class="btn-fechar" id="btn-fechar-modal">Fechar</button>
+      <div class="linha-secundaria">
+        <button type="button" id="btn-favorito-modal" aria-pressed="${favoritado}">${favoritado ? '❤️ Nos favoritos' : '🤍 Favoritar'}</button>
+        ${esgotado ? '' : '<button type="button" id="btn-anexar-foto">📎 Compartilhar foto e link</button>'}
+      </div>
+      <div class="barra-compra">
+        ${esgotado
+          ? '<span class="bc-aviso">Indisponível no momento</span><button type="button" class="bc-pedir" id="btn-perguntar">💬 Perguntar se volta</button>'
+          : `<button type="button" class="bc-sacola" id="btn-sacola-modal" aria-pressed="${naSacola}">${naSacola ? '✓ Na sacola' : '🛍️ Sacola'}</button>
+             <button type="button" class="bc-pedir" id="btn-quero">💬 PEDIR NO WHATSAPP</button>`}
+      </div>
     `;
+    // O endereço da foto principal entra por aqui (e não escrito dentro do <img> do texto acima): com a política de segurança da página + service worker, o Chrome chegava a pedir o texto "${...}" como se fosse um endereço de foto (erro 404 à toa).
+    document.getElementById('foto-principal-modal').src = p.Foto_URL;
 
     const urlAbertura = new URL(window.location);
     // endereço curto e igual ao do link compartilhado (?c=TK-0008); peça sem código cai no ?id= antigo
     urlAbertura.searchParams.delete('id'); urlAbertura.searchParams.delete('c');
     if (p.Codigo) urlAbertura.searchParams.set('c', p.Codigo); else urlAbertura.searchParams.set('id', p.ID);
     abrirComHistorico_('overlay', urlAbertura);
+    habilitarArrastarParaFechar(document.getElementById('modal-conteudo'), fecharDetalhe);
     document.getElementById('btn-fechar-modal').addEventListener('click', fecharDetalhe);
-    document.getElementById('btn-favorito-modal').addEventListener('click', () => {
-      toggleFavorito(p.ID);
-      atualizarBadges();
-      abrirDetalhe(id);
+    // favoritar/sacola mudam só o botão (antes a folha era redesenhada: voltava à 1ª foto, ao topo, e contava outra visualização)
+    const btnFav = document.getElementById('btn-favorito-modal');
+    btnFav.addEventListener('click', () => {
+      const agora = toggleFavorito(p.ID);
+      btnFav.textContent = agora ? '❤️ Nos favoritos' : '🤍 Favoritar';
+      btnFav.setAttribute('aria-pressed', String(agora));
+      atualizarBadges(); sincronizarBotoesCard_(p.ID);
     });
 
     if (!esgotado) {
       document.getElementById('btn-quero').addEventListener('click', () => abrirWhatsApp(p));
       document.getElementById('btn-anexar-foto').addEventListener('click', () => compartilharComFoto(p));
-      document.getElementById('btn-sacola-modal').addEventListener('click', () => {
-        if (estaNaSacola(p.ID)) removerDaSacola(p.ID); else adicionarNaSacola(p.ID);
-        atualizarBadges();
-        abrirDetalhe(id);
+      const btnSac = document.getElementById('btn-sacola-modal');
+      btnSac.addEventListener('click', () => {
+        const agora = alternarSacola_(p);
+        btnSac.textContent = agora ? '✓ Na sacola' : '🛍️ Sacola';
+        btnSac.setAttribute('aria-pressed', String(agora));
+      });
+    } else {
+      document.getElementById('btn-perguntar').addEventListener('click', () => {
+        registrarEvento(p.ID, p.Codigo, 'whatsapp');
+        window.open(linkWhatsApp('Olá! A peça ' + p.Nome + (p.Codigo ? ' (' + p.Codigo + ')' : '') + ' está esgotada no catálogo. Vai chegar mais?\n' + linkProduto(p)), '_blank');
       });
     }
 
@@ -907,82 +1274,6 @@
 
   document.getElementById('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') fecharDetalhe(); });
 
-  /* ===================== Sacola ===================== */
-
-  function abrirSacola() {
-    const ids = getSacola();
-    const itens = ids.map(id => produtos.find(p => String(p.ID) === String(id))).filter(Boolean);
-    const container = document.getElementById('sacola-conteudo');
-
-    if (!itens.length) {
-      container.innerHTML = `
-        <div class="modal-conteudo">
-          <div class="nome" style="margin-bottom:10px;">🛍️ Sua Sacola</div>
-          <div id="sacola-vazia">Sua sacola está vazia. Adicione peças pelo botão "Adicionar à Sacola" dentro de cada produto.</div>
-        </div>
-        <button class="btn-fechar" id="btn-fechar-sacola">Fechar</button>
-      `;
-    } else {
-      const total = itens.reduce((soma, p) => soma + Number(p.Preco) * (1 - DESCONTO_AVISTA), 0);
-      container.innerHTML = `
-        <div class="modal-conteudo" style="padding-bottom:0;">
-          <div class="nome" style="margin-bottom:4px;">🛍️ Sua Sacola (${itens.length})</div>
-        </div>
-        ${itens.map(p => `
-          <div class="item-sacola">
-            <img src="${escaparHtml(fotoMini(p.Foto_URL, 160))}" alt="${escaparHtml(p.Nome)}" loading="lazy">
-            <div class="info">
-              <div class="nome">${escaparHtml(p.Nome)}</div>
-              <div class="preco">${formatarReal(Number(p.Preco) * (1 - DESCONTO_AVISTA))} à vista</div>
-            </div>
-            <button type="button" class="btn-remover" data-remover-id="${escaparHtml(p.ID)}" title="Remover da sacola">✕</button>
-          </div>
-        `).join('')}
-        <div class="modal-conteudo">
-          <div class="preco-linha"><strong>Total estimado à vista:</strong> <span class="avista">${formatarReal(total)}</span></div>
-        </div>
-        <button class="btn-principal-cta" id="btn-enviar-sacola">💬 ENVIAR PEDIDO COMBINADO NO WHATSAPP</button>
-        <button class="btn-secundario-cta" id="btn-limpar-sacola">🗑️ Esvaziar Sacola</button>
-        <button class="btn-fechar" id="btn-fechar-sacola">Fechar</button>
-      `;
-
-      container.querySelectorAll('[data-remover-id]').forEach(btn => btn.addEventListener('click', () => {
-        removerDaSacola(btn.dataset.removerId);
-        atualizarBadges();
-        abrirSacola();
-      }));
-
-      document.getElementById('btn-enviar-sacola').addEventListener('click', () => {
-        let texto = 'Olá! Quero fazer um pedido com estas peças:\n\n';
-        itens.forEach(p => {
-          const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
-          const codigo = p.Codigo ? (' (' + p.Codigo + ')') : '';
-          texto += `• ${escaparHtml(p.Nome)}${codigo} — ${formatarReal(avista)} à vista\n`;
-        });
-        texto += `\nTotal estimado à vista: ${formatarReal(total)}`;
-        window.open('https://wa.me/' + WHATSAPP_NUMERO + '?text=' + encodeURIComponent(texto), '_blank');
-      });
-
-      document.getElementById('btn-limpar-sacola').addEventListener('click', () => {
-        if (confirm('Esvaziar toda a sacola?')) {
-          limparSacola();
-          atualizarBadges();
-          abrirSacola();
-        }
-      });
-    }
-
-    container.querySelectorAll('#btn-fechar-sacola').forEach(btn => btn.addEventListener('click', fecharSacola));
-    abrirComHistorico_('overlay-sacola');
-  }
-
-  function fecharSacola() {
-    fecharComHistorico_('overlay-sacola');
-  }
-
-  document.getElementById('btn-sacola-header').addEventListener('click', abrirSacola);
-  document.getElementById('overlay-sacola').addEventListener('click', (e) => { if (e.target.id === 'overlay-sacola') fecharSacola(); });
-
   /* ===================== Busca por voz ===================== */
 
   (function configurarBuscaPorVoz() {
@@ -1020,6 +1311,19 @@
       if (achado) id = achado.ID;
     }
     if (id) abrirDetalhe(id);
+  }
+
+  /** Atalhos por endereço: ?abrir=sacola (atalho do app) e ?pedido=<código> (acompanhar pedido). Roda uma vez, na abertura. */
+  function abrirJanelasDaURL_() {
+    const params = new URLSearchParams(window.location.search);
+    const abrirSac = params.get('abrir') === 'sacola';
+    const temPedido = params.has('pedido');
+    if (!abrirSac && !temPedido) return;
+    const limpa = new URL(window.location);
+    ['abrir', 'pedido', 'origem'].forEach(k => limpa.searchParams.delete(k));
+    window.history.replaceState({}, '', limpa);   // a janela empilha a própria entrada; voltar leva ao catálogo limpo
+    if (abrirSac) abrirSacola();
+    if (temPedido) abrirRastreio(params.get('pedido') || '', '');
   }
 
   /* ===================== Notificações push (OneSignal) ===================== */
@@ -1079,6 +1383,7 @@
     }
 
     function atualizarBotao() {
+      window.__usuarioCliente = usuario;   // pedido.js pré-preenche nome e WhatsApp com isto
       btn.textContent = usuario ? (String(usuario.name || '?').trim().charAt(0).toUpperCase() || '👤') : '👤';
       btn.title = usuario ? 'Minha conta (' + usuario.name + ')' : 'Entrar ou criar conta';
       btn.classList.toggle('ativado', !!usuario);
@@ -1152,7 +1457,17 @@
     })();
   })(); } catch (erroConta) { console.warn('Conta de cliente indisponível:', erroConta); }
 
+  ligarPedidoNaPagina();
   carregarCatalogo();
+  abrirJanelasDaURL_();
+  // Configuração pública do painel (Pixel da Meta, sinônimos de busca). Backend antigo => nada muda.
+  (async () => {
+    try {
+      const cfg = await configPublica();
+      if (Array.isArray(cfg.sinonimos) && cfg.sinonimos.length) { sinonimosMapa_ = montarSinonimos(SINONIMOS_PADRAO.concat(cfg.sinonimos)); if (produtos.length) aplicarFiltros(); }
+      if (cfg.pixelId && window.TKMeta) TKMeta.iniciar(cfg.pixelId);
+    } catch (e) {}
+  })();
 </script>
 <script>
 /* v3.0 — filtros recolhíveis (só a busca fica visível ao rolar) */
@@ -1210,5 +1525,6 @@
 </script>
 <script src="nav.js" data-ativo="catalogo"></script>
 <script src="a11y.js"></script>
+<script src="pwa.js"></script>
 </body>
 </html>

@@ -67,7 +67,7 @@
   });
 
   /* ---------- 2. janelas ---------- */
-  var JANELAS = '#overlay,#overlay-sacola,#overlay-compartilhar,.overlay-sheet,#modal-conta,#login-overlay';
+  var JANELAS = '#overlay,#overlay-sacola,#overlay-compartilhar,.overlay-sheet,.overlay-sheet-loja,#modal-conta,#login-overlay';
   var BOTOES_FECHAR = '[aria-label="Fechar"],.sheet-x,.conta-fechar,.btn-fechar,#btn-fechar-arte-config,#btn-fechar-auditoria';
   var FOCAVEIS = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   var NOMES = {

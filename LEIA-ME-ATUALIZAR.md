@@ -1,3 +1,25 @@
+# ATUALIZAÇÃO MAIS RECENTE — catálogo v3.1 (backend) + site v3.3
+
+> Tudo que está abaixo desta seção (títulos "v4 / v2", "Atualização 3" etc.) é o **histórico** das atualizações antigas, mantido como registro. Os arquivos `Code-*.gs.txt`, `tenkiter-codigo-v2.1.gs.txt` e `Code-treinamento-*.gs.txt` citados lá são antigos: **não use**. Os atuais são `catalogo-codigo-3.1.gs.txt` e `funcionario-codigo-3.0.gs.txt`.
+
+**Nada apaga dados: só acrescenta abas/colunas. Ordem importa.**
+
+1. **Site primeiro (já publicado pelo Claude).** O site novo funciona também com o backend antigo (pedido segue só pelo WhatsApp, painel sem as telas novas). Nada quebra se você demorar no passo 2.
+2. **Backend do catálogo** — Apps Script do *catálogo*: apague todo o código, cole o conteúdo de **`catalogo-codigo-3.1.gs.txt`**, salve; *Implantar → Gerenciar implantações → lápis → Nova versão → Implantar* (a URL não muda). Aceite as permissões se o Google pedir.
+   - Conferir: abra `<URL do Apps Script>?action=versao` — deve aparecer `"versao":"catalogo-3.1"` e `"pedidos":true`.
+   - No painel, na lista de peças aparece o aviso "⚠️ peças sem código": toque em **Gerar códigos agora** uma vez (as peças antigas sem código ganham `TK-####`; os códigos que já existem não mudam).
+   - Quem tinha WhatsApp de 10 dígitos na planilha precisa entrar de novo **uma vez** (mudança da v3.0 — igual ao portal).
+3. **Pixel / API de Conversões (quando quiser; o resto funciona sem isso).** Painel → *Integrações*: cole o ID do Pixel (só números) e, se for usar a API de Conversões, o token da Meta (fica só no servidor, nunca volta para a tela). Vazio = tudo desligado e o aviso de cookies nem aparece.
+4. **Instagram / Facebook / Google.** Painel → *Integrações* → copie o endereço do catálogo (CSV) e cadastre na Meta (Gerenciador de Comércio) / Google Merchant. A loja do Instagram depende da aprovação da Meta; postagem automática continua desligada (decisão do projeto).
+5. **Cloudflare / Render (opcional, melhora Google e velocidade):** siga `og-worker/LEIA-ME.md` (publicar o Worker v2, regras de rewrite no Render e, se quiser, ligar a lista rápida).
+
+**Segurança — faça hoje:** apague do chat/arquivos qualquer token da Cloudflare, chave da API do Render e chave do Gemini que tenham sido colados em conversas; gere novos se precisar. Nada disso deve ir para o GitHub (o repositório é público).
+
+**O que o cliente passa a ter:** sacola com formulário e código de pedido (`PED-0001`), acompanhar pedido com o código + 4 últimos números do WhatsApp, favoritos e "pedir lista" pelo WhatsApp da loja, app instalável, catálogo que abre sem internet, política de privacidade.
+**O que o lojista passa a ter:** pedidos com etapas e mensagem pronta de WhatsApp, números reais, importar/exportar CSV, lote de categoria/estoque, avisos com modelos e histórico, Story em vídeo (teste no seu celular; veja o parecer que o painel dá), integrações.
+
+---
+
 # TENKiTER — Acesso unificado (v4 / v2): como atualizar sem derrubar nada
 
 **Ordem importa. Faça na sequência. Nada apaga dados: a migração faz backup antes.**

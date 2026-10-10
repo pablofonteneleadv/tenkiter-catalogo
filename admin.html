@@ -6,6 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0d0d0d">
+<meta name="robots" content="noindex, nofollow">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" href="favicon.ico" sizes="any">
@@ -173,6 +174,17 @@
   #input-desc-arte { height: 64px !important; min-height: 0 !important; max-height: 64px; resize: none; font-family: inherit; line-height: 1.35; overflow-y: auto; }
 
   .arte-thumbs { display: flex; gap: 8px; margin-top: 8px; overflow-x: auto; }
+  .arte-video { margin-top: 18px; padding: 12px; border: 1px dashed #aaa; border-radius: 12px; background: #fafafa; }
+  .arte-video h4 { margin: 0 0 4px; font-size: 0.95rem; }
+  .arte-video .arte-novo { display: inline-block; background: var(--laranja); color: #0d0d0d; font-size: 0.66rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; vertical-align: middle; margin-left: 4px; }
+  .arte-video p { font-size: 0.74rem; color: #555; margin: 4px 0 8px; }
+  .arte-video video { display: block; width: 100%; max-width: 210px; aspect-ratio: 9 / 16; margin: 10px auto; border-radius: 12px; background: #000; }
+  .arte-video .linha-botoes { display: flex; gap: 8px; flex-wrap: wrap; }
+  .arte-video .linha-botoes button { flex: 1 1 140px; }
+  #status-video-arte { font-size: 0.8rem; min-height: 18px; margin-top: 6px; }
+  #info-video-arte { font-size: 0.8rem; line-height: 1.4; margin: 4px 0 8px; }
+  #info-video-arte .v-ok { color: #14632f; font-weight: 700; }
+  #info-video-arte .v-atencao { color: #7a4a00; font-weight: 700; }
   .arte-thumb { width: 48px; height: 60px; object-fit: cover; border-radius: 6px; cursor: pointer; opacity: 0.55; border: 2px solid transparent; flex-shrink: 0; }
   .arte-thumb.selecionada { opacity: 1; border-color: var(--laranja); }
 
@@ -309,6 +321,76 @@
   @media (prefers-reduced-motion: reduce) { .produto.sk .sk-b { animation: none; } }
   .aviso-cache { font-size: 0.74rem; color: #7a4a00; background: #fff3e0; border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; display: none; }
   details.ferramentas { margin-top: 22px; }
+
+  /* ===== v3.1: pedidos, números reais, importar CSV, integrações (admin-gestao.js) ===== */
+  [hidden] { display: none !important; }
+  .aviso-gestao { display: block; width: 100%; text-align: left; background: #fff3e0; border: 1px solid #ffcc80; color: #5c3a00; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.82rem; font-weight: 600; line-height: 1.4; }
+  button.aviso-gestao { cursor: pointer; background: #e8f1ff; border-color: #a9c8f2; color: #0b3d75; }
+  .aviso-gestao button { width: auto; margin-top: 6px; padding: 8px 12px; font-size: 0.78rem; background: var(--laranja); color: #0d0d0d; }
+  .btn-ferr { width: auto; padding: 9px 14px; font-size: 0.85rem; border-radius: 8px; }
+  .sem-cadastrar #card-pedidos, .sem-cadastrar #aviso-codigos, .sem-cadastrar #aviso-pedidos-novos, .sem-cadastrar #btn-bulk-estoque, .sem-cadastrar #btn-bulk-categoria { display: none !important; }
+  .sem-auditoria #btn-abrir-metricas, .sem-precos #btn-importar-csv, .sem-gerir #btn-abrir-integracoes { display: none !important; }
+  .ped-topo { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+  #ped-atualizar { width: auto; flex: none; padding: 7px 12px; font-size: 0.78rem; background: #eee; color: #333; }
+  .ped-vazio { text-align: center; color: #666; padding: 16px 0; font-size: 0.88rem; }
+  .ped-erro { color: var(--vermelho); }
+  .ped-card { border: 1px solid #e3e3e3; border-left: 5px solid var(--laranja); border-radius: 12px; padding: 12px; margin: 10px 0; background: #fff; }
+  .ped-card.st-novo { border-left-color: #0f5fa8; background: #f4f9ff; }
+  .ped-card.st-ok { border-left-color: var(--verde); }
+  .ped-card.st-cancel { border-left-color: #999; background: #f6f6f6; }
+  .ped-topo-card { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .ped-badge { background: #eee; color: #222; font-size: 0.7rem; font-weight: 800; padding: 3px 9px; border-radius: 20px; text-align: right; }
+  .ped-linha { font-size: 0.82rem; margin-top: 5px; overflow-wrap: anywhere; }
+  .ped-cod { color: var(--laranja-txt); font-size: 0.7rem; font-weight: 800; }
+  .ped-itens { margin: 8px 0; padding-left: 18px; font-size: 0.82rem; }
+  .ped-zap { display: block; text-align: center; background: var(--verde); color: #fff; text-decoration: none; font-weight: 800; font-size: 0.85rem; padding: 11px 10px; border-radius: 10px; margin: 8px 0; }
+  .ped-rotulo { display: block; font-size: 0.72rem; font-weight: 700; color: #555; margin: 10px 0 4px; }
+  .ped-etapas { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ped-etapas .chip { font-size: 0.74rem; padding: 6px 10px; }
+  .ped-nota { display: flex; gap: 6px; }
+  .ped-nota input { flex: 1; min-width: 0; }
+  .ped-nota input.salvo { outline: 2px solid var(--verde); }
+  .ped-nota button { width: auto; padding: 0 14px; background: var(--preto); color: var(--laranja); font-size: 0.8rem; }
+  .ped-hist { margin-top: 8px; font-size: 0.76rem; color: #444; }
+  .ped-hist summary { cursor: pointer; font-weight: 700; }
+  .ped-hist ul { margin: 6px 0 0; padding-left: 18px; }
+  .gestao-corpo { overflow-y: auto; flex: 1; min-height: 0; -webkit-overflow-scrolling: touch; padding-bottom: 12px; }
+  .gestao-titulo { margin: 0; font-size: 1.02rem; font-weight: 700; font-family: "Poppins", sans-serif; }
+  .gestao-corpo h3 { margin: 16px 0 4px; font-size: 0.92rem; font-family: "Poppins", sans-serif; }
+  .gestao-corpo input[type=password], .gestao-corpo input[type=file] { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 0.95rem; background: var(--branco); }
+  .g-info { font-size: 0.85rem; color: #333; line-height: 1.45; }
+  .g-nota { font-size: 0.74rem; color: #666; line-height: 1.4; margin: 6px 0; }
+  .g-erro { color: var(--vermelho); font-weight: 700; font-size: 0.85rem; }
+  .g-ok { color: #146c43; font-weight: 700; font-size: 0.88rem; }
+  .g-prim { background: var(--laranja); color: #0d0d0d; margin-top: 12px; }
+  .g-sec { background: #eee; color: #333; }
+  .g-linha { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+  .g-linha button { width: auto; padding: 10px 14px; font-size: 0.85rem; }
+  .g-det { border: 1px solid #e3e3e3; border-radius: 10px; padding: 8px 10px; margin-top: 10px; }
+  .g-det > summary { cursor: pointer; font-weight: 700; font-size: 0.84rem; }
+  .g-copia { display: flex; gap: 6px; }
+  .g-copia input { flex: 1; min-width: 0; font-size: 0.78rem; }
+  .g-copia button { width: auto; padding: 0 14px; background: var(--preto); color: var(--laranja); font-size: 0.8rem; }
+  .g-lista { padding-left: 18px; font-size: 0.85rem; }
+  .imp-item { border-bottom: 1px solid #eee; padding: 6px 0; font-size: 0.8rem; overflow-wrap: anywhere; }
+  .imp-item ul { margin: 4px 0 0; padding-left: 18px; color: #444; }
+  .imp-item.ig { color: #8a1c1c; }
+  .mt-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+  .mt-card { background: #f7f4ec; border-radius: 12px; padding: 10px; text-align: center; }
+  .mt-card span { display: block; font-size: 0.7rem; color: #555; }
+  .mt-card strong { display: block; font-size: 1.35rem; color: var(--laranja-txt); }
+  .mt-card small { display: block; font-size: 0.66rem; color: #555; }
+  .mt-card.ok strong { color: #146c43; }
+  .mt-card.atencao strong { color: var(--vermelho); }
+  .mt-grafico { display: flex; align-items: flex-end; gap: 2px; height: 90px; background: #faf8f2; border-radius: 8px; padding: 6px 6px 0; }
+  .mt-col { flex: 1; height: 100%; display: flex; align-items: flex-end; }
+  .mt-barra { width: 100%; background: var(--laranja); border-radius: 3px 3px 0 0; min-height: 2px; }
+  .mt-eixo { display: flex; justify-content: space-between; gap: 6px; font-size: 0.68rem; color: #555; margin-top: 4px; }
+  .mt-tab { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  .mt-tab th, .mt-tab td { text-align: left; padding: 6px 4px; border-bottom: 1px solid #eee; vertical-align: top; }
+  .mt-tab th:not(:first-child), .mt-tab td:not(:first-child) { text-align: right; white-space: nowrap; }
+  .push-modelos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 0; }
+  .push-modelos .chip { font-size: 0.74rem; padding: 6px 10px; }
 </style>
 </head>
 <body>
@@ -358,6 +440,16 @@
     <div class="dashboard-card disponiveis"><span>Disponíveis</span><strong id="dash-disponiveis">0</strong></div>
     <div class="dashboard-card esgotados"><span>Esgotados</span><strong id="dash-esgotados">0</strong></div>
   </div>
+
+  <button type="button" class="aviso-gestao" id="aviso-pedidos-novos" hidden></button>
+
+  <details class="cartao-cad" id="card-pedidos" hidden>
+    <summary><span id="ped-sum-txt">🧾 Pedidos</span></summary>
+    <div class="cad-corpo">
+      <div class="ped-topo"><div class="filtros-lista" id="ped-filtros" role="group" aria-label="Filtrar pedidos por etapa"></div><button type="button" id="ped-atualizar">🔄 Atualizar</button></div>
+      <div id="ped-lista" aria-live="polite"><p class="ped-vazio">Carregando pedidos…</p></div>
+    </div>
+  </details>
 
   <details class="cartao-cad" id="card-form">
     <summary><span id="cad-sum-txt">➕ Cadastrar nova peça</span></summary>
@@ -480,6 +572,13 @@
     </div>
   </div>
 
+  <div class="overlay-sheet" id="overlay-gestao">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="gestao-titulo">
+      <div class="sheet-topo"><h2 id="gestao-titulo" class="gestao-titulo"></h2><button type="button" class="sheet-x" id="gestao-fechar" aria-label="Fechar">✕</button></div>
+      <div class="gestao-corpo" id="gestao-corpo"></div>
+    </div>
+  </div>
+
   <!-- Ações em Lote -->
   <div class="bulk-bar" id="bulk-bar">
     <div class="bulk-bar-header">
@@ -493,6 +592,8 @@
       <button type="button" id="btn-bulk-reativar">🔄 Reativar em Massa</button>
     </div>
   </div>
+
+  <div class="aviso-gestao" id="aviso-codigos" hidden></div>
 
   <div class="lista-topo">
     <h2>Estoque & Atendimento</h2>
@@ -514,6 +615,10 @@
   <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
     <button type="button" id="btn-abrir-auditoria" style="background:#333;color:#fff;">📋 Auditoria</button>
     <button type="button" id="btn-abrir-push" style="background:#0f5fa8;color:#fff;">📢 Enviar Notificação</button>
+    <button type="button" class="btn-ferr" id="btn-abrir-metricas" hidden style="background:#1f6f43;color:#fff;">📊 Números reais</button>
+    <button type="button" class="btn-ferr" id="btn-exportar-csv" style="background:#444;color:#fff;">⬇️ Exportar planilha</button>
+    <button type="button" class="btn-ferr" id="btn-importar-csv" hidden style="background:#444;color:#fff;">⬆️ Importar planilha</button>
+    <button type="button" class="btn-ferr" id="btn-abrir-integracoes" hidden style="background:#5a2ea6;color:#fff;">🔌 Integrações</button>
     <a href="treinamentos.html" target="_blank" style="text-decoration:none;background:var(--preto);color:var(--laranja);border:1px solid var(--laranja);border-radius:8px;padding:9px 14px;font-size:0.85rem;font-weight:700;display:inline-flex;align-items:center;">📖 Treinamentos</a>
   </div>
 
@@ -524,6 +629,9 @@
     <input type="text" id="push-titulo" maxlength="60" placeholder="Ex: Promoção de fim de semana! 🎉">
     <label style="margin-top:8px;display:block;">Mensagem</label>
     <textarea id="push-mensagem" rows="2" maxlength="150" placeholder="Ex: 20% off em toda a loja até domingo."></textarea>
+    <div class="push-modelos" id="push-modelos"></div>
+    <div id="push-segmento-linha" hidden><label for="push-segmento" style="margin-top:8px;display:block;">Enviar para</label><select id="push-segmento"></select></div>
+    <div id="push-extras" hidden><button type="button" id="btn-push-historico" style="margin-top:8px;width:auto;padding:8px 12px;font-size:0.78rem;background:#dbe9fb;color:#0b3d75;">📜 Ver últimos avisos enviados</button></div>
     <div style="display:flex;gap:8px;margin-top:10px;">
       <button type="button" id="btn-enviar-push" style="background:#0f5fa8;color:#fff;">Enviar Agora</button>
       <button type="button" id="btn-cancelar-push" style="background:#eee;color:#555;">Cancelar</button>
@@ -664,7 +772,7 @@
   /* ---------- v2: login único ---------- */
   const NOMES_PERMISSOES = [
     ['sem-cadastrar', 'catalogo_cadastrar'], ['sem-excluir', 'catalogo_excluir'], ['sem-precos', 'catalogo_precos'],
-    ['sem-auditoria', 'catalogo_auditoria'], ['sem-push', 'catalogo_push'], ['sem-portal', 'portal']
+    ['sem-auditoria', 'catalogo_auditoria'], ['sem-push', 'catalogo_push'], ['sem-portal', 'portal'], ['sem-gerir', 'gerir_acessos']
   ];
 
   function aplicarPermissoes(usuario) {
@@ -1756,6 +1864,7 @@
     document.getElementById('dash-disponiveis').textContent = ativos.filter(p => !estaEsgotado(p)).length;
     document.getElementById('dash-esgotados').textContent = ativos.filter(p => estaEsgotado(p)).length;
     renderizarFiltrosLista_();
+    if (window.TKGestao) TKGestao.aoRenderizarLista(); // v3.1: aviso de peças sem código
 
     const lista = listaVisivel_();
 
@@ -1770,7 +1879,7 @@
         <input type="checkbox" class="produto-chk" data-id="${idE}" aria-label="Selecionar ${escaparHtml(p.Nome)}" ${selecionadosBulk.has(String(p.ID)) ? 'checked' : ''}>
         <img src="${escaparHtml(fotoMini(p.Foto_URL, 200))}" alt="" loading="lazy" decoding="async" width="64" height="80">
         <div class="produto-info">
-          <div class="codigo">${escaparHtml(p.Codigo || '')}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}${esg ? '<span class="sel-esg">ESGOTADO</span>' : ''}</div>
+          <div class="codigo">${p.Codigo ? escaparHtml(p.Codigo) : '<span class="selo-inativo" style="background:#fff3e0;color:#7a4a00;margin-left:0">SEM CÓDIGO</span>'}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}${esg ? '<span class="sel-esg">ESGOTADO</span>' : ''}</div>
           <div class="nome">${escaparHtml(p.Nome)}</div>
           <div class="preco">${formatarReal(p.Preco)} · à vista <span>${formatarReal(p.Preco * (1 - DESCONTO_AVISTA))}</span></div>
           ${estoqueInformado(p) && !esg ? `<div class="estoque-linha">Estoque: ${escaparHtml(p.Estoque)}</div>` : ''}
@@ -1982,7 +2091,7 @@
     }
   }
   window.addEventListener('popstate', () => {
-    ['overlay-compartilhar', 'overlay-categorias'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('aberto'); });
+    ['overlay-compartilhar', 'overlay-categorias', 'overlay-gestao'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('aberto'); });
   });
   document.addEventListener('click', (ev) => { // fecha o menu "⋯" das peças ao tocar fora dele
     document.querySelectorAll('details.mais[open]').forEach(d => { if (!d.contains(ev.target)) d.removeAttribute('open'); });
@@ -2095,6 +2204,22 @@
 
       <div id="status-arte" style="text-align:center;font-size:0.8rem;margin-top:8px;min-height:18px;"></div>
       <button type="button" id="btn-baixar-arte" style="background:var(--laranja);margin-top:6px;">⬇️ Baixar Imagem</button>
+
+      <section class="arte-video" id="arte-video" aria-labelledby="arte-video-titulo">
+        <h4 id="arte-video-titulo">🎬 Story em vídeo <span class="arte-novo">novo · em teste</span></h4>
+        <p>Grava aqui no seu celular um vídeo de ${VIDEO_STORY_SEGUNDOS} segundos (a foto se aproxima devagar e aparecem o nome e o preço). Sem som: escolha a música no Instagram. Nada é enviado para a internet. Toque, espere terminar e confira o resultado abaixo: ele diz se o arquivo serve para o Instagram.</p>
+        <button type="button" id="btn-gravar-video-arte" style="background:var(--preto);color:var(--laranja);">🎬 Gravar Story em vídeo</button>
+        <div id="status-video-arte" role="status" aria-live="polite"></div>
+        <div id="resultado-video-arte" hidden>
+          <video id="video-arte-preview" controls playsinline muted loop aria-label="Prévia do Story em vídeo"></video>
+          <div id="info-video-arte" aria-live="polite"></div>
+          <div class="linha-botoes">
+            <button type="button" id="btn-compartilhar-video-arte" style="background:var(--laranja);color:#0d0d0d;">📤 Compartilhar</button>
+            <button type="button" id="btn-baixar-video-arte" style="background:#eee;color:#333;">⬇️ Baixar vídeo</button>
+          </div>
+        </div>
+      </section>
+
       <button type="button" id="btn-fechar-arte-config" style="background:#eee;color:#555;margin-top:8px;">Fechar</button>
     `;
 
@@ -2212,6 +2337,7 @@
       gerarEBaixarImagemStories(p, { selo: c.selo, precoStory: c.precoStory, foto: configArteAtual.foto, nome: c.nome, desc: c.desc, categoria: c.categoria }, status);
     });
 
+    ligarVideoArte_(p, lerCamposArte_);
     atualizarPreviewAoVivo();
   }
 
@@ -2225,9 +2351,122 @@
     ctx.closePath();
   }
 
+  /* ---------- arte do Story: desenho em camadas (a MESMA arte serve para o JPG e para o vídeo) ---------- */
+  const STORY_LARGURA = 1080, STORY_ALTURA = 1920, STORY_AREA_FOTO = 1240;
+
+  /** Fundo da foto: a própria foto ampliada, desfocada e escurecida, preenchendo (0,0,1080,1240). Custa caro (blur): no vídeo é desenhado UMA vez. */
+  function desenharFundoDesfocadoStories_(ctx, img) {
+    const AF = STORY_AREA_FOTO;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, STORY_LARGURA, AF); ctx.clip();
+    const escalaFundo = Math.max(STORY_LARGURA / img.naturalWidth, AF / img.naturalHeight);
+    const wf = img.naturalWidth * escalaFundo, hf = img.naturalHeight * escalaFundo;
+    let desfoqueOk = false;
+    try { ctx.filter = 'blur(40px)'; desfoqueOk = (ctx.filter === 'blur(40px)'); } catch (e) { desfoqueOk = false; }
+    ctx.drawImage(img, (STORY_LARGURA - wf) / 2, (AF - hf) / 2, wf, hf);
+    ctx.filter = 'none';
+    ctx.fillStyle = desfoqueOk ? 'rgba(13,13,13,0.45)' : 'rgba(13,13,13,0.82)'; // sem blur no aparelho: escurece mais pra não competir com a foto
+    ctx.fillRect(0, 0, STORY_LARGURA, AF);
+    ctx.restore();
+  }
+
+  /** Foto INTEIRA (nada cortado) centralizada na área da foto. zoom > 1 aproxima (usado só no vídeo). */
+  function desenharFotoNitidaStories_(ctx, img, zoom) {
+    const AF = STORY_AREA_FOTO;
+    const escala = Math.min(STORY_LARGURA / img.naturalWidth, AF / img.naturalHeight) * (zoom || 1);
+    const w = img.naturalWidth * escala, h = img.naturalHeight * escala;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, STORY_LARGURA, AF); ctx.clip();
+    ctx.drawImage(img, (STORY_LARGURA - w) / 2, (AF - h) / 2, w, h);
+    ctx.restore();
+  }
+
+  /** Selo, código, faixa laranja e rodapé (marca, nome, descrição, categoria, preço). Vale para o JPG e para o vídeo. */
+  function desenharTopoStories_(ctx, p, config) {
+    const areaFotoAltura = STORY_AREA_FOTO;
+    // selo e código ficam abaixo da barra do Instagram (nome da conta/minutagem cobrem os ~170px de cima)
+    const YTOPO = 190;
+    if (config.selo) {
+      ctx.font = 'bold 34px sans-serif';
+      const larguraTexto = ctx.measureText(config.selo).width;
+      const larguraSelo = larguraTexto + 60;
+      ctx.fillStyle = '#ff7a1a';
+      desenharRetanguloArredondado(ctx, 40, YTOPO, larguraSelo, 64, 10);
+      ctx.fill();
+      ctx.fillStyle = '#0d0d0d';
+      ctx.textAlign = 'left';
+      ctx.fillText(config.selo, 70, YTOPO + 44);
+    }
+
+    // código do produto, se houver
+    if (p.Codigo) {
+      ctx.font = 'bold 30px sans-serif';
+      const larguraCodigo = ctx.measureText(p.Codigo).width + 50;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      desenharRetanguloArredondado(ctx, 1040 - larguraCodigo, YTOPO, larguraCodigo, 64, 10);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'right';
+      ctx.fillText(p.Codigo, 1010, YTOPO + 43);
+    }
+
+    // faixa laranja separando foto do rodapé
+    ctx.fillStyle = '#ff7a1a';
+    ctx.fillRect(0, areaFotoAltura, 1080, 8);
+
+    // ---- rodapé: marca fixa + bloco dinâmico (nome / descrição / categoria / preço) ----
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ff7a1a';
+    ctx.font = 'bold 42px sans-serif';
+    ctx.fillText('TENKiTER MODAS', 540, areaFotoAltura + 70);
+
+    // monta os blocos que existem; o que for vazio simplesmente não ocupa espaço
+    const blocos = [];
+    if (config.nome) {
+      let fs = 58;
+      ctx.font = 'bold ' + fs + 'px sans-serif';
+      while (fs > 36 && ctx.measureText(config.nome).width > 960) { fs -= 2; ctx.font = 'bold ' + fs + 'px sans-serif'; }
+      blocos.push({ h: fs + 14, cor: '#ffffff', font: 'bold ' + fs + 'px sans-serif', linhas: [config.nome], lh: fs + 14, gapDepois: 8 });
+    }
+    if (config.desc) {
+      ctx.font = '36px sans-serif';
+      const ld = linhasCanvas_(ctx, config.desc, 940, 2);
+      blocos.push({ h: ld.length * 46, cor: '#cfcfcf', font: '36px sans-serif', linhas: ld, lh: 46, gapDepois: 8 });
+    }
+    if (config.categoria) {
+      blocos.push({ h: 40, cor: '#999999', font: '30px sans-serif', linhas: [config.categoria], lh: 40, gapDepois: 8 });
+    }
+    const precoCheio = Number(p.Preco);
+    if (config.precoStory < precoCheio - 0.009) {
+      blocos.push({ h: 46, cor: '#999999', font: '32px sans-serif', linhas: ['De ' + formatarReal(precoCheio)], lh: 46, gapDepois: 2, riscado: true });
+    }
+    blocos.push({ h: 80, cor: '#7ee787', font: 'bold 64px sans-serif', linhas: [formatarReal(config.precoStory) + ' à vista'], lh: 80, gapDepois: 0 });
+
+    // centraliza o conjunto entre a marca e a zona do adesivo de link (y 1752+)
+    const regiaoTopo = areaFotoAltura + 105, regiaoBase = 1745;
+    const alturaTotal = blocos.reduce((t, b) => t + b.h + b.gapDepois, 0);
+    let y = regiaoTopo + Math.max(0, (regiaoBase - regiaoTopo - alturaTotal) / 2);
+    blocos.forEach(b => {
+      ctx.fillStyle = b.cor; ctx.font = b.font;
+      b.linhas.forEach((l, i) => {
+        const yl = y + i * b.lh + b.lh / 2;
+        ctx.fillText(l, 540, yl);
+        if (b.riscado) {
+          const lw = ctx.measureText(l).width;
+          ctx.fillRect(540 - lw / 2, yl, lw, 3);
+        }
+      });
+      y += b.h + b.gapDepois;
+    });
+    ctx.textBaseline = 'alphabetic';
+
+    // Espaço reservado (x 40–650, y 1752–1856) para colar o adesivo de link do Instagram. Fica vazio de propósito.
+  }
+
   function gerarEBaixarImagemStories(p, config, status) {
     const canvas = document.getElementById('canvas-stories');
-    canvas.width = 1080; canvas.height = 1920;
+    canvas.width = STORY_LARGURA; canvas.height = STORY_ALTURA;
     const ctx = canvas.getContext('2d');
 
     const img = new Image();
@@ -2236,105 +2475,14 @@
       try {
         // fundo preto
         ctx.fillStyle = '#0d0d0d';
-        ctx.fillRect(0, 0, 1080, 1920);
+        ctx.fillRect(0, 0, STORY_LARGURA, STORY_ALTURA);
 
         // foto do produto: aparece INTEIRA (nada cortado). Os espaços que sobram nas laterais/em
         // cima e embaixo são preenchidos com a própria foto ampliada, desfocada e escurecida --
         // antes a foto era cortada pra cobrir a área, e peças em foto vertical perdiam mangas e barra.
-        const areaFotoAltura = 1240;
-        ctx.save();
-        ctx.beginPath(); ctx.rect(0, 0, 1080, areaFotoAltura); ctx.clip();
-        const escalaFundo = Math.max(1080 / img.naturalWidth, areaFotoAltura / img.naturalHeight);
-        const wf = img.naturalWidth * escalaFundo, hf = img.naturalHeight * escalaFundo;
-        let desfoqueOk = false;
-        try { ctx.filter = 'blur(40px)'; desfoqueOk = (ctx.filter === 'blur(40px)'); } catch (e) { desfoqueOk = false; }
-        ctx.drawImage(img, (1080 - wf) / 2, (areaFotoAltura - hf) / 2, wf, hf);
-        ctx.filter = 'none';
-        ctx.fillStyle = desfoqueOk ? 'rgba(13,13,13,0.45)' : 'rgba(13,13,13,0.82)'; // sem blur no aparelho: escurece mais pra não competir com a foto
-        ctx.fillRect(0, 0, 1080, areaFotoAltura);
-        const escala = Math.min(1080 / img.naturalWidth, areaFotoAltura / img.naturalHeight);
-        const w = img.naturalWidth * escala, h = img.naturalHeight * escala;
-        ctx.drawImage(img, (1080 - w) / 2, (areaFotoAltura - h) / 2, w, h);
-        ctx.restore();
-
-        // selo e código ficam abaixo da barra do Instagram (nome da conta/minutagem cobrem os ~170px de cima)
-        const YTOPO = 190;
-        if (config.selo) {
-          ctx.font = 'bold 34px sans-serif';
-          const larguraTexto = ctx.measureText(config.selo).width;
-          const larguraSelo = larguraTexto + 60;
-          ctx.fillStyle = '#ff7a1a';
-          desenharRetanguloArredondado(ctx, 40, YTOPO, larguraSelo, 64, 10);
-          ctx.fill();
-          ctx.fillStyle = '#0d0d0d';
-          ctx.textAlign = 'left';
-          ctx.fillText(config.selo, 70, YTOPO + 44);
-        }
-
-        // código do produto, se houver
-        if (p.Codigo) {
-          ctx.font = 'bold 30px sans-serif';
-          const larguraCodigo = ctx.measureText(p.Codigo).width + 50;
-          ctx.fillStyle = 'rgba(0,0,0,0.55)';
-          desenharRetanguloArredondado(ctx, 1040 - larguraCodigo, YTOPO, larguraCodigo, 64, 10);
-          ctx.fill();
-          ctx.fillStyle = '#ffffff';
-          ctx.textAlign = 'right';
-          ctx.fillText(p.Codigo, 1010, YTOPO + 43);
-        }
-
-        // faixa laranja separando foto do rodapé
-        ctx.fillStyle = '#ff7a1a';
-        ctx.fillRect(0, areaFotoAltura, 1080, 8);
-
-        // ---- rodapé: marca fixa + bloco dinâmico (nome / descrição / categoria / preço) ----
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#ff7a1a';
-        ctx.font = 'bold 42px sans-serif';
-        ctx.fillText('TENKiTER MODAS', 540, areaFotoAltura + 70);
-
-        // monta os blocos que existem; o que for vazio simplesmente não ocupa espaço
-        const blocos = [];
-        if (config.nome) {
-          let fs = 58;
-          ctx.font = 'bold ' + fs + 'px sans-serif';
-          while (fs > 36 && ctx.measureText(config.nome).width > 960) { fs -= 2; ctx.font = 'bold ' + fs + 'px sans-serif'; }
-          blocos.push({ h: fs + 14, cor: '#ffffff', font: 'bold ' + fs + 'px sans-serif', linhas: [config.nome], lh: fs + 14, gapDepois: 8 });
-        }
-        if (config.desc) {
-          ctx.font = '36px sans-serif';
-          const ld = linhasCanvas_(ctx, config.desc, 940, 2);
-          blocos.push({ h: ld.length * 46, cor: '#cfcfcf', font: '36px sans-serif', linhas: ld, lh: 46, gapDepois: 8 });
-        }
-        if (config.categoria) {
-          blocos.push({ h: 40, cor: '#999999', font: '30px sans-serif', linhas: [config.categoria], lh: 40, gapDepois: 8 });
-        }
-        const precoCheio = Number(p.Preco);
-        if (config.precoStory < precoCheio - 0.009) {
-          blocos.push({ h: 46, cor: '#999999', font: '32px sans-serif', linhas: ['De ' + formatarReal(precoCheio)], lh: 46, gapDepois: 2, riscado: true });
-        }
-        blocos.push({ h: 80, cor: '#7ee787', font: 'bold 64px sans-serif', linhas: [formatarReal(config.precoStory) + ' à vista'], lh: 80, gapDepois: 0 });
-
-        // centraliza o conjunto entre a marca e a zona do adesivo de link (y 1752+)
-        const regiaoTopo = areaFotoAltura + 105, regiaoBase = 1745;
-        const alturaTotal = blocos.reduce((t, b) => t + b.h + b.gapDepois, 0);
-        let y = regiaoTopo + Math.max(0, (regiaoBase - regiaoTopo - alturaTotal) / 2);
-        blocos.forEach(b => {
-          ctx.fillStyle = b.cor; ctx.font = b.font;
-          b.linhas.forEach((l, i) => {
-            const yl = y + i * b.lh + b.lh / 2;
-            ctx.fillText(l, 540, yl);
-            if (b.riscado) {
-              const lw = ctx.measureText(l).width;
-              ctx.fillRect(540 - lw / 2, yl, lw, 3);
-            }
-          });
-          y += b.h + b.gapDepois;
-        });
-        ctx.textBaseline = 'alphabetic';
-
-        // Espaço reservado (x 40–650, y 1752–1856) para colar o adesivo de link do Instagram. Fica vazio de propósito.
+        desenharFundoDesfocadoStories_(ctx, img);
+        desenharFotoNitidaStories_(ctx, img, 1);
+        desenharTopoStories_(ctx, p, config);
 
         const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
         const a = document.createElement('a');
@@ -2351,6 +2499,209 @@
     };
     img.src = config.foto || p.Foto_URL;
   }
+
+  /* ====================================================================
+   * STORY EM VÍDEO — gravado no próprio aparelho (canvas + MediaRecorder). Nada vai para o servidor.
+   * O que o aparelho consegue gravar varia: Chrome recente no Android costuma gerar MP4 com H.264 (o que o Instagram aceita);
+   * navegadores mais antigos/desktop geram WebM (VP8/VP9), que o Instagram pode recusar. Por isso, depois de gravar, o painel
+   * ABRE O ARQUIVO e diz o que realmente saiu (contêiner + codec), em vez de adivinhar.
+   * ==================================================================== */
+  const VIDEO_STORY_SEGUNDOS = 7;
+  const VIDEO_CANDIDATOS = [
+    'video/mp4;codecs=avc1.640028', 'video/mp4;codecs=avc1.4D4028', 'video/mp4;codecs=avc1.42E01F', 'video/mp4;codecs=avc1', 'video/mp4;codecs=h264',
+    'video/mp4',                       // sem codec dito: o aparelho escolhe (no Safari é H.264; em alguns Chrome é VP9) — a análise do arquivo confirma
+    'video/webm;codecs=h264', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'
+  ];
+  let gravacaoVideoArte_ = null;   // { cancelar() } enquanto estiver gravando
+  let urlVideoArte_ = null;
+
+  /** null = o navegador não grava vídeo; '' = grava, mas escolhe sozinho; senão o melhor formato aceito, na ordem acima. */
+  function escolherFormatoVideo_() {
+    if (typeof MediaRecorder === 'undefined' || !HTMLCanvasElement.prototype.captureStream) return null;
+    for (const m of VIDEO_CANDIDATOS) { try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) {} }
+    return '';
+  }
+
+  /** Abre o começo do arquivo e descobre o que ele É de verdade (o nome que o aparelho dá ao formato nem sempre bate). */
+  async function analisarVideoGravado_(blob) {
+    const u8 = new Uint8Array(await blob.slice(0, 262144).arrayBuffer());
+    let txt = '';
+    for (let i = 0; i < u8.length; i += 8192) txt += String.fromCharCode.apply(null, u8.subarray(i, i + 8192));
+    const mp4 = txt.slice(0, 64).indexOf('ftyp') !== -1;
+    const webm = u8[0] === 0x1A && u8[1] === 0x45 && u8[2] === 0xDF && u8[3] === 0xA3;
+    let codec = 'desconhecido';
+    if (mp4) {
+      if (/avc[13]/.test(txt)) codec = 'h264'; else if (/hvc1|hev1/.test(txt)) codec = 'h265'; else if (/vp09/.test(txt)) codec = 'vp9'; else if (/av01/.test(txt)) codec = 'av1';
+    } else if (webm) {
+      if (txt.indexOf('V_MPEG4/ISO/AVC') !== -1) codec = 'h264'; else if (txt.indexOf('V_VP9') !== -1) codec = 'vp9'; else if (txt.indexOf('V_VP8') !== -1) codec = 'vp8'; else if (txt.indexOf('V_AV1') !== -1) codec = 'av1';
+    }
+    return { container: mp4 ? 'mp4' : (webm ? 'webm' : 'outro'), codec: codec };
+  }
+
+  /** O parecer em português simples. nivel 'ok' = serve para o Instagram; 'atencao' = pode ser recusado. */
+  function parecerVideo_(a) {
+    const nomeCodec = { h264: 'H.264', h265: 'H.265', vp9: 'VP9', vp8: 'VP8', av1: 'AV1', desconhecido: 'codec não identificado' }[a.codec] || a.codec;
+    if (a.container === 'mp4' && a.codec === 'h264') return { nivel: 'ok', texto: '✅ MP4 com H.264: é o formato que o Instagram aceita. Pode postar.' };
+    if (a.container === 'webm') return { nivel: 'atencao', texto: '⚠️ Saiu em WebM (' + nomeCodec + '), formato que o Instagram pode recusar. Tente postar assim mesmo; se ele recusar, o próximo passo é converter para MP4 automaticamente (ainda não está ligado).' };
+    return { nivel: 'atencao', texto: '⚠️ Saiu em ' + a.container.toUpperCase() + ' com ' + nomeCodec + ', que o Instagram pode recusar. Tente postar assim mesmo; se ele recusar, o próximo passo é converter para MP4 com H.264 (ainda não está ligado).' };
+  }
+
+  function carregarImagemStory_(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('foto'));
+      img.src = url;
+    });
+  }
+
+  /**
+   * Grava o vídeo. aoProgresso(segundosJaGravados). Devolve { blob, mime }. Lança Error('semSuporte' | 'foto' | 'fotoBloqueada' | 'cancelado' | 'tela').
+   * Camadas prontas ANTES de gravar (o desfoque custa caro): em cada quadro só se desenham 3 imagens, para o celular acompanhar os 30 quadros por segundo.
+   */
+  async function gravarStoryVideo_(p, config, aoProgresso) {
+    const mime = escolherFormatoVideo_();
+    if (mime === null) throw new Error('semSuporte');
+    const img = await carregarImagemStory_(config.foto || p.Foto_URL);
+
+    const fundo = document.createElement('canvas'); fundo.width = STORY_LARGURA; fundo.height = STORY_AREA_FOTO;
+    desenharFundoDesfocadoStories_(fundo.getContext('2d'), img);
+    try { fundo.getContext('2d').getImageData(0, 0, 1, 1); } catch (e) { throw new Error('fotoBloqueada'); }   // foto de serviço sem permissão: o vídeo sairia preto
+    const topo = document.createElement('canvas'); topo.width = STORY_LARGURA; topo.height = STORY_ALTURA;
+    desenharTopoStories_(topo.getContext('2d'), p, config);
+
+    const canvas = document.createElement('canvas'); canvas.width = STORY_LARGURA; canvas.height = STORY_ALTURA;
+    const ctx = canvas.getContext('2d');
+    const D = VIDEO_STORY_SEGUNDOS;
+    function quadro(s) {
+      const k = Math.min(1, s / D), suave = k * k * (3 - 2 * k);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#0d0d0d'; ctx.fillRect(0, 0, STORY_LARGURA, STORY_ALTURA);
+      ctx.drawImage(fundo, 0, 0);
+      desenharFotoNitidaStories_(ctx, img, 1 + 0.08 * suave);   // aproxima 8% ao longo do vídeo
+      ctx.globalAlpha = Math.min(1, s / 0.6);                    // nome, selo e preço aparecem nos primeiros 0,6 s
+      ctx.drawImage(topo, 0, 0);
+      ctx.globalAlpha = 1;
+    }
+    quadro(0);
+
+    const stream = canvas.captureStream(30);
+    const opcoes = { videoBitsPerSecond: 8000000 };
+    if (mime) opcoes.mimeType = mime;
+    const rec = new MediaRecorder(stream, opcoes);
+    const partes = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) partes.push(e.data); };
+
+    return new Promise((resolve, reject) => {
+      let cancelado = false, motivo = '', terminou = false, raf = 0, ultimoSeg = -1;
+      const t0 = performance.now();
+      function limpar() {
+        cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', aoMudarVisibilidade);
+        try { stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+        gravacaoVideoArte_ = null;
+      }
+      function aoMudarVisibilidade() { if (document.hidden) { cancelado = true; motivo = 'tela'; if (rec.state !== 'inactive') rec.stop(); } }
+      gravacaoVideoArte_ = { cancelar: () => { cancelado = true; motivo = 'cancelado'; if (rec.state !== 'inactive') rec.stop(); } };
+      document.addEventListener('visibilitychange', aoMudarVisibilidade);
+      rec.onerror = () => { cancelado = true; motivo = 'erro'; };
+      rec.onstop = () => {
+        limpar();
+        if (cancelado) { reject(new Error(motivo || 'cancelado')); return; }
+        const tipo = rec.mimeType || mime || 'video/webm';
+        resolve({ blob: new Blob(partes, { type: tipo }), mime: tipo });
+      };
+      rec.start();
+      (function passo(agora) {
+        if (cancelado || terminou) return;
+        const s = ((agora || performance.now()) - t0) / 1000;
+        if (Math.floor(s) !== ultimoSeg) { ultimoSeg = Math.floor(s); if (aoProgresso) aoProgresso(Math.min(D, ultimoSeg)); }
+        if (s >= D) {
+          quadro(D); terminou = true;
+          setTimeout(() => { if (rec.state !== 'inactive') rec.stop(); }, 200);   // deixa o último quadro entrar no arquivo
+          return;
+        }
+        quadro(s);
+        raf = requestAnimationFrame(passo);
+      })();
+    });
+  }
+
+  function cancelarGravacaoVideoArte_() { if (gravacaoVideoArte_) gravacaoVideoArte_.cancelar(); }
+  function limparVideoArte_() { if (urlVideoArte_) { URL.revokeObjectURL(urlVideoArte_); urlVideoArte_ = null; } }
+
+  function ligarVideoArte_(p, lerCampos) {
+    const btn = document.getElementById('btn-gravar-video-arte');
+    const st = document.getElementById('status-video-arte');
+    const res = document.getElementById('resultado-video-arte');
+    const vid = document.getElementById('video-arte-preview');
+    const info = document.getElementById('info-video-arte');
+    const bShare = document.getElementById('btn-compartilhar-video-arte');
+    const bDown = document.getElementById('btn-baixar-video-arte');
+    if (escolherFormatoVideo_() === null) {
+      btn.disabled = true;
+      st.textContent = 'Este navegador não grava vídeo pelo site. Abra o painel no Chrome do celular (atualizado).';
+      return;
+    }
+    let arquivo = null;
+    const rotuloBtn = btn.textContent;
+
+    btn.addEventListener('click', async () => {
+      if (gravacaoVideoArte_) { cancelarGravacaoVideoArte_(); return; }   // segundo toque cancela
+      limparVideoArte_(); res.hidden = true; arquivo = null;
+      const c = lerCampos();
+      btn.textContent = '⏹ Cancelar gravação';
+      st.textContent = 'Preparando…';
+      try {
+        const r = await gravarStoryVideo_(p, { selo: c.selo, precoStory: c.precoStory, foto: configArteAtual.foto, nome: c.nome, desc: c.desc, categoria: c.categoria }, (seg) => {
+          st.textContent = 'Gravando… ' + seg + ' de ' + VIDEO_STORY_SEGUNDOS + ' segundos. Não saia desta tela.';
+        });
+        const a = await analisarVideoGravado_(r.blob);
+        const ext = a.container === 'mp4' ? 'mp4' : 'webm';
+        arquivo = new File([r.blob], 'story-' + (p.Codigo || p.ID) + '.' + ext, { type: r.blob.type || (ext === 'mp4' ? 'video/mp4' : 'video/webm') });
+        urlVideoArte_ = URL.createObjectURL(arquivo);
+        vid.src = urlVideoArte_;
+        const par = parecerVideo_(a);
+        const mb = (arquivo.size / 1048576).toFixed(1).replace('.', ',');
+        info.innerHTML = '<div>' + escaparHtml(a.container.toUpperCase()) + ' · ' + escaparHtml(String(a.codec).toUpperCase()) + ' · 1080×1920 · ' + VIDEO_STORY_SEGUNDOS + ' s · ' + mb + ' MB · sem som</div>' +
+          '<div class="' + (par.nivel === 'ok' ? 'v-ok' : 'v-atencao') + '">' + escaparHtml(par.texto) + '</div>';
+        res.hidden = false;
+        st.textContent = '';
+        vid.onerror = () => { info.insertAdjacentHTML('beforeend', '<div class="v-atencao">A prévia não abriu neste navegador, mas o arquivo foi gravado. Baixe o vídeo para conferir.</div>'); };
+        try { const tocar = vid.play(); if (tocar && tocar.catch) tocar.catch(() => {}); } catch (e) {}
+      } catch (erro) {
+        const m = String(erro && erro.message);
+        st.textContent = m === 'cancelado' ? 'Gravação cancelada.'
+          : m === 'tela' ? 'A gravação parou porque você saiu da tela. Toque de novo e deixe esta tela aberta até terminar.'
+          : m === 'fotoBloqueada' ? '❌ A foto está num serviço que bloqueia esse uso, então o vídeo sairia preto. Use a imagem (botão acima) ou escolha outra foto.'
+          : m === 'foto' ? '❌ Não foi possível carregar a foto selecionada.'
+          : m === 'semSuporte' ? '❌ Este navegador não grava vídeo pelo site.'
+          : '❌ Não foi possível gravar o vídeo neste aparelho agora. Tente de novo; se persistir, use a imagem.';
+      } finally {
+        btn.textContent = rotuloBtn;
+      }
+    });
+
+    bDown.addEventListener('click', () => {
+      if (!arquivo || !urlVideoArte_) return;
+      const a = document.createElement('a'); a.href = urlVideoArte_; a.download = arquivo.name; document.body.appendChild(a); a.click(); a.remove();
+      st.textContent = '✅ Vídeo baixado! Confira sua pasta de downloads.';
+    });
+    bShare.addEventListener('click', async () => {
+      if (!arquivo) return;
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [arquivo] })) { await navigator.share({ files: [arquivo], title: 'Story TENKiTER Modas' }); return; }
+      } catch (e) { if (e && e.name === 'AbortError') return; }
+      bDown.click();   // aparelho sem compartilhamento de arquivo: baixa para postar pela galeria
+      st.textContent = 'Este aparelho não compartilha arquivo direto: baixei o vídeo. Abra o Instagram e escolha-o na galeria.';
+    });
+  }
+
+  // fechou a janela da arte (botão, fundo, Esc, voltar): para de gravar e solta a memória do vídeo
+  (function vigiarJanelaArte_() {
+    const ov = document.getElementById('overlay-compartilhar');
+    if (!ov) return;
+    new MutationObserver(() => { if (!ov.classList.contains('aberto')) { cancelarGravacaoVideoArte_(); limparVideoArte_(); } }).observe(ov, { attributes: true, attributeFilter: ['class'] });
+  })();
 
   // Quebra o texto em até maxLinhas linhas de no máximo larguraMax px; se sobrar, termina com "…".
   function linhasCanvas_(ctx, texto, larguraMax, maxLinhas) {
@@ -2444,7 +2795,8 @@
       statusPush.textContent = '⚠️ Preencha título e mensagem.';
       return;
     }
-    if (!confirm('Enviar esta notificação para todos os assinantes agora?')) return;
+    const segEscolhido = (window.TKGestao && TKGestao.segmentoEscolhido()) || '';
+    if (!confirm(segEscolhido && segEscolhido !== 'Subscribed Users' ? 'Enviar esta notificação para o segmento "' + segEscolhido + '" agora?' : 'Enviar esta notificação para todos os assinantes agora?')) return;
 
     btnPush.disabled = true;
     const textoOriginalBtn = btnPush.textContent;
@@ -2454,7 +2806,7 @@
       const resp = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'enviarPush', pin: adminPin, titulo: titulo, mensagem: mensagem })
+        body: JSON.stringify({ action: 'enviarPush', pin: adminPin, titulo: titulo, mensagem: mensagem, segmento: segEscolhido || undefined })
       }).then(r => r.json());
 
       if (resp.ok) {
@@ -2681,6 +3033,7 @@
 
       box.innerHTML = `
         <div class="seo-sugestao">
+          ${resp.local ? '<div class="campo" style="color:#7a4a00"><b>Gerado sem IA</b>' + escaparHtml(resp.aviso || 'A IA não respondeu.') + ' Montei um texto só com os dados da peça: confira e ajuste.</div>' : ''}
           <div class="campo"><b>Título sugerido</b>${escaparHtml(resp.titulo || '—')}</div>
           <div class="campo"><b>Descrição sugerida</b>${escaparHtml(resp.descricao || '—')}</div>
           <button type="button" id="btn-usar-titulo-seo" style="background:var(--laranja);">Usar Título</button>
@@ -2712,6 +3065,7 @@
     await Promise.all([carregarListas(), carregarProdutos(), carregarStats()]);
   })();
 </script>
+<script src="admin-gestao.js"></script>
 <script src="nav.js" data-ativo="gestao"></script>
 <script src="a11y.js"></script>
 </body>
