@@ -3,6 +3,8 @@
  *
  *   /p/<código>      página da peça com miniatura (og:*), dados estruturados (JSON-LD Product, para o Google) e texto visível;
  *                    a pessoa é levada ao catálogo (?c=<código>). É o link que vai no WhatsApp/Instagram.
+ *   /p/<código>?f=3  o MESMO link, mas na 3ª foto da galeria (1 = capa; o vídeo é sempre o último): a miniatura é essa foto (ou um quadro do
+ *                    vídeo) e a pessoa cai no catálogo já nela (?c=<código>&f=3). Número inválido = capa.
  *   /sitemap.xml     mapa do site com a página inicial e TODAS as peças ativas (/p/<código>) — para o Google achar cada peça.
  *   /feed.csv        catálogo para a Meta (Instagram/Facebook) e o Google Merchant, gerado da lista (funciona mesmo com o Apps Script antigo).
  *   /feed.xml        o mesmo catálogo em XML (Google Merchant).
@@ -37,19 +39,44 @@ const CABECALHOS_SEGUROS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Poli
 /** JSON-LD dentro de <script>: "<" vira \u003c para que um nome de peça nunca consiga fechar o script. */
 function jsonLd(obj) { return JSON.stringify(obj).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026'); }
 
-function pagina(p, cod) {
-  const destino = SITE_URL + '?c=' + encodeURIComponent(cod);
+/** Fotos e vídeo da peça NA MESMA ORDEM do catálogo (index.html): capa, galeria e, por último, o vídeo. Mudou lá, mude aqui. */
+function midias(p) {
+  const fotos = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',').map((s) => s.trim()).filter(Boolean));
+  const out = fotos.map((url) => ({ tipo: 'foto', url: String(url || '') }));
+  const v = String(p.Video_URL || '');
+  if (/^https:\/\/res\.cloudinary\.com\//.test(v)) out.push({ tipo: 'video', url: v, cloudinary: true });
+  else if (/^https:\/\/drive\.google\.com\/file\/d\/[\w-]+\/preview$/.test(v)) out.push({ tipo: 'video', url: v, cloudinary: false });
+  return out;
+}
+/** Imagem que representa a foto/vídeo na miniatura (og:image). Foto do Google sai em 1200 px (leve para o WhatsApp); vídeo da Cloudinary vira um
+ *  quadro dele (30% da duração: o quadro 0 costuma vir preto). Vídeo do Drive não dá miniatura confiável: devolve '' e quem chama usa a capa. */
+function imagemDaMidia(m) {
+  if (!m) return '';
+  if (m.tipo === 'foto') return /^https:\/\/lh3\.googleusercontent\.com\/d\/[\w-]+$/.test(m.url) ? m.url + '=w1200' : m.url;
+  if (m.cloudinary && m.url.indexOf('/video/upload/') !== -1) return m.url.replace('/video/upload/', '/video/upload/so_30p,w_1200,c_limit,f_jpg/').replace(/\.[A-Za-z0-9]+(\?.*)?$/, '.jpg');
+  return '';
+}
+/** ?f=<n> do endereço -> número de 2 a 99, ou 1 (capa) se não for um número válido. */
+function numeroDaFoto(v) { const n = parseInt(v, 10); return n >= 2 && n <= 99 ? n : 1; }
+
+function pagina(p, cod, f) {
+  const lista = midias(p);
+  const n = f >= 2 && f <= lista.length ? f : 1;          // foto escolhida (1 = capa)
+  const destino = SITE_URL + '?c=' + encodeURIComponent(cod) + (n > 1 ? '&f=' + n : '');
   const cheio = Number(p.Preco) || 0;
   const avista = cheio * (1 - DESCONTO_AVISTA);
   const titulo = p.Nome + (p.Codigo ? ' [' + p.Codigo + ']' : '') + ' — ' + real(avista) + ' à vista';
   const desc = (p.Descricao ? String(p.Descricao).slice(0, 160) + ' | ' : '') + 'De ' + real(cheio) + ' por ' + real(avista) + ' à vista na TENKiTER Modas — Crateús, CE.';
-  const img = p.Foto_URL || (SITE_URL + 'og-banner.jpg');
+  const capa = p.Foto_URL || (SITE_URL + 'og-banner.jpg');
+  const img = imagemDaMidia(lista[n - 1]) || imagemDaMidia(lista[0]) || capa;   // a foto escolhida; sem miniatura própria, a capa
+  const canonico = linkPeca(p);
+  const urlCompartilhada = n > 1 ? canonico + (canonico.indexOf('?') === -1 ? '?' : '&') + 'f=' + n : canonico;
   const galeria = String(p.Fotos_Galeria || '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 8);
   // Dados estruturados (Google): preço = preço de tabela; o desconto à vista aparece no texto, não como promoção.
   const produtoLd = {
     '@context': 'https://schema.org', '@type': 'Product',
     name: p.Nome, sku: p.Codigo || String(p.ID), description: String(p.Descricao || p.Nome).slice(0, 500),
-    image: [img].concat(galeria), brand: { '@type': 'Brand', name: 'TENKiTER Modas' }, category: p.Categoria || undefined,
+    image: [capa].concat(galeria), brand: { '@type': 'Brand', name: 'TENKiTER Modas' }, category: p.Categoria || undefined,
     offers: {
       '@type': 'Offer', url: linkPeca(p), priceCurrency: 'BRL', price: cheio.toFixed(2), itemCondition: 'https://schema.org/NewCondition',
       availability: temEstoque(p) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
@@ -59,10 +86,10 @@ function pagina(p, cod) {
   return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<title>' + esc(titulo) + '</title><meta name="description" content="' + esc(desc) + '">' +
-    '<link rel="canonical" href="' + esc(linkPeca(p)) + '">' +
+    '<link rel="canonical" href="' + esc(canonico) + '">' +
     '<meta property="og:type" content="product"><meta property="og:site_name" content="TENKiTER Modas"><meta property="og:locale" content="pt_BR">' +
     '<meta property="og:title" content="' + esc(titulo) + '"><meta property="og:description" content="' + esc(desc) + '">' +
-    '<meta property="og:image" content="' + esc(img) + '"><meta property="og:url" content="' + esc(linkPeca(p)) + '">' +
+    '<meta property="og:image" content="' + esc(img) + '"><meta property="og:url" content="' + esc(urlCompartilhada) + '">' +
     '<meta property="product:price:amount" content="' + esc(cheio.toFixed(2)) + '"><meta property="product:price:currency" content="BRL">' +
     '<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="' + esc(titulo) + '">' +
     '<meta name="twitter:description" content="' + esc(desc) + '"><meta name="twitter:image" content="' + esc(img) + '">' +
@@ -151,9 +178,10 @@ export default {
         const alvo = String(cod).trim().toLowerCase();
         const p = lista.find((x) => String(x.Codigo || '').toLowerCase() === alvo || String(x.ID) === cod);
         if (!p) return Response.redirect(SITE_URL, 302);
-        return resposta(pagina(p, p.Codigo || p.ID), 'text/html; charset=utf-8', 'public, max-age=300');
+        return resposta(pagina(p, p.Codigo || p.ID, numeroDaFoto(url.searchParams.get('f'))), 'text/html; charset=utf-8', 'public, max-age=300');
       } catch (e) {
-        return Response.redirect(SITE_URL + '?c=' + encodeURIComponent(cod), 302); // API fora: a pessoa ainda chega na peça
+        const fx = numeroDaFoto(url.searchParams.get('f'));
+        return Response.redirect(SITE_URL + '?c=' + encodeURIComponent(cod) + (fx > 1 ? '&f=' + fx : ''), 302); // API fora: a pessoa ainda chega na peça (e na foto)
       }
     } catch (e) {
       return new Response('Catálogo indisponível no momento. Tente de novo em instantes.', { status: 503, headers: Object.assign({ 'Content-Type': 'text/plain; charset=utf-8', 'Retry-After': '120' }, CABECALHOS_SEGUROS) });

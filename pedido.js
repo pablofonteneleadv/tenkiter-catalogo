@@ -23,7 +23,7 @@ function linhaItem_(p) {
 }
 /** Lista de peças. Põe o link de cada peça enquanto a mensagem couber no limite do wa.me (~1800 caracteres). */
 function listaDePecasTexto_(itens) {
-  var comLinks = itens.map(function (p) { return linhaItem_(p) + '\n  ' + linkProduto(p); }).join('\n');
+  var comLinks = itens.map(function (p) { return linhaItem_(p) + '\n  ' + linkProduto(p, fotoDaSacola(p.ID)); }).join('\n'); // o link leva à foto que a pessoa escolheu
   if (comLinks.length <= 1100) return comLinks;
   return itens.map(linhaItem_).join('\n');
 }
@@ -118,7 +118,7 @@ function abrirSacola() {
       (sumiram > 0 ? '<p class="texto-pequeno" role="status">' + sumiram + (sumiram === 1 ? ' peça saiu' : ' peças saíram') + ' do catálogo e foi removida da sacola.</p>' : '') +
       itens.map(function (p) {
         return '<div class="item-sacola">' +
-          '<img src="' + escaparHtml(fotoMini(p.Foto_URL, 160)) + '" alt="" width="48" height="60" loading="lazy">' +
+          '<img src="' + escaparHtml(imagemDoSlide(p, fotoDaSacola(p.ID), 160)) + '" alt="" width="48" height="60" loading="lazy">' +
           '<div class="info"><div class="nome">' + escaparHtml(p.Nome) + '</div>' +
           (p.Codigo ? '<div class="codigo" style="font-size:.68rem;color:var(--laranja-txt);font-weight:800">' + escaparHtml(p.Codigo) + '</div>' : '') +
           '<div class="preco">' + formatarReal(precoAvista_(p)) + ' à vista</div></div>' +

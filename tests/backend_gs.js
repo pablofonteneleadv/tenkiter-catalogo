@@ -74,6 +74,7 @@ function criarAmbiente() {
         return fmt.replace(/yyyy|MM|dd|HH|mm/g, t => m[t]);
       },
       computeDigest: (_a, texto) => Array.from(crypto.createHash('sha256').update(texto, 'utf8').digest()).map(b => (b > 127 ? b - 256 : b)),
+      computeHmacSha256Signature: (texto, chave) => Array.from(crypto.createHmac('sha256', String(chave)).update(String(texto), 'utf8').digest()).map(b => (b > 127 ? b - 256 : b)),
       getUuid: () => crypto.randomUUID(), base64Decode: s => Array.from(Buffer.from(s, 'base64')),
       DigestAlgorithm: { SHA_256: 'SHA_256' }, Charset: { UTF_8: 'UTF_8' }, newBlob: () => ({})
     },
@@ -123,6 +124,7 @@ console.log('Arquivo testado: ' + ARQ);
   const r = amb.getJson({ action: 'versao' });
   ok(r.ok && r.versao === 'catalogo-' + v, '?action=versao devolve catalogo-' + v, r.versao);
   ok(r.pedidos === true && r.config === true && r.metricas === true && r.importacao === true && r.feed === true && r.integracoes === true && r.loteCategoria === true && r.pushHistorico === true && r.codigos === true, 'versao anuncia os recursos novos');
+  if (parseFloat(v) >= 3.2) ok(r.categoriasGestao === true, 'versao anuncia categoriasGestao (o painel só mostra apagar/renomear categoria se vir isso)');
   ok(!/Versão: catálogo v2\.1/.test(codigoFonte), 'diagnostico() não tem mais a versão antiga escrita à mão');
   const antigos = arquivos.length;
   ok(antigos >= 1, 'existe o arquivo versionado');
@@ -440,6 +442,107 @@ console.log('Arquivo testado: ' + ARQ);
   ok(r.ok && r.local === true && r.titulo.length <= 60 && r.descricao.length <= 300, 'sem chave do Gemini: devolve texto pronto (local:true) em vez de erro', JSON.stringify(r));
   ok(/Crateús-CE/.test(r.descricao) && /10% de desconto à vista/.test(r.descricao) && !/sem juros|3x|horário/i.test(r.descricao), 'o texto só usa fatos da loja (10% à vista, Crateús-CE) — sem inventar parcelamento nem horário');
   ok(r.aviso && /Gemini/.test(r.aviso), 'e avisa por que não usou a IA');
+})();
+
+// ------------------------------------------------------------------ 8b. categorias: nome limpo, apagar e renomear (v3.2)
+(function categorias() {
+  console.log('\n[categorias: nome limpo, apagar, renomear]');
+  const amb = criarAmbiente(); semear(amb);
+  const lista = () => amb.getJson({ action: 'categorias' }).categorias;
+  const aba = amb.ss.getSheetByName('Sheet1');
+  const catDa = (id) => { const l = aba.d.find(x => x[0] === id); return l ? l[2] : undefined; };
+
+  // --- criar (PIN antigo basta: é "cadastrar")
+  let r = amb.post(adm({ action: 'addCategoria', nome: '  Fantasia   infantil,  menina ' }));
+  ok(r.ok && r.nome === 'Fantasia infantil menina', 'nome limpo: vírgula vira espaço, espaços repetidos viram um, pontas aparadas', JSON.stringify(r));
+  ok(lista().indexOf('Fantasia infantil menina') !== -1 && lista().filter(c => /Fantasia/.test(c)).length === 1, 'entrou UMA vez na lista, sem vírgula');
+  r = amb.post(adm({ action: 'addCategoria', nome: 'fantasia INFANTIL menina' }));
+  ok(r.ok && r.jaExistia === true && r.nome === 'Fantasia infantil menina' && lista().filter(c => /fantasia/i.test(c)).length === 1, 'repetir com outra maiúscula não duplica e devolve o nome que já existe', JSON.stringify(r));
+  r = amb.post(adm({ action: 'addCategoria', nome: 'Calcas' }));
+  ok(r.ok && r.jaExistia === true && r.nome === 'Calças' || r.ok && r.nome === 'Calcas', 'sem acento é reconhecida como a mesma ("Calças" já existe nas padrão)', JSON.stringify(r));
+  r = amb.post(adm({ action: 'addCategoria', nome: ' , ,  ' }));
+  ok(r.ok === false, 'nome só de vírgula/espaço é recusado', JSON.stringify(r));
+  r = amb.post(adm({ action: 'addCategoria', nome: 'x'.repeat(100) }));
+  ok(r.ok && r.nome.length === 60, 'nome muito longo é cortado em 60');
+  r = amb.post(adm({ action: 'addCategoria', nome: '=1+1' }));
+  ok(r.ok && !String(amb.ss.getSheetByName('Categorias').d.slice(-1)[0][0]).startsWith('='), 'nome que começa com "=" não vira fórmula na planilha');
+  r = amb.post({ action: 'addCategoria', nome: 'Sem login' });
+  ok(r.ok === false, 'criar categoria sem PIN/login continua negado');
+
+  // --- contas: Admin total e Funcionária (login de verdade)
+  // a planilha de pessoas de verdade já tem Nome/WhatsApp/Senha na linha 1; o simulador começa vazio
+  amb.ctx.SpreadsheetApp.openById('x').getSheetByName('Pessoas').appendRow(['Nome', 'WhatsApp', 'Senha']);
+  amb.run("acRegistrar_('Pablo Admin', '88999990001', 'senha-forte-1', 'Admin total', {})");
+  amb.run("acRegistrar_('Ana Func', '88999990002', 'senha-forte-2', 'Funcionário', {})");
+  const tokAdmin = amb.post({ action: 'login', whatsapp: '88999990001', senha: 'senha-forte-1' });
+  const tokFunc = amb.post({ action: 'login', whatsapp: '88999990002', senha: 'senha-forte-2' });
+  ok(tokAdmin.ok && tokAdmin.usuario.permissoes.indexOf('gerir_acessos') !== -1, 'conta Admin total existe e tem gerir_acessos', JSON.stringify(tokAdmin).slice(0, 160));
+  ok(tokFunc.ok && tokFunc.usuario.permissoes.indexOf('gerir_acessos') === -1 && tokFunc.usuario.permissoes.indexOf('catalogo_cadastrar') !== -1, 'conta de Funcionário cadastra mas NÃO tem gerir_acessos');
+  const A = (o) => Object.assign({ sessao: tokAdmin.sessao, whatsapp: '88999990001' }, o);
+  const F = (o) => Object.assign({ sessao: tokFunc.sessao, whatsapp: '88999990002' }, o);
+
+  // peças de teste com categorias: 101 Vestidos | 102 Conjuntos | 103 Blusas | 105/106 Saias
+  aba.d.find(x => x[0] === '101')[2] = 'Vestidos, Fantasia infantil menina';
+  amb.post(A({ action: 'addCategoria', nome: 'aisatnaF Fantasia' }));
+  amb.post(A({ action: 'addCategoria', nome: 'Lixo Sem Uso' }));
+
+  // --- apagar: só Admin total, só com login
+  r = amb.post(F({ action: 'excluirCategoria', nome: 'Lixo Sem Uso' }));
+  ok(r.ok === false && r.semPermissao === true && lista().indexOf('Lixo Sem Uso') !== -1, 'Funcionário NÃO consegue apagar categoria (sem permissão) e nada é apagado', JSON.stringify(r));
+  r = amb.post(adm({ action: 'excluirCategoria', nome: 'Lixo Sem Uso' }));
+  ok(r.ok === false && r.exigeLogin === true && lista().indexOf('Lixo Sem Uso') !== -1, 'o PIN antigo NÃO apaga categoria (exige login de Admin total)', JSON.stringify(r));
+  r = amb.post({ action: 'excluirCategoria', nome: 'Lixo Sem Uso' });
+  ok(r.ok === false && lista().indexOf('Lixo Sem Uso') !== -1, 'sem nenhuma credencial: negado');
+  r = amb.post(A({ action: 'excluirCategoria', nome: 'Lixo Sem Uso' }));
+  ok(r.ok && r.pecas === 0 && lista().indexOf('Lixo Sem Uso') === -1, 'Admin total apaga categoria sem uso', JSON.stringify(r));
+  r = amb.post(A({ action: 'excluirCategoria', nome: 'Lixo Sem Uso' }));
+  ok(r.ok === false && r.naoExiste === true, 'apagar de novo: "não existe mais"', JSON.stringify(r));
+  r = amb.post(A({ action: 'excluirCategoria', nome: '' }));
+  ok(r.ok === false, 'sem nome: recusa');
+  r = amb.post(A({ action: 'excluirCategoria', nome: 'fantasia INFANTIL menina' }));
+  ok(r.ok === false && r.emUso === 1 && lista().indexOf('Fantasia infantil menina') !== -1 && catDa('101') === 'Vestidos, Fantasia infantil menina', 'categoria EM USO: não apaga e diz em quantas peças (1)', JSON.stringify(r));
+  r = amb.post(A({ action: 'excluirCategoria', nome: 'Fantasia infantil menina', confirmar: true }));
+  ok(r.ok && r.pecas === 1 && lista().indexOf('Fantasia infantil menina') === -1, 'com confirmação apaga a categoria', JSON.stringify(r));
+  ok(catDa('101') === 'Vestidos', 'a peça perdeu SÓ essa categoria e ficou com a outra ("Vestidos")', catDa('101'));
+  ok(aba.d.filter(x => x[0] === '101').length === 1 && aba.d.find(x => x[0] === '101')[1] === 'Vestido Floral', 'a peça continua no catálogo');
+  const audit = () => amb.ss.getSheetByName('Acoes_Audit');
+  ok(audit() && audit().d.some(l => l[2] === 'excluir_categoria' && l[1] === 'Pablo Admin'), 'ficou registrado em Acoes_Audit com o nome de quem apagou');
+  ok(amb.getJson({ action: 'list' }).produtos.find(x => x.ID === '101').Categoria === 'Vestidos', 'a lista pública já mostra a mudança (cache descartado)');
+
+  // --- renomear
+  r = amb.post(F({ action: 'renomearCategoria', nome: 'aisatnaF Fantasia', novoNome: 'Fantasia' }));
+  ok(r.ok === false && r.semPermissao === true, 'Funcionário NÃO renomeia categoria');
+  r = amb.post(adm({ action: 'renomearCategoria', nome: 'aisatnaF Fantasia', novoNome: 'Fantasia' }));
+  ok(r.ok === false && r.exigeLogin === true, 'o PIN antigo NÃO renomeia categoria');
+  aba.d.find(x => x[0] === '102')[2] = 'Conjuntos, aisatnaF Fantasia';
+  aba.d.find(x => x[0] === '103')[2] = 'aisatnaF Fantasia';
+  r = amb.post(A({ action: 'renomearCategoria', nome: 'aisatnaF Fantasia', novoNome: '  Fantasia  ' }));
+  ok(r.ok && r.nome === 'Fantasia' && r.pecas === 2 && !r.juntou, 'renomeia (nome limpo) e diz quantas peças mudaram (2)', JSON.stringify(r));
+  ok(lista().indexOf('Fantasia') !== -1 && lista().indexOf('aisatnaF Fantasia') === -1, 'a lista tem o nome novo e não tem o velho');
+  ok(catDa('102') === 'Conjuntos, Fantasia' && catDa('103') === 'Fantasia', 'as peças que usavam o nome velho passaram para o novo, mantendo as outras categorias', catDa('102') + ' | ' + catDa('103'));
+  // juntar com uma que já existe
+  aba.d.find(x => x[0] === '105')[2] = 'Saias, Fantasia';
+  amb.post(A({ action: 'addCategoria', nome: 'Fantasias Erro' })); aba.d.find(x => x[0] === '106')[2] = 'Fantasias Erro';
+  r = amb.post(A({ action: 'renomearCategoria', nome: 'Fantasias Erro', novoNome: 'fantasia' }));
+  ok(r.ok && r.juntou === true && r.nome === 'Fantasia', 'nome novo que já existe: JUNTA e usa a grafia que já existia', JSON.stringify(r));
+  ok(lista().filter(c => /^fantasia/i.test(c)).length === 1 && catDa('106') === 'Fantasia', 'continua uma só "Fantasia" na lista e a peça foi para ela');
+  aba.d.find(x => x[0] === '105')[2] = 'Fantasia, Saias, Fantasias Erro2';
+  amb.post(A({ action: 'addCategoria', nome: 'Fantasias Erro2' }));
+  r = amb.post(A({ action: 'renomearCategoria', nome: 'Fantasias Erro2', novoNome: 'Fantasia' }));
+  ok(catDa('105') === 'Fantasia, Saias', 'peça que já tinha as duas fica com "Fantasia" uma vez só', catDa('105'));
+  // só acento/maiúscula
+  r = amb.post(A({ action: 'renomearCategoria', nome: 'saias', novoNome: 'SAIAS Longas' }));
+  ok(r.ok && lista().indexOf('SAIAS Longas') !== -1 && lista().indexOf('Saias') === -1, 'renomear para algo novo funciona também em categoria padrão');
+  amb.post(A({ action: 'addCategoria', nome: 'calcas jeans' }));
+  r = amb.post(A({ action: 'renomearCategoria', nome: 'calcas jeans', novoNome: 'Calças Jeans' }));
+  ok(r.ok && r.juntou === false && lista().indexOf('Calças Jeans') !== -1 && lista().indexOf('calcas jeans') === -1, 'corrigir só acento/maiúscula não vira "juntar"', JSON.stringify(r));
+  r = amb.post(A({ action: 'renomearCategoria', nome: 'Nao Existe', novoNome: 'X' }));
+  ok(r.ok === false && r.naoExiste === true, 'renomear categoria que não existe: erro claro');
+  r = amb.post(A({ action: 'renomearCategoria', nome: 'Fantasia', novoNome: ' , ' }));
+  ok(r.ok === false, 'nome novo vazio é recusado');
+  ok(audit() && audit().d.some(l => l[2] === 'renomear_categoria'), 'renomear também fica registrado');
+  r = amb.post(A({ action: 'renomearCategoria', nome: 'Fantasia', novoNome: 'Fantasia, Nova' }));
+  ok(r.ok && r.nome === 'Fantasia Nova' && catDa('103') === 'Fantasia Nova', 'vírgula no nome novo é trocada por espaço (não quebra em duas categorias)', r.nome + ' | ' + catDa('103'));
 })();
 
 // ------------------------------------------------------------------ 9. o que já existia continua igual

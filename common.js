@@ -55,10 +55,16 @@ function fotoMini(url, largura) {
 }
 
 /** Link público da peça no SITE (nunca a API_URL). Com código: SITE_URL + 'p/<código>' -> Render faz Rewrite para o Worker
- *  da Cloudflare (og-worker/), que devolve as meta og:* (foto/nome/preço) e leva a pessoa a ?c=<código>. Sem código: ?id=. */
-function linkProduto(p) {
+ *  da Cloudflare (og-worker/), que devolve as meta og:* (foto/nome/preço) e leva a pessoa a ?c=<código>. Sem código: ?id=.
+ *  `foto` (opcional) = número da foto/vídeo ESCOLHIDO na galeria, contando de 1 (1 = capa; o vídeo é sempre o último). Com 2 ou mais o link
+ *  ganha "?f=<n>": a miniatura no WhatsApp é essa foto e quem abrir o link já cai nela. Sem `foto` (ou 1) o link é o de sempre. */
+function linkProduto(p, foto) {
   const cod = p && (p.Codigo || p.codigo);
-  return cod ? (SITE_URL + 'p/' + encodeURIComponent(cod)) : (SITE_URL + '?id=' + encodeURIComponent(p.ID != null ? p.ID : p.id));
+  const n = Math.floor(Number(foto));
+  const temFoto = n >= 2 && n <= 99;
+  return cod
+    ? (SITE_URL + 'p/' + encodeURIComponent(cod) + (temFoto ? '?f=' + n : ''))
+    : (SITE_URL + '?id=' + encodeURIComponent(p.ID != null ? p.ID : p.id) + (temFoto ? '&f=' + n : ''));
 }
 
 function formatarReal(v) {
@@ -235,19 +241,58 @@ function getSacola() {
 
 function salvarSacola(lista) {
   localStorage.setItem('tenkiter_sacola', JSON.stringify(lista));
+  podarFotosDaSacola_(lista);
   if (typeof salvarContaClienteDepois === 'function') salvarContaClienteDepois();
+}
+
+/* Foto/vídeo ESCOLHIDO de cada peça da sacola (número de 1; 1 = capa). Fica só neste aparelho (não é dado pessoal) e serve para o link do pedido
+ * levar à foto que a pessoa viu e para a miniatura na sacola. Quando a peça sai da sacola, o registro sai junto. */
+const CHAVE_FOTO_SACOLA = 'tenkiter_sacola_foto_v1';
+function lerFotosDaSacola_() {
+  try { const o = JSON.parse(localStorage.getItem(CHAVE_FOTO_SACOLA) || '{}'); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (e) { return {}; }
+}
+function fotoDaSacola(id) {
+  const n = Math.floor(Number(lerFotosDaSacola_()[String(id)]));
+  return n >= 2 && n <= 99 ? n : 1;
+}
+function guardarFotoDaSacola(id, n) {
+  try {
+    const o = lerFotosDaSacola_(); const k = String(id); const num = Math.floor(Number(n));
+    if (num >= 2 && num <= 99) o[k] = num; else delete o[k];
+    localStorage.setItem(CHAVE_FOTO_SACOLA, JSON.stringify(o));
+  } catch (e) {}
+}
+function podarFotosDaSacola_(lista) {
+  try {
+    const o = lerFotosDaSacola_(); const ids = (lista || []).map(String); let mudou = false;
+    Object.keys(o).forEach(k => { if (ids.indexOf(k) === -1) { delete o[k]; mudou = true; } });
+    if (mudou) localStorage.setItem(CHAVE_FOTO_SACOLA, JSON.stringify(o));
+  } catch (e) {}
+}
+
+/** Imagem (miniatura) da foto/vídeo `n` da peça (n de 1). Foto = ela mesma; vídeo da Cloudinary = um quadro dele (o quadro 0 vem preto);
+ *  qualquer outro caso (número fora da galeria, vídeo do Drive) = a capa. */
+function imagemDoSlide(p, n, largura) {
+  const w = largura || 400;
+  const fotos = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',').map(s => s.trim()).filter(Boolean));
+  const i = Math.floor(Number(n)) - 1;
+  if (i >= 0 && i < fotos.length && fotos[i]) return fotoMini(fotos[i], w);
+  const v = String(p.Video_URL || '');
+  if (i === fotos.length && /^https:\/\/res\.cloudinary\.com\/.+\/video\/upload\//.test(v)) return v.replace('/video/upload/', '/video/upload/so_30p,w_' + w + ',c_limit,f_jpg/').replace(/\.[A-Za-z0-9]+$/, '.jpg');
+  return fotoMini(p.Foto_URL, w);
 }
 
 function estaNaSacola(id) {
   return getSacola().includes(String(id));
 }
 
-function adicionarNaSacola(id) {
+function adicionarNaSacola(id, foto) {
   const atuais = getSacola();
   const idStr = String(id);
   if (!atuais.includes(idStr)) {
     atuais.push(idStr);
     salvarSacola(atuais);
+    guardarFotoDaSacola(idStr, foto); // foto/vídeo que a pessoa estava vendo ao pôr na sacola (1 ou vazio = capa)
   }
   return atuais;
 }

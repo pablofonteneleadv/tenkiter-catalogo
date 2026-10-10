@@ -74,6 +74,48 @@ const base = [
   r = await pedir('/qualquer-coisa');
   ok(r.status === 302 && r.headers.get('location') === SITE, 'endereço desconhecido leva à loja');
 
+  console.log('== Foto escolhida: /p/<código>?f=N (miniatura e destino acompanham a foto) ==');
+  const CAPA = 'https://lh3.googleusercontent.com/d/CAPA123', G1 = 'https://res.cloudinary.com/z/image/upload/v1/g1.jpg', G2 = 'https://res.cloudinary.com/z/image/upload/v1/g2.jpg';
+  const VID = 'https://res.cloudinary.com/z89/video/upload/v1791644263/tenkiter-catalogo/abc123.mp4';
+  const comMidia = [
+    { ID: 21, Nome: 'Fantasia menina', Categoria: 'Fantasias', Genero: 'Infantil Menina', Preco: 50, Foto_URL: CAPA, Status: 'Ativo', Descricao: '', Estoque: 2, Codigo: 'TK-0010', Fotos_Galeria: G1 + ',' + G2, Video_URL: VID },
+    { ID: 22, Nome: 'Com vídeo do Drive', Categoria: 'Fantasias', Genero: 'Infantil Menina', Preco: 60, Foto_URL: G1, Status: 'Ativo', Estoque: 2, Codigo: 'TK-0011', Fotos_Galeria: G2, Video_URL: 'https://drive.google.com/file/d/AbC_123-x/preview' },
+    { ID: 23, Nome: 'Só fotos', Categoria: 'Fantasias', Genero: 'Infantil Menina', Preco: 70, Foto_URL: G1, Status: 'Ativo', Estoque: 2, Codigo: 'TK-0012', Fotos_Galeria: G2 }
+  ];
+  apiLista = comMidia;
+  const pag = async (c) => { const rr = await pedir(c); return { r: rr, h: await rr.text() }; };
+  const og = (h) => (h.match(/<meta property="og:image" content="([^"]*)">/) || [])[1];
+  const ogUrl = (h) => (h.match(/<meta property="og:url" content="([^"]*)">/) || [])[1];
+  const canon = (h) => (h.match(/<link rel="canonical" href="([^"]*)">/) || [])[1];
+  const dest = (h) => (h.match(/location\.replace\("([^"]*)"\)/) || [])[1];
+  let q = await pag('/p/TK-0010');
+  ok(og(q.h) === CAPA + '=w1200', 'sem ?f: a miniatura é a capa (foto do Google em 1200 px, leve para o WhatsApp)', og(q.h));
+  ok(dest(q.h) === SITE + '?c=TK-0010' && ogUrl(q.h) === SITE + 'p/TK-0010', 'sem ?f: destino e og:url são os de sempre');
+  q = await pag('/p/TK-0010?f=2');
+  ok(og(q.h) === G1, '?f=2: a miniatura é a 2ª foto (1ª da galeria)', og(q.h));
+  ok(dest(q.h) === SITE + '?c=TK-0010&f=2' && q.h.includes('url=' + SITE + '?c=TK-0010&amp;f=2'), '?f=2: leva a pessoa ao catálogo JÁ nessa foto (?c=…&f=2)', dest(q.h));
+  ok(canon(q.h) === SITE + 'p/TK-0010' && ogUrl(q.h) === SITE + 'p/TK-0010?f=2', '?f=2: canonical continua sendo o endereço da peça (Google não duplica); og:url é o link compartilhado', canon(q.h) + ' | ' + ogUrl(q.h));
+  const ld2 = JSON.parse(q.h.match(/ld\+json">([\s\S]*?)<\/script>/)[1]);
+  ok(ld2.image[0] === CAPA && ld2.offers.url === SITE + 'p/TK-0010', '?f=2: dados do Google continuam com a capa primeiro e a URL curta da oferta');
+  q = await pag('/p/TK-0010?f=3');
+  ok(og(q.h) === G2 && dest(q.h) === SITE + '?c=TK-0010&f=3', '?f=3: terceira foto');
+  q = await pag('/p/TK-0010?f=4');
+  ok(og(q.h) === 'https://res.cloudinary.com/z89/video/upload/so_30p,w_1200,c_limit,f_jpg/v1791644263/tenkiter-catalogo/abc123.jpg', '?f=4 (o vídeo): a miniatura é um QUADRO do vídeo (imagem .jpg, 30% da duração)', og(q.h));
+  ok(dest(q.h) === SITE + '?c=TK-0010&f=4', '?f=4 (o vídeo): leva ao catálogo já no vídeo');
+  for (const ruim of ['5', '0', '1', '-2', 'abc', '', '999']) {
+    q = await pag('/p/TK-0010?f=' + ruim);
+    ok(og(q.h) === CAPA + '=w1200' && dest(q.h) === SITE + '?c=TK-0010', '?f=' + ruim + ': número que não existe/inválido volta para a capa (sem quebrar)', og(q.h) + ' | ' + dest(q.h));
+  }
+  q = await pag('/p/TK-0011?f=3');
+  ok(og(q.h) === G1 + '' && dest(q.h) === SITE + '?c=TK-0011&f=3', 'vídeo do Drive: sem miniatura confiável -> usa a capa, mas o destino continua no vídeo', og(q.h) + ' | ' + dest(q.h));
+  q = await pag('/p/TK-0012?f=3');
+  ok(og(q.h) === G1 && dest(q.h) === SITE + '?c=TK-0012', 'peça sem vídeo: ?f=3 não existe -> capa');
+  q = await pag('/p/TK-0010?f=3"><script>alert(1)</script>');
+  ok(!q.h.includes('<script>alert') && dest(q.h) === SITE + '?c=TK-0010&f=3', '?f= com lixo/HTML não injeta nada na página');
+  apiQuebrada = true; r = await pedir('/p/TK-0010?f=3'); apiQuebrada = false;
+  ok(r.status === 302 && r.headers.get('location') === SITE + '?c=TK-0010&f=3', 'com o Apps Script fora do ar, o link da foto ainda leva à peça e à foto (?c=&f=)', r.headers.get('location'));
+  apiLista = base;
+
   console.log('== /sitemap.xml ==');
   r = await pedir('/sitemap.xml'); let x = await r.text();
   ok(r.status === 200 && /application\/xml/.test(r.headers.get('content-type')), 'sitemap responde 200 em XML');

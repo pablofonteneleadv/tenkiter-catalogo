@@ -1,0 +1,221 @@
+"""Painel do lojista: criar categoria (campo visível, nome limpo, sugestões), corrigir nome (✎) e apagar (×) só para Admin total,
+e sugestões de peças já cadastradas enquanto digita o "Nome da peça". Celular de verdade (390 px) com o Apps Script SIMULADO.
+    python3 tests/admin_categorias.py"""
+import sys, os, json, re
+AQUI = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, AQUI)
+os.makedirs(os.path.join(AQUI, 'saida'), exist_ok=True)
+from mock import *
+from playwright.sync_api import sync_playwright
+BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
+AXE = open(os.path.join(AQUI, 'axe.min.js')).read() if os.path.exists(os.path.join(AQUI, 'axe.min.js')) else None
+OK = []; BAD = []
+def chk(nome, cond, extra=""):
+    (OK if cond else BAD).append(nome); print(("  ✔ " if cond else "  ✘ ") + nome + (" — " + str(extra) if extra and not cond else ""))
+
+VIEW = {"width": 390, "height": 844}
+def abrir(b, perms=PERMS_ALL, versao="3.2", dialogos=None):
+    ctx = b.new_context(viewport=VIEW, is_mobile=True, has_touch=True, service_workers="block")
+    ctx.add_init_script(SESSION)
+    log = []; st = install(ctx, perms=perms, log=log, versao=versao)
+    pg = ctx.new_page(); erros = []
+    pg.on("pageerror", lambda e: erros.append(str(e)))
+    falas = [] if dialogos is None else dialogos
+    pg.on("dialog", lambda d: (falas.append((d.type, d.message)), d.accept()))
+    pg.goto(BASE + "admin.html"); pg.wait_for_timeout(1500)
+    pg.click("#card-form > summary"); pg.wait_for_timeout(300)
+    return ctx, pg, log, st, erros, falas
+def abrir_folha(pg):
+    pg.click("#btn-abrir-categorias"); pg.wait_for_timeout(250)
+def posts(log, acao): return [x for x in log if x.get("action") == acao]
+def nomes_lista(pg): return pg.eval_on_selector_all("#cat-lista .cat-item", "els=>els.map(e=>e.dataset.cat)")
+
+with sync_playwright() as p:
+    b = p.chromium.launch(args=["--no-sandbox"])
+
+    # ------------------------------------------------------------ 1. quem vê os botões
+    print("== Quem vê ✎ e × ==")
+    ctx, pg, log, st, erros, falas = abrir(b)
+    abrir_folha(pg)
+    n = len(nomes_lista(pg))
+    chk("Admin total vê ✎ e × em cada categoria", pg.locator("#cat-lista .cat-acao.cat-ed").count() == n and pg.locator("#cat-lista .cat-acao.cat-x").count() == n and n >= 10, (n, pg.locator("#cat-lista .cat-acao").count()))
+    chk("botões têm nome para leitor de tela", pg.locator("#cat-lista .cat-x").first.get_attribute("aria-label").startswith("Apagar a categoria"))
+    chk("botão × cabe no dedo (≥ 40 px)", pg.locator("#cat-lista .cat-x").first.bounding_box()["width"] >= 40 and pg.locator("#cat-lista .cat-x").first.bounding_box()["height"] >= 40)
+    chk("a linha da categoria ainda mostra o nome inteiro", pg.locator("#cat-lista .cat-item").first.bounding_box()["width"] > 200)
+    ctx.close()
+
+    ctx, pg, log, st, erros, falas = abrir(b, perms=[x for x in PERMS_ALL if x != "gerir_acessos"])
+    abrir_folha(pg)
+    chk("Funcionário SEM gerir_acessos não vê ✎ nem ×", pg.locator("#cat-lista .cat-acao").count() == 0 and len(nomes_lista(pg)) >= 10, pg.locator("#cat-lista .cat-acao").count())
+    pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Vest"); pg.wait_for_timeout(200)
+    chk("…nem nas sugestões de criar categoria", pg.locator("#nova-cat-sugestoes .sug-linha").count() >= 1 and pg.locator("#nova-cat-sugestoes [data-cat-editar]").count() == 0)
+    ctx.close()
+
+    ctx, pg, log, st, erros, falas = abrir(b, versao="3.1")
+    abrir_folha(pg)
+    chk("backend 3.1 (sem a bandeira): Admin total também NÃO vê ✎ nem × (não finge o que o servidor não sabe)", pg.locator("#cat-lista .cat-acao").count() == 0 and len(nomes_lista(pg)) >= 10)
+    pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Fantasia, menina"); pg.wait_for_timeout(200)
+    pg.click("#btn-confirmar-nova-categoria"); pg.wait_for_timeout(500)
+    ad = posts(log, "addCategoria")
+    chk("backend 3.1: criar categoria continua funcionando, já sem vírgula", len(ad) == 1 and ad[0]["nome"] == "Fantasia menina", ad)
+    ctx.close()
+
+    # ------------------------------------------------------------ 2. criar categoria
+    print("== Criar categoria ==")
+    ctx, pg, log, st, erros, falas = abrir(b)
+    abrir_folha(pg)
+    pg.click("#btn-criar-categoria"); pg.wait_for_timeout(200)
+    caixa = pg.locator("#input-nova-categoria").bounding_box()
+    chk("campo do nome é LARGO e alto (antes era um quadradinho)", caixa["width"] >= 200 and caixa["height"] >= 36, caixa)
+    botao = pg.locator("#btn-confirmar-nova-categoria").bounding_box()
+    chk("botão Adicionar não come o campo", botao["width"] < caixa["width"], (botao["width"], caixa["width"]))
+    chk("campo é da esquerda para a direita e sem autocorreção (nome sai como digitado)", pg.locator("#input-nova-categoria").get_attribute("dir") == "ltr" and pg.locator("#input-nova-categoria").get_attribute("autocorrect") == "off")
+    pg.locator("#input-nova-categoria").press_sequentially("Fantasia menina"); pg.wait_for_timeout(200)
+    chk("o que digitou aparece no campo, na ordem certa", pg.input_value("#input-nova-categoria") == "Fantasia menina", pg.input_value("#input-nova-categoria"))
+    chk("prévia mostra o nome que vai ser criado", "Fantasia menina" in pg.inner_text("#nova-cat-previa") and "Vai ser criada" in pg.inner_text("#nova-cat-previa"), pg.inner_text("#nova-cat-previa"))
+    pg.fill("#input-nova-categoria", ""); pg.locator("#input-nova-categoria").press_sequentially("Cal"); pg.wait_for_timeout(200)
+    sug = pg.eval_on_selector_all("#nova-cat-sugestoes [data-cat-copiar]", "els=>els.map(e=>e.dataset.catCopiar)")
+    chk("sugestões aparecem ao digitar (sem acento): 'Cal' acha 'Calça'", "Calça" in sug and "Vestido" not in sug, sug)
+    pg.click("#nova-cat-sugestoes [data-cat-copiar='Calça']"); pg.wait_for_timeout(150)
+    chk("tocar na sugestão COPIA o nome para o campo", pg.input_value("#input-nova-categoria") == "Calça")
+    pg.keyboard.type("s Jeans"); pg.wait_for_timeout(150)
+    chk("dá para continuar digitando no fim do nome copiado", pg.input_value("#input-nova-categoria") == "Calças Jeans", pg.input_value("#input-nova-categoria"))
+    chk("prévia acompanha", "Calças Jeans" in pg.inner_text("#nova-cat-previa"), pg.inner_text("#nova-cat-previa"))
+    pg.click("#btn-confirmar-nova-categoria"); pg.wait_for_timeout(600)
+    ad = posts(log, "addCategoria")
+    chk("enviou o nome ao servidor", len(ad) == 1 and ad[0]["nome"] == "Calças Jeans", ad)
+    chk("credencial da conta foi junto (pin/sessao/whatsapp)", ad and ad[0].get("sessao") and ad[0].get("whatsapp") == "88999999999", ad)
+    chk("a folha voltou para a lista e a categoria nova está lá, marcada", "Calças Jeans" in nomes_lista(pg) and pg.locator("#cat-lista .cat-item.selecionado:has-text('Calças Jeans')").count() == 1)
+    chk("a categoria aparece como etiqueta no formulário", pg.locator("#tags-categoria .tag:has-text('Calças Jeans')").count() == 1)
+    chk("e fica guardada para a próxima abertura (cache do aparelho)", "Calças Jeans" in (pg.evaluate("localStorage.getItem('tenkiter_admin_listas_v1')") or ""))
+
+    # vírgula
+    pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Moda, praia  2-6"); pg.wait_for_timeout(200)
+    chk("vírgula e espaços duplos: a prévia mostra o nome já arrumado e avisa", "Moda praia 2-6" in pg.inner_text("#nova-cat-previa") and "vírgula" in pg.inner_text("#nova-cat-previa"), pg.inner_text("#nova-cat-previa"))
+    pg.press("#input-nova-categoria", "Enter"); pg.wait_for_timeout(500)
+    ad = posts(log, "addCategoria")
+    chk("Enter cria; servidor recebe sem vírgula", len(ad) == 2 and ad[1]["nome"] == "Moda praia 2-6", ad[-1:])
+    # já existe
+    pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("vestido"); pg.wait_for_timeout(200)
+    chk("nome que já existe: prévia diz 'Já existe' e o botão vira 'Usar essa'", "Já existe" in pg.inner_text("#nova-cat-previa") and pg.inner_text("#btn-confirmar-nova-categoria") == "Usar essa", (pg.inner_text("#nova-cat-previa"), pg.inner_text("#btn-confirmar-nova-categoria")))
+    pg.click("#btn-confirmar-nova-categoria"); pg.wait_for_timeout(300)
+    chk("'Usar essa' escolhe a existente e NÃO cria duplicada", len(posts(log, "addCategoria")) == 2 and pg.locator("#cat-lista .cat-item.selecionado:has-text('Vestido')").count() == 1)
+    # atalho na busca
+    pg.fill("#cat-busca", "Blusa de frio"); pg.wait_for_timeout(200)
+    chk("busca sem resultado oferece 'Criar a categoria “…”'", pg.locator("#cat-lista .cat-criar-linha").count() == 1 and "Blusa de frio" in pg.inner_text("#cat-lista .cat-criar-linha"))
+    pg.click("#cat-lista .cat-criar-linha"); pg.wait_for_timeout(200)
+    chk("…e leva o texto para o campo de criar", pg.input_value("#input-nova-categoria") == "Blusa de frio")
+    pg.click("#nova-cat-voltar"); pg.wait_for_timeout(200)
+    chk("'Voltar para a lista' volta sem criar nada", pg.locator("#nova-categoria-linha.aberto").count() == 0 and pg.locator("#cat-lista").is_visible() and len(posts(log, "addCategoria")) == 2)
+    chk("sem erro de JavaScript", not erros, erros)
+    if AXE:
+        pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Cal"); pg.wait_for_timeout(200)
+        pg.evaluate(AXE)
+        v = pg.evaluate("async()=>{const r=await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa','best-practice']}});return r.violations.map(v=>v.id+' ×'+v.nodes.length+' '+v.nodes.slice(0,2).map(n=>n.target.join(' ')).join(' | '))}")
+        chk("acessibilidade (axe) da folha em modo criar: sem problemas", not v, v)
+    ctx.close()
+
+    # ------------------------------------------------------------ 3. corrigir nome (✎)
+    print("== Corrigir nome da categoria (✎) ==")
+    ctx, pg, log, st, erros, falas = abrir(b)
+    abrir_folha(pg)
+    pg.click("#cat-lista [data-cat='Blusa'] >> xpath=.. >> .cat-ed"); pg.wait_for_timeout(200)
+    chk("✎ troca a linha por um campo com o nome atual, já em foco", pg.locator("#cat-lista .cat-edit-input").count() == 1 and pg.input_value("#cat-lista .cat-edit-input") == "Blusa" and pg.evaluate("document.activeElement.classList.contains('cat-edit-input')"))
+    chk("campo de correção é largo", pg.locator("#cat-lista .cat-edit-input").bounding_box()["width"] >= 150)
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(150)
+    chk("Esc cancela e volta à linha normal", pg.locator("#cat-lista .cat-edit-input").count() == 0 and "Blusa" in nomes_lista(pg) and not posts(log, "renomearCategoria"))
+    pg.click("#cat-lista [data-cat='Blusa'] >> xpath=.. >> .cat-ed"); pg.fill("#cat-lista .cat-edit-input", "Blusas, longas"); pg.keyboard.press("Enter"); pg.wait_for_timeout(500)
+    rn = posts(log, "renomearCategoria")
+    chk("Enter salva: servidor recebe o nome antigo e o novo (sem vírgula)", len(rn) == 1 and rn[0]["nome"] == "Blusa" and rn[0]["novoNome"] == "Blusas longas", rn)
+    chk("a credencial vai junto", rn and rn[0].get("sessao") and rn[0].get("whatsapp"))
+    chk("lista mostra o nome novo e não o velho", "Blusas longas" in nomes_lista(pg) and "Blusa" not in nomes_lista(pg), nomes_lista(pg))
+    chk("peças que usavam o nome velho passaram para o novo (no servidor simulado)", not any("Blusa" == c.strip() for x in st["produtos"] for c in x["Categoria"].split(",")) and any("Blusas longas" in x["Categoria"] for x in st["produtos"]))
+    # juntar com existente, via sugestões do modo criar
+    pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Saia"); pg.wait_for_timeout(200)
+    pg.click("#nova-cat-sugestoes [data-cat-editar='Saia']"); pg.wait_for_timeout(200)
+    chk("nas sugestões também há ✎ Corrigir (Admin total) e abre o campo de correção", pg.locator("#nova-cat-sugestoes .cat-edit-input").count() == 1 and pg.input_value("#nova-cat-sugestoes .cat-edit-input") == "Saia")
+    pg.fill("#nova-cat-sugestoes .cat-edit-input", "vestido"); pg.click("#nova-cat-sugestoes [data-cat-salvar]"); pg.wait_for_timeout(600)
+    rn = posts(log, "renomearCategoria")
+    chk("renomear para nome que já existe: servidor junta", len(rn) == 2 and rn[1]["novoNome"] == "vestido")
+    chk("o painel avisa que juntou", any("juntei" in m for t, m in falas), falas[-2:])
+    pg.click("#nova-cat-voltar"); pg.wait_for_timeout(200)
+    chk("a categoria 'Saia' sumiu e só existe uma 'Vestido'", "Saia" not in nomes_lista(pg) and len([c for c in nomes_lista(pg) if c.lower() == "vestido"]) == 1, nomes_lista(pg))
+    chk("sem erro de JavaScript", not erros, erros)
+    ctx.close()
+
+    # ------------------------------------------------------------ 4. apagar (×)
+    print("== Apagar categoria (×) ==")
+    falas = []
+    ctx, pg, log, st, erros, falas = abrir(b, dialogos=falas)
+    abrir_folha(pg)
+    # criar uma sem uso e apagar
+    pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Lixo teste"); pg.click("#btn-confirmar-nova-categoria"); pg.wait_for_timeout(500)
+    n0 = len(falas)
+    pg.click("#cat-lista [data-cat='Lixo teste'] >> xpath=.. >> .cat-x"); pg.wait_for_timeout(500)
+    ex = posts(log, "excluirCategoria")
+    chk("× pergunta antes de apagar", len(falas) > n0 and falas[n0][0] == "confirm" and "Lixo teste" in falas[n0][1], falas[n0:])
+    chk("categoria sem uso: apaga com UMA chamada", len(ex) == 1 and not ex[0].get("confirmar"), ex)
+    chk("some da lista e do servidor", "Lixo teste" not in nomes_lista(pg) and "Lixo teste" not in st["categorias"])
+    chk("e não fica etiqueta nem escolhida", pg.locator("#tags-categoria .tag:has-text('Lixo teste')").count() == 0)
+    # em uso
+    usada = next(c for c in CATS if any(c == q.strip() for x in st["produtos"] for q in x["Categoria"].split(",")))
+    qtd = sum(1 for x in st["produtos"] if any(usada == q.strip() for q in x["Categoria"].split(",")))
+    n0 = len(falas)
+    pg.click("#cat-lista [data-cat='%s'] >> xpath=.. >> .cat-x" % usada); pg.wait_for_timeout(600)
+    ex = posts(log, "excluirCategoria")
+    chk("categoria EM USO: segunda pergunta diz quantas peças", len(falas) - n0 == 2 and str(qtd) in falas[n0 + 1][1] and "peça" in falas[n0 + 1][1], falas[n0:])
+    chk("só apaga depois do segundo OK (chamada com confirmar)", len(ex) == 3 and ex[1].get("confirmar") is None and ex[2].get("confirmar") is True, [e.get("confirmar") for e in ex])
+    chk("em uso: saiu da lista e das peças (que continuam no catálogo)", usada not in nomes_lista(pg) and len(st["produtos"]) >= 24 and not any(usada == q.strip() for x in st["produtos"] for q in x["Categoria"].split(",")))
+    # cancelar
+    ctx.close()
+    cancelar = []
+    ctx = b.new_context(viewport=VIEW, is_mobile=True, has_touch=True, service_workers="block"); ctx.add_init_script(SESSION)
+    log = []; st = install(ctx, log=log); pg = ctx.new_page(); pg.on("dialog", lambda d: (cancelar.append(d.message), d.dismiss()))
+    pg.goto(BASE + "admin.html"); pg.wait_for_timeout(1500); pg.click("#card-form > summary"); abrir_folha(pg)
+    pg.click("#cat-lista [data-cat='Short'] >> xpath=.. >> .cat-x"); pg.wait_for_timeout(300)
+    chk("tocar em Cancelar na pergunta não apaga nada", not posts(log, "excluirCategoria") and "Short" in nomes_lista(pg) and "Short" in st["categorias"])
+    ctx.close()
+
+    # ------------------------------------------------------------ 5. nome da peça: sugestões
+    print("== Nome da peça: sugestões ==")
+    falas = []
+    ctx, pg, log, st, erros, falas = abrir(b, dialogos=falas)
+    pg.locator("#nome").press_sequentially("Vestido"); pg.wait_for_timeout(250)
+    linhas = pg.locator("#nome-sugestoes .sug-linha").count()
+    chk("ao digitar 'Vestido' aparecem peças já cadastradas", linhas >= 2 and linhas <= 6, linhas)
+    alvo = pg.eval_on_selector("#nome-sugestoes [data-peca-copiar]", "e=>({id:e.dataset.pecaCopiar,nome:e.querySelector('.sug-nome').textContent})")
+    pg.click("#nome-sugestoes [data-peca-copiar]"); pg.wait_for_timeout(200)
+    chk("tocar no nome copia para o campo", pg.input_value("#nome") == alvo["nome"], (pg.input_value("#nome"), alvo))
+    chk("depois de copiar, a lista de sugestões se recolhe (não fica repetindo o mesmo nome)", pg.locator("#nome-sugestoes .sug-linha").count() == 0)
+    pg.keyboard.type(" Midi"); pg.wait_for_timeout(200)
+    chk("dá para continuar digitando depois de copiar ('mudar só o final')", pg.input_value("#nome") == alvo["nome"] + " Midi", pg.input_value("#nome"))
+    pg.fill("#nome", alvo["nome"]); pg.dispatch_event("#nome", "input"); pg.wait_for_timeout(200)
+    chk("nome igual ao de outra peça: aviso amarelo com o código", pg.locator("#nome-sugestoes .sug-aviso").count() == 1 and "TK-" in pg.inner_text("#nome-sugestoes .sug-aviso"), pg.inner_text("#nome-sugestoes")[:120])
+    chk("nome ainda é editável e o formulário não foi bloqueado", pg.input_value("#nome") == alvo["nome"])
+    pg.fill("#nome", "vestido"); pg.dispatch_event("#nome", "input"); pg.wait_for_timeout(200)
+    chk("achar por pedaço, sem acento e sem maiúscula", pg.locator("#nome-sugestoes .sug-linha").count() >= 2)
+    pg.fill("#nome", "x"); pg.dispatch_event("#nome", "input"); pg.wait_for_timeout(150)
+    chk("com 1 letra só não mostra nada", pg.locator("#nome-sugestoes .sug-linha").count() == 0)
+    pg.fill("#nome", "zzzz qqq"); pg.dispatch_event("#nome", "input"); pg.wait_for_timeout(150)
+    chk("sem parecido: não mostra nada", pg.locator("#nome-sugestoes .sug-linha").count() == 0)
+    # Editar com formulário em branco (só o nome)
+    pg.fill("#nome", "Camiseta"); pg.dispatch_event("#nome", "input"); pg.wait_for_timeout(200)
+    alvo2 = pg.eval_on_selector("#nome-sugestoes [data-peca-editar]", "e=>e.dataset.pecaEditar")
+    n0 = len(falas)
+    pg.click("#nome-sugestoes [data-peca-editar]"); pg.wait_for_timeout(400)
+    chk("'Editar' abre aquela peça (sem pergunta quando só o nome estava preenchido)", len(falas) == n0 and pg.input_value("#produto-id") == alvo2 and "Editando:" in pg.inner_text("#titulo-form"), (falas[n0:], pg.input_value("#produto-id")))
+    chk("campos da peça foram carregados", pg.input_value("#preco") != "" and pg.locator("#nome-sugestoes .sug-linha").count() == 0)
+    # Editar com outros dados preenchidos -> pergunta
+    pg.click("#btn-cancelar-duplicar"); pg.wait_for_timeout(200)
+    pg.fill("#preco", "99"); pg.fill("#nome", "Calça"); pg.dispatch_event("#nome", "input"); pg.wait_for_timeout(200)
+    n0 = len(falas)
+    pg.click("#nome-sugestoes [data-peca-editar]"); pg.wait_for_timeout(400)
+    chk("se já preencheu outras coisas, pergunta antes de descartar", len(falas) == n0 + 1 and "descartado" in falas[n0][1], falas[n0:])
+    chk("editando a peça A, a lista de sugestões não oferece a própria peça A", pg.input_value("#produto-id") != "" and all(l != pg.input_value("#produto-id") for l in pg.eval_on_selector_all("#nome-sugestoes [data-peca-copiar]", "es=>es.map(e=>e.dataset.pecaCopiar)")))
+    chk("sem erro de JavaScript", not erros, erros)
+    ctx.close()
+    b.close()
+
+print("\nFALHAS=%d %s" % (len(BAD), BAD if BAD else ""))
+print("%d verificações OK" % len(OK))
+sys.exit(1 if BAD else 0)

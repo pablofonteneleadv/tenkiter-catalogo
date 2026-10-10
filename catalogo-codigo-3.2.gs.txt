@@ -1,4 +1,14 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.1
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.2
+//
+// NOVIDADE v3.2 -- categorias sob controle (só ACRESCENTA; nada existente muda de formato):
+//  - addCategoria/addGenero: o nome é LIMPO antes de gravar (vírgula vira espaço -- a vírgula separa as categorias dentro da peça e partia
+//    "Fantasia, menina" em duas --, espaços repetidos viram um, no máximo 60 caracteres) e a comparação ignora acento/maiúscula
+//    ("Calcas" = "Calças"). A resposta devolve o nome como ficou gravado (nome) para o painel usar exatamente ele.
+//  - excluirCategoria (Admin total, só com login -- o PIN antigo não vale): apaga a categoria da lista. Se peças usam a categoria, devolve
+//    emUso = quantas e NÃO apaga; repetindo com confirmar:true apaga e tira a categoria dessas peças (elas continuam no catálogo).
+//  - renomearCategoria (Admin total, só com login): corrige o nome na lista E em todas as peças que usam. Se o nome novo já existe, junta as duas
+//    (as peças ficam com a que já existia) -- nunca deixa duas iguais. Peça com várias categorias mantém as outras.
+//  - versao anuncia categoriasGestao:true; o painel só mostra o X (apagar) e o lápis (renomear) se essa bandeira existir E a pessoa for Admin total.
 //
 // NOVIDADE v3.1 -- pedidos com acompanhamento, métricas reais, importação CSV, feed de catálogo e integrações (Pixel da Meta).
 // Só ACRESCENTA: nenhuma coluna, aba ou formato de resposta anterior mudou. O site continua funcionando com a v3.0 (os recursos novos
@@ -105,7 +115,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-3.1';
+const VERSAO_CATALOGO = 'catalogo-3.2';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -195,17 +205,102 @@ function getListaValores_(nome, valoresPadrao) {
  * ações forem usadas no futuro.
  */
 function adicionarValorLista_(nomeSheet, valoresPadrao, novoValor) {
-  if (!novoValor || !String(novoValor).trim()) {
+  const valorLimpo = nomeDeLista_(novoValor);
+  if (!valorLimpo) {
     return { ok: false, erro: 'Valor vazio.' };
   }
-  const valorLimpo = String(novoValor).trim();
   const valores = getListaValores_(nomeSheet, valoresPadrao);
-  if (valores.some(v => normalizar_(v) === normalizar_(valorLimpo))) {
-    return { ok: true, jaExistia: true };
+  const existente = valores.filter(v => acNorm_(v) === acNorm_(valorLimpo))[0];
+  if (existente) {
+    return { ok: true, jaExistia: true, nome: existente };
   }
   const sheet = getOrCreateSheet_(nomeSheet, ['Nome']);
-  sheet.appendRow([valorLimpo]);
-  return { ok: true };
+  sheet.appendRow([acTexto_(valorLimpo)]);
+  return { ok: true, nome: valorLimpo };
+}
+
+/** Nome de categoria/gênero pronto para gravar: sem vírgula (ela separa as categorias dentro da peça), sem espaço repetido, até 60 caracteres. */
+function nomeDeLista_(valor) {
+  return String(valor == null ? '' : valor).replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
+}
+
+/** Números das linhas (1 = cabeçalho) da aba de categorias cujo nome é `nome` (ignora acento e maiúscula). */
+function linhasDaCategoria_(aba, nome) {
+  const dados = aba.getDataRange().getValues();
+  const alvo = acNorm_(nome);
+  const out = [];
+  for (let i = 1; i < dados.length; i++) if (acNorm_(dados[i][0]) === alvo) out.push(i + 1);
+  return out;
+}
+
+/** Peças (linha da planilha de produtos + as categorias que elas têm) que usam a categoria `nome`. A coluna 3 é a Categoria (mesma posição usada no resto do script). */
+function pecasDaCategoria_(nome) {
+  const prod = getProdutosSheet_();
+  const dados = prod.getDataRange().getValues();
+  const alvo = acNorm_(nome);
+  const achadas = [];
+  for (let i = 1; i < dados.length; i++) {
+    const cats = String(dados[i][2] == null ? '' : dados[i][2]).split(',').map(function (c) { return c.trim(); }).filter(Boolean);
+    if (cats.some(function (c) { return acNorm_(c) === alvo; })) achadas.push({ linha: i + 1, cats: cats });
+  }
+  return { prod: prod, achadas: achadas };
+}
+
+/**
+ * Apaga uma categoria (Admin total, só com login). Se peças usam a categoria e a chamada não trouxe confirmar:true, NÃO apaga:
+ * devolve emUso = quantas peças. Com confirmar:true tira a categoria dessas peças (elas continuam no catálogo, com as outras categorias) e apaga.
+ */
+function excluirCategoria_(body) {
+  const nome = nomeDeLista_(body.nome);
+  if (!nome) return jsonResponse_({ ok: false, erro: 'Informe a categoria.' });
+  const aba = getOrCreateSheet_(SHEET_CATEGORIAS, ['Nome']);
+  const linhas = linhasDaCategoria_(aba, nome);
+  if (!linhas.length) return jsonResponse_({ ok: false, naoExiste: true, erro: 'Essa categoria não existe mais.' });
+  const uso = pecasDaCategoria_(nome);
+  if (uso.achadas.length && body.confirmar !== true) {
+    return jsonResponse_({ ok: false, emUso: uso.achadas.length, erro: 'Essa categoria está em ' + uso.achadas.length + (uso.achadas.length === 1 ? ' peça.' : ' peças.') });
+  }
+  const alvo = acNorm_(nome);
+  uso.achadas.forEach(function (a) {
+    uso.prod.getRange(a.linha, 3).setValue(acTexto_(a.cats.filter(function (c) { return acNorm_(c) !== alvo; }).join(', ')));
+  });
+  for (let k = linhas.length - 1; k >= 0; k--) aba.deleteRow(linhas[k]); // de baixo para cima: o número das linhas de cima não muda
+  registrarAudit_(body.funcionario, 'excluir_categoria', '', { nome: nome, pecas: uso.achadas.length });
+  return jsonResponse_({ ok: true, nome: nome, pecas: uso.achadas.length });
+}
+
+/**
+ * Corrige o nome de uma categoria na lista E em todas as peças que a usam (Admin total, só com login). Se o nome novo já existe como OUTRA
+ * categoria, junta as duas (as peças ficam com a que já existia). Peça com várias categorias mantém as outras e nunca fica com a mesma duas vezes.
+ */
+function renomearCategoria_(body) {
+  const antigo = nomeDeLista_(body.nome);
+  const novo = nomeDeLista_(body.novoNome);
+  if (!antigo || !novo) return jsonResponse_({ ok: false, erro: 'Informe o nome atual e o nome novo.' });
+  const aba = getOrCreateSheet_(SHEET_CATEGORIAS, ['Nome']);
+  const linhas = linhasDaCategoria_(aba, antigo);
+  if (!linhas.length) return jsonResponse_({ ok: false, naoExiste: true, erro: 'Essa categoria não existe mais.' });
+  const mudouSoGrafia = acNorm_(antigo) === acNorm_(novo); // ex.: "calcas" -> "Calças"
+  const outra = mudouSoGrafia ? undefined : getListaValores_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO).filter(function (v) { return acNorm_(v) === acNorm_(novo); })[0];
+  const nomeFinal = outra || novo;
+  const alvo = acNorm_(antigo);
+  const uso = pecasDaCategoria_(antigo);
+  uso.achadas.forEach(function (a) {
+    const saida = [];
+    a.cats.forEach(function (c) {
+      const n = acNorm_(c) === alvo ? nomeFinal : c;
+      if (!saida.some(function (o) { return acNorm_(o) === acNorm_(n); })) saida.push(n);
+    });
+    uso.prod.getRange(a.linha, 3).setValue(acTexto_(saida.join(', ')));
+  });
+  if (outra) {
+    for (let k = linhas.length - 1; k >= 0; k--) aba.deleteRow(linhas[k]); // a que já existia fica; a velha sai
+  } else {
+    aba.getRange(linhas[0], 1).setValue(acTexto_(nomeFinal));
+    for (let k = linhas.length - 1; k >= 1; k--) aba.deleteRow(linhas[k]); // sobras repetidas
+  }
+  registrarAudit_(body.funcionario, 'renomear_categoria', '', { de: antigo, para: nomeFinal, pecas: uso.achadas.length, juntou: !!outra });
+  return jsonResponse_({ ok: true, nome: nomeFinal, juntou: !!outra, pecas: uso.achadas.length });
 }
 
 function getProdutosSheet_() {
@@ -1080,6 +1175,8 @@ const PERMISSAO_POR_ACAO_ = {
   create: 'catalogo_cadastrar', update: 'catalogo_cadastrar', addCategoria: 'catalogo_cadastrar', addGenero: 'catalogo_cadastrar',
   gerarSeo: 'catalogo_cadastrar', sugerirPorFoto: 'catalogo_cadastrar', statusConfigIA: 'gerir_acessos', salvarConfigIA: 'gerir_acessos', delete: 'catalogo_excluir', reativar: 'catalogo_excluir', excluirPermanente: 'catalogo_excluir',
   enviarPush: 'catalogo_push', assinarUploadVideo: 'catalogo_cadastrar',
+  // v3.2: mexer nas categorias de TODAS as peças é coisa de Admin total (e só com login, nunca com o PIN antigo)
+  excluirCategoria: 'gerir_acessos', renomearCategoria: 'gerir_acessos',
   // v3.1 (só reaproveitam permissões que já existem -- não cria permissão nova, para não mexer no bloco compartilhado com o treinamento)
   listarPedidos: 'catalogo_cadastrar', atualizarPedido: 'catalogo_cadastrar', gerarCodigosFaltantes: 'catalogo_cadastrar',
   metricas: 'catalogo_auditoria', importarProdutos: 'catalogo_precos',
@@ -1274,10 +1371,12 @@ function statsComCache_() {
   return saida;
 }
 
-const ACOES_QUE_ALTERAM_PRODUTOS_ = ['create', 'update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate', 'importarProdutos', 'gerarCodigosFaltantes'];
+const ACOES_QUE_ALTERAM_PRODUTOS_ = ['create', 'update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate', 'importarProdutos', 'gerarCodigosFaltantes', 'excluirCategoria', 'renomearCategoria'];
 // "create" só acrescenta no fim da planilha (e o código sequencial já tem trava própria);
 // as demais mexem em linhas que já existem e por isso entram na fila:
-const ACOES_COM_TRAVA_ = ['update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate', 'importarProdutos', 'gerarCodigosFaltantes'];
+const ACOES_COM_TRAVA_ = ['update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate', 'importarProdutos', 'gerarCodigosFaltantes', 'excluirCategoria', 'renomearCategoria'];
+// v3.2: ações que só valem com LOGIN (nunca com o PIN antigo, que não diz quem é a pessoa nem a permissão dela)
+const ACOES_SO_COM_LOGIN_ = ['excluirCategoria', 'renomearCategoria'];
 
 /**
  * Backup: copia a planilha do catálogo para uma pasta do Drive e mantém só as
@@ -1346,7 +1445,8 @@ function doGetInterno_(e) {
   if (action === 'stats') return statsComCache_();
   if (action === 'versao') return jsonResponse_({
     ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
-    pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true
+    pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true,
+    categoriasGestao: true
   });
   if (action === 'config') return configPublica_();
   if (action === 'feed') return feedProdutos_(e.parameter.formato);
@@ -1424,6 +1524,9 @@ function doPostInterno_(body) {
   const aut = autorizarAcao_(body.sessao || body.pin, body.whatsapp, permissao, body.pin);
   if (!aut.ok) return respostaNegada_(aut);
   if (aut.nome) body.funcionario = aut.nome; // auditoria com o nome verdadeiro de quem fez
+  if (ACOES_SO_COM_LOGIN_.indexOf(action) !== -1 && aut.via !== 'login') {
+    return respostaNegada_({ exigeLogin: true, erro: 'Esta ação é só para Admin total e exige entrar com sua conta (WhatsApp e senha).' });
+  }
 
   if (ACOES_QUE_ALTERAM_PRODUTOS_.indexOf(action) === -1) return despacharPost_(body);
   if (ACOES_COM_TRAVA_.indexOf(action) === -1) {
@@ -1456,6 +1559,8 @@ function despacharPost_(body) {
   if (action === 'bulkUpdate') return acaoEmLote_(body);
   if (action === 'addCategoria') return jsonResponse_(adicionarValorLista_(SHEET_CATEGORIAS, CATEGORIAS_PADRAO, body.nome));
   if (action === 'addGenero') return jsonResponse_(adicionarValorLista_(SHEET_GENEROS, GENEROS_PADRAO, body.nome));
+  if (action === 'excluirCategoria') return excluirCategoria_(body);
+  if (action === 'renomearCategoria') return renomearCategoria_(body);
   if (action === 'gerarSeo') return gerarSeoComGemini_(body);
   if (action === 'sugerirPorFoto') return sugerirPorFotoComGemini_(body);
   if (action === 'statusConfigIA') return statusConfigIA_();

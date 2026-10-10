@@ -22,7 +22,7 @@ Catálogo online da TENKiTER Modas (Crateús, CE), hospedado no Render:
 
 ## Backend
 
-O catálogo usa `catalogo-codigo-3.1.gs.txt` e o RH/treinamento `funcionario-codigo-3.0.gs.txt` (os outros `.gs.txt` são históricos). O backend é um Google Apps Script (Web App) conectado a uma planilha do Google Sheets (produtos) e a uma pasta do Google Drive (fotos). A URL do Web App fica em `common.js`, na constante `API_URL`.
+O catálogo usa `catalogo-codigo-3.2.gs.txt` e o RH/treinamento `funcionario-codigo-3.0.gs.txt` (os outros `.gs.txt` são históricos). O backend é um Google Apps Script (Web App) conectado a uma planilha do Google Sheets (produtos) e a uma pasta do Google Drive (fotos). A URL do Web App fica em `common.js`, na constante `API_URL`.
 
 > ⚠️ **Atenção**: `index.html` e `admin.html` devem sempre usar a mesma `API_URL` (a de `common.js`). Se algum dia precisar apontar para uma nova implantação do Apps Script, troque só ali — nunca crie uma URL diferente em outro arquivo, senão o cadastro e o catálogo público passam a ler/escrever planilhas diferentes.
 >

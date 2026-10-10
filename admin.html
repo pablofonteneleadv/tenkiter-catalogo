@@ -70,9 +70,40 @@
   .chip { width: auto; padding: 8px 14px; border-radius: 20px; border: 1px solid #ddd; background: var(--branco); color: var(--preto); font-size: 0.82rem; font-weight: 500; cursor: pointer; }
   .chip.selecionado { background: var(--laranja); color: var(--preto); border-color: var(--laranja); font-weight: 700; }
   .chip.add { background: #f0f0f0; color: #666; border-style: dashed; }
-  .nova-categoria-linha { display: flex; gap: 8px; margin-top: 8px; }
-  .nova-categoria-linha input { flex: 1; min-width: 0; }
-  .nova-categoria-linha button { border: none; border-radius: 8px; padding: 0 14px; font-weight: 700; font-size: 0.82rem; cursor: pointer; background: var(--laranja); color: #0d0d0d; }
+  /* v3.2: criar categoria. O botão de baixo (button{width:100%}) espremia o campo num quadradinho: aqui o campo manda e o botão tem tamanho próprio. */
+  .nova-categoria { display: none; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow-y: auto; margin: 6px 0; -webkit-overflow-scrolling: touch; }
+  .nova-categoria.aberto { display: flex; }
+  .nova-categoria-linha { display: flex; gap: 8px; align-items: stretch; }
+  .nova-categoria-linha input { flex: 1 1 auto; width: auto; min-width: 0; padding: 12px; font-size: 1rem; }
+  .nova-categoria-linha button { flex: 0 0 auto; width: auto; min-width: 104px; border: none; border-radius: 8px; padding: 0 16px; font-weight: 700; font-size: 0.9rem; cursor: pointer; background: var(--laranja); color: #0d0d0d; }
+  .nova-categoria-linha button:disabled { opacity: .6; }
+  .nova-cat-previa { font-size: 0.88rem; color: #333; min-height: 1.3em; overflow-wrap: anywhere; }
+  .nova-cat-previa strong { color: #0d0d0d; background: #fff1e3; padding: 1px 7px; border-radius: 6px; }
+  .nova-cat-previa .muda { color: #666; font-size: 0.78rem; }
+  .nova-cat-voltar { background: #f0f0f0; color: #333; padding: 10px; font-size: 0.85rem; }
+  /* sugestões enquanto digita (categoria e nome da peça): toque no nome = copia; botão ao lado = corrigir */
+  .sug-titulo { font-size: 0.78rem; color: #555; margin: 6px 0 4px; }
+  .sug-lista { border: 1px solid #eee; border-radius: 12px; overflow: hidden; background: #fff; }
+  .sug-linha { display: flex; align-items: stretch; border-bottom: 1px solid #f0f0f0; }
+  .sug-linha:last-child { border-bottom: none; }
+  .sug-copiar { flex: 1 1 auto; width: auto; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #fff; border-radius: 0; padding: 11px 12px; font-size: 0.9rem; font-weight: 600; text-align: left; color: var(--preto); }
+  .sug-copiar .sug-nome { overflow-wrap: anywhere; }
+  .sug-copiar small { display: block; font-weight: 400; color: #666; font-size: 0.74rem; margin-top: 2px; }
+  .sug-copiar .sug-dica { flex: 0 0 auto; font-size: 0.7rem; font-weight: 700; color: #666; }
+  .sug-acao { flex: 0 0 auto; width: auto; min-width: 48px; background: #f4f4f4; color: #333; border-radius: 0; padding: 0 12px; font-size: 0.8rem; font-weight: 700; border-left: 1px solid #eee; }
+  .sug-aviso { font-size: 0.8rem; color: #6b4300; background: #fff6e5; border-radius: 8px; padding: 8px 10px; margin-top: 6px; }
+  /* linha da lista de categorias: nome + (só Admin total) ✎ corrigir e × apagar */
+  .cat-linha { display: flex; align-items: stretch; border-bottom: 1px solid #f0f0f0; }
+  .cat-linha:last-child { border-bottom: none; }
+  .cat-linha .cat-item { flex: 1 1 auto; width: auto; min-width: 0; border-bottom: none; }
+  .cat-acao { flex: 0 0 auto; width: 46px; background: #fff; border-radius: 0; padding: 0; font-size: 1.05rem; color: #555; border-left: 1px solid #f0f0f0; }
+  .cat-acao.cat-x { color: #b71c1c; }
+  .cat-edit { display: flex; gap: 6px; align-items: center; padding: 8px; width: 100%; background: #fff8ee; }
+  .cat-edit input { flex: 1 1 auto; width: auto; min-width: 0; padding: 10px; font-size: 1rem; }
+  .cat-edit button { flex: 0 0 auto; width: auto; padding: 10px 12px; font-size: 0.82rem; }
+  .cat-edit .cat-salvar { background: var(--laranja); color: #0d0d0d; }
+  .cat-edit .cat-cancelar { background: #eee; color: #333; }
+  .cat-criar-linha { display: block; width: 100%; background: #fff8ee; color: #7a3d00; border-radius: 0; text-align: left; padding: 13px 14px; font-size: 0.9rem; }
 
   details.selecao-expansivel { margin-top: 12px; border: 1px solid #ddd; border-radius: 10px; padding: 10px 12px; background: #fff; }
   details.selecao-expansivel summary { cursor: pointer; font-weight: 600; font-size: 0.85rem; list-style: none; display: flex; justify-content: space-between; align-items: center; }
@@ -475,7 +506,8 @@
 
       <section class="passo" data-passo="nome">
         <div class="passo-tit"><span class="num">2</span>Nome da peça <i class="obg">*</i></div>
-        <input type="text" id="nome" maxlength="80" placeholder="Ex: Vestido Floral Midi" autocomplete="off">
+        <input type="text" id="nome" maxlength="80" placeholder="Ex: Vestido Floral Midi" autocomplete="off" dir="ltr" lang="pt-BR">
+        <div id="nome-sugestoes" aria-live="polite"></div>
         <div class="passo-msg">Escreva o nome da peça.</div>
       </section>
 
@@ -563,9 +595,15 @@
       <div class="sheet-topo"><strong>Escolha a categoria</strong><button type="button" class="sheet-x" id="cat-fechar" aria-label="Fechar">✕</button></div>
       <input type="text" id="cat-busca" placeholder="🔎 Digite para procurar (ex: vestido)" autocomplete="off">
       <div class="cat-lista" id="cat-lista"></div>
-      <div class="nova-categoria-linha" id="nova-categoria-linha" style="display:none;">
-        <input type="text" id="input-nova-categoria" placeholder="Nome da nova categoria" maxlength="40">
-        <button type="button" id="btn-confirmar-nova-categoria">Adicionar</button>
+      <div class="nova-categoria" id="nova-categoria-linha">
+        <label for="input-nova-categoria">Nome da nova categoria</label>
+        <div class="nova-categoria-linha">
+          <input type="text" id="input-nova-categoria" placeholder="Ex.: Fantasia menina" maxlength="60" dir="ltr" lang="pt-BR" autocomplete="off" autocapitalize="sentences" autocorrect="off" spellcheck="false" enterkeyhint="done">
+          <button type="button" id="btn-confirmar-nova-categoria">Adicionar</button>
+        </div>
+        <div class="nova-cat-previa" id="nova-cat-previa" aria-live="polite"></div>
+        <div id="nova-cat-sugestoes"></div>
+        <button type="button" class="nova-cat-voltar" id="nova-cat-voltar">← Voltar para a lista</button>
       </div>
       <button type="button" class="cat-criar" id="btn-criar-categoria">＋ Não achei: criar categoria nova</button>
       <button type="button" class="btn-primario" id="cat-pronto" style="margin-top:0;">Pronto</button>
@@ -943,6 +981,9 @@
   });
 
   let categorias = [], generos = [], produtos = [];
+  let catGestaoNoServidor_ = false; // o backend (3.2+) sabe apagar/renomear categoria; só liga os botões se disser que sabe
+  let editandoCat_ = null;          // categoria que está sendo renomeada agora (linha vira campo de edição)
+  let ocupadoCat_ = false;          // uma chamada de apagar/renomear em andamento
   let selecionadasCategorias = new Set(), selecionadosGeneros = new Set();
   let selecionadosBulk = new Set();
 
@@ -1164,40 +1205,112 @@
     atualizarFaltas_();
   }
 
-  // Nova categoria: manda pro servidor, entra na lista local já ordenada em ordem alfabética
-  // e fica selecionada (quem criou já vai usar na hora).
+  /* ===================== v3.2: categorias — nome limpo, sugestões enquanto digita, ✎ corrigir e × apagar (só Admin total) ===================== */
+
+  versaoServidor().then(v => { catGestaoNoServidor_ = !!(v && v.categoriasGestao); renderizarListaCategorias_(); }).catch(() => {});
+  /** Apagar/renomear categoria muda TODAS as peças: só Admin total (permissão gerir_acessos), só com login e só se o backend souber fazer. */
+  function podeGerirCategorias_() { return catGestaoNoServidor_ && modoLogin && temPermissao(usuarioAdmin, 'gerir_acessos'); }
+  /** Mesma regra do servidor: vírgula vira espaço (vírgula separa as categorias da peça), espaços repetidos viram um, no máximo 60 letras. */
+  function limparNomeCategoria_(s) { return String(s == null ? '' : s).replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim(); }
+  function chamarAdmin_(extra) {
+    const sess = (typeof getSessao === 'function' && getSessao()) || null;
+    return apiPost(Object.assign({ pin: adminPin, sessao: adminPin, whatsapp: sess ? sess.whatsapp : '', funcionario: funcionarioNome }, extra));
+  }
+  /** Texto de erro para o aviso; vazio quando o próprio painel já avisou (sem permissão / pedir login de novo). */
+  function textoErroCat_(r, padrao) {
+    if (r && (r.semPermissao || r.exigeLogin || r.sessaoInvalida || r.inativa || r.pinInvalido)) return '';
+    return (r && r.erro) || padrao;
+  }
+  function guardarCategoriasLocal_() {
+    categorias.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    gravarCacheAdmin_(CACHE_ADMIN_LISTAS, { categorias: categorias, generos: generos });
+    renderizarChips('chips-categoria', categorias, selecionadasCategorias);
+  }
+  function criandoCategoria_() { return document.getElementById('nova-categoria-linha').classList.contains('aberto'); }
+  function redesenharCategorias_() { renderizarListaCategorias_(); if (criandoCategoria_()) atualizarCriacaoCategoria_(); }
+
+  /** Categorias já cadastradas com nome parecido (sem acento/maiúscula, todas as palavras digitadas). As que começam igual vêm primeiro. */
+  function sugestoesDeCategoria_(termo) {
+    const t = semAcento_(termo); if (!t) return [];
+    const palavras = t.split(/\s+/).filter(Boolean);
+    const comeca = (c) => semAcento_(c).indexOf(t) === 0 ? 0 : 1;
+    return categorias.filter(c => { const n = semAcento_(c); return palavras.every(w => n.indexOf(w) !== -1); })
+      .sort((a, b) => comeca(a) - comeca(b) || a.localeCompare(b, 'pt-BR')).slice(0, 8);
+  }
+  function botoesGerirCat_(c, comApagar) {
+    if (!podeGerirCategorias_()) return '';
+    const e = escaparHtml(c);
+    return '<button type="button" class="cat-acao cat-ed" data-cat-editar="' + e + '" aria-label="Corrigir o nome de ' + e + '" title="Corrigir o nome">✎</button>'
+      + (comApagar ? '<button type="button" class="cat-acao cat-x" data-cat-apagar="' + e + '" aria-label="Apagar a categoria ' + e + '" title="Apagar categoria">✕</button>' : '');
+  }
+  function editorCat_(c, classeLinha) {
+    const e = escaparHtml(c);
+    return '<div class="' + classeLinha + '"><div class="cat-edit"><input type="text" class="cat-edit-input" data-cat-antigo="' + e + '" value="' + e + '" maxlength="60" dir="ltr" lang="pt-BR" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Novo nome da categoria ' + e + '">'
+      + '<button type="button" class="cat-salvar" data-cat-salvar>Salvar</button><button type="button" class="cat-cancelar" data-cat-cancelar aria-label="Cancelar a correção">✕</button></div></div>';
+  }
+  function linhaSugestaoCat_(c) {
+    if (editandoCat_ === c) return editorCat_(c, 'sug-linha');
+    const e = escaparHtml(c);
+    return '<div class="sug-linha"><button type="button" class="sug-copiar" data-cat-copiar="' + e + '"><span class="sug-nome">' + e + '</span><span class="sug-dica">copiar nome</span></button>'
+      + (podeGerirCategorias_() ? '<button type="button" class="sug-acao" data-cat-editar="' + e + '" aria-label="Corrigir o nome de ' + e + '">✎ Corrigir</button>' : '') + '</div>';
+  }
+
+  /* --- criar --- */
+  function abrirCriacaoCategoria_(texto) {
+    editandoCat_ = null;
+    document.getElementById('nova-categoria-linha').classList.add('aberto');
+    ['cat-busca', 'cat-lista', 'btn-criar-categoria'].forEach(id => { document.getElementById(id).style.display = 'none'; });
+    const inp = document.getElementById('input-nova-categoria');
+    inp.value = limparNomeCategoria_(texto);
+    atualizarCriacaoCategoria_();
+    inp.focus();
+    try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
+  }
+  function fecharCriacaoCategoria_() {
+    document.getElementById('nova-categoria-linha').classList.remove('aberto');
+    ['cat-busca', 'cat-lista', 'btn-criar-categoria'].forEach(id => { document.getElementById(id).style.display = ''; });
+    editandoCat_ = null;
+    renderizarListaCategorias_();
+  }
+  function atualizarCriacaoCategoria_() {
+    const inp = document.getElementById('input-nova-categoria');
+    const bruto = inp.value, limpo = limparNomeCategoria_(bruto);
+    const igual = limpo ? categorias.find(c => semAcento_(c) === semAcento_(limpo)) : null;
+    const previa = document.getElementById('nova-cat-previa');
+    if (!limpo) previa.innerHTML = '<span class="muda">Digite o nome. Embaixo aparecem as categorias que já existem com nome parecido.</span>';
+    else if (igual) previa.innerHTML = 'Já existe: <strong>' + escaparHtml(igual) + '</strong>';
+    else previa.innerHTML = 'Vai ser criada como: <strong>' + escaparHtml(limpo) + '</strong>' + (bruto.indexOf(',') !== -1 ? ' <span class="muda">(a vírgula foi trocada por espaço)</span>' : '');
+    const btn = document.getElementById('btn-confirmar-nova-categoria');
+    if (!btn.disabled) btn.textContent = igual ? 'Usar essa' : 'Adicionar';
+    const sug = sugestoesDeCategoria_(limpo);
+    document.getElementById('nova-cat-sugestoes').innerHTML = !limpo ? ''
+      : sug.length ? '<div class="sug-titulo">Já cadastradas parecidas — toque para copiar o nome e mudar só o final:</div><div class="sug-lista">' + sug.map(linhaSugestaoCat_).join('') + '</div>'
+      : '<div class="sug-titulo">Nenhuma categoria parecida. Pode criar.</div>';
+  }
   async function adicionarNovaCategoria() {
     const input = document.getElementById('input-nova-categoria');
-    const nome = input.value.trim();
-    if (!nome) return;
+    const nome = limparNomeCategoria_(input.value);
+    if (!nome) { input.focus(); return; }
     const igual = categorias.find(c => semAcento_(c) === semAcento_(nome));
     if (igual) { // já existe (ex.: "vestido" x "Vestido"): usa a que existe, sem criar duplicada
       selecionadasCategorias.add(igual); input.value = '';
-      document.getElementById('nova-categoria-linha').style.display = 'none';
-      document.getElementById('btn-criar-categoria').style.display = '';
+      fecharCriacaoCategoria_();
       renderizarChips('chips-categoria', categorias, selecionadasCategorias);
       return;
     }
     const btn = document.getElementById('btn-confirmar-nova-categoria');
     btn.disabled = true; btn.textContent = 'Adicionando...';
     try {
-      const resp = await fetch(API_URL, {
-        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'addCategoria', nome: nome, pin: adminPin, funcionario: funcionarioNome })
-      }).then(r => r.json());
-      if (!resp.ok) { alert(resp.erro || 'Não consegui adicionar a categoria.'); return; }
-      if (!categorias.some(c => c.toLowerCase() === nome.toLowerCase())) {
-        categorias.push(nome);
-        categorias.sort((a, b) => a.localeCompare(b, 'pt-BR'));
-      }
-      selecionadasCategorias.add(categorias.find(c => c.toLowerCase() === nome.toLowerCase()) || nome);
+      const resp = await chamarAdmin_({ action: 'addCategoria', nome: nome });
+      if (!resp || !resp.ok) { const t = textoErroCat_(resp, 'Não consegui adicionar a categoria.'); if (t) alert(t); return; }
+      const nomeSalvo = limparNomeCategoria_(resp.nome || nome) || nome; // o servidor devolve o nome como ficou (ou o que já existia com outra maiúscula)
+      let existente = categorias.find(c => semAcento_(c) === semAcento_(nomeSalvo));
+      if (!existente) { categorias.push(nomeSalvo); existente = nomeSalvo; }
+      selecionadasCategorias.add(existente);
       input.value = '';
-      document.getElementById('nova-categoria-linha').style.display = 'none';
-      document.getElementById('btn-criar-categoria').style.display = '';
       document.getElementById('cat-busca').value = '';
-      renderizarChips('chips-categoria', categorias, selecionadasCategorias);
-    } catch (e) {
-      alert('Sem conexão. Tente de novo.');
+      fecharCriacaoCategoria_();
+      guardarCategoriasLocal_();
     } finally {
       btn.disabled = false; btn.textContent = 'Adicionar';
     }
@@ -1206,6 +1319,88 @@
   document.getElementById('input-nova-categoria').addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') { ev.preventDefault(); adicionarNovaCategoria(); }
   });
+  document.getElementById('input-nova-categoria').addEventListener('input', () => { editandoCat_ = null; atualizarCriacaoCategoria_(); });
+  document.getElementById('nova-cat-voltar').addEventListener('click', fecharCriacaoCategoria_);
+
+  /* --- corrigir nome (✎) e apagar (×): só Admin total --- */
+  function focarEdicaoCat_() { const i = document.querySelector('#overlay-categorias .cat-edit-input'); if (i) { i.focus(); i.select(); } }
+  async function salvarRenomear_(input) {
+    if (ocupadoCat_ || !input) return;
+    const antigo = input.dataset.catAntigo, novo = limparNomeCategoria_(input.value);
+    if (!novo) { alert('Escreva o novo nome da categoria.'); input.focus(); return; }
+    if (novo === antigo) { editandoCat_ = null; redesenharCategorias_(); return; }
+    const botao = input.parentNode.querySelector('[data-cat-salvar]');
+    ocupadoCat_ = true; botao.disabled = true; botao.textContent = 'Salvando…';
+    const r = await chamarAdmin_({ action: 'renomearCategoria', nome: antigo, novoNome: novo });
+    ocupadoCat_ = false;
+    if (!r || !r.ok) {
+      botao.disabled = false; botao.textContent = 'Salvar';
+      const t = textoErroCat_(r, 'Não consegui corrigir o nome agora.'); if (t) alert(t);
+      return;
+    }
+    const nomeFinal = r.nome || novo;
+    const eraEscolhida = selecionadasCategorias.delete(antigo);
+    categorias = categorias.filter(c => c !== antigo);
+    let existente = categorias.find(c => semAcento_(c) === semAcento_(nomeFinal));
+    if (!existente) { categorias.push(nomeFinal); existente = nomeFinal; }
+    if (eraEscolhida) selecionadasCategorias.add(existente);
+    editandoCat_ = null;
+    guardarCategoriasLocal_();
+    redesenharCategorias_();
+    if (r.juntou) alert('A categoria “' + existente + '” já existia: juntei as duas. ' + (r.pecas ? r.pecas + (r.pecas === 1 ? ' peça passou' : ' peças passaram') + ' para ela.' : ''));
+    if (r.pecas) carregarProdutos();
+  }
+  async function apagarCategoria_(nome) {
+    if (ocupadoCat_) return;
+    if (!confirm('Apagar a categoria “' + nome + '”?')) return;
+    ocupadoCat_ = true;
+    let r = await chamarAdmin_({ action: 'excluirCategoria', nome: nome });
+    if (r && r.ok === false && r.emUso) {
+      const n = r.emUso;
+      ocupadoCat_ = false;
+      if (!confirm('“' + nome + '” está em ' + n + (n === 1 ? ' peça' : ' peças') + '.\n\nSe apagar, ' + (n === 1 ? 'essa peça fica' : 'essas peças ficam') + ' sem esta categoria (continuam no catálogo, com as outras categorias que tiverem).\n\nApagar mesmo assim?')) return;
+      ocupadoCat_ = true;
+      r = await chamarAdmin_({ action: 'excluirCategoria', nome: nome, confirmar: true });
+    }
+    ocupadoCat_ = false;
+    if (!r || (!r.ok && !r.naoExiste)) { const t = textoErroCat_(r, 'Não consegui apagar a categoria agora.'); if (t) alert(t); return; }
+    if (r.naoExiste) alert('Essa categoria já tinha sido apagada. Atualizei a lista.');
+    categorias = categorias.filter(c => c !== nome);
+    selecionadasCategorias.delete(nome);
+    editandoCat_ = null;
+    guardarCategoriasLocal_();
+    redesenharCategorias_();
+    if (r.pecas) carregarProdutos();
+  }
+  /** Cliques de ✎ / × / Salvar / Cancelar / "usar este nome" vindos da lista e das sugestões. Devolve true se tratou. */
+  function aoClicarAcaoCategoria_(ev) {
+    const t = ev.target;
+    const ed = t.closest('[data-cat-editar]');
+    if (ed) { editandoCat_ = ed.dataset.catEditar; redesenharCategorias_(); focarEdicaoCat_(); return true; }
+    const ap = t.closest('[data-cat-apagar]');
+    if (ap) { apagarCategoria_(ap.dataset.catApagar); return true; }
+    if (t.closest('[data-cat-cancelar]')) { editandoCat_ = null; redesenharCategorias_(); return true; }
+    const sv = t.closest('[data-cat-salvar]');
+    if (sv) { salvarRenomear_(sv.closest('.cat-edit').querySelector('.cat-edit-input')); return true; }
+    const cp = t.closest('[data-cat-copiar]');
+    if (cp) {
+      const inp = document.getElementById('input-nova-categoria');
+      inp.value = cp.dataset.catCopiar; atualizarCriacaoCategoria_(); inp.focus();
+      try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
+      return true;
+    }
+    const cr = t.closest('[data-cat-criar-com]');
+    if (cr) { abrirCriacaoCategoria_(cr.dataset.catCriarCom); return true; }
+    return false;
+  }
+  function aoTeclarEdicaoCat_(ev) {
+    if (!ev.target.classList || !ev.target.classList.contains('cat-edit-input')) return;
+    if (ev.key === 'Enter') { ev.preventDefault(); salvarRenomear_(ev.target); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); editandoCat_ = null; redesenharCategorias_(); }
+  }
+  document.getElementById('nova-cat-sugestoes').addEventListener('click', aoClicarAcaoCategoria_);
+  document.getElementById('nova-cat-sugestoes').addEventListener('keydown', aoTeclarEdicaoCat_);
+  document.getElementById('cat-lista').addEventListener('keydown', aoTeclarEdicaoCat_);
 
   /* ===================== v3.1: cadastro guiado ===================== */
 
@@ -1279,6 +1474,53 @@
   }
   document.getElementById('form-produto').addEventListener('input', atualizarFaltas_);
 
+  /* ===================== v3.2: ao digitar o nome da peça, mostra as já cadastradas parecidas ===================== */
+  // Toque no nome = copia para o campo (dá para mudar só o final: "Fantasia menina 2-6" -> "Fantasia menino 2-6").
+  // Botão "Editar" = abre aquela peça (se o nome tem erro, corrige na hora). Nome igual a outro: aviso, sem impedir (pode ser outra cor/modelo).
+  let nomeSugCopiado_ = null;
+  function sugestoesDePeca_(texto, idAtual) {
+    const t = semAcento_(texto); if (t.length < 2) return [];
+    const palavras = t.split(/\s+/).filter(Boolean);
+    const comeca = (p) => semAcento_(p.Nome).indexOf(t) === 0 ? 0 : 1;
+    return produtos.filter(p => String(p.ID) !== String(idAtual || '') && palavras.every(w => semAcento_(p.Nome).indexOf(w) !== -1))
+      .sort((a, b) => comeca(a) - comeca(b) || String(a.Nome).localeCompare(String(b.Nome), 'pt-BR')).slice(0, 6);
+  }
+  function atualizarSugestoesNome_() {
+    const box = document.getElementById('nome-sugestoes');
+    const texto = document.getElementById('nome').value;
+    const lista = nomeSugCopiado_ === texto ? [] : sugestoesDePeca_(texto, document.getElementById('produto-id').value);
+    if (!lista.length) { box.innerHTML = ''; return; }
+    const igual = lista.find(p => semAcento_(p.Nome) === semAcento_(texto));
+    box.innerHTML = (igual ? '<div class="sug-aviso">⚠️ Já existe uma peça com esse nome' + (igual.Codigo ? ' (' + escaparHtml(igual.Codigo) + ')' : '') + '. Se for outra peça, pode continuar; se queria mexer nela, toque em “Editar”.</div>' : '')
+      + '<div class="sug-titulo">Já cadastradas com nome parecido — toque no nome para copiar, ou em Editar para abrir a peça:</div><div class="sug-lista">'
+      + lista.map(p => {
+        const meta = [p.Codigo, p.Preco ? formatarReal(p.Preco) : '', ehInativo_(p) ? 'arquivada' : (estaEsgotado(p) ? 'esgotada' : '')].filter(Boolean).join(' · ');
+        return '<div class="sug-linha"><button type="button" class="sug-copiar" data-peca-copiar="' + escaparHtml(p.ID) + '"><span><span class="sug-nome">' + escaparHtml(p.Nome) + '</span>' + (meta ? '<small>' + escaparHtml(meta) + '</small>' : '') + '</span><span class="sug-dica">copiar</span></button>'
+          + '<button type="button" class="sug-acao" data-peca-editar="' + escaparHtml(p.ID) + '" aria-label="Editar a peça ' + escaparHtml(p.Nome) + '">✎ Editar</button></div>';
+      }).join('') + '</div>';
+  }
+  document.getElementById('nome').addEventListener('input', () => { nomeSugCopiado_ = null; atualizarSugestoesNome_(); });
+  document.getElementById('nome').addEventListener('focus', atualizarSugestoesNome_);
+  document.getElementById('nome-sugestoes').addEventListener('click', (ev) => {
+    const cp = ev.target.closest('[data-peca-copiar]');
+    if (cp) {
+      const p = produtos.find(x => String(x.ID) === String(cp.dataset.pecaCopiar)); if (!p) return;
+      const campo = document.getElementById('nome');
+      campo.value = String(p.Nome).slice(0, 80); nomeSugCopiado_ = campo.value;
+      campo.focus(); try { campo.setSelectionRange(campo.value.length, campo.value.length); } catch (e) {}
+      atualizarSugestoesNome_(); atualizarFaltas_();
+      return;
+    }
+    const ed = ev.target.closest('[data-peca-editar]');
+    if (ed) {
+      const p = produtos.find(x => String(x.ID) === String(ed.dataset.pecaEditar)); if (!p) return;
+      const temOutrosDados = modoFormulario === 'editando' || !!(document.getElementById('preco').value || document.getElementById('descricao').value.trim() || selecionadasCategorias.size || selecionadosGeneros.size || (typeof fotosItens !== 'undefined' && fotosItens.length) || videoNovo);
+      if (temOutrosDados && !confirm('Abrir “' + p.Nome + '” para editar? O que você já preencheu neste formulário será descartado.')) return;
+      editarProduto(p.ID);
+      document.getElementById('nome-sugestoes').innerHTML = '';
+    }
+  });
+
   function tituloForm_(txt) {
     document.getElementById('titulo-form').textContent = txt;
     const s = document.getElementById('cad-sum-txt');
@@ -1300,13 +1542,22 @@
     const termo = semAcento_(document.getElementById('cat-busca').value);
     const lista = categorias.filter(c => !termo || semAcento_(c).indexOf(termo) !== -1);
     const box = document.getElementById('cat-lista');
+    const linha = (c) => {
+      if (editandoCat_ === c) return editorCat_(c, 'cat-linha');
+      const marcada = selecionadasCategorias.has(c);
+      return '<div class="cat-linha"><button type="button" class="cat-item' + (marcada ? ' selecionado' : '') + '" data-cat="' + escaparHtml(c) + '"><span>' + escaparHtml(c) + '</span><span class="marca">' + (marcada ? '✓' : '') + '</span></button>' + botoesGerirCat_(c, true) + '</div>';
+    };
+    const buscaBruta = limparNomeCategoria_(document.getElementById('cat-busca').value);
+    const criarCom = buscaBruta && !categorias.some(c => semAcento_(c) === semAcento_(buscaBruta))
+      ? '<button type="button" class="cat-criar-linha" data-cat-criar-com="' + escaparHtml(buscaBruta) + '">＋ Criar a categoria “' + escaparHtml(buscaBruta) + '”</button>' : '';
     box.innerHTML = lista.length
-      ? lista.map(c => '<button type="button" class="cat-item' + (selecionadasCategorias.has(c) ? ' selecionado' : '') + '" data-cat="' + escaparHtml(c) + '"><span>' + escaparHtml(c) + '</span><span class="marca">' + (selecionadasCategorias.has(c) ? '✓' : '') + '</span></button>').join('')
-      : '<div class="cat-vazio">' + (termo ? 'Nenhuma categoria com esse nome.' : 'Ainda não há categorias.') + '<br>Use o botão abaixo para criar.</div>';
+      ? lista.map(linha).join('') + criarCom
+      : '<div class="cat-vazio">' + (termo ? 'Nenhuma categoria com esse nome.' : 'Ainda não há categorias.') + '<br>Use o botão abaixo para criar.</div>' + criarCom;
     const n = selecionadasCategorias.size;
     document.getElementById('cat-pronto').textContent = n ? 'Pronto (' + n + (n === 1 ? ' escolhida)' : ' escolhidas)') : 'Pronto';
   }
   document.getElementById('cat-lista').addEventListener('click', (ev) => {
+    if (aoClicarAcaoCategoria_(ev)) return;
     const b = ev.target.closest('.cat-item'); if (!b) return;
     const c = b.dataset.cat;
     if (selecionadasCategorias.has(c)) selecionadasCategorias.delete(c); else selecionadasCategorias.add(c);
@@ -1330,21 +1581,13 @@
   document.getElementById('cat-busca').addEventListener('input', renderizarListaCategorias_);
   document.getElementById('btn-abrir-categorias').addEventListener('click', () => {
     document.getElementById('cat-busca').value = '';
-    document.getElementById('nova-categoria-linha').style.display = 'none';
-    document.getElementById('btn-criar-categoria').style.display = '';
-    renderizarListaCategorias_();
+    fecharCriacaoCategoria_(); // volta ao modo lista (e redesenha)
     abrirComHistorico_('overlay-categorias');
   });
   document.getElementById('cat-fechar').addEventListener('click', () => fecharComHistorico_('overlay-categorias'));
   document.getElementById('cat-pronto').addEventListener('click', () => fecharComHistorico_('overlay-categorias'));
   document.getElementById('overlay-categorias').addEventListener('click', (ev) => { if (ev.target.id === 'overlay-categorias') fecharComHistorico_('overlay-categorias'); });
-  document.getElementById('btn-criar-categoria').addEventListener('click', () => {
-    document.getElementById('nova-categoria-linha').style.display = 'flex';
-    document.getElementById('btn-criar-categoria').style.display = 'none';
-    const inp = document.getElementById('input-nova-categoria');
-    inp.value = document.getElementById('cat-busca').value.trim();
-    inp.focus();
-  });
+  document.getElementById('btn-criar-categoria').addEventListener('click', () => abrirCriacaoCategoria_(document.getElementById('cat-busca').value));
   montarRapidos_();
 
   /* ===================== Duplicar / Editar peça ===================== */

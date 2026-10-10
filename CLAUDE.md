@@ -14,7 +14,7 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
   integrações, avisos no painel), `privacidade.html`, `404.html`, `site.webmanifest`, `robots.txt`, `sitemap.xml`.
 - **Backend**: dois Apps Script Web Apps separados, versionados por nome de arquivo
   (`<nome>-<versão>.gs.txt`):
-  - `catalogo-codigo-3.1.gs.txt` — catálogo + autenticação central + pedidos/métricas/importação/feed/integrações (v3.1).
+  - `catalogo-codigo-3.2.gs.txt` — catálogo + autenticação central + pedidos/métricas/importação/feed/integrações (v3.1) + apagar/renomear categoria só para Admin total (v3.2).
   - `funcionario-codigo-3.0.gs.txt` — RH/treinamento/contratação.
   - Arquivos antigos (`Code-treinamento-v4.0.gs.txt`, `v4.1.gs.txt`, `atualizado.gs.txt`,
     `tenkiter-codigo-v2.1.gs.txt`) são **históricos — não editar nem usar como referência**.
@@ -55,7 +55,7 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
 
 ## Link e miniatura do produto
 
-- Link público da peça: **sempre** `linkProduto(p)` (common.js) = `SITE_URL + 'p/<código>'`. Nunca montar a partir de
+- Link público da peça: **sempre** `linkProduto(p)` (common.js) = `SITE_URL + 'p/<código>'` (com a foto/vídeo escolhido: `linkProduto(p, n)` = `.../p/<código>?f=n`, ver seção "Foto escolhida" no fim). Nunca montar a partir de
   `API_URL` — o `?action=share` do Apps Script devolve HTML dentro de um iframe do Google, o WhatsApp não lê as meta
   tags `og:*` dali e a mensagem mostrava o endereço do script sem miniatura (bug real, não repetir).
 - Miniatura **por produto**: Cloudflare Worker `tenkiter-og` (código em `og-worker/worker.js`, endereço
@@ -155,3 +155,28 @@ Propriedades do Script do Apps Script, nunca no código versionado.
   do Playwright que custaram caro: bloqueie service workers nos testes comuns; `set_offline`/`route` NÃO afetam o que o service worker busca;
   `route.fulfill` já injeta CORS (para simular bloqueio, devolva um `Access-Control-Allow-Origin` diferente).
 - **Nunca rodar `pkill -f` com texto que apareça no próprio comando** (mata o shell). Para encerrar servidores de teste use o PID.
+
+## v3.4 — foto escolhida no compartilhar e categorias do painel (backend 3.2)
+
+- **A foto/vídeo que a pessoa está vendo é a que vai** (pedido do Pablo: "se está selecionada a preta, o WhatsApp tem que mandar a preta, não a capa").
+  Identidade da mídia = número do slide `f` (1 = capa, depois a galeria, vídeo por último). `linkProduto(p, f)` → `SITE_URL/p/<código>?f=n` (só com
+  n ≥ 2; capa = link limpo de sempre). O Worker (`og-worker/worker.js`, `?f=n`) usa aquela foto em `og:image` (vídeo do Cloudinary: quadro `so_30p` em
+  JPG; `so_0` sai preto), mantém o canonical sem `?f` e redireciona para `?c=<código>&f=n`; o catálogo abre naquele slide e mantém o endereço em
+  sincronia (`history.replaceState`). `compartilharComFoto` (index.html) manda o ARQUIVO da mídia escolhida pelo Web Share (orçamento de 3,5 s por causa
+  da ativação do toque; vídeo do Drive vai só como texto+link); cancelar = silêncio; sem compartilhamento nativo ou falha = `wa.me/?text=`. "Pedir no
+  WhatsApp" e "Na sacola" usam o mesmo slide; a sacola guarda a escolha no aparelho (`tenkiter_sacola_foto_v1`, podada em `salvarSacola`) e a mensagem
+  do pedido leva o link com `?f=`. **Publicar o Worker de novo sempre que `og-worker/worker.js` mudar** (`og-worker/publicar.py`, token em variável de
+  ambiente, nunca no repositório). Teste: `tests/compartilhar_foto.py` + seção "Foto escolhida" de `tests/worker_og.js`.
+- **Categorias (backend 3.2 + admin.html)**: nome sempre limpo (`nomeDeLista_` no servidor e `limparNomeCategoria_` no painel: vírgula vira espaço, espaços
+  repetidos viram um, máx. 60) — vírgula quebrava a peça em duas categorias, porque a coluna `Categoria` é separada por vírgula. Duplicada (sem acento/maiúscula)
+  reaproveita a existente (`jaExistia`). `excluirCategoria` / `renomearCategoria` são **só Admin total** (`gerir_acessos`) e **só com login**
+  (`ACOES_SO_COM_LOGIN_`: o PIN antigo é recusado com `exigeLogin`); apagar categoria EM USO devolve `emUso:n` e só apaga com `confirmar:true`
+  (as peças perdem só essa categoria); renomear para nome que já existe JUNTA (`juntou:true`); ambas gravam em `Acoes_Audit`. O painel só mostra ✎/× se
+  `versao.categoriasGestao` **e** login **e** `gerir_acessos` (`podeGerirCategorias_`). Ao criar: campo largo (o `button{width:100%}` global espremia o
+  campo — todo botão novo ao lado de campo precisa de `width:auto`), prévia "Vai ser criada como: …", sugestões já cadastradas (tocar copia o nome para
+  mudar só o final; ✎ Corrigir ao lado para Admin total). O "Nome da peça" também sugere peças parecidas (copiar / Editar) e avisa nome repetido sem
+  impedir. Credencial de toda chamada nova do painel: `chamarAdmin_` (pin+sessao+whatsapp), nunca só `pin: adminPin`.
+- **Teste**: `tests/admin_categorias.py`; no simulador de backend (`tests/backend_gs.js`) a aba de pessoas precisa do cabeçalho `Nome/WhatsApp/Senha` e o
+  `Utilities` simulado precisa de `computeHmacSha256Signature` para criar contas de verdade; `tests/mock.py` tem categorias com estado
+  (`install(..., versao="3.2")`; `"3.1"` = sem a bandeira, `"3.0"` = backend antigo).
+

@@ -973,10 +973,10 @@ catch (e) { window.__precargaLista = null; }
   }
 
   /** Põe ou tira a peça da sacola (cartão e folha usam a mesma função). Devolve true se agora está na sacola. */
-  function alternarSacola_(p) {
+  function alternarSacola_(p, foto) {
     let agora;
     if (estaNaSacola(p.ID)) { removerDaSacola(p.ID); agora = false; }
-    else { adicionarNaSacola(p.ID); agora = true; if (window.TKMeta) TKMeta.evento('AddToCart', dadosPixel_(p), novoEventId_('ac', p.ID)); }
+    else { adicionarNaSacola(p.ID, foto); agora = true; if (window.TKMeta) TKMeta.evento('AddToCart', dadosPixel_(p), novoEventId_('ac', p.ID)); }
     atualizarBadges(); sincronizarBotoesCard_(p.ID);
     return agora;
   }
@@ -994,10 +994,15 @@ catch (e) { window.__precargaLista = null; }
     return { content_ids: [p.Codigo || String(p.ID)], content_name: p.Nome, content_type: 'product', value: Number(p.Preco) * (1 - DESCONTO_AVISTA), currency: 'BRL' };
   }
 
-  function abrirWhatsApp(p) {
+  // Foto/vídeo que está aparecendo na janela da peça (0 = capa). Os botões "Pedir" e "Compartilhar" da janela usam isso:
+  // o link leva a foto escolhida (?f=<n>) e a miniatura no WhatsApp é essa foto, não a capa.
+  let slideAtualModal_ = 0;
+
+  function abrirWhatsApp(p, foto) {
     // Link do produto NO SITE (linkProduto, em common.js): ?c=<código>. Antes apontava para o Apps Script
     // (endpoint de compartilhamento), que o WhatsApp não consegue ler -- aparecia o endereço do script e nada de miniatura.
-    const link = linkProduto(p);
+    // `foto` = número (de 1) da foto/vídeo escolhido na galeria; só a janela da peça passa isso (no cartão da lista vale a capa).
+    const link = linkProduto(p, foto);
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const codigo = p.Codigo ? ('\nCódigo: ' + p.Codigo) : '';
     const texto = `Olá! Quero garantir este produto:\n*${p.Nome}*${codigo}\n${formatarReal(avista)} à vista\n${link}`;
@@ -1007,27 +1012,55 @@ catch (e) { window.__precargaLista = null; }
     window.open(linkWhatsApp(texto), '_blank');   // sempre o WhatsApp da loja
   }
 
-  async function compartilharComFoto(p) {
-    const link = linkProduto(p);
-    const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
-    const texto = `${p.Nome} — ${formatarReal(avista)} à vista\n${link}\n\nTENKiTER Modas — WhatsApp: ${linkWhatsApp()}`;
-    let arquivoImagem = null;
+  /** Baixa a foto (ou o vídeo da Cloudinary) que está na tela para mandar como ARQUIVO. Devolve null se não der a tempo ou não for possível
+   *  (ex.: vídeo do Drive, que o navegador não consegue baixar) -- aí vai só o link, que já mostra a miniatura certa. O tempo é curto de
+   *  propósito: o navegador só deixa abrir a janela de compartilhar até ~5 s depois do toque. */
+  async function arquivoDoSlide_(slide, p, ms) {
+    let url, nome, tipoPadrao;
+    const cod = String(p.Codigo || p.ID).replace(/[^\w-]/g, '');
+    if (!slide || slide.tipo === 'foto') { url = (slide && slide.url) || p.Foto_URL; nome = 'tenkiter-' + cod + '.jpg'; tipoPadrao = 'image/jpeg'; }
+    else if (slide.video && slide.video.tipo === 'cloudinary') { url = slide.video.url; nome = 'tenkiter-' + cod + '.mp4'; tipoPadrao = 'video/mp4'; }
+    else return null;
+    if (!url) return null;
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const t = setTimeout(() => { if (ctl) ctl.abort(); }, ms);
     try {
-      const blob = await fetch(p.Foto_URL).then(r => r.blob());
-      arquivoImagem = new File([blob], 'produto.jpg', { type: blob.type || 'image/jpeg' });
-    } catch (e) {}
+      const r = await fetch(url, ctl ? { signal: ctl.signal } : undefined);
+      if (!r.ok) return null;
+      const blob = await r.blob();
+      const tipo = String(blob.type || '').split(';')[0] || tipoPadrao; // "video/mp4;codecs=avc1" -> "video/mp4" (o canShare não aceita o complemento)
+      return new File([blob], nome, { type: tipo });
+    } catch (e) { return null; }
+    finally { clearTimeout(t); }
+  }
+
+  /** "Compartilhar foto e link": manda a foto (ou o vídeo) QUE ESTÁ NA TELA e o link que já abre nessa foto. `slide` = { tipo, url | video }, `foto` = número (de 1). */
+  async function compartilharComFoto(p, slide, foto) {
+    const link = linkProduto(p, foto);
+    const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
+    const ehVideo = !!(slide && slide.tipo === 'video');
+    const texto = `${p.Nome} — ${formatarReal(avista)} à vista${ehVideo ? ' (vídeo)' : ''}\n${link}\n\nTENKiTER Modas — WhatsApp: ${linkWhatsApp()}`;
+    const btn = document.getElementById('btn-anexar-foto');
+    const rotulo = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = ehVideo ? '⏳ Preparando o vídeo…' : '⏳ Preparando…'; }
+    let arquivo = null;
+    try { arquivo = await arquivoDoSlide_(slide, p, 3500); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = rotulo; } }
 
     if (navigator.share) {
       try {
-        if (arquivoImagem && navigator.canShare && navigator.canShare({ files: [arquivoImagem] })) {
-          await navigator.share({ files: [arquivoImagem], text: texto });
+        if (arquivo && navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+          await navigator.share({ files: [arquivo], text: texto });
         } else {
           await navigator.share({ text: texto });
         }
         return;
-      } catch (e) {}
+      } catch (e) {
+        if (e && e.name === 'AbortError') return; // a pessoa fechou a janela de compartilhar: não abre mais nada
+      }
     }
-    abrirWhatsApp(p);
+    // Sem compartilhar nativo (computador) ou falhou: abre o WhatsApp para ESCOLHER o contato (sem número fixo -- é para mandar a alguém).
+    window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
   }
 
   // ===================== Overlays x botão/gesto "voltar" do Android =====================
@@ -1093,9 +1126,11 @@ catch (e) { window.__precargaLista = null; }
     const ld = document.getElementById('ld-produto'); if (ld) ld.remove();
   }
 
-  function abrirDetalhe(id) {
+  /** slideInicial (opcional) = posição (de 0) da foto/vídeo que já deve aparecer: vem do endereço ?f=<n> (link compartilhado numa foto específica). */
+  function abrirDetalhe(id, slideInicial) {
     const p = produtos.find(x => String(x.ID) === String(id));
     if (!p) return;
+    slideAtualModal_ = 0;
     const eidVista = novoEventId_('vc', p.ID);
     registrarEvento(p.ID, p.Codigo, 'visualizacao', eidVista);
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
@@ -1149,12 +1184,14 @@ catch (e) { window.__precargaLista = null; }
       </div>
     `;
     // O endereço da foto principal entra por aqui (e não escrito dentro do <img> do texto acima): com a política de segurança da página + service worker, o Chrome chegava a pedir o texto "${...}" como se fosse um endereço de foto (erro 404 à toa).
-    document.getElementById('foto-principal-modal').src = p.Foto_URL;
+    const slideValido = Number.isInteger(slideInicial) && slideInicial > 0 && slideInicial < totalSlides;
+    if (!slideValido) document.getElementById('foto-principal-modal').src = p.Foto_URL; // com ?f=<n> a foto certa entra logo abaixo (sem piscar a capa antes)
 
     const urlAbertura = new URL(window.location);
-    // endereço curto e igual ao do link compartilhado (?c=TK-0008); peça sem código cai no ?id= antigo
-    urlAbertura.searchParams.delete('id'); urlAbertura.searchParams.delete('c');
+    // endereço curto e igual ao do link compartilhado (?c=TK-0008&f=3); peça sem código cai no ?id= antigo
+    urlAbertura.searchParams.delete('id'); urlAbertura.searchParams.delete('c'); urlAbertura.searchParams.delete('f');
     if (p.Codigo) urlAbertura.searchParams.set('c', p.Codigo); else urlAbertura.searchParams.set('id', p.ID);
+    if (slideValido) urlAbertura.searchParams.set('f', String(slideInicial + 1));
     abrirComHistorico_('overlay', urlAbertura);
     habilitarArrastarParaFechar(document.getElementById('modal-conteudo'), fecharDetalhe);
     document.getElementById('btn-fechar-modal').addEventListener('click', fecharDetalhe);
@@ -1168,18 +1205,19 @@ catch (e) { window.__precargaLista = null; }
     });
 
     if (!esgotado) {
-      document.getElementById('btn-quero').addEventListener('click', () => abrirWhatsApp(p));
-      document.getElementById('btn-anexar-foto').addEventListener('click', () => compartilharComFoto(p));
+      // "Pedir" e "Compartilhar" levam a foto/vídeo que está na tela (slides/atual são definidos mais abaixo; só são lidos no toque)
+      document.getElementById('btn-quero').addEventListener('click', () => abrirWhatsApp(p, slideAtualModal_ + 1));
+      document.getElementById('btn-anexar-foto').addEventListener('click', () => compartilharComFoto(p, slides[slideAtualModal_], slideAtualModal_ + 1));
       const btnSac = document.getElementById('btn-sacola-modal');
       btnSac.addEventListener('click', () => {
-        const agora = alternarSacola_(p);
+        const agora = alternarSacola_(p, slideAtualModal_ + 1); // a sacola guarda a foto que a pessoa está vendo
         btnSac.textContent = agora ? '✓ Na sacola' : '🛍️ Sacola';
         btnSac.setAttribute('aria-pressed', String(agora));
       });
     } else {
       document.getElementById('btn-perguntar').addEventListener('click', () => {
         registrarEvento(p.ID, p.Codigo, 'whatsapp');
-        window.open(linkWhatsApp('Olá! A peça ' + p.Nome + (p.Codigo ? ' (' + p.Codigo + ')' : '') + ' está esgotada no catálogo. Vai chegar mais?\n' + linkProduto(p)), '_blank');
+        window.open(linkWhatsApp('Olá! A peça ' + p.Nome + (p.Codigo ? ' (' + p.Codigo + ')' : '') + ' está esgotada no catálogo. Vai chegar mais?\n' + linkProduto(p, slideAtualModal_ + 1)), '_blank');
       });
     }
 
@@ -1190,6 +1228,13 @@ catch (e) { window.__precargaLista = null; }
     let atual = 0;
     function mostrarSlide(i) {
       atual = (i + slides.length) % slides.length;
+      slideAtualModal_ = atual;
+      // o endereço acompanha a foto que está na tela (?c=TK-0010&f=3): copiar o endereço do navegador também leva a essa foto
+      try {
+        const u = new URL(window.location.href);
+        if (atual > 0) u.searchParams.set('f', String(atual + 1)); else u.searchParams.delete('f');
+        if (u.href !== window.location.href) window.history.replaceState(window.history.state, '', u);
+      } catch (e) {}
       const s = slides[atual];
       area.innerHTML = '';
       if (s.tipo === 'foto') {
@@ -1252,6 +1297,7 @@ catch (e) { window.__precargaLista = null; }
       });
       window.__navSlide = (d) => mostrarSlide(atual + d);
     } else { window.__navSlide = null; }
+    if (slideValido) mostrarSlide(slideInicial); // veio de um link de uma foto específica (?f=<n>)
   }
 
   // Reconhece tanto vídeo antigo (Drive, tocado num <iframe>) quanto vídeo novo (Cloudinary,
@@ -1310,7 +1356,9 @@ catch (e) { window.__precargaLista = null; }
       const achado = produtos.find(x => String(x.Codigo || '').toLowerCase() === String(cod).trim().toLowerCase());
       if (achado) id = achado.ID;
     }
-    if (id) abrirDetalhe(id);
+    // ?f=<n>: link compartilhado numa foto/vídeo específico (1 = capa; o vídeo é o último). Número inválido = capa.
+    const f = parseInt(params.get('f'), 10);
+    if (id) abrirDetalhe(id, f >= 2 ? f - 1 : 0);
   }
 
   /** Atalhos por endereço: ?abrir=sacola (atalho do app) e ?pedido=<código> (acompanhar pedido). Roda uma vez, na abertura. */

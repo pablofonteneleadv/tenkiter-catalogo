@@ -12,15 +12,22 @@ def prods(n=24):
     return out
 PNG=bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cfc0f01f0005000201a5f645400000000049454e44ae426082")
 PERMS_ALL=["catalogo_admin","gerir_acessos","equipe_relatorio","gerir_manuais","dados_pessoais","catalogo_cadastrar","catalogo_excluir","catalogo_precos","catalogo_auditoria","catalogo_push","portal"]
-def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.1", pixel="", sem_codigo=0, ia=True):
-    """Simula o Apps Script. versao="3.1" liga pedidos/métricas/CSV/integrações (como o backend novo); "3.0" é o backend antigo (o site tem que seguir funcionando).
+def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem_codigo=0, ia=True):
+    """Simula o Apps Script. versao="3.2" (padrão) liga também apagar/renomear categoria; "3.1" tem pedidos/métricas/CSV/integrações mas não mexe em categoria; "3.0" é o backend antigo (o site tem que seguir funcionando).
     Devolve um dicionário de estado (pedidos, integrações, produtos...) para os testes conferirem."""
     P=prods()
     for i in range(sem_codigo):
         q=dict(P[i]); q["ID"]=str(1790000009000+i); q["Nome"]="Peça antiga %d"%(i+1); q["Codigo"]=""; P.append(q)
     novo = versao != "3.0"
-    st={"produtos":P,"pedidos":[],"falhas":{},"integ":{"pixelId":pixel,"capi":False,"teste":"","graph":"v23.0","sinonimos":"","segmentos":"Clientes Infantil"},"push":[],"importados":[],"seq":0,"ia":ia}
-    FLAGS={"ok":True,"versao":"catalogo-3.1","acessos":True,"pinAtivo":False,"pedidos":True,"config":True,"metricas":True,"importacao":True,"feed":True,"integracoes":True,"codigos":True,"pushHistorico":True,"loteCategoria":True} if novo else {"ok":True,"versao":"catalogo-3.0","acessos":True,"pinAtivo":False}
+    st={"produtos":P,"pedidos":[],"falhas":{},"integ":{"pixelId":pixel,"capi":False,"teste":"","graph":"v23.0","sinonimos":"","segmentos":"Clientes Infantil"},"push":[],"importados":[],"seq":0,"ia":ia,"categorias":list(CATS)}
+    cat_gestao = versao >= "3.2"
+    FLAGS={"ok":True,"versao":"catalogo-"+versao,"acessos":True,"pinAtivo":False,"pedidos":True,"config":True,"metricas":True,"importacao":True,"feed":True,"integracoes":True,"codigos":True,"pushHistorico":True,"loteCategoria":True} if novo else {"ok":True,"versao":"catalogo-3.0","acessos":True,"pinAtivo":False}
+    if cat_gestao: FLAGS["categoriasGestao"]=True
+    def limpa(n): return " ".join(str(n or "").replace(","," ").split())[:60].strip()
+    def norm(n):
+        import unicodedata
+        return "".join(c for c in unicodedata.normalize("NFD",str(n)) if unicodedata.category(c)!="Mn").lower().strip()
+    def cats_da(x): return [c.strip() for c in str(x.get("Categoria","")).split(",") if c.strip()]
     def cliente(ped):
         return {"codigo":ped["codigo"],"data":ped["data"],"atualizado":ped["atualizado"],"status":ped["status"],"entrega":ped["entrega"],"total":ped["total"],"itens":[{"nome":i["nome"],"codigo":i["codigo"]} for i in ped["itens"]]}
     def post(b):
@@ -28,6 +35,34 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.1", pixel="", sem
         if a in("sessao","login"): return {"ok":True,"sessao":"tk2.x.y","usuario":{"whatsapp":"88999999999","name":"Ana Lojista","nome":"Ana Lojista","level":3,"permissoes":perms,"perfil":"Admin"}}
         if a=="curriculos_listar": return {"ok":True,"curriculos":[],"status":["Novo","Entrevista"],"motivos":[]}
         if a=="create": return {"ok":True,"id":"999","codigo":"TK-0099"}
+        if a=="addCategoria":
+            n=limpa(b.get("nome"))
+            if not n: return {"ok":False,"erro":"Escreva o nome da categoria."}
+            ja=[c for c in st["categorias"] if norm(c)==norm(n)]
+            if ja: return {"ok":True,"nome":ja[0],"jaExistia":True}
+            st["categorias"].append(n); return {"ok":True,"nome":n}
+        if cat_gestao and a in("excluirCategoria","renomearCategoria"):
+            if "gerir_acessos" not in perms: return {"ok":False,"semPermissao":True,"erro":"Você não tem permissão para essa ação."}
+            alvo=[c for c in st["categorias"] if norm(c)==norm(b.get("nome"))]
+            if not alvo: return {"ok":False,"naoExiste":True,"erro":"Essa categoria não existe mais."}
+            alvo=alvo[0]; pecas=[x for x in P if any(norm(c)==norm(alvo) for c in cats_da(x))]
+            if a=="excluirCategoria":
+                if pecas and not b.get("confirmar"): return {"ok":False,"emUso":len(pecas),"erro":"Essa categoria está em %d peça(s)."%len(pecas)}
+                for x in pecas: x["Categoria"]=", ".join(c for c in cats_da(x) if norm(c)!=norm(alvo))
+                st["categorias"]=[c for c in st["categorias"] if c!=alvo]; return {"ok":True,"pecas":len(pecas)}
+            novo_nome=limpa(b.get("novoNome"))
+            if not novo_nome: return {"ok":False,"erro":"Escreva o novo nome."}
+            existe=[c for c in st["categorias"] if norm(c)==norm(novo_nome) and c!=alvo]
+            final=existe[0] if existe else novo_nome
+            for x in pecas:
+                novas=[]
+                for c in cats_da(x):
+                    c2=final if norm(c)==norm(alvo) else c
+                    if c2 not in novas: novas.append(c2)
+                x["Categoria"]=", ".join(novas)
+            st["categorias"]=[c for c in st["categorias"] if c!=alvo]
+            if not existe: st["categorias"].append(final)
+            return {"ok":True,"nome":final,"juntou":bool(existe),"pecas":len(pecas)}
         if novo and a=="criarPedido":
             ids=[str(i.get("id")) for i in b.get("itens",[])]
             itens=[x for x in P if str(x["ID"]) in ids and x["Status"]=="Ativo" and x["Estoque"]!=0]
@@ -126,7 +161,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.1", pixel="", sem
             if "action=versao" in u: return route.fulfill(json=FLAGS)
             if "action=config" in u: return route.fulfill(json={"ok":True,"config":{"pixelId":st["integ"]["pixelId"],"sinonimos":[x for x in st["integ"]["sinonimos"].split("\n") if "=" in x]}})
             if "action=list" in u: return route.fulfill(json={"ok":True,"produtos":P if "todos=true" in u else [x for x in P if x["Status"]=="Ativo"]})
-            if "action=categorias" in u: return route.fulfill(json={"ok":True,"categorias":CATS})
+            if "action=categorias" in u: return route.fulfill(json={"ok":True,"categorias":list(st["categorias"])})
             if "action=generos" in u: return route.fulfill(json={"ok":True,"generos":GENS})
             if "action=stats" in u: return route.fulfill(json={"ok":True,"totalVisualizacoes":120,"totalWhatsapp":18,"produtoMaisVistoId":"1790000000003","produtoMaisVistoCodigo":"TK-0003","produtoMaisVistoViews":40})
             if "manuais_lista" in u: return route.fulfill(json={"ok":True,"manuais":[]})
