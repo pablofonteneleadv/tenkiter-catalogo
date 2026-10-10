@@ -570,7 +570,7 @@
       return `
         <div class="card" data-id="${escaparHtml(p.ID)}">
           <div class="img-wrap">
-            <img src="${escaparHtml(p.Foto_URL)}" alt="${escaparHtml(p.Nome)}" loading="lazy">
+            <img src="${escaparHtml(fotoMini(p.Foto_URL, 480))}" alt="${escaparHtml(p.Nome)}" loading="lazy" decoding="async">
             ${esgotado ? '<span class="selo-card esgotado">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade">NOVIDADE</span>' : '')}
             <button type="button" class="btn-favorito-card" data-fav-id="${escaparHtml(p.ID)}" title="Favoritar">${favoritado ? '❤️' : '🤍'}</button>
           </div>
@@ -865,7 +865,7 @@
         </div>
         ${itens.map(p => `
           <div class="item-sacola">
-            <img src="${escaparHtml(p.Foto_URL)}" alt="${escaparHtml(p.Nome)}">
+            <img src="${escaparHtml(fotoMini(p.Foto_URL, 160))}" alt="${escaparHtml(p.Nome)}" loading="lazy">
             <div class="info">
               <div class="nome">${escaparHtml(p.Nome)}</div>
               <div class="preco">${formatarReal(Number(p.Preco) * (1 - DESCONTO_AVISTA))} à vista</div>

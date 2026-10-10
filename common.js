@@ -27,6 +27,16 @@ const WHATSAPP_NUMERO = '5588993223998';
 // (Extensões > Propriedades do Script > ONESIGNAL_REST_API_KEY).
 const ONESIGNAL_APP_ID = '535f6b0d-c866-43c2-b241-43bd7ab62fae';
 
+/** Miniatura de uma foto (v3.1): mesma foto, mas já redimensionada no servidor de imagens -- 3 a 4 vezes menos bytes na lista.
+ *  Só mexe em endereços que sabemos redimensionar (Google lh3 "/d/<id>" e Cloudinary "/upload/"); qualquer outro volta igual. */
+function fotoMini(url, largura) {
+  const u = String(url || '');
+  const w = largura || 400;
+  if (/^https:\/\/lh3\.googleusercontent\.com\/d\/[\w-]+$/.test(u)) return u + '=w' + w;
+  if (/^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/(?!w_|c_|f_|q_)/.test(u)) return u.replace('/upload/', '/upload/w_' + w + ',c_limit,f_auto,q_auto/');
+  return u;
+}
+
 /** Link público da peça no SITE (nunca a API_URL). Com código: SITE_URL + 'p/<código>' -> Render faz Rewrite para o Worker
  *  da Cloudflare (og-worker/), que devolve as meta og:* (foto/nome/preço) e leva a pessoa a ?c=<código>. Sem código: ?id=. */
 function linkProduto(p) {
