@@ -1,4 +1,13 @@
-// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v4.5
+// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v4.6
+//
+// NOVIDADE DA v4.6:
+//  - Nova ação curriculos_foto: o painel de Currículos e o de Acessos já chamavam essa ação quando a foto
+//    do Drive não abre pelo link público, mas ela NÃO existia (a foto ficava escondida). Agora o script lê
+//    o arquivo no Drive e devolve a imagem (data URL). Exige a permissão dados_pessoais e só lê a foto de
+//    perfil/corpo já gravada na planilha daquela pessoa (nunca um id de arquivo vindo do navegador).
+//  - acCurriculoStatusMapa_ passa a usar cache de 60 s (CacheService): o painel de Acessos lia duas
+//    planilhas inteiras a cada abertura. O cache é limpo sempre que uma linha de currículo é gravada
+//    (cvGravarLinha_), então a defasagem real é só para quem mexe direto na planilha.
 //
 // NOVIDADE DA v4.5 -- conserta a raiz do bug "aluno leu tudo mas o painel mostra 0 lidos":
 //  - lerManuais_ agora SEMPRE recalcula id+hash de cada capítulo (manAtribuirIdsEHashes_),
@@ -970,7 +979,7 @@ function doGet(e) {
   }
 
   if (action === 'versao') {
-    return jsonOut_({ ok: true, versao: '4.5', acessos: true, curriculos: true, listaFechada: listaFechada_() });
+    return jsonOut_({ ok: true, versao: '4.6', acessos: true, curriculos: true, listaFechada: listaFechada_() });
   }
 
   // padrão: lista de funcionários (login e níveis) -- formato ANTIGO, só existe
@@ -1013,6 +1022,7 @@ function doPost(e) {
       case 'curriculos_antigos':       return cvAdminLegadoListarAcao_(data);
       case 'curriculos_antigos_nota':  return cvAdminLegadoNotaAcao_(data);
       case 'curriculos_treinamento':   return cvTreinamentoPessoaAcao_(data);
+      case 'curriculos_foto':          return cvFotoAcao_(data);
       case 'manual_marcar_lido':       return manMarcarLidoAcao_(data);
       case 'manual_sincronizar_lote':  return manSincronizarLoteAcao_(data);
       case 'acessos_listar':           return acessosListar_(data);
@@ -1823,8 +1833,12 @@ function acCadastroISO_(v) {
   if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
   return '';
 }
-/** Situação do currículo (novo sistema, por WhatsApp) e se existe resposta na planilha antiga. */
+/** Situação do currículo (novo sistema, por WhatsApp) e se existe resposta na planilha antiga. Cache de 60 s. */
 function acCurriculoStatusMapa_() {
+  try {
+    var emCache = CacheService.getScriptCache().get('cv_mapa');
+    if (emCache) return JSON.parse(emCache);
+  } catch (e) {}
   var novos = {}, legado = {}, etapas = {};
   try {
     cvLerNovos_().rows.forEach(function (r) {
@@ -1840,8 +1854,34 @@ function acCurriculoStatusMapa_() {
       [r.tel, r.tel2, r.tel3].forEach(function (t) { var w8 = cvW8_(t); if (w8) legado[w8] = true; });
     });
   } catch (e) {}
-  return { novos: novos, legado: legado, etapas: etapas };
+  var mapa = { novos: novos, legado: legado, etapas: etapas };
+  try { CacheService.getScriptCache().put('cv_mapa', JSON.stringify(mapa), 60); } catch (e) {} // passou de 100 KB? só não guarda
+  return mapa;
 }
+/**
+ * v4.6 -- Plano B da foto no painel de Currículos/Acessos: quando a imagem do Drive não abre pelos links
+ * de navegador, o script lê o arquivo e devolve em base64. Só lê a foto JÁ gravada na planilha da pessoa
+ * (fotoperfilurl / fotocorpourl) -- o id do arquivo nunca vem do navegador. Exige dados_pessoais.
+ */
+function cvFotoAcao_(data) {
+  var v = exigirPerm_(data, 'dados_pessoais');
+  if (!v.ok) return negarAcesso_(v);
+  var alvo = normalizarWhats_(data.alvo);
+  if (!alvo) return jsonOut_({ ok: false, erro: 'Pessoa inválida.' });
+  var campo = data.tipo === 'corpo' ? 'fotocorpourl' : 'fotoperfilurl';
+  var url = '';
+  acLinhasDoWhats_(alvo).forEach(function (l) { if (!url && l[campo]) url = String(l[campo]); });
+  if (!url) return jsonOut_({ ok: false, erro: 'Sem foto cadastrada.' });
+  var m = url.match(/googleusercontent\.com\/d\/([\w-]+)/) || url.match(/drive\.google\.com\/(?:uc\?(?:[^#]*&)?id=|file\/d\/|open\?id=|thumbnail\?(?:[^#]*&)?id=)([\w-]+)/);
+  if (!m) return jsonOut_({ ok: false, erro: 'Foto fora do Drive.' });
+  try {
+    var blob = DriveApp.getFileById(m[1]).getBlob();
+    return jsonOut_({ ok: true, dataUrl: 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes()) });
+  } catch (err) {
+    return jsonOut_({ ok: false, erro: 'Não foi possível ler a foto.' });
+  }
+}
+
 function acessosListar_(data) {
   var _ac = exigirPerm_(data, 'gerir_acessos');
   if (!_ac.ok) return negarAcesso_(_ac);
@@ -2464,6 +2504,7 @@ function cvAcharNovo_(rows, campo, valor) {
   return ach;
 }
 function cvGravarLinha_(aba, headers, numLinha, campos) {
+  try { CacheService.getScriptCache().remove('cv_mapa'); } catch (e) {} // o painel de Acessos nunca mostra currículo velho depois de uma gravação
   var atual = numLinha ? aba.getRange(numLinha, 1, 1, headers.length).getValues()[0] : headers.map(function () { return ''; });
   var novo = headers.map(function (h, i) { return campos[h] !== undefined ? campos[h] : (atual[i] == null ? '' : atual[i]); });
   if (numLinha) aba.getRange(numLinha, 1, 1, headers.length).setValues([novo]);

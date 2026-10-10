@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -85,6 +85,14 @@
   @media (min-width: 640px) { .grid { grid-template-columns: repeat(3, 1fr); } }
   @media (min-width: 900px) { .grid { grid-template-columns: repeat(4, 1fr); } }
 
+  /* v3.0: foco visível por teclado (acessibilidade) e cartões-esqueleto enquanto o catálogo carrega pela 1ª vez */
+  :focus-visible { outline: 2px solid var(--laranja); outline-offset: 2px; }
+  .card.esqueleto { cursor: default; pointer-events: none; }
+  .card.esqueleto .sk { background: linear-gradient(90deg, #ececec 25%, #f6f6f6 50%, #ececec 75%); background-size: 200% 100%; animation: sk-brilho 1.2s linear infinite; border-radius: 6px; }
+  .card.esqueleto .sk-foto { width: 100%; aspect-ratio: 4 / 5; border-radius: 0; }
+  .card.esqueleto .sk-linha { height: 10px; margin-top: 8px; }
+  @keyframes sk-brilho { to { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .card.esqueleto .sk { animation: none; } }
   .card { background: var(--branco); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.06); cursor: pointer; position: relative; transition: transform 0.15s; }
   .card:active { transform: scale(0.98); }
   .card .img-wrap { position: relative; }
@@ -372,6 +380,11 @@
       abrirProdutoDaURL();
     } else {
       mostrarToastCarregando('Carregando produtos...');
+      // esqueleto: cartões cinza no formato do real (em vez de tela vazia) até a lista chegar
+      const grade = document.getElementById('grid');
+      grade.innerHTML = Array.from({ length: 8 }, () =>
+        '<div class="card esqueleto" aria-hidden="true"><div class="sk sk-foto"></div><div class="card-info">' +
+        '<div class="sk sk-linha" style="width:35%"></div><div class="sk sk-linha"></div><div class="sk sk-linha" style="width:60%"></div></div></div>').join('');
     }
 
     try {
@@ -382,6 +395,7 @@
       if (!temCache) abrirProdutoDaURL();
     } catch (e) {
       if (!temCache) {
+        document.getElementById('grid').innerHTML = ''; // some o esqueleto
         document.getElementById('contagem').textContent = '';
         const vazio = document.getElementById('vazio');
         vazio.textContent = 'Não foi possível carregar o catálogo agora. Verifique sua internet e tente novamente em instantes.';

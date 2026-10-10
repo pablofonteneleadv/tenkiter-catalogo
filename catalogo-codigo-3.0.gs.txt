@@ -1,4 +1,12 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v2.7
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.0
+//
+// NOVIDADE v3.0 -- WhatsApp normalizado IGUAL ao script de treinamento (acWhats_):
+//  - número antigo de 10 dígitos (sem o "9") agora vira ddd+9+8 dígitos (11), como já era no portal.
+//    Antes, a mesma pessoa digitando o número sem o 9 era achada pelo portal mas NÃO pelo catálogo, e
+//    o token de sessão emitido por um script não valia no outro. Os dois lados da comparação passam
+//    pela mesma função, então planilhas com número antigo continuam sendo achadas (não precisa migrar).
+//    Efeito colateral único: quem tem número de 10 dígitos na planilha e estava logado precisa entrar
+//    de novo uma vez (o token antigo carregava o número de 10 dígitos).
 //
 // NOVIDADE v2.7 -- corrige "fica só em Analisando": o gemini-3.8-flash estava sobrecarregado (~70 s
 //  até dar erro 503). Padrão agora gemini-3.5-flash; se um modelo falhar o sistema tenta outros
@@ -82,7 +90,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-2.7';
+const VERSAO_CATALOGO = 'catalogo-3.0';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -655,6 +663,7 @@ function acNorm_(s) {
 function acWhats_(w) {
   var d = String(w || '').replace(/\D/g, '');
   if (d.length >= 12 && d.slice(0, 2) === '55') d = d.slice(2);
+  if (d.length === 10) d = d.slice(0, 2) + '9' + d.slice(2); // igual ao treinamento: sempre ddd+9+8 dígitos
   return d;
 }
 /** Texto vindo de fora nunca vira fórmula na planilha: se começa com = + - @ ganha um apóstrofo (o Sheets guarda como texto puro). */
