@@ -52,12 +52,14 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
 
 ## Link e miniatura do produto
 
-- Link público da peça: **sempre** `linkProduto(p)` (common.js) = `SITE_URL + '?c=<código>'`. Nunca montar a partir de
+- Link público da peça: **sempre** `linkProduto(p)` (common.js) = `SITE_URL + 'p/<código>'`. Nunca montar a partir de
   `API_URL` — o `?action=share` do Apps Script devolve HTML dentro de um iframe do Google, o WhatsApp não lê as meta
   tags `og:*` dali e a mensagem mostrava o endereço do script sem miniatura (bug real, não repetir).
-- Miniatura **por produto** exige HTML com `og:*` no servidor: `og-service/` (Node sem dependências, ainda NÃO implantado;
-  precisa de um Web Service no Render + regra Rewrite `/p/*`). Enquanto isso, `index.html` tem `og:image` genérico
-  (`og-banner.jpg`).
+- Miniatura **por produto**: Cloudflare Worker `tenkiter-og` (código em `og-worker/worker.js`, endereço
+  `https://tenkiter-og.distkrpconfeccoes.workers.dev`) devolve HTML com `og:*` em `/p/<código>` e redireciona a pessoa para
+  `?c=<código>`. No Render existe a regra Rewrite `/p/*` -> `<worker>/p/*` (confirmado: faz proxy, não redireciona). Se mudar
+  o código do Worker, publicar de novo na Cloudflare (painel ou API). `og-service/` (Node) é alternativa antiga, não usada.
+  `index.html` mantém `og:image` genérico (`og-banner.jpg`) para o link da loja em si.
 
 ## Instagram / redes sociais
 

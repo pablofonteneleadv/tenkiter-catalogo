@@ -27,11 +27,11 @@ const WHATSAPP_NUMERO = '5588993223998';
 // (Extensões > Propriedades do Script > ONESIGNAL_REST_API_KEY).
 const ONESIGNAL_APP_ID = '535f6b0d-c866-43c2-b241-43bd7ab62fae';
 
-/** Link público da peça no SITE (nunca a API_URL). ?c=<código> é curto; sem código usa ?id=. Um lugar só: se um dia
- *  existir uma rota com miniatura por produto, é só trocar aqui. */
+/** Link público da peça no SITE (nunca a API_URL). Com código: SITE_URL + 'p/<código>' -> Render faz Rewrite para o Worker
+ *  da Cloudflare (og-worker/), que devolve as meta og:* (foto/nome/preço) e leva a pessoa a ?c=<código>. Sem código: ?id=. */
 function linkProduto(p) {
   const cod = p && (p.Codigo || p.codigo);
-  return SITE_URL + (cod ? ('?c=' + encodeURIComponent(cod)) : ('?id=' + encodeURIComponent(p.ID != null ? p.ID : p.id)));
+  return cod ? (SITE_URL + 'p/' + encodeURIComponent(cod)) : (SITE_URL + '?id=' + encodeURIComponent(p.ID != null ? p.ID : p.id));
 }
 
 function formatarReal(v) {
