@@ -610,6 +610,7 @@
       </details>
 
       <div class="cad-falta" id="cad-falta" role="status" aria-live="polite"></div>
+      <div class="aviso-gestao" id="aviso-lote" role="status" hidden></div>
       <button type="submit" class="btn-primario" id="btn-salvar" style="margin-top:10px;">Cadastrar peça</button>
       <button type="button" class="btn-cancelar-duplicar" id="btn-cancelar-duplicar">Cancelar Duplicação / Nova peça</button>
       <div id="status" style="text-align:center;font-size:0.85rem;margin-top:8px;"></div>
@@ -1701,6 +1702,7 @@
   function cancelarDuplicacao() {
     modoFormulario = 'novo';
     window.__rascunhoAtual = null;   // v3.6: rascunho do Instagram que estava sendo aceito
+    window.__loteSeparado = null; window.__loteBase = null; { const al = document.getElementById('aviso-lote'); if (al) al.hidden = true; }   // v3.7: cadastro separado de vários posts
     document.getElementById('form-produto').reset();
     document.getElementById('produto-id').value = '';
     selecionadasCategorias.clear(); selecionadosGeneros.clear();
@@ -1739,6 +1741,26 @@
     atualizarFaltas_();
   };
 
+  /* v3.7: "Cadastrar separado" — vários posts do Instagram viram vários produtos IGUAIS nas informações (nome, categoria, gênero, preço, cores…),
+     cada um com as fotos/vídeo do SEU post. O formulário é preenchido uma vez (com o 1º post); ao cadastrar, os outros entram na mesma fila de envios. */
+  window.tkAceitarSeparado = function (rs) {
+    if (!rs || rs.length < 2) return;
+    window.tkAceitarRascunho(rs[0]);
+    window.__loteSeparado = rs.slice(1); window.__loteBase = rs[0].id;
+    tituloForm_('Cadastro separado: ' + rs.length + ' produtos');
+    document.getElementById('btn-salvar').textContent = 'Cadastrar os ' + rs.length + ' produtos';
+    const al = document.getElementById('aviso-lote');
+    al.hidden = false; al.textContent = '🧩 Cadastro separado: preencha UMA vez. Ao cadastrar, este e mais ' + (rs.length - 1) + ' post(s) viram ' + rs.length + ' produtos diferentes, todos com estas mesmas informações; cada um fica com as fotos/vídeo do seu post.';
+  };
+  function dadosDoPostSeparado_(base, r2) {
+    const fotos = (r2.midias || []).filter(m => m.tipo === 'foto'), video = (r2.midias || []).find(m => m.tipo === 'video');
+    const capa = fotos.find(m => m.capa) || fotos[0] || null;
+    const resto = fotos.filter(m => m !== capa).map(m => m.url).slice(0, MAX_GALERIA - 1);   // no máximo 8 fotos por produto
+    const d = Object.assign({}, base, { fotoUrlExistente: capa ? capa.url : '', fotosGaleriaExistentes: resto.join(',') });
+    delete d.videoUrlExistente; if (video) d.videoUrlExistente = video.url;
+    d.notificarPush = false;   // um aviso só (o do primeiro), não um por produto
+    return d;
+  }
   // Salvar Produto (criar, duplicar ou editar): vai para uma fila e sobe em segundo plano.
   // O formulário libera na hora para cadastrar a próxima peça; os envios saem um de cada vez.
   const envios = []; let processandoEnvios = false; let seqEnvios = 0;
@@ -2194,6 +2216,12 @@
       capaNovaB64: capaNovaB64, galeriaNovaB64: galeriaNovaB64,
       dados: dados, estado: 'fila', msg: '', rascunhoId: window.__rascunhoAtual || null
     });
+    if (!ehEdicao && Array.isArray(window.__loteSeparado) && window.__loteSeparado.length && window.__rascunhoAtual && window.__rascunhoAtual === window.__loteBase) {
+      window.__loteSeparado.forEach((r2) => {
+        const d2 = dadosDoPostSeparado_(dados, r2);
+        envios.push({ chave: ++seqEnvios, titulo: d2.nome || 'Peça', ehEdicao: false, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: d2, estado: 'fila', msg: '', rascunhoId: r2.id });
+      });
+    }
     cancelarDuplicacao(); // libera o formulário já
     document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima peça.';
     document.getElementById('card-form').scrollIntoView({ behavior: 'smooth', block: 'start' });

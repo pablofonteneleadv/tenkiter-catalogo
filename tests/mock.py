@@ -455,6 +455,13 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     if not pa: return route.fulfill(status=400,json={"ok":False,"erro":"Não deu para juntar."})
                     pa["midias"]+=r["midias"]; r["midias"]=[]; r["status"]="descartado"; pa.pop("ia",None); pa["iaStatus"]=""
                     g.setdefault("juntadas",[]).append([r["id"],pa["id"]])
+                elif a=="removerMidia":
+                    mm=next((x for x in r["midias"] if x["id"]==body.get("midia")),None)
+                    if not mm: return route.fulfill(status=400,json={"ok":False,"erro":"Mídia não encontrada."})
+                    r["midias"]=[x for x in r["midias"] if x["id"]!=mm["id"]]
+                    novo_id=max(x["id"] for x in g["rasc"])+1
+                    g["rasc"].append({"id":novo_id,"grupo":"sem_id","status":"pendente","origem":"feed","legenda":"","permalink":"","publicadoEm":"2026-10-01T00:00:00Z","precoSug":"","tamanhosSug":"","midias":[mm],"iaStatus":""})
+                    g.setdefault("removidas",[]).append([r["id"],mm["id"]])
                 elif a=="lerIA": r["iaStatus"]="ok"; r["ia"]={"produto":True,"nome":"Lido de novo","generos":[],"categorias":[],"cores":[],"tamanhos":[],"descricao":""}
                 elif a=="aceitado": r["status"]="aceito"; r["produtoId"]=body.get("produtoId","")
                 elif a=="capa":

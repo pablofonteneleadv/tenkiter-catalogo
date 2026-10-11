@@ -35,6 +35,14 @@ async function iniciar(env) {
   if (pronto) return;
   await env.DB.batch(DDL.map((s) => env.DB.prepare(s)));
   for (const col of COLUNAS_NOVAS) { try { await env.DB.prepare('ALTER TABLE rascunho ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  try {   // v3.7: preço sempre calculado (o escrito é o à vista). Corrige os rascunhos antigos cujo preço da legenda foi gravado como se fosse o cheio.
+    if (!(await cfgGet(env, 'mig_preco_v2'))) {
+      const velhos = (await env.DB.prepare("SELECT id, preco_sug FROM rascunho WHERE COALESCE(preco_foto,'')='' AND COALESCE(preco_sug,'')!='' AND status IN ('pendente','descartado')").all()).results || [];
+      const ups = velhos.map((x) => { const p = precoDasFotos(x.preco_sug); return p ? env.DB.prepare('UPDATE rascunho SET preco_sug=?, preco_foto=? WHERE id=?').bind(p.cheio, p.avista, x.id) : null; }).filter(Boolean);
+      for (let k = 0; k < ups.length; k += 50) await env.DB.batch(ups.slice(k, k + 50));
+      await cfgSet(env, 'mig_preco_v2', '1');
+    }
+  } catch (e) { /* tenta de novo na próxima vez */ }
   pronto = true;
 }
 
@@ -179,8 +187,9 @@ export async function ciclo(env, origem, opcoes) {
         }
         const legenda = String(m.caption || '').slice(0, 2200), cod = codigoDaLegenda(legenda);
         const grupo = it.story ? 'sem_id' : (cod ? 'duplicado' : 'pendente');
-        const rr = await env.DB.prepare('INSERT INTO rascunho (grupo, status, origem, legenda, permalink, publicado_em, preco_sug, tamanhos_sug, codigo_dup, criado_em, atualizado_em) VALUES (?, \'pendente\', ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(grupo, origemDe(m, it.story), legenda, m.permalink || '', m.timestamp || inicio, precoDaLegenda(legenda), tamanhosDaLegenda(legenda), cod, inicio, inicio).run();
+        const pl = precoDasFotos(precoDaLegenda(legenda));   // o preço escrito na legenda também é o À VISTA: sempre passa pelo cálculo
+        const rr = await env.DB.prepare('INSERT INTO rascunho (grupo, status, origem, legenda, permalink, publicado_em, preco_sug, preco_foto, tamanhos_sug, codigo_dup, criado_em, atualizado_em) VALUES (?, \'pendente\', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(grupo, origemDe(m, it.story), legenda, m.permalink || '', m.timestamp || inicio, pl ? pl.cheio : '', pl ? pl.avista : '', tamanhosDaLegenda(legenda), cod, inicio, inicio).run();
         const rid = rr.meta.last_row_id;
         const exp = it.story ? new Date(new Date(m.timestamp || Date.now()).getTime() + 86400000).toISOString() : '';
         const lote = [env.DB.prepare('INSERT OR IGNORE INTO ig_midia (id, tipo, produto_tipo, legenda, permalink, publicado_em, pai_id, chave, chave_mini, bytes, status, expirou_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'em_rascunho\', ?, ?)')
@@ -242,16 +251,20 @@ const MODELOS_IA = ['gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 
 const MAX_FOTOS_IA = 4, MAX_BYTES_FOTO_IA = 3 * 1024 * 1024, DESCONTO_AVISTA = 0.10;
 const COND_IA_PENDENTE = "status='pendente' AND grupo != 'nao_produto' AND (ia_status IN ('', 'pendente') OR (ia_status='erro' AND ia_tent < 2) OR (ia_status='lendo' AND ia_em < ?))";
 
-/** O preço escrito nas fotos já é o À VISTA (com 10% de desconto). ",99" no fim = arredonda para cima. O catálogo guarda o preço CHEIO
- *  e mostra o à vista (cheio × 0,90) — então: cheio = à vista ÷ 0,90, para cima no centavo (70,00 → 77,78 → à vista 70,00). */
+/** O preço escrito (na foto OU na legenda) é SEMPRE o À VISTA (com 10% de desconto) — o cálculo vale para qualquer origem. ",99" no fim = arredonda para cima
+ *  (69,99 → 70,00). O catálogo guarda o preço CHEIO e o site mostra à vista = cheio × 0,90 arredondado em centavos. Então o cheio é o MENOR valor em centavos
+ *  cujo à vista, formatado do mesmo jeito que o site formata, dá EXATAMENTE o preço escrito (70,00 → 77,78 → à vista 70,00; testado de R$ 1 a R$ 3.000). */
 export function precoDasFotos(v) {
   if (/^\s*-/.test(String(v == null ? '' : v))) return null;
   let n = Number(String(v == null ? '' : v).replace(',', '.').replace(/[^\d.]/g, ''));
   if (!isFinite(n) || n <= 0 || n > 100000) return null;
   n = Math.round(n * 100) / 100;
   if (Math.round((n - Math.floor(n)) * 100) === 99) n = Math.floor(n) + 1;
-  const cheio = Math.ceil(n / (1 - DESCONTO_AVISTA) * 100 - 1e-6) / 100;
-  return { avista: n.toFixed(2), cheio: cheio.toFixed(2) };
+  const alvo = n.toFixed(2);
+  const mostra = (c) => (c / 100 * (1 - DESCONTO_AVISTA)).toFixed(2);   // igual ao site: Number(Preco) * (1 - DESCONTO_AVISTA)
+  let c = Math.ceil(n / (1 - DESCONTO_AVISTA) * 100) - 3;
+  for (let i = 0; i < 12 && c > 0; i++, c++) if (mostra(c) === alvo) return { avista: alvo, cheio: (c / 100).toFixed(2) };
+  return { avista: alvo, cheio: (Math.ceil(n / (1 - DESCONTO_AVISTA) * 100 - 1e-6) / 100).toFixed(2) };
 }
 function b64(buf) { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
 async function listasDaLoja(env) {
@@ -314,7 +327,7 @@ export async function analisarRascunho(env, id) {
       '{"produto": true, "nome": "", "preco": null, "generos": [], "categorias": [], "cores": [], "tamanhos": [], "descricao": ""}\n' +
       'Regras:\n- produto: false se NÃO for uma peça à venda (aviso, promoção geral, frase motivacional, bastidores).\n' +
       '- nome: curto e claro, como "Vestido Alfaiataria Premium Vermelho" (máx. 60 caracteres); use o nome escrito na imagem quando houver.\n' +
-      '- preco: SOMENTE se houver um valor em reais ESCRITO nas imagens ou na legenda (número, ex.: 69.99). Se não houver, null. NUNCA invente.\n' +
+      '- preco: SOMENTE se houver um valor em reais ESCRITO nas imagens ou na legenda (número, ex.: 69.99), copiado EXATAMENTE como está escrito (não calcule nada). Se houver dois valores (ex.: um riscado e outro promocional), devolva o MENOR (o que vale). Se não houver, null. NUNCA invente.\n' +
       '- generos: escolha SOMENTE entre ' + JSON.stringify(listas.generos) + ' (vazio se nenhum servir).\n' +
       '- categorias: escolha SOMENTE entre ' + JSON.stringify(listas.categorias) + ' (vazio se nenhuma servir).\n' +
       '- cores: cores que você VÊ na peça (em português). Se o post mostra várias cores da mesma peça, liste todas.\n' +
@@ -328,8 +341,8 @@ export async function analisarRascunho(env, id) {
     const ia = { produto: j.produto !== false, nome: String(j.nome || '').replace(/\s+/g, ' ').trim().slice(0, 60), generos: soValidos(j.generos, listas.generos), categorias: soValidos(j.categorias, listas.categorias),
       cores: (Array.isArray(j.cores) ? j.cores : []).map((x) => String(x).trim().slice(0, 30)).filter(Boolean).slice(0, 8), tamanhos: (Array.isArray(j.tamanhos) ? j.tamanhos : []).map((x) => String(x).trim().toUpperCase().slice(0, 6)).filter(Boolean).slice(0, 10),
       descricao: String(j.descricao || '').replace(/\s+/g, ' ').trim().slice(0, 400) };
-    await env.DB.prepare("UPDATE rascunho SET ia_status='ok', ia_json=?, ia_tent=0, preco_foto=?, preco_sug=CASE WHEN ? != '' THEN ? ELSE preco_sug END, tamanhos_sug=CASE WHEN tamanhos_sug='' AND ? != '' THEN ? ELSE tamanhos_sug END, atualizado_em=? WHERE id=?")
-      .bind(JSON.stringify(ia), preco ? preco.avista : '', preco ? preco.cheio : '', preco ? preco.cheio : '', ia.tamanhos.join(', '), ia.tamanhos.join(', '), agora(), id).run();
+    await env.DB.prepare("UPDATE rascunho SET ia_status='ok', ia_json=?, ia_tent=0, preco_foto=CASE WHEN ? != '' THEN ? ELSE preco_foto END, preco_sug=CASE WHEN ? != '' THEN ? ELSE preco_sug END, tamanhos_sug=CASE WHEN tamanhos_sug='' AND ? != '' THEN ? ELSE tamanhos_sug END, atualizado_em=? WHERE id=?")
+      .bind(JSON.stringify(ia), preco ? preco.avista : '', preco ? preco.avista : '', preco ? preco.cheio : '', preco ? preco.cheio : '', ia.tamanhos.join(', '), ia.tamanhos.join(', '), agora(), id).run();
     return { ok: true };
   } catch (e) { return await falhar('Falha ao ler as fotos.', true); }
 }
@@ -444,7 +457,7 @@ async function acao(env, b) {
       let ordem = await proximaOrdem(env, para.id);
       await env.DB.batch(ms.map((x) => env.DB.prepare('INSERT OR REPLACE INTO rascunho_midia (rascunho_id, midia_id, ordem, capa) VALUES (?, ?, ?, 0)').bind(para.id, x.midia_id, ordem++))
         .concat([env.DB.prepare('DELETE FROM rascunho_midia WHERE rascunho_id=?').bind(de.id), env.DB.prepare("UPDATE rascunho SET status='descartado', descartado_em=?, atualizado_em=? WHERE id=?").bind(agora(), agora(), de.id),
-          env.DB.prepare("UPDATE rascunho SET legenda=CASE WHEN legenda='' THEN ? ELSE legenda END, preco_sug=CASE WHEN preco_sug='' THEN ? ELSE preco_sug END, tamanhos_sug=CASE WHEN tamanhos_sug='' THEN ? ELSE tamanhos_sug END, grupo=CASE WHEN grupo='sem_id' THEN 'pendente' ELSE grupo END, ia_status='', ia_tent=0, atualizado_em=? WHERE id=?").bind(de.legenda || '', de.preco_sug || '', de.tamanhos_sug || '', agora(), para.id)]));
+          env.DB.prepare("UPDATE rascunho SET legenda=CASE WHEN legenda='' THEN ? ELSE legenda END, preco_sug=CASE WHEN preco_sug='' THEN ? ELSE preco_sug END, preco_foto=CASE WHEN COALESCE(preco_foto,'')='' THEN ? ELSE preco_foto END, tamanhos_sug=CASE WHEN tamanhos_sug='' THEN ? ELSE tamanhos_sug END, grupo=CASE WHEN grupo='sem_id' THEN 'pendente' ELSE grupo END, ia_status='', ia_tent=0, atualizado_em=? WHERE id=?").bind(de.legenda || '', de.preco_sug || '', de.preco_foto || '', de.tamanhos_sug || '', agora(), para.id)]));
       await garantirCapa(env, para.id); return {};
     }
     case 'lerIA': {                                                  // "ler as fotos de novo" (um rascunho)

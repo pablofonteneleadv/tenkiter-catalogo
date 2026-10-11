@@ -104,14 +104,14 @@ function d1() {
   const porLeg = (txt) => j.rascunhos.find((x) => x.legenda.includes(txt));
   const car = porLeg('Look novo');
   chk('carrossel = 1 rascunho com as 3 mídias, na ordem', car && car.midias.length === 3 && car.midias.map((x) => x.tipo).join() === 'foto,foto,video' && car.midias[0].capa, car);
-  chk('preço e tamanhos sugeridos a partir da legenda', car.precoSug === '44.99' && car.tamanhosSug === 'P, M, G', car);
+  chk('preço da legenda é o À VISTA (44,99 → 45,00): cheio 50,00 no catálogo; tamanhos sugeridos', car.precoSug === '50.00' && car.precoFoto === '45.00' && car.tamanhosSug === 'P, M, G', car);
   chk('mídia copiada para o R2 (URL do nosso Worker, nunca a do Instagram)', car.midias.every((x) => x.url.startsWith('https://tenkiter-midia.fake/m/')) && car.midias.every((x) => objs.has(x.url.replace('https://tenkiter-midia.fake/m/', ''))));
   const vid = car.midias[2], chaveV = vid.url.replace('https://tenkiter-midia.fake/m/', '');
   chk('vídeo tem miniatura com o MESMO nome em .jpg (padrão do Worker de mídia)', vid.mini === vid.url.replace(/\.mp4$/, '.jpg') && objs.has(chaveV.replace(/\.mp4$/, '.jpg')), vid);
   const reel = porLeg('Vestido R$ 129');
-  chk('reel = 1 rascunho de vídeo com preço 129.90', reel && reel.origem === 'reel' && reel.midias.length === 1 && reel.midias[0].tipo === 'video' && reel.precoSug === '129.90');
+  chk('reel = 1 rascunho de vídeo com preço escrito 129,90 = cheio 144,33', reel && reel.origem === 'reel' && reel.midias.length === 1 && reel.midias[0].tipo === 'video' && reel.precoSug === '144.33' && reel.precoFoto === '129.90');
   const foto = porLeg('Conjunto lindo');
-  chk('foto única: origem feed, preço 89.90, tamanhos P, M, G', foto && foto.origem === 'feed' && foto.precoSug === '89.90' && foto.tamanhosSug === 'P, M, G', foto);
+  chk('foto única: origem feed, preço escrito 89,90 = cheio 99,89, tamanhos P, M, G', foto && foto.origem === 'feed' && foto.precoSug === '99.89' && foto.precoFoto === '89.90' && foto.tamanhosSug === 'P, M, G', foto);
   chk('aparece no grupo Pendentes (não no duplicado)', !porLeg('TK-0007'));
   ({ j } = await A('GET', '/rascunhos?grupo=duplicado')); chk('legenda com TK-0007 = provável duplicado, com o código', j.rascunhos.length === 1 && j.rascunhos[0].codigoDup === 'TK-0007', j.rascunhos);
   ({ j } = await A('GET', '/rascunhos?grupo=sem_id')); chk('Story entra em "Sem identificação"', j.rascunhos.length === 1 && j.rascunhos[0].origem === 'story' && j.contagens.sem_id === 1, j.rascunhos);
@@ -248,7 +248,11 @@ function d1() {
     chk('59,99 → 60,00 → 66,67', P(59.99).avista === '60.00' && P(59.99).cheio === '66.67', P(59.99));
     chk('90 → 100,00 (sem sobra de ponto flutuante)', P('90').cheio === '100.00', P('90'));
     chk('89,90 não é ",99": fica 89,90 → 99,89', P('89,90').avista === '89.90' && P('89,90').cheio === '99.89', P('89,90'));
-    chk('R$ 100 → 111,12', P('R$ 100').cheio === '111.12');
+    chk('R$ 100 → 111,11 (à vista mostra 100,00 mesmo)', P('R$ 100').cheio === '111.11');
+    {   // de R$ 1,00 a R$ 3.000,00: o que o site MOSTRA à vista (cheio × 0,90, 2 casas) é exatamente o preço escrito
+      let ruins = 0; for (let c = 100; c <= 300000; c++) { if (c % 100 === 99) continue; const n = (c / 100).toFixed(2), q = P(n), f = (v) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); if (f(Number(q.cheio) * (1 - 0.10)) !== f(n)) ruins++; }
+      chk('296.902 preços de R$ 1 a R$ 3.000: o à vista exibido é SEMPRE igual ao escrito', ruins === 0, ruins);
+    }
     chk('lixo / zero / negativo / enorme = sem preço', P('abc') === null && P(0) === null && P(-5) === null && P(9999999) === null && P(null) === null);
     chk('à vista × 0,90 do preço cheio nunca fica abaixo do que está na foto', [19.99, 29.99, 49.99, 69.99, 89.9, 120, 33.33].every((v) => { const q = P(v); return Math.round(Number(q.cheio) * 0.9 * 100) / 100 >= Number(q.avista) - 0.0001; }));
 

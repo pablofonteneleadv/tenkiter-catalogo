@@ -12,6 +12,8 @@
   const esc = (v) => escaparHtml(v);
   const GRUPOS = [['pendente', 'Pendentes'], ['duplicado', 'Prováveis duplicados'], ['nao_produto', 'Não é produto'], ['descartado', 'Descartados']];
   let grupo = 'pendente', lista = [], mais = false, cont = {}, st = null, editando = null, ocupado = false, desfazer = null, desfazerTimer = null;
+  const LIM_FOTOS = 8, LIM_VIDEOS = 1;   // o cadastro da peça aceita no máximo 8 fotos e 1 vídeo
+  let escolha = null;                    // tela de escolha quando juntar passa dos limites: { ordem, itens, sel:Set }
   const marcados = new Set();            // posts marcados com a caixinha para "Juntar"
   let iaRodando = false, iaTxt = '', tela = '';      // tela: 'lista' | 'editor' | 'conectar' (a leitura por IA só redesenha a lista)
 
@@ -115,6 +117,16 @@
     $('ig-fechar').addEventListener('click', fechar);
     $('ig-corpo').addEventListener('click', clique);
     $('ig-corpo').addEventListener('change', (ev) => {
+      const esco = ev.target.closest && ev.target.closest('.ig-esc');
+      if (esco && escolha) {   // tela "o que fica ao juntar": respeita 8 fotos e 1 vídeo
+        const m = escolha.itens.find((x) => String(x.id) === String(esco.value)); if (!m) return;
+        if (esco.checked) {
+          const c = contagemEscolha(), ehV = m.tipo === 'video';
+          if ((ehV && c.v >= LIM_VIDEOS) || (!ehV && c.f >= LIM_FOTOS)) { esco.checked = false; msg(ehV ? 'Só cabe ' + LIM_VIDEOS + ' vídeo: desmarque o outro antes.' : 'Só cabem ' + LIM_FOTOS + ' fotos: desmarque uma antes.', 'erro'); return; }
+          escolha.sel.add(m.id);
+        } else escolha.sel.delete(m.id);
+        const y = $('ig-corpo').scrollTop; desenharEscolha(); $('ig-corpo').scrollTop = y; return;
+      }
       const c = ev.target.closest && ev.target.closest('.ig-selr'); if (!c) return;
       const id = Number(c.value); if (c.checked) marcados.add(id); else marcados.delete(id);
       const y = $('ig-corpo').scrollTop; desenharLista(); $('ig-corpo').scrollTop = y;
@@ -150,14 +162,14 @@
   }
   function cartao(r) {
     const sug = [];
-    if (r.precoSug) sug.push('💲 R$ ' + String(r.precoSug).replace('.', ','));
+    if (r.precoSug) sug.push(r.precoFoto ? '💲 Escrito R$ ' + String(r.precoFoto).replace('.', ',') + ' à vista → catálogo R$ ' + String(r.precoSug).replace('.', ',') : '💲 Catálogo R$ ' + String(r.precoSug).replace('.', ','));
     if (r.tamanhosSug) sug.push('📏 ' + r.tamanhosSug);
     const dup = r.codigoDup ? '<div class="ig-dup">Parece já estar no catálogo: <b>' + esc(r.codigoDup) + '</b>. Confira antes de aceitar.</div>' : '';
     const nao = grupo === 'descartado' ? '<button type="button" class="ig-sec" data-ig="restaurar" data-id="' + r.id + '">↩️ Restaurar</button>'
       : '<button type="button" class="ig-ok" data-ig="aceitar" data-id="' + r.id + '">✅ Aceitar</button><button type="button" class="ig-sec" data-ig="editar" data-id="' + r.id + '">🖼️ Mídias</button><button type="button" class="ig-ruim" data-ig="descartar" data-id="' + r.id + '">🗑️ Descartar</button>' + (grupo !== 'nao_produto' ? '<button type="button" class="ig-sec" data-ig="naoproduto" data-id="' + r.id + '">🚫 Não é produto</button>' : '');
     const ia = r.ia || null;
     const iaLinha = ia ? '<div class="ig-iaok">🤖 <b>' + esc(ia.nome || 'Sem nome') + '</b>' + (ia.categorias && ia.categorias.length ? ' · ' + esc(ia.categorias.join(', ')) : '') + (ia.generos && ia.generos.length ? ' · ' + esc(ia.generos.join(', ')) : '') + (ia.cores && ia.cores.length ? ' · ' + esc(ia.cores.join(', ')) : '') +
-      (r.precoFoto ? '<br>💲 Na foto: R$ ' + esc(String(r.precoFoto).replace('.', ',')) + ' à vista → catálogo R$ ' + esc(String(r.precoSug || '').replace('.', ',')) + '' : '') + (ia.produto === false ? '<br>🤔 A IA acha que isso não é uma peça à venda.' : '') + '</div>'
+      ''+ (ia.produto === false ? '<br>🤔 A IA acha que isso não é uma peça à venda.' : '') + '</div>'
       : (r.iaStatus === 'erro' ? '<div class="ig-ia">🤖 A IA não conseguiu ler as fotos deste post (você pode aceitar e preencher na mão).</div>' : '');
     const caixa = (grupo !== 'descartado') ? '<label class="ig-selcard"><input type="checkbox" class="ig-selr" value="' + r.id + '"' + (marcados.has(r.id) ? ' checked' : '') + '> Marcar para juntar</label>' : '';
     return '<div class="ig-card" data-card="' + r.id + '">' + caixa + miniaturas(r, 3) + '<div class="ig-meta"><span>' + (ORIGEM[r.origem] || r.origem) + '</span><span>' + esc(dataBr(r.publicadoEm)) + '</span><span>' + (r.midias || []).length + ' mídia(s)</span>' + (r.permalink ? '<a href="' + esc(r.permalink) + '" target="_blank" rel="noopener" style="color:var(--laranja-txt)">ver no Instagram</a>' : '') + '</div>' +
@@ -170,7 +182,8 @@
     const vazio = '<p class="ig-vazio">' + (grupo === 'pendente' ? 'Nada esperando agora. 🎉 O que você postar no Instagram aparece aqui sozinho (a cada 30 minutos) ou toque em "Buscar agora".' : 'Nada por aqui.') + '</p>';
     const ids = lista.map((x) => x.id); marcados.forEach((id) => { if (ids.indexOf(id) === -1) marcados.delete(id); });
     const barra = (grupo !== 'descartado' && lista.length > 1) ? '<div class="ig-juntar-barra"><button type="button" class="ig-ok" data-ig="juntarMarcados"' + (marcados.size < 2 ? ' disabled' : '') + '>🔗 Juntar ' + (marcados.size >= 2 ? marcados.size + ' posts em 1 produto' : 'em 1 produto') + '</button>' +
-      (marcados.size ? '<button type="button" class="ig-sec" data-ig="limparMarcados">Limpar</button>' : '') + '<span>' + (marcados.size ? marcados.size + ' marcado(s)' : 'Marque os posts da MESMA peça (caixinha em cada um) e toque em Juntar.') + '</span></div>' : '';
+      '<button type="button" class="ig-ok" data-ig="separadoMarcados"' + (marcados.size < 2 ? ' disabled' : '') + '>🧩 Cadastrar separado' + (marcados.size >= 2 ? ' (' + marcados.size + ')' : '') + '</button>' +
+      (marcados.size ? '<button type="button" class="ig-sec" data-ig="limparMarcados">Limpar</button>' : '') + '<span>' + (marcados.size ? marcados.size + ' marcado(s)' : 'Marque os posts (caixinha em cada um). Juntar = 1 produto só (máx. ' + LIM_FOTOS + ' fotos e ' + LIM_VIDEOS + ' vídeo). Cadastrar separado = 1 produto por post, com as mesmas informações.') + '</span></div>' : '';
     const iaBox = '<div class="ig-ia" id="ig-ia" role="status"' + (iaTxt ? '' : ' hidden') + '>' + esc(iaTxt) + '</div>';
     $('ig-corpo').innerHTML = avisos + iaBox + abas + barra + (lista.length ? lista.map(cartao).join('') : vazio) + (mais ? '<div class="ig-acoes" style="justify-content:center"><button type="button" class="ig-sec" data-ig="mais" style="width:auto;padding:10px 16px;border:0;border-radius:8px;min-height:44px;font-weight:700">Carregar mais</button></div>' : '') + rodape() + toast();
   }
@@ -284,21 +297,61 @@
   }
 
   /* ---------- juntar vários posts em 1 produto ---------- */
+  function midiasDe(ordem) { const o = []; ordem.forEach((r) => (r.midias || []).forEach((m) => o.push({ id: m.id, tipo: m.tipo, mini: m.mini || m.url, url: m.url, de: r.id }))); return o; }
   async function juntarMarcados() {
     if (ocupado) return;
     const ordem = lista.filter((x) => marcados.has(x.id)); if (ordem.length < 2) { msg('Marque 2 ou mais posts.', 'erro'); return; }
+    await iniciarJuncao(ordem);
+  }
+  /** Se as mídias juntas cabem (8 fotos e 1 vídeo), junta direto; se passam, abre a tela para a pessoa ESCOLHER o que fica. */
+  async function iniciarJuncao(ordem) {
+    const itens = midiasDe(ordem), fotos = itens.filter((m) => m.tipo !== 'video'), vids = itens.filter((m) => m.tipo === 'video');
+    if (fotos.length <= LIM_FOTOS && vids.length <= LIM_VIDEOS) {
+      if (!confirm('Juntar ' + ordem.length + ' posts em UM produto só?\n\n• ' + fotos.length + ' foto(s)' + (vids.length ? ' e ' + vids.length + ' vídeo' : '') + ' ficam juntos (a capa é a do primeiro da lista).\n• Os outros ' + (ordem.length - 1) + ' post(s) saem desta lista (ficam em "Descartados").')) return;
+      await executarJuncao(ordem, null); return;
+    }
+    const sel = new Set(fotos.slice(0, LIM_FOTOS).map((m) => m.id).concat(vids.slice(0, LIM_VIDEOS).map((m) => m.id)));
+    escolha = { ordem: ordem, itens: itens, sel: sel }; desenharEscolha();
+  }
+  function contagemEscolha() { const f = escolha.itens.filter((m) => m.tipo !== 'video' && escolha.sel.has(m.id)).length, v = escolha.itens.filter((m) => m.tipo === 'video' && escolha.sel.has(m.id)).length; return { f, v }; }
+  function desenharEscolha() {
+    tela = 'escolha';
+    const e = escolha, c = contagemEscolha();
+    const totF = e.itens.filter((m) => m.tipo !== 'video').length, totV = e.itens.length - totF;
+    const tiles = e.itens.map((m, i) => '<div class="ig-tile' + (e.sel.has(m.id) ? ' capa' : '') + '"><div class="ig-th"><img loading="lazy" alt="" ' + atribSrc(m.mini) + '>' + (m.tipo === 'video' ? '<span class="ig-play">▶ vídeo</span>' : '') + '</div>' +
+      '<label class="ig-linha" style="align-items:center"><input type="checkbox" class="ig-esc" value="' + esc(m.id) + '"' + (e.sel.has(m.id) ? ' checked' : '') + '> <span>' + (e.sel.has(m.id) ? 'Fica' : 'Não fica') + ' · post ' + (e.ordem.findIndex((r) => r.id === m.de) + 1) + '</span></label></div>').join('');
+    $('ig-corpo').innerHTML = '<button type="button" class="ig-sec" data-ig="voltarEscolha" style="width:auto;padding:10px 14px;border:0;border-radius:8px;min-height:44px;font-weight:700">← Voltar</button>' +
+      '<p class="ig-leg" style="-webkit-line-clamp:6;margin-top:10px"><b>Os ' + e.ordem.length + ' posts juntos têm ' + totF + ' foto(s)' + (totV ? ' e ' + totV + ' vídeo(s)' : '') + '.</b> O produto aceita no máximo ' + LIM_FOTOS + ' fotos e ' + LIM_VIDEOS + ' vídeo. Marque o que FICA; o resto vai para "Pendentes" como mídia solta (nada se perde).</p>' +
+      '<div class="ig-sug"><span id="ig-esc-cont">Fotos ' + c.f + '/' + LIM_FOTOS + ' · Vídeo ' + c.v + '/' + LIM_VIDEOS + '</span></div><div class="ig-grade">' + tiles + '</div>' +
+      '<div class="ig-edit-barra"><button type="button" class="ig-ok" data-ig="juntarEscolhidas"' + (c.f < 1 ? ' disabled' : '') + '>🔗 Juntar com as escolhidas</button></div><div class="ig-msg" id="ig-msg" role="status"></div>';
+  }
+  async function executarJuncao(ordem, manter) {
+    if (ocupado) return;
     const destino = ordem[0], outros = ordem.slice(1);
-    if (!confirm('Juntar ' + ordem.length + ' posts em UM produto só?\n\n• Todas as fotos e vídeos ficam juntos (a capa é a do primeiro da lista).\n• Os outros ' + outros.length + ' post(s) saem desta lista (ficam em "Descartados").')) return;
-    ocupado = true; let feitos = 0, erro = '';
+    ocupado = true; let feitos = 0, erro = '', fora = 0;
     for (const o of outros) {
       msg('Juntando… ' + (feitos + 1) + ' de ' + outros.length);
       const r = await ig('/acao', 'POST', { acao: 'juntar', id: o.id, para: destino.id });
       if (r && r.ok) feitos++; else { erro = erroTxt(r); break; }
     }
-    ocupado = false; marcados.clear();
+    if (!erro && manter) {   // o que passou do limite sai do produto (vira mídia solta em "Pendentes")
+      const sobrando = midiasDe(ordem).filter((m) => !manter.has(m.id));
+      for (const m of sobrando) { const r = await ig('/acao', 'POST', { acao: 'removerMidia', id: destino.id, midia: m.id }); if (r && r.ok) fora++; else { erro = erroTxt(r); break; } }
+    }
+    ocupado = false; marcados.clear(); escolha = null;
     await carregarStatus(); await carregarLista(true);
-    msg(erro ? 'Juntei ' + feitos + ' e parei: ' + erro : '✅ Pronto: ' + (feitos + 1) + ' posts viraram 1 produto (' + feitos + ' foto(s)/vídeo(s) a mais).', erro ? 'erro' : 'ok');
+    msg(erro ? 'Juntei ' + feitos + ' e parei: ' + erro : '✅ Pronto: ' + (feitos + 1) + ' posts viraram 1 produto' + (fora ? ' (' + fora + ' mídia(s) que passavam do limite foram para "Pendentes")' : '') + '.', erro ? 'erro' : 'ok');
     rodarIA();
+  }
+  /** "Cadastrar separado": cada post vira um produto, todos com as mesmas informações preenchidas no formulário. */
+  async function separadoMarcados() {
+    if (ocupado) return;
+    const ordem = lista.filter((x) => marcados.has(x.id)); if (ordem.length < 2) { msg('Marque 2 ou mais posts.', 'erro'); return; }
+    const semFoto = ordem.filter((r) => !(r.midias || []).some((m) => m.tipo !== 'video'));
+    if (semFoto.length) { msg(semFoto.length + ' dos posts marcados só tem vídeo (sem foto). Desmarque-os ou junte com outro post que tenha foto.', 'erro'); return; }
+    if (typeof window.tkAceitarSeparado !== 'function') { alert('O cadastro ainda não carregou. Tente de novo.'); return; }
+    if (!confirm('Cadastrar ' + ordem.length + ' posts como ' + ordem.length + ' produtos SEPARADOS?\n\nVocê preenche o cadastro UMA vez (começa com o post mais recente da lista marcada). Ao cadastrar, cada post vira um produto diferente, todos com as mesmas informações (nome, categoria, gênero, preço, cores…), cada um com as fotos do seu post.')) return;
+    marcados.clear(); fechar(); window.tkAceitarSeparado(ordem);
   }
 
   /* ---------- IA: lê as fotos dos posts que ainda não foram lidos (o Worker também faz isso sozinho a cada 30 min) ---------- */
@@ -350,6 +403,9 @@
     else if (a === 'desfazer') await refazer();
     else if (a === 'buscar') { msg('Buscando no Instagram…'); const r = await ig('/buscar', 'POST', {}); if (r && r.ok) { msg(r.novas ? r.novas + ' novo(s) encontrado(s).' : 'Nada novo.', 'ok'); await carregarStatus(); await carregarLista(true); rodarIA(); } else msg(erroTxt(r), 'erro'); }
     else if (a === 'juntarMarcados') await juntarMarcados();
+    else if (a === 'separadoMarcados') await separadoMarcados();
+    else if (a === 'voltarEscolha') { escolha = null; desenharLista(); }
+    else if (a === 'juntarEscolhidas') { if (escolha) { const manter = new Set(escolha.sel); if (confirm('Juntar com ' + contagemEscolha().f + ' foto(s) e ' + contagemEscolha().v + ' vídeo(s)?\n\nO que ficou de fora vai para "Pendentes" como mídia solta.')) await executarJuncao(escolha.ordem, manter); } }
     else if (a === 'limparMarcados') { marcados.clear(); desenharLista(); }
     else if (a === 'iaLigar') { const k = ($('ig-ia-chave') || {}).value || ''; msg('Conferindo a chave com o Google…'); const r = await ig('/ia-chave', 'POST', { chave: k }); if (r && r.ok) { $('ig-ia-chave').value = ''; await carregarStatus(); desenharConectar(); msg('✅ IA ligada. Os posts pendentes vão sendo lidos.', 'ok'); rodarIA(); } else msg(erroTxt(r), 'erro'); }
     else if (a === 'iaDesligar') { if (confirm('Desligar a leitura por IA? Os posts continuam chegando, só sem o preenchimento automático.')) { await ig('/ia-chave', 'DELETE'); await carregarStatus(); desenharConectar(); } }
@@ -366,7 +422,7 @@
     else if (a === 'tirar') agirEditor({ acao: 'removerMidia', midia: b.dataset.m }, 'A mídia foi para "Sem identificação".');
     else if (a === 'separar') { const s = escolhidas(); if (!s.length) { msg('Marque "escolher" nas mídias que vão para o outro produto.', 'erro'); return; } agirEditor({ acao: 'separar', midias: s }, 'Separado: o novo produto está na lista.'); }
     else if (a === 'juntar') escolherJunta();
-    else if (a === 'juntarCom') { const r = await ig('/acao', 'POST', { acao: 'juntar', id: editando.id, para: Number(b.dataset.para) }); if (r && r.ok) { editando = null; await carregarLista(true); } else msg(erroTxt(r), 'erro'); }
+    else if (a === 'juntarCom') { const para = lista.find((x) => x.id === Number(b.dataset.para)); if (para && editando) { const de = editando; editando = null; await iniciarJuncao([para, de]); } }
     else if (a === 'tocar') { const t = b.closest('.ig-th'); const v = document.createElement('video'); v.src = b.dataset.url; v.controls = true; v.playsInline = true; v.autoplay = true; t.innerHTML = ''; t.appendChild(v); }
   }
   async function descartarRapido(id, naoProduto) {
