@@ -56,6 +56,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
         if a in("sessao","login"): return {"ok":True,"sessao":"tk2.x.y","usuario":{"whatsapp":"88999999999","name":"Ana Lojista","nome":"Ana Lojista","level":3,"permissoes":perms,"perfil":"Admin"}}
         if a=="curriculos_listar": return {"ok":True,"curriculos":[],"status":["Novo","Entrevista"],"motivos":[]}
         if a=="create": return {"ok":True,"id":"999","codigo":"TK-0099"}
+        if a=="sugerirPorFoto": st.setdefault("ia_chamadas",[]).append(b.get("fotos",[])); return {"ok":False,"erro":"Teste: IA simulada."}
         if a=="addCategoria":
             n=limpa(b.get("nome"))
             if not n: return {"ok":False,"erro":"Escreva o nome da categoria."}

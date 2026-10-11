@@ -519,7 +519,7 @@
           <label class="btn-foto" for="galeria-input">📷 Tirar foto ou escolher da galeria</label>
           <input type="file" id="galeria-input" accept="image/*" multiple class="input-oculto">
           <div id="galeria-grid" class="galeria-grid"></div>
-          <div class="dica-midia">A foto com <b>★ CAPA</b> aparece primeiro no catálogo. Toque numa foto para torná-la a capa, use ‹ › para mudar a ordem e ✕ para tirar.</div>
+          <div class="dica-midia">A foto com <b>★ CAPA</b> aparece primeiro no catálogo. Toque numa foto para vê-la grande (lá você pode escolher a capa), use ‹ › para mudar a ordem e ✕ para tirar.</div>
         </div>
         <button type="button" class="btn-seo-ia" id="btn-foto-ia">✨ Preencher os campos pela foto (IA)</button>
         <div id="foto-ia-box"></div>
@@ -1043,6 +1043,15 @@
     const tmp = fotosItens[idx]; fotosItens[idx] = fotosItens[alvo]; fotosItens[alvo] = tmp;
     desenharFotos();
   }
+  // Toque na miniatura = foto GRANDE e nítida (a original), com ‹ › e "★ Usar como capa".
+  function abrirFotoGrandeForm_(idx) {
+    TKFotoGrande.abrir({
+      itens: fotosItens.map(i => ({ url: i.url || i.prev, tipo: 'foto' })),
+      indice: idx,
+      capa: (k) => !!(fotosItens[k] && fotosItens[k].capa),
+      aoCapa: (k) => tornarCapa(k)
+    });
+  }
   function desenharFotos() {
     garantirCapa_();
     const grid = document.getElementById('galeria-grid');
@@ -1051,8 +1060,8 @@
       const box = document.createElement('div'); box.className = 'galeria-item' + (it.capa ? ' capa' : '');
       const img = document.createElement('img'); img.alt = ''; img.referrerPolicy = 'no-referrer';
       img.src = it.url ? fotoMini(it.url, 200) : it.prev; img.decoding = 'async';
-      img.title = 'Toque para tornar capa';
-      img.addEventListener('click', () => tornarCapa(idx));
+      img.title = 'Toque para ver a foto grande';
+      img.addEventListener('click', () => abrirFotoGrandeForm_(idx));
       box.appendChild(img);
 
       if (it.capa) { const s = document.createElement('span'); s.className = 'selo-capa'; s.textContent = '★ CAPA'; box.appendChild(s); }
@@ -3300,6 +3309,30 @@
     });
   }
 
+  // Foto salva fora do Cloudinary (ex.: nosso armazenamento R2, vindo do Instagram): o servidor da IA só baixa do Cloudinary,
+  // então o navegador baixa, reduz e manda a foto pronta (b64). Falhou? devolve null e a foto vai só como endereço.
+  async function urlParaB64Ia_(url, max) {
+    try {
+      const r = await fetch(url, { mode: 'cors' }); if (!r.ok) return null;
+      const blob = await r.blob();
+      const obj = URL.createObjectURL(blob);
+      try {
+        return await new Promise((resolve) => {
+          const img = new Image();
+          img.onerror = () => resolve(null);
+          img.onload = () => {
+            const esc = Math.min(1, max / Math.max(img.width, img.height));
+            const c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(img.width * esc)); c.height = Math.max(1, Math.round(img.height * esc));
+            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+            resolve(c.toDataURL('image/jpeg', 0.85).split(',')[1]);
+          };
+          img.src = obj;
+        });
+      } finally { URL.revokeObjectURL(obj); }
+    } catch (e) { return null; }
+  }
+
   document.getElementById('btn-foto-ia').addEventListener('click', async () => {
     const btn = document.getElementById('btn-foto-ia');
     const box = document.getElementById('foto-ia-box');
@@ -3311,7 +3344,12 @@
       const fotos = [];
       for (const it of fotosItens) {
         if (it.b64) fotos.push({ b64: await reduzirB64ParaIa_(it.b64) });
-        else if (it.url) fotos.push({ url: it.url });
+        else if (it.url && /^https:\/\/res\.cloudinary\.com\//.test(it.url)) fotos.push({ url: it.url });
+        else if (it.url) {
+          // a capa (1ª) vai maior para o texto escrito nela (nome, preço) ficar legível
+          const b = await urlParaB64Ia_(it.url, it.capa ? 1280 : 768);
+          if (b) fotos.push({ b64: b }); else fotos.push({ url: it.url });
+        }
       }
       const sess = (typeof getSessao === 'function' && getSessao()) || null;
       const corpoIa = JSON.stringify({ action: 'sugerirPorFoto', pin: adminPin, sessao: adminPin, whatsapp: sess ? sess.whatsapp : '', fotos: fotos, categorias: categorias, generos: generos });

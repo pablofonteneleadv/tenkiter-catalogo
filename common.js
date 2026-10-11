@@ -202,6 +202,86 @@ function escaparHtml(v) {
  *  `${...}` (404 no log, foto pedida à toa). Com `${atribSrc(...)}` o texto não parece mais um atributo src e o problema some. */
 function atribSrc(url) { return 'src="' + escaparHtml(url) + '"'; }
 
+/* ===================== Foto em tela cheia (toque na miniatura) =====================
+ * TKFotoGrande.abrir({ itens:[{url, tipo:'foto'|'video', poster}], indice, capa:(i)=>bool, aoCapa:(i)=>void })
+ * Mostra a foto GRANDE e nítida (a original, nunca a miniatura), com ‹ › para passar, toque na foto para ampliar
+ * (e arrastar para ver os detalhes), Esc/✕/voltar fecham. "★ Usar como capa" só aparece se aoCapa for passado. */
+const TKFotoGrande = (function () {
+  let el = null, st = null, ampliado = false;
+  function css() {
+    if (document.getElementById('tkfg-css')) return;
+    const c = document.createElement('style'); c.id = 'tkfg-css';
+    c.textContent = '#tkfg{position:fixed;inset:0;z-index:130;background:rgba(0,0,0,.94);display:none;flex-direction:column;color:#fff;font-family:inherit}' +
+      '#tkfg.aberto{display:flex}#tkfg .tkfg-topo{display:flex;align-items:center;gap:8px;padding:10px 12px;flex:0 0 auto}' +
+      '#tkfg .tkfg-cont{flex:1;font-weight:700;font-size:.95rem}#tkfg button{width:auto;min-height:44px;min-width:44px;border:0;border-radius:10px;background:#2b2b2b;color:#fff;font-size:1rem;font-weight:700;padding:0 14px;cursor:pointer}' +
+      '#tkfg button:disabled{opacity:.35;cursor:default}#tkfg button.tkfg-ok{background:#E67E22;color:#0d0d0d}' +
+      '#tkfg .tkfg-palco{flex:1;min-height:0;overflow:auto;display:flex;align-items:center;justify-content:center;touch-action:pan-x pan-y pinch-zoom;-webkit-overflow-scrolling:touch}' +
+      '#tkfg .tkfg-palco img,#tkfg .tkfg-palco video{max-width:100%;max-height:100%;object-fit:contain;display:block;margin:auto}' +
+      '#tkfg .tkfg-palco.zoom{display:block}#tkfg .tkfg-palco.zoom img{max-width:none;max-height:none;width:240%;cursor:zoom-out}' +
+      '#tkfg .tkfg-palco img{cursor:zoom-in}#tkfg .tkfg-base{display:flex;gap:8px;justify-content:center;align-items:center;padding:10px 12px calc(10px + env(safe-area-inset-bottom));flex:0 0 auto;flex-wrap:wrap}' +
+      '#tkfg .tkfg-dica{font-size:.8rem;color:#ccc;text-align:center;padding:0 12px 4px}';
+    document.head.appendChild(c);
+  }
+  function montar() {
+    if (el) return;
+    css();
+    el = document.createElement('div'); el.id = 'tkfg'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Foto em tela cheia');
+    el.innerHTML = '<div class="tkfg-topo"><span class="tkfg-cont" id="tkfg-cont" aria-live="polite"></span><button type="button" id="tkfg-zoom" aria-label="Ampliar ou reduzir">🔍 Ampliar</button><button type="button" id="tkfg-fechar" aria-label="Fechar">✕ Fechar</button></div>' +
+      '<div class="tkfg-palco" id="tkfg-palco"></div><div class="tkfg-dica" id="tkfg-dica"></div>' +
+      '<div class="tkfg-base"><button type="button" id="tkfg-ant" aria-label="Foto anterior">‹ Anterior</button><button type="button" id="tkfg-capa" class="tkfg-ok">★ Usar como capa</button><button type="button" id="tkfg-prox" aria-label="Próxima foto">Próxima ›</button></div>';
+    document.body.appendChild(el);
+    el.querySelector('#tkfg-fechar').addEventListener('click', fechar);
+    el.querySelector('#tkfg-ant').addEventListener('click', () => ir(-1));
+    el.querySelector('#tkfg-prox').addEventListener('click', () => ir(1));
+    el.querySelector('#tkfg-zoom').addEventListener('click', alternarZoom);
+    el.querySelector('#tkfg-capa').addEventListener('click', () => { if (st && st.aoCapa) { st.aoCapa(st.i); desenhar(); } });
+    el.querySelector('#tkfg-palco').addEventListener('click', (ev) => { if (ev.target.tagName === 'IMG') alternarZoom(); else if (ev.target.id === 'tkfg-palco') fechar(); });
+    window.addEventListener('keydown', (ev) => {       // captura: o Esc fecha SÓ a foto, não a janela que está por baixo
+      if (!el.classList.contains('aberto')) return;
+      if (ev.key === 'Escape') { ev.stopPropagation(); ev.preventDefault(); fechar(); } else if (ev.key === 'ArrowLeft') ir(-1); else if (ev.key === 'ArrowRight') ir(1);
+    }, true);
+    window.addEventListener('popstate', () => { if (el.classList.contains('aberto')) fechar(true); });
+  }
+  function alternarZoom() { ampliado = !ampliado; desenhar(true); }
+  function ir(d) { if (!st) return; const n = st.i + d; if (n < 0 || n >= st.itens.length) return; st.i = n; ampliado = false; desenhar(); }
+  function desenhar(soZoom) {
+    if (!st) return;
+    const it = st.itens[st.i] || {}, palco = el.querySelector('#tkfg-palco');
+    const ehVideo = it.tipo === 'video';
+    if (!soZoom) {
+      palco.innerHTML = '';
+      const m = document.createElement(ehVideo ? 'video' : 'img');
+      if (ehVideo) { m.src = it.url; m.controls = true; m.playsInline = true; if (it.poster) m.poster = it.poster; }
+      else { m.alt = 'Foto ' + (st.i + 1) + ' de ' + st.itens.length; m.referrerPolicy = 'no-referrer'; m.decoding = 'async'; m.src = it.url; }
+      palco.appendChild(m);
+    }
+    palco.classList.toggle('zoom', ampliado && !ehVideo);
+    if (!ehVideo && ampliado) { palco.scrollLeft = (palco.scrollWidth - palco.clientWidth) / 2; }
+    el.querySelector('#tkfg-cont').textContent = (ehVideo ? 'Vídeo ' : 'Foto ') + (st.i + 1) + ' de ' + st.itens.length + (st.capa && st.capa(st.i) ? ' · ★ capa' : '');
+    el.querySelector('#tkfg-zoom').textContent = ampliado ? '🔍 Reduzir' : '🔍 Ampliar';
+    el.querySelector('#tkfg-zoom').hidden = ehVideo;
+    el.querySelector('#tkfg-ant').disabled = st.i === 0; el.querySelector('#tkfg-prox').disabled = st.i === st.itens.length - 1;
+    const bc = el.querySelector('#tkfg-capa'); const jaCapa = !!(st.capa && st.capa(st.i));
+    bc.hidden = !st.aoCapa || ehVideo || jaCapa;
+    el.querySelector('#tkfg-dica').textContent = ehVideo ? '' : (ampliado ? 'Arraste para ver os detalhes. Toque na foto para reduzir.' : 'Toque na foto para ampliar e ver os detalhes.');
+  }
+  function abrir(o) {
+    const itens = ((o && o.itens) || []).filter((x) => x && x.url);
+    if (!itens.length) return;
+    montar();
+    st = { itens: itens, i: Math.min(Math.max(0, Number(o.indice) || 0), itens.length - 1), capa: o.capa || null, aoCapa: o.aoCapa || null, volta: document.activeElement };
+    ampliado = false; desenhar();
+    el.classList.add('aberto'); el.querySelector('#tkfg-fechar').focus();
+  }
+  function fechar() {
+    if (!el) return;
+    el.classList.remove('aberto'); el.querySelector('#tkfg-palco').innerHTML = '';
+    const v = st && st.volta; st = null; try { if (v && v.focus) v.focus(); } catch (e) { /* ignora */ }
+  }
+  return { abrir: abrir, fechar: fechar };
+})();
+window.TKFotoGrande = TKFotoGrande;
+
 /* ===================== Configurações (API_URL editável) ===================== */
 
 function definirApiUrlPersonalizada(url) {

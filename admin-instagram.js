@@ -257,7 +257,23 @@
   }
 
   /* ---------- cliques ---------- */
+  /** Toque numa miniatura (lista ou editor) = foto grande e nítida, com ‹ › e, no editor, "Usar como capa". */
+  function abrirGrande(ev) {
+    const im = ev.target.closest && ev.target.closest('.ig-th img'); if (!im || ev.target.closest('[data-ig]')) return false;
+    const tile = im.closest('.ig-tile'), card = im.closest('.ig-card');
+    const r = tile ? editando : (card ? lista.find((x) => x.id === Number(card.dataset.card)) : null); if (!r || !window.TKFotoGrande) return false;
+    const ms = (r.midias || []).filter((m) => m.url);
+    const alvo = tile ? tile.dataset.m : null;
+    let i = tile ? ms.findIndex((m) => m.id === alvo) : Array.prototype.indexOf.call(card.querySelectorAll('.ig-th'), im.closest('.ig-th'));
+    window.TKFotoGrande.abrir({
+      itens: ms.map((m) => ({ url: m.url, tipo: m.tipo === 'video' ? 'video' : 'foto', poster: m.mini || '' })), indice: Math.max(0, i),
+      capa: tile ? (k) => !!(editando && (editando.midias || []).filter((m) => m.url)[k] && (editando.midias || []).filter((m) => m.url)[k].capa) : null,
+      aoCapa: tile ? (k) => { const m = ms[k]; if (m) { ms.forEach((x) => { x.capa = (x === m); }); agirEditor({ acao: 'capa', midia: m.id }); } } : null
+    });
+    return true;
+  }
   async function clique(ev) {
+    if (abrirGrande(ev)) return;
     const b = ev.target.closest('[data-ig]'); if (!b) return;
     const a = b.dataset.ig, id = Number(b.dataset.id) || 0;
     if (a === 'aba') { grupo = b.dataset.g; editando = null; $('ig-corpo').innerHTML = '<p class="ig-vazio">Carregando…</p>'; await carregarLista(true); }
