@@ -1,6 +1,6 @@
 # ATUALIZAÇÃO MAIS RECENTE — catálogo v3.3 (backend) + site v3.4
 
-> Tudo que está abaixo desta seção (títulos "v4 / v2", "Atualização 3" etc.) é o **histórico** das atualizações antigas, mantido como registro. Os arquivos `Code-*.gs.txt`, `tenkiter-codigo-v2.1.gs.txt` e `Code-treinamento-*.gs.txt` citados lá são antigos: **não use**. Os atuais são `catalogo-codigo-3.3.gs.txt` e `funcionario-codigo-3.0.gs.txt`.
+> Tudo que está abaixo desta seção (títulos "v4 / v2", "Atualização 3" etc.) é o **histórico** das atualizações antigas, mantido como registro. Os arquivos `Code-*.gs.txt`, `tenkiter-codigo-v2.1.gs.txt` e `Code-treinamento-*.gs.txt` citados lá são antigos: **não use**. Os atuais são `catalogo-codigo-3.3.gs.txt` e `funcionario-codigo-3.1.gs.txt`.
 
 **Nada apaga dados: só acrescenta abas/colunas. Ordem importa.**
 

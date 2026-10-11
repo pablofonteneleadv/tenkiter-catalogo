@@ -15,7 +15,7 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
 - **Backend**: dois Apps Script Web Apps separados, versionados por nome de arquivo
   (`<nome>-<versão>.gs.txt`):
   - `catalogo-codigo-3.6.gs.txt` — catálogo + autenticação central + pedidos/métricas/importação/feed/integrações (v3.1) + apagar/renomear categoria só para Admin total (v3.2) + avisos push completos (v3.3) + Conexões Render/Cloudflare (v3.4) + OneSignal nas Conexões e Números reais com filtros/aparelhos (v3.5) + Cofre das Conexões com dupla verificação (v3.6).
-  - `funcionario-codigo-3.0.gs.txt` — RH/treinamento/contratação.
+  - `funcionario-codigo-3.1.gs.txt` — RH/treinamento/contratação (v3.1: Admin total não consegue rebaixar/desativar a PRÓPRIA conta; a trava "sobrar 1 Admin" já existia).
   - Arquivos antigos (`Code-treinamento-v4.0.gs.txt`, `v4.1.gs.txt`, `atualizado.gs.txt`,
     `tenkiter-codigo-v2.1.gs.txt`) são **históricos — não editar nem usar como referência**.
 

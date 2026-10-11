@@ -1,4 +1,8 @@
-// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v3.0
+// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v3.1
+//
+// NOVIDADE DA v3.1 -- TRAVA CONTRA TIRAR O PRÓPRIO ACESSO (pedido do Pablo: "sem querer tirei meu acesso de admin total"):
+//  - Quem é Admin total não consegue mais, pelo painel de Acessos, rebaixar o PRÓPRIO perfil, desmarcar a PRÓPRIA caixinha 'Gerir acessos' nem desativar a PRÓPRIA conta.
+//    Para mudar o cargo de um Admin total, outro Admin total faz (a trava de 'sobrar pelo menos um Admin' continua valendo). Também gravado em Acessos_Log como tentativa barrada.
 //
 // NOTA: a numeração passou a acompanhar a versão geral do sistema (v3.0). Esta é a continuação direta da 4.5
 // (que vem logo abaixo) -- o número menor NÃO é retrocesso.
@@ -982,7 +986,7 @@ function doGet(e) {
   }
 
   if (action === 'versao') {
-    return jsonOut_({ ok: true, versao: '3.0', acessos: true, curriculos: true, listaFechada: listaFechada_() });
+    return jsonOut_({ ok: true, versao: '3.1', acessos: true, curriculos: true, listaFechada: listaFechada_() });
   }
 
   // padrão: lista de funcionários (login e níveis) -- formato ANTIGO, só existe
@@ -1935,6 +1939,10 @@ function acessosDefinirPerfilSemTrava_(whatsappAlvo, nomePerfil, quem) {
   if (!perfil) return { ok: false, erro: 'Perfil desconhecido.' };
   var linhas = acLinhasDoWhats_(alvo);
   if (!linhas.length) return { ok: false, erro: 'Pessoa não encontrada.' };
+  if (quem && acWhats_(quem.whatsapp) === alvo && !perfil.perms.gerir_acessos) {
+    acLog_(quem.name, quem.whatsapp, alvo, 'barrado_auto_rebaixar', nomePerfil);
+    return { ok: false, erro: 'Você não pode tirar o seu próprio acesso de Admin total (para não se trancar para fora). Peça a outro Admin total para mudar o seu perfil.' };
+  }
   if (!perfil.perms.gerir_acessos && acAdminsAtivos_(alvo) < 1) {
     return { ok: false, erro: 'Precisa sobrar pelo menos um Admin total ativo. Passe o cargo a outra pessoa antes.' };
   }
@@ -1957,6 +1965,10 @@ function acessosDefinirPermissaoSemTrava_(whatsappAlvo, chave, valor, quem) {
   var linhas = acLinhasDoWhats_(alvo);
   if (!linhas.length) return { ok: false, erro: 'Pessoa não encontrada.' };
   valor = valor === true;
+  if (chave === 'gerir_acessos' && !valor && quem && acWhats_(quem.whatsapp) === alvo) {
+    acLog_(quem.name, quem.whatsapp, alvo, 'barrado_auto_rebaixar', chave);
+    return { ok: false, erro: 'Você não pode desmarcar o seu próprio "Gerir acessos" (para não se trancar para fora). Peça a outro Admin total.' };
+  }
   if (chave === 'gerir_acessos' && !valor && acAdminsAtivos_(alvo) < 1) {
     return { ok: false, erro: 'Precisa sobrar pelo menos um Admin total ativo. Passe o cargo a outra pessoa antes.' };
   }
@@ -1982,6 +1994,13 @@ function acessosDefinirStatusSemTrava_(whatsappAlvo, novoStatus, quem) {
   var alvo = acWhats_(whatsappAlvo);
   var linhas = acLinhasDoWhats_(alvo);
   if (!linhas.length) return { ok: false, erro: 'Funcionário não encontrado.' };
+  if (novoStatus === 'Inativo' && quem && acWhats_(quem.whatsapp) === alvo) {
+    var pf = acPerfis_();
+    if (linhas.some(function (l) { return acPermsDaLinha_(l, pf).gerir_acessos; })) {
+      acLog_(quem.name, quem.whatsapp, alvo, 'barrado_auto_desativar', '');
+      return { ok: false, erro: 'Você não pode desativar a sua própria conta de Admin total. Peça a outro Admin total.' };
+    }
+  }
   if (novoStatus === 'Inativo' && acAdminsAtivos_(alvo) < 1) {
     var perfis = acPerfis_();
     if (linhas.some(function (l) { return acPermsDaLinha_(l, perfis).gerir_acessos; })) {
