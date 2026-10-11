@@ -367,11 +367,26 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if g.get("fora"): return route.fulfill(status=404,json={"ok":False,"erro":"Não encontrado."})
             if not (h.get("x-tk-sessao") or "").startswith("tk"): return route.fulfill(status=401,json={"ok":False,"erro":"Entre na sua conta de administrador."})
             body=json.loads(route.request.post_data or "{}") if m=="POST" else {}
-            if path=="/status": return route.fulfill(json={"ok":True,"conectado":g["conectado"],"usuario":"tenkitermodasceara","venceEmDias":55,"contagens":cont(),"ultimoCiclo":{"inicio":"2026-10-11T05:00:00Z","fim":"2026-10-11T05:00:02Z","novas":0,"erro":""},"novasDesdeOntem":2,"alertas":g.get("alertas",[]),"historico":{"completo":g.get("hist_completo",False),"emAndamento":g.get("hist_andamento",False)}})
+            if path=="/status": return route.fulfill(json={"ok":True,"conectado":g["conectado"],"usuario":"tenkitermodasceara","venceEmDias":55,"contagens":cont(),"ultimoCiclo":{"inicio":"2026-10-11T05:00:00Z","fim":"2026-10-11T05:00:02Z","novas":0,"erro":""},"novasDesdeOntem":2,"alertas":g.get("alertas",[]),"ia":{"ligada":g.get("ia_ligada",False),"fim":"abcd","pendentes":sum(1 for r in g["rasc"] if r["status"]=="pendente" and r.get("iaStatus")!="ok") if g.get("ia_ligada") else 0},"historico":{"completo":g.get("hist_completo",False),"emAndamento":g.get("hist_andamento",False)}})
             if path=="/rascunhos":
                 gr=(u.split("grupo=")[1].split("&")[0] if "grupo=" in u else "pendente")
                 l=[r for r in g["rasc"] if (r["status"]==gr if gr in ("descartado","aceito") else (r["status"]=="pendente" and r["grupo"]==gr))]
                 return route.fulfill(json={"ok":True,"rascunhos":l,"mais":False,"contagens":cont()})
+            if path=="/ia":
+                if not g.get("ia_ligada"): return route.fulfill(json={"ok":False,"erro":"A IA ainda não foi ligada."})
+                feitas=0
+                for r in g["rasc"]:
+                    if feitas>=2: break
+                    if r["status"]=="pendente" and r.get("iaStatus")!="ok":
+                        r["iaStatus"]="ok"; r["ia"]={"produto":True,"nome":"Vestido Alfaiataria Premium Vermelho","generos":["Feminino Adulto"],"categorias":["Vestido"],"cores":["Vermelho"],"tamanhos":[],"descricao":"Vestido curto com babado na barra."}
+                        r["precoFoto"]="70.00"; r["precoSug"]="77.78"; feitas+=1
+                g.setdefault("ia_lotes",[]).append(feitas)
+                rest=sum(1 for r in g["rasc"] if r["status"]=="pendente" and r.get("iaStatus")!="ok")
+                return route.fulfill(json={"ok":True,"feitas":feitas,"restantes":rest})
+            if path=="/ia-chave":
+                if m=="DELETE": g["ia_ligada"]=False; return route.fulfill(json={"ok":True})
+                if len(body.get("chave",""))<20: return route.fulfill(status=400,json={"ok":False,"erro":"Essa chave parece incompleta ou com caracteres estranhos. Cole de novo, só a chave."})
+                g["ia_ligada"]=True; g["ia_chave_recebida"]=body["chave"]; return route.fulfill(json={"ok":True,"fim":body["chave"][-4:]})
             if path=="/token":
                 if m=="DELETE": g["conectado"]=False; return route.fulfill(json={"ok":True})
                 if len(body.get("token",""))<20: return route.fulfill(status=400,json={"ok":False,"erro":"Esse texto não parece um token do Instagram."})
@@ -391,6 +406,12 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                 if a=="descartar": r["status"]="descartado"
                 elif a=="restaurar": r["status"]="pendente"
                 elif a=="grupo": r["grupo"]=body["grupo"]; r["status"]="pendente"
+                elif a=="juntar":
+                    pa=next((x for x in g["rasc"] if x["id"]==body.get("para")),None)
+                    if not pa: return route.fulfill(status=400,json={"ok":False,"erro":"Não deu para juntar."})
+                    pa["midias"]+=r["midias"]; r["midias"]=[]; r["status"]="descartado"; pa.pop("ia",None); pa["iaStatus"]=""
+                    g.setdefault("juntadas",[]).append([r["id"],pa["id"]])
+                elif a=="lerIA": r["iaStatus"]="ok"; r["ia"]={"produto":True,"nome":"Lido de novo","generos":[],"categorias":[],"cores":[],"tamanhos":[],"descricao":""}
                 elif a=="aceitado": r["status"]="aceito"; r["produtoId"]=body.get("produtoId","")
                 elif a=="capa":
                     for x in r["midias"]: x["capa"]=(x["id"]==body["midia"])

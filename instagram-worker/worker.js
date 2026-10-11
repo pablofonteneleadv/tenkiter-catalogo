@@ -28,10 +28,13 @@ const DDL = [
   `CREATE INDEX IF NOT EXISTS ix_rasc ON rascunho (status, grupo, publicado_em)`,
   `CREATE INDEX IF NOT EXISTS ix_rm ON rascunho_midia (midia_id)`
 ];
+/* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
+const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 let pronto = false;
 async function iniciar(env) {
   if (pronto) return;
   await env.DB.batch(DDL.map((s) => env.DB.prepare(s)));
+  for (const col of COLUNAS_NOVAS) { try { await env.DB.prepare('ALTER TABLE rascunho ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   pronto = true;
 }
 
@@ -224,15 +227,128 @@ export async function ciclo(env, origem, opcoes) {
   return { ok: !erro, novas: novas, erro: erro, puladas: puladas, fim: fim };
 }
 
+/* ---------- IA: lê as FOTOS do post (nome, preço escrito, categoria, cores...) ---------- */
+const MODELOS_IA = ['gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite'];
+const MAX_FOTOS_IA = 4, MAX_BYTES_FOTO_IA = 3 * 1024 * 1024, DESCONTO_AVISTA = 0.10;
+const COND_IA_PENDENTE = "status='pendente' AND grupo != 'nao_produto' AND (ia_status IN ('', 'pendente') OR (ia_status='erro' AND ia_tent < 2) OR (ia_status='lendo' AND ia_em < ?))";
+
+/** O preço escrito nas fotos já é o À VISTA (com 10% de desconto). ",99" no fim = arredonda para cima. O catálogo guarda o preço CHEIO
+ *  e mostra o à vista (cheio × 0,90) — então: cheio = à vista ÷ 0,90, para cima no centavo (70,00 → 77,78 → à vista 70,00). */
+export function precoDasFotos(v) {
+  if (/^\s*-/.test(String(v == null ? '' : v))) return null;
+  let n = Number(String(v == null ? '' : v).replace(',', '.').replace(/[^\d.]/g, ''));
+  if (!isFinite(n) || n <= 0 || n > 100000) return null;
+  n = Math.round(n * 100) / 100;
+  if (Math.round((n - Math.floor(n)) * 100) === 99) n = Math.floor(n) + 1;
+  const cheio = Math.ceil(n / (1 - DESCONTO_AVISTA) * 100 - 1e-6) / 100;
+  return { avista: n.toFixed(2), cheio: cheio.toFixed(2) };
+}
+function b64(buf) { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+async function listasDaLoja(env) {
+  const c = await env.CACHE.get('ia_listas', 'json'); if (c) return c;
+  const base = String(env.API_URL || '').trim(); let categorias = [], generos = [];
+  try {
+    const [a, g] = await Promise.all([fetch(base + '?action=categorias', { headers: { 'User-Agent': UA } }).then((r) => r.json()), fetch(base + '?action=generos', { headers: { 'User-Agent': UA } }).then((r) => r.json())]);
+    categorias = (a.categorias || []).map(String).slice(0, 100); generos = (g.generos || []).map(String).slice(0, 20);
+  } catch (e) { /* sem listas: a IA devolve só nome/cores/descrição */ }
+  if (categorias.length || generos.length) await env.CACHE.put('ia_listas', JSON.stringify({ categorias: categorias, generos: generos }), { expirationTtl: 600 });
+  return { categorias: categorias, generos: generos };
+}
+async function fotosDoRascunho(env, rid) {
+  const q = await env.DB.prepare('SELECT m.tipo, m.chave, m.chave_mini FROM rascunho_midia rm JOIN ig_midia m ON m.id = rm.midia_id WHERE rm.rascunho_id=? ORDER BY rm.capa DESC, rm.ordem').bind(rid).all();
+  const partes = [];
+  for (const x of (q.results || [])) {
+    if (partes.length >= MAX_FOTOS_IA) break;
+    const chave = x.tipo === 'VIDEO' ? x.chave_mini : x.chave; if (!chave) continue;
+    try {
+      const o = await env.MIDIA.get(chave); if (!o) continue;
+      const buf = await o.arrayBuffer(); if (buf.byteLength > MAX_BYTES_FOTO_IA) continue;
+      partes.push({ inline_data: { mime_type: /\.png$/.test(chave) ? 'image/png' : /\.webp$/.test(chave) ? 'image/webp' : 'image/jpeg', data: b64(buf) } });
+    } catch (e) { /* foto que não deu para ler é ignorada */ }
+  }
+  return partes;
+}
+async function chamarGemini(env, chave, payload) {
+  let ultimo = '';
+  for (const modelo of MODELOS_IA.slice(0, 3)) {
+    try {
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave }, body: JSON.stringify(payload) });
+      let j = {}; try { j = await r.json(); } catch (e) { j = {}; }
+      if (r.status === 200) {
+        const partes = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
+        const texto = partes.map((x) => x.text || '').join('').replace(/```json/gi, '').replace(/```/g, '').trim();
+        if (texto) return { ok: true, texto: texto };
+        ultimo = 'resposta vazia'; continue;
+      }
+      ultimo = ((j.error && j.error.message) || ('HTTP ' + r.status)).replace(/key=[^&\s]+/g, 'key=***').slice(0, 160);
+      if (r.status === 429) return { ok: false, erro: 'A IA pediu para esperar um pouco (limite de uso).', espera: true };
+      if (r.status === 400 || r.status === 401 || r.status === 403) break;
+    } catch (e) { ultimo = 'sem conexão com a IA'; }
+  }
+  return { ok: false, erro: 'Erro da IA: ' + ultimo };
+}
+const soValidos = (arr, lista) => { const m = {}; lista.forEach((x) => { m[String(x).toLowerCase()] = x; }); const out = []; (Array.isArray(arr) ? arr : []).forEach((v) => { const k = m[String(v).trim().toLowerCase()]; if (k && out.indexOf(k) === -1) out.push(k); }); return out; };
+/** Lê as fotos de UM rascunho e guarda a sugestão. Nunca lança. Devolve {ok, espera?, erro?}. */
+export async function analisarRascunho(env, id) {
+  const chave = await cfgGet(env, 'gemini_key');
+  if (!chave) return { ok: false, erro: 'IA não ligada.', semChave: true };
+  const r = await env.DB.prepare('SELECT * FROM rascunho WHERE id=?').bind(id).first(); if (!r) return { ok: false, erro: 'Rascunho não existe.' };
+  const falhar = async (txt, conta) => { await env.DB.prepare("UPDATE rascunho SET ia_status='erro', ia_tent=ia_tent+?, ia_json=? WHERE id=?").bind(conta ? 1 : 0, JSON.stringify({ erro: txt }), id).run(); return { ok: false, erro: txt }; };
+  try {
+    const partes = await fotosDoRascunho(env, id);
+    if (!partes.length) return await falhar('Sem foto legível para a IA.', true);
+    const listas = await listasDaLoja(env);
+    const prompt = 'Você cadastra roupas no catálogo de uma loja de moda brasileira (TENKiTER Modas). Abaixo estão as FOTOS de UMA publicação do Instagram da loja ' +
+      '(a 1ª é a capa; ângulos diferentes da mesma peça ou da mesma coleção) e a LEGENDA. LEIA também todo texto escrito nas imagens (nome da peça, preço, tamanhos, "Alfaiataria Premium" etc.). ' +
+      'Responda SOMENTE em JSON válido, sem markdown, exatamente neste formato: ' +
+      '{"produto": true, "nome": "", "preco": null, "generos": [], "categorias": [], "cores": [], "tamanhos": [], "descricao": ""}\n' +
+      'Regras:\n- produto: false se NÃO for uma peça à venda (aviso, promoção geral, frase motivacional, bastidores).\n' +
+      '- nome: curto e claro, como "Vestido Alfaiataria Premium Vermelho" (máx. 60 caracteres); use o nome escrito na imagem quando houver.\n' +
+      '- preco: SOMENTE se houver um valor em reais ESCRITO nas imagens ou na legenda (número, ex.: 69.99). Se não houver, null. NUNCA invente.\n' +
+      '- generos: escolha SOMENTE entre ' + JSON.stringify(listas.generos) + ' (vazio se nenhum servir).\n' +
+      '- categorias: escolha SOMENTE entre ' + JSON.stringify(listas.categorias) + ' (vazio se nenhuma servir).\n' +
+      '- cores: cores que você VÊ na peça (em português). Se o post mostra várias cores da mesma peça, liste todas.\n' +
+      '- tamanhos: SOMENTE se estiverem escritos (ex.: ["P","M","G"]); senão [].\n' +
+      '- descricao: 1 a 2 frases só com o que é visível (modelagem, detalhes). NÃO invente tecido, marca nem composição.\n\nLEGENDA:\n' + String(r.legenda || '').slice(0, 1200);
+    const g = await chamarGemini(env, chave, { contents: [{ parts: [{ text: prompt }].concat(partes) }], generationConfig: { temperature: 0.2, responseMimeType: 'application/json' } });
+    if (!g.ok) { const f = await falhar(g.erro, !g.espera); f.espera = !!g.espera; return f; }
+    let j; try { j = JSON.parse(g.texto); } catch (e) { const m = /\{[\s\S]*\}/.exec(g.texto); try { j = m ? JSON.parse(m[0]) : null; } catch (e2) { j = null; } }
+    if (!j || typeof j !== 'object') return await falhar('A IA devolveu algo que não deu para ler.', true);
+    const preco = precoDasFotos(j.preco);
+    const ia = { produto: j.produto !== false, nome: String(j.nome || '').replace(/\s+/g, ' ').trim().slice(0, 60), generos: soValidos(j.generos, listas.generos), categorias: soValidos(j.categorias, listas.categorias),
+      cores: (Array.isArray(j.cores) ? j.cores : []).map((x) => String(x).trim().slice(0, 30)).filter(Boolean).slice(0, 8), tamanhos: (Array.isArray(j.tamanhos) ? j.tamanhos : []).map((x) => String(x).trim().toUpperCase().slice(0, 6)).filter(Boolean).slice(0, 10),
+      descricao: String(j.descricao || '').replace(/\s+/g, ' ').trim().slice(0, 400) };
+    await env.DB.prepare("UPDATE rascunho SET ia_status='ok', ia_json=?, ia_tent=0, preco_foto=?, preco_sug=CASE WHEN ? != '' THEN ? ELSE preco_sug END, tamanhos_sug=CASE WHEN tamanhos_sug='' AND ? != '' THEN ? ELSE tamanhos_sug END, atualizado_em=? WHERE id=?")
+      .bind(JSON.stringify(ia), preco ? preco.avista : '', preco ? preco.cheio : '', preco ? preco.cheio : '', ia.tamanhos.join(', '), ia.tamanhos.join(', '), agora(), id).run();
+    return { ok: true };
+  } catch (e) { return await falhar('Falha ao ler as fotos.', true); }
+}
+/** Lê até `max` rascunhos que ainda não foram lidos (de 1 em 1, para respeitar o limite de uso da IA). */
+export async function analisarPendentes(env, max) {
+  if (!(await cfgGet(env, 'gemini_key'))) return { feitas: 0, restantes: 0, semChave: true };
+  const velho = new Date(Date.now() - 300000).toISOString();
+  let feitas = 0, espera = false, erro = '';
+  for (let i = 0; i < max; i++) {
+    const q = await env.DB.prepare('SELECT id FROM rascunho WHERE ' + COND_IA_PENDENTE + ' ORDER BY id DESC LIMIT 1').bind(velho).first(); if (!q) break;
+    const c = await env.DB.prepare("UPDATE rascunho SET ia_status='lendo', ia_em=? WHERE id=? AND (" + "ia_status IN ('', 'pendente', 'erro') OR (ia_status='lendo' AND ia_em < ?))").bind(agora(), q.id, velho).run();
+    if (!c.meta.changes) continue;
+    const r = await analisarRascunho(env, q.id);
+    if (r.ok) feitas++; else { erro = r.erro || ''; if (r.espera) { espera = true; break; } }
+  }
+  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM rascunho WHERE ' + COND_IA_PENDENTE).bind(velho).first();
+  return { feitas: feitas, restantes: n ? n.n : 0, espera: espera, erro: erro };
+}
+
 /* ---------- leitura para a tela ---------- */
 function urlMidia(env, chave) { return chave ? String(env.MIDIA_URL || '').replace(/\/$/, '') + '/m/' + chave : ''; }
+function iaDe(r) { if (r.ia_status !== 'ok') return null; try { return JSON.parse(r.ia_json || 'null'); } catch (e) { return null; } }
 async function carregarRascunhos(env, linhas) {
   if (!linhas.length) return [];
   const ids = linhas.map((r) => r.id);
   const q = await env.DB.prepare('SELECT rm.rascunho_id, rm.ordem, rm.capa, m.id AS midia, m.tipo, m.chave, m.chave_mini, m.expirou_em FROM rascunho_midia rm JOIN ig_midia m ON m.id = rm.midia_id WHERE rm.rascunho_id IN (' + ids.map(() => '?').join(',') + ') ORDER BY rm.rascunho_id, rm.ordem').bind(...ids).all();
   const por = {};
   (q.results || []).forEach((x) => { (por[x.rascunho_id] = por[x.rascunho_id] || []).push({ id: x.midia, tipo: x.tipo === 'VIDEO' ? 'video' : 'foto', url: urlMidia(env, x.chave), mini: x.tipo === 'VIDEO' ? urlMidia(env, x.chave_mini) : urlMidia(env, x.chave), capa: !!x.capa, ordem: x.ordem }); });
-  return linhas.map((r) => ({ id: r.id, grupo: r.grupo, status: r.status, origem: r.origem, legenda: r.legenda, permalink: r.permalink, publicadoEm: r.publicado_em, precoSug: r.preco_sug, tamanhosSug: r.tamanhos_sug, codigoDup: r.codigo_dup, produtoId: r.produto_id, midias: por[r.id] || [] }));
+  return linhas.map((r) => ({ id: r.id, grupo: r.grupo, status: r.status, origem: r.origem, legenda: r.legenda, permalink: r.permalink, publicadoEm: r.publicado_em, precoSug: r.preco_sug, tamanhosSug: r.tamanhos_sug, codigoDup: r.codigo_dup, produtoId: r.produto_id, precoFoto: r.preco_foto || '', iaStatus: r.ia_status || '', ia: iaDe(r), midias: por[r.id] || [] }));
 }
 async function contagens(env) {
   const q = await env.DB.prepare("SELECT status, grupo, COUNT(*) AS n FROM rascunho GROUP BY status, grupo").all();
@@ -301,6 +417,7 @@ async function acao(env, b) {
       const novo = await novoRascunhoAvulso(env, r.origem, r.legenda, r.permalink, r.publicado_em, 'pendente');
       await env.DB.batch(sel.map((m, k) => env.DB.prepare('INSERT INTO rascunho_midia (rascunho_id, midia_id, ordem, capa) VALUES (?, ?, ?, ?)').bind(novo, m, k, k === 0 ? 1 : 0))
         .concat(sel.map((m) => env.DB.prepare('DELETE FROM rascunho_midia WHERE rascunho_id=? AND midia_id=?').bind(id, m))));
+      await env.DB.prepare("UPDATE rascunho SET ia_status='', ia_tent=0 WHERE id=?").bind(id).run();
       await garantirCapa(env, id); await tocar(env, id); return { novoId: novo };
     }
     case 'mover': {                                                  // leva UMA mídia para outro rascunho
@@ -317,13 +434,23 @@ async function acao(env, b) {
       let ordem = await proximaOrdem(env, para.id);
       await env.DB.batch(ms.map((x) => env.DB.prepare('INSERT OR REPLACE INTO rascunho_midia (rascunho_id, midia_id, ordem, capa) VALUES (?, ?, ?, 0)').bind(para.id, x.midia_id, ordem++))
         .concat([env.DB.prepare('DELETE FROM rascunho_midia WHERE rascunho_id=?').bind(de.id), env.DB.prepare("UPDATE rascunho SET status='descartado', descartado_em=?, atualizado_em=? WHERE id=?").bind(agora(), agora(), de.id),
-          env.DB.prepare("UPDATE rascunho SET legenda=CASE WHEN legenda='' THEN ? ELSE legenda END, preco_sug=CASE WHEN preco_sug='' THEN ? ELSE preco_sug END, tamanhos_sug=CASE WHEN tamanhos_sug='' THEN ? ELSE tamanhos_sug END, grupo=CASE WHEN grupo='sem_id' THEN 'pendente' ELSE grupo END, atualizado_em=? WHERE id=?").bind(de.legenda || '', de.preco_sug || '', de.tamanhos_sug || '', agora(), para.id)]));
+          env.DB.prepare("UPDATE rascunho SET legenda=CASE WHEN legenda='' THEN ? ELSE legenda END, preco_sug=CASE WHEN preco_sug='' THEN ? ELSE preco_sug END, tamanhos_sug=CASE WHEN tamanhos_sug='' THEN ? ELSE tamanhos_sug END, grupo=CASE WHEN grupo='sem_id' THEN 'pendente' ELSE grupo END, ia_status='', ia_tent=0, atualizado_em=? WHERE id=?").bind(de.legenda || '', de.preco_sug || '', de.tamanhos_sug || '', agora(), para.id)]));
       await garantirCapa(env, para.id); return {};
+    }
+    case 'lerIA': {                                                  // "ler as fotos de novo" (um rascunho)
+      const rr = await analisarRascunho(env, id);
+      if (!rr.ok) throw Object.assign(new Error(rr.semChave ? 'A IA ainda não foi ligada (cole a chave em ⚙️ Instagram).' : rr.erro || 'A IA não conseguiu agora.'), { codigo: rr.semChave ? 409 : 502 });
+      return {};
     }
     default: throw Object.assign(new Error('Ação desconhecida.'), { codigo: 400 });
   }
 }
 
+async function iaStatus(env) {
+  const k = await cfgGet(env, 'gemini_key'); if (!k) return { ligada: false, pendentes: 0 };
+  const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM rascunho WHERE ' + COND_IA_PENDENTE).bind(new Date(Date.now() - 300000).toISOString()).first();
+  return { ligada: true, fim: k.slice(-4), pendentes: n ? n.n : 0 };
+}
 async function status(env) {
   const c = await contagens(env);
   const ult = await env.DB.prepare('SELECT inicio, fim, novas, erro, origem FROM exec_log ORDER BY id DESC LIMIT 1').first();
@@ -334,11 +461,11 @@ async function status(env) {
   const alertas = [];
   if (tem && falhas >= 3) alertas.push('A busca no Instagram falhou ' + falhas + ' vezes seguidas' + (ult && ult.erro ? ': ' + ult.erro : '.'));
   if (tem && dias !== null && dias < 10) alertas.push('O acesso ao Instagram vence em ' + Math.max(0, dias) + ' dia(s). Conecte de novo.');
-  return { ok: true, conectado: tem, usuario: await cfgGet(env, 'ig_usuario') || '', venceEmDias: dias, desde: await cfgGet(env, 'ig_desde') || '', contagens: c, ultimoCiclo: ult || null, novasDesdeOntem: n ? n.n : 0, falhasSeguidas: falhas, alertas: alertas, usoR2: await lerUso(env), limiteR2: limite(env), historico: { completo: !!(await cfgGet(env, 'ig_hist_fim')), emAndamento: !!(await cfgGet(env, 'ig_hist_depois')) } };
+  return { ok: true, conectado: tem, usuario: await cfgGet(env, 'ig_usuario') || '', venceEmDias: dias, desde: await cfgGet(env, 'ig_desde') || '', contagens: c, ultimoCiclo: ult || null, novasDesdeOntem: n ? n.n : 0, falhasSeguidas: falhas, alertas: alertas, usoR2: await lerUso(env), limiteR2: limite(env), ia: await iaStatus(env), historico: { completo: !!(await cfgGet(env, 'ig_hist_fim')), emAndamento: !!(await cfgGet(env, 'ig_hist_depois')) } };
 }
 
 export default {
-  async scheduled(ev, env, ctx) { if (await env.CACHE.get('ig_hist_trava')) return; ctx.waitUntil(ciclo(env, 'cron')); },
+  async scheduled(ev, env, ctx) { if (await env.CACHE.get('ig_hist_trava')) return; ctx.waitUntil((async () => { await ciclo(env, 'cron'); try { await analisarPendentes(env, 5); } catch (e) { /* a IA é conforto: o ciclo não pode cair por causa dela */ } })()); },
   async fetch(req, env, ctx) {
     const url = new URL(req.url), h = cors(env, req), J = (c, s) => resp(c, s, h);
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
@@ -388,6 +515,21 @@ export default {
         await cfgSet(env, 'falhas', 0);
         return J({ ok: true, usuario: eu.username || eu.id || '' });
       }
+      if (p === '/ia' && req.method === 'POST') {
+        let b = {}; try { b = await req.json(); } catch (e) { /* sem corpo */ }
+        const r = await analisarPendentes(env, Math.min(3, Math.max(1, Number(b && b.limite) || 2)));
+        return J(Object.assign({ ok: !r.semChave }, r, r.semChave ? { erro: 'A IA ainda não foi ligada.' } : {}));
+      }
+      if (p === '/ia-chave' && req.method === 'POST') {
+        let b; try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); }
+        const chave = String((b && b.chave) || '').trim();
+        if (!/^[A-Za-z0-9._\-]{20,200}$/.test(chave)) return J({ ok: false, erro: 'Essa chave parece incompleta ou com caracteres estranhos. Cole de novo, só a chave.' }, 400);
+        let t; try { t = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', { headers: { 'x-goog-api-key': chave, 'User-Agent': UA } }); } catch (e) { return J({ ok: false, erro: 'Não consegui falar com o Google agora. Tente de novo.' }, 502); }
+        if (!t.ok) return J({ ok: false, erro: 'O Google recusou essa chave (' + t.status + '). Confira se copiou a chave inteira.' }, 400);
+        await cfgSet(env, 'gemini_key', chave);
+        return J({ ok: true, fim: chave.slice(-4) });
+      }
+      if (p === '/ia-chave' && req.method === 'DELETE') { await cfgSet(env, 'gemini_key', null); return J({ ok: true }); }
       if (p === '/token' && req.method === 'DELETE') { await cfgSet(env, 'ig_token', null); await cfgSet(env, 'ig_token_exp', null); await cfgSet(env, 'ig_usuario', null); return J({ ok: true }); }
       return J({ ok: false, erro: 'Não encontrado.' }, 404);
     } catch (e) {

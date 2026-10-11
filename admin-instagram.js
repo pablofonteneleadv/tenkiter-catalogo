@@ -12,6 +12,8 @@
   const esc = (v) => escaparHtml(v);
   const GRUPOS = [['pendente', 'Pendentes'], ['sem_id', 'Sem identificação'], ['duplicado', 'Prováveis duplicados'], ['nao_produto', 'Não é produto'], ['descartado', 'Descartados']];
   let grupo = 'pendente', lista = [], mais = false, cont = {}, st = null, editando = null, ocupado = false, desfazer = null, desfazerTimer = null;
+  const marcados = new Set();            // posts marcados com a caixinha para "Juntar"
+  let iaRodando = false, iaTxt = '', tela = '';      // tela: 'lista' | 'editor' | 'conectar' (a leitura por IA só redesenha a lista)
 
   /* ---------- Worker ---------- */
   function sessao() { const s = typeof getSessao === 'function' ? getSessao() : null; return s && /^tk[12]\./.test(String(s.sessao)) ? s : null; }
@@ -70,6 +72,11 @@
       .ig-conectar ol { padding-left: 20px; font-size: 0.86rem; line-height: 1.5; }
       .ig-toast { position: sticky; bottom: 0; background: #222; color: #fff; border-radius: 10px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; justify-content: space-between; font-size: 0.86rem; }
       .ig-toast button { width: auto; min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--laranja); color: #0d0d0d; font-weight: 800; cursor: pointer; }
+      .ig-juntar-barra { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: #fff; border: 1px solid #e3e3e3; border-radius: 10px; padding: 8px 10px; margin: 0 0 8px; font-size: 0.84rem; }
+      .ig-juntar-barra button { width: auto; flex: none; padding: 0 14px; min-height: 44px; border-radius: 8px; border: 0; font-weight: 800; cursor: pointer; } .ig-juntar-barra button:disabled { opacity: .45; cursor: default; }
+      .ig-selcard { display: flex; align-items: center; gap: 8px; font-size: 0.86rem; font-weight: 700; margin: 0 0 8px; min-height: 40px; } .ig-selcard input { width: 22px; height: 22px; }
+      .ig-ia { background: #f1ecff; border: 1px solid #d8ccff; color: #3b1f8c; border-radius: 10px; padding: 7px 10px; font-size: 0.82rem; margin: 0 0 8px; }
+      .ig-iaok { background: #e9f7ee; border: 1px solid #b5e0c4; color: #14532d; border-radius: 8px; padding: 5px 8px; font-size: 0.8rem; margin-bottom: 8px; overflow-wrap: anywhere; }
       .ig-msg { min-height: 1.3em; font-size: 0.85rem; margin: 6px 0; } .ig-msg.erro { color: var(--vermelho); font-weight: 700; } .ig-msg.ok { color: #146c43; font-weight: 700; }
     `;
     document.head.appendChild(s);
@@ -107,6 +114,11 @@
     document.body.appendChild(o);
     $('ig-fechar').addEventListener('click', fechar);
     $('ig-corpo').addEventListener('click', clique);
+    $('ig-corpo').addEventListener('change', (ev) => {
+      const c = ev.target.closest && ev.target.closest('.ig-selr'); if (!c) return;
+      const id = Number(c.value); if (c.checked) marcados.add(id); else marcados.delete(id);
+      const y = $('ig-corpo').scrollTop; desenharLista(); $('ig-corpo').scrollTop = y;
+    });
     window.addEventListener('popstate', () => o.classList.remove('aberto'));
   }
   function fechar() { fecharComHistorico_('overlay-instagram'); }
@@ -117,7 +129,7 @@
     const r = await carregarStatus();
     if (!r || !r.ok) { $('ig-corpo').innerHTML = '<p class="ig-aviso">' + esc(erroTxt(r)) + '</p>'; return; }
     if (!st.conectado) { desenharConectar(); return; }
-    editando = null; await carregarLista(true);
+    editando = null; await carregarLista(true); rodarIA();
   }
 
   /* ---------- lista ---------- */
@@ -128,6 +140,7 @@
     if (!r || !r.ok) { $('ig-corpo').innerHTML = '<p class="ig-aviso">' + esc(erroTxt(r)) + '</p>'; return; }
     lista = lista.concat(r.rascunhos); mais = !!r.mais; cont = r.contagens || cont;
     desenharFaixa(); desenharLista();
+    rodarIA();
   }
   const ORIGEM = { feed: '📷 Feed', carrossel: '🖼️ Carrossel', reel: '🎬 Reel', story: '⏱️ Story', avulsa: '📎 Avulsa' };
   function dataBr(iso) { try { const d = new Date(iso); return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
@@ -142,14 +155,24 @@
     const dup = r.codigoDup ? '<div class="ig-dup">Parece já estar no catálogo: <b>' + esc(r.codigoDup) + '</b>. Confira antes de aceitar.</div>' : '';
     const nao = grupo === 'descartado' ? '<button type="button" class="ig-sec" data-ig="restaurar" data-id="' + r.id + '">↩️ Restaurar</button>'
       : '<button type="button" class="ig-ok" data-ig="aceitar" data-id="' + r.id + '">✅ Aceitar</button><button type="button" class="ig-sec" data-ig="editar" data-id="' + r.id + '">🖼️ Mídias</button><button type="button" class="ig-ruim" data-ig="descartar" data-id="' + r.id + '">🗑️ Descartar</button>' + (grupo !== 'nao_produto' ? '<button type="button" class="ig-sec" data-ig="naoproduto" data-id="' + r.id + '">🚫 Não é produto</button>' : '');
-    return '<div class="ig-card" data-card="' + r.id + '">' + miniaturas(r, 3) + '<div class="ig-meta"><span>' + (ORIGEM[r.origem] || r.origem) + '</span><span>' + esc(dataBr(r.publicadoEm)) + '</span><span>' + (r.midias || []).length + ' mídia(s)</span>' + (r.permalink ? '<a href="' + esc(r.permalink) + '" target="_blank" rel="noopener" style="color:var(--laranja-txt)">ver no Instagram</a>' : '') + '</div>' +
-      (r.legenda ? '<p class="ig-leg">' + esc(r.legenda) + '</p>' : '') + (sug.length ? '<div class="ig-sug">' + sug.map((x) => '<span>' + esc(x) + '</span>').join('') + '</div>' : '') + dup + '<div class="ig-acoes">' + nao + '</div></div>';
+    const ia = r.ia || null;
+    const iaLinha = ia ? '<div class="ig-iaok">🤖 <b>' + esc(ia.nome || 'Sem nome') + '</b>' + (ia.categorias && ia.categorias.length ? ' · ' + esc(ia.categorias.join(', ')) : '') + (ia.generos && ia.generos.length ? ' · ' + esc(ia.generos.join(', ')) : '') + (ia.cores && ia.cores.length ? ' · ' + esc(ia.cores.join(', ')) : '') +
+      (r.precoFoto ? '<br>💲 Na foto: R$ ' + esc(String(r.precoFoto).replace('.', ',')) + ' à vista → catálogo R$ ' + esc(String(r.precoSug || '').replace('.', ',')) + '' : '') + (ia.produto === false ? '<br>🤔 A IA acha que isso não é uma peça à venda.' : '') + '</div>'
+      : (r.iaStatus === 'erro' ? '<div class="ig-ia">🤖 A IA não conseguiu ler as fotos deste post (você pode aceitar e preencher na mão).</div>' : '');
+    const caixa = (grupo !== 'descartado') ? '<label class="ig-selcard"><input type="checkbox" class="ig-selr" value="' + r.id + '"' + (marcados.has(r.id) ? ' checked' : '') + '> Marcar para juntar</label>' : '';
+    return '<div class="ig-card" data-card="' + r.id + '">' + caixa + miniaturas(r, 3) + '<div class="ig-meta"><span>' + (ORIGEM[r.origem] || r.origem) + '</span><span>' + esc(dataBr(r.publicadoEm)) + '</span><span>' + (r.midias || []).length + ' mídia(s)</span>' + (r.permalink ? '<a href="' + esc(r.permalink) + '" target="_blank" rel="noopener" style="color:var(--laranja-txt)">ver no Instagram</a>' : '') + '</div>' +
+      (r.legenda ? '<p class="ig-leg">' + esc(r.legenda) + '</p>' : '') + iaLinha + (sug.length ? '<div class="ig-sug">' + sug.map((x) => '<span>' + esc(x) + '</span>').join('') + '</div>' : '') + dup + '<div class="ig-acoes">' + nao + '</div></div>';
   }
   function desenharLista() {
+    tela = 'lista';
     const abas = '<div class="ig-abas" role="tablist">' + GRUPOS.map((g) => '<button type="button" role="tab" aria-selected="' + (g[0] === grupo) + '" data-ig="aba" data-g="' + g[0] + '">' + g[1] + (cont[g[0]] ? ' (' + cont[g[0]] + ')' : '') + '</button>').join('') + '</div>';
     const avisos = (st && st.alertas || []).map((a) => '<div class="ig-aviso">⚠️ ' + esc(a) + '</div>').join('');
     const vazio = '<p class="ig-vazio">' + (grupo === 'pendente' ? 'Nada esperando agora. 🎉 O que você postar no Instagram aparece aqui sozinho (a cada 30 minutos) ou toque em "Buscar agora".' : 'Nada por aqui.') + '</p>';
-    $('ig-corpo').innerHTML = avisos + abas + (lista.length ? lista.map(cartao).join('') : vazio) + (mais ? '<div class="ig-acoes" style="justify-content:center"><button type="button" class="ig-sec" data-ig="mais" style="width:auto;padding:10px 16px;border:0;border-radius:8px;min-height:44px;font-weight:700">Carregar mais</button></div>' : '') + rodape() + toast();
+    const ids = lista.map((x) => x.id); marcados.forEach((id) => { if (ids.indexOf(id) === -1) marcados.delete(id); });
+    const barra = (grupo !== 'descartado' && lista.length > 1) ? '<div class="ig-juntar-barra"><button type="button" class="ig-ok" data-ig="juntarMarcados"' + (marcados.size < 2 ? ' disabled' : '') + '>🔗 Juntar ' + (marcados.size >= 2 ? marcados.size + ' posts em 1 produto' : 'em 1 produto') + '</button>' +
+      (marcados.size ? '<button type="button" class="ig-sec" data-ig="limparMarcados">Limpar</button>' : '') + '<span>' + (marcados.size ? marcados.size + ' marcado(s)' : 'Marque os posts da MESMA peça (caixinha em cada um) e toque em Juntar.') + '</span></div>' : '';
+    const iaBox = '<div class="ig-ia" id="ig-ia" role="status"' + (iaTxt ? '' : ' hidden') + '>' + esc(iaTxt) + '</div>';
+    $('ig-corpo').innerHTML = avisos + iaBox + abas + barra + (lista.length ? lista.map(cartao).join('') : vazio) + (mais ? '<div class="ig-acoes" style="justify-content:center"><button type="button" class="ig-sec" data-ig="mais" style="width:auto;padding:10px 16px;border:0;border-radius:8px;min-height:44px;font-weight:700">Carregar mais</button></div>' : '') + rodape() + toast();
   }
   function rodape() {
     const u = st && st.ultimoCiclo;
@@ -162,13 +185,14 @@
   /* ---------- editor de mídias ---------- */
   function desenharEditor() {
     const r = editando; if (!r) return;
+    tela = 'editor';
     const tiles = (r.midias || []).map((m, i) => '<div class="ig-tile' + (m.capa ? ' capa' : '') + '" data-m="' + esc(m.id) + '"><div class="ig-th">' + (m.tipo === 'video' ? '<img loading="lazy" alt="" ' + atribSrc(m.mini || '') + '><button type="button" data-ig="tocar" data-url="' + esc(m.url) + '" style="position:absolute;inset:auto 6px 6px auto;min-height:36px">▶ tocar</button>' : '<img loading="lazy" alt="" ' + atribSrc(m.url) + '>') + '</div>' +
       '<div class="ig-linha"><button type="button" data-ig="sobe" data-m="' + esc(m.id) + '" ' + (i === 0 ? 'disabled' : '') + ' aria-label="Mover para antes">◀</button><button type="button" data-ig="desce" data-m="' + esc(m.id) + '" ' + (i === r.midias.length - 1 ? 'disabled' : '') + ' aria-label="Mover para depois">▶</button>' +
       (m.tipo === 'foto' && !m.capa ? '<button type="button" data-ig="capa" data-m="' + esc(m.id) + '">⭐ Capa</button>' : (m.capa ? '<span style="align-self:center;font-weight:800;font-size:.8rem">⭐ Capa</span>' : '')) + '<button type="button" data-ig="tirar" data-m="' + esc(m.id) + '">✕ Tirar</button></div>' +
       '<label><input type="checkbox" class="ig-sel" value="' + esc(m.id) + '"> escolher</label></div>').join('');
     $('ig-corpo').innerHTML = '<button type="button" class="ig-sec" data-ig="voltar" style="width:auto;padding:10px 14px;border:0;border-radius:8px;min-height:44px;font-weight:700">← Voltar à lista</button>' +
       '<div class="ig-meta" style="margin-top:8px"><span>' + (ORIGEM[r.origem] || r.origem) + '</span><span>' + esc(dataBr(r.publicadoEm)) + '</span></div>' + (r.legenda ? '<p class="ig-leg" style="-webkit-line-clamp:4">' + esc(r.legenda) + '</p>' : '') +
-      '<div class="ig-grade">' + tiles + '</div><div class="ig-edit-barra"><button type="button" class="ig-sec" data-ig="separar">✂️ Separar as escolhidas em outro produto</button><button type="button" class="ig-sec" data-ig="juntar">🔗 Juntar com outro produto…</button></div>' +
+      '<div class="ig-grade">' + tiles + '</div><div class="ig-edit-barra"><button type="button" class="ig-sec" data-ig="separar">✂️ Separar as escolhidas em outro produto</button><button type="button" class="ig-sec" data-ig="juntar">🔗 Juntar com outro produto…</button>' + (st && st.ia && st.ia.ligada ? '<button type="button" class="ig-sec" data-ig="lerIA" data-id="' + r.id + '">🤖 Ler as fotos de novo</button>' : '') + '</div>' +
       '<div class="ig-edit-barra"><button type="button" class="ig-ok" data-ig="aceitar" data-id="' + r.id + '">✅ Aceitar este produto</button><button type="button" class="ig-ruim" data-ig="descartar" data-id="' + r.id + '">🗑️ Descartar</button></div><div class="ig-msg" id="ig-msg" role="status"></div>';
   }
   async function recarregarEditor() {
@@ -211,9 +235,11 @@
 
   /* ---------- conectar ---------- */
   function desenharConectar(erro) {
+    tela = 'conectar';
     const c = st || {};
     $('ig-corpo').innerHTML = '<div class="ig-conectar">' + (c.conectado ? '<p><b>✅ Conectado' + (c.usuario ? ' como @' + esc(c.usuario) : '') + '</b>' + (c.venceEmDias != null ? ' · o acesso é renovado sozinho (vence em ' + c.venceEmDias + ' dias se algo falhar)' : '') + '.</p>' +
-      '<div class="ig-edit-barra"><button type="button" class="ig-sec" data-ig="historico">📚 Importar os últimos 20 posts</button><button type="button" class="ig-sec" data-ig="todos" id="ig-btn-todos">' + rotuloTodos(c) + '</button><button type="button" class="ig-ruim" data-ig="desconectar">Desconectar</button><button type="button" class="ig-sec" data-ig="voltarLista">← Voltar</button></div><hr>' : '') +
+      '<div class="ig-edit-barra"><button type="button" class="ig-sec" data-ig="historico">📚 Importar os últimos 20 posts</button><button type="button" class="ig-sec" data-ig="todos" id="ig-btn-todos">' + rotuloTodos(c) + '</button><button type="button" class="ig-ruim" data-ig="desconectar">Desconectar</button><button type="button" class="ig-sec" data-ig="voltarLista">← Voltar</button></div><hr>' + '<h3 style="font-size:.95rem;margin:8px 0 6px">🤖 Leitura das fotos por IA</h3>' + (c.ia && c.ia.ligada ? '<p style="font-size:.86rem">✅ <b>Ligada</b> (chave terminada em ' + esc(c.ia.fim || '') + '). Cada post novo é lido sozinho: nome, preço escrito na foto, categoria e cores já vêm preenchidos quando você aceita.</p><div class="ig-edit-barra"><button type="button" class="ig-ruim" data-ig="iaDesligar">Desligar a IA</button></div>' :
+        '<p style="font-size:.86rem">Para os posts chegarem já com nome, preço, categoria e cores, cole uma chave do Google (Gemini). No celular: abra <b>aistudio.google.com/apikey</b> → <b>Criar chave de API</b> → copie e cole aqui. Ela fica guardada só no servidor e nunca volta para a tela.</p><label for="ig-ia-chave">Chave da IA (Gemini)</label><input type="password" id="ig-ia-chave" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="ig-edit-barra"><button type="button" class="ig-ok" data-ig="iaLigar">Ligar a IA</button></div>') : '') +
       '<h3 style="font-size:.95rem;margin:8px 0">' + (c.conectado ? 'Trocar o acesso do Instagram' : 'Conectar o Instagram') + '</h3>' +
       '<p style="font-size:.85rem">O sistema só LÊ o seu Instagram (nunca posta). Para liberar, você cria um acesso na Meta e cola o código aqui:</p>' +
       '<ol><li>No celular, abra <b>developers.facebook.com</b> → <b>Meus apps</b> → <b>Criar app</b> (tipo "Negócios") → adicione o produto <b>Instagram</b> → <b>API com login do Instagram</b>.</li><li>Em <b>Funções do app</b>, adicione a conta <b>@tenkitermodasceara</b> como testadora e aceite o convite no app do Instagram (Configurações → Apps e sites).</li><li>Em <b>Gerar tokens de acesso</b>, gere o token da conta e copie.</li><li>Cole abaixo e toque em Conectar. O código fica guardado só no servidor e nunca volta para a tela.</li></ol>' +
@@ -251,9 +277,47 @@
     const pb = $('ig-btn-parar'); if (pb) pb.remove();
     await carregarStatus();
     if (btn) { btn.disabled = false; btn.textContent = rotuloTodos(st); }
+    rodarIA();
     if (terminou) msg('✅ Pronto! Todos os posts foram importados: ' + total + ' novo(s)' + (puladas ? ' (' + puladas + ' pulado(s) por falha na mídia)' : '') + '. Veja em "Produtos para aceitar".', 'ok');
     else if (erroFinal) msg('Parei: ' + erroFinal + ' (' + total + ' copiados). Toque em "Importar TODOS" para continuar de onde parou.', 'erro');
     else msg('Parado. ' + total + ' post(s) copiados. Toque em "Importar TODOS" para continuar de onde parou.', 'ok');
+  }
+
+  /* ---------- juntar vários posts em 1 produto ---------- */
+  async function juntarMarcados() {
+    if (ocupado) return;
+    const ordem = lista.filter((x) => marcados.has(x.id)); if (ordem.length < 2) { msg('Marque 2 ou mais posts.', 'erro'); return; }
+    const destino = ordem[0], outros = ordem.slice(1);
+    if (!confirm('Juntar ' + ordem.length + ' posts em UM produto só?\n\n• Todas as fotos e vídeos ficam juntos (a capa é a do primeiro da lista).\n• Os outros ' + outros.length + ' post(s) saem desta lista (ficam em "Descartados").')) return;
+    ocupado = true; let feitos = 0, erro = '';
+    for (const o of outros) {
+      msg('Juntando… ' + (feitos + 1) + ' de ' + outros.length);
+      const r = await ig('/acao', 'POST', { acao: 'juntar', id: o.id, para: destino.id });
+      if (r && r.ok) feitos++; else { erro = erroTxt(r); break; }
+    }
+    ocupado = false; marcados.clear();
+    await carregarStatus(); await carregarLista(true);
+    msg(erro ? 'Juntei ' + feitos + ' e parei: ' + erro : '✅ Pronto: ' + (feitos + 1) + ' posts viraram 1 produto (' + feitos + ' foto(s)/vídeo(s) a mais).', erro ? 'erro' : 'ok');
+    rodarIA();
+  }
+
+  /* ---------- IA: lê as fotos dos posts que ainda não foram lidos (o Worker também faz isso sozinho a cada 30 min) ---------- */
+  async function rodarIA() {
+    if (iaRodando || !st || !st.conectado || !st.ia || !st.ia.ligada) return;
+    if (!(st.ia.pendentes > 0)) return;
+    iaRodando = true; let seguidasSemProgresso = 0;
+    try {
+      while (st && st.ia && st.ia.pendentes > 0 && $('overlay-instagram') && $('overlay-instagram').classList.contains('aberto')) {
+        iaTxt = '🤖 Lendo as fotos com IA… faltam ' + st.ia.pendentes + ' post(s). Pode continuar mexendo.'; const el = $('ig-ia'); if (el) { el.hidden = false; el.textContent = iaTxt; }
+        const r = await ig('/ia', 'POST', { limite: 2 });
+        if (!r || !r.ok) { iaTxt = '🤖 A leitura por IA parou: ' + erroTxt(r); break; }
+        if (r.restantes != null) st.ia.pendentes = r.restantes;
+        if (r.espera) { iaTxt = '🤖 A IA pediu um tempinho (limite de uso). Continuo já já…'; const e2 = $('ig-ia'); if (e2) e2.textContent = iaTxt; await new Promise((ok) => setTimeout(ok, 20000)); continue; }
+        if (!r.feitas) { seguidasSemProgresso++; if (seguidasSemProgresso >= 3) { iaTxt = '🤖 A IA não conseguiu ler alguns posts (' + (r.erro || 'erro') + '). Você pode aceitá-los e preencher na mão.'; break; } } else seguidasSemProgresso = 0;
+        if (tela === 'lista' && !editando && !ocupado) { const x = $('ig-corpo').scrollTop; const rr = await ig('/rascunhos?grupo=' + grupo + '&limite=' + Math.max(20, lista.length)); if (rr && rr.ok && tela === 'lista' && !editando) { lista = rr.rascunhos; mais = !!rr.mais; desenharLista(); $('ig-corpo').scrollTop = x; } }
+      }
+      if (st && st.ia && !(st.ia.pendentes > 0)) iaTxt = '';
+    } finally { iaRodando = false; const e3 = $('ig-ia'); if (e3) { e3.textContent = iaTxt; e3.hidden = !iaTxt; } }
   }
 
   /* ---------- cliques ---------- */
@@ -284,7 +348,12 @@
     else if (a === 'descartar' || a === 'naoproduto') await descartarRapido(id, a === 'naoproduto');
     else if (a === 'restaurar') { await ig('/acao', 'POST', { acao: 'restaurar', id: id }); lista = lista.filter((x) => x.id !== id); await carregarStatus(); desenharLista(); }
     else if (a === 'desfazer') await refazer();
-    else if (a === 'buscar') { msg('Buscando no Instagram…'); const r = await ig('/buscar', 'POST', {}); if (r && r.ok) { msg(r.novas ? r.novas + ' novo(s) encontrado(s).' : 'Nada novo.', 'ok'); await carregarStatus(); await carregarLista(true); } else msg(erroTxt(r), 'erro'); }
+    else if (a === 'buscar') { msg('Buscando no Instagram…'); const r = await ig('/buscar', 'POST', {}); if (r && r.ok) { msg(r.novas ? r.novas + ' novo(s) encontrado(s).' : 'Nada novo.', 'ok'); await carregarStatus(); await carregarLista(true); rodarIA(); } else msg(erroTxt(r), 'erro'); }
+    else if (a === 'juntarMarcados') await juntarMarcados();
+    else if (a === 'limparMarcados') { marcados.clear(); desenharLista(); }
+    else if (a === 'iaLigar') { const k = ($('ig-ia-chave') || {}).value || ''; msg('Conferindo a chave com o Google…'); const r = await ig('/ia-chave', 'POST', { chave: k }); if (r && r.ok) { $('ig-ia-chave').value = ''; await carregarStatus(); desenharConectar(); msg('✅ IA ligada. Os posts pendentes vão sendo lidos.', 'ok'); rodarIA(); } else msg(erroTxt(r), 'erro'); }
+    else if (a === 'iaDesligar') { if (confirm('Desligar a leitura por IA? Os posts continuam chegando, só sem o preenchimento automático.')) { await ig('/ia-chave', 'DELETE'); await carregarStatus(); desenharConectar(); } }
+    else if (a === 'lerIA') { msg('Lendo as fotos…'); const r = await ig('/acao', 'POST', { acao: 'lerIA', id }); if (r && r.ok) { await recarregarEditor(); msg('✅ Fotos lidas de novo.', 'ok'); } else msg(erroTxt(r), 'erro'); }
     else if (a === 'config') desenharConectar();
     else if (a === 'conectar') { const t = ($('ig-token') || {}).value || ''; msg('Conferindo com o Instagram…'); const r = await ig('/token', 'POST', { token: t }); if (r && r.ok) { $('ig-token').value = ''; await carregarStatus(); grupo = 'pendente'; await carregarLista(true); } else desenharConectar(erroTxt(r)); }
     else if (a === 'desconectar') { if (confirm('Desconectar o Instagram? Os rascunhos já criados continuam aqui.')) { await ig('/token', 'DELETE'); await carregarStatus(); desenharConectar(); } }

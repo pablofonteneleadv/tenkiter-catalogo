@@ -1709,7 +1709,8 @@
     const legenda = String(r.legenda || '');
     const limpa = legenda.replace(/#\S+/g, ' ').replace(/https?:\/\/\S+/g, ' ').replace(/\s+/g, ' ').trim();
     const primeira = (legenda.split(/\n/)[0] || '').replace(/#\S+/g, ' ').replace(/https?:\/\/\S+/g, ' ').replace(/\s+/g, ' ').trim();
-    preencherFormComProduto({ Nome: /[$]|R\$/.test(primeira) ? '' : primeira.slice(0, 60), Preco: r.precoSug || '', Estoque: '', Tamanhos: r.tamanhosSug || '', Cores: '', Descricao: limpa.slice(0, 400), Categoria: '', Genero: '', Novidade: false });
+    const ia = r.ia || null;      // o que a IA leu nas fotos durante a importação (nome, categoria, gênero, cores, descrição); o preço já vem em r.precoSug
+    preencherFormComProduto({ Nome: (ia && ia.nome) ? ia.nome : (/[$]|R\$/.test(primeira) ? '' : primeira.slice(0, 60)), Preco: r.precoSug || '', Estoque: '', Tamanhos: r.tamanhosSug || '', Cores: ia ? (ia.cores || []).join(', ') : '', Descricao: (ia && ia.descricao) ? ia.descricao : limpa.slice(0, 400), Categoria: ia ? (ia.categorias || []).join(',') : '', Genero: ia ? (ia.generos || []).join(',') : '', Novidade: false });
     zerarMidia({ Foto_URL: capa ? capa.url : '', Fotos_Galeria: resto.join(','), Video_URL: video ? video.url : '' });
     window.__rascunhoAtual = r.id;
     tituloForm_('Aceitando do Instagram');

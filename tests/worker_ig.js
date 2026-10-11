@@ -17,14 +17,24 @@ function d1() {
   const cacheMem = new Map();
   globalThis.caches = { default: { async match(r) { const v = cacheMem.get(r.url); return v ? new Response(v) : undefined; }, async put(r, x) { cacheMem.set(r.url, await x.text()); } } };
   const objs = new Map(); const kv = new Map();
-  const R2 = { async put(k, b) { objs.set(k, Buffer.from(b instanceof ReadableStream ? await new Response(b).arrayBuffer() : b)); }, async delete(k) { objs.delete(k); } };
+  const R2 = { async get(k) { const v = objs.get(k); return v ? { async arrayBuffer() { return v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength); } } : null; }, async put(k, b) { objs.set(k, Buffer.from(b instanceof ReadableStream ? await new Response(b).arrayBuffer() : b)); }, async delete(k) { objs.delete(k); } };
   const KV = { async get(k, t) { const v = kv.get(k); return v === undefined ? null : (t === 'json' ? JSON.parse(v) : v); }, async put(k, v) { kv.set(k, String(v)); }, async delete(k) { kv.delete(k); } };
   const TOKEN = 'IGQVJ_TOKEN_INVENTADO_PARA_TESTE_1234567890';
   // ---- Instagram falso ----
+  const GEMINI_OK = 'AIzaINVENTADA_PARA_TESTE_1234567890abcd'; let gemChamadas = [], gemModo = 'ok', gemTexto = '';
   let paginas = null, feed = [], stories = [], midia404 = {}, tokenValido = true, chamadas = [];
   const cdn = (id, tipo) => 'https://cdn.fake/' + id + (tipo === 'VIDEO' ? '.mp4' : '.jpg');
   globalThis.fetch = async (u, init) => {
     u = String(u);
+    if (u.startsWith('https://api.fake') && u.includes('action=categorias')) return new Response(JSON.stringify({ ok: true, categorias: ['Vestido', 'Conjunto', 'Blusa'] }));
+    if (u.startsWith('https://api.fake') && u.includes('action=generos')) return new Response(JSON.stringify({ ok: true, generos: ['Feminino Adulto', 'Infantil'] }));
+    if (u.startsWith('https://generativelanguage.googleapis.com/v1beta/models?')) { const k = new Headers(init.headers)['get']('x-goog-api-key'); return new Response(JSON.stringify(k === GEMINI_OK ? { models: [] } : { error: { message: 'API key not valid' } }), { status: k === GEMINI_OK ? 200 : 400 }); }
+    if (u.startsWith('https://generativelanguage.googleapis.com/')) {
+      gemChamadas.push({ url: u, headers: new Headers(init.headers), body: JSON.parse(init.body) });
+      if (gemModo === '429') return new Response(JSON.stringify({ error: { message: 'quota key=' + GEMINI_OK } }), { status: 429 });
+      if (gemModo === 'lixo') return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'não é json' }] } }] }));
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: gemTexto }] } }] }));
+    }
     if (u.startsWith('https://api.fake')) { const b = JSON.parse(init.body); return new Response(JSON.stringify(b.sessao === 'tk2.admin' ? { ok: true, usuario: { permissoes: ['gerir_acessos', 'catalogo_cadastrar'] } } : b.sessao === 'tk2.gerente' ? { ok: true, usuario: { permissoes: ['catalogo_cadastrar'] } } : { ok: false })); }
     if (u.startsWith('https://ig.fake') || u.startsWith('https://graph.fake')) {
       chamadas.push(u);
@@ -203,6 +213,69 @@ function d1() {
     const cheio2 = Object.assign({}, env, { LIMITE_BYTES: '100' });
     const rc = await W.ciclo(cheio2, 'historico', { todos: true }); chk('armazenamento cheio para a importação total com aviso', rc.ok === false && /armazenamento cheio/.test(rc.erro) && rc.puladas === 0, rc);
     paginas = null;
+  }
+
+  console.log('== IA lê as fotos do post ==');
+  {
+    const P = W.precoDasFotos;
+    chk('69,99 nas fotos = 70,00 à vista = 77,78 cheio (o site mostra 70,00)', JSON.stringify(P('69,99')) === JSON.stringify({ avista: '70.00', cheio: '77.78' }), P('69,99'));
+    chk('59,99 → 60,00 → 66,67', P(59.99).avista === '60.00' && P(59.99).cheio === '66.67', P(59.99));
+    chk('90 → 100,00 (sem sobra de ponto flutuante)', P('90').cheio === '100.00', P('90'));
+    chk('89,90 não é ",99": fica 89,90 → 99,89', P('89,90').avista === '89.90' && P('89,90').cheio === '99.89', P('89,90'));
+    chk('R$ 100 → 111,12', P('R$ 100').cheio === '111.12');
+    chk('lixo / zero / negativo / enorme = sem preço', P('abc') === null && P(0) === null && P(-5) === null && P(9999999) === null && P(null) === null);
+    chk('à vista × 0,90 do preço cheio nunca fica abaixo do que está na foto', [19.99, 29.99, 49.99, 69.99, 89.9, 120, 33.33].every((v) => { const q = P(v); return Math.round(Number(q.cheio) * 0.9 * 100) / 100 >= Number(q.avista) - 0.0001; }));
+
+    let r2, j2;
+    feed = [m('IA1', { timestamp: ts(5), caption: 'Arraste para o lado 👉', children: undefined })];
+    await W.ciclo(env, 'cron');
+    const rIA = await DB.prepare("SELECT id FROM rascunho WHERE legenda LIKE 'Arraste para o lado%'").first();
+    ({ r: r2, j: j2 } = await A('GET', '/status')); chk('sem chave: status diz IA desligada', j2.ia && j2.ia.ligada === false, j2.ia);
+    let pr = await W.analisarPendentes(env, 3); chk('sem chave nada é lido e ninguém quebra', pr.semChave === true && gemChamadas.length === 0, pr);
+    ({ r: r2, j: j2 } = await A('POST', '/ia-chave', { chave: 'curta' })); chk('chave com formato estranho = 400 sem falar com o Google', r2.status === 400 && gemChamadas.length === 0, j2);
+    ({ r: r2, j: j2 } = await A('POST', '/ia-chave', { chave: 'AIzaRECUSADA_PELO_GOOGLE_1234567890' })); chk('Google recusa a chave = frase clara e NÃO guarda', r2.status === 400 && /recusou/.test(j2.erro) && !(await DB.prepare("SELECT 1 AS x FROM cfg WHERE chave='gemini_key'").first()), j2);
+    ({ r: r2, j: j2 } = await A('POST', '/ia-chave', { chave: GEMINI_OK })); chk('chave boa é guardada (resposta só tem os 4 últimos)', j2.ok && j2.fim === GEMINI_OK.slice(-4) && !JSON.stringify(j2).includes(GEMINI_OK), j2);
+    ({ r: r2, j: j2 } = await A('GET', '/status')); chk('status: IA ligada, com pendentes, sem a chave', j2.ia.ligada === true && j2.ia.pendentes >= 1 && !JSON.stringify(j2).includes(GEMINI_OK), j2.ia);
+
+    gemTexto = JSON.stringify({ produto: true, nome: 'Vestido Alfaiataria Premium Vermelho', preco: 69.99, generos: ['feminino adulto', 'Inexistente'], categorias: ['Vestido', 'Coisa que não existe'], cores: ['Vermelho'], tamanhos: ['p', 'm'], descricao: 'Vestido curto com babado na barra.' });
+    ({ r: r2, j: j2 } = await A('POST', '/ia', { limite: 3 })); chk('POST /ia lê os pendentes', j2.ok && j2.feitas >= 1, j2);
+    const ult = gemChamadas[gemChamadas.length - 1];
+    chk('a chave vai no cabeçalho, nunca na URL', ult.headers.get('x-goog-api-key') === GEMINI_OK && !ult.url.includes(GEMINI_OK), ult.url);
+    chk('foto vai como imagem pronta e o pedido fala em ler o texto da imagem e em NÃO inventar preço', ult.body.contents[0].parts.some((x) => x.inline_data && x.inline_data.data) && /ESCRITO nas imagens/.test(ult.body.contents[0].parts[0].text) && /NUNCA invente/.test(ult.body.contents[0].parts[0].text));
+    chk('o pedido leva só as categorias e gêneros da loja', /Vestido/.test(ult.body.contents[0].parts[0].text) && /Feminino Adulto/.test(ult.body.contents[0].parts[0].text));
+    ({ j: j2 } = await A('GET', '/rascunhos?grupo=pendente&limite=60'));
+    const L = j2.rascunhos.find((x) => x.id === rIA.id);
+    chk('rascunho ficou com nome, cores e descrição da IA', L.iaStatus === 'ok' && L.ia.nome === 'Vestido Alfaiataria Premium Vermelho' && L.ia.cores[0] === 'Vermelho' && /babado/.test(L.ia.descricao), L);
+    chk('categoria/gênero fora das listas da loja são descartados (e o resto casa sem diferenciar maiúscula)', JSON.stringify(L.ia.categorias) === '["Vestido"]' && JSON.stringify(L.ia.generos) === '["Feminino Adulto"]', L.ia);
+    chk('preço: 69,99 na foto → 70,00 à vista → 77,78 sugerido', L.precoFoto === '70.00' && L.precoSug === '77.78', [L.precoFoto, L.precoSug]);
+    chk('tamanhos lidos entram quando a legenda não tinha', L.tamanhosSug === 'P, M', L.tamanhosSug);
+    chk('a chave não aparece em nenhuma lista', !JSON.stringify(j2).includes(GEMINI_OK));
+    const gt = gemTexto; gemTexto = JSON.stringify({ produto: true, nome: 'OUTRO NOME', preco: null, generos: [], categorias: [], cores: [], tamanhos: [], descricao: '' });
+    await A('POST', '/ia', { limite: 3 }); const lido = await DB.prepare('SELECT ia_json FROM rascunho WHERE id=?').bind(rIA.id).first(); gemTexto = gt;
+    chk('post já lido não é lido (nem cobrado) de novo', JSON.parse(lido.ia_json).nome === 'Vestido Alfaiataria Premium Vermelho', lido);
+
+    // limite de uso (429) não conta como erro do post
+    feed = [m('IA2', { timestamp: ts(6), caption: 'segundo' })]; await W.ciclo(env, 'cron');
+    gemModo = '429'; ({ j: j2 } = await A('POST', '/ia', { limite: 3 }));
+    chk('429: devolve "espera" e segue sem marcar erro definitivo', j2.espera === true && j2.feitas === 0, j2);
+    const e429 = await DB.prepare("SELECT ia_status, ia_tent FROM rascunho WHERE legenda='segundo'").first(); chk('429 não gasta tentativa', e429.ia_tent === 0, e429);
+    chk('o texto do erro não vaza a chave', !JSON.stringify(j2).includes(GEMINI_OK));
+    gemModo = 'lixo'; for (let i = 0; i < 3; i++) await A('POST', '/ia', { limite: 1 });
+    const e2 = await DB.prepare("SELECT ia_status, ia_tent FROM rascunho WHERE legenda='segundo'").first(); chk('resposta ilegível: tenta até 2 vezes e desiste (sem laço infinito)', e2.ia_status === 'erro' && e2.ia_tent === 2, e2);
+    gemModo = 'ok';
+
+    // cron lê sozinho depois de buscar
+    feed = [m('IA3', { timestamp: ts(7), caption: 'terceiro' })]; const n0 = gemChamadas.length;
+    await W.default.scheduled({}, env, { waitUntil: (p) => p });
+    await new Promise((ok) => setTimeout(ok, 50));
+    chk('o cron lê as fotos dos posts novos sozinho', gemChamadas.length > n0, gemChamadas.length - n0);
+
+    // juntar / separar pedem nova leitura
+    feed = []; const a = await DB.prepare("SELECT id FROM rascunho WHERE legenda='terceiro'").first(), b2 = await DB.prepare("SELECT id FROM rascunho WHERE legenda='Arraste para o lado 👉'").first();
+    await A('POST', '/acao', { acao: 'juntar', id: a.id, para: b2.id });
+    const jj = await DB.prepare('SELECT ia_status FROM rascunho WHERE id=?').bind(b2.id).first(); chk('juntar manda ler as fotos de novo (agora são mais fotos)', jj.ia_status === '', jj);
+    ({ r: r2, j: j2 } = await A('POST', '/acao', { acao: 'lerIA', id: b2.id })); chk('"ler as fotos de novo" funciona', j2.ok === true, j2);
+    ({ r: r2, j: j2 } = await A('DELETE', '/ia-chave')); ({ j: j2 } = await A('GET', '/status')); chk('desligar apaga a chave', j2.ia.ligada === false);
   }
 
   console.log('== Token ==');
