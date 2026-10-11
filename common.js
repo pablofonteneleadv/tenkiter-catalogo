@@ -161,8 +161,10 @@ async function versaoServidor() {
   return _versaoPromessa;
 }
 
-async function entrarComSenha(whatsapp, senha) {
-  const r = await apiPost({ action: 'login', whatsapp: normalizarWhats(whatsapp), senha: senha });
+async function entrarComSenha(identificador, senha) {
+  // v4.0: entra com e-mail, WhatsApp ou CPF. `whatsapp` segue indo (backend antigo só entende ele); `identificador` é o texto como a pessoa digitou.
+  const texto = String(identificador || '').trim();
+  const r = await apiPost({ action: 'login', identificador: texto, whatsapp: texto.indexOf('@') === -1 ? normalizarWhats(texto) : '', senha: senha });
   if (r && r.ok && r.sessao && r.usuario) salvarSessao(r.usuario.whatsapp, r.sessao);
   return r;
 }
@@ -181,11 +183,15 @@ async function conferirSessao() {
   return null;
 }
 
-async function registrarClienteApi(nome, whatsapp, senha) {
-  const r = await apiPost({ action: 'registrar_cliente', nome: nome, whatsapp: normalizarWhats(whatsapp), senha: senha });
+async function registrarClienteApi(nome, whatsapp, senha, extras) {
+  extras = extras || {};
+  const r = await apiPost({ action: 'registrar_cliente', nome: nome, whatsapp: normalizarWhats(whatsapp), senha: senha, cpf: extras.cpf || '', email: extras.email || '' });
   if (r && r.ok && r.sessao && r.usuario) salvarSessao(r.usuario.whatsapp, r.sessao);
   return r;
 }
+
+/** Chamada genérica ao backend do catálogo para as peças de conta (recuperar senha, salvar CPF/e-mail). */
+async function chamarConta(payload) { return apiPost(payload); }
 
 function temPermissao(usuario, chave) {
   return !!(usuario && Array.isArray(usuario.permissoes) && usuario.permissoes.indexOf(chave) !== -1);

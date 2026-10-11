@@ -509,6 +509,8 @@ function userFromRosterEntry(entry){
     peso: entry.peso || '',
     fotoPerfilUrl: entry.fotoPerfilUrl || '',
     fotoCorpoUrl: entry.fotoCorpoUrl || '',
+    cpf: entry.cpf || '',
+    email: entry.email || '',
     perms: Array.isArray(entry.perms) ? entry.perms : null,
     perfil: entry.perfil || ''
   };
@@ -589,7 +591,7 @@ function entryFromServerUser(u, sessao){
     password: sessao, // a "senha" que o site reenvia nas ações é o token de sessão
     dataNascimento: u.dataNascimento, instagram: u.instagram, cep: u.cep, endereco: u.endereco,
     bairro: u.bairro, cidade: u.cidade, estado: u.estado, altura: u.altura, peso: u.peso,
-    fotoPerfilUrl: u.fotoPerfilUrl, fotoCorpoUrl: u.fotoCorpoUrl,
+    fotoPerfilUrl: u.fotoPerfilUrl, fotoCorpoUrl: u.fotoCorpoUrl, cpf: u.cpf || '', email: u.email || '',
     perms: Array.isArray(u.permissoes) ? u.permissoes : null, perfil: u.perfil || ''
   };
 }
@@ -903,16 +905,30 @@ function renderLogin(){
     '<div class="login-wrap"><div class="login-card">' +
       '<div class="mark"><img src="icon-192.png" alt="TENKiTER"></div>' +
       '<h1>Portal de treinamento</h1>' +
-      '<p class="sub">TENKiTER Modas — entre com seu WhatsApp e senha.</p>' +
+      '<p class="sub">TENKiTER Modas — entre com seu e-mail, WhatsApp ou CPF e a senha.</p>' +
       '<div class="login-error" id="login-error"></div>' +
-      '<div class="field"><label>WhatsApp</label><input type="tel" id="login-whats" autocomplete="username" placeholder="88999999999"></div>' +
+      '<div class="field"><label>E-mail, WhatsApp ou CPF</label><input type="text" id="login-whats" autocomplete="username" autocapitalize="none" placeholder="88999999999, e-mail ou CPF"></div>' +
       '<div class="field"><label>Senha</label><input type="password" id="login-pass" autocomplete="current-password"></div>' +
       '<button class="btn btn-primary" id="login-btn">Entrar</button>' +
+      '<p class="sub" style="margin:12px 0 0;text-align:center;"><a href="#" id="link-esqueci">Esqueci a senha</a></p>' +
       '<p class="sub" style="margin:14px 0 0;text-align:center;">Ainda não tem conta? <a href="#" id="link-cadastro">Cadastre-se</a></p>' +
     '</div></div>';
   document.getElementById('login-btn').addEventListener('click', doLogin);
   document.getElementById('login-pass').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
   document.getElementById('link-cadastro').addEventListener('click', function(e){ e.preventDefault(); renderCadastro(); });
+  document.getElementById('link-esqueci').addEventListener('click', function(e){ e.preventDefault(); abrirRecuperarConta(document.getElementById('login-whats').value); });
+}
+
+/* entra com a resposta do servidor (login ou recuperação de senha) */
+function entrarComResposta(resp){
+  var entryN = entryFromServerUser(resp.usuario, resp.sessao);
+  state.user = userFromRosterEntry(entryN);
+  ls_set('tm_session', { whatsapp: entryN.whatsapp, sessao: resp.sessao });
+  goHome();
+}
+function abrirRecuperarConta(ident){
+  if (!window.TKConta){ toast('Não consegui abrir agora. Fale com a gestão.'); return; }
+  TKConta.abrirRecuperar({ identificador: ident || '', chamar: submitResult, aoEntrar: function(r){ toast('Senha trocada! Bem-vindo(a).'); entrarComResposta(r); } });
 }
 
 function renderCadastro(){
@@ -927,6 +943,8 @@ function renderCadastro(){
       '<div class="field"><label>WhatsApp</label><input type="tel" id="cad-whats" autocomplete="username" placeholder="88999999999"></div>' +
       '<div class="field"><label>Senha</label><input type="password" id="cad-senha" autocomplete="new-password"></div>' +
       '<div class="field"><label>Data de nascimento</label><input type="text" id="cad-nascimento" inputmode="numeric" placeholder="dd/mm/aaaa" maxlength="10"></div>' +
+      '<div class="field"><label>CPF (opcional)</label><input type="text" id="cad-cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14"><small style="color:var(--muted)">Não é obrigatório. Com ele você entra usando o CPF e recupera a senha sozinho(a) se esquecer.</small></div>' +
+      '<div class="field"><label>E-mail (opcional)</label><input type="email" id="cad-email" autocomplete="email" placeholder="voce@email.com"><small style="color:var(--muted)">Opcional. Serve para entrar com o e-mail.</small></div>' +
       '<div class="field"><label>Instagram</label><input type="text" id="cad-instagram" placeholder="@seuusuario" value="@"></div>' +
       '<button class="btn btn-primary" id="cad-btn">Criar conta</button>' +
       '<p class="sub" style="margin:14px 0 0;text-align:center;">Já tem conta? <a href="#" id="link-login">Entrar</a></p>' +
@@ -936,6 +954,7 @@ function renderCadastro(){
   document.getElementById('cad-senha').addEventListener('keydown', function(e){ if(e.key==='Enter') doCadastro(); });
   wireInstagramField(document.getElementById('cad-instagram'));
   wireDataNascimentoField(document.getElementById('cad-nascimento'));
+  if (window.TKConta) TKConta.ligarCpf(document.getElementById('cad-cpf'));
 }
 
 /**
@@ -991,9 +1010,18 @@ async function doCadastro(){
   if(dataNascimento && !dataNascimentoValida(dataNascimento)){
     err.textContent = 'Data de nascimento inválida. Use o formato dd/mm/aaaa.'; err.style.display='block'; return;
   }
-  if(DATA.roster.some(function(r){ return normWhats(r.whatsapp) === whatsapp; })){
-    err.textContent = 'Já existe uma conta com esse WhatsApp. Tente entrar.'; err.style.display='block'; return;
+  var cpf = (document.getElementById('cad-cpf').value || '').trim();
+  var email = (document.getElementById('cad-email').value || '').trim();
+  if(cpf && window.TKConta && !TKConta.cpfValido(cpf)){ err.textContent = 'CPF inválido. Confira os 11 números ou deixe em branco.'; err.style.display='block'; return; }
+  if(email && window.TKConta && !TKConta.emailValido(email)){ err.textContent = 'E-mail inválido. Confira ou deixe em branco.'; err.style.display='block'; return; }
+  function jaTem(){
+    var box = document.querySelector('.login-card');
+    if (window.TKConta) TKConta.avisoContaExiste(box, { identificador: whatsapp,
+      aoEntrar: function(){ renderLogin(); var l=document.getElementById('login-whats'); if(l) l.value = whatsapp; },
+      aoRecuperar: function(){ abrirRecuperarConta(whatsapp); } });
+    else { err.textContent = 'Já existe uma conta com esse WhatsApp. Tente entrar.'; err.style.display='block'; }
   }
+  if(DATA.roster.some(function(r){ return normWhats(r.whatsapp) === whatsapp; })){ jaTem(); return; }
   if(!DATA.appsScriptUrl){
     err.textContent = 'Cadastro ainda não está disponível (sistema em configuração). Fale com a gestão.'; err.style.display='block'; return;
   }
@@ -1001,9 +1029,10 @@ async function doCadastro(){
   btn.disabled = true; btn.textContent = 'Cadastrando...';
   var resp = await submitResult({
     action:'registrar', nome: nome, whatsapp: whatsapp, senha: senha,
-    dataNascimento: dataNascimento, instagram: instagram
+    dataNascimento: dataNascimento, instagram: instagram, cpf: cpf, email: email
   });
   btn.disabled = false; btn.textContent = 'Criar conta';
+  if(resp && resp.contaExiste){ jaTem(); return; }
   if(!resp || !resp.ok){
     err.textContent = (resp && resp.erro) || 'Não foi possível cadastrar agora. Tente de novo.'; err.style.display='block'; return;
   }
@@ -1025,30 +1054,28 @@ async function doCadastro(){
 }
 
 async function doLogin(){
-  var whatsapp = normWhats(document.getElementById('login-whats').value);
+  var ident = document.getElementById('login-whats').value.trim();
+  var whatsapp = ident.indexOf('@') >= 0 ? '' : normWhats(ident);
   var pass = document.getElementById('login-pass').value;
   var err = document.getElementById('login-error');
   err.style.display = 'none';
-  if(!whatsapp || !pass){ err.textContent = 'Preencha WhatsApp e senha.'; err.style.display='block'; return; }
+  if(!ident || !pass){ err.textContent = 'Preencha e-mail, WhatsApp ou CPF e a senha.'; err.style.display='block'; return; }
   if(!servidorChecado) await detectarServidor();
   if(servidorNovo){
     var btnL = document.getElementById('login-btn');
     if(btnL){ btnL.disabled = true; btnL.textContent = 'Entrando...'; }
-    var respL = await submitResult({ action:'login', whatsapp: whatsapp, senha: pass });
+    var respL = await submitResult({ action:'login', identificador: ident, whatsapp: whatsapp, senha: pass });
     if(btnL){ btnL.disabled = false; btnL.textContent = 'Entrar'; }
     if(!respL || !respL.ok){
       err.textContent = (respL && respL.erro === 'sem conexão')
         ? 'Sem conexão. Verifique a internet e tente de novo.'
-        : ((respL && respL.erro) || 'WhatsApp ou senha incorretos.');
+        : ((respL && respL.erro) || 'Dados ou senha incorretos.') + ' Esqueceu a senha? Toque em “Esqueci a senha”.';
       err.style.display = 'block'; return;
     }
-    var entryN = entryFromServerUser(respL.usuario, respL.sessao);
-    state.user = userFromRosterEntry(entryN);
-    ls_set('tm_session', { whatsapp: entryN.whatsapp, sessao: respL.sessao });
-    goHome();
+    entrarComResposta(respL);
     return;
   }
-  var entry = DATA.roster.find(function(r){ return normWhats(r.whatsapp) === whatsapp; });
+  var entry = whatsapp ? DATA.roster.find(function(r){ return normWhats(r.whatsapp) === whatsapp; }) : null;
   if(!entry || entry.password !== pass){
     err.textContent = (DATA.roster.length === 0)
       ? 'Não foi possível conferir agora. Verifique a internet e tente de novo.'
@@ -1217,6 +1244,8 @@ function renderPerfil(){
     '<div class="perfil-error" id="perfil-error"></div>' +
     '<h3 class="perfil-secao">Dados pessoais</h3>' +
     campo('perfil-nascimento', 'Data de nascimento', u.dataNascimento, 'text', ' inputmode="numeric" placeholder="dd/mm/aaaa" maxlength="10"') +
+    campo('perfil-cpf', 'CPF', window.TKConta ? TKConta.cpfMask(u.cpf || '') : (u.cpf||''), 'text', ' inputmode="numeric" placeholder="000.000.000-00" maxlength="14"') +
+    campo('perfil-email', 'E-mail (para entrar com ele)', u.email, 'email', ' autocomplete="email" placeholder="voce@email.com"') +
     campo('perfil-instagram', 'Instagram', u.instagram || '@', 'text') +
     campo('perfil-altura', 'Altura (cm)', u.altura, 'number', ' min="0" step="1" placeholder="Ex: 170"') +
     campo('perfil-peso', 'Peso (kg)', u.peso, 'number', ' min="0" step="0.1" placeholder="Ex: 68"') +
@@ -1233,6 +1262,7 @@ function renderPerfil(){
 function wirePerfil(){
   wireInstagramField(document.getElementById('perfil-instagram'));
   wireDataNascimentoField(document.getElementById('perfil-nascimento'));
+  if (window.TKConta) TKConta.ligarCpf(document.getElementById('perfil-cpf'));
 
   var cepInput = document.getElementById('perfil-cep');
   cepInput.addEventListener('blur', async function(){
@@ -1293,7 +1323,14 @@ function wirePerfil(){
       err.textContent = 'Data de nascimento inválida. Use o formato dd/mm/aaaa.'; err.style.display = 'block'; return;
     }
     var instagram = normInstagram(document.getElementById('perfil-instagram').value);
+    var cpfP = document.getElementById('perfil-cpf').value.trim();
+    var emailP = document.getElementById('perfil-email').value.trim();
+    if (cpfP && window.TKConta && !TKConta.cpfValido(cpfP)){ err.textContent = 'CPF inválido. Confira os 11 números.'; err.style.display = 'block'; return; }
+    if (emailP && window.TKConta && !TKConta.emailValido(emailP)){ err.textContent = 'E-mail inválido.'; err.style.display = 'block'; return; }
+    if (!cpfP && window.TKConta && TKConta.precisaCpf(state.user)){ err.textContent = 'O CPF é obrigatório para a equipe. Preencha o CPF.'; err.style.display = 'block'; return; }
     var campos = {
+      cpf: cpfP,
+      email: emailP,
       dataNascimento: dataNascimento,
       instagram: instagram,
       altura: document.getElementById('perfil-altura').value,
@@ -1365,6 +1402,18 @@ function goHome(){
   empurrarHistorico('home', null);
   wireTopbar();
   carregarAvisoCurriculo();
+  // Estagiário em diante sem CPF: faixa vermelha grande NESTA tela, sem ir a configurações
+  if (window.TKConta && TKConta.precisaCpf(state.user)){
+    var mainBox = document.querySelector('#app .main');
+    if (mainBox) TKConta.faixaCpf(mainBox, { usuario: state.user,
+      salvar: function(cpf){ return submitResult({ action:'salvar_identificadores', whatsapp: state.user.whatsapp, sessao: state.user.password, cpf: cpf }); },
+      aoSalvar: function(r){
+        var c = (r && r.usuario && r.usuario.cpf) || '';
+        state.user.cpf = c;
+        var re = DATA.roster.find(function(x){ return normWhats(x.whatsapp) === state.user.whatsapp; }); if (re) re.cpf = c;
+        toast('CPF salvo! Obrigado.');
+      } });
+  }
   var linkPerfil = document.getElementById('link-completar-perfil');
   if (linkPerfil) linkPerfil.addEventListener('click', function(e){ e.preventDefault(); openPerfil(); });
   document.querySelectorAll('.card').forEach(function(el){
@@ -2609,6 +2658,7 @@ function render(){
 <script src="common.js"></script>
 <script src="nav.js" data-ativo="treinamentos"></script>
 <script src="a11y.js"></script>
+<script src="conta.js"></script>
 <script src="push.js"></script>
 </body>
 </html>

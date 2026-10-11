@@ -67,12 +67,12 @@
   });
 
   /* ---------- 2. janelas ---------- */
-  var JANELAS = '#overlay,#overlay-sacola,#overlay-compartilhar,.overlay-sheet,.overlay-sheet-loja,#modal-conta,#login-overlay,#tkp-janela';
+  var JANELAS = '#overlay,#overlay-sacola,#overlay-compartilhar,.overlay-sheet,.overlay-sheet-loja,#modal-conta,#login-overlay,#tkp-janela,#tkc-recuperar';
   var BOTOES_FECHAR = '[aria-label="Fechar"],.sheet-x,.conta-fechar,.btn-fechar,#btn-fechar-arte-config,#btn-fechar-auditoria';
   var FOCAVEIS = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   var NOMES = {
     'overlay': 'Detalhes da peça', 'overlay-sacola': 'Sua sacola', 'overlay-compartilhar': 'Compartilhar',
-    'login-overlay': 'Entrar', 'modal-conta': 'Minha conta', 'overlay-categorias': 'Escolher categoria', 'tkp-janela': 'Avisos'
+    'login-overlay': 'Entrar', 'modal-conta': 'Minha conta', 'overlay-categorias': 'Escolher categoria', 'tkp-janela': 'Avisos', 'tkc-recuperar': 'Esqueci minha senha'
   };
   var lembrar = new WeakMap();      // janela -> elemento que tinha o foco antes de abrir
 

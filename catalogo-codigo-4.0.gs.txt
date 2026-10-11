@@ -1,4 +1,6 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.9
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v4.0
+//
+// NOVIDADE v4.0 -- CPF, E-MAIL E LOGIN MÚLTIPLO + RECUPERAR SENHA (pedido do Pablo): entra com e-mail, WhatsApp ou CPF (acResolverIdentificador_); CPF/e-mail opcionais no cadastro de cliente; ação recuperar_senha (CPF/nascimento conferidos, 5 erros = 15 min, conta da equipe exige os dois) e salvar_identificadores. Bandeiras em versao: cpf, recuperarSenha, loginMultiplo. Bloco compartilhado com o backend de funcionários 3.3.
 //
 // NOVIDADE v3.9 -- ANTI-DUPLICADO POR FOTO: o freio de 10 s (mesmo nome + mesmo preço) só barra se a FOTO DE CAPA também for a mesma (duplo clique/retentativa). Peças com fotos diferentes (cadastro separado de vários posts) passam. Bandeira em versao: duplicadoPorFoto.
 //
@@ -186,7 +188,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-3.9';
+const VERSAO_CATALOGO = 'catalogo-4.0';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -996,6 +998,152 @@ function acLinhasDoWhats_(whatsapp) {
   }
   return out;
 }
+/* ---------- v3.9: CPF, e-mail, login por e-mail/WhatsApp/CPF e recuperação de senha ----------
+ * BLOCO COMPARTILHADO: o texto é IGUAL nos dois backends (catálogo e funcionários), porque os dois mexem na mesma planilha de pessoas. */
+function acDigitos_(s) { return String(s == null ? '' : s).replace(/\D/g, ''); }
+function acCpfValido_(c) {
+  c = acDigitos_(c);
+  if (c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false;
+  var s = 0, i;
+  for (i = 0; i < 9; i++) s += Number(c.charAt(i)) * (10 - i);
+  if (((s * 10) % 11) % 10 !== Number(c.charAt(9))) return false;
+  s = 0;
+  for (i = 0; i < 10; i++) s += Number(c.charAt(i)) * (11 - i);
+  return ((s * 10) % 11) % 10 === Number(c.charAt(10));
+}
+function acCpfFormatado_(c) {
+  var d = acDigitos_(c);
+  return d.length === 11 ? d.slice(0, 3) + '.' + d.slice(3, 6) + '.' + d.slice(6, 9) + '-' + d.slice(9) : String(c || '');
+}
+function acEmailNorm_(e) { return String(e == null ? '' : e).trim().toLowerCase(); }
+function acEmailValido_(e) { e = acEmailNorm_(e); return e.length <= 120 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e); }
+/** Data de nascimento (Date, 'aaaa-mm-dd', ISO com hora ou 'dd/mm/aaaa') em 'aaaa-mm-dd'; '' se não reconhecer. */
+function acNascIso_(t) {
+  if (Object.prototype.toString.call(t) === '[object Date]') return isNaN(t.getTime()) ? '' : Utilities.formatDate(t, 'America/Fortaleza', 'yyyy-MM-dd');
+  t = String(t == null ? '' : t).trim();
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
+  if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  return '';
+}
+/** WhatsApps (normalizados, sem repetir) das linhas em que a coluna `col` vale `valor` (cada célula passa por `norm` antes de comparar). */
+function acWhatsPorCampo_(col, valor, norm) {
+  if (!valor) return [];
+  var sh = acPlanilha_(), ultima = sh.getLastRow();
+  if (ultima < 2) return [];
+  var headers = acCabecalhos_(sh), ic = headers.indexOf(col), iw = headers.indexOf('whatsapp');
+  if (ic === -1 || iw === -1) return [];
+  var dados = sh.getRange(2, 1, ultima - 1, Math.max(ic, iw) + 1).getValues(), out = [];
+  for (var i = 0; i < dados.length; i++) {
+    if (norm(dados[i][ic]) === valor) { var w = acWhats_(dados[i][iw]); if (w && out.indexOf(w) === -1) out.push(w); }
+  }
+  return out;
+}
+/** Acha o WhatsApp da conta pelo que a pessoa digitou no login: e-mail, WhatsApp ou CPF. Se não achar, devolve o texto como WhatsApp (o login falha como sempre). */
+function acResolverIdentificador_(texto) {
+  var t = String(texto == null ? '' : texto).trim();
+  if (!t) return '';
+  if (t.indexOf('@') !== -1) { var ws = acWhatsPorCampo_('email', acEmailNorm_(t), acEmailNorm_); return ws.length === 1 ? ws[0] : ''; }
+  var d = acDigitos_(t);
+  if (!d) return '';
+  if (acLinhasDoWhats_(d).length) return acWhats_(d);                     // é o WhatsApp de uma conta
+  if (d.length === 11 && acCpfValido_(d)) { var wc = acWhatsPorCampo_('cpf', d, acDigitos_); if (wc.length === 1) return wc[0]; }
+  return acWhats_(d);
+}
+function acCampoEmUso_(col, valor, norm, exceto) {
+  var eu = acWhats_(exceto);
+  return acWhatsPorCampo_(col, valor, norm).filter(function (w) { return w !== eu; }).length > 0;
+}
+/** Grava UM campo em todas as linhas do WhatsApp, criando a coluna na hora se não existir (texto puro). */
+function acGravarCampo_(whatsapp, chave, bonito, valor) {
+  var alvo = acWhats_(whatsapp), sh = acPlanilha_(), dados = sh.getDataRange().getValues();
+  if (!dados.length) return false;
+  var headers = dados[0].map(function (h) { return String(h).trim().toLowerCase(); });
+  var iw = headers.indexOf('whatsapp'), ic = headers.indexOf(chave), ok = false;
+  if (iw === -1) return false;
+  if (ic === -1) { ic = headers.length; sh.getRange(1, ic + 1).setValue(bonito); }
+  for (var i = 1; i < dados.length; i++) {
+    if (acWhats_(dados[i][iw]) === alvo) { sh.getRange(i + 1, ic + 1).setNumberFormat('@').setValue(acTexto_(valor)); ok = true; }
+  }
+  return ok;
+}
+/** Valida e grava CPF e/ou e-mail de uma conta (campo vazio = não mexe). Devolve { ok:true } ou { ok:false, campo, erro, emUso? }. */
+function acSalvarIdentificadores_(whatsapp, campos) {
+  campos = campos || {};
+  var cpf = '', email = '';
+  if (String(campos.cpf == null ? '' : campos.cpf).trim() !== '') {
+    cpf = acDigitos_(campos.cpf);
+    if (!acCpfValido_(cpf)) return { ok: false, campo: 'cpf', erro: 'CPF inválido. Confira os 11 números.' };
+    if (acCampoEmUso_('cpf', cpf, acDigitos_, whatsapp)) return { ok: false, campo: 'cpf', emUso: true, erro: 'Esse CPF já está cadastrado em outra conta. Entre nela ou toque em "Esqueci a senha".' };
+  }
+  if (String(campos.email == null ? '' : campos.email).trim() !== '') {
+    email = acEmailNorm_(campos.email);
+    if (!acEmailValido_(email)) return { ok: false, campo: 'email', erro: 'E-mail inválido. Confira se tem @ e o final (.com).' };
+    if (acCampoEmUso_('email', email, acEmailNorm_, whatsapp)) return { ok: false, campo: 'email', emUso: true, erro: 'Esse e-mail já está cadastrado em outra conta. Entre nela ou toque em "Esqueci a senha".' };
+  }
+  if (cpf) acGravarCampo_(whatsapp, 'cpf', 'CPF', acCpfFormatado_(cpf));
+  if (email) acGravarCampo_(whatsapp, 'email', 'Email', email);
+  return { ok: true };
+}
+/** Permissões que dão poder sobre produtos, gente ou dados: contas com elas só trocam a senha sozinhas com CPF E nascimento conferidos. */
+var AC_PERMS_SENSIVEIS_ = ['catalogo_admin', 'catalogo_cadastrar', 'catalogo_excluir', 'catalogo_precos', 'catalogo_push', 'catalogo_auditoria', 'gerir_acessos', 'dados_pessoais', 'gerir_manuais', 'equipe_relatorio'];
+/**
+ * Recuperar senha SEM e-mail/SMS: a pessoa prova que é ela com o que já cadastrou (CPF e/ou data de nascimento) e escolhe a nova senha.
+ * - Conta comum (Cliente/Aluno): vale o que estiver cadastrado (CPF, nascimento ou os dois -- todos os que existem precisam conferir).
+ * - Conta da equipe (qualquer permissão sensível): exige CPF E nascimento cadastrados e conferidos; senão, só a gestão troca.
+ * - Sem nenhum dos dois cadastrado: a gestão troca (a tela já abre o WhatsApp da loja com a mensagem pronta).
+ * 5 erros = 15 minutos de espera (por conta). Tudo (acerto e erro) vai para Acessos_Log. Nas respostas de ERRO nunca devolve CPF/nascimento (no acerto devolve o próprio usuário, como um login).
+ */
+function acRecuperarSenha_(data) {
+  data = data || {};
+  var w = acResolverIdentificador_(data.identificador || data.whatsapp || '');
+  var linhas = w ? acLinhasDoWhats_(w) : [];
+  if (!linhas.length) return { ok: false, semConta: true, erro: 'Não achei uma conta com esse dado. Confira o WhatsApp, e-mail ou CPF — ou crie uma conta.' };
+  var cache = CacheService.getScriptCache(), chave = 'rec_' + w, falhas = parseInt(cache.get(chave) || '0', 10);
+  if (falhas >= 5) return { ok: false, bloqueado: true, erro: 'Muitas tentativas. Espere 15 minutos ou chame a gestão.' };
+  var ativas = linhas.filter(function (l) { return String(l.status || 'Ativo').trim().toLowerCase() !== 'inativo'; });
+  if (!ativas.length) return { ok: false, inativa: true, erro: 'Essa conta está desativada. Fale com a gestão.' };
+  var cpf = '', nasc = '', nome = '', sensivel = false, perfis = acPerfis_();
+  ativas.forEach(function (l) {
+    cpf = cpf || acDigitos_(l.cpf); nasc = nasc || acNascIso_(l.datanascimento); nome = nome || String(l.nome || '').trim();
+    var p = acPermsDaLinha_(l, perfis);
+    AC_PERMS_SENSIVEIS_.forEach(function (k) { if (p[k]) sensivel = true; });
+  });
+  var primeiro = nome.split(/\s+/)[0] || '';
+  var temCpf = acCpfValido_(cpf), temNasc = !!nasc;
+  if ((sensivel && !(temCpf && temNasc)) || (!temCpf && !temNasc)) {
+    acLog_('', '', w, 'recuperarSenhaGestao', sensivel ? 'conta da equipe sem CPF+nascimento' : 'sem CPF/nascimento');
+    return { ok: false, precisaGestao: true, nome: primeiro, erro: sensivel ? 'Por segurança, a senha desta conta só pode ser trocada pela gestão.' : 'Esta conta não tem CPF nem data de nascimento cadastrados, então não consigo confirmar que é você. A gestão resolve rápido pelo WhatsApp.' };
+  }
+  var nova = String(data.novaSenha || '');
+  if (nova.length < 4) return { ok: false, erro: 'A nova senha precisa ter pelo menos 4 caracteres.', faltaSenha: true };
+  var confere = (!temCpf || acDigitos_(data.cpf) === cpf) && (!temNasc || acNascIso_(data.nascimento) === nasc);
+  if (!confere) {
+    cache.put(chave, String(falhas + 1), 900);
+    acLog_('', '', w, 'recuperarSenhaErro', 'dados não conferem (' + (falhas + 1) + ')');
+    return { ok: false, naoConfere: true, restam: Math.max(0, 4 - falhas), erro: 'Os dados não conferem. Preencha ' + (temCpf && temNasc ? 'o CPF e a data de nascimento' : temCpf ? 'o CPF' : 'a data de nascimento') + ' exatamente como você cadastrou.' };
+  }
+  var sh = acPlanilha_(), headers = acCabecalhos_(sh), guardada = acGuardarSenha_(nova);
+  linhas.forEach(function (l) { acRegravarLinha_(sh, headers, l.__row, { senha: guardada }); });
+  cache.remove(chave); acLimpaFalhas_(w);
+  acLog_(nome, w, w, 'recuperarSenha', 'senha trocada pela própria pessoa');
+  var v = acVerificar_(w, nova);
+  return v.ok ? { ok: true, usuario: v.usuario, sessao: v.sessao } : { ok: true };
+}
+
+/** A própria pessoa (com sessão ou senha) grava/atualiza o CPF e/ou e-mail da sua conta. Devolve { ok, usuario } ou { ok:false, erro, campo }. */
+function acSalvarMeusIdentificadores_(data) {
+  data = data || {};
+  var v = acVerificar_(data.whatsapp, data.sessao || data.senha);
+  if (!v.ok) return { ok: false, erro: v.erro || 'Entre de novo para continuar.', sessaoInvalida: !!v.sessaoInvalida };
+  if (String(data.cpf || '').trim() === '' && String(data.email || '').trim() === '') return { ok: false, erro: 'Digite o CPF ou o e-mail.' };
+  var r = acSalvarIdentificadores_(v.usuario.whatsapp, { cpf: data.cpf, email: data.email });
+  if (!r.ok) return r;
+  var v2 = acVerificar_(v.usuario.whatsapp, data.sessao || data.senha);
+  return { ok: true, usuario: v2.ok ? v2.usuario : v.usuario };
+}
+
 function acTodasLinhas_() {
   var sh = acPlanilha_();
   var dados = sh.getDataRange().getValues();
@@ -1130,7 +1278,7 @@ function acVerificar_(whatsapp, cred) {
     var p = acPermsDaLinha_(l, perfis);
     acChaves_().forEach(function (k) { if (p[k]) perms[k] = true; });
     perfil = String(l.perfil || '').trim() || perfil || acPerfilLegado_(l.nivel);
-    ['datanascimento', 'instagram', 'cep', 'endereco', 'bairro', 'cidade', 'estado', 'altura', 'peso', 'fotoperfilurl', 'fotocorpourl'].forEach(function (c) {
+    ['datanascimento', 'instagram', 'cep', 'endereco', 'bairro', 'cidade', 'estado', 'altura', 'peso', 'fotoperfilurl', 'fotocorpourl', 'cpf', 'email'].forEach(function (c) {
       var v = l[c];
       if (v !== undefined && v !== '' && v !== null) pessoal[c] = Object.prototype.toString.call(v) === '[object Date]' ? v.toISOString() : String(v);
     });
@@ -1140,6 +1288,7 @@ function acVerificar_(whatsapp, cred) {
     whatsapp: alvo, name: nome || alvo, status: 'ativo', perfil: perfil,
     level: acNivelDe_(perms), permissoes: acPermsLista_(perms),
     dataNascimento: pessoal.datanascimento || '', instagram: pessoal.instagram || '', cep: pessoal.cep || '',
+    cpf: pessoal.cpf || '', email: pessoal.email || '',
     endereco: pessoal.endereco || '', bairro: pessoal.bairro || '', cidade: pessoal.cidade || '', estado: pessoal.estado || '',
     altura: pessoal.altura || '', peso: pessoal.peso || '',
     fotoPerfilUrl: pessoal.fotoperfilurl || '', fotoCorpoUrl: pessoal.fotocorpourl || ''
@@ -1227,7 +1376,7 @@ function acRegistrar_(nome, whatsapp, senha, perfilNome, extras) {
   var lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    if (acLinhasDoWhats_(w).length) return { ok: false, erro: 'Já existe uma conta com esse WhatsApp.' };
+    if (acLinhasDoWhats_(w).length) return { ok: false, contaExiste: true, erro: 'Já existe uma conta com esse WhatsApp.' };
     var sh = acGarantirColunas_();
     var headers = acCabecalhos_(sh);
     var perfis = acPerfis_();
@@ -1328,7 +1477,8 @@ function respostaNegada_(a) {
 }
 
 function loginPessoa_(body) {
-  const v = acVerificar_(body.whatsapp, body.senha);
+  // v4.0: entra com e-mail, WhatsApp ou CPF (o servidor descobre de quem é)
+  const v = acVerificar_(acResolverIdentificador_(body.identificador || body.whatsapp), body.senha);
   if (!v.ok) return jsonResponse_({ ok: false, erro: v.erro, inativa: !!v.inativa, bloqueado: !!v.bloqueado });
   return jsonResponse_({ ok: true, usuario: v.usuario, sessao: v.sessao });
 }
@@ -1345,8 +1495,12 @@ function registrarCliente_(body) {
   const feitos = parseInt(cache.get('reg_hora') || '0', 10);
   if (feitos >= 60) return jsonResponse_({ ok: false, erro: 'Muitos cadastros agora. Tente de novo em alguns minutos.' });
   cache.put('reg_hora', String(feitos + 1), 3600);
+  // v4.0: CPF e e-mail são OPCIONAIS no cliente; se vierem, são conferidos ANTES de criar a conta
+  if (String(body.cpf || '').trim() && !acCpfValido_(body.cpf)) return jsonResponse_({ ok: false, campo: 'cpf', erro: 'CPF inválido. Confira os 11 números (ou deixe em branco).' });
+  if (String(body.email || '').trim() && !acEmailValido_(body.email)) return jsonResponse_({ ok: false, campo: 'email', erro: 'E-mail inválido (ou deixe em branco).' });
   const r = acRegistrar_(body.nome, body.whatsapp, body.senha, 'Cliente', {});
-  if (!r.ok) return jsonResponse_({ ok: false, erro: r.erro });
+  if (!r.ok) return jsonResponse_({ ok: false, erro: r.erro, contaExiste: !!r.contaExiste });
+  if (String(body.cpf || '').trim() || String(body.email || '').trim()) acSalvarIdentificadores_(body.whatsapp, { cpf: body.cpf, email: body.email });
   const v = acVerificar_(body.whatsapp, body.senha);
   if (v.ok) return jsonResponse_({ ok: true, usuario: v.usuario, sessao: v.sessao });
   return jsonResponse_({ ok: true });
@@ -1545,7 +1699,7 @@ function doGetInterno_(e) {
   if (action === 'versao') return jsonResponse_({
     ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
     pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true,
-    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true, midiaRapida: true, juntarProdutos: true, duplicadoPorFoto: true
+    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true, midiaRapida: true, juntarProdutos: true, duplicadoPorFoto: true, cpf: true, recuperarSenha: true, loginMultiplo: true
   });
   if (action === 'config') return configPublica_();
   if (action === 'pushconfig') return pushConfigPublica_();
@@ -1614,6 +1768,8 @@ function doPostInterno_(body) {
   if (action === 'login') return loginPessoa_(body);
   if (action === 'sessao') return sessaoPessoa_(body);
   if (action === 'registrar_cliente') return registrarCliente_(body);
+  if (action === 'recuperar_senha') return jsonResponse_(acRecuperarSenha_(body));
+  if (action === 'salvar_identificadores') return jsonResponse_(acSalvarMeusIdentificadores_(body));
   if (action === 'cliente_dados') return clienteDados_(body);
   if (action === 'cliente_salvar') return clienteSalvar_(body);
   if (action === 'criarPedido') { try { return criarPedido_(body); } finally { pushDespacharFila_(); } }

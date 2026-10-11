@@ -231,8 +231,10 @@ function viewRetomar(msg) {
     <input type="password" id="senha" name="senha" autocomplete="current-password">
     <div class="erro ${msg ? '' : 'oculto'}" id="erro">${esc(msg || '')}</div>
     <button class="btn-p" id="ok">Entrar</button>
+    <button class="btn-s" id="esqueci">Esqueci a senha</button>
     <button class="btn-s" id="voltar">Voltar</button></div>`);
   document.getElementById('voltar').onclick = () => viewWhats();
+  document.getElementById('esqueci').onclick = () => abrirRecuperarCurriculo(S.whats);
   const b = document.getElementById('ok');
   b.onclick = async () => {
     const senha = document.getElementById('senha').value; if (!senha) return erroBox('Digite a senha.');
@@ -240,6 +242,18 @@ function viewRetomar(msg) {
     if (!r.ok) return erroBox(r.erro);
     entrarRetomada(r);
   };
+}
+/* "Esqueci a senha": confirma com CPF/nascimento, troca a senha e já continua o currículo */
+function abrirRecuperarCurriculo(ident) {
+  TKConta.abrirRecuperar({
+    identificador: ident || '', chamar: o => api(o.action, o),
+    whatsLoja: '5588993223998',
+    aoEntrar: async r => {
+      const rs = await api('curriculo_retomar', { whatsapp: r.usuario.whatsapp, sessao: r.sessao });
+      if (rs.ok) return entrarRetomada(rs);
+      S.whats = r.usuario.whatsapp; viewCadastro('Senha trocada! Continue o cadastro.');
+    }
+  });
 }
 function entrarRetomada(r) {
   S.nome = r.nome; S.whats = r.whatsapp; S.sessao = r.sessao; S.fotoUrl = r.fotoUrl || ''; S.enviado = !!r.enviado; if (r.email) S.email = r.email;
@@ -342,6 +356,9 @@ function viewFinalizar(aviso) {
     <h2>Só mais um passo!</h2>
     <p class="sub">É o último antes de começar seu currículo de verdade.</p>
     ${aviso ? `<div class="aviso">${esc(aviso)}</div>` : ''}
+    <label class="campo" for="cpf">CPF (obrigatório)</label>
+    <input type="text" id="cpf" name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="14" value="${esc(S.tmp.cpf || '')}">
+    <p class="sub" style="margin:4px 0 12px">Precisamos do CPF para a contratação. Ele também serve para você entrar e recuperar a senha.</p>
     <label class="campo" for="nasc">Data de nascimento</label>
     <input type="text" id="nasc" name="nasc" inputmode="numeric" placeholder="dd/mm/aaaa" maxlength="10" value="${esc(S.tmp.nascTxt || '')}">
     <label class="opcao lgpd"><input type="checkbox" name="lgpd" value="1" ${S.tmp.lgpd ? 'checked' : ''}><span>Autorizo a TENKiTER a usar meus dados só para este cadastro e processo seletivo. <a href="#" id="verLgpd" style="color:var(--laranja);font-weight:600">Ver detalhes</a></span></label>
@@ -351,19 +368,32 @@ function viewFinalizar(aviso) {
   document.getElementById('voltar').onclick = () => viewMoradia('');
   document.getElementById('verLgpd').onclick = e => { e.preventDefault(); alert(LGPD_TEXTO); };
   wireNasc(document.getElementById('nasc'));
+  TKConta.ligarCpf(document.getElementById('cpf'));
   const b = document.getElementById('ok');
   b.onclick = async () => {
     const nascDigitado = val('nasc');
+    const cpfDigitado = val('cpf');
+    if (!cpfDigitado) return erroBox('Digite o seu CPF. Ele é obrigatório.');
+    if (!TKConta.cpfValido(cpfDigitado)) return erroBox('CPF inválido. Confira os 11 números.');
     if (!document.querySelector('input[name="lgpd"]').checked) return erroBox('Marque a autorização para continuar.');
     if (!nascValida(nascDigitado)) return erroBox('Data de nascimento inválida. Use o formato dd/mm/aaaa.');
     const nasc = nascISO(nascDigitado);
     const ida = idade(nasc);
     if (ida === null) return erroBox('Digite sua data de nascimento.');
-    S.tmp.nascTxt = nascDigitado; S.tmp.lgpd = true;
+    S.tmp.nascTxt = nascDigitado; S.tmp.lgpd = true; S.tmp.cpf = cpfDigitado;
     if (ida < 18 && S.idadeOk !== nasc) return confirmarIdade(ida, nasc, b);
     carregando(b, true);
-    const r = await api('curriculo_cadastro', { email: S.tmp.email, nome: S.tmp.nome, whatsapp: S.tmp.whats, senha: S.tmp.senha, sessao: S.login ? S.login.sessao : '', moradia: S.tmp.moradia, chegada: S.tmp.chegada, lgpd: true, dataNascimento: nasc, cvToken: S.cvToken });
+    const r = await api('curriculo_cadastro', { email: S.tmp.email, nome: S.tmp.nome, whatsapp: S.tmp.whats, senha: S.tmp.senha, sessao: S.login ? S.login.sessao : '', moradia: S.tmp.moradia, chegada: S.tmp.chegada, lgpd: true, dataNascimento: nasc, cpf: cpfDigitado, cvToken: S.cvToken });
     carregando(b, false);
+    if (!r.ok && (r.contaExiste || r.emUso)) {
+      erroBox(r.erro || 'Você já tem cadastro.');
+      const card = document.querySelector('.card');
+      TKConta.avisoContaExiste(card, {
+        aoEntrar: () => viewWhats(),
+        aoRecuperar: () => abrirRecuperarCurriculo(r.campo === 'cpf' ? cpfDigitado : S.tmp.whats)
+      });
+      return;
+    }
     if (!r.ok) return erroBox(r.erro);
     S.nome = r.nome; S.whats = r.whatsapp; S.sessao = r.sessao; S.fotoUrl = r.fotoUrl || '';
     if (r.menor) return viewMenor();
@@ -626,5 +656,6 @@ function viewFim() {
 </script>
 <script src="nav.js" data-ativo="candidatura"></script>
 <script src="a11y.js"></script>
+<script src="conta.js"></script>
 </body>
 </html>

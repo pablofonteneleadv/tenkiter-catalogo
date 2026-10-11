@@ -87,6 +87,7 @@
   .sug-linha { display: flex; align-items: stretch; border-bottom: 1px solid #f0f0f0; }
   .sug-linha:last-child { border-bottom: none; }
   .sug-copiar { flex: 1 1 auto; width: auto; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #fff; border-radius: 0; padding: 11px 12px; font-size: 0.9rem; font-weight: 600; text-align: left; color: var(--preto); }
+  .env-nao-saia { position: sticky; top: 0; z-index: 3; background: #7a1010; color: #fff; font-weight: 800; border-radius: 10px; padding: 10px 12px; margin: 0 0 8px; font-size: 0.92rem; }
   .sug-copiar .sug-nome { overflow-wrap: anywhere; }
   .sug-copiar small { display: block; font-weight: 400; color: #666; font-size: 0.74rem; margin-top: 2px; }
   .sug-copiar .sug-dica { flex: 0 0 auto; font-size: 0.7rem; font-weight: 700; color: #666; }
@@ -455,12 +456,13 @@
 <div id="login-overlay" role="dialog" aria-modal="true" aria-labelledby="lo-titulo">
   <div class="lo-box">
     <h2 id="lo-titulo">Entrar na Área de Gestão</h2>
-    <p>Use o mesmo WhatsApp e a mesma senha do portal de treinamento.</p>
-    <input type="tel" id="lo-whats" placeholder="WhatsApp com DDD" autocomplete="username" inputmode="tel">
+    <p>Entre com e-mail, WhatsApp ou CPF e a mesma senha do portal de treinamento.</p>
+    <input type="text" id="lo-whats" placeholder="E-mail, WhatsApp ou CPF" autocomplete="username" autocapitalize="none">
     <input type="password" id="lo-senha" placeholder="Senha" autocomplete="current-password">
     <div class="lo-erro" id="lo-erro"></div>
     <button type="button" class="lo-principal" id="lo-entrar">Entrar</button>
     <div class="lo-links">
+      <button type="button" class="lo-link" id="lo-esqueci">Esqueci a senha</button>
       <button type="button" class="lo-link" id="lo-pin" hidden>Entrar com o PIN antigo</button>
       <a href="index.html" class="lo-link">Voltar ao catálogo</a>
     </div>
@@ -476,6 +478,7 @@
   </div>
   <p>Gestão & Atendimento do Catálogo</p>
 </header>
+<div id="faixa-cpf-slot" style="padding:0 12px"></div>
 
 <main>
 
@@ -536,6 +539,7 @@
         <div class="passo-tit"><span class="num">2</span>Nome da peça <i class="obg">*</i></div>
         <input type="text" id="nome" maxlength="80" placeholder="Ex: Vestido Floral Midi" autocomplete="off" dir="ltr" lang="pt-BR">
         <div id="nome-sugestoes" aria-live="polite"></div>
+      <div id="aviso-copiado" class="sug-aviso" role="status" hidden></div>
         <div class="passo-msg">Escreva o nome da peça.</div>
       </section>
 
@@ -884,6 +888,19 @@
     document.getElementById('btn-trocar-user').style.display = 'none';
     aplicarPermissoes(usuario);
     esconderLogin();
+    mostrarFaixaCpf_(usuario);
+  }
+
+  // Estagiário em diante sem CPF: faixa vermelha grande aqui mesmo (sem ir a configurações)
+  function mostrarFaixaCpf_(usuario) {
+    const slot = document.getElementById('faixa-cpf-slot');
+    if (!slot || !window.TKConta) return;
+    slot.innerHTML = '';
+    TKConta.faixaCpf(slot, {
+      usuario,
+      salvar: (cpf) => { const s = getSessao(); return chamarConta({ action: 'salvar_identificadores', whatsapp: s ? s.whatsapp : usuario.whatsapp, sessao: s ? s.sessao : '', cpf }); },
+      aoSalvar: (r) => { if (usuarioAdmin && r && r.usuario) usuarioAdmin.cpf = r.usuario.cpf || ''; }
+    });
   }
 
   function usarPinAntigo() {
@@ -903,11 +920,11 @@
   document.getElementById('lo-entrar').addEventListener('click', async () => {
     const btn = document.getElementById('lo-entrar');
     const w = document.getElementById('lo-whats').value, senha = document.getElementById('lo-senha').value;
-    if (!w || !senha) { document.getElementById('lo-erro').textContent = 'Preencha WhatsApp e senha.'; return; }
+    if (!w || !senha) { document.getElementById('lo-erro').textContent = 'Preencha e-mail, WhatsApp ou CPF e a senha.'; return; }
     btn.disabled = true; btn.textContent = 'Entrando...';
     const r = await entrarComSenha(w, senha);
     btn.disabled = false; btn.textContent = 'Entrar';
-    if (!r || !r.ok) { document.getElementById('lo-erro').textContent = (r && r.erro) || 'WhatsApp ou senha incorretos.'; return; }
+    if (!r || !r.ok) { document.getElementById('lo-erro').textContent = ((r && r.erro) || 'Dados ou senha incorretos.') + ' Esqueceu a senha? Toque em “Esqueci a senha”.'; return; }
     if (!temPermissao(r.usuario, 'catalogo_admin')) {
       document.getElementById('lo-erro').textContent = 'Sua conta não tem acesso à Área de Gestão. Fale com a gestão.';
       return;
@@ -918,6 +935,12 @@
   });
   document.getElementById('lo-senha').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('lo-entrar').click(); });
   document.getElementById('lo-pin').addEventListener('click', usarPinAntigo);
+  document.getElementById('lo-esqueci').addEventListener('click', () => {
+    TKConta.abrirRecuperar({ identificador: document.getElementById('lo-whats').value, chamar: chamarConta,
+      aoEntrar: (r) => { salvarSessao(r.usuario.whatsapp, r.sessao);
+        if (!temPermissao(r.usuario, 'catalogo_admin')) { document.getElementById('lo-erro').textContent = 'Senha trocada, mas sua conta não tem acesso à Área de Gestão.'; return; }
+        modoLogin = true; aplicarUsuario(r.usuario); } });
+  });
 
   // Respostas do servidor que pedem login de novo ou negam permissão (vale para TODAS as chamadas ao backend).
   let ultimoAvisoPermissao = 0;
@@ -1557,7 +1580,11 @@
     if (cp) {
       const p = produtos.find(x => String(x.ID) === String(cp.dataset.pecaCopiar)); if (!p) return;
       const campo = document.getElementById('nome');
+      // Copiar = traz TUDO da peça parecida (preço, categorias, gêneros, tamanhos, cores, descrição, estoque, novidade), menos o código e as fotos.
+      // Editando uma peça, só o nome é copiado (não troca os dados da peça aberta).
+      if (modoFormulario !== 'editando') preencherFormComProduto(p);
       campo.value = String(p.Nome).slice(0, 80); nomeSugCopiado_ = campo.value;
+      if (modoFormulario !== 'editando') { const av = document.getElementById('aviso-copiado'); if (av) { av.hidden = false; av.textContent = '📋 Copiei os dados de “' + p.Nome + '” (preço, categoria, gênero, tamanhos, cores, descrição). Confira, escolha as fotos e mude o que for diferente.'; } }
       campo.focus(); try { campo.setSelectionRange(campo.value.length, campo.value.length); } catch (e) {}
       atualizarSugestoesNome_(); atualizarFaltas_();
       return;
@@ -1699,6 +1726,7 @@
     abrirCadastro_();
   }
 
+  document.getElementById('form-produto').addEventListener('reset', () => { const ac = document.getElementById('aviso-copiado'); if (ac) ac.hidden = true; });
   function cancelarDuplicacao() {
     modoFormulario = 'novo';
     window.__rascunhoAtual = null;   // v3.6: rascunho do Instagram que estava sendo aceito
@@ -1777,6 +1805,8 @@
   function desenharEnvios() {
     const box = document.getElementById('fila-envios');
     box.innerHTML = '';
+    { const pend = envios.filter(e => e.estado === 'fila' || e.estado === 'enviando').length;
+      if (pend) { const av = document.createElement('div'); av.className = 'env-nao-saia'; av.setAttribute('role', 'status'); av.textContent = '⚠️ Não saia desta tela: ' + (pend === 1 ? 'falta 1 peça' : 'faltam ' + pend + ' peças') + ' para terminar de enviar.'; box.appendChild(av); } }
     envios.forEach((it) => {
       const linha = document.createElement('div'); linha.className = 'env-item env-' + (it.estado === 'fila' ? 'enviando' : it.estado);
       const t = document.createElement('div'); t.className = 'env-txt';
@@ -2169,6 +2199,11 @@
   window.addEventListener('beforeunload', (ev) => {
     if (envios.some(e => e.estado === 'fila' || e.estado === 'enviando')) { ev.preventDefault(); ev.returnValue = ''; }
   });
+  // Os envios rodam NESTA página: sair (ou fechar o app) interrompe o que ainda não terminou. A barra inferior avisa antes.
+  window.TKSairBloqueio = () => {
+    const n = envios.filter(e => e.estado === 'fila' || e.estado === 'enviando').length;
+    return n ? '⚠️ Ainda ' + (n === 1 ? 'falta 1 peça' : 'faltam ' + n + ' peças') + ' para terminar de enviar.\n\nSe você sair agora, o que não terminou SE PERDE e precisa ser cadastrado de novo.\n\nOK = sair mesmo assim · Cancelar = ficar e deixar terminar.' : '';
+  };
 
   document.getElementById('form-produto').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -3559,6 +3594,7 @@
 <script src="admin-instagram.js"></script>
 <script src="nav.js" data-ativo="gestao"></script>
 <script src="a11y.js"></script>
+<script src="conta.js"></script>
 <script src="push.js"></script>
 </body>
 </html>

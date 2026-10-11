@@ -159,6 +159,14 @@
   // o <script> fica no fim do <body>: o DOM já existe. currentScript só vale agora, então guardamos antes.
   var _tag = document.currentScript;
   if (_tag) ativoId = _tag.getAttribute('data-ativo') || '';
+  // Guarda de saída: a página pode definir window.TKSairBloqueio = function () { return 'texto' | '' }.
+  // Se devolver texto (ex.: envios em andamento), tocar na barra pede confirmação antes de sair.
+  document.addEventListener('click', function (ev) {
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[data-nav]') : null;
+    if (!a || typeof window.TKSairBloqueio !== 'function') return;
+    var msg = ''; try { msg = window.TKSairBloqueio() || ''; } catch (e) {}
+    if (msg && !window.confirm(msg)) { ev.preventDefault(); ev.stopPropagation(); }
+  }, true);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { lerCache(); desenhar(); atualizarDoServidor(); preCarregar(); });
   else { lerCache(); desenhar(); atualizarDoServidor(); preCarregar(); }
 })();

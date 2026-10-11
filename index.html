@@ -40,6 +40,7 @@
      Só libera o que o catálogo realmente usa: o próprio site, o Apps Script (dados), Cloudinary/Google (fotos e vídeos), OneSignal (avisos) e Meta (só se o Pixel for ligado no painel). -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.onesignal.com https://*.onesignal.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.onesignal.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://tenkiter-og.distkrpconfeccoes.workers.dev https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com https://lh3.googleusercontent.com https://res.cloudinary.com https://tenkiter-midia.distkrpconfeccoes.workers.dev https://drive.google.com https://onesignal.com https://*.onesignal.com https://www.facebook.com https://connect.facebook.net; frame-src https://drive.google.com https://*.onesignal.com https://onesignal.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <script src="common.js"></script>
+<script src="conta.js"></script>
 <script>
 /* v3.3: começa a buscar a lista de peças já aqui no <head> (antes do resto da página montar) -- o catálogo aparece mais cedo.
    O endereço vem de common.js (API_URL, fonte única). carregarCatalogo() pega esta busca pronta. */
@@ -248,6 +249,8 @@ catch (e) { window.__precargaLista = null; }
   .conta-abas { display: flex; gap: 6px; margin-bottom: 12px; }
   .conta-abas button { flex: 1; padding: 8px; border: none; border-radius: 8px; background: #eee; font-weight: 700; cursor: pointer; }
   .conta-abas button.ativa { background: var(--preto); color: var(--laranja); }
+  .conta-opc-txt { font-size: 0.8rem; color: #555; margin: 4px 0 8px; line-height: 1.35; }
+  .conta-opc { border-top: 1px solid #ddd; margin-top: 12px; padding-top: 10px; }
   .conta-erro { color: #c62828; font-size: 0.85rem; min-height: 1.1em; margin-bottom: 6px; }
   .conta-fechar { position: absolute; top: 8px; right: 12px; background: none; border: none; font-size: 1.4rem; cursor: pointer; color: #666; }
   /* ======================= v3.3 ======================= */
@@ -1597,11 +1600,36 @@ catch (e) { window.__precargaLista = null; }
       await sincronizar();
     }
 
+    let identDigitado_ = '';
     function desenhar(erro) {
       corpo.textContent = '';
       if (usuario) {
         corpo.appendChild(el('h2', { id: 'conta-titulo', text: 'Olá, ' + usuario.name + '!' }));
         corpo.appendChild(el('p', { text: 'Seus favoritos e sua sacola ficam salvos na sua conta e aparecem em qualquer aparelho em que você entrar.' }));
+        // CPF: da equipe (Estagiário em diante) é obrigatório = faixa vermelha aqui mesmo; cliente comum só é convidado (opcional)
+        if (window.TKConta && TKConta.precisaCpf(usuario)) {
+          TKConta.faixaCpf(corpo, { usuario, salvar: (cpf) => chamarConta({ action: 'salvar_identificadores', whatsapp: getSessao() && getSessao().whatsapp, sessao: getSessao() && getSessao().sessao, cpf }), aoSalvar: (r) => { if (r.usuario) { usuario = r.usuario; desenhar(); } } });
+        } else if (window.TKConta && !usuario.cpf && !usuario.email) {
+          const cx = el('div', { className: 'conta-opc' });
+          cx.appendChild(el('p', { className: 'conta-opc-txt', text: 'Quer entrar também com e-mail ou CPF e poder recuperar a senha sozinho(a)? Preencha abaixo. É opcional — pode pular.' }));
+          const inEmail = el('input', { type: 'email', id: 'conta-email-opc', placeholder: 'E-mail (opcional)', autocomplete: 'email' });
+          const inCpf = el('input', { type: 'text', id: 'conta-cpf-opc', placeholder: 'CPF (opcional)' }); TKConta.ligarCpf(inCpf);
+          const msgOpc = el('div', { className: 'conta-erro', id: 'conta-opc-msg' });
+          const salvarOpc = el('button', { type: 'button', className: 'conta-secundario', text: 'Salvar' });
+          salvarOpc.addEventListener('click', async () => {
+            if (!inEmail.value.trim() && !inCpf.value.trim()) { msgOpc.textContent = 'Digite o e-mail ou o CPF (ou deixe como está).'; return; }
+            if (inCpf.value && !TKConta.cpfValido(inCpf.value)) { msgOpc.textContent = 'CPF inválido. Confira os 11 números.'; return; }
+            if (inEmail.value && !TKConta.emailValido(inEmail.value)) { msgOpc.textContent = 'E-mail inválido.'; return; }
+            salvarOpc.disabled = true;
+            const s = getSessao() || {};
+            const r = await chamarConta({ action: 'salvar_identificadores', whatsapp: s.whatsapp, sessao: s.sessao, cpf: inCpf.value, email: inEmail.value });
+            salvarOpc.disabled = false;
+            if (r && r.ok) { if (r.usuario) usuario = r.usuario; desenhar(); return; }
+            msgOpc.textContent = (r && r.erro) || 'Não consegui salvar agora.';
+          });
+          [cx.firstChild, inEmail, inCpf, msgOpc, salvarOpc].forEach((n) => cx.appendChild(n));
+          corpo.appendChild(cx);
+        }
         const sair = el('button', { type: 'button', className: 'conta-secundario', id: 'conta-sair', text: 'Sair da conta' });
         sair.addEventListener('click', () => { limparSessao(); usuario = null; definirEquipe_(null); atualizarBotao(); ov.classList.remove('visivel'); });
         corpo.appendChild(sair);
@@ -1617,25 +1645,49 @@ catch (e) { window.__precargaLista = null; }
       });
       corpo.appendChild(abas);
       const nome = el('input', { type: 'text', id: 'conta-nome', placeholder: 'Seu nome', autocomplete: 'name' });
-      const whats = el('input', { type: 'tel', id: 'conta-whats', placeholder: 'WhatsApp com DDD', autocomplete: 'username', inputMode: 'tel' });
+      const whats = el('input', aba === 'criar' ? { type: 'tel', id: 'conta-whats', placeholder: 'WhatsApp com DDD', autocomplete: 'username', inputMode: 'tel' } : { type: 'text', id: 'conta-whats', placeholder: 'E-mail, WhatsApp ou CPF', autocomplete: 'username', autocapitalize: 'none', autocorrect: 'off' });
+      whats.value = identDigitado_;
+      whats.addEventListener('input', () => { identDigitado_ = whats.value; });
+      const emailNovo = el('input', { type: 'email', id: 'conta-email', placeholder: 'E-mail (opcional)', autocomplete: 'email' });
+      const cpfNovo = el('input', { type: 'text', id: 'conta-cpf', placeholder: 'CPF (opcional)' });
+      if (window.TKConta) TKConta.ligarCpf(cpfNovo);
       const senha = el('input', { type: 'password', id: 'conta-senha', placeholder: aba === 'criar' ? 'Crie uma senha (mín. 4)' : 'Senha', autocomplete: aba === 'criar' ? 'new-password' : 'current-password' });
       if (aba === 'criar') corpo.appendChild(nome);
       corpo.appendChild(whats); corpo.appendChild(senha);
+      if (aba === 'criar') {
+        corpo.appendChild(emailNovo); corpo.appendChild(cpfNovo);
+        corpo.appendChild(el('p', { className: 'conta-opc-txt', text: 'E-mail e CPF são opcionais. Se quiser informar, você poderá entrar também por eles e recuperar a senha sozinho(a) se esquecer.' }));
+      }
       corpo.appendChild(el('div', { className: 'conta-erro', id: 'conta-erro', text: erro || '' }));
       const ok = el('button', { type: 'button', className: 'conta-principal', id: 'conta-ok', text: aba === 'criar' ? 'Criar conta' : 'Entrar' });
       async function enviar() {
         const erroEl = document.getElementById('conta-erro');
         if (!whats.value || !senha.value || (aba === 'criar' && !nome.value.trim())) { erroEl.textContent = 'Preencha todos os campos.'; return; }
         if (aba === 'criar' && senha.value.length < 4) { erroEl.textContent = 'A senha precisa ter pelo menos 4 caracteres.'; return; }
+        if (aba === 'criar' && cpfNovo.value && window.TKConta && !TKConta.cpfValido(cpfNovo.value)) { erroEl.textContent = 'CPF inválido. Confira os 11 números (ou deixe em branco).'; return; }
         ok.disabled = true; const rotulo = ok.textContent; ok.textContent = 'Aguarde...';
-        const r = aba === 'criar' ? await registrarClienteApi(nome.value.trim(), whats.value, senha.value) : await entrarComSenha(whats.value, senha.value);
+        const r = aba === 'criar' ? await registrarClienteApi(nome.value.trim(), whats.value, senha.value, { cpf: cpfNovo.value, email: emailNovo.value }) : await entrarComSenha(whats.value, senha.value);
         ok.disabled = false; ok.textContent = rotulo;
+        if (r && r.contaExiste && window.TKConta) {
+          erroEl.textContent = '';
+          TKConta.avisoContaExiste(corpo, { aoEntrar: () => { aba = 'entrar'; desenhar(); }, aoRecuperar: () => abrirRecuperar_(whats.value) });
+          return;
+        }
         if (!r || !r.ok || !r.usuario) { erroEl.textContent = (r && r.erro) || 'Não foi possível agora. Tente de novo.'; return; }
         depoisDeEntrar(r.usuario);
       }
       ok.addEventListener('click', enviar);
       senha.addEventListener('keydown', (e) => { if (e.key === 'Enter') enviar(); });
       corpo.appendChild(ok);
+      if (aba === 'entrar') {
+        const esq = el('button', { type: 'button', className: 'conta-secundario', id: 'conta-esqueci', text: 'Esqueci a senha' });
+        esq.addEventListener('click', () => abrirRecuperar_(whats.value));
+        corpo.appendChild(esq);
+      }
+    }
+    function abrirRecuperar_(ident) {
+      if (!window.TKConta) return;
+      TKConta.abrirRecuperar({ identificador: ident, chamar: chamarConta, aoEntrar: (r) => { salvarSessao(r.usuario.whatsapp, r.sessao); depoisDeEntrar(r.usuario); } });
     }
 
     btn.addEventListener('click', () => { desenhar(); ov.classList.add('visivel'); });

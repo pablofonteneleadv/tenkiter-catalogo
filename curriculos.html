@@ -99,9 +99,10 @@ async function chamar(action, corpo) {
 }
 
 function telaLogin(msg) {
-  $('app').innerHTML = `<div class="card"><h3 style="margin-top:0">Entrar</h3><p style="font-size:.9rem;color:#555">Use o mesmo WhatsApp e a mesma senha do portal e do admin.</p>
-    <input id="w" type="tel" placeholder="WhatsApp com DDD" autocomplete="username" style="margin-bottom:8px"><input id="s" type="password" placeholder="Senha" autocomplete="current-password">
-    <div class="erro ${msg ? '' : 'oculto'}" id="er">${E(msg || '')}</div><button id="go" style="width:100%;margin-top:8px">Entrar</button></div>`;
+  $('app').innerHTML = `<div class="card"><h3 style="margin-top:0">Entrar</h3><p style="font-size:.9rem;color:#555">Entre com e-mail, WhatsApp ou CPF e a mesma senha do portal e do admin.</p>
+    <input id="w" type="text" placeholder="E-mail, WhatsApp ou CPF" autocomplete="username" autocapitalize="none" style="margin-bottom:8px"><input id="s" type="password" placeholder="Senha" autocomplete="current-password">
+    <div class="erro ${msg ? '' : 'oculto'}" id="er">${E(msg || '')}</div><button id="go" style="width:100%;margin-top:8px">Entrar</button><button id="esq" type="button" style="width:100%;margin-top:8px;background:#111;color:#fff">Esqueci a senha</button></div>`;
+  $('esq').onclick = () => TKConta.abrirRecuperar({ identificador: $('w').value, chamar: chamarConta, aoEntrar: r => { salvarSessao(r.usuario.whatsapp, r.sessao); iniciar(); } });
   $('go').onclick = async () => {
     $('go').disabled = true; const r = await entrarComSenha($('w').value, $('s').value); $('go').disabled = false;
     if (!r || !r.ok) return telaLogin((r && r.erro) || 'Não foi possível entrar.');
@@ -418,5 +419,6 @@ iniciar();
 </script>
 <script src="nav.js" data-ativo="curriculos"></script>
 <script src="a11y.js"></script>
+<script src="conta.js"></script>
 </body>
 </html>

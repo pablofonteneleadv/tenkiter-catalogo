@@ -1,11 +1,11 @@
 # ATUALIZAÇÃO MAIS RECENTE — catálogo v3.3 (backend) + site v3.4
 
-> Tudo que está abaixo desta seção (títulos "v4 / v2", "Atualização 3" etc.) é o **histórico** das atualizações antigas, mantido como registro. Os arquivos `Code-*.gs.txt`, `tenkiter-codigo-v2.1.gs.txt` e `Code-treinamento-*.gs.txt` citados lá são antigos: **não use**. Os atuais são `catalogo-codigo-3.3.gs.txt` e `funcionario-codigo-3.2.gs.txt`.
+> Tudo que está abaixo desta seção (títulos "v4 / v2", "Atualização 3" etc.) é o **histórico** das atualizações antigas, mantido como registro. Os arquivos `Code-*.gs.txt`, `tenkiter-codigo-v2.1.gs.txt` e `Code-treinamento-*.gs.txt` citados lá são antigos: **não use**. Os atuais são `catalogo-codigo-3.3.gs.txt` e `funcionario-codigo-3.3.gs.txt`.
 
 **Nada apaga dados: só acrescenta abas/colunas. Ordem importa.**
 
 1. **Site primeiro (já publicado pelo Claude).** O site novo funciona também com o backend antigo (pedido segue só pelo WhatsApp, painel sem as telas novas). Nada quebra se você demorar no passo 2.
-2. **Backend do catálogo** — Apps Script do *catálogo*: apague todo o código, cole o conteúdo de **`catalogo-codigo-3.9.gs.txt`** (já inclui o 3.2, 3.3 e 3.4), salve; *Implantar → Gerenciar implantações → lápis → Nova versão → Implantar* (a URL não muda). Aceite as permissões se o Google pedir.
+2. **Backend do catálogo** — Apps Script do *catálogo*: apague todo o código, cole o conteúdo de **`catalogo-codigo-4.0.gs.txt`** (já inclui o 3.2, 3.3 e 3.4), salve; *Implantar → Gerenciar implantações → lápis → Nova versão → Implantar* (a URL não muda). Aceite as permissões se o Google pedir.
    - Conferir: abra `<URL do Apps Script>?action=versao` — deve aparecer `"versao":"catalogo-3.6"`, `"pedidos":true`, `"categoriasGestao":true`, `"pushCompleto":true`, `"conexoes":true`, `"conexoesOnesignal":true`, `"metricasAvancadas":true` e `"dispositivos":true`.
    - **Números reais com filtros (novo no 3.5):** Gestão → 📊 Números reais → período (7/30/90 dias ou datas), **horário do dia (opcional)**, dias da semana, app ou navegador, aparelho, de onde veio, categoria e gênero; mostra também quantas pessoas instalaram o app e quantas têm aviso ativo. Os dados de aparelho/origem só existem a partir do dia em que o site novo entrou no ar (antes aparece "Não informado"); a aba **Dispositivos** da planilha é criada sozinha e guarda só um código aleatório por aparelho (sem nome nem telefone).
    - No painel, na lista de peças aparece o aviso "⚠️ peças sem código": toque em **Gerar códigos agora** uma vez (as peças antigas sem código ganham `TK-####`; os códigos que já existem não mudam).
