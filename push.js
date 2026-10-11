@@ -68,6 +68,7 @@
     return 'pendente';
   }
   function mudou() {
+    if (resumo() === 'ativo') { var pl = document.getElementById('tk-placa-aviso'); if (pl && pl.parentNode) pl.parentNode.removeChild(pl); }
     ouvintes.slice().forEach(function (f) { try { f(est, resumo()); } catch (e) {} });
     atualizarBotaoTopo();
     informarPainel();
@@ -110,9 +111,9 @@
     window.OneSignalDeferred.push(function (OneSignal) { return prepararSDK(OneSignal); });
     var s = document.createElement('script');
     s.src = SDK_URL; s.defer = true;
-    s.onerror = function () { est.sdk = 'bloqueado'; mudou(); };
+    s.onerror = function () { est.sdk = 'bloqueado'; mudou(); validarAoAbrir(); };
     document.head.appendChild(s);
-    setTimeout(function () { if (est.sdk === 'carregando') { est.sdk = 'bloqueado'; mudou(); } }, 20000);
+    setTimeout(function () { if (est.sdk === 'carregando') { est.sdk = 'bloqueado'; mudou(); validarAoAbrir(); } }, 20000);
   }
 
   var fila = Promise.resolve();       // identificação e etiquetas nunca rodam ao mesmo tempo
@@ -493,7 +494,41 @@
     }
     abrir(origem === 'instalou' ? '✅ App instalado! Ative os avisos' : 'Receba os avisos da TENKiTER', filhos);
   }
+  /** Placa de verificação: TODA vez que o app instalado abre, confere a permissão de avisos. Ativo = não faz nada; desligado = placa flutuante pedindo.
+   *  Sem "não mostrar mais" de propósito (só "Agora não", que vale até fechar o app). A permissão só é pedida DENTRO do toque do botão. */
+  var K_PLACA = 'tk_placa_aviso_sessao_v1';
+  function placaDispensada() { try { return sessionStorage.getItem(K_PLACA) === '1'; } catch (e) { return false; } }
+  function removerPlaca() { var p = document.getElementById('tk-placa-aviso'); if (p && p.parentNode) p.parentNode.removeChild(p); }
+  function validarAoAbrir() {
+    if (!standalone() || placaDispensada()) return;
+    setTimeout(function () {
+      var r = resumo();
+      if (r !== 'pendente' && r !== 'pausado' && r !== 'negado' && r !== 'bloqueado') return;   // ativo/ativando/indisponível: nada acontece
+      if (document.getElementById('tk-placa-aviso') || placaDispensada()) return;
+      if (document.querySelector('.aberto, .visivel, [role=dialog][open]')) return;
+      if (!document.getElementById('tk-placa-css')) {
+        var st = document.createElement('style'); st.id = 'tk-placa-css';
+        st.textContent = '#tk-placa-aviso{position:fixed;left:12px;right:12px;bottom:84px;z-index:80;max-width:460px;margin:0 auto;background:#111;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 6px 24px rgba(0,0,0,.35);font:14px/1.35 system-ui,sans-serif}' +
+          '#tk-placa-aviso b{display:block;font-size:15px;margin-bottom:2px}#tk-placa-aviso p{margin:0 0 10px;color:#e6e6e6}' +
+          '#tk-placa-aviso .tkpl-l{display:flex;gap:8px;flex-wrap:wrap}' +
+          '#tk-placa-aviso button{width:auto;font:inherit;cursor:pointer;border-radius:10px;padding:9px 14px;min-height:40px}' +
+          '#tk-placa-aviso .tkpl-p{background:#E67E22;color:#0d0d0d;border:0;font-weight:700}' +
+          '#tk-placa-aviso .tkpl-s{background:transparent;color:#fff;border:1px solid #888}';
+        document.head.appendChild(st);
+      }
+      var bloq = r === 'negado' || r === 'bloqueado';
+      var box = document.createElement('div'); box.id = 'tk-placa-aviso'; box.setAttribute('role', 'region'); box.setAttribute('aria-label', 'Avisos desligados');
+      box.innerHTML = '<b>🔕 Os avisos estão desligados</b><p></p><div class="tkpl-l"><button type="button" class="tkpl-p"></button><button type="button" class="tkpl-s">Agora não</button></div>';
+      box.querySelector('p').textContent = bloq ? 'Este aparelho está bloqueando os avisos da TENKiTER. Veja como liberar para não perder pedidos e novidades.'
+        : 'Ative para receber ' + (est.tipo === 'equipe' ? 'os novos pedidos e os avisos da equipe' : 'as novidades e o andamento do seu pedido') + ' direto na tela do celular.';
+      var bp = box.querySelector('.tkpl-p'); bp.textContent = bloq ? 'Ver como liberar' : '🔔 Ativar avisos';
+      bp.addEventListener('click', function () { removerPlaca(); if (bloq) { abrirAjuda(r); } else { ativar(); } });
+      box.querySelector('.tkpl-s').addEventListener('click', function () { try { sessionStorage.setItem(K_PLACA, '1'); } catch (e) {} removerPlaca(); });
+      document.body.appendChild(box);
+    }, window.TK_PLACA_ATRASO_MS != null ? window.TK_PLACA_ATRASO_MS : 2500);
+  }
   function convidarAutomatico() {
+    if (standalone()) { validarAoAbrir(); return; }
     if (resumo() !== 'pendente' || est.sdk !== 'pronto') return;
     var noApp = standalone();
     if (!noApp && !(est.equipe || est.tipo === 'aluno')) return;     // cliente no navegador: só o sininho, sem insistir

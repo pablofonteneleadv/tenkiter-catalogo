@@ -204,7 +204,7 @@
         '#tk-convite-app button{width:auto;font:inherit;cursor:pointer;border-radius:10px;padding:9px 14px;min-height:40px}' +
         '#tk-convite-app .tkcv-p{background:#E67E22;color:#0d0d0d;border:0;font-weight:700}' +
         '#tk-convite-app .tkcv-s{background:transparent;color:#fff;border:1px solid #888}' +
-        '#tk-convite-app .tkcv-n{background:transparent;color:#e6e6e6;border:0;text-decoration:underline;padding:9px 6px}';
+        '#tk-convite-app .tkcv-n{background:transparent;color:#9a9a9a;border:0;text-decoration:underline;font-size:10px;line-height:1;min-height:0;padding:3px 4px;margin-left:auto;align-self:flex-end}';
       document.head.appendChild(st);
     }
     var box = document.createElement('div'); box.id = 'tk-convite-app'; box.setAttribute('role', 'region'); box.setAttribute('aria-label', 'Instalar o app da TENKiTER');

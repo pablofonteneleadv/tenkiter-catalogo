@@ -26,6 +26,7 @@ with sync_playwright() as p:
     chk("recarregar logo depois não volta a aparecer (espera 3 dias)",pg.locator("#tk-convite-app").count()==0)
     ctx.close()
     ctx,pg=abrir(b,UA_AND)
+    chk("'Não mostrar mais' é bem menor que 'Agora não'", pg.evaluate("(()=>{const n=document.querySelector('#tk-convite-app .tkcv-n').getBoundingClientRect(),s=document.querySelector('#tk-convite-app .tkcv-s').getBoundingClientRect();return n.height<s.height*0.6&&n.width<s.width})()"))
     pg.click("#tk-convite-app .tkcv-n"); pg.reload(); pg.wait_for_timeout(1500)
     chk("'Não mostrar mais' = nunca mais",pg.locator("#tk-convite-app").count()==0)
     ctx.close()

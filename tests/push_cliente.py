@@ -28,7 +28,7 @@ UA_PC = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) 
 # ---- OneSignal FALSO (mesma forma do SDK v16: fila OneSignalDeferred + objeto OneSignal)
 SDK_FALSO = r"""
 (function(){
-  var S = window.__os = { calls: [], externalId: null, tags: {}, aliases: {}, optedIn: false, perm: [], sub: [], initOpts: null };
+  var S = window.__os = { calls: [], externalId: null, tags: {}, aliases: {}, optedIn: window.__perm === 'granted', perm: [], sub: [], initOpts: null };
   function avisa(l){ l.forEach(function(f){ try{ f(); }catch(e){} }); }
   var OneSignal = {
     init: function(o){ S.initOpts = o; S.calls.push(['init']); return Promise.resolve(); },
@@ -267,8 +267,8 @@ with sync_playwright() as p:
     chk("no app instalado do iPhone o SDK carrega e o estado é 'pendente'", reqs["sdk"] == 1 and resumo(pg) == "pendente", (reqs, resumo(pg)))
     chk("origem 'app' na etiqueta", os_(pg, "S.tags.origem") == "app", os_(pg, "S.tags"))
     pg.wait_for_timeout(1500)
-    chk("convida a ativar (UMA janela nossa) sem pedir a permissão sozinho", pg.locator("#tkp-janela.aberto").count() == 1 and chamadas(pg, "requestPermission") == [])
-    pg.click("#tkp-janela .tkp-btn:has-text('Ativar avisos')"); pg.wait_for_timeout(900)
+    chk("mostra a placa de ativar (UMA) sem pedir a permissão sozinho", pg.locator("#tk-placa-aviso").count() == 1 and chamadas(pg, "requestPermission") == [])
+    pg.click("#tk-placa-aviso .tkpl-p"); pg.wait_for_timeout(900)
     rp = chamadas(pg, "requestPermission")
     chk("no iPhone a permissão também sai de um toque", len(rp) == 1 and rp[0][1] is True and resumo(pg) == "ativo", (rp, resumo(pg)))
     pg.evaluate("document.getElementById('instalar-app').scrollIntoView()")
@@ -322,13 +322,51 @@ with sync_playwright() as p:
     pg.goto(BASE + "index.html"); pg.wait_for_timeout(2300)
     chk("origem 'app' e SDK carregado", os_(pg, "S.tags.origem") == "app" and reqs["sdk"] == 1, os_(pg, "S.tags"))
     pg.wait_for_timeout(1500)
-    chk("abrir o app instalado convida a ativar os avisos", pg.locator("#tkp-janela.aberto").count() == 1)
-    pg.click("#tkp-janela .tkp-btn:has-text('Agora não')"); pg.wait_for_timeout(300)
+    chk("abrir o app instalado com avisos desligados mostra a PLACA pedindo para ativar", pg.locator("#tk-placa-aviso").count() == 1 and pg.locator("#tkp-janela.aberto").count() == 0)
+    chk("a placa não tem 'não mostrar mais'", "mais" not in pg.inner_text("#tk-placa-aviso").lower())
+    chk("a permissão ainda NÃO foi pedida (só no toque)", chamadas(pg, "requestPermission") == [])
+    axe(pg, "placa de avisos desligados")
+    pg.click("#tk-placa-aviso .tkpl-s"); pg.wait_for_timeout(200)
+    chk("'Agora não' some com a placa", pg.locator("#tk-placa-aviso").count() == 0)
+    pg.reload(); pg.wait_for_timeout(4500)
+    chk("na mesma abertura do app (mesma sessão) ela não volta", pg.locator("#tk-placa-aviso").count() == 0)
+    pg.evaluate("sessionStorage.clear()"); pg.reload(); pg.wait_for_timeout(4500)
+    chk("ao abrir o app de novo a placa volta (valida a cada abertura)", pg.locator("#tk-placa-aviso").count() == 1)
+    pg.click("#tk-placa-aviso .tkpl-s"); pg.wait_for_timeout(200)
     pg.evaluate("document.getElementById('instalar-app').scrollIntoView()")
     chk("a seção de instalar diz 'Você já está usando o app' e oferece 'Ativar avisos'", "já está usando o app" in pg.inner_text("#inst-android-txt") and pg.locator("#inst-avisos").is_visible() and "Ativar avisos" in pg.inner_text("#btn-inst-avisos"), pg.inner_text("#inst-avisos") if pg.locator("#inst-avisos").count() else "")
     pg.click("#btn-inst-avisos"); pg.wait_for_timeout(900)
     chk("o botão da seção ativa os avisos (toque)", resumo(pg) == "ativo" and chamadas(pg, "requestPermission")[0][1] is True)
     chk("e passa a oferecer 'Ajustar avisos'", "Ajustar avisos" in pg.inner_text("#btn-inst-avisos"), pg.inner_text("#btn-inst-avisos"))
+    ctx.close()
+
+    print("== App instalado: placa ativa e permissão ativa ==")
+    ctx, st, reqs = novo_contexto(b, standalone_mm=True)
+    pg = pag(ctx, erros)
+    pg.goto(BASE + "index.html"); pg.wait_for_timeout(4500)
+    pg.click("#tk-placa-aviso .tkpl-p"); pg.wait_for_timeout(900)
+    chk("o botão da placa pede a permissão dentro do toque e ativa", resumo(pg) == "ativo" and chamadas(pg, "requestPermission")[0][1] is True and pg.locator("#tk-placa-aviso").count() == 0)
+    ctx.close()
+    ctx, st, reqs = novo_contexto(b, standalone_mm=True, perm="granted")
+    pg = pag(ctx, erros)
+    pg.goto(BASE + "index.html"); pg.wait_for_timeout(4500)
+    chk("com os avisos ativos nada aparece ao abrir o app", resumo(pg) == "ativo" and pg.locator("#tk-placa-aviso").count() == 0 and pg.locator("#tkp-janela.aberto").count() == 0, resumo(pg))
+    ctx.close()
+
+    print("== App instalado com permissão NEGADA ==")
+    ctx, st, reqs = novo_contexto(b, standalone_mm=True, perm="denied")
+    pg = pag(ctx, erros)
+    pg.goto(BASE + "index.html"); pg.wait_for_timeout(4500)
+    chk("bloqueado: a placa aparece com 'Ver como liberar'", pg.locator("#tk-placa-aviso").count() == 1 and "Ver como liberar" in pg.inner_text("#tk-placa-aviso"), pg.inner_text("body")[:100])
+    pg.click("#tk-placa-aviso .tkpl-p"); pg.wait_for_timeout(500)
+    chk("o botão abre a ajuda passo a passo (sem pedir permissão)", pg.locator("#tkp-janela.aberto").count() == 1 and chamadas(pg, "requestPermission") == [])
+    ctx.close()
+
+    print("== Site normal (fora do app): sem a placa ==")
+    ctx, st, reqs = novo_contexto(b)
+    pg = pag(ctx, erros)
+    pg.goto(BASE + "index.html"); pg.wait_for_timeout(4500)
+    chk("fora do app a placa de avisos não aparece", pg.locator("#tk-placa-aviso").count() == 0)
     ctx.close()
 
     # ======================================================================= I. computador

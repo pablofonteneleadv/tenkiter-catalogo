@@ -350,7 +350,8 @@ catch (e) { window.__precargaLista = null; }
   #toast-equipe.visivel { display: flex; }
   #toast-equipe button { background: var(--laranja); color: #0d0d0d; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer; width: auto; }
   .btn-x-modal { position: absolute; top: 10px; right: 10px; z-index: 6; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(0,0,0,0.65); color: #fff; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-  .barra-compra { position: sticky; bottom: 0; z-index: 5; display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--branco); border-top: 1px solid #eee; box-shadow: 0 -4px 12px rgba(0,0,0,0.08); }
+  .barra-compra { position: sticky; bottom: 0; z-index: 5; display: flex; flex-direction: column; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--branco); border-top: 1px solid #eee; box-shadow: 0 -4px 12px rgba(0,0,0,0.08); }
+  .barra-compra .bc-linha { display: flex; gap: 8px; }
   .barra-compra button, .barra-compra a { min-height: 48px; border-radius: 12px; font-weight: 800; font-size: 0.92rem; cursor: pointer; border: none; text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; }
   .barra-compra .bc-sacola { flex: 0 0 38%; background: #f0f0f0; color: var(--preto); }
   .barra-compra .bc-sacola[aria-pressed="true"] { background: var(--preto); color: var(--laranja); }
@@ -359,8 +360,8 @@ catch (e) { window.__precargaLista = null; }
   .barra-compra .bc-total small { font-size: 0.68rem; color: #555; font-weight: 700; }
   .barra-compra .bc-total strong { font-size: 1.05rem; color: #1a7a1a; }
   .barra-compra .bc-aviso { flex: 1; background: #eee; color: #555; font-weight: 700; font-size: 0.82rem; padding: 0 8px; }
-  .linha-secundaria { display: flex; gap: 8px; padding: 0 16px 12px; }
-  .linha-secundaria button { flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid #ddd; background: #fafafa; font-weight: 700; font-size: 0.8rem; cursor: pointer; color: #222; }
+  .linha-secundaria { display: flex; gap: 8px; }
+  .barra-compra .linha-secundaria button { flex: 1; min-height: 40px; font-size: 0.8rem; border-radius: 10px; border: 1px solid #ddd; background: #fafafa; font-weight: 700; font-size: 0.8rem; cursor: pointer; color: #222; }
 
   /* sacola / pedido / favoritos / rastreio / seleção */
   .sheet-topo { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 4px; gap: 8px; }
@@ -1302,15 +1303,17 @@ catch (e) { window.__precargaLista = null; }
         ${p.Descricao ? `<div class="desc">${escaparHtml(p.Descricao)}</div>` : ''}
         ${disp ? `<div class="disponibilidade ${disp.classe}" style="margin-top:10px;font-size:0.8rem;">${disp.texto}</div>` : ''}
       </div>
-      <div class="linha-secundaria">
+      <div class="barra-compra">
+        <div class="linha-secundaria">
         <button type="button" id="btn-favorito-modal" aria-pressed="${favoritado}">${favoritado ? '❤️ Nos favoritos' : '🤍 Favoritar'}</button>
         ${esgotado ? '' : '<button type="button" id="btn-anexar-foto">📎 Compartilhar foto e link</button>'}
-      </div>
-      <div class="barra-compra">
+        </div>
+        <div class="bc-linha">
         ${esgotado
           ? '<span class="bc-aviso">Indisponível no momento</span><button type="button" class="bc-pedir" id="btn-perguntar">💬 Perguntar se volta</button>'
           : `<button type="button" class="bc-sacola" id="btn-sacola-modal" aria-pressed="${naSacola}">${naSacola ? '✓ Na sacola' : '🛍️ Sacola'}</button>
              <button type="button" class="bc-pedir" id="btn-quero">💬 PEDIR NO WHATSAPP</button>`}
+        </div>
       </div>
     `;
     // O endereço da foto principal entra por aqui (e não escrito dentro do <img> do texto acima): com a política de segurança da página + service worker, o Chrome chegava a pedir o texto "${...}" como se fosse um endereço de foto (erro 404 à toa).
