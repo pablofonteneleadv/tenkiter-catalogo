@@ -481,8 +481,10 @@ export default {
         const lim = Math.min(60, Number(url.searchParams.get('limite')) || 30), antes = Number(url.searchParams.get('antes')) || 0;
         let sql = 'SELECT * FROM rascunho WHERE ', bind = [];
         if (grupo === 'descartado') sql += "status='descartado'"; else if (grupo === 'aceito') sql += "status='aceito'"; else if (GRUPOS.indexOf(grupo) !== -1) { sql += "status='pendente' AND grupo=?"; bind.push(grupo); } else return J({ ok: false, erro: 'Filtro inválido.' }, 400);
-        if (antes) { sql += ' AND id < ?'; bind.push(antes); }
-        const q = await env.DB.prepare(sql + ' ORDER BY id DESC LIMIT ?').bind(...bind, lim + 1).all();
+        /* mais recente primeiro pela data/hora do POST no Instagram (não pela ordem em que foi importado); o cursor `antes` é o id do último item da página anterior */
+        const DH = "substr(COALESCE(NULLIF(publicado_em,''), criado_em), 1, 19)";
+        if (antes) { sql += ' AND (' + DH + ' < (SELECT ' + DH + ' FROM rascunho WHERE id=?) OR (' + DH + ' = (SELECT ' + DH + ' FROM rascunho WHERE id=?) AND id < ?))'; bind.push(antes, antes, antes); }
+        const q = await env.DB.prepare(sql + ' ORDER BY ' + DH + ' DESC, id DESC LIMIT ?').bind(...bind, lim + 1).all();
         const linhas = q.results || [], mais = linhas.length > lim;
         return J({ ok: true, rascunhos: await carregarRascunhos(env, linhas.slice(0, lim)), mais: mais, contagens: await contagens(env) });
       }

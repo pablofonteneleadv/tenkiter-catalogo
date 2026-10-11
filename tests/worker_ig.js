@@ -150,7 +150,16 @@ function d1() {
 
   console.log('== Listas, filtros e paginação ==');
   ({ j } = await A('GET', '/rascunhos?grupo=pendente&limite=5')); chk('página de 5 com "mais"', j.rascunhos.length === 5 && j.mais === true);
-  const ultimo = j.rascunhos[4].id; ({ j } = await A('GET', '/rascunhos?grupo=pendente&limite=5&antes=' + ultimo)); chk('próxima página continua de onde parou', j.rascunhos.every((x) => x.id < ultimo) && j.rascunhos.length > 0);
+  const ultimo = j.rascunhos[4].id; ({ j } = await A('GET', '/rascunhos?grupo=pendente&limite=5&antes=' + ultimo)); chk('próxima página continua de onde parou', j.rascunhos.length > 0);
+  {
+    /* ordem = data/hora do POST (mais recente primeiro), não a ordem de importação; vale também entre páginas */
+    const todos = (await DB.prepare("SELECT id FROM rascunho WHERE status='pendente' AND grupo='pendente' ORDER BY id").all()).results;
+    for (let i = 0; i < todos.length; i++) await DB.prepare('UPDATE rascunho SET publicado_em=? WHERE id=?').bind('2026-09-' + String(10 + ((i * 7) % 15)).padStart(2, '0') + 'T1' + (i % 10) + ':00:00+0000', todos[i].id).run();
+    const dh = (x) => String(x.publicadoEm).slice(0, 19);
+    let tudo = [], antes2 = 0;
+    for (let n = 0; n < 20; n++) { ({ j } = await A('GET', '/rascunhos?grupo=pendente&limite=3' + (antes2 ? '&antes=' + antes2 : ''))); tudo = tudo.concat(j.rascunhos); if (!j.mais) break; antes2 = j.rascunhos[j.rascunhos.length - 1].id; }
+    chk('lista em ordem de data/hora do post, mais recente primeiro, atravessando páginas', tudo.length === todos.length && tudo.every((x, i) => i === 0 || dh(tudo[i - 1]) >= dh(x)) && new Set(tudo.map((x) => x.id)).size === tudo.length, tudo.map(dh));
+  }
   ({ r } = await A('GET', '/rascunhos?grupo=qualquer')); chk('filtro inválido = 400', r.status === 400);
 
   console.log('== Ações do editor ==');

@@ -345,3 +345,5 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 - **Front** (`admin-conexoes.js`, bloco `#cx-cofre`): a chave vai direto para a área de transferência, nunca para o DOM/localStorage; sem permissão de clipboard cai em `window.prompt`. Bloco "Dados para copiar" ao lado: só IDs/endereços públicos.
 - **Testes**: seção 8g de `tests/backend_gs.js` (chaves INVENTADAS) e `tests/cofre_admin.py`; `mock.py` com `versao="3.6"`.
 - **Claude continua sem ler o cofre sozinho**: o Pablo copia e cola na conversa; usar só como variável de ambiente do comando e pedir para revogar no fim.
+
+- **Ordem da lista "Produtos para aceitar"** (pedido do Pablo, 11/10/2026): mais recente primeiro pela data/hora do POST no Instagram (`publicado_em`, 19 primeiros caracteres), desempate por `id`; antes era `id DESC` (ordem de importação, que na importação total ficava embaralhada). O cursor `antes` continua sendo o id do último item (o servidor busca a data dele). Teste em `tests/worker_ig.js`. Worker republicado.
