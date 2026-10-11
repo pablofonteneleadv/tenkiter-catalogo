@@ -1175,7 +1175,7 @@ function servicosFalsos(amb, est) {
   const P = (o) => { const r = amb.post(o); respostas.push(JSON.stringify(r)); return r; };
   const chamou = (re) => est.chamadas.filter(c => re.test(c.url));
 
-  ok(amb.getJson({ action: 'versao' }).conexoesOnesignal === true && /^catalogo-3\.5$/.test(amb.getJson({ action: 'versao' }).versao), 'versao anuncia conexoesOnesignal:true e catalogo-3.5');
+  ok(amb.getJson({ action: 'versao' }).conexoesOnesignal === true && /^catalogo-3\.6$/.test(amb.getJson({ action: 'versao' }).versao), 'versao anuncia conexoesOnesignal:true e catalogo-3.6');
   // --- quem pode
   ok(P(adm({ action: 'onesignalConfigurar' })).exigeLogin === true, 'o PIN antigo NÃO liga o OneSignal (exige login de Admin total)');
   ok(P(F({ action: 'onesignalConfigurar' })).semPermissao === true && P(F({ action: 'salvarConexao', nome: 'onesignal', chave: CHAVE_ORG, orgId: ORG })).semPermissao === true, 'Funcionário (sem gerir_acessos) não consegue ligar nem guardar a chave do OneSignal');
@@ -1264,6 +1264,85 @@ function servicosFalsos(amb, est) {
   ok(aud.some(l => /^salvarConexao\|\|\{"conexao":"onesignal"\}$/.test(l)) && aud.some(l => /^onesignalConfigurar\|/.test(l)) && aud.some(l => /^apagarConexao\|\|\{"conexao":"onesignal"\}$/.test(l)), 'cada ação do OneSignal fica na auditoria (sem chave)', aud.slice(-6).join(' ; ').slice(0, 300));
   ok(![...amb.cacheMem.values()].some(v => v.includes(CHAVE_ORG) || v.includes('os_v2_app_NOVACHAVEENVIO')), 'as chaves não vão parar no cache do script');
   ok(!/os_v2_(org|app)_[A-Za-z0-9]{20}/.test(codigoFonte), 'o arquivo .gs.txt não tem chave do OneSignal escrita');
+})();
+
+// ------------------------------------------------------------------ 8g. COFRE das conexões com dupla verificação (v3.6)
+(function cofreConexoes() {
+  console.log('\n[Cofre: copiar chaves só com login de Admin total + senha digitada de novo (v3.6)]');
+  const amb = criarAmbiente(); semear(amb);
+  amb.ctx.SpreadsheetApp.openById('x').getSheetByName('Pessoas').appendRow(['Nome', 'WhatsApp', 'Senha']);
+  amb.run("acRegistrar_('Pablo Admin', '88999990001', 'senha-forte-1', 'Admin total', {})");
+  amb.run("acRegistrar_('Ana Func', '88999990002', 'senha-forte-2', 'Funcionário', {})");
+  // chaves INVENTADAS (repositório público)
+  const RND = 'rnd_TESTEFALSOTESTEFALSO1234567890', OSORG = 'os_v2_org_TESTEFALSOTESTEFALSOTESTEFALSOTESTEFALSO1234567890abcdef';
+  amb.props.set('RENDER_API_KEY', RND); amb.props.set('ONESIGNAL_ORG_API_KEY', OSORG);
+  const adm = amb.post({ action: 'login', whatsapp: '88999990001', senha: 'senha-forte-1' });
+  const fun = amb.post({ action: 'login', whatsapp: '88999990002', senha: 'senha-forte-2' });
+  const A = (o) => Object.assign({ sessao: adm.sessao, whatsapp: '88999990001' }, o);
+  const F = (o) => Object.assign({ sessao: fun.sessao, whatsapp: '88999990002' }, o);
+  const vaza = (r) => JSON.stringify(r).indexOf('TESTEFALSO') !== -1;
+  const nome = (r) => amb.getJson({ action: 'versao' });
+  ok(amb.getJson({ action: 'versao' }).conexoesCopiar === true, 'versao anuncia conexoesCopiar:true');
+  // ---- 1ª verificação: quem pode
+  ok(amb.post({ action: 'revelarConexao', pin: '1234', nome: 'render' }).exigeLogin === true, 'o PIN antigo NÃO abre o cofre (exige login)');
+  ok(amb.post({ action: 'abrirCofre', pin: '1234', senha: 'senha-forte-1' }).exigeLogin === true, 'o PIN antigo nem consegue tentar a senha');
+  let r = amb.post(F({ action: 'abrirCofre', senha: 'senha-forte-2' }));
+  ok(r.semPermissao === true && !r.cofre, 'Funcionário (sem gerir_acessos) não abre o cofre nem com a senha certa');
+  ok(amb.post(F({ action: 'revelarConexao', nome: 'render', cofre: 'qualquer' })).semPermissao === true, 'Funcionário não revela chave');
+  // ---- sem a 2ª verificação
+  r = amb.post(A({ action: 'revelarConexao', nome: 'render' }));
+  ok(r.ok === false && r.cofreFechado === true && !vaza(r), 'só a sessão de login (sem abrir o cofre): trancado, nada vaza');
+  r = amb.post(A({ action: 'revelarConexao', nome: 'render', cofre: 'chute-qualquer' }));
+  ok(r.ok === false && r.cofreFechado === true && !vaza(r), 'código de abertura inventado: trancado');
+  // o token de sessão NÃO vale como senha
+  r = amb.post(A({ action: 'abrirCofre', senha: adm.sessao }));
+  ok(r.ok === false && !r.cofre, 'sessão roubada sozinha não abre o cofre (token não serve de senha)');
+  r = amb.post(A({ action: 'abrirCofre', senha: '' }));
+  ok(r.ok === false && !r.cofre, 'senha vazia não abre');
+  // ---- senha errada: freio de tentativas
+  r = amb.post(A({ action: 'abrirCofre', senha: 'errada' }));
+  ok(r.ok === false && r.erro === 'Senha incorreta.', 'senha errada: recusado');
+  for (let i = 0; i < 4; i++) amb.post(A({ action: 'abrirCofre', senha: 'errada' + i }));
+  r = amb.post(A({ action: 'abrirCofre', senha: 'senha-forte-1' }));
+  ok(r.ok === false && r.bloqueado === true, 'depois de 5 senhas erradas, nem a certa abre (bloqueio de 15 min)');
+  ok(JSON.stringify(amb.ss.getSheetByName('Acoes_Audit').getDataRange().getValues()).indexOf('cofreSenhaErrada') !== -1, 'tentativas erradas ficam na auditoria');
+  amb.cacheMem.clear();
+  // ---- abrir de verdade
+  r = amb.post(A({ action: 'abrirCofre', senha: 'senha-forte-1' }));
+  ok(r.ok === true && typeof r.cofre === 'string' && r.cofre.length >= 32 && r.validoSegundos === 300 && !vaza(r), 'senha certa: devolve só um código de abertura (5 min), nenhuma chave');
+  const cofre = r.cofre;
+  r = amb.post(A({ action: 'revelarConexao', nome: 'render', cofre }));
+  ok(r.ok === true && r.valor === RND, 'cofre aberto: Render é devolvido para copiar');
+  r = amb.post(A({ action: 'revelarConexao', nome: 'onesignal', cofre }));
+  ok(r.ok === true && r.valor === OSORG, 'cofre aberto: OneSignal é devolvido para copiar');
+  r = amb.post(A({ action: 'revelarConexao', nome: 'cloudflare', cofre }));
+  ok(r.ok === false && /Ainda não há/.test(r.erro), 'chave que não foi guardada: frase clara, nunca "undefined"');
+  r = amb.post(A({ action: 'revelarConexao', nome: '__proto__', cofre }));
+  ok(r.ok === false && r.erro === 'Conexão desconhecida.', 'nome estranho (__proto__) é recusado');
+  r = amb.post(A({ action: 'revelarConexao', nome: 'ADMIN_PIN', cofre }));
+  ok(r.ok === false && !vaza(r) && JSON.stringify(r).indexOf('1234') === -1, 'só as 4 conexões do cofre saem; ADMIN_PIN e outras propriedades nunca');
+  // o código de abertura é do dono: outra pessoa com o mesmo código não revela
+  r = amb.post(F({ action: 'revelarConexao', nome: 'render', cofre }));
+  ok(r.ok === false && !vaza(r), 'o código de um Admin não serve para outra conta');
+  // auditoria: só o nome, nunca o valor
+  const aud = JSON.stringify(amb.ss.getSheetByName('Acoes_Audit').getDataRange().getValues());
+  ok(aud.indexOf('revelarConexao') !== -1 && aud.indexOf('abrirCofre') !== -1 && aud.indexOf('TESTEFALSO') === -1 && aud.indexOf('senha-forte') === -1, 'auditoria registra abrir/copiar (com o nome da conexão) e nunca o valor nem a senha');
+  // as outras ações continuam sem devolver chave
+  const st = amb.post(A({ action: 'statusConexoes' }));
+  ok(!vaza(st), 'statusConexoes continua mostrando só "guardada" + 4 últimos caracteres');
+  // trancar
+  ok(amb.post(A({ action: 'fecharCofre' })).ok === true, 'Trancar cofre responde ok');
+  r = amb.post(A({ action: 'revelarConexao', nome: 'render', cofre }));
+  ok(r.ok === false && r.cofreFechado === true && !vaza(r), 'depois de trancar, o mesmo código não funciona mais');
+  // expiração
+  r = amb.post(A({ action: 'abrirCofre', senha: 'senha-forte-1' }));
+  amb.cacheMem.delete('cofre_88999990001');
+  ok(amb.post(A({ action: 'revelarConexao', nome: 'render', cofre: r.cofre })).cofreFechado === true, 'passados os 5 minutos (cache expirou), o cofre tranca sozinho');
+  // freio de revelações
+  r = amb.post(A({ action: 'abrirCofre', senha: 'senha-forte-1' })); let ultimo;
+  for (let i = 0; i < 32; i++) ultimo = amb.post(A({ action: 'revelarConexao', nome: 'render', cofre: r.cofre }));
+  ok(ultimo.ok === false && /Muitas cópias/.test(ultimo.erro) && !vaza(ultimo), 'mais de 30 cópias em 10 minutos: freio');
+  ok(!/(rnd_[A-Za-z0-9]{16}|cfut_[A-Za-z0-9]{20}|os_v2_(org|app)_[A-Za-z0-9]{20})/.test(codigoFonte), 'o arquivo .gs.txt continua sem nenhuma chave escrita');
 })();
 
 // ------------------------------------------------------------------ 8f. números reais com filtros, aparelhos (instalou / aviso ativo) e contagem por público (v3.5 parte 2)

@@ -1,6 +1,6 @@
 # Avisos (notificações) + instalar o app — guia do Pablo
 
-Tudo o que o site faz sozinho já está pronto (v3.5 do site + `catalogo-codigo-3.5.gs.txt`). Falta só **colar o código novo no Apps Script** e tocar em
+Tudo o que o site faz sozinho já está pronto (v3.5 do site + `catalogo-codigo-3.6.gs.txt`). Falta só **colar o código novo no Apps Script** e tocar em
 **📣 Ligar os avisos agora** no painel (aba 🔗 Conexões) — o painel liga a plataforma Web do OneSignal e cria a chave de envio sozinho (veja "Jeito automático" abaixo).
 Os passos manuais 1 e 2 só servem se você preferir fazer à mão. Sem o passo 1 **nenhum aviso chega em celular nenhum** (é por isso que o app
 instalado mostrava "Sem permissão": o OneSignal ainda não estava configurado para sites).
@@ -17,7 +17,7 @@ instalado mostrava "Sem permissão": o OneSignal ainda não estava configurado p
 
 ## Jeito automático (recomendado, 2 minutos)
 
-1. Cole o `catalogo-codigo-3.5.gs.txt` no Apps Script e publique a **Nova versão** (Passo 3 abaixo).
+1. Cole o `catalogo-codigo-3.6.gs.txt` no Apps Script e publique a **Nova versão** (Passo 3 abaixo).
 2. No OneSignal: ⚙️ **Settings → Organization settings → Security**. Copie o **Organization ID** e, em **Keys & IDs → Add Key**, crie uma chave (nome `TENKiTER site`, lista de IPs vazia) e copie-a na hora (começa com `os_v2_org_`; só aparece uma vez).
 3. No painel do site: **Gestão → 🔗 Conexões → OneSignal**. Cole o Organization ID e a chave → **Testar e guardar** → **📣 Ligar os avisos agora**.
 4. O painel liga a plataforma Web (Typical Site, `https://tenkitermodas.com.br`), grava o App ID e **cria a chave de envio** do app no servidor. Não precisa dos Passos 1 e 2 abaixo.
@@ -62,10 +62,10 @@ Opcionais (só se quiser):
 
 ## Passo 3 — Colar o código novo (como sempre)
 
-1. Abra `catalogo-codigo-3.5.gs.txt`, selecione **tudo**, copie.
+1. Abra `catalogo-codigo-3.6.gs.txt`, selecione **tudo**, copie.
 2. Apps Script do catálogo → apague o código antigo, cole o novo, **Salvar**.
 3. **Implantar → Gerenciar implantações → ✏️ → Versão: Nova versão → Implantar.**
-4. Confira no navegador: `<sua URL do script>?action=versao` tem que mostrar `"versao":"catalogo-3.5"`, `"pushCompleto":true`, `"categoriasGestao":true`, `"conexoes":true`, `"conexoesOnesignal":true`, `"metricasAvancadas":true` e `"dispositivos":true`.
+4. Confira no navegador: `<sua URL do script>?action=versao` tem que mostrar `"versao":"catalogo-3.6"`, `"pushCompleto":true`, `"categoriasGestao":true`, `"conexoes":true`, `"conexoesOnesignal":true`, `"metricasAvancadas":true` e `"dispositivos":true`.
 
 O 3.5 já inclui tudo do 3.2 (categorias), do 3.3 (avisos completos) e do 3.4 (Conexões) — não precisa colar os anteriores antes. O Apps Script de **funcionários não muda** (`funcionario-codigo-3.0.gs.txt`).
 

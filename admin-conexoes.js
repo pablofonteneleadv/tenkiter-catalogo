@@ -15,7 +15,7 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   const esc = (v) => escaparHtml(v);
-  let itens = [], status = null, deployTimer = null, ocupado = false, temOnesignal = false;
+  let itens = [], status = null, deployTimer = null, ocupado = false, temOnesignal = false, temCofre = false, cofreCodigo = '', cofreTimer = null, cofreFimEm = 0;
 
   /* ---------- backend ---------- */
   function chamar(extra) {
@@ -80,7 +80,7 @@
     $('cx-corpo').addEventListener('click', clique);
     window.addEventListener('popstate', () => { o.classList.remove('aberto'); parouDeploy_(); });
   }
-  function fechar() { fecharComHistorico_('overlay-conexoes'); parouDeploy_(); }
+  function fechar() { trancarCofre_(true); fecharComHistorico_('overlay-conexoes'); parouDeploy_(); }
   function parouDeploy_() { if (deployTimer) { clearTimeout(deployTimer); deployTimer = null; } }
 
   async function abrir() {
@@ -141,7 +141,8 @@
     el.innerHTML = (passos && passos.length) ? '<ul class="cx-lista">' + passos.map((x) =>
       '<li><span class="cx-i" aria-hidden="true">' + ICONE[String(x.ok)] + '</span><span class="cx-t">' + esc(x.detalhe) + '</span></li>').join('') + '</ul>' : '';
   }
-  function desenhar() {
+  function desenhar() { desenharBase_(); desenharCofre(); }
+  function desenharBase_() {
     const e = status.enderecos || {};
     $('cx-corpo').innerHTML =
       '<p class="g-info">Aqui ficam as chaves que o painel usa para cuidar do site sozinho. Elas ficam guardadas <b>no servidor</b> (Propriedades do Script): <b>nunca voltam para esta tela</b>, não ficam neste aparelho e não vão para o GitHub. Só o Admin total vê esta tela.</p>' +
@@ -171,8 +172,54 @@
         '<p class="g-nota">Já no domínio da loja. Na Meta (Gerenciador de Comércio) e no Google Merchant use “fonte de dados por link”; no Google Search Console cadastre o mapa do site.</p>' +
         [['cx-end-csv', 'Catálogo CSV — Meta e Google', e.feedCsv], ['cx-end-xml', 'Catálogo XML — Google Merchant', e.feedXml], ['cx-end-map', 'Mapa do site (sitemap) — Google Search Console', e.sitemap]].map((x) =>
           '<label for="' + x[0] + '">' + esc(x[1]) + '</label><div class="cx-copia"><input type="text" id="' + x[0] + '" readonly value="' + esc(x[2] || '') + '"><button type="button" data-cx="copiar" data-alvo="' + x[0] + '">Copiar</button></div>').join('') +
-      '</div>' + blocoDados();
+      '</div>' + (temCofre ? '<div class="cx-bloco" id="cx-cofre"></div>' : '') + blocoDados();
   }
+  /* ---------- COFRE (dupla verificação): 1) login de Admin total  2) senha da conta digitada de novo. O código de abertura vive só na memória desta tela. ---------- */
+  const COFRE_ITENS = [['render', 'Render — chave da API', () => status.conexoes.render], ['cloudflare', 'Cloudflare — token', () => status.conexoes.cloudflare],
+    ['onesignal', 'OneSignal — chave da organização', () => status.conexoes.onesignal], ['onesignalEnvio', 'OneSignal — chave de envio dos avisos', () => ({ temChave: !!(status.conexoes.onesignal || {}).chaveEnvio, fim: '' })]];
+  function desenharCofre() {
+    const box = $('cx-cofre'); if (!box || !status) return;
+    const aberto = !!cofreCodigo;
+    box.innerHTML = '<h3>🔐 Cofre das chaves</h3>' +
+      '<p class="g-nota">Para copiar uma chave são <b>duas verificações</b>: você já entrou com o seu login e agora digita a <b>senha da sua conta</b> de novo. Depois de aberto, o cofre se tranca sozinho em 5 minutos. A chave <b>nunca aparece na tela</b>: vai direto para a área de transferência. Cole-a só na conversa com o Claude e <b>revogue depois</b> no site de origem.</p>' +
+      (aberto ? '<div class="cx-linha"><span class="cx-t"><b id="cx-cofre-tempo">Cofre aberto</b></span><button type="button" class="cx-btn cx-sec" data-cx="cofre-trancar">🔒 Trancar agora</button></div>' +
+        COFRE_ITENS.map((x) => { const c = x[2]() || {}; return '<div class="cx-linha"><span class="cx-t"><b>' + esc(x[1]) + '</b><span>' + (c.temChave ? 'Guardada' + (c.fim ? ' (termina em ' + esc(c.fim) + ')' : '') : 'Ainda não guardada — use o campo acima.') + '</span></span><button type="button" class="cx-btn cx-prim" data-cx="cofre-copiar" data-nome="' + x[0] + '"' + (c.temChave ? '' : ' disabled') + '>Copiar</button></div>'; }).join('')
+        : '<label for="cx-cofre-senha">Senha da sua conta</label><div class="cx-copia"><input type="password" id="cx-cofre-senha" autocomplete="current-password" autocapitalize="off" spellcheck="false" placeholder="Digite de novo para abrir"><button type="button" data-cx="cofre-abrir">Abrir cofre</button></div>') +
+      '<div class="cx-msg" id="cx-msg-cofre" role="status"></div>';
+  }
+  function trancarCofre_(silencioso) {
+    const tinha = !!cofreCodigo;
+    cofreCodigo = ''; cofreFimEm = 0; if (cofreTimer) { clearInterval(cofreTimer); cofreTimer = null; }
+    if (tinha) chamar({ action: 'fecharCofre' });
+    if (!silencioso) { desenharCofre(); msg('cx-msg-cofre', 'Cofre trancado.', 'ok'); }
+  }
+  async function abrirCofre_() {
+    const campo = $('cx-cofre-senha'); const senha = campo ? campo.value : '';
+    if (!senha) { msg('cx-msg-cofre', 'Digite a senha da sua conta.', 'erro'); return; }
+    msg('cx-msg-cofre', 'Conferindo…', '');
+    const r = await chamar({ action: 'abrirCofre', senha: senha });
+    if (campo) campo.value = '';                                     // a senha não fica no campo
+    if (!r || !r.ok) { msg('cx-msg-cofre', erroTxt(r), 'erro'); return; }
+    cofreCodigo = r.cofre; cofreFimEm = Date.now() + (r.validoSegundos || 300) * 1000;
+    desenharCofre();
+    cofreTimer = setInterval(() => {
+      const falta = Math.round((cofreFimEm - Date.now()) / 1000);
+      if (falta <= 0) { trancarCofre_(false); return; }
+      const el = $('cx-cofre-tempo'); if (el) el.textContent = 'Cofre aberto — tranca em ' + Math.floor(falta / 60) + ':' + String(falta % 60).padStart(2, '0');
+    }, 1000);
+  }
+  async function copiarChave_(nome) {
+    if (!cofreCodigo) { desenharCofre(); return; }
+    msg('cx-msg-cofre', 'Copiando…', '');
+    const r = await chamar({ action: 'revelarConexao', nome: nome, cofre: cofreCodigo });
+    if (!r || !r.ok) { if (r && r.cofreFechado) { cofreCodigo = ''; desenharCofre(); } msg('cx-msg-cofre', erroTxt(r), 'erro'); return; }
+    let valor = r.valor; r.valor = '';
+    const fim = () => msg('cx-msg-cofre', 'Copiada! Cole na conversa e revogue depois no site de origem.', 'ok');
+    try { await navigator.clipboard.writeText(valor); fim(); }
+    catch (e) { window.prompt('Seu aparelho não deixou copiar sozinho. Copie abaixo:', valor); fim(); }
+    valor = '';
+  }
+
   /* Dados que o Claude pede em toda conversa: só IDs e endereços PÚBLICOS (nunca chave/senha/token — esses não saem do servidor). */
   function blocoDados() {
     const lista = [
@@ -320,6 +367,9 @@
     else if (a === 'apagar') apagar(b.dataset.nome);
     else if (a === 'deploy') publicar();
     else if (a === 'copiar') copiar(b.dataset.alvo);
+    else if (a === 'cofre-abrir') abrirCofre_();
+    else if (a === 'cofre-trancar') trancarCofre_(false);
+    else if (a === 'cofre-copiar') copiarChave_(b.dataset.nome);
     else if (a === 'copiartudo') {
       const t = Array.from(document.querySelectorAll('#cx-corpo [id^=cx-dado-]')).map((i) => (document.querySelector('label[for=' + i.id + ']') || {}).textContent + ': ' + i.value).join('\n');
       const ok = () => msg('cx-msg-dados', 'Tudo copiado!', 'ok');
@@ -339,7 +389,7 @@
     let v = null;
     try { v = await versaoServidor(); } catch (e) { v = null; }
     if (!v || typeof v !== 'object' || !v.conexoes) return;       // backend antigo: nada muda
-    temOnesignal = !!v.conexoesOnesignal;                          // backend 3.4: sem o bloco do OneSignal
+    temOnesignal = !!v.conexoesOnesignal; temCofre = !!v.conexoesCopiar;                          // backend 3.4: sem o bloco do OneSignal
     botao.hidden = false;
     botao.addEventListener('click', () => {
       if (!podeGerir()) { alert('Esta tela é só para o Admin total.'); return; }

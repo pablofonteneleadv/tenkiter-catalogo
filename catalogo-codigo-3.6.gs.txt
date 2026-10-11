@@ -1,4 +1,15 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.5
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.6
+//
+// NOVIDADE v3.6 -- COFRE NAS CONEXÕES, com DUPLA VERIFICAÇÃO (pedido do Pablo: "quero as chaves e tokens salvos e fáceis de copiar, tudo centralizado"):
+//  - 1ª verificação: sessão de login (token tk1./tk2.; o PIN antigo recebe exigeLogin) de quem tem gerir_acessos (Admin total).
+//  - 2ª verificação: abrirCofre { senha } -- a pessoa digita de novo a SENHA da própria conta (um token de sessão NÃO vale como senha, então sessão roubada
+//    sozinha não abre o cofre). Erro de senha conta no freio do login E num freio próprio do cofre (5 erros = 15 min sem tentar, nem com a senha certa) e fica na auditoria. Acertou: o servidor devolve um
+//    código de abertura aleatório, preso àquele WhatsApp, que vale 5 minutos (só na memória da tela; nunca em localStorage).
+//  - revelarConexao { nome: render | cloudflare | onesignal | onesignalEnvio, cofre }: exige o código de abertura válido e devolve o valor guardado nas
+//    Propriedades do Script para o botão "Copiar". Cada uso grava em Acoes_Audit só o NOME da conexão (nunca o valor); freio de 30 revelações por 10 min.
+//    É a ÚNICA resposta que leva uma chave ao navegador; statusConexoes etc. seguem mostrando só "guardada ✓" + 4 últimos caracteres.
+//  - fecharCofre: apaga o código de abertura na hora (botão "Trancar cofre").
+//  - versao anuncia conexoesCopiar:true; o site só mostra o cofre se essa bandeira existir (backend 3.5 continua funcionando).
 //
 // NOVIDADE v3.5 -- CONEXÃO COM O OneSignal guardada no servidor (a aba "Conexões" ganha o bloco OneSignal):
 //  - salvarConexao (nome 'onesignal'): guarda o Organization ID (público) em ONESIGNAL_ORG_ID e a Organization API Key em ONESIGNAL_ORG_API_KEY
@@ -164,7 +175,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-3.5';
+const VERSAO_CATALOGO = 'catalogo-3.6';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1234,7 +1245,7 @@ const PERMISSAO_POR_ACAO_ = {
   pushPrevia: 'catalogo_push', pushPessoas: 'catalogo_push', pushStatus: 'catalogo_push', pushNumeros: 'catalogo_push', pushCancelar: 'catalogo_push',
   pushModelos: 'catalogo_push', salvarPushModelo: 'catalogo_push', excluirPushModelo: 'catalogo_push', salvarPushConfig: 'gerir_acessos',
   // v3.4: conexões (chaves do Render/Cloudflare guardadas no servidor) -- Admin total, só com login
-  statusConexoes: 'gerir_acessos', salvarConexao: 'gerir_acessos', testarConexoes: 'gerir_acessos',
+  statusConexoes: 'gerir_acessos', abrirCofre: 'gerir_acessos', fecharCofre: 'gerir_acessos', revelarConexao: 'gerir_acessos', salvarConexao: 'gerir_acessos', testarConexoes: 'gerir_acessos',
   renderCriarRegras: 'gerir_acessos', renderDeploy: 'gerir_acessos', renderStatusDeploy: 'gerir_acessos',
   // v3.5: liga o OneSignal pelo painel (Organization API Key guardada no servidor)
   onesignalConfigurar: 'gerir_acessos'
@@ -1433,7 +1444,7 @@ const ACOES_QUE_ALTERAM_PRODUTOS_ = ['create', 'update', 'delete', 'reativar', '
 // as demais mexem em linhas que já existem e por isso entram na fila:
 const ACOES_COM_TRAVA_ = ['update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate', 'importarProdutos', 'gerarCodigosFaltantes', 'excluirCategoria', 'renomearCategoria'];
 // v3.2: ações que só valem com LOGIN (nunca com o PIN antigo, que não diz quem é a pessoa nem a permissão dela)
-const ACOES_SO_COM_LOGIN_ = ['excluirCategoria', 'renomearCategoria', 'statusConexoes', 'salvarConexao', 'testarConexoes', 'renderCriarRegras', 'renderDeploy', 'renderStatusDeploy', 'onesignalConfigurar'];
+const ACOES_SO_COM_LOGIN_ = ['excluirCategoria', 'renomearCategoria', 'statusConexoes', 'abrirCofre', 'fecharCofre', 'revelarConexao', 'salvarConexao', 'testarConexoes', 'renderCriarRegras', 'renderDeploy', 'renderStatusDeploy', 'onesignalConfigurar'];
 
 /**
  * Backup: copia a planilha do catálogo para uma pasta do Drive e mantém só as
@@ -1503,7 +1514,7 @@ function doGetInterno_(e) {
   if (action === 'versao') return jsonResponse_({
     ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
     pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true,
-    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, metricasAvancadas: true, dispositivos: true
+    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true
   });
   if (action === 'config') return configPublica_();
   if (action === 'pushconfig') return pushConfigPublica_();
@@ -1645,6 +1656,9 @@ function despacharPost_(body) {
   if (action === 'salvarIntegracoes') return salvarIntegracoes_(body);
   if (action === 'assinarUploadVideo') return assinarUploadVideo_(body);
   if (action === 'statusConexoes') return statusConexoes_();
+  if (action === 'abrirCofre') return abrirCofre_(body);
+  if (action === 'fecharCofre') return fecharCofre_(body);
+  if (action === 'revelarConexao') return revelarConexao_(body);
   if (action === 'salvarConexao') return salvarConexao_(body);
   if (action === 'testarConexoes') return testarConexoes_();
   if (action === 'renderCriarRegras') return renderCriarRegras_(body);
@@ -3625,6 +3639,52 @@ function statusConexoesObj_() {
   return { ok: true, conexoes: conexoes, servico: RENDER_SERVICO_, enderecos: { feedCsv: SITE_URL + 'feed.csv', feedXml: SITE_URL + 'feed.xml', sitemap: SITE_URL + 'sitemap.xml' } };
 }
 function statusConexoes_() { return jsonResponse_(statusConexoesObj_()); }
+
+/* ---------- COFRE (dupla verificação) ---------- */
+const COFRE_ = { render: 'RENDER_API_KEY', cloudflare: 'CLOUDFLARE_API_TOKEN', onesignal: 'ONESIGNAL_ORG_API_KEY', onesignalEnvio: 'ONESIGNAL_REST_API_KEY' };
+const COFRE_VALE_SEGUNDOS_ = 300;
+function cofreChave_(body) { return 'cofre_' + acWhats_(body.whatsapp); }
+/** 2ª verificação: a senha da PRÓPRIA conta, digitada agora. Token de sessão nunca serve de senha. */
+function abrirCofre_(body) {
+  const senha = String(body.senha == null ? '' : body.senha);
+  if (!senha || acEhToken_(senha)) return jsonResponse_({ ok: false, erro: 'Digite a senha da sua conta.' });
+  // freio PRÓPRIO do cofre (mais apertado que o do login): 5 senhas erradas = 15 minutos sem poder tentar, nem com a senha certa
+  const cache = CacheService.getScriptCache(), kf = 'cofre_falhas_' + acWhats_(body.whatsapp);
+  const falhas = parseInt(cache.get(kf) || '0', 10);
+  if (falhas >= 5) return jsonResponse_({ ok: false, bloqueado: true, erro: 'Muitas senhas erradas no cofre. Aguarde 15 minutos.' });
+  const v = acVerificar_(body.whatsapp, senha);
+  if (!v.ok) {
+    cache.put(kf, String(falhas + 1), 900);
+    registrarAudit_(body.funcionario, 'cofreSenhaErrada', '', {});
+    return jsonResponse_({ ok: false, erro: v.bloqueado ? v.erro : 'Senha incorreta.', bloqueado: !!v.bloqueado });
+  }
+  cache.remove(kf);
+  const codigo = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  CacheService.getScriptCache().put(cofreChave_(body), codigo, COFRE_VALE_SEGUNDOS_);
+  registrarAudit_(body.funcionario, 'abrirCofre', '', {});
+  return jsonResponse_({ ok: true, cofre: codigo, validoSegundos: COFRE_VALE_SEGUNDOS_ });
+}
+function fecharCofre_(body) {
+  CacheService.getScriptCache().remove(cofreChave_(body));
+  return jsonResponse_({ ok: true });
+}
+/** Devolve a chave guardada para o botão "Copiar". Audita só o NOME. */
+function revelarConexao_(body) {
+  const nome = String(body.nome || '');
+  const prop = Object.prototype.hasOwnProperty.call(COFRE_, nome) ? COFRE_[nome] : '';
+  if (!prop) return jsonResponse_({ ok: false, erro: 'Conexão desconhecida.' });
+  const cache = CacheService.getScriptCache();
+  const aberto = String(cache.get(cofreChave_(body)) || '');
+  const dado = String(body.cofre || '');
+  if (!aberto || !dado || !acIguais_(aberto, dado)) return jsonResponse_({ ok: false, cofreFechado: true, erro: 'O cofre está trancado. Digite sua senha para abrir.' });
+  const usos = parseInt(cache.get('cofre_usos') || '0', 10);
+  if (usos >= 30) return jsonResponse_({ ok: false, erro: 'Muitas cópias em pouco tempo. Espere alguns minutos.' });
+  cache.put('cofre_usos', String(usos + 1), 600);
+  const valor = String(PropertiesService.getScriptProperties().getProperty(prop) || '').trim();
+  if (!valor) return jsonResponse_({ ok: false, erro: 'Ainda não há essa chave guardada. Cole-a no campo acima e toque em Guardar.' });
+  registrarAudit_(body.funcionario, 'revelarConexao', '', { conexao: nome });
+  return jsonResponse_({ ok: true, nome: nome, valor: valor });
+}
 
 function salvarConexao_(body) {
   const nome = String(body.nome || '');

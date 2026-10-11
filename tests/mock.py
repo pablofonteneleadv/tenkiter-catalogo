@@ -27,6 +27,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     st["conex"]={"render":{"temChave":False,"fim":"","salvaEm":""},"cloudflare":{"temChave":False,"fim":"","salvaEm":""}}
     if conex5: st["conex"]["onesignal"]={"temChave":False,"fim":"","salvaEm":"","orgId":"","appId":"535f6b0d-c866-43c2-b241-43bd7ab62fae","chaveEnvio":False}
     st["ligou"]=0
+    conex6 = conex5 and versao >= "3.6"   # Cofre (conexoesCopiar): abrirCofre (senha de novo) + revelarConexao
     avanc = conex5                        # metricasAvancadas + dispositivos (3.5 parte 2): Números reais com filtros, aparelhos e contagem por público
     st["metricas_pedidos"]=[]; st["dispositivos"]=[]
     st["regras_ok"]=False; st["deploys"]=0; st["status_deploy"]=0
@@ -41,6 +42,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     if push3: FLAGS["pushCompleto"]=True
     if conex: FLAGS["conexoes"]=True
     if conex5: FLAGS["conexoesOnesignal"]=True
+    if conex6: FLAGS["conexoesCopiar"]=True
     if avanc: FLAGS["metricasAvancadas"]=True; FLAGS["dispositivos"]=True
     def limpa(n): return " ".join(str(n or "").replace(","," ").split())[:60].strip()
     def norm(n):
@@ -189,13 +191,23 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             for k,c in(("testeCodigo","teste"),("graphVersao","graph"),("sinonimos","sinonimos"),("segmentosPush","segmentos")):
                 if k in b: i[c]=b[k]
             return {"ok":True,"pixelId":i["pixelId"],"capiConfigurado":i["capi"],"testeCodigo":i["teste"],"graphVersao":i["graph"],"sinonimos":i["sinonimos"],"segmentosPush":i["segmentos"]}
-        if conex and a in("statusConexoes","salvarConexao","testarConexoes","renderCriarRegras","renderDeploy","renderStatusDeploy","onesignalConfigurar"):
+        if conex and a in("statusConexoes","salvarConexao","testarConexoes","renderCriarRegras","renderDeploy","renderStatusDeploy","onesignalConfigurar","abrirCofre","fecharCofre","revelarConexao"):
             if "gerir_acessos" not in perms: return {"ok":False,"semPermissao":True,"erro":"Você não tem permissão para essa ação."}
             C=st["conex"]
             def estado(extra=None):
                 r={"ok":True,"conexoes":{k:{"rotulo":k.title(),**v} for k,v in C.items()},"servico":"srv-dasa63fpn0mc73fh8fgg",
                    "enderecos":{"feedCsv":"https://tenkitermodas.com.br/feed.csv","feedXml":"https://tenkitermodas.com.br/feed.xml","sitemap":"https://tenkitermodas.com.br/sitemap.xml"}}
                 r.update(extra or {}); return r
+            if a in("abrirCofre","fecharCofre","revelarConexao"):
+                cf=st.setdefault("cofre",{"codigo":"","chamadas":[],"falhas":0,"valores":{"render":"rnd_FALSO_PARA_TESTE_123456","cloudflare":"cfut_FALSO_PARA_TESTE_123456","onesignal":"os_v2_org_FALSO_PARA_TESTE","onesignalEnvio":"os_v2_app_FALSO_PARA_TESTE"}})
+                cf["chamadas"].append({k:v for k,v in b.items() if k!="valor"})
+                if a=="abrirCofre":
+                    if b.get("senha")!="senha-certa":
+                        cf["falhas"]+=1; return {"ok":False,"erro":"Senha incorreta."}
+                    cf["codigo"]="abc123COFRE"; return {"ok":True,"cofre":cf["codigo"],"validoSegundos":300}
+                if a=="fecharCofre": cf["codigo"]=""; return {"ok":True}
+                if not cf["codigo"] or b.get("cofre")!=cf["codigo"]: return {"ok":False,"cofreFechado":True,"erro":"O cofre está trancado. Digite sua senha para abrir."}
+                return {"ok":True,"nome":b.get("nome"),"valor":cf["valores"][b.get("nome")]}
             if a=="statusConexoes": return estado()
             if a=="salvarConexao":
                 n=b.get("nome")
