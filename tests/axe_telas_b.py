@@ -11,7 +11,7 @@ res={}
 def axe(pg,label):
     pg.evaluate(AXE)
     r=pg.evaluate("async()=>{const r=await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa','best-practice']}});return r.violations.map(v=>({id:v.id,impact:v.impact,n:v.nodes.length,help:v.help,ex:v.nodes.slice(0,3).map(n=>n.target.join(' ')+' :: '+(n.failureSummary||'').split('\\n')[1])}))}")
-    res[label]=r; print(("  ✘ " if r else "  ✔ ")+label+("  "+", ".join("%s×%d"%(v['id'],v['n']) for v in r) if r else ""))
+    res[label]=r; print(("  ✘ " if r else "  ✔ ")+label+("  "+", ".join("%s×%d"%(v['id'],v['n']) for v in r) if r else "")); [print('      ',e) for v in r for e in v['ex']]
 CV=[{"ID":"c%d"%i,"Nome":"Maria Silva %d"%i,"WhatsApp":"8899900000%d"%i,"Etapa":["Enviado","Perfil","Instagram"][i%3],"Status":["Novo","Entrevista","Novo"][i%3],"Vaga":"Vendedora","Email":"m%d@x.com"%i,"Instagram":"@maria%d"%i,"Idade":"2%d"%i,"EnviadoEm":"2026-10-0%d"%(i+1),"Historico":"[]"} for i in range(1,5)]
 def cv_route(ctx):
     def hd(route):

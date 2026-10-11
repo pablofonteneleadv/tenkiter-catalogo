@@ -312,6 +312,12 @@
 
   .overlay-sheet { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: flex-end; justify-content: center; }
   .overlay-sheet.aberto { display: flex; }
+  .juntar-ajuda { font-size: .88rem; color: #444; margin: 4px 0 10px; }
+  .juntar-item { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid #ddd; border-radius: 10px; margin-bottom: 6px; cursor: pointer; }
+  .juntar-item input { width: auto; flex: none; }
+  .juntar-item img { width: 44px; height: 54px; object-fit: cover; border-radius: 6px; flex: none; background: #eee; }
+  .juntar-item span { font-size: .9rem; }
+  .juntar-erro { background: #fdecea; color: #8a1c13; border-radius: 8px; padding: 8px 10px; font-size: .88rem; margin: 6px 0; }
   .sheet { background: var(--branco); width: 100%; max-width: 560px; border-radius: 18px 18px 0 0; padding: 14px 16px 16px; height: 82vh; max-height: 82vh; display: flex; flex-direction: column; }
   .sheet-topo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-family: "Poppins", sans-serif; font-size: 1.02rem; }
   .sheet-x { width: 36px; height: 36px; padding: 0; border-radius: 50%; background: #eee; color: #333; font-size: 1rem; }
@@ -632,6 +638,16 @@
     </div>
   </div>
 
+  <div class="overlay-sheet" id="overlay-juntar">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="juntar-titulo">
+      <div class="sheet-topo"><strong id="juntar-titulo">Juntar produtos repetidos</strong><button type="button" class="sheet-x" id="juntar-fechar" aria-label="Fechar">✕</button></div>
+      <p class="juntar-ajuda">Escolha o produto que <b>fica</b>. As fotos e o vídeo dos outros vão para ele, e os outros ficam <b>arquivados</b> (dá para reativar).</p>
+      <div id="juntar-lista" role="radiogroup" aria-labelledby="juntar-titulo"></div>
+      <div id="juntar-erro" class="juntar-erro" role="alert" hidden></div>
+      <button type="button" class="btn-primario" id="juntar-ok">Juntar</button>
+    </div>
+  </div>
+
   <div class="overlay-sheet" id="overlay-gestao">
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="gestao-titulo">
       <div class="sheet-topo"><h2 id="gestao-titulo" class="gestao-titulo"></h2><button type="button" class="sheet-x" id="gestao-fechar" aria-label="Fechar">✕</button></div>
@@ -650,6 +666,7 @@
       <button type="button" id="btn-bulk-novidade">Marcar Novidades</button>
       <button type="button" id="btn-bulk-arquivar">🗃️ Arquivar em Massa</button>
       <button type="button" id="btn-bulk-reativar">🔄 Reativar em Massa</button>
+      <button type="button" id="btn-bulk-juntar" hidden>🔗 Juntar em 1 produto</button>
     </div>
   </div>
 
@@ -1009,6 +1026,7 @@
   let ocupadoCat_ = false;          // uma chamada de apagar/renomear em andamento
   let selecionadasCategorias = new Set(), selecionadosGeneros = new Set();
   let selecionadosBulk = new Set();
+  let juntarLiberado_ = false;
 
   /* ===================== v2.3: fotos unificadas (até 8, com capa e ordem) e vídeo (1) ===================== */
   const MAX_GALERIA = 8, MAX_VIDEO_MB = 20;
@@ -2296,6 +2314,7 @@
     if (selecionadosBulk.size > 0) {
       bar.classList.add('ativa');
       cnt.textContent = selecionadosBulk.size + ' selecionados';
+      const bj = document.getElementById('btn-bulk-juntar'); if (bj) bj.hidden = !(juntarLiberado_ && selecionadosBulk.size >= 2);
     } else {
       bar.classList.remove('ativa');
     }
@@ -2335,7 +2354,46 @@
     }
   });
 
-  const BOTOES_BULK_IDS = ['btn-bulk-preco', 'btn-bulk-novidade', 'btn-bulk-arquivar', 'btn-bulk-reativar'];
+  /* ===== v3.7: juntar produtos repetidos (backend juntarProdutos) ===== */
+  versaoServidor().then(v => { juntarLiberado_ = !!(v && v.juntarProdutos); atualizarBarraBulk(); }).catch(() => {});
+  function juntarSelecionados_() { return produtos.filter(p => selecionadosBulk.has(String(p.ID))); }
+  document.getElementById('btn-bulk-juntar').addEventListener('click', () => {
+    const sel = juntarSelecionados_();
+    if (sel.length < 2) { alert('Marque pelo menos 2 produtos para juntar.'); return; }
+    const lista = document.getElementById('juntar-lista'); lista.innerHTML = '';
+    sel.forEach((p, i) => {
+      const fotos = 1 + String(p.Fotos_Galeria || '').split(',').filter(x => x.trim()).length;
+      const lb = document.createElement('label'); lb.className = 'juntar-item';
+      lb.innerHTML = '<input type="radio" name="juntar-destino" value="' + escaparHtml(String(p.ID)) + '"' + (i === 0 ? ' checked' : '') + '><img ' + atribSrc(fotoMini(p.Foto_URL, 120)) + ' alt=""><span><b>' + escaparHtml(p.Nome) + '</b><br>' + escaparHtml(p.Codigo || '') + ' · ' + fotos + (fotos === 1 ? ' foto' : ' fotos') + (p.Status === 'Inativo' ? ' · arquivada' : '') + '</span>';
+      lista.appendChild(lb);
+    });
+    const er = document.getElementById('juntar-erro'); er.hidden = true; er.textContent = '';
+    abrirComHistorico_('overlay-juntar');
+  });
+  document.getElementById('juntar-fechar').addEventListener('click', () => fecharComHistorico_('overlay-juntar'));
+  document.getElementById('overlay-juntar').addEventListener('click', (ev) => { if (ev.target.id === 'overlay-juntar') fecharComHistorico_('overlay-juntar'); });
+  document.getElementById('juntar-ok').addEventListener('click', async () => {
+    const btn = document.getElementById('juntar-ok'), er = document.getElementById('juntar-erro');
+    const marcado = document.querySelector('input[name="juntar-destino"]:checked');
+    const sel = juntarSelecionados_(); if (!marcado || sel.length < 2) return;
+    const destino = sel.find(p => String(p.ID) === marcado.value); const outros = sel.filter(p => String(p.ID) !== marcado.value);
+    if (!confirm('Juntar ' + outros.length + (outros.length === 1 ? ' produto' : ' produtos') + ' em "' + destino.Nome + '" (' + (destino.Codigo || '') + ')?\n\nOs outros ficam arquivados e as fotos deles passam para este.')) return;
+    btn.disabled = true; er.hidden = true;
+    try {
+      const r = await chamarAdmin_({ action: 'juntarProdutos', destinoId: destino.ID, origemIds: outros.map(p => p.ID) });
+      if (r && r.ok) {
+        selecionadosBulk.clear(); atualizarBarraBulk(); fecharComHistorico_('overlay-juntar');
+        await carregarProdutos();
+        alert('Pronto! Ficou "' + destino.Nome + '" com ' + r.fotosNoDestino + ' foto(s). ' + r.arquivados + ' arquivado(s).');
+      } else {
+        const t = textoErroCat_(r, 'Não consegui juntar agora. Tente de novo.');
+        if (t) { er.textContent = t; er.hidden = false; }
+      }
+    } catch (e) { er.textContent = 'Sem conexão. Tente de novo.'; er.hidden = false; }
+    finally { btn.disabled = false; }
+  });
+
+  const BOTOES_BULK_IDS = ['btn-bulk-preco', 'btn-bulk-novidade', 'btn-bulk-arquivar', 'btn-bulk-reativar', 'btn-bulk-juntar'];
   function travarBotoesBulk(travar) {
     BOTOES_BULK_IDS.forEach(id => {
       const el = document.getElementById(id);
@@ -2464,7 +2522,7 @@
     }
   }
   window.addEventListener('popstate', () => {
-    ['overlay-compartilhar', 'overlay-categorias', 'overlay-gestao'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('aberto'); });
+    ['overlay-compartilhar', 'overlay-categorias', 'overlay-gestao', 'overlay-juntar'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('aberto'); });
   });
   document.addEventListener('click', (ev) => { // fecha o menu "⋯" das peças ao tocar fora dele
     document.querySelectorAll('details.mais[open]').forEach(d => { if (!d.contains(ev.target)) d.removeAttribute('open'); });

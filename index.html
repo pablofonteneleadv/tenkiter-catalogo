@@ -336,6 +336,16 @@ catch (e) { window.__precargaLista = null; }
   .modal.voltando { transition: transform 0.2s ease-out; }
   .sheet-handle { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 42px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.85); box-shadow: 0 0 4px rgba(0,0,0,0.4); z-index: 6; pointer-events: none; }
   .sheet-handle.escura { background: #bbb; box-shadow: none; }
+  /* v3.7: X de arquivar (só Equipe do site ou maior) */
+  .x-equipe { position: absolute; top: 8px; left: 8px; z-index: 6; width: 38px; height: 38px; border-radius: 50%; border: 2px dashed #fff; background: #b71c1c; color: #fff; font-size: 1.05rem; font-weight: 900; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; box-shadow: 0 2px 8px rgba(0,0,0,.55); }
+  .x-equipe:focus-visible { outline: 3px solid var(--laranja); outline-offset: 2px; }
+  .x-equipe.mini { width: 22px; height: 22px; font-size: .7rem; top: 2px; left: 2px; border-width: 1px; }
+  .thumb-wrap { position: relative; flex: none; display: inline-block; }
+  body.equipe-x .card .selo-card { top: 52px; }
+  body.equipe-x .carrossel-wrap .selo-card { top: 56px !important; }
+  #toast-equipe { position: fixed; left: 12px; right: 12px; bottom: 84px; z-index: 160; background: var(--preto); color: #fff; border-radius: 12px; padding: 12px 14px; font-size: .9rem; display: none; align-items: center; gap: 10px; justify-content: space-between; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  #toast-equipe.visivel { display: flex; }
+  #toast-equipe button { background: var(--laranja); color: #0d0d0d; border: none; border-radius: 8px; padding: 8px 12px; font-weight: 800; cursor: pointer; width: auto; }
   .btn-x-modal { position: absolute; top: 10px; right: 10px; z-index: 6; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(0,0,0,0.65); color: #fff; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .barra-compra { position: sticky; bottom: 0; z-index: 5; display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--branco); border-top: 1px solid #eee; box-shadow: 0 -4px 12px rgba(0,0,0,0.08); }
   .barra-compra button, .barra-compra a { min-height: 48px; border-radius: 12px; font-weight: 800; font-size: 0.92rem; cursor: pointer; border: none; text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; }
@@ -412,6 +422,7 @@ catch (e) { window.__precargaLista = null; }
   </div>
 </div>
 
+<div id="toast-equipe" role="status" aria-live="polite"><span id="toast-equipe-txt"></span><button type="button" id="toast-equipe-btn" hidden>Desfazer</button></div>
 <div id="toast-carregando" role="status" aria-live="polite"><span class="spinner-mini"></span><span id="texto-toast">Carregando produtos...</span></div>
 
 <header>
@@ -574,6 +585,7 @@ catch (e) { window.__precargaLista = null; }
   const QTD_PILLS_CATEGORIA = 6;
 
   let produtos = [];
+  const equipe_ = { pode: false };   // v3.7: Equipe do site vê o X de arquivar (definirEquipe_)
   let listaFiltradaAtual = [];
   let itensVisiveis = POR_PAGINA;
   let categoriasDisponiveis = new Set();
@@ -1026,6 +1038,7 @@ catch (e) { window.__precargaLista = null; }
           <div class="img-wrap">
             <img ${atribSrc(fotoMini(p.Foto_URL, 480))} alt="${escaparHtml(p.Nome)}" ${pos < 4 ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async">
             ${esgotado ? '<span class="selo-card esgotado">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade">NOVIDADE</span>' : '')}
+            ${equipe_.pode ? `<button type="button" class="x-equipe" data-x-prod="${escaparHtml(p.ID)}" title="Arquivar esta peça (equipe)" aria-label="Arquivar a peça: ${escaparHtml(p.Nome)}">✕</button>` : ''}
             <button type="button" class="btn-favorito-card" data-fav-id="${escaparHtml(p.ID)}" title="Favoritar" aria-label="${favoritado ? 'Remover dos favoritos' : 'Favoritar'}: ${escaparHtml(p.Nome)}" aria-pressed="${favoritado}">${favoritado ? '❤️' : '🤍'}</button>
             ${nFotos > 1 || temVideo ? `<span class="mini-selos" aria-hidden="true">${nFotos > 1 ? `<span class="mini-selo">📷 ${nFotos}</span>` : ''}${temVideo ? '<span class="mini-selo">▶ vídeo</span>' : ''}</span>` : ''}
             ${ultimas ? '<span class="selo-ultimas" aria-hidden="true">' + (Number(p.Estoque) === 1 ? 'Última!' : 'Últimas ' + Number(p.Estoque)) + '</span>' : ''}
@@ -1047,9 +1060,10 @@ catch (e) { window.__precargaLista = null; }
 
     btnMais.style.display = lista.length > itensVisiveis ? 'block' : 'none';
     grid.querySelectorAll('.card').forEach(el => el.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-favorito-card, .acoes-card')) return;
+      if (e.target.closest('.btn-favorito-card, .acoes-card, .x-equipe')) return;
       abrirDetalhe(el.dataset.id);
     }));
+    grid.querySelectorAll('.x-equipe').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); arquivarProdutoX_(b.dataset.xProd); }));
     grid.querySelectorAll('.btn-favorito-card').forEach(btn => btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = btn.dataset.favId;
@@ -1239,19 +1253,19 @@ catch (e) { window.__precargaLista = null; }
   }
 
   /** slideInicial (opcional) = posição (de 0) da foto/vídeo que já deve aparecer: vem do endereço ?f=<n> (link compartilhado numa foto específica). */
-  function abrirDetalhe(id, slideInicial) {
+  function abrirDetalhe(id, slideInicial, silencioso) {
     const p = produtos.find(x => String(x.ID) === String(id));
     if (!p) return;
     slideAtualModal_ = 0;
     const eidVista = novoEventId_('vc', p.ID);
-    registrarEvento(p.ID, p.Codigo, 'visualizacao', eidVista);
+    if (!silencioso) registrarEvento(p.ID, p.Codigo, 'visualizacao', eidVista);   // reabrir depois de arquivar uma foto não conta como outra visualização
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const esgotado = estaEsgotado(p);
     const disp = nivelDisponibilidade(p);
     const favoritado = ehFavorito(p.ID);
     const naSacola = estaNaSacola(p.ID);
     definirMetaPeca_(p, avista);
-    if (window.TKMeta) TKMeta.evento('ViewContent', dadosPixel_(p), eidVista);
+    if (window.TKMeta && !silencioso) TKMeta.evento('ViewContent', dadosPixel_(p), eidVista);
 
     const fotosGaleria = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',').map(s=>s.trim()).filter(Boolean));
     const idVid = idVideoSeguro(p.Video_URL);
@@ -1262,13 +1276,14 @@ catch (e) { window.__precargaLista = null; }
       <button type="button" class="btn-x-modal" id="btn-fechar-modal" aria-label="Fechar">✕</button>
       <div class="carrossel-wrap">
         <div class="slide-area" id="slide-area"><img id="foto-principal-modal" alt="${escaparHtml(p.Nome)}"></div>
+        ${equipe_.pode ? `<button type="button" class="x-equipe" id="x-slide" title="Tirar esta foto/vídeo da peça (equipe)" aria-label="Tirar esta foto ou vídeo da peça">✕</button>` : ''}
         ${totalSlides > 1 ? `<button type="button" class="seta-slide esq" id="seta-esq" aria-label="Anterior">‹</button><button type="button" class="seta-slide dir" id="seta-dir" aria-label="Próxima">›</button><span class="contador-slide" id="contador-slide">1 / ${totalSlides}</span>` : ''}
         ${esgotado ? '<span class="selo-card esgotado" style="top:12px;left:12px;font-size:0.7rem;">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade" style="top:12px;left:12px;font-size:0.7rem;">NOVIDADE</span>' : '')}
       </div>
       ${totalSlides > 1 ? `
         <div class="thumbs-galeria">
-          ${fotosGaleria.map((f, idx) => `<img ${atribSrc(fotoMini(f, 120))} class="thumb-item ${idx===0?'ativa':''}" data-idx="${idx}" alt="" width="50" height="62" loading="lazy">`).join('')}
-          ${idVid ? `<div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div>` : ''}
+          ${fotosGaleria.map((f, idx) => { const im = `<img ${atribSrc(fotoMini(f, 120))} class="thumb-item ${idx===0?'ativa':''}" data-idx="${idx}" alt="" width="50" height="62" loading="lazy">`; return equipe_.pode ? `<span class="thumb-wrap">${im}<button type="button" class="x-equipe mini" data-x-idx="${idx}" aria-label="Tirar a foto ${idx+1} da peça">✕</button></span>` : im; }).join('')}
+          ${idVid ? (equipe_.pode ? `<span class="thumb-wrap"><div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div><button type="button" class="x-equipe mini" data-x-idx="${fotosGaleria.length}" aria-label="Tirar o vídeo da peça">✕</button></span>` : `<div class="thumb-item thumb-video" data-idx="${fotosGaleria.length}" role="button" aria-label="Ver vídeo">▶</div>`) : ''}
         </div>
       ` : ''}
       <div class="modal-conteudo">
@@ -1338,6 +1353,8 @@ catch (e) { window.__precargaLista = null; }
     const area = document.getElementById('slide-area');
     const thumbs = document.querySelectorAll('.thumb-item');
     let atual = 0;
+    const xs = document.getElementById('x-slide'); if (xs) xs.addEventListener('click', () => arquivarMidiaX_(p, slides[atual], atual));
+    document.querySelectorAll('.thumb-wrap .x-equipe').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); const k = Number(b.dataset.xIdx); arquivarMidiaX_(p, slides[k], k); }));
     function mostrarSlide(i) {
       atual = (i + slides.length) % slides.length;
       slideAtualModal_ = atual;
@@ -1488,6 +1505,63 @@ catch (e) { window.__precargaLista = null; }
 
   /* Notificações push: tudo em push.js (v3.4) — sininho #btn-push-header, convite, conta, pedidos, ajuda. */
 
+  /* ===================== v3.7: Equipe do site (catalogo_cadastrar) arquiva pelo X ===================== */
+  async function definirEquipe_(usuario) {
+    let pode = false;
+    try { const v = await versaoServidor(); pode = !!(v && v.midiaRapida && temPermissao(usuario, 'catalogo_cadastrar')); } catch (e) { pode = false; }
+    if (pode === equipe_.pode) return;
+    equipe_.pode = pode;
+    document.body.classList.toggle('equipe-x', pode);
+    if (produtos && produtos.length) renderizarGrid();
+  }
+  function pedirEquipe_(corpo) {
+    const s = getSessao();
+    if (!s) return Promise.resolve({ ok: false, erro: 'Entre na sua conta para fazer isso.' });
+    return apiPost(Object.assign({ whatsapp: s.whatsapp, sessao: s.sessao }, corpo));
+  }
+  function erroEquipe_(r) { return (r && r.erro) || (r && r.semPermissao ? 'Sua conta não tem esse acesso.' : 'Não consegui agora. Tente de novo.'); }
+  let toastEquipeTimer_ = null;
+  function avisoEquipe_(texto, desfazer) {
+    const t = document.getElementById('toast-equipe'), tx = document.getElementById('toast-equipe-txt'), b = document.getElementById('toast-equipe-btn');
+    tx.textContent = texto; b.hidden = !desfazer; b.onclick = desfazer ? async () => { b.disabled = true; try { await desfazer(); } finally { b.disabled = false; t.classList.remove('visivel'); } } : null;
+    t.classList.add('visivel'); clearTimeout(toastEquipeTimer_); toastEquipeTimer_ = setTimeout(() => t.classList.remove('visivel'), desfazer ? 12000 : 6000);
+  }
+  function listaGaleria_(p) { return String(p.Fotos_Galeria || '').split(',').map(x => x.trim()).filter(Boolean); }
+  async function arquivarProdutoX_(id) {
+    const p = produtos.find(x => String(x.ID) === String(id)); if (!p) return;
+    if (!confirm('Arquivar a peça "' + p.Nome + '"' + (p.Codigo ? ' (' + p.Codigo + ')' : '') + '?\n\nEla some do catálogo. Fica registrado e um Encarregado pode reativar.')) return;
+    const r = await pedirEquipe_({ action: 'arquivarRapido', id: p.ID });
+    if (!r || !r.ok) { avisoEquipe_(erroEquipe_(r)); return; }
+    produtos = produtos.filter(x => String(x.ID) !== String(id));
+    try { salvarCatalogoCache(produtos); } catch (e) {}
+    fecharDetalhe && document.getElementById('overlay').classList.contains('aberto') && fecharDetalhe();
+    aplicarFiltros(); avisoEquipe_('Peça arquivada. Para voltar, um Encarregado reativa em Gestão → Arquivadas.');
+  }
+  async function arquivarMidiaX_(p, slide, idx) {
+    if (!slide) return;
+    const ehVideo = slide.tipo === 'video';
+    const url = ehVideo ? String(p.Video_URL || '').trim() : String(slide.url || '').trim();
+    if (!ehVideo && listaGaleria_(p).length === 0) { alert('Essa é a única foto da peça. Para tirar a peça do catálogo, use o ✕ da peça (arquivar a peça inteira).'); return; }
+    if (!confirm((ehVideo ? 'Tirar o VÍDEO' : 'Tirar esta FOTO') + ' da peça "' + p.Nome + '"?\n\nO arquivo não é apagado: fica guardado e dá para desfazer.')) return;
+    const r = await pedirEquipe_({ action: 'arquivarMidia', id: p.ID, tipo: ehVideo ? 'video' : 'foto', url: url });
+    if (!r || !r.ok) { avisoEquipe_(erroEquipe_(r)); return; }
+    if (ehVideo) p.Video_URL = '';
+    else {
+      let gal = listaGaleria_(p);
+      if (url === String(p.Foto_URL || '').trim()) { p.Foto_URL = r.novaCapa || gal[0]; gal = gal.slice(1); } else gal = gal.filter(x => x !== url);
+      p.Fotos_Galeria = gal.join(',');
+    }
+    try { salvarCatalogoCache(produtos); } catch (e) {}
+    aplicarFiltros(); abrirDetalhe(p.ID, Math.max(0, idx - 1), true);
+    avisoEquipe_((ehVideo ? 'Vídeo' : 'Foto') + ' tirada da peça.', async () => {
+      const d = await pedirEquipe_({ action: 'restaurarMidia', registro: r.registro });
+      if (!d || !d.ok) { avisoEquipe_(erroEquipe_(d)); return; }
+      try { const resp = await buscarListaPublica(); if (Array.isArray(resp.produtos)) { const rec = resp.produtos.reverse(); salvarCatalogoCache(rec); aplicarProdutosRecebidos(rec); } } catch (e) {}
+      if (document.getElementById('overlay').classList.contains('aberto')) abrirDetalhe(p.ID, 0, true);
+      avisoEquipe_('Pronto, voltou para a peça.');
+    });
+  }
+
   /* ===================== v2: conta de cliente (favoritos e sacola salvos) ===================== */
   try { (function contaCliente() {
     const btn = document.getElementById('btn-conta-header');
@@ -1517,7 +1591,7 @@ catch (e) { window.__precargaLista = null; }
     }
 
     async function depoisDeEntrar(u) {
-      usuario = u;
+      usuario = u; definirEquipe_(usuario);
       atualizarBotao();
       ov.classList.remove('visivel');
       await sincronizar();
@@ -1529,7 +1603,7 @@ catch (e) { window.__precargaLista = null; }
         corpo.appendChild(el('h2', { id: 'conta-titulo', text: 'Olá, ' + usuario.name + '!' }));
         corpo.appendChild(el('p', { text: 'Seus favoritos e sua sacola ficam salvos na sua conta e aparecem em qualquer aparelho em que você entrar.' }));
         const sair = el('button', { type: 'button', className: 'conta-secundario', id: 'conta-sair', text: 'Sair da conta' });
-        sair.addEventListener('click', () => { limparSessao(); usuario = null; atualizarBotao(); ov.classList.remove('visivel'); });
+        sair.addEventListener('click', () => { limparSessao(); usuario = null; definirEquipe_(null); atualizarBotao(); ov.classList.remove('visivel'); });
         corpo.appendChild(sair);
         return;
       }
@@ -1574,7 +1648,7 @@ catch (e) { window.__precargaLista = null; }
       if (!v || !v.acessos) return;
       btn.style.display = '';
       const u = await conferirSessao();
-      if (u && !u.semRede) { usuario = u; atualizarBotao(); sincronizar(); }
+      if (u && !u.semRede) { usuario = u; definirEquipe_(usuario); atualizarBotao(); sincronizar(); }
     })();
   })(); } catch (erroConta) { console.warn('Conta de cliente indisponível:', erroConta); }
 

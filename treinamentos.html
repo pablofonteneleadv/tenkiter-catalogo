@@ -288,6 +288,8 @@ th{background:var(--surface-2); font-weight:700;}
 .ac-filtro{display:flex; flex-wrap:wrap; gap:6px 8px; align-items:center; margin:0 0 12px;}
 .ac-filtro-t{font-size:.8rem; color:var(--muted); font-weight:700;}
 .ac-chip{display:inline-flex; align-items:center; gap:5px; font-size:.82rem; padding:5px 10px; border:1px solid var(--border); border-radius:999px; background:var(--surface); cursor:pointer;}
+.ac-perfis{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;}
+.ac-chip-fixo{cursor:default; border-style:dashed;}
 .ac-chip:has(input:checked){border-color:var(--accent-2); background:rgba(230,126,34,.12);}
 .ac-n{font-size:.72rem; color:var(--muted);}
 .ac-form{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; padding:10px; border:1px dashed var(--border); border-radius:10px;}
@@ -2226,7 +2228,7 @@ async function carregarAcessos(){
   } else {
     a.erro = ''; a.pessoas = resp.pessoas || []; a.perfis = resp.perfis || []; a.permissoes = resp.permissoes || [];
     a.totalClientes = resp.totalClientes || 0; a.eu = resp.eu || state.user.whatsapp;
-    a.contagem = {}; a.pessoas.forEach(function(x){ a.contagem[x.perfil] = (a.contagem[x.perfil] || 0) + 1; }); a.truncado = !!resp.truncado;
+    a.contagem = {}; a.pessoas.forEach(function(x){ perfisDe(x).forEach(function(n){ a.contagem[n] = (a.contagem[n] || 0) + 1; }); }); a.truncado = !!resp.truncado;
     if (!a.filtro){ a.filtro = {}; a.perfis.forEach(function(x){ a.filtro[x.nome] = (String(x.nome).toLowerCase() !== 'cliente'); }); }
   }
   a.carregado = true;
@@ -2253,17 +2255,26 @@ function abrirFotoGrande(url, legenda, alvoFoto){
   document.addEventListener('keydown', tecla);
   document.body.appendChild(ov);
 }
+function baseDosPerfis(lista){
+  var soma = {};
+  lista.forEach(function(x){ var o = permObj(x.permissoes); Object.keys(o).forEach(function(k){ if (o[k]) soma[k] = true; }); });
+  return soma;
+}
 function acessosCard(p){
   var a = acessosEstado();
-  var perfilObj = a.perfis.filter(function(x){ return x.nome === p.perfil; })[0];
-  var base = perfilObj ? permObj(perfilObj.permissoes) : null;
+  var meus = perfisDe(p);
+  var conhecidos = a.perfis.filter(function(x){ return meus.indexOf(x.nome) !== -1; });
+  var base = conhecidos.length ? baseDosPerfis(conhecidos) : null;
   var mine = permObj(p.permissoes);
   var ativo = String(p.status || 'ativo').toLowerCase() !== 'inativo';
   var qtd = a.permissoes.filter(function(x){ return mine[x.chave]; }).length;
   var diffs = base ? a.permissoes.filter(function(x){ return !!mine[x.chave] !== !!base[x.chave]; }).length : 0;
   var aberto = !!a.abertos[p.whatsapp];
-  var opts = a.perfis.map(function(x){ return '<option value="' + esc(x.nome) + '"' + (x.nome === p.perfil ? ' selected' : '') + '>' + esc(x.nome) + '</option>'; }).join('');
-  if (!perfilObj) opts = '<option value="" selected>' + esc(p.perfil || '(sem perfil)') + '</option>' + opts;
+  var chips = a.perfis.map(function(x){
+    var cli = String(x.nome).toLowerCase() === 'cliente';
+    return '<label class="ac-chip' + (cli ? ' ac-chip-fixo' : '') + '" title="' + esc(x.desc || '') + '"><input type="checkbox" data-perfil-set="' + esc(x.nome) + '"' + ((cli || meus.indexOf(x.nome) !== -1) ? ' checked' : '') + (cli ? ' disabled' : '') + '> ' + esc(x.nome) + '</label>';
+  }).join('');
+  var semPerfilConhecido = meus.length && !conhecidos.length ? '<div class="ac-sub">Perfil antigo: ' + esc(p.perfil) + '</div>' : '';
   var grupos = [], porGrupo = {};
   a.permissoes.forEach(function(x){ if (!porGrupo[x.grupo]){ porGrupo[x.grupo] = []; grupos.push(x.grupo); } porGrupo[x.grupo].push(x); });
   var permsHtml = aberto ? ('<div class="ac-perms">' + grupos.map(function(g){
@@ -2279,7 +2290,7 @@ function acessosCard(p){
         '<div class="ac-sub">' + esc(p.whatsapp) + ' · <span class="' + (ativo ? 'badge-ativo' : 'badge-inativo') + '">' + (ativo ? 'Ativo' : 'Inativo') + '</span></div>' +
         '<div class="ac-sub">Cadastro: ' + (p.cadastro ? esc(acDataBr(p.cadastro)) : '<em>sem data (conta antiga)</em>') + (p.curriculo === 'enviado' ? ' · <span style="color:#198754;font-weight:700">📄 currículo feito</span>' : (p.curriculo === 'andamento' ? ' · 📄 currículo em andamento' : (p.curriculo === 'menor' ? ' · 📄 menor de 18' : ''))) + '</div></div>' +
       '<div class="ac-actions">' +
-        '<select class="admin-sel ac-perfil" aria-label="Perfil">' + opts + '</select>' +
+        '<div class="ac-perfis" role="group" aria-label="Perfis de ' + esc(p.nome || 'esta pessoa') + '">' + chips + '</div>' + semPerfilConhecido +
         '<button type="button" class="admin-mini-btn ac-abrir">' + (aberto ? '▾' : '▸') + ' Permissões (' + qtd + ')' + (diffs ? ' ✱' + diffs : '') + '</button>' +
         (p.curriculo ? '<button type="button" class="admin-mini-btn ac-vercv">📄 Ver currículo</button>' : '') +
         (p.curriculo === 'andamento' || p.curriculo === '' ? '<a class="admin-mini-btn" target="_blank" rel="noopener" href="' + esc(cvLinkCobranca(p)) + '">📲 Cobrar currículo</a>' : '') +
@@ -2287,7 +2298,7 @@ function acessosCard(p){
         (p.fotoCorpoUrl ? '<button type="button" class="admin-mini-btn ac-corpo">🧍 Foto de corpo inteiro</button>' : '') +
         '<button type="button" class="admin-mini-btn ac-status" data-ativo="' + (ativo ? '1' : '0') + '">' + (ativo ? 'Desativar' : 'Reativar') + '</button>' +
         '<button type="button" class="admin-mini-btn ac-reset">Resetar senha</button>' +
-        '<button type="button" class="admin-mini-btn ac-excluir" style="color:#b00020">🗑️ Excluir</button>' +
+        '<button type="button" class="admin-mini-btn ac-excluir" style="color:var(--danger)">🗑️ Excluir</button>' +
       '</div>' +
     '</div>' + permsHtml + '</div>';
 }
@@ -2318,9 +2329,14 @@ function acessosCasaBusca(p, a){
   if (!q) return true;
   return acTxt(p.nome).indexOf(q) !== -1 || (d && String(p.whatsapp).indexOf(d) !== -1);
 }
+function perfisDe(p){ return String(p.perfil || '').split(',').map(function(x){ return x.trim(); }).filter(Boolean); }   // v3.2: a pessoa pode ter vários perfis ("Cliente, Aluno")
 function acessosPerfilMarcado(p, a){
-  if (!a.filtro || !(p.perfil in a.filtro)) return true; // perfil que não está na lista (renomeado): nunca some
-  return !!a.filtro[p.perfil];
+  if (!a.filtro) return true;
+  var nomes = perfisDe(p);
+  if (!nomes.length) return true;
+  var conhecidos = nomes.filter(function(n){ return n in a.filtro; });
+  if (!conhecidos.length) return true; // perfil que não está na lista (renomeado): nunca some
+  return conhecidos.some(function(n){ return !!a.filtro[n]; });
 }
 function acessosVisiveis(){
   var a = acessosEstado();
@@ -2497,15 +2513,24 @@ function wireTabAcessos(){
   });
   lista.addEventListener('change', async function(e){
     var p = pessoaDe(e.target); if (!p) return;
-    if (e.target.classList.contains('ac-perfil')){
-      var novo = e.target.value; if (!novo) return;
-      var perfilObj = a.perfis.filter(function(x){ return x.nome === p.perfil; })[0];
-      var base = perfilObj ? permObj(perfilObj.permissoes) : null, mine = permObj(p.permissoes);
-      var temAjuste = base && a.permissoes.some(function(x){ return !!mine[x.chave] !== !!base[x.chave]; });
-      if (temAjuste && !confirm('Trocar o perfil de ' + p.nome + ' para ' + novo + '? As permissões voltam ao padrão do perfil (os ajustes individuais serão perdidos).')){ pintarAcessos(); return; }
-      var r = await acessosReq({ action: 'acessos_perfil', whatsappAlvo: p.whatsapp, perfil: novo });
-      if (!r || !r.ok){ toast((r && r.erro) || 'Não foi possível trocar o perfil.'); pintarAcessos(); return; }
-      toast('Perfil atualizado — permissões marcadas automaticamente.');
+    if (e.target.hasAttribute && e.target.hasAttribute('data-perfil-set')){
+      var card = e.target.closest('.ac-card');
+      var marcados = Array.prototype.slice.call(card.querySelectorAll('input[data-perfil-set]:checked')).map(function(c){ return c.getAttribute('data-perfil-set'); });
+      var outros = marcados.filter(function(n){ return String(n).toLowerCase() !== 'cliente'; });
+      var perfisNovos = outros.length ? outros : ['Cliente'];
+      var meusAgora = perfisDe(p), conhecAgora = a.perfis.filter(function(x){ return meusAgora.indexOf(x.nome) !== -1; });
+      var baseAgora = conhecAgora.length ? baseDosPerfis(conhecAgora) : null, mineAgora = permObj(p.permissoes);
+      var temAjuste = baseAgora && a.permissoes.some(function(x){ return !!mineAgora[x.chave] !== !!baseAgora[x.chave]; });
+      if (temAjuste && !confirm('Mudar os perfis de ' + p.nome + '? As permissões voltam a ser a soma dos perfis marcados (os ajustes individuais serão perdidos).')){ pintarAcessos(); return; }
+      var req = { action: 'acessos_perfil', whatsappAlvo: p.whatsapp, perfis: perfisNovos };
+      if (perfisNovos.length === 1) req.perfil = perfisNovos[0];   // backend antigo (só um perfil) ainda entende
+      var r = await acessosReq(req);
+      if (!r || !r.ok){
+        var msg = (r && r.erro) || 'Não foi possível trocar os perfis.';
+        if (perfisNovos.length > 1 && /desconhecido/i.test(msg)) msg = 'Para dar mais de um perfil, o backend de Funcionários precisa estar na versão 3.2 (cole o arquivo novo no Apps Script).';
+        toast(msg); pintarAcessos(); return;
+      }
+      toast('Perfis atualizados — permissões somadas automaticamente.');
       await carregarAcessos();
       if (p.whatsapp === state.user.whatsapp) refrescarMinhas();
       return;

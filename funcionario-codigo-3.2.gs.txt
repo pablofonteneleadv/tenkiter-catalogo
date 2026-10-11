@@ -1,4 +1,9 @@
-// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v3.1
+// TENKiTER Treinamento + Acessos -- backend do site (Google Apps Script) -- v3.2
+//
+// NOVIDADE DA v3.2 -- VÁRIOS PERFIS POR PESSOA (pedido do Pablo: "outorgar mais de um acesso ao usuário; todos são clientes; as permissões se complementam"):
+//  - A coluna Perfil pode ter vários nomes separados por vírgula (ex.: "Cliente, Aluno, Equipe do site"). As permissões são a SOMA dos perfis marcados; 'Cliente' está sempre incluído.
+//  - acessos_perfil aceita 'perfis' (lista) além do 'perfil' (um só, como antes). Marcar/desmarcar um perfil refaz as caixinhas pela soma dos que sobraram (ajustes individuais são refeitos, como já era ao trocar de perfil).
+//  - As travas da v3.1 continuam: ninguém tira o PRÓPRIO Admin total e sempre sobra um Admin total ativo (valem para a soma dos perfis).
 //
 // NOVIDADE DA v3.1 -- TRAVA CONTRA TIRAR O PRÓPRIO ACESSO (pedido do Pablo: "sem querer tirei meu acesso de admin total"):
 //  - Quem é Admin total não consegue mais, pelo painel de Acessos, rebaixar o PRÓPRIO perfil, desmarcar a PRÓPRIA caixinha 'Gerir acessos' nem desativar a PRÓPRIA conta.
@@ -485,10 +490,30 @@ function acNivelDe_(perms) {
   return 0;
 }
 /** Permissões efetivas de UMA linha: caixinha marcada/desmarcada vale; em branco herda do perfil (ou do Nivel antigo). */
+/** "Cliente, Aluno" -> ['Cliente','Aluno'] (sem vazios nem repetidos). */
+function acNomesDePerfil_(texto) {
+  var vistos = {}, out = [];
+  String(texto == null ? '' : texto).split(',').forEach(function (n) {
+    n = n.trim();
+    if (n && !vistos[acNorm_(n)]) { vistos[acNorm_(n)] = true; out.push(n); }
+  });
+  return out;
+}
+/** Soma as permissões de vários perfis (união). Nome que não existe mais na aba Perfis usa o modelo de fábrica; sem modelo, fica de fora. */
+function acPermsDosPerfis_(nomes, perfis) {
+  var soma = {}, achou = false;
+  nomes.forEach(function (n) {
+    var p = perfis.mapa[acNorm_(n)] || acPerfilDeFabrica_(n);
+    if (!p) return;
+    achou = true;
+    Object.keys(p.perms).forEach(function (k) { if (p.perms[k]) soma[k] = true; });
+  });
+  return achou ? soma : null;
+}
 function acPermsDaLinha_(linha, perfis) {
   perfis = perfis || acPerfis_();
   var nomePerfil = String(linha.perfil || '').trim() || acPerfilLegado_(linha.nivel);
-  var base = (perfis.mapa[acNorm_(nomePerfil)] || perfis.mapa[acNorm_(acPerfilLegado_(linha.nivel))] || acPerfilDeFabrica_(nomePerfil) || acPerfilDeFabrica_(acPerfilLegado_(linha.nivel)) || { perms: {} }).perms;
+  var base = acPermsDosPerfis_(acNomesDePerfil_(nomePerfil), perfis) || (perfis.mapa[acNorm_(acPerfilLegado_(linha.nivel))] || acPerfilDeFabrica_(acPerfilLegado_(linha.nivel)) || { perms: {} }).perms;
   var out = {};
   acChaves_().forEach(function (k) {
     var b = acBool_(linha['perm_' + k]);
@@ -986,7 +1011,7 @@ function doGet(e) {
   }
 
   if (action === 'versao') {
-    return jsonOut_({ ok: true, versao: '3.1', acessos: true, curriculos: true, listaFechada: listaFechada_() });
+    return jsonOut_({ ok: true, versao: '3.2', acessos: true, curriculos: true, listaFechada: listaFechada_() });
   }
 
   // padrão: lista de funcionários (login e níveis) -- formato ANTIGO, só existe
@@ -1905,12 +1930,13 @@ function acessosListar_(data) {
     if (!w || vistos[w]) return;
     vistos[w] = true;
     var nomePerfil = String(l.perfil || '').trim() || acPerfilLegado_(l.nivel);
-    var ehCliente = acNorm_(nomePerfil) === 'cliente';
+    var nomesDaPessoa = acNomesDePerfil_(nomePerfil);
+    var ehCliente = nomesDaPessoa.length === 1 && acNorm_(nomesDaPessoa[0]) === 'cliente';   // só cliente (quem tem outro perfil também é cliente, mas não entra nesta conta)
     if (ehCliente) totalClientes++;
-    contagem[nomePerfil] = (contagem[nomePerfil] || 0) + 1;
+    nomesDaPessoa.forEach(function (nm) { contagem[nm] = (contagem[nm] || 0) + 1; });
     var bate = !busca || acNorm_(l.nome).indexOf(busca) !== -1 || w.indexOf(busca.replace(/\D/g, '') || '§') !== -1;
     // com texto na busca, procura em TODOS os perfis (ninguém "some" por causa de um filtro esquecido)
-    var passaFiltro = busca ? true : (filtroPerfis ? !!filtroPerfis[acNorm_(nomePerfil)] : (!ehCliente || incluirClientes));
+    var passaFiltro = busca ? true : (filtroPerfis ? nomesDaPessoa.some(function (nm) { return !!filtroPerfis[acNorm_(nm)]; }) : (!ehCliente || incluirClientes));
     if (!passaFiltro || (busca && !bate)) return;
     var w8 = cvW8_(w);
     pessoas.push({
@@ -1932,31 +1958,44 @@ function acessosListar_(data) {
   });
 }
 
-function acessosDefinirPerfilSemTrava_(whatsappAlvo, nomePerfil, quem) {
+function acessosDefinirPerfilSemTrava_(whatsappAlvo, nomesPerfil, quem) {
   var alvo = acWhats_(whatsappAlvo);
   var perfis = acPerfis_();
-  var perfil = perfis.mapa[acNorm_(nomePerfil)];
-  if (!perfil) return { ok: false, erro: 'Perfil desconhecido.' };
+  var lista = Array.isArray(nomesPerfil) ? nomesPerfil.join(',') : nomesPerfil;
+  var nomes = acNomesDePerfil_(lista), oficiais = [];
+  if (!nomes.length) return { ok: false, erro: 'Escolha pelo menos um perfil.' };
+  for (var n = 0; n < nomes.length; n++) {
+    var pf = perfis.mapa[acNorm_(nomes[n])];
+    if (!pf) return { ok: false, erro: 'Perfil desconhecido.' };
+    oficiais.push(pf.nome);
+  }
+  // todo mundo é cliente: "Cliente" vai sempre na frente quando houver outro perfil junto
+  var semCliente = oficiais.filter(function (x) { return acNorm_(x) !== 'cliente'; });
+  if (semCliente.length) oficiais = (perfis.mapa['cliente'] ? [perfis.mapa['cliente'].nome] : []).concat(semCliente);
+  var soma = acPermsDosPerfis_(oficiais, perfis) || {};
   var linhas = acLinhasDoWhats_(alvo);
   if (!linhas.length) return { ok: false, erro: 'Pessoa não encontrada.' };
-  if (quem && acWhats_(quem.whatsapp) === alvo && !perfil.perms.gerir_acessos) {
-    acLog_(quem.name, quem.whatsapp, alvo, 'barrado_auto_rebaixar', nomePerfil);
+  var rotulo = oficiais.join(', ');
+  if (quem && acWhats_(quem.whatsapp) === alvo && !soma.gerir_acessos) {
+    acLog_(quem.name, quem.whatsapp, alvo, 'barrado_auto_rebaixar', rotulo);
     return { ok: false, erro: 'Você não pode tirar o seu próprio acesso de Admin total (para não se trancar para fora). Peça a outro Admin total para mudar o seu perfil.' };
   }
-  if (!perfil.perms.gerir_acessos && acAdminsAtivos_(alvo) < 1) {
+  if (!soma.gerir_acessos && acAdminsAtivos_(alvo) < 1) {
     return { ok: false, erro: 'Precisa sobrar pelo menos um Admin total ativo. Passe o cargo a outra pessoa antes.' };
   }
   var anterior = String(linhas[0].perfil || '').trim() || acPerfilLegado_(linhas[0].nivel);
   var sh = acGarantirColunas_(), headers = acCabecalhos_(sh);
-  linhas.forEach(function (l) { acRegravarLinha_(sh, headers, l.__row, acMudancasPerfil_(perfil.nome, perfil.perms)); });
-  acLog_(quem.name, quem.whatsapp, alvo, 'perfil', anterior + ' -> ' + perfil.nome);
-  return { ok: true };
+  var permsGravar = {};
+  acChaves_().forEach(function (k) { permsGravar[k] = soma[k] === true; });
+  linhas.forEach(function (l) { acRegravarLinha_(sh, headers, l.__row, acMudancasPerfil_(rotulo, permsGravar)); });
+  acLog_(quem.name, quem.whatsapp, alvo, 'perfil', anterior + ' -> ' + rotulo);
+  return { ok: true, perfil: rotulo };
 }
 
 function acessosPerfilAcao_(data) {
   var _ac = exigirPerm_(data, 'gerir_acessos');
   if (!_ac.ok) return negarAcesso_(_ac);
-  return jsonOut_(acessosDefinirPerfil_(data.whatsappAlvo, data.perfil, _ac.usuario));
+  return jsonOut_(acessosDefinirPerfil_(data.whatsappAlvo, Array.isArray(data.perfis) ? data.perfis : data.perfil, _ac.usuario));
 }
 
 function acessosDefinirPermissaoSemTrava_(whatsappAlvo, chave, valor, quem) {

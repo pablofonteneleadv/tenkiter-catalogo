@@ -1175,7 +1175,7 @@ function servicosFalsos(amb, est) {
   const P = (o) => { const r = amb.post(o); respostas.push(JSON.stringify(r)); return r; };
   const chamou = (re) => est.chamadas.filter(c => re.test(c.url));
 
-  ok(amb.getJson({ action: 'versao' }).conexoesOnesignal === true && /^catalogo-3\.7$/.test(amb.getJson({ action: 'versao' }).versao), 'versao anuncia conexoesOnesignal:true e catalogo-3.7');
+  ok(amb.getJson({ action: 'versao' }).conexoesOnesignal === true && /^catalogo-3\.\d+$/.test(amb.getJson({ action: 'versao' }).versao), 'versao anuncia conexoesOnesignal:true e catalogo-3.x');
   // --- quem pode
   ok(P(adm({ action: 'onesignalConfigurar' })).exigeLogin === true, 'o PIN antigo NÃO liga o OneSignal (exige login de Admin total)');
   ok(P(F({ action: 'onesignalConfigurar' })).semPermissao === true && P(F({ action: 'salvarConexao', nome: 'onesignal', chave: CHAVE_ORG, orgId: ORG })).semPermissao === true, 'Funcionário (sem gerir_acessos) não consegue ligar nem guardar a chave do OneSignal');

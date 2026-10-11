@@ -38,6 +38,8 @@ SUITES = [  # (arquivo, como saber que passou)
     ("novas_telas.py", lambda o: "FALHAS=0" in o),
     ("compartilhar_foto.py", lambda o: "FALHAS=0" in o),   # compartilhar/pedir/sacola levam a FOTO ou VÍDEO escolhido (?f=N)
     ("admin_categorias.py", lambda o: "FALHAS=0" in o),    # criar categoria, ✎/× só Admin total, sugestões de nome
+    ("juntar_admin.py", lambda o: "FALHAS=0" in o),   # juntar produtos repetidos na lista do admin
+    ("x_equipe.py", lambda o: "FALHAS=0" in o),   # X de arquivar na loja (Equipe do site)
     ("selecao_link.py", lambda o: "RESULTADO:" in o and " 0 falhas" in o),   # compartilhar seleção leva as PEÇAS (?sel=…), não só a loja
     ("central_avisos.py", lambda o: "FALHAS=0" in o),      # Central de avisos do lojista (público, {nome}, agendar, modelos, histórico, preparar)
     ("push_cliente.py", lambda o: "FALHAS=0" in o),        # avisos + instalar app no cliente com OneSignal FALSO (Android, iPhone, Instagram, computador)
@@ -50,6 +52,8 @@ SUITES = [  # (arquivo, como saber que passou)
     ("story_video.py", lambda o: "FALHAS=0" in o),
     ("service_worker.py", lambda o: "FALHAS=0" in o),   # sobe e DESLIGA o próprio servidor para testar "sem internet" de verdade
     ("backend_gs.js", lambda o: "FALHAS=0" in o),        # backend do Apps Script rodando em memória (sem planilha real)
+    ("backend_func.js", lambda o: "FALHAS=0" in o),      # backend de Funcionários/Acessos: vários perfis por pessoa + travas de Admin
+    ("acessos_perfis.py", lambda o: "FALHAS=0" in o),    # painel de Acessos do RH: caixinhas de perfil
     ("worker_og.js", lambda o: "FALHAS=0" in o),         # Worker da Cloudflare com o Apps Script simulado
     ("worker_midia.js", lambda o: "FALHAS=0" in o),      # Worker de mídia (R2) com R2/KV/Apps Script falsos: quem envia, tipos, travas de tamanho e de armazenamento
     ("midia_r2.py", lambda o: "FALHAS=0" in o),          # painel -> R2 (e reserva no Cloudinary)

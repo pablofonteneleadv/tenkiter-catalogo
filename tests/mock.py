@@ -43,6 +43,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     if conex: FLAGS["conexoes"]=True
     if conex5: FLAGS["conexoesOnesignal"]=True
     if conex6: FLAGS["conexoesCopiar"]=True
+    if versao>="3.7" and novo: FLAGS["midiaRapida"]=True; FLAGS["juntarProdutos"]=True
     if avanc: FLAGS["metricasAvancadas"]=True; FLAGS["dispositivos"]=True
     def limpa(n): return " ".join(str(n or "").replace(","," ").split())[:60].strip()
     def norm(n):
@@ -53,6 +54,49 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
         return {"codigo":ped["codigo"],"data":ped["data"],"atualizado":ped["atualizado"],"status":ped["status"],"entrega":ped["entrega"],"total":ped["total"],"itens":[{"nome":i["nome"],"codigo":i["codigo"]} for i in ped["itens"]]}
     def post(b):
         a=b.get("action")
+        if versao>="3.7" and a in("arquivarRapido","arquivarMidia","restaurarMidia","juntarProdutos"):
+            st.setdefault("x_chamadas",[]).append(b)
+            if "catalogo_cadastrar" not in perms: return {"ok":False,"semPermissao":True,"erro":"Você não tem permissão para essa ação."}
+            x=next((q for q in P if str(q["ID"])==str(b.get("id") or b.get("destinoId"))),None)
+            if a=="juntarProdutos": return {"ok":True,"arquivados":len(b.get("origemIds",[]))}
+            if a=="restaurarMidia":
+                r=st.setdefault("x_arq",{}).get(b.get("registro"))
+                if not r: return {"ok":False,"erro":"Registro não encontrado."}
+                y=next(q for q in P if str(q["ID"])==r["id"]); gal=[g for g in y["Fotos_Galeria"].split(",") if g]
+                if r["tipo"]=="video": y["Video_URL"]=r["url"]
+                else: gal.insert(r["pos"],r["url"]); y["Fotos_Galeria"]=",".join(gal)
+                return {"ok":True}
+            if not x: return {"ok":False,"erro":"Produto não encontrado."}
+            if a=="arquivarRapido": x["Status"]="Inativo"; return {"ok":True}
+            gal=[g for g in x["Fotos_Galeria"].split(",") if g]; url=b.get("url")
+            if b.get("tipo")=="video": x["Video_URL"]=""; pos=0; nova=""
+            elif url==x["Foto_URL"]:
+                if not gal: return {"ok":False,"erro":"Essa é a única foto do produto. Para tirar o produto do site, arquive o produto inteiro."}
+                nova=gal[0]; x["Foto_URL"]=nova; x["Fotos_Galeria"]=",".join(gal[1:]); pos=0
+            elif url in gal: pos=gal.index(url); gal.remove(url); x["Fotos_Galeria"]=",".join(gal); nova=""
+            else: return {"ok":False,"erro":"Essa foto já não está no produto."}
+            reg="MA%d"%(len(st.setdefault("x_arq",{}))+1); st["x_arq"][reg]={"id":str(x["ID"]),"tipo":b.get("tipo"),"url":url,"pos":pos}
+            return {"ok":True,"registro":reg,"novaCapa":nova}
+        if a in("acessos_listar","acessos_perfil"):
+            AP=st.setdefault("acpessoas",[{"whatsapp":"88999999999","nome":"Ana Lojista","perfil":"Admin total","status":"Ativo"},{"whatsapp":"88988887777","nome":"Cris Cliente","perfil":"Cliente","status":"Ativo"}])
+            PF={"Cliente":["cliente"],"Aluno":["portal"],"Equipe do site":["catalogo_admin","catalogo_cadastrar"],"Funcionário":["portal","catalogo_admin","catalogo_cadastrar"],"Admin total":["cliente","portal","catalogo_admin","catalogo_cadastrar","gerir_acessos"]}
+            if a=="acessos_perfil":
+                st.setdefault("perfil_chamadas",[]).append(b)
+                if "gerir_acessos" not in perms: return {"ok":False,"semPermissao":True,"erro":"Sem permissão."}
+                nomes=b.get("perfis") or ([b.get("perfil")] if b.get("perfil") else [])
+                if not nomes: return {"ok":False,"erro":"Escolha pelo menos um perfil."}
+                if any(n not in PF for n in nomes): return {"ok":False,"erro":"Perfil desconhecido."}
+                alvo=next((q for q in AP if q["whatsapp"]==b.get("whatsappAlvo")),None)
+                if not alvo: return {"ok":False,"erro":"Pessoa não encontrada."}
+                outros=[n for n in nomes if n!="Cliente"]; fin=(["Cliente"]+outros) if outros else ["Cliente"]
+                perm=sorted({k for n in fin for k in PF[n]})
+                if alvo["whatsapp"]=="88999999999" and "gerir_acessos" not in perm: return {"ok":False,"erro":"Você não pode tirar o seu próprio acesso de Admin total (para não se trancar para fora). Peça a outro Admin total para mudar o seu perfil."}
+                alvo["perfil"]=", ".join(fin); return {"ok":True,"perfil":alvo["perfil"]}
+            pes=[]
+            for q in AP:
+                ns=[n.strip() for n in q["perfil"].split(",")]; perm=sorted({k for n in ns for k in PF.get(n,[])})
+                pes.append(dict(q,permissoes=perm,nivel=1,cadastro="2026-10-01T10:00:00",fotoPerfilUrl="",fotoCorpoUrl="",curriculo="",curriculoEtapa="",curriculoAntigo=False))
+            return {"ok":True,"pessoas":pes,"perfis":[{"nome":n,"desc":"","permissoes":v} for n,v in PF.items()],"permissoes":[{"chave":k,"rotulo":k,"grupo":"Geral"} for k in ["cliente","portal","catalogo_admin","catalogo_cadastrar","gerir_acessos"]],"totalClientes":1,"eu":"88999999999","truncado":False}
         if a in("sessao","login"): return {"ok":True,"sessao":"tk2.x.y","usuario":{"whatsapp":"88999999999","name":"Ana Lojista","nome":"Ana Lojista","level":3,"permissoes":perms,"perfil":"Admin"}}
         if a=="curriculos_listar": return {"ok":True,"curriculos":[],"status":["Novo","Entrevista"],"motivos":[]}
         if a=="create": return {"ok":True,"id":"999","codigo":"TK-0099"}
