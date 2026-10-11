@@ -30,6 +30,7 @@ kv = next((k["id"] for k in kvs if k["title"] == KV_TITULO), None)
 if not kv: sys.exit("KV %s não encontrado." % KV_TITULO)
 dbs = api("/accounts/%s/d1/database?name=tenkiter-ig" % conta).get("result") or []
 db = next((d["uuid"] for d in dbs if d["name"] == "tenkiter-ig"), None)
+if not db: db = os.environ.get("TK_D1_ID")   # id do D1 `tenkiter-ig` (público) quando o token não pode listar/criar bancos
 if not db:
     c = api("/accounts/%s/d1/database" % conta, "POST", json.dumps({"name": "tenkiter-ig"}).encode(), {"Content-Type": "application/json"})
     db = (c.get("result") or {}).get("uuid")
