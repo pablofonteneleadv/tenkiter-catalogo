@@ -16,7 +16,7 @@
 // sem isto o navegador recusa o arquivo inteiro e o catálogo deixa de abrir sem internet. Só os avisos push ficam de fora.
 try { importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js'); } catch (e) { /* segue só com o cache */ }
 
-var VERSAO = 'tk-3.4.0';
+var VERSAO = 'tk-3.5.0';
 var CACHE_SITE = 'tk-site-' + VERSAO;
 var CACHE_FOTOS = 'tk-fotos-v1';
 var MAX_FOTOS = 160;
@@ -24,7 +24,7 @@ var BASICO = ['/', '/index.html', '/common.js', '/meta.js', '/pedido.js', '/push
 var PAGINAS = /^\/(index\.html|privacidade\.html)?$/;
 var ESTATICOS = /\.(?:js|css|png|jpg|jpeg|webp|svg|ico|webmanifest|woff2?)$/i;
 var FORA_DO_CACHE = /^\/(admin|treinamentos|curriculos|curriculo|manual)\.html$/;
-var HOSTS_FOTO = /^(?:lh3\.googleusercontent\.com|res\.cloudinary\.com)$/;
+var HOSTS_FOTO = /^(?:lh3\.googleusercontent\.com|res\.cloudinary\.com|tenkiter-midia\.[a-z0-9-]+\.workers\.dev|midia\.tenkitermodas\.com\.br)$/;
 
 self.addEventListener('install', function (ev) {
   ev.waitUntil(

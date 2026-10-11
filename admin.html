@@ -1022,7 +1022,7 @@
     const texto = String(u || '');
     const mDrive = /^https:\/\/drive\.google\.com\/file\/d\/([\w-]+)\//.exec(texto);
     if (mDrive) return { tipo: 'drive', id: mDrive[1] };
-    if (/^https:\/\/res\.cloudinary\.com\//.test(texto)) return { tipo: 'cloudinary', url: texto };
+    if (ehVideoDireto(texto)) return { tipo: 'cloudinary', url: texto };   // Cloudinary (antigo) ou R2 (novo)
     return null;
   }
 
@@ -1918,7 +1918,7 @@
   // verdade). O Cloudinary é feito pra receber arquivo grande direto do navegador e aguenta uma
   // conexão instável muito melhor.
   function subirVideoDireto_(file, it, aoProgredir) {
-    return comTentativas_(it, () => pedirAssinaturaVideo_().then((assinatura) => subirParaCloudinary_(file, assinatura, aoProgredir, 'video', 'vídeo')), 'vídeo→Cloudinary');
+    return subirMidia_(file, it, aoProgredir, 'video', 'vídeo');
   }
 
   // Mesma lógica do vídeo, mas pra uma foto: a foto já chega aqui redimensionada e em base64
@@ -1928,7 +1928,51 @@
   // conexão" (xhr.status=0, readyState=4) de forma consistente e sem relação real com o sinal.
   function subirFotoDireta_(b64, it, aoProgredir) {
     const blob = base64ParaBlob_(b64, 'image/jpeg');
-    return comTentativas_(it, () => pedirAssinaturaVideo_().then((assinatura) => subirParaCloudinary_(blob, assinatura, aoProgredir, 'image', 'foto')), 'foto→Cloudinary');
+    return subirMidia_(blob, it, aoProgredir, 'image', 'foto');
+  }
+
+  // ---- R2 (Cloudflare): onde ficam as fotos e vídeos NOVOS ----
+  // Foto <= 2,5 MB e vídeo <= 15 MB vão para o Worker `tenkiter-midia` (grátis para servir, com travas de tamanho/armazenamento). Quem entrou só com
+  // o PIN antigo (sem token de sessão), arquivo maior que o limite ou qualquer falha do R2 cai no Cloudinary, como sempre foi: o envio nunca para.
+  const R2_FOTO_MAX = 2.5 * 1048576, R2_VIDEO_MAX = 15 * 1048576;
+  function sessaoR2_() {
+    const s = typeof getSessao === 'function' ? getSessao() : null;
+    return s && /^tk[12]\./.test(String(s.sessao)) ? s : null;
+  }
+  function podeR2_(file, tipoRecurso) {
+    if (window.TK_MIDIA_R2 === false || !sessaoR2_()) return false;
+    return file.size > 0 && file.size <= (tipoRecurso === 'image' ? R2_FOTO_MAX : R2_VIDEO_MAX);
+  }
+  function subirParaR2_(file, aoProgredir, rotulo) {
+    return new Promise((resolve, reject) => {
+      const s = sessaoR2_();
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', MIDIA_URL + '/u');
+      xhr.setRequestHeader('X-TK-Whats', s.whatsapp); xhr.setRequestHeader('X-TK-Sessao', s.sessao);
+      xhr.timeout = 300000;
+      const inicio = Date.now();
+      window.logDebug_('→ POST ' + MIDIA_URL + '/u  (' + rotulo + ', ' + (file.size / 1048576).toFixed(2) + 'MB)');
+      xhr.upload.onprogress = function (ev) {
+        if (!ev.lengthComputable || !aoProgredir) return;
+        const fracao = ev.loaded / ev.total, taxa = ev.loaded / Math.max((Date.now() - inicio) / 1000, 0.05);
+        aoProgredir(fracao, taxa > 0 ? Math.max(0, Math.round((ev.total - ev.loaded) / taxa)) : null);
+      };
+      xhr.onload = function () {
+        let r = null; try { r = JSON.parse(xhr.responseText); } catch (e) {}
+        if (xhr.status >= 200 && xhr.status < 300 && r && r.ok && r.url) { window.logDebug_('← R2 ok em ' + (Date.now() - inicio) + 'ms -- ' + r.url); resolve(r.url); }
+        else reject(new Error('R2: ' + ((r && r.erro) || ('HTTP ' + xhr.status))));
+      };
+      xhr.onerror = () => reject(new Error('falha de conexão durante o envio'));
+      xhr.ontimeout = () => reject(new Error('demorou mais de 5 minutos e a conexão foi cancelada'));
+      xhr.send(file);
+    });
+  }
+  async function subirMidia_(file, it, aoProgredir, tipoRecurso, rotulo) {
+    if (podeR2_(file, tipoRecurso)) {
+      try { return await comTentativas_(it, () => subirParaR2_(file, aoProgredir, rotulo), rotulo + '→R2'); }
+      catch (e) { window.logDebug_('R2 não serviu (' + ((e && e.message) || e) + ') -- usando o Cloudinary'); it.progresso = null; it.etaSegundos = null; }
+    }
+    return comTentativas_(it, () => pedirAssinaturaVideo_().then((assinatura) => subirParaCloudinary_(file, assinatura, aoProgredir, tipoRecurso, rotulo)), rotulo + '→Cloudinary');
   }
 
   async function enviarItem(it) {

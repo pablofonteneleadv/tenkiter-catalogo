@@ -19,7 +19,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     for i in range(sem_codigo):
         q=dict(P[i]); q["ID"]=str(1790000009000+i); q["Nome"]="Peça antiga %d"%(i+1); q["Codigo"]=""; P.append(q)
     novo = versao != "3.0"
-    st={"produtos":P,"pedidos":[],"falhas":{},"integ":{"pixelId":pixel,"capi":False,"teste":"","graph":"v23.0","sinonimos":"","segmentos":"Clientes Infantil"},"push":[],"importados":[],"seq":0,"ia":ia,"categorias":list(CATS)}
+    st={"produtos":P,"pedidos":[],"falhas":{},"integ":{"pixelId":pixel,"capi":False,"teste":"","graph":"v23.0","sinonimos":"","segmentos":"Clientes Infantil"},"push":[],"importados":[],"seq":0,"ia":ia,"categorias":list(CATS),"midia":{"modo":"recusa","envios":[]}}
     cat_gestao = versao >= "3.2"
     push3 = novo and versao >= "3.3"     # avisos completos (pushCompleto): público, agendamento, modelos, histórico com números
     conex = novo and versao >= "3.4"     # Conexões (conexoes): chaves do Render/Cloudflare guardadas no servidor, situação, regras, publicar
@@ -342,6 +342,15 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if "action=stats" in u: return route.fulfill(json={"ok":True,"totalVisualizacoes":120,"totalWhatsapp":18,"produtoMaisVistoId":"1790000000003","produtoMaisVistoCodigo":"TK-0003","produtoMaisVistoViews":40})
             if "manuais_lista" in u: return route.fulfill(json={"ok":True,"manuais":[]})
             return route.fulfill(json={"ok":True})
+        if "tenkiter-midia" in u:     # Worker de mídia (R2): padrão = recusa rápida (o painel cai no Cloudinary); st["midia"]["modo"]="ok" aceita e guarda o que foi enviado
+            m=st["midia"]
+            if route.request.method=="POST" and u.endswith("/u"):
+                m["envios"].append({"tam":len(route.request.post_data_buffer or b""),"whats":route.request.headers.get("x-tk-whats"),"sessao":route.request.headers.get("x-tk-sessao")})
+                if m["modo"]=="ok":
+                    n=len(m["envios"]); video=(route.request.headers.get("content-type") or "").startswith("video/")
+                    return route.fulfill(json={"ok":True,"url":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/%020x.%s"%(n,"mp4" if video else "jpg"),"tipo":"video" if video else "foto"})
+                return route.fulfill(status=503,json={"ok":False,"erro":"Armazenamento cheio (teste)." if m["modo"]=="cheio" else "Indisponível (teste)."})
+            return route.fulfill(body=PNG,content_type="image/png")
         if "lh3.googleusercontent" in u or "cloudinary" in u: return route.fulfill(body=PNG,content_type="image/png")
         if "connect.facebook.net" in u: return route.fulfill(body="/* fbevents simulado */",content_type="application/javascript")
         if u.startswith("http://localhost") or u.startswith(BASE_LOCAL): return route.continue_()

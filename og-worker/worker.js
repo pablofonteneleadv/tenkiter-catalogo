@@ -45,6 +45,7 @@ function midias(p) {
   const out = fotos.map((url) => ({ tipo: 'foto', url: String(url || '') }));
   const v = String(p.Video_URL || '');
   if (/^https:\/\/res\.cloudinary\.com\//.test(v)) out.push({ tipo: 'video', url: v, cloudinary: true });
+  else if (/^https:\/\/(?:tenkiter-midia\.[a-z0-9-]+\.workers\.dev|midia\.tenkitermodas\.com\.br)\/m\/\d{6}\/[0-9a-f]{20}\.(mp4|webm)$/.test(v)) out.push({ tipo: 'video', url: v, cloudinary: false });   // R2: sem quadro de miniatura, usa a capa
   else if (/^https:\/\/drive\.google\.com\/file\/d\/[\w-]+\/preview$/.test(v)) out.push({ tipo: 'video', url: v, cloudinary: false });
   return out;
 }

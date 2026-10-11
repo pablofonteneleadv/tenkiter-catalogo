@@ -25,6 +25,15 @@ const DESCONTO_AVISTA = 0.10; // 10% de desconto no pagamento à vista
  *  por exemplo 'https://tenkiter-og.distkrpconfeccoes.workers.dev/lista.json'. Se o Worker falhar, o catálogo cai no Apps Script sozinho. */
 const LISTA_RAPIDA_URL = '';
 
+/** Fotos e vídeos NOVOS ficam no R2 da Cloudflare (Worker `tenkiter-midia`, midia-worker/): servir arquivo é grátis e há travas de tamanho e de armazenamento,
+ *  então não existe cobrança surpresa. O que já está no Cloudinary/Drive continua funcionando igual. */
+const MIDIA_URL = 'https://tenkiter-midia.distkrpconfeccoes.workers.dev';
+/** Vídeo que toca direto num <video>: o do Cloudinary (antigo) ou o nosso, do R2 (novo). */
+function ehVideoDireto(u) {
+  const t = String(u || '');
+  return /^https:\/\/res\.cloudinary\.com\//.test(t) || /^https:\/\/(?:tenkiter-midia\.[a-z0-9-]+\.workers\.dev|midia\.tenkitermodas\.com\.br)\/m\/\d{6}\/[0-9a-f]{20}\.(mp4|webm)$/.test(t);
+}
+
 /** Busca a lista pública de peças ({ ok, produtos: [...] }). Com LISTA_RAPIDA_URL ligada tenta ela primeiro (3,5 s) e cai no Apps Script se falhar. */
 function buscarListaPublica() {
   const direto = () => fetch(API_URL + '?action=list').then(r => r.json());

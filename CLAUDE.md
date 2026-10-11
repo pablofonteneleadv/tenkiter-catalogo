@@ -298,3 +298,19 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 - **Testes**: seção 8f de `tests/backend_gs.js` (filtros, virada de meia-noite, dia da semana, cache por combinação, 30 000/400, sem telefone/token/chave), `tests/numeros_reais.py`,
   `tests/aparelho_anonimo.py`, `tests/central_contagens.py`; `tests/mock.py` com `versao="3.5"` liga `metricasAvancadas`/`dispositivos` (`3.4` = tela antiga). O `id` de modelo de
   aviso agora tem sufixo aleatório (dois cliques no mesmo milissegundo repetiam o código e quebravam um teste de vez em quando).
+
+## v3.6 — saindo do Apps Script/Cloudinary: mídia no R2 da Cloudflare (decisão do Pablo: "Opção 1, o mais barato possível, sem risco de custo absurdo nas imagens")
+
+- **Plano (escada)**: degrau 0 = tudo grátis (Workers free, KV, D1, R2 até 10 GB). Só sobe para Workers Paid (US$ 5) quando o painel da Cloudflare mostrar uso perto de 100 mil requisições/dia.
+  **Não ligar** Images (redimensionar sob demanda) nem Stream: cobram por uso — só se o Pablo mandar. Banco/Supabase (degraus 3 e 4) só com pedido e confirmação dele.
+- **Recursos já criados na conta Cloudflare (11/10/2026)**: bucket R2 `tenkiter-midia`, banco D1 `tenkiter-db` (VAZIO, ainda sem tabelas; migração da planilha para o D1 é a próxima etapa, com gravação dupla
+  e conferência antes de trocar), KV `tenkiter-cache`. Worker **`tenkiter-midia`** (`midia-worker/worker.js`, publicado por `CLOUDFLARE_API_TOKEN=… python3 midia-worker/publicar.py`; bindings `MIDIA`=R2, `CACHE`=KV, `API_URL`)
+  em `https://tenkiter-midia.distkrpconfeccoes.workers.dev` (o token não enxergou a zona `tenkitermodas.com.br`, então ficou sem domínio próprio; `midia.tenkitermodas.com.br` já é aceito pelo front/Worker se um dia ligar).
+- **Travas contra custo (no Worker, não no navegador)**: foto ≤ 2,5 MB, vídeo ≤ 15 MB, tipo conferido pelos BYTES (JPG/PNG/WEBP/MP4/WEBM; HEIC recusado), ≤ 400 envios/dia, total guardado ≤ 9,5 GB (`LIMITE_BYTES`, abaixo dos 10 GB grátis; passou = 507).
+  Servir arquivo (saída) no R2 é grátis. Quem envia: `POST /u` com `X-TK-Whats` + `X-TK-Sessao` (SÓ token `tk1./tk2.`, nunca senha); o Worker pergunta ao Apps Script (`sessao`) e exige `catalogo_cadastrar` (apagar: `catalogo_excluir`); resultado guardado 2 min no cache da borda.
+  `GET /uso` mostra bytes/arquivos/limite. `GET /m/<AAAAMM>/<20 hex>.<ext>` é público, cache de 1 ano, com Range (vídeo).
+- **Painel (`admin.html`)**: `subirMidia_` tenta o R2 primeiro (foto/vídeo dentro do limite e com login por token); PIN antigo, arquivo maior ou QUALQUER falha do R2 caem no Cloudinary como sempre foi — o envio nunca para.
+  O que já está no Cloudinary/Drive continua igual. `ehVideoDireto()` (common.js) reconhece vídeo do Cloudinary OU do R2 (host travado: `tenkiter-midia.<conta>.workers.dev` / `midia.tenkitermodas.com.br`) — index, admin e `og-worker` usam.
+  Vídeo no R2 não tem quadro de miniatura (só o Cloudinary faz `so_30p`): o `og:image` cai na capa. Fotos do R2 não têm `fotoMini` (a foto já sobe reduzida pelo painel). CSP do `index.html` e `HOSTS_FOTO` do service worker (`tk-3.5.0`) incluem o host.
+- **Pendente (peça um passo por vez)**: apagar do R2 ao excluir peça (Worker já tem `DELETE`), migrar mídia antiga do Cloudinary, D1 + gravação dupla com a planilha, tirar o catálogo do Apps Script (lista pelo KV). O token `cfut_…` que o Pablo colou no chat vale até 01/12/2026: **pedir para revogar**.
+- **Testes**: `tests/worker_midia.js` (R2/KV/Apps Script falsos) e `tests/midia_r2.py` (painel → R2, vídeo grande → Cloudinary, R2 recusa → Cloudinary); `tests/mock.py` ganhou `st["midia"]["modo"]` (`recusa` padrão | `ok` | `cheio`).
