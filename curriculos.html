@@ -137,11 +137,11 @@ async function iniciar() {
   if (abrir) { busca = abrir; }
   if (irParaAntigos) {
     aba = 'antigos'; desenhar(); await carregarAntigos();
-    if (abrir) { const it = document.querySelector('.item'); if (it) { it.classList.add('aberto'); it.scrollIntoView({ block: 'start' }); } }
+    if (abrir) { const it = document.querySelector('.item'); if (it) { if (it._abrir) it._abrir(); else it.classList.add('aberto'); it.scrollIntoView({ block: 'start' }); } }
     return;
   }
   desenhar();
-  if (abrir) { const it = document.querySelector('.item'); if (it) { it.classList.add('aberto'); it.scrollIntoView({ block: 'start' }); } }
+  if (abrir) { const it = document.querySelector('.item'); if (it) { if (it._abrir) it._abrir(); else it.classList.add('aberto'); it.scrollIntoView({ block: 'start' }); } }
 }
 async function carregarNovos() {
   const r = await chamar('curriculos_listar'); if (!r.ok) return erro(r.erro);
@@ -371,10 +371,10 @@ function itemNovo(r) {
     <textarea data-k="obsAlt" placeholder="Observação desta alteração (fica registrada no histórico)"></textarea>
     <textarea data-k="no" placeholder="Suas anotações gerais">${E(r.Nota || '')}</textarea><button data-k="sv">Salvar</button><span data-k="ms" class="meta"></span></div>
     <dl>${dl}</dl>${historicoHtml(r)}</div>`;
+  /* abrir o card SEMPRE carrega o treinamento (também quando abre sozinho pelo link ?abrir=: antes ficava em "Abra o card pra ver.") */
+  d._abrir = () => { d.classList.add('aberto'); carregarTreino(r, d.querySelector('[data-k=treino]')); };
   d.querySelector('.topo').onclick = () => {
-    const abrindo = !d.classList.contains('aberto');
-    d.classList.toggle('aberto');
-    if (abrindo) carregarTreino(r, d.querySelector('[data-k=treino]'));
+    if (d.classList.contains('aberto')) d.classList.remove('aberto'); else d._abrir();
   };
   d.querySelector('[data-k=st]').onchange = e => {
     const st = e.target.value;
