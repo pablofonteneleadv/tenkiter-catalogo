@@ -75,7 +75,9 @@
       .ig-toast { position: sticky; bottom: 0; background: #222; color: #fff; border-radius: 10px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; justify-content: space-between; font-size: 0.86rem; }
       .ig-toast button { width: auto; min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--laranja); color: #0d0d0d; font-weight: 800; cursor: pointer; }
       .ig-juntar-barra { position: sticky; top: 0; z-index: 2; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: #fff; border: 1px solid #e3e3e3; border-radius: 10px; padding: 8px 10px; margin: 0 0 8px; font-size: 0.84rem; }
-      .ig-juntar-barra button { width: auto; flex: none; padding: 0 14px; min-height: 44px; border-radius: 8px; border: 0; font-weight: 800; cursor: pointer; } .ig-juntar-barra button:disabled { opacity: .45; cursor: default; }
+      .ig-juntar-barra button { width: auto; flex: 1 1 0; padding: 0 10px; min-height: 44px; white-space: nowrap; border-radius: 8px; border: 0; font-weight: 800; cursor: pointer; } .ig-juntar-barra button:disabled { opacity: .45; cursor: default; }
+      .ig-ajuda { font-size: 0.82rem; color: #444; margin: 0 0 8px; } .ig-sec-tit { font-size: 0.95rem; margin: 6px 0 8px; color: #14532d; } .ig-sec-resto { color: #444; margin-top: 14px; }
+      .ig-selecionados { background: #f1faf4; border: 2px solid #b5e0c4; border-radius: 12px; padding: 8px; margin: 0 0 8px; }
       .ig-selcard { display: flex; align-items: center; gap: 8px; font-size: 0.86rem; font-weight: 700; margin: 0 0 8px; min-height: 40px; } .ig-selcard input { width: 22px; height: 22px; }
       .ig-ia { background: #f1ecff; border: 1px solid #d8ccff; color: #3b1f8c; border-radius: 10px; padding: 7px 10px; font-size: 0.82rem; margin: 0 0 8px; }
       .ig-iaok { background: #e9f7ee; border: 1px solid #b5e0c4; color: #14532d; border-radius: 8px; padding: 5px 8px; font-size: 0.8rem; margin-bottom: 8px; overflow-wrap: anywhere; }
@@ -181,11 +183,16 @@
     const avisos = (st && st.alertas || []).map((a) => '<div class="ig-aviso">⚠️ ' + esc(a) + '</div>').join('');
     const vazio = '<p class="ig-vazio">' + (grupo === 'pendente' ? 'Nada esperando agora. 🎉 O que você postar no Instagram aparece aqui sozinho (a cada 30 minutos) ou toque em "Buscar agora".' : 'Nada por aqui.') + '</p>';
     const ids = lista.map((x) => x.id); marcados.forEach((id) => { if (ids.indexOf(id) === -1) marcados.delete(id); });
-    const barra = (grupo !== 'descartado' && lista.length > 1) ? '<div class="ig-juntar-barra"><button type="button" class="ig-ok" data-ig="juntarMarcados"' + (marcados.size < 2 ? ' disabled' : '') + '>🔗 Juntar ' + (marcados.size >= 2 ? marcados.size + ' posts em 1 produto' : 'em 1 produto') + '</button>' +
-      '<button type="button" class="ig-ok" data-ig="separadoMarcados"' + (marcados.size < 2 ? ' disabled' : '') + '>🧩 Cadastrar separado' + (marcados.size >= 2 ? ' (' + marcados.size + ')' : '') + '</button>' +
-      (marcados.size ? '<button type="button" class="ig-sec" data-ig="limparMarcados">Limpar</button>' : '') + '<span>' + (marcados.size ? marcados.size + ' marcado(s)' : 'Marque os posts (caixinha em cada um). Juntar = 1 produto só (máx. ' + LIM_FOTOS + ' fotos e ' + LIM_VIDEOS + ' vídeo). Cadastrar separado = 1 produto por post, com as mesmas informações.') + '</span></div>' : '';
+    const nM = marcados.size, podeMarcar = grupo !== 'descartado' && lista.length > 1;
+    const ajuda = podeMarcar && !nM ? '<p class="ig-ajuda">Marque 2 ou mais posts para <b>juntar</b> (1 produto, máx. ' + LIM_FOTOS + ' fotos e ' + LIM_VIDEOS + ' vídeo) ou <b>cadastrar separado</b> (1 produto por post, mesmas informações).</p>' : '';
+    const barra = podeMarcar ? '<div class="ig-juntar-barra"><button type="button" class="ig-ok" data-ig="juntarMarcados"' + (nM < 2 ? ' disabled' : '') + '>🔗 Juntar' + (nM >= 2 ? ' (' + nM + ')' : '') + '</button>' +
+      '<button type="button" class="ig-ok" data-ig="separadoMarcados"' + (nM < 2 ? ' disabled' : '') + '>🧩 Separado' + (nM >= 2 ? ' (' + nM + ')' : '') + '</button>' +
+      (nM ? '<button type="button" class="ig-sec" data-ig="limparMarcados">Limpar</button>' : '') + '</div>' : '';
+    // Marcados sobem juntos para o topo (na ordem da data) para a conferência final; ao desmarcar voltam ao lugar pela data.
+    const sel = podeMarcar ? lista.filter((x) => marcados.has(x.id)) : [], resto = podeMarcar ? lista.filter((x) => !marcados.has(x.id)) : lista;
+    const corpoLista = sel.length ? '<div class="ig-selecionados"><h3 class="ig-sec-tit">✅ Selecionados (' + sel.length + ') — confira antes de executar</h3>' + sel.map(cartao).join('') + '</div>' + (resto.length ? '<h3 class="ig-sec-tit ig-sec-resto">Demais posts</h3>' : '') + resto.map(cartao).join('') : (lista.length ? lista.map(cartao).join('') : vazio);
     const iaBox = '<div class="ig-ia" id="ig-ia" role="status"' + (iaTxt ? '' : ' hidden') + '>' + esc(iaTxt) + '</div>';
-    $('ig-corpo').innerHTML = avisos + iaBox + abas + barra + (lista.length ? lista.map(cartao).join('') : vazio) + (mais ? '<div class="ig-acoes" style="justify-content:center"><button type="button" class="ig-sec" data-ig="mais" style="width:auto;padding:10px 16px;border:0;border-radius:8px;min-height:44px;font-weight:700">Carregar mais</button></div>' : '') + rodape() + toast();
+    $('ig-corpo').innerHTML = avisos + iaBox + abas + ajuda + barra + corpoLista + (mais ? '<div class="ig-acoes" style="justify-content:center"><button type="button" class="ig-sec" data-ig="mais" style="width:auto;padding:10px 16px;border:0;border-radius:8px;min-height:44px;font-weight:700">Carregar mais</button></div>' : '') + rodape() + toast();
   }
   function rodape() {
     const u = st && st.ultimoCiclo;

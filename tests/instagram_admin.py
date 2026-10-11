@@ -111,7 +111,7 @@ with sync_playwright() as p:
     chk("botão Juntar em cima, desligado enquanto há menos de 2 marcados", pg.locator("[data-ig=juntarMarcados]").is_disabled())
     pg.locator(".ig-selr").nth(0).check(); chk("com 1 marcado continua desligado", pg.locator("[data-ig=juntarMarcados]").is_disabled())
     pg.locator(".ig-selr").nth(1).check(); pg.locator(".ig-selr").nth(2).check()
-    chk("com 3 marcados liga e diz quantos", pg.locator("[data-ig=juntarMarcados]").is_enabled() and "3 posts" in pg.locator("[data-ig=juntarMarcados]").inner_text(), pg.locator("[data-ig=juntarMarcados]").inner_text())
+    chk("com 3 marcados liga e diz quantos", pg.locator("[data-ig=juntarMarcados]").is_enabled() and "(3)" in pg.locator("[data-ig=juntarMarcados]").inner_text(), pg.locator("[data-ig=juntarMarcados]").inner_text())
     axe(pg, "juntar-barra")
     pg.click("[data-ig=limparMarcados]"); chk("Limpar desmarca tudo", pg.locator(".ig-selr:checked").count() == 0)
     msgs = []; pg.on("dialog", lambda d: msgs.append(d.message))
