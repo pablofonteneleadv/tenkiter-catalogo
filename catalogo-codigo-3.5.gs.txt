@@ -3051,7 +3051,7 @@ function gerarCodigosFaltantes() {
 
 const ROTULOS_ORIGEM_ = { app: 'App instalado', site: 'Navegador', nao_informado: 'Não informado' };
 const ROTULOS_DISP_ = { android: 'Android', ios: 'iPhone / iPad', computador: 'Computador', outro: 'Outro aparelho', nao_informado: 'Não informado' };
-const ROTULOS_FONTE_ = { instagram: 'Instagram', whatsapp: 'WhatsApp', facebook: 'Facebook', google: 'Google', tiktok: 'TikTok', youtube: 'YouTube', direto: 'Direto (digitou ou favorito)', outro: 'Outros sites', nao_informado: 'Não informado' };
+const ROTULOS_FONTE_ = { instagram: 'Instagram', whatsapp: 'WhatsApp', facebook: 'Facebook', google: 'Google', tiktok: 'TikTok', youtube: 'YouTube', direto: 'Direto (link sem origem, digitado ou app)', outro: 'Outros sites', nao_informado: 'Não informado' };
 const NOMES_DIA_SEMANA_ = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
 function metricasFiltros_(body) {

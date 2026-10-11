@@ -601,12 +601,19 @@ catch (e) { window.__precargaLista = null; }
   function registrarEvento(produtoId, codigo, tipo, eventId, semCapi) {
     try {
       const corpo = { action: 'registrarEvento', produtoId: produtoId, codigo: codigo, tipo: tipo };
+      if (window.TKDisp) Object.assign(corpo, TKDisp.perfil());   // v3.5: app ou navegador, aparelho, de onde veio e um código ANÔNIMO do aparelho (sem nome nem telefone)
       // Só se o Pixel estiver ligado e aceito: o servidor pode repetir o evento na API de Conversões da Meta (o token fica só no servidor).
       const ck = !semCapi && window.TKMeta && TKMeta.cookies();
       if (ck) { corpo.meta = { fbp: ck.fbp, fbc: ck.fbc, url: location.href, ua: navigator.userAgent }; if (eventId) corpo.meta.eventId = eventId; }
-      fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(corpo) });
+      fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(corpo) }).catch(function () {});   // sem internet não pode virar erro de JavaScript
     } catch (e) {}
   }
+
+  /** Uma "visita" por sessão: conta quantas PESSOAS entraram (visualização conta peças vistas). Só o servidor 3.5 guarda; o antigo ignora. */
+  (function () {
+    try { if (sessionStorage.getItem('tk_visita_v1')) return; sessionStorage.setItem('tk_visita_v1', '1'); } catch (e) { return; }
+    setTimeout(function () { registrarEvento('', '', 'visita', '', true); }, 900);
+  })();
 
   function lerFiltrosURL() {
     const params = new URLSearchParams(window.location.search);

@@ -14,7 +14,7 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
   integrações, avisos no painel), `privacidade.html`, `404.html`, `site.webmanifest`, `robots.txt` (o `sitemap.xml` e os feeds vêm do Worker — não recriar `sitemap.xml` no repositório: arquivo estático ganha da regra Rewrite do Render).
 - **Backend**: dois Apps Script Web Apps separados, versionados por nome de arquivo
   (`<nome>-<versão>.gs.txt`):
-  - `catalogo-codigo-3.5.gs.txt` — catálogo + autenticação central + pedidos/métricas/importação/feed/integrações (v3.1) + apagar/renomear categoria só para Admin total (v3.2) + avisos push completos (v3.3) + Conexões Render/Cloudflare (v3.4) + OneSignal nas Conexões (v3.5).
+  - `catalogo-codigo-3.5.gs.txt` — catálogo + autenticação central + pedidos/métricas/importação/feed/integrações (v3.1) + apagar/renomear categoria só para Admin total (v3.2) + avisos push completos (v3.3) + Conexões Render/Cloudflare (v3.4) + OneSignal nas Conexões e Números reais com filtros/aparelhos (v3.5).
   - `funcionario-codigo-3.0.gs.txt` — RH/treinamento/contratação.
   - Arquivos antigos (`Code-treinamento-v4.0.gs.txt`, `v4.1.gs.txt`, `atualizado.gs.txt`,
     `tenkiter-codigo-v2.1.gs.txt`) são **históricos — não editar nem usar como referência**.
@@ -268,3 +268,33 @@ Propriedades do Script do Apps Script, nunca no código versionado.
   Para conferir à mão use `?callback=zz$RANDOM`.
 - **Claude continua sem ler essas chaves** em sessões futuras (mesma regra das outras). Para mexer no OneSignal por conta própria: variável de ambiente `ONESIGNAL_ORG_API_KEY`
   + `ONESIGNAL_ORG_ID` no comando, ou o Pablo cola de novo. O mais simples é ele tocar em **📣 Ligar os avisos agora** no painel.
+
+## v3.5 (parte 2) — Números reais com filtros, aparelhos anônimos e contagem por público (backend 3.5)
+
+- **Pedido do Pablo**: "nos dados reais mais informações e maiores opções de afunilamento, seleção até por horário (se ativo); quantas pessoas instalaram, quantas têm o push
+  ativo; nas configurações dos push, ao selecionar os alvos, quero ver do lado quantos tem em cada um (igual à seleção de categoria do currículo)". "Se ativo" foi lido como
+  **horário OPCIONAL (desligado por padrão)**.
+- **Aparelho ANÔNIMO** (`TKDisp` em `common.js`, exposto como `window.TKDisp` — `const` no topo do arquivo NÃO vira propriedade de `window`): código aleatório `tk_vid_v1` (24 hex)
+  + `tk_disp_estado_v1` (só `instalou/pushAtivo/novidades/interesses`) + `tk_disp_env_v1` (assinatura do último envio). **Nunca** nome, telefone, endereço ou senha. Quem tem sessão
+  manda só o TOKEN (`tk1./tk2.`); o servidor calcula o `pushId` (HMAC) e liga o aparelho à conta; sair da conta manda `logout`. Os envios são **juntados** (espera 1,5 s) e
+  espaçados ≥ 17 s (o servidor ignora o mesmo aparelho em < 15 s); sem mudança, no máximo 1 aviso de "existo" a cada 6 h; "nunca teve aviso" = "não disse" (não gasta envio só
+  para dizer "não"). Ganchos de teste: `window.TK_DISP_ATRASO_MS` / `TK_DISP_ESPERA_MS`. Quem chama: `pwa.js` (ping por visita + `appinstalled` + app aberto como app), `push.js`
+  (`informarPainel()` dentro de `mudou()`, `definirInteresse`, `definirNovidades`, `salvarPrefs`; só depois do SDK ficar `pronto`), `index.html` (`registrarEvento` leva
+  `TKDisp.perfil()` = `visitante/origem/dispositivo/fonte`; 1 evento `visita` por sessão).
+- **Fonte da visita** (`detectarFonte`, 1× por sessão em `sessionStorage`): `?utm_source=`/`?fonte=`/`igshid`/`fbclid`/`gclid`, depois o `document.referrer`, depois o navegador embutido
+  (Instagram/Facebook/TikTok). Link compartilhado no WhatsApp chega **sem referrer** → cai em "Direto (link sem origem, digitado ou app)"; não dá para separar.
+- **Backend 3.5 (parte 2)**: aba `Dispositivos` (14 colunas, uma linha por aparelho; teto 30 000 linhas e 400 aparelhos novos/hora — os dois só barram aparelho NOVO), ação aberta
+  `dispositivo`; `Eventos` ganhou `Origem/Dispositivo/Fonte/Visitante` (cabeçalho completado sozinho em planilha antiga; a trava anti-repetição agora é por aparelho);
+  `metricas` com filtros (`dias` ou `de/ate`, `horaDe/horaAte` com virada de meia-noite, `diasSemana`, `origem/dispositivo/fonte/categoria/genero`, `nao_informado` aceito) e
+  devolve `totais.visitantes`, `funil`, `porHora`, `porDiaSemana`, `porOrigem/porDispositivo/porFonte/porGenero`, `opcoes`, `cobertura` e `aparelhos` (**sem** `pushIds`/`interesses`
+  internos — teste confere). `pushStatus` ganhou `contasAtivas`, `ativos` em perfis/acessos, `total` em interesses, `etapas`, `aparelhos`; `pushPrevia` ganhou `comAviso` e `aparelhos`.
+  Bandeiras em `versao`: `metricasAvancadas`, `dispositivos`. `dispositivosResumo_(ini, fim, comOneSignal)` só consulta o OneSignal (cache 5 min) onde precisa.
+- **Honestidade dos números**: aparelho/origem/fonte só existem para eventos **depois** do deploy (`cobertura.desde`; antes = "Não informado"); "instalaram" e "aviso ativo" contam só
+  quem voltou ao site depois disso — o total real de quem recebe aviso é o do OneSignal (`messageable_players`, aparece quando a chave da organização está em Conexões). Pedidos
+  respeitam período/horário/dia da semana, **não** origem/aparelho/categoria (o pedido não tem esses dados).
+- **Front**: `admin-gestao.js` (Números reais: filtros em `<details>`, cada mudança busca de novo; `mtDefinir_`; resposta velha é descartada por `mtSeq`; linha de tabela vira filtro;
+  sem `metricasAvancadas` cai na tela simples antiga `abrirMetricasSimples_`), `admin-push.js` (`contagemPublico`, `cont()`: "(5 · 2 com aviso)"; só "(5)" com backend sem a contagem —
+  nunca "undefined"), `privacidade.html` ganhou a linha do código anônimo.
+- **Testes**: seção 8f de `tests/backend_gs.js` (filtros, virada de meia-noite, dia da semana, cache por combinação, 30 000/400, sem telefone/token/chave), `tests/numeros_reais.py`,
+  `tests/aparelho_anonimo.py`, `tests/central_contagens.py`; `tests/mock.py` com `versao="3.5"` liga `metricasAvancadas`/`dispositivos` (`3.4` = tela antiga). O `id` de modelo de
+  aviso agora tem sufixo aleatório (dois cliques no mesmo milissegundo repetiam o código e quebravam um teste de vez em quando).

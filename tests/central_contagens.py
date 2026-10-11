@@ -1,0 +1,100 @@
+"""Central de avisos com a CONTAGEM ao lado de cada público (v3.5 parte 2): "Alunos (3 · 2 com aviso)", interesses "(4)", perfis, acessos, etapas de pedido,
+a prévia (quantas contas têm aviso ativo / quantos aparelhos) e a tela Preparar. Com backend 3.3 (sem as contagens) tudo segue igual, sem "(undefined)".
+Apps Script simulado (mock.py)."""
+import sys, os
+AQUI = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, AQUI)
+os.makedirs(os.path.join(AQUI, 'saida'), exist_ok=True)
+from mock import *
+from playwright.sync_api import sync_playwright
+AXE = open(os.path.join(AQUI, 'axe.min.js')).read()
+BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
+OK = []; BAD = []
+def chk(n, c, e=""):
+    (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + ((" — " + str(e)) if (e and not c) else ""))
+def axe(pg, label):
+    pg.evaluate(AXE)
+    r = pg.evaluate("async()=>{const r=await axe.run(document.querySelector('#overlay-avisos'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa','best-practice']}});return r.violations.map(v=>({id:v.id,impact:v.impact,n:v.nodes.length,ex:v.nodes.map(n=>n.target.join(' ')).slice(0,3)}))}")
+    chk("axe — " + label, not r, "; ".join("%s×%d %s" % (v['id'], v['n'], v['ex'][:2]) for v in r))
+def abrir_central(pg):
+    if pg.locator("#details-ferramentas[open]").count() == 0:
+        pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250)
+    pg.click("#btn-abrir-push"); pg.wait_for_timeout(900)
+def opcoes(pg): return dict(zip(pg.eval_on_selector_all("#av-publico option", "e=>e.map(o=>o.value)"), pg.eval_on_selector_all("#av-publico option", "e=>e.map(o=>o.textContent)")))
+
+with sync_playwright() as p:
+    b = p.chromium.launch(args=["--no-sandbox"])
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
+    ctx.add_init_script(SESSION)
+    log = []; st = install(ctx, log=log, versao="3.5")
+    erros = []; pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e)))
+    pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
+    abrir_central(pg)
+    o = opcoes(pg)
+    print("== Contagem ao lado de cada público ==")
+    chk("'Todos que ativaram os avisos' mostra o total REAL do OneSignal quando existe, senão os aparelhos do site (7)", o["todos"].endswith("(7)"), o["todos"])
+    chk("'Quem instalou o app' mostra quantos têm aviso ativo no app (3)", o["app"].endswith("(3)"), o["app"])
+    chk("Equipe: contas e quantas têm aviso ativo", o["g:equipe"].endswith("(2 · 1 com aviso)"), o["g:equipe"])
+    chk("Alunos: 3 contas, 2 com aviso", o["g:alunos"].endswith("(3 · 2 com aviso)"), o["g:alunos"])
+    chk("Portal: 4 contas, 3 com aviso", o["g:portal"].endswith("(4 · 3 com aviso)"), o["g:portal"])
+    chk("Clientes com conta: 2 contas, 1 com aviso", o["g:clientes"].endswith("(2 · 1 com aviso)"), o["g:clientes"])
+    chk("Todas as contas: 9, 5 com aviso", o["g:contas"].endswith("(9 · 5 com aviso)"), o["g:contas"])
+    chk("públicos sem número claro (perfil, acesso, pessoas…) ficam sem parênteses", "(" not in o["perfil"] and "(" not in o["pessoas"] and "(" not in o["pedido"], (o["perfil"], o["pessoas"]))
+    chk("nunca aparece 'undefined' nem 'NaN'", not any(("undefined" in v or "NaN" in v) for v in o.values()), o)
+
+    print("== Sub-listas com número ==")
+    pg.select_option("#av-publico", "interesse"); pg.wait_for_timeout(500)
+    chips = pg.eval_on_selector_all("#av-sub-interesses .chip", "e=>e.map(x=>x.textContent.replace(/\\s+/g,' ').trim())")
+    chk("interesses: 'Feminino Adulto (4)' e 'Infantil Menina (0)'", chips == ["Feminino Adulto (4)", "Infantil Menina (0)"], chips)
+    pg.select_option("#av-publico", "perfil"); pg.wait_for_timeout(500)
+    ls = pg.eval_on_selector_all("#av-sub label", "e=>e.map(x=>x.textContent.replace(/\\s+/g,' ').trim())")
+    chk("perfis: 'Aluno (3 · 2 com aviso)'", "Aluno (3 · 2 com aviso)" in ls and "Cliente (2 · 1 com aviso)" in ls, ls)
+    pg.select_option("#av-publico", "acesso"); pg.wait_for_timeout(500)
+    ls = pg.eval_on_selector_all("#av-sub label", "e=>e.map(x=>x.textContent.replace(/\\s+/g,' ').trim())")
+    chk("acessos: 'Enviar avisos (2 · 1 com aviso)'", any(x.startswith("Enviar avisos") and x.endswith("(2 · 1 com aviso)") for x in ls), ls)
+    pg.select_option("#av-publico", "pedidos"); pg.wait_for_timeout(500)
+    ets = pg.eval_on_selector_all("#av-etapa option", "e=>e.map(x=>x.textContent)")
+    chk("etapas de pedido: 'Novo (2)', 'Pronto (1)', 'Concluído (5)', 'Cancelado (0)'", "Novo (2)" in ets and "Pronto (1)" in ets and "Concluído (5)" in ets and "Cancelado (0)" in ets, ets)
+
+    print("== Prévia ==")
+    pg.select_option("#av-publico", "g:alunos"); pg.wait_for_timeout(900)
+    prev = pg.inner_text("#av-previa")
+    chk("grupo: 'N pessoa(s), 1 com aviso ativo agora'", "2 pessoa(s)" in prev and "1 com aviso ativo agora" in prev, prev)
+    pg.select_option("#av-publico", "todos"); pg.wait_for_timeout(900)
+    prev = pg.inner_text("#av-previa")
+    chk("'todos': diz o número de aparelhos contados pelo site", "7" in prev and "aparelho(s) com aviso ativo" in prev, prev)
+    pg.select_option("#av-publico", "app"); pg.wait_for_timeout(900)
+    chk("'app': 3 aparelhos", "3</b> aparelho(s)" in pg.inner_html("#av-previa") or "3 aparelho(s)" in pg.inner_text("#av-previa"), pg.inner_text("#av-previa"))
+    axe(pg, "Central — aba Enviar com contagens")
+
+    print("== Preparar ==")
+    pg.click("#av-aba-preparar"); pg.wait_for_timeout(800)
+    t = pg.inner_text("#av-corpo")
+    chk("Preparar: contas com aviso ativo e aparelhos", "Com aviso ativo agora" in t and "7</b> com aviso ativo" in pg.inner_html("#av-corpo") and "instalaram o app" in t, t[:600])
+    chk("Preparar: sem a chave do OneSignal em Conexões não mostra o total real", "recebem avisos" not in t)
+    st["conex"]["onesignal"]["temChave"] = True
+    pg.click("#pr-verificar"); pg.wait_for_timeout(900)
+    chk("com a chave guardada: 'no OneSignal 11 recebem avisos (de 15 inscritos)'", "11" in pg.inner_text("#av-corpo") and "recebem avisos" in pg.inner_text("#av-corpo") and "15 inscritos" in pg.inner_text("#av-corpo"), pg.inner_text("#av-corpo")[:500])
+    pg.click("#av-aba-enviar"); pg.wait_for_timeout(700)
+    chk("com a chave guardada, 'Todos que ativaram' passa a mostrar o total real (11)", opcoes(pg)["todos"].endswith("(11)"), opcoes(pg)["todos"])
+    chk("nenhum erro de JavaScript", not erros, erros)
+    ctx.close()
+
+    print("== Backend 3.3 (sem contagens) ==")
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
+    ctx.add_init_script(SESSION)
+    install(ctx, versao="3.3")
+    erros = []; pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e)))
+    pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
+    abrir_central(pg)
+    o = opcoes(pg)
+    chk("3.3: Alunos mostra só o total de contas (3), sem 'com aviso'", o["g:alunos"].endswith("(3)") and "com aviso" not in o["g:alunos"], o["g:alunos"])
+    chk("3.3: 'Todos' e 'Quem instalou o app' ficam sem número", "(" not in o["todos"] and "(" not in o["app"], (o["todos"], o["app"]))
+    pg.select_option("#av-publico", "interesse"); pg.wait_for_timeout(400)
+    chips = pg.eval_on_selector_all("#av-sub-interesses .chip", "e=>e.map(x=>x.textContent.replace(/\\s+/g,' ').trim())")
+    chk("3.3: interesses sem número", chips == ["Feminino Adulto", "Infantil Menina"], chips)
+    chk("3.3: nenhum erro de JavaScript", not erros, erros)
+    ctx.close(); b.close()
+
+print("\nOK=%d FALHAS=%d %s" % (len(OK), len(BAD), BAD))
+sys.exit(1 if BAD else 0)

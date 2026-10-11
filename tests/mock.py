@@ -27,6 +27,8 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     st["conex"]={"render":{"temChave":False,"fim":"","salvaEm":""},"cloudflare":{"temChave":False,"fim":"","salvaEm":""}}
     if conex5: st["conex"]["onesignal"]={"temChave":False,"fim":"","salvaEm":"","orgId":"","appId":"535f6b0d-c866-43c2-b241-43bd7ab62fae","chaveEnvio":False}
     st["ligou"]=0
+    avanc = conex5                        # metricasAvancadas + dispositivos (3.5 parte 2): Números reais com filtros, aparelhos e contagem por público
+    st["metricas_pedidos"]=[]; st["dispositivos"]=[]
     st["regras_ok"]=False; st["deploys"]=0; st["status_deploy"]=0
     st["modelos"]=[{"id":"m1","rotulo":"Promoção","titulo":"Promoção de fim de semana! 🎉","mensagem":"{nome}, 20% off até domingo.","url":"","imagem":""},
                    {"id":"m2","rotulo":"Chegou novidade","titulo":"Chegou novidade! ✨","mensagem":"Peças novas no catálogo.","url":"","imagem":""}]
@@ -39,6 +41,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     if push3: FLAGS["pushCompleto"]=True
     if conex: FLAGS["conexoes"]=True
     if conex5: FLAGS["conexoesOnesignal"]=True
+    if avanc: FLAGS["metricasAvancadas"]=True; FLAGS["dispositivos"]=True
     def limpa(n): return " ".join(str(n or "").replace(","," ").split())[:60].strip()
     def norm(n):
         import unicodedata
@@ -112,6 +115,39 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     if "nota" in b: ped["nota"]=b["nota"]
                     return {"ok":True,"pedido":ped}
             return {"ok":False,"erro":"Pedido não encontrado."}
+        if avanc and a=="dispositivo":
+            st["dispositivos"].append(dict(b)); return {"ok":True}
+        if avanc and a=="metricas":
+            st["metricas_pedidos"].append(dict(b))
+            nome={"app":"App instalado","site":"Navegador","nao_informado":"Não informado"}
+            partes=["de %s a %s"%(b["de"],b["ate"]) if b.get("de") else "últimos %d dias"%int(b.get("dias",30))]
+            if b.get("horaDe") is not None: partes.append("das %sh às %sh59"%(b["horaDe"],b["horaAte"]))
+            if b.get("diasSemana"): partes.append(", ".join(["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"][d] for d in b["diasSemana"]))
+            for k in("origem","dispositivo","fonte","categoria","genero"):
+                if b.get(k): partes.append("%s %s"%(k,nome.get(b[k],b[k])))
+            filtrado=len(partes)>1 or int(b.get("dias",30))!=30
+            f=0.25 if filtrado else 1.0
+            ndias=int(b.get("dias",30)) if not b.get("de") else 7
+            vis=int(120*f); zap=int(18*f)
+            ap={"total":12,"instalaram":4,"instalaramNoPeriodo":2,"usaramAppNoPeriodo":3,"pushAtivos":7,"pushAtivosNoApp":3,"pushAtivosVistos30":6,"porPlataforma":{"android":4,"ios":2,"computador":1,"outro":0},"comConta":5,"desde":"11/10/2026",
+                "onesignal":({"inscritos":15,"recebem":11} if st["conex"].get("onesignal",{}).get("temChave") else None)}
+            if st.get("sem_aparelhos"): ap.update({"total":0,"instalaram":0,"instalaramNoPeriodo":0,"usaramAppNoPeriodo":0,"pushAtivos":0,"pushAtivosNoApp":0,"comConta":0,"porPlataforma":{"android":0,"ios":0,"computador":0,"outro":0}})
+            return {"ok":True,"dias":int(b.get("dias",30)),"geradoEm":"11/10/2026 12:00","semDados":st.get("sem_dados",False),"filtros":{"dias":int(b.get("dias",30)),"de":b.get("de",""),"ate":b.get("ate","")},
+                "filtrosDescricao":" · ".join(partes),"filtrado":filtrado,
+                "totais":{"visualizacoes":vis,"whatsapp":zap,"whatsappPor100Visualizacoes":15.0,"visitantes":int(40*f),"visitas":int(55*f)},
+                "funil":{"visitantes":int(40*f),"visualizacoes":vis,"whatsapp":zap,"pedidos":len(st["pedidos"])},
+                "porDia":[{"dia":"2026-10-%02d"%(1+i%10),"visualizacoes":i%7,"whatsapp":i%3,"pedidos":0} for i in range(ndias)],
+                "porHora":[{"hora":h,"visualizacoes":(h*3)%11,"whatsapp":h%3} for h in range(24)],
+                "porDiaSemana":[{"dia":d,"nome":["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"][d],"visualizacoes":d*4,"whatsapp":d} for d in range(7)],
+                "porOrigem":[{"chave":"app","nome":"App instalado","visualizacoes":30,"whatsapp":5,"visitantes":10,"taxa":16.7},{"chave":"site","nome":"Navegador","visualizacoes":60,"whatsapp":8,"visitantes":25,"taxa":13.3},{"chave":"nao_informado","nome":"Não informado","visualizacoes":30,"whatsapp":5,"visitantes":0,"taxa":16.7}],
+                "porDispositivo":[{"chave":"android","nome":"Android","visualizacoes":70,"whatsapp":10,"visitantes":22,"taxa":14.3},{"chave":"ios","nome":"iPhone / iPad","visualizacoes":20,"whatsapp":3,"visitantes":8,"taxa":15.0}],
+                "porFonte":[{"chave":"instagram","nome":"Instagram","visualizacoes":50,"whatsapp":9,"visitantes":18,"taxa":18.0},{"chave":"direto","nome":"Direto (link sem origem, digitado ou app)","visualizacoes":40,"whatsapp":5,"visitantes":12,"taxa":12.5}],
+                "porGenero":[{"chave":"Feminino Adulto","nome":"Feminino Adulto","visualizacoes":80,"whatsapp":12,"taxa":15.0}],
+                "categorias":[{"nome":"Vestido","visualizacoes":60,"whatsapp":9,"taxa":15.0}],
+                "topProdutos":[{"id":"1","codigo":"TK-0007","nome":"Vestido Floral","visualizacoes":40,"whatsapp":8,"taxa":20.0}],
+                "pedidos":{"total":len(st["pedidos"]),"valor":sum(x["total"] for x in st["pedidos"]),"porStatus":{},"concluidos":0,"valorConcluidos":0},
+                "opcoes":{"categorias":["Blusas","Vestido"],"generos":["Feminino Adulto","Infantil Menina"]},
+                "cobertura":{"eventos":100,"comVisitante":70,"desde":"11/10/2026"},"aparelhos":ap}
         if novo and a=="metricas":
             dias=int(b.get("dias",30))
             return {"ok":True,"dias":dias,"geradoEm":"10/10/2026 12:00","semDados":False,"totais":{"visualizacoes":120,"whatsapp":18,"whatsappPor100Visualizacoes":15.0},
@@ -226,7 +262,13 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             return {"ok":True,"appId":"535f6b0d-c866-43c2-b241-43bd7ab62fae","chaveConfigurada":c["chave"],"webPronto":c["web"],"segmentos":["Subscribed Users"],
                     "contas":{"total":9,"equipe":2,"alunos":3,"portal":4,"clientes":2},"perfis":[{"nome":"Admin","total":1},{"nome":"Aluno","total":3},{"nome":"Cliente","total":2}],
                     "acessos":[{"chave":"catalogo_push","rotulo":"Enviar avisos","grupo":"Catálogo","total":2},{"chave":"portal","rotulo":"Portal de treinamento","grupo":"Portal","total":4}],
-                    "interesses":[{"chave":"feminino-adulto","rotulo":"Feminino Adulto"},{"chave":"infantil-menina","rotulo":"Infantil Menina"}],"autoNovoPedido":c["novo"],"autoPedido":c["etapa"]}
+                    "interesses":[{"chave":"feminino-adulto","rotulo":"Feminino Adulto"},{"chave":"infantil-menina","rotulo":"Infantil Menina"}],"autoNovoPedido":c["novo"],"autoPedido":c["etapa"],
+                    **({"contasAtivas":{"total":5,"equipe":1,"alunos":2,"portal":3,"clientes":1},
+                        "perfis":[{"nome":"Admin","total":1,"ativos":1},{"nome":"Aluno","total":3,"ativos":2},{"nome":"Cliente","total":2,"ativos":1}],
+                        "acessos":[{"chave":"catalogo_push","rotulo":"Enviar avisos","grupo":"Catálogo","total":2,"ativos":1},{"chave":"portal","rotulo":"Portal de treinamento","grupo":"Portal","total":4,"ativos":3}],
+                        "interesses":[{"chave":"feminino-adulto","rotulo":"Feminino Adulto","total":4},{"chave":"infantil-menina","rotulo":"Infantil Menina","total":0}],
+                        "etapas":{"novo":2,"pronto":1,"concluido":5},
+                        "aparelhos":{"ativos":7,"ativosNoApp":3,"instalaram":4,"comConta":5,"desde":"11/10/2026","onesignal":({"inscritos":15,"recebem":11} if st["conex"].get("onesignal",{}).get("temChave") else None)}} if avanc else {})}
         if push3 and a=="salvarPushConfig":
             if "gerir_acessos" not in perms: return {"ok":False,"semPermissao":True,"erro":"Você não tem permissão para essa ação."}
             if "autoNovoPedido" in b: st["pushcfg"]["novo"]=bool(b["autoNovoPedido"])
@@ -248,10 +290,10 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             return {"ok":True,"pessoas":[x for x in st["pessoas"] if q and q in norm(x["nome"])]}
         if push3 and a=="pushPrevia":
             au=b.get("audiencia") or {}; t=au.get("tipo")
-            if t in("grupo","perfil","acesso"): return {"ok":True,"descricao":"Grupo "+str(au.get("grupo") or au.get("perfis") or au.get("chaves")),"quantidade":2,"porAparelho":False,"amostra":["Bia Aluna","Caio Cliente"]}
+            if t in("grupo","perfil","acesso"): return {"ok":True,"descricao":"Grupo "+str(au.get("grupo") or au.get("perfis") or au.get("chaves")),"quantidade":2,"porAparelho":False,"amostra":["Bia Aluna","Caio Cliente"],**({"comAviso":1} if avanc else {})}
             if t=="pessoas": return {"ok":True,"descricao":"%d pessoa(s) escolhida(s)"%len(au.get("ids",[])),"quantidade":len(au.get("ids",[])),"porAparelho":False,"amostra":[x["nome"] for x in st["pessoas"] if x["pid"] in au.get("ids",[])]}
             if t=="pedido" and not au.get("codigo"): return {"ok":False,"erro":"Informe o código do pedido."}
-            return {"ok":True,"descricao":"Todos que ativaram os avisos" if t=="todos" else str(t),"quantidade":None,"porAparelho":True,"amostra":[]}
+            return {"ok":True,"descricao":"Todos que ativaram os avisos" if t=="todos" else str(t),"quantidade":None,"porAparelho":True,"amostra":[],**({"aparelhos":{"todos":7,"app":3,"interesse":4}.get(t)} if avanc else {})}
         if push3 and a=="enviarPush":
             if not b.get("titulo") or not b.get("mensagem"): return {"ok":False,"erro":"Título e mensagem são obrigatórios."}
             if st["pushcfg"].get("falhar"): return {"ok":False,"erro":st["pushcfg"]["falhar"],"semAviso":["Caio Cliente"]}

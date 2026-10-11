@@ -624,3 +624,121 @@ async function criarPedidoApi(dados) {
 async function consultarPedidoApi(codigo, final4) {
   return apiPost({ action: 'consultarPedido', codigo: String(codigo || '').trim().toUpperCase(), final: soDigitos(final4).slice(-4) });
 }
+
+/* ====================================================================
+ * Aparelho ANÔNIMO (v3.5): quantos instalaram o app, quantos têm aviso ativo, de onde as pessoas vêm.
+ * O aparelho cria um código ALEATÓRIO (`tk_vid_v1`) e só conta o que ele é: abriu como app?, instalou?, aviso ativo?, interesses de aviso, de onde veio.
+ * NUNCA nome, telefone, endereço ou o que a pessoa digitou. Quem entrou na conta manda só o TOKEN de sessão (nunca a senha); o servidor calcula o código
+ * interno da conta (pushId) e a gestão passa a contar "avisos ativos por perfil/grupo". Sem o servidor 3.5 a chamada é simplesmente ignorada.
+ * ==================================================================== */
+const TKDisp = (function () {
+  const K_ID = 'tk_vid_v1', K_ESTADO = 'tk_disp_estado_v1', K_ENV = 'tk_disp_env_v1', K_CONTA = 'tk_disp_conta_v1', S_FONTE = 'tk_fonte_v1', S_PING = 'tk_disp_ping_v1';
+  const ESPERA_MIN = typeof window.TK_DISP_ESPERA_MS === 'number' ? window.TK_DISP_ESPERA_MS : 17000;   // o servidor ignora o MESMO aparelho repetido em menos de 15 s: juntamos tudo num envio só (os testes encurtam)
+  const ATRASO = typeof window.TK_DISP_ATRASO_MS === 'number' ? window.TK_DISP_ATRASO_MS : 1500;          // espera juntar vários avisos (instalou + aviso ativo + conta) num envio só
+  const RENOVAR = 6 * 3600 * 1000;   // sem mudança, avisa que o aparelho ainda existe no máximo de 6 em 6 horas
+  let idMem = '', timer = null, ultimoEnvio = 0;
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (v === null || v === undefined) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
+  function ssGet(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+  function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
+  function lerJson(k) { try { const o = JSON.parse(lsGet(k) || 'null'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
+
+  function id() {
+    if (idMem) return idMem;
+    const g = lsGet(K_ID);
+    if (g && /^[0-9a-f]{16,40}$/.test(g)) return (idMem = g);
+    let hex = '';
+    try { const a = new Uint8Array(12); crypto.getRandomValues(a); hex = Array.from(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); }
+    catch (e) { for (let i = 0; i < 24; i++) hex += Math.floor(Math.random() * 16).toString(16); }
+    lsSet(K_ID, hex);
+    return (idMem = hex);
+  }
+  function origem() {
+    try { return (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) ? 'app' : 'site'; } catch (e) { return 'site'; }
+  }
+  function aparelho() {
+    const ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+    if (/Android/i.test(ua)) return 'android';
+    if (/Windows|Macintosh|Linux|CrOS|X11/.test(ua)) return 'computador';
+    return 'outro';
+  }
+  /** De onde a pessoa veio (uma vez por visita): endereço com ?utm_source=/?fonte=, a página anterior ou o navegador de dentro do Instagram/Facebook/TikTok. */
+  function detectarFonte() {
+    const ua = navigator.userAgent || '';
+    let q; try { q = new URLSearchParams(location.search); } catch (e) { q = new URLSearchParams(''); }
+    const marca = String(q.get('utm_source') || q.get('fonte') || '').toLowerCase() + ' ' + (q.has('igshid') ? 'instagram' : '') + ' ' + (q.has('fbclid') ? 'facebook' : '') + ' ' + (q.has('gclid') ? 'google' : '');
+    let host = ''; try { host = document.referrer ? new URL(document.referrer).hostname.toLowerCase() : ''; } catch (e) {}
+    const mesmoSite = !!host && host === location.hostname;
+    const texto = marca + ' ' + (mesmoSite ? '' : host);
+    const mapa = [['instagram', /instagram|(^|[^a-z])ig([^a-z]|$)/], ['whatsapp', /whatsapp|wa\.me|(^|[^a-z])wa([^a-z]|$)/], ['facebook', /facebook|fb\.com|(^|[^a-z])fb([^a-z]|$)/],
+      ['tiktok', /tiktok|(^|[^a-z])tt([^a-z]|$)/], ['youtube', /youtube|youtu\.be/], ['google', /google/]];
+    for (let i = 0; i < mapa.length; i++) if (mapa[i][1].test(texto)) return mapa[i][0];
+    if (/Instagram/i.test(ua)) return 'instagram';
+    if (/FBAN|FBAV|FB_IAB/.test(ua)) return 'facebook';
+    if (/TikTok|musical_ly/i.test(ua)) return 'tiktok';
+    return (!host || mesmoSite) ? 'direto' : 'outro';
+  }
+  function fonte() {
+    let f = ssGet(S_FONTE);
+    if (!f) { f = detectarFonte(); ssSet(S_FONTE, f); }
+    return f;
+  }
+  /** O que acompanha cada evento do catálogo (visualização, WhatsApp, visita). */
+  function perfil() { return { visitante: id(), origem: origem(), dispositivo: aparelho(), fonte: fonte() }; }
+
+  function conta() {
+    const s = typeof getSessao === 'function' ? getSessao() : null;
+    return s && /^tk[12]\./.test(String(s.sessao)) ? s : null;     // só token de sessão (nunca senha)
+  }
+  function assinatura(estado) {
+    const s = conta();
+    return JSON.stringify([origem(), aparelho(), estado.instalou === true, estado.pushAtivo === true ? 1 : 0,        // "nunca teve aviso" e "não disse ainda" valem o mesmo: não gasta um envio só para dizer "não"
+      estado.novidades === true ? 1 : (estado.novidades === false ? 0 : -1), (estado.interesses || []).slice().sort().join(','), s ? String(s.sessao).slice(-8) : '']);
+  }
+  /** Conta o que mudou neste aparelho (instalou, aviso ativo, interesses, entrou/saiu da conta). Junta vários avisos num envio só e não repete o que já foi dito. */
+  function registrar(extra) {
+    try {
+      const estado = lerJson(K_ESTADO);
+      Object.keys(extra || {}).forEach(function (k) {
+        if (k === 'instalou') { if (extra[k] === true) estado.instalou = true; }
+        else if (k === 'pushAtivo' || k === 'novidades') { if (typeof extra[k] === 'boolean') estado[k] = extra[k]; }
+        else if (k === 'interesses') { if (Array.isArray(extra[k])) estado.interesses = extra[k].map(String).slice(0, 12); }
+      });
+      lsSet(K_ESTADO, JSON.stringify(estado));
+      const env = lerJson(K_ENV);
+      if (env.sig === assinatura(estado) && Date.now() - (env.t || 0) < RENOVAR) return;      // nada mudou
+      if (timer) return;
+      timer = setTimeout(enviar, Math.max(ATRASO, ultimoEnvio + ESPERA_MIN - Date.now()));
+    } catch (e) {}
+  }
+  function enviar() {
+    timer = null;
+    try {
+      const estado = lerJson(K_ESTADO), sig = assinatura(estado), s = conta();
+      const corpo = Object.assign({ action: 'dispositivo' }, perfil());
+      if (estado.instalou === true) corpo.instalou = true;
+      if (typeof estado.pushAtivo === 'boolean') corpo.pushAtivo = estado.pushAtivo;
+      if (typeof estado.novidades === 'boolean') corpo.novidades = estado.novidades;
+      if (Array.isArray(estado.interesses)) corpo.interesses = estado.interesses;
+      if (s) { corpo.whatsapp = s.whatsapp; corpo.sessao = s.sessao; lsSet(K_CONTA, '1'); }
+      else if (lsGet(K_CONTA) === '1') { corpo.logout = true; lsSet(K_CONTA, null); }       // saiu da conta: o servidor solta o aparelho da conta
+      ultimoEnvio = Date.now();
+      lsSet(K_ENV, JSON.stringify({ sig: sig, t: ultimoEnvio }));
+      apiPost(corpo);
+    } catch (e) {}
+  }
+  /** Uma vez por visita: "este aparelho existe e abriu o site/app". */
+  function ping() {
+    if (ssGet(S_PING)) return;
+    ssSet(S_PING, '1');
+    registrar({});
+  }
+  try {
+    window.addEventListener('tk:sessao', function () { registrar({}); });
+    window.addEventListener('storage', function (e) { if (e && e.key === SESSAO_CHAVE) registrar({}); });
+  } catch (e) {}
+  return { id: id, perfil: perfil, registrar: registrar, ping: ping, origem: origem, aparelho: aparelho, fonte: fonte };
+})();
+try { window.TKDisp = TKDisp; } catch (e) {}   // `const` no topo do arquivo não vira propriedade de window: push.js, pwa.js e index.html procuram por window.TKDisp

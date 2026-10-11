@@ -145,9 +145,22 @@
   ];
   const ETAPAS = [['novo', 'Novo'], ['em_atendimento', 'Em atendimento'], ['aguardando_pagamento', 'Aguardando pagamento'], ['separacao', 'Separando'], ['pronto', 'Pronto'], ['concluido', 'Concluído'], ['cancelado', 'Cancelado']];
 
+  /** "(5 · 2 com aviso)"; só "(5)" quando o servidor ainda não diz quem tem aviso ativo (backend anterior ao 3.5 parte 2). */
+  function cont(total, ativos) { return typeof ativos === 'number' ? '(' + total + ' · ' + ativos + ' com aviso)' : '(' + total + ')'; }
+  /** Quantos há em cada público, para aparecer ao lado do nome (igual à escolha de categoria do currículo). */
+  function contagemPublico(chave) {
+    const c = st.contas || {}, a = st.contasAtivas, ap = st.aparelhos;
+    const conta = (k) => (typeof c[k] === 'number' ? ' ' + cont(c[k], a ? a[k] : undefined) : '');
+    if (chave === 'todos') { const n = ap ? (ap.onesignal ? ap.onesignal.recebem : ap.ativos) : null; return typeof n === 'number' ? ' (' + n + ')' : ''; }
+    if (chave === 'app') return ap && typeof ap.ativosNoApp === 'number' ? ' (' + ap.ativosNoApp + ')' : '';
+    if (chave === 'g:contas') return conta('total');
+    if (chave.indexOf('g:') === 0) return conta(chave.slice(2));
+    return '';
+  }
+
   function telaEnviar() {
     const rascunho = telaEnviar.rascunho || {};
-    const opcoesPublico = PUBLICOS.filter((p) => p[0] !== 'segmento' || (st.segmentos && st.segmentos.length > 1)).map((p) => '<option value="' + p[0] + '">' + esc(p[1]) + '</option>').join('');
+    const opcoesPublico = PUBLICOS.filter((p) => p[0] !== 'segmento' || (st.segmentos && st.segmentos.length > 1)).map((p) => '<option value="' + p[0] + '">' + esc(p[1] + contagemPublico(p[0])) + '</option>').join('');
     const aviso = !st.chaveConfigurada || st.webPronto === false
       ? '<div class="av-aviso">⚠️ Os avisos ainda não estão prontos para chegar nos aparelhos. Veja a aba <b>⚙️ Preparar</b> (faltam passos no OneSignal).</div>' : '';
     $('av-corpo').innerHTML = aviso +
@@ -248,22 +261,22 @@
     const t = $('av-publico').value, sub = $('av-sub');
     let h = '';
     if (t === 'interesse') {
-      h = '<div class="av-chips" id="av-sub-interesses" role="group" aria-label="Interesses">' + (st.interesses || []).map((i) => '<button type="button" class="chip" data-int="' + esc(i.chave) + '" data-rot="' + esc(i.rotulo) + '" aria-pressed="false">' + esc(i.rotulo) + '</button>').join('') + '</div><p class="g-nota">Vai para quem marcou esses interesses no aparelho.</p>';
+      h = '<div class="av-chips" id="av-sub-interesses" role="group" aria-label="Interesses">' + (st.interesses || []).map((i) => '<button type="button" class="chip" data-int="' + esc(i.chave) + '" data-rot="' + esc(i.rotulo) + '" aria-pressed="false">' + esc(i.rotulo) + (typeof i.total === 'number' ? ' <small>(' + i.total + ')</small>' : '') + '</button>').join('') + '</div><p class="g-nota">Vai para quem marcou esses interesses no aparelho. O número é de aparelhos com aviso ativo que escolheram aquele interesse.</p>';
     } else if (t === 'perfil') {
-      h = (st.perfis || []).map((p) => '<label class="av-sel-linha"><input type="checkbox" data-perfil="' + esc(p.nome) + '"> ' + esc(p.nome) + ' <small>(' + p.total + ')</small></label>').join('') || '<p class="g-nota">Nenhum perfil cadastrado.</p>';
+      h = (st.perfis || []).map((p) => '<label class="av-sel-linha"><input type="checkbox" data-perfil="' + esc(p.nome) + '"> ' + esc(p.nome) + ' <small>' + cont(p.total, p.ativos) + '</small></label>').join('') || '<p class="g-nota">Nenhum perfil cadastrado.</p>';
     } else if (t === 'acesso') {
       let grupo = '';
       h = '<label class="av-sel-linha"><input type="radio" name="av-modo" value="qualquer" checked> Quem tem <b>qualquer um</b> dos marcados</label><label class="av-sel-linha"><input type="radio" name="av-modo" value="todas"> Quem tem <b>todos</b> os marcados</label>';
       (st.acessos || []).forEach((a) => {
         if (a.grupo !== grupo) { grupo = a.grupo; h += '<h3 style="margin:10px 0 2px;font-size:.8rem;color:#555">' + esc(grupo) + '</h3>'; }
-        h += '<label class="av-sel-linha"><input type="checkbox" data-acesso="' + esc(a.chave) + '"> ' + esc(a.rotulo) + ' <small>(' + a.total + ')</small></label>';
+        h += '<label class="av-sel-linha"><input type="checkbox" data-acesso="' + esc(a.chave) + '"> ' + esc(a.rotulo) + ' <small>' + cont(a.total, a.ativos) + '</small></label>';
       });
     } else if (t === 'pessoas') {
       h = '<label for="av-busca-pessoa">Buscar pelo nome ou final do telefone</label><input type="text" id="av-busca-pessoa" placeholder="Ex.: Maria" autocomplete="off"><ul class="av-lista" id="av-achadas"></ul><div class="av-chips" id="av-escolhidas"></div>';
     } else if (t === 'pedido') {
       h = '<label for="av-cod-pedido">Código do pedido</label><input type="text" id="av-cod-pedido" placeholder="PED-0001" autocomplete="off" autocapitalize="characters">';
     } else if (t === 'pedidos') {
-      h = '<label for="av-etapa">Etapa do pedido</label><select id="av-etapa">' + ETAPAS.map((e) => '<option value="' + e[0] + '">' + esc(e[1]) + '</option>').join('') + '</select>';
+      h = '<label for="av-etapa">Etapa do pedido</label><select id="av-etapa">' + ETAPAS.map((e) => '<option value="' + e[0] + '">' + esc(e[1]) + (st.etapas ? ' (' + (st.etapas[e[0]] || 0) + ')' : '') + '</option>').join('') + '</select><p class="g-nota">O número é de pedidos que estão nessa etapa agora.</p>';
     } else if (t === 'segmento') {
       h = '<label for="av-seg">Segmento</label><select id="av-seg">' + (st.segmentos || []).map((s) => '<option value="' + esc(s) + '">' + esc(s === 'Subscribed Users' ? 'Todos os assinantes' : s) + '</option>').join('') + '</select>';
     }
@@ -342,8 +355,8 @@
       const el2 = $('av-previa'); if (!el2) return;
       if (!r || !r.ok) { ultimaPrevia = null; el2.innerHTML = '<span class="av-erro">' + esc(erroTxt(r)) + '</span>'; return; }
       ultimaPrevia = r;
-      if (r.quantidade === null) el2.innerHTML = '👥 <b>' + esc(r.descricao) + '</b><br><span class="g-nota">Quem já ativou os avisos no aparelho. O número exato aparece no histórico depois de enviar.</span>';
-      else el2.innerHTML = '👥 <b>' + esc(r.descricao) + '</b>: ' + r.quantidade + ' pessoa(s)' + (r.amostra.length ? '<br><span class="g-nota">' + esc(r.amostra.join(', ')) + (r.quantidade > r.amostra.length ? ' e mais ' + (r.quantidade - r.amostra.length) : '') + '</span>' : '') +
+      if (r.quantidade === null) el2.innerHTML = '👥 <b>' + esc(r.descricao) + '</b>' + (typeof r.aparelhos === 'number' ? ': cerca de <b>' + r.aparelhos + '</b> aparelho(s) com aviso ativo' : '') + '<br><span class="g-nota">Quem já ativou os avisos no aparelho' + (typeof r.aparelhos === 'number' ? ' (contados pelo site; o número exato do OneSignal aparece no histórico depois de enviar)' : '. O número exato aparece no histórico depois de enviar') + '.</span>';
+      else el2.innerHTML = '👥 <b>' + esc(r.descricao) + '</b>: ' + r.quantidade + ' pessoa(s)' + (typeof r.comAviso === 'number' ? ', <b>' + r.comAviso + '</b> com aviso ativo agora' : '') + (r.amostra.length ? '<br><span class="g-nota">' + esc(r.amostra.join(', ')) + (r.quantidade > r.amostra.length ? ' e mais ' + (r.quantidade - r.amostra.length) : '') + '</span>' : '') +
         '<br><span class="g-nota">Só recebe quem entrou na conta e ativou os avisos no aparelho.</span>';
     }, 350);
   }
@@ -498,7 +511,10 @@
       '<div class="av-linha"><button type="button" class="av-sec" id="pr-verificar">🔄 Verificar de novo</button></div>' +
       item(aparelho === 'ativo' ? true : (aparelho === 'pendente' || aparelho === 'pausado' || aparelho === 'negado' ? false : null), '3. Este aparelho', esc(rotAparelho) + '<div class="av-linha"><button type="button" class="av-prim" id="pr-ativar">🔔 Ativar avisos neste aparelho</button><button type="button" class="av-sec" id="pr-teste-local">Mostrar notificação de teste</button></div>' +
         '<div class="g-nota">Entre com sua conta (WhatsApp e senha) antes de ativar: é assim que os avisos de equipe e de novos pedidos chegam até você.</div>') +
-      item(null, '4. Quem pode receber', 'Contas ativas: <b>' + c.total + '</b> — equipe ' + c.equipe + ', alunos ' + c.alunos + ', portal ' + c.portal + ', clientes ' + c.clientes + '.<br>Cada pessoa só recebe depois de <b>entrar na conta e tocar em “Ativar avisos”</b> no próprio aparelho (o celular exige esse toque). Os avisos para “todos” alcançam também quem não tem conta.') +
+      item(null, '4. Quem pode receber', 'Contas ativas: <b>' + c.total + '</b> — equipe ' + c.equipe + ', alunos ' + c.alunos + ', portal ' + c.portal + ', clientes ' + c.clientes + '.' +
+        (st.contasAtivas ? '<br>Com aviso ativo agora: <b>' + st.contasAtivas.total + '</b> — equipe ' + st.contasAtivas.equipe + ', alunos ' + st.contasAtivas.alunos + ', portal ' + st.contasAtivas.portal + ', clientes ' + st.contasAtivas.clientes + '.' : '') +
+        (st.aparelhos ? '<br>Aparelhos: <b>' + st.aparelhos.ativos + '</b> com aviso ativo (' + st.aparelhos.ativosNoApp + ' no app), <b>' + st.aparelhos.instalaram + '</b> instalaram o app' + (st.aparelhos.onesignal ? '; no OneSignal <b>' + st.aparelhos.onesignal.recebem + '</b> recebem avisos (de ' + st.aparelhos.onesignal.inscritos + ' inscritos)' : '') + '.' : '') +
+        '<br>Cada pessoa só recebe depois de <b>entrar na conta e tocar em “Ativar avisos”</b> no próprio aparelho (o celular exige esse toque). Os avisos para “todos” alcançam também quem não tem conta.') +
       '<div class="av-bloco"><h3>Avisos automáticos</h3>' +
         '<label class="av-sel-linha"><input type="checkbox" id="pr-auto-novo" ' + (st.autoNovoPedido ? 'checked' : '') + '> A equipe é avisada a cada <b>pedido novo</b></label>' +
         '<label class="av-sel-linha"><input type="checkbox" id="pr-auto-etapa" ' + (st.autoPedido ? 'checked' : '') + '> O cliente é avisado quando a <b>etapa do pedido</b> muda</label>' +

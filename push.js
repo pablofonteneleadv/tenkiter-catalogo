@@ -70,6 +70,16 @@
   function mudou() {
     ouvintes.slice().forEach(function (f) { try { f(est, resumo()); } catch (e) {} });
     atualizarBotaoTopo();
+    informarPainel();
+  }
+  /** Conta (de forma anônima, sem nome nem telefone) se este aparelho está com aviso ativo e quais interesses escolheu: alimenta "avisos ativos" na gestão. */
+  function informarPainel() {
+    try {
+      if (!window.TKDisp || est.sdk !== 'pronto') return;      // antes do SDK ficar pronto não se sabe o estado real: não diz nada
+      var p = prefs(), extra = { pushAtivo: resumo() === 'ativo', interesses: p.int || [] };
+      if (typeof p.novidades === 'boolean') extra.novidades = p.novidades;
+      TKDisp.registrar(extra);
+    } catch (e) {}
   }
   function lerEstado() {
     est.permissao = lerPermissao();
@@ -187,11 +197,12 @@
       try { OS.User.addTags(t); gravarLS(K_TAGS, { a: assinatura }); } catch (e) {}
     });
   }
-  function salvarPrefs(p) { gravarLS(K_PREFS, p); gravarLS(K_TAGS, null); return marcar(); }
+  function salvarPrefs(p) { gravarLS(K_PREFS, p); gravarLS(K_TAGS, null); informarPainel(); return marcar(); }
   function definirNovidades(ligado) {
     var p = prefs(); p.novidades = !!ligado; gravarLS(K_PREFS, p);
     try { if (OS) OS.User.addTag('av_novidades', ligado ? '1' : '0'); } catch (e) {}
     gravarLS(K_TAGS, null);
+    informarPainel();
   }
   function definirInteresse(chave, ligado) {
     var p = prefs(); p.int = (p.int || []).filter(function (k) { return k !== chave; });
@@ -199,6 +210,7 @@
     gravarLS(K_PREFS, p);
     try { if (OS) { if (ligado) OS.User.addTag('int_' + chave, '1'); else OS.User.removeTag('int_' + chave); } } catch (e) {}
     gravarLS(K_TAGS, null);
+    informarPainel();
   }
 
   /* ---------------------------------------------------------------- pedidos: o aparelho acompanha cada pedido (apelido ped_0001) */

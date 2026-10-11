@@ -170,7 +170,7 @@
   }
   function formatarDiaCurto_(iso) { const p = String(iso).split('-'); return p.length === 3 ? p[2] + '/' + p[1] : iso; }
 
-  async function abrirMetricas_(dias) {
+  async function abrirMetricasSimples_(dias) {          // servidor sem metricasAvancadas (3.4 ou anterior): a tela de sempre
     diasMetricas = dias || diasMetricas;
     abrirFolha_('📊 Números reais da loja', '<p class="g-info">Carregando…</p>');
     const r = await chamar_({ action: 'metricas', dias: diasMetricas });
@@ -200,6 +200,244 @@
     if (etapas.length) h += '<h3>Pedidos por etapa</h3><p class="g-info">' + etapas.map((k) => esc(rotuloEtapa_(k, '')) + ': <b>' + ped.porStatus[k] + '</b>').join(' · ') + '</p>';
     h += '<p class="g-nota">Atualizado em ' + esc(r.geradoEm) + '. Os números ficam guardados por até 2 minutos.</p>';
     $('gestao-corpo').innerHTML = h;
+  }
+
+
+  /* ====================================================================
+   * NÚMEROS REAIS COM FILTROS (v3.5, só com a bandeira metricasAvancadas)
+   * Período (dias ou datas), horário (OPCIONAL, pode virar a meia-noite), dias da semana, como usaram (app/navegador), aparelho, de onde vieram,
+   * categoria e gênero. Os filtros se combinam e cada mudança busca os números de novo. Tudo é contado a partir dos eventos reais da loja.
+   * ==================================================================== */
+  const MT_PADRAO = () => ({ dias: 30, de: '', ate: '', horaOn: false, horaDe: 9, horaAte: 18, sem: [], origem: '', dispositivo: '', fonte: '', categoria: '', genero: '' });
+  let mt = MT_PADRAO(), mtSeq = 0, mtTimer = null, mtOpcoesFeitas = false;
+  const MT_DIAS_SEM = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const MT_ORIGENS = [['', 'Todos'], ['app', 'App instalado'], ['site', 'Navegador'], ['nao_informado', 'Não informado']];
+  const MT_DISPOSITIVOS = [['', 'Todos'], ['android', 'Android'], ['ios', 'iPhone / iPad'], ['computador', 'Computador'], ['outro', 'Outro'], ['nao_informado', 'Não informado']];
+  const MT_FONTES = [['', 'Todos'], ['instagram', 'Instagram'], ['whatsapp', 'WhatsApp'], ['facebook', 'Facebook'], ['google', 'Google'], ['tiktok', 'TikTok'], ['youtube', 'YouTube'], ['direto', 'Direto (link sem origem, digitado ou app)'], ['outro', 'Outros sites'], ['nao_informado', 'Não informado']];
+
+  function mtIso_(d) { return d.getFullYear() + '-' + dois_(d.getMonth() + 1) + '-' + dois_(d.getDate()); }
+  function mtCorpo_() {
+    const c = { action: 'metricas' };
+    if (mt.de && mt.ate) { c.de = mt.de; c.ate = mt.ate; } else c.dias = mt.dias;
+    if (mt.horaOn) { c.horaDe = mt.horaDe; c.horaAte = mt.horaAte; }
+    if (mt.sem.length && mt.sem.length < 7) c.diasSemana = mt.sem.slice();
+    ['origem', 'dispositivo', 'fonte', 'categoria', 'genero'].forEach((k) => { if (mt[k]) c[k] = mt[k]; });
+    return c;
+  }
+  function mtQuantosFiltros_() {
+    let n = 0;
+    if (mt.de || mt.dias !== 30) n++;
+    if (mt.horaOn) n++;
+    if (mt.sem.length && mt.sem.length < 7) n++;
+    ['origem', 'dispositivo', 'fonte', 'categoria', 'genero'].forEach((k) => { if (mt[k]) n++; });
+    return n;
+  }
+  function mtOpcoesHtml_(lista, atual) { return lista.map((o) => '<option value="' + esc(o[0]) + '"' + (o[0] === atual ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join(''); }
+  function mtHorasHtml_(ate, atual) {
+    let h = '';
+    for (let i = 0; i < 24; i++) h += '<option value="' + i + '"' + (i === atual ? ' selected' : '') + '>' + i + (ate ? 'h59' : 'h') + '</option>';
+    return h;
+  }
+
+  function mtFiltrosHtml_() {
+    return '<details class="g-det mt-filtros" id="mt-det"><summary>🎚️ Filtros <span id="mt-nfiltros"></span><span class="mt-sum-res" id="mt-sum-res"></span><small class="mt-dica">período, horário, dia da semana, origem, aparelho…</small></summary>' +
+      '<p class="mt-rot">Período</p>' +
+      '<div class="mt-chips" role="group" aria-label="Período">' + [7, 30, 90].map((n) => '<button type="button" class="chip" data-mt-dias="' + n + '" aria-pressed="false">' + n + ' dias</button>').join('') +
+      '<button type="button" class="chip" id="mt-datas-btn" aria-pressed="false">📅 Escolher datas</button></div>' +
+      '<div class="form-linha" id="mt-datas" hidden><div><label for="mt-de">De</label><input type="date" id="mt-de"></div><div><label for="mt-ate">Até</label><input type="date" id="mt-ate"></div></div>' +
+      '<p class="g-erro" id="mt-erro-datas" role="alert" hidden></p>' +
+      '<p class="mt-rot">Horário do dia <small>(opcional)</small></p>' +
+      '<label class="mt-check" for="mt-hora-on"><input type="checkbox" id="mt-hora-on"> Filtrar por horário</label>' +
+      '<div class="form-linha" id="mt-horas" hidden><div><label for="mt-hora-de">Das</label><select id="mt-hora-de">' + mtHorasHtml_(false, mt.horaDe) + '</select></div>' +
+      '<div><label for="mt-hora-ate">Até</label><select id="mt-hora-ate">' + mtHorasHtml_(true, mt.horaAte) + '</select></div></div>' +
+      '<p class="g-nota" id="mt-horas-nota" hidden>Vale o horário de Fortaleza. Para a noite que passa da meia-noite escolha, por exemplo, das 22h até 2h59.</p>' +
+      '<p class="mt-rot">Dias da semana <small>(nenhum marcado = todos)</small></p>' +
+      '<div class="mt-chips" role="group" aria-label="Dias da semana">' + MT_DIAS_SEM.map((n, i) => '<button type="button" class="chip" data-mt-sem="' + i + '" aria-pressed="false">' + n + '</button>').join('') + '</div>' +
+      '<div class="form-linha"><div><label for="mt-origem">Como usaram</label><select id="mt-origem">' + mtOpcoesHtml_(MT_ORIGENS, mt.origem) + '</select></div>' +
+      '<div><label for="mt-dispositivo">Aparelho</label><select id="mt-dispositivo">' + mtOpcoesHtml_(MT_DISPOSITIVOS, mt.dispositivo) + '</select></div></div>' +
+      '<div class="form-linha"><div><label for="mt-fonte">Veio de</label><select id="mt-fonte">' + mtOpcoesHtml_(MT_FONTES, mt.fonte) + '</select></div>' +
+      '<div><label for="mt-categoria">Categoria da peça</label><select id="mt-categoria"><option value="">Todas</option></select></div></div>' +
+      '<div class="form-linha"><div><label for="mt-genero">Para quem é</label><select id="mt-genero"><option value="">Todos</option></select></div><div></div></div>' +
+      '<div class="g-linha"><button type="button" id="mt-limpar" class="g-sec">Limpar filtros</button></div>' +
+      '</details>';
+  }
+  /** Põe na tela o que está em `mt` (sem refazer o bloco, para o foco não pular). */
+  function mtAtualizarFiltros_() {
+    document.querySelectorAll('[data-mt-dias]').forEach((b) => { const on = !mt.de && mt.dias === Number(b.dataset.mtDias); b.classList.toggle('selecionado', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    const bd = $('mt-datas-btn'); if (bd) { bd.classList.toggle('selecionado', !!mt.de); bd.setAttribute('aria-pressed', mt.de ? 'true' : 'false'); }
+    if ($('mt-datas')) { $('mt-datas').hidden = !mt.de; $('mt-de').value = mt.de; $('mt-ate').value = mt.ate; const hoje = mtIso_(new Date()); $('mt-de').max = hoje; $('mt-ate').max = hoje; }
+    if ($('mt-hora-on')) { $('mt-hora-on').checked = mt.horaOn; $('mt-horas').hidden = !mt.horaOn; $('mt-horas-nota').hidden = !mt.horaOn; $('mt-hora-de').value = String(mt.horaDe); $('mt-hora-ate').value = String(mt.horaAte); }
+    document.querySelectorAll('[data-mt-sem]').forEach((b) => { const on = mt.sem.indexOf(Number(b.dataset.mtSem)) !== -1; b.classList.toggle('selecionado', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    ['origem', 'dispositivo', 'fonte', 'categoria', 'genero'].forEach((k) => { const el = $('mt-' + k); if (el) el.value = mt[k]; });
+    const n = mtQuantosFiltros_(); const sp = $('mt-nfiltros'); if (sp) sp.textContent = n ? '(' + n + ' ativo' + (n === 1 ? '' : 's') + ')' : '';
+    const lim = $('mt-limpar'); if (lim) lim.disabled = !n;
+  }
+  function mtPreencherOpcoes_(op) {
+    if (!op || mtOpcoesFeitas) return;
+    const preencher = (id, lista, atual, todas) => {
+      const el = $(id); if (!el) return;
+      const itens = (lista || []).slice();
+      if (atual && itens.indexOf(atual) === -1) itens.unshift(atual);
+      el.innerHTML = '<option value="">' + todas + '</option>' + itens.map((x) => '<option value="' + esc(x) + '"' + (x === atual ? ' selected' : '') + '>' + esc(x) + '</option>').join('');
+    };
+    preencher('mt-categoria', op.categorias, mt.categoria, 'Todas'); preencher('mt-genero', op.generos, mt.genero, 'Todos');
+    mtOpcoesFeitas = true;
+  }
+  /** Muda o estado, atualiza os filtros na tela e busca de novo (um pouquinho depois, para juntar vários toques). */
+  function mtDefinir_(parte, agora) {
+    Object.assign(mt, parte);
+    mtAtualizarFiltros_();
+    clearTimeout(mtTimer);
+    mtTimer = setTimeout(carregarMetricas_, agora ? 0 : 250);
+  }
+  function mtErroDatas_(msg) { const e = $('mt-erro-datas'); if (e) { e.hidden = !msg; e.textContent = msg || ''; } }
+
+  function mtNum_(v) { return Number(v || 0).toLocaleString('pt-BR'); }
+  function mtPct_(v) { return v === null || v === undefined ? '—' : String(v).replace('.', ',') + '%'; }
+  function mtCartao_(rotulo, valor, pequeno) { return '<div class="mt-card"><span>' + rotulo + '</span><strong>' + valor + '</strong>' + (pequeno ? '<small>' + pequeno + '</small>' : '') + '</div>'; }
+  function mtColuna_(rotulo, valor, max, dica) {
+    const h = max ? Math.max(2, Math.round((valor / max) * 100)) : 2;
+    return '<div class="mt-col" title="' + esc(dica || rotulo) + '"><div class="mt-barra" style="height:' + h + '%"></div></div>';
+  }
+  function mtTabela_(titulo, linhas, opts) {
+    opts = opts || {};
+    if (!linhas.length) return '<h3>' + titulo + '</h3><p class="g-info">Sem dados neste recorte.</p>';
+    const filtravel = opts.filtro;
+    const nome = (x) => filtravel && x.chave ? '<button type="button" class="mt-link" data-mt-set="' + filtravel + '" data-v="' + esc(x.chave) + '" aria-label="Filtrar só por ' + esc(x.nome) + '">' + esc(x.nome) + '</button>' : esc(x.nome);
+    return '<h3>' + titulo + '</h3><table class="mt-tab"><thead><tr><th>' + (opts.cab || 'Item') + '</th><th>Vistas</th><th>WhatsApp</th>' + (opts.pessoas ? '<th>Pessoas</th>' : '<th>Taxa</th>') + '</tr></thead><tbody>' +
+      linhas.map((x) => '<tr><td>' + nome(x) + '</td><td>' + mtNum_(x.visualizacoes) + '</td><td>' + mtNum_(x.whatsapp) + '</td><td>' + (opts.pessoas ? (x.visitantes === undefined ? '—' : mtNum_(x.visitantes)) : mtPct_(x.taxa)) + '</td></tr>').join('') + '</tbody></table>' +
+      (filtravel ? '<p class="g-nota">Toque no nome para ver só aquele grupo.</p>' : '');
+  }
+
+  function desenharMetricasAvancadas_(r) {
+    const t = r.totais, ped = r.pedidos, ap = r.aparelhos || {}, cob = r.cobertura || {}, fun = r.funil || {};
+    const temVis = cob.comVisitante > 0;
+    let h = '<p class="mt-resumo">Mostrando: <b>' + esc(r.filtrosDescricao) + '</b></p>';
+    if (r.semDados) h += '<p class="g-info">Nada neste recorte. ' + (r.filtrado ? 'Experimente tirar algum filtro.' : 'Os números aparecem conforme as pessoas usam o catálogo.') + '</p>';
+    h += '<div class="mt-cards">' +
+      mtCartao_('👤 Pessoas que entraram', temVis ? mtNum_(t.visitantes) : '—', temVis ? 'aparelhos diferentes' : 'conta a partir da atualização') +
+      mtCartao_('👁️ Visualizações de peças', mtNum_(t.visualizacoes)) +
+      mtCartao_('💬 Toques em “Pedir no WhatsApp”', mtNum_(t.whatsapp)) +
+      mtCartao_('📈 Toques por 100 visualizações', t.whatsappPor100Visualizacoes === null ? '—' : String(t.whatsappPor100Visualizacoes).replace('.', ',')) +
+      mtCartao_('🧾 Pedidos pelo site', mtNum_(ped.total), formatarReal(ped.valor) + ' à vista (sem cancelados)') +
+      (t.visitas ? mtCartao_('🚪 Visitas à loja', mtNum_(t.visitas), 'quantas vezes abriram o site') : '') + '</div>';
+    h += '<p class="g-nota">Toque no WhatsApp não é venda confirmada: é a pessoa que pediu para falar com a loja. Venda confirmada é o pedido marcado como “Concluído”' + (ped.concluidos ? ' (' + ped.concluidos + ' no período, ' + formatarReal(ped.valorConcluidos) + ')' : '') + '.</p>';
+
+    // ---- aparelhos e avisos (estado de agora; só "instalaram no período" segue o período)
+    h += '<h3>📲 Aparelhos e avisos</h3>';
+    if (!ap.total) h += '<p class="g-info">Ainda nenhum aparelho se registrou. Eles aparecem conforme as pessoas voltam ao site depois da atualização.</p>';
+    else {
+      h += '<div class="mt-cards">' +
+        mtCartao_('📲 Instalaram o app', mtNum_(ap.instalaram), (r.filtros && (r.filtros.de || r.filtros.dias !== 30)) ? 'neste período: ' + mtNum_(ap.instalaramNoPeriodo) : 'abriram como app no período: ' + mtNum_(ap.usaramAppNoPeriodo)) +
+        mtCartao_('🔔 Com aviso ativo', mtNum_(ap.pushAtivos), mtNum_(ap.pushAtivosNoApp) + ' no app instalado') +
+        (ap.onesignal ? mtCartao_('📡 Recebem aviso (OneSignal)', mtNum_(ap.onesignal.recebem), 'de ' + mtNum_(ap.onesignal.inscritos) + ' inscritos — total real') : '') +
+        mtCartao_('🔗 Aviso ligado a uma conta', mtNum_(ap.comConta), 'equipe, alunos e clientes com login') + '</div>';
+      const pl = ap.porPlataforma || {};
+      h += '<p class="g-info">Com aviso ativo: Android <b>' + mtNum_(pl.android) + '</b> · iPhone/iPad <b>' + mtNum_(pl.ios) + '</b> · Computador <b>' + mtNum_(pl.computador) + '</b>' + (pl.outro ? ' · Outros <b>' + mtNum_(pl.outro) + '</b>' : '') + '</p>';
+    }
+    h += '<p class="g-nota">Contagem anônima (um código aleatório por aparelho, sem nome nem telefone)' + (ap.desde ? ', desde ' + esc(ap.desde) : '') + '. Cada aparelho entra na conta quando a pessoa abre o site de novo.' +
+      (ap.onesignal ? '' : (recursos.conexoesOnesignal ? ' Para ver também o total real do OneSignal, guarde a chave em <b>Gestão → Conexões → OneSignal</b>.' : '')) + '</p>';
+
+    // ---- funil
+    const linhasFunil = [];
+    if (temVis) linhasFunil.push(['👤 Pessoas que entraram', fun.visitantes]);
+    linhasFunil.push(['👁️ Viram peças (visualizações)', fun.visualizacoes], ['💬 Tocaram em pedir no WhatsApp', fun.whatsapp], ['🧾 Fizeram pedido pelo site', fun.pedidos]);
+    const maxF = linhasFunil.reduce((m, l) => Math.max(m, l[1] || 0), 0);
+    h += '<h3>🔻 Do acesso ao pedido</h3><div class="mt-funil">' + linhasFunil.map((l) =>
+      '<div class="mt-funil-l"><span>' + l[0] + '</span><b>' + mtNum_(l[1]) + '</b></div><div class="mt-trilho" aria-hidden="true"><div class="mt-fbarra" style="width:' + (maxF ? Math.max(1, Math.round(((l[1] || 0) / maxF) * 100)) : 0) + '%"></div></div>').join('') + '</div>';
+
+    // ---- por dia
+    const max = r.porDia.reduce((m, d) => Math.max(m, d.visualizacoes), 0);
+    const melhor = r.porDia.reduce((m, d) => (d.visualizacoes > (m ? m.visualizacoes : -1) ? d : m), null);
+    h += '<h3>Visualizações por dia</h3><div class="mt-grafico" role="img" aria-label="Gráfico de visualizações por dia, ' + r.porDia.length + ' dias' + (melhor && melhor.visualizacoes ? '. Melhor dia: ' + formatarDiaCurto_(melhor.dia) + ' com ' + melhor.visualizacoes + ' visualizações' : '') + '">' + r.porDia.map((d) => barraDia_(d, max)).join('') + '</div>' +
+      '<div class="mt-eixo"><span>' + formatarDiaCurto_(r.porDia[0].dia) + '</span><span>' + (melhor && melhor.visualizacoes ? 'Melhor dia: ' + formatarDiaCurto_(melhor.dia) + ' (' + melhor.visualizacoes + ')' : '') + '</span><span>' + formatarDiaCurto_(r.porDia[r.porDia.length - 1].dia) + '</span></div>';
+
+    // ---- por hora
+    const maxH = r.porHora.reduce((m, x) => Math.max(m, x.visualizacoes), 0);
+    const melhorH = r.porHora.reduce((m, x) => (x.visualizacoes > (m ? m.visualizacoes : -1) ? x : m), null);
+    h += '<h3>Por horário do dia</h3><div class="mt-grafico" role="img" aria-label="Gráfico de visualizações por hora do dia' + (melhorH && melhorH.visualizacoes ? '. Horário mais movimentado: ' + melhorH.hora + ' horas, com ' + melhorH.visualizacoes + ' visualizações' : '') + '">' +
+      r.porHora.map((x) => mtColuna_(x.hora + 'h', x.visualizacoes, maxH, x.hora + 'h: ' + x.visualizacoes + ' visualizações, ' + x.whatsapp + ' toques no WhatsApp')).join('') + '</div>' +
+      '<div class="mt-eixo"><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>23h</span></div>' +
+      (melhorH && melhorH.visualizacoes ? '<p class="g-info">Horário mais movimentado: <b>' + melhorH.hora + 'h</b> (' + mtNum_(melhorH.visualizacoes) + ' visualizações).</p>' : '');
+
+    // ---- por dia da semana
+    const maxS = r.porDiaSemana.reduce((m, x) => Math.max(m, x.visualizacoes), 0);
+    const melhorS = r.porDiaSemana.reduce((m, x) => (x.visualizacoes > (m ? m.visualizacoes : -1) ? x : m), null);
+    h += '<h3>Por dia da semana</h3><div class="mt-grafico" role="img" aria-label="Gráfico de visualizações por dia da semana' + (melhorS && melhorS.visualizacoes ? '. Dia mais movimentado: ' + melhorS.nome : '') + '">' +
+      r.porDiaSemana.map((x) => mtColuna_(x.nome, x.visualizacoes, maxS, x.nome + ': ' + x.visualizacoes + ' visualizações, ' + x.whatsapp + ' toques no WhatsApp')).join('') + '</div>' +
+      '<div class="mt-semana">' + r.porDiaSemana.map((x) => '<span>' + MT_DIAS_SEM[x.dia] + '<b>' + mtNum_(x.visualizacoes) + '</b></span>').join('') + '</div>';
+
+    // ---- tabelas
+    h += mtTabela_('Como usaram', r.porOrigem, { cab: 'Como', pessoas: true, filtro: 'origem' });
+    h += mtTabela_('Aparelho', r.porDispositivo, { cab: 'Aparelho', pessoas: true, filtro: 'dispositivo' });
+    h += mtTabela_('De onde vieram', r.porFonte, { cab: 'Origem', pessoas: true, filtro: 'fonte' });
+    h += '<h3>Peças mais vistas</h3>';
+    h += r.topProdutos.length ? '<table class="mt-tab"><thead><tr><th>Peça</th><th>Vistas</th><th>WhatsApp</th><th>Taxa</th></tr></thead><tbody>' +
+      r.topProdutos.map((x) => '<tr><td><b>' + esc(x.codigo || '') + '</b> ' + esc(x.nome) + '</td><td>' + mtNum_(x.visualizacoes) + '</td><td>' + mtNum_(x.whatsapp) + '</td><td>' + mtPct_(x.taxa) + '</td></tr>').join('') + '</tbody></table>' : '<p class="g-info">Sem dados neste recorte.</p>';
+    h += mtTabela_('Por categoria', r.categorias.map((x) => Object.assign({ chave: x.nome }, x)), { cab: 'Categoria', filtro: 'categoria' });
+    h += mtTabela_('Para quem é', r.porGenero.map((x) => Object.assign({ chave: x.nome }, x)), { cab: 'Para quem', filtro: 'genero' });
+    const etapas = Object.keys(ped.porStatus || {});
+    if (etapas.length) h += '<h3>Pedidos por etapa</h3><p class="g-info">' + etapas.map((k) => esc(rotuloEtapa_(k, '')) + ': <b>' + ped.porStatus[k] + '</b>').join(' · ') + '</p>';
+    if (cob.eventos) h += '<p class="g-nota">Como usaram, aparelho e “veio de” só existem para o que aconteceu a partir de ' + (cob.desde ? esc(cob.desde) : 'a atualização') + ' (' + mtNum_(cob.comVisitante) + ' de ' + mtNum_(cob.eventos) + ' registros do recorte têm esses dados); o resto aparece como “Não informado”. Pedidos seguem o período, o horário e o dia da semana, mas não as outras escolhas.</p>';
+    h += '<p class="g-nota">Atualizado em ' + esc(r.geradoEm) + '. Os números ficam guardados por até 2 minutos.</p>';
+    return h;
+  }
+
+  async function carregarMetricas_() {
+    const alvo = $('mt-resultado'); if (!alvo) return;
+    mtErroDatas_('');
+    if (mt.de || mt.ate) {   // datas incompletas ou erradas: explica em vez de chamar o servidor
+      if (!mt.de || !mt.ate) return;
+      if (mt.ate < mt.de) { mtErroDatas_('A data final precisa ser igual ou depois da inicial.'); return; }
+      if ((new Date(mt.ate + 'T12:00:00') - new Date(mt.de + 'T12:00:00')) / 86400000 > 365) { mtErroDatas_('O período pode ter no máximo 1 ano.'); return; }
+    }
+    const meu = ++mtSeq;
+    alvo.setAttribute('aria-busy', 'true'); alvo.classList.add('mt-carregando');
+    const r = await chamar_(mtCorpo_());
+    if (meu !== mtSeq || !$('mt-resultado')) return;     // chegou uma resposta velha (a pessoa já mudou o filtro) ou a janela fechou
+    alvo.removeAttribute('aria-busy'); alvo.classList.remove('mt-carregando');
+    if (!r || !r.ok) { alvo.innerHTML = '<p class="g-erro">' + esc(erroTexto_(r)) + '</p>'; return; }
+    mtPreencherOpcoes_(r.opcoes);
+    alvo.innerHTML = desenharMetricasAvancadas_(r);
+    const sr = $('mt-sum-res'); if (sr) sr.textContent = ' · ' + mtNum_(r.totais.visualizacoes) + ' visualizações · ' + mtNum_(r.totais.whatsapp) + ' no WhatsApp';   // aparece mesmo com os filtros recolhidos
+  }
+  function abrirMetricas_(dias) {
+    if (!recursos.metricasAvancadas) { abrirMetricasSimples_(dias); return; }
+    mt = MT_PADRAO(); mtOpcoesFeitas = false; if (dias) mt.dias = dias;
+    abrirFolha_('📊 Números reais da loja', mtFiltrosHtml_() + '<div id="mt-resultado" aria-live="off"><p class="g-info">Carregando…</p></div>');
+    mtAtualizarFiltros_();
+    carregarMetricas_();
+  }
+  function ligarMetricas_() {
+    const corpo = $('gestao-corpo');
+    corpo.addEventListener('click', (ev) => {
+      if (!$('mt-resultado')) return;
+      const d = ev.target.closest('[data-mt-dias]');
+      if (d) { mtDefinir_({ dias: Number(d.dataset.mtDias), de: '', ate: '' }, true); return; }
+      if (ev.target.closest('#mt-datas-btn')) {
+        if (mt.de) { mtDefinir_({ de: '', ate: '' }, true); return; }
+        const fim = new Date(), ini = new Date(Date.now() - 6 * 86400000);
+        mtDefinir_({ de: mtIso_(ini), ate: mtIso_(fim) }, true); return;
+      }
+      const w = ev.target.closest('[data-mt-sem]');
+      if (w) {
+        const n = Number(w.dataset.mtSem), i = mt.sem.indexOf(n);
+        const nova = mt.sem.slice(); if (i === -1) nova.push(n); else nova.splice(i, 1);
+        mtDefinir_({ sem: nova.sort() }); return;
+      }
+      const s = ev.target.closest('[data-mt-set]');
+      if (s) { const k = s.dataset.mtSet; mtDefinir_({ [k]: mt[k] === s.dataset.v ? '' : s.dataset.v }, true); return; }
+      if (ev.target.closest('#mt-limpar')) { const op = mtOpcoesFeitas; mt = MT_PADRAO(); mtOpcoesFeitas = op; mtDefinir_({}, true); }
+    });
+    corpo.addEventListener('change', (ev) => {
+      const el = ev.target; if (!el.id || el.id.indexOf('mt-') !== 0 || !$('mt-resultado')) return;
+      if (el.id === 'mt-de') mtDefinir_({ de: el.value });
+      else if (el.id === 'mt-ate') mtDefinir_({ ate: el.value });
+      else if (el.id === 'mt-hora-on') mtDefinir_({ horaOn: el.checked }, true);
+      else if (el.id === 'mt-hora-de') mtDefinir_({ horaDe: Number(el.value) });
+      else if (el.id === 'mt-hora-ate') mtDefinir_({ horaAte: Number(el.value) });
+      else { const k = el.id.slice(3); if (['origem', 'dispositivo', 'fonte', 'categoria', 'genero'].indexOf(k) !== -1) mtDefinir_({ [k]: el.value }, true); }
+    });
   }
 
   /* ====================================================================
@@ -486,7 +724,8 @@
 
   (async function iniciar() {
     $('gestao-fechar').addEventListener('click', fecharFolha_);
-    $('gestao-corpo').addEventListener('click', (ev) => { const m = ev.target.closest('[data-mt-dias]'); if (m) abrirMetricas_(Number(m.dataset.mtDias)); });
+    $('gestao-corpo').addEventListener('click', (ev) => { if ($('mt-resultado')) return; const m = ev.target.closest('[data-mt-dias]'); if (m) abrirMetricasSimples_(Number(m.dataset.mtDias)); });   // tela simples (servidor sem filtros)
+    ligarMetricas_();
     $('aviso-codigos').addEventListener('click', (ev) => { if (ev.target.closest('#btn-gerar-codigos')) gerarCodigos_(); });
     $('btn-exportar-csv').addEventListener('click', exportarCsv_);
     $('btn-importar-csv').addEventListener('click', telaImportar_);

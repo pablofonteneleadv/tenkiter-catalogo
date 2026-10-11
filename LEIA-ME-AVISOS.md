@@ -65,7 +65,7 @@ Opcionais (só se quiser):
 1. Abra `catalogo-codigo-3.5.gs.txt`, selecione **tudo**, copie.
 2. Apps Script do catálogo → apague o código antigo, cole o novo, **Salvar**.
 3. **Implantar → Gerenciar implantações → ✏️ → Versão: Nova versão → Implantar.**
-4. Confira no navegador: `<sua URL do script>?action=versao` tem que mostrar `"versao":"catalogo-3.5"`, `"pushCompleto":true`, `"categoriasGestao":true`, `"conexoes":true` e `"conexoesOnesignal":true`.
+4. Confira no navegador: `<sua URL do script>?action=versao` tem que mostrar `"versao":"catalogo-3.5"`, `"pushCompleto":true`, `"categoriasGestao":true`, `"conexoes":true`, `"conexoesOnesignal":true`, `"metricasAvancadas":true` e `"dispositivos":true`.
 
 O 3.5 já inclui tudo do 3.2 (categorias), do 3.3 (avisos completos) e do 3.4 (Conexões) — não precisa colar os anteriores antes. O Apps Script de **funcionários não muda** (`funcionario-codigo-3.0.gs.txt`).
 
@@ -97,6 +97,9 @@ O 3.5 já inclui tudo do 3.2 (categorias), do 3.3 (avisos completos) e do 3.4 (C
 - **📜 Histórico:** quando e quem enviou, para quem, **entregues / cliques / falhas** (o OneSignal leva alguns minutos para fechar a conta),
   **cancelar** aviso agendado e **usar de novo**.
 - **🧩 Modelos:** crie, edite e apague seus próprios modelos (aparecem como botões na aba Enviar).
+- **Números ao lado de cada público:** na aba Enviar, cada público mostra quantos há — contas e quantas já têm aviso ativo ("Alunos (3 · 2 com aviso)"), interesses (aparelhos
+  com aviso que escolheram aquele interesse), perfis, acessos e pedidos por etapa. A prévia mostra "N pessoas, X com aviso ativo agora" (ou quantos aparelhos, para "todos"/"app"/interesse).
+  Quem tem aviso ativo é contado a partir de quando abriu o site depois da atualização; o total real de quem recebe é o do OneSignal (aparece quando a chave da organização está em Conexões).
 - **⚙️ Preparar:** checklist do que falta (chave, plataforma Web, este aparelho), quantas contas por grupo e os **avisos automáticos**
   (equipe é avisada a cada pedido novo; cliente é avisado quando a etapa do pedido muda) — só o Admin total liga/desliga.
 - Quem tem a permissão `catalogo_push` usa a Central; só o Admin total (`gerir_acessos`) muda os avisos automáticos.

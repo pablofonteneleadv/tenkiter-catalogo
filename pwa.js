@@ -38,6 +38,7 @@
   function lembrouInstalado() { try { return localStorage.getItem(K_INST) === '1'; } catch (e) { return false; } }
   function guardarInstalado(v) { try { if (v) localStorage.setItem(K_INST, '1'); else localStorage.removeItem(K_INST); } catch (e) {} }
   if (standalone()) guardarInstalado(true);
+  if (window.TKDisp) { if (standalone()) TKDisp.registrar({ instalou: true }); TKDisp.ping(); }   // v3.5: este aparelho existe (e, se abriu como app, já está instalado)
 
   var $ = function (id) { return document.getElementById(id); };
   var btnRodape = $('btn-instalar');
@@ -126,6 +127,7 @@
   });
   window.addEventListener('appinstalled', function () {
     evento = null; guardarInstalado(true); desenhar();
+    if (window.TKDisp) TKDisp.registrar({ instalou: true });     // v3.5: conta no painel "quantas pessoas instalaram"
     msg('✅ App instalado! Procure o ícone TENKiTER na tela inicial.');
     if (window.TKPush) setTimeout(function () { TKPush.aposInstalar(); }, 600);
   });
