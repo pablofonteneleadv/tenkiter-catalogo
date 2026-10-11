@@ -83,7 +83,10 @@ function criarAmbiente() {
       createTextOutput: t => ({ _t: String(t), mime: null, setMimeType(m) { this.mime = m; return this; }, getContent() { return this._t; } })
     },
     HtmlService: { createHtmlOutput: h => ({ getContent: () => h }) },
-    UrlFetchApp: { fetch(url, opt) { chamadasFetch.push({ url, opt }); const r = amb.fetchResposta(url, opt); if (r instanceof Error) throw r; return { getResponseCode: () => r.code, getContentText: () => r.body }; } },
+    UrlFetchApp: {
+      fetch(url, opt) { chamadasFetch.push({ url, opt }); const r = amb.fetchResposta(url, opt); if (r instanceof Error) throw r; return { getResponseCode: () => r.code, getContentText: () => r.body }; },
+      fetchAll(reqs) { return reqs.map(rq => { const opt = Object.assign({}, rq); const url = opt.url; delete opt.url; chamadasFetch.push({ url, opt, lote: true }); const r = amb.fetchResposta(url, opt); if (r instanceof Error) throw r; return { getResponseCode: () => r.code, getContentText: () => r.body }; }); }
+    },
     ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/TESTE/exec' }) },
     DriveApp: {}
   };
@@ -418,12 +421,16 @@ console.log('Arquivo testado: ' + ARQ);
   r = amb.post(adm({ action: 'enviarPush', titulo: 'Chegou!', mensagem: 'Fantasias novas', url: 'https://tenkitermodas.com.br/?c=TK-0002', segmento: 'Clientes Infantil' }));
   ok(r.ok && r.destinatarios === 7, 'aviso enviado para 7');
   ok(JSON.parse(amb.chamadasFetch[0].opt.payload).included_segments[0] === 'Clientes Infantil', 'usou o segmento escolhido');
+  const n0 = amb.chamadasFetch.length;
   r = amb.post(adm({ action: 'enviarPush', titulo: 'T', mensagem: 'M', segmento: 'Segmento Inventado' }));
-  ok(JSON.parse(amb.chamadasFetch[1].opt.payload).included_segments[0] === 'Subscribed Users', 'segmento que não está na lista cai em "Subscribed Users"');
+  ok(r.ok === false && /segmento/i.test(r.erro) && amb.chamadasFetch.length === n0, 'segmento que não está na lista é RECUSADO (v3.3: antes caía em "todos" e podia mandar para o público errado) e nada é enviado', JSON.stringify(r));
+  r = amb.post(adm({ action: 'enviarPush', titulo: 'T', mensagem: 'M', segmento: 'Subscribed Users' }));
+  const pl = JSON.parse(amb.chamadasFetch[amb.chamadasFetch.length - 1].opt.payload);
+  ok(r.ok && Array.isArray(pl.filters) && !pl.included_segments && pl.filters.some(f => f.key === 'av_novidades'), 'formato antigo sem segmento = "todos" respeitando quem desligou promoções (filtro av_novidades)', JSON.stringify(pl.filters));
   r = amb.post(adm({ action: 'enviarPush', titulo: 'T', mensagem: 'M', url: 'javascript:alert(1)' }));
   ok(r.ok === false, 'link que não é https:// é recusado');
   r = amb.post(adm({ action: 'pushHistorico' }));
-  ok(r.ok && r.historico.length === 2 && r.historico[1].titulo === 'Chegou!' === false || r.historico.length === 2, 'histórico guarda os 2 avisos', JSON.stringify(r.historico.map(h => h.titulo)));
+  ok(r.ok && r.historico.length === 2, 'histórico guarda os 2 avisos', JSON.stringify(r.historico.map(h => h.titulo)));
   ok(r.historico[0].titulo === 'T' && r.historico[1].segmento === 'Clientes Infantil' && r.historico[1].destinatarios === 7 && r.historico[1].quem === 'Teste', 'histórico: mais novo primeiro, com segmento, destinatários e quem enviou');
   ok(r.segmentos[0] === 'Subscribed Users' && r.segmentos.indexOf('Clientes Feminino') !== -1, 'lista de segmentos para o painel');
   r = amb.post({ action: 'pushHistorico' });
@@ -543,6 +550,413 @@ console.log('Arquivo testado: ' + ARQ);
   ok(audit() && audit().d.some(l => l[2] === 'renomear_categoria'), 'renomear também fica registrado');
   r = amb.post(A({ action: 'renomearCategoria', nome: 'Fantasia', novoNome: 'Fantasia, Nova' }));
   ok(r.ok && r.nome === 'Fantasia Nova' && catDa('103') === 'Fantasia Nova', 'vírgula no nome novo é trocada por espaço (não quebra em duas categorias)', r.nome + ' | ' + catDa('103'));
+})();
+
+// ------------------------------------------------------------------ 8c. avisos completos (v3.3) com um OneSignal FALSO
+function onesignalFalso(amb, est) {
+  est.enviados = []; est.cancelados = []; est.auths = []; est.sequencia = 0;
+  est.usuarios = est.usuarios || [];
+  const avalia = (filtros, u) => {
+    const grupos = [[]];
+    filtros.forEach(f => { if (f.operator === 'OR') grupos.push([]); else grupos[grupos.length - 1].push(f); });
+    return grupos.some(g => g.every(f => {
+      const v = (u.tags || {})[f.key];
+      if (f.relation === '=') return String(v) === String(f.value);
+      if (f.relation === 'exists') return v !== undefined;
+      if (f.relation === 'not_exists') return v === undefined;
+      return false;
+    }));
+  };
+  amb.fetchResposta = (url, opt) => {
+    const auth = ((opt && opt.headers) || {}).Authorization || '';
+    if (/\/sync\//.test(url)) return { code: 200, body: est.webPronto ? '/**/x({"success":true,"app_id":"app","features":{}})' : '/**/x({"success":false,"code":2,"description":"This app is not configured for web push."})' };
+    est.auths.push(auth);
+    if (est.exigeEsquema && auth.split(' ')[0] !== est.exigeEsquema) return { code: 403, body: '{"errors":["Access denied. Please include an Authorization header"]}' };
+    if (est.cai) return est.cai;
+    const metodo = String((opt && opt.method) || 'get').toLowerCase();
+    const m = url.match(/\/notifications\/([^?]+)\?/);
+    if (m) {
+      if (metodo === 'delete') { est.cancelados.push(m[1]); return est.naoCancela ? { code: 400, body: '{"errors":["Notification has already been sent"]}' } : { code: 200, body: '{"success":true}' }; }
+      return { code: 200, body: JSON.stringify(est.stats || { successful: 5, failed: 1, errored: 1, converted: 2, remaining: 0, canceled: false, completed_at: 1760000000 }) };
+    }
+    const p = JSON.parse(opt.payload);
+    est.enviados.push(p);
+    const id = 'notif-' + String(++est.sequencia).padStart(4, '0') + '-aaaa';
+    if (p.include_aliases) {
+      const invalidos = {}; let validos = 0;
+      Object.keys(p.include_aliases).forEach(rot => (p.include_aliases[rot] || []).forEach(x => {
+        const tem = est.usuarios.some(u => u[rot] === x);
+        if (tem) validos++; else (invalidos[rot] = invalidos[rot] || []).push(x);
+      }));
+      if (!validos) return { code: 200, body: JSON.stringify({ id: '', errors: { invalid_aliases: invalidos } }) };
+      return { code: 200, body: JSON.stringify(Object.keys(invalidos).length ? { id, errors: { invalid_aliases: invalidos } } : { id }) };
+    }
+    if (p.filters) return { code: 200, body: JSON.stringify({ id, recipients: est.usuarios.filter(u => avalia(p.filters, u)).length }) };
+    return { code: 200, body: JSON.stringify({ id, recipients: est.usuarios.length }) };
+  };
+  return est;
+}
+
+(function avisosCompletos() {
+  console.log('\n[avisos completos v3.3: públicos, {nome}, agendamento, automáticos]');
+  const amb = criarAmbiente(); semear(amb);
+  amb.ctx.SpreadsheetApp.openById('x').getSheetByName('Pessoas').appendRow(['Nome', 'WhatsApp', 'Senha']);
+  const gente = [
+    ['Pablo Admin', '88999990001', 'Admin total'], ['Ana Func', '88999990002', 'Funcionário'], ['Bia Aluna', '88999990003', 'Aluno'],
+    ['Caio Novato', '88999990004', 'Novato'], ['Dani Cliente', '88999990005', 'Cliente'], ['Eva Silva', '88999990006', 'Cliente'],
+    ['Flávia Estagiária', '88999990007', 'Estagiário'], ['Gil Admin', '88999990008', 'Admin']
+  ];
+  gente.forEach(g => amb.run("acRegistrar_(" + JSON.stringify(g[0]) + ", " + JSON.stringify(g[1]) + ", 'senha-" + g[1].slice(-2) + "', " + JSON.stringify(g[2]) + ", {})"));
+  // Eva fica inativa (não pode receber nada)
+  const ph = amb.ctx.SpreadsheetApp.openById('x').getSheetByName('Pessoas');
+  const cab = ph.d[0].map(x => String(x).toLowerCase());
+  ph.d.forEach((l, i) => { if (i && l[cab.indexOf('whatsapp')] === '88999990006') l[cab.indexOf('status')] = 'Inativo'; });
+  const entrar = (w) => amb.post({ action: 'login', whatsapp: w, senha: 'senha-' + w.slice(-2) });
+  const tok = {}; gente.forEach(g => { tok[g[0].split(' ')[0]] = entrar(g[1]); });
+  const A = (o) => Object.assign({ sessao: tok.Pablo.sessao, whatsapp: '88999990001' }, o);
+  const F = (o) => Object.assign({ sessao: tok.Ana.sessao, whatsapp: '88999990002' }, o);
+  const pid = (w) => amb.run("pushIdDe_('" + w + "')");
+  const est = { usuarios: [], webPronto: false };
+  onesignalFalso(amb, est);
+
+  // ---------- sem configuração
+  let r = amb.post(A({ action: 'enviarPush', titulo: 'Oi', mensagem: 'Teste', audiencia: { tipo: 'grupo', grupo: 'alunos' } }));
+  ok(r.ok === false && /OneSignal/.test(r.erro), 'sem as chaves do OneSignal: erro claro (nada é enviado)', r.erro);
+  amb.props.set('ONESIGNAL_APP_ID', 'app-1'); amb.props.set('ONESIGNAL_REST_API_KEY', 'os_v2_app_chave');
+
+  // ---------- status do painel
+  r = amb.post(A({ action: 'pushStatus' }));
+  ok(r.ok && r.chaveConfigurada === true && r.appId === 'app-1' && r.webPronto === false, 'status: chave presente, plataforma Web NÃO configurada (é o caso real hoje)', JSON.stringify(r).slice(0, 200));
+  ok(r.contas.alunos === 2 && r.contas.equipe >= 4 && r.contas.clientes === 1 && r.contas.total === 7, 'status: contas por grupo (alunos 2, clientes 1 — a inativa não conta)', JSON.stringify(r.contas));
+  ok(r.perfis.some(p => p.nome === 'Novato' && p.total === 1) && r.acessos.some(a => a.chave === 'catalogo_push' && a.total === 2), 'status: lista perfis e quantos têm cada acesso');
+  est.webPronto = true; amb.cacheMem.clear();
+  r = amb.post(A({ action: 'pushStatus' }));
+  ok(r.webPronto === true, 'status: depois de configurar o Web no OneSignal, aparece como pronto');
+  ok(JSON.stringify(r).indexOf('os_v2') === -1, 'a chave REST nunca aparece na resposta');
+  r = amb.post(F({ action: 'pushStatus' }));
+  ok(r.ok === false && r.semPermissao === true, 'Funcionário (sem "enviar notificações") não vê o status');
+
+  // ---------- identidade do aparelho
+  r = amb.post({ action: 'pushIdentidade', whatsapp: '88999990003', sessao: 'senha-03' });
+  ok(r.ok === false, 'pushIdentidade NÃO aceita senha (só token de sessão)', JSON.stringify(r));
+  r = amb.post({ action: 'pushIdentidade', whatsapp: '88999990003' });
+  ok(r.ok === false, 'sem credencial: negado');
+  r = amb.post({ action: 'pushIdentidade', whatsapp: '88999990002', sessao: tok.Bia.sessao });
+  ok(r.ok === false, 'token da Bia não vale para falar pela Ana');
+  r = amb.post({ action: 'pushIdentidade', whatsapp: '88999990003', sessao: tok.Bia.sessao });
+  ok(r.ok && r.pushId === pid('88999990003') && /^tk[0-9a-f]{30}$/.test(r.pushId) && r.tipo === 'aluno' && r.equipe === false, 'Bia: recebe o pushId dela (aluno)', JSON.stringify(r));
+  ok(r.pushId.indexOf('88999990003') === -1 && pid('88999990003') !== pid('88999990004'), 'o pushId não contém o telefone e é diferente para cada conta');
+  const rAna = amb.post({ action: 'pushIdentidade', whatsapp: '88999990002', sessao: tok.Ana.sessao });
+  ok(rAna.ok && rAna.tipo === 'equipe' && rAna.equipe === true, 'Ana: equipe');
+  const rDani = amb.post({ action: 'pushIdentidade', whatsapp: '88999990005', sessao: tok.Dani.sessao });
+  ok(rDani.ok && rDani.tipo === 'cliente', 'Dani: cliente');
+  r = amb.post({ action: 'pushIdentidade', whatsapp: '88999990006', sessao: tok.Eva.sessao });
+  ok(r.ok === false, 'conta inativa não consegue identidade');
+
+  // quem tem aparelho com aviso ligado (no OneSignal falso)
+  est.usuarios = [
+    { external_id: pid('88999990001') }, { external_id: pid('88999990002') }, { external_id: pid('88999990003') }, { external_id: pid('88999990004'), tags: { av_novidades: '0' } },
+    { external_id: pid('88999990005') }
+  ];
+
+  // ---------- prévia do público (não envia)
+  const antes = est.enviados.length;
+  const prev = (aud) => amb.post(A({ action: 'pushPrevia', audiencia: aud }));
+  r = prev({ tipo: 'grupo', grupo: 'alunos' });
+  ok(r.ok && r.quantidade === 2 && r.amostra.sort().join() === 'Bia Aluna,Caio Novato', 'prévia: alunos = Bia e Caio', JSON.stringify(r));
+  r = prev({ tipo: 'grupo', grupo: 'equipe' });
+  ok(r.ok && r.quantidade === 4 && r.amostra.indexOf('Bia Aluna') === -1, 'prévia: equipe = Pablo, Ana, Flávia, Gil (aluno fora)', JSON.stringify(r.amostra));
+  r = prev({ tipo: 'grupo', grupo: 'clientes' });
+  ok(r.ok && r.quantidade === 1 && r.amostra[0] === 'Dani Cliente', 'prévia: clientes = só a Dani (a Eva está inativa)');
+  r = prev({ tipo: 'grupo', grupo: 'portal' });
+  ok(r.ok && r.quantidade === 6, 'prévia: portal = quem acessa o portal', r.quantidade);
+  r = prev({ tipo: 'perfil', perfis: ['novato'] });
+  ok(r.ok && r.quantidade === 1 && r.amostra[0] === 'Caio Novato', 'prévia: perfil Novato (ignora maiúscula)');
+  r = prev({ tipo: 'perfil', perfis: ['Aluno', 'Novato'] });
+  ok(r.ok && r.quantidade === 2, 'prévia: vários perfis');
+  r = prev({ tipo: 'acesso', chaves: ['catalogo_push'] });
+  ok(r.ok && r.quantidade === 2 && r.amostra.sort().join() === 'Gil Admin,Pablo Admin', 'prévia: quem tem o acesso "Enviar notificações" = Admin e Admin total', JSON.stringify(r.amostra));
+  r = prev({ tipo: 'acesso', chaves: ['catalogo_push', 'gerir_acessos'], modo: 'todas' });
+  ok(r.ok && r.quantidade === 1 && r.amostra[0] === 'Pablo Admin', 'prévia: exigir os DOIS acessos = só o Admin total');
+  r = prev({ tipo: 'acesso', chaves: ['permissao_inventada'] });
+  ok(r.ok === false, 'acesso que não existe é recusado');
+  r = prev({ tipo: 'pessoas', ids: [pid('88999990003'), pid('88999990005'), 'tkinventado'] });
+  ok(r.ok && r.quantidade === 2, 'prévia: pessoas escolhidas (id inventado é ignorado)');
+  r = prev({ tipo: 'pessoas', ids: [] });
+  ok(r.ok === false, 'nenhuma pessoa escolhida: recusa');
+  r = prev({ tipo: 'todos' });
+  ok(r.ok && r.porAparelho === true && r.quantidade === null, 'prévia: "todos" é contado pelo OneSignal (por aparelho), não pela planilha');
+  r = prev({ tipo: 'inventado' });
+  ok(r.ok === false, 'público desconhecido: recusa');
+  ok(est.enviados.length === antes, 'prévia não envia nada');
+
+  // ---------- busca de pessoas (sem expor telefone inteiro)
+  r = amb.post(A({ action: 'pushPessoas', q: 'dani' }));
+  ok(r.ok && r.pessoas.length === 1 && r.pessoas[0].pid === pid('88999990005') && /9\*\*\*\*-0005$/.test(r.pessoas[0].tel) && JSON.stringify(r).indexOf('88999990005') === -1, 'busca por nome acha a Dani e mostra o telefone mascarado', JSON.stringify(r));
+  r = amb.post(A({ action: 'pushPessoas', q: 'FLAVIA' }));
+  ok(r.ok && r.pessoas.length === 1 && r.pessoas[0].nome === 'Flávia Estagiária', 'busca ignora acento e maiúscula');
+  r = amb.post(A({ action: 'pushPessoas', q: '99990004' }));
+  ok(r.ok && r.pessoas.length === 1 && r.pessoas[0].nome === 'Caio Novato', 'busca por final do telefone');
+  r = amb.post(A({ action: 'pushPessoas', q: 'a' }));
+  ok(r.ok && r.pessoas.length === 0, 'busca curta demais não lista todo mundo');
+
+  // ---------- enviar para um grupo (mensagem direta por identidade)
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Aula nova 📚', mensagem: 'Saiu o manual Estágio.', url: 'https://tenkitermodas.com.br/treinamentos.html', audiencia: { tipo: 'grupo', grupo: 'alunos' } }));
+  ok(r.ok && r.destinatarios === 2 && r.pessoas === 2 && r.semAviso.join() === '', 'alunos: 2 na planilha, os 2 têm aparelho (2 recebem)', JSON.stringify(r));
+  let p = est.enviados[est.enviados.length - 1];
+  ok(p.target_channel === 'push' && !p.filters && !p.included_segments && JSON.stringify(Object.keys(p.include_aliases)) === '["external_id"]', 'direto: só include_aliases (um único método de público)', JSON.stringify(Object.keys(p)));
+  ok(p.include_aliases.external_id.length === 2 && p.include_aliases.external_id.indexOf(pid('88999990003')) !== -1 && p.include_aliases.external_id.indexOf(pid('88999990004')) !== -1, 'os ids são os pushId dos 2 alunos');
+  ok(p.url === 'https://tenkitermodas.com.br/treinamentos.html' && p.headings.pt === 'Aula nova 📚' && p.app_id === 'app-1', 'link, título e app_id certos');
+  ok(!p.send_after && !p.ttl, 'sem agendamento/validade quando não pedidos');
+  ok(est.auths[est.auths.length - 1] === 'Key os_v2_app_chave', 'chave nova (os_v2_) vai como "Key"');
+
+  // ---------- personalização {nome}
+  const nEnv = est.enviados.length;
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Oi, {nome}! 💛', mensagem: '{nome}, tem novidade para você.', audiencia: { tipo: 'pessoas', ids: [pid('88999990003'), pid('88999990005'), pid('88999990004')] } }));
+  ok(r.ok && r.individuais === true && r.destinatarios === 3, '{nome}: um aviso por pessoa', JSON.stringify(r));
+  const novos = est.enviados.slice(nEnv);
+  ok(novos.length === 3 && novos.some(x => x.headings.pt === 'Oi, Bia! 💛' && x.contents.pt === 'Bia, tem novidade para você.') && novos.some(x => x.headings.en === 'Oi, Dani! 💛') && novos.some(x => x.headings.pt === 'Oi, Caio! 💛'), 'cada um recebe o PRÓPRIO primeiro nome', JSON.stringify(novos.map(x => x.headings.pt)));
+  ok(novos.every(x => x.include_aliases.external_id.length === 1), 'cada envio tem uma só pessoa');
+  ok(amb.chamadasFetch.filter(c => c.lote).length >= 3, 'foi enviado em lote (fetchAll)');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Oi {NOME}', mensagem: 'M', audiencia: { tipo: 'pessoas', ids: [pid('88999990003')] } }));
+  ok(r.ok && est.enviados[est.enviados.length - 1].headings.pt === 'Oi Bia', '{NOME} em maiúscula também funciona');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Oi {nome}', mensagem: 'M', audiencia: { tipo: 'todos' } }));
+  ok(r.ok && est.enviados[est.enviados.length - 1].headings.pt === 'Oi cliente', '{nome} em aviso geral vira "cliente" (não dá para saber o nome)');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Oi {nome}', mensagem: 'M', audiencia: { tipo: 'pessoas', ids: [pid('88999990006')] } }));
+  ok(r.ok === false, 'pessoa inativa não é alvo');
+
+  // ---------- limite de {nome}
+  const grande = criarAmbiente(); semear(grande);
+  grande.ctx.SpreadsheetApp.openById('x').getSheetByName('Pessoas').appendRow(['Nome', 'WhatsApp', 'Senha']);
+  grande.run("acRegistrar_('Pablo Admin', '88999990001', 'senha-forte-1', 'Admin total', {})");
+  for (let i = 0; i < 310; i++) grande.run("acRegistrar_('Cli " + i + "', '8898" + String(1000000 + i) + "', 'abcd1234', 'Cliente', {})");
+  grande.props.set('ONESIGNAL_APP_ID', 'a'); grande.props.set('ONESIGNAL_REST_API_KEY', 'k');
+  onesignalFalso(grande, { usuarios: [] });
+  const tg = grande.post({ action: 'login', whatsapp: '88999990001', senha: 'senha-forte-1' });
+  r = grande.post({ sessao: tg.sessao, whatsapp: '88999990001', action: 'enviarPush', titulo: 'Oi {nome}', mensagem: 'M', audiencia: { tipo: 'grupo', grupo: 'clientes' } });
+  ok(r.ok === false && /300/.test(r.erro) && grande.chamadasFetch.length === 0, 'com {nome} e mais de 300 pessoas: recusa sem enviar nada', r.erro);
+  r = grande.post({ sessao: tg.sessao, whatsapp: '88999990001', action: 'enviarPush', titulo: 'Oi', mensagem: 'M', audiencia: { tipo: 'grupo', grupo: 'clientes' } });
+  ok(r.ok === false && grande.chamadasFetch.length === 1, 'sem {nome} o mesmo público vai em UMA chamada (ninguém com aparelho = erro claro)', r.erro);
+
+  // ---------- todos / segmento / app / interesse (por aparelho)
+  est.usuarios[0].tags = { av_novidades: '1', origem: 'app', int_feminino_adulto: '1' };
+  est.usuarios[2].tags = { origem: 'app' }; // sem preferência = recebe
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Promo', mensagem: 'M', audiencia: { tipo: 'todos' } }));
+  p = est.enviados[est.enviados.length - 1];
+  ok(r.ok && Array.isArray(p.filters) && !p.include_aliases && !p.included_segments, 'todos: usa filtros (um único método)');
+  ok(r.destinatarios === 4, 'todos respeita quem desligou promoções (Caio com av_novidades=0 fica de fora: 5 aparelhos -> 4)', r.destinatarios);
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Só app', mensagem: 'M', audiencia: { tipo: 'app' } }));
+  ok(r.ok && r.destinatarios === 2, 'quem instalou o app: 2 aparelhos', r.destinatarios);
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Interesse', mensagem: 'M', audiencia: { tipo: 'interesse', chaves: ['Feminino Adulto'], rotulos: ['Feminino Adulto'] } }));
+  p = est.enviados[est.enviados.length - 1];
+  ok(r.ok && r.destinatarios === 1 && JSON.stringify(p.filters).indexOf('int_feminino_adulto') !== -1, 'interesse: só quem marcou "Feminino Adulto"', JSON.stringify(p.filters));
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Interesse', mensagem: 'M', audiencia: { tipo: 'interesse', chaves: [] } }));
+  ok(r.ok === false, 'interesse vazio: recusa');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Seg', mensagem: 'M', audiencia: { tipo: 'segmento', nome: 'Inventado' } }));
+  ok(r.ok === false && /segmento/i.test(r.erro), 'segmento fora da lista: recusa');
+  amb.props.set('PUSH_SEGMENTOS', 'VIPs');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Seg', mensagem: 'M', audiencia: { tipo: 'segmento', nome: 'VIPs' } }));
+  ok(r.ok && est.enviados[est.enviados.length - 1].included_segments[0] === 'VIPs', 'segmento cadastrado nas Propriedades vale');
+
+  // ---------- validações
+  const nada = est.enviados.length;
+  r = amb.post(A({ action: 'enviarPush', titulo: '', mensagem: 'M', audiencia: { tipo: 'todos' } }));
+  ok(r.ok === false, 'sem título: recusa');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'x'.repeat(81), mensagem: 'M', audiencia: { tipo: 'todos' } }));
+  ok(r.ok === false && /80/.test(r.erro), 'título com mais de 80 letras: recusa');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'x'.repeat(301), audiencia: { tipo: 'todos' } }));
+  ok(r.ok === false && /300/.test(r.erro), 'mensagem com mais de 300 letras: recusa');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', url: 'http://tenkitermodas.com.br', audiencia: { tipo: 'todos' } }));
+  ok(r.ok === false && /https/.test(r.erro), 'link http:// (sem s): recusa');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', url: 'javascript:alert(1)', audiencia: { tipo: 'todos' } }));
+  ok(r.ok === false, 'link javascript: recusa');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', imagem: 'http://x/y.jpg', audiencia: { tipo: 'todos' } }));
+  ok(r.ok === false && /imagem/i.test(r.erro), 'imagem http://: recusa');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', agendarEm: 'ontem', audiencia: { tipo: 'todos' } }));
+  ok(r.ok === false, 'data inválida: recusa');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', agendarEm: new Date(Date.now() - 3600000).toISOString(), audiencia: { tipo: 'todos' } }));
+  ok(r.ok === false && /futuro/.test(r.erro), 'horário no passado: recusa');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', agendarEm: new Date(Date.now() + 40 * 86400000).toISOString(), audiencia: { tipo: 'todos' } }));
+  ok(r.ok === false && /30 dias/.test(r.erro), 'mais de 30 dias: recusa');
+  ok(est.enviados.length === nada, 'nenhuma dessas tentativas chegou ao OneSignal');
+  r = F({ action: 'enviarPush', titulo: 'T', mensagem: 'M', audiencia: { tipo: 'todos' } });
+  r = amb.post(r);
+  ok(r.ok === false && r.semPermissao === true && est.enviados.length === nada, 'Funcionário sem a permissão "enviar notificações": negado');
+  r = amb.post({ action: 'enviarPush', titulo: 'T', mensagem: 'M', audiencia: { tipo: 'todos' } });
+  ok(r.ok === false && est.enviados.length === nada, 'sem login/PIN: negado');
+
+  // ---------- imagem, validade e agendamento
+  const quando = new Date(Date.now() + 3 * 3600000);
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Amanhã tem!', mensagem: 'Liquidação', imagem: 'https://res.cloudinary.com/z/a.jpg', ttlHoras: 6, agendarEm: quando.toISOString(), audiencia: { tipo: 'grupo', grupo: 'clientes' } }));
+  p = est.enviados[est.enviados.length - 1];
+  ok(r.ok && r.agendado === true && p.send_after === quando.toISOString() && p.ttl === 6 * 3600 && p.chrome_web_image === 'https://res.cloudinary.com/z/a.jpg', 'agendado: send_after, ttl em segundos e imagem grande', JSON.stringify(p));
+  const idAgendado = r.id;
+  let h = amb.post(A({ action: 'pushHistorico' }));
+  ok(h.ok && h.historico[0].id === idAgendado && h.historico[0].resultado === 'agendado' && h.historico[0].agendado !== '' && /clientes/i.test(h.historico[0].audiencia) && h.historico[0].imagem !== '', 'histórico mostra "agendado", quando, público e imagem', JSON.stringify(h.historico[0]));
+  r = amb.post(A({ action: 'pushCancelar', id: idAgendado }));
+  ok(r.ok && est.cancelados.indexOf(idAgendado) !== -1, 'cancelar manda o DELETE ao OneSignal');
+  h = amb.post(A({ action: 'pushHistorico' }));
+  ok(h.historico[0].resultado === 'cancelado', 'histórico passa a "cancelado"');
+  est.naoCancela = true;
+  r = amb.post(A({ action: 'pushCancelar', id: idAgendado }));
+  ok(r.ok === false && /já|enviado/i.test(r.erro), 'cancelar o que já saiu: erro claro', r.erro);
+  est.naoCancela = false;
+  r = amb.post(A({ action: 'pushCancelar', id: '../x' }));
+  ok(r.ok === false, 'id esquisito é recusado (não vira caminho de URL)');
+
+  // ---------- números do aviso
+  r = amb.post(A({ action: 'pushNumeros', id: idAgendado }));
+  ok(r.ok && r.entregues === 5 && r.falhas === 2 && r.cliques === 2 && r.restantes === 0, 'números: entregues, falhas (failed+errored), cliques', JSON.stringify(r));
+  r = amb.post(A({ action: 'pushNumeros', id: 'a b' }));
+  ok(r.ok === false, 'números: id inválido recusado');
+
+  // ---------- quem não tem aparelho
+  est.usuarios = [{ external_id: pid('88999990003') }];
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Equipe', mensagem: 'Aviso', audiencia: { tipo: 'grupo', grupo: 'equipe' } }));
+  ok(r.ok === false && /ativad/i.test(r.erro), 'ninguém do público tem aparelho: erro claro (não finge que enviou)', r.erro);
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Alunos', mensagem: 'Aviso', audiencia: { tipo: 'grupo', grupo: 'alunos' } }));
+  ok(r.ok && r.destinatarios === 1 && r.semAviso.length === 1 && r.semAviso[0] === 'Caio Novato', 'parte sem aparelho: envia para quem tem e LISTA quem ficou sem', JSON.stringify(r));
+  h = amb.post(A({ action: 'pushHistorico' }));
+  ok(h.historico[0].destinatarios === 1, 'histórico guarda o número real que recebeu (1)');
+  est.cai = { code: 500, body: '{"errors":["boom"]}' };
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', audiencia: { tipo: 'todos' } }));
+  ok(r.ok === false && /boom/.test(r.erro), 'erro do OneSignal chega ao painel com o motivo', r.erro);
+  est.cai = new Error('sem internet');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', audiencia: { tipo: 'todos' } }));
+  ok(r.ok === false && /conectar/i.test(r.erro), 'sem internet: mensagem clara, sem quebrar');
+  est.cai = { code: 400, body: '{"errors":["App is not configured for web push"]}' };
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', audiencia: { tipo: 'todos' } }));
+  ok(r.ok === false && /plataforma Web/i.test(r.erro), 'app sem Web configurado: o erro explica o que falta', r.erro);
+  est.cai = null;
+
+  // ---------- esquema de autorização (Key x Basic)
+  est.exigeEsquema = 'Basic'; est.usuarios = [{ external_id: pid('88999990005') }];
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', audiencia: { tipo: 'pessoas', ids: [pid('88999990005')] } }));
+  ok(r.ok && est.auths.slice(-2).join() === 'Key os_v2_app_chave,Basic os_v2_app_chave' , 'se "Key" é recusado (403), tenta "Basic" e funciona', est.auths.slice(-3).join());
+  est.exigeEsquema = '';
+  amb.props.set('ONESIGNAL_REST_API_KEY', 'chave-antiga');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', audiencia: { tipo: 'todos' } }));
+  ok(est.auths[est.auths.length - 1] === 'Basic chave-antiga', 'chave antiga (sem os_v2_) vai como "Basic"');
+  amb.props.set('ONESIGNAL_REST_API_KEY', 'os_v2_app_chave');
+
+  // ---------- modelos
+  r = amb.post(A({ action: 'pushModelos' }));
+  ok(r.ok && r.modelos.length === 6 && r.modelos.some(m => /\{nome\}/.test(m.titulo)), 'modelos prontos criados sozinhos (6, um com {nome})');
+  r = amb.post(A({ action: 'salvarPushModelo', modelo: { rotulo: 'Dia das mães', titulo: 'Dia das Mães 💐', mensagem: 'Presentes que ela vai amar.', url: 'https://tenkitermodas.com.br/', imagem: '' } }));
+  ok(r.ok && r.modelos.length === 7 && r.modelos.some(m => m.rotulo === 'Dia das mães' && m.id === r.id), 'salvar modelo novo');
+  const mid = r.id;
+  r = amb.post(A({ action: 'salvarPushModelo', modelo: { id: mid, rotulo: 'Dia das mães', titulo: 'Dia das Mães 💐 — hoje', mensagem: 'Presentes que ela vai amar.' } }));
+  ok(r.ok && r.modelos.length === 7 && r.modelos.find(m => m.id === mid).titulo.indexOf('hoje') !== -1, 'editar modelo existente (não duplica)');
+  r = amb.post(A({ action: 'salvarPushModelo', modelo: { rotulo: '', titulo: 'x', mensagem: 'y' } }));
+  ok(r.ok === false, 'modelo sem nome: recusa');
+  r = amb.post(A({ action: 'salvarPushModelo', modelo: { rotulo: 'R', titulo: 'T', mensagem: 'M', url: 'javascript:x' } }));
+  ok(r.ok === false, 'modelo com link inseguro: recusa');
+  r = amb.post(A({ action: 'salvarPushModelo', modelo: { rotulo: '=cmd', titulo: '=1+1', mensagem: '+2' } }));
+  const abaMod = amb.ss.getSheetByName('Push_Modelos');
+  ok(r.ok && abaMod.d.slice(1).every(l => !/^[=+\-@]/.test(String(l[1])) && !/^[=+\-@]/.test(String(l[2])) && !/^[=+\-@]/.test(String(l[3]))), 'texto que começa com = ou + não vira fórmula na planilha');
+  r = amb.post(F({ action: 'salvarPushModelo', modelo: { rotulo: 'R', titulo: 'T', mensagem: 'M' } }));
+  ok(r.ok === false && r.semPermissao === true, 'Funcionário não mexe nos modelos');
+  r = amb.post(A({ action: 'excluirPushModelo', id: mid }));
+  ok(r.ok && r.modelos.every(m => m.id !== mid), 'excluir modelo');
+  r = amb.post(A({ action: 'excluirPushModelo', id: mid }));
+  ok(r.ok === false, 'excluir de novo: "não existe mais"');
+
+  // ---------- configuração dos automáticos (só Admin total)
+  const gil = amb.post({ action: 'salvarPushConfig', whatsapp: '88999990008', sessao: tok.Gil.sessao, autoNovoPedido: false });
+  ok(gil.ok === false && gil.semPermissao === true, 'Admin (sem "Gerir acessos") não muda os automáticos');
+  r = amb.post(A({ action: 'salvarPushConfig', autoPedido: false }));
+  ok(r.ok && r.autoPedido === false && r.autoNovoPedido === true, 'Admin total desliga o aviso de etapa do pedido');
+  r = amb.post(A({ action: 'salvarPushConfig', autoPedido: true }));
+  ok(r.ok && r.autoPedido === true, '...e liga de novo');
+
+  // ---------- pedidos: pushKey, aviso para a equipe e para o cliente
+  est.usuarios = [{ external_id: pid('88999990001') }, { external_id: pid('88999990002') }, { external_id: pid('88999990005') }, { ped_0002: amb.run("pushChavePedido_('PED-0002')") }];
+  est.enviados.length = 0;
+  const itens = [{ id: '101' }, { id: '102' }];
+  let ped = amb.post({ action: 'criarPedido', nome: 'Dani Cliente', whatsapp: '88999990005', entrega: 'retirada', itens });
+  ok(ped.ok && ped.codigo === 'PED-0001' && ped.pushKey === amb.run("pushChavePedido_('PED-0001')") && /^pk[0-9a-f]{30}$/.test(ped.pushKey), 'criarPedido devolve a chave do pedido (pushKey)', JSON.stringify(ped).slice(0, 160));
+  let pn = est.enviados[est.enviados.length - 1];
+  ok(est.enviados.length === 1 && pn && /Novo pedido PED-0001/.test(pn.headings.pt) && pn.url === 'https://tenkitermodas.com.br/admin.html', 'pedido novo: UM aviso para a equipe, com link do painel', JSON.stringify(pn).slice(0, 200));
+  const ids = pn.include_aliases.external_id;
+  ok(ids.indexOf(pid('88999990001')) !== -1 && ids.indexOf(pid('88999990002')) !== -1 && ids.indexOf(pid('88999990003')) === -1 && ids.indexOf(pid('88999990005')) === -1, 'quem recebe: equipe que cadastra produtos (Pablo, Ana...), nunca aluno nem cliente', ids.length);
+  ok(/Dani/.test(pn.contents.pt) && pn.contents.pt.indexOf('88999990005') === -1 && pn.contents.pt.indexOf('R$') !== -1, 'texto traz o primeiro nome e o total, NUNCA o telefone');
+  const dup = amb.post({ action: 'criarPedido', nome: 'Dani Cliente', whatsapp: '88999990005', entrega: 'retirada', itens });
+  ok(dup.ok && dup.repetido === true && dup.pushKey === ped.pushKey && est.enviados.length === 1, 'toque duplo: mesmo pedido, mesma chave e NÃO avisa a equipe de novo');
+  const pedConv = amb.post({ action: 'criarPedido', nome: 'Visitante Sem Conta', whatsapp: '88988887777', entrega: 'entrega', endereco: 'Rua A, 10, Centro', itens: [{ id: '101' }] });
+  ok(pedConv.ok && pedConv.codigo === 'PED-0002', 'segundo pedido (visitante sem conta)');
+
+  // consultar devolve a chave só com código + final do telefone
+  r = amb.post({ action: 'consultarPedido', codigo: 'PED-0001', final: '0005' });
+  ok(r.ok && r.pushKey === ped.pushKey && JSON.stringify(r).indexOf('88999990005') === -1, 'consultarPedido (código + 4 últimos) devolve a chave e nunca o telefone');
+  r = amb.post({ action: 'consultarPedido', codigo: 'PED-0001', final: '0000' });
+  ok(r.ok === false && !r.pushKey, 'final errado: sem chave');
+
+  // mudança de etapa -> cliente com conta (external_id + chave do pedido)
+  est.enviados.length = 0;
+  r = amb.post(A({ action: 'atualizarPedido', codigo: 'PED-0001', status: 'em_atendimento' }));
+  pn = est.enviados[est.enviados.length - 1];
+  ok(r.ok && est.enviados.length === 1 && /PED-0001/.test(pn.headings.pt) && pn.url === 'https://tenkitermodas.com.br/?pedido=PED-0001', 'etapa muda: o cliente recebe aviso com link completo para acompanhar', JSON.stringify(pn).slice(0, 220));
+  ok(pn.include_aliases.external_id[0] === pid('88999990005') && pn.include_aliases.ped_0001[0] === ped.pushKey, 'vai para a conta dela E para a chave do pedido (se estiver só como visitante)');
+  est.enviados.length = 0;
+  amb.post(A({ action: 'atualizarPedido', codigo: 'PED-0001', status: 'pronto' }));
+  ok(/Moreira da Rocha/.test(est.enviados[0].contents.pt) && /pronto/i.test(est.enviados[0].headings.pt), 'pronto + retirada: mostra o endereço da loja');
+  est.enviados.length = 0;
+  amb.post(A({ action: 'atualizarPedido', codigo: 'PED-0002', status: 'pronto' }));
+  ok(est.enviados.length === 1 && /entrega/i.test(est.enviados[0].contents.pt) && !est.enviados[0].include_aliases.external_id && est.enviados[0].include_aliases.ped_0002[0] === amb.run("pushChavePedido_('PED-0002')"), 'pronto + entrega: texto de entrega; visitante sem conta recebe só pela chave do pedido');
+  est.enviados.length = 0;
+  amb.post(A({ action: 'atualizarPedido', codigo: 'PED-0001', nota: 'só uma nota' }));
+  ok(est.enviados.length === 0, 'mudar só a nota interna NÃO avisa o cliente');
+  amb.post(A({ action: 'atualizarPedido', codigo: 'PED-0001', status: 'pronto' }));
+  ok(est.enviados.length === 0, 'repetir a mesma etapa NÃO avisa de novo');
+  amb.post(A({ action: 'atualizarPedido', codigo: 'PED-0001', status: 'novo' }));
+  ok(est.enviados.length === 0, 'voltar para "novo" não manda aviso (não há texto para essa etapa)');
+  amb.props.set('PUSH_PEDIDO_AUTO', 'false');
+  amb.post(A({ action: 'atualizarPedido', codigo: 'PED-0001', status: 'concluido' }));
+  ok(est.enviados.length === 0, 'PUSH_PEDIDO_AUTO=false desliga o aviso de etapa');
+  amb.props.set('PUSH_NOVO_PEDIDO', 'false');
+  amb.post({ action: 'criarPedido', nome: 'Outra Pessoa', whatsapp: '88977776666', entrega: 'retirada', itens: [{ id: '106' }] });
+  ok(est.enviados.length === 0, 'PUSH_NOVO_PEDIDO=false desliga o aviso à equipe');
+  amb.props.delete('PUSH_NOVO_PEDIDO'); amb.props.delete('PUSH_PEDIDO_AUTO');
+  // o aviso nunca derruba o pedido
+  est.cai = new Error('OneSignal fora do ar'); amb.cacheMem.clear();
+  const pedOk = amb.post({ action: 'criarPedido', nome: 'Teste Falha', whatsapp: '88966665555', entrega: 'retirada', itens: [{ id: '101' }] });
+  ok(pedOk.ok && /^PED-/.test(pedOk.codigo), 'OneSignal fora do ar: o pedido é criado normalmente');
+  const upOk = amb.post(A({ action: 'atualizarPedido', codigo: pedOk.codigo, status: 'separacao' }));
+  ok(upOk.ok, 'OneSignal fora do ar: a mudança de etapa é salva normalmente');
+  est.cai = null;
+  // sem chaves do OneSignal: nada de aviso automático e nada quebra
+  const semChave = criarAmbiente(); semear(semChave);
+  const pedS = semChave.post({ action: 'criarPedido', nome: 'Sem Chave', whatsapp: '88955554444', entrega: 'retirada', itens: [{ id: '101' }] });
+  ok(pedS.ok && semChave.chamadasFetch.length === 0, 'sem OneSignal configurado: pedido normal, nenhuma chamada externa');
+
+  // ---------- pedido (cliente do pedido) e etapa (todos com pedido nessa etapa)
+  est.usuarios = [{ external_id: pid('88999990005') }, { ped_0002: amb.run("pushChavePedido_('PED-0002')") }];
+  est.enviados.length = 0;
+  r = amb.post(A({ action: 'enviarPush', titulo: 'Sobre seu pedido', mensagem: 'Oi, tudo bem?', audiencia: { tipo: 'pedido', codigo: 'ped 2' } }));
+  ok(r.ok && est.enviados[0].include_aliases.ped_0002[0] === amb.run("pushChavePedido_('PED-0002')") && /PED-0002/.test(r.descricao), 'aviso para o cliente de um pedido (código digitado de qualquer jeito)', JSON.stringify(r));
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', audiencia: { tipo: 'pedido', codigo: 'PED-9999' } }));
+  ok(r.ok === false && /não encontrado/i.test(r.erro), 'pedido que não existe: recusa');
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', audiencia: { tipo: 'pedidos', status: 'pronto' } }));
+  ok(r.ok && r.pessoas === 1 && /pronto/.test(r.descricao), 'pedidos em uma etapa: 1 cliente (PED-0002 está pronto)', JSON.stringify(r));
+  r = amb.post(A({ action: 'enviarPush', titulo: 'T', mensagem: 'M', audiencia: { tipo: 'pedidos', status: 'inventada' } }));
+  ok(r.ok === false, 'etapa inventada: recusa');
+
+  // ---------- novidade de produto leva a foto e respeita preferências
+  est.usuarios = [{ external_id: pid('88999990005') }]; est.enviados.length = 0;
+  r = amb.post(A({ action: 'create', nome: 'Vestido Novo', preco: 99, categoria: 'Vestidos', genero: 'Feminino Adulto', novidade: true, notificarPush: true, fotoUrlExistente: 'https://res.cloudinary.com/z/novo.jpg' }));
+  pn = est.enviados[0];
+  ok(r.ok && pn && Array.isArray(pn.filters) && pn.url === 'https://tenkitermodas.com.br/?c=' + r.codigo && pn.chrome_web_image === 'https://res.cloudinary.com/z/novo.jpg' && /Vestido Novo/.test(pn.contents.pt), 'peça nova com "avisar": link ?c=<código>, foto grande e respeita preferências', JSON.stringify(pn).slice(0, 240));
+  est.cai = new Error('fora'); est.enviados.length = 0;
+  r = amb.post(A({ action: 'create', nome: 'Vestido Novo 2', preco: 99, categoria: 'Vestidos', genero: 'Feminino Adulto', novidade: true, notificarPush: true, fotoUrlExistente: 'https://res.cloudinary.com/z/novo2.jpg' }));
+  ok(r.ok, 'falha no aviso de novidade não impede o cadastro da peça');
+  est.cai = null;
+
+  // ---------- config pública
+  const cfg = amb.getJson({ action: 'pushconfig' });
+  ok(cfg.ok && cfg.interesses.length >= 5 && cfg.interesses.every(i => /^[a-z0-9_]+$/.test(i.chave) && i.rotulo), 'pushconfig (público): interesses com chave segura para etiqueta', JSON.stringify(cfg.interesses.slice(0, 2)));
+  ok(JSON.stringify(cfg).indexOf('os_v2') === -1 && JSON.stringify(cfg).indexOf('app-1') === -1, 'a configuração pública não vaza chave nem App ID do servidor');
+  const v = amb.getJson({ action: 'versao' });
+  ok(v.pushCompleto === true, 'versao anuncia pushCompleto:true');
 })();
 
 // ------------------------------------------------------------------ 9. o que já existia continua igual

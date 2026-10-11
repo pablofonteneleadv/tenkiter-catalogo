@@ -1,4 +1,20 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.2
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.3
+//
+// NOVIDADE v3.3 -- AVISOS (push) COMPLETOS, com público à escolha (só ACRESCENTA; o aviso simples da v3.1/3.2 continua funcionando igual):
+//  - Quem recebe: todos | segmento do OneSignal | quem instalou o app | por interesse (gênero) | grupo (equipe, alunos, portal, clientes, todas as
+//    contas) | perfil (Aluno, Novato, Estagiário, Funcionário, Admin... os que existirem na sua aba Perfis) | acesso (qualquer permissão: ex. quem
+//    pode cadastrar produtos) | pessoas escolhidas pelo nome | o cliente de um pedido | clientes com pedido em uma etapa. As escolhas por conta são
+//    resolvidas AQUI, pela planilha de pessoas, e entregues por identidade (nunca por etiqueta que o aparelho poderia inventar).
+//  - Personalização: {nome} no título/mensagem vira o primeiro nome da pessoa (um aviso por pessoa, até 300 pessoas por envio); link para qualquer
+//    https, imagem grande, agendamento (até 30 dias), validade (ttl), prévia do público antes de enviar, cancelar aviso agendado.
+//  - Números de cada aviso (entregues, cliques, falhas) direto do OneSignal; histórico com público e horário agendado (colunas novas em Push_Historico).
+//  - Modelos de aviso editáveis (aba Push_Modelos, criada sozinha com 6 modelos prontos).
+//  - Automáticos (desligáveis nas Propriedades do Script ou no painel): a equipe recebe cada pedido novo; o cliente recebe quando a etapa do pedido muda.
+//  - Identidade: pushIdentidade (aberta, mas só com token de sessão) devolve o pushId da conta; criarPedido/consultarPedido devolvem pushKey (chave do
+//    pedido) para o aparelho de quem pediu SEM conta receber os avisos daquele pedido. pushId/pushKey são HMAC com o segredo do servidor.
+//  - Painel: statusPush (OneSignal configurado? plataforma Web pronta? quantas contas por grupo), salvarPushConfig (Admin total).
+//  - versao anuncia pushCompleto:true; o site só mostra a Central de avisos nova se essa bandeira existir.
+//  - Esta versão INCLUI a v3.2 (categorias). Cole este arquivo inteiro no lugar do anterior.
 //
 // NOVIDADE v3.2 -- categorias sob controle (só ACRESCENTA; nada existente muda de formato):
 //  - addCategoria/addGenero: o nome é LIMPO antes de gravar (vírgula vira espaço -- a vírgula separa as categorias dentro da peça e partia
@@ -115,7 +131,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-3.2';
+const VERSAO_CATALOGO = 'catalogo-3.3';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1180,7 +1196,10 @@ const PERMISSAO_POR_ACAO_ = {
   // v3.1 (só reaproveitam permissões que já existem -- não cria permissão nova, para não mexer no bloco compartilhado com o treinamento)
   listarPedidos: 'catalogo_cadastrar', atualizarPedido: 'catalogo_cadastrar', gerarCodigosFaltantes: 'catalogo_cadastrar',
   metricas: 'catalogo_auditoria', importarProdutos: 'catalogo_precos',
-  statusIntegracoes: 'gerir_acessos', salvarIntegracoes: 'gerir_acessos', pushHistorico: 'catalogo_push'
+  statusIntegracoes: 'gerir_acessos', salvarIntegracoes: 'gerir_acessos', pushHistorico: 'catalogo_push',
+  // v3.3: avisos completos (mandar aviso já exigia catalogo_push; as consultas do painel também)
+  pushPrevia: 'catalogo_push', pushPessoas: 'catalogo_push', pushStatus: 'catalogo_push', pushNumeros: 'catalogo_push', pushCancelar: 'catalogo_push',
+  pushModelos: 'catalogo_push', salvarPushModelo: 'catalogo_push', excluirPushModelo: 'catalogo_push', salvarPushConfig: 'gerir_acessos'
 };
 const PERMISSAO_POR_LOTE_ = {
   ajustarPrecoPorcento: 'catalogo_precos', marcarNovidade: 'catalogo_cadastrar', alterarEstoque: 'catalogo_cadastrar',
@@ -1446,9 +1465,10 @@ function doGetInterno_(e) {
   if (action === 'versao') return jsonResponse_({
     ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
     pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true,
-    categoriasGestao: true
+    categoriasGestao: true, pushCompleto: true
   });
   if (action === 'config') return configPublica_();
+  if (action === 'pushconfig') return pushConfigPublica_();
   if (action === 'feed') return feedProdutos_(e.parameter.formato);
   if (action === 'sitemap') return sitemapProdutos_();
 
@@ -1515,8 +1535,9 @@ function doPostInterno_(body) {
   if (action === 'registrar_cliente') return registrarCliente_(body);
   if (action === 'cliente_dados') return clienteDados_(body);
   if (action === 'cliente_salvar') return clienteSalvar_(body);
-  if (action === 'criarPedido') return criarPedido_(body);
+  if (action === 'criarPedido') { try { return criarPedido_(body); } finally { pushDespacharFila_(); } }
   if (action === 'consultarPedido') return consultarPedido_(body);
+  if (action === 'pushIdentidade') return pushIdentidade_(body);
 
   // ---- protegidas: login + permissão (ou PIN antigo enquanto ligado)
   const permissao = permissaoDaAcao_(body);
@@ -1565,10 +1586,19 @@ function despacharPost_(body) {
   if (action === 'sugerirPorFoto') return sugerirPorFotoComGemini_(body);
   if (action === 'statusConfigIA') return statusConfigIA_();
   if (action === 'salvarConfigIA') return salvarConfigIA_(body);
-  if (action === 'enviarPush') return enviarPushOneSignal_(body.titulo, body.mensagem, body.url || SITE_URL, body.segmento, body.funcionario);
+  if (action === 'enviarPush') return enviarPushAcao_(body);
   if (action === 'pushHistorico') return listarPushHistorico_(body);
+  if (action === 'pushPrevia') return pushPrevia_(body);
+  if (action === 'pushPessoas') return pushPessoasBuscar_(body);
+  if (action === 'pushStatus') return pushStatus_();
+  if (action === 'pushNumeros') return pushNumeros_(body);
+  if (action === 'pushCancelar') return pushCancelar_(body);
+  if (action === 'pushModelos') return pushModelosListar_();
+  if (action === 'salvarPushModelo') return pushModeloSalvar_(body);
+  if (action === 'excluirPushModelo') return pushModeloExcluir_(body);
+  if (action === 'salvarPushConfig') return pushSalvarConfig_(body);
   if (action === 'listarPedidos') return listarPedidos_(body);
-  if (action === 'atualizarPedido') return atualizarPedido_(body);
+  if (action === 'atualizarPedido') { try { return atualizarPedido_(body); } finally { pushDespacharFila_(); } }
   if (action === 'gerarCodigosFaltantes') return gerarCodigosFaltantes_(body);
   if (action === 'metricas') return metricas_(body);
   if (action === 'importarProdutos') return importarProdutos_(body);
@@ -1685,12 +1715,13 @@ function criarProduto_(body) {
   // Push automático de "novidade" — nunca deve impedir o cadastro do produto se falhar.
   if (body.novidade && body.notificarPush) {
     try {
-      enviarPushOneSignal_(
-        'Chegou novidade! 🆕',
-        body.nome ? ('Acabou de chegar: ' + body.nome) : 'Uma peça nova chegou na loja. Vem ver!',
-        SITE_URL + '?id=' + id,
-        '', body.funcionario
-      );
+      pushEnviar_({
+        titulo: 'Chegou novidade! 🆕',
+        mensagem: body.nome ? ('Acabou de chegar: ' + body.nome) : 'Uma peça nova chegou na loja. Vem ver!',
+        url: SITE_URL + (codigo ? '?c=' + encodeURIComponent(codigo) : '?id=' + id),
+        imagem: /^https:\/\//.test(String(fotoUrl || '')) ? String(fotoUrl) : '',
+        audiencia: { tipo: 'todos' }, quem: body.funcionario
+      });
     } catch (erroPush) {
       // Silencioso de propósito: falha no push não pode derrubar o cadastro.
     }
@@ -2067,62 +2098,616 @@ function sugerirPorFotoComGemini_(body) {
 }
 
 /**
- * Envia uma notificação push de verdade para todos os inscritos, via OneSignal.
- * O OneSignal cuida de guardar quem se inscreveu e de toda a criptografia do
- * Web Push — este backend só dispara um POST simples pra API REST dele.
+ * AVISOS (push) -- o módulo completo da v3.3 está mais abaixo, na seção "v3.3: AVISOS (push) COMPLETOS" (pushEnviar_ e companhia).
+ * O OneSignal cuida de guardar quem se inscreveu e de toda a criptografia do Web Push; este backend decide PARA QUEM mandar.
  *
  * CONFIGURAÇÃO NECESSÁRIA (uma vez só):
- * 1. No painel do OneSignal (onesignal.com) → seu app → Settings → Keys & IDs
- * 2. Copie a "REST API Key" (essa é SEGREDA — nunca vai no common.js nem no chat)
- * 3. No editor do Apps Script: ⚙️ Configurações do projeto → Propriedades
- *    do script → Adicionar propriedade do script:
+ * 1. No painel do OneSignal (onesignal.com) → seu app → Settings → Platforms → Web → configure o site (veja LEIA-ME-AVISOS.md).
+ * 2. Settings → Keys & IDs → copie a "REST API Key" (SEGREDA -- nunca vai no common.js nem no chat).
+ * 3. No editor do Apps Script: ⚙️ Configurações do projeto → Propriedades do script → Adicionar:
  *    Nome: ONESIGNAL_REST_API_KEY   Valor: <sua REST API Key>
  *    Nome: ONESIGNAL_APP_ID         Valor: 535f6b0d-c866-43c2-b241-43bd7ab62fae
- *    (o App ID já está público no common.js também — não é segredo, só a chave REST é.)
+ *    (o App ID já está público no common.js também -- não é segredo, só a chave REST é.)
+ *  Opcionais: PUSH_SEGMENTOS (nomes de segmentos do OneSignal, separados por vírgula), PUSH_NOVO_PEDIDO e PUSH_PEDIDO_AUTO ('false' desliga).
  */
-function enviarPushOneSignal_(titulo, mensagem, urlDestino, segmento, funcionario) {
-  const appId = PropertiesService.getScriptProperties().getProperty('ONESIGNAL_APP_ID');
-  const restApiKey = PropertiesService.getScriptProperties().getProperty('ONESIGNAL_REST_API_KEY');
+// ====================================================================
+// ===================== v3.3: AVISOS (push) COMPLETOS =====================
+// ====================================================================
+// Tudo aqui é NOVO na v3.3. O envio continua sendo feito pelo OneSignal (provado, cuida de Android, iPhone e computador);
+// este script só decide PARA QUEM mandar (contas, perfis, acessos, alunos, pessoas, pedidos, interesses...) e guarda o histórico.
+//
+//  IDENTIDADE: cada conta tem um "pushId" (HMAC do WhatsApp com o segredo do servidor -- não dá para adivinhar). O site, depois do login,
+//  pede o pushId (pushIdentidade, só com sessão válida) e liga o aparelho a ele (OneSignal.login). Assim "avisar a Maria" ou "avisar todos os
+//  alunos" é decidido AQUI, pela planilha de pessoas, e não por etiquetas que o próprio aparelho poderia inventar.
+//  Quem fez pedido sem conta recebe uma chave do pedido (pushChavePedido_): só quem fez o pedido a recebe e só ela liga o aparelho àquele pedido
+//  (apelido "ped_0001" no OneSignal, um por pedido).
+//
+//  PÚBLICOS (audiencia): todos | segmento | grupo (equipe, alunos, clientes, portal, contas) | perfil | acesso (permissões) | pessoas | pedido |
+//  pedidos (por etapa) | interesse | app (quem instalou). Avisos para contas (grupo/perfil/acesso/pessoas/pedido) são mensagens DIRETAS por
+//  identidade; para "todos", "interesse" e "app" vale a preferência "Novidades e promoções" que a pessoa escolheu no aparelho (etiqueta av_novidades).
+//  {nome} no título/mensagem vira o primeiro nome (um aviso por pessoa, até PUSH_LIMITE_PERSONALIZADO_).
+//  Automáticos (podem ser desligados nas Propriedades do Script com 'false'): PUSH_NOVO_PEDIDO (equipe recebe cada pedido novo) e
+//  PUSH_PEDIDO_AUTO (cliente recebe quando a etapa do pedido muda).
 
-  if (!appId || !restApiKey) {
-    return jsonResponse_({ ok: false, erro: 'OneSignal não configurado no servidor (faltam ONESIGNAL_APP_ID e/ou ONESIGNAL_REST_API_KEY nas Propriedades do Script). Veja as instruções no código (enviarPushOneSignal_).' });
+const SHEET_PUSH_MODELOS_ = 'Push_Modelos';
+const PUSH_API_ = 'https://api.onesignal.com';
+const PUSH_LIMITE_PERSONALIZADO_ = 300;
+const PUSH_CAB_HIST_ = ['DataHora', 'Funcionario', 'Titulo', 'Mensagem', 'Url', 'Segmento', 'Destinatarios', 'Resultado', 'NotifId', 'Audiencia', 'Agendado', 'Imagem'];
+const PUSH_MODELOS_PADRAO_ = [
+  { rotulo: 'Novidades', titulo: 'Chegou novidade! 🆕', mensagem: 'Peças novas na TENKiTER Modas. Vem conferir no catálogo!' },
+  { rotulo: 'Últimas peças', titulo: 'Últimas peças! ⏳', mensagem: 'Algumas peças estão acabando. Garanta a sua no catálogo.' },
+  { rotulo: 'Reposição', titulo: 'Voltou ao estoque ✨', mensagem: 'As peças que você pediu chegaram de novo. Confira no catálogo.' },
+  { rotulo: 'Fantasias', titulo: 'Fantasias infantis 🎭', mensagem: 'Veja as fantasias disponíveis na TENKiTER Modas, em Crateús.' },
+  { rotulo: 'Com o nome', titulo: 'Oi, {nome}! 💛', mensagem: 'Tem novidade para você na TENKiTER Modas. Toque para ver.' },
+  { rotulo: 'Aviso da equipe', titulo: 'Aviso da equipe 📣', mensagem: 'Recado importante para a equipe TENKiTER. Toque para ler.' }
+];
+const PUSH_MSG_PEDIDO_ = {
+  em_atendimento: { t: 'Pedido {c}: estamos cuidando 💬', m: 'Já estamos atendendo o seu pedido. Qualquer dúvida, é só chamar a loja.' },
+  aguardando_pagamento: { t: 'Pedido {c}: aguardando pagamento 💳', m: 'Seu pedido está reservado e aguardando o pagamento. Fale com a loja para combinar.' },
+  separacao: { t: 'Pedido {c}: separando suas peças 🧺', m: 'Estamos separando as suas peças com carinho.' },
+  pronto_retirada: { t: 'Pedido {c}: pronto! 🎉', m: 'Seu pedido está pronto. Pode vir buscar na loja: Rua Dr. Moreira da Rocha, 759 — Crateús.' },
+  pronto_entrega: { t: 'Pedido {c}: pronto! 🎉', m: 'Seu pedido está pronto e já vai sair para entrega.' },
+  concluido: { t: 'Pedido {c} concluído 💛', m: 'Obrigado por comprar na TENKiTER Modas! Volte sempre.' },
+  cancelado: { t: 'Pedido {c} cancelado', m: 'Seu pedido foi cancelado. Se foi engano, fale com a loja pelo WhatsApp.' }
+};
+
+var pushFila_ = []; // avisos automáticos esperando o fim da gravação (a trava do script já foi solta)
+
+function pushCfg_() {
+  const p = PropertiesService.getScriptProperties();
+  return { appId: String(p.getProperty('ONESIGNAL_APP_ID') || '').trim(), chave: String(p.getProperty('ONESIGNAL_REST_API_KEY') || '').trim() };
+}
+function pushAutoLigado_(nome) {
+  const cfg = pushCfg_();
+  return !!(cfg.appId && cfg.chave) && PropertiesService.getScriptProperties().getProperty(nome) !== 'false';
+}
+function pushIdDe_(whats) {
+  return 'tk' + acBytesHex_(Utilities.computeHmacSha256Signature('push|' + acWhats_(whats), acSegredo_())).slice(0, 30);
+}
+function pushChavePedido_(codigo) {
+  return 'pk' + acBytesHex_(Utilities.computeHmacSha256Signature('pedido|' + String(codigo), acSegredo_())).slice(0, 30);
+}
+function pushSlug_(t) { return acNorm_(t).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40); }
+function pushPrimeiroNome_(nome) {
+  const p = String(nome || '').trim().split(/\s+/)[0] || '';
+  return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : '';
+}
+function pushTexto_(t, nome) { return String(t == null ? '' : t).replace(/\{nome\}/gi, nome); }
+function pushTemNome_(t) { return /\{nome\}/i.test(String(t || '')); }
+
+/** Chamada à API do OneSignal. Chave nova (os_v2_...) usa "Key", chave antiga usa "Basic"; se o esquema for recusado (401/403), tenta o outro. */
+function pushChamar_(metodo, caminho, corpo) {
+  const cfg = pushCfg_();
+  const esquemas = /^os_v2_/.test(cfg.chave) ? ['Key', 'Basic'] : ['Basic', 'Key'];
+  let ultimo = null;
+  for (let i = 0; i < esquemas.length; i++) {
+    const opt = { method: metodo, contentType: 'application/json', headers: { 'Authorization': esquemas[i] + ' ' + cfg.chave, 'Accept': 'application/json' }, muteHttpExceptions: true };
+    if (corpo) opt.payload = JSON.stringify(corpo);
+    const r = UrlFetchApp.fetch(PUSH_API_ + caminho, opt);
+    const texto = String(r.getContentText() || '');
+    ultimo = { codigo: r.getResponseCode(), dados: jsonSeguro_(texto, {}), texto: texto };
+    if (ultimo.codigo !== 401 && ultimo.codigo !== 403) return ultimo;
   }
-  if (!titulo || !mensagem) {
-    return jsonResponse_({ ok: false, erro: 'Título e mensagem são obrigatórios para enviar a notificação.' });
+  return ultimo;
+}
+function pushRequisicao_(corpo) {
+  const cfg = pushCfg_();
+  return { url: PUSH_API_ + '/notifications', method: 'post', contentType: 'application/json', headers: { 'Authorization': (/^os_v2_/.test(cfg.chave) ? 'Key ' : 'Basic ') + cfg.chave, 'Accept': 'application/json' }, payload: JSON.stringify(corpo), muteHttpExceptions: true };
+}
+/** Texto de erro legível a partir da resposta do OneSignal. */
+function pushErroTexto_(r) {
+  const e = r && r.dados && r.dados.errors;
+  let t = '';
+  if (Array.isArray(e)) t = e.map(function (x) { return typeof x === 'string' ? x : (x && (x.title || x.message)) || JSON.stringify(x); }).join('; ');
+  else if (e && typeof e === 'object') t = Object.keys(e).map(function (k) { return k + ': ' + JSON.stringify(e[k]); }).join('; ');
+  if (!t) t = 'HTTP ' + (r ? r.codigo : '?');
+  if (/not configured for web|no.*web.*platform/i.test(t)) t += ' (a plataforma Web ainda não foi configurada no OneSignal)';
+  return t;
+}
+/** ids de alias que o OneSignal diz que não têm aparelho com aviso ativo. */
+function pushInvalidos_(dados) {
+  const e = dados && dados.errors;
+  const out = {};
+  if (e && !Array.isArray(e) && typeof e === 'object' && e.invalid_aliases) {
+    Object.keys(e.invalid_aliases).forEach(function (rotulo) { (e.invalid_aliases[rotulo] || []).forEach(function (id) { out[String(id)] = true; }); });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- quem existe (planilha de pessoas)
+
+/** Uma entrada por WhatsApp (contas ativas), com grupo e permissões. Quem tem o mesmo número em mais de uma linha junta as permissões. */
+function pushPessoas_() {
+  const perfis = acPerfis_();
+  const mapa = {};
+  acTodasLinhas_().forEach(function (l) {
+    const w = acWhats_(l.whatsapp);
+    if (!w) return;
+    if (String(l.status || 'Ativo').trim().toLowerCase() === 'inativo') return;
+    const p = acPermsDaLinha_(l, perfis);
+    const perfil = String(l.perfil || '').trim() || acPerfilLegado_(l.nivel);
+    let x = mapa[w];
+    if (!x) x = mapa[w] = { whats: w, nome: String(l.nome || '').trim() || w, perfis: [], perms: {} };
+    if (String(l.nome || '').trim() && x.nome === w) x.nome = String(l.nome).trim();
+    if (x.perfis.indexOf(perfil) === -1) x.perfis.push(perfil);
+    acChaves_().forEach(function (k) { if (p[k]) x.perms[k] = true; });
+  });
+  return Object.keys(mapa).map(function (w) {
+    const x = mapa[w];
+    const perfisNorm = x.perfis.map(acNorm_);
+    x.perfil = x.perfis[0] || '';
+    x.equipe = !!(x.perms.catalogo_admin || x.perms.catalogo_cadastrar || x.perms.gerir_acessos || x.perms.gerir_manuais || x.perms.equipe_relatorio);
+    x.portal = !!x.perms.portal;
+    x.aluno = perfisNorm.indexOf('aluno') !== -1 || perfisNorm.indexOf('novato') !== -1;
+    x.cliente = !x.equipe && !x.portal;
+    x.pushId = pushIdDe_(w);
+    return x;
+  });
+}
+
+const PUSH_GRUPOS_ = {
+  equipe: { rotulo: 'Toda a equipe (quem acessa o catálogo/gestão)', teste: function (x) { return x.equipe; } },
+  alunos: { rotulo: 'Alunos (perfis Aluno e Novato)', teste: function (x) { return x.aluno; } },
+  portal: { rotulo: 'Todos do portal de treinamento', teste: function (x) { return x.portal; } },
+  clientes: { rotulo: 'Clientes com conta', teste: function (x) { return x.cliente; } },
+  contas: { rotulo: 'Todas as contas', teste: function () { return true; } }
+};
+
+// ---------------------------------------------------------------- resolver o público
+
+function pushRamos_(cond, respeitar) {
+  if (!respeitar) return cond.slice();
+  return cond.concat([{ field: 'tag', key: 'av_novidades', relation: '=', value: '1' }, { operator: 'OR' }]).concat(cond).concat([{ field: 'tag', key: 'av_novidades', relation: 'not_exists' }]);
+}
+function pushJuntarRamos_(alternativas, respeitar) {
+  let out = [];
+  alternativas.forEach(function (c, i) { if (i) out.push({ operator: 'OR' }); out = out.concat(pushRamos_(c, respeitar)); });
+  return out;
+}
+function pushItemPessoa_(x) {
+  return { nome: x.nome, ids: { external_id: [x.pushId] } };
+}
+/** Cada pedido tem o PRÓPRIO apelido no OneSignal ("ped_0001" = chave do pedido): um aparelho pode acompanhar vários pedidos ao mesmo tempo
+ *  (o OneSignal só aceita UM valor por apelido, então um apelido único como "pedido" só guardaria o último). */
+function pushRotuloPedido_(codigo) { return 'ped_' + String(codigo).replace(/\D/g, ''); }
+function pushItemPedido_(o) {
+  const w = acWhats_(o.WhatsApp);
+  const ids = {};
+  ids[pushRotuloPedido_(o.Codigo)] = [pushChavePedido_(String(o.Codigo))];
+  if (acLinhasDoWhats_(w).length) ids.external_id = [pushIdDe_(w)];
+  return { nome: String(o.Nome || ''), ids: ids };
+}
+
+/**
+ * Devolve { ok, tipo: 'aliases'|'filtros'|'segmentos', descricao, itens?, filtros?, segmentos? } ou { ok:false, erro }.
+ * 'aliases' = lista de pessoas com os ids que o OneSignal conhece (mensagem direta); 'filtros' = etiquetas do aparelho; 'segmentos' = segmentos do OneSignal.
+ */
+function pushAudiencia_(aud, respeitar) {
+  aud = aud && typeof aud === 'object' ? aud : { tipo: 'todos' };
+  const tipo = String(aud.tipo || 'todos');
+
+  if (tipo === 'todos') {
+    return respeitar
+      ? { ok: true, tipo: 'filtros', filtros: pushJuntarRamos_([[]], true), descricao: 'Todos que ativaram os avisos (respeitando quem desligou promoções)' }
+      : { ok: true, tipo: 'segmentos', segmentos: ['Subscribed Users'], descricao: 'Todos que ativaram os avisos' };
+  }
+  if (tipo === 'segmento') {
+    const permitidos = ['Subscribed Users'].concat(String(PropertiesService.getScriptProperties().getProperty('PUSH_SEGMENTOS') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean));
+    const nome = String(aud.nome || 'Subscribed Users');
+    if (permitidos.indexOf(nome) === -1) return { ok: false, erro: 'Esse segmento não está cadastrado (Integrações → segmentos).' };
+    return { ok: true, tipo: 'segmentos', segmentos: [nome], descricao: nome === 'Subscribed Users' ? 'Todos que ativaram os avisos' : 'Segmento: ' + nome };
+  }
+  if (tipo === 'app') {
+    return { ok: true, tipo: 'filtros', filtros: pushJuntarRamos_([[{ field: 'tag', key: 'origem', relation: '=', value: 'app' }]], respeitar), descricao: 'Quem instalou o app' };
+  }
+  if (tipo === 'interesse') {
+    const chaves = (Array.isArray(aud.chaves) ? aud.chaves : [aud.chave]).map(pushSlug_).filter(Boolean).slice(0, 10);
+    if (!chaves.length) return { ok: false, erro: 'Escolha pelo menos um interesse.' };
+    const rotulos = (Array.isArray(aud.rotulos) ? aud.rotulos : chaves).map(function (r) { return String(r).slice(0, 40); });
+    return { ok: true, tipo: 'filtros', filtros: pushJuntarRamos_(chaves.map(function (c) { return [{ field: 'tag', key: 'int_' + c, relation: '=', value: '1' }]; }), respeitar), descricao: 'Interessados em: ' + rotulos.join(', ') };
   }
 
-  const segmentosOk = ['Subscribed Users'].concat(String(PropertiesService.getScriptProperties().getProperty('PUSH_SEGMENTOS') || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean));
-  const seg = segmento && segmentosOk.indexOf(String(segmento)) !== -1 ? String(segmento) : 'Subscribed Users';
-  if (urlDestino && !/^https:\/\//.test(String(urlDestino))) return jsonResponse_({ ok: false, erro: 'O link do aviso precisa começar com https://' });
-  const payload = {
-    app_id: appId,
-    included_segments: [seg],
-    headings: { en: titulo, pt: titulo },
-    contents: { en: mensagem, pt: mensagem },
-    url: urlDestino || SITE_URL
-  };
-
-  try {
-    const resp = UrlFetchApp.fetch('https://onesignal.com/api/v1/notifications', {
-      method: 'post',
-      contentType: 'application/json',
-      headers: { 'Authorization': 'Basic ' + restApiKey },
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
+  // ---- por conta (mensagem direta)
+  let itens = [], descricao = '';
+  if (tipo === 'pedido') {
+    const cod = codigoPedidoNormalizado_(aud.codigo);
+    const o = cod ? pedidoPorCodigo_(cod) : null;
+    if (!o) return { ok: false, erro: 'Pedido não encontrado.' };
+    itens = [pushItemPedido_(o)]; descricao = 'Cliente do pedido ' + cod;
+  } else if (tipo === 'pedidos') {
+    const st = String(aud.status || '');
+    if (STATUS_PEDIDO_.indexOf(st) === -1) return { ok: false, erro: 'Etapa de pedido inválida.' };
+    const vistos = {};
+    linhasComoObjetos_(getOrCreateSheet_(SHEET_PEDIDOS, CABECALHOS_PEDIDOS_)).forEach(function (o) {
+      if (String(o.Status || 'novo') !== st) return;
+      const it = pushItemPedido_(o);
+      const k = (it.ids.external_id || [])[0] || JSON.stringify(it.ids);
+      if (!vistos[k]) { vistos[k] = true; itens.push(it); }
     });
-    const codigoResp = resp.getResponseCode();
-    const dadosResp = JSON.parse(resp.getContentText());
-
-    if (codigoResp !== 200) {
-      const msgErro = (dadosResp.errors && dadosResp.errors.join(', ')) || ('HTTP ' + codigoResp);
-      return jsonResponse_({ ok: false, erro: 'Erro do OneSignal: ' + msgErro });
+    descricao = 'Clientes com pedido em "' + st + '"';
+  } else {
+    const pessoas = pushPessoas_();
+    let sel = [];
+    if (tipo === 'grupo') {
+      const g = PUSH_GRUPOS_[String(aud.grupo || '')];
+      if (!g) return { ok: false, erro: 'Grupo desconhecido.' };
+      sel = pessoas.filter(g.teste); descricao = g.rotulo;
+    } else if (tipo === 'perfil') {
+      const nomes = (Array.isArray(aud.perfis) ? aud.perfis : [aud.perfil]).map(acNorm_).filter(Boolean);
+      if (!nomes.length) return { ok: false, erro: 'Escolha pelo menos um perfil.' };
+      sel = pessoas.filter(function (x) { return x.perfis.some(function (p) { return nomes.indexOf(acNorm_(p)) !== -1; }); });
+      descricao = 'Perfil: ' + (Array.isArray(aud.perfis) ? aud.perfis : [aud.perfil]).join(', ');
+    } else if (tipo === 'acesso') {
+      const validas = acChaves_();
+      const chaves = (Array.isArray(aud.chaves) ? aud.chaves : [aud.chave]).filter(function (k) { return validas.indexOf(k) !== -1; });
+      if (!chaves.length) return { ok: false, erro: 'Escolha pelo menos um acesso.' };
+      const todas = aud.modo === 'todas';
+      sel = pessoas.filter(function (x) { return todas ? chaves.every(function (k) { return x.perms[k]; }) : chaves.some(function (k) { return x.perms[k]; }); });
+      const rot = {}; AC_PERMISSOES.forEach(function (p) { rot[p.chave] = p.rotulo; });
+      descricao = 'Acesso: ' + chaves.map(function (k) { return rot[k]; }).join(todas ? ' + ' : ' ou ');
+    } else if (tipo === 'pessoas') {
+      const ids = (Array.isArray(aud.ids) ? aud.ids : []).map(String);
+      if (!ids.length) return { ok: false, erro: 'Escolha pelo menos uma pessoa.' };
+      sel = pessoas.filter(function (x) { return ids.indexOf(x.pushId) !== -1; });
+      descricao = sel.length === 1 ? 'Pessoa: ' + sel[0].nome : 'Pessoas escolhidas (' + sel.length + ')';
+    } else {
+      return { ok: false, erro: 'Público desconhecido: ' + tipo };
     }
-
-    registrarPushHistorico_(funcionario, titulo, mensagem, urlDestino, seg, dadosResp.recipients || 0, 'enviado');
-    return jsonResponse_({ ok: true, id: dadosResp.id, destinatarios: dadosResp.recipients || 0 });
-  } catch (erroFetch) {
-    return jsonResponse_({ ok: false, erro: 'Falha ao conectar com o OneSignal: ' + erroFetch.message });
+    itens = sel.map(pushItemPessoa_);
   }
+  if (!itens.length) return { ok: false, erro: 'Ninguém encontrado nesse público.' };
+  return { ok: true, tipo: 'aliases', itens: itens, descricao: descricao };
+}
+
+// ---------------------------------------------------------------- enviar
+
+/**
+ * Envia (ou agenda) um aviso. op: { titulo, mensagem, url, imagem, audiencia, agendarEm (ISO), ttlHoras, quem, respeitarPreferencias, semHistorico }.
+ * Devolve objeto simples (nunca lança): { ok, id, agendado, descricao, pessoas, semAviso:[nomes], individuais, erro }.
+ */
+function pushEnviar_(op) {
+  const cfg = pushCfg_();
+  if (!cfg.appId || !cfg.chave) return { ok: false, erro: 'OneSignal não configurado no servidor (faltam ONESIGNAL_APP_ID e/ou ONESIGNAL_REST_API_KEY nas Propriedades do Script). Veja LEIA-ME-AVISOS.md.' };
+  const titulo = String(op.titulo == null ? '' : op.titulo).trim();
+  const mensagem = String(op.mensagem == null ? '' : op.mensagem).trim();
+  if (!titulo || !mensagem) return { ok: false, erro: 'Título e mensagem são obrigatórios para enviar a notificação.' };
+  if (titulo.length > 80 || mensagem.length > 300) return { ok: false, erro: 'Título: até 80 letras. Mensagem: até 300.' };
+  const url = String(op.url || SITE_URL).trim();
+  if (!/^https:\/\//.test(url)) return { ok: false, erro: 'O link do aviso precisa começar com https://' };
+  const imagem = String(op.imagem || '').trim();
+  if (imagem && !/^https:\/\//.test(imagem)) return { ok: false, erro: 'A imagem do aviso precisa ser um endereço https://' };
+
+  let sendAfter = '';
+  if (op.agendarEm) {
+    const d = new Date(op.agendarEm);
+    if (isNaN(d.getTime())) return { ok: false, erro: 'Data e hora do agendamento inválidas.' };
+    const agora = Date.now();
+    if (d.getTime() < agora + 60000) return { ok: false, erro: 'O horário agendado precisa estar no futuro.' };
+    if (d.getTime() > agora + 30 * 86400000) return { ok: false, erro: 'Agende no máximo para daqui a 30 dias.' };
+    sendAfter = d.toISOString();
+  }
+
+  const alvo = pushAudiencia_(op.audiencia, op.respeitarPreferencias !== false);
+  if (!alvo.ok) return alvo;
+
+  const base = { app_id: cfg.appId, url: url };
+  if (imagem) { base.chrome_web_image = imagem; base.big_picture = imagem; }
+  const ttl = Number(op.ttlHoras);
+  if (ttl > 0 && ttl <= 24 * 28) base.ttl = Math.round(ttl * 3600);
+  if (sendAfter) base.send_after = sendAfter;
+
+  const individual = alvo.tipo === 'aliases' && (pushTemNome_(titulo) || pushTemNome_(mensagem));
+  if (individual && alvo.itens.length > PUSH_LIMITE_PERSONALIZADO_) {
+    return { ok: false, erro: 'Com {nome} o aviso vai um a um e o limite é ' + PUSH_LIMITE_PERSONALIZADO_ + ' pessoas por envio (este público tem ' + alvo.itens.length + '). Tire o {nome} ou escolha um público menor.' };
+  }
+
+  const res = { ok: true, id: '', agendado: !!sendAfter, descricao: alvo.descricao, pessoas: alvo.tipo === 'aliases' ? alvo.itens.length : null, semAviso: [], individuais: individual, enviados: 0 };
+  let erroApi = '';
+
+  if (individual) {
+    const pedidos = alvo.itens.map(function (it) {
+      const corpo = Object.assign({}, base, { target_channel: 'push', include_aliases: it.ids });
+      const nome = pushPrimeiroNome_(it.nome) || 'cliente';
+      corpo.headings = { en: pushTexto_(titulo, nome), pt: pushTexto_(titulo, nome) };
+      corpo.contents = { en: pushTexto_(mensagem, nome), pt: pushTexto_(mensagem, nome) };
+      return pushRequisicao_(corpo);
+    });
+    const ids = [];
+    for (let i = 0; i < pedidos.length; i += 40) {
+      let resp;
+      try { resp = UrlFetchApp.fetchAll(pedidos.slice(i, i + 40)); } catch (e) { erroApi = 'Falha ao conectar com o OneSignal: ' + e.message; break; }
+      resp.forEach(function (r, j) {
+        const dados = jsonSeguro_(r.getContentText(), {});
+        const it = alvo.itens[i + j];
+        if (r.getResponseCode() === 200 && dados.id) { res.enviados++; ids.push(dados.id); }
+        else {
+          if (r.getResponseCode() !== 200 && r.getResponseCode() !== 400) erroApi = pushErroTexto_({ codigo: r.getResponseCode(), dados: dados });
+          res.semAviso.push(it.nome || 'Sem nome');
+        }
+      });
+    }
+    res.id = ids[0] || '';
+    res.ids = ids;
+    if (!res.enviados) return { ok: false, erro: erroApi ? 'Erro do OneSignal: ' + erroApi : 'Ninguém desse público tem avisos ativados ainda (a pessoa precisa entrar na conta e ativar os avisos no aparelho).', descricao: alvo.descricao, semAviso: res.semAviso };
+  } else {
+    const corpo = Object.assign({}, base, { headings: { en: pushTexto_(titulo, 'cliente'), pt: pushTexto_(titulo, 'cliente') }, contents: { en: pushTexto_(mensagem, 'cliente'), pt: pushTexto_(mensagem, 'cliente') } });
+    if (alvo.tipo === 'aliases') {
+      const junto = {};
+      alvo.itens.forEach(function (it) { Object.keys(it.ids).forEach(function (k) { junto[k] = (junto[k] || []).concat(it.ids[k]); }); });
+      corpo.target_channel = 'push'; corpo.include_aliases = junto;
+    } else if (alvo.tipo === 'filtros') corpo.filters = alvo.filtros;
+    else corpo.included_segments = alvo.segmentos;
+    let r;
+    try { r = pushChamar_('post', '/notifications', corpo); } catch (e) { return { ok: false, erro: 'Falha ao conectar com o OneSignal: ' + e.message }; }
+    if (r.codigo !== 200) return { ok: false, erro: 'Erro do OneSignal: ' + pushErroTexto_(r) };
+    const invalidos = pushInvalidos_(r.dados);
+    if (alvo.tipo === 'aliases') {
+      alvo.itens.forEach(function (it) {
+        const todos = Object.keys(it.ids).reduce(function (a, rot) { return a.concat(it.ids[rot]); }, []);
+        if (todos.length && todos.every(function (id) { return invalidos[id]; })) res.semAviso.push(it.nome || 'Sem nome');
+      });
+      res.enviados = alvo.itens.length - res.semAviso.length;
+    } else if (r.dados.recipients !== undefined) res.enviados = Number(r.dados.recipients) || 0;
+    res.id = String(r.dados.id || '');
+    if (!res.id) return { ok: false, erro: 'Ninguém desse público tem avisos ativados ainda' + (r.dados.errors ? ' (' + pushErroTexto_(r) + ')' : '.'), descricao: alvo.descricao, semAviso: res.semAviso };
+    if (alvo.tipo === 'aliases' && res.enviados <= 0) return { ok: false, erro: 'Ninguém desse público tem avisos ativados ainda (a pessoa precisa entrar na conta e ativar os avisos no aparelho).', descricao: alvo.descricao, semAviso: res.semAviso };
+  }
+
+  if (!op.semHistorico) {
+    pushHistoricoGravar_({ quem: op.quem, titulo: titulo, mensagem: mensagem, url: url, segmento: alvo.tipo === 'segmentos' ? alvo.segmentos[0] : '', destinatarios: res.enviados, resultado: sendAfter ? 'agendado' : 'enviado', id: res.id, audiencia: alvo.descricao, agendado: sendAfter ? dataBR_(new Date(sendAfter)) : '', imagem: imagem });
+  }
+  return res;
+}
+
+/** Compatível com a v3.1/3.2: título, mensagem, link, segmento (ou "Subscribed Users"). Usado pelo aviso automático de novidade e por quem ainda manda o formato antigo. */
+/** Formato antigo (só "segmento"): vazio ou "Subscribed Users" = todos (respeitando quem desligou promoções); outro nome = segmento do OneSignal. */
+function pushAudienciaDeSegmento_(segmento) {
+  const seg = String(segmento || '').trim();
+  return !seg || seg === 'Subscribed Users' ? { tipo: 'todos' } : { tipo: 'segmento', nome: seg };
+}
+function enviarPushOneSignal_(titulo, mensagem, urlDestino, segmento, funcionario) {
+  const r = pushEnviar_({ titulo: titulo, mensagem: mensagem, url: urlDestino, audiencia: pushAudienciaDeSegmento_(segmento), quem: funcionario });
+  if (!r.ok) return jsonResponse_({ ok: false, erro: r.erro });
+  return jsonResponse_({ ok: true, id: r.id, destinatarios: r.enviados || 0 });
+}
+
+function enviarPushAcao_(body) {
+  const op = {
+    titulo: body.titulo, mensagem: body.mensagem, url: body.url || SITE_URL, imagem: body.imagem, agendarEm: body.agendarEm, ttlHoras: body.ttlHoras,
+    quem: body.funcionario, respeitarPreferencias: body.respeitarPreferencias !== false,
+    audiencia: body.audiencia || pushAudienciaDeSegmento_(body.segmento)
+  };
+  const r = pushEnviar_(op);
+  if (!r.ok) return jsonResponse_({ ok: false, erro: r.erro, semAviso: r.semAviso || [], descricao: r.descricao || '' });
+  registrarAudit_(body.funcionario, 'enviar_push', '', { titulo: op.titulo, publico: r.descricao, id: r.id, agendado: r.agendado });
+  return jsonResponse_({ ok: true, id: r.id, destinatarios: r.enviados || 0, agendado: r.agendado, descricao: r.descricao, pessoas: r.pessoas, semAviso: r.semAviso, individuais: r.individuais });
+}
+
+/** Resolve o público SEM enviar: quantas pessoas (quando dá para saber) e uma amostra de nomes. */
+function pushPrevia_(body) {
+  const alvo = pushAudiencia_(body.audiencia, body.respeitarPreferencias !== false);
+  if (!alvo.ok) return jsonResponse_({ ok: false, erro: alvo.erro });
+  if (alvo.tipo !== 'aliases') return jsonResponse_({ ok: true, descricao: alvo.descricao, quantidade: null, porAparelho: true, amostra: [] });
+  return jsonResponse_({ ok: true, descricao: alvo.descricao, quantidade: alvo.itens.length, porAparelho: false, amostra: alvo.itens.slice(0, 8).map(function (i) { return i.nome; }), limitePersonalizado: PUSH_LIMITE_PERSONALIZADO_ });
+}
+
+// ---------------------------------------------------------------- histórico, números e cancelamento
+
+function pushHistAba_() {
+  const aba = getOrCreateSheet_(SHEET_PUSH_HIST, PUSH_CAB_HIST_);
+  const n = Math.max(1, aba.getLastColumn());
+  const atual = aba.getRange(1, 1, 1, n).getValues()[0].map(function (x) { return String(x).trim(); });
+  PUSH_CAB_HIST_.forEach(function (h) {
+    if (atual.indexOf(h) === -1) { aba.getRange(1, atual.length + 1).setValue(h); atual.push(h); }
+  });
+  return { aba: aba, cab: atual };
+}
+function pushHistoricoGravar_(d) {
+  try {
+    const h = pushHistAba_();
+    const v = { DataHora: new Date(), Funcionario: acTexto_(d.quem || 'Sistema'), Titulo: acTexto_(d.titulo || ''), Mensagem: acTexto_(d.mensagem || ''), Url: acTexto_(d.url || ''), Segmento: acTexto_(d.segmento || ''),
+      Destinatarios: d.destinatarios || 0, Resultado: acTexto_(d.resultado || ''), NotifId: acTexto_(d.id || ''), Audiencia: acTexto_(d.audiencia || ''), Agendado: acTexto_(d.agendado || ''), Imagem: acTexto_(d.imagem || '') };
+    h.aba.appendRow(h.cab.map(function (nome) { return v[nome] !== undefined ? v[nome] : ''; }));
+  } catch (e) { /* o histórico é um extra: nunca derruba o envio */ }
+}
+function listarPushHistorico_(body) {
+  const h = pushHistAba_();
+  const lista = linhasComoObjetos_(h.aba).reverse().slice(0, Math.max(1, Math.min(Number(body.limite) || 50, 200)));
+  const props = PropertiesService.getScriptProperties();
+  return jsonResponse_({
+    ok: true,
+    segmentos: ['Subscribed Users'].concat(String(props.getProperty('PUSH_SEGMENTOS') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean)),
+    historico: lista.map(function (o) {
+      return { quando: dataBR_(o.DataHora), quem: String(o.Funcionario || ''), titulo: String(o.Titulo || ''), mensagem: String(o.Mensagem || ''), url: String(o.Url || ''), segmento: String(o.Segmento || ''),
+        destinatarios: Number(o.Destinatarios) || 0, resultado: String(o.Resultado || ''), id: String(o.NotifId || ''), audiencia: String(o.Audiencia || ''), agendado: String(o.Agendado || ''), imagem: String(o.Imagem || '') };
+    })
+  });
+}
+
+/** Entregues / cliques / falhas de UM aviso (o OneSignal calcula e leva alguns minutos para fechar a conta). */
+function pushNumeros_(body) {
+  const cfg = pushCfg_();
+  const id = String(body.id || '').trim();
+  if (!cfg.appId || !cfg.chave) return jsonResponse_({ ok: false, erro: 'OneSignal não configurado no servidor.' });
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(id)) return jsonResponse_({ ok: false, erro: 'Aviso inválido.' });
+  let r;
+  try { r = pushChamar_('get', '/notifications/' + id + '?app_id=' + encodeURIComponent(cfg.appId)); } catch (e) { return jsonResponse_({ ok: false, erro: 'Falha ao conectar com o OneSignal: ' + e.message }); }
+  if (r.codigo !== 200) return jsonResponse_({ ok: false, erro: 'Erro do OneSignal: ' + pushErroTexto_(r) });
+  const d = r.dados || {};
+  const n = function (v) { return Number(v) || 0; };
+  return jsonResponse_({ ok: true, entregues: n(d.successful), falhas: n(d.failed) + n(d.errored), cliques: n(d.converted), restantes: n(d.remaining), cancelado: !!d.canceled, enviadoEm: d.completed_at || d.queued_at || 0 });
+}
+
+function pushCancelar_(body) {
+  const cfg = pushCfg_();
+  const id = String(body.id || '').trim();
+  if (!cfg.appId || !cfg.chave) return jsonResponse_({ ok: false, erro: 'OneSignal não configurado no servidor.' });
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(id)) return jsonResponse_({ ok: false, erro: 'Aviso inválido.' });
+  let r;
+  try { r = pushChamar_('delete', '/notifications/' + id + '?app_id=' + encodeURIComponent(cfg.appId)); } catch (e) { return jsonResponse_({ ok: false, erro: 'Falha ao conectar com o OneSignal: ' + e.message }); }
+  if (r.codigo !== 200) return jsonResponse_({ ok: false, erro: 'Não deu para cancelar (talvez já tenha sido enviado): ' + pushErroTexto_(r) });
+  try {
+    const h = pushHistAba_();
+    const iId = h.cab.indexOf('NotifId'), iRes = h.cab.indexOf('Resultado');
+    const dados = h.aba.getDataRange().getValues();
+    for (let i = dados.length - 1; i >= 1; i--) if (String(dados[i][iId]) === id) { h.aba.getRange(i + 1, iRes + 1).setValue('cancelado'); break; }
+  } catch (e) {}
+  registrarAudit_(body.funcionario, 'cancelar_push', '', { id: id });
+  return jsonResponse_({ ok: true });
+}
+
+// ---------------------------------------------------------------- modelos de aviso (editáveis)
+
+function pushModelosAba_() {
+  const aba = getOrCreateSheet_(SHEET_PUSH_MODELOS_, ['ID', 'Rotulo', 'Titulo', 'Mensagem', 'Url', 'Imagem', 'Atualizado', 'Por']);
+  if (aba.getLastRow() < 2) {
+    PUSH_MODELOS_PADRAO_.forEach(function (m, i) { aba.appendRow(['m' + (i + 1), acTexto_(m.rotulo), acTexto_(m.titulo), acTexto_(m.mensagem), '', '', new Date(), 'Sistema']); });
+  }
+  return aba;
+}
+function pushModelos_() {
+  return linhasComoObjetos_(pushModelosAba_()).map(function (o) {
+    return { id: String(o.ID), rotulo: String(o.Rotulo || ''), titulo: String(o.Titulo || ''), mensagem: String(o.Mensagem || ''), url: String(o.Url || ''), imagem: String(o.Imagem || '') };
+  });
+}
+function pushModelosListar_() { return jsonResponse_({ ok: true, modelos: pushModelos_() }); }
+function pushModeloSalvar_(body) {
+  const m = body.modelo || {};
+  const rotulo = limparTexto_(m.rotulo, 30), titulo = limparTexto_(m.titulo, 80), mensagem = limparTexto_(m.mensagem, 300);
+  if (!rotulo || !titulo || !mensagem) return jsonResponse_({ ok: false, erro: 'Modelo: nome, título e mensagem são obrigatórios.' });
+  const url = String(m.url || '').trim(), imagem = String(m.imagem || '').trim();
+  if ((url && !/^https:\/\//.test(url)) || (imagem && !/^https:\/\//.test(imagem))) return jsonResponse_({ ok: false, erro: 'Link e imagem precisam começar com https://' });
+  const trava = LockService.getScriptLock();
+  try { trava.waitLock(15000); } catch (e) { return jsonResponse_({ ok: false, erro: 'O sistema está ocupado. Tente de novo.' }); }
+  try {
+    const aba = pushModelosAba_();
+    const dados = aba.getDataRange().getValues();
+    const iId = dados[0].map(function (x) { return String(x).trim(); }).indexOf('ID');
+    const linhaVal = function (id) { return [id, acTexto_(rotulo), acTexto_(titulo), acTexto_(mensagem), acTexto_(url), acTexto_(imagem), new Date(), acTexto_(body.funcionario || '')]; };
+    const alvo = String(m.id || '');
+    for (let i = 1; i < dados.length; i++) {
+      if (alvo && String(dados[i][iId]) === alvo) { aba.getRange(i + 1, 1, 1, 8).setValues([linhaVal(alvo)]); return jsonResponse_({ ok: true, id: alvo, modelos: pushModelos_() }); }
+    }
+    const novo = 'm' + new Date().getTime().toString(36);
+    aba.appendRow(linhaVal(novo));
+    return jsonResponse_({ ok: true, id: novo, modelos: pushModelos_() });
+  } finally { trava.releaseLock(); }
+}
+function pushModeloExcluir_(body) {
+  const alvo = String(body.id || '');
+  if (!alvo) return jsonResponse_({ ok: false, erro: 'Modelo inválido.' });
+  const trava = LockService.getScriptLock();
+  try { trava.waitLock(15000); } catch (e) { return jsonResponse_({ ok: false, erro: 'O sistema está ocupado. Tente de novo.' }); }
+  try {
+    const aba = pushModelosAba_();
+    const dados = aba.getDataRange().getValues();
+    for (let i = dados.length - 1; i >= 1; i--) if (String(dados[i][0]) === alvo) { aba.deleteRow(i + 1); return jsonResponse_({ ok: true, modelos: pushModelos_() }); }
+    return jsonResponse_({ ok: false, erro: 'Esse modelo não existe mais.' });
+  } finally { trava.releaseLock(); }
+}
+
+// ---------------------------------------------------------------- pessoas, situação e configuração (painel)
+
+function pushMascararTel_(w) { return '(' + w.slice(0, 2) + ') 9****-' + w.slice(-4); }
+function pushPessoasBuscar_(body) {
+  const q = acNorm_(body.q || '');
+  const qd = String(body.q || '').replace(/\D/g, '');
+  if (q.length < 2 && qd.length < 3) return jsonResponse_({ ok: true, pessoas: [] });
+  const achadas = pushPessoas_().filter(function (x) { return acNorm_(x.nome).indexOf(q) !== -1 || (qd.length >= 3 && x.whats.indexOf(qd) !== -1); }).slice(0, 30);
+  return jsonResponse_({ ok: true, pessoas: achadas.map(function (x) { return { pid: x.pushId, nome: x.nome, perfil: x.perfil, tel: pushMascararTel_(x.whats), grupo: x.equipe ? 'equipe' : (x.aluno ? 'aluno' : (x.portal ? 'portal' : 'cliente')) }; }) });
+}
+
+function pushInteresses_() {
+  return getListaValores_(SHEET_GENEROS, GENEROS_PADRAO).map(function (g) { return { chave: pushSlug_(g), rotulo: g }; }).filter(function (i) { return i.chave; });
+}
+/** Público (sem login): o que a pessoa pode escolher em "Meus avisos". */
+function pushConfigPublica_() {
+  return jsonResponse_({ ok: true, interesses: pushInteresses_() });
+}
+
+/** O OneSignal responde, sem chave, se a plataforma Web do app já foi configurada (sem isso nenhum aviso chega a navegador/iPhone). */
+function pushWebPronto_(appId) {
+  const cache = CacheService.getScriptCache();
+  const c = cache.get('push_web_' + appId);
+  if (c) return c === '1';
+  let ok = false;
+  try {
+    const r = UrlFetchApp.fetch(PUSH_API_ + '/sync/' + encodeURIComponent(appId) + '/web?callback=x', { muteHttpExceptions: true });
+    const t = String(r.getContentText() || '');
+    ok = /"success"\s*:\s*false/.test(t) ? false : (r.getResponseCode() === 200 && t.length > 40);
+  } catch (e) { return null; }
+  try { cache.put('push_web_' + appId, ok ? '1' : '0', 60); } catch (e) {}
+  return ok;
+}
+
+function pushStatus_() {
+  const cfg = pushCfg_();
+  const props = PropertiesService.getScriptProperties();
+  const pessoas = pushPessoas_();
+  const contar = function (f) { return pessoas.filter(f).length; };
+  const perfis = {};
+  pessoas.forEach(function (x) { x.perfis.forEach(function (p) { perfis[p] = (perfis[p] || 0) + 1; }); });
+  const acessos = AC_PERMISSOES.map(function (p) { return { chave: p.chave, rotulo: p.rotulo, grupo: p.grupo, total: contar(function (x) { return x.perms[p.chave]; }) }; });
+  return jsonResponse_({
+    ok: true,
+    appId: cfg.appId, chaveConfigurada: !!cfg.chave, webPronto: cfg.appId ? pushWebPronto_(cfg.appId) : null,
+    segmentos: ['Subscribed Users'].concat(String(props.getProperty('PUSH_SEGMENTOS') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean)),
+    contas: { total: pessoas.length, equipe: contar(PUSH_GRUPOS_.equipe.teste), alunos: contar(PUSH_GRUPOS_.alunos.teste), portal: contar(PUSH_GRUPOS_.portal.teste), clientes: contar(PUSH_GRUPOS_.clientes.teste) },
+    perfis: Object.keys(perfis).sort().map(function (p) { return { nome: p, total: perfis[p] }; }),
+    acessos: acessos,
+    interesses: pushInteresses_(),
+    autoNovoPedido: props.getProperty('PUSH_NOVO_PEDIDO') !== 'false', autoPedido: props.getProperty('PUSH_PEDIDO_AUTO') !== 'false'
+  });
+}
+function pushSalvarConfig_(body) {
+  const props = PropertiesService.getScriptProperties();
+  if (body.autoNovoPedido !== undefined) props.setProperty('PUSH_NOVO_PEDIDO', body.autoNovoPedido ? 'true' : 'false');
+  if (body.autoPedido !== undefined) props.setProperty('PUSH_PEDIDO_AUTO', body.autoPedido ? 'true' : 'false');
+  registrarAudit_(body.funcionario, 'config_push', '', { autoNovoPedido: body.autoNovoPedido, autoPedido: body.autoPedido });
+  return pushStatus_();
+}
+
+// ---------------------------------------------------------------- identidade do aparelho (aberto, mas só com sessão válida)
+
+/**
+ * Chamado pelo site depois do login: devolve o pushId da conta e o tipo (para o aparelho ligar-se a ela). Exige o TOKEN de sessão
+ * (nunca aceita senha aqui, para não virar uma segunda porta de tentativas).
+ */
+function pushIdentidade_(body) {
+  const cred = String(body.sessao || '');
+  if (!acEhToken_(cred)) return respostaNegada_({ sessaoInvalida: true, erro: 'Sessão inválida. Entre de novo.' });
+  const v = acVerificar_(body.whatsapp, cred);
+  if (!v.ok) return respostaNegada_(v);
+  const x = pushPessoas_().filter(function (p) { return p.whats === v.usuario.whatsapp; })[0];
+  const perms = v.usuario.permissoes || [];
+  return jsonResponse_({
+    ok: true, pushId: pushIdDe_(v.usuario.whatsapp), nome: v.usuario.name, perfil: v.usuario.perfil,
+    tipo: x ? (x.equipe ? 'equipe' : (x.aluno ? 'aluno' : (x.portal ? 'portal' : 'cliente'))) : 'cliente',
+    equipe: perms.indexOf('catalogo_admin') !== -1 || perms.indexOf('catalogo_cadastrar') !== -1
+  });
+}
+
+// ---------------------------------------------------------------- avisos automáticos (pedido novo para a equipe, etapa do pedido para o cliente)
+
+function pushPedidoNovo_(codigo, total, nItens, nome) {
+  if (!pushAutoLigado_('PUSH_NOVO_PEDIDO')) return;
+  const quem = pushPrimeiroNome_(nome) || 'Um cliente';
+  pushFila_.push({
+    titulo: 'Novo pedido ' + codigo + ' 🛍️', mensagem: quem + ' pediu ' + nItens + (nItens === 1 ? ' peça' : ' peças') + ' (' + ('R$ ' + Number(total).toFixed(2).replace('.', ',')) + '). Toque para abrir o painel.',
+    url: SITE_URL + 'admin.html', audiencia: { tipo: 'acesso', chaves: ['catalogo_cadastrar'] }, ttlHoras: 12, quem: 'Sistema'
+  });
+}
+function pushPedidoEtapa_(codigo, status, entrega, quem) {
+  if (!pushAutoLigado_('PUSH_PEDIDO_AUTO')) return;
+  const chave = status === 'pronto' ? (entrega === 'entrega' ? 'pronto_entrega' : 'pronto_retirada') : status;
+  const m = PUSH_MSG_PEDIDO_[chave];
+  if (!m) return;
+  pushFila_.push({ titulo: m.t.replace('{c}', codigo), mensagem: m.m, url: SITE_URL + '?pedido=' + encodeURIComponent(codigo), audiencia: { tipo: 'pedido', codigo: codigo }, ttlHoras: 48, quem: quem || 'Sistema', semHistorico: false });
+}
+/** Dispara os avisos automáticos guardados. Nunca lança: aviso é um extra e não pode derrubar pedido nem atualização. */
+function pushDespacharFila_() {
+  const fila = pushFila_; pushFila_ = [];
+  fila.forEach(function (op) { try { pushEnviar_(op); } catch (e) { logErroServidor_('pushAuto', e, { titulo: op.titulo }); } });
 }
 
 
@@ -2224,7 +2809,7 @@ function criarPedido_(body) {
   const cache = CacheService.getScriptCache();
   const chaveDup = 'pd_' + acSha256Hex_(whats + '|' + ids.slice().sort().join(',') + '|' + entrega).slice(0, 40);
   const jaFeito = cache.get(chaveDup);
-  if (jaFeito) { const r = jsonSeguro_(jaFeito, null); if (r && r.codigo) return jsonResponse_({ ok: true, codigo: r.codigo, total: r.total, repetido: true }); }
+  if (jaFeito) { const r = jsonSeguro_(jaFeito, null); if (r && r.codigo) return jsonResponse_({ ok: true, codigo: r.codigo, total: r.total, repetido: true, pushKey: pushChavePedido_(r.codigo) }); }
   const chaveW = 'pw_' + whats;
   const feitosW = parseInt(cache.get(chaveW) || '0', 10);
   const feitosG = parseInt(cache.get('pg_hora') || '0', 10);
@@ -2267,7 +2852,8 @@ function criarPedido_(body) {
     cache.put(chaveW, String(feitosW + 1), 3600);
     cache.put('pg_hora', String(feitosG + 1), 3600);
   } catch (e) { /* os freios são um extra */ }
-  return jsonResponse_({ ok: true, codigo: codigo, total: total, ignorados: ignorados, itens: itens.map(function (i) { return { nome: i.nome, codigo: i.codigo }; }) });
+  pushPedidoNovo_(codigo, total, itens.length, nome); // v3.3: avisa a equipe (enviado em doPostInterno_, depois que a trava foi solta)
+  return jsonResponse_({ ok: true, codigo: codigo, total: total, ignorados: ignorados, pushKey: pushChavePedido_(codigo), itens: itens.map(function (i) { return { nome: i.nome, codigo: i.codigo }; }) });
 }
 
 /**
@@ -2289,7 +2875,7 @@ function consultarPedido_(body) {
     try { cache.put(ck, String(falhas + 1), 900); cache.put('pc_global', String(globais + 1), 900); } catch (e) {}
     return jsonResponse_({ ok: false, naoEncontrado: true });
   }
-  return jsonResponse_({ ok: true, pedido: pedidoParaCliente_(achado) });
+  return jsonResponse_({ ok: true, pedido: pedidoParaCliente_(achado), pushKey: pushChavePedido_(codigo) });
 }
 
 /** Painel da equipe: lista os pedidos (mais novos primeiro) com a contagem por etapa. */
@@ -2331,6 +2917,7 @@ function atualizarPedido_(body) {
         const hist = jsonSeguro_(dados[i][col('Historico')], []);
         hist.push({ t: agora.toISOString(), status: status, por: String(body.funcionario || 'equipe').slice(0, 60) });
         aba.getRange(linha, col('Historico') + 1).setValue(JSON.stringify(hist));
+        pushPedidoEtapa_(codigo, status, String(dados[i][col('Entrega')] || 'retirada'), String(body.funcionario || 'equipe')); // v3.3: o aviso sai depois que a trava é solta
       }
       if (body.nota !== undefined) aba.getRange(linha, col('NotaInterna') + 1).setValue(limparTexto_(body.nota, 500));
       aba.getRange(linha, col('Atualizado') + 1).setValue(agora);
@@ -2758,26 +3345,6 @@ function enviarEventoMetaCapi_(body, tipo) {
   } catch (erro) {
     logErroServidor_('metaCapi', erro, {});
   }
-}
-
-// ---------------------------------------------------------------- HISTÓRICO DE AVISOS (push)
-
-function registrarPushHistorico_(funcionario, titulo, mensagem, url, segmento, destinatarios, resultado) {
-  try {
-    const aba = getOrCreateSheet_(SHEET_PUSH_HIST, ['DataHora', 'Funcionario', 'Titulo', 'Mensagem', 'Url', 'Segmento', 'Destinatarios', 'Resultado']);
-    aba.appendRow([new Date(), acTexto_(funcionario || 'Sistema'), acTexto_(titulo || ''), acTexto_(mensagem || ''), acTexto_(url || ''), acTexto_(segmento || ''), destinatarios || 0, acTexto_(resultado || '')]);
-  } catch (e) { /* o histórico é um extra: nunca derruba o envio */ }
-}
-
-function listarPushHistorico_(body) {
-  const aba = getOrCreateSheet_(SHEET_PUSH_HIST, ['DataHora', 'Funcionario', 'Titulo', 'Mensagem', 'Url', 'Segmento', 'Destinatarios', 'Resultado']);
-  const lista = linhasComoObjetos_(aba).reverse().slice(0, Math.max(1, Math.min(Number(body.limite) || 50, 200)));
-  const props = PropertiesService.getScriptProperties();
-  return jsonResponse_({
-    ok: true,
-    segmentos: ['Subscribed Users'].concat(String(props.getProperty('PUSH_SEGMENTOS') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean)),
-    historico: lista.map(function (o) { return { quando: dataBR_(o.DataHora), quem: String(o.Funcionario || ''), titulo: String(o.Titulo || ''), mensagem: String(o.Mensagem || ''), url: String(o.Url || ''), segmento: String(o.Segmento || ''), destinatarios: Number(o.Destinatarios) || 0, resultado: String(o.Resultado || '') }; })
-  });
 }
 
 // ---------------------------------------------------------------- AUXILIARES v3.1

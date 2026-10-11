@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Roda toda a bateria de testes do site (simula lojista, cliente, pedido, funcionária, acessibilidade, teclado, busca, painel de gestão,
-telas novas, categorias do painel, compartilhar a foto escolhida, service worker offline, Story em vídeo, lista rápida) e os testes de código sem navegador (backend do Apps Script e Worker da Cloudflare).
+telas novas, categorias do painel, compartilhar a foto escolhida e a seleção, central de avisos, avisos/instalação no celular, service worker offline, Story em vídeo, lista rápida) e os testes de código sem navegador (backend do Apps Script e Worker da Cloudflare).
 
 Uso:
     pip install playwright pillow && playwright install chromium     (uma vez)
@@ -38,6 +38,10 @@ SUITES = [  # (arquivo, como saber que passou)
     ("novas_telas.py", lambda o: "FALHAS=0" in o),
     ("compartilhar_foto.py", lambda o: "FALHAS=0" in o),   # compartilhar/pedir/sacola levam a FOTO ou VÍDEO escolhido (?f=N)
     ("admin_categorias.py", lambda o: "FALHAS=0" in o),    # criar categoria, ✎/× só Admin total, sugestões de nome
+    ("selecao_link.py", lambda o: "RESULTADO:" in o and " 0 falhas" in o),   # compartilhar seleção leva as PEÇAS (?sel=…), não só a loja
+    ("central_avisos.py", lambda o: "FALHAS=0" in o),      # Central de avisos do lojista (público, {nome}, agendar, modelos, histórico, preparar)
+    ("push_cliente.py", lambda o: "FALHAS=0" in o),        # avisos + instalar app no cliente com OneSignal FALSO (Android, iPhone, Instagram, computador)
+    ("instalabilidade.py", lambda o: "FALHAS=0" in o),     # diagnóstico do próprio Chrome: o site é instalável
     ("lista_rapida.py", lambda o: "FALHAS=0" in o),
     ("story_video.py", lambda o: "FALHAS=0" in o),
     ("service_worker.py", lambda o: "FALHAS=0" in o),   # sobe e DESLIGA o próprio servidor para testar "sem internet" de verdade

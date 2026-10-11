@@ -107,10 +107,12 @@ function getSessao() {
 
 function salvarSessao(whatsapp, token) {
   try { localStorage.setItem(SESSAO_CHAVE, JSON.stringify({ whatsapp: whatsapp, sessao: token })); } catch (e) {}
+  try { window.dispatchEvent(new Event('tk:sessao')); } catch (e) {}   // push.js liga/desliga o aparelho da conta
 }
 
 function limparSessao() {
   try { localStorage.removeItem(SESSAO_CHAVE); } catch (e) {}
+  try { window.dispatchEvent(new Event('tk:sessao')); } catch (e) {}
 }
 
 /** POST simples ao backend; nunca lança (devolve { ok:false, semRede:true } sem internet). */

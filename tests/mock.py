@@ -21,8 +21,16 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     novo = versao != "3.0"
     st={"produtos":P,"pedidos":[],"falhas":{},"integ":{"pixelId":pixel,"capi":False,"teste":"","graph":"v23.0","sinonimos":"","segmentos":"Clientes Infantil"},"push":[],"importados":[],"seq":0,"ia":ia,"categorias":list(CATS)}
     cat_gestao = versao >= "3.2"
+    push3 = novo and versao >= "3.3"     # avisos completos (pushCompleto): público, agendamento, modelos, histórico com números
+    st["modelos"]=[{"id":"m1","rotulo":"Promoção","titulo":"Promoção de fim de semana! 🎉","mensagem":"{nome}, 20% off até domingo.","url":"","imagem":""},
+                   {"id":"m2","rotulo":"Chegou novidade","titulo":"Chegou novidade! ✨","mensagem":"Peças novas no catálogo.","url":"","imagem":""}]
+    st["pessoas"]=[{"pid":"tkaluna0000000000000000000000001","nome":"Bia Aluna","perfil":"Aluno","tel":"(88) 9****-0005","grupo":"aluno"},
+                   {"pid":"tkclient000000000000000000000002","nome":"Caio Cliente","perfil":"Cliente","tel":"(88) 9****-7777","grupo":"cliente"}]
+    st["pushcfg"]={"chave":True,"web":True,"novo":True,"etapa":True}
+    st["avisos"]=[]
     FLAGS={"ok":True,"versao":"catalogo-"+versao,"acessos":True,"pinAtivo":False,"pedidos":True,"config":True,"metricas":True,"importacao":True,"feed":True,"integracoes":True,"codigos":True,"pushHistorico":True,"loteCategoria":True} if novo else {"ok":True,"versao":"catalogo-3.0","acessos":True,"pinAtivo":False}
     if cat_gestao: FLAGS["categoriasGestao"]=True
+    if push3: FLAGS["pushCompleto"]=True
     def limpa(n): return " ".join(str(n or "").replace(","," ").split())[:60].strip()
     def norm(n):
         import unicodedata
@@ -72,12 +80,17 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             ped={"codigo":cod,"data":"10/10/2026 12:00","atualizado":"10/10/2026 12:00","status":"novo","entrega":b.get("entrega","retirada"),"total":round(sum(x["Preco"]*0.9 for x in itens),2),
                  "itens":[{"id":x["ID"],"nome":x["Nome"],"codigo":x["Codigo"],"preco":round(x["Preco"]*0.9,2)} for x in itens],"nome":b.get("nome"),"whatsapp":"".join(c for c in str(b.get("whatsapp","")) if c.isdigit()),
                  "endereco":b.get("endereco",""),"obs":b.get("obs",""),"nota":"","origem":"site","historico":[{"quando":"10/10/2026 12:00","status":"novo","por":"cliente"}]}
-            st["pedidos"].append(ped); return {"ok":True,"codigo":cod,"total":ped["total"]}
+            st["pedidos"].append(ped); r={"ok":True,"codigo":cod,"total":ped["total"]}
+            if push3: r["pushKey"]="pk%028d"%st["seq"]
+            return r
         if novo and a=="consultarPedido":
             cod=str(b.get("codigo","")).upper(); fim=str(b.get("final",""))
             if st["falhas"].get(cod,0)>=8: return {"ok":False,"bloqueado":True}
             for ped in st["pedidos"]:
-                if ped["codigo"]==cod and ped["whatsapp"][-4:]==fim: return {"ok":True,"pedido":cliente(ped)}
+                if ped["codigo"]==cod and ped["whatsapp"][-4:]==fim:
+                    r={"ok":True,"pedido":cliente(ped)}
+                    if push3: r["pushKey"]="pk%028d"%int(cod[4:])
+                    return r
             st["falhas"][cod]=st["falhas"].get(cod,0)+1; return {"ok":False,"naoEncontrado":True}
         if novo and a=="listarPedidos":
             cont={}
@@ -132,6 +145,53 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             for k,c in(("testeCodigo","teste"),("graphVersao","graph"),("sinonimos","sinonimos"),("segmentosPush","segmentos")):
                 if k in b: i[c]=b[k]
             return {"ok":True,"pixelId":i["pixelId"],"capiConfigurado":i["capi"],"testeCodigo":i["teste"],"graphVersao":i["graph"],"sinonimos":i["sinonimos"],"segmentosPush":i["segmentos"]}
+        if push3 and a=="pushIdentidade":
+            if not str(b.get("sessao","")).startswith("tk"): return {"ok":False,"sessaoInvalida":True,"erro":"Sessão inválida. Entre de novo."}
+            return {"ok":True,"pushId":"tkpush0000000000000000000000000","nome":"Ana Lojista","perfil":"Admin","tipo":"equipe","equipe":True}
+        if push3 and a=="pushStatus":
+            c=st["pushcfg"]
+            return {"ok":True,"appId":"535f6b0d-c866-43c2-b241-43bd7ab62fae","chaveConfigurada":c["chave"],"webPronto":c["web"],"segmentos":["Subscribed Users"],
+                    "contas":{"total":9,"equipe":2,"alunos":3,"portal":4,"clientes":2},"perfis":[{"nome":"Admin","total":1},{"nome":"Aluno","total":3},{"nome":"Cliente","total":2}],
+                    "acessos":[{"chave":"catalogo_push","rotulo":"Enviar avisos","grupo":"Catálogo","total":2},{"chave":"portal","rotulo":"Portal de treinamento","grupo":"Portal","total":4}],
+                    "interesses":[{"chave":"feminino-adulto","rotulo":"Feminino Adulto"},{"chave":"infantil-menina","rotulo":"Infantil Menina"}],"autoNovoPedido":c["novo"],"autoPedido":c["etapa"]}
+        if push3 and a=="salvarPushConfig":
+            if "gerir_acessos" not in perms: return {"ok":False,"semPermissao":True,"erro":"Você não tem permissão para essa ação."}
+            if "autoNovoPedido" in b: st["pushcfg"]["novo"]=bool(b["autoNovoPedido"])
+            if "autoPedido" in b: st["pushcfg"]["etapa"]=bool(b["autoPedido"])
+            return post({"action":"pushStatus"})
+        if push3 and a=="pushModelos": return {"ok":True,"modelos":list(st["modelos"])}
+        if push3 and a=="salvarPushModelo":
+            m=dict(b.get("modelo") or {})
+            if not (m.get("rotulo") and m.get("titulo") and m.get("mensagem")): return {"ok":False,"erro":"Modelo: nome, título e mensagem são obrigatórios."}
+            if m.get("id"):
+                st["modelos"]=[dict(m) if x["id"]==m["id"] else x for x in st["modelos"]]
+            else:
+                m["id"]="m%d"%(len(st["modelos"])+10); st["modelos"].append(m)
+            return {"ok":True,"id":m["id"],"modelos":list(st["modelos"])}
+        if push3 and a=="excluirPushModelo":
+            st["modelos"]=[x for x in st["modelos"] if x["id"]!=b.get("id")]; return {"ok":True,"modelos":list(st["modelos"])}
+        if push3 and a=="pushPessoas":
+            q=norm(b.get("q",""))
+            return {"ok":True,"pessoas":[x for x in st["pessoas"] if q and q in norm(x["nome"])]}
+        if push3 and a=="pushPrevia":
+            au=b.get("audiencia") or {}; t=au.get("tipo")
+            if t in("grupo","perfil","acesso"): return {"ok":True,"descricao":"Grupo "+str(au.get("grupo") or au.get("perfis") or au.get("chaves")),"quantidade":2,"porAparelho":False,"amostra":["Bia Aluna","Caio Cliente"]}
+            if t=="pessoas": return {"ok":True,"descricao":"%d pessoa(s) escolhida(s)"%len(au.get("ids",[])),"quantidade":len(au.get("ids",[])),"porAparelho":False,"amostra":[x["nome"] for x in st["pessoas"] if x["pid"] in au.get("ids",[])]}
+            if t=="pedido" and not au.get("codigo"): return {"ok":False,"erro":"Informe o código do pedido."}
+            return {"ok":True,"descricao":"Todos que ativaram os avisos" if t=="todos" else str(t),"quantidade":None,"porAparelho":True,"amostra":[]}
+        if push3 and a=="enviarPush":
+            if not b.get("titulo") or not b.get("mensagem"): return {"ok":False,"erro":"Título e mensagem são obrigatórios."}
+            if st["pushcfg"].get("falhar"): return {"ok":False,"erro":st["pushcfg"]["falhar"],"semAviso":["Caio Cliente"]}
+            st["ultimo_push"]=dict(b); au=b.get("audiencia") or {}
+            nid="nid%04d"%(len(st["avisos"])+1); agend=bool(b.get("agendarEm"))
+            st["avisos"].append(nid)
+            st["push"].append({"quando":"10/10/2026 12:00","quem":"Ana Lojista","titulo":b.get("titulo"),"mensagem":b.get("mensagem"),"segmento":"","destinatarios":2,"url":b.get("url") or "","resultado":"agendado" if agend else "enviado","id":nid,"audiencia":str(au.get("tipo")),"agendado":"11/10/2026 09:00" if agend else "","imagem":b.get("imagem") or ""})
+            return {"ok":True,"id":nid,"destinatarios":2,"agendado":agend,"descricao":str(au.get("tipo")),"pessoas":2,"semAviso":st["pushcfg"].get("semAviso",[]),"individuais":False}
+        if push3 and a=="pushNumeros": return {"ok":True,"entregues":5,"falhas":1,"cliques":2,"restantes":0,"cancelado":False}
+        if push3 and a=="pushCancelar":
+            for x in st["push"]:
+                if x.get("id")==b.get("id"): x["resultado"]="cancelado"
+            return {"ok":True}
         if novo and a=="pushHistorico":
             return {"ok":True,"segmentos":["Subscribed Users"]+[s.strip() for s in st["integ"]["segmentos"].split(",") if s.strip()],"historico":list(reversed(st["push"]))}
         if a=="enviarPush":
@@ -161,6 +221,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if "action=versao" in u: return route.fulfill(json=FLAGS)
             if "action=config" in u: return route.fulfill(json={"ok":True,"config":{"pixelId":st["integ"]["pixelId"],"sinonimos":[x for x in st["integ"]["sinonimos"].split("\n") if "=" in x]}})
             if "action=list" in u: return route.fulfill(json={"ok":True,"produtos":P if "todos=true" in u else [x for x in P if x["Status"]=="Ativo"]})
+            if "action=pushconfig" in u: return route.fulfill(json={"ok":True,"interesses":[{"chave":"feminino-adulto","rotulo":"Feminino Adulto"},{"chave":"infantil-menina","rotulo":"Infantil Menina"}]} if push3 else {"ok":True})
             if "action=categorias" in u: return route.fulfill(json={"ok":True,"categorias":list(st["categorias"])})
             if "action=generos" in u: return route.fulfill(json={"ok":True,"generos":GENS})
             if "action=stats" in u: return route.fulfill(json={"ok":True,"totalVisualizacoes":120,"totalWhatsapp":18,"produtoMaisVistoId":"1790000000003","produtoMaisVistoCodigo":"TK-0003","produtoMaisVistoViews":40})

@@ -6,6 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TENKiTER">
 <meta name="theme-color" content="#0d0d0d">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
@@ -274,6 +275,11 @@ catch (e) { window.__precargaLista = null; }
   .btn-zap, .btn-neutro { display: block; text-align: center; text-decoration: none; padding: 13px 14px; border-radius: 12px; font-weight: 800; font-size: 0.9rem; cursor: pointer; border: none; }
   .btn-zap { background: var(--verde); color: #fff; }
   .btn-neutro { background: #fff; color: var(--preto); border: 1px solid #ccc; }
+  .sel-fixa { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 4px 16px 6px; font-weight: 600; font-size: 0.9rem; color: #222; cursor: pointer; }
+  .sel-fixa input { width: 22px; height: 22px; flex: none; }
+  .aviso-selecao { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; background: #fff7ec; border: 1px solid #f0c48a; border-radius: 12px; padding: 10px 12px; margin: 0 0 10px; font-size: 0.88rem; color: #222; }
+  .aviso-selecao[hidden] { display: none; }
+  .aviso-selecao button { width: auto; min-height: 40px; padding: 8px 14px; border-radius: 999px; font-weight: 700; cursor: pointer; font-size: 0.82rem; }
 
   /* rodapé */
   .rodape { background: var(--preto); color: #ddd; padding: 26px 16px 22px; margin-top: 30px; font-size: 0.82rem; line-height: 1.55; }
@@ -285,8 +291,34 @@ catch (e) { window.__precargaLista = null; }
   .rodape a:hover { text-decoration: underline; }
   .rodape ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
   .rodape li a, .rodape li button { display: inline-flex; align-items: center; min-height: 36px; }
+  .rodape .btn-instalar[hidden] { display: none; }   /* sem isto o 'display:inline-flex' dos botões do rodapé vencia o atributo hidden e o botão aparecia sem poder instalar */
   .rodape .btn-instalar { background: none; border: 1px solid var(--laranja); color: var(--laranja); border-radius: 999px; padding: 0 14px; font-weight: 700; cursor: pointer; }
   .rodape .nota { color: #bbb; font-size: 0.74rem; margin-top: 10px; }
+
+  /* instalar o app (Android + iPhone) — fim da página */
+  .instalar-app { max-width: 900px; margin: 22px auto 0; padding-top: 20px; border-top: 1px solid #333; }
+  .instalar-app h2 { font-size: 1.1rem; margin: 0 0 6px; }
+  .instalar-app .inst-sub { margin: 0 0 14px; color: #ddd; font-size: 0.86rem; }
+  .inst-cards { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @media (min-width: 640px) { .inst-cards { grid-template-columns: 1fr 1fr; } }
+  .inst-card { background: #1b1b1b; border: 1px solid #333; border-radius: 14px; padding: 14px; }
+  .inst-card.meu { border-color: var(--laranja); box-shadow: 0 0 0 1px var(--laranja); }
+  .inst-card h3 { margin: 0 0 6px; font-size: 1rem; color: #fff; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-family: "Poppins", sans-serif; }
+  .inst-seu { background: var(--laranja); color: #0d0d0d; font-size: 0.68rem; font-weight: 800; padding: 2px 9px; border-radius: 999px; font-family: "Inter", sans-serif; }
+  .inst-seu[hidden] { display: none; }
+  .inst-card p { margin: 0 0 8px; color: #ddd; font-size: 0.84rem; }
+  .inst-passos { margin: 6px 0 0; padding-left: 20px; color: #ddd; font-size: 0.84rem; }
+  .inst-passos li { margin: 5px 0; }
+  .inst-passos[hidden] { display: none; }
+  .inst-passos b { color: #fff; }
+  .inst-ico { width: 18px; height: 18px; vertical-align: -4px; color: var(--laranja); }
+  .inst-nota { color: #bbb; font-size: 0.78rem; }
+  .inst-btn { display: block; width: 100%; min-height: 48px; border: 0; border-radius: 12px; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: 0.95rem; cursor: pointer; padding: 10px 14px; }
+  .inst-btn[hidden] { display: none; }
+  .inst-avisos { margin-top: 12px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: #1b1b1b; border: 1px solid #333; border-radius: 14px; padding: 12px 14px; color: #ddd; font-size: 0.84rem; }
+  .inst-avisos[hidden] { display: none; }
+  .inst-avisos .inst-btn { width: auto; min-width: 170px; flex: none; }
+  .inst-msg { margin: 10px 0 0; min-height: 1em; color: #fff; font-weight: 700; font-size: 0.84rem; }
 
   /* botão flutuante do WhatsApp (sempre o número fixo da loja) */
   .fab-zap { position: fixed; right: 14px; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); width: 56px; height: 56px; border-radius: 50%; background: var(--verde); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.3); z-index: 80; text-decoration: none; }
@@ -369,7 +401,6 @@ catch (e) { window.__precargaLista = null; }
   .cookie-aviso a { color: var(--laranja-txt); font-weight: 700; }
   @media (prefers-reduced-motion: reduce) { .modal { animation: none; } .modal.voltando { transition: none; } }
 </style>
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 </head>
 <body>
 
@@ -445,6 +476,10 @@ catch (e) { window.__precargaLista = null; }
 </div>
 
 <main>
+  <div class="aviso-selecao" id="aviso-selecao" role="status" hidden>
+    <span id="aviso-selecao-txt"></span>
+    <button type="button" class="btn-neutro" id="aviso-selecao-todas">Ver todas as peças</button>
+  </div>
   <div class="barra-lista">
     <div id="contagem" aria-live="polite">Carregando catálogo...</div>
     <label class="ordem-wrap"><span class="sr-only">Ordenar as peças por</span>
@@ -476,6 +511,40 @@ catch (e) { window.__precargaLista = null; }
       <li><button type="button" class="btn-instalar" id="btn-instalar" hidden>📲 Instalar o app no celular</button></li>
     </ul>
   </div>
+  <section class="instalar-app" id="instalar-app" aria-labelledby="instalar-titulo">
+    <h2 id="instalar-titulo">📲 Instale o app da TENKiTER</h2>
+    <p class="inst-sub">Abre direto da tela inicial, carrega mais rápido, funciona até sem internet e avisa das novidades e do seu pedido. Grátis — sem loja de aplicativos.</p>
+    <div class="inst-cards">
+      <article class="inst-card" id="inst-android" aria-labelledby="inst-android-h">
+        <h3 id="inst-android-h">🤖 Android <span class="inst-seu" hidden>Seu aparelho</span></h3>
+        <p id="inst-android-txt">Toque em Instalar e confirme. O ícone da TENKiTER aparece na tela inicial.</p>
+        <button type="button" class="inst-btn" id="btn-inst-android" hidden>Instalar no Android</button>
+        <ol class="inst-passos" id="inst-android-passos">
+          <li>Abra este site no <b>Chrome</b>.</li>
+          <li>Toque nos três pontinhos <b>⋮</b> (canto de cima).</li>
+          <li>Toque em <b>Instalar app</b> (ou “Adicionar à tela inicial”).</li>
+          <li>Confirme em <b>Instalar</b> e abra o app pelo ícone.</li>
+          <li>Dentro do app, toque em <b>Ativar avisos</b>.</li>
+        </ol>
+      </article>
+      <article class="inst-card" id="inst-ios" aria-labelledby="inst-ios-h">
+        <h3 id="inst-ios-h">🍎 iPhone <span class="inst-seu" hidden>Seu aparelho</span></h3>
+        <p id="inst-ios-txt">No iPhone a instalação é feita pelo Safari, em poucos toques:</p>
+        <button type="button" class="inst-btn" id="btn-inst-ios" hidden>📤 Abrir o menu Compartilhar</button>
+        <ol class="inst-passos" id="inst-ios-passos">
+          <li>Abra este site no <b>Safari</b>.</li>
+          <li>Toque em <b>Compartilhar</b> <svg class="inst-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v12M12 3 8 7M12 3l4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> (barra de baixo).</li>
+          <li>Role e toque em <b>Adicionar à Tela de Início</b>, depois em <b>Adicionar</b>.</li>
+          <li>Abra o <b>TENKiTER</b> pelo ícone novo e toque em <b>Ativar avisos</b>. <span class="inst-nota">(Avisos no iPhone: iOS 16.4 ou mais novo.)</span></li>
+        </ol>
+      </article>
+    </div>
+    <div class="inst-avisos" id="inst-avisos" hidden>
+      <span id="inst-avisos-txt"></span>
+      <button type="button" class="inst-btn" id="btn-inst-avisos">🔔 Ativar avisos</button>
+    </div>
+    <p class="inst-msg" id="inst-msg" role="status" aria-live="polite"></p>
+  </section>
   <a class="fab-zap" id="fab-zap" href="#" target="_blank" rel="noopener" aria-label="Falar com a TENKiTER no WhatsApp">
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
 </a>
@@ -512,6 +581,8 @@ catch (e) { window.__precargaLista = null; }
   let filtroGeneros = new Set();
   let apenasNovidades = false;
   let apenasFavoritos = false;
+  /** Seleção fixa vinda de um link (?sel=TK-0010,TK-0011,…): mostra SÓ essas peças. null = não há seleção. */
+  let selecaoFixa = null;
 
   function listaDeTags(c) { return String(c || '').split(',').map(s => s.trim()).filter(Boolean); }
 
@@ -546,6 +617,17 @@ catch (e) { window.__precargaLista = null; }
     if (params.has('ord') && ['recentes', 'menor', 'maior', 'az'].includes(params.get('ord'))) document.getElementById('ordem').value = params.get('ord');
     if (params.has('cat')) params.get('cat').split(',').forEach(c => filtroCategorias.add(c.trim()));
     if (params.has('gen')) params.get('gen').split(',').forEach(g => filtroGeneros.add(g.trim()));
+    if (params.has('sel')) {
+      const itens = Array.from(new Set(params.get('sel').split(',').map(s => s.trim().slice(0, 60)).filter(Boolean))).slice(0, 60);
+      selecaoFixa = itens.length ? itens : null;
+    }
+  }
+
+  /** A peça faz parte da seleção do link? Casa pelo código (sem diferenciar maiúscula) ou, para peça sem código, pelo ID. */
+  function naSelecaoFixa_(p) {
+    if (!selecaoFixa) return true;
+    const cod = String(p.Codigo || '').toLowerCase(), id = String(p.ID);
+    return selecaoFixa.some(t => (cod && t.toLowerCase() === cod) || t === id);
   }
 
   function atualizarURLComFiltros() {
@@ -563,6 +645,7 @@ catch (e) { window.__precargaLista = null; }
 
     if (filtroCategorias.size) url.searchParams.set('cat', Array.from(filtroCategorias).join(',')); else url.searchParams.delete('cat');
     if (filtroGeneros.size) url.searchParams.set('gen', Array.from(filtroGeneros).join(',')); else url.searchParams.delete('gen');
+    if (selecaoFixa) url.searchParams.set('sel', selecaoFixa.join(',')); else url.searchParams.delete('sel');
 
     window.history.replaceState({}, '', url);
   }
@@ -765,7 +848,7 @@ catch (e) { window.__precargaLista = null; }
     document.getElementById('busca').value = '';
     document.getElementById('preco-min').value = '';
     document.getElementById('preco-max').value = '';
-    filtroCategorias.clear(); filtroGeneros.clear(); apenasNovidades = false; apenasFavoritos = false;
+    filtroCategorias.clear(); filtroGeneros.clear(); apenasNovidades = false; apenasFavoritos = false; selecaoFixa = null;
     renderizarChipExtra();
     renderizarPillsCategoria();
     renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias, 'resumo-categoria');
@@ -779,9 +862,10 @@ catch (e) { window.__precargaLista = null; }
     const termos = termosDaBusca(busca);
     const min = parseFloat(document.getElementById('preco-min').value);
     const max = parseFloat(document.getElementById('preco-max').value);
-    const filtrosAtivos = !isNaN(min) || !isNaN(max) || apenasNovidades || apenasFavoritos || filtroCategorias.size > 0 || filtroGeneros.size > 0;
+    const filtrosAtivos = !isNaN(min) || !isNaN(max) || apenasNovidades || apenasFavoritos || filtroCategorias.size > 0 || filtroGeneros.size > 0 || !!selecaoFixa;
 
     const passaFiltros = p => {
+      if (selecaoFixa && !naSelecaoFixa_(p)) return false;
       if (!isNaN(min) && Number(p.Preco) < min) return false;
       if (!isNaN(max) && Number(p.Preco) > max) return false;
       if (apenasNovidades && !ehNovidade(p)) return false;
@@ -876,6 +960,23 @@ catch (e) { window.__precargaLista = null; }
     vazio.style.display = 'block';
   }
 
+  /** Faixa "peças separadas para você" (link ?sel=…): diz quantas são e avisa se alguma já saiu da loja. */
+  function atualizarAvisoSelecao_() {
+    const box = document.getElementById('aviso-selecao');
+    if (!box) return;
+    if (!selecaoFixa) { box.hidden = true; return; }
+    const total = selecaoFixa.length;
+    const achadas = produtos.length ? produtos.filter(naSelecaoFixa_).length : total;
+    let t = '🔗 Peças separadas para você: ' + achadas + (achadas === 1 ? ' peça' : ' peças') + '.';
+    if (produtos.length && achadas < total) t += ' ' + (total - achadas) + (total - achadas === 1 ? ' peça desta seleção não está mais disponível.' : ' peças desta seleção não estão mais disponíveis.');
+    document.getElementById('aviso-selecao-txt').textContent = t;
+    box.hidden = false;
+  }
+  document.getElementById('aviso-selecao-todas').addEventListener('click', () => {
+    selecaoFixa = null; aplicarFiltros();
+    const m = document.querySelector('main'); if (m && m.scrollIntoView) m.scrollIntoView({ behavior: 'smooth' });
+  });
+
   function renderizarGrid() {
     const grid = document.getElementById('grid');
     const vazio = document.getElementById('vazio');
@@ -884,8 +985,11 @@ catch (e) { window.__precargaLista = null; }
     const lista = listaFiltradaAtual;
     const qtd = lista.length + (lista.length === 1 ? ' peça' : ' peças');
 
+    atualizarAvisoSelecao_();
     contagem.textContent = buscaIgnorouFiltros
       ? 'Nada com esses filtros — mostrando ' + qtd + ' de toda a loja'
+      : (selecaoFixa && !buscaPorSinonimo_)
+        ? lista.length + (lista.length === 1 ? ' peça da seleção' : ' peças da seleção')
       : buscaPorSinonimo_
         ? 'Nada com “' + buscaPorSinonimo_ + '” — mostrando ' + qtd + ' parecida' + (lista.length === 1 ? '' : 's')
         : lista.length + (lista.length === 1 ? ' peça disponível' : ' peças encontradas');
@@ -1374,46 +1478,7 @@ catch (e) { window.__precargaLista = null; }
     if (temPedido) abrirRastreio(params.get('pedido') || '', '');
   }
 
-  /* ===================== Notificações push (OneSignal) ===================== */
-
-  (function configurarNotificacoesPush() {
-    const btnPush = document.getElementById('btn-push-header');
-    if (!ONESIGNAL_APP_ID) return; // não configurado ainda
-
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    OneSignalDeferred.push(async function (OneSignal) {
-      try {
-        await OneSignal.init({ appId: ONESIGNAL_APP_ID });
-
-        const atualizarIcone = () => {
-          const inscrito = OneSignal.User.PushSubscription.optedIn;
-          btnPush.textContent = inscrito ? '🔔' : '🔕';
-          btnPush.classList.toggle('ativado', !!inscrito);
-          btnPush.title = inscrito ? 'Notificações ativadas (toque para desativar)' : 'Ativar notificações de novidades';
-        };
-
-        btnPush.style.display = '';
-        atualizarIcone();
-
-        OneSignal.Notifications.addEventListener('permissionChange', atualizarIcone);
-        OneSignal.User.PushSubscription.addEventListener('change', atualizarIcone);
-
-        btnPush.addEventListener('click', async () => {
-          const inscritoAgora = OneSignal.User.PushSubscription.optedIn;
-          if (inscritoAgora) {
-            await OneSignal.User.PushSubscription.optOut();
-          } else if (OneSignal.Notifications.permission) {
-            await OneSignal.User.PushSubscription.optIn();
-          } else {
-            await OneSignal.Notifications.requestPermission();
-          }
-          atualizarIcone();
-        });
-      } catch (e) {
-        console.warn('OneSignal não pôde iniciar:', e);
-      }
-    });
-  })();
+  /* Notificações push: tudo em push.js (v3.4) — sininho #btn-push-header, convite, conta, pedidos, ajuda. */
 
   /* ===================== v2: conta de cliente (favoritos e sacola salvos) ===================== */
   try { (function contaCliente() {
@@ -1573,6 +1638,7 @@ catch (e) { window.__precargaLista = null; }
 </script>
 <script src="nav.js" data-ativo="catalogo"></script>
 <script src="a11y.js"></script>
+<script src="push.js"></script>
 <script src="pwa.js"></script>
 </body>
 </html>

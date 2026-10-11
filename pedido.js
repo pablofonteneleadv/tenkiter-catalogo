@@ -209,14 +209,14 @@ async function enviarPedido_(itens) {
   // lembrar (ou esquecer) os dados neste aparelho — só quando a pessoa escolheu
   gravarClienteLocal_(dados.lembrar ? { nome: dados.nome, whats: dados.whatsapp, entrega: dados.entrega, endereco: dados.endereco } : null);
 
-  var codigo = '', totalServidor = null, avisoServidor = '';
+  var codigo = '', totalServidor = null, avisoServidor = '', chaveAvisos = '';
   var v = await versaoServidor();
   if (v && v.pedidos) {
     var r = await criarPedidoApi({
       nome: dados.nome, whatsapp: dados.whatsapp, entrega: dados.entrega, endereco: dados.endereco, obs: dados.obs,
       itens: itens.map(function (p) { return { id: String(p.ID) }; }), origem: 'site'
     });
-    if (r && r.ok && r.codigo) { codigo = r.codigo; if (typeof r.total === 'number') totalServidor = r.total; }
+    if (r && r.ok && r.codigo) { codigo = r.codigo; chaveAvisos = r.pushKey || ''; if (typeof r.total === 'number') totalServidor = r.total; }
     else avisoServidor = (r && r.erro) ? r.erro : 'Não foi possível registrar o pedido agora.';
   }
   var texto = textoPedido_(itens, dados, codigo);
@@ -227,6 +227,7 @@ async function enviarPedido_(itens) {
   try { janela = window.open(url, '_blank'); } catch (e) {}
   if (codigo) { limparSacola(); atualizarSacolaHeader_(); }
   rascunhoPedido_ = null;
+  if (codigo && chaveAvisos && window.TKPush) { try { TKPush.pedidoCriado(codigo, chaveAvisos); } catch (e) {} }   // o aparelho passa a acompanhar este pedido (avisos)
   mostrarPedidoEnviado_({ codigo: codigo, url: url, aberto: !!janela, itens: itens, total: totalServidor != null ? totalServidor : totalAvista_(itens), dados: dados, aviso: avisoServidor, rotuloBotao: rotulo });
 }
 
@@ -242,6 +243,7 @@ function mostrarPedidoEnviado_(o) {
       (o.aviso ? '<p style="color:#7a4b00">' + escaparHtml(o.aviso) + ' Mas você pode enviar o pedido pelo WhatsApp normalmente.</p>' : '') +
       (o.codigo ? '<p>Para acompanhar, guarde este código e os 4 últimos números do seu WhatsApp.<br><a href="' + escaparHtml(link) + '" id="link-rastreio-ok" style="color:var(--laranja-txt);font-weight:700;word-break:break-all">' + escaparHtml(link) + '</a></p>' : '') +
     '</div>' +
+    (o.codigo ? '<div id="pedido-avisos"></div>' : '') +
     '<a class="btn-principal-cta" style="text-decoration:none" id="btn-abrir-zap" href="' + escaparHtml(o.url) + '" target="_blank" rel="noopener">💬 ABRIR O WHATSAPP DA LOJA</a>' +
     (o.codigo ? '<button type="button" class="btn-secundario-cta" id="btn-ir-rastreio">📦 Acompanhar este pedido</button>' : '<button type="button" class="btn-secundario-cta" id="btn-esvaziar-depois">🗑️ Já enviei — esvaziar a sacola</button>') +
     '<button type="button" class="btn-secundario-cta" id="btn-continuar">Continuar vendo o catálogo</button>';
@@ -252,6 +254,8 @@ function mostrarPedidoEnviado_(o) {
   if (lk) lk.addEventListener('click', function (e) { e.preventDefault(); abrirRastreio(o.codigo, o.dados.whatsapp.slice(-4)); });
   var esv = document.getElementById('btn-esvaziar-depois');
   if (esv) esv.addEventListener('click', function () { limparSacola(); atualizarSacolaHeader_(); fecharSacola(); });
+  var av = document.getElementById('pedido-avisos');
+  if (av && window.TKPush) { try { TKPush.blocoPedido(av); } catch (e) {} }
   var bz = document.getElementById('btn-abrir-zap');
   if (bz) bz.focus();
 }
@@ -292,7 +296,13 @@ async function consultarRastreio_() {
   var v = await versaoServidor();
   var r = (v && v.pedidos) ? await consultarPedidoApi(cod, fim) : { ok: false, indisponivel: true };
   btn.disabled = false; btn.textContent = 'Consultar';
-  if (r && r.ok && r.pedido) { res.innerHTML = htmlPedidoRastreio_(r.pedido); return; }
+  if (r && r.ok && r.pedido) {
+    res.innerHTML = htmlPedidoRastreio_(r.pedido);
+    if (r.pushKey && window.TKPush && r.pedido.status !== 'concluido' && r.pedido.status !== 'cancelado') {   // quem acompanha o pedido pode receber os avisos dele neste aparelho
+      try { TKPush.pedidoCriado(r.pedido.codigo, r.pushKey); var cx = document.createElement('div'); res.appendChild(cx); TKPush.blocoPedido(cx); } catch (e) {}
+    }
+    return;
+  }
   if (r && r.bloqueado) erro.textContent = 'Muitas tentativas seguidas. Aguarde 15 minutos ou fale com a loja.';
   else if (r && r.naoEncontrado) erro.textContent = 'Não encontramos esse pedido. Confira o código e os 4 últimos números do WhatsApp usado no pedido.';
   else if (r && r.semRede) erro.textContent = 'Sem conexão agora. Tente de novo em instantes.';
@@ -372,11 +382,38 @@ function fecharFavoritos() { fecharComHistorico_('overlay-favoritos'); }
 /* ====================================================================
  * COMPARTILHAR SELEÇÃO (neutro: fala só da loja, sem nome de atendente)
  * ==================================================================== */
-function linkDaSelecao_() {
+var MAX_SELECAO_FIXA = 60;
+/** Como a peça aparece no link: o código (TK-0010) ou, se não tiver código, o ID. */
+function chaveDaPeca_(p) { return String(p.Codigo || p.ID); }
+/** Seleção "de verdade" (favoritas ou uma seleção que a pessoa recebeu): o link TEM que levar as peças, não só os filtros. */
+function selecaoObrigatoriaFixa_() { return !!(apenasFavoritos || selecaoFixa); }
+/**
+ * Link da seleção.
+ *  fixa=true  -> SITE_URL?sel=TK-0010,TK-0011,… (abre mostrando EXATAMENTE essas peças; o atendente só clica).
+ *  fixa=false -> os filtros da tela (busca, categoria, preço…) como sempre.
+ * Sempre o endereço do SITE, mesmo se a pessoa estiver em outro endereço.
+ */
+function linkDaSelecao_(fixa) {
+  if (fixa) {
+    var cods = (listaFiltradaAtual || []).slice(0, MAX_SELECAO_FIXA).map(function (p) { return encodeURIComponent(chaveDaPeca_(p)); });
+    if (cods.length) return SITE_URL + '?sel=' + cods.join(',');
+  }
   var u = new URL(window.location.href);
-  ['c', 'id', 'pedido', 'abrir', 'origem'].forEach(function (k) { u.searchParams.delete(k); });
+  ['c', 'id', 'pedido', 'abrir', 'origem', 'f', 'sel'].forEach(function (k) { u.searchParams.delete(k); });
   var qs = u.searchParams.toString();
-  return SITE_URL + (qs ? '?' + qs : '');   // sempre o endereço do SITE, mesmo se a pessoa estiver em outro endereço
+  return SITE_URL + (qs ? '?' + qs : '');
+}
+/** Texto do WhatsApp (texto puro): com lista fixa, cada peça com preço e o link da seleção no fim (endereço completo e clicável). */
+function mensagemDaSelecao_(link, fixa, lista) {
+  var cab = 'Olha as peças que separei na TENKiTER Modas';
+  if (!fixa) return cab + ' (' + descricaoDaSelecao_() + '):\n' + link;
+  var n = Math.min(lista.length, MAX_SELECAO_FIXA), mostrar = Math.min(n, 12), msg;
+  do {
+    var linhas = lista.slice(0, mostrar).map(linhaItem_).join('\n') + (n > mostrar ? '\n… e mais ' + (n - mostrar) + (n - mostrar === 1 ? ' peça' : ' peças') : '');
+    msg = cab + ' (' + n + (n === 1 ? ' peça' : ' peças') + '):\n' + linhas + '\n\nToque para ver as fotos de cada uma:\n' + link;
+    mostrar--;
+  } while (msg.length > 1500 && mostrar > 0);
+  return msg;
 }
 function descricaoDaSelecao_() {
   var partes = [];
@@ -386,31 +423,48 @@ function descricaoDaSelecao_() {
   var min = document.getElementById('preco-min').value, max = document.getElementById('preco-max').value;
   if (min || max) partes.push('preço ' + (min ? 'de R$ ' + min : '') + (min && max ? ' ' : '') + (max ? 'até R$ ' + max : ''));
   if (apenasNovidades) partes.push('novidades');
+  if (apenasFavoritos) partes.push('favoritas');
+  if (selecaoFixa) partes.push('seleção enviada');
   return partes.length ? partes.join(' · ') : 'todas as peças';
 }
 function abrirSelecao() {
   if (typeof atualizarURLComFiltros === 'function') atualizarURLComFiltros();
-  var link = linkDaSelecao_();
   var lista = listaFiltradaAtual || [];
+  var forcada = selecaoObrigatoriaFixa_();
+  // Com filtros comuns (busca, categoria…) a pessoa escolhe: "filtros" acompanha a loja; "lista fixa" manda só estas peças.
+  var temFiltro = descricaoDaSelecao_() !== 'todas as peças';
+  var podeEscolher = !forcada && temFiltro && lista.length > 0 && lista.length <= MAX_SELECAO_FIXA;
+  var fixa = forcada && lista.length > 0;
   var c = document.getElementById('selecao-conteudo');
-  var msg = 'Olha as peças que separei na TENKiTER Modas (' + descricaoDaSelecao_() + '):\n' + link;
-  c.innerHTML =
-    '<div class="sheet-topo"><div class="nome">🔗 Compartilhar seleção</div><button type="button" class="x" id="btn-fechar-selecao" aria-label="Fechar">✕</button></div>' +
-    '<p class="texto-pequeno" style="margin-bottom:8px"><b>' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + '</b> — ' + escaparHtml(descricaoDaSelecao_()) + '</p>' +
-    '<div class="preview-selecao">' + lista.slice(0, 4).map(function (p) { return '<img src="' + escaparHtml(fotoMini(p.Foto_URL, 160)) + '" alt="' + escaparHtml(p.Nome) + '" width="80" height="100" loading="lazy">'; }).join('') + '</div>' +
-    '<label class="sr-only" for="sel-link">Link da seleção</label><input type="text" id="sel-link" class="link-selecao" readonly value="' + escaparHtml(link) + '">' +
-    '<a class="btn-zap" style="margin:0 16px 8px" id="sel-zap" href="' + escaparHtml('https://wa.me/?text=' + encodeURIComponent(msg)) + '" target="_blank" rel="noopener">💬 Enviar pelo WhatsApp</a>' +
-    '<button type="button" class="btn-secundario-cta" id="sel-copiar">📋 Copiar link</button>' +
-    (navigator.share ? '<button type="button" class="btn-secundario-cta" id="sel-nativo">↗ Mais opções de compartilhar…</button>' : '') +
-    '<p class="texto-pequeno" id="sel-aviso" role="status" style="padding-bottom:16px"></p>';
-  document.getElementById('btn-fechar-selecao').addEventListener('click', fecharSelecao);
-  document.getElementById('sel-copiar').addEventListener('click', async function () {
-    var aviso = document.getElementById('sel-aviso');
-    try { await navigator.clipboard.writeText(link); aviso.textContent = 'Link copiado. É só colar na conversa.'; }
-    catch (e) { var i = document.getElementById('sel-link'); i.focus(); i.select(); aviso.textContent = 'Selecione e copie o link acima.'; }
-  });
-  var nat = document.getElementById('sel-nativo');
-  if (nat) nat.addEventListener('click', async function () { try { await navigator.share({ title: 'TENKiTER Modas — peças selecionadas', text: 'Olha as peças que separei na TENKiTER Modas:', url: link }); } catch (e) {} });
+
+  function desenhar() {
+    var link = linkDaSelecao_(fixa);
+    var msg = mensagemDaSelecao_(link, fixa, lista);
+    c.innerHTML =
+      '<div class="sheet-topo"><div class="nome">🔗 Compartilhar seleção</div><button type="button" class="x" id="btn-fechar-selecao" aria-label="Fechar">✕</button></div>' +
+      '<p class="texto-pequeno" style="margin-bottom:8px"><b>' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + '</b> — ' + escaparHtml(descricaoDaSelecao_()) + '</p>' +
+      '<div class="preview-selecao">' + lista.slice(0, 4).map(function (p) { return '<img src="' + escaparHtml(fotoMini(p.Foto_URL, 160)) + '" alt="' + escaparHtml(p.Nome) + '" width="80" height="100" loading="lazy">'; }).join('') + '</div>' +
+      (podeEscolher ? '<label class="sel-fixa"><input type="checkbox" id="sel-fixa"' + (fixa ? ' checked' : '') + '> <span>Enviar só estas ' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + ' (lista fixa)</span></label>' : '') +
+      '<p class="texto-pequeno" id="sel-explica" style="margin-bottom:6px">' + (fixa
+        ? 'Quem abrir o link vê exatamente estas peças.'
+        : 'Quem abrir o link vê a loja com estes mesmos filtros (peças novas que entrarem nele aparecem também).') + '</p>' +
+      '<label class="sr-only" for="sel-link">Link da seleção</label><input type="text" id="sel-link" class="link-selecao" readonly value="' + escaparHtml(link) + '">' +
+      '<a class="btn-zap" style="margin:0 16px 8px" id="sel-zap" href="' + escaparHtml('https://wa.me/?text=' + encodeURIComponent(msg)) + '" target="_blank" rel="noopener">💬 Enviar pelo WhatsApp</a>' +
+      '<button type="button" class="btn-secundario-cta" id="sel-copiar">📋 Copiar link</button>' +
+      (navigator.share ? '<button type="button" class="btn-secundario-cta" id="sel-nativo">↗ Mais opções de compartilhar…</button>' : '') +
+      '<p class="texto-pequeno" id="sel-aviso" role="status" style="padding-bottom:16px"></p>';
+    document.getElementById('btn-fechar-selecao').addEventListener('click', fecharSelecao);
+    var cx = document.getElementById('sel-fixa');
+    if (cx) cx.addEventListener('change', function () { fixa = cx.checked; desenhar(); var n = document.getElementById('sel-fixa'); if (n) n.focus(); });
+    document.getElementById('sel-copiar').addEventListener('click', async function () {
+      var aviso = document.getElementById('sel-aviso');
+      try { await navigator.clipboard.writeText(link); aviso.textContent = 'Link copiado. É só colar na conversa.'; }
+      catch (e) { var i = document.getElementById('sel-link'); i.focus(); i.select(); aviso.textContent = 'Selecione e copie o link acima.'; }
+    });
+    var nat = document.getElementById('sel-nativo');
+    if (nat) nat.addEventListener('click', async function () { try { await navigator.share({ title: 'TENKiTER Modas — peças selecionadas', text: msg }); } catch (e) {} });   // o link já vai dentro do texto (sem "url" para não duplicar)
+  }
+  desenhar();
   abrirComHistorico_('overlay-selecao');
 }
 function fecharSelecao() { fecharComHistorico_('overlay-selecao'); }

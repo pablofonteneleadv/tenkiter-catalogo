@@ -67,12 +67,12 @@
   });
 
   /* ---------- 2. janelas ---------- */
-  var JANELAS = '#overlay,#overlay-sacola,#overlay-compartilhar,.overlay-sheet,.overlay-sheet-loja,#modal-conta,#login-overlay';
+  var JANELAS = '#overlay,#overlay-sacola,#overlay-compartilhar,.overlay-sheet,.overlay-sheet-loja,#modal-conta,#login-overlay,#tkp-janela';
   var BOTOES_FECHAR = '[aria-label="Fechar"],.sheet-x,.conta-fechar,.btn-fechar,#btn-fechar-arte-config,#btn-fechar-auditoria';
   var FOCAVEIS = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   var NOMES = {
     'overlay': 'Detalhes da peça', 'overlay-sacola': 'Sua sacola', 'overlay-compartilhar': 'Compartilhar',
-    'login-overlay': 'Entrar', 'modal-conta': 'Minha conta', 'overlay-categorias': 'Escolher categoria'
+    'login-overlay': 'Entrar', 'modal-conta': 'Minha conta', 'overlay-categorias': 'Escolher categoria', 'tkp-janela': 'Avisos'
   };
   var lembrar = new WeakMap();      // janela -> elemento que tinha o foco antes de abrir
 
@@ -127,16 +127,23 @@
     }
   });
 
-  function iniciar() {
-    ligarRotulos(document); tornarTeclado(document);
+  /* janelas criadas depois (ex.: a de avisos, montada por push.js) também passam a ser acompanhadas */
+  function observarJanelas() {
     document.querySelectorAll(JANELAS).forEach(function (el) {
+      if (el.hasAttribute('data-tk-obs')) return;
+      el.setAttribute('data-tk-obs', '1');
       sincronizar(el);
       new MutationObserver(function () { sincronizar(el); }).observe(el, { attributes: true, attributeFilter: ['class'] });
     });
+  }
+
+  function iniciar() {
+    ligarRotulos(document); tornarTeclado(document);
+    observarJanelas();
     var agendado = false;
     new MutationObserver(function () {
       if (agendado) return; agendado = true;
-      (window.requestAnimationFrame || setTimeout)(function () { agendado = false; ligarRotulos(document); tornarTeclado(document); });
+      (window.requestAnimationFrame || setTimeout)(function () { agendado = false; ligarRotulos(document); tornarTeclado(document); observarJanelas(); });
     }).observe(document.body, { childList: true, subtree: true });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();

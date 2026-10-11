@@ -1,5 +1,5 @@
 /* ====================================================================
- * TENKiTER — service worker ÚNICO do site (v3.3)
+ * TENKiTER — service worker ÚNICO do site (v3.4)
  *
  * Só pode existir UM service worker por endereço, e o OneSignal (avisos push) já usa este arquivo.
  * Por isso ele faz as duas coisas: (1) OneSignal, (2) deixar o catálogo abrir sem internet.
@@ -16,11 +16,11 @@
 // sem isto o navegador recusa o arquivo inteiro e o catálogo deixa de abrir sem internet. Só os avisos push ficam de fora.
 try { importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js'); } catch (e) { /* segue só com o cache */ }
 
-var VERSAO = 'tk-3.3.0';
+var VERSAO = 'tk-3.4.0';
 var CACHE_SITE = 'tk-site-' + VERSAO;
 var CACHE_FOTOS = 'tk-fotos-v1';
 var MAX_FOTOS = 160;
-var BASICO = ['/', '/index.html', '/common.js', '/meta.js', '/pedido.js', '/pwa.js', '/nav.js', '/a11y.js', '/privacidade.html', '/site.webmanifest', '/logo-mark.png', '/icon-192.png', '/favicon.ico'];
+var BASICO = ['/', '/index.html', '/common.js', '/meta.js', '/pedido.js', '/push.js', '/pwa.js', '/nav.js', '/a11y.js', '/privacidade.html', '/site.webmanifest', '/logo-mark.png', '/icon-192.png', '/favicon.ico'];
 var PAGINAS = /^\/(index\.html|privacidade\.html)?$/;
 var ESTATICOS = /\.(?:js|css|png|jpg|jpeg|webp|svg|ico|webmanifest|woff2?)$/i;
 var FORA_DO_CACHE = /^\/(admin|treinamentos|curriculos|curriculo|manual)\.html$/;

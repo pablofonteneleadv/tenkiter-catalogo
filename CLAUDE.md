@@ -180,3 +180,51 @@ Propriedades do Script do Apps Script, nunca no código versionado.
   `Utilities` simulado precisa de `computeHmacSha256Signature` para criar contas de verdade; `tests/mock.py` tem categorias com estado
   (`install(..., versao="3.2")`; `"3.1"` = sem a bandeira, `"3.0"` = backend antigo).
 
+## v3.4 (parte 2) — avisos push completos, instalar o app, seleção por link (backend 3.3)
+
+- **Pedido do Pablo**: o app instalado mostrava "Notificações: Sem permissão" e ele quer (1) instalar no Android e no iPhone pelo FIM da página, (2) push
+  completo: segmentar por cliente, usuário, acesso, aluno, "do jeito que a gente quiser", que a notificação APAREÇA, copiando algo 100% funcional.
+  Decisão: **OneSignal continua sendo o motor** (já é o serviço pronto e testado do mundo todo); o que é nosso é a ligação conta↔aparelho, o convite no
+  momento certo, a Central de avisos e os testes. Causa do "Sem permissão": o app OneSignal `535f6b0d-…` **não tem a plataforma Web configurada**
+  (o endpoint `https://api.onesignal.com/sync/<appId>/web?callback=x` responde `"success":false`) e o Android nunca concede permissão sozinho. Sem a
+  configuração do OneSignal (Pablo, `LEIA-ME-AVISOS.md` passo 1) nada chega a ninguém — o site mostra `em-breve` e esconde o sininho em vez de prometer.
+- **`push.js`** (carregado em index/admin/treinamentos logo depois de `a11y.js`; precisa de `common.js` antes): `window.TKPush`. O SDK v16 só é baixado depois
+  de `sync` dizer que o app está configurado e só onde pode funcionar (`suporte()`: `ok | embutido | ios-antigo | ios-instalar | nao-suportado | sem-app`).
+  `resumo()`: `em-breve | <suporte> | bloqueado | negado | ativo | ativando | pausado | pendente`. **`Notification.requestPermission` só dentro de um toque**
+  (`ativar()` é chamado direto do `onclick`; nunca de timer/`load`) — o convite automático só ABRE uma janela nossa, quem pede é o botão. Convite: no app
+  instalado, equipe/aluno no navegador, logo após `appinstalled` (`TKPush.aposInstalar()`); máx. 3, ≥ 3 dias entre eles, "Não quero receber" = `nunca`.
+  iPhone: só com o app instalado (iOS ≥ 16.4); navegador embutido (Instagram/WhatsApp) não faz push nem instala. Ajuda por motivo (`abrirAjuda`),
+  inclusive "Pausar atividade no app quando não usado" (o Android TIRA a permissão), bateria "Sem restrições" e Início automático da Xiaomi.
+  Não existe `allowLocalhostAsSecureOrigin` neste SDK; não ligue `notifyButton` nem os prompts do painel do OneSignal (pedido duplicado).
+- **Identidade**: o aparelho faz `OneSignal.login(pushId)`; `pushId = 'tk' + HMAC(push|whats)` calculado SÓ no servidor e entregue por `pushIdentidade`,
+  ação aberta que aceita apenas token de sessão `tk1./tk2.` (nunca senha). Logout/troca de conta (`tk:sessao`, `storage`, poll 3 s) desliga o aparelho.
+  Pedido de visitante sem conta: apelido `ped_<dígitos>` (ex. `ped_0001`) com valor `pk`+HMAC (`pushKey`, devolvido por `criarPedido`/`consultarPedido`),
+  até 5 por aparelho. **Nada pessoal no aparelho**: só escolhas de aviso, chaves opacas e contadores do convite (`tk_push_*`).
+- **Backend 3.3** (módulo "AVISOS (push) COMPLETOS"): `pushEnviar_` nunca lança; UM método de alvo por requisição (`include_aliases` | `filters` |
+  `included_segments`). Públicos sensíveis (grupo/perfil/acesso/pessoas/pedido/pedidos) são resolvidos NO SERVIDOR pela planilha de pessoas e vão como
+  `external_id`; marketing (todos/app/interesse) usa etiquetas (`av_novidades`, `origem`, `int_<slug>`, `tipo`) respeitando "novidades e promoções" desligado.
+  `{nome}` = uma requisição por pessoa (`fetchAll`, máx. 300). Agendar ≤ 30 dias, `ttl`, só `https://` em link/imagem. Chave `os_v2_…` usa `Key`, a antiga
+  `Basic` (fallback automático). Automáticos: pedido novo → equipe (`catalogo_cadastrar`), mudança de etapa → cliente; vão numa fila (`pushFila_`) liberada
+  DEPOIS de soltar o lock do script (`pushDespacharFila_`). `salvarPushConfig` exige `gerir_acessos`; as demais ações de push, `catalogo_push`. Bandeira em
+  `versao`: `pushCompleto`; público: `GET ?action=pushconfig` (interesses). Planilhas novas: `Push_Modelos` (6 modelos de série), `Push_Historico` ganhou
+  NotifId/Audiencia/Agendado/Imagem.
+- **`admin-push.js`** (Central de avisos; só liga com `pushCompleto`, senão o painel simples antigo): abas Enviar / Histórico / Modelos / Preparar. Intercepta
+  o clique de `#btn-abrir-push` em fase de captura. Preparar recarrega `pushStatus` sempre (a pessoa configura o OneSignal e volta para conferir).
+  Erros viram frase, nunca JSON. Botão de aviso com fundo laranja = letra preta.
+- **Instalar o app** (`pwa.js` + seção `#instalar-app` DENTRO do rodapé, depois dos links = "abaixo de tudo"): Android/Chrome usa `beforeinstallprompt` (guardado;
+  `prompt()` só dentro do toque); sem o evento mostra o passo a passo, nunca um botão que não faz nada; iPhone não tem API de instalar → botão chama
+  `navigator.share()` + passos sempre à vista; navegador embutido → "Copiar o endereço". **Todo botão do rodapé com `display` próprio precisa de regra
+  `[hidden]{display:none}`** (o `.rodape li button{display:inline-flex}` anulava o `hidden` e o botão de instalar aparecia sempre — bug real, achado pelo teste).
+  Service worker único `OneSignalSDKWorker.js` agora `VERSAO='tk-3.4.0'` e `/push.js` em `BASICO`.
+- **Seleção por link** (`?sel=TK-0010,TK-0011,…`): "Compartilhar seleção" com favoritos (ou com uma seleção recebida) gera `SITE_URL?sel=<códigos>` e a mensagem do WhatsApp
+  lista cada peça com preço e termina com o link completo; antes mandava só `SITE_URL` e o atendente não via quais peças eram (bug real). Filtro comum
+  (busca/categoria/preço) continua mandando os filtros, com a caixinha "Enviar só estas N peças (lista fixa)". `index.html`: `selecaoFixa`, `naSelecaoFixa_`
+  (casa por código sem diferenciar maiúscula ou, sem código, pelo ID), faixa `#aviso-selecao` ("Peças separadas para você: N" + avisa as que saíram da
+  loja + "Ver todas as peças"); "Limpar filtros" também sai da seleção; busca sem resultado dentro da seleção mostra a loja toda (regra 3). Máx. 60 peças.
+  A miniatura no WhatsApp do link `?sel=` é a genérica da loja (o Worker só gera miniatura por peça; um `/s/` no Worker seria o próximo passo).
+- **Testes novos** (em `rodar_tudo.py`): `selecao_link.py`, `central_avisos.py`, `push_cliente.py` (OneSignal FALSO com `navigator.userActivation` para provar que a
+  permissão sai de um toque; UAs de Android/iPhone/iOS antigo/Instagram/computador; `beforeinstallprompt`/`appinstalled` simulados), `instalabilidade.py`
+  (`Page.getInstallabilityErrors` do Chrome com o service worker de verdade), e a seção 8c de `backend_gs.js` (302 checagens com um OneSignal falso).
+  `tests/mock.py`: `install(ctx, versao="3.3")` liga `pushCompleto` e as ações novas (`pushStatus/pushPrevia/pushPessoas/pushNumeros/pushCancelar/pushModelos/…`).
+  **Entrega real no Android/iPhone NÃO é testável no sandbox**: roteiro no aparelho em `LEIA-ME-AVISOS.md`.
+
