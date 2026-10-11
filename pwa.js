@@ -169,8 +169,73 @@
     else window.addEventListener('load', function () { if (window.TKPush) TKPush.aoMudar(desenhar); desenhar(); });
   }
 
+  /* ---------------------------------------------------------------- 3. plaquinha flutuante de convite
+   * Só aparece quando a pessoa está no SITE (navegador comum) e não no app instalado, no celular.
+   * Respeita: "Agora não" (volta em >= 3 dias, no máximo 3 vezes), "Já instalei / Não mostrar mais" (nunca mais).
+   * Nunca abre por cima de janela aberta, nem em navegador de computador. O botão de instalar do Android usa o toque (prompt() exige). */
+  var K_CONVITE = 'tk_convite_app_v1';
+  function lerConvite() { try { return JSON.parse(localStorage.getItem(K_CONVITE) || '{}') || {}; } catch (e) { return {}; } }
+  function gravarConvite(o) { try { localStorage.setItem(K_CONVITE, JSON.stringify(o)); } catch (e) {} }
+  function vindoDoApp() {
+    return standalone() || /^android-app:\/\//.test(document.referrer || '') || /[?&](source=pwa|origem=app)\b/.test(location.search);
+  }
+  function podeConvidar() {
+    if (vindoDoApp()) return false;
+    if (!(iOS || android)) return false;                        // computador: não incomoda
+    var c = lerConvite();
+    if (c.nunca) return false;
+    if ((c.vezes || 0) >= 3) return false;
+    if (c.ultimo && Date.now() - c.ultimo < 3 * 86400000) return false;
+    if (lembrouInstalado() && !evento && android) return false; // já instalou (o Chrome só oferece instalar quando NÃO está instalado)
+    if (document.querySelector('.aberto, .visivel, [role=dialog][open]')) return false;
+    return true;
+  }
+  function fecharConvite(nunca) {
+    var el = $('tk-convite-app'); if (el) el.remove();
+    var c = lerConvite(); c.vezes = (c.vezes || 0) + 1; c.ultimo = Date.now(); if (nunca) c.nunca = true; gravarConvite(c);
+  }
+  function abrirConvite() {
+    if ($('tk-convite-app') || !podeConvidar()) return;
+    if (!$('tk-convite-css')) {
+      var st = document.createElement('style'); st.id = 'tk-convite-css';
+      st.textContent = '#tk-convite-app{position:fixed;left:12px;right:12px;bottom:84px;z-index:80;max-width:460px;margin:0 auto;background:#111;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 6px 24px rgba(0,0,0,.35);font:14px/1.35 system-ui,sans-serif}' +
+        '#tk-convite-app b{display:block;font-size:15px;margin-bottom:2px}#tk-convite-app p{margin:0 0 10px;color:#e6e6e6}' +
+        '#tk-convite-app .tkcv-l{display:flex;gap:8px;flex-wrap:wrap;align-items:center}' +
+        '#tk-convite-app button{width:auto;font:inherit;cursor:pointer;border-radius:10px;padding:9px 14px;min-height:40px}' +
+        '#tk-convite-app .tkcv-p{background:#E67E22;color:#0d0d0d;border:0;font-weight:700}' +
+        '#tk-convite-app .tkcv-s{background:transparent;color:#fff;border:1px solid #888}' +
+        '#tk-convite-app .tkcv-n{background:transparent;color:#e6e6e6;border:0;text-decoration:underline;padding:9px 6px}';
+      document.head.appendChild(st);
+    }
+    var box = document.createElement('div'); box.id = 'tk-convite-app'; box.setAttribute('role', 'region'); box.setAttribute('aria-label', 'Instalar o app da TENKiTER');
+    var pode = !!evento, texto, rot;
+    if (embutido) { texto = 'Você está dentro de outro app. Abra no Chrome ou Safari para instalar o app da TENKiTER.'; rot = 'Copiar endereço'; }
+    else if (iOS) { texto = 'Instale o app na tela inicial: abre mais rápido e você recebe os avisos dos seus pedidos.'; rot = 'Como instalar'; }
+    else if (pode) { texto = 'Instale o app da TENKiTER: abre mais rápido, funciona sem sinal ruim e avisa quando seu pedido andar.'; rot = '📲 Instalar o app'; }
+    else { texto = 'Instale o app da TENKiTER pelo menu do navegador (⋮ → Instalar app ou Adicionar à tela inicial).'; rot = 'Ver o passo a passo'; }
+    box.innerHTML = '<b>📲 Leve a TENKiTER no seu celular</b><p></p><div class="tkcv-l"><button type="button" class="tkcv-p"></button><button type="button" class="tkcv-s">Agora não</button><button type="button" class="tkcv-n">Não mostrar mais</button></div>';
+    box.querySelector('p').textContent = texto; box.querySelector('.tkcv-p').textContent = rot;
+    box.querySelector('.tkcv-p').addEventListener('click', function () {
+      if (embutido) { copiarEndereco(); return; }
+      if (iOS) {
+        fecharConvite(false);
+        try { navigator.share({ title: 'TENKiTER Modas', url: location.origin + '/' }).catch(function () {}); } catch (e) {}
+        if (secao) { try { secao.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }
+        return;
+      }
+      if (evento) { fecharConvite(false); pedirInstalacao(); return; }
+      fecharConvite(false);
+      if (secao) { try { secao.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }
+    });
+    box.querySelector('.tkcv-s').addEventListener('click', function () { fecharConvite(false); });
+    box.querySelector('.tkcv-n').addEventListener('click', function () { fecharConvite(true); });
+    document.body.appendChild(box);
+  }
+  window.addEventListener('appinstalled', function () { var el = $('tk-convite-app'); if (el) el.remove(); var c = lerConvite(); c.nunca = true; gravarConvite(c); });
+  window.addEventListener('load', function () { setTimeout(abrirConvite, window.TK_CONVITE_ATRASO_MS != null ? window.TK_CONVITE_ATRASO_MS : 9000); });
+
   window.TKInstalar = {
-    estado: function () { return { instalado: instalado(), podeInstalar: !!evento, standalone: standalone(), ios: iOS, android: android, embutido: embutido }; },
+    estado: function () { return { vindoDoApp: vindoDoApp(), instalado: instalado(), podeInstalar: !!evento, standalone: standalone(), ios: iOS, android: android, embutido: embutido }; },
     instalar: pedirInstalacao, redesenhar: desenhar
   };
   desenhar();

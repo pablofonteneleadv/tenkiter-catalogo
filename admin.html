@@ -86,6 +86,8 @@
   .sug-lista { border: 1px solid #eee; border-radius: 12px; overflow: hidden; background: #fff; }
   .sug-linha { display: flex; align-items: stretch; border-bottom: 1px solid #f0f0f0; }
   .sug-linha:last-child { border-bottom: none; }
+  .audit-linha { display:block; font-size:.72rem; color:#666; margin-top:3px; line-height:1.35; }
+  .hist-item { border-bottom:1px solid #eee; padding:8px 0; font-size:.88rem; } .hist-item small { display:block; color:#666; }
   .sug-copiar { flex: 1 1 auto; width: auto; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #fff; border-radius: 0; padding: 11px 12px; font-size: 0.9rem; font-weight: 600; text-align: left; color: var(--preto); }
   .env-nao-saia { position: sticky; top: 0; z-index: 3; background: #7a1010; color: #fff; font-weight: 800; border-radius: 10px; padding: 10px 12px; margin: 0 0 8px; font-size: 0.92rem; }
   .sug-copiar .sug-nome { overflow-wrap: anywhere; }
@@ -517,6 +519,7 @@
     <summary><span id="cad-sum-txt">➕ Cadastrar nova peça</span></summary>
     <div class="cad-corpo">
     <h2 id="titulo-form">Nova peça</h2>
+    <span class="audit-linha" id="audit-form" hidden></span>
     <p class="cad-sub">Preencha de cima para baixo. O que tem <b style="color:var(--vermelho)">*</b> é obrigatório.</p>
 
     <form id="form-produto" novalidate>
@@ -653,6 +656,13 @@
     </div>
   </div>
 
+  <div class="overlay-sheet" id="overlay-historico">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="historico-titulo">
+      <div class="sheet-topo"><strong id="historico-titulo">Histórico da peça</strong><button type="button" class="sheet-x" id="historico-fechar" aria-label="Fechar">✕</button></div>
+      <div id="historico-corpo" aria-live="polite"></div>
+    </div>
+  </div>
+
   <div class="overlay-sheet" id="overlay-gestao">
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="gestao-titulo">
       <div class="sheet-topo"><h2 id="gestao-titulo" class="gestao-titulo"></h2><button type="button" class="sheet-x" id="gestao-fechar" aria-label="Fechar">✕</button></div>
@@ -770,6 +780,7 @@
   let funcionarioNome = localStorage.getItem('tenkiter_funcionario') || '';
   let modoLogin = false;      // true: o servidor tem contas (WhatsApp + senha + permissões)
   let pinAindaAtivo = false;  // o PIN antigo ainda vale no servidor
+  let auditoriaMapa_ = {};     // v4.1: quem cadastrou/editou cada peça (só equipe, só backend 4.1)
   let usuarioAdmin = null;    // quem está logado (modo login)
   let servidorComContas = false; // o backend já tem contas/permissões (v2)
 
@@ -874,7 +885,7 @@
     setTimeout(() => document.getElementById(document.getElementById('lo-whats').value ? 'lo-senha' : 'lo-whats').focus(), 50);
   }
 
-  function esconderLogin() { document.getElementById('login-overlay').classList.remove('visivel'); }
+  function esconderLogin() { document.getElementById('login-overlay').classList.remove('visivel'); setTimeout(() => { try { restaurarEnvios_(); } catch (e) {} }, 400); }
 
   function aplicarUsuario(usuario) {
     usuarioAdmin = usuario;
@@ -1719,6 +1730,7 @@
     zerarMidia(p);
 
     tituloForm_('Editando: ' + p.Nome);
+    mostrarAuditoriaForm_();
     document.getElementById('btn-salvar').textContent = 'Salvar Alterações';
     document.getElementById('btn-cancelar-duplicar').textContent = 'Cancelar Edição';
     document.getElementById('btn-cancelar-duplicar').style.display = 'block';
@@ -1738,6 +1750,7 @@
     renderizarChips('chips-genero', generos, selecionadosGeneros);
     zerarMidia(null);
     tituloForm_('Nova peça');
+    mostrarAuditoriaForm_();
     document.getElementById('btn-salvar').textContent = 'Cadastrar peça';
     document.getElementById('btn-cancelar-duplicar').style.display = 'none';
     document.getElementById('seo-sugestao-box').innerHTML = '';
@@ -1793,6 +1806,80 @@
   // O formulário libera na hora para cadastrar a próxima peça; os envios saem um de cada vez.
   const envios = []; let processandoEnvios = false; let seqEnvios = 0;
 
+  // ---- v4.1: a fila fica guardada NO APARELHO (IndexedDB). Se o app for minimizado, fechado ou o celular reiniciar no meio do envio,
+  // o que não terminou volta sozinho quando o painel abrir de novo. Só dados da peça e fotos/vídeo (nenhuma senha/token: a credencial entra na hora de enviar).
+  let envioGuardadoOk_ = true;
+  function bdEnvios_() {
+    return new Promise((res, rej) => {
+      try {
+        const rq = indexedDB.open('tenkiter_admin_envios_v1', 1);
+        rq.onupgradeneeded = () => { rq.result.createObjectStore('e', { keyPath: 'k' }); };
+        rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+      } catch (e) { rej(e); }
+    });
+  }
+  async function guardarEnvio_(it) {
+    try {
+      const db = await bdEnvios_();
+      await new Promise((res, rej) => {
+        const tx = db.transaction('e', 'readwrite');
+        tx.objectStore('e').put({ k: it.k, titulo: it.titulo, ehEdicao: it.ehEdicao, temVideo: it.temVideo, videoArquivo: it.videoArquivo || null, capaNovaB64: it.capaNovaB64 || null,
+          galeriaNovaB64: it.galeriaNovaB64 || [], dados: it.dados, rascunhoId: it.rascunhoId || null, etapa: it.etapa || 'fila', msg: it.estado === 'erro' ? it.msg : '' });
+        tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
+      });
+      db.close();
+    } catch (e) { envioGuardadoOk_ = false; }
+  }
+  async function apagarEnvio_(it) {
+    if (!it || !it.k) return;
+    try {
+      const db = await bdEnvios_();
+      await new Promise((res) => { const tx = db.transaction('e', 'readwrite'); tx.objectStore('e').delete(it.k); tx.oncomplete = res; tx.onerror = res; tx.onabort = res; });
+      db.close();
+    } catch (e) {}
+  }
+  function tirarEnvio_(it) { const i = envios.indexOf(it); if (i !== -1) envios.splice(i, 1); apagarEnvio_(it); }
+  function novoKEnvio_() { return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+  let envioRestaurado_ = false;
+  async function restaurarEnvios_() {
+    if (envioRestaurado_) return; envioRestaurado_ = true;
+    let lista = [];
+    try {
+      const db = await bdEnvios_();
+      lista = await new Promise((res) => { const tx = db.transaction('e', 'readonly'); const rq = tx.objectStore('e').getAll(); rq.onsuccess = () => res(rq.result || []); rq.onerror = () => res([]); });
+      db.close();
+    } catch (e) { return; }
+    if (!lista.length) return;
+    lista.forEach((r) => {
+      if (envios.some(x => x.k === r.k)) return;
+      const it = { chave: ++seqEnvios, k: r.k, titulo: r.titulo, ehEdicao: !!r.ehEdicao, temVideo: !!r.temVideo, videoArquivo: r.videoArquivo || null, capaNovaB64: r.capaNovaB64 || null,
+        galeriaNovaB64: r.galeriaNovaB64 || [], dados: r.dados, rascunhoId: r.rascunhoId || null, estado: 'fila', msg: '', etapa: 'fila' };
+      if (r.etapa === 'salvando') { it.estado = 'erro'; it.etapa = 'fila'; it.msg = 'o app fechou na hora de salvar, então não sei se esta peça chegou a ser salva. Confira na lista: se NÃO estiver lá, toque em “Tentar de novo”; se estiver, toque em “Descartar”.'; }
+      else if (r.msg) { it.estado = 'erro'; it.msg = r.msg; }
+      envios.push(it);
+    });
+    document.getElementById('status').textContent = 'Retomando ' + lista.length + (lista.length === 1 ? ' peça que ficou' : ' peças que ficaram') + ' pela metade da última vez.';
+    abrirCadastro_();   // a fila fica dentro do cartão de cadastro: abre para a pessoa ver o que voltou
+    desenharEnvios(); processarEnvios();
+  }
+
+  // Mantém a tela acordada enquanto envia (o celular dormindo é o que mais interrompe). Só funciona com a tela ligada; minimizar/trocar de app pausa e o envio RETOMA ao voltar.
+  let wakeLock_ = null;
+  async function ajustarWakeLock_(pend) {
+    try {
+      if (pend && !wakeLock_ && navigator.wakeLock && document.visibilityState === 'visible') {
+        wakeLock_ = await navigator.wakeLock.request('screen');
+        wakeLock_.addEventListener('release', () => { wakeLock_ = null; });
+      } else if (!pend && wakeLock_) { const w = wakeLock_; wakeLock_ = null; await w.release(); }
+    } catch (e) { wakeLock_ = null; }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    const pend = envios.some(e => e.estado === 'fila' || e.estado === 'enviando');
+    ajustarWakeLock_(pend);
+    if (envios.some(e => e.estado === 'fila') && !processandoEnvios) processarEnvios();
+  });
+
   function textoEnvio(it) {
     const o = it.ehEdicao ? 'Alterações de ' : 'Cadastro de ';
     if (it.estado === 'fila') return '⏳ ' + o + '"' + it.titulo + '" na fila...';
@@ -1806,6 +1893,7 @@
     const box = document.getElementById('fila-envios');
     box.innerHTML = '';
     { const pend = envios.filter(e => e.estado === 'fila' || e.estado === 'enviando').length;
+      ajustarWakeLock_(pend);
       if (pend) { const av = document.createElement('div'); av.className = 'env-nao-saia'; av.setAttribute('role', 'status'); av.textContent = '⚠️ Não saia desta tela: ' + (pend === 1 ? 'falta 1 peça' : 'faltam ' + pend + ' peças') + ' para terminar de enviar.'; box.appendChild(av); } }
     envios.forEach((it) => {
       const linha = document.createElement('div'); linha.className = 'env-item env-' + (it.estado === 'fila' ? 'enviando' : it.estado);
@@ -1830,21 +1918,21 @@
       if (it.estado === 'aviso') {
         const botoes = document.createElement('div'); botoes.className = 'env-botoes';
         const b0 = document.createElement('button'); b0.type = 'button'; b0.textContent = 'Entendi';
-        b0.addEventListener('click', () => { envios.splice(envios.indexOf(it), 1); desenharEnvios(); });
+        b0.addEventListener('click', () => { tirarEnvio_(it); desenharEnvios(); });
         botoes.appendChild(b0); linha.appendChild(botoes);
       }
       if (it.estado === 'erro') {
         const botoes = document.createElement('div'); botoes.className = 'env-botoes';
         const b1 = document.createElement('button'); b1.type = 'button'; b1.textContent = 'Tentar de novo';
-        b1.addEventListener('click', () => { it.estado = 'fila'; it.msg = ''; desenharEnvios(); processarEnvios(); });
+        b1.addEventListener('click', () => { it.estado = 'fila'; it.msg = ''; it.etapa = 'fila'; guardarEnvio_(it); desenharEnvios(); processarEnvios(); });
         const b2 = document.createElement('button'); b2.type = 'button'; b2.textContent = 'Descartar'; b2.style.background = '#777';
-        b2.addEventListener('click', () => { envios.splice(envios.indexOf(it), 1); desenharEnvios(); });
+        b2.addEventListener('click', () => { tirarEnvio_(it); desenharEnvios(); });
         botoes.appendChild(b1); botoes.appendChild(b2); linha.appendChild(botoes);
       }
       box.appendChild(linha);
     });
   }
-  function sumirDepois(it, ms) { setTimeout(() => { const i = envios.indexOf(it); if (i !== -1 && (it.estado === 'ok' || it.estado === 'offline')) { envios.splice(i, 1); desenharEnvios(); } }, ms); }
+  function sumirDepois(it, ms) { setTimeout(() => { const i = envios.indexOf(it); if (i !== -1 && (it.estado === 'ok' || it.estado === 'offline')) { tirarEnvio_(it); desenharEnvios(); } }, ms); }
 
   function conferirSalvo(it, resp) {
     const d = it.dados, id = String((resp && resp.id) || d.id || '');
@@ -2158,6 +2246,7 @@
     // então esse envio é sempre pequeno. Mesmo assim, só cai na fila offline depois de insistir:
     // uma única tentativa falhar não quer dizer que o aparelho está mesmo sem internet.
     let resultado;
+    it.etapa = 'salvando'; await guardarEnvio_(it);   // se o app fechar daqui até a resposta, na volta a pessoa confere antes de reenviar (evita peça duplicada)
     try {
       const resp = await comTentativas_(it, () => enviarComProgresso(dados, aoProgredir), 'salvar produto');
       resultado = { ok: true, resp: resp };
@@ -2192,6 +2281,7 @@
         if (!it) break;
         it.estado = 'enviando'; desenharEnvios();
         try { await enviarItem(it); } catch (err) { it.estado = 'erro'; it.msg = 'erro inesperado'; window.logDebug_('════ "' + it.titulo + '": erro inesperado no JS -- ' + ((err && err.stack) || err) + ' ════'); }
+        if (it.estado === 'ok' || it.estado === 'aviso' || it.estado === 'offline') apagarEnvio_(it); else { it.etapa = 'fila'; guardarEnvio_(it); }
         desenharEnvios();
       }
     } finally { processandoEnvios = false; }
@@ -2202,7 +2292,11 @@
   // Os envios rodam NESTA página: sair (ou fechar o app) interrompe o que ainda não terminou. A barra inferior avisa antes.
   window.TKSairBloqueio = () => {
     const n = envios.filter(e => e.estado === 'fila' || e.estado === 'enviando').length;
-    return n ? '⚠️ Ainda ' + (n === 1 ? 'falta 1 peça' : 'faltam ' + n + ' peças') + ' para terminar de enviar.\n\nSe você sair agora, o que não terminou SE PERDE e precisa ser cadastrado de novo.\n\nOK = sair mesmo assim · Cancelar = ficar e deixar terminar.' : '';
+    if (!n) return '';
+    const base = '⚠️ Ainda ' + (n === 1 ? 'falta 1 peça' : 'faltam ' + n + ' peças') + ' para terminar de enviar.\n\n';
+    return base + (envioGuardadoOk_
+      ? 'Se você sair agora, o envio PAUSA. O que ficou guardado neste aparelho continua sozinho quando você voltar ao painel, mas só termina de verdade se o painel ficar aberto.\n\nOK = sair mesmo assim · Cancelar = ficar e deixar terminar.'
+      : 'Se você sair agora, o que não terminou SE PERDE e precisa ser cadastrado de novo.\n\nOK = sair mesmo assim · Cancelar = ficar e deixar terminar.') ;
   };
 
   document.getElementById('form-produto').addEventListener('submit', (e) => {
@@ -2249,12 +2343,14 @@
       chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao,
       temVideo: !!videoNovo, videoArquivo: videoNovo ? videoNovo.file : null,
       capaNovaB64: capaNovaB64, galeriaNovaB64: galeriaNovaB64,
-      dados: dados, estado: 'fila', msg: '', rascunhoId: window.__rascunhoAtual || null
+      dados: dados, estado: 'fila', msg: '', rascunhoId: window.__rascunhoAtual || null, k: novoKEnvio_(), etapa: 'fila'
     });
+    guardarEnvio_(envios[envios.length - 1]);
     if (!ehEdicao && Array.isArray(window.__loteSeparado) && window.__loteSeparado.length && window.__rascunhoAtual && window.__rascunhoAtual === window.__loteBase) {
       window.__loteSeparado.forEach((r2) => {
         const d2 = dadosDoPostSeparado_(dados, r2);
-        envios.push({ chave: ++seqEnvios, titulo: d2.nome || 'Peça', ehEdicao: false, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: d2, estado: 'fila', msg: '', rascunhoId: r2.id });
+        envios.push({ chave: ++seqEnvios, titulo: d2.nome || 'Peça', ehEdicao: false, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: d2, estado: 'fila', msg: '', rascunhoId: r2.id, k: novoKEnvio_(), etapa: 'fila' });
+        guardarEnvio_(envios[envios.length - 1]);
       });
     }
     cancelarDuplicacao(); // libera o formulário já
@@ -2286,7 +2382,52 @@
     }
     avisoCache_('');
     renderizarProdutos();
+    carregarAuditoria_();
   }
+
+  // ---- v4.1: quem cadastrou / quem editou (só com backend 4.1 + login; a lista pública nunca traz esses nomes)
+  function quandoCurto_(iso) {
+    const d = new Date(iso); if (!iso || isNaN(d)) return '';
+    return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Fortaleza' }).replace(',', '');
+  }
+  function textoAuditoria_(a) {
+    if (!a) return '';
+    const partes = [];
+    if (a.criadoPor) partes.push('Cadastrou: ' + a.criadoPor + (a.criadoEm ? ' · ' + quandoCurto_(a.criadoEm) : ''));
+    if (a.editadoPor) partes.push((a.ultimaAcao && a.ultimaAcao !== 'Editou a peça' ? a.ultimaAcao : 'Editou') + ': ' + a.editadoPor + (a.editadoEm ? ' · ' + quandoCurto_(a.editadoEm) : ''));
+    return partes.join(' — ');
+  }
+  async function carregarAuditoria_() {
+    try {
+      const v = await versaoServidor();
+      if (!v || !v.auditoriaProdutos || !usuarioAdmin) return;
+      const r = await chamarAdmin_({ action: 'auditoriaProdutos' });
+      if (r && r.ok && r.itens) { auditoriaMapa_ = r.itens; renderizarProdutos(); mostrarAuditoriaForm_(); }
+    } catch (e) { /* sem isso a lista funciona igual */ }
+  }
+  function mostrarAuditoriaForm_() {
+    const el = document.getElementById('audit-form'); if (!el) return;
+    const id = document.getElementById('produto-id').value;
+    const t = modoFormulario === 'editando' && id ? textoAuditoria_(auditoriaMapa_[String(id)]) : '';
+    el.textContent = t; el.hidden = !t;
+  }
+  async function abrirHistorico_(id) {
+    const p = produtos.find(x => String(x.ID) === String(id));
+    document.getElementById('historico-titulo').textContent = 'Histórico: ' + (p ? p.Nome : 'peça');
+    const corpo = document.getElementById('historico-corpo');
+    corpo.innerHTML = '<p style="color:#666">Carregando…</p>';
+    abrirComHistorico_('overlay-historico');
+    const r = await chamarAdmin_({ action: 'historicoProduto', id: id });
+    if (!r || !r.ok) { corpo.innerHTML = '<p style="color:#b3151b">' + escaparHtml((r && r.erro) || 'Não consegui carregar agora.') + '</p>'; return; }
+    corpo.innerHTML = r.historico.length
+      ? r.historico.map(h => '<div class="hist-item"><b>' + escaparHtml(h.acao) + '</b> — ' + escaparHtml(h.quem || 'Sem identificação') + '<small>' + escaparHtml(quandoCurto_(h.quando)) + (h.resumo ? ' · ' + escaparHtml(h.resumo) : '') + '</small></div>').join('')
+      : '<p style="color:#666">Ainda não há registros desta peça. Os próximos cadastros e edições aparecem aqui.</p>';
+  }
+  document.getElementById('historico-fechar').addEventListener('click', () => fecharComHistorico_('overlay-historico'));
+  document.getElementById('overlay-historico').addEventListener('click', (ev) => { if (ev.target.id === 'overlay-historico') fecharComHistorico_('overlay-historico'); });
+  document.getElementById('lista-produtos').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-hist-id]'); if (b) abrirHistorico_(b.dataset.histId);
+  });
 
   let filtroLista = 'ativas';
   function ehInativo_(p) { return !!p.Status && String(p.Status).trim().toLowerCase() !== 'ativo'; }
@@ -2337,6 +2478,7 @@
           <div class="nome">${escaparHtml(p.Nome)}</div>
           <div class="preco">${formatarReal(p.Preco)} · à vista <span>${formatarReal(p.Preco * (1 - DESCONTO_AVISTA))}</span></div>
           ${estoqueInformado(p) && !esg ? `<div class="estoque-linha">Estoque: ${escaparHtml(p.Estoque)}</div>` : ''}
+          ${auditoriaMapa_[String(p.ID)] ? `<span class="audit-linha">${escaparHtml(textoAuditoria_(auditoriaMapa_[String(p.ID)]))}</span>` : ''}
           <div class="acoes-linha">
             <button type="button" class="btn-editar" data-editar-id="${idE}">✏️ Editar</button>
             <button type="button" class="btn-arte" data-arte-id="${idE}">🎨 Stories</button>
@@ -2344,6 +2486,7 @@
             <details class="mais"><summary aria-label="Mais ações">⋯</summary>
               <div class="mais-menu">
                 <button type="button" class="btn-duplicar" data-duplicar-id="${idE}">📋 Duplicar</button>
+                ${Object.keys(auditoriaMapa_).length ? `<button type="button" data-hist-id="${idE}">🕘 Histórico</button>` : ''}
                 ${inativo
                   ? `<button type="button" class="btn-reativar" data-reativar-id="${idE}">🔄 Reativar</button>`
                   : `<button type="button" class="btn-arquivar" data-arquivar-id="${idE}">🗃️ Arquivar</button>`}
@@ -2585,7 +2728,7 @@
     }
   }
   window.addEventListener('popstate', () => {
-    ['overlay-compartilhar', 'overlay-categorias', 'overlay-gestao', 'overlay-juntar'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('aberto'); });
+    ['overlay-compartilhar', 'overlay-categorias', 'overlay-gestao', 'overlay-juntar', 'overlay-historico'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('aberto'); });
   });
   document.addEventListener('click', (ev) => { // fecha o menu "⋯" das peças ao tocar fora dele
     document.querySelectorAll('details.mais[open]').forEach(d => { if (!d.contains(ev.target)) d.removeAttribute('open'); });

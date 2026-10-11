@@ -1,4 +1,6 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v4.0
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v4.1
+//
+// NOVIDADE v4.1 -- QUEM CADASTROU / QUEM EDITOU E QUANDO (pedido do Pablo): a planilha de produtos ganha CriadoPor, CriadoEm, EditadoPor, EditadoEm e UltimaAcao (criadas sozinhas), preenchidas com o NOME VERDADEIRO da sessão de login (o PIN antigo usa o nome digitado no aparelho). Vale para cadastrar, editar, arquivar, reativar, X do catálogo, foto/vídeo tirado ou devolvido, juntar e lote. Essas colunas NUNCA saem na lista pública. Ações novas (catalogo_cadastrar): auditoriaProdutos (resumo de todas as peças) e historicoProduto {id} (linha do tempo). Bandeira auditoriaProdutos.
 //
 // NOVIDADE v4.0 -- CPF, E-MAIL E LOGIN MÚLTIPLO + RECUPERAR SENHA (pedido do Pablo): entra com e-mail, WhatsApp ou CPF (acResolverIdentificador_); CPF/e-mail opcionais no cadastro de cliente; ação recuperar_senha (CPF/nascimento conferidos, 5 erros = 15 min, conta da equipe exige os dois) e salvar_identificadores. Bandeiras em versao: cpf, recuperarSenha, loginMultiplo. Bloco compartilhado com o backend de funcionários 3.3.
 //
@@ -188,7 +190,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-4.0';
+const VERSAO_CATALOGO = 'catalogo-4.1';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1428,7 +1430,9 @@ const PERMISSAO_POR_ACAO_ = {
   // v3.5: liga o OneSignal pelo painel (Organization API Key guardada no servidor)
   onesignalConfigurar: 'gerir_acessos',
   // v3.7: X de arquivar no catálogo (Equipe do site ou maior) e juntar produtos
-  arquivarRapido: 'catalogo_cadastrar', arquivarMidia: 'catalogo_cadastrar', restaurarMidia: 'catalogo_cadastrar', midiasArquivadas: 'catalogo_cadastrar', juntarProdutos: 'catalogo_cadastrar'
+  arquivarRapido: 'catalogo_cadastrar', arquivarMidia: 'catalogo_cadastrar', restaurarMidia: 'catalogo_cadastrar', midiasArquivadas: 'catalogo_cadastrar', juntarProdutos: 'catalogo_cadastrar',
+  // v4.1: quem cadastrou/editou
+  auditoriaProdutos: 'catalogo_cadastrar', historicoProduto: 'catalogo_cadastrar'
 };
 const PERMISSAO_POR_LOTE_ = {
   ajustarPrecoPorcento: 'catalogo_precos', marcarNovidade: 'catalogo_cadastrar', alterarEstoque: 'catalogo_cadastrar',
@@ -1699,7 +1703,7 @@ function doGetInterno_(e) {
   if (action === 'versao') return jsonResponse_({
     ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
     pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true,
-    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true, midiaRapida: true, juntarProdutos: true, duplicadoPorFoto: true, cpf: true, recuperarSenha: true, loginMultiplo: true
+    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true, midiaRapida: true, juntarProdutos: true, duplicadoPorFoto: true, cpf: true, recuperarSenha: true, loginMultiplo: true, auditoriaProdutos: true
   });
   if (action === 'config') return configPublica_();
   if (action === 'pushconfig') return pushConfigPublica_();
@@ -1726,6 +1730,7 @@ function doGetInterno_(e) {
       const linha = dados[i];
       const obj = {};
       headers.forEach((h, idx) => obj[h] = linha[idx]);
+      COLUNAS_AUDIT_PROD_.forEach(function (c) { delete obj[c]; });   // v4.1: nomes da equipe NUNCA vão para a lista pública
       if (incluirTodos || normalizar_(obj.Status) === 'ativo') {
         produtos.push(obj);
       }
@@ -1759,6 +1764,122 @@ function doPost(e) {
   }
 }
 
+// ===================== v4.1: quem cadastrou / quem editou =====================
+const COLUNAS_AUDIT_PROD_ = ['CriadoPor', 'CriadoEm', 'EditadoPor', 'EditadoEm', 'UltimaAcao'];
+const ROTULO_ACAO_PROD_ = {
+  create: 'Cadastrou a peça', update: 'Editou a peça', delete: 'Arquivou a peça', reativar: 'Reativou a peça', arquivarRapido: 'Arquivou pelo X do catálogo',
+  arquivarMidia: 'Tirou uma foto/vídeo', restaurarMidia: 'Devolveu uma foto/vídeo', juntarProdutos: 'Juntou produtos', bulkUpdate: 'Editou em lote'
+};
+
+/** Números das colunas de auditoria (criadas na hora se faltarem). */
+function colunasAuditProd_(sheet) {
+  const n = Math.max(sheet.getLastColumn(), 1);
+  const cab = sheet.getRange(1, 1, 1, n).getValues()[0].map(function (h) { return String(h).trim(); });
+  const mapa = {};
+  COLUNAS_AUDIT_PROD_.forEach(function (nome) {
+    let i = cab.indexOf(nome);
+    if (i === -1) { cab.push(nome); i = cab.length - 1; sheet.getRange(1, i + 1).setValue(nome); }
+    mapa[nome] = i + 1;
+  });
+  return mapa;
+}
+
+/** Nome de quem fez: com login é o nome verdadeiro da conta (body.funcionario já foi trocado por aut.nome); com o PIN antigo é o que foi digitado no aparelho. */
+function autorDaAcao_(body) {
+  const nome = acTexto_(String(body.funcionario || '').trim().slice(0, 80));
+  return nome || 'Sem identificação';
+}
+
+function despacharComCarimbo_(body) {
+  const saida = despacharPost_(body);
+  try {
+    const r = JSON.parse(saida.getContent());
+    if (r && r.ok) carimbarProdutos_(body, r);
+  } catch (e) { /* o carimbo nunca derruba a ação principal */ }
+  return saida;
+}
+
+function carimbarProdutos_(body, resposta) {
+  const acao = body.action;
+  let ids = [];
+  if (acao === 'create') ids = [resposta.id];
+  else if (acao === 'bulkUpdate') ids = body.ids || [];
+  else if (acao === 'juntarProdutos') ids = [body.destinoId].concat(body.origemIds || []);
+  else ids = [body.id];
+  const alvo = {};
+  ids.forEach(function (x) { if (x !== undefined && x !== null && x !== '') alvo[String(x)] = true; });
+  if (!Object.keys(alvo).length) return;
+  const sheet = getProdutosSheet_();
+  const ult = sheet.getLastRow();
+  if (ult < 2) return;
+  const col = colunasAuditProd_(sheet);
+  const idsPlanilha = sheet.getRange(2, 1, ult - 1, 1).getValues();
+  const agora = new Date(), quem = autorDaAcao_(body), rotulo = ROTULO_ACAO_PROD_[acao] || acao;
+  const valores = {};
+  COLUNAS_AUDIT_PROD_.forEach(function (c) { valores[c] = sheet.getRange(2, col[c], ult - 1, 1).getValues(); });
+  let mudou = false;
+  for (let i = 0; i < idsPlanilha.length; i++) {
+    if (!alvo[String(idsPlanilha[i][0])]) continue;
+    if (acao === 'create') { valores.CriadoPor[i][0] = quem; valores.CriadoEm[i][0] = agora; }
+    else { valores.EditadoPor[i][0] = quem; valores.EditadoEm[i][0] = agora; }
+    valores.UltimaAcao[i][0] = rotulo;
+    mudou = true;
+  }
+  if (!mudou) return;
+  COLUNAS_AUDIT_PROD_.forEach(function (c) { sheet.getRange(2, col[c], ult - 1, 1).setValues(valores[c]); });
+}
+
+function dataIso_(v) { return v instanceof Date ? v.toISOString() : (v ? String(v) : ''); }
+
+/** Resumo de todas as peças: { id: { criadoPor, criadoEm, editadoPor, editadoEm, ultimaAcao } } (só quem tem algum dado). */
+function auditoriaProdutos_() {
+  const sheet = getProdutosSheet_();
+  const ult = sheet.getLastRow();
+  const itens = {};
+  if (ult >= 2) {
+    const n = Math.max(sheet.getLastColumn(), 1);
+    const cab = sheet.getRange(1, 1, 1, n).getValues()[0].map(function (h) { return String(h).trim(); });
+    const dados = sheet.getRange(2, 1, ult - 1, n).getValues();
+    const ix = {}; COLUNAS_AUDIT_PROD_.forEach(function (c) { ix[c] = cab.indexOf(c); });
+    dados.forEach(function (l) {
+      const o = {
+        criadoPor: ix.CriadoPor > -1 ? String(l[ix.CriadoPor] || '') : '', criadoEm: ix.CriadoEm > -1 ? dataIso_(l[ix.CriadoEm]) : '',
+        editadoPor: ix.EditadoPor > -1 ? String(l[ix.EditadoPor] || '') : '', editadoEm: ix.EditadoEm > -1 ? dataIso_(l[ix.EditadoEm]) : '',
+        ultimaAcao: ix.UltimaAcao > -1 ? String(l[ix.UltimaAcao] || '') : ''
+      };
+      if (o.criadoPor || o.editadoPor) itens[String(l[0])] = o;
+    });
+  }
+  return jsonResponse_({ ok: true, itens: itens });
+}
+
+/** Linha do tempo de uma peça (da aba Acoes_Audit), mais recente primeiro, até 40 linhas. */
+function historicoProduto_(body) {
+  const id = String(body.id || '').trim();
+  if (!id) return jsonResponse_({ ok: false, erro: 'Informe a peça.' });
+  const sheet = getOrCreateSheet_(SHEET_AUDITORIA, ['DataHora', 'Funcionario', 'Acao', 'ProdutoID', 'Detalhes']);
+  const ult = sheet.getLastRow();
+  const linhas = [];
+  if (ult >= 2) {
+    const dados = sheet.getRange(2, 1, ult - 1, 5).getValues();
+    for (let i = dados.length - 1; i >= 0 && linhas.length < 40; i--) {
+      const l = dados[i];
+      if (String(l[3]) !== id) continue;
+      let resumo = '';
+      try {
+        const d = JSON.parse(String(l[4] || '{}'));
+        const novo = d.produto || {}, velho = d.anterior || {};
+        const partes = [];
+        if (velho.preco !== undefined && novo.preco !== undefined && String(velho.preco) !== String(novo.preco)) partes.push('preço ' + velho.preco + ' → ' + novo.preco);
+        if (velho.estoque !== undefined && novo.estoque !== undefined && String(velho.estoque) !== String(novo.estoque)) partes.push('estoque ' + velho.estoque + ' → ' + novo.estoque);
+        resumo = partes.join(' · ');
+      } catch (e) {}
+      linhas.push({ quando: dataIso_(l[0]), quem: String(l[1] || ''), acao: ROTULO_ACAO_PROD_[String(l[2])] || String(l[2]), resumo: resumo });
+    }
+  }
+  return jsonResponse_({ ok: true, historico: linhas });
+}
+
 function doPostInterno_(body) {
   const action = body.action;
 
@@ -1788,7 +1909,7 @@ function doPostInterno_(body) {
 
   if (ACOES_QUE_ALTERAM_PRODUTOS_.indexOf(action) === -1) return despacharPost_(body);
   if (ACOES_COM_TRAVA_.indexOf(action) === -1) {
-    try { return despacharPost_(body); } finally { invalidarCacheProdutos_(); }
+    try { return despacharComCarimbo_(body); } finally { invalidarCacheProdutos_(); }
   }
   const trava = LockService.getScriptLock();
   try {
@@ -1797,7 +1918,7 @@ function doPostInterno_(body) {
     return jsonResponse_({ ok: false, erro: 'O sistema está salvando outra alteração agora. Tente de novo em alguns segundos.' });
   }
   try {
-    return despacharPost_(body);
+    return despacharComCarimbo_(body);
   } finally {
     invalidarCacheProdutos_();
     trava.releaseLock();
@@ -1817,6 +1938,8 @@ function despacharPost_(body) {
   if (action === 'restaurarMidia') return restaurarMidia_(body);
   if (action === 'midiasArquivadas') return midiasArquivadas_(body);
   if (action === 'juntarProdutos') return juntarProdutos_(body);
+  if (action === 'auditoriaProdutos') return auditoriaProdutos_();
+  if (action === 'historicoProduto') return historicoProduto_(body);
   if (action === 'reativar') return reativarProduto_(body);
   if (action === 'excluirPermanente') return excluirPermanentemente_(body);
   if (action === 'bulkUpdate') return acaoEmLote_(body);

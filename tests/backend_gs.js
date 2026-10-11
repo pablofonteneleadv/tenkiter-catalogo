@@ -1673,6 +1673,49 @@ function servicosFalsos(amb, est) {
   ok(r.ok === false && /limite/.test(r.erro) && linha('103').r[6] === 'Ativo', 'passar do limite de fotos recusa e não arquiva ninguém', r.erro);
 })();
 
+// ------------------------------------------------------------------ 8i. quem cadastrou / quem editou (v4.1)
+(function carimbo() {
+  console.log('\n[v4.1: quem cadastrou, quem editou e quando]');
+  const amb = criarAmbiente(); semear(amb);
+  const sh = amb.ss.getSheetByName('Sheet1');
+  const cab = () => sh.getDataRange().getValues()[0];
+  const lin = (id) => { const d = sh.getDataRange().getValues(); const i = d.findIndex((r) => String(r[0]) === String(id)); return Object.fromEntries(cab().map((h, k) => [h, d[i][k]])); };
+  ok(amb.getJson({ action: 'versao' }).auditoriaProdutos === true, 'versao anuncia auditoriaProdutos');
+  amb.ctx.SpreadsheetApp.openById('x').getSheetByName('Pessoas').appendRow(['Nome', 'WhatsApp', 'Senha']);
+  amb.run("acRegistrar_('Ana Cadastro', '88999990011', 'senha-a-1', 'Equipe do site', {})");
+  amb.run("acRegistrar_('Beto Edita', '88999990012', 'senha-b-2', 'Equipe do site', {})");
+  amb.run("acRegistrar_('Cris Cliente', '88999990013', 'senha-c-3', 'Cliente', {})");
+  const ana = amb.post({ action: 'login', whatsapp: '88999990011', senha: 'senha-a-1' });
+  const beto = amb.post({ action: 'login', whatsapp: '88999990012', senha: 'senha-b-2' });
+  const cris = amb.post({ action: 'login', whatsapp: '88999990013', senha: 'senha-c-3' });
+  const A = (o) => Object.assign({ sessao: ana.sessao, whatsapp: '88999990011' }, o);
+  const B = (o) => Object.assign({ sessao: beto.sessao, whatsapp: '88999990012' }, o);
+  const Cr = (o) => Object.assign({ sessao: cris.sessao, whatsapp: '88999990013' }, o);
+  let r = amb.post(A({ action: 'create', nome: 'Vestido Carimbo', preco: 99.9, categoria: 'Vestidos', genero: 'Feminino', funcionario: 'NOME FALSO DIGITADO', fotoUrlExistente: 'https://res.cloudinary.com/z/car.jpg' }));
+  ok(r.ok, 'cadastro com login funciona', JSON.stringify(r));
+  let l = lin(r.id);
+  ok(l.CriadoPor === 'Ana Cadastro' && l.CriadoEm instanceof Date && l.UltimaAcao === 'Cadastrou a peça', 'cadastro grava o NOME DA CONTA (não o texto digitado no aparelho), a data e a ação', JSON.stringify([l.CriadoPor, l.UltimaAcao]));
+  ok(!l.EditadoPor, 'peça nova ainda não tem "editado por"');
+  const id = r.id;
+  r = amb.post(B({ action: 'update', id: id, nome: 'Vestido Carimbo', preco: 109.9, categoria: 'Vestidos', genero: 'Feminino' }));
+  ok(r.ok, 'edição funciona', JSON.stringify(r)); l = lin(id);
+  ok(l.EditadoPor === 'Beto Edita' && l.EditadoEm instanceof Date && l.UltimaAcao === 'Editou a peça' && l.CriadoPor === 'Ana Cadastro', 'edição grava quem editou e mantém quem cadastrou');
+  r = amb.post(B({ action: 'arquivarRapido', id: id })); l = lin(id);
+  ok(r.ok && l.UltimaAcao === 'Arquivou pelo X do catálogo' && l.EditadoPor === 'Beto Edita', 'X do catálogo também carimba');
+  r = amb.post(B({ action: 'bulkUpdate', tipoAcao: 'marcarNovidade', ids: [id, '101'], valor: true })); 
+  ok(lin('101').EditadoPor === 'Beto Edita' || r.ok === false, 'lote carimba as peças afetadas (ou recusa sem carimbar)', JSON.stringify(r));
+  // ---- leitura: só equipe; nunca na lista pública
+  r = amb.post(Cr({ action: 'auditoriaProdutos' }));
+  ok(r.semPermissao === true || r.ok === false, 'cliente comum NÃO vê quem editou');
+  r = amb.post(A({ action: 'auditoriaProdutos' }));
+  ok(r.ok && r.itens[id] && r.itens[id].criadoPor === 'Ana Cadastro' && r.itens[id].editadoPor === 'Beto Edita' && /^\d{4}-\d\d-\d\dT/.test(r.itens[id].criadoEm), 'equipe vê o resumo (datas em ISO)', JSON.stringify(r.itens && r.itens[id]));
+  const pub = JSON.stringify(amb.getJson({ action: 'list', todos: 'true' }));
+  ok(pub.indexOf('Ana Cadastro') === -1 && pub.indexOf('Beto Edita') === -1 && pub.indexOf('CriadoPor') === -1 && pub.indexOf('UltimaAcao') === -1, 'a lista PÚBLICA nunca traz nomes da equipe nem as colunas de auditoria');
+  r = amb.post(A({ action: 'historicoProduto', id: id }));
+  ok(r.ok && r.historico.length >= 2 && r.historico[0].quem && r.historico[0].quando, 'historicoProduto devolve a linha do tempo, mais recente primeiro', JSON.stringify(r).slice(0, 200));
+  ok(amb.post(Cr({ action: 'historicoProduto', id: id })).ok !== true, 'histórico também é só da equipe');
+})();
+
 console.log('\n' + (total - falhas.length) + '/' + total + ' verificações passaram');
 console.log('FALHAS=' + falhas.length + (falhas.length ? ' ' + JSON.stringify(falhas) : ''));
 process.exit(falhas.length ? 1 : 0);

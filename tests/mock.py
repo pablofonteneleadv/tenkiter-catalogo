@@ -44,6 +44,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     if conex5: FLAGS["conexoesOnesignal"]=True
     if conex6: FLAGS["conexoesCopiar"]=True
     if versao>="3.7" and novo: FLAGS["midiaRapida"]=True; FLAGS["juntarProdutos"]=True
+    if versao>="4.1" and novo: FLAGS["auditoriaProdutos"]=True
     if avanc: FLAGS["metricasAvancadas"]=True; FLAGS["dispositivos"]=True
     def limpa(n): return " ".join(str(n or "").replace(","," ").split())[:60].strip()
     def norm(n):
@@ -54,6 +55,11 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
         return {"codigo":ped["codigo"],"data":ped["data"],"atualizado":ped["atualizado"],"status":ped["status"],"entrega":ped["entrega"],"total":ped["total"],"itens":[{"nome":i["nome"],"codigo":i["codigo"]} for i in ped["itens"]]}
     def post(b):
         a=b.get("action")
+        if versao>="4.1" and a=="auditoriaProdutos":
+            st.setdefault("aud_chamadas",[]).append(b)
+            return {"ok":True,"itens":st.get("auditoria",{"1790000000000":{"criadoPor":"Ana Cadastro","criadoEm":"2026-10-11T17:32:00.000Z","editadoPor":"Beto Edita","editadoEm":"2026-10-11T19:05:00.000Z","ultimaAcao":"Editou a peça"}})}
+        if versao>="4.1" and a=="historicoProduto":
+            return {"ok":True,"historico":[{"quando":"2026-10-11T19:05:00.000Z","quem":"Beto Edita","acao":"Editou a peça","resumo":"preço 89 → 99"},{"quando":"2026-10-11T17:32:00.000Z","quem":"Ana Cadastro","acao":"Cadastrou a peça","resumo":""}]}
         if versao>="3.7" and a in("arquivarRapido","arquivarMidia","restaurarMidia","juntarProdutos"):
             st.setdefault("x_chamadas",[]).append(b)
             if "catalogo_cadastrar" not in perms: return {"ok":False,"semPermissao":True,"erro":"Você não tem permissão para essa ação."}
