@@ -1298,8 +1298,8 @@ catch (e) { window.__precargaLista = null; }
           <span class="avista">${formatarReal(avista)} à vista</span>
         </div>
         <div class="tags">${escaparHtml(p.Categoria)} · ${escaparHtml(p.Genero)}</div>
-        ${p.Tamanhos ? `<div class="extra"><strong>Tamanhos:</strong> ${escaparHtml(p.Tamanhos)}</div>` : ''}
-        ${p.Cores ? `<div class="extra"><strong>Cores:</strong> ${escaparHtml(p.Cores)}</div>` : ''}
+        ${p.Tamanhos ? `<div class="extra"><strong>Tamanhos:</strong> ${escaparHtml(textoPlano(p.Tamanhos))}</div>` : ''}
+        ${p.Cores ? `<div class="extra"><strong>Cores:</strong> ${escaparHtml(textoPlano(p.Cores))}</div>` : ''}
         ${p.Descricao ? `<div class="desc">${escaparHtml(p.Descricao)}</div>` : ''}
         ${disp ? `<div class="disponibilidade ${disp.classe}" style="margin-top:10px;font-size:0.8rem;">${disp.texto}</div>` : ''}
       </div>

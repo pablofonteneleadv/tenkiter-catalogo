@@ -842,3 +842,14 @@ const TKDisp = (function () {
   return { id: id, perfil: perfil, registrar: registrar, ping: ping, origem: origem, aparelho: aparelho, fonte: fonte };
 })();
 try { window.TKDisp = TKDisp; } catch (e) {}   // `const` no topo do arquivo não vira propriedade de window: push.js, pwa.js e index.html procuram por window.TKDisp
+
+
+/** Tamanhos/Cores são texto. Se a planilha converteu "2/4/6" em data (2006-04-02T08:00:00.000Z), devolve "2/4/6" (conserta o que já estava gravado errado). */
+function textoPlano(v) {
+  const t = String(v == null ? '' : v);
+  const m = /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.exec(t);
+  if (!m) return t;
+  const d = new Date(t); if (isNaN(d.getTime())) return t;
+  const loc = new Date(d.getTime() - 3 * 3600000);               // Brasil (UTC-3), onde a planilha guardou a data
+  return loc.getUTCDate() + '/' + (loc.getUTCMonth() + 1) + '/' + (loc.getUTCFullYear() % 100);
+}

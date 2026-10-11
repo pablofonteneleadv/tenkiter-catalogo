@@ -1687,8 +1687,8 @@
     document.getElementById('nome').value = p.Nome;
     document.getElementById('preco').value = p.Preco;
     document.getElementById('estoque').value = p.Estoque || '';
-    document.getElementById('tamanhos').value = p.Tamanhos || '';
-    document.getElementById('cores').value = p.Cores || '';
+    document.getElementById('tamanhos').value = textoPlano(p.Tamanhos);
+    document.getElementById('cores').value = textoPlano(p.Cores);
     document.getElementById('descricao').value = p.Descricao || '';
     document.getElementById('novidade').checked = ehNovidade(p);
     document.getElementById('linha-notificar-push').style.display = ehNovidade(p) ? 'flex' : 'none';

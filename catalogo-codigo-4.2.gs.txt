@@ -1,5 +1,6 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v4.1
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v4.2
 //
+// NOVIDADE v4.2 -- TAMANHOS/CORES SEMPRE COMO TEXTO: o Google Planilhas transformava "2/4/6" em data (2006-04-02) e o site mostrava "2006-04-02T08:00:00.000Z". Agora a gravação força texto nas duas colunas e a leitura devolve a data de volta como "2/4/6" (conserta também o que já estava gravado errado).
 // NOVIDADE v4.1 -- QUEM CADASTROU / QUEM EDITOU E QUANDO (pedido do Pablo): a planilha de produtos ganha CriadoPor, CriadoEm, EditadoPor, EditadoEm e UltimaAcao (criadas sozinhas), preenchidas com o NOME VERDADEIRO da sessão de login (o PIN antigo usa o nome digitado no aparelho). Vale para cadastrar, editar, arquivar, reativar, X do catálogo, foto/vídeo tirado ou devolvido, juntar e lote. Essas colunas NUNCA saem na lista pública. Ações novas (catalogo_cadastrar): auditoriaProdutos (resumo de todas as peças) e historicoProduto {id} (linha do tempo). Bandeira auditoriaProdutos.
 //
 // NOVIDADE v4.0 -- CPF, E-MAIL E LOGIN MÚLTIPLO + RECUPERAR SENHA (pedido do Pablo): entra com e-mail, WhatsApp ou CPF (acResolverIdentificador_); CPF/e-mail opcionais no cadastro de cliente; ação recuperar_senha (CPF/nascimento conferidos, 5 erros = 15 min, conta da equipe exige os dois) e salvar_identificadores. Bandeiras em versao: cpf, recuperarSenha, loginMultiplo. Bloco compartilhado com o backend de funcionários 3.3.
@@ -190,7 +191,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-4.1';
+const VERSAO_CATALOGO = 'catalogo-4.2';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1703,7 +1704,7 @@ function doGetInterno_(e) {
   if (action === 'versao') return jsonResponse_({
     ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
     pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true,
-    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true, midiaRapida: true, juntarProdutos: true, duplicadoPorFoto: true, cpf: true, recuperarSenha: true, loginMultiplo: true, auditoriaProdutos: true
+    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true, midiaRapida: true, juntarProdutos: true, duplicadoPorFoto: true, cpf: true, recuperarSenha: true, loginMultiplo: true, auditoriaProdutos: true, textoPlano: true
   });
   if (action === 'config') return configPublica_();
   if (action === 'pushconfig') return pushConfigPublica_();
@@ -1730,6 +1731,8 @@ function doGetInterno_(e) {
       const linha = dados[i];
       const obj = {};
       headers.forEach((h, idx) => obj[h] = linha[idx]);
+      if (obj.Tamanhos instanceof Date) obj.Tamanhos = textoPlano_(obj.Tamanhos);
+      if (obj.Cores instanceof Date) obj.Cores = textoPlano_(obj.Cores);
       COLUNAS_AUDIT_PROD_.forEach(function (c) { delete obj[c]; });   // v4.1: nomes da equipe NUNCA vão para a lista pública
       if (incluirTodos || normalizar_(obj.Status) === 'ativo') {
         produtos.push(obj);
@@ -1762,6 +1765,15 @@ function doPost(e) {
     logErroServidor_('doPost', erro, { action: body && body.action });
     return jsonResponse_({ ok: false, erro: 'Erro interno no servidor: ' + (erro && erro.message || erro) });
   }
+}
+
+/** v4.2: Tamanhos/Cores são TEXTO. Se o Planilhas converteu "2/4/6" em data, devolve "2/4/6" (dia/mês/ano de 2 dígitos). */
+function textoPlano_(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v.getTime())) {
+    const tz = Session.getScriptTimeZone();
+    return Utilities.formatDate(v, tz, 'd') + '/' + Utilities.formatDate(v, tz, 'M') + '/' + (Number(Utilities.formatDate(v, tz, 'yyyy')) % 100);
+  }
+  return v;
 }
 
 // ===================== v4.1: quem cadastrou / quem editou =====================
@@ -2086,6 +2098,7 @@ function criarProduto_(body) {
     codigo,
     fotoStoriesUrl
   ]);
+  sheet.getRange(sheet.getLastRow(), 11, 1, 2).setNumberFormat('@').setValues([[acTexto_(body.tamanhos || ''), acTexto_(body.cores || '')]]);
   sheet.getRange(sheet.getLastRow(), colunaGaleria_(sheet)).setValue(fotosGaleriaFinal);
 
   if (videoUrl) gravarVideo_(sheet, sheet.getLastRow(), videoUrl);
@@ -2181,6 +2194,7 @@ function atualizarProduto_(body) {
       const anterior = { preco: dados[i][4], estoque: dados[i][9] };
       const estoqueNovo = body.estoque !== undefined && body.estoque !== '' ? Number(body.estoque) : dados[i][9];
 
+      sheet.getRange(linha, 11, 1, 2).setNumberFormat('@');
       sheet.getRange(linha, 2, 1, 14).setValues([[
         body.nome !== undefined ? acTexto_(body.nome) : dados[i][1],
         body.categoria !== undefined ? acTexto_(body.categoria) : dados[i][2],
@@ -2191,8 +2205,8 @@ function atualizarProduto_(body) {
         dados[i][7],
         body.descricao !== undefined ? acTexto_(body.descricao) : dados[i][8],
         estoqueNovo,
-        body.tamanhos !== undefined ? acTexto_(body.tamanhos) : dados[i][10],
-        body.cores !== undefined ? acTexto_(body.cores) : dados[i][11],
+        body.tamanhos !== undefined ? acTexto_(body.tamanhos) : String(textoPlano_(dados[i][10])),
+        body.cores !== undefined ? acTexto_(body.cores) : String(textoPlano_(dados[i][11])),
         body.novidade !== undefined ? !!body.novidade : dados[i][12],
         dados[i][13],
         fotoStoriesUrl
