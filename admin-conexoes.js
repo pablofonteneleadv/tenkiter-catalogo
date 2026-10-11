@@ -171,7 +171,28 @@
         '<p class="g-nota">Já no domínio da loja. Na Meta (Gerenciador de Comércio) e no Google Merchant use “fonte de dados por link”; no Google Search Console cadastre o mapa do site.</p>' +
         [['cx-end-csv', 'Catálogo CSV — Meta e Google', e.feedCsv], ['cx-end-xml', 'Catálogo XML — Google Merchant', e.feedXml], ['cx-end-map', 'Mapa do site (sitemap) — Google Search Console', e.sitemap]].map((x) =>
           '<label for="' + x[0] + '">' + esc(x[1]) + '</label><div class="cx-copia"><input type="text" id="' + x[0] + '" readonly value="' + esc(x[2] || '') + '"><button type="button" data-cx="copiar" data-alvo="' + x[0] + '">Copiar</button></div>').join('') +
-      '</div>';
+      '</div>' + blocoDados();
+  }
+  /* Dados que o Claude pede em toda conversa: só IDs e endereços PÚBLICOS (nunca chave/senha/token — esses não saem do servidor). */
+  function blocoDados() {
+    const lista = [
+      ['Site (endereço final)', typeof SITE_URL !== 'undefined' ? SITE_URL : ''],
+      ['Site no Render (endereço de teste)', 'https://tenkiter-catalogo.onrender.com'],
+      ['Render — ID do serviço', 'srv-dasa63fpn0mc73fh8fgg'],
+      ['Render — ID do workspace', 'tea-d001phk9c44c73fd13h0'],
+      ['Apps Script — endereço do catálogo (API)', typeof API_URL_PADRAO !== 'undefined' ? API_URL_PADRAO : ''],
+      ['Cloudflare — Worker das miniaturas (og)', 'https://tenkiter-og.distkrpconfeccoes.workers.dev'],
+      ['Cloudflare — Worker de mídia (R2)', typeof MIDIA_URL !== 'undefined' ? MIDIA_URL : ''],
+      ['Cloudflare — Worker do Instagram', typeof INSTAGRAM_URL !== 'undefined' ? INSTAGRAM_URL : ''],
+      ['OneSignal — App ID (público)', typeof ONESIGNAL_APP_ID !== 'undefined' ? ONESIGNAL_APP_ID : '535f6b0d-c866-43c2-b241-43bd7ab62fae'],
+      ['Instagram da loja', '@tenkitermodasceara'],
+      ['Repositório no GitHub', 'pablofonteneleadv/tenkiter-catalogo']
+    ];
+    return '<div class="cx-bloco"><h3>Dados para copiar e me passar</h3>' +
+      '<p class="g-nota">Toque em <b>Copiar</b> e cole na conversa com o Claude. São só endereços e códigos públicos. <b>Chaves e tokens (Render, Cloudflare, OneSignal, Instagram) não aparecem aqui de propósito</b>: ficam guardados no servidor e nunca voltam para a tela — quando precisar de uma, o Claude vai pedir para você criar uma nova e depois revogar.</p>' +
+      lista.map((x, i) => '<label for="cx-dado-' + i + '">' + esc(x[0]) + '</label><div class="cx-copia"><input type="text" id="cx-dado-' + i + '" readonly value="' + esc(x[1]) + '"><button type="button" data-cx="copiar" data-alvo="cx-dado-' + i + '" aria-label="Copiar ' + esc(x[0]) + '">Copiar</button></div>').join('') +
+      '<div class="cx-linha"><button type="button" class="cx-btn cx-sec" data-cx="copiartudo">📋 Copiar tudo de uma vez</button></div>' +
+      '<div class="cx-msg" id="cx-msg-dados" role="status"></div></div>';
   }
   /* O botão "Guardar a chave…" aparece UMA vez (no item da própria chave); os itens do feed/mapa sem chave só explicam. */
   function desenharItens() {
@@ -287,7 +308,7 @@
   function copiar(alvo) {
     const el = $(alvo); if (!el) return;
     const texto = el.value;
-    const aviso = () => msg('cx-msg-itens', 'Copiado!', 'ok');
+    const aviso = () => msg(/^cx-dado-/.test(alvo) ? 'cx-msg-dados' : 'cx-msg-itens', 'Copiado!', 'ok');
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(aviso).catch(() => { el.select(); window.prompt('Copie o endereço abaixo:', texto); });
     else { el.select(); window.prompt('Copie o endereço abaixo:', texto); }
   }
@@ -299,6 +320,11 @@
     else if (a === 'apagar') apagar(b.dataset.nome);
     else if (a === 'deploy') publicar();
     else if (a === 'copiar') copiar(b.dataset.alvo);
+    else if (a === 'copiartudo') {
+      const t = Array.from(document.querySelectorAll('#cx-corpo [id^=cx-dado-]')).map((i) => (document.querySelector('label[for=' + i.id + ']') || {}).textContent + ': ' + i.value).join('\n');
+      const ok = () => msg('cx-msg-dados', 'Tudo copiado!', 'ok');
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok).catch(() => window.prompt('Copie abaixo:', t)); else window.prompt('Copie abaixo:', t);
+    }
     else if (a === 'acao') {
       const ac = b.dataset.acao;
       if (ac === 'renderCriarRegras') criarRegras();

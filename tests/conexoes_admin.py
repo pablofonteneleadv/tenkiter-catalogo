@@ -137,6 +137,12 @@ with sync_playwright() as p:
     pg.click("[data-cx=copiar][data-alvo=cx-end-map]"); pg.wait_for_timeout(600)
     chk("com permissão, 'Copiar' copia o endereço certo e avisa", "Copiado!" in pg.inner_text("#cx-msg-itens") and pg.evaluate("navigator.clipboard.readText()") == "https://tenkitermodas.com.br/sitemap.xml", pg.inner_text("#cx-msg-itens"))
 
+    pg.click("[data-cx=copiar][data-alvo=cx-dado-2]"); pg.wait_for_timeout(500)
+    chk("bloco 'Dados para copiar': cada dado tem seu Copiar (ID do serviço do Render)", pg.locator("#cx-corpo [id^=cx-dado-]").count() >= 10 and pg.evaluate("navigator.clipboard.readText()") == "srv-dasa63fpn0mc73fh8fgg" and "Copiado!" in pg.inner_text("#cx-msg-dados"))
+    pg.click("[data-cx=copiartudo]"); pg.wait_for_timeout(500)
+    tudo = pg.evaluate("navigator.clipboard.readText()")
+    chk("'Copiar tudo' junta rótulo e valor, sem nenhuma chave/token", "Render — ID do serviço: srv-" in tudo and not __import__("re").search(r"os_v2|cfut_|rnd_|IGAA|Bearer", tudo))
+
     print("== Teclado e janela ==")
     pg.keyboard.press("Escape"); pg.wait_for_timeout(500)
     chk("Esc fecha a janela", pg.locator("#overlay-conexoes.aberto").count() == 0)
