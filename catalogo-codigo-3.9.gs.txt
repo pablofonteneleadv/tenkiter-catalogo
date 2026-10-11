@@ -1,4 +1,6 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.8
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.9
+//
+// NOVIDADE v3.9 -- ANTI-DUPLICADO POR FOTO: o freio de 10 s (mesmo nome + mesmo preço) só barra se a FOTO DE CAPA também for a mesma (duplo clique/retentativa). Peças com fotos diferentes (cadastro separado de vários posts) passam. Bandeira em versao: duplicadoPorFoto.
 //
 // NOVIDADE v3.8 -- VÁRIOS PERFIS POR PESSOA: a coluna Perfil pode ter "Cliente, Aluno, Equipe do site"; as permissões em branco herdam a SOMA dos perfis (acPermsDaLinha_). A gravação dos perfis múltiplos é feita pelo backend de Funcionários (3.2).
 //
@@ -184,7 +186,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-3.8';
+const VERSAO_CATALOGO = 'catalogo-3.9';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1543,7 +1545,7 @@ function doGetInterno_(e) {
   if (action === 'versao') return jsonResponse_({
     ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
     pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true,
-    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true, midiaRapida: true, juntarProdutos: true
+    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true, midiaRapida: true, juntarProdutos: true, duplicadoPorFoto: true
   });
   if (action === 'config') return configPublica_();
   if (action === 'pushconfig') return pushConfigPublica_();
@@ -1754,7 +1756,10 @@ function criarProduto_(body) {
     const linhaAtual = dadosAtuais[j];
     if (normalizar_(linhaAtual[1]) === normalizar_(body.nome) && Number(linhaAtual[4]) === precoValidado) {
       const dataLinhaMs = linhaAtual[7] instanceof Date ? linhaAtual[7].getTime() : new Date(linhaAtual[7]).getTime();
-      if (!isNaN(dataLinhaMs) && (agoraMs - dataLinhaMs) < 10000) {
+      // v3.9: capa diferente = outra peça (só barra se a capa nova for igual à da linha, ou se a capa vem como upload novo, que ainda não tem endereço para comparar)
+      const capaNova = String(body.fotoUrlExistente || '').trim(), capaLinha = String(linhaAtual[5] || '').trim();
+      const outraFoto = capaNova && capaLinha && capaNova !== capaLinha;
+      if (!outraFoto && !isNaN(dataLinhaMs) && (agoraMs - dataLinhaMs) < 10000) {
         return jsonResponse_({ ok: false, erro: 'Esse produto parece ter sido cadastrado agora mesmo. Confira a lista antes de cadastrar de novo.' });
       }
     }
