@@ -84,6 +84,7 @@ function limite(env) { const n = Number(env.LIMITE_BYTES); return n > 0 ? n : LI
 function dia() { return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); }   // dia de Fortaleza
 
 const CHAVE_OK = /^[0-9]{6}\/[0-9a-f]{20}\.(jpg|png|webp|mp4|webm)$/;
+const POSTER_MAX = 400 * 1024;   // miniatura de vídeo: um quadro em JPG, pequeno de propósito
 
 export default {
   async fetch(req, env) {
@@ -132,13 +133,24 @@ export default {
       const tipo = tipoPelosBytes(buf);
       if (!tipo) return resp({ ok: false, erro: 'Formato não aceito. Use foto JPG/PNG/WEBP ou vídeo MP4/WEBM.' }, 415, H());
       if (!tipo.video && buf.byteLength > FOTO_MAX) return resp({ ok: false, erro: 'Foto grande demais (máximo 2,5 MB). Reduza e envie de novo.' }, 413, H());
+      // ?poster=<chave do vídeo>: este arquivo é a MINIATURA de um vídeo já enviado — fica com o mesmo nome do vídeo, terminando em .jpg
+      const paraVideo = url.searchParams.get('poster');
+      let chaveFixa = '';
+      if (paraVideo) {
+        const m = /^([0-9]{6}\/[0-9a-f]{20})\.(mp4|webm)$/.exec(paraVideo);
+        if (!m || tipo.ext !== 'jpg') return resp({ ok: false, erro: 'Miniatura inválida (precisa ser JPG de um vídeo enviado).' }, 400, H());
+        if (buf.byteLength > POSTER_MAX) return resp({ ok: false, erro: 'Miniatura grande demais (máximo 400 KB).' }, 413, H());
+        if (!(await env.MIDIA.head(paraVideo))) return resp({ ok: false, erro: 'Vídeo não encontrado.' }, 404, H());
+        if (await env.MIDIA.head(m[1] + '.jpg')) return resp({ ok: true, chave: m[1] + '.jpg', url: url.origin + '/m/' + m[1] + '.jpg', tipo: 'foto', jaExistia: true }, 200, H());
+        chaveFixa = m[1] + '.jpg';
+      }
       const hoje = 'env_' + dia();
       const feitos = parseInt((await env.CACHE.get(hoje)) || '0', 10) || 0;
       if (feitos >= ENVIOS_DIA_MAX) return resp({ ok: false, erro: 'Limite de envios de hoje atingido. Tente amanhã.' }, 429, H());
       const uso = await lerUso(env);
       if (uso.bytes + buf.byteLength > limite(env)) return resp({ ok: false, erro: 'Armazenamento cheio (limite de segurança para não gerar cobrança). Apague arquivos antigos.' }, 507, H());
       const aleatorio = Array.from(crypto.getRandomValues(new Uint8Array(10)), b => ('0' + b.toString(16)).slice(-2)).join('');
-      const chave = dia().slice(0, 7).replace('-', '') + '/' + aleatorio + '.' + tipo.ext;
+      const chave = chaveFixa || (dia().slice(0, 7).replace('-', '') + '/' + aleatorio + '.' + tipo.ext);
       await env.MIDIA.put(chave, buf, { httpMetadata: { contentType: tipo.mime, cacheControl: 'public, max-age=31536000, immutable' } });
       uso.bytes += buf.byteLength; uso.arquivos += 1;
       await gravarUso(env, uso);
@@ -153,8 +165,12 @@ export default {
       const cab = await env.MIDIA.head(chave);
       if (!cab) return resp({ ok: false, erro: 'Não encontrado.' }, 404, H());
       await env.MIDIA.delete(chave);
+      let tirou = cab.size, arqs = 1;
+      const mv = /^([0-9]{6}\/[0-9a-f]{20})\.(mp4|webm)$/.exec(chave);
+      const cabP = mv ? await env.MIDIA.head(mv[1] + '.jpg') : null;     // miniatura do vídeo vai junto
+      if (cabP) { await env.MIDIA.delete(mv[1] + '.jpg'); tirou += cabP.size; arqs += 1; }
       const uso = await lerUso(env);
-      uso.bytes = Math.max(0, uso.bytes - cab.size); uso.arquivos = Math.max(0, uso.arquivos - 1);
+      uso.bytes = Math.max(0, uso.bytes - tirou); uso.arquivos = Math.max(0, uso.arquivos - arqs);
       await gravarUso(env, uso);
       return resp({ ok: true }, 200, H());
     }

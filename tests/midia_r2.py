@@ -44,12 +44,14 @@ def cenario(p, modo, video, sessao=True):
 
 with sync_playwright() as p:
     print("== R2 aceita: 2 fotos + vídeo pequeno ==")
-    st, cr, ups, errs = cenario(p, "ok", "r2v.mp4")
+    st, cr, ups, errs = cenario(p, "ok", "r2v.webm")
     chk("3 envios ao R2", len(st["midia"]["envios"]) == 3, len(st["midia"]["envios"]))
     chk("nada foi ao Cloudinary", len(ups) == 0, ups)
     chk("envio leva a sessão (token, não senha) e o WhatsApp", all((e["sessao"] or "").startswith("tk") and e["whats"] == "88999999999" for e in st["midia"]["envios"]), st["midia"]["envios"][:1])
-    chk("peça criada com URLs do R2 (capa, galeria e vídeo)", len(cr) == 1 and cr[0]["fotoUrlExistente"].startswith("https://tenkiter-midia.") and cr[0]["fotosGaleriaExistentes"].count("tenkiter-midia") == 1 and cr[0].get("videoUrlExistente", "").endswith(".mp4") and "tenkiter-midia" in cr[0].get("videoUrlExistente", ""), cr and {k: cr[0].get(k) for k in ("fotoUrlExistente", "fotosGaleriaExistentes", "videoUrlExistente")})
+    chk("peça criada com URLs do R2 (capa, galeria e vídeo)", len(cr) == 1 and cr[0]["fotoUrlExistente"].startswith("https://tenkiter-midia.") and cr[0]["fotosGaleriaExistentes"].count("tenkiter-midia") == 1 and cr[0].get("videoUrlExistente", "").endswith(".webm") and "tenkiter-midia" in cr[0].get("videoUrlExistente", ""), cr and {k: cr[0].get(k) for k in ("fotoUrlExistente", "fotosGaleriaExistentes", "videoUrlExistente")})
     chk("sem erro de JavaScript", not errs, errs)
+    ps = st["midia"].get("posters", [])
+    chk("miniatura do vídeo (um quadro JPG pequeno) enviada ao R2 para o vídeo certo", len(ps) == 1 and 500 < ps[0]["tam"] <= 400 * 1024 and ps[0]["chave"].endswith(".webm") and ps[0]["ctype"] in (None, "image/jpeg", "text/plain;charset=UTF-8"), ps)
     print("== Vídeo de 16 MB: passa do limite do R2, vai ao Cloudinary; fotos seguem no R2 ==")
     st, cr, ups, errs = cenario(p, "ok", "r2grande.mp4")
     chk("fotos no R2 (2) e vídeo grande no Cloudinary (1)", len(st["midia"]["envios"]) == 2 and len(ups) == 1 and "/video/" in ups[0], (len(st["midia"]["envios"]), ups))

@@ -28,6 +28,8 @@ const LISTA_RAPIDA_URL = '';
 /** Fotos e vídeos NOVOS ficam no R2 da Cloudflare (Worker `tenkiter-midia`, midia-worker/): servir arquivo é grátis e há travas de tamanho e de armazenamento,
  *  então não existe cobrança surpresa. O que já está no Cloudinary/Drive continua funcionando igual. */
 const MIDIA_URL = 'https://tenkiter-midia.distkrpconfeccoes.workers.dev';
+/** Miniatura de um vídeo do R2: foto de mesmo nome (o painel a envia junto com o vídeo). */
+function posterDoVideo(u) { return String(u || '').replace(/\.(mp4|webm)$/, '.jpg'); }
 /** Vídeo que toca direto num <video>: o do Cloudinary (antigo) ou o nosso, do R2 (novo). */
 function ehVideoDireto(u) {
   const t = String(u || '');
@@ -289,6 +291,7 @@ function imagemDoSlide(p, n, largura) {
   const i = Math.floor(Number(n)) - 1;
   if (i >= 0 && i < fotos.length && fotos[i]) return fotoMini(fotos[i], w);
   const v = String(p.Video_URL || '');
+  if (i === fotos.length && ehVideoDireto(v) && !/res\.cloudinary\.com/.test(v)) return posterDoVideo(v);   // vídeo do R2: a miniatura é a foto de mesmo nome
   if (i === fotos.length && /^https:\/\/res\.cloudinary\.com\/.+\/video\/upload\//.test(v)) return v.replace('/video/upload/', '/video/upload/so_30p,w_' + w + ',c_limit,f_jpg/').replace(/\.[A-Za-z0-9]+$/, '.jpg');
   return fotoMini(p.Foto_URL, w);
 }

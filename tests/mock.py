@@ -344,11 +344,14 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             return route.fulfill(json={"ok":True})
         if "tenkiter-midia" in u:     # Worker de mídia (R2): padrão = recusa rápida (o painel cai no Cloudinary); st["midia"]["modo"]="ok" aceita e guarda o que foi enviado
             m=st["midia"]
+            if route.request.method=="POST" and "/u?poster=" in u:
+                m.setdefault("posters",[]).append({"chave":u.split("poster=")[1],"tam":len(route.request.post_data_buffer or b""),"ctype":route.request.headers.get("content-type")})
+                return route.fulfill(json={"ok":True,"url":"x"})
             if route.request.method=="POST" and u.endswith("/u"):
                 m["envios"].append({"tam":len(route.request.post_data_buffer or b""),"whats":route.request.headers.get("x-tk-whats"),"sessao":route.request.headers.get("x-tk-sessao")})
                 if m["modo"]=="ok":
                     n=len(m["envios"]); video=(route.request.headers.get("content-type") or "").startswith("video/")
-                    return route.fulfill(json={"ok":True,"url":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/%020x.%s"%(n,"mp4" if video else "jpg"),"tipo":"video" if video else "foto"})
+                    return route.fulfill(json={"ok":True,"url":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/%020x.%s"%(n,("webm" if "webm" in (route.request.headers.get("content-type") or "") else "mp4") if video else "jpg"),"tipo":"video" if video else "foto"})
                 return route.fulfill(status=503,json={"ok":False,"erro":"Armazenamento cheio (teste)." if m["modo"]=="cheio" else "Indisponível (teste)."})
             return route.fulfill(body=PNG,content_type="image/png")
         if "lh3.googleusercontent" in u or "cloudinary" in u: return route.fulfill(body=PNG,content_type="image/png")

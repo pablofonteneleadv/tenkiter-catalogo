@@ -45,14 +45,15 @@ function midias(p) {
   const out = fotos.map((url) => ({ tipo: 'foto', url: String(url || '') }));
   const v = String(p.Video_URL || '');
   if (/^https:\/\/res\.cloudinary\.com\//.test(v)) out.push({ tipo: 'video', url: v, cloudinary: true });
-  else if (/^https:\/\/(?:tenkiter-midia\.[a-z0-9-]+\.workers\.dev|midia\.tenkitermodas\.com\.br)\/m\/\d{6}\/[0-9a-f]{20}\.(mp4|webm)$/.test(v)) out.push({ tipo: 'video', url: v, cloudinary: false });   // R2: sem quadro de miniatura, usa a capa
+  else if (/^https:\/\/(?:tenkiter-midia\.[a-z0-9-]+\.workers\.dev|midia\.tenkitermodas\.com\.br)\/m\/\d{6}\/[0-9a-f]{20}\.(mp4|webm)$/.test(v)) out.push({ tipo: 'video', url: v, cloudinary: false, r2: true });   // R2: a miniatura é a foto de mesmo nome (.jpg)
   else if (/^https:\/\/drive\.google\.com\/file\/d\/[\w-]+\/preview$/.test(v)) out.push({ tipo: 'video', url: v, cloudinary: false });
   return out;
 }
 /** Imagem que representa a foto/vídeo na miniatura (og:image). Foto do Google sai em 1200 px (leve para o WhatsApp); vídeo da Cloudinary vira um
  *  quadro dele (30% da duração: o quadro 0 costuma vir preto). Vídeo do Drive não dá miniatura confiável: devolve '' e quem chama usa a capa. */
-function imagemDaMidia(m) {
+function imagemDaMidia(m, semPoster) {
   if (!m) return '';
+  if (m.r2) return semPoster ? '' : m.url.replace(/\.(mp4|webm)$/, '.jpg');
   if (m.tipo === 'foto') return /^https:\/\/lh3\.googleusercontent\.com\/d\/[\w-]+$/.test(m.url) ? m.url + '=w1200' : m.url;
   if (m.cloudinary && m.url.indexOf('/video/upload/') !== -1) return m.url.replace('/video/upload/', '/video/upload/so_30p,w_1200,c_limit,f_jpg/').replace(/\.[A-Za-z0-9]+(\?.*)?$/, '.jpg');
   return '';
@@ -60,7 +61,7 @@ function imagemDaMidia(m) {
 /** ?f=<n> do endereço -> número de 2 a 99, ou 1 (capa) se não for um número válido. */
 function numeroDaFoto(v) { const n = parseInt(v, 10); return n >= 2 && n <= 99 ? n : 1; }
 
-function pagina(p, cod, f) {
+function pagina(p, cod, f, semPoster) {
   const lista = midias(p);
   const n = f >= 2 && f <= lista.length ? f : 1;          // foto escolhida (1 = capa)
   const destino = SITE_URL + '?c=' + encodeURIComponent(cod) + (n > 1 ? '&f=' + n : '');
@@ -69,7 +70,7 @@ function pagina(p, cod, f) {
   const titulo = p.Nome + (p.Codigo ? ' [' + p.Codigo + ']' : '') + ' — ' + real(avista) + ' à vista';
   const desc = (p.Descricao ? String(p.Descricao).slice(0, 160) + ' | ' : '') + 'De ' + real(cheio) + ' por ' + real(avista) + ' à vista na TENKiTER Modas — Crateús, CE.';
   const capa = p.Foto_URL || (SITE_URL + 'og-banner.jpg');
-  const img = imagemDaMidia(lista[n - 1]) || imagemDaMidia(lista[0]) || capa;   // a foto escolhida; sem miniatura própria, a capa
+  const img = imagemDaMidia(lista[n - 1], semPoster) || imagemDaMidia(lista[0], semPoster) || capa;   // a foto escolhida; sem miniatura própria, a capa
   const canonico = linkPeca(p);
   const urlCompartilhada = n > 1 ? canonico + (canonico.indexOf('?') === -1 ? '?' : '&') + 'f=' + n : canonico;
   const galeria = String(p.Fotos_Galeria || '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 8);
@@ -179,7 +180,10 @@ export default {
         const alvo = String(cod).trim().toLowerCase();
         const p = lista.find((x) => String(x.Codigo || '').toLowerCase() === alvo || String(x.ID) === cod);
         if (!p) return Response.redirect(SITE_URL, 302);
-        return resposta(pagina(p, p.Codigo || p.ID, numeroDaFoto(url.searchParams.get('f'))), 'text/html; charset=utf-8', 'public, max-age=300');
+        let semPoster = false;      // vídeo do R2 sem miniatura enviada (falhou na hora do envio): não promete uma foto que não existe
+        const mR2 = midias(p).filter((x) => x.r2)[0];
+        if (mR2) { try { semPoster = !(await fetch(mR2.url.replace(/\.(mp4|webm)$/, '.jpg'), { method: 'HEAD' })).ok; } catch (e) { semPoster = true; } }
+        return resposta(pagina(p, p.Codigo || p.ID, numeroDaFoto(url.searchParams.get('f')), semPoster), 'text/html; charset=utf-8', 'public, max-age=300');
       } catch (e) {
         const fx = numeroDaFoto(url.searchParams.get('f'));
         return Response.redirect(SITE_URL + '?c=' + encodeURIComponent(cod) + (fx > 1 ? '&f=' + fx : ''), 302); // API fora: a pessoa ainda chega na peça (e na foto)

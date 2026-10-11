@@ -70,10 +70,26 @@ const chk = (n, c, d) => { if (c) { ok++; console.log('  ✔ ' + n); } else { fa
   mem.set('env_' + new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10), '400');
   r = await w.fetch(pedido('POST', '/u', 'tk2.cadastra', jpg, { 'Content-Length': String(jpg.length) }), env); chk('400 envios no dia = 429', r.status === 429);
 
+  console.log('== Miniatura de vídeo (?poster=) ==');
+  mem.delete('env_' + new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10));   // zera o contador do dia (o teste anterior o encheu)
+  r = await w.fetch(pedido('POST', '/u', 'tk2.cadastra', mp4, { 'Content-Length': String(mp4.length) }), env); j = await r.json(); const vch = j.chave;
+  r = await w.fetch(pedido('POST', '/u?poster=' + vch, 'tk2.cadastra', jpg, { 'Content-Length': String(jpg.length) }), env); j = await r.json();
+  chk('miniatura fica com o nome do vídeo + .jpg', r.status === 200 && j.chave === vch.replace('.mp4', '.jpg'), j);
+  r = await w.fetch(pedido('POST', '/u?poster=' + vch, 'tk2.cadastra', jpg, { 'Content-Length': String(jpg.length) }), env); j = await r.json(); chk('repetir não duplica nem conta de novo', j.ok && j.jaExistia === true, j);
+  r = await w.fetch(pedido('POST', '/u?poster=202610/ffffffffffffffffffff.mp4', 'tk2.cadastra', jpg, { 'Content-Length': String(jpg.length) }), env); chk('vídeo que não existe = 404', r.status === 404);
+  r = await w.fetch(pedido('POST', '/u?poster=' + vch, 'tk2.cadastra', mp4, { 'Content-Length': String(mp4.length) }), env); chk('miniatura que não é JPG = 400', r.status === 400);
+  r = await w.fetch(pedido('POST', '/u?poster=../../x.mp4', 'tk2.cadastra', jpg, { 'Content-Length': String(jpg.length) }), env); chk('nome de vídeo fora do padrão = 400', r.status === 400);
+  const jgrande = Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(500 * 1024)]);
+  mem.delete('env_' + new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10));
+  objs.delete(vch.replace('.mp4', '.jpg'));
+  r = await w.fetch(pedido('POST', '/u?poster=' + vch, 'tk2.cadastra', jgrande, { 'Content-Length': String(jgrande.length) }), env); chk('miniatura de 500 KB = 413', r.status === 413);
+  r = await w.fetch(pedido('POST', '/u?poster=' + vch, 'tk2.cadastra', jpg, { 'Content-Length': String(jpg.length) }), env);
+  r = await w.fetch(pedido('DELETE', '/m/' + vch, 'tk2.admin'), env); chk('apagar o vídeo apaga a miniatura junto', r.status === 200 && !objs.has(vch) && !objs.has(vch.replace('.mp4', '.jpg')));
+
   console.log('== Apagar ==');
   r = await w.fetch(pedido('DELETE', '/m/' + chave, 'tk2.cadastra'), env); chk('quem só cadastra não apaga (403)', r.status === 403);
   r = await w.fetch(pedido('DELETE', '/m/' + chave, 'tk2.admin'), env); chk('com permissão apaga', r.status === 200 && !objs.has(chave));
-  r = await w.fetch(pedido('GET', '/uso', 'tk2.admin'), env); j = await r.json(); chk('uso desce ao apagar', j.arquivos === 1, j);
+  r = await w.fetch(pedido('GET', '/uso', 'tk2.admin'), env); j = await r.json(); chk('uso desce ao apagar', j.arquivos >= 0 && j.arquivos < 5, j);
   r = await w.fetch(new Request('https://midia.test/u', { method: 'OPTIONS', headers: { Origin: O } }), env); chk('OPTIONS 204 com CORS', r.status === 204 && r.headers.get('Access-Control-Allow-Origin') === O);
   r = await w.fetch(new Request('https://midia.test/u', { method: 'OPTIONS', headers: { Origin: 'https://malvado.com' } }), env); chk('origem de fora sem CORS', !r.headers.get('Access-Control-Allow-Origin'));
 

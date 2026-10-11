@@ -1917,8 +1917,37 @@
   // mesmo com a internet "boa" (xhr.onerror não distingue um tranco passageiro de uma queda de
   // verdade). O Cloudinary é feito pra receber arquivo grande direto do navegador e aguenta uma
   // conexão instável muito melhor.
-  function subirVideoDireto_(file, it, aoProgredir) {
-    return subirMidia_(file, it, aoProgredir, 'video', 'vídeo');
+  async function subirVideoDireto_(file, it, aoProgredir) {
+    const url = await subirMidia_(file, it, aoProgredir, 'video', 'vídeo');
+    if (typeof url === 'string' && url.indexOf(MIDIA_URL + '/m/') === 0) await enviarMiniaturaVideo_(file, url);   // só vídeo do R2 precisa (o Cloudinary gera o quadro sozinho)
+    return url;
+  }
+  // Um quadro do vídeo (aos 30%, onde não fica preto) vira uma foto pequena, de mesmo nome, no R2: é a miniatura no WhatsApp e na lista.
+  // Tudo no celular, custo zero. Se falhar não derruba o envio (a peça só fica sem miniatura própria de vídeo).
+  async function quadroDoVideo_(file) {
+    const u = URL.createObjectURL(file);
+    try {
+      const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = u;
+      await new Promise((ok, no) => { v.onloadeddata = ok; v.onerror = () => no(new Error('o navegador não leu o vídeo')); setTimeout(() => no(new Error('demorou para ler o vídeo')), 15000); });
+      const alvo = isFinite(v.duration) && v.duration > 0 ? v.duration * 0.3 : 0.5;
+      await new Promise((ok, no) => { v.onseeked = ok; v.onerror = () => no(new Error('não consegui avançar o vídeo')); setTimeout(() => no(new Error('demorou para achar o quadro')), 15000); v.currentTime = alvo; });
+      const w = Math.min(800, v.videoWidth || 800), h = Math.round(w * (v.videoHeight || 800) / (v.videoWidth || 800));
+      const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(v, 0, 0, w, h);
+      for (const q of [0.82, 0.65, 0.5]) {          // reduz a qualidade até caber nos 400 KB que o Worker aceita
+        const b = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', q));
+        if (b && b.size <= 400 * 1024) return b;
+      }
+      return null;
+    } finally { URL.revokeObjectURL(u); }
+  }
+  async function enviarMiniaturaVideo_(file, urlVideo) {
+    try {
+      const s = sessaoR2_(); if (!s) return;
+      const blob = await quadroDoVideo_(file); if (!blob) throw new Error('quadro grande demais');
+      const chave = urlVideo.slice((MIDIA_URL + '/m/').length);
+      const r = await fetch(MIDIA_URL + '/u?poster=' + encodeURIComponent(chave), { method: 'POST', headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: blob }).then((x) => x.json());
+      window.logDebug_(r && r.ok ? '← miniatura do vídeo enviada (' + Math.round(blob.size / 1024) + ' KB)' : '✗ miniatura do vídeo recusada: ' + (r && r.erro));
+    } catch (e) { window.logDebug_('✗ miniatura do vídeo não saiu (o vídeo foi enviado): ' + ((e && e.message) || e)); }
   }
 
   // Mesma lógica do vídeo, mas pra uma foto: a foto já chega aqui redimensionada e em base64

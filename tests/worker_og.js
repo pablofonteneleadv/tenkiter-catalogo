@@ -16,6 +16,7 @@ function carregar() {
   const ctx = { Response, URL, fetch: async (u) => {
     chamadasApi++;
     if (apiQuebrada) throw new Error('API fora do ar');
+    if (String(u).includes('tenkiter-midia')) return { ok: !String(u).includes('semposter') };      // HEAD da miniatura do vídeo do R2
     if (!String(u).includes('?action=list')) throw new Error('chamada inesperada: ' + u);
     return { json: async () => ({ ok: true, produtos: apiLista }) };
   }, module: { exports: {} }, console, String, Number, Array, JSON, Object, RegExp, encodeURIComponent, decodeURIComponent, Math };
@@ -106,6 +107,15 @@ const base = [
     q = await pag('/p/TK-0010?f=' + ruim);
     ok(og(q.h) === CAPA + '=w1200' && dest(q.h) === SITE + '?c=TK-0010', '?f=' + ruim + ': número que não existe/inválido volta para a capa (sem quebrar)', og(q.h) + ' | ' + dest(q.h));
   }
+  const R2V = 'https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/0123456789abcdef0123.mp4', R2SEM = 'https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/semposter000000000000.mp4';
+  apiLista = comMidia.concat([
+    { ID: 31, Nome: 'Vídeo no R2', Categoria: 'Fantasias', Genero: 'Infantil Menina', Preco: 50, Foto_URL: CAPA, Status: 'Ativo', Estoque: 2, Codigo: 'TK-0020', Fotos_Galeria: G1, Video_URL: R2V },
+    { ID: 32, Nome: 'Vídeo no R2 sem miniatura', Categoria: 'Fantasias', Genero: 'Infantil Menina', Preco: 50, Foto_URL: CAPA, Status: 'Ativo', Estoque: 2, Codigo: 'TK-0021', Fotos_Galeria: G1, Video_URL: R2SEM }]);
+  q = await pag('/p/TK-0020?f=3');
+  ok(og(q.h) === R2V.replace('.mp4', '.jpg') && dest(q.h) === SITE + '?c=TK-0020&f=3', 'vídeo do R2 (?f=3): a miniatura é a foto de mesmo nome (.jpg) e o destino continua no vídeo', og(q.h));
+  q = await pag('/p/TK-0021?f=3');
+  ok(og(q.h) === CAPA + '=w1200', 'vídeo do R2 SEM miniatura enviada: usa a capa (nunca promete foto que não existe)', og(q.h));
+  apiLista = comMidia;
   q = await pag('/p/TK-0011?f=3');
   ok(og(q.h) === G1 + '' && dest(q.h) === SITE + '?c=TK-0011&f=3', 'vídeo do Drive: sem miniatura confiável -> usa a capa, mas o destino continua no vídeo', og(q.h) + ' | ' + dest(q.h));
   q = await pag('/p/TK-0012?f=3');
