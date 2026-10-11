@@ -11,6 +11,17 @@
 //    parâmetro novo a cada consulta) -- antes ela podia mostrar "não configurada" por até 1 hora depois de ligar.
 //  - versao anuncia conexoesOnesignal:true; o site só mostra o bloco OneSignal se essa bandeira existir (backend 3.4 continua funcionando).
 //
+// NOVIDADE v3.5 (parte 2) -- NÚMEROS REAIS COM FILTROS e APARELHOS (bandeiras metricasAvancadas e dispositivos):
+//  - Aba nova "Dispositivos" (criada sozinha): UMA linha por aparelho, com um código aleatório (anônimo), se abriu como app, se instalou, se o aviso está
+//    ativo, plataforma, de onde veio e interesses. NUNCA nome, telefone ou endereço. Ação aberta `dispositivo` (como registrarEvento), com proteção contra enchimento.
+//    Quem entra na conta pode ligar o aparelho ao pushId (calculado AQUI a partir do token de sessão; nunca senha) para contar por perfil/grupo.
+//  - Aba "Eventos" ganha colunas Origem (app|site), Dispositivo, Fonte (de onde veio) e Visitante (código anônimo); evento novo `visita`. Linhas antigas ficam sem esses dados
+//    ("Não informado"): os números novos valem a partir do dia em que o site novo começou a registrar.
+//  - metricas: filtros por período (dias ou de/ate), horário (horaDe/horaAte, opcional; vira a meia-noite), dias da semana, origem, aparelho, fonte, categoria e gênero;
+//    devolve visitantes únicos, funil, gráfico por hora e por dia da semana, tabelas por origem/aparelho/fonte/gênero e "aparelhos" (instalaram, avisos ativos, OneSignal real).
+//  - pushStatus: contas/perfis/acessos com quantas têm aviso ativo, interesses com quantos aparelhos, pedidos por etapa e números de aparelhos; pushPrevia mostra
+//    quantas das pessoas têm aviso ativo (por conta) ou quantos aparelhos (todos/app/interesse).
+//
 // v3.4 -- CONEXÕES (Render / Cloudflare) guardadas no servidor, para o painel cuidar sozinho do que antes dependia de colar chave em conversa:
 //  - Ações (só Admin total = gerir_acessos, e SÓ com login -- o PIN antigo é recusado): statusConexoes, salvarConexao, testarConexoes,
 //    renderCriarRegras, renderDeploy, renderStatusDeploy.
@@ -1492,7 +1503,7 @@ function doGetInterno_(e) {
   if (action === 'versao') return jsonResponse_({
     ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
     pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true,
-    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true
+    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, metricasAvancadas: true, dispositivos: true
   });
   if (action === 'config') return configPublica_();
   if (action === 'pushconfig') return pushConfigPublica_();
@@ -1557,6 +1568,7 @@ function doPostInterno_(body) {
 
   // ---- abertas (não exigem permissão de gestão)
   if (action === 'registrarEvento') return registrarEvento_(body);
+  if (action === 'dispositivo') return dispositivoRegistrar_(body);
   if (action === 'login') return loginPessoa_(body);
   if (action === 'sessao') return sessaoPessoa_(body);
   if (action === 'registrar_cliente') return registrarCliente_(body);
@@ -1647,15 +1659,17 @@ function registrarEvento_(body) {
   // Limite de taxa simples: ignora eventos idênticos (mesmo produto+tipo) repetidos em
   // menos de CACHE_TTL_RATE_LIMIT_EVENTO segundos — protege contra cliques duplicados/scripts
   // e contra inflar a planilha de Eventos sem precisar de PIN (esse endpoint é público, de propósito).
-  const chaveRate = 'evt_' + (body.produtoId || '') + '_' + (body.tipo || '');
+  const vis = eventoVisitante_(body.visitante); // v3.5: código anônimo do aparelho (a mesma pessoa em outro aparelho conta de novo)
+  const chaveRate = 'evt_' + (body.produtoId || '') + '_' + (body.tipo || '') + (vis ? '_' + vis : '');
   const cache = CacheService.getScriptCache();
   if (cache.get(chaveRate)) {
     return jsonResponse_({ ok: true, ignorado: true });
   }
   try { cache.put(chaveRate, '1', CACHE_TTL_RATE_LIMIT_EVENTO); } catch (erroCache) { /* silencioso */ }
 
-  const sheet = getOrCreateSheet_(SHEET_EVENTOS, ['DataHora', 'ProdutoID', 'Codigo', 'Tipo']);
-  sheet.appendRow([new Date(), acTexto_(String(body.produtoId || '').slice(0, 60)), acTexto_(String(body.codigo || '').slice(0, 60)), acTexto_(String(body.tipo || '').slice(0, 30))]);
+  const sheet = eventosAba_();
+  sheet.appendRow([new Date(), acTexto_(String(body.produtoId || '').slice(0, 60)), acTexto_(String(body.codigo || '').slice(0, 60)), acTexto_(String(body.tipo || '').slice(0, 30)),
+    eventoOpcao_(body.origem, ['app', 'site']), eventoOpcao_(body.dispositivo, DISPOSITIVOS_), eventoOpcao_(body.fonte, FONTES_), vis]);
   if (body.meta) enviarEventoMetaCapi_(body, String(body.tipo || '')); // v3.1: só faz algo se o Pixel + token estiverem configurados e a pessoa aceitou o aviso
   return jsonResponse_({ ok: true });
 }
@@ -2521,8 +2535,10 @@ function enviarPushAcao_(body) {
 function pushPrevia_(body) {
   const alvo = pushAudiencia_(body.audiencia, body.respeitarPreferencias !== false);
   if (!alvo.ok) return jsonResponse_({ ok: false, erro: alvo.erro });
-  if (alvo.tipo !== 'aliases') return jsonResponse_({ ok: true, descricao: alvo.descricao, quantidade: null, porAparelho: true, amostra: [] });
-  return jsonResponse_({ ok: true, descricao: alvo.descricao, quantidade: alvo.itens.length, porAparelho: false, amostra: alvo.itens.slice(0, 8).map(function (i) { return i.nome; }), limitePersonalizado: PUSH_LIMITE_PERSONALIZADO_ });
+  if (alvo.tipo !== 'aliases') return jsonResponse_({ ok: true, descricao: alvo.descricao, quantidade: null, porAparelho: true, amostra: [], aparelhos: dispositivosParaPublico_(body.audiencia, body.respeitarPreferencias !== false) });
+  const ativos = dispositivosResumo_(null, null).pushIds;
+  const comAviso = alvo.itens.filter(function (i) { return i.ids && i.ids.external_id && ativos[i.ids.external_id[0]]; }).length;
+  return jsonResponse_({ ok: true, descricao: alvo.descricao, quantidade: alvo.itens.length, comAviso: comAviso, porAparelho: false, amostra: alvo.itens.slice(0, 8).map(function (i) { return i.nome; }), limitePersonalizado: PUSH_LIMITE_PERSONALIZADO_ });
 }
 
 // ---------------------------------------------------------------- histórico, números e cancelamento
@@ -2622,7 +2638,9 @@ function pushModeloSalvar_(body) {
     for (let i = 1; i < dados.length; i++) {
       if (alvo && String(dados[i][iId]) === alvo) { aba.getRange(i + 1, 1, 1, 8).setValues([linhaVal(alvo)]); return jsonResponse_({ ok: true, id: alvo, modelos: pushModelos_() }); }
     }
-    const novo = 'm' + new Date().getTime().toString(36);
+    const existentes = {}; for (let i = 1; i < dados.length; i++) existentes[String(dados[i][iId])] = true;
+    let novo = '';
+    do { novo = 'm' + new Date().getTime().toString(36) + Math.floor(Math.random() * 1296).toString(36); } while (existentes[novo]); // dois cliques no mesmo milissegundo não podem repetir o código
     aba.appendRow(linhaVal(novo));
     return jsonResponse_({ ok: true, id: novo, modelos: pushModelos_() });
   } finally { trava.releaseLock(); }
@@ -2678,18 +2696,28 @@ function pushStatus_() {
   const cfg = pushCfg_();
   const props = PropertiesService.getScriptProperties();
   const pessoas = pushPessoas_();
+  const ap = dispositivosResumo_(null, null, true);                 // v3.5: quais contas têm aviso ativo, quantos aparelhos, interesses
+  const ativa = function (x) { return !!ap.pushIds[x.pushId]; };
   const contar = function (f) { return pessoas.filter(f).length; };
-  const perfis = {};
-  pessoas.forEach(function (x) { x.perfis.forEach(function (p) { perfis[p] = (perfis[p] || 0) + 1; }); });
-  const acessos = AC_PERMISSOES.map(function (p) { return { chave: p.chave, rotulo: p.rotulo, grupo: p.grupo, total: contar(function (x) { return x.perms[p.chave]; }) }; });
+  const contarAtivas = function (f) { return pessoas.filter(function (x) { return f(x) && ativa(x); }).length; };
+  const perfis = {}, perfisAtivos = {};
+  pessoas.forEach(function (x) { x.perfis.forEach(function (p) { perfis[p] = (perfis[p] || 0) + 1; if (ativa(x)) perfisAtivos[p] = (perfisAtivos[p] || 0) + 1; }); });
+  const acessos = AC_PERMISSOES.map(function (p) { return { chave: p.chave, rotulo: p.rotulo, grupo: p.grupo, total: contar(function (x) { return x.perms[p.chave]; }), ativos: contarAtivas(function (x) { return x.perms[p.chave]; }) }; });
+  const etapas = {};
+  const abaPed = getSS_().getSheetByName(SHEET_PEDIDOS);
+  if (abaPed && abaPed.getLastRow() > 1) linhasComoObjetos_(abaPed).forEach(function (o) { const st = String(o.Status || 'novo'); etapas[st] = (etapas[st] || 0) + 1; });
+  const grupos = {}; Object.keys(PUSH_GRUPOS_).forEach(function (k) { grupos[k] = contarAtivas(PUSH_GRUPOS_[k].teste); });
   return jsonResponse_({
     ok: true,
     appId: cfg.appId, chaveConfigurada: !!cfg.chave, webPronto: cfg.appId ? pushWebPronto_(cfg.appId) : null,
     segmentos: ['Subscribed Users'].concat(String(props.getProperty('PUSH_SEGMENTOS') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean)),
     contas: { total: pessoas.length, equipe: contar(PUSH_GRUPOS_.equipe.teste), alunos: contar(PUSH_GRUPOS_.alunos.teste), portal: contar(PUSH_GRUPOS_.portal.teste), clientes: contar(PUSH_GRUPOS_.clientes.teste) },
-    perfis: Object.keys(perfis).sort().map(function (p) { return { nome: p, total: perfis[p] }; }),
+    contasAtivas: { total: grupos.contas, equipe: grupos.equipe, alunos: grupos.alunos, portal: grupos.portal, clientes: grupos.clientes },
+    perfis: Object.keys(perfis).sort().map(function (p) { return { nome: p, total: perfis[p], ativos: perfisAtivos[p] || 0 }; }),
     acessos: acessos,
-    interesses: pushInteresses_(),
+    interesses: pushInteresses_().map(function (i) { return { chave: i.chave, rotulo: i.rotulo, total: ap.interesses[i.chave] || 0 }; }),
+    etapas: etapas,
+    aparelhos: { ativos: ap.pushAtivos, ativosNoApp: ap.pushAtivosNoApp, instalaram: ap.instalaram, comConta: ap.comConta, desde: ap.desde, onesignal: ap.onesignal },
     autoNovoPedido: props.getProperty('PUSH_NOVO_PEDIDO') !== 'false', autoPedido: props.getProperty('PUSH_PEDIDO_AUTO') !== 'false'
   });
 }
@@ -3017,70 +3045,169 @@ function gerarCodigosFaltantes() {
   }
 }
 
-// ---------------------------------------------------------------- MÉTRICAS (só dados REAIS da aba Eventos e Pedidos)
+// ---------------------------------------------------------------- MÉTRICAS (só dados REAIS da aba Eventos, Pedidos e Dispositivos)
+// v3.5: filtros (período, horário, dia da semana, origem, aparelho, de onde veio, categoria, gênero), gráfico por hora, visitantes únicos e
+// "Aparelhos e avisos" (quem instalou o app / quem tem aviso ativo). Sem nenhum filtro novo a resposta é a de antes + campos extras.
+
+const ROTULOS_ORIGEM_ = { app: 'App instalado', site: 'Navegador', nao_informado: 'Não informado' };
+const ROTULOS_DISP_ = { android: 'Android', ios: 'iPhone / iPad', computador: 'Computador', outro: 'Outro aparelho', nao_informado: 'Não informado' };
+const ROTULOS_FONTE_ = { instagram: 'Instagram', whatsapp: 'WhatsApp', facebook: 'Facebook', google: 'Google', tiktok: 'TikTok', youtube: 'YouTube', direto: 'Direto (digitou ou favorito)', outro: 'Outros sites', nao_informado: 'Não informado' };
+const NOMES_DIA_SEMANA_ = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+function metricasFiltros_(body) {
+  const f = { dias: 30, de: '', ate: '', horaDe: null, horaAte: null, diasSemana: null, origem: '', dispositivo: '', fonte: '', categoria: '', genero: '' };
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  if (re.test(String(body.de || '')) && re.test(String(body.ate || ''))) { f.de = String(body.de); f.ate = String(body.ate); }
+  else f.dias = Math.max(1, Math.min(Number(body.dias) || 30, 365));
+  const hora = function (v) { const n = Number(v); return v !== null && v !== undefined && v !== '' && isFinite(n) && n >= 0 && n <= 23 ? Math.floor(n) : null; };
+  const a = hora(body.horaDe), b = hora(body.horaAte);
+  if (a !== null && b !== null) { f.horaDe = a; f.horaAte = b; }
+  if (Array.isArray(body.diasSemana)) {
+    const d = body.diasSemana.map(Number).filter(function (n, i, arr) { return n >= 0 && n <= 6 && n === Math.floor(n) && arr.indexOf(n) === i; }).sort();
+    if (d.length && d.length < 7) f.diasSemana = d;
+  }
+  const opc = function (v, lista) { v = String(v || '').toLowerCase(); return v && (lista.indexOf(v) !== -1 || v === 'nao_informado') ? v : ''; };
+  f.origem = opc(body.origem, ['app', 'site']); f.dispositivo = opc(body.dispositivo, DISPOSITIVOS_); f.fonte = opc(body.fonte, FONTES_);
+  f.categoria = String(body.categoria || '').trim().slice(0, 60); f.genero = String(body.genero || '').trim().slice(0, 60);
+  return f;
+}
+/** Frase com os filtros que estão valendo (a tela mostra acima dos números). */
+function metricasDescricao_(f) {
+  const p = [];
+  p.push(f.de ? 'de ' + f.de.split('-').reverse().join('/') + ' a ' + f.ate.split('-').reverse().join('/') : 'últimos ' + f.dias + ' dias');
+  if (f.horaDe !== null) p.push('das ' + f.horaDe + 'h às ' + f.horaAte + 'h59');
+  if (f.diasSemana) p.push(f.diasSemana.map(function (d) { return NOMES_DIA_SEMANA_[d]; }).join(', '));
+  if (f.origem) p.push(ROTULOS_ORIGEM_[f.origem]);
+  if (f.dispositivo) p.push(ROTULOS_DISP_[f.dispositivo]);
+  if (f.fonte) p.push('veio de ' + ROTULOS_FONTE_[f.fonte]);
+  if (f.categoria) p.push('categoria ' + f.categoria);
+  if (f.genero) p.push('gênero ' + f.genero);
+  return p.join(' · ');
+}
+function metricasChaveCache_(f) {
+  return 'metricas2:' + versaoCacheProdutos_() + ':' + encodeURIComponent([f.dias, f.de, f.ate, f.horaDe, f.horaAte, (f.diasSemana || []).join(''), f.origem, f.dispositivo, f.fonte, f.categoria, f.genero].join('|')).slice(0, 200);
+}
+function metricasDiaSemana_(diaIso) { return new Date(Date.UTC(Number(diaIso.slice(0, 4)), Number(diaIso.slice(5, 7)) - 1, Number(diaIso.slice(8, 10)))).getUTCDay(); }
 
 function metricas_(body) {
-  const dias = Math.max(1, Math.min(Number(body.dias) || 30, 365));
-  const chave = 'metricas:' + dias + ':' + versaoCacheProdutos_();
+  const f = metricasFiltros_(body);
+  const chave = metricasChaveCache_(f);
   const emCache = cacheLerGrande_(chave);
   if (emCache) return respostaTexto_(emCache);
 
   const agora = new Date();
-  const inicio = new Date(agora.getTime() - dias * 86400000);
+  let inicio, fim = agora;
+  const porDia = {};
+  if (f.de) {
+    inicio = new Date(f.de + 'T00:00:00-03:00'); fim = new Date(f.ate + 'T23:59:59.999-03:00');
+    if (isNaN(inicio.getTime()) || isNaN(fim.getTime()) || fim < inicio) return jsonResponse_({ ok: false, erro: 'Período inválido: confira as datas.' });
+    if (fim.getTime() - inicio.getTime() > 366 * 86400000) return jsonResponse_({ ok: false, erro: 'O período pode ter no máximo 1 ano.' });
+    for (let t = inicio.getTime(); t <= fim.getTime(); t += 86400000) porDia[Utilities.formatDate(new Date(t), FUSO_, 'yyyy-MM-dd')] = { visualizacoes: 0, whatsapp: 0, pedidos: 0 };
+    porDia[Utilities.formatDate(fim, FUSO_, 'yyyy-MM-dd')] = porDia[Utilities.formatDate(fim, FUSO_, 'yyyy-MM-dd')] || { visualizacoes: 0, whatsapp: 0, pedidos: 0 };
+  } else {
+    inicio = new Date(agora.getTime() - f.dias * 86400000);
+    for (let k = f.dias - 1; k >= 0; k--) porDia[Utilities.formatDate(new Date(agora.getTime() - k * 86400000), FUSO_, 'yyyy-MM-dd')] = { visualizacoes: 0, whatsapp: 0, pedidos: 0 };
+  }
+  const horaOk = function (h) { return f.horaDe === null ? true : (f.horaDe <= f.horaAte ? (h >= f.horaDe && h <= f.horaAte) : (h >= f.horaDe || h <= f.horaAte)); };
+  const semanaOk = function (d) { return !f.diasSemana || f.diasSemana.indexOf(d) !== -1; };
+
   const prods = {};
   linhasComoObjetos_(getProdutosSheet_()).forEach(function (p) { prods[String(p.ID)] = p; });
-  const porDia = {};
-  for (let k = dias - 1; k >= 0; k--) porDia[Utilities.formatDate(new Date(agora.getTime() - k * 86400000), FUSO_, 'yyyy-MM-dd')] = { visualizacoes: 0, whatsapp: 0, pedidos: 0 };
-  const porPeca = {}, porCat = {};
-  let views = 0, whats = 0, eventosNoPeriodo = 0;
+  const listaDe = function (v) { return String(v || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean); };
+  const catNorm = acNorm_(f.categoria), genNorm = acNorm_(f.genero);
+
+  const porPeca = {}, porCat = {}, porGen = {}, porOrigem = {}, porDisp = {}, porFonte = {};
+  const porHora = [], porSemana = [];
+  for (let h = 0; h < 24; h++) porHora.push({ hora: h, visualizacoes: 0, whatsapp: 0 });
+  for (let s = 0; s < 7; s++) porSemana.push({ dia: s, nome: NOMES_DIA_SEMANA_[s], visualizacoes: 0, whatsapp: 0 });
+  const visitantes = {};
+  let views = 0, whats = 0, visitas = 0, eventosNoPeriodo = 0, comVisitante = 0, desdeVisitante = null;
+  const balde = function (mapa, k) { return mapa[k] || (mapa[k] = { visualizacoes: 0, whatsapp: 0, v: {} }); };
+
   const aba = getSS_().getSheetByName(SHEET_EVENTOS);
   if (aba && aba.getLastRow() > 1) {
     const dados = aba.getDataRange().getValues();
     for (let i = 1; i < dados.length; i++) {
-      const quando = dados[i][0] instanceof Date ? dados[i][0] : new Date(dados[i][0]);
-      if (isNaN(quando.getTime()) || quando < inicio) continue;
-      const tipo = String(dados[i][3] || '');
-      if (tipo !== 'visualizacao' && tipo !== 'whatsapp') continue;
-      eventosNoPeriodo++;
+      const l = dados[i];
+      const quando = l[0] instanceof Date ? l[0] : new Date(l[0]);
+      if (isNaN(quando.getTime()) || quando < inicio || quando > fim) continue;
+      const tipo = String(l[3] || '');
+      if (tipo !== 'visualizacao' && tipo !== 'whatsapp' && tipo !== 'visita') continue;
       const dia = Utilities.formatDate(quando, FUSO_, 'yyyy-MM-dd');
-      const pid = String(dados[i][1]);
-      const peca = porPeca[pid] || (porPeca[pid] = { visualizacoes: 0, whatsapp: 0, codigo: String(dados[i][2] || '') });
+      const hora = parseInt(Utilities.formatDate(quando, FUSO_, 'HH'), 10);
+      const sem = metricasDiaSemana_(dia);
+      if (!horaOk(hora) || !semanaOk(sem)) continue;
+      const og = String(l[4] || '') || 'nao_informado', dp = String(l[5] || '') || 'nao_informado', fo = String(l[6] || '') || 'nao_informado', vis = String(l[7] || '');
+      if ((f.origem && og !== f.origem) || (f.dispositivo && dp !== f.dispositivo) || (f.fonte && fo !== f.fonte)) continue;
+      const pid = String(l[1]);
       const p = prods[pid];
-      const cats = p ? String(p.Categoria || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean) : [];
-      if (tipo === 'visualizacao') { views++; peca.visualizacoes++; if (porDia[dia]) porDia[dia].visualizacoes++; cats.forEach(function (c) { (porCat[c] = porCat[c] || { visualizacoes: 0, whatsapp: 0 }).visualizacoes++; }); }
-      else { whats++; peca.whatsapp++; if (porDia[dia]) porDia[dia].whatsapp++; cats.forEach(function (c) { (porCat[c] = porCat[c] || { visualizacoes: 0, whatsapp: 0 }).whatsapp++; }); }
+      const cats = p ? listaDe(p.Categoria) : [], gens = p ? listaDe(p.Genero) : [];
+      if (f.categoria && (tipo === 'visita' || !cats.some(function (c) { return acNorm_(c) === catNorm; }))) continue;
+      if (f.genero && (tipo === 'visita' || !gens.some(function (g) { return acNorm_(g) === genNorm; }))) continue;
+
+      eventosNoPeriodo++;
+      if (vis) { visitantes[vis] = true; comVisitante++; if (!desdeVisitante || quando < desdeVisitante) desdeVisitante = quando; }
+      if (tipo === 'visita') { visitas++; continue; }
+      const peca = porPeca[pid] || (porPeca[pid] = { visualizacoes: 0, whatsapp: 0, codigo: String(l[2] || '') });
+      const campo = tipo === 'visualizacao' ? 'visualizacoes' : 'whatsapp';
+      if (tipo === 'visualizacao') views++; else whats++;
+      peca[campo]++; if (porDia[dia]) porDia[dia][campo]++;
+      porHora[hora][campo]++; porSemana[sem][campo]++;
+      cats.forEach(function (c) { (porCat[c] = porCat[c] || { visualizacoes: 0, whatsapp: 0 })[campo]++; });
+      gens.forEach(function (g) { (porGen[g] = porGen[g] || { visualizacoes: 0, whatsapp: 0 })[campo]++; });
+      [[porOrigem, og], [porDisp, dp], [porFonte, fo]].forEach(function (par) { const b = balde(par[0], par[1]); b[campo]++; if (vis) b.v[vis] = true; });
     }
   }
   const taxa = function (w, v) { return v > 0 ? Math.round((w / v) * 1000) / 10 : null; }; // WhatsApp por 100 visualizações
+  const lista = function (mapa, rotulos) {
+    return Object.keys(mapa).map(function (k) {
+      return { chave: k, nome: rotulos ? (rotulos[k] || k) : k, visualizacoes: mapa[k].visualizacoes, whatsapp: mapa[k].whatsapp, visitantes: mapa[k].v ? Object.keys(mapa[k].v).length : undefined, taxa: taxa(mapa[k].whatsapp, mapa[k].visualizacoes) };
+    }).sort(function (a, b) { return (b.visualizacoes + b.whatsapp) - (a.visualizacoes + a.whatsapp); });
+  };
 
   const topProdutos = Object.keys(porPeca).map(function (pid) {
     const e = porPeca[pid], p = prods[pid];
     return { id: pid, codigo: (p && p.Codigo) || e.codigo, nome: p ? String(p.Nome) : '(peça removida)', visualizacoes: e.visualizacoes, whatsapp: e.whatsapp, taxa: taxa(e.whatsapp, e.visualizacoes) };
   }).sort(function (a, b) { return (b.visualizacoes + b.whatsapp) - (a.visualizacoes + a.whatsapp); }).slice(0, 10);
-  const categorias = Object.keys(porCat).map(function (c) {
-    return { nome: c, visualizacoes: porCat[c].visualizacoes, whatsapp: porCat[c].whatsapp, taxa: taxa(porCat[c].whatsapp, porCat[c].visualizacoes) };
-  }).sort(function (a, b) { return (b.visualizacoes + b.whatsapp) - (a.visualizacoes + a.whatsapp); });
 
+  // pedidos: respeitam período, horário e dia da semana (origem/aparelho/categoria não existem no pedido)
   const ped = { total: 0, valor: 0, porStatus: {}, concluidos: 0, valorConcluidos: 0 };
   const abaPed = getSS_().getSheetByName(SHEET_PEDIDOS);
   if (abaPed && abaPed.getLastRow() > 1) {
     linhasComoObjetos_(abaPed).forEach(function (o) {
       const quando = o.Data instanceof Date ? o.Data : new Date(o.Data);
-      if (isNaN(quando.getTime()) || quando < inicio) return;
+      if (isNaN(quando.getTime()) || quando < inicio || quando > fim) return;
+      const dia = Utilities.formatDate(quando, FUSO_, 'yyyy-MM-dd');
+      if (!horaOk(parseInt(Utilities.formatDate(quando, FUSO_, 'HH'), 10)) || !semanaOk(metricasDiaSemana_(dia))) return;
       const st = String(o.Status || 'novo');
       ped.total++; ped.porStatus[st] = (ped.porStatus[st] || 0) + 1;
-      const dia = Utilities.formatDate(quando, FUSO_, 'yyyy-MM-dd');
       if (porDia[dia]) porDia[dia].pedidos++;
       if (st !== 'cancelado') ped.valor += Number(o.Total) || 0;
       if (st === 'concluido') { ped.concluidos++; ped.valorConcluidos += Number(o.Total) || 0; }
     });
     ped.valor = arredondar2_(ped.valor); ped.valorConcluidos = arredondar2_(ped.valorConcluidos);
   }
+
+  // o que existe para escolher nos filtros
+  const cats = {}, gens = {};
+  Object.keys(prods).forEach(function (k) { listaDe(prods[k].Categoria).forEach(function (c) { cats[c] = true; }); listaDe(prods[k].Genero).forEach(function (g) { gens[g] = true; }); });
+
+  const ap = dispositivosResumo_(inicio, fim, true);
+  delete ap.pushIds;                                                 // códigos internos das contas nunca vão para a tela
+  delete ap.interesses;
   const resultado = {
-    ok: true, dias: dias, geradoEm: dataBR_(agora), semDados: eventosNoPeriodo === 0 && ped.total === 0,
-    totais: { visualizacoes: views, whatsapp: whats, whatsappPor100Visualizacoes: taxa(whats, views) },
+    ok: true, dias: f.dias, geradoEm: dataBR_(agora), semDados: eventosNoPeriodo === 0 && ped.total === 0,
+    filtros: f, filtrosDescricao: metricasDescricao_(f), filtrado: !!(f.de || f.horaDe !== null || f.diasSemana || f.origem || f.dispositivo || f.fonte || f.categoria || f.genero),
+    totais: { visualizacoes: views, whatsapp: whats, whatsappPor100Visualizacoes: taxa(whats, views), visitantes: Object.keys(visitantes).length, visitas: visitas },
+    funil: { visitantes: Object.keys(visitantes).length, visualizacoes: views, whatsapp: whats, pedidos: ped.total },
     porDia: Object.keys(porDia).sort().map(function (d) { return { dia: d, visualizacoes: porDia[d].visualizacoes, whatsapp: porDia[d].whatsapp, pedidos: porDia[d].pedidos }; }),
-    topProdutos: topProdutos, categorias: categorias, pedidos: ped
+    porHora: porHora, porDiaSemana: porSemana,
+    porOrigem: lista(porOrigem, ROTULOS_ORIGEM_), porDispositivo: lista(porDisp, ROTULOS_DISP_), porFonte: lista(porFonte, ROTULOS_FONTE_),
+    porGenero: lista(porGen), categorias: lista(porCat).map(function (c) { return { nome: c.nome, visualizacoes: c.visualizacoes, whatsapp: c.whatsapp, taxa: c.taxa }; }),
+    topProdutos: topProdutos, pedidos: ped,
+    opcoes: { categorias: Object.keys(cats).sort(), generos: Object.keys(gens).sort() },
+    cobertura: { eventos: eventosNoPeriodo, comVisitante: comVisitante, desde: desdeVisitante ? dataBR_(desdeVisitante).split(' ')[0] : '' },
+    aparelhos: ap
   };
   const texto = JSON.stringify(resultado);
   cacheGravarGrande_(chave, texto, 120);
@@ -3737,4 +3864,148 @@ function testarConexoes_() {
     }
   }
   return jsonResponse_({ ok: true, itens: itens, quando: new Date().toISOString() });
+}
+
+// ===================== v3.5: APARELHOS (quem instalou o app, quem tem aviso ativo, de onde vem) =====================
+// Tudo ANÔNIMO: o aparelho cria um código aleatório (visitante) e o site só diz "abri como app", "instalei", "avisos ativos", "interesses".
+// Nunca guarda nome, telefone nem endereço. Quem entrou na conta pode ligar o aparelho ao pushId (código opaco) para contar por perfil/grupo.
+
+const SHEET_DISPOSITIVOS_ = 'Dispositivos';
+const DISPOSITIVOS_CAB_ = ['Visitante', 'Primeira', 'Ultima', 'Origem', 'Plataforma', 'Fonte', 'Instalou', 'InstaladoEm', 'PushAtivo', 'PushVisto', 'PushId', 'Interesses', 'Novidades', 'AppAbertoEm'];
+const DISPOSITIVOS_LIMITE_ = 30000;       // linhas: passou disso, aparelhos novos deixam de ser guardados (proteção contra enchimento da planilha)
+const DISPOSITIVOS_NOVOS_POR_HORA_ = 400; // idem, por hora
+const EVENTOS_CAB_ = ['DataHora', 'ProdutoID', 'Codigo', 'Tipo', 'Origem', 'Dispositivo', 'Fonte', 'Visitante'];
+const DISPOSITIVOS_ = ['android', 'ios', 'computador', 'outro'];
+const FONTES_ = ['instagram', 'whatsapp', 'facebook', 'google', 'tiktok', 'youtube', 'direto', 'outro'];
+
+function eventoVisitante_(v) { v = String(v || '').toLowerCase(); return /^[0-9a-f]{16,40}$/.test(v) ? v : ''; }
+function eventoOpcao_(v, lista) { v = String(v || '').toLowerCase(); return lista.indexOf(v) !== -1 ? v : ''; }
+function verdadeiro_(v) { return v === true || String(v).toLowerCase() === 'true'; }
+/** A planilha de eventos antiga só tem 4 colunas: acrescenta os cabeçalhos novos (uma vez por 6 horas, sem custo por evento). */
+function eventosAba_() {
+  const aba = getOrCreateSheet_(SHEET_EVENTOS, EVENTOS_CAB_);
+  const cache = CacheService.getScriptCache();
+  if (!cache.get('evt_cab_ok')) {
+    if (aba.getLastColumn() < EVENTOS_CAB_.length) aba.getRange(1, 1, 1, EVENTOS_CAB_.length).setValues([EVENTOS_CAB_]);
+    try { cache.put('evt_cab_ok', '1', 21600); } catch (e) { /* silencioso */ }
+  }
+  return aba;
+}
+
+/** Aberta (como registrarEvento): o aparelho conta o que é. Só ACRESCENTA/ATUALIZA a própria linha, achada pelo código aleatório. */
+function dispositivoRegistrar_(body) {
+  const vis = eventoVisitante_(body.visitante);
+  if (!vis) return jsonResponse_({ ok: false, erro: 'Aparelho inválido.' });
+  const cache = CacheService.getScriptCache();
+  if (cache.get('disp_' + vis)) return jsonResponse_({ ok: true, ignorado: true });
+  try { cache.put('disp_' + vis, '1', 15); } catch (e) { /* silencioso */ }
+  const trava = LockService.getScriptLock();
+  try { trava.waitLock(10000); } catch (e) { return jsonResponse_({ ok: true, ignorado: true }); }
+  try {
+    const aba = getOrCreateSheet_(SHEET_DISPOSITIVOS_, DISPOSITIVOS_CAB_);
+    const dados = aba.getDataRange().getValues();
+    let ind = -1;
+    for (let i = 1; i < dados.length; i++) if (String(dados[i][0]) === vis) { ind = i; break; }
+    const agora = new Date();
+    let r;
+    if (ind < 0) {
+      if (dados.length > DISPOSITIVOS_LIMITE_) return jsonResponse_({ ok: true, ignorado: true });
+      const kh = 'disp_novos_' + Utilities.formatDate(agora, FUSO_, 'yyyyMMddHH');
+      const n = parseInt(cache.get(kh) || '0', 10) || 0;
+      if (n >= DISPOSITIVOS_NOVOS_POR_HORA_) return jsonResponse_({ ok: true, ignorado: true });
+      try { cache.put(kh, String(n + 1), 4000); } catch (e) { /* silencioso */ }
+      r = [vis, agora, agora, '', '', '', false, '', '', '', '', '', '', ''];
+    } else {
+      r = dados[ind].slice(0, DISPOSITIVOS_CAB_.length);
+      while (r.length < DISPOSITIVOS_CAB_.length) r.push('');
+    }
+    r[2] = agora;
+    const origem = eventoOpcao_(body.origem, ['app', 'site']);
+    if (origem) r[3] = origem;
+    const plat = eventoOpcao_(body.dispositivo, DISPOSITIVOS_);
+    if (plat) r[4] = plat;
+    if (!r[5]) r[5] = eventoOpcao_(body.fonte, FONTES_);
+    if (origem === 'app') { r[13] = agora; body.instalou = true; }       // abriu como app = o app está instalado
+    if (body.instalou === true && !verdadeiro_(r[6])) { r[6] = true; r[7] = agora; }
+    if (typeof body.pushAtivo === 'boolean') { r[8] = body.pushAtivo; r[9] = agora; }
+    if (body.logout === true) r[10] = '';
+    else if (body.sessao && body.whatsapp && acEhToken_(body.sessao)) {      // só token de sessão (nunca senha); o pushId é calculado AQUI
+      const v = acVerificar_(body.whatsapp, body.sessao);
+      if (v && v.ok && v.usuario) r[10] = pushIdDe_(v.usuario.whatsapp);
+    }
+    if (Array.isArray(body.interesses)) {
+      const validas = pushInteresses_().map(function (i) { return i.chave; });
+      r[11] = body.interesses.map(pushSlug_).filter(function (k, i, a) { return k && validas.indexOf(k) !== -1 && a.indexOf(k) === i; }).slice(0, 12).join(',');
+    }
+    if (typeof body.novidades === 'boolean') r[12] = body.novidades;
+    if (ind < 0) aba.appendRow(r); else aba.getRange(ind + 1, 1, 1, r.length).setValues([r]);
+    return jsonResponse_({ ok: true });
+  } finally {
+    trava.releaseLock();
+  }
+}
+
+/** Linhas da aba Dispositivos já como objetos (datas como Date ou null). */
+function dispositivosLinhas_() {
+  const aba = getSS_().getSheetByName(SHEET_DISPOSITIVOS_);
+  if (!aba || aba.getLastRow() < 2) return [];
+  const dt = function (v) { if (!v) return null; const d = v instanceof Date ? v : new Date(v); return isNaN(d.getTime()) ? null : d; };
+  return aba.getDataRange().getValues().slice(1).filter(function (l) { return String(l[0] || ''); }).map(function (l) {
+    return {
+      visitante: String(l[0]), primeira: dt(l[1]), ultima: dt(l[2]), origem: String(l[3] || ''), plataforma: String(l[4] || ''), fonte: String(l[5] || ''),
+      instalou: verdadeiro_(l[6]), instaladoEm: dt(l[7]), pushAtivo: verdadeiro_(l[8]), pushVisto: dt(l[9]), pushId: String(l[10] || ''),
+      interesses: String(l[11] || '').split(',').filter(Boolean), novidades: l[12] === '' || l[12] === undefined || l[12] === null ? null : verdadeiro_(l[12]), appAbertoEm: dt(l[13])
+    };
+  });
+}
+/** Números dos aparelhos (estado de AGORA; só "instalou em / abriu o app" respeitam o período). inicio/fim podem ser null. */
+function dispositivosResumo_(inicio, fim, comOneSignal) {
+  const linhas = dispositivosLinhas_();
+  const r = { total: linhas.length, instalaram: 0, instalaramNoPeriodo: 0, usaramAppNoPeriodo: 0, pushAtivos: 0, pushAtivosNoApp: 0, pushAtivosVistos30: 0,
+    porPlataforma: { android: 0, ios: 0, computador: 0, outro: 0 }, comConta: 0, interesses: {}, pushIds: {}, desde: '', onesignal: comOneSignal ? onesignalNumeros_() : null };
+  const dentro = function (d) { return !!d && (!inicio || d >= inicio) && (!fim || d <= fim); };
+  const h30 = new Date().getTime() - 30 * 86400000;
+  let primeiro = null;
+  linhas.forEach(function (x) {
+    if (x.primeira && (!primeiro || x.primeira < primeiro)) primeiro = x.primeira;
+    if (x.instalou) { r.instalaram++; if (dentro(x.instaladoEm)) r.instalaramNoPeriodo++; }
+    if (dentro(x.appAbertoEm)) r.usaramAppNoPeriodo++;
+    if (x.pushAtivo) {
+      r.pushAtivos++;
+      if (x.origem === 'app' || x.appAbertoEm) r.pushAtivosNoApp++;
+      if (x.ultima && x.ultima.getTime() >= h30) r.pushAtivosVistos30++;
+      r.porPlataforma[x.plataforma && r.porPlataforma[x.plataforma] !== undefined ? x.plataforma : 'outro']++;
+      x.interesses.forEach(function (k) { r.interesses[k] = (r.interesses[k] || 0) + 1; });
+      if (x.pushId) { r.pushIds[x.pushId] = true; r.comConta++; }
+    }
+  });
+  r.desde = primeiro ? dataBR_(primeiro).split(' ')[0] : '';
+  return r;
+}
+/** Total real de aparelhos no OneSignal (quando a chave da organização está guardada em Conexões). Nunca devolve a chave; cache de 5 min. */
+function onesignalNumeros_() {
+  const chave = conexaoChave_('onesignal');
+  if (!chave) return null;
+  const cache = CacheService.getScriptCache();
+  const c = cache.get('os_numeros');
+  if (c) { try { return JSON.parse(c); } catch (e) { /* refaz */ } }
+  const r = conexaoHttp_('get', PUSH_API_ + '/apps/' + onesignalAppId_(), chave, undefined, 'Key');
+  if (r.codigo !== 200 || !r.dados) return null;
+  const o = { inscritos: Number(r.dados.players) || 0, recebem: Number(r.dados.messageable_players) || 0 };
+  try { cache.put('os_numeros', JSON.stringify(o), 300); } catch (e) { /* silencioso */ }
+  return o;
+}
+/** Quantos aparelhos com aviso ativo cabem num público de marketing (todos | app | interesse). Aproximado: só conta quem avisou o site. */
+function dispositivosParaPublico_(aud, respeitar) {
+  aud = aud && typeof aud === 'object' ? aud : { tipo: 'todos' };
+  const tipo = String(aud.tipo || 'todos');
+  if (['todos', 'app', 'interesse'].indexOf(tipo) === -1) return null;
+  const chaves = (Array.isArray(aud.chaves) ? aud.chaves : [aud.chave]).map(pushSlug_).filter(Boolean);
+  return dispositivosLinhas_().filter(function (x) {
+    if (!x.pushAtivo) return false;
+    if (respeitar && x.novidades === false) return false;
+    if (tipo === 'app') return x.origem === 'app' || !!x.appAbertoEm;
+    if (tipo === 'interesse') return x.interesses.some(function (k) { return chaves.indexOf(k) !== -1; });
+    return true;
+  }).length;
 }

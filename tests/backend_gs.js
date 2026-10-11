@@ -1266,6 +1266,231 @@ function servicosFalsos(amb, est) {
   ok(!/os_v2_(org|app)_[A-Za-z0-9]{20}/.test(codigoFonte), 'o arquivo .gs.txt não tem chave do OneSignal escrita');
 })();
 
+// ------------------------------------------------------------------ 8f. números reais com filtros, aparelhos (instalou / aviso ativo) e contagem por público (v3.5 parte 2)
+(function numerosEAparelhos() {
+  console.log('\n[números reais com filtros, aparelhos e contagem por público (v3.5)]');
+  const amb = criarAmbiente(); semear(amb);
+  amb.ctx.SpreadsheetApp.openById('x').getSheetByName('Pessoas').appendRow(['Nome', 'WhatsApp', 'Senha']);
+  const gente = [['Pablo Admin', '88999990001', 'Admin total'], ['Ana Func', '88999990002', 'Funcionário'], ['Bia Aluna', '88999990003', 'Aluno'], ['Dani Cliente', '88999990005', 'Cliente']];
+  gente.forEach(g => amb.run("acRegistrar_(" + JSON.stringify(g[0]) + ", " + JSON.stringify(g[1]) + ", 'senha-" + g[1].slice(-2) + "', " + JSON.stringify(g[2]) + ", {})"));
+  const tok = {}; gente.forEach(g => { tok[g[0].split(' ')[0]] = amb.post({ action: 'login', whatsapp: g[1], senha: 'senha-' + g[1].slice(-2) }); });
+  const A = (o) => Object.assign({ sessao: tok.Pablo.sessao, whatsapp: '88999990001' }, o);
+  const F = (o) => Object.assign({ sessao: tok.Ana.sessao, whatsapp: '88999990002' }, o);
+  const pid = (w) => amb.run("pushIdDe_('" + w + "')");
+  const V = (n) => String(n).padStart(16, 'a');           // código anônimo de aparelho (hex)
+  const aba = (n) => amb.ss.getSheetByName(n);
+  const respostas = [];
+  const P = (o) => { const r = amb.post(o); respostas.push(JSON.stringify(r)); return r; };
+
+  // ---------- eventos novos: origem, aparelho, fonte e visitante
+  let r = P({ action: 'registrarEvento', produtoId: '101', codigo: 'TK-0001', tipo: 'visualizacao', origem: 'app', dispositivo: 'android', fonte: 'instagram', visitante: V(1) });
+  let linha = aba('Eventos').d[aba('Eventos').d.length - 1];
+  ok(r.ok && linha.length === 8 && linha[3] === 'visualizacao' && linha[4] === 'app' && linha[5] === 'android' && linha[6] === 'instagram' && linha[7] === V(1), 'registrarEvento grava origem, aparelho, fonte e o código anônimo do visitante', JSON.stringify(linha));
+  ok(aba('Eventos').d[0].join() === 'DataHora,ProdutoID,Codigo,Tipo,Origem,Dispositivo,Fonte,Visitante', 'cabeçalho da aba Eventos com as colunas novas');
+  r = P({ action: 'registrarEvento', produtoId: '102', codigo: 'TK-0002', tipo: 'visualizacao', origem: '<b>hack</b>', dispositivo: 'geladeira', fonte: 'x'.repeat(50), visitante: '<script>alert(1)</script>' });
+  linha = aba('Eventos').d[aba('Eventos').d.length - 1];
+  ok(r.ok && linha[4] === '' && linha[5] === '' && linha[6] === '' && linha[7] === '', 'valor fora da lista / visitante que não é código é descartado (nada de texto livre na planilha)', JSON.stringify(linha));
+  r = P({ action: 'registrarEvento', produtoId: '101', codigo: 'TK-0001', tipo: 'visualizacao', origem: 'app', visitante: V(1) });
+  ok(r.ignorado === true, 'o mesmo aparelho repetindo a mesma ação em segundos é ignorado');
+  r = P({ action: 'registrarEvento', produtoId: '101', codigo: 'TK-0001', tipo: 'visualizacao', origem: 'site', visitante: V(2) });
+  ok(r.ok && !r.ignorado, 'outro aparelho na mesma peça conta normalmente (a trava agora é por aparelho)');
+  // planilha de Eventos antiga (4 colunas) ganha os cabeçalhos sozinha
+  const velho = criarAmbiente(); semear(velho);
+  const evv = velho.ss.insertSheet('Eventos'); evv.appendRow(['DataHora', 'ProdutoID', 'Codigo', 'Tipo']); evv.appendRow([new Date(), '101', 'TK-0001', 'visualizacao']);
+  velho.post({ action: 'registrarEvento', produtoId: '102', codigo: 'TK-0002', tipo: 'whatsapp', origem: 'app', visitante: V(9) });
+  ok(evv.d[0].length === 8 && evv.d[0][7] === 'Visitante' && evv.d[2][4] === 'app', 'aba Eventos de 4 colunas é completada sem perder as linhas antigas', JSON.stringify(evv.d[0]));
+
+  // ---------- aparelhos
+  ok(amb.getJson({ action: 'versao' }).metricasAvancadas === true && amb.getJson({ action: 'versao' }).dispositivos === true, 'versao anuncia metricasAvancadas e dispositivos');
+  r = P({ action: 'dispositivo', visitante: 'nao-e-codigo' });
+  ok(r.ok === false && !aba('Dispositivos'), 'aparelho sem código válido é recusado e nada é gravado');
+  r = P({ action: 'dispositivo', visitante: V(1), origem: 'site', dispositivo: 'android', fonte: 'instagram' });
+  let d = () => aba('Dispositivos').d.slice(1).map(l => ({ v: l[0], origem: l[3], plat: l[4], fonte: l[5], instalou: l[6], pushAtivo: l[8], pushId: l[10], int: l[11], nov: l[12], app: l[13] }));
+  ok(r.ok && d().length === 1 && d()[0].origem === 'site' && d()[0].instalou === false, 'primeiro registro do aparelho cria UMA linha (ainda não instalou)', JSON.stringify(d()));
+  r = P({ action: 'dispositivo', visitante: V(1), origem: 'app' });
+  ok(r.ignorado === true, 'registrar o mesmo aparelho de novo em segundos é ignorado (não enche a planilha)');
+  amb.cacheMem.clear();
+  r = P({ action: 'dispositivo', visitante: V(1), origem: 'app', fonte: 'google' });
+  ok(r.ok && d().length === 1 && d()[0].instalou === true && d()[0].origem === 'app' && d()[0].app instanceof Date && d()[0].fonte === 'instagram', 'abriu como app: marca instalou e atualiza a MESMA linha; a fonte da primeira visita não é trocada', JSON.stringify(d()));
+  amb.cacheMem.clear();
+  const interessesOk = amb.getJson({ action: 'pushconfig' }).interesses.map(i => i.chave);
+  r = P({ action: 'dispositivo', visitante: V(1), pushAtivo: true, novidades: true, interesses: [interessesOk[0], interessesOk[1], 'inventado', interessesOk[0]] });
+  ok(r.ok && d()[0].pushAtivo === true && d()[0].int === interessesOk[0] + ',' + interessesOk[1] && d()[0].nov === true, 'aviso ativo + interesses: só guarda interesses que existem, sem repetir', JSON.stringify(d()[0]));
+  // conta: só token de sessão liga o aparelho ao pushId
+  amb.cacheMem.clear();
+  r = P({ action: 'dispositivo', visitante: V(1), whatsapp: '88999990003', sessao: 'senha-03' });
+  ok(d()[0].pushId === '', 'senha NÃO liga o aparelho a uma conta (só token de sessão)');
+  amb.cacheMem.clear();
+  r = P({ action: 'dispositivo', visitante: V(1), whatsapp: '88999990002', sessao: tok.Bia.sessao });
+  ok(d()[0].pushId === '', 'token da Bia não liga o aparelho à conta da Ana');
+  amb.cacheMem.clear();
+  r = P({ action: 'dispositivo', visitante: V(1), whatsapp: '88999990003', sessao: tok.Bia.sessao });
+  ok(d()[0].pushId === pid('88999990003') && /^tk[0-9a-f]{30}$/.test(d()[0].pushId), 'token da Bia liga o aparelho ao pushId dela (calculado no servidor)', d()[0].pushId);
+  amb.cacheMem.clear();
+  r = P({ action: 'dispositivo', visitante: V(1), logout: true });
+  ok(d()[0].pushId === '', 'sair da conta desliga o aparelho do pushId');
+  // vários aparelhos
+  const reg = (n, extra) => { amb.cacheMem.clear(); return P(Object.assign({ action: 'dispositivo', visitante: V(n) }, extra)); };
+  reg(1, { whatsapp: '88999990003', sessao: tok.Bia.sessao });                                                        // Bia: aluna, aviso ativo (aparelho 1)
+  reg(2, { origem: 'app', dispositivo: 'ios', pushAtivo: true, whatsapp: '88999990001', sessao: tok.Pablo.sessao, interesses: [interessesOk[0]] });   // Pablo: iPhone, app, aviso ativo
+  reg(3, { origem: 'site', dispositivo: 'computador', pushAtivo: true, novidades: false, whatsapp: '88999990002', sessao: tok.Ana.sessao });      // Ana: aviso ativo, desligou promoções
+  reg(4, { origem: 'site', dispositivo: 'android', pushAtivo: false, whatsapp: '88999990005', sessao: tok.Dani.sessao });                        // Dani: aviso desligado
+  reg(5, { origem: 'site', dispositivo: 'android', fonte: 'whatsapp' });                                                                          // visitante qualquer
+  ok(d().length === 5, 'cinco aparelhos, cinco linhas', d().length);
+
+  // ---------- Números reais com filtros
+  const meiaNoite = Math.floor((Date.now() - 3 * 3600000) / 86400000) * 86400000 + 3 * 3600000;       // 00:00 de hoje em Fortaleza (UTC-3)
+  const quando = (diasAtras, hora, min) => new Date(meiaNoite - diasAtras * 86400000 + hora * 3600000 + (min || 0) * 60000);
+  const diaIso = (diasAtras) => new Date(meiaNoite - diasAtras * 86400000 - 3 * 3600000 + 12 * 3600000).toISOString().slice(0, 10).replace(/-(\d\d)-(\d\d)$/, '-$1-$2');
+  const sem = (diasAtras) => new Date(diaIso(diasAtras) + 'T12:00:00Z').getUTCDay();
+  const m = amb.ss.insertSheet('Eventos2'); // só para não confundir: os eventos do teste vão para uma planilha limpa
+  amb.ss.abas.splice(amb.ss.abas.indexOf(m), 1);
+  const ev = aba('Eventos'); ev.d.length = 1;
+  const E = (q, pid_, cod, tipo, og, dp, fo, vis) => ev.appendRow([q, pid_, cod, tipo, og, dp, fo, vis]);
+  E(quando(2, 9, 30), '101', 'TK-0001', 'visualizacao', 'app', 'android', 'instagram', V(11));
+  E(quando(2, 9, 45), '101', 'TK-0001', 'whatsapp', 'app', 'android', 'instagram', V(11));
+  E(quando(2, 22, 10), '102', 'TK-0002', 'visualizacao', 'site', 'ios', 'direto', V(12));
+  E(quando(1, 23, 30), '101', 'TK-0001', 'visualizacao', 'site', 'computador', 'google', V(13));
+  E(quando(1, 1, 15), '103', 'TK-0003', 'visualizacao', 'site', 'android', 'whatsapp', V(14));
+  E(quando(3, 10, 0), '', '', 'visita', 'site', 'android', 'direto', V(15));
+  ev.appendRow([quando(2, 12, 0), '101', 'TK-0001', 'visualizacao']);   // linha antiga, sem as colunas novas
+  const M = (o) => P(adm(Object.assign({ action: 'metricas' }, o)));
+  r = M({ dias: 30 });
+  ok(r.ok && r.totais.visualizacoes === 5 && r.totais.whatsapp === 1 && r.totais.visitas === 1, 'sem filtro: 5 visualizações, 1 WhatsApp, 1 visita', JSON.stringify(r.totais));
+  ok(r.totais.visitantes === 5 && r.funil.visitantes === 5, 'visitantes únicos = 5 (a mesma pessoa com 2 ações conta uma vez)', JSON.stringify(r.funil));
+  ok(r.filtrado === false && r.porHora.length === 24 && r.porDiaSemana.length === 7 && r.porDia.length === 30, 'sem filtro: 24 horas, 7 dias da semana, 30 dias no gráfico');
+  ok(r.cobertura.eventos === 7 && r.cobertura.comVisitante === 6 && /^\d\d\/\d\d\/\d{4}$/.test(r.cobertura.desde), 'cobertura diz quantos eventos têm os dados novos e desde quando', JSON.stringify(r.cobertura));
+  ok(r.porOrigem.some(x => x.chave === 'nao_informado' && x.visualizacoes === 1) && r.porOrigem.some(x => x.chave === 'app' && x.visualizacoes === 1 && x.whatsapp === 1), 'origem: o evento antigo aparece como "Não informado", sem inventar', JSON.stringify(r.porOrigem));
+  ok(r.porDispositivo.find(x => x.chave === 'android').visualizacoes === 2 && r.porFonte.find(x => x.chave === 'instagram').whatsapp === 1, 'tabelas por aparelho e por fonte');
+  ok(r.porGenero.find(x => x.nome === 'Feminino Adulto').visualizacoes === 4, 'por gênero (peças que a pessoa viu)', JSON.stringify(r.porGenero));
+  // horário (opcional)
+  r = M({ dias: 30, horaDe: 9, horaAte: 10 });
+  ok(r.totais.visualizacoes === 1 && r.totais.whatsapp === 1 && r.totais.visitas === 1 && r.filtrado === true && /das 9h às 10h59/.test(r.filtrosDescricao), 'horário 9h–10h59: pega só o que aconteceu nessa faixa', JSON.stringify(r.totais) + r.filtrosDescricao);
+  ok(r.porHora[9].visualizacoes === 1 && r.porHora[9].whatsapp === 1 && r.porHora[22].visualizacoes === 0, 'gráfico por hora respeita o filtro');
+  r = M({ dias: 30, horaDe: 22, horaAte: 2 });
+  ok(r.totais.visualizacoes === 3, 'horário que vira a meia-noite (22h–2h59): 22:10, 23:30 e 01:15', JSON.stringify(r.totais));
+  r = M({ dias: 30, horaDe: 9 });
+  ok(r.filtrado === false && r.totais.visualizacoes === 5, 'horário incompleto (só "de") é ignorado: o filtro é opcional');
+  r = M({ dias: 30, horaDe: 25, horaAte: -1 });
+  ok(r.filtrado === false, 'horário fora de 0–23 é ignorado');
+  // dia da semana
+  r = M({ dias: 30, diasSemana: [sem(1)] });
+  ok(r.totais.visualizacoes === 2 && r.porDiaSemana[sem(1)].visualizacoes === 2, 'um dia da semana: só as 2 visualizações de ontem', JSON.stringify(r.totais));
+  r = M({ dias: 30, diasSemana: [0, 1, 2, 3, 4, 5, 6] });
+  ok(r.filtrado === false, 'marcar os 7 dias = sem filtro');
+  // origem / aparelho / fonte
+  r = M({ dias: 30, origem: 'app' });
+  ok(r.totais.visualizacoes === 1 && r.totais.whatsapp === 1 && r.totais.visitas === 0, 'só quem usou o app', JSON.stringify(r.totais));
+  r = M({ dias: 30, origem: 'nao_informado' });
+  ok(r.totais.visualizacoes === 1, 'filtro "não informado" pega só os eventos antigos');
+  r = M({ dias: 30, dispositivo: 'ios' });
+  ok(r.totais.visualizacoes === 1, 'só iPhone');
+  r = M({ dias: 30, fonte: 'instagram' });
+  ok(r.totais.visualizacoes === 1 && r.totais.whatsapp === 1, 'só quem veio do Instagram');
+  r = M({ dias: 30, origem: 'hacker', dispositivo: 'x', fonte: 'y' });
+  ok(r.filtrado === false && r.totais.visualizacoes === 5, 'valor inventado de filtro é ignorado');
+  // categoria / gênero
+  r = M({ dias: 30, categoria: 'blusas' });
+  ok(r.totais.visualizacoes === 1 && r.totais.visitas === 0 && r.topProdutos.length === 1 && r.topProdutos[0].codigo === 'TK-0003', 'categoria (sem diferenciar maiúscula): só a Blusa', JSON.stringify(r.totais));
+  r = M({ dias: 30, genero: 'Infantil Menino' });
+  ok(r.totais.visualizacoes === 1 && r.topProdutos[0].codigo === 'TK-0002', 'gênero: só a peça infantil');
+  ok(r.opcoes.categorias.includes('Vestidos') && r.opcoes.generos.includes('Infantil Menino'), 'devolve as categorias e gêneros que existem para a tela montar os filtros');
+  // período por data
+  r = M({ de: diaIso(2), ate: diaIso(2) });
+  ok(r.totais.visualizacoes === 3 && r.filtrosDescricao.indexOf('de ') === 0 && r.porDia.length >= 1, 'período por datas (de/até): só o dia pedido', JSON.stringify(r.totais) + r.filtrosDescricao);
+  r = M({ de: '2026-10-05', ate: '2026-09-01' });
+  ok(r.ok === false && /inválido/i.test(r.erro), 'datas invertidas: erro em frase');
+  r = M({ de: '2024-01-01', ate: '2026-01-01' });
+  ok(r.ok === false && /1 ano/.test(r.erro), 'período maior que 1 ano é recusado');
+  // combinação
+  r = M({ dias: 30, origem: 'site', dispositivo: 'android', horaDe: 0, horaAte: 3 });
+  ok(r.totais.visualizacoes === 1 && r.topProdutos[0].codigo === 'TK-0003', 'filtros combinados (site + Android + madrugada): só a Blusa de 01:15', JSON.stringify(r.totais));
+  // pedido respeita horário
+  amb.post({ action: 'criarPedido', nome: 'Ana', whatsapp: '88999990001', itens: [{ id: '101' }] });
+  amb.cacheMem.clear();
+  const horaAgora = parseInt(amb.run("Utilities.formatDate(new Date(), 'x', 'HH')"), 10);
+  r = M({ dias: 7 });
+  ok(r.pedidos.total === 1 && r.funil.pedidos === 1, 'funil: o pedido de agora aparece');
+  r = M({ dias: 7, horaDe: (horaAgora + 2) % 24, horaAte: (horaAgora + 3) % 24 });
+  ok(r.pedidos.total === 0, 'pedidos também respeitam o filtro de horário', JSON.stringify(r.pedidos));
+  // filtro diferente = resposta diferente (o cache não mistura)
+  const a1 = M({ dias: 30, origem: 'app' }).totais.visualizacoes, a2 = M({ dias: 30 }).totais.visualizacoes, a3 = M({ dias: 30, origem: 'app' }).totais.visualizacoes;
+  ok(a1 === 1 && a2 === 5 && a3 === 1, 'o cache guarda cada combinação de filtros separada');
+  r = amb.post({ action: 'metricas', dias: 30 });
+  ok(r.ok === false, 'sem login/PIN os números continuam negados');
+
+  // ---------- aparelhos nos números
+  amb.cacheMem.clear();
+  r = M({ dias: 30 });
+  ok(r.aparelhos.total === 5 && r.aparelhos.instalaram === 2 && r.aparelhos.pushAtivos === 3 && r.aparelhos.comConta === 3, 'aparelhos: 5 no total, 2 instalaram, 3 com aviso ativo (3 ligados a uma conta)', JSON.stringify(r.aparelhos));
+  ok(r.aparelhos.pushAtivosNoApp === 2 && r.aparelhos.porPlataforma.ios === 1 && r.aparelhos.porPlataforma.computador === 1 && r.aparelhos.porPlataforma.android === 1, 'aviso ativo: quantos no app e por aparelho', JSON.stringify(r.aparelhos));
+  ok(r.aparelhos.instalaramNoPeriodo === 2 && r.aparelhos.onesignal === null, 'instalaram no período; sem a chave do OneSignal guardada o total real fica vazio (não inventa)');
+  ok(r.aparelhos.pushIds === undefined && JSON.stringify(r).indexOf(pid('88999990003')) === -1 && JSON.stringify(r).indexOf(pid('88999990001')) === -1, 'o código interno das contas (pushId) NÃO vai para a tela dos números');
+  // total real do OneSignal quando a chave da organização está guardada
+  const est = { feed: true, webPronto: true, chaveRender: 'x', chaveCf: 'x',
+    os: { appId: '535f6b0d-c866-43c2-b241-43bd7ab62fae', orgId: 'b0b0b0b0-1111-4222-8333-444444444444', chaveOrg: 'os_v2_org_TESTEFALSOTESTEFALSOTESTEFALSOTESTEFALSO1234567890abcdef', chaveEnvio: '', puts: [], tokens: 0,
+      app: { id: '535f6b0d-c866-43c2-b241-43bd7ab62fae', name: 'Tenkitermodas', organization_id: 'b0b0b0b0-1111-4222-8333-444444444444', players: 12, messageable_players: 9 } } };
+  servicosFalsos(amb, est);
+  amb.props.set('ONESIGNAL_ORG_API_KEY', est.os.chaveOrg); amb.props.set('ONESIGNAL_ORG_ID', est.os.orgId);
+  amb.cacheMem.clear();
+  r = M({ dias: 30 });
+  ok(r.aparelhos.onesignal && r.aparelhos.onesignal.inscritos === 12 && r.aparelhos.onesignal.recebem === 9, 'com a chave em Conexões: mostra o total REAL do OneSignal (12 inscritos, 9 recebem)', JSON.stringify(r.aparelhos.onesignal));
+  ok(JSON.stringify(r).indexOf('os_v2_') === -1 && JSON.stringify(r).indexOf('SEGREDO-REST-DO-APP') === -1, 'a chave e o segredo do app nunca aparecem na resposta');
+
+  // ---------- Central de avisos: quantos em cada público
+  r = P(A({ action: 'pushStatus' }));
+  ok(r.ok && r.contas.total === 4 && r.contasAtivas.total === 3, 'status: 4 contas, 3 com aviso ativo', JSON.stringify(r.contasAtivas));
+  ok(r.contasAtivas.alunos === 1 && r.contasAtivas.equipe === 2 && r.contasAtivas.clientes === 0 && r.contasAtivas.portal >= 0, 'status por grupo: alunos 1, equipe 2 (Pablo e Ana), clientes 0 (Dani desligou)', JSON.stringify(r.contasAtivas));
+  ok(r.perfis.find(x => x.nome === 'Aluno').ativos === 1 && r.perfis.find(x => x.nome === 'Aluno').total === 1 && r.perfis.find(x => x.nome === 'Cliente').ativos === 0, 'perfis: total e quantos têm aviso ativo');
+  ok(r.acessos.every(a => typeof a.ativos === 'number' && a.ativos <= a.total) && r.acessos.find(a => a.chave === 'gerir_acessos').ativos === 1, 'acessos: total e ativos (só o Admin total gerencia acessos)', JSON.stringify(r.acessos.find(a => a.chave === 'gerir_acessos')));
+  ok(r.interesses.length >= 2 && r.interesses.every(i => i.chave && i.rotulo && typeof i.total === 'number') && r.interesses.find(i => i.chave === interessesOk[0]).total === 2 && r.interesses.find(i => i.chave === interessesOk[1]).total === 1, 'interesses: quantos aparelhos escolheram cada um (aviso ativo)', JSON.stringify(r.interesses.slice(0, 3)));
+  ok(r.etapas.novo === 1, 'pedidos por etapa (para escolher "clientes com pedido em ...")', JSON.stringify(r.etapas));
+  ok(r.aparelhos.ativos === 3 && r.aparelhos.instaladas === undefined && r.aparelhos.instalaram === 2 && r.aparelhos.ativosNoApp === 2 && r.aparelhos.onesignal.recebem === 9, 'status: aparelhos com aviso, instalaram e o total real do OneSignal', JSON.stringify(r.aparelhos));
+  ok(JSON.stringify(r).indexOf(pid('88999990003')) === -1, 'o status não entrega o código interno de nenhuma conta');
+  r = P(F({ action: 'pushStatus' }));
+  ok(r.ok === false && r.semPermissao === true, 'Funcionário sem "enviar notificações" continua sem ver o status');
+  // prévia
+  const prev = (aud, extra) => P(A(Object.assign({ action: 'pushPrevia', audiencia: aud }, extra || {})));
+  r = prev({ tipo: 'grupo', grupo: 'alunos' });
+  ok(r.ok && r.quantidade === 1 && r.comAviso === 1, 'prévia de um grupo: quantas contas e quantas têm aviso ativo', JSON.stringify(r));
+  r = prev({ tipo: 'grupo', grupo: 'clientes' });
+  ok(r.quantidade === 1 && r.comAviso === 0, 'prévia: a cliente Dani existe mas está sem aviso (comAviso 0)', JSON.stringify(r));
+  r = prev({ tipo: 'todos' });
+  ok(r.porAparelho === true && r.aparelhos === 2, 'prévia "todos" (respeitando promoções): 2 aparelhos — o de quem desligou promoções fica de fora', JSON.stringify(r));
+  r = prev({ tipo: 'todos' }, { respeitarPreferencias: false });
+  ok(r.aparelhos === 3, 'prévia "todos" sem respeitar promoções: 3 aparelhos');
+  r = prev({ tipo: 'app' });
+  ok(r.aparelhos === 2, 'prévia "quem instalou o app": 2 aparelhos com aviso (o Pablo e o da Bia abriram como app)', JSON.stringify(r));
+  r = prev({ tipo: 'interesse', chaves: [interessesOk[0]] });
+  ok(r.aparelhos === 2, 'prévia por interesse: 2 aparelhos', JSON.stringify(r));
+  r = P(A({ action: 'pushPrevia' }));
+  ok(r.ok === true || r.ok === false, 'prévia sem público não derruba o servidor');
+
+  // ---------- proteções
+  const dsp = aba('Dispositivos');
+  const antes = dsp.d.length;
+  const gr = criarAmbiente(); semear(gr);
+  const abaG = gr.ss.insertSheet('Dispositivos'); abaG.appendRow(amb.run('DISPOSITIVOS_CAB_'));
+  for (let i = 0; i < 30001; i++) abaG.d.push([V(100000 + i), new Date(), new Date(), '', '', '', false, '', '', '', '', '', '', '']);
+  r = gr.post({ action: 'dispositivo', visitante: V(7) });
+  ok(r.ignorado === true && abaG.d.length === 30002, 'planilha de aparelhos cheia (30 mil): aparelho novo é ignorado, a planilha não cresce sem fim');
+  gr.cacheMem.clear();
+  r = gr.post({ action: 'dispositivo', visitante: V(100000), origem: 'app' });
+  ok(r.ok && !r.ignorado, 'mesmo cheia, quem já existe continua sendo atualizado');
+  const hr = criarAmbiente(); semear(hr);
+  let aceitos = 0, recusados = 0;
+  for (let i = 0; i < 405; i++) { const x = hr.post({ action: 'dispositivo', visitante: V(200000 + i) }); if (x.ignorado) recusados++; else aceitos++; }
+  ok(aceitos === 400 && recusados === 5, 'no máximo 400 aparelhos novos por hora', aceitos + '/' + recusados);
+  ok(antes === dsp.d.length, 'as proteções não mexeram na planilha principal');
+
+  // ---------- nada pessoal
+  const todas = JSON.stringify([...amb.ss.getSheets().map(a => a.d)]);
+  ok(todas.indexOf('88999990003') === -1 || !JSON.stringify(aba('Dispositivos').d).includes('88999990003'), 'a planilha de aparelhos NÃO tem telefone');
+  ok(!JSON.stringify(aba('Dispositivos').d).includes(tok.Bia.sessao) && !JSON.stringify(aba('Dispositivos').d).includes('senha-03'), 'a planilha de aparelhos NÃO guarda token de sessão nem senha');
+  ok(!respostas.some(t => t.includes(est.os.chaveOrg)), 'chave da organização em nenhuma resposta');
+  ok(aba('Dispositivos').d[0].join() === 'Visitante,Primeira,Ultima,Origem,Plataforma,Fonte,Instalou,InstaladoEm,PushAtivo,PushVisto,PushId,Interesses,Novidades,AppAbertoEm', 'colunas da aba Dispositivos');
+})();
+
 // ------------------------------------------------------------------ 9. o que já existia continua igual
 (function legado() {
   console.log('\n[compatibilidade]');
