@@ -5,8 +5,8 @@
 **Nada apaga dados: só acrescenta abas/colunas. Ordem importa.**
 
 1. **Site primeiro (já publicado pelo Claude).** O site novo funciona também com o backend antigo (pedido segue só pelo WhatsApp, painel sem as telas novas). Nada quebra se você demorar no passo 2.
-2. **Backend do catálogo** — Apps Script do *catálogo*: apague todo o código, cole o conteúdo de **`catalogo-codigo-3.3.gs.txt`** (já inclui o 3.2), salve; *Implantar → Gerenciar implantações → lápis → Nova versão → Implantar* (a URL não muda). Aceite as permissões se o Google pedir.
-   - Conferir: abra `<URL do Apps Script>?action=versao` — deve aparecer `"versao":"catalogo-3.3"`, `"pedidos":true`, `"categoriasGestao":true` e `"pushCompleto":true`.
+2. **Backend do catálogo** — Apps Script do *catálogo*: apague todo o código, cole o conteúdo de **`catalogo-codigo-3.4.gs.txt`** (já inclui o 3.2 e o 3.3), salve; *Implantar → Gerenciar implantações → lápis → Nova versão → Implantar* (a URL não muda). Aceite as permissões se o Google pedir.
+   - Conferir: abra `<URL do Apps Script>?action=versao` — deve aparecer `"versao":"catalogo-3.4"`, `"pedidos":true`, `"categoriasGestao":true`, `"pushCompleto":true` e `"conexoes":true`.
    - No painel, na lista de peças aparece o aviso "⚠️ peças sem código": toque em **Gerar códigos agora** uma vez (as peças antigas sem código ganham `TK-####`; os códigos que já existem não mudam).
    - Quem tinha WhatsApp de 10 dígitos na planilha precisa entrar de novo **uma vez** (mudança da v3.0 — igual ao portal).
 3. **Pixel / API de Conversões (quando quiser; o resto funciona sem isso).** Painel → *Integrações*: cole o ID do Pixel (só números) e, se for usar a API de Conversões, o token da Meta (fica só no servidor, nunca volta para a tela). Vazio = tudo desligado e o aviso de cookies nem aparece.

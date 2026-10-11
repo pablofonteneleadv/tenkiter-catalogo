@@ -1,6 +1,6 @@
 # Avisos (notificações) + instalar o app — guia do Pablo
 
-Tudo o que o site faz sozinho já está pronto (v3.4 do site + `catalogo-codigo-3.3.gs.txt`). Falta só **ligar o OneSignal para a Web** e
+Tudo o que o site faz sozinho já está pronto (v3.4 do site + `catalogo-codigo-3.4.gs.txt`). Falta só **ligar o OneSignal para a Web** e
 **colar o código novo no Apps Script** — são os dois passos abaixo. Sem o passo 1 **nenhum aviso chega em celular nenhum** (é por isso que o app
 instalado mostrava "Sem permissão": o OneSignal ainda não estava configurado para sites).
 
@@ -52,12 +52,12 @@ Opcionais (só se quiser):
 
 ## Passo 3 — Colar o código novo (como sempre)
 
-1. Abra `catalogo-codigo-3.3.gs.txt`, selecione **tudo**, copie.
+1. Abra `catalogo-codigo-3.4.gs.txt`, selecione **tudo**, copie.
 2. Apps Script do catálogo → apague o código antigo, cole o novo, **Salvar**.
 3. **Implantar → Gerenciar implantações → ✏️ → Versão: Nova versão → Implantar.**
-4. Confira no navegador: `<sua URL do script>?action=versao` tem que mostrar `"versao":"catalogo-3.3"`, `"pushCompleto":true` e `"categoriasGestao":true`.
+4. Confira no navegador: `<sua URL do script>?action=versao` tem que mostrar `"versao":"catalogo-3.4"`, `"pushCompleto":true`, `"categoriasGestao":true` e `"conexoes":true`.
 
-O 3.3 já inclui tudo do 3.2 (categorias) — não precisa colar o 3.2 antes. O Apps Script de **funcionários não muda** (`funcionario-codigo-3.0.gs.txt`).
+O 3.4 já inclui tudo do 3.2 (categorias) e do 3.3 (avisos completos) — não precisa colar os anteriores antes. O Apps Script de **funcionários não muda** (`funcionario-codigo-3.0.gs.txt`).
 
 ## Passo 4 — Teste no celular de verdade (uns 5 minutos)
 

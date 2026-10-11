@@ -41,6 +41,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("selecao_link.py", lambda o: "RESULTADO:" in o and " 0 falhas" in o),   # compartilhar seleção leva as PEÇAS (?sel=…), não só a loja
     ("central_avisos.py", lambda o: "FALHAS=0" in o),      # Central de avisos do lojista (público, {nome}, agendar, modelos, histórico, preparar)
     ("push_cliente.py", lambda o: "FALHAS=0" in o),        # avisos + instalar app no cliente com OneSignal FALSO (Android, iPhone, Instagram, computador)
+    ("conexoes_admin.py", lambda o: "FALHAS=0" in o),      # Conexões do Admin total: chave no servidor (nunca na tela), situação, regras do Render, publicar
     ("instalabilidade.py", lambda o: "FALHAS=0" in o),     # diagnóstico do próprio Chrome: o site é instalável
     ("lista_rapida.py", lambda o: "FALHAS=0" in o),
     ("story_video.py", lambda o: "FALHAS=0" in o),

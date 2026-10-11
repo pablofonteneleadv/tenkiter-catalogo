@@ -1,4 +1,15 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.3
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.4
+//
+// NOVIDADE v3.4 -- CONEXÕES (Render / Cloudflare) guardadas no servidor, para o painel cuidar sozinho do que antes dependia de colar chave em conversa:
+//  - Ações (só Admin total = gerir_acessos, e SÓ com login -- o PIN antigo é recusado): statusConexoes, salvarConexao, testarConexoes,
+//    renderCriarRegras, renderDeploy, renderStatusDeploy.
+//  - A chave do Render (RENDER_API_KEY) e o token da Cloudflare (CLOUDFLARE_API_TOKEN) ficam SÓ nas Propriedades do Script. Nunca voltam para o
+//    navegador (a tela só vê "guardada ✓" + últimos 4 caracteres), nunca entram em log nem em Acoes_Audit e nunca vão ao GitHub.
+//    salvarConexao TESTA a chave na API antes de guardar (chave inválida não é guardada).
+//  - testarConexoes: confere feed.csv, feed.xml e sitemap.xml do SITE, a plataforma Web do OneSignal, a chave do Render (regras /p/*, /feed.csv,
+//    /feed.xml, /sitemap.xml e último deploy) e a da Cloudflare (Worker tenkiter-og publicado quando). renderCriarRegras só ACRESCENTA a regra que falta
+//    (nunca apaga nem troca uma existente); renderDeploy publica o site agora (o deploy automático do Render é pouco confiável).
+//  - versao anuncia conexoes:true; o site só mostra o botão Conexões se essa bandeira existir. Backend 3.3 continua funcionando com o site novo (sem o botão).
 //
 // NOVIDADE v3.3 -- AVISOS (push) COMPLETOS, com público à escolha (só ACRESCENTA; o aviso simples da v3.1/3.2 continua funcionando igual):
 //  - Quem recebe: todos | segmento do OneSignal | quem instalou o app | por interesse (gênero) | grupo (equipe, alunos, portal, clientes, todas as
@@ -131,7 +142,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-3.3';
+const VERSAO_CATALOGO = 'catalogo-3.4';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1199,7 +1210,10 @@ const PERMISSAO_POR_ACAO_ = {
   statusIntegracoes: 'gerir_acessos', salvarIntegracoes: 'gerir_acessos', pushHistorico: 'catalogo_push',
   // v3.3: avisos completos (mandar aviso já exigia catalogo_push; as consultas do painel também)
   pushPrevia: 'catalogo_push', pushPessoas: 'catalogo_push', pushStatus: 'catalogo_push', pushNumeros: 'catalogo_push', pushCancelar: 'catalogo_push',
-  pushModelos: 'catalogo_push', salvarPushModelo: 'catalogo_push', excluirPushModelo: 'catalogo_push', salvarPushConfig: 'gerir_acessos'
+  pushModelos: 'catalogo_push', salvarPushModelo: 'catalogo_push', excluirPushModelo: 'catalogo_push', salvarPushConfig: 'gerir_acessos',
+  // v3.4: conexões (chaves do Render/Cloudflare guardadas no servidor) -- Admin total, só com login
+  statusConexoes: 'gerir_acessos', salvarConexao: 'gerir_acessos', testarConexoes: 'gerir_acessos',
+  renderCriarRegras: 'gerir_acessos', renderDeploy: 'gerir_acessos', renderStatusDeploy: 'gerir_acessos'
 };
 const PERMISSAO_POR_LOTE_ = {
   ajustarPrecoPorcento: 'catalogo_precos', marcarNovidade: 'catalogo_cadastrar', alterarEstoque: 'catalogo_cadastrar',
@@ -1395,7 +1409,7 @@ const ACOES_QUE_ALTERAM_PRODUTOS_ = ['create', 'update', 'delete', 'reativar', '
 // as demais mexem em linhas que já existem e por isso entram na fila:
 const ACOES_COM_TRAVA_ = ['update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate', 'importarProdutos', 'gerarCodigosFaltantes', 'excluirCategoria', 'renomearCategoria'];
 // v3.2: ações que só valem com LOGIN (nunca com o PIN antigo, que não diz quem é a pessoa nem a permissão dela)
-const ACOES_SO_COM_LOGIN_ = ['excluirCategoria', 'renomearCategoria'];
+const ACOES_SO_COM_LOGIN_ = ['excluirCategoria', 'renomearCategoria', 'statusConexoes', 'salvarConexao', 'testarConexoes', 'renderCriarRegras', 'renderDeploy', 'renderStatusDeploy'];
 
 /**
  * Backup: copia a planilha do catálogo para uma pasta do Drive e mantém só as
@@ -1465,7 +1479,7 @@ function doGetInterno_(e) {
   if (action === 'versao') return jsonResponse_({
     ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
     pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true,
-    categoriasGestao: true, pushCompleto: true
+    categoriasGestao: true, pushCompleto: true, conexoes: true
   });
   if (action === 'config') return configPublica_();
   if (action === 'pushconfig') return pushConfigPublica_();
@@ -1605,6 +1619,12 @@ function despacharPost_(body) {
   if (action === 'statusIntegracoes') return statusIntegracoes_();
   if (action === 'salvarIntegracoes') return salvarIntegracoes_(body);
   if (action === 'assinarUploadVideo') return assinarUploadVideo_(body);
+  if (action === 'statusConexoes') return statusConexoes_();
+  if (action === 'salvarConexao') return salvarConexao_(body);
+  if (action === 'testarConexoes') return testarConexoes_();
+  if (action === 'renderCriarRegras') return renderCriarRegras_(body);
+  if (action === 'renderDeploy') return renderDeploy_(body);
+  if (action === 'renderStatusDeploy') return renderStatusDeploy_(body);
 
   return jsonResponse_({ ok: false, erro: 'Ação desconhecida: ' + action });
 }
@@ -3374,4 +3394,219 @@ function descricaoLocal_(body) {
   if (cores.length) d += ' Cores: ' + cores.join(', ') + '.';
   d += ' ' + Math.round(DESCONTO_AVISTA_ * 100) + '% de desconto à vista. Peça pelo WhatsApp.';
   return { ok: true, titulo: titulo, descricao: d.slice(0, 300), local: true };
+}
+
+
+// ===================== v3.4: CONEXÕES (Render / Cloudflare) =====================
+/** As chaves ficam nas Propriedades do Script. Esta parte NUNCA devolve a chave, nunca a escreve em log ou auditoria e só é chamada por Admin total com login. */
+const RENDER_API_ = 'https://api.render.com/v1';
+const CLOUDFLARE_API_ = 'https://api.cloudflare.com/client/v4';
+const RENDER_SERVICO_ = 'srv-dasa63fpn0mc73fh8fgg';
+const WORKER_NOME_ = 'tenkiter-og';
+const WORKER_BASE_ = 'https://tenkiter-og.distkrpconfeccoes.workers.dev';
+const REGRAS_RENDER_ = ['/p/*', '/feed.csv', '/feed.xml', '/sitemap.xml']; // cada uma é um Rewrite para WORKER_BASE_ + o mesmo caminho
+const CONEXOES_ = {
+  render:     { prop: 'RENDER_API_KEY',       rotulo: 'Render',     padrao: /^rnd_[A-Za-z0-9]{16,100}$/ },
+  cloudflare: { prop: 'CLOUDFLARE_API_TOKEN', rotulo: 'Cloudflare', padrao: /^[A-Za-z0-9_\-]{30,160}$/ }
+};
+
+function conexaoChave_(nome) {
+  const c = CONEXOES_[nome];
+  return c ? String(PropertiesService.getScriptProperties().getProperty(c.prop) || '').trim() : '';
+}
+/** Chamada autenticada. Devolve { codigo, dados, erro }; nunca lança e nunca devolve a chave. */
+function conexaoHttp_(metodo, url, chave, corpo) {
+  const opt = { method: metodo, muteHttpExceptions: true, headers: { Authorization: 'Bearer ' + chave, Accept: 'application/json' } };
+  if (corpo !== undefined) { opt.contentType = 'application/json'; opt.payload = JSON.stringify(corpo); }
+  try {
+    const r = UrlFetchApp.fetch(url, opt);
+    let dados = null;
+    try { dados = JSON.parse(r.getContentText()); } catch (e) { dados = null; }
+    return { codigo: r.getResponseCode(), dados: dados };
+  } catch (e) {
+    return { codigo: 0, dados: null, erro: 'Sem conexão com o serviço agora. Tente de novo.' };
+  }
+}
+/** Frase curta (sem JSON) para um erro de API. */
+function conexaoMsgApi_(r) {
+  if (r.erro) return r.erro;
+  if (r.codigo === 401 || r.codigo === 403) return 'A chave foi recusada (inválida, vencida ou sem permissão).';
+  const m = r.dados && (r.dados.message || (r.dados.errors && r.dados.errors[0] && r.dados.errors[0].message));
+  return 'O serviço respondeu com erro ' + r.codigo + (m ? ': ' + String(m).slice(0, 160) : '.');
+}
+/** Testa a chave de verdade, na API. */
+function conexaoTestar_(nome, chave) {
+  if (nome === 'render') {
+    const r = conexaoHttp_('get', RENDER_API_ + '/services/' + RENDER_SERVICO_, chave);
+    if (r.codigo === 200) return { ok: true, detalhe: 'Enxerga o site "' + String((r.dados && r.dados.name) || RENDER_SERVICO_) + '".' };
+    if (r.codigo === 404) return { ok: false, detalhe: 'A chave é válida, mas não enxerga o site do TENKiTER (é de outra conta do Render?).' };
+    return { ok: false, detalhe: conexaoMsgApi_(r) };
+  }
+  const v = conexaoHttp_('get', CLOUDFLARE_API_ + '/user/tokens/verify', chave);
+  if (v.codigo === 200 && v.dados && v.dados.success && v.dados.result && v.dados.result.status === 'active') return { ok: true, detalhe: 'Chave ativa.' };
+  const a = conexaoHttp_('get', CLOUDFLARE_API_ + '/accounts', chave); // token de conta (em vez de usuário) não passa no /user/tokens/verify
+  if (a.codigo === 200 && a.dados && a.dados.success && a.dados.result && a.dados.result.length) return { ok: true, detalhe: 'Chave ativa.' };
+  return { ok: false, detalhe: v.codigo === 200 ? 'A chave não está ativa.' : conexaoMsgApi_(v) };
+}
+
+function statusConexoesObj_() {
+  const props = PropertiesService.getScriptProperties();
+  const conexoes = {};
+  Object.keys(CONEXOES_).forEach(function (n) {
+    const k = conexaoChave_(n);
+    conexoes[n] = { rotulo: CONEXOES_[n].rotulo, temChave: !!k, fim: k ? k.slice(-4) : '', salvaEm: String(props.getProperty(CONEXOES_[n].prop + '_EM') || '') };
+  });
+  return { ok: true, conexoes: conexoes, servico: RENDER_SERVICO_, enderecos: { feedCsv: SITE_URL + 'feed.csv', feedXml: SITE_URL + 'feed.xml', sitemap: SITE_URL + 'sitemap.xml' } };
+}
+function statusConexoes_() { return jsonResponse_(statusConexoesObj_()); }
+
+function salvarConexao_(body) {
+  const nome = String(body.nome || '');
+  const c = CONEXOES_[nome];
+  if (!c) return jsonResponse_({ ok: false, erro: 'Conexão desconhecida.' });
+  const props = PropertiesService.getScriptProperties();
+  if (body.apagar === true) {
+    props.deleteProperty(c.prop);
+    props.deleteProperty(c.prop + '_EM');
+    registrarAudit_(body.funcionario, 'apagarConexao', '', { conexao: nome });
+    return statusConexoes_();
+  }
+  const chave = String(body.chave || '').trim();
+  if (!c.padrao.test(chave)) return jsonResponse_({ ok: false, erro: 'Essa chave parece incompleta ou com caracteres estranhos. Cole de novo, só a chave, sem espaços.' });
+  const t = conexaoTestar_(nome, chave);
+  if (!t.ok) return jsonResponse_({ ok: false, erro: 'Não guardei a chave: ' + t.detalhe });
+  props.setProperty(c.prop, chave);
+  props.setProperty(c.prop + '_EM', new Date().toISOString());
+  registrarAudit_(body.funcionario, 'salvarConexao', '', { conexao: nome });
+  const r = statusConexoesObj_();
+  r.detalhe = t.detalhe;
+  return jsonResponse_(r);
+}
+
+/** Regras (Redirects/Rewrites) do site no Render. */
+function renderRegras_(chave) {
+  const r = conexaoHttp_('get', RENDER_API_ + '/services/' + RENDER_SERVICO_ + '/routes?limit=100', chave);
+  if (r.codigo !== 200 || !Array.isArray(r.dados)) return { ok: false, erro: conexaoMsgApi_(r) };
+  return { ok: true, regras: r.dados.map(function (x) { const q = (x && x.route) || x || {}; return { id: q.id, source: q.source, destination: q.destination, type: q.type }; }) };
+}
+/** Quais regras faltam e quais existem mas apontam para outro lugar (estas NÃO são mexidas). */
+function renderAnalisar_(regras) {
+  const faltam = [], divergentes = [];
+  REGRAS_RENDER_.forEach(function (src) {
+    const achou = regras.filter(function (x) { return x.source === src; })[0];
+    if (!achou) faltam.push(src);
+    else if (achou.type !== 'rewrite' || achou.destination !== WORKER_BASE_ + src) divergentes.push(src);
+  });
+  return { faltam: faltam, divergentes: divergentes };
+}
+function renderCriarRegras_(body) {
+  const chave = conexaoChave_('render');
+  if (!chave) return jsonResponse_({ ok: false, erro: 'Guarde primeiro a chave do Render (em Conexões).' });
+  const g = renderRegras_(chave);
+  if (!g.ok) return jsonResponse_({ ok: false, erro: g.erro });
+  const a = renderAnalisar_(g.regras);
+  const criadas = [];
+  for (let i = 0; i < a.faltam.length; i++) {
+    const src = a.faltam[i];
+    const r = conexaoHttp_('post', RENDER_API_ + '/services/' + RENDER_SERVICO_ + '/routes', chave, { type: 'rewrite', source: src, destination: WORKER_BASE_ + src });
+    if (r.codigo !== 201 && r.codigo !== 200) {
+      registrarAudit_(body.funcionario, 'renderCriarRegras', '', { criadas: criadas, falhouEm: src });
+      return jsonResponse_({ ok: false, erro: 'Não consegui criar a regra ' + src + ': ' + conexaoMsgApi_(r), criadas: criadas });
+    }
+    criadas.push(src);
+  }
+  registrarAudit_(body.funcionario, 'renderCriarRegras', '', { criadas: criadas, divergentes: a.divergentes });
+  return jsonResponse_({ ok: true, criadas: criadas, divergentes: a.divergentes, jaExistiam: REGRAS_RENDER_.length - a.faltam.length - a.divergentes.length });
+}
+function renderDeploy_(body) {
+  const chave = conexaoChave_('render');
+  if (!chave) return jsonResponse_({ ok: false, erro: 'Guarde primeiro a chave do Render (em Conexões).' });
+  const r = conexaoHttp_('post', RENDER_API_ + '/services/' + RENDER_SERVICO_ + '/deploys', chave, { clearCache: 'do_not_clear' });
+  const d = r.dados && (r.dados.deploy || r.dados);
+  if ([200, 201, 202].indexOf(r.codigo) === -1 || !d || !d.id) return jsonResponse_({ ok: false, erro: 'Não consegui publicar agora: ' + conexaoMsgApi_(r) });
+  registrarAudit_(body.funcionario, 'renderDeploy', '', { deploy: d.id });
+  return jsonResponse_({ ok: true, deployId: d.id, status: d.status || 'created' });
+}
+function renderStatusDeploy_(body) {
+  const chave = conexaoChave_('render');
+  const id = String(body.deployId || '');
+  if (!chave) return jsonResponse_({ ok: false, erro: 'Sem chave do Render guardada.' });
+  if (!/^dep-[A-Za-z0-9]{8,40}$/.test(id)) return jsonResponse_({ ok: false, erro: 'Identificador de publicação inválido.' });
+  const r = conexaoHttp_('get', RENDER_API_ + '/services/' + RENDER_SERVICO_ + '/deploys/' + id, chave);
+  if (r.codigo !== 200 || !r.dados) return jsonResponse_({ ok: false, erro: conexaoMsgApi_(r) });
+  return jsonResponse_({ ok: true, status: String(r.dados.status || '') });
+}
+
+/** Confere tudo de uma vez. Cada item: { id, rotulo, ok: true|false|null (null = só informação), detalhe, acao } -- `acao` é o botão que resolve (renderCriarRegras | chave:render | chave:cloudflare). */
+function testarConexoes_() {
+  const itens = [];
+  const add = function (id, rotulo, ok, detalhe, acao) { itens.push({ id: id, rotulo: rotulo, ok: ok, detalhe: detalhe, acao: acao || '' }); };
+  const props = PropertiesService.getScriptProperties();
+  const rk = conexaoChave_('render'), ck = conexaoChave_('cloudflare');
+
+  // 1) o que o público enxerga (sem chave nenhuma)
+  let resp = [];
+  try {
+    resp = UrlFetchApp.fetchAll([SITE_URL + 'feed.csv', SITE_URL + 'feed.xml', SITE_URL + 'sitemap.xml'].map(function (u) { return { url: u, method: 'get', muteHttpExceptions: true, followRedirects: true }; }));
+  } catch (e) { resp = []; }
+  const lido = function (i) { const r = resp[i]; return r ? { codigo: r.getResponseCode(), texto: String(r.getContentText() || '') } : { codigo: 0, texto: '' }; };
+  const csv = lido(0), xml = lido(1), mapa = lido(2);
+  const acaoSite = rk ? 'renderCriarRegras' : 'chave:render';
+  const nCsv = csv.codigo === 200 && /^id,title,/.test(csv.texto) ? Math.max(0, csv.texto.trim().split('\n').length - 1) : -1;
+  add('feed-csv', 'Catálogo para a Meta (feed.csv)', nCsv >= 0, nCsv >= 0 ? nCsv + ' peça(s) no feed do seu site.' : 'O endereço ' + SITE_URL + 'feed.csv não entregou o catálogo (falta a regra no Render).', nCsv >= 0 ? '' : acaoSite);
+  const nXml = xml.codigo === 200 && /<rss[\s>]/.test(xml.texto) ? (xml.texto.match(/<item>/g) || []).length : -1;
+  add('feed-xml', 'Catálogo para o Google (feed.xml)', nXml >= 0, nXml >= 0 ? nXml + ' peça(s) no feed do seu site.' : 'O endereço ' + SITE_URL + 'feed.xml não entregou o catálogo (falta a regra no Render).', nXml >= 0 ? '' : acaoSite);
+  const nMapa = mapa.codigo === 200 && /<urlset/.test(mapa.texto) ? (mapa.texto.match(/<loc>[^<]*\/p\//g) || []).length : -1;
+  add('sitemap', 'Mapa do site para o Google (sitemap.xml)', nMapa > 0,
+    nMapa > 0 ? 'Lista ' + nMapa + ' peça(s) além das páginas fixas.' : (nMapa === 0 ? 'Está mostrando só as páginas fixas: um arquivo sitemap.xml antigo no repositório do site ganha da regra do Render e precisa ser removido de lá.' : 'O endereço ' + SITE_URL + 'sitemap.xml não respondeu direito.'),
+    nMapa > 0 || nMapa === 0 ? '' : acaoSite);
+
+  // 2) avisos
+  const appId = String(props.getProperty('ONESIGNAL_APP_ID') || '').trim();
+  if (!appId) add('onesignal', 'Avisos (OneSignal, plataforma Web)', null, 'O App ID do OneSignal ainda não está nas Propriedades do Script (ONESIGNAL_APP_ID).');
+  else {
+    const web = pushWebPronto_(appId);
+    add('onesignal', 'Avisos (OneSignal, plataforma Web)', web === null ? null : web, web === null ? 'Não consegui conferir agora.' : (web ? 'Plataforma Web ligada: os avisos podem chegar.' : 'A plataforma Web do OneSignal ainda NÃO foi ligada: sem isso nenhum aviso chega. O passo a passo está no LEIA-ME-AVISOS.md.'));
+  }
+
+  // 3) Render
+  if (!rk) add('render-chave', 'Render (publicar e regras)', null, 'Sem chave guardada. Guarde abaixo para o painel conseguir conferir as regras e publicar o site.', 'chave:render');
+  else {
+    const t = conexaoTestar_('render', rk);
+    add('render-chave', 'Render (publicar e regras)', t.ok, t.detalhe, t.ok ? '' : 'chave:render');
+    if (t.ok) {
+      const g = renderRegras_(rk);
+      if (!g.ok) add('render-regras', 'Regras do Render', false, g.erro);
+      else {
+        const a = renderAnalisar_(g.regras);
+        const bom = !a.faltam.length && !a.divergentes.length;
+        let det = bom ? 'Todas no lugar: ' + REGRAS_RENDER_.join(', ') + '.' : '';
+        if (a.faltam.length) det += 'Faltam: ' + a.faltam.join(', ') + '. ';
+        if (a.divergentes.length) det += 'Apontam para outro lugar (não mexo): ' + a.divergentes.join(', ') + '.';
+        add('render-regras', 'Regras do Render', bom, det.trim(), a.faltam.length ? 'renderCriarRegras' : '');
+      }
+      const d = conexaoHttp_('get', RENDER_API_ + '/services/' + RENDER_SERVICO_ + '/deploys?limit=1', rk);
+      const ult = d.codigo === 200 && Array.isArray(d.dados) && d.dados[0] ? (d.dados[0].deploy || d.dados[0]) : null;
+      if (ult) add('render-deploy', 'Último deploy do site', ult.status === 'live' ? true : null, 'Estado: ' + String(ult.status || '?') + (ult.createdAt ? ' (' + Utilities.formatDate(new Date(ult.createdAt), 'America/Fortaleza', 'dd/MM/yyyy HH:mm') + ')' : '') + '.');
+    }
+  }
+
+  // 4) Cloudflare
+  if (!ck) add('cloudflare-chave', 'Cloudflare (Worker das miniaturas, feed e mapa)', null, 'Sem chave guardada. É opcional: serve só para conferir quando o Worker foi publicado.', 'chave:cloudflare');
+  else {
+    const t = conexaoTestar_('cloudflare', ck);
+    add('cloudflare-chave', 'Cloudflare (Worker das miniaturas, feed e mapa)', t.ok, t.detalhe, t.ok ? '' : 'chave:cloudflare');
+    if (t.ok) {
+      const c = conexaoHttp_('get', CLOUDFLARE_API_ + '/accounts', ck);
+      const conta = c.codigo === 200 && c.dados && c.dados.result && c.dados.result.length === 1 ? c.dados.result[0].id : '';
+      if (!conta) add('worker', 'Worker ' + WORKER_NOME_, null, 'A chave enxerga mais de uma conta (ou nenhuma); não consegui achar o Worker.');
+      else {
+        const w = conexaoHttp_('get', CLOUDFLARE_API_ + '/accounts/' + conta + '/workers/scripts', ck);
+        const achou = w.codigo === 200 && w.dados && Array.isArray(w.dados.result) ? w.dados.result.filter(function (x) { return x.id === WORKER_NOME_; })[0] : null;
+        if (achou) add('worker', 'Worker ' + WORKER_NOME_, true, 'Publicado em ' + (achou.modified_on ? Utilities.formatDate(new Date(achou.modified_on), 'America/Fortaleza', 'dd/MM/yyyy HH:mm') : 'data desconhecida') + '.');
+        else add('worker', 'Worker ' + WORKER_NOME_, w.codigo === 200 ? false : null, w.codigo === 200 ? 'Não encontrei o Worker ' + WORKER_NOME_ + ' nesta conta.' : conexaoMsgApi_(w));
+      }
+    }
+  }
+  return jsonResponse_({ ok: true, itens: itens, quando: new Date().toISOString() });
 }

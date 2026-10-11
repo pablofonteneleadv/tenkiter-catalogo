@@ -22,6 +22,9 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     st={"produtos":P,"pedidos":[],"falhas":{},"integ":{"pixelId":pixel,"capi":False,"teste":"","graph":"v23.0","sinonimos":"","segmentos":"Clientes Infantil"},"push":[],"importados":[],"seq":0,"ia":ia,"categorias":list(CATS)}
     cat_gestao = versao >= "3.2"
     push3 = novo and versao >= "3.3"     # avisos completos (pushCompleto): público, agendamento, modelos, histórico com números
+    conex = novo and versao >= "3.4"     # Conexões (conexoes): chaves do Render/Cloudflare guardadas no servidor, situação, regras, publicar
+    st["conex"]={"render":{"temChave":False,"fim":"","salvaEm":""},"cloudflare":{"temChave":False,"fim":"","salvaEm":""}}
+    st["regras_ok"]=False; st["deploys"]=0; st["status_deploy"]=0
     st["modelos"]=[{"id":"m1","rotulo":"Promoção","titulo":"Promoção de fim de semana! 🎉","mensagem":"{nome}, 20% off até domingo.","url":"","imagem":""},
                    {"id":"m2","rotulo":"Chegou novidade","titulo":"Chegou novidade! ✨","mensagem":"Peças novas no catálogo.","url":"","imagem":""}]
     st["pessoas"]=[{"pid":"tkaluna0000000000000000000000001","nome":"Bia Aluna","perfil":"Aluno","tel":"(88) 9****-0005","grupo":"aluno"},
@@ -31,6 +34,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     FLAGS={"ok":True,"versao":"catalogo-"+versao,"acessos":True,"pinAtivo":False,"pedidos":True,"config":True,"metricas":True,"importacao":True,"feed":True,"integracoes":True,"codigos":True,"pushHistorico":True,"loteCategoria":True} if novo else {"ok":True,"versao":"catalogo-3.0","acessos":True,"pinAtivo":False}
     if cat_gestao: FLAGS["categoriasGestao"]=True
     if push3: FLAGS["pushCompleto"]=True
+    if conex: FLAGS["conexoes"]=True
     def limpa(n): return " ".join(str(n or "").replace(","," ").split())[:60].strip()
     def norm(n):
         import unicodedata
@@ -145,6 +149,47 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             for k,c in(("testeCodigo","teste"),("graphVersao","graph"),("sinonimos","sinonimos"),("segmentosPush","segmentos")):
                 if k in b: i[c]=b[k]
             return {"ok":True,"pixelId":i["pixelId"],"capiConfigurado":i["capi"],"testeCodigo":i["teste"],"graphVersao":i["graph"],"sinonimos":i["sinonimos"],"segmentosPush":i["segmentos"]}
+        if conex and a in("statusConexoes","salvarConexao","testarConexoes","renderCriarRegras","renderDeploy","renderStatusDeploy"):
+            if "gerir_acessos" not in perms: return {"ok":False,"semPermissao":True,"erro":"Você não tem permissão para essa ação."}
+            C=st["conex"]
+            def estado(extra=None):
+                r={"ok":True,"conexoes":{k:{"rotulo":k.title(),**v} for k,v in C.items()},"servico":"srv-dasa63fpn0mc73fh8fgg",
+                   "enderecos":{"feedCsv":"https://tenkitermodas.com.br/feed.csv","feedXml":"https://tenkitermodas.com.br/feed.xml","sitemap":"https://tenkitermodas.com.br/sitemap.xml"}}
+                r.update(extra or {}); return r
+            if a=="statusConexoes": return estado()
+            if a=="salvarConexao":
+                n=b.get("nome")
+                if n not in C: return {"ok":False,"erro":"Conexão desconhecida."}
+                if b.get("apagar") is True: C[n]={"temChave":False,"fim":"","salvaEm":""}; st["apagou"]=n; return estado()
+                k=str(b.get("chave","")).strip(); st["chave_enviada"]=k
+                if len(k)<20: return {"ok":False,"erro":"Essa chave parece incompleta ou com caracteres estranhos. Cole de novo, só a chave, sem espaços."}
+                if "RECUSADA" in k: return {"ok":False,"erro":"Não guardei a chave: A chave foi recusada (inválida, vencida ou sem permissão)."}
+                C[n]={"temChave":True,"fim":k[-4:],"salvaEm":"2026-10-10T22:40:00.000Z"}
+                return estado({"detalhe":'Enxerga o site "tenkiter-catalogo".' if n=="render" else "Chave ativa."})
+            if a=="testarConexoes":
+                ok=st["regras_ok"]; rc=C["render"]["temChave"]; cc=C["cloudflare"]["temChave"]; acao="renderCriarRegras" if rc else "chave:render"
+                it=[{"id":"feed-csv","rotulo":"Catálogo para a Meta (feed.csv)","ok":ok,"detalhe":"9 peça(s) no feed do seu site." if ok else "O endereço https://tenkitermodas.com.br/feed.csv não entregou o catálogo (falta a regra no Render).","acao":"" if ok else acao},
+                    {"id":"feed-xml","rotulo":"Catálogo para o Google (feed.xml)","ok":ok,"detalhe":"9 peça(s) no feed do seu site." if ok else "O endereço https://tenkitermodas.com.br/feed.xml não entregou o catálogo (falta a regra no Render).","acao":"" if ok else acao},
+                    {"id":"sitemap","rotulo":"Mapa do site para o Google (sitemap.xml)","ok":ok,"detalhe":"Lista 9 peça(s) além das páginas fixas." if ok else "O endereço https://tenkitermodas.com.br/sitemap.xml não respondeu direito.","acao":"" if ok else acao},
+                    {"id":"onesignal","rotulo":"Avisos (OneSignal, plataforma Web)","ok":bool(st["pushcfg"]["web"]),"detalhe":"Plataforma Web ligada: os avisos podem chegar." if st["pushcfg"]["web"] else "A plataforma Web do OneSignal ainda NÃO foi ligada: sem isso nenhum aviso chega.","acao":""}]
+                if not rc: it.append({"id":"render-chave","rotulo":"Render (publicar e regras)","ok":None,"detalhe":"Sem chave guardada. Guarde abaixo para o painel conseguir conferir as regras e publicar o site.","acao":"chave:render"})
+                else:
+                    it.append({"id":"render-chave","rotulo":"Render (publicar e regras)","ok":True,"detalhe":'Enxerga o site "tenkiter-catalogo".',"acao":""})
+                    it.append({"id":"render-regras","rotulo":"Regras do Render","ok":ok,"detalhe":"Todas no lugar: /p/*, /feed.csv, /feed.xml, /sitemap.xml." if ok else "Faltam: /feed.csv, /feed.xml, /sitemap.xml.","acao":"" if ok else "renderCriarRegras"})
+                if not cc: it.append({"id":"cloudflare-chave","rotulo":"Cloudflare (Worker das miniaturas, feed e mapa)","ok":None,"detalhe":"Sem chave guardada. É opcional.","acao":"chave:cloudflare"})
+                else: it.append({"id":"worker","rotulo":"Worker tenkiter-og","ok":True,"detalhe":"Publicado em 10/10/2026 22:36.","acao":""})
+                return {"ok":True,"itens":it,"quando":"2026-10-10T22:41:00.000Z"}
+            if a=="renderCriarRegras":
+                if not C["render"]["temChave"]: return {"ok":False,"erro":"Guarde primeiro a chave do Render (em Conexões)."}
+                criar=[] if st["regras_ok"] else ["/feed.csv","/feed.xml","/sitemap.xml"]; st["regras_ok"]=True
+                return {"ok":True,"criadas":criar,"divergentes":[],"jaExistiam":4-len(criar)}
+            if a=="renderDeploy":
+                if not C["render"]["temChave"]: return {"ok":False,"erro":"Guarde primeiro a chave do Render (em Conexões)."}
+                st["deploys"]+=1; st["status_deploy"]=0; return {"ok":True,"deployId":"dep-novo000000001","status":"created"}
+            if a=="renderStatusDeploy":
+                st["status_deploy"]+=1
+                if st.get("deploy_falha"): return {"ok":True,"status":"build_failed"}
+                return {"ok":True,"status":"build_in_progress" if st["status_deploy"]<2 else "live"}
         if push3 and a=="pushIdentidade":
             if not str(b.get("sessao","")).startswith("tk"): return {"ok":False,"sessaoInvalida":True,"erro":"Sessão inválida. Entre de novo."}
             return {"ok":True,"pushId":"tkpush0000000000000000000000000","nome":"Ana Lojista","perfil":"Admin","tipo":"equipe","equipe":True}

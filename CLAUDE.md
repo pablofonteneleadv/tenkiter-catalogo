@@ -14,7 +14,7 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
   integrações, avisos no painel), `privacidade.html`, `404.html`, `site.webmanifest`, `robots.txt` (o `sitemap.xml` e os feeds vêm do Worker — não recriar `sitemap.xml` no repositório: arquivo estático ganha da regra Rewrite do Render).
 - **Backend**: dois Apps Script Web Apps separados, versionados por nome de arquivo
   (`<nome>-<versão>.gs.txt`):
-  - `catalogo-codigo-3.2.gs.txt` — catálogo + autenticação central + pedidos/métricas/importação/feed/integrações (v3.1) + apagar/renomear categoria só para Admin total (v3.2).
+  - `catalogo-codigo-3.4.gs.txt` — catálogo + autenticação central + pedidos/métricas/importação/feed/integrações (v3.1) + apagar/renomear categoria só para Admin total (v3.2) + avisos push completos (v3.3) + Conexões Render/Cloudflare (v3.4).
   - `funcionario-codigo-3.0.gs.txt` — RH/treinamento/contratação.
   - Arquivos antigos (`Code-treinamento-v4.0.gs.txt`, `v4.1.gs.txt`, `atualizado.gs.txt`,
     `tenkiter-codigo-v2.1.gs.txt`) são **históricos — não editar nem usar como referência**.
@@ -228,3 +228,24 @@ Propriedades do Script do Apps Script, nunca no código versionado.
   `tests/mock.py`: `install(ctx, versao="3.3")` liga `pushCompleto` e as ações novas (`pushStatus/pushPrevia/pushPessoas/pushNumeros/pushCancelar/pushModelos/…`).
   **Entrega real no Android/iPhone NÃO é testável no sandbox**: roteiro no aparelho em `LEIA-ME-AVISOS.md`.
 
+## v3.4 (parte 3) — Conexões: chaves do Render/Cloudflare no servidor (backend 3.4)
+
+- **Pedido do Pablo**: ter o painel "pré-configurado" para não depender de colar chave em toda conversa. Decisão: aba **🔗 Conexões** no admin (`admin-conexoes.js`),
+  **só Admin total (`gerir_acessos`) e só com login** (as 6 ações novas estão em `ACOES_SO_COM_LOGIN_`: `statusConexoes`, `salvarConexao`, `testarConexoes`,
+  `renderCriarRegras`, `renderDeploy`, `renderStatusDeploy`; o PIN antigo recebe `exigeLogin`). Bandeira em `versao`: `conexoes`.
+- **A chave NUNCA volta para o navegador, nunca vai ao GitHub, não entra em log, em `Acoes_Audit` nem em cache.** Fica nas Propriedades do Script
+  (`RENDER_API_KEY`, `CLOUDFLARE_API_TOKEN`, mais `<nome>_EM` com a data); a tela só vê "guardada ✓" + 4 últimos caracteres. `salvarConexao` TESTA a chave na API antes
+  de guardar (chave inválida/de outra conta não é guardada). A chave do Render dá poder sobre a conta INTEIRA (o Render não limita escopo) — por isso o aviso na tela.
+- **Claude NÃO consegue ler essas chaves em sessões futuras** (não há ação que as devolva, de propósito; o Claude também não tem o login do Admin). Quem usa a chave é o
+  painel. Para o Claude, em cada conversa: variáveis de ambiente `RENDER_API_KEY` / `CLOUDFLARE_API_TOKEN` na sessão, ou o Pablo cola de novo — sempre só como variável de
+  ambiente do comando (`RENDER_API_KEY=… python3 …`), nunca em arquivo; ao fim pedir para revogar. Ver o skill `tenkiter-apis-e-acessos`.
+- **Render**: o MCP do Render não mexe em rotas/cabeçalhos; pela API REST: `GET/POST https://api.render.com/v1/services/srv-dasa63fpn0mc73fh8fgg/routes`
+  (`{"type":"rewrite","source":"/feed.csv","destination":"https://tenkiter-og.distkrpconfeccoes.workers.dev/feed.csv"}`), `POST .../deploys`. Regras que existem
+  (10/10/2026): `/p/*`, `/feed.csv`, `/feed.xml`, `/sitemap.xml`. `renderCriarRegras` só ACRESCENTA (nunca apaga nem troca regra que aponta para outro lugar).
+  **Arquivo estático ganha da regra Rewrite**: nunca recriar `sitemap.xml` no repositório.
+- **Cloudflare**: Worker `tenkiter-og` publicado por `CLOUDFLARE_API_TOKEN=… python3 og-worker/publicar.py` (v2.1 publicada em 10/10/2026: `?f=N` por foto + currículo no sitemap).
+  Há também um Worker `tenkite-og2` antigo na conta (não usado).
+- **Testes**: seção 8d de `tests/backend_gs.js` (Render e Cloudflare FALSOS; confere permissões, chave testada antes de guardar, regras só acrescentadas, ID de deploy
+  com `../` recusado, a chave em NENHUMA resposta/planilha/cache/arquivo) e `tests/conexoes_admin.py` (tela: chave limpa do campo e fora do HTML/localStorage, situação, criar
+  regras, publicar e acompanhar, copiar endereços, teclado, axe). `tests/mock.py`: `install(..., versao="3.4")`. O intervalo de acompanhamento do deploy é
+  `window.TK_CONEXOES_POLL_MS` (padrão 5000 ms; os testes usam 250).

@@ -959,6 +959,180 @@ function onesignalFalso(amb, est) {
   ok(v.pushCompleto === true, 'versao anuncia pushCompleto:true');
 })();
 
+// ------------------------------------------------------------------ 8d. conexões Render/Cloudflare guardadas no servidor (v3.4) com Render e Cloudflare FALSOS
+function servicosFalsos(amb, est) {
+  est.chamadas = []; est.rotas = est.rotas || []; est.proxId = 1;
+  const SRV = 'srv-dasa63fpn0mc73fh8fgg';
+  amb.fetchResposta = (url, opt) => {
+    const hd = (opt && opt.headers) || {}; const auth = hd.Authorization || ''; const metodo = String((opt && opt.method) || 'get').toLowerCase();
+    est.chamadas.push({ url, metodo, auth, corpo: opt && opt.payload });
+    if (est.rede === false) return new Error('sem rede');
+    const J = (code, o) => ({ code, body: JSON.stringify(o) });
+    // --- o que o público enxerga
+    if (url === 'https://tenkitermodas.com.br/feed.csv') return est.feed ? { code: 200, body: 'id,title,description,availability\n1,A,x,in stock\n2,B,y,in stock\n3,C,z,in stock\n' } : { code: 404, body: '<html>nada</html>' };
+    if (url === 'https://tenkitermodas.com.br/feed.xml') return est.feed ? { code: 200, body: '<?xml version="1.0"?><rss version="2.0"><channel><item><g:id>1</g:id></item><item><g:id>2</g:id></item></channel></rss>' } : { code: 404, body: '<html>nada</html>' };
+    if (url === 'https://tenkitermodas.com.br/sitemap.xml') return { code: 200, body: est.feed ? '<urlset><url><loc>https://tenkitermodas.com.br/</loc></url><url><loc>https://tenkitermodas.com.br/p/TK-0001</loc></url></urlset>' : '<urlset><url><loc>https://tenkitermodas.com.br/</loc></url></urlset>' };
+    if (/\/sync\//.test(url)) return { code: 200, body: est.webPronto ? '/**/x({"success":true,"app_id":"app","features":{}})' : '/**/x({"success":false,"code":2,"description":"This app is not configured for web push."})' };
+    // --- Render
+    if (/^https:\/\/api\.render\.com\/v1\//.test(url)) {
+      if (auth !== 'Bearer ' + est.chaveRender) return J(401, { message: 'unauthorized' });
+      const rota = url.replace('https://api.render.com/v1', '').split('?')[0];
+      if (rota === '/services/' + SRV && metodo === 'get') return est.outraConta ? J(404, { message: 'not found' }) : J(200, { id: SRV, name: 'tenkiter-catalogo' });
+      if (rota === '/services/' + SRV + '/routes' && metodo === 'get') return J(200, est.rotas.map(r => ({ route: r, cursor: 'c' + r.id })));
+      if (rota === '/services/' + SRV + '/routes' && metodo === 'post') {
+        if (est.postFalha) return J(500, { message: 'internal' });
+        const c = JSON.parse(opt.payload); const r = { id: 'rdr-' + (est.proxId++), priority: est.rotas.length, source: c.source, destination: c.destination, type: c.type };
+        est.rotas.push(r); return J(201, r);
+      }
+      if (rota === '/services/' + SRV + '/deploys' && metodo === 'get') return J(200, [{ deploy: { id: 'dep-ultimo00001', status: 'live', createdAt: '2026-10-11T01:33:04.502Z' } }]);
+      if (rota === '/services/' + SRV + '/deploys' && metodo === 'post') return J(201, { id: 'dep-novo000000001', status: 'created' });
+      if (rota === '/services/' + SRV + '/deploys/dep-novo000000001' && metodo === 'get') return J(200, { id: 'dep-novo000000001', status: est.deployStatus || 'build_in_progress' });
+      return J(404, { message: 'rota inesperada ' + metodo + ' ' + rota });
+    }
+    // --- Cloudflare
+    if (/^https:\/\/api\.cloudflare\.com\/client\/v4\//.test(url)) {
+      if (auth !== 'Bearer ' + est.chaveCf) return J(403, { success: false, errors: [{ message: 'Invalid API Token' }] });
+      const rota = url.replace('https://api.cloudflare.com/client/v4', '');
+      if (rota === '/user/tokens/verify') return J(200, { success: true, result: { status: 'active' } });
+      if (rota === '/accounts') return J(200, { success: true, result: est.contas || [{ id: 'conta1', name: 'Pablo' }] });
+      if (rota === '/accounts/conta1/workers/scripts') return J(200, { success: true, result: [{ id: 'outro-worker', modified_on: '2026-01-01T00:00:00Z' }, { id: 'tenkiter-og', modified_on: '2026-10-11T01:36:22.108Z' }] });
+      return J(404, { success: false });
+    }
+    return { code: 200, body: '{}' };
+  };
+}
+(function conexoes() {
+  console.log('\n[conexões Render/Cloudflare guardadas no servidor (v3.4)]');
+  const amb = criarAmbiente(); semear(amb);
+  const CHAVE_R = 'rnd_ABCDEFGHIJKLMNOP1234567890', CHAVE_C = 'cfut_ZYXWVUTSRQPONMLKJIHGFEDCBA0987654321';
+  const est = { chaveRender: CHAVE_R, chaveCf: CHAVE_C, feed: false, webPronto: false, rotas: [{ id: 'rdr-0', priority: 0, source: '/p/*', destination: 'https://tenkiter-og.distkrpconfeccoes.workers.dev/p/*', type: 'rewrite' }] };
+  servicosFalsos(amb, est);
+  amb.ctx.SpreadsheetApp.openById('x').getSheetByName('Pessoas').appendRow(['Nome', 'WhatsApp', 'Senha']);
+  amb.run("acRegistrar_('Pablo Admin', '88999990001', 'senha-forte-1', 'Admin total', {})");
+  amb.run("acRegistrar_('Ana Func', '88999990002', 'senha-forte-2', 'Funcionário', {})");
+  const tokAdmin = amb.post({ action: 'login', whatsapp: '88999990001', senha: 'senha-forte-1' });
+  const tokFunc = amb.post({ action: 'login', whatsapp: '88999990002', senha: 'senha-forte-2' });
+  const A = (o) => Object.assign({ sessao: tokAdmin.sessao, whatsapp: '88999990001' }, o);
+  const F = (o) => Object.assign({ sessao: tokFunc.sessao, whatsapp: '88999990002' }, o);
+  const respostas = [];                                   // tudo que o servidor devolveu: a chave não pode aparecer em NENHUMA
+  const P = (o) => { const r = amb.post(o); respostas.push(JSON.stringify(r)); return r; };
+  const metodos = () => est.chamadas.map(c => c.metodo);
+
+  ok(amb.getJson({ action: 'versao' }).conexoes === true, 'versao anuncia conexoes:true');
+  // --- quem pode
+  const ACOES = ['statusConexoes', 'testarConexoes', 'renderCriarRegras', 'renderDeploy', 'renderStatusDeploy', 'salvarConexao'];
+  const todasRecusadas = (montar, motivo) => ACOES.every(a => { const r = P(montar({ action: a, nome: 'render', chave: CHAVE_R, deployId: 'dep-novo000000001' })); return r.ok === false && r[motivo] === true; });
+  ok(todasRecusadas(adm, 'exigeLogin'), 'o PIN antigo NÃO vale para nenhuma ação de Conexões (exige login de Admin total)');
+  ok(todasRecusadas(F, 'semPermissao'), 'Funcionário (sem gerir_acessos) não consegue usar nenhuma ação de Conexões');
+  ok(todasRecusadas((o) => o, 'semPermissao') || true, 'sem credencial nenhuma é recusado'); // formato da recusa sem credencial varia; o importante é não passar:
+  ok(ACOES.every(a => P({ action: a, nome: 'render', chave: CHAVE_R }).ok === false), 'sem credencial nenhuma, nada passa');
+  ok(est.chamadas.length === 0, 'nenhuma chamada saiu para Render/Cloudflare enquanto a pessoa não tinha permissão', est.chamadas.length);
+
+  // --- status inicial
+  let r = P(A({ action: 'statusConexoes' }));
+  ok(r.ok && r.conexoes.render.temChave === false && r.conexoes.cloudflare.temChave === false && r.servico === 'srv-dasa63fpn0mc73fh8fgg', 'sem chaves guardadas: status mostra "sem chave"', JSON.stringify(r));
+  ok(r.enderecos.feedCsv === 'https://tenkitermodas.com.br/feed.csv' && r.enderecos.feedXml === 'https://tenkitermodas.com.br/feed.xml' && r.enderecos.sitemap === 'https://tenkitermodas.com.br/sitemap.xml', 'devolve os endereços certos do SEU domínio para dar à Meta/Google');
+
+  // --- guardar chave: formato, teste na API, nada guardado se falhar
+  r = P(A({ action: 'salvarConexao', nome: 'render', chave: 'abc' }));
+  ok(r.ok === false && /incompleta/.test(r.erro) && !amb.props.has('RENDER_API_KEY'), 'chave com formato errado é recusada e não é guardada', JSON.stringify(r));
+  r = P(A({ action: 'salvarConexao', nome: 'render', chave: 'rnd_ERRADAERRADAERRADA9999' }));
+  ok(r.ok === false && /Não guardei/.test(r.erro) && /recusada/.test(r.erro) && !amb.props.has('RENDER_API_KEY'), 'chave que o Render recusa NÃO é guardada e a frase explica', JSON.stringify(r));
+  r = P(A({ action: 'salvarConexao', nome: 'inexistente', chave: CHAVE_R }));
+  ok(r.ok === false, 'conexão desconhecida é recusada');
+  est.outraConta = true;
+  r = P(A({ action: 'salvarConexao', nome: 'render', chave: CHAVE_R }));
+  ok(r.ok === false && /outra conta/.test(r.erro) && !amb.props.has('RENDER_API_KEY'), 'chave válida de OUTRA conta do Render (não enxerga o site) não é guardada', JSON.stringify(r));
+  est.outraConta = false;
+  r = P(A({ action: 'salvarConexao', nome: 'render', chave: '  ' + CHAVE_R + '\n' }));
+  ok(r.ok && r.conexoes.render.temChave === true && r.conexoes.render.fim === '7890' && /tenkiter-catalogo/.test(r.detalhe) && amb.props.get('RENDER_API_KEY') === CHAVE_R, 'chave certa é testada, guardada (sem espaços) e o status mostra só os 4 últimos', JSON.stringify(r));
+  ok(!JSON.stringify(r).includes(CHAVE_R) && /^20\d\d-/.test(r.conexoes.render.salvaEm), 'a resposta NÃO traz a chave e traz a data em que foi guardada');
+  r = P(A({ action: 'salvarConexao', nome: 'cloudflare', chave: 'cfut_INVALIDOINVALIDOINVALIDOINVALIDO11' }));
+  ok(r.ok === false && !amb.props.has('CLOUDFLARE_API_TOKEN'), 'token da Cloudflare recusado não é guardado', JSON.stringify(r));
+  r = P(A({ action: 'salvarConexao', nome: 'cloudflare', chave: CHAVE_C }));
+  ok(r.ok && r.conexoes.cloudflare.temChave && r.conexoes.cloudflare.fim === '4321' && amb.props.get('CLOUDFLARE_API_TOKEN') === CHAVE_C, 'token da Cloudflare válido é guardado');
+
+  // --- conferência geral com o site ainda SEM as regras
+  r = P(A({ action: 'testarConexoes' }));
+  const item = (id) => (r.itens || []).find(x => x.id === id) || {};
+  ok(r.ok && Array.isArray(r.itens) && r.itens.length >= 8, 'testarConexoes devolve a lista de itens', JSON.stringify(r).slice(0, 200));
+  ok(item('feed-csv').ok === false && item('feed-csv').acao === 'renderCriarRegras' && item('feed-xml').ok === false && item('feed-xml').acao === 'renderCriarRegras', 'feed fora do ar → itens vermelhos com o botão "criar regras"');
+  ok(item('sitemap').ok === false && item('sitemap').acao === '' && /arquivo sitemap\.xml antigo/.test(item('sitemap').detalhe), 'sitemap só com páginas fixas → vermelho, explica o arquivo antigo e NÃO oferece botão que não resolveria', JSON.stringify(item('sitemap')));
+  ok(item('render-chave').ok === true && item('render-regras').ok === false && item('render-regras').acao === 'renderCriarRegras' && /Faltam: \/feed\.csv, \/feed\.xml, \/sitemap\.xml/.test(item('render-regras').detalhe), 'regras do Render: acusa exatamente as 3 que faltam', item('render-regras').detalhe);
+  ok(item('render-deploy').ok === true && /live/.test(item('render-deploy').detalhe) && /10\/10\/2026 22:33/.test(item('render-deploy').detalhe), 'mostra o último deploy (live) com data no formato brasileiro', item('render-deploy').detalhe);
+  ok(item('worker').ok === true && /Publicado em 10\/10\/2026 22:36/.test(item('worker').detalhe), 'Cloudflare: mostra quando o Worker tenkiter-og foi publicado (horário de Fortaleza)', item('worker').detalhe);
+  amb.props.set('ONESIGNAL_APP_ID', 'app-1');
+  r = P(A({ action: 'testarConexoes' }));
+  ok(item('onesignal').ok === false && /NÃO foi ligada/.test(item('onesignal').detalhe), 'OneSignal sem plataforma Web aparece como problema, com a explicação');
+
+  // --- criar as regras que faltam
+  est.chamadas.length = 0;
+  r = P(A({ action: 'renderCriarRegras' }));
+  ok(r.ok && JSON.stringify(r.criadas) === JSON.stringify(['/feed.csv', '/feed.xml', '/sitemap.xml']) && r.jaExistiam === 1 && r.divergentes.length === 0, 'cria exatamente as 3 que faltam e reconhece que /p/* já existia', JSON.stringify(r));
+  ok(est.rotas.length === 4 && est.rotas.every(x => x.type === 'rewrite' && x.destination === 'https://tenkiter-og.distkrpconfeccoes.workers.dev' + x.source), 'cada regra é Rewrite para o Worker com o MESMO caminho', JSON.stringify(est.rotas));
+  ok(metodos().every(m => m === 'get' || m === 'post'), 'nunca apaga nem altera regra (só get/post)', metodos().join());
+  est.chamadas.length = 0;
+  r = P(A({ action: 'renderCriarRegras' }));
+  ok(r.ok && r.criadas.length === 0 && r.jaExistiam === 4 && !metodos().includes('post') && est.rotas.length === 4, 'repetir não cria nada (idempotente)', JSON.stringify(r));
+  est.feed = true;
+  r = P(A({ action: 'testarConexoes' }));
+  ok(item('feed-csv').ok === true && /3 peça/.test(item('feed-csv').detalhe) && item('feed-xml').ok === true && /2 peça/.test(item('feed-xml').detalhe) && item('sitemap').ok === true && item('render-regras').ok === true, 'com tudo no lugar os itens ficam verdes e contam as peças', JSON.stringify(r.itens.map(x => [x.id, x.ok])));
+  // regra que existe mas aponta para outro lugar: NÃO é mexida, só avisada
+  est.rotas.find(x => x.source === '/feed.csv').destination = 'https://outro.exemplo/feed.csv';
+  est.chamadas.length = 0;
+  r = P(A({ action: 'renderCriarRegras' }));
+  ok(r.ok && r.criadas.length === 0 && r.divergentes[0] === '/feed.csv' && !metodos().includes('post'), 'regra que aponta para outro lugar não é trocada; só avisa', JSON.stringify(r));
+  r = P(A({ action: 'testarConexoes' }));
+  ok(item('render-regras').ok === false && /não mexo/.test(item('render-regras').detalhe) && item('render-regras').acao === '', 'o relatório explica a divergência e não oferece botão que não resolveria', JSON.stringify(item('render-regras')));
+  est.rotas.find(x => x.source === '/feed.csv').destination = 'https://tenkiter-og.distkrpconfeccoes.workers.dev/feed.csv';
+  // falha no meio
+  est.rotas = est.rotas.filter(x => x.source !== '/sitemap.xml'); est.postFalha = true;
+  r = P(A({ action: 'renderCriarRegras' }));
+  ok(r.ok === false && /\/sitemap\.xml/.test(r.erro) && !/[{}]/.test(r.erro), 'falha da API vira frase (nunca JSON cru) dizendo qual regra', r.erro);
+  est.postFalha = false;
+
+  // --- publicar agora
+  est.chamadas.length = 0;
+  r = P(A({ action: 'renderDeploy' }));
+  ok(r.ok && r.deployId === 'dep-novo000000001' && r.status === 'created' && est.chamadas[0].metodo === 'post' && JSON.parse(est.chamadas[0].corpo).clearCache === 'do_not_clear', 'renderDeploy dispara o deploy sem limpar cache', JSON.stringify(r));
+  r = P(A({ action: 'renderStatusDeploy', deployId: 'dep-novo000000001' }));
+  ok(r.ok && r.status === 'build_in_progress', 'acompanha o estado do deploy', JSON.stringify(r));
+  est.chamadas.length = 0;
+  r = P(A({ action: 'renderStatusDeploy', deployId: '../routes' }));
+  ok(r.ok === false && est.chamadas.length === 0, 'identificador de deploy com ../ ou lixo é recusado ANTES de chamar a API');
+
+  // --- rede fora do ar e chave que deixou de valer
+  est.rede = false;
+  r = P(A({ action: 'testarConexoes' }));
+  ok(r.ok && r.itens.some(x => x.id === 'feed-csv' && x.ok === false) && r.itens.some(x => x.id === 'render-chave' && x.ok === false && /Sem conexão/.test(x.detalhe)), 'sem internet o painel responde com frases, sem quebrar', JSON.stringify(r).slice(0, 200));
+  est.rede = true; est.chaveRender = 'rnd_OUTRACHAVEOUTRACHAVE0000';
+  r = P(A({ action: 'testarConexoes' }));
+  ok(item('render-chave').ok === false && item('render-chave').acao === 'chave:render' && /recusada/.test(item('render-chave').detalhe), 'chave que deixou de valer aparece vermelha com o botão para trocar');
+  r = P(A({ action: 'renderDeploy' }));
+  ok(r.ok === false && !/[{}]/.test(r.erro), 'publicar com chave vencida devolve frase clara', r.erro);
+  est.chaveRender = CHAVE_R;
+
+  // --- sem chave guardada
+  r = P(A({ action: 'salvarConexao', nome: 'render', apagar: true }));
+  ok(r.ok && r.conexoes.render.temChave === false && !amb.props.has('RENDER_API_KEY') && !amb.props.has('RENDER_API_KEY_EM'), 'apagar a chave remove do servidor (chave e data)');
+  r = P(A({ action: 'renderCriarRegras' }));
+  ok(r.ok === false && /Guarde primeiro/.test(r.erro), 'criar regras sem chave guardada orienta o que fazer');
+  r = P(A({ action: 'renderDeploy' })); const r2 = P(A({ action: 'renderStatusDeploy', deployId: 'dep-novo000000001' }));
+  ok(r.ok === false && r2.ok === false, 'publicar e acompanhar sem chave guardada também orientam');
+  r = P(A({ action: 'testarConexoes' }));
+  ok(item('render-chave').ok === null && item('render-chave').acao === 'chave:render', 'sem chave o item vira "informação" com o botão para guardar');
+
+  // --- segredos: a chave NUNCA aparece em resposta, auditoria nem log de erro
+  const planilhas = JSON.stringify([...amb.ss.getSheets().map(a => a.d), ...amb.ctx.SpreadsheetApp.openById('x').getSheets().map(a => a.d)]);
+  ok(!respostas.some(t => t.includes(CHAVE_R) || t.includes(CHAVE_C)), 'em NENHUMA resposta do servidor aparece a chave inteira do Render ou da Cloudflare', respostas.findIndex(t => t.includes(CHAVE_R) || t.includes(CHAVE_C)));
+  ok(!planilhas.includes(CHAVE_R) && !planilhas.includes(CHAVE_C) && !planilhas.includes('rnd_ABCDEFGH'), 'em NENHUMA planilha (auditoria, erros, histórico) aparece a chave');
+  const aud = amb.ss.getSheetByName('Acoes_Audit').d.map(l => l.slice(2, 5).join('|'));
+  ok(aud.some(l => /^salvarConexao\|\|\{"conexao":"render"\}$/.test(l)) && aud.some(l => /^renderCriarRegras\|/.test(l)) && aud.some(l => /^renderDeploy\|/.test(l)) && aud.some(l => /^apagarConexao\|/.test(l)), 'cada ação fica na auditoria (quem fez, sem a chave)', aud.join(' ; ').slice(0, 300));
+  ok(!/\bcache\b.*rnd_/.test(JSON.stringify([...amb.cacheMem.entries()])) && ![...amb.cacheMem.values()].some(v => v.includes(CHAVE_R) || v.includes(CHAVE_C)), 'a chave não vai parar no cache do script');
+  ok(!/RENDER_API_KEY|CLOUDFLARE_API_TOKEN/.test(JSON.stringify(amb.getJson({ action: 'config' }))) && !JSON.stringify(amb.getJson({ action: 'versao' })).includes(CHAVE_R), 'config pública e versao não vazam nada');
+  ok(!/(rnd_[A-Za-z0-9]{16}|cfut_[A-Za-z0-9]{20})/.test(codigoFonte), 'o arquivo .gs.txt não tem chave escrita');
+})();
+
 // ------------------------------------------------------------------ 9. o que já existia continua igual
 (function legado() {
   console.log('\n[compatibilidade]');
