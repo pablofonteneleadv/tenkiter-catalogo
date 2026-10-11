@@ -1515,6 +1515,7 @@ catch (e) { window.__precargaLista = null; }
   async function definirEquipe_(usuario) {
     let pode = false;
     try { const v = await versaoServidor(); pode = !!(v && v.midiaRapida && temPermissao(usuario, 'catalogo_cadastrar')); } catch (e) { pode = false; }
+    try { localStorage.setItem('tk_equipe_dica_v1', pode ? '1' : '0'); } catch (e) {}   // só um sim/não (sem nome nem telefone): deixa o ✕ aparecer já na 1ª tela da próxima vez
     if (pode === equipe_.pode) return;
     equipe_.pode = pode;
     document.body.classList.toggle('equipe-x', pode);
@@ -1704,9 +1705,12 @@ catch (e) { window.__precargaLista = null; }
       btn.style.display = '';
       const u = await conferirSessao();
       if (u && !u.semRede) { usuario = u; definirEquipe_(usuario); atualizarBotao(); sincronizar(); }
+      else if (!u) definirEquipe_(null);     // sessão acabou: tira o ✕ que foi mostrado antes da conferência
     })();
   })(); } catch (erroConta) { console.warn('Conta de cliente indisponível:', erroConta); }
 
+  // ✕ da equipe aparece na hora (palpite do último acesso deste aparelho); a conferência de verdade vem do servidor e corrige se preciso.
+  try { if (getSessao() && localStorage.getItem('tk_equipe_dica_v1') === '1') { equipe_.pode = true; document.body.classList.add('equipe-x'); } } catch (e) {}
   ligarPedidoNaPagina();
   carregarCatalogo();
   abrirJanelasDaURL_();

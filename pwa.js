@@ -232,7 +232,7 @@
     document.body.appendChild(box);
   }
   window.addEventListener('appinstalled', function () { var el = $('tk-convite-app'); if (el) el.remove(); var c = lerConvite(); c.nunca = true; gravarConvite(c); });
-  window.addEventListener('load', function () { setTimeout(abrirConvite, window.TK_CONVITE_ATRASO_MS != null ? window.TK_CONVITE_ATRASO_MS : 9000); });
+  window.addEventListener('load', function () { setTimeout(abrirConvite, window.TK_CONVITE_ATRASO_MS != null ? window.TK_CONVITE_ATRASO_MS : 2000); });
 
   window.TKInstalar = {
     estado: function () { return { vindoDoApp: vindoDoApp(), instalado: instalado(), podeInstalar: !!evento, standalone: standalone(), ios: iOS, android: android, embutido: embutido }; },
