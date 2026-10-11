@@ -1,0 +1,86 @@
+"""Painel -> importador do Instagram: faixa com contador, lista com filtros, descartar+desfazer, editor de mídias, ACEITAR abre o cadastro preenchido e, ao cadastrar, marca o rascunho como aceito; conectar/desconectar sem expor o token; quem não é Admin total não vê nada."""
+import sys, os, re, json
+AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
+import mock
+from mock import *
+from playwright.sync_api import sync_playwright
+BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
+AXE = open(os.path.join(AQUI, "axe.min.js")).read()
+def axe(pg, label):
+    pg.evaluate(AXE)
+    r = pg.evaluate("async()=>{const r=await axe.run(document.querySelector('#overlay-instagram'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','best-practice']}});return r.violations.map(v=>v.id+'x'+v.nodes.length+' '+v.nodes[0].target.join(' '))}")
+    chk("axe — " + label, not r, "; ".join(r))
+OK = []; BAD = []
+def chk(n, c, e=""):
+    (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + (" — " + str(e) if e and not c else ""))
+
+def novo(p, perms=None):
+    b = p.chromium.launch(args=["--no-sandbox"]); ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    ctx.add_init_script(SESSION); log = []
+    st = install(ctx, log=log, versao="3.5", **({"perms": perms} if perms else {}))
+    pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: d.accept())
+    pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2500)
+    return b, pg, st, log, errs
+
+with sync_playwright() as p:
+    print("== Admin total: faixa, lista, filtros ==")
+    b, pg, st, log, errs = novo(p)
+    chk("faixa aparece com o contador (2 esperando)", pg.locator("#ig-abrir .ig-badge").inner_text().strip() == "2", pg.locator("#ig-faixa").inner_text())
+    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card")
+    chk("pendentes: 1 cartão com preço e tamanhos sugeridos", pg.locator(".ig-card").count() == 1 and "89,90" in pg.locator(".ig-sug").inner_text() and "P, M, G" in pg.locator(".ig-sug").inner_text())
+    axe(pg, "lista")
+    chk("aviso de provável duplicado leva o código", "TK-0003" in pg.locator(".ig-dup").inner_text())
+    chk("chamadas levam WhatsApp + token de sessão (nunca senha)", all((c["sessao"] or "").startswith("tk") and c["whats"] == "88999999999" for c in st["ig"]["chamadas"] if c["m"] != "OPTIONS"))
+    pg.click("[data-ig=aba][data-g=sem_id]"); pg.wait_for_selector(".ig-card")
+    chk("aba Sem identificação mostra o Story", "Story" in pg.locator(".ig-meta").first.inner_text())
+    print("== Descartar com Desfazer ==")
+    pg.click("[data-ig=descartar]"); pg.wait_for_selector("#ig-toast")
+    chk("some da lista e aparece Desfazer", pg.locator(".ig-card").count() == 0 and st["ig"]["rasc"][1]["status"] == "descartado")
+    pg.click("[data-ig=desfazer]"); pg.wait_for_timeout(600)
+    chk("Desfazer devolve o rascunho", st["ig"]["rasc"][1]["status"] == "pendente" and pg.locator(".ig-card").count() == 1)
+    print("== Editor de mídias ==")
+    pg.click("[data-ig=aba][data-g=pendente]"); pg.wait_for_selector(".ig-card"); pg.click("[data-ig=editar]"); pg.wait_for_selector(".ig-tile")
+    axe(pg, "editor de mídias")
+    chk("2 mídias, a primeira é capa", pg.locator(".ig-tile").count() == 2 and pg.locator(".ig-tile.capa").count() == 1)
+    pg.locator("[data-ig=desce]").first.click(); pg.wait_for_timeout(500)
+    chk("ordem trocada no servidor", st["ig"]["rasc"][0]["midias"][0]["id"] == "m2")
+    pg.locator("[data-ig=capa]").first.click(); pg.wait_for_timeout(500)
+    chk("capa trocada", [m["capa"] for m in st["ig"]["rasc"][0]["midias"]] == [True, False])
+    print("== Aceitar -> cadastro preenchido -> cadastrar marca como aceito ==")
+    pg.click("[data-ig=aceitar]"); pg.wait_for_timeout(800)
+    chk("janela fechou e o cadastro abriu", not pg.locator("#overlay-instagram.aberto").count() and pg.locator("#card-form").evaluate("e=>e.open"))
+    chk("preço e tamanhos vieram", pg.input_value("#preco") in ("89.90", "89,90") and pg.input_value("#tamanhos") == "P, M, G", (pg.input_value("#preco"), pg.input_value("#tamanhos")))
+    pg.fill("#nome", "Vestido floral"); pg.fill("#estoque", "2")
+    pg.click("#chips-genero .chip:first-child")
+    pg.click("#btn-abrir-categorias"); pg.click("#cat-lista .cat-item:has-text('Vestido')"); pg.click("#cat-pronto")
+    pg.click("#btn-salvar"); pg.wait_for_timeout(4000)
+    cr = [x for x in log if x.get("action") == "create"]
+    chk("peça criada com a capa escolhida e a galeria, tudo do R2", len(cr) == 1 and cr[0]["fotoUrlExistente"].startswith("https://tenkiter-midia.") and cr[0]["fotoUrlExistente"].endswith("a2.jpg") and cr[0]["fotosGaleriaExistentes"].endswith("a1.jpg"), cr[:1])
+    chk("Worker do Instagram foi avisado (rascunho = aceito)", st["ig"]["rasc"][0]["status"] == "aceito")
+    chk("sem erro de JavaScript", not errs, errs)
+    b.close()
+
+    print("== Desconectado: tela de conexão, token não fica na tela nem no aparelho ==")
+    b, pg, st, log, errs = novo(p)
+    st["ig"]["conectado"] = False
+    pg.reload(); pg.wait_for_timeout(2500)
+    pg.click("#ig-abrir"); pg.wait_for_selector("#ig-token")
+    axe(pg, "conectar")
+    chk("pede o token (campo de senha)", pg.get_attribute("#ig-token", "type") == "password")
+    pg.fill("#ig-token", "curto"); pg.click("[data-ig=conectar]"); pg.wait_for_selector(".ig-msg.erro")
+    chk("token curto: frase de erro, não JSON", "não parece" in pg.locator(".ig-msg.erro").inner_text() and "{" not in pg.locator(".ig-msg.erro").inner_text())
+    TOK = "IGAAtokenINVENTADOparaTESTE1234567890"
+    pg.fill("#ig-token", TOK); pg.click("[data-ig=conectar]"); pg.wait_for_selector(".ig-card, .ig-vazio")
+    chk("conectou e o servidor recebeu o token", st["ig"].get("token_recebido") == TOK)
+    html = pg.content(); ls = pg.evaluate("JSON.stringify(localStorage)+JSON.stringify(sessionStorage)")
+    chk("token fora da tela e do armazenamento do aparelho", TOK not in html and TOK not in ls)
+    b.close()
+
+    print("== Sem permissão de Admin total: nada aparece ==")
+    perms = [x for x in PERMS_ALL if x != "gerir_acessos"] if isinstance(PERMS_ALL, (list, tuple)) else None
+    if perms is not None:
+        b, pg, st, log, errs = novo(p, perms)
+        chk("faixa escondida e Worker nem foi chamado", pg.locator("#ig-faixa").is_hidden() and not st["ig"]["chamadas"], st["ig"]["chamadas"][:1])
+        b.close()
+print("\nOK=%d FALHAS=%d" % (len(OK), len(BAD)))
+sys.exit(1 if BAD else 0)

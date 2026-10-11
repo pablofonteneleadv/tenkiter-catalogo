@@ -19,7 +19,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     for i in range(sem_codigo):
         q=dict(P[i]); q["ID"]=str(1790000009000+i); q["Nome"]="Peça antiga %d"%(i+1); q["Codigo"]=""; P.append(q)
     novo = versao != "3.0"
-    st={"produtos":P,"pedidos":[],"falhas":{},"integ":{"pixelId":pixel,"capi":False,"teste":"","graph":"v23.0","sinonimos":"","segmentos":"Clientes Infantil"},"push":[],"importados":[],"seq":0,"ia":ia,"categorias":list(CATS),"midia":{"modo":"recusa","envios":[]}}
+    st={"produtos":P,"pedidos":[],"falhas":{},"integ":{"pixelId":pixel,"capi":False,"teste":"","graph":"v23.0","sinonimos":"","segmentos":"Clientes Infantil"},"push":[],"importados":[],"seq":0,"ia":ia,"categorias":list(CATS),"midia":{"modo":"recusa","envios":[]},"ig":{"conectado":True,"seq":10,"chamadas":[],"rasc":[{"id":1,"grupo":"pendente","status":"pendente","origem":"carrossel","legenda":"Vestido floral TK-0003 R$ 89,90 P M G","permalink":"https://www.instagram.com/p/AAA/","publicadoEm":"2026-10-10T12:00:00Z","precoSug":"89.90","tamanhosSug":"P, M, G","codigoDup":"TK-0003","produtoId":"","midias":[{"id":"m1","tipo":"foto","url":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/a1.jpg","mini":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/a1.jpg","capa":True},{"id":"m2","tipo":"foto","url":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/a2.jpg","mini":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/a2.jpg","capa":False}]},{"id":2,"grupo":"sem_id","status":"pendente","origem":"story","legenda":"","permalink":"","publicadoEm":"2026-10-10T13:00:00Z","precoSug":"","tamanhosSug":"","codigoDup":"","produtoId":"","midias":[{"id":"m3","tipo":"foto","url":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/a3.jpg","mini":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/a3.jpg","capa":True}]}]}}
     cat_gestao = versao >= "3.2"
     push3 = novo and versao >= "3.3"     # avisos completos (pushCompleto): público, agendamento, modelos, histórico com números
     conex = novo and versao >= "3.4"     # Conexões (conexoes): chaves do Render/Cloudflare guardadas no servidor, situação, regras, publicar
@@ -342,6 +342,41 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if "action=stats" in u: return route.fulfill(json={"ok":True,"totalVisualizacoes":120,"totalWhatsapp":18,"produtoMaisVistoId":"1790000000003","produtoMaisVistoCodigo":"TK-0003","produtoMaisVistoViews":40})
             if "manuais_lista" in u: return route.fulfill(json={"ok":True,"manuais":[]})
             return route.fulfill(json={"ok":True})
+        if "tenkiter-ig." in u:        # Worker do importador do Instagram (simulado): st["ig"]
+            g=st["ig"]; h=route.request.headers; m=route.request.method; path=u.split("workers.dev",1)[1].split("?")[0]
+            def cont():
+                c={"pendente":0,"sem_id":0,"duplicado":0,"nao_produto":0,"descartado":0,"aceito":0}
+                for r in g["rasc"]:
+                    k=r["grupo"] if r["status"]=="pendente" else r["status"]; c[k]=c.get(k,0)+1
+                return c
+            g["chamadas"].append({"m":m,"path":path,"whats":h.get("x-tk-whats"),"sessao":h.get("x-tk-sessao"),"corpo":route.request.post_data})
+            if m=="OPTIONS": return route.fulfill(status=204,body="")
+            if not (h.get("x-tk-sessao") or "").startswith("tk"): return route.fulfill(status=401,json={"ok":False,"erro":"Entre na sua conta de administrador."})
+            body=json.loads(route.request.post_data or "{}") if m=="POST" else {}
+            if path=="/status": return route.fulfill(json={"ok":True,"conectado":g["conectado"],"usuario":"tenkitermodasceara","venceEmDias":55,"contagens":cont(),"ultimoCiclo":{"inicio":"2026-10-11T05:00:00Z","fim":"2026-10-11T05:00:02Z","novas":0,"erro":""},"novasDesdeOntem":2,"alertas":g.get("alertas",[])})
+            if path=="/rascunhos":
+                gr=(u.split("grupo=")[1].split("&")[0] if "grupo=" in u else "pendente")
+                l=[r for r in g["rasc"] if (r["status"]==gr if gr in ("descartado","aceito") else (r["status"]=="pendente" and r["grupo"]==gr))]
+                return route.fulfill(json={"ok":True,"rascunhos":l,"mais":False,"contagens":cont()})
+            if path=="/token":
+                if m=="DELETE": g["conectado"]=False; return route.fulfill(json={"ok":True})
+                if len(body.get("token",""))<20: return route.fulfill(status=400,json={"ok":False,"erro":"Esse texto não parece um token do Instagram."})
+                g["conectado"]=True; g["token_recebido"]=body["token"]; return route.fulfill(json={"ok":True,"usuario":"tenkitermodasceara"})
+            if path=="/buscar": return route.fulfill(json={"ok":True,"novas":1})
+            if path=="/acao":
+                r=next((x for x in g["rasc"] if x["id"]==body.get("id")),None); a=body.get("acao")
+                if not r: return route.fulfill(status=404,json={"ok":False,"erro":"Rascunho não encontrado."})
+                if a=="descartar": r["status"]="descartado"
+                elif a=="restaurar": r["status"]="pendente"
+                elif a=="grupo": r["grupo"]=body["grupo"]; r["status"]="pendente"
+                elif a=="aceitado": r["status"]="aceito"; r["produtoId"]=body.get("produtoId","")
+                elif a=="capa":
+                    for x in r["midias"]: x["capa"]=(x["id"]==body["midia"])
+                elif a=="ordem":
+                    ms=r["midias"]; i=[x["id"] for x in ms].index(body["midia"]); j=i+(-1 if body["delta"]<0 else 1)
+                    if 0<=j<len(ms): ms[i],ms[j]=ms[j],ms[i]
+                return route.fulfill(json={"ok":True,"contagens":cont()})
+            return route.fulfill(status=404,json={"ok":False,"erro":"Não encontrado."})
         if "tenkiter-midia" in u:     # Worker de mídia (R2): padrão = recusa rápida (o painel cai no Cloudinary); st["midia"]["modo"]="ok" aceita e guarda o que foi enviado
             m=st["midia"]
             if route.request.method=="POST" and "/u?poster=" in u:

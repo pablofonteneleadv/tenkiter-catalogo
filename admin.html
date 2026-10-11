@@ -502,6 +502,8 @@
     </div>
   </details>
 
+  <div id="ig-faixa" hidden></div>
+
   <details class="cartao-cad" id="card-form">
     <summary><span id="cad-sum-txt">➕ Cadastrar nova peça</span></summary>
     <div class="cad-corpo">
@@ -1671,6 +1673,7 @@
 
   function cancelarDuplicacao() {
     modoFormulario = 'novo';
+    window.__rascunhoAtual = null;   // v3.6: rascunho do Instagram que estava sendo aceito
     document.getElementById('form-produto').reset();
     document.getElementById('produto-id').value = '';
     selecionadasCategorias.clear(); selecionadosGeneros.clear();
@@ -1686,6 +1689,27 @@
   }
 
   document.getElementById('btn-cancelar-duplicar').addEventListener('click', cancelarDuplicacao);
+
+  // v3.6 — "Produtos para aceitar" (importador do Instagram): abre o cadastro NORMAL já preenchido com as mídias do rascunho (já estão no R2) — mesmo caminho de sempre
+  // (código TK, categoria, SEO...). Nada vira produto sem o Pablo conferir e apertar "Cadastrar peça". `r` = { id, legenda, precoSug, tamanhosSug, midias:[{tipo,url,capa}] }.
+  window.tkAceitarRascunho = function (r) {
+    cancelarDuplicacao();
+    const fotos = (r.midias || []).filter(m => m.tipo === 'foto'), video = (r.midias || []).find(m => m.tipo === 'video');
+    const capa = fotos.find(m => m.capa) || fotos[0] || null;
+    const resto = fotos.filter(m => m !== capa).map(m => m.url);
+    const legenda = String(r.legenda || '');
+    const limpa = legenda.replace(/#\S+/g, ' ').replace(/https?:\/\/\S+/g, ' ').replace(/\s+/g, ' ').trim();
+    const primeira = (legenda.split(/\n/)[0] || '').replace(/#\S+/g, ' ').replace(/https?:\/\/\S+/g, ' ').replace(/\s+/g, ' ').trim();
+    preencherFormComProduto({ Nome: /[$]|R\$/.test(primeira) ? '' : primeira.slice(0, 60), Preco: r.precoSug || '', Estoque: '', Tamanhos: r.tamanhosSug || '', Cores: '', Descricao: limpa.slice(0, 400), Categoria: '', Genero: '', Novidade: false });
+    zerarMidia({ Foto_URL: capa ? capa.url : '', Fotos_Galeria: resto.join(','), Video_URL: video ? video.url : '' });
+    window.__rascunhoAtual = r.id;
+    tituloForm_('Aceitando do Instagram');
+    document.getElementById('btn-salvar').textContent = 'Cadastrar peça';
+    document.getElementById('btn-cancelar-duplicar').textContent = 'Cancelar / Nova peça';
+    document.getElementById('btn-cancelar-duplicar').style.display = 'block';
+    abrirCadastro_();
+    atualizarFaltas_();
+  };
 
   // Salvar Produto (criar, duplicar ou editar): vai para uma fila e sobe em segundo plano.
   // O formulário libera na hora para cadastrar a próxima peça; os envios saem um de cada vez.
@@ -2069,6 +2093,7 @@
       try { await carregarProdutos(); } catch (e) {}
       const aviso = conferirSalvo(it, resultado.resp);
       if (aviso) { it.estado = 'aviso'; it.msg = aviso; } else { it.estado = 'ok'; sumirDepois(it, 6000); }
+      if (it.rascunhoId) { try { window.dispatchEvent(new CustomEvent('tk:peca-salva', { detail: { rascunhoId: it.rascunhoId, id: resultado.resp.id, codigo: resultado.resp.codigo } })); } catch (e) {} }   // o importador marca o rascunho como aceito
       window.logDebug_('════ "' + it.titulo + '": ' + (aviso ? ('salvo com aviso -- ' + aviso) : 'salvo com sucesso') + ' ════');
     } else if (!resultado.ok && resultado.enfileirado) {
       it.estado = 'offline'; sumirDepois(it, 15000);
@@ -2122,6 +2147,7 @@
       fotosGaleriaExistentes: resto.filter(i => i.url).map(i => i.url).join(',')
     };
     if (!videoNovo && ehEdicao && removerVideo) dados.removerVideo = true;
+    if (!ehEdicao && !videoNovo && videoAtual) dados.videoUrlExistente = videoAtual;   // v3.6: peça aceita do Instagram já traz o vídeo (R2)
     if (ehEdicao) dados.id = idParaEditar;
     if (!ehEdicao && dados.novidade) dados.notificarPush = document.getElementById('notificarPush').checked;
 
@@ -2138,7 +2164,7 @@
       chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao,
       temVideo: !!videoNovo, videoArquivo: videoNovo ? videoNovo.file : null,
       capaNovaB64: capaNovaB64, galeriaNovaB64: galeriaNovaB64,
-      dados: dados, estado: 'fila', msg: ''
+      dados: dados, estado: 'fila', msg: '', rascunhoId: window.__rascunhoAtual || null
     });
     cancelarDuplicacao(); // libera o formulário já
     document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima peça.';
@@ -3405,6 +3431,7 @@
 <script src="admin-gestao.js"></script>
 <script src="admin-push.js"></script>
 <script src="admin-conexoes.js"></script>
+<script src="admin-instagram.js"></script>
 <script src="nav.js" data-ativo="gestao"></script>
 <script src="a11y.js"></script>
 <script src="push.js"></script>

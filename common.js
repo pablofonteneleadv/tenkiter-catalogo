@@ -28,6 +28,8 @@ const LISTA_RAPIDA_URL = '';
 /** Fotos e vídeos NOVOS ficam no R2 da Cloudflare (Worker `tenkiter-midia`, midia-worker/): servir arquivo é grátis e há travas de tamanho e de armazenamento,
  *  então não existe cobrança surpresa. O que já está no Cloudinary/Drive continua funcionando igual. */
 const MIDIA_URL = 'https://tenkiter-midia.distkrpconfeccoes.workers.dev';
+/** Importador do Instagram (Worker `tenkiter-ig`, instagram-worker/): só o painel (Admin total) fala com ele. */
+const INSTAGRAM_URL = 'https://tenkiter-ig.distkrpconfeccoes.workers.dev';
 /** Miniatura de um vídeo do R2: foto de mesmo nome (o painel a envia junto com o vídeo). */
 function posterDoVideo(u) { return String(u || '').replace(/\.(mp4|webm)$/, '.jpg'); }
 /** Vídeo que toca direto num <video>: o do Cloudinary (antigo) ou o nosso, do R2 (novo). */
