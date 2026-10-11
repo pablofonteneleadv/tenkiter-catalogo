@@ -27,17 +27,19 @@ with sync_playwright() as p:
     b, pg, st, log, errs = novo(p)
     chk("faixa aparece com o contador (2 esperando)", pg.locator("#ig-abrir .ig-badge").inner_text().strip() == "2", pg.locator("#ig-faixa").inner_text())
     pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card")
-    chk("pendentes: 1 cartão com preço e tamanhos sugeridos", pg.locator(".ig-card").count() == 1 and "89,90" in pg.locator(".ig-sug").inner_text() and "P, M, G" in pg.locator(".ig-sug").inner_text())
+    chk("pendentes: 2 cartões (Pendentes + Sem identificação juntos), o mais recente (Story) primeiro? ordem do servidor", pg.locator(".ig-card").count() == 2 and "89,90" in pg.locator(".ig-sug").inner_text() and "P, M, G" in pg.locator(".ig-sug").inner_text())
+    chk("não existe mais a aba Sem identificação", pg.locator("[data-ig=aba][data-g=sem_id]").count() == 0)
     axe(pg, "lista")
     chk("aviso de provável duplicado leva o código", "TK-0003" in pg.locator(".ig-dup").inner_text())
     chk("chamadas levam WhatsApp + token de sessão (nunca senha)", all((c["sessao"] or "").startswith("tk") and c["whats"] == "88999999999" for c in st["ig"]["chamadas"] if c["m"] != "OPTIONS"))
-    pg.click("[data-ig=aba][data-g=sem_id]"); pg.wait_for_selector(".ig-card")
-    chk("aba Sem identificação mostra o Story", "Story" in pg.locator(".ig-meta").first.inner_text())
+    chk("o Story aparece na mesma lista", "Story" in pg.locator(".ig-card").nth(1).inner_text() or "Story" in pg.locator(".ig-card").first.inner_text())
     print("== Descartar com Desfazer ==")
-    pg.click("[data-ig=descartar]"); pg.wait_for_selector("#ig-toast")
-    chk("some da lista e aparece Desfazer", pg.locator(".ig-card").count() == 0 and st["ig"]["rasc"][1]["status"] == "descartado")
+    pg.locator(".ig-card", has_text="Story").locator("[data-ig=descartar]").click(); pg.wait_for_selector("#ig-toast")
+    chk("some da lista e aparece Desfazer", pg.locator(".ig-card").count() == 1 and st["ig"]["rasc"][1]["status"] == "descartado")
     pg.click("[data-ig=desfazer]"); pg.wait_for_timeout(600)
-    chk("Desfazer devolve o rascunho", st["ig"]["rasc"][1]["status"] == "pendente" and pg.locator(".ig-card").count() == 1)
+    chk("Desfazer devolve o rascunho", st["ig"]["rasc"][1]["status"] == "pendente" and pg.locator(".ig-card").count() == 2)
+    st["ig"]["rasc"][1]["grupo"] = "nao_produto"   # tira o Story da lista para os testes seguintes (que assumem 1 cartão)
+    pg.click("[data-ig=aba][data-g=duplicado]"); pg.wait_for_timeout(300); pg.click("[data-ig=aba][data-g=pendente]"); pg.wait_for_timeout(600)
     print("== Editor de mídias ==")
     pg.click("[data-ig=aba][data-g=pendente]"); pg.wait_for_selector(".ig-card"); pg.click("[data-ig=editar]"); pg.wait_for_selector(".ig-tile")
     axe(pg, "editor de mídias")
@@ -100,6 +102,7 @@ with sync_playwright() as p:
 
     print("== Juntar vários posts em 1 produto (caixinhas) ==")
     b, pg, st, log, errs = novo(p)
+    st["ig"]["rasc"][1]["grupo"] = "nao_produto"   # o Story agora cai na mesma lista de Pendentes; aqui o foco é só a junção
     mid = lambda i: {"id": "z%d" % i, "tipo": "foto", "url": "https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/z%d.jpg" % i, "mini": "https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/z%d.jpg" % i, "capa": True}
     for n in (3, 4):
         st["ig"]["rasc"].append({"id": n, "grupo": "pendente", "status": "pendente", "origem": "feed", "legenda": "Post %d" % n, "permalink": "", "publicadoEm": "2026-10-09T10:00:00Z", "precoSug": "", "tamanhosSug": "", "codigoDup": "", "produtoId": "", "midias": [mid(n)]})

@@ -10,7 +10,7 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   const esc = (v) => escaparHtml(v);
-  const GRUPOS = [['pendente', 'Pendentes'], ['sem_id', 'Sem identificação'], ['duplicado', 'Prováveis duplicados'], ['nao_produto', 'Não é produto'], ['descartado', 'Descartados']];
+  const GRUPOS = [['pendente', 'Pendentes'], ['duplicado', 'Prováveis duplicados'], ['nao_produto', 'Não é produto'], ['descartado', 'Descartados']];
   let grupo = 'pendente', lista = [], mais = false, cont = {}, st = null, editando = null, ocupado = false, desfazer = null, desfazerTimer = null;
   const marcados = new Set();            // posts marcados com a caixinha para "Juntar"
   let iaRodando = false, iaTxt = '', tela = '';      // tela: 'lista' | 'editor' | 'conectar' (a leitura por IA só redesenha a lista)
@@ -165,7 +165,7 @@
   }
   function desenharLista() {
     tela = 'lista';
-    const abas = '<div class="ig-abas" role="tablist">' + GRUPOS.map((g) => '<button type="button" role="tab" aria-selected="' + (g[0] === grupo) + '" data-ig="aba" data-g="' + g[0] + '">' + g[1] + (cont[g[0]] ? ' (' + cont[g[0]] + ')' : '') + '</button>').join('') + '</div>';
+    const abas = '<div class="ig-abas" role="tablist">' + GRUPOS.map((g) => { const n = g[0] === 'pendente' ? (cont.pendente || 0) + (cont.sem_id || 0) : cont[g[0]]; return '<button type="button" role="tab" aria-selected="' + (g[0] === grupo) + '" data-ig="aba" data-g="' + g[0] + '">' + g[1] + (n ? ' (' + n + ')' : '') + '</button>'; }).join('') + '</div>';
     const avisos = (st && st.alertas || []).map((a) => '<div class="ig-aviso">⚠️ ' + esc(a) + '</div>').join('');
     const vazio = '<p class="ig-vazio">' + (grupo === 'pendente' ? 'Nada esperando agora. 🎉 O que você postar no Instagram aparece aqui sozinho (a cada 30 minutos) ou toque em "Buscar agora".' : 'Nada por aqui.') + '</p>';
     const ids = lista.map((x) => x.id); marcados.forEach((id) => { if (ids.indexOf(id) === -1) marcados.delete(id); });

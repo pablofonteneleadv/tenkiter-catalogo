@@ -370,7 +370,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if path=="/status": return route.fulfill(json={"ok":True,"conectado":g["conectado"],"usuario":"tenkitermodasceara","venceEmDias":55,"contagens":cont(),"ultimoCiclo":{"inicio":"2026-10-11T05:00:00Z","fim":"2026-10-11T05:00:02Z","novas":0,"erro":""},"novasDesdeOntem":2,"alertas":g.get("alertas",[]),"ia":{"ligada":g.get("ia_ligada",False),"fim":"abcd","pendentes":sum(1 for r in g["rasc"] if r["status"]=="pendente" and r.get("iaStatus")!="ok") if g.get("ia_ligada") else 0},"historico":{"completo":g.get("hist_completo",False),"emAndamento":g.get("hist_andamento",False)}})
             if path=="/rascunhos":
                 gr=(u.split("grupo=")[1].split("&")[0] if "grupo=" in u else "pendente")
-                l=[r for r in g["rasc"] if (r["status"]==gr if gr in ("descartado","aceito") else (r["status"]=="pendente" and r["grupo"]==gr))]
+                l=[r for r in g["rasc"] if (r["status"]==gr if gr in ("descartado","aceito") else (r["status"]=="pendente" and (r["grupo"] in ("pendente","sem_id") if gr=="pendente" else r["grupo"]==gr)))]
                 return route.fulfill(json={"ok":True,"rascunhos":l,"mais":False,"contagens":cont()})
             if path=="/ia":
                 if not g.get("ia_ligada"): return route.fulfill(json={"ok":False,"erro":"A IA ainda não foi ligada."})
