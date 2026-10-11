@@ -14,7 +14,7 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
   integrações, avisos no painel), `privacidade.html`, `404.html`, `site.webmanifest`, `robots.txt` (o `sitemap.xml` e os feeds vêm do Worker — não recriar `sitemap.xml` no repositório: arquivo estático ganha da regra Rewrite do Render).
 - **Backend**: dois Apps Script Web Apps separados, versionados por nome de arquivo
   (`<nome>-<versão>.gs.txt`):
-  - `catalogo-codigo-3.4.gs.txt` — catálogo + autenticação central + pedidos/métricas/importação/feed/integrações (v3.1) + apagar/renomear categoria só para Admin total (v3.2) + avisos push completos (v3.3) + Conexões Render/Cloudflare (v3.4).
+  - `catalogo-codigo-3.5.gs.txt` — catálogo + autenticação central + pedidos/métricas/importação/feed/integrações (v3.1) + apagar/renomear categoria só para Admin total (v3.2) + avisos push completos (v3.3) + Conexões Render/Cloudflare (v3.4) + OneSignal nas Conexões (v3.5).
   - `funcionario-codigo-3.0.gs.txt` — RH/treinamento/contratação.
   - Arquivos antigos (`Code-treinamento-v4.0.gs.txt`, `v4.1.gs.txt`, `atualizado.gs.txt`,
     `tenkiter-codigo-v2.1.gs.txt`) são **históricos — não editar nem usar como referência**.
@@ -249,3 +249,22 @@ Propriedades do Script do Apps Script, nunca no código versionado.
   com `../` recusado, a chave em NENHUMA resposta/planilha/cache/arquivo) e `tests/conexoes_admin.py` (tela: chave limpa do campo e fora do HTML/localStorage, situação, criar
   regras, publicar e acompanhar, copiar endereços, teclado, axe). `tests/mock.py`: `install(..., versao="3.4")`. O intervalo de acompanhamento do deploy é
   `window.TK_CONEXOES_POLL_MS` (padrão 5000 ms; os testes usam 250).
+
+## v3.5 — OneSignal nas Conexões: liga os avisos pelo painel (backend 3.5)
+
+- **Pedido do Pablo**: "quero que estas API vão pra configuração do site" (Organization ID + Organization API Key do OneSignal). A Web do app foi ligada em
+  10/10/2026 com `PUT https://api.onesignal.com/apps/<app_id>` (`Authorization: Key <Organization API Key>`; campos `organization_id`, `site_name`,
+  `chrome_web_origin`, `safari_site_origin`, `safari_apns_p12:""`, `safari_apns_p12_password:""`, `chrome_web_default_notification_icon` = `icon-256.png`).
+  Organization ID e App ID são públicos; **a Organization API Key (`os_v2_org_…`) manda em TODOS os apps da organização** — só no servidor, nunca em arquivo,
+  teste, commit ou conversa. O bloqueio automático já barrou uma tentativa de pôr a chave real num teste: **testes usam chaves INVENTADAS** (ver 8e de
+  `tests/backend_gs.js` e `CHAVE_O` de `tests/conexoes_admin.py`).
+- **Backend 3.5** (bandeira `conexoesOnesignal`; o front só mostra o bloco com ela): `CONEXOES_.onesignal` (`ONESIGNAL_ORG_API_KEY`, mais `ONESIGNAL_ORG_ID` público),
+  `salvarConexao` com `orgId` (testa `GET /apps/<id>` e confere `organization_id`), `onesignalConfigurar` (Admin total, só com login): lê o app → liga a plataforma Web se
+  faltar → grava `ONESIGNAL_APP_ID` se faltar → **cria a chave de envio do app** (`POST /apps/<id>/auth/tokens`, devolve `formatted_token` UMA vez) se
+  `ONESIGNAL_REST_API_KEY` não existe ou foi recusada → confere o `sync`. Idempotente; nenhuma chave volta ao navegador (a resposta de `GET /apps/<id>` traz `basic_auth_key`:
+  nunca repassar). Apagar a conexão remove a chave da organização e o código, **não** a chave de envio.
+- **Cache do `sync` do OneSignal**: `https://api.onesignal.com/sync/<appId>/web?callback=x` tem `s-maxage=3600` na borda — um "not configured for web push" ficava preso por até
+  1 hora depois de ligar (e o backend/`push.js` liam `callback=x` fixo). Agora backend e `push.js` mandam um parâmetro `_` novo (backend: a cada consulta; `push.js`: a cada 10 min).
+  Para conferir à mão use `?callback=zz$RANDOM`.
+- **Claude continua sem ler essas chaves** em sessões futuras (mesma regra das outras). Para mexer no OneSignal por conta própria: variável de ambiente `ONESIGNAL_ORG_API_KEY`
+  + `ONESIGNAL_ORG_ID` no comando, ou o Pablo cola de novo. O mais simples é ele tocar em **📣 Ligar os avisos agora** no painel.

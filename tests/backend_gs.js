@@ -973,6 +973,26 @@ function servicosFalsos(amb, est) {
     if (url === 'https://tenkitermodas.com.br/feed.xml') return est.feed ? { code: 200, body: '<?xml version="1.0"?><rss version="2.0"><channel><item><g:id>1</g:id></item><item><g:id>2</g:id></item></channel></rss>' } : { code: 404, body: '<html>nada</html>' };
     if (url === 'https://tenkitermodas.com.br/sitemap.xml') return { code: 200, body: est.feed ? '<urlset><url><loc>https://tenkitermodas.com.br/</loc></url><url><loc>https://tenkitermodas.com.br/p/TK-0001</loc></url></urlset>' : '<urlset><url><loc>https://tenkitermodas.com.br/</loc></url></urlset>' };
     if (/\/sync\//.test(url)) return { code: 200, body: est.webPronto ? '/**/x({"success":true,"app_id":"app","features":{}})' : '/**/x({"success":false,"code":2,"description":"This app is not configured for web push."})' };
+    // --- OneSignal (API com a Organization API Key + a chave de envio do app)
+    if (est.os && /^https:\/\/api\.onesignal\.com\//.test(url)) {
+      const os = est.os; const rota = url.replace('https://api.onesignal.com', '').split('?')[0];
+      if (rota === '/notifications' && metodo === 'get') return auth === 'Key ' + os.chaveEnvio ? J(200, { notifications: [] }) : J(403, { errors: ['forbidden'] });
+      if (rota.indexOf('/apps/' + os.appId) === 0 && auth !== 'Key ' + os.chaveOrg) return J(403, { errors: ['Access denied'] });
+      if (rota === '/apps/' + os.appId && metodo === 'get') return J(200, Object.assign({ basic_auth_key: 'SEGREDO-REST-DO-APP' }, os.app));
+      if (rota === '/apps/' + os.appId && metodo === 'put') {
+        if (os.putFalha) return J(400, { errors: [{ title: 'icone invalido' }] });
+        const c = JSON.parse(opt.payload); os.puts.push(c);
+        if (c.organization_id !== os.orgId) return J(400, { errors: ['organization'] });
+        Object.assign(os.app, { site_name: c.site_name, chrome_web_origin: c.chrome_web_origin, safari_site_origin: c.safari_site_origin, chrome_web_default_notification_icon: c.chrome_web_default_notification_icon });
+        est.webPronto = true; return J(200, Object.assign({ basic_auth_key: 'SEGREDO-REST-DO-APP' }, os.app));
+      }
+      if (rota === '/apps/' + os.appId + '/auth/tokens' && metodo === 'post') {
+        if (os.tokenFalha) return J(403, { errors: ['permission'] });
+        os.tokens++; os.chaveEnvio = 'os_v2_app_NOVACHAVEENVIO' + os.tokens + 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012345';
+        return J(200, { token_id: 'tok' + os.tokens, name: JSON.parse(opt.payload).name, formatted_token: os.chaveEnvio });
+      }
+      return J(404, { errors: ['rota inesperada ' + metodo + ' ' + rota] });
+    }
     // --- Render
     if (/^https:\/\/api\.render\.com\/v1\//.test(url)) {
       if (auth !== 'Bearer ' + est.chaveRender) return J(401, { message: 'unauthorized' });
@@ -1131,6 +1151,119 @@ function servicosFalsos(amb, est) {
   ok(!/\bcache\b.*rnd_/.test(JSON.stringify([...amb.cacheMem.entries()])) && ![...amb.cacheMem.values()].some(v => v.includes(CHAVE_R) || v.includes(CHAVE_C)), 'a chave não vai parar no cache do script');
   ok(!/RENDER_API_KEY|CLOUDFLARE_API_TOKEN/.test(JSON.stringify(amb.getJson({ action: 'config' }))) && !JSON.stringify(amb.getJson({ action: 'versao' })).includes(CHAVE_R), 'config pública e versao não vazam nada');
   ok(!/(rnd_[A-Za-z0-9]{16}|cfut_[A-Za-z0-9]{20})/.test(codigoFonte), 'o arquivo .gs.txt não tem chave escrita');
+})();
+
+// ------------------------------------------------------------------ 8e. OneSignal guardado no servidor + "Ligar avisos" (v3.5) com OneSignal FALSO
+(function conexoesOnesignal() {
+  console.log('\n[OneSignal nas Conexões: chave da organização guardada no servidor e avisos ligados pelo painel (v3.5)]');
+  const amb = criarAmbiente(); semear(amb);
+  // TUDO aqui é inventado para o teste (o repositório é público): nunca colocar chave real em arquivo de teste.
+  const APP = '535f6b0d-c866-43c2-b241-43bd7ab62fae', ORG = 'b0b0b0b0-1111-4222-8333-444444444444';
+  const CHAVE_ORG = 'os_v2_org_TESTEFALSOTESTEFALSOTESTEFALSOTESTEFALSO1234567890abcdef';
+  const est = { feed: true, webPronto: false, chaveRender: 'x', chaveCf: 'x',
+    os: { appId: APP, orgId: ORG, chaveOrg: CHAVE_ORG, chaveEnvio: '', puts: [], tokens: 0,
+      app: { id: APP, name: 'Tenkitermodas', organization_id: ORG, site_name: null, chrome_web_origin: null, safari_site_origin: null, chrome_web_default_notification_icon: null } } };
+  servicosFalsos(amb, est);
+  amb.ctx.SpreadsheetApp.openById('x').getSheetByName('Pessoas').appendRow(['Nome', 'WhatsApp', 'Senha']);
+  amb.run("acRegistrar_('Pablo Admin', '88999990001', 'senha-forte-1', 'Admin total', {})");
+  amb.run("acRegistrar_('Ana Func', '88999990002', 'senha-forte-2', 'Funcionário', {})");
+  const tokAdmin = amb.post({ action: 'login', whatsapp: '88999990001', senha: 'senha-forte-1' });
+  const tokFunc = amb.post({ action: 'login', whatsapp: '88999990002', senha: 'senha-forte-2' });
+  const A = (o) => Object.assign({ sessao: tokAdmin.sessao, whatsapp: '88999990001' }, o);
+  const F = (o) => Object.assign({ sessao: tokFunc.sessao, whatsapp: '88999990002' }, o);
+  const respostas = [];
+  const P = (o) => { const r = amb.post(o); respostas.push(JSON.stringify(r)); return r; };
+  const chamou = (re) => est.chamadas.filter(c => re.test(c.url));
+
+  ok(amb.getJson({ action: 'versao' }).conexoesOnesignal === true && /^catalogo-3\.5$/.test(amb.getJson({ action: 'versao' }).versao), 'versao anuncia conexoesOnesignal:true e catalogo-3.5');
+  // --- quem pode
+  ok(P(adm({ action: 'onesignalConfigurar' })).exigeLogin === true, 'o PIN antigo NÃO liga o OneSignal (exige login de Admin total)');
+  ok(P(F({ action: 'onesignalConfigurar' })).semPermissao === true && P(F({ action: 'salvarConexao', nome: 'onesignal', chave: CHAVE_ORG, orgId: ORG })).semPermissao === true, 'Funcionário (sem gerir_acessos) não consegue ligar nem guardar a chave do OneSignal');
+  ok(est.chamadas.length === 0 && !amb.props.has('ONESIGNAL_ORG_API_KEY'), 'sem permissão: nenhuma chamada saiu e nada foi guardado');
+
+  // --- guardar: formato, código da organização, teste de verdade
+  let r = P(A({ action: 'statusConexoes' }));
+  ok(r.ok && r.conexoes.onesignal && r.conexoes.onesignal.temChave === false && r.conexoes.onesignal.orgId === '' && r.conexoes.onesignal.appId === APP && r.conexoes.onesignal.chaveEnvio === false, 'status inicial: sem chave, App ID público, sem chave de envio', JSON.stringify(r.conexoes && r.conexoes.onesignal));
+  r = P(A({ action: 'onesignalConfigurar' }));
+  ok(r.ok === false && /Guarde primeiro/.test(r.erro), 'ligar sem ter guardado a chave orienta o que fazer');
+  r = P(A({ action: 'salvarConexao', nome: 'onesignal', chave: 'os_v2_app_NAOEAORGANIZACAO000000000000000000', orgId: ORG }));
+  ok(r.ok === false && /incompleta/.test(r.erro), 'chave que não é da organização (os_v2_org_) é recusada pelo formato');
+  r = P(A({ action: 'salvarConexao', nome: 'onesignal', chave: CHAVE_ORG, orgId: 'isso-nao-e-um-codigo' }));
+  ok(r.ok === false && /Organization ID parece errado/.test(r.erro) && !amb.props.has('ONESIGNAL_ORG_API_KEY'), 'Organization ID com formato errado é recusado e nada é guardado', r.erro);
+  r = P(A({ action: 'salvarConexao', nome: 'onesignal', chave: CHAVE_ORG }));
+  ok(r.ok === false && /Organization ID parece errado/.test(r.erro), 'sem Organization ID (e nenhum guardado) o painel pede o código');
+  r = P(A({ action: 'salvarConexao', nome: 'onesignal', chave: CHAVE_ORG, orgId: '11111111-2222-3333-4444-555555555555' }));
+  ok(r.ok === false && /não é o do app/.test(r.erro) && !amb.props.has('ONESIGNAL_ORG_API_KEY'), 'chave válida com Organization ID de OUTRA organização não é guardada', r.erro);
+  r = P(A({ action: 'salvarConexao', nome: 'onesignal', chave: CHAVE_ORG.slice(0, -3) + 'zzz', orgId: ORG }));
+  ok(r.ok === false && /Não guardei/.test(r.erro) && /recusada/.test(r.erro) && !amb.props.has('ONESIGNAL_ORG_API_KEY'), 'chave que o OneSignal recusa não é guardada e a frase explica', r.erro);
+  r = P(A({ action: 'salvarConexao', nome: 'onesignal', chave: '  ' + CHAVE_ORG + '\n', orgId: ' ' + ORG.toUpperCase() + ' ' }));
+  ok(r.ok && r.conexoes.onesignal.temChave === true && r.conexoes.onesignal.fim === CHAVE_ORG.slice(-4) && r.conexoes.onesignal.orgId === ORG && amb.props.get('ONESIGNAL_ORG_API_KEY') === CHAVE_ORG && amb.props.get('ONESIGNAL_ORG_ID') === ORG && /Tenkitermodas/.test(r.detalhe), 'chave certa é testada, guardada (sem espaços, ID em minúsculas) e o status mostra só o fim', JSON.stringify(r).slice(0, 250));
+  ok(!JSON.stringify(r).includes(CHAVE_ORG) && !JSON.stringify(r).includes('SEGREDO-REST-DO-APP'), 'a resposta NÃO traz a chave da organização nem a chave de envio que o OneSignal devolve junto com o app');
+
+  // --- situação antes de ligar
+  r = P(A({ action: 'testarConexoes' }));
+  const item = (id) => (r.itens || []).find(x => x.id === id) || {};
+  ok(item('onesignal').ok === false && item('onesignal').acao === 'onesignalConfigurar', 'plataforma Web desligada → vermelho com o botão "Ligar avisos"', JSON.stringify(item('onesignal')));
+  ok(item('onesignal-envio').ok === false && item('onesignal-envio').acao === 'onesignalConfigurar' && /ONESIGNAL_REST_API_KEY/.test(item('onesignal-envio').detalhe), 'sem chave de envio → vermelho com o mesmo botão');
+  ok(item('onesignal-chave').ok === true && item('onesignal-chave').acao === '', 'a chave da organização aparece verde');
+  ok(chamou(/\/sync\//).length > 0 && chamou(/\/sync\//).every(c => /[?&]_=\d+/.test(c.url)), 'a conferência da plataforma Web usa endereço novo a cada vez (o OneSignal guarda o mesmo endereço em cache por 1 hora)', chamou(/\/sync\//).map(c => c.url).join(' '));
+
+  // --- ligar
+  est.chamadas.length = 0;
+  r = P(A({ action: 'onesignalConfigurar' }));
+  const passo = (id) => (r.passos || []).find(x => x.id === id) || {};
+  ok(r.ok && passo('web').ok && /Plataforma Web ligada/.test(passo('web').detalhe) && passo('envio').ok && /Criei a chave de envio/.test(passo('envio').detalhe) && passo('conferencia').ok === true && r.webPronto === true, 'liga a Web, cria a chave de envio e confirma que o OneSignal já responde', JSON.stringify(r.passos));
+  const put = est.os.puts[0] || {};
+  ok(est.os.puts.length === 1 && put.organization_id === ORG && put.site_name === 'TENKiTER Modas' && put.chrome_web_origin === 'https://tenkitermodas.com.br' && put.safari_site_origin === 'https://tenkitermodas.com.br' && put.safari_apns_p12 === '' && put.safari_apns_p12_password === '' && put.chrome_web_default_notification_icon === 'https://tenkitermodas.com.br/icon-256.png', 'o PUT leva exatamente os campos da plataforma Web (site, domínio, certificado vazio, ícone 256)', JSON.stringify(put));
+  ok(amb.props.get('ONESIGNAL_REST_API_KEY') === est.os.chaveEnvio && /^os_v2_app_/.test(est.os.chaveEnvio) && amb.props.get('ONESIGNAL_APP_ID') === APP && est.os.tokens === 1, 'a chave de envio criada e o App ID ficam nas Propriedades do Script', est.os.tokens);
+  ok(!JSON.stringify(r).includes(est.os.chaveEnvio) && !JSON.stringify(r).includes(CHAVE_ORG) && r.conexoes.onesignal.chaveEnvio === true, 'a resposta NÃO devolve a chave de envio criada (só diz que existe)');
+  ok(chamou(/\/apps\//).every(c => c.auth.startsWith('Key ')), 'as chamadas da organização usam o esquema "Key"', chamou(/\/apps\//).map(c => c.auth.slice(0, 8)).join());
+  // idempotente
+  est.chamadas.length = 0; est.os.puts.length = 0; const tokensAntes = est.os.tokens;
+  r = P(A({ action: 'onesignalConfigurar' }));
+  ok(r.ok && /já estava configurada/.test(passo('web').detalhe) && /funciona/.test(passo('envio').detalhe) && est.os.puts.length === 0 && est.os.tokens === tokensAntes, 'repetir não muda nada: não refaz a Web nem cria outra chave', JSON.stringify(r.passos));
+  r = P(A({ action: 'testarConexoes' }));
+  ok(item('onesignal').ok === true && item('onesignal-envio').ok === true && item('onesignal-chave').ok === true, 'depois de ligar, os três itens do OneSignal ficam verdes', JSON.stringify(r.itens.filter(x => /onesignal/.test(x.id)).map(x => [x.id, x.ok])));
+  // chave de envio recusada → cria outra
+  est.os.chaveEnvio = 'os_v2_app_OUTRACHAVEDIFERENTE0000000000000000000000'; // o OneSignal passa a não aceitar a que está no servidor
+  r = P(A({ action: 'testarConexoes' }));
+  ok(item('onesignal-envio').ok === false && item('onesignal-envio').acao === 'onesignalConfigurar', 'chave de envio que o OneSignal recusa aparece vermelha com o botão');
+  const recusada = amb.props.get('ONESIGNAL_REST_API_KEY');
+  r = P(A({ action: 'onesignalConfigurar' }));
+  ok(r.ok && /recusada/.test(passo('envio').detalhe) && amb.props.get('ONESIGNAL_REST_API_KEY') === est.os.chaveEnvio && amb.props.get('ONESIGNAL_REST_API_KEY') !== recusada && est.os.tokens === tokensAntes + 1, 'chave de envio recusada é substituída por uma nova', JSON.stringify(r.passos));
+
+  // --- falhas viram frase
+  est.os.app.chrome_web_origin = null; est.os.putFalha = true;
+  r = P(A({ action: 'onesignalConfigurar' }));
+  ok(r.ok === false && /Não consegui ligar a plataforma Web/.test(r.erro) && !/[{}]/.test(r.erro), 'falha ao ligar a Web vira frase (nunca JSON cru)', r.erro);
+  est.os.putFalha = false; est.os.chaveEnvio = ''; est.os.tokenFalha = true; amb.props.delete('ONESIGNAL_REST_API_KEY');
+  r = P(A({ action: 'onesignalConfigurar' }));
+  ok(r.ok === false && /Web ficou ligada/.test(r.erro) && /não consegui criar a chave de envio/.test(r.erro) && !/[{}]/.test(r.erro), 'falha ao criar a chave de envio avisa que a Web ficou ligada e explica', r.erro);
+  est.os.tokenFalha = false;
+  est.os.chaveOrg = 'os_v2_org_OUTRA' + 'x'.repeat(60);        // a chave guardada deixou de valer (revogada no OneSignal)
+  r = P(A({ action: 'testarConexoes' }));
+  ok(item('onesignal-chave').ok === false && item('onesignal-chave').acao === 'chave:onesignal' && /recusada/.test(item('onesignal-chave').detalhe), 'chave da organização revogada aparece vermelha com o botão para trocar');
+  r = P(A({ action: 'onesignalConfigurar' }));
+  ok(r.ok === false && /Não consegui ler o app/.test(r.erro) && !/[{}]/.test(r.erro), 'ligar com a chave revogada devolve frase clara', r.erro);
+  est.os.chaveOrg = CHAVE_ORG;
+  est.rede = false;
+  r = P(A({ action: 'onesignalConfigurar' }));
+  ok(r.ok === false && /Sem conexão/.test(r.erro), 'sem internet o painel responde com frase, sem quebrar', r.erro);
+  est.rede = true;
+
+  // --- apagar: tira a chave da organização, mas NÃO a de envio (é ela que manda os avisos)
+  amb.props.set('ONESIGNAL_REST_API_KEY', 'os_v2_app_ENVIOQUEFICA00000000000000000000000000000');
+  r = P(A({ action: 'salvarConexao', nome: 'onesignal', apagar: true }));
+  ok(r.ok && r.conexoes.onesignal.temChave === false && !amb.props.has('ONESIGNAL_ORG_API_KEY') && !amb.props.has('ONESIGNAL_ORG_API_KEY_EM') && !amb.props.has('ONESIGNAL_ORG_ID') && amb.props.has('ONESIGNAL_REST_API_KEY'), 'apagar remove a chave e o código da organização, mas mantém a chave de envio dos avisos');
+
+  // --- segredos
+  const planilhas = JSON.stringify([...amb.ss.getSheets().map(a => a.d), ...amb.ctx.SpreadsheetApp.openById('x').getSheets().map(a => a.d)]);
+  ok(!respostas.some(t => t.includes(CHAVE_ORG) || t.includes('SEGREDO-REST-DO-APP') || /os_v2_app_NOVACHAVEENVIO/.test(t)), 'em NENHUMA resposta aparece a chave da organização, a de envio criada ou a que o OneSignal devolve com o app');
+  ok(!planilhas.includes(CHAVE_ORG) && !planilhas.includes('os_v2_app_NOVACHAVEENVIO') && !planilhas.includes('SEGREDO-REST-DO-APP'), 'em NENHUMA planilha (auditoria, erros, histórico) aparece alguma chave');
+  const aud = amb.ss.getSheetByName('Acoes_Audit').d.map(l => l.slice(2, 5).join('|'));
+  ok(aud.some(l => /^salvarConexao\|\|\{"conexao":"onesignal"\}$/.test(l)) && aud.some(l => /^onesignalConfigurar\|/.test(l)) && aud.some(l => /^apagarConexao\|\|\{"conexao":"onesignal"\}$/.test(l)), 'cada ação do OneSignal fica na auditoria (sem chave)', aud.slice(-6).join(' ; ').slice(0, 300));
+  ok(![...amb.cacheMem.values()].some(v => v.includes(CHAVE_ORG) || v.includes('os_v2_app_NOVACHAVEENVIO')), 'as chaves não vão parar no cache do script');
+  ok(!/os_v2_(org|app)_[A-Za-z0-9]{20}/.test(codigoFonte), 'o arquivo .gs.txt não tem chave do OneSignal escrita');
 })();
 
 // ------------------------------------------------------------------ 9. o que já existia continua igual

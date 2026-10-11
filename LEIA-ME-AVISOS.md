@@ -1,7 +1,8 @@
 # Avisos (notificações) + instalar o app — guia do Pablo
 
-Tudo o que o site faz sozinho já está pronto (v3.4 do site + `catalogo-codigo-3.4.gs.txt`). Falta só **ligar o OneSignal para a Web** e
-**colar o código novo no Apps Script** — são os dois passos abaixo. Sem o passo 1 **nenhum aviso chega em celular nenhum** (é por isso que o app
+Tudo o que o site faz sozinho já está pronto (v3.5 do site + `catalogo-codigo-3.5.gs.txt`). Falta só **colar o código novo no Apps Script** e tocar em
+**📣 Ligar os avisos agora** no painel (aba 🔗 Conexões) — o painel liga a plataforma Web do OneSignal e cria a chave de envio sozinho (veja "Jeito automático" abaixo).
+Os passos manuais 1 e 2 só servem se você preferir fazer à mão. Sem o passo 1 **nenhum aviso chega em celular nenhum** (é por isso que o app
 instalado mostrava "Sem permissão": o OneSignal ainda não estava configurado para sites).
 
 ## Como funciona (resumo)
@@ -14,7 +15,16 @@ instalado mostrava "Sem permissão": o OneSignal ainda não estava configurado p
   **equipe, alunos, clientes com conta, um perfil, quem tem um acesso, uma pessoa só ou o cliente de um pedido**. Quem não tem conta recebe os avisos
   gerais ("todos", "quem instalou o app", "por interesse") e o andamento do próprio pedido.
 
-## Passo 1 — Ligar a plataforma **Web** no OneSignal (10 minutos, uma vez)
+## Jeito automático (recomendado, 2 minutos)
+
+1. Cole o `catalogo-codigo-3.5.gs.txt` no Apps Script e publique a **Nova versão** (Passo 3 abaixo).
+2. No OneSignal: ⚙️ **Settings → Organization settings → Security**. Copie o **Organization ID** e, em **Keys & IDs → Add Key**, crie uma chave (nome `TENKiTER site`, lista de IPs vazia) e copie-a na hora (começa com `os_v2_org_`; só aparece uma vez).
+3. No painel do site: **Gestão → 🔗 Conexões → OneSignal**. Cole o Organization ID e a chave → **Testar e guardar** → **📣 Ligar os avisos agora**.
+4. O painel liga a plataforma Web (Typical Site, `https://tenkitermodas.com.br`), grava o App ID e **cria a chave de envio** do app no servidor. Não precisa dos Passos 1 e 2 abaixo.
+
+A chave da organização manda em **todos** os apps do seu OneSignal: cole **só no painel** (nunca em conversa) e, se desconfiar de vazamento, apague no painel **e** no OneSignal.
+
+## Passo 1 — (manual) Ligar a plataforma **Web** no OneSignal (10 minutos, uma vez)
 
 1. Entre em **onesignal.com** → app **TENKiTER** (App ID `535f6b0d-c866-43c2-b241-43bd7ab62fae`).
 2. **Settings → Push & In-App → Web** (também aparece como *Platforms → Web*). Toque em **Configure** / **Activate**.
@@ -33,7 +43,7 @@ instalado mostrava "Sem permissão": o OneSignal ainda não estava configurado p
 > Se o domínio estiver no Cloudflare: deixe o **Rocket Loader** desligado (Speed → Optimization) e não bloqueie `OneSignalSDKWorker.js` em regras de
 > segurança.
 
-## Passo 2 — Chaves no Apps Script (5 minutos, uma vez)
+## Passo 2 — (manual) Chaves no Apps Script (5 minutos, uma vez)
 
 No Apps Script do **catálogo**: ⚙️ **Configurações do projeto → Propriedades do script → Editar propriedades** e confira/crie:
 
@@ -52,12 +62,12 @@ Opcionais (só se quiser):
 
 ## Passo 3 — Colar o código novo (como sempre)
 
-1. Abra `catalogo-codigo-3.4.gs.txt`, selecione **tudo**, copie.
+1. Abra `catalogo-codigo-3.5.gs.txt`, selecione **tudo**, copie.
 2. Apps Script do catálogo → apague o código antigo, cole o novo, **Salvar**.
 3. **Implantar → Gerenciar implantações → ✏️ → Versão: Nova versão → Implantar.**
-4. Confira no navegador: `<sua URL do script>?action=versao` tem que mostrar `"versao":"catalogo-3.4"`, `"pushCompleto":true`, `"categoriasGestao":true` e `"conexoes":true`.
+4. Confira no navegador: `<sua URL do script>?action=versao` tem que mostrar `"versao":"catalogo-3.5"`, `"pushCompleto":true`, `"categoriasGestao":true`, `"conexoes":true` e `"conexoesOnesignal":true`.
 
-O 3.4 já inclui tudo do 3.2 (categorias) e do 3.3 (avisos completos) — não precisa colar os anteriores antes. O Apps Script de **funcionários não muda** (`funcionario-codigo-3.0.gs.txt`).
+O 3.5 já inclui tudo do 3.2 (categorias), do 3.3 (avisos completos) e do 3.4 (Conexões) — não precisa colar os anteriores antes. O Apps Script de **funcionários não muda** (`funcionario-codigo-3.0.gs.txt`).
 
 ## Passo 4 — Teste no celular de verdade (uns 5 minutos)
 

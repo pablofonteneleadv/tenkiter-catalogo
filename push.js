@@ -82,7 +82,8 @@
   function verificarConfigurado() {
     var c = lerSS(S_CFG);
     if (c && Date.now() - c.t < 600000) { est.configurado = c.ok; return Promise.resolve(); }
-    return fetch('https://api.onesignal.com/sync/' + encodeURIComponent(APP_ID) + '/web?callback=x', { cache: 'no-store' })
+    // O OneSignal guarda cada endereço desse em cache por 1 hora (e o "não configurada" ficava preso depois de ligar): o parâmetro `_` muda a cada 10 minutos.
+    return fetch('https://api.onesignal.com/sync/' + encodeURIComponent(APP_ID) + '/web?callback=x&_=' + Math.floor(Date.now() / 600000), { cache: 'no-store' })
       .then(function (r) { return r.text().then(function (t) { return { ok: r.ok, t: t }; }); })
       .then(function (r) {
         if (/"success"\s*:\s*false/.test(r.t)) est.configurado = false;

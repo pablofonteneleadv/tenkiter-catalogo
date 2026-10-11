@@ -1,5 +1,7 @@
 /* ====================================================================
- * TENKiTER — admin-conexoes.js (v3.4) — CONEXÕES (Render / Cloudflare) do Admin total
+ * TENKiTER — admin-conexoes.js (v3.5) — CONEXÕES (Render / Cloudflare / OneSignal) do Admin total
+ *  • v3.5: bloco OneSignal (só com a bandeira conexoesOnesignal do backend): guarda o Organization ID + a Organization API Key e o botão
+ *    "Ligar os avisos agora" liga a plataforma Web do app e cria a chave de envio, tudo no servidor (a chave de envio nunca aparece aqui).
  *  • Guarda no SERVIDOR (Propriedades do Script) a chave do Render e o token da Cloudflare. A chave nunca volta para esta tela
  *    (só "guardada ✓" + últimos 4 caracteres), nunca fica no navegador (nem em localStorage) e nunca vai ao GitHub.
  *  • "Situação agora": confere feed.csv / feed.xml / sitemap.xml do SEU site, a plataforma Web do OneSignal, as regras e o último deploy
@@ -13,7 +15,7 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   const esc = (v) => escaparHtml(v);
-  let itens = [], status = null, deployTimer = null, ocupado = false;
+  let itens = [], status = null, deployTimer = null, ocupado = false, temOnesignal = false;
 
   /* ---------- backend ---------- */
   function chamar(extra) {
@@ -54,7 +56,7 @@
       .cx-msg { min-height: 1.4em; font-size: 0.86rem; margin: 6px 0; overflow-wrap: anywhere; }
       .cx-msg.ok { color: #146c43; font-weight: 700; } .cx-msg.erro { color: var(--vermelho); font-weight: 700; }
       .cx-bloco label { display: block; font-size: 0.82rem; font-weight: 700; margin: 8px 0 4px; }
-      .cx-bloco input[type=password] { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 0.95rem; background: var(--branco); }
+      .cx-bloco input[type=password], .cx-bloco input[type=text].cx-campo { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 0.95rem; background: var(--branco); }
       .cx-copia { display: flex; gap: 6px; margin-bottom: 6px; }
       .cx-copia input { flex: 1; min-width: 0; font-size: 0.78rem; padding: 9px 10px; border: 1px solid #ddd; border-radius: 8px; background: #fafafa; }
       .cx-copia button { width: auto; padding: 0 14px; min-height: 40px; background: var(--preto); color: var(--laranja); border: 0; border-radius: 8px; font-size: 0.8rem; cursor: pointer; }
@@ -94,12 +96,12 @@
 
   /* ---------- desenho ---------- */
   const ICONE = { true: '✅', false: '⚠️', null: 'ℹ️' };
-  const ROTULO_ACAO = { renderCriarRegras: 'Criar as regras que faltam', 'chave:render': 'Guardar a chave do Render', 'chave:cloudflare': 'Guardar o token da Cloudflare' };
+  const ROTULO_ACAO = { renderCriarRegras: 'Criar as regras que faltam', 'chave:render': 'Guardar a chave do Render', 'chave:cloudflare': 'Guardar o token da Cloudflare', onesignalConfigurar: 'Ligar os avisos agora', 'chave:onesignal': 'Guardar a chave do OneSignal' };
   function fmtData(iso) {
     const d = iso ? new Date(iso) : null;
     return d && !isNaN(d) ? d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
   }
-  function blocoChave(nome, titulo, ajuda, aviso) {
+  function blocoChave(nome, titulo, ajuda, aviso, antes, depois) {
     const c = (status.conexoes || {})[nome] || {};
     const quando = fmtData(c.salvaEm);
     return '<div class="cx-bloco" id="cx-bloco-' + nome + '">' +
@@ -109,12 +111,35 @@
         : '<p class="cx-chave-sem" id="cx-estado-' + nome + '">Sem chave guardada.</p>') +
       '<p class="g-nota">' + ajuda + '</p>' +
       (aviso ? '<div class="cx-aviso">' + aviso + '</div>' : '') +
+      (antes || '') +
       '<label for="cx-chave-' + nome + '">' + (c.temChave ? 'Trocar a chave' : 'Colar a chave') + '</label>' +
       '<input type="password" id="cx-chave-' + nome + '" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole aqui — a chave não aparece depois">' +
       '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="guardar" data-nome="' + nome + '">Testar e guardar</button>' +
       (c.temChave ? '<button type="button" class="cx-btn cx-perigo" data-cx="apagar" data-nome="' + nome + '">Apagar a chave guardada</button>' : '') + '</div>' +
+      (depois || '') +
       '<div class="cx-msg" id="cx-msg-' + nome + '" role="status"></div>' +
     '</div>';
+  }
+  function blocoOneSignal() {
+    const c = (status.conexoes || {}).onesignal || {};
+    const antes =
+      '<label for="cx-org-onesignal">Organization ID (código público)</label>' +
+      '<input type="text" class="cx-campo" id="cx-org-onesignal" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Ex.: b036c245-6f4a-4074-b7af-eaaed786933a" value="' + esc(c.orgId || '') + '">';
+    const depois =
+      '<p class="' + (c.chaveEnvio ? 'cx-chave-ok' : 'cx-chave-sem') + '" id="cx-estado-envio">' + (c.chaveEnvio ? '✔ A chave de envio do app (a que manda os avisos) já está no servidor.' : 'A chave de envio do app ainda não está no servidor — o botão abaixo cria sozinho.') + '</p>' +
+      (c.temChave
+        ? '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="acao" data-acao="onesignalConfigurar" id="cx-ligar-avisos">📣 Ligar os avisos agora</button></div>'
+        : '<p class="g-nota">Guarde a chave acima para liberar o botão “Ligar os avisos agora”.</p>') +
+      '<div id="cx-passos-onesignal" aria-live="polite"></div>';
+    return blocoChave('onesignal', 'OneSignal — avisos (notificações)',
+      'No OneSignal: <b>⚙️ Settings → Organization settings → Security → Keys &amp; IDs → Add Key</b> (nome: <i>TENKiTER site</i>, deixe a lista de IPs vazia). O <b>Organization ID</b> aparece na mesma tela. O painel testa tudo antes de guardar e depois liga a plataforma Web do app e cria a chave de envio.',
+      '⚠️ A chave da organização manda em <b>todos os apps</b> da sua conta do OneSignal. Ela só fica no servidor e só o Admin total mexe. Se desconfiar de vazamento, apague aqui <b>e</b> apague a chave no OneSignal. Nunca cole essa chave em conversa: cole só aqui.',
+      antes, depois);
+  }
+  function mostrarPassos(passos) {
+    const el = $('cx-passos-onesignal'); if (!el) return;
+    el.innerHTML = (passos && passos.length) ? '<ul class="cx-lista">' + passos.map((x) =>
+      '<li><span class="cx-i" aria-hidden="true">' + ICONE[String(x.ok)] + '</span><span class="cx-t">' + esc(x.detalhe) + '</span></li>').join('') + '</ul>' : '';
   }
   function desenhar() {
     const e = status.enderecos || {};
@@ -133,6 +158,8 @@
         '<div class="cx-msg" id="cx-msg-deploy" role="status"></div>' +
       '</div>' +
 
+      (temOnesignal ? blocoOneSignal() : '') +
+
       blocoChave('render', 'Render — chave da API',
         'Crie em <b>Render → Account Settings → API Keys → Create API Key</b> e cole aqui. Ela serve para conferir/criar as regras do site e publicar. O painel testa a chave antes de guardar.',
         '⚠️ A chave do Render manda em <b>toda a sua conta do Render</b> (não dá para limitar). Por isso ela só fica no servidor e só o Admin total mexe. Se desconfiar de vazamento, apague a chave aqui <b>e</b> revogue-a no Render.') +
@@ -149,11 +176,15 @@
   /* O botão "Guardar a chave…" aparece UMA vez (no item da própria chave); os itens do feed/mapa sem chave só explicam. */
   function desenharItens() {
     const ul = $('cx-itens'); if (!ul) return;
-    ul.innerHTML = itens.map((x) =>
+    let ligarJa = false;                                   // "Ligar os avisos agora" aparece em UM item só (dois botões iguais confundem)
+    ul.innerHTML = itens.map((x) => {
+      const mostra = x.acao && ROTULO_ACAO[x.acao] && (x.acao.indexOf('chave:') !== 0 || /-chave$/.test(x.id)) && !(x.acao === 'onesignalConfigurar' && ligarJa);
+      if (mostra && x.acao === 'onesignalConfigurar') ligarJa = true;
+      return (
       '<li><span class="cx-i" aria-hidden="true">' + ICONE[String(x.ok)] + '</span>' +
       '<span class="cx-t"><b>' + esc(x.rotulo) + '</b><span>' + (x.ok === true ? 'Tudo certo. ' : x.ok === false ? 'Atenção. ' : '') + esc(x.detalhe) + '</span></span>' +
-      (x.acao && ROTULO_ACAO[x.acao] && (x.acao.indexOf('chave:') !== 0 || /-chave$/.test(x.id)) ? '<button type="button" class="cx-btn ' + (x.ok === false ? 'cx-prim' : 'cx-sec') + '" data-cx="acao" data-acao="' + esc(x.acao) + '">' + esc(ROTULO_ACAO[x.acao]) + '</button>' : '') +
-      '</li>').join('') || '<li><span class="cx-t">Nada para mostrar.</span></li>';
+      (mostra ? '<button type="button" class="cx-btn ' + (x.ok === false ? 'cx-prim' : 'cx-sec') + '" data-cx="acao" data-acao="' + esc(x.acao) + '">' + esc(ROTULO_ACAO[x.acao]) + '</button>' : '') +
+      '</li>'); }).join('') || '<li><span class="cx-t">Nada para mostrar.</span></li>';
   }
   function msg(id, texto, tipo) {
     const el = $(id); if (!el) return;
@@ -182,12 +213,19 @@
   async function guardar(nome) {
     const campo = $('cx-chave-' + nome); const chave = campo ? campo.value.trim() : '';
     if (!chave) { msg('cx-msg-' + nome, 'Cole a chave no campo acima primeiro.', 'erro'); if (campo) campo.focus(); return; }
+    const extra = {};
+    if (nome === 'onesignal') {
+      const org = $('cx-org-onesignal'); const orgId = org ? org.value.trim() : '';
+      const guardado = (((status.conexoes || {}).onesignal) || {}).orgId;
+      if (!orgId && !guardado) { msg('cx-msg-' + nome, 'Cole também o Organization ID (o código da tela Security).', 'erro'); if (org) org.focus(); return; }
+      if (orgId) extra.orgId = orgId;
+    }
     msg('cx-msg-' + nome, 'Testando a chave…', '');
-    const r = await chamar({ action: 'salvarConexao', nome, chave });
+    const r = await chamar(Object.assign({ action: 'salvarConexao', nome, chave }, extra));
     if (campo) campo.value = '';                      // a chave não fica na tela nem no aparelho
     if (!r || !r.ok) { msg('cx-msg-' + nome, erroTxt(r), 'erro'); return; }
     status = r; desenhar();
-    msg('cx-msg-' + nome, '✔ Guardada. ' + (r.detalhe || ''), 'ok');
+    msg('cx-msg-' + nome, '✔ Guardada. ' + (r.detalhe || '') + (nome === 'onesignal' ? ' Agora toque em “Ligar os avisos agora”.' : ''), 'ok');
     conferir();
   }
   async function apagar(nome) {
@@ -205,6 +243,21 @@
     const n = (r.criadas || []).length;
     msg('cx-msg-itens', n ? '✔ Criei ' + n + ' regra(s): ' + r.criadas.join(', ') + '. Pode levar alguns segundos para valer.' : 'Nada a criar: as regras já estavam no lugar.', 'ok');
     setTimeout(conferir, 4000);
+  }
+  async function ligarAvisos() {
+    if (ocupado) return;
+    ocupado = true;
+    const b = $('cx-ligar-avisos'); if (b) b.disabled = true;
+    msg('cx-msg-onesignal', 'Ligando os avisos… (leva alguns segundos)', '');
+    const r = await chamar({ action: 'onesignalConfigurar' });
+    ocupado = false;
+    if (!r || !r.ok) {
+      const b2 = $('cx-ligar-avisos'); if (b2) b2.disabled = false;
+      mostrarPassos(r && r.passos); msg('cx-msg-onesignal', erroTxt(r), 'erro'); return;
+    }
+    status = r; desenhar(); mostrarPassos(r.passos);
+    msg('cx-msg-onesignal', r.webPronto ? '✔ Avisos ligados! Os aparelhos já podem ativar as notificações (o app instalado pode levar alguns minutos para perceber).' : '✔ Ligado. O OneSignal ainda não confirmou: toque em “Conferir de novo” daqui a um minuto.', 'ok');
+    conferir();
   }
   async function publicar() {
     const b = $('cx-deploy'); if (b) b.disabled = true;
@@ -249,6 +302,7 @@
     else if (a === 'acao') {
       const ac = b.dataset.acao;
       if (ac === 'renderCriarRegras') criarRegras();
+      else if (ac === 'onesignalConfigurar') ligarAvisos();
       else if (ac.indexOf('chave:') === 0) { const c = $('cx-chave-' + ac.slice(6)); if (c) { c.scrollIntoView({ block: 'center' }); c.focus(); } }
     }
   }
@@ -259,6 +313,7 @@
     let v = null;
     try { v = await versaoServidor(); } catch (e) { v = null; }
     if (!v || typeof v !== 'object' || !v.conexoes) return;       // backend antigo: nada muda
+    temOnesignal = !!v.conexoesOnesignal;                          // backend 3.4: sem o bloco do OneSignal
     botao.hidden = false;
     botao.addEventListener('click', () => {
       if (!podeGerir()) { alert('Esta tela é só para o Admin total.'); return; }

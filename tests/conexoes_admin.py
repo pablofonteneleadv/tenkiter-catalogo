@@ -1,6 +1,6 @@
-"""Conexões do Admin total (admin-conexoes.js, v3.4): guardar a chave do Render / token da Cloudflare NO SERVIDOR, situação (feed, mapa, regras do Render,
-OneSignal, Worker), criar as regras que faltam, publicar o site agora e acompanhar, endereços prontos para a Meta/Google. A chave nunca fica na tela nem
-no aparelho. Só Admin total e só com backend 3.4. Apps Script simulado (mock.py)."""
+"""Conexões do Admin total (admin-conexoes.js, v3.4/v3.5): guardar a chave do Render / token da Cloudflare / chave da organização do OneSignal NO SERVIDOR,
+situação (feed, mapa, regras do Render, OneSignal, Worker), criar as regras que faltam, publicar o site agora e acompanhar, "Ligar os avisos agora" (OneSignal),
+endereços prontos para a Meta/Google. A chave nunca fica na tela nem no aparelho. Só Admin total e só com backend 3.4+ (OneSignal: 3.5). Apps Script simulado (mock.py)."""
 import sys, os, json
 AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, AQUI)
@@ -21,6 +21,8 @@ def dialogo(d):
     DIALOGOS.append((d.type, d.message)); d.accept()
 CHAVE_R = "rnd_SEGREDOSEGREDOSEGREDO7788"
 CHAVE_C = "cfut_SEGREDODACLOUDFLARE0123456789ab"
+CHAVE_O = "os_v2_org_SEGREDODAORGANIZACAOFALSA0123456789xyz"     # inventada: o repositório é público, nunca usar chave real em teste
+ORG_ID = "b0b0b0b0-1111-4222-8333-444444444444"
 POLL = "window.TK_CONEXOES_POLL_MS=250;"
 
 def pagina(ctx, erros):
@@ -144,6 +146,51 @@ with sync_playwright() as p:
     chk("Tab não escapa da janela (foco preso)", pg.evaluate("document.querySelector('#overlay-conexoes').contains(document.activeElement)") and foco_dentro is not None)
     pg.click("#cx-fechar"); pg.wait_for_timeout(400)
     chk("✕ fecha a janela", pg.locator("#overlay-conexoes.aberto").count() == 0)
+
+
+    print("== OneSignal (backend 3.5) ==")
+    chk("com o backend 3.4 o bloco OneSignal não aparece (painel segue igual)", pg.locator("#cx-bloco-onesignal").count() == 0)
+    log5 = []
+    c5, st5 = novo_contexto(b, versao="3.5", log=log5)
+    st5["pushcfg"]["web"] = False; st5["pushcfg"]["chave"] = False
+    p5 = pagina(c5, erros); p5.goto(BASE + "admin.html"); p5.wait_for_timeout(2600)
+    abrir(p5)
+    t5 = corpo(p5)
+    chk("bloco OneSignal aparece com a explicação de onde criar a chave e o aviso 'todos os apps'", "OneSignal — avisos (notificações)" in t5 and "Keys & IDs" in t5 and "todos os apps" in t5 and "Nunca cole essa chave em conversa" in t5, t5[:300])
+    chk("campos: Organization ID (texto, com rótulo) e chave (senha, sem preenchimento automático, com rótulo)", p5.eval_on_selector("#cx-org-onesignal", "i=>i.type==='text' && !!document.querySelector('label[for=cx-org-onesignal]')") and p5.eval_on_selector("#cx-chave-onesignal", "i=>i.type==='password' && i.autocomplete==='new-password' && i.value==='' && !!document.querySelector('label[for=cx-chave-onesignal]')"))
+    chk("sem chave: não há botão 'Ligar os avisos agora' no bloco (só aviso para guardar antes)", p5.locator("#cx-ligar-avisos").count() == 0 and "Guarde a chave acima" in t5)
+    it5 = p5.inner_text("#cx-itens")
+    chk("situação: avisos desligados (Atenção) e item da chave do OneSignal com UM botão para guardar", "Avisos (OneSignal, plataforma Web)" in it5 and "Atenção." in it5 and p5.locator("#cx-itens button:has-text('Guardar a chave do OneSignal')").count() == 1 and p5.locator("#cx-itens button:has-text('Ligar os avisos agora')").count() == 0, p5.locator("#cx-itens button").all_inner_texts())
+    axe(p5, "Conexões — bloco OneSignal sem chave")
+    p5.fill("#cx-chave-onesignal", CHAVE_O); p5.click("[data-cx=guardar][data-nome=onesignal]"); p5.wait_for_timeout(500)
+    chk("sem o Organization ID: pede o código e NÃO chama o servidor", "Organization ID" in p5.inner_text("#cx-msg-onesignal") and not any(x.get("action") == "salvarConexao" for x in log5), p5.inner_text("#cx-msg-onesignal"))
+    p5.fill("#cx-org-onesignal", "  " + ORG_ID + " "); p5.fill("#cx-chave-onesignal", "  " + CHAVE_O + " "); p5.click("[data-cx=guardar][data-nome=onesignal]"); p5.wait_for_timeout(1800)
+    chk("o servidor recebeu a chave limpa e o código, e guardou", st5["chave_enviada"] == CHAVE_O and st5["org_enviado"] == ORG_ID and st5["conex"]["onesignal"]["temChave"], (st5.get("chave_enviada"), st5.get("org_enviado")))
+    chk("mostra 'Guardada' e a próxima ação; o código (público) continua no campo e a chave NÃO", "✔ Guardada" in p5.inner_text("#cx-msg-onesignal") and "Ligar os avisos agora" in p5.inner_text("#cx-msg-onesignal") and p5.input_value("#cx-org-onesignal") == ORG_ID and p5.input_value("#cx-chave-onesignal") == "", p5.inner_text("#cx-msg-onesignal"))
+    chk("estado mostra só o final da chave (xyz) e o botão de apagar", "termina em 9xyz" in p5.inner_text("#cx-estado-onesignal") and p5.locator("[data-cx=apagar][data-nome=onesignal]").count() == 1, p5.inner_text("#cx-estado-onesignal"))
+    h5 = p5.content(); store5 = p5.evaluate("JSON.stringify([localStorage, sessionStorage])") + json.dumps(p5.context.cookies())
+    chk("a chave da organização NÃO está no HTML, nem no localStorage/sessionStorage/cookies", CHAVE_O not in h5 and CHAVE_O not in store5 and "SEGREDODAORGANIZACAO" not in h5 + store5)
+    p5.wait_for_timeout(600)
+    it5 = p5.inner_text("#cx-itens")
+    chk("com a chave guardada: avisos ainda desligados, UM botão 'Ligar os avisos agora' na situação e outro no bloco", p5.locator("#cx-itens button:has-text('Ligar os avisos agora')").count() == 1 and p5.locator("#cx-ligar-avisos").count() == 1 and "chave de envio do app ainda não está" in p5.inner_text("#cx-estado-envio"), (p5.locator("#cx-itens button").all_inner_texts(), p5.inner_text("#cx-estado-envio")))
+    axe(p5, "Conexões — OneSignal com a chave guardada")
+    p5.click("#cx-ligar-avisos"); p5.wait_for_timeout(2200)
+    m5 = p5.inner_text("#cx-msg-onesignal"); ps = p5.inner_text("#cx-passos-onesignal")
+    chk("ligar: mostra '✔ Avisos ligados!' e o passo a passo em frases", st5["ligou"] == 1 and "✔ Avisos ligados!" in m5 and "Plataforma Web ligada" in ps and "Criei a chave de envio" in ps and "{" not in ps, (m5, ps))
+    chk("a tela passa a dizer que a chave de envio já está no servidor (sem mostrar a chave)", "já está no servidor" in p5.inner_text("#cx-estado-envio") and "os_v2_app" not in p5.content())
+    p5.wait_for_timeout(800)
+    it5 = p5.inner_text("#cx-itens")
+    chk("depois de ligar a situação fica toda certa para o OneSignal", "Plataforma Web ligada" in it5 and "A chave de envio funciona." in it5 and p5.locator("#cx-itens button:has-text('Ligar os avisos agora')").count() == 0, it5[:500])
+    st5["liga_falha"] = True
+    p5.click("#cx-ligar-avisos"); p5.wait_for_timeout(1800)
+    me = p5.inner_text("#cx-msg-onesignal")
+    chk("falha ao ligar vira frase de erro (sem JSON) e o botão volta a funcionar", "Não consegui ligar a plataforma Web" in me and "{" not in me and p5.locator("#cx-ligar-avisos").is_enabled(), me)
+    st5["liga_falha"] = False
+    DIALOGOS.clear()
+    p5.click("[data-cx=apagar][data-nome=onesignal]"); p5.wait_for_timeout(1500)
+    chk("apagar pede confirmação, remove a chave e o código, e o botão 'Ligar' some", any(t == "confirm" for t, m in DIALOGOS) and st5.get("apagou") == "onesignal" and p5.input_value("#cx-org-onesignal") == "" and p5.locator("#cx-ligar-avisos").count() == 0 and "Sem chave guardada." in p5.inner_text("#cx-estado-onesignal"))
+    axe(p5, "Conexões — OneSignal depois de apagar")
+    c5.close()
 
     chk("nenhum erro de JavaScript", not erros, erros[:3])
     b.close()

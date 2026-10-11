@@ -23,7 +23,10 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     cat_gestao = versao >= "3.2"
     push3 = novo and versao >= "3.3"     # avisos completos (pushCompleto): público, agendamento, modelos, histórico com números
     conex = novo and versao >= "3.4"     # Conexões (conexoes): chaves do Render/Cloudflare guardadas no servidor, situação, regras, publicar
+    conex5 = conex and versao >= "3.5"   # Conexões com OneSignal (conexoesOnesignal): Organization ID + chave da organização, "Ligar os avisos agora"
     st["conex"]={"render":{"temChave":False,"fim":"","salvaEm":""},"cloudflare":{"temChave":False,"fim":"","salvaEm":""}}
+    if conex5: st["conex"]["onesignal"]={"temChave":False,"fim":"","salvaEm":"","orgId":"","appId":"535f6b0d-c866-43c2-b241-43bd7ab62fae","chaveEnvio":False}
+    st["ligou"]=0
     st["regras_ok"]=False; st["deploys"]=0; st["status_deploy"]=0
     st["modelos"]=[{"id":"m1","rotulo":"Promoção","titulo":"Promoção de fim de semana! 🎉","mensagem":"{nome}, 20% off até domingo.","url":"","imagem":""},
                    {"id":"m2","rotulo":"Chegou novidade","titulo":"Chegou novidade! ✨","mensagem":"Peças novas no catálogo.","url":"","imagem":""}]
@@ -35,6 +38,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     if cat_gestao: FLAGS["categoriasGestao"]=True
     if push3: FLAGS["pushCompleto"]=True
     if conex: FLAGS["conexoes"]=True
+    if conex5: FLAGS["conexoesOnesignal"]=True
     def limpa(n): return " ".join(str(n or "").replace(","," ").split())[:60].strip()
     def norm(n):
         import unicodedata
@@ -149,7 +153,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             for k,c in(("testeCodigo","teste"),("graphVersao","graph"),("sinonimos","sinonimos"),("segmentosPush","segmentos")):
                 if k in b: i[c]=b[k]
             return {"ok":True,"pixelId":i["pixelId"],"capiConfigurado":i["capi"],"testeCodigo":i["teste"],"graphVersao":i["graph"],"sinonimos":i["sinonimos"],"segmentosPush":i["segmentos"]}
-        if conex and a in("statusConexoes","salvarConexao","testarConexoes","renderCriarRegras","renderDeploy","renderStatusDeploy"):
+        if conex and a in("statusConexoes","salvarConexao","testarConexoes","renderCriarRegras","renderDeploy","renderStatusDeploy","onesignalConfigurar"):
             if "gerir_acessos" not in perms: return {"ok":False,"semPermissao":True,"erro":"Você não tem permissão para essa ação."}
             C=st["conex"]
             def estado(extra=None):
@@ -160,12 +164,17 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if a=="salvarConexao":
                 n=b.get("nome")
                 if n not in C: return {"ok":False,"erro":"Conexão desconhecida."}
-                if b.get("apagar") is True: C[n]={"temChave":False,"fim":"","salvaEm":""}; st["apagou"]=n; return estado()
-                k=str(b.get("chave","")).strip(); st["chave_enviada"]=k
+                if b.get("apagar") is True:
+                    C[n]={**C[n],"temChave":False,"fim":"","salvaEm":""}
+                    if n=="onesignal": C[n]["orgId"]=""
+                    st["apagou"]=n; return estado()
+                k=str(b.get("chave","")).strip(); st["chave_enviada"]=k; st["org_enviado"]=b.get("orgId")
+                if n=="onesignal" and not (str(b.get("orgId") or "").strip() or C[n]["orgId"]): return {"ok":False,"erro":"O Organization ID parece errado: é um código de letras, números e traços. Copie de novo na tela Security do OneSignal."}
                 if len(k)<20: return {"ok":False,"erro":"Essa chave parece incompleta ou com caracteres estranhos. Cole de novo, só a chave, sem espaços."}
                 if "RECUSADA" in k: return {"ok":False,"erro":"Não guardei a chave: A chave foi recusada (inválida, vencida ou sem permissão)."}
-                C[n]={"temChave":True,"fim":k[-4:],"salvaEm":"2026-10-10T22:40:00.000Z"}
-                return estado({"detalhe":'Enxerga o site "tenkiter-catalogo".' if n=="render" else "Chave ativa."})
+                C[n]={**C[n],"temChave":True,"fim":k[-4:],"salvaEm":"2026-10-10T22:40:00.000Z"}
+                if n=="onesignal": C[n]["orgId"]=str(b.get("orgId") or C[n]["orgId"]).strip().lower()
+                return estado({"detalhe":'Enxerga o site "tenkiter-catalogo".' if n=="render" else ('Enxerga o app "Tenkitermodas".' if n=="onesignal" else "Chave ativa.")})
             if a=="testarConexoes":
                 ok=st["regras_ok"]; rc=C["render"]["temChave"]; cc=C["cloudflare"]["temChave"]; acao="renderCriarRegras" if rc else "chave:render"
                 it=[{"id":"feed-csv","rotulo":"Catálogo para a Meta (feed.csv)","ok":ok,"detalhe":"9 peça(s) no feed do seu site." if ok else "O endereço https://tenkitermodas.com.br/feed.csv não entregou o catálogo (falta a regra no Render).","acao":"" if ok else acao},
@@ -176,9 +185,28 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                 else:
                     it.append({"id":"render-chave","rotulo":"Render (publicar e regras)","ok":True,"detalhe":'Enxerga o site "tenkiter-catalogo".',"acao":""})
                     it.append({"id":"render-regras","rotulo":"Regras do Render","ok":ok,"detalhe":"Todas no lugar: /p/*, /feed.csv, /feed.xml, /sitemap.xml." if ok else "Faltam: /feed.csv, /feed.xml, /sitemap.xml.","acao":"" if ok else "renderCriarRegras"})
+                if conex5:
+                    oc=C["onesignal"]; web=bool(st["pushcfg"]["web"]); env=bool(st["pushcfg"]["chave"])
+                    for x in it:
+                        if x["id"]=="onesignal": x["acao"]="" if web or not oc["temChave"] else "onesignalConfigurar"
+                    it.append({"id":"onesignal-envio","rotulo":"Avisos (chave de envio do app)","ok":env,"detalhe":"A chave de envio funciona." if env else "Falta a chave de envio do app (ONESIGNAL_REST_API_KEY): sem ela o site não consegue mandar avisos.","acao":"" if env or not oc["temChave"] else "onesignalConfigurar"})
+                    if not oc["temChave"]: it.append({"id":"onesignal-chave","rotulo":"OneSignal (ligar os avisos pelo painel)","ok":None,"detalhe":"Sem chave guardada. Guarde o Organization ID e a chave abaixo.","acao":"chave:onesignal"})
+                    else: it.append({"id":"onesignal-chave","rotulo":"OneSignal (ligar os avisos pelo painel)","ok":True,"detalhe":'Enxerga o app "Tenkitermodas".',"acao":""})
                 if not cc: it.append({"id":"cloudflare-chave","rotulo":"Cloudflare (Worker das miniaturas, feed e mapa)","ok":None,"detalhe":"Sem chave guardada. É opcional.","acao":"chave:cloudflare"})
                 else: it.append({"id":"worker","rotulo":"Worker tenkiter-og","ok":True,"detalhe":"Publicado em 10/10/2026 22:36.","acao":""})
                 return {"ok":True,"itens":it,"quando":"2026-10-10T22:41:00.000Z"}
+            if a=="onesignalConfigurar":
+                oc=C.get("onesignal")
+                if not oc or not oc["temChave"] or not oc["orgId"]: return {"ok":False,"erro":"Guarde primeiro o Organization ID e a chave do OneSignal (em Conexões)."}
+                st["ligou"]+=1
+                if st.get("liga_falha"): return {"ok":False,"erro":"Não consegui ligar a plataforma Web: O serviço respondeu com erro 400.","passos":[{"id":"app","ok":True,"detalhe":'App "Tenkitermodas" encontrado.'}]}
+                novo_envio=not st["pushcfg"]["chave"]; ja_web=st["pushcfg"]["web"]
+                st["pushcfg"]["web"]=True; st["pushcfg"]["chave"]=True; oc["chaveEnvio"]=True
+                passos=[{"id":"app","ok":True,"detalhe":'App "Tenkitermodas" encontrado.'},
+                        {"id":"web","ok":True,"detalhe":"A plataforma Web já estava configurada para https://tenkitermodas.com.br." if ja_web else "Plataforma Web ligada para https://tenkitermodas.com.br."},
+                        {"id":"envio","ok":True,"detalhe":"Criei a chave de envio do app e guardei no servidor." if novo_envio else "A chave de envio que já estava no servidor funciona."},
+                        {"id":"conferencia","ok":True,"detalhe":"O OneSignal já responde: plataforma Web ligada."}]
+                return estado({"passos":passos,"webPronto":True})
             if a=="renderCriarRegras":
                 if not C["render"]["temChave"]: return {"ok":False,"erro":"Guarde primeiro a chave do Render (em Conexões)."}
                 criar=[] if st["regras_ok"] else ["/feed.csv","/feed.xml","/sitemap.xml"]; st["regras_ok"]=True

@@ -1,6 +1,17 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.4
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.5
 //
-// NOVIDADE v3.4 -- CONEXÕES (Render / Cloudflare) guardadas no servidor, para o painel cuidar sozinho do que antes dependia de colar chave em conversa:
+// NOVIDADE v3.5 -- CONEXÃO COM O OneSignal guardada no servidor (a aba "Conexões" ganha o bloco OneSignal):
+//  - salvarConexao (nome 'onesignal'): guarda o Organization ID (público) em ONESIGNAL_ORG_ID e a Organization API Key em ONESIGNAL_ORG_API_KEY
+//    (SÓ nas Propriedades do Script; mesma regra das outras chaves: nunca volta ao navegador, não entra em log/auditoria/cache). A chave é TESTADA no
+//    OneSignal antes de guardar, e o Organization ID tem que ser o do app do TENKiTER.
+//  - onesignalConfigurar (Admin total, só com login): liga a plataforma Web do app (Typical Site, https://tenkitermodas.com.br, ícone da loja) se
+//    ainda não estiver, grava ONESIGNAL_APP_ID se faltar, e CRIA a chave de envio do app (ONESIGNAL_REST_API_KEY) quando não existe ou foi recusada --
+//    o Pablo não precisa mais mexer nas Propriedades do Script. Idempotente (repetir não muda nada que já está certo). A chave criada nunca é devolvida.
+//  - testarConexoes ganha 'onesignal-chave' e 'onesignal-envio'; a conferência da plataforma Web ignora o cache de 1 hora do OneSignal (sync com
+//    parâmetro novo a cada consulta) -- antes ela podia mostrar "não configurada" por até 1 hora depois de ligar.
+//  - versao anuncia conexoesOnesignal:true; o site só mostra o bloco OneSignal se essa bandeira existir (backend 3.4 continua funcionando).
+//
+// v3.4 -- CONEXÕES (Render / Cloudflare) guardadas no servidor, para o painel cuidar sozinho do que antes dependia de colar chave em conversa:
 //  - Ações (só Admin total = gerir_acessos, e SÓ com login -- o PIN antigo é recusado): statusConexoes, salvarConexao, testarConexoes,
 //    renderCriarRegras, renderDeploy, renderStatusDeploy.
 //  - A chave do Render (RENDER_API_KEY) e o token da Cloudflare (CLOUDFLARE_API_TOKEN) ficam SÓ nas Propriedades do Script. Nunca voltam para o
@@ -142,7 +153,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-3.4';
+const VERSAO_CATALOGO = 'catalogo-3.5';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1213,7 +1224,9 @@ const PERMISSAO_POR_ACAO_ = {
   pushModelos: 'catalogo_push', salvarPushModelo: 'catalogo_push', excluirPushModelo: 'catalogo_push', salvarPushConfig: 'gerir_acessos',
   // v3.4: conexões (chaves do Render/Cloudflare guardadas no servidor) -- Admin total, só com login
   statusConexoes: 'gerir_acessos', salvarConexao: 'gerir_acessos', testarConexoes: 'gerir_acessos',
-  renderCriarRegras: 'gerir_acessos', renderDeploy: 'gerir_acessos', renderStatusDeploy: 'gerir_acessos'
+  renderCriarRegras: 'gerir_acessos', renderDeploy: 'gerir_acessos', renderStatusDeploy: 'gerir_acessos',
+  // v3.5: liga o OneSignal pelo painel (Organization API Key guardada no servidor)
+  onesignalConfigurar: 'gerir_acessos'
 };
 const PERMISSAO_POR_LOTE_ = {
   ajustarPrecoPorcento: 'catalogo_precos', marcarNovidade: 'catalogo_cadastrar', alterarEstoque: 'catalogo_cadastrar',
@@ -1409,7 +1422,7 @@ const ACOES_QUE_ALTERAM_PRODUTOS_ = ['create', 'update', 'delete', 'reativar', '
 // as demais mexem em linhas que já existem e por isso entram na fila:
 const ACOES_COM_TRAVA_ = ['update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate', 'importarProdutos', 'gerarCodigosFaltantes', 'excluirCategoria', 'renomearCategoria'];
 // v3.2: ações que só valem com LOGIN (nunca com o PIN antigo, que não diz quem é a pessoa nem a permissão dela)
-const ACOES_SO_COM_LOGIN_ = ['excluirCategoria', 'renomearCategoria', 'statusConexoes', 'salvarConexao', 'testarConexoes', 'renderCriarRegras', 'renderDeploy', 'renderStatusDeploy'];
+const ACOES_SO_COM_LOGIN_ = ['excluirCategoria', 'renomearCategoria', 'statusConexoes', 'salvarConexao', 'testarConexoes', 'renderCriarRegras', 'renderDeploy', 'renderStatusDeploy', 'onesignalConfigurar'];
 
 /**
  * Backup: copia a planilha do catálogo para uma pasta do Drive e mantém só as
@@ -1479,7 +1492,7 @@ function doGetInterno_(e) {
   if (action === 'versao') return jsonResponse_({
     ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
     pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true,
-    categoriasGestao: true, pushCompleto: true, conexoes: true
+    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true
   });
   if (action === 'config') return configPublica_();
   if (action === 'pushconfig') return pushConfigPublica_();
@@ -1625,6 +1638,7 @@ function despacharPost_(body) {
   if (action === 'renderCriarRegras') return renderCriarRegras_(body);
   if (action === 'renderDeploy') return renderDeploy_(body);
   if (action === 'renderStatusDeploy') return renderStatusDeploy_(body);
+  if (action === 'onesignalConfigurar') return onesignalConfigurar_(body);
 
   return jsonResponse_({ ok: false, erro: 'Ação desconhecida: ' + action });
 }
@@ -2646,13 +2660,13 @@ function pushConfigPublica_() {
 }
 
 /** O OneSignal responde, sem chave, se a plataforma Web do app já foi configurada (sem isso nenhum aviso chega a navegador/iPhone). */
-function pushWebPronto_(appId) {
+function pushWebPronto_(appId, forcar) {
   const cache = CacheService.getScriptCache();
-  const c = cache.get('push_web_' + appId);
-  if (c) return c === '1';
+  if (!forcar) { const c = cache.get('push_web_' + appId); if (c) return c === '1'; }
   let ok = false;
   try {
-    const r = UrlFetchApp.fetch(PUSH_API_ + '/sync/' + encodeURIComponent(appId) + '/web?callback=x', { muteHttpExceptions: true });
+    // O OneSignal guarda cada endereço desse em cache por 1 HORA (s-maxage=3600): sem um parâmetro novo, "não configurada" continuaria aparecendo depois de ligar.
+    const r = UrlFetchApp.fetch(PUSH_API_ + '/sync/' + encodeURIComponent(appId) + '/web?callback=x&_=' + new Date().getTime(), { muteHttpExceptions: true });
     const t = String(r.getContentText() || '');
     ok = /"success"\s*:\s*false/.test(t) ? false : (r.getResponseCode() === 200 && t.length > 40);
   } catch (e) { return null; }
@@ -3397,7 +3411,7 @@ function descricaoLocal_(body) {
 }
 
 
-// ===================== v3.4: CONEXÕES (Render / Cloudflare) =====================
+// ===================== v3.4: CONEXÕES (Render / Cloudflare) + v3.5: OneSignal =====================
 /** As chaves ficam nas Propriedades do Script. Esta parte NUNCA devolve a chave, nunca a escreve em log ou auditoria e só é chamada por Admin total com login. */
 const RENDER_API_ = 'https://api.render.com/v1';
 const CLOUDFLARE_API_ = 'https://api.cloudflare.com/client/v4';
@@ -3405,9 +3419,13 @@ const RENDER_SERVICO_ = 'srv-dasa63fpn0mc73fh8fgg';
 const WORKER_NOME_ = 'tenkiter-og';
 const WORKER_BASE_ = 'https://tenkiter-og.distkrpconfeccoes.workers.dev';
 const REGRAS_RENDER_ = ['/p/*', '/feed.csv', '/feed.xml', '/sitemap.xml']; // cada uma é um Rewrite para WORKER_BASE_ + o mesmo caminho
+const ONESIGNAL_APP_ID_PADRAO_ = '535f6b0d-c866-43c2-b241-43bd7ab62fae'; // público (também está em common.js)
+const ONESIGNAL_UUID_ = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const CONEXOES_ = {
-  render:     { prop: 'RENDER_API_KEY',       rotulo: 'Render',     padrao: /^rnd_[A-Za-z0-9]{16,100}$/ },
-  cloudflare: { prop: 'CLOUDFLARE_API_TOKEN', rotulo: 'Cloudflare', padrao: /^[A-Za-z0-9_\-]{30,160}$/ }
+  render:     { prop: 'RENDER_API_KEY',        rotulo: 'Render',     padrao: /^rnd_[A-Za-z0-9]{16,100}$/ },
+  cloudflare: { prop: 'CLOUDFLARE_API_TOKEN',  rotulo: 'Cloudflare', padrao: /^[A-Za-z0-9_\-]{30,160}$/ },
+  // Organization API Key do OneSignal (começa com os_v2_org_). Manda em TODOS os apps da organização: só fica no servidor.
+  onesignal:  { prop: 'ONESIGNAL_ORG_API_KEY', rotulo: 'OneSignal',  padrao: /^os_v2_org_[A-Za-z0-9]{30,300}$/ }
 };
 
 function conexaoChave_(nome) {
@@ -3415,8 +3433,8 @@ function conexaoChave_(nome) {
   return c ? String(PropertiesService.getScriptProperties().getProperty(c.prop) || '').trim() : '';
 }
 /** Chamada autenticada. Devolve { codigo, dados, erro }; nunca lança e nunca devolve a chave. */
-function conexaoHttp_(metodo, url, chave, corpo) {
-  const opt = { method: metodo, muteHttpExceptions: true, headers: { Authorization: 'Bearer ' + chave, Accept: 'application/json' } };
+function conexaoHttp_(metodo, url, chave, corpo, esquema) {
+  const opt = { method: metodo, muteHttpExceptions: true, headers: { Authorization: (esquema || 'Bearer') + ' ' + chave, Accept: 'application/json' } };
   if (corpo !== undefined) { opt.contentType = 'application/json'; opt.payload = JSON.stringify(corpo); }
   try {
     const r = UrlFetchApp.fetch(url, opt);
@@ -3434,8 +3452,25 @@ function conexaoMsgApi_(r) {
   const m = r.dados && (r.dados.message || (r.dados.errors && r.dados.errors[0] && r.dados.errors[0].message));
   return 'O serviço respondeu com erro ' + r.codigo + (m ? ': ' + String(m).slice(0, 160) : '.');
 }
-/** Testa a chave de verdade, na API. */
-function conexaoTestar_(nome, chave) {
+/** App ID do OneSignal usado nas chamadas com a chave da organização (só aceita o formato UUID: ele vai dentro do endereço). */
+function onesignalAppId_() {
+  const v = String(PropertiesService.getScriptProperties().getProperty('ONESIGNAL_APP_ID') || '').trim().toLowerCase();
+  return ONESIGNAL_UUID_.test(v) ? v : ONESIGNAL_APP_ID_PADRAO_;
+}
+function onesignalOrgId_() { return String(PropertiesService.getScriptProperties().getProperty('ONESIGNAL_ORG_ID') || '').trim(); }
+/** Testa a chave de verdade, na API. `extra.orgId` (OneSignal) = o Organization ID que a pessoa informou. */
+function conexaoTestar_(nome, chave, extra) {
+  if (nome === 'onesignal') {
+    // Só lê id/nome/organização do app: a resposta do OneSignal traz também a chave de envio do app, que NUNCA é repassada.
+    const r = conexaoHttp_('get', PUSH_API_ + '/apps/' + onesignalAppId_(), chave, undefined, 'Key');
+    if (r.codigo === 200 && r.dados && r.dados.id) {
+      const orgInf = String((extra && extra.orgId) || onesignalOrgId_() || '');
+      if (orgInf && r.dados.organization_id && String(r.dados.organization_id) !== orgInf) return { ok: false, detalhe: 'A chave é válida, mas o Organization ID informado não é o do app do TENKiTER. Copie de novo o código da tela Security.' };
+      return { ok: true, detalhe: 'Enxerga o app "' + String(r.dados.name || r.dados.id).slice(0, 60) + '".' };
+    }
+    if (r.codigo === 404) return { ok: false, detalhe: 'A chave é válida, mas não enxerga o app do TENKiTER (é de outra organização do OneSignal?).' };
+    return { ok: false, detalhe: conexaoMsgApi_(r) };
+  }
   if (nome === 'render') {
     const r = conexaoHttp_('get', RENDER_API_ + '/services/' + RENDER_SERVICO_, chave);
     if (r.codigo === 200) return { ok: true, detalhe: 'Enxerga o site "' + String((r.dados && r.dados.name) || RENDER_SERVICO_) + '".' };
@@ -3456,6 +3491,10 @@ function statusConexoesObj_() {
     const k = conexaoChave_(n);
     conexoes[n] = { rotulo: CONEXOES_[n].rotulo, temChave: !!k, fim: k ? k.slice(-4) : '', salvaEm: String(props.getProperty(CONEXOES_[n].prop + '_EM') || '') };
   });
+  // OneSignal: o Organization ID e o App ID são públicos (podem ir à tela); a chave de envio do app só aparece como "existe / não existe".
+  conexoes.onesignal.orgId = onesignalOrgId_();
+  conexoes.onesignal.appId = onesignalAppId_();
+  conexoes.onesignal.chaveEnvio = !!pushCfg_().chave;
   return { ok: true, conexoes: conexoes, servico: RENDER_SERVICO_, enderecos: { feedCsv: SITE_URL + 'feed.csv', feedXml: SITE_URL + 'feed.xml', sitemap: SITE_URL + 'sitemap.xml' } };
 }
 function statusConexoes_() { return jsonResponse_(statusConexoesObj_()); }
@@ -3468,15 +3507,23 @@ function salvarConexao_(body) {
   if (body.apagar === true) {
     props.deleteProperty(c.prop);
     props.deleteProperty(c.prop + '_EM');
+    if (nome === 'onesignal') props.deleteProperty('ONESIGNAL_ORG_ID'); // a chave de ENVIO do app (ONESIGNAL_REST_API_KEY) continua: é ela que manda os avisos
     registrarAudit_(body.funcionario, 'apagarConexao', '', { conexao: nome });
     return statusConexoes_();
   }
   const chave = String(body.chave || '').trim();
   if (!c.padrao.test(chave)) return jsonResponse_({ ok: false, erro: 'Essa chave parece incompleta ou com caracteres estranhos. Cole de novo, só a chave, sem espaços.' });
-  const t = conexaoTestar_(nome, chave);
+  let extra = {};
+  if (nome === 'onesignal') {
+    const orgId = String(body.orgId || onesignalOrgId_() || '').trim().toLowerCase();
+    if (!ONESIGNAL_UUID_.test(orgId)) return jsonResponse_({ ok: false, erro: 'O Organization ID parece errado: é um código de letras, números e traços (como b036c245-6f4a-4074-b7af-eaaed786933a). Copie de novo na tela Security do OneSignal.' });
+    extra.orgId = orgId;
+  }
+  const t = conexaoTestar_(nome, chave, extra);
   if (!t.ok) return jsonResponse_({ ok: false, erro: 'Não guardei a chave: ' + t.detalhe });
   props.setProperty(c.prop, chave);
   props.setProperty(c.prop + '_EM', new Date().toISOString());
+  if (extra.orgId) props.setProperty('ONESIGNAL_ORG_ID', extra.orgId);
   registrarAudit_(body.funcionario, 'salvarConexao', '', { conexao: nome });
   const r = statusConexoesObj_();
   r.detalhe = t.detalhe;
@@ -3537,6 +3584,76 @@ function renderStatusDeploy_(body) {
   return jsonResponse_({ ok: true, status: String(r.dados.status || '') });
 }
 
+/**
+ * v3.5: liga os avisos pelo painel. Idempotente: só mexe no que ainda não está certo.
+ *  1) lê o app (confere que o Organization ID guardado é o dele);
+ *  2) liga a plataforma Web (Typical Site) para o domínio da loja, se ainda não estiver;
+ *  3) grava ONESIGNAL_APP_ID se faltar;
+ *  4) se NÃO existe uma chave de envio que funcione (ONESIGNAL_REST_API_KEY), CRIA uma nova pelo OneSignal e guarda (nunca devolvida);
+ *  5) confere se o OneSignal já responde "plataforma Web ligada" (sem o cache de 1 hora).
+ */
+function onesignalConfigurar_(body) {
+  const chave = conexaoChave_('onesignal'), orgId = onesignalOrgId_();
+  if (!chave || !orgId) return jsonResponse_({ ok: false, erro: 'Guarde primeiro o Organization ID e a chave do OneSignal (em Conexões).' });
+  const props = PropertiesService.getScriptProperties();
+  const appId = onesignalAppId_();
+  const passos = [];
+  const passo = function (id, ok, detalhe) { passos.push({ id: id, ok: ok, detalhe: detalhe }); };
+  const parar = function (erro) {
+    registrarAudit_(body.funcionario, 'onesignalConfigurar', '', { passos: passos.map(function (x) { return x.id + ':' + x.ok; }), falhouEm: erro.slice(0, 120) });
+    return jsonResponse_({ ok: false, erro: erro, passos: passos });
+  };
+
+  // 1) ler o app
+  const g = conexaoHttp_('get', PUSH_API_ + '/apps/' + appId, chave, undefined, 'Key');
+  if (g.codigo !== 200 || !g.dados || !g.dados.id) return parar('Não consegui ler o app no OneSignal: ' + conexaoMsgApi_(g));
+  const app = g.dados;
+  if (app.organization_id && String(app.organization_id) !== orgId) return parar('O Organization ID guardado não é o do app do TENKiTER. Guarde de novo a chave e o código (tela Security do OneSignal).');
+  passo('app', true, 'App "' + String(app.name || appId).slice(0, 60) + '" encontrado.');
+
+  // 2) plataforma Web
+  const origem = SITE_URL.replace(/\/+$/, '');
+  const jaTem = app.chrome_web_origin === origem && app.safari_site_origin === origem && !!app.site_name && !!app.chrome_web_default_notification_icon;
+  if (jaTem) passo('web', true, 'A plataforma Web já estava configurada para ' + origem + '.');
+  else {
+    const corpo = {
+      organization_id: orgId, site_name: String(app.site_name || 'TENKiTER Modas'),
+      chrome_web_origin: origem, safari_site_origin: origem, safari_apns_p12: '', safari_apns_p12_password: '',
+      chrome_web_default_notification_icon: SITE_URL + 'icon-256.png'
+    };
+    const p = conexaoHttp_('put', PUSH_API_ + '/apps/' + appId, chave, corpo, 'Key');
+    if (p.codigo !== 200) return parar('Não consegui ligar a plataforma Web: ' + conexaoMsgApi_(p));
+    passo('web', true, 'Plataforma Web ligada para ' + origem + '.');
+  }
+
+  // 3) App ID nas Propriedades do Script
+  if (!String(props.getProperty('ONESIGNAL_APP_ID') || '').trim()) { props.setProperty('ONESIGNAL_APP_ID', appId); passo('appid', true, 'App ID gravado no servidor.'); }
+
+  // 4) chave de envio do app
+  let envioOk = false, recusada = false;
+  if (pushCfg_().chave) {
+    const t = pushChamar_('get', '/notifications?app_id=' + encodeURIComponent(appId) + '&limit=1');
+    envioOk = t.codigo === 200; recusada = !envioOk;
+  }
+  if (envioOk) passo('envio', true, 'A chave de envio que já estava no servidor funciona.');
+  else {
+    const c = conexaoHttp_('post', PUSH_API_ + '/apps/' + appId + '/auth/tokens', chave, { name: 'TENKiTER site (Apps Script)' }, 'Key');
+    const nova = c.dados && typeof c.dados.formatted_token === 'string' ? c.dados.formatted_token.trim() : '';
+    if ((c.codigo !== 200 && c.codigo !== 201) || nova.length < 20) return parar('A plataforma Web ficou ligada, mas não consegui criar a chave de envio: ' + conexaoMsgApi_(c));
+    props.setProperty('ONESIGNAL_REST_API_KEY', nova);
+    props.setProperty('ONESIGNAL_REST_API_KEY_EM', new Date().toISOString());
+    passo('envio', true, recusada ? 'A chave de envio antiga foi recusada pelo OneSignal; criei uma nova e guardei no servidor.' : 'Criei a chave de envio do app e guardei no servidor.');
+  }
+
+  // 5) conferência final (sem o cache do OneSignal)
+  const web = pushWebPronto_(appId, true);
+  passo('conferencia', web === true ? true : null, web === true ? 'O OneSignal já responde: plataforma Web ligada.' : 'Ligado, mas o OneSignal ainda não confirmou. Toque em "Conferir de novo" daqui a um minuto.');
+  registrarAudit_(body.funcionario, 'onesignalConfigurar', '', { passos: passos.map(function (x) { return x.id + ':' + x.ok; }) });
+  const r = statusConexoesObj_();
+  r.passos = passos; r.webPronto = web;
+  return jsonResponse_(r);
+}
+
 /** Confere tudo de uma vez. Cada item: { id, rotulo, ok: true|false|null (null = só informação), detalhe, acao } -- `acao` é o botão que resolve (renderCriarRegras | chave:render | chave:cloudflare). */
 function testarConexoes_() {
   const itens = [];
@@ -3561,12 +3678,23 @@ function testarConexoes_() {
     nMapa > 0 ? 'Lista ' + nMapa + ' peça(s) além das páginas fixas.' : (nMapa === 0 ? 'Está mostrando só as páginas fixas: um arquivo sitemap.xml antigo no repositório do site ganha da regra do Render e precisa ser removido de lá.' : 'O endereço ' + SITE_URL + 'sitemap.xml não respondeu direito.'),
     nMapa > 0 || nMapa === 0 ? '' : acaoSite);
 
-  // 2) avisos
-  const appId = String(props.getProperty('ONESIGNAL_APP_ID') || '').trim();
-  if (!appId) add('onesignal', 'Avisos (OneSignal, plataforma Web)', null, 'O App ID do OneSignal ainda não está nas Propriedades do Script (ONESIGNAL_APP_ID).');
+  // 2) avisos (OneSignal)
+  const appId = onesignalAppId_();
+  const ok_ = conexaoChave_('onesignal');
+  const web = pushWebPronto_(appId, true);
+  add('onesignal', 'Avisos (OneSignal, plataforma Web)', web === null ? null : web,
+    web === null ? 'Não consegui conferir agora.' : (web ? 'Plataforma Web ligada: os avisos podem chegar.' : 'A plataforma Web do OneSignal ainda NÃO foi ligada: sem isso nenhum aviso chega.' + (ok_ ? '' : ' Guarde a chave do OneSignal abaixo e o painel liga sozinho.')),
+    web === false && ok_ ? 'onesignalConfigurar' : '');
+  const envio = pushCfg_().chave;
+  if (!envio) add('onesignal-envio', 'Avisos (chave de envio do app)', false, 'Falta a chave de envio do app (ONESIGNAL_REST_API_KEY): sem ela o site não consegue mandar avisos.' + (ok_ ? '' : ' Guarde a chave do OneSignal abaixo e o painel cria a de envio sozinho.'), ok_ ? 'onesignalConfigurar' : '');
   else {
-    const web = pushWebPronto_(appId);
-    add('onesignal', 'Avisos (OneSignal, plataforma Web)', web === null ? null : web, web === null ? 'Não consegui conferir agora.' : (web ? 'Plataforma Web ligada: os avisos podem chegar.' : 'A plataforma Web do OneSignal ainda NÃO foi ligada: sem isso nenhum aviso chega. O passo a passo está no LEIA-ME-AVISOS.md.'));
+    const te = pushChamar_('get', '/notifications?app_id=' + encodeURIComponent(appId) + '&limit=1');
+    add('onesignal-envio', 'Avisos (chave de envio do app)', te.codigo === 200, te.codigo === 200 ? 'A chave de envio funciona.' : 'O OneSignal recusou a chave de envio guardada.' + (ok_ ? '' : ' Guarde a chave do OneSignal abaixo e o painel cria outra.'), te.codigo === 200 || !ok_ ? '' : 'onesignalConfigurar');
+  }
+  if (!ok_) add('onesignal-chave', 'OneSignal (ligar os avisos pelo painel)', null, 'Sem chave guardada. Guarde o Organization ID e a chave abaixo para o painel ligar a plataforma Web e criar a chave de envio sozinho.', 'chave:onesignal');
+  else {
+    const t = conexaoTestar_('onesignal', ok_);
+    add('onesignal-chave', 'OneSignal (ligar os avisos pelo painel)', t.ok, t.detalhe, t.ok ? '' : 'chave:onesignal');
   }
 
   // 3) Render
