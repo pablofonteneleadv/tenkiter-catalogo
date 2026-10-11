@@ -22,6 +22,14 @@
     const sess = (typeof getSessao === 'function' && getSessao()) || null;
     return apiPost(Object.assign({ pin: adminPin, sessao: adminPin, whatsapp: sess ? sess.whatsapp : '', funcionario: funcionarioNome }, extra));
   }
+  async function igWorker_(caminho, metodo, corpo) {
+    const s = (typeof getSessao === 'function' && getSessao()) || null;
+    if (!s || typeof INSTAGRAM_URL === 'undefined') return { ok: false, erro: 'Entre com o seu login (não vale só o PIN) para conectar o Instagram.' };
+    try {
+      const r = await fetch(INSTAGRAM_URL + caminho, { method: metodo, headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, 'Content-Type': 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined });
+      return await r.json();
+    } catch (e) { return { ok: false, erro: 'Sem conexão agora. Tente de novo.', semRede: true }; }
+  }
   function erroTxt(r) {
     if (r && r.erro) return r.erro;
     return r && r.semRede ? 'Sem conexão agora. Tente de novo.' : 'Não foi possível agora. Tente de novo.';
@@ -165,6 +173,10 @@
         'Crie em <b>Render → Account Settings → API Keys → Create API Key</b> e cole aqui. Ela serve para conferir/criar as regras do site e publicar. O painel testa a chave antes de guardar.',
         '⚠️ A chave do Render manda em <b>toda a sua conta do Render</b> (não dá para limitar). Por isso ela só fica no servidor e só o Admin total mexe. Se desconfiar de vazamento, apague a chave aqui <b>e</b> revogue-a no Render.') +
 
+      (status.conexoes && status.conexoes.instagram ? blocoChave('instagram', 'Instagram — token de acesso',
+        'Gere em <b>developers.facebook.com → Meus apps → seu app → Instagram → API com login do Instagram → Gerar token</b> (a conta da loja precisa ser <b>Empresa</b>; para postar, marque a permissão <b>instagram_business_content_publish</b>). O painel testa o token no Instagram, liga o importador/postagens (Worker) e guarda uma cópia aqui no cofre.',
+        'O token vale ~60 dias; o servidor renova o dele sozinho. Se o Instagram recusar, gere outro e cole aqui.') : '') +
+
       blocoChave('cloudflare', 'Cloudflare — token (opcional)',
         'Crie em <b>Cloudflare → Meu perfil → API Tokens → Create Token</b>, modelo <b>Edit Cloudflare Workers</b>, de preferência com data de fim. Aqui serve só para conferir quando o Worker das miniaturas foi publicado.', '') +
 
@@ -175,15 +187,16 @@
       '</div>' + (temCofre ? '<div class="cx-bloco" id="cx-cofre"></div>' : '') + blocoDados();
   }
   /* ---------- COFRE (dupla verificação): 1) login de Admin total  2) senha da conta digitada de novo. O código de abertura vive só na memória desta tela. ---------- */
-  const COFRE_ITENS = [['render', 'Render — chave da API', () => status.conexoes.render], ['cloudflare', 'Cloudflare — token', () => status.conexoes.cloudflare],
-    ['onesignal', 'OneSignal — chave da organização', () => status.conexoes.onesignal], ['onesignalEnvio', 'OneSignal — chave de envio dos avisos', () => ({ temChave: !!(status.conexoes.onesignal || {}).chaveEnvio, fim: '' })]];
+  const cofreBase_ = [['render', 'Render — chave da API', () => status.conexoes.render], ['cloudflare', 'Cloudflare — token', () => status.conexoes.cloudflare],
+    ['onesignal', 'OneSignal — chave da organização', () => status.conexoes.onesignal], ['onesignalEnvio', 'OneSignal — chave de envio dos avisos', () => ({ temChave: !!(status.conexoes.onesignal || {}).chaveEnvio, fim: '' })]]
+  const cofreItens_ = () => cofreBase_.concat(status && status.conexoes && status.conexoes.instagram ? [['instagram', 'Instagram — token de acesso', () => status.conexoes.instagram]] : []);
   function desenharCofre() {
     const box = $('cx-cofre'); if (!box || !status) return;
     const aberto = !!cofreCodigo;
     box.innerHTML = '<h3>🔐 Cofre das chaves</h3>' +
       '<p class="g-nota">Para copiar uma chave são <b>duas verificações</b>: você já entrou com o seu login e agora digita a <b>senha da sua conta</b> de novo. Depois de aberto, o cofre se tranca sozinho em 5 minutos. A chave <b>nunca aparece na tela</b>: vai direto para a área de transferência. Cole-a só na conversa com o Claude e <b>revogue depois</b> no site de origem.</p>' +
       (aberto ? '<div class="cx-linha"><span class="cx-t"><b id="cx-cofre-tempo">Cofre aberto</b></span><button type="button" class="cx-btn cx-sec" data-cx="cofre-trancar">🔒 Trancar agora</button></div>' +
-        COFRE_ITENS.map((x) => { const c = x[2]() || {}; return '<div class="cx-linha"><span class="cx-t"><b>' + esc(x[1]) + '</b><span>' + (c.temChave ? 'Guardada' + (c.fim ? ' (termina em ' + esc(c.fim) + ')' : '') : 'Ainda não guardada — use o campo acima.') + '</span></span><button type="button" class="cx-btn cx-prim" data-cx="cofre-copiar" data-nome="' + x[0] + '"' + (c.temChave ? '' : ' disabled') + '>Copiar</button></div>'; }).join('')
+        cofreItens_().map((x) => { const c = x[2]() || {}; return '<div class="cx-linha"><span class="cx-t"><b>' + esc(x[1]) + '</b><span>' + (c.temChave ? 'Guardada' + (c.fim ? ' (termina em ' + esc(c.fim) + ')' : '') : 'Ainda não guardada — use o campo acima.') + '</span></span><button type="button" class="cx-btn cx-prim" data-cx="cofre-copiar" data-nome="' + x[0] + '"' + (c.temChave ? '' : ' disabled') + '>Copiar</button></div>'; }).join('')
         : '<label for="cx-cofre-senha">Senha da sua conta</label><div class="cx-copia"><input type="password" id="cx-cofre-senha" autocomplete="current-password" autocapitalize="off" spellcheck="false" placeholder="Digite de novo para abrir"><button type="button" data-cx="cofre-abrir">Abrir cofre</button></div>') +
       '<div class="cx-msg" id="cx-msg-cofre" role="status"></div>';
   }
@@ -289,6 +302,10 @@
       if (orgId) extra.orgId = orgId;
     }
     msg('cx-msg-' + nome, 'Testando a chave…', '');
+    if (nome === 'instagram') {       // 1º liga o Worker (importador/postagens); só se ele aceitar, guarda a cópia no cofre
+      const w = await igWorker_('/token', 'POST', { token: chave });
+      if (!w || !w.ok) { if (campo) campo.value = ''; msg('cx-msg-' + nome, erroTxt(w), 'erro'); return; }
+    }
     const r = await chamar(Object.assign({ action: 'salvarConexao', nome, chave }, extra));
     if (campo) campo.value = '';                      // a chave não fica na tela nem no aparelho
     if (!r || !r.ok) { msg('cx-msg-' + nome, erroTxt(r), 'erro'); return; }
@@ -298,6 +315,7 @@
   }
   async function apagar(nome) {
     if (!confirm('Apagar a chave guardada no servidor? O painel deixa de conseguir cuidar disso até você colar outra. (Se quiser, revogue-a também no site do serviço.)')) return;
+    if (nome === 'instagram') await igWorker_('/token', 'DELETE');
     const r = await chamar({ action: 'salvarConexao', nome, apagar: true });
     if (!r || !r.ok) { msg('cx-msg-' + nome, erroTxt(r), 'erro'); return; }
     status = r; desenhar();

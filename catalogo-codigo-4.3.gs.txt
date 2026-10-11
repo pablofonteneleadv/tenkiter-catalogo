@@ -1,5 +1,6 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v4.2
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v4.3
 //
+// NOVIDADE v4.3 -- INSTAGRAM NO COFRE: conexão `instagram` (INSTAGRAM_TOKEN nas Propriedades do Script; testada em graph.instagram.com antes de guardar) e item no cofre (revelarConexao nome=instagram). É uma CÓPIA para o Pablo copiar com dupla verificação; quem publica/lê o Instagram é o Worker tenkiter-ig, que guarda o dele no D1.
 // NOVIDADE v4.2 -- TAMANHOS/CORES SEMPRE COMO TEXTO: o Google Planilhas transformava "2/4/6" em data (2006-04-02) e o site mostrava "2006-04-02T08:00:00.000Z". Agora a gravação força texto nas duas colunas e a leitura devolve a data de volta como "2/4/6" (conserta também o que já estava gravado errado).
 // NOVIDADE v4.1 -- QUEM CADASTROU / QUEM EDITOU E QUANDO (pedido do Pablo): a planilha de produtos ganha CriadoPor, CriadoEm, EditadoPor, EditadoEm e UltimaAcao (criadas sozinhas), preenchidas com o NOME VERDADEIRO da sessão de login (o PIN antigo usa o nome digitado no aparelho). Vale para cadastrar, editar, arquivar, reativar, X do catálogo, foto/vídeo tirado ou devolvido, juntar e lote. Essas colunas NUNCA saem na lista pública. Ações novas (catalogo_cadastrar): auditoriaProdutos (resumo de todas as peças) e historicoProduto {id} (linha do tempo). Bandeira auditoriaProdutos.
 //
@@ -21,7 +22,7 @@
 //  - 2ª verificação: abrirCofre { senha } -- a pessoa digita de novo a SENHA da própria conta (um token de sessão NÃO vale como senha, então sessão roubada
 //    sozinha não abre o cofre). Erro de senha conta no freio do login E num freio próprio do cofre (5 erros = 15 min sem tentar, nem com a senha certa) e fica na auditoria. Acertou: o servidor devolve um
 //    código de abertura aleatório, preso àquele WhatsApp, que vale 5 minutos (só na memória da tela; nunca em localStorage).
-//  - revelarConexao { nome: render | cloudflare | onesignal | onesignalEnvio, cofre }: exige o código de abertura válido e devolve o valor guardado nas
+//  - revelarConexao { nome: render | cloudflare | onesignal | onesignalEnvio | instagram, cofre }: exige o código de abertura válido e devolve o valor guardado nas
 //    Propriedades do Script para o botão "Copiar". Cada uso grava em Acoes_Audit só o NOME da conexão (nunca o valor); freio de 30 revelações por 10 min.
 //    É a ÚNICA resposta que leva uma chave ao navegador; statusConexoes etc. seguem mostrando só "guardada ✓" + 4 últimos caracteres.
 //  - fecharCofre: apaga o código de abertura na hora (botão "Trancar cofre").
@@ -191,7 +192,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-4.2';
+const VERSAO_CATALOGO = 'catalogo-4.3';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1704,7 +1705,7 @@ function doGetInterno_(e) {
   if (action === 'versao') return jsonResponse_({
     ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
     pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true,
-    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true, midiaRapida: true, juntarProdutos: true, duplicadoPorFoto: true, cpf: true, recuperarSenha: true, loginMultiplo: true, auditoriaProdutos: true, textoPlano: true
+    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true, midiaRapida: true, juntarProdutos: true, duplicadoPorFoto: true, cpf: true, recuperarSenha: true, loginMultiplo: true, auditoriaProdutos: true, textoPlano: true, conexoesInstagram: true
   });
   if (action === 'config') return configPublica_();
   if (action === 'pushconfig') return pushConfigPublica_();
@@ -4049,7 +4050,9 @@ const CONEXOES_ = {
   render:     { prop: 'RENDER_API_KEY',        rotulo: 'Render',     padrao: /^rnd_[A-Za-z0-9]{16,100}$/ },
   cloudflare: { prop: 'CLOUDFLARE_API_TOKEN',  rotulo: 'Cloudflare', padrao: /^[A-Za-z0-9_\-]{30,160}$/ },
   // Organization API Key do OneSignal (começa com os_v2_org_). Manda em TODOS os apps da organização: só fica no servidor.
-  onesignal:  { prop: 'ONESIGNAL_ORG_API_KEY', rotulo: 'OneSignal',  padrao: /^os_v2_org_[A-Za-z0-9]{30,300}$/ }
+  onesignal:  { prop: 'ONESIGNAL_ORG_API_KEY', rotulo: 'OneSignal',  padrao: /^os_v2_org_[A-Za-z0-9]{30,300}$/ },
+  // Token do Instagram (API com login do Instagram, ~60 dias). Cópia para o cofre; o Worker tenkiter-ig guarda o próprio no D1.
+  instagram:  { prop: 'INSTAGRAM_TOKEN',       rotulo: 'Instagram',  padrao: /^[A-Za-z0-9_\-.]{20,600}$/ }
 };
 
 function conexaoChave_(nome) {
@@ -4095,6 +4098,17 @@ function conexaoTestar_(nome, chave, extra) {
     if (r.codigo === 404) return { ok: false, detalhe: 'A chave é válida, mas não enxerga o app do TENKiTER (é de outra organização do OneSignal?).' };
     return { ok: false, detalhe: conexaoMsgApi_(r) };
   }
+  if (nome === 'instagram') {
+    // o token vai na consulta (é como a API do Instagram pede); a resposta só traz o @ da conta e nada é registrado em log
+    let r;
+    try {
+      const u = UrlFetchApp.fetch('https://graph.instagram.com/me?fields=username&access_token=' + encodeURIComponent(chave), { muteHttpExceptions: true });
+      let d = null; try { d = JSON.parse(u.getContentText()); } catch (e) { d = null; }
+      r = { codigo: u.getResponseCode(), dados: d };
+    } catch (e) { r = { codigo: 0, dados: null, erro: 'Sem conexão com o serviço agora. Tente de novo.' }; }
+    if (r.codigo === 200 && r.dados && r.dados.username) return { ok: true, detalhe: 'Conta @' + String(r.dados.username).slice(0, 40) + '.' };
+    return { ok: false, detalhe: r.dados && r.dados.error ? 'O Instagram recusou o token (inválido, vencido ou sem permissão).' : conexaoMsgApi_(r) };
+  }
   if (nome === 'render') {
     const r = conexaoHttp_('get', RENDER_API_ + '/services/' + RENDER_SERVICO_, chave);
     if (r.codigo === 200) return { ok: true, detalhe: 'Enxerga o site "' + String((r.dados && r.dados.name) || RENDER_SERVICO_) + '".' };
@@ -4124,7 +4138,7 @@ function statusConexoesObj_() {
 function statusConexoes_() { return jsonResponse_(statusConexoesObj_()); }
 
 /* ---------- COFRE (dupla verificação) ---------- */
-const COFRE_ = { render: 'RENDER_API_KEY', cloudflare: 'CLOUDFLARE_API_TOKEN', onesignal: 'ONESIGNAL_ORG_API_KEY', onesignalEnvio: 'ONESIGNAL_REST_API_KEY' };
+const COFRE_ = { render: 'RENDER_API_KEY', cloudflare: 'CLOUDFLARE_API_TOKEN', onesignal: 'ONESIGNAL_ORG_API_KEY', onesignalEnvio: 'ONESIGNAL_REST_API_KEY', instagram: 'INSTAGRAM_TOKEN' };
 const COFRE_VALE_SEGUNDOS_ = 300;
 function cofreChave_(body) { return 'cofre_' + acWhats_(body.whatsapp); }
 /** 2ª verificação: a senha da PRÓPRIA conta, digitada agora. Token de sessão nunca serve de senha. */

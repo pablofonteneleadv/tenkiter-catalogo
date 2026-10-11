@@ -27,6 +27,8 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     st["conex"]={"render":{"temChave":False,"fim":"","salvaEm":""},"cloudflare":{"temChave":False,"fim":"","salvaEm":""}}
     if conex5: st["conex"]["onesignal"]={"temChave":False,"fim":"","salvaEm":"","orgId":"","appId":"535f6b0d-c866-43c2-b241-43bd7ab62fae","chaveEnvio":False}
     st["ligou"]=0
+    conex43 = conex5 and versao >= "4.3"  # Instagram nas Conexões + cofre (conexoesInstagram)
+    if conex43: st["conex"]["instagram"]={"temChave":False,"fim":"","salvaEm":""}
     conex6 = conex5 and versao >= "3.6"   # Cofre (conexoesCopiar): abrirCofre (senha de novo) + revelarConexao
     avanc = conex5                        # metricasAvancadas + dispositivos (3.5 parte 2): Números reais com filtros, aparelhos e contagem por público
     st["metricas_pedidos"]=[]; st["dispositivos"]=[]
@@ -43,6 +45,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     if conex: FLAGS["conexoes"]=True
     if conex5: FLAGS["conexoesOnesignal"]=True
     if conex6: FLAGS["conexoesCopiar"]=True
+    if conex43: FLAGS["conexoesInstagram"]=True
     if versao>="3.7" and novo: FLAGS["midiaRapida"]=True; FLAGS["juntarProdutos"]=True
     if versao>="4.1" and novo: FLAGS["auditoriaProdutos"]=True
     if avanc: FLAGS["metricasAvancadas"]=True; FLAGS["dispositivos"]=True
@@ -250,7 +253,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                    "enderecos":{"feedCsv":"https://tenkitermodas.com.br/feed.csv","feedXml":"https://tenkitermodas.com.br/feed.xml","sitemap":"https://tenkitermodas.com.br/sitemap.xml"}}
                 r.update(extra or {}); return r
             if a in("abrirCofre","fecharCofre","revelarConexao"):
-                cf=st.setdefault("cofre",{"codigo":"","chamadas":[],"falhas":0,"valores":{"render":"rnd_FALSO_PARA_TESTE_123456","cloudflare":"cfut_FALSO_PARA_TESTE_123456","onesignal":"os_v2_org_FALSO_PARA_TESTE","onesignalEnvio":"os_v2_app_FALSO_PARA_TESTE"}})
+                cf=st.setdefault("cofre",{"codigo":"","chamadas":[],"falhas":0,"valores":{"render":"rnd_FALSO_PARA_TESTE_123456","cloudflare":"cfut_FALSO_PARA_TESTE_123456","onesignal":"os_v2_org_FALSO_PARA_TESTE","onesignalEnvio":"os_v2_app_FALSO_PARA_TESTE","instagram":"IGAA_FALSO_PARA_TESTE_123456"}})
                 cf["chamadas"].append({k:v for k,v in b.items() if k!="valor"})
                 if a=="abrirCofre":
                     if b.get("senha")!="senha-certa":

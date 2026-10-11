@@ -21,7 +21,7 @@ def novo(b, perms=PERMS_ALL, versao="3.6"):
     pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250)
     pg.click("#btn-abrir-conexoes"); pg.wait_for_timeout(1500)
     return ctx, pg, st, erros
-SEGREDOS = re.compile(r"rnd_FALSO|cfut_FALSO|os_v2_(org|app)_FALSO")
+SEGREDOS = re.compile(r"rnd_FALSO|cfut_FALSO|os_v2_(org|app)_FALSO|IGAA_FALSO")
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
     ctx, pg, st, erros = novo(b)
@@ -54,6 +54,19 @@ with sync_playwright() as p:
     chk("fechar a janela tranca o cofre no servidor", st["cofre"]["codigo"] == "")
     chk("nenhum erro de JavaScript", not erros, erros[:3])
     ctx.close()
+    print("== Instagram no cofre (backend 4.3) ==")
+    c3, p3, st3, e3 = novo(b, versao="4.3")
+    chk("bloco do Instagram aparece nas Conexões, sem chave", p3.locator("#cx-bloco-instagram").count() == 1 and "Sem chave" in p3.inner_text("#cx-estado-instagram"))
+    p3.fill("#cx-chave-instagram", "IGAA_FALSO_PARA_TESTE_123456"); p3.click("[data-cx=guardar][data-nome=instagram]"); p3.wait_for_timeout(900)
+    chk("guardar liga o Worker (importador/postagens) E guarda a cópia no cofre", st3["ig"].get("token_recebido") == "IGAA_FALSO_PARA_TESTE_123456" and st3["chave_enviada"] == "IGAA_FALSO_PARA_TESTE_123456" and "Guardada" in p3.inner_text("#cx-msg-instagram"), p3.inner_text("#cx-msg-instagram"))
+    chk("o token não fica no campo nem na tela", p3.input_value("#cx-chave-instagram") == "" and not SEGREDOS.search(p3.content()))
+    p3.fill("#cx-cofre-senha", "senha-certa"); p3.click("[data-cx=cofre-abrir]"); p3.wait_for_selector("[data-cx=cofre-copiar]")
+    chk("cofre aberto: 5 itens, o Instagram entre eles", p3.locator("[data-cx=cofre-copiar]").count() == 5 and p3.locator("[data-cx=cofre-copiar][data-nome=instagram]").count() == 1)
+    p3.click("[data-cx=cofre-copiar][data-nome=instagram]"); p3.wait_for_timeout(700)
+    chk("o token do Instagram vai para a área de transferência", p3.evaluate("navigator.clipboard.readText()") == "IGAA_FALSO_PARA_TESTE_123456")
+    chk("e nunca aparece na tela", not SEGREDOS.search(p3.content()))
+    c3.close()
+
     print("== Quem não vê / backend antigo ==")
     c2, p2, st2, e2 = novo(b, versao="3.5")
     chk("backend 3.5 (sem a bandeira): nenhum cofre", p2.locator("#cx-cofre").count() == 0)

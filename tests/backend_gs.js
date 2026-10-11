@@ -1324,6 +1324,25 @@ function servicosFalsos(amb, est) {
   // o código de abertura é do dono: outra pessoa com o mesmo código não revela
   r = amb.post(F({ action: 'revelarConexao', nome: 'render', cofre }));
   ok(r.ok === false && !vaza(r), 'o código de um Admin não serve para outra conta');
+  // ---- v4.3: Instagram no cofre (token INVENTADO, testado em graph.instagram.com antes de guardar)
+  const IGT = 'IGAATESTEFALSOTESTEFALSOTESTEFALSO1234567890';
+  ok(amb.getJson({ action: 'versao' }).conexoesInstagram === true, 'versao anuncia conexoesInstagram:true');
+  amb.fetchResposta = (url) => /graph\.instagram\.com\/me/.test(url) && url.indexOf(encodeURIComponent(IGT)) !== -1 ? { code: 200, body: '{"username":"tenkitermodasceara","id":"1"}' } : { code: 400, body: '{"error":{"message":"Invalid OAuth access token"}}' };
+  r = amb.post(A({ action: 'salvarConexao', nome: 'instagram', chave: 'IGAATOKENRUIMTOKENRUIMTOKENRUIM123' }));
+  ok(r.ok === false && /recusou|Não guardei/.test(r.erro) && !amb.props.get('INSTAGRAM_TOKEN'), 'token inválido: o Instagram recusa e nada é guardado');
+  r = amb.post(F({ action: 'salvarConexao', nome: 'instagram', chave: IGT }));
+  ok(r.semPermissao === true, 'Funcionário não guarda token do Instagram');
+  r = amb.post(A({ action: 'salvarConexao', nome: 'instagram', chave: IGT }));
+  ok(r.ok === true && /@tenkitermodasceara/.test(r.detalhe) && r.conexoes.instagram.temChave === true && r.conexoes.instagram.fim === IGT.slice(-4) && r.conexoes.instagram.rotulo === 'Instagram', 'token válido: guardado, mostra só os 4 últimos caracteres');
+  ok(JSON.stringify(r).indexOf('TESTEFALSO') === -1, 'a resposta de guardar não devolve o token');
+  r = amb.post(A({ action: 'statusConexoes' }));
+  ok(JSON.stringify(r).indexOf('TESTEFALSO') === -1, 'o status não devolve o token');
+  r = amb.post(A({ action: 'revelarConexao', nome: 'instagram', cofre }));
+  ok(r.ok === true && r.valor === IGT, 'cofre aberto: o token do Instagram é devolvido para copiar');
+  r = amb.post(A({ action: 'revelarConexao', nome: 'instagram', cofre: 'chute' }));
+  ok(r.ok === false && r.cofreFechado === true && !vaza(r), 'sem o cofre aberto o token do Instagram não sai');
+  r = amb.post(A({ action: 'salvarConexao', nome: 'instagram', apagar: true }));
+  ok(r.ok === true && r.conexoes.instagram.temChave === false && !amb.props.get('INSTAGRAM_TOKEN'), 'apagar remove o token do servidor');
   // auditoria: só o nome, nunca o valor
   const aud = JSON.stringify(amb.ss.getSheetByName('Acoes_Audit').getDataRange().getValues());
   ok(aud.indexOf('revelarConexao') !== -1 && aud.indexOf('abrirCofre') !== -1 && aud.indexOf('TESTEFALSO') === -1 && aud.indexOf('senha-forte') === -1, 'auditoria registra abrir/copiar (com o nome da conexão) e nunca o valor nem a senha');
