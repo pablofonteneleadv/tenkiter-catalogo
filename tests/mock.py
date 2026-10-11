@@ -366,7 +366,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if g.get("fora"): return route.fulfill(status=404,json={"ok":False,"erro":"Não encontrado."})
             if not (h.get("x-tk-sessao") or "").startswith("tk"): return route.fulfill(status=401,json={"ok":False,"erro":"Entre na sua conta de administrador."})
             body=json.loads(route.request.post_data or "{}") if m=="POST" else {}
-            if path=="/status": return route.fulfill(json={"ok":True,"conectado":g["conectado"],"usuario":"tenkitermodasceara","venceEmDias":55,"contagens":cont(),"ultimoCiclo":{"inicio":"2026-10-11T05:00:00Z","fim":"2026-10-11T05:00:02Z","novas":0,"erro":""},"novasDesdeOntem":2,"alertas":g.get("alertas",[])})
+            if path=="/status": return route.fulfill(json={"ok":True,"conectado":g["conectado"],"usuario":"tenkitermodasceara","venceEmDias":55,"contagens":cont(),"ultimoCiclo":{"inicio":"2026-10-11T05:00:00Z","fim":"2026-10-11T05:00:02Z","novas":0,"erro":""},"novasDesdeOntem":2,"alertas":g.get("alertas",[]),"historico":{"completo":g.get("hist_completo",False),"emAndamento":g.get("hist_andamento",False)}})
             if path=="/rascunhos":
                 gr=(u.split("grupo=")[1].split("&")[0] if "grupo=" in u else "pendente")
                 l=[r for r in g["rasc"] if (r["status"]==gr if gr in ("descartado","aceito") else (r["status"]=="pendente" and r["grupo"]==gr))]
@@ -375,7 +375,15 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                 if m=="DELETE": g["conectado"]=False; return route.fulfill(json={"ok":True})
                 if len(body.get("token",""))<20: return route.fulfill(status=400,json={"ok":False,"erro":"Esse texto não parece um token do Instagram."})
                 g["conectado"]=True; g["token_recebido"]=body["token"]; return route.fulfill(json={"ok":True,"usuario":"tenkitermodasceara"})
-            if path=="/buscar": return route.fulfill(json={"ok":True,"novas":1})
+            if path=="/buscar":
+                if body.get("todos"):
+                    g.setdefault("hist_chamadas",[]).append(body); n=len(g["hist_chamadas"])
+                    if g.get("hist_erro_na")==n: return route.fulfill(json={"ok":False,"erro":"Instagram: limite de chamadas. Tente em alguns minutos."})
+                    fim = n>=g.get("hist_lotes",3)
+                    if fim: g["hist_completo"]=True; g["hist_andamento"]=False
+                    else: g["hist_andamento"]=True
+                    return route.fulfill(json={"ok":True,"novas":4,"puladas":1 if fim else 0,"fim":fim})
+                return route.fulfill(json={"ok":True,"novas":1})
             if path=="/acao":
                 r=next((x for x in g["rasc"] if x["id"]==body.get("id")),None); a=body.get("acao")
                 if not r: return route.fulfill(status=404,json={"ok":False,"erro":"Rascunho não encontrado."})

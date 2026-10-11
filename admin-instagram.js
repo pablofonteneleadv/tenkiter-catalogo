@@ -213,11 +213,47 @@
   function desenharConectar(erro) {
     const c = st || {};
     $('ig-corpo').innerHTML = '<div class="ig-conectar">' + (c.conectado ? '<p><b>✅ Conectado' + (c.usuario ? ' como @' + esc(c.usuario) : '') + '</b>' + (c.venceEmDias != null ? ' · o acesso é renovado sozinho (vence em ' + c.venceEmDias + ' dias se algo falhar)' : '') + '.</p>' +
-      '<div class="ig-edit-barra"><button type="button" class="ig-sec" data-ig="historico">📚 Importar os últimos 20 posts</button><button type="button" class="ig-ruim" data-ig="desconectar">Desconectar</button><button type="button" class="ig-sec" data-ig="voltarLista">← Voltar</button></div><hr>' : '') +
+      '<div class="ig-edit-barra"><button type="button" class="ig-sec" data-ig="historico">📚 Importar os últimos 20 posts</button><button type="button" class="ig-sec" data-ig="todos" id="ig-btn-todos">' + rotuloTodos(c) + '</button><button type="button" class="ig-ruim" data-ig="desconectar">Desconectar</button><button type="button" class="ig-sec" data-ig="voltarLista">← Voltar</button></div><hr>' : '') +
       '<h3 style="font-size:.95rem;margin:8px 0">' + (c.conectado ? 'Trocar o acesso do Instagram' : 'Conectar o Instagram') + '</h3>' +
       '<p style="font-size:.85rem">O sistema só LÊ o seu Instagram (nunca posta). Para liberar, você cria um acesso na Meta e cola o código aqui:</p>' +
       '<ol><li>No celular, abra <b>developers.facebook.com</b> → <b>Meus apps</b> → <b>Criar app</b> (tipo "Negócios") → adicione o produto <b>Instagram</b> → <b>API com login do Instagram</b>.</li><li>Em <b>Funções do app</b>, adicione a conta <b>@tenkitermodasceara</b> como testadora e aceite o convite no app do Instagram (Configurações → Apps e sites).</li><li>Em <b>Gerar tokens de acesso</b>, gere o token da conta e copie.</li><li>Cole abaixo e toque em Conectar. O código fica guardado só no servidor e nunca volta para a tela.</li></ol>' +
       '<label for="ig-token">Código de acesso (token)</label><input type="password" id="ig-token" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="ig-edit-barra"><button type="button" class="ig-ok" data-ig="conectar">Conectar</button></div>' + (erro ? '<div class="ig-msg erro">' + esc(erro) + '</div>' : '<div class="ig-msg" id="ig-msg"></div>') + '</div>';
+  }
+
+  /* ---------- importar TODOS os posts (em lotes; o servidor guarda onde parou) ---------- */
+  let paraTodos = false, rodandoTodos = false;
+  function rotuloTodos(c) { const h = (c && c.historico) || {}; return '📦 Importar TODOS os posts' + (h.completo ? ' (já feito · refazer)' : h.emAndamento ? ' (continuar de onde parou)' : ''); }
+  async function importarTodos(refazer) {
+    if (rodandoTodos) return;
+    const aviso = 'Importar TODOS os posts do Instagram?\n\n• Cada post vira um rascunho em "Produtos para aceitar" (nada vai para a loja sem você aceitar).\n• As fotos e vídeos são copiados para o armazenamento da loja (grátis; o sistema para sozinho antes de gerar cobrança).\n• Pode levar vários minutos. Deixe esta tela aberta — se fechar ou der erro, é só tocar de novo que continua de onde parou.';
+    if (!confirm(aviso)) return;
+    rodandoTodos = true; paraTodos = false;
+    const barra = document.querySelector('.ig-conectar .ig-edit-barra');
+    const btn = $('ig-btn-todos'); if (btn) btn.disabled = true;
+    if (barra && !$('ig-btn-parar')) { const p = document.createElement('button'); p.type = 'button'; p.className = 'ig-ruim'; p.id = 'ig-btn-parar'; p.dataset.ig = 'parar'; p.textContent = '⏹ Parar'; barra.appendChild(p); }
+    let total = 0, puladas = 0, recomecar = !!refazer, falhasRede = 0, terminou = false, erroFinal = '';
+    while (!paraTodos) {
+      msg('Importando… ' + total + ' post(s) copiados até agora' + (puladas ? ' · ' + puladas + ' pulado(s)' : '') + '.');
+      const r = await ig('/buscar', 'POST', recomecar ? { todos: true, recomecar: true } : { todos: true });
+      recomecar = false;
+      if (r && r.ok) {
+        if (typeof r.fim !== 'boolean') { erroFinal = 'o servidor do importador ainda é a versão antiga (falta publicar a atualização do Worker na Cloudflare)'; break; }
+        falhasRede = 0; total += r.novas || 0; puladas += r.puladas || 0;
+        if (r.fim) { terminou = true; break; }
+      } else {
+        const t = erroTxt(r);
+        if (/em andamento/i.test(t) && falhasRede < 5) { falhasRede++; await new Promise((ok) => setTimeout(ok, 4000)); continue; }
+        if (r && r.semRede && falhasRede < 3) { falhasRede++; await new Promise((ok) => setTimeout(ok, 3000)); continue; }
+        erroFinal = t; break;
+      }
+    }
+    rodandoTodos = false;
+    const pb = $('ig-btn-parar'); if (pb) pb.remove();
+    await carregarStatus();
+    if (btn) { btn.disabled = false; btn.textContent = rotuloTodos(st); }
+    if (terminou) msg('✅ Pronto! Todos os posts foram importados: ' + total + ' novo(s)' + (puladas ? ' (' + puladas + ' pulado(s) por falha na mídia)' : '') + '. Veja em "Produtos para aceitar".', 'ok');
+    else if (erroFinal) msg('Parei: ' + erroFinal + ' (' + total + ' copiados). Toque em "Importar TODOS" para continuar de onde parou.', 'erro');
+    else msg('Parado. ' + total + ' post(s) copiados. Toque em "Importar TODOS" para continuar de onde parou.', 'ok');
   }
 
   /* ---------- cliques ---------- */
@@ -237,6 +273,8 @@
     else if (a === 'conectar') { const t = ($('ig-token') || {}).value || ''; msg('Conferindo com o Instagram…'); const r = await ig('/token', 'POST', { token: t }); if (r && r.ok) { $('ig-token').value = ''; await carregarStatus(); grupo = 'pendente'; await carregarLista(true); } else desenharConectar(erroTxt(r)); }
     else if (a === 'desconectar') { if (confirm('Desconectar o Instagram? Os rascunhos já criados continuam aqui.')) { await ig('/token', 'DELETE'); await carregarStatus(); desenharConectar(); } }
     else if (a === 'historico') { msg('Importando…'); const r = await ig('/buscar', 'POST', { ultimos: 20 }); if (r && r.ok) { msg(r.novas + ' post(s) importado(s).', 'ok'); await carregarStatus(); } else msg(erroTxt(r), 'erro'); }
+    else if (a === 'todos') await importarTodos(!!(st && st.historico && st.historico.completo));
+    else if (a === 'parar') { paraTodos = true; msg('Parando depois deste lote…'); }
     else if (a === 'sobe') agirEditor({ acao: 'ordem', midia: b.dataset.m, delta: -1 });
     else if (a === 'desce') agirEditor({ acao: 'ordem', midia: b.dataset.m, delta: 1 });
     else if (a === 'capa') agirEditor({ acao: 'capa', midia: b.dataset.m });

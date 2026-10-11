@@ -76,6 +76,32 @@ with sync_playwright() as p:
     chk("token fora da tela e do armazenamento do aparelho", TOK not in html and TOK not in ls)
     b.close()
 
+    print("== Importar TODOS os posts ==")
+    b, pg, st, log, errs = novo(p)
+    msgs = []; pg.on("dialog", lambda d: msgs.append(d.message))
+    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card"); pg.click("[data-ig=config]"); pg.wait_for_selector("[data-ig=todos]")
+    chk("botão 'Importar TODOS os posts' ao lado do dos 20", "TODOS" in pg.locator("[data-ig=todos]").inner_text() and "20" in pg.locator("[data-ig=historico]").inner_text(), pg.locator("[data-ig=todos]").inner_text())
+    axe(pg, "conectado-importar")
+    pg.click("[data-ig=todos]"); pg.wait_for_selector(".ig-msg.ok:has-text('Pronto')", timeout=15000)
+    chk("pediu confirmação explicando o que acontece (rascunhos, armazenamento, continua de onde parou)", msgs and "rascunho" in msgs[-1] and "armazenamento" in msgs[-1] and "continua de onde parou" in msgs[-1], msgs)
+    chk("chamou em lotes até o servidor dizer que acabou (3 chamadas)", len(st["ig"]["hist_chamadas"]) == 3, st["ig"].get("hist_chamadas"))
+    chk("mensagem final com o total (12) e o pulado (1), sem JSON", "12 novo" in pg.locator(".ig-msg").inner_text() and "1 pulado" in pg.locator(".ig-msg").inner_text() and "{" not in pg.locator(".ig-msg").inner_text(), pg.locator(".ig-msg").inner_text())
+    chk("depois de completo o botão vira 'refazer' e o Parar some", "refazer" in pg.locator("[data-ig=todos]").inner_text() and pg.locator("#ig-btn-parar").count() == 0, pg.locator("[data-ig=todos]").inner_text())
+    pg.click("[data-ig=todos]"); pg.wait_for_timeout(1500)
+    chk("'refazer' manda recomeçar do zero", st["ig"]["hist_chamadas"][3].get("recomecar") is True, st["ig"]["hist_chamadas"][3:4])
+    chk("sem erro de JavaScript", not errs, errs)
+    b.close()
+
+    print("== Importar TODOS: erro no meio mostra frase e permite continuar ==")
+    b, pg, st, log, errs = novo(p)
+    st["ig"]["hist_erro_na"] = 2
+    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card"); pg.click("[data-ig=config]"); pg.wait_for_selector("[data-ig=todos]")
+    pg.click("[data-ig=todos]"); pg.wait_for_selector(".ig-msg.erro:has-text('Parei')", timeout=15000)
+    t = pg.locator(".ig-msg").inner_text()
+    chk("parou com frase clara (4 copiados) e diz como continuar, sem JSON", "limite de chamadas" in t and "4 copiados" in t and "continuar de onde parou" in t and "{" not in t, t)
+    chk("botão volta a funcionar (continuar)", pg.locator("[data-ig=todos]").is_enabled() and "continuar" in pg.locator("[data-ig=todos]").inner_text(), pg.locator("[data-ig=todos]").inner_text())
+    b.close()
+
     print("== Worker ainda não publicado: a faixa aparece e explica ==")
     b, pg, st, log, errs = novo(p)
     st["ig"]["fora"] = True

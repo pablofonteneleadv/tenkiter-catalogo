@@ -13,6 +13,7 @@ const ORIGENS_PADRAO = ['https://tenkitermodas.com.br', 'https://www.tenkitermod
 const UA = 'Mozilla/5.0 (compatible; tenkiter-ig/1.0)';
 const IG_BASE_PADRAO = 'https://graph.instagram.com/v23.0';
 const CAMPOS = 'id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,children{id,media_type,media_url,thumbnail_url}';
+const MAX_PAGINAS = 8;                    // páginas do feed lidas por chamada da importação total (limite de subrequisições)
 const MAX_POR_CICLO = 10;                 // mídias copiadas por execução (limite de subrequisições); o resto fica para o próximo ciclo
 const MAX_BYTES_MIDIA = 60 * 1024 * 1024;
 const LIMITE_PADRAO = 9.5 * 1024 * 1024 * 1024;
@@ -131,62 +132,84 @@ async function renovarToken(env, token) {
 export async function ciclo(env, origem, opcoes) {
   await iniciar(env);
   const inicio = agora();
-  let novas = 0, erro = '';
+  let novas = 0, erro = '', puladas = 0, fim = false;
   try {
     let token = await cfgGet(env, 'ig_token');
     if (!token) { erro = 'Instagram ainda não conectado.'; return { ok: false, erro: erro }; }
     token = await renovarToken(env, token);
-    const desde = (opcoes && opcoes.ultimos) ? '' : (await cfgGet(env, 'ig_desde') || '');
+    const todos = !!(opcoes && opcoes.todos);
+    const desde = (opcoes && (opcoes.ultimos || todos)) ? '' : (await cfgGet(env, 'ig_desde') || '');
     const ultimos = Math.min(50, Number(opcoes && opcoes.ultimos) || 0);
-    const itens = [];
-    const feed = await graph(env, token, '/me/media?fields=' + encodeURIComponent(CAMPOS) + '&limit=' + (ultimos || 25));
-    (feed.data || []).forEach((m) => itens.push({ m: m, story: false }));
-    try { const st = await graph(env, token, '/me/stories?fields=' + encodeURIComponent(CAMPOS) + '&limit=25'); (st.data || []).forEach((m) => itens.push({ m: m, story: true })); } catch (e) { /* conta sem stories agora / permissão: o feed segue */ }
-    const vistos = {};
-    const ids = itens.map((x) => x.m.id);
-    if (ids.length) {
-      const q = await env.DB.prepare('SELECT id FROM ig_midia WHERE id IN (' + ids.map(() => '?').join(',') + ')').bind(...ids).all();
-      (q.results || []).forEach((r) => { vistos[r.id] = true; });
-    }
-    const fila = itens.filter((x) => !vistos[x.m.id] && (!desde || String(x.m.timestamp || '') >= desde)).sort((a, b) => String(a.m.timestamp).localeCompare(String(b.m.timestamp)));
     let orcamento = MAX_POR_CICLO;
-    for (const it of fila) {
-      const m = it.m, filhos = m.media_type === 'CAROUSEL_ALBUM' && m.children && Array.isArray(m.children.data) ? m.children.data : [m];
-      if (filhos.length > orcamento) break;                        // não cabe neste ciclo: fica para o próximo (nada é gravado pela metade)
-      const aaaamm = String(m.timestamp || agora()).slice(0, 7).replace('-', '');
-      const copias = [];
-      try {
-        for (const f of filhos) {
-          const ehVideo = f.media_type === 'VIDEO';
-          const url = f.media_url || (ehVideo ? '' : f.thumbnail_url);
-          if (!url) throw new Error('mídia sem endereço (conta sem permissão?)');
-          const c = await copiarMidia(env, url, aaaamm);
-          let mini = '';
-          if (ehVideo && (f.thumbnail_url || m.thumbnail_url)) { try { mini = (await copiarMidia(env, f.thumbnail_url || m.thumbnail_url, aaaamm, c.chave.replace(/\.[a-z0-9]+$/, '.jpg'))).chave; } catch (e) { mini = ''; } }
-          copias.push({ f: f, c: c, mini: mini, ehVideo: ehVideo });
-          orcamento--;
-        }
-      } catch (e) {
-        erro = String((e && e.message) || e).slice(0, 300);        // não registra: tenta de novo no próximo ciclo
-        for (const c of copias) { try { await env.MIDIA.delete(c.c.chave); if (c.mini) await env.MIDIA.delete(c.mini); } catch (x) { /* ignora */ } }
-        continue;
+    /** Copia o que é novo de uma lista. 'ok' = acabou a lista; 'parou' = acabou o orçamento (volta nesta mesma página); 'erro' = falha que para tudo. */
+    const processar = async (itens) => {
+      const vistos = {};
+      const ids = itens.map((x) => x.m.id);
+      if (ids.length) {
+        const q = await env.DB.prepare('SELECT id FROM ig_midia WHERE id IN (' + ids.map(() => '?').join(',') + ')').bind(...ids).all();
+        (q.results || []).forEach((r) => { vistos[r.id] = true; });
       }
-      const legenda = String(m.caption || '').slice(0, 2200), cod = codigoDaLegenda(legenda);
-      const grupo = it.story ? 'sem_id' : (cod ? 'duplicado' : 'pendente');
-      const rr = await env.DB.prepare('INSERT INTO rascunho (grupo, status, origem, legenda, permalink, publicado_em, preco_sug, tamanhos_sug, codigo_dup, criado_em, atualizado_em) VALUES (?, \'pendente\', ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(grupo, origemDe(m, it.story), legenda, m.permalink || '', m.timestamp || inicio, precoDaLegenda(legenda), tamanhosDaLegenda(legenda), cod, inicio, inicio).run();
-      const rid = rr.meta.last_row_id;
-      const exp = it.story ? new Date(new Date(m.timestamp || Date.now()).getTime() + 86400000).toISOString() : '';
-      const lote = [env.DB.prepare('INSERT OR IGNORE INTO ig_midia (id, tipo, produto_tipo, legenda, permalink, publicado_em, pai_id, chave, chave_mini, bytes, status, expirou_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'em_rascunho\', ?, ?)')
-        .bind(m.id, 'GRUPO', m.media_product_type || '', legenda, m.permalink || '', m.timestamp || '', '', '', '', 0, exp, inicio)];
-      copias.forEach((x, i) => {
-        const idMidia = x.f.id === m.id && copias.length === 1 ? m.id + '#1' : x.f.id;
-        lote.push(env.DB.prepare('INSERT OR IGNORE INTO ig_midia (id, tipo, produto_tipo, legenda, permalink, publicado_em, pai_id, chave, chave_mini, bytes, status, expirou_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'em_rascunho\', ?, ?)')
-          .bind(idMidia, x.ehVideo ? 'VIDEO' : 'IMAGE', m.media_product_type || '', '', m.permalink || '', m.timestamp || '', m.id, x.c.chave, x.mini, x.c.bytes, exp, inicio));
-        lote.push(env.DB.prepare('INSERT OR IGNORE INTO rascunho_midia (rascunho_id, midia_id, ordem, capa) VALUES (?, ?, ?, ?)').bind(rid, idMidia, i, i === 0 ? 1 : 0));
-      });
-      await env.DB.batch(lote);
-      novas++;
+      const fila = itens.filter((x) => !vistos[x.m.id] && (!desde || String(x.m.timestamp || '') >= desde)).sort((a, b) => String(a.m.timestamp).localeCompare(String(b.m.timestamp)));
+      for (const it of fila) {
+        const m = it.m, filhos = m.media_type === 'CAROUSEL_ALBUM' && m.children && Array.isArray(m.children.data) ? m.children.data : [m];
+        if (filhos.length > orcamento) return 'parou';                        // não cabe neste ciclo: fica para o próximo (nada é gravado pela metade)
+        const aaaamm = String(m.timestamp || agora()).slice(0, 7).replace('-', '');
+        const copias = [];
+        try {
+          for (const f of filhos) {
+            const ehVideo = f.media_type === 'VIDEO';
+            const url = f.media_url || (ehVideo ? '' : f.thumbnail_url);
+            if (!url) throw new Error('mídia sem endereço (conta sem permissão?)');
+            const c = await copiarMidia(env, url, aaaamm);
+            let mini = '';
+            if (ehVideo && (f.thumbnail_url || m.thumbnail_url)) { try { mini = (await copiarMidia(env, f.thumbnail_url || m.thumbnail_url, aaaamm, c.chave.replace(/\.[a-z0-9]+$/, '.jpg'))).chave; } catch (e) { mini = ''; } }
+            copias.push({ f: f, c: c, mini: mini, ehVideo: ehVideo });
+            orcamento--;
+          }
+        } catch (e) {
+          const txt = String((e && e.message) || e).slice(0, 300);
+          for (const c of copias) { try { await env.MIDIA.delete(c.c.chave); if (c.mini) await env.MIDIA.delete(c.mini); } catch (x) { /* ignora */ } }
+          if (todos && txt.indexOf('armazenamento cheio') === -1) { puladas++; continue; }   // importação total: um post ruim não trava os outros
+          erro = txt;                                                // não registra: tenta de novo no próximo ciclo
+          if (todos) return 'erro';
+          continue;
+        }
+        const legenda = String(m.caption || '').slice(0, 2200), cod = codigoDaLegenda(legenda);
+        const grupo = it.story ? 'sem_id' : (cod ? 'duplicado' : 'pendente');
+        const rr = await env.DB.prepare('INSERT INTO rascunho (grupo, status, origem, legenda, permalink, publicado_em, preco_sug, tamanhos_sug, codigo_dup, criado_em, atualizado_em) VALUES (?, \'pendente\', ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(grupo, origemDe(m, it.story), legenda, m.permalink || '', m.timestamp || inicio, precoDaLegenda(legenda), tamanhosDaLegenda(legenda), cod, inicio, inicio).run();
+        const rid = rr.meta.last_row_id;
+        const exp = it.story ? new Date(new Date(m.timestamp || Date.now()).getTime() + 86400000).toISOString() : '';
+        const lote = [env.DB.prepare('INSERT OR IGNORE INTO ig_midia (id, tipo, produto_tipo, legenda, permalink, publicado_em, pai_id, chave, chave_mini, bytes, status, expirou_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'em_rascunho\', ?, ?)')
+          .bind(m.id, 'GRUPO', m.media_product_type || '', legenda, m.permalink || '', m.timestamp || '', '', '', '', 0, exp, inicio)];
+        copias.forEach((x, i) => {
+          const idMidia = x.f.id === m.id && copias.length === 1 ? m.id + '#1' : x.f.id;
+          lote.push(env.DB.prepare('INSERT OR IGNORE INTO ig_midia (id, tipo, produto_tipo, legenda, permalink, publicado_em, pai_id, chave, chave_mini, bytes, status, expirou_em, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'em_rascunho\', ?, ?)')
+            .bind(idMidia, x.ehVideo ? 'VIDEO' : 'IMAGE', m.media_product_type || '', '', m.permalink || '', m.timestamp || '', m.id, x.c.chave, x.mini, x.c.bytes, exp, inicio));
+          lote.push(env.DB.prepare('INSERT OR IGNORE INTO rascunho_midia (rascunho_id, midia_id, ordem, capa) VALUES (?, ?, ?, ?)').bind(rid, idMidia, i, i === 0 ? 1 : 0));
+        });
+        await env.DB.batch(lote);
+        novas++;
+      }
+      return 'ok';
+    };
+    if (!todos) {
+      const itens = [];
+      const feed = await graph(env, token, '/me/media?fields=' + encodeURIComponent(CAMPOS) + '&limit=' + (ultimos || 25));
+      (feed.data || []).forEach((m) => itens.push({ m: m, story: false }));
+      try { const st = await graph(env, token, '/me/stories?fields=' + encodeURIComponent(CAMPOS) + '&limit=25'); (st.data || []).forEach((m) => itens.push({ m: m, story: true })); } catch (e) { /* conta sem stories agora / permissão: o feed segue */ }
+      await processar(itens);
+    } else {
+      /* Importação de TODO o histórico: anda página por página (cursor guardado no servidor — se fechar a tela ou der erro, continua de onde parou). */
+      let depois = await cfgGet(env, 'ig_hist_depois') || '';
+      for (let pg = 0; pg < MAX_PAGINAS && orcamento > 0; pg++) {
+        const pag = await graph(env, token, '/me/media?fields=' + encodeURIComponent(CAMPOS) + '&limit=25' + (depois ? '&after=' + encodeURIComponent(depois) : ''));
+        const r = await processar((pag.data || []).map((m) => ({ m: m, story: false })));
+        if (r !== 'ok') break;                                     // mesma página na próxima chamada
+        const prox = pag.paging && pag.paging.next && pag.paging.cursors && pag.paging.cursors.after;
+        if (!prox) { fim = true; await cfgSet(env, 'ig_hist_depois', null); await cfgSet(env, 'ig_hist_fim', agora()); break; }
+        depois = prox; await cfgSet(env, 'ig_hist_depois', depois);
+      }
     }
   } catch (e) {
     erro = String((e && e.message) || e).slice(0, 300);
@@ -198,7 +221,7 @@ export async function ciclo(env, origem, opcoes) {
       await env.DB.prepare('DELETE FROM exec_log WHERE id NOT IN (SELECT id FROM exec_log ORDER BY id DESC LIMIT 200)').run();
     } catch (e) { /* log é só conforto */ }
   }
-  return { ok: !erro, novas: novas, erro: erro };
+  return { ok: !erro, novas: novas, erro: erro, puladas: puladas, fim: fim };
 }
 
 /* ---------- leitura para a tela ---------- */
@@ -311,11 +334,11 @@ async function status(env) {
   const alertas = [];
   if (tem && falhas >= 3) alertas.push('A busca no Instagram falhou ' + falhas + ' vezes seguidas' + (ult && ult.erro ? ': ' + ult.erro : '.'));
   if (tem && dias !== null && dias < 10) alertas.push('O acesso ao Instagram vence em ' + Math.max(0, dias) + ' dia(s). Conecte de novo.');
-  return { ok: true, conectado: tem, usuario: await cfgGet(env, 'ig_usuario') || '', venceEmDias: dias, desde: await cfgGet(env, 'ig_desde') || '', contagens: c, ultimoCiclo: ult || null, novasDesdeOntem: n ? n.n : 0, falhasSeguidas: falhas, alertas: alertas, usoR2: await lerUso(env), limiteR2: limite(env) };
+  return { ok: true, conectado: tem, usuario: await cfgGet(env, 'ig_usuario') || '', venceEmDias: dias, desde: await cfgGet(env, 'ig_desde') || '', contagens: c, ultimoCiclo: ult || null, novasDesdeOntem: n ? n.n : 0, falhasSeguidas: falhas, alertas: alertas, usoR2: await lerUso(env), limiteR2: limite(env), historico: { completo: !!(await cfgGet(env, 'ig_hist_fim')), emAndamento: !!(await cfgGet(env, 'ig_hist_depois')) } };
 }
 
 export default {
-  async scheduled(ev, env, ctx) { ctx.waitUntil(ciclo(env, 'cron')); },
+  async scheduled(ev, env, ctx) { if (await env.CACHE.get('ig_hist_trava')) return; ctx.waitUntil(ciclo(env, 'cron')); },
   async fetch(req, env, ctx) {
     const url = new URL(req.url), h = cors(env, req), J = (c, s) => resp(c, s, h);
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
@@ -342,9 +365,16 @@ export default {
         return J(Object.assign({ ok: true }, r, { contagens: await contagens(env) }));
       }
       if (p === '/buscar' && req.method === 'POST') {
+        let b = {}; try { b = await req.json(); } catch (e) { /* sem corpo */ }
+        if (b && b.todos) {
+          /* importação total: o painel chama em sequência; a trava só impede duas importações ao mesmo tempo (vence sozinha em 60 s) */
+          if (await env.CACHE.get('ig_hist_trava')) return J({ ok: false, erro: 'Já existe uma importação em andamento. Espere um instante.' }, 429);
+          if (b.recomecar) { await cfgSet(env, 'ig_hist_depois', null); await cfgSet(env, 'ig_hist_fim', null); }
+          await env.CACHE.put('ig_hist_trava', '1', { expirationTtl: 60 });
+          try { return J(await ciclo(env, 'historico', { todos: true })); } finally { await env.CACHE.delete('ig_hist_trava'); }
+        }
         if (await env.CACHE.get('ig_buscar_agora')) return J({ ok: false, erro: 'Espere um minuto antes de buscar de novo.' }, 429);
         await env.CACHE.put('ig_buscar_agora', '1', { expirationTtl: 60 });
-        let b = {}; try { b = await req.json(); } catch (e) { /* sem corpo */ }
         return J(await ciclo(env, 'manual', { ultimos: b && b.ultimos }));
       }
       if (p === '/token' && req.method === 'POST') {
