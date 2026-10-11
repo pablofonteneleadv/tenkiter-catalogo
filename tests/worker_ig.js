@@ -123,6 +123,23 @@ function d1() {
   const n1 = await DB.prepare('SELECT COUNT(*) AS n FROM rascunho').first(); chk('continuam 5 rascunhos', n1.n === 5);
   chk('token nunca aparece na URL gravada nem no D1 fora de cfg', !JSON.stringify(await DB.prepare('SELECT * FROM rascunho').all()).includes(TOKEN) && !JSON.stringify(await DB.prepare('SELECT * FROM exec_log').all()).includes(TOKEN));
 
+  console.log('== Stories ==');
+  {
+    const desdeAntigo = await DB.prepare("SELECT valor FROM cfg WHERE chave='ig_desde'").first();
+    const velho = new Date(new Date(desdeAntigo.valor).getTime() - 3 * 3600000).toISOString();
+    feed = []; stories = [m('SV1', { media_product_type: 'STORY', timestamp: velho })];
+    c = await W.ciclo(env, 'cron'); chk('Story no ar postado ANTES da conexão também entra (Story ignora o "desde")', c.novas === 1, c);
+    ({ j } = await A('GET', '/rascunhos?grupo=sem_id')); chk('Story vai para "Sem identificação" com origem story', j.rascunhos.some((x) => x.origem === 'story'), j.rascunhos.map((x) => x.origem));
+    ({ j } = await A('GET', '/status')); chk('status mostra quantos Stories estão no ar e nenhum aviso', j.stories && j.stories.no_ar === 1 && !j.stories.erro && !j.alertas.some((a) => /Stories/.test(a)), j.stories);
+    stories = [m('SV2', { media_product_type: 'STORY', timestamp: ts(1) })];
+    c = await W.ciclo(env, 'historico', { todos: true }); chk('importação total também traz os Stories no ar', c.ok && await DB.prepare("SELECT 1 AS x FROM ig_midia WHERE pai_id='SV2'").first(), c);
+    const orig = globalThis.fetch; globalThis.fetch = async (u, i) => (String(u).includes('/me/stories') ? new Response(JSON.stringify({ error: { message: '(#10) Application does not have permission' } }), { status: 400 }) : orig(u, i));
+    stories = []; feed = []; c = await W.ciclo(env, 'cron'); globalThis.fetch = orig;
+    ({ j } = await A('GET', '/status')); chk('erro ao ler Stories vira aviso no painel (não fica em silêncio) e o ciclo segue ok', c.ok && j.alertas.some((a) => /Stories.*permission/.test(a)), j.alertas);
+    chk('o aviso não vaza o token', !JSON.stringify(j).includes(TOKEN));
+    c = await W.ciclo(env, 'cron'); ({ j } = await A('GET', '/status')); chk('voltando a funcionar o aviso some', !j.alertas.some((a) => /Stories/.test(a)));
+  }
+
   console.log('== Limite por ciclo, falha de cópia e armazenamento cheio ==');
   feed = []; for (let i = 0; i < 12; i++) feed.push(m('L' + i, { timestamp: ts(10 + i), caption: 'lote ' + i }));
   stories = [];
