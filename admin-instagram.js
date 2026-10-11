@@ -87,7 +87,15 @@
   async function carregarStatus() {
     const r = await ig('/status');
     if (r && r.ok) { st = r; cont = r.contagens || {}; desenharFaixa(); }
+    else desenharFaixaOff(r);
     return r;
+  }
+  /* O motor (Worker) ainda não foi publicado ou está fora do ar: a faixa APARECE do mesmo jeito, dizendo o que falta (nunca some em silêncio). */
+  function desenharFaixaOff(r) {
+    const f = $('ig-faixa'); if (!f) return;
+    css(); f.hidden = false;
+    const motivo = r && r.semRede ? 'Sem conexão agora.' : (r && r.erro && !/Não encontrado/.test(r.erro) ? r.erro : 'O importador ainda não foi ativado no servidor (falta publicar o Worker na Cloudflare).');
+    f.innerHTML = '<div class="ig-faixa-btn" style="cursor:default"><span class="ig-badge zero">!</span><span><b>📥 Produtos para aceitar</b><small>' + esc(motivo) + '</small></span></div>';
   }
 
   /* ---------- janela ---------- */

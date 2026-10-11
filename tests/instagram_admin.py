@@ -76,6 +76,13 @@ with sync_playwright() as p:
     chk("token fora da tela e do armazenamento do aparelho", TOK not in html and TOK not in ls)
     b.close()
 
+    print("== Worker ainda não publicado: a faixa aparece e explica ==")
+    b, pg, st, log, errs = novo(p)
+    st["ig"]["fora"] = True
+    pg.reload(); pg.wait_for_timeout(2500)
+    chk("faixa visível dizendo que falta ativar o importador (nunca some em silêncio)", pg.locator("#ig-faixa").is_visible() and "ainda não foi ativado" in pg.locator("#ig-faixa").inner_text(), pg.locator("#ig-faixa").inner_text())
+    b.close()
+
     print("== Sem permissão de Admin total: nada aparece ==")
     perms = [x for x in PERMS_ALL if x != "gerir_acessos"] if isinstance(PERMS_ALL, (list, tuple)) else None
     if perms is not None:

@@ -363,6 +363,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                 return c
             g["chamadas"].append({"m":m,"path":path,"whats":h.get("x-tk-whats"),"sessao":h.get("x-tk-sessao"),"corpo":route.request.post_data})
             if m=="OPTIONS": return route.fulfill(status=204,body="")
+            if g.get("fora"): return route.fulfill(status=404,json={"ok":False,"erro":"Não encontrado."})
             if not (h.get("x-tk-sessao") or "").startswith("tk"): return route.fulfill(status=401,json={"ok":False,"erro":"Entre na sua conta de administrador."})
             body=json.loads(route.request.post_data or "{}") if m=="POST" else {}
             if path=="/status": return route.fulfill(json={"ok":True,"conectado":g["conectado"],"usuario":"tenkitermodasceara","venceEmDias":55,"contagens":cont(),"ultimoCiclo":{"inicio":"2026-10-11T05:00:00Z","fim":"2026-10-11T05:00:02Z","novas":0,"erro":""},"novasDesdeOntem":2,"alertas":g.get("alertas",[])})
