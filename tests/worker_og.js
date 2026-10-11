@@ -119,7 +119,7 @@ const base = [
   console.log('== /sitemap.xml ==');
   r = await pedir('/sitemap.xml'); let x = await r.text();
   ok(r.status === 200 && /application\/xml/.test(r.headers.get('content-type')), 'sitemap responde 200 em XML');
-  ok(x.includes('<loc>' + SITE + '</loc>') && x.includes('<loc>' + SITE + 'privacidade.html</loc>'), 'tem a página inicial e a de privacidade');
+  ok(x.includes('<loc>' + SITE + '</loc>') && x.includes('<loc>' + SITE + 'privacidade.html</loc>') && x.includes('<loc>' + SITE + 'curriculo.html</loc>'), 'tem a página inicial, a de privacidade e a de currículo (que estavam no sitemap estático)');
   ok(x.includes('<loc>' + SITE + 'p/TK-0001</loc>') && x.includes('<loc>' + SITE + 'p/TK-0002</loc>') && x.includes('<loc>' + SITE + 'p/TK-0003</loc>'), 'tem as peças ativas (inclusive esgotada)');
   ok(!x.includes('p/TK-0004'), 'não tem peça arquivada');
   ok(!x.includes('<loc>' + SITE + 'p/</loc>') && !x.includes('?id=6'), 'não lista peça sem código');

@@ -11,7 +11,7 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
   `common.js` (config compartilhada — **única fonte de verdade** para `API_URL`/`SITE_URL`).
   Também no front: `pedido.js` (sacola com formulário, pedido enviado, acompanhar pedido, favoritos, compartilhar seleção), `meta.js` (Pixel da
   Meta, desligado por padrão), `pwa.js` (instalar o app + registra o service worker), `admin-gestao.js` (pedidos, números, importar CSV,
-  integrações, avisos no painel), `privacidade.html`, `404.html`, `site.webmanifest`, `robots.txt`, `sitemap.xml`.
+  integrações, avisos no painel), `privacidade.html`, `404.html`, `site.webmanifest`, `robots.txt` (o `sitemap.xml` e os feeds vêm do Worker — não recriar `sitemap.xml` no repositório: arquivo estático ganha da regra Rewrite do Render).
 - **Backend**: dois Apps Script Web Apps separados, versionados por nome de arquivo
   (`<nome>-<versão>.gs.txt`):
   - `catalogo-codigo-3.2.gs.txt` — catálogo + autenticação central + pedidos/métricas/importação/feed/integrações (v3.1) + apagar/renomear categoria só para Admin total (v3.2).
@@ -61,7 +61,7 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
 - Miniatura **por produto**: Cloudflare Worker `tenkiter-og` (código em `og-worker/worker.js`, endereço
   `https://tenkiter-og.distkrpconfeccoes.workers.dev`) devolve HTML com `og:*` em `/p/<código>` e redireciona a pessoa para
   `?c=<código>`. No Render existe a regra Rewrite `/p/*` -> `<worker>/p/*` (confirmado: faz proxy, não redireciona). Se mudar
-  o código do Worker, publicar de novo na Cloudflare (painel ou API). `og-service/` (Node) é alternativa antiga, não usada. O Worker é **v2 e está PUBLICADO desde 10/10/2026** (publicado pela API da Cloudflare, `og-worker/publicar.py`; JSON-LD, `/sitemap.xml`, `/feed.csv|xml`, `/lista.json`) — guia de publicação em `og-worker/LEIA-ME.md`.
+  o código do Worker, publicar de novo na Cloudflare (painel ou API). `og-service/` (Node) é alternativa antiga, não usada. O Worker é **v2 e está PUBLICADO desde 10/10/2026** (publicado pela API da Cloudflare, `og-worker/publicar.py`; JSON-LD, `/sitemap.xml`, `/feed.csv|xml`, `/lista.json`) — guia de publicação em `og-worker/LEIA-ME.md`. **Regras Rewrite no Render (criadas em 10/10/2026 pela API do Render):** `/p/*`, `/feed.csv`, `/feed.xml`, `/sitemap.xml` → mesmo caminho no Worker (rotas e cabeçalhos do Render só se mexem por API REST — `https://api.render.com/v1/services/<id>/routes` — ou pelo painel; o MCP do Render não tem isso).
   `index.html` mantém `og:image` genérico (`og-banner.jpg`) para o link da loja em si.
 
 ## Instagram / redes sociais

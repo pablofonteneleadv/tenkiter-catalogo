@@ -19,7 +19,7 @@
 const API_URL = 'https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec';
 const SITE_URL = 'https://tenkitermodas.com.br/';
 const DESCONTO_AVISTA = 0.10;
-const PAGINAS_FIXAS = ['', 'privacidade.html'];
+const PAGINAS_FIXAS = ['', 'privacidade.html', 'curriculo.html'];
 
 async function produtos() {
   const r = await fetch(API_URL + '?action=list', { redirect: 'follow', cf: { cacheTtl: 60, cacheEverything: true } });

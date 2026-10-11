@@ -20,10 +20,10 @@ Qualquer outro caminho redireciona para a loja. Se o Apps Script estiver fora do
 2. Confira no navegador (troque `TK-0001` por um código que exista):
    - `https://tenkiter-og.distkrpconfeccoes.workers.dev/p/TK-0001` (deve redirecionar para o catálogo; "ver código-fonte" mostra `application/ld+json`);
    - `.../sitemap.xml`, `.../feed.csv`, `.../lista.json`.
-3. **Render → o site estático → Redirects/Rewrites** (a regra `/p/*` já existe). Crie, do tipo **Rewrite**:
+3. **Render → o site estático → Redirects/Rewrites** — **JÁ CRIADAS em 10/10/2026** (`/p/*`, `/feed.csv`, `/feed.xml`, `/sitemap.xml`; pela API: `POST https://api.render.com/v1/services/srv-dasa63fpn0mc73fh8fgg/routes` com `{"type":"rewrite","source":...,"destination":...}`). Se precisar refazer, do tipo **Rewrite**:
    - `/feed.csv` → `https://tenkiter-og.distkrpconfeccoes.workers.dev/feed.csv`
    - `/feed.xml` → `https://tenkiter-og.distkrpconfeccoes.workers.dev/feed.xml`
-   - `/sitemap.xml` → `https://tenkiter-og.distkrpconfeccoes.workers.dev/sitemap.xml` — **e então apague o `sitemap.xml` do repositório** (o arquivo estático tem só 3 páginas; não dependa de qual dos dois o Render serve primeiro). Depois abra `https://tenkitermodas.com.br/sitemap.xml` e confira se listou as peças.
+   - `/sitemap.xml` → `https://tenkiter-og.distkrpconfeccoes.workers.dev/sitemap.xml` — **o `sitemap.xml` estático NÃO pode existir no repositório** (arquivo estático ganha da regra Rewrite: confirmado em 10/10/2026). Abra `https://tenkitermodas.com.br/sitemap.xml` e confira se listou as peças.
 4. (**Não ligue ainda** — sem o cache de borda não ganha velocidade, ver a tabela acima) em `common.js` troque `const LISTA_RAPIDA_URL = '';` por `'https://tenkiter-og.distkrpconfeccoes.workers.dev/lista.json'`, rode `python3 tests/rodar_tudo.py` e publique. Para desligar: volte a `''`.
 5. Google Search Console: cadastre `https://tenkitermodas.com.br/sitemap.xml`. Meta (Gerenciador de Comércio) / Google Merchant: fonte de dados por link → `https://tenkitermodas.com.br/feed.csv` (ou `.xml` no Google).
 

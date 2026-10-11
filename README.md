@@ -14,7 +14,7 @@ Catálogo online da TENKiTER Modas (Crateús, CE), hospedado no Render:
 **Scripts compartilhados**
 - **`common.js`** — configuração e funções compartilhadas (URL da API, endereço público do site, desconto à vista, número de WhatsApp da loja, favoritos, sacola, fila offline, formatação de preço, miniaturas, lista rápida). **Qualquer mudança nesses valores deve ser feita só aqui.**
 - **`pedido.js`** (sacola com formulário, pedido enviado, acompanhar pedido, favoritos, compartilhar seleção), **`meta.js`** (Pixel da Meta — desligado até haver ID e aceite do visitante), **`pwa.js`** + **`push.js`** + **`OneSignalSDKWorker.js`** (instalar o app, avisos push e cache offline; um único service worker; guia dos avisos em **`LEIA-ME-AVISOS.md`**), **`nav.js`** (barra inferior), **`a11y.js`** (acessibilidade: foco, Esc, Tab preso nas janelas).
-- **`site.webmanifest`**, ícones, **`robots.txt`**, **`sitemap.xml`** (páginas fixas; o mapa completo das peças vem do Worker, ver `og-worker/LEIA-ME.md`).
+- **`site.webmanifest`**, ícones, **`robots.txt`**. O `sitemap.xml` e o feed (`/feed.csv`, `/feed.xml`) **não são arquivos do site**: o Render repassa (Rewrite) para o Worker `tenkiter-og`, que monta tudo com as peças ativas — ver `og-worker/LEIA-ME.md`.
 
 **Fora do site**
 - **`og-worker/`** — Worker da Cloudflare (miniatura e dados do Google por peça, mapa do site, catálogo para Meta/Google, lista rápida). Guia: `og-worker/LEIA-ME.md`.
