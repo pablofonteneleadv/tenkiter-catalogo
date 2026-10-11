@@ -1175,7 +1175,7 @@ function servicosFalsos(amb, est) {
   const P = (o) => { const r = amb.post(o); respostas.push(JSON.stringify(r)); return r; };
   const chamou = (re) => est.chamadas.filter(c => re.test(c.url));
 
-  ok(amb.getJson({ action: 'versao' }).conexoesOnesignal === true && /^catalogo-3\.6$/.test(amb.getJson({ action: 'versao' }).versao), 'versao anuncia conexoesOnesignal:true e catalogo-3.6');
+  ok(amb.getJson({ action: 'versao' }).conexoesOnesignal === true && /^catalogo-3\.7$/.test(amb.getJson({ action: 'versao' }).versao), 'versao anuncia conexoesOnesignal:true e catalogo-3.7');
   // --- quem pode
   ok(P(adm({ action: 'onesignalConfigurar' })).exigeLogin === true, 'o PIN antigo NÃO liga o OneSignal (exige login de Admin total)');
   ok(P(F({ action: 'onesignalConfigurar' })).semPermissao === true && P(F({ action: 'salvarConexao', nome: 'onesignal', chave: CHAVE_ORG, orgId: ORG })).semPermissao === true, 'Funcionário (sem gerir_acessos) não consegue ligar nem guardar a chave do OneSignal');
@@ -1589,6 +1589,88 @@ function servicosFalsos(amb, est) {
   ok(r.ok === false && /desconhecida/i.test(r.erro), 'ação desconhecida continua devolvendo erro');
   r = amb.post({ action: 'acaoQueNaoExiste' });
   ok(r.ok === false, 'POST desconhecido continua negado');
+})();
+
+// ------------------------------------------------------------------ 8h. X de arquivar no catálogo, mídia arquivada reversível e juntar produtos (v3.7)
+(function midiaRapida() {
+  console.log('\n[v3.7: arquivar rápido, mídia arquivada (reversível) e juntar produtos]');
+  const amb = criarAmbiente(); semear(amb);
+  const sh = amb.ss.getSheetByName('Sheet1');
+  const linha = (id) => { const d = sh.getDataRange().getValues(); const i = d.findIndex((r) => String(r[0]) === String(id)); return { i: i + 1, r: d[i], cab: d[0] }; };
+  const col = (nome) => linha('101').cab.indexOf(nome) + 1;
+  const G = col('Fotos_Galeria');
+  sh.getRange(linha('101').i, G).setValue('https://x/g1.jpg,https://x/g2.jpg,https://x/g3.jpg');
+  sh.getRange(linha('102').i, G).setValue('https://x/h1.jpg');
+  amb.run("colunaVideo_(getProdutosSheet_())");
+  const V = col('Video_URL');
+  sh.getRange(linha('101').i, V).setValue('https://v/101.mp4'); sh.getRange(linha('102').i, V).setValue('https://v/102.mp4');
+  const gal = (id) => String(linha(id).r[G - 1]); const capa = (id) => String(linha(id).r[5]); const vid = (id) => String(linha(id).r[V - 1] || '');
+  ok(amb.getJson({ action: 'versao' }).midiaRapida === true && amb.getJson({ action: 'versao' }).juntarProdutos === true, 'versao anuncia midiaRapida e juntarProdutos');
+  // ---- quem pode
+  ok(amb.post({ action: 'arquivarMidia', id: '101', tipo: 'foto', url: 'https://x/g1.jpg' }).ok === false, 'sem login/PIN: negado');
+  amb.ctx.SpreadsheetApp.openById('x').getSheetByName('Pessoas').appendRow(['Nome', 'WhatsApp', 'Senha']);
+  amb.run("acRegistrar_('Cliente Maria', '88999990003', 'senha-cli-3', 'Cliente', {})");
+  amb.run("acRegistrar_('Equipe Site', '88999990004', 'senha-eq-4', 'Equipe do site', {})");
+  const cli = amb.post({ action: 'login', whatsapp: '88999990003', senha: 'senha-cli-3' });
+  const eq = amb.post({ action: 'login', whatsapp: '88999990004', senha: 'senha-eq-4' });
+  const C = (o) => Object.assign({ sessao: cli.sessao, whatsapp: '88999990003' }, o);
+  const E = (o) => Object.assign({ sessao: eq.sessao, whatsapp: '88999990004' }, o);
+  ok(amb.post(C({ action: 'arquivarMidia', id: '101', tipo: 'foto', url: 'https://x/g1.jpg' })).semPermissao === true && amb.post(C({ action: 'arquivarRapido', id: '101' })).semPermissao === true && amb.post(C({ action: 'juntarProdutos', destinoId: '101', origemIds: ['102'] })).semPermissao === true, 'Cliente comum NÃO vê/usa o X (arquivar, arquivar mídia, juntar)');
+  ok(gal('101') === 'https://x/g1.jpg,https://x/g2.jpg,https://x/g3.jpg' && linha('101').r[6] === 'Ativo', 'nada mudou com o pedido negado');
+  // ---- arquivar uma foto da galeria
+  let r = amb.post(E({ action: 'arquivarMidia', id: '101', tipo: 'foto', url: 'https://x/g2.jpg' }));
+  ok(r.ok && /^MA\d+/.test(r.registro) && gal('101') === 'https://x/g1.jpg,https://x/g3.jpg' && capa('101') === 'https://res.cloudinary.com/z/a.jpg', 'Equipe do site tira uma foto da galeria; capa e as outras ficam', JSON.stringify(r));
+  const reg1 = r.registro;
+  ok(amb.post(E({ action: 'arquivarMidia', id: '101', tipo: 'foto', url: 'https://x/g2.jpg' })).ok === false, 'tirar a mesma foto de novo recusa com frase');
+  const arq = amb.ss.getSheetByName('Midia_Arquivada').getDataRange().getValues();
+  ok(arq.length === 2 && arq[1][2] === 'Equipe Site' && arq[1][3] === '101' && arq[1][6] === 'https://x/g2.jpg' && arq[1][7] === 1 && arq[1][9] === 'arquivada', 'Midia_Arquivada guarda quem, produto, endereço, posição e situação', JSON.stringify(arq[1]));
+  const aud = amb.ss.getSheetByName('Acoes_Audit').getDataRange().getValues().filter((x) => x[2] === 'arquivar_midia');
+  ok(aud.length === 1 && /restaurarMidia/.test(aud[0][4]) && /g2\.jpg/.test(aud[0][4]), 'Acoes_Audit registra com o endereço e como reverter');
+  // ---- restaurar volta ao lugar exato
+  r = amb.post(E({ action: 'restaurarMidia', registro: reg1 }));
+  ok(r.ok && gal('101') === 'https://x/g1.jpg,https://x/g2.jpg,https://x/g3.jpg', 'restaurar devolve a foto na MESMA posição', gal('101'));
+  ok(amb.post(E({ action: 'restaurarMidia', registro: reg1 })).ok === false, 'restaurar duas vezes recusa');
+  // ---- capa: a 1ª da galeria assume; restaurar devolve a capa
+  r = amb.post(E({ action: 'arquivarMidia', id: '101', tipo: 'foto', url: 'https://res.cloudinary.com/z/a.jpg' }));
+  ok(r.ok && capa('101') === 'https://x/g1.jpg' && gal('101') === 'https://x/g2.jpg,https://x/g3.jpg' && r.novaCapa === 'https://x/g1.jpg', 'tirar a CAPA: a 1ª foto da galeria vira capa', capa('101') + ' | ' + gal('101'));
+  r = amb.post(E({ action: 'restaurarMidia', registro: r.registro }));
+  ok(r.ok && capa('101') === 'https://res.cloudinary.com/z/a.jpg' && gal('101') === 'https://x/g1.jpg,https://x/g2.jpg,https://x/g3.jpg', 'restaurar a capa devolve tudo como era', capa('101') + ' | ' + gal('101'));
+  // ---- única foto não sai
+  r = amb.post(E({ action: 'arquivarMidia', id: '103', tipo: 'foto', url: 'https://res.cloudinary.com/z/c.jpg' }));
+  ok(r.ok === false && /única foto/.test(r.erro) && capa('103') === 'https://res.cloudinary.com/z/c.jpg', 'a ÚNICA foto do produto não pode sair (a frase manda arquivar o produto)', r.erro);
+  // ---- vídeo
+  r = amb.post(E({ action: 'arquivarMidia', id: '101', tipo: 'video', url: 'https://v/101.mp4' }));
+  ok(r.ok && vid('101') === '', 'tirar o vídeo limpa a coluna (o arquivo não é apagado)');
+  ok(amb.post(E({ action: 'restaurarMidia', registro: r.registro })).ok && vid('101') === 'https://v/101.mp4', 'restaurar o vídeo volta');
+  ok(amb.post(E({ action: 'arquivarMidia', id: '101', tipo: 'foto', url: 'https://x/nao-existe.jpg' })).ok === false, 'foto que não está no produto recusa');
+  r = amb.post(E({ action: 'midiasArquivadas', id: '101' }));
+  ok(r.ok && r.midias.length === 3 && r.midias.every((m) => m.status === 'restaurada'), 'midiasArquivadas lista o histórico do produto');
+  // ---- arquivar produto inteiro pelo X
+  r = amb.post(E({ action: 'arquivarRapido', id: '106' }));
+  ok(r.ok && linha('106').r[6] === 'Inativo', 'X no produto arquiva (Status Inativo)');
+  const aud2 = amb.ss.getSheetByName('Acoes_Audit').getDataRange().getValues().filter((x) => x[2] === 'arquivar_rapido_detalhe');
+  ok(aud2.length === 1 && /statusAntes/.test(aud2[0][4]) && /reativar/.test(aud2[0][4]), 'auditoria guarda o status de antes e como reverter');
+  ok(amb.post(E({ action: 'delete', id: '105' })).semPermissao === true, 'excluir de vez continua exigindo catalogo_excluir (Equipe do site não)');
+  ok(amb.post(E({ action: 'reativar', id: '106' })).semPermissao === true, 'reativar pelo admin continua exigindo catalogo_excluir');
+  // ---- juntar produtos
+  sh.getRange(linha('105').i, G).setValue('https://x/g1.jpg');   // 105 repete uma foto que o 101 já tem
+  r = amb.post(E({ action: 'juntarProdutos', destinoId: '101', origemIds: ['102', '105', '999'] }));
+  ok(r.ok === false && /não foi encontrado/.test(r.erro) && linha('102').r[6] === 'Ativo', 'juntar com um produto inexistente recusa sem mexer em nada', r.erro);
+  r = amb.post(E({ action: 'juntarProdutos', destinoId: '101', origemIds: ['101'] }));
+  ok(r.ok === false, 'juntar um produto nele mesmo recusa');
+  r = amb.post(E({ action: 'juntarProdutos', destinoId: '101', origemIds: ['102', '105'] }));
+  ok(r.ok && r.arquivados === 2, 'juntar 3 produtos em 1', JSON.stringify(r));
+  const g = gal('101').split(',');
+  ok(g.indexOf('https://res.cloudinary.com/z/b.jpg') !== -1 && g.indexOf('https://x/h1.jpg') !== -1 && g.indexOf('https://res.cloudinary.com/z/e.jpg') !== -1, 'o destino recebeu as capas e galerias dos outros');
+  ok(g.filter((x) => x === 'https://x/g1.jpg').length === 1, 'foto repetida não duplica');
+  ok(vid('101') === 'https://v/101.mp4', 'o destino mantém o vídeo que já tinha');
+  ok(linha('102').r[6] === 'Inativo' && linha('105').r[6] === 'Inativo' && capa('102') === 'https://res.cloudinary.com/z/b.jpg' && String(linha('102').r[G - 1]) === 'https://x/h1.jpg', 'os outros ficam ARQUIVADOS com as colunas intactas (reversível)');
+  const aud3 = amb.ss.getSheetByName('Acoes_Audit').getDataRange().getValues().filter((x) => x[2] === 'juntar_produtos');
+  ok(aud3.length === 1 && /galeriaAntes/.test(aud3[0][4]) && /fotosLevadas/.test(aud3[0][4]) && /reverter/.test(aud3[0][4]), 'auditoria da junção guarda antes/depois e como reverter');
+  // ---- limite de fotos
+  sh.getRange(linha('103').i, G).setValue('https://x/a1.jpg,https://x/a2.jpg,https://x/a3.jpg,https://x/a4.jpg,https://x/a5.jpg,https://x/a6.jpg,https://x/a7.jpg,https://x/a8.jpg');
+  r = amb.post(E({ action: 'juntarProdutos', destinoId: '101', origemIds: ['103'] }));
+  ok(r.ok === false && /limite/.test(r.erro) && linha('103').r[6] === 'Ativo', 'passar do limite de fotos recusa e não arquiva ninguém', r.erro);
 })();
 
 console.log('\n' + (total - falhas.length) + '/' + total + ' verificações passaram');

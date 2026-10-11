@@ -1,4 +1,11 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.6
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v3.7
+//
+// NOVIDADE v3.7 -- X DE ARQUIVAR NO CATÁLOGO, MÍDIA ARQUIVADA (REVERSÍVEL) E JUNTAR PRODUTOS (pedido do Pablo):
+//  - arquivarRapido {id}: arquiva o produto inteiro (Status Inativo). arquivarMidia {id, tipo:'foto'|'video', url}: tira UMA foto ou o vídeo do produto SEM apagar o arquivo
+//    (Cloudinary/R2 ficam intactos). A capa tirada é substituída pela 1ª foto da galeria; a ÚNICA foto do produto não sai (arquive o produto). Cada mídia tirada vira uma linha
+//    na aba Midia_Arquivada (posição, se era capa, quem, quando) + Acoes_Audit, e restaurarMidia {registro} devolve exatamente ao lugar. midiasArquivadas {id} lista.
+//    juntarProdutos {destinoId, origemIds}: leva as fotos/vídeo dos outros para o destino e ARQUIVA os outros (as colunas deles ficam intactas = reversível); o antes/depois vai para Acoes_Audit.
+//    Permissão: catalogo_cadastrar (Equipe do site / Funcionário ou maior). Excluir de vez continua exigindo catalogo_excluir.
 //
 // NOVIDADE v3.6 -- COFRE NAS CONEXÕES, com DUPLA VERIFICAÇÃO (pedido do Pablo: "quero as chaves e tokens salvos e fáceis de copiar, tudo centralizado"):
 //  - 1ª verificação: sessão de login (token tk1./tk2.; o PIN antigo recebe exigeLogin) de quem tem gerir_acessos (Admin total).
@@ -175,7 +182,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-3.6';
+const VERSAO_CATALOGO = 'catalogo-3.7';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1248,7 +1255,9 @@ const PERMISSAO_POR_ACAO_ = {
   statusConexoes: 'gerir_acessos', abrirCofre: 'gerir_acessos', fecharCofre: 'gerir_acessos', revelarConexao: 'gerir_acessos', salvarConexao: 'gerir_acessos', testarConexoes: 'gerir_acessos',
   renderCriarRegras: 'gerir_acessos', renderDeploy: 'gerir_acessos', renderStatusDeploy: 'gerir_acessos',
   // v3.5: liga o OneSignal pelo painel (Organization API Key guardada no servidor)
-  onesignalConfigurar: 'gerir_acessos'
+  onesignalConfigurar: 'gerir_acessos',
+  // v3.7: X de arquivar no catálogo (Equipe do site ou maior) e juntar produtos
+  arquivarRapido: 'catalogo_cadastrar', arquivarMidia: 'catalogo_cadastrar', restaurarMidia: 'catalogo_cadastrar', midiasArquivadas: 'catalogo_cadastrar', juntarProdutos: 'catalogo_cadastrar'
 };
 const PERMISSAO_POR_LOTE_ = {
   ajustarPrecoPorcento: 'catalogo_precos', marcarNovidade: 'catalogo_cadastrar', alterarEstoque: 'catalogo_cadastrar',
@@ -1439,10 +1448,10 @@ function statsComCache_() {
   return saida;
 }
 
-const ACOES_QUE_ALTERAM_PRODUTOS_ = ['create', 'update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate', 'importarProdutos', 'gerarCodigosFaltantes', 'excluirCategoria', 'renomearCategoria'];
+const ACOES_QUE_ALTERAM_PRODUTOS_ = ['arquivarRapido', 'arquivarMidia', 'restaurarMidia', 'juntarProdutos', 'create', 'update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate', 'importarProdutos', 'gerarCodigosFaltantes', 'excluirCategoria', 'renomearCategoria'];
 // "create" só acrescenta no fim da planilha (e o código sequencial já tem trava própria);
 // as demais mexem em linhas que já existem e por isso entram na fila:
-const ACOES_COM_TRAVA_ = ['update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate', 'importarProdutos', 'gerarCodigosFaltantes', 'excluirCategoria', 'renomearCategoria'];
+const ACOES_COM_TRAVA_ = ['arquivarRapido', 'arquivarMidia', 'restaurarMidia', 'juntarProdutos', 'update', 'delete', 'reativar', 'excluirPermanente', 'bulkUpdate', 'importarProdutos', 'gerarCodigosFaltantes', 'excluirCategoria', 'renomearCategoria'];
 // v3.2: ações que só valem com LOGIN (nunca com o PIN antigo, que não diz quem é a pessoa nem a permissão dela)
 const ACOES_SO_COM_LOGIN_ = ['excluirCategoria', 'renomearCategoria', 'statusConexoes', 'abrirCofre', 'fecharCofre', 'revelarConexao', 'salvarConexao', 'testarConexoes', 'renderCriarRegras', 'renderDeploy', 'renderStatusDeploy', 'onesignalConfigurar'];
 
@@ -1514,7 +1523,7 @@ function doGetInterno_(e) {
   if (action === 'versao') return jsonResponse_({
     ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
     pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true,
-    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true
+    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true, midiaRapida: true, juntarProdutos: true
   });
   if (action === 'config') return configPublica_();
   if (action === 'pushconfig') return pushConfigPublica_();
@@ -1625,6 +1634,11 @@ function despacharPost_(body) {
   if (action === 'create') return criarProduto_(body);
   if (action === 'update') return atualizarProduto_(body);
   if (action === 'delete') return deletarProduto_(body);
+  if (action === 'arquivarRapido') return arquivarRapido_(body);
+  if (action === 'arquivarMidia') return arquivarMidia_(body);
+  if (action === 'restaurarMidia') return restaurarMidia_(body);
+  if (action === 'midiasArquivadas') return midiasArquivadas_(body);
+  if (action === 'juntarProdutos') return juntarProdutos_(body);
   if (action === 'reativar') return reativarProduto_(body);
   if (action === 'excluirPermanente') return excluirPermanentemente_(body);
   if (action === 'bulkUpdate') return acaoEmLote_(body);
@@ -1936,6 +1950,157 @@ function acaoEmLote_(body) {
   }
 
   return jsonResponse_({ ok: true, afetados: afetados });
+}
+
+// ===================== v3.7: arquivar rápido (X no catálogo), mídia arquivada e juntar produtos =====================
+
+const SHEET_MIDIA_ARQ_ = 'Midia_Arquivada';
+const CAB_MIDIA_ARQ_ = ['Registro', 'DataHora', 'Funcionario', 'ProdutoID', 'Codigo', 'Tipo', 'URL', 'Posicao', 'EraCapa', 'Status', 'RestauradoEm', 'RestauradoPor'];
+
+function listaCsv_(v) { return String(v || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean); }
+
+/** Acha o produto pela ID. Devolve { sheet, dados, i, linha, colGal, colVid } ou null. */
+function produtoParaMidia_(id) {
+  const sheet = getProdutosSheet_();
+  garantirCabecalhos_(sheet);
+  const colGal = colunaGaleria_(sheet), colVid = colunaVideo_(sheet);
+  const dados = sheet.getDataRange().getValues();
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(id)) return { sheet: sheet, dados: dados, i: i, linha: i + 1, colGal: colGal, colVid: colVid };
+  }
+  return null;
+}
+
+function arquivarRapido_(body) {
+  const sheet = getProdutosSheet_();
+  const dados = sheet.getDataRange().getValues();
+  for (let i = 1; i < dados.length; i++) {
+    if (String(dados[i][0]) === String(body.id)) {
+      const antes = String(dados[i][6] || '');
+      if (antes === 'Inativo') return jsonResponse_({ ok: true, jaEstava: true });
+      sheet.getRange(i + 1, 7).setValue('Inativo');
+      registrarHistorico_('arquivar_rapido', { id: body.id, codigo: dados[i][13], nome: dados[i][1], preco: dados[i][4], estoque: dados[i][9] }, null, body.funcionario);
+      registrarAudit_(body.funcionario, 'arquivar_rapido_detalhe', body.id, { statusAntes: antes, codigo: dados[i][13], nome: dados[i][1], como: 'X no catálogo', reverter: 'reativar (status volta para ' + (antes || 'Ativo') + ')' });
+      return jsonResponse_({ ok: true });
+    }
+  }
+  return jsonResponse_({ ok: false, erro: 'Produto não encontrado.' });
+}
+
+function arquivarMidia_(body) {
+  const tipo = String(body.tipo || 'foto') === 'video' ? 'video' : 'foto';
+  const url = String(body.url || '').trim();
+  if (!url) return jsonResponse_({ ok: false, erro: 'Qual foto ou vídeo? (faltou o endereço).' });
+  const pr = produtoParaMidia_(body.id);
+  if (!pr) return jsonResponse_({ ok: false, erro: 'Produto não encontrado.' });
+  const d = pr.dados[pr.i];
+  const capa = String(d[5] || '').trim();
+  let gal = listaCsv_(d[pr.colGal - 1]);
+  let posicao = 0, eraCapa = false, novaCapa = '';
+  if (tipo === 'video') {
+    if (String(d[pr.colVid - 1] || '').trim() !== url) return jsonResponse_({ ok: false, erro: 'Esse vídeo já não está no produto (atualize a página).' });
+    pr.sheet.getRange(pr.linha, pr.colVid).setValue('');
+  } else if (url === capa) {
+    if (!gal.length) return jsonResponse_({ ok: false, erro: 'Essa é a única foto do produto. Para tirar o produto do site, arquive o produto inteiro.' });
+    eraCapa = true; novaCapa = gal[0]; gal = gal.slice(1);
+    pr.sheet.getRange(pr.linha, 6).setValue(novaCapa);
+    pr.sheet.getRange(pr.linha, pr.colGal).setValue(gal.join(','));
+  } else {
+    posicao = gal.indexOf(url);
+    if (posicao === -1) return jsonResponse_({ ok: false, erro: 'Essa foto já não está no produto (atualize a página).' });
+    gal.splice(posicao, 1);
+    pr.sheet.getRange(pr.linha, pr.colGal).setValue(gal.join(','));
+  }
+  const registro = 'MA' + new Date().getTime() + Math.floor(Math.random() * 900 + 100);
+  const quem = acTexto_(body.funcionario || 'Anônimo');
+  getOrCreateSheet_(SHEET_MIDIA_ARQ_, CAB_MIDIA_ARQ_).appendRow([registro, new Date(), quem, body.id, d[13], tipo, url, posicao, eraCapa ? 'SIM' : 'NÃO', 'arquivada', '', '']);
+  registrarAudit_(body.funcionario, 'arquivar_midia', body.id, { registro: registro, tipo: tipo, url: url, posicao: posicao, eraCapa: eraCapa, novaCapa: novaCapa, codigo: d[13], nome: d[1], reverter: 'restaurarMidia {registro: ' + registro + '} (aba Midia_Arquivada guarda tudo; o arquivo não foi apagado)' });
+  return jsonResponse_({ ok: true, registro: registro, novaCapa: novaCapa });
+}
+
+function restaurarMidia_(body) {
+  const sh = getOrCreateSheet_(SHEET_MIDIA_ARQ_, CAB_MIDIA_ARQ_);
+  const reg = sh.getDataRange().getValues();
+  let k = -1;
+  for (let i = 1; i < reg.length; i++) { if (String(reg[i][0]) === String(body.registro)) { k = i; break; } }
+  if (k === -1) return jsonResponse_({ ok: false, erro: 'Registro não encontrado.' });
+  if (String(reg[k][9]) !== 'arquivada') return jsonResponse_({ ok: false, erro: 'Essa mídia já foi restaurada.' });
+  const pr = produtoParaMidia_(reg[k][3]);
+  if (!pr) return jsonResponse_({ ok: false, erro: 'O produto dessa mídia não existe mais.' });
+  const tipo = String(reg[k][5]), url = String(reg[k][6]), posicao = Number(reg[k][7]) || 0, eraCapa = String(reg[k][8]) === 'SIM';
+  const d = pr.dados[pr.i];
+  let gal = listaCsv_(d[pr.colGal - 1]);
+  if (tipo === 'video') {
+    if (String(d[pr.colVid - 1] || '').trim()) return jsonResponse_({ ok: false, erro: 'O produto já tem outro vídeo. Tire-o antes de restaurar este.' });
+    pr.sheet.getRange(pr.linha, pr.colVid).setValue(url);
+  } else if (eraCapa) {
+    if (gal.length + 1 > MAX_FOTOS_GALERIA) return jsonResponse_({ ok: false, erro: 'O produto já está com o máximo de fotos. Tire uma antes de restaurar.' });
+    const capaAtual = String(d[5] || '').trim();
+    if (capaAtual) gal = [capaAtual].concat(gal);
+    pr.sheet.getRange(pr.linha, 6).setValue(url);
+    pr.sheet.getRange(pr.linha, pr.colGal).setValue(gal.join(','));
+  } else {
+    if (gal.length + 1 > MAX_FOTOS_GALERIA) return jsonResponse_({ ok: false, erro: 'O produto já está com o máximo de fotos. Tire uma antes de restaurar.' });
+    if (gal.indexOf(url) === -1 && String(d[5] || '').trim() !== url) gal.splice(Math.min(posicao, gal.length), 0, url);
+    pr.sheet.getRange(pr.linha, pr.colGal).setValue(gal.join(','));
+  }
+  sh.getRange(k + 1, 10, 1, 3).setValues([['restaurada', new Date(), acTexto_(body.funcionario || 'Anônimo')]]);
+  registrarAudit_(body.funcionario, 'restaurar_midia', reg[k][3], { registro: body.registro, tipo: tipo, url: url });
+  return jsonResponse_({ ok: true });
+}
+
+function midiasArquivadas_(body) {
+  const sh = getOrCreateSheet_(SHEET_MIDIA_ARQ_, CAB_MIDIA_ARQ_);
+  const reg = sh.getDataRange().getValues();
+  const out = [];
+  for (let i = reg.length - 1; i >= 1 && out.length < 60; i--) {
+    if (body.id && String(reg[i][3]) !== String(body.id)) continue;
+    out.push({ registro: reg[i][0], quando: reg[i][1] instanceof Date ? reg[i][1].toISOString() : String(reg[i][1]), quem: reg[i][2], produtoId: reg[i][3], codigo: reg[i][4], tipo: reg[i][5], url: reg[i][6], status: reg[i][9] });
+  }
+  return jsonResponse_({ ok: true, midias: out });
+}
+
+/** Junta produtos repetidos: as fotos (e o vídeo, se o destino não tem) dos outros vão para o destino; os outros são ARQUIVADOS (colunas intactas = reversível). */
+function juntarProdutos_(body) {
+  const destinoId = String(body.destinoId || ''), origemIds = (Array.isArray(body.origemIds) ? body.origemIds : []).map(String).filter(function (x, i, a) { return x && x !== destinoId && a.indexOf(x) === i; });
+  if (!destinoId || !origemIds.length) return jsonResponse_({ ok: false, erro: 'Escolha o produto que fica e pelo menos mais um para juntar nele.' });
+  const sheet = getProdutosSheet_();
+  garantirCabecalhos_(sheet);
+  const colGal = colunaGaleria_(sheet), colVid = colunaVideo_(sheet);
+  const dados = sheet.getDataRange().getValues();
+  let di = -1; const oi = [];
+  for (let i = 1; i < dados.length; i++) {
+    const id = String(dados[i][0]);
+    if (id === destinoId) di = i; else if (origemIds.indexOf(id) !== -1) oi.push(i);
+  }
+  if (di === -1) return jsonResponse_({ ok: false, erro: 'O produto que fica não foi encontrado.' });
+  if (oi.length !== origemIds.length) return jsonResponse_({ ok: false, erro: 'Algum dos produtos escolhidos não foi encontrado (atualize a lista).' });
+  const capaDest = String(dados[di][5] || '').trim();
+  const galAntes = listaCsv_(dados[di][colGal - 1]);
+  const videoAntes = String(dados[di][colVid - 1] || '').trim();
+  const todas = [capaDest].concat(galAntes).filter(Boolean);
+  let gal = galAntes.slice(), video = videoAntes;
+  const relatorio = [];
+  oi.forEach(function (i) {
+    const fotos = [String(dados[i][5] || '').trim()].concat(listaCsv_(dados[i][colGal - 1])).filter(Boolean);
+    const novas = fotos.filter(function (u) { return todas.indexOf(u) === -1; });
+    novas.forEach(function (u) { todas.push(u); gal.push(u); });
+    const v = String(dados[i][colVid - 1] || '').trim();
+    let videoLevado = false;
+    if (v && !video) { video = v; videoLevado = true; }
+    relatorio.push({ id: String(dados[i][0]), codigo: dados[i][13], nome: dados[i][1], fotosLevadas: novas, videoLevado: videoLevado ? v : '', videoNaoLevado: (v && !videoLevado) ? v : '' });
+  });
+  if (1 + gal.length > 1 + MAX_FOTOS_GALERIA) {
+    return jsonResponse_({ ok: false, erro: 'Juntando, o produto ficaria com ' + (1 + gal.length) + ' fotos, e o limite é ' + (1 + MAX_FOTOS_GALERIA) + '. Tire fotos repetidas antes (ou junte menos produtos).' });
+  }
+  sheet.getRange(di + 1, colGal).setValue(gal.join(','));
+  if (video !== videoAntes) sheet.getRange(di + 1, colVid).setValue(video);
+  oi.forEach(function (i) {
+    sheet.getRange(i + 1, 7).setValue('Inativo');
+    registrarHistorico_('arquivar_juntado', { id: dados[i][0], codigo: dados[i][13], nome: dados[i][1], preco: dados[i][4], estoque: dados[i][9] }, null, body.funcionario);
+  });
+  registrarAudit_(body.funcionario, 'juntar_produtos', destinoId, { destino: { id: destinoId, codigo: dados[di][13], nome: dados[di][1], galeriaAntes: galAntes.join(','), videoAntes: videoAntes }, origens: relatorio, reverter: 'devolver galeriaAntes/videoAntes ao destino e reativar os produtos de origem (as fotos deles continuam nas linhas arquivadas)' });
+  return jsonResponse_({ ok: true, fotosNoDestino: 1 + gal.length, arquivados: oi.length });
 }
 
 function deletarProduto_(body) {
