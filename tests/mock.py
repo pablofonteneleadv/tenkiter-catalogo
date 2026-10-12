@@ -426,12 +426,12 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                 g["post_chamadas"].append({"path":path,"corpo":pb})
                 if path=="/post":
                     if g.get("post_recusa"): return route.fulfill(status=400,json={"ok":False,"erro":g["post_recusa"]})
-                    ids=[]
+                    ids=[]; quandos=[]
                     for q in (pb.get("posts") or [pb]):
                         g["post_seq"]+=1; man=q.get("modo")=="manual"; agora=q.get("quando")=="agora"
                         g["posts"].append({"id":g["post_seq"],"tipo":q["tipo"],"modo":q.get("modo","auto"),"legenda":q.get("legenda",""),"midias":q["midias"],"produto":q.get("produto",""),"template":q.get("template",""),"link":q.get("link",""),"agendadoEm":"2026-10-12T15:00:00Z" if not agora else "2026-10-11T12:00:00Z","status":"manual_pendente" if man else ("publicado" if agora and not g.get("post_fica") else "agendado"),"tentativas":0,"erro":"","permalink":"https://www.instagram.com/p/FAKE/" if agora and not man else "","criadoPor":q.get("por","")})
-                        ids.append(g["post_seq"])
-                    return route.fulfill(json={"ok":True,"ids":ids})
+                        ids.append(g["post_seq"]); quandos.append("2026-10-12T15:%02d:00Z"%(len(ids)*2))
+                    return route.fulfill(json={"ok":True,"ids":ids,"quandos":quandos})
                 x=next((q for q in g["posts"] if q["id"]==pb.get("id")),None)
                 if not x: return route.fulfill(status=404,json={"ok":False,"erro":"Postagem não encontrada."})
                 if path=="/post/cancelar": x["status"]="cancelado"

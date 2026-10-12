@@ -36,6 +36,7 @@ let pronto = false;
 async function iniciar(env) {
   if (pronto) return;
   await env.DB.batch(DDL.map((s) => env.DB.prepare(s)));
+  try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN seq INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   for (const col of COLUNAS_NOVAS) { try { await env.DB.prepare('ALTER TABLE rascunho ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   try {   // v3.7: preço sempre calculado (o escrito é o à vista). Corrige os rascunhos antigos cujo preço da legenda foi gravado como se fosse o cheio.
     if (!(await cfgGet(env, 'mig_preco_v2'))) {
@@ -574,7 +575,7 @@ export async function processarPostagens(env) {
     await iniciar(env);
     const t = agora();
     await env.DB.prepare("UPDATE postagem SET status='manual_pendente', atualizado_em=? WHERE modo='manual' AND status='agendado' AND agendado_em<=?").bind(t, t).run();
-    const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY agendado_em LIMIT 4").bind(t).all()).results || [];
+    const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY agendado_em, id LIMIT 4").bind(t).all()).results || [];
     if (!lin.length) return { feitas: 0 };
     let token = await cfgGet(env, 'ig_token');
     if (!token) { for (const p of lin) await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('O Instagram não está conectado. Conecte o token e use "Tentar de novo".', agora(), p.id).run(); return { feitas: 0 }; }
@@ -591,6 +592,12 @@ export async function processarPostagens(env) {
 }
 function httpsUrl(u) { try { const x = new URL(String(u)); return x.protocol === 'https:' && String(u).length <= 600; } catch (e) { return false; } }
 /** Valida e normaliza o pedido de UMA postagem. Devolve { erro } ou { v }. */
+/** Intervalo "humano" entre postagens em sequência (para não parecer robô): Story depois de Story = 1 a 3 min; o resto, 3 a 9 min. */
+export function intervaloHumanoMs(tipoAnterior, tipo, sorteio) {
+  const r = typeof sorteio === 'function' ? sorteio : Math.random, curto = tipoAnterior === 'story' && tipo === 'story';
+  const min = curto ? 1 : 3, max = curto ? 3 : 9;
+  return Math.round((min + r() * (max - min)) * 60000);
+}
 export function validarPostagem(b) {
   const tipo = String((b && b.tipo) || '');
   if (TIPOS_POST.indexOf(tipo) === -1) return { erro: 'Escolha o tipo: Feed, Carrossel, Reels ou Story.' };
@@ -606,13 +613,14 @@ export function validarPostagem(b) {
   const link = String(b.link || '').trim();
   if (link && !httpsUrl(link)) return { erro: 'O link do Story precisa começar com https://.' };
   let quando = agora();
-  if (b.quando && b.quando !== 'agora') {
+  const sequencia = b.quando === 'sequencia';
+  if (b.quando && b.quando !== 'agora' && !sequencia) {
     const t = Date.parse(b.quando);
     if (!isFinite(t)) return { erro: 'A data e hora não são válidas.' };
     if (t - Date.now() > 60 * 86400000) return { erro: 'Dá para agendar até 60 dias à frente.' };
     if (t > Date.now()) quando = new Date(t).toISOString();
   }
-  return { v: { tipo: tipo, modo: modo, legenda: legenda, midias: midias, link: link, quando: quando, agora: quando <= agora(), produto: String(b.produto || '').slice(0, 40), template: String(b.template || '').slice(0, 30), grupo: String(b.grupo || '').slice(0, 40) } };
+  return { v: { tipo: tipo, modo: modo, legenda: legenda, midias: midias, link: link, quando: quando, agora: !sequencia && quando <= agora(), sequencia: sequencia, produto: String(b.produto || '').slice(0, 40), template: String(b.template || '').slice(0, 30), grupo: String(b.grupo || '').slice(0, 40) } };
 }
 function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
@@ -634,13 +642,24 @@ async function rotasPostagem(env, ctx, req, url, J) {
     if (pend + lista.length > 200) return J({ ok: false, erro: 'Há postagens demais na fila (200). Espere algumas saírem.' }, 429);
     const vs = []; for (const x of lista) { const r = validarPostagem(x); if (r.erro) return J({ ok: false, erro: r.erro }, 400); vs.push(r.v); }
     if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto')) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
-    const ids = [], por = String(b.por || '').slice(0, 60);
+    const ids = [], quandos = [], por = String(b.por || '').slice(0, 60);
+    let cursor = null, anterior = null;                      // "na sequência": cada uma sai um pouco depois da anterior (intervalo humano)
     for (const v of vs) {
-      const r = await env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo).run();
+      if (v.sequencia) {
+        if (cursor === null) {
+          const cauda = await env.DB.prepare("SELECT MAX(agendado_em) AS t FROM postagem WHERE seq=1 AND status IN ('agendado','processando') AND agendado_em>?").bind(agora()).first();
+          cursor = cauda && cauda.t ? Date.parse(cauda.t) : null;
+        }
+        const t = cursor === null ? Date.now() + 60000 : cursor + intervaloHumanoMs(anterior, v.tipo);
+        cursor = t; v.quando = new Date(t).toISOString();
+      }
+      anterior = v.tipo; quandos.push(v.quando);
+
+      const r = await env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0).run();
       ids.push(r.meta && r.meta.last_row_id);
     }
     if (vs.some((v) => v.agora) && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
-    return J({ ok: true, ids: ids });
+    return J({ ok: true, ids: ids, quandos: quandos });
   }
   const id = Number(b.id) || 0;
   const linha = id ? await env.DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first() : null;

@@ -112,7 +112,7 @@
     await carregarFila();
     parar(); pollTimer = setInterval(() => { if ($('overlay-postagens').classList.contains('aberto') && abaAtual !== 'nova' && !ocupado) carregarFila(true); }, window.TK_POSTAGENS_POLL_MS || 15000);
   }
-  function novaVazia(lote) { nova = { lote: lote || (nova && nova.lote) || [], p: null, midias: [], tipo: 'feed', template: 'classico', legenda: '', quando: 'agora', data: '', manual: false, busca: '', legendaMexida: false, previa: false }; }
+  function novaVazia(lote) { nova = { lote: lote || (nova && nova.lote) || [], modoLivre: false, livre: [], seqAgenda: true, link: '', p: null, midias: [], tipo: 'feed', template: 'classico', legenda: '', quando: 'agora', data: '', manual: false, busca: '', legendaMexida: false, previa: false }; }
 
   async function carregarFila(silencioso) {
     const r = await ig('/posts');
@@ -166,32 +166,57 @@
     corpo.innerHTML = topo + (abaAtual === 'nova' ? htmlNova() : abaAtual === 'fila' ? htmlFila(['agendado', 'processando', 'erro'], 'Nada na fila agora.') : abaAtual === 'manual' ? htmlManual() : htmlFila(['publicado', 'manual_feito'], 'Ainda não há postagens feitas por aqui.'));
     if (abaAtual === 'nova' && nova && nova.previa) pintarPrevia();
   }
+  function htmlLivre() {
+    const n = nova;
+    let h = '<div class="po-passo"><h4>1. Suas mídias (sem peça)</h4><p class="po-ajuda" style="margin-top:0">Fotos e vídeos do aparelho, na ordem em que vão sair. Serve para Story do dia, aviso, bastidores, qualquer coisa.</p>' +
+      '<label for="po-livre-arq" class="po-ajuda" style="font-weight:700;margin:0 0 4px;display:block">Escolher fotos e vídeos (vídeo até 15 MB)</label><input type="file" id="po-livre-arq" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple>';
+    h += n.livre.length ? '<div style="margin-top:8px">' + n.livre.map((m, i) => '<div class="po-escolhida" style="margin-bottom:6px;align-items:flex-start">' +
+      (m.tipo === 'video' ? '<span class="po-v" style="background:#222;color:#fff;border-radius:6px;padding:20px 12px;font-size:1.2rem" aria-hidden="true">🎬</span>' : '<img src="' + esc(m.url) + '" alt="" width="40" height="50" style="border-radius:6px;object-fit:cover">') +
+      '<div style="flex:1;min-width:0"><b>' + (i + 1) + 'º · ' + (m.tipo === 'video' ? 'Vídeo' : 'Foto') + '</b><small style="display:block;color:#555;overflow-wrap:anywhere">' + esc(m.nome || '') + '</small>' +
+      (n.quando === 'agendar' ? '<label class="po-ajuda" for="po-h-' + i + '" style="display:block;margin:4px 0 2px">Horário só deste (opcional)</label><input type="datetime-local" id="po-h-' + i + '" data-hora="' + i + '" value="' + esc(m.hora || '') + '">' : '') + '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:4px;flex:none"><button type="button" data-lm="up" data-i="' + i + '" aria-label="Subir"' + (i === 0 ? ' disabled' : '') + '>↑</button><button type="button" data-lm="down" data-i="' + i + '" aria-label="Descer"' + (i === n.livre.length - 1 ? ' disabled' : '') + '>↓</button><button type="button" data-lm="x" data-i="' + i + '" aria-label="Tirar">✕</button></div></div>').join('') + '</div>' : '<p class="po-ajuda">Nenhuma mídia ainda.</p>';
+    return h + '</div>';
+  }
   function htmlNova() {
-    const n = nova, p = n.p;
-    let h = htmlLote() + '<div class="po-passo"><h4>1. Qual peça?</h4>';
-    if (p) h += '<div class="po-escolhida"><img src="' + esc(fotoMini(p.Foto_URL, 120)) + '" alt="" width="40" height="50" style="border-radius:6px;object-fit:cover"><div><b>' + esc(p.Nome) + '</b><small style="display:block;color:#555">' + esc(p.Codigo || '') + ' · ' + esc(formatarReal(precoAvista(p))) + ' à vista</small></div><button type="button" data-a="trocar">Trocar</button></div>';
+    const n = nova, p = n.p, livre = n.modoLivre;
+    let h = htmlLote() + '<div class="po-chips" role="group" aria-label="Com peça ou livre" style="margin-bottom:10px"><button type="button" data-modo="peca" aria-pressed="' + !livre + '">🛍️ Com peça</button><button type="button" data-modo="livre" aria-pressed="' + livre + '">✍️ Livre (sem peça)</button></div>';
+    if (livre) h += htmlLivre();
     else {
-      const b = semAc(n.busca), l = pecasAtivas().filter((x) => !b || semAc(x.Nome).includes(b) || semAc(x.Codigo).includes(b)).slice(0, 40);
-      h += '<label for="po-busca" class="po-ajuda" style="margin:0 0 4px">Procure pelo nome ou código</label><input type="search" id="po-busca" value="' + esc(n.busca) + '" autocomplete="off"><div class="po-lista-pecas">' +
-        (l.length ? l.map((x) => '<button type="button" class="po-peca" data-peca="' + esc(x.ID) + '"><img src="' + esc(fotoMini(x.Foto_URL, 100)) + '" alt="" loading="lazy" width="40" height="50"><span><b>' + esc(x.Nome) + '</b><small>' + esc(x.Codigo || '') + ' · ' + esc(formatarReal(x.Preco)) + '</small></span></button>').join('') : '<p class="po-ajuda" style="padding:10px">Nenhuma peça encontrada.</p>') + '</div>';
+      h += '<div class="po-passo"><h4>1. Qual peça?</h4>';
+      if (p) h += '<div class="po-escolhida"><img src="' + esc(fotoMini(p.Foto_URL, 120)) + '" alt="" width="40" height="50" style="border-radius:6px;object-fit:cover"><div><b>' + esc(p.Nome) + '</b><small style="display:block;color:#555">' + esc(p.Codigo || '') + ' · ' + esc(formatarReal(precoAvista(p))) + ' à vista</small></div><button type="button" data-a="trocar">Trocar</button></div>';
+      else {
+        const b = semAc(n.busca), l = pecasAtivas().filter((x) => !b || semAc(x.Nome).includes(b) || semAc(x.Codigo).includes(b)).slice(0, 40);
+        h += '<label for="po-busca" class="po-ajuda" style="margin:0 0 4px">Procure pelo nome ou código</label><input type="search" id="po-busca" value="' + esc(n.busca) + '" autocomplete="off"><div class="po-lista-pecas">' +
+          (l.length ? l.map((x) => '<button type="button" class="po-peca" data-peca="' + esc(x.ID) + '"><img src="' + esc(fotoMini(x.Foto_URL, 100)) + '" alt="" loading="lazy" width="40" height="50"><span><b>' + esc(x.Nome) + '</b><small>' + esc(x.Codigo || '') + ' · ' + esc(formatarReal(x.Preco)) + '</small></span></button>').join('') : '<p class="po-ajuda" style="padding:10px">Nenhuma peça encontrada.</p>') + '</div>';
+      }
+      h += '</div>';
+      if (!p) return h;
+    }
+    h += '<div class="po-passo"><h4>2. O que postar?</h4><div class="po-chips" role="group" aria-label="Tipo de postagem">' + TIPOS.map((t) => '<button type="button" data-tipo="' + t[0] + '" aria-pressed="' + (n.tipo === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>';
+    h += '<p class="po-ajuda">' + ({ feed: 'Uma foto no feed (formato 4:5).', carrossel: 'De 2 a 10 mídias deslizando no mesmo post.', reels: 'Um vídeo vertical.' + (livre ? '' : ' Use o vídeo da peça ou suba um do aparelho.'), story: 'Cada foto/vídeo vira UM Story separado, na ordem.' }[n.tipo]) + '</p>';
+    if (!livre) {
+      h += '<div class="po-midias" role="group" aria-label="Mídias da peça">' + n.midias.map((m, i) => { const ord = m.sel ? n.midias.filter((x, j) => x.sel && j <= i).length : 0;
+        return '<button type="button" class="po-m" data-m="' + i + '" aria-pressed="' + m.sel + '" aria-label="' + (m.tipo === 'video' ? 'Vídeo' : 'Foto ' + (i + 1)) + (m.sel ? ', escolhida em ' + ord + 'º' : ', não escolhida') + '"><img src="' + esc(m.tipo === 'video' ? (typeof posterDoVideo === 'function' ? posterDoVideo(m.url) : '') : fotoMini(m.url, 160)) + '" alt="" loading="lazy">' + (m.sel ? '<span class="po-n">' + ord + '</span>' : '') + (m.tipo === 'video' ? '<span class="po-v">vídeo</span>' : '') + '</button>'; }).join('') + '</div>';
+      if (n.tipo === 'reels' || n.tipo === 'story' || n.tipo === 'carrossel') h += '<p class="po-ajuda"><label for="po-vid" style="font-weight:700">Vídeo do aparelho (até 15 MB):</label> <input type="file" id="po-vid" accept="video/mp4,video/webm"></p>';
+    }
+    if (n.tipo === 'story') {
+      h += '<p class="po-ajuda" style="margin-top:10px"><label><input type="checkbox" id="po-manual"' + (n.manual ? ' checked' : '') + '> <b>Story com link</b> — o Instagram não deixa colocar link por aqui. Eu preparo tudo e você só cola o link no app (aba “Postar à mão”).</label></p>';
+      if (n.manual && livre) h += '<label for="po-link" class="po-ajuda" style="display:block;margin:6px 0 2px">Link que vai no Story (https://…)</label><input type="url" id="po-link" value="' + esc(n.link) + '" placeholder="https://tenkitermodas.com.br/">';
     }
     h += '</div>';
-    if (!p) return h;
-    h += '<div class="po-passo"><h4>2. O que postar?</h4><div class="po-chips" role="group" aria-label="Tipo de postagem">' + TIPOS.map((t) => '<button type="button" data-tipo="' + t[0] + '" aria-pressed="' + (n.tipo === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>';
-    h += '<p class="po-ajuda">' + ({ feed: 'Uma foto no feed (formato 4:5).', carrossel: 'De 2 a 10 mídias deslizando no mesmo post.', reels: 'Um vídeo vertical. Use o vídeo da peça ou suba um do aparelho.', story: 'Cada foto/vídeo marcado vira UM Story separado.' }[n.tipo]) + '</p>';
-    h += '<div class="po-midias" role="group" aria-label="Mídias da peça">' + n.midias.map((m, i) => { const ord = m.sel ? n.midias.filter((x, j) => x.sel && j <= i).length : 0;
-      return '<button type="button" class="po-m" data-m="' + i + '" aria-pressed="' + m.sel + '" aria-label="' + (m.tipo === 'video' ? 'Vídeo' : 'Foto ' + (i + 1)) + (m.sel ? ', escolhida em ' + ord + 'º' : ', não escolhida') + '"><img src="' + esc(m.tipo === 'video' ? (typeof posterDoVideo === 'function' ? posterDoVideo(m.url) : '') : fotoMini(m.url, 160)) + '" alt="" loading="lazy">' + (m.sel ? '<span class="po-n">' + ord + '</span>' : '') + (m.tipo === 'video' ? '<span class="po-v">vídeo</span>' : '') + '</button>'; }).join('') + '</div>';
-    if (n.tipo === 'reels' || n.tipo === 'story' || n.tipo === 'carrossel') h += '<p class="po-ajuda"><label for="po-vid" style="font-weight:700">Vídeo do aparelho (até 15 MB):</label> <input type="file" id="po-vid" accept="video/mp4,video/webm"></p>';
-    if (n.tipo === 'story') h += '<p class="po-ajuda" style="margin-top:10px"><label><input type="checkbox" id="po-manual"' + (n.manual ? ' checked' : '') + '> <b>Story com link da peça</b> — o Instagram não deixa colocar link por aqui. Eu preparo tudo e você só cola o link no app (aba “Postar à mão”).</label></p>';
-    h += '</div>';
-    if (n.tipo !== 'reels') h += '<div class="po-passo"><h4>3. Visual</h4><div class="po-chips" role="group" aria-label="Visual">' + TEMPLATES.map((t) => '<button type="button" data-tpl="' + t[0] + '" aria-pressed="' + (n.template === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>' +
+    if (!livre && n.tipo !== 'reels') h += '<div class="po-passo"><h4>3. Visual</h4><div class="po-chips" role="group" aria-label="Visual">' + TEMPLATES.map((t) => '<button type="button" data-tpl="' + t[0] + '" aria-pressed="' + (n.template === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>' +
       '<p class="po-ajuda">' + (n.template === 'original' ? 'A foto como está (ajustada ao formato do Instagram).' : 'A foto ganha nome, preço à vista e código da peça. Vídeos ficam sem template.') + '</p>' +
       '<p><button type="button" data-a="previa" class="po-ajuda" style="width:auto;padding:9px 14px;min-height:44px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">👁️ Ver como vai ficar</button></p><div class="po-previa" id="po-previa"></div></div>';
-    h += '<div class="po-passo"><h4>' + (n.tipo === 'reels' ? '3' : '4') + '. Legenda</h4>' + (n.tipo === 'story' ? '<p class="po-ajuda" style="margin-top:0">Story não leva legenda pela API' + (n.manual ? '; aqui ela serve de texto para copiar no app.' : ' — esta legenda só vale para Feed/Carrossel/Reels.') + '</p>' : '') + '<label for="po-leg" class="po-ajuda" style="margin:0 0 4px">Texto que acompanha a postagem</label><textarea id="po-leg" maxlength="2200">' + esc(n.legenda) + '</textarea>' +
-      '<p><button type="button" data-a="legenda" style="width:auto;padding:9px 14px;min-height:44px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">↺ Refazer legenda automática</button></p></div>';
-    h += '<div class="po-passo"><h4>' + (n.tipo === 'reels' ? '4' : '5') + '. Quando?</h4><div class="po-chips" role="group" aria-label="Quando"><button type="button" data-q="agora" aria-pressed="' + (n.quando === 'agora') + '">Agora</button><button type="button" data-q="agendar" aria-pressed="' + (n.quando === 'agendar') + '">Agendar</button></div>' +
-      (n.quando === 'agendar' ? '<p style="margin:8px 0 0"><label for="po-data" class="po-ajuda" style="margin:0 0 4px;display:block">Dia e hora (horário de Brasília)</label><input type="datetime-local" id="po-data" value="' + esc(n.data) + '"></p><p class="po-ajuda">O servidor posta sozinho, mesmo com o celular desligado.</p>' : '') + '</div>';
-    h += '<button type="button" class="po-enviar" data-a="enviar"' + (ocupado ? ' disabled' : '') + '>' + (ocupado ? 'Preparando…' : n.manual ? '✋ Preparar Story para postar à mão' : n.quando === 'agora' ? '🚀 Postar agora' : '🗓️ Agendar postagem') + '</button>';
+    const visual = !livre && n.tipo !== 'reels', nLeg = visual ? 4 : 3;
+    h += '<div class="po-passo"><h4>' + nLeg + '. Legenda</h4>' + (n.tipo === 'story' ? '<p class="po-ajuda" style="margin-top:0">Story não leva legenda pela API' + (n.manual ? '; aqui ela serve de texto para copiar no app.' : ' — esta legenda só vale para Feed/Carrossel/Reels.') + '</p>' : '') + '<label for="po-leg" class="po-ajuda" style="margin:0 0 4px">Texto que acompanha a postagem</label><textarea id="po-leg" maxlength="2200">' + esc(n.legenda) + '</textarea>' +
+      (livre ? '' : '<p><button type="button" data-a="legenda" style="width:auto;padding:9px 14px;min-height:44px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">↺ Refazer legenda automática</button></p>') + '</div>';
+    const nItens = livre ? n.livre.length : n.midias.filter((m) => m.sel).length;
+    h += '<div class="po-passo"><h4>' + (nLeg + 1) + '. Quando?</h4><div class="po-chips" role="group" aria-label="Quando">' +
+      '<button type="button" data-q="agora" aria-pressed="' + (n.quando === 'agora') + '">⚡ Agora mesmo</button><button type="button" data-q="sequencia" aria-pressed="' + (n.quando === 'sequencia') + '">🔁 Na sequência</button><button type="button" data-q="agendar" aria-pressed="' + (n.quando === 'agendar') + '">🗓️ Dia e hora</button></div>' +
+      '<p class="po-ajuda">' + ({ agora: 'Sai em instantes.', sequencia: 'Entra na fila e sai com intervalo curto e variado entre uma e outra (Stories: 1 a 3 min; Feed/Reels: 3 a 9 min), para parecer postagem de gente.', agendar: 'Escolha o dia e a hora. Várias postagens no mesmo horário não têm problema: saem todas, em ordem.' }[n.quando]) + '</p>' +
+      (n.quando === 'agendar' ? '<p style="margin:8px 0 0"><label for="po-data" class="po-ajuda" style="margin:0 0 4px;display:block">Dia e hora (horário de Brasília)</label><input type="datetime-local" id="po-data" value="' + esc(n.data) + '"></p>' +
+        (n.tipo === 'story' && nItens > 1 ? '<p class="po-ajuda"><label><input type="checkbox" id="po-seqag"' + (n.seqAgenda ? ' checked' : '') + '> Soltar os ' + nItens + ' Stories em sequência a partir desse horário (intervalo humano). Desmarcado = todos no mesmo horário.</label></p>' : '') : '') + '</div>';
+    h += '<button type="button" class="po-enviar" data-a="enviar"' + (ocupado ? ' disabled' : '') + '>' + (ocupado ? 'Preparando…' : n.manual ? '✋ Preparar Story para postar à mão' : n.quando === 'agora' ? '🚀 Postar agora' : n.quando === 'sequencia' ? '🔁 Colocar na sequência' : '🗓️ Agendar postagem') + '</button>';
     return h;
   }
   function quando_(x) { const d = x.agendadoEm ? new Date(x.agendadoEm) : null; return d && !isNaN(d) ? d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''; }
@@ -230,6 +255,10 @@
     if (t.id === 'po-busca') { nova.busca = t.value; const pos = t.selectionStart; desenhar(); const n = $('po-busca'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} } }
     else if (t.id === 'po-leg') { nova.legenda = t.value; nova.legendaMexida = true; }
     else if (t.id === 'po-data') nova.data = t.value;
+    else if (t.id === 'po-link') nova.link = t.value;
+    else if (t.id === 'po-seqag') nova.seqAgenda = t.checked;
+    else if (t.dataset && t.dataset.hora !== undefined) { const m = nova.livre[Number(t.dataset.hora)]; if (m) m.hora = t.value; }
+    else if (t.id === 'po-livre-arq' && t.files && t.files.length) { adicionarLivres(Array.from(t.files)); t.value = ''; }
     else if (t.id === 'po-manual') { nova.manual = t.checked; desenhar(); }
     else if (t.id === 'po-vid' && t.files && t.files[0]) videoDoAparelho(t.files[0]);
   }
@@ -237,6 +266,8 @@
   async function clique(ev) {
     const b = ev.target.closest('button, a'); if (!b || b.tagName === 'A') return;
     const d = b.dataset;
+    if (d.modo) { nova.modoLivre = d.modo === 'livre'; if (nova.modoLivre) { nova.template = 'original'; nova.p = null; } else if (nova.template === 'original' && nova.tipo !== 'reels') nova.template = 'classico'; nova.previa = false; return desenhar(); }
+    if (d.lm) { const i = Number(d.i), L = nova.livre; if (d.lm === 'x') { try { URL.revokeObjectURL(L[i].url); } catch (e) {} L.splice(i, 1); } else { const k = d.lm === 'up' ? i - 1 : i + 1; if (L[k]) { const t = L[i]; L[i] = L[k]; L[k] = t; } } return desenhar(); }
     if (d.peca) return escolherPeca(d.peca);
     if (d.lote) return escolherPeca(d.lote);
     if (d.loteX) { nova.lote = nova.lote.filter((i) => i !== d.loteX); if (nova.p && String(nova.p.ID) === d.loteX) { nova.p = null; nova.midias = []; } return desenhar(); }
@@ -268,7 +299,7 @@
   function cobrir(ctx, img, x, y, w, h) { const r = Math.max(w / img.width, h / img.height), iw = img.width * r, ih = img.height * r; ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); ctx.restore(); }
   function caber(ctx, img, x, y, w, h) { const r = Math.min(w / img.width, h / img.height), iw = img.width * r, ih = img.height * r; ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); }
   function quebrar(ctx, texto, largura, max) { const pal = String(texto).split(/\s+/), l = []; let cur = ''; pal.forEach((p) => { const t = cur ? cur + ' ' + p : p; if (ctx.measureText(t).width > largura && cur) { l.push(cur); cur = p; } else cur = t; }); if (cur) l.push(cur); if (l.length > max) { l.length = max; l[max - 1] = l[max - 1].replace(/.?.?$/, '…'); } return l; }
-  function infoPeca(p) { return { nome: String(p.Nome || '').trim(), avista: formatarReal(precoAvista(p)), cheio: formatarReal(p.Preco), codigo: String(p.Codigo || '') }; }
+  function infoPeca(p) { if (!p) return { nome: '', avista: '', cheio: '', codigo: '' }; return { nome: String(p.Nome || '').trim(), avista: formatarReal(precoAvista(p)), cheio: formatarReal(p.Preco), codigo: String(p.Codigo || '') }; }
   const FONTE = '"Helvetica Neue", Arial, sans-serif', LARANJA = '#E67E22';
   function desenharTemplate(ctx, img, W, H, tpl, info) {
     const story = H > W * 1.5;
@@ -337,7 +368,21 @@
     try { const url = await subirBlob(file, file.name || 'video.mp4'); nova.midias.forEach((m) => { if (nova.tipo === 'reels') m.sel = false; }); nova.midias.push({ url, tipo: 'video', sel: true }); msg('Vídeo pronto.', false); }
     catch (e) { msg(e.message, true); }
   }
+  function adicionarLivres(arqs) {
+    const erros = [];
+    arqs.forEach((f) => {
+      const video = /^video\//.test(f.type), foto = /^image\/(jpeg|png|webp)$/.test(f.type);
+      if (!video && !foto) { erros.push(f.name + ': formato não aceito (use JPG, PNG, WEBP, MP4 ou WEBM)'); return; }
+      if (video && f.size > 15 * 1048576) { erros.push(f.name + ': vídeo passa de 15 MB'); return; }
+      if (nova.livre.length >= 20) { erros.push('No máximo 20 mídias por vez'); return; }
+      nova.livre.push({ file: f, tipo: video ? 'video' : 'imagem', url: URL.createObjectURL(f), nome: f.name, hora: '' });
+    });
+    aviso = erros.join(' · '); avisoErro = erros.length > 0; desenhar();
+  }
+  /** Intervalo "humano" (igual ao do servidor): Story depois de Story 1–3 min; o resto 3–9 min. */
+  function gapHumanoMs(ant, tipo) { const curto = ant === 'story' && tipo === 'story', mn = curto ? 1 : 3, mx = curto ? 3 : 9; return Math.round((mn + Math.random() * (mx - mn)) * 60000); }
   async function prepararMidia(m) {
+    if (m.file && m.tipo === 'video') return { url: await subirBlob(m.file, m.nome || 'video.mp4'), tipo: 'video' };
     if (m.tipo === 'video') return { url: m.url, tipo: 'video' };
     const [W, H] = tamanhoAlvo(), c = document.createElement('canvas'); c.width = W; c.height = H;
     try {
@@ -352,33 +397,50 @@
   /* ---------- criar ---------- */
   async function enviar() {
     if (ocupado) return;
-    const n = nova, sel = n.midias.filter((m) => m.sel);
-    if (!n.p) return msg('Escolha a peça.', true);
-    if (n.tipo === 'feed' && (sel.length !== 1 || sel[0].tipo !== 'imagem')) return msg('Para Feed, marque exatamente 1 foto.', true);
-    if (n.tipo === 'carrossel' && (sel.length < 2 || sel.length > 10)) return msg('Para Carrossel, marque de 2 a 10 mídias.', true);
-    if (n.tipo === 'reels' && (sel.length !== 1 || sel[0].tipo !== 'video')) return msg('Para Reels, marque 1 vídeo (da peça ou do aparelho).', true);
-    if (n.tipo === 'story' && !sel.length) return msg('Marque pelo menos uma foto ou vídeo para o Story.', true);
-    let quando = 'agora';
+    const n = nova, livre = n.modoLivre, sel = livre ? n.livre : n.midias.filter((m) => m.sel);
+    if (!livre && !n.p) return msg('Escolha a peça.', true);
+    if (livre && !n.livre.length) return msg('Escolha pelo menos uma foto ou vídeo.', true);
+    if (n.tipo === 'feed' && (sel.length !== 1 || sel[0].tipo !== 'imagem')) return msg('Para Feed, use exatamente 1 foto.', true);
+    if (n.tipo === 'carrossel' && (sel.length < 2 || sel.length > 10)) return msg('Para Carrossel, use de 2 a 10 mídias.', true);
+    if (n.tipo === 'reels' && (sel.length !== 1 || sel[0].tipo !== 'video')) return msg('Para Reels, use 1 vídeo (da peça ou do aparelho).', true);
+    if (n.tipo === 'story' && !sel.length) return msg('Escolha pelo menos uma foto ou vídeo para o Story.', true);
+    const link = n.manual ? (livre ? String(n.link || '').trim() : linkProduto(n.p)) : '';
+    if (n.manual && !/^https:\/\//i.test(link)) return msg('Coloque o link do Story começando com https://', true);
+    // horários: 'agora' | 'sequencia' (o servidor escalona) | datas (uma por postagem)
+    const nPosts = n.tipo === 'story' ? sel.length : 1;
+    let quandos = [];
     if (n.quando === 'agendar') {
-      const d = new Date(n.data); if (!n.data || isNaN(d)) return msg('Escolha o dia e a hora.', true);
-      if (d.getTime() < Date.now() + 60000) return msg('Escolha um horário daqui a pelo menos 1 minuto (ou use “Agora”).', true);
-      quando = d.toISOString();
-    }
-    if (n.manual) quando = 'agora';
+      const d0 = new Date(n.data); if (!n.data || isNaN(d0)) return msg('Escolha o dia e a hora.', true);
+      let t = d0.getTime(), ant = null;
+      for (let k = 0; k < nPosts; k++) {
+        const proprio = livre && n.tipo === 'story' && sel[k].hora ? new Date(sel[k].hora).getTime() : NaN;
+        if (isFinite(proprio)) { quandos.push(proprio); continue; }
+        if (k > 0 && n.seqAgenda && n.tipo === 'story') t += gapHumanoMs(ant, 'story');
+        quandos.push(t); ant = 'story';
+      }
+      if (quandos.some((q) => q < Date.now() + 60000)) return msg('Os horários precisam ser daqui a pelo menos 1 minuto (ou use “Agora mesmo”).', true);
+      quandos = quandos.map((q) => new Date(q).toISOString());
+    } else quandos = Array.from({ length: nPosts }, () => n.quando);
     ocupado = true; aviso = ''; desenhar();
     try {
       const prontas = []; for (const m of sel) prontas.push(await prepararMidia(m));
-      const base = { legenda: n.legenda, quando, produto: String(n.p.Codigo || n.p.ID || ''), template: n.template, por: (typeof funcionarioNome !== 'undefined' ? funcionarioNome : '') || '' };
+      const grupo = livre ? 'livre-' + Date.now().toString(36) : String(n.p.Codigo || n.p.ID || '');
+      const base = { legenda: n.legenda, produto: livre ? '' : grupo, template: livre ? 'livre' : n.template, por: (typeof funcionarioNome !== 'undefined' ? funcionarioNome : '') || '' };
       let corpo;
-      if (n.tipo === 'story') corpo = { posts: prontas.map((m) => Object.assign({}, base, { tipo: 'story', midias: [m], modo: n.manual ? 'manual' : 'auto', link: n.manual ? linkProduto(n.p) : undefined, grupo: base.produto })) };
-      else corpo = Object.assign({}, base, { tipo: n.tipo, midias: prontas });
+      if (n.tipo === 'story') corpo = { posts: prontas.map((m, k) => Object.assign({}, base, { tipo: 'story', quando: quandos[k], midias: [m], modo: n.manual ? 'manual' : 'auto', link: n.manual ? link : undefined, grupo })), por: base.por };
+      else corpo = Object.assign({}, base, { tipo: n.tipo, quando: quandos[0], midias: prontas });
       const r = await ig('/post', 'POST', corpo);
       if (!r || !r.ok) throw new Error(erroTxt(r));
-      const qtd = (r.ids || []).length || 1;
-      aviso = n.manual ? 'Pronto! ' + qtd + ' Story' + (qtd > 1 ? 's' : '') + ' esperando você na aba “Postar à mão”.' : n.quando === 'agora' ? 'Enviado! Em instantes aparece em “Já postadas” (vídeo pode demorar alguns minutos).' : 'Agendado! O servidor posta sozinho na hora marcada.'; avisoErro = false;
-      const feita = String(n.p.ID), resto = (n.lote || []).filter((i) => i !== feita), cfg = { tipo: n.tipo, template: n.template, quando: n.quando, data: n.data, manual: n.manual };
+      const qtd = (r.ids || []).length || 1, hh = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      aviso = n.manual ? 'Pronto! ' + qtd + ' Story' + (qtd > 1 ? 's' : '') + ' ' + (n.quando === 'agendar' ? 'vão aparecer na aba “Postar à mão” na hora marcada.' : 'esperando você na aba “Postar à mão”.')
+        : n.quando === 'agora' ? 'Enviado! Em instantes aparece em “Já postadas” (vídeo pode demorar alguns minutos).'
+        : n.quando === 'sequencia' ? 'Na fila! ' + (r.quandos && r.quandos.length ? 'Sai entre ' + hh(r.quandos[0]) + ' e ' + hh(r.quandos[r.quandos.length - 1]) + ', com intervalos variados.' : '')
+        : 'Agendado! O servidor posta sozinho na hora marcada, mesmo com o celular desligado.';
+      avisoErro = false;
+      const feita = livre ? '' : String(n.p.ID), resto = (n.lote || []).filter((i) => i !== feita), cfg = { tipo: n.tipo, template: n.template, quando: n.quando, data: n.data, manual: n.manual, seqAgenda: n.seqAgenda };
+      n.livre.forEach((m) => { try { URL.revokeObjectURL(m.url); } catch (e) {} });
       ocupado = false;
-      if (resto.length) {      // tem mais peças na lista: segue para a próxima com as mesmas escolhas
+      if (!livre && resto.length) {      // tem mais peças na lista: segue para a próxima com as mesmas escolhas
         novaVazia(resto); Object.assign(nova, cfg); abaAtual = 'nova'; escolherPeca(resto[0]);
         aviso += ' Próxima da lista: ' + nomeLote(resto[0]) + ' (faltam ' + resto.length + ').';
         await carregarFila(); return;

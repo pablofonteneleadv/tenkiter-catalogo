@@ -1,6 +1,6 @@
 """Aba Postagens (admin-postagens.js, v4.6): escolher peça/mídias, tipo (Feed, Carrossel, Reels, Story), Original/Templates (canvas -> JPEG -> R2), legenda, agora x agendado,
 fila (cancelar / tentar de novo), Story com link = tarefa manual (baixar, copiar, "Já postei"), quem pode ver o botão, teclado e axe. Worker do Instagram e R2 simulados (mock.py)."""
-import sys, os, json
+import sys, os, json, datetime
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
 from mock import *
 from playwright.sync_api import sync_playwright
@@ -133,9 +133,63 @@ with sync_playwright() as p:
     axe(pg, "lista de postagem")
     pg.evaluate("document.querySelector('#overlay-postagens').classList.remove('aberto')")
 
+    print("== 3 opções de horário e postagem LIVRE (sem peça) ==")
+    abrir(pg); aba(pg, "nova")
+    from PIL import Image
+    d = os.path.join(AQUI, "saida"); os.makedirs(d, exist_ok=True)
+    for i, cor in enumerate(["red", "blue"]): Image.new("RGB", (600, 800), cor).save(os.path.join(d, "livre%d.jpg" % i))
+    open(os.path.join(d, "livre.mp4"), "wb").write(b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 4000)
+    pg.click("[data-modo=livre]"); pg.wait_for_timeout(300)
+    chk("modo livre não pede peça e mostra o campo de mídias", pg.locator("#po-livre-arq").count() == 1 and "Qual peça?" not in corpo(pg))
+    pg.click("[data-tipo=story]")
+    chk("os 3 horários existem: Agora mesmo, Na sequência, Dia e hora", all(x in corpo(pg) for x in ["Agora mesmo", "Na sequência", "Dia e hora"]))
+    pg.set_input_files("#po-livre-arq", [os.path.join(d, "livre0.jpg"), os.path.join(d, "livre1.jpg"), os.path.join(d, "livre.mp4")]); pg.wait_for_timeout(500)
+    chk("3 mídias na lista, na ordem", pg.locator("[data-lm=x]").count() == 3 and "1º · Foto" in corpo(pg) and "3º · Vídeo" in corpo(pg))
+    pg.click("[data-lm=down][data-i='0']"); pg.wait_for_timeout(200)
+    chk("dá para reordenar (↓ move a 1ª para a 2ª posição)", pg.locator("#po-corpo :text('1º · Foto')").count() == 1)
+    pg.set_input_files("#po-livre-arq", [os.path.join(d, "livre0.jpg")]); pg.wait_for_timeout(300)
+    pg.click("[data-lm=x][data-i='3']"); pg.wait_for_timeout(200)
+    chk("tirar uma mídia da lista", pg.locator("[data-lm=x]").count() == 3)
+    pg.click("[data-q=sequencia]"); pg.wait_for_timeout(200)
+    chk("Na sequência explica o intervalo humano", "1 a 3 min" in corpo(pg))
+    n0 = len(g["posts"]); pg.click("[data-a=enviar]"); pg.wait_for_timeout(3500)
+    c = g["post_chamadas"][-1]["corpo"]
+    if "posts" not in c: print("TELA:", corpo(pg)[:400])
+    chk("sequência: 3 Stories com quando='sequencia', sem peça, 2 fotos (JPEG no R2) e 1 vídeo", len(c["posts"]) == 3 and all(q["quando"] == "sequencia" and q["tipo"] == "story" and q["modo"] == "auto" and not q["produto"] for q in c["posts"]) and [q["midias"][0]["tipo"] for q in c["posts"]] == ["imagem", "imagem", "video"], c)
+    chk("todas as mídias foram para o R2", all("tenkiter-midia" in q["midias"][0]["url"] for q in c["posts"]))
+    chk("aviso mostra a janela de horários e vai para a Fila", "Na fila" in corpo(pg) and "Sai entre" in corpo(pg), corpo(pg)[:200])
+    print("-- agendado: um vídeo às 7h, depois fotos em sequência, um horário próprio")
+    aba(pg, "nova"); pg.click("[data-modo=livre]"); pg.click("[data-tipo=story]")
+    pg.set_input_files("#po-livre-arq", [os.path.join(d, "livre.mp4"), os.path.join(d, "livre0.jpg"), os.path.join(d, "livre1.jpg")]); pg.wait_for_timeout(500)
+    pg.click("[data-q=agendar]"); pg.wait_for_timeout(200)
+    amanha = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    pg.fill("#po-data", amanha + "T07:00"); pg.fill("#po-h-2", amanha + "T12:30"); pg.wait_for_timeout(200)
+    chk("com Dia e hora: caixa 'em sequência' e horário próprio por mídia", pg.locator("#po-seqag").count() == 1 and pg.locator("[data-hora]").count() == 3)
+    pg.click("[data-a=enviar]"); pg.wait_for_timeout(3500)
+    c = g["post_chamadas"][-1]["corpo"]["posts"]
+    t = [q["quando"] for q in c]
+    chk("1º (vídeo) às 07:00 do dia seguinte; 2º depois dele (intervalo humano); 3º no horário próprio", len(t) == 3 and t[0] < t[1] and 60000 <= (datetime.datetime.fromisoformat(t[1].replace("Z", "+00:00")) - datetime.datetime.fromisoformat(t[0].replace("Z", "+00:00"))).total_seconds() * 1000 <= 180000 and t[2].endswith("Z"), t)
+    chk("o horário de Brasília foi respeitado (07:00 local = 10:00 UTC, UTC-3)", t[0][11:16] == "10:00", t[0])
+    print("-- livre: Feed, mesmo horário e Story com link")
+    aba(pg, "nova"); pg.click("[data-modo=livre]"); pg.click("[data-tipo=feed]")
+    pg.set_input_files("#po-livre-arq", [os.path.join(d, "livre1.jpg")]); pg.wait_for_timeout(400)
+    pg.fill("#po-leg", "Aviso da loja: amanhã abrimos mais cedo!"); pg.click("[data-q=agendar]"); pg.fill("#po-data", amanha + "T07:00")
+    pg.click("[data-a=enviar]"); pg.wait_for_timeout(3000)
+    c2 = g["post_chamadas"][-1]["corpo"]
+    chk("mesmo horário de outra postagem é aceito (07:00 de novo, sem conflito)", c2["quando"] == t[0] and c2["legenda"].startswith("Aviso da loja"), c2.get("quando"))
+    aba(pg, "nova"); pg.click("[data-modo=livre]"); pg.click("[data-tipo=story]"); pg.set_input_files("#po-livre-arq", [os.path.join(d, "livre0.jpg")]); pg.wait_for_timeout(400)
+    pg.check("#po-manual"); pg.wait_for_timeout(200); pg.click("[data-a=enviar]"); pg.wait_for_timeout(300)
+    chk("Story com link livre exige o link", "https://" in corpo(pg) and "link" in corpo(pg).lower())
+    pg.fill("#po-link", "https://tenkitermodas.com.br/"); pg.click("[data-a=enviar]"); pg.wait_for_timeout(3000)
+    c3 = g["post_chamadas"][-1]["corpo"]["posts"][0]
+    chk("Story manual livre leva o link digitado", c3["modo"] == "manual" and c3["link"] == "https://tenkitermodas.com.br/", c3)
+    axe(pg, "postagem livre")
+    aba(pg, "nova"); pg.click("[data-modo=livre]"); axe(pg, "livre (vazio)")
+    pg.evaluate("document.querySelector('#overlay-postagens').classList.remove('aberto')")
+
     print("== Recusas do servidor e teclado ==")
     abrir(pg)
-    aba(pg, "nova"); pg.fill("#po-busca", "TK-0006"); pg.wait_for_timeout(300); pg.click(".po-peca >> nth=0"); pg.wait_for_timeout(300)
+    aba(pg, "nova"); pg.click("[data-modo=peca]"); pg.fill("#po-busca", "TK-0006"); pg.wait_for_timeout(300); pg.click(".po-peca >> nth=0"); pg.wait_for_timeout(300)
     g["post_recusa"] = "O Instagram não está conectado. Peça ao Admin total para conectar em Conexões."
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(2500)
     chk("recusa do servidor vira aviso vermelho com a frase", "não está conectado" in corpo(pg) and pg.locator(".po-aviso.erro").count() >= 1)

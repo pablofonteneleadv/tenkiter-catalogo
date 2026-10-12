@@ -386,6 +386,26 @@ function d1() {
     chk('Story com link NÃO vai pela API: fica "manual_pendente" esperando a pessoa', L.status === 'manual_pendente' && postChamadas.length === 0 && L.link === 'https://tenkitermodas.com.br/p/TK-0001', [L.status, postChamadas.length]);
     x = await G('POST', '/post/feito', { id: idMan }); L = await linha(idMan); chk('"já postei" fecha como manual_feito', x.j.ok === true && L.status === 'manual_feito');
     x = await G('POST', '/post/feito', { id: idFeed }); chk('não dá para marcar "feito" numa postagem automática', x.r.status === 409);
+
+    // ---- NA SEQUÊNCIA (intervalo humano) e mesmo horário
+    await DB.prepare("DELETE FROM postagem WHERE status IN ('agendado','erro')").run();
+    x = await G('POST', '/post', { posts: [1, 2, 3, 4].map((n) => ({ tipo: 'story', midias: [IMG(n)], quando: 'sequencia' })) });
+    const q = x.j.quandos.map((t) => Date.parse(t));
+    chk('na sequência: 4 Stories saem escalonados, cada um 1 a 3 min depois do anterior', x.j.ok && q.length === 4 && q.every((t, i) => i === 0 || (t - q[i - 1] >= 60000 && t - q[i - 1] <= 180000)), x.j.quandos);
+    chk('o 1º da sequência sai em ~1 min (não na mesma hora do pedido)', q[0] - Date.now() > 30000 && q[0] - Date.now() < 90000);
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(5)], quando: 'sequencia' });
+    chk('um pedido novo entra DEPOIS da fila de sequência (3 a 9 min depois da última)', Date.parse(x.j.quandos[0]) - q[3] >= 180000 && Date.parse(x.j.quandos[0]) - q[3] <= 540000, [x.j.quandos, q[3]]);
+    const idsSeq = (await DB.prepare("SELECT id FROM postagem WHERE seq=1 AND status='agendado'").all()).results.length;
+    chk('as da sequência ficam marcadas como sequência', idsSeq === 5, idsSeq);
+    chk('o intervalo humano varia (não é sempre igual)', new Set(Array.from({ length: 30 }, () => W.intervaloHumanoMs('feed', 'feed'))).size > 5);
+    // vários no MESMO horário: todos saem (4 por minuto, o resto no minuto seguinte), em ordem
+    await DB.prepare("DELETE FROM postagem WHERE status='agendado'").run();
+    const mesma = ts(180); const ids6 = [];
+    for (let n = 0; n < 6; n++) { x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(n)], quando: mesma }); ids6.push(x.j.ids[0]); chk('mesmo horário #' + (n + 1) + ' é aceito (sem conflito)', x.j.ok === true, x.j); }
+    await DB.prepare('UPDATE postagem SET agendado_em=? WHERE id IN (' + ids6.join(',') + ')').bind(ts(-1)).run();
+    publicados = []; await rodar(); const n1 = publicados.length; await rodar();
+    chk('6 no mesmo horário: 4 no 1º minuto e os 2 restantes no seguinte', n1 === 4 && publicados.length === 6, [n1, publicados.length]);
+    chk('todas publicadas, sem erro', (await DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE id IN (" + ids6.join(',') + ") AND status='publicado'").first()).n === 6);
     // ---- cancelar / reagendar
     x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(4)], quando: ts(300) }); const idC = x.j.ids[0];
     x = await G('POST', '/post/cancelar', { id: idC }); L = await linha(idC); chk('cancelar uma agendada', x.j.ok === true && L.status === 'cancelado');
