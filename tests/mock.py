@@ -415,10 +415,40 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                 for r in g["rasc"]:
                     k=r["grupo"] if r["status"]=="pendente" else r["status"]; c[k]=c.get(k,0)+1
                 return c
-            g["chamadas"].append({"m":m,"path":path,"whats":h.get("x-tk-whats"),"sessao":h.get("x-tk-sessao"),"corpo":route.request.post_data})
+            g["chamadas"].append({"m":m,"path":path,"whats":h.get("x-tk-whats"),"sessao":h.get("x-tk-sessao"),"corpo":(route.request.post_data if "image/" not in (h.get("content-type") or "") else "<binário>")})
             if m=="OPTIONS": return route.fulfill(status=204,body="")
             if g.get("fora"): return route.fulfill(status=404,json={"ok":False,"erro":"Não encontrado."})
             if not (h.get("x-tk-sessao") or "").startswith("tk"): return route.fulfill(status=401,json={"ok":False,"erro":"Entre na sua conta de administrador."})
+            if path=="/cliente/foto" or path.startswith("/fotos"):      # fotos de clientes (Worker v4.7): st["ig"]["fotos"]
+                from urllib.parse import urlparse, parse_qs
+                g.setdefault("fotos",[]); g.setdefault("foto_chamadas",[]); g.setdefault("foto_seq",50)
+                qs=parse_qs(urlparse(u).query); q1=lambda k:(qs.get(k) or [""])[0]
+                if path=="/fotos" and m=="GET":
+                    stt=q1("status") or "nova"; cs={}
+                    for x in g["fotos"]: cs[x["status"]]=cs.get(x["status"],0)+1
+                    return route.fulfill(json={"ok":True,"fotos":[x for x in reversed(g["fotos"]) if x["status"]==stt],"contagens":cs})
+                if path=="/fotos/acao":
+                    fb=json.loads(route.request.post_data or "{}"); g["foto_chamadas"].append({"path":path,"corpo":fb})
+                    for x in g["fotos"]:
+                        if x["id"] in (fb.get("ids") or []): x["status"]={"usada":"usada","descartar":"descartada","restaurar":"nova"}[fb["acao"]]
+                    return route.fulfill(json={"ok":True})
+                raw=route.request.post_data_buffer or b""
+                g["foto_chamadas"].append({"path":path,"q":dict((k,v[0]) for k,v in qs.items()),"tam":len(raw),"jpeg":raw[:3]==b"\xff\xd8\xff"})
+                if path=="/cliente/foto":
+                    if g.get("foto_recusa"): return route.fulfill(status=429,json={"ok":False,"erro":g["foto_recusa"]})
+                    if q1("aceito")!="1": return route.fulfill(status=400,json={"ok":False,"erro":"Marque que autoriza a loja a usar a foto nos Stories."})
+                    g["foto_seq"]+=1; g["fotos"].append({"id":g["foto_seq"],"origem":"cliente","url":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/fc%d.jpg"%g["foto_seq"],"whats":"88988887777","nome":"Maria Cliente","instagram":q1("ig").lstrip("@").lower(),"obs":q1("obs"),"status":"nova","vinculo":"conta","criadoPor":"Maria Cliente"})
+                    return route.fulfill(json={"ok":True,"id":g["foto_seq"]})
+                if path=="/fotos/nova":
+                    w=q1("whats"); ig2=q1("ig").lstrip("@").lower()
+                    if not w and not ig2: return route.fulfill(status=400,json={"ok":False,"erro":"Informe o WhatsApp ou o Instagram de quem mandou a foto (pelo menos um)."})
+                    nome=""; vinc="nenhum"
+                    if w=="88977776666": nome="Joana Cadastrada"; vinc="conta"
+                    elif ig2:
+                        h=next((x for x in g["fotos"] if x["instagram"]==ig2 and (x["whats"] or x["nome"])),None)
+                        if h: w=h["whats"]; nome=h["nome"]; vinc="historico"
+                    g["foto_seq"]+=1; g["fotos"].append({"id":g["foto_seq"],"origem":"equipe","url":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/fe%d.jpg"%g["foto_seq"],"whats":w,"nome":nome,"instagram":ig2,"obs":q1("obs"),"status":"nova","vinculo":vinc,"criadoPor":q1("por")})
+                    return route.fulfill(json={"ok":True,"id":g["foto_seq"],"vinculo":vinc,"nome":nome,"whats":w,"instagram":ig2})
             if path=="/posts" or path.startswith("/post"):      # fila de postagens (Worker v4.6): st["ig"]["posts"]
                 g.setdefault("posts",[]); g.setdefault("post_chamadas",[]); g.setdefault("post_seq",100)
                 if path=="/posts": return route.fulfill(json={"ok":True,"posts":[x for x in g["posts"] if x["status"]!="cancelado"],"contagens":{},"conectado":g["conectado"],"usuario":"tenkitermodasceara"})

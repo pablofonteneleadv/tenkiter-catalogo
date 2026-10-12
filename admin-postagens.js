@@ -16,7 +16,8 @@
   const ST_TXT = { agendado: '⏳ Agendado', processando: '⚙️ Publicando…', manual_pendente: '✋ Falta você postar', manual_feito: '✅ Postado à mão', publicado: '✅ Publicado', erro: '⚠️ Deu problema', cancelado: 'Cancelado' };
   const HASHTAGS = '#tenkitermodas #modacrateus #crateús #lookdodia #modafeminina #modainfantil #modamasculina';
   let abaAtual = 'nova', fila = null, conectado = null, usuarioIg = '', pollTimer = null, ocupado = false, aviso = '', avisoErro = false;
-  let nova = null;   // { p, midias:[{url,tipo,sel}], tipo, template, legenda, quando, data, manual, extras:[] }
+  let nova = null;
+  let fotos = null, fotosFiltro = 'nova', fotosConta = {}, selFotos = new Set(), formFoto = { aberto: false, whats: '', ig: '', obs: '', msg: '', erro: false, ocupado: false };   // { p, midias:[{url,tipo,sel}], tipo, template, legenda, quando, data, manual, extras:[] }
 
   /* ---------- Worker ---------- */
   function sessao() { const s = typeof getSessao === 'function' ? getSessao() : null; return s && /^tk[12]\./.test(String(s.sessao)) ? s : null; }
@@ -60,8 +61,9 @@
       .po-m img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .po-m .po-n { position: absolute; left: 3px; top: 3px; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: 0.75rem; border-radius: 999px; min-width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
       .po-m .po-v { position: absolute; right: 3px; bottom: 3px; background: rgba(0,0,0,.75); color: #fff; font-size: 0.7rem; padding: 1px 6px; border-radius: 8px; }
-      .po-previa { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; }
-      .po-previa canvas { height: 190px; width: auto; border-radius: 8px; border: 1px solid #ddd; background: #f4f4f4; flex: none; }
+      .po-previa { display: flex; gap: 10px; flex-wrap: wrap; padding: 4px 0; }
+      .po-previa canvas { width: calc(50% - 5px); max-width: 260px; height: auto; border-radius: 8px; border: 1px solid #ddd; background: #f4f4f4; flex: none; }
+      .po-previa canvas.arrastando { outline: 3px solid var(--laranja); }
       .po-sheet textarea, .po-sheet input[type=datetime-local], .po-sheet input[type=search] { width: 100%; box-sizing: border-box; font-size: 1rem; padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
       .po-sheet textarea { min-height: 150px; font-family: inherit; }
       .po-ajuda { font-size: 0.8rem; color: #444; margin: 6px 0 0; }
@@ -97,7 +99,7 @@
       '<div class="po-abas" role="tablist" id="po-abas"></div><div id="po-corpo"></div></div>';
     document.body.appendChild(o);
     $('po-fechar').addEventListener('click', fechar);
-    $('po-abas').addEventListener('click', (ev) => { const b = ev.target.closest('[data-aba]'); if (b) { abaAtual = b.dataset.aba; aviso = ''; desenhar(); if (abaAtual !== 'nova') carregarFila(); } });
+    $('po-abas').addEventListener('click', (ev) => { const b = ev.target.closest('[data-aba]'); if (b) { abaAtual = b.dataset.aba; aviso = ''; desenhar(); if (abaAtual === 'fotos') carregarFotos(); else if (abaAtual !== 'nova') carregarFila(); } });
     $('po-corpo').addEventListener('click', clique);
     $('po-corpo').addEventListener('input', entrada);
     window.addEventListener('popstate', () => { o.classList.remove('aberto'); parar(); });
@@ -109,16 +111,92 @@
     abrirComHistorico_('overlay-postagens');
     if (!nova) novaVazia();
     desenhar();
-    await carregarFila();
+    await carregarFila(); carregarFotos(true);
     parar(); pollTimer = setInterval(() => { if ($('overlay-postagens').classList.contains('aberto') && abaAtual !== 'nova' && !ocupado) carregarFila(true); }, window.TK_POSTAGENS_POLL_MS || 15000);
   }
-  function novaVazia(lote) { nova = { lote: lote || (nova && nova.lote) || [], modoLivre: false, livre: [], seqAgenda: true, link: '', p: null, midias: [], tipo: 'feed', template: 'classico', legenda: '', quando: 'agora', data: '', manual: false, busca: '', legendaMexida: false, previa: false }; }
+  function novaVazia(lote) { nova = { lote: lote || (nova && nova.lote) || [], modoLivre: false, modoCli: false, tx: {}, tam: {}, ajuste: 'preencher', livre: [], seqAgenda: true, link: '', p: null, midias: [], tipo: 'feed', template: 'classico', legenda: '', quando: 'agora', data: '', manual: false, busca: '', legendaMexida: false, previa: false }; }
 
   async function carregarFila(silencioso) {
     const r = await ig('/posts');
     if (r && r.ok) { fila = r.posts || []; conectado = !!r.conectado; usuarioIg = r.usuario || ''; }
     else if (!silencioso) { fila = []; aviso = erroTxt(r); avisoErro = true; }
     desenhar();
+  }
+
+
+  /* ---------- fotos de clientes ---------- */
+  async function carregarFotos(silencioso) {
+    const r = await ig('/fotos?status=' + encodeURIComponent(fotosFiltro) + '&limite=80');
+    if (r && r.ok) { fotos = r.fotos || []; fotosConta = r.contagens || {}; }
+    else if (!silencioso) { fotos = fotos || []; aviso = erroTxt(r); avisoErro = true; }
+    desenhar();
+  }
+  function whatsBonito(w) { const d = String(w || '').replace(/\D/g, ''); return d.length === 11 ? '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7) : d.length === 10 ? '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6) : d; }
+  function htmlFotos() {
+    const f = formFoto, c = fotosConta || {};
+    let h = '<div class="po-chips" role="group" aria-label="Filtrar fotos" style="margin-bottom:8px">' + [['nova', 'Novas'], ['usada', 'Já usadas'], ['descartada', 'Descartadas']].map((x) => '<button type="button" data-ff="' + x[0] + '" aria-pressed="' + (fotosFiltro === x[0]) + '">' + x[1] + (c[x[0]] ? ' (' + c[x[0]] + ')' : '') + '</button>').join('') +
+      '<button type="button" data-a="fotoform" style="background:#fde7f3;border-color:#c13584">➕ Adicionar foto recebida</button></div>';
+    if (f.aberto) h += '<div class="po-passo" style="border-color:#c13584"><h4>➕ Foto que um cliente mandou</h4>' +
+      '<label for="po-f-arq" class="po-ajuda" style="font-weight:700;margin:0 0 4px;display:block">Foto(s) (JPG, PNG ou WEBP)</label><input type="file" id="po-f-arq" accept="image/jpeg,image/png,image/webp,image/*" multiple>' +
+      '<label for="po-f-whats" class="po-ajuda" style="font-weight:700;margin:8px 0 2px;display:block">WhatsApp de quem mandou (com DDD)</label><input type="tel" id="po-f-whats" value="' + esc(f.whats) + '" placeholder="(88) 99999-9999" autocomplete="off">' +
+      '<label for="po-f-ig" class="po-ajuda" style="font-weight:700;margin:8px 0 2px;display:block">Instagram (se não tiver o WhatsApp)</label><input type="text" id="po-f-ig" value="' + esc(f.ig) + '" placeholder="@usuario" autocomplete="off" autocapitalize="none">' +
+      '<label for="po-f-obs" class="po-ajuda" style="font-weight:700;margin:8px 0 2px;display:block">Observação (opcional)</label><input type="text" id="po-f-obs" value="' + esc(f.obs) + '" maxlength="300" autocomplete="off">' +
+      '<p class="po-ajuda"><b>Obrigatório:</b> o WhatsApp <b>ou</b> o Instagram (pelo menos um). Se o WhatsApp já tem cadastro no site, a foto é ligada à conta sozinha. Se só tiver o Instagram e já houve foto dessa pessoa, uso os mesmos dados.</p>' +
+      (f.msg ? '<div class="po-aviso' + (f.erro ? ' erro' : '') + '" role="status">' + esc(f.msg) + '</div>' : '') +
+      '<button type="button" class="po-enviar" data-a="fotosalvar"' + (f.ocupado ? ' disabled' : '') + '>' + (f.ocupado ? 'Enviando…' : 'Salvar foto(s)') + '</button></div>';
+    if (fotos === null) return h + '<p class="po-ajuda">Carregando…</p>';
+    if (!fotos.length) return h + '<p class="po-ajuda">' + ({ nova: 'Nenhuma foto nova. Os clientes mandam pela conta deles no site, e você também pode adicionar as que chegam pelo WhatsApp.', usada: 'Nenhuma foto usada ainda.', descartada: 'Nenhuma foto descartada.' }[fotosFiltro]) + '</p>';
+    h += fotos.map((x) => '<div class="po-item" data-fid="' + x.id + '"><div style="display:flex;gap:10px;align-items:flex-start">' +
+      '<label style="display:flex;align-items:center;min-height:44px;min-width:32px"><input type="checkbox" data-fsel="' + x.id + '"' + (selFotos.has(x.id) ? ' checked' : '') + ' aria-label="Escolher a foto de ' + esc(x.nome || x.instagram || x.whats || 'cliente') + '"></label>' +
+      '<a href="' + esc(x.url) + '" target="_blank" rel="noopener" aria-label="Abrir a foto inteira"><img src="' + esc(x.url) + '" alt="" loading="lazy" style="width:72px;height:96px;object-fit:cover;border-radius:8px;background:#eee"></a>' +
+      '<div style="flex:1;min-width:0"><div class="po-st">' + esc(x.nome || (x.vinculo === 'nenhum' ? 'Sem cadastro' : 'Cliente')) + '</div>' +
+      '<p class="po-meta">' + (x.whats ? '📱 ' + esc(whatsBonito(x.whats)) : '') + (x.instagram ? ' · 📷 @' + esc(x.instagram) : '') + '</p>' +
+      '<p class="po-meta">' + (x.origem === 'cliente' ? '🧡 Enviada pelo cliente no site' : '👤 Anexada pela equipe' + (x.criadoPor ? ' (' + esc(x.criadoPor) + ')' : '')) + ' · ' + ({ conta: 'ligada à conta', historico: 'dados de foto anterior', nenhum: 'só com os dados informados' }[x.vinculo] || '') + '</p>' +
+      (x.obs ? '<p class="po-leg">“' + esc(x.obs) + '”</p>' : '') + '</div></div>' +
+      '<div class="po-acoes" style="margin-top:6px">' + (fotosFiltro === 'nova' ? '<button type="button" class="po-ruim" data-fa="descartar" data-id="' + x.id + '">Descartar</button>' : '<button type="button" data-fa="restaurar" data-id="' + x.id + '">Voltar para novas</button>') + '</div></div>').join('');
+    if (selFotos.size) h += '<div style="position:sticky;bottom:0;background:#fff;padding:8px 0"><button type="button" class="po-enviar" data-a="fotousar">📱 Colocar ' + selFotos.size + ' na fila de Story</button></div>';
+    return h;
+  }
+  function reduzirFoto(file) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => { try { const r = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width * r)); c.height = Math.max(1, Math.round(img.height * r)); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height); let q = 0.86; const t = () => c.toBlob((b) => { if (!b) { URL.revokeObjectURL(url); rej(new Error('Não consegui preparar a foto.')); return; } if (b.size > 2.4 * 1048576 && q > 0.5) { q -= 0.12; t(); return; } URL.revokeObjectURL(url); res(b); }, 'image/jpeg', q); t(); } catch (e) { URL.revokeObjectURL(url); rej(new Error('Não consegui preparar a foto.')); } };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Não consegui abrir ' + (file.name || 'a foto') + '. Use JPG, PNG ou WEBP.')); };
+      img.src = url;
+    });
+  }
+  async function salvarFotosEquipe() {
+    const f = formFoto, arq = $('po-f-arq'), lista = arq && arq.files ? Array.from(arq.files) : [], s = sessao();
+    const whats = String(f.whats || '').replace(/\D/g, ''), ig2 = String(f.ig || '').trim();
+    const falha = (t) => { f.msg = t; f.erro = true; desenhar(); };
+    if (!lista.length) return falha('Escolha a foto.');
+    if (!whats && !ig2) return falha('Coloque o WhatsApp ou o Instagram de quem mandou a foto (pelo menos um).');
+    if (whats && whats.length < 10) return falha('WhatsApp incompleto: coloque com DDD (ex.: 88 99999-9999).');
+    if (!s) return falha('Entre com o seu login para anexar a foto.');
+    f.ocupado = true; f.msg = ''; desenhar();
+    let ok = 0, ultimo = null, erro = '';
+    for (const file of lista) {
+      try {
+        const blob = await reduzirFoto(file);
+        const q = '?whats=' + encodeURIComponent(whats) + '&ig=' + encodeURIComponent(ig2) + '&obs=' + encodeURIComponent(f.obs || '') + '&por=' + encodeURIComponent((typeof funcionarioNome !== 'undefined' ? funcionarioNome : '') || '');
+        const r = await fetch(INSTAGRAM_URL + '/fotos/nova' + q, { method: 'POST', headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, 'Content-Type': 'image/jpeg' }, body: blob });
+        const j = await r.json(); if (r.ok && j && j.ok) { ok++; ultimo = j; } else { erro = (j && j.erro) || 'Não consegui enviar agora.'; break; }
+      } catch (e) { erro = (e && e.message) || 'Sem conexão agora. Tente de novo.'; break; }
+    }
+    f.ocupado = false;
+    if (erro && !ok) return falha(erro);
+    const vinc = ultimo ? ({ conta: 'Ligada à conta de ' + (ultimo.nome || 'cliente') + '.', historico: 'Usei os dados de uma foto anterior' + (ultimo.nome ? ' (' + ultimo.nome + ')' : '') + '.', nenhum: 'Salva só com os dados informados (não achei cadastro).' }[ultimo.vinculo] || '') : '';
+    f.msg = ok + (ok > 1 ? ' fotos salvas. ' : ' foto salva. ') + vinc + (erro ? ' Parei em um erro: ' + erro : ''); f.erro = !!erro; f.whats = ''; f.ig = ''; f.obs = '';
+    fotosFiltro = 'nova'; await carregarFotos(true);
+  }
+  function usarFotos() {
+    const ids = Array.from(selFotos), escolhidas = (fotos || []).filter((x) => ids.indexOf(x.id) !== -1);
+    if (!escolhidas.length) return;
+    if (!nova) novaVazia();
+    if (!nova.modoCli) { nova.livre.forEach((m) => { try { if (!m.fotoId) URL.revokeObjectURL(m.url); } catch (e) {} }); nova.livre = []; }
+    nova.modoCli = true; nova.modoLivre = false; nova.p = null; nova.midias = []; nova.tipo = 'story'; nova.template = 'elausa'; nova.manual = false; nova.previa = false;
+    escolhidas.forEach((x) => { if (!nova.livre.some((m) => m.fotoId === x.id)) nova.livre.push({ fotoId: x.id, tipo: 'imagem', url: x.url, nome: (x.nome || (x.instagram ? '@' + x.instagram : '') || whatsBonito(x.whats) || 'Cliente'), hora: '', pos: {} }); });
+    selFotos.clear(); abaAtual = 'nova'; aviso = escolhidas.length + (escolhidas.length > 1 ? ' fotos prontas' : ' foto pronta') + ' para o Story. Ajuste o texto, arraste na foto e escolha o horário.'; avisoErro = false; desenhar();
   }
 
   /* ---------- peças e mídia ---------- */
@@ -159,27 +237,28 @@
   function desenhar() {
     const abas = $('po-abas'), corpo = $('po-corpo'); if (!abas || !corpo) return;
     const nMan = (fila || []).filter((x) => x.status === 'manual_pendente').length, nFila = (fila || []).filter((x) => ['agendado', 'processando', 'erro'].indexOf(x.status) !== -1).length;
-    abas.innerHTML = [['nova', 'Nova postagem'], ['fila', 'Fila' + (nFila ? ' (' + nFila + ')' : '')], ['manual', 'Postar à mão' + (nMan ? ' (' + nMan + ')' : '')], ['hist', 'Já postadas']]
+    abas.innerHTML = [['nova', 'Nova postagem'], ['fila', 'Fila' + (nFila ? ' (' + nFila + ')' : '')], ['manual', 'Postar à mão' + (nMan ? ' (' + nMan + ')' : '')], ['fotos', 'Fotos de clientes' + (fotosConta.nova ? ' (' + fotosConta.nova + ')' : '')], ['hist', 'Já postadas']]
       .map((a) => '<button type="button" role="tab" data-aba="' + a[0] + '" aria-selected="' + (abaAtual === a[0]) + '">' + esc(a[1]) + '</button>').join('');
     const topo = (aviso ? '<div class="po-aviso' + (avisoErro ? ' erro' : '') + '" role="status">' + esc(aviso) + '</div>' : '') +
       (conectado === false ? '<div class="po-aviso erro">O Instagram não está conectado. Só o Admin total conecta (Conexões → Instagram). Enquanto isso, só dá para preparar Story com link para postar à mão.</div>' : '');
-    corpo.innerHTML = topo + (abaAtual === 'nova' ? htmlNova() : abaAtual === 'fila' ? htmlFila(['agendado', 'processando', 'erro'], 'Nada na fila agora.') : abaAtual === 'manual' ? htmlManual() : htmlFila(['publicado', 'manual_feito'], 'Ainda não há postagens feitas por aqui.'));
-    if (abaAtual === 'nova' && nova && nova.previa) pintarPrevia();
+    corpo.innerHTML = topo + (abaAtual === 'nova' ? htmlNova() : abaAtual === 'fila' ? htmlFila(['agendado', 'processando', 'erro'], 'Nada na fila agora.') : abaAtual === 'manual' ? htmlManual() : abaAtual === 'fotos' ? htmlFotos() : htmlFila(['publicado', 'manual_feito'], 'Ainda não há postagens feitas por aqui.'));
+    if (abaAtual === 'nova' && nova && nova.p !== undefined && deveMostrarPrevia()) pintarPrevia();
   }
   function htmlLivre() {
     const n = nova;
-    let h = '<div class="po-passo"><h4>1. Suas mídias (sem peça)</h4><p class="po-ajuda" style="margin-top:0">Fotos e vídeos do aparelho, na ordem em que vão sair. Serve para Story do dia, aviso, bastidores, qualquer coisa.</p>' +
+    let h = n.modoCli ? '<div class="po-passo"><h4>1. Fotos de clientes escolhidas</h4><p class="po-ajuda" style="margin-top:0">Só Story, com o template “Ela usa TM”. Escolha mais fotos na aba <b>Fotos de clientes</b>.</p>' :
+      '<div class="po-passo"><h4>1. Suas mídias (sem peça)</h4><p class="po-ajuda" style="margin-top:0">Fotos e vídeos do aparelho, na ordem em que vão sair. Serve para Story do dia, aviso, bastidores, qualquer coisa.</p>' +
       '<label for="po-livre-arq" class="po-ajuda" style="font-weight:700;margin:0 0 4px;display:block">Escolher fotos e vídeos (vídeo até 15 MB)</label><input type="file" id="po-livre-arq" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple>';
     h += n.livre.length ? '<div style="margin-top:8px">' + n.livre.map((m, i) => '<div class="po-escolhida" style="margin-bottom:6px;align-items:flex-start">' +
       (m.tipo === 'video' ? '<span class="po-v" style="background:#222;color:#fff;border-radius:6px;padding:20px 12px;font-size:1.2rem" aria-hidden="true">🎬</span>' : '<img src="' + esc(m.url) + '" alt="" width="40" height="50" style="border-radius:6px;object-fit:cover">') +
       '<div style="flex:1;min-width:0"><b>' + (i + 1) + 'º · ' + (m.tipo === 'video' ? 'Vídeo' : 'Foto') + '</b><small style="display:block;color:#555;overflow-wrap:anywhere">' + esc(m.nome || '') + '</small>' +
       (n.quando === 'agendar' ? '<label class="po-ajuda" for="po-h-' + i + '" style="display:block;margin:4px 0 2px">Horário só deste (opcional)</label><input type="datetime-local" id="po-h-' + i + '" data-hora="' + i + '" value="' + esc(m.hora || '') + '">' : '') + '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:4px;flex:none"><button type="button" data-lm="up" data-i="' + i + '" aria-label="Subir"' + (i === 0 ? ' disabled' : '') + '>↑</button><button type="button" data-lm="down" data-i="' + i + '" aria-label="Descer"' + (i === n.livre.length - 1 ? ' disabled' : '') + '>↓</button><button type="button" data-lm="x" data-i="' + i + '" aria-label="Tirar">✕</button></div></div>').join('') + '</div>' : '<p class="po-ajuda">Nenhuma mídia ainda.</p>';
+      '<div style="display:flex;flex-direction:column;gap:4px;flex:none"><button type="button" data-lm="up" data-i="' + i + '" aria-label="Subir"' + (i === 0 ? ' disabled' : '') + '>↑</button><button type="button" data-lm="down" data-i="' + i + '" aria-label="Descer"' + (i === n.livre.length - 1 ? ' disabled' : '') + '>↓</button><button type="button" data-lm="x" data-i="' + i + '" aria-label="Tirar">✕</button></div></div>').join('') + '</div>' : (n.modoCli ? '<p class="po-ajuda">Nenhuma foto escolhida ainda. Vá em <b>Fotos de clientes</b>, marque as fotos e toque em “Colocar na fila de Story”.</p>' : '<p class="po-ajuda">Nenhuma mídia ainda.</p>');
     return h + '</div>';
   }
   function htmlNova() {
-    const n = nova, p = n.p, livre = n.modoLivre;
-    let h = htmlLote() + '<div class="po-chips" role="group" aria-label="Com peça ou livre" style="margin-bottom:10px"><button type="button" data-modo="peca" aria-pressed="' + !livre + '">🛍️ Com peça</button><button type="button" data-modo="livre" aria-pressed="' + livre + '">✍️ Livre (sem peça)</button></div>';
+    const n = nova, p = n.p, cli = n.modoCli, livre = n.modoLivre || cli;
+    let h = htmlLote() + '<div class="po-chips" role="group" aria-label="Tipo de conteúdo" style="margin-bottom:10px"><button type="button" data-modo="peca" aria-pressed="' + !livre + '">🛍️ Com peça</button><button type="button" data-modo="livre" aria-pressed="' + n.modoLivre + '">✍️ Livre</button><button type="button" data-modo="cliente" aria-pressed="' + cli + '">🧡 Ela usa TM</button></div>';
     if (livre) h += htmlLivre();
     else {
       h += '<div class="po-passo"><h4>1. Qual peça?</h4>';
@@ -192,7 +271,7 @@
       h += '</div>';
       if (!p) return h;
     }
-    h += '<div class="po-passo"><h4>2. O que postar?</h4><div class="po-chips" role="group" aria-label="Tipo de postagem">' + TIPOS.map((t) => '<button type="button" data-tipo="' + t[0] + '" aria-pressed="' + (n.tipo === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>';
+    h += '<div class="po-passo"><h4>2. O que postar?</h4><div class="po-chips" role="group" aria-label="Tipo de postagem">' + TIPOS.filter((t) => !cli || t[0] === 'story').map((t) => '<button type="button" data-tipo="' + t[0] + '" aria-pressed="' + (n.tipo === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>';
     h += '<p class="po-ajuda">' + ({ feed: 'Uma foto no feed (formato 4:5).', carrossel: 'De 2 a 10 mídias deslizando no mesmo post.', reels: 'Um vídeo vertical.' + (livre ? '' : ' Use o vídeo da peça ou suba um do aparelho.'), story: 'Cada foto/vídeo vira UM Story separado, na ordem.' }[n.tipo]) + '</p>';
     if (!livre) {
       h += '<div class="po-midias" role="group" aria-label="Mídias da peça">' + n.midias.map((m, i) => { const ord = m.sel ? n.midias.filter((x, j) => x.sel && j <= i).length : 0;
@@ -204,10 +283,19 @@
       if (n.manual && livre) h += '<label for="po-link" class="po-ajuda" style="display:block;margin:6px 0 2px">Link que vai no Story (https://…)</label><input type="url" id="po-link" value="' + esc(n.link) + '" placeholder="https://tenkitermodas.com.br/">';
     }
     h += '</div>';
-    if (!livre && n.tipo !== 'reels') h += '<div class="po-passo"><h4>3. Visual</h4><div class="po-chips" role="group" aria-label="Visual">' + TEMPLATES.map((t) => '<button type="button" data-tpl="' + t[0] + '" aria-pressed="' + (n.template === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>' +
-      '<p class="po-ajuda">' + (n.template === 'original' ? 'A foto como está (ajustada ao formato do Instagram).' : 'A foto ganha nome, preço à vista e código da peça. Vídeos ficam sem template.') + '</p>' +
-      '<p><button type="button" data-a="previa" class="po-ajuda" style="width:auto;padding:9px 14px;min-height:44px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">👁️ Ver como vai ficar</button></p><div class="po-previa" id="po-previa"></div></div>';
-    const visual = !livre && n.tipo !== 'reels', nLeg = visual ? 4 : 3;
+    if (n.tipo !== 'reels') {
+      const lista = cli ? [['elausa', 'Ela usa TM']] : livre ? [['original', 'Original'], ['elausa', 'Ela usa TM']] : TEMPLATES, itens = n.template !== 'original' ? itensTemplate(n.template, infoPeca(n.p), ...tamanhoAlvo()) : [];
+      h += '<div class="po-passo"><h4>3. Visual</h4>' + (lista.length > 1 ? '<div class="po-chips" role="group" aria-label="Visual">' + lista.map((t) => '<button type="button" data-tpl="' + t[0] + '" aria-pressed="' + (n.template === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>' : '') +
+        '<p class="po-ajuda">' + (n.template === 'original' ? 'A foto como está (ajustada ao formato do Instagram).' : n.template === 'elausa' ? 'A foto com o texto “Ela usa TM” (toque numa das opções ou escreva o seu). Arraste o texto na foto para onde quiser.' : 'A foto ganha nome, preço à vista e código da peça. Arraste cada texto na prévia para onde quiser. Vídeos ficam sem template.') + '</p>';
+      if (n.template === 'original' || n.template === 'elausa') h += '<div class="po-chips" role="group" aria-label="Como a foto ocupa a tela" style="margin-bottom:6px"><button type="button" data-aj="preencher" aria-pressed="' + (n.ajuste === 'preencher') + '">Preencher a tela</button><button type="button" data-aj="inteira" aria-pressed="' + (n.ajuste === 'inteira') + '">Foto inteira (fundo desfocado)</button></div>';
+      if (n.template === 'elausa') h += '<div class="po-chips" role="group" aria-label="Textos prontos" style="margin-bottom:6px">' + VARIANTES_ELA.map((v) => '<button type="button" data-var="' + esc(v) + '" aria-pressed="' + (((n.tx.elausa || {}).marca !== undefined ? n.tx.elausa.marca : VARIANTES_ELA[0]) === v) + '">' + esc(v) + '</button>').join('') + '</div>';
+      if (itens.length) h += '<div id="po-textos">' + itens.map((it) => { const tx = (n.tx[n.template] || {})[it.k], tm = (n.tam[n.template] || {})[it.k] || 1;
+        return '<div style="margin:6px 0"><label class="po-ajuda" for="po-tx-' + it.k + '" style="display:block;margin:0 0 2px;font-weight:700">' + esc(it.rot) + '</label><input type="text" id="po-tx-' + it.k + '" data-tx="' + it.k + '" value="' + esc(tx !== undefined ? tx : it.t) + '" maxlength="90" autocomplete="off">' +
+          '<label class="po-ajuda" for="po-tm-' + it.k + '" style="display:flex;gap:8px;align-items:center;margin:2px 0 0">Tamanho <input type="range" id="po-tm-' + it.k + '" data-tm="' + it.k + '" min="0.5" max="2" step="0.05" value="' + tm + '" style="flex:1"></label></div>'; }).join('') +
+        '<p><button type="button" data-a="resetTx" style="width:auto;padding:9px 14px;min-height:44px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">↺ Voltar textos e posições ao padrão</button></p></div>';
+      h += '<p><button type="button" data-a="previa" class="po-ajuda" style="width:auto;padding:9px 14px;min-height:44px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">👁️ Ver como vai ficar</button></p><div class="po-previa" id="po-previa"></div></div>';
+    }
+    const visual = n.tipo !== 'reels', nLeg = visual ? 4 : 3;
     h += '<div class="po-passo"><h4>' + nLeg + '. Legenda</h4>' + (n.tipo === 'story' ? '<p class="po-ajuda" style="margin-top:0">Story não leva legenda pela API' + (n.manual ? '; aqui ela serve de texto para copiar no app.' : ' — esta legenda só vale para Feed/Carrossel/Reels.') + '</p>' : '') + '<label for="po-leg" class="po-ajuda" style="margin:0 0 4px">Texto que acompanha a postagem</label><textarea id="po-leg" maxlength="2200">' + esc(n.legenda) + '</textarea>' +
       (livre ? '' : '<p><button type="button" data-a="legenda" style="width:auto;padding:9px 14px;min-height:44px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">↺ Refazer legenda automática</button></p>') + '</div>';
     const nItens = livre ? n.livre.length : n.midias.filter((m) => m.sel).length;
@@ -255,6 +343,12 @@
     if (t.id === 'po-busca') { nova.busca = t.value; const pos = t.selectionStart; desenhar(); const n = $('po-busca'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} } }
     else if (t.id === 'po-leg') { nova.legenda = t.value; nova.legendaMexida = true; }
     else if (t.id === 'po-data') nova.data = t.value;
+    else if (t.dataset && t.dataset.tx !== undefined) { (nova.tx[nova.template] = nova.tx[nova.template] || {})[t.dataset.tx] = t.value; repintar(); }
+    else if (t.dataset && t.dataset.tm !== undefined) { (nova.tam[nova.template] = nova.tam[nova.template] || {})[t.dataset.tm] = Number(t.value) || 1; repintar(); }
+    else if (t.id === 'po-f-whats') formFoto.whats = t.value;
+    else if (t.id === 'po-f-ig') formFoto.ig = t.value;
+    else if (t.id === 'po-f-obs') formFoto.obs = t.value;
+    else if (t.dataset && t.dataset.fsel !== undefined) { const id = Number(t.dataset.fsel); if (t.checked) selFotos.add(id); else selFotos.delete(id); desenhar(); }
     else if (t.id === 'po-link') nova.link = t.value;
     else if (t.id === 'po-seqag') nova.seqAgenda = t.checked;
     else if (t.dataset && t.dataset.hora !== undefined) { const m = nova.livre[Number(t.dataset.hora)]; if (m) m.hora = t.value; }
@@ -266,7 +360,22 @@
   async function clique(ev) {
     const b = ev.target.closest('button, a'); if (!b || b.tagName === 'A') return;
     const d = b.dataset;
-    if (d.modo) { nova.modoLivre = d.modo === 'livre'; if (nova.modoLivre) { nova.template = 'original'; nova.p = null; } else if (nova.template === 'original' && nova.tipo !== 'reels') nova.template = 'classico'; nova.previa = false; return desenhar(); }
+    if (d.ff) { fotosFiltro = d.ff; selFotos.clear(); fotos = null; desenhar(); return carregarFotos(); }
+    if (d.fa) { const r = await ig('/fotos/acao', 'POST', { ids: [Number(d.id)], acao: d.fa }); if (!r.ok) return msg(erroTxt(r), true); selFotos.delete(Number(d.id)); return carregarFotos(); }
+    if (d.a === 'fotoform') { formFoto.aberto = !formFoto.aberto; formFoto.msg = ''; return desenhar(); }
+    if (d.a === 'fotosalvar') return salvarFotosEquipe();
+    if (d.a === 'fotousar') return usarFotos();
+    if (d.aj) { nova.ajuste = d.aj; return desenhar(); }
+    if (d.var) { (nova.tx.elausa = nova.tx.elausa || {}).marca = d.var; return desenhar(); }
+    if (d.a === 'resetTx') { delete nova.tx[nova.template]; delete nova.tam[nova.template]; itensDaPostagem().forEach((m) => { if (m.pos) delete m.pos[nova.template]; }); return desenhar(); }
+    if (d.modo) {
+      const antes = nova.modoCli ? 'cliente' : nova.modoLivre ? 'livre' : 'peca';
+      if (antes !== d.modo && antes !== 'peca') { nova.livre.forEach((m) => { try { if (!m.fotoId) URL.revokeObjectURL(m.url); } catch (e) {} }); nova.livre = []; }
+      nova.modoLivre = d.modo === 'livre'; nova.modoCli = d.modo === 'cliente';
+      if (d.modo === 'peca') { if (nova.template === 'original' || nova.template === 'elausa') nova.template = 'classico'; }
+      else { nova.p = null; nova.midias = []; if (d.modo === 'cliente') { nova.tipo = 'story'; nova.template = 'elausa'; nova.manual = false; } else if (nova.template !== 'elausa') nova.template = 'original'; }
+      nova.previa = false; return desenhar();
+    }
     if (d.lm) { const i = Number(d.i), L = nova.livre; if (d.lm === 'x') { try { URL.revokeObjectURL(L[i].url); } catch (e) {} L.splice(i, 1); } else { const k = d.lm === 'up' ? i - 1 : i + 1; if (L[k]) { const t = L[i]; L[i] = L[k]; L[k] = t; } } return desenhar(); }
     if (d.peca) return escolherPeca(d.peca);
     if (d.lote) return escolherPeca(d.lote);
@@ -301,47 +410,108 @@
   function quebrar(ctx, texto, largura, max) { const pal = String(texto).split(/\s+/), l = []; let cur = ''; pal.forEach((p) => { const t = cur ? cur + ' ' + p : p; if (ctx.measureText(t).width > largura && cur) { l.push(cur); cur = p; } else cur = t; }); if (cur) l.push(cur); if (l.length > max) { l.length = max; l[max - 1] = l[max - 1].replace(/.?.?$/, '…'); } return l; }
   function infoPeca(p) { if (!p) return { nome: '', avista: '', cheio: '', codigo: '' }; return { nome: String(p.Nome || '').trim(), avista: formatarReal(precoAvista(p)), cheio: formatarReal(p.Preco), codigo: String(p.Codigo || '') }; }
   const FONTE = '"Helvetica Neue", Arial, sans-serif', LARANJA = '#E67E22';
-  function desenharTemplate(ctx, img, W, H, tpl, info) {
+  const VARIANTES_ELA = ['ElausaTM🧡', 'EleusaTM🧡', 'ElasusamTM🧡', 'ElesusamTM🧡'];
+  const FONTE_MANUAL = '"Segoe Script","Brush Script MT","Lucida Handwriting","Snell Roundhand",cursive';
+  /** Textos de cada template: k = chave, rot = nome no editor, t = texto padrão, x/y = posição (fração da imagem; x é a esquerda ou o centro, y é a linha de base), tam = tamanho em px (imagem de 1080 de largura). */
+  function itensTemplate(tpl, info, W, H) {
+    const story = H > W * 1.5;
+    if (tpl === 'classico') return [
+      { k: 'selo', rot: 'Selo', t: 'NOVIDADE', x: 0.07, y: 0.085, tam: 38, cor: '#0d0d0d', bg: LARANJA },
+      { k: 'nome', rot: 'Nome da peça', t: info.nome, x: 0.055, y: 0.8, tam: 58, cor: '#fff', max: 0.88, linhas: 2, sombra: true },
+      { k: 'preco', rot: 'Preço', t: info.avista ? info.avista + ' à vista' : '', x: 0.055, y: 0.895, tam: 74, cor: LARANJA, sombra: true },
+      { k: 'codigo', rot: 'Código', t: info.codigo ? 'Código ' + info.codigo + ' · TENKiTER Modas' : '', x: 0.055, y: 0.945, tam: 32, cor: '#ddd', sombra: true }];
+    if (tpl === 'promo') return [
+      { k: 'selo', rot: 'Selo', t: 'PROMOÇÃO', x: 0.05, y: 0.115, tam: 78, cor: '#0d0d0d', bg: LARANJA },
+      { k: 'nome', rot: 'Nome da peça', t: info.nome, x: 0.045, y: 0.73, tam: 44, cor: '#fff', bg: '#0d0d0d', max: 0.7, linhas: 2 },
+      { k: 'preco', rot: 'Preço', t: info.avista || '', x: 0.045, y: 0.84, tam: 84, cor: LARANJA, bg: '#0d0d0d' },
+      { k: 'codigo', rot: 'Código', t: info.codigo ? 'à vista · ' + info.codigo : '', x: 0.045, y: 0.895, tam: 30, cor: '#fff', bg: '#0d0d0d' }];
+    if (tpl === 'minimal') return [
+      { k: 'nome', rot: 'Nome da peça', t: info.nome, x: 0.052, y: story ? 0.8 : 0.84, tam: 54, cor: '#111', max: 0.9, linhas: 2 },
+      { k: 'preco', rot: 'Preço', t: info.avista ? info.avista + ' à vista' : '', x: 0.052, y: story ? 0.89 : 0.915, tam: 60, cor: '#A85200' },
+      { k: 'codigo', rot: 'Código', t: info.codigo ? info.codigo + ' · @tenkitermodasceara' : '', x: 0.052, y: story ? 0.94 : 0.96, tam: 32, cor: '#555' }];
+    if (tpl === 'vitrine') { const yn = story ? 0.72 : 0.78; return [
+      { k: 'marca', rot: 'Marca', t: 'TENKiTER MODAS', x: 0.5, y: 0.05, tam: 40, cor: LARANJA, alinha: 'center' },
+      { k: 'nome', rot: 'Nome da peça', t: info.nome, x: 0.5, y: yn, tam: 52, cor: '#fff', alinha: 'center', max: 0.85, linhas: 2 },
+      { k: 'preco', rot: 'Preço', t: info.avista ? info.avista + ' à vista' : '', x: 0.5, y: yn + 0.075, tam: 66, cor: LARANJA, alinha: 'center' }]
+      .concat(story ? [{ k: 'extra', rot: 'Linha extra', t: info.codigo ? 'Peça pelo WhatsApp · ' + info.codigo : 'Peça pelo WhatsApp', x: 0.5, y: yn + 0.125, tam: 34, cor: '#ccc', alinha: 'center' }] : []); }
+    if (tpl === 'elausa') return [{ k: 'marca', rot: 'Texto', t: VARIANTES_ELA[0], x: 0.5, y: 0.72, tam: 120, cor: '#fff', alinha: 'center', estilo: 'italic', fonte: FONTE_MANUAL, sombra: true }];
+    return [];
+  }
+  /** Itens com o que a pessoa mexeu: texto trocado, tamanho e a posição (por foto). */
+  function itensEfetivos(tpl, m) {
+    const [W, H] = tamanhoAlvo(), base = itensTemplate(tpl, infoPeca(nova.p), W, H);
+    const tx = (nova.tx && nova.tx[tpl]) || {}, tm = (nova.tam && nova.tam[tpl]) || {}, ps = (m && m.pos && m.pos[tpl]) || {};
+    return base.map((it) => Object.assign({}, it, { t: tx[it.k] !== undefined ? tx[it.k] : it.t, mult: tm[it.k] || 1 }, ps[it.k] ? { x: ps[it.k].x, y: ps[it.k].y } : {}));
+  }
+  function textoCanvas(ctx, it, W, H) {
+    const txt = String(it.t == null ? '' : it.t).trim(); if (!txt) return null;
+    const tam = Math.max(12, Math.round(it.tam * (it.mult || 1)));
+    ctx.font = (it.estilo ? it.estilo + ' ' : '') + 'bold ' + tam + 'px ' + (it.fonte || FONTE); ctx.textAlign = it.alinha || 'left'; ctx.textBaseline = 'alphabetic';
+    const linhas = it.max ? quebrar(ctx, txt, W * it.max, it.linhas || 2) : [txt], lh = tam * 1.15, pad = it.bg ? tam * 0.28 : 4;
+    const larg = Math.max.apply(null, linhas.map((l) => ctx.measureText(l).width)), x = it.x * W, y0 = it.y * H;
+    const x0 = (it.alinha === 'center' ? x - larg / 2 : x) - pad, y1 = y0 - tam * 0.88 - pad * 0.6, y2 = y0 + (linhas.length - 1) * lh + tam * 0.3 + pad * 0.6;
+    if (it.bg) { ctx.fillStyle = it.bg; ctx.fillRect(x0, y1, larg + pad * 2, y2 - y1); }
+    ctx.save(); if (it.sombra) { ctx.shadowColor = 'rgba(0,0,0,.65)'; ctx.shadowBlur = Math.round(tam * 0.18); ctx.shadowOffsetY = Math.round(tam * 0.05); }
+    ctx.fillStyle = it.cor || '#fff'; linhas.forEach((l, n) => ctx.fillText(l, x, y0 + n * lh)); ctx.restore();
+    return { k: it.k, x0: x0, y0: y1, x1: x0 + larg + pad * 2, y1: y2 };
+  }
+  function fundoFoto(ctx, img, W, H, ajuste) {
+    if (ajuste === 'inteira') {
+      ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H);
+      try { ctx.save(); ctx.filter = 'blur(40px)'; cobrir(ctx, img, -60, -60, W + 120, H + 120); ctx.restore(); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, W, H); } catch (e) { /* sem blur: fica o fundo escuro */ }
+      caber(ctx, img, 0, 0, W, H);
+    } else cobrir(ctx, img, 0, 0, W, H);
+  }
+  /** Desenha a foto + template e os textos; devolve as caixas dos textos (para arrastar). */
+  function desenharTemplate(ctx, img, W, H, tpl, itens, ajuste) {
     const story = H > W * 1.5;
     ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H);
-    if (tpl === 'original') { if (story) caber(ctx, img, 0, 0, W, H); else cobrir(ctx, img, 0, 0, W, H); return; }
-    if (tpl === 'classico') {
-      cobrir(ctx, img, 0, 0, W, H);
-      const bh = story ? 520 : 360, g = ctx.createLinearGradient(0, H - bh, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.45, 'rgba(0,0,0,.7)'); g.addColorStop(1, 'rgba(0,0,0,.92)'); ctx.fillStyle = g; ctx.fillRect(0, H - bh, W, bh);
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 58px ' + FONTE; ctx.textBaseline = 'alphabetic'; const ls = quebrar(ctx, info.nome, W - 120, 2); let y = H - (story ? 250 : 170) - (ls.length - 1) * 66; ls.forEach((t) => { ctx.fillText(t, 60, y); y += 66; });
-      ctx.fillStyle = LARANJA; ctx.font = 'bold 74px ' + FONTE; ctx.fillText(info.avista + ' à vista', 60, y + 14);
-      ctx.fillStyle = '#ddd'; ctx.font = '34px ' + FONTE; ctx.fillText('Código ' + info.codigo + ' · TENKiTER Modas', 60, y + 66);
-      ctx.fillStyle = LARANJA; ctx.fillRect(60, 60, 14, 74); ctx.fillStyle = '#fff'; ctx.font = 'bold 40px ' + FONTE; ctx.fillText('NOVIDADE', 92, 112);
-    } else if (tpl === 'promo') {
-      cobrir(ctx, img, 0, 0, W, H);
-      ctx.fillStyle = LARANJA; ctx.fillRect(0, 70, W * 0.62, 120); ctx.fillStyle = '#0d0d0d'; ctx.font = 'bold 78px ' + FONTE; ctx.fillText('PROMOÇÃO', 50, 155);
-      const bw = W * 0.72, bh = 250, by = H - bh - (story ? 220 : 70); ctx.fillStyle = '#0d0d0d'; ctx.fillRect(0, by, bw, bh);
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 44px ' + FONTE; const ls = quebrar(ctx, info.nome, bw - 90, 2); let y = by + 62; ls.forEach((t) => { ctx.fillText(t, 45, y); y += 52; });
-      ctx.fillStyle = LARANJA; ctx.font = 'bold 84px ' + FONTE; ctx.fillText(info.avista, 45, by + bh - 48); ctx.fillStyle = '#ccc'; ctx.font = '30px ' + FONTE; ctx.fillText('à vista · ' + info.codigo, 45 + ctx.measureText(info.avista).width * 0 + 0, by + bh - 6);
-    } else if (tpl === 'minimal') {
-      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-      const m = 56, fh = H - (story ? 520 : 330); cobrir(ctx, img, m, story ? 140 : m, W - m * 2, fh - (story ? 140 : m));
-      ctx.fillStyle = '#111'; ctx.font = 'bold 54px ' + FONTE; const ls = quebrar(ctx, info.nome, W - m * 2, 2); let y = H - (story ? 340 : 215) + 10; ls.forEach((t) => { ctx.fillText(t, m, y); y += 62; });
-      ctx.fillStyle = '#A85200'; ctx.font = 'bold 60px ' + FONTE; ctx.fillText(info.avista + ' à vista', m, y + 16); ctx.fillStyle = '#555'; ctx.font = '32px ' + FONTE; ctx.fillText(info.codigo + ' · @tenkitermodas', m, y + 66);
-    } else {   // vitrine
+    if (tpl === 'original' || tpl === 'elausa') fundoFoto(ctx, img, W, H, ajuste);
+    else if (tpl === 'classico') { cobrir(ctx, img, 0, 0, W, H); const bh = story ? 640 : 460, g = ctx.createLinearGradient(0, H - bh, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.5, 'rgba(0,0,0,.7)'); g.addColorStop(1, 'rgba(0,0,0,.92)'); ctx.fillStyle = g; ctx.fillRect(0, H - bh, W, bh); }
+    else if (tpl === 'promo') cobrir(ctx, img, 0, 0, W, H);
+    else if (tpl === 'minimal') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); const m = 56, topo = story ? 140 : m, fh = H - (story ? 520 : 330); cobrir(ctx, img, m, topo, W - m * 2, fh - topo); }
+    else {     // vitrine
       const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#1b1b1b'); g.addColorStop(1, '#0d0d0d'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = LARANJA; ctx.font = 'bold 40px ' + FONTE; ctx.textAlign = 'center'; ctx.fillText('TENKiTER MODAS', W / 2, 90);
-      const fw = W - 160, fh = story ? 1180 : 840, fx = 80, fy = 130; ctx.save(); ctx.beginPath(); const r = 36; ctx.moveTo(fx + r, fy); ctx.arcTo(fx + fw, fy, fx + fw, fy + fh, r); ctx.arcTo(fx + fw, fy + fh, fx, fy + fh, r); ctx.arcTo(fx, fy + fh, fx, fy, r); ctx.arcTo(fx, fy, fx + fw, fy, r); ctx.closePath(); ctx.clip(); cobrir(ctx, img, fx, fy, fw, fh); ctx.restore();
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 52px ' + FONTE; const ls = quebrar(ctx, info.nome, W - 160, 2); let y = fy + fh + 80; ls.forEach((t) => { ctx.fillText(t, W / 2, y); y += 60; });
-      ctx.fillStyle = LARANJA; ctx.font = 'bold 66px ' + FONTE; ctx.fillText(info.avista + ' à vista', W / 2, y + 20);
-      if (story) { ctx.fillStyle = '#ccc'; ctx.font = '34px ' + FONTE; ctx.fillText('Peça pelo WhatsApp · ' + info.codigo, W / 2, y + 90); }
-      ctx.textAlign = 'left';
+      const fw = W - 160, fh = story ? 1180 : 840, fx = 80, fy = 130, r = 36; ctx.save(); ctx.beginPath(); ctx.moveTo(fx + r, fy); ctx.arcTo(fx + fw, fy, fx + fw, fy + fh, r); ctx.arcTo(fx + fw, fy + fh, fx, fy + fh, r); ctx.arcTo(fx, fy + fh, fx, fy, r); ctx.arcTo(fx, fy, fx + fw, fy, r); ctx.closePath(); ctx.clip(); cobrir(ctx, img, fx, fy, fw, fh); ctx.restore();
     }
+    const caixas = []; (itens || []).forEach((it) => { const c = textoCanvas(ctx, it, W, H); if (c) caixas.push(c); });
+    return caixas;
   }
   function tamanhoAlvo() { return nova.tipo === 'story' ? [1080, 1920] : [1080, 1350]; }
+  const imgCache = {};
+  async function imagemCache(url) { if (!imgCache[url]) imgCache[url] = carregarImagem(url).catch((e) => { delete imgCache[url]; throw e; }); return imgCache[url]; }
+  function itensDaPostagem() { return nova.modoLivre || nova.modoCli ? nova.livre : nova.midias.filter((m) => m.sel); }
+  function deveMostrarPrevia() { return nova && (nova.previa || (nova.template && nova.template !== 'original')) && nova.tipo !== 'reels'; }
+  let previaSeq = 0;
+  function pintarCanvas(c) {
+    const m = c._m, [W, H] = tamanhoAlvo(); c.width = W; c.height = H;
+    c._boxes = desenharTemplate(c.getContext('2d'), c._img, W, H, nova.template, itensEfetivos(nova.template, m), nova.ajuste);
+  }
+  function repintar() { document.querySelectorAll('#po-previa canvas').forEach((c) => { if (c._img) pintarCanvas(c); }); }
+  let arr = null, arrRaf = 0, arrGlobal = false;
+  function pontoDe(c, e) { const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e, r = c.getBoundingClientRect(); return { x: (t.clientX - r.left) / r.width * c.width, y: (t.clientY - r.top) / r.height * c.height }; }
+  function acharCaixa(c, pt) { const b = c._boxes || []; for (let i = b.length - 1; i >= 0; i--) if (pt.x >= b[i].x0 && pt.x <= b[i].x1 && pt.y >= b[i].y0 && pt.y <= b[i].y1) return b[i]; return null; }
+  function moverArraste(e) {
+    if (!arr) return; const c = arr.c, pt = pontoDe(c, e), m = c._m; m.pos = m.pos || {}; m.pos[nova.template] = m.pos[nova.template] || {};
+    m.pos[nova.template][arr.k] = { x: Math.min(1, Math.max(0, arr.x + (pt.x - arr.ox) / c.width)), y: Math.min(1.02, Math.max(0.02, arr.y + (pt.y - arr.oy) / c.height)) };
+    if (!arrRaf) arrRaf = requestAnimationFrame(() => { arrRaf = 0; if (arr) pintarCanvas(arr.c); }); if (e.cancelable) e.preventDefault();
+  }
+  function fimArraste() { if (arr) { const c = arr.c; arr = null; c.classList.remove('arrastando'); pintarCanvas(c); } }
+  function ligarArraste(c) {
+    if (!arrGlobal) { arrGlobal = true; window.addEventListener('mousemove', moverArraste); window.addEventListener('mouseup', fimArraste); }
+    const inicio = (e) => { const pt = pontoDe(c, e), b = acharCaixa(c, pt); if (!b) return; const it = itensEfetivos(nova.template, c._m).find((q) => q.k === b.k); if (!it) return; arr = { c: c, k: b.k, x: it.x, y: it.y, ox: pt.x, oy: pt.y }; c.classList.add('arrastando'); if (e.cancelable) e.preventDefault(); };
+    c.addEventListener('mousedown', inicio);
+    c.addEventListener('touchstart', inicio, { passive: false }); c.addEventListener('touchmove', moverArraste, { passive: false }); c.addEventListener('touchend', fimArraste); c.addEventListener('touchcancel', fimArraste);
+    c.addEventListener('mousemove', (e) => { if (!arr) c.style.cursor = acharCaixa(c, pontoDe(c, e)) ? 'grab' : 'default'; });
+  }
   async function pintarPrevia() {
-    const box = $('po-previa'); if (!box || !nova.p) return;
-    const fotos = nova.midias.filter((m) => m.sel && m.tipo === 'imagem').slice(0, 4);
-    if (!fotos.length) { box.innerHTML = '<p class="po-ajuda">Marque pelo menos uma foto.</p>'; return; }
+    const box = $('po-previa'); if (!box) return;
+    const fotos = itensDaPostagem().filter((m) => m.tipo === 'imagem').slice(0, 10), meu = ++previaSeq;
+    if (!fotos.length) { box.innerHTML = '<p class="po-ajuda">Escolha pelo menos uma foto.</p>'; return; }
     box.innerHTML = '<p class="po-ajuda">Montando…</p>';
-    const [W, H] = tamanhoAlvo(); const cs = [];
+    const cs = [];
     try {
-      for (const m of fotos) { const img = await carregarImagem(m.url), c = document.createElement('canvas'); c.width = W; c.height = H; desenharTemplate(c.getContext('2d'), img, W, H, nova.template, infoPeca(nova.p)); c.setAttribute('role', 'img'); c.setAttribute('aria-label', 'Prévia da postagem'); cs.push(c); }
+      for (const m of fotos) { const img = await imagemCache(m.url); if (meu !== previaSeq) return; const c = document.createElement('canvas'); c._m = m; c._img = img; pintarCanvas(c); c.setAttribute('role', 'img'); c.setAttribute('aria-label', 'Prévia da postagem. Arraste os textos para mudar de lugar.'); ligarArraste(c); cs.push(c); }
       box.innerHTML = ''; cs.forEach((c) => box.appendChild(c));
     } catch (e) { box.innerHTML = '<p class="po-aviso erro">' + esc(e.message || 'Não deu para montar a prévia.') + '</p>'; }
   }
@@ -386,7 +556,7 @@
     if (m.tipo === 'video') return { url: m.url, tipo: 'video' };
     const [W, H] = tamanhoAlvo(), c = document.createElement('canvas'); c.width = W; c.height = H;
     try {
-      const img = await carregarImagem(m.url); desenharTemplate(c.getContext('2d'), img, W, H, nova.template, infoPeca(nova.p));
+      const img = await imagemCache(m.url); desenharTemplate(c.getContext('2d'), img, W, H, nova.template, itensEfetivos(nova.template, m), nova.ajuste);
       const blob = await blobDe(c); return { url: await subirBlob(blob, 'post.jpg'), tipo: 'imagem' };
     } catch (e) {
       if (nova.template === 'original' && /^https:\/\//.test(m.url) && /\.(jpe?g)(\?|$)/i.test(m.url)) return { url: m.url, tipo: 'imagem' };   // sem canvas: JPG original serve
@@ -397,9 +567,9 @@
   /* ---------- criar ---------- */
   async function enviar() {
     if (ocupado) return;
-    const n = nova, livre = n.modoLivre, sel = livre ? n.livre : n.midias.filter((m) => m.sel);
+    const n = nova, cli = n.modoCli, livre = n.modoLivre || cli, sel = livre ? n.livre : n.midias.filter((m) => m.sel);
     if (!livre && !n.p) return msg('Escolha a peça.', true);
-    if (livre && !n.livre.length) return msg('Escolha pelo menos uma foto ou vídeo.', true);
+    if (livre && !n.livre.length) return msg(cli ? 'Escolha fotos na aba “Fotos de clientes”.' : 'Escolha pelo menos uma foto ou vídeo.', true);
     if (n.tipo === 'feed' && (sel.length !== 1 || sel[0].tipo !== 'imagem')) return msg('Para Feed, use exatamente 1 foto.', true);
     if (n.tipo === 'carrossel' && (sel.length < 2 || sel.length > 10)) return msg('Para Carrossel, use de 2 a 10 mídias.', true);
     if (n.tipo === 'reels' && (sel.length !== 1 || sel[0].tipo !== 'video')) return msg('Para Reels, use 1 vídeo (da peça ou do aparelho).', true);
@@ -424,8 +594,8 @@
     ocupado = true; aviso = ''; desenhar();
     try {
       const prontas = []; for (const m of sel) prontas.push(await prepararMidia(m));
-      const grupo = livre ? 'livre-' + Date.now().toString(36) : String(n.p.Codigo || n.p.ID || '');
-      const base = { legenda: n.legenda, produto: livre ? '' : grupo, template: livre ? 'livre' : n.template, por: (typeof funcionarioNome !== 'undefined' ? funcionarioNome : '') || '' };
+      const grupo = livre ? (cli ? 'cliente-' : 'livre-') + Date.now().toString(36) : String(n.p.Codigo || n.p.ID || '');
+      const base = { legenda: n.legenda, produto: livre ? '' : grupo, template: livre ? (cli ? 'elausa' : 'livre') : n.template, por: (typeof funcionarioNome !== 'undefined' ? funcionarioNome : '') || '' };
       let corpo;
       if (n.tipo === 'story') corpo = { posts: prontas.map((m, k) => Object.assign({}, base, { tipo: 'story', quando: quandos[k], midias: [m], modo: n.manual ? 'manual' : 'auto', link: n.manual ? link : undefined, grupo })), por: base.por };
       else corpo = Object.assign({}, base, { tipo: n.tipo, quando: quandos[0], midias: prontas });
@@ -438,7 +608,8 @@
         : 'Agendado! O servidor posta sozinho na hora marcada, mesmo com o celular desligado.';
       avisoErro = false;
       const feita = livre ? '' : String(n.p.ID), resto = (n.lote || []).filter((i) => i !== feita), cfg = { tipo: n.tipo, template: n.template, quando: n.quando, data: n.data, manual: n.manual, seqAgenda: n.seqAgenda };
-      n.livre.forEach((m) => { try { URL.revokeObjectURL(m.url); } catch (e) {} });
+      if (cli) { const ids = n.livre.map((m) => m.fotoId).filter(Boolean); if (ids.length) { await ig('/fotos/acao', 'POST', { ids: ids, acao: 'usada' }); } }
+      n.livre.forEach((m) => { try { if (!m.fotoId) URL.revokeObjectURL(m.url); } catch (e) {} });
       ocupado = false;
       if (!livre && resto.length) {      // tem mais peças na lista: segue para a próxima com as mesmas escolhas
         novaVazia(resto); Object.assign(nova, cfg); abaAtual = 'nova'; escolherPeca(resto[0]);
