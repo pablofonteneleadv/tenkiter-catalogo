@@ -56,8 +56,8 @@ if not r.get("success"): sys.exit("Falhou ao publicar: %s" % r.get("errors"))
 print("Publicado:", (r.get("result") or {}).get("modified_on"))
 s = api("/accounts/%s/workers/scripts/%s/subdomain" % (conta, SCRIPT), "POST", js({"enabled": True, "previews_enabled": False}), {"Content-Type": "application/json"})
 print("workers.dev:", "ligado" if s.get("success") else s.get("errors"))
-sc = api("/accounts/%s/workers/scripts/%s/schedules" % (conta, SCRIPT), "PUT", js([{"cron": "*/30 * * * *"}]), {"Content-Type": "application/json"})
-print("cron a cada 30 min:", "ligado" if sc.get("success") else sc.get("errors"))
+sc = api("/accounts/%s/workers/scripts/%s/schedules" % (conta, SCRIPT), "PUT", js([{"cron": "* * * * *"}]), {"Content-Type": "application/json"})
+print("cron a cada minuto (postagens) — importa a cada 30 min:", "ligado" if sc.get("success") else sc.get("errors"))
 zonas = api("/zones?name=" + ZONA).get("result") or []
 if zonas:
     d = api("/accounts/%s/workers/domains" % conta, "PUT", js({"hostname": DOMINIO, "service": SCRIPT, "zone_id": zonas[0]["id"], "environment": "production"}), {"Content-Type": "application/json"})

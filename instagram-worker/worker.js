@@ -25,6 +25,8 @@ const DDL = [
   `CREATE TABLE IF NOT EXISTS rascunho_midia (rascunho_id INTEGER NOT NULL, midia_id TEXT NOT NULL, ordem INTEGER NOT NULL DEFAULT 0, capa INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (rascunho_id, midia_id))`,
   `CREATE TABLE IF NOT EXISTS exec_log (id INTEGER PRIMARY KEY AUTOINCREMENT, inicio TEXT, fim TEXT, novas INTEGER DEFAULT 0, erro TEXT, origem TEXT)`,
   `CREATE TABLE IF NOT EXISTS cfg (chave TEXT PRIMARY KEY, valor TEXT)`,
+  `CREATE TABLE IF NOT EXISTS postagem (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, modo TEXT NOT NULL DEFAULT 'auto', legenda TEXT DEFAULT '', midias TEXT NOT NULL DEFAULT '[]', produto TEXT DEFAULT '', template TEXT DEFAULT '', link TEXT DEFAULT '', agendado_em TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'agendado', containers TEXT DEFAULT '', inicio_proc TEXT DEFAULT '', tentativas INTEGER DEFAULT 0, erro TEXT DEFAULT '', ig_id TEXT DEFAULT '', permalink TEXT DEFAULT '', criado_por TEXT DEFAULT '', criado_em TEXT, atualizado_em TEXT, publicado_em TEXT DEFAULT '', grupo TEXT DEFAULT '')`,
+  `CREATE INDEX IF NOT EXISTS ix_post ON postagem (status, agendado_em)`,
   `CREATE INDEX IF NOT EXISTS ix_rasc ON rascunho (status, grupo, publicado_em)`,
   `CREATE INDEX IF NOT EXISTS ix_rm ON rascunho_midia (midia_id)`
 ];
@@ -489,17 +491,200 @@ async function status(env) {
   return { ok: true, conectado: tem, usuario: await cfgGet(env, 'ig_usuario') || '', venceEmDias: dias, desde: await cfgGet(env, 'ig_desde') || '', contagens: c, ultimoCiclo: ult || null, novasDesdeOntem: n ? n.n : 0, falhasSeguidas: falhas, alertas: alertas, usoR2: await lerUso(env), limiteR2: limite(env), stories: si, ia: await iaStatus(env), historico: { completo: !!(await cfgGet(env, 'ig_hist_fim')), emAndamento: !!(await cfgGet(env, 'ig_hist_depois')) } };
 }
 
+/* ===================== POSTAGENS: publicar no Instagram (Feed, Carrossel, Reels, Story) =====================
+ * A API do Instagram NÃO agenda: a agenda é NOSSA (tabela `postagem` + cron por minuto). Máquina de estados, sem esperar vídeo dentro de uma execução:
+ *   agendado → processando (containers criados no Instagram; cada minuto confere `status_code`) → publicado | erro | cancelado
+ *   Story COM LINK: a API não aceita figurinha de link → `modo:'manual'`: na hora vira `manual_pendente` e o funcionário termina no Instagram (→ `manual_feito`).
+ * Permissão das rotas: Admin total OU `catalogo_cadastrar` (a equipe que cadastra peças também posta). O token fica no D1 e nunca volta à tela. */
+const TIPOS_POST = ['feed', 'carrossel', 'reels', 'story'];
+const MAX_POSTS_24H = 90;                 // o Instagram deixa ~100 publicações por API a cada 24 h; paramos antes
+const MAX_ESPERA_VIDEO_MS = 20 * 60 * 1000;
+const MAX_TENT = 3;
+class ErroIG extends Error { constructor(e, http) { super((e && e.message) || ('HTTP ' + http)); this.code = e && e.code; this.sub = e && e.error_subcode; this.http = http; } }
+async function graphPost(env, token, caminho, params) {
+  const corpo = new URLSearchParams();
+  Object.keys(params || {}).forEach((k) => { if (params[k] !== undefined && params[k] !== null && params[k] !== '') corpo.set(k, String(params[k])); });
+  corpo.set('access_token', token);                                   // o token vai no corpo, nunca no endereço
+  let r, j = null;
+  try { r = await fetch(igBase(env) + caminho, { method: 'POST', headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded' }, body: corpo }); j = await r.json(); } catch (e) { throw new ErroIG({ message: 'não consegui falar com o Instagram' }, 0); }
+  if (!r.ok || (j && j.error)) throw new ErroIG(j && j.error, r.status);
+  return j;
+}
+/** Frase para a pessoa + se vale tentar de novo. Nunca devolve JSON nem o token. */
+export function fraseErroIG(e) {
+  const code = e && e.code, sub = e && e.sub, msg = String((e && e.message) || '').replace(/access_token=[^&\s]+/g, 'access_token=***');
+  if (code === 190) return { frase: 'O token do Instagram venceu ou foi recusado. Gere outro e conecte de novo.', fatal: true };
+  if (code === 10 || code === 200 || /permission/i.test(msg)) return { frase: 'O token não tem a permissão de publicar (instagram_business_content_publish). Gere outro token marcando essa permissão.', fatal: true };
+  if (code === 4 || code === 17 || code === 32 || code === 613 || sub === 2207051) return { frase: 'O Instagram pediu para esperar (limite de publicações). Tento de novo mais tarde.', espera: true };
+  if (sub === 2207026 || sub === 2207052 || sub === 2207003 || /download|fetch|unsupported|format|ratio|aspect/i.test(msg)) return { frase: 'O Instagram não aceitou a mídia (precisa ser JPEG ou MP4 público, dentro das proporções). ' + msg.slice(0, 140) };
+  return { frase: 'Instagram: ' + (msg || 'erro desconhecido').slice(0, 200) };
+}
+function parametrosContainer(p, m, filho) {
+  const cap = p.legenda || '';
+  if (filho) return m.tipo === 'video' ? { media_type: 'VIDEO', video_url: m.url, is_carousel_item: 'true' } : { image_url: m.url, is_carousel_item: 'true' };
+  if (p.tipo === 'feed') return { image_url: m.url, caption: cap };
+  if (p.tipo === 'reels') return { media_type: 'REELS', video_url: m.url, caption: cap, share_to_feed: 'true' };
+  if (p.tipo === 'story') return m.tipo === 'video' ? { media_type: 'STORIES', video_url: m.url } : { media_type: 'STORIES', image_url: m.url };
+  return {};
+}
+async function statusContainer(env, token, id) {
+  const j = await graph(env, token, '/' + encodeURIComponent(id) + '?fields=status_code');
+  return String((j && j.status_code) || 'FINISHED').toUpperCase();         // sem o campo = tratamos como pronto
+}
+async function gravarContainers(env, id, c) { await env.DB.prepare('UPDATE postagem SET containers=?, atualizado_em=? WHERE id=?').bind(JSON.stringify(c), agora(), id).run(); }
+async function avancarPostagem(env, token, p) {
+  const m = JSON.parse(p.midias || '[]');
+  if (p.status === 'agendado') {
+    const r = await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(agora(), agora(), p.id).run();
+    if (!r.meta || r.meta.changes !== 1) return;                         // outra execução pegou
+    p.inicio_proc = agora();
+  }
+  let c = {}; try { c = JSON.parse(p.containers || '{}') || {}; } catch (e) { c = {}; }
+  if (p.tipo === 'carrossel') {
+    if (!c.filhos) { c.filhos = []; for (const x of m) c.filhos.push((await graphPost(env, token, '/me/media', parametrosContainer(p, x, true))).id); await gravarContainers(env, p.id, c); }
+    if (!c.principal) {
+      const sts = []; for (const id of c.filhos) sts.push(await statusContainer(env, token, id));
+      if (sts.some((x) => x === 'ERROR' || x === 'EXPIRED')) throw new ErroIG({ message: 'o Instagram não conseguiu processar uma das mídias do carrossel', code: 0, error_subcode: 2207052 }, 0);
+      if (sts.some((x) => x !== 'FINISHED')) return esperar(env, p);
+      c.principal = (await graphPost(env, token, '/me/media', { media_type: 'CAROUSEL', children: c.filhos.join(','), caption: p.legenda || '' })).id; await gravarContainers(env, p.id, c);
+    }
+  } else if (!c.principal) {
+    c.principal = (await graphPost(env, token, '/me/media', parametrosContainer(p, m[0], false))).id; await gravarContainers(env, p.id, c);
+  }
+  const st = await statusContainer(env, token, c.principal);
+  if (st === 'ERROR' || st === 'EXPIRED') throw new ErroIG({ message: 'o Instagram não conseguiu processar a mídia', code: 0, error_subcode: 2207052 }, 0);
+  if (st !== 'FINISHED' && st !== 'PUBLISHED') return esperar(env, p);
+  const pub = await graphPost(env, token, '/me/media_publish', { creation_id: c.principal });
+  let permalink = ''; try { permalink = (await graph(env, token, '/' + encodeURIComponent(pub.id) + '?fields=permalink')).permalink || ''; } catch (e) { /* o link é conforto */ }
+  await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink=?, erro='', publicado_em=?, atualizado_em=? WHERE id=?").bind(String(pub.id || ''), permalink, agora(), agora(), p.id).run();
+}
+async function esperar(env, p) {
+  if (Date.now() - Date.parse(p.inicio_proc || agora()) > MAX_ESPERA_VIDEO_MS) throw new ErroIG({ message: 'o vídeo demorou demais para ser processado', code: 0, error_subcode: 2207052 }, 0);
+}
+async function falhaPostagem(env, p, e) {
+  const f = fraseErroIG(e);
+  if (f.espera) { await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, containers='', erro=?, atualizado_em=? WHERE id=?").bind(new Date(Date.now() + 30 * 60000).toISOString(), f.frase, agora(), p.id).run(); return; }
+  const tent = (Number(p.tentativas) || 0) + 1;
+  if (f.fatal || tent >= MAX_TENT) { await env.DB.prepare("UPDATE postagem SET status='erro', tentativas=?, erro=?, containers='', atualizado_em=? WHERE id=?").bind(tent, f.frase, agora(), p.id).run(); return; }
+  await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, tentativas=?, containers='', erro=?, atualizado_em=? WHERE id=?").bind(new Date(Date.now() + 5 * 60000).toISOString(), tent, f.frase, agora(), p.id).run();
+}
+/** Chamado a cada minuto pelo cron (e logo ao criar "agora"). Nunca lança. */
+export async function processarPostagens(env) {
+  try {
+    await iniciar(env);
+    const t = agora();
+    await env.DB.prepare("UPDATE postagem SET status='manual_pendente', atualizado_em=? WHERE modo='manual' AND status='agendado' AND agendado_em<=?").bind(t, t).run();
+    const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY agendado_em LIMIT 4").bind(t).all()).results || [];
+    if (!lin.length) return { feitas: 0 };
+    let token = await cfgGet(env, 'ig_token');
+    if (!token) { for (const p of lin) await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('O Instagram não está conectado. Conecte o token e use "Tentar de novo".', agora(), p.id).run(); return { feitas: 0 }; }
+    token = await renovarToken(env, token);
+    const desde = new Date(Date.now() - 86400000).toISOString();
+    const usados = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status='publicado' AND publicado_em>=?").bind(desde).first()) || {}).n) || 0;
+    let feitas = 0, novas = usados;
+    for (const p of lin) {
+      if (p.status === 'agendado') { if (novas >= MAX_POSTS_24H) continue; novas++; }   // limite diário: fica agendada para o dia seguinte
+      try { await avancarPostagem(env, token, p); feitas++; } catch (e) { try { await falhaPostagem(env, p, e); } catch (e2) { /* próximo minuto tenta de novo */ } }
+    }
+    return { feitas: feitas };
+  } catch (e) { return { feitas: 0, erro: true }; }
+}
+function httpsUrl(u) { try { const x = new URL(String(u)); return x.protocol === 'https:' && String(u).length <= 600; } catch (e) { return false; } }
+/** Valida e normaliza o pedido de UMA postagem. Devolve { erro } ou { v }. */
+export function validarPostagem(b) {
+  const tipo = String((b && b.tipo) || '');
+  if (TIPOS_POST.indexOf(tipo) === -1) return { erro: 'Escolha o tipo: Feed, Carrossel, Reels ou Story.' };
+  const midias = Array.isArray(b.midias) ? b.midias.map((x) => ({ url: String((x && x.url) || ''), tipo: x && x.tipo === 'video' ? 'video' : 'imagem' })) : [];
+  if (midias.some((x) => !httpsUrl(x.url))) return { erro: 'Uma das mídias não tem endereço válido (https).' };
+  if (tipo === 'feed' && !(midias.length === 1 && midias[0].tipo === 'imagem')) return { erro: 'Feed leva exatamente 1 foto.' };
+  if (tipo === 'carrossel' && (midias.length < 2 || midias.length > 10)) return { erro: 'Carrossel leva de 2 a 10 fotos/vídeos.' };
+  if (tipo === 'reels' && !(midias.length === 1 && midias[0].tipo === 'video')) return { erro: 'Reels leva exatamente 1 vídeo.' };
+  if (tipo === 'story' && midias.length !== 1) return { erro: 'Cada Story leva 1 foto ou 1 vídeo (para várias, crie um por foto).' };
+  const legenda = String(b.legenda || '').slice(0, 2200);
+  const modo = b.modo === 'manual' ? 'manual' : 'auto';
+  if (modo === 'manual' && tipo !== 'story') return { erro: 'O modo manual (com link) só existe para Story.' };
+  const link = String(b.link || '').trim();
+  if (link && !httpsUrl(link)) return { erro: 'O link do Story precisa começar com https://.' };
+  let quando = agora();
+  if (b.quando && b.quando !== 'agora') {
+    const t = Date.parse(b.quando);
+    if (!isFinite(t)) return { erro: 'A data e hora não são válidas.' };
+    if (t - Date.now() > 60 * 86400000) return { erro: 'Dá para agendar até 60 dias à frente.' };
+    if (t > Date.now()) quando = new Date(t).toISOString();
+  }
+  return { v: { tipo: tipo, modo: modo, legenda: legenda, midias: midias, link: link, quando: quando, agora: quando <= agora(), produto: String(b.produto || '').slice(0, 40), template: String(b.template || '').slice(0, 30), grupo: String(b.grupo || '').slice(0, 40) } };
+}
+function linhaPostagem(r) {
+  let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
+  return { id: r.id, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo };
+}
+async function rotasPostagem(env, ctx, req, url, J) {
+  const p = url.pathname;
+  if (p === '/posts' && req.method === 'GET') {
+    const lim = Math.min(100, Number(url.searchParams.get('limite')) || 60);
+    const q = (await env.DB.prepare("SELECT * FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
+    const c = (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM postagem GROUP BY status").all()).results || [];
+    const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
+    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '' });
+  }
+  let b = {}; if (req.method === 'POST') { try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); } }
+  if (p === '/post' && req.method === 'POST') {
+    const lista = Array.isArray(b.posts) ? b.posts.slice(0, 12) : [b];
+    const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
+    if (pend + lista.length > 200) return J({ ok: false, erro: 'Há postagens demais na fila (200). Espere algumas saírem.' }, 429);
+    const vs = []; for (const x of lista) { const r = validarPostagem(x); if (r.erro) return J({ ok: false, erro: r.erro }, 400); vs.push(r.v); }
+    if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto')) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
+    const ids = [], por = String(b.por || '').slice(0, 60);
+    for (const v of vs) {
+      const r = await env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo).run();
+      ids.push(r.meta && r.meta.last_row_id);
+    }
+    if (vs.some((v) => v.agora) && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
+    return J({ ok: true, ids: ids });
+  }
+  const id = Number(b.id) || 0;
+  const linha = id ? await env.DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first() : null;
+  if (p.indexOf('/post/') === 0 && req.method === 'POST') {
+    if (!linha) return J({ ok: false, erro: 'Postagem não encontrada.' }, 404);
+    if (p === '/post/cancelar') {
+      if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem já está sendo enviada ou foi publicada; não dá mais para cancelar.' }, 409);
+      await env.DB.prepare("UPDATE postagem SET status='cancelado', atualizado_em=? WHERE id=?").bind(agora(), id).run(); return J({ ok: true });
+    }
+    if (p === '/post/reagendar') {
+      if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
+      const r = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: b.quando }));
+      if (r.erro) return J({ ok: false, erro: r.erro }, 400);
+      await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, tentativas=0, erro='', containers='', atualizado_em=? WHERE id=?").bind(r.v.quando, agora(), id).run();
+      if (r.v.agora && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
+      return J({ ok: true });
+    }
+    if (p === '/post/feito') {
+      if (linha.status !== 'manual_pendente') return J({ ok: false, erro: 'Essa postagem não está esperando você.' }, 409);
+      await env.DB.prepare("UPDATE postagem SET status='manual_feito', publicado_em=?, atualizado_em=? WHERE id=?").bind(agora(), agora(), id).run(); return J({ ok: true });
+    }
+  }
+  return null;
+}
+
 export default {
-  async scheduled(ev, env, ctx) { if (await env.CACHE.get('ig_hist_trava')) return; ctx.waitUntil((async () => { await ciclo(env, 'cron'); try { await analisarPendentes(env, 5); } catch (e) { /* a IA é conforto: o ciclo não pode cair por causa dela */ } })()); },
+  async scheduled(ev, env, ctx) {
+    ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
+    const min = ev && ev.scheduledTime ? new Date(ev.scheduledTime).getUTCMinutes() : 0;
+    if (min % 30 !== 0) return;                                                // importar do Instagram só a cada 30 min (como antes)
+    if (await env.CACHE.get('ig_hist_trava')) return;
+    ctx.waitUntil((async () => { await ciclo(env, 'cron'); try { await analisarPendentes(env, 5); } catch (e) { /* a IA é conforto: o ciclo não pode cair por causa dela */ } })());
+  },
   async fetch(req, env, ctx) {
     const url = new URL(req.url), h = cors(env, req), J = (c, s) => resp(c, s, h);
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
     const perms = await permissoes(env, req);
     if (!perms) return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
-    if (perms.indexOf('gerir_acessos') === -1) return J({ ok: false, erro: 'Só o administrador total acessa o importador do Instagram.' }, 403);
+    const ehPost = url.pathname === '/posts' || url.pathname.indexOf('/post') === 0;
+    if (ehPost ? (perms.indexOf('gerir_acessos') === -1 && perms.indexOf('catalogo_cadastrar') === -1) : perms.indexOf('gerir_acessos') === -1) return J({ ok: false, erro: ehPost ? 'Você não tem permissão para postar no Instagram.' : 'Só o administrador total acessa o importador do Instagram.' }, 403);
     try {
       await iniciar(env);
       const p = url.pathname;
+      if (ehPost) { const rp = await rotasPostagem(env, ctx, req, url, J); if (rp) return rp; }
       if (p === '/status' && req.method === 'GET') return J(await status(env));
       if (p === '/rascunhos' && req.method === 'GET') {
         const grupo = url.searchParams.get('grupo') || 'pendente';

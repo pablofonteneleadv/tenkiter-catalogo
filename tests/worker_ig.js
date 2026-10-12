@@ -22,6 +22,7 @@ function d1() {
   const TOKEN = 'IGQVJ_TOKEN_INVENTADO_PARA_TESTE_1234567890';
   // ---- Instagram falso ----
   const GEMINI_OK = 'AIzaINVENTADA_PARA_TESTE_1234567890abcd'; let gemChamadas = [], gemModo = 'ok', gemTexto = '';
+  let postChamadas = [], postErro = null, seqC = 0, containers = {}, publicados = [], videoStatus = 'FINISHED';
   let paginas = null, feed = [], stories = [], midia404 = {}, tokenValido = true, chamadas = [];
   const cdn = (id, tipo) => 'https://cdn.fake/' + id + (tipo === 'VIDEO' ? '.mp4' : '.jpg');
   globalThis.fetch = async (u, init) => {
@@ -36,6 +37,16 @@ function d1() {
       return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: gemTexto }] } }] }));
     }
     if (u.startsWith('https://api.fake')) { const b = JSON.parse(init.body); return new Response(JSON.stringify(b.sessao === 'tk2.admin' ? { ok: true, usuario: { permissoes: ['gerir_acessos', 'catalogo_cadastrar'] } } : b.sessao === 'tk2.gerente' ? { ok: true, usuario: { permissoes: ['catalogo_cadastrar'] } } : { ok: false })); }
+    if (u.startsWith('https://ig.fake') && init && init.method === 'POST') {          // publicação (POST com o token no CORPO)
+      const f = new URLSearchParams(String(init.body)), tk = f.get('access_token'); f.delete('access_token');
+      postChamadas.push({ u, p: Object.fromEntries(f) });
+      if (!tokenValido || tk !== TOKEN) return new Response(JSON.stringify({ error: { message: 'Invalid OAuth access token', code: 190 } }), { status: 400 });
+      if (postErro) { const e = postErro; postErro = null; return new Response(JSON.stringify({ error: e }), { status: 400 }); }
+      if (u.endsWith('/me/media')) { const id = 'C' + (++seqC); containers[id] = { st: (f.get('video_url') || f.get('media_type') === 'REELS') ? videoStatus : 'FINISHED', p: Object.fromEntries(f) }; return new Response(JSON.stringify({ id })); }
+      if (u.endsWith('/me/media_publish')) { publicados.push(f.get('creation_id')); return new Response(JSON.stringify({ id: 'M' + publicados.length })); }
+    }
+    if (u.startsWith('https://ig.fake') && u.includes('?fields=status_code')) { const id = u.split('/').pop().split('?')[0]; return new Response(JSON.stringify({ status_code: (containers[id] || { st: 'FINISHED' }).st })); }
+    if (u.startsWith('https://ig.fake') && u.includes('?fields=permalink')) return new Response(JSON.stringify({ permalink: 'https://www.instagram.com/p/FAKE123/' }));
     if (u.startsWith('https://ig.fake') || u.startsWith('https://graph.fake')) {
       chamadas.push(u);
       const tk = new URL(u).searchParams.get('access_token');
@@ -306,6 +317,121 @@ function d1() {
     const jj = await DB.prepare('SELECT ia_status FROM rascunho WHERE id=?').bind(b2.id).first(); chk('juntar manda ler as fotos de novo (agora são mais fotos)', jj.ia_status === '', jj);
     ({ r: r2, j: j2 } = await A('POST', '/acao', { acao: 'lerIA', id: b2.id })); chk('"ler as fotos de novo" funciona', j2.ok === true, j2);
     ({ r: r2, j: j2 } = await A('DELETE', '/ia-chave')); ({ j: j2 } = await A('GET', '/status')); chk('desligar apaga a chave', j2.ia.ligada === false);
+  }
+
+  console.log('== POSTAGENS (publicar no Instagram) ==');
+  {
+    // o token foi apagado no fim da seção anterior? Aqui ele ainda existe (a seção "Token" vem depois)
+    const IMG = (n) => ({ url: 'https://tenkiter-midia.fake/m/202610/img' + n + '.jpg', tipo: 'imagem' }), VID = { url: 'https://tenkiter-midia.fake/m/202610/v1.mp4', tipo: 'video' };
+    const G = async (m, pth, corpo) => { const r = await w.fetch(ped(m, pth, 'tk2.gerente', corpo), env, {}); return { r, j: await r.json() }; };
+    const rodar = async (n) => { for (let i = 0; i < (n || 1); i++) await W.processarPostagens(env); };
+    const linha = (id) => DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first();
+    let x;
+    // ---- quem pode
+    r = await w.fetch(ped('GET', '/posts', ''), env, {}); chk('postagens: sem sessão = 401', r.status === 401);
+    x = await G('GET', '/posts'); chk('equipe que cadastra (catalogo_cadastrar) vê a fila de postagens', x.r.status === 200 && x.j.ok === true && x.j.conectado === true, x.j);
+    x = await G('GET', '/status'); chk('mas continua SEM acesso ao importador/token (só Admin total)', x.r.status === 403);
+    r = await w.fetch(ped('GET', '/posts', 'tk2.outro'), env, {}); chk('sessão sem nenhuma das duas permissões = 401', r.status === 401);
+    // ---- validação
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(1), IMG(2)] }); chk('feed com 2 fotos é recusado com frase', x.r.status === 400 && /exatamente 1 foto/.test(x.j.erro), x.j);
+    x = await G('POST', '/post', { tipo: 'carrossel', midias: [IMG(1)] }); chk('carrossel com 1 foto é recusado', x.r.status === 400 && /2 a 10/.test(x.j.erro));
+    x = await G('POST', '/post', { tipo: 'carrossel', midias: Array.from({ length: 11 }, (_, i) => IMG(i)) }); chk('carrossel com 11 é recusado (máx. 10)', x.r.status === 400);
+    x = await G('POST', '/post', { tipo: 'reels', midias: [IMG(1)] }); chk('Reels sem vídeo é recusado', x.r.status === 400 && /1 vídeo/.test(x.j.erro));
+    x = await G('POST', '/post', { tipo: 'story', midias: [IMG(1), IMG(2)] }); chk('Story com 2 mídias é recusado (1 por Story)', x.r.status === 400);
+    x = await G('POST', '/post', { tipo: 'feed', midias: [{ url: 'http://x/a.jpg', tipo: 'imagem' }] }); chk('mídia sem https é recusada', x.r.status === 400);
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(1)], modo: 'manual' }); chk('modo manual só para Story', x.r.status === 400);
+    x = await G('POST', '/post', { tipo: 'story', modo: 'manual', link: 'javascript:alert(1)', midias: [IMG(1)] }); chk('link do Story só aceita https', x.r.status === 400);
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(1)], quando: 'amanhã cedo' }); chk('data inválida é recusada', x.r.status === 400);
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(1)], quando: new Date(Date.now() + 90 * 86400000).toISOString() }); chk('mais de 60 dias à frente é recusado', x.r.status === 400);
+    // ---- FEED agora
+    postChamadas = []; publicados = [];
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(1)], legenda: 'Vestido TK-0001 R$ 70,00 à vista', quando: 'agora', por: 'Ana' }); const idFeed = x.j.ids[0];
+    chk('criar Feed "agora" devolve o id', x.j.ok === true && idFeed > 0, x.j);
+    await rodar();
+    let L = await linha(idFeed);
+    chk('Feed publicado na hora: container com image_url + legenda, depois media_publish', L.status === 'publicado' && postChamadas[0].p.image_url === IMG(1).url && postChamadas[0].p.caption.includes('TK-0001') && postChamadas[1].u.endsWith('/media_publish'), [L.status, postChamadas]);
+    chk('guarda o link do post e quem criou', L.permalink === 'https://www.instagram.com/p/FAKE123/' && L.criado_por === 'Ana' && !!L.publicado_em, L);
+    chk('o token vai no CORPO do POST, nunca no endereço', postChamadas.every((c) => !c.u.includes('access_token') && !c.u.includes(TOKEN)));
+    // ---- AGENDADO no futuro não sai antes da hora
+    postChamadas = [];
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(2)], legenda: 'depois', quando: ts(120) }); const idFut = x.j.ids[0];
+    await rodar(2); L = await linha(idFut);
+    chk('agendado para daqui a 2 h NÃO publica agora', L.status === 'agendado' && postChamadas.length === 0, L.status);
+    await DB.prepare('UPDATE postagem SET agendado_em=? WHERE id=?').bind(ts(-1), idFut).run();
+    await rodar(); L = await linha(idFut); chk('quando chega a hora, o cron publica', L.status === 'publicado', L);
+    // ---- CARROSSEL com vídeo que demora
+    postChamadas = []; containers = {}; videoStatus = 'IN_PROGRESS'; const pubAntes = publicados.length;
+    x = await G('POST', '/post', { tipo: 'carrossel', midias: [IMG(1), IMG(2), VID], legenda: 'Carrossel', quando: 'agora' }); const idCar = x.j.ids[0];
+    await rodar(); L = await linha(idCar);
+    chk('carrossel: cria 1 container por mídia (o vídeo marcado VIDEO) e fica processando', L.status === 'processando' && postChamadas.filter((c) => c.p.is_carousel_item === 'true').length === 3 && postChamadas.some((c) => c.p.media_type === 'VIDEO'), [L.status, postChamadas.length]);
+    chk('ainda NÃO criou o container do carrossel nem publicou (vídeo em processamento)', !postChamadas.some((c) => c.p.media_type === 'CAROUSEL') && publicados.length === pubAntes);
+    videoStatus = 'FINISHED'; Object.values(containers).forEach((c) => { c.st = 'FINISHED'; });
+    await rodar(); L = await linha(idCar);
+    const pai = postChamadas.find((c) => c.p.media_type === 'CAROUSEL');
+    chk('quando o vídeo termina: cria o container pai com os 3 filhos e publica', L.status === 'publicado' && pai && pai.p.children.split(',').length === 3 && pai.p.caption === 'Carrossel', [L.status, pai]);
+    // ---- REELS
+    postChamadas = []; videoStatus = 'FINISHED';
+    x = await G('POST', '/post', { tipo: 'reels', midias: [VID], legenda: 'Reels da loja', quando: 'agora' }); await rodar(); L = await linha(x.j.ids[0]);
+    chk('Reels: media_type REELS + video_url + legenda + share_to_feed', L.status === 'publicado' && postChamadas[0].p.media_type === 'REELS' && postChamadas[0].p.video_url === VID.url && postChamadas[0].p.share_to_feed === 'true', postChamadas[0]);
+    // ---- STORY (foto e vídeo) e vários Stories de uma vez
+    postChamadas = [];
+    x = await G('POST', '/post', { posts: [{ tipo: 'story', midias: [IMG(1)], quando: 'agora', grupo: 'p1' }, { tipo: 'story', midias: [VID], quando: 'agora', grupo: 'p1' }] });
+    chk('vários Stories num pedido só (1 por foto)', x.j.ok === true && x.j.ids.length === 2, x.j);
+    await rodar(); chk('Story de foto usa media_type STORIES + image_url; de vídeo, video_url', postChamadas.some((c) => c.p.media_type === 'STORIES' && c.p.image_url) && postChamadas.some((c) => c.p.media_type === 'STORIES' && c.p.video_url));
+    chk('Story não manda legenda (a API não aceita)', postChamadas.every((c) => c.p.media_type !== 'STORIES' || c.p.caption === undefined));
+    // ---- STORY COM LINK = semi-manual
+    postChamadas = [];
+    x = await G('POST', '/post', { tipo: 'story', modo: 'manual', link: 'https://tenkitermodas.com.br/p/TK-0001', legenda: 'Vestido novo 👇', midias: [IMG(3)], quando: 'agora' }); const idMan = x.j.ids[0];
+    await rodar(); L = await linha(idMan);
+    chk('Story com link NÃO vai pela API: fica "manual_pendente" esperando a pessoa', L.status === 'manual_pendente' && postChamadas.length === 0 && L.link === 'https://tenkitermodas.com.br/p/TK-0001', [L.status, postChamadas.length]);
+    x = await G('POST', '/post/feito', { id: idMan }); L = await linha(idMan); chk('"já postei" fecha como manual_feito', x.j.ok === true && L.status === 'manual_feito');
+    x = await G('POST', '/post/feito', { id: idFeed }); chk('não dá para marcar "feito" numa postagem automática', x.r.status === 409);
+    // ---- cancelar / reagendar
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(4)], quando: ts(300) }); const idC = x.j.ids[0];
+    x = await G('POST', '/post/cancelar', { id: idC }); L = await linha(idC); chk('cancelar uma agendada', x.j.ok === true && L.status === 'cancelado');
+    x = await G('POST', '/post/cancelar', { id: idFeed }); chk('não cancela o que já foi publicado', x.r.status === 409);
+    x = await G('POST', '/posts'.replace('/posts', '/post/cancelar'), { id: 99999 }); chk('postagem que não existe = 404', x.r.status === 404);
+    ({ j } = await G('GET', '/posts')); chk('a fila não mostra as canceladas', !j.posts.some((q) => q.id === idC));
+    chk('a fila nunca expõe containers/token', !JSON.stringify(j).includes(TOKEN) && !JSON.stringify(j).includes('containers'));
+    // ---- erros do Instagram viram frase e tentam de novo
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(5)], quando: 'agora' }); const idE = x.j.ids[0];
+    postErro = { message: 'Media download has failed', code: 9004, error_subcode: 2207052 }; await rodar(); L = await linha(idE);
+    chk('mídia recusada pelo Instagram: volta para a fila (+5 min) com frase, sem JSON', L.status === 'agendado' && L.tentativas === 1 && /não aceitou a mídia/.test(L.erro) && !/\{/.test(L.erro), L);
+    await DB.prepare('UPDATE postagem SET agendado_em=? WHERE id=?').bind(ts(-1), idE).run(); await rodar(); L = await linha(idE);
+    chk('na 2ª tentativa publica e limpa o erro', L.status === 'publicado' && L.erro === '', L);
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(6)], quando: 'agora' }); const idP = x.j.ids[0];
+    postErro = { message: '(#10) Application does not have permission', code: 10 }; await rodar(); L = await linha(idP);
+    chk('sem permissão de publicar: erro na hora (não adianta repetir) com a frase certa', L.status === 'erro' && /instagram_business_content_publish/.test(L.erro), L);
+    x = await G('POST', '/post/reagendar', { id: idP, quando: 'agora' }); await rodar(); L = await linha(idP);
+    chk('"Tentar de novo" depois de corrigir o token publica', x.j.ok === true && L.status === 'publicado', L);
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(7)], quando: 'agora' }); const idL = x.j.ids[0];
+    postErro = { message: 'Application request limit reached', code: 4 }; await rodar(); L = await linha(idL);
+    chk('limite do Instagram: espera 30 min sem gastar tentativa', L.status === 'agendado' && L.tentativas === 0 && Date.parse(L.agendado_em) - Date.now() > 25 * 60000, L);
+    await DB.prepare('UPDATE postagem SET agendado_em=? WHERE id=?').bind(ts(-1), idL).run(); await rodar();
+    // ---- 3 falhas seguidas = erro
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(8)], quando: 'agora' }); const id3 = x.j.ids[0];
+    for (let i = 0; i < 3; i++) { postErro = { message: 'Media download has failed', code: 9004, error_subcode: 2207052 }; await DB.prepare('UPDATE postagem SET agendado_em=? WHERE id=?').bind(ts(-1), id3).run(); await rodar(); }
+    L = await linha(id3); chk('3 falhas seguidas: para em "erro" (não fica tentando para sempre)', L.status === 'erro' && L.tentativas === 3, L);
+    // ---- token vencido
+    tokenValido = false; x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(9)], quando: 'agora' }); await rodar(); L = await linha(x.j.ids[0]);
+    chk('token vencido: erro com a frase "gere outro" (sem repetir)', L.status === 'erro' && /venceu ou foi recusado/.test(L.erro), L); tokenValido = true;
+    // ---- limite diário
+    await DB.prepare("DELETE FROM postagem WHERE status='agendado'").run();
+    const hoje = agoraIso();
+    const antes = Number((await DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status='publicado' AND publicado_em>=?").bind(new Date(Date.now() - 86400000).toISOString()).first()).n);
+    for (let i = antes; i < 90; i++) await DB.prepare("INSERT INTO postagem (tipo, legenda, midias, agendado_em, status, publicado_em, criado_em) VALUES ('feed','','[]',?, 'publicado', ?, ?)").bind(hoje, hoje, hoje).run();
+    postChamadas = []; x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(1)], quando: 'agora' }); await rodar(); L = await linha(x.j.ids[0]);
+    chk('com 90 publicações em 24 h a próxima espera (limite do Instagram)', L.status === 'agendado' && postChamadas.length === 0, L.status);
+    await DB.prepare("DELETE FROM postagem WHERE status IN ('publicado') AND tipo='feed' AND legenda='' AND midias='[]'").run();
+    // ---- sem token conectado
+    const tk = (await DB.prepare("SELECT valor FROM cfg WHERE chave='ig_token'").first()).valor;
+    await DB.prepare("DELETE FROM cfg WHERE chave='ig_token'").run();
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(1)], quando: 'agora' }); chk('sem Instagram conectado: recusa com frase clara', x.r.status === 409 && /não está conectado/.test(x.j.erro), x.j);
+    x = await G('POST', '/post', { tipo: 'story', modo: 'manual', link: 'https://tenkitermodas.com.br/', midias: [IMG(1)], quando: 'agora' }); chk('mas Story manual (com link) funciona sem token', x.j.ok === true);
+    await DB.prepare("INSERT INTO cfg (chave, valor) VALUES ('ig_token', ?)").bind(tk).run();
+    // ---- agendada para daqui a 1 min no cron real (scheduledTime)
+    chk('processarPostagens nunca lança, nem sem nada na fila', (await W.processarPostagens(env)).erro !== true);
+    chk('fraseErroIG não vaza o token', !JSON.stringify(W.fraseErroIG({ message: 'x access_token=SEGREDO123 y', code: 1 })).includes('SEGREDO123'));
   }
 
   console.log('== Token ==');
