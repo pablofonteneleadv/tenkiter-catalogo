@@ -1,1 +1,5 @@
 __pycache__/
+
+# Backends do Apps Script: ficam só no computador do Pablo (colados à mão), não no GitHub
+*.gs
+*.gs.txt
