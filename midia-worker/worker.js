@@ -3,7 +3,7 @@
 // Por que é barato e sem surpresa de custo:
 //  - Servir arquivo (saída) no R2 é GRÁTIS; só se paga armazenamento acima de 10 GB (~R$ 0,08 por GB/mês).
 //  - NÃO há redimensionamento por uso (Images) nem Stream: nada aqui cobra por visualização.
-//  - TRAVAS DURAS: foto <= 2,5 MB, vídeo <= 15 MB, só tipos conhecidos (conferidos pelos bytes), no máx. 400 envios/dia
+//  - TRAVAS DURAS: foto <= 2,5 MB, vídeo <= 40 MB, só tipos conhecidos (conferidos pelos bytes), no máx. 600 envios/dia
 //    e o total guardado nunca passa de LIMITE_BYTES (padrão 9,5 GB = abaixo da faixa grátis de 10 GB). Passou? recusa o envio.
 //
 // Rotas:
@@ -15,8 +15,8 @@
 // Bindings: MIDIA (R2), CACHE (KV), API_URL (texto), LIMITE_BYTES (texto, opcional), ORIGENS (texto, opcional, separado por vírgula).
 
 const FOTO_MAX = 2.5 * 1024 * 1024;
-const VIDEO_MAX = 15 * 1024 * 1024;
-const ENVIOS_DIA_MAX = 400;
+const VIDEO_MAX = 40 * 1024 * 1024;
+const ENVIOS_DIA_MAX = 600;
 const LIMITE_PADRAO = 9.5 * 1024 * 1024 * 1024;
 const ORIGENS_PADRAO = ['https://tenkitermodas.com.br', 'https://www.tenkitermodas.com.br', 'https://tenkiter-catalogo.onrender.com'];
 const UA = 'Mozilla/5.0 (compatible; tenkiter-midia/1.0)';
@@ -83,7 +83,7 @@ function limite(env) { const n = Number(env.LIMITE_BYTES); return n > 0 ? n : LI
 
 function dia() { return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); }   // dia de Fortaleza
 
-const CHAVE_OK = /^[0-9]{6}\/[0-9a-f]{20}\.(jpg|png|webp|mp4|webm)$/;
+const CHAVE_OK = /^(t\/)?[0-9]{6}\/[0-9a-f]{20}\.(jpg|png|webp|mp4|webm)$/;
 const POSTER_MAX = 400 * 1024;   // miniatura de vídeo: um quadro em JPG, pequeno de propósito
 
 export default {
@@ -127,7 +127,7 @@ export default {
       if (perms.indexOf('catalogo_cadastrar') === -1) return resp({ ok: false, erro: 'Sem permissão para enviar.' }, 403, H());
       const tam = Number(req.headers.get('Content-Length'));
       if (!tam || tam < 0) return resp({ ok: false, erro: 'Tamanho do arquivo não informado.' }, 411, H());
-      if (tam > VIDEO_MAX) return resp({ ok: false, erro: 'Arquivo grande demais (máximo 15 MB para vídeo e 2,5 MB para foto).' }, 413, H());
+      if (tam > VIDEO_MAX) return resp({ ok: false, erro: 'Arquivo grande demais (máximo 40 MB para vídeo e 2,5 MB para foto).' }, 413, H());
       const buf = await req.arrayBuffer();
       if (buf.byteLength !== tam) return resp({ ok: false, erro: 'Envio incompleto.' }, 400, H());
       const tipo = tipoPelosBytes(buf);
@@ -150,7 +150,9 @@ export default {
       const uso = await lerUso(env);
       if (uso.bytes + buf.byteLength > limite(env)) return resp({ ok: false, erro: 'Armazenamento cheio (limite de segurança para não gerar cobrança). Apague arquivos antigos.' }, 507, H());
       const aleatorio = Array.from(crypto.getRandomValues(new Uint8Array(10)), b => ('0' + b.toString(16)).slice(-2)).join('');
-      const chave = chaveFixa || (dia().slice(0, 7).replace('-', '') + '/' + aleatorio + '.' + tipo.ext);
+      // ?temp=1: arquivo TEMPORÁRIO (postagem livre/template): fica em t/ e o Worker tenkiter-ig apaga sozinho depois de 5 dias
+      const pref = url.searchParams.get('temp') === '1' && !chaveFixa ? 't/' : '';
+      const chave = chaveFixa || (pref + dia().slice(0, 7).replace('-', '') + '/' + aleatorio + '.' + tipo.ext);
       await env.MIDIA.put(chave, buf, { httpMetadata: { contentType: tipo.mime, cacheControl: 'public, max-age=31536000, immutable' } });
       uso.bytes += buf.byteLength; uso.arquivos += 1;
       await gravarUso(env, uso);

@@ -118,6 +118,8 @@
     document.body.appendChild(o);
     $('ig-fechar').addEventListener('click', fechar);
     $('ig-corpo').addEventListener('click', clique);
+    $('ig-corpo').addEventListener('input', (e) => { if (e.target.classList && e.target.classList.contains('ig-lf')) lerCampoLote(e.target); });
+    $('ig-corpo').addEventListener('change', (e) => { if (e.target.classList && e.target.classList.contains('ig-lg')) lerCampoLote(e.target); });
     $('ig-corpo').addEventListener('change', (ev) => {
       const esco = ev.target.closest && ev.target.closest('.ig-esc');
       if (esco && escolha) {   // tela "o que fica ao juntar": respeita 8 fotos e 1 vídeo
@@ -183,10 +185,12 @@
     const avisos = (st && st.alertas || []).map((a) => '<div class="ig-aviso">⚠️ ' + esc(a) + '</div>').join('');
     const vazio = '<p class="ig-vazio">' + (grupo === 'pendente' ? 'Nada esperando agora. 🎉 O que você postar no Instagram aparece aqui sozinho (a cada 30 minutos) ou toque em "Buscar agora".' : 'Nada por aqui.') + '</p>';
     const ids = lista.map((x) => x.id); marcados.forEach((id) => { if (ids.indexOf(id) === -1) marcados.delete(id); });
-    const nM = marcados.size, podeMarcar = grupo !== 'descartado' && lista.length > 1;
-    const ajuda = podeMarcar && !nM ? '<p class="ig-ajuda">Marque 2 ou mais posts para <b>juntar</b> (1 produto, máx. ' + LIM_FOTOS + ' fotos e ' + LIM_VIDEOS + ' vídeo) ou <b>cadastrar separado</b> (1 produto por post, mesmas informações).</p>' : '';
+    const nM = marcados.size, podeMarcar = grupo !== 'descartado' && lista.length > 0;
+    const ajuda = podeMarcar && !nM ? '<p class="ig-ajuda">Marque posts para <b>aceitar</b> ou <b>descartar</b> vários de uma vez, ou 2 ou mais para <b>juntar</b> (1 produto, máx. ' + LIM_FOTOS + ' fotos e ' + LIM_VIDEOS + ' vídeo) ou <b>cadastrar separado</b> (1 produto por post, mesmas informações).</p>' : '';
     const barra = podeMarcar ? '<div class="ig-juntar-barra"><button type="button" class="ig-ok" data-ig="juntarMarcados"' + (nM < 2 ? ' disabled' : '') + '>🔗 Juntar' + (nM >= 2 ? ' (' + nM + ')' : '') + '</button>' +
       '<button type="button" class="ig-ok" data-ig="separadoMarcados"' + (nM < 2 ? ' disabled' : '') + '>🧩 Separado' + (nM >= 2 ? ' (' + nM + ')' : '') + '</button>' +
+      '<button type="button" class="ig-ok" data-ig="aceitarMarcados"' + (nM < 1 ? ' disabled' : '') + '>✅ Aceitar' + (nM >= 1 ? ' (' + nM + ')' : '') + '</button>' +
+      '<button type="button" class="ig-ruim" data-ig="descartarMarcados"' + (nM < 1 ? ' disabled' : '') + '>🗑️ Descartar' + (nM >= 1 ? ' (' + nM + ')' : '') + '</button>' +
       (nM ? '<button type="button" class="ig-sec" data-ig="limparMarcados">Limpar</button>' : '') + '</div>' : '';
     // Marcados sobem juntos para o topo (na ordem da data) para a conferência final; ao desmarcar voltam ao lugar pela data.
     const sel = podeMarcar ? lista.filter((x) => marcados.has(x.id)) : [], resto = podeMarcar ? lista.filter((x) => !marcados.has(x.id)) : lista;
@@ -237,6 +241,72 @@
     if (!outros.length) { msg('Não há outro produto na lista para juntar.', 'erro'); return; }
     $('ig-corpo').innerHTML = '<button type="button" class="ig-sec" data-ig="editar" data-id="' + editando.id + '" style="width:auto;padding:10px 14px;border:0;border-radius:8px;min-height:44px;font-weight:700">← Voltar</button><p class="ig-leg" style="-webkit-line-clamp:3;margin-top:10px"><b>Juntar este produto dentro de qual?</b> As mídias vão para o final do escolhido.</p>' +
       outros.map((x) => '<div class="ig-card">' + miniaturas(x, 3) + '<p class="ig-leg">' + esc(x.legenda || '(sem legenda)') + '</p><div class="ig-acoes"><button type="button" class="ig-ok" data-ig="juntarCom" data-para="' + x.id + '">Juntar aqui</button></div></div>').join('') + '<div class="ig-msg" id="ig-msg"></div>';
+  }
+
+  /* ---------- aceitar vários: um formulário embaixo do outro, cada um com as suas informações ---------- */
+  let loteAceite = null;                 // [{ r, v:{nome,preco,categorias,generos,tamanhos,cores,descricao,novidade} }]
+  function valoresDoPost(r) {
+    const ia = r.ia || null, leg = String(r.legenda || ''), prim = (leg.split(/\n/)[0] || '').replace(/#\S+/g, ' ').replace(/https?:\/\/\S+/g, ' ').replace(/\s+/g, ' ').trim();
+    const limpa = leg.replace(/#\S+/g, ' ').replace(/https?:\/\/\S+/g, ' ').replace(/\s+/g, ' ').trim();
+    return { nome: (ia && ia.nome) ? ia.nome : (/[$]|R\$/.test(prim) ? '' : prim.slice(0, 60)), preco: r.precoSug || '', categorias: ia ? (ia.categorias || []).join(', ') : '', generos: ia ? (ia.generos || []).slice() : [],
+      tamanhos: r.tamanhosSug || '', cores: ia ? (ia.cores || []).join(', ') : '', descricao: (ia && ia.descricao) ? ia.descricao : limpa.slice(0, 400), novidade: false };
+  }
+  function listasLoja() { return typeof window.tkListasLoja === 'function' ? window.tkListasLoja() : { categorias: [], generos: [] }; }
+  function aceitarMarcados() {
+    const ordem = lista.filter((x) => marcados.has(x.id)); if (!ordem.length) { msg('Marque pelo menos 1 post.', 'erro'); return; }
+    const semFoto = ordem.filter((r) => !(r.midias || []).some((m) => m.tipo !== 'video'));
+    if (semFoto.length) { msg(semFoto.length + ' dos posts marcados só tem vídeo (sem foto). Desmarque-os ou junte com outro post que tenha foto.', 'erro'); return; }
+    if (ordem.length === 1) { marcados.clear(); aceitar(ordem[0].id); return; }
+    loteAceite = ordem.map((r) => ({ r: r, v: valoresDoPost(r) })); desenharLote();
+  }
+  function desenharLote() {
+    tela = 'lote'; const L = listasLoja(), gens = L.generos || [];
+    const cards = loteAceite.map((it, i) => {
+      const v = it.v, outros = loteAceite.map((o, j) => j === i ? '' : '<option value="' + j + '">Produto ' + (j + 1) + (o.v.nome ? ' — ' + esc(o.v.nome.slice(0, 30)) : '') + '</option>').join('');
+      const falta = (!v.nome.trim() ? ' nome' : '') + (!(Number(String(v.preco).replace(',', '.')) > 0) ? ' preço' : '') + (!v.categorias.trim() ? ' categoria' : '') + (!v.generos.length ? ' gênero' : '');
+      return '<section class="ig-card" aria-label="Produto ' + (i + 1) + '"><h3 class="ig-sec-tit">Produto ' + (i + 1) + ' de ' + loteAceite.length + '</h3>' + miniaturas(it.r, 4) +
+        (it.r.ia ? '<p class="ig-ajuda" style="margin:4px 0">🤖 Já veio preenchido pela leitura das fotos. Confira.</p>' : '<p class="ig-ajuda" style="margin:4px 0">Esta ainda não foi lida pela IA: preencha ou copie de outro.</p>') +
+        '<div class="ig-edit-barra"><select id="ig-lcp-' + i + '" aria-label="Copiar as informações de outro produto" style="flex:1 1 140px;min-height:44px"><option value="-1">Copiar de…</option>' + outros + '</select>' +
+        '<button type="button" class="ig-sec" data-ig="loteCopiar" data-i="' + i + '">📋 Copiar</button><button type="button" class="ig-sec" data-ig="loteIA" data-i="' + i + '">🤖 Voltar ao da IA</button></div>' +
+        '<label for="ig-l-' + i + '-nome">Nome da peça</label><input type="text" id="ig-l-' + i + '-nome" class="ig-lf" data-i="' + i + '" data-k="nome" maxlength="80" value="' + esc(v.nome) + '">' +
+        '<label for="ig-l-' + i + '-preco">Preço cheio (R$)</label><input type="text" inputmode="decimal" id="ig-l-' + i + '-preco" class="ig-lf" data-i="' + i + '" data-k="preco" value="' + esc(String(v.preco).replace('.', ',')) + '">' +
+        '<fieldset style="border:0;padding:0;margin:6px 0"><legend>Para quem é</legend>' + (gens.length ? gens.map((g) => '<label style="display:inline-flex;align-items:center;gap:6px;margin:2px 10px 2px 0;min-height:44px"><input type="checkbox" class="ig-lg" data-i="' + i + '" value="' + esc(g) + '"' + (v.generos.indexOf(g) !== -1 ? ' checked' : '') + '> ' + esc(g) + '</label>').join('') : '<input type="text" class="ig-lf" data-i="' + i + '" data-k="generosTxt" placeholder="Ex.: Feminino" value="' + esc(v.generos.join(', ')) + '">') + '</fieldset>' +
+        '<label for="ig-l-' + i + '-cat">Categoria (separe por vírgula)</label><input type="text" id="ig-l-' + i + '-cat" class="ig-lf" data-i="' + i + '" data-k="categorias" list="ig-l-cats" value="' + esc(v.categorias) + '">' +
+        '<label for="ig-l-' + i + '-tam">Tamanhos</label><input type="text" id="ig-l-' + i + '-tam" class="ig-lf" data-i="' + i + '" data-k="tamanhos" value="' + esc(v.tamanhos) + '">' +
+        '<label for="ig-l-' + i + '-cor">Cores</label><input type="text" id="ig-l-' + i + '-cor" class="ig-lf" data-i="' + i + '" data-k="cores" value="' + esc(v.cores) + '">' +
+        '<label for="ig-l-' + i + '-des">Descrição</label><textarea id="ig-l-' + i + '-des" class="ig-lf" data-i="' + i + '" data-k="descricao" rows="3" maxlength="600">' + esc(v.descricao) + '</textarea>' +
+        '<p class="ig-ajuda ig-falta" id="ig-lfalta-' + i + '" style="color:#8a1c1c;font-weight:700;margin:4px 0"' + (falta ? '' : ' hidden') + '>Falta:' + esc(falta) + '</p></section>';
+    }).join('');
+    $('ig-corpo').innerHTML = '<datalist id="ig-l-cats">' + (L.categorias || []).map((c) => '<option value="' + esc(c) + '">').join('') + '</datalist>' +
+      '<button type="button" class="ig-sec" data-ig="loteVoltar" style="width:auto;padding:10px 14px;border:0;border-radius:8px;min-height:44px;font-weight:700">← Voltar à lista</button>' +
+      '<p class="ig-ajuda" style="margin-top:8px"><b>' + loteAceite.length + ' produtos, um embaixo do outro.</b> Cada um tem as suas informações. Ao cadastrar, cada post vira 1 produto com as suas próprias fotos.</p>' + cards +
+      '<div class="ig-juntar-barra"><button type="button" class="ig-ok" data-ig="loteSalvar">✅ Cadastrar os ' + loteAceite.length + ' produtos</button></div><div class="ig-msg" id="ig-msg" role="status"></div>';
+  }
+  function lerCampoLote(t) {
+    if (!loteAceite) return; const i = Number(t.dataset.i), it = loteAceite[i]; if (!it) return;
+    if (t.classList.contains('ig-lg')) { const g = t.value, k = it.v.generos.indexOf(g); if (t.checked && k === -1) it.v.generos.push(g); if (!t.checked && k !== -1) it.v.generos.splice(k, 1); }
+    else if (t.dataset.k === 'generosTxt') it.v.generos = t.value.split(',').map((x) => x.trim()).filter(Boolean);
+    else if (t.dataset.k) it.v[t.dataset.k] = t.value;
+    const v = it.v, falta = (!v.nome.trim() ? ' nome' : '') + (!(Number(String(v.preco).replace(',', '.')) > 0) ? ' preço' : '') + (!v.categorias.trim() ? ' categoria' : '') + (!v.generos.length ? ' gênero' : ''), el = $('ig-lfalta-' + i);
+    if (el) { el.hidden = !falta; el.textContent = 'Falta:' + falta; }
+  }
+  async function salvarLote() {
+    if (!loteAceite || ocupado) return;
+    const ruins = loteAceite.map((it, i) => ({ i: i, v: it.v })).filter((x) => !x.v.nome.trim() || !(Number(String(x.v.preco).replace(',', '.')) > 0) || !x.v.categorias.trim() || !x.v.generos.length);
+    if (ruins.length) { msg('Falta preencher: ' + ruins.map((x) => 'Produto ' + (x.i + 1)).join(', ') + '. Nome, preço, gênero e categoria são obrigatórios.', 'erro'); const el = $('ig-lfalta-' + ruins[0].i); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' }); return; }
+    if (typeof window.tkCadastrarLote !== 'function') { alert('O cadastro ainda não carregou. Tente de novo.'); return; }
+    if (!confirm('Cadastrar ' + loteAceite.length + ' produtos agora? Eles entram na fila de envio e sobem em segundo plano.')) return;
+    const itens = loteAceite.map((it) => ({ r: it.r, dados: { nome: it.v.nome.trim(), categoria: it.v.categorias.split(',').map((c) => c.replace(/\s+/g, ' ').trim()).filter(Boolean).join(', '), genero: it.v.generos.join(', '), preco: String(it.v.preco).replace(',', '.'), estoque: '', tamanhos: it.v.tamanhos.trim(), cores: it.v.cores.trim(), descricao: it.v.descricao.trim(), novidade: !!it.v.novidade } }));
+    loteAceite = null; marcados.clear(); fechar(); window.tkCadastrarLote(itens);
+  }
+  async function descartarMarcados() {
+    if (ocupado) return;
+    const ordem = lista.filter((x) => marcados.has(x.id)); if (!ordem.length) { msg('Marque pelo menos 1 post.', 'erro'); return; }
+    if (!confirm('Descartar ' + ordem.length + ' post(s)?\n\nEles vão para a aba "Descartados" e dá para restaurar depois.')) return;
+    ocupado = true; let feitos = 0, erro = '';
+    for (const r of ordem) { msg('Descartando… ' + (feitos + 1) + ' de ' + ordem.length); const x = await ig('/acao', 'POST', { acao: 'descartar', id: r.id }); if (x && x.ok) feitos++; else { erro = erroTxt(x); break; } }
+    ocupado = false; marcados.clear(); await carregarStatus(); await carregarLista(true);
+    msg(erro ? 'Descartei ' + feitos + ' e parei: ' + erro : '🗑️ ' + feitos + ' post(s) descartado(s). Estão em "Descartados".', erro ? 'erro' : 'ok');
   }
 
   /* ---------- aceitar ---------- */
@@ -411,6 +481,12 @@
     else if (a === 'buscar') { msg('Buscando no Instagram…'); const r = await ig('/buscar', 'POST', {}); if (r && r.ok) { msg(r.novas ? r.novas + ' novo(s) encontrado(s).' : 'Nada novo.', 'ok'); await carregarStatus(); await carregarLista(true); rodarIA(); } else msg(erroTxt(r), 'erro'); }
     else if (a === 'juntarMarcados') await juntarMarcados();
     else if (a === 'separadoMarcados') await separadoMarcados();
+    else if (a === 'aceitarMarcados') aceitarMarcados();
+    else if (a === 'descartarMarcados') await descartarMarcados();
+    else if (a === 'loteVoltar') { loteAceite = null; desenharLista(); }
+    else if (a === 'loteIA') { const i = Number(b.dataset.i); if (loteAceite && loteAceite[i]) { loteAceite[i].v = valoresDoPost(loteAceite[i].r); desenharLote(); } }
+    else if (a === 'loteCopiar') { const i = Number(b.dataset.i), sel = $('ig-lcp-' + i), j = sel ? Number(sel.value) : -1; if (loteAceite && j >= 0 && loteAceite[j] && j !== i) { const o = loteAceite[j].v; loteAceite[i].v = Object.assign({}, o, { generos: o.generos.slice() }); desenharLote(); } else msg('Escolha de qual produto copiar.', 'erro'); }
+    else if (a === 'loteSalvar') await salvarLote();
     else if (a === 'voltarEscolha') { escolha = null; desenharLista(); }
     else if (a === 'juntarEscolhidas') { if (escolha) { const manter = new Set(escolha.sel); if (confirm('Juntar com ' + contagemEscolha().f + ' foto(s) e ' + contagemEscolha().v + ' vídeo(s)?\n\nO que ficou de fora vai para "Pendentes" como mídia solta.')) await executarJuncao(escolha.ordem, manter); } }
     else if (a === 'limparMarcados') { marcados.clear(); desenharLista(); }

@@ -91,11 +91,33 @@ ok(!c.ok && c.sessaoInvalida, 'sessão inválida não recebe nada');
 c = conteudo(['portal', 'gerir_manuais']);
 ok(c.ok && c.manuais.every(m => m.liberado && m.parts.length) && Object.keys(c.provas).length === 3, 'quem gere manuais vê tudo (manuais e provas dos 3 níveis)');
 ok(JSON.parse(run('doGet({ parameter: { action: "versao" } })')._t).conteudoProtegido === true, 'versao anuncia conteudoProtegido');
-ok(/'3\.4'/.test(fonte.split('\n').filter(l => /versao: '/.test(l))[0]), 'versao devolve 3.4');
+ok(/'3\.5'/.test(fonte.split('\n').filter(l => /versao: '/.test(l))[0]), 'versao devolve 3.5');
 // erro inesperado no POST não vaza texto técnico
 run('lerManuais_ = function () { throw new Error("SEGREDO-INTERNO"); }');
 const rr = JSON.parse(run('doPost({ postData: { contents: JSON.stringify({ token: TOKEN, action: "treinamento_conteudo", whatsapp: "859", sessao: "x" }) } })')._t);
 ok(rr.ok === false && /^R\d+$/.test(String(rr.ocorrencia)) && JSON.stringify(rr).indexOf('SEGREDO-INTERNO') === -1, 'POST com falha devolve só um código de ocorrência', rr);
+console.log('\n[perfis novos: Equipe catálogo 1 e Responsável RH]');
+{
+  ok(JSON.parse(run('doGet({ parameter: { action: "versao" } })')._t).perfisNovos === true, 'versao anuncia perfisNovos');
+  ok(chaves.indexOf('painel_simples') !== -1, 'existe a permissão painel_simples');
+  pessoa('Nova Equipe', '85994444444', 'Cliente'); pessoa('Rita RH', '85995555555', 'Cliente');
+  let r1 = definir('85994444444', ['Equipe catálogo 1'], EU), pe = permsDe('85994444444');
+  ok(r1.ok && r1.perfil === 'Cliente, Equipe catálogo 1', 'dá para marcar o perfil Equipe catálogo 1', r1);
+  ok(pe.catalogo_admin && pe.catalogo_cadastrar && pe.painel_simples && pe.cliente, 'recebe entrar no admin, cadastrar e painel simplificado', pe);
+  ok(!pe.catalogo_excluir && !pe.catalogo_precos && !pe.catalogo_push && !pe.catalogo_auditoria && !pe.gerir_acessos && !pe.dados_pessoais && !pe.equipe_relatorio && !pe.gerir_manuais, 'e NÃO recebe nada que afete a empresa (excluir, preço em lote, avisos, auditoria, acessos, dados pessoais, relatório, manuais)', pe);
+  let r2 = definir('85995555555', ['Responsável RH'], EU), pr = permsDe('85995555555');
+  ok(r2.ok && pr.dados_pessoais && pr.cliente, 'Responsável RH recebe dados pessoais (tudo de Currículos)', pr);
+  ok(!pr.gerir_acessos && !pr.catalogo_cadastrar && !pr.gerir_manuais && !pr.painel_simples, 'e não recebe acessos, catálogo nem manuais', pr);
+  const pa = permsDe('85991047615'); ok(pa.gerir_acessos && !pa.painel_simples, 'Admin total NÃO vira painel simplificado', pa);
+  // aba Perfis ANTIGA (sem os perfis novos e sem a coluna nova): os dois perfis aparecem mesmo assim
+  const ab = ss.insertSheet('Perfis'); ab.appendRow(['perfil', 'descricao'].concat(chaves.filter(k => k !== 'painel_simples').map(k => 'perm_' + k)));
+  ab.appendRow(['Cliente', 'x'].concat(chaves.filter(k => k !== 'painel_simples').map(k => k === 'cliente')));
+  const nomes = run('(function(){ var p = acPerfis_(); return p.ordem.map(function(o){ return p.mapa[o].nome; }); })()');
+  ok(nomes.indexOf('Equipe catálogo 1') !== -1 && nomes.indexOf('Responsável RH') !== -1 && nomes.indexOf('Cliente') !== -1, 'numa aba Perfis antiga os dois perfis novos aparecem sem apagar os seus', nomes);
+  r1 = definir('85994444444', ['Equipe catálogo 1'], EU); pe = permsDe('85994444444');
+  ok(r1.ok && pe.painel_simples && pe.catalogo_cadastrar, 'e funcionam com a aba antiga', pe);
+  ss.abas.splice(ss.abas.indexOf(ab), 1);
+}
 console.log('\n' + (total - falhas.length) + '/' + total + ' verificações passaram');
 console.log('FALHAS=' + falhas.length);
 process.exit(falhas.length ? 1 : 0);

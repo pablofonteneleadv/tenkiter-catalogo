@@ -807,10 +807,33 @@ async function rotasPostagem(env, ctx, req, url, J) {
   return null;
 }
 
+/** Apaga do R2 as mídias temporárias (prefixo t/) com mais de 5 dias, menos as que ainda são usadas por postagem na fila. Roda 1x por dia. */
+const TEMP_DIAS = 5;
+export async function limparTemporarios(env, agoraMs) {
+  const hoje = new Date(agoraMs || Date.now()).toISOString().slice(0, 10);
+  if (!agoraMs && (await env.CACHE.get('limpeza_temp')) === hoje) return { pulou: true };
+  const corte = (agoraMs || Date.now()) - TEMP_DIAS * 86400000;
+  const emUso = await env.DB.prepare("SELECT midias FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").all();
+  const texto = (emUso.results || []).map((r) => r.midias || '').join('\n');
+  let apagados = 0, bytes = 0, cursor, voltas = 0;
+  do {
+    const l = await env.MIDIA.list({ prefix: 't/', cursor: cursor, limit: 500 });
+    for (const o of l.objects || []) {
+      if (new Date(o.uploaded).getTime() > corte) continue;
+      if (texto.indexOf(o.key) !== -1) continue;
+      await env.MIDIA.delete(o.key); apagados++; bytes += o.size || 0;
+    }
+    cursor = l.truncated ? l.cursor : null; voltas++;
+  } while (cursor && voltas < 20);
+  if (bytes) { const u = await lerUso(env); u.bytes = Math.max(0, u.bytes - bytes); u.arquivos = Math.max(0, u.arquivos - apagados); await env.CACHE.put('uso', JSON.stringify(u)); }
+  if (!agoraMs) await env.CACHE.put('limpeza_temp', hoje, { expirationTtl: 172800 });
+  return { apagados: apagados, bytes: bytes };
+}
 export default {
   async scheduled(ev, env, ctx) {
     ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
     const min = ev && ev.scheduledTime ? new Date(ev.scheduledTime).getUTCMinutes() : 0;
+    if (min === 7) ctx.waitUntil(limparTemporarios(env).catch(() => {}));      // 1x por dia: apaga do R2 o que é temporário (t/) com mais de 5 dias
     if (min % 30 !== 0) return;                                                // importar do Instagram só a cada 30 min (como antes)
     if (await env.CACHE.get('ig_hist_trava')) return;
     ctx.waitUntil((async () => { await ciclo(env, 'cron'); try { await analisarPendentes(env, 5); } catch (e) { /* a IA é conforto: o ciclo não pode cair por causa dela */ } })());

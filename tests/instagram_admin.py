@@ -175,6 +175,46 @@ with sync_playwright() as p:
     chk("sem erro de JavaScript", not errs, errs)
     b.close()
 
+    print("== Aceitar vários (formulários um embaixo do outro) e Descartar vários ==")
+    b, pg, st, log, errs = novo(p)
+    st["ig"]["rasc"][1]["grupo"] = "nao_produto"
+    for n in (3, 4):
+        st["ig"]["rasc"].append(dict(st["ig"]["rasc"][0], id=n, legenda="Post %d" % n, midias=[dict(st["ig"]["rasc"][0]["midias"][0], id="mm%d" % n, url=st["ig"]["rasc"][0]["midias"][0]["url"].replace(".jpg", "_%d.jpg" % n) if ".jpg" in st["ig"]["rasc"][0]["midias"][0]["url"] else st["ig"]["rasc"][0]["midias"][0]["url"] + "_%d" % n)]))
+    st["ig"]["rasc"][0]["ia"] = {"nome": "Vestido Floral IA", "categorias": ["Vestido"], "generos": ["Feminino"], "cores": ["Azul"], "descricao": "Vestido leve."}
+    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card")
+    chk("Aceitar e Descartar começam desligados", pg.locator("[data-ig=aceitarMarcados]").is_disabled() and pg.locator("[data-ig=descartarMarcados]").is_disabled())
+    for i in range(3): pg.locator(".ig-selr").nth(i).check()
+    chk("ligam com os marcados e mostram quantos", pg.locator("[data-ig=aceitarMarcados]").is_enabled() and "3" in pg.locator("[data-ig=aceitarMarcados]").inner_text() and "3" in pg.locator("[data-ig=descartarMarcados]").inner_text())
+    pg.click("[data-ig=aceitarMarcados]"); pg.wait_for_selector("section.ig-card", timeout=5000)
+    chk("abre 3 formulários, um embaixo do outro", pg.locator("section.ig-card").count() == 3, pg.locator("section.ig-card").count())
+    chk("o que a IA leu já vem preenchido", pg.input_value("#ig-l-0-nome") == "Vestido Floral IA" or any(pg.input_value("#ig-l-%d-nome" % i) == "Vestido Floral IA" for i in range(3)))
+    idx = [i for i in range(3) if pg.input_value("#ig-l-%d-nome" % i) == "Vestido Floral IA"][0]; outro = [i for i in range(3) if i != idx][0]
+    pg.select_option("#ig-lcp-%d" % outro, str(idx)); pg.click("[data-ig=loteCopiar][data-i='%d']" % outro); pg.wait_for_timeout(200)
+    chk("'Copiar de outro' traz as informações", pg.input_value("#ig-l-%d-nome" % outro) == "Vestido Floral IA")
+    pg.fill("#ig-l-%d-nome" % outro, "Vestido Floral 2"); pg.wait_for_timeout(100)
+    chk("cada formulário é individual (editar um não muda o outro)", pg.input_value("#ig-l-%d-nome" % idx) == "Vestido Floral IA")
+    pg.click("[data-ig=loteSalvar]"); pg.wait_for_timeout(400)
+    chk("sem preço o cadastro é barrado e diz quem falta", "Falta preencher" in pg.locator("#ig-msg").inner_text(), pg.locator("#ig-msg").inner_text())
+    for i in range(3):
+        pg.fill("#ig-l-%d-preco" % i, "80"); pg.fill("#ig-l-%d-cat" % i, "Vestido")
+        if pg.locator("input.ig-lg[data-i='%d']" % i).count() and not pg.locator("input.ig-lg[data-i='%d']:checked" % i).count(): pg.locator("input.ig-lg[data-i='%d']" % i).first.check()
+        if not pg.input_value("#ig-l-%d-nome" % i).strip(): pg.fill("#ig-l-%d-nome" % i, "Peça %d" % i)
+    pg.click("[data-ig=loteSalvar]"); pg.wait_for_timeout(7000)
+    cr = [x for x in log if x.get("action") == "create"]
+    chk("3 produtos criados, cada um com o seu nome", len(cr) == 3 and len({c.get("nome") for c in cr}) >= 2, [(c.get("nome")) for c in cr])
+    chk("cada um com a sua própria capa", len({c["fotoUrlExistente"] for c in cr}) == 3, [c.get("fotoUrlExistente") for c in cr])
+    chk("os rascunhos viraram 'aceito'", sum(1 for x in st["ig"]["rasc"] if x["status"] == "aceito" and x["id"] in (1, 3, 4)) == 3, [(x["id"], x["status"]) for x in st["ig"]["rasc"]])
+    chk("sem erro de JavaScript", not errs, errs)
+    b.close()
+    b, pg, st, log, errs = novo(p)
+    st["ig"]["rasc"][1]["grupo"] = "nao_produto"
+    st["ig"]["rasc"].append(dict(st["ig"]["rasc"][0], id=3, legenda="Post 3"))
+    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card")
+    for i in range(2): pg.locator(".ig-selr").nth(i).check()
+    pg.click("[data-ig=descartarMarcados]"); pg.wait_for_timeout(1500)
+    chk("Descartar vários manda os 2 para Descartados", sum(1 for x in st["ig"]["rasc"] if x["status"] == "descartado") == 2, [(x["id"], x["status"]) for x in st["ig"]["rasc"]])
+    b.close()
+
     print("== IA: ligar a chave, ler sozinha, e o cadastro já vem preenchido ==")
     b, pg, st, log, errs = novo(p)
     pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card")

@@ -17,7 +17,8 @@ function d1() {
   const cacheMem = new Map();
   globalThis.caches = { default: { async match(r) { const v = cacheMem.get(r.url); return v ? new Response(v) : undefined; }, async put(r, x) { cacheMem.set(r.url, await x.text()); } } };
   const objs = new Map(); const kv = new Map();
-  const R2 = { async get(k) { const v = objs.get(k); return v ? { async arrayBuffer() { return v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength); } } : null; }, async put(k, b) { objs.set(k, Buffer.from(b instanceof ReadableStream ? await new Response(b).arrayBuffer() : b)); }, async delete(k) { objs.delete(k); } };
+  const R2 = { async get(k) { const v = objs.get(k); return v ? { async arrayBuffer() { return v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength); } } : null; }, async put(k, b) { objs.set(k, Buffer.from(b instanceof ReadableStream ? await new Response(b).arrayBuffer() : b)); }, async delete(k) { objs.delete(k); }, async list(o) { const pr = (o && o.prefix) || ''; return { objects: [...objs.keys()].filter((k) => k.startsWith(pr)).map((k) => ({ key: k, size: objs.get(k).length, uploaded: (tempDatas.get(k) || new Date()) })), truncated: false }; } };
+  const tempDatas = new Map();
   const KV = { async get(k, t) { const v = kv.get(k); return v === undefined ? null : (t === 'json' ? JSON.parse(v) : v); }, async put(k, v) { kv.set(k, String(v)); }, async delete(k) { kv.delete(k); } };
   const TOKEN = 'IGQVJ_TOKEN_INVENTADO_PARA_TESTE_1234567890';
   // ---- Instagram falso ----
@@ -518,6 +519,21 @@ function d1() {
   feed = []; chamadas = []; await W.ciclo(env, 'cron'); chk('o ciclo renova o token sozinho antes de vencer', chamadas.some((u) => u.includes('refresh_access_token')));
   ({ j } = await A('GET', '/status')); chk('depois de renovar o alerta some', !j.alertas.some((a) => /vence em/.test(a)));
   ({ j } = await A('DELETE', '/token')); ({ j } = await A('GET', '/status')); chk('desconectar apaga o token', j.conectado === false);
+
+  console.log('== Limpeza de mídia temporária (5 dias) ==');
+  {
+    const velho = new Date(Date.now() - 6 * 86400000), novo = new Date(Date.now() - 2 * 86400000);
+    objs.set('t/202610/aaaaaaaaaaaaaaaaaaaa.jpg', Buffer.alloc(100)); tempDatas.set('t/202610/aaaaaaaaaaaaaaaaaaaa.jpg', velho);
+    objs.set('t/202610/bbbbbbbbbbbbbbbbbbbb.jpg', Buffer.alloc(100)); tempDatas.set('t/202610/bbbbbbbbbbbbbbbbbbbb.jpg', novo);
+    objs.set('t/202610/cccccccccccccccccccc.jpg', Buffer.alloc(100)); tempDatas.set('t/202610/cccccccccccccccccccc.jpg', velho);
+    objs.set('202610/dddddddddddddddddddd.jpg', Buffer.alloc(100)); tempDatas.set('202610/dddddddddddddddddddd.jpg', velho);
+    await DB.prepare("INSERT INTO postagem (tipo, modo, midias, agendado_em, status) VALUES ('story','auto', ?, '2026-12-01T10:00:00Z', 'agendado')").bind(JSON.stringify([{ url: 'https://x/m/t/202610/cccccccccccccccccccc.jpg', tipo: 'imagem' }])).run();
+    const rl = await W.limparTemporarios(env, Date.now());
+    chk('apaga a temporária com mais de 5 dias', !objs.has('t/202610/aaaaaaaaaaaaaaaaaaaa.jpg'), rl);
+    chk('mantém a temporária recente', objs.has('t/202610/bbbbbbbbbbbbbbbbbbbb.jpg'));
+    chk('mantém a velha que ainda está numa postagem agendada', objs.has('t/202610/cccccccccccccccccccc.jpg'));
+    chk('nunca mexe em mídia que não é temporária', objs.has('202610/dddddddddddddddddddd.jpg'));
+  }
 
   console.log('\nOK=' + ok + ' FALHAS=' + falhas.length, falhas);
   process.exit(falhas.length ? 1 : 0);

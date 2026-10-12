@@ -46,8 +46,8 @@ with sync_playwright() as p:
     abrir(pg)
     chk("abre com as 4 abas e o passo 1", pg.locator("#overlay-postagens.aberto").count() == 1 and pg.locator("#po-abas [role=tab]").count() == 5 and "Qual peça?" in corpo(pg))
     pg.fill("#po-busca", "TK-0003"); pg.wait_for_timeout(300)
-    chk("busca por código mostra a peça", pg.locator(".po-peca").count() >= 1, corpo(pg)[:200])
-    pg.click(".po-peca >> nth=0"); pg.wait_for_timeout(400)
+    chk("busca por código mostra a peça", pg.locator(".po-card").count() >= 1, corpo(pg)[:200])
+    pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(400)
     t = corpo(pg)
     chk("peça escolhida: tipos, visual, legenda e quando aparecem", all(x in t for x in ["O que postar?", "Visual", "Legenda", "Quando?"]), t[:300])
     leg = pg.input_value("#po-leg")
@@ -69,7 +69,7 @@ with sync_playwright() as p:
     aba(pg, "hist"); chk("histórico mostra Publicado + link do Instagram", "Publicado" in corpo(pg) and pg.locator("#po-corpo a:has-text('Ver no Instagram')").count() == 1)
 
     print("== Carrossel e validações ==")
-    aba(pg, "nova"); pg.fill("#po-busca", "TK-0004"); pg.wait_for_timeout(300); pg.click(".po-peca >> nth=0"); pg.wait_for_timeout(300)
+    aba(pg, "nova"); pg.fill("#po-busca", "TK-0004"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(300)
     pg.click("[data-tipo=carrossel]"); pg.wait_for_timeout(200)
     n = pg.locator(".po-m[aria-pressed=true]").count()
     chk("Carrossel marca as fotos da peça (2 ou mais quando existem)", n >= 1, n)
@@ -95,7 +95,7 @@ with sync_playwright() as p:
     chk("'Já postei' tira da lista", pg.locator(".po-item").count() == antes - 1)
 
     print("== Agendado, cancelar, erro ==")
-    aba(pg, "nova"); pg.fill("#po-busca", "TK-0005"); pg.wait_for_timeout(300); pg.click(".po-peca >> nth=0"); pg.wait_for_timeout(300)
+    aba(pg, "nova"); pg.fill("#po-busca", "TK-0005"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(300)
     pg.click("[data-q=agendar]"); pg.fill("#po-data", "2020-01-01T10:00"); pg.click("[data-a=enviar]"); pg.wait_for_timeout(300)
     chk("data no passado é barrada", "pelo menos 1 minuto" in corpo(pg))
     import datetime
@@ -199,7 +199,7 @@ with sync_playwright() as p:
         r = pg.locator("#po-previa canvas").nth(idx).bounding_box(); b = caixa(pg, idx, k)
         cx = r["x"] + (b["x0"] + b["x1"]) / 2 / b["w"] * r["width"]; cy = r["y"] + (b["y0"] + b["y1"]) / 2 / b["h"] * r["height"]
         pg.mouse.move(cx, cy); pg.mouse.down(); pg.mouse.move(cx + dx_frac * r["width"] / 2, cy + dy_frac * r["height"] / 2, steps=4); pg.mouse.move(cx + dx_frac * r["width"], cy + dy_frac * r["height"], steps=4); pg.mouse.up(); pg.wait_for_timeout(250)
-    garantir(pg); aba(pg, "nova"); pg.click("[data-modo=peca]"); pg.fill("#po-busca", "TK-0003"); pg.wait_for_timeout(300); pg.click(".po-peca >> nth=0"); pg.wait_for_timeout(1200)
+    garantir(pg); aba(pg, "nova"); pg.click("[data-modo=peca]"); pg.fill("#po-busca", "TK-0003"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(1200)
     chk("template Clássico mostra a prévia sozinho e o editor com Selo, Nome, Preço e Código", pg.locator("#po-previa canvas").count() == 1 and all(pg.locator("#po-tx-%s" % k).count() == 1 for k in ["selo", "nome", "preco", "codigo"]))
     chk("os textos nascem com os dados da peça (editáveis)", "TK-0003" in pg.input_value("#po-tx-codigo") and "à vista" in pg.input_value("#po-tx-preco"))
     b0 = caixa(pg, 0, "nome"); pg.fill("#po-tx-nome", "Vestido longo florido de verão"); pg.wait_for_timeout(300)
@@ -268,7 +268,7 @@ with sync_playwright() as p:
 
     print("== Recusas do servidor e teclado ==")
     abrir(pg)
-    aba(pg, "nova"); pg.click("[data-modo=peca]"); pg.fill("#po-busca", "TK-0006"); pg.wait_for_timeout(300); pg.click(".po-peca >> nth=0"); pg.wait_for_timeout(300)
+    aba(pg, "nova"); pg.click("[data-modo=peca]"); pg.fill("#po-busca", "TK-0006"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(300)
     g["post_recusa"] = "O Instagram não está conectado. Peça ao Admin total para conectar em Conexões."
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(2500)
     chk("recusa do servidor vira aviso vermelho com a frase", "não está conectado" in corpo(pg) and pg.locator(".po-aviso.erro").count() >= 1)

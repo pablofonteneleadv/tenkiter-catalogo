@@ -16,7 +16,7 @@
   const ST_TXT = { agendado: '⏳ Agendado', processando: '⚙️ Publicando…', manual_pendente: '✋ Falta você postar', manual_feito: '✅ Postado à mão', publicado: '✅ Publicado', erro: '⚠️ Deu problema', cancelado: 'Cancelado' };
   const HASHTAGS = '#tenkitermodas #modacrateus #crateús #lookdodia #modafeminina #modainfantil #modamasculina';
   let abaAtual = 'nova', fila = null, conectado = null, usuarioIg = '', pollTimer = null, ocupado = false, aviso = '', avisoErro = false;
-  let nova = null;
+  let nova = null, fotosNovas = null;
   let fotos = null, fotosFiltro = 'nova', fotosConta = {}, selFotos = new Set(), formFoto = { aberto: false, whats: '', ig: '', obs: '', msg: '', erro: false, ocupado: false };   // { p, midias:[{url,tipo,sel}], tipo, template, legenda, quando, data, manual, extras:[] }
 
   /* ---------- Worker ---------- */
@@ -82,6 +82,21 @@
       .po-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
       .po-acoes button, .po-acoes a { width: auto; flex: none; padding: 10px 14px; border-radius: 8px; border: 0; font-size: 0.85rem; min-height: 44px; cursor: pointer; background: #eee; color: #222; text-decoration: none; display: inline-flex; align-items: center; font-weight: 700; box-sizing: border-box; }
       .po-acoes .po-ok { background: var(--laranja); color: #0d0d0d; } .po-acoes .po-ruim { background: #fde3e3; color: #8a1c1c; }
+      .po-lista-pecas { max-height: none; }
+      .po-grade { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: calc(94vh - 300px); min-height: 280px; overflow-y: auto; padding: 4px; border: 1px solid #eee; border-radius: 10px; margin-top: 8px; -webkit-overflow-scrolling: touch; }
+      .po-card { position: relative; display: flex; flex-direction: column; gap: 4px; text-align: left; background: #fff; border: 2px solid #e6e6e6; border-radius: 10px; padding: 6px; cursor: pointer; color: #111; width: auto; min-height: 44px; }
+      .po-card[aria-pressed="true"] { border-color: var(--laranja); background: #fff3e0; }
+      .po-card img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 7px; background: #eee; }
+      .po-card b { font-size: .8rem; line-height: 1.15; overflow-wrap: anywhere; } .po-card small { color: #555; font-size: .72rem; }
+      .po-card .po-ck { position: absolute; left: 10px; top: 10px; width: 24px; height: 24px; border-radius: 6px; background: #fff; border: 2px solid #999; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; font-size: .9rem; }
+      .po-card[aria-pressed="true"] .po-ck { background: var(--laranja); border-color: var(--laranja); color: #0d0d0d; }
+      .po-barra-sel { position: sticky; bottom: 0; background: #fff; padding: 8px 0 2px; display: flex; gap: 8px; flex-wrap: wrap; z-index: 2; }
+      .po-barra-sel button { flex: 1 1 140px; }
+      .po-filtros { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 6px 0; }
+      .po-filtros select { flex: 1 1 140px; min-height: 44px; font-size: .9rem; padding: 6px 8px; border-radius: 8px; border: 1px solid #ccc; background: #fff; }
+      .po-oc { width: auto; flex: none; min-height: 44px; padding: 6px 12px; border-radius: 8px; border: 1px solid #ccc; background: #fff; color: #222; font-size: .8rem; font-weight: 700; cursor: pointer; }
+      .po-oc[aria-pressed="true"] { background: #333; color: #fff; border-color: #333; }
+      .po-presets button { font-size: .78rem; padding: 8px 10px; }
       .po-passos-man { background: #fff3e0; border: 1px solid #ffcc80; border-radius: 10px; padding: 8px 10px; font-size: 0.85rem; margin: 6px 0; }
       .po-passos-man ol { margin: 4px 0 0; padding-left: 20px; }
     `;
@@ -114,12 +129,13 @@
     await carregarFila(); carregarFotos(true);
     parar(); pollTimer = setInterval(() => { if ($('overlay-postagens').classList.contains('aberto') && abaAtual !== 'nova' && !ocupado) carregarFila(true); }, window.TK_POSTAGENS_POLL_MS || 15000);
   }
-  function novaVazia(lote) { nova = { lote: lote || (nova && nova.lote) || [], modoLivre: false, modoCli: false, tx: {}, tam: {}, ajuste: 'preencher', livre: [], seqAgenda: true, link: '', p: null, midias: [], tipo: 'feed', template: 'classico', legenda: '', quando: 'agora', data: '', manual: false, busca: '', legendaMexida: false, previa: false }; }
+  function novaVazia(lote) { nova = { lote: lote || (nova && nova.lote) || [], modoLivre: false, modoCli: false, tx: {}, tam: {}, ajuste: 'preencher', livre: [], seqAgenda: true, link: '', p: null, midias: [], tipo: 'feed', template: 'classico', legenda: '', quando: 'agora', data: '', manual: false, busca: '', legendaMexida: false, previa: false, oculto: {}, preset: {}, fg: '', fc: '', selPecas: [] }; }
 
   async function carregarFila(silencioso) {
-    const r = await ig('/posts');
+    const r = await ig('/posts'), antes = JSON.stringify([fila, conectado, usuarioIg]);
     if (r && r.ok) { fila = r.posts || []; conectado = !!r.conectado; usuarioIg = r.usuario || ''; }
     else if (!silencioso) { fila = []; aviso = erroTxt(r); avisoErro = true; }
+    if (silencioso && antes === JSON.stringify([fila, conectado, usuarioIg])) return;     // nada mudou: não refaz a tela (senão some a foto que a pessoa acabou de escolher)
     desenhar();
   }
 
@@ -189,14 +205,15 @@
     f.msg = ok + (ok > 1 ? ' fotos salvas. ' : ' foto salva. ') + vinc + (erro ? ' Parei em um erro: ' + erro : ''); f.erro = !!erro; f.whats = ''; f.ig = ''; f.obs = '';
     fotosFiltro = 'nova'; await carregarFotos(true);
   }
+  function fotoParaLivre(x) { return { fotoId: x.id, tipo: 'imagem', url: x.url, nome: (x.nome || (x.instagram ? '@' + x.instagram : '') || whatsBonito(x.whats) || 'Cliente'), hora: '', pos: {} }; }
   function usarFotos() {
     const ids = Array.from(selFotos), escolhidas = (fotos || []).filter((x) => ids.indexOf(x.id) !== -1);
     if (!escolhidas.length) return;
     if (!nova) novaVazia();
     if (!nova.modoCli) { nova.livre.forEach((m) => { try { if (!m.fotoId) URL.revokeObjectURL(m.url); } catch (e) {} }); nova.livre = []; }
     nova.modoCli = true; nova.modoLivre = false; nova.p = null; nova.midias = []; nova.tipo = 'story'; nova.template = 'elausa'; nova.manual = false; nova.previa = false;
-    escolhidas.forEach((x) => { if (!nova.livre.some((m) => m.fotoId === x.id)) nova.livre.push({ fotoId: x.id, tipo: 'imagem', url: x.url, nome: (x.nome || (x.instagram ? '@' + x.instagram : '') || whatsBonito(x.whats) || 'Cliente'), hora: '', pos: {} }); });
-    selFotos.clear(); abaAtual = 'nova'; aviso = escolhidas.length + (escolhidas.length > 1 ? ' fotos prontas' : ' foto pronta') + ' para o Story. Ajuste o texto, arraste na foto e escolha o horário.'; avisoErro = false; desenhar();
+    escolhidas.forEach((x) => { if (!nova.livre.some((m) => m.fotoId === x.id)) nova.livre.push(fotoParaLivre(x)); });
+    selFotos.clear(); abaAtual = 'nova'; carregarFotosNovas(); aviso = escolhidas.length + (escolhidas.length > 1 ? ' fotos prontas' : ' foto pronta') + ' para o Story. Ajuste o texto, arraste na foto e escolha o horário.'; avisoErro = false; desenhar();
   }
 
   /* ---------- peças e mídia ---------- */
@@ -248,13 +265,47 @@
     const n = nova;
     let h = n.modoCli ? '<div class="po-passo"><h4>1. Fotos de clientes escolhidas</h4><p class="po-ajuda" style="margin-top:0">Só Story, com o template “Ela usa TM”. Escolha mais fotos na aba <b>Fotos de clientes</b>.</p>' :
       '<div class="po-passo"><h4>1. Suas mídias (sem peça)</h4><p class="po-ajuda" style="margin-top:0">Fotos e vídeos do aparelho, na ordem em que vão sair. Serve para Story do dia, aviso, bastidores, qualquer coisa.</p>' +
-      '<label for="po-livre-arq" class="po-ajuda" style="font-weight:700;margin:0 0 4px;display:block">Escolher fotos e vídeos (vídeo até 15 MB)</label><input type="file" id="po-livre-arq" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple>';
+      '<label for="po-livre-arq" class="po-ajuda" style="font-weight:700;margin:0 0 4px;display:block">Escolher fotos e vídeos (vídeo até 40 MB)</label><input type="file" id="po-livre-arq" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple>';
+    if (n.modoCli) h += htmlEscolherFotos();
     h += n.livre.length ? '<div style="margin-top:8px">' + n.livre.map((m, i) => '<div class="po-escolhida" style="margin-bottom:6px;align-items:flex-start">' +
       (m.tipo === 'video' ? '<span class="po-v" style="background:#222;color:#fff;border-radius:6px;padding:20px 12px;font-size:1.2rem" aria-hidden="true">🎬</span>' : '<img src="' + esc(m.url) + '" alt="" width="40" height="50" style="border-radius:6px;object-fit:cover">') +
       '<div style="flex:1;min-width:0"><b>' + (i + 1) + 'º · ' + (m.tipo === 'video' ? 'Vídeo' : 'Foto') + '</b><small style="display:block;color:#555;overflow-wrap:anywhere">' + esc(m.nome || '') + '</small>' +
       (n.quando === 'agendar' ? '<label class="po-ajuda" for="po-h-' + i + '" style="display:block;margin:4px 0 2px">Horário só deste (opcional)</label><input type="datetime-local" id="po-h-' + i + '" data-hora="' + i + '" value="' + esc(m.hora || '') + '">' : '') + '</div>' +
       '<div style="display:flex;flex-direction:column;gap:4px;flex:none"><button type="button" data-lm="up" data-i="' + i + '" aria-label="Subir"' + (i === 0 ? ' disabled' : '') + '>↑</button><button type="button" data-lm="down" data-i="' + i + '" aria-label="Descer"' + (i === n.livre.length - 1 ? ' disabled' : '') + '>↓</button><button type="button" data-lm="x" data-i="' + i + '" aria-label="Tirar">✕</button></div></div>').join('') + '</div>' : (n.modoCli ? '<p class="po-ajuda">Nenhuma foto escolhida ainda. Vá em <b>Fotos de clientes</b>, marque as fotos e toque em “Colocar na fila de Story”.</p>' : '<p class="po-ajuda">Nenhuma mídia ainda.</p>');
     return h + '</div>';
+  }
+  /** Ela usa TM: escolher aqui mesmo entre as fotos de clientes ainda NÃO usadas (várias de uma vez). */
+  function htmlEscolherFotos() {
+    const l = fotosNovas;
+    if (l === null) return '<p class="po-ajuda">Carregando as fotos de clientes…</p>';
+    const jaNa = (x) => nova.livre.some((m) => m.fotoId === x.id);
+    if (!l.length) return '<p class="po-ajuda"><b>Não há fotos novas</b> de clientes. Quando chegarem (pela conta do cliente ou adicionadas por você), aparecem aqui.</p>';
+    const todas = l.every(jaNa);
+    return '<div class="po-barra-sel" style="position:static;padding:0 0 6px"><button type="button" class="po-oc" data-a="fotos-todas">' + (todas ? '☐ Desmarcar todas' : '☑ Marcar todas (' + l.length + ')') + '</button></div>' +
+      '<div class="po-grade" role="group" aria-label="Fotos de clientes que ainda não foram usadas">' + l.map((x) => '<button type="button" class="po-card" data-fcli="' + x.id + '" aria-pressed="' + jaNa(x) + '"><span class="po-ck" aria-hidden="true">' + (jaNa(x) ? '✓' : '') + '</span><img src="' + esc(fotoMini(x.url, 240)) + '" alt="" loading="lazy"><b>' + esc(x.nome || (x.instagram ? '@' + x.instagram : whatsBonito(x.whats)) || 'Cliente') + '</b>' + (x.obs ? '<small>' + esc(String(x.obs).slice(0, 50)) + '</small>' : '') + '</button>').join('') + '</div>';
+  }
+  async function carregarFotosNovas() {
+    const r = await ig('/fotos?status=nova&limite=80');
+    if (r && r.ok) fotosNovas = r.fotos || []; else if (fotosNovas === null) fotosNovas = [];
+    if (abaAtual === 'nova' && nova && nova.modoCli) desenhar();
+  }
+  /** Com peça: grade grande (aproveita a tela), filtros por gênero e categoria, e escolhe VÁRIAS peças. */
+  function opcoesDe(campo) { const m = {}; pecasAtivas().forEach((p) => String(p[campo] || '').split(',').map((x) => x.trim()).filter(Boolean).forEach((x) => { m[x] = true; })); return Object.keys(m).sort((a, b) => a.localeCompare(b, 'pt-BR')); }
+  function pecasFiltradas() {
+    const n = nova, b = semAc(n.busca);
+    return pecasAtivas().filter((x) => (!b || semAc(x.Nome).includes(b) || semAc(x.Codigo).includes(b)) &&
+      (!n.fg || String(x.Genero || '').split(',').map((s) => s.trim()).indexOf(n.fg) !== -1) && (!n.fc || String(x.Categoria || '').split(',').map((s) => s.trim()).indexOf(n.fc) !== -1));
+  }
+  function htmlEscolherPecas() {
+    const n = nova, l = pecasFiltradas(), sel = n.selPecas || [], gs = opcoesDe('Genero'), cs = opcoesDe('Categoria');
+    const op = (lista, atual, vazio) => '<option value="">' + vazio + '</option>' + lista.map((x) => '<option value="' + esc(x) + '"' + (x === atual ? ' selected' : '') + '>' + esc(x) + '</option>').join('');
+    const todas = l.length > 0 && l.every((x) => sel.indexOf(String(x.ID)) !== -1);
+    return '<label for="po-busca" class="po-ajuda" style="margin:0 0 4px">Procure pelo nome ou código</label><input type="search" id="po-busca" value="' + esc(n.busca) + '" autocomplete="off">' +
+      '<div class="po-filtros"><select id="po-fg" aria-label="Filtrar por gênero">' + op(gs, n.fg, 'Todos os gêneros') + '</select><select id="po-fc" aria-label="Filtrar por categoria">' + op(cs, n.fc, 'Todas as categorias') + '</select></div>' +
+      '<p class="po-ajuda" style="margin:2px 0">' + l.length + ' peça(s)' + (sel.length ? ' · <b>' + sel.length + ' marcada(s)</b>' : '') + '. Toque para marcar uma ou várias.</p>' +
+      '<div class="po-grade" role="group" aria-label="Peças">' + (l.length ? l.map((x) => { const on = sel.indexOf(String(x.ID)) !== -1; return '<button type="button" class="po-card" data-psel="' + esc(x.ID) + '" aria-pressed="' + on + '"><span class="po-ck" aria-hidden="true">' + (on ? '✓' : '') + '</span><img src="' + esc(fotoMini(x.Foto_URL, 240)) + '" alt="" loading="lazy"><b>' + esc(x.Nome) + '</b><small>' + esc(x.Codigo || '') + ' · ' + esc(formatarReal(x.Preco)) + '</small></button>'; }).join('') : '<p class="po-ajuda" style="padding:10px;grid-column:1/-1">Nenhuma peça com esses filtros.</p>') + '</div>' +
+      '<div class="po-barra-sel"><button type="button" class="po-oc" data-a="pecas-todas">' + (todas ? '☐ Desmarcar as ' + l.length : '☑ Marcar as ' + l.length + ' da lista') + '</button>' +
+      '<button type="button" class="po-enviar" data-a="usarpecas"' + (sel.length ? '' : ' disabled') + '>' + (sel.length > 1 ? '➡ Usar as ' + sel.length + ' peças (uma por vez)' : sel.length ? '➡ Usar esta peça' : 'Marque pelo menos uma peça') + '</button></div>';
   }
   function htmlNova() {
     const n = nova, p = n.p, cli = n.modoCli, livre = n.modoLivre || cli;
@@ -263,11 +314,7 @@
     else {
       h += '<div class="po-passo"><h4>1. Qual peça?</h4>';
       if (p) h += '<div class="po-escolhida"><img src="' + esc(fotoMini(p.Foto_URL, 120)) + '" alt="" width="40" height="50" style="border-radius:6px;object-fit:cover"><div><b>' + esc(p.Nome) + '</b><small style="display:block;color:#555">' + esc(p.Codigo || '') + ' · ' + esc(formatarReal(precoAvista(p))) + ' à vista</small></div><button type="button" data-a="trocar">Trocar</button></div>';
-      else {
-        const b = semAc(n.busca), l = pecasAtivas().filter((x) => !b || semAc(x.Nome).includes(b) || semAc(x.Codigo).includes(b)).slice(0, 40);
-        h += '<label for="po-busca" class="po-ajuda" style="margin:0 0 4px">Procure pelo nome ou código</label><input type="search" id="po-busca" value="' + esc(n.busca) + '" autocomplete="off"><div class="po-lista-pecas">' +
-          (l.length ? l.map((x) => '<button type="button" class="po-peca" data-peca="' + esc(x.ID) + '"><img src="' + esc(fotoMini(x.Foto_URL, 100)) + '" alt="" loading="lazy" width="40" height="50"><span><b>' + esc(x.Nome) + '</b><small>' + esc(x.Codigo || '') + ' · ' + esc(formatarReal(x.Preco)) + '</small></span></button>').join('') : '<p class="po-ajuda" style="padding:10px">Nenhuma peça encontrada.</p>') + '</div>';
-      }
+      else h += htmlEscolherPecas();
       h += '</div>';
       if (!p) return h;
     }
@@ -276,7 +323,7 @@
     if (!livre) {
       h += '<div class="po-midias" role="group" aria-label="Mídias da peça">' + n.midias.map((m, i) => { const ord = m.sel ? n.midias.filter((x, j) => x.sel && j <= i).length : 0;
         return '<button type="button" class="po-m" data-m="' + i + '" aria-pressed="' + m.sel + '" aria-label="' + (m.tipo === 'video' ? 'Vídeo' : 'Foto ' + (i + 1)) + (m.sel ? ', escolhida em ' + ord + 'º' : ', não escolhida') + '"><img src="' + esc(m.tipo === 'video' ? (typeof posterDoVideo === 'function' ? posterDoVideo(m.url) : '') : fotoMini(m.url, 160)) + '" alt="" loading="lazy">' + (m.sel ? '<span class="po-n">' + ord + '</span>' : '') + (m.tipo === 'video' ? '<span class="po-v">vídeo</span>' : '') + '</button>'; }).join('') + '</div>';
-      if (n.tipo === 'reels' || n.tipo === 'story' || n.tipo === 'carrossel') h += '<p class="po-ajuda"><label for="po-vid" style="font-weight:700">Vídeo do aparelho (até 15 MB):</label> <input type="file" id="po-vid" accept="video/mp4,video/webm"></p>';
+      if (n.tipo === 'reels' || n.tipo === 'story' || n.tipo === 'carrossel') h += '<p class="po-ajuda"><label for="po-vid" style="font-weight:700">Vídeo do aparelho (até 40 MB):</label> <input type="file" id="po-vid" accept="video/mp4,video/webm"></p>';
     }
     if (n.tipo === 'story') {
       h += '<p class="po-ajuda" style="margin-top:10px"><label><input type="checkbox" id="po-manual"' + (n.manual ? ' checked' : '') + '> <b>Story com link</b> — o Instagram não deixa colocar link por aqui. Eu preparo tudo e você só cola o link no app (aba “Postar à mão”).</label></p>';
@@ -284,14 +331,16 @@
     }
     h += '</div>';
     if (n.tipo !== 'reels') {
-      const lista = cli ? [['elausa', 'Ela usa TM']] : livre ? [['original', 'Original'], ['elausa', 'Ela usa TM']] : TEMPLATES, itens = n.template !== 'original' ? itensTemplate(n.template, infoPeca(n.p), ...tamanhoAlvo()) : [];
+      const lista = cli ? [['elausa', 'Ela usa TM']] : livre ? TEMPLATES.concat([['elausa', 'Ela usa TM']]) : TEMPLATES, itens = n.template !== 'original' ? itensTemplate(n.template, infoPeca(n.p), ...tamanhoAlvo()) : [];
       h += '<div class="po-passo"><h4>3. Visual</h4>' + (lista.length > 1 ? '<div class="po-chips" role="group" aria-label="Visual">' + lista.map((t) => '<button type="button" data-tpl="' + t[0] + '" aria-pressed="' + (n.template === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>' : '') +
         '<p class="po-ajuda">' + (n.template === 'original' ? 'A foto como está (ajustada ao formato do Instagram).' : n.template === 'elausa' ? 'A foto com o texto “Ela usa TM” (toque numa das opções ou escreva o seu). Arraste o texto na foto para onde quiser.' : 'A foto ganha nome, preço à vista e código da peça. Arraste cada texto na prévia para onde quiser. Vídeos ficam sem template.') + '</p>';
       if (n.template === 'original' || n.template === 'elausa') h += '<div class="po-chips" role="group" aria-label="Como a foto ocupa a tela" style="margin-bottom:6px"><button type="button" data-aj="preencher" aria-pressed="' + (n.ajuste === 'preencher') + '">Preencher a tela</button><button type="button" data-aj="inteira" aria-pressed="' + (n.ajuste === 'inteira') + '">Foto inteira (fundo desfocado)</button></div>';
+      if (n.template === 'classico') h += '<p class="po-ajuda" style="margin:8px 0 4px"><b>Posição pronta</b> (depois ainda dá para arrastar):</p><div class="po-chips po-presets" role="group" aria-label="Posições prontas do visual Clássico">' + PRESETS_CLASSICO.map((pr, i) => '<button type="button" data-preset="' + i + '" aria-pressed="' + ((n.preset.classico || 0) === i) + '">' + (i + 1) + '. ' + esc(pr.nome) + '</button>').join('') + '</div>';
       if (n.template === 'elausa') h += '<div class="po-chips" role="group" aria-label="Textos prontos" style="margin-bottom:6px">' + VARIANTES_ELA.map((v) => '<button type="button" data-var="' + esc(v) + '" aria-pressed="' + (((n.tx.elausa || {}).marca !== undefined ? n.tx.elausa.marca : VARIANTES_ELA[0]) === v) + '">' + esc(v) + '</button>').join('') + '</div>';
       if (itens.length) h += '<div id="po-textos">' + itens.map((it) => { const tx = (n.tx[n.template] || {})[it.k], tm = (n.tam[n.template] || {})[it.k] || 1;
         return '<div style="margin:6px 0"><label class="po-ajuda" for="po-tx-' + it.k + '" style="display:block;margin:0 0 2px;font-weight:700">' + esc(it.rot) + '</label><input type="text" id="po-tx-' + it.k + '" data-tx="' + it.k + '" value="' + esc(tx !== undefined ? tx : it.t) + '" maxlength="90" autocomplete="off">' +
-          '<label class="po-ajuda" for="po-tm-' + it.k + '" style="display:flex;gap:8px;align-items:center;margin:2px 0 0">Tamanho <input type="range" id="po-tm-' + it.k + '" data-tm="' + it.k + '" min="0.5" max="2" step="0.05" value="' + tm + '" style="flex:1"></label></div>'; }).join('') +
+          '<div style="display:flex;gap:8px;align-items:center;margin:2px 0 0"><label class="po-ajuda" for="po-tm-' + it.k + '" style="display:flex;gap:8px;align-items:center;flex:1;margin:0">Tamanho <input type="range" id="po-tm-' + it.k + '" data-tm="' + it.k + '" min="0.5" max="2" step="0.05" value="' + tm + '" style="flex:1"></label>' +
+          '<button type="button" class="po-oc" data-oc="' + it.k + '" aria-pressed="' + (!!((n.oculto[n.template] || {})[it.k])) + '">' + ((n.oculto[n.template] || {})[it.k] ? '🙈 Oculto — mostrar' : '👁 Ocultar') + '</button></div></div>'; }).join('') +
         '<p><button type="button" data-a="resetTx" style="width:auto;padding:9px 14px;min-height:44px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">↺ Voltar textos e posições ao padrão</button></p></div>';
       h += '<p><button type="button" data-a="previa" class="po-ajuda" style="width:auto;padding:9px 14px;min-height:44px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">👁️ Ver como vai ficar</button></p><div class="po-previa" id="po-previa"></div></div>';
     }
@@ -349,6 +398,8 @@
     else if (t.id === 'po-f-ig') formFoto.ig = t.value;
     else if (t.id === 'po-f-obs') formFoto.obs = t.value;
     else if (t.dataset && t.dataset.fsel !== undefined) { const id = Number(t.dataset.fsel); if (t.checked) selFotos.add(id); else selFotos.delete(id); desenhar(); }
+    else if (t.id === 'po-fg') { nova.fg = t.value; desenhar(); }
+    else if (t.id === 'po-fc') { nova.fc = t.value; desenhar(); }
     else if (t.id === 'po-link') nova.link = t.value;
     else if (t.id === 'po-seqag') nova.seqAgenda = t.checked;
     else if (t.dataset && t.dataset.hora !== undefined) { const m = nova.livre[Number(t.dataset.hora)]; if (m) m.hora = t.value; }
@@ -371,12 +422,16 @@
     if (d.modo) {
       const antes = nova.modoCli ? 'cliente' : nova.modoLivre ? 'livre' : 'peca';
       if (antes !== d.modo && antes !== 'peca') { nova.livre.forEach((m) => { try { if (!m.fotoId) URL.revokeObjectURL(m.url); } catch (e) {} }); nova.livre = []; }
-      nova.modoLivre = d.modo === 'livre'; nova.modoCli = d.modo === 'cliente';
-      if (d.modo === 'peca') { if (nova.template === 'original' || nova.template === 'elausa') nova.template = 'classico'; }
-      else { nova.p = null; nova.midias = []; if (d.modo === 'cliente') { nova.tipo = 'story'; nova.template = 'elausa'; nova.manual = false; } else if (nova.template !== 'elausa') nova.template = 'original'; }
+      nova.modoLivre = d.modo === 'livre'; nova.modoCli = d.modo === 'cliente'; if (nova.modoCli) carregarFotosNovas();
+      if (d.modo === 'peca') { if (nova.template === 'original' || nova.template === 'elausa') nova.template = 'classico'; nova.selPecas = []; }
+      else { nova.p = null; nova.midias = []; if (d.modo === 'cliente') { nova.tipo = 'story'; nova.template = 'elausa'; nova.manual = false; } else if (nova.template !== 'elausa' && !TEMPLATES.some((t) => t[0] === nova.template)) nova.template = 'original'; }
       nova.previa = false; return desenhar();
     }
     if (d.lm) { const i = Number(d.i), L = nova.livre; if (d.lm === 'x') { try { URL.revokeObjectURL(L[i].url); } catch (e) {} L.splice(i, 1); } else { const k = d.lm === 'up' ? i - 1 : i + 1; if (L[k]) { const t = L[i]; L[i] = L[k]; L[k] = t; } } return desenhar(); }
+    if (d.psel) { const id = String(d.psel), i = nova.selPecas.indexOf(id); if (i === -1) nova.selPecas.push(id); else nova.selPecas.splice(i, 1); const g = document.querySelector('.po-grade'), y = g ? g.scrollTop : 0; desenhar(); const g2 = document.querySelector('.po-grade'); if (g2) g2.scrollTop = y; return; }
+    if (d.fcli) { const x = (fotosNovas || []).find((q) => String(q.id) === String(d.fcli)); if (!x) return; const i = nova.livre.findIndex((m) => m.fotoId === x.id); if (i === -1) nova.livre.push(fotoParaLivre(x)); else nova.livre.splice(i, 1); nova.previa = false; const g = document.querySelector('.po-grade'), y = g ? g.scrollTop : 0; desenhar(); const g2 = document.querySelector('.po-grade'); if (g2) g2.scrollTop = y; return; }
+    if (d.oc !== undefined) { const t = nova.template, o = (nova.oculto[t] = nova.oculto[t] || {}); o[d.oc] = !o[d.oc]; return desenhar(); }
+    if (d.preset !== undefined) { nova.preset[nova.template] = Number(d.preset); itensDaPostagem().forEach((m) => { if (m.pos) delete m.pos[nova.template]; }); return desenhar(); }
     if (d.peca) return escolherPeca(d.peca);
     if (d.lote) return escolherPeca(d.lote);
     if (d.loteX) { nova.lote = nova.lote.filter((i) => i !== d.loteX); if (nova.p && String(nova.p.ID) === d.loteX) { nova.p = null; nova.midias = []; } return desenhar(); }
@@ -385,6 +440,9 @@
     if (d.q) { nova.quando = d.q; if (d.q === 'agendar' && !nova.data) nova.data = dataLocalPadrao(); return desenhar(); }
     if (d.m !== undefined) { const m = nova.midias[Number(d.m)]; if (!m) return; m.sel = !m.sel; if (nova.tipo === 'feed' && m.sel) nova.midias.forEach((x) => { if (x !== m) x.sel = false; }); if (nova.tipo === 'reels') nova.midias.forEach((x) => { if (x !== m) x.sel = false; }); nova.previa = false; return desenhar(); }
     const a = d.a; if (!a) return;
+    if (a === 'pecas-todas') { const l = pecasFiltradas().map((x) => String(x.ID)), todas = l.every((i) => nova.selPecas.indexOf(i) !== -1); nova.selPecas = todas ? nova.selPecas.filter((i) => l.indexOf(i) === -1) : nova.selPecas.concat(l.filter((i) => nova.selPecas.indexOf(i) === -1)); return desenhar(); }
+    if (a === 'usarpecas') { const ids = nova.selPecas.slice(); if (!ids.length) return; nova.lote = ids; nova.selPecas = []; aviso = ids.length > 1 ? ids.length + ' peças na lista. Vamos uma por uma, com as mesmas escolhas.' : ''; avisoErro = false; return escolherPeca(ids[0]); }
+    if (a === 'fotos-todas') { const l = fotosNovas || [], todas = l.every((x) => nova.livre.some((m) => m.fotoId === x.id)); if (todas) nova.livre = nova.livre.filter((m) => !l.some((x) => x.id === m.fotoId)); else l.forEach((x) => { if (!nova.livre.some((m) => m.fotoId === x.id)) nova.livre.push(fotoParaLivre(x)); }); nova.previa = false; return desenhar(); }
     if (a === 'trocar') { nova.p = null; nova.midias = []; nova.previa = false; return desenhar(); }
     if (a === 'legenda') { nova.legenda = legendaPadrao(); nova.legendaMexida = false; return desenhar(); }
     if (a === 'previa') { nova.previa = true; return desenhar(); }
@@ -437,11 +495,27 @@
     if (tpl === 'elausa') return [{ k: 'marca', rot: 'Texto', t: VARIANTES_ELA[0], x: 0.5, y: 0.72, tam: 120, cor: '#fff', alinha: 'center', estilo: 'italic', fonte: FONTE_MANUAL, sombra: true }];
     return [];
   }
+  /** 10 posições prontas do visual Clássico (x, y = fração da imagem; al = alinhamento; m = multiplicador de tamanho; grad = onde escurece para o texto aparecer). */
+  const PRESETS_CLASSICO = [
+    { nome: 'Embaixo à esquerda', grad: 'baixo', i: {} },
+    { nome: 'Embaixo no centro', grad: 'baixo', i: { selo: { x: 0.5, y: 0.085, al: 'center' }, nome: { x: 0.5, y: 0.8, al: 'center' }, preco: { x: 0.5, y: 0.895, al: 'center' }, codigo: { x: 0.5, y: 0.945, al: 'center' } } },
+    { nome: 'Embaixo à direita', grad: 'baixo', i: { selo: { x: 0.93, y: 0.085, al: 'right' }, nome: { x: 0.945, y: 0.8, al: 'right' }, preco: { x: 0.945, y: 0.895, al: 'right' }, codigo: { x: 0.945, y: 0.945, al: 'right' } } },
+    { nome: 'Topo à esquerda', grad: 'cima', i: { selo: { x: 0.07, y: 0.075 }, nome: { x: 0.055, y: 0.165 }, preco: { x: 0.055, y: 0.255 }, codigo: { x: 0.055, y: 0.3 } } },
+    { nome: 'Topo no centro', grad: 'cima', i: { selo: { x: 0.5, y: 0.075, al: 'center' }, nome: { x: 0.5, y: 0.165, al: 'center' }, preco: { x: 0.5, y: 0.255, al: 'center' }, codigo: { x: 0.5, y: 0.3, al: 'center' } } },
+    { nome: 'Meio à esquerda', grad: 'tudo', i: { selo: { x: 0.07, y: 0.085 }, nome: { x: 0.055, y: 0.46 }, preco: { x: 0.055, y: 0.545 }, codigo: { x: 0.055, y: 0.59 } } },
+    { nome: 'Meio grande no centro', grad: 'tudo', i: { selo: { x: 0.5, y: 0.085, al: 'center' }, nome: { x: 0.5, y: 0.46, al: 'center', m: 1.15 }, preco: { x: 0.5, y: 0.56, al: 'center', m: 1.35 }, codigo: { x: 0.5, y: 0.62, al: 'center' } } },
+    { nome: 'Preço gigante', grad: 'baixo', i: { nome: { x: 0.055, y: 0.77, m: 0.85 }, preco: { x: 0.055, y: 0.88, m: 1.45 }, codigo: { x: 0.055, y: 0.945, m: 0.9 } } },
+    { nome: 'Compacto embaixo', grad: 'baixo', i: { selo: { x: 0.07, y: 0.085, m: 0.8 }, nome: { x: 0.055, y: 0.865, m: 0.75 }, preco: { x: 0.055, y: 0.92, m: 0.75 }, codigo: { x: 0.055, y: 0.96, m: 0.75 } } },
+    { nome: 'Preço no topo, nome embaixo', grad: 'ambos', i: { selo: { x: 0.07, y: 0.085 }, preco: { x: 0.055, y: 0.18, m: 1.2 }, nome: { x: 0.055, y: 0.9 }, codigo: { x: 0.055, y: 0.955 } } }
+  ];
+  function presetAtual(tpl) { return tpl === 'classico' ? PRESETS_CLASSICO[(nova.preset && nova.preset.classico) || 0] : null; }
   /** Itens com o que a pessoa mexeu: texto trocado, tamanho e a posição (por foto). */
   function itensEfetivos(tpl, m) {
     const [W, H] = tamanhoAlvo(), base = itensTemplate(tpl, infoPeca(nova.p), W, H);
     const tx = (nova.tx && nova.tx[tpl]) || {}, tm = (nova.tam && nova.tam[tpl]) || {}, ps = (m && m.pos && m.pos[tpl]) || {};
-    return base.map((it) => Object.assign({}, it, { t: tx[it.k] !== undefined ? tx[it.k] : it.t, mult: tm[it.k] || 1 }, ps[it.k] ? { x: ps[it.k].x, y: ps[it.k].y } : {}));
+    const pr = presetAtual(tpl), oc = (nova.oculto && nova.oculto[tpl]) || {};
+    return base.map((it) => { const q = pr && pr.i[it.k] ? pr.i[it.k] : null;
+      return Object.assign({}, it, q ? { x: q.x, y: q.y, alinha: q.al || 'left' } : {}, { t: oc[it.k] ? '' : (tx[it.k] !== undefined ? tx[it.k] : it.t), mult: (tm[it.k] || 1) * (q && q.m ? q.m : 1) }, ps[it.k] ? { x: ps[it.k].x, y: ps[it.k].y } : {}); });
   }
   function textoCanvas(ctx, it, W, H) {
     const txt = String(it.t == null ? '' : it.t).trim(); if (!txt) return null;
@@ -449,7 +523,7 @@
     ctx.font = (it.estilo ? it.estilo + ' ' : '') + 'bold ' + tam + 'px ' + (it.fonte || FONTE); ctx.textAlign = it.alinha || 'left'; ctx.textBaseline = 'alphabetic';
     const linhas = it.max ? quebrar(ctx, txt, W * it.max, it.linhas || 2) : [txt], lh = tam * 1.15, pad = it.bg ? tam * 0.28 : 4;
     const larg = Math.max.apply(null, linhas.map((l) => ctx.measureText(l).width)), x = it.x * W, y0 = it.y * H;
-    const x0 = (it.alinha === 'center' ? x - larg / 2 : x) - pad, y1 = y0 - tam * 0.88 - pad * 0.6, y2 = y0 + (linhas.length - 1) * lh + tam * 0.3 + pad * 0.6;
+    const x0 = (it.alinha === 'center' ? x - larg / 2 : it.alinha === 'right' ? x - larg : x) - pad, y1 = y0 - tam * 0.88 - pad * 0.6, y2 = y0 + (linhas.length - 1) * lh + tam * 0.3 + pad * 0.6;
     if (it.bg) { ctx.fillStyle = it.bg; ctx.fillRect(x0, y1, larg + pad * 2, y2 - y1); }
     ctx.save(); if (it.sombra) { ctx.shadowColor = 'rgba(0,0,0,.65)'; ctx.shadowBlur = Math.round(tam * 0.18); ctx.shadowOffsetY = Math.round(tam * 0.05); }
     ctx.fillStyle = it.cor || '#fff'; linhas.forEach((l, n) => ctx.fillText(l, x, y0 + n * lh)); ctx.restore();
@@ -467,7 +541,13 @@
     const story = H > W * 1.5;
     ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H);
     if (tpl === 'original' || tpl === 'elausa') fundoFoto(ctx, img, W, H, ajuste);
-    else if (tpl === 'classico') { cobrir(ctx, img, 0, 0, W, H); const bh = story ? 640 : 460, g = ctx.createLinearGradient(0, H - bh, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.5, 'rgba(0,0,0,.7)'); g.addColorStop(1, 'rgba(0,0,0,.92)'); ctx.fillStyle = g; ctx.fillRect(0, H - bh, W, bh); }
+    else if (tpl === 'classico') {
+      cobrir(ctx, img, 0, 0, W, H); const bh = story ? 640 : 460, pr = presetAtual('classico'), gr = pr ? pr.grad : 'baixo';
+      const faixa = (y0, y1) => { const g = ctx.createLinearGradient(0, y1, 0, y0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.5, 'rgba(0,0,0,.7)'); g.addColorStop(1, 'rgba(0,0,0,.92)'); ctx.fillStyle = g; ctx.fillRect(0, Math.min(y0, y1), W, Math.abs(y1 - y0)); };
+      if (gr === 'baixo' || gr === 'ambos') faixa(H, H - bh);
+      if (gr === 'cima' || gr === 'ambos') faixa(0, bh * 0.75);
+      if (gr === 'tudo') { ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, 0, W, H); }
+    }
     else if (tpl === 'promo') cobrir(ctx, img, 0, 0, W, H);
     else if (tpl === 'minimal') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); const m = 56, topo = story ? 140 : m, fh = H - (story ? 520 : 330); cobrir(ctx, img, m, topo, W - m * 2, fh - topo); }
     else {     // vitrine
@@ -485,7 +565,13 @@
   let previaSeq = 0;
   function pintarCanvas(c) {
     const m = c._m, [W, H] = tamanhoAlvo(); c.width = W; c.height = H;
-    c._boxes = desenharTemplate(c.getContext('2d'), c._img, W, H, nova.template, itensEfetivos(nova.template, m), nova.ajuste);
+    const x = c.getContext('2d');
+    c._boxes = desenharTemplate(x, c._img, W, H, nova.template, itensEfetivos(nova.template, m), nova.ajuste);
+    if (nova.tipo === 'story' && nova.manual) {     // só na prévia: reserva o lugar do botão de link que será colocado no Instagram
+      x.save(); x.setLineDash([14, 10]); x.lineWidth = 4; x.strokeStyle = 'rgba(255,255,255,.95)'; x.fillStyle = 'rgba(0,0,0,.35)';
+      const bw = W * 0.56, bh = H * 0.05, bx = (W - bw) / 2, by = H * 0.655; x.fillRect(bx, by, bw, bh); x.strokeRect(bx, by, bw, bh);
+      x.setLineDash([]); x.fillStyle = '#fff'; x.font = 'bold ' + Math.round(W * 0.028) + 'px ' + FONTE; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('🔗 aqui entra o link (só na prévia)', W / 2, by + bh / 2); x.restore();
+    }
   }
   function repintar() { document.querySelectorAll('#po-previa canvas').forEach((c) => { if (c._img) pintarCanvas(c); }); }
   let arr = null, arrRaf = 0, arrGlobal = false;
@@ -521,7 +607,7 @@
   async function subirBlob(blob, nome) {
     const s = sessao(); if (!s) throw new Error('Entre com o seu login para postar.');
     try {
-      const r = await fetch(MIDIA_URL + '/u', { method: 'POST', headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: blob });
+      const r = await fetch(MIDIA_URL + '/u?temp=1', { method: 'POST', headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: blob });
       const j = await r.json();
       if (r.ok && j && j.ok && j.url) return j.url;
       throw new Error((j && j.erro) || ('HTTP ' + r.status));
@@ -533,7 +619,7 @@
     }
   }
   async function videoDoAparelho(file) {
-    if (file.size > 15 * 1048576) { return msg('Esse vídeo passa de 15 MB. Corte ou comprima e tente de novo.', true); }
+    if (file.size > 40 * 1048576) { return msg('Esse vídeo passa de 40 MB. Corte ou comprima e tente de novo.', true); }
     msg('Enviando o vídeo…', false);
     try { const url = await subirBlob(file, file.name || 'video.mp4'); nova.midias.forEach((m) => { if (nova.tipo === 'reels') m.sel = false; }); nova.midias.push({ url, tipo: 'video', sel: true }); msg('Vídeo pronto.', false); }
     catch (e) { msg(e.message, true); }
@@ -543,8 +629,8 @@
     arqs.forEach((f) => {
       const video = /^video\//.test(f.type), foto = /^image\/(jpeg|png|webp)$/.test(f.type);
       if (!video && !foto) { erros.push(f.name + ': formato não aceito (use JPG, PNG, WEBP, MP4 ou WEBM)'); return; }
-      if (video && f.size > 15 * 1048576) { erros.push(f.name + ': vídeo passa de 15 MB'); return; }
-      if (nova.livre.length >= 20) { erros.push('No máximo 20 mídias por vez'); return; }
+      if (video && f.size > 40 * 1048576) { erros.push(f.name + ': vídeo passa de 40 MB'); return; }
+      if (nova.livre.length >= 30) { erros.push('No máximo 30 mídias por vez'); return; }
       nova.livre.push({ file: f, tipo: video ? 'video' : 'imagem', url: URL.createObjectURL(f), nome: f.name, hora: '' });
     });
     aviso = erros.join(' · '); avisoErro = erros.length > 0; desenhar();
@@ -595,7 +681,7 @@
     try {
       const prontas = []; for (const m of sel) prontas.push(await prepararMidia(m));
       const grupo = livre ? (cli ? 'cliente-' : 'livre-') + Date.now().toString(36) : String(n.p.Codigo || n.p.ID || '');
-      const base = { legenda: n.legenda, produto: livre ? '' : grupo, template: livre ? (cli ? 'elausa' : 'livre') : n.template, por: (typeof funcionarioNome !== 'undefined' ? funcionarioNome : '') || '' };
+      const base = { legenda: n.legenda, produto: livre ? '' : grupo, template: livre ? (cli ? 'elausa' : (n.template === 'original' ? 'livre' : 'livre-' + n.template)) : n.template, por: (typeof funcionarioNome !== 'undefined' ? funcionarioNome : '') || '' };
       let corpo;
       if (n.tipo === 'story') corpo = { posts: prontas.map((m, k) => Object.assign({}, base, { tipo: 'story', quando: quandos[k], midias: [m], modo: n.manual ? 'manual' : 'auto', link: n.manual ? link : undefined, grupo })), por: base.por };
       else corpo = Object.assign({}, base, { tipo: n.tipo, quando: quandos[0], midias: prontas });

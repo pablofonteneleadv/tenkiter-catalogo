@@ -139,6 +139,8 @@
 
   .produto { display: flex; gap: 10px; background: var(--branco); border-radius: 12px; padding: 10px; margin-bottom: 10px; align-items: flex-start; position: relative; }
   .produto-chk { margin-top: 25px; }
+  .foto-ampliar { width: auto; flex: none; padding: 0; margin: 0; border: 0; background: none; border-radius: 8px; cursor: zoom-in; min-height: 0; line-height: 0; position: relative; }
+  .foto-ampliar::after { content: '🔍'; position: absolute; right: 2px; bottom: 2px; font-size: .7rem; line-height: 1; background: rgba(255,255,255,.85); border-radius: 6px; padding: 2px 3px; }
   .produto img { width: 56px; height: 70px; object-fit: cover; border-radius: 8px; background: #eee; }
   .produto-info { flex: 1; min-width: 0; }
   .produto-info .codigo { font-size: 0.68rem; color: var(--laranja-txt); font-weight: 800; }
@@ -341,7 +343,7 @@
   .produto img { width: 64px; height: 80px; flex: none; }
   .produto.arquivado { opacity: .72; }
   .produto { padding: 12px; }
-  .produto-chk { position: absolute; left: 17px; top: 17px; width: 22px; height: 22px; margin: 0; z-index: 2; accent-color: var(--laranja); }
+  .produto-chk { position: absolute; left: 15px; top: 15px; width: 26px; height: 26px; margin: 0; z-index: 2; accent-color: var(--laranja); }
   .acoes-linha > button { padding: 7px 10px; }
   .produto-info .estoque-linha { font-size: 0.74rem; color: #666; margin-top: 2px; }
   .sel-esg { background: #fde3e3; color: var(--vermelho); font-size: 0.6rem; font-weight: 800; padding: 2px 7px; border-radius: 6px; margin-left: 6px; vertical-align: middle; }
@@ -376,6 +378,11 @@
   .sem-cadastrar #card-pedidos, .sem-cadastrar #aviso-codigos, .sem-cadastrar #aviso-pedidos-novos, .sem-cadastrar #btn-bulk-estoque, .sem-cadastrar #btn-bulk-categoria { display: none !important; }
   .sem-auditoria #btn-abrir-metricas, .sem-precos #btn-importar-csv, .sem-gerir #btn-abrir-integracoes, .sem-gerir #btn-abrir-conexoes { display: none !important; }
   .sem-cadastrar #btn-abrir-postagens { display: none !important; }
+  /* v4.9 — "Painel simplificado" (perfil Equipe catálogo 1): fica só cadastro, lista e Postagens. Nada é apagado: quem tem outra permissão (Encarregado, Admin…) não cai aqui (ver aplicarPermissoes). */
+  .painel-simples #card-pedidos, .painel-simples #aviso-pedidos-novos, .painel-simples #aviso-codigos, .painel-simples #atalho-pedidos, .painel-simples #atalho-numeros,
+  .painel-simples [data-atalho="ferramentas"], .painel-simples #details-ferramentas, .painel-simples #ig-faixa, .painel-simples #btn-bulk-preco, .painel-simples #btn-bulk-novidade,
+  .painel-simples #btn-bulk-arquivar, .painel-simples #btn-bulk-reativar, .painel-simples #btn-bulk-juntar, .painel-simples #btn-bulk-estoque, .painel-simples #btn-bulk-categoria,
+  .painel-simples .dashboard { display: none !important; }
   .ped-topo { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
   #ped-atualizar { width: auto; flex: none; padding: 7px 12px; font-size: 0.78rem; background: #eee; color: #333; }
   .ped-vazio { text-align: center; color: #666; padding: 16px 0; font-size: 0.88rem; }
@@ -524,12 +531,83 @@
     <div class="atalhos-linha">
       <button type="button" data-atalho="cadastrar">➕ Cadastrar peça</button>
       <button type="button" data-atalho="pedidos" id="atalho-pedidos" hidden>🧾 Pedidos</button>
-      <button type="button" data-atalho="postagens" id="atalho-postagens" hidden>📸 Postar Story</button>
+      <button type="button" data-atalho="postagens" id="atalho-postagens">📸 Postagens</button>
       <button type="button" data-atalho="lista">📦 Estoque</button>
       <button type="button" data-atalho="numeros" id="atalho-numeros" hidden>📊 Números</button>
       <button type="button" data-atalho="ferramentas">🛠️ Outras ferramentas</button>
     </div>
   </nav>
+
+  <details class="extra ferramentas" id="details-ferramentas">
+    <summary>🛠️ Ferramentas do gestor (números, avisos, auditoria, configurações)</summary>
+  <div class="stats-panel" id="stats-panel">
+    <div class="stats-card"><span>👁️ Visualizações</span><strong id="stats-views">—</strong></div>
+    <div class="stats-card"><span>💬 Cliques WhatsApp</span><strong id="stats-whats">—</strong></div>
+    <div class="stats-card"><span>🔥 Mais visto</span><strong id="stats-mais-visto">—</strong><small id="stats-mais-visto-views"></small></div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+    <button type="button" id="btn-abrir-auditoria" style="background:#333;color:#fff;">📋 Auditoria</button>
+    <button type="button" id="btn-abrir-push" style="background:#0f5fa8;color:#fff;">📢 Enviar Notificação</button>
+    <button type="button" class="btn-ferr" id="btn-abrir-metricas" hidden style="background:#1f6f43;color:#fff;">📊 Números reais</button>
+    <button type="button" class="btn-ferr" id="btn-exportar-csv" style="background:#444;color:#fff;">⬇️ Exportar planilha</button>
+    <button type="button" class="btn-ferr" id="btn-importar-csv" hidden style="background:#444;color:#fff;">⬆️ Importar planilha</button>
+    <button type="button" class="btn-ferr" id="btn-abrir-integracoes" hidden style="background:#5a2ea6;color:#fff;">🔌 Integrações</button>
+    <button type="button" class="btn-ferr" id="btn-abrir-postagens" hidden style="background:#c13584;color:#fff;">📸 Postagens</button>
+    <button type="button" class="btn-ferr" id="btn-abrir-conexoes" hidden style="background:#0b5d63;color:#fff;">🔗 Conexões</button>
+    <a href="treinamentos.html" target="_blank" style="text-decoration:none;background:var(--preto);color:var(--laranja);border:1px solid var(--laranja);border-radius:8px;padding:9px 14px;font-size:0.85rem;font-weight:700;display:inline-flex;align-items:center;">📖 Treinamentos</a>
+  </div>
+
+  <div class="painel-push" id="painel-push" style="display:none;background:#eef6ff;border:1px solid #bcd9f5;border-radius:10px;padding:14px;margin-bottom:14px;">
+    <h2 style="margin:0 0 8px;font-size:0.95rem;">📢 Enviar Notificação para Assinantes</h2>
+    <p style="font-size:0.75rem;color:#555;margin:0 0 10px;">Vai para todos que ativaram as notificações no catálogo. Use para promoções, avisos gerais, etc.</p>
+    <label>Título</label>
+    <input type="text" id="push-titulo" maxlength="60" placeholder="Ex: Promoção de fim de semana! 🎉">
+    <label style="margin-top:8px;display:block;">Mensagem</label>
+    <textarea id="push-mensagem" rows="2" maxlength="150" placeholder="Ex: 20% off em toda a loja até domingo."></textarea>
+    <div class="push-modelos" id="push-modelos"></div>
+    <div id="push-segmento-linha" hidden><label for="push-segmento" style="margin-top:8px;display:block;">Enviar para</label><select id="push-segmento"></select></div>
+    <div id="push-extras" hidden><button type="button" id="btn-push-historico" style="margin-top:8px;width:auto;padding:8px 12px;font-size:0.78rem;background:#dbe9fb;color:#0b3d75;">📜 Ver últimos avisos enviados</button></div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button type="button" id="btn-enviar-push" style="background:#0f5fa8;color:#fff;">Enviar Agora</button>
+      <button type="button" id="btn-cancelar-push" style="background:#eee;color:#555;">Cancelar</button>
+    </div>
+    <div id="push-status" style="font-size:0.8rem;margin-top:8px;"></div>
+  </div>
+
+  <details class="extra" id="details-config">
+    <summary>⚙️ Configurações Avançadas (URL do sistema)</summary>
+    <label>Endereço da API (Apps Script)</label>
+    <input type="text" id="input-api-url" placeholder="https://script.google.com/...">
+    <button type="button" id="btn-salvar-api-url" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar Endereço Personalizado</button>
+    <button type="button" id="btn-restaurar-api-url" style="margin-top:8px;background:#eee;color:#555;">Restaurar Endereço Padrão</button>
+    <p style="font-size:0.72rem;color:#666;margin-top:8px;">Só mude isto se um novo endereço do sistema for informado. Um endereço errado impede o catálogo de carregar.</p>
+
+    <hr style="border:none;border-top:1px dashed #ccc;margin:16px 0;">
+    <label>🤖 Inteligência artificial (Gemini) — chave</label>
+    <div id="ia-status" style="font-size:0.78rem;color:#666;margin:2px 0 6px;">Verificando...</div>
+    <input type="password" id="input-ia-chave" placeholder="Cole aqui a chave do Gemini" autocomplete="off">
+    <label style="margin-top:8px;">Modelo</label>
+    <input type="text" id="input-ia-modelo" placeholder="vazio = padrão do sistema" autocomplete="off">
+    <button type="button" id="btn-salvar-ia" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar Configuração da IA</button>
+    <button type="button" id="btn-apagar-ia" style="margin-top:8px;background:#eee;color:#555;">Apagar chave guardada</button>
+    <p style="font-size:0.72rem;color:#666;margin-top:8px;">A chave fica guardada só no servidor e nunca volta para esta tela (aparece apenas "configurada" e os 4 últimos caracteres). Usada pelos botões "Preencher pela foto" e "Gerar Título/Descrição". Deixe a chave em branco para mudar só o modelo. Só quem é Admin total consegue salvar.</p>
+  </details>
+
+  <details class="extra" id="details-log-debug">
+    <summary>🪲 Log de Depuração</summary>
+    <p style="font-size:0.72rem;color:#666;margin:0 0 8px;">Grava, passo a passo, tudo que o sistema faz ao enviar um produto (pedido, resposta, erro, cada tentativa) — liga só na hora de reproduzir um problema, pra não ficar rodando à toa.</p>
+    <button type="button" id="btn-toggle-log-debug" style="background:var(--preto);color:var(--laranja);">🪲 Ligar Log</button>
+    <div id="log-debug-painel" style="display:none;margin-top:10px;">
+      <textarea id="log-debug-texto" readonly style="width:100%;height:220px;font-family:monospace;font-size:0.68rem;white-space:pre;box-sizing:border-box;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button type="button" id="btn-copiar-log-debug" style="background:var(--laranja);">📋 Copiar Log</button>
+        <button type="button" id="btn-limpar-log-debug" style="background:#eee;color:#555;">🗑️ Limpar</button>
+      </div>
+    </div>
+  </details>
+
+  </details>
 
   <details class="cartao-cad" id="card-pedidos" hidden>
     <summary><span id="ped-sum-txt">🧾 Pedidos</span></summary>
@@ -721,76 +799,6 @@
   <div class="filtros-lista" id="filtros-lista"></div>
   <div class="aviso-cache" id="aviso-cache"></div>
   <div id="lista-produtos"></div>
-  <details class="extra ferramentas" id="details-ferramentas">
-    <summary>🛠️ Ferramentas do gestor (números, avisos, auditoria, configurações)</summary>
-  <div class="stats-panel" id="stats-panel">
-    <div class="stats-card"><span>👁️ Visualizações</span><strong id="stats-views">—</strong></div>
-    <div class="stats-card"><span>💬 Cliques WhatsApp</span><strong id="stats-whats">—</strong></div>
-    <div class="stats-card"><span>🔥 Mais visto</span><strong id="stats-mais-visto">—</strong><small id="stats-mais-visto-views"></small></div>
-  </div>
-
-  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-    <button type="button" id="btn-abrir-auditoria" style="background:#333;color:#fff;">📋 Auditoria</button>
-    <button type="button" id="btn-abrir-push" style="background:#0f5fa8;color:#fff;">📢 Enviar Notificação</button>
-    <button type="button" class="btn-ferr" id="btn-abrir-metricas" hidden style="background:#1f6f43;color:#fff;">📊 Números reais</button>
-    <button type="button" class="btn-ferr" id="btn-exportar-csv" style="background:#444;color:#fff;">⬇️ Exportar planilha</button>
-    <button type="button" class="btn-ferr" id="btn-importar-csv" hidden style="background:#444;color:#fff;">⬆️ Importar planilha</button>
-    <button type="button" class="btn-ferr" id="btn-abrir-integracoes" hidden style="background:#5a2ea6;color:#fff;">🔌 Integrações</button>
-    <button type="button" class="btn-ferr" id="btn-abrir-postagens" hidden style="background:#c13584;color:#fff;">📸 Postagens</button>
-    <button type="button" class="btn-ferr" id="btn-abrir-conexoes" hidden style="background:#0b5d63;color:#fff;">🔗 Conexões</button>
-    <a href="treinamentos.html" target="_blank" style="text-decoration:none;background:var(--preto);color:var(--laranja);border:1px solid var(--laranja);border-radius:8px;padding:9px 14px;font-size:0.85rem;font-weight:700;display:inline-flex;align-items:center;">📖 Treinamentos</a>
-  </div>
-
-  <div class="painel-push" id="painel-push" style="display:none;background:#eef6ff;border:1px solid #bcd9f5;border-radius:10px;padding:14px;margin-bottom:14px;">
-    <h3 style="margin:0 0 8px;font-size:0.95rem;">📢 Enviar Notificação para Assinantes</h3>
-    <p style="font-size:0.75rem;color:#555;margin:0 0 10px;">Vai para todos que ativaram as notificações no catálogo. Use para promoções, avisos gerais, etc.</p>
-    <label>Título</label>
-    <input type="text" id="push-titulo" maxlength="60" placeholder="Ex: Promoção de fim de semana! 🎉">
-    <label style="margin-top:8px;display:block;">Mensagem</label>
-    <textarea id="push-mensagem" rows="2" maxlength="150" placeholder="Ex: 20% off em toda a loja até domingo."></textarea>
-    <div class="push-modelos" id="push-modelos"></div>
-    <div id="push-segmento-linha" hidden><label for="push-segmento" style="margin-top:8px;display:block;">Enviar para</label><select id="push-segmento"></select></div>
-    <div id="push-extras" hidden><button type="button" id="btn-push-historico" style="margin-top:8px;width:auto;padding:8px 12px;font-size:0.78rem;background:#dbe9fb;color:#0b3d75;">📜 Ver últimos avisos enviados</button></div>
-    <div style="display:flex;gap:8px;margin-top:10px;">
-      <button type="button" id="btn-enviar-push" style="background:#0f5fa8;color:#fff;">Enviar Agora</button>
-      <button type="button" id="btn-cancelar-push" style="background:#eee;color:#555;">Cancelar</button>
-    </div>
-    <div id="push-status" style="font-size:0.8rem;margin-top:8px;"></div>
-  </div>
-
-  <details class="extra" id="details-config">
-    <summary>⚙️ Configurações Avançadas (URL do sistema)</summary>
-    <label>Endereço da API (Apps Script)</label>
-    <input type="text" id="input-api-url" placeholder="https://script.google.com/...">
-    <button type="button" id="btn-salvar-api-url" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar Endereço Personalizado</button>
-    <button type="button" id="btn-restaurar-api-url" style="margin-top:8px;background:#eee;color:#555;">Restaurar Endereço Padrão</button>
-    <p style="font-size:0.72rem;color:#666;margin-top:8px;">Só mude isto se um novo endereço do sistema for informado. Um endereço errado impede o catálogo de carregar.</p>
-
-    <hr style="border:none;border-top:1px dashed #ccc;margin:16px 0;">
-    <label>🤖 Inteligência artificial (Gemini) — chave</label>
-    <div id="ia-status" style="font-size:0.78rem;color:#666;margin:2px 0 6px;">Verificando...</div>
-    <input type="password" id="input-ia-chave" placeholder="Cole aqui a chave do Gemini" autocomplete="off">
-    <label style="margin-top:8px;">Modelo</label>
-    <input type="text" id="input-ia-modelo" placeholder="vazio = padrão do sistema" autocomplete="off">
-    <button type="button" id="btn-salvar-ia" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar Configuração da IA</button>
-    <button type="button" id="btn-apagar-ia" style="margin-top:8px;background:#eee;color:#555;">Apagar chave guardada</button>
-    <p style="font-size:0.72rem;color:#666;margin-top:8px;">A chave fica guardada só no servidor e nunca volta para esta tela (aparece apenas "configurada" e os 4 últimos caracteres). Usada pelos botões "Preencher pela foto" e "Gerar Título/Descrição". Deixe a chave em branco para mudar só o modelo. Só quem é Admin total consegue salvar.</p>
-  </details>
-
-  <details class="extra" id="details-log-debug">
-    <summary>🪲 Log de Depuração</summary>
-    <p style="font-size:0.72rem;color:#666;margin:0 0 8px;">Grava, passo a passo, tudo que o sistema faz ao enviar um produto (pedido, resposta, erro, cada tentativa) — liga só na hora de reproduzir um problema, pra não ficar rodando à toa.</p>
-    <button type="button" id="btn-toggle-log-debug" style="background:var(--preto);color:var(--laranja);">🪲 Ligar Log</button>
-    <div id="log-debug-painel" style="display:none;margin-top:10px;">
-      <textarea id="log-debug-texto" readonly style="width:100%;height:220px;font-family:monospace;font-size:0.68rem;white-space:pre;box-sizing:border-box;"></textarea>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button type="button" id="btn-copiar-log-debug" style="background:var(--laranja);">📋 Copiar Log</button>
-        <button type="button" id="btn-limpar-log-debug" style="background:#eee;color:#555;">🗑️ Limpar</button>
-      </div>
-    </div>
-  </details>
-
-  </details>
 
 </main>
 
@@ -897,6 +905,8 @@
 
   function aplicarPermissoes(usuario) {
     NOMES_PERMISSOES.forEach(([classe, chave]) => document.body.classList.toggle(classe, !temPermissao(usuario, chave)));
+    // Painel simplificado: só quem tem a permissão E nenhuma de gestão (quem soma outro perfil maior continua vendo tudo)
+    document.body.classList.toggle('painel-simples', temPermissao(usuario, 'painel_simples') && !['catalogo_excluir', 'catalogo_precos', 'catalogo_auditoria', 'catalogo_push', 'gerir_acessos', 'equipe_relatorio', 'dados_pessoais', 'gerir_manuais'].some(k => temPermissao(usuario, k)));
     const card = document.getElementById('form-produto').closest('.cartao-cad');
     if (card) card.style.display = temPermissao(usuario, 'catalogo_cadastrar') ? '' : 'none';
   }
@@ -943,7 +953,7 @@
   function usarPinAntigo() {
     modoLogin = false;
     usuarioAdmin = null;
-    NOMES_PERMISSOES.forEach(([classe]) => document.body.classList.remove(classe));
+    NOMES_PERMISSOES.forEach(([classe]) => document.body.classList.remove(classe)); document.body.classList.remove('painel-simples');
     const card = document.getElementById('form-produto').closest('.cartao-cad');
     if (card) card.style.display = '';
     document.getElementById('btn-trocar-user').style.display = '';
@@ -1819,6 +1829,17 @@
     const al = document.getElementById('aviso-lote');
     al.hidden = false; al.textContent = '🧩 Cadastro separado: preencha UMA vez. Ao cadastrar, este e mais ' + (rs.length - 1) + ' post(s) viram ' + rs.length + ' produtos diferentes, todos com estas mesmas informações; cada um fica com as fotos/vídeo do seu post.';
   };
+  /* v4.9: "Aceitar" vários posts, cada um com as suas informações (janela do importador). Cada item vira um envio na fila, com as fotos do SEU post. */
+  window.tkListasLoja = function () { return { categorias: categorias.slice(), generos: generos.slice() }; };
+  window.tkCadastrarLote = function (itens) {
+    (itens || []).forEach((it) => {
+      const base = Object.assign({ action: 'create' }, it.dados), d2 = dadosDoPostSeparado_(base, it.r);
+      envios.push({ chave: ++seqEnvios, titulo: d2.nome || 'Peça', ehEdicao: false, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: d2, estado: 'fila', msg: '', rascunhoId: it.r.id, k: novoKEnvio_(), etapa: 'fila' });
+      guardarEnvio_(envios[envios.length - 1]);
+    });
+    document.getElementById('status').textContent = 'Enviando ' + (itens || []).length + ' produtos em segundo plano. Pode cadastrar a próxima peça.';
+    desenharEnvios(); processarEnvios();
+  };
   function dadosDoPostSeparado_(base, r2) {
     const fotos = (r2.midias || []).filter(m => m.tipo === 'foto'), video = (r2.midias || []).find(m => m.tipo === 'video');
     const capa = fotos.find(m => m.capa) || fotos[0] || null;
@@ -2498,7 +2519,7 @@
       return `
       <div class="produto${inativo ? ' arquivado' : ''}">
         <input type="checkbox" class="produto-chk" data-id="${idE}" aria-label="Selecionar ${escaparHtml(p.Nome)}" ${selecionadosBulk.has(String(p.ID)) ? 'checked' : ''}>
-        <img ${atribSrc(fotoMini(p.Foto_URL, 200))} alt="" loading="lazy" decoding="async" width="64" height="80">
+        <button type="button" class="foto-ampliar" data-ampliar-id="${idE}" aria-label="Ampliar a foto de ${escaparHtml(p.Nome)}"><img ${atribSrc(fotoMini(p.Foto_URL, 200))} alt="" loading="lazy" decoding="async" width="64" height="80"></button>
         <div class="produto-info">
           <div class="codigo">${p.Codigo ? escaparHtml(p.Codigo) : '<span class="selo-inativo" style="background:#fff3e0;color:#7a4a00;margin-left:0">SEM CÓDIGO</span>'}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}${esg ? '<span class="sel-esg">ESGOTADO</span>' : ''}</div>
           <div class="nome">${escaparHtml(p.Nome)}</div>
@@ -2535,6 +2556,13 @@
     container.querySelectorAll('[data-postar-id]').forEach(btn => btn.addEventListener('click', () => enviarParaPostagem_([btn.dataset.postarId])));
     container.querySelectorAll('[data-link-id]').forEach(btn => btn.addEventListener('click', () => copiarLink(btn.dataset.linkId)));
     container.querySelectorAll('[data-editar-id]').forEach(btn => btn.addEventListener('click', () => editarProduto(btn.dataset.editarId)));
+    // Toque na miniatura = a foto original, grande, com as outras fotos e o vídeo da peça (‹ ›)
+    container.querySelectorAll('[data-ampliar-id]').forEach(btn => btn.addEventListener('click', () => {
+      const p = produtos.find(x => String(x.ID) === String(btn.dataset.ampliarId)); if (!p || !p.Foto_URL) return;
+      const itens = [{ url: p.Foto_URL, tipo: 'foto' }];
+      String(p.Fotos_Galeria || '').split(',').map(x => x.trim()).filter(x => /^https?:\/\//.test(x) && x !== p.Foto_URL).slice(0, 8).forEach(u => itens.push({ url: u, tipo: 'foto' }));
+      if (window.TKFotoGrande) TKFotoGrande.abrir({ itens, indice: 0 });
+    }));
     container.querySelectorAll('[data-duplicar-id]').forEach(btn => btn.addEventListener('click', () => duplicarProduto(btn.dataset.duplicarId)));
     container.querySelectorAll('[data-arte-id]').forEach(btn => btn.addEventListener('click', () => abrirCriadorDeArte(btn.dataset.arteId)));
     container.querySelectorAll('[data-arquivar-id]').forEach(btn => btn.addEventListener('click', () => arquivarUnico(btn.dataset.arquivarId)));

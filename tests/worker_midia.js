@@ -59,16 +59,20 @@ const chk = (n, c, d) => { if (c) { ok++; console.log('  ✔ ' + n); } else { fa
   console.log('== Travas de custo ==');
   const grande = Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(3 * 1024 * 1024)]);
   r = await w.fetch(pedido('POST', '/u', 'tk2.cadastra', grande, { 'Content-Length': String(grande.length) }), env); chk('foto de 3 MB recusada (413)', r.status === 413);
-  const enorme = Buffer.concat([mp4, Buffer.alloc(16 * 1024 * 1024)]);
-  r = await w.fetch(pedido('POST', '/u', 'tk2.cadastra', enorme, { 'Content-Length': String(enorme.length) }), env); chk('vídeo de 16 MB recusado (413)', r.status === 413);
+  const enorme = Buffer.concat([mp4, Buffer.alloc(41 * 1024 * 1024)]);
+  r = await w.fetch(pedido('POST', '/u', 'tk2.cadastra', enorme, { 'Content-Length': String(enorme.length) }), env); chk('vídeo de 41 MB recusado (413)', r.status === 413);
   r = await w.fetch(pedido('POST', '/u', 'tk2.cadastra', mp4, { 'Content-Length': String(mp4.length) }), env); chk('vídeo pequeno aceito', r.status === 200);
+  const medio = Buffer.concat([mp4, Buffer.alloc(30 * 1024 * 1024)]);
+  r = await w.fetch(pedido('POST', '/u', 'tk2.cadastra', medio, { 'Content-Length': String(medio.length) }), env); chk('vídeo de 30 MB aceito (limite agora 40 MB)', r.status === 200);
+  r = await w.fetch(pedido('POST', '/u?temp=1', 'tk2.cadastra', jpg, { 'Content-Length': String(jpg.length) }), env); const jt = await r.json(); chk('envio temporário (?temp=1) vai para t/', r.status === 200 && /\/m\/t\/[0-9]{6}\/[0-9a-f]{20}\.jpg$/.test(jt.url));
+  r = await w.fetch(new Request(jt.url), env); chk('arquivo temporário abre pelo endereço público', r.status === 200);
   r = await w.fetch(pedido('POST', '/u', 'tk2.cadastra', Buffer.from('MZ' + 'x'.repeat(500)), { 'Content-Length': '502' }), env); chk('arquivo estranho recusado (415)', r.status === 415);
   r = await w.fetch(pedido('POST', '/u', 'tk2.cadastra', heic, { 'Content-Length': String(heic.length) }), env); chk('HEIC recusado (415)', r.status === 415);
   r = await w.fetch(pedido('POST', '/u', 'tk2.cadastra', jpg, {}), env); chk('sem Content-Length = 411', r.status === 411);
   const cheio = Object.assign({}, env, { LIMITE_BYTES: String(jpg.length + mp4.length + 10) });
   r = await w.fetch(pedido('POST', '/u', 'tk2.cadastra', jpg, { 'Content-Length': String(jpg.length) }), cheio); chk('passou do teto de armazenamento = 507', r.status === 507);
-  mem.set('env_' + new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10), '400');
-  r = await w.fetch(pedido('POST', '/u', 'tk2.cadastra', jpg, { 'Content-Length': String(jpg.length) }), env); chk('400 envios no dia = 429', r.status === 429);
+  mem.set('env_' + new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10), '600');
+  r = await w.fetch(pedido('POST', '/u', 'tk2.cadastra', jpg, { 'Content-Length': String(jpg.length) }), env); chk('600 envios no dia = 429', r.status === 429);
 
   console.log('== Miniatura de vídeo (?poster=) ==');
   mem.delete('env_' + new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10));   // zera o contador do dia (o teste anterior o encheu)
