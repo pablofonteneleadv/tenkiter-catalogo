@@ -201,8 +201,8 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if st.get("sem_aparelhos"): ap.update({"total":0,"instalaram":0,"instalaramNoPeriodo":0,"usaramAppNoPeriodo":0,"pushAtivos":0,"pushAtivosNoApp":0,"comConta":0,"porPlataforma":{"android":0,"ios":0,"computador":0,"outro":0}})
             return {"ok":True,"dias":int(b.get("dias",30)),"geradoEm":"11/10/2026 12:00","semDados":st.get("sem_dados",False),"filtros":{"dias":int(b.get("dias",30)),"de":b.get("de",""),"ate":b.get("ate","")},
                 "filtrosDescricao":" · ".join(partes),"filtrado":filtrado,
-                "totais":{"visualizacoes":vis,"whatsapp":zap,"whatsappPor100Visualizacoes":15.0,"visitantes":int(40*f),"visitas":int(55*f)},
-                "funil":{"visitantes":int(40*f),"visualizacoes":vis,"whatsapp":zap,"pedidos":len(st["pedidos"])},
+                "totais":dict({"visualizacoes":vis,"whatsapp":zap,"whatsappPor100Visualizacoes":15.0,"visitantes":int(40*f),"visitas":int(55*f)},**({"pessoasViram":int(30*f),"pessoasWhats":int(9*f)} if st.get("pessoas_reais") else {})),
+                "funil":dict({"visitantes":int(40*f),"visualizacoes":vis,"whatsapp":zap,"pedidos":len(st["pedidos"])},**({"pessoasViram":int(30*f),"pessoasWhats":int(9*f)} if st.get("pessoas_reais") else {})),
                 "porDia":[{"dia":"2026-10-%02d"%(1+i%10),"visualizacoes":i%7,"whatsapp":i%3,"pedidos":0} for i in range(ndias)],
                 "porHora":[{"hora":h,"visualizacoes":(h*3)%11,"whatsapp":h%3} for h in range(24)],
                 "porDiaSemana":[{"dia":d,"nome":["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"][d],"visualizacoes":d*4,"whatsapp":d} for d in range(7)],

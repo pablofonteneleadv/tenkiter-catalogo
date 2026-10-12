@@ -1007,13 +1007,30 @@
       return;
     }
     if (j.exigeLogin || j.sessaoInvalida || j.inativa || j.pinInvalido) {
+      // Antes de pedir login, CONFERE a sessão de verdade: respostas atrasadas de chamadas feitas antes do login terminar (ou de uma ação
+      // que mandou credencial vazia) não podem derrubar quem já está logado nem reabrir a tela de login (bug real, Pablo 12/10/2026).
+      if (!acessoPronto_) return;                    // a abertura do painel ainda decide sozinha (iniciarAcesso)
+      if (conferindoAcesso_) return;
+      if (usuarioAdmin && getSessao()) {
+        conferindoAcesso_ = true;
+        conferirSessao().then((u) => {
+          conferindoAcesso_ = false;
+          if (u && (u.semRede || temPermissao(u, 'catalogo_admin'))) { if (u && !u.semRede) { const s = getSessao(); if (s) adminPin = s.sessao; } return; }
+          modoLogin = true; mostrarLogin(j.erro || 'Entre de novo para continuar.');
+        }).catch(() => { conferindoAcesso_ = false; });
+        return;
+      }
       if (j.sessaoInvalida || j.inativa) limparSessao();
       modoLogin = true; // o PIN não vale mais: daqui em diante é login
       mostrarLogin(j.erro || 'Entre de novo para continuar.');
     }
   }
+  let acessoPronto_ = false, conferindoAcesso_ = false;
 
   (async function iniciarAcesso() {
+    try { await iniciarAcessoCorpo_(); } finally { acessoPronto_ = true; }
+  })();
+  async function iniciarAcessoCorpo_() {
     const pSessao = getSessao() ? conferirSessao() : null; // em paralelo com a versão: uma ida ao servidor a menos
     const v = await versaoServidor();
     if (v === null) {
@@ -1036,7 +1053,7 @@
       return;
     }
     mostrarLogin(usr ? 'Sua conta não tem acesso à Área de Gestão. Fale com a gestão.' : '');
-  })();
+  }
 
   document.getElementById('btn-trocar-user').addEventListener('click', identificarFuncionario);
 
@@ -2792,20 +2809,13 @@
     const el = document.getElementById(idOverlay);
     if (!el || el.classList.contains('aberto')) return;
     el.classList.add('aberto');
-    window.history.pushState({ overlay: idOverlay }, '');
+    TKCamadas.empilhar(idOverlay, () => el.classList.remove('aberto'));
   }
   function fecharComHistorico_(idOverlay) {
     const el = document.getElementById(idOverlay);
     if (!el || !el.classList.contains('aberto')) return;
-    if (window.history.state && window.history.state.overlay === idOverlay) {
-      window.history.back();
-    } else {
-      el.classList.remove('aberto');
-    }
+    if (TKCamadas.aberta(idOverlay)) TKCamadas.desempilhar(idOverlay); else el.classList.remove('aberto');
   }
-  window.addEventListener('popstate', () => {
-    ['overlay-compartilhar', 'overlay-categorias', 'overlay-gestao', 'overlay-juntar', 'overlay-historico'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('aberto'); });
-  });
   document.addEventListener('click', (ev) => { // fecha o menu "⋯" das peças ao tocar fora dele
     document.querySelectorAll('details.mais[open]').forEach(d => { if (!d.contains(ev.target)) d.removeAttribute('open'); });
   });
@@ -3827,6 +3837,8 @@
     });
   }
   setInterval(espelha,1500); espelha();
+  // vindo do catálogo (botão "➕ Cadastrar nova peça"): abre o MESMO cartão de cadastro daqui, sem cópia da função
+  try { if (/[?&]novo=1/.test(location.search)) { setTimeout(function(){ var c=$('card-form'); if(c){ c.open=true; c.scrollIntoView({block:'start'}); } try{ history.replaceState(history.state,'',location.pathname); }catch(e){} }, 900); } } catch(e) {}
   document.addEventListener('click',function(e){
     var b=e.target.closest&&e.target.closest('[data-atalho]'); if(!b) return;
     var k=b.getAttribute('data-atalho'), alvo=null;

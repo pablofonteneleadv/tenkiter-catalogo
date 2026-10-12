@@ -191,7 +191,7 @@
     h += '<h3>Visualizações por dia</h3><div class="mt-grafico" role="img" aria-label="Gráfico de visualizações por dia nos últimos ' + r.dias + ' dias' + (melhor && melhor.visualizacoes ? '. Melhor dia: ' + formatarDiaCurto_(melhor.dia) + ' com ' + melhor.visualizacoes + ' visualizações' : '') + '">' + r.porDia.map((d) => barraDia_(d, max)).join('') + '</div>' +
       '<div class="mt-eixo"><span>' + formatarDiaCurto_(r.porDia[0].dia) + '</span><span>' + (melhor && melhor.visualizacoes ? 'Melhor dia: ' + formatarDiaCurto_(melhor.dia) + ' (' + melhor.visualizacoes + ')' : '') + '</span><span>' + formatarDiaCurto_(r.porDia[r.porDia.length - 1].dia) + '</span></div>';
     h += '<h3>Peças mais vistas</h3>';
-    h += r.topProdutos.length ? '<table class="mt-tab"><thead><tr><th>Peça</th><th>Vistas</th><th>WhatsApp</th><th>Taxa</th></tr></thead><tbody>' +
+    h += r.topProdutos.length ? '<table class="mt-tab"><thead><tr><th>Peça</th><th>Pessoas</th><th>Vistas</th><th>WhatsApp</th><th>Taxa</th></tr></thead><tbody>' +
       r.topProdutos.map((x) => '<tr><td><b>' + esc(x.codigo || '') + '</b> ' + esc(x.nome) + '</td><td>' + x.visualizacoes + '</td><td>' + x.whatsapp + '</td><td>' + (x.taxa === null ? '—' : String(x.taxa).replace('.', ',') + '%') + '</td></tr>').join('') + '</tbody></table>' : '<p class="g-info">Sem dados.</p>';
     h += '<h3>Por categoria</h3>';
     h += r.categorias.length ? '<table class="mt-tab"><thead><tr><th>Categoria</th><th>Vistas</th><th>WhatsApp</th><th>Taxa</th></tr></thead><tbody>' +
@@ -242,7 +242,7 @@
   function mtFiltrosHtml_() {
     return '<details class="g-det mt-filtros" id="mt-det"><summary>🎚️ Filtros <span id="mt-nfiltros"></span><span class="mt-sum-res" id="mt-sum-res"></span><small class="mt-dica">período, horário, dia da semana, origem, aparelho…</small></summary>' +
       '<p class="mt-rot">Período</p>' +
-      '<div class="mt-chips" role="group" aria-label="Período">' + [7, 30, 90].map((n) => '<button type="button" class="chip" data-mt-dias="' + n + '" aria-pressed="false">' + n + ' dias</button>').join('') +
+      '<div class="mt-chips" role="group" aria-label="Período">' + '<button type="button" class="chip" data-mt-hoje="1" aria-pressed="false">Hoje</button>' + [1, 2, 3, 7, 30, 90].map((n) => '<button type="button" class="chip" data-mt-dias="' + n + '" aria-pressed="false">' + n + (n === 1 ? ' dia' : ' dias') + '</button>').join('') +
       '<button type="button" class="chip" id="mt-datas-btn" aria-pressed="false">📅 Escolher datas</button></div>' +
       '<div class="form-linha" id="mt-datas" hidden><div><label for="mt-de">De</label><input type="date" id="mt-de"></div><div><label for="mt-ate">Até</label><input type="date" id="mt-ate"></div></div>' +
       '<p class="g-erro" id="mt-erro-datas" role="alert" hidden></p>' +
@@ -263,6 +263,7 @@
   }
   /** Põe na tela o que está em `mt` (sem refazer o bloco, para o foco não pular). */
   function mtAtualizarFiltros_() {
+    document.querySelectorAll('[data-mt-hoje]').forEach((b) => { const h = mtIso_(new Date()); const on = mt.de === h && mt.ate === h; b.classList.toggle('selecionado', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
     document.querySelectorAll('[data-mt-dias]').forEach((b) => { const on = !mt.de && mt.dias === Number(b.dataset.mtDias); b.classList.toggle('selecionado', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
     const bd = $('mt-datas-btn'); if (bd) { bd.classList.toggle('selecionado', !!mt.de); bd.setAttribute('aria-pressed', mt.de ? 'true' : 'false'); }
     if ($('mt-datas')) { $('mt-datas').hidden = !mt.de; $('mt-de').value = mt.de; $('mt-ate').value = mt.ate; const hoje = mtIso_(new Date()); $('mt-de').max = hoje; $('mt-ate').max = hoje; }
@@ -304,22 +305,29 @@
     if (!linhas.length) return '<h3>' + titulo + '</h3><p class="g-info">Sem dados neste recorte.</p>';
     const filtravel = opts.filtro;
     const nome = (x) => filtravel && x.chave ? '<button type="button" class="mt-link" data-mt-set="' + filtravel + '" data-v="' + esc(x.chave) + '" aria-label="Filtrar só por ' + esc(x.nome) + '">' + esc(x.nome) + '</button>' : esc(x.nome);
-    return '<h3>' + titulo + '</h3><table class="mt-tab"><thead><tr><th>' + (opts.cab || 'Item') + '</th><th>Vistas</th><th>WhatsApp</th>' + (opts.pessoas ? '<th>Pessoas</th>' : '<th>Taxa</th>') + '</tr></thead><tbody>' +
-      linhas.map((x) => '<tr><td>' + nome(x) + '</td><td>' + mtNum_(x.visualizacoes) + '</td><td>' + mtNum_(x.whatsapp) + '</td><td>' + (opts.pessoas ? (x.visitantes === undefined ? '—' : mtNum_(x.visitantes)) : mtPct_(x.taxa)) + '</td></tr>').join('') + '</tbody></table>' +
+    return '<h3>' + titulo + '</h3><table class="mt-tab"><thead><tr><th>' + (opts.cab || 'Item') + '</th>' + (opts.pessoas ? '<th>Pessoas</th>' : '') + '<th>Vistas</th><th>WhatsApp</th>' + (opts.pessoas ? '' : '<th>Taxa</th>') + '</tr></thead><tbody>' +
+      linhas.map((x) => '<tr><td>' + nome(x) + '</td>' + (opts.pessoas ? '<td><b>' + (x.visitantes === undefined ? '—' : mtNum_(x.visitantes)) + '</b></td>' : '') + '<td>' + mtNum_(x.visualizacoes) + '</td><td>' + mtNum_(x.whatsapp) + '</td>' + (opts.pessoas ? '' : '<td>' + mtPct_(x.taxa) + '</td>') + '</tr>').join('') +
+      (opts.pessoas && opts.total !== undefined && opts.total !== null ? '<tr class="mt-total"><td><b>Pessoas reais (sem repetir)</b></td><td><b>' + mtNum_(opts.total) + '</b></td><td></td><td></td></tr>' : '') + '</tbody></table>' +
+      (opts.pessoas ? '<p class="g-nota">“Pessoas” = pessoas diferentes (um código por aparelho). Uma mesma pessoa pode aparecer em mais de um grupo (ex.: usou o app e o navegador), por isso a soma das linhas pode passar do total real.</p>' : '') +
       (filtravel ? '<p class="g-nota">Toque no nome para ver só aquele grupo.</p>' : '');
   }
 
+  function semCodigoTxt_(cob) {
+    const sc = cob && cob.semCodigo; if (!sc) return '';
+    const n = (sc.visualizacoes || 0) + (sc.whatsapp || 0) + (sc.visitas || 0);
+    return n ? ' <b>' + mtNum_(n) + '</b> registro(s) do período (' + mtNum_(sc.visualizacoes) + ' visualizações, ' + mtNum_(sc.whatsapp) + ' toques, ' + mtNum_(sc.visitas) + ' visitas) são de antes do código de pessoa' + (cob.desde ? ' (anteriores a ' + esc(cob.desde) + ')' : '') + ': entram nas visualizações e toques, mas não dá para contar as pessoas deles.' : '';
+  }
   function desenharMetricasAvancadas_(r) {
     const t = r.totais, ped = r.pedidos, ap = r.aparelhos || {}, cob = r.cobertura || {}, fun = r.funil || {};
     const temVis = cob.comVisitante > 0;
     let h = '<p class="mt-resumo">Mostrando: <b>' + esc(r.filtrosDescricao) + '</b></p>';
     if (r.semDados) h += '<p class="g-info">Nada neste recorte. ' + (r.filtrado ? 'Experimente tirar algum filtro.' : 'Os números aparecem conforme as pessoas usam o catálogo.') + '</p>';
     h += '<h3 class="mt-grupo">👀 Interesse <small>quem olhou</small></h3><div class="mt-cards">' +
-      mtCartao_('👤 Pessoas que entraram', temVis ? mtNum_(t.visitantes) : '—', temVis ? 'aparelhos diferentes' : 'conta a partir da atualização') +
-      mtCartao_('👁️ Visualizações de peças', mtNum_(t.visualizacoes)) +
+      mtCartao_('👤 Pessoas reais que entraram', temVis ? mtNum_(t.visitantes) : '—', temVis ? 'pessoas diferentes, sem repetir — em qualquer app ou navegador' : 'conta a partir da atualização') +
+      (t.pessoasViram !== undefined && temVis ? mtCartao_('👁️ Pessoas que viram peças', mtNum_(t.pessoasViram), 'de ' + mtNum_(t.visitantes) + ' que entraram · ' + mtNum_(t.visualizacoes) + ' visualizações no total') : mtCartao_('👁️ Visualizações de peças', mtNum_(t.visualizacoes))) +
       (t.visitas ? mtCartao_('🚪 Visitas à loja', mtNum_(t.visitas), 'quantas vezes abriram o site') : '') + '</div>';
     h += '<h3 class="mt-grupo">💬 Intenção <small>pediram para falar com a loja — ainda não é venda</small></h3><div class="mt-cards">' +
-      mtCartao_('💬 Toques em “Pedir no WhatsApp”', mtNum_(t.whatsapp)) +
+      (t.pessoasWhats !== undefined && temVis ? mtCartao_('💬 Pessoas que pediram no WhatsApp', mtNum_(t.pessoasWhats), 'de ' + mtNum_(t.visitantes) + ' que entraram · ' + mtNum_(t.whatsapp) + ' toques no total') : mtCartao_('💬 Toques em “Pedir no WhatsApp”', mtNum_(t.whatsapp))) +
       mtCartao_('📈 Toques por 100 visualizações', t.whatsappPor100Visualizacoes === null ? '—' : String(t.whatsappPor100Visualizacoes).replace('.', ',')) +
       mtCartao_('🧾 Pedidos pelo site', mtNum_(ped.total), formatarReal(ped.valor) + ' à vista (sem cancelados) — enviados, ainda não confirmados') + '</div>';
     h += '<h3 class="mt-grupo">✅ Resultado confirmado <small>só pedido marcado como “Concluído”</small></h3><div class="mt-cards">' +
@@ -343,11 +351,16 @@
 
     // ---- funil
     const linhasFunil = [];
-    if (temVis) linhasFunil.push(['👤 Pessoas que entraram', fun.visitantes]);
-    linhasFunil.push(['👁️ Viram peças (visualizações)', fun.visualizacoes], ['💬 Tocaram em pedir no WhatsApp', fun.whatsapp], ['🧾 Fizeram pedido pelo site', fun.pedidos]);
+    if (temVis && fun.pessoasViram !== undefined) {
+      linhasFunil.push(['👤 Pessoas que entraram', fun.visitantes], ['👁️ Pessoas que viram alguma peça', fun.pessoasViram], ['💬 Pessoas que tocaram em pedir no WhatsApp', fun.pessoasWhats], ['🧾 Pedidos feitos pelo site (pedidos, não pessoas)', fun.pedidos]);
+    } else {
+      if (temVis) linhasFunil.push(['👤 Pessoas que entraram', fun.visitantes]);
+      linhasFunil.push(['👁️ Viram peças (visualizações)', fun.visualizacoes], ['💬 Tocaram em pedir no WhatsApp', fun.whatsapp], ['🧾 Fizeram pedido pelo site', fun.pedidos]);
+    }
     const maxF = linhasFunil.reduce((m, l) => Math.max(m, l[1] || 0), 0);
     h += '<h3>🔻 Do acesso ao pedido</h3><div class="mt-funil">' + linhasFunil.map((l) =>
-      '<div class="mt-funil-l"><span>' + l[0] + '</span><b>' + mtNum_(l[1]) + '</b></div><div class="mt-trilho" aria-hidden="true"><div class="mt-fbarra" style="width:' + (maxF ? Math.max(1, Math.round(((l[1] || 0) / maxF) * 100)) : 0) + '%"></div></div>').join('') + '</div>';
+      '<div class="mt-funil-l"><span>' + l[0] + '</span><b>' + mtNum_(l[1]) + '</b></div><div class="mt-trilho" aria-hidden="true"><div class="mt-fbarra" style="width:' + (maxF ? Math.max(1, Math.round(((l[1] || 0) / maxF) * 100)) : 0) + '%"></div></div>').join('') + '</div>' +
+      (temVis && fun.pessoasViram !== undefined ? '<p class="g-nota">Cada linha conta <b>pessoas diferentes</b>, sem repetir (quem entrou duas vezes, ou pelo app e pelo navegador, conta 1). Quem viu peça ou pediu no WhatsApp já está entre os que entraram. Ao todo foram ' + mtNum_(fun.visualizacoes) + ' visualizações e ' + mtNum_(fun.whatsapp) + ' toques no WhatsApp (uma pessoa pode ver e tocar várias vezes).' + semCodigoTxt_(cob) + '</p>' : '');
 
     // ---- por dia
     const max = r.porDia.reduce((m, d) => Math.max(m, d.visualizacoes), 0);
@@ -371,14 +384,14 @@
       '<div class="mt-semana">' + r.porDiaSemana.map((x) => '<span>' + MT_DIAS_SEM[x.dia] + '<b>' + mtNum_(x.visualizacoes) + '</b></span>').join('') + '</div>';
 
     // ---- tabelas
-    h += mtTabela_('Como usaram', r.porOrigem, { cab: 'Como', pessoas: true, filtro: 'origem' });
-    h += mtTabela_('Aparelho', r.porDispositivo, { cab: 'Aparelho', pessoas: true, filtro: 'dispositivo' });
-    h += mtTabela_('De onde vieram', r.porFonte, { cab: 'Origem', pessoas: true, filtro: 'fonte' });
+    h += mtTabela_('Como usaram', r.porOrigem, { cab: 'Como', pessoas: true, total: temVis ? t.visitantes : null, filtro: 'origem' });
+    h += mtTabela_('Aparelho', r.porDispositivo, { cab: 'Aparelho', pessoas: true, total: temVis ? t.visitantes : null, filtro: 'dispositivo' });
+    h += mtTabela_('De onde vieram', r.porFonte, { cab: 'Origem', pessoas: true, total: temVis ? t.visitantes : null, filtro: 'fonte' });
     h += '<h3>Peças mais vistas</h3>';
     h += r.topProdutos.length ? '<table class="mt-tab"><thead><tr><th>Peça</th><th>Vistas</th><th>WhatsApp</th><th>Taxa</th></tr></thead><tbody>' +
-      r.topProdutos.map((x) => '<tr><td><b>' + esc(x.codigo || '') + '</b> ' + esc(x.nome) + '</td><td>' + mtNum_(x.visualizacoes) + '</td><td>' + mtNum_(x.whatsapp) + '</td><td>' + mtPct_(x.taxa) + '</td></tr>').join('') + '</tbody></table>' : '<p class="g-info">Sem dados neste recorte.</p>';
-    h += mtTabela_('Por categoria', r.categorias.map((x) => Object.assign({ chave: x.nome }, x)), { cab: 'Categoria', filtro: 'categoria' });
-    h += mtTabela_('Para quem é', r.porGenero.map((x) => Object.assign({ chave: x.nome }, x)), { cab: 'Para quem', filtro: 'genero' });
+      r.topProdutos.map((x) => '<tr><td><b>' + esc(x.codigo || '') + '</b> ' + esc(x.nome) + '</td><td><b>' + (x.pessoas === undefined ? '—' : mtNum_(x.pessoas)) + '</b></td><td>' + mtNum_(x.visualizacoes) + '</td><td>' + mtNum_(x.whatsapp) + '</td><td>' + mtPct_(x.taxa) + '</td></tr>').join('') + '</tbody></table>' : '<p class="g-info">Sem dados neste recorte.</p>';
+    h += mtTabela_('Por categoria', r.categorias.map((x) => Object.assign({ chave: x.nome }, x)), { cab: 'Categoria', pessoas: true, filtro: 'categoria' });
+    h += mtTabela_('Para quem é', r.porGenero.map((x) => Object.assign({ chave: x.nome }, x)), { cab: 'Para quem', pessoas: true, filtro: 'genero' });
     const etapas = Object.keys(ped.porStatus || {});
     if (etapas.length) h += '<h3>Pedidos por etapa</h3><p class="g-info">' + etapas.map((k) => esc(rotuloEtapa_(k, '')) + ': <b>' + ped.porStatus[k] + '</b>').join(' · ') + '</p>';
     if (cob.eventos) h += '<p class="g-nota">Como usaram, aparelho e “veio de” só existem para o que aconteceu a partir de ' + (cob.desde ? esc(cob.desde) : 'a atualização') + ' (' + mtNum_(cob.comVisitante) + ' de ' + mtNum_(cob.eventos) + ' registros do recorte têm esses dados); o resto aparece como “Não informado”. Pedidos seguem o período, o horário e o dia da semana, mas não as outras escolhas.</p>';
@@ -402,7 +415,7 @@
     if (!r || !r.ok) { alvo.innerHTML = '<p class="g-erro">' + esc(erroTexto_(r)) + '</p>'; return; }
     mtPreencherOpcoes_(r.opcoes);
     alvo.innerHTML = desenharMetricasAvancadas_(r);
-    const sr = $('mt-sum-res'); if (sr) sr.textContent = ' · ' + mtNum_(r.totais.visualizacoes) + ' visualizações · ' + mtNum_(r.totais.whatsapp) + ' no WhatsApp';   // aparece mesmo com os filtros recolhidos
+    const sr = $('mt-sum-res'); if (sr) sr.textContent = ' · ' + (r.totais.pessoasViram !== undefined && r.cobertura && r.cobertura.comVisitante > 0 ? mtNum_(r.totais.visitantes) + ' pessoas · ' : '') + mtNum_(r.totais.visualizacoes) + ' visualizações · ' + mtNum_(r.totais.whatsapp) + ' no WhatsApp';   // aparece mesmo com os filtros recolhidos
   }
   function abrirMetricas_(dias) {
     if (!recursos.metricasAvancadas) { abrirMetricasSimples_(dias); return; }
@@ -415,6 +428,7 @@
     const corpo = $('gestao-corpo');
     corpo.addEventListener('click', (ev) => {
       if (!$('mt-resultado')) return;
+      if (ev.target.closest('[data-mt-hoje]')) { const h = mtIso_(new Date()); mtDefinir_({ de: h, ate: h }, true); return; }
       const d = ev.target.closest('[data-mt-dias]');
       if (d) { mtDefinir_({ dias: Number(d.dataset.mtDias), de: '', ate: '' }, true); return; }
       if (ev.target.closest('#mt-datas-btn')) {

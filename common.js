@@ -208,6 +208,40 @@ function escaparHtml(v) {
  *  `${...}` (404 no log, foto pedida à toa). Com `${atribSrc(...)}` o texto não parece mais um atributo src e o problema some. */
 function atribSrc(url) { return 'src="' + escaparHtml(url) + '"'; }
 
+/* ===================== Botão "voltar" do celular x janelas (pilha única) =====================
+ * Toda janela/folha/foto que cobre a página empilha UMA entrada no histórico; o "voltar" (botão/gesto do Android, iPhone) fecha SÓ a de cima
+ * e a pessoa continua no site. Só quando não há janela aberta o "voltar" sai da página (comportamento normal do navegador).
+ * TKCamadas.empilhar(chave, fecha, url?)  -> abre a camada (fecha() é chamado quando ela precisa sumir da tela)
+ * TKCamadas.desempilhar(chave)            -> fecha pelo nosso botão: consome a entrada do histórico (history.back) e o popstate chama fecha()
+ * Evento `tk:camada-fechada` ({detail:{chave}}) avisa quem precisa limpar algo. */
+const TKCamadas = (function () {
+  const pilha = [];   // { chave, fecha }
+  let fechouAgora = false;   // este "voltar" só fechou uma janela (telas por histórico, como o treinamentos, não devem trocar de tela)
+  function aviso(chave) { try { document.dispatchEvent(new CustomEvent('tk:camada-fechada', { detail: { chave: chave } })); } catch (e) { /* ignora */ } }
+  function fecharItem(it) { try { it.fecha(); } catch (e) { /* ignora */ } aviso(it.chave); }
+  function empilhar(chave, fecha, url) {
+    if (pilha.some((x) => x.chave === chave)) return false;
+    pilha.push({ chave: chave, fecha: fecha });
+    try { window.history.pushState({ overlay: chave, n: pilha.length }, '', url || undefined); } catch (e) { /* ignora */ }
+    return true;
+  }
+  function desempilhar(chave) {
+    const k = pilha.findIndex((x) => x.chave === chave);
+    if (k < 0) return;
+    const st = window.history.state;
+    if (k === pilha.length - 1 && st && st.overlay === chave && st.n === pilha.length) { window.history.back(); return; }   // o popstate fecha
+    const it = pilha.splice(k, 1)[0]; fecharItem(it);
+  }
+  window.addEventListener('popstate', function (e) {
+    const n = (e.state && e.state.n) || 0;
+    let fechou = false;
+    while (pilha.length > n) { fecharItem(pilha.pop()); fechou = true; }
+    if (fechou) { fechouAgora = true; setTimeout(function () { fechouAgora = false; }, 0); }
+  });
+  return { empilhar: empilhar, desempilhar: desempilhar, aberta: function (chave) { return pilha.some((x) => x.chave === chave); }, total: function () { return pilha.length; }, fechouAgora: function () { return fechouAgora; } };
+})();
+window.TKCamadas = TKCamadas;
+
 /* ===================== Foto em tela cheia (toque na miniatura) =====================
  * TKFotoGrande.abrir({ itens:[{url, tipo:'foto'|'video', poster}], indice, capa:(i)=>bool, aoCapa:(i)=>void })
  * Mostra a foto GRANDE e nítida (a original, nunca a miniatura), com ‹ › para passar, toque na foto para ampliar
@@ -246,7 +280,6 @@ const TKFotoGrande = (function () {
       if (!el.classList.contains('aberto')) return;
       if (ev.key === 'Escape') { ev.stopPropagation(); ev.preventDefault(); fechar(); } else if (ev.key === 'ArrowLeft') ir(-1); else if (ev.key === 'ArrowRight') ir(1);
     }, true);
-    window.addEventListener('popstate', () => { if (el.classList.contains('aberto')) fechar(true); });
   }
   function alternarZoom() { ampliado = !ampliado; desenhar(true); }
   function ir(d) { if (!st) return; const n = st.i + d; if (n < 0 || n >= st.itens.length) return; st.i = n; ampliado = false; desenhar(); }
@@ -278,8 +311,10 @@ const TKFotoGrande = (function () {
     st = { itens: itens, i: Math.min(Math.max(0, Number(o.indice) || 0), itens.length - 1), capa: o.capa || null, aoCapa: o.aoCapa || null, volta: document.activeElement };
     ampliado = false; desenhar();
     el.classList.add('aberto'); el.querySelector('#tkfg-fechar').focus();
+    TKCamadas.empilhar('tkfg', limpar);
   }
-  function fechar() {
+  function fechar() { if (el && el.classList.contains('aberto')) TKCamadas.desempilhar('tkfg'); }
+  function limpar() {
     if (!el) return;
     el.classList.remove('aberto'); el.querySelector('#tkfg-palco').innerHTML = '';
     const v = st && st.volta; st = null; try { if (v && v.focus) v.focus(); } catch (e) { /* ignora */ }

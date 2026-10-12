@@ -135,7 +135,7 @@
       const id = Number(c.value); if (c.checked) marcados.add(id); else marcados.delete(id);
       const y = $('ig-corpo').scrollTop; desenharLista(); $('ig-corpo').scrollTop = y;
     });
-    window.addEventListener('popstate', () => o.classList.remove('aberto'));
+    
   }
   function fechar() { fecharComHistorico_('overlay-instagram'); }
   async function abrir() {

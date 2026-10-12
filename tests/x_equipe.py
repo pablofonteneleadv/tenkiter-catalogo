@@ -25,13 +25,14 @@ def abrir(b, perms, versao="3.7", sessao=True):
 with sync_playwright() as p:
     b = p.chromium.launch()
     print("== Quem NÃO vê o X ==")
-    ctx, pg, st, m, er = abrir(b, ["portal"]); chk("cliente comum (sem catalogo_cadastrar): nenhum X", pg.locator(".x-equipe").count() == 0); ctx.close()
+    ctx, pg, st, m, er = abrir(b, ["portal"]); chk("cliente comum (sem catalogo_cadastrar): nenhum X", pg.locator(".x-equipe").count() == 0); chk("cliente comum: sem botão de cadastrar", pg.locator("#btn-nova-peca:visible").count() == 0); ctx.close()
     ctx, pg, st, m, er = abrir(b, PERMS_ALL, sessao=False); chk("sem entrar na conta: nenhum X", pg.locator(".x-equipe").count() == 0); ctx.close()
     ctx, pg, st, m, er = abrir(b, PERMS_ALL, versao="3.6"); chk("backend antigo (sem midiaRapida): nenhum X (nada de botão que não funciona)", pg.locator(".x-equipe").count() == 0); ctx.close()
 
     print("== Equipe do site vê o X na grade ==")
     ctx, pg, st, msgs, erros = abrir(b, PERMS_ALL)
     n = pg.locator(".card").count()
+    chk("equipe vê o botão ➕ Cadastrar nova peça, que leva ao MESMO cadastro do painel", pg.locator("#btn-nova-peca:visible").count() == 1 and pg.get_attribute("#btn-nova-peca", "href") == "admin.html?novo=1")
     chk("um X diferenciado em cada card da grade", pg.locator(".card .x-equipe").count() == n and n > 3, (pg.locator(".card .x-equipe").count(), n))
     chk("o X fica no canto esquerdo de cima da foto", pg.evaluate("(()=>{const x=document.querySelector('.card .x-equipe').getBoundingClientRect(), c=document.querySelector('.card .img-wrap').getBoundingClientRect(); return x.left-c.left<20 && x.top-c.top<20})()"))
     chk("tocar no X NÃO abre a peça", (pg.locator(".card .x-equipe").first.click(), pg.wait_for_timeout(400), pg.locator("#overlay.aberto").count() == 0)[2])

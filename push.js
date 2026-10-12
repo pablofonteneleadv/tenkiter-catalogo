@@ -325,14 +325,15 @@
     janela.addEventListener('click', function (e) { if (e.target === janela) fechar(); });
     document.body.appendChild(janela);
   }
-  function fechar() { if (janela) janela.classList.remove('aberto'); }
+  function sumir() { if (janela) janela.classList.remove('aberto'); }
+  function fechar() { if (window.TKCamadas && TKCamadas.aberta('tkp-janela')) TKCamadas.desempilhar('tkp-janela'); else sumir(); }
   function abrir(titulo, filhos) {
     garantirJanela();
     folha.textContent = '';
     var topo = el('div', { class: 'tkp-topo' }, [el('h2', { id: 'tkp-titulo', text: titulo }), el('button', { type: 'button', class: 'tkp-x', 'aria-label': 'Fechar', text: '✕', onclick: fechar })]);
     folha.appendChild(topo);
     filhos.forEach(function (f) { if (f) folha.appendChild(f); });
-    janela.classList.add('aberto');
+    if (!janela.classList.contains('aberto')) { janela.classList.add('aberto'); if (window.TKCamadas) TKCamadas.empilhar('tkp-janela', sumir); }
   }
   function aviso(msg) {
     css();

@@ -117,7 +117,7 @@
     $('po-abas').addEventListener('click', (ev) => { const b = ev.target.closest('[data-aba]'); if (b) { abaAtual = b.dataset.aba; aviso = ''; desenhar(); if (abaAtual === 'fotos') carregarFotos(); else if (abaAtual !== 'nova') carregarFila(); } });
     $('po-corpo').addEventListener('click', clique);
     $('po-corpo').addEventListener('input', entrada);
-    window.addEventListener('popstate', () => { o.classList.remove('aberto'); parar(); });
+    document.addEventListener('tk:camada-fechada', (ev) => { if (ev.detail.chave === 'overlay-postagens') parar(); });
   }
   function fechar() { parar(); fecharComHistorico_('overlay-postagens'); }
   function parar() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }

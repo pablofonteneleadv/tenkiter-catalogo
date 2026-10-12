@@ -373,8 +373,8 @@ th{background:var(--surface-2); font-weight:700;}
 .cv-aviso a.cv-btn{display:inline-block; background:#0d0d0d; color:#F39C12; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:800; font-size:1rem;}
 .cv-aviso.cv-incompleto{background:#c62828; color:#fff; box-shadow:0 4px 14px rgba(198,40,40,.35);}
 .cv-aviso.cv-incompleto a.cv-btn{background:#fff; color:#c62828;}
-.cv-aviso.cv-completo{background:#0d0d0d; color:#fff; box-shadow:0 4px 14px rgba(0,0,0,.25);}
-.cv-aviso.cv-completo h2{color:#F39C12;}
+.cv-ok{margin:0 0 14px; font-size:.85rem; color:#555;}
+.cv-ok a{color:var(--accent-txt); font-weight:600;}
 .cv-aviso.cv-desistiu{background:var(--warn-bg); color:var(--warn-text); box-shadow:none; border:1px solid var(--warn-border);}
 .cv-aviso.cv-desistiu a.cv-btn{background:var(--warn-border); color:#0d0d0d;}
 .btn-sm{padding:6px 12px; font-size:0.82rem;}
@@ -454,6 +454,7 @@ function empurrarHistorico(view, manual){
   try{ history.pushState({ view: view, manual: manual || null }, ''); }catch(e){}
 }
 window.addEventListener('popstate', function(e){
+  if (window.TKCamadas && TKCamadas.fechouAgora()) return; // este voltar só fechou uma janela
   if (!state.user) return; // tela de login/cadastro -- deixa o navegador seguir o padrão dele
   suprimirHistorico = true;
   var st = e.state || { view: 'home' };
@@ -1478,10 +1479,10 @@ function cvBannerHtml(r){
     return '<div class="cv-aviso cv-incompleto"><h2>⚠️ Seu currículo está incompleto</h2><p>Falta pouco! Ainda falta:</p><ul>' + (r.faltando || []).map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul><a class="cv-btn" href="curriculo.html">Completar agora</a></div>';
   }
   if (st === 'completo'){
-    return '<div class="cv-aviso cv-completo"><h2>✅ Seu currículo está completo</h2><p>Recebemos tudo. Se algo mudou, você pode conferir ou atualizar quando quiser.</p><a class="cv-btn" href="curriculo.html">Ver meu currículo</a></div>';
+    return '<p class="cv-ok">✅ Currículo completo · <a href="curriculo.html">ver ou atualizar</a></p>';
   }
   if (st === 'menor'){
-    return '<div class="cv-aviso cv-completo"><h2>📄 Currículo</h2><p>Você está cadastrada(o) como cliente e aluno. Quando completar 18 anos, será um prazer retomar seu currículo com você.</p></div>';
+    return '<p class="cv-ok">📄 Quando completar 18 anos, será um prazer retomar seu currículo com você.</p>';
   }
   if (st === 'desistiu'){
     return '<div class="cv-aviso cv-desistiu"><h2>👋 Seu currículo ficou pausado</h2><p>Da última vez, seu currículo foi marcado como desistência. Se mudou de ideia, você pode reativar em poucos segundos.</p><a class="cv-btn" href="curriculo.html">Reativar meu currículo</a></div>';

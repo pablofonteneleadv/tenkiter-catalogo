@@ -354,6 +354,8 @@ catch (e) { window.__precargaLista = null; }
   .x-equipe:focus-visible { outline: 3px solid var(--laranja); outline-offset: 2px; }
   .x-equipe.mini { width: 22px; height: 22px; font-size: .7rem; top: 2px; left: 2px; border-width: 1px; }
   .thumb-wrap { position: relative; flex: none; display: inline-block; }
+  .btn-nova-peca { display: none; align-items: center; justify-content: center; gap: 8px; min-height: 48px; margin: 0 0 10px; border-radius: 12px; background: var(--laranja); color: #0d0d0d; font-weight: 800; text-decoration: none; }
+  body.equipe-x .btn-nova-peca { display: flex; }
   body.equipe-x .card .selo-card { top: 52px; }
   body.equipe-x .carrossel-wrap .selo-card { top: 56px !important; }
   #toast-equipe { position: fixed; left: 12px; right: 12px; bottom: 84px; z-index: 160; background: var(--preto); color: #fff; border-radius: 12px; padding: 12px 14px; font-size: .9rem; display: none; align-items: center; gap: 10px; justify-content: space-between; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
@@ -515,6 +517,7 @@ catch (e) { window.__precargaLista = null; }
     <button type="button" class="btn-neutro" id="aviso-selecao-todas">Ver todas as peças</button>
   </div>
   <div class="etiquetas-ativas" id="etiquetas-ativas" role="group" aria-label="Filtros ativos" hidden></div>
+  <a class="btn-nova-peca" id="btn-nova-peca" href="admin.html?novo=1">➕ Cadastrar nova peça</a>
   <div class="barra-lista">
     <div id="contagem" aria-live="polite">Carregando catálogo...</div>
     <label class="ordem-wrap"><span class="sr-only">Ordenar as peças por</span>
@@ -1268,35 +1271,18 @@ catch (e) { window.__precargaLista = null; }
   // mesmo lugar: o catálogo, sem sair da Tenkiter.
   // v3.3: pilha de janelas. Cada janela aberta empilha UMA entrada no histórico (com o nível n); o "voltar" fecha só a de cima
   // (ex.: peça aberta de dentro dos favoritos volta para os favoritos, e o próximo "voltar" volta para a lista).
-  const pilhaOverlays_ = [];
   function abrirComHistorico_(idOverlay, url) {
     const el = document.getElementById(idOverlay);
     if (!el || el.classList.contains('aberto')) return;
     el.classList.add('aberto');
-    pilhaOverlays_.push(idOverlay);
-    window.history.pushState({ overlay: idOverlay, n: pilhaOverlays_.length }, '', url || undefined);
+    TKCamadas.empilhar(idOverlay, () => { el.classList.remove('aberto'); if (idOverlay === 'overlay') restaurarMeta_(); }, url);
   }
   function fecharComHistorico_(idOverlay) {
     const el = document.getElementById(idOverlay);
     if (!el || !el.classList.contains('aberto')) return;
-    const topo = pilhaOverlays_[pilhaOverlays_.length - 1];
-    if (topo === idOverlay && window.history.state && window.history.state.overlay === idOverlay) {
-      window.history.back(); // o popstate abaixo fecha a janela quando essa volta acontecer
-    } else {
-      el.classList.remove('aberto'); // não tinha entrada empilhada (ex.: já veio por popstate) -- só fecha
-      const k = pilhaOverlays_.indexOf(idOverlay); if (k >= 0) pilhaOverlays_.splice(k, 1);
-      if (idOverlay === 'overlay') restaurarMeta_();
-    }
+    if (TKCamadas.aberta(idOverlay)) TKCamadas.desempilhar(idOverlay);
+    else el.classList.remove('aberto');
   }
-  window.addEventListener('popstate', (e) => {
-    const n = (e.state && e.state.n) || 0;
-    while (pilhaOverlays_.length > n) {
-      const id = pilhaOverlays_.pop();
-      const el = document.getElementById(id);
-      if (el) el.classList.remove('aberto');
-    }
-    if (pilhaOverlays_.indexOf('overlay') < 0) restaurarMeta_();
-  });
 
   // Título, descrição e dados estruturados da peça aberta (buscadores e abas do navegador); volta ao normal ao fechar.
   const META_PADRAO_ = { titulo: document.title, descricao: (document.querySelector('meta[name="description"]') || {}).content || '' };
@@ -1638,6 +1624,8 @@ catch (e) { window.__precargaLista = null; }
   try { (function contaCliente() {
     const btn = document.getElementById('btn-conta-header');
     const ov = document.getElementById('modal-conta');
+    function abrirConta_() { if (!ov.classList.contains('visivel')) { ov.classList.add('visivel'); TKCamadas.empilhar('modal-conta', () => ov.classList.remove('visivel')); } }
+    function fecharConta_() { if (ov.classList.contains('visivel')) { if (TKCamadas.aberta('modal-conta')) TKCamadas.desempilhar('modal-conta'); else ov.classList.remove('visivel'); } }
     const corpo = document.getElementById('conta-corpo');
     let usuario = null;
     let aba = 'entrar';
@@ -1665,7 +1653,7 @@ catch (e) { window.__precargaLista = null; }
     async function depoisDeEntrar(u) {
       usuario = u; definirEquipe_(usuario);
       atualizarBotao();
-      ov.classList.remove('visivel');
+      fecharConta_();
       await sincronizar();
     }
 
@@ -1701,7 +1689,7 @@ catch (e) { window.__precargaLista = null; }
         }
         if (window.TKFotoCliente) corpo.appendChild(TKFotoCliente.bloco());
         const sair = el('button', { type: 'button', className: 'conta-secundario', id: 'conta-sair', text: 'Sair da conta' });
-        sair.addEventListener('click', () => { limparSessao(); usuario = null; definirEquipe_(null); atualizarBotao(); ov.classList.remove('visivel'); });
+        sair.addEventListener('click', () => { limparSessao(); usuario = null; definirEquipe_(null); atualizarBotao(); fecharConta_(); });
         corpo.appendChild(sair);
         return;
       }
@@ -1760,9 +1748,9 @@ catch (e) { window.__precargaLista = null; }
       TKConta.abrirRecuperar({ identificador: ident, chamar: chamarConta, aoEntrar: (r) => { salvarSessao(r.usuario.whatsapp, r.sessao); depoisDeEntrar(r.usuario); } });
     }
 
-    btn.addEventListener('click', () => { desenhar(); ov.classList.add('visivel'); });
-    document.getElementById('conta-fechar').addEventListener('click', () => ov.classList.remove('visivel'));
-    ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('visivel'); });
+    btn.addEventListener('click', () => { desenhar(); abrirConta_(); });
+    document.getElementById('conta-fechar').addEventListener('click', () => fecharConta_());
+    ov.addEventListener('click', (e) => { if (e.target === ov) fecharConta_(); });
 
     // só aparece se o backend já tem contas; catálogo antigo segue exatamente como era
     (async () => {

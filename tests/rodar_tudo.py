@@ -41,6 +41,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("admin_categorias.py", lambda o: "FALHAS=0" in o),    # criar categoria, ✎/× só Admin total, sugestões de nome
     ("juntar_admin.py", lambda o: "FALHAS=0" in o),   # juntar produtos repetidos na lista do admin
     ("x_equipe.py", lambda o: "FALHAS=0" in o),   # X de arquivar na loja (Equipe do site)
+    ("botao_voltar.py", lambda o: "FALHAS=0" in o),   # botão voltar fecha só a janela de cima
     ("selecao_link.py", lambda o: "RESULTADO:" in o and " 0 falhas" in o),   # compartilhar seleção leva as PEÇAS (?sel=…), não só a loja
     ("central_avisos.py", lambda o: "FALHAS=0" in o),      # Central de avisos do lojista (público, {nome}, agendar, modelos, histórico, preparar)
     ("push_cliente.py", lambda o: "FALHAS=0" in o),        # avisos + instalar app no cliente com OneSignal FALSO (Android, iPhone, Instagram, computador)

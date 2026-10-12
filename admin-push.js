@@ -93,7 +93,7 @@
     document.body.appendChild(o);
     $('av-fechar').addEventListener('click', fechar);
     o.querySelector('.av-abas').addEventListener('click', (ev) => { const b = ev.target.closest('[data-aba]'); if (b) mostrarAba(b.dataset.aba); });
-    window.addEventListener('popstate', () => o.classList.remove('aberto'));
+    
   }
   function fechar() { fecharComHistorico_('overlay-avisos'); }
   async function abrir() {

@@ -86,7 +86,7 @@
     document.body.appendChild(o);
     $('cx-fechar').addEventListener('click', fechar);
     $('cx-corpo').addEventListener('click', clique);
-    window.addEventListener('popstate', () => { o.classList.remove('aberto'); parouDeploy_(); });
+    document.addEventListener('tk:camada-fechada', (ev) => { if (ev.detail.chave === 'overlay-conexoes') { trancarCofre_(true); parouDeploy_(); } });
   }
   function fechar() { trancarCofre_(true); fecharComHistorico_('overlay-conexoes'); parouDeploy_(); }
   function parouDeploy_() { if (deployTimer) { clearTimeout(deployTimer); deployTimer = null; } }

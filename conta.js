@@ -113,7 +113,8 @@
     ov = el('div', { 'class': 'tkc-ov', id: 'tkc-recuperar' });
     var box = el('div', { 'class': 'tkc-box', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'tkc-t' });
     ov.appendChild(box); document.body.appendChild(ov);
-    function fechar() { ov.classList.remove('aberto'); setTimeout(function () { ov.remove(); }, 50); }
+    function sumir() { ov.classList.remove('aberto'); setTimeout(function () { ov.remove(); }, 50); }
+    function fechar() { if (window.TKCamadas && TKCamadas.aberta('tkc-recuperar')) TKCamadas.desempilhar('tkc-recuperar'); else sumir(); }
     ov.addEventListener('click', function (e) { if (e.target === ov) fechar(); });
 
     function zap(nome, ident) {
@@ -171,6 +172,7 @@
     }
     formulario(o.identificador || '');
     ov.classList.add('aberto');
+    if (window.TKCamadas) TKCamadas.empilhar('tkc-recuperar', sumir);
   }
 
   /* ---------- Faixa vermelha do CPF (equipe) ---------- */
