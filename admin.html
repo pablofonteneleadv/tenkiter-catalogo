@@ -348,6 +348,11 @@
   .acoes-linha { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
   .acoes-linha > button { width: auto; padding: 7px 11px; font-size: 0.74rem; border-radius: 9px; }
   .acoes-linha .btn-link { background: #eee; color: #333; }
+  .acoes-linha .btn-postar { background: #fde7f3; color: #8a1259; }
+  /* o menu ⋯ saía cortado: content-visibility recorta o que passa da borda do cartão; com o menu aberto o cartão deixa de recortar */
+  .produto:has(details.mais[open]) { content-visibility: visible; z-index: 20; position: relative; }
+  #btn-bulk-postar { background: #c13584; color: #fff; }
+  .sem-cadastrar #btn-bulk-postar, .sem-cadastrar .btn-postar { display: none !important; }
   details.mais { position: absolute; top: 10px; right: 10px; z-index: 5; }
   .produto-info .codigo, .produto-info .nome { padding-right: 38px; }
   details.mais > summary { list-style: none; cursor: pointer; width: 34px; height: 31px; border-radius: 9px; background: #eee; color: #333; font-weight: 800; display: flex; align-items: center; justify-content: center; }
@@ -682,6 +687,7 @@
       <button type="button" id="btn-bulk-novidade">Marcar Novidades</button>
       <button type="button" id="btn-bulk-arquivar">🗃️ Arquivar em Massa</button>
       <button type="button" id="btn-bulk-reativar">🔄 Reativar em Massa</button>
+      <button type="button" id="btn-bulk-postar">📸 Enviar para Postagens</button>
       <button type="button" id="btn-bulk-juntar" hidden>🔗 Juntar em 1 produto</button>
     </div>
   </div>
@@ -2485,6 +2491,7 @@
             <button type="button" class="btn-editar" data-editar-id="${idE}">✏️ Editar</button>
             <button type="button" class="btn-arte" data-arte-id="${idE}">🎨 Stories</button>
             <button type="button" class="btn-link" data-link-id="${idE}">🔗 Link</button>
+            ${inativo ? '' : `<button type="button" class="btn-postar" data-postar-id="${idE}">📸 Postar</button>`}
             <details class="mais"><summary aria-label="Mais ações">⋯</summary>
               <div class="mais-menu">
                 <button type="button" class="btn-duplicar" data-duplicar-id="${idE}">📋 Duplicar</button>
@@ -2507,6 +2514,7 @@
         atualizarBarraBulk();
       });
     });
+    container.querySelectorAll('[data-postar-id]').forEach(btn => btn.addEventListener('click', () => enviarParaPostagem_([btn.dataset.postarId])));
     container.querySelectorAll('[data-link-id]').forEach(btn => btn.addEventListener('click', () => copiarLink(btn.dataset.linkId)));
     container.querySelectorAll('[data-editar-id]').forEach(btn => btn.addEventListener('click', () => editarProduto(btn.dataset.editarId)));
     container.querySelectorAll('[data-duplicar-id]').forEach(btn => btn.addEventListener('click', () => duplicarProduto(btn.dataset.duplicarId)));
@@ -2528,6 +2536,17 @@
     }
   }
 
+  /** Manda as peças (1 ou várias) para a lista da aba Postagens; lá cada uma vira uma postagem, uma depois da outra. */
+  function enviarParaPostagem_(ids) {
+    if (typeof window.tkPostarPecas !== 'function') { alert('A aba Postagens ainda não carregou. Tente de novo em instantes.'); return; }
+    window.tkPostarPecas(ids.map(String));
+  }
+  document.getElementById('btn-bulk-postar').addEventListener('click', () => {
+    const ids = Array.from(selecionadosBulk);
+    if (!ids.length) return;
+    enviarParaPostagem_(ids);
+    selecionadosBulk.clear(); atualizarBarraBulk(); renderizarProdutos();
+  });
   document.getElementById('btn-cancelar-bulk').addEventListener('click', () => {
     selecionadosBulk.clear();
     atualizarBarraBulk();
@@ -2601,7 +2620,7 @@
     finally { btn.disabled = false; }
   });
 
-  const BOTOES_BULK_IDS = ['btn-bulk-preco', 'btn-bulk-novidade', 'btn-bulk-arquivar', 'btn-bulk-reativar', 'btn-bulk-juntar'];
+  const BOTOES_BULK_IDS = ['btn-bulk-preco', 'btn-bulk-novidade', 'btn-bulk-arquivar', 'btn-bulk-reativar', 'btn-bulk-juntar', 'btn-bulk-postar'];
   function travarBotoesBulk(travar) {
     BOTOES_BULK_IDS.forEach(id => {
       const el = document.getElementById(id);

@@ -112,7 +112,7 @@
     await carregarFila();
     parar(); pollTimer = setInterval(() => { if ($('overlay-postagens').classList.contains('aberto') && abaAtual !== 'nova' && !ocupado) carregarFila(true); }, window.TK_POSTAGENS_POLL_MS || 15000);
   }
-  function novaVazia() { nova = { p: null, midias: [], tipo: 'feed', template: 'classico', legenda: '', quando: 'agora', data: '', manual: false, busca: '', legendaMexida: false, previa: false }; }
+  function novaVazia(lote) { nova = { lote: lote || (nova && nova.lote) || [], p: null, midias: [], tipo: 'feed', template: 'classico', legenda: '', quando: 'agora', data: '', manual: false, busca: '', legendaMexida: false, previa: false }; }
 
   async function carregarFila(silencioso) {
     const r = await ig('/posts');
@@ -168,7 +168,7 @@
   }
   function htmlNova() {
     const n = nova, p = n.p;
-    let h = '<div class="po-passo"><h4>1. Qual peça?</h4>';
+    let h = htmlLote() + '<div class="po-passo"><h4>1. Qual peça?</h4>';
     if (p) h += '<div class="po-escolhida"><img src="' + esc(fotoMini(p.Foto_URL, 120)) + '" alt="" width="40" height="50" style="border-radius:6px;object-fit:cover"><div><b>' + esc(p.Nome) + '</b><small style="display:block;color:#555">' + esc(p.Codigo || '') + ' · ' + esc(formatarReal(precoAvista(p))) + ' à vista</small></div><button type="button" data-a="trocar">Trocar</button></div>';
     else {
       const b = semAc(n.busca), l = pecasAtivas().filter((x) => !b || semAc(x.Nome).includes(b) || semAc(x.Codigo).includes(b)).slice(0, 40);
@@ -238,6 +238,8 @@
     const b = ev.target.closest('button, a'); if (!b || b.tagName === 'A') return;
     const d = b.dataset;
     if (d.peca) return escolherPeca(d.peca);
+    if (d.lote) return escolherPeca(d.lote);
+    if (d.loteX) { nova.lote = nova.lote.filter((i) => i !== d.loteX); if (nova.p && String(nova.p.ID) === d.loteX) { nova.p = null; nova.midias = []; } return desenhar(); }
     if (d.tipo) { nova.tipo = d.tipo; if (d.tipo !== 'story') nova.manual = false; nova.template = d.tipo === 'reels' ? 'original' : (nova.template || 'classico'); ajustarSelecao(); nova.previa = false; return desenhar(); }
     if (d.tpl) { nova.template = d.tpl; nova.previa = false; return desenhar(); }
     if (d.q) { nova.quando = d.q; if (d.q === 'agendar' && !nova.data) nova.data = dataLocalPadrao(); return desenhar(); }
@@ -374,9 +376,34 @@
       if (!r || !r.ok) throw new Error(erroTxt(r));
       const qtd = (r.ids || []).length || 1;
       aviso = n.manual ? 'Pronto! ' + qtd + ' Story' + (qtd > 1 ? 's' : '') + ' esperando você na aba “Postar à mão”.' : n.quando === 'agora' ? 'Enviado! Em instantes aparece em “Já postadas” (vídeo pode demorar alguns minutos).' : 'Agendado! O servidor posta sozinho na hora marcada.'; avisoErro = false;
-      abaAtual = n.manual ? 'manual' : n.quando === 'agora' ? 'hist' : 'fila'; novaVazia(); ocupado = false;
+      const feita = String(n.p.ID), resto = (n.lote || []).filter((i) => i !== feita), cfg = { tipo: n.tipo, template: n.template, quando: n.quando, data: n.data, manual: n.manual };
+      ocupado = false;
+      if (resto.length) {      // tem mais peças na lista: segue para a próxima com as mesmas escolhas
+        novaVazia(resto); Object.assign(nova, cfg); abaAtual = 'nova'; escolherPeca(resto[0]);
+        aviso += ' Próxima da lista: ' + nomeLote(resto[0]) + ' (faltam ' + resto.length + ').';
+        await carregarFila(); return;
+      }
+      abaAtual = n.manual ? 'manual' : n.quando === 'agora' ? 'hist' : 'fila'; novaVazia([]);
       await carregarFila();
     } catch (e) { ocupado = false; msg((e && e.message) || 'Não deu certo. Tente de novo.', true); }
+  }
+
+  /* ---------- lista de peças para postar (vem dos cartões / seleção em massa) ---------- */
+  window.tkPostarPecas = async function (ids) {
+    if (!podePostar()) { alert('Você não tem permissão para postar no Instagram.'); return; }
+    montar(); if (!nova) novaVazia();
+    const todos = pecasAtivas().map((p) => String(p.ID)), novos = (ids || []).map(String).filter((i) => todos.indexOf(i) !== -1);
+    if (!novos.length) { alert('Essas peças não estão ativas (arquivadas não vão para postagem).'); return; }
+    nova.lote = (nova.lote || []).filter((i) => novos.indexOf(i) === -1).concat(novos);
+    abaAtual = 'nova'; aviso = novos.length > 1 ? novos.length + ' peças na lista para postar. Vamos uma por uma.' : ''; avisoErro = false;
+    escolherPeca(novos[0]);
+    abrirComHistorico_('overlay-postagens'); desenhar();
+    carregarFila();
+  };
+  function nomeLote(id) { const p = pecasAtivas().find((x) => String(x.ID) === String(id)); return p ? (p.Codigo ? p.Codigo + ' · ' : '') + p.Nome : id; }
+  function htmlLote() {
+    const l = (nova && nova.lote) || []; if (!l.length) return '';
+    return '<div class="po-passo" style="border-color:#c13584"><h4>📋 Lista para postar (' + l.length + ')</h4>' + l.map((id) => '<div class="po-escolhida" style="margin-bottom:6px' + (nova.p && String(nova.p.ID) === String(id) ? ';border-color:#c13584;background:#fde7f3' : '') + '"><button type="button" data-lote="' + esc(id) + '" style="margin:0;background:transparent;flex:1;text-align:left;font-weight:700">' + (nova.p && String(nova.p.ID) === String(id) ? '▶ ' : '') + esc(nomeLote(id)) + '</button><button type="button" data-lote-x="' + esc(id) + '" aria-label="Tirar da lista">✕</button></div>').join('') + '</div>';
   }
 
   /* ---------- liga ---------- */
