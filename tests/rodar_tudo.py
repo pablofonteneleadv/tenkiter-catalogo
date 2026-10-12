@@ -64,6 +64,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("midia_r2.py", lambda o: "FALHAS=0" in o),          # painel -> R2 (e reserva no Cloudinary)
     ("worker_ig.js", lambda o: "FALHAS=0" in o),         # Worker do importador do Instagram (D1/R2/KV e Instagram falsos): ciclo, agrupamento, cópia, ações, token
     ("cofre_admin.py", lambda o: "FALHAS=0" in o),       # cofre das Conexões: copiar chaves só com login + senha de novo
+    ("postagens_admin.py", lambda o: "FALHAS=0" in o),   # aba Postagens: feed/carrossel/reels/story, templates, agenda, fila, Story com link manual
     ("instagram_admin.py", lambda o: "FALHAS=0" in o),   # painel: Produtos para aceitar (lista, editor, aceitar -> cadastro, conectar)
 ]
 PROPRIO_SERVIDOR = {"service_worker.py"}   # no teste local, esta bateria cuida do próprio servidor (precisa desligá-lo)
