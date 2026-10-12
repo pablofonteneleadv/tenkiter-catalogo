@@ -12,7 +12,7 @@
   const $ = (id) => document.getElementById(id);
   const esc = (v) => escaparHtml(v);
   const TIPOS = [['feed', '🖼️ Feed'], ['carrossel', '🗂️ Carrossel'], ['reels', '🎬 Reels'], ['story', '📱 Story']];
-  const TEMPLATES = [['original', 'Original'], ['classico', 'Clássico'], ['promo', 'Promoção'], ['minimal', 'Minimal'], ['vitrine', 'Vitrine']];
+  const TEMPLATES = [['original', 'Original'], ['classico', '1 · Clássico inferior'], ['promo', '2 · Preço no topo'], ['minimal', '3 · Centralizado'], ['rodape', '4 · Rodapé escuro'], ['lateral', '5 · Lateral direita'], ['cabecalho', '6 · Cabeçalho'], ['energia', '7 · Energia laranja'], ['blocos', '8 · Blocos separados'], ['editorial', '9 · Editorial vertical'], ['cartao', '10 · Cartão flutuante']];
   const ST_TXT = { agendado: '⏳ Agendado', processando: '⚙️ Publicando…', manual_pendente: '✋ Falta você postar', manual_feito: '✅ Postado à mão', publicado: '✅ Publicado', erro: '⚠️ Deu problema', cancelado: 'Cancelado' };
   const HASHTAGS = '#tenkitermodas #modacrateus #crateús #lookdodia #modafeminina #modainfantil #modamasculina';
   let abaAtual = 'nova', fila = null, conectado = null, usuarioIg = '', pollTimer = null, ocupado = false, aviso = '', avisoErro = false;
@@ -333,9 +333,8 @@
     if (n.tipo !== 'reels') {
       const lista = cli ? [['elausa', 'Ela usa TM']] : livre ? TEMPLATES.concat([['elausa', 'Ela usa TM']]) : TEMPLATES, itens = n.template !== 'original' ? itensTemplate(n.template, infoPeca(n.p), ...tamanhoAlvo()) : [];
       h += '<div class="po-passo"><h4>3. Visual</h4>' + (lista.length > 1 ? '<div class="po-chips" role="group" aria-label="Visual">' + lista.map((t) => '<button type="button" data-tpl="' + t[0] + '" aria-pressed="' + (n.template === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>' : '') +
-        '<p class="po-ajuda">' + (n.template === 'original' ? 'A foto como está (ajustada ao formato do Instagram).' : n.template === 'elausa' ? 'A foto com o texto “Ela usa TM” (toque numa das opções ou escreva o seu). Arraste o texto na foto para onde quiser.' : 'A foto ganha nome, preço à vista e código da peça. Arraste cada texto na prévia para onde quiser. Vídeos ficam sem template.') + '</p>';
+        '<p class="po-ajuda">' + (n.template === 'original' ? 'A foto como está (ajustada ao formato do Instagram).' : n.template === 'elausa' ? 'A foto com o texto “Ela usa TM” (toque numa das opções ou escreva o seu). Arraste o texto na foto para onde quiser.' : 'A foto ganha nome, preço à vista e a “zona do link”: no Story, cole o adesivo de link do Instagram em cima dela (sem adesivo, o texto padrão da loja fica ali). Arraste cada texto na prévia para onde quiser. Vídeos ficam sem template.') + '</p>';
       if (n.template === 'original' || n.template === 'elausa') h += '<div class="po-chips" role="group" aria-label="Como a foto ocupa a tela" style="margin-bottom:6px"><button type="button" data-aj="preencher" aria-pressed="' + (n.ajuste === 'preencher') + '">Preencher a tela</button><button type="button" data-aj="inteira" aria-pressed="' + (n.ajuste === 'inteira') + '">Foto inteira (fundo desfocado)</button></div>';
-      if (n.template === 'classico') h += '<p class="po-ajuda" style="margin:8px 0 4px"><b>Posição pronta</b> (depois ainda dá para arrastar):</p><div class="po-chips po-presets" role="group" aria-label="Posições prontas do visual Clássico">' + PRESETS_CLASSICO.map((pr, i) => '<button type="button" data-preset="' + i + '" aria-pressed="' + ((n.preset.classico || 0) === i) + '">' + (i + 1) + '. ' + esc(pr.nome) + '</button>').join('') + '</div>';
       if (n.template === 'elausa') h += '<div class="po-chips" role="group" aria-label="Textos prontos" style="margin-bottom:6px">' + VARIANTES_ELA.map((v) => '<button type="button" data-var="' + esc(v) + '" aria-pressed="' + (((n.tx.elausa || {}).marca !== undefined ? n.tx.elausa.marca : VARIANTES_ELA[0]) === v) + '">' + esc(v) + '</button>').join('') + '</div>';
       if (itens.length) h += '<div id="po-textos">' + itens.map((it) => { const tx = (n.tx[n.template] || {})[it.k], tm = (n.tam[n.template] || {})[it.k] || 1;
         return '<div style="margin:6px 0"><label class="po-ajuda" for="po-tx-' + it.k + '" style="display:block;margin:0 0 2px;font-weight:700">' + esc(it.rot) + '</label><input type="text" id="po-tx-' + it.k + '" data-tx="' + it.k + '" value="' + esc(tx !== undefined ? tx : it.t) + '" maxlength="90" autocomplete="off">' +
@@ -431,7 +430,6 @@
     if (d.psel) { const id = String(d.psel), i = nova.selPecas.indexOf(id); if (i === -1) nova.selPecas.push(id); else nova.selPecas.splice(i, 1); const g = document.querySelector('.po-grade'), y = g ? g.scrollTop : 0; desenhar(); const g2 = document.querySelector('.po-grade'); if (g2) g2.scrollTop = y; return; }
     if (d.fcli) { const x = (fotosNovas || []).find((q) => String(q.id) === String(d.fcli)); if (!x) return; const i = nova.livre.findIndex((m) => m.fotoId === x.id); if (i === -1) nova.livre.push(fotoParaLivre(x)); else nova.livre.splice(i, 1); nova.previa = false; const g = document.querySelector('.po-grade'), y = g ? g.scrollTop : 0; desenhar(); const g2 = document.querySelector('.po-grade'); if (g2) g2.scrollTop = y; return; }
     if (d.oc !== undefined) { const t = nova.template, o = (nova.oculto[t] = nova.oculto[t] || {}); o[d.oc] = !o[d.oc]; return desenhar(); }
-    if (d.preset !== undefined) { nova.preset[nova.template] = Number(d.preset); itensDaPostagem().forEach((m) => { if (m.pos) delete m.pos[nova.template]; }); return desenhar(); }
     if (d.peca) return escolherPeca(d.peca);
     if (d.lote) return escolherPeca(d.lote);
     if (d.loteX) { nova.lote = nova.lote.filter((i) => i !== d.loteX); if (nova.p && String(nova.p.ID) === d.loteX) { nova.p = null; nova.midias = []; } return desenhar(); }
@@ -470,64 +468,133 @@
   const FONTE = '"Helvetica Neue", Arial, sans-serif', LARANJA = '#E67E22';
   const VARIANTES_ELA = ['ElausaTM🧡', 'EleusaTM🧡', 'ElasusamTM🧡', 'ElesusamTM🧡'];
   const FONTE_MANUAL = '"Segoe Script","Brush Script MT","Lucida Handwriting","Snell Roundhand",cursive';
-  /** Textos de cada template: k = chave, rot = nome no editor, t = texto padrão, x/y = posição (fração da imagem; x é a esquerda ou o centro, y é a linha de base), tam = tamanho em px (imagem de 1080 de largura). */
-  function itensTemplate(tpl, info, W, H) {
-    const story = H > W * 1.5;
-    if (tpl === 'classico') return [
-      { k: 'selo', rot: 'Selo', t: 'NOVIDADE', x: 0.07, y: 0.085, tam: 38, cor: '#0d0d0d', bg: LARANJA },
-      { k: 'nome', rot: 'Nome da peça', t: info.nome, x: 0.055, y: 0.8, tam: 58, cor: '#fff', max: 0.88, linhas: 2, sombra: true },
-      { k: 'preco', rot: 'Preço', t: info.avista ? info.avista + ' à vista' : '', x: 0.055, y: 0.895, tam: 74, cor: LARANJA, sombra: true },
-      { k: 'codigo', rot: 'Código', t: info.codigo ? 'Código ' + info.codigo + ' · TENKiTER Modas' : '', x: 0.055, y: 0.945, tam: 32, cor: '#ddd', sombra: true }];
-    if (tpl === 'promo') return [
-      { k: 'selo', rot: 'Selo', t: 'PROMOÇÃO', x: 0.05, y: 0.115, tam: 78, cor: '#0d0d0d', bg: LARANJA },
-      { k: 'nome', rot: 'Nome da peça', t: info.nome, x: 0.045, y: 0.73, tam: 44, cor: '#fff', bg: '#0d0d0d', max: 0.7, linhas: 2 },
-      { k: 'preco', rot: 'Preço', t: info.avista || '', x: 0.045, y: 0.84, tam: 84, cor: LARANJA, bg: '#0d0d0d' },
-      { k: 'codigo', rot: 'Código', t: info.codigo ? 'à vista · ' + info.codigo : '', x: 0.045, y: 0.895, tam: 30, cor: '#fff', bg: '#0d0d0d' }];
-    if (tpl === 'minimal') return [
-      { k: 'nome', rot: 'Nome da peça', t: info.nome, x: 0.052, y: story ? 0.8 : 0.84, tam: 54, cor: '#111', max: 0.9, linhas: 2 },
-      { k: 'preco', rot: 'Preço', t: info.avista ? info.avista + ' à vista' : '', x: 0.052, y: story ? 0.89 : 0.915, tam: 60, cor: '#A85200' },
-      { k: 'codigo', rot: 'Código', t: info.codigo ? info.codigo + ' · @tenkitermodasceara' : '', x: 0.052, y: story ? 0.94 : 0.96, tam: 32, cor: '#555' }];
-    if (tpl === 'vitrine') { const yn = story ? 0.72 : 0.78; return [
-      { k: 'marca', rot: 'Marca', t: 'TENKiTER MODAS', x: 0.5, y: 0.05, tam: 40, cor: LARANJA, alinha: 'center' },
-      { k: 'nome', rot: 'Nome da peça', t: info.nome, x: 0.5, y: yn, tam: 52, cor: '#fff', alinha: 'center', max: 0.85, linhas: 2 },
-      { k: 'preco', rot: 'Preço', t: info.avista ? info.avista + ' à vista' : '', x: 0.5, y: yn + 0.075, tam: 66, cor: LARANJA, alinha: 'center' }]
-      .concat(story ? [{ k: 'extra', rot: 'Linha extra', t: info.codigo ? 'Peça pelo WhatsApp · ' + info.codigo : 'Peça pelo WhatsApp', x: 0.5, y: yn + 0.125, tam: 34, cor: '#ccc', alinha: 'center' }] : []); }
-    if (tpl === 'elausa') return [{ k: 'marca', rot: 'Texto', t: VARIANTES_ELA[0], x: 0.5, y: 0.72, tam: 120, cor: '#fff', alinha: 'center', estilo: 'italic', fonte: FONTE_MANUAL, sombra: true }];
-    return [];
+  /* ---------- Motor de templates (v5.1) ----------
+   * Cada visual = fundo + GRUPOS de itens empilhados a partir de uma borda (baixo/topo/meio). O texto se AJUSTA sozinho (encolhe ou quebra em
+   * linhas) para caber na largura do grupo, e a altura de cada item é medida de verdade — por isso nada se sobrepõe nem sai cortado.
+   * "Zona de link" (k:'zona') = caixa com texto padrão da marca no lugar onde o adesivo de link do Instagram será colado por cima: sem adesivo,
+   * o texto padrão fica bonito; com adesivo, ele cobre a zona. Tudo continua editável (texto, tamanho, ocultar) e arrastável por foto. */
+  const FONTE_T = '"Poppins","Inter","Helvetica Neue",Arial,sans-serif', FONTE_I = '"Inter","Helvetica Neue",Arial,sans-serif';
+  const BEGE = '#F5F1E8', CINZA = '#2C2C2C', OURO = '#F39C12', PRETO = '#1a1a1a';
+  function especTemplate(tpl, info, W, H) {
+    const story = H > W * 1.5, preco = info.avista ? info.avista + ' à vista' : '';
+    const selo = (t, grp) => ({ k: 'selo', rot: 'Selo', t: t || 'NOVIDADE', grp: grp, tam: 38, cor: PRETO, bg: LARANJA, padX: 0.7, padY: 0.38, radius: 0.18 });
+    const nome = (grp, o) => Object.assign({ k: 'nome', rot: 'Nome da peça', t: info.nome, grp: grp, tam: 66, cor: BEGE, linhas: 2, sombra: true }, o || {});
+    const precoIt = (grp, o) => Object.assign({ k: 'preco', rot: 'Preço', t: preco, grp: grp, tam: 88, cor: OURO, sombra: true }, o || {});
+    const codigo = (grp, o) => Object.assign({ k: 'codigo', rot: 'Código', t: info.codigo ? 'Código ' + info.codigo + ' · TENKiTER Modas' : '', grp: grp, tam: 34, cor: BEGE, peso: 'normal', sombra: true }, o || {});
+    const zona = (grp, t, o) => Object.assign({ k: 'zona', rot: 'Zona do link (texto padrão)', t: t, grp: grp, tam: 40, cor: BEGE, wz: 0.6, padY: 0.5, sombra: false }, o || {});
+    const dy = story ? 0.04 : 0;      // no Story a base sobe um pouco: a barra de resposta do Instagram cobre o rodapé
+    if (tpl === 'classico') return { fundo: 'baixo', grupos: [
+      { id: 'a', anc: 't', y: 0.05, x: 0.05, al: 'left' }, { id: 'b', anc: 'b', y: 0.14 + dy, x: 0.05, al: 'left', w: 0.9, gap: 8 }, { id: 'c', anc: 'b', y: 0.04 + dy, x: 0.5, al: 'center' }],
+      itens: [selo('NOVIDADE', 'a'), nome('b'), precoIt('b'), codigo('b'), zona('c', 'www.tenkiter.com.br', { sub: { cor: LARANJA, w: 3 }, wz: 0.6 })] };
+    if (tpl === 'promo') return { fundo: 'ambos', grupos: [
+      { id: 'a', anc: 't', y: 0.05, x: 0.05, al: 'left' }, { id: 'p', anc: 't', y: 0.115, x: 0.05, al: 'left', w: 0.9 }, { id: 'b', anc: 'b', y: 0.2 + dy, x: 0.05, al: 'left', w: 0.9 }, { id: 'c', anc: 'b', y: 0.05 + dy, x: 0.5, al: 'center' }],
+      itens: [selo('PROMOÇÃO', 'a'), precoIt('p', { tam: 170 }), nome('b', { tam: 64 }), zona('c', 'Compre Online', { cor: OURO, bg: 'rgba(44,44,44,.62)', radius: 0.22, padY: 0.55 })] };
+    if (tpl === 'minimal') return { fundo: 'baixo', grupos: [
+      { id: 'a', anc: 't', y: 0.05, x: 0.5, al: 'center' }, { id: 'b', anc: 'b', y: 0.15 + dy, x: 0.5, al: 'center', w: 0.88, gap: 10 }, { id: 'c', anc: 'b', y: 0.05 + dy, x: 0.5, al: 'center' }],
+      itens: [selo('NOVIDADE', 'a'), nome('b', { al: 'center' }), precoIt('b'), zona('c', info.codigo ? 'Código ' + info.codigo : 'TENKiTER Modas', { wz: 0.7, setas: LARANJA, tam: 38 })] };
+    if (tpl === 'rodape') return { fundo: 'rodape', grupos: [
+      { id: 'b', anc: 'm', y: 0.875, x: 0.05, al: 'left', w: 0.44, gap: 8 }, { id: 'c', anc: 'm', y: 0.875, x: 0.95, al: 'right' }],
+      itens: [nome('b', { tam: 50 }), precoIt('b', { tam: 70 }), zona('c', 'Toque e Compre', { wz: 0.42, bg: LARANJA, cor: CINZA, radius: 0.12, padY: 0.7, tam: 40 })] };
+    if (tpl === 'lateral') return { fundo: 'baixo-dir', grupos: [
+      { id: 'a', anc: 't', y: 0.05, x: 0.95, al: 'right' }, { id: 'b', anc: 'b', y: 0.2 + dy, x: 0.95, al: 'right', w: 0.7, gap: 8 }, { id: 'c', anc: 'b', y: 0.08 + dy, x: 0.95, al: 'right' }],
+      itens: [selo('NOVIDADE', 'a'), nome('b'), precoIt('b'), zona('c', '@tenkitermodas', { wz: 0.5, borda: { cor: BEGE, w: 2, dash: true }, padY: 0.55, tam: 38 })] };
+    if (tpl === 'cabecalho') return { fundo: 'topo', grupos: [
+      { id: 'b', anc: 't', y: 0.1, x: 0.05, al: 'left', w: 0.88, gap: 8 }, { id: 'c', anc: 'b', y: 0.03 + dy, x: 0.5, al: 'center' }],
+      itens: [precoIt('b', { tam: 110 }), nome('b', { tam: 60 }), zona('c', 'www.tenkiter.com.br', { wz: 1, fade: true, padY: 0.7 })] };
+    if (tpl === 'energia') return { fundo: 'energia', grupos: [
+      { id: 'b', anc: 'm', y: 0.9, x: 0.05, al: 'left', w: 0.44, gap: 6 }, { id: 'c', anc: 'm', y: 0.9, x: 0.95, al: 'right' }],
+      itens: [nome('b', { tam: 48, cor: PRETO, sombra: false }), precoIt('b', { tam: 68, cor: PRETO, sombra: false }), zona('c', 'Clique Aqui', { wz: 0.4, bg: BEGE, cor: CINZA, radius: 0.16, padY: 0.65 })] };
+    if (tpl === 'blocos') return { fundo: 'ambos', grupos: [
+      { id: 'a', anc: 't', y: 0.08, x: 0.05, al: 'left', w: 0.88, gap: 12 }, { id: 'b', anc: 'b', y: 0.15 + dy, x: 0.05, al: 'left', w: 0.9 }, { id: 'c', anc: 'b', y: 0.05 + dy, x: 0.95, al: 'right' }],
+      itens: [selo('NOVIDADE', 'a'), nome('a'), precoIt('b', { tam: 96 }), zona('c', 'Ver no Site', { wz: 0.5, bg: BEGE, cor: CINZA, radius: 0.2, padY: 0.6, sombraCx: true })] };
+    if (tpl === 'editorial') return { fundo: 'direita', grupos: [
+      { id: 'a', anc: 't', y: 0.2, x: 0.95, al: 'right', w: 0.36, gap: 6 }, { id: 'c', anc: 'b', y: 0.05 + dy, x: 0.95, al: 'right' }],
+      itens: [precoIt('a', { tam: 80, linhas: 2 }), nome('a', { tam: 48, linhas: 3 }), codigo('a', { t: info.codigo || '', tam: 28 }), zona('c', 'WhatsApp →', { wz: 0.5, bl: { cor: LARANJA, w: 5 }, txtAl: 'left', padX: 0.5, padY: 0.45 })] };
+    if (tpl === 'cartao') return { fundo: 'baixo-leve', grupos: [
+      { id: 'a', anc: 'b', y: 0.05 + dy, x: 0.5, al: 'center', fw: 0.9, gap: 10, caixa: { cor: BEGE, r: 26, pad: 28, sombra: true } }],
+      itens: [nome('a', { cor: CINZA, sombra: false, tam: 54, al: 'center' }), precoIt('a', { cor: '#A85200', sombra: false, tam: 72 }), zona('a', 'Chame no WhatsApp', { wz: 'cheio', bg: CINZA, radius: 0.16, padY: 0.6, tam: 42 })] };
+    if (tpl === 'elausa') return { fundo: 'foto', grupos: [{ id: 'a', anc: 'm', y: 0.72, x: 0.5, al: 'center', w: 0.9 }],
+      itens: [{ k: 'marca', rot: 'Texto', t: VARIANTES_ELA[0], grp: 'a', tam: 120, cor: '#fff', estilo: 'italic', fonte: FONTE_MANUAL, sombra: true, al: 'center' }] };
+    return { fundo: 'foto', grupos: [], itens: [] };
   }
-  /** 10 posições prontas do visual Clássico (x, y = fração da imagem; al = alinhamento; m = multiplicador de tamanho; grad = onde escurece para o texto aparecer). */
-  const PRESETS_CLASSICO = [
-    { nome: 'Embaixo à esquerda', grad: 'baixo', i: {} },
-    { nome: 'Embaixo no centro', grad: 'baixo', i: { selo: { x: 0.5, y: 0.085, al: 'center' }, nome: { x: 0.5, y: 0.8, al: 'center' }, preco: { x: 0.5, y: 0.895, al: 'center' }, codigo: { x: 0.5, y: 0.945, al: 'center' } } },
-    { nome: 'Embaixo à direita', grad: 'baixo', i: { selo: { x: 0.93, y: 0.085, al: 'right' }, nome: { x: 0.945, y: 0.8, al: 'right' }, preco: { x: 0.945, y: 0.895, al: 'right' }, codigo: { x: 0.945, y: 0.945, al: 'right' } } },
-    { nome: 'Topo à esquerda', grad: 'cima', i: { selo: { x: 0.07, y: 0.075 }, nome: { x: 0.055, y: 0.165 }, preco: { x: 0.055, y: 0.255 }, codigo: { x: 0.055, y: 0.3 } } },
-    { nome: 'Topo no centro', grad: 'cima', i: { selo: { x: 0.5, y: 0.075, al: 'center' }, nome: { x: 0.5, y: 0.165, al: 'center' }, preco: { x: 0.5, y: 0.255, al: 'center' }, codigo: { x: 0.5, y: 0.3, al: 'center' } } },
-    { nome: 'Meio à esquerda', grad: 'tudo', i: { selo: { x: 0.07, y: 0.085 }, nome: { x: 0.055, y: 0.46 }, preco: { x: 0.055, y: 0.545 }, codigo: { x: 0.055, y: 0.59 } } },
-    { nome: 'Meio grande no centro', grad: 'tudo', i: { selo: { x: 0.5, y: 0.085, al: 'center' }, nome: { x: 0.5, y: 0.46, al: 'center', m: 1.15 }, preco: { x: 0.5, y: 0.56, al: 'center', m: 1.35 }, codigo: { x: 0.5, y: 0.62, al: 'center' } } },
-    { nome: 'Preço gigante', grad: 'baixo', i: { nome: { x: 0.055, y: 0.77, m: 0.85 }, preco: { x: 0.055, y: 0.88, m: 1.45 }, codigo: { x: 0.055, y: 0.945, m: 0.9 } } },
-    { nome: 'Compacto embaixo', grad: 'baixo', i: { selo: { x: 0.07, y: 0.085, m: 0.8 }, nome: { x: 0.055, y: 0.865, m: 0.75 }, preco: { x: 0.055, y: 0.92, m: 0.75 }, codigo: { x: 0.055, y: 0.96, m: 0.75 } } },
-    { nome: 'Preço no topo, nome embaixo', grad: 'ambos', i: { selo: { x: 0.07, y: 0.085 }, preco: { x: 0.055, y: 0.18, m: 1.2 }, nome: { x: 0.055, y: 0.9 }, codigo: { x: 0.055, y: 0.955 } } }
-  ];
-  function presetAtual(tpl) { return tpl === 'classico' ? PRESETS_CLASSICO[(nova.preset && nova.preset.classico) || 0] : null; }
-  /** Itens com o que a pessoa mexeu: texto trocado, tamanho e a posição (por foto). */
-  function itensEfetivos(tpl, m) {
-    const [W, H] = tamanhoAlvo(), base = itensTemplate(tpl, infoPeca(nova.p), W, H);
-    const tx = (nova.tx && nova.tx[tpl]) || {}, tm = (nova.tam && nova.tam[tpl]) || {}, ps = (m && m.pos && m.pos[tpl]) || {};
-    const pr = presetAtual(tpl), oc = (nova.oculto && nova.oculto[tpl]) || {};
-    return base.map((it) => { const q = pr && pr.i[it.k] ? pr.i[it.k] : null;
-      return Object.assign({}, it, q ? { x: q.x, y: q.y, alinha: q.al || 'left' } : {}, { t: oc[it.k] ? '' : (tx[it.k] !== undefined ? tx[it.k] : it.t), mult: (tm[it.k] || 1) * (q && q.m ? q.m : 1) }, ps[it.k] ? { x: ps[it.k].x, y: ps[it.k].y } : {}); });
-  }
-  function textoCanvas(ctx, it, W, H) {
+  function itensTemplate(tpl, info, W, H) { return especTemplate(tpl, info, W, H).itens; }
+  const _mc = document.createElement('canvas').getContext('2d');
+  function fonteDe(it, tam) { return (it.estilo ? it.estilo + ' ' : '') + (it.peso || 'bold') + ' ' + tam + 'px ' + (it.fonte || (it.peso === 'normal' ? FONTE_I : FONTE_T)); }
+  /** Mede um item: encolhe a letra (até 45%) até caber em `larg` px nas linhas permitidas; devolve tamanho, linhas e caixa. */
+  function medirItem(it, larg) {
     const txt = String(it.t == null ? '' : it.t).trim(); if (!txt) return null;
-    const tam = Math.max(12, Math.round(it.tam * (it.mult || 1)));
-    ctx.font = (it.estilo ? it.estilo + ' ' : '') + 'bold ' + tam + 'px ' + (it.fonte || FONTE); ctx.textAlign = it.alinha || 'left'; ctx.textBaseline = 'alphabetic';
-    const linhas = it.max ? quebrar(ctx, txt, W * it.max, it.linhas || 2) : [txt], lh = tam * 1.15, pad = it.bg ? tam * 0.28 : 4;
-    const larg = Math.max.apply(null, linhas.map((l) => ctx.measureText(l).width)), x = it.x * W, y0 = it.y * H;
-    const x0 = (it.alinha === 'center' ? x - larg / 2 : it.alinha === 'right' ? x - larg : x) - pad, y1 = y0 - tam * 0.88 - pad * 0.6, y2 = y0 + (linhas.length - 1) * lh + tam * 0.3 + pad * 0.6;
-    if (it.bg) { ctx.fillStyle = it.bg; ctx.fillRect(x0, y1, larg + pad * 2, y2 - y1); }
-    ctx.save(); if (it.sombra) { ctx.shadowColor = 'rgba(0,0,0,.65)'; ctx.shadowBlur = Math.round(tam * 0.18); ctx.shadowOffsetY = Math.round(tam * 0.05); }
-    ctx.fillStyle = it.cor || '#fff'; linhas.forEach((l, n) => ctx.fillText(l, x, y0 + n * lh)); ctx.restore();
-    return { k: it.k, x0: x0, y0: y1, x1: x0 + larg + pad * 2, y1: y2 };
+    const base = Math.max(12, Math.round(it.tam * (it.mult || 1))), padX = (it.padX || 0) * base, padY = (it.padY || 0) * base, livre = Math.max(40, larg - padX * 2), maxL = it.linhas || 1;
+    let tam = base, linhas;
+    for (;;) {
+      _mc.font = fonteDe(it, tam); linhas = (it.k === 'preco' && maxL >= 2 && /\sà vista$/i.test(txt)) ? [txt.replace(/\s+à vista$/i, ''), 'à vista'] : quebrar(_mc, txt, livre, maxL);
+      const lw = Math.max.apply(null, linhas.map((l) => _mc.measureText(l).width)), cortou = linhas.join(' ').replace(/\s+/g, ' ') !== txt.replace(/\s+/g, ' ');
+      if ((lw <= livre + 0.5 && !cortou) || tam <= base * 0.45) break;
+      tam = Math.floor(tam * 0.94);
+    }
+    _mc.font = fonteDe(it, tam);
+    const lh = tam * 1.18, lw = Math.max.apply(null, linhas.map((l) => _mc.measureText(l).width));
+    return { tam, linhas, lh, padX, padY, lw, w: it.wz ? 0 : lw + padX * 2, h: linhas.length * lh + padY * 2 };
+  }
+  /** Calcula a posição (caixa) de cada item. Itens com `pos` (arrastados) ficam onde a pessoa deixou. */
+  function layoutItens(spec, W, H, ov) {
+    const story = H > W * 1.5, out = [];
+    spec.grupos.forEach((g) => {
+      const its = spec.itens.filter((q) => q.grp === g.id && String(q.t == null ? '' : q.t).trim());
+      if (!its.length) return;
+      const gap = g.gap == null ? 8 : g.gap, cx = g.caixa, pad = cx ? cx.pad : 0;
+      const larguraGrupo = (g.fw ? g.fw * W : (g.w || 0.9) * W);
+      const larguraInterna = g.fw ? larguraGrupo - pad * 2 : larguraGrupo;
+      const med = its.map((it) => { const larg = it.wz === 'cheio' ? larguraInterna : it.wz ? it.wz * W : larguraInterna; const m = medirItem(it, larg); if (m && it.wz) m.w = it.wz === 'cheio' ? larguraInterna : it.wz * W; return m; });
+      const itensM = its.map((it, i) => ({ it, m: med[i] })).filter((q) => q.m);
+      if (!itensM.length) return;
+      const total = itensM.reduce((s, q) => s + q.m.h, 0) + gap * (itensM.length - 1) + pad * 2;
+      const gx = g.x * W;
+      const larguraCaixa = g.fw ? larguraGrupo : Math.max.apply(null, itensM.map((q) => q.m.w)) + pad * 2;
+      const gx0 = g.al === 'center' ? gx - larguraCaixa / 2 : g.al === 'right' ? gx - larguraCaixa : gx;
+      let top = g.anc === 'b' ? H - g.y * H - total : g.anc === 't' ? g.y * H : g.y * H - total / 2;
+      if (cx) out.push({ deco: 'caixa', x0: gx0, y0: top, x1: gx0 + larguraCaixa, y1: top + total, cx });
+      let y = top + pad;
+      itensM.forEach((q) => {
+        const it = q.it, m = q.m, w = m.w, ial = it.al || g.al;
+        const x0 = ial === 'center' ? gx0 + larguraCaixa / 2 - w / 2 : ial === 'right' ? gx0 + larguraCaixa - pad - w : gx0 + pad;
+        const r = { x0, y0: y, x1: x0 + w, y1: y + m.h };
+        const o = ov && ov[it.k];
+        if (o) { const dx = o.x * W - (r.x0 + r.x1) / 2, dyy = o.y * H - (r.y0 + r.y1) / 2; r.x0 += dx; r.x1 += dx; r.y0 += dyy; r.y1 += dyy; }
+        out.push(Object.assign({}, it, { ial, m, r, x: (r.x0 + r.x1) / 2 / W, y: (r.y0 + r.y1) / 2 / H }));
+        y += m.h + gap;
+      });
+    });
+    return out;
+  }
+  function itensEfetivos(tpl, m) {
+    const [W, H] = tamanhoAlvo(), spec = especTemplate(tpl, infoPeca(nova.p), W, H);
+    const tx = (nova.tx && nova.tx[tpl]) || {}, tm = (nova.tam && nova.tam[tpl]) || {}, ps = (m && m.pos && m.pos[tpl]) || {}, oc = (nova.oculto && nova.oculto[tpl]) || {};
+    spec.itens = spec.itens.map((it) => Object.assign({}, it, { t: oc[it.k] ? '' : (tx[it.k] !== undefined ? tx[it.k] : it.t), mult: tm[it.k] || 1 }));
+    return { tpl: tpl, fundo: spec.fundo, lista: layoutItens(spec, W, H, ps) };
+  }
+  function caixaArredondada(ctx, x0, y0, x1, y1, r) { r = Math.min(r, (x1 - x0) / 2, (y1 - y0) / 2); ctx.beginPath(); ctx.moveTo(x0 + r, y0); ctx.arcTo(x1, y0, x1, y1, r); ctx.arcTo(x1, y1, x0, y1, r); ctx.arcTo(x0, y1, x0, y0, r); ctx.arcTo(x0, y0, x1, y0, r); ctx.closePath(); }
+  function desenharItem(ctx, it, W, H) {
+    const m = it.m, r = it.r, rad = (it.radius || 0) * m.tam * 2;
+    if (it.fade) { const g = ctx.createLinearGradient(0, r.y0 - 90, 0, H); g.addColorStop(0, 'rgba(44,44,44,0)'); g.addColorStop(0.45, 'rgba(44,44,44,.8)'); g.addColorStop(1, 'rgba(44,44,44,.92)'); ctx.fillStyle = g; ctx.fillRect(0, r.y0 - 90, W, H - r.y0 + 90); }
+    if (it.bg) { ctx.save(); if (it.sombraCx) { ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 10; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3; } ctx.fillStyle = it.bg; caixaArredondada(ctx, r.x0, r.y0, r.x1, r.y1, rad); ctx.fill(); ctx.restore(); }
+    if (it.borda) { ctx.save(); ctx.strokeStyle = it.borda.cor; ctx.lineWidth = it.borda.w; if (it.borda.dash) ctx.setLineDash([12, 8]); caixaArredondada(ctx, r.x0, r.y0, r.x1, r.y1, 6); ctx.stroke(); ctx.restore(); }
+    if (it.sub) { ctx.fillStyle = it.sub.cor; ctx.fillRect(r.x0, r.y1 - it.sub.w, r.x1 - r.x0, it.sub.w); }
+    if (it.bl) { ctx.fillStyle = it.bl.cor; ctx.fillRect(r.x0, r.y0, it.bl.w, r.y1 - r.y0); }
+    ctx.save(); ctx.font = fonteDe(it, m.tam); ctx.textBaseline = 'alphabetic';
+    if (it.sombra) { ctx.shadowColor = 'rgba(0,0,0,.65)'; ctx.shadowBlur = Math.round(m.tam * 0.18); ctx.shadowOffsetY = Math.round(m.tam * 0.05); }
+    const caixa = !!(it.wz || it.bg), centro = it.wz ? (it.txtAl !== 'left') : false, gal = it.ial || it.al || 'left';
+    const alinha = it.wz ? (it.txtAl || 'center') : (it.alinhaTexto || null);
+    ctx.fillStyle = it.cor || '#fff';
+    m.linhas.forEach((l, n) => {
+      const yb = r.y0 + m.padY + n * m.lh + m.tam * 0.9 + (m.lh - m.tam * 1.18) / 2;
+      let tx, ta = alinha;
+      if (!ta) ta = it.bg ? 'center' : (gal === 'center' ? 'center' : gal === 'right' ? 'right' : 'left');
+      if (ta === 'center') tx = (r.x0 + r.x1) / 2; else if (ta === 'right') tx = r.x1 - m.padX; else tx = r.x0 + m.padX;
+      ctx.textAlign = ta; ctx.fillText(l, tx, yb);
+    });
+    if (it.setas) { ctx.fillStyle = it.setas; ctx.font = fonteDe(it, Math.round(m.tam * 1.7)); ctx.textAlign = 'left'; ctx.fillText('»', r.x0 + 10, r.y0 + m.padY + m.tam * 1.05); ctx.textAlign = 'right'; ctx.fillText('«', r.x1 - 10, r.y0 + m.padY + m.tam * 1.05); }
+    ctx.restore();
+    return { k: it.k, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 };
   }
   function fundoFoto(ctx, img, W, H, ajuste) {
     if (ajuste === 'inteira') {
@@ -536,28 +603,29 @@
       caber(ctx, img, 0, 0, W, H);
     } else cobrir(ctx, img, 0, 0, W, H);
   }
-  /** Desenha a foto + template e os textos; devolve as caixas dos textos (para arrastar). */
-  function desenharTemplate(ctx, img, W, H, tpl, itens, ajuste) {
-    const story = H > W * 1.5;
+  function degrade(ctx, W, y0, y1, a0, a1, cor) { const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + (cor || '0,0,0') + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + (cor || '0,0,0') + ',' + a1 + ')'); ctx.fillStyle = g; ctx.fillRect(0, Math.min(y0, y1), W, Math.abs(y1 - y0)); }
+  /** Desenha a foto + fundo do visual + itens; devolve as caixas dos textos (para arrastar). */
+  function desenharTemplate(ctx, img, W, H, tpl, ef, ajuste) {
     ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H);
-    if (tpl === 'original' || tpl === 'elausa') fundoFoto(ctx, img, W, H, ajuste);
-    else if (tpl === 'classico') {
-      cobrir(ctx, img, 0, 0, W, H); const bh = story ? 640 : 460, pr = presetAtual('classico'), gr = pr ? pr.grad : 'baixo';
-      const faixa = (y0, y1) => { const g = ctx.createLinearGradient(0, y1, 0, y0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.5, 'rgba(0,0,0,.7)'); g.addColorStop(1, 'rgba(0,0,0,.92)'); ctx.fillStyle = g; ctx.fillRect(0, Math.min(y0, y1), W, Math.abs(y1 - y0)); };
-      if (gr === 'baixo' || gr === 'ambos') faixa(H, H - bh);
-      if (gr === 'cima' || gr === 'ambos') faixa(0, bh * 0.75);
-      if (gr === 'tudo') { ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, 0, W, H); }
-    }
-    else if (tpl === 'promo') cobrir(ctx, img, 0, 0, W, H);
-    else if (tpl === 'minimal') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); const m = 56, topo = story ? 140 : m, fh = H - (story ? 520 : 330); cobrir(ctx, img, m, topo, W - m * 2, fh - topo); }
-    else {     // vitrine
-      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#1b1b1b'); g.addColorStop(1, '#0d0d0d'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-      const fw = W - 160, fh = story ? 1180 : 840, fx = 80, fy = 130, r = 36; ctx.save(); ctx.beginPath(); ctx.moveTo(fx + r, fy); ctx.arcTo(fx + fw, fy, fx + fw, fy + fh, r); ctx.arcTo(fx + fw, fy + fh, fx, fy + fh, r); ctx.arcTo(fx, fy + fh, fx, fy, r); ctx.arcTo(fx, fy, fx + fw, fy, r); ctx.closePath(); ctx.clip(); cobrir(ctx, img, fx, fy, fw, fh); ctx.restore();
-    }
-    const caixas = []; (itens || []).forEach((it) => { const c = textoCanvas(ctx, it, W, H); if (c) caixas.push(c); });
+    const fundo = ef && ef.fundo ? ef.fundo : 'foto';
+    if (tpl === 'original' || tpl === 'elausa') fundoFoto(ctx, img, W, H, ajuste); else cobrir(ctx, img, 0, 0, W, H);
+    if (fundo === 'baixo') degrade(ctx, W, H * 0.5, H, 0, 0.88);
+    else if (fundo === 'baixo-leve') degrade(ctx, W, H * 0.7, H, 0, 0.45);
+    else if (fundo === 'ambos') { degrade(ctx, W, H * 0.42, 0, 0, 0.7); degrade(ctx, W, H * 0.58, H, 0, 0.82); }
+    else if (fundo === 'topo') { degrade(ctx, W, H * 0.5, 0, 0, 0.85); }
+    else if (fundo === 'baixo-dir') { degrade(ctx, W, H * 0.5, H, 0, 0.82); const g = ctx.createLinearGradient(W * 0.3, 0, W, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.4)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
+    else if (fundo === 'direita') { const g = ctx.createLinearGradient(W * 0.35, 0, W, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.78)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); degrade(ctx, W, H * 0.8, H, 0, 0.5); }
+    else if (fundo === 'rodape') { ctx.fillStyle = CINZA; ctx.fillRect(0, H * 0.75, W, H * 0.25); }
+    else if (fundo === 'energia') { ctx.fillStyle = LARANJA; ctx.fillRect(0, H * 0.8, W, H * 0.2); }
+    const caixas = [];
+    ((ef && ef.lista) || []).forEach((it) => {
+      if (it.deco === 'caixa') { ctx.save(); if (it.cx.sombra) { ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 8; } ctx.fillStyle = it.cx.cor; caixaArredondada(ctx, it.x0, it.y0, it.x1, it.y1, it.cx.r); ctx.fill(); ctx.restore(); }
+    });
+    ((ef && ef.lista) || []).forEach((it) => { if (!it.deco) caixas.push(desenharItem(ctx, it, W, H)); });
     return caixas;
   }
   function tamanhoAlvo() { return nova.tipo === 'story' ? [1080, 1920] : [1080, 1350]; }
+  async function carregarFontes_() { try { await Promise.all(['700 40px Poppins', '800 40px Poppins', '400 30px Inter', '700 30px Inter'].map((f) => document.fonts.load(f))); } catch (e) { /* sem fonte da loja: usa a do aparelho */ } }
   const imgCache = {};
   async function imagemCache(url) { if (!imgCache[url]) imgCache[url] = carregarImagem(url).catch((e) => { delete imgCache[url]; throw e; }); return imgCache[url]; }
   function itensDaPostagem() { return nova.modoLivre || nova.modoCli ? nova.livre : nova.midias.filter((m) => m.sel); }
@@ -567,7 +635,7 @@
     const m = c._m, [W, H] = tamanhoAlvo(); c.width = W; c.height = H;
     const x = c.getContext('2d');
     c._boxes = desenharTemplate(x, c._img, W, H, nova.template, itensEfetivos(nova.template, m), nova.ajuste);
-    if (nova.tipo === 'story' && nova.manual) {     // só na prévia: reserva o lugar do botão de link que será colocado no Instagram
+    if (nova.tipo === 'story' && nova.manual && (nova.template === 'original' || nova.template === 'elausa')) {     // só na prévia: reserva o lugar do botão de link que será colocado no Instagram
       x.save(); x.setLineDash([14, 10]); x.lineWidth = 4; x.strokeStyle = 'rgba(255,255,255,.95)'; x.fillStyle = 'rgba(0,0,0,.35)';
       const bw = W * 0.56, bh = H * 0.05, bx = (W - bw) / 2, by = H * 0.655; x.fillRect(bx, by, bw, bh); x.strokeRect(bx, by, bw, bh);
       x.setLineDash([]); x.fillStyle = '#fff'; x.font = 'bold ' + Math.round(W * 0.028) + 'px ' + FONTE; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('🔗 aqui entra o link (só na prévia)', W / 2, by + bh / 2); x.restore();
@@ -585,7 +653,7 @@
   function fimArraste() { if (arr) { const c = arr.c; arr = null; c.classList.remove('arrastando'); pintarCanvas(c); } }
   function ligarArraste(c) {
     if (!arrGlobal) { arrGlobal = true; window.addEventListener('mousemove', moverArraste); window.addEventListener('mouseup', fimArraste); }
-    const inicio = (e) => { const pt = pontoDe(c, e), b = acharCaixa(c, pt); if (!b) return; const it = itensEfetivos(nova.template, c._m).find((q) => q.k === b.k); if (!it) return; arr = { c: c, k: b.k, x: it.x, y: it.y, ox: pt.x, oy: pt.y }; c.classList.add('arrastando'); if (e.cancelable) e.preventDefault(); };
+    const inicio = (e) => { const pt = pontoDe(c, e), b = acharCaixa(c, pt); if (!b) return; const it = itensEfetivos(nova.template, c._m).lista.find((q) => q.k === b.k); if (!it) return; arr = { c: c, k: b.k, x: it.x, y: it.y, ox: pt.x, oy: pt.y }; c.classList.add('arrastando'); if (e.cancelable) e.preventDefault(); };
     c.addEventListener('mousedown', inicio);
     c.addEventListener('touchstart', inicio, { passive: false }); c.addEventListener('touchmove', moverArraste, { passive: false }); c.addEventListener('touchend', fimArraste); c.addEventListener('touchcancel', fimArraste);
     c.addEventListener('mousemove', (e) => { if (!arr) c.style.cursor = acharCaixa(c, pontoDe(c, e)) ? 'grab' : 'default'; });
@@ -595,6 +663,7 @@
     const fotos = itensDaPostagem().filter((m) => m.tipo === 'imagem').slice(0, 10), meu = ++previaSeq;
     if (!fotos.length) { box.innerHTML = '<p class="po-ajuda">Escolha pelo menos uma foto.</p>'; return; }
     box.innerHTML = '<p class="po-ajuda">Montando…</p>';
+    await carregarFontes_();
     const cs = [];
     try {
       for (const m of fotos) { const img = await imagemCache(m.url); if (meu !== previaSeq) return; const c = document.createElement('canvas'); c._m = m; c._img = img; pintarCanvas(c); c.setAttribute('role', 'img'); c.setAttribute('aria-label', 'Prévia da postagem. Arraste os textos para mudar de lugar.'); ligarArraste(c); cs.push(c); }
@@ -642,6 +711,7 @@
     if (m.tipo === 'video') return { url: m.url, tipo: 'video' };
     const [W, H] = tamanhoAlvo(), c = document.createElement('canvas'); c.width = W; c.height = H;
     try {
+      await carregarFontes_();
       const img = await imagemCache(m.url); desenharTemplate(c.getContext('2d'), img, W, H, nova.template, itensEfetivos(nova.template, m), nova.ajuste);
       const blob = await blobDe(c); return { url: await subirBlob(blob, 'post.jpg'), tipo: 'imagem' };
     } catch (e) {

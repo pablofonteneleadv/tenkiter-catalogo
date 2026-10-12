@@ -55,7 +55,7 @@ with sync_playwright() as p:
     chk("Feed marca só 1 foto", pg.locator(".po-m[aria-pressed=true]").count() == 1)
     pg.click("[data-a=previa]"); pg.wait_for_timeout(1500)
     chk("prévia do template mostra a imagem montada (canvas 1080x1350)", pg.eval_on_selector_all("#po-previa canvas", "c=>c.length>0 && c[0].width===1080 && c[0].height===1350"))
-    for tpl in ["promo", "minimal", "vitrine", "original"]:
+    for tpl in ["promo", "minimal", "rodape", "original"]:
         pg.click("[data-tpl=%s]" % tpl); pg.click("[data-a=previa]"); pg.wait_for_timeout(900)
         chk("template %s monta a prévia" % tpl, pg.locator("#po-previa canvas").count() == 1)
     pg.click("[data-tpl=classico]")
@@ -80,7 +80,7 @@ with sync_playwright() as p:
     print("== Story com link (manual) ==")
     pg.click("[data-tipo=story]"); pg.wait_for_timeout(200)
     chk("Story oferece a caixinha 'Story com link' e explica", pg.locator("#po-manual").count() == 1 and "não deixa colocar link" in corpo(pg))
-    pg.click("[data-tpl=vitrine]"); pg.check("#po-manual"); pg.wait_for_timeout(200)
+    pg.click("[data-tpl=rodape]"); pg.check("#po-manual"); pg.wait_for_timeout(200)
     chk("botão vira 'Preparar Story para postar à mão'", "Preparar Story" in pg.inner_text(".po-enviar"))
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(2500)
     c = g["post_chamadas"][-1]["corpo"]
@@ -211,7 +211,7 @@ with sync_playwright() as p:
     bef = caixa(pg, 0, "preco"); arrastar(pg, 0, "preco", 0.15, -0.30); aft = caixa(pg, 0, "preco")
     chk("arrastar o texto na foto muda a posição (subiu e foi para a direita)", aft["y0"] < bef["y0"] - 100 and aft["x0"] > bef["x0"] + 40, [bef, aft])
     pg.click("[data-tpl=promo]"); pg.wait_for_timeout(900)
-    chk("outros templates também têm texto editável e arrastável (Promoção: selo, nome, preço, código)", all(pg.locator("#po-tx-%s" % k).count() == 1 for k in ["selo", "nome", "preco", "codigo"]))
+    chk("outros templates também têm texto editável e arrastável (Promoção: selo, nome, preço, zona do link)", all(pg.locator("#po-tx-%s" % k).count() == 1 for k in ["selo", "nome", "preco", "zona"]))
     bn = caixa(pg, 0, "nome"); arrastar(pg, 0, "nome", 0.0, 0.10); an = caixa(pg, 0, "nome"); chk("arrasta no Promoção", an["y0"] > bn["y0"] + 40, [bn, an])
     pg.click("[data-a=resetTx]"); pg.wait_for_timeout(700); ar = caixa(pg, 0, "nome")
     chk("'Voltar ao padrão' devolve a posição", abs(ar["y0"] - bn["y0"]) < 3, [bn, ar])

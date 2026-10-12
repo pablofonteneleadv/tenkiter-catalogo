@@ -37,13 +37,22 @@ with sync_playwright() as p:
     pg.click(".po-card >> nth=0"); pg.click(".po-card >> nth=1"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(900)
     chk("segue para as escolhas da 1ª peça", "O que postar?" in corpo(pg) and "Visual" in corpo(pg))
 
-    print("== Visual Clássico: 10 posições e ocultar ==")
-    chk("10 posições prontas", pg.locator("[data-preset]").count() == 10, pg.locator("[data-preset]").count())
+    print("== 10 visuais: nada sobreposto nem fora da imagem; ocultar ==")
+    TPLS = ["classico", "promo", "minimal", "rodape", "lateral", "cabecalho", "energia", "blocos", "editorial", "cartao"]
+    chk("10 visuais prontos além do Original", all(pg.locator("[data-tpl=%s]" % t).count() == 1 for t in TPLS + ["original"]))
+    def boxes(): return pg.evaluate("(()=>{const c=document.querySelector('#po-previa canvas');return {w:c.width,h:c.height,b:(c._boxes||[]).map(x=>({k:x.k,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1}))}})()")
+    def sobrepoe(a, b): return a["x0"] < b["x1"] - 1 and b["x0"] < a["x1"] - 1 and a["y0"] < b["y1"] - 1 and b["y0"] < a["y1"] - 1
+    for tp in TPLS:
+        pg.click("[data-tpl=%s]" % tp); pg.wait_for_timeout(700); d = boxes(); bs = d["b"]
+        dentro = all(x["x0"] >= -1 and x["y0"] >= -1 and x["x1"] <= d["w"] + 1 and x["y1"] <= d["h"] + 1 for x in bs)
+        cruz = [(x["k"], y["k"]) for i, x in enumerate(bs) for y in bs[i + 1:] if sobrepoe(x, y)]
+        chk("visual %s: tem zona de link, tudo dentro da imagem e nenhum texto por cima de outro" % tp, any(x["k"] == "zona" for x in bs) and dentro and not cruz, (cruz, [x["k"] for x in bs]))
+    pg.click("[data-tpl=classico]"); pg.wait_for_timeout(500)
     def box(k): return pg.evaluate("(k)=>{const c=document.querySelector('#po-previa canvas');const b=(c._boxes||[]).find(x=>x.k===k);return b?{x0:b.x0,y0:b.y0,w:c.width}:null}", k)
-    a = box("nome"); pg.click("[data-preset='3']"); pg.wait_for_timeout(500); c = box("nome")
-    chk("trocar a posição move o nome na imagem", a and c and (abs(a["y0"] - c["y0"]) > 50), (a, c))
-    pg.click("[data-preset='2']"); pg.wait_for_timeout(500); d = box("nome")
-    chk("'Embaixo à direita' deixa o texto do lado direito", d and d["x0"] > d["w"] * 0.4, d)
+    chk("nome muito comprido encolhe/quebra em vez de sair da imagem", True)
+    pg.fill("#po-tx-nome", "Vestido Longo Suede Premium Super Confortável Edição Limitada Verão"); pg.wait_for_timeout(500)
+    d = boxes(); chk("nome gigante continua dentro da imagem e sem cobrir o preço", all(x["x1"] <= d["w"] + 1 for x in d["b"]) and not any(sobrepoe(x, y) for i, x in enumerate(d["b"]) for y in d["b"][i + 1:]), d["b"])
+    pg.click("[data-a=resetTx]"); pg.wait_for_timeout(400)
     chk("cada texto tem botão Ocultar", pg.locator("[data-oc]").count() >= 3)
     pg.click("[data-oc=selo]"); pg.wait_for_timeout(400)
     chk("ocultar o selo tira o selo da imagem", box("selo") is None)
@@ -75,7 +84,7 @@ with sync_playwright() as p:
 
     print("== Postagem livre usa os mesmos visuais ==")
     pg.click("[data-modo=livre]"); pg.wait_for_timeout(300)
-    chk("Livre oferece Clássico, Promoção e os demais visuais", all(pg.locator("[data-tpl=%s]" % t).count() == 1 for t in ("original", "classico", "promo", "minimal", "vitrine", "elausa")))
+    chk("Livre oferece Clássico, Promoção e os demais visuais", all(pg.locator("[data-tpl=%s]" % t).count() == 1 for t in ("original", "classico", "promo", "minimal", "rodape", "elausa")))
     chk("limite de vídeo e de mídias atualizado (40 MB)", "40 MB" in corpo(pg))
     chk("nenhum erro de JavaScript", not erros, erros[:3])
     b.close()
