@@ -1324,6 +1324,14 @@ function servicosFalsos(amb, est) {
   // o código de abertura é do dono: outra pessoa com o mesmo código não revela
   r = amb.post(F({ action: 'revelarConexao', nome: 'render', cofre }));
   ok(r.ok === false && !vaza(r), 'o código de um Admin não serve para outra conta');
+  // ---- v4.4: contaPorWhats (fotos de clientes): só nome, só equipe
+  ok(amb.getJson({ action: 'versao' }).contaPorWhats === true, 'versao anuncia contaPorWhats:true');
+  r = amb.post(A({ action: 'contaPorWhats', alvo: '(88) 99999-0002' }));
+  ok(r.ok === true && r.existe === true && typeof r.nome === 'string' && r.nome.length > 0, 'WhatsApp com conta: existe + nome', JSON.stringify(r));
+  ok(!/senha|cpf|email|nasc|perfil|permiss/i.test(JSON.stringify(r).replace(/"existe"/, '')), 'devolve SÓ o nome (nada de senha/CPF/e-mail/perfil)', JSON.stringify(r));
+  r = amb.post(A({ action: 'contaPorWhats', alvo: '88911112222' })); ok(r.ok === true && r.existe === false, 'WhatsApp sem conta: existe=false');
+  r = amb.post(A({ action: 'contaPorWhats', alvo: '123' })); ok(r.ok === false, 'WhatsApp curto é recusado com frase');
+  r = amb.post({ action: 'contaPorWhats', alvo: '88999990002' }); ok(r.ok !== true, 'sem login não consulta');
   // ---- v4.3: Instagram no cofre (token INVENTADO, testado em graph.instagram.com antes de guardar)
   const IGT = 'IGAATESTEFALSOTESTEFALSOTESTEFALSO1234567890';
   ok(amb.getJson({ action: 'versao' }).conexoesInstagram === true, 'versao anuncia conexoesInstagram:true');

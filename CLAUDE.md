@@ -14,7 +14,7 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
   integrações, avisos no painel), `privacidade.html`, `404.html`, `site.webmanifest`, `robots.txt` (o `sitemap.xml` e os feeds vêm do Worker — não recriar `sitemap.xml` no repositório: arquivo estático ganha da regra Rewrite do Render).
 - **Backend**: dois Apps Script Web Apps separados, versionados por nome de arquivo
   (`<nome>-<versão>.gs.txt`):
-  - `catalogo-codigo-4.3.gs.txt` — catálogo + autenticação central + pedidos/métricas/importação/feed/integrações (v3.1) + apagar/renomear categoria só para Admin total (v3.2) + avisos push completos (v3.3) + Conexões Render/Cloudflare (v3.4) + OneSignal nas Conexões e Números reais com filtros/aparelhos (v3.5) + Cofre das Conexões com dupla verificação (v3.6) + X de arquivar no catálogo, mídia arquivada reversível e juntar produtos (v3.7).
+  - `catalogo-codigo-4.4.gs.txt` — catálogo + autenticação central + pedidos/métricas/importação/feed/integrações (v3.1) + apagar/renomear categoria só para Admin total (v3.2) + avisos push completos (v3.3) + Conexões Render/Cloudflare (v3.4) + OneSignal nas Conexões e Números reais com filtros/aparelhos (v3.5) + Cofre das Conexões com dupla verificação (v3.6) + X de arquivar no catálogo, mídia arquivada reversível e juntar produtos (v3.7).
   - `funcionario-codigo-3.3.gs.txt` — RH/treinamento/contratação (v3.1: Admin total não consegue rebaixar/desativar a PRÓPRIA conta; a trava "sobrar 1 Admin" já existia).
   - Arquivos antigos (`Code-treinamento-v4.0.gs.txt`, `v4.1.gs.txt`, `atualizado.gs.txt`,
     `tenkiter-codigo-v2.1.gs.txt`) são **históricos — não editar nem usar como referência**.
@@ -357,7 +357,7 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 - **Juntar** (`admin.html`, botão `#btn-bulk-juntar` na barra de lote, só com `versao.juntarProdutos` e ≥ 2 marcados): janela `#overlay-juntar` escolhe qual fica; erro de limite de fotos aparece como frase. Credencial via `chamarAdmin_`.
 - **Vários perfis** (funcionários 3.2; catálogo 3.8 só LÊ): a coluna `Perfil` pode ser `Cliente, Aluno, Equipe do site`. Permissões = **soma** dos perfis (`acPermsDosPerfis_`); "Cliente" vai sempre junto. `acessos_perfil` aceita `perfis:[...]` (e `perfil` de um só, como antes). Marcar/desmarcar refaz as caixinhas `perm_*` pela soma (ajustes individuais são refeitos — o painel pergunta antes). **Travas mantidas** e valem para a soma: ninguém tira o PRÓPRIO Admin total e sempre sobra um Admin total ativo. "Só cliente" = a lista é exatamente `Cliente`. Painel RH (`treinamentos.html`): caixinhas `data-perfil-set` no lugar da lista suspensa; com backend antigo e mais de um perfil, mostra frase pedindo o backend 3.2.
 - **Testes**: `tests/x_equipe.py`, `tests/juntar_admin.py`, `tests/acessos_perfis.py`, `tests/backend_func.js` (backend de funcionários com planilha simulada), seção 8h de `tests/backend_gs.js`; `tests/mock.py` ganhou `versao="3.7"` (ações do X/juntar, `st["x_chamadas"]`, `st["x_arq"]`) e `acessos_listar/acessos_perfil` com estado (`st["acpessoas"]`, `st["perfil_chamadas"]`).
-- **Colar à mão (Apps Script)**: `catalogo-codigo-4.3.gs.txt` no Apps Script do CATÁLOGO e `funcionario-codigo-3.3.gs.txt` no de FUNCIONÁRIOS, "Nova versão" nos dois; conferir com `?action=versao`.
+- **Colar à mão (Apps Script)**: `catalogo-codigo-4.4.gs.txt` no Apps Script do CATÁLOGO e `funcionario-codigo-3.3.gs.txt` no de FUNCIONÁRIOS, "Nova versão" nos dois; conferir com `?action=versao`.
 
 ## v3.8 (parte 2) — Importador: limites ao juntar, "Cadastrar separado" e conta do preço (Worker `tenkiter-ig`, só front + Worker)
 
@@ -369,7 +369,7 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 
 ## v3.9 — anti-duplicado por foto (backend catálogo 3.9)
 
-- O freio de 10 s do `criarProduto_` (mesmo nome + preço) quebrava o "Cadastrar separado" (e qualquer lote com nome/preço iguais). Agora só barra se a **capa também for igual** (`fotoUrlExistente` = Foto_URL da linha); capa diferente passa. Upload novo em base64 (sem endereço) mantém o freio antigo. Bandeira `duplicadoPorFoto`. Colar `catalogo-codigo-4.3.gs.txt` à mão.
+- O freio de 10 s do `criarProduto_` (mesmo nome + preço) quebrava o "Cadastrar separado" (e qualquer lote com nome/preço iguais). Agora só barra se a **capa também for igual** (`fotoUrlExistente` = Foto_URL da linha); capa diferente passa. Upload novo em base64 (sem endereço) mantém o freio antigo. Bandeira `duplicadoPorFoto`. Colar `catalogo-codigo-4.4.gs.txt` à mão.
 
 ## v4.0 — CPF, e-mail, login múltiplo e "Esqueci a senha" (catálogo 4.0 + funcionários 3.3)
 
@@ -387,7 +387,7 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 - **Aviso ao sair com envios pendentes** (`admin.html`): os envios da fila rodam NA página; `window.TKSairBloqueio()` devolve o texto se há envio pendente e `nav.js` pergunta (`confirm`) antes de qualquer link da barra inferior; `beforeunload` cobre fechar a aba. Sem envio pendente não pergunta.
 - **Copiar peça parecida** (`admin.html`, sugestões do "Nome da peça"): traz TUDO (preço, categorias, gêneros, tamanhos, cores, descrição…) menos código e fotos, com o aviso `#aviso-copiado`; editando uma peça, copia só o nome. Depois de copiar, "✎ Editar" outra peça pergunta antes de descartar.
 - **Testes**: `tests/backend_contas.js`, `tests/backend_func.js`, `tests/contas_cpf.py` (telas + axe + aviso de saída), `tests/admin_categorias.py` (copiar). `jornada_funcionaria.py` "progresso foi enviado ao servidor" já falhava ANTES desta mudança (conferido no HEAD anterior) — não é regressão.
-- **Colar à mão (Apps Script)**: `catalogo-codigo-4.3.gs.txt` (catálogo) e `funcionario-codigo-3.3.gs.txt` (funcionários), "Nova versão" nos dois; conferir `?action=versao` (flags `cpf, recuperarSenha, loginMultiplo`). Sem o backend novo o site funciona como antes (login só por WhatsApp), mas CPF/recuperação só valem depois de colar os dois.
+- **Colar à mão (Apps Script)**: `catalogo-codigo-4.4.gs.txt` (catálogo) e `funcionario-codigo-3.3.gs.txt` (funcionários), "Nova versão" nos dois; conferir `?action=versao` (flags `cpf, recuperarSenha, loginMultiplo`). Sem o backend novo o site funciona como antes (login só por WhatsApp), mas CPF/recuperação só valem depois de colar os dois.
 
 ## v4.1 — plaquinha flutuante de convite para instalar o app (`pwa.js`, só front)
 
@@ -400,7 +400,7 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 ## v4.2 — quem cadastrou/editou (backend catálogo 4.1) e fila de envios que sobrevive (admin.html)
 
 - **Pedido do Pablo (11/10/2026)**: (1) "o cadastro do produto deixe registrado quem cadastrou, quem e quando editou e etc"; (2) se minimizar o app ou ir a outro app, o envio não pode se perder.
-- **Auditoria** (`catalogo-codigo-4.3.gs.txt`, bandeira `auditoriaProdutos`): colunas `CriadoPor/CriadoEm/EditadoPor/EditadoEm/UltimaAcao` na planilha de produtos (criadas sozinhas). O NOME vem da sessão de login (`aut.nome` → `body.funcionario`; o texto digitado no aparelho é ignorado com login; com o PIN antigo vale o digitado).
+- **Auditoria** (`catalogo-codigo-4.4.gs.txt`, bandeira `auditoriaProdutos`): colunas `CriadoPor/CriadoEm/EditadoPor/EditadoEm/UltimaAcao` na planilha de produtos (criadas sozinhas). O NOME vem da sessão de login (`aut.nome` → `body.funcionario`; o texto digitado no aparelho é ignorado com login; com o PIN antigo vale o digitado).
   Carimbo central: `despacharComCarimbo_` (create, update, delete, reativar, arquivarRapido, arquivarMidia, restaurarMidia, juntarProdutos, bulkUpdate); falha no carimbo NUNCA derruba a ação. **Essas colunas são removidas da lista PÚBLICA** (`?action=list`) — nome de funcionário não pode vazar; a equipe lê por `auditoriaProdutos` e `historicoProduto {id}` (permissão `catalogo_cadastrar`; linha do tempo vem da aba `Acoes_Audit`).
   Front: linha "Cadastrou: X · dd/mm hh:mm — Editou: Y · …" na lista e no formulário de edição, botão "🕘 Histórico" no menu ⋯ (`#overlay-historico`, entra na lista do `popstate`). Só aparece com backend 4.1. Testes: seção 8i de `backend_gs.js`, `tests/auditoria_produto.py`; `mock.py` `versao="4.1"`.
 - **Fila de envios no aparelho** (`admin.html`): cada envio é gravado no IndexedDB `tenkiter_admin_envios_v1` (dados da peça + fotos em base64 + arquivo do vídeo; **nunca senha/token** — a credencial entra na hora de enviar). Ao abrir o painel logado, `restaurarEnvios_` retoma sozinho o que ficou (abre o cartão de cadastro para a pessoa ver).

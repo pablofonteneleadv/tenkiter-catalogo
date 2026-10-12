@@ -26,6 +26,8 @@ const DDL = [
   `CREATE TABLE IF NOT EXISTS exec_log (id INTEGER PRIMARY KEY AUTOINCREMENT, inicio TEXT, fim TEXT, novas INTEGER DEFAULT 0, erro TEXT, origem TEXT)`,
   `CREATE TABLE IF NOT EXISTS cfg (chave TEXT PRIMARY KEY, valor TEXT)`,
   `CREATE TABLE IF NOT EXISTS postagem (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, modo TEXT NOT NULL DEFAULT 'auto', legenda TEXT DEFAULT '', midias TEXT NOT NULL DEFAULT '[]', produto TEXT DEFAULT '', template TEXT DEFAULT '', link TEXT DEFAULT '', agendado_em TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'agendado', containers TEXT DEFAULT '', inicio_proc TEXT DEFAULT '', tentativas INTEGER DEFAULT 0, erro TEXT DEFAULT '', ig_id TEXT DEFAULT '', permalink TEXT DEFAULT '', criado_por TEXT DEFAULT '', criado_em TEXT, atualizado_em TEXT, publicado_em TEXT DEFAULT '', grupo TEXT DEFAULT '')`,
+  `CREATE TABLE IF NOT EXISTS foto_cliente (id INTEGER PRIMARY KEY AUTOINCREMENT, origem TEXT NOT NULL DEFAULT 'cliente', url TEXT NOT NULL, chave TEXT, whats TEXT DEFAULT '', nome TEXT DEFAULT '', instagram TEXT DEFAULT '', obs TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'nova', vinculo TEXT DEFAULT '', criado_por TEXT DEFAULT '', criado_em TEXT, usada_em TEXT DEFAULT '')`,
+  `CREATE INDEX IF NOT EXISTS ix_fc ON foto_cliente (status, id)`,
   `CREATE INDEX IF NOT EXISTS ix_post ON postagem (status, agendado_em)`,
   `CREATE INDEX IF NOT EXISTS ix_rasc ON rascunho (status, grupo, publicado_em)`,
   `CREATE INDEX IF NOT EXISTS ix_rm ON rascunho_midia (midia_id)`
@@ -626,6 +628,106 @@ function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
   return { id: r.id, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo };
 }
+
+/* ====================================================================
+ * FOTOS DE CLIENTES ("Ela usa TM"): o cliente (logado) manda uma foto usando a peça; o funcionário também anexa a que recebeu pelo WhatsApp.
+ * As fotos ficam numa aba ao lado da fila e só servem para Story com o template "Ela usa". Tudo no R2 (mesma trava de custo) + D1.
+ * ==================================================================== */
+const FOTO_MAX = 2.5 * 1024 * 1024, FOTOS_POR_DIA_CLIENTE = 5, FOTOS_NOVAS_CLIENTE = 30, FOTOS_POR_DIA_TOTAL = 300;
+export function extensaoImagem(b) {      // confere os BYTES (JPEG/PNG/WEBP); HEIC e o resto são recusados
+  const u = new Uint8Array(b);
+  if (u.length > 12 && u[0] === 0xff && u[1] === 0xd8 && u[2] === 0xff) return 'jpg';
+  if (u.length > 12 && u[0] === 0x89 && u[1] === 0x50 && u[2] === 0x4e && u[3] === 0x47) return 'png';
+  if (u.length > 12 && u[0] === 0x52 && u[1] === 0x49 && u[2] === 0x46 && u[3] === 0x46 && u[8] === 0x57 && u[9] === 0x45 && u[10] === 0x42 && u[11] === 0x50) return 'webp';
+  return null;
+}
+export function instagramLimpo(t) { const x = String(t || '').trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@/, '').replace(/[/?#].*$/, '').toLowerCase(); return /^[a-z0-9._]{1,30}$/.test(x) ? x : ''; }
+const soDigitos = (t, n) => String(t || '').replace(/\D/g, '').slice(0, n || 15);
+async function infoSessao(env, req) {       // {perms, nome} da sessão (qualquer conta: cliente, aluno, equipe); 2 min de cache
+  const whats = soDigitos(req.headers.get('X-TK-Whats'), 20), sessao = (req.headers.get('X-TK-Sessao') || '').slice(0, 400);
+  if (!whats || !/^tk[12]\./.test(sessao)) return null;
+  const chave = new Request('https://sessaoinfo.invalid/' + (await sha(whats + '|' + sessao))), cache = caches.default, g = await cache.match(chave);
+  if (g) return g.json();
+  let info = null;
+  try {
+    const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
+    const j = await r.json();
+    if (j && j.ok && j.usuario) info = { perms: Array.isArray(j.usuario.permissoes) ? j.usuario.permissoes : [], nome: String(j.usuario.nome || '').slice(0, 80), whats: soDigitos(j.usuario.whatsapp || whats, 15) };
+  } catch (e) { return null; }
+  if (info) await cache.put(chave, new Response(JSON.stringify(info), { headers: { 'Cache-Control': 'max-age=120' } }));
+  return info;
+}
+async function guardarFoto(env, req, limiteBytes) {      // lê o corpo, confere tamanho/bytes, trava de armazenamento e grava no R2
+  const buf = await req.arrayBuffer();
+  if (!buf.byteLength) return { erro: 'Nenhuma foto recebida.' };
+  if (buf.byteLength > (limiteBytes || FOTO_MAX)) return { erro: 'A foto passa de 2,5 MB. Tente uma menor.' };
+  const ext = extensaoImagem(buf); if (!ext) return { erro: 'Formato não aceito. Use foto JPG, PNG ou WEBP (no iPhone: escolha "Mais compatível" ou tire um print).' };
+  const uso = await lerUso(env); if (uso.bytes + buf.byteLength > limite(env)) return { erro: 'O armazenamento de fotos está cheio no momento. Avise a loja.', cheio: true };
+  const d = new Date(), aaaamm = d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0'), chave = aaaamm + '/' + hex(10) + '.' + ext;
+  await env.MIDIA.put(chave, buf, { httpMetadata: { contentType: ext === 'jpg' ? 'image/jpeg' : 'image/' + ext, cacheControl: 'public, max-age=31536000, immutable' } });
+  uso.bytes += buf.byteLength; uso.arquivos += 1; await env.CACHE.put('uso', JSON.stringify(uso));
+  return { chave: chave, url: String(env.MIDIA_URL || '').replace(/\/$/, '') + '/m/' + chave };
+}
+async function contaPorWhats(env, req, alvo) {   // pergunta ao Apps Script (backend 4.4) se o WhatsApp já tem conta; falha = sem vínculo (nunca derruba o envio)
+  try {
+    const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'contaPorWhats', whatsapp: soDigitos(req.headers.get('X-TK-Whats'), 20), sessao: (req.headers.get('X-TK-Sessao') || '').slice(0, 400), alvo: alvo }) });
+    const j = await r.json(); return j && j.ok ? j : null;
+  } catch (e) { return null; }
+}
+function linhaFoto(r) { return { id: r.id, origem: r.origem, url: r.url, whats: r.whats, nome: r.nome, instagram: r.instagram, obs: r.obs, status: r.status, vinculo: r.vinculo, criadoPor: r.criado_por, criadoEm: r.criado_em, usadaEm: r.usada_em }; }
+export async function rotasFotosCliente(env, req, url, J) {     // /cliente/foto (qualquer conta logada)
+  if (url.pathname !== '/cliente/foto' || req.method !== 'POST') return null;
+  const info = await infoSessao(env, req); if (!info) return J({ ok: false, erro: 'Entre na sua conta para enviar a foto.' }, 401);
+  await iniciar(env);
+  const whats = info.whats, desde = new Date(Date.now() - 86400000).toISOString();
+  const dia = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM foto_cliente WHERE whats=? AND origem='cliente' AND criado_em>?").bind(whats, desde).first()) || {}).n) || 0;
+  if (dia >= FOTOS_POR_DIA_CLIENTE) return J({ ok: false, erro: 'Você já enviou ' + FOTOS_POR_DIA_CLIENTE + ' fotos hoje. Amanhã dá para mandar mais. 🧡' }, 429);
+  const novas = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM foto_cliente WHERE whats=? AND origem='cliente' AND status='nova'").bind(whats).first()) || {}).n) || 0;
+  if (novas >= FOTOS_NOVAS_CLIENTE) return J({ ok: false, erro: 'Você já tem muitas fotos esperando a nossa análise. Obrigado!' }, 429);
+  const total = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM foto_cliente WHERE origem='cliente' AND criado_em>?").bind(desde).first()) || {}).n) || 0;
+  if (total >= FOTOS_POR_DIA_TOTAL) return J({ ok: false, erro: 'Recebemos muitas fotos hoje. Tente de novo amanhã.' }, 429);
+  if (url.searchParams.get('aceito') !== '1') return J({ ok: false, erro: 'Marque que autoriza a loja a usar a foto nos Stories.' }, 400);
+  const g = await guardarFoto(env, req); if (g.erro) return J({ ok: false, erro: g.erro }, g.cheio ? 507 : 400);
+  const obs = String(url.searchParams.get('obs') || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 300), ig = instagramLimpo(url.searchParams.get('ig'));
+  const r = await env.DB.prepare("INSERT INTO foto_cliente (origem, url, chave, whats, nome, instagram, obs, status, vinculo, criado_por, criado_em) VALUES ('cliente',?,?,?,?,?,?, 'nova','conta',?,?)").bind(g.url, g.chave, whats, info.nome, ig, obs, info.nome, agora()).run();
+  return J({ ok: true, id: r.meta && r.meta.last_row_id });
+}
+export async function rotasFotos(env, ctx, req, url, J) {       // /fotos* (equipe: gerir_acessos ou catalogo_cadastrar)
+  const p = url.pathname;
+  if (p === '/fotos' && req.method === 'GET') {
+    const st = url.searchParams.get('status') || 'nova', lim = Math.min(100, Number(url.searchParams.get('limite')) || 60);
+    const q = (await (st === 'todas' ? env.DB.prepare('SELECT * FROM foto_cliente ORDER BY id DESC LIMIT ?').bind(lim) : env.DB.prepare('SELECT * FROM foto_cliente WHERE status=? ORDER BY id DESC LIMIT ?').bind(st, lim)).all()).results || [];
+    const c = (await env.DB.prepare('SELECT status, COUNT(*) AS n FROM foto_cliente GROUP BY status').all()).results || []; const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
+    return J({ ok: true, fotos: q.map(linhaFoto), contagens: conta });
+  }
+  if (p === '/fotos/nova' && req.method === 'POST') {          // a equipe anexa a foto que recebeu pelo WhatsApp (1 por pedido)
+    const whats = soDigitos(url.searchParams.get('whats'), 15), ig = instagramLimpo(url.searchParams.get('ig'));
+    if (whats && whats.length < 10) return J({ ok: false, erro: 'WhatsApp incompleto: coloque com DDD (ex.: 88 99999-9999).' }, 400);
+    if (!whats && !ig) return J({ ok: false, erro: 'Informe o WhatsApp ou o Instagram de quem mandou a foto (pelo menos um).' }, 400);
+    const g = await guardarFoto(env, req); if (g.erro) return J({ ok: false, erro: g.erro }, g.cheio ? 507 : 400);
+    let nome = '', vinculo = 'nenhum', w = whats, i = ig;
+    if (w) {
+      const c = await contaPorWhats(env, req, w);
+      if (c && c.existe) { nome = String(c.nome || ''); vinculo = 'conta'; }
+      else { const h = await env.DB.prepare("SELECT nome, instagram FROM foto_cliente WHERE whats=? AND (nome!='' OR instagram!='') ORDER BY id DESC LIMIT 1").bind(w).first(); if (h) { nome = h.nome || ''; if (!i) i = h.instagram || ''; vinculo = 'historico'; } }
+      if (!i) { const h2 = await env.DB.prepare("SELECT instagram FROM foto_cliente WHERE whats=? AND instagram!='' ORDER BY id DESC LIMIT 1").bind(w).first(); if (h2) i = h2.instagram; }
+    } else {
+      const h = await env.DB.prepare("SELECT whats, nome FROM foto_cliente WHERE instagram=? AND (whats!='' OR nome!='') ORDER BY (whats!='') DESC, id DESC LIMIT 1").bind(i).first();
+      if (h) { w = h.whats || ''; nome = h.nome || ''; vinculo = 'historico'; }
+    }
+    const obs = String(url.searchParams.get('obs') || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 300), por = String(url.searchParams.get('por') || '').slice(0, 60);
+    const r = await env.DB.prepare("INSERT INTO foto_cliente (origem, url, chave, whats, nome, instagram, obs, status, vinculo, criado_por, criado_em) VALUES ('equipe',?,?,?,?,?,?, 'nova',?,?,?)").bind(g.url, g.chave, w, nome, i, obs, vinculo, por, agora()).run();
+    return J({ ok: true, id: r.meta && r.meta.last_row_id, vinculo: vinculo, nome: nome, whats: w, instagram: i });
+  }
+  if (p === '/fotos/acao' && req.method === 'POST') {
+    let b = {}; try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); }
+    const ids = (Array.isArray(b.ids) ? b.ids : [b.id]).map(Number).filter((n) => n > 0).slice(0, 50), acao = String(b.acao || '');
+    const novo = { usada: 'usada', descartar: 'descartada', restaurar: 'nova' }[acao]; if (!novo || !ids.length) return J({ ok: false, erro: 'Ação inválida.' }, 400);
+    for (const id of ids) await env.DB.prepare('UPDATE foto_cliente SET status=?, usada_em=? WHERE id=?').bind(novo, novo === 'usada' ? agora() : '', id).run();
+    return J({ ok: true, n: ids.length });
+  }
+  return null;
+}
 async function rotasPostagem(env, ctx, req, url, J) {
   const p = url.pathname;
   if (p === '/posts' && req.method === 'GET') {
@@ -696,14 +798,15 @@ export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url), h = cors(env, req), J = (c, s) => resp(c, s, h);
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
+    if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
     const perms = await permissoes(env, req);
     if (!perms) return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
-    const ehPost = url.pathname === '/posts' || url.pathname.indexOf('/post') === 0;
+    const ehPost = url.pathname === '/posts' || url.pathname.indexOf('/post') === 0 || url.pathname.indexOf('/fotos') === 0;
     if (ehPost ? (perms.indexOf('gerir_acessos') === -1 && perms.indexOf('catalogo_cadastrar') === -1) : perms.indexOf('gerir_acessos') === -1) return J({ ok: false, erro: ehPost ? 'Você não tem permissão para postar no Instagram.' : 'Só o administrador total acessa o importador do Instagram.' }, 403);
     try {
       await iniciar(env);
       const p = url.pathname;
-      if (ehPost) { const rp = await rotasPostagem(env, ctx, req, url, J); if (rp) return rp; }
+      if (ehPost) { const rp = (await rotasFotos(env, ctx, req, url, J)) || (await rotasPostagem(env, ctx, req, url, J)); if (rp) return rp; }
       if (p === '/status' && req.method === 'GET') return J(await status(env));
       if (p === '/rascunhos' && req.method === 'GET') {
         const grupo = url.searchParams.get('grupo') || 'pendente';

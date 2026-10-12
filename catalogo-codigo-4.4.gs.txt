@@ -1,4 +1,6 @@
-// TENKiTER Catálogo -- backend (Google Apps Script) -- v4.3
+// TENKiTER Catálogo -- backend (Google Apps Script) -- v4.4
+//
+// NOVIDADE v4.4 -- FOTOS DE CLIENTES (aba Postagens): ação `contaPorWhats` (catalogo_cadastrar, só com login) diz se um WhatsApp já tem conta no site e devolve só o NOME (nunca CPF, e-mail, senha ou endereço). O funcionário que anexa uma foto recebida pelo WhatsApp usa isso para vincular a foto à conta.
 //
 // NOVIDADE v4.3 -- INSTAGRAM NO COFRE: conexão `instagram` (INSTAGRAM_TOKEN nas Propriedades do Script; testada em graph.instagram.com antes de guardar) e item no cofre (revelarConexao nome=instagram). É uma CÓPIA para o Pablo copiar com dupla verificação; quem publica/lê o Instagram é o Worker tenkiter-ig, que guarda o dele no D1.
 // NOVIDADE v4.2 -- TAMANHOS/CORES SEMPRE COMO TEXTO: o Google Planilhas transformava "2/4/6" em data (2006-04-02) e o site mostrava "2006-04-02T08:00:00.000Z". Agora a gravação força texto nas duas colunas e a leitura devolve a data de volta como "2/4/6" (conserta também o que já estava gravado errado).
@@ -192,7 +194,7 @@
 //  Nenhuma coluna, aba ou formato de resposta foi alterado.
 //
 // ===================== CONFIGURAÇÃO =====================
-const VERSAO_CATALOGO = 'catalogo-4.3';
+const VERSAO_CATALOGO = 'catalogo-4.4';
 const DRIVE_FOLDER_ID = '1LwX8UVAtQSi0rX2ULZ7xVPhPOTT6LXCl'; // só usado pelas fotos antigas; uploads novos vão para o Cloudinary
 const SHEET_PRODUTOS = 'Sheet1';
 const SHEET_CATEGORIAS = 'Categorias';
@@ -1434,7 +1436,9 @@ const PERMISSAO_POR_ACAO_ = {
   // v3.7: X de arquivar no catálogo (Equipe do site ou maior) e juntar produtos
   arquivarRapido: 'catalogo_cadastrar', arquivarMidia: 'catalogo_cadastrar', restaurarMidia: 'catalogo_cadastrar', midiasArquivadas: 'catalogo_cadastrar', juntarProdutos: 'catalogo_cadastrar',
   // v4.1: quem cadastrou/editou
-  auditoriaProdutos: 'catalogo_cadastrar', historicoProduto: 'catalogo_cadastrar'
+  auditoriaProdutos: 'catalogo_cadastrar', historicoProduto: 'catalogo_cadastrar',
+  // v4.4: fotos de clientes (ver se o WhatsApp já tem conta)
+  contaPorWhats: 'catalogo_cadastrar'
 };
 const PERMISSAO_POR_LOTE_ = {
   ajustarPrecoPorcento: 'catalogo_precos', marcarNovidade: 'catalogo_cadastrar', alterarEstoque: 'catalogo_cadastrar',
@@ -1705,7 +1709,7 @@ function doGetInterno_(e) {
   if (action === 'versao') return jsonResponse_({
     ok: true, versao: VERSAO_CATALOGO, acessos: true, pinAtivo: pinLegadoAtivo_(),
     pedidos: true, config: true, metricas: true, importacao: true, feed: true, integracoes: true, codigos: true, pushHistorico: true, loteCategoria: true,
-    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true, midiaRapida: true, juntarProdutos: true, duplicadoPorFoto: true, cpf: true, recuperarSenha: true, loginMultiplo: true, auditoriaProdutos: true, textoPlano: true, conexoesInstagram: true
+    categoriasGestao: true, pushCompleto: true, conexoes: true, conexoesOnesignal: true, conexoesCopiar: true, metricasAvancadas: true, dispositivos: true, midiaRapida: true, juntarProdutos: true, duplicadoPorFoto: true, cpf: true, recuperarSenha: true, loginMultiplo: true, auditoriaProdutos: true, textoPlano: true, conexoesInstagram: true, contaPorWhats: true
   });
   if (action === 'config') return configPublica_();
   if (action === 'pushconfig') return pushConfigPublica_();
@@ -1867,6 +1871,16 @@ function auditoriaProdutos_() {
 }
 
 /** Linha do tempo de uma peça (da aba Acoes_Audit), mais recente primeiro, até 40 linhas. */
+/** v4.4: o WhatsApp informado já tem conta no site? Devolve só o nome (e se a conta está ativa); nada pessoal além disso. Quem chama já passou pela trava de permissão. */
+function contaPorWhats_(body) {
+  const w = acWhats_(body.alvo);
+  if (!w || w.length < 10) return jsonResponse_({ ok: false, erro: 'Informe o WhatsApp com DDD.' });
+  const linhas = acLinhasDoWhats_(w);
+  if (!linhas.length) return jsonResponse_({ ok: true, existe: false });
+  const ativa = linhas.filter(function (l) { return String(l.status || 'Ativo').trim().toLowerCase() !== 'inativo'; })[0] || linhas[0];
+  return jsonResponse_({ ok: true, existe: true, nome: String(ativa.nome || '').trim().slice(0, 80) });
+}
+
 function historicoProduto_(body) {
   const id = String(body.id || '').trim();
   if (!id) return jsonResponse_({ ok: false, erro: 'Informe a peça.' });
@@ -1953,6 +1967,7 @@ function despacharPost_(body) {
   if (action === 'juntarProdutos') return juntarProdutos_(body);
   if (action === 'auditoriaProdutos') return auditoriaProdutos_();
   if (action === 'historicoProduto') return historicoProduto_(body);
+  if (action === 'contaPorWhats') return contaPorWhats_(body);
   if (action === 'reativar') return reativarProduto_(body);
   if (action === 'excluirPermanente') return excluirPermanentemente_(body);
   if (action === 'bulkUpdate') return acaoEmLote_(body);

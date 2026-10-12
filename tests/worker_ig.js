@@ -22,6 +22,7 @@ function d1() {
   const TOKEN = 'IGQVJ_TOKEN_INVENTADO_PARA_TESTE_1234567890';
   // ---- Instagram falso ----
   const GEMINI_OK = 'AIzaINVENTADA_PARA_TESTE_1234567890abcd'; let gemChamadas = [], gemModo = 'ok', gemTexto = '';
+  let contaChamadas = [], contaFora = false;
   let postChamadas = [], postErro = null, seqC = 0, containers = {}, publicados = [], videoStatus = 'FINISHED';
   let paginas = null, feed = [], stories = [], midia404 = {}, tokenValido = true, chamadas = [];
   const cdn = (id, tipo) => 'https://cdn.fake/' + id + (tipo === 'VIDEO' ? '.mp4' : '.jpg');
@@ -36,7 +37,7 @@ function d1() {
       if (gemModo === 'lixo') return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'não é json' }] } }] }));
       return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: gemTexto }] } }] }));
     }
-    if (u.startsWith('https://api.fake')) { const b = JSON.parse(init.body); return new Response(JSON.stringify(b.sessao === 'tk2.admin' ? { ok: true, usuario: { permissoes: ['gerir_acessos', 'catalogo_cadastrar'] } } : b.sessao === 'tk2.gerente' ? { ok: true, usuario: { permissoes: ['catalogo_cadastrar'] } } : { ok: false })); }
+    if (u.startsWith('https://api.fake')) { const b = JSON.parse(init.body); if (b.action === 'contaPorWhats') { contaChamadas.push(b); return new Response(JSON.stringify(b.sessao === 'tk2.cliente' ? { ok: false } : contaFora ? { ok: false, erro: 'x' } : String(b.alvo) === '88977776666' ? { ok: true, existe: true, nome: 'Joana Cadastrada' } : { ok: true, existe: false })); } return new Response(JSON.stringify(b.sessao === 'tk2.admin' ? { ok: true, usuario: { permissoes: ['gerir_acessos', 'catalogo_cadastrar'] } } : b.sessao === 'tk2.gerente' ? { ok: true, usuario: { permissoes: ['catalogo_cadastrar'], nome: 'Gerente' } } : b.sessao === 'tk2.cliente' ? { ok: true, usuario: { permissoes: [], nome: 'Maria Cliente', whatsapp: '88988887777' } } : { ok: false })); }
     if (u.startsWith('https://ig.fake') && init && init.method === 'POST') {          // publicação (POST com o token no CORPO)
       const f = new URLSearchParams(String(init.body)), tk = f.get('access_token'); f.delete('access_token');
       postChamadas.push({ u, p: Object.fromEntries(f) });
@@ -452,6 +453,52 @@ function d1() {
     // ---- agendada para daqui a 1 min no cron real (scheduledTime)
     chk('processarPostagens nunca lança, nem sem nada na fila', (await W.processarPostagens(env)).erro !== true);
     chk('fraseErroIG não vaza o token', !JSON.stringify(W.fraseErroIG({ message: 'x access_token=SEGREDO123 y', code: 1 })).includes('SEGREDO123'));
+  }
+
+  console.log('== FOTOS DE CLIENTES (Ela usa TM) ==');
+  {
+    const JPG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0xff, 0xd9]);
+    const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1]);
+    const bin = (m, p, sess, corpo, tipo) => new Request('https://ig.test' + p, { method: m, headers: { Origin: O, 'X-TK-Whats': '88999990000', 'X-TK-Sessao': sess || '', 'Content-Type': tipo || 'image/jpeg' }, body: corpo });
+    const E = async (p, corpo, sess) => { const r = await w.fetch(bin('POST', p, sess || 'tk2.gerente', corpo), env, {}); return { r, j: await r.json() }; };
+    const C = async (q, corpo, sess) => { const r = await w.fetch(bin('POST', '/cliente/foto' + q, sess || 'tk2.cliente', corpo), env, {}); return { r, j: await r.json() }; };
+    let x, r2;
+    // ---- cliente
+    x = await C('?aceito=1&obs=Usei%20no%20anivers%C3%A1rio&ig=%40Maria.Cli', JPG); const idC1 = x.j.id;
+    chk('cliente logado envia a foto (só com a autorização marcada)', x.r.status === 200 && x.j.ok && idC1 > 0, x.j);
+    let L = await DB.prepare('SELECT * FROM foto_cliente WHERE id=?').bind(idC1).first();
+    chk('fica ligada ao cadastro (WhatsApp e nome da SESSÃO, não do que veio no pedido), com observação e Instagram limpo', L.whats === '88988887777' && L.nome === 'Maria Cliente' && L.origem === 'cliente' && L.vinculo === 'conta' && L.obs === 'Usei no aniversário' && L.instagram === 'maria.cli', L);
+    chk('a foto foi para o R2 com o endereço público do Worker de mídia', /^https:\/\/tenkiter-midia\.fake\/m\/\d{6}\/[0-9a-f]{20}\.jpg$/.test(L.url), L.url);
+    x = await C('', JPG); chk('sem marcar a autorização: recusa', x.r.status === 400 && /autoriza/.test(x.j.erro));
+    x = await C('?aceito=1', JPG, 'tk2.fantasma'); chk('sem login válido: 401', x.r.status === 401);
+    x = await C('?aceito=1', new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])); chk('arquivo que não é imagem (pelos bytes) é recusado com frase', x.r.status === 400 && /Formato não aceito/.test(x.j.erro));
+    x = await C('?aceito=1', new Uint8Array(2.6 * 1048576).fill(0).map((v, i) => (i < 4 ? [0xff, 0xd8, 0xff, 0xe0][i] : 0))); chk('foto acima de 2,5 MB é recusada', x.r.status === 400 && /2,5 MB/.test(x.j.erro));
+    for (let k = 0; k < 4; k++) x = await C('?aceito=1', k === 1 ? PNG : JPG); x = await C('?aceito=1', JPG);
+    chk('limite de 5 fotos por dia por cliente', x.r.status === 429 && /5 fotos hoje/.test(x.j.erro), x.j);
+    r2 = await w.fetch(bin('POST', '/fotos/nova?whats=88977776666', 'tk2.cliente', JPG), env, {}); chk('cliente comum NÃO acessa as rotas da equipe', r2.status === 403);
+    r2 = await w.fetch(bin('GET', '/fotos', 'tk2.cliente'), env, {}); chk('nem a lista de fotos', r2.status === 403);
+    // ---- equipe anexa a foto recebida
+    contaChamadas = [];
+    x = await E('/fotos/nova', JPG); chk('equipe: sem WhatsApp e sem Instagram = recusa (obrigatório um dos dois)', x.r.status === 400 && /pelo menos um/.test(x.j.erro));
+    x = await E('/fotos/nova?whats=8899', JPG); chk('WhatsApp incompleto é recusado', x.r.status === 400);
+    x = await E('/fotos/nova?whats=(88)%2097777-6666&por=Ana', JPG);
+    chk('WhatsApp que já tem conta: vincula automaticamente e traz o nome', x.j.ok && x.j.vinculo === 'conta' && x.j.nome === 'Joana Cadastrada' && x.j.whats === '88977776666', x.j);
+    chk('a consulta de conta usa a sessão de quem anexou', contaChamadas.length === 1 && contaChamadas[0].sessao === 'tk2.gerente' && contaChamadas[0].alvo === '88977776666');
+    x = await E('/fotos/nova?whats=88966665555&ig=%40Nova.Pessoa', PNG); chk('WhatsApp sem conta + Instagram: envia só com o que tem', x.j.ok && x.j.vinculo === 'nenhum' && x.j.nome === '' && x.j.instagram === 'nova.pessoa', x.j);
+    x = await E('/fotos/nova?ig=nova.pessoa', JPG); chk('só Instagram que já apareceu antes: reaproveita o WhatsApp da outra foto', x.j.ok && x.j.whats === '88966665555' && x.j.vinculo === 'historico', x.j);
+    x = await E('/fotos/nova?ig=maria.cli', JPG); chk('só Instagram da cliente que enviou pelo site: vincula à conta dela (nome e WhatsApp)', x.j.ok && x.j.nome === 'Maria Cliente' && x.j.whats === '88988887777', x.j);
+    x = await E('/fotos/nova?ig=https://instagram.com/Alguem.Novo/', JPG); chk('Instagram colado como link vira @usuario limpo', x.j.ok && x.j.instagram === 'alguem.novo' && x.j.vinculo === 'nenhum', x.j);
+    contaFora = true; x = await E('/fotos/nova?whats=88977776666', JPG); chk('se a consulta de conta falha, a foto entra mesmo assim (histórico do WhatsApp)', x.j.ok === true && x.j.nome === 'Joana Cadastrada', x.j); contaFora = false;
+    x = await E('/fotos/nova?whats=88955554444', new Uint8Array([9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9])); chk('equipe também só anexa imagem de verdade', x.r.status === 400);
+    // ---- lista e ações
+    r2 = await w.fetch(bin('GET', '/fotos?status=nova', 'tk2.gerente'), env, {}); const lista = await r2.json();
+    chk('equipe lista as fotos novas (de cliente e de equipe) sem token/chave', r2.status === 200 && lista.fotos.length >= 7 && lista.fotos.some((f) => f.origem === 'cliente') && lista.fotos.some((f) => f.origem === 'equipe') && !JSON.stringify(lista).includes('chave'), lista.contagens);
+    const alvoId = lista.fotos[0].id;
+    x = await (await w.fetch(ped('POST', '/fotos/acao', 'tk2.gerente', { ids: [alvoId], acao: 'usada' }), env, {})).json(); chk('marcar como usada', x.ok && (await DB.prepare('SELECT status FROM foto_cliente WHERE id=?').bind(alvoId).first()).status === 'usada');
+    x = await (await w.fetch(ped('POST', '/fotos/acao', 'tk2.gerente', { ids: [alvoId], acao: 'descartar' }), env, {})).json(); chk('descartar', (await DB.prepare('SELECT status FROM foto_cliente WHERE id=?').bind(alvoId).first()).status === 'descartada');
+    x = await (await w.fetch(ped('POST', '/fotos/acao', 'tk2.gerente', { ids: [alvoId], acao: 'restaurar' }), env, {})).json(); chk('restaurar volta para nova', (await DB.prepare('SELECT status FROM foto_cliente WHERE id=?').bind(alvoId).first()).status === 'nova');
+    x = await (await w.fetch(ped('POST', '/fotos/acao', 'tk2.gerente', { ids: [alvoId], acao: 'apagar' }), env, {})).json(); chk('ação desconhecida é recusada', x.ok === false);
+    r2 = await w.fetch(ped('GET', '/status', 'tk2.gerente'), env, {}); chk('quem só cadastra continua sem o importador', r2.status === 403);
   }
 
   console.log('== Token ==');
