@@ -71,6 +71,31 @@ r = definir('85991047615', ['Aluno', 'Funcionário'], EU); ok(!r.ok, 'nem combin
 r = definir('85991047615', ['Admin total', 'Aluno'], EU); ok(r.ok && /Admin total/.test(r.perfil), 'pode somar perfis mantendo Admin total', r);
 r = definir('85992222222', ['Funcionário'], EU); ok(r.ok, 'outro Admin total pode rebaixar o Dois (sobra o Um)', r);
 r = definir('85991047615', ['Funcionário'], OUTRO); ok(!r.ok && /pelo menos um Admin/.test(r.erro), 'não deixa ficar sem Admin total ativo', r);
+
+console.log('\n[conteúdo do treinamento protegido (v3.4)]');
+const conteudo = (perms, ok_ = true) => {
+  run('acVerificar_ = function () { return ' + (ok_ ? '{ ok: true, usuario: { whatsapp: "859", permissoes: ' + JSON.stringify(perms) + ' } }' : '{ ok: false, erro: "Sessão inválida" }') + '; }');
+  const o = run('treinamentoConteudoAcao_({ whatsapp: "859", sessao: "x" })'); return JSON.parse(o._t);
+};
+let c = conteudo(['portal', 'manual_1', 'avaliacoes', 'cliente']);
+ok(c.ok && c.manuais.length === 3, 'aluno recebe a lista dos 3 manuais-semente (vitrine mostra os bloqueados)', c.manuais && c.manuais.length);
+ok(c.manuais[0].liberado && c.manuais[0].parts.length > 0, 'manual 1 liberado traz o texto');
+ok(!c.manuais[1].liberado && c.manuais[1].parts.length === 0 && !c.manuais[2].liberado && c.manuais[2].parts.length === 0, 'manuais 2 e 3 bloqueados vêm SEM texto');
+ok(Object.keys(c.provas).join() === '1' && c.provas['1'].questions.length > 0 && typeof c.provas['1'].questions[0].correct === 'number', 'aluno recebe só a prova do nível 1 (com gabarito para a correção)');
+c = conteudo(['portal', 'manual_1', 'cliente']);
+ok(c.ok && Object.keys(c.provas).length === 0, 'sem a permissão "avaliacoes" não vem prova nenhuma');
+c = conteudo(['cliente']);
+ok(!c.ok && c.semPermissao, 'cliente sem portal não recebe nada');
+c = conteudo([], false);
+ok(!c.ok && c.sessaoInvalida, 'sessão inválida não recebe nada');
+c = conteudo(['portal', 'gerir_manuais']);
+ok(c.ok && c.manuais.every(m => m.liberado && m.parts.length) && Object.keys(c.provas).length === 3, 'quem gere manuais vê tudo (manuais e provas dos 3 níveis)');
+ok(JSON.parse(run('doGet({ parameter: { action: "versao" } })')._t).conteudoProtegido === true, 'versao anuncia conteudoProtegido');
+ok(/'3\.4'/.test(fonte.split('\n').filter(l => /versao: '/.test(l))[0]), 'versao devolve 3.4');
+// erro inesperado no POST não vaza texto técnico
+run('lerManuais_ = function () { throw new Error("SEGREDO-INTERNO"); }');
+const rr = JSON.parse(run('doPost({ postData: { contents: JSON.stringify({ token: TOKEN, action: "treinamento_conteudo", whatsapp: "859", sessao: "x" }) } })')._t);
+ok(rr.ok === false && /^R\d+$/.test(String(rr.ocorrencia)) && JSON.stringify(rr).indexOf('SEGREDO-INTERNO') === -1, 'POST com falha devolve só um código de ocorrência', rr);
 console.log('\n' + (total - falhas.length) + '/' + total + ' verificações passaram');
 console.log('FALHAS=' + falhas.length);
 process.exit(falhas.length ? 1 : 0);

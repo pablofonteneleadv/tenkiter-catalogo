@@ -33,6 +33,7 @@ function d1() {
     if (u.startsWith('https://generativelanguage.googleapis.com/v1beta/models?')) { const k = new Headers(init.headers)['get']('x-goog-api-key'); return new Response(JSON.stringify(k === GEMINI_OK ? { models: [] } : { error: { message: 'API key not valid' } }), { status: k === GEMINI_OK ? 200 : 400 }); }
     if (u.startsWith('https://generativelanguage.googleapis.com/')) {
       gemChamadas.push({ url: u, headers: new Headers(init.headers), body: JSON.parse(init.body) });
+      if (gemModo === 'cota1' && u.includes('gemini-3.5-flash:')) return new Response(JSON.stringify({ error: { message: 'You exceeded your current quota. Please retry in 21h26m11.19s.' } }), { status: 429 });
       if (gemModo === '429') return new Response(JSON.stringify({ error: { message: 'quota key=' + GEMINI_OK } }), { status: 429 });
       if (gemModo === 'lixo') return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'não é json' }] } }] }));
       return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: gemTexto }] } }] }));
@@ -302,6 +303,15 @@ function d1() {
     chk('429: devolve "espera" e segue sem marcar erro definitivo', j2.espera === true && j2.feitas === 0, j2);
     const e429 = await DB.prepare("SELECT ia_status, ia_tent FROM rascunho WHERE legenda='segundo'").first(); chk('429 não gasta tentativa', e429.ia_tent === 0, e429);
     chk('o texto do erro não vaza a chave', !JSON.stringify(j2).includes(GEMINI_OK));
+    // cota de UM modelo acabou: troca para o próximo e lembra qual esgotou
+    await env.CACHE.delete('ia_esgotados'); feed = [m('IA2B', { timestamp: ts(6), caption: 'cota um' })]; await W.ciclo(env, 'cron');
+    gemModo = 'cota1'; let c0 = gemChamadas.length; ({ j: j2 } = await A('POST', '/ia', { limite: 1 }));
+    const usadas = gemChamadas.slice(c0).map((x) => (/models\/([^:]+):/.exec(x.url) || [])[1]);
+    chk('cota do 1º modelo acabou: usa o próximo e leu o post', j2.feitas === 1 && usadas[0] === 'gemini-3.5-flash' && usadas[1] === 'gemini-3.7-flash', { j2, usadas });
+    feed = [m('IA2C', { timestamp: ts(6), caption: 'cota dois' })]; await W.ciclo(env, 'cron'); c0 = gemChamadas.length; await A('POST', '/ia', { limite: 1 });
+    const usadas2 = gemChamadas.slice(c0).map((x) => (/models\/([^:]+):/.exec(x.url) || [])[1]);
+    chk('modelo esgotado fica de molho: nem é chamado de novo', usadas2.length >= 1 && !usadas2.includes('gemini-3.5-flash') && usadas2[0] === 'gemini-3.7-flash', usadas2);
+    await env.CACHE.delete('ia_esgotados');
     gemModo = 'lixo'; for (let i = 0; i < 3; i++) await A('POST', '/ia', { limite: 1 });
     const e2 = await DB.prepare("SELECT ia_status, ia_tent FROM rascunho WHERE legenda='segundo'").first(); chk('resposta ilegível: tenta até 2 vezes e desiste (sem laço infinito)', e2.ia_status === 'erro' && e2.ia_tent === 2, e2);
     gemModo = 'ok';

@@ -1743,6 +1743,22 @@ function servicosFalsos(amb, est) {
   ok(amb.post(Cr({ action: 'historicoProduto', id: id })).ok !== true, 'histórico também é só da equipe');
 })();
 
+// ------------------------------------------------------------------ 8j. erro inesperado não vaza texto técnico (v4.5)
+(function erroGenerico() {
+  console.log('\n[8j erro inesperado: mensagem pública + código]');
+  const amb = criarAmbiente(); semear(amb);
+  const orig = amb.ss.getSheetByName;
+  amb.ss.getSheetByName = function () { throw new Error('SEGREDO-INTERNO planilha xyz'); };
+  const r = amb.getJson({ action: 'list' });
+  const rp = amb.post(adm({ action: 'metricas', dias: 7 }));
+  amb.ss.getSheetByName = orig;
+  const txt = JSON.stringify(r) + JSON.stringify(rp);
+  ok(r.ok === false && /^E\d{12}\d{3}$/.test(String(r.ocorrencia)), 'GET com falha devolve código de ocorrência', JSON.stringify(r));
+  ok(rp.ok === false && /^E\d{15}$/.test(String(rp.ocorrencia)), 'POST com falha devolve código de ocorrência', JSON.stringify(rp));
+  ok(txt.indexOf('SEGREDO-INTERNO') === -1 && txt.indexOf('xyz') === -1 && txt.indexOf('Erro interno no servidor') === -1, 'o texto técnico NÃO chega ao navegador');
+  ok(amb.getJson({ action: 'versao' }).erroGenerico === true, 'versao anuncia erroGenerico');
+})();
+
 console.log('\n' + (total - falhas.length) + '/' + total + ' verificações passaram');
 console.log('FALHAS=' + falhas.length + (falhas.length ? ' ' + JSON.stringify(falhas) : ''));
 process.exit(falhas.length ? 1 : 0);

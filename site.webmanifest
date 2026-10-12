@@ -20,7 +20,7 @@
   ],
   "shortcuts": [
     { "name": "Novidades", "short_name": "Novidades", "url": "/?novidade=true&origem=app", "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }] },
-    { "name": "Minha sacola", "short_name": "Sacola", "url": "/?abrir=sacola&origem=app", "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Minha seleção", "short_name": "Seleção", "url": "/?abrir=sacola&origem=app", "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }] },
     { "name": "Acompanhar pedido", "short_name": "Pedido", "url": "/?pedido=&origem=app", "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }] }
   ]
 }

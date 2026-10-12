@@ -103,18 +103,18 @@ function abrirSacola() {
   var esgotados = todos.filter(estaEsgotado);
 
   if (carregando) {
-    container.innerHTML = '<div class="sheet-topo"><div class="nome">🛍️ Sua sacola</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">✕</button></div>' +
-      '<p class="texto-pequeno" style="padding:20px 16px">Carregando as peças da sua sacola…</p>';
+    container.innerHTML = '<div class="sheet-topo"><div class="nome">🛍️ Minha seleção</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">✕</button></div>' +
+      '<p class="texto-pequeno" style="padding:20px 16px">Carregando as peças da sua seleção…</p>';
   } else if (!todos.length) {
     container.innerHTML =
-      '<div class="sheet-topo"><div class="nome">🛍️ Sua sacola</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">✕</button></div>' +
-      '<div id="sacola-vazia">Sua sacola está vazia. Toque em <b>Sacola</b> nas peças que você gostar e peça tudo de uma vez.</div>' +
+      '<div class="sheet-topo"><div class="nome">🛍️ Minha seleção</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">✕</button></div>' +
+      '<div id="sacola-vazia">Sua seleção está vazia. Toque em <b>Selecionar</b> nas peças que você gostar e envie tudo de uma vez para a loja.</div>' +
       '<a class="btn-zap" style="margin:0 16px 16px" href="' + escaparHtml(linkWhatsApp('Olá! Vim pelo catálogo e quero ajuda para escolher.')) + '" target="_blank" rel="noopener">💬 Prefiro falar no WhatsApp</a>';
   } else {
     var d = dadosIniciaisCliente_();
     var total = totalAvista_(itens);
     container.innerHTML =
-      '<div class="sheet-topo"><div class="nome">🛍️ Sua sacola (' + itens.length + ')</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">✕</button></div>' +
+      '<div class="sheet-topo"><div class="nome">🛍️ Minha seleção (' + itens.length + ')</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">✕</button></div>' +
       (sumiram > 0 ? '<p class="texto-pequeno" role="status">' + sumiram + (sumiram === 1 ? ' peça saiu' : ' peças saíram') + ' do catálogo e foi removida da sacola.</p>' : '') +
       itens.map(function (p) {
         return '<div class="item-sacola">' +
@@ -142,9 +142,9 @@ function abrirSacola() {
         '<div class="erro-campo" id="ped-erro" role="alert"></div>' +
       '</div>' +
       '<p class="texto-pequeno">O pedido vai para o WhatsApp da loja. O pagamento e a combinação de retirada ou entrega são feitos por lá. Veja a <a href="privacidade.html" style="color:var(--laranja-txt);font-weight:700">política de privacidade</a>.</p>' +
-      '<button type="button" class="btn-secundario-cta" id="btn-limpar-sacola" style="margin-top:12px">🗑️ Esvaziar sacola</button>' +
+      '<button type="button" class="btn-secundario-cta" id="btn-limpar-sacola" style="margin-top:12px">🗑️ Esvaziar seleção</button>' +
       '<div class="barra-compra"><div class="bc-total"><small>Total à vista</small><strong>' + formatarReal(total) + '</strong></div>' +
-      '<button type="button" class="bc-pedir" id="btn-enviar-sacola">💬 ENVIAR PEDIDO</button></div>';
+      '<button type="button" class="bc-pedir" id="btn-enviar-sacola">💬 ENVIAR MINHA SELEÇÃO</button></div>';
 
     container.querySelectorAll('[data-remover-id]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -245,7 +245,7 @@ function mostrarPedidoEnviado_(o) {
     '</div>' +
     (o.codigo ? '<div id="pedido-avisos"></div>' : '') +
     '<a class="btn-principal-cta" style="text-decoration:none" id="btn-abrir-zap" href="' + escaparHtml(o.url) + '" target="_blank" rel="noopener">💬 ABRIR O WHATSAPP DA LOJA</a>' +
-    (o.codigo ? '<button type="button" class="btn-secundario-cta" id="btn-ir-rastreio">📦 Acompanhar este pedido</button>' : '<button type="button" class="btn-secundario-cta" id="btn-esvaziar-depois">🗑️ Já enviei — esvaziar a sacola</button>') +
+    (o.codigo ? '<button type="button" class="btn-secundario-cta" id="btn-ir-rastreio">📦 Acompanhar este pedido</button>' : '<button type="button" class="btn-secundario-cta" id="btn-esvaziar-depois">🗑️ Já enviei — esvaziar a seleção</button>') +
     '<button type="button" class="btn-secundario-cta" id="btn-continuar">Continuar vendo o catálogo</button>';
   c.querySelectorAll('#btn-fechar-sacola, #btn-continuar').forEach(function (b) { b.addEventListener('click', fecharSacola); });
   var rast = document.getElementById('btn-ir-rastreio');
@@ -354,8 +354,8 @@ function abrirFavoritos() {
       }).join('') +
       '<div class="resumo-linha" style="margin-top:6px"><strong>Total à vista (' + disp.length + (disp.length === 1 ? ' peça' : ' peças') + ')</strong><span style="color:#1a7a1a;font-weight:800">' + formatarReal(totalAvista_(disp)) + '</span></div>' +
       (todos.length > disp.length ? '<p class="texto-pequeno">' + (todos.length - disp.length) + ' esgotada(s) não entram na conta.</p>' : '') +
-      '<button type="button" class="btn-principal-cta" id="fav-pedir"' + (disp.length ? '' : ' disabled') + '>💬 PEDIR A LISTA COMPLETA NO WHATSAPP</button>' +
-      '<button type="button" class="btn-secundario-cta" id="fav-mover"' + (disp.length ? '' : ' disabled') + '>🛍️ Adicionar todos à sacola</button>' +
+      '<button type="button" class="btn-principal-cta" id="fav-pedir"' + (disp.length ? '' : ' disabled') + '>💬 CONSULTAR A LISTA COMPLETA NO WHATSAPP</button>' +
+      '<button type="button" class="btn-secundario-cta" id="fav-mover"' + (disp.length ? '' : ' disabled') + '>🛍️ Adicionar todos à seleção</button>' +
       '<button type="button" class="btn-secundario-cta" id="fav-ver">Ver só os favoritos na lista</button>';
     c.querySelectorAll('[data-abrir-id]').forEach(function (b) { b.addEventListener('click', function () { abrirDetalhe(b.dataset.abrirId); }); });
     c.querySelectorAll('[data-sac-id]').forEach(function (b) { b.addEventListener('click', function () { adicionarNaSacola(b.dataset.sacId); atualizarSacolaHeader_(); abrirFavoritos(); }); });
@@ -489,6 +489,7 @@ function ligarPedidoNaPagina() {
   var rast = document.getElementById('rod-rastrear');
   if (rast) rast.addEventListener('click', function (e) { e.preventDefault(); abrirRastreio('', ''); });
   var z = document.getElementById('rod-zap'); if (z) z.href = linkWhatsApp('Olá! Vim pelo catálogo da TENKiTER Modas.');
+  var az = document.getElementById('ajuda-zap'); if (az) az.href = linkWhatsApp('Olá! Preciso de ajuda para escolher uma peça no catálogo da TENKiTER Modas.');
   var fz = document.getElementById('fab-zap');
   if (fz) { fz.href = linkWhatsApp('Olá! Vim pelo catálogo da TENKiTER Modas e quero ajuda.'); fz.addEventListener('click', function () { if (window.TKMeta) TKMeta.evento('Contact'); }); }
 }

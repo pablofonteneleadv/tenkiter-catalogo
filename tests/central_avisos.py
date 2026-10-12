@@ -90,6 +90,7 @@ with sync_playwright() as p:
     pg.click("#av-enviar"); pg.wait_for_timeout(1100)
     u = st.get("ultimo_push", {})
     chk("pediu confirmação citando o público", DIALOGOS and DIALOGOS[0][0] == "confirm" and "Promoção de sábado" in DIALOGOS[0][1] and "pessoa(s)" in DIALOGOS[0][1], DIALOGOS)
+    chk("a confirmação mostra público, título, mensagem, link e horário", all(x in DIALOGOS[0][1] for x in ("Público:", "Título: Promoção de sábado", "Mensagem: Oi, {nome}! 20% off.", "Ao tocar abre: " + SITE, "Quando: agora")), DIALOGOS[0][1])
     chk("enviou audiência 'grupo alunos' com título, mensagem e link", u.get("audiencia") == {"tipo": "grupo", "grupo": "alunos"} and u.get("titulo") == "Promoção de sábado 🎉" and u.get("mensagem") == "Oi, {nome}! 20% off." and u.get("url") == SITE, u)
     chk("validade de 24 h vai junto (ttlHoras)", u.get("ttlHoras") == 24, u)
     chk("sem agendamento, não manda agendarEm", "agendarEm" not in u)

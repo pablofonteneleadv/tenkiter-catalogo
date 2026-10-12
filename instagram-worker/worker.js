@@ -252,7 +252,7 @@ export async function ciclo(env, origem, opcoes) {
 }
 
 /* ---------- IA: lê as FOTOS do post (nome, preço escrito, categoria, cores...) ---------- */
-const MODELOS_IA = ['gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite'];
+const MODELOS_IA = ['gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
 const MAX_FOTOS_IA = 4, MAX_BYTES_FOTO_IA = 3 * 1024 * 1024, DESCONTO_AVISTA = 0.10;
 const COND_IA_PENDENTE = "status='pendente' AND grupo != 'nao_produto' AND (ia_status IN ('', 'pendente') OR (ia_status='erro' AND ia_tent < 2) OR (ia_status='lendo' AND ia_em < ?))";
 
@@ -296,23 +296,43 @@ async function fotosDoRascunho(env, rid) {
   }
   return partes;
 }
+/** Cota grátis é POR MODELO: 429 = passa ao próximo modelo e deixa o esgotado "de molho" no KV até o Google liberar ("retry in 21h26m"). */
+async function modelosEsgotados(env) { try { return (await env.CACHE.get('ia_esgotados', 'json')) || {}; } catch (e) { return {}; } }
+async function marcarEsgotado(env, modelo, msg) {
+  try {
+    const m = /retry in\s+(?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?/i.exec(String(msg || ''));
+    let seg = 3600; if (m) seg = Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Math.ceil(Number(m[3] || 0));
+    seg = Math.max(600, Math.min(seg, 86400));
+    const mapa = await modelosEsgotados(env), agora = Date.now();
+    Object.keys(mapa).forEach((k) => { if (mapa[k] <= agora) delete mapa[k]; });
+    mapa[modelo] = agora + seg * 1000;
+    await env.CACHE.put('ia_esgotados', JSON.stringify(mapa), { expirationTtl: 86400 });
+  } catch (e) { /* sem KV: só não lembra */ }
+}
 async function chamarGemini(env, chave, payload) {
-  let ultimo = '';
-  for (const modelo of MODELOS_IA.slice(0, 3)) {
+  let ultimo = '', quota = 0, falhas = 0;
+  const esg = await modelosEsgotados(env), agora = Date.now();
+  let fila = MODELOS_IA.filter((m) => !(esg[m] && esg[m] > agora));
+  if (!fila.length) fila = MODELOS_IA.slice();      // todos de molho: tenta de novo (a cota pode ter voltado)
+  for (const modelo of fila) {
     try {
       const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave }, body: JSON.stringify(payload) });
       let j = {}; try { j = await r.json(); } catch (e) { j = {}; }
       if (r.status === 200) {
         const partes = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
         const texto = partes.map((x) => x.text || '').join('').replace(/```json/gi, '').replace(/```/g, '').trim();
-        if (texto) return { ok: true, texto: texto };
-        ultimo = 'resposta vazia'; continue;
+        if (texto) return { ok: true, texto: texto, modelo: modelo };
+        ultimo = 'resposta vazia'; if (++falhas >= 3) break; continue;
       }
-      ultimo = ((j.error && j.error.message) || ('HTTP ' + r.status)).replace(/key=[^&\s]+/g, 'key=***').slice(0, 160);
-      if (r.status === 429) return { ok: false, erro: 'A IA pediu para esperar um pouco (limite de uso).', espera: true };
+      const msg = ((j.error && j.error.message) || ('HTTP ' + r.status));
+      ultimo = msg.replace(/key=[^&\s]+/g, 'key=***').slice(0, 160);
+      if (r.status === 429 || /quota/i.test(msg)) { quota++; await marcarEsgotado(env, modelo, msg); continue; }
+      if (r.status === 404) continue;
       if (r.status === 400 || r.status === 401 || r.status === 403) break;
-    } catch (e) { ultimo = 'sem conexão com a IA'; }
+      if (++falhas >= 3) break;
+    } catch (e) { ultimo = 'sem conexão com a IA'; if (++falhas >= 3) break; }
   }
+  if (quota && quota >= fila.length) return { ok: false, erro: 'A cota gratuita da IA acabou em todos os modelos por agora (volta sozinha em até 24 h).', espera: true };
   return { ok: false, erro: 'Erro da IA: ' + ultimo };
 }
 const soValidos = (arr, lista) => { const m = {}; lista.forEach((x) => { m[String(x).toLowerCase()] = x; }); const out = []; (Array.isArray(arr) ? arr : []).forEach((v) => { const k = m[String(v).trim().toLowerCase()]; if (k && out.indexOf(k) === -1) out.push(k); }); return out; };

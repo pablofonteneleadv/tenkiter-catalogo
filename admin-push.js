@@ -395,8 +395,13 @@
         corpo.agendarEm = d.toISOString();
       }
       desc = ultimaPrevia ? ultimaPrevia.descricao + (ultimaPrevia.quantidade != null ? ' (' + ultimaPrevia.quantidade + ' pessoa(s))' : '') : 'o público escolhido';
-      const quando = corpo.agendarEm ? ' para ' + new Date(corpo.agendarEm).toLocaleString('pt-BR') : ' agora';
-      if (!confirm('Enviar "' + titulo + '" para ' + desc + quando + '?')) return;
+      const quando = corpo.agendarEm ? new Date(corpo.agendarEm).toLocaleString('pt-BR') : 'agora';
+      // Resumo completo antes de enviar (auditoria 11/10/2026): público, quantidade, texto final, link e horário. Aviso enviado não volta atrás.
+      const linhas = ['CONFIRA ANTES DE ENVIAR', '',
+        'Público: ' + desc];
+      if (ultimaPrevia && typeof ultimaPrevia.comAviso === 'number') linhas.push('Com aviso ativo agora: ' + ultimaPrevia.comAviso + (ultimaPrevia.comAviso === 0 ? '  ⚠ ninguém vai receber' : ''));
+      linhas.push('Título: ' + titulo, 'Mensagem: ' + mensagem, 'Ao tocar abre: ' + (url || 'só abre o site (sem link próprio)'), 'Quando: ' + quando, '', 'Enviar mesmo assim?');
+      if (!confirm(linhas.join('\n'))) return;
     }
     const b = $(teste ? 'av-teste' : 'av-enviar'); b.disabled = true; const rot = b.textContent; b.textContent = 'Enviando…';
     res.innerHTML = '<p class="g-info">Enviando…</p>';

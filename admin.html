@@ -421,6 +421,7 @@
   .imp-item { border-bottom: 1px solid #eee; padding: 6px 0; font-size: 0.8rem; overflow-wrap: anywhere; }
   .imp-item ul { margin: 4px 0 0; padding-left: 18px; color: #444; }
   .imp-item.ig { color: #8a1c1c; }
+  .mt-grupo { margin:14px 0 2px; font-size:.95rem; } .mt-grupo small { font-weight:400; color:#666; font-size:.75rem; margin-left:4px; }
   .mt-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
   .mt-card { background: #f7f4ec; border-radius: 12px; padding: 10px; text-align: center; }
   .mt-card span { display: block; font-size: 0.7rem; color: #555; }
@@ -457,6 +458,12 @@
   .mt-tab th:not(:first-child), .mt-tab td:not(:first-child) { text-align: right; white-space: nowrap; }
   .push-modelos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0 0; }
   .push-modelos .chip { font-size: 0.74rem; padding: 6px 10px; }
+
+  .atalhos-hoje { background:#fff; border:1px solid #e3e3e3; border-radius:12px; padding:10px 12px; margin:0 0 12px; }
+  .atalhos-hoje strong { display:block; font-size:.8rem; color:#444; margin-bottom:6px; }
+  .atalhos-linha { display:flex; flex-wrap:wrap; gap:6px; }
+  .atalhos-linha button { width:auto; flex:1 1 auto; padding:9px 12px; font-size:.8rem; min-height:40px; background:#f3f3f3; color:#222; border:1px solid #ddd; border-radius:8px; }
+  .atalhos-linha button[hidden] { display:none; }
 </style>
 </head>
 <body>
@@ -509,7 +516,20 @@
     <div class="dashboard-card esgotados"><span>Esgotados</span><strong id="dash-esgotados">0</strong></div>
   </div>
 
+  <div class="aviso-gestao" id="aviso-codigos" hidden></div>
   <button type="button" class="aviso-gestao" id="aviso-pedidos-novos" hidden></button>
+
+  <nav class="atalhos-hoje" id="atalhos-hoje" aria-label="O que fazer agora">
+    <strong>O que fazer agora</strong>
+    <div class="atalhos-linha">
+      <button type="button" data-atalho="cadastrar">➕ Cadastrar peça</button>
+      <button type="button" data-atalho="pedidos" id="atalho-pedidos" hidden>🧾 Pedidos</button>
+      <button type="button" data-atalho="postagens" id="atalho-postagens" hidden>📸 Postar Story</button>
+      <button type="button" data-atalho="lista">📦 Estoque</button>
+      <button type="button" data-atalho="numeros" id="atalho-numeros" hidden>📊 Números</button>
+      <button type="button" data-atalho="ferramentas">🛠️ Outras ferramentas</button>
+    </div>
+  </nav>
 
   <details class="cartao-cad" id="card-pedidos" hidden>
     <summary><span id="ped-sum-txt">🧾 Pedidos</span></summary>
@@ -691,8 +711,6 @@
       <button type="button" id="btn-bulk-juntar" hidden>🔗 Juntar em 1 produto</button>
     </div>
   </div>
-
-  <div class="aviso-gestao" id="aviso-codigos" hidden></div>
 
   <div class="lista-topo">
     <h2>Estoque & Atendimento</h2>
@@ -2642,8 +2660,16 @@
       atualizarBarraSync();
 
       if (resultado.ok && resultado.resp && resultado.resp.ok) {
-        alert('Ação realizada em ' + resultado.resp.afetados + ' produtos!');
-        selecionadosBulk.clear();
+        const rr = resultado.resp, pedidos = Array.isArray(rr.faltaram) ? (rr.pedidos || 0) : 0;
+        if (Array.isArray(rr.faltaram) && rr.faltaram.length) {
+          // v4.5: mostra QUAIS peças não foram alteradas (e deixa só elas marcadas para tentar de novo)
+          const nomeDe = id => { const p = produtos.find(x => String(x.ID) === String(id)); return p ? (p.Codigo ? p.Codigo + ' ' : '') + p.Nome : 'peça ' + id; };
+          alert('Concluído em ' + rr.afetados + ' de ' + pedidos + ' peças.\n\nNÃO foram alteradas (não encontradas — talvez já apagadas):\n• ' + rr.faltaram.map(nomeDe).join('\n• ') + '\n\nElas continuam marcadas para você tentar de novo.');
+          selecionadosBulk = new Set(rr.faltaram.map(String));
+        } else {
+          alert('Ação realizada em ' + rr.afetados + (rr.afetados === 1 ? ' produto!' : ' produtos!'));
+          selecionadosBulk.clear();
+        }
         atualizarBarraBulk();
         await carregarProdutos();
       } else if (!resultado.ok && resultado.enfileirado) {
@@ -2651,7 +2677,8 @@
         selecionadosBulk.clear();
         atualizarBarraBulk();
       } else {
-        alert('Erro ao executar ação em lote.');
+        const motivo = resultado && resultado.resp && resultado.resp.erro ? resultado.resp.erro : '';
+        alert('Não consegui executar a ação em lote' + (motivo ? ': ' + motivo : '.') + '\nConfira a lista antes de repetir — as peças continuam marcadas.');
       }
     } finally {
       travarBotoesBulk(false);
@@ -3761,5 +3788,31 @@
 <script src="a11y.js"></script>
 <script src="conta.js"></script>
 <script src="push.js"></script>
+
+<script>
+/* Atalhos "O que fazer agora": só levam a funções que já existem (nada foi removido). */
+(function(){
+  var $=function(i){return document.getElementById(i);};
+  function espelha(){
+    [['atalho-pedidos','card-pedidos'],['atalho-postagens','btn-abrir-postagens'],['atalho-numeros','btn-abrir-metricas']].forEach(function(p){
+      var a=$(p[0]),o=$(p[1]); if(a&&o) a.hidden=!!o.hidden;
+    });
+  }
+  setInterval(espelha,1500); espelha();
+  document.addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('[data-atalho]'); if(!b) return;
+    var k=b.getAttribute('data-atalho'), alvo=null;
+    if(k==='cadastrar'){alvo=$('card-form'); if(alvo) alvo.open=true;}
+    else if(k==='pedidos'){alvo=$('card-pedidos'); if(alvo) alvo.open=true;}
+    else if(k==='lista'){alvo=$('busca-admin');}
+    else if(k==='ferramentas'){alvo=$('details-ferramentas'); if(alvo) alvo.open=true;}
+    else if(k==='postagens'||k==='numeros'){
+      var d=$('details-ferramentas'); if(d) d.open=true;
+      var bt=$(k==='postagens'?'btn-abrir-postagens':'btn-abrir-metricas'); if(bt) bt.click(); return;
+    }
+    if(alvo&&alvo.scrollIntoView) alvo.scrollIntoView({behavior:'smooth',block:'start'});
+  });
+})();
+</script>
 </body>
 </html>

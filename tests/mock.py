@@ -12,7 +12,7 @@ def prods(n=24):
     return out
 PNG=bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cfc0f01f0005000201a5f645400000000049454e44ae426082")
 PERMS_ALL=["catalogo_admin","gerir_acessos","equipe_relatorio","gerir_manuais","dados_pessoais","catalogo_cadastrar","catalogo_excluir","catalogo_precos","catalogo_auditoria","catalogo_push","portal"]
-def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem_codigo=0, ia=True):
+def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem_codigo=0, ia=True, protegido=False):
     """Simula o Apps Script. versao="3.2" (padrão) liga também apagar/renomear categoria; "3.1" tem pedidos/métricas/CSV/integrações mas não mexe em categoria; "3.0" é o backend antigo (o site tem que seguir funcionando).
     Devolve um dicionário de estado (pedidos, integrações, produtos...) para os testes conferirem."""
     P=prods()
@@ -49,6 +49,8 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     if versao>="3.7" and novo: FLAGS["midiaRapida"]=True; FLAGS["juntarProdutos"]=True
     if versao>="4.1" and novo: FLAGS["auditoriaProdutos"]=True
     if avanc: FLAGS["metricasAvancadas"]=True; FLAGS["dispositivos"]=True
+    if protegido: FLAGS["conteudoProtegido"]=True   # backend de RH 3.4: treinamento_conteudo
+    st["conteudo_chamadas"]=[]
     def limpa(n): return " ".join(str(n or "").replace(","," ").split())[:60].strip()
     def norm(n):
         import unicodedata
@@ -58,6 +60,15 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
         return {"codigo":ped["codigo"],"data":ped["data"],"atualizado":ped["atualizado"],"status":ped["status"],"entrega":ped["entrega"],"total":ped["total"],"itens":[{"nome":i["nome"],"codigo":i["codigo"]} for i in ped["itens"]]}
     def post(b):
         a=b.get("action")
+        if a=="treinamento_conteudo":
+            st["conteudo_chamadas"].append(b)
+            tem=lambda c: c in perms
+            ms=[]
+            for i,tit in (("1","Manual Um"),("2","Manual Dois"),("3","Manual Três")):
+                lib=tem("portal") and tem("manual_"+i)
+                ms.append({"id":i,"titulo":tit,"blurb":"resumo "+i,"nivelMinimo":int(i),"ordem":int(i),"liberado":lib,"parts":([{"title":"Parte","chapters":[{"title":"Cap "+i,"id":"cap-"+i,"hash":"h"+i,"blocks":[{"type":"p","text":"TEXTO-DO-SERVIDOR-"+i}]}]}] if lib else [])})
+            provas={i:{"title":"Prova "+i,"pass":0.7,"questions":[{"q":"Pergunta do servidor?","options":["A","B"],"correct":1,"explain":"x"}]} for i in ("1","2","3") if tem("avaliacoes") and tem("manual_"+i)}
+            return {"ok":True,"manuais":ms,"provas":provas}
         if versao>="4.1" and a=="auditoriaProdutos":
             st.setdefault("aud_chamadas",[]).append(b)
             return {"ok":True,"itens":st.get("auditoria",{"1790000000000":{"criadoPor":"Ana Cadastro","criadoEm":"2026-10-11T17:32:00.000Z","editadoPor":"Beto Edita","editadoEm":"2026-10-11T19:05:00.000Z","ultimaAcao":"Editou a peça"}})}
@@ -379,14 +390,14 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             st["push"].append({"quando":"10/10/2026 12:00","quem":"Ana Lojista","titulo":b.get("titulo"),"mensagem":b.get("mensagem"),"segmento":b.get("segmento") or "Subscribed Users","destinatarios":7,"url":""}); st["ultimo_push"]=dict(b)
             return {"ok":True,"destinatarios":7}
         if a=="bulkUpdate":
-            n=0
+            n=0; faltar=[str(i) for i in st.get("lote_faltar",[])]
             for x in P:
-                if str(x["ID"]) in [str(i) for i in b.get("ids",[])]:
+                if str(x["ID"]) in [str(i) for i in b.get("ids",[])] and str(x["ID"]) not in faltar:
                     n+=1
                     if b.get("tipoAcao")=="alterarEstoque": x["Estoque"]=b.get("valor")
                     if b.get("tipoAcao")=="alterarCategoria": x["Categoria"]=b.get("valor")
                     if b.get("tipoAcao")=="arquivar": x["Status"]="Inativo"
-            st["lote"]=dict(b); return {"ok":True,"afetados":n}
+            st["lote"]=dict(b); return {"ok":True,"afetados":n,"pedidos":len(b.get("ids",[])),"faltaram":[str(i) for i in b.get("ids",[]) if str(i) in faltar]}
         if a=="gerarSeo":
             if st["ia"]: return {"ok":True,"titulo":"Título IA","descricao":"Descrição IA"}
             return {"ok":True,"local":True,"aviso":"Chave do Gemini não configurada.","titulo":(b.get("nome","")+" | TENKiTER Modas")[:60],"descricao":b.get("nome","")+" na TENKiTER Modas, em Crateús-CE. 10% de desconto à vista. Peça pelo WhatsApp."}

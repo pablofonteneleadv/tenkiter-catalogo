@@ -314,13 +314,16 @@
     const temVis = cob.comVisitante > 0;
     let h = '<p class="mt-resumo">Mostrando: <b>' + esc(r.filtrosDescricao) + '</b></p>';
     if (r.semDados) h += '<p class="g-info">Nada neste recorte. ' + (r.filtrado ? 'Experimente tirar algum filtro.' : 'Os números aparecem conforme as pessoas usam o catálogo.') + '</p>';
-    h += '<div class="mt-cards">' +
+    h += '<h3 class="mt-grupo">👀 Interesse <small>quem olhou</small></h3><div class="mt-cards">' +
       mtCartao_('👤 Pessoas que entraram', temVis ? mtNum_(t.visitantes) : '—', temVis ? 'aparelhos diferentes' : 'conta a partir da atualização') +
       mtCartao_('👁️ Visualizações de peças', mtNum_(t.visualizacoes)) +
+      (t.visitas ? mtCartao_('🚪 Visitas à loja', mtNum_(t.visitas), 'quantas vezes abriram o site') : '') + '</div>';
+    h += '<h3 class="mt-grupo">💬 Intenção <small>pediram para falar com a loja — ainda não é venda</small></h3><div class="mt-cards">' +
       mtCartao_('💬 Toques em “Pedir no WhatsApp”', mtNum_(t.whatsapp)) +
       mtCartao_('📈 Toques por 100 visualizações', t.whatsappPor100Visualizacoes === null ? '—' : String(t.whatsappPor100Visualizacoes).replace('.', ',')) +
-      mtCartao_('🧾 Pedidos pelo site', mtNum_(ped.total), formatarReal(ped.valor) + ' à vista (sem cancelados)') +
-      (t.visitas ? mtCartao_('🚪 Visitas à loja', mtNum_(t.visitas), 'quantas vezes abriram o site') : '') + '</div>';
+      mtCartao_('🧾 Pedidos pelo site', mtNum_(ped.total), formatarReal(ped.valor) + ' à vista (sem cancelados) — enviados, ainda não confirmados') + '</div>';
+    h += '<h3 class="mt-grupo">✅ Resultado confirmado <small>só pedido marcado como “Concluído”</small></h3><div class="mt-cards">' +
+      mtCartao_('✅ Pedidos concluídos', mtNum_(ped.concluidos || 0), ped.concluidos ? 'marcados por você no painel' : 'nenhum marcado neste período') + '</div>';
     h += '<p class="g-nota">Toque no WhatsApp não é venda confirmada: é a pessoa que pediu para falar com a loja. Venda confirmada é o pedido marcado como “Concluído”' + (ped.concluidos ? ' (' + ped.concluidos + ' no período, ' + formatarReal(ped.valorConcluidos) + ')' : '') + '.</p>';
 
     // ---- aparelhos e avisos (estado de agora; só "instalaram no período" segue o período)

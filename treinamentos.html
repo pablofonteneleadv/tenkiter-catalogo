@@ -179,6 +179,8 @@ button{font-family:inherit;}
 /* ---------- manual content ---------- */
 .manual-title{font-size:1.6rem; margin:0 0 4px;}
 .manual-sub{color:var(--muted); margin:0 0 28px; font-size:0.95rem;}
+.sync-status{margin:-18px 0 22px; font-size:0.82rem; font-weight:600; color:var(--muted);}
+.sync-status.ok{color:#1a6b1a;} .sync-status.erro{color:#8a4b00;}
 .part-heading{font-size:1.25rem; color:var(--accent); margin:40px 0 18px; padding-top:8px; border-top:1px solid var(--border);}
 .part-heading:first-of-type{border-top:none; margin-top:0;}
 .chapter{margin-bottom:34px; scroll-margin-top:80px;}
@@ -572,6 +574,10 @@ function perfilCompletude(user){
 var servidorNovo = false;
 var servidorChecado = false;
 var servidorAcessos = false; // v4: servidor com perfis e permissões (painel Acessos)
+var servidorProtegido = false; // v3.4 do RH: manuais e provas só chegam por sessão + permissão (treinamento_conteudo)
+var conteudoEstado = ''; // '' (ainda não) | 'carregando' | 'ok' | 'falhou'
+var detectPromise = null;
+function garantirDeteccao(){ return detectPromise || (detectPromise = detectarServidor()); }
 async function detectarServidor(){
   if (!DATA.appsScriptUrl){ servidorChecado = true; return; }
   try{
@@ -582,6 +588,8 @@ async function detectarServidor(){
     var json = await res.json();
     servidorNovo = !!(json && json.ok && json.versao);
     servidorAcessos = !!(json && json.ok && json.acessos);
+    servidorProtegido = !!(json && json.ok && json.conteudoProtegido);
+    if (servidorProtegido){ try{ localStorage.removeItem(CHAVE_CACHE_MANUAIS); }catch(e){} } // o texto dos manuais não fica mais guardado no aparelho
     servidorChecado = true;
   }catch(e){ /* sem rede: tenta de novo no login */ }
 }
@@ -719,6 +727,8 @@ async function loadManuaisList(){
     var res = await fetch(DATA.appsScriptUrl + '?action=manuais_lista', { method:'GET' });
     if (!res.ok) return false;
     var json = await res.json();
+    await garantirDeteccao();
+    if (servidorProtegido) return false; // no servidor novo o conteúdo vem de carregarConteudoProtegido (com login e permissão)
     if (json && json.ok && Array.isArray(json.manuais)){
       aplicarManuais(json.manuais);
       try{ localStorage.setItem(CHAVE_CACHE_MANUAIS, JSON.stringify({ manuais: json.manuais, em: Date.now() })); }catch(e){ /* sem espaço: segue sem cache */ }
@@ -726,6 +736,27 @@ async function loadManuaisList(){
     }
   }catch(e){ /* mantém os manuais-semente embutidos no arquivo, se ainda não migrou nenhum */ }
   return false;
+}
+/** v3.4: manuais e provas só chegam depois do login, e só o que a permissão da pessoa libera. */
+async function carregarConteudoProtegido(){
+  if (!servidorProtegido || !state.user) return true;
+  conteudoEstado = 'carregando';
+  try{
+    var r = await submitResult({ action:'treinamento_conteudo', whatsapp: state.user.whatsapp, sessao: state.user.password });
+    if (r && r.ok && Array.isArray(r.manuais)){
+      aplicarManuais(r.manuais);
+      DATA.quizzes = r.provas || {};
+      conteudoEstado = 'ok';
+      return true;
+    }
+  }catch(e){}
+  conteudoEstado = 'falhou';
+  return false;
+}
+function renderCarregandoConteudo(){
+  var app = document.getElementById('app');
+  app.innerHTML = renderTopbar() + '<div class="shell"><div class="main" style="max-width:900px"><p class="sub" role="status" id="tm-carregando">Carregando seus manuais…</p></div></div>';
+  wireTopbar();
 }
 function shuffleArray(arr){
   var a = arr.slice();
@@ -841,6 +872,14 @@ function manualProgress(level){
    antes desse recurso existir (acabou de migrar acima) quanto qualquer sincronização individual
    que tenha falhado por falta de rede. Só soma leitura, nunca desmarca; roda em segundo plano,
    sem travar a tela nem avisar em caso de falha. */
+/** Diz à pessoa, com palavras, se a leitura dela já está salva no servidor ou só neste aparelho. */
+function mostrarSync(estado){
+  var el = document.getElementById('sync-status'); if (!el) return;
+  el.hidden = false; el.className = 'sync-status' + (estado === 'ok' ? ' ok' : estado === 'erro' ? ' erro' : '');
+  el.textContent = estado === 'ok' ? '✓ Seu progresso está salvo no servidor.'
+    : estado === 'erro' ? '⏳ Seu progresso está salvo neste aparelho e ainda não chegou ao servidor. Ele tenta de novo quando você abrir o manual com internet.'
+    : 'Salvando seu progresso…';
+}
 function sincronizarProgressoLote(level){
   if (!DATA.appsScriptUrl) return;
   var content = DATA.manuals[level];
@@ -853,8 +892,9 @@ function sincronizarProgressoLote(level){
     });
   });
   if (!itens.length) return;
+  mostrarSync('salvando');
   submitResult({ action:'manual_sincronizar_lote', whatsapp: state.user.whatsapp, sessao: state.user.password,
-    manualId: level, itens: itens }).catch(function(){});
+    manualId: level, itens: itens }).then(function(r){ mostrarSync(r && r.ok ? 'ok' : 'erro'); }).catch(function(){ mostrarSync('erro'); });
 }
 
 /* ---------------- render: blocks ---------------- */
@@ -1106,6 +1146,8 @@ function tryRestoreSession(){
 function logout(){
   try{ localStorage.removeItem('tm_session'); }catch(e){}
   state.user = null; state.view='login'; state.manual=null;
+  conteudoEstado = ''; // a próxima pessoa busca o conteúdo dela
+  if (servidorProtegido){ DATA.quizzes = {}; Object.keys(DATA.manuals).forEach(function(k){ DATA.manuals[k] = { parts: [] }; }); }
   renderLogin();
 }
 
@@ -1364,6 +1406,11 @@ function manualNivelMinimo(id){
 function goHome(){
   state.view = 'home'; state.manual = null;
   sincNav();
+  if (servidorProtegido && state.user && conteudoEstado !== 'ok' && conteudoEstado !== 'falhou'){
+    if (conteudoEstado !== 'carregando'){ carregarConteudoProtegido().then(function(){ if (state.view === 'home' && state.user) goHome(); }); }
+    renderCarregandoConteudo();
+    return;
+  }
   var app = document.getElementById('app');
   if (!temPerm('portal')){ renderSemAcesso(); return; }
   var manualIds = (state.manuaisList && state.manuaisList.length)
@@ -1480,7 +1527,8 @@ function renderManual(level){
   });
 
   var bodyHtml = '<div class="manual-title">' + esc(DATA.titles[level]) + '</div>' +
-    '<p class="manual-sub">' + esc(DATA.blurbs[level]) + '</p>';
+    '<p class="manual-sub">' + esc(DATA.blurbs[level]) + '</p>' +
+    '<p class="sync-status" id="sync-status" role="status" hidden></p>';
 
   content.parts.forEach(function(part, pi){
     bodyHtml += '<h2 class="part-heading">' + esc(part.title) + '</h2>';
@@ -1560,8 +1608,9 @@ function wireManual(level){
       // Sincroniza com o servidor só pra admin acompanhar à distância; nunca bloqueia nem
       // atrasa a experiência de quem está lendo -- se falhar, fica só no localStorage mesmo.
       if (capId && capHash){
+        mostrarSync('salvando');
         submitResult({ action:'manual_marcar_lido', whatsapp: state.user.whatsapp, sessao: state.user.password,
-          manualId: level, capId: capId, hash: capHash, lido: cb.checked }).catch(function(){});
+          manualId: level, capId: capId, hash: capHash, lido: cb.checked }).then(function(r){ mostrarSync(r && r.ok ? 'ok' : 'erro'); }).catch(function(){ mostrarSync('erro'); });
       }
     });
   });
@@ -2640,7 +2689,7 @@ function render(){
   var pSessao = (sess0 && sess0.whatsapp && sess0.sessao) ? submitResult({ action:'sessao', whatsapp: sess0.whatsapp, sessao: sess0.sessao }) : null; // junto com a checagem do servidor
   var pManuais = loadManuaisList();
   loadQuizConfig(); // só é preciso na hora da prova: não segura a abertura da página
-  await detectarServidor();
+  await garantirDeteccao();
   await loadRoster(); // só faz algo no servidor antigo
   if (!temCacheManuais) await pManuais; // 1ª visita neste aparelho: precisa da lista para montar a tela
   var restaurou = servidorNovo ? await restaurarSessaoServidor(pSessao) : tryRestoreSession();

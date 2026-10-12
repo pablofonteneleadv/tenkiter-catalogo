@@ -155,6 +155,15 @@ catch (e) { window.__precargaLista = null; }
   .btn-compartilhar-filtros { font-size: 0.75rem; color: var(--preto); font-weight: 700; background: #f0f0f0; border: 1px solid #ccc; border-radius: 12px; padding: 4px 10px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
 
   main { padding: 14px; max-width: 900px; margin: 0 auto; }
+  .ajuda-whats { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 22px 0 6px; padding: 14px 16px; background: var(--branco); border: 1px solid #e6dfcf; border-radius: 12px; font-size: 0.88rem; color: #333; }
+  .ajuda-whats p { margin: 0; line-height: 1.4; }
+  .btn-ajuda-zap { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border-radius: 10px; background: var(--laranja); color: #0d0d0d; font-weight: 800; text-decoration: none; }
+  .etiquetas-ativas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; }
+  .etiquetas-ativas[hidden] { display: none; }
+  .etiqueta-ativa { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 10px; border-radius: 999px; border: 1px solid #d0d0d0; background: #fff; color: var(--preto); font-size: 0.78rem; font-weight: 600; cursor: pointer; width: auto; }
+  .etiqueta-ativa .x { font-size: 0.9rem; line-height: 1; color: #666; }
+  .etiqueta-ativa:hover, .etiqueta-ativa:focus-visible { border-color: var(--preto); }
+  .etiquetas-ativas .btn-limpar { min-height: 32px; padding: 4px 6px; width: auto; }
   #contagem { font-size: 0.8rem; color: #666; margin-bottom: 10px; font-weight: 600; }
 
   .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
@@ -271,7 +280,7 @@ catch (e) { window.__precargaLista = null; }
   .mini-selo { background: rgba(0,0,0,0.72); color: #fff; font-size: 0.64rem; font-weight: 700; padding: 3px 7px; border-radius: 999px; }
   .selo-ultimas { position: absolute; right: 8px; bottom: 8px; z-index: 2; background: var(--amarelo); color: #fff; font-size: 0.64rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; pointer-events: none; }
   .acoes-card { display: flex; gap: 6px; margin-top: 8px; }
-  .acoes-card button { flex: 1; min-height: 40px; border-radius: 10px; font-size: 0.74rem; font-weight: 800; cursor: pointer; border: 1px solid #ccc; background: #fff; color: #111; padding: 0 4px; }
+  .acoes-card button { flex: 1; min-height: 44px; border-radius: 10px; font-size: 0.74rem; font-weight: 800; cursor: pointer; border: 1px solid #ccc; background: #fff; color: #111; padding: 0 4px; }
   .acoes-card .ac-pedir { background: var(--verde); border-color: var(--verde); color: #fff; }
   .acoes-card .ac-sacola[aria-pressed="true"] { background: var(--preto); border-color: var(--preto); color: var(--laranja); }
 
@@ -416,6 +425,14 @@ catch (e) { window.__precargaLista = null; }
   .cookie-aviso button.sim { background: var(--preto); color: var(--laranja); border-color: var(--preto); }
   .cookie-aviso a { color: var(--laranja-txt); font-weight: 700; }
   @media (prefers-reduced-motion: reduce) { .modal { animation: none; } .modal.voltando { transition: none; } }
+  /* Alvos de toque ≥ 44 px (polimento da auditoria de 11/10/2026): só aumenta a área de toque (por baixo), sem mudar o tamanho visual */
+  .btn-icone-header::after, .btn-voz::after, .btn-favorito-card::after, .btn-x-modal::after { content: ''; position: absolute; inset: -4px; }
+  .pill-cat, .btn-filtros-toggle, #btn-favorito-modal, #btn-anexar-foto { min-height: 44px; }
+  #busca { min-height: 48px; }
+  #preco-min, #preco-max, #ordem { min-height: 44px; }
+  .btn-limpar, .btn-compartilhar-filtros { min-height: 44px; display: inline-flex; align-items: center; }
+  .abrir-peca { min-height: 32px; }
+  .acoes-card button { white-space: nowrap; min-width: 0; flex: 1 1 0; padding: 0 2px; font-size: 0.68rem; letter-spacing: -0.2px; overflow: hidden; }
 </style>
 </head>
 <body>
@@ -442,17 +459,11 @@ catch (e) { window.__precargaLista = null; }
     <div class="header-icones">
       <button type="button" class="btn-icone-header" id="btn-conta-header" title="Minha conta" style="display:none;">👤</button>
       <button type="button" class="btn-icone-header" id="btn-favoritos-header" title="Ver favoritos">❤️<span class="badge-contador" id="badge-favoritos" style="display:none;">0</span></button>
-      <button type="button" class="btn-icone-header" id="btn-sacola-header" title="Abrir sacola de pedidos">🛍️<span class="badge-contador" id="badge-sacola" style="display:none;">0</span></button>
+      <button type="button" class="btn-icone-header" id="btn-sacola-header" title="Abrir minha seleção">🛍️<span class="badge-contador" id="badge-sacola" style="display:none;">0</span></button>
       <button type="button" class="btn-icone-header" id="btn-push-header" title="Ativar notificações de novidades" style="display:none;">🔔</button>
     </div>
   </div>
 </header>
-
-<section class="beneficios" aria-label="Vantagens da loja">
-  <span>💬 Peça pelo WhatsApp</span>
-  <span>💰 10% de desconto à vista</span>
-  <span>📍 Retire na loja, em Crateús</span>
-</section>
 
 <div class="pills-categoria" id="pills-categoria"></div>
 
@@ -492,11 +503,18 @@ catch (e) { window.__precargaLista = null; }
   </div>
 </div>
 
+<section class="beneficios" id="beneficios" aria-label="Vantagens da loja">
+  <span>💬 Consulte pelo WhatsApp</span>
+  <span>💰 10% de desconto à vista</span>
+  <span>📍 Retire na loja, em Crateús</span>
+</section>
+
 <main>
   <div class="aviso-selecao" id="aviso-selecao" role="status" hidden>
     <span id="aviso-selecao-txt"></span>
     <button type="button" class="btn-neutro" id="aviso-selecao-todas">Ver todas as peças</button>
   </div>
+  <div class="etiquetas-ativas" id="etiquetas-ativas" role="group" aria-label="Filtros ativos" hidden></div>
   <div class="barra-lista">
     <div id="contagem" aria-live="polite">Carregando catálogo...</div>
     <label class="ordem-wrap"><span class="sr-only">Ordenar as peças por</span>
@@ -511,6 +529,10 @@ catch (e) { window.__precargaLista = null; }
   <div class="grid" id="grid"></div>
   <div id="vazio" style="display:none;">Nenhum produto encontrado para estes filtros.</div>
   <button type="button" class="btn-carregar-mais" id="btn-carregar-mais" style="display:none;">Carregar mais peças</button>
+  <aside class="ajuda-whats" id="ajuda-whats" aria-label="Ajuda para escolher">
+    <p><strong>Precisa de ajuda para escolher?</strong><br>Fale com a equipe da TENKiTER pelo WhatsApp.</p>
+    <a id="ajuda-zap" class="btn-ajuda-zap" href="#" target="_blank" rel="noopener">💬 Falar com a equipe</a>
+  </aside>
 </main>
 
 <footer class="rodape" id="rodape">
@@ -574,7 +596,7 @@ catch (e) { window.__precargaLista = null; }
 <div id="overlay"><div class="modal" id="modal-conteudo" role="dialog" aria-modal="true" aria-label="Detalhes da peça"></div></div>
 
 <div id="overlay-sacola">
-  <div class="modal" id="sacola-conteudo" role="dialog" aria-modal="true" aria-label="Sua sacola"></div>
+  <div class="modal" id="sacola-conteudo" role="dialog" aria-modal="true" aria-label="Minha seleção"></div>
 </div>
 
 <div id="overlay-rastreio" class="overlay-sheet-loja"><div class="modal" id="rastreio-conteudo" role="dialog" aria-modal="true" aria-label="Acompanhar pedido"></div></div>
@@ -914,7 +936,49 @@ catch (e) { window.__precargaLista = null; }
     buscaIgnorouFiltros = !!(termos.length && filtrosAtivos && !listaFiltradaAtual.length && porBusca.length);
     if (buscaIgnorouFiltros) listaFiltradaAtual = ordenarLista_(porBusca);
     itensVisiveis = POR_PAGINA;
+    renderEtiquetasAtivas_();
     renderizarGrid();
+  }
+
+  /** Filtros ativos sempre à vista (mesmo com a gaveta de filtros fechada), cada um removível com um toque. */
+  function renderEtiquetasAtivas_() {
+    const box = document.getElementById('etiquetas-ativas');
+    if (!box) return;
+    const itens = [];
+    const busca = document.getElementById('busca').value.trim();
+    const min = document.getElementById('preco-min').value, max = document.getElementById('preco-max').value;
+    if (selecaoFixa) itens.push(['Peças separadas para você', () => { selecaoFixa = null; }]);
+    if (apenasNovidades) itens.push(['Novidades', () => { apenasNovidades = false; renderizarChipExtra(); }]);
+    if (apenasFavoritos) itens.push(['Favoritos', () => { apenasFavoritos = false; renderizarChipExtra(); }]);
+    filtroCategorias.forEach(c => itens.push([c, () => { filtroCategorias.delete(c); }]));
+    filtroGeneros.forEach(g => itens.push([g, () => { filtroGeneros.delete(g); }]));
+    if (min !== '' || max !== '') {
+      const rot = min !== '' && max !== '' ? 'R$ ' + min + ' a ' + max : (min !== '' ? 'a partir de R$ ' + min : 'até R$ ' + max);
+      itens.push(['Preço: ' + rot, () => { document.getElementById('preco-min').value = ''; document.getElementById('preco-max').value = ''; }]);
+    }
+    box.textContent = '';
+    box.hidden = !itens.length;
+    if (!itens.length) return;
+    itens.forEach(([rotulo, remover]) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'etiqueta-ativa';
+      b.setAttribute('aria-label', 'Tirar o filtro ' + rotulo);
+      const t = document.createElement('span'); t.textContent = rotulo;
+      const x = document.createElement('span'); x.className = 'x'; x.setAttribute('aria-hidden', 'true'); x.textContent = '✕';
+      b.append(t, x);
+      b.addEventListener('click', () => {
+        remover();
+        renderizarPillsCategoria();
+        renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias, 'resumo-categoria');
+        renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
+        aplicarFiltros();
+      });
+      box.appendChild(b);
+    });
+    const l = document.createElement('button');
+    l.type = 'button'; l.className = 'btn-limpar'; l.textContent = 'Limpar tudo';
+    l.addEventListener('click', () => document.getElementById('btn-limpar').click());
+    box.appendChild(l);
   }
 
   /* ---- busca tolerante: sem acento, vários termos, nome + categoria + gênero + cor + descrição, e 1 letra errada ---- */
@@ -1055,8 +1119,8 @@ catch (e) { window.__precargaLista = null; }
             <div class="tags">${escaparHtml(p.Categoria)}</div>
             ${disp && !esgotado ? `<div class="disponibilidade ${disp.classe}">${disp.texto}</div>` : ''}
             ${esgotado ? '' : `<div class="acoes-card">
-              <button type="button" class="ac-sacola" data-sac-id="${escaparHtml(p.ID)}" aria-pressed="${naSacola}" aria-label="${escaparHtml(p.Nome)}: sacola">${naSacola ? '✓ Na sacola' : '🛍️ Sacola'}</button>
-              <button type="button" class="ac-pedir" data-pedir-id="${escaparHtml(p.ID)}" aria-label="${escaparHtml(p.Nome)}: pedir no WhatsApp">💬 Pedir</button>
+              <button type="button" class="ac-sacola" data-sac-id="${escaparHtml(p.ID)}" aria-pressed="${naSacola}" aria-label="${escaparHtml(p.Nome)}: minha seleção">${naSacola ? '✓ Na seleção' : '🛍️ Selecionar'}</button>
+              <button type="button" class="ac-pedir" data-pedir-id="${escaparHtml(p.ID)}" aria-label="${escaparHtml(p.Nome)}: consultar no WhatsApp">💬 Consultar</button>
             </div>`}
           </div>
         </div>
@@ -1118,7 +1182,7 @@ catch (e) { window.__precargaLista = null; }
     const fav = card.querySelector('.btn-favorito-card');
     if (fav) { const f = ehFavorito(id); fav.textContent = f ? '❤️' : '🤍'; fav.setAttribute('aria-pressed', String(f)); }
     const sac = card.querySelector('.ac-sacola');
-    if (sac) { const n = estaNaSacola(id); sac.setAttribute('aria-pressed', String(n)); sac.textContent = n ? '✓ Na sacola' : '🛍️ Sacola'; }
+    if (sac) { const n = estaNaSacola(id); sac.setAttribute('aria-pressed', String(n)); sac.textContent = n ? '✓ Na seleção' : '🛍️ Selecionar'; }
     if (apenasFavoritos && !ehFavorito(id)) aplicarFiltros();
   }
   function dadosPixel_(p) {
@@ -1312,8 +1376,8 @@ catch (e) { window.__precargaLista = null; }
         <div class="bc-linha">
         ${esgotado
           ? '<span class="bc-aviso">Indisponível no momento</span><button type="button" class="bc-pedir" id="btn-perguntar">💬 Perguntar se volta</button>'
-          : `<button type="button" class="bc-sacola" id="btn-sacola-modal" aria-pressed="${naSacola}">${naSacola ? '✓ Na sacola' : '🛍️ Sacola'}</button>
-             <button type="button" class="bc-pedir" id="btn-quero">💬 PEDIR NO WHATSAPP</button>`}
+          : `<button type="button" class="bc-sacola" id="btn-sacola-modal" aria-pressed="${naSacola}">${naSacola ? '✓ Na seleção' : '🛍️ Selecionar'}</button>
+             <button type="button" class="bc-pedir" id="btn-quero">💬 CONSULTAR NO WHATSAPP</button>`}
         </div>
       </div>
     `;
@@ -1345,7 +1409,7 @@ catch (e) { window.__precargaLista = null; }
       const btnSac = document.getElementById('btn-sacola-modal');
       btnSac.addEventListener('click', () => {
         const agora = alternarSacola_(p, slideAtualModal_ + 1); // a sacola guarda a foto que a pessoa está vendo
-        btnSac.textContent = agora ? '✓ Na sacola' : '🛍️ Sacola';
+        btnSac.textContent = agora ? '✓ Na seleção' : '🛍️ Selecionar';
         btnSac.setAttribute('aria-pressed', String(agora));
       });
     } else {
