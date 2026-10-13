@@ -71,7 +71,7 @@ with sync_playwright() as p:
     pg.click("[data-vza=novo]"); pg.wait_for_timeout(900)
     chk("novo visual criado, aberto, com prévia pintada", pg.locator("details[data-vz-det^='v:c_'][open]").count() == 1 and pg.evaluate("(()=>{const c=document.querySelector('details[data-vz-det^=\\'v:c_\\'] canvas');return c&&c.width===1080})()"))
     C = "details[data-vz-det^='v:c_']"
-    chk("editor visual: prévia, camadas e painel aparecem", pg.locator(C + " [data-ed-cv]").count() == 1 and pg.locator(C + " .ed-cam").count() == 4)
+    chk("editor visual: prévia, camadas e painel aparecem", pg.locator(C + " [data-ed-cv]").count() == 1 and pg.locator(C + " .ed-cam").count() == 5)
     chk("código já traz o guia para IA", "_guia" in pg.input_value(C + " [data-vz-json]") and "FORMATO: JSON" in pg.input_value(C + " [data-vz-json]"))
     pg.locator(C + " [data-ed-a=sel][data-k=nome]").click(); pg.wait_for_timeout(400)
     chk("tocar numa camada abre as propriedades dela", pg.locator(C + " .ed-props").count() == 1 and pg.locator(C + " [data-ed-p=t]").input_value() == "{nome}")
@@ -88,11 +88,11 @@ with sync_playwright() as p:
     pg.locator(C + " [data-ed-p=giro]").fill("30"); pg.wait_for_timeout(300)
     chk("girar grava o ângulo", '"giro":30' in pg.input_value(C + " [data-vz-json]"))
     pg.locator(C + " [data-ed-a=addforma][data-forma=elipse]").click(); pg.wait_for_timeout(300)
-    chk("adicionar círculo cria uma camada nova (5)", pg.locator(C + " .ed-cam").count() == 5)
+    chk("adicionar círculo cria uma camada nova (6)", pg.locator(C + " .ed-cam").count() == 6)
     pg.locator(C + " [data-ed-a=addtxt]").click(); pg.wait_for_timeout(300)
-    chk("adicionar texto cria outra camada (6) com limite de letras do tipo", pg.locator(C + " .ed-cam").count() == 6 and '"max":60' in pg.input_value(C + " [data-vz-json]"))
+    chk("adicionar texto cria outra camada (7) com limite de letras do tipo", pg.locator(C + " .ed-cam").count() == 7 and '"max":60' in pg.input_value(C + " [data-vz-json]"))
     pg.locator(C + " [data-ed-a=delcam]").first.click(); pg.wait_for_timeout(300)
-    chk("apagar camada volta a 5", pg.locator(C + " .ed-cam").count() == 5)
+    chk("apagar camada volta a 6", pg.locator(C + " .ed-cam").count() == 6)
     # código -> visual
     ta = pg.locator(C + " [data-vz-json]"); import json as _j
     spec = _j.loads(ta.input_value()); spec.pop("_guia", None); spec["camadas"] = [c for c in spec["camadas"] if c["k"] in ("faixa", "nome")]; spec["camadas"][1]["t"] = "Texto vindo do código"

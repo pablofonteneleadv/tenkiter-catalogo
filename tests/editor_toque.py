@@ -68,7 +68,7 @@ with sync_playwright() as p:
     pg.locator(C + " [data-ed-a=redo]").click(); pg.wait_for_timeout(250)
     chk("↷ Refazer repete", abs(cam("nome")["y"] - y1) < 0.002)
     print("== Formas e imagem fixa ==")
-    pg.locator(C + " [data-ed-a=addforma][data-forma=coracao]").click(); pg.wait_for_timeout(250)
+    pg.locator(C + " [data-ed-a=addforma][data-forma=coracao]:not([data-contorno])").click(); pg.wait_for_timeout(250)
     ch = [c for c in spec()["camadas"] if c.get("forma") == "coracao"]
     chk("+ Coração cria a forma (já selecionada)", len(ch) == 1 and pg.locator(C + " .ed-pill.sel").count() == 1)
     pg.locator(C + " [data-ed-p=cor]").first.evaluate("e=>{e.value='#ff0000';e.dispatchEvent(new Event('input',{bubbles:true}))}"); pg.wait_for_timeout(250)

@@ -20,7 +20,7 @@
   function salvarCfgVis_(c) { try { localStorage.setItem(CFG_VIS_KEY, JSON.stringify(c)); } catch (e) {} agendarEnvioVisuais_(); }
   const CUSTOM_KEY = 'tk_po_visuais_custom_v1', NOMES_KEY = 'tk_po_visuais_nomes_v1', CTA_KEY = 'tk_po_cta_v1', CTA_PADRAO = 'www.tenkitermodas.com.br';
   /* Sincronização com o servidor (Worker tenkiter-ig, /fotos/visuais): os visuais valem em todos os aparelhos. Sem a rota nova no Worker, segue só local. */
-  const CHAVES_SYNC_ = ['tk_po_visuais_v1', 'tk_po_visuais_custom_v1', 'tk_po_visuais_nomes_v1', 'tk_po_cta_v1'];
+  const CHAVES_SYNC_ = ['tk_po_visuais_v1', 'tk_po_visuais_custom_v1', 'tk_po_visuais_nomes_v1', 'tk_po_cta_v1', 'tk_po_elementos_v1'];
   let sincTimer_ = null, sincAtivo_ = true, sincPuxando_ = null;
   const VSYNC_KEY = 'tk_po_sync_v1';      // versão do servidor que este aparelho viu por último (não faz parte do que é sincronizado)
   const vSync_ = () => { try { const n = Number(localStorage.getItem(VSYNC_KEY)); return isFinite(n) ? n : 0; } catch (e) { return 0; } };
@@ -33,6 +33,7 @@
     (Array.isArray(local) ? local : []).forEach((c) => { if (c && c.id && (!mapa[c.id] || (Number(c.em) || 0) > (Number(mapa[c.id].em) || 0))) mapa[c.id] = c; });
     return Object.keys(mapa).map((k) => mapa[k]);
   }
+  function juntarElementos_(local, remoto) { const m = {}; [].concat(Array.isArray(remoto) ? remoto : [], Array.isArray(local) ? local : []).forEach((q) => { if (q && q.url && (!m[q.url] || (Number(q.em) || 0) > (Number(m[q.url].em) || 0))) m[q.url] = q; }); return Object.keys(m).map((k) => m[k]).sort((a, b) => (Number(b.em) || 0) - (Number(a.em) || 0)).slice(0, 40); }
   function agendarEnvioVisuais_() {
     if (!sincAtivo_) return; clearTimeout(sincTimer_);
     sincTimer_ = setTimeout(enviarVisuais_, 900);
@@ -42,7 +43,7 @@
     const r = await ig('/fotos/visuais', 'POST', { dados: dadosLocais_(), base: vSync_() });
     if (r && r.ok) { if (r.v != null) vSyncGravar_(r.v); return; }
     if (r && r.conflito && r.dados && typeof r.dados === 'object') {
-      const loc = dadosLocais_(), jun = Object.assign({}, r.dados); jun.tk_po_visuais_custom_v1 = juntarCustom_(loc.tk_po_visuais_custom_v1, r.dados.tk_po_visuais_custom_v1);
+      const loc = dadosLocais_(), jun = Object.assign({}, r.dados); jun.tk_po_visuais_custom_v1 = juntarCustom_(loc.tk_po_visuais_custom_v1, r.dados.tk_po_visuais_custom_v1); jun.tk_po_elementos_v1 = juntarElementos_(loc.tk_po_elementos_v1, r.dados.tk_po_elementos_v1);
       aplicarRemoto_(jun); vSyncGravar_(r.v);
       aviso = 'Outra pessoa alterou os visuais ao mesmo tempo. Juntei as duas versões (os seus visuais próprios foram mantidos).'; avisoErro = false;
       const r2 = await ig('/fotos/visuais', 'POST', { dados: dadosLocais_(), base: vSync_() }); if (r2 && r2.ok && r2.v != null) vSyncGravar_(r2.v);
@@ -56,7 +57,7 @@
       sincAtivo_ = true;
       if (r.v != null && r.v === vSync_() && r.dados) return false;      // nada novo
       if (r.dados && typeof r.dados === 'object') {
-        if (sincTimer_) { clearTimeout(sincTimer_); sincTimer_ = null; const loc = dadosLocais_(), jun = Object.assign({}, r.dados); jun.tk_po_visuais_custom_v1 = juntarCustom_(loc.tk_po_visuais_custom_v1, r.dados.tk_po_visuais_custom_v1); aplicarRemoto_(jun); vSyncGravar_(r.v); agendarEnvioVisuais_(); return true; }
+        if (sincTimer_) { clearTimeout(sincTimer_); sincTimer_ = null; const loc = dadosLocais_(), jun = Object.assign({}, r.dados); jun.tk_po_visuais_custom_v1 = juntarCustom_(loc.tk_po_visuais_custom_v1, r.dados.tk_po_visuais_custom_v1); jun.tk_po_elementos_v1 = juntarElementos_(loc.tk_po_elementos_v1, r.dados.tk_po_elementos_v1); aplicarRemoto_(jun); vSyncGravar_(r.v); agendarEnvioVisuais_(); return true; }
         const igual = JSON.stringify(dadosLocais_()) === JSON.stringify(Object.assign({}, ...CHAVES_SYNC_.map((k) => ({ [k]: r.dados[k] == null ? null : r.dados[k] }))));
         aplicarRemoto_(r.dados); if (r.v != null) vSyncGravar_(r.v); return !igual;
       }
@@ -397,7 +398,7 @@
     if (sp.fundo === 'arte' && !ARTES[sp.base]) return 'Fundo "arte" precisa de "base" com o id de um visual pronto (ex.: classico).';
     return '';
   }
-  const FORMAS_ = [['ret', 'Retângulo', '▭'], ['elipse', 'Círculo', '⬭'], ['linha', 'Linha', '―'], ['coracao', 'Coração', '❤'], ['estrela', 'Estrela', '★'], ['losango', 'Losango', '◆'], ['triangulo', 'Triângulo', '▲'], ['seta', 'Seta', '➜']];
+  const FORMAS_ = [['ret', 'Retângulo', '▭'], ['elipse', 'Círculo', '⬭'], ['linha', 'Linha', '―'], ['coracao', 'Coração', '❤'], ['estrela', 'Estrela', '★'], ['losango', 'Losango', '◆'], ['triangulo', 'Triângulo', '▲'], ['seta', 'Seta', '➜'], ['faisca', 'Faísca', '✦'], ['pin', 'Local', '📍'], ['caminhao', 'Entrega', '🚚'], ['sacola', 'Sacola', '🛍'], ['cabide', 'Cabide', '👗'], ['balao', 'Balão', '💬']];
   function mesmaOrigem_(u) { try { const q = new URL(u, location.href); return q.origin === location.origin && /^https?:$/.test(q.protocol); } catch (e) { return false; } }
   function validarCamadas_(sp) {
     if (!Array.isArray(sp.camadas)) return 'A lista "camadas" precisa ser uma lista [ … ].';
@@ -409,7 +410,8 @@
       if (!c || typeof c !== 'object') return n + ' não é um objeto { … }.';
       if (!c.k || typeof c.k !== 'string' || !/^[a-z0-9_]{1,30}$/.test(c.k)) return n + ' precisa de "k" único (minúsculas, números e _, sem espaço).';
       if (ks[c.k]) return 'Duas camadas com o mesmo "k": "' + c.k + '".'; ks[c.k] = 1;
-      if (c.tipo !== 'texto' && c.tipo !== 'forma' && c.tipo !== 'imagem') return n + ': "tipo" precisa ser "texto", "forma" ou "imagem".';
+      if (c.tipo !== 'texto' && c.tipo !== 'forma' && c.tipo !== 'imagem' && c.tipo !== 'foto') return n + ': "tipo" precisa ser "texto", "forma", "imagem" ou "foto".';
+      if (c.tipo === 'foto') { if (sp.camadas.filter((q) => q && q.tipo === 'foto').length > 1) return 'Só pode haver UMA camada "foto" (a foto do produto).'; if (c.forma != null && ['ret', 'elipse', 'arco'].indexOf(c.forma) === -1) return n + ' (foto): "forma" precisa ser ret, elipse ou arco.'; if (sp.fundo === 'arte') return 'A foto como elemento não combina com o fundo "arte" (a arte já tem a janela da foto). Troque o fundo.'; }
       if (!num(c.x) || !num(c.y) || !num(c.w) || !num(c.h)) return n + ' precisa de números em x, y, w e h.';
       if (c.w <= 0 || c.h <= 0 || c.w > 4 || c.h > 4) return n + ': w e h precisam ficar entre 0 e 4 (fração da largura).';
       if (c.tipo === 'texto') { if (typeof c.t !== 'string') return n + ' precisa de "t" (o texto, entre aspas).'; if (c.tam != null && (!num(c.tam) || c.tam < 8 || c.tam > 500)) return n + ': "tam" precisa ficar entre 8 e 500.'; }
@@ -418,10 +420,12 @@
         if (c.src.length > 90000) return n + ': a imagem embutida é grande demais; envie pelo botão Imagem.';
         if (c.fit != null && c.fit !== 'contain' && c.fit !== 'cover') return n + ': "fit" precisa ser contain ou cover.';
       }
-      else if (c.forma && formas.indexOf(c.forma) === -1) return n + ': "forma" precisa ser ' + formas.join(', ') + '.';
+      else if (c.tipo === 'forma' && c.forma && formas.indexOf(c.forma) === -1) return n + ': "forma" precisa ser ' + formas.join(', ') + '.';
+      if (c.tipo === 'texto' && c.fam != null && c.fam !== '' && !FAMS[c.fam]) return n + ': "fam" precisa ser ' + Object.keys(FAMS).join(', ') + '.';
       if (c.giro != null && !num(c.giro)) return n + ': "giro" precisa ser número (graus).';
       if (c.opac != null && (!num(c.opac) || c.opac < 0 || c.opac > 1)) return n + ': "opac" precisa ficar entre 0 e 1.';
     }
+    const ix = sp.camadas.findIndex((q) => q.tipo === 'foto'); if (ix > 0) sp.camadas.unshift(sp.camadas.splice(ix, 1)[0]);      // a foto é SEMPRE a camada mais ao fundo
     return '';
   }
   const EDT = { sel: {}, drag: null };
@@ -439,7 +443,8 @@
     return 'Você vai editar o código de um visual de postagem do Instagram da TENKiTER Modas. Leia o guia dentro do JSON, aplique SÓ o pedido no final e devolva o JSON inteiro, válido, sem explicações. Não crie camadas de imagem com endereços inventados (use só os "src" que já existem). Não apague nenhuma camada que o pedido não mencione.\n\nCÓDIGO ATUAL:\n' + formatarSpec_(vzTrab[id].spec) + '\n\nPEDIDO: (escreva aqui o que quer mudar)';
   }
   function novoSpecCamadas_() {
-    return { versao: 2, fundo: 'baixo', camadas: [
+    return { versao: 2, fundo: 'baixo', fundoCor: '#F5F1E8', camadas: [
+      { k: 'foto', tipo: 'foto', rot: 'Foto do produto', cheia: true, x: 0.5, y: 0.5, w: 1, h: 1.25, fit: 'cover', forma: 'ret', raio: 0 },
       { k: 'faixa', tipo: 'forma', rot: 'Faixa laranja', forma: 'ret', x: 0.5, y: 0.905, w: 1, h: 0.13, cor: '#E67E22', opac: 0.95 },
       { k: 'nome', tipo: 'texto', rot: 'Nome da peça', papel: 'nome', t: '{nome}', x: 0.5, y: 0.79, w: 0.88, h: 0.15, tam: 66, cor: '#F5F1E8', peso: 'bold', al: 'center', linhas: 2, max: 40, sombra: true },
       { k: 'preco', tipo: 'texto', rot: 'Preço', papel: 'preco', t: '{avista} à vista', x: 0.5, y: 0.905, w: 0.9, h: 0.1, tam: 78, cor: '#0d0d0d', peso: 'bold', al: 'center', linhas: 1, max: 16, sombra: false },
@@ -551,7 +556,39 @@
     else if (forma === 'losango') pol([[0, -1], [1, 0], [0, 1], [-1, 0]]);
     else if (forma === 'triangulo') pol([[0, -1], [1, 1], [-1, 1]]);
     else if (forma === 'seta') pol([[-1, -0.32], [0.15, -0.32], [0.15, -0.95], [1, 0], [0.15, 0.95], [0.15, 0.32], [-1, 0.32]]);
+    else if (forma === 'faisca') { const P = (u, v) => [u * w / 2, v * h / 2]; ctx.beginPath(); ctx.moveTo.apply(ctx, P(0, -1)); [[0.1, -0.1, 1, 0], [0.1, 0.1, 0, 1], [-0.1, 0.1, -1, 0], [-0.1, -0.1, 0, -1]].forEach((q) => ctx.quadraticCurveTo.apply(ctx, [].concat(P(q[0], q[1]), P(q[2], q[3])))); ctx.closePath(); }
+    else if (forma === 'pin') {
+      const P = (u, v) => [u * w / 2, v * h / 2]; ctx.beginPath(); ctx.moveTo.apply(ctx, P(0, 1));
+      ctx.bezierCurveTo.apply(ctx, [].concat(P(-0.2, 0.6), P(-0.8, 0.2), P(-0.8, -0.3))); ctx.bezierCurveTo.apply(ctx, [].concat(P(-0.8, -0.75), P(-0.45, -1), P(0, -1)));
+      ctx.bezierCurveTo.apply(ctx, [].concat(P(0.45, -1), P(0.8, -0.75), P(0.8, -0.3))); ctx.bezierCurveTo.apply(ctx, [].concat(P(0.8, 0.2), P(0.2, 0.6), P(0, 1))); ctx.closePath();
+      ctx.moveTo(0.3 * w / 2, -0.3 * h / 2); ctx.ellipse(0, -0.3 * h / 2, 0.3 * w / 2, 0.3 * h / 2, 0, 0, Math.PI * 2);
+    }
+    else if (forma === 'caminhao') {
+      const R = (u0, v0, u1, v1) => ctx.rect(u0 * w / 2, v0 * h / 2, (u1 - u0) * w / 2, (v1 - v0) * h / 2); ctx.beginPath(); R(-1, -0.7, 0.1, 0.35);
+      pol2_(ctx, w, h, [[0.18, -0.4], [0.62, -0.4], [1, 0.05], [1, 0.35], [0.18, 0.35]]);
+      [-0.55, 0.55].forEach((u) => { ctx.moveTo((u + 0.22) * w / 2, 0.62 * h / 2); ctx.ellipse(u * w / 2, 0.62 * h / 2, 0.22 * w / 2, 0.22 * h / 2, 0, 0, Math.PI * 2); });
+    }
+    else if (forma === 'sacola') {
+      const P = (u, v) => [u * w / 2, v * h / 2]; ctx.beginPath(); ctx.rect(-0.85 * w / 2, -0.45 * h / 2, 1.7 * w / 2, 1.45 * h / 2);
+      ctx.moveTo.apply(ctx, P(-0.5, -0.45)); ctx.bezierCurveTo.apply(ctx, [].concat(P(-0.5, -1.05), P(0.5, -1.05), P(0.5, -0.45))); ctx.lineTo.apply(ctx, P(0.3, -0.45)); ctx.bezierCurveTo.apply(ctx, [].concat(P(0.3, -0.8), P(-0.3, -0.8), P(-0.3, -0.45))); ctx.closePath();
+      coracaoSub_(ctx, w, h, 0, 0.3, 0.34);
+    }
+    else if (forma === 'cabide') {
+      ctx.beginPath(); pol2_(ctx, w, h, [[0, -0.15], [1, 0.9], [-1, 0.9]]); pol2_(ctx, w, h, [[0, 0.16], [0.7, 0.75], [-0.7, 0.75]]);
+      ctx.moveTo(0.2 * w / 2, -0.55 * h / 2); ctx.ellipse(0, -0.55 * h / 2, 0.2 * w / 2, 0.2 * h / 2, 0, 0, Math.PI * 2); ctx.moveTo(0.1 * w / 2, -0.55 * h / 2); ctx.ellipse(0, -0.55 * h / 2, 0.1 * w / 2, 0.1 * h / 2, 0, 0, Math.PI * 2);
+      ctx.rect(-0.06 * w / 2, -0.4 * h / 2, 0.12 * w / 2, 0.3 * h / 2);
+    }
+    else if (forma === 'balao') {
+      const x0 = -w / 2, y0 = -0.9 * h / 2, x1 = w / 2, y1 = 0.5 * h / 2, r = Math.min(0.3 * h / 2, w / 4); ctx.beginPath(); ctx.moveTo(x0 + r, y0); ctx.arcTo(x1, y0, x1, y1, r); ctx.arcTo(x1, y1, x0, y1, r); ctx.arcTo(x0, y1, x0, y0, r); ctx.arcTo(x0, y0, x1, y0, r); ctx.closePath();
+      pol2_(ctx, w, h, [[-0.6, 0.5], [-0.25, 0.5], [-0.7, 1]]); coracaoSub_(ctx, w, h, 0, -0.2, 0.34);
+    }
     else caixaArredondada(ctx, -w / 2, -h / 2, w / 2, h / 2, forma === 'linha' ? Math.min(w, h) / 2 : rad);
+  }
+  function pol2_(ctx, w, h, pts) { pts.forEach((q, i) => { const X = q[0] * w / 2, Y = q[1] * h / 2; if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); }); ctx.closePath(); }
+  function coracaoSub_(ctx, w, h, cu, cv, k) {     // coração pequeno como "furo" (preenchimento par-ímpar)
+    const P = (u, v) => [(cu + u * k) * w / 2, (cv + v * k) * h / 2]; ctx.moveTo.apply(ctx, P(0, 1));
+    ctx.bezierCurveTo.apply(ctx, [].concat(P(-0.35, 0.72), P(-1, 0.2), P(-1, -0.35))); ctx.bezierCurveTo.apply(ctx, [].concat(P(-1, -0.85), P(-0.4, -1), P(0, -0.55)));
+    ctx.bezierCurveTo.apply(ctx, [].concat(P(0.4, -1), P(1, -0.85), P(1, -0.35))); ctx.bezierCurveTo.apply(ctx, [].concat(P(1, 0.2), P(0.35, 0.72), P(0, 1))); ctx.closePath();
   }
   /** Alças da camada selecionada, em pixels do canvas. Tamanho = pixels de TELA × escala (por isso ficam grandes no celular). */
   function escalaTela_(cv) { const r = cv.getBoundingClientRect(); return r.width ? cv.width / r.width : 1; }
@@ -614,34 +651,68 @@
       const [W, H] = edTam_(id); if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; edAjustar_(id); }
       const ar = cv.parentElement; if (edRO_ && ar && !ar._obs) { ar._obs = 1; edRO_.observe(ar); }
       const IA_ = infoAmostraDe_(id), sp = posEspec_(especCustom_({ spec: tr.spec }, IA_), IA_, id); if (tr.spec.base) sp.base = tr.spec.base;
-      const ef = { fundo: sp.fundo, arteBase: sp.base, lista: layoutItens(sp, W, H, {}) };
+      const ef = { fundo: sp.fundo, arteBase: sp.base, bgCor: sp.fundoCor, lista: layoutItens(sp, W, H, {}) };
       EDITANDO_ = true; try { desenharTemplate(cv.getContext('2d'), fotoAmostraUma_(), W, H, id, ef, 'preencher'); } finally { EDITANDO_ = false; }
       desenharSelecao_(cv.getContext('2d'), id, W, H);
       const erro = document.querySelector('[data-vz-erro="' + id + '"]'); if (erro) erro.textContent = tr.erro || tr.nota || '';
     } catch (e) { const erro = document.querySelector('[data-vz-erro="' + id + '"]'); if (erro) erro.textContent = 'Não consegui desenhar: ' + (e && e.message ? e.message : e); }
   }
   function toHex_(c) { c = String(c || ''); if (/^#[0-9a-f]{6}/i.test(c)) return c.slice(0, 7); if (/^#[0-9a-f]{3}$/i.test(c)) return '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3]; return '#000000'; }
+  /** Identidade da TENKiTER (manual de marca do Pablo): paleta, frases e estilos de texto. */
+  const PALETA_ = [['#E67E22', 'Laranja Energia'], ['#F39C12', 'Ouro Quente'], ['#F5F1E8', 'Bege Neutro'], ['#2C2C2C', 'Cinza Escuro'], ['#0d0d0d', 'Preto'], ['#ffffff', 'Branco']];
+  const ESTILOS_ = [['titulo', 'Título'], ['corpo', 'Texto'], ['manuscrito', 'Manuscrito'], ['elegante', 'Elegante'], ['chamada', 'Chamada'], ['selo', 'Selo']];
+  const ESTILO_DEF_ = {
+    titulo: { fam: 'poppins', peso: '800', estilo: null, caixa: null, espac: 0 }, corpo: { fam: 'inter', peso: 'normal', estilo: null, caixa: null, espac: 0 },
+    manuscrito: { fam: 'dancing', peso: 'bold', estilo: null, caixa: null, espac: 0, cor: '#E67E22' }, elegante: { fam: 'playfair', peso: 'bold', estilo: 'italic', caixa: null, espac: 0 },
+    chamada: { fam: 'oswald', peso: 'bold', estilo: null, caixa: 'alta', espac: 4 }, selo: { fam: 'poppins', peso: '800', estilo: null, caixa: 'alta', espac: 3, bg: '#E67E22', cor: '#0d0d0d', raio: 40 }
+  };
+  function aplicarEstilo_(c, nome) {
+    const d = ESTILO_DEF_[nome]; if (!d || !c) return; delete c.esp;
+    Object.keys(d).forEach((k) => { if (d[k] == null || d[k] === 0) delete c[k]; else c[k] = d[k]; });
+    if (nome !== 'selo') { delete c.bg; delete c.raio; }
+  }
+  const FRASES_MARCA_ = [
+    ['Moda que acolhe', 'Moda que acolhe', 'titulo'], ['Preços que cabem', 'Preços que cabem', 'titulo'], ['Atendimento que aproxima', 'Atendimento que aproxima', 'titulo'], ['Compre fácil, receba rápido', 'Compre fácil, receba rápido', 'titulo'],
+    ['Seu estilo, sua melhor versão', 'Seu estilo, sua melhor versão', 'titulo'], ['Moda feminina casual e trendy…', 'Moda feminina casual e trendy para o seu dia a dia.', 'corpo'],
+    ['Novos looks, novas histórias', 'Novos looks, novas histórias.', 'chamada'], ['Do seu jeito. No seu tempo.', 'Do seu jeito. No seu tempo.', 'corpo'],
+    ['Com você, todos os dias ♡', 'Com você, todos os dias. ♡', 'manuscrito'], ['Estamos aqui pra te ajudar!', 'Estamos aqui pra te ajudar! ♥', 'manuscrito'], ['Feito com carinho pra você', 'Feito com carinho pra você ♡', 'manuscrito'],
+    ['Se vestir bem é sobre se sentir bem', 'Se vestir bem é sobre se sentir bem todos os dias.', 'elegante'], ['Do interior do Ceará para você', 'Do interior do Ceará para você', 'corpo'],
+    ['Compre pelo site ou fale no WhatsApp', 'Compre pelo site ou fale no WhatsApp', 'corpo'], ['Entrega rápida', 'Entrega rápida', 'chamada'], ['VEM VER ♥', 'Vem ver ♥', 'selo'], ['NOVIDADE', 'Novidade', 'selo'], ['TENKiTER Modas ♥', 'TENKiTER Modas ♥', 'titulo'], ['Crateús, Ceará', 'Crateús, Ceará', 'corpo']
+  ];
+  const ELEM_KEY = 'tk_po_elementos_v1';
+  const elementosLib_ = () => { const l = lerJ_(ELEM_KEY, []); return Array.isArray(l) ? l.filter((q) => q && typeof q.url === 'string' && /^https:\/\//.test(q.url)).slice(0, 40) : []; };
+  function elementosAdd_(url, nome) { if (!/^https:\/\//.test(url)) return; const l = elementosLib_().filter((q) => q.url !== url); l.unshift({ url, nome: String(nome || 'Elemento').slice(0, 40), em: Date.now() }); gravarJ_(ELEM_KEY, l.slice(0, 40)); }
   function edCampo_(id, f, rotulo, tipo, val, extra) {
     const at = ' data-ed-id="' + esc(id) + '" data-ed-p="' + f + '" data-ed-t="' + tipo + '"';
     if (tipo === 'bool') return '<label class="ed-chk"><input type="checkbox"' + at + (val ? ' checked' : '') + '> ' + esc(rotulo) + '</label>';
-    if (tipo === 'cor') return '<label class="ed-c">' + esc(rotulo) + '<input type="color"' + at + ' value="' + esc(toHex_(val)) + '"></label>';
+    if (tipo === 'cor') return '<span class="ed-cw"><label class="ed-c">' + esc(rotulo) + '<input type="color"' + at + ' value="' + esc(toHex_(val)) + '"></label><span class="ed-sw" role="group" aria-label="Cores da marca">' + PALETA_.map((q) => '<button type="button" class="ed-swb" data-ed-sw="' + q[0] + '" title="' + q[1] + '" aria-label="' + q[1] + '" style="background:' + q[0] + '"></button>').join('') + '</span></span>';
     if (tipo === 'sel') return '<label class="ed-c">' + esc(rotulo) + '<select' + at + '>' + extra.map((o) => '<option value="' + o[0] + '"' + (String(val) === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select></label>';
     return '<label class="ed-c">' + esc(rotulo) + '<input type="' + (tipo === 'txt' ? 'text' : 'number') + '"' + at + ' value="' + esc(val == null ? '' : val) + '"' + (extra || '') + '></label>';
   }
-  function glifoCamada_(c) { return c.tipo === 'texto' ? '✏️' : c.tipo === 'imagem' ? '🖼' : ((FORMAS_.find((f) => f[0] === (c.forma || 'ret')) || FORMAS_[0])[2]); }
+  function glifoCamada_(c) { return c.tipo === 'texto' ? '✏️' : c.tipo === 'imagem' ? '🖼' : c.tipo === 'foto' ? '📷' : ((FORMAS_.find((f) => f[0] === (c.forma || 'ret')) || FORMAS_[0])[2]); }
   function htmlPropsEd_(id, c) {
-    const pct = (v) => Math.round((Number(v) || 0) * 1000) / 10, isT = c.tipo === 'texto', isI = c.tipo === 'imagem', st = edE_(id);
-    let h = '<details class="ed-mais" data-ed-det="mais"' + (st.mais !== false ? ' open' : '') + '><summary class="ed-mais-s">⚙️ Ajustes de “' + esc(c.rot || c.k) + '”' + (c.bloq ? ' 🔒' : '') + '</summary><div class="ed-props"><h5>' + (isT ? '✏️ Texto' : isI ? '🖼 Imagem' : '🔷 Forma') + ': ' + esc(c.rot || c.k) + '</h5>';
+    const pct = (v) => Math.round((Number(v) || 0) * 1000) / 10, isT = c.tipo === 'texto', isI = c.tipo === 'imagem', isF = c.tipo === 'foto', st = edE_(id);
+    let h = '<details class="ed-mais" data-ed-det="mais"' + (st.mais !== false ? ' open' : '') + '><summary class="ed-mais-s">⚙️ Ajustes de “' + esc(c.rot || c.k) + '”' + (c.bloq ? ' 🔒' : '') + '</summary><div class="ed-props"><h5>' + (isT ? '✏️ Texto' : isI ? '🖼 Imagem' : isF ? '📷 Foto do produto' : '🔷 Forma') + ': ' + esc(c.rot || c.k) + '</h5>';
     if (c.esp) h += '<p class="po-ajuda" style="margin:0 0 6px">✨ Estilo especial (copiado do visual pronto). Tamanho, cor e texto funcionam; caixa de fundo, linhas, alinhamento, peso e sombra transformam em texto comum. <button type="button" data-ed-a="espoff" data-id="' + esc(id) + '" style="min-height:40px">Virar texto comum</button></p>';
     if (c.bloq) h += '<p class="po-ajuda" style="margin:0 0 6px">🔒 Travado: não se move ao arrastar (fica fixo). Desmarque “Travar” para mexer.</p>';
     if (isT) {
       h += edCampo_(id, 't', 'Texto (use {nome} {avista} {codigo}…)', 'txt', c.t, ' maxlength="140"');
       h += '<div class="ed-lin">' + edCampo_(id, 'tam', 'Tamanho da letra', 'num', c.tam || 40, ' min="10" max="400" step="1"') + '<button type="button" data-ed-a="tam-" data-id="' + esc(id) + '" aria-label="Diminuir a letra">A−</button><button type="button" data-ed-a="tam+" data-id="' + esc(id) + '" aria-label="Aumentar a letra">A+</button>' + edCampo_(id, 'cor', 'Cor da letra', 'cor', c.cor || '#ffffff') + '</div>';
+      h += '<div class="ed-estilos" role="group" aria-label="Estilos prontos da marca"><span>Estilo da marca:</span>' + ESTILOS_.map((q) => '<button type="button" data-ed-a="estilo" data-est="' + q[0] + '"' + ' data-id="' + esc(id) + '" data-k="' + esc(c.k) + '">' + q[1] + '</button>').join('') + '</div>';
+      h += '<div class="ed-lin">' + edCampo_(id, 'fam', 'Tipografia', 'sel', c.fam || '', FAMS_ROT) + edCampo_(id, 'peso', 'Peso', 'sel', c.peso || 'bold', PESOS_ROT) + '</div>';
+      h += '<div class="ed-lin">' + edCampo_(id, 'italico', 'Itálico', 'bool', c.estilo === 'italic') + edCampo_(id, 'caixa', 'MAIÚSCULAS', 'bool', c.caixa === 'alta') + edCampo_(id, 'espac', 'Espaço entre letras', 'num', c.espac || 0, ' min="0" max="30" step="1"') + '</div>';
+      h += '<div class="ed-lin">' + edCampo_(id, 'contOn', 'Contorno na letra', 'bool', !!c.contorno) + (c.contorno ? edCampo_(id, 'contCor', 'Cor do contorno', 'cor', c.contorno.cor || '#0d0d0d') + edCampo_(id, 'contW', 'Espessura (px)', 'num', c.contorno.w || 4, ' min="1" max="30"') : '') + '</div>';
       h += '<div class="ed-lin"><label class="ed-c">Exemplo na prévia<select data-ed-amostra="' + esc(id) + '"><option value="curto"' + (st.amostra === 'curto' ? ' selected' : '') + '>Nome curto</option><option value="medio"' + (!st.amostra || st.amostra === 'medio' ? ' selected' : '') + '>Nome médio</option><option value="longo"' + (st.amostra === 'longo' ? ' selected' : '') + '>Nome bem longo</option></select></label></div>';
       h += '<div class="ed-lin">' + edCampo_(id, 'max', 'Máx. letras (0 = sem limite) · padrão ' + (MAX_PADRAO[c.papel || 'extra'] || 60), 'num', c.max == null ? (MAX_PADRAO[c.papel || 'extra'] || 60) : c.max, ' min="0" max="200"') + edCampo_(id, 'linhas', 'Linhas', 'num', c.linhas || 1, ' min="1" max="8"') + '</div>';
       h += '<p class="po-ajuda" data-ed-cont="' + esc(id) + '" style="margin:0 0 6px">' + esc(contLetras_(id, c)) + '</p>';
-      h += '<div class="ed-lin">' + edCampo_(id, 'al', 'Alinhar', 'sel', c.al || 'center', [['left', 'Esquerda'], ['center', 'Centro'], ['right', 'Direita']]) + edCampo_(id, 'peso', 'Peso', 'sel', c.peso || 'bold', [['bold', 'Negrito'], ['normal', 'Normal']]) + edCampo_(id, 'sombra', 'Sombra', 'bool', !!c.sombra) + '</div>';
+      h += '<div class="ed-lin">' + edCampo_(id, 'al', 'Alinhar', 'sel', c.al || 'center', [['left', 'Esquerda'], ['center', 'Centro'], ['right', 'Direita']]) + edCampo_(id, 'sombra', 'Sombra', 'bool', !!c.sombra) + '</div>';
       h += '<div class="ed-lin">' + edCampo_(id, 'bgOn', 'Caixa atrás do texto', 'bool', !!c.bg) + (c.bg ? edCampo_(id, 'bg', 'Cor da caixa', 'cor', c.bg) + edCampo_(id, 'raio', 'Canto (px)', 'num', c.raio || 0, ' min="0" max="300"') : '') + '</div>';
+    } else if (isF) {
+      h += '<p class="po-ajuda" style="margin:0 0 6px">A foto do produto é sempre a camada MAIS AO FUNDO: nada fica atrás dela. Defina o espaço que ela ocupa (arraste, puxe os cantos ou digite). Em cada postagem dá para mover/aproximar a foto dentro desse espaço.</p>';
+      h += '<div class="ed-lin"><button type="button" data-ed-a="fotocheia" data-id="' + esc(id) + '">⛶ Ocupar a tela toda</button>' + (c.cheia ? '<span class="po-ajuda">✔ ocupando a tela toda</span>' : '') + '</div>';
+      h += '<div class="ed-lin">' + edCampo_(id, 'forma', 'Formato', 'sel', c.forma || 'ret', [['ret', 'Retângulo'], ['elipse', 'Círculo / oval'], ['arco', 'Arco']]) + edCampo_(id, 'fit', 'Encaixe', 'sel', c.fit || 'cover', [['cover', 'Preencher (corta)'], ['contain', 'Inteira (fundo desfocado)']]) + edCampo_(id, 'raio', 'Canto (px)', 'num', c.raio || 0, ' min="0" max="600"') + '</div>';
+      h += '<div class="ed-lin">' + edCampo_(id, 'bordaCor', 'Cor da borda', 'cor', (c.borda && c.borda.cor) || '#ffffff') + edCampo_(id, 'bordaW', 'Borda (px, 0 = sem)', 'num', (c.borda && c.borda.w) || 0, ' min="0" max="60"') + edCampo_(id, 'sombra', 'Sombra', 'bool', !!c.sombra) + '</div>';
+      h += '<div class="ed-lin">' + edCampo_(id, 'fundoCor', 'Cor atrás da foto (fundo do visual)', 'cor', (vzTrab[id] && vzTrab[id].spec.fundoCor) || '#F5F1E8') + '</div>';
     } else if (isI) {
       h += '<div class="ed-lin"><label class="ed-arq">🔄 Trocar imagem<input type="file" accept="image/png,image/jpeg,image/webp" hidden data-ed-img="' + esc(id) + '" data-ed-troca="1"></label>' + edCampo_(id, 'fit', 'Encaixe', 'sel', c.fit || 'contain', [['contain', 'Inteira (sem cortar)'], ['cover', 'Preencher (corta)']]) + '</div>';
       h += '<div class="ed-lin">' + edCampo_(id, 'flip', 'Espelhar', 'bool', !!c.flip) + edCampo_(id, 'sombra', 'Sombra', 'bool', !!c.sombra) + edCampo_(id, 'raio', 'Canto (px)', 'num', c.raio || 0, ' min="0" max="600"') + '</div>';
@@ -650,6 +721,7 @@
       h += '<div class="ed-lin">' + edCampo_(id, 'gradOn', 'Degradê', 'bool', !!c.cor2) + (c.cor2 ? edCampo_(id, 'cor2', 'Cor final', 'cor', c.cor2) : '') + edCampo_(id, 'sombra', 'Sombra', 'bool', !!c.sombra) + '</div>';
       h += '<div class="ed-lin">' + edCampo_(id, 'bordaCor', 'Cor da borda', 'cor', (c.borda && c.borda.cor) || '#ffffff') + edCampo_(id, 'bordaW', 'Borda (px, 0 = sem)', 'num', (c.borda && c.borda.w) || 0, ' min="0" max="60"') + (c.forma === 'ret' || !c.forma ? edCampo_(id, 'raio', 'Canto (px)', 'num', c.raio || 0, ' min="0" max="400"') : '') + '</div>';
     }
+    if (isF) h += '<p class="po-ajuda" style="margin:0 0 4px">Espaço da foto: X/Y = centro, Largura/Altura em % da largura.</p>';
     h += '<div class="ed-lin">' + edCampo_(id, 'x', 'X (%)', 'num', pct(c.x), ' step="0.5"') + edCampo_(id, 'y', 'Y (%)', 'num', pct(c.y), ' step="0.5"') + edCampo_(id, 'w', 'Largura (%)', 'num', pct(c.w), ' min="2" step="0.5"') + edCampo_(id, 'h', 'Altura (%)', 'num', pct(c.h), ' min="0.5" step="0.5"') + '</div>';
     h += '<div class="ed-lin">' + edCampo_(id, 'giro', 'Girar (graus)', 'num', Math.round((Number(c.giro) || 0) * 10) / 10, ' min="-180" max="180" step="1"') + edCampo_(id, 'opac', 'Opacidade (%)', 'num', Math.round((c.opac == null ? 1 : c.opac) * 100), ' min="5" max="100" step="5"') + edCampo_(id, 'bloq', '🔒 Travar (fica fixo)', 'bool', !!c.bloq) + '</div>';
     h += '<div class="ed-alinhar" role="group" aria-label="Alinhar na tela"><span>Alinhar na tela:</span>' + [['l', '⇤', 'à esquerda'], ['ch', '↔', 'centro na horizontal'], ['r', '⇥', 'à direita'], ['t', '⤒', 'no topo'], ['cv', '↕', 'centro na vertical'], ['b', '⤓', 'embaixo']].map((q) => '<button type="button" data-ed-a="al" data-al="' + q[0] + '" data-id="' + esc(id) + '" aria-label="Alinhar ' + q[2] + '" title="' + q[2] + '">' + q[1] + '</button>').join('') + '</div>';
@@ -657,6 +729,7 @@
   }
   function htmlRapido_(id, c) {
     const bt = (a, ic, tx, extra) => '<button type="button" class="ed-q" data-ed-a="' + a + '" data-id="' + esc(id) + '" data-k="' + esc(c.k) + '"' + (extra || '') + '><b>' + ic + '</b><span>' + tx + '</span></button>';
+    if (c.tipo === 'foto') return '<div class="ed-rapido" role="toolbar" aria-label="Ações da foto do produto">' + bt('qlock', c.bloq ? '🔓' : '🔒', c.bloq ? 'Soltar' : 'Travar') + bt('qvis', '👁', c.oculto ? 'Mostrar' : 'Ocultar') + bt('qdel', '🗑', 'Tirar', ' style="color:#b00020"') + '</div>';
     return '<div class="ed-rapido" role="toolbar" aria-label="Ações do elemento “' + esc(c.rot || c.k) + '”">' + bt('qlock', c.bloq ? '🔓' : '🔒', c.bloq ? 'Soltar' : 'Travar') + bt('qdup', '⧉', 'Copiar') + bt('qup', '⬆', 'Frente') + bt('qdown', '⬇', 'Trás') + bt('qvis', '👁', c.oculto ? 'Mostrar' : 'Ocultar') + bt('qdel', '🗑', 'Apagar', ' style="color:#b00020"') + '</div>';
   }
   function htmlPainelEd_(id) {
@@ -665,12 +738,16 @@
     if (c) h += htmlRapido_(id, c) + htmlPropsEd_(id, c);
     else h += '<p class="po-ajuda ed-dica">Toque num elemento da prévia (ou na lista) para editar. Arraste para mover; bolinhas dos cantos = tamanho; bolinha laranja de cima = girar. Setas do teclado movem.</p>';
     h += '<details class="ed-addbox" data-ed-det="add"' + (st.add !== false ? ' open' : '') + '><summary>➕ Adicionar elemento</summary>';
+    if (!cams.some((q) => q.tipo === 'foto')) h += '<div class="ed-add" role="group" aria-label="Foto do produto"><button type="button" data-ed-a="addfoto"' + I + '>📷 Foto do produto como elemento (define o espaço da foto)</button></div>';
     h += '<div class="ed-add" role="group" aria-label="Adicionar texto"><select data-ed-papel="' + esc(id) + '" aria-label="Tipo de texto">' + PAPEIS.map((q) => '<option value="' + q[0] + '">' + esc(q[1]) + '</option>').join('') + '</select><button type="button" data-ed-a="addtxt"' + I + '>+ Texto</button></div>';
-    h += '<div class="ed-add" role="group" aria-label="Adicionar forma">' + FORMAS_.map((f) => '<button type="button" data-ed-a="addforma" data-forma="' + f[0] + '"' + I + '>' + f[2] + ' ' + f[1] + '</button>').join('') + '</div>';
-    h += '<div class="ed-add" role="group" aria-label="Adicionar imagem"><label class="ed-arq">🖼 Imagem / logo do aparelho<input type="file" accept="image/png,image/jpeg,image/webp" hidden data-ed-img="' + esc(id) + '"></label><button type="button" data-ed-a="addlogo"' + I + '>+ Logo da loja</button></div>';
-    h += '<p class="po-ajuda" style="margin:4px 0 0">Imagens e figuras ficam fixas em todas as postagens que usarem este visual. Use PNG com fundo transparente para logo. Para travar a posição, toque em “Travar”.</p></details>';
+    h += '<div class="ed-add" role="group" aria-label="Frases da marca"><select data-ed-frase="' + esc(id) + '" aria-label="Frase da marca">' + FRASES_MARCA_.map((q, i) => '<option value="' + i + '">' + esc(q[0]) + '</option>').join('') + '</select><button type="button" data-ed-a="addfrase"' + I + '>+ Frase da marca</button></div>';
+    h += '<p class="po-ajuda" style="margin:2px 0">Elementos da marca:</p><div class="ed-add" role="group" aria-label="Adicionar forma ou elemento da marca">' + FORMAS_.map((f) => '<button type="button" data-ed-a="addforma" data-forma="' + f[0] + '"' + I + '>' + f[2] + ' ' + f[1] + '</button>').join('') + '<button type="button" data-ed-a="addforma" data-forma="coracao" data-contorno="1"' + I + '>♡ Coração contorno</button></div>';
+    h += '<div class="ed-add" role="group" aria-label="Adicionar imagem"><label class="ed-arq">📁 Subir PNG do celular<input type="file" accept="image/png,image/jpeg,image/webp" hidden data-ed-img="' + esc(id) + '"></label><button type="button" data-ed-a="addlogo"' + I + '>+ Logo da loja</button></div>';
+    const lib = elementosLib_();
+    if (lib.length) h += '<p class="po-ajuda" style="margin:2px 0">Meus elementos (guardados no servidor, valem para todos que postam):</p><div class="ed-lib" role="group" aria-label="Meus elementos">' + lib.map((q, i) => '<span class="ed-lib-i"><button type="button" data-ed-a="addlib" data-i="' + i + '"' + I + ' aria-label="Inserir ' + esc(q.nome || 'elemento') + '"><img src="' + esc(q.url) + '" alt="" loading="lazy"></button><button type="button" class="ed-lib-x" data-ed-a="dellib" data-i="' + i + '"' + I + ' aria-label="Tirar da lista">×</button></span>').join('') + '</div>';
+    h += '<p class="po-ajuda" style="margin:4px 0 0">PNGs enviados ficam no servidor e fixos em todas as postagens que usarem este visual. Use PNG com fundo transparente. Para travar a posição, toque em “Travar”.</p></details>';
     h += '<label class="po-vz-l">Efeito sobre a foto<select data-ed-fundo="' + esc(id) + '">' + FUNDOS_OK.filter((f) => f !== 'arte' || tr.spec.base).map((f) => '<option value="' + f + '"' + ((tr.spec.fundo || 'foto') === f ? ' selected' : '') + '>' + f + '</option>').join('') + '</select></label>';
-    h += '<h5 class="ed-h-cam" style="margin:12px 0 2px">Elementos deste visual</h5><p class="po-ajuda ed-h-cam">Toque no nome para escolher o elemento e editar (cor, tamanho, texto) logo acima. “Frente/Trás” muda quem fica por cima.</p><div class="ed-camadas" role="list" aria-label="Camadas (de cima para baixo)">' + (cams.length ? cams.map((q, i) => i).reverse().map((i) => { const q = cams[i], K = ' data-k="' + esc(q.k) + '"' + I; return '<div class="ed-cam' + (q.k === st.sel ? ' sel' : '') + '" role="listitem"><button type="button" class="ed-cam-n" data-ed-a="sel"' + K + '>' + glifoCamada_(q) + ' ' + esc(q.rot || q.k) + (q.oculto ? ' (oculto)' : '') + (q.bloq ? ' 🔒' : '') + '</button><div class="ed-cam-b"><button type="button" data-ed-a="up"' + K + ' aria-label="Trazer para frente">▲ Frente</button><button type="button" data-ed-a="down"' + K + ' aria-label="Enviar para trás">▼ Trás</button><button type="button" data-ed-a="vis"' + K + ' aria-label="Mostrar ou esconder">👁 Ocultar</button><button type="button" data-ed-a="dupcam"' + K + ' aria-label="Duplicar">⧉ Copiar</button><button type="button" data-ed-a="delcam"' + K + ' aria-label="Apagar">✕ Apagar</button></div></div>'; }).join('') : '<p class="po-ajuda">Nenhum elemento ainda.</p>') + '</div>';
+    h += '<h5 class="ed-h-cam" style="margin:12px 0 2px">Elementos deste visual</h5><p class="po-ajuda ed-h-cam">Toque no nome para escolher o elemento e editar (cor, tamanho, texto) logo acima. “Frente/Trás” muda quem fica por cima.</p><div class="ed-camadas" role="list" aria-label="Camadas (de cima para baixo)">' + (cams.length ? cams.map((q, i) => i).reverse().map((i) => { const q = cams[i], K = ' data-k="' + esc(q.k) + '"' + I; return '<div class="ed-cam' + (q.k === st.sel ? ' sel' : '') + '" role="listitem"><button type="button" class="ed-cam-n" data-ed-a="sel"' + K + '>' + glifoCamada_(q) + ' ' + esc(q.rot || q.k) + (q.oculto ? ' (oculto)' : '') + (q.bloq ? ' 🔒' : '') + '</button><div class="ed-cam-b">' + (q.tipo === 'foto' ? '<span class="po-ajuda" style="flex:1 1 100%;margin:0">📷 Sempre a camada mais ao fundo.</span>' : '<button type="button" data-ed-a="up"' + K + ' aria-label="Trazer para frente">▲ Frente</button><button type="button" data-ed-a="down"' + K + ' aria-label="Enviar para trás">▼ Trás</button>') + '<button type="button" data-ed-a="vis"' + K + ' aria-label="Mostrar ou esconder">👁 Ocultar</button>' + (q.tipo === 'foto' ? '' : '<button type="button" data-ed-a="dupcam"' + K + ' aria-label="Duplicar">⧉ Copiar</button>') + '<button type="button" data-ed-a="delcam"' + K + ' aria-label="Apagar">✕ Apagar</button></div></div>'; }).join('') : '<p class="po-ajuda">Nenhum elemento ainda.</p>') + '</div>';
     return h;
   }
   function htmlEditor_(id) {
@@ -695,13 +772,16 @@
     document.querySelectorAll('[data-ed-id="' + id + '"][data-ed-p]').forEach((el) => { if (document.activeElement === el) return; const f = el.dataset.edP; if (f === 'x' || f === 'y' || f === 'w' || f === 'h') el.value = pct(c[f]); else if (f === 'giro') el.value = Math.round((Number(c.giro) || 0) * 10) / 10; else if (f === 'tam') el.value = c.tam || 40; });
   }
   function edMudou_(id, painel, junta) { const tr = vzTrab[id]; if (tr) { tr.erro = ''; rascunhoSalvar_(id); } histGuardar_(id, junta); edSyncCodigo_(id); if (painel) edPainel_(id); else edSyncCampos_(id); edBarra_(id); pintarEditor_(id); }
+  /** A foto "ocupa a tela toda" vale para Feed e Story; ao mexer no tamanho/posição ela passa a ter medidas próprias. */
+  function fotoMat_(id, c) { if (c && c.tipo === 'foto' && c.cheia) { const [W, H] = edTam_(id); c.x = 0.5; c.y = 0.5; c.w = 1; c.h = arred_(H / W); delete c.cheia; } }
   function edNovoK_(spec, base) { let k = base, n = 1; while (spec.camadas.some((c) => c.k === k)) k = base + (++n); return k; }
   function edProp_(t) {
     const id = t.dataset.edId, tr = vzTrab[id], c = edCam_(id); if (!tr || !c) return;
     const f = t.dataset.edP, k = t.dataset.edT; let v = k === 'bool' ? t.checked : (k === 'txt' || k === 'cor' || k === 'sel') ? t.value : Number(t.value), repintaPainel = false;
     if (k === 'num' && (t.value === '' || !isFinite(v))) return;
     const lim = (a, b) => Math.max(a, Math.min(b, v));
-    if (c.esp && ['bgOn', 'bg', 'raio', 'linhas', 'al', 'peso', 'sombra'].indexOf(f) !== -1) { delete c.esp; repintaPainel = true; const msg = '✔ Esse texto tinha um estilo especial (preço grande, botão, ícone…). Virou texto comum para aceitar essa mudança.'; tr.nota = msg; setTimeout(() => { if (tr.nota === msg) tr.nota = ''; }, 7000); }
+    if (c.esp && ['bgOn', 'bg', 'raio', 'linhas', 'al', 'peso', 'sombra', 'fam', 'italico', 'caixa', 'espac', 'contOn', 'contCor', 'contW'].indexOf(f) !== -1) { delete c.esp; repintaPainel = true; const msg = '✔ Esse texto tinha um estilo especial (preço grande, botão, ícone…). Virou texto comum para aceitar essa mudança.'; tr.nota = msg; setTimeout(() => { if (tr.nota === msg) tr.nota = ''; }, 7000); }
+    if (c.tipo === 'foto' && ['x', 'y', 'w', 'h'].indexOf(f) !== -1) fotoMat_(id, c);
     if (f === 'x' || f === 'y') c[f] = arred_(lim(-20, 120) / 100);
     else if (f === 'w') c.w = arred_(lim(2, 400) / 100); else if (f === 'h') c.h = arred_(lim(0.5, 400) / 100);
     else if (f === 'opac') { c.opac = lim(5, 100) / 100; if (c.opac >= 1) delete c.opac; }
@@ -718,6 +798,14 @@
     else if (f === 'flip') { if (v) c.flip = true; else delete c.flip; }
     else if (f === 'fit') c.fit = v;
     else if (f === 'sombra') c.sombra = !!v;
+    else if (f === 'fam') { if (v) c.fam = v; else delete c.fam; }
+    else if (f === 'italico') { if (v) c.estilo = 'italic'; else delete c.estilo; }
+    else if (f === 'caixa') { if (v) c.caixa = 'alta'; else delete c.caixa; }
+    else if (f === 'espac') { c.espac = Math.round(lim(0, 30)); if (!c.espac) delete c.espac; }
+    else if (f === 'contOn') { if (v) c.contorno = c.contorno || { cor: '#0d0d0d', w: 4 }; else delete c.contorno; repintaPainel = true; }
+    else if (f === 'contCor') c.contorno = { cor: v, w: (c.contorno && c.contorno.w) || 4 };
+    else if (f === 'contW') c.contorno = { cor: (c.contorno && c.contorno.cor) || '#0d0d0d', w: Math.round(lim(1, 30)) };
+    else if (f === 'fundoCor') tr.spec.fundoCor = v;
     else c[f] = v;
     edMudou_(id, repintaPainel, true);
     if (f === 't') { const h5 = document.querySelector('[data-ed-dyn="' + id + '"] .ed-props h5'); if (h5) h5.textContent = '✏️ Texto: ' + (c.rot || c.k); }
@@ -766,7 +854,7 @@
   function edMove_(e) {
     const d = EDT.drag; if (!d) return; const cv = document.querySelector('[data-ed-cv="' + d.id + '"]'), tr = vzTrab[d.id]; if (!cv || !tr) return;
     const c = tr.spec.camadas.find((q) => q.k === d.k); if (!c) return; const p = ptEd_(cv, e), W = cv.width, H = cv.height, st = edE_(d.id), esc = d.esc;
-    if (!d.moved) { if (Math.hypot(p.x - d.p0.x, p.y - d.p0.y) < 5 * esc) return; d.moved = true; }
+    if (!d.moved) { if (Math.hypot(p.x - d.p0.x, p.y - d.p0.y) < 5 * esc) return; d.moved = true; fotoMat_(d.id, c); }
     st.guia = null; st.dica = '';
     if (d.modo === 'mover') {
       let cx = d.b0.cx + (p.x - d.p0.x), cy = d.b0.cy + (p.y - d.p0.y);
@@ -803,7 +891,7 @@
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); return histIr_(id, e.shiftKey ? 1 : -1); }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); return histIr_(id, 1); }
     const c = edCam_(id); if (!c) return;
-    const passo = e.shiftKey ? 0.02 : 0.004; let usou = true;
+    const passo = e.shiftKey ? 0.02 : 0.004; let usou = true; if (c.tipo === 'foto' && e.key.indexOf('Arrow') === 0) fotoMat_(id, c);
     if (e.key === 'Delete' || e.key === 'Backspace') { vzTrab[id].spec.camadas = vzTrab[id].spec.camadas.filter((q) => q !== c); edE_(id).sel = ''; edMudou_(id, true); e.preventDefault(); return; }
     if (c.bloq) return;
     if (e.key === 'ArrowLeft') c.x = arred_(c.x - passo); else if (e.key === 'ArrowRight') c.x = arred_(c.x + passo); else if (e.key === 'ArrowUp') c.y = arred_(c.y - passo); else if (e.key === 'ArrowDown') c.y = arred_(c.y + passo); else usou = false;
@@ -848,6 +936,7 @@
       if (blob && blob.size > 2300000) blob = await tb('image/webp', 0.85);
       if (!blob) throw new Error('não consegui preparar a imagem');
       let src; try { src = await subirFixa_(blob); } catch (e) { if (blob.size <= 45000) src = await blobParaDataUrl_(blob); else throw e; }
+      if (/^https:\/\//.test(src)) elementosAdd_(src, (file.name || 'Elemento').replace(/\.[a-z0-9]+$/i, ''));
       const ratio = cw / ch, st = edE_(id); let c;
       if (troca) { c = edCam_(id); if (!c || c.tipo !== 'imagem') return; c.src = src; c.h = arred_(c.w / ratio); }
       else { const nk = edNovoK_(tr.spec, 'img'); c = { k: nk, tipo: 'imagem', rot: 'Imagem', src, fit: 'contain', x: 0.5, y: 0.5, w: arred_(ratio >= 1 ? 0.3 : 0.3 * ratio), h: arred_(ratio >= 1 ? 0.3 / ratio : 0.3) }; tr.spec.camadas.push(c); st.sel = nk; }
@@ -855,6 +944,7 @@
     } catch (e) { edDizer_(id, 'Não consegui enviar a imagem (' + ((e && e.message) || 'falha') + '). Tente uma imagem menor.'); }
   }
   function edAlinhar_(id, c, al) {
+    fotoMat_(id, c);
     const [W, H] = edTam_(id), b = caixaDaCamada_(c, W, H), cs = Math.abs(Math.cos(b.a)), sn = Math.abs(Math.sin(b.a)), bw = b.w * cs + b.h * sn, bh = b.w * sn + b.h * cs;
     if (al === 'l') c.x = arred_(bw / 2 / W); else if (al === 'r') c.x = arred_(1 - bw / 2 / W); else if (al === 'ch') c.x = 0.5;
     else if (al === 't') c.y = arred_(bh / 2 / H); else if (al === 'b') c.y = arred_(1 - bh / 2 / H); else if (al === 'cv') c.y = 0.5;
@@ -870,9 +960,25 @@
     if (a === 'al') { const c = edCam_(id); if (c) { edAlinhar_(id, c, b.dataset.al); edMudou_(id, false); } return; }
     if (a === 'addtxt') { const sel = document.querySelector('[data-ed-papel="' + id + '"]'), papel = sel ? sel.value : 'extra', def = PAPEIS.find((q) => q[0] === papel) || PAPEIS[0]; const nk = edNovoK_(tr.spec, papel); cams.push({ k: nk, tipo: 'texto', rot: def[1], papel: papel, t: def[2], x: 0.5, y: 0.5, w: 0.8, h: papel === 'nome' ? 0.15 : 0.1, tam: papel === 'preco' ? 90 : papel === 'nome' ? 66 : 44, cor: '#F5F1E8', peso: 'bold', al: 'center', linhas: papel === 'nome' ? 2 : 1, max: MAX_PADRAO[papel] || 60, sombra: true }); st.sel = nk; return edMudou_(id, true); }
     if (a === 'addforma') {
-      const fm = b.dataset.forma, ff = FORMAS_.find((q) => q[0] === fm) || FORMAS_[0], nk = edNovoK_(tr.spec, 'forma'), linha = fm === 'linha';
-      cams.push({ k: nk, tipo: 'forma', rot: ff[1], forma: fm, x: 0.5, y: 0.5, w: linha ? 0.5 : (fm === 'seta' ? 0.35 : 0.25), h: linha ? 0.006 : (fm === 'seta' ? 0.18 : 0.25), cor: fm === 'coracao' ? '#E74C3C' : fm === 'estrela' ? '#F39C12' : '#E67E22', raio: fm === 'ret' ? 24 : 0 }); st.sel = nk; return edMudou_(id, true);
+      const fm = b.dataset.forma, ff = FORMAS_.find((q) => q[0] === fm) || FORMAS_[0], nk = edNovoK_(tr.spec, 'forma'), linha = fm === 'linha', contorno = b.dataset.contorno === '1', larga = fm === 'caminhao' || fm === 'balao';
+      const cam = { k: nk, tipo: 'forma', rot: contorno ? 'Coração contorno' : ff[1], forma: fm, x: 0.5, y: 0.5, w: linha ? 0.5 : (fm === 'seta' ? 0.35 : larga ? 0.3 : 0.2), h: linha ? 0.006 : (fm === 'seta' ? 0.18 : larga ? 0.22 : (fm === 'pin' || fm === 'sacola' || fm === 'cabide') ? 0.24 : 0.2), cor: fm === 'estrela' || fm === 'faisca' ? '#F39C12' : '#E67E22', raio: fm === 'ret' ? 24 : 0 };
+      if (contorno) { cam.cor = 'rgba(0,0,0,0)'; cam.borda = { cor: '#E67E22', w: 10 }; } cams.push(cam); st.sel = nk; return edMudou_(id, true);
     }
+    if (a === 'addfoto') {
+      if (cams.some((q) => q.tipo === 'foto')) return; if (tr.spec.fundo === 'arte') { tr.spec.fundo = 'foto'; delete tr.spec.base; tr.nota = 'O desenho de fundo pronto foi trocado por cor lisa, porque a foto agora é um elemento.'; }
+      cams.unshift({ k: 'foto', tipo: 'foto', rot: 'Foto do produto', cheia: true, x: 0.5, y: 0.5, w: 1, h: 1.25, fit: 'cover', forma: 'ret', raio: 0 }); if (!tr.spec.fundoCor) tr.spec.fundoCor = '#F5F1E8'; st.sel = 'foto'; return edMudou_(id, true);
+    }
+    if (a === 'fotocheia') { const c = edCam_(id); if (c && c.tipo === 'foto') { c.cheia = true; c.x = 0.5; c.y = 0.5; c.w = 1; c.h = 1.25; delete c.giro; return edMudou_(id, true); } return; }
+    if (a === 'estilo') { const c = edCam_(id); if (c && c.tipo === 'texto') { aplicarEstilo_(c, b.dataset.est); return edMudou_(id, true); } return; }
+    if (a === 'addfrase') {
+      const sel = document.querySelector('[data-ed-frase="' + id + '"]'), fr = FRASES_MARCA_[Number(sel ? sel.value : 0)] || FRASES_MARCA_[0], nk = edNovoK_(tr.spec, 'frase');
+      const c = { k: nk, tipo: 'texto', rot: fr[0].slice(0, 28), papel: 'extra', t: fr[1], x: 0.5, y: 0.5, w: 0.8, h: 0.1, tam: 52, cor: '#F5F1E8', peso: 'bold', al: 'center', linhas: 2, max: 80, sombra: true }; aplicarEstilo_(c, fr[2]); if (fr[2] === 'selo') { c.w = 0.4; c.h = 0.06; c.linhas = 1; c.sombra = false; c.cor = '#0d0d0d'; } cams.push(c); st.sel = nk; return edMudou_(id, true);
+    }
+    if (a === 'addlib') {
+      const q = elementosLib_()[Number(b.dataset.i)]; if (!q) return;
+      carregarImagem(q.url).then((im) => { const ratio = (im.width || 1) / (im.height || 1), nk = edNovoK_(tr.spec, 'img'); cams.push({ k: nk, tipo: 'imagem', rot: q.nome || 'Elemento', src: q.url, fit: 'contain', x: 0.5, y: 0.5, w: arred_(ratio >= 1 ? 0.3 : 0.3 * ratio), h: arred_(ratio >= 1 ? 0.3 / ratio : 0.3) }); st.sel = nk; edMudou_(id, true); }).catch(() => edDizer_(id, 'Não consegui abrir essa imagem. Ela pode ter sido apagada.')); return;
+    }
+    if (a === 'dellib') { const l = elementosLib_(); l.splice(Number(b.dataset.i), 1); gravarJ_(ELEM_KEY, l); return edPainel_(id); }
     if (a === 'addlogo') {
       const nk = edNovoK_(tr.spec, 'logo'); cams.push({ k: nk, tipo: 'imagem', rot: 'Logo da loja', src: new URL('logo-mark.png', location.href).href, fit: 'contain', x: 0.88, y: 0.07, w: 0.16, h: 0.16 }); st.sel = nk; return edMudou_(id, true);
     }
@@ -880,8 +986,9 @@
     if (i < 0 && a !== 'tam-' && a !== 'tam+') return;
     if (a === 'espoff') { delete cams[i].esp; return edMudou_(id, true); }
     if (a === 'lock') { if (cams[i].bloq) delete cams[i].bloq; else cams[i].bloq = true; return edMudou_(id, true); }
+    if (cams[i] && cams[i].tipo === 'foto' && (a === 'up' || a === 'down' || a === 'dupcam')) return;
     if (a === 'up' && i < cams.length - 1) { const t = cams[i]; cams[i] = cams[i + 1]; cams[i + 1] = t; return edMudou_(id, true); }
-    if (a === 'down' && i > 0) { const t = cams[i]; cams[i] = cams[i - 1]; cams[i - 1] = t; return edMudou_(id, true); }
+    if (a === 'down' && i > 0 && cams[i - 1].tipo !== 'foto') { const t = cams[i]; cams[i] = cams[i - 1]; cams[i - 1] = t; return edMudou_(id, true); }
     if (a === 'vis') { if (cams[i].oculto) delete cams[i].oculto; else cams[i].oculto = true; return edMudou_(id, true); }
     if (a === 'dupcam') { const cp = JSON.parse(JSON.stringify(cams[i])); delete cp.bloq; cp.k = edNovoK_(tr.spec, cp.k.replace(/\d+$/, '')); cp.x = arred_(cp.x + 0.03); cp.y = arred_(cp.y + 0.02); cams.splice(i + 1, 0, cp); st.sel = cp.k; return edMudou_(id, true); }
     if (a === 'delcam') { cams.splice(i, 1); if (st.sel === k) st.sel = ''; return edMudou_(id, true); }
@@ -923,7 +1030,7 @@
   function htmlConfigVisuais_() {
     const c = lerCfgVis_(), todos = todosVisuais_();
     const tipos = [['feed', 'Feed'], ['carrossel', 'Carrossel'], ['story', 'Story']];
-    let h = '<style>.po-vz{border:1px solid #ddd;border-radius:12px;margin:0 0 8px;background:#fff}.po-vz>summary{padding:12px;font-weight:800;cursor:pointer;min-height:44px}.po-vz-corpo{padding:0 12px 12px}.po-vz-l{display:block;font-weight:700;font-size:.85rem;margin:8px 0}.po-vz-l input{display:block;width:100%;margin-top:4px}.po-vz-f{display:grid;grid-template-columns:1fr;gap:4px;border-top:1px solid #eee;padding:8px 0}.po-vz-f label{font-size:.75rem;display:inline-flex;gap:4px;align-items:center}.po-vz-f input[type=number]{width:70px}.po-vz-add,.po-vz-acoes{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.po-vz button{width:auto;min-height:40px;padding:6px 12px}.po-vz-ok{background:#E67E22;color:#0d0d0d;font-weight:800}.ed-cv{display:block;width:86%;margin:8px auto;border-radius:12px;border:1px solid #ccc;background:#eee;touch-action:none;cursor:crosshair}.ed-cv:focus-visible{outline:3px solid #A85200}.ed-fmt,.ed-add{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.ed-fmt button[aria-pressed=true]{background:#E67E22;color:#0d0d0d;font-weight:800}.ed-camadas{margin:8px 0}.ed-cam{display:block;border:1px solid #ddd;border-radius:10px;padding:6px;margin:6px 0;background:#fff}.ed-cam.sel{border-color:#E67E22;background:#FFF8F0}.ed-cam-b{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.ed-cam-b button{width:auto!important;flex:1 1 auto;min-width:0;min-height:36px;padding:4px 2px;font-size:.7rem;white-space:nowrap}.ed-cam.sel .ed-cam-n{border-color:#E67E22;background:#FFF3E6;font-weight:800}.ed-cam-n{display:block;text-align:left;border:1px solid #ccc;border-radius:8px;background:#fff;min-height:40px;width:100%;white-space:normal;word-break:break-word}.ed-props{border:1px solid #E67E22;border-radius:12px;padding:8px 10px;margin:8px 0;background:#fffaf5}.ed-props h5{margin:0 0 6px}.ed-lin{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin:4px 0}.ed-c{display:flex;flex-direction:column;font-size:.75rem;font-weight:700;gap:2px;flex:1 1 90px}.ed-c input,.ed-c select{width:100%;min-height:40px}.ed-chk{display:flex;gap:6px;align-items:center;min-height:40px;font-size:.8rem;font-weight:700}.ed-props input[type=color]{padding:2px;height:40px}.ed-wrap{margin:6px 0}.ed-barra{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}.ed-barra button{min-height:44px;min-width:44px;padding:6px 10px;font-weight:700}.ed-barra button[disabled]{opacity:.4}.ed-barra button[aria-pressed=true]:not(.ed-fmt button){background:#FFF3E6;border-color:#E67E22}.ed-sv{margin-left:auto;display:none!important;background:#fff}.ed-wrap.full .ed-sv{display:inline-flex!important;align-items:center}.ed-wrap.full .ed-sv+.ed-tela{margin-left:0}.ed-wrap.full .ed-fmt .x{display:none}.ed-tela{margin-left:auto;background:#E67E22;color:#0d0d0d;font-weight:800}.ed-area{display:block}.ed-dock{display:none}.ed-rapido{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0}.ed-wrap .ed-q{flex:1 1 46px;min-width:46px;min-height:50px;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:2px 4px!important;line-height:1.1}.ed-wrap .ed-q b{font-size:1.15rem}.ed-wrap .ed-q span{font-size:.62rem;font-weight:700}.ed-mais{margin:6px 0}.ed-mais-s{font-weight:800;cursor:pointer;min-height:44px;display:flex;align-items:center}.ed-addbox{border:1px solid #ddd;border-radius:10px;padding:0 8px;margin:8px 0;background:#fff}.ed-addbox>summary{font-weight:800;cursor:pointer;min-height:44px;display:flex;align-items:center}.ed-wrap .ed-arq{display:inline-flex;align-items:center;min-height:44px;padding:6px 12px;border:1px solid #ccc;border-radius:8px;background:#fff;font-weight:700;cursor:pointer}.ed-alinhar{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin:6px 0}.ed-alinhar span{font-size:.75rem;font-weight:700;margin-right:4px}.ed-alinhar button{min-width:44px;min-height:44px;padding:2px 6px;font-size:1.1rem}.ed-wrap .ed-pill{display:inline-flex!important;align-items:center;gap:4px;flex:0 0 auto;width:auto!important;min-height:44px;padding:4px 12px!important;border-radius:22px;white-space:nowrap;font-size:.8rem}.ed-wrap .ed-pill i{width:12px;height:12px;border-radius:50%;border:1px solid #888;display:inline-block}.ed-wrap .ed-pill.sel{background:#FFF3E6;border-color:#E67E22;font-weight:800}.ed-wrap .ed-pill.off{opacity:.5}.ed-wrap.full .ed-barra button{min-width:40px;padding:4px 9px;font-size:.8rem}.ed-wrap.full .ed-barra{gap:4px}.ed-wrap.full .ed-fmt button{padding:4px 8px}html.ed-travado,html.ed-travado body{overflow:hidden!important;overscroll-behavior:none}.ed-wrap.full{position:fixed;inset:0;z-index:100;margin:0;background:#1e1e1e;display:flex;flex-direction:column;overflow:hidden}.ed-wrap.full .ed-barra{flex:0 0 auto;margin:0;padding:6px 8px;background:#fff;border-bottom:1px solid #ddd}.ed-wrap.full .ed-area{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:8px;overflow:hidden}.ed-wrap.full .ed-cv{margin:0;border-radius:2px;border:0;max-width:none}.ed-wrap.full .ed-baixo{flex:0 1 auto;max-height:44dvh;overflow:auto;background:#fff;padding:6px 8px calc(8px + env(safe-area-inset-bottom));border-top:3px solid #E67E22}.ed-wrap.full .ed-dock{display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch}.ed-wrap.full .ed-camadas,.ed-wrap.full .ed-h-cam{display:none}.ed-wrap.full .ed-dica{font-size:.78rem;margin:2px 0}@media (min-width:900px){.ed-wrap:not(.full) .ed-dock{display:flex;gap:6px;flex-wrap:wrap}}</style>';
+    let h = '<style>.po-vz{border:1px solid #ddd;border-radius:12px;margin:0 0 8px;background:#fff}.po-vz>summary{padding:12px;font-weight:800;cursor:pointer;min-height:44px}.po-vz-corpo{padding:0 12px 12px}.po-vz-l{display:block;font-weight:700;font-size:.85rem;margin:8px 0}.po-vz-l input{display:block;width:100%;margin-top:4px}.po-vz-f{display:grid;grid-template-columns:1fr;gap:4px;border-top:1px solid #eee;padding:8px 0}.po-vz-f label{font-size:.75rem;display:inline-flex;gap:4px;align-items:center}.po-vz-f input[type=number]{width:70px}.po-vz-add,.po-vz-acoes{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.po-vz button{width:auto;min-height:40px;padding:6px 12px}.po-vz-ok{background:#E67E22;color:#0d0d0d;font-weight:800}.ed-cv{display:block;width:86%;margin:8px auto;border-radius:12px;border:1px solid #ccc;background:#eee;touch-action:none;cursor:crosshair}.ed-cv:focus-visible{outline:3px solid #A85200}.ed-fmt,.ed-add{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.ed-fmt button[aria-pressed=true]{background:#E67E22;color:#0d0d0d;font-weight:800}.ed-camadas{margin:8px 0}.ed-cam{display:block;border:1px solid #ddd;border-radius:10px;padding:6px;margin:6px 0;background:#fff}.ed-cam.sel{border-color:#E67E22;background:#FFF8F0}.ed-cam-b{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.ed-cam-b button{width:auto!important;flex:1 1 auto;min-width:0;min-height:36px;padding:4px 2px;font-size:.7rem;white-space:nowrap}.ed-cam.sel .ed-cam-n{border-color:#E67E22;background:#FFF3E6;font-weight:800}.ed-cam-n{display:block;text-align:left;border:1px solid #ccc;border-radius:8px;background:#fff;min-height:40px;width:100%;white-space:normal;word-break:break-word}.ed-props{border:1px solid #E67E22;border-radius:12px;padding:8px 10px;margin:8px 0;background:#fffaf5}.ed-props h5{margin:0 0 6px}.ed-lin{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin:4px 0}.ed-c{display:flex;flex-direction:column;font-size:.75rem;font-weight:700;gap:2px;flex:1 1 90px}.ed-c input,.ed-c select{width:100%;min-height:40px}.ed-chk{display:flex;gap:6px;align-items:center;min-height:40px;font-size:.8rem;font-weight:700}.ed-props input[type=color]{padding:2px;height:40px}.ed-wrap{margin:6px 0}.ed-barra{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}.ed-barra button{min-height:44px;min-width:44px;padding:6px 10px;font-weight:700}.ed-barra button[disabled]{opacity:.4}.ed-barra button[aria-pressed=true]:not(.ed-fmt button){background:#FFF3E6;border-color:#E67E22}.ed-cw{display:inline-flex;flex-direction:column;gap:4px}.ed-sw{display:flex;gap:4px;flex-wrap:wrap}.ed-swb{width:28px!important;min-width:28px!important;height:28px;min-height:28px!important;padding:0!important;border:2px solid #fff!important;border-radius:50%!important;box-shadow:0 0 0 1px #999}.ed-estilos{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0}.ed-estilos span{font-weight:700;font-size:.8rem}.ed-lib{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0}.ed-lib-i{position:relative;display:inline-block}.ed-lib-i>button:first-child{width:56px!important;height:56px;min-height:56px!important;padding:2px!important;background:#eee url() center;border:1px solid #ccc}.ed-lib-i img{max-width:100%;max-height:100%;object-fit:contain}.ed-lib-x{position:absolute;top:-6px;right:-6px;width:22px!important;min-width:22px!important;height:22px;min-height:22px!important;padding:0!important;border-radius:50%!important;line-height:1}.ed-sv{margin-left:auto;display:none!important;background:#fff}.ed-wrap.full .ed-sv{display:inline-flex!important;align-items:center}.ed-wrap.full .ed-sv+.ed-tela{margin-left:0}.ed-wrap.full .ed-fmt .x{display:none}.ed-tela{margin-left:auto;background:#E67E22;color:#0d0d0d;font-weight:800}.ed-area{display:block}.ed-dock{display:none}.ed-rapido{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0}.ed-wrap .ed-q{flex:1 1 46px;min-width:46px;min-height:50px;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:2px 4px!important;line-height:1.1}.ed-wrap .ed-q b{font-size:1.15rem}.ed-wrap .ed-q span{font-size:.62rem;font-weight:700}.ed-mais{margin:6px 0}.ed-mais-s{font-weight:800;cursor:pointer;min-height:44px;display:flex;align-items:center}.ed-addbox{border:1px solid #ddd;border-radius:10px;padding:0 8px;margin:8px 0;background:#fff}.ed-addbox>summary{font-weight:800;cursor:pointer;min-height:44px;display:flex;align-items:center}.ed-wrap .ed-arq{display:inline-flex;align-items:center;min-height:44px;padding:6px 12px;border:1px solid #ccc;border-radius:8px;background:#fff;font-weight:700;cursor:pointer}.ed-alinhar{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin:6px 0}.ed-alinhar span{font-size:.75rem;font-weight:700;margin-right:4px}.ed-alinhar button{min-width:44px;min-height:44px;padding:2px 6px;font-size:1.1rem}.ed-wrap .ed-pill{display:inline-flex!important;align-items:center;gap:4px;flex:0 0 auto;width:auto!important;min-height:44px;padding:4px 12px!important;border-radius:22px;white-space:nowrap;font-size:.8rem}.ed-wrap .ed-pill i{width:12px;height:12px;border-radius:50%;border:1px solid #888;display:inline-block}.ed-wrap .ed-pill.sel{background:#FFF3E6;border-color:#E67E22;font-weight:800}.ed-wrap .ed-pill.off{opacity:.5}.ed-wrap.full .ed-barra button{min-width:40px;padding:4px 9px;font-size:.8rem}.ed-wrap.full .ed-barra{gap:4px}.ed-wrap.full .ed-fmt button{padding:4px 8px}html.ed-travado,html.ed-travado body{overflow:hidden!important;overscroll-behavior:none}.ed-wrap.full{position:fixed;inset:0;z-index:100;margin:0;background:#1e1e1e;display:flex;flex-direction:column;overflow:hidden}.ed-wrap.full .ed-barra{flex:0 0 auto;margin:0;padding:6px 8px;background:#fff;border-bottom:1px solid #ddd}.ed-wrap.full .ed-area{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:8px;overflow:hidden}.ed-wrap.full .ed-cv{margin:0;border-radius:2px;border:0;max-width:none}.ed-wrap.full .ed-baixo{flex:0 1 auto;max-height:44dvh;overflow:auto;background:#fff;padding:6px 8px calc(8px + env(safe-area-inset-bottom));border-top:3px solid #E67E22}.ed-wrap.full .ed-dock{display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch}.ed-wrap.full .ed-camadas,.ed-wrap.full .ed-h-cam{display:none}.ed-wrap.full .ed-dica{font-size:.78rem;margin:2px 0}@media (min-width:900px){.ed-wrap:not(.full) .ed-dock{display:flex;gap:6px;flex-wrap:wrap}}</style>';
     h += '<div class="po-passo"><h4>Visuais de cada tipo</h4><p class="po-ajuda" style="margin-top:0">Toque num tipo para marcar quais visuais aparecem nele. Reels não usa visual. Vale para todos os aparelhos da equipe; sempre sobra pelo menos um.</p>';
     h += tipos.map((t) => { const ativos = Array.isArray(c[t[0]]) ? c[t[0]] : todos.map((x) => x[0]); return '<details class="po-vz" data-vz-det="t:' + t[0] + '"' + (vzAbertos['t:' + t[0]] ? ' open' : '') + '><summary>' + t[1] + ' <small>(' + todos.filter((v) => ativos.indexOf(v[0]) !== -1).length + ' de ' + todos.length + ')</small></summary><div class="po-vz-corpo">' + todos.map((v) => '<label style="display:flex;gap:8px;align-items:center;min-height:40px"><input type="checkbox" data-cv-tipo="' + t[0] + '" data-cv-id="' + esc(v[0]) + '"' + (ativos.indexOf(v[0]) !== -1 ? ' checked' : '') + '> ' + esc(v[1]) + '</label>').join('') + '</div></details>'; }).join('') + '</div>';
     h += '<div class="po-passo"><h4>Meus visuais e edição</h4><p class="po-ajuda" style="margin-top:0">Cada visual tem nome, texto do botão sem link e prévia ao vivo. Os visuais prontos podem ser duplicados para você editar campos e código; os seus podem ser alterados e excluídos.</p><div class="po-vz-acoes" style="margin-top:0"><button type="button" class="po-vz-ok" data-vza="novo">+ Novo visual</button></div>' + todos.map(htmlCardVisual_).join('') + '</div>';
@@ -953,6 +1060,7 @@
     corpo.addEventListener('pointerdown', edDown_); corpo.addEventListener('pointermove', edMove_); corpo.addEventListener('pointerup', edUp_); corpo.addEventListener('pointercancel', edUp_); corpo.addEventListener('keydown', edTecla_);
     corpo.addEventListener('change', (e) => { const t = e.target; if (t && t.dataset && t.dataset.edAmostra !== undefined) { edE_(t.dataset.edAmostra).amostra = t.value; edSyncCampos_(t.dataset.edAmostra); pintarEditor_(t.dataset.edAmostra); return; } if (t && t.dataset && t.dataset.edImg !== undefined) { const f = t.files && t.files[0]; t.value = ''; if (f) edImagem_(t.dataset.edImg, f, t.dataset.edTroca === '1'); } });
     corpo.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-ed-a]'); if (b) edAcao_(b); });
+    corpo.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-ed-sw]'); if (!b) return; const inp = b.closest('.ed-cw').querySelector('input[type=color]'); if (inp) { inp.value = b.dataset.edSw; inp.dispatchEvent(new Event('input', { bubbles: true })); } });
     corpo.addEventListener('change', (e) => { const t = e.target; if (t && t.dataset && t.dataset.edFundo !== undefined) { const tr = vzTrab[t.dataset.edFundo]; if (tr) { tr.spec.fundo = t.value; edMudou_(t.dataset.edFundo, false); } } });
     corpo.addEventListener('click', (e) => {
       const b = e.target.closest && e.target.closest('[data-vza]'); if (!b) return; const a = b.dataset.vza, id = b.dataset.id;
@@ -1283,7 +1391,13 @@
   }
   function itensTemplate(tpl, info, W, H) { return especTemplate(tpl, info, W, H).itens; }
   const _mc = document.createElement('canvas').getContext('2d');
-  function fonteDe(it, tam) { return (it.estilo ? it.estilo + ' ' : '') + (it.peso || 'bold') + ' ' + tam + 'px ' + (it.fonte || (it.peso === 'normal' ? FONTE_I : FONTE_T)); }
+  /** Tipografias da marca (Poppins/Inter) + 3 de apoio. `fam` = chave; o resto continua valendo. */
+  const FAMS = { poppins: '"Poppins","Inter",Arial,sans-serif', inter: '"Inter","Helvetica Neue",Arial,sans-serif', playfair: '"Playfair Display",Georgia,serif', dancing: '"Dancing Script","Brush Script MT",cursive', oswald: '"Oswald","Arial Narrow",Arial,sans-serif' };
+  const FAMS_ROT = [['', 'Padrão da marca'], ['poppins', 'Poppins (títulos)'], ['inter', 'Inter (texto corrido)'], ['playfair', 'Playfair (elegante)'], ['dancing', 'Dancing (manuscrita)'], ['oswald', 'Oswald (chamada)']];
+  const PESOS_ROT = [['normal', 'Normal'], ['500', 'Médio'], ['600', 'Semi-negrito'], ['bold', 'Negrito'], ['800', 'Extra-negrito']];
+  const temEsp_ = typeof CanvasRenderingContext2D !== 'undefined' && 'letterSpacing' in CanvasRenderingContext2D.prototype;
+  const espacoPx_ = (c, tam) => (Number(c.espac) || 0) / 100 * tam;
+  function fonteDe(it, tam) { return (it.estilo ? it.estilo + ' ' : '') + (it.peso || 'bold') + ' ' + tam + 'px ' + (FAMS[it.fam] || it.fonte || (it.peso === 'normal' ? FONTE_I : FONTE_T)); }
   /* ---------- v5.2: ARTES (visuais desenhados) ----------
    * Inspirados no PDF de referência do Pablo (só o estilo: arcos, painéis curvos, janela da foto, pílula de botão com ícone, ícones em círculo,
    * texto vertical, preço grande) — NENHUM texto do PDF é usado: tudo vem dos dados da peça (nome, preço, categoria, gênero, tamanhos, cores, código)
@@ -1549,13 +1663,15 @@
   const GUIA_CODIGO = [
     'GUIA PARA QUEM EDITAR ESTE CÓDIGO (pessoa ou IA). A chave "_guia" é só explicação: pode ficar ou sair, o sistema ignora.',
     'FORMATO: JSON válido (sem comentários, sem vírgula sobrando). Responda SEMPRE com o JSON inteiro, mantendo "camadas" e todos os "k".',
-    'TELA: imagem de 1080 px de largura. Feed = 1080x1350, Story = 1080x1920. A FOTO DA PEÇA fica sempre por baixo; as "camadas" são desenhadas por cima, na ordem da lista (a última fica na frente).',
+    'TELA: imagem de 1080 px de largura. Feed = 1080x1350, Story = 1080x1920. A FOTO DA PEÇA fica sempre por baixo (se existir a camada "foto", ela define o espaço da foto); as "camadas" são desenhadas por cima, na ordem da lista (a última fica na frente).',
     'COORDENADAS (frações): x = CENTRO na horizontal (0 esquerda, 0.5 meio, 1 direita); y = CENTRO na vertical (0 topo, 1 base); w = largura como fração da LARGURA da imagem; h = altura como fração da LARGURA (não da altura: assim a caixa mantém a proporção no Feed e no Story); giro = graus de -180 a 180, em volta do centro.',
     'camada tipo "texto": t = texto (aceita {nome} {avista} {cheio} {codigo} {tam} {cores} {cat} {gen}, que viram os dados da peça); tam = tamanho da letra em px (a letra encolhe sozinha, até 45%, se o texto não couber na caixa w x h); linhas = máximo de linhas; max = máximo de letras (passou disso vira "…"; 0 = sem limite); cor; peso "bold" ou "normal"; al "left", "center" ou "right"; bg = cor da caixa atrás do texto (opcional) e raio = canto arredondado em px; sombra true/false; opac de 0 a 1.',
     'esp (só em texto, opcional): estilo especial copiado dos visuais prontos, ex. {"big":true} = preço grande (R$ pequeno + número grande + ,centavos + "à vista"; o texto precisa começar com "R$ 99,90"), {"pill":true,"seta":true} = botão arredondado com ícone, {"chip":{"ic":"tam"}} = linha com ícone em círculo (ic: tam | cor | cat), {"track":0.2} = letras espaçadas, {"vert":true} = texto na vertical, {"stack":true} = nome em duas cores (usa cor e cor2); "up":true = tudo em MAIÚSCULAS. Nesses, a altura da caixa é calculada sozinha; mexa em w, tam e cor. Para texto comum, apague "esp".',
     'papel (só em texto, opcional): "preco" = quando a peça está marcada "Sem preço" o texto vira "Consulte valor"; "zona" = botão/zona do link do Story: sem link aparece o CTA configurado do visual (padrão www.tenkitermodas.com.br). Outros papéis (nome, codigo, tam, cores, cat, selo, extra) só definem o limite de letras padrão.',
-    'camada tipo "forma": forma = "ret" (retângulo, com raio de canto em px), "elipse" (círculo/oval), "linha" (traço fino, use h pequeno, ex. 0.005), "coracao", "estrela", "losango", "triangulo" ou "seta"; cor e, se quiser degradê de cima para baixo, cor2; borda = {"cor":"#fff","w":4}; opac; sombra true/false.',
+    'camada tipo "forma": forma = "ret" (retângulo, com raio de canto em px), "elipse" (círculo/oval), "linha" (traço fino, use h pequeno, ex. 0.005), "coracao", "estrela", "losango", "triangulo", "seta", "faisca" (brilho de 4 pontas), "pin" (local), "caminhao" (entrega), "sacola", "cabide" ou "balao"; cor e, se quiser degradê de cima para baixo, cor2; borda = {"cor":"#fff","w":4}; opac; sombra true/false.',
     'camada tipo "imagem" (logo, figurinha, selo — fica em posição fixa em toda postagem): src = endereço https:// da imagem (NUNCA invente um endereço: copie um que já esteja no código; novas imagens só pelo botão “Imagem / logo” do editor); fit = "contain" (inteira, padrão) ou "cover" (preenche e corta); flip true espelha; raio = canto arredondado em px; sombra; opac; giro. w e h seguem a mesma regra das outras camadas.',
+    'camada tipo "foto" (opcional, no máximo UMA, sempre a mais ao fundo — o sistema a mantém no começo da lista): é a foto do produto como elemento. x,y,w,h definem o espaço que ela ocupa; "cheia": true = ocupa a tela toda (Feed e Story); fit "cover" (corta para preencher) ou "contain"; forma "ret" | "elipse" | "arco"; raio, borda, sombra. O que fica ATRÁS da foto é a cor "fundoCor" do visual (ex. "#F5F1E8"). Nenhuma outra camada fica atrás da foto. Não combina com fundo "arte".',
+    'texto, tipografia e estilo: fam = "poppins" (títulos) | "inter" (texto corrido) | "playfair" (elegante) | "dancing" (manuscrita) | "oswald" (chamada); peso = "normal" | "500" | "600" | "bold" | "800"; estilo = "italic"; caixa = "alta" (MAIÚSCULAS); espac = espaço entre letras em centésimos de letra (0 a 30); contorno = {"cor":"#0d0d0d","w":4}.',
     'bloq: true (em qualquer camada) = travada: não se move ao arrastar no editor (boa para logo e figuras fixas). Não muda o desenho final.',
     'fundo = efeito escuro/colorido sobre a foto: foto (nenhum) | baixo | baixo-leve | ambos | topo | baixo-dir | direita | rodape | energia. Para os visuais prontos desenhados, fundo "arte" exige "base" com o id do visual (ex. "classico").',
     'LIMITES PADRÃO DE LETRAS por papel: nome 40, preco 16, codigo 20, tam 30, cores 30, cat 32, zona 26, selo 16, extra 60. Pode mudar em cada camada ("max").',
@@ -1563,22 +1679,23 @@
     'MARCA: laranja #E67E22, bege #F5F1E8, cinza #2C2C2C, ouro #F39C12. Fundo laranja SEMPRE com letra preta (#0d0d0d), nunca branca. Texto sobre foto precisa de contraste (use sombra true ou uma forma escura atrás).',
     'DICA: no Story, o rodapé (cerca de 12% de baixo) fica sob a barra de resposta do Instagram: evite texto importante com y acima de 0.92.'
   ];
-  function caixaDaCamada_(c, W, H) { return { cx: (Number(c.x) || 0) * W, cy: (Number(c.y) || 0) * H, w: Math.max(4, (Number(c.w) || 0.2) * W), h: Math.max(4, (Number(c.h) || 0.1) * W), a: (Number(c.giro) || 0) * Math.PI / 180 }; }
+  function caixaDaCamada_(c, W, H) { if (c && c.tipo === 'foto' && c.cheia) return { cx: W / 2, cy: H / 2, w: W, h: H, a: 0 }; return { cx: (Number(c.x) || 0) * W, cy: (Number(c.y) || 0) * H, w: Math.max(4, (Number(c.w) || 0.2) * W), h: Math.max(4, (Number(c.h) || 0.1) * W), a: (Number(c.giro) || 0) * Math.PI / 180 }; }
   function medirTextoCamada_(c, bw, bh) {
-    const txt = String(c.t == null ? '' : c.t).trim(); if (!txt) return null;
+    let txt = String(c.t == null ? '' : c.t).trim(); if (!txt) return null; if (c.caixa === 'alta') txt = txt.toUpperCase();
     const base = Math.max(10, Math.round((Number(c.tam) || 40) * (c.mult || 1))), pad = c.bg ? Math.round(base * 0.35) : 0, livre = Math.max(20, bw - pad * 2), maxL = Math.max(1, Math.min(8, Number(c.linhas) || 1));
     let tam = base, linhas;
     for (;;) {
-      _mc.font = fonteDe(c, tam); linhas = quebrar(_mc, txt, livre, maxL);
+      _mc.font = fonteDe(c, tam); if (temEsp_) _mc.letterSpacing = espacoPx_(c, tam) + 'px'; linhas = quebrar(_mc, txt, livre, maxL);
       const lw = Math.max.apply(null, linhas.map((l) => _mc.measureText(l).width)), cortou = linhas.join(' ').replace(/\s+/g, ' ') !== txt.replace(/\s+/g, ' ');
       if ((lw <= livre + 0.5 && !cortou && linhas.length * tam * 1.18 <= bh - pad * 2 + 0.5) || tam <= Math.max(10, base * 0.45)) break;
       tam = Math.max(10, Math.floor(tam * 0.94));
     }
+    if (temEsp_) _mc.letterSpacing = '0px';
     return { tam, linhas, lh: tam * 1.18, pad };
   }
   function layoutCamadas(spec, W, H, ov) {
     const out = [];
-    (spec.camadas || []).forEach((c) => {
+    (spec.camadas || []).slice().sort((a, b) => (b && b.tipo === 'foto' ? 1 : 0) - (a && a.tipo === 'foto' ? 1 : 0)).forEach((c) => {
       if (!c || c.oculto) return;
       const b = caixaDaCamada_(c, W, H), o = ov && ov[c.k], cx = o ? o.x * W : b.cx, cy = o ? o.y * H : b.cy;
       let m = null, espIt = null, bw = b.w, bh = b.h;
@@ -1597,7 +1714,7 @@
       const caminho = () => caminhoForma_(ctx, it.forma, w, h, rad);
       let fill = it.cor || '#E67E22'; if (it.cor2) { const g = ctx.createLinearGradient(0, -h / 2, 0, h / 2); g.addColorStop(0, fill); g.addColorStop(1, it.cor2); fill = g; }
       if (it.sombra) { ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8; }
-      ctx.fillStyle = fill; caminho(); ctx.fill(); ctx.shadowColor = 'transparent';
+      ctx.fillStyle = fill; caminho(); ctx.fill('evenodd'); ctx.shadowColor = 'transparent';
       if (it.borda && Number(it.borda.w) > 0) { ctx.strokeStyle = it.borda.cor || '#fff'; ctx.lineWidth = Number(it.borda.w); caminho(); ctx.stroke(); }
     } else if (it.tipo === 'imagem') {
       const im = imgCam_(it.src);
@@ -1615,14 +1732,15 @@
     } else {
       const m = it.m;
       if (it.bg) { ctx.fillStyle = it.bg; caixaArredondada(ctx, -w / 2, -h / 2, w / 2, h / 2, rad); ctx.fill(); }
-      ctx.font = fonteDe(it, m.tam); ctx.textBaseline = 'middle'; ctx.fillStyle = it.cor || '#fff';
+      ctx.font = fonteDe(it, m.tam); ctx.textBaseline = 'middle'; ctx.fillStyle = it.cor || '#fff'; if (temEsp_) ctx.letterSpacing = espacoPx_(it, m.tam) + 'px';
       if (it.sombra) { ctx.shadowColor = 'rgba(0,0,0,.65)'; ctx.shadowBlur = Math.round(m.tam * 0.18); ctx.shadowOffsetY = Math.round(m.tam * 0.05); }
       const ta = it.al === 'left' || it.al === 'right' ? it.al : 'center'; ctx.textAlign = ta;
       const tx = ta === 'left' ? -w / 2 + m.pad : ta === 'right' ? w / 2 - m.pad : 0, total = m.linhas.length * m.lh;
-      m.linhas.forEach((l, i) => ctx.fillText(l, tx, -total / 2 + m.lh * (i + 0.5)));
+      m.linhas.forEach((l, i) => { const yy = -total / 2 + m.lh * (i + 0.5); if (it.contorno && Number(it.contorno.w) > 0) { ctx.save(); ctx.shadowColor = 'transparent'; ctx.lineJoin = 'round'; ctx.lineWidth = Number(it.contorno.w) * 2; ctx.strokeStyle = it.contorno.cor || '#0d0d0d'; ctx.strokeText(l, tx, yy); ctx.restore(); } ctx.fillText(l, tx, yy); });
+      if (temEsp_) ctx.letterSpacing = '0px';
     }
     ctx.restore();
-    if (it.tipo === 'forma' || it.tipo === 'imagem') return null;
+    if (it.tipo === 'forma' || it.tipo === 'imagem' || it.tipo === 'foto') return null;
     const cs = Math.abs(Math.cos(b.a)), sn = Math.abs(Math.sin(b.a)), bw = w * cs + h * sn, bh = w * sn + h * cs;
     return { k: it.k, x0: b.cx - bw / 2, y0: b.cy - bh / 2, x1: b.cx + bw / 2, y1: b.cy + bh / 2 };
   }
@@ -1679,7 +1797,7 @@
     const novosIt = spec.itens.map((it) => { let t = oc[it.k] ? '' : (tx[it.k] !== undefined ? tx[it.k] : it.t); const mx = Number(it.max) || 0; if (spec.camadas && mx > 0 && String(t).length > mx) t = String(t).slice(0, Math.max(1, mx - 1)).trim() + '…'; return Object.assign({}, it, { t: t, mult: tm[it.k] || 1 }); });
     if (spec.camadas) { const mp = {}; novosIt.forEach((n) => { mp[n.k] = n; }); spec.camadas = spec.camadas.map((c) => (c.tipo === 'texto' && mp[c.k] ? mp[c.k] : c)); }
     spec.itens = novosIt;
-    return { tpl: tpl, fundo: spec.fundo, arteBase: spec.base, lista: layoutItens(spec, W, H, ps) };
+    return { tpl: tpl, fundo: spec.fundo, arteBase: spec.base, bgCor: spec.fundoCor, lista: layoutItens(spec, W, H, ps) };
   }
   function caixaArredondada(ctx, x0, y0, x1, y1, r) { r = Math.min(r, (x1 - x0) / 2, (y1 - y0) / 2); ctx.beginPath(); ctx.moveTo(x0 + r, y0); ctx.arcTo(x1, y0, x1, y1, r); ctx.arcTo(x1, y1, x0, y1, r); ctx.arcTo(x0, y1, x0, y0, r); ctx.arcTo(x0, y0, x1, y0, r); ctx.closePath(); }
   function desenharItem(ctx, it, W, H) {
@@ -1738,27 +1856,52 @@
   }
   function degrade(ctx, W, y0, y1, a0, a1, cor) { const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + (cor || '0,0,0') + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + (cor || '0,0,0') + ',' + a1 + ')'); ctx.fillStyle = g; ctx.fillRect(0, Math.min(y0, y1), W, Math.abs(y1 - y0)); }
   /** Desenha a foto + fundo do visual + itens; devolve as caixas dos textos (para arrastar). */
-  function desenharTemplate(ctx, img, W, H, tpl, ef, ajuste) {
+  /** Foto do produto como ELEMENTO: ocupa o retângulo/forma que a pessoa definiu (sempre a camada mais ao fundo). */
+  function desenharFotoCam_(ctx, it, img, opc, overlay) {
+    const b = it.cb, w = b.w, h = b.h, rad = Math.max(0, Number(it.raio) || 0), m = (opc && opc.m) || {}, modo = (opc && opc.ajuste) || 'preencher', zoom = Number(m.zoom) || 1;
+    const caminho = () => {
+      if (it.forma === 'elipse') { ctx.beginPath(); ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2); }
+      else if (it.forma === 'arco') { const r = Math.min(w / 2, h); ctx.beginPath(); ctx.moveTo(-w / 2, h / 2); ctx.lineTo(-w / 2, -h / 2 + r); ctx.arc(0, -h / 2 + r, w / 2, Math.PI, 0); ctx.lineTo(w / 2, h / 2); ctx.closePath(); }
+      else caixaArredondada(ctx, -w / 2, -h / 2, w / 2, h / 2, rad);
+    };
+    if (it.sombra) { ctx.save(); ctx.translate(b.cx, b.cy); ctx.rotate(b.a); ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10; ctx.fillStyle = '#fff'; caminho(); ctx.fill(); ctx.restore(); }
+    ctx.save(); ctx.translate(b.cx, b.cy); ctx.rotate(b.a); caminho(); ctx.clip();
+    if (modo === 'margem') { ctx.fillStyle = (opc && opc.margemCor) || '#ffffff'; ctx.fillRect(-w / 2, -h / 2, w, h); }
+    else if (modo === 'inteira' || it.fit === 'contain') ctx.drawImage(fundoDesfocado(img, Math.max(2, Math.round(w)), Math.max(2, Math.round(h))), -w / 2, -h / 2, w, h);
+    const r = ((modo === 'inteira' || modo === 'margem' || it.fit === 'contain') ? Math.min(w / img.width, h / img.height) : Math.max(w / img.width, h / img.height)) * zoom, iw = img.width * r, ih = img.height * r;
+    ctx.drawImage(img, -iw / 2 + (Number(m.fx) || 0) * w, -ih / 2 + (Number(m.fy) || 0) * h, iw, ih);
+    ctx.rotate(-b.a); ctx.translate(-b.cx, -b.cy); if (overlay) overlay();
+    ctx.restore();
+    if (it.borda && Number(it.borda.w) > 0) { ctx.save(); ctx.translate(b.cx, b.cy); ctx.rotate(b.a); ctx.strokeStyle = it.borda.cor || '#fff'; ctx.lineWidth = Number(it.borda.w); caminho(); ctx.stroke(); ctx.restore(); }
+  }
+  /** Desenha a foto + fundo do visual + itens; devolve as caixas dos textos (para arrastar). `fotoOpc` = {m, ajuste, margemCor} quando o visual tem a foto como elemento. */
+  function desenharTemplate(ctx, img, W, H, tpl, ef, ajuste, fotoOpc) {
     ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H);
-    const fundo = ef && ef.fundo ? ef.fundo : 'foto';
-    if (tpl === 'original' || tpl === 'elausa') fundoFoto(ctx, img, W, H, ajuste); else if (fundo === 'arte') desenharArte(ctx, img, W, H, (ef && ef.arteBase) || tpl, ajuste); else cobrir(ctx, img, 0, 0, W, H);
-    if (fundo === 'baixo') degrade(ctx, W, H * 0.5, H, 0, 0.88);
-    else if (fundo === 'baixo-leve') degrade(ctx, W, H * 0.7, H, 0, 0.45);
-    else if (fundo === 'ambos') { degrade(ctx, W, H * 0.42, 0, 0, 0.7); degrade(ctx, W, H * 0.58, H, 0, 0.82); }
-    else if (fundo === 'topo') { degrade(ctx, W, H * 0.5, 0, 0, 0.85); }
-    else if (fundo === 'baixo-dir') { degrade(ctx, W, H * 0.5, H, 0, 0.82); const g = ctx.createLinearGradient(W * 0.3, 0, W, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.4)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
-    else if (fundo === 'direita') { const g = ctx.createLinearGradient(W * 0.35, 0, W, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.78)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); degrade(ctx, W, H * 0.8, H, 0, 0.5); }
-    else if (fundo === 'rodape') { ctx.fillStyle = CINZA; ctx.fillRect(0, H * 0.75, W, H * 0.25); }
-    else if (fundo === 'energia') { ctx.fillStyle = LARANJA; ctx.fillRect(0, H * 0.8, W, H * 0.2); }
+    const fundo = ef && ef.fundo ? ef.fundo : 'foto', temFotoCam = !!(ef && ef.lista && ef.lista.some((q) => q.tipo === 'foto' && q.camada));
+    const overlay = () => {
+      if (fundo === 'baixo') degrade(ctx, W, H * 0.5, H, 0, 0.88);
+      else if (fundo === 'baixo-leve') degrade(ctx, W, H * 0.7, H, 0, 0.45);
+      else if (fundo === 'ambos') { degrade(ctx, W, H * 0.42, 0, 0, 0.7); degrade(ctx, W, H * 0.58, H, 0, 0.82); }
+      else if (fundo === 'topo') { degrade(ctx, W, H * 0.5, 0, 0, 0.85); }
+      else if (fundo === 'baixo-dir') { degrade(ctx, W, H * 0.5, H, 0, 0.82); const g = ctx.createLinearGradient(W * 0.3, 0, W, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.4)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
+      else if (fundo === 'direita') { const g = ctx.createLinearGradient(W * 0.35, 0, W, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.78)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); degrade(ctx, W, H * 0.8, H, 0, 0.5); }
+      else if (fundo === 'rodape') { ctx.fillStyle = CINZA; ctx.fillRect(0, H * 0.75, W, H * 0.25); }
+      else if (fundo === 'energia') { ctx.fillStyle = LARANJA; ctx.fillRect(0, H * 0.8, W, H * 0.2); }
+    };
+    if (temFotoCam) { ctx.fillStyle = (ef && ef.bgCor) || '#F5F1E8'; ctx.fillRect(0, 0, W, H); }
+    else {
+      if (tpl === 'original' || tpl === 'elausa') fundoFoto(ctx, img, W, H, ajuste); else if (fundo === 'arte') desenharArte(ctx, img, W, H, (ef && ef.arteBase) || tpl, ajuste); else cobrir(ctx, img, 0, 0, W, H);
+      overlay();
+    }
     const caixas = [];
     ((ef && ef.lista) || []).forEach((it) => {
       if (it.deco === 'caixa') { ctx.save(); if (it.cx.sombra) { ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 8; } ctx.fillStyle = it.cx.cor; caixaArredondada(ctx, it.x0, it.y0, it.x1, it.y1, it.cx.r); ctx.fill(); ctx.restore(); }
     });
-    ((ef && ef.lista) || []).forEach((it) => { if (!it.deco) { const bx = desenharItem(ctx, it, W, H); if (bx) caixas.push(bx); } });
+    ((ef && ef.lista) || []).forEach((it) => { if (it.deco) return; if (it.tipo === 'foto' && it.camada) { desenharFotoCam_(ctx, it, img, fotoOpc, overlay); return; } const bx = desenharItem(ctx, it, W, H); if (bx) caixas.push(bx); });
     return caixas;
   }
   function tamanhoAlvo() { return nova.tipo === 'story' ? [1080, 1920] : [1080, 1350]; }
-  async function carregarFontes_() { try { await Promise.all(['700 40px Poppins', '800 40px Poppins', '400 30px Inter', '700 30px Inter'].map((f) => document.fonts.load(f))); } catch (e) { /* sem fonte da loja: usa a do aparelho */ } }
+  async function carregarFontes_() { try { await Promise.all(['700 40px Poppins', '800 40px Poppins', '400 30px Inter', '700 30px Inter', '700 40px "Playfair Display"', 'italic 700 40px "Playfair Display"', '700 40px "Dancing Script"', '700 40px Oswald'].map((f) => document.fonts.load(f))); } catch (e) { /* sem fonte da loja: usa a do aparelho */ } }
   const imgCache = {};
   async function imagemCache(url) { if (!imgCache[url]) imgCache[url] = carregarImagem(url).catch((e) => { delete imgCache[url]; throw e; }); return imgCache[url]; }
   function itensDaPostagem() { return nova.modoLivre || nova.modoCli ? nova.livre : nova.midias.filter((m) => m.sel); }
@@ -1767,7 +1910,9 @@
   function pintarCanvas(c) {
     const m = c._m, [W, H] = tamanhoAlvo(); c.width = W; c.height = H;
     const x = c.getContext('2d');
-    c._boxes = desenharTemplate(x, compor(c._img, W, H, m), W, H, nova.template, itensEfetivos(nova.template, m), 'preencher');
+    const ef = itensEfetivos(nova.template, m), fotoEl = ef.lista.some((q) => q.tipo === 'foto' && q.camada);
+    if (fotoEl) limitesFoto_(m);
+    c._boxes = desenharTemplate(x, fotoEl ? c._img : compor(c._img, W, H, m), W, H, nova.template, ef, 'preencher', fotoEl ? { m, ajuste: nova.ajuste, margemCor: nova.margemCor } : null);
     if (nova.tipo === 'story' && nova.manual && (nova.template === 'original' || nova.template === 'elausa')) {     // só na prévia: reserva o lugar do botão de link que será colocado no Instagram
       x.save(); x.setLineDash([14, 10]); x.lineWidth = 4; x.strokeStyle = 'rgba(255,255,255,.95)'; x.fillStyle = 'rgba(0,0,0,.35)';
       const bw = W * 0.56, bh = H * 0.05, bx = (W - bw) / 2, by = H * 0.655; x.fillRect(bx, by, bw, bh); x.strokeRect(bx, by, bw, bh);
@@ -1870,7 +2015,8 @@
     const [W, H] = tamanhoAlvo(), c = document.createElement('canvas'); c.width = W; c.height = H;
     try {
       await carregarFontes_(); await precarregarImgs_();
-      const img = await imagemCache(m.url); desenharTemplate(c.getContext('2d'), compor(img, W, H, m), W, H, nova.template, itensEfetivos(nova.template, m), 'preencher');
+      const img = await imagemCache(m.url), efF = itensEfetivos(nova.template, m), fotoEl = efF.lista.some((q) => q.tipo === 'foto' && q.camada); if (fotoEl) limitesFoto_(m);
+      desenharTemplate(c.getContext('2d'), fotoEl ? img : compor(img, W, H, m), W, H, nova.template, efF, 'preencher', fotoEl ? { m, ajuste: nova.ajuste, margemCor: nova.margemCor } : null);
       const blob = await blobDe(c); return { url: await subirBlob(blob, 'post.jpg'), tipo: 'imagem' };
     } catch (e) {
       if (nova.template === 'original' && /^https:\/\//.test(m.url) && /\.(jpe?g)(\?|$)/i.test(m.url)) return { url: m.url, tipo: 'imagem' };   // sem canvas: JPG original serve

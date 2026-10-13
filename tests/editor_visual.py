@@ -63,7 +63,7 @@ with sync_playwright() as p:
     chk("copiar guia para IA não quebra", pg.locator(C + " [data-ed-a=copiarIA]").count() == 1)
     pg.locator(C + " [data-vza=salvar]").click(); pg.wait_for_timeout(500)
     saved = pg.evaluate("JSON.parse(localStorage.getItem('tk_po_visuais_custom_v1')||'[]')[0].spec")
-    chk("salvar guarda o visual com as camadas", saved and len(saved["camadas"]) == 4 and saved["versao"] == 2)
+    chk("salvar guarda o visual com as camadas", saved and len(saved["camadas"]) == 5 and saved["versao"] == 2)
     print("== Usar na postagem: limite de letras, Sem preço, CTA ==")
     pg.click("[data-aba=nova]"); pg.wait_for_timeout(400)
     pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(900)

@@ -72,6 +72,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("editor_visual.py", lambda o: "FALHAS=0" in o),   # v5.5: editor visual sem código (camadas)
     ("editor_toque.py", lambda o: "FALHAS=0" in o),   # v5.7: editor no celular (dedo), tela cheia, imagens fixas, desfazer
     ("visual_v58.py", lambda o: "FALHAS=0" in o),   # v5.8: texto do editor vale, contador, rascunho, opções do botão, login tolerante
+    ("visual_v59.py", lambda o: "FALHAS=0" in o),   # v5.9: tipografia/estilos da marca, elementos da identidade, PNG do celular, foto como elemento no fundo
     ("excluir_avaliacao_lento.py", lambda o: "FALHAS=0" in o),   # v5.6: excluir sem travar, abertura lenta não vai ao login
     ("painel_v49.py", lambda o: "FALHAS=0" in o),
     ("equipe_catalogo1.py", lambda o: "FALHAS=0" in o),   # v4.9: perfil Equipe catálogo 1 (painel simplificado)   # v4.9: ferramentas no topo, Postagens fixa, miniatura amplia
