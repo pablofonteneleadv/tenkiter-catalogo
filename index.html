@@ -296,6 +296,11 @@ catch (e) { window.__precargaLista = null; }
   .barra-filtros-flut { position: fixed; left: 12px; right: 88px; bottom: 80px; z-index: 75; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(13,13,13,.92); color: #fff; border-radius: 12px; padding: 4px 4px 4px 12px; box-shadow: 0 2px 10px rgba(0,0,0,.25); font-size: .78rem; font-weight: 600; min-height: 36px; }
   .barra-filtros-flut span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .barra-filtros-flut[hidden] { display: none; }
+  .barra-filtros-flut.so-botao { right: auto; left: 12px; background: transparent; box-shadow: none; padding: 0; min-height: 0; }
+  .barra-filtros-flut.so-botao span { display: none; }
+  .barra-filtros-flut.so-botao button { background: #0d0d0d; color: #fff; border: 1px solid var(--laranja); font-weight: 700; box-shadow: 0 2px 10px rgba(0,0,0,.3); border-radius: 999px; padding: 6px 14px; }
+  .linha-share-busca { padding: 6px 0 0; } .linha-share-busca[hidden] { display: none; }
+  .linha-share-busca button { width: auto; min-height: 40px; padding: 6px 16px; border-radius: 999px; border: 1px solid #ccc; background: #fff; font-weight: 700; cursor: pointer; }
   .barra-filtros-flut button { width: auto; flex: none; min-height: 36px; padding: 4px 12px; border-radius: 9px; border: 0; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: .76rem; cursor: pointer; white-space: nowrap; }
   .aviso-selecao button { width: auto; min-height: 40px; padding: 8px 14px; border-radius: 999px; font-weight: 700; cursor: pointer; font-size: 0.82rem; }
 
@@ -485,6 +490,7 @@ catch (e) { window.__precargaLista = null; }
       <span aria-hidden="true">⚙️</span><span class="rot">Filtros</span><span class="badge-filtros" id="badge-filtros" hidden>0</span>
     </button>
   </div>
+  <div class="linha-share-busca" id="linha-share-busca" hidden><button type="button" id="btn-share-busca">🔗 Compartilhar seleção</button></div>
   <div class="filtros-extras" id="filtros-extras">
     <div class="linha-preco">
       <span>Preço:</span>
@@ -665,8 +671,10 @@ catch (e) { window.__precargaLista = null; }
     setTimeout(function () { registrarEvento('', '', 'visita', '', true); }, 900);
   })();
 
+  let modoLink_ = false;   // a pessoa entrou por um link de seleção (filtros/peças vindos do endereço)
   function lerFiltrosURL() {
     const params = new URLSearchParams(window.location.search);
+    modoLink_ = ['q', 'min', 'max', 'novidade', 'cat', 'gen', 'sel'].some((k) => params.has(k));
     if (params.has('q')) document.getElementById('busca').value = params.get('q');
     if (params.has('min')) document.getElementById('preco-min').value = params.get('min');
     if (params.has('max')) document.getElementById('preco-max').value = params.get('max');
@@ -1062,7 +1070,10 @@ catch (e) { window.__precargaLista = null; }
     const nFiltros = (bf && !bf.hidden ? (parseInt(bf.textContent, 10) || 0) : 0);
     const q = document.getElementById('busca').value.trim();
     const ativo = nFiltros > 0 || !!q || !!selecaoFixa || apenasFavoritos || apenasNovidades;
-    if (!ativo) { bar.hidden = true; return; }
+    const share = document.getElementById('linha-share-busca'); if (share) share.hidden = !ativo;
+    if (!ativo) { bar.hidden = true; modoLink_ = false; return; }
+    bar.classList.toggle('so-botao', modoLink_);
+    if (modoLink_) { document.getElementById('barra-filtros-txt').textContent = ''; document.getElementById('barra-filtros-limpar').textContent = 'Ver os outros produtos do site'; bar.hidden = false; return; }
     const n = listaFiltradaAtual.length;
     let t = selecaoFixa ? 'Seleção' : (n + (n === 1 ? ' peça' : ' peças'));
     if (!selecaoFixa && nFiltros) t += ' · ' + nFiltros + (nFiltros === 1 ? ' filtro' : ' filtros');
@@ -1071,9 +1082,17 @@ catch (e) { window.__precargaLista = null; }
     document.getElementById('barra-filtros-limpar').textContent = selecaoFixa ? '✕ Ver todas as peças' : 'Limpar filtros';
     bar.hidden = false;
   }
-  document.getElementById('barra-filtros-limpar').addEventListener('click', () => {
-    if (selecaoFixa) { selecaoFixa = null; aplicarFiltros(); } else document.getElementById('btn-limpar').click();
+  /** Sai dos filtros do link (ou limpa os filtros comuns) e mostra o site inteiro; sacola e favoritos da pessoa ficam como estão. */
+  document.getElementById('btn-share-busca').addEventListener('click', () => document.getElementById('btn-share-filtros').click());
+  function verTodoSite_() {
+    modoLink_ = false;
+    if (selecaoFixa) { selecaoFixa = null; }
+    document.getElementById('btn-limpar').click();
+    aplicarFiltros();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  document.getElementById('barra-filtros-limpar').addEventListener('click', () => {
+    verTodoSite_();
   });
 
   function mostrarVazio_(mensagem) {
@@ -1108,7 +1127,7 @@ catch (e) { window.__precargaLista = null; }
     box.hidden = false;
   }
   document.getElementById('aviso-selecao-todas').addEventListener('click', () => {
-    selecaoFixa = null; aplicarFiltros();
+    modoLink_ = false; selecaoFixa = null; aplicarFiltros();
     const m = document.querySelector('main'); if (m && m.scrollIntoView) m.scrollIntoView({ behavior: 'smooth' });
   });
 
