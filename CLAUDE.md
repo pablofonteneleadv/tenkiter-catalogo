@@ -536,7 +536,7 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 - **`TKOcupado`** (`nav.js`, todas as páginas): `var fim = TKOcupado.inicio(); … fim()`. Enquanto há gravação, `overscroll-behavior-y:contain` (puxar para recarregar não funciona) e `beforeunload` avisa. `submitResult` (treinamentos) o liga sozinho nas ações que gravam (`ACOES_GRAVAM_`) e tem **tempo limite** (35 s; 90 s nas lentas, `ACOES_LENTAS_`) devolvendo `{demorou:true}` em vez de ficar pendurado.
 - **Excluir avaliação**: a linha sai da tela assim que o servidor confirma; "já estava apagada" (`Não encontrei essa avaliação`) conta como feito; timeout = confere recarregando o relatório (`recarregarRelatorioSilencioso_`); clique duplo ignorado (`data-ocupado`).
 - **Abertura**: `restaurarSessaoServidor` devolve `'rede'` quando o servidor não responde (a sessão NÃO é apagada; só `sessaoInvalida/inativa` apaga) → tenta de novo 2× e mostra `telaSemConexao_` ("Tentar de novo" / "Entrar com outra conta"), nunca o login. Teste: `tests/excluir_avaliacao_lento.py`. Service worker `tk-3.9.0`.
-- **Pendente**: o mesmo padrão (tempo limite + `TKOcupado` + abertura tolerante) ainda não foi aplicado ao `admin.html` e ao `curriculos.html`.
+- **Pendente**: o mesmo padrão (tempo limite + `TKOcupado` + abertura tolerante) — `admin.html` feito na v5.8 (abertura); `curriculos.html` ainda não.
 
 ## v5.7 — Editor de visuais refeito para o celular: alças grandes, tela cheia, desfazer, formas e imagens fixas (`admin-postagens.js`, só front)
 
@@ -549,3 +549,14 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 - `GUIA_CODIGO`/`promptIA_` ganharam imagem, novas formas e `bloq` (IA nunca deve inventar `src`). `validarCamadas_` recusa `src` estranho (ex. `javascript:`) com frase.
 - **Ainda NÃO feito / limites**: gesto de pinça (2 dedos escala/gira) e múltipla seleção; testes de dedo usam toque simulado (CDP), **nunca testado num celular de verdade**; as alças que ficam fora da borda da imagem são cortadas pelo canvas (arraste o elemento para dentro).
 - **Testes**: `tests/editor_toque.py` (35: dedo via CDP, alça errada por ~18 px, ímã, trava, desfazer, formas, imagem, código↔visual, tela cheia + voltar, axe, coração vermelho no pixel da arte final); `tests/editor_visual.py` usa o gancho `window.__tkEdAlcas(id)` (posição das alças em px de tela). Service worker não mudou (admin nunca entra no cache).
+
+## v5.8 — Editor de visuais: edição que vale, contador de letras, rascunho, opções do botão (`admin-postagens.js` + `admin.html`, só front)
+
+- **Pedido do Pablo (13/10/2026, testando no celular)**: (1) texto do nome em 1 linha e fundo amarelo não aparecia no visual; (2) definir quantidade de letras com prévia ao vivo; (3) ao escolher um objeto a lista de elementos pulava para a esquerda; (4) "sai quando toca": perdeu a edição e foi desconectado; (5) **Zona do link com várias opções de texto**, quem monta escolhe, e a última opção é "usar o link no Instagram".
+- **Estilo especial (`esp`)**: texto copiado de visual pronto (preço grande, botão…) IGNORA caixa de fundo, linhas, alinhamento, peso e sombra. Agora mexer nesses campos remove o `esp` (vira texto comum) e avisa; botão "Virar texto comum" (`espoff`).
+- **Contador**: `contLetras_` + seletor "Exemplo na prévia" (curto/médio/longo, `st.amostra`, `infoAmostraDe_`) — a prévia usa o nome escolhido.
+- **Dock** (`edPainel_`) preserva `scrollLeft` e mantém o escolhido à vista.
+- **Rascunho**: `tk_po_rascunho_visuais_v1` (por visual; recuperado em `trabDe_` com aviso), "● não salvo", botões Salvar/Descartar, 💾 Salvar na barra da tela cheia, `TKOcupado` avisa ao sair com alteração não salva. `overscroll-behavior` no admin (puxar para recarregar não apaga mais).
+- **Login**: `iniciarAcessoCorpo_` não vai mais ao login quando `versao` volta `{}` (servidor lento/erro) ou a sessão não foi RECUSADA (só some com `sessaoInvalida/inativa`).
+- **Opções do botão**: `tk_po_cta_v1[visual]` agora aceita LISTA (até 8, 40 letras; texto antigo = lista de 1). Na montagem (`nova.ctaI`) aparece o grupo `input[name=po-cta]`: cada opção + (só Story) "🔗 Usar o link no Instagram" = `nova.manual`. Visual sem zona (Original/Ela usa) mantém a caixinha `#po-manual`.
+- Teste: `tests/visual_v58.py`; `postagens_admin.py` ajustado (radio no lugar da caixinha).

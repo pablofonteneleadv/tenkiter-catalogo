@@ -20,7 +20,7 @@
 <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
 <title>TENKiTER Modas — Painel do Atendente</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap">
-<style>
+<style>html,body{overscroll-behavior-y:none}
   :root { --preto: #0d0d0d; --laranja: #E67E22; --laranja-txt: #A85200; --ouro: #F39C12; --cinza: #F5F1E8; --branco: #ffffff; --verde: #198754; --vermelho: #c62828; --amarelo: #8a6200; }
   input, button, select, textarea { font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; }
   h1, h2, h3 { font-family: "Poppins", sans-serif; font-weight: 800; }
@@ -1035,8 +1035,8 @@
   async function iniciarAcessoCorpo_() {
     const pSessao = getSessao() ? conferirSessao() : null; // em paralelo com a versão: uma ida ao servidor a menos
     const v = await versaoServidor();
-    if (v === null) {
-      // sem internet agora: se já havia login, segue com o token guardado; senão, como sempre foi
+    if (v === null || (getSessao() && !v.acessos && !v.ok)) {
+      // sem internet (ou servidor lento/fora do ar) agora: se já havia login, segue com o token guardado; senão, como sempre foi
       const s = getSessao();
       if (s) { modoLogin = true; adminPin = s.sessao; document.getElementById('lbl-funcionario').textContent = funcionarioNome || s.whatsapp; document.getElementById('btn-trocar-user').style.display = 'none'; return; }
       return usarPinAntigo();
@@ -1048,6 +1048,9 @@
     const usr = pSessao ? await pSessao : await conferirSessao();
     if (usr && usr.semRede) { const s = getSessao(); if (s) { adminPin = s.sessao; document.getElementById('btn-trocar-user').style.display = 'none'; return; } }
     if (usr && temPermissao(usr, 'catalogo_admin')) return aplicarUsuario(usr);
+    if (!usr && getSessao()) { // a sessão NÃO foi recusada pelo servidor (só não respondeu): não derruba o login
+      const s2 = getSessao(); modoLogin = true; adminPin = s2.sessao; document.getElementById('lbl-funcionario').textContent = funcionarioNome || s2.whatsapp; document.getElementById('btn-trocar-user').style.display = 'none'; return;
+    }
     if (!usr && pinAindaAtivo && adminPin && adminPin.indexOf('tk') !== 0) {
       // sessão do PIN antigo deste aparelho: segue usando enquanto o PIN valer
       modoLogin = false;

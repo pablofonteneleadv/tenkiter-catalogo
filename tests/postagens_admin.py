@@ -82,8 +82,8 @@ with sync_playwright() as p:
 
     print("== Story com link (manual) ==")
     pg.click("[data-tipo=story]"); pg.wait_for_timeout(200)
-    chk("Story oferece a caixinha 'Story com link' e explica", pg.locator("#po-manual").count() == 1 and "não deixa colocar link" in corpo(pg))
-    pg.click("[data-tpl=rodape]"); pg.check("#po-manual"); pg.wait_for_timeout(200)
+    chk("Story oferece a caixinha 'Story com link' e explica", (pg.locator("input[name=po-cta][value=link]").count() + pg.locator("#po-manual").count()) == 1 and "não deixa colocar link" in corpo(pg))
+    pg.click("[data-tpl=rodape]"); pg.check("input[name=po-cta][value=link]"); pg.wait_for_timeout(200)
     chk("botão vira 'Preparar Story para postar à mão'", "Preparar Story" in pg.inner_text(".po-enviar"))
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(2500)
     c = g["post_chamadas"][-1]["corpo"]
@@ -183,7 +183,7 @@ with sync_playwright() as p:
     c2 = g["post_chamadas"][-1]["corpo"]
     chk("mesmo horário de outra postagem é aceito (07:00 de novo, sem conflito)", c2["quando"] == t[0] and c2["legenda"].startswith("Aviso da loja"), c2.get("quando"))
     aba(pg, "nova"); pg.click("[data-modo=livre]"); pg.click("[data-tipo=story]"); pg.set_input_files("#po-livre-arq", [os.path.join(d, "livre0.jpg")]); pg.wait_for_timeout(400)
-    pg.check("#po-manual"); pg.wait_for_timeout(200); pg.click("[data-a=enviar]"); pg.wait_for_timeout(300)
+    pg.check("input[name=po-cta][value=link]"); pg.wait_for_timeout(200); pg.click("[data-a=enviar]"); pg.wait_for_timeout(300)
     chk("Story com link livre exige o link", "https://" in corpo(pg) and "link" in corpo(pg).lower())
     pg.fill("#po-link", "https://tenkitermodas.com.br/"); pg.click("[data-a=enviar]"); pg.wait_for_timeout(3000)
     c3 = g["post_chamadas"][-1]["corpo"]["posts"][0]
