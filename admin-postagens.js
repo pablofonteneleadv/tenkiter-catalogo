@@ -401,9 +401,10 @@
     lista.forEach((it) => {
       if (it.deco === 'caixa') { cams.push({ k: 'caixa' + (++n), tipo: 'forma', rot: 'Caixa ' + n, forma: 'ret', x: f((it.x0 + it.x1) / 2 / W), y: f((it.y0 + it.y1) / 2 / H), w: f((it.x1 - it.x0) / W), h: f((it.y1 - it.y0) / W), cor: it.cx.cor, raio: it.cx.r || 0, sombra: !!it.cx.sombra }); return; }
       const r = it.r, m = it.m, ri = raw.itens.find((q) => q.k === it.k) || it, cx = (r.x0 + r.x1) / 2 / W, cy = (r.y0 + r.y1) / 2 / H;
-      if (it.bg) cams.push({ k: 'fundo_' + it.k, tipo: 'forma', rot: 'Fundo de ' + (it.rot || it.k), forma: 'ret', x: f(cx), y: f(cy), w: f((r.x1 - r.x0) / W), h: f((r.y1 - r.y0) / W), cor: it.bg, raio: Math.round((it.radius || 0) * m.tam * 2) });
+      if (it.bg && !ESPECIAL(it)) cams.push({ k: 'fundo_' + it.k, tipo: 'forma', rot: 'Fundo de ' + (it.rot || it.k), forma: 'ret', x: f(cx), y: f(cy), w: f((r.x1 - r.x0) / W), h: f((r.y1 - r.y0) / W), cor: it.bg, raio: Math.round((it.radius || 0) * m.tam * 2) });
       const al = it.alinhaTexto || (it.wz ? (it.txtAl || 'center') : (it.bg ? 'center' : (it.ial || 'left'))), papel = papeis.indexOf(it.k) !== -1 ? it.k : 'extra';
-      cams.push({ k: String(it.k).toLowerCase().replace(/[^a-z0-9_]/g, '') || 'txt' + (++n), tipo: 'texto', rot: it.rot || it.k, papel: papel, t: ri.t, x: f(cx), y: f(cy), w: f(Math.min(1.2, (r.x1 - r.x0) / W * (it.wz ? 1 : 1.08) + (it.wz ? 0 : 0.01))), h: f((r.y1 - r.y0) / W), tam: Math.round(m.tam), cor: it.cor || '#ffffff', peso: it.peso || 'bold', al: al, linhas: Math.max(it.linhas || 1, (m.linhas || []).length || 1), max: Number(it.max) || MAX_PADRAO[papel] || 60, sombra: !!it.sombra });
+      const espC = ESPECIAL(it) ? {} : null; if (espC) ['big', 'pill', 'chip', 'track', 'vert', 'stack', 'seta', 'estilo', 'alP', 'vistaAl', 'corBorda', 'sombraCx', 'rpx', 'borda2', 'vmax', 'padX', 'padY', 'wz'].forEach((q) => { if (it[q] != null) espC[q] = it[q]; }); if (espC && /\{[A-Z]{2,}\}/.test(String(ri.t || ''))) espC.up = true;
+      cams.push(Object.assign({ k: String(it.k).toLowerCase().replace(/[^a-z0-9_]/g, '') || 'txt' + (++n), tipo: 'texto', rot: it.rot || it.k, papel: papel, t: String(ri.t == null ? '' : ri.t).replace(/\{([A-Za-z]+)\}/g, (mm, q) => '{' + q.toLowerCase() + '}'), x: f(cx), y: f(cy), w: f(Math.min(1.2, (r.x1 - r.x0) / W * (it.wz ? 1 : (espC ? 1.12 : 1.08)) + (it.wz ? 0 : 0.012))), h: f((r.y1 - r.y0) / W), tam: Math.round(m.tam), cor: it.cor || '#ffffff', peso: it.peso || 'bold', al: al, linhas: Math.max(it.linhas || 1, (m.linhas || []).length || 1), max: espC ? 0 : (Number(it.max) || MAX_PADRAO[papel] || 60), sombra: !!it.sombra }, espC ? { esp: espC, cor2: it.cor2, bg: it.bg } : {}));
     });
     const out = { versao: 2, fundo: raw.fundo || 'foto', camadas: cams }; if (raw.base) out.base = raw.base; return out;
   }
@@ -1247,6 +1248,7 @@
     'TELA: imagem de 1080 px de largura. Feed = 1080x1350, Story = 1080x1920. A FOTO DA PEÇA fica sempre por baixo; as "camadas" são desenhadas por cima, na ordem da lista (a última fica na frente).',
     'COORDENADAS (frações): x = CENTRO na horizontal (0 esquerda, 0.5 meio, 1 direita); y = CENTRO na vertical (0 topo, 1 base); w = largura como fração da LARGURA da imagem; h = altura como fração da LARGURA (não da altura: assim a caixa mantém a proporção no Feed e no Story); giro = graus de -180 a 180, em volta do centro.',
     'camada tipo "texto": t = texto (aceita {nome} {avista} {cheio} {codigo} {tam} {cores} {cat} {gen}, que viram os dados da peça); tam = tamanho da letra em px (a letra encolhe sozinha, até 45%, se o texto não couber na caixa w x h); linhas = máximo de linhas; max = máximo de letras (passou disso vira "…"; 0 = sem limite); cor; peso "bold" ou "normal"; al "left", "center" ou "right"; bg = cor da caixa atrás do texto (opcional) e raio = canto arredondado em px; sombra true/false; opac de 0 a 1.',
+    'esp (só em texto, opcional): estilo especial copiado dos visuais prontos, ex. {"big":true} = preço grande (R$ pequeno + número grande + ,centavos + "à vista"; o texto precisa começar com "R$ 99,90"), {"pill":true,"seta":true} = botão arredondado com ícone, {"chip":{"ic":"tam"}} = linha com ícone em círculo (ic: tam | cor | cat), {"track":0.2} = letras espaçadas, {"vert":true} = texto na vertical, {"stack":true} = nome em duas cores (usa cor e cor2); "up":true = tudo em MAIÚSCULAS. Nesses, a altura da caixa é calculada sozinha; mexa em w, tam e cor. Para texto comum, apague "esp".',
     'papel (só em texto, opcional): "preco" = quando a peça está marcada "Sem preço" o texto vira "Consulte valor"; "zona" = botão/zona do link do Story: sem link aparece o CTA configurado do visual (padrão www.tenkitermodas.com.br). Outros papéis (nome, codigo, tam, cores, cat, selo, extra) só definem o limite de letras padrão.',
     'camada tipo "forma": forma = "ret" (retângulo, com raio de canto em px), "elipse" (círculo/oval) ou "linha" (traço fino, use h pequeno, ex. 0.005); cor e, se quiser degradê de cima para baixo, cor2; borda = {"cor":"#fff","w":4}; opac; sombra true/false.',
     'fundo = efeito escuro/colorido sobre a foto: foto (nenhum) | baixo | baixo-leve | ambos | topo | baixo-dir | direita | rodape | energia. Para os visuais prontos desenhados, fundo "arte" exige "base" com o id do visual (ex. "classico").',
@@ -1273,8 +1275,12 @@
     (spec.camadas || []).forEach((c) => {
       if (!c || c.oculto) return;
       const b = caixaDaCamada_(c, W, H), o = ov && ov[c.k], cx = o ? o.x * W : b.cx, cy = o ? o.y * H : b.cy;
-      let m = null; if (c.tipo === 'texto') { m = medirTextoCamada_(c, b.w, b.h); if (!m) return; }
-      out.push(Object.assign({}, c, { camada: true, cb: { cx, cy, w: b.w, h: b.h, a: b.a }, m, r: { x0: cx - b.w / 2, y0: cy - b.h / 2, x1: cx + b.w / 2, y1: cy + b.h / 2 }, x: cx / W, y: cy / H }));
+      let m = null, espIt = null, bw = b.w, bh = b.h;
+      if (c.tipo === 'texto') {
+        if (c.esp && typeof c.esp === 'object') { const itE = Object.assign({}, c, c.esp, { ial: c.al || 'left' }); itE.t = String(c.t == null ? '' : c.t).trim(); if (itE.up) itE.t = itE.t.toUpperCase(); const me = itE.t ? medirEspecial(itE, b.w) : null; if (me) { m = me; espIt = itE; bw = me.w || b.w; bh = me.h; } }
+        if (!m) { m = medirTextoCamada_(c, b.w, b.h); if (!m) return; }
+      }
+      out.push(Object.assign({}, c, { camada: true, espIt: espIt, cb: { cx, cy, w: bw, h: bh, a: b.a }, m, r: { x0: cx - bw / 2, y0: cy - bh / 2, x1: cx + bw / 2, y1: cy + bh / 2 }, x: cx / W, y: cy / H }));
     });
     return out;
   }
@@ -1287,6 +1293,8 @@
       if (it.sombra) { ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8; }
       ctx.fillStyle = fill; caminho(); ctx.fill(); ctx.shadowColor = 'transparent';
       if (it.borda && Number(it.borda.w) > 0) { ctx.strokeStyle = it.borda.cor || '#fff'; ctx.lineWidth = Number(it.borda.w); caminho(); ctx.stroke(); }
+    } else if (it.espIt) {
+      desenharEspecial(ctx, Object.assign({}, it.espIt, { m: it.m, r: { x0: -w / 2, y0: -h / 2, x1: w / 2, y1: h / 2 } }), W, H);
     } else {
       const m = it.m;
       if (it.bg) { ctx.fillStyle = it.bg; caixaArredondada(ctx, -w / 2, -h / 2, w / 2, h / 2, rad); ctx.fill(); }
