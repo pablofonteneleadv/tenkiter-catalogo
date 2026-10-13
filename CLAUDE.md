@@ -529,3 +529,11 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 - **Editor**: canvas `[data-ed-cv]` (pointer events, `touch-action:none`, 86% da largura deixa faixa para rolar a página): arrastar, alças de canto (tamanho), alça de cima (giro), setas do teclado; painel de propriedades, ▲▼ ordem, 👁 ocultar, ⧉ duplicar, ✕. Código e visual: debounce 350 ms nos dois sentidos. Visual pronto → "Duplicar"/"🎨 Converter para o editor visual" (`converterParaCamadas_`, aproximação: pílulas/ícones viram texto/forma simples).
 - **Não testado em celular de verdade** (arrastar com o dedo). Teste: `tests/editor_visual.py` (em `rodar_tudo.py`).
 - **Compartilhar seleção da sacola**: `#linha-share-busca` aparece também quando há itens na sacola ("🔗 Compartilhar seleção (N)"); `#btn-share-busca` → `abrirSelecao(true)` (`pedido.js`, `linkDaSelecao_`).
+
+## v5.6 — Excluir avaliação sem travar, servidor lento nunca vai ao login (`treinamentos.html` + `nav.js`, só front)
+
+- **Bug real (Pablo, 13/10/2026)**: ✕ de avaliação (Raio-X) parecia não fazer nada (a linha só saía depois de baixar o relatório inteiro, lento); ele recarregou puxando a tela, o 2º pedido foi cortado (só 1 de 2 apagada) e a abertura lenta mostrou o LOGIN.
+- **`TKOcupado`** (`nav.js`, todas as páginas): `var fim = TKOcupado.inicio(); … fim()`. Enquanto há gravação, `overscroll-behavior-y:contain` (puxar para recarregar não funciona) e `beforeunload` avisa. `submitResult` (treinamentos) o liga sozinho nas ações que gravam (`ACOES_GRAVAM_`) e tem **tempo limite** (35 s; 90 s nas lentas, `ACOES_LENTAS_`) devolvendo `{demorou:true}` em vez de ficar pendurado.
+- **Excluir avaliação**: a linha sai da tela assim que o servidor confirma; "já estava apagada" (`Não encontrei essa avaliação`) conta como feito; timeout = confere recarregando o relatório (`recarregarRelatorioSilencioso_`); clique duplo ignorado (`data-ocupado`).
+- **Abertura**: `restaurarSessaoServidor` devolve `'rede'` quando o servidor não responde (a sessão NÃO é apagada; só `sessaoInvalida/inativa` apaga) → tenta de novo 2× e mostra `telaSemConexao_` ("Tentar de novo" / "Entrar com outra conta"), nunca o login. Teste: `tests/excluir_avaliacao_lento.py`. Service worker `tk-3.9.0`.
+- **Pendente**: o mesmo padrão (tempo limite + `TKOcupado` + abertura tolerante) ainda não foi aplicado ao `admin.html` e ao `curriculos.html`.

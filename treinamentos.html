@@ -657,8 +657,8 @@ async function restaurarSessaoServidor(respPronta){
     }catch(e){ resp = null; }
   }
   if (!resp || !resp.ok){
-    if (resp && (resp.sessaoInvalida || resp.inativa)){ try{ localStorage.removeItem('tm_session'); }catch(e){} }
-    return false;
+    if (resp && (resp.sessaoInvalida || resp.inativa)){ try{ localStorage.removeItem('tm_session'); }catch(e){} return false; }
+    return 'rede'; // servidor lento/sem conexão: a sessão continua guardada, não manda para o login
   }
   var entry = entryFromServerUser(resp.usuario, resp.sessao);
   state.user = userFromRosterEntry(entry);
@@ -871,15 +871,28 @@ function buildQuizAttempt(level){
   return { title: quiz.title, questions: questions, id: novoIdTentativa_() };
 }
 
+var ACOES_GRAVAM_ = /^(excluir_|resetar_|salvar_|atualizar_|alterar_|criar_|acessos_(criar|excluir|status|permissao|perfil)|prova_|manual_(sincronizar|marcar)|sincronizar_|resultado$|registrar$|enviar_)/;
+var ACOES_LENTAS_ = /^(relatorio_equipe|treinamento_conteudo|manual_sincronizar_lote|sincronizar_manual|prova_sincronizar|prova_criar_doc|curriculos_foto|enviar_foto_perfil)$/;
 async function submitResult(payload){
   if (!DATA.appsScriptUrl) return;
+  var acao = String((payload && payload.action) || ''), grava = ACOES_GRAVAM_.test(acao) && !/^(sessao|login)$/.test(acao);
+  var fimOcupado = (grava && window.TKOcupado) ? window.TKOcupado.inicio() : null;
+  var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var limite = ACOES_LENTAS_.test(acao) ? 90000 : 35000, timer = ctl ? setTimeout(function(){ try{ ctl.abort(); }catch(e){} }, limite) : null;
   try{
     var res = await fetch(DATA.appsScriptUrl, {
       method:'POST',
-      body: JSON.stringify(Object.assign({ token: DATA.appsScriptToken }, payload))
+      body: JSON.stringify(Object.assign({ token: DATA.appsScriptToken }, payload)),
+      signal: ctl ? ctl.signal : undefined
     });
     return await res.json();
-  }catch(e){ return { ok:false, erro:'sem conexão' }; }
+  }catch(e){
+    if (e && e.name === 'AbortError') return { ok:false, erro:'O servidor está demorando para responder.', demorou:true };
+    return { ok:false, erro:'sem conexão' };
+  }finally{
+    if (timer) clearTimeout(timer);
+    if (fimOcupado) fimOcupado();
+  }
 }
 
 function progressKey(whatsapp){ return 'tm_progress_' + whatsapp; }
@@ -1973,6 +1986,14 @@ function openAdminPanel(){
   fetchAdminData();
 }
 
+var _relEmCurso = false;
+async function recarregarRelatorioSilencioso_(){
+  if (_relEmCurso || !temPerm('equipe_relatorio')) return; _relEmCurso = true;
+  try{
+    var resp = await submitResult({ action:'relatorio_equipe', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password });
+    if (resp && resp.ok){ state.adminData = { funcionarios: resp.funcionarios || [], resultados: resp.resultados || [] }; if (state.view === 'admin' && state.adminTab === 'desempenho'){ if (document.getElementById('ds-lista')) pintarDesempenho(); else render(); } }
+  } finally { _relEmCurso = false; }
+}
 async function fetchAdminData(){
   if (!temPerm('equipe_relatorio')){ state.adminData = { funcionarios: [], resultados: [] }; if (state.view === 'admin') render(); return; }
   var resp = await submitResult({
@@ -2266,12 +2287,23 @@ function wireTabDesempenho(){
     var b = ev.target.closest ? ev.target.closest('.ds-del') : null;
     if (!b) return;
     if (!confirm('Excluir esta avaliação de ' + (b.getAttribute('data-nome') || b.getAttribute('data-whats')) + '? Isso não pode ser desfeito.')) return;
-    b.disabled = true;
+    if (b.getAttribute('data-ocupado') === '1') return;
+    b.setAttribute('data-ocupado', '1'); b.disabled = true; var rotuloAnt = b.textContent; b.textContent = '…';
+    var dh = b.getAttribute('data-dh'), wh = b.getAttribute('data-whats');
+    var tirarDaTela = function(){
+      var rs = state.adminData && state.adminData.resultados;
+      if (!rs) return;
+      var i = rs.findIndex(function(r){ return String(r.dataHora) === dh && normWhats(r.whatsapp) === normWhats(wh); });
+      if (i >= 0) rs.splice(i, 1);
+      pintarDesempenho();
+    };
     var resp = await submitResult({ action: 'excluir_avaliacao', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
-      linha: b.getAttribute('data-linha'), dataHora: b.getAttribute('data-dh'), whatsappAvaliacao: b.getAttribute('data-whats') });
-    if (!resp || !resp.ok){ b.disabled = false; toast((resp && resp.erro) || 'Não foi possível excluir.'); return; }
-    toast('Avaliação excluída.');
-    fetchAdminData();
+      linha: b.getAttribute('data-linha'), dataHora: dh, whatsappAvaliacao: wh });
+    if (resp && resp.ok){ toast('Avaliação excluída.'); tirarDaTela(); recarregarRelatorioSilencioso_(); return; }
+    if (resp && /já tenha sido apagada|Não encontrei essa avaliação/i.test(resp.erro || '')){ toast('Essa avaliação já estava apagada. Lista atualizada.'); tirarDaTela(); recarregarRelatorioSilencioso_(); return; }
+    b.removeAttribute('data-ocupado'); b.disabled = false; b.textContent = rotuloAnt;
+    if (resp && resp.demorou){ toast('O servidor demorou. Vou conferir se a exclusão foi feita…'); recarregarRelatorioSilencioso_(); return; }
+    toast((resp && resp.erro) || 'Não foi possível excluir.');
   });
   var btn = document.getElementById('btn-export-csv');
   if (!btn) return;
@@ -3034,6 +3066,31 @@ function render(){
   }
 }
 
+/* Servidor lento ou sem internet na abertura: tenta de novo sozinho e, se não der, mostra uma tela com botão — NUNCA joga a pessoa no login por causa disso. */
+async function tentarSessaoDeNovo_(){
+  for (var i = 0; i < 2; i++){
+    var app0 = document.getElementById('app'); if (app0 && i === 0) app0.setAttribute('aria-busy', 'true');
+    await new Promise(function(r){ setTimeout(r, 1500 + i * 2500); });
+    var r = await restaurarSessaoServidor(null);
+    if (r !== 'rede') return r;
+  }
+  return 'rede';
+}
+function telaSemConexao_(){
+  var app0 = document.getElementById('app'); if (!app0) return; app0.removeAttribute('aria-busy');
+  app0.innerHTML = '<div style="max-width:420px;margin:64px auto;padding:0 20px;text-align:center"><h2 style="margin:0 0 8px">O servidor está demorando</h2>'
+    + '<p style="color:#555">Sua sessão continua guardada, você <b>não saiu da conta</b>. Pode ser a internet ou o servidor ocupado.</p>'
+    + '<button id="tm-retentar" style="margin-top:12px;padding:14px 20px;border-radius:12px;border:0;background:#E67E22;color:#0d0d0d;font-weight:800;font-size:1rem;width:100%">Tentar de novo</button>'
+    + '<button id="tm-outra" style="margin-top:10px;padding:12px;border-radius:12px;border:1px solid #bbb;background:#fff;width:100%">Entrar com outra conta</button></div>';
+  document.getElementById('tm-retentar').onclick = async function(){
+    this.disabled = true; this.textContent = 'Tentando…';
+    var r = await restaurarSessaoServidor(null);
+    if (r === 'rede') return telaSemConexao_();
+    if (r){ if (/[?&]painel=rh\b/.test(location.search) && temGestao()) openAdminPanel(); else goHome(); } else renderLogin();
+  };
+  document.getElementById('tm-outra').onclick = function(){ renderLogin(); };
+}
+
 /* ---------------- boot ---------------- */
 (async function boot(){
   // v3.1: tudo que não depende de nada sai ao mesmo tempo; o que já foi visto neste aparelho aparece na hora.
@@ -3047,6 +3104,8 @@ function render(){
   await loadRoster(); // só faz algo no servidor antigo
   if (!temCacheManuais) await pManuais; // 1ª visita neste aparelho: precisa da lista para montar a tela
   var restaurou = servidorNovo ? await restaurarSessaoServidor(pSessao) : tryRestoreSession();
+  if (restaurou === 'rede') restaurou = await tentarSessaoDeNovo_();
+  if (restaurou === 'rede'){ telaSemConexao_(); return; }
   if (restaurou){
     // vindo da barra inferior (RH): abre direto o painel do RH, se a pessoa tiver acesso
     if (/[?&]painel=rh\b/.test(location.search) && temGestao()) openAdminPanel(); else goHome();

@@ -22,6 +22,22 @@
  * TenkiterNav.setPerms([...]) e TenkiterNav.ativo('rh').
  * Nunca guarda senha: só a lista de permissões.
  * ==================================================================== */
+/* TKOcupado — "estou salvando": enquanto houver gravação em andamento, puxar a tela para baixo (recarregar) é bloqueado e fechar/recarregar
+ * pede confirmação. Uso: var fim = TKOcupado.inicio('excluindo avaliação'); ... fim();  (fim pode ser chamado mais de uma vez). */
+(function () {
+  'use strict';
+  if (window.TKOcupado) return;
+  var n = 0, est = null;
+  function liga() {
+    if (!est) { est = document.createElement('style'); est.textContent = 'html,body{overscroll-behavior-y:contain!important}'; (document.head || document.documentElement).appendChild(est); }
+  }
+  function desliga() { if (est && est.parentNode) est.parentNode.removeChild(est); est = null; }
+  window.TKOcupado = {
+    inicio: function () { n++; liga(); var feito = false; return function () { if (feito) return; feito = true; n = Math.max(0, n - 1); if (!n) desliga(); }; },
+    pendentes: function () { return n; }
+  };
+  window.addEventListener('beforeunload', function (e) { if (n > 0) { e.preventDefault(); e.returnValue = 'Ainda estou salvando. Se sair agora, a alteração pode não ser concluída.'; return e.returnValue; } });
+})();
 (function () {
   'use strict';
   if (window.TenkiterNav) return;

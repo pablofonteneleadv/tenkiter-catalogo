@@ -70,6 +70,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("foto_cliente.py", lambda o: "FALHAS=0" in o),   # cliente manda foto pela conta (Ela usa TM)
     ("postagens_v49.py", lambda o: "FALHAS=0" in o),   # v4.9: várias peças, filtros, Ela usa TM com seletor, ocultar, 10 posições
     ("editor_visual.py", lambda o: "FALHAS=0" in o),   # v5.5: editor visual sem código (camadas)
+    ("excluir_avaliacao_lento.py", lambda o: "FALHAS=0" in o),   # v5.6: excluir sem travar, abertura lenta não vai ao login
     ("painel_v49.py", lambda o: "FALHAS=0" in o),
     ("equipe_catalogo1.py", lambda o: "FALHAS=0" in o),   # v4.9: perfil Equipe catálogo 1 (painel simplificado)   # v4.9: ferramentas no topo, Postagens fixa, miniatura amplia
     ("postagens_admin.py", lambda o: "FALHAS=0" in o),   # aba Postagens: feed/carrossel/reels/story, templates, agenda, fila, Story com link manual
