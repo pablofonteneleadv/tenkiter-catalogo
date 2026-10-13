@@ -13,14 +13,26 @@
   const esc = (v) => escaparHtml(v);
   const TIPOS = [['feed', '🖼️ Feed'], ['carrossel', '🗂️ Carrossel'], ['reels', '🎬 Reels'], ['story', '📱 Story']];
   /* Visuais que aparecem para cada tipo (configurável na aba ⚙️ Visuais; fica neste aparelho). */
+  const semPrecoIds = {};   // peças marcadas “Sem preço — Consulte valor” (vale na arte e na legenda)
+  const ehSemPreco_ = (p) => !!(p && semPrecoIds[String(p.ID)]);
   const CFG_VIS_KEY = 'tk_po_visuais_v1';
   function lerCfgVis_() { try { return JSON.parse(localStorage.getItem(CFG_VIS_KEY) || '{}') || {}; } catch (e) { return {}; } }
   function salvarCfgVis_(c) { try { localStorage.setItem(CFG_VIS_KEY, JSON.stringify(c)); } catch (e) {} }
+  const CUSTOM_KEY = 'tk_po_visuais_custom_v1', NOMES_KEY = 'tk_po_visuais_nomes_v1', CTA_KEY = 'tk_po_cta_v1', CTA_PADRAO = 'www.tenkitermodas.com.br';
+  const lerJ_ = (k, def) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? def : v; } catch (e) { return def; } };
+  const gravarJ_ = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  const lerCustom_ = () => { const l = lerJ_(CUSTOM_KEY, []); return Array.isArray(l) ? l.filter((c) => c && c.id && c.spec) : []; };
+  const customPorId_ = (id) => lerCustom_().find((c) => c.id === id) || null;
+  const ctaDoVisual_ = (id) => { const c = lerJ_(CTA_KEY, {}); return c && typeof c[id] === 'string' && c[id].trim() ? c[id].trim() : CTA_PADRAO; };
+  function todosVisuais_() {
+    const nomes = lerJ_(NOMES_KEY, {});
+    return TEMPLATES.map((t) => [t[0], (nomes && nomes[t[0]]) || t[1]]).concat(lerCustom_().map((c) => [c.id, c.nome || 'Meu visual']));
+  }
   function visuaisDoTipo_(tipo) {
-    const c = lerCfgVis_()[tipo];
-    if (!Array.isArray(c)) return TEMPLATES;
-    const l = TEMPLATES.filter((t) => c.indexOf(t[0]) !== -1);
-    return l.length ? l : TEMPLATES;
+    const todos = todosVisuais_(), c = lerCfgVis_()[tipo];
+    if (!Array.isArray(c)) return todos;
+    const l = todos.filter((t) => c.indexOf(t[0]) !== -1);
+    return l.length ? l : todos;
   }
   const TEMPLATES = [['original', 'Original'], ['classico', '1 · Vitrine em arco'], ['promo', '2 · Preço em destaque'], ['minimal', '3 · Cartão central'], ['rodape', '4 · Faixa e detalhes'], ['lateral', '5 · Preço no canto'], ['cabecalho', '6 · Título grande'], ['energia', '7 · Laranja e detalhes'], ['blocos', '8 · Palavras empilhadas'], ['editorial', '9 · Editorial vertical'], ['cartao', '10 · Elegante']];
   const ST_TXT = { agendado: '⏳ Agendado', processando: '⚙️ Publicando…', manual_pendente: '✋ Falta você postar', manual_feito: '✅ Postado à mão', publicado: '✅ Publicado', erro: '⚠️ Deu problema', cancelado: 'Cancelado' };
@@ -140,7 +152,10 @@
       '<div class="po-abas" role="tablist" id="po-abas"></div><div id="po-corpo"></div></div>';
     document.body.appendChild(o);
     $('po-fechar').addEventListener('click', fechar);
+    ligarConfigVisuais_();
     $('po-corpo').addEventListener('change', (ev) => {
+      const sp = ev.target.closest && ev.target.closest('[data-sp]');
+      if (sp) { const id = sp.dataset.sp; if (sp.checked) semPrecoIds[id] = true; else delete semPrecoIds[id]; if (nova && nova.p && !nova.legendaMexida) nova.legenda = legendaPadrao(); if (nova) nova.previa = false; return desenhar(); }
       const cb = ev.target.closest && ev.target.closest('[data-cv-tipo]'); if (!cb) return;
       const tipo = cb.dataset.cvTipo, c = lerCfgVis_();
       const marcados = Array.from(document.querySelectorAll('[data-cv-tipo="' + tipo + '"]')).filter((x) => x.checked).map((x) => x.dataset.cvId);
@@ -278,7 +293,8 @@
   function legendaPadrao() {
     const p = nova.p; if (!p) return '';
     const l = [String(p.Nome || '').trim(), ''];
-    if (Number(p.Preco) > 0) l.push('💰 ' + formatarReal(precoAvista(p)) + ' à vista (10% de desconto) · ' + formatarReal(p.Preco) + ' no cartão');
+    if (ehSemPreco_(p)) l.push('💰 Consulte valor pelo WhatsApp');
+    else if (Number(p.Preco) > 0) l.push('💰 ' + formatarReal(precoAvista(p)) + ' à vista (10% de desconto) · ' + formatarReal(p.Preco) + ' no cartão');
     const tam = typeof textoPlano === 'function' ? textoPlano(p.Tamanhos) : p.Tamanhos; if (String(tam || '').trim()) l.push('📏 Tamanhos: ' + String(tam).trim());
     l.push('🛍️ Código: ' + (p.Codigo || ''), '📍 Rua Dr. Moreira da Rocha 759, Crateús-CE', '👉 ' + linkProduto(p), '', HASHTAGS);
     return l.join('\n');
@@ -296,17 +312,122 @@
     corpo.innerHTML = topo + (abaAtual === 'nova' ? htmlNova() : abaAtual === 'fila' ? htmlFila(['agendado', 'processando', 'erro'], 'Nada na fila agora.') : abaAtual === 'manual' ? htmlManual() : abaAtual === 'fotos' ? htmlFotos() : abaAtual === 'config' ? htmlConfigVisuais_() : htmlFila(['publicado', 'manual_feito'], 'Ainda não há postagens feitas por aqui.'));
     const chipsDepois = corpo.querySelector('.po-chips-h');
     if (chipsDepois) { chipsDepois.scrollLeft = rolou; const sel = chipsDepois.querySelector('[aria-pressed="true"]'); if (sel) { const a = sel.offsetLeft, b = a + sel.offsetWidth; if (a < chipsDepois.scrollLeft || b > chipsDepois.scrollLeft + chipsDepois.clientWidth) chipsDepois.scrollLeft = a - 12; } }
+    if (abaAtual === 'config') setTimeout(pintarAbertas_, 0);
     if (abaAtual === 'nova' && nova && nova.p !== undefined && deveMostrarPrevia()) pintarPrevia();
   }
+  /* ---------- aba ⚙️ Visuais: cards por tipo, editor de cada visual (campos + código) com prévia ao vivo ---------- */
+  const vzTrab = {}, vzAbertos = {};
+  const FUNDOS_OK = ['foto', 'baixo', 'baixo-leve', 'ambos', 'topo', 'baixo-dir', 'direita', 'rodape', 'energia', 'arte'];
+  const INFO_AMOSTRA = { nome: 'Vestido Longo Floral', avista: 'R$ 89,90', cheio: 'R$ 99,89', codigo: 'TK-0000', tam: 'P, M, G', cores: 'Branco, preto', cat: 'Vestidos', gen: 'Feminino Adulto', comLink: false, semPreco: false };
+  const INFO_MOLDE = { nome: '{nome}', avista: '{avista}', cheio: '{cheio}', codigo: '{codigo}', tam: '{tam}', cores: '{cores}', cat: '{cat}', gen: '{gen}', comLink: false, semPreco: false };
+  const CAMPOS_NOVOS = [['extra', 'Texto extra (livre)', 'Seu texto'], ['nome', 'Nome da peça', '{nome}'], ['preco', 'Preço', '{avista} à vista'], ['codigo', 'Código', 'Código {codigo}'], ['tam', 'Tamanhos', 'Tamanhos: {tam}'], ['cores', 'Cores', 'Cores: {cores}'], ['cat', 'Categoria e gênero', '{cat} · {gen}'], ['zona', 'Botão / zona do link', 'Compre online']];
+  const novoIdVisual_ = () => 'c_' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+  function validarSpec_(sp) {
+    if (!sp || typeof sp !== 'object' || Array.isArray(sp)) return 'O código precisa ser um objeto { … }.';
+    if (!Array.isArray(sp.grupos) || !sp.grupos.length) return 'Falta a lista "grupos" (pelo menos 1).';
+    if (!Array.isArray(sp.itens) || !sp.itens.length) return 'Falta a lista "itens" (pelo menos 1 campo).';
+    const ids = sp.grupos.map((g) => g && g.id);
+    if (ids.some((x) => !x)) return 'Todo grupo precisa de "id".';
+    for (let i = 0; i < sp.itens.length; i++) { const it = sp.itens[i]; if (!it || !it.k) return 'O campo ' + (i + 1) + ' precisa de "k" (um nome curto único).'; if (ids.indexOf(it.grp) === -1) return 'O campo "' + it.k + '" aponta para um grupo que não existe ("' + it.grp + '").'; }
+    const ks = sp.itens.map((it) => it.k); if (ks.some((k, i) => ks.indexOf(k) !== i)) return 'Dois campos com o mesmo "k".';
+    if (sp.fundo && FUNDOS_OK.indexOf(sp.fundo) === -1) return 'Fundo inválido. Use: ' + FUNDOS_OK.join(', ') + '.';
+    if (sp.fundo === 'arte' && !ARTES[sp.base]) return 'Fundo "arte" precisa de "base" com o id de um visual pronto (ex.: classico).';
+    return '';
+  }
+  function trabDe_(id) {
+    if (!vzTrab[id]) { const c = customPorId_(id); if (!c) return null; vzTrab[id] = { nome: c.nome, spec: JSON.parse(JSON.stringify(c.spec)), erro: '' }; }
+    return vzTrab[id];
+  }
+  function especDoCard_(id) {
+    const tr = vzTrab[id];
+    if (tr) { const r = especCustom_({ spec: tr.spec }, INFO_AMOSTRA); if (tr.spec.base) r.base = tr.spec.base; return posEspec_(r, INFO_AMOSTRA, id); }
+    return especTemplate(id, INFO_AMOSTRA, 1080, 1350);
+  }
+  function fotoAmostra_() {
+    const c = document.createElement('canvas'); c.width = 1080; c.height = 1350; const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 0, 1080, 1350); g.addColorStop(0, '#e8d5c4'); g.addColorStop(1, '#9c7b64'); x.fillStyle = g; x.fillRect(0, 0, 1080, 1350);
+    x.fillStyle = 'rgba(255,255,255,.35)'; x.beginPath(); x.ellipse(540, 520, 190, 250, 0, 0, 7); x.fill(); x.fillRect(380, 700, 320, 560);
+    return c;
+  }
+  async function pintarAmostra_(id) {
+    const cv = document.querySelector('[data-vz-cv="' + id + '"]'); if (!cv) return;
+    try {
+      await carregarFontes_();
+      cv.width = 1080; cv.height = 1350; const x = cv.getContext('2d');
+      if (id === 'original') { x.drawImage(fotoAmostra_(), 0, 0); return; }
+      const sp = especDoCard_(id); if (!sp) return;
+      sp.itens = sp.itens.map((it) => Object.assign({ mult: 1 }, it));
+      const ef = { fundo: sp.fundo, arteBase: sp.base, lista: layoutItens(sp, 1080, 1350, {}) };
+      desenharTemplate(x, fotoAmostra_(), 1080, 1350, id, ef, 'preencher');
+      const erro = document.querySelector('[data-vz-erro="' + id + '"]'); if (erro && vzTrab[id]) erro.textContent = vzTrab[id].erro || '';
+    } catch (e) { const erro = document.querySelector('[data-vz-erro="' + id + '"]'); if (erro) erro.textContent = 'Não consegui desenhar: ' + (e && e.message ? e.message : e); }
+  }
+  function pintarAbertas_() { document.querySelectorAll('details[data-vz-det^="v:"][open]').forEach((d) => pintarAmostra_(d.dataset.vzDet.slice(2))); }
+  function htmlCardVisual_(v) {
+    const id = v[0], custom = id.indexOf('c_') === 0, tr = custom ? trabDe_(id) : null, aberto = vzAbertos['v:' + id] ? ' open' : '';
+    const nomes = lerJ_(NOMES_KEY, {}), nomeAtual = custom ? (tr ? tr.nome : v[1]) : ((nomes && nomes[id]) || v[1]);
+    let h = '<details class="po-vz" data-vz-det="v:' + esc(id) + '"' + aberto + '><summary>' + esc(nomeAtual) + (custom ? ' <small>(seu)</small>' : '') + '</summary><div class="po-vz-corpo">';
+    h += '<label class="po-vz-l">Nome do visual<input type="text" data-vz-nome="' + esc(id) + '" value="' + esc(nomeAtual) + '" maxlength="40"></label>';
+    h += '<label class="po-vz-l">Texto do botão quando NÃO há link<input type="text" data-vz-cta="' + esc(id) + '" value="' + esc(ctaDoVisual_(id)) + '" maxlength="40" placeholder="' + CTA_PADRAO + '"></label>';
+    h += '<div class="po-vz-prev"><canvas data-vz-cv="' + esc(id) + '" aria-label="Prévia do visual ' + esc(nomeAtual) + '" style="width:100%;max-width:280px;border-radius:12px;border:1px solid #ddd"></canvas></div>';
+    h += '<div class="po-vz-erro" data-vz-erro="' + esc(id) + '" role="status" style="color:#b00020;font-size:.82rem"></div>';
+    if (custom && tr) {
+      h += '<h5 style="margin:10px 0 4px">Campos deste visual</h5>';
+      h += tr.spec.itens.map((it, i) => '<div class="po-vz-f"><b>' + esc(it.rot || it.k) + '</b><input type="text" data-vz-f="' + esc(id) + '|' + i + '|t" value="' + esc(it.t) + '" aria-label="Texto de ' + esc(it.rot || it.k) + '"><label>Tam.<input type="number" min="10" max="300" data-vz-f="' + esc(id) + '|' + i + '|tam" value="' + esc(it.tam || 40) + '"></label><label>Máx. letras<input type="number" min="0" max="200" data-vz-f="' + esc(id) + '|' + i + '|max" value="' + esc(it.max || 0) + '"></label><button type="button" data-vza="delf" data-id="' + esc(id) + '" data-i="' + i + '" aria-label="Apagar o campo ' + esc(it.rot || it.k) + '">✕</button></div>').join('');
+      h += '<div class="po-vz-add"><select data-vz-add="' + esc(id) + '" aria-label="Tipo de campo">' + CAMPOS_NOVOS.map((c) => '<option value="' + c[0] + '">' + esc(c[1]) + '</option>').join('') + '</select><button type="button" data-vza="addf" data-id="' + esc(id) + '">+ Adicionar campo</button></div>';
+      h += '<p class="po-ajuda" style="margin:6px 0">Use {nome} {avista} {cheio} {codigo} {tam} {cores} {cat} {gen} no texto: trocam pelos dados da peça. “Máx. letras” 0 = sem limite.</p>';
+      h += '<details class="po-vz-cod"><summary>🧩 Código do visual (avançado)</summary><textarea data-vz-json="' + esc(id) + '" spellcheck="false" rows="12" style="width:100%;font-family:monospace;font-size:.78rem">' + esc(JSON.stringify(tr.spec, null, 1)) + '</textarea><button type="button" data-vza="aplicar" data-id="' + esc(id) + '">Aplicar código na prévia</button></details>';
+      h += '<div class="po-vz-acoes"><button type="button" class="po-vz-ok" data-vza="salvar" data-id="' + esc(id) + '">💾 Salvar visual</button><button type="button" data-vza="dup" data-id="' + esc(id) + '">Duplicar</button><button type="button" data-vza="excluir" data-id="' + esc(id) + '" style="color:#b00020">Excluir</button></div>';
+    } else {
+      h += '<div class="po-vz-acoes">' + (id === 'original' ? '' : '<button type="button" data-vza="dup" data-id="' + esc(id) + '">📄 Duplicar para editar campos e código</button>') + '<button type="button" data-vza="esconder" data-id="' + esc(id) + '">Esconder de todos os tipos</button></div>';
+    }
+    return h + '</div></details>';
+  }
   function htmlConfigVisuais_() {
-    const c = lerCfgVis_();
+    const c = lerCfgVis_(), todos = todosVisuais_();
     const tipos = [['feed', 'Feed'], ['carrossel', 'Carrossel'], ['story', 'Story']];
-    return '<div class="po-passo"><h4>Visuais de cada tipo</h4><p class="po-ajuda" style="margin-top:0">Marque quais visuais aparecem na hora de criar cada tipo de postagem. Reels não usa visual. Vale para este aparelho; sempre sobra pelo menos um.</p>' +
-      tipos.map((t) => {
-        const ativos = Array.isArray(c[t[0]]) ? c[t[0]] : TEMPLATES.map((x) => x[0]);
-        return '<fieldset style="border:1px solid #ddd;border-radius:12px;padding:8px 12px;margin:0 0 10px"><legend style="font-weight:800;padding:0 6px">' + t[1] + '</legend>' +
-          TEMPLATES.map((v) => '<label style="display:flex;gap:8px;align-items:center;min-height:40px"><input type="checkbox" data-cv-tipo="' + t[0] + '" data-cv-id="' + v[0] + '"' + (ativos.indexOf(v[0]) !== -1 ? ' checked' : '') + '> ' + esc(v[1]) + '</label>').join('') + '</fieldset>';
-      }).join('') + '</div>';
+    let h = '<style>.po-vz{border:1px solid #ddd;border-radius:12px;margin:0 0 8px;background:#fff}.po-vz>summary{padding:12px;font-weight:800;cursor:pointer;min-height:44px}.po-vz-corpo{padding:0 12px 12px}.po-vz-l{display:block;font-weight:700;font-size:.85rem;margin:8px 0}.po-vz-l input{display:block;width:100%;margin-top:4px}.po-vz-f{display:grid;grid-template-columns:1fr;gap:4px;border-top:1px solid #eee;padding:8px 0}.po-vz-f label{font-size:.75rem;display:inline-flex;gap:4px;align-items:center}.po-vz-f input[type=number]{width:70px}.po-vz-add,.po-vz-acoes{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.po-vz button{width:auto;min-height:40px;padding:6px 12px}.po-vz-ok{background:#E67E22;color:#0d0d0d;font-weight:800}</style>';
+    h += '<div class="po-passo"><h4>Visuais de cada tipo</h4><p class="po-ajuda" style="margin-top:0">Toque num tipo para marcar quais visuais aparecem nele. Reels não usa visual. Vale para este aparelho; sempre sobra pelo menos um.</p>';
+    h += tipos.map((t) => { const ativos = Array.isArray(c[t[0]]) ? c[t[0]] : todos.map((x) => x[0]); return '<details class="po-vz" data-vz-det="t:' + t[0] + '"' + (vzAbertos['t:' + t[0]] ? ' open' : '') + '><summary>' + t[1] + ' <small>(' + todos.filter((v) => ativos.indexOf(v[0]) !== -1).length + ' de ' + todos.length + ')</small></summary><div class="po-vz-corpo">' + todos.map((v) => '<label style="display:flex;gap:8px;align-items:center;min-height:40px"><input type="checkbox" data-cv-tipo="' + t[0] + '" data-cv-id="' + esc(v[0]) + '"' + (ativos.indexOf(v[0]) !== -1 ? ' checked' : '') + '> ' + esc(v[1]) + '</label>').join('') + '</div></details>'; }).join('') + '</div>';
+    h += '<div class="po-passo"><h4>Meus visuais e edição</h4><p class="po-ajuda" style="margin-top:0">Cada visual tem nome, texto do botão sem link e prévia ao vivo. Os visuais prontos podem ser duplicados para você editar campos e código; os seus podem ser alterados e excluídos.</p><div class="po-vz-acoes" style="margin-top:0"><button type="button" class="po-vz-ok" data-vza="novo">+ Novo visual</button></div>' + todos.map(htmlCardVisual_).join('') + '</div>';
+    return h;
+  }
+  function redesenharConfig_() { desenhar(); setTimeout(pintarAbertas_, 0); }
+  function addCfgTodosTipos_(id, remover) {
+    const c = lerCfgVis_(), todos = todosVisuais_().map((x) => x[0]);
+    ['feed', 'carrossel', 'story'].forEach((t) => {
+      if (!Array.isArray(c[t])) { if (!remover) return; c[t] = todos.slice(); }
+      c[t] = c[t].filter((x) => x !== id); if (!remover) c[t].push(id);
+      if (!c[t].length) c[t] = todos.filter((x) => x !== id).slice(0, 1);
+    });
+    salvarCfgVis_(c);
+  }
+  function ligarConfigVisuais_() {
+    const corpo = $('po-corpo');
+    corpo.addEventListener('toggle', (e) => { const d = e.target; if (d && d.dataset && d.dataset.vzDet) { vzAbertos[d.dataset.vzDet] = d.open; if (d.open && d.dataset.vzDet.indexOf('v:') === 0) pintarAmostra_(d.dataset.vzDet.slice(2)); } }, true);
+    corpo.addEventListener('input', (e) => {
+      const t = e.target; if (!t || !t.dataset) return;
+      if (t.dataset.vzNome !== undefined) { const id = t.dataset.vzNome, v = t.value.trim().slice(0, 40); if (id.indexOf('c_') === 0) { const tr = trabDe_(id); if (tr) tr.nome = v || 'Meu visual'; } else { const n = lerJ_(NOMES_KEY, {}); if (v) n[id] = v; else delete n[id]; gravarJ_(NOMES_KEY, n); } const sm = t.closest('details').querySelector('summary'); if (sm) sm.firstChild.textContent = v || 'Meu visual'; return; }
+      if (t.dataset.vzCta !== undefined) { const id = t.dataset.vzCta, c = lerJ_(CTA_KEY, {}); const v = t.value.trim(); if (v) c[id] = v; else delete c[id]; gravarJ_(CTA_KEY, c); pintarAmostra_(id); return; }
+      if (t.dataset.vzF !== undefined) { const [id, i, campo] = t.dataset.vzF.split('|'), tr = trabDe_(id); if (!tr || !tr.spec.itens[Number(i)]) return; const it = tr.spec.itens[Number(i)]; if (campo === 't') it.t = t.value; else it[campo] = Number(t.value) || 0; const ta = document.querySelector('[data-vz-json="' + id + '"]'); if (ta && document.activeElement !== ta) ta.value = JSON.stringify(tr.spec, null, 1); tr.erro = ''; pintarAmostra_(id); return; }
+      if (t.dataset.vzJson !== undefined) { const id = t.dataset.vzJson, tr = trabDe_(id); if (!tr) return; clearTimeout(t._tm); t._tm = setTimeout(() => { try { const sp = JSON.parse(t.value), err = validarSpec_(sp); if (err) { tr.erro = err; const el = document.querySelector('[data-vz-erro="' + id + '"]'); if (el) el.textContent = err; return; } tr.spec = sp; tr.erro = ''; pintarAmostra_(id); } catch (er) { tr.erro = 'Código com erro de escrita: ' + er.message; const el = document.querySelector('[data-vz-erro="' + id + '"]'); if (el) el.textContent = tr.erro; } }, 350); }
+    });
+    corpo.addEventListener('click', (e) => {
+      const b = e.target.closest && e.target.closest('[data-vza]'); if (!b) return; const a = b.dataset.vza, id = b.dataset.id;
+      if (a === 'novo') { const nid = novoIdVisual_(), sp = { fundo: 'baixo', grupos: [{ id: 'a', anc: 'b', y: 0.08, x: 0.5, al: 'center', w: 0.88 }], itens: [{ k: 'nome', rot: 'Nome da peça', t: '{nome}', grp: 'a', tam: 66, cor: '#F5F1E8', linhas: 2, sombra: true, max: 40 }, { k: 'preco', rot: 'Preço', t: '{avista} à vista', grp: 'a', tam: 88, cor: '#F39C12', sombra: true }, { k: 'zona', rot: 'Zona do link / botão', t: 'Compre online', grp: 'a', tam: 40, cor: '#F5F1E8', wz: 0.6, padY: 0.5, sombra: false }] }; const l = lerCustom_(); l.push({ id: nid, nome: 'Meu visual ' + (l.length + 1), spec: sp }); gravarJ_(CUSTOM_KEY, l); addCfgTodosTipos_(nid); vzAbertos['v:' + nid] = true; return redesenharConfig_(); }
+      if (a === 'dup') {
+        let sp, nome; const cu = customPorId_(id);
+        if (vzTrab[id]) { sp = JSON.parse(JSON.stringify(vzTrab[id].spec)); nome = vzTrab[id].nome; } else if (cu) { sp = JSON.parse(JSON.stringify(cu.spec)); nome = cu.nome; } else { const r = especTemplateBase(id, INFO_MOLDE, 1080, 1350); sp = JSON.parse(JSON.stringify({ fundo: r.fundo, grupos: r.grupos, itens: r.itens })); if (r.fundo === 'arte') sp.base = id; nome = (todosVisuais_().find((x) => x[0] === id) || [0, id])[1]; }
+        const nid = novoIdVisual_(), l = lerCustom_(); l.push({ id: nid, nome: 'Cópia de ' + nome, spec: sp }); gravarJ_(CUSTOM_KEY, l); addCfgTodosTipos_(nid); vzAbertos['v:' + nid] = true; return redesenharConfig_();
+      }
+      if (a === 'esconder') { addCfgTodosTipos_(id, true); return redesenharConfig_(); }
+      const tr = trabDe_(id); if (!tr && a !== 'excluir') return;
+      if (a === 'addf') { const sel = document.querySelector('[data-vz-add="' + id + '"]'), k0 = sel ? sel.value : 'extra', def = CAMPOS_NOVOS.find((x) => x[0] === k0) || CAMPOS_NOVOS[0]; let k = k0, n = 1; while (tr.spec.itens.some((it) => it.k === k)) k = k0 + (++n); tr.spec.itens.push({ k: k, rot: def[1], t: def[2], grp: tr.spec.grupos[0].id, tam: 40, cor: '#F5F1E8', sombra: true, max: 0 }); return redesenharConfig_(); }
+      if (a === 'delf') { if (tr.spec.itens.length <= 1) { tr.erro = 'O visual precisa de pelo menos 1 campo.'; return pintarAmostra_(id); } tr.spec.itens.splice(Number(b.dataset.i), 1); return redesenharConfig_(); }
+      if (a === 'aplicar') { const ta = document.querySelector('[data-vz-json="' + id + '"]'); try { const sp = JSON.parse(ta.value), err = validarSpec_(sp); if (err) { tr.erro = err; return pintarAmostra_(id); } tr.spec = sp; tr.erro = ''; return redesenharConfig_(); } catch (er) { tr.erro = 'Código com erro de escrita: ' + er.message; return pintarAmostra_(id); } }
+      if (a === 'salvar') { const err = validarSpec_(tr.spec); if (err) { tr.erro = err; return pintarAmostra_(id); } const l = lerCustom_(), c = l.find((x) => x.id === id); if (c) { c.nome = tr.nome; c.spec = tr.spec; gravarJ_(CUSTOM_KEY, l); } aviso = 'Visual salvo.'; avisoErro = false; return redesenharConfig_(); }
+      if (a === 'excluir') { if (!confirm('Excluir este visual? Não dá para desfazer.')) return; gravarJ_(CUSTOM_KEY, lerCustom_().filter((x) => x.id !== id)); delete vzTrab[id]; addCfgTodosTipos_(id, true); return redesenharConfig_(); }
+    });
   }
   function htmlLivre() {
     const n = nova;
@@ -380,7 +501,7 @@
     if (n.tipo !== 'reels') {
       const baseV = visuaisDoTipo_(n.tipo); if (n.template !== 'elausa' && !baseV.some((t) => t[0] === n.template)) n.template = baseV[0][0]; const lista = cli ? [['elausa', 'Ela usa TM']] : livre ? baseV.concat([['elausa', 'Ela usa TM']]) : baseV, itens = n.template !== 'original' ? itensTemplate(n.template, infoPeca(n.p), ...tamanhoAlvo()) : [];
       const chipsV = lista.length > 1 ? '<div class="po-chips po-chips-h" role="group" aria-label="Visual">' + lista.map((t) => '<button type="button" data-tpl="' + t[0] + '" aria-pressed="' + (n.template === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>' : '';
-      h += '<div class="po-passo"><h4>3. Visual</h4><div class="po-sticky">' + chipsV +
+      h += (n.p ? '<label class="po-sp" style="display:flex;gap:8px;align-items:center;min-height:44px;font-weight:700"><input type="checkbox" data-sp="' + esc(String(n.p.ID)) + '"' + (ehSemPreco_(n.p) ? ' checked' : '') + '> Sem preço — mostrar “Consulte valor”</label>' : '') + '<div class="po-passo"><h4>3. Visual</h4><div class="po-sticky">' + chipsV +
         '<button type="button" data-a="previa" class="po-previa-btn">👁️ Ver como vai ficar</button><div class="po-previa" id="po-previa" tabindex="0" role="group" aria-label="Prévia da arte"></div></div>' +
         '<p class="po-ajuda">' + (n.template === 'original' ? 'A foto como está (ajustada ao formato do Instagram).' : n.template === 'elausa' ? 'A foto com o texto “Ela usa TM” (toque numa das opções ou escreva o seu). Arraste o texto na foto para onde quiser.' : 'Toque num visual e a prévia muda na hora. Arraste cada texto na prévia para onde quiser. No Story, cole o adesivo de link do Instagram em cima da “zona do link” (sem adesivo, o texto da loja fica ali). Vídeos ficam sem template.') + '</p>';
       if (n.template === 'original' || n.template === 'elausa') h += '<div class="po-chips" role="group" aria-label="Como a foto ocupa a tela" style="margin-bottom:6px"><button type="button" data-aj="preencher" aria-pressed="' + (n.ajuste === 'preencher') + '">Preencher a tela</button><button type="button" data-aj="inteira" aria-pressed="' + (n.ajuste === 'inteira') + '">Foto inteira (fundo desfocado)</button></div>';
@@ -472,7 +593,7 @@
       if (antes !== d.modo && antes !== 'peca') { nova.livre.forEach((m) => { try { if (!m.fotoId) URL.revokeObjectURL(m.url); } catch (e) {} }); nova.livre = []; }
       nova.modoLivre = d.modo === 'livre'; nova.modoCli = d.modo === 'cliente'; if (nova.modoCli) carregarFotosNovas();
       if (d.modo === 'peca') { if (nova.template === 'original' || nova.template === 'elausa') nova.template = 'classico'; nova.selPecas = []; }
-      else { nova.p = null; nova.midias = []; if (d.modo === 'cliente') { nova.tipo = 'story'; nova.template = 'elausa'; nova.manual = false; } else if (nova.template !== 'elausa' && !TEMPLATES.some((t) => t[0] === nova.template)) nova.template = 'original'; }
+      else { nova.p = null; nova.midias = []; if (d.modo === 'cliente') { nova.tipo = 'story'; nova.template = 'elausa'; nova.manual = false; } else if (nova.template !== 'elausa' && !todosVisuais_().some((t) => t[0] === nova.template)) nova.template = 'original'; }
       nova.previa = false; return desenhar();
     }
     if (d.lm) { const i = Number(d.i), L = nova.livre; if (d.lm === 'x') { try { URL.revokeObjectURL(L[i].url); } catch (e) {} L.splice(i, 1); } else { const k = d.lm === 'up' ? i - 1 : i + 1; if (L[k]) { const t = L[i]; L[i] = L[k]; L[k] = t; } } return desenhar(); }
@@ -514,9 +635,10 @@
   function caber(ctx, img, x, y, w, h) { const r = Math.min(w / img.width, h / img.height), iw = img.width * r, ih = img.height * r; ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); }
   function quebrar(ctx, texto, largura, max) { const pal = String(texto).split(/\s+/), l = []; let cur = ''; pal.forEach((p) => { const t = cur ? cur + ' ' + p : p; if (ctx.measureText(t).width > largura && cur) { l.push(cur); cur = p; } else cur = t; }); if (cur) l.push(cur); if (l.length > max) { l.length = max; l[max - 1] = l[max - 1].replace(/.?.?$/, '…'); } return l; }
   function infoPeca(p) {
-    if (!p) return { nome: '', avista: '', cheio: '', codigo: '', tam: '', cores: '', cat: '', gen: '', comLink: false };
+    if (!p) return { semPreco: false, nome: '', avista: '', cheio: '', codigo: '', tam: '', cores: '', cat: '', gen: '', comLink: false };
     const tp = (v) => String(typeof textoPlano === 'function' ? textoPlano(v) : v || '').trim(), pri = (v) => String(v || '').split(',')[0].trim();
-    return { nome: String(p.Nome || '').trim(), avista: formatarReal(precoAvista(p)), cheio: formatarReal(p.Preco), codigo: String(p.Codigo || ''), tam: tp(p.Tamanhos), cores: tp(p.Cores), cat: pri(p.Categoria), gen: pri(p.Genero), comLink: !!(nova && nova.tipo === 'story' && nova.manual) };
+    const semP = ehSemPreco_(p);
+    return { semPreco: semP, nome: String(p.Nome || '').trim(), avista: semP ? '' : formatarReal(precoAvista(p)), cheio: formatarReal(p.Preco), codigo: String(p.Codigo || ''), tam: tp(p.Tamanhos), cores: tp(p.Cores), cat: pri(p.Categoria), gen: pri(p.Genero), comLink: !!(nova && nova.tipo === 'story' && nova.manual) };
   }
   const FONTE = '"Helvetica Neue", Arial, sans-serif', LARANJA = '#E67E22';
   const VARIANTES_ELA = ['ElausaTM🧡', 'EleusaTM🧡', 'ElasusamTM🧡', 'ElesusamTM🧡'];
@@ -528,7 +650,29 @@
    * o texto padrão fica bonito; com adesivo, ele cobre a zona. Tudo continua editável (texto, tamanho, ocultar) e arrastável por foto. */
   const FONTE_T = '"Poppins","Inter","Helvetica Neue",Arial,sans-serif', FONTE_I = '"Inter","Helvetica Neue",Arial,sans-serif';
   const BEGE = '#F5F1E8', CINZA = '#2C2C2C', OURO = '#F39C12', PRETO = '#1a1a1a';
+  const PLACEHOLDERS_ = ['nome', 'avista', 'cheio', 'codigo', 'tam', 'cores', 'cat', 'gen'];
+  function especCustom_(c, info) {
+    const sp = JSON.parse(JSON.stringify(c.spec));
+    sp.grupos = Array.isArray(sp.grupos) ? sp.grupos : []; sp.itens = Array.isArray(sp.itens) ? sp.itens : [];
+    const sub = (t) => String(t == null ? '' : t).replace(/\{(nome|avista|cheio|codigo|tam|cores|cat|gen)\}/g, (m, k) => (info[k] == null ? '' : info[k]));
+    sp.itens.forEach((it) => { let t = sub(it.t); const mx = Number(it.max) || 0; if (mx > 0 && t.length > mx) t = t.slice(0, Math.max(1, mx - 1)).trim() + '…'; it.t = t; });
+    if (!sp.fundo) sp.fundo = 'foto';
+    return sp;
+  }
+  function posEspec_(r, info, tpl) {
+    if (r && r.itens && info) {
+      if (info.semPreco) r.itens.forEach((it) => { if (it.k === 'preco') { it.t = 'Consulte valor'; delete it.big; it.tam = Math.round((it.tam || 80) * 0.5); it.linhas = 1; } });
+      if (!info.comLink) r.itens.forEach((it) => { if (it.k === 'zona') it.t = ctaDoVisual_(tpl); });
+    }
+    return r;
+  }
   function especTemplate(tpl, info, W, H) {
+    const cu = customPorId_(tpl);
+    const r = cu ? especCustom_(cu, info || {}) : especTemplateBase(tpl, info, W, H);
+    if (r && cu && cu.spec && cu.spec.base) r.base = cu.spec.base;
+    return posEspec_(r, info, tpl);
+  }
+  function especTemplateBase(tpl, info, W, H) {
     if (ARTES[tpl]) return especArte(tpl, info, W, H);
     const story = H > W * 1.5, preco = info.avista ? info.avista + ' à vista' : '';
     const selo = (t, grp) => ({ k: 'selo', rot: 'Selo', t: t || 'NOVIDADE', grp: grp, tam: 38, cor: PRETO, bg: LARANJA, padX: 0.7, padY: 0.38, radius: 0.18 });
@@ -878,7 +1022,7 @@
     const [W, H] = tamanhoAlvo(), spec = especTemplate(tpl, infoPeca(nova.p), W, H);
     const tx = (nova.tx && nova.tx[tpl]) || {}, tm = (nova.tam && nova.tam[tpl]) || {}, ps = (m && m.pos && m.pos[tpl]) || {}, oc = (nova.oculto && nova.oculto[tpl]) || {};
     spec.itens = spec.itens.map((it) => Object.assign({}, it, { t: oc[it.k] ? '' : (tx[it.k] !== undefined ? tx[it.k] : it.t), mult: tm[it.k] || 1 }));
-    return { tpl: tpl, fundo: spec.fundo, lista: layoutItens(spec, W, H, ps) };
+    return { tpl: tpl, fundo: spec.fundo, arteBase: spec.base, lista: layoutItens(spec, W, H, ps) };
   }
   function caixaArredondada(ctx, x0, y0, x1, y1, r) { r = Math.min(r, (x1 - x0) / 2, (y1 - y0) / 2); ctx.beginPath(); ctx.moveTo(x0 + r, y0); ctx.arcTo(x1, y0, x1, y1, r); ctx.arcTo(x1, y1, x0, y1, r); ctx.arcTo(x0, y1, x0, y0, r); ctx.arcTo(x0, y0, x1, y0, r); ctx.closePath(); }
   function desenharItem(ctx, it, W, H) {
@@ -917,7 +1061,7 @@
   function desenharTemplate(ctx, img, W, H, tpl, ef, ajuste) {
     ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H);
     const fundo = ef && ef.fundo ? ef.fundo : 'foto';
-    if (tpl === 'original' || tpl === 'elausa') fundoFoto(ctx, img, W, H, ajuste); else if (fundo === 'arte') desenharArte(ctx, img, W, H, tpl, ajuste); else cobrir(ctx, img, 0, 0, W, H);
+    if (tpl === 'original' || tpl === 'elausa') fundoFoto(ctx, img, W, H, ajuste); else if (fundo === 'arte') desenharArte(ctx, img, W, H, (ef && ef.arteBase) || tpl, ajuste); else cobrir(ctx, img, 0, 0, W, H);
     if (fundo === 'baixo') degrade(ctx, W, H * 0.5, H, 0, 0.88);
     else if (fundo === 'baixo-leve') degrade(ctx, W, H * 0.7, H, 0, 0.45);
     else if (fundo === 'ambos') { degrade(ctx, W, H * 0.42, 0, 0, 0.7); degrade(ctx, W, H * 0.58, H, 0, 0.82); }
@@ -1101,7 +1245,7 @@
   function nomeLote(id) { const p = pecasAtivas().find((x) => String(x.ID) === String(id)); return p ? (p.Codigo ? p.Codigo + ' · ' : '') + p.Nome : id; }
   function htmlLote() {
     const l = (nova && nova.lote) || []; if (!l.length) return '';
-    return '<div class="po-passo" style="border-color:#c13584"><h4>📋 Lista para postar (' + l.length + ')</h4>' + l.map((id) => '<div class="po-escolhida" style="margin-bottom:6px' + (nova.p && String(nova.p.ID) === String(id) ? ';border-color:#c13584;background:#fde7f3' : '') + '"><button type="button" data-lote="' + esc(id) + '" style="margin:0;background:transparent;flex:1;text-align:left;font-weight:700">' + (nova.p && String(nova.p.ID) === String(id) ? '▶ ' : '') + esc(nomeLote(id)) + '</button><button type="button" data-lote-x="' + esc(id) + '" aria-label="Tirar da lista">✕</button></div>').join('') + '</div>';
+    return '<div class="po-passo" style="border-color:#c13584"><h4>📋 Lista para postar (' + l.length + ')</h4>' + l.map((id) => '<div class="po-escolhida" style="margin-bottom:6px' + (nova.p && String(nova.p.ID) === String(id) ? ';border-color:#c13584;background:#fde7f3' : '') + '"><button type="button" data-lote="' + esc(id) + '" style="margin:0;background:transparent;flex:1;text-align:left;font-weight:700">' + (nova.p && String(nova.p.ID) === String(id) ? '▶ ' : '') + esc(nomeLote(id)) + '</button><label style="display:flex;gap:4px;align-items:center;font-size:.78rem;white-space:nowrap;min-height:36px"><input type="checkbox" data-sp="' + esc(id) + '"' + (semPrecoIds[String(id)] ? ' checked' : '') + '> sem preço</label><button type="button" data-lote-x="' + esc(id) + '" aria-label="Tirar da lista">✕</button></div>').join('') + '</div>';
   }
 
   /* ---------- liga ---------- */

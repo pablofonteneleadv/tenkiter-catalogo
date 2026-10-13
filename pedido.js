@@ -148,7 +148,7 @@ function abrirSacola() {
 
     container.querySelectorAll('[data-remover-id]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        guardarRascunho_(); removerDaSacola(btn.dataset.removerId); atualizarSacolaHeader_(); abrirSacola();
+        guardarRascunho_(); removerDaSacola(btn.dataset.removerId); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); abrirSacola();
       });
     });
     container.querySelectorAll('input[name="ped-entrega"]').forEach(function (r) {
@@ -156,7 +156,7 @@ function abrirSacola() {
     });
     document.getElementById('btn-enviar-sacola').addEventListener('click', function () { enviarPedido_(itens); });
     document.getElementById('btn-limpar-sacola').addEventListener('click', function () {
-      if (confirm('Esvaziar toda a sacola?')) { limparSacola(); atualizarSacolaHeader_(); abrirSacola(); }
+      if (confirm('Esvaziar toda a seleção?')) { limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); abrirSacola(); }
     });
   }
   container.querySelectorAll('#btn-fechar-sacola').forEach(function (btn) { btn.addEventListener('click', fecharSacola); });

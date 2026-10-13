@@ -1223,6 +1223,14 @@ catch (e) { window.__precargaLista = null; }
     return agora;
   }
   /** Mantém o ❤️ e o botão Sacola do cartão iguais ao estado real (a pessoa pode ter mudado dentro da folha). */
+  /** Chamada pela janela da seleção (pedido.js) depois de esvaziar/remover: refaz os botões “Na seleção” de todos os cartões. */
+  window.tkSincronizarCards = function () {
+    document.querySelectorAll('.card[data-id]').forEach((card) => {
+      const id = card.getAttribute('data-id'), sac = card.querySelector('.ac-sacola');
+      if (sac) { const n = estaNaSacola(id); sac.setAttribute('aria-pressed', String(n)); sac.textContent = n ? '✓ Na seleção' : '🛍️ Selecionar'; }
+    });
+    atualizarBadges();
+  };
   function sincronizarBotoesCard_(id) {
     const card = document.querySelector('.card[data-id="' + String(id).replace(/"/g, '') + '"]');
     if (!card) return;
