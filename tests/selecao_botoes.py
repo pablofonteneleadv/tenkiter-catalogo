@@ -28,6 +28,16 @@ with sync_playwright() as p:
         if lote:
             pg.click("#btn-lote-menu"); chk("lista de ações abre", pg.locator("#lote-menu:visible").count() == 1 and pg.locator("#lote-menu [data-lote]").count() == 6)
         chk("mesma linha (tops iguais)", pg.evaluate("(()=>{const t=[...document.querySelectorAll('#btn-share-busca,#btn-limpar-sel,#btn-lote-menu')].filter(b=>b.offsetParent).map(b=>Math.round(b.getBoundingClientRect().top)); return new Set(t).size===1})()"))
+        if lote:
+            pg.on("dialog", lambda d: d.accept())
+            pg.click('#lote-menu [data-lote=btn-bulk-juntar]'); pg.wait_for_timeout(300)
+            chk("Juntar abre a janela no catálogo (sem sair)", pg.locator("#overlay-juntar.aberto").count() == 1 and pg.url.endswith("index.html") or "admin" not in pg.url)
+            chk("2 peças para escolher", pg.locator("#juntar-lista input").count() == 2)
+            pg.click("#juntar-ok"); pg.wait_for_timeout(100)
+            chk("mostra que está carregando", pg.locator("#juntar-prog:visible").count() == 1 or pg.locator("#overlay-juntar.aberto").count() == 0)
+            pg.wait_for_timeout(1500)
+            chk("fechou e a seleção esvaziou", pg.locator("#overlay-juntar.aberto").count() == 0 and pg.evaluate("getSacola().length") == 0)
+            pg.evaluate("salvarSacola([String(produtos[0].ID), String(produtos[1].ID)]); atualizarBarraFiltros_()")
         pg.click("#btn-limpar-sel"); pg.wait_for_timeout(300)
         chk("Limpar esvazia a seleção e some", pg.evaluate("getSacola().length") == 0 and pg.locator("#linha-share-busca:visible").count() == 0)
         ctx.close()

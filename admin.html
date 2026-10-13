@@ -2673,7 +2673,7 @@
     const sel = juntarSelecionados_(); if (!marcado || sel.length < 2) return;
     const destino = sel.find(p => String(p.ID) === marcado.value); const outros = sel.filter(p => String(p.ID) !== marcado.value);
     if (!confirm('Juntar ' + outros.length + (outros.length === 1 ? ' produto' : ' produtos') + ' em "' + destino.Nome + '" (' + (destino.Codigo || '') + ')?\n\nOs outros ficam arquivados e as fotos deles passam para este.')) return;
-    btn.disabled = true; er.hidden = true;
+    btn.disabled = true; btn.textContent = 'Juntando… aguarde, está funcionando'; er.hidden = true;
     try {
       const r = await chamarAdmin_({ action: 'juntarProdutos', destinoId: destino.ID, origemIds: outros.map(p => p.ID) });
       if (r && r.ok) {
@@ -2685,7 +2685,7 @@
         if (t) { er.textContent = t; er.hidden = false; }
       }
     } catch (e) { er.textContent = 'Sem conexão. Tente de novo.'; er.hidden = false; }
-    finally { btn.disabled = false; }
+    finally { btn.disabled = false; btn.textContent = 'Juntar'; }
   });
 
   const BOTOES_BULK_IDS = ['btn-bulk-preco', 'btn-bulk-novidade', 'btn-bulk-arquivar', 'btn-bulk-reativar', 'btn-bulk-juntar', 'btn-bulk-postar'];

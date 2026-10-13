@@ -299,6 +299,21 @@ catch (e) { window.__precargaLista = null; }
   .barra-filtros-flut.so-botao { right: auto; left: 12px; background: transparent; box-shadow: none; padding: 0; min-height: 0; }
   .barra-filtros-flut.so-botao span { display: none; }
   .barra-filtros-flut.so-botao button { background: #0d0d0d; color: #fff; border: 1px solid var(--laranja); font-weight: 700; box-shadow: 0 2px 10px rgba(0,0,0,.3); border-radius: 999px; padding: 6px 14px; }
+  .juntar-modal { padding: 16px; }
+  .juntar-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 1.05rem; }
+  .juntar-topo .btn-fechar { width: 44px; min-height: 44px; border-radius: 50%; border: 0; background: #eee; font-size: 1.1rem; cursor: pointer; }
+  .juntar-ajuda { font-size: .9rem; color: #444; margin: 0 0 10px; }
+  .juntar-item { display: flex; gap: 10px; align-items: center; border: 1px solid #ccc; border-radius: 12px; padding: 8px; margin-bottom: 8px; cursor: pointer; }
+  .juntar-item input { width: 22px; height: 22px; flex: none; }
+  .juntar-item img { width: 52px; height: 64px; object-fit: cover; border-radius: 8px; flex: none; }
+  .juntar-item span { font-size: .88rem; min-width: 0; }
+  .juntar-erro { color: #b00020; font-weight: 700; margin: 8px 0; }
+  .juntar-prog { display: flex; gap: 10px; align-items: center; background: #fff4e5; border: 2px solid var(--laranja); border-radius: 12px; padding: 10px 12px; margin: 8px 0; font-size: .9rem; color: #0d0d0d; }
+  .juntar-prog[hidden], .juntar-erro[hidden] { display: none; }
+  .juntar-spin { width: 22px; height: 22px; border: 3px solid #f0c48f; border-top-color: #0d0d0d; border-radius: 50%; animation: juntar-gira .8s linear infinite; flex: none; }
+  @keyframes juntar-gira { to { transform: rotate(360deg); } }
+  .juntar-ok { width: 100%; min-height: 48px; border: 0; border-radius: 12px; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: 1rem; cursor: pointer; }
+  .juntar-ok:disabled { opacity: .7; cursor: progress; }
   .linha-share-busca { padding: 6px 0 0; } .linha-share-busca[hidden] { display: none; }
   .linha-share-busca { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
   .linha-share-busca[hidden] { display: none; }
@@ -625,6 +640,14 @@ catch (e) { window.__precargaLista = null; }
 
 <div id="overlay-rastreio" class="overlay-sheet-loja"><div class="modal" id="rastreio-conteudo" role="dialog" aria-modal="true" aria-label="Acompanhar pedido"></div></div>
 
+<div id="overlay-juntar" class="overlay-sheet-loja"><div class="modal juntar-modal" role="dialog" aria-modal="true" aria-labelledby="juntar-titulo">
+  <div class="juntar-topo"><strong id="juntar-titulo">Juntar produtos repetidos</strong><button type="button" class="btn-fechar" id="juntar-fechar" aria-label="Fechar">✕</button></div>
+  <p class="juntar-ajuda">Escolha o produto que <b>fica</b>. As fotos e o vídeo dos outros vão para ele, e os outros ficam <b>arquivados</b> (dá para reativar).</p>
+  <div id="juntar-lista" role="radiogroup" aria-labelledby="juntar-titulo"></div>
+  <div id="juntar-erro" class="juntar-erro" role="alert" hidden></div>
+  <div id="juntar-prog" class="juntar-prog" role="status" aria-live="polite" hidden><span class="juntar-spin" aria-hidden="true"></span><span>Juntando… pode levar alguns segundos. <b>Está funcionando, não feche.</b></span></div>
+  <button type="button" class="juntar-ok" id="juntar-ok">Juntar</button>
+</div></div>
 <div id="overlay-selecao" class="overlay-sheet-loja"><div class="modal" id="selecao-conteudo" role="dialog" aria-modal="true" aria-label="Compartilhar seleção"></div></div>
 
 
@@ -1097,7 +1120,7 @@ catch (e) { window.__precargaLista = null; }
   document.getElementById('btn-share-busca').addEventListener('click', () => { const bf = document.getElementById('badge-filtros'), q = document.getElementById('busca').value.trim(); const filtrando = (bf && !bf.hidden && (parseInt(bf.textContent, 10) || 0) > 0) || q || selecaoFixa || apenasFavoritos || apenasNovidades; if (!filtrando && getSacola().length) abrirSelecao(true); else document.getElementById('btn-share-filtros').click(); });
   document.getElementById('btn-limpar-sel').addEventListener('click', () => { if (getSacola().length) { limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); } if (selecaoFixa || document.getElementById('busca').value.trim() || apenasFavoritos || apenasNovidades) document.getElementById('btn-share-filtros').click(); atualizarBarraFiltros_(); });
   document.getElementById('btn-lote-menu').addEventListener('click', (e) => { const m = document.getElementById('lote-menu'); m.hidden = !m.hidden; e.currentTarget.setAttribute('aria-expanded', String(!m.hidden)); });
-  document.getElementById('lote-menu').addEventListener('click', (e) => { const b = e.target.closest('[data-lote]'); if (!b) return; location.href = 'admin.html?lote=' + encodeURIComponent(getSacola().join(',')) + '&acao=' + b.dataset.lote; });
+  document.getElementById('lote-menu').addEventListener('click', (e) => { const b = e.target.closest('[data-lote]'); if (!b) return; if (b.dataset.lote === 'btn-bulk-juntar') { document.getElementById('lote-menu').hidden = true; abrirJuntarCatalogo_(); return; } location.href = 'admin.html?lote=' + encodeURIComponent(getSacola().join(',')) + '&acao=' + b.dataset.lote; });
   function verTodoSite_() {
     modoLink_ = false;
     if (selecaoFixa) { selecaoFixa = null; }
@@ -1664,6 +1687,43 @@ catch (e) { window.__precargaLista = null; }
     if (!s) return Promise.resolve({ ok: false, erro: 'Entre na sua conta para fazer isso.' });
     return apiPost(Object.assign({ whatsapp: s.whatsapp, sessao: s.sessao }, corpo));
   }
+
+  /* v6.2: Juntar produtos repetidos SEM sair do catálogo (usa a ação juntarProdutos do backend 3.7+) */
+  function abrirJuntarCatalogo_() {
+    const sel = getSacola().map(String).map(id => produtos.find(p => String(p.ID) === id)).filter(Boolean);
+    if (sel.length < 2) { avisoEquipe_('Marque pelo menos 2 peças para juntar.'); return; }
+    const lista = document.getElementById('juntar-lista'); lista.innerHTML = '';
+    sel.forEach((p, i) => {
+      const fotos = 1 + listaGaleria_(p).length;
+      const lb = document.createElement('label'); lb.className = 'juntar-item';
+      lb.innerHTML = '<input type="radio" name="juntar-destino" value="' + escaparHtml(String(p.ID)) + '"' + (i === 0 ? ' checked' : '') + '><img ' + atribSrc(fotoMini(p.Foto_URL, 120)) + ' alt=""><span><b>' + escaparHtml(p.Nome) + '</b><br>' + escaparHtml(p.Codigo || '') + ' · ' + fotos + (fotos === 1 ? ' foto' : ' fotos') + '</span>';
+      lista.appendChild(lb);
+    });
+    document.getElementById('juntar-erro').hidden = true; document.getElementById('juntar-prog').hidden = true;
+    document.getElementById('juntar-ok').disabled = false; document.getElementById('juntar-ok').textContent = 'Juntar';
+    abrirComHistorico_('overlay-juntar');
+  }
+  document.getElementById('juntar-fechar').addEventListener('click', () => { if (!document.getElementById('juntar-ok').disabled) fecharComHistorico_('overlay-juntar'); });
+  document.getElementById('juntar-ok').addEventListener('click', async () => {
+    const btn = document.getElementById('juntar-ok'), er = document.getElementById('juntar-erro'), prog = document.getElementById('juntar-prog');
+    const marcado = document.querySelector('input[name="juntar-destino"]:checked'); if (!marcado) return;
+    const sel = getSacola().map(String).map(id => produtos.find(p => String(p.ID) === id)).filter(Boolean);
+    const destino = sel.find(p => String(p.ID) === marcado.value), outros = sel.filter(p => String(p.ID) !== marcado.value);
+    if (!destino || !outros.length) return;
+    if (!confirm('Juntar ' + outros.length + (outros.length === 1 ? ' peça' : ' peças') + ' em "' + destino.Nome + '" (' + (destino.Codigo || '') + ')?\n\nAs outras ficam arquivadas e as fotos delas passam para esta.')) return;
+    btn.disabled = true; btn.textContent = 'Juntando…'; er.hidden = true; prog.hidden = false;
+    document.querySelectorAll('#juntar-lista input').forEach(i => i.disabled = true);
+    try {
+      const r = await pedirEquipe_({ action: 'juntarProdutos', destinoId: destino.ID, origemIds: outros.map(p => p.ID) });
+      if (r && r.ok) {
+        btn.textContent = '✔ Pronto!'; prog.hidden = true;
+        limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards();
+        try { const resp = await buscarListaPublica(); if (Array.isArray(resp.produtos)) { const rec = resp.produtos.reverse(); salvarCatalogoCache(rec); aplicarProdutosRecebidos(rec); } } catch (e) {}
+        btn.disabled = false; fecharComHistorico_('overlay-juntar'); atualizarBarraFiltros_();
+        avisoEquipe_('✔ Pronto! "' + destino.Nome + '" ficou com ' + (r.fotosNoDestino != null ? r.fotosNoDestino + ' foto(s)' : 'as fotos juntas') + '. ' + outros.length + ' arquivada(s).');
+      } else { prog.hidden = true; btn.disabled = false; btn.textContent = 'Juntar'; document.querySelectorAll('#juntar-lista input').forEach(i => i.disabled = false); er.textContent = erroEquipe_(r); er.hidden = false; }
+    } catch (e) { prog.hidden = true; btn.disabled = false; btn.textContent = 'Juntar'; document.querySelectorAll('#juntar-lista input').forEach(i => i.disabled = false); er.textContent = 'Sem conexão. Tente de novo.'; er.hidden = false; }
+  });
   function erroEquipe_(r) { return (r && r.erro) || (r && r.semPermissao ? 'Sua conta não tem esse acesso.' : 'Não consegui agora. Tente de novo.'); }
   let toastEquipeTimer_ = null;
   function avisoEquipe_(texto, desfazer) {
