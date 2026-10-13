@@ -96,8 +96,8 @@ with sync_playwright() as p:
     chk("tocar numa pílula escolhe o elemento", pg.locator(C + " .ed-pill.sel").count() == 1 and pg.locator(C + " .ed-rapido").count() == 1)
     pg.locator(C + " .ed-pill[data-k=nome]").click(); pg.wait_for_timeout(200)
     pg.locator(C + " [data-ed-a=imas]").click(); chk("🧲 desliga os ímãs", pg.locator(C + " [data-ed-a=imas]").get_attribute("aria-pressed") == "false")
-    c4 = centro("nome"); y2 = cam("nome")["y"]; arrasta(c4, (c4[0], c4[1] + 30)); rh = pg.evaluate("window.__tkEdAlcas(%r)" % cid)["rect"]["h"]
-    chk("na tela cheia o dedo também move (sem ímã: 30 px = 30/altura)", abs(cam("nome")["y"] - y2 - 30 / rh) < 0.012, (y2, cam("nome")["y"], 30 / rh))
+    c4 = centro("nome"); y2 = cam("nome")["y"]; rh = pg.evaluate("window.__tkEdAlcas(%r)" % cid)["rect"]["h"]; arrasta(c4, (c4[0], c4[1] + 30)); rh = (rh + pg.evaluate("window.__tkEdAlcas(%r)" % cid)["rect"]["h"]) / 2
+    chk("na tela cheia o dedo também move (sem ímã: 30 px = 30/altura)", abs(cam("nome")["y"] - (cam("nome").get("ov", {}).get("feed", {}).get("y", y2)) - 30 / rh) < 0.012, (y2, cam("nome")["y"], 30 / rh))
     h0 = pg.evaluate("document.documentElement.scrollHeight"); chk("a página de trás não rola (travada)", pg.evaluate("getComputedStyle(document.documentElement).overflow") == "hidden")
     pg.go_back(); pg.wait_for_timeout(500)
     chk("botão voltar do celular fecha só a tela cheia (continua no painel)", "full" not in (pg.locator(C + " .ed-wrap").get_attribute("class") or "") and pg.url.split("?")[0].endswith("admin.html"))
