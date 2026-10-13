@@ -714,6 +714,15 @@ export async function rotasFotosCliente(env, req, url, J) {     // /cliente/foto
 }
 export async function rotasFotos(env, ctx, req, url, J) {       // /fotos* (equipe: gerir_acessos ou catalogo_cadastrar)
   const p = url.pathname;
+  if (p === '/fotos/visuais') {     // configuração dos visuais de Postagens (nomes, CTA, visuais próprios, tipos): igual em todos os aparelhos
+    if (req.method === 'GET') { const v = await cfgGet(env, 'po_visuais'); let d = null; try { d = v ? JSON.parse(v) : null; } catch (e) {} return J({ ok: true, dados: d }); }
+    if (req.method === 'POST') {
+      let b = {}; try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); }
+      const txt = JSON.stringify(b.dados && typeof b.dados === 'object' ? b.dados : {});
+      if (txt.length > 200000) return J({ ok: false, erro: 'Configuração grande demais.' }, 400);
+      await cfgSet(env, 'po_visuais', txt); return J({ ok: true });
+    }
+  }
   if (p === '/fotos' && req.method === 'GET') {
     const st = url.searchParams.get('status') || 'nova', lim = Math.min(100, Number(url.searchParams.get('limite')) || 60);
     const q = (await (st === 'todas' ? env.DB.prepare('SELECT * FROM foto_cliente ORDER BY id DESC LIMIT ?').bind(lim) : env.DB.prepare('SELECT * FROM foto_cliente WHERE status=? ORDER BY id DESC LIMIT ?').bind(st, lim)).all()).results || [];

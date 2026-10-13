@@ -17,10 +17,23 @@
   const ehSemPreco_ = (p) => !!(p && semPrecoIds[String(p.ID)]);
   const CFG_VIS_KEY = 'tk_po_visuais_v1';
   function lerCfgVis_() { try { return JSON.parse(localStorage.getItem(CFG_VIS_KEY) || '{}') || {}; } catch (e) { return {}; } }
-  function salvarCfgVis_(c) { try { localStorage.setItem(CFG_VIS_KEY, JSON.stringify(c)); } catch (e) {} }
+  function salvarCfgVis_(c) { try { localStorage.setItem(CFG_VIS_KEY, JSON.stringify(c)); } catch (e) {} agendarEnvioVisuais_(); }
   const CUSTOM_KEY = 'tk_po_visuais_custom_v1', NOMES_KEY = 'tk_po_visuais_nomes_v1', CTA_KEY = 'tk_po_cta_v1', CTA_PADRAO = 'www.tenkitermodas.com.br';
+  /* Sincronização com o servidor (Worker tenkiter-ig, /fotos/visuais): os visuais valem em todos os aparelhos. Sem a rota nova no Worker, segue só local. */
+  const CHAVES_SYNC_ = ['tk_po_visuais_v1', 'tk_po_visuais_custom_v1', 'tk_po_visuais_nomes_v1', 'tk_po_cta_v1'];
+  let sincTimer_ = null, sincAtivo_ = true;
+  function agendarEnvioVisuais_() {
+    if (!sincAtivo_) return; clearTimeout(sincTimer_);
+    sincTimer_ = setTimeout(() => { const d = {}; CHAVES_SYNC_.forEach((k) => { try { d[k] = JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { d[k] = null; } }); ig('/fotos/visuais', 'POST', { dados: d }); }, 900);
+  }
+  async function puxarVisuais_() {
+    const r = await ig('/fotos/visuais'); if (!r || !r.ok) { sincAtivo_ = false; return false; }
+    if (r.dados && typeof r.dados === 'object') { CHAVES_SYNC_.forEach((k) => { try { if (r.dados[k] == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(r.dados[k])); } catch (e) {} }); return true; }
+    if (CHAVES_SYNC_.some((k) => { try { return !!localStorage.getItem(k); } catch (e) { return false; } })) agendarEnvioVisuais_();
+    return false;
+  }
   const lerJ_ = (k, def) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? def : v; } catch (e) { return def; } };
-  const gravarJ_ = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  const gravarJ_ = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} if (CHAVES_SYNC_.indexOf(k) !== -1) agendarEnvioVisuais_(); };
   const lerCustom_ = () => { const l = lerJ_(CUSTOM_KEY, []); return Array.isArray(l) ? l.filter((c) => c && c.id && c.spec) : []; };
   const customPorId_ = (id) => lerCustom_().find((c) => c.id === id) || null;
   const ctaDoVisual_ = (id) => { const c = lerJ_(CTA_KEY, {}); return c && typeof c[id] === 'string' && c[id].trim() ? c[id].trim() : CTA_PADRAO; };
@@ -102,6 +115,11 @@
       .po-previa { display: flex; gap: 10px; flex-wrap: wrap; padding: 4px 0; }
       .po-previa canvas { width: calc(50% - 5px); max-width: 260px; height: auto; border-radius: 8px; border: 1px solid #ddd; background: #f4f4f4; flex: none; }
       .po-previa canvas.arrastando { outline: 3px solid var(--laranja); }
+      .po-previa canvas.ativa { outline: 2px solid var(--laranja); outline-offset: 1px; }
+      .po-zoom { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 4px 0 2px; }
+      .po-zoom label { font-weight: 700; font-size: .9em; }
+      .po-zoom input[type=range] { flex: 1 1 120px; width: auto; min-width: 100px; }
+      .po-zoom button { width: auto; min-width: 44px; min-height: 44px; }
       .po-sheet textarea, .po-sheet input[type=datetime-local], .po-sheet input[type=search] { width: 100%; box-sizing: border-box; font-size: 1rem; padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
       .po-sheet textarea { min-height: 150px; font-family: inherit; }
       .po-ajuda { font-size: 0.8rem; color: #444; margin: 6px 0 0; }
@@ -175,6 +193,7 @@
     abrirComHistorico_('overlay-postagens');
     if (!nova) novaVazia();
     desenhar();
+    puxarVisuais_().then((mudou) => { if (mudou && (abaAtual === 'nova' || abaAtual === 'config')) desenhar(); });
     await carregarFila(); carregarFotos(true);
     parar(); pollTimer = setInterval(() => { if ($('overlay-postagens').classList.contains('aberto') && abaAtual !== 'nova' && !ocupado) carregarFila(true); }, window.TK_POSTAGENS_POLL_MS || 15000);
   }
@@ -387,7 +406,7 @@
     const c = lerCfgVis_(), todos = todosVisuais_();
     const tipos = [['feed', 'Feed'], ['carrossel', 'Carrossel'], ['story', 'Story']];
     let h = '<style>.po-vz{border:1px solid #ddd;border-radius:12px;margin:0 0 8px;background:#fff}.po-vz>summary{padding:12px;font-weight:800;cursor:pointer;min-height:44px}.po-vz-corpo{padding:0 12px 12px}.po-vz-l{display:block;font-weight:700;font-size:.85rem;margin:8px 0}.po-vz-l input{display:block;width:100%;margin-top:4px}.po-vz-f{display:grid;grid-template-columns:1fr;gap:4px;border-top:1px solid #eee;padding:8px 0}.po-vz-f label{font-size:.75rem;display:inline-flex;gap:4px;align-items:center}.po-vz-f input[type=number]{width:70px}.po-vz-add,.po-vz-acoes{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.po-vz button{width:auto;min-height:40px;padding:6px 12px}.po-vz-ok{background:#E67E22;color:#0d0d0d;font-weight:800}</style>';
-    h += '<div class="po-passo"><h4>Visuais de cada tipo</h4><p class="po-ajuda" style="margin-top:0">Toque num tipo para marcar quais visuais aparecem nele. Reels não usa visual. Vale para este aparelho; sempre sobra pelo menos um.</p>';
+    h += '<div class="po-passo"><h4>Visuais de cada tipo</h4><p class="po-ajuda" style="margin-top:0">Toque num tipo para marcar quais visuais aparecem nele. Reels não usa visual. Vale para todos os aparelhos da equipe; sempre sobra pelo menos um.</p>';
     h += tipos.map((t) => { const ativos = Array.isArray(c[t[0]]) ? c[t[0]] : todos.map((x) => x[0]); return '<details class="po-vz" data-vz-det="t:' + t[0] + '"' + (vzAbertos['t:' + t[0]] ? ' open' : '') + '><summary>' + t[1] + ' <small>(' + todos.filter((v) => ativos.indexOf(v[0]) !== -1).length + ' de ' + todos.length + ')</small></summary><div class="po-vz-corpo">' + todos.map((v) => '<label style="display:flex;gap:8px;align-items:center;min-height:40px"><input type="checkbox" data-cv-tipo="' + t[0] + '" data-cv-id="' + esc(v[0]) + '"' + (ativos.indexOf(v[0]) !== -1 ? ' checked' : '') + '> ' + esc(v[1]) + '</label>').join('') + '</div></details>'; }).join('') + '</div>';
     h += '<div class="po-passo"><h4>Meus visuais e edição</h4><p class="po-ajuda" style="margin-top:0">Cada visual tem nome, texto do botão sem link e prévia ao vivo. Os visuais prontos podem ser duplicados para você editar campos e código; os seus podem ser alterados e excluídos.</p><div class="po-vz-acoes" style="margin-top:0"><button type="button" class="po-vz-ok" data-vza="novo">+ Novo visual</button></div>' + todos.map(htmlCardVisual_).join('') + '</div>';
     return h;
@@ -504,7 +523,11 @@
       h += (n.p ? '<label class="po-sp" style="display:flex;gap:8px;align-items:center;min-height:44px;font-weight:700"><input type="checkbox" data-sp="' + esc(String(n.p.ID)) + '"' + (ehSemPreco_(n.p) ? ' checked' : '') + '> Sem preço — mostrar “Consulte valor”</label>' : '') + '<div class="po-passo"><h4>3. Visual</h4><div class="po-sticky">' + chipsV +
         '<button type="button" data-a="previa" class="po-previa-btn">👁️ Ver como vai ficar</button><div class="po-previa" id="po-previa" tabindex="0" role="group" aria-label="Prévia da arte"></div></div>' +
         '<p class="po-ajuda">' + (n.template === 'original' ? 'A foto como está (ajustada ao formato do Instagram).' : n.template === 'elausa' ? 'A foto com o texto “Ela usa TM” (toque numa das opções ou escreva o seu). Arraste o texto na foto para onde quiser.' : 'Toque num visual e a prévia muda na hora. Arraste cada texto na prévia para onde quiser. No Story, cole o adesivo de link do Instagram em cima da “zona do link” (sem adesivo, o texto da loja fica ali). Vídeos ficam sem template.') + '</p>';
-      if (n.template === 'original' || n.template === 'elausa') h += '<div class="po-chips" role="group" aria-label="Como a foto ocupa a tela" style="margin-bottom:6px"><button type="button" data-aj="preencher" aria-pressed="' + (n.ajuste === 'preencher') + '">Preencher a tela</button><button type="button" data-aj="inteira" aria-pressed="' + (n.ajuste === 'inteira') + '">Foto inteira (fundo desfocado)</button></div>';
+      h += '<div class="po-foto-aj" id="po-foto-aj"><div class="po-chips" role="group" aria-label="Como a foto ocupa a tela" style="margin-bottom:6px"><button type="button" data-aj="preencher" aria-pressed="' + (n.ajuste === 'preencher') + '">✂️ Cortar (preencher)</button><button type="button" data-aj="inteira" aria-pressed="' + (n.ajuste === 'inteira') + '">🖼️ Encaixar (fundo desfocado)</button><button type="button" data-aj="margem" aria-pressed="' + (n.ajuste === 'margem') + '">⬜ Com margens</button></div>' +
+        (n.ajuste === 'margem' ? '<div class="po-chips" role="group" aria-label="Cor da margem" style="margin-bottom:6px">' + [['#ffffff', 'Branca'], ['#111111', 'Preta'], ['#F5F1E8', 'Creme'], ['#E67E22', 'Laranja']].map((q) => '<button type="button" data-mg="' + q[0] + '" aria-pressed="' + ((n.margemCor || '#ffffff') === q[0]) + '">' + q[1] + '</button>').join('') + '</div>' : '') +
+        '<div class="po-zoom"><label for="po-zoom">🔍 Zoom da foto</label><button type="button" data-a="zoomMenos" aria-label="Afastar a foto">−</button><input type="range" id="po-zoom" data-zoom="1" min="0.3" max="4" step="0.02" value="' + ((n.fotoAtiva && n.fotoAtiva.zoom) || 1) + '" aria-label="Zoom da foto"><button type="button" data-a="zoomMais" aria-label="Aproximar a foto">+</button><button type="button" data-a="centrar" class="po-reset">↺ Centralizar</button></div>' +
+        '<label class="po-mover" style="display:flex;gap:8px;align-items:center;min-height:44px"><input type="checkbox" data-a="mover"' + (n.moverFoto ? ' checked' : '') + '> ✋ Mover a foto com o dedo (desliga a rolagem sobre a prévia)</label>' +
+        '<p class="po-ajuda">Arraste a foto (computador: arraste no fundo; roda do mouse = zoom). No celular, ligue “Mover a foto” e use 1 dedo para mover e 2 dedos para aproximar. O visual fica por cima, sem alterar a foto.</p></div>';
       if (n.template === 'elausa') h += '<div class="po-chips" role="group" aria-label="Textos prontos" style="margin-bottom:6px">' + VARIANTES_ELA.map((v) => '<button type="button" data-var="' + esc(v) + '" aria-pressed="' + (((n.tx.elausa || {}).marca !== undefined ? n.tx.elausa.marca : VARIANTES_ELA[0]) === v) + '">' + esc(v) + '</button>').join('') + '</div>';
       if (itens.length) h += '<details class="po-det" id="po-det"' + (n.detTx ? ' open' : '') + '><summary>✏️ Personalizar textos (' + itens.length + ')</summary><div id="po-textos">' + itens.map((it) => { const tx = (n.tx[n.template] || {})[it.k], tm = (n.tam[n.template] || {})[it.k] || 1, oc = !!((n.oculto[n.template] || {})[it.k]);
         return '<div class="po-it"><div class="po-it-top"><label for="po-tx-' + it.k + '">' + esc(it.rot) + '</label><input type="range" id="po-tm-' + it.k + '" data-tm="' + it.k + '" min="0.5" max="2" step="0.05" value="' + tm + '" aria-label="Tamanho: ' + esc(it.rot) + '"></div>' +
@@ -562,6 +585,8 @@
     else if (t.id === 'po-leg') { nova.legenda = t.value; nova.legendaMexida = true; }
     else if (t.id === 'po-data') nova.data = t.value;
     else if (t.dataset && t.dataset.tx !== undefined) { (nova.tx[nova.template] = nova.tx[nova.template] || {})[t.dataset.tx] = t.value; repintar(); }
+    else if (t.dataset && t.dataset.zoom !== undefined) { const m = fotoAtiva_(); if (m) { m.zoom = Number(t.value) || 1; limitesFoto_(m); repintar(); } }
+    else if (t.dataset && t.dataset.a === 'mover') { nova.moverFoto = t.checked; repintar(); }
     else if (t.dataset && t.dataset.tm !== undefined) { (nova.tam[nova.template] = nova.tam[nova.template] || {})[t.dataset.tm] = Number(t.value) || 1; repintar(); }
     else if (t.id === 'po-f-whats') formFoto.whats = t.value;
     else if (t.id === 'po-f-ig') formFoto.ig = t.value;
@@ -585,7 +610,10 @@
     if (d.a === 'fotoform') { formFoto.aberto = !formFoto.aberto; formFoto.msg = ''; return desenhar(); }
     if (d.a === 'fotosalvar') return salvarFotosEquipe();
     if (d.a === 'fotousar') return usarFotos();
-    if (d.aj) { nova.ajuste = d.aj; return desenhar(); }
+    if (d.aj) { nova.ajuste = d.aj; itensDaPostagem().forEach((m) => { m.zoom = 1; m.fx = 0; m.fy = 0; }); return desenhar(); }
+    if (d.mg) { nova.margemCor = d.mg; return desenhar(); }
+    if (d.a === 'zoomMais' || d.a === 'zoomMenos') { const m = fotoAtiva_(); if (m) { m.zoom = (m.zoom || 1) * (d.a === 'zoomMais' ? 1.1 : 1 / 1.1); limitesFoto_(m); const z = $('po-zoom'); if (z) z.value = m.zoom; repintar(); } return; }
+    if (d.a === 'centrar') { const m = fotoAtiva_(); if (m) { m.zoom = 1; m.fx = 0; m.fy = 0; const z = $('po-zoom'); if (z) z.value = 1; repintar(); } return; }
     if (d.var) { (nova.tx.elausa = nova.tx.elausa || {}).marca = d.var; return desenhar(); }
     if (d.a === 'resetTx') { delete nova.tx[nova.template]; delete nova.tam[nova.template]; itensDaPostagem().forEach((m) => { if (m.pos) delete m.pos[nova.template]; }); return desenhar(); }
     if (d.modo) {
@@ -1056,6 +1084,28 @@
       caber(ctx, img, 0, 0, W, H);
     } else cobrir(ctx, img, 0, 0, W, H);
   }
+  /** Monta a FOTO no formato da postagem (Feed 1080×1350 / Story 1080×1920) antes de qualquer visual:
+   *  'preencher' = corta para cobrir, 'inteira' = foto inteira com fundo desfocado, 'margem' = foto inteira com margem de cor.
+   *  Zoom (m.zoom) e deslocamento (m.fx/m.fy, em fração da tela) valem para os três. O visual é desenhado POR CIMA, sem mexer na foto. */
+  const fundoBorrado = new WeakMap();
+  function fundoDesfocado(img, W, H) {
+    const k = W + 'x' + H, mapa = fundoBorrado.get(img) || {}; if (mapa[k]) return mapa[k];
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+    x.fillStyle = '#111'; x.fillRect(0, 0, W, H);
+    try { x.filter = 'blur(40px)'; cobrir(x, img, -60, -60, W + 120, H + 120); x.filter = 'none'; x.fillStyle = 'rgba(0,0,0,.35)'; x.fillRect(0, 0, W, H); } catch (e) { /* sem blur: fundo escuro */ }
+    mapa[k] = c; fundoBorrado.set(img, mapa); return c;
+  }
+  function limitesFoto_(m) { m.zoom = Math.min(4, Math.max(0.3, Number(m.zoom) || 1)); m.fx = Math.min(1, Math.max(-1, Number(m.fx) || 0)); m.fy = Math.min(1, Math.max(-1, Number(m.fy) || 0)); }
+  function compor(img, W, H, m) {
+    m = m || {}; limitesFoto_(m);
+    const modo = nova.ajuste === 'inteira' || nova.ajuste === 'margem' ? nova.ajuste : 'preencher';
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+    if (modo === 'margem') { x.fillStyle = nova.margemCor || '#ffffff'; x.fillRect(0, 0, W, H); } else x.drawImage(fundoDesfocado(img, W, H), 0, 0);
+    const r = (modo === 'preencher' ? Math.max(W / img.width, H / img.height) : Math.min(W / img.width, H / img.height)) * m.zoom;
+    const iw = img.width * r, ih = img.height * r;
+    x.drawImage(img, (W - iw) / 2 + m.fx * W, (H - ih) / 2 + m.fy * H, iw, ih);
+    return c;
+  }
   function degrade(ctx, W, y0, y1, a0, a1, cor) { const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(' + (cor || '0,0,0') + ',' + a0 + ')'); g.addColorStop(1, 'rgba(' + (cor || '0,0,0') + ',' + a1 + ')'); ctx.fillStyle = g; ctx.fillRect(0, Math.min(y0, y1), W, Math.abs(y1 - y0)); }
   /** Desenha a foto + fundo do visual + itens; devolve as caixas dos textos (para arrastar). */
   function desenharTemplate(ctx, img, W, H, tpl, ef, ajuste) {
@@ -1087,7 +1137,7 @@
   function pintarCanvas(c) {
     const m = c._m, [W, H] = tamanhoAlvo(); c.width = W; c.height = H;
     const x = c.getContext('2d');
-    c._boxes = desenharTemplate(x, c._img, W, H, nova.template, itensEfetivos(nova.template, m), nova.ajuste);
+    c._boxes = desenharTemplate(x, compor(c._img, W, H, m), W, H, nova.template, itensEfetivos(nova.template, m), 'preencher');
     if (nova.tipo === 'story' && nova.manual && (nova.template === 'original' || nova.template === 'elausa')) {     // só na prévia: reserva o lugar do botão de link que será colocado no Instagram
       x.save(); x.setLineDash([14, 10]); x.lineWidth = 4; x.strokeStyle = 'rgba(255,255,255,.95)'; x.fillStyle = 'rgba(0,0,0,.35)';
       const bw = W * 0.56, bh = H * 0.05, bx = (W - bw) / 2, by = H * 0.655; x.fillRect(bx, by, bw, bh); x.strokeRect(bx, by, bw, bh);
@@ -1104,6 +1154,31 @@
     if (!arrRaf) arrRaf = requestAnimationFrame(() => { arrRaf = 0; if (arr) pintarCanvas(arr.c); }); if (e.cancelable) e.preventDefault();
   }
   function fimArraste() { if (arr) { const c = arr.c; arr = null; c.classList.remove('arrastando'); pintarCanvas(c); } }
+  function fotoAtiva_() { const l = itensDaPostagem().filter((m) => m.tipo === 'imagem'); return (nova.fotoAtiva && l.indexOf(nova.fotoAtiva) >= 0) ? nova.fotoAtiva : (nova.fotoAtiva = l[0] || null); }
+  let pan = null;
+  function marcarAtiva_(c) { nova.fotoAtiva = c._m; document.querySelectorAll('#po-previa canvas').forEach((q) => q.classList.toggle('ativa', q === c)); const z = $('po-zoom'); if (z) z.value = c._m.zoom || 1; }
+  function distDedos_(e) { const a = e.touches[0], b = e.touches[1]; return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); }
+  function ligarFoto(c) {
+    const r = () => c.getBoundingClientRect();
+    const mexer = (ptX, ptY) => { if (!pan) return; const m = c._m, k = r(); m.fx = pan.fx + (ptX - pan.x) / k.width; m.fy = pan.fy + (ptY - pan.y) / k.height; limitesFoto_(m); if (!pan.raf) pan.raf = requestAnimationFrame(() => { if (pan) pan.raf = 0; pintarCanvas(c); }); };
+    c.addEventListener('mousedown', (e) => { marcarAtiva_(c); if (arr || acharCaixa(c, pontoDe(c, e))) return; pan = { x: e.clientX, y: e.clientY, fx: c._m.fx || 0, fy: c._m.fy || 0 }; c.style.cursor = 'move'; e.preventDefault(); });
+    window.addEventListener('mousemove', (e) => { if (pan && !pan.toque) mexer(e.clientX, e.clientY); });
+    window.addEventListener('mouseup', () => { if (pan && !pan.toque) { pan = null; c.style.cursor = ''; pintarCanvas(c); } });
+    c.addEventListener('wheel', (e) => { if (!nova.moverFoto && !e.ctrlKey) return; marcarAtiva_(c); const m = c._m; m.zoom = (m.zoom || 1) * (e.deltaY < 0 ? 1.08 : 1 / 1.08); limitesFoto_(m); const z = $('po-zoom'); if (z) z.value = m.zoom; pintarCanvas(c); e.preventDefault(); }, { passive: false });
+    c.addEventListener('touchstart', (e) => {
+      marcarAtiva_(c);
+      if (e.touches.length === 2) { pan = { toque: 2, d: distDedos_(e), z: c._m.zoom || 1 }; e.preventDefault(); return; }
+      if (e.touches.length === 1 && nova.moverFoto && !arr && !acharCaixa(c, pontoDe(c, e))) { const t = e.touches[0]; pan = { toque: 1, x: t.clientX, y: t.clientY, fx: c._m.fx || 0, fy: c._m.fy || 0 }; e.preventDefault(); }
+    }, { passive: false });
+    c.addEventListener('touchmove', (e) => {
+      if (!pan || !pan.toque) return;
+      if (pan.toque === 2 && e.touches.length === 2) { c._m.zoom = pan.z * distDedos_(e) / (pan.d || 1); limitesFoto_(c._m); const z = $('po-zoom'); if (z) z.value = c._m.zoom; if (!pan.raf) pan.raf = requestAnimationFrame(() => { if (pan) pan.raf = 0; pintarCanvas(c); }); }
+      else if (pan.toque === 1 && e.touches.length === 1) mexer(e.touches[0].clientX, e.touches[0].clientY);
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+    const fim = () => { if (pan && pan.toque) { pan = null; pintarCanvas(c); } };
+    c.addEventListener('touchend', fim); c.addEventListener('touchcancel', fim);
+  }
   function ligarArraste(c) {
     if (!arrGlobal) { arrGlobal = true; window.addEventListener('mousemove', moverArraste); window.addEventListener('mouseup', fimArraste); }
     const inicio = (e) => { const pt = pontoDe(c, e), b = acharCaixa(c, pt); if (!b) return; const it = itensEfetivos(nova.template, c._m).lista.find((q) => q.k === b.k); if (!it) return; arr = { c: c, k: b.k, x: it.x, y: it.y, ox: pt.x, oy: pt.y }; c.classList.add('arrastando'); if (e.cancelable) e.preventDefault(); };
@@ -1119,7 +1194,7 @@
     await carregarFontes_();
     const cs = [];
     try {
-      for (const m of fotos) { const img = await imagemCache(m.url); if (meu !== previaSeq) return; const c = document.createElement('canvas'); c._m = m; c._img = img; pintarCanvas(c); c.setAttribute('role', 'img'); c.setAttribute('aria-label', 'Prévia da postagem. Arraste os textos para mudar de lugar.'); ligarArraste(c); cs.push(c); }
+      for (const m of fotos) { const img = await imagemCache(m.url); if (meu !== previaSeq) return; const c = document.createElement('canvas'); c._m = m; c._img = img; pintarCanvas(c); c.setAttribute('role', 'img'); c.setAttribute('aria-label', 'Prévia da postagem. Arraste os textos para mudar de lugar.'); ligarArraste(c); ligarFoto(c); cs.push(c); }
       box.innerHTML = ''; cs.forEach((c) => box.appendChild(c));
     } catch (e) { box.innerHTML = '<p class="po-aviso erro">' + esc(e.message || 'Não deu para montar a prévia.') + '</p>'; }
   }
@@ -1165,7 +1240,7 @@
     const [W, H] = tamanhoAlvo(), c = document.createElement('canvas'); c.width = W; c.height = H;
     try {
       await carregarFontes_();
-      const img = await imagemCache(m.url); desenharTemplate(c.getContext('2d'), img, W, H, nova.template, itensEfetivos(nova.template, m), nova.ajuste);
+      const img = await imagemCache(m.url); desenharTemplate(c.getContext('2d'), compor(img, W, H, m), W, H, nova.template, itensEfetivos(nova.template, m), 'preencher');
       const blob = await blobDe(c); return { url: await subirBlob(blob, 'post.jpg'), tipo: 'imagem' };
     } catch (e) {
       if (nova.template === 'original' && /^https:\/\//.test(m.url) && /\.(jpe?g)(\?|$)/i.test(m.url)) return { url: m.url, tipo: 'imagem' };   // sem canvas: JPG original serve

@@ -509,6 +509,11 @@ function d1() {
     x = await (await w.fetch(ped('POST', '/fotos/acao', 'tk2.gerente', { ids: [alvoId], acao: 'descartar' }), env, {})).json(); chk('descartar', (await DB.prepare('SELECT status FROM foto_cliente WHERE id=?').bind(alvoId).first()).status === 'descartada');
     x = await (await w.fetch(ped('POST', '/fotos/acao', 'tk2.gerente', { ids: [alvoId], acao: 'restaurar' }), env, {})).json(); chk('restaurar volta para nova', (await DB.prepare('SELECT status FROM foto_cliente WHERE id=?').bind(alvoId).first()).status === 'nova');
     x = await (await w.fetch(ped('POST', '/fotos/acao', 'tk2.gerente', { ids: [alvoId], acao: 'apagar' }), env, {})).json(); chk('ação desconhecida é recusada', x.ok === false);
+    x = await (await w.fetch(ped('GET', '/fotos/visuais', 'tk2.gerente'), env, {})).json(); chk('visuais: começa sem nada guardado', x.ok === true && x.dados === null);
+    x = await (await w.fetch(ped('POST', '/fotos/visuais', 'tk2.gerente', { dados: { tk_po_cta_v1: '{"a":1}' } }), env, {})).json(); chk('visuais: salva', x.ok === true);
+    x = await (await w.fetch(ped('GET', '/fotos/visuais', 'tk2.gerente'), env, {})).json(); chk('visuais: volta o que foi salvo (vale em outro aparelho)', x.dados && x.dados.tk_po_cta_v1 === '{"a":1}');
+    x = await (await w.fetch(ped('POST', '/fotos/visuais', 'tk2.gerente', { dados: { g: 'x'.repeat(210000) } }), env, {})).json(); chk('visuais: recusa configuração enorme', x.ok === false);
+    r2 = await w.fetch(ped('GET', '/fotos/visuais'), env, {}); chk('visuais: sem login é recusado', r2.status === 401 || r2.status === 403);
     r2 = await w.fetch(ped('GET', '/status', 'tk2.gerente'), env, {}); chk('quem só cadastra continua sem o importador', r2.status === 403);
   }
 
