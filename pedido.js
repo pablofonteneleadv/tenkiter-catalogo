@@ -393,9 +393,9 @@ function selecaoObrigatoriaFixa_() { return !!(apenasFavoritos || selecaoFixa); 
  *  fixa=false -> os filtros da tela (busca, categoria, preço…) como sempre.
  * Sempre o endereço do SITE, mesmo se a pessoa estiver em outro endereço.
  */
-function linkDaSelecao_(fixa) {
+function linkDaSelecao_(fixa, listaBase) {
   if (fixa) {
-    var cods = (listaFiltradaAtual || []).slice(0, MAX_SELECAO_FIXA).map(function (p) { return encodeURIComponent(chaveDaPeca_(p)); });
+    var cods = (listaBase || listaFiltradaAtual || []).slice(0, MAX_SELECAO_FIXA).map(function (p) { return encodeURIComponent(chaveDaPeca_(p)); });
     if (cods.length) return SITE_URL + '?sel=' + cods.join(',');
   }
   var u = new URL(window.location.href);
@@ -427,22 +427,22 @@ function descricaoDaSelecao_() {
   if (selecaoFixa) partes.push('seleção enviada');
   return partes.length ? partes.join(' · ') : 'todas as peças';
 }
-function abrirSelecao() {
+function abrirSelecao(daSacola) {
   if (typeof atualizarURLComFiltros === 'function') atualizarURLComFiltros();
-  var lista = listaFiltradaAtual || [];
-  var forcada = selecaoObrigatoriaFixa_();
+  var lista = daSacola ? itensDaSacola_() : (listaFiltradaAtual || []);
+  var forcada = daSacola || selecaoObrigatoriaFixa_();
   // Com filtros comuns (busca, categoria…) a pessoa escolhe: "filtros" acompanha a loja; "lista fixa" manda só estas peças.
-  var temFiltro = descricaoDaSelecao_() !== 'todas as peças';
+  var temFiltro = !daSacola && descricaoDaSelecao_() !== 'todas as peças';
   var podeEscolher = !forcada && temFiltro && lista.length > 0 && lista.length <= MAX_SELECAO_FIXA;
   var fixa = forcada && lista.length > 0;
   var c = document.getElementById('selecao-conteudo');
 
   function desenhar() {
-    var link = linkDaSelecao_(fixa);
+    var link = linkDaSelecao_(fixa, lista);
     var msg = mensagemDaSelecao_(link, fixa, lista);
     c.innerHTML =
       '<div class="sheet-topo"><div class="nome">🔗 Compartilhar seleção</div><button type="button" class="x" id="btn-fechar-selecao" aria-label="Fechar">✕</button></div>' +
-      '<p class="texto-pequeno" style="margin-bottom:8px"><b>' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + '</b> — ' + escaparHtml(descricaoDaSelecao_()) + '</p>' +
+      '<p class="texto-pequeno" style="margin-bottom:8px"><b>' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + '</b> — ' + escaparHtml(daSacola ? 'as peças que você marcou em “Selecionar”' : descricaoDaSelecao_()) + '</p>' +
       '<div class="preview-selecao">' + lista.slice(0, 4).map(function (p) { return '<img src="' + escaparHtml(fotoMini(p.Foto_URL, 160)) + '" alt="' + escaparHtml(p.Nome) + '" width="80" height="100" loading="lazy">'; }).join('') + '</div>' +
       (podeEscolher ? '<label class="sel-fixa"><input type="checkbox" id="sel-fixa"' + (fixa ? ' checked' : '') + '> <span>Enviar só estas ' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + ' (lista fixa)</span></label>' : '') +
       '<p class="texto-pequeno" id="sel-explica" style="margin-bottom:6px">' + (fixa
@@ -480,7 +480,7 @@ function aoAtualizarProdutos() {
 function ligarPedidoNaPagina() {
   var bs = document.getElementById('btn-sacola-header'); if (bs) bs.addEventListener('click', abrirSacola);
   var bf = document.getElementById('btn-favoritos-header'); if (bf) bf.addEventListener('click', abrirFavoritos);
-  var bsel = document.getElementById('btn-share-filtros'); if (bsel) bsel.addEventListener('click', abrirSelecao);
+  var bsel = document.getElementById('btn-share-filtros'); if (bsel) bsel.addEventListener('click', function () { abrirSelecao(false); });
   [['overlay-sacola', fecharSacola], ['overlay-favoritos', fecharFavoritos], ['overlay-rastreio', fecharRastreio], ['overlay-selecao', fecharSelecao]].forEach(function (par) {
     var ov = document.getElementById(par[0]); if (!ov) return;
     ov.addEventListener('click', function (e) { if (e.target === ov) par[1](); });
