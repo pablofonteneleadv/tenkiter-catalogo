@@ -47,7 +47,7 @@ with sync_playwright() as p:
 
     print("== Nova postagem: Feed agora com template ==")
     abrir(pg)
-    chk("abre com as 4 abas e o passo 1", pg.locator("#overlay-postagens.aberto").count() == 1 and pg.locator("#po-abas [role=tab]").count() == 5 and "Qual peça?" in corpo(pg))
+    chk("abre com as abas e o passo 1", pg.locator("#overlay-postagens.aberto").count() == 1 and pg.locator("#po-abas [role=tab]").count() == 6 and "Qual peça?" in corpo(pg))
     pg.fill("#po-busca", "TK-0003"); pg.wait_for_timeout(300)
     chk("busca por código mostra a peça", pg.locator(".po-card").count() >= 1, corpo(pg)[:200])
     pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(400)

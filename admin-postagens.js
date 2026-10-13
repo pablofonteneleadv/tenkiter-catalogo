@@ -12,6 +12,16 @@
   const $ = (id) => document.getElementById(id);
   const esc = (v) => escaparHtml(v);
   const TIPOS = [['feed', '🖼️ Feed'], ['carrossel', '🗂️ Carrossel'], ['reels', '🎬 Reels'], ['story', '📱 Story']];
+  /* Visuais que aparecem para cada tipo (configurável na aba ⚙️ Visuais; fica neste aparelho). */
+  const CFG_VIS_KEY = 'tk_po_visuais_v1';
+  function lerCfgVis_() { try { return JSON.parse(localStorage.getItem(CFG_VIS_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function salvarCfgVis_(c) { try { localStorage.setItem(CFG_VIS_KEY, JSON.stringify(c)); } catch (e) {} }
+  function visuaisDoTipo_(tipo) {
+    const c = lerCfgVis_()[tipo];
+    if (!Array.isArray(c)) return TEMPLATES;
+    const l = TEMPLATES.filter((t) => c.indexOf(t[0]) !== -1);
+    return l.length ? l : TEMPLATES;
+  }
   const TEMPLATES = [['original', 'Original'], ['classico', '1 · Vitrine em arco'], ['promo', '2 · Preço em destaque'], ['minimal', '3 · Cartão central'], ['rodape', '4 · Faixa e detalhes'], ['lateral', '5 · Preço no canto'], ['cabecalho', '6 · Título grande'], ['energia', '7 · Laranja e detalhes'], ['blocos', '8 · Palavras empilhadas'], ['editorial', '9 · Editorial vertical'], ['cartao', '10 · Elegante']];
   const ST_TXT = { agendado: '⏳ Agendado', processando: '⚙️ Publicando…', manual_pendente: '✋ Falta você postar', manual_feito: '✅ Postado à mão', publicado: '✅ Publicado', erro: '⚠️ Deu problema', cancelado: 'Cancelado' };
   const HASHTAGS = '#tenkitermodas #modacrateus #crateús #lookdodia #modafeminina #modainfantil #modamasculina';
@@ -61,7 +71,7 @@
       .po-m img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .po-m .po-n { position: absolute; left: 3px; top: 3px; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: 0.75rem; border-radius: 999px; min-width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
       .po-m .po-v { position: absolute; right: 3px; bottom: 3px; background: rgba(0,0,0,.75); color: #fff; font-size: 0.7rem; padding: 1px 6px; border-radius: 8px; }
-      .po-sticky { position: sticky; top: 0; z-index: 6; background: #fff; padding: 4px 0 8px; box-shadow: 0 8px 8px -8px rgba(0,0,0,.35); }
+      .po-sticky { padding: 4px 0 8px; }
       .po-chips-h { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
       .po-chips-h button { white-space: nowrap; min-height: 40px; padding: 7px 12px; }
       .po-previa-btn { width: auto; margin: 2px 0 4px; padding: 6px 12px; min-height: 36px; border-radius: 8px; border: 1px solid #ccc; background: #fff; font-size: .8rem; cursor: pointer; }
@@ -130,6 +140,13 @@
       '<div class="po-abas" role="tablist" id="po-abas"></div><div id="po-corpo"></div></div>';
     document.body.appendChild(o);
     $('po-fechar').addEventListener('click', fechar);
+    $('po-corpo').addEventListener('change', (ev) => {
+      const cb = ev.target.closest && ev.target.closest('[data-cv-tipo]'); if (!cb) return;
+      const tipo = cb.dataset.cvTipo, c = lerCfgVis_();
+      const marcados = Array.from(document.querySelectorAll('[data-cv-tipo="' + tipo + '"]')).filter((x) => x.checked).map((x) => x.dataset.cvId);
+      if (!marcados.length) { cb.checked = true; return; }
+      c[tipo] = marcados; salvarCfgVis_(c);
+    });
     $('po-abas').addEventListener('click', (ev) => { const b = ev.target.closest('[data-aba]'); if (b) { abaAtual = b.dataset.aba; aviso = ''; desenhar(); if (abaAtual === 'fotos') carregarFotos(); else if (abaAtual !== 'nova') carregarFila(); } });
     $('po-corpo').addEventListener('click', clique);
     $('po-corpo').addEventListener('input', entrada);
@@ -271,12 +288,25 @@
   function desenhar() {
     const abas = $('po-abas'), corpo = $('po-corpo'); if (!abas || !corpo) return;
     const nMan = (fila || []).filter((x) => x.status === 'manual_pendente').length, nFila = (fila || []).filter((x) => ['agendado', 'processando', 'erro'].indexOf(x.status) !== -1).length;
-    abas.innerHTML = [['nova', 'Nova postagem'], ['fila', 'Fila' + (nFila ? ' (' + nFila + ')' : '')], ['manual', 'Postar à mão' + (nMan ? ' (' + nMan + ')' : '')], ['fotos', 'Fotos de clientes' + (fotosConta.nova ? ' (' + fotosConta.nova + ')' : '')], ['hist', 'Já postadas']]
+    abas.innerHTML = [['nova', 'Nova postagem'], ['fila', 'Fila' + (nFila ? ' (' + nFila + ')' : '')], ['manual', 'Postar à mão' + (nMan ? ' (' + nMan + ')' : '')], ['fotos', 'Fotos de clientes' + (fotosConta.nova ? ' (' + fotosConta.nova + ')' : '')], ['hist', 'Já postadas'], ['config', '⚙️ Visuais']]
       .map((a) => '<button type="button" role="tab" data-aba="' + a[0] + '" aria-selected="' + (abaAtual === a[0]) + '">' + esc(a[1]) + '</button>').join('');
     const topo = (aviso ? '<div class="po-aviso' + (avisoErro ? ' erro' : '') + '" role="status">' + esc(aviso) + '</div>' : '') +
       (conectado === false ? '<div class="po-aviso erro">O Instagram não está conectado. Só o Admin total conecta (Conexões → Instagram). Enquanto isso, só dá para preparar Story com link para postar à mão.</div>' : '');
-    corpo.innerHTML = topo + (abaAtual === 'nova' ? htmlNova() : abaAtual === 'fila' ? htmlFila(['agendado', 'processando', 'erro'], 'Nada na fila agora.') : abaAtual === 'manual' ? htmlManual() : abaAtual === 'fotos' ? htmlFotos() : htmlFila(['publicado', 'manual_feito'], 'Ainda não há postagens feitas por aqui.'));
+    const chipsAntes = corpo.querySelector('.po-chips-h'), rolou = chipsAntes ? chipsAntes.scrollLeft : 0;
+    corpo.innerHTML = topo + (abaAtual === 'nova' ? htmlNova() : abaAtual === 'fila' ? htmlFila(['agendado', 'processando', 'erro'], 'Nada na fila agora.') : abaAtual === 'manual' ? htmlManual() : abaAtual === 'fotos' ? htmlFotos() : abaAtual === 'config' ? htmlConfigVisuais_() : htmlFila(['publicado', 'manual_feito'], 'Ainda não há postagens feitas por aqui.'));
+    const chipsDepois = corpo.querySelector('.po-chips-h');
+    if (chipsDepois) { chipsDepois.scrollLeft = rolou; const sel = chipsDepois.querySelector('[aria-pressed="true"]'); if (sel) { const a = sel.offsetLeft, b = a + sel.offsetWidth; if (a < chipsDepois.scrollLeft || b > chipsDepois.scrollLeft + chipsDepois.clientWidth) chipsDepois.scrollLeft = a - 12; } }
     if (abaAtual === 'nova' && nova && nova.p !== undefined && deveMostrarPrevia()) pintarPrevia();
+  }
+  function htmlConfigVisuais_() {
+    const c = lerCfgVis_();
+    const tipos = [['feed', 'Feed'], ['carrossel', 'Carrossel'], ['story', 'Story']];
+    return '<div class="po-passo"><h4>Visuais de cada tipo</h4><p class="po-ajuda" style="margin-top:0">Marque quais visuais aparecem na hora de criar cada tipo de postagem. Reels não usa visual. Vale para este aparelho; sempre sobra pelo menos um.</p>' +
+      tipos.map((t) => {
+        const ativos = Array.isArray(c[t[0]]) ? c[t[0]] : TEMPLATES.map((x) => x[0]);
+        return '<fieldset style="border:1px solid #ddd;border-radius:12px;padding:8px 12px;margin:0 0 10px"><legend style="font-weight:800;padding:0 6px">' + t[1] + '</legend>' +
+          TEMPLATES.map((v) => '<label style="display:flex;gap:8px;align-items:center;min-height:40px"><input type="checkbox" data-cv-tipo="' + t[0] + '" data-cv-id="' + v[0] + '"' + (ativos.indexOf(v[0]) !== -1 ? ' checked' : '') + '> ' + esc(v[1]) + '</label>').join('') + '</fieldset>';
+      }).join('') + '</div>';
   }
   function htmlLivre() {
     const n = nova;
@@ -348,7 +378,7 @@
     }
     h += '</div>';
     if (n.tipo !== 'reels') {
-      const lista = cli ? [['elausa', 'Ela usa TM']] : livre ? TEMPLATES.concat([['elausa', 'Ela usa TM']]) : TEMPLATES, itens = n.template !== 'original' ? itensTemplate(n.template, infoPeca(n.p), ...tamanhoAlvo()) : [];
+      const baseV = visuaisDoTipo_(n.tipo); if (n.template !== 'elausa' && !baseV.some((t) => t[0] === n.template)) n.template = baseV[0][0]; const lista = cli ? [['elausa', 'Ela usa TM']] : livre ? baseV.concat([['elausa', 'Ela usa TM']]) : baseV, itens = n.template !== 'original' ? itensTemplate(n.template, infoPeca(n.p), ...tamanhoAlvo()) : [];
       const chipsV = lista.length > 1 ? '<div class="po-chips po-chips-h" role="group" aria-label="Visual">' + lista.map((t) => '<button type="button" data-tpl="' + t[0] + '" aria-pressed="' + (n.template === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>' : '';
       h += '<div class="po-passo"><h4>3. Visual</h4><div class="po-sticky">' + chipsV +
         '<button type="button" data-a="previa" class="po-previa-btn">👁️ Ver como vai ficar</button><div class="po-previa" id="po-previa" tabindex="0" role="group" aria-label="Prévia da arte"></div></div>' +

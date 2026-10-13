@@ -293,9 +293,10 @@ catch (e) { window.__precargaLista = null; }
   .sel-fixa input { width: 22px; height: 22px; flex: none; }
   .aviso-selecao { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; background: #fff7ec; border: 1px solid #f0c48a; border-radius: 12px; padding: 10px 12px; margin: 0 0 10px; font-size: 0.88rem; color: #222; }
   .aviso-selecao[hidden] { display: none; }
-  .barra-filtros-flut { position: fixed; left: 50%; transform: translateX(-50%); bottom: 88px; z-index: 75; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 24px); background: #0d0d0d; color: #fff; border: 1px solid var(--laranja); border-radius: 999px; padding: 6px 6px 6px 16px; box-shadow: 0 6px 18px rgba(0,0,0,.35); font-size: .85rem; font-weight: 600; }
+  .barra-filtros-flut { position: fixed; left: 12px; right: 88px; bottom: 80px; z-index: 75; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(13,13,13,.92); color: #fff; border-radius: 12px; padding: 4px 4px 4px 12px; box-shadow: 0 2px 10px rgba(0,0,0,.25); font-size: .78rem; font-weight: 600; min-height: 36px; }
+  .barra-filtros-flut span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .barra-filtros-flut[hidden] { display: none; }
-  .barra-filtros-flut button { width: auto; min-height: 40px; padding: 8px 14px; border-radius: 999px; border: 0; background: var(--laranja); color: #0d0d0d; font-weight: 800; cursor: pointer; white-space: nowrap; }
+  .barra-filtros-flut button { width: auto; flex: none; min-height: 36px; padding: 4px 12px; border-radius: 9px; border: 0; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: .76rem; cursor: pointer; white-space: nowrap; }
   .aviso-selecao button { width: auto; min-height: 40px; padding: 8px 14px; border-radius: 999px; font-weight: 700; cursor: pointer; font-size: 0.82rem; }
 
   /* rodapé */
@@ -1063,11 +1064,11 @@ catch (e) { window.__precargaLista = null; }
     const ativo = nFiltros > 0 || !!q || !!selecaoFixa || apenasFavoritos || apenasNovidades;
     if (!ativo) { bar.hidden = true; return; }
     const n = listaFiltradaAtual.length;
-    let t = selecaoFixa ? 'Só as peças separadas para você' : (n + (n === 1 ? ' peça' : ' peças'));
+    let t = selecaoFixa ? 'Seleção' : (n + (n === 1 ? ' peça' : ' peças'));
     if (!selecaoFixa && nFiltros) t += ' · ' + nFiltros + (nFiltros === 1 ? ' filtro' : ' filtros');
-    if (selecaoFixa) t = n + (n === 1 ? ' peça' : ' peças') + ' — ' + t.toLowerCase();
+    if (selecaoFixa) t = 'Seleção · ' + n + (n === 1 ? ' peça' : ' peças');
     document.getElementById('barra-filtros-txt').textContent = t;
-    document.getElementById('barra-filtros-limpar').textContent = selecaoFixa ? '✕ Ver todas as peças' : '✕ Limpar filtros';
+    document.getElementById('barra-filtros-limpar').textContent = selecaoFixa ? '✕ Ver todas as peças' : 'Limpar filtros';
     bar.hidden = false;
   }
   document.getElementById('barra-filtros-limpar').addEventListener('click', () => {
