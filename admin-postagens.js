@@ -343,6 +343,7 @@
   const novoIdVisual_ = () => 'c_' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
   function validarSpec_(sp) {
     if (!sp || typeof sp !== 'object' || Array.isArray(sp)) return 'O código precisa ser um objeto { … }.';
+    if (sp.camadas !== undefined) return validarCamadas_(sp);
     if (!Array.isArray(sp.grupos) || !sp.grupos.length) return 'Falta a lista "grupos" (pelo menos 1).';
     if (!Array.isArray(sp.itens) || !sp.itens.length) return 'Falta a lista "itens" (pelo menos 1 campo).';
     const ids = sp.grupos.map((g) => g && g.id);
@@ -352,6 +353,59 @@
     if (sp.fundo && FUNDOS_OK.indexOf(sp.fundo) === -1) return 'Fundo inválido. Use: ' + FUNDOS_OK.join(', ') + '.';
     if (sp.fundo === 'arte' && !ARTES[sp.base]) return 'Fundo "arte" precisa de "base" com o id de um visual pronto (ex.: classico).';
     return '';
+  }
+  function validarCamadas_(sp) {
+    if (!Array.isArray(sp.camadas)) return 'A lista "camadas" precisa ser uma lista [ … ].';
+    if (sp.fundo && FUNDOS_OK.indexOf(sp.fundo) === -1) return 'Fundo inválido. Use: ' + FUNDOS_OK.join(', ') + '.';
+    if (sp.fundo === 'arte' && !ARTES[sp.base]) return 'Fundo "arte" precisa de "base" com o id de um visual pronto (ex.: classico).';
+    const ks = {}, num = (v) => typeof v === 'number' && isFinite(v);
+    for (let i = 0; i < sp.camadas.length; i++) {
+      const c = sp.camadas[i], n = 'A camada ' + (i + 1) + (c && c.k ? ' ("' + c.k + '")' : '');
+      if (!c || typeof c !== 'object') return n + ' não é um objeto { … }.';
+      if (!c.k || typeof c.k !== 'string' || !/^[a-z0-9_]{1,30}$/.test(c.k)) return n + ' precisa de "k" único (minúsculas, números e _, sem espaço).';
+      if (ks[c.k]) return 'Duas camadas com o mesmo "k": "' + c.k + '".'; ks[c.k] = 1;
+      if (c.tipo !== 'texto' && c.tipo !== 'forma') return n + ': "tipo" precisa ser "texto" ou "forma".';
+      if (!num(c.x) || !num(c.y) || !num(c.w) || !num(c.h)) return n + ' precisa de números em x, y, w e h.';
+      if (c.w <= 0 || c.h <= 0 || c.w > 4 || c.h > 4) return n + ': w e h precisam ficar entre 0 e 4 (fração da largura).';
+      if (c.tipo === 'texto') { if (typeof c.t !== 'string') return n + ' precisa de "t" (o texto, entre aspas).'; if (c.tam != null && (!num(c.tam) || c.tam < 8 || c.tam > 500)) return n + ': "tam" precisa ficar entre 8 e 500.'; }
+      else if (c.forma && ['ret', 'elipse', 'linha'].indexOf(c.forma) === -1) return n + ': "forma" precisa ser ret, elipse ou linha.';
+      if (c.giro != null && !num(c.giro)) return n + ': "giro" precisa ser número (graus).';
+    }
+    return '';
+  }
+  const EDT = { sel: {}, drag: null };
+  function edE_(id) { return EDT.sel[id] || (EDT.sel[id] = { sel: '', fmt: 'feed', guia: null }); }
+  function formatarSpec_(spec) {
+    const o = Object.assign({ _guia: GUIA_CODIGO }, spec), partes = [];
+    Object.keys(o).forEach((k) => {
+      if (k === 'camadas') partes.push(' "camadas": [\n' + o.camadas.map((c) => '  ' + JSON.stringify(c)).join(',\n') + '\n ]');
+      else if (k === '_guia') partes.push(' "_guia": [\n' + o._guia.map((l) => '  ' + JSON.stringify(l)).join(',\n') + '\n ]');
+      else partes.push(' ' + JSON.stringify(k) + ': ' + JSON.stringify(o[k]));
+    });
+    return '{\n' + partes.join(',\n') + '\n}';
+  }
+  function promptIA_(id) {
+    return 'Você vai editar o código de um visual de postagem do Instagram da TENKiTER Modas. Leia o guia dentro do JSON, aplique SÓ o pedido no final e devolva o JSON inteiro, válido, sem explicações.\n\nCÓDIGO ATUAL:\n' + formatarSpec_(vzTrab[id].spec) + '\n\nPEDIDO: (escreva aqui o que quer mudar)';
+  }
+  function novoSpecCamadas_() {
+    return { versao: 2, fundo: 'baixo', camadas: [
+      { k: 'faixa', tipo: 'forma', rot: 'Faixa laranja', forma: 'ret', x: 0.5, y: 0.905, w: 1, h: 0.13, cor: '#E67E22', opac: 0.95 },
+      { k: 'nome', tipo: 'texto', rot: 'Nome da peça', papel: 'nome', t: '{nome}', x: 0.5, y: 0.79, w: 0.88, h: 0.15, tam: 66, cor: '#F5F1E8', peso: 'bold', al: 'center', linhas: 2, max: 40, sombra: true },
+      { k: 'preco', tipo: 'texto', rot: 'Preço', papel: 'preco', t: '{avista} à vista', x: 0.5, y: 0.905, w: 0.9, h: 0.1, tam: 78, cor: '#0d0d0d', peso: 'bold', al: 'center', linhas: 1, max: 16, sombra: false },
+      { k: 'zona', tipo: 'texto', rot: 'Botão / zona do link', papel: 'zona', t: 'Compre online', x: 0.5, y: 0.69, w: 0.6, h: 0.07, tam: 36, cor: '#0d0d0d', peso: 'bold', al: 'center', linhas: 1, max: 26, bg: '#E67E22', raio: 40, sombra: false }
+    ] };
+  }
+  function converterParaCamadas_(spec) {
+    const raw = JSON.parse(JSON.stringify(spec)), W = 1080, H = 1350, sub = especCustom_({ spec: JSON.parse(JSON.stringify(spec)) }, INFO_AMOSTRA);
+    const lista = layoutItens(sub, W, H, {}), cams = [], papeis = ['nome', 'preco', 'codigo', 'tam', 'cores', 'cat', 'zona', 'selo'], f = (n) => Math.round(n * 10000) / 10000; let n = 0;
+    lista.forEach((it) => {
+      if (it.deco === 'caixa') { cams.push({ k: 'caixa' + (++n), tipo: 'forma', rot: 'Caixa ' + n, forma: 'ret', x: f((it.x0 + it.x1) / 2 / W), y: f((it.y0 + it.y1) / 2 / H), w: f((it.x1 - it.x0) / W), h: f((it.y1 - it.y0) / W), cor: it.cx.cor, raio: it.cx.r || 0, sombra: !!it.cx.sombra }); return; }
+      const r = it.r, m = it.m, ri = raw.itens.find((q) => q.k === it.k) || it, cx = (r.x0 + r.x1) / 2 / W, cy = (r.y0 + r.y1) / 2 / H;
+      if (it.bg) cams.push({ k: 'fundo_' + it.k, tipo: 'forma', rot: 'Fundo de ' + (it.rot || it.k), forma: 'ret', x: f(cx), y: f(cy), w: f((r.x1 - r.x0) / W), h: f((r.y1 - r.y0) / W), cor: it.bg, raio: Math.round((it.radius || 0) * m.tam * 2) });
+      const al = it.alinhaTexto || (it.wz ? (it.txtAl || 'center') : (it.bg ? 'center' : (it.ial || 'left'))), papel = papeis.indexOf(it.k) !== -1 ? it.k : 'extra';
+      cams.push({ k: String(it.k).toLowerCase().replace(/[^a-z0-9_]/g, '') || 'txt' + (++n), tipo: 'texto', rot: it.rot || it.k, papel: papel, t: ri.t, x: f(cx), y: f(cy), w: f(Math.min(1.2, (r.x1 - r.x0) / W * (it.wz ? 1 : 1.08) + (it.wz ? 0 : 0.01))), h: f((r.y1 - r.y0) / W), tam: Math.round(m.tam), cor: it.cor || '#ffffff', peso: it.peso || 'bold', al: al, linhas: Math.max(it.linhas || 1, (m.linhas || []).length || 1), max: Number(it.max) || MAX_PADRAO[papel] || 60, sombra: !!it.sombra });
+    });
+    const out = { versao: 2, fundo: raw.fundo || 'foto', camadas: cams }; if (raw.base) out.base = raw.base; return out;
   }
   function trabDe_(id) {
     if (!vzTrab[id]) { const c = customPorId_(id); if (!c) return null; vzTrab[id] = { nome: c.nome, spec: JSON.parse(JSON.stringify(c.spec)), erro: '' }; }
@@ -369,6 +423,7 @@
     return c;
   }
   async function pintarAmostra_(id) {
+    if (vzTrab[id] && vzTrab[id].spec && vzTrab[id].spec.camadas) return pintarEditor_(id);
     const cv = document.querySelector('[data-vz-cv="' + id + '"]'); if (!cv) return;
     try {
       await carregarFontes_();
@@ -381,6 +436,170 @@
       const erro = document.querySelector('[data-vz-erro="' + id + '"]'); if (erro && vzTrab[id]) erro.textContent = vzTrab[id].erro || '';
     } catch (e) { const erro = document.querySelector('[data-vz-erro="' + id + '"]'); if (erro) erro.textContent = 'Não consegui desenhar: ' + (e && e.message ? e.message : e); }
   }
+
+  /* ---------- editor visual (camadas): prévia com seleção, alças, painel de propriedades, lista de camadas, código ↔ visual ---------- */
+  const fotoAmostraCache_ = {};
+  function fotoAmostraUma_() { return fotoAmostraCache_.c || (fotoAmostraCache_.c = fotoAmostra_()); }
+  function edTam_(id) { return edE_(id).fmt === 'story' ? [1080, 1920] : [1080, 1350]; }
+  function edCam_(id) { const tr = vzTrab[id]; return tr && tr.spec.camadas ? tr.spec.camadas.find((c) => c.k === edE_(id).sel) : null; }
+  const arred_ = (v) => Math.round(v * 10000) / 10000;
+  function desenharSelecao_(x, id, W, H) {
+    const st = edE_(id), c = edCam_(id);
+    if (c) {
+      const b = caixaDaCamada_(c, W, H);
+      x.save(); x.translate(b.cx, b.cy); x.rotate(b.a);
+      x.lineWidth = 6; x.strokeStyle = '#fff'; x.strokeRect(-b.w / 2, -b.h / 2, b.w, b.h);
+      x.lineWidth = 3; x.strokeStyle = '#E67E22'; x.setLineDash([16, 10]); x.strokeRect(-b.w / 2, -b.h / 2, b.w, b.h); x.setLineDash([]);
+      [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach((q) => { x.fillStyle = '#fff'; x.strokeStyle = '#E67E22'; x.lineWidth = 5; x.fillRect(q[0] * b.w / 2 - 22, q[1] * b.h / 2 - 22, 44, 44); x.strokeRect(q[0] * b.w / 2 - 22, q[1] * b.h / 2 - 22, 44, 44); });
+      x.strokeStyle = '#E67E22'; x.lineWidth = 4; x.beginPath(); x.moveTo(0, -b.h / 2); x.lineTo(0, -b.h / 2 - 90); x.stroke();
+      x.fillStyle = '#E67E22'; x.strokeStyle = '#fff'; x.beginPath(); x.arc(0, -b.h / 2 - 90, 28, 0, Math.PI * 2); x.fill(); x.stroke();
+      x.restore();
+    }
+    if (st.guia) { x.save(); x.strokeStyle = '#00c2d1'; x.lineWidth = 3; x.setLineDash([14, 10]); if (st.guia.v) { x.beginPath(); x.moveTo(W / 2, 0); x.lineTo(W / 2, H); x.stroke(); } if (st.guia.h) { x.beginPath(); x.moveTo(0, H / 2); x.lineTo(W, H / 2); x.stroke(); } x.restore(); }
+  }
+  async function pintarEditor_(id) {
+    const cv = document.querySelector('[data-ed-cv="' + id + '"]'), tr = vzTrab[id]; if (!cv || !tr) return;
+    try {
+      await carregarFontes_();
+      const [W, H] = edTam_(id); if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+      const sp = posEspec_(especCustom_({ spec: tr.spec }, INFO_AMOSTRA), INFO_AMOSTRA, id); if (tr.spec.base) sp.base = tr.spec.base;
+      const ef = { fundo: sp.fundo, arteBase: sp.base, lista: layoutItens(sp, W, H, {}) };
+      desenharTemplate(cv.getContext('2d'), fotoAmostraUma_(), W, H, id, ef, 'preencher');
+      desenharSelecao_(cv.getContext('2d'), id, W, H);
+      const erro = document.querySelector('[data-vz-erro="' + id + '"]'); if (erro) erro.textContent = tr.erro || '';
+    } catch (e) { const erro = document.querySelector('[data-vz-erro="' + id + '"]'); if (erro) erro.textContent = 'Não consegui desenhar: ' + (e && e.message ? e.message : e); }
+  }
+  function toHex_(c) { c = String(c || ''); if (/^#[0-9a-f]{6}/i.test(c)) return c.slice(0, 7); if (/^#[0-9a-f]{3}$/i.test(c)) return '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3]; return '#000000'; }
+  function edCampo_(id, f, rotulo, tipo, val, extra) {
+    const at = ' data-ed-id="' + esc(id) + '" data-ed-p="' + f + '" data-ed-t="' + tipo + '"';
+    if (tipo === 'bool') return '<label class="ed-chk"><input type="checkbox"' + at + (val ? ' checked' : '') + '> ' + esc(rotulo) + '</label>';
+    if (tipo === 'cor') return '<label class="ed-c">' + esc(rotulo) + '<input type="color"' + at + ' value="' + esc(toHex_(val)) + '"></label>';
+    if (tipo === 'sel') return '<label class="ed-c">' + esc(rotulo) + '<select' + at + '>' + extra.map((o) => '<option value="' + o[0] + '"' + (String(val) === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select></label>';
+    return '<label class="ed-c">' + esc(rotulo) + '<input type="' + (tipo === 'txt' ? 'text' : 'number') + '"' + at + ' value="' + esc(val == null ? '' : val) + '"' + (extra || '') + '></label>';
+  }
+  function htmlPropsEd_(id, c) {
+    const pct = (v) => Math.round((Number(v) || 0) * 1000) / 10, isT = c.tipo === 'texto';
+    let h = '<div class="ed-props"><h5>' + (isT ? '✏️ Texto' : '🔷 Forma') + ': ' + esc(c.rot || c.k) + '</h5>';
+    if (isT) {
+      h += edCampo_(id, 't', 'Texto (use {nome} {avista} {codigo}…)', 'txt', c.t, ' maxlength="140"');
+      h += '<div class="ed-lin">' + edCampo_(id, 'tam', 'Tamanho da letra', 'num', c.tam || 40, ' min="10" max="400" step="1"') + '<button type="button" data-ed-a="tam-" data-id="' + esc(id) + '" aria-label="Diminuir a letra">A−</button><button type="button" data-ed-a="tam+" data-id="' + esc(id) + '" aria-label="Aumentar a letra">A+</button>' + edCampo_(id, 'cor', 'Cor da letra', 'cor', c.cor || '#ffffff') + '</div>';
+      h += '<div class="ed-lin">' + edCampo_(id, 'max', 'Máx. letras (0 = sem limite) · padrão ' + (MAX_PADRAO[c.papel || 'extra'] || 60), 'num', c.max == null ? (MAX_PADRAO[c.papel || 'extra'] || 60) : c.max, ' min="0" max="200"') + edCampo_(id, 'linhas', 'Linhas', 'num', c.linhas || 1, ' min="1" max="8"') + '</div>';
+      h += '<div class="ed-lin">' + edCampo_(id, 'al', 'Alinhar', 'sel', c.al || 'center', [['left', 'Esquerda'], ['center', 'Centro'], ['right', 'Direita']]) + edCampo_(id, 'peso', 'Peso', 'sel', c.peso || 'bold', [['bold', 'Negrito'], ['normal', 'Normal']]) + edCampo_(id, 'sombra', 'Sombra', 'bool', !!c.sombra) + '</div>';
+      h += '<div class="ed-lin">' + edCampo_(id, 'bgOn', 'Caixa atrás do texto', 'bool', !!c.bg) + (c.bg ? edCampo_(id, 'bg', 'Cor da caixa', 'cor', c.bg) + edCampo_(id, 'raio', 'Canto (px)', 'num', c.raio || 0, ' min="0" max="300"') : '') + '</div>';
+    } else {
+      h += '<div class="ed-lin">' + edCampo_(id, 'forma', 'Forma', 'sel', c.forma || 'ret', [['ret', 'Retângulo'], ['elipse', 'Círculo / oval'], ['linha', 'Linha']]) + edCampo_(id, 'cor', 'Cor', 'cor', c.cor || '#E67E22') + '</div>';
+      h += '<div class="ed-lin">' + edCampo_(id, 'gradOn', 'Degradê', 'bool', !!c.cor2) + (c.cor2 ? edCampo_(id, 'cor2', 'Cor final', 'cor', c.cor2) : '') + edCampo_(id, 'sombra', 'Sombra', 'bool', !!c.sombra) + '</div>';
+      h += '<div class="ed-lin">' + edCampo_(id, 'bordaCor', 'Cor da borda', 'cor', (c.borda && c.borda.cor) || '#ffffff') + edCampo_(id, 'bordaW', 'Borda (px, 0 = sem)', 'num', (c.borda && c.borda.w) || 0, ' min="0" max="60"') + (c.forma !== 'elipse' ? edCampo_(id, 'raio', 'Canto (px)', 'num', c.raio || 0, ' min="0" max="400"') : '') + '</div>';
+    }
+    h += '<div class="ed-lin">' + edCampo_(id, 'x', 'X (%)', 'num', pct(c.x), ' step="0.5"') + edCampo_(id, 'y', 'Y (%)', 'num', pct(c.y), ' step="0.5"') + edCampo_(id, 'w', 'Largura (%)', 'num', pct(c.w), ' min="2" step="0.5"') + edCampo_(id, 'h', 'Altura (%)', 'num', pct(c.h), ' min="1" step="0.5"') + '</div>';
+    h += '<div class="ed-lin">' + edCampo_(id, 'giro', 'Girar (graus)', 'num', Math.round((Number(c.giro) || 0) * 10) / 10, ' min="-180" max="180" step="1"') + edCampo_(id, 'opac', 'Opacidade (%)', 'num', Math.round((c.opac == null ? 1 : c.opac) * 100), ' min="5" max="100" step="5"') + '</div>';
+    return h + '</div>';
+  }
+  function htmlPainelEd_(id) {
+    const tr = vzTrab[id], st = edE_(id), cams = tr.spec.camadas;
+    let h = '<div class="ed-add" role="group" aria-label="Adicionar elemento"><select data-ed-papel="' + esc(id) + '" aria-label="Tipo de texto">' + PAPEIS.map((q) => '<option value="' + q[0] + '">' + esc(q[1]) + '</option>').join('') + '</select><button type="button" data-ed-a="addtxt" data-id="' + esc(id) + '">+ Texto</button><button type="button" data-ed-a="addforma" data-forma="ret" data-id="' + esc(id) + '">+ Retângulo</button><button type="button" data-ed-a="addforma" data-forma="elipse" data-id="' + esc(id) + '">+ Círculo</button><button type="button" data-ed-a="addforma" data-forma="linha" data-id="' + esc(id) + '">+ Linha</button></div>';
+    h += '<label class="po-vz-l">Efeito sobre a foto<select data-ed-fundo="' + esc(id) + '">' + FUNDOS_OK.filter((f) => f !== 'arte' || tr.spec.base).map((f) => '<option value="' + f + '"' + ((tr.spec.fundo || 'foto') === f ? ' selected' : '') + '>' + f + '</option>').join('') + '</select></label>';
+    h += '<div class="ed-camadas" role="list" aria-label="Camadas (de cima para baixo)">' + (cams.length ? cams.map((c, i) => i).reverse().map((i) => { const c = cams[i]; return '<div class="ed-cam' + (c.k === st.sel ? ' sel' : '') + '" role="listitem"><button type="button" class="ed-cam-n" data-ed-a="sel" data-k="' + esc(c.k) + '" data-id="' + esc(id) + '">' + (c.tipo === 'texto' ? '✏️' : '🔷') + ' ' + esc(c.rot || c.k) + (c.oculto ? ' (oculto)' : '') + '</button><button type="button" data-ed-a="up" data-k="' + esc(c.k) + '" data-id="' + esc(id) + '" aria-label="Trazer para frente">▲</button><button type="button" data-ed-a="down" data-k="' + esc(c.k) + '" data-id="' + esc(id) + '" aria-label="Enviar para trás">▼</button><button type="button" data-ed-a="vis" data-k="' + esc(c.k) + '" data-id="' + esc(id) + '" aria-label="Mostrar ou esconder">👁</button><button type="button" data-ed-a="dupcam" data-k="' + esc(c.k) + '" data-id="' + esc(id) + '" aria-label="Duplicar">⧉</button><button type="button" data-ed-a="delcam" data-k="' + esc(c.k) + '" data-id="' + esc(id) + '" aria-label="Apagar">✕</button></div>'; }).join('') : '<p class="po-ajuda">Nenhum elemento ainda. Use os botões “+” acima.</p>') + '</div>';
+    const c = edCam_(id);
+    return h + (c ? htmlPropsEd_(id, c) : '<p class="po-ajuda">Toque num elemento da prévia (ou na lista) para editar. Arraste para mover; cantos = tamanho; bolinha de cima = girar. Setas do teclado movem.</p>');
+  }
+  function htmlEditor_(id) {
+    const st = edE_(id);
+    return '<div class="ed-fmt" role="group" aria-label="Formato da prévia"><button type="button" data-ed-a="fmt" data-v="feed" data-id="' + esc(id) + '" aria-pressed="' + (st.fmt === 'feed') + '">Feed 4:5</button><button type="button" data-ed-a="fmt" data-v="story" data-id="' + esc(id) + '" aria-pressed="' + (st.fmt === 'story') + '">Story 9:16</button></div>' +
+      '<canvas class="ed-cv" data-ed-cv="' + esc(id) + '" tabindex="0" role="group" aria-label="Editor visual. Toque num elemento para selecionar; arraste para mover; setas do teclado movem; Delete apaga."></canvas>' +
+      '<div data-ed-dyn="' + esc(id) + '">' + htmlPainelEd_(id) + '</div>';
+  }
+  function edPainel_(id) { const d = document.querySelector('[data-ed-dyn="' + id + '"]'); if (d) d.innerHTML = htmlPainelEd_(id); }
+  function edSyncCodigo_(id) { const ta = document.querySelector('[data-vz-json="' + id + '"]'); if (ta && document.activeElement !== ta && vzTrab[id]) ta.value = formatarSpec_(vzTrab[id].spec); }
+  function edSyncCampos_(id) {
+    const c = edCam_(id); if (!c) return; const pct = (v) => Math.round((Number(v) || 0) * 1000) / 10;
+    document.querySelectorAll('[data-ed-id="' + id + '"][data-ed-p]').forEach((el) => { if (document.activeElement === el) return; const f = el.dataset.edP; if (f === 'x' || f === 'y' || f === 'w' || f === 'h') el.value = pct(c[f]); else if (f === 'giro') el.value = Math.round((Number(c.giro) || 0) * 10) / 10; else if (f === 'tam') el.value = c.tam || 40; });
+  }
+  function edMudou_(id, painel) { const tr = vzTrab[id]; if (tr) tr.erro = ''; edSyncCodigo_(id); if (painel) edPainel_(id); else edSyncCampos_(id); pintarEditor_(id); }
+  function edNovoK_(spec, base) { let k = base, n = 1; while (spec.camadas.some((c) => c.k === k)) k = base + (++n); return k; }
+  function edProp_(t) {
+    const id = t.dataset.edId, tr = vzTrab[id], c = edCam_(id); if (!tr || !c) return;
+    const f = t.dataset.edP, k = t.dataset.edT; let v = k === 'bool' ? t.checked : (k === 'txt' || k === 'cor' || k === 'sel') ? t.value : Number(t.value), repintaPainel = false;
+    if (k === 'num' && (t.value === '' || !isFinite(v))) return;
+    const lim = (a, b) => Math.max(a, Math.min(b, v));
+    if (f === 'x' || f === 'y') c[f] = arred_(lim(-20, 120) / 100);
+    else if (f === 'w') c.w = arred_(lim(2, 400) / 100); else if (f === 'h') c.h = arred_(lim(0.5, 400) / 100);
+    else if (f === 'opac') { c.opac = lim(5, 100) / 100; if (c.opac >= 1) delete c.opac; }
+    else if (f === 'giro') { c.giro = lim(-180, 180); if (!c.giro) delete c.giro; }
+    else if (f === 'tam') c.tam = Math.round(lim(10, 400));
+    else if (f === 'max') c.max = Math.round(lim(0, 200)); else if (f === 'linhas') c.linhas = Math.round(lim(1, 8));
+    else if (f === 'raio') c.raio = Math.round(lim(0, 400));
+    else if (f === 'bgOn') { if (v) c.bg = c.bg || '#2C2C2C'; else { delete c.bg; delete c.raio; } repintaPainel = true; }
+    else if (f === 'gradOn') { if (v) c.cor2 = c.cor2 || '#C0392B'; else delete c.cor2; repintaPainel = true; }
+    else if (f === 'bordaCor') c.borda = { cor: v, w: (c.borda && c.borda.w) || 4 };
+    else if (f === 'bordaW') { if (v > 0) c.borda = { cor: (c.borda && c.borda.cor) || '#ffffff', w: Math.round(lim(1, 60)) }; else delete c.borda; }
+    else if (f === 'forma') { c.forma = v; repintaPainel = true; }
+    else if (f === 'sombra') c.sombra = !!v;
+    else c[f] = v;
+    edMudou_(id, repintaPainel);
+    if (f === 't') { const h5 = document.querySelector('[data-ed-dyn="' + id + '"] .ed-props h5'); if (h5) h5.textContent = '✏️ Texto: ' + (c.rot || c.k); }
+  }
+  function ptEd_(cv, e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * cv.width, y: (e.clientY - r.top) / r.height * cv.height }; }
+  function localDe_(b, p) { const dx = p.x - b.cx, dy = p.y - b.cy, co = Math.cos(-b.a), si = Math.sin(-b.a); return { x: dx * co - dy * si, y: dx * si + dy * co }; }
+  function edDown_(e) {
+    const cv = e.target.closest && e.target.closest('[data-ed-cv]'); if (!cv) return;
+    const id = cv.dataset.edCv, tr = vzTrab[id]; if (!tr || !tr.spec.camadas) return;
+    const st = edE_(id), p = ptEd_(cv, e), W = cv.width, H = cv.height; let c = edCam_(id), modo = '';
+    if (c) {
+      const b = caixaDaCamada_(c, W, H), l = localDe_(b, p);
+      if (Math.hypot(l.x, l.y + b.h / 2 + 90) < 64) modo = 'giro';
+      else if (Math.abs(Math.abs(l.x) - b.w / 2) < 56 && Math.abs(Math.abs(l.y) - b.h / 2) < 56) modo = 'redim';
+      else if (Math.abs(l.x) <= b.w / 2 && Math.abs(l.y) <= b.h / 2) modo = 'mover';
+    }
+    if (!modo) {
+      c = null;
+      for (let i = tr.spec.camadas.length - 1; i >= 0; i--) { const q = tr.spec.camadas[i]; if (q.oculto) continue; const b = caixaDaCamada_(q, W, H), l = localDe_(b, p); if (Math.abs(l.x) <= b.w / 2 && Math.abs(l.y) <= b.h / 2) { c = q; break; } }
+      if (c) { modo = 'mover'; st.sel = c.k; } else { st.sel = ''; }
+      edPainel_(id);
+    }
+    if (modo && c) { try { cv.setPointerCapture(e.pointerId); } catch (er) {} EDT.drag = { id, k: c.k, modo, p0: p, x0: c.x, y0: c.y, b0: caixaDaCamada_(c, W, H) }; }
+    cv.focus({ preventScroll: true }); if (e.cancelable) e.preventDefault(); pintarEditor_(id);
+  }
+  function edMove_(e) {
+    const d = EDT.drag; if (!d) return; const cv = document.querySelector('[data-ed-cv="' + d.id + '"]'), tr = vzTrab[d.id]; if (!cv || !tr) return;
+    const c = tr.spec.camadas.find((q) => q.k === d.k); if (!c) return; const p = ptEd_(cv, e), W = cv.width, H = cv.height, st = edE_(d.id); st.guia = null;
+    if (d.modo === 'mover') {
+      let x = d.x0 + (p.x - d.p0.x) / W, y = d.y0 + (p.y - d.p0.y) / H;
+      if (Math.abs(x - 0.5) < 0.012) { x = 0.5; st.guia = { v: true }; } if (Math.abs(y - 0.5) < 0.012) { y = 0.5; st.guia = Object.assign(st.guia || {}, { h: true }); }
+      c.x = arred_(Math.max(-0.2, Math.min(1.2, x))); c.y = arred_(Math.max(-0.2, Math.min(1.2, y)));
+    } else if (d.modo === 'redim') {
+      const l = localDe_(d.b0, p); c.w = arred_(Math.max(0.03, 2 * Math.abs(l.x) / W)); c.h = arred_(Math.max(0.015, 2 * Math.abs(l.y) / W));
+    } else if (d.modo === 'giro') {
+      let ang = Math.atan2(p.y - d.b0.cy, p.x - d.b0.cx) * 180 / Math.PI + 90; if (ang > 180) ang -= 360; if (ang < -180) ang += 360;
+      const m15 = Math.round(ang / 15) * 15; if (Math.abs(ang - m15) < 4) ang = m15; c.giro = Math.round(ang * 10) / 10; if (!c.giro) delete c.giro;
+    }
+    if (!d.raf) d.raf = requestAnimationFrame(() => { d.raf = 0; edSyncCodigo_(d.id); edSyncCampos_(d.id); pintarEditor_(d.id); });
+    if (e.cancelable) e.preventDefault();
+  }
+  function edUp_() { const d = EDT.drag; if (!d) return; EDT.drag = null; const st = edE_(d.id); st.guia = null; edMudou_(d.id, false); }
+  function edTecla_(e) {
+    const cv = e.target.closest && e.target.closest('[data-ed-cv]'); if (!cv) return; const id = cv.dataset.edCv, c = edCam_(id); if (!c) return;
+    const passo = e.shiftKey ? 0.02 : 0.004; let usou = true;
+    if (e.key === 'ArrowLeft') c.x = arred_(c.x - passo); else if (e.key === 'ArrowRight') c.x = arred_(c.x + passo); else if (e.key === 'ArrowUp') c.y = arred_(c.y - passo); else if (e.key === 'ArrowDown') c.y = arred_(c.y + passo);
+    else if (e.key === 'Delete' || e.key === 'Backspace') { vzTrab[id].spec.camadas = vzTrab[id].spec.camadas.filter((q) => q !== c); edE_(id).sel = ''; edMudou_(id, true); e.preventDefault(); return; } else usou = false;
+    if (usou) { e.preventDefault(); edMudou_(id, false); }
+  }
+  function edAcao_(b) {
+    const a = b.dataset.edA, id = b.dataset.id, tr = vzTrab[id]; if (!tr || !tr.spec.camadas) return; const st = edE_(id), cams = tr.spec.camadas, k = b.dataset.k, i = cams.findIndex((q) => q.k === k);
+    if (a === 'fmt') { st.fmt = b.dataset.v; document.querySelectorAll('[data-ed-a="fmt"][data-id="' + id + '"]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.v === st.fmt))); return pintarEditor_(id); }
+    if (a === 'addtxt') { const sel = document.querySelector('[data-ed-papel="' + id + '"]'), papel = sel ? sel.value : 'extra', def = PAPEIS.find((q) => q[0] === papel) || PAPEIS[0]; const nk = edNovoK_(tr.spec, papel); cams.push({ k: nk, tipo: 'texto', rot: def[1], papel: papel, t: def[2], x: 0.5, y: 0.5, w: 0.8, h: papel === 'nome' ? 0.15 : 0.1, tam: papel === 'preco' ? 90 : papel === 'nome' ? 66 : 44, cor: '#F5F1E8', peso: 'bold', al: 'center', linhas: papel === 'nome' ? 2 : 1, max: MAX_PADRAO[papel] || 60, sombra: true }); st.sel = nk; return edMudou_(id, true); }
+    if (a === 'addforma') { const fm = b.dataset.forma, nk = edNovoK_(tr.spec, 'forma'); cams.push({ k: nk, tipo: 'forma', rot: fm === 'ret' ? 'Retângulo' : fm === 'elipse' ? 'Círculo' : 'Linha', forma: fm, x: 0.5, y: 0.5, w: fm === 'linha' ? 0.5 : 0.4, h: fm === 'linha' ? 0.006 : fm === 'elipse' ? 0.4 : 0.2, cor: '#E67E22', raio: fm === 'ret' ? 24 : 0 }); st.sel = nk; return edMudou_(id, true); }
+    if (a === 'sel') { st.sel = k; return edMudou_(id, true); }
+    if (i < 0 && a !== 'tam-' && a !== 'tam+') return;
+    if (a === 'up' && i < cams.length - 1) { const t = cams[i]; cams[i] = cams[i + 1]; cams[i + 1] = t; return edMudou_(id, true); }
+    if (a === 'down' && i > 0) { const t = cams[i]; cams[i] = cams[i - 1]; cams[i - 1] = t; return edMudou_(id, true); }
+    if (a === 'vis') { if (cams[i].oculto) delete cams[i].oculto; else cams[i].oculto = true; return edMudou_(id, true); }
+    if (a === 'dupcam') { const cp = JSON.parse(JSON.stringify(cams[i])); cp.k = edNovoK_(tr.spec, cp.k.replace(/\d+$/, '')); cp.x = arred_(cp.x + 0.03); cp.y = arred_(cp.y + 0.02); cams.splice(i + 1, 0, cp); st.sel = cp.k; return edMudou_(id, true); }
+    if (a === 'delcam') { cams.splice(i, 1); if (st.sel === k) st.sel = ''; return edMudou_(id, true); }
+    if (a === 'tam+' || a === 'tam-') { const c = edCam_(id); if (c && c.tipo === 'texto') { c.tam = Math.max(10, Math.min(400, Math.round((c.tam || 40) * (a === 'tam+' ? 1.1 : 1 / 1.1)))); edMudou_(id, false); } return; }
+    if (a === 'copiarIA') return copiar(promptIA_(id));
+    if (a === 'converter') return;
+  }
   function pintarAbertas_() { document.querySelectorAll('details[data-vz-det^="v:"][open]').forEach((d) => pintarAmostra_(d.dataset.vzDet.slice(2))); }
   function htmlCardVisual_(v) {
     const id = v[0], custom = id.indexOf('c_') === 0, tr = custom ? trabDe_(id) : null, aberto = vzAbertos['v:' + id] ? ' open' : '';
@@ -388,15 +607,19 @@
     let h = '<details class="po-vz" data-vz-det="v:' + esc(id) + '"' + aberto + '><summary>' + esc(nomeAtual) + (custom ? ' <small>(seu)</small>' : '') + '</summary><div class="po-vz-corpo">';
     h += '<label class="po-vz-l">Nome do visual<input type="text" data-vz-nome="' + esc(id) + '" value="' + esc(nomeAtual) + '" maxlength="40"></label>';
     h += '<label class="po-vz-l">Texto do botão quando NÃO há link<input type="text" data-vz-cta="' + esc(id) + '" value="' + esc(ctaDoVisual_(id)) + '" maxlength="40" placeholder="' + CTA_PADRAO + '"></label>';
-    h += '<div class="po-vz-prev"><canvas data-vz-cv="' + esc(id) + '" aria-label="Prévia do visual ' + esc(nomeAtual) + '" style="width:100%;max-width:280px;border-radius:12px;border:1px solid #ddd"></canvas></div>';
+    const ehCam = !!(custom && tr && tr.spec.camadas);
+    h += ehCam ? '<div class="po-vz-prev ed">' + htmlEditor_(id) + '</div>' : '<div class="po-vz-prev"><canvas data-vz-cv="' + esc(id) + '" aria-label="Prévia do visual ' + esc(nomeAtual) + '" style="width:100%;max-width:280px;border-radius:12px;border:1px solid #ddd"></canvas></div>';
     h += '<div class="po-vz-erro" data-vz-erro="' + esc(id) + '" role="status" style="color:#b00020;font-size:.82rem"></div>';
-    if (custom && tr) {
+    if (ehCam) {
+      h += '<details class="po-vz-cod" open><summary>🧩 Código do visual (muda junto com a prévia)</summary><p class="po-ajuda" style="margin:6px 0">Edite aqui ou arraste na prévia: um atualiza o outro na hora. O guia dentro do código explica cada campo para pessoas e IAs.</p><textarea data-vz-json="' + esc(id) + '" spellcheck="false" rows="14" style="width:100%;font-family:monospace;font-size:.76rem" aria-label="Código do visual">' + esc(formatarSpec_(tr.spec)) + '</textarea><div class="po-vz-acoes"><button type="button" data-ed-a="copiarIA" data-id="' + esc(id) + '">📋 Copiar guia + código para uma IA</button></div></details>';
+      h += '<div class="po-vz-acoes"><button type="button" class="po-vz-ok" data-vza="salvar" data-id="' + esc(id) + '">💾 Salvar visual</button><button type="button" data-vza="dup" data-id="' + esc(id) + '">Duplicar</button><button type="button" data-vza="excluir" data-id="' + esc(id) + '" style="color:#b00020">Excluir</button></div>';
+    } else if (custom && tr) {
       h += '<h5 style="margin:10px 0 4px">Campos deste visual</h5>';
       h += tr.spec.itens.map((it, i) => '<div class="po-vz-f"><b>' + esc(it.rot || it.k) + '</b><input type="text" data-vz-f="' + esc(id) + '|' + i + '|t" value="' + esc(it.t) + '" aria-label="Texto de ' + esc(it.rot || it.k) + '"><label>Tam.<input type="number" min="10" max="300" data-vz-f="' + esc(id) + '|' + i + '|tam" value="' + esc(it.tam || 40) + '"></label><label>Máx. letras<input type="number" min="0" max="200" data-vz-f="' + esc(id) + '|' + i + '|max" value="' + esc(it.max || 0) + '"></label><button type="button" data-vza="delf" data-id="' + esc(id) + '" data-i="' + i + '" aria-label="Apagar o campo ' + esc(it.rot || it.k) + '">✕</button></div>').join('');
       h += '<div class="po-vz-add"><select data-vz-add="' + esc(id) + '" aria-label="Tipo de campo">' + CAMPOS_NOVOS.map((c) => '<option value="' + c[0] + '">' + esc(c[1]) + '</option>').join('') + '</select><button type="button" data-vza="addf" data-id="' + esc(id) + '">+ Adicionar campo</button></div>';
       h += '<p class="po-ajuda" style="margin:6px 0">Use {nome} {avista} {cheio} {codigo} {tam} {cores} {cat} {gen} no texto: trocam pelos dados da peça. “Máx. letras” 0 = sem limite.</p>';
       h += '<details class="po-vz-cod"><summary>🧩 Código do visual (avançado)</summary><textarea data-vz-json="' + esc(id) + '" spellcheck="false" rows="12" style="width:100%;font-family:monospace;font-size:.78rem">' + esc(JSON.stringify(tr.spec, null, 1)) + '</textarea><button type="button" data-vza="aplicar" data-id="' + esc(id) + '">Aplicar código na prévia</button></details>';
-      h += '<div class="po-vz-acoes"><button type="button" class="po-vz-ok" data-vza="salvar" data-id="' + esc(id) + '">💾 Salvar visual</button><button type="button" data-vza="dup" data-id="' + esc(id) + '">Duplicar</button><button type="button" data-vza="excluir" data-id="' + esc(id) + '" style="color:#b00020">Excluir</button></div>';
+      h += '<div class="po-vz-acoes"><button type="button" class="po-vz-ok" data-vza="salvar" data-id="' + esc(id) + '">💾 Salvar visual</button><button type="button" data-vza="converter" data-id="' + esc(id) + '">🎨 Converter para o editor visual (arrastar)</button><button type="button" data-vza="dup" data-id="' + esc(id) + '">Duplicar</button><button type="button" data-vza="excluir" data-id="' + esc(id) + '" style="color:#b00020">Excluir</button></div>';
     } else {
       h += '<div class="po-vz-acoes">' + (id === 'original' ? '' : '<button type="button" data-vza="dup" data-id="' + esc(id) + '">📄 Duplicar para editar campos e código</button>') + '<button type="button" data-vza="esconder" data-id="' + esc(id) + '">Esconder de todos os tipos</button></div>';
     }
@@ -405,7 +628,7 @@
   function htmlConfigVisuais_() {
     const c = lerCfgVis_(), todos = todosVisuais_();
     const tipos = [['feed', 'Feed'], ['carrossel', 'Carrossel'], ['story', 'Story']];
-    let h = '<style>.po-vz{border:1px solid #ddd;border-radius:12px;margin:0 0 8px;background:#fff}.po-vz>summary{padding:12px;font-weight:800;cursor:pointer;min-height:44px}.po-vz-corpo{padding:0 12px 12px}.po-vz-l{display:block;font-weight:700;font-size:.85rem;margin:8px 0}.po-vz-l input{display:block;width:100%;margin-top:4px}.po-vz-f{display:grid;grid-template-columns:1fr;gap:4px;border-top:1px solid #eee;padding:8px 0}.po-vz-f label{font-size:.75rem;display:inline-flex;gap:4px;align-items:center}.po-vz-f input[type=number]{width:70px}.po-vz-add,.po-vz-acoes{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.po-vz button{width:auto;min-height:40px;padding:6px 12px}.po-vz-ok{background:#E67E22;color:#0d0d0d;font-weight:800}</style>';
+    let h = '<style>.po-vz{border:1px solid #ddd;border-radius:12px;margin:0 0 8px;background:#fff}.po-vz>summary{padding:12px;font-weight:800;cursor:pointer;min-height:44px}.po-vz-corpo{padding:0 12px 12px}.po-vz-l{display:block;font-weight:700;font-size:.85rem;margin:8px 0}.po-vz-l input{display:block;width:100%;margin-top:4px}.po-vz-f{display:grid;grid-template-columns:1fr;gap:4px;border-top:1px solid #eee;padding:8px 0}.po-vz-f label{font-size:.75rem;display:inline-flex;gap:4px;align-items:center}.po-vz-f input[type=number]{width:70px}.po-vz-add,.po-vz-acoes{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.po-vz button{width:auto;min-height:40px;padding:6px 12px}.po-vz-ok{background:#E67E22;color:#0d0d0d;font-weight:800}.ed-cv{display:block;width:86%;margin:8px auto;border-radius:12px;border:1px solid #ccc;background:#eee;touch-action:none;cursor:crosshair}.ed-cv:focus-visible{outline:3px solid #A85200}.ed-fmt,.ed-add{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}.ed-fmt button[aria-pressed=true]{background:#E67E22;color:#0d0d0d;font-weight:800}.ed-camadas{margin:8px 0}.ed-cam{display:flex;gap:4px;align-items:center;margin:3px 0}.ed-cam.sel .ed-cam-n{border-color:#E67E22;background:#FFF3E6;font-weight:800}.ed-cam-n{flex:1;text-align:left;border:1px solid #ccc;border-radius:8px;background:#fff;min-height:40px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ed-cam button{min-width:40px}.ed-props{border:1px solid #E67E22;border-radius:12px;padding:8px 10px;margin:8px 0;background:#fffaf5}.ed-props h5{margin:0 0 6px}.ed-lin{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin:4px 0}.ed-c{display:flex;flex-direction:column;font-size:.75rem;font-weight:700;gap:2px;flex:1 1 90px}.ed-c input,.ed-c select{width:100%;min-height:40px}.ed-chk{display:flex;gap:6px;align-items:center;min-height:40px;font-size:.8rem;font-weight:700}.ed-props input[type=color]{padding:2px;height:40px}</style>';
     h += '<div class="po-passo"><h4>Visuais de cada tipo</h4><p class="po-ajuda" style="margin-top:0">Toque num tipo para marcar quais visuais aparecem nele. Reels não usa visual. Vale para todos os aparelhos da equipe; sempre sobra pelo menos um.</p>';
     h += tipos.map((t) => { const ativos = Array.isArray(c[t[0]]) ? c[t[0]] : todos.map((x) => x[0]); return '<details class="po-vz" data-vz-det="t:' + t[0] + '"' + (vzAbertos['t:' + t[0]] ? ' open' : '') + '><summary>' + t[1] + ' <small>(' + todos.filter((v) => ativos.indexOf(v[0]) !== -1).length + ' de ' + todos.length + ')</small></summary><div class="po-vz-corpo">' + todos.map((v) => '<label style="display:flex;gap:8px;align-items:center;min-height:40px"><input type="checkbox" data-cv-tipo="' + t[0] + '" data-cv-id="' + esc(v[0]) + '"' + (ativos.indexOf(v[0]) !== -1 ? ' checked' : '') + '> ' + esc(v[1]) + '</label>').join('') + '</div></details>'; }).join('') + '</div>';
     h += '<div class="po-passo"><h4>Meus visuais e edição</h4><p class="po-ajuda" style="margin-top:0">Cada visual tem nome, texto do botão sem link e prévia ao vivo. Os visuais prontos podem ser duplicados para você editar campos e código; os seus podem ser alterados e excluídos.</p><div class="po-vz-acoes" style="margin-top:0"><button type="button" class="po-vz-ok" data-vza="novo">+ Novo visual</button></div>' + todos.map(htmlCardVisual_).join('') + '</div>';
@@ -426,23 +649,28 @@
     corpo.addEventListener('toggle', (e) => { const d = e.target; if (d && d.dataset && d.dataset.vzDet) { vzAbertos[d.dataset.vzDet] = d.open; if (d.open && d.dataset.vzDet.indexOf('v:') === 0) pintarAmostra_(d.dataset.vzDet.slice(2)); } }, true);
     corpo.addEventListener('input', (e) => {
       const t = e.target; if (!t || !t.dataset) return;
+      if (t.dataset.edP !== undefined) return edProp_(t);
       if (t.dataset.vzNome !== undefined) { const id = t.dataset.vzNome, v = t.value.trim().slice(0, 40); if (id.indexOf('c_') === 0) { const tr = trabDe_(id); if (tr) tr.nome = v || 'Meu visual'; } else { const n = lerJ_(NOMES_KEY, {}); if (v) n[id] = v; else delete n[id]; gravarJ_(NOMES_KEY, n); } const sm = t.closest('details').querySelector('summary'); if (sm) sm.firstChild.textContent = v || 'Meu visual'; return; }
       if (t.dataset.vzCta !== undefined) { const id = t.dataset.vzCta, c = lerJ_(CTA_KEY, {}); const v = t.value.trim(); if (v) c[id] = v; else delete c[id]; gravarJ_(CTA_KEY, c); pintarAmostra_(id); return; }
       if (t.dataset.vzF !== undefined) { const [id, i, campo] = t.dataset.vzF.split('|'), tr = trabDe_(id); if (!tr || !tr.spec.itens[Number(i)]) return; const it = tr.spec.itens[Number(i)]; if (campo === 't') it.t = t.value; else it[campo] = Number(t.value) || 0; const ta = document.querySelector('[data-vz-json="' + id + '"]'); if (ta && document.activeElement !== ta) ta.value = JSON.stringify(tr.spec, null, 1); tr.erro = ''; pintarAmostra_(id); return; }
-      if (t.dataset.vzJson !== undefined) { const id = t.dataset.vzJson, tr = trabDe_(id); if (!tr) return; clearTimeout(t._tm); t._tm = setTimeout(() => { try { const sp = JSON.parse(t.value), err = validarSpec_(sp); if (err) { tr.erro = err; const el = document.querySelector('[data-vz-erro="' + id + '"]'); if (el) el.textContent = err; return; } tr.spec = sp; tr.erro = ''; pintarAmostra_(id); } catch (er) { tr.erro = 'Código com erro de escrita: ' + er.message; const el = document.querySelector('[data-vz-erro="' + id + '"]'); if (el) el.textContent = tr.erro; } }, 350); }
+      if (t.dataset.vzJson !== undefined) { const id = t.dataset.vzJson, tr = trabDe_(id); if (!tr) return; clearTimeout(t._tm); t._tm = setTimeout(() => { try { const sp = JSON.parse(t.value); delete sp._guia; const err = validarSpec_(sp); if (err) { tr.erro = err; const el = document.querySelector('[data-vz-erro="' + id + '"]'); if (el) el.textContent = err; return; } tr.spec = sp; tr.erro = ''; if (sp.camadas) { const st = edE_(id); if (!sp.camadas.some((q) => q.k === st.sel)) st.sel = ''; edPainel_(id); } pintarAmostra_(id); } catch (er) { tr.erro = 'Código com erro de escrita: ' + er.message; const el = document.querySelector('[data-vz-erro="' + id + '"]'); if (el) el.textContent = tr.erro; } }, 350); }
     });
+    corpo.addEventListener('pointerdown', edDown_); corpo.addEventListener('pointermove', edMove_); corpo.addEventListener('pointerup', edUp_); corpo.addEventListener('pointercancel', edUp_); corpo.addEventListener('keydown', edTecla_);
+    corpo.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-ed-a]'); if (b) edAcao_(b); });
+    corpo.addEventListener('change', (e) => { const t = e.target; if (t && t.dataset && t.dataset.edFundo !== undefined) { const tr = vzTrab[t.dataset.edFundo]; if (tr) { tr.spec.fundo = t.value; edMudou_(t.dataset.edFundo, false); } } });
     corpo.addEventListener('click', (e) => {
       const b = e.target.closest && e.target.closest('[data-vza]'); if (!b) return; const a = b.dataset.vza, id = b.dataset.id;
-      if (a === 'novo') { const nid = novoIdVisual_(), sp = { fundo: 'baixo', grupos: [{ id: 'a', anc: 'b', y: 0.08, x: 0.5, al: 'center', w: 0.88 }], itens: [{ k: 'nome', rot: 'Nome da peça', t: '{nome}', grp: 'a', tam: 66, cor: '#F5F1E8', linhas: 2, sombra: true, max: 40 }, { k: 'preco', rot: 'Preço', t: '{avista} à vista', grp: 'a', tam: 88, cor: '#F39C12', sombra: true }, { k: 'zona', rot: 'Zona do link / botão', t: 'Compre online', grp: 'a', tam: 40, cor: '#F5F1E8', wz: 0.6, padY: 0.5, sombra: false }] }; const l = lerCustom_(); l.push({ id: nid, nome: 'Meu visual ' + (l.length + 1), spec: sp }); gravarJ_(CUSTOM_KEY, l); addCfgTodosTipos_(nid); vzAbertos['v:' + nid] = true; return redesenharConfig_(); }
+      if (a === 'novo') { const nid = novoIdVisual_(), sp = novoSpecCamadas_(); const l = lerCustom_(); l.push({ id: nid, nome: 'Meu visual ' + (l.length + 1), spec: sp }); gravarJ_(CUSTOM_KEY, l); addCfgTodosTipos_(nid); vzAbertos['v:' + nid] = true; return redesenharConfig_(); }
       if (a === 'dup') {
         let sp, nome; const cu = customPorId_(id);
-        if (vzTrab[id]) { sp = JSON.parse(JSON.stringify(vzTrab[id].spec)); nome = vzTrab[id].nome; } else if (cu) { sp = JSON.parse(JSON.stringify(cu.spec)); nome = cu.nome; } else { const r = especTemplateBase(id, INFO_MOLDE, 1080, 1350); sp = JSON.parse(JSON.stringify({ fundo: r.fundo, grupos: r.grupos, itens: r.itens })); if (r.fundo === 'arte') sp.base = id; nome = (todosVisuais_().find((x) => x[0] === id) || [0, id])[1]; }
+        if (vzTrab[id]) { sp = JSON.parse(JSON.stringify(vzTrab[id].spec)); nome = vzTrab[id].nome; } else if (cu) { sp = JSON.parse(JSON.stringify(cu.spec)); nome = cu.nome; } else { const r = especTemplateBase(id, INFO_MOLDE, 1080, 1350); sp = JSON.parse(JSON.stringify({ fundo: r.fundo, grupos: r.grupos, itens: r.itens })); if (r.fundo === 'arte') sp.base = id; try { sp = converterParaCamadas_(sp); } catch (er) { /* fica no formato antigo */ } nome = (todosVisuais_().find((x) => x[0] === id) || [0, id])[1]; }
         const nid = novoIdVisual_(), l = lerCustom_(); l.push({ id: nid, nome: 'Cópia de ' + nome, spec: sp }); gravarJ_(CUSTOM_KEY, l); addCfgTodosTipos_(nid); vzAbertos['v:' + nid] = true; return redesenharConfig_();
       }
       if (a === 'esconder') { addCfgTodosTipos_(id, true); return redesenharConfig_(); }
       const tr = trabDe_(id); if (!tr && a !== 'excluir') return;
       if (a === 'addf') { const sel = document.querySelector('[data-vz-add="' + id + '"]'), k0 = sel ? sel.value : 'extra', def = CAMPOS_NOVOS.find((x) => x[0] === k0) || CAMPOS_NOVOS[0]; let k = k0, n = 1; while (tr.spec.itens.some((it) => it.k === k)) k = k0 + (++n); tr.spec.itens.push({ k: k, rot: def[1], t: def[2], grp: tr.spec.grupos[0].id, tam: 40, cor: '#F5F1E8', sombra: true, max: 0 }); return redesenharConfig_(); }
       if (a === 'delf') { if (tr.spec.itens.length <= 1) { tr.erro = 'O visual precisa de pelo menos 1 campo.'; return pintarAmostra_(id); } tr.spec.itens.splice(Number(b.dataset.i), 1); return redesenharConfig_(); }
+      if (a === 'converter') { try { tr.spec = converterParaCamadas_(tr.spec); tr.erro = ''; edE_(id).sel = ''; return redesenharConfig_(); } catch (er) { tr.erro = 'Não consegui converter: ' + er.message; return pintarAmostra_(id); } }
       if (a === 'aplicar') { const ta = document.querySelector('[data-vz-json="' + id + '"]'); try { const sp = JSON.parse(ta.value), err = validarSpec_(sp); if (err) { tr.erro = err; return pintarAmostra_(id); } tr.spec = sp; tr.erro = ''; return redesenharConfig_(); } catch (er) { tr.erro = 'Código com erro de escrita: ' + er.message; return pintarAmostra_(id); } }
       if (a === 'salvar') { const err = validarSpec_(tr.spec); if (err) { tr.erro = err; return pintarAmostra_(id); } const l = lerCustom_(), c = l.find((x) => x.id === id); if (c) { c.nome = tr.nome; c.spec = tr.spec; gravarJ_(CUSTOM_KEY, l); } aviso = 'Visual salvo.'; avisoErro = false; return redesenharConfig_(); }
       if (a === 'excluir') { if (!confirm('Excluir este visual? Não dá para desfazer.')) return; gravarJ_(CUSTOM_KEY, lerCustom_().filter((x) => x.id !== id)); delete vzTrab[id]; addCfgTodosTipos_(id, true); return redesenharConfig_(); }
@@ -681,6 +909,11 @@
   const PLACEHOLDERS_ = ['nome', 'avista', 'cheio', 'codigo', 'tam', 'cores', 'cat', 'gen'];
   function especCustom_(c, info) {
     const sp = JSON.parse(JSON.stringify(c.spec));
+    if (Array.isArray(sp.camadas)) {
+      const sub2 = (t) => String(t == null ? '' : t).replace(/\{(nome|avista|cheio|codigo|tam|cores|cat|gen)\}/g, (m, k) => (info[k] == null ? '' : info[k]));
+      sp.camadas.forEach((q) => { if (q.tipo !== 'texto') return; let t = sub2(q.t); const mx = Number(q.max) || 0; if (mx > 0 && t.length > mx) t = t.slice(0, Math.max(1, mx - 1)).trim() + '…'; q.t = t; });
+      sp.itens = sp.camadas.filter((q) => q.tipo === 'texto'); sp.grupos = []; if (!sp.fundo) sp.fundo = 'foto'; return sp;
+    }
     sp.grupos = Array.isArray(sp.grupos) ? sp.grupos : []; sp.itens = Array.isArray(sp.itens) ? sp.itens : [];
     const sub = (t) => String(t == null ? '' : t).replace(/\{(nome|avista|cheio|codigo|tam|cores|cat|gen)\}/g, (m, k) => (info[k] == null ? '' : info[k]));
     sp.itens.forEach((it) => { let t = sub(it.t); const mx = Number(it.max) || 0; if (mx > 0 && t.length > mx) t = t.slice(0, Math.max(1, mx - 1)).trim() + '…'; it.t = t; });
@@ -689,8 +922,8 @@
   }
   function posEspec_(r, info, tpl) {
     if (r && r.itens && info) {
-      if (info.semPreco) r.itens.forEach((it) => { if (it.k === 'preco') { it.t = 'Consulte valor'; delete it.big; it.tam = Math.round((it.tam || 80) * 0.5); it.linhas = 1; } });
-      if (!info.comLink) r.itens.forEach((it) => { if (it.k === 'zona') it.t = ctaDoVisual_(tpl); });
+      if (info.semPreco) r.itens.forEach((it) => { if (it.k === 'preco' || it.papel === 'preco') { it.t = 'Consulte valor'; delete it.big; it.tam = Math.round((it.tam || 80) * 0.5); it.linhas = 1; } });
+      if (!info.comLink) r.itens.forEach((it) => { if (it.k === 'zona' || it.papel === 'zona') it.t = ctaDoVisual_(tpl); });
     }
     return r;
   }
@@ -1000,6 +1233,74 @@
   function codigo_(info, grp) { return info.codigo ? { k: 'codigo', rot: 'Código', t: 'CÓDIGO ' + info.codigo, grp: grp, tam: 22, track: 0.2, peso: 'normal', cor: TXT_SUAVE } : null; }
 
   /** Mede um item: encolhe a letra (até 45%) até caber em `larg` px nas linhas permitidas; devolve tamanho, linhas e caixa. */
+
+  /* ---------- v5.5: CAMADAS (editor visual sem código) ----------
+   * Um visual "v2" é { versao:2, fundo, base?, camadas:[ … ] }. Cada camada é um TEXTO ou uma FORMA com posição livre
+   * (x,y = centro em fração; w,h = fração da LARGURA; giro em graus). A foto fica sempre por baixo; as camadas vêm por cima, na ordem da lista.
+   * Texto: a letra ENCOLHE sozinha (até 45%) para caber na caixa w×h; `max` = limite de letras; `papel` liga comportamentos (preco, zona).
+   * O guia completo para pessoas/IA vai dentro do próprio código (GUIA_CODIGO). */
+  const MAX_PADRAO = { nome: 40, preco: 30, codigo: 20, tam: 30, cores: 30, cat: 32, zona: 26, selo: 16, extra: 60 };
+  const PAPEIS = [['extra', 'Texto livre', 'Seu texto'], ['nome', 'Nome da peça', '{nome}'], ['preco', 'Preço', '{avista} à vista'], ['codigo', 'Código', 'Código {codigo}'], ['tam', 'Tamanhos', 'Tamanhos: {tam}'], ['cores', 'Cores', 'Cores: {cores}'], ['cat', 'Categoria e gênero', '{cat} · {gen}'], ['zona', 'Botão / zona do link', 'Compre online'], ['selo', 'Selo', 'NOVIDADE']];
+  const GUIA_CODIGO = [
+    'GUIA PARA QUEM EDITAR ESTE CÓDIGO (pessoa ou IA). A chave "_guia" é só explicação: pode ficar ou sair, o sistema ignora.',
+    'FORMATO: JSON válido (sem comentários, sem vírgula sobrando). Responda SEMPRE com o JSON inteiro, mantendo "camadas" e todos os "k".',
+    'TELA: imagem de 1080 px de largura. Feed = 1080x1350, Story = 1080x1920. A FOTO DA PEÇA fica sempre por baixo; as "camadas" são desenhadas por cima, na ordem da lista (a última fica na frente).',
+    'COORDENADAS (frações): x = CENTRO na horizontal (0 esquerda, 0.5 meio, 1 direita); y = CENTRO na vertical (0 topo, 1 base); w = largura como fração da LARGURA da imagem; h = altura como fração da LARGURA (não da altura: assim a caixa mantém a proporção no Feed e no Story); giro = graus de -180 a 180, em volta do centro.',
+    'camada tipo "texto": t = texto (aceita {nome} {avista} {cheio} {codigo} {tam} {cores} {cat} {gen}, que viram os dados da peça); tam = tamanho da letra em px (a letra encolhe sozinha, até 45%, se o texto não couber na caixa w x h); linhas = máximo de linhas; max = máximo de letras (passou disso vira "…"; 0 = sem limite); cor; peso "bold" ou "normal"; al "left", "center" ou "right"; bg = cor da caixa atrás do texto (opcional) e raio = canto arredondado em px; sombra true/false; opac de 0 a 1.',
+    'papel (só em texto, opcional): "preco" = quando a peça está marcada "Sem preço" o texto vira "Consulte valor"; "zona" = botão/zona do link do Story: sem link aparece o CTA configurado do visual (padrão www.tenkitermodas.com.br). Outros papéis (nome, codigo, tam, cores, cat, selo, extra) só definem o limite de letras padrão.',
+    'camada tipo "forma": forma = "ret" (retângulo, com raio de canto em px), "elipse" (círculo/oval) ou "linha" (traço fino, use h pequeno, ex. 0.005); cor e, se quiser degradê de cima para baixo, cor2; borda = {"cor":"#fff","w":4}; opac; sombra true/false.',
+    'fundo = efeito escuro/colorido sobre a foto: foto (nenhum) | baixo | baixo-leve | ambos | topo | baixo-dir | direita | rodape | energia. Para os visuais prontos desenhados, fundo "arte" exige "base" com o id do visual (ex. "classico").',
+    'LIMITES PADRÃO DE LETRAS por papel: nome 40, preco 16, codigo 20, tam 30, cores 30, cat 32, zona 26, selo 16, extra 60. Pode mudar em cada camada ("max").',
+    'CADA camada precisa de "k" ÚNICO (minúsculas e números, sem espaço) e de "tipo". "rot" é só o nome que aparece na lista. Cores: #RRGGBB ou rgba(...).',
+    'MARCA: laranja #E67E22, bege #F5F1E8, cinza #2C2C2C, ouro #F39C12. Fundo laranja SEMPRE com letra preta (#0d0d0d), nunca branca. Texto sobre foto precisa de contraste (use sombra true ou uma forma escura atrás).',
+    'DICA: no Story, o rodapé (cerca de 12% de baixo) fica sob a barra de resposta do Instagram: evite texto importante com y acima de 0.92.'
+  ];
+  function caixaDaCamada_(c, W, H) { return { cx: (Number(c.x) || 0) * W, cy: (Number(c.y) || 0) * H, w: Math.max(4, (Number(c.w) || 0.2) * W), h: Math.max(4, (Number(c.h) || 0.1) * W), a: (Number(c.giro) || 0) * Math.PI / 180 }; }
+  function medirTextoCamada_(c, bw, bh) {
+    const txt = String(c.t == null ? '' : c.t).trim(); if (!txt) return null;
+    const base = Math.max(10, Math.round((Number(c.tam) || 40) * (c.mult || 1))), pad = c.bg ? Math.round(base * 0.35) : 0, livre = Math.max(20, bw - pad * 2), maxL = Math.max(1, Math.min(8, Number(c.linhas) || 1));
+    let tam = base, linhas;
+    for (;;) {
+      _mc.font = fonteDe(c, tam); linhas = quebrar(_mc, txt, livre, maxL);
+      const lw = Math.max.apply(null, linhas.map((l) => _mc.measureText(l).width)), cortou = linhas.join(' ').replace(/\s+/g, ' ') !== txt.replace(/\s+/g, ' ');
+      if ((lw <= livre + 0.5 && !cortou && linhas.length * tam * 1.18 <= bh - pad * 2 + 0.5) || tam <= Math.max(10, base * 0.45)) break;
+      tam = Math.max(10, Math.floor(tam * 0.94));
+    }
+    return { tam, linhas, lh: tam * 1.18, pad };
+  }
+  function layoutCamadas(spec, W, H, ov) {
+    const out = [];
+    (spec.camadas || []).forEach((c) => {
+      if (!c || c.oculto) return;
+      const b = caixaDaCamada_(c, W, H), o = ov && ov[c.k], cx = o ? o.x * W : b.cx, cy = o ? o.y * H : b.cy;
+      let m = null; if (c.tipo === 'texto') { m = medirTextoCamada_(c, b.w, b.h); if (!m) return; }
+      out.push(Object.assign({}, c, { camada: true, cb: { cx, cy, w: b.w, h: b.h, a: b.a }, m, r: { x0: cx - b.w / 2, y0: cy - b.h / 2, x1: cx + b.w / 2, y1: cy + b.h / 2 }, x: cx / W, y: cy / H }));
+    });
+    return out;
+  }
+  function desenharCamada(ctx, it, W, H) {
+    const b = it.cb, w = b.w, h = b.h, rad = Math.max(0, Number(it.raio) || 0);
+    ctx.save(); ctx.translate(b.cx, b.cy); ctx.rotate(b.a); ctx.globalAlpha = it.opac == null ? 1 : Math.max(0, Math.min(1, Number(it.opac)));
+    if (it.tipo === 'forma') {
+      const caminho = () => { if (it.forma === 'elipse') { ctx.beginPath(); ctx.ellipse(0, 0, w / 2, h / 2, 0, 0, Math.PI * 2); } else caixaArredondada(ctx, -w / 2, -h / 2, w / 2, h / 2, it.forma === 'linha' ? Math.min(w, h) / 2 : rad); };
+      let fill = it.cor || '#E67E22'; if (it.cor2) { const g = ctx.createLinearGradient(0, -h / 2, 0, h / 2); g.addColorStop(0, fill); g.addColorStop(1, it.cor2); fill = g; }
+      if (it.sombra) { ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8; }
+      ctx.fillStyle = fill; caminho(); ctx.fill(); ctx.shadowColor = 'transparent';
+      if (it.borda && Number(it.borda.w) > 0) { ctx.strokeStyle = it.borda.cor || '#fff'; ctx.lineWidth = Number(it.borda.w); caminho(); ctx.stroke(); }
+    } else {
+      const m = it.m;
+      if (it.bg) { ctx.fillStyle = it.bg; caixaArredondada(ctx, -w / 2, -h / 2, w / 2, h / 2, rad); ctx.fill(); }
+      ctx.font = fonteDe(it, m.tam); ctx.textBaseline = 'middle'; ctx.fillStyle = it.cor || '#fff';
+      if (it.sombra) { ctx.shadowColor = 'rgba(0,0,0,.65)'; ctx.shadowBlur = Math.round(m.tam * 0.18); ctx.shadowOffsetY = Math.round(m.tam * 0.05); }
+      const ta = it.al === 'left' || it.al === 'right' ? it.al : 'center'; ctx.textAlign = ta;
+      const tx = ta === 'left' ? -w / 2 + m.pad : ta === 'right' ? w / 2 - m.pad : 0, total = m.linhas.length * m.lh;
+      m.linhas.forEach((l, i) => ctx.fillText(l, tx, -total / 2 + m.lh * (i + 0.5)));
+    }
+    ctx.restore();
+    if (it.tipo === 'forma') return null;
+    const cs = Math.abs(Math.cos(b.a)), sn = Math.abs(Math.sin(b.a)), bw = w * cs + h * sn, bh = w * sn + h * cs;
+    return { k: it.k, x0: b.cx - bw / 2, y0: b.cy - bh / 2, x1: b.cx + bw / 2, y1: b.cy + bh / 2 };
+  }
   function medirItem(it, larg) {
     if (ESPECIAL(it)) { const esp = medirEspecial(it, larg); if (esp) return esp; }
     const txt = String(it.t == null ? '' : it.t).trim(); if (!txt) return null;
@@ -1017,6 +1318,7 @@
   }
   /** Calcula a posição (caixa) de cada item. Itens com `pos` (arrastados) ficam onde a pessoa deixou. */
   function layoutItens(spec, W, H, ov) {
+    if (spec.camadas) return layoutCamadas(spec, W, H, ov);
     const story = H > W * 1.5, out = [];
     spec.grupos.forEach((g) => {
       const its = spec.itens.filter((q) => q.grp === g.id && String(q.t == null ? '' : q.t).trim());
@@ -1049,11 +1351,14 @@
   function itensEfetivos(tpl, m) {
     const [W, H] = tamanhoAlvo(), spec = especTemplate(tpl, infoPeca(nova.p), W, H);
     const tx = (nova.tx && nova.tx[tpl]) || {}, tm = (nova.tam && nova.tam[tpl]) || {}, ps = (m && m.pos && m.pos[tpl]) || {}, oc = (nova.oculto && nova.oculto[tpl]) || {};
-    spec.itens = spec.itens.map((it) => Object.assign({}, it, { t: oc[it.k] ? '' : (tx[it.k] !== undefined ? tx[it.k] : it.t), mult: tm[it.k] || 1 }));
+    const novosIt = spec.itens.map((it) => { let t = oc[it.k] ? '' : (tx[it.k] !== undefined ? tx[it.k] : it.t); const mx = Number(it.max) || 0; if (spec.camadas && mx > 0 && String(t).length > mx) t = String(t).slice(0, Math.max(1, mx - 1)).trim() + '…'; return Object.assign({}, it, { t: t, mult: tm[it.k] || 1 }); });
+    if (spec.camadas) { const mp = {}; novosIt.forEach((n) => { mp[n.k] = n; }); spec.camadas = spec.camadas.map((c) => (c.tipo === 'texto' && mp[c.k] ? mp[c.k] : c)); }
+    spec.itens = novosIt;
     return { tpl: tpl, fundo: spec.fundo, arteBase: spec.base, lista: layoutItens(spec, W, H, ps) };
   }
   function caixaArredondada(ctx, x0, y0, x1, y1, r) { r = Math.min(r, (x1 - x0) / 2, (y1 - y0) / 2); ctx.beginPath(); ctx.moveTo(x0 + r, y0); ctx.arcTo(x1, y0, x1, y1, r); ctx.arcTo(x1, y1, x0, y1, r); ctx.arcTo(x0, y1, x0, y0, r); ctx.arcTo(x0, y0, x1, y0, r); ctx.closePath(); }
   function desenharItem(ctx, it, W, H) {
+    if (it.camada) return desenharCamada(ctx, it, W, H);
     if (ESPECIAL(it) && it.m && (it.m.big || it.m.pill || it.m.chip || it.track || it.vert || it.stack)) return desenharEspecial(ctx, it, W, H);
     const m = it.m, r = it.r, rad = (it.radius || 0) * m.tam * 2;
     if (it.fade) { const g = ctx.createLinearGradient(0, r.y0 - 90, 0, H); g.addColorStop(0, 'rgba(44,44,44,0)'); g.addColorStop(0.45, 'rgba(44,44,44,.8)'); g.addColorStop(1, 'rgba(44,44,44,.92)'); ctx.fillStyle = g; ctx.fillRect(0, r.y0 - 90, W, H - r.y0 + 90); }
@@ -1124,7 +1429,7 @@
     ((ef && ef.lista) || []).forEach((it) => {
       if (it.deco === 'caixa') { ctx.save(); if (it.cx.sombra) { ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 8; } ctx.fillStyle = it.cx.cor; caixaArredondada(ctx, it.x0, it.y0, it.x1, it.y1, it.cx.r); ctx.fill(); ctx.restore(); }
     });
-    ((ef && ef.lista) || []).forEach((it) => { if (!it.deco) caixas.push(desenharItem(ctx, it, W, H)); });
+    ((ef && ef.lista) || []).forEach((it) => { if (!it.deco) { const bx = desenharItem(ctx, it, W, H); if (bx) caixas.push(bx); } });
     return caixas;
   }
   function tamanhoAlvo() { return nova.tipo === 'story' ? [1080, 1920] : [1080, 1350]; }
