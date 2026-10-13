@@ -27,6 +27,7 @@ with sync_playwright() as p:
         chk("botões com fundo próprio e ≥44px", pg.evaluate("(()=>{const r=document.querySelector('#btn-limpar-sel').getBoundingClientRect(); return r.height>=44 && getComputedStyle(document.querySelector('#btn-limpar-sel')).backgroundColor!=='rgba(0, 0, 0, 0)'})()"))
         if lote:
             pg.click("#btn-lote-menu"); chk("lista de ações abre", pg.locator("#lote-menu:visible").count() == 1 and pg.locator("#lote-menu [data-lote]").count() == 6)
+        chk("mesma linha (tops iguais)", pg.evaluate("(()=>{const t=[...document.querySelectorAll('#btn-share-busca,#btn-limpar-sel,#btn-lote-menu')].filter(b=>b.offsetParent).map(b=>Math.round(b.getBoundingClientRect().top)); return new Set(t).size===1})()"))
         pg.click("#btn-limpar-sel"); pg.wait_for_timeout(300)
         chk("Limpar esvazia a seleção e some", pg.evaluate("getSacola().length") == 0 and pg.locator("#linha-share-busca:visible").count() == 0)
         ctx.close()
