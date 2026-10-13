@@ -91,7 +91,7 @@ ok(!c.ok && c.sessaoInvalida, 'sessão inválida não recebe nada');
 c = conteudo(['portal', 'gerir_manuais']);
 ok(c.ok && c.manuais.every(m => m.liberado && m.parts.length) && Object.keys(c.provas).length === 3, 'quem gere manuais vê tudo (manuais e provas dos 3 níveis)');
 ok(JSON.parse(run('doGet({ parameter: { action: "versao" } })')._t).conteudoProtegido === true, 'versao anuncia conteudoProtegido');
-ok(/'3\.6'/.test(fonte.split('\n').filter(l => /versao: '/.test(l))[0]), 'versao devolve 3.6');
+ok(/'3\.7'/.test(fonte.split('\n').filter(l => /versao: '/.test(l))[0]), 'versao devolve 3.7');
 // erro inesperado no POST não vaza texto técnico
 run('lerManuais_ = function () { throw new Error("SEGREDO-INTERNO"); }');
 const rr = JSON.parse(run('doPost({ postData: { contents: JSON.stringify({ token: TOKEN, action: "treinamento_conteudo", whatsapp: "859", sessao: "x" }) } })')._t);

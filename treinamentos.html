@@ -749,11 +749,14 @@ async function loadManuaisList(){
   return false;
 }
 /** v3.4: manuais e provas só chegam depois do login, e só o que a permissão da pessoa libera. */
+var conteudoAdiantado = null; // pedido feito em paralelo no boot (poupa uma ida ao servidor)
 async function carregarConteudoProtegido(){
   if (!servidorProtegido || !state.user) return true;
   conteudoEstado = 'carregando';
   try{
-    var r = await submitResult({ action:'treinamento_conteudo', whatsapp: state.user.whatsapp, sessao: state.user.password });
+    var pronto = conteudoAdiantado; conteudoAdiantado = null;
+    var r = pronto ? await pronto : null;
+    if (!r || !r.ok) r = await submitResult({ action:'treinamento_conteudo', whatsapp: state.user.whatsapp, sessao: state.user.password });
     if (r && r.ok && Array.isArray(r.manuais)){
       aplicarManuais(r.manuais);
       DATA.quizzes = r.provas || {};
@@ -2922,6 +2925,7 @@ function render(){
   var temCacheManuais = carregarManuaisDoCache();
   var sess0 = ls_get('tm_session', null);
   var pSessao = (sess0 && sess0.whatsapp && sess0.sessao) ? submitResult({ action:'sessao', whatsapp: sess0.whatsapp, sessao: sess0.sessao }) : null; // junto com a checagem do servidor
+  if (sess0 && sess0.whatsapp && sess0.sessao) conteudoAdiantado = submitResult({ action:'treinamento_conteudo', whatsapp: sess0.whatsapp, sessao: sess0.sessao }).catch(function(){ return null; });
   var pManuais = loadManuaisList();
   loadQuizConfig(); // só é preciso na hora da prova: não segura a abertura da página
   await garantirDeteccao();
