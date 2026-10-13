@@ -244,6 +244,16 @@ th{background:var(--surface-2); font-weight:700;}
 }
 .quiz-result .score{font-family:"Poppins",sans-serif; font-size:2.4rem; color:var(--accent); font-weight:800;}
 .quiz-result .verdict{font-weight:700; margin-top:4px;}
+.quiz-result .qr-nota{margin:10px 0 0; color:var(--text);}
+.qr-importante{margin:16px 0 0; padding:14px 16px; text-align:left; background:var(--surface); border-left:4px solid var(--accent); border-radius:10px; font-size:0.93rem; line-height:1.5;}
+.qr-importante strong{display:block; margin-bottom:4px; font-size:1rem;}
+.qr-importante p{margin:0;}
+.qr-passos{margin-top:18px; display:flex; flex-direction:column; gap:10px; text-align:left;}
+.qr-titulo{margin:0; font-weight:700; text-align:center;}
+.qr-grande{width:100%; padding:14px 16px; font-size:1rem; min-height:48px;}
+.qr-extra{margin-top:16px; display:flex; flex-direction:column; gap:10px; align-items:center;}
+.qr-extra .btn{width:100%;}
+.qr-link{background:none; border:0; color:var(--accent-txt); text-decoration:underline; font-size:0.88rem; cursor:pointer; padding:10px;}
 .quiz-actions{display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap;}
 .toast{
   position:fixed; bottom:calc(88px + env(safe-area-inset-bottom,0px)); left:50%; transform:translateX(-50%);
@@ -1886,6 +1896,7 @@ function gradeQuiz(level){
     if (r.ok && r.tentativa != null){
       if (state.quizTent && state.quizTent.ok){ state.quizTent.porId = state.quizTent.porId || {}; state.quizTent.porId[level] = r.tentativa; }
       if (infoEl) infoEl.textContent = 'Esta foi a avaliação ' + Math.min(r.tentativa, r.max || r.tentativa) + ' de ' + (r.max || maxTentativas(level)) + '.';
+      if (r.tentativa >= (r.max || maxTentativas(level))){ var rq = document.getElementById('retry-quiz'), sv = document.getElementById('qr-sem-vaga'); if (rq) rq.style.display = 'none'; if (sv) sv.style.display = 'block'; }
     } else if (r.ok === false && r.limite && infoEl){
       infoEl.textContent = 'Atenção: o limite de avaliações já tinha sido atingido, então esta NÃO foi contada nem salva.';
     } else if (r.ok === false && infoEl){
@@ -1899,17 +1910,35 @@ function gradeQuiz(level){
     waHtml = '<a class="btn btn-primary" target="_blank" href="https://wa.me/' + PABLO_WHATSAPP + '?text=' + waText + '">Enviar resultado no WhatsApp</a>';
   }
 
+  var nErros = erros.length;
+  var msgNota = passed
+    ? '<p class="qr-nota">' + (nErros ? 'Você errou ' + nErros + (nErros === 1 ? ' pergunta' : ' perguntas') + '. Veja a explicação de cada uma logo acima.' : 'Você acertou tudo. Parabéns pela atenção!') + '</p>'
+    : '<p class="qr-nota">Você errou ' + nErros + (nErros === 1 ? ' pergunta' : ' perguntas') + '. Sem problema: veja a explicação de cada uma logo acima e releia o manual antes de tentar de novo.</p>';
   document.getElementById('quiz-result').innerHTML =
     '<div class="quiz-result">' +
       '<div class="score">' + score + '/' + total + '</div>' +
       '<div class="verdict" style="color:' + (passed ? 'var(--good-text)' : 'var(--danger)') + '">' + (passed ? 'Aprovado(a)!' : 'Ainda não foi dessa vez') + '</div>' +
       '<p class="muted-note" id="quiz-tent-info" role="status"></p>' +
-      '<div class="quiz-actions">' +
+      msgNota +
+      '<div class="qr-importante">' +
+        '<strong>O mais importante não é a nota.</strong>' +
+        '<p>A prova só confere se você entendeu. O que faz diferença é <b>ler o manual várias vezes</b> e <b>fazer na loja, no dia a dia, o que você acertou aqui</b>. De nada adianta tirar 10 e, na hora de atender, fazer diferente.</p>' +
+      '</div>' +
+      '<div class="qr-passos">' +
+        '<p class="qr-titulo">O que fazer agora</p>' +
+        '<button type="button" class="btn btn-primary qr-grande" id="qr-reler">📖 Reler o manual</button>' +
+        (nErros ? '<button type="button" class="btn qr-grande" id="qr-erros">🔎 Ver o que eu errei</button>' : '') +
+        '<button type="button" class="btn qr-grande" id="retry-quiz">📝 Fazer outra avaliação</button>' +
+        '<p class="muted-note" id="qr-sem-vaga" style="display:none">Você usou todas as avaliações deste manual. Continue relendo o manual; se precisar de mais uma, fale com a gestão.</p>' +
+      '</div>' +
+      '<div class="qr-extra">' +
         waHtml +
-        '<button class="btn" id="copy-result">Copiar resultado</button>' +
-        '<button class="btn" id="retry-quiz">Tentar de novo</button>' +
+        '<button type="button" class="qr-link" id="copy-result">Copiar meu resultado</button>' +
       '</div>' +
     '</div>';
+  var btnForm = document.getElementById('quiz-corrigir'); if (btnForm) btnForm.style.display = 'none';
+  var rel = document.getElementById('qr-reler'); if (rel) rel.addEventListener('click', function(){ state.quizAttempt = null; state.quizGate = false; openManual(level); window.scrollTo(0,0); });
+  var ver = document.getElementById('qr-erros'); if (ver) ver.addEventListener('click', function(){ var e = document.querySelector('.opt.wrong-answer, .quiz-q.graded .wrong-answer'); var q = e && e.closest ? e.closest('.quiz-q') : null; if (q) q.scrollIntoView({ behavior:'smooth', block:'start' }); });
   document.getElementById('quiz-result').scrollIntoView({behavior:'smooth', block:'start'});
   document.getElementById('retry-quiz').addEventListener('click', async function(){ state.quizGate = true; state.quizTent = null; render(); try{ await state.pendingSubmit; }catch(e){} carregarTentativas(level); window.scrollTo(0,0); });
   document.getElementById('copy-result').addEventListener('click', function(){

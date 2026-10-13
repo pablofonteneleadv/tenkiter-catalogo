@@ -33,6 +33,11 @@ with sync_playwright() as p:
     res = [x for x in log if x.get("action") == "resultado"]
     chk("respondida: envia 1 resultado com manualId e tentativaId", len(res) == 1 and res[0].get("manualId") and res[0].get("tentativaId"), res)
     chk("a tela mostra 'avaliação 1 de 3'", "1 de 3" in pg.inner_text("#app"), pg.inner_text("#app")[-200:])
+    txt = pg.inner_text("#quiz-result")
+    chk("tela final reforça que a nota não é o mais importante e manda reler o manual", "O mais importante não é a nota" in txt and "ler o manual várias vezes" in txt and pg.locator("#qr-reler").count() == 1)
+    chk("o botão Corrigir some depois de corrigir", not pg.locator("#quiz-corrigir").is_visible())
+    pg.click("#qr-reler"); pg.wait_for_timeout(600)
+    chk("'Reler o manual' volta ao manual (sem a prova aberta)", pg.locator(".chapter").count() >= 1 and pg.locator("#quiz-corrigir").count() == 0)
     st["aval_feitas"] = {"1": 3}
     chk("sem erros de JavaScript", not erros, erros)
     ctx.close()
