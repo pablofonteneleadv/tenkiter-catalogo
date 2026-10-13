@@ -35,13 +35,15 @@ with sync_playwright() as p:
     print("== Redimensionar, girar, teclado, Story ==")
     pg.locator(C + " [data-ed-a=sel][data-k=nome]").click(); pg.wait_for_timeout(300)
     cv = pg.locator(C + " [data-ed-cv]"); cv.scroll_into_view_if_needed()
-    bx = cv.bounding_box(); w0 = cam("nome")["w"]; x = cam("nome")["x"]; y = cam("nome")["y"]; hh = cam("nome")["h"]
-    # alça do canto superior direito: (x + w/2, y*H - h/2*W) em px do canvas 1080x1350
-    cx = bx["x"] + bx["width"] * (x + w0 / 2); cy = bx["y"] + bx["height"] * y - bx["width"] * hh / 2
+    cid = pg.get_attribute(C + " [data-ed-cv]", "data-ed-cv"); bx = cv.bounding_box(); w0 = cam("nome")["w"]
+    def alca(n, sx=None, sy=None):
+        g = pg.evaluate("window.__tkEdAlcas(%r)" % cid)
+        return [a for a in g["alcas"] if a["n"] == n and (sx is None or a.get("sx") == sx) and (sy is None or a.get("sy") == sy)][0]
+    a = alca("canto", 1, -1); cx, cy = a["x"], a["y"]
     pg.mouse.move(cx, cy); pg.mouse.down(); pg.mouse.move(cx - bx["width"] * 0.2, cy, steps=6); pg.mouse.up(); pg.wait_for_timeout(400)
     chk("arrastar o canto diminui a largura da caixa", cam("nome")["w"] < w0 - 0.15, (w0, cam("nome")["w"]))
     # alça de giro: acima do topo
-    c = cam("nome"); gx = bx["x"] + bx["width"] * c["x"]; gy = bx["y"] + bx["height"] * c["y"] - bx["width"] * c["h"] / 2 - bx["width"] * 90 / 1080
+    g = alca("giro"); gx, gy = g["x"], g["y"]
     pg.mouse.move(gx, gy); pg.mouse.down(); pg.mouse.move(gx + bx["width"] * 0.25, gy + bx["width"] * 0.05, steps=6); pg.mouse.up(); pg.wait_for_timeout(400)
     chk("arrastar a bolinha gira o elemento", abs(cam("nome").get("giro", 0)) > 10, cam("nome").get("giro"))
     y0 = cam("nome")["y"]; cv.focus(); pg.keyboard.press("ArrowDown"); pg.keyboard.press("ArrowDown"); pg.wait_for_timeout(300)
