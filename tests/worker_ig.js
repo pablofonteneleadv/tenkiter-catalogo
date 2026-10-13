@@ -512,6 +512,11 @@ function d1() {
     x = await (await w.fetch(ped('GET', '/fotos/visuais', 'tk2.gerente'), env, {})).json(); chk('visuais: começa sem nada guardado', x.ok === true && x.dados === null);
     x = await (await w.fetch(ped('POST', '/fotos/visuais', 'tk2.gerente', { dados: { tk_po_cta_v1: '{"a":1}' } }), env, {})).json(); chk('visuais: salva', x.ok === true);
     x = await (await w.fetch(ped('GET', '/fotos/visuais', 'tk2.gerente'), env, {})).json(); chk('visuais: volta o que foi salvo (vale em outro aparelho)', x.dados && x.dados.tk_po_cta_v1 === '{"a":1}');
+    x = await (await w.fetch(ped('GET', '/fotos/visuais', 'tk2.gerente'), env, {})).json(); const vBase = x.v;
+    chk('visuais: a versão sobe a cada salvamento', typeof vBase === 'number' && vBase >= 1, vBase);
+    x = await (await w.fetch(ped('POST', '/fotos/visuais', 'tk2.gerente', { dados: { tk_po_cta_v1: '{"b":2}' }, base: vBase }), env, {})).json(); chk('visuais: salvar com a versão certa funciona', x.ok === true && x.v === vBase + 1, x);
+    x = await (await w.fetch(ped('POST', '/fotos/visuais', 'tk2.gerente', { dados: { tk_po_cta_v1: '{"c":3}' }, base: vBase }), env, {})).json(); chk('visuais: versão velha (outra pessoa salvou antes) dá conflito e devolve o do servidor', x.ok === false && x.conflito === true && x.dados.tk_po_cta_v1 === '{"b":2}', x);
+    x = await (await w.fetch(ped('GET', '/fotos/visuais', 'tk2.gerente'), env, {})).json(); chk('visuais: o conflito não sobrescreveu nada', x.dados.tk_po_cta_v1 === '{"b":2}');
     x = await (await w.fetch(ped('POST', '/fotos/visuais', 'tk2.gerente', { dados: { g: 'x'.repeat(210000) } }), env, {})).json(); chk('visuais: recusa configuração enorme', x.ok === false);
     r2 = await w.fetch(ped('GET', '/fotos/visuais'), env, {}); chk('visuais: sem login é recusado', r2.status === 401 || r2.status === 403);
     r2 = await w.fetch(ped('GET', '/status', 'tk2.gerente'), env, {}); chk('quem só cadastra continua sem o importador', r2.status === 403);

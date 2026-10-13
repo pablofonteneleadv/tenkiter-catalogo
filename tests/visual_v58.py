@@ -68,6 +68,23 @@ with sync_playwright() as p:
     chk("a última opção liga o Story com link", "Preparar Story" in pg.inner_text(".po-enviar"))
     pg.click("[data-tipo=feed]"); pg.wait_for_timeout(300)
     chk("no Feed só aparecem as opções de texto (sem link)", pg.locator("input[name=po-cta]").count() == 3)
+    print("== Visuais iguais para todos (conflito juntado) ==")
+    estado = {"n": 0}
+    remoto = {"tk_po_visuais_custom_v1": [{"id": "c_remoto1", "nome": "Visual da Maria", "spec": {"versao": 2, "fundo": "foto", "camadas": []}, "em": 5}], "tk_po_cta_v1": {"x": ["Do servidor"]}}
+    def rota(route):
+        rq = route.request
+        if rq.method == "POST":
+            estado["n"] += 1
+            if estado["n"] == 1: return route.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"}, body=json.dumps({"ok": False, "conflito": True, "dados": remoto, "v": 7}))
+            return route.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"}, body=json.dumps({"ok": True, "v": 8}))
+        return route.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"}, body=json.dumps({"ok": True, "dados": None, "v": 0}))
+    pg.route(re.compile(r"/fotos/visuais"), rota)
+    pg.evaluate("localStorage.setItem('tk_po_cta_v1', JSON.stringify({y:['Meu']}))")
+    pg.click("[data-aba=nova]"); pg.wait_for_timeout(300); pg.click("[data-aba=config]"); pg.wait_for_timeout(300)
+    pg.locator(C + " [data-vz-cta]").first.fill("Teste A\nTeste B"); pg.dispatch_event(C + " [data-vz-cta] >> nth=0", "change"); pg.wait_for_timeout(2500)
+    ids = pg.evaluate("(JSON.parse(localStorage.getItem('tk_po_visuais_custom_v1')||'[]')).map(c=>c.id)")
+    chk("conflito: o visual de outra pessoa entrou e o meu foi mantido", "c_remoto1" in ids and len(ids) >= 2, ids)
+    chk("guarda a versão do servidor", pg.evaluate("localStorage.getItem('tk_po_sync_v1')") == "8")
     print("== Servidor lento não derruba o login ==")
     ctx2 = b.new_context(viewport={"width": 1100, "height": 900}, service_workers="block")
     ctx2.add_init_script(SESSION); install(ctx2, perms=PERMS_ALL, versao="4.3")

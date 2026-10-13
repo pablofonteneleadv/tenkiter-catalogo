@@ -21,16 +21,49 @@
   const CUSTOM_KEY = 'tk_po_visuais_custom_v1', NOMES_KEY = 'tk_po_visuais_nomes_v1', CTA_KEY = 'tk_po_cta_v1', CTA_PADRAO = 'www.tenkitermodas.com.br';
   /* Sincronização com o servidor (Worker tenkiter-ig, /fotos/visuais): os visuais valem em todos os aparelhos. Sem a rota nova no Worker, segue só local. */
   const CHAVES_SYNC_ = ['tk_po_visuais_v1', 'tk_po_visuais_custom_v1', 'tk_po_visuais_nomes_v1', 'tk_po_cta_v1'];
-  let sincTimer_ = null, sincAtivo_ = true;
+  let sincTimer_ = null, sincAtivo_ = true, sincPuxando_ = null;
+  const VSYNC_KEY = 'tk_po_sync_v1';      // versão do servidor que este aparelho viu por último (não faz parte do que é sincronizado)
+  const vSync_ = () => { try { const n = Number(localStorage.getItem(VSYNC_KEY)); return isFinite(n) ? n : 0; } catch (e) { return 0; } };
+  const vSyncGravar_ = (v) => { try { localStorage.setItem(VSYNC_KEY, String(Number(v) || 0)); } catch (e) { /* ok */ } };
+  const dadosLocais_ = () => { const d = {}; CHAVES_SYNC_.forEach((k) => { try { d[k] = JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { d[k] = null; } }); return d; };
+  function aplicarRemoto_(dados) { CHAVES_SYNC_.forEach((k) => { try { if (dados[k] == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(dados[k])); } catch (e) { /* ok */ } }); }
+  /** Dois aparelhos mexeram ao mesmo tempo: visuais próprios são juntados por id (vale o salvo por último, campo `em`); o resto vem do servidor. */
+  function juntarCustom_(local, remoto) {
+    const mapa = {}; (Array.isArray(remoto) ? remoto : []).forEach((c) => { if (c && c.id) mapa[c.id] = c; });
+    (Array.isArray(local) ? local : []).forEach((c) => { if (c && c.id && (!mapa[c.id] || (Number(c.em) || 0) > (Number(mapa[c.id].em) || 0))) mapa[c.id] = c; });
+    return Object.keys(mapa).map((k) => mapa[k]);
+  }
   function agendarEnvioVisuais_() {
     if (!sincAtivo_) return; clearTimeout(sincTimer_);
-    sincTimer_ = setTimeout(() => { const d = {}; CHAVES_SYNC_.forEach((k) => { try { d[k] = JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { d[k] = null; } }); ig('/fotos/visuais', 'POST', { dados: d }); }, 900);
+    sincTimer_ = setTimeout(enviarVisuais_, 900);
+  }
+  async function enviarVisuais_() {
+    if (sincPuxando_) { try { await sincPuxando_; } catch (e) { /* segue */ } }
+    const r = await ig('/fotos/visuais', 'POST', { dados: dadosLocais_(), base: vSync_() });
+    if (r && r.ok) { if (r.v != null) vSyncGravar_(r.v); return; }
+    if (r && r.conflito && r.dados && typeof r.dados === 'object') {
+      const loc = dadosLocais_(), jun = Object.assign({}, r.dados); jun.tk_po_visuais_custom_v1 = juntarCustom_(loc.tk_po_visuais_custom_v1, r.dados.tk_po_visuais_custom_v1);
+      aplicarRemoto_(jun); vSyncGravar_(r.v);
+      aviso = 'Outra pessoa alterou os visuais ao mesmo tempo. Juntei as duas versões (os seus visuais próprios foram mantidos).'; avisoErro = false;
+      const r2 = await ig('/fotos/visuais', 'POST', { dados: dadosLocais_(), base: vSync_() }); if (r2 && r2.ok && r2.v != null) vSyncGravar_(r2.v);
+      if (abaAtual === 'nova' || abaAtual === 'config') desenhar();
+    }
   }
   async function puxarVisuais_() {
-    const r = await ig('/fotos/visuais'); if (!r || !r.ok) { sincAtivo_ = false; return false; }
-    if (r.dados && typeof r.dados === 'object') { CHAVES_SYNC_.forEach((k) => { try { if (r.dados[k] == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(r.dados[k])); } catch (e) {} }); return true; }
-    if (CHAVES_SYNC_.some((k) => { try { return !!localStorage.getItem(k); } catch (e) { return false; } })) agendarEnvioVisuais_();
-    return false;
+    if (sincPuxando_) return sincPuxando_;
+    sincPuxando_ = (async () => {
+      const r = await ig('/fotos/visuais'); if (!r || !r.ok) { sincAtivo_ = false; return false; }
+      sincAtivo_ = true;
+      if (r.v != null && r.v === vSync_() && r.dados) return false;      // nada novo
+      if (r.dados && typeof r.dados === 'object') {
+        if (sincTimer_) { clearTimeout(sincTimer_); sincTimer_ = null; const loc = dadosLocais_(), jun = Object.assign({}, r.dados); jun.tk_po_visuais_custom_v1 = juntarCustom_(loc.tk_po_visuais_custom_v1, r.dados.tk_po_visuais_custom_v1); aplicarRemoto_(jun); vSyncGravar_(r.v); agendarEnvioVisuais_(); return true; }
+        const igual = JSON.stringify(dadosLocais_()) === JSON.stringify(Object.assign({}, ...CHAVES_SYNC_.map((k) => ({ [k]: r.dados[k] == null ? null : r.dados[k] }))));
+        aplicarRemoto_(r.dados); if (r.v != null) vSyncGravar_(r.v); return !igual;
+      }
+      if (CHAVES_SYNC_.some((k) => { try { return !!localStorage.getItem(k); } catch (e) { return false; } })) agendarEnvioVisuais_();
+      return false;
+    })();
+    try { return await sincPuxando_; } finally { sincPuxando_ = null; }
   }
   const lerJ_ = (k, def) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? def : v; } catch (e) { return def; } };
   const gravarJ_ = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} if (CHAVES_SYNC_.indexOf(k) !== -1) agendarEnvioVisuais_(); };
@@ -182,7 +215,7 @@
       if (!marcados.length) { cb.checked = true; return; }
       c[tipo] = marcados; salvarCfgVis_(c);
     });
-    $('po-abas').addEventListener('click', (ev) => { const b = ev.target.closest('[data-aba]'); if (b) { abaAtual = b.dataset.aba; aviso = ''; desenhar(); if (abaAtual === 'fotos') carregarFotos(); else if (abaAtual !== 'nova') carregarFila(); } });
+    $('po-abas').addEventListener('click', (ev) => { const b = ev.target.closest('[data-aba]'); if (b) { abaAtual = b.dataset.aba; aviso = ''; desenhar(); if (abaAtual === 'config' || abaAtual === 'nova') puxarVisuais_().then((mudou) => { if (mudou && abaAtual === b.dataset.aba) desenhar(); }); if (abaAtual === 'fotos') carregarFotos(); else if (abaAtual !== 'nova') carregarFila(); } });
     $('po-corpo').addEventListener('click', clique);
     $('po-corpo').addEventListener('input', entrada);
     $('po-corpo').addEventListener('toggle', (e) => { if (e.target && e.target.id === 'po-det' && nova) nova.detTx = e.target.open; }, true);
@@ -196,6 +229,7 @@
     if (!nova) novaVazia();
     desenhar();
     puxarVisuais_().then((mudou) => { if (mudou && (abaAtual === 'nova' || abaAtual === 'config')) desenhar(); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !document.querySelector('.ed-wrap.full')) puxarVisuais_().then((mudou) => { if (mudou && (abaAtual === 'nova' || abaAtual === 'config') && !document.querySelector('.ed-wrap.full')) desenhar(); }); });
     await carregarFila(); carregarFotos(true);
     parar(); pollTimer = setInterval(() => { if ($('overlay-postagens').classList.contains('aberto') && abaAtual !== 'nova' && !ocupado) carregarFila(true); }, window.TK_POSTAGENS_POLL_MS || 15000);
   }
@@ -934,7 +968,7 @@
       if (a === 'delf') { if (tr.spec.itens.length <= 1) { tr.erro = 'O visual precisa de pelo menos 1 campo.'; return pintarAmostra_(id); } tr.spec.itens.splice(Number(b.dataset.i), 1); return redesenharConfig_(); }
       if (a === 'converter') { try { tr.spec = converterParaCamadas_(tr.spec); tr.erro = ''; edE_(id).sel = ''; return redesenharConfig_(); } catch (er) { tr.erro = 'Não consegui converter: ' + er.message; return pintarAmostra_(id); } }
       if (a === 'aplicar') { const ta = document.querySelector('[data-vz-json="' + id + '"]'); try { const sp = JSON.parse(ta.value), err = validarSpec_(sp); if (err) { tr.erro = err; return pintarAmostra_(id); } tr.spec = sp; tr.erro = ''; return redesenharConfig_(); } catch (er) { tr.erro = 'Código com erro de escrita: ' + er.message; return pintarAmostra_(id); } }
-      if (a === 'salvar') { const err = validarSpec_(tr.spec); if (err) { tr.erro = err; return pintarAmostra_(id); } const l = lerCustom_(), c = l.find((x) => x.id === id); if (c) { c.nome = tr.nome; c.spec = JSON.parse(JSON.stringify(tr.spec)); gravarJ_(CUSTOM_KEY, l); } tr.nota = ''; rascunhoSalvar_(id); aviso = 'Visual salvo.'; avisoErro = false; return redesenharConfig_(); }
+      if (a === 'salvar') { const err = validarSpec_(tr.spec); if (err) { tr.erro = err; return pintarAmostra_(id); } const l = lerCustom_(), c = l.find((x) => x.id === id); if (c) { c.nome = tr.nome; c.spec = JSON.parse(JSON.stringify(tr.spec)); c.em = Date.now(); gravarJ_(CUSTOM_KEY, l); } tr.nota = ''; rascunhoSalvar_(id); aviso = 'Visual salvo.'; avisoErro = false; return redesenharConfig_(); }
       if (a === 'descartar') { if (!confirm('Voltar ao visual salvo? As alterações não salvas serão perdidas.')) return; delete vzTrab[id]; { const r = rascunhos_(); delete r[id]; rascGravar_(r); } guardaSujoAtualizar_(); return redesenharConfig_(); }
       if (a === 'excluir') { if (!confirm('Excluir este visual? Não dá para desfazer.')) return; gravarJ_(CUSTOM_KEY, lerCustom_().filter((x) => x.id !== id)); delete vzTrab[id]; { const r = rascunhos_(); delete r[id]; rascGravar_(r); } guardaSujoAtualizar_(); addCfgTodosTipos_(id, true); return redesenharConfig_(); }
     });

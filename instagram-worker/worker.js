@@ -714,13 +714,19 @@ export async function rotasFotosCliente(env, req, url, J) {     // /cliente/foto
 }
 export async function rotasFotos(env, ctx, req, url, J) {       // /fotos* (equipe: gerir_acessos ou catalogo_cadastrar)
   const p = url.pathname;
-  if (p === '/fotos/visuais') {     // configuração dos visuais de Postagens (nomes, CTA, visuais próprios, tipos): igual em todos os aparelhos
-    if (req.method === 'GET') { const v = await cfgGet(env, 'po_visuais'); let d = null; try { d = v ? JSON.parse(v) : null; } catch (e) {} return J({ ok: true, dados: d }); }
+  if (p === '/fotos/visuais') {     // configuração dos visuais de Postagens (nomes, CTA, visuais próprios, tipos): igual em todos os aparelhos e para todos que têm acesso
+    const vAtual = async () => Number(await cfgGet(env, 'po_visuais_v')) || 0;
+    if (req.method === 'GET') { const v = await cfgGet(env, 'po_visuais'); let d = null; try { d = v ? JSON.parse(v) : null; } catch (e) {} return J({ ok: true, dados: d, v: await vAtual() }); }
     if (req.method === 'POST') {
       let b = {}; try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); }
       const txt = JSON.stringify(b.dados && typeof b.dados === 'object' ? b.dados : {});
       if (txt.length > 200000) return J({ ok: false, erro: 'Configuração grande demais.' }, 400);
-      await cfgSet(env, 'po_visuais', txt); return J({ ok: true });
+      const atual = await vAtual();
+      if (b.base != null && Number(b.base) !== atual) {      // outra pessoa salvou antes: devolve o que está no servidor para o aparelho juntar
+        const v = await cfgGet(env, 'po_visuais'); let d = null; try { d = v ? JSON.parse(v) : null; } catch (e) {}
+        return J({ ok: false, conflito: true, dados: d, v: atual });
+      }
+      await cfgSet(env, 'po_visuais', txt); await cfgSet(env, 'po_visuais_v', String(atual + 1)); return J({ ok: true, v: atual + 1 });
     }
   }
   if (p === '/fotos' && req.method === 'GET') {
