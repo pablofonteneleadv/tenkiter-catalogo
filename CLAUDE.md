@@ -579,3 +579,7 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 - **Botões 🧲 Ímã e 🔗 Proporção** agora têm nome e explicação na dica do painel (Ímã = gruda no centro/bordas/outros elementos ao arrastar; Proporção = mantém a forma ao puxar o canto; ligado = laranja).
 - **Bug real corrigido**: "Virar texto comum" não fazia nada (o botão não levava `data-k`, a ação saía antes) — `edAcao_` usa o elemento selecionado quando falta `data-k`.
 - Teste: `tests/visual_v60.py`. Limite conhecido: o código JSON mostra a posição base do elemento aberto até ele ser resolvido; desfazer de um elemento com ajuste já salvo pode perder o `ov` (raro).
+
+## v6.1 — Botões da seleção no catálogo (`index.html` + gancho em `admin.html`, só front)
+- **Pedido do Pablo (13/10/2026)**: ao lado de "Compartilhar seleção" ficam **✕ Limpar seleção** (esvazia a sacola e limpa filtros/link) e, só para quem tem `catalogo_cadastrar` (`equipe_.pode`) com peças na seleção, **🛠️ Edição em lote** (`#btn-lote-menu`, abre `#lote-menu` com as ações). Os 3 têm contorno/sombra, ≥44 px (Compartilhar laranja com letra preta; Edição em lote preta).
+- A ação leva a `admin.html?lote=<IDs>&acao=btn-bulk-*`: o painel marca as peças e aciona o botão do lote existente (nada duplicado). Teste: `tests/selecao_botoes.py`.

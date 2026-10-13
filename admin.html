@@ -3858,6 +3858,26 @@
       }, 500);
     }
   } catch(e) {}
+  // vindo do catálogo ("🛠️ Edição em lote"): marca as peças da seleção e aciona o botão escolhido
+  try {
+    var mLo = /[?&]lote=([^&]*)/.exec(location.search), mAc = /[?&]acao=(btn-bulk-[a-z]+)/.exec(location.search);
+    if (mLo && mAc) {
+      var idsLo = decodeURIComponent(mLo[1]).split(',').filter(Boolean), tentLo = 0;
+      var tmLo = setInterval(function(){
+        tentLo++;
+        var ok = (typeof produtos !== 'undefined') && produtos && produtos.length;
+        if (ok || tentLo > 60){
+          clearInterval(tmLo);
+          if (ok){ try{
+            selecionadosBulk = new Set(idsLo.filter(function(i){ return produtos.some(function(x){ return String(x.ID) === i; }); }));
+            atualizarBarraBulk();
+            var bt = $(mAc[1]); if (bt && !bt.hidden && selecionadosBulk.size){ $('bulk-bar').scrollIntoView({block:'center'}); setTimeout(function(){ bt.click(); }, 400); }
+          }catch(e){} }
+          try{ history.replaceState(history.state,'',location.pathname); }catch(e){}
+        }
+      }, 500);
+    }
+  } catch(e) {}
   // vindo do catálogo (botão "➕ Cadastrar nova peça"): abre o MESMO cartão de cadastro daqui, sem cópia da função
   try { if (/[?&]novo=1/.test(location.search)) { setTimeout(function(){ var c=$('card-form'); if(c){ c.open=true; c.scrollIntoView({block:'start'}); } try{ history.replaceState(history.state,'',location.pathname); }catch(e){} }, 900); } } catch(e) {}
   document.addEventListener('click',function(e){
