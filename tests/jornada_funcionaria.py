@@ -12,7 +12,7 @@ BASE=os.environ.get("TK_BASE","http://localhost:8765/")
 with sync_playwright() as p:
     b=p.chromium.launch(args=["--no-sandbox"])
     ctx=b.new_context(viewport={"width":390,"height":844},is_mobile=True,has_touch=True); log=[]
-    install(ctx,perms=PERMS_ALL+["avaliacoes","manual_1","manual_2","manual_3"],log=log); pg=ctx.new_page(); errs=[]; pg.on("pageerror",lambda e:errs.append(str(e))); pg.on("dialog",lambda d:d.accept())
+    install(ctx,perms=PERMS_ALL+["avaliacoes","manual_1","manual_2","manual_3"],log=log,versao="3.7",protegido=True); pg=ctx.new_page(); errs=[]; pg.on("pageerror",lambda e:errs.append(str(e))); pg.on("dialog",lambda d:d.accept())
     print("== Funcionária: entrar, ler manual, avaliação ==")
     pg.goto(BASE+"treinamentos.html"); pg.wait_for_timeout(1500)
     chk("abre na tela de entrar",pg.locator("#login-pass").count()==1)
@@ -30,7 +30,7 @@ with sync_playwright() as p:
     chk("todos os capítulos marcados (%d)"%n,pg.locator(".chapter input[type=checkbox]:checked").count()==n)
     chk("avaliação destravou",pg.locator("#btn-ir-avaliacao").count()==1 and not pg.locator("#btn-ir-avaliacao").is_disabled())
     acoes=sorted(set(x.get("action") for x in log)); print("   ações enviadas:",acoes)
-    chk("progresso foi enviado ao servidor",any("prog" in (a or "").lower() or "leit" in (a or "").lower() or "cap" in (a or "").lower() for a in acoes),acoes)
+    chk("progresso foi enviado ao servidor",any("prog" in (a or "").lower() or "leit" in (a or "").lower() or "cap" in (a or "").lower() or "lido" in (a or "").lower() for a in acoes),acoes)
     pg.click("#btn-ir-avaliacao"); pg.wait_for_timeout(900)
     txt=pg.inner_text("#app")
     chk("tela da avaliação abre",("avalia" in txt.lower()),txt[:100].replace("\n"," | "))

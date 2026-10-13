@@ -72,6 +72,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("equipe_catalogo1.py", lambda o: "FALHAS=0" in o),   # v4.9: perfil Equipe catálogo 1 (painel simplificado)   # v4.9: ferramentas no topo, Postagens fixa, miniatura amplia
     ("postagens_admin.py", lambda o: "FALHAS=0" in o),   # aba Postagens: feed/carrossel/reels/story, templates, agenda, fila, Story com link manual
     ("conteudo_protegido.py", lambda o: "FALHAS=0" in o),   # treinamentos: manuais e provas só pelo servidor, com sessão e permissão (RH 3.4)
+    ("provas_v52.py", lambda o: "FALHAS=0" in o),   # v5.2: prova só corrige respondida, n de 3 vem do servidor, botão Editar produto
     ("vitrine_orientacao.py", lambda o: "FALHAS=0" in o),   # vitrine: Consultar/Selecionar, etiquetas de filtro, rolagem, ajuda no fim
     ("instagram_admin.py", lambda o: "FALHAS=0" in o),   # painel: Produtos para aceitar (lista, editor, aceitar -> cadastro, conectar)
 ]

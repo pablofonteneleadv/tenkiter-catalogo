@@ -16,7 +16,7 @@
 // sem isto o navegador recusa o arquivo inteiro e o catálogo deixa de abrir sem internet. Só os avisos push ficam de fora.
 try { importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js'); } catch (e) { /* segue só com o cache */ }
 
-var VERSAO = 'tk-3.7.0';
+var VERSAO = 'tk-3.8.0';
 var CACHE_SITE = 'tk-site-' + VERSAO;
 var CACHE_FOTOS = 'tk-fotos-v1';
 var MAX_FOTOS = 160;

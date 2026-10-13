@@ -60,6 +60,15 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
         return {"codigo":ped["codigo"],"data":ped["data"],"atualizado":ped["atualizado"],"status":ped["status"],"entrega":ped["entrega"],"total":ped["total"],"itens":[{"nome":i["nome"],"codigo":i["codigo"]} for i in ped["itens"]]}
     def post(b):
         a=b.get("action")
+        if a=="avaliacoes_contagem":
+            feitas=st.setdefault("aval_feitas",{})
+            return {"ok":True,"porId":{i:feitas.get(i,0) for i in ("1","2","3")},"contagem":{},"maxPorManual":{"1":3,"2":3,"3":3},"max":3}
+        if a=="resultado" and b.get("manualId"):
+            feitas=st.setdefault("aval_feitas",{}); vistos=st.setdefault("aval_ids",set()); mid=str(b.get("manualId"))
+            if b.get("tentativaId") in vistos: return {"ok":True,"repetida":True,"tentativa":feitas.get(mid,0),"max":3}
+            if feitas.get(mid,0)>=3: return {"ok":False,"limite":True,"tentativa":feitas.get(mid,0),"max":3,"erro":"Você já usou as 3 avaliações deste manual."}
+            vistos.add(b.get("tentativaId")); feitas[mid]=feitas.get(mid,0)+1
+            return {"ok":True,"tentativa":feitas[mid],"max":3}
         if a=="treinamento_conteudo":
             st["conteudo_chamadas"].append(b)
             tem=lambda c: c in perms

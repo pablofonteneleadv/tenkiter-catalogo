@@ -164,7 +164,13 @@ function erro(m) { const el = document.createElement('div'); el.className = 'err
 function diasPara(iso) { if (!iso) return null; const d = new Date(iso + 'T00:00:00'); return Math.ceil((d - new Date()) / 86400000); }
 function diasDesde(iso) { if (!iso) return null; const d = new Date(iso); if (isNaN(d)) return null; return Math.floor((Date.now() - d) / 86400000); }
 function fmtData(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || ''); }
-function fmtDataHora(dt) { const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(dt || ''); return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : (dt || ''); }
+function fmtDataHora(dt) {
+  // datas do servidor vêm em UTC (terminam em Z): mostra no horário do aparelho (antes aparecia 3 h adiantado, ex. 22:26 em vez de 19:26)
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}.*(Z|[+-]\d{2}:?\d{2})$/.test(dt || '')) {
+    const d = new Date(dt);
+    if (!isNaN(d)) { const z = n => String(n).padStart(2, '0'); return `${z(d.getDate())}/${z(d.getMonth() + 1)}/${d.getFullYear()} ${z(d.getHours())}:${z(d.getMinutes())}`; }
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(dt || ''); return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : (dt || ''); }
 function corStatus(s) { return s === 'Contratada' ? 'ok' : (s === 'Descartada' || s === 'Desistiu' || s === 'Demitida' ? 'ru' : ((s === 'Agendada' || s === 'Estagiando') ? 'al' : '')); }
 function rotuloDataEvento(st) { return st === 'Estagiando' ? 'Data (início do estágio):' : 'Data (contratação/demissão):'; }
 function usaDataEvento(st) { return st === 'Contratada' || st === 'Demitida' || st === 'Estagiando'; }

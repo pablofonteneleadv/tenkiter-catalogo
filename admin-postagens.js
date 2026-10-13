@@ -12,7 +12,7 @@
   const $ = (id) => document.getElementById(id);
   const esc = (v) => escaparHtml(v);
   const TIPOS = [['feed', '🖼️ Feed'], ['carrossel', '🗂️ Carrossel'], ['reels', '🎬 Reels'], ['story', '📱 Story']];
-  const TEMPLATES = [['original', 'Original'], ['classico', '1 · Clássico inferior'], ['promo', '2 · Preço no topo'], ['minimal', '3 · Centralizado'], ['rodape', '4 · Rodapé escuro'], ['lateral', '5 · Lateral direita'], ['cabecalho', '6 · Cabeçalho'], ['energia', '7 · Energia laranja'], ['blocos', '8 · Blocos separados'], ['editorial', '9 · Editorial vertical'], ['cartao', '10 · Cartão flutuante']];
+  const TEMPLATES = [['original', 'Original'], ['classico', '1 · Vitrine em arco'], ['promo', '2 · Preço em destaque'], ['minimal', '3 · Cartão central'], ['rodape', '4 · Faixa e detalhes'], ['lateral', '5 · Preço no canto'], ['cabecalho', '6 · Título grande'], ['energia', '7 · Laranja e detalhes'], ['blocos', '8 · Palavras empilhadas'], ['editorial', '9 · Editorial vertical'], ['cartao', '10 · Elegante']];
   const ST_TXT = { agendado: '⏳ Agendado', processando: '⚙️ Publicando…', manual_pendente: '✋ Falta você postar', manual_feito: '✅ Postado à mão', publicado: '✅ Publicado', erro: '⚠️ Deu problema', cancelado: 'Cancelado' };
   const HASHTAGS = '#tenkitermodas #modacrateus #crateús #lookdodia #modafeminina #modainfantil #modamasculina';
   let abaAtual = 'nova', fila = null, conectado = null, usuarioIg = '', pollTimer = null, ocupado = false, aviso = '', avisoErro = false;
@@ -464,7 +464,11 @@
   function cobrir(ctx, img, x, y, w, h) { const r = Math.max(w / img.width, h / img.height), iw = img.width * r, ih = img.height * r; ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); ctx.restore(); }
   function caber(ctx, img, x, y, w, h) { const r = Math.min(w / img.width, h / img.height), iw = img.width * r, ih = img.height * r; ctx.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); }
   function quebrar(ctx, texto, largura, max) { const pal = String(texto).split(/\s+/), l = []; let cur = ''; pal.forEach((p) => { const t = cur ? cur + ' ' + p : p; if (ctx.measureText(t).width > largura && cur) { l.push(cur); cur = p; } else cur = t; }); if (cur) l.push(cur); if (l.length > max) { l.length = max; l[max - 1] = l[max - 1].replace(/.?.?$/, '…'); } return l; }
-  function infoPeca(p) { if (!p) return { nome: '', avista: '', cheio: '', codigo: '' }; return { nome: String(p.Nome || '').trim(), avista: formatarReal(precoAvista(p)), cheio: formatarReal(p.Preco), codigo: String(p.Codigo || '') }; }
+  function infoPeca(p) {
+    if (!p) return { nome: '', avista: '', cheio: '', codigo: '', tam: '', cores: '', cat: '', gen: '', comLink: false };
+    const tp = (v) => String(typeof textoPlano === 'function' ? textoPlano(v) : v || '').trim(), pri = (v) => String(v || '').split(',')[0].trim();
+    return { nome: String(p.Nome || '').trim(), avista: formatarReal(precoAvista(p)), cheio: formatarReal(p.Preco), codigo: String(p.Codigo || ''), tam: tp(p.Tamanhos), cores: tp(p.Cores), cat: pri(p.Categoria), gen: pri(p.Genero), comLink: !!(nova && nova.tipo === 'story' && nova.manual) };
+  }
   const FONTE = '"Helvetica Neue", Arial, sans-serif', LARANJA = '#E67E22';
   const VARIANTES_ELA = ['ElausaTM🧡', 'EleusaTM🧡', 'ElasusamTM🧡', 'ElesusamTM🧡'];
   const FONTE_MANUAL = '"Segoe Script","Brush Script MT","Lucida Handwriting","Snell Roundhand",cursive';
@@ -476,6 +480,7 @@
   const FONTE_T = '"Poppins","Inter","Helvetica Neue",Arial,sans-serif', FONTE_I = '"Inter","Helvetica Neue",Arial,sans-serif';
   const BEGE = '#F5F1E8', CINZA = '#2C2C2C', OURO = '#F39C12', PRETO = '#1a1a1a';
   function especTemplate(tpl, info, W, H) {
+    if (ARTES[tpl]) return especArte(tpl, info, W, H);
     const story = H > W * 1.5, preco = info.avista ? info.avista + ' à vista' : '';
     const selo = (t, grp) => ({ k: 'selo', rot: 'Selo', t: t || 'NOVIDADE', grp: grp, tam: 38, cor: PRETO, bg: LARANJA, padX: 0.7, padY: 0.38, radius: 0.18 });
     const nome = (grp, o) => Object.assign({ k: 'nome', rot: 'Nome da peça', t: info.nome, grp: grp, tam: 66, cor: BEGE, linhas: 2, sombra: true }, o || {});
@@ -520,8 +525,262 @@
   function itensTemplate(tpl, info, W, H) { return especTemplate(tpl, info, W, H).itens; }
   const _mc = document.createElement('canvas').getContext('2d');
   function fonteDe(it, tam) { return (it.estilo ? it.estilo + ' ' : '') + (it.peso || 'bold') + ' ' + tam + 'px ' + (it.fonte || (it.peso === 'normal' ? FONTE_I : FONTE_T)); }
+  /* ---------- v5.2: ARTES (visuais desenhados) ----------
+   * Inspirados no PDF de referência do Pablo (só o estilo: arcos, painéis curvos, janela da foto, pílula de botão com ícone, ícones em círculo,
+   * texto vertical, preço grande) — NENHUM texto do PDF é usado: tudo vem dos dados da peça (nome, preço, categoria, gênero, tamanhos, cores, código)
+   * e cada item continua editável, ocultável e arrastável. A foto fica numa JANELA (arco, retângulo arredondado…) por cima de formas da marca,
+   * então nenhum texto cobre a peça e o resultado fica bonito com qualquer foto. */
+  const CREME = '#F5F1E8', CREME2 = '#FBF8F2', LARANJA_TXT = '#A85200', TXT_SUAVE = '#555';
+  const ARTES = { classico: 1, promo: 1, minimal: 1, rodape: 1, lateral: 1, cabecalho: 1, energia: 1, blocos: 1, editorial: 1, cartao: 1 };
+  function caminhoJanela(ctx, x0, y0, x1, y1, forma) {
+    const w = x1 - x0; ctx.beginPath();
+    if (forma === 'arco') { const r = w / 2; ctx.moveTo(x0, y1); ctx.lineTo(x0, y0 + r); ctx.arc(x0 + r, y0 + r, r, Math.PI, 0); ctx.lineTo(x1, y1); ctx.closePath(); }
+    else if (forma === 'cantos') { const r = Math.min(150, w * 0.3), s = 26; ctx.moveTo(x0 + r, y0); ctx.lineTo(x1 - s, y0); ctx.arcTo(x1, y0, x1, y0 + s, s); ctx.lineTo(x1, y1 - r); ctx.arcTo(x1, y1, x1 - r, y1, r); ctx.lineTo(x0 + s, y1); ctx.arcTo(x0, y1, x0, y1 - s, s); ctx.lineTo(x0, y0 + r); ctx.arcTo(x0, y0, x0 + r, y0, r); ctx.closePath(); }
+    else caixaArredondada(ctx, x0, y0, x1, y1, 44);
+  }
+  function fotoNaRegiao(ctx, img, x, y, w, h, aj) {
+    if (aj === 'inteira') { ctx.fillStyle = '#222'; ctx.fillRect(x, y, w, h); try { ctx.save(); ctx.filter = 'blur(30px)'; cobrir(ctx, img, x - 40, y - 40, w + 80, h + 80); ctx.restore(); ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x, y, w, h); } catch (e) { /* sem blur */ } caber(ctx, img, x, y, w, h); }
+    else cobrir(ctx, img, x, y, w, h);
+  }
+  function janelaFoto(ctx, img, x0, y0, x1, y1, forma, aj, borda) {
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.28)'; ctx.shadowBlur = 36; ctx.shadowOffsetY = 12; ctx.fillStyle = '#fff'; caminhoJanela(ctx, x0, y0, x1, y1, forma); ctx.fill(); ctx.restore();
+    ctx.save(); caminhoJanela(ctx, x0, y0, x1, y1, forma); ctx.clip(); fotoNaRegiao(ctx, img, x0, y0, x1 - x0, y1 - y0, aj); ctx.restore();
+    if (borda) { ctx.save(); ctx.strokeStyle = borda; ctx.lineWidth = 6; caminhoJanela(ctx, x0, y0, x1, y1, forma); ctx.stroke(); ctx.restore(); }
+  }
+  function baseCreme(ctx, W, H, forte) { const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, forte ? CREME : CREME2); g.addColorStop(1, forte ? '#EBE3D2' : CREME); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); }
+  function curvaLado(ctx, W, H, lado, cor, prof) {
+    ctx.save(); ctx.fillStyle = cor; ctx.beginPath();
+    const X = (f) => (lado === 'dir' ? W * (1 - f) : W * f);
+    ctx.moveTo(lado === 'dir' ? W : 0, 0); ctx.lineTo(X(prof), 0); ctx.bezierCurveTo(X(prof * 0.3), H * 0.26, X(prof * 1.25), H * 0.56, X(prof * 0.5), H); ctx.lineTo(lado === 'dir' ? W : 0, H); ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+  function arcoLinha(ctx, cx, cy, r, cor, w, a0, a1) { ctx.save(); ctx.strokeStyle = cor; ctx.lineWidth = w || 3; ctx.beginPath(); ctx.arc(cx, cy, r, a0 == null ? 0 : a0, a1 == null ? Math.PI * 2 : a1); ctx.stroke(); ctx.restore(); }
+  function discoSuave(ctx, cx, cy, rx, ry, cor) { ctx.save(); ctx.fillStyle = cor; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+  /** Desenha o fundo + a foto de cada visual. `story` = formato alto (sobra espaço em cima e embaixo). */
+  function desenharArte(ctx, img, W, H, tpl, aj) {
+    const story = H > W * 1.5, ty = story ? H * 0.075 : H * 0.035, by = story ? H * 0.92 : H * 0.965;
+    if (tpl === 'classico') {
+      baseCreme(ctx, W, H); curvaLado(ctx, W, H, 'dir', LARANJA, 0.4); discoSuave(ctx, W * 0.64, H * 0.5, W * 0.4, H * 0.47, 'rgba(255,255,255,.7)');
+      arcoLinha(ctx, 0, H, W * 0.5, 'rgba(230,126,34,.55)', 3, -Math.PI / 2, 0); arcoLinha(ctx, 0, H, W * 0.56, 'rgba(230,126,34,.3)', 2, -Math.PI / 2, 0);
+      janelaFoto(ctx, img, W * 0.3, ty, W * 0.97, by, 'arco', aj);
+    } else if (tpl === 'promo') {
+      baseCreme(ctx, W, H, true); curvaLado(ctx, W, H, 'dir', LARANJA, 0.3); discoSuave(ctx, W * 0.68, H * 0.52, W * 0.36, H * 0.44, 'rgba(255,255,255,.75)');
+      arcoLinha(ctx, W * 0.1, 0, W * 0.34, 'rgba(230,126,34,.5)', 3, 0, Math.PI / 2);
+      janelaFoto(ctx, img, W * 0.38, ty, W * 0.97, by, 'arco', aj);
+    } else if (tpl === 'minimal') {
+      cobrir(ctx, img, 0, 0, W, H); if (aj === 'inteira') fundoFoto(ctx, img, W, H, 'inteira');
+      ctx.save(); ctx.fillStyle = LARANJA; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W * 0.4, 0); ctx.bezierCurveTo(W * 0.3, H * 0.05, W * 0.08, H * 0.1, 0, H * 0.2); ctx.closePath(); ctx.fill(); ctx.restore();
+      arcoLinha(ctx, 0, 0, W * 0.5, 'rgba(255,255,255,.85)', 3, 0, Math.PI / 2); arcoLinha(ctx, W, H, W * 0.42, 'rgba(230,126,34,.9)', 5, Math.PI, Math.PI * 1.5);
+    } else if (tpl === 'rodape') {
+      baseCreme(ctx, W, H); curvaLado(ctx, W, H, 'dir', LARANJA, 0.27); arcoLinha(ctx, W * 0.08, 0, W * 0.3, 'rgba(230,126,34,.5)', 3, 0, Math.PI / 2);
+      arcoLinha(ctx, 0, H, W * 0.36, 'rgba(230,126,34,.4)', 3, -Math.PI / 2, 0);
+      janelaFoto(ctx, img, W * 0.42, ty, W * 0.98, by, 'ret', aj);
+    } else if (tpl === 'lateral') {
+      baseCreme(ctx, W, H, true); discoSuave(ctx, W * 0.9, H * 0.18, W * 0.3, W * 0.3, 'rgba(230,126,34,.18)'); arcoLinha(ctx, W, H, W * 0.42, 'rgba(230,126,34,.5)', 3, Math.PI, Math.PI * 1.5);
+      ctx.save(); ctx.fillStyle = LARANJA; caixaArredondada(ctx, W * 0.045, ty + 24, W * 0.665, by + 20, 44); ctx.fill(); ctx.restore();
+      janelaFoto(ctx, img, W * 0.02, ty, W * 0.64, by, 'cantos', aj);
+    } else if (tpl === 'cabecalho') {
+      baseCreme(ctx, W, H); curvaLado(ctx, W, H, 'esq', 'rgba(230,126,34,.9)', 0.09); discoSuave(ctx, W * 0.7, H * 0.5, W * 0.32, H * 0.45, 'rgba(255,255,255,.7)');
+      arcoLinha(ctx, 0, H, W * 0.46, 'rgba(230,126,34,.5)', 3, -Math.PI / 2, 0);
+      janelaFoto(ctx, img, W * 0.42, ty, W * 0.98, by, 'arco', aj);
+    } else if (tpl === 'energia') {
+      baseCreme(ctx, W, H, true); ctx.save(); ctx.fillStyle = LARANJA; ctx.beginPath(); ctx.arc(0, 0, W * 0.4, 0, Math.PI / 2); ctx.lineTo(0, 0); ctx.closePath(); ctx.fill(); ctx.restore();
+      arcoLinha(ctx, 0, 0, W * 0.47, 'rgba(230,126,34,.45)', 3, 0, Math.PI / 2); arcoLinha(ctx, W, H, W * 0.4, 'rgba(230,126,34,.5)', 3, Math.PI, Math.PI * 1.5);
+      janelaFoto(ctx, img, W * 0.4, ty, W * 0.98, by, 'ret', aj);
+    } else if (tpl === 'blocos') {
+      baseCreme(ctx, W, H); curvaLado(ctx, W, H, 'dir', LARANJA, 0.42); discoSuave(ctx, W * 0.32, H * 0.5, W * 0.34, H * 0.46, 'rgba(255,255,255,.7)');
+      arcoLinha(ctx, W, 0, W * 0.3, 'rgba(26,26,26,.25)', 3, Math.PI / 2, Math.PI);
+      janelaFoto(ctx, img, W * 0.03, ty, W * 0.6, by, 'arco', aj);
+    } else if (tpl === 'editorial') {
+      baseCreme(ctx, W, H, true); ctx.fillStyle = LARANJA; ctx.fillRect(0, 0, W * 0.085, H);
+      discoSuave(ctx, W * 0.5, H * 0.5, W * 0.34, H * 0.47, 'rgba(255,255,255,.7)'); arcoLinha(ctx, W, H, W * 0.36, 'rgba(230,126,34,.5)', 3, Math.PI, Math.PI * 1.5);
+      janelaFoto(ctx, img, W * 0.13, ty, W * 0.66, by, 'ret', aj);
+    } else if (tpl === 'cartao') {
+      baseCreme(ctx, W, H); discoSuave(ctx, W * 0.68, H * 0.5, W * 0.4, H * 0.48, 'rgba(255,255,255,.75)'); arcoLinha(ctx, W, 0, W * 0.32, 'rgba(230,126,34,.5)', 3, Math.PI / 2, Math.PI);
+      ctx.save(); ctx.fillStyle = 'rgba(26,26,26,.9)'; caixaArredondada(ctx, W * 0.395, ty + 22, W * 0.985, by + 18, 44); ctx.fill(); ctx.restore();
+      janelaFoto(ctx, img, W * 0.37, ty, W * 0.96, by, 'cantos', aj);
+    }
+  }
+
+  /* ---------- itens novos: texto espaçado (caps), vertical, nome em 2 cores/pilha, preço grande, botão com ícone, ícone em círculo ---------- */
+  function iconeCirculo(ctx, ic, cx, cy, r, cor) {
+    ctx.save(); ctx.strokeStyle = cor; ctx.fillStyle = cor; ctx.lineWidth = Math.max(2, r * 0.1); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; const u = r * 0.5;
+    if (ic === 'tam') { ctx.strokeRect(cx - u * 1.1, cy - u * 0.45, u * 2.2, u * 0.9); for (let i = 0; i < 5; i++) { const x = cx - u * 0.88 + i * u * 0.44; ctx.beginPath(); ctx.moveTo(x, cy - u * 0.45); ctx.lineTo(x, cy + (i % 2 ? -0.05 : 0.12) * u); ctx.stroke(); } }
+    else if (ic === 'cor') { [[-0.5, 0.15], [0.5, 0.15], [0, -0.5]].forEach((p) => { ctx.beginPath(); ctx.arc(cx + p[0] * u, cy + p[1] * u, u * 0.62, 0, Math.PI * 2); ctx.stroke(); }); }
+    else if (ic === 'cat') { ctx.beginPath(); ctx.moveTo(cx - u * 0.2, cy - u); ctx.lineTo(cx + u * 0.85, cy - u); ctx.lineTo(cx + u * 0.85, cy + u * 0.1); ctx.lineTo(cx - u * 0.15, cy + u * 1.1); ctx.lineTo(cx - u * 1.1, cy + u * 0.1); ctx.lineTo(cx - u * 1.1, cy - u * 0.15); ctx.closePath(); ctx.stroke(); ctx.beginPath(); ctx.arc(cx + u * 0.45, cy - u * 0.5, u * 0.14, 0, Math.PI * 2); ctx.fill(); }
+    else if (ic === 'gen') { ctx.beginPath(); ctx.moveTo(cx, cy + u * 0.95); ctx.bezierCurveTo(cx - u * 1.8, cy - u * 0.2, cx - u * 0.8, cy - u * 1.3, cx, cy - u * 0.4); ctx.bezierCurveTo(cx + u * 0.8, cy - u * 1.3, cx + u * 1.8, cy - u * 0.2, cx, cy + u * 0.95); ctx.stroke(); }
+    else if (ic === 'cod') { ctx.beginPath(); [[-0.35, -1], [-0.35, 1], [0.35, -1], [0.35, 1]].forEach((p, i) => { if (i % 2 === 0) ctx.moveTo(cx + p[0] * u, cy + p[1] * u); else ctx.lineTo(cx + p[0] * u, cy + p[1] * u); }); ctx.moveTo(cx - u, cy - u * 0.35); ctx.lineTo(cx + u, cy - u * 0.35); ctx.moveTo(cx - u, cy + u * 0.35); ctx.lineTo(cx + u, cy + u * 0.35); ctx.stroke(); }
+    else if (ic === 'globo') { ctx.beginPath(); ctx.arc(cx, cy, u * 1.05, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.ellipse(cx, cy, u * 0.45, u * 1.05, 0, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(cx - u * 1.05, cy); ctx.lineTo(cx + u * 1.05, cy); ctx.stroke(); }
+    else if (ic === 'zap') {   // balão do WhatsApp com o fone dentro
+      ctx.beginPath(); ctx.arc(cx, cy, u * 1.1, 0.3 * Math.PI, 2.3 * Math.PI); ctx.lineTo(cx - u * 1.18, cy + u * 1.3); ctx.lineTo(cx - u * 0.45, cy + u * 0.98); ctx.closePath(); ctx.stroke();
+      ctx.lineWidth = Math.max(3, r * 0.2); ctx.beginPath(); ctx.moveTo(cx - u * 0.45, cy - u * 0.5); ctx.quadraticCurveTo(cx - u * 0.45, cy + u * 0.5, cx + u * 0.5, cy + u * 0.45); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function larguraT(ctx, txt, tam, track) { return ctx.measureText(txt).width + (track ? track * tam * Math.max(0, txt.length - 1) : 0); }
+  function desenharTrack(ctx, txt, x, y, tam, track, al) {
+    const w = larguraT(ctx, txt, tam, track); let cx = al === 'center' ? x - w / 2 : al === 'right' ? x - w : x; ctx.textAlign = 'left';
+    for (const ch of txt) { ctx.fillText(ch, cx, y); cx += ctx.measureText(ch).width + track * tam; }
+  }
+  function dividirNome(txt, maxL) {
+    const pal = String(txt).trim().split(/\s+/).filter(Boolean); if (pal.length <= 1) return [pal.join(' ')];
+    const n = Math.min(maxL, pal.length), total = pal.join(' ').length, alvo = total / n, linhas = []; let cur = [];
+    pal.forEach((p, i) => { const resto = pal.length - i, faltam = n - linhas.length - 1; cur.push(p); const len = cur.join(' ').length; if (linhas.length < n - 1 && len >= alvo * 0.85 && resto - 1 >= faltam) { linhas.push(cur.join(' ')); cur = []; } });
+    if (cur.length) linhas.push(cur.join(' ')); return linhas;
+  }
+  function estiloLinha(it, i, n) {
+    if (it.stack === 'pilha') { const ponta = (i === 0 || i === n - 1) && n > 2; return { peso: ponta ? '500' : 'bold', cor: ponta ? it.cor : it.cor2 }; }
+    return { peso: 'bold', cor: i === 0 ? it.cor : it.cor2 };
+  }
+  function fonteLinha(it, tam, peso) { return peso + ' ' + tam + 'px ' + FONTE_T; }
+  /** Mede os itens novos. Devolve null para os itens comuns (o medirItem de sempre cuida deles). */
+  function medirEspecial(it, larg) {
+    const txt = String(it.t == null ? '' : it.t).trim(); if (!txt) return null;
+    const base = Math.max(12, Math.round(it.tam * (it.mult || 1)));
+    if (it.track || it.vert) {
+      const maxL = it.linhas || 1; let tam = base, linhas;
+      for (;;) {
+        _mc.font = fonteDe(it, tam); const cab = (t) => larguraT(_mc, t, tam, it.track || 0), pal = txt.split(/\s+/); linhas = []; let cur = '';
+        pal.forEach((p) => { const t = cur ? cur + ' ' + p : p; if (cab(t) > (it.vert ? 1e9 : larg) && cur) { linhas.push(cur); cur = p; } else cur = t; }); if (cur) linhas.push(cur);
+        const lw = Math.max.apply(null, linhas.map(cab));
+        if ((linhas.length <= maxL && (it.vert ? lw <= (it.vmax || 600) : lw <= larg + 0.5)) || tam <= base * 0.5) break; tam = Math.floor(tam * 0.94);
+      }
+      _mc.font = fonteDe(it, tam); const lh = tam * 1.35, lw = Math.max.apply(null, linhas.map((l) => larguraT(_mc, l, tam, it.track || 0)));
+      return it.vert ? { tam, linhas, lh, padX: 0, padY: 0, lw, w: lh * linhas.length, h: lw } : { tam, linhas, lh, padX: 0, padY: 0, lw, w: lw, h: lh * linhas.length };
+    }
+    if (it.stack) {
+      const maxL = it.stack === 'pilha' ? 4 : 2; let tam = base, linhas = dividirNome(txt, maxL);
+      for (;;) { const lw = Math.max.apply(null, linhas.map((l, i) => { _mc.font = fonteLinha(it, tam, estiloLinha(it, i, linhas.length).peso); return _mc.measureText(l).width; })); if (lw <= larg + 0.5 || tam <= base * 0.4) { var w = lw; break; } tam = Math.floor(tam * 0.94); }
+      const lh = tam * 1.12; return { tam, linhas, lh, padX: 0, padY: 0, lw: w, w: w, h: lh * linhas.length };
+    }
+    if (it.big) {
+      const mt = /^(R\$)\s*(\d[\d.]*)(?:,(\d{2}))?\s*(.*)$/.exec(txt); if (!mt) return null;
+      const padX = (it.padX || 0) * base, padY = (it.padY || 0) * base, livre = Math.max(40, larg - padX * 2); let tam = base, partes;
+      for (;;) {
+        _mc.font = 'bold ' + Math.round(tam * 0.42) + 'px ' + FONTE_T; const wr = _mc.measureText('R$').width;
+        _mc.font = 'bold ' + tam + 'px ' + FONTE_T; const wi = _mc.measureText(mt[2]).width;
+        _mc.font = 'bold ' + Math.round(tam * 0.5) + 'px ' + FONTE_T; const wc = mt[3] ? _mc.measureText(',' + mt[3]).width : 0;
+        _mc.font = '500 ' + Math.round(tam * 0.4) + 'px ' + FONTE_T; const wv = mt[4] ? _mc.measureText(mt[4]).width : 0;
+        const lw = wr + tam * 0.06 + wi + wc; partes = { wr, wi, wc, wv, lw, mt };
+        if (Math.max(lw, wv) <= livre + 0.5 || tam <= base * 0.4) break; tam = Math.floor(tam * 0.94);
+      }
+      const hv = mt[4] ? tam * 0.5 : 0, hh = tam * 0.98 + hv;
+      return { tam, linhas: [txt], lh: tam, padX, padY, lw: Math.max(partes.lw, partes.wv), w: Math.max(partes.lw, partes.wv) + padX * 2, h: hh + padY * 2, big: partes };
+    }
+    if (it.pill) {
+      const total = it.wz === 'cheio' ? larg : larg, h = base * 2.4, d = h * 0.62, ocupado = h * 0.35 + d + h * 0.3 + (it.seta ? h * 0.5 : h * 0.25), livre = Math.max(60, total - ocupado);
+      let tam = base, linhas; const maxL = it.linhas || 1;
+      for (;;) { _mc.font = 'bold ' + tam + 'px ' + FONTE_T; linhas = quebrar(_mc, txt, livre, maxL); const lw = Math.max.apply(null, linhas.map((l) => _mc.measureText(l).width)), cortou = linhas.join(' ') !== txt.replace(/\s+/g, ' '); if ((lw <= livre + 0.5 && !cortou) || tam <= base * 0.5) break; tam = Math.floor(tam * 0.94); }
+      const hh = Math.max(h * 0.8, (linhas.length > 1 ? tam * 2.3 : tam * 1.18) + base * 1.05);
+      return { tam, linhas, lh: tam * 1.12, padX: 0, padY: 0, lw: 0, w: 0, h: Math.max(hh, h * 0.9), pill: { h: Math.max(hh, h * 0.9), d: Math.max(hh, h * 0.9) * 0.62 } };
+    }
+    if (it.chip) {
+      const d = base * 2.1, gap = base * 0.5, livre = Math.max(60, larg - d - gap); let tam = base, linhas; const maxL = it.linhas || 2;
+      for (;;) { _mc.font = fonteDe(Object.assign({}, it, { peso: 'bold' }), tam); linhas = quebrar(_mc, txt, livre, maxL); const lw = Math.max.apply(null, linhas.map((l) => _mc.measureText(l).width)), cortou = linhas.join(' ') !== txt.replace(/\s+/g, ' '); if ((lw <= livre + 0.5 && !cortou) || tam <= base * 0.55) break; tam = Math.floor(tam * 0.94); }
+      _mc.font = fonteDe(Object.assign({}, it, { peso: 'bold' }), tam); const lw = Math.max.apply(null, linhas.map((l) => _mc.measureText(l).width)), lh = tam * 1.2;
+      return { tam, linhas, lh, padX: 0, padY: 0, lw, w: d + gap + lw, h: Math.max(d, linhas.length * lh), chip: { d, gap } };
+    }
+    return null;
+  }
+  function pilulaCaminho(ctx, x0, y0, x1, y1) { caixaArredondada(ctx, x0, y0, x1, y1, (y1 - y0) / 2); }
+  function desenharEspecial(ctx, it, W, H) {
+    const m = it.m, r = it.r, cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
+    ctx.save(); ctx.textBaseline = 'alphabetic';
+    if (it.track && !it.vert) {
+      ctx.font = fonteDe(it, m.tam); ctx.fillStyle = it.cor || CINZA; const al = it.ial === 'center' ? 'center' : it.ial === 'right' ? 'right' : 'left', xx = al === 'center' ? cx : al === 'right' ? r.x1 : r.x0;
+      m.linhas.forEach((l, n) => desenharTrack(ctx, l, xx, r.y0 + n * m.lh + m.tam * 1.0, m.tam, it.track, al));
+    } else if (it.vert) {
+      ctx.font = fonteDe(it, m.tam); ctx.fillStyle = it.cor || CINZA; ctx.translate(cx, cy); ctx.rotate(-Math.PI / 2);
+      m.linhas.forEach((l, n) => desenharTrack(ctx, l, 0, (n - (m.linhas.length - 1) / 2) * m.lh + m.tam * 0.35, m.tam, it.track || 0, 'center'));
+    } else if (it.stack) {
+      const al = it.ial === 'center' ? 'center' : it.ial === 'right' ? 'right' : 'left', xx = al === 'center' ? cx : al === 'right' ? r.x1 : r.x0;
+      m.linhas.forEach((l, i) => { const s = estiloLinha(it, i, m.linhas.length); ctx.font = fonteLinha(it, m.tam, s.peso); ctx.fillStyle = s.cor; ctx.textAlign = al; ctx.fillText(l, xx, r.y0 + i * m.lh + m.tam * 0.92); });
+    } else if (it.big) {
+      const b = m.big, mt = b.mt;
+      if (it.bg) { ctx.save(); if (it.sombraCx) { ctx.shadowColor = 'rgba(0,0,0,.3)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 6; } ctx.fillStyle = it.bg; const x0 = it.sangra === 'esq' ? 0 : r.x0, x1 = it.sangra === 'dir' ? W : r.x1; caixaArredondada(ctx, x0, r.y0, x1, r.y1, it.rpx || 26); ctx.fill(); ctx.restore(); }
+      if (it.borda2) { ctx.save(); ctx.strokeStyle = it.borda2; ctx.lineWidth = 3; caixaArredondada(ctx, r.x0 + 12, r.y0 + 12, r.x1 + 12, r.y1 + 12, it.rpx || 26); ctx.stroke(); ctx.restore(); }
+      const xi = r.x0 + m.padX + (r.x1 - r.x0 - m.padX * 2 - b.lw) / (it.alP === 'left' ? 1e9 : 2), top = r.y0 + m.padY, bi = top + m.tam * 0.8;
+      ctx.fillStyle = it.cor; ctx.textAlign = 'left';
+      ctx.font = 'bold ' + Math.round(m.tam * 0.42) + 'px ' + FONTE_T; ctx.fillText('R$', xi, bi - m.tam * 0.38);
+      ctx.font = 'bold ' + m.tam + 'px ' + FONTE_T; ctx.fillText(mt[2], xi + b.wr + m.tam * 0.06, bi);
+      if (mt[3]) { ctx.font = 'bold ' + Math.round(m.tam * 0.5) + 'px ' + FONTE_T; ctx.fillText(',' + mt[3], xi + b.wr + m.tam * 0.06 + b.wi, bi - m.tam * 0.3); }
+      if (mt[4]) { ctx.font = '500 ' + Math.round(m.tam * 0.4) + 'px ' + FONTE_T; ctx.textAlign = it.vistaAl === 'left' ? 'left' : 'right'; ctx.fillText(mt[4], it.vistaAl === 'left' ? xi : xi + b.lw, bi + m.tam * 0.42); }
+    } else if (it.pill) {
+      const h = r.y1 - r.y0, d = m.pill.d, estilo = it.estilo || 'cheio';
+      ctx.save(); if (estilo === 'cheio') { ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 5; ctx.fillStyle = it.bg || LARANJA; pilulaCaminho(ctx, r.x0, r.y0, r.x1, r.y1); ctx.fill(); }
+      else { ctx.fillStyle = it.bg || 'rgba(255,255,255,.9)'; pilulaCaminho(ctx, r.x0, r.y0, r.x1, r.y1); ctx.fill(); ctx.strokeStyle = it.corBorda || LARANJA; ctx.lineWidth = 4; pilulaCaminho(ctx, r.x0 + 2, r.y0 + 2, r.x1 - 2, r.y1 - 2); ctx.stroke(); }
+      ctx.restore();
+      const ic = /whats|zap/i.test(it.t) ? 'zap' : 'globo', corI = it.cor, ix = r.x0 + h * 0.35 + d / 2;
+      iconeCirculo(ctx, ic, ix, cy, d / 2, corI);
+      ctx.strokeStyle = corI; ctx.globalAlpha = 0.45; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(ix + d / 2 + h * 0.15, r.y0 + h * 0.25); ctx.lineTo(ix + d / 2 + h * 0.15, r.y1 - h * 0.25); ctx.stroke(); ctx.globalAlpha = 1;
+      const tx0 = ix + d / 2 + h * 0.3, tx1 = r.x1 - (it.seta ? h * 0.5 : h * 0.25);
+      ctx.font = 'bold ' + m.tam + 'px ' + FONTE_T; ctx.fillStyle = corI; ctx.textAlign = 'left';
+      m.linhas.forEach((l, n) => ctx.fillText(l, tx0, cy - ((m.linhas.length - 1) * m.lh) / 2 + n * m.lh + m.tam * 0.36));
+      if (it.seta) { ctx.strokeStyle = corI; ctx.lineWidth = Math.max(3, h * 0.06); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; const ax = r.x1 - h * 0.5, as = h * 0.13; ctx.beginPath(); ctx.moveTo(ax, cy - as); ctx.lineTo(ax + as, cy); ctx.lineTo(ax, cy + as); ctx.stroke(); }
+    } else if (it.chip) {
+      const c = m.chip, rr = c.d / 2, ix = r.x0 + rr, cyy = cy;
+      ctx.fillStyle = 'rgba(230,126,34,.16)'; ctx.beginPath(); ctx.arc(ix, cyy, rr, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = LARANJA; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(ix, cyy, rr - 1.5, 0, Math.PI * 2); ctx.stroke();
+      iconeCirculo(ctx, it.chip.ic, ix, cyy, rr * 0.82, LARANJA_TXT);
+      ctx.font = fonteDe(Object.assign({}, it, { peso: 'bold' }), m.tam); ctx.fillStyle = it.cor || CINZA; ctx.textAlign = 'left';
+      m.linhas.forEach((l, n) => ctx.fillText(l, r.x0 + c.d + c.gap, cyy - ((m.linhas.length - 1) * m.lh) / 2 + n * m.lh + m.tam * 0.36));
+    }
+    ctx.restore();
+    return { k: it.k, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 };
+  }
+  const ESPECIAL = (it) => it.track || it.vert || it.stack || it.big || it.pill || it.chip;
+
+  /** Especificação dos 10 visuais: grupos (onde cada bloco de texto fica) + itens (o que aparece). Tudo vem dos dados da peça. */
+  function especArte(tpl, info, W, H) {
+    const story = H > W * 1.5, sy = story ? 0.06 : 0, by = story ? 0.055 : 0, preco = info.avista ? info.avista + ' à vista' : '';
+    const cta = info.comLink ? 'Toque no link' : null;
+    const nome = (grp, o) => Object.assign({ k: 'nome', rot: 'Nome da peça', t: info.nome, grp: grp, tam: 62, cor: CINZA, cor2: LARANJA_TXT, stack: 'duo' }, o || {});
+    const precoG = (grp, o) => Object.assign({ k: 'preco', rot: 'Preço', t: preco, grp: grp, tam: 120, cor: CINZA, big: true }, o || {});
+    const botao = (grp, texto, o) => Object.assign({ k: 'zona', rot: 'Zona do link (botão)', t: cta || texto, grp: grp, tam: 34, pill: true, wz: 0.5, bg: LARANJA, cor: PRETO, estilo: 'cheio', seta: true }, o || {});
+    const lema = (grp, t, o) => Object.assign({ k: 'lema', rot: 'Frase pequena', t: t, grp: grp, tam: 24, track: 0.28, peso: 'normal', cor: TXT_SUAVE, linhas: 4 }, o || {});
+    const chip = (grp, n, ic, t, o) => Object.assign({ k: 'chip' + n, rot: 'Detalhe ' + n, t: t, grp: grp, tam: 27, chip: { ic: ic }, cor: CINZA, linhas: 2 }, o || {});
+    const selo = (grp, t, o) => Object.assign({ k: 'selo', rot: 'Selo', t: t, grp: grp, tam: 30, cor: PRETO, bg: LARANJA, padX: 0.8, padY: 0.4, radius: 0.5, peso: 'bold' }, o || {});
+    const c3 = (g) => [info.tam ? chip(g, 1, 'tam', 'Tamanhos ' + info.tam) : null, info.cores ? chip(g, 2, 'cor', 'Cores ' + info.cores) : null, (info.cat || info.gen) ? chip(g, 3, info.cat ? 'cat' : 'gen', [info.cat, info.gen].filter(Boolean).join(' · ')) : null].filter(Boolean);
+    const lemaTxt = [info.gen, info.cat].filter(Boolean).join(' ').toUpperCase() || 'TENKiTER MODAS';
+    const codigoTxt = info.codigo ? 'CÓDIGO ' + info.codigo : '';
+    let g = [], it = [];
+    if (tpl === 'classico') {
+      g = [{ id: 'a', anc: 't', y: 0.07 + sy, x: 0.045, al: 'left', w: 0.22, gap: 10 }, { id: 'c', anc: 'm', y: 0.46, x: 0.04, al: 'left', w: 0.27, gap: 18 }, { id: 'k', anc: 'b', y: 0.04 + by, x: 0.04, al: 'left', fw: 0.55, gap: 10, caixa: { cor: '#FFFFFF', r: 26, pad: 22, sombra: true } }];
+      it = [selo('a', 'NOVIDADE'), lema('a', lemaTxt)].concat(c3('c').slice(0, 3), [nome('k', { tam: 50 }), precoG('k', { tam: 108, alP: 'left', vistaAl: 'left' }), codigo_(info, 'k'), botao('k', 'Chame no WhatsApp', { wz: 'cheio' })].filter(Boolean));
+    } else if (tpl === 'promo') {
+      g = [{ id: 'a', anc: 't', y: 0.07 + sy, x: 0.05, al: 'left', w: 0.3, gap: 14 }, { id: 'p', anc: 'm', y: 0.38, x: 0.05, al: 'left', w: 0.3, gap: 10 }, { id: 'k', anc: 'b', y: 0.05 + by, x: 0.05, al: 'left', w: 0.34, gap: 12 }];
+      it = [selo('a', 'NOVIDADE'), nome('a', { tam: 54, linhas: 3 }), lema('a', lemaTxt, { linhas: 2, tam: 22 }), precoG('p', { tam: 104, vistaAl: 'left', alP: 'left' }), codigo_(info, 'p'), botao('k', 'Chame no WhatsApp', { wz: 'cheio', linhas: 2, tam: 30 })].filter(Boolean);
+    } else if (tpl === 'minimal') {
+      g = [{ id: 'a', anc: 't', y: 0.05 + sy, x: 0.05, al: 'left', w: 0.3 }, { id: 'k', anc: 'b', y: 0.04 + by, x: 0.5, al: 'center', fw: 0.9, gap: 10, caixa: { cor: '#FFFFFF', r: 30, pad: 26, sombra: true } }];
+      it = [selo('a', 'NOVIDADE', { cor: PRETO }), precoG('k', { tam: 104, linhas: 1, alP: 'center', vistaAl: 'right' }), nome('k', { tam: 52, al: 'center', stack: 'duo' }), botao('k', 'Chame no WhatsApp', { wz: 'cheio', bg: LARANJA, seta: false })];
+    } else if (tpl === 'rodape') {
+      g = [{ id: 'a', anc: 't', y: 0.06 + sy, x: 0.05, al: 'left', w: 0.34, gap: 12 }, { id: 'c', anc: 'm', y: 0.43, x: 0.05, al: 'left', w: 0.34, gap: 16 }, { id: 'p', anc: 'b', y: 0.18 + by, x: 0.05, al: 'left', w: 0.34, gap: 10 }, { id: 'k', anc: 'b', y: 0.05 + by, x: 0.05, al: 'left', w: 0.34 }];
+      it = [nome('a', { tam: 50, linhas: 3 }), lema('a', lemaTxt, { linhas: 2, tam: 20 })].concat(c3('c'), [precoG('p', { tam: 92, bg: LARANJA, padX: 0.28, padY: 0.2, rpx: 24, sombraCx: true }), botao('k', 'Chame no WhatsApp', { wz: 'cheio', estilo: 'contorno', bg: '#FFFFFF', cor: CINZA, linhas: 2, tam: 28 })]);
+    } else if (tpl === 'lateral') {
+      g = [{ id: 'p', anc: 't', y: 0.06 + sy, x: 0.97, al: 'right', w: 0.31, gap: 10 }, { id: 'a', anc: 'm', y: 0.5, x: 0.97, al: 'right', w: 0.31, gap: 12 }, { id: 'k', anc: 'b', y: 0.05 + by, x: 0.97, al: 'right', w: 0.31, gap: 10 }];
+      it = [precoG('p', { tam: 88, bg: LARANJA, padX: 0.28, padY: 0.2, rpx: 22, sangra: 'dir', sombraCx: true, vistaAl: 'right' }), nome('a', { tam: 50, linhas: 3, al: 'right', stack: 'duo' }), lema('a', lemaTxt, { linhas: 2, tam: 20, al: 'right' }), selo('k', 'NOVIDADE'), botao('k', 'Chame no WhatsApp', { wz: 'cheio', linhas: 2, tam: 26, seta: false })];
+    } else if (tpl === 'cabecalho') {
+      g = [{ id: 'a', anc: 't', y: 0.06 + sy, x: 0.05, al: 'left', w: 0.35, gap: 10 }, { id: 'p', anc: 'm', y: 0.45, x: 0.0, al: 'left', w: 0.4, gap: 8 }, { id: 'c', anc: 'b', y: 0.2 + by, x: 0.05, al: 'left', w: 0.35, gap: 14 }, { id: 'k', anc: 'b', y: 0.05 + by, x: 0.05, al: 'left', w: 0.35 }];
+      it = [lema('a', lemaTxt, { linhas: 2, tam: 20 }), nome('a', { tam: 70, linhas: 3, stack: 'pilha' }), precoG('p', { tam: 88, bg: LARANJA, padX: 0.4, padY: 0.2, rpx: 26, sangra: 'esq', vistaAl: 'left', alP: 'left' })].concat(c3('c'), [botao('k', 'Chame no WhatsApp', { wz: 'cheio', linhas: 2, tam: 27, seta: false })]);
+    } else if (tpl === 'energia') {
+      g = [{ id: 'a', anc: 't', y: 0.06 + sy, x: 0.05, al: 'left', w: 0.33, gap: 12 }, { id: 'p', anc: 'm', y: 0.42, x: 0.05, al: 'left', w: 0.33, gap: 10 }, { id: 'c', anc: 'b', y: 0.2 + by, x: 0.05, al: 'left', w: 0.33, gap: 14 }, { id: 'k', anc: 'b', y: 0.05 + by, x: 0.05, al: 'left', w: 0.33 }];
+      it = [nome('a', { tam: 52, linhas: 3, cor: PRETO, cor2: PRETO }), precoG('p', { tam: 100, cor: PRETO, bg: 'rgba(255,255,255,.0)', alP: 'left', vistaAl: 'left', padX: 0, padY: 0 })].concat(c3('c'), [botao('k', 'Chame no WhatsApp', { wz: 'cheio', linhas: 2, tam: 27 })]);
+      it[0] = Object.assign(it[0], { cor: PRETO, cor2: PRETO });
+    } else if (tpl === 'blocos') {
+      g = [{ id: 'a', anc: 't', y: 0.12 + sy, x: 0.97, al: 'right', w: 0.34, gap: 10 }, { id: 'p', anc: 'm', y: 0.62, x: 0.97, al: 'right', w: 0.34, gap: 10 }, { id: 'k', anc: 'b', y: 0.05 + by, x: 0.97, al: 'right', w: 0.34 }];
+      it = [lema('a', lemaTxt, { linhas: 2, tam: 20, al: 'right', cor: PRETO }), nome('a', { tam: 66, linhas: 4, stack: 'pilha', al: 'right', cor: PRETO, cor2: PRETO }), precoG('p', { tam: 92, bg: '#FFFFFF', cor: PRETO, padX: 0.3, padY: 0.2, rpx: 22, borda2: PRETO, vistaAl: 'right' }), botao('k', 'Chame no WhatsApp', { wz: 'cheio', estilo: 'contorno', bg: '#FFFFFF', cor: PRETO, corBorda: PRETO, linhas: 2, tam: 26, seta: false })];
+    } else if (tpl === 'editorial') {
+      g = [{ id: 'v', anc: 'm', y: 0.5, x: 0.0425, al: 'center', w: 0.07 }, { id: 'a', anc: 't', y: 0.06 + sy, x: 0.96, al: 'right', w: 0.29, gap: 10 }, { id: 'p', anc: 'm', y: 0.5, x: 0.96, al: 'right', w: 0.29, gap: 10 }, { id: 'c', anc: 'b', y: 0.14 + by, x: 0.96, al: 'right', w: 0.29, gap: 12 }, { id: 'k', anc: 'b', y: 0.045 + by, x: 0.96, al: 'right', w: 0.29 }];
+      it = [lema('v', lemaTxt, { vert: true, k: 'lema', tam: 22, cor: PRETO, vmax: H * 0.7 }), nome('a', { tam: 48, linhas: 3, al: 'right' }), precoG('p', { tam: 78, bg: LARANJA, padX: 0.3, padY: 0.2, rpx: 22, sombraCx: true, vistaAl: 'right' })].concat(c3('c').slice(0, 2), [botao('k', 'Chame no WhatsApp', { wz: 'cheio', linhas: 2, tam: 24, seta: false })]);
+    } else if (tpl === 'cartao') {
+      g = [{ id: 'a', anc: 't', y: 0.06 + sy, x: 0.04, al: 'left', w: 0.3, gap: 10 }, { id: 'n', anc: 'm', y: 0.42, x: 0.04, al: 'left', w: 0.3, gap: 12 }, { id: 'c', anc: 'b', y: 0.2 + by, x: 0.04, al: 'left', w: 0.3, gap: 12 }, { id: 'k', anc: 'b', y: 0.05 + by, x: 0.04, al: 'left', w: 0.3, gap: 10 }];
+      it = [lema('a', [info.gen, info.cat, info.tam ? 'TAM ' + info.tam : '', info.cores].filter(Boolean).join(' · ').toUpperCase() || lemaTxt, { linhas: 4, tam: 20 }), nome('n', { tam: 48, linhas: 3, stack: 'pilha' }), precoG('c', { tam: 82, vistaAl: 'left', alP: 'left', cor: LARANJA_TXT }), botao('k', 'Chame no WhatsApp', { wz: 'cheio', estilo: 'contorno', bg: '#FFFFFF', cor: CINZA, linhas: 2, tam: 25 })];
+    }
+    return { fundo: 'arte', grupos: g, itens: it };
+  }
+  function codigo_(info, grp) { return info.codigo ? { k: 'codigo', rot: 'Código', t: 'CÓDIGO ' + info.codigo, grp: grp, tam: 22, track: 0.2, peso: 'normal', cor: TXT_SUAVE } : null; }
+
   /** Mede um item: encolhe a letra (até 45%) até caber em `larg` px nas linhas permitidas; devolve tamanho, linhas e caixa. */
   function medirItem(it, larg) {
+    if (ESPECIAL(it)) { const esp = medirEspecial(it, larg); if (esp) return esp; }
     const txt = String(it.t == null ? '' : it.t).trim(); if (!txt) return null;
     const base = Math.max(12, Math.round(it.tam * (it.mult || 1))), padX = (it.padX || 0) * base, padY = (it.padY || 0) * base, livre = Math.max(40, larg - padX * 2), maxL = it.linhas || 1;
     let tam = base, linhas;
@@ -574,6 +833,7 @@
   }
   function caixaArredondada(ctx, x0, y0, x1, y1, r) { r = Math.min(r, (x1 - x0) / 2, (y1 - y0) / 2); ctx.beginPath(); ctx.moveTo(x0 + r, y0); ctx.arcTo(x1, y0, x1, y1, r); ctx.arcTo(x1, y1, x0, y1, r); ctx.arcTo(x0, y1, x0, y0, r); ctx.arcTo(x0, y0, x1, y0, r); ctx.closePath(); }
   function desenharItem(ctx, it, W, H) {
+    if (ESPECIAL(it) && it.m && (it.m.big || it.m.pill || it.m.chip || it.track || it.vert || it.stack)) return desenharEspecial(ctx, it, W, H);
     const m = it.m, r = it.r, rad = (it.radius || 0) * m.tam * 2;
     if (it.fade) { const g = ctx.createLinearGradient(0, r.y0 - 90, 0, H); g.addColorStop(0, 'rgba(44,44,44,0)'); g.addColorStop(0.45, 'rgba(44,44,44,.8)'); g.addColorStop(1, 'rgba(44,44,44,.92)'); ctx.fillStyle = g; ctx.fillRect(0, r.y0 - 90, W, H - r.y0 + 90); }
     if (it.bg) { ctx.save(); if (it.sombraCx) { ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 10; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3; } ctx.fillStyle = it.bg; caixaArredondada(ctx, r.x0, r.y0, r.x1, r.y1, rad); ctx.fill(); ctx.restore(); }
@@ -608,7 +868,7 @@
   function desenharTemplate(ctx, img, W, H, tpl, ef, ajuste) {
     ctx.fillStyle = '#111'; ctx.fillRect(0, 0, W, H);
     const fundo = ef && ef.fundo ? ef.fundo : 'foto';
-    if (tpl === 'original' || tpl === 'elausa') fundoFoto(ctx, img, W, H, ajuste); else cobrir(ctx, img, 0, 0, W, H);
+    if (tpl === 'original' || tpl === 'elausa') fundoFoto(ctx, img, W, H, ajuste); else if (fundo === 'arte') desenharArte(ctx, img, W, H, tpl, ajuste); else cobrir(ctx, img, 0, 0, W, H);
     if (fundo === 'baixo') degrade(ctx, W, H * 0.5, H, 0, 0.88);
     else if (fundo === 'baixo-leve') degrade(ctx, W, H * 0.7, H, 0, 0.45);
     else if (fundo === 'ambos') { degrade(ctx, W, H * 0.42, 0, 0, 0.7); degrade(ctx, W, H * 0.58, H, 0, 0.82); }

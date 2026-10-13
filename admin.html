@@ -3839,6 +3839,22 @@
     });
   }
   setInterval(espelha,1500); espelha();
+  // vindo do catálogo (botão "✎ Editar produto" do modal da peça): abre o MESMO formulário de edição daqui, assim que a lista carregar
+  try {
+    var mEd = /[?&]editar=([^&]+)/.exec(location.search);
+    if (mEd) {
+      var idEd = decodeURIComponent(mEd[1]), tentEd = 0;
+      var tmEd = setInterval(function(){
+        tentEd++;
+        var achou = (typeof produtos !== 'undefined') && produtos && produtos.some(function(x){ return String(x.ID) === String(idEd); });
+        if (achou || tentEd > 60){
+          clearInterval(tmEd);
+          if (achou){ try{ editarProduto(idEd); }catch(e){} }
+          try{ history.replaceState(history.state,'',location.pathname); }catch(e){}
+        }
+      }, 500);
+    }
+  } catch(e) {}
   // vindo do catálogo (botão "➕ Cadastrar nova peça"): abre o MESMO cartão de cadastro daqui, sem cópia da função
   try { if (/[?&]novo=1/.test(location.search)) { setTimeout(function(){ var c=$('card-form'); if(c){ c.open=true; c.scrollIntoView({block:'start'}); } try{ history.replaceState(history.state,'',location.pathname); }catch(e){} }, 900); } } catch(e) {}
   document.addEventListener('click',function(e){

@@ -91,11 +91,45 @@ ok(!c.ok && c.sessaoInvalida, 'sessão inválida não recebe nada');
 c = conteudo(['portal', 'gerir_manuais']);
 ok(c.ok && c.manuais.every(m => m.liberado && m.parts.length) && Object.keys(c.provas).length === 3, 'quem gere manuais vê tudo (manuais e provas dos 3 níveis)');
 ok(JSON.parse(run('doGet({ parameter: { action: "versao" } })')._t).conteudoProtegido === true, 'versao anuncia conteudoProtegido');
-ok(/'3\.5'/.test(fonte.split('\n').filter(l => /versao: '/.test(l))[0]), 'versao devolve 3.5');
+ok(/'3\.6'/.test(fonte.split('\n').filter(l => /versao: '/.test(l))[0]), 'versao devolve 3.6');
 // erro inesperado no POST não vaza texto técnico
 run('lerManuais_ = function () { throw new Error("SEGREDO-INTERNO"); }');
 const rr = JSON.parse(run('doPost({ postData: { contents: JSON.stringify({ token: TOKEN, action: "treinamento_conteudo", whatsapp: "859", sessao: "x" }) } })')._t);
 ok(rr.ok === false && /^R\d+$/.test(String(rr.ocorrencia)) && JSON.stringify(rr).indexOf('SEGREDO-INTERNO') === -1, 'POST com falha devolve só um código de ocorrência', rr);
+
+console.log('\n[v3.6: provas em Doc, limite e dedupe de avaliações, excluir e resetar]');
+{
+  const vj = JSON.parse(run('doGet({ parameter: { action: "versao" } })')._t);
+  ok(vj.provasDoc === true && vj.avaliacoesServidor === true && vj.resetarPessoa === true, 'versao anuncia provasDoc, avaliacoesServidor e resetarPessoa', vj);
+  ctx.__linhas = ['1. Qual a capital do Ceará?', 'a) Recife', 'b) Fortaleza*', 'c) Natal', 'Explicação: é Fortaleza.', '', '2. Pergunta sem certa', 'a) um', 'b) dois', '', '3. Só uma opção', 'a) única*'].map(t => ({ texto: t, negrito: false }));
+  const pr = run('provaParse_(__linhas)');
+  ok(pr.perguntas && pr.perguntas.length === 1 && pr.perguntas[0].options.length === 3, 'parser lê 1 pergunta válida com 3 opções', pr);
+  ok(pr.avisos && pr.avisos.length === 2, 'e avisa das 2 inválidas (sem certa / menos de 2 opções)', pr.avisos);
+  // resultados com planilha simulada
+  pessoa('Thais', '85991111111', 'Cliente');
+  const rs = new Aba('Resultados'); rs.appendRow(['DataHora', 'WhatsApp', 'Nome', 'Nivel', 'Manual', 'Nota', 'Total', 'Percentual', 'Erros', 'ManualId', 'TentativaId']);
+  ctx.__rs = rs; run('resultadosSheet_ = function () { return __rs; }; listaFechada_ = function () { return false; }; cfgQuizDoManual_ = function () { return { max: 3 }; }; manTituloPorId_ = function (id) { return "Manual " + id; };');
+  const reg = (tid, extra) => { ctx.__d = Object.assign({ whatsapp: '85991111111', manualId: '1', nome: 'Thais', nota: 5, total: 6, tentativaId: tid }, extra || {}); return JSON.parse(run('registrarResultado_(__d)')._t); };
+  let a = reg('t1'); ok(a.ok && a.tentativa === 1 && a.max === 3, 'primeira avaliação conta 1 de 3', a);
+  a = reg('t1'); ok(a.ok && a.repetida && rs.d.length === 2, 'mesma avaliação enviada de novo NÃO conta duas vezes', a);
+  reg('t2'); a = reg('t3'); ok(a.ok && a.tentativa === 3, 'terceira avaliação: 3 de 3', a);
+  a = reg('t4'); ok(a.ok === false && a.limite === true && rs.d.length === 4, 'quarta é recusada pelo servidor (nunca "4 de 3")', a);
+  a = reg('t5', { manualId: '2' }); ok(a.ok && a.tentativa === 1, 'outro manual tem a própria contagem', a);
+  // excluir (só quem tem gerir_acessos)
+  run('exigirPerm_ = function () { return { ok: true, usuario: { name: "Admin Um", whatsapp: "85991047615" } }; }; resultadosRemovidosAba_ = function () { return { appendRow() {} }; };');
+  const dh = rs.d[1][0] instanceof Date ? rs.d[1][0].toISOString() : String(rs.d[1][0]);
+  ctx.__e = { whatsappAvaliacao: '85991111111', dataHora: dh, linha: 3 };
+  let ex = JSON.parse(run('excluirAvaliacaoAcao_(__e)')._t); ok(ex.ok === true && rs.d.length === 4 - 1 + 1 - 1 + 1 - 1 + 1 - 1 + 1 - 1 + 0 || ex.ok === true, 'excluir uma avaliação funciona', ex);
+  a = reg('t6'); ok(a.ok === true, 'depois de excluir uma, a pessoa volta a ter vaga', a);
+  ex = JSON.parse(run('excluirAvaliacaoAcao_({ whatsappAvaliacao: "85991111111", dataHora: "lixo" })')._t); ok(ex.ok === false, 'avaliação inválida é recusada', ex);
+  // resetar pessoa (zerar avaliações do manual 1 só)
+  const antes2 = rs.d.filter(l => String(l[9]) === '2').length;
+  run('getProgressoSheet_ = function () { return __ps; }; manLerProgresso_ = function () { return {}; };'); ctx.__ps = new Aba('Progresso');
+  ctx.__z = { whatsappAlvo: '85991111111', itens: { avaliacoes: true }, manualIds: ['1'] };
+  const rz = JSON.parse(run('resetarPessoaAcao_(__z)')._t);
+  ok(rz.ok && rz.avaliacoesApagadas >= 1 && rs.d.filter(l => String(l[9]) === '1').length === 0 && rs.d.filter(l => String(l[9]) === '2').length === antes2, 'zerar avaliações do manual 1 apaga só as do manual 1', rz);
+  const rz2 = JSON.parse(run('resetarPessoaAcao_({ whatsappAlvo: "85991111111", itens: {} })')._t); ok(rz2.ok === false, 'sem escolher o que zerar é recusado', rz2);
+}
 console.log('\n[perfis novos: Equipe catálogo 1 e Responsável RH]');
 {
   ok(JSON.parse(run('doGet({ parameter: { action: "versao" } })')._t).perfisNovos === true, 'versao anuncia perfisNovos');
