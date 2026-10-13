@@ -7,6 +7,9 @@ from playwright.sync_api import sync_playwright
 BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
 AXE = open(os.path.join(AQUI, "axe.min.js")).read()
 OK = []; BAD = []
+def abre_det(pg):
+    pg.evaluate("()=>{const d=document.getElementById('po-det'); if(d) d.open=true}")
+
 def chk(n, c, e=""):
     (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + ((" — " + str(e)) if (e and not c) else ""))
 def axe(pg, label):
@@ -202,7 +205,7 @@ with sync_playwright() as p:
     garantir(pg); aba(pg, "nova"); pg.click("[data-modo=peca]"); pg.fill("#po-busca", "TK-0003"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(1200)
     chk("template Clássico mostra a prévia sozinho e o editor com Selo, Nome, Preço e Código", pg.locator("#po-previa canvas").count() == 1 and all(pg.locator("#po-tx-%s" % k).count() == 1 for k in ["selo", "nome", "preco", "codigo"]))
     chk("os textos nascem com os dados da peça (editáveis)", "TK-0003" in pg.input_value("#po-tx-codigo") and "à vista" in pg.input_value("#po-tx-preco"))
-    b0 = caixa(pg, 0, "nome"); pg.fill("#po-tx-nome", "Vestido longo florido de verão"); pg.wait_for_timeout(300)
+    b0 = caixa(pg, 0, "nome"); abre_det(pg); pg.fill("#po-tx-nome", "Vestido longo florido de verão"); pg.wait_for_timeout(300)
     b1 = caixa(pg, 0, "nome")
     chk("editar o texto muda a imagem na hora (caixa do nome mudou)", b0 and b1 and abs((b1["x1"] - b1["x0"]) - (b0["x1"] - b0["x0"])) > 1, [b0, b1])
     chk("digitar não perde o foco do campo", pg.evaluate("document.activeElement.id") == "po-tx-nome")
@@ -248,7 +251,7 @@ with sync_playwright() as p:
     chk("uma prévia 1080×1920 por foto escolhida", pg.eval_on_selector_all("#po-previa canvas", "c=>c.length===2&&c.every(x=>x.width===1080&&x.height===1920)"))
     w0 = caixa(pg, 0, "marca"); pg.click("[data-var='ElasusamTM🧡']"); pg.wait_for_timeout(900); w1 = caixa(pg, 0, "marca")
     chk("tocar numa opção troca o texto da imagem e do campo", pg.input_value("#po-tx-marca") == "ElasusamTM🧡" and (w1["x1"] - w1["x0"]) > (w0["x1"] - w0["x0"]) + 20, [w0, w1])
-    pg.fill("#po-tx-marca", "ElaUsaTM 🧡"); pg.wait_for_timeout(300)
+    abre_det(pg); pg.fill("#po-tx-marca", "ElaUsaTM 🧡"); pg.wait_for_timeout(300)
     chk("também dá para escrever o seu texto", pg.input_value("#po-tx-marca") == "ElaUsaTM 🧡")
     m0 = caixa(pg, 0, "marca"); m1 = caixa(pg, 1, "marca"); arrastar(pg, 0, "marca", -0.2, 0.25); m0b = caixa(pg, 0, "marca"); m1b = caixa(pg, 1, "marca")
     chk("arrasta o texto com o dedo/mouse; cada foto tem a sua posição (a outra não mexeu)", m0b["y0"] > m0["y0"] + 80 and abs(m1b["y0"] - m1["y0"]) < 2 and m0b["x0"] < m0["x0"] - 30, [m0, m0b, m1, m1b])

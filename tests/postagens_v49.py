@@ -6,6 +6,9 @@ from mock import *
 from playwright.sync_api import sync_playwright
 BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
 OK = []; BAD = []
+def abre_det(pg):
+    pg.evaluate("()=>{const d=document.getElementById('po-det'); if(d) d.open=true}")
+
 def chk(n, c, e=""):
     (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + ((" — " + str(e)) if (e and not c) else ""))
 def corpo(pg): return pg.inner_text("#po-corpo")
@@ -50,7 +53,7 @@ with sync_playwright() as p:
     pg.click("[data-tpl=classico]"); pg.wait_for_timeout(500)
     def box(k): return pg.evaluate("(k)=>{const c=document.querySelector('#po-previa canvas');const b=(c._boxes||[]).find(x=>x.k===k);return b?{x0:b.x0,y0:b.y0,w:c.width}:null}", k)
     chk("nome muito comprido encolhe/quebra em vez de sair da imagem", True)
-    pg.fill("#po-tx-nome", "Vestido Longo Suede Premium Super Confortável Edição Limitada Verão"); pg.wait_for_timeout(500)
+    abre_det(pg); pg.fill("#po-tx-nome", "Vestido Longo Suede Premium Super Confortável Edição Limitada Verão"); pg.wait_for_timeout(500)
     d = boxes(); chk("nome gigante continua dentro da imagem e sem cobrir o preço", all(x["x1"] <= d["w"] + 1 for x in d["b"]) and not any(sobrepoe(x, y) for i, x in enumerate(d["b"]) for y in d["b"][i + 1:]), d["b"])
     pg.click("[data-a=resetTx]"); pg.wait_for_timeout(400)
     chk("cada texto tem botão Ocultar", pg.locator("[data-oc]").count() >= 3)

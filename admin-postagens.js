@@ -61,6 +61,22 @@
       .po-m img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .po-m .po-n { position: absolute; left: 3px; top: 3px; background: var(--laranja); color: #0d0d0d; font-weight: 800; font-size: 0.75rem; border-radius: 999px; min-width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
       .po-m .po-v { position: absolute; right: 3px; bottom: 3px; background: rgba(0,0,0,.75); color: #fff; font-size: 0.7rem; padding: 1px 6px; border-radius: 8px; }
+      .po-sticky { position: sticky; top: 0; z-index: 6; background: #fff; padding: 4px 0 8px; box-shadow: 0 8px 8px -8px rgba(0,0,0,.35); }
+      .po-chips-h { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+      .po-chips-h button { white-space: nowrap; min-height: 40px; padding: 7px 12px; }
+      .po-previa-btn { width: auto; margin: 2px 0 4px; padding: 6px 12px; min-height: 36px; border-radius: 8px; border: 1px solid #ccc; background: #fff; font-size: .8rem; cursor: pointer; }
+      .po-sticky .po-previa { flex-wrap: nowrap; overflow-x: auto; gap: 8px; justify-content: flex-start; }
+      .po-sticky .po-previa canvas { width: auto; max-width: none; height: min(40vh, 380px); }
+      .po-det { margin: 6px 0; border: 1px solid #e3e3e3; border-radius: 10px; padding: 0 10px; }
+      .po-det > summary { cursor: pointer; font-weight: 700; font-size: .9rem; min-height: 44px; display: flex; align-items: center; }
+      .po-it { margin: 0 0 8px; }
+      .po-it-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+      .po-it-top label { font-weight: 700; font-size: .78rem; margin: 0; flex: none; color: #333; }
+      .po-it-top input[type=range] { width: 46%; flex: none; margin: 0; }
+      .po-it-row { display: flex; gap: 6px; align-items: center; }
+      .po-it-row input[type=text] { flex: 1; width: auto; min-width: 0; min-height: 40px; padding: 6px 10px; }
+      .po-it-row .po-oc { min-height: 40px; padding: 4px 10px; font-size: .75rem; white-space: nowrap; }
+      .po-reset { width: auto; padding: 8px 14px; min-height: 40px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; font-size: .85rem; }
       .po-previa { display: flex; gap: 10px; flex-wrap: wrap; padding: 4px 0; }
       .po-previa canvas { width: calc(50% - 5px); max-width: 260px; height: auto; border-radius: 8px; border: 1px solid #ddd; background: #f4f4f4; flex: none; }
       .po-previa canvas.arrastando { outline: 3px solid var(--laranja); }
@@ -117,6 +133,7 @@
     $('po-abas').addEventListener('click', (ev) => { const b = ev.target.closest('[data-aba]'); if (b) { abaAtual = b.dataset.aba; aviso = ''; desenhar(); if (abaAtual === 'fotos') carregarFotos(); else if (abaAtual !== 'nova') carregarFila(); } });
     $('po-corpo').addEventListener('click', clique);
     $('po-corpo').addEventListener('input', entrada);
+    $('po-corpo').addEventListener('toggle', (e) => { if (e.target && e.target.id === 'po-det' && nova) nova.detTx = e.target.open; }, true);
     document.addEventListener('tk:camada-fechada', (ev) => { if (ev.detail.chave === 'overlay-postagens') parar(); });
   }
   function fechar() { parar(); fecharComHistorico_('overlay-postagens'); }
@@ -332,16 +349,18 @@
     h += '</div>';
     if (n.tipo !== 'reels') {
       const lista = cli ? [['elausa', 'Ela usa TM']] : livre ? TEMPLATES.concat([['elausa', 'Ela usa TM']]) : TEMPLATES, itens = n.template !== 'original' ? itensTemplate(n.template, infoPeca(n.p), ...tamanhoAlvo()) : [];
-      h += '<div class="po-passo"><h4>3. Visual</h4>' + (lista.length > 1 ? '<div class="po-chips" role="group" aria-label="Visual">' + lista.map((t) => '<button type="button" data-tpl="' + t[0] + '" aria-pressed="' + (n.template === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>' : '') +
-        '<p class="po-ajuda">' + (n.template === 'original' ? 'A foto como está (ajustada ao formato do Instagram).' : n.template === 'elausa' ? 'A foto com o texto “Ela usa TM” (toque numa das opções ou escreva o seu). Arraste o texto na foto para onde quiser.' : 'A foto ganha nome, preço à vista e a “zona do link”: no Story, cole o adesivo de link do Instagram em cima dela (sem adesivo, o texto padrão da loja fica ali). Arraste cada texto na prévia para onde quiser. Vídeos ficam sem template.') + '</p>';
+      const chipsV = lista.length > 1 ? '<div class="po-chips po-chips-h" role="group" aria-label="Visual">' + lista.map((t) => '<button type="button" data-tpl="' + t[0] + '" aria-pressed="' + (n.template === t[0]) + '">' + esc(t[1]) + '</button>').join('') + '</div>' : '';
+      h += '<div class="po-passo"><h4>3. Visual</h4><div class="po-sticky">' + chipsV +
+        '<button type="button" data-a="previa" class="po-previa-btn">👁️ Ver como vai ficar</button><div class="po-previa" id="po-previa" tabindex="0" role="group" aria-label="Prévia da arte"></div></div>' +
+        '<p class="po-ajuda">' + (n.template === 'original' ? 'A foto como está (ajustada ao formato do Instagram).' : n.template === 'elausa' ? 'A foto com o texto “Ela usa TM” (toque numa das opções ou escreva o seu). Arraste o texto na foto para onde quiser.' : 'Toque num visual e a prévia muda na hora. Arraste cada texto na prévia para onde quiser. No Story, cole o adesivo de link do Instagram em cima da “zona do link” (sem adesivo, o texto da loja fica ali). Vídeos ficam sem template.') + '</p>';
       if (n.template === 'original' || n.template === 'elausa') h += '<div class="po-chips" role="group" aria-label="Como a foto ocupa a tela" style="margin-bottom:6px"><button type="button" data-aj="preencher" aria-pressed="' + (n.ajuste === 'preencher') + '">Preencher a tela</button><button type="button" data-aj="inteira" aria-pressed="' + (n.ajuste === 'inteira') + '">Foto inteira (fundo desfocado)</button></div>';
       if (n.template === 'elausa') h += '<div class="po-chips" role="group" aria-label="Textos prontos" style="margin-bottom:6px">' + VARIANTES_ELA.map((v) => '<button type="button" data-var="' + esc(v) + '" aria-pressed="' + (((n.tx.elausa || {}).marca !== undefined ? n.tx.elausa.marca : VARIANTES_ELA[0]) === v) + '">' + esc(v) + '</button>').join('') + '</div>';
-      if (itens.length) h += '<div id="po-textos">' + itens.map((it) => { const tx = (n.tx[n.template] || {})[it.k], tm = (n.tam[n.template] || {})[it.k] || 1;
-        return '<div style="margin:6px 0"><label class="po-ajuda" for="po-tx-' + it.k + '" style="display:block;margin:0 0 2px;font-weight:700">' + esc(it.rot) + '</label><input type="text" id="po-tx-' + it.k + '" data-tx="' + it.k + '" value="' + esc(tx !== undefined ? tx : it.t) + '" maxlength="90" autocomplete="off">' +
-          '<div style="display:flex;gap:8px;align-items:center;margin:2px 0 0"><label class="po-ajuda" for="po-tm-' + it.k + '" style="display:flex;gap:8px;align-items:center;flex:1;margin:0">Tamanho <input type="range" id="po-tm-' + it.k + '" data-tm="' + it.k + '" min="0.5" max="2" step="0.05" value="' + tm + '" style="flex:1"></label>' +
-          '<button type="button" class="po-oc" data-oc="' + it.k + '" aria-pressed="' + (!!((n.oculto[n.template] || {})[it.k])) + '">' + ((n.oculto[n.template] || {})[it.k] ? '🙈 Oculto — mostrar' : '👁 Ocultar') + '</button></div></div>'; }).join('') +
-        '<p><button type="button" data-a="resetTx" style="width:auto;padding:9px 14px;min-height:44px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">↺ Voltar textos e posições ao padrão</button></p></div>';
-      h += '<p><button type="button" data-a="previa" class="po-ajuda" style="width:auto;padding:9px 14px;min-height:44px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">👁️ Ver como vai ficar</button></p><div class="po-previa" id="po-previa"></div></div>';
+      if (itens.length) h += '<details class="po-det" id="po-det"' + (n.detTx ? ' open' : '') + '><summary>✏️ Personalizar textos (' + itens.length + ')</summary><div id="po-textos">' + itens.map((it) => { const tx = (n.tx[n.template] || {})[it.k], tm = (n.tam[n.template] || {})[it.k] || 1, oc = !!((n.oculto[n.template] || {})[it.k]);
+        return '<div class="po-it"><div class="po-it-top"><label for="po-tx-' + it.k + '">' + esc(it.rot) + '</label><input type="range" id="po-tm-' + it.k + '" data-tm="' + it.k + '" min="0.5" max="2" step="0.05" value="' + tm + '" aria-label="Tamanho: ' + esc(it.rot) + '"></div>' +
+          '<div class="po-it-row"><input type="text" id="po-tx-' + it.k + '" data-tx="' + it.k + '" value="' + esc(tx !== undefined ? tx : it.t) + '" maxlength="90" autocomplete="off">' +
+          '<button type="button" class="po-oc" data-oc="' + it.k + '" aria-pressed="' + oc + '">' + (oc ? '🙈 mostrar' : '👁 Ocultar') + '</button></div></div>'; }).join('') +
+        '<p style="margin:8px 0 0"><button type="button" data-a="resetTx" class="po-reset">↺ Voltar textos e posições ao padrão</button></p></div></details>';
+      h += '</div>';
     }
     const visual = n.tipo !== 'reels', nLeg = visual ? 4 : 3;
     h += '<div class="po-passo"><h4>' + nLeg + '. Legenda</h4>' + (n.tipo === 'story' ? '<p class="po-ajuda" style="margin-top:0">Story não leva legenda pela API' + (n.manual ? '; aqui ela serve de texto para copiar no app.' : ' — esta legenda só vale para Feed/Carrossel/Reels.') + '</p>' : '') + '<label for="po-leg" class="po-ajuda" style="margin:0 0 4px">Texto que acompanha a postagem</label><textarea id="po-leg" maxlength="2200">' + esc(n.legenda) + '</textarea>' +

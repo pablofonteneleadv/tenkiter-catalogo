@@ -341,6 +341,22 @@ th{background:var(--surface-2); font-weight:700;}
 .manual-img-wrap{margin:18px 0;}
 .manual-img-wrap img{display:block; max-width:100%; height:auto; border-radius:10px;}
 .manual-card{border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:12px; background:var(--surface-2);}
+details.manual-card{padding:0;}
+details.manual-card>summary{display:flex; align-items:center; gap:10px; padding:10px 12px; cursor:pointer; list-style:none; min-height:48px;}
+details.manual-card>summary::-webkit-details-marker{display:none;}
+details.manual-card>summary::after{content:'▾'; margin-left:auto; color:#666;}
+details.manual-card[open]>summary::after{content:'▴';}
+.mc-corpo{padding:0 14px 14px;}
+.mc-alca{flex:none; width:40px; height:40px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; border-radius:8px; border:1px dashed var(--border); background:var(--surface); cursor:grab; touch-action:none; user-select:none;}
+.mc-alca[disabled]{opacity:.35; cursor:not-allowed;}
+.mc-num{flex:none; font-weight:700; min-width:1.6em; text-align:center;}
+.mc-tit{display:flex; flex-direction:column; min-width:0;}
+.mc-tit strong{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.mc-tit small{color:#666; font-size:.78rem;}
+.mc-mover{display:flex; flex-direction:column; gap:2px; flex:none;}
+.mc-mover button{width:auto; padding:0 8px; min-height:22px; font-size:.75rem; line-height:1;}
+.manual-card.mc-arrastando{opacity:.55; outline:2px dashed var(--accent-txt);}
+.mc-dica{font-size:.82rem; color:#666; margin:0 0 10px;}
 .manual-card-row{display:flex; gap:14px; flex-wrap:wrap;}
 .manual-field{display:flex; flex-direction:column; gap:4px; font-size:0.82rem; color:var(--muted); font-weight:600; margin-bottom:10px; flex:1; min-width:140px;}
 .manual-field input, .manual-field select{padding:8px 10px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-family:inherit; font-size:0.9rem; width:100%;}
@@ -2335,7 +2351,15 @@ function renderTabConteudo(){
         (m.provaDocUrl ? '<div class="sub">' + (m.provaAtualizadoEm ? 'Prova sincronizada em ' + new Date(m.provaAtualizadoEm).toLocaleString('pt-BR') : 'Prova ainda não sincronizada') + '</div>' : '') +
       '</div>';
     }
-    return '<div class="manual-card" data-manual-id="' + esc(m.id) + '">' + cabecalho + prova + '</div>';
+    var idx = manuais.indexOf(m);
+    var aberto = (state.cardsAbertos || {})[m.id] ? ' open' : '';
+    var resumo = 'Nível ' + m.nivelMinimo + (quiz ? ' · ' + totalPerg + ' perguntas' : (m.semente ? ' · não migrado' : ' · sem prova'));
+    return '<details class="manual-card" data-manual-id="' + esc(m.id) + '"' + aberto + '>' +
+      '<summary><button type="button" class="mc-alca" aria-label="Arrastar para mudar a ordem de ' + esc(m.titulo) + '"' + (m.semente ? ' disabled title="Migre para o Google Docs para poder reordenar"' : '') + '>☰</button>' +
+        '<span class="mc-num">' + (idx + 1) + '</span>' +
+        '<span class="mc-tit"><strong>' + esc(m.titulo) + '</strong><small>' + esc(resumo) + '</small></span>' +
+        (m.semente ? '' : '<span class="mc-mover"><button type="button" class="btn mc-sobe" aria-label="Subir">▲</button><button type="button" class="btn mc-desce" aria-label="Descer">▼</button></span>') +
+      '</summary><div class="mc-corpo">' + cabecalho + prova + '</div></details>';
   }).join('');
 
   var migrarBanner = '';
@@ -2354,7 +2378,8 @@ function renderTabConteudo(){
       '</div>' +
       '<p class="sub">O texto de cada manual e as perguntas de cada prova são editados direto no Google Docs. No manual: "Título 1" separa partes e "Título 2" separa capítulos. Na prova: "1. pergunta", alternativas "a) b) c) d)" e a certa termina com *. Depois de editar, toque em Sincronizar.</p>' +
       migrarBanner +
-      (cards || '<p class="sub">Nenhum manual cadastrado ainda.</p>') +
+      (manuais.length > 1 ? '<p class="mc-dica">☰ Segure e arraste (ou use ▲▼) para mudar a ordem: o número 1 é o primeiro manual que o candidato vê. Toque no card para abrir e editar.</p>' : '') +
+      '<div id="mc-lista">' + (cards || '<p class="sub">Nenhum manual cadastrado ainda.</p>') + '</div>' +
       (haProva ? '<button type="button" class="btn btn-primary" id="btn-salvar-config">Salvar regras das provas</button>' : '') +
     '</div>' +
   '</div>';
@@ -2366,6 +2391,67 @@ function wireTabConteudo(){
     state._buscandoConteudo = true;
     carregarConteudoProtegido().then(function(){ state._buscandoConteudo = false; if (state.view === 'admin' && state.adminTab === 'conteudo') render(); });
   }
+  document.querySelectorAll('details.manual-card').forEach(function(d){
+    d.addEventListener('toggle', function(){ state.cardsAbertos = state.cardsAbertos || {}; state.cardsAbertos[d.getAttribute('data-manual-id')] = d.open; });
+  });
+  var salvarOrdem_ = async function(){
+    var ids = Array.prototype.map.call(document.querySelectorAll('#mc-lista details.manual-card'), function(c){ return c.getAttribute('data-manual-id'); });
+    var antes = (state.manuaisList || []).map(function(m){ return m.id; });
+    var porId = {}; (state.manuaisList || []).forEach(function(m){ porId[m.id] = m; });
+    var falhou = false, mudou = 0;
+    for (var i = 0; i < ids.length; i++){
+      var m = porId[ids[i]];
+      if (!m || m.semente) continue;
+      if (antes.indexOf(ids[i]) === i && m.ordem === i + 1) continue;
+      mudou++;
+      var r = await submitResult({ action:'atualizar_manual_config', whatsappAdmin: state.user.whatsapp, senhaAdmin: state.user.password,
+        manualId: ids[i], titulo: m.titulo, blurb: m.blurb || '', nivelMinimo: m.nivelMinimo, ordem: i + 1 });
+      if (!r || !r.ok){ falhou = true; toast((r && r.erro) || 'Não foi possível salvar a ordem.'); break; }
+    }
+    await recarregarManuais_();
+    if (!falhou && mudou) toast('Ordem salva. É essa que o candidato vê.');
+    render();
+  };
+  var lista_ = document.getElementById('mc-lista');
+  if (lista_){
+    lista_.querySelectorAll('.mc-sobe, .mc-desce').forEach(function(b){
+      b.addEventListener('click', function(e){
+        e.preventDefault(); e.stopPropagation();
+        var c = b.closest('details.manual-card');
+        var alvo = b.classList.contains('mc-sobe') ? c.previousElementSibling : c.nextElementSibling;
+        if (!alvo) return;
+        if (b.classList.contains('mc-sobe')) lista_.insertBefore(c, alvo); else lista_.insertBefore(alvo, c);
+        salvarOrdem_();
+      });
+    });
+    lista_.querySelectorAll('.mc-alca:not([disabled])').forEach(function(h){
+      h.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); });
+      h.addEventListener('pointerdown', function(e){
+        e.preventDefault();
+        var c = h.closest('details.manual-card');
+        c.classList.add('mc-arrastando');
+        try{ h.setPointerCapture(e.pointerId); }catch(_){}
+        var mexeu = false;
+        var mover = function(ev){
+          mexeu = true;
+          var irmaos = Array.prototype.filter.call(lista_.children, function(x){ return x !== c; });
+          var alvo = null;
+          for (var i = 0; i < irmaos.length; i++){
+            var r = irmaos[i].getBoundingClientRect();
+            if (ev.clientY < r.top + r.height / 2){ alvo = irmaos[i]; break; }
+          }
+          if (alvo) lista_.insertBefore(c, alvo); else lista_.appendChild(c);
+        };
+        var fim = function(){
+          h.removeEventListener('pointermove', mover); h.removeEventListener('pointerup', fim); h.removeEventListener('pointercancel', fim);
+          c.classList.remove('mc-arrastando');
+          if (mexeu) salvarOrdem_();
+        };
+        h.addEventListener('pointermove', mover); h.addEventListener('pointerup', fim); h.addEventListener('pointercancel', fim);
+      });
+    });
+  }
+
   var btnCfg = document.getElementById('btn-salvar-config');
   if (btnCfg) btnCfg.addEventListener('click', async function(){
     var configs = Array.prototype.map.call(document.querySelectorAll('.prova-bloco'), function(card){
