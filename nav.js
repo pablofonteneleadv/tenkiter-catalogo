@@ -21,33 +21,36 @@
  * common.js. Páginas que sabem as permissões (treinamentos.html) chamam
  * TenkiterNav.setPerms([...]) e TenkiterNav.ativo('rh').
  * Nunca guarda senha: só a lista de permissões.
+ *
+ * v3.10 (FE-06) — modernização gradual: `var` -> `const`/`let`, callbacks em arrow e optional
+ * chaining. Comportamento idêntico: mesmos itens, mesma ordem, mesmos seletores e efeitos.
  * ==================================================================== */
 /* TKOcupado — "estou salvando": enquanto houver gravação em andamento, puxar a tela para baixo (recarregar) é bloqueado e fechar/recarregar
- * pede confirmação. Uso: var fim = TKOcupado.inicio('excluindo avaliação'); ... fim();  (fim pode ser chamado mais de uma vez). */
-(function () {
+ * pede confirmação. Uso: const fim = TKOcupado.inicio('excluindo avaliação'); ... fim();  (fim pode ser chamado mais de uma vez). */
+(() => {
   'use strict';
   if (window.TKOcupado) return;
-  var n = 0, est = null;
-  function liga() {
+  let n = 0, est = null;
+  const liga = () => {
     if (!est) { est = document.createElement('style'); est.textContent = 'html,body{overscroll-behavior-y:contain!important}'; (document.head || document.documentElement).appendChild(est); }
-  }
-  function desliga() { if (est && est.parentNode) est.parentNode.removeChild(est); est = null; }
-  window.TKOcupado = {
-    inicio: function () { n++; liga(); var feito = false; return function () { if (feito) return; feito = true; n = Math.max(0, n - 1); if (!n) desliga(); }; },
-    pendentes: function () { return n; }
   };
-  window.addEventListener('beforeunload', function (e) { if (n > 0) { e.preventDefault(); e.returnValue = 'Ainda estou salvando. Se sair agora, a alteração pode não ser concluída.'; return e.returnValue; } });
+  const desliga = () => { if (est?.parentNode) est.parentNode.removeChild(est); est = null; };
+  window.TKOcupado = {
+    inicio: () => { n++; liga(); let feito = false; return () => { if (feito) return; feito = true; n = Math.max(0, n - 1); if (!n) desliga(); }; },
+    pendentes: () => n
+  };
+  window.addEventListener('beforeunload', (e) => { if (n > 0) { e.preventDefault(); e.returnValue = 'Ainda estou salvando. Se sair agora, a alteração pode não ser concluída.'; return e.returnValue; } });
 })();
-(function () {
+(() => {
   'use strict';
   if (window.TenkiterNav) return;
   if (/[?&]embed=1/.test(location.search)) return; // página dentro de outra (iframe): sem barra
 
-  var CHAVE_SESSAO = 'tm_session';
-  var CHAVE_CACHE = 'tm_nav_perms';
-  var TTL_MS = 5 * 60 * 1000;
+  const CHAVE_SESSAO = 'tm_session';
+  const CHAVE_CACHE = 'tm_nav_perms';
+  const TTL_MS = 5 * 60 * 1000;
 
-  var ITENS = [
+  const ITENS = [
     { id: 'catalogo',     href: 'index.html',                 icone: '👗', rotulo: 'Catálogo' },
     { id: 'gestao',       href: 'admin.html',                 icone: '🔧', rotulo: 'Gestão',        qualquer: ['catalogo_admin'] },
     { id: 'treinamentos', href: 'treinamentos.html',          icone: '🎓', rotulo: 'Treinamentos',  visitanteOuPerm: 'portal' },
@@ -55,44 +58,44 @@
     { id: 'curriculos',   href: 'curriculos.html',            icone: '📄', rotulo: 'Currículos',    qualquer: ['dados_pessoais', 'gerir_acessos'] },
     { id: 'candidatura',  href: 'curriculo.html',             icone: '✍️', rotulo: 'Trabalhe conosco', soVisitante: true }
   ];
-  var CHAVES_EQUIPE = ['catalogo_admin', 'equipe_relatorio', 'gerir_manuais', 'dados_pessoais', 'gerir_acessos'];
+  const CHAVES_EQUIPE = ['catalogo_admin', 'equipe_relatorio', 'gerir_manuais', 'dados_pessoais', 'gerir_acessos'];
 
-  var perms = [];
-  var logado = false;
-  var ativoId = '';
-  var nav = null;
+  let perms = [];
+  let logado = false;
+  let ativoId = '';
+  let nav = null;
 
-  function lerJson(chave) { try { return JSON.parse(localStorage.getItem(chave) || 'null'); } catch (e) { return null; } }
-  function sessao() { var s = lerJson(CHAVE_SESSAO); return s && s.whatsapp ? s : null; }
+  const lerJson = (chave) => { try { return JSON.parse(localStorage.getItem(chave) || 'null'); } catch (e) { return null; } };
+  const sessao = () => { const s = lerJson(CHAVE_SESSAO); return s?.whatsapp ? s : null; };
 
-  function lerCache() {
-    var s = sessao();
+  const lerCache = () => {
+    const s = sessao();
     logado = !!s;
     if (!s) { perms = []; try { localStorage.removeItem(CHAVE_CACHE); } catch (e) {} return null; }
-    var c = lerJson(CHAVE_CACHE);
+    const c = lerJson(CHAVE_CACHE);
     if (c && c.w === s.whatsapp && Array.isArray(c.p)) { perms = c.p; return c; }
     perms = [];
     return null;
-  }
-  function gravarCache(lista) {
-    var s = sessao(); if (!s) return;
+  };
+  const gravarCache = (lista) => {
+    const s = sessao(); if (!s) return;
     try { localStorage.setItem(CHAVE_CACHE, JSON.stringify({ w: s.whatsapp, p: lista, t: Date.now() })); } catch (e) {}
-  }
+  };
 
-  function tem(chave) { return perms.indexOf(chave) !== -1; }
-  function ehEquipe() { return CHAVES_EQUIPE.some(tem); }
+  const tem = (chave) => perms.indexOf(chave) !== -1;
+  const ehEquipe = () => CHAVES_EQUIPE.some(tem);
 
-  function visivel(it) {
+  const visivel = (it) => {
     if (it.id === ativoId) return true; // a página em que a pessoa está sempre aparece (e destacada)
     if (it.qualquer) return it.qualquer.some(tem);
     if (it.visitanteOuPerm) return !logado || tem(it.visitanteOuPerm) || !perms.length; // sem lista ainda: mostra (a página decide o acesso)
     if (it.soVisitante) return !ehEquipe();
     return true;
-  }
+  };
 
-  function css() {
+  const css = () => {
     if (document.getElementById('tk-nav-css')) return;
-    var s = document.createElement('style');
+    const s = document.createElement('style');
     s.id = 'tk-nav-css';
     s.textContent =
       '@view-transition{navigation:auto}' +
@@ -110,9 +113,9 @@
       '@media (min-width:900px){.tk-nav{justify-content:center}.tk-nav a{flex:0 0 130px}}' +
       '@media (prefers-reduced-motion:reduce){@view-transition{navigation:none}}';
     document.head.appendChild(s);
-  }
+  };
 
-  function desenhar() {
+  const desenhar = () => {
     if (!document.body) return;
     css();
     if (!nav) {
@@ -122,47 +125,47 @@
       document.body.appendChild(nav);
       document.body.classList.add('tk-tem-nav');
     }
-    var html = ITENS.filter(visivel).map(function (it) {
-      var atual = it.id === ativoId;
+    const html = ITENS.filter(visivel).map((it) => {
+      const atual = it.id === ativoId;
       return '<a href="' + it.href + '"' + (atual ? ' class="tk-ativo" aria-current="page"' : '') + ' data-nav="' + it.id + '">' +
         '<span class="tk-i" aria-hidden="true">' + it.icone + '</span><span class="tk-r">' + it.rotulo + '</span></a>';
     }).join('');
     if (nav.getAttribute('data-h') !== html) { nav.innerHTML = html; nav.setAttribute('data-h', html); }
-  }
+  };
 
   /** Atualiza as permissões a partir do catálogo (mesmo login do portal). Só se common.js estiver na página. */
-  function atualizarDoServidor() {
-    var s = sessao();
-    if (!s || !s.sessao) return;
-    var c = lerJson(CHAVE_CACHE);
+  const atualizarDoServidor = () => {
+    const s = sessao();
+    if (!s?.sessao) return;
+    const c = lerJson(CHAVE_CACHE);
     if (c && c.w === s.whatsapp && Date.now() - (c.t || 0) < TTL_MS) return;
-    var url = null;
+    let url = null;
     try { url = (typeof API_URL !== 'undefined') ? API_URL : null; } catch (e) { url = null; }
     if (!url) return;
     fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'sessao', whatsapp: s.whatsapp, sessao: s.sessao }) })
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        if (j && j.ok && j.usuario && Array.isArray(j.usuario.permissoes)) { perms = j.usuario.permissoes; gravarCache(perms); desenhar(); }
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.ok && j.usuario && Array.isArray(j.usuario.permissoes)) { perms = j.usuario.permissoes; gravarCache(perms); desenhar(); }
         else if (j && (j.sessaoInvalida || j.inativa)) { perms = []; try { localStorage.removeItem(CHAVE_CACHE); } catch (e) {} desenhar(); }
       })
-      .catch(function () { /* sem rede: segue com o cache */ });
-  }
+      .catch(() => { /* sem rede: segue com o cache */ });
+  };
 
   /** Pré-carrega as outras telas para o toque na barra abrir na hora. */
-  function preCarregar() {
-    var fazer = function () {
-      ITENS.filter(visivel).forEach(function (it) {
+  const preCarregar = () => {
+    const fazer = () => {
+      ITENS.filter(visivel).forEach((it) => {
         if (it.id === ativoId) return;
-        var a = document.createElement('link'); a.rel = 'prefetch'; a.href = it.href.split('?')[0];
+        const a = document.createElement('link'); a.rel = 'prefetch'; a.href = it.href.split('?')[0];
         document.head.appendChild(a);
       });
     };
     if ('requestIdleCallback' in window) requestIdleCallback(fazer, { timeout: 4000 }); else setTimeout(fazer, 2500);
-  }
+  };
 
-  var API = {
-    ativo: function (id) { ativoId = id || ''; desenhar(); },
-    setPerms: function (lista) {
+  const API = {
+    ativo: (id) => { ativoId = id || ''; desenhar(); },
+    setPerms: (lista) => {
       logado = !!sessao();
       perms = Array.isArray(lista) ? lista.slice() : [];
       if (logado) gravarCache(perms);
@@ -173,16 +176,16 @@
   window.TenkiterNav = API;
 
   // o <script> fica no fim do <body>: o DOM já existe. currentScript só vale agora, então guardamos antes.
-  var _tag = document.currentScript;
+  const _tag = document.currentScript;
   if (_tag) ativoId = _tag.getAttribute('data-ativo') || '';
   // Guarda de saída: a página pode definir window.TKSairBloqueio = function () { return 'texto' | '' }.
   // Se devolver texto (ex.: envios em andamento), tocar na barra pede confirmação antes de sair.
-  document.addEventListener('click', function (ev) {
-    var a = ev.target && ev.target.closest ? ev.target.closest('a[data-nav]') : null;
+  document.addEventListener('click', (ev) => {
+    const a = ev.target?.closest ? ev.target.closest('a[data-nav]') : null;
     if (!a || typeof window.TKSairBloqueio !== 'function') return;
-    var msg = ''; try { msg = window.TKSairBloqueio() || ''; } catch (e) {}
+    let msg = ''; try { msg = window.TKSairBloqueio() || ''; } catch (e) {}
     if (msg && !window.confirm(msg)) { ev.preventDefault(); ev.stopPropagation(); }
   }, true);
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { lerCache(); desenhar(); atualizarDoServidor(); preCarregar(); });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { lerCache(); desenhar(); atualizarDoServidor(); preCarregar(); });
   else { lerCache(); desenhar(); atualizarDoServidor(); preCarregar(); }
 })();

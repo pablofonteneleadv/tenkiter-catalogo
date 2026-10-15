@@ -8,8 +8,9 @@
  *   /sitemap.xml     mapa do site com a página inicial e TODAS as peças ativas (/p/<código>) — para o Google achar cada peça.
  *   /feed.csv        catálogo para a Meta (Instagram/Facebook) e o Google Merchant, gerado da lista (funciona mesmo com o Apps Script antigo).
  *   /feed.xml        o mesmo catálogo em XML (Google Merchant).
- *   /lista.json      a lista pública de peças (CORS liberado; o navegador guarda 60 s). MEDIDO em 10/10/2026: ainda NÃO acelera (~1,1 s, igual ao Apps Script),
- *                    porque o cache de verdade na borda (ex.: Workers KV) não foi feito; por isso LISTA_RAPIDA_URL (common.js) fica vazia.
+ *   /lista.json      a lista pública de peças (CORS liberado; o navegador guarda 60 s). v3.10 (FE-01): guarda a lista num namespace KV
+ *                    (binding TK_LISTA) e serve do KV em ~30 ms, revalidando em segundo plano (stale-while-revalidate). Sem o binding,
+ *                    cai no fetch direto ao Apps Script, como antes — nada quebra. Ligue em common.js: LISTA_RAPIDA_URL.
  *
  * Sem segredos: API_URL e SITE_URL são públicos (o catálogo já é público). Nenhuma credencial entra neste arquivo.
  * Como publicar: painel Cloudflare > Workers & Pages > tenkiter-og > Edit code > colar este arquivo > Deploy.
@@ -26,6 +27,32 @@ async function produtos() {
   const j = await r.json();
   if (!(j && j.ok && Array.isArray(j.produtos))) throw new Error('lista inválida');
   return j.produtos;
+}
+
+/* ---- v3.10 (FE-01): cache de borda da lista no Workers KV ----
+ * A lista muda pouco (cadastro de peças), então servir do KV em ~30 ms é seguro: o visitante recebe
+ * a versão guardada na hora e o Worker revalida o Apps Script por trás (stale-while-revalidate).
+ * Sem o binding TK_LISTA o comportamento é o de antes (fetch direto) — o Worker nunca quebra por falta dele. */
+const KV_CHAVE = 'lista_v1';
+const KV_TTL_MS = 5 * 60 * 1000;   // 5 min: mesma janela do cache local do navegador (LISTA_CACHE_MS)
+
+async function listaComKV(env, ctx) {
+  const kv = env && env.TK_LISTA;
+  if (!kv) return produtos();                       // sem KV: caminho antigo
+  let guardado = null;
+  try { guardado = await kv.get(KV_CHAVE, 'json'); } catch (e) { guardado = null; }
+  const fresco = !!(guardado && Array.isArray(guardado.produtos) && (Date.now() - (guardado.salvoEm || 0)) < KV_TTL_MS);
+  if (fresco) return guardado.produtos;
+  const atualizar = produtos().then(async (lista) => {
+    try { await kv.put(KV_CHAVE, JSON.stringify({ produtos: lista, salvoEm: Date.now() })); } catch (e) {}
+    return lista;
+  });
+  if (guardado && Array.isArray(guardado.produtos) && guardado.produtos.length) {
+    // devolve o guardado na hora e grava o novo por trás (ctx.waitUntil mantém o Worker vivo até terminar)
+    if (ctx && ctx.waitUntil) ctx.waitUntil(atualizar.catch(() => {}));
+    return guardado.produtos;
+  }
+  return atualizar;                                 // primeira vez (KV vazio): espera a lista
 }
 
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -147,7 +174,7 @@ function feedXml(lista) {
 const resposta = (corpo, tipo, cache, extra) => new Response(corpo, { headers: Object.assign({ 'Content-Type': tipo, 'Cache-Control': cache }, CABECALHOS_SEGUROS, extra || {}) });
 
 export default {
-  async fetch(req) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const caminho = url.pathname;
     const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Max-Age': '86400' };
@@ -155,7 +182,7 @@ export default {
       if (caminho === '/lista.json') {
         if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: Object.assign({}, CORS, CABECALHOS_SEGUROS) });
         try {
-          const lista = await produtos();
+          const lista = await listaComKV(env, ctx);
           return resposta(JSON.stringify({ ok: true, produtos: lista }), 'application/json; charset=utf-8', 'public, max-age=60', CORS);
         } catch (e) {
           return new Response(JSON.stringify({ ok: false }), { status: 502, headers: Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, CORS, CABECALHOS_SEGUROS) });

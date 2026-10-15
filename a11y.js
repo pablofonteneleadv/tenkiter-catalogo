@@ -10,29 +10,32 @@
  *     "foge" para trás da janela; Esc fecha; ao fechar, o foco volta para quem abriu.
  *
  * Não muda nenhuma regra de negócio nem o visual. Se esta página não tiver nada disso, não faz nada.
+ *
+ * v3.10 (FE-06) — modernização gradual: `var` -> `const`/`let`, funções de callback em arrow e
+ * optional chaining. Nenhuma mudança de comportamento: os mesmos seletores, a mesma ordem e os
+ * mesmos efeitos. O arquivo continua sendo um IIFE com 'use strict' (nada vaza para o global).
  * ==================================================================== */
-(function () {
+(() => {
   'use strict';
 
   /* ---------- 1. rótulos ---------- */
-  var seq = 0;
-  var CAMPO = 'input:not([type=hidden]),select,textarea';
+  let seq = 0;
+  const CAMPO = 'input:not([type=hidden]),select,textarea';
 
-  function ligarRotulos(raiz) {
-    var labels = (raiz || document).querySelectorAll('label:not([for])');
-    for (var i = 0; i < labels.length; i++) {
-      var lb = labels[i];
+  const ligarRotulos = (raiz) => {
+    const labels = (raiz || document).querySelectorAll('label:not([for])');
+    for (const lb of labels) {
       if (lb.querySelector(CAMPO)) continue;                       // o campo está dentro do label: já vale
-      var alvo = lb.nextElementSibling;
+      let alvo = lb.nextElementSibling;
       while (alvo && alvo.tagName === 'BR') alvo = alvo.nextElementSibling;
       if (!alvo) continue;
-      if (alvo.matches && alvo.matches(CAMPO)) {
+      if (alvo.matches?.(CAMPO)) {
         if (!alvo.id) alvo.id = 'tk-campo-' + (++seq);
         lb.setAttribute('for', alvo.id);
       } else if (alvo.querySelector) {
-        var unico = alvo.querySelectorAll(CAMPO);
+        const unico = alvo.querySelectorAll(CAMPO);
         if (!unico.length) continue;
-        var tipo = unico[0].type;
+        const tipo = unico[0].type;
         if (unico.length === 1 && tipo !== 'radio' && tipo !== 'checkbox') {   // campo envolvido por um <div>
           if (!unico[0].id) unico[0].id = 'tk-campo-' + (++seq);
           lb.setAttribute('for', unico[0].id);
@@ -43,108 +46,105 @@
         }
       }
     }
-  }
+  };
 
   /* ---------- 1b. áreas clicáveis (cartão do manual, logo) viram botão de teclado ---------- */
-  var CLICAVEIS = '.card[data-manual],#brand-home,[data-tk-btn]';
-  function tornarTeclado(raiz) {
-    var l = (raiz || document).querySelectorAll(CLICAVEIS);
-    for (var i = 0; i < l.length; i++) {
-      var el = l[i];
+  const CLICAVEIS = '.card[data-manual],#brand-home,[data-tk-btn]';
+  const tornarTeclado = (raiz) => {
+    const l = (raiz || document).querySelectorAll(CLICAVEIS);
+    for (const el of l) {
       if (el.hasAttribute('data-tk-ok')) continue;
       if (el.querySelector('button,a[href],input,select,textarea')) continue;   // já tem controle de verdade lá dentro
       el.setAttribute('data-tk-ok', '1');
       if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
       if (!el.getAttribute('role')) el.setAttribute('role', 'button');
     }
-  }
-  document.addEventListener('keydown', function (ev) {
+  };
+  document.addEventListener('keydown', (ev) => {
     if (ev.key !== 'Enter' && ev.key !== ' ') return;
-    var el = ev.target;
-    if (!el || !el.getAttribute || el.getAttribute('data-tk-ok') !== '1' || ev.target !== el) return;
+    const el = ev.target;
+    if (!el?.getAttribute || el.getAttribute('data-tk-ok') !== '1' || ev.target !== el) return;
     ev.preventDefault();
     el.click();
   });
 
   /* ---------- 2. janelas ---------- */
-  var JANELAS = '#overlay,#overlay-sacola,#overlay-compartilhar,.overlay-sheet,.overlay-sheet-loja,#modal-conta,#login-overlay,#tkp-janela,#tkc-recuperar';
-  var BOTOES_FECHAR = '[aria-label="Fechar"],.sheet-x,.conta-fechar,.btn-fechar,#btn-fechar-arte-config,#btn-fechar-auditoria';
-  var FOCAVEIS = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-  var NOMES = {
+  const JANELAS = '#overlay,#overlay-sacola,#overlay-compartilhar,.overlay-sheet,.overlay-sheet-loja,#modal-conta,#login-overlay,#tkp-janela,#tkc-recuperar';
+  const BOTOES_FECHAR = '[aria-label="Fechar"],.sheet-x,.conta-fechar,.btn-fechar,#btn-fechar-arte-config,#btn-fechar-auditoria';
+  const FOCAVEIS = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  const NOMES = {
     'overlay': 'Detalhes da peça', 'overlay-sacola': 'Sua sacola', 'overlay-compartilhar': 'Compartilhar',
     'login-overlay': 'Entrar', 'modal-conta': 'Minha conta', 'overlay-categorias': 'Escolher categoria', 'tkp-janela': 'Avisos', 'tkc-recuperar': 'Esqueci minha senha'
   };
-  var lembrar = new WeakMap();      // janela -> elemento que tinha o foco antes de abrir
+  const lembrar = new WeakMap();      // janela -> elemento que tinha o foco antes de abrir
 
-  function aberta(el) { return el.classList.contains('aberto') || el.classList.contains('visivel'); }
-  function visivel(e) { return !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length); }
-  function abertas() {
-    return Array.prototype.filter.call(document.querySelectorAll(JANELAS), aberta);
-  }
-  function topo() {
-    var l = abertas(), melhor = null, z = -1;
-    l.forEach(function (el) { var v = parseInt(getComputedStyle(el).zIndex, 10) || 0; if (v >= z) { z = v; melhor = el; } });
+  const aberta = (el) => el.classList.contains('aberto') || el.classList.contains('visivel');
+  const visivel = (e) => !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length);
+  const abertas = () => [...document.querySelectorAll(JANELAS)].filter(aberta);
+  const topo = () => {
+    let melhor = null, z = -1;
+    abertas().forEach((el) => { const v = parseInt(getComputedStyle(el).zIndex, 10) || 0; if (v >= z) { z = v; melhor = el; } });
     return melhor;
-  }
-  function corpo(el) { return el.querySelector('[role=dialog]') || el.firstElementChild || el; }
+  };
+  const corpo = (el) => el.querySelector('[role=dialog]') || el.firstElementChild || el;
 
-  function aoAbrir(el) {
+  const aoAbrir = (el) => {
     if (lembrar.has(el)) return;
     lembrar.set(el, document.activeElement);
-    var c = corpo(el);
+    const c = corpo(el);
     if (!el.getAttribute('role') && !c.getAttribute('role')) {
       c.setAttribute('role', 'dialog'); c.setAttribute('aria-modal', 'true');
       if (!c.getAttribute('aria-label') && !c.getAttribute('aria-labelledby')) c.setAttribute('aria-label', NOMES[el.id] || 'Janela');
     }
     if (!c.hasAttribute('tabindex')) { c.setAttribute('tabindex', '-1'); c.style.outline = 'none'; }
-    setTimeout(function () { try { c.focus({ preventScroll: true }); } catch (e) { c.focus(); } }, 30);
-  }
-  function aoFechar(el) {
-    var antes = lembrar.get(el);
+    setTimeout(() => { try { c.focus({ preventScroll: true }); } catch (e) { c.focus(); } }, 30);
+  };
+  const aoFechar = (el) => {
+    const antes = lembrar.get(el);
     lembrar.delete(el);
     if (antes && antes !== document.body && document.contains(antes) && typeof antes.focus === 'function') {
       try { antes.focus({ preventScroll: true }); } catch (e) { /* ignora */ }
     }
-  }
-  function sincronizar(el) { if (aberta(el)) aoAbrir(el); else if (lembrar.has(el)) aoFechar(el); }
+  };
+  const sincronizar = (el) => { if (aberta(el)) aoAbrir(el); else if (lembrar.has(el)) aoFechar(el); };
 
-  document.addEventListener('keydown', function (ev) {
-    var el = topo();
+  document.addEventListener('keydown', (ev) => {
+    const el = topo();
     if (!el) return;
     if (ev.key === 'Escape') {
       if (el.id === 'login-overlay') return;                     // entrar é obrigatório: Esc não fecha
-      var b = Array.prototype.filter.call(el.querySelectorAll(BOTOES_FECHAR), visivel)[0];
+      const b = [...el.querySelectorAll(BOTOES_FECHAR)].filter(visivel)[0];
       if (b) { ev.preventDefault(); b.click(); }
       return;
     }
     if (ev.key === 'Tab') {                                       // mantém o Tab dentro da janela
-      var c = corpo(el);
-      var f = Array.prototype.filter.call(c.querySelectorAll(FOCAVEIS), visivel);
+      const c = corpo(el);
+      const f = [...c.querySelectorAll(FOCAVEIS)].filter(visivel);
       if (!f.length) { ev.preventDefault(); return; }
-      var i = f.indexOf(document.activeElement);
+      const i = f.indexOf(document.activeElement);
       if (ev.shiftKey && (i <= 0)) { ev.preventDefault(); f[f.length - 1].focus(); }
       else if (!ev.shiftKey && (i === f.length - 1 || i === -1 && !c.contains(document.activeElement))) { ev.preventDefault(); f[0].focus(); }
     }
   });
 
   /* janelas criadas depois (ex.: a de avisos, montada por push.js) também passam a ser acompanhadas */
-  function observarJanelas() {
-    document.querySelectorAll(JANELAS).forEach(function (el) {
+  const observarJanelas = () => {
+    document.querySelectorAll(JANELAS).forEach((el) => {
       if (el.hasAttribute('data-tk-obs')) return;
       el.setAttribute('data-tk-obs', '1');
       sincronizar(el);
-      new MutationObserver(function () { sincronizar(el); }).observe(el, { attributes: true, attributeFilter: ['class'] });
+      new MutationObserver(() => { sincronizar(el); }).observe(el, { attributes: true, attributeFilter: ['class'] });
     });
-  }
+  };
 
-  function iniciar() {
+  const iniciar = () => {
     ligarRotulos(document); tornarTeclado(document);
     observarJanelas();
-    var agendado = false;
-    new MutationObserver(function () {
+    let agendado = false;
+    new MutationObserver(() => {
       if (agendado) return; agendado = true;
-      (window.requestAnimationFrame || setTimeout)(function () { agendado = false; ligarRotulos(document); tornarTeclado(document); observarJanelas(); });
+      (window.requestAnimationFrame || setTimeout)(() => { agendado = false; ligarRotulos(document); tornarTeclado(document); observarJanelas(); });
     }).observe(document.body, { childList: true, subtree: true });
-  }
+  };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
