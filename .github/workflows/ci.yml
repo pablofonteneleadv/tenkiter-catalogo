@@ -15,7 +15,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # Quando o Deploy chama este workflow (workflow_call), o grupo é diferente do
+  # grupo do push — senão o CI do push e o CI do deploy se cancelariam mutuamente.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
