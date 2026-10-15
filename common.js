@@ -9,7 +9,7 @@
 const API_URL_PADRAO = 'https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec';
 let API_URL = localStorage.getItem('tenkiter_api_url_override') || API_URL_PADRAO;
 
-// Log de depuração opcional (liga/desliga pelo admin.html, botão "🪲 Log de Depuração").
+// Log de depuração opcional (liga/desliga pelo admin.html, botão "🛠️ Log de Depuração").
 // Aqui é só o padrão "não faz nada" -- o admin.html troca por uma versão de verdade que grava
 // o que acontece; index.html nunca liga isso, então chamar continua seguro e sem custo lá.
 if (typeof window.logDebug_ !== 'function') window.logDebug_ = function () {};
@@ -20,10 +20,37 @@ const SITE_URL = 'https://tenkitermodas.com.br/';
 
 const DESCONTO_AVISTA = 0.10; // 10% de desconto no pagamento à vista
 
-/** Endereço RÁPIDO da lista de peças: o Worker da Cloudflare (og-worker) responde em /lista.json. ATENÇÃO: medido em 10/10/2026, ainda não é mais rápido que o Apps Script (falta cache de borda, ex. KV); deixe vazio.
- *  Vazio = desligado (padrão): o catálogo busca direto no Apps Script, como sempre. Para ligar, publique o Worker novo e cole aqui,
- *  por exemplo 'https://tenkiter-og.distkrpconfeccoes.workers.dev/lista.json'. Se o Worker falhar, o catálogo cai no Apps Script sozinho. */
+/** Endereço RÁPIDO da lista de peças: o Worker da Cloudflare (og-worker) responde em /lista.json.
+ *  v3.10 (FE-01): o Worker agora guarda a lista num namespace KV (cache de borda) e serve do KV em ~30 ms,
+ *  revalidando em segundo plano — por isso vale ligar. Vazio = desligado (padrão): o catálogo busca direto
+ *  no Apps Script, como sempre. Para ligar, publique o Worker novo e cole aqui, por exemplo
+ *  'https://tenkiter-og.distkrpconfeccoes.workers.dev/lista.json'. Se o Worker falhar, o catálogo cai no Apps Script sozinho. */
 const LISTA_RAPIDA_URL = '';
+
+/** v3.10 (FE-01) — quanto tempo a lista guardada no aparelho é considerada "fresca" (ms). Dentro disso o
+ *  catálogo pinta na hora, sem tocar na rede; passando disso, pinta o cache e revalida em segundo plano
+ *  (stale-while-revalidate). 5 min é o mesmo TTL que a borda usa, então os dois ficam alinhados. */
+const LISTA_CACHE_MS = 5 * 60 * 1000;
+
+/** v3.10 (FE-01) — busca a lista com cache local "stale-while-revalidate": devolve o que já está guardado
+ *  no aparelho IMEDIATAMENTE (render instantâneo, mesmo offline) e, se estiver velho, atualiza por trás.
+ *  `aoAtualizar` (opcional) recebe a lista nova quando ela chegar. Sem cache, comporta-se como buscarListaPublica(). */
+function buscarListaComCache(aoAtualizar) {
+  const cache = obterCatalogoCache();
+  const fresco = !!(cache && cache.produtos && cache.produtos.length && (Date.now() - (cache.salvoEm || 0)) < LISTA_CACHE_MS);
+  const revalidar = () => buscarListaPublica().then(function (resp) {
+    if (!resp || !Array.isArray(resp.produtos)) throw new Error('lista inválida');
+    const recebidos = resp.produtos.slice().reverse();
+    salvarCatalogoCache(recebidos);
+    if (typeof aoAtualizar === 'function') aoAtualizar(recebidos);
+    return recebidos;
+  });
+  if (cache && cache.produtos && cache.produtos.length) {
+    if (!fresco) revalidar().catch(function () {});
+    return Promise.resolve(cache.produtos);
+  }
+  return revalidar();
+}
 
 /** Fotos e vídeos NOVOS ficam no R2 da Cloudflare (Worker `tenkiter-midia`, midia-worker/): servir arquivo é grátis e há travas de tamanho e de armazenamento,
  *  então não existe cobrança surpresa. O que já está no Cloudinary/Drive continua funcionando igual. */
@@ -65,6 +92,34 @@ function fotoMini(url, largura) {
   if (/^https:\/\/lh3\.googleusercontent\.com\/d\/[\w-]+$/.test(u)) return u + '=w' + w;
   if (/^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/(?!w_|c_|f_|q_)/.test(u)) return u.replace('/upload/', '/upload/w_' + w + ',c_limit,f_auto,q_auto/');
   return u;
+}
+
+/** v3.10 (FE-02) — largura REAL da miniatura do cartão, conforme a tela e a densidade de pixels.
+ *  Antes era fixo em 480 px: no celular (cartão de ~180 px) isso baixava quase 3x mais bytes do que o
+ *  necessário — e a foto principal do catálogo é justamente o maior item do LCP (5,8 s na medição).
+ *  Passos de 40 px mantêm poucos endereços diferentes (bom para o cache do aparelho e da borda). */
+function larguraMini() {
+  try {
+    const vw = window.innerWidth || 1024;
+    const colunas = vw <= 480 ? 2 : (vw <= 768 ? 3 : (vw <= 1100 ? 4 : 5));
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const alvo = Math.ceil((vw / colunas) * dpr);
+    return Math.max(240, Math.min(640, Math.round(alvo / 40) * 40));
+  } catch (e) { return 480; }
+}
+
+/** v3.10 (FE-02) — largura ocupada por um cartão em cada faixa de tela (tem de casar com o grid do catalogo.css). */
+const SIZES_CARDS = '(max-width: 480px) 48vw, (max-width: 768px) 32vw, (max-width: 1100px) 24vw, 19vw';
+
+/** v3.10 (FE-02) — srcset com 3 tamanhos da MESMA foto. Só é emitido quando o servidor de imagens sabe
+ *  redimensionar (Google lh3 e Cloudinary — este último já entrega WebP/AVIF pelo f_auto); fora deles os
+ *  três endereços seriam o mesmo arquivo e não haveria ganho nenhum. */
+function atribSrcSet(url) {
+  const larguras = [320, 480, 640];
+  const itens = larguras.map(function (n) { return fotoMini(url, n) + ' ' + n + 'w'; });
+  const unicos = new Set(itens.map(function (s) { return s.split(' ')[0]; }));
+  if (unicos.size < 2) return '';
+  return 'srcset="' + escaparHtml(itens.join(', ')) + '" sizes="' + SIZES_CARDS + '" ';
 }
 
 /** Link público da peça no SITE (nunca a API_URL). Com código: SITE_URL + 'p/<código>' -> Render faz Rewrite para o Worker
@@ -203,8 +258,8 @@ function escaparHtml(v) {
 }
 
 /** Atributo src="..." já escapado, para montar <img> dentro de modelos de texto (innerHTML).
- *  Escreva `<img ${atribSrc(url)} alt="">` e NUNCA `<img src="${url}">` dentro de um <script> de página HTML: o Chrome, ao ler a página aos pedaços
- *  (principalmente quando ela passa pelo service worker), às vezes "enxerga" esse <img> no texto do script e pede uma foto chamada
+ *  Escreva `<img ${atribSrc(url)} alt="">` e NUNCA `<img src="${url}">` dentro de um <script> de página HTML: o Chrome, ao ler a
+ *  página aos pedaços (principalmente quando ela passa pelo service worker), às vezes "enxerga" esse <img> no texto do script e pede uma foto chamada
  *  `${...}` (404 no log, foto pedida à toa). Com `${atribSrc(...)}` o texto não parece mais um atributo src e o problema some. */
 function atribSrc(url) { return 'src="' + escaparHtml(url) + '"'; }
 
@@ -710,7 +765,7 @@ const SINONIMOS_PADRAO = [
 
 /** Lê uma lista "a=b,c" e devolve { a:[b,c], ... } (sem acento, minúsculas). */
 function montarSinonimos(listas) {
-  const sem = v => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const sem = v => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   const mapa = {};
   (listas || []).forEach(linha => {
     const [chave, resto] = String(linha || '').split('=');
