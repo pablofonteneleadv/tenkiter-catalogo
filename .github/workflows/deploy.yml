@@ -1,0 +1,75 @@
+name: Deploy
+
+# Deploy confiável: só depois do CI verde, com trigger explícito na API do Render,
+# acompanhamento até "live", limpeza de cache no Cloudflare e verificação no ar.
+#
+# Por que não usar o autoDeploy do Render: ele depende de webhook e falha em silêncio
+# (o próprio projeto documenta isso). Aqui o deploy é um passo do CI, com código de
+# saída — se falhar, o workflow fica vermelho e ninguém acha que publicou.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      motivo:
+        description: 'Motivo do deploy manual'
+        required: false
+        default: 'deploy manual'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false   # nunca cancelar um deploy em andamento
+
+jobs:
+  # Reaproveita o portão de qualidade antes de tocar em produção.
+  ci:
+    name: Portão de qualidade
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Publicar no Render + Cloudflare
+    runs-on: ubuntu-latest
+    needs: ci
+    environment: producao
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Disparar e acompanhar o deploy no Render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          SITE_URL: https://tenkitermodas.com.br/
+          COMMIT_ESPERADO: ${{ github.sha }}
+        run: bash scripts/deploy/render_deploy.sh
+
+      - name: Limpar o cache do Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: bash scripts/deploy/cloudflare_purge.sh
+
+      - name: Verificação final no ar
+        run: |
+          echo "==> Cabeçalhos de produção"
+          curl -sSI -m 30 https://tenkitermodas.com.br/ | head -20
+          echo ""
+          echo "==> version.json publicado"
+          curl -sS -m 20 https://tenkitermodas.com.br/version.json || true
+          echo ""
+          codigo="$(curl -sS -o /dev/null -w '%{http_code}' -m 30 https://tenkitermodas.com.br/)"
+          echo "HTTP final: $codigo"
+          [ "$codigo" = "200" ] || exit 1
+
+      - name: Resumo do deploy
+        if: always()
+        run: |
+          {
+            echo "### Deploy ${{ job.status }}"
+            echo ""
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Autor: ${{ github.actor }}"
+            echo "- Site: https://tenkitermodas.com.br/"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,60 @@
+name: Release
+
+# Publica uma tag semver + GitHub Release a partir do CHANGELOG.
+# Antes: "main · 0 tags · sem releases" — voltar atrás era adivinhação.
+# Agora: cada release tem tag, changelog e um ponto exato para rollback.
+on:
+  workflow_dispatch:
+    inputs:
+      tipo:
+        description: 'Tipo de incremento'
+        required: true
+        default: 'patch'
+        type: choice
+        options: [patch, minor, major]
+      descricao:
+        description: 'O que mudou nesta versão'
+        required: true
+        default: 'Melhorias de infraestrutura e CI/CD'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Tag + GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurar o git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Subir a versão (VERSION + version.json + CHANGELOG)
+        run: bash scripts/release/bump_version.sh "${{ inputs.tipo }}" "${{ inputs.descricao }}"
+
+      - name: Ler a versão nova
+        id: versao
+        run: echo "valor=$(cat VERSION | tr -d '[:space:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Commitar e criar a tag
+        run: |
+          git add VERSION version.json CHANGELOG.md
+          git commit -m "chore(release): v${{ steps.versao.outputs.valor }}"
+          git tag -a "v${{ steps.versao.outputs.valor }}" -m "v${{ steps.versao.outputs.valor }}"
+          git push origin HEAD:${{ github.ref_name }}
+          git push origin "v${{ steps.versao.outputs.valor }}"
+
+      - name: Publicar o GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.versao.outputs.valor }}" \
+            --title "v${{ steps.versao.outputs.valor }}" \
+            --notes "${{ inputs.descricao }}" \
+            --target "${{ github.ref_name }}"
