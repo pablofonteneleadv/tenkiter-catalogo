@@ -1,0 +1,52 @@
+# Infraestrutura do site TENKiTER Modas como código.
+#
+# Este arquivo descreve o serviço estático que roda no Render. Ele é a fonte da
+# verdade da configuração: qualquer mudança de build/rota passa por revisão de PR,
+# em vez de ser clicada no painel e esquecida.
+#
+# IMPORTANTE — autoDeploy:
+#   autoDeploy: false de propósito. O autoDeploy do Render depende de webhook e
+#   falha em silêncio (o próprio projeto documenta isso). O deploy é disparado
+#   explicitamente pela API dentro do GitHub Actions (.github/workflows/deploy.yml),
+#   que acompanha até "live" e confirma o commit publicado em /version.json.
+#
+# Como aplicar: Render → Blueprint → conectar este repositório. O Render lê este
+# arquivo e cria/atualiza o serviço. Ver docs/CI-CD.md.
+
+services:
+  - type: web
+    name: tenkiter-catalogo
+    runtime: static
+    repo: https://github.com/pablofonteneleadv/tenkiter-catalogo
+    branch: main
+    autoDeploy: false
+    buildCommand: bash scripts/deploy/build_version.sh
+    staticPublishPath: ./
+    # Cabeçalhos de segurança aplicados na origem (o Cloudflare reforça na borda).
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: geolocation=(), microphone=(), camera=()
+      - path: /version.json
+        name: Cache-Control
+        value: no-store
+    routes:
+      # O mapa do site e os feeds são montados pelo Worker tenkiter-og.
+      - type: rewrite
+        source: /sitemap.xml
+        destination: https://tenkiter-og.pablofonteneleadv.workers.dev/sitemap.xml
+      - type: rewrite
+        source: /feed.xml
+        destination: https://tenkiter-og.pablofonteneleadv.workers.dev/feed.xml
+      - type: rewrite
+        source: /feed.csv
+        destination: https://tenkiter-og.pablofonteneleadv.workers.dev/feed.csv

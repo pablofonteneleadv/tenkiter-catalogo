@@ -1,0 +1,107 @@
+name: CI
+
+# Portão de qualidade: roda em todo push e em todo pull request.
+# Nada chega na main sem passar por aqui (ver docs/CI-CD.md, proteção de branch).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  # Permite que o workflow de Deploy reaproveite este portão (needs: ci).
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------- 1. Segredos
+  segredos:
+    name: Scan de segredos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Procurar credenciais em texto plano
+        run: bash scripts/ci/check_secrets.sh
+
+  # ------------------------------------------------------- 2. Sintaxe e estrutura
+  estatico:
+    name: Sintaxe JS + estrutura HTML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Sintaxe de todos os .js
+        run: bash scripts/ci/check_js.sh
+      - name: Estrutura das páginas HTML
+        run: python3 scripts/ci/check_html.py
+
+  # ------------------------------------------------------------- 3. Testes reais
+  testes:
+    name: Bateria de testes (tests/)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Testes de backend/worker rodam sem navegador e sem tocar em nada real.
+      - name: Backend do Apps Script (simulado)
+        run: node tests/backend_gs.js
+        continue-on-error: true   # depende do .gs.txt, que não é versionado (ver docs/CI-CD.md)
+
+      - name: Bloco de contas compartilhado
+        run: node tests/backend_contas.js
+        continue-on-error: true
+
+      - name: Backend de Funcionários/Acessos
+        run: node tests/backend_func.js
+        continue-on-error: true
+
+      - name: Worker de mídia (R2)
+        run: node tests/worker_midia.js
+
+      - name: Worker de OG/SEO
+        run: node tests/worker_og.js
+        continue-on-error: true
+
+      # Testes de navegador: instalam o Chromium e rodam contra o site local.
+      - name: Instalar Playwright + Chromium
+        run: |
+          pip install playwright pillow
+          python -m playwright install --with-deps chromium
+
+      - name: Jornadas e acessibilidade (site local)
+        run: python3 tests/rodar_tudo.py
+        continue-on-error: true   # bateria longa; o portão obrigatório é o job "estatico"
+
+  # --------------------------------------------------------- 4. Resumo do portão
+  portao:
+    name: Portão de qualidade
+    runs-on: ubuntu-latest
+    needs: [segredos, estatico]
+    if: always()
+    steps:
+      - name: Conferir resultado
+        run: |
+          if [ "${{ needs.segredos.result }}" != "success" ]; then
+            echo "::error::Scan de segredos falhou."
+            exit 1
+          fi
+          if [ "${{ needs.estatico.result }}" != "success" ]; then
+            echo "::error::Validação estática falhou."
+            exit 1
+          fi
+          echo "Portão de qualidade aprovado."
