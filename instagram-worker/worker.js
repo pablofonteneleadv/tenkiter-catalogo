@@ -9,7 +9,12 @@
 // Auth das rotas: a mesma do painel (ação `sessao` do Apps Script) e SÓ Admin total (`gerir_acessos`). O token do Instagram fica no D1, nunca volta à tela nem aos logs.
 // Bindings: DB (D1), MIDIA (R2), CACHE (KV), API_URL, MIDIA_URL, [IG_BASE], [LIMITE_BYTES], [ORIGENS].
 
-const ORIGENS_PADRAO = ['https://tenkitermodas.com.br', 'https://www.tenkitermodas.com.br', 'https://tenkiter-catalogo.onrender.com'];
+/* Origens que podem falar com este Worker (CORS). O painel (admin.html) e servido
+ * de mais de um endereco: o site de producao, o endereco direto do Render e a
+ * copia do repositorio no GitHub Pages. Se a origem de onde o painel abriu nao
+ * estiver aqui, o navegador bloqueia a resposta e a tela mostra
+ * "Sem conexao agora. Tente de novo." — foi uma regressao real. */
+const ORIGENS_PADRAO = ['https://tenkitermodas.com.br', 'https://www.tenkitermodas.com.br', 'https://tenkiter-catalogo.onrender.com', 'https://pablofonteneleadv.github.io'];
 const UA = 'Mozilla/5.0 (compatible; tenkiter-ig/1.0)';
 const IG_BASE_PADRAO = 'https://graph.instagram.com/v23.0';
 const CAMPOS = 'id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,children{id,media_type,media_url,thumbnail_url}';

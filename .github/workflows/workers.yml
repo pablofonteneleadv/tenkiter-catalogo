@@ -1,0 +1,102 @@
+name: Workers (Cloudflare)
+
+# Publica os Workers da Cloudflare. Fica SEPARADO do deploy do site de proposito:
+# o site (Render) e os Workers tem ciclos de vida diferentes, e um deploy de
+# Worker nao deve depender do build do catalogo.
+#
+# Roda so quando algo que o Worker usa muda — ou na mao (workflow_dispatch).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'instagram-worker/**'
+      - 'midia-worker/**'
+      - 'og-worker/**'
+      - '.github/workflows/workers.yml'
+  workflow_dispatch:
+    inputs:
+      worker:
+        description: 'Qual Worker publicar'
+        required: true
+        default: 'todos'
+        type: choice
+        options: [todos, instagram-worker, midia-worker, og-worker]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workers-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # O portao de qualidade roda antes: nao se publica Worker que nao passa no CI.
+  ci:
+    name: Portao de qualidade
+    uses: ./.github/workflows/ci.yml
+
+  publicar:
+    name: Publicar Workers
+    runs-on: ubuntu-latest
+    needs: ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Confere que toda variavel lida pelo worker.js esta declarada no
+      # wrangler.toml. Sem isso, o `wrangler deploy` APAGA as variaveis de
+      # producao que nao estiverem no arquivo — foi a causa da regressao do
+      # Instagram em 15/10/2026 (a variavel ORIGENS sumiu e o CORS bloqueou o painel).
+      - name: Variaveis dos Workers declaradas
+        run: python3 scripts/ci/check_workers.py
+
+      - name: Publicar instagram-worker
+        if: github.event.inputs.worker == 'todos' || github.event.inputs.worker == 'instagram-worker' || github.event_name == 'push'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: instagram-worker
+          command: deploy
+
+      - name: Publicar midia-worker
+        if: github.event.inputs.worker == 'todos' || github.event.inputs.worker == 'midia-worker' || github.event_name == 'push'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: midia-worker
+          command: deploy
+
+      - name: Publicar og-worker
+        if: github.event.inputs.worker == 'todos' || github.event.inputs.worker == 'og-worker' || github.event_name == 'push'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: og-worker
+          command: deploy
+
+      # Prova de que o Worker respondeu depois do deploy — e que o CORS continua
+      # liberando a origem do painel. Sem esta checagem, um deploy que quebra o
+      # CORS passa silenciosamente e so aparece no celular do lojista.
+      - name: Verificar que o Worker respondeu e o CORS esta de pe
+        run: |
+          set -e
+          URL="https://tenkiter-ig.distkrpconfeccoes.workers.dev/status"
+          ORIGEM="https://tenkitermodas.com.br"
+          for i in 1 2 3 4 5; do
+            H=$(curl -sS -m 20 -o /dev/null -D - -H "Origin: $ORIGEM" "$URL" || true)
+            if echo "$H" | grep -qi '^HTTP/'; then break; fi
+            echo "tentativa $i: sem resposta, aguardando..."; sleep 5
+          done
+          echo "$H" | grep -qi '^HTTP/' || { echo "::error::O Worker nao respondeu apos o deploy."; exit 1; }
+          if ! echo "$H" | grep -qi "access-control-allow-origin: $ORIGEM"; then
+            echo "::error::O Worker respondeu, mas SEM o cabecalho CORS para $ORIGEM."
+            echo "::error::O painel vai mostrar 'Sem conexao agora'. Confira a variavel ORIGENS."
+            exit 1
+          fi
+          echo "Worker no ar e CORS liberando $ORIGEM."

@@ -34,6 +34,19 @@ bucket_name = "tenkiter-midia"
 API_URL = "https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec"
 MIDIA_URL = "https://tenkiter-midia.distkrpconfeccoes.workers.dev"
 
+# ORIGENS: lista de origens que podem falar com este Worker (CORS).
+#
+# ATENCAO — este campo e obrigatorio aqui. O `wrangler deploy` SUBSTITUI as
+# variaveis do Worker pelo que esta neste arquivo: se ORIGENS nao estiver
+# declarada, o deploy APAGA a variavel que existe em producao e o Worker volta
+# para ORIGENS_PADRAO. Foi exatamente esse o risco que derrubou o painel.
+#
+# Toda origem de onde o painel (admin.html) e servido PRECISA estar aqui:
+#   - tenkitermodas.com.br / www  -> site de producao (Render + Cloudflare)
+#   - tenkiter-catalogo.onrender.com -> endereco direto do Render
+#   - pablofonteneleadv.github.io -> GitHub Pages (copia do repo, publica)
+ORIGENS = "https://tenkitermodas.com.br,https://www.tenkitermodas.com.br,https://tenkiter-catalogo.onrender.com,https://pablofonteneleadv.github.io"
+
 # Cron de 1 minuto: a fila de postagens é nossa (a API do Instagram não agenda).
 # O import e a IA rodam só nos minutos 0 e 30 (ver CLAUDE.md).
 [triggers]

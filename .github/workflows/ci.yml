@@ -45,6 +45,8 @@ jobs:
         run: bash scripts/ci/check_js.sh
       - name: Estrutura das páginas HTML
         run: python3 scripts/ci/check_html.py
+      - name: Variaveis dos Workers declaradas (wrangler.toml)
+        run: python3 scripts/ci/check_workers.py
 
   # ------------------------------------------------------------- 3. Testes reais
   testes:

@@ -29,5 +29,10 @@ bucket_name = "tenkiter-midia"
 [vars]
 API_URL = "https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec"
 
+# ORIGENS: origens autorizadas a enviar midia (CORS). Mesma regra do
+# instagram-worker: o `wrangler deploy` substitui as variaveis, entao a lista
+# PRECISA estar declarada aqui — senao o deploy apaga a de producao.
+ORIGENS = "https://tenkitermodas.com.br,https://www.tenkitermodas.com.br,https://tenkiter-catalogo.onrender.com,https://pablofonteneleadv.github.io"
+
 [observability]
 enabled = true

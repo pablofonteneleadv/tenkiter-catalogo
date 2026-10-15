@@ -18,7 +18,9 @@ const FOTO_MAX = 2.5 * 1024 * 1024;
 const VIDEO_MAX = 40 * 1024 * 1024;
 const ENVIOS_DIA_MAX = 600;
 const LIMITE_PADRAO = 9.5 * 1024 * 1024 * 1024;
-const ORIGENS_PADRAO = ['https://tenkitermodas.com.br', 'https://www.tenkitermodas.com.br', 'https://tenkiter-catalogo.onrender.com'];
+/* Origens autorizadas a enviar midia (CORS). Precisa cobrir todo endereco de onde
+ * o painel e servido — inclusive a copia do repositorio no GitHub Pages. */
+const ORIGENS_PADRAO = ['https://tenkitermodas.com.br', 'https://www.tenkitermodas.com.br', 'https://tenkiter-catalogo.onrender.com', 'https://pablofonteneleadv.github.io'];
 const UA = 'Mozilla/5.0 (compatible; tenkiter-midia/1.0)';
 
 /** Descobre o tipo pelos PRIMEIROS BYTES (o que o navegador diz não vale). */

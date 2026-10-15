@@ -2,8 +2,9 @@
 #
 # Este arquivo é a fonte da verdade da configuração do Worker: o deploy passa a ser
 # `wrangler deploy` (dentro do GitHub Actions), em vez de colar o código no painel.
-# Nenhum segredo aqui — o repositório é público. O Worker não usa bindings: ele só
-# chama a API pública do Apps Script (endereço fixo dentro do próprio worker.js).
+# Nenhum segredo aqui — o repositório é público. O Worker só chama a API pública do
+# Apps Script (endereço fixo dentro do próprio worker.js) e usa um namespace KV para
+# guardar a lista de peças (cache de borda, FE-01).
 #
 # Publicar à mão (quando precisar):  npx wrangler deploy --config og-worker/wrangler.toml
 
@@ -14,6 +15,13 @@ compatibility_date = "2025-01-01"
 # Mantém o endereço público tenkiter-og.<conta>.workers.dev (usado pelas rotas
 # Rewrite do Render: /sitemap.xml, /feed.xml e /feed.csv).
 workers_dev = true
+
+# Cache de borda da lista de peças (FE-01, v3.10 do worker.js): serve /lista.json do KV
+# em ~30 ms e revalida em segundo plano. Sem este binding o Worker cai no caminho antigo
+# (busca direta no Apps Script, ~1,5 s) — ele nunca quebra, mas perde a velocidade.
+[[kv_namespaces]]
+binding = "TK_LISTA"
+id = "b199e2ba52774d95a99cc7930e67473e"
 
 [observability]
 enabled = true
