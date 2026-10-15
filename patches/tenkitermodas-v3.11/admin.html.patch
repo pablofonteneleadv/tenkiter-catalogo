@@ -1,0 +1,140 @@
+diff --git a/admin.html b/admin.html
+index 213c796..f9def8c 100644
+--- a/admin.html
++++ b/admin.html
+@@ -315,6 +315,11 @@
+   .cad-falta { margin-top: 16px; font-size: 0.8rem; font-weight: 600; text-align: center; padding: 8px; border-radius: 10px; background: #fff3e0; color: #7a4a00; }
+   .cad-falta.pronto { background: #edf7ee; color: #1a6b2c; }
+ 
++  /* v3.11 (CAD-02): aviso de rascunho recuperado */
++  .rascunho-aviso { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: #e8f1ff; border: 1px solid #a9c8f2; color: #0b3d75; font-size: 0.82rem; font-weight: 600; }
++  .rascunho-aviso[hidden] { display: none; }
++  .rascunho-aviso button { width: auto; min-height: 40px; padding: 8px 12px; font-size: 0.78rem; border-radius: 8px; border: 1px solid #a9c8f2; background: #fff; color: #0b3d75; font-weight: 700; cursor: pointer; }
++
+   .overlay-sheet { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: flex-end; justify-content: center; }
+   .overlay-sheet.aberto { display: flex; }
+   .juntar-ajuda { font-size: .88rem; color: #444; margin: 4px 0 10px; }
+@@ -724,6 +729,11 @@
+ 
+       <div class="cad-falta" id="cad-falta" role="status" aria-live="polite"></div>
+       <div class="aviso-gestao" id="aviso-lote" role="status" hidden></div>
++      <!-- v3.11 (CAD-02): aviso de rascunho recuperado (aparece só quando há rascunho salvo) -->
++      <div class="rascunho-aviso" id="rascunho-aviso" role="status" hidden>
++        <span id="rascunho-aviso-txt"></span>
++        <button type="button" id="btn-descartar-rascunho">Descartar rascunho</button>
++      </div>
+       <button type="submit" class="btn-primario" id="btn-salvar" style="margin-top:10px;">Cadastrar peça</button>
+       <button type="button" class="btn-cancelar-duplicar" id="btn-cancelar-duplicar">Cancelar Duplicação / Nova peça</button>
+       <div id="status" style="text-align:center;font-size:0.85rem;margin-top:8px;"></div>
+@@ -2091,6 +2101,14 @@
+       form.append('timestamp', String(assinatura.timestamp));
+       form.append('folder', assinatura.folder);
+       form.append('signature', assinatura.signature);
++      // v3.11 (CAD-01 / SEC-20): repassa os campos ASSINADOS extras que o servidor mandar
++      // (allowed_formats, max_file_size, public_id, type...). O Cloudinary só aceita o que estiver
++      // dentro da assinatura, então repassar é seguro; se o backend antigo não mandar nada, o envio
++      // continua exatamente como era (retrocompatível). É o par de front do SEC-20.
++      ['allowed_formats', 'max_file_size', 'public_id', 'type', 'eager', 'quality'].forEach(function (campo) {
++        const v = assinatura[campo];
++        if (v !== undefined && v !== null && v !== '') form.append(campo, String(v));
++      });
+ 
+       const recurso = tipoRecurso || 'video';
+       const nomeRotulo = rotulo || (recurso === 'image' ? 'foto' : 'vídeo');
+@@ -2423,6 +2441,7 @@
+       });
+     }
+     cancelarDuplicacao(); // libera o formulário já
++    limparRascunhoForm_(); // v3.11 (CAD-02): a peça entrou na fila, o rascunho cumpriu o papel
+     document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima peça.';
+     document.getElementById('card-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+     desenharEnvios(); processarEnvios();
+@@ -3816,10 +3835,88 @@
+     }
+   });
+ 
++  /* ===================== v3.11 (CAD-02): rascunho incremental do formulário =====================
++   * O cadastro é longo (fotos, nome, preço, gênero, categoria, tamanhos, cores, descrição). Se a
++   * pessoa fechar o app, trocar de tela ou o celular descarregar no meio, tudo se perdia. Agora os
++   * CAMPOS DE TEXTO e as escolhas (gênero/categoria) são salvos sozinhos no aparelho enquanto ela
++   * digita e voltam na próxima abertura, com aviso e botão de descartar. As FOTOS não entram aqui
++   * (base64 é grande demais para o armazenamento do navegador) — elas seguem no fluxo de envio. */
++  const RASCUNHO_CHAVE = 'tenkiter_rascunho_form_v1';
++  let rascunhoTimer_ = null;
++
++  function camposDoRascunho_() {
++    return {
++      nome: document.getElementById('nome').value,
++      preco: document.getElementById('preco').value,
++      estoque: document.getElementById('estoque').value,
++      tamanhos: document.getElementById('tamanhos').value,
++      cores: document.getElementById('cores').value,
++      descricao: document.getElementById('descricao').value,
++      novidade: document.getElementById('novidade').checked,
++      categorias: Array.from(selecionadasCategorias),
++      generos: Array.from(selecionadosGeneros)
++    };
++  }
++  function rascunhoVazio_(r) {
++    if (!r) return true;
++    return !(String(r.nome || '').trim() || String(r.preco || '').trim() || String(r.estoque || '').trim() ||
++      String(r.tamanhos || '').trim() || String(r.cores || '').trim() || String(r.descricao || '').trim() ||
++      (r.categorias && r.categorias.length) || (r.generos && r.generos.length) || r.novidade);
++  }
++  function salvarRascunhoForm_() {
++    if (modoFormulario === 'editando') return;   // editar peça existente não vira rascunho
++    try {
++      const r = camposDoRascunho_();
++      if (rascunhoVazio_(r)) { localStorage.removeItem(RASCUNHO_CHAVE); return; }
++      r.salvoEm = Date.now();
++      localStorage.setItem(RASCUNHO_CHAVE, JSON.stringify(r));
++    } catch (e) { /* sem espaço: segue sem rascunho */ }
++  }
++  function agendarRascunho_() {
++    clearTimeout(rascunhoTimer_);
++    rascunhoTimer_ = setTimeout(salvarRascunhoForm_, 600);   // espera a digitação parar
++  }
++  function limparRascunhoForm_() {
++    clearTimeout(rascunhoTimer_);
++    try { localStorage.removeItem(RASCUNHO_CHAVE); } catch (e) {}
++    const av = document.getElementById('rascunho-aviso'); if (av) av.hidden = true;
++  }
++  function restaurarRascunhoForm_() {
++    let r = null;
++    try { r = JSON.parse(localStorage.getItem(RASCUNHO_CHAVE) || 'null'); } catch (e) { r = null; }
++    if (rascunhoVazio_(r) || modoFormulario === 'editando') return;
++    document.getElementById('nome').value = r.nome || '';
++    document.getElementById('preco').value = r.preco || '';
++    document.getElementById('estoque').value = r.estoque || '';
++    document.getElementById('tamanhos').value = r.tamanhos || '';
++    document.getElementById('cores').value = r.cores || '';
++    document.getElementById('descricao').value = r.descricao || '';
++    document.getElementById('novidade').checked = !!r.novidade;
++    selecionadasCategorias = new Set(r.categorias || []);
++    selecionadosGeneros = new Set(r.generos || []);
++    renderizarChips('chips-categoria', categorias, selecionadasCategorias);
++    renderizarChips('chips-genero', generos, selecionadosGeneros);
++    renderizarCategorias_();
++    atualizarFaltas_();
++    const av = document.getElementById('rascunho-aviso');
++    if (av) { document.getElementById('rascunho-aviso-txt').textContent = '📝 Rascunho recuperado do seu último cadastro.'; av.hidden = false; }
++  }
++  (function ligarRascunho_() {
++    const form = document.getElementById('form-produto');
++    if (!form) return;
++    form.addEventListener('input', agendarRascunho_);
++    form.addEventListener('change', agendarRascunho_);
++    const b = document.getElementById('btn-descartar-rascunho');
++    if (b) b.addEventListener('click', () => { limparRascunhoForm_(); cancelarDuplicacao(); });
++    const bc = document.getElementById('btn-cancelar-duplicar');
++    if (bc) bc.addEventListener('click', limparRascunhoForm_);
++  })();
++
+   (async function iniciar() {
+     atualizarBarraSync();
+     // tudo ao mesmo tempo (antes era um depois do outro, somando as esperas); lista e categorias já aparecem do cache do aparelho
+     await Promise.all([carregarListas(), carregarProdutos(), carregarStats()]);
++    restaurarRascunhoForm_();   // v3.11 (CAD-02): depois das listas, para os chips já existirem
+   })();
+ </script>
+ <script src="admin-gestao.js"></script>

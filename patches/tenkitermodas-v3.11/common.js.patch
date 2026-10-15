@@ -1,0 +1,39 @@
+diff --git a/common.js b/common.js
+index 0bf3832..19be7cd 100644
+--- a/common.js
++++ b/common.js
+@@ -27,6 +27,12 @@ const DESCONTO_AVISTA = 0.10; // 10% de desconto no pagamento à vista
+  *  'https://tenkiter-og.distkrpconfeccoes.workers.dev/lista.json'. Se o Worker falhar, o catálogo cai no Apps Script sozinho. */
+ const LISTA_RAPIDA_URL = '';
+ 
++/** v3.11 (FE-01) — teto de tempo da busca ao atalho da borda (ms). Estourou, cai no Apps Script na hora.
++ *  Era 3500 ms: como a borda fria leva ~1,4 s por causa do `cf.cacheTtl` do Worker, a queda para o
++ *  Apps Script acontecia fácil e o atalho ficava sem efeito. 2000 ms é folgado para a borda quente e
++ *  curto o bastante para não segurar a tela quando o Worker estiver fora. */
++const LISTA_RAPIDA_MS = 2000;
++
+ /** v3.10 (FE-01) — quanto tempo a lista guardada no aparelho é considerada "fresca" (ms). Dentro disso o
+  *  catálogo pinta na hora, sem tocar na rede; passando disso, pinta o cache e revalida em segundo plano
+  *  (stale-while-revalidate). 5 min é o mesmo TTL que a borda usa, então os dois ficam alinhados. */
+@@ -65,17 +71,19 @@ function ehVideoDireto(u) {
+   return /^https:\/\/res\.cloudinary\.com\//.test(t) || /^https:\/\/(?:tenkiter-midia\.[a-z0-9-]+\.workers\.dev|midia\.tenkitermodas\.com\.br)\/m\/\d{6}\/[0-9a-f]{20}\.(mp4|webm)$/.test(t);
+ }
+ 
+-/** Busca a lista pública de peças ({ ok, produtos: [...] }). Com LISTA_RAPIDA_URL ligada tenta ela primeiro (3,5 s) e cai no Apps Script se falhar. */
++/** Busca a lista pública de peças ({ ok, produtos: [...] }). Com LISTA_RAPIDA_URL ligada tenta ela primeiro
++ *  (LISTA_RAPIDA_MS) e cai no Apps Script se falhar. */
+ function buscarListaPublica() {
+   const direto = () => fetch(API_URL + '?action=list').then(r => r.json());
+   if (!LISTA_RAPIDA_URL) return direto();
+   const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+-  const t = setTimeout(() => { if (ctl) ctl.abort(); }, 3500);
++  const t = setTimeout(() => { if (ctl) ctl.abort(); }, LISTA_RAPIDA_MS);
+   return fetch(LISTA_RAPIDA_URL, ctl ? { signal: ctl.signal } : undefined)
+     .then(r => r.json())
+     .then(j => { clearTimeout(t); if (!j || !Array.isArray(j.produtos)) throw new Error('lista inválida'); return j; })
+     .catch(() => { clearTimeout(t); return direto(); });
+ }
++
+ const WHATSAPP_NUMERO = '5588993223998';
+ 
+ // Notificações push (OneSignal). App ID é público (não é segredo) — pegue em
