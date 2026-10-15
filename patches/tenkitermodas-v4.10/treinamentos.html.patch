@@ -1,0 +1,12 @@
+diff --git a/treinamentos.html b/treinamentos.html
+index e013afd..5e31576 100644
+--- a/treinamentos.html
++++ b/treinamentos.html
+@@ -663,6 +663,7 @@ async function restaurarSessaoServidor(respPronta){
+   var entry = entryFromServerUser(resp.usuario, resp.sessao);
+   state.user = userFromRosterEntry(entry);
+   ls_set('tm_session', { whatsapp: entry.whatsapp, sessao: resp.sessao });
++  try { window.dispatchEvent(new Event('tk:sessao')); } catch (e) {}   // v4.10: avisa a barra inferior/menus (sessão compartilhada)
+   return true;
+ }
+ 
