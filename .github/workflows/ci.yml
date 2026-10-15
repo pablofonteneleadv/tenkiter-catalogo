@@ -89,23 +89,50 @@ jobs:
 
       - name: Jornadas e acessibilidade (site local)
         run: python3 tests/rodar_tudo.py
-        continue-on-error: true   # bateria longa; o portão obrigatório é o job "estatico"
+        continue-on-error: true   # bateria longa; nao bloqueia o portao (ver job `portao`)
 
   # --------------------------------------------------------- 4. Resumo do portão
+  #
+  # ATENCAO: este job e o STATUS CHECK OBRIGATORIO da protecao de branch da main
+  # (ver docs/CI-CD.md). Ele precisa listar em `needs` TODOS os jobs que devem
+  # bloquear o merge. Qualquer job fora do `needs` NAO influencia este check.
+  #
+  # Defeito corrigido em 15/10/2026: `needs` era [segredos, estatico] e `testes`
+  # ficou de fora. Como os dois primeiros terminam em ~30 s e `testes` leva alguns
+  # minutos (Playwright), o portao reportava SUCESSO antes do CI acabar. Medido no
+  # run 38800756430 (commit 15f4ef7a):
+  #     20:17:46  Scan de segredos ................ sucesso
+  #     20:17:53  Sintaxe JS + estrutura HTML ..... sucesso
+  #     20:18:02  Portao de qualidade ............. SUCESSO  <- aprovava aqui
+  #     20:18:21  Bateria de testes ............... comecava DEPOIS
+  # Ou seja: a protecao de branch aprovava o merge com metade do CI ainda por
+  # rodar. Com `testes` no `needs`, o portao so fica verde quando o workflow
+  # INTEIRO terminou — que e o que um status check obrigatorio deve significar.
   portao:
     name: Portão de qualidade
     runs-on: ubuntu-latest
-    needs: [segredos, estatico]
+    needs: [segredos, estatico, testes]
     if: always()
     steps:
       - name: Conferir resultado
         run: |
+          falhou=0
           if [ "${{ needs.segredos.result }}" != "success" ]; then
             echo "::error::Scan de segredos falhou."
-            exit 1
+            falhou=1
           fi
           if [ "${{ needs.estatico.result }}" != "success" ]; then
             echo "::error::Validação estática falhou."
+            falhou=1
+          fi
+          # A bateria de testes marca continue-on-error nos passos que dependem de
+          # arquivos nao versionados (.gs.txt). Aqui interessa que o job tenha
+          # TERMINADO bem, para o portao nao aprovar com o CI ainda em andamento.
+          if [ "${{ needs.testes.result }}" != "success" ]; then
+            echo "::error::Bateria de testes falhou (ou foi cancelada)."
+            falhou=1
+          fi
+          if [ "$falhou" != "0" ]; then
             exit 1
           fi
-          echo "Portão de qualidade aprovado."
+          echo "Portão de qualidade aprovado (segredos, estatico e testes)."
