@@ -77,45 +77,15 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # -------------------------------------------------- Workers (Cloudflare)
-  # Publica os 3 Workers com o wrangler, um por vez (matrix). Antes isto era
-  # `python3 <pasta>/publicar.py` rodado à mão, com um token colado no terminal.
-  # Agora é um passo do CI: se o wrangler falhar, o workflow fica vermelho.
+  # Delega para o workers.yml (workflow_call) em vez de repetir o deploy aqui.
+  #
+  # POR QUE: antes este arquivo tinha a sua PRÓPRIA matriz de wrangler deploy, e o
+  # workers.yml tinha outra. Num push que mexia em Worker, os dois rodavam e
+  # publicavam os MESMOS Workers duas vezes, por dois caminhos com regras
+  # diferentes. Pior: a cópia daqui não tinha o porteiro de credenciais — foi ela
+  # que falhou no run 38795395138 (15/10/2026) com o CLOUDFLARE_API_TOKEN vazio.
+  # Agora existe UM caminho para publicar Worker, com o porteiro e as verificações.
   workers:
-    name: Publicar Worker ${{ matrix.script }}
-    runs-on: ubuntu-latest
+    name: Workers (Cloudflare)
     needs: ci
-    environment: producao
-    strategy:
-      fail-fast: false   # um Worker com problema não impede os outros dois
-      matrix:
-        include:
-          - pasta: og-worker
-            script: tenkiter-og
-          - pasta: midia-worker
-            script: tenkiter-midia
-          - pasta: instagram-worker
-            script: tenkiter-ig
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Publicar ${{ matrix.script }} (wrangler deploy)
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: ${{ matrix.pasta }}
-          command: deploy
-
-  # ------------------------------------------- Verificação dos Workers
-  verificar-workers:
-    name: Verificar os Workers publicados
-    runs-on: ubuntu-latest
-    needs: workers
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Conferir que os 3 Workers foram publicados agora
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bash scripts/deploy/verificar_workers.sh
+    uses: ./.github/workflows/workers.yml

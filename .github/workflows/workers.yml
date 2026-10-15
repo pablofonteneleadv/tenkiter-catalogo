@@ -4,7 +4,30 @@ name: Workers (Cloudflare)
 # o site (Render) e os Workers tem ciclos de vida diferentes, e um deploy de
 # Worker nao deve depender do build do catalogo.
 #
-# Roda so quando algo que o Worker usa muda — ou na mao (workflow_dispatch).
+# Roda so quando algo que o Worker usa muda — ou na mao (workflow_dispatch) —
+# ou quando o deploy.yml chama este arquivo (workflow_call).
+#
+# HISTORICO (por que este arquivo tem um porteiro de credenciais)
+# ---------------------------------------------------------------
+# 15/10/2026 — run 38795395138, commit d983bf51, FALHOU.
+# O passo "Publicar instagram-worker" morreu com:
+#   "In a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN
+#    environment variable for wrangler to work."
+# Os secrets foram criados as 19:46-19:48 e o job so comecou as 19:51:24 — mas o
+# token chegou VAZIO ao passo, o wrangler-action nao exportou a variavel e o deploy
+# morreu. Como cada Worker era um passo sequencial do MESMO job, os outros dois
+# foram PULADOS (skipped) e ninguem publicou nada.
+# Resultado: o Instagram ficou sem receber postagens ate alguem rodar o
+# `wrangler deploy` a mao — exatamente a dependencia manual que o CI veio remover.
+#
+# Correcoes aplicadas (o deploy automatico passa a fazer o MESMO que o manual):
+#   1. job `credenciais` roda ANTES: falha em 1s, dizendo qual secret esta vazio
+#      e que a run precisa ser re-disparada depois de criar/alterar o secret.
+#   2. matrix com `fail-fast: false`: um Worker com problema nao impede os outros.
+#   3. cada leg prova, depois do deploy, que o Worker RESPONDEU (e, no tenkiter-ig,
+#      que o CORS continua liberando a origem do painel).
+#   4. etapa final confere na API da Cloudflare que os 3 foram republicados AGORA
+#      (modified_on recente) — a prova que o deploy manual nunca teve.
 on:
   push:
     branches: [main]
@@ -12,6 +35,7 @@ on:
       - 'instagram-worker/**'
       - 'midia-worker/**'
       - 'og-worker/**'
+      - 'scripts/ci/check_worker_secrets.sh'
       - '.github/workflows/workers.yml'
   workflow_dispatch:
     inputs:
@@ -21,12 +45,15 @@ on:
         default: 'todos'
         type: choice
         options: [todos, instagram-worker, midia-worker, og-worker]
+  # Permite que o deploy.yml reaproveite este arquivo (evita publicar os Workers
+  # duas vezes no mesmo push, por dois caminhos diferentes).
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: workers-${{ github.ref }}
+  group: workers-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -35,10 +62,41 @@ jobs:
     name: Portao de qualidade
     uses: ./.github/workflows/ci.yml
 
-  publicar:
-    name: Publicar Workers
+  # Porteiro: confere as credenciais ANTES de tentar publicar qualquer coisa.
+  # Sem isto, um secret ausente so aparecia no meio do log do wrangler — e o
+  # deploy inteiro morria sem nenhum aviso legivel.
+  credenciais:
+    name: Conferir credenciais da Cloudflare
     runs-on: ubuntu-latest
     needs: ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: As credenciais chegaram neste job?
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: bash scripts/ci/check_worker_secrets.sh
+
+  publicar:
+    name: Publicar ${{ matrix.script }}
+    runs-on: ubuntu-latest
+    needs: credenciais
+    strategy:
+      # Um Worker com problema NAO impede os outros dois de publicar.
+      # Antes (passos sequenciais) a falha do instagram-worker pulava midia e og.
+      fail-fast: false
+      matrix:
+        include:
+          - pasta: instagram-worker
+            script: tenkiter-ig
+            alvo: https://tenkiter-ig.distkrpconfeccoes.workers.dev/feed.csv
+          - pasta: midia-worker
+            script: tenkiter-midia
+            alvo: https://tenkiter-midia.distkrpconfeccoes.workers.dev/status
+          - pasta: og-worker
+            script: tenkiter-og
+            alvo: https://tenkiter-og.distkrpconfeccoes.workers.dev/status
     steps:
       - uses: actions/checkout@v4
 
@@ -53,41 +111,47 @@ jobs:
       - name: Variaveis dos Workers declaradas
         run: python3 scripts/ci/check_workers.py
 
-      - name: Publicar instagram-worker
-        if: github.event.inputs.worker == 'todos' || github.event.inputs.worker == 'instagram-worker' || github.event_name == 'push'
+      - name: Publicar ${{ matrix.script }} (wrangler deploy)
+        if: github.event_name == 'push' || github.event_name == 'workflow_call' || github.event.inputs.worker == 'todos' || github.event.inputs.worker == '${{ matrix.pasta }}'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: instagram-worker
+          workingDirectory: ${{ matrix.pasta }}
           command: deploy
 
-      - name: Publicar midia-worker
-        if: github.event.inputs.worker == 'todos' || github.event.inputs.worker == 'midia-worker' || github.event_name == 'push'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: midia-worker
-          command: deploy
+      # Prova de que o Worker respondeu depois do deploy. Sem esta checagem um
+      # deploy que publica codigo quebrado passa em silencio — o wrangler sai com
+      # codigo 0 mesmo quando o Worker publicado nao atende.
+      - name: Provar que ${{ matrix.script }} respondeu
+        if: github.event_name == 'push' || github.event_name == 'workflow_call' || github.event.inputs.worker == 'todos' || github.event.inputs.worker == '${{ matrix.pasta }}'
+        run: |
+          set -e
+          ALVO="${{ matrix.alvo }}"
+          echo "==> Testando $ALVO"
+          codigo=""
+          for i in 1 2 3 4 5; do
+            codigo=$(curl -sS -m 20 -o /dev/null -w '%{http_code}' "$ALVO" || echo "000")
+            case "$codigo" in
+              2*|3*|4*) echo "tentativa $i: HTTP $codigo"; break ;;
+              *) echo "tentativa $i: sem resposta (HTTP $codigo), aguardando..."; sleep 5 ;;
+            esac
+          done
+          case "$codigo" in
+            000) echo "::error::$ALVO nao respondeu apos o deploy de ${{ matrix.script }}."; exit 1 ;;
+            *)   echo "Worker ${{ matrix.script }} no ar (HTTP $codigo)." ;;
+          esac
 
-      - name: Publicar og-worker
-        if: github.event.inputs.worker == 'todos' || github.event.inputs.worker == 'og-worker' || github.event_name == 'push'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: og-worker
-          command: deploy
-
-      # Prova de que o Worker respondeu depois do deploy — e que o CORS continua
-      # liberando a origem do painel. Sem esta checagem, um deploy que quebra o
-      # CORS passa silenciosamente e so aparece no celular do lojista.
-      - name: Verificar que o Worker respondeu e o CORS esta de pe
+      # No tenkiter-ig o CORS e o que sustenta o painel do Instagram. Se a variavel
+      # ORIGENS sumir do Worker, o navegador bloqueia a resposta e o lojista ve
+      # "Sem conexao agora" — sem nenhum erro no servidor. Por isso e checado aqui.
+      - name: CORS do painel continua de pe (tenkiter-ig)
+        if: matrix.pasta == 'instagram-worker' && (github.event_name == 'push' || github.event_name == 'workflow_call' || github.event.inputs.worker == 'todos' || github.event.inputs.worker == 'instagram-worker')
         run: |
           set -e
           URL="https://tenkiter-ig.distkrpconfeccoes.workers.dev/status"
           ORIGEM="https://tenkitermodas.com.br"
+          H=""
           for i in 1 2 3 4 5; do
             H=$(curl -sS -m 20 -o /dev/null -D - -H "Origin: $ORIGEM" "$URL" || true)
             if echo "$H" | grep -qi '^HTTP/'; then break; fi
@@ -96,7 +160,20 @@ jobs:
           echo "$H" | grep -qi '^HTTP/' || { echo "::error::O Worker nao respondeu apos o deploy."; exit 1; }
           if ! echo "$H" | grep -qi "access-control-allow-origin: $ORIGEM"; then
             echo "::error::O Worker respondeu, mas SEM o cabecalho CORS para $ORIGEM."
-            echo "::error::O painel vai mostrar 'Sem conexao agora'. Confira a variavel ORIGENS."
+            echo "::error::O painel vai mostrar 'Sem conexao agora'. Confira a variavel ORIGENS no wrangler.toml."
             exit 1
           fi
-          echo "Worker no ar e CORS liberando $ORIGEM."
+          echo "CORS liberando $ORIGEM."
+
+  verificar:
+    name: Verificar os 3 Workers publicados
+    runs-on: ubuntu-latest
+    needs: publicar
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Conferir que os 3 Workers foram republicados agora
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/deploy/verificar_workers.sh
