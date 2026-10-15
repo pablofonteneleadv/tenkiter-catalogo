@@ -1,7 +1,8 @@
 name: Deploy
 
 # Deploy confiável: só depois do CI verde, com trigger explícito na API do Render,
-# acompanhamento até "live", limpeza de cache no Cloudflare e verificação no ar.
+# acompanhamento até "live", limpeza de cache no Cloudflare, publicação dos Workers
+# e verificação no ar.
 #
 # Por que não usar o autoDeploy do Render: ele depende de webhook e falha em silêncio
 # (o próprio projeto documenta isso). Aqui o deploy é um passo do CI, com código de
@@ -29,6 +30,7 @@ jobs:
     name: Portão de qualidade
     uses: ./.github/workflows/ci.yml
 
+  # ------------------------------------------------------------- Site (Render)
   deploy:
     name: Publicar no Render + Cloudflare
     runs-on: ubuntu-latest
@@ -73,3 +75,47 @@ jobs:
             echo "- Autor: ${{ github.actor }}"
             echo "- Site: https://tenkitermodas.com.br/"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # -------------------------------------------------- Workers (Cloudflare)
+  # Publica os 3 Workers com o wrangler, um por vez (matrix). Antes isto era
+  # `python3 <pasta>/publicar.py` rodado à mão, com um token colado no terminal.
+  # Agora é um passo do CI: se o wrangler falhar, o workflow fica vermelho.
+  workers:
+    name: Publicar Worker ${{ matrix.script }}
+    runs-on: ubuntu-latest
+    needs: ci
+    environment: producao
+    strategy:
+      fail-fast: false   # um Worker com problema não impede os outros dois
+      matrix:
+        include:
+          - pasta: og-worker
+            script: tenkiter-og
+          - pasta: midia-worker
+            script: tenkiter-midia
+          - pasta: instagram-worker
+            script: tenkiter-ig
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publicar ${{ matrix.script }} (wrangler deploy)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: ${{ matrix.pasta }}
+          command: deploy
+
+  # ------------------------------------------- Verificação dos Workers
+  verificar-workers:
+    name: Verificar os Workers publicados
+    runs-on: ubuntu-latest
+    needs: workers
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Conferir que os 3 Workers foram publicados agora
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/deploy/verificar_workers.sh

@@ -101,8 +101,14 @@ Assim o deploy tem código de saída: se falhar, o workflow fica vermelho.
 |---|---|---|
 | `RENDER_API_KEY` | Render → Account Settings → API Keys | (a chave do Render não tem granularidade por serviço) |
 | `RENDER_SERVICE_ID` | Painel do serviço, ou `GET /v1/services` | — |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → Custom Token | Zone → Cache Purge (na zona `tenkitermodas.com.br`) |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → Custom Token | Account → **Workers Scripts: Edit** + Zone → **Cache Purge** (na zona `tenkitermodas.com.br`) |
 | `CLOUDFLARE_ZONE_ID` | Visão geral da zona, ou `GET /zones` | — |
+| `CLOUDFLARE_ACCOUNT_ID` | `GET /accounts` (ou a URL do painel) | — |
+
+> O mesmo `CLOUDFLARE_API_TOKEN` serve para o purge do cache **e** para publicar os
+> Workers. Ele precisa das duas permissões: *Workers Scripts: Edit* (conta) e
+> *Cache Purge* (zona). Se o token não enxergar a zona, o purge falha — ver a
+> seção 5.
 
 > **Nunca** cole esses valores no chat, em issue, em PR ou em arquivo do repositório.
 > Só no cofre de segredos do GitHub (ou nas variáveis de ambiente do Render).
@@ -161,26 +167,84 @@ curl -s https://tenkitermodas.com.br/version.json
 
 ---
 
-## 5. Backends e Workers (fora do pipeline do site)
+## 5. Workers da Cloudflare (automatizados)
 
 | Componente | Como publica | Automatizável? |
 |---|---|---|
-| Site estático (Render) | `deploy.yml` | ✅ sim |
+| Site estático (Render) | `deploy.yml` → job `deploy` | ✅ sim |
 | Cache/headers (Cloudflare) | `cloudflare_purge.sh` | ✅ sim |
-| Workers (`og-worker/`, `midia-worker/`, `instagram-worker/`) | `wrangler deploy` | ⚠️ manual hoje |
+| Workers (`og-worker/`, `midia-worker/`, `instagram-worker/`) | `deploy.yml` → job `workers` (wrangler-action) | ✅ **sim** |
 | Backend Apps Script (`.gs`) | colar no editor + "Nova versão" | ❌ manual (item INFRA-03) |
 
-Os Workers têm `publicar.py` em cada pasta. Para automatizar, adicione um job no
-`deploy.yml` com `cloudflare/wrangler-action` e um token com escopo
-**Workers Scripts: Edit** — ver o guia de conexão.
+### Como funciona
+
+O job `workers` do `deploy.yml` roda **depois do CI verde** e publica os três Workers
+em paralelo (matrix), um por pasta, com `cloudflare/wrangler-action@v3`. Em seguida o
+job `verificar-workers` confirma pela API que os três foram republicados agora há pouco
+e que o `tenkiter-og` responde.
+
+```
+   merge na main
+        │
+        ▼
+  CI (ci.yml) ──► portão de qualidade
+        │
+        ├──► deploy      (Render + purge do Cloudflare)
+        └──► workers     (wrangler deploy × 3, em paralelo)
+                  │
+                  ▼
+             verificar-workers  (modified_on recente + /feed.csv 200)
+```
+
+### Configuração de cada Worker
+
+Cada pasta tem um `wrangler.toml` versionado — é a **fonte da verdade** da configuração
+(nome, bindings, vars e cron). Nenhum segredo nesses arquivos: o repositório é público.
+
+| Pasta | Worker | Bindings | Cron |
+|---|---|---|---|
+| `og-worker/` | `tenkiter-og` | nenhum (só chama a API pública) | — |
+| `midia-worker/` | `tenkiter-midia` | KV `CACHE`, R2 `MIDIA`, var `API_URL` | — |
+| `instagram-worker/` | `tenkiter-ig` | D1 `DB`, KV `CACHE`, R2 `MIDIA`, vars `API_URL`/`MIDIA_URL` | `* * * * *` |
+
+> Os bindings do `wrangler.toml` são os **mesmos que já estão em produção**. O wrangler
+> substitui a configuração inteira do Worker pelo que está no arquivo — por isso os
+> bindings precisam estar declarados aqui, senão o deploy os apagaria.
+
+### Publicar um Worker à mão (quando precisar)
+
+```bash
+export CLOUDFLARE_API_TOKEN='...'
+export CLOUDFLARE_ACCOUNT_ID='...'
+npx wrangler deploy --config og-worker/wrangler.toml
+```
+
+Os antigos `publicar.py` continuam nas pastas como alternativa sem wrangler, mas o
+caminho normal passou a ser o CI.
+
+### Verificar o que está no ar
+
+```bash
+CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... bash scripts/deploy/verificar_workers.sh
+```
+
+O script lê o `modified_on` de cada Worker na **lista** de scripts (esse campo não existe
+em `/settings`) e confere que a publicação é recente. `LIMITE_SEGUNDOS` ajusta a janela
+(padrão 900 s).
 
 ---
 
 ## 6. Checklist de primeiros passos
 
-- [ ] Criar os 4 secrets no GitHub (tabela da seção 3)
+- [ ] Criar os 5 secrets no GitHub (tabela da seção 3)
 - [ ] Ativar a proteção de branch na `main` (seção 2)
 - [ ] No Render: desligar o Auto-Deploy do serviço e definir o Build Command como
       `bash scripts/deploy/build_version.sh`
 - [ ] Rodar o workflow **Release** uma vez para criar a tag `v1.0.0`
 - [ ] Fazer um PR de teste e confirmar que o portão bloqueia/libera corretamente
+- [ ] **Revogar o token da Cloudflare que foi colado no chat** e criar um novo
+      (o antigo vale até 01/12/2026 e está comprometido — ver o relatório de infra)
+
+> ⚠️ **O token da Cloudflare que circulou no chat deve ser revogado.** Ele dá acesso de
+> escrita aos Workers e ao cache da zona. Crie um token novo com os escopos da tabela da
+> seção 3, troque o secret `CLOUDFLARE_API_TOKEN` no GitHub e só então revogue o antigo.

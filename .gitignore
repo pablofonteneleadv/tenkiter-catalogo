@@ -3,3 +3,10 @@ __pycache__/
 # Backends do Apps Script: ficam só no computador do Pablo (colados à mão), não no GitHub
 *.gs
 *.gs.txt
+
+# Wrangler (Workers da Cloudflare): cache local e segredos de desenvolvimento.
+# O wrangler.toml É versionado (não tem segredo); o .dev.vars NUNCA é.
+.wrangler/
+.dev.vars
+.dev.vars.*
+node_modules/

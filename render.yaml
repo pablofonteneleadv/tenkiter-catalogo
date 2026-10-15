@@ -43,10 +43,10 @@ services:
       # O mapa do site e os feeds são montados pelo Worker tenkiter-og.
       - type: rewrite
         source: /sitemap.xml
-        destination: https://tenkiter-og.pablofonteneleadv.workers.dev/sitemap.xml
+        destination: https://tenkiter-og.distkrpconfeccoes.workers.dev/sitemap.xml
       - type: rewrite
         source: /feed.xml
-        destination: https://tenkiter-og.pablofonteneleadv.workers.dev/feed.xml
+        destination: https://tenkiter-og.distkrpconfeccoes.workers.dev/feed.xml
       - type: rewrite
         source: /feed.csv
-        destination: https://tenkiter-og.pablofonteneleadv.workers.dev/feed.csv
+        destination: https://tenkiter-og.distkrpconfeccoes.workers.dev/feed.csv

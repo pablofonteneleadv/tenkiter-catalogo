@@ -1,0 +1,33 @@
+# Worker `tenkiter-midia` — serve as mídias do catálogo (R2) com cache em KV.
+#
+# Este arquivo é a fonte da verdade da configuração do Worker: o deploy passa a ser
+# `wrangler deploy` (dentro do GitHub Actions), em vez de rodar `publicar.py` à mão.
+# Nenhum segredo aqui — o repositório é público. Os bindings abaixo são os mesmos
+# que já estão em produção (conferidos pela API da Cloudflare em 15/10/2026).
+#
+# Publicar à mão (quando precisar):  npx wrangler deploy --config midia-worker/wrangler.toml
+
+name = "tenkiter-midia"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Mantém o endereço público tenkiter-midia.<conta>.workers.dev (é o MIDIA_URL de common.js).
+workers_dev = true
+
+# Cache de respostas na borda.
+[[kv_namespaces]]
+binding = "CACHE"
+id = "b199e2ba52774d95a99cc7930e67473e"
+
+# Bucket das mídias (fotos e vídeos das peças).
+[[r2_buckets]]
+binding = "MIDIA"
+bucket_name = "tenkiter-midia"
+
+# Endereço público do backend (Apps Script). É público e tem que ser igual ao
+# API_URL_PADRAO de common.js — o teste tests/worker_midia.js confere.
+[vars]
+API_URL = "https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec"
+
+[observability]
+enabled = true

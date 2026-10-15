@@ -1,0 +1,43 @@
+# Worker `tenkiter-ig` — fila de postagens do Instagram (D1 + R2 + KV + cron).
+#
+# Este arquivo é a fonte da verdade da configuração do Worker: o deploy passa a ser
+# `wrangler deploy` (dentro do GitHub Actions), em vez de rodar `publicar.py` à mão.
+# Nenhum segredo aqui — o repositório é público. Os bindings abaixo são os mesmos
+# que já estão em produção (conferidos pela API da Cloudflare em 15/10/2026).
+#
+# O token do Instagram e a chave do Gemini NÃO ficam aqui: são gravados no D1 pelo
+# painel (⚙️ Instagram) e nunca voltam à tela.
+#
+# Publicar à mão (quando precisar):  npx wrangler deploy --config instagram-worker/wrangler.toml
+
+name = "tenkiter-ig"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+workers_dev = true
+
+# Banco próprio do Instagram (separado do `tenkiter-db` do catálogo).
+[[d1_databases]]
+binding = "DB"
+database_name = "tenkiter-ig"
+database_id = "15731893-d51a-4631-877f-6b7a6517bd54"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "b199e2ba52774d95a99cc7930e67473e"
+
+[[r2_buckets]]
+binding = "MIDIA"
+bucket_name = "tenkiter-midia"
+
+[vars]
+API_URL = "https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec"
+MIDIA_URL = "https://tenkiter-midia.distkrpconfeccoes.workers.dev"
+
+# Cron de 1 minuto: a fila de postagens é nossa (a API do Instagram não agenda).
+# O import e a IA rodam só nos minutos 0 e 30 (ver CLAUDE.md).
+[triggers]
+crons = ["* * * * *"]
+
+[observability]
+enabled = true

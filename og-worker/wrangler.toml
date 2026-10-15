@@ -1,0 +1,19 @@
+# Worker `tenkiter-og` — páginas de compartilhamento (OG/SEO), sitemap e feeds.
+#
+# Este arquivo é a fonte da verdade da configuração do Worker: o deploy passa a ser
+# `wrangler deploy` (dentro do GitHub Actions), em vez de colar o código no painel.
+# Nenhum segredo aqui — o repositório é público. O Worker não usa bindings: ele só
+# chama a API pública do Apps Script (endereço fixo dentro do próprio worker.js).
+#
+# Publicar à mão (quando precisar):  npx wrangler deploy --config og-worker/wrangler.toml
+
+name = "tenkiter-og"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Mantém o endereço público tenkiter-og.<conta>.workers.dev (usado pelas rotas
+# Rewrite do Render: /sitemap.xml, /feed.xml e /feed.csv).
+workers_dev = true
+
+[observability]
+enabled = true
