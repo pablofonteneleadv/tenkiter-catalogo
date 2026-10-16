@@ -16,7 +16,10 @@
 // sem isto o navegador recusa o arquivo inteiro e o catálogo deixa de abrir sem internet. Só os avisos push ficam de fora.
 try { importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js'); } catch (e) { /* segue só com o cache */ }
 
-var VERSAO = 'tk-3.11.0';
+// v3.12 (16/10/2026): renova o cache do site em todos os aparelhos, para que o common.js e o
+// admin-postagens.js novos (seletor de canal Instagram/WhatsApp/Ambos + payload `canal`) cheguem
+// na hora, sem o atendente precisar limpar o cache na mao.
+var VERSAO = 'tk-3.12.0';
 var CACHE_SITE = 'tk-site-' + VERSAO;
 var CACHE_FOTOS = 'tk-fotos-v1';
 var MAX_FOTOS = 160;

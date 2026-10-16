@@ -6,6 +6,25 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [Não publicado] - 2026-10-16
+
+### Adicionado
+- **Postagem multicanal (Instagram · WhatsApp · Ambos)**: seletor de canal na tela de postagem do
+  painel. O contrato do canal passa a viver em `common.js` e o `POST /post` envia
+  `canal=instagram|whatsapp|ambos`. Com `instagram` (padrão) o comportamento é idêntico ao de antes.
+- **Integração Wafly (status do WhatsApp) no backend** (Apps Script 4.14 / 3.14, **fora do
+  repositório**): envio server-side de texto e status com deduplicação, retry idempotente e validação
+  de webhook. As credenciais `WAFLY_CLIENT_TOKEN`, `WAFLY_INSTANCE` e `WAFLY_TOKEN` ficam **apenas**
+  nas Propriedades do Script — nunca no repositório, no frontend ou nos logs.
+
+### Alterado
+- **Cache do site**: `OneSignalSDKWorker.js` — `VERSAO` de `tk-3.11.0` para `tk-3.12.0`, para renovar o
+  cache de `common.js` e `admin-postagens.js` em todos os aparelhos.
+
+### Notas
+- Passo a passo do deploy manual (frontend, Apps Script e as 3 propriedades da Wafly) em
+  `patches/postagem-multicanal-wafly/como-aplicar.md`.
+
 ## [1.0.0] - 2026-10-15
 
 ### Adicionado
