@@ -1,0 +1,601 @@
+diff --git a/admin.html b/admin.html
+index 213c796..db47980 100644
+--- a/admin.html
++++ b/admin.html
+@@ -130,12 +130,32 @@
+   .btn-primario { background: var(--laranja); color: var(--preto); margin-top: 18px; }
+   .btn-cancelar-duplicar { background: #eee; color: #555; margin-top: 8px; display: none; }
+ 
+-  /* Bar de ações em lote */
+-  .bulk-bar { background: var(--preto); color: #fff; padding: 12px; border-radius: 12px; margin-bottom: 12px; display: none; }
++  /* Bar de ações em lote (v4.10 FE-04: rolagem horizontal no celular + "Mais ações" para o Juntar/Separar não sumirem) */
++  .bulk-bar { background: var(--preto); color: #fff; padding: 12px; border-radius: 12px; margin-bottom: 12px; display: none; position: sticky; top: 0; z-index: 40; }
+   .bulk-bar.ativa { display: block; }
+-  .bulk-bar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 0.85rem; }
+-  .bulk-bar-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+-  .bulk-bar-actions button { width: auto; font-size: 0.72rem; padding: 6px 10px; background: #333; color: #fff; }
++  .bulk-bar-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 0.85rem; }
++  .bulk-bar-actions { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; padding-bottom: 4px; }
++  .bulk-bar-actions::-webkit-scrollbar { height: 6px; }
++  .bulk-bar-actions::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
++  .bulk-bar-actions button { width: auto; flex: 0 0 auto; font-size: 0.72rem; padding: 6px 10px; background: #333; color: #fff; white-space: nowrap; }
++  .bulk-bar-actions button.mais { background: var(--laranja); color: #0d0d0d; }
++  .bulk-mais { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.15); }
++  .bulk-mais[hidden] { display: none; }
++  .bulk-mais button { width: auto; font-size: 0.72rem; padding: 6px 10px; background: #333; color: #fff; }
++
++  /* v4.10 (FE-03): menu "Cadastrar" com 3 caminhos */
++  .menu-cad { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 2px; }
++  .menu-cad-item { display: flex; align-items: center; gap: 12px; text-align: left; background: #fff; border: 2px solid #e6e6e6; border-radius: 12px; padding: 12px 14px; cursor: pointer; min-height: 56px; color: #111; width: 100%; }
++  .menu-cad-item:hover { border-color: var(--laranja); }
++  .menu-cad-item .mc-ic { font-size: 1.4rem; line-height: 1; flex: none; }
++  .menu-cad-item b { display: block; font-size: 0.95rem; }
++  .menu-cad-item small { color: #555; font-size: 0.78rem; }
++  .menu-cad-item[hidden] { display: none; }
++
++  /* v4.10 (FE-08): filtros extras da busca do admin */
++  .filtros-admin { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 10px; }
++  .filtros-admin select, .filtros-admin input { width: auto; flex: 1 1 130px; min-width: 0; padding: 8px 10px; font-size: 0.8rem; border: 1px solid #ccc; border-radius: 10px; background: #fff; }
++  .filtros-admin button { width: auto; flex: 0 0 auto; font-size: 0.78rem; padding: 8px 12px; background: #eee; color: #333; }
+ 
+   .produto { display: flex; gap: 10px; background: var(--branco); border-radius: 12px; padding: 10px; margin-bottom: 10px; align-items: flex-start; position: relative; }
+   .produto-chk { margin-top: 25px; }
+@@ -323,6 +343,8 @@
+   .juntar-item img { width: 44px; height: 54px; object-fit: cover; border-radius: 6px; flex: none; background: #eee; }
+   .juntar-item span { font-size: .9rem; }
+   .juntar-erro { background: #fdecea; color: #8a1c13; border-radius: 8px; padding: 8px 10px; font-size: .88rem; margin: 6px 0; }
++  /* v4.10+: a lista de juntar rola sozinha e o botão "Juntar" fica sempre visível (celular) */
++  .juntar-lista { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 4px 0 10px; padding-right: 2px; }
+   .sheet { background: var(--branco); width: 100%; max-width: 560px; border-radius: 18px 18px 0 0; padding: 14px 16px 16px; height: 82vh; max-height: 82vh; display: flex; flex-direction: column; }
+   .sheet-topo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-family: "Poppins", sans-serif; font-size: 1.02rem; }
+   .sheet-x { width: 36px; height: 36px; padding: 0; border-radius: 50%; background: #eee; color: #333; font-size: 1rem; }
+@@ -621,6 +643,15 @@
+ 
+   <div id="ig-faixa" hidden></div>
+ 
++  <details class="cartao-cad" id="card-menu-cadastro">
++    <summary><span>➕ Cadastrar</span></summary>
++    <div class="menu-cad">
++      <button type="button" class="menu-cad-item" id="menu-cad-aceitar" hidden><span class="mc-ic">📥</span><span><b>Produtos para aceitar</b><small>Do Instagram — confira e cadastre</small></span></button>
++      <button type="button" class="menu-cad-item" id="menu-cad-nova"><span class="mc-ic">➕</span><span><b>Cadastrar nova peça</b><small>Uma peça, com fotos e vídeo</small></span></button>
++      <button type="button" class="menu-cad-item" id="menu-cad-varias"><span class="mc-ic">🗃️</span><span><b>Cadastrar várias peças</b><small>Mesmos dados, uma foto por peça</small></span></button>
++    </div>
++  </details>
++
+   <details class="cartao-cad" id="card-form">
+     <summary><span id="cad-sum-txt">➕ Cadastrar nova peça</span></summary>
+     <div class="cad-corpo">
+@@ -668,27 +699,35 @@
+         <div class="passo-msg">Coloque o preço da peça (maior que zero).</div>
+       </section>
+ 
+-      <section class="passo" data-passo="genero">
+-        <div class="passo-tit"><span class="num">4</span>Para quem é? <i class="obg">*</i></div>
+-        <div class="chips chips-grandes" id="chips-genero"></div>
+-        <div class="passo-msg">Escolha para quem é a peça.</div>
+-      </section>
+-
+       <section class="passo" data-passo="categoria">
+-        <div class="passo-tit"><span class="num">5</span>Categoria <i class="obg">*</i></div>
++        <div class="passo-tit"><span class="num">4</span>Categoria <i class="obg">*</i></div>
+         <div class="tags" id="tags-categoria"></div>
+         <button type="button" class="btn-escolher" id="btn-abrir-categorias">＋ Escolher categoria</button>
+         <div class="passo-msg">Escolha pelo menos uma categoria.</div>
+       </section>
+ 
+       <section class="passo" data-passo="tamanhos">
+-        <div class="passo-tit"><span class="num">6</span>Tamanhos <span class="opc">(se souber)</span></div>
++        <div class="passo-tit"><span class="num">5</span>Tamanhos <span class="opc">(se souber)</span></div>
+         <div class="chips chips-rapidos" id="chips-tamanhos"></div>
+         <input type="text" id="tamanhos" placeholder="Ou escreva: P, M, G, GG" autocomplete="off">
++        <button type="button" class="btn-escolher" id="btn-abrir-tamanhos">＋ Escolher tamanhos</button>
++      </section>
++
++      <section class="passo" data-passo="cores">
++        <div class="passo-tit"><span class="num">6</span>Cores e estampas <span class="opc">(se souber)</span></div>
++        <div class="chips chips-rapidos" id="chips-cores"></div>
++        <input type="text" id="cores" placeholder="Ou escreva: Preto, Off-white, Estampado" autocomplete="off">
++        <button type="button" class="btn-escolher" id="btn-abrir-cores">＋ Escolher cores e estampas</button>
++      </section>
++
++      <section class="passo" data-passo="genero">
++        <div class="passo-tit"><span class="num">7</span>Para quem é? <i class="obg">*</i></div>
++        <div class="chips chips-grandes" id="chips-genero"></div>
++        <div class="passo-msg">Escolha para quem é a peça.</div>
+       </section>
+ 
+       <section class="passo" data-passo="video" id="passo-video">
+-        <div class="passo-tit"><span class="num">7</span>Vídeo da peça <span class="opc">(opcional · 1 só · até 20 MB)</span></div>
++        <div class="passo-tit"><span class="num">8</span>Vídeo da peça <span class="opc">(opcional · 1 só · até 20 MB)</span></div>
+         <div class="foto-box" id="video-box">
+           <label class="btn-foto btn-video" for="video-input">🎬 Gravar ou escolher um vídeo</label>
+           <input type="file" id="video-input" accept="video/mp4,video/quicktime,video/webm" class="input-oculto">
+@@ -702,10 +741,6 @@
+       <details class="extra" id="details-mais">
+         <summary>➕ Mais detalhes (cores, descrição, novidade)</summary>
+ 
+-        <label for="cores" style="margin-top:12px;">Cores</label>
+-        <div class="chips chips-rapidos" id="chips-cores"></div>
+-        <input type="text" id="cores" placeholder="Ou escreva: Preto, Off-white" autocomplete="off">
+-
+         <label for="descricao">Descrição</label>
+         <textarea id="descricao" rows="2" placeholder="Tecido viscose, caimento leve..."></textarea>
+ 
+@@ -752,11 +787,51 @@
+     </div>
+   </div>
+ 
++  <div class="overlay-sheet" id="overlay-tamanhos">
++    <div class="sheet" role="dialog" aria-modal="true" aria-label="Escolher tamanhos">
++      <div class="sheet-topo"><strong>Escolha os tamanhos</strong><button type="button" class="sheet-x" id="tam-fechar" aria-label="Fechar">✕</button></div>
++      <input type="text" id="tam-busca" placeholder="🔎 Digite para procurar (ex: M)" autocomplete="off">
++      <div class="cat-lista" id="tam-lista"></div>
++      <div class="nova-categoria" id="nova-tamanho-linha">
++        <label for="input-novo-tamanho">Nome do novo tamanho</label>
++        <div class="nova-categoria-linha">
++          <input type="text" id="input-novo-tamanho" placeholder="Ex.: G3" maxlength="60" dir="ltr" lang="pt-BR" autocomplete="off" autocapitalize="sentences" autocorrect="off" spellcheck="false" enterkeyhint="done">
++          <button type="button" id="btn-confirmar-novo-tamanho">Adicionar</button>
++        </div>
++        <div class="nova-cat-previa" id="novo-tam-previa" aria-live="polite"></div>
++        <div id="novo-tam-sugestoes"></div>
++        <button type="button" class="nova-cat-voltar" id="novo-tam-voltar">← Voltar para a lista</button>
++      </div>
++      <button type="button" class="cat-criar" id="btn-criar-tamanho">＋ Não achei: criar tamanho novo</button>
++      <button type="button" class="btn-primario" id="tam-pronto" style="margin-top:0;">Pronto</button>
++    </div>
++  </div>
++
++  <div class="overlay-sheet" id="overlay-cores">
++    <div class="sheet" role="dialog" aria-modal="true" aria-label="Escolher cores e estampas">
++      <div class="sheet-topo"><strong>Escolha as cores e estampas</strong><button type="button" class="sheet-x" id="cor-fechar" aria-label="Fechar">✕</button></div>
++      <input type="text" id="cor-busca" placeholder="🔎 Digite para procurar (ex: preto)" autocomplete="off">
++      <div class="cat-lista" id="cor-lista"></div>
++      <div class="nova-categoria" id="nova-cor-linha">
++        <label for="input-nova-cor">Nome da nova cor/estampa</label>
++        <div class="nova-categoria-linha">
++          <input type="text" id="input-nova-cor" placeholder="Ex.: Verde musgo" maxlength="60" dir="ltr" lang="pt-BR" autocomplete="off" autocapitalize="sentences" autocorrect="off" spellcheck="false" enterkeyhint="done">
++          <button type="button" id="btn-confirmar-nova-cor">Adicionar</button>
++        </div>
++        <div class="nova-cat-previa" id="nova-cor-previa" aria-live="polite"></div>
++        <div id="nova-cor-sugestoes"></div>
++        <button type="button" class="nova-cat-voltar" id="novo-cor-voltar">← Voltar para a lista</button>
++      </div>
++      <button type="button" class="cat-criar" id="btn-criar-cor">＋ Não achei: criar cor/estampa nova</button>
++      <button type="button" class="btn-primario" id="cor-pronto" style="margin-top:0;">Pronto</button>
++    </div>
++  </div>
++
+   <div class="overlay-sheet" id="overlay-juntar">
+     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="juntar-titulo">
+       <div class="sheet-topo"><strong id="juntar-titulo">Juntar produtos repetidos</strong><button type="button" class="sheet-x" id="juntar-fechar" aria-label="Fechar">✕</button></div>
+       <p class="juntar-ajuda">Escolha o produto que <b>fica</b>. As fotos e o vídeo dos outros vão para ele, e os outros ficam <b>arquivados</b> (dá para reativar).</p>
+-      <div id="juntar-lista" role="radiogroup" aria-labelledby="juntar-titulo"></div>
++      <div class="juntar-lista" id="juntar-lista" role="radiogroup" aria-labelledby="juntar-titulo"></div>
+       <div id="juntar-erro" class="juntar-erro" role="alert" hidden></div>
+       <button type="button" class="btn-primario" id="juntar-ok">Juntar</button>
+     </div>
+@@ -789,6 +864,11 @@
+       <button type="button" id="btn-bulk-reativar">🔄 Reativar em Massa</button>
+       <button type="button" id="btn-bulk-postar">📸 Enviar para Postagens</button>
+       <button type="button" id="btn-bulk-juntar" hidden>🔗 Juntar em 1 produto</button>
++      <button type="button" class="mais" id="btn-bulk-mais" aria-expanded="false">⋯ Mais ações</button>
++    </div>
++    <div class="bulk-mais" id="bulk-mais" hidden>
++      <button type="button" id="btn-bulk-separar" hidden>✂️ Separar em peças</button>
++      <button type="button" id="btn-bulk-editar">✏️ Editar em massa</button>
+     </div>
+   </div>
+ 
+@@ -798,6 +878,20 @@
+   </div>
+ 
+   <input type="text" id="busca-admin" placeholder="🔎 Procurar peça por nome ou código..." autocomplete="off">
++  <div class="filtros-admin" id="filtros-admin">
++    <select id="fa-categoria" aria-label="Filtrar por categoria"><option value="">Categoria: todas</option></select>
++    <select id="fa-genero" aria-label="Filtrar por gênero"><option value="">Gênero: todos</option></select>
++    <select id="fa-ordem" aria-label="Ordenar a lista">
++      <option value="recentes">Mais recentes</option>
++      <option value="antigas">Mais antigas</option>
++      <option value="nome">Nome (A–Z)</option>
++      <option value="preco-maior">Maior preço</option>
++      <option value="preco-menor">Menor preço</option>
++    </select>
++    <input type="number" id="fa-preco-min" placeholder="Preço mín R$" inputmode="decimal" aria-label="Preço mínimo">
++    <input type="number" id="fa-preco-max" placeholder="Preço máx R$" inputmode="decimal" aria-label="Preço máximo">
++    <button type="button" id="fa-limpar">✕ Limpar filtros</button>
++  </div>
+   <div class="filtros-lista" id="filtros-lista"></div>
+   <div class="aviso-cache" id="aviso-cache"></div>
+   <div id="lista-produtos"></div>
+@@ -1737,6 +1831,160 @@
+   document.getElementById('btn-criar-categoria').addEventListener('click', () => abrirCriacaoCategoria_(document.getElementById('cat-busca').value));
+   montarRapidos_();
+ 
++  /* ===================== v4.10+: tamanhos e cores com o MESMO sistema de escolha das categorias =====================
++   * Cada campo (tamanhos, cores) ganha uma folha com busca, lista, "criar nova" e sugestões — o mesmo padrão da
++   * categoria. O que a pessoa escolhe vira o texto do campo (separado por vírgula), então cadastro, edição e
++   * "Editar em massa" continuam funcionando sem mudança. */
++  const CAMPOS_ESCOLHA_ = {
++    tamanhos: { overlay: 'overlay-tamanhos', campo: 'tamanhos', chips: 'chips-tamanhos', busca: 'tam-busca', lista: 'tam-lista', criar: 'btn-criar-tamanho', nova: 'nova-tamanho-linha', input: 'input-novo-tamanho', confirmar: 'btn-confirmar-novo-tamanho', previa: 'novo-tam-previa', sugestoes: 'novo-tam-sugestoes', voltar: 'novo-tam-voltar', pronto: 'tam-pronto', abrir: 'btn-abrir-tamanhos', fechar: 'tam-fechar', base: TAMANHOS_RAPIDOS },
++    cores:    { overlay: 'overlay-cores',    campo: 'cores',    chips: 'chips-cores',    busca: 'cor-busca', lista: 'cor-lista', criar: 'btn-criar-cor',    nova: 'nova-cor-linha',    input: 'input-nova-cor',    confirmar: 'btn-confirmar-nova-cor',    previa: 'nova-cor-previa', sugestoes: 'nova-cor-sugestoes', voltar: 'novo-cor-voltar', pronto: 'cor-pronto', abrir: 'btn-abrir-cores',    fechar: 'cor-fechar', base: CORES_RAPIDAS }
++  };
++  const escolhaEditando_ = { tamanhos: null, cores: null };
++  const escolhaNovas_ = { tamanhos: [], cores: [] };
++  const escolhaSel_ = { tamanhos: new Set(), cores: new Set() };
++  const escolhaTermo_ = { tamanhos: '', cores: '' };
++
++  function opcoesEscolha_(chave) {
++    const cfg = CAMPOS_ESCOLHA_[chave];
++    const vistos = new Set(), out = [];
++    cfg.base.concat(escolhaNovas_[chave]).forEach((o) => { const k = semAcento_(o); if (o && !vistos.has(k)) { vistos.add(k); out.push(o); } });
++    return out.sort((a, b) => a.localeCompare(b, 'pt-BR'));
++  }
++  function abrirEscolha_(chave) {
++    const cfg = CAMPOS_ESCOLHA_[chave];
++    escolhaSel_[chave] = new Set(listaDoCampo_(cfg.campo));
++    escolhaTermo_[chave] = '';
++    escolhaEditando_[chave] = null;
++    const b = document.getElementById(cfg.busca); if (b) b.value = '';
++    fecharCriacaoEscolha_(chave);
++    renderizarEscolha_(chave);
++    abrirComHistorico_(cfg.overlay);
++  }
++  function renderizarEscolha_(chave) {
++    const cfg = CAMPOS_ESCOLHA_[chave];
++    const termo = semAcento_(escolhaTermo_[chave]);
++    const lista = opcoesEscolha_(chave).filter((o) => !termo || semAcento_(o).indexOf(termo) !== -1);
++    const box = document.getElementById(cfg.lista);
++    const linha = (o) => {
++      if (escolhaEditando_[chave] === o) return editorEscolha_(chave, o);
++      const marcada = escolhaSel_[chave].has(o);
++      return '<div class="cat-linha"><button type="button" class="cat-item' + (marcada ? ' selecionado' : '') + '" data-esc="' + escaparHtml(o) + '"><span>' + escaparHtml(o) + '</span><span class="marca">' + (marcada ? '✓' : '') + '</span></button>'
++        + '<button type="button" class="cat-acao cat-ed" data-esc-editar="' + escaparHtml(o) + '" aria-label="Corrigir ' + escaparHtml(o) + '" title="Corrigir">✎</button></div>';
++    };
++    const bruto = String(escolhaTermo_[chave] || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
++    const criarCom = bruto && !opcoesEscolha_(chave).some((o) => semAcento_(o) === semAcento_(bruto))
++      ? '<button type="button" class="cat-criar-linha" data-esc-criar="' + escaparHtml(bruto) + '">＋ Criar “' + escaparHtml(bruto) + '”</button>' : '';
++    box.innerHTML = lista.length ? lista.map(linha).join('') + criarCom
++      : '<div class="cat-vazio">' + (termo ? 'Nada com esse nome.' : 'Ainda não há opções.') + '<br>Use o botão abaixo para criar.</div>' + criarCom;
++    const n = escolhaSel_[chave].size;
++    document.getElementById(cfg.pronto).textContent = n ? 'Pronto (' + n + (n === 1 ? ' escolhido)' : ' escolhidos)') : 'Pronto';
++  }
++  function editorEscolha_(chave, o) {
++    const e = escaparHtml(o);
++    return '<div class="cat-linha"><div class="cat-edit"><input type="text" class="cat-edit-input" data-esc-antigo="' + e + '" value="' + e + '" maxlength="60" dir="ltr" lang="pt-BR" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Novo nome de ' + e + '">'
++      + '<button type="button" class="cat-salvar" data-esc-salvar>Salvar</button><button type="button" class="cat-cancelar" data-esc-cancelar aria-label="Cancelar">✕</button></div></div>';
++  }
++  function abrirCriacaoEscolha_(chave, texto) {
++    const cfg = CAMPOS_ESCOLHA_[chave];
++    escolhaEditando_[chave] = null;
++    document.getElementById(cfg.nova).classList.add('aberto');
++    [cfg.busca, cfg.lista, cfg.criar].forEach((id) => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
++    const inp = document.getElementById(cfg.input);
++    inp.value = String(texto || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
++    atualizarCriacaoEscolha_(chave);
++    inp.focus();
++    try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) {}
++  }
++  function fecharCriacaoEscolha_(chave) {
++    const cfg = CAMPOS_ESCOLHA_[chave];
++    document.getElementById(cfg.nova).classList.remove('aberto');
++    [cfg.busca, cfg.lista, cfg.criar].forEach((id) => { const el = document.getElementById(id); if (el) el.style.display = ''; });
++    escolhaEditando_[chave] = null;
++  }
++  function atualizarCriacaoEscolha_(chave) {
++    const cfg = CAMPOS_ESCOLHA_[chave];
++    const inp = document.getElementById(cfg.input);
++    const limpo = String(inp.value || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
++    const igual = limpo ? opcoesEscolha_(chave).find((o) => semAcento_(o) === semAcento_(limpo)) : null;
++    const previa = document.getElementById(cfg.previa);
++    if (!limpo) previa.innerHTML = '<span class="muda">Digite o nome. Embaixo aparecem as opções parecidas que já existem.</span>';
++    else if (igual) previa.innerHTML = 'Já existe: <strong>' + escaparHtml(igual) + '</strong>';
++    else previa.innerHTML = 'Vai ser criado como: <strong>' + escaparHtml(limpo) + '</strong>';
++    const btn = document.getElementById(cfg.confirmar);
++    if (!btn.disabled) btn.textContent = igual ? 'Usar essa' : 'Adicionar';
++    const sug = limpo ? opcoesEscolha_(chave).filter((o) => semAcento_(o).indexOf(semAcento_(limpo)) !== -1).slice(0, 8) : [];
++    document.getElementById(cfg.sugestoes).innerHTML = !limpo ? ''
++      : sug.length ? '<div class="sug-titulo">Já cadastradas parecidas — toque para copiar o nome:</div><div class="sug-lista">' + sug.map((o) => '<div class="sug-linha"><button type="button" class="sug-copiar" data-esc-copiar="' + escaparHtml(o) + '"><span class="sug-nome">' + escaparHtml(o) + '</span><span class="sug-dica">copiar nome</span></button></div>').join('') + '</div>'
++      : '<div class="sug-titulo">Nenhuma opção parecida. Pode criar.</div>';
++  }
++  function adicionarEscolha_(chave) {
++    const cfg = CAMPOS_ESCOLHA_[chave];
++    const inp = document.getElementById(cfg.input);
++    const nome = String(inp.value || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
++    if (!nome) { inp.focus(); return; }
++    const igual = opcoesEscolha_(chave).find((o) => semAcento_(o) === semAcento_(nome));
++    const alvo = igual || nome;
++    if (!igual) escolhaNovas_[chave].push(nome);
++    escolhaSel_[chave].add(alvo);
++    inp.value = '';
++    fecharCriacaoEscolha_(chave);
++    renderizarEscolha_(chave);
++  }
++  function aplicarEscolha_(chave) {
++    const cfg = CAMPOS_ESCOLHA_[chave];
++    document.getElementById(cfg.campo).value = Array.from(escolhaSel_[chave]).join(', ');
++    sincRapidos_();
++    atualizarFaltas_();
++  }
++  function ligarEscolha_(chave) {
++    const cfg = CAMPOS_ESCOLHA_[chave];
++    const abrir = document.getElementById(cfg.abrir); if (abrir) abrir.addEventListener('click', () => abrirEscolha_(chave));
++    const fechar = document.getElementById(cfg.fechar); if (fechar) fechar.addEventListener('click', () => fecharComHistorico_(cfg.overlay));
++    const pronto = document.getElementById(cfg.pronto); if (pronto) pronto.addEventListener('click', () => { aplicarEscolha_(chave); fecharComHistorico_(cfg.overlay); });
++    const ov = document.getElementById(cfg.overlay); if (ov) ov.addEventListener('click', (ev) => { if (ev.target.id === cfg.overlay) { aplicarEscolha_(chave); fecharComHistorico_(cfg.overlay); } });
++    const busca = document.getElementById(cfg.busca); if (busca) busca.addEventListener('input', () => { escolhaTermo_[chave] = busca.value; escolhaEditando_[chave] = null; renderizarEscolha_(chave); });
++    const criar = document.getElementById(cfg.criar); if (criar) criar.addEventListener('click', () => abrirCriacaoEscolha_(chave, escolhaTermo_[chave]));
++    const voltar = document.getElementById(cfg.voltar); if (voltar) voltar.addEventListener('click', () => { fecharCriacaoEscolha_(chave); renderizarEscolha_(chave); });
++    const conf = document.getElementById(cfg.confirmar); if (conf) conf.addEventListener('click', () => adicionarEscolha_(chave));
++    const inp = document.getElementById(cfg.input);
++    if (inp) {
++      inp.addEventListener('input', () => { escolhaEditando_[chave] = null; atualizarCriacaoEscolha_(chave); });
++      inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); adicionarEscolha_(chave); } });
++    }
++    const lista = document.getElementById(cfg.lista);
++    if (lista) {
++      lista.addEventListener('click', (ev) => {
++        const ed = ev.target.closest('[data-esc-editar]');
++        if (ed) { escolhaEditando_[chave] = ed.getAttribute('data-esc-editar'); renderizarEscolha_(chave); const i = lista.querySelector('.cat-edit-input'); if (i) { i.focus(); i.select(); } return; }
++        const sv = ev.target.closest('[data-esc-salvar]');
++        if (sv) {
++          const i = lista.querySelector('.cat-edit-input'); if (!i) return;
++          const antigo = i.getAttribute('data-esc-antigo'), novo = String(i.value || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
++          if (novo && semAcento_(novo) !== semAcento_(antigo)) {
++            const idx = escolhaNovas_[chave].findIndex((o) => semAcento_(o) === semAcento_(antigo));
++            if (idx !== -1) escolhaNovas_[chave][idx] = novo; else escolhaNovas_[chave].push(novo);
++            if (escolhaSel_[chave].has(antigo)) { escolhaSel_[chave].delete(antigo); escolhaSel_[chave].add(novo); }
++          }
++          escolhaEditando_[chave] = null; renderizarEscolha_(chave); return;
++        }
++        if (ev.target.closest('[data-esc-cancelar]')) { escolhaEditando_[chave] = null; renderizarEscolha_(chave); return; }
++        const cr = ev.target.closest('[data-esc-criar]');
++        if (cr) { abrirCriacaoEscolha_(chave, cr.getAttribute('data-esc-criar')); return; }
++        const cp = ev.target.closest('[data-esc-copiar]');
++        if (cp) { const i = document.getElementById(cfg.input); if (i) { i.value = cp.getAttribute('data-esc-copiar'); atualizarCriacaoEscolha_(chave); i.focus(); } return; }
++        const it = ev.target.closest('.cat-item'); if (!it) return;
++        const o = it.getAttribute('data-esc');
++        if (escolhaSel_[chave].has(o)) escolhaSel_[chave].delete(o); else escolhaSel_[chave].add(o);
++        it.classList.toggle('selecionado');
++        const m = it.querySelector('.marca'); if (m) m.textContent = escolhaSel_[chave].has(o) ? '✓' : '';
++        const n = escolhaSel_[chave].size;
++        document.getElementById(cfg.pronto).textContent = n ? 'Pronto (' + n + (n === 1 ? ' escolhido)' : ' escolhidos)') : 'Pronto';
++      });
++    }
++  }
++  ligarEscolha_('tamanhos');
++  ligarEscolha_('cores');
++
+   /* ===================== Duplicar / Editar peça ===================== */
+ 
+   let modoFormulario = 'novo'; // 'novo' | 'duplicando' | 'editando'
+@@ -1818,6 +2066,35 @@
+ 
+   document.getElementById('btn-cancelar-duplicar').addEventListener('click', cancelarDuplicacao);
+ 
++  /* ===================== v4.10 (FE-03): menu "Cadastrar" com 3 caminhos ===================== */
++  (function ligarMenuCadastro_() {
++    const bAceitar = document.getElementById('menu-cad-aceitar');
++    const bNova = document.getElementById('menu-cad-nova');
++    const bVarias = document.getElementById('menu-cad-varias');
++    const menu = document.getElementById('card-menu-cadastro');
++    if (bAceitar) bAceitar.addEventListener('click', () => {
++      if (menu) menu.open = false;
++      const f = document.getElementById('ig-faixa');
++      if (f && !f.hidden) { f.scrollIntoView({ behavior: 'smooth', block: 'center' }); const b = document.getElementById('ig-abrir'); if (b) b.click(); }
++      else alert('Nenhum produto do Instagram esperando aceite agora.');
++    });
++    if (bNova) bNova.addEventListener('click', () => { if (menu) menu.open = false; cancelarDuplicacao(); abrirCadastro_(); });
++    if (bVarias) bVarias.addEventListener('click', () => { if (menu) menu.open = false; iniciarVarias_(); });
++  })();
++
++  /** "Cadastrar várias peças": mesmos dados para todas, UMA foto por peça. Cada foto vira um produto. */
++  function iniciarVarias_() {
++    cancelarDuplicacao();
++    modoFormulario = 'varias';
++    tituloForm_('Cadastrar várias peças');
++    const al = document.getElementById('aviso-lote');
++    if (al) { al.hidden = false; al.textContent = '🗃️ Várias peças: preencha os dados UMA vez e escolha as fotos abaixo — cada foto vira uma peça separada com estes mesmos dados.'; }
++    document.getElementById('btn-salvar').textContent = 'Cadastrar as peças';
++    document.getElementById('btn-cancelar-duplicar').textContent = 'Cancelar / Nova peça';
++    document.getElementById('btn-cancelar-duplicar').style.display = 'block';
++    abrirCadastro_();
++  }
++
+   // v3.6 — "Produtos para aceitar" (importador do Instagram): abre o cadastro NORMAL já preenchido com as mídias do rascunho (já estão no R2) — mesmo caminho de sempre
+   // (código TK, categoria, SEO...). Nada vira produto sem o Pablo conferir e apertar "Cadastrar peça". `r` = { id, legenda, precoSug, tamanhosSug, midias:[{tipo,url,capa}] }.
+   window.tkAceitarRascunho = function (r) {
+@@ -2375,6 +2652,34 @@
+     const idParaEditar = document.getElementById('produto-id').value;
+     const ehEdicao = modoFormulario === 'editando' && idParaEditar;
+     garantirCapa_();
++
++    // v4.10 (FE-03): "Cadastrar várias peças" — cada foto vira um produto com os MESMOS dados.
++    if (modoFormulario === 'varias') {
++      const base = {
++        action: 'create',
++        nome: document.getElementById('nome').value.trim(),
++        categoria: Array.from(selecionadasCategorias).join(', '),
++        genero: Array.from(selecionadosGeneros).join(', '),
++        preco: document.getElementById('preco').value,
++        estoque: document.getElementById('estoque').value,
++        tamanhos: document.getElementById('tamanhos').value.trim(),
++        cores: document.getElementById('cores').value.trim(),
++        descricao: document.getElementById('descricao').value.trim(),
++        novidade: document.getElementById('novidade').checked,
++        notificarPush: document.getElementById('novidade').checked ? document.getElementById('notificarPush').checked : false
++      };
++      const fotos = fotosItens.filter(i => i.b64);
++      if (!fotos.length) { alert('Escolha pelo menos uma foto — cada foto vira uma peça.'); return; }
++      fotos.forEach((f) => {
++        envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Peça', ehEdicao: false, temVideo: false, videoArquivo: null, capaNovaB64: f.b64, galeriaNovaB64: [], dados: Object.assign({}, base), estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila' });
++        guardarEnvio_(envios[envios.length - 1]);
++      });
++      cancelarDuplicacao();
++      document.getElementById('status').textContent = 'Cadastrando ' + fotos.length + ' peça(s) em segundo plano.';
++      document.getElementById('card-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
++      desenharEnvios(); processarEnvios();
++      return;
++    }
+     const capaItem = fotosItens.find(i => i.capa) || null;
+     const resto = fotosItens.filter(i => !i.capa);
+     const dados = {
+@@ -2514,11 +2819,49 @@
+   /** As peças que estão aparecendo agora. Regra do projeto: com texto de busca, procura em TUDO, sem combinar com o filtro escolhido. */
+   function listaVisivel_() {
+     const busca = semAcento_(document.getElementById('busca-admin').value);
+-    return busca
++    const fCat = semAcento_((document.getElementById('fa-categoria') || {}).value || '');
++    const fGen = semAcento_((document.getElementById('fa-genero') || {}).value || '');
++    const pMin = parseFloat(String((document.getElementById('fa-preco-min') || {}).value || '').replace(',', '.'));
++    const pMax = parseFloat(String((document.getElementById('fa-preco-max') || {}).value || '').replace(',', '.'));
++    const ordem = (document.getElementById('fa-ordem') || {}).value || 'recentes';
++    let lista = busca
+       ? produtos.filter(p => semAcento_(p.Nome).includes(busca) || semAcento_(p.Codigo).includes(busca))
+       : produtos.filter(p => filtroLista === 'todas' ? true : filtroLista === 'arquivadas' ? ehInativo_(p) : filtroLista === 'esgotadas' ? (!ehInativo_(p) && estaEsgotado(p)) : !ehInativo_(p));
++    // v4.10 (FE-08): filtros extras da busca do admin
++    if (fCat) lista = lista.filter(p => semAcento_(p.Categoria).includes(fCat));
++    if (fGen) lista = lista.filter(p => semAcento_(p.Genero).includes(fGen));
++    if (!isNaN(pMin)) lista = lista.filter(p => Number(p.Preco) >= pMin);
++    if (!isNaN(pMax)) lista = lista.filter(p => Number(p.Preco) <= pMax);
++    if (ordem === 'antigas') lista = lista.slice().reverse();
++    else if (ordem === 'nome') lista = lista.slice().sort((a, b) => String(a.Nome || '').localeCompare(String(b.Nome || ''), 'pt-BR'));
++    else if (ordem === 'preco-maior') lista = lista.slice().sort((a, b) => Number(b.Preco) - Number(a.Preco));
++    else if (ordem === 'preco-menor') lista = lista.slice().sort((a, b) => Number(a.Preco) - Number(b.Preco));
++    return lista;
+   }
+ 
++  /** v4.10 (FE-08): preenche os selects de categoria/gênero com o que existe na loja. */
++  function renderizarFiltrosAdmin_() {
++    const selC = document.getElementById('fa-categoria'), selG = document.getElementById('fa-genero');
++    if (!selC || !selG) return;
++    const cats = new Set(), gens = new Set();
++    produtos.forEach(p => { String(p.Categoria || '').split(',').map(s => s.trim()).filter(Boolean).forEach(c => cats.add(c)); String(p.Genero || '').split(',').map(s => s.trim()).filter(Boolean).forEach(g => gens.add(g)); });
++    const atualC = selC.value, atualG = selG.value;
++    selC.innerHTML = '<option value="">Categoria: todas</option>' + Array.from(cats).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(c => '<option value="' + escaparHtml(c) + '">' + escaparHtml(c) + '</option>').join('');
++    selG.innerHTML = '<option value="">Gênero: todos</option>' + Array.from(gens).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(g => '<option value="' + escaparHtml(g) + '">' + escaparHtml(g) + '</option>').join('');
++    selC.value = atualC; selG.value = atualG;
++  }
++  (function ligarFiltrosAdmin_() {
++    const box = document.getElementById('filtros-admin'); if (!box) return;
++    box.addEventListener('change', () => renderizarProdutos());
++    box.addEventListener('input', (e) => { if (e.target && /fa-preco/.test(e.target.id)) renderizarProdutos(); });
++    const limpar = document.getElementById('fa-limpar');
++    if (limpar) limpar.addEventListener('click', () => {
++      ['fa-categoria', 'fa-genero', 'fa-preco-min', 'fa-preco-max'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
++      const o = document.getElementById('fa-ordem'); if (o) o.value = 'recentes';
++      renderizarProdutos();
++    });
++  })();
++
+   function renderizarProdutos() {
+     const busca = semAcento_(document.getElementById('busca-admin').value);
+     const container = document.getElementById('lista-produtos');
+@@ -2528,6 +2871,7 @@
+     document.getElementById('dash-disponiveis').textContent = ativos.filter(p => !estaEsgotado(p)).length;
+     document.getElementById('dash-esgotados').textContent = ativos.filter(p => estaEsgotado(p)).length;
+     renderizarFiltrosLista_();
++    renderizarFiltrosAdmin_();   // v4.10 (FE-08)
+     if (window.TKGestao) TKGestao.aoRenderizarLista(); // v3.1: aviso de peças sem código
+ 
+     const lista = listaVisivel_();
+@@ -2599,8 +2943,11 @@
+       bar.classList.add('ativa');
+       cnt.textContent = selecionadosBulk.size + ' selecionados';
+       const bj = document.getElementById('btn-bulk-juntar'); if (bj) bj.hidden = !(juntarLiberado_ && selecionadosBulk.size >= 2);
++      // v4.10+: "Separar" só faz sentido com UMA peça marcada (a que tem várias fotos). Antes o botão ficava sempre escondido.
++      const bs = document.getElementById('btn-bulk-separar'); if (bs) bs.hidden = !(selecionadosBulk.size >= 1);
+     } else {
+       bar.classList.remove('ativa');
++      const bs2 = document.getElementById('btn-bulk-separar'); if (bs2) bs2.hidden = true;
+     }
+   }
+ 
+@@ -2649,6 +2996,56 @@
+     }
+   });
+ 
++  /* ===================== v4.10 (FE-04/FE-05): "Mais ações" — Separar e Editar em massa ===================== */
++  document.getElementById('btn-bulk-mais').addEventListener('click', (e) => {
++    const box = document.getElementById('bulk-mais');
++    box.hidden = !box.hidden;
++    e.currentTarget.setAttribute('aria-expanded', String(!box.hidden));
++  });
++
++  /** Separar: inverso do Juntar. Mantém a 1ª peça como está e devolve as fotos extras como peças novas. */
++  document.getElementById('btn-bulk-separar').addEventListener('click', async () => {
++    const ids = Array.from(selecionadosBulk);
++    if (ids.length !== 1) { alert('Para separar, marque UMA peça só (a que tem várias fotos).'); return; }
++    if (!confirm('Separar esta peça em várias? A 1ª foto continua na peça original e cada foto extra vira uma peça nova com os mesmos dados.')) return;
++    const r = await chamarAdmin_({ action: 'separarProduto', id: ids[0] });
++    if (r && r.ok) { alert('Pronto! ' + (r.criados || 0) + ' peça(s) nova(s) criada(s).'); selecionadosBulk.clear(); atualizarBarraBulk(); await carregarProdutos(); }
++    else alert('Não consegui separar' + (r && r.erro ? ': ' + r.erro : '.') + '\nSe o servidor ainda não tiver essa ação, use "Editar em massa" ou o cadastro normal.');
++  });
++
++  /** Editar em massa: muda UM campo em várias peças de uma vez, mantendo os outros campos de cada uma. Não mexe em fotos/vídeo. */
++  document.getElementById('btn-bulk-editar').addEventListener('click', async () => {
++    const ids = Array.from(selecionadosBulk);
++    if (!ids.length) return;
++    const campos = [['preco', 'Preço (ex: 89,90)'], ['categoria', 'Categoria (separe por vírgula)'], ['genero', 'Gênero (Feminino/Masculino/Unissex)'], ['tamanhos', 'Tamanhos (ex: P, M, G)'], ['cores', 'Cores (ex: Preto, Off-white)'], ['estoque', 'Estoque (número)'], ['descricao', 'Descrição']];
++    const escolha = prompt('O que você quer mudar nas ' + ids.length + ' peças?\n\n' + campos.map((c, i) => (i + 1) + ') ' + c[1]).join('\n') + '\n\nDigite o número:');
++    const idx = parseInt(escolha, 10) - 1;
++    if (!(idx >= 0 && idx < campos.length)) return;
++    const campo = campos[idx][0];
++    const valor = prompt('Novo valor para "' + campos[idx][1] + '":');
++    if (valor === null) return;
++    let n = 0;
++    ids.forEach((id) => {
++      const p = produtos.find(x => String(x.ID) === String(id));
++      if (!p) return;
++      const dados = {
++        action: 'update', id: p.ID,
++        nome: p.Nome || '', categoria: p.Categoria || '', genero: p.Genero || '',
++        preco: p.Preco != null ? String(p.Preco) : '', estoque: p.Estoque != null ? String(p.Estoque) : '',
++        tamanhos: p.Tamanhos || '', cores: p.Cores || '', descricao: p.Descricao || '',
++        novidade: ehNovidade(p),
++        fotoUrlExistente: String(p.Foto_URL || '').trim(),
++        fotosGaleriaExistentes: String(p.Fotos_Galeria || '').split(',').map(s => s.trim()).filter(Boolean).join(',')
++      };
++      dados[campo] = valor;
++      envios.push({ chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: true, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: dados, estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila' });
++      guardarEnvio_(envios[envios.length - 1]); n++;
++    });
++    if (!n) return;
++    document.getElementById('status').textContent = 'Editando ' + n + ' peça(s) em segundo plano.';
++    selecionadosBulk.clear(); atualizarBarraBulk(); desenharEnvios(); processarEnvios();
++  });
++
+   /* ===== v3.7: juntar produtos repetidos (backend juntarProdutos) ===== */
+   versaoServidor().then(v => { juntarLiberado_ = !!(v && v.juntarProdutos); atualizarBarraBulk(); }).catch(() => {});
+   function juntarSelecionados_() { return produtos.filter(p => selecionadosBulk.has(String(p.ID))); }
+@@ -3859,6 +4256,15 @@
+     }
+   } catch(e) {}
+   // vindo do catálogo ("🛠️ Edição em lote"): marca as peças da seleção e aciona o botão escolhido
++  // v4.10 (FE-06): se o catálogo mandou a sessão compartilhada na URL, adota ANTES de qualquer coisa —
++  // assim o admin não pede login de novo (mesma conta, mesma chave tm_session).
++  try {
++    var mSes = /[?&]sessao=([^&]+)/.exec(location.search), mWpp = /[?&]whatsapp=([^&]*)/.exec(location.search);
++    if (mSes && !getSessao()) {
++      salvarSessao(decodeURIComponent(mWpp ? mWpp[1] : ''), decodeURIComponent(mSes[1]));
++      try { window.dispatchEvent(new Event('tk:sessao')); } catch (e) {}
++    }
++  } catch (e) {}
+   try {
+     var mLo = /[?&]lote=([^&]*)/.exec(location.search), mAc = /[?&]acao=(btn-bulk-[a-z]+)/.exec(location.search);
+     if (mLo && mAc) {
+@@ -3880,6 +4286,15 @@
+   } catch(e) {}
+   // vindo do catálogo (botão "➕ Cadastrar nova peça"): abre o MESMO cartão de cadastro daqui, sem cópia da função
+   try { if (/[?&]novo=1/.test(location.search)) { setTimeout(function(){ var c=$('card-form'); if(c){ c.open=true; c.scrollIntoView({block:'start'}); } try{ history.replaceState(history.state,'',location.pathname); }catch(e){} }, 900); } } catch(e) {}
++  // v4.10 (FE-03): mostra "Produtos para aceitar" no menu Cadastrar quando houver algo esperando (a faixa do Instagram é a fonte)
++  try {
++    var tmIg = setInterval(function(){
++      var f = document.getElementById('ig-faixa'), b = document.getElementById('menu-cad-aceitar');
++      if (!f || !b) return;
++      if (!f.hidden) { b.hidden = false; clearInterval(tmIg); }
++    }, 800);
++    setTimeout(function(){ clearInterval(tmIg); }, 20000);
++  } catch(e) {}
+   document.addEventListener('click',function(e){
+     var b=e.target.closest&&e.target.closest('[data-ativo]'); if(!b) return;
+     var k=b.getAttribute('data-atalho'), alvo=null;
