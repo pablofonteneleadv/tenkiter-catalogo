@@ -62,17 +62,63 @@ jobs:
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
         run: bash scripts/deploy/cloudflare_purge.sh
 
+      # Roda SEMPRE, mesmo que o purge acima tenha falhado. Antes ele era pulado
+      # em cascata (o purge saia com exit 1 e o job marcava o resto como skipped),
+      # entao uma falha secundaria escondia o estado real de producao — nos runs
+      # 38833465713, 38837548442 e 38840046234 ninguem chegou a conferir o ar.
       - name: Verificação final no ar
+        if: always()
+        env:
+          COMMIT_ESPERADO: ${{ github.sha }}
         run: |
-          echo "==> Cabeçalhos de produção"
-          curl -sSI -m 30 https://tenkitermodas.com.br/ | head -20
-          echo ""
-          echo "==> version.json publicado"
-          curl -sS -m 20 https://tenkitermodas.com.br/version.json || true
-          echo ""
+          falhou=0
+
+          echo "==> 1) Site"
           codigo="$(curl -sS -o /dev/null -w '%{http_code}' -m 30 https://tenkitermodas.com.br/)"
-          echo "HTTP final: $codigo"
-          [ "$codigo" = "200" ] || exit 1
+          echo "    https://tenkitermodas.com.br/ -> HTTP $codigo"
+          [ "$codigo" = "200" ] || falhou=1
+
+          echo ""
+          echo "==> 2) Commit publicado (/version.json)"
+          publicado="$(curl -sS -m 20 -H 'Cache-Control: no-cache' \
+            "https://tenkitermodas.com.br/version.json?cb=$(date +%s)" || true)"
+          echo "    $publicado"
+          no_ar="$(printf '%s' "$publicado" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("commit",""))' 2>/dev/null || echo "")"
+          echo "    no ar:  '${no_ar}'"
+          echo "    esperado: '$COMMIT_ESPERADO'"
+          if [ "$no_ar" = "$COMMIT_ESPERADO" ]; then
+            echo "    OK — o ar esta servindo exatamente este commit."
+          else
+            echo "::error::/version.json no ar ('$no_ar') nao confere com o commit deste deploy ('$COMMIT_ESPERADO')."
+            falhou=1
+          fi
+
+          echo ""
+          echo "==> 3) CORS do Worker do Instagram"
+          ig_headers="$(curl -sS -D - -o /dev/null -m 25 \
+            -H 'Origin: https://tenkitermodas.com.br' \
+            https://tenkiter-ig.distkrpconfeccoes.workers.dev/status || true)"
+          echo "$ig_headers" | grep -iE '^HTTP|access-control-allow-origin|access-control-allow-methods|access-control-allow-headers' || true
+          cors="$(printf '%s' "$ig_headers" | grep -i '^access-control-allow-origin' | head -1 | tr -d '\r')"
+          codigo_ig="$(printf '%s' "$ig_headers" | grep -iE '^HTTP' | head -1 | tr -d '\r')"
+          if [ -n "$cors" ]; then
+            echo "    OK — $cors"
+          else
+            echo "::error::O Worker do Instagram nao devolveu cabecalho CORS para a origem do painel."
+            falhou=1
+          fi
+
+          {
+            echo "### Verificacao em producao"
+            echo ""
+            echo "| Checagem | Resultado |"
+            echo "|---|---|"
+            echo "| Site | HTTP $codigo |"
+            echo "| Commit no ar | \`$no_ar\` (esperado \`$COMMIT_ESPERADO\`) |"
+            echo "| Instagram | ${codigo_ig:-sem resposta} / ${cors:-sem CORS} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit "$falhou"
 
       - name: Resumo do deploy
         if: always()
