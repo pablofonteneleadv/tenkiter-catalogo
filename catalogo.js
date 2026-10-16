@@ -469,7 +469,15 @@
   document.getElementById('btn-share-busca').addEventListener('click', () => { const bf = document.getElementById('badge-filtros'), q = document.getElementById('busca').value.trim(); const filtrando = (bf && !bf.hidden && (parseInt(bf.textContent, 10) || 0) > 0) || q || selecaoFixa || apenasFavoritos || apenasNovidades; if (!filtrando && getSacola().length) abrirSelecao(true); else document.getElementById('btn-share-filtros').click(); });
   document.getElementById('btn-limpar-sel').addEventListener('click', () => { if (getSacola().length) { limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); } if (selecaoFixa || document.getElementById('busca').value.trim() || apenasFavoritos || apenasNovidades) document.getElementById('btn-share-filtros').click(); atualizarBarraFiltros_(); });
   document.getElementById('btn-lote-menu').addEventListener('click', (e) => { const m = document.getElementById('lote-menu'); m.hidden = !m.hidden; e.currentTarget.setAttribute('aria-expanded', String(!m.hidden)); });
-  document.getElementById('lote-menu').addEventListener('click', (e) => { const b = e.target.closest('[data-lote]'); if (!b) return; if (b.dataset.lote === 'btn-bulk-juntar') { document.getElementById('lote-menu').hidden = true; abrirJuntarCatalogo_(); return; } location.href = 'admin.html?lote=' + encodeURIComponent(getSacola().join(',')) + '&acao=' + b.dataset.lote; });
+  document.getElementById('lote-menu').addEventListener('click', (e) => { const b = e.target.closest('[data-lote]'); if (!b) return; if (b.dataset.lote === 'btn-bulk-juntar') { document.getElementById('lote-menu').hidden = true; abrirJuntarCatalogo_(); return; }
+    // v4.10 (FE-06): "Enviar para postagem" (e as demais ações em lote) exigem a MESMA sessão compartilhada.
+    // Antes, o catálogo mandava direto pro admin.html e o admin pedia login de novo. Agora: sem sessão, abre o
+    // login AQUI; com sessão, leva o token junto para o admin validar (nunca manda o link cru).
+    const s = getSessao();
+    if (!s || !s.sessao) { avisoEquipe_('Entre na sua conta para usar a edição em lote.'); const bc = document.getElementById('btn-conta-header'); if (bc) bc.click(); return; }
+    document.getElementById('lote-menu').hidden = true;
+    location.href = 'admin.html?lote=' + encodeURIComponent(getSacola().join(',')) + '&acao=' + b.dataset.lote + '&sessao=' + encodeURIComponent(s.sessao) + '&whatsapp=' + encodeURIComponent(s.whatsapp || '');
+  });
   function verTodoSite_() {
     modoLink_ = false;
     if (selecaoFixa) { selecaoFixa = null; }
