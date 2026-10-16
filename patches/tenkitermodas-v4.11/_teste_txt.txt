@@ -1,0 +1,4 @@
+acentos: ação ção ãõ é í ó ú â ê ô à
+emoji: 🔄 🗂️ 📥
+contexto: <details class="extra" id="detalhes-mais">
+<summary>➕ Mais detalhes (cores, descrição, novidade)</summary>
