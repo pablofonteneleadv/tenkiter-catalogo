@@ -58,7 +58,7 @@ index 213c796..db47980 100644
 +    <div class="menu-cad">
 +      <button type="button" class="menu-cad-item" id="menu-cad-aceitar" hidden><span class="mc-ic">📥</span><span><b>Produtos para aceitar</b><small>Do Instagram — confira e cadastre</small></span></button>
 +      <button type="button" class="menu-cad-item" id="menu-cad-nova"><span class="mc-ic">➕</span><span><b>Cadastrar nova peça</b><small>Uma peça, com fotos e vídeo</small></span></button>
-+      <button type="button" class="menu-cad-item" id="menu-cad-varias"><span class="mc-ic">🗃️</span><span><b>Cadastrar várias peças</b><small>Mesmos dados, uma foto por peça</small></span></button>
++      <button type="button" class="menu-cad-item" id="menu-cad-varias"><span class="mc-ic">🗂️</span><span><b>Cadastrar várias peças</b><small>Mesmos dados, uma foto por peça</small></span></button>
 +    </div>
 +  </details>
 +
@@ -111,8 +111,8 @@ index 213c796..db47980 100644
            <label class="btn-foto btn-video" for="video-input">🎬 Gravar ou escolher um vídeo</label>
            <input type="file" id="video-input" accept="video/mp4,video/quicktime,video/webm" class="input-oculto">
 @@ -702,10 +741,6 @@
-       <details class="extra" id="details-mais">
-         <summary>➕ Mais detalhes (cores, descrição, novidade)</summary>
+       <details class="extra" id="detalhes-mais">
+         <summary>➕ Mais detalhes (cores, descrivção, novidade)</summary>
  
 -        <label for="cores" style="margin-top:12px;">Cores</label>
 -        <div class="chips chips-rapidos" id="chips-cores"></div>
@@ -168,7 +168,7 @@ index 213c796..db47980 100644
    <div class="overlay-sheet" id="overlay-juntar">
      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="juntar-titulo">
        <div class="sheet-topo"><strong id="juntar-titulo">Juntar produtos repetidos</strong><button type="button" class="sheet-x" id="juntar-fechar" aria-label="Fechar">✕</button></div>
-       <p class="juntar-ajuda">Escolha o produto que <b>fica</b>. As fotos e o vídeo dos outros vão para ele, e os outros ficam <b>arquivados</b> (dá para reativar).</p>
+       <p class="juntar-ajuda">Escolha o produto que <b>fica</b>. As fotos e o vídeo dos outros vão para ele, e os outros ficam <b>arquivados</b> (d� para reativar).</p>
 -      <div id="juntar-lista" role="radiogroup" aria-labelledby="juntar-titulo"></div>
 +      <div class="juntar-lista" id="juntar-lista" role="radiogroup" aria-labelledby="juntar-titulo"></div>
        <div id="juntar-erro" class="juntar-erro" role="alert" hidden></div>
@@ -196,7 +196,7 @@ index 213c796..db47980 100644
 +    <select id="fa-ordem" aria-label="Ordenar a lista">
 +      <option value="recentes">Mais recentes</option>
 +      <option value="antigas">Mais antigas</option>
-+      <option value="nome">Nome (A–Z)</option>
++      <option value="nome">Nome (A”Z)</option>
 +      <option value="preco-maior">Maior preço</option>
 +      <option value="preco-menor">Menor preço</option>
 +    </select>
@@ -214,8 +214,8 @@ index 213c796..db47980 100644
 +  /* ===================== v4.10+: tamanhos e cores com o MESMO sistema de escolha das categorias =====================
 +   * Cada campo (tamanhos, cores) ganha uma folha com busca, lista, "criar nova" e sugestões — o mesmo padrão da
 +   * categoria. O que a pessoa escolhe vira o texto do campo (separado por vírgula), então cadastro, edição e
-+   * "Editar em massa" continuam funcionando sem mudança. */
-+  const CAMPOS_ESCOLHA_ = {
++   * "Editar em massaa" continuam funcionando sem mudança. */
++  const CAMROS_ESCOLHA_ = {
 +    tamanhos: { overlay: 'overlay-tamanhos', campo: 'tamanhos', chips: 'chips-tamanhos', busca: 'tam-busca', lista: 'tam-lista', criar: 'btn-criar-tamanho', nova: 'nova-tamanho-linha', input: 'input-novo-tamanho', confirmar: 'btn-confirmar-novo-tamanho', previa: 'novo-tam-previa', sugestoes: 'novo-tam-sugestoes', voltar: 'novo-tam-voltar', pronto: 'tam-pronto', abrir: 'btn-abrir-tamanhos', fechar: 'tam-fechar', base: TAMANHOS_RAPIDOS },
 +    cores:    { overlay: 'overlay-cores',    campo: 'cores',    chips: 'chips-cores',    busca: 'cor-busca', lista: 'cor-lista', criar: 'btn-criar-cor',    nova: 'nova-cor-linha',    input: 'input-nova-cor',    confirmar: 'btn-confirmar-nova-cor',    previa: 'nova-cor-previa', sugestoes: 'nova-cor-sugestoes', voltar: 'novo-cor-voltar', pronto: 'cor-pronto', abrir: 'btn-abrir-cores',    fechar: 'cor-fechar', base: CORES_RAPIDAS }
 +  };
@@ -232,7 +232,7 @@ index 213c796..db47980 100644
 +  }
 +  function abrirEscolha_(chave) {
 +    const cfg = CAMPOS_ESCOLHA_[chave];
-+    escolhaSel_[chave] = new Set(listaDoCampo_(cfg.campo));
++    escolhaSel_[chave] = new Set(listaDoCampo__(cfg.campo));
 +    escolhaTermo_[chave] = '';
 +    escolhaEditando_[chave] = null;
 +    const b = document.getElementById(cfg.busca); if (b) b.value = '';
@@ -394,7 +394,7 @@ index 213c796..db47980 100644
 +    modoFormulario = 'varias';
 +    tituloForm_('Cadastrar várias peças');
 +    const al = document.getElementById('aviso-lote');
-+    if (al) { al.hidden = false; al.textContent = '🗃️ Várias peças: preencha os dados UMA vez e escolha as fotos abaixo — cada foto vira uma peça separada com estes mesmos dados.'; }
++    if (al) { al.hidden = false; al.textContent = '🗂️ Várias peças: preencha os dados UMA vez e escolha as fotos abaixo — cada foto vira uma peça separada com estes mesmos dados.'; }
 +    document.getElementById('btn-salvar').textContent = 'Cadastrar as peças';
 +    document.getElementById('btn-cancelar-duplicar').textContent = 'Cancelar / Nova peça';
 +    document.getElementById('btn-cancelar-duplicar').style.display = 'block';
@@ -597,5 +597,5 @@ index 213c796..db47980 100644
 +    setTimeout(function(){ clearInterval(tmIg); }, 20000);
 +  } catch(e) {}
    document.addEventListener('click',function(e){
-     var b=e.target.closest&&e.target.closest('[data-ativo]'); if(!b) return;
+     var b=e.target.closest&&e.target.closest('[data-atalho]'); if(!b) return;
      var k=b.getAttribute('data-atalho'), alvo=null;
