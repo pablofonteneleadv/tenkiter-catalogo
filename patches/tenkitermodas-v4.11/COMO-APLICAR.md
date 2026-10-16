@@ -15,7 +15,7 @@ arquivo final **byte a byte**):
 | `common.js` | `patches/tenkitermodas-v4.11/common.js.patch` |
 | `nav.js` | `patches/tenkitermodas-v4.11/nav.js.patch` |
 | `catalogo.js` | `patches/tenkitermodas-v4.11/catalogo.js.patch` |
-| `admin.html` | `patches/tenkitermodas-v4.11/admin.html.patch` |
+| `admin.html` | `patches/tenkitermodas-v4.11/admin.html.patch.gz` (comprimido) |
 | `treinamentos.html` | `patches/tenkitermodas-v4.11/treinamentos.html.patch` |
 
 ## Como aplicar os patches
@@ -24,9 +24,13 @@ arquivo final **byte a byte**):
 git checkout main && git pull
 
 # a partir da RAIZ do repositório (os arquivos estão na raiz)
-for f in common.js nav.js catalogo.js admin.html treinamentos.html; do
+for f in common.js nav.js catalogo.js treinamentos.html; do
   patch -p1 < patches/tenkitermodas-v4.11/$f.patch
 done
+
+# admin.html (patch comprimido)
+gunzip -c patches/tenkitermodas-v4.11/admin.html.patch.gz > /tmp/admin.html.patch
+patch -p1 < /tmp/admin.html.patch
 ```
 
 Conferir (deve imprimir os mesmos md5 nas duas colunas):
@@ -36,7 +40,7 @@ md5sum common.js nav.js catalogo.js admin.html treinamentos.html
 # common.js         6a2cd85749db39a35709a8b7580f4525
 # nav.js            e8045185fe0806e51d9bfcae133004c1
 # catalogo.js       590466d1b422a0829708d5cd9d2ced30
-# admin.html        3966cdb3db32e363a419aafb399b8764
+# admin.html        3213fc176d8d05baa948fcc5c8bfe599
 # treinamentos.html c0140dfe2c0ae0b48f6f1a8b245018f0
 ```
 
