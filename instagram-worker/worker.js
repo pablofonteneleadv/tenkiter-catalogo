@@ -9,13 +9,29 @@
 // Auth das rotas: a mesma do painel (ação `sessao` do Apps Script) e SÓ Admin total (`gerir_acessos`). O token do Instagram fica no D1, nunca volta à tela nem aos logs.
 // Bindings: DB (D1), MIDIA (R2), CACHE (KV), API_URL, MIDIA_URL, [IG_BASE], [LIMITE_BYTES], [ORIGENS].
 
+/* ==========================================================================
+ * v1.1 -- SESSAO COMPARTILHADA E 401 x 403 (16/10/2026)
+ *
+ *  - Este Worker passa a aceitar o token `tk3`, o MESMO emitido pelo Apps
+ *    Script. Antes o teste era /^tk[12]\./ e o `tk3` era recusado ANTES de
+ *    qualquer consulta ao backend -- o painel do Instagram mostrava
+ *    "Sem conexao agora. Tente de novo." mesmo com o Worker no ar e o CORS
+ *    correto. Era exatamente o sintoma relatado pela loja.
+ *  - 401 x 403 separados: sem cabecalho X-TK-Whats/X-TK-Sessao (ou token que o
+ *    backend nao reconhece) = 401 "Entre na sua conta"; sessao valida porem sem
+ *    a permissao exigida = 403 "Sem permissao". Antes os dois viravam 401 e a
+ *    tela nao sabia distinguir "faca login" de "voce nao tem permissao".
+ *  - Backend fora do ar nao vira mais 401 (que mandava a pessoa relogar por
+ *    nada): vira 503 "Nao consegui confirmar sua sessao agora".
+ * ========================================================================== */
+
 /* Origens que podem falar com este Worker (CORS). O painel (admin.html) e servido
  * de mais de um endereco: o site de producao, o endereco direto do Render e a
  * copia do repositorio no GitHub Pages. Se a origem de onde o painel abriu nao
  * estiver aqui, o navegador bloqueia a resposta e a tela mostra
  * "Sem conexao agora. Tente de novo." — foi uma regressao real. */
 const ORIGENS_PADRAO = ['https://tenkitermodas.com.br', 'https://www.tenkitermodas.com.br', 'https://tenkiter-catalogo.onrender.com', 'https://pablofonteneleadv.github.io'];
-const UA = 'Mozilla/5.0 (compatible; tenkiter-ig/1.0)';
+const UA = 'Mozilla/5.0 (compatible; tenkiter-ig/1.1)';
 const IG_BASE_PADRAO = 'https://graph.instagram.com/v23.0';
 const CAMPOS = 'id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,children{id,media_type,media_url,thumbnail_url}';
 const MAX_PAGINAS = 8;                    // páginas do feed lidas por chamada da importação total (limite de subrequisições)
@@ -75,7 +91,7 @@ async function cfgSet(env, k, v) { if (v === null || v === undefined) await env.
 async function permissoes(env, req) {
   const whats = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
   const sessao = (req.headers.get('X-TK-Sessao') || '').slice(0, 400);
-  if (!whats || !/^tk[12]\./.test(sessao)) return null;
+  if (!whats || !/^tk[123]\./.test(sessao)) return 'sem_sessao';
   const chave = new Request('https://sessao.invalid/' + (await sha(whats + '|' + sessao)));
   const cache = caches.default, g = await cache.match(chave);
   if (g) return g.json();
@@ -84,9 +100,9 @@ async function permissoes(env, req) {
     const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
     const j = await r.json();
     if (j && j.ok && j.usuario && Array.isArray(j.usuario.permissoes)) lista = j.usuario.permissoes;
-  } catch (e) { return null; }
+  } catch (e) { return 'indisponivel'; }         // backend fora do ar != "faca login"
   if (lista) await cache.put(chave, new Response(JSON.stringify(lista), { headers: { 'Cache-Control': 'max-age=120' } }));
-  return lista;
+  return lista || 'sem_sessao';                  // sessao que o backend nao reconhece
 }
 
 /* ---------- sugestões a partir da legenda (sem IA) ---------- */
@@ -670,7 +686,7 @@ export function instagramLimpo(t) { const x = String(t || '').trim().replace(/^h
 const soDigitos = (t, n) => String(t || '').replace(/\D/g, '').slice(0, n || 15);
 async function infoSessao(env, req) {       // {perms, nome} da sessão (qualquer conta: cliente, aluno, equipe); 2 min de cache
   const whats = soDigitos(req.headers.get('X-TK-Whats'), 20), sessao = (req.headers.get('X-TK-Sessao') || '').slice(0, 400);
-  if (!whats || !/^tk[12]\./.test(sessao)) return null;
+  if (!whats || !/^tk[123]\./.test(sessao)) return null;
   const chave = new Request('https://sessaoinfo.invalid/' + (await sha(whats + '|' + sessao))), cache = caches.default, g = await cache.match(chave);
   if (g) return g.json();
   let info = null;
@@ -863,7 +879,8 @@ export default {
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
     const perms = await permissoes(env, req);
-    if (!perms) return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
+    if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
+    if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
     const ehPost = url.pathname === '/posts' || url.pathname.indexOf('/post') === 0 || url.pathname.indexOf('/fotos') === 0;
     if (ehPost ? (perms.indexOf('gerir_acessos') === -1 && perms.indexOf('catalogo_cadastrar') === -1) : perms.indexOf('gerir_acessos') === -1) return J({ ok: false, erro: ehPost ? 'Você não tem permissão para postar no Instagram.' : 'Só o administrador total acessa o importador do Instagram.' }, 403);
     try {
