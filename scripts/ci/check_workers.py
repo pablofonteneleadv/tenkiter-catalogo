@@ -41,6 +41,9 @@ OPCIONAIS = {
     # "nunca quebra por falta dele" (ver o comentario no proprio worker.js).
     # Nao e uma variavel de configuracao — e um cache. Nao entra na guarda.
     "TK_LISTA",
+    # Segredo do Worker tenkiter-ig (ponte para o Status do WhatsApp). Nao vai em [vars] (o repositorio
+    # e publico): e gravado com `wrangler secret put WORKER_TOKEN` e sobrevive aos deploys.
+    "WORKER_TOKEN",
 }
 
 WORKERS = ["og-worker", "midia-worker", "instagram-worker"]

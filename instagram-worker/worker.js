@@ -10,6 +10,35 @@
 // Bindings: DB (D1), MIDIA (R2), CACHE (KV), API_URL, MIDIA_URL, [IG_BASE], [LIMITE_BYTES], [ORIGENS].
 
 /* ==========================================================================
+ * v1.3 -- CANAL "AMBOS" PUBLICA NOS DOIS (16/10/2026)
+ *
+ *  SINTOMA: escolhendo "Ambos", a peça ia só para o Instagram (o WhatsApp nunca era chamado).
+ *  CORRECAO: em "ambos" o Status do WhatsApp é enviado ANTES do Instagram. Se o WhatsApp falhar, a peça
+ *  vai para erro e o Instagram não é publicado. Se já foi enviada ao WhatsApp numa tentativa anterior,
+ *  não é reenviada (marcador zap:<requestId> em ig_id; requestId estável = idempotente na Wafly).
+ *  Também: o limite diário do Instagram passa a contar as peças em "ambos".
+ *
+ * v1.2 (base) -- CANAL DE POSTAGEM: O CAMPO `canal` PASSA A SER RESPEITADO (16/10/2026)
+ *
+ *  SINTOMA: escolhendo "somente WhatsApp" no seletor da tela de Postagens, a
+ *  peca era publicada no INSTAGRAM -- tanto na fila quanto na publicacao real.
+ *
+ *  CAUSA RAIZ: este Worker (e so ele) e quem publica. O campo `canal` chegava
+ *  no corpo do POST /post, mas NAO existia em lugar nenhum do Worker: nao havia
+ *  coluna na tabela `postagem`, nao era lido em validarPostagem(), nao era
+ *  gravado no INSERT e o processador da fila (avancarPostagem) nem sabia que o
+ *  campo existia -- publicava no Instagram sempre. O commit do frontend
+ *  (feat/postagem-multicanal-wafly, "sem deploy") entregou o seletor e o campo
+ *  no payload, mas nunca publicou este Worker.
+ *
+ *  CORRECAO: coluna `canal` na tabela (+migracao para o banco que ja existe),
+ *  normalizacao/validacao do valor, gravacao no INSERT e leitura de volta pelo
+ *  processador. Com canal que NAO usa Instagram, as chamadas ao Graph sao
+ *  PULADAS e a peca vai para o Status do WhatsApp pela ponte waflyStatusRemoto
+ *  (backend + modulo Wafly), com requestId estavel = idempotente.
+ * ========================================================================== */
+
+/* ==========================================================================
  * v1.1 -- SESSAO COMPARTILHADA E 401 x 403 (16/10/2026)
  *
  *  - Este Worker passa a aceitar o token `tk3`, o MESMO emitido pelo Apps
@@ -46,7 +75,7 @@ const DDL = [
   `CREATE TABLE IF NOT EXISTS rascunho_midia (rascunho_id INTEGER NOT NULL, midia_id TEXT NOT NULL, ordem INTEGER NOT NULL DEFAULT 0, capa INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (rascunho_id, midia_id))`,
   `CREATE TABLE IF NOT EXISTS exec_log (id INTEGER PRIMARY KEY AUTOINCREMENT, inicio TEXT, fim TEXT, novas INTEGER DEFAULT 0, erro TEXT, origem TEXT)`,
   `CREATE TABLE IF NOT EXISTS cfg (chave TEXT PRIMARY KEY, valor TEXT)`,
-  `CREATE TABLE IF NOT EXISTS postagem (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, modo TEXT NOT NULL DEFAULT 'auto', legenda TEXT DEFAULT '', midias TEXT NOT NULL DEFAULT '[]', produto TEXT DEFAULT '', template TEXT DEFAULT '', link TEXT DEFAULT '', agendado_em TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'agendado', containers TEXT DEFAULT '', inicio_proc TEXT DEFAULT '', tentativas INTEGER DEFAULT 0, erro TEXT DEFAULT '', ig_id TEXT DEFAULT '', permalink TEXT DEFAULT '', criado_por TEXT DEFAULT '', criado_em TEXT, atualizado_em TEXT, publicado_em TEXT DEFAULT '', grupo TEXT DEFAULT '')`,
+  `CREATE TABLE IF NOT EXISTS postagem (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, modo TEXT NOT NULL DEFAULT 'auto', legenda TEXT DEFAULT '', midias TEXT NOT NULL DEFAULT '[]', produto TEXT DEFAULT '', template TEXT DEFAULT '', link TEXT DEFAULT '', agendado_em TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'agendado', containers TEXT DEFAULT '', inicio_proc TEXT DEFAULT '', tentativas INTEGER DEFAULT 0, erro TEXT DEFAULT '', ig_id TEXT DEFAULT '', permalink TEXT DEFAULT '', criado_por TEXT DEFAULT '', criado_em TEXT, atualizado_em TEXT, publicado_em TEXT DEFAULT '', grupo TEXT DEFAULT '', canal TEXT NOT NULL DEFAULT 'instagram')`,
   `CREATE TABLE IF NOT EXISTS foto_cliente (id INTEGER PRIMARY KEY AUTOINCREMENT, origem TEXT NOT NULL DEFAULT 'cliente', url TEXT NOT NULL, chave TEXT, whats TEXT DEFAULT '', nome TEXT DEFAULT '', instagram TEXT DEFAULT '', obs TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'nova', vinculo TEXT DEFAULT '', criado_por TEXT DEFAULT '', criado_em TEXT, usada_em TEXT DEFAULT '')`,
   `CREATE INDEX IF NOT EXISTS ix_fc ON foto_cliente (status, id)`,
   `CREATE INDEX IF NOT EXISTS ix_post ON postagem (status, agendado_em)`,
@@ -59,6 +88,7 @@ let pronto = false;
 async function iniciar(env) {
   if (pronto) return;
   await env.DB.batch(DDL.map((s) => env.DB.prepare(s)));
+  try { await env.DB.prepare("ALTER TABLE postagem ADD COLUMN canal TEXT DEFAULT ''").run(); } catch (e) { /* ja existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN seq INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   for (const col of COLUNAS_NOVAS) { try { await env.DB.prepare('ALTER TABLE rascunho ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   try {   // v3.7: preço sempre calculado (o escrito é o à vista). Corrige os rascunhos antigos cujo preço da legenda foi gravado como se fosse o cheio.
@@ -541,6 +571,16 @@ async function status(env) {
  *   Story COM LINK: a API não aceita figurinha de link → `modo:'manual'`: na hora vira `manual_pendente` e o funcionário termina no Instagram (→ `manual_feito`).
  * Permissão das rotas: Admin total OU `catalogo_cadastrar` (a equipe que cadastra peças também posta). O token fica no D1 e nunca volta à tela. */
 const TIPOS_POST = ['feed', 'carrossel', 'reels', 'story'];
+/* ---------- CANAIS DE POSTAGEM (v1.2) ----------
+ * Contrato: canal = 'instagram' (padrao) | 'whatsapp' | 'ambos', identico ao de common.js no frontend.
+ * O canal precisa ser GRAVADO junto com a peca e LIDO de volta pelo processador da fila. Era
+ * exatamente isso que faltava: o campo chegava no POST, era descartado no INSERT e a fila publicava
+ * sempre no Instagram -- mesmo com "somente WhatsApp" escolhido na tela. */
+const CANAIS_POSTAGEM = ['instagram', 'whatsapp', 'ambos'];
+const CANAL_POSTAGEM_PADRAO = 'instagram';
+function normalizarCanal_(v) { const c = String(v == null ? '' : v).trim().toLowerCase(); return CANAIS_POSTAGEM.indexOf(c) === -1 ? CANAL_POSTAGEM_PADRAO : c; }
+function canalUsaInstagram_(c) { const x = normalizarCanal_(c); return x === 'instagram' || x === 'ambos'; }
+function canalUsaWhatsApp_(c) { const x = normalizarCanal_(c); return x === 'whatsapp' || x === 'ambos'; }
 const MAX_POSTS_24H = 90;                 // o Instagram deixa ~100 publicações por API a cada 24 h; paramos antes
 const MAX_ESPERA_VIDEO_MS = 20 * 60 * 1000;
 const MAX_TENT = 3;
@@ -576,8 +616,53 @@ async function statusContainer(env, token, id) {
   return String((j && j.status_code) || 'FINISHED').toUpperCase();         // sem o campo = tratamos como pronto
 }
 async function gravarContainers(env, id, c) { await env.DB.prepare('UPDATE postagem SET containers=?, atualizado_em=? WHERE id=?').bind(JSON.stringify(c), agora(), id).run(); }
+/**
+ * v1.2: publica no Status do WhatsApp pelo backend (Apps Script + modulo Wafly). O Worker nao tem
+ * sessao de usuario, entao a ponte e autenticada por um SEGREDO COMPARTILHADO (WORKER_TOKEN),
+ * declarado nas variaveis do Worker e nas Propriedades do Script do backend.
+ * Idempotente: o `requestId` e estavel (deriva do id da postagem), entao repetir NAO republica.
+ */
+/* v1.3: envio ao Status do WhatsApp SEM gravar o desfecho da postagem (usado também no canal "ambos"). */
+async function enviarWhatsAppSo_(env, p) {
+  const base = String(env.API_URL || '').trim();
+  if (!base) return { ok: false, erro: 'Falta o endereco do backend (API_URL) para enviar ao WhatsApp.' };
+  let m = []; try { m = JSON.parse(p.midias || '[]'); } catch (e) { m = []; }
+  const primeira = m[0] || {};
+  const requestId = 'tkpost-' + String(p.id).padStart(12, '0');
+  let j = null;
+  try {
+    const r = await fetch(base, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'waflyStatusRemoto', token: String(env.WORKER_TOKEN || ''), requestId: requestId, tipo: primeira.tipo === 'video' ? 'video' : 'image', url: String(primeira.url || ''), legenda: String(p.legenda || '') }) });
+    j = await r.json();
+  } catch (e) { return { ok: false, erro: 'Sem conexao com o servidor do WhatsApp agora. Tento de novo.' }; }
+  if (j && j.ok) return { ok: true, requestId: String(j.requestId || requestId) };
+  return { ok: false, erro: String((j && j.erro) || 'O WhatsApp recusou o envio.') };
+}
+async function enviarWhatsApp_(env, p) {
+  const r = await enviarWhatsAppSo_(env, p);
+  if (!r.ok) return marcarErroPost_(env, p, r.erro);
+  await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', publicado_em=?, atualizado_em=? WHERE id=?").bind(r.requestId, agora(), agora(), p.id).run();
+  return { ok: true, canal: 'whatsapp' };
+}
+/** Marca a postagem com a frase do erro (o painel mostra e oferece "Tentar de novo"). Nunca lanca. */
+async function marcarErroPost_(env, p, frase) {
+  try { await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind(String(frase || '').slice(0, 300), agora(), p.id).run(); } catch (e) { /* o proximo minuto tenta de novo */ }
+  return { ok: false, erro: frase };
+}
 async function avancarPostagem(env, token, p) {
   const m = JSON.parse(p.midias || '[]');
+  /* v1.2: O CANAL MANDA. Quando o canal nao inclui o Instagram, as chamadas ao Graph nem sao feitas
+   * -- a peca vai para o Status do WhatsApp pelo backend. Antes o campo era ignorado por completo e
+   * tudo caia no caminho do Instagram. */
+  if (!canalUsaInstagram_(p.canal)) return await enviarWhatsApp_(env, p);
+  /* v1.3 (canal "ambos"): o WhatsApp vai ANTES do Instagram. Se o WhatsApp falhar, a peça fica em erro
+   * e o Instagram não é publicado (o lojista tenta de novo). Se já foi enviado ao WhatsApp numa tentativa
+   * anterior, não reenvia: o requestId é estável, então a Wafly não republica. */
+  const zapJaEnviado = String(p.ig_id || '').indexOf('zap:') === 0;
+  if (canalUsaWhatsApp_(p.canal) && !zapJaEnviado) {
+    const z = await enviarWhatsAppSo_(env, p);
+    if (!z.ok) return await marcarErroPost_(env, p, 'WhatsApp: ' + z.erro);
+    await env.DB.prepare("UPDATE postagem SET ig_id=?, atualizado_em=? WHERE id=?").bind('zap:' + z.requestId, agora(), p.id).run();
+  }
   if (p.status === 'agendado') {
     const r = await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(agora(), agora(), p.id).run();
     if (!r.meta || r.meta.changes !== 1) return;                         // outra execução pegou
@@ -620,14 +705,19 @@ export async function processarPostagens(env) {
     await env.DB.prepare("UPDATE postagem SET status='manual_pendente', atualizado_em=? WHERE modo='manual' AND status='agendado' AND agendado_em<=?").bind(t, t).run();
     const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY agendado_em, id LIMIT 4").bind(t).all()).results || [];
     if (!lin.length) return { feitas: 0 };
-    let token = await cfgGet(env, 'ig_token');
-    if (!token) { for (const p of lin) await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('O Instagram não está conectado. Conecte o token e use "Tentar de novo".', agora(), p.id).run(); return { feitas: 0 }; }
-    token = await renovarToken(env, token);
+    /* v1.2: o token do Instagram só é exigido quando ALGUMA postagem vencida vai para o Instagram.
+     * Antes ele era exigido para a fila inteira: com "somente WhatsApp" escolhido, sem token do
+     * Instagram a peça virava erro e o WhatsApp nunca era chamado. */
+    const precisaIg = lin.some((p) => canalUsaInstagram_(p.canal));
+    let token = '';
+    if (precisaIg) { token = await cfgGet(env, 'ig_token'); if (token) token = await renovarToken(env, token); }
     const desde = new Date(Date.now() - 86400000).toISOString();
-    const usados = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status='publicado' AND publicado_em>=?").bind(desde).first()) || {}).n) || 0;
+    const usados = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status='publicado' AND COALESCE(canal,'instagram') IN ('instagram','ambos') AND publicado_em>=?").bind(desde).first()) || {}).n) || 0;
     let feitas = 0, novas = usados;
     for (const p of lin) {
-      if (p.status === 'agendado') { if (novas >= MAX_POSTS_24H) continue; novas++; }   // limite diário: fica agendada para o dia seguinte
+      const usaIg = canalUsaInstagram_(p.canal);
+      if (usaIg && !token) { await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('O Instagram não está conectado. Conecte o token e use "Tentar de novo".', agora(), p.id).run(); continue; }
+      if (usaIg && p.status === 'agendado') { if (novas >= MAX_POSTS_24H) continue; novas++; }   // limite diário: fica agendada para o dia seguinte
       try { await avancarPostagem(env, token, p); feitas++; } catch (e) { try { await falhaPostagem(env, p, e); } catch (e2) { /* próximo minuto tenta de novo */ } }
     }
     return { feitas: feitas };
@@ -663,11 +753,11 @@ export function validarPostagem(b) {
     if (t - Date.now() > 60 * 86400000) return { erro: 'Dá para agendar até 60 dias à frente.' };
     if (t > Date.now()) quando = new Date(t).toISOString();
   }
-  return { v: { tipo: tipo, modo: modo, legenda: legenda, midias: midias, link: link, quando: quando, agora: !sequencia && quando <= agora(), sequencia: sequencia, produto: String(b.produto || '').slice(0, 40), template: String(b.template || '').slice(0, 30), grupo: String(b.grupo || '').slice(0, 40) } };
+  return { v: { tipo: tipo, modo: modo, legenda: legenda, midias: midias, link: link, quando: quando, agora: !sequencia && quando <= agora(), sequencia: sequencia, produto: String(b.produto || '').slice(0, 40), template: String(b.template || '').slice(0, 30), grupo: String(b.grupo || '').slice(0, 40), canal: normalizarCanal_(b.canal) } };
 }
 function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
-  return { id: r.id, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo };
+  return { id: r.id, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
 }
 
 /* ====================================================================
@@ -799,7 +889,7 @@ async function rotasPostagem(env, ctx, req, url, J) {
     const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
     if (pend + lista.length > 200) return J({ ok: false, erro: 'Há postagens demais na fila (200). Espere algumas saírem.' }, 429);
     const vs = []; for (const x of lista) { const r = validarPostagem(x); if (r.erro) return J({ ok: false, erro: r.erro }, 400); vs.push(r.v); }
-    if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto')) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
+    if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto' && canalUsaInstagram_(v.canal))) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
     const ids = [], quandos = [], por = String(b.por || '').slice(0, 60);
     let cursor = null, anterior = null;                      // "na sequência": cada uma sai um pouco depois da anterior (intervalo humano)
     for (const v of vs) {
@@ -813,7 +903,7 @@ async function rotasPostagem(env, ctx, req, url, J) {
       }
       anterior = v.tipo; quandos.push(v.quando);
 
-      const r = await env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0).run();
+      const r = await env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal).run();
       ids.push(r.meta && r.meta.last_row_id);
     }
     if (vs.some((v) => v.agora) && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));

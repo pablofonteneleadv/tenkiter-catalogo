@@ -90,6 +90,15 @@ jobs:
         run: node tests/worker_og.js
         continue-on-error: true
 
+      # Usa node:sqlite (Node 22+); o restante da bateria segue no Node 20.
+      - name: Worker do Instagram (fila e canal WhatsApp/Instagram)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          node tests/worker_ig.js
+          node tests/worker_canal.js
+
       # Testes de navegador: instalam o Chromium e rodam contra o site local.
       - name: Instalar Playwright + Chromium
         run: |
