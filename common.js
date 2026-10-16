@@ -183,6 +183,30 @@ function limparSessao() {
   try { window.dispatchEvent(new Event('tk:sessao')); } catch (e) {}
 }
 
+/* ===================== v4.10 (FE-01): sessão COMPARTILHADA entre todas as páginas =====================
+ * Uma única chave (`tm_session`) e uma única API para ler/gravar/limpar. Catálogo, gestão (admin.html),
+ * treinamentos e currículos usam ESTE objeto — entrar numa página vale nas outras, sem login repetido.
+ * `TKSessao.aoMudar(fn)` avisa quem precisa se redesenhar (barra inferior, menus, permissões) na hora,
+ * sem recarregar a página. Nunca guarda senha: só o token de sessão. */
+const TKSessao = {
+  chave: SESSAO_CHAVE,
+  ler: getSessao,
+  salvar: salvarSessao,
+  limpar: limparSessao,
+  token: function () { const s = getSessao(); return s ? s.sessao : ''; },
+  whatsapp: function () { const s = getSessao(); return s ? s.whatsapp : ''; },
+  logado: function () { return !!getSessao(); },
+  /** Chama `fn(sessao)` sempre que a sessão mudar (nesta aba ou em outra). Devolve uma função para parar de ouvir. */
+  aoMudar: function (fn) {
+    if (typeof fn !== 'function') return function () {};
+    const h = function () { try { fn(getSessao()); } catch (e) {} };
+    window.addEventListener('tk:sessao', h);
+    window.addEventListener('storage', function (e) { if (e && e.key === SESSAO_CHAVE) h(); });
+    return function () { try { window.removeEventListener('tk:sessao', h); } catch (e) {} };
+  }
+};
+try { window.TKSessao = TKSessao; } catch (e) {}
+
 /** POST simples ao backend; nunca lança (devolve { ok:false, semRede:true } sem internet). */
 async function apiPost(corpo) {
   try {

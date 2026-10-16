@@ -20,6 +20,23 @@
 # Uso:  CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... bash scripts/ci/check_worker_secrets.sh
 set -uo pipefail
 
+# ---------------------------------------------------------------------------
+# Higiene dos valores vindos de GitHub Secrets
+# ---------------------------------------------------------------------------
+# Um secret colado no painel do GitHub costuma trazer um \n (ou espaco) invisivel
+# no fim. O valor vira "abc\n" e o curl morre com
+#     curl: (3) URL rejected: Malformed input to a URL function
+# (foi o que derrubou o purge de cache em 15/10 e 16/10/2026). Retirar espacos e
+# quebras de linha das credenciais resolve, sem depender de o humano ter colado
+# o valor limpo.
+limpar() {
+  printf '%s' "${1:-}" | tr -d '\r\n\t' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
+CLOUDFLARE_API_TOKEN="$(limpar "${CLOUDFLARE_API_TOKEN:-}")"
+CLOUDFLARE_ACCOUNT_ID="$(limpar "${CLOUDFLARE_ACCOUNT_ID:-}")"
+CLOUDFLARE_ZONE_ID="$(limpar "${CLOUDFLARE_ZONE_ID:-}")"
+
 falta=0
 conferir() {
   local nome="$1" valor="${2:-}"

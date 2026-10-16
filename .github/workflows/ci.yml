@@ -48,6 +48,15 @@ jobs:
       - name: Variaveis dos Workers declaradas (wrangler.toml)
         run: python3 scripts/ci/check_workers.py
 
+      # Os scripts de deploy rodam so na hora de publicar — um erro de sintaxe neles
+      # so apareceria com o deploy ja em andamento. Aqui ele aparece no PR.
+      - name: Sintaxe dos scripts de deploy e CI
+        run: |
+          for f in scripts/deploy/*.sh scripts/ci/*.sh; do
+            bash -n "$f" || { echo "::error::$f tem erro de sintaxe."; exit 1; }
+          done
+          echo "scripts de shell: sintaxe OK"
+
   # ------------------------------------------------------------- 3. Testes reais
   testes:
     name: Bateria de testes (tests/)

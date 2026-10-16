@@ -39,6 +39,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Sem o buildCommand certo, o Render publica o version.json do repositorio
+      # (commit vazio) e a etapa 4/4 nunca consegue confirmar o commit no ar.
+      # Roda ANTES do deploy; se a API recusar, avisa e o deploy segue.
+      - name: Garantir o buildCommand do Render (gera o version.json)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: bash scripts/deploy/render_garantir_build.sh
+
       - name: Disparar e acompanhar o deploy no Render
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
@@ -89,3 +98,15 @@ jobs:
     name: Workers (Cloudflare)
     needs: ci
     uses: ./.github/workflows/workers.yml
+    # SEM esta linha os secrets NAO atravessam a chamada de workflow reutilizavel.
+    #
+    # Regressao de 16/10/2026 (run 38833465713): o job `credenciais` do workers.yml
+    # recebeu CLOUDFLARE_API_TOKEN / ACCOUNT_ID / ZONE_ID VAZIOS e abortou em 1s.
+    # Nao era o secret que faltava (existiam desde 15/10, 19:46-19:48): e que
+    # `uses: ./.github/workflows/workers.yml` NAO herda os secrets do chamador.
+    # Só o workers.yml disparado direto por `push`/`workflow_dispatch` os recebia —
+    # por isso o deploy automatico nunca publicava os Workers, e o Instagram ficava
+    # sem receber postagens ate alguem rodar `wrangler deploy` a mao.
+    #
+    # `inherit` passa todos os secrets do repositorio para o workflow chamado.
+    secrets: inherit

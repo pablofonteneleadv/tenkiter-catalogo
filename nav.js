@@ -175,6 +175,13 @@
   };
   window.TenkiterNav = API;
 
+  // v4.10 (FE-02): a sessão mudou (entrou/saiu nesta página ou em OUTRA aba/página) -> redesenha a barra
+  // na hora, sem recarregar. Antes, entrar no catálogo só refletia na barra depois de um F5.
+  try {
+    window.addEventListener('tk:sessao', () => { lerCache(); desenhar(); atualizarDoServidor(); });
+    window.addEventListener('storage', (e) => { if (e && e.key === CHAVE_SESSAO) { lerCache(); desenhar(); atualizarDoServidor(); } });
+  } catch (e) { /* navegador sem eventos: segue como antes */ }
+
   // o <script> fica no fim do <body>: o DOM já existe. currentScript só vale agora, então guardamos antes.
   const _tag = document.currentScript;
   if (_tag) ativoId = _tag.getAttribute('data-ativo') || '';
