@@ -22,6 +22,31 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------- 1. Segredos
+  # ------------------------------------------------------- 0. Escopo do PR
+  # Em pull_request que muda SOMENTE arquivos .md, a bateria de navegador (testes)
+  # e pulada. Segredos e sintaxe continuam rodando, e o portao continua obrigatorio.
+  # Em push para main e no deploy, a bateria completa sempre roda.
+  escopo:
+    name: Escopo do PR
+    runs-on: ubuntu-latest
+    outputs:
+      so_docs: ${{ steps.calc.outputs.so_docs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: calc
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "so_docs=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          files=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
+          if [ -n "$files" ] && ! echo "$files" | grep -qv '\.md$'; then
+            echo "so_docs=true" >> "$GITHUB_OUTPUT"; echo "PR so com .md: bateria de navegador pulada."
+          else
+            echo "so_docs=false" >> "$GITHUB_OUTPUT"
+          fi
+
   segredos:
     name: Scan de segredos
     runs-on: ubuntu-latest
@@ -61,6 +86,8 @@ jobs:
   testes:
     name: Bateria de testes (tests/)
     runs-on: ubuntu-latest
+    needs: escopo
+    if: needs.escopo.outputs.so_docs != 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -129,7 +156,7 @@ jobs:
   portao:
     name: Portão de qualidade
     runs-on: ubuntu-latest
-    needs: [segredos, estatico, testes]
+    needs: [escopo, segredos, estatico, testes]
     if: always()
     steps:
       - name: Conferir resultado
@@ -146,7 +173,9 @@ jobs:
           # A bateria de testes marca continue-on-error nos passos que dependem de
           # arquivos nao versionados (.gs.txt). Aqui interessa que o job tenha
           # TERMINADO bem, para o portao nao aprovar com o CI ainda em andamento.
-          if [ "${{ needs.testes.result }}" != "success" ]; then
+          if [ "${{ needs.escopo.outputs.so_docs }}" = "true" ] && [ "${{ needs.testes.result }}" = "skipped" ]; then
+            echo "PR so com .md: bateria de navegador dispensada."
+          elif [ "${{ needs.testes.result }}" != "success" ]; then
             echo "::error::Bateria de testes falhou (ou foi cancelada)."
             falhou=1
           fi
