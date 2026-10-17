@@ -37,7 +37,7 @@ with sync_playwright() as p:
     pg.goto(BASE+"admin.html"); pg.wait_for_timeout(1500)
     chk("lista abre com peças ativas", pg.locator("#lista-produtos .produto").count()>=10, pg.locator("#lista-produtos .produto").count())
     pg.click("#card-form > summary"); pg.wait_for_timeout(300)
-    chk("passo 7 (vídeo) está visível sem abrir 'Mais detalhes'", pg.locator("#passo-video").is_visible() and pg.locator("#details-mais[open]").count()==0)
+    chk("passo 7 (vídeo) está visível sem abrir 'Mais detalhes'", pg.locator("#passo-video").is_visible())
     chk("botão de vídeo visível", pg.locator("label[for=video-input]").is_visible())
     # preencher
     pg.set_input_files("#galeria-input",[os.path.join(AQUI,"saida","foto1.jpg"),os.path.join(AQUI,"saida","foto2.jpg")]); pg.wait_for_timeout(1200)
@@ -47,7 +47,7 @@ with sync_playwright() as p:
     pg.click("#chips-genero .chip:first-child")
     pg.click("#btn-abrir-categorias"); pg.click("#cat-lista .cat-item:has-text('Vestido')"); pg.click("#cat-pronto")
     pg.get_by_role('button',name='P',exact=True).click() if pg.locator('#chips-tamanhos button').count() else pg.locator('#chips-tamanhos .chip').filter(has_text=__import__('re').compile(r'^P$')).click(); pg.locator('#chips-tamanhos .chip').filter(has_text=__import__('re').compile(r'^M$')).click()
-    pg.click("#details-mais > summary"); pg.click("#chips-cores .chip:has-text('Preto')"); pg.fill("#descricao","Viscose, caimento leve."); pg.check("#novidade")
+    pg.click("#chips-cores .chip:has-text('Preto')"); pg.fill("#descricao","Viscose, caimento leve."); pg.check("#novidade")
     chk("checklist diz tudo certo", "Tudo certo" in pg.inner_text("#cad-falta"))
     pg.click("#btn-salvar"); pg.wait_for_timeout(3500)
     cr=[x for x in log if x.get("action")=="create"]

@@ -584,3 +584,13 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 - **Pedido do Pablo (13/10/2026)**: ao lado de "Compartilhar seleção" ficam **✕ Limpar seleção** (esvazia a sacola e limpa filtros/link) e, só para quem tem `catalogo_cadastrar` (`equipe_.pode`) com peças na seleção, **🛠️ Edição em lote** (`#btn-lote-menu`, abre `#lote-menu` com as ações). Os 3 têm contorno/sombra, ≥44 px (Compartilhar laranja com letra preta; Edição em lote preta).
 - A ação leva a `admin.html?lote=<IDs>&acao=btn-bulk-*`: o painel marca as peças e aciona o botão do lote existente (nada duplicado). Teste: `tests/selecao_botoes.py`.
 - **v6.2 — Juntar dentro do catálogo (13/10/2026)**: "Juntar em 1 produto" do menu Edição em lote abre `#overlay-juntar` (`.overlay-sheet-loja`, `TKCamadas`) POR CIMA do catálogo, sem ir ao admin (`abrirJuntarCatalogo_`, ação `juntarProdutos` via `pedirEquipe_`). Durante a chamada: botão "Juntando…", faixa `#juntar-prog` com spinner ("Está funcionando, não feche"), janela não fecha; ao fim "✔ Pronto!", seleção limpa, lista recarregada e aviso. O admin também mostra "Juntando… aguarde" no botão.
+
+## v4.17 — Cadastro: campos visíveis, várias peças sem teto de 8 por lote (`admin.html` + testes, só front)
+
+- **Pedido do Pablo (conversa do zip, 17/10/2026)**: Foto 12 (campos "Mais detalhes" sempre visíveis) e Foto 8 (cadastro de várias peças sem o limite de 8 no lote).
+- **Foto 12**: o `<details id="details-mais">` virou `<div class="extra" id="details-mais">`. Descrição, "Gerar Título/Descrição com IA", Novidade e aviso de push ficam sempre visíveis. NÃO reintroduzir o `<details>`/`summary` sem combinar com o Pablo.
+- **Foto 8**: no modo `modoFormulario === 'varias'` (menu Cadastrar → "Cadastrar várias peças"), `galeria-input` aceita quantas fotos forem escolhidas e cada uma vira uma peça. O teto `MAX_GALERIA = 8` continua valendo no cadastro de UMA peça (por produto, inclusive a galeria de cada peça criada em lote). Contador no lote: "N foto(s) no lote".
+- **Testes ajustados**: `tests/admin_gestao.py` e `tests/jornada_lojista.py` deixaram de clicar em `#details-mais > summary`.
+- **Pendente nesta versão** (não feito): Foto 1 (remover atalhos duplicados do painel), opção A de velocidade (liberar a tela após "Salvar" e mostrar a fila), Fotos 3 a 6 (Story padrão, prévia automática, enquadramento), assinatura de foto e SEC-20 (exigem `Code.gs` completo colado pelo Pablo).
+- **Testes**: `admin_gestao.py` 80/80, `jornada_lojista.py` 15/15, checks de CI (JS, HTML, workers, segredos) passam. Falhas já existentes no `main` e fora do escopo: `selecao_link`, `rolagem_infinita`, `lista_rapida`.
+- Detalhes completos, diagnósticos e pendências: ver `okou.md` na raiz.
