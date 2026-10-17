@@ -248,3 +248,34 @@ em `/settings`) e confere que a publicação é recente. `LIMITE_SEGUNDOS` ajust
 > ⚠️ **O token da Cloudflare que circulou no chat deve ser revogado.** Ele dá acesso de
 > escrita aos Workers e ao cache da zona. Crie um token novo com os escopos da tabela da
 > seção 3, troque o secret `CLOUDFLARE_API_TOKEN` no GitHub e só então revogue o antigo.
+
+## 6. CI otimizado — modo rápido e bateria completa (17/10/2026)
+
+### Objetivo
+
+Evitar que cada merge/deploy repita a bateria de navegador e as mesmas verificações de Workers, sem abrir mão do scan de segredos, da validação estática nem de um teste funcional mínimo.
+
+### Modos
+
+- **PR normal:** scan de segredos + sintaxe/estrutura + testes rápidos dos Workers de mídia, Instagram e canal.
+- **PR só com arquivos Markdown:** scan de segredos e estático continuam obrigatórios; testes de código são dispensados.
+- **Deploy da `main`:** `deploy.yml` chama `ci.yml` como workflow reutilizável no modo rápido. O workflow não é disparado separadamente por `push` na `main`, evitando CI duplicado.
+- **Bateria completa:** workflow `CI` → `Run workflow` → `suite=completo`, ou execução agendada diária. Inclui Playwright, acessibilidade, jornadas e demais suites de `tests/rodar_tudo.py`.
+- **Workers Cloudflare:** publicação automática centralizada em `deploy.yml`. O workflow reutilizável `workers.yml` recebe `skip_ci: true` do deploy porque o commit já passou pelo portão; execução manual ainda executa seu próprio CI rápido.
+
+### Como rodar a bateria completa manualmente
+
+1. GitHub → **Actions** → **CI**.
+2. **Run workflow**.
+3. Escolher `completo` no campo `suite`.
+4. Conferir o resultado de cada suite, não apenas o resumo.
+
+A bateria completa está agendada para 03:00 UTC (00:00 em Fortaleza). Se o agendamento não for necessário, remova o bloco `schedule` de `.github/workflows/ci.yml`.
+
+### Limites e manutenção
+
+- O modo rápido é uma proteção de feedback curto, não prova equivalente à bateria completa. Mudanças amplas em fluxo de cliente, cadastro/admin, autenticação, acessibilidade, Apps Script ou telas devem ser avaliadas com a suíte completa antes do merge/publicação quando viável.
+- O teste completo não deve ser executado uma segunda vez dentro de passos isolados que o próprio `rodar_tudo.py` já executa.
+- Não adicionar `continue-on-error: true` a testes que devem bloquear publicação sem uma justificativa documentada.
+- O job **Portão de qualidade** mantém o mesmo nome para preservar a configuração de proteção da branch `main`.
+- A duração real deve ser medida nas primeiras execuções; os tempos dependem de instalação do Chromium, disponibilidade do runner e duração das suites.
