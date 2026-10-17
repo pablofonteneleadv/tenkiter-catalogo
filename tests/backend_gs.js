@@ -1840,6 +1840,47 @@ function servicosFalsos(amb, est) {
   ok(amb.getJson({ action: 'versao' }).videosMultiplos === true, 'versao anuncia videosMultiplos');
 })();
 
+// ------------------------------------------------------------------ 8j. cadastro idempotente (v4.19)
+(function opIdempotente() {
+  console.log('\n[v4.19: cadastro idempotente (opId)]');
+  const amb = criarAmbiente(); semear(amb);
+  const sh = amb.ss.getSheetByName('Sheet1');
+  const base = { action: 'create', nome: 'Vestido idempotente', preco: 99, categoria: 'Blusas', genero: 'Unissex', fotoUrlExistente: 'https://res.cloudinary.com/z/idem.jpg' };
+  const antes = sh.getLastRow();
+  let r1 = amb.post(adm(Object.assign({ opId: 'e1abc-OPID_001' }, base)));
+  ok(r1.ok && r1.id && r1.codigo, 'primeiro envio cria a peça', JSON.stringify(r1));
+  ok(sh.getLastRow() === antes + 1, 'uma linha nova');
+  // reenvio IMEDIATO (cairia no freio de 10 s) e reenvio com outra foto: ambos devolvem a ORIGINAL
+  let r2 = amb.post(adm(Object.assign({ opId: 'e1abc-OPID_001' }, base)));
+  ok(r2.ok && r2.repetido === true && r2.id === r1.id && r2.codigo === r1.codigo, 'mesmo opId devolve a peça original (repetido)', JSON.stringify(r2));
+  ok(sh.getLastRow() === antes + 1, 'reenvio NÃO cria outra linha');
+  let r3 = amb.post(adm(Object.assign({}, base, { opId: 'e1abc-OPID_001', fotoUrlExistente: 'https://res.cloudinary.com/z/outra.jpg' })));
+  ok(r3.ok && r3.repetido && r3.id === r1.id && sh.getLastRow() === antes + 1, 'mesmo opId com outra capa continua sendo a mesma peça');
+  ok(r2.fotoUrl === 'https://res.cloudinary.com/z/idem.jpg', 'a resposta repetida traz a capa gravada', r2.fotoUrl);
+  // opId diferente = outra peça (capa diferente passa pelo freio de 10 s)
+  let r4 = amb.post(adm(Object.assign({}, base, { opId: 'e1abc-OPID_002', fotoUrlExistente: 'https://res.cloudinary.com/z/idem2.jpg' })));
+  ok(r4.ok && !r4.repetido && r4.id !== r1.id && sh.getLastRow() === antes + 2, 'opId novo cria outra peça');
+  // opId inválido é ignorado (comportamento de sempre)
+  let r5 = amb.post(adm(Object.assign({}, base, { opId: 'x', nome: 'Sem opId valido', fotoUrlExistente: 'https://res.cloudinary.com/z/idem3.jpg' })));
+  ok(r5.ok && !r5.repetido, 'opId curto/ inválido é ignorado');
+  // sem opId: igual a antes
+  let r6 = amb.post(adm(Object.assign({}, base, { nome: 'Sem opId nenhum', fotoUrlExistente: 'https://res.cloudinary.com/z/idem4.jpg' })));
+  ok(r6.ok && !r6.repetido, 'sem opId continua igual');
+  // a coluna OpId existe e NUNCA aparece na lista pública
+  const cab = sh.getDataRange().getValues()[0];
+  ok(cab.indexOf('OpId') > -1, 'coluna OpId criada sozinha');
+  const lista = amb.getJson({ action: 'list', todos: 'true' });
+  ok(lista.produtos.every((x) => !('OpId' in x)), 'a lista pública não traz OpId');
+  ok(amb.getJson({ action: 'versao' }).opIdempotente === true, 'versao anuncia opIdempotente');
+  // v4.18: listas de tamanhos e cores (leitura pública; escrever só com login de Admin total)
+  const op = amb.getJson({ action: 'opcoes' });
+  ok(op.ok && op.tamanhos.indexOf('M') > -1 && op.cores.indexOf('Preto') > -1, 'opcoes devolve as listas de fábrica', JSON.stringify(op).slice(0, 120));
+  const semLogin = amb.post(adm({ action: 'addCor', nome: 'Farm' }));
+  ok(semLogin.ok === false, 'addCor com o PIN antigo é recusado', JSON.stringify(semLogin));
+  ok(amb.getJson({ action: 'opcoes' }).cores.indexOf('Farm') === -1, 'a recusa não grava a cor');
+  ok(amb.getJson({ action: 'versao' }).opcoesLista === true, 'versao anuncia opcoesLista');
+})();
+
 console.log('\n' + (total - falhas.length) + '/' + total + ' verificações passaram');
 console.log('FALHAS=' + falhas.length + (falhas.length ? ' ' + JSON.stringify(falhas) : ''));
 process.exit(falhas.length ? 1 : 0);
