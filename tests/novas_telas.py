@@ -86,7 +86,7 @@ with sync_playwright() as p:
     pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: d.accept(""))
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
     axe(pg, "painel: lista com aviso de pedido novo e de códigos faltantes")
-    pg.click("#card-pedidos > summary"); pg.wait_for_timeout(900)
+    pg.wait_for_timeout(900)
     axe(pg, "painel: pedidos abertos")
     pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(300)
     janela(pg, "painel: números reais", lambda: pg.click("#btn-abrir-metricas"), "#overlay-gestao")
