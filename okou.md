@@ -4,9 +4,9 @@ Documento de passagem para outra inteligência (ou pessoa) assumir o trabalho. F
 
 ## 1. Regras obrigatórias (vêm da especificação mestra, PDF `Document_Merged (8).pdf`, seção 2)
 
-1. O deploy no Render/OnRender é feito **manualmente pelo Pablo (owner)**. Não executar deploy, não acionar APIs de publicação, não alterar configurações de deploy para automatizar.
+1. **Atualizado em 17/10/2026 pelo Pablo**: o deploy do frontend é feito pelo Okou direto pelo GitHub (merge na `main` dispara `deploy.yml`), sem esperar confirmação, sempre com ponto de restauração `backup/pre-...` antes. A bateria completa roda só quando o Pablo pedir, com o site já atualizado.
 2. O Pablo cola manualmente o `Code.gs` completo no Google Apps Script quando o backend muda. Entregar sempre arquivo completo, nunca trecho.
-3. **Não publicar direto na `main`.** Trabalhar em branch separada, entregar para revisão, sem merge e sem publicar.
+3. Trabalhar em branch separada e abrir PR. Merge na `main` e deploy são autorizados pelo Pablo (ver seção 8), com ponto de restauração antes.
 4. Não acessar, alterar, remover ou inventar credenciais. Segredos só em Propriedades do Script / variáveis de ambiente, nunca no front, no repositório ou em logs.
 5. Não criar projeto novo nem reescrever o sistema. Não remover funcionalidades existentes.
 
@@ -85,4 +85,5 @@ export TK_BASE=http://localhost:8765/
 ## 8. Merge e deploy
 
 - Autorizado explicitamente pelo Pablo (17/10/2026) para fazer merge do PR #13 na `main` e disparar o deploy pelo GitHub Actions (`deploy.yml`).
+- Ponto de restauração: `backup/pre-v4.17-2026-10-17` apontando para `7e1b98d` (main antes do merge).
 - Resultado do deploy e URL publicada: registrados abaixo quando concluídos.
