@@ -598,3 +598,19 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 - **Pendente nesta versão** (não feito): Foto 1 (remover atalhos duplicados do painel), opção A de velocidade (liberar a tela após "Salvar" e mostrar a fila), Fotos 3 a 6 (Story padrão, prévia automática, enquadramento), assinatura de foto e SEC-20 (exigem `Code.gs` completo colado pelo Pablo).
 - **Testes**: `admin_gestao.py` 80/80, `jornada_lojista.py` 15/15, checks de CI (JS, HTML, workers, segredos) passam. Falhas já existentes no `main` e fora do escopo: `selecao_link`, `rolagem_infinita`, `lista_rapida`.
 - Detalhes completos, diagnósticos e pendências: ver `okou.md` na raiz.
+
+## CI/CD otimizado — decisão registrada em 17/10/2026
+
+**Objetivo do Pablo:** parar de repetir a bateria gigante de testes a cada merge/deploy, reduzindo o tempo de espera sem desativar verificações importantes.
+
+- `.github/workflows/ci.yml`: CI curto para PRs e deploys; mantém scan de segredos, sintaxe JS/HTML, configuração dos Workers e sintaxe dos scripts. O modo rápido roda os testes funcionais unitários dos Workers de mídia, Instagram e canal, sem instalar Chromium.
+- **Bateria completa:** `tests/rodar_tudo.py` com Playwright, acessibilidade e jornadas roda por agendamento diário ou manualmente em **Actions → CI → Run workflow → suite=completo**. Não deve ser repetida em etapas isoladas que o próprio executor já inclui.
+- **Deploy:** `deploy.yml` chama o CI reutilizável no modo rápido. O CI não tem gatilho de `push: main`, evitando que o mesmo commit dispare um CI separado e outro dentro do deploy.
+- **Workers Cloudflare:** publicação automática é orquestrada pelo `deploy.yml`; `workers.yml` recebe `skip_ci: true` quando chamado pelo deploy, porque o commit já passou pelo portão. Execução manual de `workers.yml` continua executando o CI rápido.
+- **Portão obrigatório:** manter exatamente o nome `Portão de qualidade`, pois pode estar configurado como status check obrigatório da proteção de `main`. Não mudar a semântica do job sem conferir a proteção de branch.
+- **Mudanças de alto risco:** antes de publicar alterações amplas em catálogo, cadastro/admin, autenticação, Apps Script, acessibilidade ou fluxos críticos, executar a bateria completa manualmente quando viável. O modo rápido não substitui a cobertura completa.
+- **Sem falhas silenciosas:** não adicionar `continue-on-error: true` a testes bloqueantes sem justificar/documentar a limitação.
+- A bateria completa fica agendada para 03:00 UTC (00:00 em Fortaleza). Medir a duração real das primeiras execuções e ajustar se necessário.
+- A otimização deve ser entregue por branch e PR para revisão; **não fazer merge nem publicar automaticamente esta alteração** antes de confirmar que o workflow está verde e revisar o diff.
+
+Documentação técnica: `docs/CI-CD.md`, seção **6. CI otimizado**.
