@@ -614,3 +614,11 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 - A otimização deve ser entregue por branch e PR para revisão; **não fazer merge nem publicar automaticamente esta alteração** antes de confirmar que o workflow está verde e revisar o diff.
 
 Documentação técnica: `docs/CI-CD.md`, seção **6. CI otimizado**.
+
+## v4.18 — Cadastro rápido, painel enxuto, filtro por cor (só front, 17/10/2026)
+
+- **Cadastro** (`admin.html`): até 3 vídeos por peça (backend 4.17 `videosMultiplos`), uploads de fotos+vídeos em paralelo (até 4), 2 peças por vez na fila, lista recarrega 1× no fim; ao tocar em Salvar o cartão fecha e a plaquinha `#envios-flut` mostra o andamento (fila em IndexedDB; **só termina com o painel aberto** — PWA congela ao minimizar, limite honesto). Lote "várias peças": vídeo só na 1ª peça. Tamanhos e cores livres só para Admin total (`.so-admin-cores`; os demais usam os chips).
+- **Painel**: `#card-pedidos` mora em "Ferramentas do gestor"; `#ig-faixa` ("Produtos para aceitar") fica dentro do menu Cadastrar com selo `#cad-badge`; `#card-form` fechado não mostra barra (abre pelo menu Cadastrar; testes abrem por JS).
+- **Postagens**: "Mover a foto" já marcado, rótulos curtos (Cortar / Encaixar / Margens), sem parágrafo de ajuda. `postagens_admin.py` e `postagens_v49.py` já falhavam antes (testes antigos; Story já é o padrão).
+- **Catálogo**: filtro **Cor** (`#chips-cor`, `?cor=`); a gaveta de filtros abre ao focar a busca e fecha ao sair (só se foi aberta por ela).
+- **Pendente**: barra de lote/cards responsivos e tipografia (H/I), chips de categoria sempre visíveis com ordem do admin (precisa backend), revisar `postagens_*.py`.

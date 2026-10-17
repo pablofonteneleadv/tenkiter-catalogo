@@ -54,9 +54,9 @@ with sync_playwright() as p:
     print("== Painel com backend novo ==")
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
     chk("lista de peças abre", pg.locator("#lista-produtos .produto").count() >= 10, pg.locator("#lista-produtos .produto").count())
-    chk("cartão 'Pedidos' saiu do topo (v4.18)", pg.locator("#card-pedidos").count() == 0)
+    chk("cartão 'Pedidos' está dentro de Ferramentas do gestor (v4.19)", pg.locator("#details-ferramentas #card-pedidos").count() == 1)
     chk("aviso de pedido novo aparece no topo", pg.locator("#aviso-pedidos-novos").is_visible() and "1 pedido novo" in pg.inner_text("#aviso-pedidos-novos"), pg.inner_text("#aviso-pedidos-novos"))
-    chk("resumo do cartão conta os pedidos em aberto", "1 em aberto" in pg.inner_text("#ped-sum-txt"), pg.inner_text("#ped-sum-txt"))
+    chk("resumo do cartão conta os pedidos em aberto", "1 em aberto" in pg.text_content("#ped-sum-txt"), pg.text_content("#ped-sum-txt"))
     abrir_ferramentas(pg)
     chk("botões novos aparecem (números, importar, integrações)", all(pg.locator(i).is_visible() for i in ("#btn-abrir-metricas", "#btn-importar-csv", "#btn-abrir-integracoes")))
 
@@ -219,7 +219,7 @@ with sync_playwright() as p:
     pg.click("#gestao-fechar"); pg.wait_for_timeout(300)
 
     print("== SEO sem IA ==")
-    pg.click("#card-form > summary"); pg.wait_for_timeout(300)
+    pg.evaluate("document.getElementById('card-form').open=true"); pg.wait_for_timeout(300)
     pg.fill("#nome", "Vestido Midi Floral")
     pg.wait_for_timeout(200)
     pg.click("#btn-seo-ia"); pg.wait_for_timeout(900)

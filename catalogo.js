@@ -7,6 +7,8 @@
   let itensVisiveis = POR_PAGINA;
   let categoriasDisponiveis = new Set();
   let generosDisponiveis = new Set();
+  let coresDisponiveis = new Set();
+  let filtroCores = new Set();
   let filtroCategorias = new Set();
   let filtroGeneros = new Set();
   let apenasNovidades = false;
@@ -56,6 +58,7 @@
     if (params.has('ord') && ['recentes', 'menor', 'maior', 'az'].includes(params.get('ord'))) document.getElementById('ordem').value = params.get('ord');
     if (params.has('cat')) params.get('cat').split(',').forEach(c => filtroCategorias.add(c.trim()));
     if (params.has('gen')) params.get('gen').split(',').forEach(g => filtroGeneros.add(g.trim()));
+    if (params.has('cor')) params.get('cor').split(',').forEach(g => filtroCores.add(g.trim()));
     if (params.has('sel')) {
       const itens = Array.from(new Set(params.get('sel').split(',').map(s => s.trim().slice(0, 60)).filter(Boolean))).slice(0, 60);
       selecaoFixa = itens.length ? itens : null;
@@ -84,6 +87,7 @@
 
     if (filtroCategorias.size) url.searchParams.set('cat', Array.from(filtroCategorias).join(',')); else url.searchParams.delete('cat');
     if (filtroGeneros.size) url.searchParams.set('gen', Array.from(filtroGeneros).join(',')); else url.searchParams.delete('gen');
+    if (filtroCores.size) url.searchParams.set('cor', Array.from(filtroCores).join(',')); else url.searchParams.delete('cor');
     if (selecaoFixa) url.searchParams.set('sel', selecaoFixa.join(',')); else url.searchParams.delete('sel');
 
     window.history.replaceState({}, '', url);
@@ -103,7 +107,9 @@
     produtos = lista;
     categoriasDisponiveis = new Set();
     generosDisponiveis = new Set();
+    coresDisponiveis = new Set();
     produtos.forEach(p => {
+      listaDeTags(textoPlano(p.Cores)).forEach(c => coresDisponiveis.add(c));
       listaDeTags(p.Categoria).forEach(c => categoriasDisponiveis.add(c));
       listaDeTags(p.Genero).forEach(g => generosDisponiveis.add(g));
     });
@@ -111,6 +117,7 @@
     renderizarPillsCategoria();
     renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias, 'resumo-categoria');
     renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
+    renderizarChipsFiltro('chips-cor', coresDisponiveis, filtroCores, 'resumo-cor');
     atualizarBadges();
     aplicarFiltros();
     if (typeof aoAtualizarProdutos === 'function') aoAtualizarProdutos();
@@ -293,11 +300,12 @@
     document.getElementById('busca').value = '';
     document.getElementById('preco-min').value = '';
     document.getElementById('preco-max').value = '';
-    filtroCategorias.clear(); filtroGeneros.clear(); apenasNovidades = false; apenasFavoritos = false; selecaoFixa = null;
+    filtroCategorias.clear(); filtroGeneros.clear(); filtroCores.clear(); apenasNovidades = false; apenasFavoritos = false; selecaoFixa = null;
     renderizarChipExtra();
     renderizarPillsCategoria();
     renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias, 'resumo-categoria');
     renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
+    renderizarChipsFiltro('chips-cor', coresDisponiveis, filtroCores, 'resumo-cor');
     aplicarFiltros();
   });
 
@@ -307,7 +315,7 @@
     const termos = termosDaBusca(busca);
     const min = parseFloat(document.getElementById('preco-min').value);
     const max = parseFloat(document.getElementById('preco-max').value);
-    const filtrosAtivos = !isNaN(min) || !isNaN(max) || apenasNovidades || apenasFavoritos || filtroCategorias.size > 0 || filtroGeneros.size > 0 || !!selecaoFixa;
+    const filtrosAtivos = !isNaN(min) || !isNaN(max) || apenasNovidades || apenasFavoritos || filtroCategorias.size > 0 || filtroGeneros.size > 0 || filtroCores.size > 0 || !!selecaoFixa;
 
     const passaFiltros = p => {
       if (selecaoFixa && !naSelecaoFixa_(p)) return false;
@@ -316,6 +324,7 @@
       if (apenasNovidades && !ehNovidade(p)) return false;
       if (apenasFavoritos && !ehFavorito(p.ID)) return false;
       if (filtroCategorias.size) { const tags = listaDeTags(p.Categoria); if (!tags.some(t => filtroCategorias.has(t))) return false; }
+      if (filtroCores.size) { const tc = listaDeTags(textoPlano(p.Cores)); if (!tc.some(t => filtroCores.has(t))) return false; }
       if (filtroGeneros.size) { const tags = listaDeTags(p.Genero); if (!tags.some(t => filtroGeneros.has(t))) return false; }
       return true;
     };
@@ -350,6 +359,7 @@
     if (apenasFavoritos) itens.push(['Favoritos', () => { apenasFavoritos = false; renderizarChipExtra(); }]);
     filtroCategorias.forEach(c => itens.push([c, () => { filtroCategorias.delete(c); }]));
     filtroGeneros.forEach(g => itens.push([g, () => { filtroGeneros.delete(g); }]));
+    filtroCores.forEach(g => itens.push([g, () => { filtroCores.delete(g); }]));
     if (min !== '' || max !== '') {
       const rot = min !== '' && max !== '' ? 'R$ ' + min + ' a ' + max : (min !== '' ? 'a partir de R$ ' + min : 'até R$ ' + max);
       itens.push(['Preço: ' + rot, () => { document.getElementById('preco-min').value = ''; document.getElementById('preco-max').value = ''; }]);
@@ -369,6 +379,7 @@
         renderizarPillsCategoria();
         renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias, 'resumo-categoria');
         renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
+    renderizarChipsFiltro('chips-cor', coresDisponiveis, filtroCores, 'resumo-cor');
         aplicarFiltros();
       });
       box.appendChild(b);
@@ -1315,6 +1326,11 @@
     badge.hidden = !n; badge.textContent = n;
   }
   function abrir() { yAbertura = window.scrollY; f.classList.add('aberto'); btn.setAttribute('aria-expanded', 'true'); }
+  // abre sozinho ao procurar e fecha ao sair (só se foi aberto por esta busca)
+  let autoAberto = false;
+  busca.addEventListener('focus', () => { if (!f.classList.contains('aberto')) { abrir(); autoAberto = true; } });
+  f.addEventListener('focusout', () => { setTimeout(() => { if (autoAberto && !f.contains(document.activeElement)) { fechar(); autoAberto = false; } }, 250); });
+  btn.addEventListener('click', () => { autoAberto = false; }, true);
   function fechar() { f.classList.remove('aberto'); btn.setAttribute('aria-expanded', 'false'); }
   function compactar(sim) {
     if (sim === f.classList.contains('compacto')) return;

@@ -23,7 +23,7 @@ def abrir(b, perms=PERMS_ALL, versao="3.2", dialogos=None):
     falas = [] if dialogos is None else dialogos
     pg.on("dialog", lambda d: (falas.append((d.type, d.message)), d.accept()))
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(1500)
-    pg.click("#card-form > summary"); pg.wait_for_timeout(300)
+    pg.evaluate("document.getElementById('card-form').open=true"); pg.wait_for_timeout(300)
     return ctx, pg, log, st, erros, falas
 def abrir_folha(pg):
     pg.click("#btn-abrir-categorias"); pg.wait_for_timeout(250)
@@ -171,7 +171,7 @@ with sync_playwright() as p:
     cancelar = []
     ctx = b.new_context(viewport=VIEW, is_mobile=True, has_touch=True, service_workers="block"); ctx.add_init_script(SESSION)
     log = []; st = install(ctx, log=log); pg = ctx.new_page(); pg.on("dialog", lambda d: (cancelar.append(d.message), d.dismiss()))
-    pg.goto(BASE + "admin.html"); pg.wait_for_timeout(1500); pg.click("#card-form > summary"); abrir_folha(pg)
+    pg.goto(BASE + "admin.html"); pg.wait_for_timeout(1500); pg.evaluate("document.getElementById('card-form').open=true"); abrir_folha(pg)
     pg.click("#cat-lista [data-cat='Short'] >> xpath=.. >> .cat-x"); pg.wait_for_timeout(300)
     chk("tocar em Cancelar na pergunta não apaga nada", not posts(log, "excluirCategoria") and "Short" in nomes_lista(pg) and "Short" in st["categorias"])
     ctx.close()

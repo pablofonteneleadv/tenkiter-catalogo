@@ -19,7 +19,7 @@ with sync_playwright() as p:
     pg.goto(BASE+"index.html"); pg.wait_for_timeout(1500); axe(pg,"catalogo")
     pg.click(".card >> nth=0"); pg.wait_for_timeout(600); axe(pg,"catalogo: produto aberto")
     pg.goto(BASE+"admin.html"); pg.wait_for_timeout(1500); axe(pg,"gestao: lista")
-    pg.click("#card-form > summary"); pg.wait_for_timeout(300); axe(pg,"gestao: cadastro")
+    pg.evaluate("document.getElementById('card-form').open=true"); pg.wait_for_timeout(300); axe(pg,"gestao: cadastro")
     pg.click("#btn-abrir-categorias"); pg.wait_for_timeout(300); axe(pg,"gestao: categorias")
     pg.goto(BASE+"treinamentos.html"); pg.wait_for_timeout(1500); axe(pg,"treinamentos: inicio")
     pg.goto(BASE+"treinamentos.html?painel=rh"); pg.wait_for_timeout(1500); axe(pg,"RH: painel")
