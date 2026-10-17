@@ -143,3 +143,7 @@ Recebidas 12 capturas do Pablo (`IMG_20261016_2252xx` a `2330xx`). Abaixo: o que
 ### 9.4 Estado de publicação desta seção
 - `main` em `dc7e267` (PR #13 v4.17, #14 docs, #15 CI rápido para `.md`).
 - Nada das fotos 01 a 12 foi implementado ainda. Esta seção é só o plano.
+
+## 17/10/2026 — v4.19 tamanhos/cores permanentes
+- Front no ar (commit 1f2f595). Backend `catalogo-codigo-4.18.gs.txt` entregue ao Pablo: colar no Apps Script do catálogo + Nova versão; conferir `?action=versao` (`opcoesLista`).
+- Pendente: Background Sync (Android/Chrome) para envios; revisar `postagens_*.py`; bateria completa só com autorização; pedir revogação do token Cloudflare `cfut_…`.
