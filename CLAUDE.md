@@ -45,6 +45,8 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
   3. Fazer o merge na `main`. O push na `main` dispara `.github/workflows/deploy.yml`, que publica no Render, acompanha até "live" e confirma o commit em `/version.json`.
   4. Conferir no site publicado (`https://tenkiter-catalogo.onrender.com/<arquivo>`) com `grep` por uma string nova do commit.
   5. Se der errado: reverter com novo commit na `main` ou restaurar a partir do `backup/pre-...`.
+- **Cópia dos .md (pedido do Pablo, 17/10/2026)**: a cada atualização, além do deploy automático, gerar um zip com os `.md` alterados (sempre `CLAUDE.md` e `okou.md`) em `/home/user/workspace/entregas/okou-md-<data>.zip` e enviar ao chat com `okou web upload-file -f <zip> --json`. O Pablo guarda essa cópia. Não precisa subir arquivo manualmente no GitHub.
+- **Deploy automático autorizado**: o merge na `main` publica sozinho pelo `deploy.yml`. Não pedir confirmação. Verificar o término pelo `gh run list --branch main` e conferir `https://tenkiter-catalogo.onrender.com/version.json` (campo `commit`).
 - **Bateria final**: a bateria completa (`tests/rodar_tudo.py` com `TK_BASE=https://tenkiter-catalogo.onrender.com/`) roda só quando o Pablo pedir, depois que o site já estiver atualizado.
 - **Render via MCP/API**: `mcp__Render__trigger_deploy` (serviço `srv-dasa63fpn0mc73fh8fgg`, workspace `tea-d001phk9c44c73fd13h0`) continua disponível como alternativa se o deploy pelo GitHub falhar.
 - **Backend (Apps Script)**: **não pode ser deployado por automação** — precisa que o Pablo cole
