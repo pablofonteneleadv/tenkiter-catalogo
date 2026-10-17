@@ -37,14 +37,16 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
 
 ## Deploy — como funciona de fato (não como o README promete)
 
-- **Frontend (Render)**: embora o serviço tenha `autoDeploy: yes`, o deploy automático ao fazer
-  push para `main` se mostrou pouco confiável na prática. Depois de cada push, sempre disparar
-  deploy explícito e confirmar:
-  1. `mcp__Render__trigger_deploy` (serviço `srv-dasa63fpn0mc73fh8fgg`, workspace
-     `tea-d001phk9c44c73fd13h0`)
-  2. `mcp__Render__get_deploy` em loop até `status: "live"`
-  3. `curl` em `https://tenkiter-catalogo.onrender.com/<arquivo>` e `grep` por uma string nova
-     do próprio commit, para confirmar que o ar está servindo o código novo (não só "live").
+- **Regra (Pablo, 17/10/2026)**: deploy é feito por você, direto pelo GitHub, sem pedir confirmação e sem enrolar. Não existe mais restrição de "deploy manual pelo Pablo" para o frontend. Sempre que houver acesso ao GitHub, fazer o deploy assim que o trabalho estiver pronto e testado.
+- **Ponto de restauração obrigatório antes de cada merge na `main`**: criar uma branch `backup/pre-<tema>-<data>` apontando para o commit atual da `main`. Assim qualquer deploy pode ser desfeito rapidamente.
+- **Fluxo padrão (frontend, Render)**:
+  1. Criar o ponto de restauração (`backup/pre-...`).
+  2. Fazer o PR (ou usar o PR existente) e aguardar o check "Portão de qualidade" ficar verde.
+  3. Fazer o merge na `main`. O push na `main` dispara `.github/workflows/deploy.yml`, que publica no Render, acompanha até "live" e confirma o commit em `/version.json`.
+  4. Conferir no site publicado (`https://tenkiter-catalogo.onrender.com/<arquivo>`) com `grep` por uma string nova do commit.
+  5. Se der errado: reverter com novo commit na `main` ou restaurar a partir do `backup/pre-...`.
+- **Bateria final**: a bateria completa (`tests/rodar_tudo.py` com `TK_BASE=https://tenkiter-catalogo.onrender.com/`) roda só quando o Pablo pedir, depois que o site já estiver atualizado.
+- **Render via MCP/API**: `mcp__Render__trigger_deploy` (serviço `srv-dasa63fpn0mc73fh8fgg`, workspace `tea-d001phk9c44c73fd13h0`) continua disponível como alternativa se o deploy pelo GitHub falhar.
 - **Backend (Apps Script)**: **não pode ser deployado por automação** — precisa que o Pablo cole
   manualmente o `.gs.txt` no editor do Apps Script e clique em "Nova versão" (Gerenciar
   implantações → editar → Nova versão). Depois que ele confirmar, validar com:
