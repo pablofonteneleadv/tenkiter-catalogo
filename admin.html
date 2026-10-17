@@ -636,6 +636,14 @@
   </details>
 
 
+  <details class="cartao-cad" id="card-pedidos" hidden>
+    <summary><span id="ped-sum-txt">🧾 Pedidos</span></summary>
+    <div class="cad-corpo">
+      <div class="ped-topo"><div class="filtros-lista" id="ped-filtros" role="group" aria-label="Filtrar pedidos por etapa"></div><button type="button" id="ped-atualizar">🔄 Atualizar</button></div>
+      <div id="ped-lista" aria-live="polite"><p class="ped-vazio">Carregando pedidos…</p></div>
+    </div>
+  </details>
+
   <div id="ig-faixa" hidden></div>
 
   <details class="cartao-cad" id="card-menu-cadastro">
@@ -648,7 +656,7 @@
   </details>
 
   <details class="cartao-cad" id="card-form">
-    <summary><span id="cad-sum-txt">➕ Cadastrar nova peça</span></summary>
+    <summary><span id="cad-sum-txt">📝 Formulário da peça</span></summary>
     <div class="cad-corpo">
     <h2 id="titulo-form">Nova peça</h2>
     <span class="audit-linha" id="audit-form" hidden></span>
@@ -1767,7 +1775,7 @@
   function tituloForm_(txt) {
     document.getElementById('titulo-form').textContent = txt;
     const s = document.getElementById('cad-sum-txt');
-    if (s) s.textContent = /^Editando/.test(txt) ? '✏️ ' + txt : /^Duplicando/.test(txt) ? '\u1F4CB ' + txt : '➕ Cadastrar nova peça';
+    if (s) s.textContent = /^Editando/.test(txt) ? '✏️ ' + txt : /^Duplicando/.test(txt) ? '\u1F4CB ' + txt : '📝 Formulário da peça';
   }
   function abrirCadastro_() {
     const d = document.getElementById('card-form');
