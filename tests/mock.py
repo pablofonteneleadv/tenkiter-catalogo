@@ -48,6 +48,9 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     if conex43: FLAGS["conexoesInstagram"]=True
     if versao>="3.7" and novo: FLAGS["midiaRapida"]=True; FLAGS["juntarProdutos"]=True
     if versao>="4.1" and novo: FLAGS["auditoriaProdutos"]=True
+    if versao>="4.18" and novo: FLAGS["opcoesLista"]=True
+    st["opcoes"]={"tamanhos":["PP","P","M","G","GG","Único"],"cores":["Preto","Branco","Estampado"]}
+    st["opcoes_add"]=[]
     if avanc: FLAGS["metricasAvancadas"]=True; FLAGS["dispositivos"]=True
     if protegido: FLAGS["conteudoProtegido"]=True   # backend de RH 3.4: treinamento_conteudo
     st["conteudo_chamadas"]=[]
@@ -130,6 +133,13 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
         if a=="curriculos_listar": return {"ok":True,"curriculos":[],"status":["Novo","Entrevista"],"motivos":[]}
         if a=="create": return {"ok":True,"id":"999","codigo":"TK-0099"}
         if a=="sugerirPorFoto": st.setdefault("ia_chamadas",[]).append(b.get("fotos",[])); return {"ok":False,"erro":"Teste: IA simulada."}
+        if a in("addTamanho","addCor"):
+            if "gerir_acessos" not in perms: return {"ok":False,"semPermissao":True,"erro":"Você não tem permissão para essa ação."}
+            n=limpa(b.get("nome")); ch="cores" if a=="addCor" else "tamanhos"
+            if not n: return {"ok":False,"erro":"Escreva o nome."}
+            ja=[c for c in st["opcoes"][ch] if norm(c)==norm(n)]
+            if ja: return {"ok":True,"nome":ja[0],"jaExistia":True}
+            st["opcoes"][ch].append(n); st["opcoes_add"].append((a,n)); return {"ok":True,"nome":n}
         if a=="addCategoria":
             n=limpa(b.get("nome"))
             if not n: return {"ok":False,"erro":"Escreva o nome da categoria."}
@@ -423,6 +433,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if "action=config" in u: return route.fulfill(json={"ok":True,"config":{"pixelId":st["integ"]["pixelId"],"sinonimos":[x for x in st["integ"]["sinonimos"].split("\n") if "=" in x]}})
             if "action=list" in u: return route.fulfill(json={"ok":True,"produtos":P if "todos=true" in u else [x for x in P if x["Status"]=="Ativo"]})
             if "action=pushconfig" in u: return route.fulfill(json={"ok":True,"interesses":[{"chave":"feminino-adulto","rotulo":"Feminino Adulto"},{"chave":"infantil-menina","rotulo":"Infantil Menina"}]} if push3 else {"ok":True})
+            if "action=opcoes" in u: return route.fulfill(json={"ok":True,"tamanhos":list(st["opcoes"]["tamanhos"]),"cores":list(st["opcoes"]["cores"])})
             if "action=categorias" in u: return route.fulfill(json={"ok":True,"categorias":list(st["categorias"])})
             if "action=generos" in u: return route.fulfill(json={"ok":True,"generos":GENS})
             if "action=stats" in u: return route.fulfill(json={"ok":True,"totalVisualizacoes":120,"totalWhatsapp":18,"produtoMaisVistoId":"1790000000003","produtoMaisVistoCodigo":"TK-0003","produtoMaisVistoViews":40})

@@ -623,3 +623,9 @@ Documentação técnica: `docs/CI-CD.md`, seção **6. CI otimizado**.
 - **Catálogo**: filtro **Cor** (`#chips-cor`, `?cor=`); a gaveta de filtros abre ao focar a busca e fecha ao sair (só se foi aberta por ela).
 - **Parte 2 (17/10/2026)**: categorias aparecem como chips sempre visíveis no passo 5 (`#chips-categorias`; ordem alfabética do front); criar categoria nova só Admin total (`.so-admin-cores` em `#btn-criar-categoria`/`.cat-criar-linha`; `admin_categorias.py` tira `sem-gerir` antes). Barra de lote quebra linha ≥560 px; nome da peça na lista com `clamp` e 2 linhas.
 - **Pendente**: ordem das listas definida pelo admin (precisa backend 4.18 + .gs completo), revisar `postagens_*.py` (já falhavam antes).
+
+## v4.19 — Tamanhos e cores/estampas permanentes para todos (backend catálogo 4.18 + admin.html)
+
+- **Pedido do Pablo (17/10/2026)**: o que o Admin total cria (categoria, cor/estampa, tamanho) é DEFINITIVO e fica escolhível para todos. A ordem das listas definida pelo admin foi **desconsiderada** (não fazer).
+- **Backend 4.18** (`catalogo-codigo-4.18.gs.txt`, colar à mão; bandeira `opcoesLista`): abas `Tamanhos_Lista` / `Cores_Lista` (criadas com os valores de fábrica), `GET ?action=opcoes` (público) e ações `addTamanho`/`addCor` (só `gerir_acessos`, só com login).
+- **Front** (`admin.html`): `carregarOpcoes_()` lê `?action=opcoes` (cache `tenkiter_admin_opcoes_v1`) e troca `TAMANHOS_RAPIDOS`/`CORES_RAPIDAS` in-place; os campos de texto `#tamanhos`/`#cores` ficam ocultos (só chips; valor antigo fora da lista aparece como chip extra marcado). `adicionarEscolha_` só aceita opção nova se o servidor gravar; com backend antigo continua local. Teste: `tests/opcoes_lista.py`; `mock.py` `versao>="4.18"`.
