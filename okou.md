@@ -152,3 +152,7 @@ Recebidas 12 capturas do Pablo (`IMG_20261016_2252xx` a `2330xx`). Abaixo: o que
 - Front: mídias sobem ao escolher; cadastro leva só dados + endereços; `opId` evita peça duplicada; ao minimizar, pacote final via fetch keepalive; app que fechou na hora de salvar reenvia sozinho (backend 4.19).
 - Backend `catalogo-codigo-4.19.gs.txt` (substitui o 4.18) entregue ao Pablo: colar + Nova versão; conferir `opIdempotente`.
 - Pendente: teste em celular real (minimizar durante vídeo grande); upload retomável em partes (multipart R2) só se vídeo grande continuar falhando; limpar mídia órfã; revisar `postagens_*.py` e `x_equipe.py`; bateria completa só com autorização; revogar token Cloudflare `cfut_…`.
+
+## 17/10/2026 (noite) — Tenkiter-cofre
+- Repositório privado `pablofonteneleadv/Tenkiter-cofre` anexado à sessão. Regra: toda entrega (`.gs.txt` + zip dos `.md`) também vai para lá, e o `.gs` mais novo DE LÁ é a base de qualquer edição de backend (regra completa na seção v4.21 do `CLAUDE.md`).
+- Achado: o cofre tinha `catalogo-codigo-4.18` (base exata do 4.19) e `funcionario-3.15`; a cópia local do funcionário era a 3.8 (velha). Backend de funcionários atual = **3.15**.
