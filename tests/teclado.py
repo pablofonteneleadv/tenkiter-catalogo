@@ -48,7 +48,7 @@ with sync_playwright() as p:
     print("== Gestão (teclado) ==")
     ctx=b.new_context(viewport={"width":1000,"height":800}); ctx.add_init_script(SESSION); install(ctx); pg=ctx.new_page(); errs=[]; pg.on("pageerror",lambda e:errs.append(str(e)))
     pg.goto(BASE+"admin.html"); pg.wait_for_timeout(1500)
-    pg.click("#card-form > summary"); pg.wait_for_timeout(300)
+    pg.evaluate("document.getElementById('card-form').open=true"); pg.wait_for_timeout(300)
     pg.click("#btn-abrir-categorias"); pg.wait_for_timeout(500)
     chk("folha de categorias abre",pg.locator("#overlay-categorias.aberto").count()==1)
     chk("foco dentro da folha",pg.evaluate("document.querySelector('#overlay-categorias').contains(document.activeElement)"))

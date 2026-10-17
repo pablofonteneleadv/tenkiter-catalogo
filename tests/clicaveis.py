@@ -36,7 +36,7 @@ with sync_playwright() as p:
     ctx,pg,c=novo(); pg.goto(BASE+"index.html"); pg.wait_for_timeout(1500); rel(pg,c,"catálogo")
     pg.locator(".card").nth(1).click(); pg.wait_for_timeout(600); rel(pg,c,"catálogo: produto aberto"); ctx.close()
     ctx,pg,c=novo(True); pg.goto(BASE+"admin.html"); pg.wait_for_timeout(1500); rel(pg,c,"gestão: lista")
-    pg.click("#card-form > summary"); pg.wait_for_timeout(300); rel(pg,c,"gestão: cadastro"); ctx.close()
+    pg.evaluate("document.getElementById('card-form').open=true"); pg.wait_for_timeout(300); rel(pg,c,"gestão: cadastro"); ctx.close()
     ctx,pg,c=novo(True); pg.goto(BASE+"treinamentos.html"); pg.wait_for_timeout(1500); rel(pg,c,"treinamentos: início")
     pg.locator(".card").first.click(); pg.wait_for_timeout(600); rel(pg,c,"treinamentos: manual"); 
     pg.goto(BASE+"treinamentos.html?painel=rh"); pg.wait_for_timeout(1500)

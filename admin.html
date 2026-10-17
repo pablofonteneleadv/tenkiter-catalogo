@@ -151,6 +151,9 @@
   .menu-cad-item b { display: block; font-size: 0.95rem; }
   .menu-cad-item small { color: #555; font-size: 0.78rem; }
   .menu-cad-item[hidden] { display: none; }
+  .cad-badge { background: var(--laranja); color: #0d0d0d; border-radius: 999px; padding: 1px 8px; font-size: .78rem; margin-left: 6px; }
+  #card-form:not([open]) { display: none; }
+  #ig-faixa { margin: 0; }
 
   /* v4.10 (FE-08): filtros extras da busca do admin */
   .filtros-admin { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 10px; }
@@ -284,6 +287,22 @@
   .env-botoes { display: flex; gap: 8px; }
   .env-item button { border: none; border-radius: 8px; padding: 7px 10px; font-weight: 700; font-size: 0.75rem; cursor: pointer; background: #333; color: #fff; flex: 1; }
   .env-spin { display: inline-block; animation: env-gira 1s linear infinite; }
+  /* v4.18: plaquinha fixa do envio em segundo plano (acima da barra inferior, abaixo das janelas) */
+  .envios-flut { position: fixed; left: 12px; right: 12px; bottom: 86px; z-index: 85; width: auto; max-width: 520px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; text-align: left; background: #0d0d0d; color: #fff; border: 2px solid var(--laranja); border-radius: 14px; padding: 10px 14px; font-size: .9rem; line-height: 1.25; box-shadow: 0 6px 18px rgba(0,0,0,.35); cursor: pointer; }
+  .envios-flut[hidden] { display: none; }
+  .envios-flut small { flex-basis: 100%; font-size: .74rem; color: #d6d6d6; font-weight: 500; }
+  .envios-flut .barra { flex-basis: 100%; display: block; height: 5px; border-radius: 3px; background: #444; overflow: hidden; }
+  .envios-flut .barra u { display: block; height: 100%; background: var(--laranja); text-decoration: none; transition: width .3s; }
+  .envios-flut.erro { border-color: #ff6b6b; background: #4a0f0f; }
+  .envios-flut.aviso { border-color: #f5c542; }
+  .envios-flut.ok { border-color: #4caf50; }
+  .video-lista { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .video-item { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid #ddd; border-radius: 10px; background: #fafafa; }
+  .video-item.principal { border-color: var(--laranja); }
+  .video-item video { width: 100%; max-width: 260px; max-height: 260px; border-radius: 8px; background: #000; align-self: center; }
+  .video-tag { align-self: flex-start; font-size: .7rem; font-weight: 800; letter-spacing: .03em; background: #0d0d0d; color: #fff; border-radius: 999px; padding: 2px 8px; }
+  .video-item.principal .video-tag { background: var(--laranja); color: #0d0d0d; }
+  .video-x { width: auto; align-self: flex-start; background: #c62828; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; min-height: 40px; font-weight: 700; cursor: pointer; }
   @keyframes env-gira { to { transform: rotate(360deg); } }
   .env-progresso-wrap { margin-top: 6px; height: 6px; border-radius: 4px; background: #e2d9cc; overflow: hidden; }
   .env-progresso-barra { height: 100%; background: var(--laranja); transition: width 0.2s linear; }
@@ -518,6 +537,7 @@
 </div>
 
 <div id="toast-carregando" role="status" aria-live="polite"><span class="spinner-mini"></span><span id="texto-toast">Carregando peças...</span></div>
+<button type="button" id="envios-flut" class="envios-flut" aria-live="polite" hidden></button>
 
 <header>
   <div class="header-brand-row">
@@ -566,6 +586,13 @@
 
   <details class="extra ferramentas" id="details-ferramentas">
     <summary>🛠&#65039; Ferramentas do gestor (números, avisos, auditoria, configurações)</summary>
+  <details class="cartao-cad" id="card-pedidos" hidden>
+    <summary><span id="ped-sum-txt">🧾 Pedidos</span></summary>
+    <div class="cad-corpo">
+      <div class="ped-topo"><div class="filtros-lista" id="ped-filtros" role="group" aria-label="Filtrar pedidos por etapa"></div><button type="button" id="ped-atualizar">🔄 Atualizar</button></div>
+      <div id="ped-lista" aria-live="polite"><p class="ped-vazio">Carregando pedidos…</p></div>
+    </div>
+  </details>
   <div class="stats-panel" id="stats-panel">
     <div class="stats-card"><span>👁&#65039; Visualizações</span><strong id="stats-views">—</strong></div>
     <div class="stats-card"><span>💬 Cliques WhatsApp</span><strong id="stats-whats">—</strong></div>
@@ -636,20 +663,12 @@
   </details>
 
 
-  <details class="cartao-cad" id="card-pedidos" hidden>
-    <summary><span id="ped-sum-txt">🧾 Pedidos</span></summary>
-    <div class="cad-corpo">
-      <div class="ped-topo"><div class="filtros-lista" id="ped-filtros" role="group" aria-label="Filtrar pedidos por etapa"></div><button type="button" id="ped-atualizar">🔄 Atualizar</button></div>
-      <div id="ped-lista" aria-live="polite"><p class="ped-vazio">Carregando pedidos…</p></div>
-    </div>
-  </details>
 
-  <div id="ig-faixa" hidden></div>
 
   <details class="cartao-cad" id="card-menu-cadastro">
-    <summary><span>➕ Cadastrar</span></summary>
+    <summary><span>➕ Cadastrar <b id="cad-badge" class="cad-badge" hidden></b></span></summary>
     <div class="menu-cad">
-      <button type="button" class="menu-cad-item" id="menu-cad-aceitar" hidden><span class="mc-ic">📥</span><span><b>Produtos para aceitar</b><small>Do Instagram — confira e cadastre</small></span></button>
+      <div id="ig-faixa" hidden></div>
       <button type="button" class="menu-cad-item" id="menu-cad-nova"><span class="mc-ic">➕</span><span><b>Cadastrar nova peça</b><small>Uma peça, com fotos e vídeo</small></span></button>
       <button type="button" class="menu-cad-item" id="menu-cad-varias"><span class="mc-ic">📂&#65039;</span><span><b>Cadastrar várias peças</b><small>Mesmos dados, uma foto por peça</small></span></button>
     </div>
@@ -679,19 +698,20 @@
       </section>
 
       <section class="passo" data-passo="video" id="passo-video">
-        <div class="passo-tit"><span class="num">2</span>Vídeo da peça <span class="opc">(opcional · até 20 MB)</span></div>
+        <div class="passo-tit"><span class="num">2</span>Vídeos da peça <span class="opc">(opcional · até 3 · até 20 MB cada)</span><span class="passo-cont" id="video-contador"></span></div>
         <div class="foto-box" id="video-box">
-          <label class="btn-foto btn-video" for="video-input">🎬 Gravar ou escolher um vídeo</label>
-          <input type="file" id="video-input" accept="video/mp4,video/quicktime,video/webm" class="input-oculto">
+          <label class="btn-foto btn-video" for="video-input" id="video-label">🎬 Gravar ou escolher um vídeo</label>
+          <input type="file" id="video-input" accept="video/mp4,video/quicktime,video/webm" multiple class="input-oculto">
+          <div id="video-lista" class="video-lista"></div>
           <video id="video-preview" controls playsinline preload="metadata"></video>
           <div id="video-atual">🎬 Esta peça já tem um vídeo salvo. <a id="video-atual-link" href="#" target="_blank" rel="noopener">Ver</a></div>
           <button type="button" id="btn-remover-video">Remover vídeo</button>
-          <div class="dica-midia">MP4, MOV ou WEBM. O vídeo precisa de internet na hora de salvar.</div>
+          <div class="dica-midia">MP4, MOV ou WEBM. Os vídeos sobem junto com as fotos, em segundo plano. O primeiro vídeo é o que aparece como principal.</div>
         </div>
       </section>
 
       <section class="passo" data-passo="nome">
-        <div class="passo-tit"><span class="num">2</span>Nome da peça <i class="obg">*</i></div>
+        <div class="passo-tit"><span class="num">3</span>Nome da peça <i class="obg">*</i></div>
         <input type="text" id="nome" maxlength="80" placeholder="Ex: Vestido Floral Midi" autocomplete="off" dir="ltr" lang="pt-BR">
         <div id="nome-sugestoes" aria-live="polite"></div>
       <div id="aviso-copiado" class="sug-aviso" role="status" hidden></div>
@@ -699,7 +719,7 @@
       </section>
 
       <section class="passo" data-passo="preco">
-        <div class="passo-tit"><span class="num">3</span>Preço e quantidade</div>
+        <div class="passo-tit"><span class="num">4</span>Preço e quantidade</div>
         <div class="form-linha">
           <div>
             <label for="preco">Preço (R$) <i class="obg" style="color:var(--vermelho);font-style:normal">*</i></label>
@@ -715,28 +735,28 @@
       </section>
 
       <section class="passo" data-passo="categoria">
-        <div class="passo-tit"><span class="num">4</span>Categoria <i class="obg">*</i></div>
+        <div class="passo-tit"><span class="num">5</span>Categoria <i class="obg">*</i></div>
         <div class="tags" id="tags-categoria"></div>
         <button type="button" class="btn-escolher" id="btn-abrir-categorias">＋ Escolher categoria</button>
         <div class="passo-msg">Escolha pelo menos uma categoria.</div>
       </section>
 
       <section class="passo" data-passo="tamanhos">
-        <div class="passo-tit"><span class="num">5</span>Tamanhos <span class="opc">(se souber)</span></div>
+        <div class="passo-tit"><span class="num">6</span>Tamanhos <span class="opc">(se souber)</span></div>
         <div class="chips chips-rapidos" id="chips-tamanhos"></div>
         <input type="text" id="tamanhos" placeholder="Ou escreva: P, M, G, GG" autocomplete="off">
         <button type="button" class="btn-escolher" id="btn-abrir-tamanhos">＋ Escolher tamanhos</button>
       </section>
 
       <section class="passo" data-passo="cores">
-        <div class="passo-tit"><span class="num">6</span>Cores e estampas <span class="opc">(se souber)</span></div>
+        <div class="passo-tit"><span class="num">7</span>Cores e estampas <span class="opc">(se souber)</span></div>
         <div class="chips chips-rapidos" id="chips-cores"></div>
         <input type="text" id="cores" placeholder="Ou escreva: Preto, Off-white, Estampado" autocomplete="off" class="so-admin-cores">
         <button type="button" class="btn-escolher so-admin-cores" id="btn-abrir-cores">＋ Escolher cores e estampas</button>
       </section>
 
       <section class="passo" data-passo="genero">
-        <div class="passo-tit"><span class="num">7</span>Para quem é? <i class="obg">*</i></div>
+        <div class="passo-tit"><span class="num">8</span>Para quem é? <i class="obg">*</i></div>
         <div class="chips chips-grandes" id="chips-genero"></div>
         <div class="passo-msg">Escolha para quem é a peça.</div>
       </section>
@@ -1221,9 +1241,18 @@
   const MAX_GALERIA = 8, MAX_VIDEO_MB = 20;
   // fotosItens: { url } já salva  |  { b64, prev } nova -- uma delas tem .capa = true (a foto principal).
   let fotosItens = [];
-  let videoNovo = null;       // { file, mime, prev }
-  let videoAtual = '';        // link do vídeo já salvo
-  let removerVideo = false;
+  // v4.18: até 3 vídeos por peça (backend 4.17+ com a bandeira videosMultiplos; sem ela, 1 só como sempre foi).
+  // videosItens: { url } já salvo  |  { file, mime, prev } novo. O 1º da lista é o PRINCIPAL.
+  const MAX_VIDEOS = 3;
+  let videosItens = [];
+  let videosRemovidos = [];   // endereços de vídeos já salvos que a pessoa tirou (só na edição)
+  let videosMulti_ = false;   // liga quando o servidor confirma videosMultiplos
+  function maxVideos_() { return videosMulti_ ? MAX_VIDEOS : 1; }
+  function videosDoProduto_(p) {
+    if (!p) return [];
+    const lista = Array.isArray(p.Videos) && p.Videos.length ? p.Videos : (p.Video_URL ? [p.Video_URL] : []);
+    return lista.map(u => String(u || '').trim()).filter(Boolean).slice(0, MAX_VIDEOS);
+  }
 
   // Reconhece tanto vídeo antigo (Drive) quanto vídeo novo (Cloudinary) salvo na peça.
   // Devolve null se não houver vídeo ou o formato não for reconhecido.
@@ -1300,25 +1329,40 @@
   }
 
   function desenharVideo() {
-    const prev = document.getElementById('video-preview');
-    const atual = document.getElementById('video-atual');
-    const btn = document.getElementById('btn-remover-video');
-    prev.style.display = 'none'; atual.style.display = 'none'; btn.style.display = 'none';
-    if (videoNovo) {
-      prev.src = videoNovo.prev; prev.style.display = 'block';
-      btn.textContent = 'Remover este vídeo'; btn.style.display = 'inline-block';
-    } else if (videoAtual && !removerVideo && infoVideoSalvo_(videoAtual)) {
-      const infoVid = infoVideoSalvo_(videoAtual);
-      document.getElementById('video-atual-link').href = infoVid.tipo === 'cloudinary' ? infoVid.url : ('https://drive.google.com/file/d/' + infoVid.id + '/view');
-      atual.style.display = 'block';
-      btn.textContent = 'Remover vídeo da peça'; btn.style.display = 'inline-block';
-    } else {
-      prev.removeAttribute('src');
-    }
+    const box = document.getElementById('video-lista'); box.innerHTML = '';
+    ['video-preview', 'video-atual', 'btn-remover-video'].forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; });   // a lista nova substitui os elementos antigos
+    videosItens.forEach((v, idx) => {
+      const card = document.createElement('div'); card.className = 'video-item' + (idx === 0 ? ' principal' : '');
+      const tag = document.createElement('span'); tag.className = 'video-tag';
+      tag.textContent = (idx === 0 ? 'PRINCIPAL' : 'Vídeo ' + (idx + 1)) + (v.file ? ' · NOVO' : ' · salvo');
+      card.appendChild(tag);
+      if (v.prev) {
+        const vd = document.createElement('video'); vd.src = v.prev; vd.controls = true; vd.playsInline = true; vd.preload = 'metadata'; card.appendChild(vd);
+      } else {
+        const info = infoVideoSalvo_(v.url);
+        const a = document.createElement('a'); a.target = '_blank'; a.rel = 'noopener'; a.textContent = '🎬 Ver o vídeo salvo';
+        a.href = info ? (info.tipo === 'drive' ? 'https://drive.google.com/file/d/' + info.id + '/view' : info.url) : v.url;
+        card.appendChild(a);
+      }
+      const x = document.createElement('button'); x.type = 'button'; x.className = 'video-x'; x.textContent = '✕ Tirar este vídeo';
+      x.addEventListener('click', () => {
+        if (v.prev) URL.revokeObjectURL(v.prev);
+        if (v.url) videosRemovidos.push(v.url);
+        videosItens.splice(idx, 1); desenharVideo(); if (typeof atualizarFaltas_ === 'function') atualizarFaltas_();
+      });
+      card.appendChild(x);
+      box.appendChild(card);
+    });
+    const cheio = videosItens.length >= maxVideos_();
+    const lab = document.getElementById('video-label'); if (lab) lab.style.display = cheio ? 'none' : '';
+    document.getElementById('video-input').disabled = cheio;
+    document.getElementById('video-input').multiple = maxVideos_() > 1;
+    const cont = document.getElementById('video-contador'); if (cont) cont.textContent = videosItens.length ? '(' + videosItens.length + ' de ' + maxVideos_() + ')' : '';
+    const tit = document.querySelector('#passo-video .opc'); if (tit) tit.textContent = '(opcional · ' + (maxVideos_() > 1 ? 'até ' + maxVideos_() : '1') + ' · até ' + MAX_VIDEO_MB + ' MB' + (maxVideos_() > 1 ? ' cada' : '') + ')';
   }
 
   function zerarMidia(p) {
-    if (videoNovo && videoNovo.prev) URL.revokeObjectURL(videoNovo.prev);
+    videosItens.forEach(v => { if (v.prev) URL.revokeObjectURL(v.prev); });
     if (p) {
       const capa = String(p.Foto_URL || '').trim();
       const resto = String(p.Fotos_Galeria || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -1326,11 +1370,12 @@
     } else {
       fotosItens = [];
     }
-    videoNovo = null; removerVideo = false; videoAtual = p ? String(p.Video_URL || '') : '';
+    videosItens = videosDoProduto_(p).map(u => ({ url: u })); videosRemovidos = [];
     document.getElementById('galeria-input').value = '';
     document.getElementById('video-input').value = '';
     desenharFotos(); desenharVideo();
   }
+  versaoServidor().then(v => { videosMulti_ = !!(v && v.videosMultiplos); desenharVideo(); }).catch(() => {});
 
   function lerFotoReduzida(file) {
     return new Promise((resolve, reject) => {
@@ -1378,21 +1423,16 @@
   });
 
   document.getElementById('video-input').addEventListener('change', (e) => {
-    const f = (e.target.files || [])[0];
-    if (!f) return;
-    if (!/^video\/(mp4|quicktime|webm)$/.test(f.type)) { alert('Formato não aceito. Use MP4, MOV ou WEBM.'); e.target.value = ''; return; }
-    if (f.size > MAX_VIDEO_MB * 1024 * 1024) { alert('Vídeo com ' + (f.size / 1048576).toFixed(1) + ' MB. O máximo é ' + MAX_VIDEO_MB + ' MB — encurte o vídeo ou reduza a qualidade.'); e.target.value = ''; return; }
-    // Guarda o arquivo original (não converte pra base64 aqui) -- o envio sobe o arquivo direto
-    // pro Cloudinary na hora de salvar, ver subirVideoDireto_.
-    if (videoNovo && videoNovo.prev) URL.revokeObjectURL(videoNovo.prev);
-    videoNovo = { file: f, mime: f.type, prev: URL.createObjectURL(f) };
-    removerVideo = false;
-    desenharVideo();
-  });
-
-  document.getElementById('btn-remover-video').addEventListener('click', () => {
-    if (videoNovo) { if (videoNovo.prev) URL.revokeObjectURL(videoNovo.prev); videoNovo = null; document.getElementById('video-input').value = ''; }
-    else if (videoAtual) removerVideo = true;
+    const arquivos = Array.from(e.target.files || []); e.target.value = '';
+    if (!arquivos.length) return;
+    let vagas = maxVideos_() - videosItens.length;
+    for (const f of arquivos) {
+      if (vagas <= 0) { alert('Só cabem ' + maxVideos_() + ' vídeo(s) por peça. Os primeiros foram aproveitados.'); break; }
+      if (!/^video\/(mp4|quicktime|webm)$/.test(f.type)) { alert('Formato não aceito (' + f.name + '). Use MP4, MOV ou WEBM.'); continue; }
+      if (f.size > MAX_VIDEO_MB * 1024 * 1024) { alert('Vídeo com ' + (f.size / 1048576).toFixed(1) + ' MB. O máximo é ' + MAX_VIDEO_MB + ' MB — encurte o vídeo ou reduza a qualidade.'); continue; }
+      // Guarda o arquivo original (não converte pra base64 aqui) -- o envio sobe o arquivo direto na hora de salvar, junto com as fotos.
+      videosItens.push({ file: f, mime: f.type, prev: URL.createObjectURL(f) }); vagas--;
+    }
     desenharVideo();
   });
   let modoDuplicando = false;
@@ -1765,7 +1805,7 @@
     const ed = ev.target.closest('[data-peca-editar]');
     if (ed) {
       const p = produtos.find(x => String(x.ID) === String(ed.dataset.pecaEditar)); if (!p) return;
-      const temOutrosDados = modoFormulario === 'editando' || !!(document.getElementById('preco').value || document.getElementById('descricao').value.trim() || selecionadasCategorias.size || selecionadosGeneros.size || (typeof fotosItens !== 'undefined' && fotosItens.length) || videoNovo);
+      const temOutrosDados = modoFormulario === 'editando' || !!(document.getElementById('preco').value || document.getElementById('descricao').value.trim() || selecionadasCategorias.size || selecionadosGeneros.size || (typeof fotosItens !== 'undefined' && fotosItens.length) || videosItens.length);
       if (temOutrosDados && !confirm('Abrir “' + p.Nome + '” para editar? O que você já preencheu neste formulário será descartado.')) return;
       editarProduto(p.ID);
       document.getElementById('nome-sugestoes').innerHTML = '';
@@ -2162,6 +2202,37 @@
   // O formulário libera na hora para cadastrar a próxima peça; os envios saem um de cada vez.
   const envios = []; let processandoEnvios = false; let seqEnvios = 0;
 
+  // v4.18 "salvar e sair": depois de salvar, o cartão do cadastro FECHA e a pessoa volta para a lista; o envio segue em segundo plano
+  // e o andamento aparece na plaquinha fixa #envios-flut (qualquer parte do painel). Toque nela = abre o cartão na fila.
+  function sairDoCadastro_() {
+    const d = document.getElementById('card-form');
+    d.open = false;
+    const alvo = document.getElementById('lista-produtos') || d;
+    try { alvo.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { window.scrollTo(0, 0); }
+    atualizarFlut_();
+  }
+  function atualizarFlut_() {
+    const el = document.getElementById('envios-flut'); if (!el) return;
+    const pend = envios.filter(e => e.estado === 'fila' || e.estado === 'enviando');
+    const erros = envios.filter(e => e.estado === 'erro').length, avisos = envios.filter(e => e.estado === 'aviso').length, oks = envios.filter(e => e.estado === 'ok').length;
+    const cardAberto = document.getElementById('card-form').open;
+    let html = '', cls = 'envios-flut';
+    if (pend.length) {
+      const ativo = envios.find(e => e.estado === 'enviando');
+      const pct = ativo && typeof ativo.progresso === 'number' ? Math.round(Math.min(1, ativo.progresso) * 100) : null;
+      html = '<span class="env-spin">⏳</span> <b>Enviando ' + (pend.length === 1 ? '1 peça' : pend.length + ' peças') + '</b>' + (pct != null ? ' · ' + pct + '%' : '') + '<small>Pode mexer no painel. Se fechar o app, o que falta retoma quando voltar.</small>' + (pct != null ? '<i class="barra"><u style="width:' + pct + '%"></u></i>' : '');
+      cls += ' enviando';
+    } else if (erros) { html = '❌ <b>' + (erros === 1 ? '1 peça com problema' : erros + ' peças com problema') + '</b><small>Toque para ver e tentar de novo.</small>'; cls += ' erro'; }
+    else if (avisos) { html = '⚠️ <b>' + (avisos === 1 ? '1 aviso' : avisos + ' avisos') + ' no envio</b><small>Toque para ver.</small>'; cls += ' aviso'; }
+    else if (oks) { html = '✅ <b>' + (oks === 1 ? '1 peça salva' : oks + ' peças salvas') + '</b>'; cls += ' ok'; }
+    el.className = cls; el.innerHTML = html; el.hidden = !html || cardAberto;
+  }
+  (function () {
+    const el = document.getElementById('envios-flut');
+    el.addEventListener('click', () => { abrirCadastro_(); setTimeout(() => { const f = document.getElementById('fila-envios'); if (f) f.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 50); });
+    document.getElementById('card-form').addEventListener('toggle', atualizarFlut_);
+  })();
+
   // ---- v4.1: a fila fica guardada NO APARELHO (IndexedDB). Se o app for minimizado, fechado ou o celular reiniciar no meio do envio,
   // o que não terminou volta sozinho quando o painel abrir de novo. Só dados da peça e fotos/vídeo (nenhuma senha/token: a credencial entra na hora de enviar).
   let envioGuardadoOk_ = true;
@@ -2179,7 +2250,7 @@
       const db = await bdEnvios_();
       await new Promise((res, rej) => {
         const tx = db.transaction('e', 'readwrite');
-        tx.objectStore('e').put({ k: it.k, titulo: it.titulo, ehEdicao: it.ehEdicao, temVideo: it.temVideo, videoArquivo: it.videoArquivo || null, capaNovaB64: it.capaNovaB64 || null,
+        tx.objectStore('e').put({ k: it.k, titulo: it.titulo, ehEdicao: it.ehEdicao, temVideo: it.temVideo, videoArquivo: null, videoArquivos: arquivosDeVideo_(it), videosSalvos: it.videosSalvos || [], videosRemover: it.videosRemover || [], capaNovaB64: it.capaNovaB64 || null,
           galeriaNovaB64: it.galeriaNovaB64 || [], dados: it.dados, rascunhoId: it.rascunhoId || null, etapa: it.etapa || 'fila', msg: it.estado === 'erro' ? it.msg : '' });
         tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
       });
@@ -2208,14 +2279,14 @@
     if (!lista.length) return;
     lista.forEach((r) => {
       if (envios.some(x => x.k === r.k)) return;
-      const it = { chave: ++seqEnvios, k: r.k, titulo: r.titulo, ehEdicao: !!r.ehEdicao, temVideo: !!r.temVideo, videoArquivo: r.videoArquivo || null, capaNovaB64: r.capaNovaB64 || null,
+      const it = { chave: ++seqEnvios, k: r.k, titulo: r.titulo, ehEdicao: !!r.ehEdicao, temVideo: !!r.temVideo, videoArquivo: null, videoArquivos: (r.videoArquivos && r.videoArquivos.length) ? r.videoArquivos : (r.videoArquivo ? [r.videoArquivo] : []), videosSalvos: r.videosSalvos || [], videosRemover: r.videosRemover || [], capaNovaB64: r.capaNovaB64 || null,
         galeriaNovaB64: r.galeriaNovaB64 || [], dados: r.dados, rascunhoId: r.rascunhoId || null, estado: 'fila', msg: '', etapa: 'fila' };
       if (r.etapa === 'salvando') { it.estado = 'erro'; it.etapa = 'fila'; it.msg = 'o app fechou na hora de salvar, então não sei se esta peça chegou a ser salva. Confira na lista: se NÃO estiver lá, toque em “Tentar de novo”; se estiver, toque em “Descartar”.'; }
       else if (r.msg) { it.estado = 'erro'; it.msg = r.msg; }
       envios.push(it);
     });
     document.getElementById('status').textContent = 'Retomando ' + lista.length + (lista.length === 1 ? ' peça que ficou' : ' peças que ficaram') + ' pela metade da última vez.';
-    abrirCadastro_();   // a fila fica dentro do cartão de cadastro: abre para a pessoa ver o que voltou
+    if (envios.some(e => e.estado === 'erro')) abrirCadastro_();   // o que pede decisão (não sei se salvou) abre o cartão; o resto só aparece na plaquinha #envios-flut
     desenharEnvios(); processarEnvios();
   }
 
@@ -2248,9 +2319,10 @@
   function desenharEnvios() {
     const box = document.getElementById('fila-envios');
     box.innerHTML = '';
+    atualizarFlut_();
     { const pend = envios.filter(e => e.estado === 'fila' || e.estado === 'enviando').length;
       ajustarWakeLock_(pend);
-      if (pend) { const av = document.createElement('div'); av.className = 'env-nao-saia'; av.setAttribute('role', 'status'); av.textContent = '⚠️ Não saia desta tela: ' + (pend === 1 ? 'falta 1 peça' : 'faltam ' + pend + ' peças') + ' para terminar de enviar.'; box.appendChild(av); } }
+      if (pend) { const av = document.createElement('div'); av.className = 'env-nao-saia'; av.setAttribute('role', 'status'); av.textContent = '⏳ Enviando: ' + (pend === 1 ? 'falta 1 peça' : 'faltam ' + pend + ' peças') + '. Pode usar o painel; só não feche o app até terminar.'; box.appendChild(av); } }
     envios.forEach((it) => {
       const linha = document.createElement('div'); linha.className = 'env-item env-' + (it.estado === 'fila' ? 'enviando' : it.estado);
       const t = document.createElement('div'); t.className = 'env-txt';
@@ -2294,12 +2366,17 @@
     const d = it.dados, id = String((resp && resp.id) || d.id || '');
     const p = produtos.find(x => String(x.ID) === id);
     if (!p) return '';
-    // d.fotosGaleriaExistentes já inclui as fotos novas (suas URLs do Cloudinary foram coladas
+    // d.fotosGaleriaExistentes já inclui as fotos novas (suas URLs já subidas foram coladas
     // nele em enviarItem, antes do POST final), então não precisa somar nenhuma lista separada.
     const esperadas = Math.min(8, String(d.fotosGaleriaExistentes || '').split(',').filter(Boolean).length);
     const tem = String(p.Fotos_Galeria || '').split(',').filter(Boolean).length;
     if (tem < esperadas) return 'foi salvo, mas as fotos extras não voltaram na lista (' + tem + ' de ' + esperadas + '). Confira se o script do catálogo é a versão mais nova.';
-    if (it.temVideo && !String(p.Video_URL || '').trim()) return 'foi salvo, mas o vídeo não voltou na lista. Confira se o script do catálogo é a versão mais nova.';
+    const novos = it.urlsVideosNovos || [];
+    if (novos.length) {
+      const vs = videosDoProduto_(p);
+      if (!vs.length) return 'foi salvo, mas o vídeo não voltou na lista. Confira se o script do catálogo é a versão mais nova.';
+      if (videosMulti_ && !novos.every(u => vs.indexOf(u) !== -1)) return 'foi salvo, mas nem todos os vídeos voltaram na lista (' + vs.length + ' de ' + (it.videosEsperados || novos.length) + '). Abra a peça e confira os vídeos.';
+    }
     return '';
   }
 
@@ -2552,66 +2629,71 @@
     return comTentativas_(it, () => pedirAssinaturaVideo_().then((assinatura) => subirParaCloudinary_(file, assinatura, aoProgredir, tipoRecurso, rotulo)), rotulo + '→Cloudinary');
   }
 
+  // ---- v4.18: velocidade. Tudo que é arquivo NOVO (vídeos + fotos) sobe JUNTO (até 4 por vez, o vídeo primeiro porque é o maior);
+  // só o POST final espera todos. O que já subiu numa tentativa anterior (it.subiu) não sobe de novo no "Tentar de novo".
+  function arquivosDeVideo_(it) { return it.videoArquivos && it.videoArquivos.length ? it.videoArquivos : (it.videoArquivo ? [it.videoArquivo] : []); }
+  async function rodarComLimite_(tarefas, limite) {
+    const erros = []; let prox = 0;
+    const trab = async () => { while (prox < tarefas.length) { const k = prox++; try { await tarefas[k].fn(); } catch (e) { erros.push({ t: tarefas[k].t, e: e }); } } };
+    await Promise.all(Array.from({ length: Math.min(limite, tarefas.length) }, trab));
+    return erros;
+  }
+
   async function enviarItem(it) {
     const dados = Object.assign({}, it.dados, { pin: adminPin, funcionario: funcionarioNome });
-    const aoProgredir = (fracao, eta) => { it.progresso = fracao; it.etaSegundos = eta; desenharEnvios(); };
-    const temFotosNovas = !!(it.capaNovaB64 || (it.galeriaNovaB64 && it.galeriaNovaB64.length));
-    window.logDebug_('════ começando envio de "' + it.titulo + '" (' + (it.ehEdicao ? 'edição' : 'novo') + (it.videoArquivo ? ', com vídeo' : '') + (temFotosNovas ? ', com foto(s) nova(s)' : '') + ') ════');
+    const arqVideos = arquivosDeVideo_(it), galeria = it.galeriaNovaB64 || [];
+    const temFotosNovas = !!(it.capaNovaB64 || galeria.length);
+    it.subiu = it.subiu || { capa: '', gal: {}, vid: {} };
+    window.logDebug_('════ começando envio de "' + it.titulo + '" (' + (it.ehEdicao ? 'edição' : 'novo') + (arqVideos.length ? ', com ' + arqVideos.length + ' vídeo(s)' : '') + (temFotosNovas ? ', com foto(s) nova(s)' : '') + ') ════');
 
-    if (it.videoArquivo) {
-      let urlVideo;
-      try {
-        urlVideo = await subirVideoDireto_(it.videoArquivo, it, aoProgredir);
-      } catch (errVideo) {
-        it.progresso = null; it.etaSegundos = null;
+    // 1) arquivos novos, todos juntos
+    const tarefas = [], frac = {}, t0 = Date.now();
+    const somar = () => {
+      let total = 0, feito = 0;
+      tarefas.forEach(k => { total += k.bytes; feito += (frac[k.id] || 0) * k.bytes; });
+      const taxa = feito / Math.max((Date.now() - t0) / 1000, 0.05);
+      it.progresso = total ? Math.min(1, feito / total) : null;
+      it.etaSegundos = taxa > 0 ? Math.max(0, Math.round((total - feito) / taxa)) : null;
+      desenharEnvios();
+    };
+    const nova = (id, t, bytes, fazer, guardar) => tarefas.push({ id: id, t: t, bytes: Math.max(bytes, 1), fn: async () => { frac[id] = 0; const u = await fazer((f) => { frac[id] = f; somar(); }); frac[id] = 1; guardar(u); somar(); } });
+    arqVideos.forEach((f, i) => { if (!it.subiu.vid[i]) nova('v' + i, 'vídeo', f.size, (ap) => subirVideoDireto_(f, it, ap), (u) => { it.subiu.vid[i] = u; }); });
+    if (it.capaNovaB64 && !it.subiu.capa) nova('c', 'foto', it.capaNovaB64.length * 0.75, (ap) => subirFotoDireta_(it.capaNovaB64, it, ap), (u) => { it.subiu.capa = u; });
+    galeria.forEach((b64, i) => { if (!it.subiu.gal[i]) nova('g' + i, 'foto', b64.length * 0.75, (ap) => subirFotoDireta_(b64, it, ap), (u) => { it.subiu.gal[i] = u; }); });
+    if (tarefas.length) {
+      const erros = await rodarComLimite_(tarefas, 4);
+      it.progresso = null; it.etaSegundos = null;
+      if (erros.length) {
         atualizarBarraSync();
+        const ehVideo = erros.some(x => x.t === 'vídeo');
         it.estado = 'erro';
-        it.msg = 'não consegui enviar o vídeo (' + ((errVideo && errVideo.message) || 'falha no envio') + '). Nada foi salvo.';
-        window.logDebug_('════ "' + it.titulo + '": desistiu no envio do vídeo -- ' + it.msg + ' ════');
-        return;
-      }
-      dados.videoUrlExistente = urlVideo;
-    }
-
-    // Fotos novas (capa e/ou galeria) sobem direto pro Cloudinary, uma de cada vez, igual ao
-    // vídeo -- só depois disso o POST final pro Apps Script leva as URLs resultantes, nunca mais
-    // os bytes em base64 das fotos.
-    if (temFotosNovas) {
-      try {
-        if (it.capaNovaB64) {
-          dados.fotoUrlExistente = await subirFotoDireta_(it.capaNovaB64, it, aoProgredir);
-        }
-        if (it.galeriaNovaB64 && it.galeriaNovaB64.length) {
-          // Fotos da galeria sobem em paralelo (até 3 por vez), mantendo a ordem original.
-          const urlsGaleria = String(dados.fotosGaleriaExistentes || '').split(',').filter(Boolean);
-          const novasUrls = new Array(it.galeriaNovaB64.length);
-          let proxGal = 0;
-          const trabalhador = async () => {
-            while (proxGal < it.galeriaNovaB64.length) {
-              const i = proxGal++;
-              novasUrls[i] = await subirFotoDireta_(it.galeriaNovaB64[i], it, aoProgredir);
-            }
-          };
-          await Promise.all(Array.from({ length: Math.min(3, it.galeriaNovaB64.length) }, trabalhador));
-          dados.fotosGaleriaExistentes = urlsGaleria.concat(novasUrls).join(',');
-        }
-      } catch (errFoto) {
-        it.progresso = null; it.etaSegundos = null;
-        atualizarBarraSync();
-        it.estado = 'erro';
-        it.msg = 'não consegui enviar a(s) foto(s) (' + ((errFoto && errFoto.message) || 'falha no envio') + '). Nada foi salvo.';
-        window.logDebug_('════ "' + it.titulo + '": desistiu no envio da(s) foto(s) -- ' + it.msg + ' ════');
+        it.msg = 'não consegui enviar ' + (ehVideo ? 'o vídeo' : 'a(s) foto(s)') + ' (' + ((erros[0].e && erros[0].e.message) || 'falha no envio') + '). Nada foi salvo.' + (Object.keys(it.subiu.gal).length || it.subiu.capa || Object.keys(it.subiu.vid).length ? ' O que já tinha subido não precisa subir de novo.' : '');
+        window.logDebug_('════ "' + it.titulo + '": desistiu no envio -- ' + it.msg + ' ════');
         return;
       }
     }
 
-    // Daqui pra baixo "dados" nunca carrega foto nem vídeo em si -- só as URLs (quando houver) --
-    // então esse envio é sempre pequeno. Mesmo assim, só cai na fila offline depois de insistir:
-    // uma única tentativa falhar não quer dizer que o aparelho está mesmo sem internet.
+    // 2) cola as URLs que subiram nos dados do POST final
+    if (it.subiu.capa) dados.fotoUrlExistente = it.subiu.capa;
+    if (galeria.length) dados.fotosGaleriaExistentes = String(dados.fotosGaleriaExistentes || '').split(',').filter(Boolean).concat(galeria.map((_, i) => it.subiu.gal[i])).join(',');
+    const novosVideos = arqVideos.map((_, i) => it.subiu.vid[i]).filter(Boolean);
+    it.urlsVideosNovos = novosVideos;
+    const salvos = (it.videosSalvos || []).slice();
+    if (novosVideos.length) {
+      if (!it.ehEdicao) {
+        const todos = salvos.concat(novosVideos).slice(0, maxVideos_());
+        dados.videoUrlExistente = todos[0]; if (todos.length > 1) dados.videos = todos.slice(1);
+        it.videosEsperados = todos.length;
+      } else if (!videosMulti_) {
+        dados.videoUrlExistente = novosVideos[0];   // backend antigo: o vídeo novo troca o que existia
+      }
+    }
+
+    // 3) POST final (só URLs: sempre pequeno). Só cai na fila offline depois de insistir.
     let resultado;
     it.etapa = 'salvando'; await guardarEnvio_(it);   // se o app fechar daqui até a resposta, na volta a pessoa confere antes de reenviar (evita peça duplicada)
     try {
-      const resp = await comTentativas_(it, () => enviarComProgresso(dados, aoProgredir), 'salvar produto');
+      const resp = await comTentativas_(it, () => enviarComProgresso(dados, () => {}), 'salvar produto');
       resultado = { ok: true, resp: resp };
     } catch (errRede) {
       window.logDebug_('[salvar produto] esgotou as tentativas (' + ((errRede && errRede.message) || '') + ') -- guardando na fila offline');
@@ -2621,12 +2703,18 @@
     it.progresso = null; it.etaSegundos = null;
     atualizarBarraSync();
     if (resultado.ok && resultado.resp && resultado.resp.ok) {
-      // confere de verdade: recarrega a lista e vê se as fotos/vídeo voltaram (não basta o servidor dizer "ok")
-      try { await carregarProdutos(); } catch (e) {}
-      const aviso = conferirSalvo(it, resultado.resp);
-      if (aviso) { it.estado = 'aviso'; it.msg = aviso; } else { it.estado = 'ok'; sumirDepois(it, 6000); }
+      // edição com vários vídeos: tira e acrescenta pelos comandos próprios do servidor (4.17+)
+      if (it.ehEdicao && videosMulti_ && (it.videosRemover || []).length + novosVideos.length) {
+        const id = resultado.resp.id || dados.id; let falhou = 0;
+        for (const u of (it.videosRemover || [])) { try { const r = await chamarAdmin_({ action: 'videoRemover', id: id, url: u }); if (!r || !r.ok) falhou++; } catch (e) { falhou++; } }
+        for (const u of novosVideos) { try { const r = await chamarAdmin_({ action: 'videoAdicionar', id: id, url: u }); if (!r || !r.ok) falhou++; } catch (e) { falhou++; } }
+        it.videosEsperados = salvos.length + novosVideos.length;
+        if (falhou) { it.estado = 'aviso'; it.msg = 'foi salvo, mas ' + falhou + ' alteração(ões) de vídeo não passaram. Abra a peça e confira os vídeos.'; window.logDebug_('════ "' + it.titulo + '": salvo com aviso de vídeo ════'); return; }
+      }
+      // A conferência (recarregar a lista e ver se fotos/vídeos voltaram) acontece UMA vez no fim da fila, não a cada peça.
+      it.estado = 'ok'; it.respSalvo = resultado.resp; conferir_.push(it);
       if (it.rascunhoId) { try { window.dispatchEvent(new CustomEvent('tk:peca-salva', { detail: { rascunhoId: it.rascunhoId, id: resultado.resp.id, codigo: resultado.resp.codigo } })); } catch (e) {} }   // o importador marca o rascunho como aceito
-      window.logDebug_('════ "' + it.titulo + '": ' + (aviso ? ('salvo com aviso -- ' + aviso) : 'salvo com sucesso') + ' ════');
+      window.logDebug_('════ "' + it.titulo + '": salvo ════');
     } else if (!resultado.ok && resultado.enfileirado) {
       it.estado = 'offline'; sumirDepois(it, 15000);
       window.logDebug_('════ "' + it.titulo + '": sem conexão, guardado no aparelho pra sincronizar depois ════');
@@ -2635,19 +2723,36 @@
       window.logDebug_('════ "' + it.titulo + '": erro -- ' + it.msg + ' ════');
     }
   }
+
+  // Fila: 2 peças ao mesmo tempo (os envios de arquivo são o que demora; o servidor grava uma de cada vez). Terminando a fila, recarrega a lista UMA vez e confere tudo.
+  const conferir_ = []; let ativosEnvio_ = 0;
+  async function trabalhadorEnvio_() {
+    for (;;) {
+      const it = envios.find(e => e.estado === 'fila');
+      if (!it) break;
+      it.estado = 'enviando'; desenharEnvios();
+      try { await enviarItem(it); } catch (err) { it.estado = 'erro'; it.msg = 'erro inesperado'; window.logDebug_('════ "' + it.titulo + '": erro inesperado no JS -- ' + ((err && err.stack) || err) + ' ════'); }
+      if (it.estado === 'ok' || it.estado === 'aviso' || it.estado === 'offline') apagarEnvio_(it); else { it.etapa = 'fila'; guardarEnvio_(it); }
+      desenharEnvios();
+    }
+  }
+  async function fimDaFila_() {
+    const lote = conferir_.splice(0);
+    if (!lote.length) return;
+    try { await carregarProdutos(); } catch (e) {}
+    lote.forEach((it) => {
+      const aviso = conferirSalvo(it, it.respSalvo);
+      if (aviso) { it.estado = 'aviso'; it.msg = aviso; window.logDebug_('════ "' + it.titulo + '": conferência com aviso -- ' + aviso + ' ════'); }
+      else sumirDepois(it, 6000);
+    });
+    desenharEnvios();
+  }
   async function processarEnvios() {
-    if (processandoEnvios) return;
-    processandoEnvios = true;
-    try {
-      for (;;) {
-        const it = envios.find(e => e.estado === 'fila');
-        if (!it) break;
-        it.estado = 'enviando'; desenharEnvios();
-        try { await enviarItem(it); } catch (err) { it.estado = 'erro'; it.msg = 'erro inesperado'; window.logDebug_('════ "' + it.titulo + '": erro inesperado no JS -- ' + ((err && err.stack) || err) + ' ════'); }
-        if (it.estado === 'ok' || it.estado === 'aviso' || it.estado === 'offline') apagarEnvio_(it); else { it.etapa = 'fila'; guardarEnvio_(it); }
-        desenharEnvios();
-      }
-    } finally { processandoEnvios = false; }
+    const LIMITE = 2;
+    while (ativosEnvio_ < LIMITE && envios.some(e => e.estado === 'fila')) {
+      ativosEnvio_++; processandoEnvios = true;
+      trabalhadorEnvio_().finally(() => { ativosEnvio_--; if (!ativosEnvio_) { processandoEnvios = false; fimDaFila_(); } });
+    }
   }
   window.addEventListener('beforeunload', (ev) => {
     if (envios.some(e => e.estado === 'fila' || e.estado === 'enviando')) { ev.preventDefault(); ev.returnValue = ''; }
@@ -2687,13 +2792,15 @@
       };
       const fotos = fotosItens.filter(i => i.b64);
       if (!fotos.length) { alert('Escolha pelo menos uma foto — cada foto vira uma peça.'); return; }
-      fotos.forEach((f) => {
-        envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Peça', ehEdicao: false, temVideo: false, videoArquivo: null, capaNovaB64: f.b64, galeriaNovaB64: [], dados: Object.assign({}, base), estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila' });
+      // Vídeo(s) escolhidos no lote vão só na PRIMEIRA peça (um mesmo arquivo em duas peças se perderia ao mexer numa delas); depois dá para juntar os produtos.
+      const vidsLote = videosItens.filter(v => v.file).map(v => v.file);
+      fotos.forEach((f, ix) => {
+        envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Peça', ehEdicao: false, temVideo: ix === 0 && vidsLote.length > 0, videoArquivo: null, videoArquivos: ix === 0 ? vidsLote : [], capaNovaB64: f.b64, galeriaNovaB64: [], dados: Object.assign({}, base), estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila' });
         guardarEnvio_(envios[envios.length - 1]);
       });
       cancelarDuplicacao();
       document.getElementById('status').textContent = 'Cadastrando ' + fotos.length + ' peça(s) em segundo plano.';
-      document.getElementById('card-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      sairDoCadastro_();
       desenharEnvios(); processarEnvios();
       return;
     }
@@ -2716,8 +2823,9 @@
       fotoUrlExistente: capaItem && capaItem.url ? capaItem.url : '',
       fotosGaleriaExistentes: resto.filter(i => i.url).map(i => i.url).join(',')
     };
-    if (!videoNovo && ehEdicao && removerVideo) dados.removerVideo = true;
-    if (!ehEdicao && !videoNovo && videoAtual) dados.videoUrlExistente = videoAtual;   // v3.6: peça aceita do Instagram já traz o vídeo (R2)
+    const videosNovos = videosItens.filter(v => v.file), videosSalvos = videosItens.filter(v => v.url).map(v => v.url);
+    if (ehEdicao && !videosMulti_ && !videosNovos.length && videosRemovidos.length && !videosSalvos.length) dados.removerVideo = true;   // backend antigo: 1 vídeo só
+    if (!ehEdicao && !videosNovos.length && videosSalvos.length) { dados.videoUrlExistente = videosSalvos[0]; if (videosSalvos.length > 1 && videosMulti_) dados.videos = videosSalvos.slice(1); }   // v3.6: peça aceita do Instagram já traz o vídeo (R2)
     if (ehEdicao) dados.id = idParaEditar;
     if (!ehEdicao && dados.novidade) dados.notificarPush = document.getElementById('notificarPush').checked;
 
@@ -2725,14 +2833,14 @@
     const galeriaNovaB64 = resto.filter(i => i.b64).map(i => i.b64);
     const totalFotosNovas = (capaNovaB64 ? 1 : 0) + galeriaNovaB64.length;
 
-    window.logDebug_('botão "Cadastrar/Salvar" apertado -- "' + (dados.nome || '') + '" | ' + (ehEdicao ? 'edição' : 'novo') + ' | vídeo: ' + (videoNovo ? (videoNovo.file.size / 1048576).toFixed(2) + 'MB (' + videoNovo.file.type + ')' : 'nenhum') + ' | fotos novas: ' + totalFotosNovas + ' | navigator.onLine=' + navigator.onLine);
+    window.logDebug_('botão "Cadastrar/Salvar" apertado -- "' + (dados.nome || '') + '" | ' + (ehEdicao ? 'edição' : 'novo') + ' | vídeo: ' + (videosNovos.length ? videosNovos.map(v => (v.file.size / 1048576).toFixed(2) + 'MB (' + v.file.type + ')').join(' + ') : 'nenhum') + ' | fotos novas: ' + totalFotosNovas + ' | navigator.onLine=' + navigator.onLine);
 
     // Vídeo e fotos novas NÃO vão dentro de "dados" -- sobem direto pro Cloudinary na hora do
     // envio (enviarItem/subirVideoDireto_/subirFotoDireta_), e só as URLs resultantes entram no
     // POST pro Apps Script, que assim nunca fica grande por causa de anexos.
     envios.push({
       chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao,
-      temVideo: !!videoNovo, videoArquivo: videoNovo ? videoNovo.file : null,
+      temVideo: videosNovos.length > 0, videoArquivo: null, videoArquivos: videosNovos.map(v => v.file), videosSalvos: ehEdicao ? videosSalvos : [], videosRemover: ehEdicao ? videosRemovidos.slice() : [],
       capaNovaB64: capaNovaB64, galeriaNovaB64: galeriaNovaB64,
       dados: dados, estado: 'fila', msg: '', rascunhoId: window.__rascunhoAtual || null, k: novoKEnvio_(), etapa: 'fila'
     });
@@ -2746,7 +2854,7 @@
     }
     cancelarDuplicacao(); // libera o formulário já
     document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima peça.';
-    document.getElementById('card-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    sairDoCadastro_();
     desenharEnvios(); processarEnvios();
   });
 
@@ -4306,9 +4414,9 @@
   // v4.10 (FE-03): mostra "Produtos para aceitar" no menu Cadastrar quando houver algo esperando (a faixa do Instagram é a fonte)
   try {
     var tmIg = setInterval(function(){
-      var f = document.getElementById('ig-faixa'), b = document.getElementById('menu-cad-aceitar');
+      var f = document.getElementById('ig-faixa'), b = document.getElementById('cad-badge');
       if (!f || !b) return;
-      if (!f.hidden) { b.hidden = false; clearInterval(tmIg); }
+      if (!f.hidden) { b.textContent = 'novos'; b.hidden = false; clearInterval(tmIg); }
     }, 800);
     setTimeout(function(){ clearInterval(tmIg); }, 20000);
   } catch(e) {}
@@ -4316,7 +4424,7 @@
     var b=e.target.closest&&e.target.closest('[data-atalho]'); if(!b) return;
     var k=b.getAttribute('data-atalho'), alvo=null;
     if(k==='cadastrar'){alvo=$('card-form'); if(alvo) alvo.open=true;}
-    else if(k==='pedidos'){alvo=$('card-pedidos'); if(alvo) alvo.open=true;}
+    else if(k==='pedidos'){var dfp=$('details-ferramentas'); if(dfp) dfp.open=true; alvo=$('card-pedidos'); if(alvo) alvo.open=true;}
     else if(k==='lista'){alvo=$('busca-admin');}
     else if(k==='ferramentas'){alvo=$('details-ferramentas'); if(alvo) alvo.open=true;}
     else if(k==='postagens'||k==='numeros'){

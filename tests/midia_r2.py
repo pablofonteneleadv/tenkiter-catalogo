@@ -31,7 +31,7 @@ def cenario(p, modo, video, sessao=True):
     pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: d.accept())
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(1500)
     if not sessao: pg.evaluate("window.adminPin && 0")
-    pg.click("#card-form > summary"); pg.wait_for_timeout(300)
+    pg.evaluate("document.getElementById('card-form').open=true"); pg.wait_for_timeout(300)
     pg.set_input_files("#galeria-input", [os.path.join(S, "r2foto1.jpg"), os.path.join(S, "r2foto2.jpg")]); pg.wait_for_timeout(1200)
     pg.set_input_files("#video-input", os.path.join(S, video)); pg.wait_for_timeout(500)
     pg.fill("#nome", "Vestido R2"); pg.fill("#preco", "99.90"); pg.fill("#estoque", "2")
