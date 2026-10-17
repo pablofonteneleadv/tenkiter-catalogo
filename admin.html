@@ -272,6 +272,11 @@
   .galeria-item .btn-remover { position: absolute; top: -6px; right: -6px; width: 24px; height: 24px; border-radius: 50%; border: none; background: #c62828; color: #fff; font-size: 0.8rem; cursor: pointer; padding: 0; line-height: 24px; z-index: 2; }
   .galeria-item .selo-capa { position: absolute; top: 4px; left: 4px; background: var(--laranja); color: #0d0d0d; font-size: 0.6rem; font-weight: 800; padding: 2px 6px; border-radius: 6px; pointer-events: none; }
   .galeria-item .novo { position: absolute; right: 4px; top: 4px; background: #333; color: #fff; font-size: 0.6rem; font-weight: 800; padding: 1px 5px; border-radius: 6px; pointer-events: none; }
+  /* v4.20: a foto/vídeo começa a subir assim que é escolhida; este selo mostra como está */
+  .pre-badge { position: absolute; right: 4px; top: 24px; border: 0; font: inherit; font-size: 0.6rem; font-weight: 800; padding: 1px 6px; border-radius: 6px; background: #333; color: #fff; width: auto; min-height: 0; line-height: 1.5; }
+  .pre-badge.ok { background: #1b6e3c; } .pre-badge.erro { background: #b3151b; cursor: pointer; } .pre-badge.subindo { background: #0d0d0d; }
+  .pre-badge:disabled { opacity: 1; cursor: default; }
+  .pre-badge.pre-inline { position: static; align-self: flex-start; font-size: .75rem; padding: 3px 9px; }
   .galeria-item .mover { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; border-radius: 0 0 6px 6px; overflow: hidden; }
   .galeria-item .mover button { flex: 1; height: 24px; border: none; background: rgba(0,0,0,0.6); color: #fff; font-size: 0.85rem; cursor: pointer; padding: 0; line-height: 24px; }
   .galeria-item .mover button:disabled { opacity: 0.35; cursor: default; }
@@ -1307,6 +1312,7 @@
 
       if (it.capa) { const s = document.createElement('span'); s.className = 'selo-capa'; s.textContent = '★ CAPA'; box.appendChild(s); }
       if (!it.url) { const n = document.createElement('span'); n.className = 'novo'; n.textContent = 'NOVA'; box.appendChild(n); }
+      if (it.up) box.appendChild(criarSeloPre_(it, ''));
 
       const x = document.createElement('button'); x.type = 'button'; x.className = 'btn-remover'; x.textContent = '✕'; x.title = 'Tirar esta foto';
       x.addEventListener('click', () => { fotosItens.splice(idx, 1); desenharFotos(); });
@@ -1341,6 +1347,7 @@
       const tag = document.createElement('span'); tag.className = 'video-tag';
       tag.textContent = (idx === 0 ? 'PRINCIPAL' : 'Vídeo ' + (idx + 1)) + (v.file ? ' · NOVO' : ' · salvo');
       card.appendChild(tag);
+      if (v.up) card.appendChild(criarSeloPre_(v, 'pre-inline'));
       if (v.prev) {
         const vd = document.createElement('video'); vd.src = v.prev; vd.controls = true; vd.playsInline = true; vd.preload = 'metadata'; card.appendChild(vd);
       } else {
@@ -1413,6 +1420,57 @@
     return new Blob([bytes], { type: mime || 'image/jpeg' });
   }
 
+  // ---- v4.20: PRÉ-ENVIO. Cada foto/vídeo começa a subir (R2; Cloudinary se o R2 recusar) no instante em que é escolhido, enquanto a pessoa preenche os dados.
+  // Ao tocar em Salvar o que já subiu só entra como endereço; o envio final fica pequeno e rápido. Falhou? O selo vira "⚠ reenviar" só naquela mídia.
+  const PRE_MAX_ = 3, preFila_ = []; let preAtivos_ = 0;
+  function preAgendar_(item, tipo) {
+    item.up = { estado: 'espera', frac: 0, url: '', tipo: tipo, el: item.up ? item.up.el : null };   // reenvio: o mesmo selo continua valendo
+    item.up.promessa = new Promise((res) => { item.up.fim = res; });
+    preFila_.push(item); preBombear_();
+  }
+  function preBombear_() {
+    while (preAtivos_ < PRE_MAX_ && preFila_.length) { const item = preFila_.shift(); preAtivos_++; preRodar_(item).finally(() => { preAtivos_--; preBombear_(); }); }
+  }
+  async function preRodar_(item) {
+    const u = item.up; u.estado = 'subindo'; u.frac = 0; pintarPre_(item);
+    const ctx = {}, ap = (f) => { u.frac = f; pintarPre_(item); };
+    try {
+      u.url = u.tipo === 'video' ? await subirVideoDireto_(item.file, ctx, ap) : await subirFotoDireta_(item.b64, ctx, ap);
+      u.estado = 'ok';
+    } catch (e) { u.estado = 'erro'; window.logDebug_('pré-envio falhou: ' + ((e && e.message) || e)); }
+    finally { const fim = u.fim; u.promessa = new Promise((res) => { u.fim = res; }); fim(); pintarPre_(item); }
+  }
+  function criarSeloPre_(item, extra) {
+    const b = document.createElement('button'); b.type = 'button'; item.up.el = b;
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); if (item.up.estado === 'erro') { preAgendar_(item, item.up.tipo); pintarPre_(item); } });
+    pintarPre_(item, extra); return b;
+  }
+  function pintarPre_(item, extra) {
+    const u = item.up, el = u && u.el; if (!el || !el.isConnected && !extra && extra !== '') return;
+    el.className = 'pre-badge ' + u.estado + (extra ? ' ' + extra : (el.classList.contains('pre-inline') ? ' pre-inline' : ''));
+    el.disabled = u.estado !== 'erro';
+    el.textContent = u.estado === 'ok' ? '✓ enviada' : u.estado === 'erro' ? '⚠ não subiu · toque para reenviar' : u.estado === 'subindo' ? '↑ ' + Math.round(u.frac * 100) + '%' : '⏳ na fila';
+    el.title = u.estado === 'ok' ? 'Já está no servidor' : u.estado === 'erro' ? 'Toque para tentar de novo' : 'Enviando enquanto você preenche';
+  }
+  // Ao cadastrar: o que já subiu vira endereço guardado no envio (it.subiu); o que ainda está subindo é esperado no começo do envio (esperarPre_).
+  function sementePre_(capaItem, galItens, vidItens) {
+    const it = { subiu: { capa: '', gal: {}, vid: {} }, pre: { capa: capaItem && capaItem.up ? capaItem : null, gal: galItens.filter((g) => g.up), vid: vidItens.filter((v) => v.up) } };
+    copiarPre_(it); return it;
+  }
+  function copiarPre_(it) {
+    const p = it.pre; if (!p) return;
+    it.subiu = it.subiu || { capa: '', gal: {}, vid: {} };
+    if (p.capa && p.capa.up.url && !it.subiu.capa) it.subiu.capa = p.capa.up.url;
+    (p.gal || []).forEach((g, i) => { if (g.up.url && !it.subiu.gal[i]) it.subiu.gal[i] = g.up.url; });
+    (p.vid || []).forEach((v, i) => { if (v.up.url && !it.subiu.vid[i]) it.subiu.vid[i] = v.up.url; });
+  }
+  async function esperarPre_(it) {
+    const p = it.pre; if (!p) return;
+    const lista = [p.capa].concat(p.gal || [], p.vid || []).filter(Boolean);
+    for (const ref of lista) { while (ref.up.estado === 'espera' || ref.up.estado === 'subindo') await ref.up.promessa; }
+    copiarPre_(it); it.pre = null; await guardarEnvio_(it);
+  }
+
   document.getElementById('galeria-input').addEventListener('change', async (e) => {
     const arquivos = Array.from(e.target.files || []);
     e.target.value = '';
@@ -1422,7 +1480,7 @@
     if (!varias && arquivos.length > vagas) alert('Cabem só mais ' + vagas + ' foto(s) (máximo ' + MAX_GALERIA + '). As primeiras ' + vagas + ' foram aproveitadas.');
     for (const f of arquivos.slice(0, Math.max(vagas, 0))) {
       if (!/^image\//.test(f.type)) continue;
-      try { fotosItens.push(await lerFotoReduzida(f)); } catch (err) { alert('Não consegui ler a foto "' + f.name + '".'); }
+      try { const novaFoto = await lerFotoReduzida(f); fotosItens.push(novaFoto); preAgendar_(novaFoto, 'foto'); } catch (err) { alert('Não consegui ler a foto "' + f.name + '".'); }
     }
     desenharFotos();
   });
@@ -1436,7 +1494,7 @@
       if (!/^video\/(mp4|quicktime|webm)$/.test(f.type)) { alert('Formato não aceito (' + f.name + '). Use MP4, MOV ou WEBM.'); continue; }
       if (f.size > MAX_VIDEO_MB * 1024 * 1024) { alert('Vídeo com ' + (f.size / 1048576).toFixed(1) + ' MB. O máximo é ' + MAX_VIDEO_MB + ' MB — encurte o vídeo ou reduza a qualidade.'); continue; }
       // Guarda o arquivo original (não converte pra base64 aqui) -- o envio sobe o arquivo direto na hora de salvar, junto com as fotos.
-      videosItens.push({ file: f, mime: f.type, prev: URL.createObjectURL(f) }); vagas--;
+      const novoVideo = { file: f, mime: f.type, prev: URL.createObjectURL(f) }; videosItens.push(novoVideo); preAgendar_(novoVideo, 'video'); vagas--;
     }
     desenharVideo();
   });
@@ -2308,7 +2366,8 @@
       await new Promise((res, rej) => {
         const tx = db.transaction('e', 'readwrite');
         tx.objectStore('e').put({ k: it.k, titulo: it.titulo, ehEdicao: it.ehEdicao, temVideo: it.temVideo, videoArquivo: null, videoArquivos: arquivosDeVideo_(it), videosSalvos: it.videosSalvos || [], videosRemover: it.videosRemover || [], capaNovaB64: it.capaNovaB64 || null,
-          galeriaNovaB64: it.galeriaNovaB64 || [], dados: it.dados, rascunhoId: it.rascunhoId || null, etapa: it.etapa || 'fila', msg: it.estado === 'erro' ? it.msg : '' });
+          galeriaNovaB64: it.galeriaNovaB64 || [], dados: it.dados, rascunhoId: it.rascunhoId || null, etapa: it.etapa || 'fila', msg: it.estado === 'erro' ? it.msg : '',
+          subiu: it.subiu || null, v: 2 });   // v4.20: o que já subiu (endereços) fica guardado; v:2 = o servidor sabe reconhecer reenvio (opId)
         tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
       });
       db.close();
@@ -2334,11 +2393,13 @@
       db.close();
     } catch (e) { return; }
     if (!lista.length) return;
+    let opOk = false; try { const vs = await versaoServidor(); opOk = !!(vs && vs.opIdempotente); } catch (e) {}
     lista.forEach((r) => {
       if (envios.some(x => x.k === r.k)) return;
       const it = { chave: ++seqEnvios, k: r.k, titulo: r.titulo, ehEdicao: !!r.ehEdicao, temVideo: !!r.temVideo, videoArquivo: null, videoArquivos: (r.videoArquivos && r.videoArquivos.length) ? r.videoArquivos : (r.videoArquivo ? [r.videoArquivo] : []), videosSalvos: r.videosSalvos || [], videosRemover: r.videosRemover || [], capaNovaB64: r.capaNovaB64 || null,
-        galeriaNovaB64: r.galeriaNovaB64 || [], dados: r.dados, rascunhoId: r.rascunhoId || null, estado: 'fila', msg: '', etapa: 'fila' };
-      if (r.etapa === 'salvando') { it.estado = 'erro'; it.etapa = 'fila'; it.msg = 'o app fechou na hora de salvar, então não sei se esta peça chegou a ser salva. Confira na lista: se NÃO estiver lá, toque em “Tentar de novo”; se estiver, toque em “Descartar”.'; }
+        galeriaNovaB64: r.galeriaNovaB64 || [], dados: r.dados, rascunhoId: r.rascunhoId || null, estado: 'fila', msg: '', etapa: 'fila', subiu: r.subiu || undefined };
+      // v4.20: com o servidor novo (opId) reenviar é seguro: se a peça já tinha sido salva, ele devolve a original em vez de duplicar. Sem isso, pergunta como antes.
+      if (r.etapa === 'salvando' && !(opOk && r.v >= 2) && !r.ehEdicao) { it.estado = 'erro'; it.etapa = 'fila'; it.msg = 'o app fechou na hora de salvar, então não sei se esta peça chegou a ser salva. Confira na lista: se NÃO estiver lá, toque em “Tentar de novo”; se estiver, toque em “Descartar”.'; }
       else if (r.msg) { it.estado = 'erro'; it.msg = r.msg; }
       envios.push(it);
     });
@@ -2696,8 +2757,53 @@
     return erros;
   }
 
-  async function enviarItem(it) {
+  // Monta o pacote do POST final (dados escritos + endereços das mídias). Só leitura do que já subiu: nunca sobe nada.
+  function montarDadosFinais_(it) {
     const dados = Object.assign({}, it.dados, { pin: adminPin, funcionario: funcionarioNome });
+    if (!it.ehEdicao) dados.opId = it.k;   // v4.20: código único da peça: reenviar a MESMA peça nunca cria outra (backend 4.19)
+    const arqVideos = arquivosDeVideo_(it), galeria = it.galeriaNovaB64 || [], subiu = it.subiu || { capa: '', gal: {}, vid: {} };
+    if (subiu.capa) dados.fotoUrlExistente = subiu.capa;
+    if (galeria.length) dados.fotosGaleriaExistentes = String(dados.fotosGaleriaExistentes || '').split(',').filter(Boolean).concat(galeria.map((_, i) => subiu.gal[i])).join(',');
+    const novosVideos = arqVideos.map((_, i) => subiu.vid[i]).filter(Boolean);
+    const salvos = (it.videosSalvos || []).slice();
+    if (novosVideos.length) {
+      if (!it.ehEdicao) {
+        const todos = salvos.concat(novosVideos).slice(0, maxVideos_());
+        dados.videoUrlExistente = todos[0]; if (todos.length > 1) dados.videos = todos.slice(1);
+        it.videosEsperados = todos.length;
+      } else if (!videosMulti_) {
+        dados.videoUrlExistente = novosVideos[0];   // backend antigo: o vídeo novo troca o que existia
+      }
+    }
+    return { dados: dados, novosVideos: novosVideos, salvos: salvos };
+  }
+  function midiaPronta_(it) {
+    copiarPre_(it);
+    const s = it.subiu || { capa: '', gal: {}, vid: {} };
+    if (it.capaNovaB64 && !s.capa) return false;
+    for (let i = 0; i < (it.galeriaNovaB64 || []).length; i++) if (!s.gal[i]) return false;
+    for (let i = 0; i < arquivosDeVideo_(it).length; i++) if (!s.vid[i]) return false;
+    return true;
+  }
+  // v4.20: ao minimizar/trocar de app, o navegador congela a página, mas um fetch com `keepalive` termina mesmo assim. Para cada peça NOVA cujas mídias já subiram,
+  // o pacote final (pequeno) é disparado nesse momento. Quando a pessoa voltar, o envio normal repete o pedido e o servidor (opId) devolve a peça já salva, sem duplicar.
+  function salvarAoMinimizar_() {
+    envios.forEach((it) => {
+      if (it.ka || it.ehEdicao || !(it.estado === 'fila' || it.estado === 'enviando') || !midiaPronta_(it)) return;
+      try {
+        const corpo = JSON.stringify(montarDadosFinais_(it).dados);
+        if (corpo.length > 60000) return;
+        it.ka = true; it.etapa = 'salvando'; guardarEnvio_(it);
+        fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: corpo, keepalive: true }).catch(() => {});
+        window.logDebug_('app saiu da tela: pacote final de "' + it.titulo + '" disparado com keepalive');
+      } catch (e) {}
+    });
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvarAoMinimizar_(); });
+  window.addEventListener('pagehide', salvarAoMinimizar_);
+
+  async function enviarItem(it) {
+    await esperarPre_(it);   // mídias que ainda estavam subindo quando a pessoa tocou em Cadastrar
     const arqVideos = arquivosDeVideo_(it), galeria = it.galeriaNovaB64 || [];
     const temFotosNovas = !!(it.capaNovaB64 || galeria.length);
     it.subiu = it.subiu || { capa: '', gal: {}, vid: {} };
@@ -2731,20 +2837,8 @@
     }
 
     // 2) cola as URLs que subiram nos dados do POST final
-    if (it.subiu.capa) dados.fotoUrlExistente = it.subiu.capa;
-    if (galeria.length) dados.fotosGaleriaExistentes = String(dados.fotosGaleriaExistentes || '').split(',').filter(Boolean).concat(galeria.map((_, i) => it.subiu.gal[i])).join(',');
-    const novosVideos = arqVideos.map((_, i) => it.subiu.vid[i]).filter(Boolean);
+    const mont = montarDadosFinais_(it), dados = mont.dados, novosVideos = mont.novosVideos, salvos = mont.salvos;
     it.urlsVideosNovos = novosVideos;
-    const salvos = (it.videosSalvos || []).slice();
-    if (novosVideos.length) {
-      if (!it.ehEdicao) {
-        const todos = salvos.concat(novosVideos).slice(0, maxVideos_());
-        dados.videoUrlExistente = todos[0]; if (todos.length > 1) dados.videos = todos.slice(1);
-        it.videosEsperados = todos.length;
-      } else if (!videosMulti_) {
-        dados.videoUrlExistente = novosVideos[0];   // backend antigo: o vídeo novo troca o que existia
-      }
-    }
 
     // 3) POST final (só URLs: sempre pequeno). Só cai na fila offline depois de insistir.
     let resultado;
@@ -2851,8 +2945,10 @@
       if (!fotos.length) { alert('Escolha pelo menos uma foto — cada foto vira uma peça.'); return; }
       // Vídeo(s) escolhidos no lote vão só na PRIMEIRA peça (um mesmo arquivo em duas peças se perderia ao mexer numa delas); depois dá para juntar os produtos.
       const vidsLote = videosItens.filter(v => v.file).map(v => v.file);
+      const vidsLoteItens = videosItens.filter(v => v.file);
       fotos.forEach((f, ix) => {
-        envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Peça', ehEdicao: false, temVideo: ix === 0 && vidsLote.length > 0, videoArquivo: null, videoArquivos: ix === 0 ? vidsLote : [], capaNovaB64: f.b64, galeriaNovaB64: [], dados: Object.assign({}, base), estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila' });
+        const sem = sementePre_(f, [], ix === 0 ? vidsLoteItens : []);
+        envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Peça', ehEdicao: false, temVideo: ix === 0 && vidsLote.length > 0, videoArquivo: null, videoArquivos: ix === 0 ? vidsLote : [], capaNovaB64: f.b64, galeriaNovaB64: [], dados: Object.assign({}, base), estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila', subiu: sem.subiu, pre: sem.pre });
         guardarEnvio_(envios[envios.length - 1]);
       });
       cancelarDuplicacao();
@@ -2895,7 +2991,9 @@
     // Vídeo e fotos novas NÃO vão dentro de "dados" -- sobem direto pro Cloudinary na hora do
     // envio (enviarItem/subirVideoDireto_/subirFotoDireta_), e só as URLs resultantes entram no
     // POST pro Apps Script, que assim nunca fica grande por causa de anexos.
+    const semPre = sementePre_(capaItem && capaItem.b64 ? capaItem : null, resto.filter(i => i.b64), videosItens.filter(v => v.file));
     envios.push({
+      subiu: semPre.subiu, pre: semPre.pre,
       chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao,
       temVideo: videosNovos.length > 0, videoArquivo: null, videoArquivos: videosNovos.map(v => v.file), videosSalvos: ehEdicao ? videosSalvos : [], videosRemover: ehEdicao ? videosRemovidos.slice() : [],
       capaNovaB64: capaNovaB64, galeriaNovaB64: galeriaNovaB64,

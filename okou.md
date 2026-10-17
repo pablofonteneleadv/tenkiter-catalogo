@@ -147,3 +147,8 @@ Recebidas 12 capturas do Pablo (`IMG_20261016_2252xx` a `2330xx`). Abaixo: o que
 ## 17/10/2026 — v4.19 tamanhos/cores permanentes
 - Front no ar (commit 1f2f595). Backend `catalogo-codigo-4.18.gs.txt` entregue ao Pablo: colar no Apps Script do catálogo + Nova versão; conferir `?action=versao` (`opcoesLista`).
 - Pendente: Background Sync (Android/Chrome) para envios; revisar `postagens_*.py`; bateria completa só com autorização; pedir revogação do token Cloudflare `cfut_…`.
+
+## 17/10/2026 (noite) — v4.20 pré-envio + opId
+- Front: mídias sobem ao escolher; cadastro leva só dados + endereços; `opId` evita peça duplicada; ao minimizar, pacote final via fetch keepalive; app que fechou na hora de salvar reenvia sozinho (backend 4.19).
+- Backend `catalogo-codigo-4.19.gs.txt` (substitui o 4.18) entregue ao Pablo: colar + Nova versão; conferir `opIdempotente`.
+- Pendente: teste em celular real (minimizar durante vídeo grande); upload retomável em partes (multipart R2) só se vídeo grande continuar falhando; limpar mídia órfã; revisar `postagens_*.py` e `x_equipe.py`; bateria completa só com autorização; revogar token Cloudflare `cfut_…`.

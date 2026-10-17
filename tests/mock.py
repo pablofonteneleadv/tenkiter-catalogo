@@ -49,6 +49,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     if versao>="3.7" and novo: FLAGS["midiaRapida"]=True; FLAGS["juntarProdutos"]=True
     if versao>="4.1" and novo: FLAGS["auditoriaProdutos"]=True
     if versao>="4.18" and novo: FLAGS["opcoesLista"]=True
+    if versao>="4.19" and novo: FLAGS["opIdempotente"]=True
     st["opcoes"]={"tamanhos":["PP","P","M","G","GG","Único"],"cores":["Preto","Branco","Estampado"]}
     st["opcoes_add"]=[]
     if avanc: FLAGS["metricasAvancadas"]=True; FLAGS["dispositivos"]=True
@@ -131,7 +132,12 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             return {"ok":True,"pessoas":pes,"perfis":[{"nome":n,"desc":"","permissoes":v} for n,v in PF.items()],"permissoes":[{"chave":k,"rotulo":k,"grupo":"Geral"} for k in ["cliente","portal","catalogo_admin","catalogo_cadastrar","gerir_acessos"]],"totalClientes":1,"eu":"88999999999","truncado":False}
         if a in("sessao","login"): return {"ok":True,"sessao":"tk2.x.y","usuario":{"whatsapp":"88999999999","name":"Ana Lojista","nome":"Ana Lojista","level":3,"permissoes":perms,"perfil":"Admin"}}
         if a=="curriculos_listar": return {"ok":True,"curriculos":[],"status":["Novo","Entrevista"],"motivos":[]}
-        if a=="create": return {"ok":True,"id":"999","codigo":"TK-0099"}
+        if a=="create":
+            op=b.get("opId"); cr_=st.setdefault("creates",{})
+            if op and versao>="4.19" and op in cr_: return dict(cr_[op],repetido=True)
+            r_={"ok":True,"id":"999","codigo":"TK-0099"}
+            if op: cr_[op]=r_
+            return r_
         if a=="sugerirPorFoto": st.setdefault("ia_chamadas",[]).append(b.get("fotos",[])); return {"ok":False,"erro":"Teste: IA simulada."}
         if a in("addTamanho","addCor"):
             if "gerir_acessos" not in perms: return {"ok":False,"semPermissao":True,"erro":"Você não tem permissão para essa ação."}
