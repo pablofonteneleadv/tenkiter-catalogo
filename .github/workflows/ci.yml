@@ -131,6 +131,13 @@ jobs:
           node tests/worker_ig.js
           node tests/worker_canal.js
 
+      # O teste do Worker do Instagram usa node:sqlite, disponível no Node 22+.
+      - name: Node 22 para bateria completa
+        if: needs.escopo.outputs.suite_completa == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       # Modo completo: só em execução agendada ou disparada manualmente.
       # O executor já inclui os testes de Workers; não os roda de novo em passos separados.
       - name: Preparar navegador para bateria completa
