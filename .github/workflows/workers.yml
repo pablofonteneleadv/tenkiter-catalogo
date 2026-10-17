@@ -4,8 +4,9 @@ name: Workers (Cloudflare)
 # o site (Render) e os Workers tem ciclos de vida diferentes, e um deploy de
 # Worker nao deve depender do build do catalogo.
 #
-# Roda so quando algo que o Worker usa muda — ou na mao (workflow_dispatch) —
-# ou quando o deploy.yml chama este arquivo (workflow_call).
+# O deploy.yml é o único gatilho automático de publicação em main.
+# Este workflow também pode ser executado manualmente ou reutilizado pelo deploy.
+# Ao ser chamado pelo deploy, pula o CI interno porque o chamador já validou o commit.
 #
 # HISTORICO (por que este arquivo tem um porteiro de credenciais)
 # ---------------------------------------------------------------
@@ -29,14 +30,6 @@ name: Workers (Cloudflare)
 #   4. etapa final confere na API da Cloudflare que os 3 foram republicados AGORA
 #      (modified_on recente) — a prova que o deploy manual nunca teve.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'instagram-worker/**'
-      - 'midia-worker/**'
-      - 'og-worker/**'
-      - 'scripts/ci/check_worker_secrets.sh'
-      - '.github/workflows/workers.yml'
   workflow_dispatch:
     inputs:
       worker:
@@ -45,9 +38,14 @@ on:
         default: 'todos'
         type: choice
         options: [todos, instagram-worker, midia-worker, og-worker]
-  # Permite que o deploy.yml reaproveite este arquivo (evita publicar os Workers
-  # duas vezes no mesmo push, por dois caminhos diferentes).
+  # O deploy.yml já executa o portão de qualidade; skip_ci evita repetir o CI.
   workflow_call:
+    inputs:
+      skip_ci:
+        description: 'Pular CI interno quando o workflow chamador já validou o commit'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -59,8 +57,11 @@ concurrency:
 jobs:
   # O portao de qualidade roda antes: nao se publica Worker que nao passa no CI.
   ci:
-    name: Portao de qualidade
+    name: Portão de qualidade
+    if: ${{ inputs.skip_ci != true }}
     uses: ./.github/workflows/ci.yml
+    with:
+      suite: rapido
 
   # Porteiro: confere as credenciais ANTES de tentar publicar qualquer coisa.
   # Sem isto, um secret ausente so aparecia no meio do log do wrangler — e o
@@ -69,6 +70,7 @@ jobs:
     name: Conferir credenciais da Cloudflare
     runs-on: ubuntu-latest
     needs: ci
+    if: ${{ always() && (inputs.skip_ci == true || needs.ci.result == 'success') }}
     steps:
       - uses: actions/checkout@v4
       - name: As credenciais chegaram neste job?

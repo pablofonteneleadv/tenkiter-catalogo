@@ -144,6 +144,8 @@ jobs:
     name: Workers (Cloudflare)
     needs: ci
     uses: ./.github/workflows/workers.yml
+    with:
+      skip_ci: true
     # SEM esta linha os secrets NAO atravessam a chamada de workflow reutilizavel.
     #
     # Regressao de 16/10/2026 (run 38833465713): o job `credenciais` do workers.yml
