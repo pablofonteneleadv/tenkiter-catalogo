@@ -88,3 +88,58 @@ export TK_BASE=http://localhost:8765/
 - Ponto de restauração: `backup/pre-v4.17-2026-10-17` apontando para `7e1b98d` (main antes do merge).
 - Resultado: deploy do merge (run `39003543585`) concluído com sucesso em 17/10/2026 às 05:04 UTC. `version.json` do site publicado mostra o commit `62219f0` (`https://tenkiter-catalogo.onrender.com/version.json`). O `admin.html` no ar já contém o novo texto e não tem mais o `<details>` de "Mais detalhes".
 - Um segundo run de Deploy do mesmo commit (`39004832640`) ficou em andamento depois; não foi disparado pelo Okou e precisa ser conferido.
+
+## 9. Plano de ação — capturas de teste no celular (17/10/2026)
+
+Recebidas 12 capturas do Pablo (`IMG_20261016_2252xx` a `2330xx`). Abaixo: o que cada uma pede, o estado real e em qual lote entra. Os lotes são feitos de uma vez para evitar várias idas ao GitHub.
+
+### 9.1 Avaliação por foto
+
+| Foto | Pedido do Pablo | Estado | Onde mexer |
+|---|---|---|---|
+| 01 | Tirar a aba "Pedidos" (fica dentro de Cadastrar) e o botão duplicado "➕ Cadastrar nova peça" abaixo do menu | Não feito (cartão `card-pedidos` ainda no ar) | `admin.html` |
+| 02 | Lista de estoque: busca não responsiva no celular; filtros em menu expansível (ao clicar em procurar abre, ao sair recolhe); cores e categorias visíveis; tipografia dos cards feia; botões Editar/Stories/Link/Postar cortados | Não feito | `admin.html` (CSS/markup da lista) |
+| 03 | Em "Nova postagem", o padrão deve ser **Story** (não Feed) | Não feito | `admin-postagens.js` |
+| 04 | "Ver como vai ficar" sempre aberto; enquadramento inicial **Encaixar (fundo desfocado)** | Não feito | `admin-postagens.js` |
+| 05 | Remover o texto longo da prévia; as 3 opções de enquadramento (Cortar / Encaixar / Com margens) lado a lado, embaixo da prévia | Não feito | `admin-postagens.js` |
+| 06 | Remover a seção "Zoom da foto" (barra e texto); permitir girar com dois dedos; checkbox "Mover a foto com o dedo" marcado = trava a foto; desmarcado = arrasta a foto quando só os textos estão selecionados | Não feito | `admin-postagens.js` |
+| 07 | Textos da prévia com o mesmo comportamento do editor de visuais: tocar no texto, aumentar/diminuir com dois dedos, arrastar, editar só aquele campo | Não feito | `admin-postagens.js` |
+| 08 | "Cadastrar várias peças": o limite de 8 não deve aparecer (cada foto vira uma peça); permitir salvar vídeo para depois juntar produtos | Parcial: a regra de lote já está no `main` (v4.17), mas a captura mostra "0 de 8" e o alerta antigo, então é provável que o celular ainda esteja com a versão anterior (cache). Vídeos por lote dependem do backend | `admin.html` + `Code.gs` (vídeos) |
+| 09 | Foto única com o X: em vez de mostrar "Essa é a única foto…", tratar como arquivar a peça (com confirmação) | Não feito | `admin.html` / `index.html` (lista e catálogo) |
+| 10 | Categorias e tamanhos: mostrar todas as opções como chips (igual aos tamanhos); cores e estampas sem campo de texto livre (só o Admin edita a lista, com ordem); "Vídeo da peça" vira o passo 2 e aceita mais vídeos além das 8 fotos | Não feito. Cores/estampas: a lista vem do admin, falta esconder o texto livre para não admin | `admin.html`; vídeos múltiplos com `Code.gs` |
+| 11 | "Mais detalhes" sai; Descrição, Gerar com IA e Novidade ficam à vista, logo acima do botão Salvar | Parcial: o `<details>` foi removido no `main` (v4.17), mas a captura ainda mostra o cabeçalho, portanto é versão antiga. Confirmar no celular | `admin.html` |
+| 12 | Pedido de fotos/vídeos repetidos com menu compacto (usar as fotos 10 e 11 como referência) | Mesmo conteúdo das 10 e 11 | — |
+
+### 9.2 Lotes de execução (ordem sugerida)
+
+**Lote A — Cadastro (admin.html), um PR só** (fotos 01, 08, 09, 10, 11)
+- Remover `card-pedidos` do topo e o botão duplicado "Cadastrar nova peça" (foto 01).
+- Chips de categoria e tamanhos sempre visíveis; cores e estampas sem texto livre para não admin (foto 10).
+- Vídeo da peça como passo 2 (foto 10).
+- Confirmar a v4.17 no celular (fotos 08 e 11) antes de mexer de novo.
+- Foto única + X = arquivar (foto 09), em `admin.html` (lista/formulário) e `index.html` (catálogo).
+
+**Lote B — Estoque (admin.html)** (foto 02)
+- Busca responsiva, filtros em menu expansível que recolhe ao sair, cores e categorias visíveis, tipografia e botões dos cards.
+
+**Lote C — Postagens (admin-postagens.js)** (fotos 03 a 07), um PR só
+- Story por padrão; "Ver como vai ficar" aberto; Encaixar por padrão.
+- Remover texto da prévia; três enquadramentos em linha.
+- Remover o bloco de zoom; girar com dois dedos; checkbox de trava com comportamento novo.
+- Editar textos da prévia tocando neles (mesmo comportamento do editor de visuais).
+
+**Lote D — Backend + velocidade (exige Code.gs completo colado pelo Pablo)**
+- Vários vídeos por lote (foto 08/10), migração de `Video_URL`.
+- Velocidade de cadastro: liberar a tela logo após "Salvar" e mostrar a fila de envios (opção A da conversa de velocidade).
+- Assinatura de foto e SEC-20 (pendências antigas).
+- Só começar esse lote quando o Pablo colar o `Code.gs`. Enquanto isso, os lotes A, B e C são só front.
+
+### 9.3 Como evitar esperas no GitHub
+- PR só com `.md` agora pula a bateria de navegador (PR #15): fica verde em ~1 minuto.
+- PR de código faz a bateria completa (~10 min). Por isso, cada lote é um PR só, com todas as mudanças dele.
+- Deploy automático no merge está autorizado. Ponto de restauração antes de cada merge: `backup/pre-...`.
+- Cópia em zip dos `.md` a cada atualização (enviada pelo chat).
+
+### 9.4 Estado de publicação desta seção
+- `main` em `dc7e267` (PR #13 v4.17, #14 docs, #15 CI rápido para `.md`).
+- Nada das fotos 01 a 12 foi implementado ainda. Esta seção é só o plano.
