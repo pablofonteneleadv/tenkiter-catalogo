@@ -4,7 +4,7 @@ Documento de passagem para outra inteligência (ou pessoa) assumir o trabalho. F
 
 ## 1. Regras obrigatórias (vêm da especificação mestra, PDF `Document_Merged (8).pdf`, seção 2)
 
-1. **Atualizado em 17/10/2026 pelo Pablo**: o deploy do frontend é feito pelo Okou direto pelo GitHub (merge na `main` dispara `deploy.yml`), sem esperar confirmação, sempre com ponto de restauração `backup/pre-...` antes. A bateria completa roda só quando o Pablo pedir, com o site já atualizado.
+1. **Atualizado em 17/10/2026 pelo Pablo**: o deploy do frontend é feito pelo Okou direto pelo GitHub (merge na `main` dispara `deploy.yml`), sem esperar confirmação, sempre com ponto de restauração `backup/pre-...` antes. A bateria completa roda só quando o Pablo pedir, com o site já atualizado. A cada atualização, enviar também um zip com os `.md` alterados (copia para guardar) pelo chat.
 2. O Pablo cola manualmente o `Code.gs` completo no Google Apps Script quando o backend muda. Entregar sempre arquivo completo, nunca trecho.
 3. Trabalhar em branch separada e abrir PR. Merge na `main` e deploy são autorizados pelo Pablo (ver seção 8), com ponto de restauração antes.
 4. Não acessar, alterar, remover ou inventar credenciais. Segredos só em Propriedades do Script / variáveis de ambiente, nunca no front, no repositório ou em logs.
@@ -86,4 +86,5 @@ export TK_BASE=http://localhost:8765/
 
 - Autorizado explicitamente pelo Pablo (17/10/2026) para fazer merge do PR #13 na `main` e disparar o deploy pelo GitHub Actions (`deploy.yml`).
 - Ponto de restauração: `backup/pre-v4.17-2026-10-17` apontando para `7e1b98d` (main antes do merge).
-- Resultado do deploy e URL publicada: registrados abaixo quando concluídos.
+- Resultado: deploy do merge (run `39003543585`) concluído com sucesso em 17/10/2026 às 05:04 UTC. `version.json` do site publicado mostra o commit `62219f0` (`https://tenkiter-catalogo.onrender.com/version.json`). O `admin.html` no ar já contém o novo texto e não tem mais o `<details>` de "Mais detalhes".
+- Um segundo run de Deploy do mesmo commit (`39004832640`) ficou em andamento depois; não foi disparado pelo Okou e precisa ser conferido.
