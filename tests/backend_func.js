@@ -38,6 +38,8 @@ pessoa('Admin Um', '85991047615', 'Admin total'); pessoa('Admin Dois', '85992222
 const perfilDe = w => run('acLinhasDoWhats_("' + w + '")')[0];
 const permsDe = w => { ctx.__l = perfilDe(w); return run('acPermsDaLinha_(__l)'); };
 const definir = (w, lista, quem) => { ctx.__q = quem; ctx.__lista = lista; return run('acessosDefinirPerfilSemTrava_("' + w + '", __lista, __q)'); };
+// várias seções abaixo trocam acVerificar_/acExigir_ por dublês; guarda os originais para restaurar antes das seções que precisam da autenticação de verdade
+run('var __acVerificarReal = acVerificar_, __acExigirReal = acExigir_;');
 const EU = { name: 'Admin Um', whatsapp: '85991047615' }, OUTRO = { name: 'Terceiro', whatsapp: '85990000000' };
 
 console.log('\n[vários perfis]');
@@ -91,10 +93,14 @@ ok(!c.ok && c.sessaoInvalida, 'sessão inválida não recebe nada');
 c = conteudo(['portal', 'gerir_manuais']);
 ok(c.ok && c.manuais.every(m => m.liberado && m.parts.length) && Object.keys(c.provas).length === 3, 'quem gere manuais vê tudo (manuais e provas dos 3 níveis)');
 ok(JSON.parse(run('doGet({ parameter: { action: "versao" } })')._t).conteudoProtegido === true, 'versao anuncia conteudoProtegido');
-ok(/'3\.8'/.test(fonte.split('\n').filter(l => /versao: '/.test(l))[0]), 'versao devolve 3.8');
-// erro inesperado no POST não vaza texto técnico
+const vFunc = ARQ.match(/funcionario-codigo-(\d+\.\d+)\.gs\.txt/)[1];
+ok(new RegExp("'" + vFunc + "'").test(fonte.split('\n').filter(l => /versao: '/.test(l))[0]), 'versao devolve ' + vFunc);
+// erro inesperado no POST não vaza texto técnico (SEC-02: o token compartilhado vive nas Propriedades do Script; o teste pega o valor de verdade)
 run('lerManuais_ = function () { throw new Error("SEGREDO-INTERNO"); }');
-const rr = JSON.parse(run('doPost({ postData: { contents: JSON.stringify({ token: TOKEN, action: "treinamento_conteudo", whatsapp: "859", sessao: "x" }) } })')._t);
+ctx.__tkReal = run('tokenCompartilhado_()');
+run('acExigir_ = function () { return { ok: true, usuario: { whatsapp: "859", permissoes: ["portal", "gerir_manuais"] } }; };'); // deixa a ação chegar até lerManuais_, que explode de propósito
+const rr = JSON.parse(run('doPost({ postData: { contents: JSON.stringify({ token: __tkReal, action: "treinamento_conteudo", whatsapp: "859", sessao: "x" }) } })')._t);
+run('acExigir_ = __acExigirReal; acVerificar_ = __acVerificarReal;'); // volta a autenticação de verdade para as seções seguintes
 ok(rr.ok === false && /^R\d+$/.test(String(rr.ocorrencia)) && JSON.stringify(rr).indexOf('SEGREDO-INTERNO') === -1, 'POST com falha devolve só um código de ocorrência', rr);
 
 console.log('\n[v3.6: provas em Doc, limite e dedupe de avaliações, excluir e resetar]');
@@ -107,9 +113,10 @@ console.log('\n[v3.6: provas em Doc, limite e dedupe de avaliações, excluir e 
   ok(pr.avisos && pr.avisos.length === 2, 'e avisa das 2 inválidas (sem certa / menos de 2 opções)', pr.avisos);
   // resultados com planilha simulada
   pessoa('Thais', '85991111111', 'Cliente');
+  definir('85991111111', ['Cliente', 'Aluno'], EU); // SEC-09: gravar nota exige sessão e a permissão "avaliacoes" (o perfil Aluno dá)
   const rs = new Aba('Resultados'); rs.appendRow(['DataHora', 'WhatsApp', 'Nome', 'Nivel', 'Manual', 'Nota', 'Total', 'Percentual', 'Erros', 'ManualId', 'TentativaId']);
   ctx.__rs = rs; run('resultadosSheet_ = function () { return __rs; }; listaFechada_ = function () { return false; }; cfgQuizDoManual_ = function () { return { max: 3 }; }; manTituloPorId_ = function (id) { return "Manual " + id; };');
-  const reg = (tid, extra) => { ctx.__d = Object.assign({ whatsapp: '85991111111', manualId: '1', nome: 'Thais', nota: 5, total: 6, tentativaId: tid }, extra || {}); return JSON.parse(run('registrarResultado_(__d)')._t); };
+  const reg = (tid, extra) => { ctx.__d = Object.assign({ whatsapp: '85991111111', senha: 'x', manualId: '1', nome: 'Thais', nota: 5, total: 6, tentativaId: tid }, extra || {}); return JSON.parse(run('registrarResultado_(__d)')._t); };
   let a = reg('t1'); ok(a.ok && a.tentativa === 1 && a.max === 3, 'primeira avaliação conta 1 de 3', a);
   a = reg('t1'); ok(a.ok && a.repetida && rs.d.length === 2, 'mesma avaliação enviada de novo NÃO conta duas vezes', a);
   reg('t2'); a = reg('t3'); ok(a.ok && a.tentativa === 3, 'terceira avaliação: 3 de 3', a);

@@ -53,6 +53,7 @@ function criarAmbiente() {
   const ctx = {
     console, Date, JSON, Math, String, Number, Array, Object, RegExp, parseInt, parseFloat, isNaN, encodeURIComponent, decodeURIComponent, Error,
     Logger: { log() {} },
+    Session: { getScriptTimeZone: () => 'America/Fortaleza', getActiveUser: () => ({ getEmail: () => 'teste@tenkiter.test' }), getTemporaryActiveUserKey: () => 'chave-teste' },
     SpreadsheetApp: { getActiveSpreadsheet: () => ss, openById: () => pessoas },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {}, hasLock: () => true }) },
     CacheService: { getScriptCache: () => ({
@@ -68,6 +69,7 @@ function criarAmbiente() {
       deleteProperty: k => { props.delete(k); }
     }) },
     Utilities: {
+      sleep() {},
       formatDate(d, _tz, fmt) {
         const x = new Date(d.getTime() + tz);
         const m = { yyyy: pad(x.getUTCFullYear(), 4), MM: pad(x.getUTCMonth() + 1), dd: pad(x.getUTCDate()), HH: pad(x.getUTCHours()), mm: pad(x.getUTCMinutes()) };
@@ -1762,6 +1764,80 @@ function servicosFalsos(amb, est) {
   ok(rp.ok === false && /^E\d{15}$/.test(String(rp.ocorrencia)), 'POST com falha devolve código de ocorrência', JSON.stringify(rp));
   ok(txt.indexOf('SEGREDO-INTERNO') === -1 && txt.indexOf('xyz') === -1 && txt.indexOf('Erro interno no servidor') === -1, 'o texto técnico NÃO chega ao navegador');
   ok(amb.getJson({ action: 'versao' }).erroGenerico === true, 'versao anuncia erroGenerico');
+})();
+
+// ------------------------------------------------------------------ v4.17: vários vídeos por peça (Videos_URL)
+(function variosVideos() {
+  console.log('\n[v4.17: vários vídeos]');
+  const amb = criarAmbiente(); semear(amb);
+  const sh = amb.ss.getSheetByName('Sheet1');
+  const U = (n) => 'https://res.cloudinary.com/z/v' + n + '.mp4';
+  const row = (id) => { const d = sh.getDataRange().getValues(); const i = d.findIndex((r) => String(r[0]) === String(id)); return i < 0 ? null : { r: d[i], cab: d[0] }; };
+  const col = (cab, nome) => cab.indexOf(nome) + 1;
+
+  let r = amb.post(adm({ action: 'create', nome: 'Peça 3 vídeos', preco: 100, categoria: 'Vestidos', genero: 'Feminino',
+    fotoUrlExistente: 'https://res.cloudinary.com/z/x.jpg', videos: [U(1), U(2), U(3)] }));
+  ok(r.ok && Array.isArray(r.videos) && r.videos.length === 3, 'create aceita lista de vídeos', JSON.stringify(r));
+  const id1 = r.id;
+  let L = row(id1);
+  ok(L.r[col(L.cab, 'Video_URL') - 1] === U(1), 'Video_URL guarda o PRIMEIRO vídeo (site antigo continua certo)', L.r[col(L.cab, 'Video_URL') - 1]);
+  ok(L.r[col(L.cab, 'Videos_URL') - 1] === U(2) + ',' + U(3), 'Videos_URL guarda os extras', L.r[col(L.cab, 'Videos_URL') - 1]);
+
+  let lista = amb.getJson({ action: 'list', todos: 'true' });
+  let p = lista.produtos.filter((x) => String(x.ID) === String(id1))[0];
+  ok(p && p.Video_URL === U(1), 'lista pública continua devolvendo Video_URL');
+  ok(p && Array.isArray(p.Videos) && p.Videos.join(',') === [U(1), U(2), U(3)].join(','), 'lista pública devolve Videos (array, na ordem)', p && JSON.stringify(p.Videos));
+
+  // peça que só manda um vídeo (site antigo): nada de coluna cheia de vírgula
+  r = amb.post(adm({ action: 'create', nome: 'Peça 1 vídeo', preco: 60, categoria: 'Blusas', genero: 'Feminino',
+    fotoUrlExistente: 'https://res.cloudinary.com/z/y.jpg', videoUrlExistente: U(4) }));
+  ok(r.ok && r.videos.length === 1 && r.videos[0] === U(4), 'sem body.videos: grava 1 vídeo como antes', JSON.stringify(r.videos));
+  L = row(r.id);
+  ok(String(L.r[col(L.cab, 'Videos_URL') - 1] || '') === '', 'sem body.videos: Videos_URL fica vazia', JSON.stringify({ cab: L.cab, valor: L.r[col(L.cab, 'Videos_URL') - 1] }));
+
+  // limite de 3
+  r = amb.post(adm({ action: 'create', nome: 'Quatro vídeos', preco: 50, categoria: 'Saias', genero: 'Feminino',
+    fotoUrlExistente: 'https://res.cloudinary.com/z/w.jpg', videos: [U(5), U(6), U(7), U(8)] }));
+  ok(r.ok && r.videos.length === 3, 'lista maior que o limite é cortada em 3', JSON.stringify(r.videos));
+
+  // adicionar / remover
+  r = amb.post(adm({ action: 'videoAdicionar', id: id1, url: U(9) }));
+  ok(r.ok === false && /3 v[ií]deos/.test(r.erro), 'videoAdicionar recusa acima do limite', r.erro);
+  r = amb.post(adm({ action: 'videoRemover', id: id1, url: U(2) }));
+  ok(r.ok && r.videos.join(',') === [U(1), U(3)].join(','), 'videoRemover tira só o escolhido', JSON.stringify(r.videos));
+  r = amb.post(adm({ action: 'videoAdicionar', id: id1, url: U(9) }));
+  ok(r.ok && r.videos.join(',') === [U(1), U(3), U(9)].join(','), 'videoAdicionar entra no fim', JSON.stringify(r.videos));
+  r = amb.post(adm({ action: 'videoAdicionar', id: id1, url: U(9) }));
+  ok(r.ok === true && r.jaTinha === true, 'não duplica o mesmo vídeo');
+  r = amb.post(adm({ action: 'videoAdicionar', id: id1, url: 'javascript:alert(1)' }));
+  ok(r.ok === false && /inv[aá]lido/i.test(r.erro), 'recusa endereço que não é https', r.erro);
+  r = amb.post(adm({ action: 'videoAdicionar', id: '999', url: U(9) }));
+  ok(r.ok === false, 'peça inexistente: erro claro');
+
+  // tirar o principal promove o próximo
+  r = amb.post(adm({ action: 'videoRemover', id: id1, url: U(1) }));
+  ok(r.ok && r.videos[0] === U(3) && r.videos.length === 2, 'tirar o principal promove o próximo extra', JSON.stringify(r.videos));
+  L = row(id1);
+  ok(L.r[col(L.cab, 'Video_URL') - 1] === U(3), 'Video_URL acompanha o novo principal');
+
+  // arquivar/restaurar vídeo extra
+  r = amb.post(adm({ action: 'arquivarMidia', id: id1, tipo: 'video', url: U(9) }));
+  ok(r.ok && r.registro, 'arquivarMidia aceita vídeo que NÃO é o principal', JSON.stringify(r));
+  const registro = r.registro;
+  L = row(id1);
+  ok(String(L.r[col(L.cab, 'Videos_URL') - 1] || '') === '', 'Videos_URL fica vazia ao tirar o único extra');
+  r = amb.post(adm({ action: 'restaurarMidia', registro: registro }));
+  ok(r.ok, 'restaurarMidia devolve o vídeo', JSON.stringify(r));
+  L = row(id1);
+  ok(L.r[col(L.cab, 'Videos_URL') - 1] === U(9), 'o vídeo volta como EXTRA (não sobrescreve o principal)');
+
+  // lista enxuta: nada de nomes de auditoria e o array é só https
+  lista = amb.getJson({ action: 'list', todos: 'true' });
+  p = lista.produtos.filter((x) => String(x.ID) === String(id1))[0];
+  ok(p.Videos.every((u) => /^https:\/\//.test(u)), 'Videos só traz https');
+  ok(Object.keys(p).indexOf('CriadoPor') === -1, 'Videos não trouxe coluna de auditoria junto');
+
+  ok(amb.getJson({ action: 'versao' }).videosMultiplos === true, 'versao anuncia videosMultiplos');
 })();
 
 console.log('\n' + (total - falhas.length) + '/' + total + ' verificações passaram');
