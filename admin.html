@@ -738,9 +738,7 @@
         </div>
       </section>
 
-      <details class="extra" id="details-mais">
-        <summary>➕ Mais detalhes (cores, descrição, novidade)</summary>
-
+      <div class="extra" id="details-mais">
         <label for="descricao">Descrição</label>
         <textarea id="descricao" rows="2" placeholder="Tecido viscose, caimento leve..."></textarea>
 
@@ -755,7 +753,7 @@
           <input type="checkbox" id="notificarPush" checked>
           <label for="notificarPush">📢 Avisar quem assina as notificações</label>
         </div>
-      </details>
+      </div>
 
       <div class="cad-falta" id="cad-falta" role="status" aria-live="polite"></div>
       <div class="aviso-gestao" id="aviso-lote" role="status" hidden></div>
@@ -1285,9 +1283,15 @@
 
       grid.appendChild(box);
     });
-    document.getElementById('galeria-contador').textContent = '(' + fotosItens.length + ' de ' + MAX_GALERIA + ')';
-    document.getElementById('galeria-input').disabled = fotosItens.length >= MAX_GALERIA;
-    document.getElementById('galeria-box').classList.toggle('cheia', fotosItens.length >= MAX_GALERIA);
+    if (modoFormulario === 'varias') {
+      document.getElementById('galeria-contador').textContent = '(' + fotosItens.length + ' foto(s) no lote)';
+      document.getElementById('galeria-input').disabled = false;
+      document.getElementById('galeria-box').classList.remove('cheia');
+    } else {
+      document.getElementById('galeria-contador').textContent = '(' + fotosItens.length + ' de ' + MAX_GALERIA + ')';
+      document.getElementById('galeria-input').disabled = fotosItens.length >= MAX_GALERIA;
+      document.getElementById('galeria-box').classList.toggle('cheia', fotosItens.length >= MAX_GALERIA);
+    }
     if (typeof atualizarFaltas_ === 'function') atualizarFaltas_();
   }
 
@@ -1358,8 +1362,10 @@
   document.getElementById('galeria-input').addEventListener('change', async (e) => {
     const arquivos = Array.from(e.target.files || []);
     e.target.value = '';
-    const vagas = MAX_GALERIA - fotosItens.length;
-    if (arquivos.length > vagas) alert('Cabem só mais ' + vagas + ' foto(s) (máximo ' + MAX_GALERIA + '). As primeiras ' + vagas + ' foram aproveitadas.');
+    // v4.17: no modo "várias peças" o limite de 8 vale por peça, não pelo lote: cada foto vira uma peça.
+    const varias = modoFormulario === 'varias';
+    const vagas = varias ? arquivos.length : MAX_GALERIA - fotosItens.length;
+    if (!varias && arquivos.length > vagas) alert('Cabem só mais ' + vagas + ' foto(s) (máximo ' + MAX_GALERIA + '). As primeiras ' + vagas + ' foram aproveitadas.');
     for (const f of arquivos.slice(0, Math.max(vagas, 0))) {
       if (!/^image\//.test(f.type)) continue;
       try { fotosItens.push(await lerFotoReduzida(f)); } catch (err) { alert('Não consegui ler a foto "' + f.name + '".'); }

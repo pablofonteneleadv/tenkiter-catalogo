@@ -37,14 +37,16 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
 
 ## Deploy — como funciona de fato (não como o README promete)
 
-- **Frontend (Render)**: embora o serviço tenha `autoDeploy: yes`, o deploy automático ao fazer
-  push para `main` se mostrou pouco confiável na prática. Depois de cada push, sempre disparar
-  deploy explícito e confirmar:
-  1. `mcp__Render__trigger_deploy` (serviço `srv-dasa63fpn0mc73fh8fgg`, workspace
-     `tea-d001phk9c44c73fd13h0`)
-  2. `mcp__Render__get_deploy` em loop até `status: "live"`
-  3. `curl` em `https://tenkiter-catalogo.onrender.com/<arquivo>` e `grep` por uma string nova
-     do próprio commit, para confirmar que o ar está servindo o código novo (não só "live").
+- **Regra (Pablo, 17/10/2026)**: deploy é feito por você, direto pelo GitHub, sem pedir confirmação e sem enrolar. Não existe mais restrição de "deploy manual pelo Pablo" para o frontend. Sempre que houver acesso ao GitHub, fazer o deploy assim que o trabalho estiver pronto e testado.
+- **Ponto de restauração obrigatório antes de cada merge na `main`**: criar uma branch `backup/pre-<tema>-<data>` apontando para o commit atual da `main`. Assim qualquer deploy pode ser desfeito rapidamente.
+- **Fluxo padrão (frontend, Render)**:
+  1. Criar o ponto de restauração (`backup/pre-...`).
+  2. Fazer o PR (ou usar o PR existente) e aguardar o check "Portão de qualidade" ficar verde.
+  3. Fazer o merge na `main`. O push na `main` dispara `.github/workflows/deploy.yml`, que publica no Render, acompanha até "live" e confirma o commit em `/version.json`.
+  4. Conferir no site publicado (`https://tenkiter-catalogo.onrender.com/<arquivo>`) com `grep` por uma string nova do commit.
+  5. Se der errado: reverter com novo commit na `main` ou restaurar a partir do `backup/pre-...`.
+- **Bateria final**: a bateria completa (`tests/rodar_tudo.py` com `TK_BASE=https://tenkiter-catalogo.onrender.com/`) roda só quando o Pablo pedir, depois que o site já estiver atualizado.
+- **Render via MCP/API**: `mcp__Render__trigger_deploy` (serviço `srv-dasa63fpn0mc73fh8fgg`, workspace `tea-d001phk9c44c73fd13h0`) continua disponível como alternativa se o deploy pelo GitHub falhar.
 - **Backend (Apps Script)**: **não pode ser deployado por automação** — precisa que o Pablo cole
   manualmente o `.gs.txt` no editor do Apps Script e clique em "Nova versão" (Gerenciar
   implantações → editar → Nova versão). Depois que ele confirmar, validar com:
@@ -584,3 +586,13 @@ Propriedades do Script do Apps Script, nunca no código versionado.
 - **Pedido do Pablo (13/10/2026)**: ao lado de "Compartilhar seleção" ficam **✕ Limpar seleção** (esvazia a sacola e limpa filtros/link) e, só para quem tem `catalogo_cadastrar` (`equipe_.pode`) com peças na seleção, **🛠️ Edição em lote** (`#btn-lote-menu`, abre `#lote-menu` com as ações). Os 3 têm contorno/sombra, ≥44 px (Compartilhar laranja com letra preta; Edição em lote preta).
 - A ação leva a `admin.html?lote=<IDs>&acao=btn-bulk-*`: o painel marca as peças e aciona o botão do lote existente (nada duplicado). Teste: `tests/selecao_botoes.py`.
 - **v6.2 — Juntar dentro do catálogo (13/10/2026)**: "Juntar em 1 produto" do menu Edição em lote abre `#overlay-juntar` (`.overlay-sheet-loja`, `TKCamadas`) POR CIMA do catálogo, sem ir ao admin (`abrirJuntarCatalogo_`, ação `juntarProdutos` via `pedirEquipe_`). Durante a chamada: botão "Juntando…", faixa `#juntar-prog` com spinner ("Está funcionando, não feche"), janela não fecha; ao fim "✔ Pronto!", seleção limpa, lista recarregada e aviso. O admin também mostra "Juntando… aguarde" no botão.
+
+## v4.17 — Cadastro: campos visíveis, várias peças sem teto de 8 por lote (`admin.html` + testes, só front)
+
+- **Pedido do Pablo (conversa do zip, 17/10/2026)**: Foto 12 (campos "Mais detalhes" sempre visíveis) e Foto 8 (cadastro de várias peças sem o limite de 8 no lote).
+- **Foto 12**: o `<details id="details-mais">` virou `<div class="extra" id="details-mais">`. Descrição, "Gerar Título/Descrição com IA", Novidade e aviso de push ficam sempre visíveis. NÃO reintroduzir o `<details>`/`summary` sem combinar com o Pablo.
+- **Foto 8**: no modo `modoFormulario === 'varias'` (menu Cadastrar → "Cadastrar várias peças"), `galeria-input` aceita quantas fotos forem escolhidas e cada uma vira uma peça. O teto `MAX_GALERIA = 8` continua valendo no cadastro de UMA peça (por produto, inclusive a galeria de cada peça criada em lote). Contador no lote: "N foto(s) no lote".
+- **Testes ajustados**: `tests/admin_gestao.py` e `tests/jornada_lojista.py` deixaram de clicar em `#details-mais > summary`.
+- **Pendente nesta versão** (não feito): Foto 1 (remover atalhos duplicados do painel), opção A de velocidade (liberar a tela após "Salvar" e mostrar a fila), Fotos 3 a 6 (Story padrão, prévia automática, enquadramento), assinatura de foto e SEC-20 (exigem `Code.gs` completo colado pelo Pablo).
+- **Testes**: `admin_gestao.py` 80/80, `jornada_lojista.py` 15/15, checks de CI (JS, HTML, workers, segredos) passam. Falhas já existentes no `main` e fora do escopo: `selecao_link`, `rolagem_infinita`, `lista_rapida`.
+- Detalhes completos, diagnósticos e pendências: ver `okou.md` na raiz.

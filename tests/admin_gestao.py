@@ -221,7 +221,7 @@ with sync_playwright() as p:
     print("== SEO sem IA ==")
     pg.click("#card-form > summary"); pg.wait_for_timeout(300)
     pg.fill("#nome", "Vestido Midi Floral")
-    pg.click("#details-mais > summary"); pg.wait_for_timeout(200)
+    pg.wait_for_timeout(200)
     pg.click("#btn-seo-ia"); pg.wait_for_timeout(900)
     box = pg.inner_text("#seo-sugestao-box")
     chk("sem IA: avisa que o texto foi montado sem IA", "gerado sem ia" in box.lower() and "gemini" in box.lower(), box[:200])
