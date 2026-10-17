@@ -1115,7 +1115,8 @@
     if (!slide) return;
     const ehVideo = slide.tipo === 'video';
     const url = ehVideo ? String(p.Video_URL || '').trim() : String(slide.url || '').trim();
-    if (!ehVideo && listaGaleria_(p).length === 0) { alert('Essa é a única foto da peça. Para tirar a peça do catálogo, use o ✕ da peça (arquivar a peça inteira).'); return; }
+    // v4.18 (foto 09): se for a única foto e não houver vídeo, o ✕ arquiva a PEÇA inteira (mesmo caminho do ✕ da peça)
+    if (!ehVideo && listaGaleria_(p).length === 0) { if (!(p.Video_URL || '').trim()) { return arquivarProdutoX_(p.ID); } }
     if (!confirm((ehVideo ? 'Tirar o VÍDEO' : 'Tirar esta FOTO') + ' da peça "' + p.Nome + '"?\n\nO arquivo não é apagado: fica guardado e dá para desfazer.')) return;
     const r = await pedirEquipe_({ action: 'arquivarMidia', id: p.ID, tipo: ehVideo ? 'video' : 'foto', url: url });
     if (!r || !r.ok) { avisoEquipe_(erroEquipe_(r)); return; }

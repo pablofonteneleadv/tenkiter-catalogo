@@ -495,6 +495,8 @@
   .atalhos-linha { display:flex; flex-wrap:wrap; gap:6px; }
   .atalhos-linha button { width:auto; flex:1 1 auto; padding:9px 12px; font-size:.8rem; min-height:40px; background:#f3f3f3; color:#222; border:1px solid #ddd; border-radius:8px; }
   .atalhos-linha button[hidden] { display:none; }
+  /* v4.18: cores/estampas com texto livre só para Admin total (lista fica com o admin) */
+  body.sem-gerir .so-admin-cores { display: none !important; }
 </style>
 </head>
 <body>
@@ -633,13 +635,6 @@
 
   </details>
 
-  <details class="cartao-cad" id="card-pedidos" hidden>
-    <summary><span id="ped-sum-txt">🧾 Pedidos</span></summary>
-    <div class="cad-corpo">
-      <div class="ped-topo"><div class="filtros-lista" id="ped-filtros" role="group" aria-label="Filtrar pedidos por etapa"></div><button type="button" id="ped-atualizar">🔄 Atualizar</button></div>
-      <div id="ped-lista" aria-live="polite"><p class="ped-vazio">Carregando pedidos…</p></div>
-    </div>
-  </details>
 
   <div id="ig-faixa" hidden></div>
 
@@ -673,6 +668,18 @@
         <button type="button" class="btn-seo-ia" id="btn-foto-ia">✨ Preencher os campos pela foto (IA)</button>
         <div id="foto-ia-box"></div>
         <div class="passo-msg">Coloque pelo menos 1 foto da peça.</div>
+      </section>
+
+      <section class="passo" data-passo="video" id="passo-video">
+        <div class="passo-tit"><span class="num">2</span>Vídeo da peça <span class="opc">(opcional · até 20 MB)</span></div>
+        <div class="foto-box" id="video-box">
+          <label class="btn-foto btn-video" for="video-input">🎬 Gravar ou escolher um vídeo</label>
+          <input type="file" id="video-input" accept="video/mp4,video/quicktime,video/webm" class="input-oculto">
+          <video id="video-preview" controls playsinline preload="metadata"></video>
+          <div id="video-atual">🎬 Esta peça já tem um vídeo salvo. <a id="video-atual-link" href="#" target="_blank" rel="noopener">Ver</a></div>
+          <button type="button" id="btn-remover-video">Remover vídeo</button>
+          <div class="dica-midia">MP4, MOV ou WEBM. O vídeo precisa de internet na hora de salvar.</div>
+        </div>
       </section>
 
       <section class="passo" data-passo="nome">
@@ -716,8 +723,8 @@
       <section class="passo" data-passo="cores">
         <div class="passo-tit"><span class="num">6</span>Cores e estampas <span class="opc">(se souber)</span></div>
         <div class="chips chips-rapidos" id="chips-cores"></div>
-        <input type="text" id="cores" placeholder="Ou escreva: Preto, Off-white, Estampado" autocomplete="off">
-        <button type="button" class="btn-escolher" id="btn-abrir-cores">＋ Escolher cores e estampas</button>
+        <input type="text" id="cores" placeholder="Ou escreva: Preto, Off-white, Estampado" autocomplete="off" class="so-admin-cores">
+        <button type="button" class="btn-escolher so-admin-cores" id="btn-abrir-cores">＋ Escolher cores e estampas</button>
       </section>
 
       <section class="passo" data-passo="genero">
@@ -726,17 +733,6 @@
         <div class="passo-msg">Escolha para quem é a peça.</div>
       </section>
 
-      <section class="passo" data-passo="video" id="passo-video">
-        <div class="passo-tit"><span class="num">8</span>Vídeo da peça <span class="opc">(opcional · 1 só · até 20 MB)</span></div>
-        <div class="foto-box" id="video-box">
-          <label class="btn-foto btn-video" for="video-input">🎬 Gravar ou escolher um vídeo</label>
-          <input type="file" id="video-input" accept="video/mp4,video/quicktime,video/webm" class="input-oculto">
-          <video id="video-preview" controls playsinline preload="metadata"></video>
-          <div id="video-atual">🎬 Esta peça já tem um vídeo salvo. <a id="video-atual-link" href="#" target="_blank" rel="noopener">Ver</a></div>
-          <button type="button" id="btn-remover-video">Remover vídeo</button>
-          <div class="dica-midia">MP4, MOV ou WEBM. O vídeo precisa de internet na hora de salvar.</div>
-        </div>
-      </section>
 
       <div class="extra" id="details-mais">
         <label for="descricao">Descrição</label>
