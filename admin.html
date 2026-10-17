@@ -518,6 +518,8 @@
   .atalhos-linha button[hidden] { display:none; }
   /* v4.18: cores/estampas com texto livre só para Admin total (lista fica com o admin) */
   body.sem-gerir .so-admin-cores { display: none !important; }
+  /* v4.18: tamanhos e cores aparecem só como chips; o campo de texto continua existindo (guarda a escolha) mas não aparece */
+  input#tamanhos, input#cores { display: none !important; }
 </style>
 </head>
 <body>
@@ -1702,29 +1704,58 @@
 
   function listaDoCampo_(id) { return document.getElementById(id).value.split(',').map(s => s.trim()).filter(Boolean); }
   function sincRapidos_() {
-    PARES_RAPIDOS.forEach(([idChips, idCampo]) => {
-      const marcados = listaDoCampo_(idCampo).map(semAcento_);
-      document.querySelectorAll('#' + idChips + ' .chip').forEach(ch => ch.classList.toggle('selecionado', marcados.indexOf(semAcento_(ch.dataset.v)) !== -1));
+    PARES_RAPIDOS.forEach(([idChips, idCampo, opcoes]) => {
+      const lista = listaDoCampo_(idCampo), marcados = lista.map(semAcento_);
+      const box = document.getElementById(idChips);
+      box.querySelectorAll('.chip[data-extra]').forEach(ch => { if (marcados.indexOf(semAcento_(ch.dataset.v)) === -1) ch.remove(); }); // valor antigo que a pessoa desmarcou
+      lista.forEach(v => { // valor que a peça já tem e não está na lista (peça antiga): aparece marcado, para nunca ficar escondido
+        if (!Array.prototype.some.call(box.querySelectorAll('.chip'), ch => semAcento_(ch.dataset.v) === semAcento_(v))) { const b = chipRapido_(idCampo, opcoes, v); b.dataset.extra = '1'; box.appendChild(b); }
+      });
+      box.querySelectorAll('.chip').forEach(ch => ch.classList.toggle('selecionado', marcados.indexOf(semAcento_(ch.dataset.v)) !== -1));
     });
+  }
+  function chipRapido_(idCampo, opcoes, o) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = o; b.dataset.v = o;
+    b.addEventListener('click', () => {
+      const lista = listaDoCampo_(idCampo);
+      const k = lista.findIndex(x => semAcento_(x) === semAcento_(o));
+      if (k >= 0) lista.splice(k, 1); else lista.push(o);
+      const pos = (x) => { const i = opcoes.findIndex(y => semAcento_(y) === semAcento_(x)); return i === -1 ? 999 : i; };
+      lista.sort((a2, b2) => pos(a2) - pos(b2));
+      document.getElementById(idCampo).value = lista.join(', ');
+      sincRapidos_();
+      if (typeof atualizarFaltas_ === 'function') atualizarFaltas_();
+    });
+    return b;
   }
   function montarRapidos_() {
     PARES_RAPIDOS.forEach(([idChips, idCampo, opcoes]) => {
       const box = document.getElementById(idChips); box.innerHTML = '';
-      opcoes.forEach(o => {
-        const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = o; b.dataset.v = o;
-        b.addEventListener('click', () => {
-          const lista = listaDoCampo_(idCampo);
-          const k = lista.findIndex(x => semAcento_(x) === semAcento_(o));
-          if (k >= 0) lista.splice(k, 1); else lista.push(o);
-          const pos = (x) => { const i = opcoes.findIndex(y => semAcento_(y) === semAcento_(x)); return i === -1 ? 999 : i; };
-          lista.sort((a2, b2) => pos(a2) - pos(b2));
-          document.getElementById(idCampo).value = lista.join(', ');
-          sincRapidos_();
-        });
-        box.appendChild(b);
-      });
-      document.getElementById(idCampo).addEventListener('input', sincRapidos_);
+      opcoes.forEach(o => box.appendChild(chipRapido_(idCampo, opcoes, o)));
+      const campo = document.getElementById(idCampo);
+      if (!campo.dataset.ligado) { campo.dataset.ligado = '1'; campo.addEventListener('input', sincRapidos_); }
     });
+    sincRapidos_();
+  }
+  /* v4.18: tamanhos e cores/estampas ficam no servidor (aba Tamanhos_Lista / Cores_Lista) e valem para TODOS; o Admin total acrescenta e todos veem. */
+  let opcoesNoServidor_ = false;
+  const CACHE_OPCOES_ = 'tenkiter_admin_opcoes_v1';
+  function aplicarOpcoes_(tam, cor) {
+    if (Array.isArray(tam) && tam.length) { TAMANHOS_RAPIDOS.length = 0; tam.forEach(x => TAMANHOS_RAPIDOS.push(x)); }
+    if (Array.isArray(cor) && cor.length) { CORES_RAPIDAS.length = 0; cor.forEach(x => CORES_RAPIDAS.push(x)); }
+    montarRapidos_();
+  }
+  async function carregarOpcoes_() {
+    try { const c = JSON.parse(localStorage.getItem(CACHE_OPCOES_) || 'null'); if (c) aplicarOpcoes_(c.tamanhos, c.cores); } catch (e) {}
+    try {
+      const v = await versaoServidor();
+      if (!v || !v.opcoesLista) return;
+      const r = await fetch(API_URL + '?action=opcoes').then(x => x.json());
+      if (!r || !r.ok) return;
+      opcoesNoServidor_ = true;
+      aplicarOpcoes_(r.tamanhos, r.cores);
+      try { localStorage.setItem(CACHE_OPCOES_, JSON.stringify({ tamanhos: r.tamanhos, cores: r.cores })); } catch (e) {}
+    } catch (e) { /* sem rede: segue com a lista de fábrica/cache */ }
   }
 
   function precoDigitado_() { return parseFloat(String(document.getElementById('preco').value).replace(',', '.')); }
@@ -1894,6 +1925,7 @@
   document.getElementById('overlay-categorias').addEventListener('click', (ev) => { if (ev.target.id === 'overlay-categorias') fecharComHistorico_('overlay-categorias'); });
   document.getElementById('btn-criar-categoria').addEventListener('click', () => abrirCriacaoCategoria_(document.getElementById('cat-busca').value));
   montarRapidos_();
+  carregarOpcoes_();
 
   /* ===================== v4.10+: tamanhos e cores com o MESMO sistema de escolha das categorias =====================
    * Cada campo (tamanhos, cores) ganha uma folha com busca, lista, "criar nova" e sugestões — o mesmo padrão da
@@ -1981,14 +2013,25 @@
       : sug.length ? '<div class="sug-titulo">Já cadastradas parecidas — toque para copiar o nome:</div><div class="sug-lista">' + sug.map((o) => '<div class="sug-linha"><button type="button" class="sug-copiar" data-esc-copiar="' + escaparHtml(o) + '"><span class="sug-nome">' + escaparHtml(o) + '</span><span class="sug-dica">copiar nome</span></button></div>').join('') + '</div>'
       : '<div class="sug-titulo">Nenhuma opção parecida. Pode criar.</div>';
   }
-  function adicionarEscolha_(chave) {
+  async function adicionarEscolha_(chave) {
     const cfg = CAMPOS_ESCOLHA_[chave];
     const inp = document.getElementById(cfg.input);
     const nome = String(inp.value || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
     if (!nome) { inp.focus(); return; }
     const igual = opcoesEscolha_(chave).find((o) => semAcento_(o) === semAcento_(nome));
-    const alvo = igual || nome;
-    if (!igual) escolhaNovas_[chave].push(nome);
+    let alvo = igual || nome;
+    if (!igual && opcoesNoServidor_) { // v4.18: vale para todos os usuários, então só entra se o servidor aceitar
+      const bt = document.getElementById(cfg.confirmar); const txt0 = bt ? bt.textContent : '';
+      if (bt) { bt.disabled = true; bt.textContent = 'Adicionando...'; }
+      try {
+        const resp = await chamarAdmin_({ action: chave === 'cores' ? 'addCor' : 'addTamanho', nome: nome });
+        if (!resp || !resp.ok) { const t = textoErroCat_(resp, 'Não consegui guardar. Só o Admin total cria opções novas.'); if (t) alert(t); return; }
+        alvo = resp.nome || nome;
+        if (!cfg.base.some((o) => semAcento_(o) === semAcento_(alvo))) cfg.base.push(alvo);
+        montarRapidos_();
+        try { localStorage.setItem(CACHE_OPCOES_, JSON.stringify({ tamanhos: TAMANHOS_RAPIDOS, cores: CORES_RAPIDAS })); } catch (e) {}
+      } finally { if (bt) { bt.disabled = false; bt.textContent = txt0; } }
+    } else if (!igual) escolhaNovas_[chave].push(nome);
     escolhaSel_[chave].add(alvo);
     inp.value = '';
     fecharCriacaoEscolha_(chave);
