@@ -74,6 +74,15 @@ export TK_BASE=http://localhost:8765/
 
 ## 7. Estado de publicação
 
+(Ver seção 8 para o estado após o merge.)
+
+## 7a. Estado antes do merge
+
 - Nada foi mesclado na `main`.
 - Nenhum deploy foi feito no Render.
-- Branch enviada ao GitHub para revisão (ver seção 8), não publicada no site.
+- Branch enviada ao GitHub e PR #13 aberto para `main`. O merge e o deploy foram autorizados pelo Pablo em 17/10/2026 (ver seção 8).
+
+## 8. Merge e deploy
+
+- Autorizado explicitamente pelo Pablo (17/10/2026) para fazer merge do PR #13 na `main` e disparar o deploy pelo GitHub Actions (`deploy.yml`).
+- Resultado do deploy e URL publicada: registrados abaixo quando concluídos.
