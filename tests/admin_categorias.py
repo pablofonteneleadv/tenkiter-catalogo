@@ -47,14 +47,14 @@ with sync_playwright() as p:
     ctx, pg, log, st, erros, falas = abrir(b, perms=[x for x in PERMS_ALL if x != "gerir_acessos"])
     abrir_folha(pg)
     chk("Funcionário SEM gerir_acessos não vê ✎ nem ×", pg.locator("#cat-lista .cat-acao").count() == 0 and len(nomes_lista(pg)) >= 10, pg.locator("#cat-lista .cat-acao").count())
-    pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Vest"); pg.wait_for_timeout(200)
+    pg.evaluate("document.body.classList.remove('sem-gerir')"); pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Vest"); pg.wait_for_timeout(200)
     chk("…nem nas sugestões de criar categoria", pg.locator("#nova-cat-sugestoes .sug-linha").count() >= 1 and pg.locator("#nova-cat-sugestoes [data-cat-editar]").count() == 0)
     ctx.close()
 
     ctx, pg, log, st, erros, falas = abrir(b, versao="3.1")
     abrir_folha(pg)
     chk("backend 3.1 (sem a bandeira): Admin total também NÃO vê ✎ nem × (não finge o que o servidor não sabe)", pg.locator("#cat-lista .cat-acao").count() == 0 and len(nomes_lista(pg)) >= 10)
-    pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Fantasia, menina"); pg.wait_for_timeout(200)
+    pg.evaluate("document.body.classList.remove('sem-gerir')"); pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Fantasia, menina"); pg.wait_for_timeout(200)
     pg.click("#btn-confirmar-nova-categoria"); pg.wait_for_timeout(500)
     ad = posts(log, "addCategoria")
     chk("backend 3.1: criar categoria continua funcionando, já sem vírgula", len(ad) == 1 and ad[0]["nome"] == "Fantasia menina", ad)
@@ -64,7 +64,7 @@ with sync_playwright() as p:
     print("== Criar categoria ==")
     ctx, pg, log, st, erros, falas = abrir(b)
     abrir_folha(pg)
-    pg.click("#btn-criar-categoria"); pg.wait_for_timeout(200)
+    pg.evaluate("document.body.classList.remove('sem-gerir')"); pg.click("#btn-criar-categoria"); pg.wait_for_timeout(200)
     caixa = pg.locator("#input-nova-categoria").bounding_box()
     chk("campo do nome é LARGO e alto (antes era um quadradinho)", caixa["width"] >= 200 and caixa["height"] >= 36, caixa)
     botao = pg.locator("#btn-confirmar-nova-categoria").bounding_box()
@@ -90,13 +90,13 @@ with sync_playwright() as p:
     chk("e fica guardada para a próxima abertura (cache do aparelho)", "Calças Jeans" in (pg.evaluate("localStorage.getItem('tenkiter_admin_listas_v1')") or ""))
 
     # vírgula
-    pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Moda, praia  2-6"); pg.wait_for_timeout(200)
+    pg.evaluate("document.body.classList.remove('sem-gerir')"); pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Moda, praia  2-6"); pg.wait_for_timeout(200)
     chk("vírgula e espaços duplos: a prévia mostra o nome já arrumado e avisa", "Moda praia 2-6" in pg.inner_text("#nova-cat-previa") and "vírgula" in pg.inner_text("#nova-cat-previa"), pg.inner_text("#nova-cat-previa"))
     pg.press("#input-nova-categoria", "Enter"); pg.wait_for_timeout(500)
     ad = posts(log, "addCategoria")
     chk("Enter cria; servidor recebe sem vírgula", len(ad) == 2 and ad[1]["nome"] == "Moda praia 2-6", ad[-1:])
     # já existe
-    pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("vestido"); pg.wait_for_timeout(200)
+    pg.evaluate("document.body.classList.remove('sem-gerir')"); pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("vestido"); pg.wait_for_timeout(200)
     chk("nome que já existe: prévia diz 'Já existe' e o botão vira 'Usar essa'", "Já existe" in pg.inner_text("#nova-cat-previa") and pg.inner_text("#btn-confirmar-nova-categoria") == "Usar essa", (pg.inner_text("#nova-cat-previa"), pg.inner_text("#btn-confirmar-nova-categoria")))
     pg.click("#btn-confirmar-nova-categoria"); pg.wait_for_timeout(300)
     chk("'Usar essa' escolhe a existente e NÃO cria duplicada", len(posts(log, "addCategoria")) == 2 and pg.locator("#cat-lista .cat-item.selecionado:has-text('Vestido')").count() == 1)
@@ -109,7 +109,7 @@ with sync_playwright() as p:
     chk("'Voltar para a lista' volta sem criar nada", pg.locator("#nova-categoria-linha.aberto").count() == 0 and pg.locator("#cat-lista").is_visible() and len(posts(log, "addCategoria")) == 2)
     chk("sem erro de JavaScript", not erros, erros)
     if AXE:
-        pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Cal"); pg.wait_for_timeout(200)
+        pg.evaluate("document.body.classList.remove('sem-gerir')"); pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Cal"); pg.wait_for_timeout(200)
         pg.evaluate(AXE)
         v = pg.evaluate("async()=>{const r=await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa','best-practice']}});return r.violations.map(v=>v.id+' ×'+v.nodes.length+' '+v.nodes.slice(0,2).map(n=>n.target.join(' ')).join(' | '))}")
         chk("acessibilidade (axe) da folha em modo criar: sem problemas", not v, v)
@@ -131,7 +131,7 @@ with sync_playwright() as p:
     chk("lista mostra o nome novo e não o velho", "Blusas longas" in nomes_lista(pg) and "Blusa" not in nomes_lista(pg), nomes_lista(pg))
     chk("peças que usavam o nome velho passaram para o novo (no servidor simulado)", not any("Blusa" == c.strip() for x in st["produtos"] for c in x["Categoria"].split(",")) and any("Blusas longas" in x["Categoria"] for x in st["produtos"]))
     # juntar com existente, via sugestões do modo criar
-    pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Saia"); pg.wait_for_timeout(200)
+    pg.evaluate("document.body.classList.remove('sem-gerir')"); pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Saia"); pg.wait_for_timeout(200)
     pg.click("#nova-cat-sugestoes [data-cat-editar='Saia']"); pg.wait_for_timeout(200)
     chk("nas sugestões também há ✎ Corrigir (Admin total) e abre o campo de correção", pg.locator("#nova-cat-sugestoes .cat-edit-input").count() == 1 and pg.input_value("#nova-cat-sugestoes .cat-edit-input") == "Saia")
     pg.fill("#nova-cat-sugestoes .cat-edit-input", "vestido"); pg.click("#nova-cat-sugestoes [data-cat-salvar]"); pg.wait_for_timeout(600)
@@ -149,7 +149,7 @@ with sync_playwright() as p:
     ctx, pg, log, st, erros, falas = abrir(b, dialogos=falas)
     abrir_folha(pg)
     # criar uma sem uso e apagar
-    pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Lixo teste"); pg.click("#btn-confirmar-nova-categoria"); pg.wait_for_timeout(500)
+    pg.evaluate("document.body.classList.remove('sem-gerir')"); pg.click("#btn-criar-categoria"); pg.locator("#input-nova-categoria").press_sequentially("Lixo teste"); pg.click("#btn-confirmar-nova-categoria"); pg.wait_for_timeout(500)
     n0 = len(falas)
     pg.click("#cat-lista [data-cat='Lixo teste'] >> xpath=.. >> .cat-x"); pg.wait_for_timeout(500)
     ex = posts(log, "excluirCategoria")
