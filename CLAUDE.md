@@ -621,4 +621,5 @@ Documentação técnica: `docs/CI-CD.md`, seção **6. CI otimizado**.
 - **Painel**: `#card-pedidos` mora em "Ferramentas do gestor"; `#ig-faixa` ("Produtos para aceitar") fica dentro do menu Cadastrar com selo `#cad-badge`; `#card-form` fechado não mostra barra (abre pelo menu Cadastrar; testes abrem por JS).
 - **Postagens**: "Mover a foto" já marcado, rótulos curtos (Cortar / Encaixar / Margens), sem parágrafo de ajuda. `postagens_admin.py` e `postagens_v49.py` já falhavam antes (testes antigos; Story já é o padrão).
 - **Catálogo**: filtro **Cor** (`#chips-cor`, `?cor=`); a gaveta de filtros abre ao focar a busca e fecha ao sair (só se foi aberta por ela).
-- **Pendente**: barra de lote/cards responsivos e tipografia (H/I), chips de categoria sempre visíveis com ordem do admin (precisa backend), revisar `postagens_*.py`.
+- **Parte 2 (17/10/2026)**: categorias aparecem como chips sempre visíveis no passo 5 (`#chips-categorias`; ordem alfabética do front); criar categoria nova só Admin total (`.so-admin-cores` em `#btn-criar-categoria`/`.cat-criar-linha`; `admin_categorias.py` tira `sem-gerir` antes). Barra de lote quebra linha ≥560 px; nome da peça na lista com `clamp` e 2 linhas.
+- **Pendente**: ordem das listas definida pelo admin (precisa backend 4.18 + .gs completo), revisar `postagens_*.py` (já falhavam antes).

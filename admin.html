@@ -137,6 +137,8 @@
   .bulk-bar-actions { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; padding-bottom: 4px; }
   .bulk-bar-actions::-webkit-scrollbar { height: 6px; }
   .bulk-bar-actions::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+  @media (min-width: 560px) { .bulk-bar-actions { flex-wrap: wrap; overflow-x: visible; } }
+  .bulk-bar-actions button { min-height: 40px; }
   .bulk-bar-actions button { width: auto; flex: 0 0 auto; font-size: 0.72rem; padding: 6px 10px; background: #333; color: #fff; white-space: nowrap; }
   .bulk-bar-actions button.mais { background: var(--laranja); color: #0d0d0d; }
   .bulk-mais { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.15); }
@@ -167,7 +169,7 @@
   .produto img { width: 56px; height: 70px; object-fit: cover; border-radius: 8px; background: #eee; }
   .produto-info { flex: 1; min-width: 0; }
   .produto-info .codigo { font-size: 0.68rem; color: var(--laranja-txt); font-weight: 800; }
-  .produto-info .nome { font-weight: 700; font-size: 0.92rem; }
+  .produto-info .nome { font-weight: 700; font-size: clamp(0.92rem, 3.6vw, 1.02rem); line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .produto-info .preco { font-size: 0.82rem; color: #333; }
   .produto-info .preco span { color: #1a7a1a; font-weight: 700; }
 
@@ -736,8 +738,9 @@
 
       <section class="passo" data-passo="categoria">
         <div class="passo-tit"><span class="num">5</span>Categoria <i class="obg">*</i></div>
-        <div class="tags" id="tags-categoria"></div>
-        <button type="button" class="btn-escolher" id="btn-abrir-categorias">＋ Escolher categoria</button>
+        <div class="tags" id="tags-categoria" hidden></div>
+        <div class="chips chips-rapidos" id="chips-categorias" role="group" aria-label="Categorias"></div>
+        <button type="button" class="btn-escolher" id="btn-abrir-categorias">＋ Procurar / gerir categorias</button>
         <div class="passo-msg">Escolha pelo menos uma categoria.</div>
       </section>
 
@@ -804,7 +807,7 @@
         <div id="nova-cat-sugestoes"></div>
         <button type="button" class="nova-cat-voltar" id="nova-cat-voltar">← Voltar para a lista</button>
       </div>
-      <button type="button" class="cat-criar" id="btn-criar-categoria">＋ Não achei: criar categoria nova</button>
+      <button type="button" class="cat-criar so-admin-cores" id="btn-criar-categoria">＋ Não achei: criar categoria nova</button>
       <button type="button" class="btn-primario" id="cat-pronto" style="margin-top:0;">Pronto</button>
     </div>
   </div>
@@ -1840,7 +1843,7 @@
     };
     const buscaBruta = limparNomeCategoria_(document.getElementById('cat-busca').value);
     const criarCom = buscaBruta && !categorias.some(c => semAcento_(c) === semAcento_(buscaBruta))
-      ? '<button type="button" class="cat-criar-linha" data-cat-criar-com="' + escaparHtml(buscaBruta) + '">＋ Criar a categoria “' + escaparHtml(buscaBruta) + '”</button>' : '';
+      ? '<button type="button" class="cat-criar-linha so-admin-cores" data-cat-criar-com="' + escaparHtml(buscaBruta) + '">＋ Criar a categoria “' + escaparHtml(buscaBruta) + '”</button>' : '';
     box.innerHTML = lista.length
       ? lista.map(linha).join('') + criarCom
       : '<div class="cat-vazio">' + (termo ? 'Nenhuma categoria com esse nome.' : 'Ainda não há categorias.') + '<br>Use o botão abaixo para criar.</div>' + criarCom;
@@ -1867,7 +1870,18 @@
       x.addEventListener('click', () => { selecionadasCategorias.delete(c); renderizarCategorias_(); });
       t.appendChild(x); tags.appendChild(t);
     });
-    document.getElementById('btn-abrir-categorias').textContent = selecionadasCategorias.size ? '＋ Adicionar ou trocar categoria' : '＋ Escolher categoria';
+    const cc = document.getElementById('chips-categorias');
+    if (cc) {
+      cc.innerHTML = '';
+      const todas = categorias.slice(); selecionadasCategorias.forEach(c => { if (todas.indexOf(c) < 0) todas.push(c); });
+      todas.forEach(c => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'chip' + (selecionadasCategorias.has(c) ? ' selecionado' : ''); b.textContent = c;
+        b.setAttribute('aria-pressed', selecionadasCategorias.has(c) ? 'true' : 'false');
+        b.addEventListener('click', () => { if (selecionadasCategorias.has(c)) selecionadasCategorias.delete(c); else selecionadasCategorias.add(c); renderizarCategorias_(); });
+        cc.appendChild(b);
+      });
+    }
+    document.getElementById('btn-abrir-categorias').textContent = selecionadasCategorias.size ? '＋ Procurar / gerir categorias' : '＋ Procurar / gerir categorias';
   }
   document.getElementById('cat-busca').addEventListener('input', renderizarListaCategorias_);
   document.getElementById('btn-abrir-categorias').addEventListener('click', () => {
@@ -1923,7 +1937,7 @@
     };
     const bruto = String(escolhaTermo_[chave] || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
     const criarCom = bruto && !opcoesEscolha_(chave).some((o) => semAcento_(o) === semAcento_(bruto))
-      ? '<button type="button" class="cat-criar-linha" data-esc-criar="' + escaparHtml(bruto) + '">＋ Criar “' + escaparHtml(bruto) + '”</button>' : '';
+      ? '<button type="button" class="cat-criar-linha so-admin-cores" data-esc-criar="' + escaparHtml(bruto) + '">＋ Criar “' + escaparHtml(bruto) + '”</button>' : '';
     box.innerHTML = lista.length ? lista.map(linha).join('') + criarCom
       : '<div class="cat-vazio">' + (termo ? 'Nada com esse nome.' : 'Ainda não há opções.') + '<br>Use o botão abaixo para criar.</div>' + criarCom;
     const n = escolhaSel_[chave].size;
