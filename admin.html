@@ -2572,11 +2572,18 @@
           dados.fotoUrlExistente = await subirFotoDireta_(it.capaNovaB64, it, aoProgredir);
         }
         if (it.galeriaNovaB64 && it.galeriaNovaB64.length) {
+          // Fotos da galeria sobem em paralelo (até 3 por vez), mantendo a ordem original.
           const urlsGaleria = String(dados.fotosGaleriaExistentes || '').split(',').filter(Boolean);
-          for (const b64 of it.galeriaNovaB64) {
-            urlsGaleria.push(await subirFotoDireta_(b64, it, aoProgredir));
-          }
-          dados.fotosGaleriaExistentes = urlsGaleria.join(',');
+          const novasUrls = new Array(it.galeriaNovaB64.length);
+          let proxGal = 0;
+          const trabalhador = async () => {
+            while (proxGal < it.galeriaNovaB64.length) {
+              const i = proxGal++;
+              novasUrls[i] = await subirFotoDireta_(it.galeriaNovaB64[i], it, aoProgredir);
+            }
+          };
+          await Promise.all(Array.from({ length: Math.min(3, it.galeriaNovaB64.length) }, trabalhador));
+          dados.fotosGaleriaExistentes = urlsGaleria.concat(novasUrls).join(',');
         }
       } catch (errFoto) {
         it.progresso = null; it.etaSegundos = null;
