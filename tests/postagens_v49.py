@@ -143,7 +143,7 @@ with sync_playwright() as p:
     pg.click("[data-tipo=feed]"); pg.wait_for_timeout(500)
     if pg.locator("[data-tpl=classico]").count(): pg.click("[data-tpl=classico]"); pg.wait_for_timeout(700)
     chk("as 3 opções de foto aparecem em todos os visuais", all(pg.locator("[data-aj=%s]" % q).count() == 1 for q in ("preencher", "inteira", "margem")))
-    chk("tem zoom, centralizar e mover", pg.locator("#po-zoom").count() == 1 and pg.locator("[data-a=centrar]").count() == 1 and pg.locator("[data-a=mover]").count() == 1)
+    chk("zoom por barra saiu (v4.18); trava de mover continua", pg.locator("#po-zoom").count() == 0 and pg.locator("[data-a=mover]").count() == 1)
     pg.click("[data-aj=margem]"); pg.wait_for_timeout(500)
     chk("margens oferece as cores", pg.locator("[data-mg]").count() == 4)
     pg.click("[data-mg='#111111']"); pg.wait_for_timeout(500)

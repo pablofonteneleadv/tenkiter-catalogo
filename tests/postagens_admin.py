@@ -56,10 +56,10 @@ with sync_playwright() as p:
     leg = pg.input_value("#po-leg")
     chk("legenda automática: nome, preço à vista, código e link completo da peça", "à vista" in leg and "TK-0003" in leg and "https://tenkitermodas.com.br/p/TK-0003" in leg and "#tenkitermodas" in leg, leg[:300])
     chk("Feed marca só 1 foto", pg.locator(".po-m[aria-pressed=true]").count() == 1)
-    pg.click("[data-a=previa]"); pg.wait_for_timeout(1500)
+    pg.wait_for_timeout(1500)
     chk("prévia do template mostra a imagem montada (canvas 1080x1350)", pg.eval_on_selector_all("#po-previa canvas", "c=>c.length>0 && c[0].width===1080 && c[0].height===1350"))
     for tpl in ["promo", "minimal", "rodape", "original"]:
-        pg.click("[data-tpl=%s]" % tpl); pg.click("[data-a=previa]"); pg.wait_for_timeout(900)
+        pg.click("[data-tpl=%s]" % tpl); pg.wait_for_timeout(900)
         chk("template %s monta a prévia" % tpl, pg.locator("#po-previa canvas").count() == 1)
     pg.click("[data-tpl=classico]")
     axe(pg, "Nova postagem")
