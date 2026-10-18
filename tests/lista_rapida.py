@@ -13,7 +13,7 @@ def chk(n, c, e=""):
     (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + ((" — " + str(e)) if (e and not c) else ""))
 
 fonte_common = open(os.path.join(os.path.dirname(AQUI), "common.js"), encoding="utf-8").read()
-chk("no repositório a lista rápida vem DESLIGADA (LISTA_RAPIDA_URL vazio)", "const LISTA_RAPIDA_URL = '';" in fonte_common)
+chk("no repositório a lista rápida vem DESLIGADA (LISTA_RAPIDA_URL vazio)", ('LISTA_RAPIDA_URL=""' in fonte_common or "const LISTA_RAPIDA_URL = '';" in fonte_common))
 
 def cenario(b, nome, worker):
     """worker: 'ok' | 'erro500' | 'lixo' | 'lento' | 'fora' | None (hook desligado). Devolve (cartões, chamadas ao worker, chamadas ao Apps Script, erros JS)"""
@@ -24,7 +24,7 @@ def cenario(b, nome, worker):
     for i, p in enumerate(lista_worker): p["Nome"] = "DO WORKER %d" % (i + 1); p["Status"] = "Ativo"; p["Estoque"] = 5
     if worker:
         def common(route):
-            route.fulfill(body=fonte_common.replace("const LISTA_RAPIDA_URL = '';", "const LISTA_RAPIDA_URL = '%s';" % WORKER), content_type="application/javascript")
+            route.fulfill(body=fonte_common.replace('LISTA_RAPIDA_URL=""', 'LISTA_RAPIDA_URL="%s"' % WORKER).replace("const LISTA_RAPIDA_URL = '';", "const LISTA_RAPIDA_URL = '%s';" % WORKER), content_type="application/javascript")
         pg.route("**/common.js*", common)
         def w(route):
             chamadas["worker"] += 1
