@@ -1369,14 +1369,14 @@ try { tkSelExpirar_(); } catch (e) {}
   f.addEventListener('input', atualizarBadge);
 })();
 
-/* ===================== v4.27/v4.28: vida da seleção — "Libera a seleção" / "Segura minha seleção" ao sair da loja ===================== */
+/* ===================== v4.27/v4.33: vida da seleção — ao tentar sair (botão voltar): "Libera / Segura"; ao CHEGAR (ou voltar depois de um bom tempo): "Você já tinha uma seleção — manter ou começar do zero?" ===================== */
 (function () {
-  let guardaAtiva = false, sairDepois = false, limparUrl_ = false, destino_ = '', modoVolta_ = false;
-  const CH_SAIU = 'tk_sel_saiu_v1', CH_DECIDIU = 'tk_sel_decidiu_v1';
+  let guardaAtiva = false, sairDepois = false, limparUrl_ = false, destino_ = '', modoVolta_ = false;   // modoVolta_ = placa de CHEGADA (outro momento)
+  const CH_SAIU = 'tk_sel_saiu_v1', CH_DECIDIU = 'tk_sel_decidiu_v1', CH_CHEGOU = 'tk_sel_chegada_v1';   // CH_CHEGOU (sessionStorage): já perguntou nesta visita
   const TXT_PADRAO = { titulo: 'Antes de sair…', segura: '\u{1F9E1} Segura minha seleção, volto já já', libera: 'Libera a seleção', fica: 'Continuar vendo a loja' };
   const temSelecao_ = () => getSacola().length > 0 || !!selecaoFixa;
   const nSelecao_ = () => getSacola().length || (selecaoFixa ? selecaoFixa.length : 0);
-  const voltaMs_ = () => (typeof window.TK_SEL_VOLTA_MS === 'number' ? window.TK_SEL_VOLTA_MS : 45000);
+  const voltaMs_ = () => (typeof window.TK_SEL_VOLTA_MS === 'number' ? window.TK_SEL_VOLTA_MS : 600000);
   function atualizarTudo_() { try { atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); atualizarBarraFiltros_(); } catch (e) {} }
   const deixar_ = () => setTimeout(() => { try { history.back(); } catch (e) {} }, 0);
   const irPara_ = (url) => { try { location.assign(url); } catch (e) { location.href = url; } };
@@ -1393,26 +1393,13 @@ try { tkSelExpirar_(); } catch (e) {}
   }
   document.addEventListener('click', (e) => { if (sairDepois || (e.target && e.target.closest && e.target.closest('#overlay-sair-sel'))) return; setTimeout(armarGuarda_, 0); }, true);   // cliques da própria placa não rearmam (corriam com o fechamento)
 
-  // v4.28: tocar num link que LEVA PARA OUTRA PÁGINA (barra de baixo, rodapé, "cadastrar peça"…) também mostra a placa — antes só o botão "voltar" do aparelho mostrava.
-  // Não intercepta: link da mesma página (âncora, ?pedido=, ?c=), que abre em outra aba (target=_blank: a loja continua aberta aqui), download, e/mailto/tel.
-  const semIndex_ = (p) => String(p || '/').replace(/index\.html$/, '');
-  document.addEventListener('click', (e) => {
-    if (e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
-    if (!a || !temSelecao_() || a.closest('#overlay-sair-sel')) return;
-    if ((a.target && a.target !== '_self') || a.hasAttribute('download')) return;
-    let u; try { u = new URL(a.href, location.href); } catch (er) { return; }
-    if (!/^https?:$/.test(u.protocol)) return;
-    if (u.origin === location.origin && semIndex_(u.pathname) === semIndex_(location.pathname)) return;
-    e.preventDefault(); e.stopPropagation();
-    mostrarPlaca_({ destino: u.href });
-  }, true);
+  // v4.33: NÃO interrompe mais o toque em links (o celular também não deixa mostrar nada ao minimizar; o Pablo pediu coerência): a pergunta vem na CHEGADA.
 
   function textos_(t) {
     document.getElementById('sair-sel-titulo').textContent = t.titulo;
     document.getElementById('sair-sel-segura').textContent = t.segura;
     document.getElementById('sair-sel-libera').textContent = t.libera;
-    document.getElementById('sair-sel-fica').textContent = t.fica;
+    const f = document.getElementById('sair-sel-fica'); f.textContent = t.fica; f.hidden = !t.fica;   // na chegada só há 2 escolhas (manter / começar do zero)
   }
   function mostrarPlaca_(op) {
     op = (op && typeof op === 'object' && !op.type) ? op : {};   // chamado por setTimeout/evento sem opções
@@ -1421,8 +1408,8 @@ try { tkSelExpirar_(); } catch (e) {}
     const n = nSelecao_(), doLink = !getSacola().length && !!selecaoFixa;
     const pecas = n === 1 ? '1 peça' : n + ' peças';
     if (modoVolta_) {
-      textos_({ titulo: 'Que bom que você voltou! \u{1F9E1}', segura: '\u{1F9E1} Segura minha seleção por 3 horas', libera: 'Libera a seleção', fica: 'Continuar vendo a loja' });
-      document.getElementById('sair-sel-txt').textContent = (doLink ? 'As ' + pecas + ' que separamos para você' : 'Suas ' + pecas + ' separadas') + ' continuam aqui. Quer que eu segure por mais tempo?';
+      textos_({ titulo: 'Você já tinha uma seleção \u{1F9E1}', segura: '\u{1F9E1} Manter minha seleção', libera: 'Começar do zero', fica: '' });
+      document.getElementById('sair-sel-txt').textContent = (doLink ? 'Separamos ' + pecas + ' para você de outro momento.' : 'Você deixou ' + pecas + ' separada' + (n === 1 ? '' : 's') + ' de outro momento.') + ' Quer manter ou começar do zero?';
     } else {
       textos_(TXT_PADRAO);
       document.getElementById('sair-sel-txt').textContent = (doLink ? 'Separamos ' + pecas + ' para você.' : 'Você separou ' + pecas + '.') + ' Quer que eu segure essa seleção?';
@@ -1435,14 +1422,20 @@ try { tkSelExpirar_(); } catch (e) {}
   function decidiu_() { try { localStorage.setItem(CH_DECIDIU, String(Date.now())); localStorage.removeItem(CH_SAIU); } catch (e) {} }
 
   document.getElementById('sair-sel-segura').addEventListener('click', () => {
+    if (modoVolta_) {
+      const n = getSacola().length; tkSelSoltarSegura_(); try { tkSelAtiv_(getSacola()); } catch (e) {} decidiu_();   // manter = volta a valer o prazo normal, contado de agora
+      avisoEquipe_('Mantive ' + (n === 1 ? 'sua peça' : 'suas ' + n + ' peças') + ' \u{1F9E1}');
+      fecharPlaca_(false); return;
+    }
     tkSelSegurar_(); decidiu_();
-    avisoEquipe_('Guardei sua seleção por 3 horas. ' + (modoVolta_ ? 'Pode continuar! ' : 'Até já! ') + '\u{1F9E1}');
-    fecharPlaca_(!modoVolta_);
+    avisoEquipe_('Guardei sua seleção por 3 horas. Até já! \u{1F9E1}');
+    fecharPlaca_(true);
   });
   document.getElementById('sair-sel-libera').addEventListener('click', () => {
     if (getSacola().length) limparSacola();
     if (selecaoFixa || modoLink_) { limparUrl_ = true; document.getElementById('btn-limpar').click(); modoLink_ = false; }
     decidiu_(); atualizarTudo_();
+    if (modoVolta_) avisoEquipe_('Pronto, começando do zero \u{1F9E1}');
     fecharPlaca_(!modoVolta_);
   });
   document.getElementById('sair-sel-fica').addEventListener('click', () => fecharPlaca_(false));
@@ -1484,18 +1477,24 @@ try { tkSelExpirar_(); } catch (e) {}
     verVolta_();
   });
   window.addEventListener('pagehide', marcarSaida_);
-  // Abriu de novo e a seleção estava guardada: avisa e volta a valer o prazo normal.
-  if (tkSelSeguraAte_() && getSacola().length) {
-    const n = getSacola().length;
-    tkSelSoltarSegura_();
-    try { localStorage.removeItem(CH_SAIU); } catch (e) {}
-    setTimeout(() => avisoEquipe_('Sua seleção estava guardada: ' + (n === 1 ? '1 peça' : n + ' peças') + ' \u{1F9E1}'), 1500);
-  } else {
-    // O navegador pode ter fechado a aba em segundo plano (Android): ao reabrir, vale a mesma regra do "voltar".
-    let saiuAntes_ = false; try { saiuAntes_ = !!localStorage.getItem(CH_SAIU); } catch (e) {}
-    if (saiuAntes_) setTimeout(() => { if (document.visibilityState === 'visible') verVolta_(); }, 1800);
+  // v4.33 — CHEGADA: ao abrir o site (uma vez por visita) com uma seleção de OUTRO momento guardada, pergunta "manter ou começar do zero?".
+  // Não pergunta se a pessoa acabou de mexer na seleção (é a mesma visita: trocou de página, recarregou), se chegou por link de seleção
+  // (a seleção do link é outra coisa) nem com outra janela aberta. A escolha "Segura" de antes (3 h) também passa por aqui.
+  function verChegada_() {
+    try { if (sessionStorage.getItem(CH_CHEGOU)) return; sessionStorage.setItem(CH_CHEGOU, '1'); } catch (e) {}
+    try {
+      if (!getSacola().length || selecaoFixa || modoLink_) return;
+      if (document.visibilityState !== 'visible' || TKCamadas.total() > 0) return;
+      const ativ = parseInt(localStorage.getItem('tk_sel_ativ_v1') || '0', 10);
+      if (ativ && Date.now() - ativ < 120000) return;
+      localStorage.removeItem(CH_SAIU);
+      mostrarPlaca_({ volta: true });
+    } catch (e) {}
   }
-  window.tkSelTeste_ = { mostrarPlaca: mostrarPlaca_, armar: armarGuarda_, verVolta: verVolta_, marcarSaida: marcarSaida_ };
+  setTimeout(verChegada_, typeof window.TK_SEL_CHEGADA_MS === 'number' ? window.TK_SEL_CHEGADA_MS : 1400);
+  // O navegador (Android) pode ter fechado a aba em segundo plano e restaurado a visita: vale a mesma regra do "voltar depois de um tempo".
+  try { if (localStorage.getItem(CH_SAIU)) setTimeout(() => { if (document.visibilityState === 'visible') verVolta_(); }, 1800); } catch (e) {}
+  window.tkSelTeste_ = { mostrarPlaca: mostrarPlaca_, armar: armarGuarda_, verVolta: verVolta_, marcarSaida: marcarSaida_, verChegada: verChegada_ };
 })();
 
 /* ===================== v4.27: sugestões enquanto digita + sinônimos ("não achei igual, mas tem…") ===================== */

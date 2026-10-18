@@ -425,6 +425,25 @@ function d1() {
     const idsSeq = (await DB.prepare("SELECT id FROM postagem WHERE seq=1 AND status='agendado'").all()).results.length;
     chk('as da sequência ficam marcadas como sequência', idsSeq === 5, idsSeq);
     chk('o intervalo humano (função antiga) varia (não é sempre igual)', new Set(Array.from({ length: 30 }, () => W.intervaloHumanoMs('feed', 'feed'))).size > 5);
+    // ---- v1.7: INTERVALO ESCOLHIDO ("de X em X minutos") entre as fotos de uma série
+    await DB.prepare("DELETE FROM postagem WHERE status IN ('agendado','erro')").run();
+    x = await G('POST', '/post', { intervalo: 10, posts: [1, 2, 3, 4].map((n) => ({ tipo: 'story', midias: [IMG(n)], quando: 'sequencia' })) });
+    const q10 = x.j.quandos.map((t) => Date.parse(t));
+    chk('intervalo escolhido: 4 Stories de 10 em 10 min (a pausa da madrugada pode empurrar, nunca encurtar)', x.j.ok && q10.length === 4 && q10.every((t, i) => i === 0 || t - q10[i - 1] >= 600000), x.j.quandos);
+    await DB.prepare("DELETE FROM postagem WHERE status IN ('agendado','erro')").run();
+    x = await G('POST', '/post', { intervalo: 1, posts: [1, 2, 3].map((n) => ({ tipo: 'story', midias: [IMG(n)], quando: 'sequencia' })) });
+    const q1 = x.j.quandos.map((t) => Date.parse(t));
+    chk('intervalo escolhido MENOR que o mínimo do canal (1 min < 2 min do Story): o servidor usa o mínimo', x.j.ok && q1.every((t, i) => i === 0 || t - q1[i - 1] >= 120000), x.j.quandos);
+    await DB.prepare("DELETE FROM postagem WHERE status IN ('agendado','erro')").run();
+    x = await G('POST', '/post', { intervalo: 'abc', posts: [1, 2, 3].map((n) => ({ tipo: 'story', midias: [IMG(n)], quando: 'sequencia' })) });
+    const qx = x.j.quandos.map((t) => Date.parse(t));
+    chk('intervalo inválido ("abc") volta ao sorteio do gestor (2 a 5 min)', x.j.ok && qx.every((t, i) => i === 0 || (t - qx[i - 1] >= 120000 && t - qx[i - 1] <= 300000)), x.j.quandos);
+    chk('intervaloPedidoMs_: 0 inválido, 1 min mínimo, 1440 máximo (24 h)', W.intervaloPedidoMs_('x') === 0 && W.intervaloPedidoMs_(0) === 0 && W.intervaloPedidoMs_(1) === 60000 && W.intervaloPedidoMs_(99999) === 1440 * 60000);
+    await DB.prepare("DELETE FROM postagem WHERE status IN ('agendado','erro')").run();
+    x = await G('POST', '/post', { tipo: 'story', midias: [IMG(1)], quando: 'sequencia' }); const q0 = Date.parse(x.j.quandos[0]);
+    x = await G('POST', '/post', { intervalo: 3, posts: [2, 3].map((n) => ({ tipo: 'story', midias: [IMG(n)], quando: 'sequencia' })) });
+    const qf = x.j.quandos.map((t) => Date.parse(t));
+    chk('intervalo escolhido respeita o que JÁ está na fila (nunca a menos de 2 min de um Story agendado)', x.j.ok && qf.every((t) => Math.abs(t - q0) >= 120000) && qf[1] - qf[0] >= 180000, [q0, qf]);
     // vários no MESMO horário: todos saem (4 por minuto, o resto no minuto seguinte), em ordem
     await DB.prepare("DELETE FROM postagem WHERE status='agendado'").run();
     const mesma = ts(180); const ids6 = [];
@@ -780,7 +799,7 @@ function d1() {
     const foto = { mime: 'image/jpeg', data: JPG };
     let rr, jj;
     ({ r: rr, j: jj } = await A2('GET', '/fotoia/config'));
-    chk('config traz a instrução padrão do Pablo (seta, 3 modelos, 9:16) e diz que a chave está guardada', jj.ok && /seta elegante/i.test(jj.config.instrucao) && /FIDELIDADE ABSOLUTA/.test(jj.config.instrucao) && jj.temChave === true && jj.fimChave === GEMINI_OK.slice(-4) && jj.podeEditar === true && jj.config.limiteDia === 20, jj.config && jj.config.limiteDia);
+    chk('config traz a instrução padrão nova (um modelo por look, roupa fiel, modelos diversos) e diz que a chave está guardada', jj.ok && /UM MODELO POR LOOK/.test(jj.config.instrucao) && /FIDELIDADE ABSOLUTA/.test(jj.config.instrucao) && /NÃO RESPEITE A MODELO/.test(jj.config.instrucao) && jj.config.v === 2 && jj.temChave === true && jj.fimChave === GEMINI_OK.slice(-4) && jj.podeEditar === true && jj.config.limiteDia === 20, jj.config && jj.config.limiteDia);
     chk('a chave não aparece em lugar nenhum da config', !JSON.stringify(jj).includes(GEMINI_OK));
     ({ r: rr, j: jj } = await G2('GET', '/fotoia/config')); chk('quem só cadastra vê a config mas NÃO pode editar', jj.ok && jj.podeEditar === false);
     ({ r: rr, j: jj } = await G2('POST', '/fotoia/config', { config: { limiteDia: 3 } })); chk('quem só cadastra NÃO muda a instrução/limites (403)', rr.status === 403);
@@ -901,7 +920,7 @@ function d1() {
     await DB.prepare('DELETE FROM fotoia').run(); await env.CACHE.delete('ia_esgotados'); await env.CACHE.delete('fotoia_cf_ate'); await KV.delete('fotoia_dia');
     await A2('POST', '/fotoia/config', { padrao: true }); await A2('POST', '/fotoia/config', { config: { limiteDia: 200 } });
     ({ j: jj } = await A2('GET', '/fotoia/config'));
-    chk('config informa que o Cloudflare está ligado e traz o padrão dele', jj.cloudflare && jj.cloudflare.disponivel === true && jj.config.provedores.join() === 'gemini,cloudflare' && jj.config.cfModelo === '@cf/black-forest-labs/flux-2-klein-4b' && /\{nome\}/.test(jj.config.instrucaoCf) && /EXACTLY the garment/.test(jj.padrao.instrucaoCf), jj.cloudflare);
+    chk('config informa que o Cloudflare está ligado e traz o padrão dele', jj.cloudflare && jj.cloudflare.disponivel === true && jj.config.provedores.join() === 'gemini,cloudflare' && jj.config.cfModelo === '@cf/black-forest-labs/flux-2-klein-4b' && /\{looks\}/.test(jj.config.instrucaoCf) && /Copy each garment EXACTLY/.test(jj.padrao.instrucaoCf), jj.cloudflare);
     ({ j: jj } = await A2('POST', '/fotoia/config', { config: { cfModelo: 'qualquer coisa; rm -rf', provedores: ['x', 'cloudflare', 'cloudflare'] } }));
     chk('modelo estranho volta ao padrão; motor desconhecido é ignorado e repetido some', jj.config.cfModelo === '@cf/black-forest-labs/flux-2-klein-4b' && jj.config.provedores.join() === 'cloudflare', jj.config);
     await A2('POST', '/fotoia/config', { config: { provedores: ['gemini', 'cloudflare'] } });
@@ -912,7 +931,7 @@ function d1() {
     const idc1 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idc1);
     chk('Gemini cota 0 + Cloudflare ligado: a imagem SAI pelo Cloudflare (pronta, modelo cloudflare:…)', it && it.status === 'pronta' && it.modelo === 'cloudflare:flux-2-klein-4b' && /\/m\/\d{6}\/[0-9a-f]{20}\.jpg$/.test(it.resultado), it);
     const ac = aiChamadas[0] || { campos: {} };
-    chk('foi pedido com 2 fotos de referência, tamanho 720×1280 (9:16) e o nome da peça na instrução', aiChamadas.length === 1 && ac.modelo === '@cf/black-forest-labs/flux-2-klein-4b' && ac.campos.input_image_0 && ac.campos.input_image_1 && !ac.campos.input_image_2 && ac.campos.width === '720' && ac.campos.height === '1280' && /Product: Cropped Farm\./.test(ac.campos.prompt) && /fundo areia/.test(ac.campos.prompt) && /EXACTLY the garment/.test(ac.campos.prompt), ac);
+    chk('foi pedido com 2 fotos de referência, tamanho 720×1280 (9:16) e o nome da peça na instrução', aiChamadas.length === 1 && ac.modelo === '@cf/black-forest-labs/flux-2-klein-4b' && ac.campos.input_image_0 && ac.campos.input_image_1 && !ac.campos.input_image_2 && ac.campos.width === '720' && ac.campos.height === '1280' && /Product: Cropped Farm\./.test(ac.campos.prompt) && /fundo areia/.test(ac.campos.prompt) && /Copy each garment EXACTLY/.test(ac.campos.prompt) && /full outfit from image 0/.test(ac.campos.prompt), ac);
     chk('o Gemini foi tentado antes (e esbarrou na cota) — ficou de molho para não repetir', imgChamadas.length >= 1 && !!(await env.CACHE.get('ia_esgotados')));
 
     // b) Gemini com cota: ele vem primeiro e o Cloudflare nem é chamado
@@ -963,8 +982,74 @@ function d1() {
     await A2('POST', '/fotoia/config', { config: { provedores: ['cloudflare', 'gemini'], formato: '4:5', tamanho: '2K' } });
     aiChamadas = []; ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Short', fotos: [foto], refs: [ref] }));
     chk('proporção e tamanho da config valem (4:5 em 2K = 1088×1360)', aiChamadas.length === 1 && aiChamadas[0].campos.width === '1088' && aiChamadas[0].campos.height === '1360', aiChamadas[0]);
-    chk('promptCf troca {nome}/{extra}/{formato} e acrescenta o produto se a instrução não tiver {nome}', W.promptCf({ instrucaoCf: 'Foto de {formato}. {extra}', formato: '9:16' }, { nome: 'Vestido', extra: 'sem sol' }, 1) === 'Foto de 9:16. sem sol\nProduct: Vestido.', W.promptCf({ instrucaoCf: 'Foto de {formato}. {extra}', formato: '9:16' }, { nome: 'Vestido', extra: 'sem sol' }, 1));
+    chk('promptCf troca {nome}/{extra}/{formato} e acrescenta o produto se a instrução não tiver {nome}', (function () { const t = W.promptCf({ instrucaoCf: 'Foto de {formato}. {extra}', formato: '9:16' }, { nome: 'Vestido', extra: 'sem sol' }, 1); return t.indexOf('Foto de 9:16. sem sol\n') === 0 && /Product: Vestido\./.test(t) && /full outfit from image 0/.test(t); })());
     chk('tamanhoCf: 9:16 1K = 720×1280; 16:9 2K = 1920×1088 (dentro do máx. de 1920)', W.tamanhoCf('9:16', '1K').join() === '720,1280' && W.tamanhoCf('16:9', '2K').join() === '1920,1088' && W.tamanhoCf('xx', 'yy').join() === '720,1280');
+    // ---- 17) v1.8: LOOKS — cada foto tem um papel e cada look vira UMA pessoa na imagem ----
+    console.log('== FOTOS COM IA — looks (um modelo por look) ==');
+    {
+      const mp = W.montarPlanoFotoIA_;
+      let r1 = mp({ papeis: ['cima', 'cima', 'cima', 'baixo'] }, 4, {});
+      chk('3 de cima e 1 de baixo: recusa e diz que faltam 2 de baixo (e qual filtro mostrar)', r1.ok === false && r1.faltam === 'baixo' && /Faltam 2 peças de baixo/.test(r1.erro) && /não inventa peças/.test(r1.erro), r1);
+      r1 = mp({ papeis: ['baixo', 'cima'] }, 2, {}); chk('1 de cima + 1 de baixo = 1 look só (cima e baixo na mesma pessoa)', r1.ok && r1.plano.looks.length === 1 && r1.plano.looks[0].partes.map((x) => x.papel).sort().join() === 'baixo,cima');
+      r1 = mp({ papeis: ['cima', 'baixo', 'look', 'look', 'look', 'look'] }, 6, {}); chk('1 de cima + 1 de baixo + 4 looks inteiros = 5 pessoas', r1.ok && r1.plano.looks.length === 5, r1);
+      r1 = mp({ papeis: ['cima', 'cima', 'cima', 'baixo', 'baixo', 'baixo'] }, 6, {}); chk('3 de cima + 3 de baixo = 3 pessoas, pares na ordem', r1.ok && r1.plano.looks.length === 3 && r1.plano.looks[0].partes[0].i === 0 && r1.plano.looks[0].partes[1].i === 3 && r1.plano.looks[2].partes[1].i === 5, r1);
+      r1 = mp({ papeis: ['look', 'look', 'look', 'look', 'look', 'look'] }, 6, {}); chk('6 looks inteiros = 6 pessoas', r1.ok && r1.plano.looks.length === 6);
+      r1 = mp({ papeis: ['cima', 'baixo', 'cima', 'baixo'], looks: [[0, 3], [2, 1]] }, 4, {}); chk('combinação escolhida à mão (trocar quem veste com quem) vale', r1.ok && r1.plano.looks[0].partes[0].i === 0 && r1.plano.looks[0].partes[1].i === 3 && r1.plano.looks[1].partes[0].i === 2 && r1.plano.looks[1].partes[1].i === 1, r1);
+      chk('combinação que repete foto, junta duas de cima ou deixa foto de fora é recusada', mp({ papeis: ['cima', 'baixo'], looks: [[0, 0]] }, 2, {}).ok === false && mp({ papeis: ['cima', 'cima', 'baixo', 'baixo'], looks: [[0, 1], [2, 3]] }, 4, {}).ok === false && mp({ papeis: ['cima', 'baixo', 'look'], looks: [[0, 1]] }, 3, {}).ok === false);
+      chk('papel inventado ou lista de papéis do tamanho errado = recusado com frase', mp({ papeis: ['cima', 'x'] }, 2, {}).ok === false && mp({ papeis: ['look'] }, 3, {}).ok === false && /Diga o que a IA/.test(mp({ papeis: ['look'] }, 3, {}).erro));
+      r1 = mp({ papeis: ['look'], destino: 'reels', seta: true, quem: 'criancas' }, 1, {}); chk('destino reels = 9:16, seta e perfil infantil guardados', r1.ok && r1.plano.formato === '9:16' && r1.plano.destino === 'reels' && r1.plano.seta === true && r1.plano.quem === 'criancas');
+      r1 = mp({ papeis: ['look'], destino: 'carrossel' }, 1, {}); chk('destino carrossel = 4:5; destino/perfil estranhos voltam ao padrão (status, mulheres)', r1.ok && r1.plano.formato === '4:5' && mp({ papeis: ['look'], destino: 'xx', quem: 'yy' }, 1, {}).plano.destino === 'status' && mp({ papeis: ['look'], quem: 'yy' }, 1, {}).plano.quem === 'mulheres');
+      const nc = W.normalizarCfgFotoIA({ instrucao: 'ANTIGA DE UM MODELO SÓ', instrucaoCf: 'OLD', limiteDia: 33, modelos: ['gemini-2.5-flash-image'] });
+      chk('configuração gravada antes da v1.8 volta às instruções novas, mas mantém limite e modelos', nc.v === 2 && /UM MODELO POR LOOK/.test(nc.instrucao) && /\{looks\}/.test(nc.instrucaoCf) && nc.limiteDia === 33 && nc.modelos[0] === 'gemini-2.5-flash-image', nc);
+      chk('configuração já v2 mantém a instrução do gestor', W.normalizarCfgFotoIA({ v: 2, instrucao: 'MINHA INSTRUÇÃO' }).instrucao === 'MINHA INSTRUÇÃO');
+    }
+    delete env.AI; await DB.prepare('DELETE FROM fotoia').run(); await env.CACHE.delete('ia_esgotados'); await env.CACHE.delete('fotoia_cf_ate'); await KV.delete('fotoia_dia');
+    await A2('POST', '/fotoia/config', { padrao: true }); await A2('POST', '/fotoia/config', { config: { limiteDia: 200 } }); await A2('POST', '/ia-chave', { chave: GEMINI_OK }); imgModo = 'ok'; imgChamadas = [];
+    // a) 6 fotos, 5 looks (1 cima + 1 baixo + 4 inteiros), com seta, para Reels → Gemini recebe a lista, a seta e as 6 fotos
+    ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Lote verão', fotos: [foto, foto, foto, foto, foto, foto], papeis: ['cima', 'baixo', 'look', 'look', 'look', 'look'], rotulos: ['Blusa Canelada', 'Saia Floral', '', '', '', ''], destino: 'reels', seta: true, quem: 'mulheres', extra: 'luz de fim de tarde' }));
+    const idl1 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idl1);
+    const tx1 = imgChamadas[0] ? imgChamadas[0].body.input[0].text : '', nImg1 = imgChamadas[0] ? imgChamadas[0].body.input.filter((x) => x.type === 'image').length : 0;
+    chk('6 fotos viram 5 looks: pedido pronto pelo Gemini com as 6 fotos de referência', it && it.status === 'pronta' && nImg1 === 6 && it.plano && it.plano.looks === 5 && it.plano.destino === 'reels' && it.plano.seta === true, { it, nImg1 });
+    chk('o texto diz "5 pessoas", lista Look 1…5 e liga cada foto ao seu look (cima + baixo juntos)', /NÚMERO DE LOOKS = NÚMERO DE PESSOAS NA IMAGEM: 5/.test(tx1) && /Look 1 — pessoa 1 \([^)]+\): veste a peça de CIMA da Foto 1 \(Blusa Canelada\) \+ a peça de BAIXO da Foto 2 \(Saia Floral\)/.test(tx1) && /Look 2 — pessoa 2 \([^)]+\): veste o LOOK INTEIRO \/ PEÇA ÚNICA da Foto 3/.test(tx1) && /Look 5 — pessoa 5/.test(tx1) && !/Look 6/.test(tx1), tx1.slice(-1500));
+    chk('cada pessoa tem um perfil diferente (idade, pele, cabelo, manequim)', (function () { const ps = (tx1.match(/Look \d — pessoa \d \(([^)]+)\)/g) || []); return ps.length === 5 && new Set(ps).size === 5; })());
+    chk('com seta ligada: pede a seta e o texto exato "ARRASTE E VEJA AS FOTOS REAIS"; Reels deixa 22% livre embaixo; observação vai junto', /SETA E CHAMADA/.test(tx1) && /ARRASTE E VEJA AS FOTOS REAIS/.test(tx1) && /22% embaixo/.test(tx1) && /luz de fim de tarde/.test(tx1) && !/SEM TEXTO/.test(tx1));
+    chk('Reels é 9:16', imgChamadas[0] && imgChamadas[0].body.response_format.aspect_ratio === '9:16');
+    chk('a instrução (regras de ouro) vai antes dos dados do pedido, e a que ensina "não copie a modelo" está lá', /NÃO RESPEITE A MODELO DAS FOTOS/.test(tx1) && tx1.lastIndexOf('DADOS DESTE PEDIDO') > tx1.indexOf('UM MODELO POR LOOK'));
+    // b) sem seta e capa de carrossel
+    imgChamadas = [];
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Capa', fotos: [foto, foto], papeis: ['look', 'look'], destino: 'carrossel', seta: false, quem: 'criancas' })); const idl2 = jj.id;
+    const tx2 = imgChamadas[0] ? imgChamadas[0].body.input[0].text : '';
+    chk('sem seta: "SEM TEXTO"; capa de carrossel = 4:5; perfil infantil', /SEM TEXTO/.test(tx2) && !/ARRASTE/.test(tx2) && imgChamadas[0].body.response_format.aspect_ratio === '4:5' && /criança de uns/.test(tx2) && !/mulher de uns/.test(tx2), tx2.slice(-700));
+    // c) 3 de cima e 1 de baixo: recusa no servidor também
+    ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'x', fotos: [foto, foto, foto, foto], papeis: ['cima', 'cima', 'cima', 'baixo'] }));
+    chk('servidor recusa 3 de cima + 1 de baixo (400) e diz qual falta', rr.status === 400 && jj.faltam === 'baixo' && /Faltam 2 peças de baixo/.test(jj.erro), jj);
+    ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'x', fotos: [foto, foto, foto, foto, foto, foto, foto], papeis: ['look', 'look', 'look', 'look', 'look', 'look', 'look'] }));
+    chk('mais de 6 fotos = 400 com frase', rr.status === 400 && /No máximo 6 fotos/.test(jj.erro), jj);
+    // d) Cloudflare com looks: referências na ORDEM das fotos (image 0, image 1…), proporção do destino
+    aiModo = 'ok'; aiChamadas = []; env.AI = { run: async (modelo, entrada) => {
+      const fd = await new Response(entrada.multipart.body, { headers: { 'content-type': entrada.multipart.contentType } }).formData();
+      const campos = {}; for (const [k, v] of fd.entries()) campos[k] = typeof v === 'string' ? v : { arquivo: true, tam: v.size };
+      aiChamadas.push({ modelo, campos });
+      return { image: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(2000, 9)]).toString('base64') };
+    } };
+    await A2('POST', '/fotoia/config', { config: { provedores: ['cloudflare'] } });
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Quatro', fotos: [foto, foto, foto, foto], refs: [ref, ref, ref, ref], papeis: ['cima', 'baixo', 'look', 'look'], destino: 'carrossel', seta: true }));
+    const idl3 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idl3);
+    const ac2 = aiChamadas[0] || { campos: {} };
+    chk('Cloudflare: 4 fotos / 3 looks saem pelo Cloudflare com as 4 referências na ordem', it && it.status === 'pronta' && /^cloudflare:/.test(it.modelo) && ac2.campos.input_image_3 && !ac2.campos.input_image_4, it);
+    chk('Cloudflare: prompt diz 3 pessoas, liga image 0 + image 1 ao look 1 e image 2/3 aos outros; 4:5 = 768×960; seta SEM palavras', /group of 3 different women/.test(ac2.campos.prompt || '') && /Person 1 \([^)]+\) wears the top garment from image 0 and the bottom garment from image 1\./.test(ac2.campos.prompt || '') && /Person 2 \([^)]+\) wears the full outfit from image 2\./.test(ac2.campos.prompt || '') && /Person 3 \([^)]+\) wears the full outfit from image 3\./.test(ac2.campos.prompt || '') && ac2.campos.width === '768' && ac2.campos.height === '960' && /arrow pointing right \(no words/.test(ac2.campos.prompt || ''), ac2.campos.prompt);
+    chk('Cloudflare: manda que NÃO copie o rosto/corpo da modelo das fotos', /Do NOT copy the face, body, skin or hair/.test(ac2.campos.prompt || ''));
+    // e) mais de 4 fotos: o Cloudflare não pode (limite dele) e, sem Gemini, o pedido acusa erro na hora com a saída (dividir)
+    aiChamadas = []; await A2('DELETE', '/ia-chave'); 
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Seis', fotos: [foto, foto, foto, foto, foto, foto], refs: [ref, ref, ref, ref, ref, ref], papeis: ['look', 'look', 'look', 'look', 'look', 'look'] }));
+    const idl4 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idl4);
+    chk('6 fotos só com Cloudflare: não chama o Cloudflare e manda dividir em dois pedidos', aiChamadas.length === 0 && /aceita no máximo 4 fotos/.test(it.erro || '') && /divida em dois pedidos/.test(it.erro || ''), it);
+    chk('refs pequenas não ficam guardadas em pedido de 6 fotos (só gastariam espaço)', (await DB.prepare('SELECT refs FROM fotoia WHERE id=?').bind(idl4).first()).refs === '[]');
+    // f) peça sem nada de looks (cliente antigo): continua funcionando como antes (cada foto = um look), proporção da configuração
+    await A2('POST', '/ia-chave', { chave: GEMINI_OK }); await A2('POST', '/fotoia/config', { padrao: true }); await A2('POST', '/fotoia/config', { config: { limiteDia: 200 } }); imgChamadas = []; delete env.AI;
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Antigo', fotos: [foto, foto, foto, foto] }));
+    const tx3 = imgChamadas[0] ? imgChamadas[0].body.input[0].text : '';
+    chk('pedido sem papéis (formato antigo): 4 fotos = 4 pessoas, 4 looks inteiros, sem seta', /PESSOAS NA IMAGEM: 4/.test(tx3) && /Look 4 — pessoa 4/.test(tx3) && /SEM TEXTO/.test(tx3), tx3.slice(-900));
     delete env.AI; await A2('POST', '/ia-chave', { chave: GEMINI_OK }); await A2('POST', '/fotoia/config', { padrao: true });
   }
 

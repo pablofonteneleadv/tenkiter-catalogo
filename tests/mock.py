@@ -513,7 +513,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     return route.fulfill(json={"ok":True,"config":fi["cfg"]})
                 if path=="/fotoia/fila" and m=="POST":
                     fi["seq"]+=1
-                    fi["itens"].insert(0,{"id":fi["seq"],"status":fi.get("novo_status","fila"),"nome":body.get("nome",""),"produto":body.get("produto",""),"extra":body.get("extra",""),"resultado":"","modelo":"","erro":fi.get("novo_erro",""),"espera":fi.get("novo_espera",""),"tent":0,"fontes":[],"criado_em":"2026-10-18T12:00:00Z","pronto_em":""})
+                    fi["itens"].insert(0,{"id":fi["seq"],"status":fi.get("novo_status","fila"),"nome":body.get("nome",""),"produto":body.get("produto",""),"extra":body.get("extra",""),"resultado":"","modelo":"","erro":fi.get("novo_erro",""),"espera":fi.get("novo_espera",""),"tent":0,"fontes":[],"criado_em":"2026-10-18T12:00:00Z","pronto_em":"","plano":({"looks":len(body.get("looks") or []),"destino":body.get("destino",""),"seta":bool(body.get("seta")),"quem":body.get("quem","")} if body.get("papeis") else None)})
                     return route.fulfill(json={"ok":True,"id":fi["seq"]})
                 if path=="/fotoia/lista":
                     return route.fulfill(json={"ok":True,"itens":fi["itens"],"contagens":cts()})

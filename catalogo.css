@@ -397,6 +397,7 @@
 .sair-sel { padding: 20px 16px calc(18px + env(safe-area-inset-bottom)); text-align: center; }
 .sair-sel h2 { margin: 0 0 6px; font-size: 1.2rem; }
 .sair-sel p { margin: 0 0 14px; color: #444; font-size: .95rem; }
+.sair-sel [hidden] { display: none; }
 .sair-sel button { width: 100%; min-height: 50px; margin-top: 8px; border-radius: 12px; font-size: .98rem; font-weight: 700; cursor: pointer; }
 .sair-sel .sair-sel-seg { background: #E67E22; color: #0d0d0d; border: 2px solid #0d0d0d; }
 .sair-sel .sair-sel-lib { background: #fff; color: #0d0d0d; border: 2px solid #0d0d0d; }

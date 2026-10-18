@@ -86,6 +86,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("postagens_admin.py", lambda o: "FALHAS=0" in o),   # aba Postagens: feed/carrossel/reels/story, templates, agenda, fila, Story com link manual
     ("conteudo_protegido.py", lambda o: "FALHAS=0" in o),   # treinamentos: manuais e provas só pelo servidor, com sessão e permissão (RH 3.4)
     ("provas_v52.py", lambda o: "FALHAS=0" in o),   # v5.2: prova só corrige respondida, n de 3 vem do servidor, botão Editar produto
+    ("manual_rico.py", lambda o: "FALHAS=0" in o),          # manual rico no site: formatação por trecho, foto ao lado, vídeo, caixas, lição que só conclui acertando, botões da prova
     ("modulo0_verificado.py", lambda o: "FALHAS=0" in o),   # módulo 0 verificado: checagem na lição, regra de ouro, prática validada, certificado e verificação
     ("vitrine_orientacao.py", lambda o: "FALHAS=0" in o),   # vitrine: Consultar/Selecionar, etiquetas de filtro, rolagem, ajuda no fim
     ("instagram_admin.py", lambda o: "FALHAS=0" in o),   # painel: Produtos para aceitar (lista, editor, aceitar -> cadastro, conectar)
@@ -105,13 +106,15 @@ SUITES = [  # (arquivo, como saber que passou)
     ("foto_ia.py", lambda o: "FALHAS=0" in o),             # v4.27: painel 🎨 Fotos com IA (fila, instrução editável, aviso de plano sem imagens)
     ("worker_canal.js", lambda o: "FALHAS=0" in o),        # Worker: canal Instagram/WhatsApp/Ambos
     ("backend_v316.js", lambda o: "FALHAS=0" in o),        # RH 3.16: manual só-gestor, prática validada, certificado (precisa do .gs.txt do RH)
+    ("backend_manual_rico.js", lambda o: "FALHAS=0" in o), # RH 3.17: cor/marca-texto/links, foto ao lado, vídeo, tabela, guia e prova-modelo no manual novo (precisa do .gs.txt do RH)
 ]
 
 # Testes que LEEM o .gs.txt do backend. O .gs.txt não fica no repositório público (fica no cofre privado), então no GitHub
 # (CI) eles NÃO têm o que testar: em vez de quebrar a bateria inteira, são pulados e a lista dos pulados é impressa no fim
 # (e vira aviso `::warning` no GitHub). Rode-os localmente, com o .gs.txt na raiz ou em ../tenkiter-cofre.
 PRECISA_GS = {"backend_gs.js": ("catalogo", (0, 0)), "backend_contas.js": ("funcionario", (0, 0)),
-              "backend_func.js": ("funcionario", (0, 0)), "backend_v316.js": ("funcionario", (3, 16))}   # (prefixo, versão mínima)
+              "backend_func.js": ("funcionario", (0, 0)), "backend_v316.js": ("funcionario", (3, 16)),
+              "backend_manual_rico.js": ("funcionario", (3, 17))}   # (prefixo, versão mínima)
 def _tem_gs(prefixo, minimo=(0, 0)):
     for pasta in (RAIZ, os.path.join(os.path.dirname(RAIZ), "tenkiter-cofre")):
         if not os.path.isdir(pasta): continue
