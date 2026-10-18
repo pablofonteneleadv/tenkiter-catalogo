@@ -33,7 +33,7 @@ jobs:
   # ------------------------------------------------------------- Site (Render)
   deploy:
     name: Publicar no Render + Cloudflare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: ci
     environment: producao
     steps:

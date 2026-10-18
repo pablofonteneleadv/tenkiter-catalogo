@@ -1,5 +1,8 @@
 name: CI
 
+# runs-on fixado em ubuntu-24.04: o GitHub migra `ubuntu-latest` para o Ubuntu 26 a partir de 19/10/2026
+# (aviso nos logs de 18/10/2026). Trocar de volta só depois de validar Chromium/Playwright e Python no runner novo.
+
 # CI rápido para PRs e deploys; bateria completa fica agendada ou manual.
 # O deploy reutiliza este workflow em modo rápido, sem disparar um segundo CI por push na main.
 on:
@@ -35,7 +38,7 @@ concurrency:
 jobs:
   escopo:
     name: Escopo do PR
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       so_docs: ${{ steps.calc.outputs.so_docs }}
       suite_completa: ${{ steps.calc.outputs.suite_completa }}
@@ -69,7 +72,7 @@ jobs:
 
   segredos:
     name: Scan de segredos
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,7 +82,7 @@ jobs:
 
   estatico:
     name: Sintaxe JS + estrutura HTML
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -100,7 +103,7 @@ jobs:
 
   testes:
     name: Testes rápidos ou bateria completa
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: escopo
     if: needs.escopo.outputs.so_docs != 'true'
     steps:
@@ -156,7 +159,7 @@ jobs:
 
   portao:
     name: Portão de qualidade
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [escopo, segredos, estatico, testes]
     if: always()
     steps:
