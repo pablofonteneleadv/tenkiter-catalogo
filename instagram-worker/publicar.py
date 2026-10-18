@@ -44,7 +44,7 @@ if not mm: sys.exit("MIDIA_URL não achado em common.js")
 meta = {"main_module": "worker.js", "compatibility_date": "2025-01-01",
         "bindings": [{"type": "d1", "name": "DB", "id": db}, {"type": "plain_text", "name": "MIDIA_URL", "text": mm.group(1)},
                      {"type": "r2_bucket", "name": "MIDIA", "bucket_name": BUCKET},
-                     {"type": "kv_namespace", "name": "CACHE", "namespace_id": kv},
+                     {"type": "kv_namespace", "name": "CACHE", "namespace_id": kv}, {"type": "ai", "name": "AI"},
                      {"type": "plain_text", "name": "API_URL", "text": m.group(1)}]}
 codigo = open(os.path.join(AQUI, "worker.js"), "rb").read()
 lim = "----tk" + uuid.uuid4().hex
