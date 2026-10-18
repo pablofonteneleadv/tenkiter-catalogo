@@ -100,6 +100,32 @@ with sync_playwright() as p:
     chk("e GIRAM a foto (≈ 40°)", 30 <= m["g"] <= 50, m)
     ver_canvas()
     chk("trocar Cortar/Encaixar zera zoom e giro", (pg.click("[data-aj=preencher]"), pg.wait_for_timeout(400), pg.evaluate("(()=>{const m=document.querySelector('#po-previa canvas')._m;return (m.zoom||1)==1&&(m.giro||0)==0})()"))[2])
+    print("== v1.6: barras espaçadas e elementos pequenos fáceis de pegar ==")
+    pg.evaluate("document.querySelector('#po-foto-aj').scrollIntoView({block:'center'})"); pg.wait_for_timeout(200)
+    if not pg.locator("[data-a=travar]").is_checked(): pg.locator("[data-a=travar]").check(); pg.wait_for_timeout(300)
+    ver_canvas(); pg.evaluate("document.activeElement && document.activeElement.blur()")
+    bx = [x for x in boxes() if x["k"] != "zona"]; kk = bx[0]["k"]
+    toque(bx[0]["x"], bx[0]["y"]); pg.wait_for_timeout(300)
+    geo = pg.evaluate("""()=>{const v=[...document.querySelectorAll('.po-it:not([hidden]) .po-it-top input[type=range]')],l=v.map(e=>e.getBoundingClientRect());
+      return {n:l.length,altura:Math.min(...l.map(r=>r.height)),folga:l.slice(1).map((r,i)=>r.top-l[i].bottom),saida:[...document.querySelectorAll('.po-it:not([hidden]) .po-it-v')].map(e=>e.textContent),toque:v.map(e=>getComputedStyle(e).touchAction)}}""")
+    chk("3 barras (Tamanho, Largura, Girar), cada uma com 44 px de altura ou mais", geo["n"] == 3 and geo["altura"] >= 44, geo)
+    chk("as barras não se encostam (12 px ou mais entre uma e outra)", all(f >= 12 for f in geo["folga"]), geo)
+    chk("a rolagem vertical da página continua valendo sobre a barra (touch-action: pan-y)", all(t == "pan-y" for t in geo["toque"]), geo)
+    chk("cada barra mostra o valor ao lado (100% / 100% / 0°)", geo["saida"] == ["100%", "100%", "0°"], geo)
+    pg.evaluate("""(k)=>{const d=(id,v)=>{const e=document.getElementById(id+k);e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}))};d('po-lw-','1.5');d('po-gr-','30')}""", kk); pg.wait_for_timeout(200)
+    sai = pg.evaluate("[...document.querySelectorAll('.po-it:not([hidden]) .po-it-v')].map(e=>e.textContent)")
+    chk("mexer na Largura e no Girar atualiza o valor mostrado (150% e 30°) sem mexer na outra barra", sai == ["100%", "150%", "30°"], sai)
+    # elemento pequeno (emoji/ícone) em cima de uma caixa grande: o MENOR vence (antes ganhava a caixa de cima da lista)
+    pg.evaluate("document.querySelector('#po-previa canvas').scrollIntoView({block:'center'})"); pg.wait_for_timeout(250)
+    toque(10, 10); pg.wait_for_timeout(200)
+    r = pg.evaluate("""()=>{const c=document.querySelector('#po-previa canvas'),b=c._boxes||[],ks=b.filter(q=>q.k&&q.k!=='zona');if(ks.length<2)return null;
+      const A=ks.slice().sort((p,q)=>(q.x1-q.x0)*(q.y1-q.y0)-(p.x1-p.x0)*(p.y1-p.y0))[0],B=ks.find(q=>q!==A),cx=(A.x0+A.x1)/2,cy=(A.y0+A.y1)/2;
+      B.x0=cx-15;B.x1=cx+15;B.y0=cy-15;B.y1=cy+15;c._boxes=[B,A];const rc=c.getBoundingClientRect(),f=rc.width/(c._W||c.width);return {grande:A.k,pequeno:B.k,x:rc.left+cx*f,y:rc.top+cy*f}}""")
+    chk("há dois textos para montar o cenário do emoji pequeno", r is not None)
+    if r:
+        toque(r["x"], r["y"]); pg.wait_for_timeout(300)
+        sel = pg.evaluate("(()=>{const b=document.querySelector('[data-seltx][aria-pressed=true]');return b?b.dataset.seltx:null})()")
+        chk("figura pequena sobre uma caixa grande: tocar nela escolhe a PEQUENA, não a grande de baixo", sel == r["pequeno"], (sel, r))
     chk("sem erro de JavaScript", not erros, erros)
     ctx.close(); b.close()
 print("\nOK=%d FALHAS=%d %s" % (len(OK), len(BAD), BAD))

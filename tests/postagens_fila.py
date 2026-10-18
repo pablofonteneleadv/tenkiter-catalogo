@@ -16,12 +16,13 @@ def chk(n, c, e=""):
 def post(i, tipo, quando, status="agendado"):
     return {"id": i, "tipo": tipo, "modo": "auto", "legenda": "Legenda %d" % i, "midias": [{"url": "https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/aa%d.jpg" % i, "tipo": "foto"}],
             "produto": "TK-0003", "template": "", "link": "", "agendadoEm": quando, "status": status, "erro": "", "criadoPor": "Loja", "permalink": ""}
-def abrir(b, perms=PERMS_ALL, gestor=True):
+def abrir(b, perms=PERMS_ALL, gestor=True, extras=None):
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
     ctx.add_init_script(SESSION); ctx.add_init_script("window.TK_POSTAGENS_POLL_MS=60000;")
     st = install(ctx, perms=perms, versao="4.3"); st["midia"]["modo"] = "ok"
     g = st["ig"]; g["regras"] = True; g["pode_regras"] = gestor; g["posts"] = [
         post(1, "story", "2026-10-19T11:00:00Z"), post(2, "story", "2026-10-19T11:02:00Z"), post(3, "story", "2026-10-19T11:04:00Z"), post(4, "feed", "2026-10-19T12:00:00Z")]
+    if extras: g["posts"] += extras
     pg = ctx.new_page(); erros = []; msgs = []
     pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: (msgs.append(d.message), d.accept()))
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2400)
@@ -38,25 +39,45 @@ with sync_playwright() as p:
     chk("a aba 🛡️ Regras existe", pg.locator("#po-abas [data-aba=regras]").count() == 1)
     aba(pg, "regras")
     chk("pausa vem ligada, 22:00 até 06:30", pg.is_checked("[data-rg=pausaAtiva]") and pg.input_value("[data-rg=pausaDeH]") == "22" and pg.input_value("[data-rg=pausaAteM]") == "30", pg.inner_text("#po-corpo")[:200])
-    chk("intervalos por tipo aparecem com a duração por extenso", pg.input_value("#rg-gapStory") == "120" and "2 min" in pg.inner_text("#rg-lbl-gapStory"), pg.inner_text("#rg-lbl-gapStory"))
+    chk("um cartão por canal: Story, Status do WhatsApp, Feed, Carrossel e Reels", pg.locator(".po-rg-c").count() == 5 and "Status do WhatsApp" in pg.inner_text("#po-corpo"), pg.locator(".po-rg-c").count())
+    chk("intervalo de/até com a faixa por extenso (Story 2 a 5 min)", pg.input_value("#rg-story-gapMin") == "120" and pg.input_value("#rg-story-gapMax") == "300" and "2 min a 5 min" in pg.inner_text("#rg-lbl-story"), pg.inner_text("#rg-lbl-story"))
+    chk("cada canal tem o seu limite de 24 h e mostra quanto já usou", pg.input_value("#rg-story-max24h") == "40" and pg.input_value("#rg-reels-max24h") == "10" and "Já usou 12 de 40" in pg.inner_text("#rg-uso-story") and "Já usou 3 de 40" in pg.inner_text("#rg-uso-status"), [pg.inner_text("#rg-uso-story"), pg.inner_text("#rg-uso-status")])
+    chk("campos de número grandes e afastados (48 px de altura, sem encostar um no outro)", pg.evaluate("()=>{const a=document.querySelector('#rg-story-gapMin').getBoundingClientRect(),b=document.querySelector('#rg-story-gapMax').getBoundingClientRect();return a.height>=48&&(b.left-a.right>=40||b.top-a.bottom>=8)}"))
     chk("gestor vê Salvar e Voltar ao padrão", pg.locator("[data-rga=salvar]").count() == 1 and pg.locator("[data-rga=padrao]").count() == 1)
     axe(pg, "Regras")
-    pg.select_option("[data-rg=pausaDeH]", "23"); pg.fill("#rg-gapStory", "180"); pg.dispatch_event("#rg-gapStory", "input"); pg.wait_for_timeout(100)
-    chk("o rótulo acompanha o que digita (180 s = 3 min)", "3 min" in pg.inner_text("#rg-lbl-gapStory"), pg.inner_text("#rg-lbl-gapStory"))
+    pg.select_option("[data-rg=pausaDeH]", "23"); pg.fill("#rg-story-gapMin", "180"); pg.dispatch_event("#rg-story-gapMin", "input"); pg.wait_for_timeout(100)
+    chk("o rótulo acompanha o que digita (180 s a 300 s = 3 min a 5 min)", "3 min a 5 min" in pg.inner_text("#rg-lbl-story"), pg.inner_text("#rg-lbl-story"))
+    pg.fill("#rg-feed-gapMax", "60"); pg.dispatch_event("#rg-feed-gapMax", "input"); pg.wait_for_timeout(100)
+    chk("máximo menor que o mínimo avisa na hora", "não pode ser menor" in pg.inner_text("#rg-lbl-feed"), pg.inner_text("#rg-lbl-feed"))
+    pg.fill("#rg-feed-gapMax", "600"); pg.dispatch_event("#rg-feed-gapMax", "input"); pg.fill("#rg-status-max24h", "7"); pg.dispatch_event("#rg-status-max24h", "input")
     pg.click("[data-rga=salvar]"); pg.wait_for_timeout(700)
     c = chamadas(g, "/post/config")
-    chk("salvou pelo servidor com as mudanças", c and c[-1]["corpo"]["config"]["pausaDe"] == "23:00" and c[-1]["corpo"]["config"]["gapStory"] == 180, c[-1:] if c else c)
+    chk("salvou pelo servidor com as mudanças", c and c[-1]["corpo"]["config"]["pausaDe"] == "23:00" and c[-1]["corpo"]["config"]["canais"]["story"]["gapMin"] == 180 and c[-1]["corpo"]["config"]["canais"]["story"]["gapMax"] == 300 and c[-1]["corpo"]["config"]["canais"]["status"]["max24h"] == 7, c[-1:] if c else c)
     chk("mostra confirmação das regras salvas", "Regras salvas" in pg.inner_text("#po-corpo"))
     chk("a pausa desligada deixa os horários esmaecidos", (pg.click("[data-rg=pausaAtiva]"), pg.wait_for_timeout(200), pg.get_attribute(".po-rg-pausa", "style") or "")[2].find("opacity") != -1)
     pg.click("[data-rga=padrao]"); pg.wait_for_timeout(500)
-    chk("Voltar ao padrão repõe 22:00 e 120 s sem salvar sozinho", pg.input_value("[data-rg=pausaDeH]") == "22" and pg.input_value("#rg-gapStory") == "120" and g["regras_cfg"]["gapStory"] == 180)
+    chk("Voltar ao padrão repõe 22:00 e 120 s sem salvar sozinho", pg.input_value("[data-rg=pausaDeH]") == "22" and pg.input_value("#rg-story-gapMin") == "120" and pg.input_value("#rg-status-max24h") == "40" and g["regras_cfg"]["canais"]["story"]["gapMin"] == 180)
+    chk("sem erro de JavaScript", not erros, erros)
+    ctx.close()
+
+    print("== Status do WhatsApp à parte e 'ambos' sem subir/descer ==")
+    ex = [dict(post(5, "story", "2026-10-19T11:10:00Z"), canal="whatsapp"), dict(post(6, "story", "2026-10-19T11:12:00Z"), canal="ambos")]
+    ctx, pg, st, g, erros, msgs = abrir(b, extras=ex)
+    aba(pg, "fila")
+    gr = [pg.inner_text(".po-grupo >> nth=%d" % i) for i in range(pg.locator(".po-grupo").count())]
+    chk("3 grupos na ordem Story, Status do WhatsApp, Feed", len(gr) == 3 and "Story" in gr[0] and gr[1].startswith("Status do WhatsApp") and "Feed" in gr[2], gr)
+    chk("o grupo do Status mostra o intervalo próprio (2 min a 5 min)", "2 min a 5 min" in gr[1], gr[1])
+    chk("o 'ambos' fica no grupo do Story (4 itens: 1, 2, 3 e o 'ambos')", gr[0].split("·")[1].strip() == "4", gr[0])
+    chk("'ambos' não tem ▲▼ (usar Horário/Próximo livre) e diz Instagram + WhatsApp", pg.locator(".po-item[data-id='6'] [data-a=subir]").count() == 0 and pg.locator(".po-item[data-id='6'] [data-a=hora]").count() == 1 and "Instagram + WhatsApp" in pg.inner_text(".po-item[data-id='6']"), pg.inner_text(".po-item[data-id='6']")[:200])
+    chk("o Status mostra 'Status do WhatsApp' e não tem ▲▼ (é o único do grupo)", "Status do WhatsApp" in pg.inner_text(".po-item[data-id='5']") and pg.is_disabled(".po-item[data-id='5'] [data-a=subir]") and pg.is_disabled(".po-item[data-id='5'] [data-a=descer]"))
+    chk("sem o 'ambos' na conta, a ordem do Story continua 1, 2, 3 (o 3 desce desabilitado)", pg.is_disabled(".po-item[data-id='3'] [data-a=descer]") and pg.is_enabled(".po-item[data-id='2'] [data-a=descer]"))
     chk("sem erro de JavaScript", not erros, erros)
     ctx.close()
 
     print("== Quem não é gestor só vê ==")
     ctx, pg, st, g, erros, msgs = abrir(b, gestor=False)
     aba(pg, "regras")
-    chk("campos travados e sem botão de salvar", pg.locator("[data-rga=salvar]").count() == 0 and pg.is_disabled("#rg-gapStory") and pg.is_disabled("[data-rg=pausaAtiva]"))
+    chk("campos travados e sem botão de salvar", pg.locator("[data-rga=salvar]").count() == 0 and pg.is_disabled("#rg-story-gapMin") and pg.is_disabled("#rg-reels-max24h") and pg.is_disabled("[data-rg=pausaAtiva]"))
     chk("explica que é do gestor", "gestor" in pg.inner_text("#po-corpo"))
     ctx.close()
 
@@ -64,7 +85,7 @@ with sync_playwright() as p:
     ctx, pg, st, g, erros, msgs = abrir(b)
     aba(pg, "fila")
     t = pg.inner_text("#po-corpo")
-    chk("grupos por tipo com o mínimo entre postagens", pg.locator(".po-grupo").count() == 2 and "mínimo de 2 min" in t and "mínimo de 5 min" in t, t[:300])
+    chk("grupos por tipo com o intervalo (faixa) entre postagens", pg.locator(".po-grupo").count() == 2 and "2 min a 5 min entre uma e outra" in t and "5 min a 10 min entre uma e outra" in t, t[:300])
     chk("Story vem antes do Feed", pg.inner_text(".po-grupo >> nth=0").startswith("📱") or "Story" in pg.inner_text(".po-grupo >> nth=0"), pg.inner_text(".po-grupo >> nth=0"))
     chk("a 1ª não sobe e a última não desce", pg.is_disabled(".po-item[data-id='1'] [data-a=subir]") and pg.is_disabled(".po-item[data-id='3'] [data-a=descer]") and pg.is_enabled(".po-item[data-id='2'] [data-a=subir]"))
     pg.click(".po-item[data-id='2'] [data-a=subir]"); pg.wait_for_timeout(700)
