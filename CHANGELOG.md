@@ -6,6 +6,21 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [Não publicado] - 2026-10-18 (v4.27)
+
+### Adicionado
+- **Seleção com validade**: a seleção de peças expira em 2 h sem uso (3 h se o cliente toca em "segura minha seleção"); ao tentar sair aparece a placa "Libera a seleção / Segura, volto já já / Continuar vendo a loja" (vale também para link `?sel=`).
+- **Busca com sugestões**: enquanto digita, mostra peças e categorias que têm resultado; se não existe igual, mostra "Não achei igual" e sinônimos (camisa/camiseta/blusa…).
+- **Painel**: ação pendente de conexão vira um chip flutuante (sem `alert`); "O que postar" aceita fotos e vídeos avulsos do aparelho com a ordem escolhida; com "Fazer em todos" desligado, editar o texto vale só para a foto selecionada.
+- **🎨 Fotos com IA** (gestor e equipe do site): o Gemini gera uma capa de campanha a partir de 1–4 fotos reais da peça, com instrução editável pelo gestor; sem cota o pedido espera na fila e roda quando a cota volta. **Ainda não foi provado contra o Google real** (modelos de imagem costumam não ter plano gratuito).
+
+### Corrigido
+- **Publicação dos Workers pelo deploy** (PR #34): com `skip_ci` os jobs `Publicar …` ficavam *skipped* e nenhum Worker era publicado desde 16/10/2026.
+
+### Alterado
+- Workflows fixados em `ubuntu-24.04` (o GitHub migra `ubuntu-latest` para o Ubuntu 26 em 19/10/2026).
+- Documentação revisada: versões dos backends (catálogo 4.21, RH 3.16), fim das instruções de colar versões antigas, pendências reunidas em `okou.md`; pacotes de patch já aplicados (`patches/tenkitermodas-v3.11`, `v4.10`) removidos.
+
 ## [Não publicado] - 2026-10-18
 
 ### Adicionado
@@ -32,7 +47,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
   cache de `common.js` e `admin-postagens.js` em todos os aparelhos.
 
 ### Notas
-- Passo a passo do deploy manual (frontend, Apps Script e as 3 propriedades da Wafly) em
+- Histórico do passo a passo (Apps Script e as 3 propriedades da Wafly) em
   `patches/postagem-multicanal-wafly/como-aplicar.md`.
 
 ## [1.0.0] - 2026-10-15

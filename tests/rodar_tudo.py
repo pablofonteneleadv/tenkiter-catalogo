@@ -89,19 +89,66 @@ SUITES = [  # (arquivo, como saber que passou)
     ("modulo0_verificado.py", lambda o: "FALHAS=0" in o),   # módulo 0 verificado: checagem na lição, regra de ouro, prática validada, certificado e verificação
     ("vitrine_orientacao.py", lambda o: "FALHAS=0" in o),   # vitrine: Consultar/Selecionar, etiquetas de filtro, rolagem, ajuda no fim
     ("instagram_admin.py", lambda o: "FALHAS=0" in o),   # painel: Produtos para aceitar (lista, editor, aceitar -> cadastro, conectar)
+    # --- v4.25–v4.27 (18/10/2026): estavam FORA da bateria até 18/10 (achado na revisão das pendências) ---
+    ("postagens_fila.py", lambda o: "FALHAS=0" in o),      # fila de Postagens com regras (pausa, intervalo por tipo, ▲▼, Próximo livre)
+    ("postagens_colagem.py", lambda o: "FALHAS=0" in o),   # 🧩 Colagem + 🖼️ Gerar imagens
+    ("postagens_v425.py", lambda o: "FALHAS=0" in o),      # prévia leve, foto travada/centralizada, largura, Fazer em todos
+    ("postagens_avulsas.py", lambda o: "FALHAS=0" in o),   # v4.27: fotos/vídeos avulsos e ordem nas Postagens
+    ("postagens_texto_foto.py", lambda o: "FALHAS=0" in o),# v4.27: texto por foto com "Fazer em todos" desligado
+    ("selecao_vida.py", lambda o: "FALHAS=0" in o),        # v4.27: seleção que expira (2 h/3 h), placa libera/segura, sugestões e sinônimos da busca
+    ("selecao_botoes.py", lambda o: "FALHAS: []" in o),    # v6.1: Compartilhar / Limpar seleção / Edição em lote
+    ("pendente_flutuante.py", lambda o: "FALHAS=0" in o),  # v4.27: ação pendente de conexão vira chip flutuante
+    ("foto_ia.py", lambda o: "FALHAS=0" in o),             # v4.27: painel 🎨 Fotos com IA (fila, instrução editável, aviso de plano sem imagens)
+    ("worker_canal.js", lambda o: "FALHAS=0" in o),        # Worker: canal Instagram/WhatsApp/Ambos
+    ("backend_v316.js", lambda o: "FALHAS=0" in o),        # RH 3.16: manual só-gestor, prática validada, certificado (precisa do .gs.txt do RH)
 ]
+
+# Testes que LEEM o .gs.txt do backend. O .gs.txt não fica no repositório público (fica no cofre privado), então no GitHub
+# (CI) eles NÃO têm o que testar: em vez de quebrar a bateria inteira, são pulados e a lista dos pulados é impressa no fim
+# (e vira aviso `::warning` no GitHub). Rode-os localmente, com o .gs.txt na raiz ou em ../tenkiter-cofre.
+PRECISA_GS = {"backend_gs.js": ("catalogo", (0, 0)), "backend_contas.js": ("funcionario", (0, 0)),
+              "backend_func.js": ("funcionario", (0, 0)), "backend_v316.js": ("funcionario", (3, 16))}   # (prefixo, versão mínima)
+def _tem_gs(prefixo, minimo=(0, 0)):
+    for pasta in (RAIZ, os.path.join(os.path.dirname(RAIZ), "tenkiter-cofre")):
+        if not os.path.isdir(pasta): continue
+        for f in os.listdir(pasta):
+            m = re.match(r"^%s-codigo-(\d+)\.(\d+)\.gs\.txt$" % prefixo, f)
+            if m and (int(m.group(1)), int(m.group(2))) >= minimo:
+                return True
+    return False
 PROPRIO_SERVIDOR = {"service_worker.py"}   # no teste local, esta bateria cuida do próprio servidor (precisa desligá-lo)
 falhou = []
+pulou = []
+EM_ACTIONS = os.environ.get("GITHUB_ACTIONS") == "true"
+def _anota(nivel, titulo, texto):
+    """No GitHub vira anotação (aparece na página da execução e na API de check-runs); fora dele não faz nada."""
+    if EM_ACTIONS:
+        t = (texto or "").replace("%", "%25").replace("\r", "").replace("\n", "%0A")[:1500]
+        print("::%s title=%s::%s" % (nivel, titulo, t))
 for arq, passou in SUITES:
     env = dict(os.environ)
+    if arq in PRECISA_GS and not _tem_gs(*PRECISA_GS[arq]):
+        pulou.append(arq)
+        print("↷ " + arq + "  (pulado: sem o .gs.txt do backend '" + PRECISA_GS[arq][0] + "' (versão mínima %d.%d) neste ambiente)" % PRECISA_GS[arq][1])
+        continue
     if arq in PROPRIO_SERVIDOR and not BASE: env.pop("TK_BASE", None)
     cmd = ["node", os.path.join(AQUI, arq)] if arq.endswith(".js") else [sys.executable, os.path.join(AQUI, arq)]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=900, env=env)
-    out = r.stdout + r.stderr
-    ok = r.returncode == 0 and passou(r.stdout)
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=900, env=env)
+        out = r.stdout + r.stderr
+        ok = r.returncode == 0 and passou(r.stdout)
+    except subprocess.TimeoutExpired as e:
+        out = "TEMPO ESGOTADO (900 s) em " + arq; ok = False
     print(("✔ " if ok else "✘ ") + arq)
     if not ok:
         falhou.append(arq); print("\n".join("    " + l for l in out.strip().splitlines()[-25:]))
+        _anota("error", "Falhou: " + arq, "\n".join(out.strip().splitlines()[-12:]))
 if srv: srv.terminate()
-print("\n%d de %d baterias passaram" % (len(SUITES) - len(falhou), len(SUITES)))
+print("\n%d de %d baterias passaram" % (len(SUITES) - len(falhou) - len(pulou), len(SUITES) - len(pulou)))
+if pulou:
+    print("PULADAS (%d, precisam do .gs.txt; rode localmente): %s" % (len(pulou), ", ".join(pulou)))
+    _anota("warning", "Baterias puladas (sem .gs.txt)", ", ".join(pulou))
+if falhou:
+    print("FALHARAM (%d): %s" % (len(falhou), ", ".join(falhou)))
+    _anota("error", "Baterias que falharam", ", ".join(falhou))
 sys.exit(1 if falhou else 0)

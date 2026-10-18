@@ -68,9 +68,10 @@ python3 tests/rodar_tudo.py
 
 `tests/backend_gs.js`, `backend_contas.js` e `backend_func.js` leem os arquivos
 `catalogo-codigo-*.gs.txt` / `funcionario-codigo-*.gs.txt`, que **não são versionados**
-(o repositório é público e eles contêm a lógica do backend). No CI esses jobs rodam com
-`continue-on-error: true` — eles passam a valer de verdade quando o backend for versionado
-em repositório privado (item **INFRA-03** do plano). O portão obrigatório é o job `estatico`.
+(o repositório é público e eles contêm a lógica do backend; a fonte-base é o repositório privado
+`Tenkiter-cofre`). Por isso o CI **não executa** esses testes (`ci.yml` comenta isso no job de testes):
+rode-os localmente, com os `.gs.txt` do cofre ao lado do código. O portão obrigatório é o job `estatico`
+(mais segredos e escopo).
 
 ---
 
@@ -241,7 +242,8 @@ Evitar que cada merge/deploy repita a bateria de navegador e as mesmas verifica�
 - **PR só com arquivos Markdown:** scan de segredos e estático continuam obrigatórios; testes de código são dispensados.
 - **Deploy da `main`:** `deploy.yml` chama `ci.yml` como workflow reutilizável no modo rápido. O workflow não é disparado separadamente por `push` na `main`, evitando CI duplicado.
 - **Bateria completa:** workflow `CI` → `Run workflow` → `suite=completo`, ou execução agendada diária. Inclui Playwright, acessibilidade, jornadas e demais suites de `tests/rodar_tudo.py`.
-- **Workers Cloudflare:** publicação automática centralizada em `deploy.yml`. O workflow reutilizável `workers.yml` recebe `skip_ci: true` do deploy porque o commit já passou pelo portão; execução manual ainda executa seu próprio CI rápido.
+- **Workers Cloudflare:** publicação automática centralizada em `deploy.yml`. **Até 18/10/2026 isso estava quebrado em silêncio**: com `skip_ci: true` o job `ci` ficava *skipped* e o `publicar` (sem `always()`) também, então nenhum Worker era publicado pelo deploy; corrigido no PR #34. Depois de todo merge confira que os jobs `Publicar tenkiter-ig/midia/og` terminaram em `success`.
+- **Workers Cloudflare (detalhe antigo):**  O workflow reutilizável `workers.yml` recebe `skip_ci: true` do deploy porque o commit já passou pelo portão; execução manual ainda executa seu próprio CI rápido.
 
 ### Como rodar a bateria completa manualmente
 
@@ -259,3 +261,5 @@ A bateria completa está agendada para 03:00 UTC (00:00 em Fortaleza). Se o agen
 - Não adicionar `continue-on-error: true` a testes que devem bloquear publicação sem uma justificativa documentada.
 - O job **Portão de qualidade** mantém o mesmo nome para preservar a configuração de proteção da branch `main`.
 - A duração real deve ser medida nas primeiras execuções; os tempos dependem de instalação do Chromium, disponibilidade do runner e duração das suites.
+- **Primeira execução agendada (18/10/2026): FALHOU** após ~24 min com "exit code 1" (job *Testes rápidos ou bateria completa*). O log não é baixável pelo proxy da sessão do Claude. Causa mais provável: `backend_gs.js`, `backend_contas.js` e `backend_func.js` leem o `.gs.txt` do backend, que não está no repositório — no GitHub nunca poderiam passar. Correção de 18/10/2026: `tests/rodar_tudo.py` pula esses testes quando não há `.gs.txt` (lista os pulados e emite `::warning`), passou a incluir testes novos que estavam fora da bateria e emite `::error` por teste que falha (anotações legíveis em Actions e pela API). Se a execução de 19/10 ainda falhar, o nome do teste aparece nas anotações. Falhas conhecidas de antes: `jornada_funcionaria.py` ("progresso foi enviado ao servidor"); `selecao_link.py` e `rolagem_infinita.py` (listadas como falhando na `main` em 17/10 e não revalidadas depois).
+- **`ubuntu-latest` vira Ubuntu 26 em 19/10/2026** (aviso do GitHub): os workflows ficam fixados em `ubuntu-24.04` até alguém validar o Chromium/Playwright e o Python no runner novo.
