@@ -98,6 +98,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("postagens_terminou.py", lambda o: "FALHAS=0" in o),  # v4.29: pergunta "terminou de editar?" ao rolar para baixo
     ("postagens_multi.py", lambda o: "FALHAS=0" in o),     # v4.29: várias peças juntas, escopo "fazer em todas" (mesma peça × todas)
     ("enquadrar_cadastro.py", lambda o: "FALHAS=0" in o),  # v4.32: janela ✂ Enquadrar do cadastro (zoom/mover/girar, prévias Site/Feed/Story, voltar à original)
+    ("curriculos_lento.py", lambda o: "FALHAS=0" in o),    # v4.32: curriculos.html com servidor lento (não cai no login, gravação sem repetir, TKOcupado)
     ("selecao_vida.py", lambda o: "FALHAS=0" in o),        # v4.27: seleção que expira (2 h/3 h), placa libera/segura, sugestões e sinônimos da busca
     ("selecao_botoes.py", lambda o: "FALHAS: []" in o),    # v6.1: Compartilhar / Limpar seleção / Edição em lote
     ("pendente_flutuante.py", lambda o: "FALHAS=0" in o),  # v4.27: ação pendente de conexão vira chip flutuante
