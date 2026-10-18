@@ -95,6 +95,8 @@ SUITES = [  # (arquivo, como saber que passou)
     ("postagens_v425.py", lambda o: "FALHAS=0" in o),      # prévia leve, foto travada/centralizada, largura, Fazer em todos
     ("postagens_avulsas.py", lambda o: "FALHAS=0" in o),   # v4.27: fotos/vídeos avulsos e ordem nas Postagens
     ("postagens_texto_foto.py", lambda o: "FALHAS=0" in o),# v4.27: texto por foto com "Fazer em todos" desligado
+    ("postagens_terminou.py", lambda o: "FALHAS=0" in o),  # v4.29: pergunta "terminou de editar?" ao rolar para baixo
+    ("postagens_multi.py", lambda o: "FALHAS=0" in o),     # v4.29: várias peças juntas, escopo "fazer em todas" (mesma peça × todas)
     ("selecao_vida.py", lambda o: "FALHAS=0" in o),        # v4.27: seleção que expira (2 h/3 h), placa libera/segura, sugestões e sinônimos da busca
     ("selecao_botoes.py", lambda o: "FALHAS: []" in o),    # v6.1: Compartilhar / Limpar seleção / Edição em lote
     ("pendente_flutuante.py", lambda o: "FALHAS=0" in o),  # v4.27: ação pendente de conexão vira chip flutuante
