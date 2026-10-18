@@ -84,6 +84,10 @@ jobs:
     name: Publicar ${{ matrix.script }}
     runs-on: ubuntu-latest
     needs: credenciais
+    # Com skip_ci=true o job `ci` fica SKIPPED e o `credenciais` roda por causa do always().
+    # Sem este always() o GitHub pula tambem o `publicar` (ancestral skipped) e os Workers
+    # deixam de ser publicados em silencio — foi o que aconteceu nos deploys depois de 16/10/2026.
+    if: ${{ always() && needs.credenciais.result == 'success' }}
     strategy:
       # Um Worker com problema NAO impede os outros dois de publicar.
       # Antes (passos sequenciais) a falha do instagram-worker pulava midia e og.
@@ -171,6 +175,7 @@ jobs:
     name: Verificar os 3 Workers publicados
     runs-on: ubuntu-latest
     needs: publicar
+    if: ${{ always() && needs.publicar.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
 
