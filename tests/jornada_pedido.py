@@ -152,7 +152,7 @@ with sync_playwright() as p:
     val = pg.input_value("#sel-link")
     chk("link da seleção usa o endereço do SITE", val.startswith(SITE) and "q=vestido" in val, val)
     zap = unquote(pg.get_attribute("#sel-zap", "href") or "")
-    chk("mensagem de compartilhar tem o link completo", val in zap and zap.startswith("https://wa.me/?text="), zap)
+    chk("mensagem de compartilhar tem o link completo", val in zap and zap.startswith("https://wa.me/5588993223998?text="), zap)
     chk("texto da seleção não cita atendente", "atendente" not in pg.inner_text("#selecao-conteudo").lower())
     pg.click("#btn-fechar-selecao"); pg.wait_for_timeout(250)
 

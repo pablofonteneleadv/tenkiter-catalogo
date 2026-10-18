@@ -196,3 +196,63 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { lerCache(); desenhar(); atualizarDoServidor(); preCarregar(); });
   else { lerCache(); desenhar(); atualizarDoServidor(); preCarregar(); }
 })();
+
+/* v4.25 — envios de cadastro em QUALQUER tela. O painel (admin.html) guarda no IndexedDB (tenkiter_admin_envios_v1) o registro LEVE das peças novas cujas mídias já estão no servidor
+ * (texto + endereços, sem credencial). Quem sai do painel não precisa esperar: aqui, nas outras páginas, esse registro é terminado (o servidor reconhece o mesmo opId e nunca duplica)
+ * e a pessoa vê o andamento. "Cadastrada" só aparece com resposta ok do servidor; timeout/erro deixa o registro guardado (o painel retoma ao abrir). O X só fecha o aviso. */
+(() => {
+  'use strict';
+  if (window.__tkEnviosBg || /\/admin\.html$/.test(location.pathname) || !window.indexedDB) return;
+  window.__tkEnviosBg = true;
+  const BD = 'tenkiter_admin_envios_v1', HIST = 'tk_envios_hist_v1';
+  const abrirBd = () => new Promise((res, rej) => { try { const rq = indexedDB.open(BD, 1); rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains('e')) rq.result.createObjectStore('e', { keyPath: 'k' }); }; rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error); } catch (e) { rej(e); } });
+  const lerTudo = async () => { const db = await abrirBd(); try { return await new Promise((r) => { const q = db.transaction('e', 'readonly').objectStore('e').getAll(); q.onsuccess = () => r(q.result || []); q.onerror = () => r([]); }); } finally { db.close(); } };
+  const apagar = async (k) => { const db = await abrirBd(); try { await new Promise((r) => { const t = db.transaction('e', 'readwrite'); t.objectStore('e').delete(k); t.oncomplete = r; t.onerror = r; t.onabort = r; }); } finally { db.close(); } };
+  const sessao = () => { try { const s = JSON.parse(localStorage.getItem('tm_session') || 'null'); return s && s.sessao && /^tk/.test(s.sessao) ? s : null; } catch (e) { return null; } };
+  const hist = (t, r) => { try { const l = JSON.parse(localStorage.getItem(HIST) || '[]'); l.unshift({ t: String(t || 'Peça').slice(0, 60), q: Date.now(), r, m: '' }); localStorage.setItem(HIST, JSON.stringify(l.slice(0, 40))); } catch (e) {} };
+  let chip = null, toast = null, rodando = false, tentativas = 0;
+  const css = () => { if (document.getElementById('tk-env-css')) return; const c = document.createElement('style'); c.id = 'tk-env-css'; c.textContent = '#tk-env-chip,#tk-env-toast{position:fixed;left:12px;right:12px;margin:0 auto;max-width:520px;z-index:85;border-radius:14px;padding:10px 14px;font:600 .86rem/1.3 system-ui,sans-serif;display:flex;align-items:center;gap:10px;box-shadow:0 4px 16px rgba(0,0,0,.35)}#tk-env-chip{bottom:calc(84px + env(safe-area-inset-bottom));background:#222;color:#fff;border:2px solid #E67E22;text-decoration:none}#tk-env-chip.erro{border-color:#f5c542}#tk-env-toast{bottom:calc(140px + env(safe-area-inset-bottom));background:#0f3d1d;color:#fff;border:2px solid #4caf50}#tk-env-toast button{margin-left:auto;width:auto;min-width:44px;min-height:44px;border:0;border-radius:10px;background:#ffffff22;color:#fff;font-size:1.1rem;cursor:pointer}'; document.head.appendChild(c); };
+  const chipOff = () => { if (chip) { chip.remove(); chip = null; } };
+  const chipOn = (txt, erro) => { css(); if (!chip) { chip = document.createElement('a'); chip.id = 'tk-env-chip'; chip.href = 'admin.html'; chip.setAttribute('role', 'status'); document.body.appendChild(chip); } chip.className = erro ? 'erro' : ''; chip.textContent = txt; };
+  const avisoOk = (txt) => { css(); if (!toast) { toast = document.createElement('div'); toast.id = 'tk-env-toast'; toast.setAttribute('role', 'status'); document.body.appendChild(toast); }
+    toast.innerHTML = ''; const sp = document.createElement('span'); sp.textContent = txt; const x = document.createElement('button'); x.type = 'button'; x.setAttribute('aria-label', 'Fechar este aviso'); x.textContent = '✕';
+    x.addEventListener('click', () => { if (toast) { toast.remove(); toast = null; } }); toast.append(sp, x); };
+  const postar = async (r, s, api) => {
+    const feito = async () => {
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 70000);
+      try {
+        const resp = await fetch(api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({}, r.pacote, { pin: s.sessao })), signal: ctl.signal });
+        return await resp.json();
+      } finally { clearTimeout(t); }
+    };
+    if (navigator.locks && navigator.locks.request) return navigator.locks.request('tk-env-' + r.k, { ifAvailable: true }, (lock) => lock ? feito() : { ocupado: true });
+    return feito();
+  };
+  const ciclo = async () => {
+    if (rodando) return; rodando = true;
+    try {
+      let lista = await lerTudo();
+      if (!lista.length) { chipOff(); return; }
+      const s = sessao(), api = typeof API_URL === 'string' ? API_URL : '';
+      const prontos = lista.filter((r) => r.pacote && !r.ehEdicao);
+      let feitos = 0, falhou = false;
+      if (prontos.length && s && api) {
+        chipOn('⏳ Finalizando ' + (prontos.length === 1 ? '1 cadastro' : prontos.length + ' cadastros') + '…');
+        for (const r of prontos) {
+          let j = null; try { j = await postar(r, s, api); } catch (e) { j = null; }
+          if (j && j.ok === true) { await apagar(r.k); hist(r.titulo, 'ok'); feitos++; avisoOk(j.repetido ? '✅ “' + r.titulo + '” já estava cadastrada.' : '✅ “' + r.titulo + '” cadastrada.'); }
+          else if (!(j && j.ocupado)) falhou = true;
+        }
+      } else if (prontos.length) falhou = true;
+      lista = await lerTudo();
+      if (!lista.length) { chipOff(); return; }
+      const n = lista.length;
+      chipOn('⚠️ ' + (n === 1 ? '1 envio não terminou' : n + ' envios não terminaram') + ' — toque para continuar no painel', true);
+      if (falhou && tentativas++ < 8) setTimeout(ciclo, 20000);
+    } catch (e) { /* sem IndexedDB/erro: não atrapalha a página */ } finally { rodando = false; }
+  };
+  window.addEventListener('online', ciclo);
+  window.addEventListener('tk:sessao', ciclo);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ciclo(); });
+  setTimeout(ciclo, 1500);
+})();

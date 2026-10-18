@@ -339,6 +339,7 @@ function d1() {
     const rodar = async (n) => { for (let i = 0; i < (n || 1); i++) await W.processarPostagens(env); };
     const linha = (id) => DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first();
     let x;
+    await DB.prepare('INSERT OR REPLACE INTO cfg (chave, valor) VALUES (?, ?)').bind('po_cfg', JSON.stringify({ pausaAtiva: false })).run();   // as regras novas têm seção própria; aqui a hora do dia não pode mudar o resultado
     // ---- quem pode
     r = await w.fetch(ped('GET', '/posts', ''), env, {}); chk('postagens: sem sessão = 401', r.status === 401);
     x = await G('GET', '/posts'); chk('equipe que cadastra (catalogo_cadastrar) vê a fila de postagens', x.r.status === 200 && x.j.ok === true && x.j.conectado === true, x.j);
@@ -404,9 +405,9 @@ function d1() {
     x = await G('POST', '/post', { posts: [1, 2, 3, 4].map((n) => ({ tipo: 'story', midias: [IMG(n)], quando: 'sequencia' })) });
     const q = x.j.quandos.map((t) => Date.parse(t));
     chk('na sequência: 4 Stories saem escalonados, cada um 1 a 3 min depois do anterior', x.j.ok && q.length === 4 && q.every((t, i) => i === 0 || (t - q[i - 1] >= 60000 && t - q[i - 1] <= 180000)), x.j.quandos);
-    chk('o 1º da sequência sai em ~1 min (não na mesma hora do pedido)', q[0] - Date.now() > 30000 && q[0] - Date.now() < 90000);
+    chk('o 1º da sequência sai a partir de ~1 min (nunca na mesma hora do pedido; um Story publicado há instantes empurra +2 min)', q[0] - Date.now() > 30000 && q[0] - Date.now() < 200000);
     x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(5)], quando: 'sequencia' });
-    chk('um pedido novo entra DEPOIS da fila de sequência (3 a 9 min depois da última)', Date.parse(x.j.quandos[0]) - q[3] >= 180000 && Date.parse(x.j.quandos[0]) - q[3] <= 540000, [x.j.quandos, q[3]]);
+    chk('cada tipo tem a sua fila: o Feed não espera os Stories (só respeita os 5 min do último Feed publicado)', Date.parse(x.j.quandos[0]) - Date.now() > 30000 && Date.parse(x.j.quandos[0]) - Date.now() < 400000 && Date.parse(x.j.quandos[0]) < q[3] + 400000, [x.j.quandos, q[3]]);
     const idsSeq = (await DB.prepare("SELECT id FROM postagem WHERE seq=1 AND status='agendado'").all()).results.length;
     chk('as da sequência ficam marcadas como sequência', idsSeq === 5, idsSeq);
     chk('o intervalo humano varia (não é sempre igual)', new Set(Array.from({ length: 30 }, () => W.intervaloHumanoMs('feed', 'feed'))).size > 5);
@@ -466,6 +467,117 @@ function d1() {
     chk('fraseErroIG não vaza o token', !JSON.stringify(W.fraseErroIG({ message: 'x access_token=SEGREDO123 y', code: 1 })).includes('SEGREDO123'));
   }
 
+
+  console.log('== REGRAS DA FILA (pausa, intervalo por tipo, mover, config) ==');
+  {
+    const IMG = (n) => ({ url: 'https://tenkiter-midia.fake/m/202610/img' + n + '.jpg', tipo: 'imagem' });
+    const G = async (m, pth, corpo) => { const r = await w.fetch(ped(m, pth, 'tk2.gerente', corpo), env, {}); return { r, j: await r.json() }; };       // só catalogo_cadastrar
+    const Ad = async (m, pth, corpo) => { const r = await w.fetch(ped(m, pth, 'tk2.admin', corpo), env, {}); return { r, j: await r.json() }; };         // Admin total
+    const rodar = async () => W.processarPostagens(env);
+    const linha = (id) => DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first();
+    const BR = (h, m, dia) => Date.UTC(2026, 9, dia || 20, h + 3, m || 0);                                    // hora de Fortaleza (UTC-3) -> ms
+    const BRrel = (dias, h, m) => { const l = new Date(Date.now() - 3 * 3600000 + dias * 86400000); return Date.UTC(l.getUTCFullYear(), l.getUTCMonth(), l.getUTCDate(), h + 3, m || 0); };
+    const P0 = W.normalizarCfgPost({});
+    let x, a;
+    chk('padrão: pausa 22:00–06:30 ligada, Story 2 min, Feed/Carrossel 5 min, Reels 10 min', P0.pausaAtiva === true && P0.pausaDe === '22:00' && P0.pausaAte === '06:30' && P0.gapStory === 120 && P0.gapFeed === 300 && P0.gapCarrossel === 300 && P0.gapReels === 600, P0);
+    a = W.normalizarCfgPost({ gapStory: 1, gapFeed: 'x', pausaDe: '25:99', max24h: 500, folga: -5 });
+    chk('valor inválido volta ao padrão e há limites (mín. 10 s, máx. 100 por dia)', a.gapStory === 10 && a.gapFeed === 300 && a.pausaDe === '22:00' && a.max24h === 100 && a.folga === 0, a);
+    chk('23:00 cai na pausa -> 06:30 do dia seguinte', W.foraDaPausa(P0, BR(23, 0)) === BR(6, 30, 21));
+    chk('03:00 cai na pausa -> 06:30 do mesmo dia', W.foraDaPausa(P0, BR(3, 0)) === BR(6, 30, 20));
+    chk('06:30 e 21:59 estão fora da pausa', W.foraDaPausa(P0, BR(6, 30)) === BR(6, 30) && W.foraDaPausa(P0, BR(21, 59)) === BR(21, 59));
+    chk('pausa desligada não mexe em nada', W.foraDaPausa(Object.assign({}, P0, { pausaAtiva: false }), BR(23, 0)) === BR(23, 0));
+    chk('pausa no mesmo dia (12:00–14:00) também funciona', W.foraDaPausa(Object.assign({}, P0, { pausaDe: '12:00', pausaAte: '14:00' }), BR(13, 0)) === BR(14, 0));
+    a = W.ajustarHorario(P0, 'story', BR(10, 0), [BR(10, 0)]);
+    chk('2 Stories no mesmo horário: o segundo vai para +2 min', a.t === BR(10, 2) && a.motivo === 'intervalo' && a.ajustado, a);
+    a = W.ajustarHorario(P0, 'feed', BR(10, 0), [BR(10, 3)]);
+    chk('Feed a 3 min de outro Feed: vai para 5 min depois dele', a.t === BR(10, 8), a);
+    a = W.ajustarHorario(P0, 'feed', BR(10, 0), [BR(10, 5)]);
+    chk('exatamente 5 min de distância é permitido', a.t === BR(10, 0) && !a.ajustado, a);
+    a = W.ajustarHorario(P0, 'story', BR(22, 0), [BR(6, 30, 21)]);
+    chk('pausa e intervalo juntos: 22:00 -> 06:30 e, como já há um Story lá, 06:32', a.t === BR(6, 32, 21) && a.motivo === 'pausa', a);
+    a = W.proximoLivre(Object.assign({}, P0, { folga: 0 }), 'story', [BR(10, 0), BR(10, 2), BR(10, 4)], BR(10, 0));
+    chk('"na sequência" acha o primeiro horário livre depois dos ocupados (10:06)', a.t === BR(10, 6), a);
+    chk('"agora" ignora tudo quando pedido (ignorarRegras)', W.ajustarHorario(P0, 'story', BR(23, 0), [BR(23, 0)], { ignorarRegras: true }).t === BR(23, 0));
+
+    // ---- configuração: só o gestor muda
+    x = await G('GET', '/post/config'); chk('equipe vê as regras, mas sem poder editar', x.j.ok && x.j.podeEditar === false && typeof x.j.config.pausaAtiva === 'boolean' && x.j.padrao.pausaAtiva === true && x.j.padrao.gapStory === 120, x.j);
+    x = await G('POST', '/post/config', { config: { pausaAtiva: false } }); chk('equipe (só catalogo_cadastrar) NÃO muda as regras: 403', x.r.status === 403, x.j);
+    x = await G('POST', '/post/reorganizar', {}); chk('equipe NÃO reorganiza a fila: 403', x.r.status === 403);
+    x = await Ad('POST', '/post/config', { config: { pausaAtiva: true, pausaDe: '23:00', pausaAte: '07:00', gapStory: 60, gapFeed: 300, folga: 0 } });
+    chk('Admin total grava as regras (pausa 23:00–07:00, Story 60 s)', x.j.ok && x.j.config.pausaDe === '23:00' && x.j.config.pausaAte === '07:00' && x.j.config.gapStory === 60, x.j);
+    x = await G('GET', '/posts'); chk('/posts devolve as regras e o aviso de que o Worker as conhece', x.j.regras === 1 && x.j.config.pausaDe === '23:00' && x.j.podeRegras === false, x.j.config);
+    await Ad('POST', '/post/config', { config: { pausaDe: '22:00', pausaAte: '06:30' } });
+    await DB.prepare('DELETE FROM postagem').run();
+
+    // ---- agendar com regras
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(1)], quando: new Date(BRrel(3, 23, 0)).toISOString() });
+    chk('agendar às 23:00 (pausa): o servidor leva para 06:30 e avisa o motivo', x.j.ok && Date.parse(x.j.quandos[0]) === BRrel(4, 6, 30) && x.j.ajustes.length === 1 && x.j.ajustes[0].motivo === 'pausa', x.j);
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(2)], quando: new Date(BRrel(3, 10, 0)).toISOString() });
+    chk('um Feed às 10:00 entra sem ajuste', x.j.ok && x.j.ajustes.length === 0 && Date.parse(x.j.quandos[0]) === BRrel(3, 10, 0), x.j); const idF1 = x.j.ids[0];
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(3)], quando: new Date(BRrel(3, 10, 2)).toISOString() });
+    chk('outro Feed às 10:02 (a 2 min): vai para 10:05 pelo intervalo de 5 min', Date.parse(x.j.quandos[0]) === BRrel(3, 10, 5) && x.j.ajustes[0].motivo === 'intervalo', x.j); const idF2 = x.j.ids[0];
+    x = await G('POST', '/post', { tipo: 'story', midias: [IMG(4)], quando: new Date(BRrel(3, 10, 2)).toISOString() });
+    chk('mas um Story às 10:02 NÃO é ajustado (tipos diferentes podem coincidir)', x.j.ajustes.length === 0 && Date.parse(x.j.quandos[0]) === BRrel(3, 10, 2), x.j);
+    x = await G('POST', '/post', { posts: [5, 6].map((n) => ({ tipo: 'carrossel', midias: [IMG(n), IMG(n + 10)], quando: new Date(BRrel(3, 12, 0)).toISOString() })) });
+    chk('dois Carrosséis pedidos juntos para as 12:00: o 2º vai para 12:05', Date.parse(x.j.quandos[0]) === BRrel(3, 12, 0) && Date.parse(x.j.quandos[1]) === BRrel(3, 12, 5), x.j.quandos);
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(7)], quando: 'agora' });
+    chk('"Agora mesmo" sai já, ignorando pausa e intervalo (urgência)', x.j.ok && Math.abs(Date.parse(x.j.quandos[0]) - Date.now()) < 5000 && x.j.ajustes.length === 0, x.j.quandos);
+    await DB.prepare('DELETE FROM postagem').run();
+
+    // ---- na sequência = primeiro horário livre do tipo (buracos contam), uma fila por tipo
+    await Ad('POST', '/post/config', { config: { pausaAtiva: false, gapStory: 120, folga: 0 } });
+    x = await G('POST', '/post', { tipo: 'story', midias: [IMG(1)], quando: ts(1) });
+    x = await G('POST', '/post', { posts: [2, 3, 4].map((n) => ({ tipo: 'story', midias: [IMG(n)], quando: 'sequencia' })) });
+    const qs = x.j.quandos.map((t) => Date.parse(t));
+    chk('sequência de Stories pula o horário ocupado e sai de 2 em 2 min (sem folga)', qs[0] - Date.now() > 150000 && qs[0] - Date.now() < 200000 && qs[1] - qs[0] === 120000 && qs[2] - qs[1] === 120000, qs.map((t) => Math.round((t - Date.now()) / 1000)));
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(9)], quando: 'sequencia' });
+    chk('o Feed tem fila própria: sai em ~1 min mesmo com Stories na fila', Date.parse(x.j.quandos[0]) - Date.now() > 30000 && Date.parse(x.j.quandos[0]) - Date.now() < 100000, x.j);
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(9)], quando: 'sequencia' });
+    chk('o 2º Feed da sequência sai 5 min depois do 1º', x.j.ok, x.j);
+
+    // ---- subir / descer / primeiro / último
+    await DB.prepare('DELETE FROM postagem').run();
+    x = await G('POST', '/post', { posts: [1, 2, 3].map((n) => ({ tipo: 'feed', midias: [IMG(n)], quando: new Date(BRrel(3, 14, 5 * (n - 1))).toISOString() })) });
+    const [i1, i2, i3] = x.j.ids; const tempos = async () => Promise.all([i1, i2, i3].map(async (i) => (await linha(i)).agendado_em));
+    const T0 = await tempos();
+    x = await G('POST', '/post/mover', { id: i2, dir: 'subir' }); let T1 = await tempos();
+    chk('subir: o 2º troca de horário com o 1º (e os horários continuam 5 min distantes)', x.j.ok && T1[1] === T0[0] && T1[0] === T0[1] && T1[2] === T0[2], [T0, T1]);
+    x = await G('POST', '/post/mover', { id: i2, dir: 'subir' }); chk('já no topo: avisa em vez de fazer nada (409)', x.r.status === 409);
+    x = await G('POST', '/post/mover', { id: i3, dir: 'primeiro' }); T1 = await tempos();
+    chk('"primeiro": o último passa para o 1º horário e os outros descem um lugar', T1[2] === T0[0] && T1[1] === T0[1] && T1[0] === T0[2] || (x.j.ok && T1[2] === T0[0]), [T0, T1]);
+    x = await G('POST', '/post/mover', { id: i3, dir: 'ultimo' }); T1 = await tempos(); chk('"último" devolve para o fim', x.j.ok && Date.parse(T1[2]) >= Date.parse(T1[0]) && Date.parse(T1[2]) >= Date.parse(T1[1]), T1);
+    x = await G('POST', '/post/mover', { id: i3, dir: 'para-os-lados' }); chk('direção inválida = 400', x.r.status === 400);
+    await DB.prepare("UPDATE postagem SET status='publicado' WHERE id=?").bind(i1).run();
+    x = await G('POST', '/post/mover', { id: i1, dir: 'descer' }); chk('postagem já publicada não muda de lugar (409)', x.r.status === 409);
+
+    // ---- horário editado, próximo livre, reorganizar
+    x = await G('POST', '/post/reagendar', { id: i2, quando: new Date(BRrel(3, 14, 12)).toISOString() });
+    chk('editar o horário para perto de outro Feed: o servidor afasta (>= 5 min)', x.j.ok && x.j.ajustado === true, x.j);
+    x = await G('POST', '/post/proximo', { id: i2 });
+    chk('"próximo horário livre": vai para a frente da fila do tipo (~1 min)', x.j.ok && Date.parse(x.j.quando) - Date.now() > 30000 && Date.parse(x.j.quando) - Date.now() < 100000, x.j);
+    await DB.prepare('DELETE FROM postagem').run();
+    await Ad('POST', '/post/config', { config: { pausaAtiva: false, gapFeed: 10 } });
+    x = await G('POST', '/post', { posts: [1, 2, 3].map((n) => ({ tipo: 'feed', midias: [IMG(n)], quando: new Date(BRrel(3, 15, 0) + n * 20000).toISOString() })) });
+    await Ad('POST', '/post/config', { config: { gapFeed: 600 } });
+    x = await Ad('POST', '/post/reorganizar', { simular: true });
+    chk('reorganizar (simulado) conta o que mudaria e não mexe em nada', x.j.ok && x.j.simulado === true && x.j.mudaram === 2, x.j);
+    const antes = (await DB.prepare("SELECT agendado_em FROM postagem WHERE status='agendado' ORDER BY id").all()).results.map((r) => r.agendado_em);
+    x = await Ad('POST', '/post/reorganizar', {}); const depois = (await DB.prepare("SELECT agendado_em FROM postagem WHERE status='agendado' ORDER BY id").all()).results.map((r) => Date.parse(r.agendado_em));
+    chk('reorganizar de verdade: o intervalo novo (10 min) passa a valer na fila já agendada', x.j.ok && x.j.mudaram === 2 && depois[1] - depois[0] >= 600000 && depois[2] - depois[1] >= 600000 && antes[0] === new Date(depois[0]).toISOString(), [x.j, depois]);
+
+    // ---- a pausa também vale na hora de publicar (agendada antes da regra)
+    await DB.prepare('DELETE FROM postagem').run();
+    const loc = new Date(Date.now() - 3 * 3600000), minLoc = loc.getUTCHours() * 60 + loc.getUTCMinutes(), hm = (n) => String(Math.floor(((n % 1440) + 1440) % 1440 / 60)).padStart(2, '0') + ':' + String(((n % 1440) + 1440) % 1440 % 60).padStart(2, '0');
+    await Ad('POST', '/post/config', { config: { pausaAtiva: true, pausaDe: hm(minLoc - 30), pausaAte: hm(minLoc + 30), gapFeed: 300, agoraIgnora: true } });
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(1)], quando: new Date(Date.now() + 3 * 86400000).toISOString() }); const idP = x.j.ids[0];
+    await DB.prepare('UPDATE postagem SET agendado_em=?, urgente=0 WHERE id=?').bind(ts(-1), idP).run();
+    publicados = []; await rodar(); const LP = await linha(idP);
+    chk('agendada antes da regra e vencida DENTRO da pausa: o cron NÃO publica, empurra para depois da pausa', LP.status === 'agendado' && Date.parse(LP.agendado_em) > Date.now() + 20 * 60000 && publicados.length === 0, [LP.status, LP.agendado_em]);
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(2)], quando: 'agora' }); const idU = x.j.ids[0];
+    await rodar(); const LU = await linha(idU);
+    chk('mas "Agora mesmo" (urgente) sai mesmo dentro da pausa', LU.status === 'publicado', LU);
+    await Ad('POST', '/post/config', { config: { pausaAtiva: false, gapFeed: 300, gapStory: 120 } });
+  }
   console.log('== FOTOS DE CLIENTES (Ela usa TM) ==');
   {
     const JPG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0xff, 0xd9]);

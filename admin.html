@@ -311,6 +311,9 @@
   .envios-flut.erro { border-color: #ff6b6b; background: #4a0f0f; }
   .envios-flut.aviso { border-color: #f5c542; }
   .envios-flut.ok { border-color: #4caf50; }
+  .env-hist { margin-top: 8px; font-size: .82rem; color: #444; }
+  .env-hist summary { cursor: pointer; font-weight: 700; padding: 8px 0; min-height: 44px; display: flex; align-items: center; }
+  .env-hist-l { padding: 4px 0; border-top: 1px solid #eee; }
   .video-lista { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
   .video-item { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid #ddd; border-radius: 10px; background: #fafafa; }
   .video-item.principal { border-color: var(--laranja); }
@@ -898,8 +901,10 @@
       <div role="radiogroup" aria-label="O que fazer com o preço">
         <label class="precos-modo"><input type="radio" name="precos-modo" value="pct" checked><span><b>% Reajustar o preço</b><small>10 = +10% · -15 = 15% de desconto. Peças “Consulte valor” são puladas.</small></span></label>
         <label class="precos-modo" id="precos-modo-escrito" hidden><input type="radio" name="precos-modo" value="escrito"><span><b>💲 Valor escrito (preço fixo)</b><small>Todas as marcadas ficam com o MESMO preço. Serve também para tirar do “Consulte valor”.</small></span></label>
+        <label class="precos-modo" id="precos-modo-padrao" hidden><input type="radio" name="precos-modo" value="padrao"><span><b>🎯 Arrumar para ,99 / ,49</b><small>Ajusta o preço para o valor à vista terminar em ,99 ou ,49. Mostra antes quantas mudam e exemplos.</small></span></label>
         <label class="precos-modo" id="precos-modo-consulta" hidden><input type="radio" name="precos-modo" value="consulta"><span><b>💬 Consultar valor</b><small>Tira o preço das marcadas e o catálogo mostra “Consulte valor”.</small></span></label>
       </div>
+      <label class="precos-todas" id="precos-todas-box" hidden><input type="checkbox" id="precos-todas"> <span>Valer para <b>todas as peças com preço da loja</b> (não só as marcadas)</span></label>
       <div id="precos-campos">
         <div id="precos-campo-pct"><label for="precos-pct">Porcentagem</label><input type="text" id="precos-pct" inputmode="decimal" autocomplete="off" placeholder="Ex.: 10 ou -15"></div>
         <div id="precos-campo-valor" hidden><label for="precos-valor">Preço (R$)</label><input type="text" id="precos-valor" inputmode="decimal" autocomplete="off" placeholder="Ex.: 89.90"></div>
@@ -1852,7 +1857,8 @@
   async function carregarOpcoes_() {
     try { const c = JSON.parse(localStorage.getItem(CACHE_OPCOES_) || 'null'); if (c) aplicarOpcoes_(c.tamanhos, c.cores); } catch (e) {}
     try {
-      const v = await versaoServidor();
+      let v = await versaoServidor();
+      for (let t = 0; !v && t < 3; t++) { await new Promise(ok => setTimeout(ok, 1500 * (t + 1))); _versaoPromessa = null; v = await versaoServidor(); }   // v4.25: falha passageira não desliga as opções do servidor
       if (!v || !v.opcoesLista) return;
       const r = await fetch(API_URL + '?action=opcoes').then(x => x.json());
       if (!r || !r.ok) return;
@@ -1862,17 +1868,27 @@
     } catch (e) { /* sem rede: segue com a lista de fábrica/cache */ }
   }
 
+  /* v4.25: preço que vai para o servidor (já no ,99/,49) — troca também o que está escrito no campo, para a pessoa ver o valor corrigido. */
+  function precoFinalCampo_() {
+    const campo = document.getElementById('preco');
+    if (consultaMarcada_()) return '';
+    const r = precoTerminacao(campo.value);
+    if (!r.valido) return campo.value;
+    if (r.mudou) campo.value = r.cheio.toFixed(2);
+    return r.cheio.toFixed(2);
+  }
   function precoDigitado_() { return parseFloat(String(document.getElementById('preco').value).replace(',', '.')); }
   /* v4.21: "Consultar valor" = peça sem preço (backend 4.20, bandeira consultarValor). Marcado: o campo de preço fica travado e vazio. */
-  let consultarLiberado_ = false;
+  let consultarLiberado_ = false, precoTerminacaoLiberado_ = false;
   function consultaMarcada_() { const c = document.getElementById('consultar-valor'); return !!(c && consultarLiberado_ && c.checked); }
   function sincConsulta_() {
     const on = consultaMarcada_(), campo = document.getElementById('preco');
     campo.disabled = on; if (on && campo.value) campo.value = '';
     return on;
   }
-  versaoServidor().then(v => { consultarLiberado_ = !!(v && v.consultarValor); const l = document.getElementById('linha-consulta'); if (l) l.hidden = !consultarLiberado_; atualizarFaltas_(); }).catch(() => {});
+  versaoServidor().then(v => { consultarLiberado_ = !!(v && v.consultarValor); precoTerminacaoLiberado_ = !!(v && v.precoTerminacao); const l = document.getElementById('linha-consulta'); if (l) l.hidden = !consultarLiberado_; atualizarFaltas_(); }).catch(() => {});
   document.getElementById('consultar-valor').addEventListener('change', () => atualizarFaltas_());
+  document.getElementById('preco').addEventListener('change', () => { const r = precoTerminacao(document.getElementById('preco').value); if (r.valido && r.mudou && !consultaMarcada_()) { const antes = document.getElementById('preco').value; precoFinalCampo_(); atualizarFaltas_(); document.getElementById('dica-avista').textContent = 'Ajustei ' + antes + ' → ' + formatarReal(r.cheio) + ' · à vista ' + formatarReal(r.avista) + ' (o site sempre termina em ,99 ou ,49).'; } });
   function faltasDoForm_() {
     const f = [];
     if (!fotosItens.length) f.push(['fotos', 'foto']);
@@ -1898,7 +1914,8 @@
     const st = document.getElementById('status'); if (!falta.length && /^Falta preencher/.test(st.textContent)) st.textContent = '';
     el.textContent = falta.length ? 'Falta: ' + falta.map(x => x[1]).join(', ') + '.' : '✅ Tudo certo! Pode salvar.';
     const consultar = sincConsulta_(), p = precoDigitado_();
-    document.getElementById('dica-avista').textContent = consultar ? 'No catálogo vai aparecer “Consulte valor”.' : (p > 0 ? 'À vista (10% de desconto): ' + formatarReal(p * (1 - DESCONTO_AVISTA)) : '');
+    { const r = precoTerminacao(p);   // v4.25: o à vista do site sempre termina em ,99 ou ,49 (o valor digitado é ajustado)
+      document.getElementById('dica-avista').textContent = consultar ? 'No catálogo vai aparecer “Consulte valor”.' : (r.valido ? (r.mudou ? 'Vai ficar ' + formatarReal(r.cheio) + ' · à vista ' + formatarReal(r.avista) + ' (o site sempre termina em ,99 ou ,49).' : 'À vista (10% de desconto): ' + formatarReal(r.avista)) : ''); }
     sincRapidos_();
   }
   function mostrarFaltas_(falta) {
@@ -2040,6 +2057,7 @@
   document.getElementById('btn-criar-categoria').addEventListener('click', () => abrirCriacaoCategoria_(document.getElementById('cat-busca').value));
   montarRapidos_();
   carregarOpcoes_();
+  (function () { let ultimo = Date.now(); document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible' || Date.now() - ultimo < 20000) return; ultimo = Date.now(); carregarOpcoes_(); if (typeof carregarListas === 'function') carregarListas(); }); })();
 
   /* ===================== v4.10+: tamanhos e cores com o MESMO sistema de escolha das categorias =====================
    * Cada campo (tamanhos, cores) ganha uma folha com busca, lista, "criar nova" e sugestões — o mesmo padrão da
@@ -2078,8 +2096,7 @@
     const linha = (o) => {
       if (escolhaEditando_[chave] === o) return editorEscolha_(chave, o);
       const marcada = escolhaSel_[chave].has(o);
-      return '<div class="cat-linha"><button type="button" class="cat-item' + (marcada ? ' selecionado' : '') + '" data-esc="' + escaparHtml(o) + '"><span>' + escaparHtml(o) + '</span><span class="marca">' + (marcada ? '✓' : '') + '</span></button>'
-        + '<button type="button" class="cat-acao cat-ed" data-esc-editar="' + escaparHtml(o) + '" aria-label="Corrigir ' + escaparHtml(o) + '" title="Corrigir">✎</button></div>';
+      return '<div class="cat-linha"><button type="button" class="cat-item' + (marcada ? ' selecionado' : '') + '" data-esc="' + escaparHtml(o) + '"><span>' + escaparHtml(o) + '</span><span class="marca">' + (marcada ? '✓' : '') + '</span></button></div>';   /* v4.25: sem ✎ — renomear só no aparelho fazia a opção "sumir"; opção só nasce no servidor */
     };
     const bruto = String(escolhaTermo_[chave] || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
     const criarCom = bruto && !opcoesEscolha_(chave).some((o) => semAcento_(o) === semAcento_(bruto))
@@ -2127,6 +2144,13 @@
       : sug.length ? '<div class="sug-titulo">Já cadastradas parecidas — toque para copiar o nome:</div><div class="sug-lista">' + sug.map((o) => '<div class="sug-linha"><button type="button" class="sug-copiar" data-esc-copiar="' + escaparHtml(o) + '"><span class="sug-nome">' + escaparHtml(o) + '</span><span class="sug-dica">copiar nome</span></button></div>').join('') + '</div>'
       : '<div class="sug-titulo">Nenhuma opção parecida. Pode criar.</div>';
   }
+  /* v4.25: opção nova (tamanho/cor) SEMPRE nasce no servidor (vale para todos). Antes, se a checagem de versão ainda não tinha voltado (ou falhou uma vez),
+   * a opção ficava só neste aparelho e "sumia" ao recarregar. Agora confirma o servidor na hora e, sem ele, recusa com frase clara. */
+  async function garantirOpcoesServidor_() {
+    if (opcoesNoServidor_) return true;
+    try { _versaoPromessa = null; const v = await versaoServidor(); if (v && v.opcoesLista) { opcoesNoServidor_ = true; return true; } } catch (e) {}
+    return false;
+  }
   async function adicionarEscolha_(chave) {
     const cfg = CAMPOS_ESCOLHA_[chave];
     const inp = document.getElementById(cfg.input);
@@ -2134,18 +2158,19 @@
     if (!nome) { inp.focus(); return; }
     const igual = opcoesEscolha_(chave).find((o) => semAcento_(o) === semAcento_(nome));
     let alvo = igual || nome;
-    if (!igual && opcoesNoServidor_) { // v4.18: vale para todos os usuários, então só entra se o servidor aceitar
+    if (!igual) {
       const bt = document.getElementById(cfg.confirmar); const txt0 = bt ? bt.textContent : '';
       if (bt) { bt.disabled = true; bt.textContent = 'Adicionando...'; }
       try {
+        if (!(await garantirOpcoesServidor_())) { alert('Não consegui falar com o servidor para guardar esta opção para todos. Confira a internet e tente de novo (nada foi criado).'); return; }
         const resp = await chamarAdmin_({ action: chave === 'cores' ? 'addCor' : 'addTamanho', nome: nome });
-        if (!resp || !resp.ok) { const t = textoErroCat_(resp, 'Não consegui guardar. Só o Admin total cria opções novas.'); if (t) alert(t); return; }
+        if (!resp || !resp.ok) { const t = textoErroCat_(resp, (resp && resp.semRede) ? 'Sem conexão: a opção NÃO foi criada. Tente de novo.' : 'Não consegui guardar. Só o Admin total cria opções novas.'); if (t) alert(t); return; }
         alvo = resp.nome || nome;
         if (!cfg.base.some((o) => semAcento_(o) === semAcento_(alvo))) cfg.base.push(alvo);
         montarRapidos_();
         try { localStorage.setItem(CACHE_OPCOES_, JSON.stringify({ tamanhos: TAMANHOS_RAPIDOS, cores: CORES_RAPIDAS })); } catch (e) {}
       } finally { if (bt) { bt.disabled = false; bt.textContent = txt0; } }
-    } else if (!igual) escolhaNovas_[chave].push(nome);
+    }
     escolhaSel_[chave].add(alvo);
     inp.value = '';
     fecharCriacaoEscolha_(chave);
@@ -2418,6 +2443,17 @@
       } catch (e) { rej(e); }
     });
   }
+  // v4.25: peça NOVA com todas as mídias já no servidor = o registro é só texto + endereços (leve). Guardado SEM credencial: quem terminar (aqui ou em outra tela) põe a sessão na hora.
+  function pacoteLeve_(it) {
+    try { if (it.ehEdicao || !midiaPronta_(it)) return null; const d = Object.assign({}, montarDadosFinais_(it).dados); delete d.pin; const t = JSON.stringify(d); return t.length > 60000 ? null : d; } catch (e) { return null; }
+  }
+  const HIST_ENVIOS_ = 'tk_envios_hist_v1';
+  function histEnvio_(it, estado) {
+    try {
+      const l = JSON.parse(localStorage.getItem(HIST_ENVIOS_) || '[]'); l.unshift({ t: String(it.titulo || 'Peça').slice(0, 60), q: Date.now(), r: estado || it.estado, m: String(it.msg || '').slice(0, 140) });
+      localStorage.setItem(HIST_ENVIOS_, JSON.stringify(l.slice(0, 40)));
+    } catch (e) {}
+  }
   async function guardarEnvio_(it) {
     try {
       const db = await bdEnvios_();
@@ -2425,7 +2461,7 @@
         const tx = db.transaction('e', 'readwrite');
         tx.objectStore('e').put({ k: it.k, titulo: it.titulo, ehEdicao: it.ehEdicao, temVideo: it.temVideo, videoArquivo: null, videoArquivos: arquivosDeVideo_(it), videosSalvos: it.videosSalvos || [], videosRemover: it.videosRemover || [], capaNovaB64: it.capaNovaB64 || null,
           galeriaNovaB64: it.galeriaNovaB64 || [], dados: it.dados, rascunhoId: it.rascunhoId || null, etapa: it.etapa || 'fila', msg: it.estado === 'erro' ? it.msg : '',
-          subiu: it.subiu || null, v: 2 });   // v4.20: o que já subiu (endereços) fica guardado; v:2 = o servidor sabe reconhecer reenvio (opId)
+          subiu: it.subiu || null, v: 2, ka: !!it.ka, pacote: pacoteLeve_(it) });   // v4.25: pacote final leve (sem credencial) para qualquer tela terminar; v4.20: o que já subiu (endereços) fica guardado; v:2 = o servidor sabe reconhecer reenvio (opId)
         tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error);
       });
       db.close();
@@ -2433,6 +2469,7 @@
   }
   async function apagarEnvio_(it) {
     if (!it || !it.k) return;
+    if (it.estado === 'ok' || it.estado === 'aviso' || it.estado === 'offline' || it.estado === 'erro') histEnvio_(it, it.estado === 'erro' ? 'descartado' : it.estado);
     try {
       const db = await bdEnvios_();
       await new Promise((res) => { const tx = db.transaction('e', 'readwrite'); tx.objectStore('e').delete(it.k); tx.oncomplete = res; tx.onerror = res; tx.onabort = res; });
@@ -2498,7 +2535,7 @@
     atualizarFlut_();
     { const pend = envios.filter(e => e.estado === 'fila' || e.estado === 'enviando').length;
       ajustarWakeLock_(pend);
-      if (pend) { const av = document.createElement('div'); av.className = 'env-nao-saia'; av.setAttribute('role', 'status'); av.textContent = '⏳ Enviando: ' + (pend === 1 ? 'falta 1 peça' : 'faltam ' + pend + ' peças') + '. Pode usar o painel; só não feche o app até terminar.'; box.appendChild(av); } }
+      if (pend) { const av = document.createElement('div'); av.className = 'env-nao-saia'; av.setAttribute('role', 'status'); av.textContent = '⏳ Enviando: ' + (pend === 1 ? 'falta 1 peça' : 'faltam ' + pend + ' peças') + '. Pode usar o painel e as outras telas; o que já está no servidor termina sozinho.'; box.appendChild(av); } }
     envios.forEach((it) => {
       const linha = document.createElement('div'); linha.className = 'env-item env-' + (it.estado === 'fila' ? 'enviando' : it.estado);
       const t = document.createElement('div'); t.className = 'env-txt';
@@ -2535,6 +2572,16 @@
       }
       box.appendChild(linha);
     });
+    // v4.25: histórico consultável (só título, resultado e hora; nunca dados de pessoas). Sumir da fila NÃO apaga o registro.
+    try {
+      const h = JSON.parse(localStorage.getItem('tk_envios_hist_v1') || '[]');
+      if (h.length) {
+        const det = document.createElement('details'); det.className = 'env-hist';
+        const rot = { ok: '✅ cadastrada', aviso: '⚠️ com aviso', offline: '📴 guardada p/ sincronizar', descartado: '🗑️ descartada', erro: '❌ falhou' };
+        det.innerHTML = '<summary>🕘 Últimos envios (' + h.length + ')</summary>' + h.slice(0, 15).map(x => '<div class="env-hist-l"><b>' + escaparHtml(x.t) + '</b> · ' + (rot[x.r] || escaparHtml(x.r)) + ' · ' + new Date(x.q).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + '</div>').join('');
+        box.appendChild(det);
+      }
+    } catch (e) {}
   }
   function sumirDepois(it, ms) { setTimeout(() => { const i = envios.indexOf(it); if (i !== -1 && (it.estado === 'ok' || it.estado === 'offline')) { tirarEnvio_(it); desenharEnvios(); } }, ms); }
 
@@ -2963,17 +3010,21 @@
       trabalhadorEnvio_().finally(() => { ativosEnvio_--; if (!ativosEnvio_) { processandoEnvios = false; fimDaFila_(); } });
     }
   }
+  // v4.25: o que realmente depende desta página = mídia ainda SUBINDO (ou edição). Peça nova com tudo no servidor tem só o registro leve para fazer: ele sai sozinho ao trocar de tela
+  // (fetch keepalive + opId: o servidor nunca duplica) e termina/é confirmado em qualquer tela do app. Só avisa quando há risco de verdade.
+  function pendentesQueDependem_() { return envios.filter(e => (e.estado === 'fila' || e.estado === 'enviando') && (e.ehEdicao || !midiaPronta_(e))); }
   window.addEventListener('beforeunload', (ev) => {
-    if (envios.some(e => e.estado === 'fila' || e.estado === 'enviando')) { ev.preventDefault(); ev.returnValue = ''; }
+    if (pendentesQueDependem_().length) { ev.preventDefault(); ev.returnValue = ''; }
   });
-  // Os envios rodam NESTA página: sair (ou fechar o app) interrompe o que ainda não terminou. A barra inferior avisa antes.
   window.TKSairBloqueio = () => {
-    const n = envios.filter(e => e.estado === 'fila' || e.estado === 'enviando').length;
+    salvarAoMinimizar_();   // peças com mídia pronta: o registro leve sai agora, antes de trocar de tela
+    const dep = pendentesQueDependem_(), n = dep.length;
     if (!n) return '';
-    const base = '⚠️ Ainda ' + (n === 1 ? 'falta 1 peça' : 'faltam ' + n + ' peças') + ' para terminar de enviar.\n\n';
+    const prontas = envios.filter(e => (e.estado === 'fila' || e.estado === 'enviando') && !e.ehEdicao && midiaPronta_(e)).length;
+    const base = '⚠️ ' + (n === 1 ? '1 peça ainda está ENVIANDO fotos/vídeos' : n + ' peças ainda estão ENVIANDO fotos/vídeos') + '.\n\n' + (prontas ? (prontas === 1 ? '(1 outra já tem tudo no servidor e termina sozinha.)\n\n' : '(' + prontas + ' outras já têm tudo no servidor e terminam sozinhas.)\n\n') : '');
     return base + (envioGuardadoOk_
-      ? 'Se você sair agora, o envio PAUSA. O que ficou guardado neste aparelho continua sozinho quando você voltar ao painel, mas só termina de verdade se o painel ficar aberto.\n\nOK = sair mesmo assim · Cancelar = ficar e deixar terminar.'
-      : 'Se você sair agora, o que não terminou SE PERDE e precisa ser cadastrado de novo.\n\nOK = sair mesmo assim · Cancelar = ficar e deixar terminar.') ;
+      ? 'Se você sair agora, o envio dessas fotos/vídeos PAUSA e continua quando você voltar ao painel.\n\nOK = sair mesmo assim · Cancelar = ficar e deixar terminar.'
+      : 'Se você sair agora, o que não terminou SE PERDE e precisa ser cadastrado de novo.\n\nOK = sair mesmo assim · Cancelar = ficar e deixar terminar.');
   };
 
   document.getElementById('form-produto').addEventListener('submit', (e) => {
@@ -2991,7 +3042,7 @@
         nome: document.getElementById('nome').value.trim(),
         categoria: Array.from(selecionadasCategorias).join(', '),
         genero: Array.from(selecionadosGeneros).join(', '),
-        preco: consultaMarcada_() ? '' : document.getElementById('preco').value,
+        preco: precoFinalCampo_(),
         ...(consultarLiberado_ ? { consultarValor: consultaMarcada_() } : {}),
         estoque: document.getElementById('estoque').value,
         tamanhos: document.getElementById('tamanhos').value.trim(),
@@ -3023,7 +3074,7 @@
       nome: document.getElementById('nome').value.trim(),
       categoria: Array.from(selecionadasCategorias).join(', '),
       genero: Array.from(selecionadosGeneros).join(', '),
-      preco: consultaMarcada_() ? '' : document.getElementById('preco').value,
+      preco: precoFinalCampo_(),
       ...(consultarLiberado_ ? { consultarValor: consultaMarcada_() } : {}),
       estoque: document.getElementById('estoque').value,
       tamanhos: document.getElementById('tamanhos').value.trim(),
@@ -3348,7 +3399,8 @@
     document.getElementById('precos-campo-pct').hidden = m !== 'pct';
     document.getElementById('precos-campo-valor').hidden = m !== 'escrito';
     document.getElementById('precos-erro').hidden = true;
-    document.getElementById('precos-ok').textContent = m === 'consulta' ? 'Passar para “Consulte valor”' : 'Aplicar';
+    document.getElementById('precos-todas-box').hidden = m !== 'padrao';
+    document.getElementById('precos-ok').textContent = m === 'consulta' ? 'Passar para “Consulte valor”' : (m === 'padrao' ? 'Ver o que muda' : 'Aplicar');
   }
   document.querySelectorAll('input[name="precos-modo"]').forEach(r => r.addEventListener('change', sincPrecos_));
   document.getElementById('btn-bulk-preco').addEventListener('click', () => {
@@ -3356,6 +3408,8 @@
     document.getElementById('precos-resumo').textContent = marcadas.length + (marcadas.length === 1 ? ' peça selecionada' : ' peças selecionadas') + (semPreco ? ' · ' + semPreco + ' em “Consulte valor”' : '') + '.';
     document.getElementById('precos-modo-escrito').hidden = !consultarLiberado_;
     document.getElementById('precos-modo-consulta').hidden = !consultarLiberado_;
+    document.getElementById('precos-modo-padrao').hidden = !precoTerminacaoLiberado_;
+    document.getElementById('precos-todas').checked = false;
     document.querySelector('input[name="precos-modo"][value="pct"]').checked = true;
     document.getElementById('precos-pct').value = ''; document.getElementById('precos-valor').value = '';
     sincPrecos_();
@@ -3367,6 +3421,23 @@
     const m = modoPrecos_(), erro = document.getElementById('precos-erro');
     const falha = t => { erro.textContent = t; erro.hidden = false; };
     let tipo, valor;
+    if (m === 'padrao') {   // v4.25 (backend 4.21): simula, mostra o que muda e só então grava
+      const todas = document.getElementById('precos-todas').checked, base = { action: 'bulkUpdate', tipoAcao: 'padronizarPrecos', valor: true };
+      if (todas) base.todos = true; else base.ids = Array.from(selecionadosBulk);
+      const btn = document.getElementById('precos-ok'); btn.disabled = true; btn.textContent = 'Conferindo…';
+      try {
+        const sim = await chamarAdmin_(Object.assign({}, base, { simular: true }));
+        if (!sim || !sim.ok) return falha((sim && sim.erro) || 'Não consegui conferir agora. Tente de novo.');
+        if (!sim.mudariam) { alert('Nada para arrumar: as ' + sim.total + ' peças já estão certas' + (sim.semPreco ? ' (' + sim.semPreco + ' “Consulte valor” não contam).' : '.')); return; }
+        const ex = (sim.exemplos || []).slice(0, 5).map(e => '• ' + (e.codigo ? e.codigo + ' ' : '') + formatarReal(e.de) + ' → ' + formatarReal(e.para) + ' (à vista ' + formatarReal(e.avista) + ')').join('\n');
+        if (!confirm('Arrumar ' + sim.mudariam + ' de ' + sim.total + ' peças para o à vista terminar em ,99/,49?\n\n' + ex + (sim.mudariam > 5 ? '\n…' : '') + '\n\nOK = aplicar agora.')) return;
+        btn.textContent = 'Aplicando…';
+        const r = await chamarAdmin_(base);
+        if (!r || !r.ok) return falha((r && r.erro) || 'Não consegui aplicar. Tente de novo.');
+        fecharComHistorico_('overlay-precos'); alert('Pronto! ' + r.afetados + ' peça(s) arrumada(s).'); selecionadosBulk.clear(); atualizarBarraBulk(); await carregarProdutos();
+      } finally { btn.disabled = false; sincPrecos_(); }
+      return;
+    }
     if (m === 'pct') {
       valor = parseFloat(String(document.getElementById('precos-pct').value).replace(',', '.'));
       if (!isFinite(valor) || valor === 0) return falha('Digite a porcentagem (ex.: 10 para +10%, -15 para 15% de desconto).');

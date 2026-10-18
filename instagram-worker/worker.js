@@ -90,6 +90,7 @@ async function iniciar(env) {
   await env.DB.batch(DDL.map((s) => env.DB.prepare(s)));
   try { await env.DB.prepare("ALTER TABLE postagem ADD COLUMN canal TEXT DEFAULT ''").run(); } catch (e) { /* ja existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN seq INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
+  try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   for (const col of COLUNAS_NOVAS) { try { await env.DB.prepare('ALTER TABLE rascunho ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   try {   // v3.7: preço sempre calculado (o escrito é o à vista). Corrige os rascunhos antigos cujo preço da legenda foi gravado como se fosse o cheio.
     if (!(await cfgGet(env, 'mig_preco_v2'))) {
@@ -705,6 +706,7 @@ export async function processarPostagens(env) {
     await env.DB.prepare("UPDATE postagem SET status='manual_pendente', atualizado_em=? WHERE modo='manual' AND status='agendado' AND agendado_em<=?").bind(t, t).run();
     const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY agendado_em, id LIMIT 4").bind(t).all()).results || [];
     if (!lin.length) return { feitas: 0 };
+    const cfgP = await lerCfgPost(env);
     /* v1.2: o token do Instagram só é exigido quando ALGUMA postagem vencida vai para o Instagram.
      * Antes ele era exigido para a fila inteira: com "somente WhatsApp" escolhido, sem token do
      * Instagram a peça virava erro e o WhatsApp nunca era chamado. */
@@ -715,9 +717,13 @@ export async function processarPostagens(env) {
     const usados = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status='publicado' AND COALESCE(canal,'instagram') IN ('instagram','ambos') AND publicado_em>=?").bind(desde).first()) || {}).n) || 0;
     let feitas = 0, novas = usados;
     for (const p of lin) {
+      if (p.status === 'agendado' && !p.urgente && cfgP.pausaAtiva && foraDaPausa(cfgP, Date.now()) > Date.now()) {          // agendada antes da regra: não sai na pausa, vai para o primeiro horário livre depois dela
+        try { const r = ajustarHorario(cfgP, p.tipo, Date.now(), await ocupadosDoTipo_(env, p.tipo, p.id, gapDoTipoMs(cfgP, p.tipo))); await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(new Date(r.t).toISOString(), agora(), p.id).run(); } catch (e) { /* tenta de novo no próximo minuto */ }
+        continue;
+      }
       const usaIg = canalUsaInstagram_(p.canal);
       if (usaIg && !token) { await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('O Instagram não está conectado. Conecte o token e use "Tentar de novo".', agora(), p.id).run(); continue; }
-      if (usaIg && p.status === 'agendado') { if (novas >= MAX_POSTS_24H) continue; novas++; }   // limite diário: fica agendada para o dia seguinte
+      if (usaIg && p.status === 'agendado') { if (novas >= (cfgP.max24h || MAX_POSTS_24H)) continue; novas++; }   // limite diário: fica agendada para o dia seguinte
       try { await avancarPostagem(env, token, p); feitas++; } catch (e) { try { await falhaPostagem(env, p, e); } catch (e2) { /* próximo minuto tenta de novo */ } }
     }
     return { feitas: feitas };
@@ -730,6 +736,73 @@ export function intervaloHumanoMs(tipoAnterior, tipo, sorteio) {
   const r = typeof sorteio === 'function' ? sorteio : Math.random, curto = tipoAnterior === 'story' && tipo === 'story';
   const min = curto ? 1 : 3, max = curto ? 3 : 9;
   return Math.round((min + r() * (max - min)) * 60000);
+}
+
+/* ==========================================================================
+ * v1.4 -- REGRAS DA FILA (18/10/2026): pausa da madrugada, intervalo mínimo POR TIPO, encaixes e reorganização
+ *
+ *  Pedido do Pablo: só o gestor (Admin total) mexe nas regras de segurança (pausa, intervalos); quem tem permissão de postar
+ *  só muda horário, sobe/desce e encaixa -- e o SERVIDOR garante as regras em qualquer caso:
+ *   - nunca duas postagens do MESMO tipo (Story, Feed, Carrossel, Reels) no mesmo horário: sempre há o intervalo mínimo daquele tipo
+ *     (tipos diferentes podem coincidir);
+ *   - nada sai dentro da pausa (padrão 22:00-06:30, horário de Fortaleza, editável); passou da pausa vai para o fim dela;
+ *   - "Agora mesmo" é a exceção (urgência): ignora pausa e intervalo (o gestor pode desligar isso);
+ *   - "Na sequência" = primeiro horário livre da fila DAQUELE tipo (os buracos entre as postagens agendadas também contam).
+ *  Funções puras e exportadas (testadas em tests/worker_ig.js); a pausa também vale na hora de publicar (cron), para o que foi agendado antes da regra.
+ * ========================================================================== */
+const FUSO_MIN = -180;                       // Fortaleza = UTC-3, sem horário de verão
+export const TIPOS_FILA = ['story', 'feed', 'carrossel', 'reels'];
+export const CFG_POST_PADRAO = { pausaAtiva: true, pausaDe: '22:00', pausaAte: '06:30', gapStory: 120, gapFeed: 300, gapCarrossel: 300, gapReels: 600, folga: 30, max24h: 90, agoraIgnora: true };
+function hmParaMin_(s, padrao) { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s == null ? '' : s).trim()); if (!m) return padrao; const h = +m[1], n = +m[2]; return h > 23 || n > 59 ? padrao : h * 60 + n; }
+function minParaHm_(n) { return String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0'); }
+export function normalizarCfgPost(c) {
+  const d = CFG_POST_PADRAO, x = c && typeof c === 'object' ? c : {};
+  const num = (v, a, b, p) => { if (v === '' || v === null || v === undefined) return p; const n = Number(v); return isFinite(n) ? Math.min(b, Math.max(a, Math.round(n))) : p; };
+  const hm = (v, p) => minParaHm_(hmParaMin_(v, hmParaMin_(p, 0)));
+  return {
+    pausaAtiva: x.pausaAtiva === undefined ? d.pausaAtiva : !!x.pausaAtiva, pausaDe: hm(x.pausaDe, d.pausaDe), pausaAte: hm(x.pausaAte, d.pausaAte),
+    gapStory: num(x.gapStory, 10, 7200, d.gapStory), gapFeed: num(x.gapFeed, 10, 7200, d.gapFeed), gapCarrossel: num(x.gapCarrossel, 10, 7200, d.gapCarrossel), gapReels: num(x.gapReels, 10, 7200, d.gapReels),
+    folga: num(x.folga, 0, 600, d.folga), max24h: num(x.max24h, 1, 100, d.max24h), agoraIgnora: x.agoraIgnora === undefined ? d.agoraIgnora : !!x.agoraIgnora,
+  };
+}
+export function gapDoTipoMs(cfg, tipo) { const k = { story: 'gapStory', feed: 'gapFeed', carrossel: 'gapCarrossel', reels: 'gapReels' }[tipo]; return (Number(cfg && cfg[k]) || 300) * 1000; }
+/** Se `ms` cai dentro da pausa, devolve o instante em que ela termina; senão devolve o próprio `ms`. */
+export function foraDaPausa(cfg, ms) {
+  if (!cfg || !cfg.pausaAtiva) return ms;
+  const de = hmParaMin_(cfg.pausaDe, 1320), ate = hmParaMin_(cfg.pausaAte, 390);
+  if (de === ate) return ms;
+  const d = new Date(ms + FUSO_MIN * 60000), loc = d.getUTCHours() * 60 + d.getUTCMinutes();
+  const dentro = de < ate ? (loc >= de && loc < ate) : (loc >= de || loc < ate);
+  if (!dentro) return ms;
+  const meiaNoite = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - FUSO_MIN * 60000;      // 00:00 local daquele dia, em UTC
+  let fim = meiaNoite + ate * 60000;
+  if (fim <= ms) fim += 86400000;
+  return fim;
+}
+/** Empurra `desejadoMs` para frente até respeitar a pausa e o intervalo mínimo do tipo em relação a `ocupadosMs` (horários das outras postagens do mesmo tipo). */
+export function ajustarHorario(cfg, tipo, desejadoMs, ocupadosMs, opts) {
+  if (opts && opts.ignorarRegras) return { t: desejadoMs, ajustado: false, motivo: '' };
+  const gap = gapDoTipoMs(cfg, tipo), ord = (ocupadosMs || []).filter((x) => isFinite(x)).sort((a, b) => a - b);
+  let t = desejadoMs, motivo = '';
+  for (let i = 0; i < 2000; i++) {
+    const p = foraDaPausa(cfg, t);
+    if (p !== t) { t = p; motivo = motivo || 'pausa'; continue; }
+    const c = ord.find((o) => Math.abs(o - t) < gap);
+    if (c === undefined) break;
+    t = c + gap; motivo = motivo || 'intervalo';
+  }
+  return { t: t, ajustado: t !== desejadoMs, motivo: motivo };
+}
+/** "Na sequência": primeiro horário livre do tipo a partir de `desdeMs` (com uma folga aleatória para não parecer robô). */
+export function proximoLivre(cfg, tipo, ocupadosMs, desdeMs, sorteio) {
+  const r = typeof sorteio === 'function' ? sorteio : Math.random;
+  return ajustarHorario(cfg, tipo, desdeMs + Math.round(r() * (cfg.folga || 0) * 1000), ocupadosMs);
+}
+async function lerCfgPost(env) { let j = null; try { j = JSON.parse((await cfgGet(env, 'po_cfg')) || 'null'); } catch (e) { j = null; } return normalizarCfgPost(j); }
+async function ocupadosDoTipo_(env, tipo, excluirId, gapMs, semAgendadas) {
+  const desde = new Date(Date.now() - gapMs - 60000).toISOString();
+  const q = (await env.DB.prepare("SELECT agendado_em, publicado_em, status FROM postagem WHERE tipo=? AND id!=? AND (status IN ('processando','manual_pendente'" + (semAgendadas ? '' : ",'agendado'") + ") OR (status IN ('publicado','manual_feito') AND publicado_em>=?))").bind(tipo, excluirId || 0, desde).all()).results || [];
+  return q.map((r) => Date.parse(r.status === 'publicado' || r.status === 'manual_feito' ? r.publicado_em : r.agendado_em)).filter((x) => isFinite(x));
 }
 export function validarPostagem(b) {
   const tipo = String((b && b.tipo) || '');
@@ -747,13 +820,14 @@ export function validarPostagem(b) {
   if (link && !httpsUrl(link)) return { erro: 'O link do Story precisa começar com https://.' };
   let quando = agora();
   const sequencia = b.quando === 'sequencia';
+  const urgente = !sequencia && (!b.quando || b.quando === 'agora');
   if (b.quando && b.quando !== 'agora' && !sequencia) {
     const t = Date.parse(b.quando);
     if (!isFinite(t)) return { erro: 'A data e hora não são válidas.' };
     if (t - Date.now() > 60 * 86400000) return { erro: 'Dá para agendar até 60 dias à frente.' };
     if (t > Date.now()) quando = new Date(t).toISOString();
   }
-  return { v: { tipo: tipo, modo: modo, legenda: legenda, midias: midias, link: link, quando: quando, agora: !sequencia && quando <= agora(), sequencia: sequencia, produto: String(b.produto || '').slice(0, 40), template: String(b.template || '').slice(0, 30), grupo: String(b.grupo || '').slice(0, 40), canal: normalizarCanal_(b.canal) } };
+  return { v: { tipo: tipo, modo: modo, legenda: legenda, midias: midias, link: link, quando: quando, agora: !sequencia && quando <= agora(), urgente: urgente, sequencia: sequencia, produto: String(b.produto || '').slice(0, 40), template: String(b.template || '').slice(0, 30), grupo: String(b.grupo || '').slice(0, 40), canal: normalizarCanal_(b.canal) } };
 }
 function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
@@ -874,14 +948,14 @@ export async function rotasFotos(env, ctx, req, url, J) {       // /fotos* (equi
   }
   return null;
 }
-async function rotasPostagem(env, ctx, req, url, J) {
+async function rotasPostagem(env, ctx, req, url, J, perms) {
   const p = url.pathname;
   if (p === '/posts' && req.method === 'GET') {
     const lim = Math.min(100, Number(url.searchParams.get('limite')) || 60);
     const q = (await env.DB.prepare("SELECT * FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
     const c = (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM postagem GROUP BY status").all()).results || [];
     const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
-    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '' });
+    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', regras: 1, config: await lerCfgPost(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
   }
   let b = {}; if (req.method === 'POST') { try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); } }
   if (p === '/post' && req.method === 'POST') {
@@ -891,23 +965,50 @@ async function rotasPostagem(env, ctx, req, url, J) {
     const vs = []; for (const x of lista) { const r = validarPostagem(x); if (r.erro) return J({ ok: false, erro: r.erro }, 400); vs.push(r.v); }
     if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto' && canalUsaInstagram_(v.canal))) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
     const ids = [], quandos = [], por = String(b.por || '').slice(0, 60);
-    let cursor = null, anterior = null;                      // "na sequência": cada uma sai um pouco depois da anterior (intervalo humano)
-    for (const v of vs) {
-      if (v.sequencia) {
-        if (cursor === null) {
-          const cauda = await env.DB.prepare("SELECT MAX(agendado_em) AS t FROM postagem WHERE seq=1 AND status IN ('agendado','processando') AND agendado_em>?").bind(agora()).first();
-          cursor = cauda && cauda.t ? Date.parse(cauda.t) : null;
-        }
-        const t = cursor === null ? Date.now() + 60000 : cursor + intervaloHumanoMs(anterior, v.tipo);
-        cursor = t; v.quando = new Date(t).toISOString();
+    const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [];
+    for (let i = 0; i < vs.length; i++) {
+      const v = vs[i], gap = gapDoTipoMs(cfg, v.tipo);
+      if (!ocup[v.tipo]) ocup[v.tipo] = await ocupadosDoTipo_(env, v.tipo, 0, gap);
+      let t;
+      if (v.urgente && cfg.agoraIgnora) t = Date.now();                                  // urgência: sai já, sem pausa nem intervalo
+      else if (v.sequencia) t = proximoLivre(cfg, v.tipo, ocup[v.tipo], cursores[v.tipo] == null ? Date.now() + 60000 : cursores[v.tipo] + gap).t;
+      else {
+        const pedido = Math.max(Date.parse(v.quando), Date.now()), aj = ajustarHorario(cfg, v.tipo, pedido, ocup[v.tipo]);
+        t = aj.t; if (aj.ajustado) ajustes.push({ i: i, tipo: v.tipo, de: new Date(pedido).toISOString(), para: new Date(t).toISOString(), motivo: aj.motivo });
       }
-      anterior = v.tipo; quandos.push(v.quando);
+      cursores[v.tipo] = t; ocup[v.tipo].push(t); v.quando = new Date(t).toISOString(); v.agora = t <= Date.now() + 1000;
+      quandos.push(v.quando);
 
-      const r = await env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal).run();
+
+      const r = await env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal, urgente) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal, v.urgente ? 1 : 0).run();
       ids.push(r.meta && r.meta.last_row_id);
     }
     if (vs.some((v) => v.agora) && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
-    return J({ ok: true, ids: ids, quandos: quandos });
+    return J({ ok: true, ids: ids, quandos: quandos, ajustes: ajustes });
+  }
+  if (p === '/post/config' && req.method === 'GET') return J({ ok: true, config: await lerCfgPost(env), padrao: CFG_POST_PADRAO, podeEditar: (perms || []).indexOf('gerir_acessos') !== -1 });
+  if (p === '/post/config' && req.method === 'POST') {
+    if ((perms || []).indexOf('gerir_acessos') === -1) return J({ ok: false, erro: 'Só o gestor (Admin total) muda as regras da fila.' }, 403);
+    const nova = normalizarCfgPost(Object.assign({}, await lerCfgPost(env), b && b.config));
+    await cfgSet(env, 'po_cfg', JSON.stringify(nova));
+    return J({ ok: true, config: nova });
+  }
+  if (p === '/post/reorganizar' && req.method === 'POST') {
+    /* Ajusta as postagens JÁ agendadas às regras atuais (depois de o gestor mudar a pausa ou os intervalos). `simular:true` só conta. */
+    if ((perms || []).indexOf('gerir_acessos') === -1) return J({ ok: false, erro: 'Só o gestor (Admin total) reorganiza a fila.' }, 403);
+    const cfg = await lerCfgPost(env), limite = Date.now() + 60000;
+    let mudaram = 0; const detalhes = [];
+    for (const tipo of TIPOS_FILA) {
+      const gap = gapDoTipoMs(cfg, tipo), ocup = await ocupadosDoTipo_(env, tipo, 0, gap, true);
+      const lst = (await env.DB.prepare("SELECT id, agendado_em FROM postagem WHERE tipo=? AND status='agendado' AND urgente=0 ORDER BY agendado_em, id").bind(tipo).all()).results || [];
+      for (const x of lst) {
+        const atual = Date.parse(x.agendado_em);
+        if (!isFinite(atual) || atual <= limite) { if (isFinite(atual)) ocup.push(atual); continue; }     // o que já vai sair em instantes não se mexe
+        const r = ajustarHorario(cfg, tipo, atual, ocup); ocup.push(r.t);
+        if (r.t !== atual) { mudaram++; detalhes.push({ id: x.id, tipo: tipo, de: x.agendado_em, para: new Date(r.t).toISOString() }); if (!(b && b.simular)) await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(new Date(r.t).toISOString(), agora(), x.id).run(); }
+      }
+    }
+    return J({ ok: true, mudaram: mudaram, simulado: !!(b && b.simular), detalhes: detalhes.slice(0, 30) });
   }
   const id = Number(b.id) || 0;
   const linha = id ? await env.DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first() : null;
@@ -921,9 +1022,32 @@ async function rotasPostagem(env, ctx, req, url, J) {
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
       const r = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: b.quando }));
       if (r.erro) return J({ ok: false, erro: r.erro }, 400);
-      await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, tentativas=0, erro='', containers='', atualizado_em=? WHERE id=?").bind(r.v.quando, agora(), id).run();
-      if (r.v.agora && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
-      return J({ ok: true });
+      const cfg = await lerCfgPost(env), gap = gapDoTipoMs(cfg, linha.tipo);
+      let t = Date.parse(r.v.quando), aj = { ajustado: false, motivo: '' };
+      if (r.v.urgente && cfg.agoraIgnora) t = Date.now();
+      else { aj = ajustarHorario(cfg, linha.tipo, Math.max(t, Date.now()), await ocupadosDoTipo_(env, linha.tipo, id, gap)); t = aj.t; }
+      await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, tentativas=0, erro='', containers='', urgente=?, atualizado_em=? WHERE id=?").bind(new Date(t).toISOString(), r.v.urgente ? 1 : 0, agora(), id).run();
+      if (t <= Date.now() + 1000 && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
+      return J({ ok: true, quando: new Date(t).toISOString(), ajustado: aj.ajustado, motivo: aj.motivo });
+    }
+    if (p === '/post/proximo') {
+      /* "Mandar para o próximo horário livre" da fila do tipo (respeita pausa e intervalo). */
+      if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
+      const cfg = await lerCfgPost(env), gap = gapDoTipoMs(cfg, linha.tipo);
+      const r = proximoLivre(cfg, linha.tipo, await ocupadosDoTipo_(env, linha.tipo, id, gap), Date.now() + 60000);
+      await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, tentativas=0, erro='', containers='', urgente=0, atualizado_em=? WHERE id=?").bind(new Date(r.t).toISOString(), agora(), id).run();
+      return J({ ok: true, quando: new Date(r.t).toISOString() });
+    }
+    if (p === '/post/mover') {
+      /* Muda a ORDEM na fila do mesmo tipo trocando os horários (os horários já respeitam as regras, então a nova ordem também respeita). */
+      if (linha.status !== 'agendado') return J({ ok: false, erro: 'Só dá para mudar a ordem de postagens agendadas.' }, 409);
+      const lst = (await env.DB.prepare("SELECT id, agendado_em FROM postagem WHERE tipo=? AND status='agendado' ORDER BY agendado_em, id").bind(linha.tipo).all()).results || [];
+      const i = lst.findIndex((x) => x.id === id), n = lst.length, alvo = { subir: i - 1, descer: i + 1, primeiro: 0, ultimo: n - 1 }[String(b.dir || '')];
+      if (alvo === undefined) return J({ ok: false, erro: 'Direção inválida.' }, 400);
+      if (i < 0 || alvo < 0 || alvo >= n || alvo === i) return J({ ok: false, erro: 'Já está na ponta da fila.' }, 409);
+      const tempos = lst.map((x) => x.agendado_em), ordem = lst.map((x) => x.id); ordem.splice(i, 1); ordem.splice(alvo, 0, id);
+      for (let k = 0; k < ordem.length; k++) if (lst[k].id !== ordem[k]) await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(tempos[k], agora(), ordem[k]).run();
+      return J({ ok: true, ordem: ordem });
     }
     if (p === '/post/feito') {
       if (linha.status !== 'manual_pendente') return J({ ok: false, erro: 'Essa postagem não está esperando você.' }, 409);
@@ -976,7 +1100,7 @@ export default {
     try {
       await iniciar(env);
       const p = url.pathname;
-      if (ehPost) { const rp = (await rotasFotos(env, ctx, req, url, J)) || (await rotasPostagem(env, ctx, req, url, J)); if (rp) return rp; }
+      if (ehPost) { const rp = (await rotasFotos(env, ctx, req, url, J)) || (await rotasPostagem(env, ctx, req, url, J, perms)); if (rp) return rp; }
       if (p === '/status' && req.method === 'GET') return J(await status(env));
       if (p === '/rascunhos' && req.method === 'GET') {
         const grupo = url.searchParams.get('grupo') || 'pendente';

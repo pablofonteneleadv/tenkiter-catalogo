@@ -167,3 +167,12 @@ Recebidas 12 capturas do Pablo (`IMG_20261016_2252xx` a `2330xx`). Abaixo: o que
 - Feito: caixa "Travar a foto" (marcada), foto gira com 2 dedos, "Personalizar textos" por toque (escolhe, move, aumenta, gira; embaixo só o campo escolhido), sem texto explicativo; x_equipe.py corrigido (X da única foto já arquivava a peça).
 - Backend 4.20 colado pelo Pablo e conferido (`consultarValor: true`).
 - Falta da checklist: lote responsivo, busca expansível, duplicados do painel, vídeo no passo 2, remover "Mais detalhes" (conferir se já sumiu), categorias visíveis.
+
+
+## 18/10/2026 — preço ,99/,49, cadastro que não prende, fila de Postagens com regras, Colagem, Gerar imagens
+- Pedido do Pablo (12 imagens + texto). Backend: `catalogo-codigo-4.21.gs.txt` (colar à mão; conferir `?action=versao` → `precoTerminacao: true`). Worker `tenkiter-ig` com regras da fila: publicado pelo `deploy.yml` no merge. Service worker `tk-3.15.0`.
+- Feito: botão "Enviar para consultor TM🧡" (WhatsApp da loja); preço sempre ,99/,49 no à vista (front + backend); opções (categoria/cor/tamanho) definitivas, só Admin total cria; aviso "Ainda falta N peça" só quando a mídia ainda sobe; `nav.js` termina cadastro leve em qualquer tela + histórico;
+  Postagens: prévia leve (meia resolução), foto centralizada e travada ao trocar, toque com folga, largura da caixa, "Fazer em todos", fila por tipo com regras (pausa 22:00–06:30, intervalo mínimo por tipo, só gestor edita), ▲▼/🕐/⏭, "Agora mesmo" discreto com confirmação, seletor rápido de dia/hora, 🧩 Colagem, 🖼️ Gerar imagens (Postar reaproveita).
+- Testes passando: `postagens_fila.py` 49, `postagens_colagem.py` 26, `postagens_v425.py` 16, `postagens_admin.py` 102, `postagens_v49.py` 71, `postagens_toque.py` 28, `visual_v58/59/60`, `editor_visual`, `editor_toque`, `worker_ig.js` 260, `backend_gs.js` 615, CI local (JS/HTML/segredos/workers).
+- Limites honestos: gestos de 2 dedos só simulados; se o SO matar o navegador, o cadastro leve retoma só ao reabrir; pausa padrão ligada (22:00–06:30) é decisão minha (o gestor muda na aba 🛡️ Regras); "Fazer em todos" cobre texto, não o enquadramento da foto.
+- Pendente: bateria completa (só com autorização do Pablo); "Horário só deste" da Postagem livre ainda usa o seletor nativo; pedir ao Pablo para revogar o token Cloudflare `cfut_…` (vale até 01/12/2026).

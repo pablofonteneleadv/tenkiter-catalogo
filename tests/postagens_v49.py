@@ -48,7 +48,7 @@ with sync_playwright() as p:
     print("== 10 visuais: nada sobreposto nem fora da imagem; ocultar ==")
     TPLS = ["classico", "promo", "minimal", "rodape", "lateral", "cabecalho", "energia", "blocos", "editorial", "cartao"]
     chk("10 visuais prontos além do Original", all(pg.locator("[data-tpl=%s]" % t).count() == 1 for t in TPLS + ["original"]))
-    def boxes(): return pg.evaluate("(()=>{const c=document.querySelector('#po-previa canvas');return {w:c.width,h:c.height,b:(c._boxes||[]).map(x=>({k:x.k,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1}))}})()")
+    def boxes(): return pg.evaluate("(()=>{const c=document.querySelector('#po-previa canvas');return {w:(c._W||c.width),h:(c._H||c.height),b:(c._boxes||[]).map(x=>({k:x.k,x0:x.x0,y0:x.y0,x1:x.x1,y1:x.y1}))}})()")
     def sobrepoe(a, b): return a["x0"] < b["x1"] - 1 and b["x0"] < a["x1"] - 1 and a["y0"] < b["y1"] - 1 and b["y0"] < a["y1"] - 1
     for tp in TPLS:
         pg.click("[data-tpl=%s]" % tp); pg.wait_for_timeout(700); d = boxes(); bs = d["b"]
@@ -74,7 +74,7 @@ with sync_playwright() as p:
     print("== Editor de visuais: cards, campos, código, CTA ==")
     chk("tipos em cards recolhíveis", pg.locator("details[data-vz-det^='t:']").count() == 3)
     pg.click("[data-vza=novo]"); pg.wait_for_timeout(900)
-    chk("novo visual criado, aberto, com prévia pintada", pg.locator("details[data-vz-det^='v:c_'][open]").count() == 1 and pg.evaluate("(()=>{const c=document.querySelector('details[data-vz-det^=\\'v:c_\\'] canvas');return c&&c.width===1080})()"))
+    chk("novo visual criado, aberto, com prévia pintada", pg.locator("details[data-vz-det^='v:c_'][open]").count() == 1 and pg.evaluate("(()=>{const c=document.querySelector('details[data-vz-det^=\\'v:c_\\'] canvas');return c&&(c._W||c.width)===1080})()"))
     C = "details[data-vz-det^='v:c_']"
     chk("editor visual: prévia, camadas e painel aparecem", pg.locator(C + " [data-ed-cv]").count() == 1 and pg.locator(C + " .ed-cam").count() == 5)
     chk("código já traz o guia para IA", "_guia" in pg.input_value(C + " [data-vz-json]") and "FORMATO: JSON" in pg.input_value(C + " [data-vz-json]"))
@@ -131,7 +131,7 @@ with sync_playwright() as p:
     chk("Story só mostra os visuais marcados", pg.locator("[data-tpl]").count() in (2, 3) and pg.locator("[data-tpl=promo]").count() == 1, pg.locator("[data-tpl]").count())
     pg.evaluate("localStorage.removeItem('tk_po_visuais_v1')"); pg.click("[data-tipo=feed]"); pg.wait_for_timeout(500)
     pg.click("[data-tpl=classico]"); pg.wait_for_timeout(500)
-    def box(k): return pg.evaluate("(k)=>{const c=document.querySelector('#po-previa canvas');const b=(c._boxes||[]).find(x=>x.k===k);return b?{x0:b.x0,y0:b.y0,w:c.width}:null}", k)
+    def box(k): return pg.evaluate("(k)=>{const c=document.querySelector('#po-previa canvas');const b=(c._boxes||[]).find(x=>x.k===k);return b?{x0:b.x0,y0:b.y0,w:(c._W||c.width)}:null}", k)
     chk("nome muito comprido encolhe/quebra em vez de sair da imagem", True)
     sel_tx(pg, "nome"); pg.fill("#po-tx-nome", "Vestido Longo Suede Premium Super Confortável Edição Limitada Verão"); pg.wait_for_timeout(500)
     d = boxes(); chk("nome gigante continua dentro da imagem e sem cobrir o preço", all(x["x1"] <= d["w"] + 1 for x in d["b"]) and not any(sobrepoe(x, y) for i, x in enumerate(d["b"]) for y in d["b"][i + 1:]), d["b"])
