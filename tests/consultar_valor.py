@@ -113,7 +113,7 @@ with sync_playwright() as p:
     preencher(pg, "Peça com preço", "89.90")
     pg.click("#btn-salvar"); pg.wait_for_timeout(2500)
     cr = [x for x in log if x.get("action") == "create"]
-    chk("create com valor escrito: consultarValor:false e preço 89.90", len(cr) == 2 and cr[1].get("consultarValor") is False and cr[1].get("preco") == "89.90", cr and cr[-1])
+    chk("create com valor escrito: consultarValor:false e preço corrigido pela regra ,99 (89,90 → 89.99)", len(cr) == 2 and cr[1].get("consultarValor") is False and cr[1].get("preco") == "89.99", cr and cr[-1])
 
     print("== Admin: várias peças de uma vez com 'Consultar valor' ==")
     pg.click("#details-ferramentas > summary") if pg.locator("#details-ferramentas[open]").count() == 0 and False else None
@@ -137,7 +137,7 @@ with sync_playwright() as p:
     chk("desmarcar libera o preço e volta a exigir valor", pg.is_enabled("#preco") and "preço" in pg.inner_text("#cad-falta"))
     pg.fill("#preco", "120"); pg.click("#btn-salvar"); pg.wait_for_timeout(2000)
     up = [x for x in log if x.get("action") == "update"]
-    chk("update leva consultarValor:false e o preço novo", up and up[-1].get("consultarValor") is False and str(up[-1].get("preco")) == "120", up[-1:] )
+    chk("update leva consultarValor:false e o preço novo corrigido pela regra ,99 (120 → 119.99)", up and up[-1].get("consultarValor") is False and str(up[-1].get("preco")) == "119.99", up[-1:] )
     chk("sem erro de JavaScript no admin", not er, er); ctx.close()
 
     print("== Admin: Alterar preços em lote (% / valor escrito / Consultar valor) ==")

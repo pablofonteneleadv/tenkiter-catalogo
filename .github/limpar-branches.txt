@@ -1,4 +1,3 @@
 # <nome><TAB><sha da ponta> — aprovado por Pablo em 18/10/2026 (A7+A9 do okou.md). Esvazie depois de rodar.
-# 1ª rodada (55 branches) concluída com sucesso em 18/10/2026 (run 39141035141). Abaixo: só as 2 branches de PRs já mesclados que sobraram depois dela.
-chore/limpar-branches-2026-10-18	3e04711350308d21b00530edc85fb0d4bb8fb296
-feat/regras-limites-intervalos-2026-10-18	12d8903b8f59ed3dce63b36048971da9b090c42f
+# 1ª rodada (55 branches, run 39141035141) e 2ª rodada (2 branches de PRs mesclados) concluídas em 18/10/2026. Abaixo: a branch do PR #45 (v4.31, já mesclado).
+feat/colagem-editor-2026-10-18	2c9648d00ef346425932641349b00bee6cede6ad
