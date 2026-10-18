@@ -282,7 +282,11 @@
   .sem-auditoria #btn-abrir-auditoria, .sem-push #btn-abrir-push, .sem-portal a[href="treinamentos.html"] { display: none !important; }
   .dica-midia { font-size: 0.75rem; color: #666; margin-top: 8px; }
   .galeria-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 10px; }
-  .galeria-item { position: relative; width: 86px; height: 107px; }
+  .galeria-item { position: relative; width: 86px; height: 107px; margin-bottom: 34px; }
+  /* v4.32: "✂ Enquadrar" abre a janela com Site / Feed-Carrossel / Story; a miniatura já é o quadro 4:5 do site */
+  .galeria-item .btn-enq { position: absolute; left: 0; right: 0; top: 112px; height: 30px; width: auto; min-height: 30px; padding: 0 4px; border-radius: 8px; border: 1.5px solid #c9c9c9; background: #fff; color: #222; font-size: 0.72rem; font-weight: 700; cursor: pointer; line-height: 1; }
+  .galeria-item .btn-enq::after { content: ''; position: absolute; inset: -7px -2px -4px; }
+  .galeria-item .selo-enq { position: absolute; left: 4px; top: 24px; background: #fff; color: #0d0d0d; font-size: 0.58rem; font-weight: 800; padding: 1px 5px; border-radius: 6px; pointer-events: none; border: 1px solid #c9c9c9; }
   .galeria-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; border: 2px solid #ddd; cursor: pointer; display: block; }
   .galeria-item.capa img { border-color: var(--laranja); }
   .galeria-item .btn-remover { position: absolute; top: -6px; right: -6px; width: 24px; height: 24px; border-radius: 50%; border: none; background: #c62828; color: #fff; font-size: 0.8rem; cursor: pointer; padding: 0; line-height: 24px; z-index: 2; }
@@ -733,7 +737,7 @@
           <label class="btn-foto" for="galeria-input">📷 Tirar foto ou escolher da galeria</label>
           <input type="file" id="galeria-input" accept="image/*" multiple class="input-oculto">
           <div id="galeria-grid" class="galeria-grid"></div>
-          <div class="dica-midia">A foto com <b>★ CAPA</b> aparece primeiro no catálogo. Toque numa foto para vê-la grande (lá você pode escolher a capa), use ‹ › para mudar a ordem e ✕ para tirar.</div>
+          <div class="dica-midia">A foto com <b>★ CAPA</b> aparece primeiro no catálogo. Toque numa foto para vê-la grande (lá você pode escolher a capa), <b>✂ Enquadrar</b> para posicionar, girar e dar zoom vendo como fica no site, no Feed, no Carrossel e no Story, ‹ › para mudar a ordem e ✕ para tirar. A miniatura já mostra o recorte 4:5 que o site usa.</div>
         </div>
         <button type="button" class="btn-seo-ia" id="btn-foto-ia">✨ Preencher os campos pela foto (IA)</button>
         <div id="foto-ia-box"></div>
@@ -1384,6 +1388,24 @@
       aoCapa: (k) => tornarCapa(k)
     });
   }
+  // v4.32: "✂ Enquadrar" — janela com zoom/mover/girar vendo Site, Feed/Carrossel (4:5) e Story. "Usar" troca a foto por um JPEG 4:5 pronto
+  // (sobe de novo pelo pré-envio); a original fica guardada em `orig` até salvar, então "↩ Voltar à original" sempre funciona.
+  function abrirEnquadrar_(idx) {
+    const it = fotosItens[idx]; if (!it || !window.TKEnquadrar) return;
+    const base = it.orig || it;
+    TKEnquadrar.abrir({
+      src: base.url || base.prev, podeVoltar: !!it.orig,
+      aoAplicar: (dataUrl) => {
+        const novo = { b64: dataUrl.split(',')[1], prev: dataUrl, capa: !!it.capa, orig: base };
+        const k = fotosItens.indexOf(it); if (k < 0) return;
+        fotosItens[k] = novo; preAgendar_(novo, 'foto'); desenharFotos();
+      },
+      aoVoltar: () => {
+        const k = fotosItens.indexOf(it); if (k < 0) return;
+        base.capa = !!it.capa; fotosItens[k] = base; desenharFotos();
+      }
+    });
+  }
   function desenharFotos() {
     garantirCapa_();
     const grid = document.getElementById('galeria-grid');
@@ -1400,9 +1422,16 @@
       if (!it.url) { const n = document.createElement('span'); n.className = 'novo'; n.textContent = 'NOVA'; box.appendChild(n); }
       if (it.up) box.appendChild(criarSeloPre_(it, ''));
 
-      const x = document.createElement('button'); x.type = 'button'; x.className = 'btn-remover'; x.textContent = '✕'; x.title = 'Tirar esta foto';
+      if (it.orig) { const se = document.createElement('span'); se.className = 'selo-enq'; se.textContent = '✂ ajustada'; box.appendChild(se); }
+
+      const x = document.createElement('button'); x.type = 'button'; x.className = 'btn-remover'; x.textContent = '✕'; x.title = 'Tirar esta foto'; x.setAttribute('aria-label', 'Tirar a foto ' + (idx + 1));
       x.addEventListener('click', () => { fotosItens.splice(idx, 1); desenharFotos(); });
       box.appendChild(x);
+
+      const enq = document.createElement('button'); enq.type = 'button'; enq.className = 'btn-enq'; enq.textContent = '✂ Enquadrar';
+      enq.title = 'Posicionar, girar e dar zoom vendo como fica no site, no Feed, no Carrossel e no Story'; enq.setAttribute('aria-label', 'Enquadrar a foto ' + (idx + 1));
+      enq.addEventListener('click', () => abrirEnquadrar_(idx));
+      box.appendChild(enq);
 
       const mover = document.createElement('div'); mover.className = 'mover';
       const esq = document.createElement('button'); esq.type = 'button'; esq.textContent = '‹'; esq.title = 'Mover para trás';
@@ -4735,6 +4764,7 @@
 <script src="admin-instagram.js"></script>
 <script src="admin-postagens.js"></script>
 <script src="admin-fotoia.js"></script>
+<script src="admin-enquadrar.js"></script>
 <script src="nav.js" data-ativo="gestao"></script>
 <script src="a11y.js"></script>
 <script src="conta.js"></script>
