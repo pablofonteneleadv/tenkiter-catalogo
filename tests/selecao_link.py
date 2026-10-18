@@ -47,7 +47,7 @@ with sync_playwright() as p:
     chk("o link é do SITE e leva ?sel= com os 4 códigos", link.startswith(SITE + "?sel=") and set(q.get("sel", [""])[0].split(",")) == set(cods), link)
     chk("sem caixinha 'lista fixa' (favoritos já é lista fixa)", pg.locator("#sel-fixa").count() == 0)
     zap = unquote(pg.get_attribute("#sel-zap", "href") or "")
-    chk("mensagem do WhatsApp termina com o link completo e clicável", zap.startswith("https://wa.me/?text=") and zap.rstrip().endswith(link), zap[-120:])
+    chk("mensagem do WhatsApp termina com o link completo e clicável", zap.startswith("https://wa.me/5588993223998?text=") and zap.rstrip().endswith(link), zap[-120:])
     chk("mensagem lista as peças com preço", zap.count("• ") == 4 and "à vista" in zap, zap)
     chk("texto não cita atendente", "atendente" not in pg.inner_text("#selecao-conteudo").lower())
     pg.click("#btn-fechar-selecao"); pg.wait_for_timeout(250)

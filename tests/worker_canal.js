@@ -103,6 +103,7 @@ function d1() {
   await W.processarPostagens(env); // cria o esquema (iniciar)
   // Sem token do Instagram: só-WhatsApp não pode depender dele.
   await DB.prepare("DELETE FROM cfg WHERE chave='ig_token'").run().catch(() => {});
+  await cfg('po_cfg', JSON.stringify({ pausaAtiva: false }));   // a pausa da madrugada (22:00–06:30) das regras da fila não pode depender da hora em que o teste roda
   zapPedidos = []; zapModo = 'ok';
   let id = await novaPostagem('whatsapp');
   await W.processarPostagens(env);

@@ -23,7 +23,7 @@ with sync_playwright() as p:
             cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": tp([(a[0] + (z[0] - a[0]) * i / passos, a[1] + (z[1] - a[1]) * i / passos) for a, z in zip(ini, fim)])}); pg.wait_for_timeout(16)
         cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []}); pg.wait_for_timeout(200)
     def toque(x, y): gesto([(x, y)], [(x, y)], 1)
-    def boxes(): return pg.evaluate("(()=>{const c=document.querySelector('#po-previa canvas');const r=c.getBoundingClientRect();const k=r.width/c.width;return (c._boxes||[]).map(x=>({k:x.k,x:r.left+(x.x0+x.x1)/2*k,y:r.top+(x.y0+x.y1)/2*k,w:(x.x1-x.x0),h:(x.y1-x.y0)}))})()")
+    def boxes(): return pg.evaluate("(()=>{const c=document.querySelector('#po-previa canvas');const r=c.getBoundingClientRect();const k=r.width/(c._W||c.width);return (c._boxes||[]).map(x=>({k:x.k,x:r.left+(x.x0+x.x1)/2*k,y:r.top+(x.y0+x.y1)/2*k,w:(x.x1-x.x0),h:(x.y1-x.y0)}))})()")
     def ver_canvas(): pg.evaluate("document.querySelector('#po-previa canvas').scrollIntoView({block:'center'})"); pg.wait_for_timeout(250)
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
     pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250); pg.click("#btn-abrir-postagens"); pg.wait_for_timeout(800)

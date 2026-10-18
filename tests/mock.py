@@ -493,9 +493,21 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     return route.fulfill(json={"ok":True,"id":g["foto_seq"],"vinculo":vinc,"nome":nome,"whats":w,"instagram":ig2})
             if path=="/posts" or path.startswith("/post"):      # fila de postagens (Worker v4.6): st["ig"]["posts"]
                 g.setdefault("posts",[]); g.setdefault("post_chamadas",[]); g.setdefault("post_seq",100)
-                if path=="/posts": return route.fulfill(json={"ok":True,"posts":[x for x in g["posts"] if x["status"]!="cancelado"],"contagens":{},"conectado":g["conectado"],"usuario":"tenkitermodasceara"})
+                PADRAO_R={"pausaAtiva":True,"pausaDe":"22:00","pausaAte":"06:30","gapStory":120,"gapFeed":300,"gapCarrossel":300,"gapReels":600,"folga":30,"max24h":90,"agoraIgnora":True}
+                if g.get("regras"): g.setdefault("regras_cfg",dict(PADRAO_R))
+                if path=="/posts":
+                    r0={"ok":True,"posts":[x for x in g["posts"] if x["status"]!="cancelado"],"contagens":{},"conectado":g["conectado"],"usuario":"tenkitermodasceara"}
+                    if g.get("regras"): r0.update({"regras":1,"config":g["regras_cfg"],"podeRegras":g.get("pode_regras",True)})
+                    return route.fulfill(json=r0)
                 pb=json.loads(route.request.post_data or "{}")
                 g["post_chamadas"].append({"path":path,"corpo":pb})
+                if g.get("regras") and path=="/post/config":
+                    if m=="POST":
+                        if not g.get("pode_regras",True): return route.fulfill(status=403,json={"ok":False,"erro":"Só o gestor muda as regras da fila."})
+                        g["regras_cfg"].update(pb.get("config") or {})
+                    return route.fulfill(json={"ok":True,"config":g["regras_cfg"],"padrao":PADRAO_R,"podeEditar":g.get("pode_regras",True)})
+                if g.get("regras") and path=="/post/reorganizar":
+                    return route.fulfill(json={"ok":True,"mudaram":0 if pb.get("simular") else g.get("reorg_n",2),"total":3})
                 if path=="/post":
                     if g.get("post_recusa"): return route.fulfill(status=400,json={"ok":False,"erro":g["post_recusa"]})
                     ids=[]; quandos=[]
@@ -507,6 +519,17 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                 x=next((q for q in g["posts"] if q["id"]==pb.get("id")),None)
                 if not x: return route.fulfill(status=404,json={"ok":False,"erro":"Postagem não encontrada."})
                 if path=="/post/cancelar": x["status"]="cancelado"
+                elif path=="/post/reagendar" and g.get("regras") and pb.get("quando")!="agora":
+                    q=pb["quando"]; aj=bool(g.get("ajusta"))
+                    if aj: q="2026-10-19T09:07:00Z"
+                    x["agendadoEm"]=q; return route.fulfill(json={"ok":True,"quando":q,"ajustado":aj,"motivo":"intervalo" if aj else ""})
+                elif path=="/post/proximo": x["agendadoEm"]="2026-10-19T09:10:00Z"; return route.fulfill(json={"ok":True,"quando":x["agendadoEm"]})
+                elif path=="/post/mover":
+                    l=[q for q in g["posts"] if q["tipo"]==x["tipo"] and q["status"]=="agendado"]; l.sort(key=lambda q:q["agendadoEm"]); i=l.index(x); d=pb.get("dir")
+                    j={"subir":i-1,"descer":i+1,"primeiro":0,"ultimo":len(l)-1}[d]
+                    if 0<=j<len(l) and j!=i:
+                        l[i]["agendadoEm"],l[j]["agendadoEm"]=l[j]["agendadoEm"],l[i]["agendadoEm"]
+                    return route.fulfill(json={"ok":True})
                 elif path=="/post/reagendar": x["status"]="publicado"; x["erro"]=""
                 elif path=="/post/feito": x["status"]="manual_feito"
                 return route.fulfill(json={"ok":True})

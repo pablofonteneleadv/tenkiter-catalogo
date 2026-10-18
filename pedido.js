@@ -456,7 +456,7 @@ function abrirSelecao(daSacola) {
         ? 'Quem abrir o link vê exatamente estas peças.'
         : 'Quem abrir o link vê a loja com estes mesmos filtros (peças novas que entrarem nele aparecem também).') + '</p>' +
       '<label class="sr-only" for="sel-link">Link da seleção</label><input type="text" id="sel-link" class="link-selecao" readonly value="' + escaparHtml(link) + '">' +
-      '<a class="btn-zap" style="margin:0 16px 8px" id="sel-zap" href="' + escaparHtml('https://wa.me/?text=' + encodeURIComponent(msg)) + '" target="_blank" rel="noopener">💬 Enviar pelo WhatsApp</a>' +
+      '<a class="btn-zap" style="margin:0 16px 8px" id="sel-zap" href="' + escaparHtml(linkWhatsApp(msg)) + '" target="_blank" rel="noopener">💬 Enviar para consultor TM🧡</a>' +
       '<button type="button" class="btn-secundario-cta" id="sel-copiar">📋 Copiar link</button>' +
       (navigator.share ? '<button type="button" class="btn-secundario-cta" id="sel-nativo">↗ Mais opções de compartilhar…</button>' : '') +
       '<p class="texto-pequeno" id="sel-aviso" role="status" style="padding-bottom:16px"></p>';

@@ -32,6 +32,9 @@ def abrir(pg):
 def corpo(pg): return pg.inner_text("#po-corpo")
 def garantir(pg):
     if pg.locator('#overlay-postagens.aberto').count() == 0: abrir(pg)
+def marca(pg, dia, h, m=0):
+    """Escolhe dia (0 = hoje), hora e minuto no seletor rápido (tocar, sem campo nativo)."""
+    pg.click("[data-pkc=nova][data-pk='d:%d']" % dia); pg.click("[data-pkc=nova][data-pk='h:%d']" % h); pg.click("[data-pkc=nova][data-pk='m:%d']" % m); pg.wait_for_timeout(150)
 def aba(pg, nome): pg.click("#po-abas [data-aba=%s]" % nome); pg.wait_for_timeout(500)
 
 with sync_playwright() as p:
@@ -52,7 +55,7 @@ with sync_playwright() as p:
 
     print("== Nova postagem: Feed agora com template ==")
     abrir(pg)
-    chk("abre com as abas e o passo 1", pg.locator("#overlay-postagens.aberto").count() == 1 and pg.locator("#po-abas [role=tab]").count() == 6 and "Qual peça?" in corpo(pg))
+    chk("abre com as abas e o passo 1", pg.locator("#overlay-postagens.aberto").count() == 1 and pg.locator("#po-abas [role=tab]").count() == 7 and "Qual peça?" in corpo(pg))
     pg.fill("#po-busca", "TK-0003"); pg.wait_for_timeout(300)
     chk("busca por código mostra a peça", pg.locator(".po-card").count() >= 1, corpo(pg)[:200])
     pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(400); pg.click("[data-tipo=feed]"); pg.wait_for_timeout(500)
@@ -62,12 +65,14 @@ with sync_playwright() as p:
     chk("legenda automática: nome, preço à vista, código e link completo da peça", "à vista" in leg and "TK-0003" in leg and "https://tenkitermodas.com.br/p/TK-0003" in leg and "#tenkitermodas" in leg, leg[:300])
     chk("Feed marca só 1 foto", pg.locator(".po-m[aria-pressed=true]").count() == 1)
     pg.wait_for_timeout(1500)
-    chk("prévia do template mostra a imagem montada (canvas 1080x1350)", pg.eval_on_selector_all("#po-previa canvas", "c=>c.length>0 && c[0].width===1080 && c[0].height===1350"))
+    chk("prévia do template mostra a imagem montada (canvas 1080x1350)", pg.eval_on_selector_all("#po-previa canvas", "c=>c.length>0 && (c[0]._W||c[0].width)===1080 && (c[0]._H||c[0].height)===1350"))
     for tpl in ["promo", "minimal", "rodape", "original"]:
         pg.click("[data-tpl=%s]" % tpl); pg.wait_for_timeout(900)
         chk("template %s monta a prévia" % tpl, pg.locator("#po-previa canvas").count() == 1)
     pg.click("[data-tpl=classico]")
     axe(pg, "Nova postagem")
+    chk("o padrão do 'Quando?' é Na sequência (Agora mesmo é só para urgência)", pg.get_attribute("[data-q=sequencia]", "aria-pressed") == "true")
+    pg.click(".po-urg"); pg.click("[data-a=agora-sim]")
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(2500)
     c = g["post_chamadas"][-1]["corpo"] if g.get("post_chamadas") else {}
     chk("enviou 1 Feed 'agora' com a mídia do R2 e a legenda", c.get("tipo") == "feed" and c.get("quando") == "agora" and len(c.get("midias", [])) == 1 and "tenkiter-midia" in c["midias"][0]["url"] and "TK-0003" in c.get("legenda", ""), c)
@@ -104,11 +109,9 @@ with sync_playwright() as p:
 
     print("== Agendado, cancelar, erro ==")
     aba(pg, "nova"); pg.fill("#po-busca", "TK-0005"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(300); pg.click("[data-tipo=feed]"); pg.wait_for_timeout(300)
-    pg.click("[data-q=agendar]"); pg.fill("#po-data", "2020-01-01T10:00"); pg.click("[data-a=enviar]"); pg.wait_for_timeout(300)
+    pg.click("[data-q=agendar]"); marca(pg, 0, datetime.datetime.now().hour, 0); pg.click("[data-a=enviar]"); pg.wait_for_timeout(300)
     chk("data no passado é barrada", "pelo menos 1 minuto" in corpo(pg))
-    import datetime
-    fut = (datetime.datetime.now() + datetime.timedelta(days=2)).strftime("%Y-%m-%dT10:00")
-    pg.fill("#po-data", fut); pg.click("[data-a=enviar]"); pg.wait_for_timeout(2500)
+    marca(pg, 2, 10, 0); pg.click("[data-a=enviar]"); pg.wait_for_timeout(2500)
     c = g["post_chamadas"][-1]["corpo"]
     chk("agendado vai com data ISO no futuro", c["quando"].endswith("Z") and c["quando"] > "2026-10-12", c.get("quando"))
     chk("abre a Fila com 'Agendado'", "Agendado" in corpo(pg) and pg.locator("[data-a=cancelar]").count() >= 1)
@@ -161,7 +164,7 @@ with sync_playwright() as p:
     pg.click("[data-lm=x][data-i='3']"); pg.wait_for_timeout(200)
     chk("tirar uma mídia da lista", pg.locator("[data-lm=x]").count() == 3)
     pg.click("[data-q=sequencia]"); pg.wait_for_timeout(200)
-    chk("Na sequência explica o intervalo humano", "1 a 3 min" in corpo(pg))
+    chk("Na sequência explica o intervalo humano", "fila de" in corpo(pg) and "Story" in corpo(pg))
     n0 = len(g["posts"]); pg.click("[data-a=enviar]"); pg.wait_for_timeout(3500)
     c = g["post_chamadas"][-1]["corpo"]
     if "posts" not in c: print("TELA:", corpo(pg)[:400])
@@ -173,7 +176,7 @@ with sync_playwright() as p:
     pg.set_input_files("#po-livre-arq", [os.path.join(d, "livre.mp4"), os.path.join(d, "livre0.jpg"), os.path.join(d, "livre1.jpg")]); pg.wait_for_timeout(500)
     pg.click("[data-q=agendar]"); pg.wait_for_timeout(200)
     amanha = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-    pg.fill("#po-data", amanha + "T07:00"); pg.fill("#po-h-2", amanha + "T12:30"); pg.wait_for_timeout(200)
+    marca(pg, 1, 7, 0); pg.fill("#po-h-2", amanha + "T12:30"); pg.wait_for_timeout(200)
     chk("com Dia e hora: caixa 'em sequência' e horário próprio por mídia", pg.locator("#po-seqag").count() == 1 and pg.locator("[data-hora]").count() == 3)
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(3500)
     c = g["post_chamadas"][-1]["corpo"]["posts"]
@@ -183,7 +186,7 @@ with sync_playwright() as p:
     print("-- livre: Feed, mesmo horário e Story com link")
     aba(pg, "nova"); pg.click("[data-modo=livre]"); pg.click("[data-tipo=feed]")
     pg.set_input_files("#po-livre-arq", [os.path.join(d, "livre1.jpg")]); pg.wait_for_timeout(400)
-    pg.fill("#po-leg", "Aviso da loja: amanhã abrimos mais cedo!"); pg.click("[data-q=agendar]"); pg.fill("#po-data", amanha + "T07:00")
+    pg.fill("#po-leg", "Aviso da loja: amanhã abrimos mais cedo!"); pg.click("[data-q=agendar]"); marca(pg, 1, 7, 0)
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(3000)
     c2 = g["post_chamadas"][-1]["corpo"]
     chk("mesmo horário de outra postagem é aceito (07:00 de novo, sem conflito)", c2["quando"] == t[0] and c2["legenda"].startswith("Aviso da loja"), c2.get("quando"))
@@ -201,7 +204,7 @@ with sync_playwright() as p:
     from PIL import Image as _I
     d2 = os.path.join(AQUI, "saida"); _I.new("RGB", (900, 1200), "teal").save(os.path.join(d2, "cli1.jpg")); _I.new("RGB", (900, 1200), "purple").save(os.path.join(d2, "cli2.jpg"))
     def caixa(pg, idx, k):
-        return pg.evaluate("([i,k])=>{const c=document.querySelectorAll('#po-previa canvas')[i];const b=(c._boxes||[]).find(x=>x.k===k);return b?{x0:b.x0,y0:b.y0,x1:b.x1,y1:b.y1,w:c.width,h:c.height}:null}", [idx, k])
+        return pg.evaluate("([i,k])=>{const c=document.querySelectorAll('#po-previa canvas')[i];const b=(c._boxes||[]).find(x=>x.k===k);return b?{x0:b.x0,y0:b.y0,x1:b.x1,y1:b.y1,w:(c._W||c.width),h:(c._H||c.height)}:null}", [idx, k])
     def arrastar(pg, idx, k, dx_frac, dy_frac):
         pg.locator("#po-previa canvas").nth(idx).scroll_into_view_if_needed(); pg.wait_for_timeout(200)
         r = pg.locator("#po-previa canvas").nth(idx).bounding_box(); b = caixa(pg, idx, k)
@@ -253,7 +256,7 @@ with sync_playwright() as p:
     pg.click("[data-a=fotousar]"); pg.wait_for_timeout(1500)
     chk("abre a fila de Story só com o template Ela usa TM", pg.locator("#po-abas [data-aba=nova][aria-selected=true]").count() == 1 and pg.locator("[data-modo=cliente][aria-pressed=true]").count() == 1 and pg.locator("[data-tipo]").count() == 1 and pg.locator("[data-tpl]").count() == 0, corpo(pg)[:200])
     chk("mostra os 4 textos prontos (ElausaTM🧡 EleusaTM🧡 ElasusamTM🧡 ElesusamTM🧡)", [pg.locator("[data-var]").nth(i).inner_text() for i in range(4)] == ["ElausaTM🧡", "EleusaTM🧡", "ElasusamTM🧡", "ElesusamTM🧡"])
-    chk("uma prévia 1080×1920 por foto escolhida", pg.eval_on_selector_all("#po-previa canvas", "c=>c.length===2&&c.every(x=>x.width===1080&&x.height===1920)"))
+    chk("uma prévia 1080×1920 por foto escolhida", pg.eval_on_selector_all("#po-previa canvas", "c=>c.length===2&&c.every(x=>(x._W||x.width)===1080&&(x._H||x.height)===1920)"))
     w0 = caixa(pg, 0, "marca"); pg.click("[data-var='ElasusamTM🧡']"); pg.wait_for_timeout(900); w1 = caixa(pg, 0, "marca")
     chk("tocar numa opção troca o texto da imagem e do campo", pg.input_value("#po-tx-marca") == "ElasusamTM🧡" and (w1["x1"] - w1["x0"]) > (w0["x1"] - w0["x0"]) + 20, [w0, w1])
     sel_tx(pg, "marca"); pg.fill("#po-tx-marca", "ElaUsaTM 🧡"); pg.wait_for_timeout(300)
