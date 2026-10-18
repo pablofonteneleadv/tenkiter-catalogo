@@ -74,6 +74,12 @@ def vars_declaradas(caminho_toml):
             m = re.search(r'^binding\s*=\s*"([^"]+)"', bloco, re.M)
             declaradas.add(m.group(1) if m else nome_padrao)
 
+    # [ai] binding = "AI"  (Workers AI: tabela simples, nao lista)
+    bloco_ai = re.search(r"^\[ai\]\s*$(.*?)(?=^\[|\Z)", texto, re.M | re.S)
+    if bloco_ai:
+        m = re.search(r'^binding\s*=\s*"([^"]+)"', bloco_ai.group(1), re.M)
+        declaradas.add(m.group(1) if m else "AI")
+
     return declaradas
 
 
