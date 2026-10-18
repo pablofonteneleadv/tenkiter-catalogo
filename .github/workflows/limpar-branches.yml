@@ -1,0 +1,82 @@
+# Apaga branches OBSOLETAS listadas em .github/limpar-branches.txt (pedido do Pablo, 18/10/2026: "apague branches que não sirvam mais").
+#
+# POR QUE EXISTE: a sessão do Claude não consegue apagar branch (o proxy do GitHub dá 403 em DELETE git/refs). Este workflow usa o
+# GITHUB_TOKEN do próprio GitHub e só mexe no que está na lista — o Claude não decide nada sozinho aqui; o Pablo autorizou a limpeza.
+#
+# TRAVAS (todas precisam passar para uma branch ser apagada):
+#   1. o nome está na lista (uma linha por branch: <nome><TAB><sha-do-commit-ponta>);
+#   2. a ponta da branch HOJE é exatamente o sha da lista (se alguém empurrou algo novo depois da revisão, NÃO apaga);
+#   3. não é `main`, não é protegida, não começa com `restauracao-`;
+#   4. o sha de cada branch apagada fica impresso no log (para recriar com `git push origin <sha>:refs/heads/<nome>`).
+# Como usar: edite .github/limpar-branches.txt (merge na main dispara sozinho) ou Actions → Limpar branches obsoletas → Run workflow.
+# Depois de rodar, esvazie a lista (um PR de docs) para a próxima vez não tentar de novo.
+name: Limpar branches obsoletas
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Digite APAGAR para confirmar a execução manual'
+        required: true
+        default: ''
+  push:
+    branches: [main]
+    paths:
+      - '.github/limpar-branches.txt'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: limpar-branches
+  cancel-in-progress: false
+
+jobs:
+  limpar:
+    name: Apagar a lista aprovada
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' || github.event.inputs.confirmar == 'APAGAR'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apagar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess, sys
+          repo = os.environ["GITHUB_REPOSITORY"]
+          def gh(*args):
+              r = subprocess.run(["gh", "api", *args], capture_output=True, text=True)
+              return r.returncode, r.stdout, r.stderr
+          itens = []
+          for linha in open(".github/limpar-branches.txt", encoding="utf-8"):
+              linha = linha.strip()
+              if not linha or linha.startswith("#"):
+                  continue
+              partes = linha.split("\t")
+              if len(partes) != 2 or not re.fullmatch(r"[0-9a-f]{40}", partes[1]):
+                  print("::error::linha inválida (esperado <nome><TAB><sha de 40 letras>): %r" % linha); sys.exit(1)
+              itens.append((partes[0], partes[1]))
+          print("%d branch(es) na lista" % len(itens))
+          apagadas = puladas = 0
+          for nome, sha in itens:
+              if nome in ("main", "master") or nome.startswith("restauracao-") or ".." in nome or not re.fullmatch(r"[A-Za-z0-9._/\-]+", nome):
+                  print("PULADA (nome proibido): %s" % nome); puladas += 1; continue
+              cod, saida, err = gh("repos/%s/branches/%s" % (repo, nome))
+              if cod != 0:
+                  print("já não existe: %s" % nome); continue
+              info = json.loads(saida)
+              if info.get("protected"):
+                  print("PULADA (protegida): %s" % nome); puladas += 1; continue
+              if info["commit"]["sha"] != sha:
+                  print("PULADA (a ponta mudou: hoje %s, lista %s): %s" % (info["commit"]["sha"][:9], sha[:9], nome)); puladas += 1; continue
+              cod, saida, err = gh("-X", "DELETE", "repos/%s/git/refs/heads/%s" % (repo, nome))
+              if cod == 0:
+                  print("APAGADA: %s (era %s)" % (nome, sha)); apagadas += 1
+              else:
+                  print("::error::não consegui apagar %s: %s" % (nome, (err or saida)[:200])); puladas += 1
+          print("RESUMO: %d apagada(s), %d pulada(s)" % (apagadas, puladas))
+          cod, saida, err = gh("repos/%s/branches?per_page=100" % repo, "--paginate", "--jq", ".[].name")
+          print("Branches que restam:\n" + saida)
+          sys.exit(1 if puladas and apagadas == 0 and itens else 0)
+          PY
