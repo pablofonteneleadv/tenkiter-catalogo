@@ -68,7 +68,7 @@ jobs:
   # deploy inteiro morria sem nenhum aviso legivel.
   credenciais:
     name: Conferir credenciais da Cloudflare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: ci
     if: ${{ always() && (inputs.skip_ci == true || needs.ci.result == 'success') }}
     steps:
@@ -82,7 +82,7 @@ jobs:
 
   publicar:
     name: Publicar ${{ matrix.script }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: credenciais
     # Com skip_ci=true o job `ci` fica SKIPPED e o `credenciais` roda por causa do always().
     # Sem este always() o GitHub pula tambem o `publicar` (ancestral skipped) e os Workers
@@ -173,7 +173,7 @@ jobs:
 
   verificar:
     name: Verificar os 3 Workers publicados
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: publicar
     if: ${{ always() && needs.publicar.result == 'success' }}
     steps:
