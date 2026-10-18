@@ -6,6 +6,16 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [Não publicado] - 2026-10-18
+
+### Adicionado
+- **Treinamento "verificado" (módulo 0, só administrador)**: checagem rápida dentro da lição (sem nota; só libera
+  "Confirmo que li" depois de acertar), perguntas da *regra de ouro* na prova (`[CRÍTICA]`: errou uma, não passa),
+  aba **Prática & Certificados** para a gestão validar a prática (fica registrado quem e quando), certificado com
+  código e QR (sem nota, sem CPF) e página pública `verificar.html`. Novos arquivos: `tm-verificado.js`,
+  `verificar.html`, `vendor-qrcode.js` (qrcode-generator 1.4.4, MIT).
+  **Só liga quando o backend RH 3.16 anuncia `certificados` em `?action=versao`**; manuais 1 a 3 não mudam.
+
 ## [Não publicado] - 2026-10-16
 
 ### Adicionado
