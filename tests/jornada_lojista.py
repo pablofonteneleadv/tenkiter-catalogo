@@ -54,7 +54,7 @@ with sync_playwright() as p:
     chk("enviou 1 create ao servidor", len(cr)==1, len(cr))
     if cr:
         c=cr[0]
-        chk("payload: nome/preço/estoque", (c["nome"],c["preco"],c["estoque"])==("Vestido Midi Floral","129.90","4"), (c["nome"],c["preco"],c["estoque"]))
+        chk("payload: nome/preço/estoque", (c["nome"],c["preco"],c["estoque"])==("Vestido Midi Floral","129.99","4"), (c["nome"],c["preco"],c["estoque"]))   # v4.25: o à vista termina em ,99/,49 (129,90 vira 129,99)
         chk("payload: categoria e gênero", c["categoria"]=="Vestido" and c["genero"]=="Feminino Adulto", (c["categoria"],c["genero"]))
         chk("payload: tamanhos, cores, descrição", c["tamanhos"]=="P, M" and c["cores"]=="Preto" and c["descricao"].startswith("Viscose"), (c["tamanhos"],c["cores"],c["descricao"]))
         chk("payload: novidade true", c["novidade"] is True)
@@ -66,7 +66,7 @@ with sync_playwright() as p:
     chk("editar abre form preenchido", pg.input_value("#nome")!="" and "Editando" in pg.inner_text("#cad-sum-txt"))
     pg.fill("#preco","77.50"); pg.click("#btn-salvar"); pg.wait_for_timeout(1500)
     up=[x for x in log if x.get("action")=="update"]
-    chk("update enviado com novo preço", len(up)==1 and up[0]["preco"]=="77.50" and up[0].get("id"), up[:1])
+    chk("update enviado com novo preço", len(up)==1 and up[0]["preco"]=="77.77" and up[0].get("id"), up[:1])
     
     pg.click("#lista-produtos .produto:first-child details.mais > summary"); pg.click("#lista-produtos .produto:first-child .btn-arquivar"); pg.wait_for_timeout(1200)
     ar=[x for x in log if x.get("action") in("archive","arquivar","setStatus","status","updateStatus")]

@@ -77,6 +77,8 @@ const DDL = [
   `CREATE TABLE IF NOT EXISTS cfg (chave TEXT PRIMARY KEY, valor TEXT)`,
   `CREATE TABLE IF NOT EXISTS postagem (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, modo TEXT NOT NULL DEFAULT 'auto', legenda TEXT DEFAULT '', midias TEXT NOT NULL DEFAULT '[]', produto TEXT DEFAULT '', template TEXT DEFAULT '', link TEXT DEFAULT '', agendado_em TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'agendado', containers TEXT DEFAULT '', inicio_proc TEXT DEFAULT '', tentativas INTEGER DEFAULT 0, erro TEXT DEFAULT '', ig_id TEXT DEFAULT '', permalink TEXT DEFAULT '', criado_por TEXT DEFAULT '', criado_em TEXT, atualizado_em TEXT, publicado_em TEXT DEFAULT '', grupo TEXT DEFAULT '', canal TEXT NOT NULL DEFAULT 'instagram')`,
   `CREATE TABLE IF NOT EXISTS foto_cliente (id INTEGER PRIMARY KEY AUTOINCREMENT, origem TEXT NOT NULL DEFAULT 'cliente', url TEXT NOT NULL, chave TEXT, whats TEXT DEFAULT '', nome TEXT DEFAULT '', instagram TEXT DEFAULT '', obs TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'nova', vinculo TEXT DEFAULT '', criado_por TEXT DEFAULT '', criado_em TEXT, usada_em TEXT DEFAULT '')`,
+  `CREATE TABLE IF NOT EXISTS fotoia (id INTEGER PRIMARY KEY AUTOINCREMENT, status TEXT NOT NULL DEFAULT 'fila', nome TEXT DEFAULT '', produto TEXT DEFAULT '', extra TEXT DEFAULT '', fontes TEXT NOT NULL DEFAULT '[]', resultado TEXT DEFAULT '', modelo TEXT DEFAULT '', bytes INTEGER DEFAULT 0, tent INTEGER DEFAULT 0, prox_em TEXT DEFAULT '', erro TEXT DEFAULT '', criado_por TEXT DEFAULT '', criado_em TEXT, atualizado_em TEXT, pronto_em TEXT)`,
+  `CREATE INDEX IF NOT EXISTS ix_fotoia ON fotoia (status, prox_em)`,
   `CREATE INDEX IF NOT EXISTS ix_fc ON foto_cliente (status, id)`,
   `CREATE INDEX IF NOT EXISTS ix_post ON postagem (status, agendado_em)`,
   `CREATE INDEX IF NOT EXISTS ix_rasc ON rascunho (status, grupo, publicado_em)`,
@@ -1079,9 +1081,267 @@ export async function limparTemporarios(env, agoraMs) {
   if (!agoraMs) await env.CACHE.put('limpeza_temp', hoje, { expirationTtl: 172800 });
   return { apagados: apagados, bytes: bytes };
 }
+/* ==========================================================================
+ * v1.5 -- FOTOS COM IA (Gemini): capas de campanha feitas a partir das fotos reais da peça (18/10/2026)
+ *
+ *  Pedido do Pablo: "de graça, respeitando os limites do plano; quando fica sem crédito entra na fila e faz quando tiver cota, igual à descrição
+ *  automática das fotos do Instagram"; instrução editável pelo gestor (a de partida é a SKILL dele).
+ *   - Cada pedido vira uma linha da fila (`fotoia`, status fila → gerando → pronta → aprovada | descartada | erro). O cron (1 min) pega UMA por vez.
+ *   - Cota acabou (429 / "quota" / "limit: 0"): NADA é perdido nem gasto — o pedido volta para a fila com horário para tentar de novo
+ *     (o modelo esgotado fica de molho no KV, igual à leitura das fotos; a lista de modelos é tentada em ordem, cada um tem a SUA cota).
+ *   - Trava própria contra gasto: limite de imagens por dia (padrão 20, gestor muda); passou = espera o dia seguinte (Fortaleza).
+ *   - A chave é a MESMA da leitura das fotos (`gemini_key`, nunca volta ao navegador). Imagem pronta vai ao R2 (mesmo contador de custo).
+ *   - Dois jeitos de falar com o Google (a documentação atual descreve a Interactions API; generateContent é o clássico): `modo` auto tenta
+ *     um e depois o outro. A resposta é lida "no escuro" (procura a imagem em qualquer lugar do JSON), porque o formato cru não está documentado.
+ * ========================================================================== */
+export const INSTRUCAO_FOTOIA_PADRAO = `# SKILL: Tenkiter Modas – Gerador Automático de Capas de Campanha (Reels & Carrossel)
+
+## 🎯 Objetivo
+Você é o motor de inteligência visual da **TENKiTER Modas**. Sua função é analisar as fotos reais de um produto ou lote enviadas pelo lojista e gerar **uma única imagem de capa de campanha** de altíssimo padrão (estilo editorial de moda / fast-fashion sofisticada) otimizada para o formato vertical de Reels/Carrossel do Instagram (9:16).
+
+---
+
+## 📋 Regras de Ouro & Diretrizes Inegociáveis
+
+1. **FIDELIDADE ABSOLUTA AO PRODUTO (Proibido Inventar Peças):**
+   - Você DEVE utilizar obrigatoriamente as peças exatas enviadas nas fotos do produto. 
+   - **Regra para Shorts e Saias:** Quando o produto base for um short ou uma saia, você deve combiná-lo com uma blusa/cropped coerente que faça parte do catálogo/estilo da loja, nunca inventando peças desconectadas da realidade operacional.
+   - Jamais invente estampas, modelagens ou texturas que não estejam presentes nas referências fornecidas.
+
+2. **SETA INDICATIVA PARA DIREITA (CTA Visual):**
+   - A arte final gerada deve conter discretamente uma **seta elegante apontando para a direita (→)**, posicionada de forma sutil na lateral ou canto inferior, indicando visualmente para o cliente que existem mais fotos reais e detalhes daquele produto no carrossel.
+
+3. **POSES EM MOVIMENTO E ALEGRIA (Zero Tristeza/Seriedade):**
+   - **Proibido:** Poses rígidas de manequim, expressões sérias, neutras ou melancólicas.
+   - **Obrigatório:** Poses dinâmicas em movimento, gargalhadas naturais, sorrisos abertos, braços dados ou interações fluidas entre as modelos, transmitindo alegria e alto astral.
+
+4. **PERFIL DOS MODELOS E MANEQUINS (Diversidade & Tamanhos Reais):**
+   - A menos que o lojista especifique o contrário, a composição padrão de campanha deve trazer **três modelos** representando diferentes faixas etárias e biotipos reais (exemplo clássico: 18 anos vestindo 36, 25 anos vestindo 40, e 45 anos vestindo 42), garantindo identificação com o público-alvo da marca.
+
+5. **CENÁRIO MINIMALISTA E LIMPO:**
+   - Estúdio contemporâneo com iluminação suave (*softbox*).
+   - Paredes em tons neutros (concreto leve, off-white, areia ou cinza suave).
+   - Sem poluição visual ou excesso de adereços.
+
+6. **FORMATO:**
+   - Proporção estrita vertical 9:16 (\`--ar 9:16\`).
+   - **ZERO TEXTOS** na imagem (além da seta sutil para a direita).
+
+---
+
+## ⚙️ Fluxo de Execução Técnica (Passo a Passo)
+
+1. **Análise dos Inputs:**
+   - Receba o lote de fotos do produto (seja uma cor, variações, estampas ou peças separadas como shorts, saias, croppeds e bodies).
+   - Mapeie quais são as peças centrais que precisam aparecer obrigatoriamente na composição.
+
+2. **Montagem do Prompt Interno para o Gerador de Imagens:**
+   - Estruture o prompt técnico combinando:
+     - *Assunto:* Grupo de modelos diversificadas (ex: idades de 18, 25 e 45 anos, tamanhos 36, 40 e 42).
+     - *Look:* Descrição exata das peças reais enviadas (cor, tecido, brilho, strass, recortes ou estampas das fotos).
+     - *Estética:* Editorial de moda profissional, luz suave de estúdio, fundo de concreto minimalista.
+     - *Expressão:* Sorrisos largos, gargalhadas naturais, poses em movimento dinâmico.
+     - *Detalhe:* Inclusão de um elemento gráfico discreto de uma seta apontando para a direita (\`→\`) para incentivar o deslize do carrossel.
+     - *Parâmetros:* \`--ar 9:16\`.
+
+3. **Validação Final:**
+   - Verifique se todas as peças do cliente foram respeitadas e se a imagem gerada convida o usuário a abrir o post para ver os detalhes manuais.`;
+export const CFG_FOTOIA_PADRAO = { ligado: true, instrucao: INSTRUCAO_FOTOIA_PADRAO, modelos: ['gemini-nano-banana-2.1', 'gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image', 'gemini-2.5-flash-image'], modo: 'auto', formato: '9:16', tamanho: '1K', limiteDia: 20 };
+const FORMATOS_FOTOIA = ['9:16', '4:5', '1:1', '3:4', '16:9'], MODOS_FOTOIA = ['auto', 'interactions', 'generateContent'];
+const FOTOIA_MAX_FONTE = 1600 * 1024, FOTOIA_MAX_RESULTADO = 8 * 1024 * 1024, FOTOIA_MAX_FOTOS = 4, FOTOIA_MAX_FILA = 40;
+export function normalizarCfgFotoIA(c) {
+  const d = CFG_FOTOIA_PADRAO, x = c && typeof c === 'object' ? c : {};
+  const instr = typeof x.instrucao === 'string' && x.instrucao.trim() ? x.instrucao.replace(/\r/g, '').slice(0, 12000) : d.instrucao;
+  let mods = (Array.isArray(x.modelos) ? x.modelos : String(x.modelos || '').split(/[\n,]+/)).map((m) => String(m).trim()).filter((m) => /^[A-Za-z0-9._\-]{3,70}$/.test(m));
+  mods = mods.filter((m, i) => mods.indexOf(m) === i).slice(0, 8); if (!mods.length) mods = d.modelos.slice();
+  const lim = Number(x.limiteDia);
+  return { ligado: x.ligado === undefined ? d.ligado : !!x.ligado, instrucao: instr, modelos: mods, modo: MODOS_FOTOIA.indexOf(x.modo) !== -1 ? x.modo : d.modo,
+    formato: FORMATOS_FOTOIA.indexOf(x.formato) !== -1 ? x.formato : d.formato, tamanho: ['1K', '2K'].indexOf(x.tamanho) !== -1 ? x.tamanho : d.tamanho,
+    limiteDia: isFinite(lim) && lim >= 1 ? Math.min(200, Math.round(lim)) : d.limiteDia };
+}
+async function lerCfgFotoIA(env) { let v = null; try { v = JSON.parse((await cfgGet(env, 'fotoia_cfg')) || 'null'); } catch (e) { v = null; } return normalizarCfgFotoIA(v); }
+const diaFortaleza_ = (ms) => new Date(ms + FUSO_MIN * 60000).toISOString().slice(0, 10);
+async function usoFotoIA_(env) { let v = null; try { v = JSON.parse((await cfgGet(env, 'fotoia_dia')) || 'null'); } catch (e) { v = null; } const hoje = diaFortaleza_(Date.now()); return v && v.dia === hoje ? v : { dia: hoje, n: 0 }; }
+/** Procura imagens em QUALQUER lugar do JSON (steps/outputs/candidates/inlineData...): objeto com mime image/* (ou type:'image') e `data` em base64. Devolve a ÚLTIMA (a final). */
+export function acharImagensIA(o, acc, prof) {
+  acc = acc || []; prof = prof || 0; if (!o || typeof o !== 'object' || prof > 9) return acc;
+  if (Array.isArray(o)) { o.forEach((x) => acharImagensIA(x, acc, prof + 1)); return acc; }
+  const mime = String(o.mime_type || o.mimeType || ''), d = o.data;
+  if (typeof d === 'string' && d.length > 200 && (/^image\//i.test(mime) || o.type === 'image') && /^[A-Za-z0-9+/=\s_-]+$/.test(d.slice(0, 400))) acc.push({ mime: /^image\//i.test(mime) ? mime.toLowerCase() : 'image/png', data: d.replace(/\s/g, '') });
+  Object.keys(o).forEach((k) => { if (typeof o[k] === 'object') acharImagensIA(o[k], acc, prof + 1); });
+  return acc;
+}
+function textoDaResposta_(o, acc, prof) { acc = acc || []; prof = prof || 0; if (!o || typeof o !== 'object' || prof > 9) return acc; if (Array.isArray(o)) { o.forEach((x) => textoDaResposta_(x, acc, prof + 1)); return acc; } if (typeof o.text === 'string' && o.text.trim()) acc.push(o.text.trim()); Object.keys(o).forEach((k) => { if (typeof o[k] === 'object') textoDaResposta_(o[k], acc, prof + 1); }); return acc; }
+function b64ParaBuf_(s) { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+export function promptFotoIA(cfg, job, nFotos) {
+  let t = String(cfg.instrucao || INSTRUCAO_FOTOIA_PADRAO).replace(/--ar\s*(\d+:\d+)/gi, 'proporção $1');
+  t += '\n\n---\nDADOS DESTE PEDIDO\n';
+  if (job && job.nome) t += 'Produto: ' + String(job.nome).slice(0, 120) + '\n';
+  t += 'Fotos reais da peça enviadas junto: ' + nFotos + ' (use EXATAMENTE as peças que aparecem nelas).\nProporção da imagem final: ' + cfg.formato + ' (vertical). Gere UMA única imagem.\n';
+  if (job && job.extra) t += 'Observação do lojista para esta imagem: ' + String(job.extra).slice(0, 600) + '\n';
+  return t;
+}
+function corpoFotoIA_(modo, modelo, cfg, prompt, fontes) {
+  if (modo === 'interactions') return { model: modelo, input: [{ type: 'text', text: prompt }].concat(fontes.map((f) => ({ type: 'image', mime_type: f.mime, data: f.data }))), response_format: { type: 'image', mime_type: 'image/jpeg', aspect_ratio: cfg.formato, image_size: cfg.tamanho } };
+  return { contents: [{ role: 'user', parts: [{ text: prompt }].concat(fontes.map((f) => ({ inline_data: { mime_type: f.mime, data: f.data } }))) }], generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: cfg.formato } } };
+}
+/** Tenta os modelos da lista, em ordem, pulando os que estão sem cota. Nunca lança. → {ok, buf, mime, modelo} | {ok:false, erro, espera?, semPlano?, fatal?, ateMs?} */
+export async function chamarGeminiImagem(env, chave, cfg, prompt, fontes) {
+  const esg = await modelosEsgotados(env), agoraMs = Date.now();
+  let fila = cfg.modelos.filter((m) => !(esg[m] && esg[m] > agoraMs)), pulados = cfg.modelos.length - fila.length;
+  if (!fila.length) { const ate = Math.min.apply(null, cfg.modelos.map((m) => esg[m] || agoraMs + 1800000)); return { ok: false, espera: true, ateMs: ate, erro: 'A cota da IA de imagens acabou em todos os modelos por agora. O pedido continua na fila e sai sozinho quando a cota voltar.' }; }
+  let ultimo = '', quota = 0, semPlano = 0, tentados = 0, falhas = 0;
+  const modos = cfg.modo === 'auto' ? ['interactions', 'generateContent'] : [cfg.modo];
+  for (const modelo of fila) {
+    let esgotou = false, deu = false;
+    for (const modo of modos) {
+      const url = modo === 'interactions' ? 'https://generativelanguage.googleapis.com/v1beta/interactions' : 'https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent';
+      try {
+        const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave }, body: JSON.stringify(corpoFotoIA_(modo, modelo, cfg, prompt, fontes)) });
+        let j = {}; try { j = await r.json(); } catch (e) { j = {}; }
+        if (r.status === 200) {
+          const imgs = acharImagensIA(j);
+          if (imgs.length) { const im = imgs[imgs.length - 1]; try { return { ok: true, buf: b64ParaBuf_(im.data), mime: im.mime, modelo: modelo }; } catch (e) { ultimo = 'a imagem veio corrompida'; deu = true; break; } }
+          const tx = textoDaResposta_(j).join(' ').replace(/\s+/g, ' ').slice(0, 160);
+          ultimo = tx ? 'A IA respondeu sem imagem: ' + tx : 'A IA respondeu sem imagem'; deu = true; break;
+        }
+        const msg = String((j.error && j.error.message) || ('HTTP ' + r.status));
+        ultimo = msg.replace(/key=[^&\s]+/g, 'key=***').slice(0, 200);
+        if (r.status === 429 || /quota|RESOURCE_EXHAUSTED/i.test(msg)) { esgotou = true; if (/limit:\s*0\b/i.test(msg)) semPlano++; await marcarEsgotado(env, modelo, msg); break; }
+        if (r.status === 401 || r.status === 403) return { ok: false, fatal: true, erro: 'O Google recusou a chave da IA (' + r.status + '). Confira a chave em Instagram ▸ ⚙️ e se o plano permite gerar imagens.' };
+        if (r.status === 404 || r.status === 400) continue;          // este jeito/modelo não existe: tenta o outro jeito e depois o próximo modelo
+        falhas++; break;
+      } catch (e) { ultimo = 'sem conexão com a IA'; falhas++; break; }
+    }
+    tentados++; if (esgotou) quota++;
+    if (deu) break;
+  }
+  if (quota && quota >= tentados) {
+    const esg2 = await modelosEsgotados(env), ate = Math.min.apply(null, cfg.modelos.map((m) => esg2[m] || agoraMs + 1800000));
+    return { ok: false, espera: true, semPlano: semPlano >= quota, ateMs: ate, erro: semPlano >= quota ? 'O plano desta chave não inclui geração de imagens (cota 0). O pedido fica na fila e tenta de novo mais tarde; se continuar assim, o plano gratuito não cobre imagens.' : 'A cota da IA de imagens acabou por agora. O pedido continua na fila e sai sozinho quando a cota voltar.' };
+  }
+  return { ok: false, erro: ultimo || 'A IA não respondeu' };
+}
+const linhaFotoIA_ = (env, x) => ({ id: x.id, status: x.status, nome: x.nome || '', produto: x.produto || '', extra: x.extra || '', resultado: x.resultado ? urlMidia(env, x.resultado) : '', modelo: x.modelo || '', erro: x.erro || '', espera: x.status === 'fila' && x.prox_em ? x.prox_em : '', tent: x.tent || 0,
+  fontes: (function () { try { return JSON.parse(x.fontes || '[]').map((k) => urlMidia(env, k)); } catch (e) { return []; } })(), criado_em: x.criado_em, pronto_em: x.pronto_em || '' });
+/** Faz UM pedido da fila (o mais antigo que já pode, ou `soId`). Nunca lança. */
+export async function processarFotoIA(env, soId) {
+  try {
+    await iniciar(env);
+    const cfg = await lerCfgFotoIA(env); if (!cfg.ligado) return { feitas: 0, desligado: true };
+    const chave = await cfgGet(env, 'gemini_key'); if (!chave) return { feitas: 0, semChave: true };
+    if (await env.CACHE.get('fotoia_trava')) return { feitas: 0, ocupado: true };
+    const agoraMs = Date.now(), agoraIso = new Date(agoraMs).toISOString();
+    await env.DB.prepare("UPDATE fotoia SET status='fila', atualizado_em=? WHERE status='gerando' AND atualizado_em < ?").bind(agoraIso, new Date(agoraMs - 10 * 60000).toISOString()).run();
+    const job = soId ? await env.DB.prepare("SELECT * FROM fotoia WHERE id=? AND status='fila'").bind(soId).first()
+      : await env.DB.prepare("SELECT * FROM fotoia WHERE status='fila' AND (prox_em='' OR prox_em<=?) ORDER BY id LIMIT 1").bind(agoraIso).first();
+    if (!job) return { feitas: 0 };
+    const uso = await usoFotoIA_(env);
+    if (uso.n >= cfg.limiteDia) {
+      const amanha = new Date(Date.parse(diaFortaleza_(agoraMs) + 'T00:05:00Z') + 86400000 - FUSO_MIN * 60000).toISOString();
+      await env.DB.prepare('UPDATE fotoia SET prox_em=?, erro=?, atualizado_em=? WHERE id=?').bind(amanha, 'Limite de ' + cfg.limiteDia + ' imagens por dia atingido. Continua amanhã.', agoraIso, job.id).run();
+      return { feitas: 0, limiteDia: true };
+    }
+    await env.CACHE.put('fotoia_trava', '1', { expirationTtl: 90 });
+    await env.DB.prepare("UPDATE fotoia SET status='gerando', atualizado_em=? WHERE id=?").bind(agoraIso, job.id).run();
+    try {
+      let chaves = []; try { chaves = JSON.parse(job.fontes || '[]'); } catch (e) { chaves = []; }
+      const fontes = [];
+      for (const k of chaves) { try { const o = await env.MIDIA.get(k); if (!o) continue; const buf = await o.arrayBuffer(); fontes.push({ mime: /\.png$/.test(k) ? 'image/png' : /\.webp$/.test(k) ? 'image/webp' : 'image/jpeg', data: b64(buf) }); } catch (e) { /* foto ilegível é ignorada */ } }
+      if (!fontes.length) { await env.DB.prepare("UPDATE fotoia SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('As fotos de origem não estão mais guardadas. Faça o pedido de novo.', agoraIso, job.id).run(); return { feitas: 0 }; }
+      const g = await chamarGeminiImagem(env, chave, cfg, promptFotoIA(cfg, job, fontes.length), fontes);
+      const t = new Date().toISOString();
+      if (g.ok) {
+        const ext = extensaoImagem(g.buf); if (!ext) { await env.DB.prepare("UPDATE fotoia SET status='erro', erro=?, tent=tent+1, atualizado_em=? WHERE id=?").bind('A IA devolveu um arquivo que não é imagem.', t, job.id).run(); return { feitas: 0 }; }
+        if (g.buf.length > FOTOIA_MAX_RESULTADO) { await env.DB.prepare("UPDATE fotoia SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('A imagem veio grande demais (' + Math.round(g.buf.length / 1048576) + ' MB).', t, job.id).run(); return { feitas: 0 }; }
+        const u = await lerUso(env);
+        if (u.bytes + g.buf.length > limite(env)) { await env.DB.prepare("UPDATE fotoia SET status='fila', prox_em=?, erro=?, atualizado_em=? WHERE id=?").bind(new Date(Date.now() + 6 * 3600000).toISOString(), 'O armazenamento de fotos está cheio. Libere espaço (descarte imagens) e o pedido continua.', t, job.id).run(); return { feitas: 0 }; }
+        const d = new Date(), chaveR2 = d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + hex(10) + '.' + ext;
+        await env.MIDIA.put(chaveR2, g.buf, { httpMetadata: { contentType: ext === 'jpg' ? 'image/jpeg' : 'image/' + ext, cacheControl: 'public, max-age=31536000, immutable' } });
+        u.bytes += g.buf.length; u.arquivos += 1; await env.CACHE.put('uso', JSON.stringify(u));
+        await env.DB.prepare("UPDATE fotoia SET status='pronta', resultado=?, modelo=?, bytes=?, erro='', prox_em='', pronto_em=?, atualizado_em=? WHERE id=?").bind(chaveR2, g.modelo || '', g.buf.length, t, t, job.id).run();
+        uso.n += 1; await cfgSet(env, 'fotoia_dia', JSON.stringify(uso));
+        return { feitas: 1, id: job.id };
+      }
+      if (g.espera) {
+        const ate = new Date(g.semPlano ? Date.now() + 6 * 3600000 : Math.max(Date.now() + 5 * 60000, Math.min(g.ateMs || (Date.now() + 1800000), Date.now() + 12 * 3600000))).toISOString();
+        await env.DB.prepare("UPDATE fotoia SET status='fila', prox_em=?, erro=?, atualizado_em=? WHERE id=?").bind(ate, g.erro, t, job.id).run();
+        return { feitas: 0, espera: true };
+      }
+      const tent = (job.tent || 0) + 1, fim = g.fatal || tent >= 3;
+      await env.DB.prepare('UPDATE fotoia SET status=?, tent=?, erro=?, prox_em=?, atualizado_em=? WHERE id=?').bind(fim ? 'erro' : 'fila', tent, g.erro || 'Erro da IA', fim ? '' : new Date(Date.now() + tent * 5 * 60000).toISOString(), t, job.id).run();
+      return { feitas: 0, erro: g.erro };
+    } finally { try { await env.CACHE.delete('fotoia_trava'); } catch (e) { /* expira sozinha em 90 s */ } }
+  } catch (e) { return { feitas: 0, erro: true }; }
+}
+export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /fotoia* (gerir_acessos ou catalogo_cadastrar; só o gestor muda a configuração)
+  const p = url.pathname, gestor = (perms || []).indexOf('gerir_acessos') !== -1;
+  const agoraIso = () => new Date().toISOString();
+  const disparar = (id) => { const f = processarFotoIA(env, id).catch(() => {}); if (ctx && ctx.waitUntil) ctx.waitUntil(f); return f; };
+  if (p === '/fotoia/config' && req.method === 'GET') {
+    const cfg = await lerCfgFotoIA(env), chave = await cfgGet(env, 'gemini_key'), uso = await usoFotoIA_(env);
+    const esg = await modelosEsgotados(env), agoraMs = Date.now(), de = {}; cfg.modelos.forEach((m) => { if (esg[m] && esg[m] > agoraMs) de[m] = new Date(esg[m]).toISOString(); });
+    const cont = {}; ((await env.DB.prepare('SELECT status, COUNT(*) AS n FROM fotoia GROUP BY status').all()).results || []).forEach((x) => { cont[x.status] = x.n; });
+    return J({ ok: true, config: cfg, padrao: { instrucao: INSTRUCAO_FOTOIA_PADRAO, limiteDia: CFG_FOTOIA_PADRAO.limiteDia, modelos: CFG_FOTOIA_PADRAO.modelos }, podeEditar: gestor, temChave: !!chave, fimChave: chave ? String(chave).slice(-4) : '', hoje: { usadas: uso.n, limite: cfg.limiteDia }, semCota: de, contagens: cont });
+  }
+  if (p === '/fotoia/config' && req.method === 'POST') {
+    if (!gestor) return J({ ok: false, erro: 'Só o administrador total muda a instrução e os limites da IA.' }, 403);
+    let b; try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); }
+    if (b && b.padrao) { await cfgSet(env, 'fotoia_cfg', null); return J({ ok: true, config: await lerCfgFotoIA(env) }); }
+    const nova = normalizarCfgFotoIA(Object.assign({}, await lerCfgFotoIA(env), b && b.config));
+    await cfgSet(env, 'fotoia_cfg', JSON.stringify(nova)); return J({ ok: true, config: nova });
+  }
+  if (p === '/fotoia/fila' && req.method === 'POST') {
+    let b; try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); }
+    const fotos = Array.isArray(b && b.fotos) ? b.fotos.slice(0, FOTOIA_MAX_FOTOS) : [];
+    if (!fotos.length) return J({ ok: false, erro: 'Escolha pelo menos 1 foto da peça.' }, 400);
+    const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM fotoia WHERE status IN ('fila','gerando')").first()) || {}).n) || 0;
+    if (pend >= FOTOIA_MAX_FILA) return J({ ok: false, erro: 'A fila já tem ' + pend + ' pedidos esperando. Aguarde alguns saírem.' }, 429);
+    const bufs = [];
+    for (const f of fotos) {
+      let buf; try { buf = b64ParaBuf_(String((f && f.data) || '').replace(/^data:[^,]*,/, '').replace(/\s/g, '')); } catch (e) { return J({ ok: false, erro: 'Uma das fotos veio corrompida.' }, 400); }
+      if (!buf.length || buf.length > FOTOIA_MAX_FONTE) return J({ ok: false, erro: 'Cada foto precisa ter até 1,5 MB (o painel reduz sozinho; tente de novo).' }, 400);
+      const ext = extensaoImagem(buf); if (!ext) return J({ ok: false, erro: 'Só foto JPG, PNG ou WEBP.' }, 400);
+      bufs.push({ buf: buf, ext: ext });
+    }
+    const uso = await lerUso(env), total = bufs.reduce((s, x) => s + x.buf.length, 0);
+    if (uso.bytes + total > limite(env)) return J({ ok: false, erro: 'O armazenamento de fotos está cheio no momento.' }, 507);
+    const d = new Date(), aaaamm = d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0'), chaves = [];
+    for (const x of bufs) { const k = 't/' + aaaamm + '/' + hex(10) + '.' + x.ext; await env.MIDIA.put(k, x.buf, { httpMetadata: { contentType: x.ext === 'jpg' ? 'image/jpeg' : 'image/' + x.ext, cacheControl: 'public, max-age=31536000, immutable' } }); chaves.push(k); }
+    uso.bytes += total; uso.arquivos += bufs.length; await env.CACHE.put('uso', JSON.stringify(uso));
+    const nome = String((b && b.nome) || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 120), produto = String((b && b.produto) || '').replace(/[^\w.\-]/g, '').slice(0, 40), extra = String((b && b.extra) || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 600);
+    const por = String(req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20), t = agoraIso();
+    const r = await env.DB.prepare("INSERT INTO fotoia (status, nome, produto, extra, fontes, criado_por, criado_em, atualizado_em) VALUES ('fila',?,?,?,?,?,?,?)").bind(nome, produto, extra, JSON.stringify(chaves), por, t, t).run();
+    const id = r.meta && r.meta.last_row_id; disparar(id);
+    return J({ ok: true, id: id });
+  }
+  if (p === '/fotoia/lista' && req.method === 'GET') {
+    const st = url.searchParams.get('status') || 'todas';
+    const q = st === 'todas' ? env.DB.prepare('SELECT * FROM fotoia ORDER BY id DESC LIMIT 40') : env.DB.prepare('SELECT * FROM fotoia WHERE status=? ORDER BY id DESC LIMIT 40').bind(st);
+    const cont = {}; ((await env.DB.prepare('SELECT status, COUNT(*) AS n FROM fotoia GROUP BY status').all()).results || []).forEach((x) => { cont[x.status] = x.n; });
+    return J({ ok: true, itens: ((await q.all()).results || []).map((x) => linhaFotoIA_(env, x)), contagens: cont });
+  }
+  if (p === '/fotoia/acao' && req.method === 'POST') {
+    let b; try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); }
+    const id = Number(b && b.id), acao = String((b && b.acao) || ''); const x = id ? await env.DB.prepare('SELECT * FROM fotoia WHERE id=?').bind(id).first() : null;
+    if (!x) return J({ ok: false, erro: 'Pedido não encontrado.' }, 404);
+    const t = agoraIso();
+    const apagarResultado = async () => { if (x.resultado) { try { await env.MIDIA.delete(x.resultado); const u = await lerUso(env); u.bytes = Math.max(0, u.bytes - (x.bytes || 0)); u.arquivos = Math.max(0, u.arquivos - 1); await env.CACHE.put('uso', JSON.stringify(u)); } catch (e) { /* o limpador diário não mexe nisso; fica sobrando, sem custo relevante */ } } };
+    if (acao === 'aprovar' && x.status === 'pronta') await env.DB.prepare("UPDATE fotoia SET status='aprovada', atualizado_em=? WHERE id=?").bind(t, id).run();
+    else if (acao === 'descartar' && (x.status === 'pronta' || x.status === 'aprovada' || x.status === 'erro')) { await apagarResultado(); await env.DB.prepare("UPDATE fotoia SET status='descartada', resultado='', bytes=0, atualizado_em=? WHERE id=?").bind(t, id).run(); }
+    else if (acao === 'cancelar' && (x.status === 'fila' || x.status === 'erro')) await env.DB.prepare("UPDATE fotoia SET status='cancelada', atualizado_em=? WHERE id=?").bind(t, id).run();
+    else if (acao === 'refazer' && ['pronta', 'aprovada', 'erro', 'descartada', 'cancelada'].indexOf(x.status) !== -1) { await apagarResultado(); await env.DB.prepare("UPDATE fotoia SET status='fila', resultado='', bytes=0, modelo='', tent=0, erro='', prox_em='', atualizado_em=? WHERE id=?").bind(t, id).run(); disparar(id); }
+    else if (acao === 'agora' && x.status === 'fila') { await env.DB.prepare("UPDATE fotoia SET prox_em='', erro='', atualizado_em=? WHERE id=?").bind(t, id).run(); disparar(id); }
+    else return J({ ok: false, erro: 'Essa ação não vale para este pedido agora.' }, 400);
+    return J({ ok: true });
+  }
+  return null;
+}
+
 export default {
   async scheduled(ev, env, ctx) {
     ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
+    ctx.waitUntil(processarFotoIA(env));                                      // a cada minuto: 1 imagem da fila de Fotos com IA (se já puder: cota/limite do dia)
     const min = ev && ev.scheduledTime ? new Date(ev.scheduledTime).getUTCMinutes() : 0;
     if (min === 7) ctx.waitUntil(limparTemporarios(env).catch(() => {}));      // 1x por dia: apaga do R2 o que é temporário (t/) com mais de 5 dias
     if (min % 30 !== 0) return;                                                // importar do Instagram só a cada 30 min (como antes)
@@ -1095,12 +1355,12 @@ export default {
     const perms = await permissoes(env, req);
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
-    const ehPost = url.pathname === '/posts' || url.pathname.indexOf('/post') === 0 || url.pathname.indexOf('/fotos') === 0;
+    const ehPost = url.pathname === '/posts' || url.pathname.indexOf('/post') === 0 || url.pathname.indexOf('/fotos') === 0 || url.pathname.indexOf('/fotoia') === 0;
     if (ehPost ? (perms.indexOf('gerir_acessos') === -1 && perms.indexOf('catalogo_cadastrar') === -1) : perms.indexOf('gerir_acessos') === -1) return J({ ok: false, erro: ehPost ? 'Você não tem permissão para postar no Instagram.' : 'Só o administrador total acessa o importador do Instagram.' }, 403);
     try {
       await iniciar(env);
       const p = url.pathname;
-      if (ehPost) { const rp = (await rotasFotos(env, ctx, req, url, J)) || (await rotasPostagem(env, ctx, req, url, J, perms)); if (rp) return rp; }
+      if (ehPost) { const rp = (await rotasFotoIA(env, ctx, req, url, J, perms)) || (await rotasFotos(env, ctx, req, url, J)) || (await rotasPostagem(env, ctx, req, url, J, perms)); if (rp) return rp; }
       if (p === '/status' && req.method === 'GET') return J(await status(env));
       if (p === '/rascunhos' && req.method === 'GET') {
         const grupo = url.searchParams.get('grupo') || 'pendente';

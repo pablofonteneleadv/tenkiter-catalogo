@@ -1,0 +1,76 @@
+"""v4.27: painel "🎨 Fotos com IA" (admin-fotoia.js): escolher peça/fotos, fila, resultado, instrução editável só pelo gestor. Worker/Google SIMULADOS (mock.py st["ig"]["fotoia"])."""
+import sys, os
+AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
+from mock import *
+from playwright.sync_api import sync_playwright
+BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
+BAD = []
+def chk(n, c, e=""):
+    if not c: BAD.append(n)
+    print(("  ✔ " if c else "  ✘ ") + n + ((" — " + str(e)) if (e and not c) else ""))
+def abrir(pg):
+    pg.evaluate("document.getElementById('details-ferramentas').open=true"); pg.wait_for_timeout(250); pg.click("#btn-abrir-fotoia"); pg.wait_for_timeout(900)
+with sync_playwright() as p:
+    b = p.chromium.launch(args=["--no-sandbox"]); erros = []
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
+    ctx.add_init_script(SESSION); ctx.add_init_script("window.TK_FOTOIA_POLL_MS=300;")
+    st = install(ctx, perms=PERMS_ALL, versao="4.3"); g = st["ig"]
+    for _p in st["produtos"]: _p["Fotos_Galeria"] = "https://res.cloudinary.com/z/image/upload/v1/g1.jpg,https://res.cloudinary.com/z/image/upload/v1/g2.jpg"
+    pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: d.accept())
+    pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
+    print("== botão e abas ==")
+    chk("o botão 🎨 Fotos com IA aparece em Ferramentas para quem cadastra", pg.evaluate("(()=>{const b=document.getElementById('btn-abrir-fotoia');return !!b&&!b.hidden})()"))
+    abrir(pg)
+    chk("a janela abre com 3 abas", pg.locator("#overlay-fotoia.aberto").count() == 1 and pg.locator("#fia-corpo [role=tab]").count() == 3)
+    chk("mostra a chave do Gemini ✓ e o uso do dia", "Chave do Gemini: ✓" in pg.inner_text("#fia-corpo") and "Hoje: 0 de 20" in pg.inner_text("#fia-corpo"))
+    print("== gerar ==")
+    chk("há peças para escolher", pg.locator(".fia-peca").count() >= 5)
+    pg.fill("#fia-busca", "TK-0003"); pg.wait_for_timeout(300)
+    chk("a busca por código afunila (e o campo mantém o foco)", pg.locator(".fia-peca").count() == 1 and pg.evaluate("document.activeElement&&document.activeElement.id")=="fia-busca")
+    pg.click(".fia-peca >> nth=0"); pg.wait_for_timeout(300)
+    chk("escolher a peça mostra as fotos dela, já marcadas na ordem (1, 2, 3)", pg.locator(".fia-foto").count() == 3 and pg.locator(".fia-foto i").count() == 3 and pg.inner_text(".fia-foto >> nth=0 >> i") == "1")
+    pg.click(".fia-foto >> nth=1 >> button"); pg.wait_for_timeout(200)
+    chk("tocar numa foto marcada desmarca (e renumera)", pg.locator(".fia-foto i").count() == 2)
+    pg.fill("#fia-extra", "fundo areia"); pg.click(".fia-foto >> nth=0 >> button"); pg.click(".fia-foto >> nth=0 >> button"); pg.wait_for_timeout(200)
+    pg.click("[data-a=enviar]"); pg.wait_for_timeout(1500)
+    ch = [c for c in g["fotoia"]["chamadas"] if c["path"] == "/fotoia/fila"]
+    chk("coloca na fila com nome, código, observação e 2 fotos", len(ch) == 1 and ch[0]["body"]["fotos"] == "<2 fotos>" and ch[0]["body"]["extra"] == "fundo areia" and ch[0]["body"]["produto"] == "TK-0003", ch)
+    chk("vai sozinho para 'Fila e resultados' e mostra o pedido 'Na fila'", pg.locator("[data-v=fila][aria-selected=true]").count() == 1 and pg.locator(".fia-cartao .fia-chip.fila").count() == 1)
+    print("== fila / resultado ==")
+    g["fotoia"]["itens"][0].update({"status": "fila", "erro": "A cota da IA de imagens acabou por agora.", "espera": "2026-10-18T18:30:00Z"}); pg.wait_for_timeout(800)
+    chk("sem cota: mostra a frase e 'tenta de novo por volta de…' (não é erro)", "cota da IA" in pg.inner_text(".fia-cartao") and "Tenta de novo" in pg.inner_text(".fia-cartao") and pg.locator(".fia-chip.erro").count() == 0)
+    pg.click("[data-a=acao][data-v=agora]"); pg.wait_for_timeout(900)
+    chk("'Tentar agora' → pedido pronto, com a imagem, e os botões certos", pg.locator(".fia-chip.pronta").count() == 1 and pg.locator(".fia-resu img[data-a=ampliar]").count() == 1 and pg.locator("[data-v=aprovar]").count() == 1 and pg.locator("[data-v=refazer]").count() == 1 and pg.locator("[data-v=descartar]").count() == 1)
+    pg.click("[data-v=aprovar]"); pg.wait_for_timeout(900)
+    chk("aprovar → 'Aprovada' (sem botão aprovar)", pg.locator(".fia-chip.aprovada").count() == 1 and pg.locator("[data-v=aprovar]").count() == 0)
+    pg.click("[data-v=descartar]"); pg.wait_for_timeout(900)
+    chk("descartar some da lista principal (fica no filtro Descartadas)", pg.locator(".fia-cartao").count() == 0)
+    pg.click("[data-a=filtro][data-v=descartada]"); pg.wait_for_timeout(300)
+    chk("filtro Descartadas mostra e deixa 'Refazer'", pg.locator(".fia-cartao").count() == 1 and pg.locator("[data-v=refazer]").count() == 1)
+    print("== instrução (gestor) ==")
+    pg.click("[data-v=instrucao]"); pg.wait_for_timeout(300)
+    chk("mostra a instrução atual e o contador de letras", "FIDELIDADE ABSOLUTA" in pg.input_value("#fia-instr") and "de 12000" in pg.inner_text("#fia-cont"))
+    pg.fill("#fia-instr", "NOVA INSTRUÇÃO DE TESTE"); pg.select_option("#fia-formato", "4:5"); pg.fill("#fia-lim", "7"); pg.fill("#fia-modelos", "modelo-a\nmodelo-b")
+    pg.click("[data-a=salvarcfg]"); pg.wait_for_timeout(700)
+    c = g["fotoia"]["cfg"]
+    chk("salvar manda instrução, proporção, limite e modelos", c["instrucao"] == "NOVA INSTRUÇÃO DE TESTE" and c["formato"] == "4:5" and c["limiteDia"] == 7 and c["modelos"] == ["modelo-a", "modelo-b"], c)
+    chk("depois de salvar mostra confirmação", "Salvo" in pg.inner_text("#fia-aba"))
+    pg.click("[data-a=padrao]"); pg.wait_for_timeout(700)
+    chk("'Voltar à instrução padrão' pede ao servidor", any(x["body"].get("padrao") for x in g["fotoia"]["chamadas"] if x["path"] == "/fotoia/config"))
+    print("== sem permissão de editar ==")
+    g["fotoia"]["pode_editar"] = False; pg.click("[data-v=gerar]"); pg.wait_for_timeout(300); pg.click("[data-v=instrucao]"); pg.wait_for_timeout(500)
+    chk("quem não é gestor lê, mas os campos ficam travados e não há botão Salvar", pg.is_disabled("#fia-instr") and pg.locator("[data-a=salvarcfg]").count() == 0)
+    print("== sem chave / servidor antigo ==")
+    g["fotoia"]["tem_chave"] = False; pg.click("[data-v=gerar]"); pg.wait_for_timeout(300)
+    chk("sem chave do Gemini: avisa onde colar e trava o botão de enviar", "Falta a chave do Gemini" in pg.inner_text("#fia-aba") and pg.is_disabled("[data-a=enviar]"))
+    pg.click("#fia-fechar"); pg.wait_for_timeout(300)
+    g["fora"] = True; abrir(pg)
+    chk("Worker sem a versão nova: frase clara, nunca JSON nem tela em branco", "ainda não foi atualizado" in pg.inner_text("#fia-corpo"))
+    chk("sem erros de JavaScript", not erros, erros)
+    ctx.close()
+    # sem permissão de cadastrar: botão escondido
+    ctx2 = b.new_context(viewport={"width": 390, "height": 844}, service_workers="block"); ctx2.add_init_script(SESSION)
+    install(ctx2, perms=["painel_simples", "cliente"], versao="4.3"); pg2 = ctx2.new_page(); pg2.goto(BASE + "admin.html"); pg2.wait_for_timeout(2600)
+    chk("sem catalogo_cadastrar o botão não aparece", pg2.evaluate("(()=>{const b=document.getElementById('btn-abrir-fotoia');return !b||b.hidden||getComputedStyle(b).display==='none'})()"))
+    b.close()
+print("\nFALHAS=%d %s" % (len(BAD), BAD)); sys.exit(1 if BAD else 0)

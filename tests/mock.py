@@ -491,6 +491,41 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                         if h: w=h["whats"]; nome=h["nome"]; vinc="historico"
                     g["foto_seq"]+=1; g["fotos"].append({"id":g["foto_seq"],"origem":"equipe","url":"https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/fe%d.jpg"%g["foto_seq"],"whats":w,"nome":nome,"instagram":ig2,"obs":q1("obs"),"status":"nova","vinculo":vinc,"criadoPor":q1("por")})
                     return route.fulfill(json={"ok":True,"id":g["foto_seq"],"vinculo":vinc,"nome":nome,"whats":w,"instagram":ig2})
+            if path.startswith("/fotoia"):      # Fotos com IA (Worker v1.5): st["ig"]["fotoia"]
+                import json as _j
+                fi=g.setdefault("fotoia",{"itens":[],"seq":0,"chamadas":[],"pode_editar":True,"tem_chave":True,
+                    "cfg":{"ligado":True,"instrucao":"# SKILL: Tenkiter Modas — FIDELIDADE ABSOLUTA ao produto. Seta →","modelos":["gemini-nano-banana-2.1","gemini-3.1-flash-lite-image"],"modo":"auto","formato":"9:16","tamanho":"1K","limiteDia":20}})
+                body={}
+                try: body=_j.loads(route.request.post_data or "{}")
+                except Exception: body={}
+                fi["chamadas"].append({"m":m,"path":path,"body":{k:(v if k!="fotos" else "<%d fotos>"%len(v)) for k,v in body.items()}})
+                def cts():
+                    c={}
+                    for x in fi["itens"]: c[x["status"]]=c.get(x["status"],0)+1
+                    return c
+                if path=="/fotoia/config" and m=="GET":
+                    return route.fulfill(json={"ok":True,"config":fi["cfg"],"padrao":{"instrucao":"PADRAO","limiteDia":20,"modelos":[]},"podeEditar":fi["pode_editar"],"temChave":fi["tem_chave"],"fimChave":"abcd","hoje":{"usadas":len([x for x in fi["itens"] if x["status"] in ("pronta","aprovada")]),"limite":fi["cfg"]["limiteDia"]},"semCota":{},"contagens":cts()})
+                if path=="/fotoia/config" and m=="POST":
+                    if not fi["pode_editar"]: return route.fulfill(status=403,json={"ok":False,"erro":"Só o administrador total muda a instrução e os limites da IA."})
+                    if body.get("padrao"): fi["cfg"]["instrucao"]="PADRAO"
+                    else: fi["cfg"].update({k:v for k,v in (body.get("config") or {}).items() if k!="modelos"}); 
+                    if (body.get("config") or {}).get("modelos") is not None: fi["cfg"]["modelos"]=[x.strip() for x in str(body["config"]["modelos"]).split("\n") if x.strip()]
+                    return route.fulfill(json={"ok":True,"config":fi["cfg"]})
+                if path=="/fotoia/fila" and m=="POST":
+                    fi["seq"]+=1
+                    fi["itens"].insert(0,{"id":fi["seq"],"status":fi.get("novo_status","fila"),"nome":body.get("nome",""),"produto":body.get("produto",""),"extra":body.get("extra",""),"resultado":"","modelo":"","erro":fi.get("novo_erro",""),"espera":fi.get("novo_espera",""),"tent":0,"fontes":[],"criado_em":"2026-10-18T12:00:00Z","pronto_em":""})
+                    return route.fulfill(json={"ok":True,"id":fi["seq"]})
+                if path=="/fotoia/lista":
+                    return route.fulfill(json={"ok":True,"itens":fi["itens"],"contagens":cts()})
+                if path=="/fotoia/acao" and m=="POST":
+                    x=next((i for i in fi["itens"] if i["id"]==body.get("id")),None)
+                    if not x: return route.fulfill(status=404,json={"ok":False,"erro":"Pedido não encontrado."})
+                    a=body.get("acao")
+                    if a=="aprovar": x["status"]="aprovada"
+                    elif a=="descartar": x["status"]="descartada"; x["resultado"]=""
+                    elif a=="cancelar": x["status"]="cancelada"
+                    elif a in ("refazer","agora"): x["status"]="pronta"; x["resultado"]="https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/ia%d.jpg"%x["id"]; x["erro"]=""; x["espera"]=""; x["modelo"]="gemini-nano-banana-2.1"
+                    return route.fulfill(json={"ok":True})
             if path=="/posts" or path.startswith("/post"):      # fila de postagens (Worker v4.6): st["ig"]["posts"]
                 g.setdefault("posts",[]); g.setdefault("post_chamadas",[]); g.setdefault("post_seq",100)
                 PADRAO_R={"pausaAtiva":True,"pausaDe":"22:00","pausaAte":"06:30","gapStory":120,"gapFeed":300,"gapCarrossel":300,"gapReels":600,"folga":30,"max24h":90,"agoraIgnora":True}
