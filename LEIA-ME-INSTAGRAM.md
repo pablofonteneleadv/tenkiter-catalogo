@@ -1,6 +1,6 @@
-# Importador do Instagram — "Produtos para aceitar" (v3.6)
+# Importador do Instagram — "Produtos para aceitar" (v3.6, revisado em 18/10/2026)
 
-O que faz: tudo que a loja posta no Instagram (foto, carrossel, Reel, Story) vira um **rascunho** no painel (aba 📥 Produtos para aceitar). Você aceita, ajusta as mídias, junta, separa ou descarta. Nada entra no catálogo sem o seu aceite. **Só lê o Instagram — nunca posta.**
+O que faz: tudo que a loja posta no Instagram (foto, carrossel, Reel, Story) vira um **rascunho** no painel (aba 📥 Produtos para aceitar). Você aceita, ajusta as mídias, junta, separa ou descarta. Nada entra no catálogo sem o seu aceite. **Esta aba só LÊ o Instagram.** Quem publica é a aba separada **📸 Postagens** (Feed, Carrossel, Reels, Story; na hora ou agendado), decisão de 11/10/2026; para isso o token precisa também da permissão `instagram_business_content_publish`.
 
 ## Pegar o código de acesso (uma vez, pelo celular)
 > A Meta muda as telas de tempos em tempos; se um nome estiver diferente, procure o parecido.
@@ -14,5 +14,5 @@ O que faz: tudo que a loja posta no Instagram (foto, carrossel, Reel, Story) vir
 
 O acesso dura ~60 dias e o Worker renova sozinho; se algo falhar, o painel mostra um aviso.
 
-## Publicar o Worker (Claude faz; precisa do token da Cloudflare em variável de ambiente)
-`CLOUDFLARE_API_TOKEN=<token> python3 instagram-worker/publicar.py` — cria o banco D1 `tenkiter-ig`, liga R2/KV, o cron de 30 min e o endereço `tenkiter-ig.<conta>.workers.dev`. O token precisa poder editar Workers **e D1**. Depois, revogar o token.
+## Publicar o Worker
+Automático: o `deploy.yml` publica o Worker `tenkiter-ig` (junto com `tenkiter-midia` e `tenkiter-og`) a cada merge na `main`. Não precisa de token seu nem de comando. O cron roda a cada minuto (publicação agendada) e import/leitura de fotos só nos minutos 0 e 30. Reserva manual, só se o GitHub estiver fora: `CLOUDFLARE_API_TOKEN=<token> python3 instagram-worker/publicar.py` (token que edite Workers **e D1**; revogar depois).

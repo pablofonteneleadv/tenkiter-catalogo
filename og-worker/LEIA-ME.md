@@ -12,7 +12,9 @@ Endereço: `https://tenkiter-og.distkrpconfeccoes.workers.dev` · código: `og-w
 
 Qualquer outro caminho redireciona para a loja. Se o Apps Script estiver fora do ar, `/p/<código>` ainda leva a pessoa à peça (`?c=`), `/sitemap.xml` devolve as páginas fixas e `/feed.*` responde 503 com `Retry-After` (a Meta tenta de novo).
 
-## Como publicar (precisa do Pablo ou de um token novo da Cloudflare)
+## Como publicar
+
+**Automático (normal):** o `deploy.yml` publica este Worker (junto com `tenkiter-ig` e `tenkiter-midia`) a cada merge na `main`. Nada a fazer. O que segue é a reserva manual, para o caso de o GitHub estar fora.
 
 **Jeito rápido (por API, sem instalar nada):** crie um token em Cloudflare → Meu perfil → API Tokens com o modelo *Edit Cloudflare Workers* (coloque data de fim, no máximo 1–2 dias) e rode `CLOUDFLARE_API_TOKEN=<token> python3 og-worker/publicar.py`; depois `node tests/worker_og.js` e abra os endereços da lista abaixo. Apague o token ao terminar. Foi assim que o Worker v2 foi publicado em 10/10/2026 (a v2.1, com `?f=N`, precisa ser publicada do mesmo jeito). (Pelo painel também serve: passos 1–3 abaixo.)
 

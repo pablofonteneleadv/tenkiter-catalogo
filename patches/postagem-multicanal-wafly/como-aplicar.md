@@ -1,5 +1,7 @@
 # Como aplicar — Postagem multicanal (Instagram / WhatsApp / Ambos) + Wafly
 
+> **Revisado em 18/10/2026 — este guia é histórico.** O site e o Worker já estão no ar, e a Wafly já está dentro dos backends que estão ao vivo (catálogo `catalogo-4.21`, RH `3.16`; `?action=versao` mostra `wafly:true`, `waflyWebhook:true`, `postagemCanal:true`). Os arquivos `catalogo-4.14.gs`/`funcionario-3.14.gs` citados abaixo são VELHOS: **não cole**. O que continua útil aqui é o Passo B2 (as 3 propriedades da Wafly) e a seção de segurança.
+
 Branch: `feat/postagem-multicanal-wafly` · PR para `main` · 16/10/2026
 
 Este guia é o passo a passo da publicação. O site sobe **sozinho pelo GitHub** (`deploy.yml`) quando o
@@ -43,7 +45,7 @@ aparece antes do backend novo e o canal `whatsapp` responde "WhatsApp não confi
 O site novo só fala o parâmetro `canal`; **quem aciona a Wafly é o backend**. Sem este passo, o canal
 `whatsapp`/`ambos` responde "WhatsApp não configurado no servidor" e nada mais quebra.
 
-### B1. Colar os dois arquivos
+### B1. Colar os dois arquivos (JÁ FEITO — histórico; hoje cole sempre o `.gs.txt` mais novo, ver `LEIA-ME-ATUALIZAR.md`)
 
 1. Abra o projeto do **catálogo** em <https://script.google.com>.
 2. Selecione **todo** o conteúdo do editor e substitua pelo conteúdo de **`catalogo-4.14.gs`**
