@@ -95,6 +95,7 @@ async function iniciar(env) {
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   for (const col of COLUNAS_NOVAS) { try { await env.DB.prepare('ALTER TABLE rascunho ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   try { await env.DB.prepare("ALTER TABLE fotoia ADD COLUMN refs TEXT DEFAULT '[]'").run(); } catch (e) { /* já existe */ }
+  try { await env.DB.prepare("ALTER TABLE fotoia ADD COLUMN plano TEXT DEFAULT ''").run(); } catch (e) { /* já existe */ }
   try {   // v3.7: preço sempre calculado (o escrito é o à vista). Corrige os rascunhos antigos cujo preço da legenda foi gravado como se fosse o cheio.
     if (!(await cfgGet(env, 'mig_preco_v2'))) {
       const velhos = (await env.DB.prepare("SELECT id, preco_sug FROM rascunho WHERE COALESCE(preco_foto,'')='' AND COALESCE(preco_sug,'')!='' AND status IN ('pendente','descartado')").all()).results || [];
@@ -878,6 +879,13 @@ export function proximoLivreMulti(cfg, buckets, ocupMap, desdeMs, sorteio) {
   if (alvo > a.t) { const m = a.motivo; a = ajustarHorarioMulti(cfg, buckets, alvo, ocupMap); a.motivo = m || a.motivo; }
   return a;
 }
+/** v1.7 (18/10/2026): intervalo ESCOLHIDO pela pessoa entre as postagens de uma série ("de 10 em 10 minutos"), em ms; 0 = usar o sorteio do gestor. Vale de 1 min a 24 h. */
+export function intervaloPedidoMs_(v) { const n = Math.round(Number(v)); return isFinite(n) && n >= 1 ? Math.min(1440, n) * 60000 : 0; }
+/** Próximo horário da série: anterior + o intervalo escolhido (nunca menos que o mínimo de nenhum canal do post), respeitando pausa e o que já está na fila. */
+export function intervaloEscolhido_(cfg, buckets, ocupMap, anteriorMs, intervaloMs) {
+  let gap = intervaloMs; (buckets || []).forEach((b) => { gap = Math.max(gap, gapDoTipoMs(cfg, b)); });
+  return ajustarHorarioMulti(cfg, buckets, anteriorMs + gap, ocupMap).t;
+}
 export function proximoLivre(cfg, tipo, ocupadosMs, desdeMs, sorteio) { return proximoLivreMulti(cfg, [tipo], { [tipo]: ocupadosMs }, desdeMs, sorteio); }
 async function lerCfgPost(env) { let j = null; try { j = JSON.parse((await cfgGet(env, 'po_cfg')) || 'null'); } catch (e) { j = null; } return normalizarCfgPost(j); }
 /** Horários já ocupados num canal de contagem (Story, Feed…, ou "status" do WhatsApp). `janelaMs` = quanto tempo para trás ainda importa. */
@@ -1058,12 +1066,13 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const vs = []; for (const x of lista) { const r = validarPostagem(x); if (r.erro) return J({ ok: false, erro: r.erro }, 400); vs.push(r.v); }
     if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto' && canalUsaInstagram_(v.canal))) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
     const ids = [], quandos = [], por = String(b.por || '').slice(0, 60);
-    const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [];
+    const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [], intervaloMs = intervaloPedidoMs_(b.intervalo);
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], bs = bucketsDoPost(v.tipo, v.canal), ck = bs.join('+');
       for (const b of bs) if (!ocup[b]) ocup[b] = await ocupadosDoTipo_(env, b, 0, gapMaxDoTipoMs(cfg, b));
       let t;
       if (v.urgente && cfg.agoraIgnora) t = Date.now();                                  // urgência: sai já, sem pausa nem intervalo
+      else if (v.sequencia && intervaloMs && cursores[ck] != null) t = intervaloEscolhido_(cfg, bs, ocup, cursores[ck], intervaloMs);   // v1.7: a pessoa escolheu "de X em X minutos" (nunca abaixo do mínimo do canal)
       else if (v.sequencia) t = proximoLivreMulti(cfg, bs, ocup, cursores[ck] == null ? Date.now() + 60000 : cursores[ck]).t;       // intervalo SORTEADO entre o mín. e o máx. do canal
       else {
         const pedido = Math.max(Date.parse(v.quando), Date.now()), aj = ajustarHorarioMulti(cfg, bs, pedido, ocup);
@@ -1187,78 +1196,51 @@ export async function limparTemporarios(env, agoraMs) {
  *   - Dois jeitos de falar com o Google (a documentação atual descreve a Interactions API; generateContent é o clássico): `modo` auto tenta
  *     um e depois o outro. A resposta é lida "no escuro" (procura a imagem em qualquer lugar do JSON), porque o formato cru não está documentado.
  * ========================================================================== */
-export const INSTRUCAO_FOTOIA_PADRAO = `# SKILL: Tenkiter Modas – Gerador Automático de Capas de Campanha (Reels & Carrossel)
+export const INSTRUCAO_FOTOIA_PADRAO = `# SKILL: TENKiTER Modas – Capa de Campanha com Looks (grupo de modelos diferentes)
 
 ## 🎯 Objetivo
-Você é o motor de inteligência visual da **TENKiTER Modas**. Sua função é analisar as fotos reais de um produto ou lote enviadas pelo lojista e gerar **uma única imagem de capa de campanha** de altíssimo padrão (estilo editorial de moda / fast-fashion sofisticada) otimizada para o formato vertical de Reels/Carrossel do Instagram (9:16).
+Você é o motor visual da **TENKiTER Modas** (moda de Crateús-CE: alegre, popular e sofisticada ao mesmo tempo). Receba as fotos reais das peças e gere **UMA única imagem de campanha**: um grupo de pessoas DIFERENTES, cada uma vestindo UM look do pedido, como num editorial de moda feito em estúdio. A lista exata de looks, o perfil de cada pessoa, o destino da imagem (Status, Reels ou capa de carrossel) e se leva seta com chamada vêm no final, em "DADOS DESTE PEDIDO".
 
----
+## 📋 Regras de ouro (inegociáveis)
 
-## 📋 Regras de Ouro & Diretrizes Inegociáveis
+1. **UM MODELO POR LOOK.** Se o pedido tem N looks, a imagem tem **EXATAMENTE N pessoas** (nem mais, nem menos), lado a lado, todas inteiras, da cabeça aos pés (calçados à vista), com cada peça totalmente visível. Nunca misture peças de looks diferentes na mesma pessoa e nunca junte vários looks em uma pessoa só. Se enviei 4 fotos, são 4 pessoas com 4 looks.
 
-1. **FIDELIDADE ABSOLUTA AO PRODUTO (Proibido Inventar Peças):**
-   - Você DEVE utilizar obrigatoriamente as peças exatas enviadas nas fotos do produto. 
-   - **Regra para Shorts e Saias:** Quando o produto base for um short ou uma saia, você deve combiná-lo com uma blusa/cropped coerente que faça parte do catálogo/estilo da loja, nunca inventando peças desconectadas da realidade operacional.
-   - Jamais invente estampas, modelagens ou texturas que não estejam presentes nas referências fornecidas.
+2. **FIDELIDADE ABSOLUTA ÀS PEÇAS (proibido inventar).** Cada pessoa veste exatamente as peças indicadas para ela: mesmo corte, comprimento, caimento, tecido, cor, estampa, brilho, textura, bordados, gola, alças, barra, cintura, elástico, transparência. Copie o caimento real (solto, justo, evasê, franzido, cintura alta…). Proibido recolorir, simplificar, trocar ou redesenhar uma peça. Proibido acrescentar roupa que não foi enviada (blusa, casaco, cinto, bolsa, lenço); só calçado discreto e neutro que combine, e acessórios mínimos.
 
-2. **SETA INDICATIVA PARA DIREITA (CTA Visual):**
-   - A arte final gerada deve conter discretamente uma **seta elegante apontando para a direita (→)**, posicionada de forma sutil na lateral ou canto inferior, indicando visualmente para o cliente que existem mais fotos reais e detalhes daquele produto no carrossel.
+3. **NÃO RESPEITE A MODELO DAS FOTOS.** As fotos de referência podem mostrar uma modelo ou manequim: use SÓ a roupa. O rosto, o corpo, a pele e o cabelo da pessoa da foto NÃO podem aparecer. Cada pessoa da imagem é uma pessoa nova, claramente DIFERENTE das outras em idade, tom de pele, cabelo, altura e manequim (os perfis estão no pedido). A mesma peça em corpos diferentes: respeite o caimento real em cada corpo, sem afinar nem retocar ninguém.
 
-3. **POSES EM MOVIMENTO E ALEGRIA (Zero Tristeza/Seriedade):**
-   - **Proibido:** Poses rígidas de manequim, expressões sérias, neutras ou melancólicas.
-   - **Obrigatório:** Poses dinâmicas em movimento, gargalhadas naturais, sorrisos abertos, braços dados ou interações fluidas entre as modelos, transmitindo alegria e alto astral.
+4. **ALEGRIA E MOVIMENTO (zero seriedade).** Sorrisos largos e gargalhadas naturais, braços dados ou entrelaçados nos ombros e cintura, abraços leves, olhares entre elas, caminhando ou girando de leve. Proibido manequim rígido, pose de catálogo, rosto sério, neutro ou triste.
 
-4. **PERFIL DOS MODELOS E MANEQUINS (Diversidade & Tamanhos Reais):**
-   - A menos que o lojista especifique o contrário, a composição padrão de campanha deve trazer **três modelos** representando diferentes faixas etárias e biotipos reais (exemplo clássico: 18 anos vestindo 36, 25 anos vestindo 40, e 45 anos vestindo 42), garantindo identificação com o público-alvo da marca.
+5. **CENÁRIO MINIMALISTA.** Estúdio contemporâneo com paredes de concreto polido / cimento queimado em bege-areia e cinza quente, piso liso de microcimento, softbox grande no alto com luz suave e quente, sem objetos nem poluição visual. Fotografia editorial realista: câmera na altura dos olhos, lente ~50 mm, foco nítido nas roupas, pele natural, cores fiéis às peças.
 
-5. **CENÁRIO MINIMALISTA E LIMPO:**
-   - Estúdio contemporâneo com iluminação suave (*softbox*).
-   - Paredes em tons neutros (concreto leve, off-white, areia ou cinza suave).
-   - Sem poluição visual ou excesso de adereços.
+6. **COMPOSIÇÃO.** O grupo ocupa o terço central da altura, com respiro livre em cima e embaixo (as "zonas livres" do destino ficam sem rostos e sem peças). Ninguém cortado pelas bordas; a pessoa mais alta não encosta no topo.
 
-6. **FORMATO:**
-   - Proporção estrita vertical 9:16 (\`--ar 9:16\`).
-   - **ZERO TEXTOS** na imagem (além da seta sutil para a direita).
+7. **TEXTO.** Nenhum texto, número ou logotipo na imagem, EXCETO o que o pedido pedir expressamente em "Seta e chamada".
 
----
-
-## ⚙️ Fluxo de Execução Técnica (Passo a Passo)
-
-1. **Análise dos Inputs:**
-   - Receba o lote de fotos do produto (seja uma cor, variações, estampas ou peças separadas como shorts, saias, croppeds e bodies).
-   - Mapeie quais são as peças centrais que precisam aparecer obrigatoriamente na composição.
-
-2. **Montagem do Prompt Interno para o Gerador de Imagens:**
-   - Estruture o prompt técnico combinando:
-     - *Assunto:* Grupo de modelos diversificadas (ex: idades de 18, 25 e 45 anos, tamanhos 36, 40 e 42).
-     - *Look:* Descrição exata das peças reais enviadas (cor, tecido, brilho, strass, recortes ou estampas das fotos).
-     - *Estética:* Editorial de moda profissional, luz suave de estúdio, fundo de concreto minimalista.
-     - *Expressão:* Sorrisos largos, gargalhadas naturais, poses em movimento dinâmico.
-     - *Detalhe:* Inclusão de um elemento gráfico discreto de uma seta apontando para a direita (\`→\`) para incentivar o deslize do carrossel.
-     - *Parâmetros:* \`--ar 9:16\`.
-
-3. **Validação Final:**
-   - Verifique se todas as peças do cliente foram respeitadas e se a imagem gerada convida o usuário a abrir o post para ver os detalhes manuais.`;
-export const INSTRUCAO_CF_PADRAO = `Vertical fashion campaign cover photo for a Brazilian clothing store ({formato}).
-Use EXACTLY the garment shown in the reference image(s): same cut, color, print, fabric and details. Do not redesign, recolor or invent another piece.
-A happy, confident model wearing it, natural pose, clean bright modern background in soft light beige and sand tones, warm natural light, editorial lifestyle photography, sharp focus, high quality.
-Keep the top and the bottom of the frame calm and uncluttered. No text, no logos, no watermarks, no extra people.
-Product: {nome}. {extra}`;
+## ⚙️ Como executar
+1. Leia a lista de looks e associe cada foto de referência à pessoa que a veste (a foto marcada como "de cima" fornece só a peça de cima; a "de baixo", só a de baixo; a "look inteiro" fornece a roupa toda).
+2. Monte o grupo na ordem da lista, da esquerda para a direita.
+3. Confira antes de responder: número de pessoas = número de looks; nenhuma peça inventada; nenhuma pessoa parecida com a das fotos de referência; todos sorrindo; ninguém cortado.`;
+export const INSTRUCAO_CF_PADRAO = `Professional editorial fashion photograph for a Brazilian clothing store, vertical {formato}. A group of {n} different {quem} (different ages, skin tones, hair and body types) standing close together, laughing happily, arms around each other's shoulders, walking slightly, full body from head to toe with shoes visible, in a minimalist warm beige concrete studio with soft overhead light and a smooth concrete floor. Eye-level camera, 50mm lens, realistic natural skin, sharp focus.
+{looks}
+Copy each garment EXACTLY from its reference image: same cut, length, fall, fabric, color, print and details. Do NOT copy the face, body, skin or hair of any person shown in the reference images. Exactly {n} people, no extra people, no extra garments. Keep the top and bottom of the frame calm and empty.
+{extra}`;
 export const CF_MODELO_PADRAO = '@cf/black-forest-labs/flux-2-klein-4b';
-export const CFG_FOTOIA_PADRAO = { ligado: true, instrucao: INSTRUCAO_FOTOIA_PADRAO, modelos: ['gemini-nano-banana-2.1', 'gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image', 'gemini-2.5-flash-image'], modo: 'auto', formato: '9:16', tamanho: '1K', limiteDia: 20,
+export const CFG_FOTOIA_PADRAO = { v: 2, ligado: true, instrucao: INSTRUCAO_FOTOIA_PADRAO, modelos: ['gemini-nano-banana-2.1', 'gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image', 'gemini-2.5-flash-image'], modo: 'auto', formato: '9:16', tamanho: '1K', limiteDia: 20,
   provedores: ['gemini', 'cloudflare'], cfModelo: CF_MODELO_PADRAO, instrucaoCf: INSTRUCAO_CF_PADRAO };
 const FORMATOS_FOTOIA = ['9:16', '4:5', '1:1', '3:4', '16:9'], MODOS_FOTOIA = ['auto', 'interactions', 'generateContent'], PROVEDORES_FOTOIA = ['gemini', 'cloudflare'];
-const FOTOIA_MAX_FONTE = 1600 * 1024, FOTOIA_MAX_REF = 300 * 1024, FOTOIA_MAX_RESULTADO = 8 * 1024 * 1024, FOTOIA_MAX_FOTOS = 4, FOTOIA_MAX_FILA = 40;
+const FOTOIA_MAX_FONTE = 1600 * 1024, FOTOIA_MAX_REF = 300 * 1024, FOTOIA_MAX_RESULTADO = 8 * 1024 * 1024, FOTOIA_MAX_FOTOS = 6, FOTOIA_CF_MAX_REF = 4, FOTOIA_MAX_FILA = 40;
 export function normalizarCfgFotoIA(c) {
   const d = CFG_FOTOIA_PADRAO, x = c && typeof c === 'object' ? c : {};
-  const instr = typeof x.instrucao === 'string' && x.instrucao.trim() ? x.instrucao.replace(/\r/g, '').slice(0, 12000) : d.instrucao;
-  const instrCf = typeof x.instrucaoCf === 'string' && x.instrucaoCf.trim() ? x.instrucaoCf.replace(/\r/g, '').slice(0, 3000) : d.instrucaoCf;
+  const antiga = !(Number(x.v) >= 2);          // configuração gravada antes da v1.8 (um modelo só): as instruções voltam ao padrão novo (um modelo por look); o resto (modelos, limite, motor) é mantido
+  const instr = !antiga && typeof x.instrucao === 'string' && x.instrucao.trim() ? x.instrucao.replace(/\r/g, '').slice(0, 12000) : d.instrucao;
+  const instrCf = !antiga && typeof x.instrucaoCf === 'string' && x.instrucaoCf.trim() ? x.instrucaoCf.replace(/\r/g, '').slice(0, 3000) : d.instrucaoCf;
   let mods = (Array.isArray(x.modelos) ? x.modelos : String(x.modelos || '').split(/[\n,]+/)).map((m) => String(m).trim()).filter((m) => /^[A-Za-z0-9._\-]{3,70}$/.test(m));
   mods = mods.filter((m, i) => mods.indexOf(m) === i).slice(0, 8); if (!mods.length) mods = d.modelos.slice();
   let provs = (Array.isArray(x.provedores) ? x.provedores : []).map((m) => String(m).trim()).filter((m, i, a) => PROVEDORES_FOTOIA.indexOf(m) !== -1 && a.indexOf(m) === i);
   if (!provs.length) provs = d.provedores.slice();
   const cfm = String(x.cfModelo || '').trim(), lim = Number(x.limiteDia);
-  return { ligado: x.ligado === undefined ? d.ligado : !!x.ligado, instrucao: instr, modelos: mods, modo: MODOS_FOTOIA.indexOf(x.modo) !== -1 ? x.modo : d.modo,
+  return { v: 2, ligado: x.ligado === undefined ? d.ligado : !!x.ligado, instrucao: instr, modelos: mods, modo: MODOS_FOTOIA.indexOf(x.modo) !== -1 ? x.modo : d.modo,
     formato: FORMATOS_FOTOIA.indexOf(x.formato) !== -1 ? x.formato : d.formato, tamanho: ['1K', '2K'].indexOf(x.tamanho) !== -1 ? x.tamanho : d.tamanho,
     limiteDia: isFinite(lim) && lim >= 1 ? Math.min(200, Math.round(lim)) : d.limiteDia,
     provedores: provs, cfModelo: /^@cf\/[A-Za-z0-9._\-]+\/[A-Za-z0-9._\-]{2,80}$/.test(cfm) ? cfm : d.cfModelo, instrucaoCf: instrCf };
@@ -1277,11 +1259,106 @@ export function acharImagensIA(o, acc, prof) {
 }
 function textoDaResposta_(o, acc, prof) { acc = acc || []; prof = prof || 0; if (!o || typeof o !== 'object' || prof > 9) return acc; if (Array.isArray(o)) { o.forEach((x) => textoDaResposta_(x, acc, prof + 1)); return acc; } if (typeof o.text === 'string' && o.text.trim()) acc.push(o.text.trim()); Object.keys(o).forEach((k) => { if (typeof o[k] === 'object') textoDaResposta_(o[k], acc, prof + 1); }); return acc; }
 function b64ParaBuf_(s) { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+/* ---------- Looks do pedido (v1.8): cada foto tem um PAPEL e cada look vira UMA pessoa na imagem ----------
+ * papeis: 'cima' (só a peça de cima da foto), 'baixo' (só a de baixo), 'look' (a roupa toda / peça única: vestido, macacão, fantasia…).
+ * Cima e baixo precisam fechar par (3 de cima ⇒ 3 de baixo); looks = fotos 'look' + pares. Destino: status | reels | carrossel. */
+export const DESTINOS_FOTOIA = { status: { formato: '9:16', nome: 'Status do WhatsApp' }, reels: { formato: '9:16', nome: 'Reels' }, carrossel: { formato: '4:5', nome: 'capa de carrossel' } };
+export const QUEM_FOTOIA = ['mulheres', 'criancas', 'homens', 'misto'];
+const PAPEIS_FOTOIA = ['cima', 'baixo', 'look'];
+const PERFIS_FOTOIA = {
+  mulheres: [['mulher de uns 22 anos, magra, manequim 36, pele clara, cabelo liso escuro com franja', 'a woman about 22, slim, size 36, fair skin, straight dark hair with bangs'],
+    ['mulher de uns 28 anos, manequim 40, pele negra, cabelo cacheado volumoso', 'a woman about 28, size 40, dark skin, voluminous curly hair'],
+    ['mulher de uns 35 anos, curvilínea, manequim 44, pele parda, cabelo ondulado castanho', 'a woman about 35, curvy, size 44, brown skin, wavy brown hair'],
+    ['mulher de uns 45 anos, manequim 42, pele morena clara, cabelo curto grisalho', 'a woman about 45, size 42, light tan skin, short gray hair'],
+    ['mulher de uns 25 anos, manequim 38, descendente de asiáticos, cabelo preto liso e curto', 'a woman about 25, size 38, East Asian descent, short straight black hair'],
+    ['mulher de uns 30 anos, plus size manequim 48, pele negra, tranças longas', 'a woman about 30, plus size 48, dark skin, long braids']],
+  criancas: [['criança de uns 4 anos, pele clara, cabelo castanho liso', 'a child about 4, fair skin, straight brown hair'],
+    ['criança de uns 6 anos, pele negra, cabelo cacheado', 'a child about 6, dark skin, curly hair'],
+    ['criança de uns 8 anos, pele parda, cabelo ondulado', 'a child about 8, brown skin, wavy hair'],
+    ['criança de uns 5 anos, pele morena, cabelo preto liso', 'a child about 5, tan skin, straight black hair'],
+    ['criança de uns 10 anos, pele clara, cabelo loiro', 'a child about 10, fair skin, blond hair'],
+    ['criança de uns 7 anos, descendente de asiáticos, cabelo preto liso', 'a child about 7, East Asian descent, straight black hair']],
+  homens: [['homem de uns 22 anos, magro, pele clara, cabelo curto castanho', 'a man about 22, slim, fair skin, short brown hair'],
+    ['homem de uns 30 anos, forte, pele negra, cabelo baixo e barba curta', 'a man about 30, athletic, dark skin, short hair and short beard'],
+    ['homem de uns 40 anos, manequim grande, pele parda, cabelo ondulado', 'a man about 40, large build, brown skin, wavy hair'],
+    ['homem de uns 50 anos, pele morena clara, cabelo grisalho', 'a man about 50, light tan skin, gray hair'],
+    ['homem de uns 26 anos, descendente de asiáticos, cabelo preto liso', 'a man about 26, East Asian descent, straight black hair'],
+    ['homem de uns 35 anos, pele negra clara, cabelo crespo', 'a man about 35, medium-dark skin, coily hair']],
+};
+const ROTULO_QUEM_EN = { mulheres: 'women', criancas: 'children', homens: 'men', misto: 'women and men' };
+const perfilDe_ = (quem, k, en) => {
+  const lista = quem === 'misto' ? (k % 3 === 2 ? PERFIS_FOTOIA.homens : PERFIS_FOTOIA.mulheres) : (PERFIS_FOTOIA[quem] || PERFIS_FOTOIA.mulheres);
+  return lista[k % lista.length][en ? 1 : 0];
+};
+/** Valida/monta o plano a partir do que o painel mandou. → {ok:true, plano} | {ok:false, erro}. Nunca lança. */
+export function montarPlanoFotoIA_(b, n, cfg) {
+  b = b && typeof b === 'object' ? b : {};
+  const destino = DESTINOS_FOTOIA[b.destino] ? b.destino : ((cfg && cfg.formato === '4:5') ? 'carrossel' : 'status');
+  const quem = QUEM_FOTOIA.indexOf(b.quem) !== -1 ? b.quem : 'mulheres';
+  let papeis;
+  if (b.papeis === undefined || b.papeis === null) papeis = new Array(n).fill('look');
+  else {
+    papeis = Array.isArray(b.papeis) ? b.papeis.map((x) => String(x)) : [];
+    if (papeis.length !== n || papeis.some((x) => PAPEIS_FOTOIA.indexOf(x) === -1)) return { ok: false, erro: 'Diga o que a IA deve usar em cada foto (peça de cima, de baixo ou look inteiro).' };
+  }
+  const cima = [], baixo = [];
+  papeis.forEach((p, i) => { if (p === 'cima') cima.push(i); else if (p === 'baixo') baixo.push(i); });
+  if (cima.length !== baixo.length) {
+    const d = Math.abs(cima.length - baixo.length), falta = cima.length > baixo.length ? 'de baixo' : 'de cima';
+    return { ok: false, faltam: cima.length > baixo.length ? 'baixo' : 'cima', erro: 'Faltam ' + d + ' peça' + (d > 1 ? 's' : '') + ' ' + falta + ' para combinar com as ' + (cima.length > baixo.length ? cima.length + ' de cima' : baixo.length + ' de baixo') + '. A IA não inventa peças: escolha ' + (d > 1 ? 'as que faltam' : 'a que falta') + ' ou mude o papel das fotos.' };
+  }
+  let looks = [];
+  if (Array.isArray(b.looks) && b.looks.length) {
+    const usados = {};
+    for (const l of b.looks) {
+      const ix = Array.isArray(l) ? l.map((x) => Number(x)) : [];
+      if (!ix.length || ix.length > 2 || ix.some((i) => !Number.isInteger(i) || i < 0 || i >= n || usados[i])) return { ok: false, erro: 'A combinação dos looks não bate com as fotos. Refaça a combinação.' };
+      if (ix.length === 1) { if (papeis[ix[0]] !== 'look') return { ok: false, erro: 'A combinação dos looks não bate com as fotos. Refaça a combinação.' }; }
+      else { const ps = ix.map((i) => papeis[i]).sort().join('+'); if (ps !== 'baixo+cima') return { ok: false, erro: 'A combinação dos looks não bate com as fotos. Refaça a combinação.' }; }
+      ix.forEach((i) => { usados[i] = true; });
+      looks.push(ix.map((i) => ({ i: i, papel: papeis[i] })));
+    }
+    if (Object.keys(usados).length !== n) return { ok: false, erro: 'A combinação dos looks não bate com as fotos. Refaça a combinação.' };
+  } else {
+    let ib = 0;
+    papeis.forEach((p, i) => { if (p === 'look') looks.push([{ i: i, papel: 'look' }]); else if (p === 'cima') { looks.push([{ i: i, papel: 'cima' }, { i: baixo[ib], papel: 'baixo' }]); ib++; } });
+  }
+  if (!looks.length || looks.length > FOTOIA_MAX_FOTOS) return { ok: false, erro: 'Escolha de 1 a ' + FOTOIA_MAX_FOTOS + ' looks.' };
+  const rot = Array.isArray(b.rotulos) ? b.rotulos.slice(0, n).map((x) => String(x || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 80)) : [];
+  return { ok: true, plano: { v: 1, destino: destino, formato: DESTINOS_FOTOIA[destino].formato, seta: !!b.seta, quem: quem, looks: looks.map((l) => ({ partes: l })), rotulos: rot } };
+}
+/** Plano guardado no pedido; pedido antigo (sem plano) = cada foto é um look inteiro, destino pelo formato da configuração. */
+export function planoDe_(job, nFotos, cfg) {
+  let p = null; try { p = typeof (job && job.plano) === 'string' ? JSON.parse(job.plano || 'null') : (job && job.plano) || null; } catch (e) { p = null; }
+  if (p && Array.isArray(p.looks) && p.looks.length) return p;
+  const r = montarPlanoFotoIA_({}, Math.max(1, Math.min(FOTOIA_MAX_FOTOS, nFotos || 1)), cfg);
+  r.plano.implicito = true; if (cfg && cfg.formato) r.plano.formato = cfg.formato;       // pedido antigo: vale a proporção da configuração, como sempre valeu
+  return r.plano;
+}
+const LIVRE_DESTINO_ = { status: 'Deixe livre cerca de 8% no topo e 14% embaixo (o Status do WhatsApp cobre essas faixas).', reels: 'Deixe livre cerca de 12% no topo e 22% embaixo: o Instagram cobre essas faixas com legenda e botões. Nenhum rosto nem peça nelas.', carrossel: 'Deixe livre cerca de 10% embaixo para o texto do post.' };
+/** Texto da lista de looks. en=true: versão curta em inglês para o Cloudflare (as fotos são "image 0", "image 1"… = o índice da foto). */
+export function textoLooks_(plano, en) {
+  const L = plano.looks, rot = plano.rotulos || [], out = [];
+  L.forEach((lk, k) => {
+    const perfil = perfilDe_(plano.quem, k, en), nome = (i) => rot[i] ? ' (' + rot[i] + ')' : '';
+    const pt = lk.partes.map((x) => x.papel === 'cima' ? 'a peça de CIMA da Foto ' + (x.i + 1) + nome(x.i) : x.papel === 'baixo' ? 'a peça de BAIXO da Foto ' + (x.i + 1) + nome(x.i) : 'o LOOK INTEIRO / PEÇA ÚNICA da Foto ' + (x.i + 1) + nome(x.i));
+    const ing = lk.partes.map((x) => x.papel === 'cima' ? 'the top garment from image ' + x.i : x.papel === 'baixo' ? 'the bottom garment from image ' + x.i : 'the full outfit from image ' + x.i);
+    out.push(en ? 'Person ' + (k + 1) + ' (' + perfil + ') wears ' + ing.join(' and ') + '.' : 'Look ' + (k + 1) + ' — pessoa ' + (k + 1) + ' (' + perfil + '): veste ' + pt.join(' + ') + '.');
+  });
+  return out.join('\n');
+}
 export function promptFotoIA(cfg, job, nFotos) {
+  const plano = planoDe_(job, nFotos, cfg), dest = DESTINOS_FOTOIA[plano.destino] || DESTINOS_FOTOIA.status, nLooks = plano.looks.length;
   let t = String(cfg.instrucao || INSTRUCAO_FOTOIA_PADRAO).replace(/--ar\s*(\d+:\d+)/gi, 'proporção $1');
   t += '\n\n---\nDADOS DESTE PEDIDO\n';
-  if (job && job.nome) t += 'Produto: ' + String(job.nome).slice(0, 120) + '\n';
-  t += 'Fotos reais da peça enviadas junto: ' + nFotos + ' (use EXATAMENTE as peças que aparecem nelas).\nProporção da imagem final: ' + cfg.formato + ' (vertical). Gere UMA única imagem.\n';
+  if (job && job.nome) t += 'Produto/lote: ' + String(job.nome).slice(0, 120) + '\n';
+  t += 'Fotos de referência enviadas, na ordem: ' + nFotos + ' (Foto 1 a Foto ' + nFotos + '). Use EXATAMENTE as peças que aparecem nelas.\n';
+  t += 'Destino: ' + dest.nome + ' — proporção ' + plano.formato + ' (vertical). Gere UMA única imagem. ' + (LIVRE_DESTINO_[plano.destino] || '') + '\n';
+  t += 'NÚMERO DE LOOKS = NÚMERO DE PESSOAS NA IMAGEM: ' + nLooks + ' ' + (nLooks === 1 ? '(uma pessoa só)' : '(' + nLooks + ' pessoas diferentes, uma por look)') + '.\n\n';
+  t += 'LOOKS DESTE PEDIDO (da esquerda para a direita):\n' + textoLooks_(plano, false) + '\n';
+  t += 'Lembrete: as pessoas das fotos de referência (se houver) NÃO aparecem; só a roupa. Cada pessoa da imagem é nova e diferente das outras.\n\n';
+  t += plano.seta ? 'SETA E CHAMADA (pedido expressamente): no canto inferior direito, dentro da área livre de baixo, coloque uma seta elegante apontando para a direita (→) e, ao lado, o texto curto exato "ARRASTE E VEJA AS FOTOS REAIS", em letras brancas, caixa alta, fonte sem serifa, com sombra suave para ler em qualquer fundo. Escreva o texto exatamente assim, sem erro de grafia. Nenhum outro texto na imagem.\n'
+    : 'SEM TEXTO: nenhuma palavra, letra, número, seta ou logotipo na imagem.\n';
   if (job && job.extra) t += 'Observação do lojista para esta imagem: ' + String(job.extra).slice(0, 600) + '\n';
   return t;
 }
@@ -1349,13 +1426,16 @@ export function dimensoesImagem(u8) {
 }
 export function tamanhoCf(formato, tam) { const f = TAMANHOS_CF[formato] || TAMANHOS_CF['9:16']; return f[tam] || f['1K']; }
 const proximaMeiaNoiteUtcMs_ = () => { const d = new Date(); d.setUTCHours(24, 5, 0, 0); return d.getTime(); };
+const LIVRE_DESTINO_EN_ = { status: 'Keep roughly the top 8% and the bottom 14% of the frame empty.', reels: 'Keep roughly the top 12% and the bottom 22% of the frame empty (no faces or garments there).', carrossel: 'Keep roughly the bottom 10% of the frame empty.' };
 export function promptCf(cfg, job, nRefs) {
-  let t = String(cfg.instrucaoCf || INSTRUCAO_CF_PADRAO);
-  const nome = job && job.nome ? String(job.nome).slice(0, 120) : '', extra = job && job.extra ? String(job.extra).slice(0, 400) : '';
-  const tinha = /\{nome\}/.test(t);
-  t = t.replace(/\{formato\}/g, cfg.formato).replace(/\{nome\}/g, nome).replace(/\{extra\}/g, extra).replace(/\{n\}/g, String(nRefs));
+  const base = String(cfg.instrucaoCf || INSTRUCAO_CF_PADRAO), plano = planoDe_(job, nRefs, cfg);
+  const nome = job && job.nome ? String(job.nome).slice(0, 120) : '', extra = job && job.extra ? String(job.extra).slice(0, 400) : '', looksEn = textoLooks_(plano, true);
+  const tinha = /\{nome\}/.test(base), tinhaLooks = /\{looks\}/.test(base);
+  let t = base.replace(/\{formato\}/g, plano.formato).replace(/\{nome\}/g, nome).replace(/\{extra\}/g, extra).replace(/\{n\}/g, String(plano.looks.length)).replace(/\{quem\}/g, ROTULO_QUEM_EN[plano.quem] || 'women').replace(/\{looks\}/g, looksEn);
+  if (!tinhaLooks) t += '\n' + looksEn;
   if (!tinha && nome) t += '\nProduct: ' + nome + '.';
-  if (!/\{extra\}/.test(cfg.instrucaoCf || INSTRUCAO_CF_PADRAO) && extra) t += '\n' + extra;
+  if (!/\{extra\}/.test(base) && extra) t += '\n' + extra;
+  t += '\n' + (LIVRE_DESTINO_EN_[plano.destino] || '') + ' ' + (plano.seta ? 'Add one small elegant arrow pointing right (no words, no letters) in the bottom-right corner, inside the empty bottom area.' : 'No text, no letters, no arrows, no logos.');
   return t.replace(/[ \t]+\n/g, '\n').trim();
 }
 /** → {ok, buf, mime, modelo} | {ok:false, espera:true, ateMs, erro} | {ok:false, indisponivel:true} | {ok:false, erro}. Nunca lança. */
@@ -1382,7 +1462,8 @@ export async function chamarCloudflareImagem(env, cfg, prompt, refs) {
   }
 }
 /** Tenta os motores na ordem do gestor. Se nenhum deu imagem: junta os motivos (e, se algum só está esperando cota, o pedido espera). */
-export async function gerarComMotores_(env, cfg, job, fontes, refs, chaveGemini) {
+export async function gerarComMotores_(env, cfg0, job, fontes, refs, chaveGemini) {
+  const planoJob = planoDe_(job, fontes.length, cfg0), explicito = !planoJob.implicito, cfg = explicito ? Object.assign({}, cfg0, { formato: planoJob.formato }) : cfg0;      // a proporção vem do destino escolhido no pedido (Status/Reels 9:16, carrossel 4:5)
   const notas = []; let ateMs = 0, espera = false, fatal = false, ultimo = '', semPlanoGem = false, tentouGem = false, tentouCf = false, so = null;
   for (const prov of cfg.provedores) {
     let g = null;
@@ -1393,7 +1474,9 @@ export async function gerarComMotores_(env, cfg, job, fontes, refs, chaveGemini)
       if (g.semPlano) semPlanoGem = true;
       notas.push('Gemini: ' + (g.semPlano ? 'o plano desta chave não inclui geração de imagens (cota 0)' : g.erro));
     } else if (prov === 'cloudflare') {
+      if (explicito && fontes.length > FOTOIA_CF_MAX_REF) { if (env.AI) notas.push('Cloudflare: aceita no máximo ' + FOTOIA_CF_MAX_REF + ' fotos por imagem e este pedido tem ' + fontes.length + ' (divida em dois pedidos)'); continue; }
       if (!refs.length) { if (env.AI) notas.push('Cloudflare: este pedido não tem a foto pequena que ele exige (cancele e coloque na fila de novo)'); continue; }
+      if (explicito && refs.length !== fontes.length) { notas.push('Cloudflare: faltam as cópias pequenas de algumas fotos (cancele e coloque na fila de novo)'); continue; }
       g = await chamarCloudflareImagem(env, cfg, promptCf(cfg, job, refs.length), refs);
       if (g.indisponivel) continue;
       tentouCf = true;
@@ -1405,12 +1488,14 @@ export async function gerarComMotores_(env, cfg, job, fontes, refs, chaveGemini)
     else if (g.fatal) fatal = true; else ultimo = g.erro || ultimo;
   }
   if (!tentouGem && !tentouCf && !notas.length) return { ok: false, erro: 'Nenhum motor de imagem está disponível (ligue o Gemini com chave ou o Cloudflare).' };
+  if (!tentouGem && !tentouCf) return { ok: false, fatal: true, erro: notas.join(' · ').slice(0, 480) };      // nenhum motor chegou a ser tentado: esperar não resolve
   if (tentouGem && !tentouCf && so && notas.length === 1) return so;   // só o Gemini foi tentado: devolve o resultado dele sem mudar nada
   const erro = notas.join(' · ').slice(0, 480);
   if (espera) return { ok: false, espera: true, ateMs: ateMs, semPlano: semPlanoGem && !tentouCf, contaTent: !!ultimo, erro: erro };   // um motor só espera cota, mas o outro deu erro de verdade: isso conta tentativa
   return { ok: false, fatal: fatal && !ultimo, erro: erro || ultimo };
 }
-const linhaFotoIA_ = (env, x) => ({ id: x.id, status: x.status, nome: x.nome || '', produto: x.produto || '', extra: x.extra || '', resultado: x.resultado ? urlMidia(env, x.resultado) : '', modelo: x.modelo || '', erro: x.erro || '', espera: x.status === 'fila' && x.prox_em ? x.prox_em : '', tent: x.tent || 0,
+const resumoPlano_ = (x) => { try { const p = x.plano ? JSON.parse(x.plano) : null; return p && Array.isArray(p.looks) ? { looks: p.looks.length, destino: p.destino || '', seta: !!p.seta, quem: p.quem || '' } : null; } catch (e) { return null; } };
+const linhaFotoIA_ = (env, x) => ({ plano: resumoPlano_(x), id: x.id, status: x.status, nome: x.nome || '', produto: x.produto || '', extra: x.extra || '', resultado: x.resultado ? urlMidia(env, x.resultado) : '', modelo: x.modelo || '', erro: x.erro || '', espera: x.status === 'fila' && x.prox_em ? x.prox_em : '', tent: x.tent || 0,
   fontes: (function () { try { return JSON.parse(x.fontes || '[]').map((k) => urlMidia(env, k)); } catch (e) { return []; } })(), criado_em: x.criado_em, pronto_em: x.pronto_em || '' });
 /** Faz UM pedido da fila (o mais antigo que já pode, ou `soId`). Nunca lança. */
 export async function processarFotoIA(env, soId) {
@@ -1437,7 +1522,7 @@ export async function processarFotoIA(env, soId) {
       let chaves = []; try { chaves = JSON.parse(job.fontes || '[]'); } catch (e) { chaves = []; }
       const fontes = [];
       for (const k of chaves) { try { const o = await env.MIDIA.get(k); if (!o) continue; const buf = await o.arrayBuffer(); fontes.push({ mime: /\.png$/.test(k) ? 'image/png' : /\.webp$/.test(k) ? 'image/webp' : 'image/jpeg', data: b64(buf) }); } catch (e) { /* foto ilegível é ignorada */ } }
-      if (!fontes.length) { await env.DB.prepare("UPDATE fotoia SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('As fotos de origem não estão mais guardadas. Faça o pedido de novo.', agoraIso, job.id).run(); return { feitas: 0 }; }
+      if (!fontes.length || (job.plano && fontes.length !== chaves.length)) { await env.DB.prepare("UPDATE fotoia SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('As fotos de origem não estão mais guardadas. Faça o pedido de novo.', agoraIso, job.id).run(); return { feitas: 0 }; }
       const refs = [];
       if (env.AI && cfg.provedores.indexOf('cloudflare') !== -1) {
         let rk = []; try { rk = JSON.parse(job.refs || '[]'); } catch (e) { rk = []; }
@@ -1490,8 +1575,11 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
   }
   if (p === '/fotoia/fila' && req.method === 'POST') {
     let b; try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); }
-    const fotos = Array.isArray(b && b.fotos) ? b.fotos.slice(0, FOTOIA_MAX_FOTOS) : [];
+    const fotos = Array.isArray(b && b.fotos) ? b.fotos : [];
     if (!fotos.length) return J({ ok: false, erro: 'Escolha pelo menos 1 foto da peça.' }, 400);
+    if (fotos.length > FOTOIA_MAX_FOTOS) return J({ ok: false, erro: 'No máximo ' + FOTOIA_MAX_FOTOS + ' fotos por imagem.' }, 400);
+    const cfgPed = await lerCfgFotoIA(env), pl = montarPlanoFotoIA_(b, fotos.length, cfgPed), comPlano = !!(b && (b.papeis || b.looks || b.destino || b.seta || b.quem));      // sem nada disso = pedido no formato antigo (cada foto = um look, proporção da configuração)
+    if (!pl.ok) return J({ ok: false, erro: pl.erro, faltam: pl.faltam || '' }, 400);
     const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM fotoia WHERE status IN ('fila','gerando')").first()) || {}).n) || 0;
     if (pend >= FOTOIA_MAX_FILA) return J({ ok: false, erro: 'A fila já tem ' + pend + ' pedidos esperando. Aguarde alguns saírem.' }, 429);
     const bufs = [];
@@ -1501,13 +1589,15 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
       const ext = extensaoImagem(buf); if (!ext) return J({ ok: false, erro: 'Só foto JPG, PNG ou WEBP.' }, 400);
       bufs.push({ buf: buf, ext: ext });
     }
-    const refsIn = Array.isArray(b && b.refs) ? b.refs.slice(0, FOTOIA_MAX_FOTOS) : [], refBufs = [];       // cópias pequenas (< 512 px) para o Cloudflare; opcionais
+    const refsIn = Array.isArray(b && b.refs) ? b.refs.slice(0, comPlano ? FOTOIA_MAX_FOTOS : FOTOIA_CF_MAX_REF) : [], refBufs = [];       // cópias pequenas (< 512 px) para o Cloudflare; opcionais
+    let refsOk = true;
     for (const f of refsIn) {
-      let buf; try { buf = b64ParaBuf_(String((f && f.data) || '').replace(/^data:[^,]*,/, '').replace(/\s/g, '')); } catch (e) { continue; }
-      const ext = extensaoImagem(buf); if (!buf.length || buf.length > FOTOIA_MAX_REF || !ext || ext === 'webp') continue;
-      const dm = dimensoesImagem(buf); if (dm && (dm[0] > 511 || dm[1] > 511)) continue;
+      let buf; try { buf = b64ParaBuf_(String((f && f.data) || '').replace(/^data:[^,]*,/, '').replace(/\s/g, '')); } catch (e) { refsOk = false; continue; }
+      const ext = extensaoImagem(buf); if (!buf.length || buf.length > FOTOIA_MAX_REF || !ext || ext === 'webp') { refsOk = false; continue; }
+      const dm = dimensoesImagem(buf); if (dm && (dm[0] > 511 || dm[1] > 511)) { refsOk = false; continue; }
       refBufs.push({ buf: buf, ext: ext });
     }
+    if (comPlano && (!refsOk || refBufs.length !== bufs.length || bufs.length > FOTOIA_CF_MAX_REF)) refBufs.length = 0;      // com looks, cada cópia pequena TEM que casar com a sua foto (a ordem liga foto ↔ look); senão o Cloudflare fica de fora deste pedido
     const uso = await lerUso(env), total = bufs.concat(refBufs).reduce((s, x) => s + x.buf.length, 0);
     if (uso.bytes + total > limite(env)) return J({ ok: false, erro: 'O armazenamento de fotos está cheio no momento.' }, 507);
     const d = new Date(), aaaamm = d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0'), chaves = [];
@@ -1517,7 +1607,7 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
     uso.bytes += total; uso.arquivos += bufs.length + refBufs.length; await env.CACHE.put('uso', JSON.stringify(uso));
     const nome = String((b && b.nome) || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 120), produto = String((b && b.produto) || '').replace(/[^\w.\-]/g, '').slice(0, 40), extra = String((b && b.extra) || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 600);
     const por = String(req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20), t = agoraIso();
-    const r = await env.DB.prepare("INSERT INTO fotoia (status, nome, produto, extra, fontes, refs, criado_por, criado_em, atualizado_em) VALUES ('fila',?,?,?,?,?,?,?,?)").bind(nome, produto, extra, JSON.stringify(chaves), JSON.stringify(chavesRef), por, t, t).run();
+    const r = await env.DB.prepare("INSERT INTO fotoia (status, nome, produto, extra, fontes, refs, plano, criado_por, criado_em, atualizado_em) VALUES ('fila',?,?,?,?,?,?,?,?,?)").bind(nome, produto, extra, JSON.stringify(chaves), JSON.stringify(chavesRef), comPlano ? JSON.stringify(pl.plano) : '', por, t, t).run();
     const id = r.meta && r.meta.last_row_id; disparar(id);
     return J({ ok: true, id: id });
   }

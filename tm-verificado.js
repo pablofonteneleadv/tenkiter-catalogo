@@ -16,7 +16,7 @@
    '.tmv-facaagora{background:var(--tip-bg);border:1px solid var(--tip-border);color:var(--tip-text);border-radius:12px;padding:12px 14px;margin:14px 0;font-weight:600;line-height:1.5;max-width:68ch}',
    '.tmv-facaagora b{display:block;font-size:.8rem;letter-spacing:.04em;text-transform:uppercase;margin-bottom:2px}',
    '.tmv-chk{border:2px solid var(--accent-2);background:var(--surface);border-radius:14px;padding:14px;margin:16px 0;max-width:68ch}',
-   '.tmv-chk-tag{font-size:.75rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-2);margin-bottom:4px}',
+   '.tmv-chk-tag{font-size:.75rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-txt);margin-bottom:4px}',
    '.tmv-chk-q{font-weight:700;margin:0 0 10px;line-height:1.4}',
    '.tmv-op{display:block;width:100%;text-align:left;min-height:48px;padding:12px 14px;margin:8px 0;border:2px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);font:inherit;cursor:pointer;line-height:1.35}',
    '.tmv-op:hover:not(:disabled){border-color:var(--accent-2)}',
@@ -33,7 +33,7 @@
    '.tmv-ic{flex:0 0 26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;background:var(--surface-2);color:var(--muted)}',
    '.tmv-req li.ok .tmv-ic{background:var(--good-border);color:#fff}',
    '.tmv-req li.falta .tmv-ic{background:var(--warn-border);color:#fff}',
-   '.tmv-btn{display:block;width:100%;min-height:52px;border:0;border-radius:12px;font:inherit;font-weight:800;background:var(--accent-2);color:#fff;cursor:pointer;margin-top:10px;padding:12px}',
+   '.tmv-btn{display:block;width:100%;min-height:52px;border:0;border-radius:12px;font:inherit;font-weight:800;background:var(--accent-2);color:#0d0d0d;cursor:pointer;margin-top:10px;padding:12px}',
    '.tmv-btn:disabled{opacity:.5;cursor:not-allowed}',
    '.tmv-btn.sec{background:var(--surface-2);color:var(--text);border:2px solid var(--border)}',
    '.tmv-tag-teste{display:inline-block;background:#2C2C2C;color:#F39C12;font-size:.72rem;font-weight:800;letter-spacing:.04em;padding:3px 8px;border-radius:999px;margin-left:6px;vertical-align:middle}',
@@ -64,13 +64,68 @@
   ].join('\n');
   var st = document.createElement('style'); st.id = 'tmv-css'; st.textContent = css; document.head.appendChild(st);
 
-  /* ---------- texto do Doc -> blocos de checagem ---------- */
+  /* ---------- texto rico (v3.17): negrito/itálico/sublinhado/riscado, cor da letra, marca-texto e links por trecho ---------- */
+  var HEX = /^#[0-9a-f]{6}$/i;
+  function lum_(h){ var r = parseInt(h.substr(1,2),16)/255, g = parseInt(h.substr(3,2),16)/255, b = parseInt(h.substr(5,2),16)/255; return 0.2126*r + 0.7152*g + 0.0722*b; }
+  function mix_(h, alvo, f){ // mistura h com 'alvo' (0 = preto, 255 = branco) na proporção f
+    var out = '#'; for (var i = 0; i < 3; i++){ var v = parseInt(h.substr(1 + i*2, 2), 16); out += ('0' + Math.round(v + (alvo - v) * f).toString(16)).slice(-2); } return out;
+  }
+  /** Cor da letra para tema claro (l) e escuro (d): cor muito clara escurece no claro; cor escura clareia no escuro. */
+  TMV.coresDoTema = function(h){
+    var L = lum_(h);
+    return { l: L > 0.72 ? mix_(h, 0, 0.5) : h, d: L < 0.45 ? mix_(h, 255, 0.6) : h };
+  };
+  function quebras_(t){ return E(t).replace(/[\r\n\u000b]+/g, '<br>'); }
+  /** HTML seguro de um parágrafo: `runs` = [{t,b,i,u,s,c,h,a}] (ou nenhum = texto simples). */
+  TMV.rico = function(texto, runs){
+    if (!runs || !runs.length || !runs.some(function(r){ return r && typeof r.t === 'string'; })) return quebras_(texto);
+    return runs.map(function(r){
+      if (!r || typeof r.t !== 'string') return '';
+      var h = quebras_(r.t), cls = [], sty = '';
+      if (r.c && HEX.test(r.c)){ var c = TMV.coresDoTema(r.c); cls.push('rc'); sty += '--c-l:' + c.l + ';--c-d:' + c.d + ';'; }
+      var marca = r.h && HEX.test(r.h);
+      if (marca){ cls.push('rh'); sty += 'background:' + r.h + ';'; }
+      if (r.b) h = '<strong>' + h + '</strong>';
+      if (r.i) h = '<em>' + h + '</em>';
+      if (r.u) h = '<u>' + h + '</u>';
+      if (r.s) h = '<s>' + h + '</s>';
+      if (marca) h = '<mark class="' + cls.join(' ') + '" style="' + sty + '">' + h + '</mark>';
+      else if (cls.length) h = '<span class="' + cls.join(' ') + '" style="' + sty + '">' + h + '</span>';
+      if (r.a && /^https?:\/\//i.test(r.a)) h = '<a href="' + E(r.a) + '" target="_blank" rel="noopener noreferrer">' + h + '</a>';
+      return h;
+    }).join('');
+  };
+  /** Tira os primeiros `n` caracteres dos trechos (o rótulo "Faça agora:" etc.). */
+  function fatiar_(runs, n){
+    if (!runs || !runs.length) return null;
+    var fora = [], resta = n;
+    runs.forEach(function(r){
+      if (!r || typeof r.t !== 'string') return;
+      if (resta <= 0){ fora.push(r); return; }
+      if (r.t.length <= resta){ resta -= r.t.length; return; }
+      var c = {}; Object.keys(r).forEach(function(k){ c[k] = r[k]; }); c.t = r.t.substring(resta); resta = 0; fora.push(c);
+    });
+    return fora.length ? fora : null;
+  }
+
+  /* ---------- texto do Doc -> blocos de checagem e avisos coloridos ---------- */
   var RE_CHK = /^\s*Checagem\s*:\s*(.+)$/i, RE_OPC = /^\s*([a-f])\)\s*(.+)$/i, RE_EXP = /^\s*Explica[cç][aã]o\s*:\s*(.+)$/i, RE_FA = /^\s*Fa[cç]a\s+agora\s*:\s*(.+)$/i;
+  /* caixas coloridas: a linha começa com o rótulo e dois pontos */
+  var RE_AVISO = /^\s*(Relaxa|Aten[cç][aã]o|Importante|Cuidado|Dica|Exemplo|Regra\s+de\s+ouro)\s*:\s*(.+)$/i;
+  var AVISOS = {
+    'relaxa': ['good', '🌿 Relaxa'], 'atencao': ['warn', '⚠️ Atenção'], 'importante': ['warn', '⚠️ Importante'], 'cuidado': ['warn', '⚠️ Cuidado'],
+    'dica': ['tip', '💡 Dica'], 'exemplo': ['neutro', '📌 Exemplo'], 'regra de ouro': ['ouro', '⭐ Regra de ouro']
+  };
+  function chaveAviso_(w){ return w.toLowerCase().replace(/[çÇ]/g, 'c').replace(/[ãâáÃ]/g, 'a').replace(/\s+/g, ' '); }
   TMV.preparar = function(blocks){
     var out = [], i = 0, n = 0;
     while (i < blocks.length){
       var b = blocks[i], m;
-      if (b.type === 'p' && (m = RE_FA.exec(b.text))){ out.push({ type: 'facaagora', text: m[1] }); i++; continue; }
+      if (b.type === 'p' && (m = RE_FA.exec(b.text))){ out.push({ type: 'facaagora', text: m[1], runs: fatiar_(b.runs, b.text.length - m[1].length) }); i++; continue; }
+      if (b.type === 'p' && (m = RE_AVISO.exec(b.text)) && AVISOS[chaveAviso_(m[1])]){
+        var def = AVISOS[chaveAviso_(m[1])];
+        out.push({ type: 'aviso', kind: def[0], rotulo: def[1], text: m[2], runs: fatiar_(b.runs, b.text.length - m[2].length) }); i++; continue;
+      }
       if (b.type === 'p' && (m = RE_CHK.exec(b.text))){
         var q = m[1], ops = [], correct = -1, expl = '', j = i + 1;
         while (j < blocks.length && blocks[j].type === 'p' && (m = RE_OPC.exec(blocks[j].text))){
@@ -98,7 +153,8 @@
   };
 
   TMV.renderBloco = function(b, key){
-    if (b.type === 'facaagora') return '<div class="tmv-facaagora"><b>Faça agora</b>' + E(b.text) + '</div>';
+    if (b.type === 'facaagora') return '<div class="tmv-facaagora"><b>Faça agora</b>' + TMV.rico(b.text, b.runs) + '</div>';
+    if (b.type === 'aviso') return '<div class="aviso aviso-' + E(b.kind) + '"><b class="aviso-tag">' + E(b.rotulo) + '</b>' + TMV.rico(b.text, b.runs) + '</div>';
     if (b.type !== 'checagem') return '';
     var ja = lerOk(key, b.n);
     return '<div class="tmv-chk" data-key="' + E(key) + '" data-n="' + b.n + '" data-correct="' + b.correct + '" data-expl="' + E(b.explain) + '" role="group" aria-label="Checagem rápida">' +
