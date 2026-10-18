@@ -667,3 +667,10 @@ Documentação técnica: `docs/CI-CD.md`, seção **6. CI otimizado**.
   Motor: `layoutItens` aceita `pos` sem x/y e devolve `gr`; `desenharRodado_` gira o item no formato antigo; `layoutCamadas` soma `gr` ao `giro` e ESCALA a caixa por `mult` (`escCx_`; antes o tamanho nunca passava da caixa).
 - **X da única foto no catálogo** (`catalogo.js` já arquivava a peça desde a v4.18): `tests/x_equipe.py` estava velho (esperava o alerta "única foto") e foi corrigido.
 - Testes: `postagens_toque.py` (28; dedo via CDP), `postagens_v49.py`/`postagens_admin.py` ajustados (Feed escolhido à mão, `sel_tx`). Não testado em celular de verdade (gestos de 2 dedos só simulados).
+
+## v4.24 — Admin: barra de lote responsiva e busca como menu expansível (`admin.html`, só front, 17/10/2026)
+
+- **Barra de lote** (`#bulk-bar`): no celular os botões ficam numa GRADE que quebra linha (`repeat(auto-fit,minmax(100px,1fr))`, ≥ 44 px, texto pode quebrar) — antes rolava para o lado e cortava "Arquivar em…". A barra continua fixa no topo, com `max-height:60vh`. `#bulk-mais` usa a mesma grade.
+- **Busca da lista** (`#busca-admin` + botão `#fa-toggle` "🎚️ Filtros (n)"): os filtros (Categoria, Gênero, **Cor** — novo `#fa-cor`, lido de `Cores` —, Ordem, Preço mín/máx, Limpar) ficam numa gaveta `#filtros-admin` que ABRE ao tocar no campo e FECHA ao sair (foco fora, Esc, Enter ou toque fora). Aberta pelo botão, só o botão fecha. A gaveta EMPURRA a lista (não flutua) e o toque fora fecha por `click` em captura + `setTimeout(0)` (fechar no `pointerdown` deslocava a lista e o toque caía noutro lugar — bug achado pelo teste). O botão mostra quantos filtros estão ligados.
+- **Já estava pronto antes** (conferido contra as imagens do Pablo de 17/10): vídeos são o passo 2 do cadastro (até 3 com `videosMultiplos`), "Mais detalhes" sem caixa recolhível, categorias como chips, "Produtos para aceitar" dentro do menu Cadastrar, `#card-pedidos` em "Ferramentas do gestor". O atalho "➕ Cadastrar peça" de "O que fazer agora" foi mantido (leva ao mesmo formulário do menu laranja).
+- Teste: `tests/admin_lista_v424.py` (25; 360 e 390 px).

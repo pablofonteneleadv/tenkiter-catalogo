@@ -1,0 +1,67 @@
+"""Admin v4.24 (17/10/2026): barra de lote responsiva no celular (grade, sem rolagem lateral) e busca da lista como menu expansível
+(abre ao tocar no campo, fecha ao sair, botão Filtros com contagem, filtro de Cor). O Apps Script e a internet são SIMULADOS."""
+import sys, os
+AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
+from mock import *
+from playwright.sync_api import sync_playwright
+BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
+OK = []; BAD = []
+def chk(n, c, e=""):
+    (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + ((" — " + str(e)) if (e and not c) else ""))
+with sync_playwright() as p:
+    b = p.chromium.launch(args=["--no-sandbox"]); erros = []
+    for larg in (360, 390):
+        ctx = b.new_context(viewport={"width": larg, "height": 780}, is_mobile=True, has_touch=True, service_workers="block")
+        ctx.add_init_script(SESSION)
+        st = install(ctx, perms=PERMS_ALL, versao="4.20")
+        pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: d.accept())
+        pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2800)
+        print("== Lote responsivo (%d px) ==" % larg)
+        pg.evaluate("document.querySelector('#lista-produtos').scrollIntoView()"); pg.wait_for_timeout(200)
+        pg.locator("#lista-produtos input[type=checkbox]").nth(0).check(); pg.locator("#lista-produtos input[type=checkbox]").nth(1).check(); pg.wait_for_timeout(300)
+        d = pg.evaluate("""(()=>{const bar=document.querySelector('#bulk-bar'),a=document.querySelector('.bulk-bar-actions');
+          const bs=[...a.querySelectorAll('button')].filter(x=>!x.hidden&&x.offsetParent!==null).map(x=>{const r=x.getBoundingClientRect();return {t:x.textContent.trim(),l:r.left,r:r.right,h:r.height,sw:x.scrollWidth>x.clientWidth+1}});
+          return {barH:bar.getBoundingClientRect().height,vh:innerHeight,sx:a.scrollWidth>a.clientWidth+1,bs,vw:innerWidth,doc:document.documentElement.scrollWidth}})()""")
+        chk("sem rolagem lateral na barra de lote", not d["sx"], d)
+        chk("todos os botões do lote cabem na tela (nada cortado)", all(x["l"] >= 0 and x["r"] <= d["vw"] and not x["sw"] for x in d["bs"]), d["bs"])
+        chk("botões com pelo menos 44 px de altura", all(x["h"] >= 43.5 for x in d["bs"]), [x["h"] for x in d["bs"]])
+        chk("a barra não passa de 60% da tela e a página não ganha rolagem lateral", d["barH"] <= d["vh"] * .6 + 1 and d["doc"] <= d["vw"] + 1, d)
+        chk("as ações continuam todas lá (preços, novidades, arquivar, reativar, postagens, mais)", all(pg.locator("#" + i).count() == 1 for i in ["btn-bulk-preco", "btn-bulk-novidade", "btn-bulk-arquivar", "btn-bulk-reativar", "btn-bulk-postar", "btn-bulk-mais"]))
+        pg.click("#btn-cancelar-bulk"); pg.wait_for_timeout(200)
+        ctx.close()
+    ctx = b.new_context(viewport={"width": 390, "height": 780}, is_mobile=True, has_touch=True, service_workers="block")
+    ctx.add_init_script(SESSION)
+    st = install(ctx, perms=PERMS_ALL, versao="4.20")
+    pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: d.accept())
+    pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2800)
+    pg.evaluate("document.querySelector('#busca-admin').scrollIntoView({block:'center'})"); pg.wait_for_timeout(200)
+    print("== Busca como menu expansível ==")
+    n0 = pg.locator("#lista-produtos .card-peca, #lista-produtos > div").count()
+    chk("filtros começam recolhidos", not pg.locator("#filtros-admin").is_visible() and pg.get_attribute("#fa-toggle", "aria-expanded") == "false")
+    pg.click("#busca-admin"); pg.wait_for_timeout(300)
+    chk("tocar no campo de busca ABRE os filtros", pg.locator("#filtros-admin").is_visible() and pg.get_attribute("#fa-toggle", "aria-expanded") == "true")
+    chk("há categoria, gênero, COR, ordem e preço", all(pg.locator("#" + i).count() == 1 for i in ["fa-categoria", "fa-genero", "fa-cor", "fa-ordem", "fa-preco-min", "fa-preco-max"]))
+    chk("o filtro de cor lista as cores da loja", pg.evaluate("[...document.querySelectorAll('#fa-cor option')].map(o=>o.value).filter(Boolean)").__contains__("Preto"))
+    pg.select_option("#fa-cor", "Bege"); pg.wait_for_timeout(300)
+    chk("escolher a cor mantém a gaveta aberta e mostra a contagem no botão", pg.locator("#filtros-admin").is_visible() and pg.inner_text("#fa-n") == "1")
+    pg.select_option("#fa-categoria", index=1); pg.wait_for_timeout(300)
+    chk("categoria + cor somam (2)", pg.inner_text("#fa-n") == "2", pg.inner_text("#fa-n"))
+    pg.click("#filtros-lista [data-f=todas]"); pg.wait_for_timeout(500)
+    chk("clicar fora da gaveta (lista) fecha quando foi aberta pela busca", not pg.locator("#filtros-admin").is_visible())
+    chk("com a gaveta fechada o botão Filtros mostra quantos filtros estão ligados", pg.is_visible("#fa-n") and pg.inner_text("#fa-n") == "2")
+    pg.click("#fa-toggle"); pg.wait_for_timeout(300)
+    chk("o botão Filtros abre", pg.locator("#filtros-admin").is_visible())
+    pg.click("#busca-admin"); pg.click("#filtros-lista [data-f=todas]"); pg.wait_for_timeout(500)
+    chk("aberta pelo botão, ela fica aberta até você fechar", pg.locator("#filtros-admin").is_visible())
+    pg.click("#fa-limpar"); pg.wait_for_timeout(300)
+    chk("Limpar filtros zera tudo e some a contagem", not pg.is_visible("#fa-n") and pg.input_value("#fa-cor") == "" and pg.input_value("#fa-categoria") == "")
+    pg.click("#fa-toggle"); pg.wait_for_timeout(300)
+    chk("o botão fecha", not pg.locator("#filtros-admin").is_visible())
+    pg.click("#busca-admin"); pg.wait_for_timeout(300); pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+    chk("Esc fecha a gaveta", not pg.locator("#filtros-admin").is_visible())
+    pg.click("#busca-admin"); pg.wait_for_timeout(300); pg.fill("#busca-admin", "Saia"); pg.keyboard.press("Enter"); pg.wait_for_timeout(500)
+    chk("Enter na busca fecha o teclado e a gaveta e mostra os resultados", not pg.locator("#filtros-admin").is_visible() and pg.locator("#lista-produtos").inner_text().count("Saia") >= 1)
+    chk("sem erro de JavaScript", not erros, erros)
+    ctx.close(); b.close()
+print("\nOK=%d FALHAS=%d %s" % (len(OK), len(BAD), BAD))
+sys.exit(1 if BAD else 0)
