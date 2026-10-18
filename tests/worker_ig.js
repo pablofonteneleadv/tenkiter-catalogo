@@ -23,7 +23,7 @@ function d1() {
   const TOKEN = 'IGQVJ_TOKEN_INVENTADO_PARA_TESTE_1234567890';
   // ---- Instagram falso ----
   const GEMINI_OK = 'AIzaINVENTADA_PARA_TESTE_1234567890abcd'; let gemChamadas = [], gemModo = 'ok', gemTexto = '', imgChamadas = [], imgModo = 'ok';
-  let contaChamadas = [], contaFora = false;
+  let contaChamadas = [], contaFora = false, zapChamadas = [], zapModo = 'ok';
   let postChamadas = [], postErro = null, seqC = 0, containers = {}, publicados = [], videoStatus = 'FINISHED';
   let paginas = null, feed = [], stories = [], midia404 = {}, tokenValido = true, chamadas = [];
   const cdn = (id, tipo) => 'https://cdn.fake/' + id + (tipo === 'VIDEO' ? '.mp4' : '.jpg');
@@ -53,7 +53,7 @@ function d1() {
       if (gemModo === 'lixo') return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'não é json' }] } }] }));
       return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: gemTexto }] } }] }));
     }
-    if (u.startsWith('https://api.fake')) { const b = JSON.parse(init.body); if (b.action === 'contaPorWhats') { contaChamadas.push(b); return new Response(JSON.stringify(b.sessao === 'tk2.cliente' ? { ok: false } : contaFora ? { ok: false, erro: 'x' } : String(b.alvo) === '88977776666' ? { ok: true, existe: true, nome: 'Joana Cadastrada' } : { ok: true, existe: false })); } return new Response(JSON.stringify(b.sessao === 'tk2.admin' ? { ok: true, usuario: { permissoes: ['gerir_acessos', 'catalogo_cadastrar'] } } : b.sessao === 'tk2.gerente' ? { ok: true, usuario: { permissoes: ['catalogo_cadastrar'], nome: 'Gerente' } } : b.sessao === 'tk2.cliente' ? { ok: true, usuario: { permissoes: [], nome: 'Maria Cliente', whatsapp: '88988887777' } } : { ok: false })); }
+    if (u.startsWith('https://api.fake')) { const b = JSON.parse(init.body); if (b.action === 'waflyStatusRemoto') { zapChamadas.push(b); return new Response(JSON.stringify(zapModo === 'ok' ? { ok: true, requestId: b.requestId } : { ok: false, erro: 'WhatsApp fora do ar' })); } if (b.action === 'contaPorWhats') { contaChamadas.push(b); return new Response(JSON.stringify(b.sessao === 'tk2.cliente' ? { ok: false } : contaFora ? { ok: false, erro: 'x' } : String(b.alvo) === '88977776666' ? { ok: true, existe: true, nome: 'Joana Cadastrada' } : { ok: true, existe: false })); } return new Response(JSON.stringify(b.sessao === 'tk2.admin' ? { ok: true, usuario: { permissoes: ['gerir_acessos', 'catalogo_cadastrar'] } } : b.sessao === 'tk2.gerente' ? { ok: true, usuario: { permissoes: ['catalogo_cadastrar'], nome: 'Gerente' } } : b.sessao === 'tk2.cliente' ? { ok: true, usuario: { permissoes: [], nome: 'Maria Cliente', whatsapp: '88988887777' } } : { ok: false })); }
     if (u.startsWith('https://ig.fake') && init && init.method === 'POST') {          // publicação (POST com o token no CORPO)
       const f = new URLSearchParams(String(init.body)), tk = f.get('access_token'); f.delete('access_token');
       postChamadas.push({ u, p: Object.fromEntries(f) });
@@ -418,13 +418,13 @@ function d1() {
     await DB.prepare("DELETE FROM postagem WHERE status IN ('agendado','erro')").run();
     x = await G('POST', '/post', { posts: [1, 2, 3, 4].map((n) => ({ tipo: 'story', midias: [IMG(n)], quando: 'sequencia' })) });
     const q = x.j.quandos.map((t) => Date.parse(t));
-    chk('na sequência: 4 Stories saem escalonados, cada um 1 a 3 min depois do anterior', x.j.ok && q.length === 4 && q.every((t, i) => i === 0 || (t - q[i - 1] >= 60000 && t - q[i - 1] <= 180000)), x.j.quandos);
-    chk('o 1º da sequência sai a partir de ~1 min (nunca na mesma hora do pedido; um Story publicado há instantes empurra +2 min)', q[0] - Date.now() > 30000 && q[0] - Date.now() < 200000);
+    chk('na sequência: 4 Stories saem escalonados, cada um 2 a 5 min depois do anterior (intervalo sorteado)', x.j.ok && q.length === 4 && q.every((t, i) => i === 0 || (t - q[i - 1] >= 120000 && t - q[i - 1] <= 300000)), x.j.quandos);
+    chk('o 1º da sequência sai a partir de ~1 min (nunca na mesma hora do pedido; um Story publicado há instantes empurra +2 min)', q[0] - Date.now() > 30000 && q[0] - Date.now() < 320000);
     x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(5)], quando: 'sequencia' });
-    chk('cada tipo tem a sua fila: o Feed não espera os Stories (só respeita os 5 min do último Feed publicado)', Date.parse(x.j.quandos[0]) - Date.now() > 30000 && Date.parse(x.j.quandos[0]) - Date.now() < 400000 && Date.parse(x.j.quandos[0]) < q[3] + 400000, [x.j.quandos, q[3]]);
+    chk('cada tipo tem a sua fila: o Feed não espera os Stories (só respeita os 5 min do último Feed publicado)', Date.parse(x.j.quandos[0]) - Date.now() > 30000 && Date.parse(x.j.quandos[0]) - Date.now() < 650000 && Date.parse(x.j.quandos[0]) < q[3] + 650000, [x.j.quandos, q[3]]);
     const idsSeq = (await DB.prepare("SELECT id FROM postagem WHERE seq=1 AND status='agendado'").all()).results.length;
     chk('as da sequência ficam marcadas como sequência', idsSeq === 5, idsSeq);
-    chk('o intervalo humano varia (não é sempre igual)', new Set(Array.from({ length: 30 }, () => W.intervaloHumanoMs('feed', 'feed'))).size > 5);
+    chk('o intervalo humano (função antiga) varia (não é sempre igual)', new Set(Array.from({ length: 30 }, () => W.intervaloHumanoMs('feed', 'feed'))).size > 5);
     // vários no MESMO horário: todos saem (4 por minuto, o resto no minuto seguinte), em ordem
     await DB.prepare("DELETE FROM postagem WHERE status='agendado'").run();
     const mesma = ts(180); const ids6 = [];
@@ -493,9 +493,14 @@ function d1() {
     const BRrel = (dias, h, m) => { const l = new Date(Date.now() - 3 * 3600000 + dias * 86400000); return Date.UTC(l.getUTCFullYear(), l.getUTCMonth(), l.getUTCDate(), h + 3, m || 0); };
     const P0 = W.normalizarCfgPost({});
     let x, a;
-    chk('padrão: pausa 22:00–06:30 ligada, Story 2 min, Feed/Carrossel 5 min, Reels 10 min', P0.pausaAtiva === true && P0.pausaDe === '22:00' && P0.pausaAte === '06:30' && P0.gapStory === 120 && P0.gapFeed === 300 && P0.gapCarrossel === 300 && P0.gapReels === 600, P0);
-    a = W.normalizarCfgPost({ gapStory: 1, gapFeed: 'x', pausaDe: '25:99', max24h: 500, folga: -5 });
-    chk('valor inválido volta ao padrão e há limites (mín. 10 s, máx. 100 por dia)', a.gapStory === 10 && a.gapFeed === 300 && a.pausaDe === '22:00' && a.max24h === 100 && a.folga === 0, a);
+    const C0 = P0.canais;
+    chk('padrão: pausa 22:00–06:30 ligada; intervalos mín.–máx.: Story/Status 2–5 min, Feed/Carrossel 5–10 min, Reels 10–20 min', P0.pausaAtiva === true && P0.pausaDe === '22:00' && P0.pausaAte === '06:30' && C0.story.gapMin === 120 && C0.story.gapMax === 300 && C0.status.gapMin === 120 && C0.feed.gapMin === 300 && C0.feed.gapMax === 600 && C0.carrossel.gapMin === 300 && C0.reels.gapMin === 600 && C0.reels.gapMax === 1200, P0);
+    chk('padrão: cada canal tem o seu limite de 24 h e a soma do Instagram cabe no teto de 90', ['story', 'status', 'feed', 'carrossel', 'reels'].every((k) => C0[k].max24h >= 1) && C0.story.max24h + C0.feed.max24h + C0.carrossel.max24h + C0.reels.max24h <= P0.max24h, C0);
+    a = W.normalizarCfgPost({ gapStory: 1, gapFeed: 'x', pausaDe: '25:99', max24h: 500, folga: -5, canais: { reels: { gapMin: 900, gapMax: 100, max24h: 0 }, status: { gapMin: 'abc', max24h: 9999 } } });
+    chk('valor inválido volta ao padrão e há limites (mín. 10 s, máx. 100 por dia)', a.canais.story.gapMin === 10 && a.canais.feed.gapMin === 300 && a.pausaDe === '22:00' && a.max24h === 100 && a.folga === undefined && a.canais.status.gapMin === 120 && a.canais.status.max24h === 100 && a.canais.reels.max24h === 1, a);
+    chk('o máximo do intervalo nunca fica abaixo do mínimo (900 s mín. e 100 s máx. viram 900–900)', a.canais.reels.gapMin === 900 && a.canais.reels.gapMax === 900, a.canais.reels);
+    a = W.mesclarCfgPost(W.normalizarCfgPost({ canais: { story: { gapMin: 200, gapMax: 400, max24h: 7 } } }), { canais: { feed: { gapMax: 900 } }, pausaAtiva: false });
+    chk('mesclar: mexer só no Feed não apaga o que já estava salvo no Story (nem volta ao padrão)', a.canais.story.gapMin === 200 && a.canais.story.gapMax === 400 && a.canais.story.max24h === 7 && a.canais.feed.gapMax === 900 && a.canais.feed.gapMin === 300 && a.pausaAtiva === false, a);
     chk('23:00 cai na pausa -> 06:30 do dia seguinte', W.foraDaPausa(P0, BR(23, 0)) === BR(6, 30, 21));
     chk('03:00 cai na pausa -> 06:30 do mesmo dia', W.foraDaPausa(P0, BR(3, 0)) === BR(6, 30, 20));
     chk('06:30 e 21:59 estão fora da pausa', W.foraDaPausa(P0, BR(6, 30)) === BR(6, 30) && W.foraDaPausa(P0, BR(21, 59)) === BR(21, 59));
@@ -509,16 +514,34 @@ function d1() {
     chk('exatamente 5 min de distância é permitido', a.t === BR(10, 0) && !a.ajustado, a);
     a = W.ajustarHorario(P0, 'story', BR(22, 0), [BR(6, 30, 21)]);
     chk('pausa e intervalo juntos: 22:00 -> 06:30 e, como já há um Story lá, 06:32', a.t === BR(6, 32, 21) && a.motivo === 'pausa', a);
-    a = W.proximoLivre(Object.assign({}, P0, { folga: 0 }), 'story', [BR(10, 0), BR(10, 2), BR(10, 4)], BR(10, 0));
+    const FIXO = (c) => W.mesclarCfgPost(c, { canais: { story: { gapMax: 120 }, status: { gapMax: 120 }, feed: { gapMax: 300 }, carrossel: { gapMax: 300 }, reels: { gapMax: 600 } } });         // sem sorteio: máximo = mínimo
+    a = W.proximoLivre(FIXO(P0), 'story', [BR(10, 0), BR(10, 2), BR(10, 4)], BR(10, 0));
     chk('"na sequência" acha o primeiro horário livre depois dos ocupados (10:06)', a.t === BR(10, 6), a);
+    // ---- intervalo ALEATÓRIO entre o mínimo e o máximo do canal (configurável por canal)
+    const sorteios = [0, 0.25, 0.5, 0.75, 0.999].map((r) => W.proximoLivre(P0, 'story', [BR(10, 0)], BR(10, 0), () => r).t - BR(10, 0));
+    chk('"na sequência" sorteia o intervalo entre 2 e 5 min (Story): 0 -> 2 min, 0,5 -> 3,5 min, ~1 -> 5 min', sorteios[0] === 120000 && sorteios[2] === 210000 && sorteios[4] >= 299000 && sorteios[4] <= 300000 && sorteios.every((v, i) => i === 0 || v > sorteios[i - 1]), sorteios);
+    const Cx = W.mesclarCfgPost(P0, { canais: { story: { gapMin: 60, gapMax: 600 } } });
+    const sx = [0, 1].map((r) => W.proximoLivre(Cx, 'story', [BR(10, 0)], BR(10, 0), () => r).t - BR(10, 0));
+    chk('cada canal tem o seu intervalo: Story configurado 1–10 min sorteia nessa faixa', sx[0] === 60000 && sx[1] === 600000, sx);
+    const sf = W.proximoLivre(P0, 'feed', [BR(10, 0)], BR(10, 0), () => 1).t - BR(10, 0);
+    chk('o Feed continua com a faixa dele (5–10 min), não a do Story', sf === 600000, sf);
+    a = W.proximoLivre(P0, 'story', [BR(10, 0)], BR(10, 30), () => 1);
+    chk('sem postagem recente no canal o sorteio não atrasa nada (sai no horário pedido)', a.t === BR(10, 30), a);
+    a = W.ajustarHorario(Cx, 'story', BR(10, 0), [BR(10, 0)]);
+    chk('agendar num horário exato respeita só o MÍNIMO (1 min), nunca sorteia', a.t === BR(10, 1), a);
+    chk('bucketsDoPost: Instagram = o tipo; WhatsApp = status; ambos = os dois', JSON.stringify(W.bucketsDoPost('story', 'instagram')) === '["story"]' && JSON.stringify(W.bucketsDoPost('feed', 'whatsapp')) === '["status"]' && JSON.stringify(W.bucketsDoPost('reels', 'ambos')) === '["reels","status"]' && JSON.stringify(W.bucketsDoPost('story', '')) === '["story"]');
+    a = W.ajustarHorarioMulti(P0, ['story', 'status'], BR(10, 0), { story: [BR(10, 0)], status: [BR(10, 2)] });
+    chk('"ambos": o horário só vale quando serve para os DOIS canais (Story em 10:00 e Status em 10:02 -> 10:04)', a.t === BR(10, 4), a);
     chk('"agora" ignora tudo quando pedido (ignorarRegras)', W.ajustarHorario(P0, 'story', BR(23, 0), [BR(23, 0)], { ignorarRegras: true }).t === BR(23, 0));
 
     // ---- configuração: só o gestor muda
-    x = await G('GET', '/post/config'); chk('equipe vê as regras, mas sem poder editar', x.j.ok && x.j.podeEditar === false && typeof x.j.config.pausaAtiva === 'boolean' && x.j.padrao.pausaAtiva === true && x.j.padrao.gapStory === 120, x.j);
+    x = await G('GET', '/post/config'); chk('equipe vê as regras, mas sem poder editar', x.j.ok && x.j.podeEditar === false && typeof x.j.config.pausaAtiva === 'boolean' && x.j.padrao.pausaAtiva === true && x.j.padrao.canais.story.gapMin === 120 && x.j.padrao.canais.status.max24h > 0, x.j);
     x = await G('POST', '/post/config', { config: { pausaAtiva: false } }); chk('equipe (só catalogo_cadastrar) NÃO muda as regras: 403', x.r.status === 403, x.j);
     x = await G('POST', '/post/reorganizar', {}); chk('equipe NÃO reorganiza a fila: 403', x.r.status === 403);
-    x = await Ad('POST', '/post/config', { config: { pausaAtiva: true, pausaDe: '23:00', pausaAte: '07:00', gapStory: 60, gapFeed: 300, folga: 0 } });
-    chk('Admin total grava as regras (pausa 23:00–07:00, Story 60 s)', x.j.ok && x.j.config.pausaDe === '23:00' && x.j.config.pausaAte === '07:00' && x.j.config.gapStory === 60, x.j);
+    x = await Ad('POST', '/post/config', { config: { pausaAtiva: true, pausaDe: '23:00', pausaAte: '07:00', canais: { story: { gapMin: 60, gapMax: 90, max24h: 12 } } } });
+    chk('Admin total grava as regras (pausa 23:00–07:00, Story 60–90 s, limite 12 por 24 h)', x.j.ok && x.j.config.pausaDe === '23:00' && x.j.config.pausaAte === '07:00' && x.j.config.canais.story.gapMin === 60 && x.j.config.canais.story.gapMax === 90 && x.j.config.canais.story.max24h === 12 && x.j.config.canais.feed.gapMin === 300, x.j);
+    x = await Ad('POST', '/post/config', { config: { gapStory: 45 } });
+    chk('painel antigo (só "gapStory") ainda funciona: vira o mínimo do Story e preserva o resto', x.j.ok && x.j.config.canais.story.gapMin === 45 && x.j.config.canais.story.gapMax === 90 && x.j.config.canais.story.max24h === 12, x.j.config);
     x = await G('GET', '/posts'); chk('/posts devolve as regras e o aviso de que o Worker as conhece', x.j.regras === 1 && x.j.config.pausaDe === '23:00' && x.j.podeRegras === false, x.j.config);
     await Ad('POST', '/post/config', { config: { pausaDe: '22:00', pausaAte: '06:30' } });
     await DB.prepare('DELETE FROM postagem').run();
@@ -539,11 +562,11 @@ function d1() {
     await DB.prepare('DELETE FROM postagem').run();
 
     // ---- na sequência = primeiro horário livre do tipo (buracos contam), uma fila por tipo
-    await Ad('POST', '/post/config', { config: { pausaAtiva: false, gapStory: 120, folga: 0 } });
+    await Ad('POST', '/post/config', { config: { pausaAtiva: false, canais: { story: { gapMin: 120, gapMax: 120, max24h: 40 } } } });
     x = await G('POST', '/post', { tipo: 'story', midias: [IMG(1)], quando: ts(1) });
     x = await G('POST', '/post', { posts: [2, 3, 4].map((n) => ({ tipo: 'story', midias: [IMG(n)], quando: 'sequencia' })) });
     const qs = x.j.quandos.map((t) => Date.parse(t));
-    chk('sequência de Stories pula o horário ocupado e sai de 2 em 2 min (sem folga)', qs[0] - Date.now() > 150000 && qs[0] - Date.now() < 200000 && qs[1] - qs[0] === 120000 && qs[2] - qs[1] === 120000, qs.map((t) => Math.round((t - Date.now()) / 1000)));
+    chk('sequência de Stories pula o horário ocupado e sai de 2 em 2 min (faixa 2–2, sem sorteio)', qs[0] - Date.now() > 150000 && qs[0] - Date.now() < 200000 && qs[1] - qs[0] === 120000 && qs[2] - qs[1] === 120000, qs.map((t) => Math.round((t - Date.now()) / 1000)));
     x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(9)], quando: 'sequencia' });
     chk('o Feed tem fila própria: sai em ~1 min mesmo com Stories na fila', Date.parse(x.j.quandos[0]) - Date.now() > 30000 && Date.parse(x.j.quandos[0]) - Date.now() < 100000, x.j);
     x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(9)], quando: 'sequencia' });
@@ -570,9 +593,9 @@ function d1() {
     x = await G('POST', '/post/proximo', { id: i2 });
     chk('"próximo horário livre": vai para a frente da fila do tipo (~1 min)', x.j.ok && Date.parse(x.j.quando) - Date.now() > 30000 && Date.parse(x.j.quando) - Date.now() < 100000, x.j);
     await DB.prepare('DELETE FROM postagem').run();
-    await Ad('POST', '/post/config', { config: { pausaAtiva: false, gapFeed: 10 } });
+    await Ad('POST', '/post/config', { config: { pausaAtiva: false, canais: { feed: { gapMin: 10, gapMax: 10 } } } });
     x = await G('POST', '/post', { posts: [1, 2, 3].map((n) => ({ tipo: 'feed', midias: [IMG(n)], quando: new Date(BRrel(3, 15, 0) + n * 20000).toISOString() })) });
-    await Ad('POST', '/post/config', { config: { gapFeed: 600 } });
+    await Ad('POST', '/post/config', { config: { canais: { feed: { gapMin: 600, gapMax: 600 } } } });
     x = await Ad('POST', '/post/reorganizar', { simular: true });
     chk('reorganizar (simulado) conta o que mudaria e não mexe em nada', x.j.ok && x.j.simulado === true && x.j.mudaram === 2, x.j);
     const antes = (await DB.prepare("SELECT agendado_em FROM postagem WHERE status='agendado' ORDER BY id").all()).results.map((r) => r.agendado_em);
@@ -582,7 +605,7 @@ function d1() {
     // ---- a pausa também vale na hora de publicar (agendada antes da regra)
     await DB.prepare('DELETE FROM postagem').run();
     const loc = new Date(Date.now() - 3 * 3600000), minLoc = loc.getUTCHours() * 60 + loc.getUTCMinutes(), hm = (n) => String(Math.floor(((n % 1440) + 1440) % 1440 / 60)).padStart(2, '0') + ':' + String(((n % 1440) + 1440) % 1440 % 60).padStart(2, '0');
-    await Ad('POST', '/post/config', { config: { pausaAtiva: true, pausaDe: hm(minLoc - 30), pausaAte: hm(minLoc + 30), gapFeed: 300, agoraIgnora: true } });
+    await Ad('POST', '/post/config', { config: { pausaAtiva: true, pausaDe: hm(minLoc - 30), pausaAte: hm(minLoc + 30), canais: { feed: { gapMin: 300, gapMax: 300 } }, agoraIgnora: true } });
     x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(1)], quando: new Date(Date.now() + 3 * 86400000).toISOString() }); const idP = x.j.ids[0];
     await DB.prepare('UPDATE postagem SET agendado_em=?, urgente=0 WHERE id=?').bind(ts(-1), idP).run();
     publicados = []; await rodar(); const LP = await linha(idP);
@@ -590,7 +613,83 @@ function d1() {
     x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(2)], quando: 'agora' }); const idU = x.j.ids[0];
     await rodar(); const LU = await linha(idU);
     chk('mas "Agora mesmo" (urgente) sai mesmo dentro da pausa', LU.status === 'publicado', LU);
-    await Ad('POST', '/post/config', { config: { pausaAtiva: false, gapFeed: 300, gapStory: 120 } });
+    await Ad('POST', '/post/config', { config: { pausaAtiva: false, canais: { feed: { gapMin: 300, gapMax: 600 }, story: { gapMin: 120, gapMax: 300 } } } });
+  }
+  console.log('== LIMITES POR CANAL (24 h): Story, Status do WhatsApp, Feed, Carrossel, Reels ==');
+  {
+    const IMG = (n) => ({ url: 'https://tenkiter-midia.fake/m/202610/lim' + n + '.jpg', tipo: 'imagem' });
+    const G = async (m, pth, corpo) => { const r = await w.fetch(ped(m, pth, 'tk2.gerente', corpo), env, {}); return { r, j: await r.json() }; };
+    const Ad = async (m, pth, corpo) => { const r = await w.fetch(ped(m, pth, 'tk2.admin', corpo), env, {}); return { r, j: await r.json() }; };
+    const linha = (id) => DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first();
+    const st = async (ids) => Promise.all(ids.map(async (i) => (await linha(i)).status));
+    const venc = async (ids) => { await DB.prepare('UPDATE postagem SET agendado_em=? WHERE id IN (' + ids.join(',') + ')').bind(ts(-1)).run(); };
+    const set = (c) => Ad('POST', '/post/config', { config: c });
+    let x;
+    await DB.prepare('DELETE FROM postagem').run();
+    await set({ pausaAtiva: false, max24h: 90, canais: { story: { max24h: 2, gapMin: 10, gapMax: 10 }, feed: { max24h: 5, gapMin: 10, gapMax: 10 }, status: { max24h: 1, gapMin: 10, gapMax: 10 }, carrossel: { max24h: 5 }, reels: { max24h: 5 } } });
+
+    // ---- cada canal tem o SEU limite; o que espera não prende os outros
+    x = await G('POST', '/post', { posts: [1, 2, 3, 4, 5].map((n) => ({ tipo: 'story', midias: [IMG(n)], quando: 'sequencia' })) }); const idsS = x.j.ids;
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(9)], quando: 'sequencia' }); const idFeed = x.j.ids[0];
+    await venc([...idsS, idFeed]); publicados = [];
+    await W.processarPostagens(env);
+    let sS = await st(idsS);
+    chk('Story: o limite de 2 por 24 h vale (2 saem, 3 esperam)', sS.filter((v) => v === 'publicado').length === 2 && sS.filter((v) => v === 'agendado').length === 3, sS);
+    chk('o Feed NÃO fica preso atrás dos Stories parados no limite (cada canal tem o seu)', (await linha(idFeed)).status === 'publicado', await linha(idFeed));
+    const antesPub = publicados.length; await W.processarPostagens(env);
+    chk('rodar de novo não passa do limite (os 3 Stories continuam esperando)', publicados.length === antesPub && (await st(idsS)).filter((v) => v === 'agendado').length === 3);
+    x = await G('GET', '/posts');
+    chk('/posts mostra quanto cada canal já usou nas últimas 24 h', x.j.uso24h && x.j.uso24h.story === 2 && x.j.uso24h.feed === 1 && x.j.uso24h.status === 0 && x.j.uso24h.reels === 0, x.j.uso24h);
+    await DB.prepare("UPDATE postagem SET publicado_em=? WHERE status='publicado'").bind(new Date(Date.now() - 25 * 3600000).toISOString()).run();
+    await W.processarPostagens(env);
+    sS = await st(idsS);
+    chk('passou 24 h: abre vaga e saem mais 2 Stories (1 continua esperando)', sS.filter((v) => v === 'publicado').length === 4 && sS.filter((v) => v === 'agendado').length === 1, sS);
+
+    // ---- Status do WhatsApp é um canal à parte
+    await DB.prepare('DELETE FROM postagem').run(); zapChamadas = []; publicados = [];
+    x = await G('POST', '/post', { posts: [1, 2].map((n) => ({ tipo: 'story', canal: 'whatsapp', midias: [IMG(n)], quando: 'sequencia' })) }); const idsW = x.j.ids;
+    x = await G('POST', '/post', { tipo: 'story', midias: [IMG(7)], quando: 'sequencia' }); const idIg = x.j.ids[0];
+    await venc([...idsW, idIg]);
+    await W.processarPostagens(env);
+    chk('Status: limite de 1 por 24 h (1 sai, o outro espera) e o WhatsApp foi chamado 1 vez', (await st(idsW)).filter((v) => v === 'publicado').length === 1 && (await st(idsW)).filter((v) => v === 'agendado').length === 1 && zapChamadas.length === 1, [await st(idsW), zapChamadas.length]);
+    chk('Story do Instagram sai normalmente: o Status do WhatsApp não gasta o limite do Story', (await linha(idIg)).status === 'publicado' && publicados.length === 1);
+
+    // ---- "ambos" conta nos DOIS canais
+    x = await G('POST', '/post', { tipo: 'story', canal: 'ambos', midias: [IMG(8)], quando: 'sequencia' }); const idAm = x.j.ids[0];
+    await venc([idAm]); const zapAntes = zapChamadas.length, pubAntes = publicados.length;
+    await W.processarPostagens(env);
+    chk('"ambos" com o Status no limite: espera inteira (não vai nem ao WhatsApp nem ao Instagram)', (await linha(idAm)).status === 'agendado' && zapChamadas.length === zapAntes && publicados.length === pubAntes, [await linha(idAm), zapChamadas.length, publicados.length]);
+    await DB.prepare("UPDATE postagem SET status='cancelado' WHERE canal='whatsapp' AND status='agendado'").run();      // o 2º do Status que esperava sai da conta
+    await set({ canais: { status: { max24h: 3 } } });
+    await W.processarPostagens(env);
+    chk('com vaga no Status, o "ambos" sai nos dois (WhatsApp e Instagram)', (await linha(idAm)).status === 'publicado' && zapChamadas.length === zapAntes + 1 && publicados.length === pubAntes + 1, [await linha(idAm), zapChamadas.length, publicados.length]);
+    x = await G('GET', '/posts');
+    chk('o "ambos" contou no Story E no Status', x.j.uso24h.story === 2 && x.j.uso24h.status === 2, x.j.uso24h);
+    x = await G('POST', '/post', { tipo: 'story', midias: [IMG(10)], quando: 'sequencia' }); const idIg2 = x.j.ids[0];
+    await venc([idIg2]); const pub2 = publicados.length;
+    await W.processarPostagens(env);
+    chk('outro Story do Instagram agora espera: o limite do Story (2) já inclui o "ambos"', (await linha(idIg2)).status === 'agendado' && publicados.length === pub2);
+
+    // ---- "ambos" não troca de lugar com ▲▼ (serviria a um canal e quebraria o outro)
+    x = await G('POST', '/post', { tipo: 'story', canal: 'ambos', midias: [IMG(11)], quando: ts(600) });
+    x = await G('POST', '/post/mover', { id: x.j.ids[0], dir: 'subir' });
+    chk('"ambos" não sobe/desce na fila: a resposta manda usar “Horário” ou “Próximo livre” (409)', x.r.status === 409 && /Horário/.test(x.j.erro), x.j);
+
+    // ---- o horário de um "ambos" respeita o intervalo dos DOIS canais
+    await DB.prepare('DELETE FROM postagem').run();
+    await set({ canais: { story: { max24h: 40, gapMin: 120, gapMax: 120 }, status: { max24h: 40, gapMin: 120, gapMax: 120 } } });
+    x = await G('POST', '/post', { tipo: 'story', canal: 'ambos', midias: [IMG(1)], quando: ts(600) }); const tA = Date.parse(x.j.quandos[0]);
+    x = await G('POST', '/post', { tipo: 'feed', canal: 'whatsapp', midias: [IMG(2)], quando: new Date(tA + 60000).toISOString() });
+    chk('Status do WhatsApp 1 min depois de um "ambos": o servidor leva para +2 min (o "ambos" também ocupa o Status)', Date.parse(x.j.quandos[0]) === tA + 120000 && x.j.ajustes[0].motivo === 'intervalo', [x.j.quandos, tA]);
+    x = await G('POST', '/post', { tipo: 'story', midias: [IMG(3)], quando: new Date(tA + 60000).toISOString() });
+    chk('Story só do Instagram 1 min depois do "ambos": também vai para +2 min (o "ambos" ocupa o Story)', Date.parse(x.j.quandos[0]) === tA + 120000, x.j.quandos);
+    x = await G('POST', '/post', { tipo: 'feed', midias: [IMG(4)], quando: new Date(tA + 60000).toISOString() });
+    chk('Feed do Instagram no mesmo momento NÃO é ajustado (canais diferentes coexistem)', x.j.ajustes.length === 0 && Date.parse(x.j.quandos[0]) === tA + 60000, x.j);
+    x = await G('POST', '/post', { posts: [1, 2, 3].map((n) => ({ tipo: 'feed', canal: 'whatsapp', midias: [IMG(n + 20)], quando: 'sequencia' })) });
+    const qw = x.j.quandos.map((t) => Date.parse(t));
+    chk('"Na sequência" no Status: cada um sai 2 min depois do anterior (faixa 2–2 configurada)', qw[1] - qw[0] === 120000 && qw[2] - qw[1] === 120000, qw);
+    await set({ pausaAtiva: false, max24h: 90, canais: { story: { max24h: 40, gapMin: 120, gapMax: 300 }, status: { max24h: 40, gapMin: 120, gapMax: 300 }, feed: { max24h: 20, gapMin: 300, gapMax: 600 }, carrossel: { max24h: 20, gapMin: 300, gapMax: 600 }, reels: { max24h: 10, gapMin: 600, gapMax: 1200 } } });
+    await DB.prepare('DELETE FROM postagem').run();
   }
   console.log('== FOTOS DE CLIENTES (Ela usa TM) ==');
   {

@@ -528,18 +528,22 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     return route.fulfill(json={"ok":True})
             if path=="/posts" or path.startswith("/post"):      # fila de postagens (Worker v4.6): st["ig"]["posts"]
                 g.setdefault("posts",[]); g.setdefault("post_chamadas",[]); g.setdefault("post_seq",100)
-                PADRAO_R={"pausaAtiva":True,"pausaDe":"22:00","pausaAte":"06:30","gapStory":120,"gapFeed":300,"gapCarrossel":300,"gapReels":600,"folga":30,"max24h":90,"agoraIgnora":True}
-                if g.get("regras"): g.setdefault("regras_cfg",dict(PADRAO_R))
+                PADRAO_R={"pausaAtiva":True,"pausaDe":"22:00","pausaAte":"06:30","max24h":90,"agoraIgnora":True,"canais":{"story":{"max24h":40,"gapMin":120,"gapMax":300},"status":{"max24h":40,"gapMin":120,"gapMax":300},"feed":{"max24h":20,"gapMin":300,"gapMax":600},"carrossel":{"max24h":20,"gapMin":300,"gapMax":600},"reels":{"max24h":10,"gapMin":600,"gapMax":1200}}}
+                if g.get("regras"): g.setdefault("regras_cfg",json.loads(json.dumps(PADRAO_R)))
                 if path=="/posts":
                     r0={"ok":True,"posts":[x for x in g["posts"] if x["status"]!="cancelado"],"contagens":{},"conectado":g["conectado"],"usuario":"tenkitermodasceara"}
-                    if g.get("regras"): r0.update({"regras":1,"config":g["regras_cfg"],"podeRegras":g.get("pode_regras",True)})
+                    if g.get("regras"): r0.update({"regras":1,"config":g["regras_cfg"],"podeRegras":g.get("pode_regras",True),"uso24h":g.get("uso24h",{"story":12,"status":3,"feed":1,"carrossel":0,"reels":0})})
                     return route.fulfill(json=r0)
                 pb=json.loads(route.request.post_data or "{}")
                 g["post_chamadas"].append({"path":path,"corpo":pb})
                 if g.get("regras") and path=="/post/config":
                     if m=="POST":
                         if not g.get("pode_regras",True): return route.fulfill(status=403,json={"ok":False,"erro":"Só o gestor muda as regras da fila."})
-                        g["regras_cfg"].update(pb.get("config") or {})
+                        cfg_in=pb.get("config") or {}
+                        for k,v in cfg_in.items():
+                            if k=="canais":
+                                for b,vv in (v or {}).items(): g["regras_cfg"]["canais"].setdefault(b,{}).update(vv)
+                            else: g["regras_cfg"][k]=v
                     return route.fulfill(json={"ok":True,"config":g["regras_cfg"],"padrao":PADRAO_R,"podeEditar":g.get("pode_regras",True)})
                 if g.get("regras") and path=="/post/reorganizar":
                     return route.fulfill(json={"ok":True,"mudaram":0 if pb.get("simular") else g.get("reorg_n",2),"total":3})
@@ -548,7 +552,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     ids=[]; quandos=[]
                     for q in (pb.get("posts") or [pb]):
                         g["post_seq"]+=1; man=q.get("modo")=="manual"; agora=q.get("quando")=="agora"
-                        g["posts"].append({"id":g["post_seq"],"tipo":q["tipo"],"modo":q.get("modo","auto"),"legenda":q.get("legenda",""),"midias":q["midias"],"produto":q.get("produto",""),"template":q.get("template",""),"link":q.get("link",""),"agendadoEm":"2026-10-12T15:00:00Z" if not agora else "2026-10-11T12:00:00Z","status":"manual_pendente" if man else ("publicado" if agora and not g.get("post_fica") else "agendado"),"tentativas":0,"erro":"","permalink":"https://www.instagram.com/p/FAKE/" if agora and not man else "","criadoPor":q.get("por","")})
+                        g["posts"].append({"id":g["post_seq"],"tipo":q["tipo"],"modo":q.get("modo","auto"),"legenda":q.get("legenda",""),"midias":q["midias"],"produto":q.get("produto",""),"template":q.get("template",""),"link":q.get("link",""),"agendadoEm":"2026-10-12T15:00:00Z" if not agora else "2026-10-11T12:00:00Z","status":"manual_pendente" if man else ("publicado" if agora and not g.get("post_fica") else "agendado"),"tentativas":0,"erro":"","permalink":"https://www.instagram.com/p/FAKE/" if agora and not man else "","criadoPor":q.get("por",""),"canal":q.get("canal","instagram")})
                         ids.append(g["post_seq"]); quandos.append("2026-10-12T15:%02d:00Z"%(len(ids)*2))
                     return route.fulfill(json={"ok":True,"ids":ids,"quandos":quandos})
                 x=next((q for q in g["posts"] if q["id"]==pb.get("id")),None)
@@ -560,7 +564,8 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     x["agendadoEm"]=q; return route.fulfill(json={"ok":True,"quando":q,"ajustado":aj,"motivo":"intervalo" if aj else ""})
                 elif path=="/post/proximo": x["agendadoEm"]="2026-10-19T09:10:00Z"; return route.fulfill(json={"ok":True,"quando":x["agendadoEm"]})
                 elif path=="/post/mover":
-                    l=[q for q in g["posts"] if q["tipo"]==x["tipo"] and q["status"]=="agendado"]; l.sort(key=lambda q:q["agendadoEm"]); i=l.index(x); d=pb.get("dir")
+                    gk=lambda q:"status" if q.get("canal")=="whatsapp" else q["tipo"]
+                    l=[q for q in g["posts"] if gk(q)==gk(x) and q.get("canal")!="ambos" and q["status"]=="agendado"]; l.sort(key=lambda q:q["agendadoEm"]); i=l.index(x); d=pb.get("dir")
                     j={"subir":i-1,"descer":i+1,"primeiro":0,"ultimo":len(l)-1}[d]
                     if 0<=j<len(l) and j!=i:
                         l[i]["agendadoEm"],l[j]["agendadoEm"]=l[j]["agendadoEm"],l[i]["agendadoEm"]

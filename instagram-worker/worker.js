@@ -708,7 +708,7 @@ export async function processarPostagens(env) {
     await iniciar(env);
     const t = agora();
     await env.DB.prepare("UPDATE postagem SET status='manual_pendente', atualizado_em=? WHERE modo='manual' AND status='agendado' AND agendado_em<=?").bind(t, t).run();
-    const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY agendado_em, id LIMIT 4").bind(t).all()).results || [];
+    const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY agendado_em, id LIMIT 40").bind(t).all()).results || [];
     if (!lin.length) return { feitas: 0 };
     const cfgP = await lerCfgPost(env);
     /* v1.2: o token do Instagram só é exigido quando ALGUMA postagem vencida vai para o Instagram.
@@ -719,19 +719,35 @@ export async function processarPostagens(env) {
     if (precisaIg) { token = await cfgGet(env, 'ig_token'); if (token) token = await renovarToken(env, token); }
     const desde = new Date(Date.now() - 86400000).toISOString();
     const usados = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status='publicado' AND COALESCE(canal,'instagram') IN ('instagram','ambos') AND publicado_em>=?").bind(desde).first()) || {}).n) || 0;
-    let feitas = 0, novas = usados;
+    /* v1.6: além do teto do Instagram, cada canal (Story, Status do WhatsApp, Reels, Carrossel, Feed) tem o SEU limite nas últimas 24 h. "Ambos" conta nos dois. */
+    const porCanal = {}; for (const b of CANAIS_FILA) porCanal[b] = await contarUsados24h_(env, b, desde);
+    let feitas = 0, novas = usados, tentadas = 0;
     for (const p of lin) {
+      if (tentadas >= 4) break;                                       // no máximo 4 por minuto; as que esperam o limite do canal não ocupam essas vagas
       if (p.status === 'agendado' && !p.urgente && cfgP.pausaAtiva && foraDaPausa(cfgP, Date.now()) > Date.now()) {          // agendada antes da regra: não sai na pausa, vai para o primeiro horário livre depois dela
         try { const r = ajustarHorario(cfgP, p.tipo, Date.now(), await ocupadosDoTipo_(env, p.tipo, p.id, gapDoTipoMs(cfgP, p.tipo))); await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(new Date(r.t).toISOString(), agora(), p.id).run(); } catch (e) { /* tenta de novo no próximo minuto */ }
         continue;
       }
       const usaIg = canalUsaInstagram_(p.canal);
       if (usaIg && !token) { await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('O Instagram não está conectado. Conecte o token e use "Tentar de novo".', agora(), p.id).run(); continue; }
-      if (usaIg && p.status === 'agendado') { if (novas >= (cfgP.max24h || MAX_POSTS_24H)) continue; novas++; }   // limite diário: fica agendada para o dia seguinte
+      if (p.status === 'agendado') {
+        const bs = bucketsDoPost(p.tipo, p.canal);
+        if (usaIg && novas >= (cfgP.max24h || MAX_POSTS_24H)) continue;                                  // teto do Instagram: fica agendada até abrir vaga
+        if (bs.some((b) => porCanal[b] >= limiteDoTipo(cfgP, b))) continue;                              // limite do canal (ex.: Story): fica agendada até abrir vaga
+        if (usaIg) novas++;
+        bs.forEach((b) => { porCanal[b]++; });
+      }
+      tentadas++;
       try { await avancarPostagem(env, token, p); feitas++; } catch (e) { try { await falhaPostagem(env, p, e); } catch (e2) { /* próximo minuto tenta de novo */ } }
     }
     return { feitas: feitas };
   } catch (e) { return { feitas: 0, erro: true }; }
+}
+/** Quantas postagens deste canal já saíram nas últimas 24 h (Story, Feed… do Instagram; ou "status" do WhatsApp). */
+async function contarUsados24h_(env, bucket, desde) {
+  const doCanal = bucket === 'status' ? "canal IN ('whatsapp','ambos')" : "tipo=? AND (canal IS NULL OR canal='' OR canal IN ('instagram','ambos'))";
+  const bind = bucket === 'status' ? [desde] : [bucket, desde];
+  return Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status='publicado' AND " + doCanal + ' AND publicado_em>=?').bind(...bind).first()) || {}).n) || 0;
 }
 function httpsUrl(u) { try { const x = new URL(String(u)); return x.protocol === 'https:' && String(u).length <= 600; } catch (e) { return false; } }
 /** Valida e normaliza o pedido de UMA postagem. Devolve { erro } ou { v }. */
@@ -756,20 +772,59 @@ export function intervaloHumanoMs(tipoAnterior, tipo, sorteio) {
  * ========================================================================== */
 const FUSO_MIN = -180;                       // Fortaleza = UTC-3, sem horário de verão
 export const TIPOS_FILA = ['story', 'feed', 'carrossel', 'reels'];
-export const CFG_POST_PADRAO = { pausaAtiva: true, pausaDe: '22:00', pausaAte: '06:30', gapStory: 120, gapFeed: 300, gapCarrossel: 300, gapReels: 600, folga: 30, max24h: 90, agoraIgnora: true };
+/* v1.6 (18/10/2026) -- "canais de contagem": cada um tem o SEU limite de 24 h e o SEU intervalo aleatório (mín.–máx.).
+ * Story, Feed, Carrossel e Reels são do Instagram; "status" é o Status do WhatsApp. Postagem "ambos" conta nos DOIS (o tipo dela + status). */
+export const CANAIS_FILA = ['story', 'status', 'feed', 'carrossel', 'reels'];
+export const CANAL_FILA_PADRAO = {
+  story: { max24h: 40, gapMin: 120, gapMax: 300 },        // 2 a 5 min (exemplo do Pablo)
+  status: { max24h: 40, gapMin: 120, gapMax: 300 },
+  feed: { max24h: 20, gapMin: 300, gapMax: 600 },
+  carrossel: { max24h: 20, gapMin: 300, gapMax: 600 },
+  reels: { max24h: 10, gapMin: 600, gapMax: 1200 },
+};
+export const CFG_POST_PADRAO = { pausaAtiva: true, pausaDe: '22:00', pausaAte: '06:30', max24h: 90, agoraIgnora: true, canais: CANAL_FILA_PADRAO };
+/** Em quais "canais de contagem" uma postagem entra: o tipo dela (se vai ao Instagram) e/ou "status" (se vai ao WhatsApp). */
+export function bucketsDoPost(tipo, canal) {
+  const out = [];
+  if (canalUsaInstagram_(canal) && TIPOS_FILA.indexOf(tipo) !== -1) out.push(tipo);
+  if (canalUsaWhatsApp_(canal)) out.push('status');
+  return out;
+}
 function hmParaMin_(s, padrao) { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s == null ? '' : s).trim()); if (!m) return padrao; const h = +m[1], n = +m[2]; return h > 23 || n > 59 ? padrao : h * 60 + n; }
 function minParaHm_(n) { return String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0'); }
+const LEGADO_GAP_ = { story: 'gapStory', feed: 'gapFeed', carrossel: 'gapCarrossel', reels: 'gapReels' };
 export function normalizarCfgPost(c) {
   const d = CFG_POST_PADRAO, x = c && typeof c === 'object' ? c : {};
   const num = (v, a, b, p) => { if (v === '' || v === null || v === undefined) return p; const n = Number(v); return isFinite(n) ? Math.min(b, Math.max(a, Math.round(n))) : p; };
   const hm = (v, p) => minParaHm_(hmParaMin_(v, hmParaMin_(p, 0)));
+  const canais = {};
+  CANAIS_FILA.forEach((b) => {
+    const dp = CANAL_FILA_PADRAO[b], src = x.canais && typeof x.canais === 'object' && x.canais[b] && typeof x.canais[b] === 'object' ? x.canais[b] : {};
+    const legado = LEGADO_GAP_[b] && x[LEGADO_GAP_[b]] !== undefined ? x[LEGADO_GAP_[b]] : undefined;      // painel antigo mandava só o intervalo mínimo (gapStory…)
+    const mn = num(legado !== undefined ? legado : src.gapMin, 10, 7200, dp.gapMin);
+    let mx = num(src.gapMax, 10, 7200, Math.max(dp.gapMax, mn));
+    if (mx < mn) mx = mn;                                                                                 // o máximo nunca fica abaixo do mínimo
+    canais[b] = { max24h: num(src.max24h, 1, 100, dp.max24h), gapMin: mn, gapMax: mx };
+  });
   return {
     pausaAtiva: x.pausaAtiva === undefined ? d.pausaAtiva : !!x.pausaAtiva, pausaDe: hm(x.pausaDe, d.pausaDe), pausaAte: hm(x.pausaAte, d.pausaAte),
-    gapStory: num(x.gapStory, 10, 7200, d.gapStory), gapFeed: num(x.gapFeed, 10, 7200, d.gapFeed), gapCarrossel: num(x.gapCarrossel, 10, 7200, d.gapCarrossel), gapReels: num(x.gapReels, 10, 7200, d.gapReels),
-    folga: num(x.folga, 0, 600, d.folga), max24h: num(x.max24h, 1, 100, d.max24h), agoraIgnora: x.agoraIgnora === undefined ? d.agoraIgnora : !!x.agoraIgnora,
+    max24h: num(x.max24h, 1, 100, d.max24h), agoraIgnora: x.agoraIgnora === undefined ? d.agoraIgnora : !!x.agoraIgnora, canais: canais,
   };
 }
-export function gapDoTipoMs(cfg, tipo) { const k = { story: 'gapStory', feed: 'gapFeed', carrossel: 'gapCarrossel', reels: 'gapReels' }[tipo]; return (Number(cfg && cfg[k]) || 300) * 1000; }
+/** Junta o que o gestor mandou (pode ser só um canal) com o que já estava salvo, canal por canal. */
+export function mesclarCfgPost(atual, novo) {
+  const a = atual && typeof atual === 'object' ? atual : {}, n = novo && typeof novo === 'object' ? novo : {};
+  const canais = {};
+  CANAIS_FILA.forEach((b) => { canais[b] = Object.assign({}, a.canais && a.canais[b], n.canais && typeof n.canais === 'object' ? n.canais[b] : null); });
+  const m = Object.assign({}, a, n, { canais: canais });
+  CANAIS_FILA.forEach((b) => { if (LEGADO_GAP_[b] && n[LEGADO_GAP_[b]] === undefined) delete m[LEGADO_GAP_[b]]; });
+  return normalizarCfgPost(m);
+}
+/** Intervalo MÍNIMO (a garantia) do canal, em ms. */
+export function gapDoTipoMs(cfg, tipo) { const c = cfg && cfg.canais && cfg.canais[tipo]; return (Number(c && c.gapMin) || (CANAL_FILA_PADRAO[tipo] || {}).gapMin || 300) * 1000; }
+/** Intervalo MÁXIMO do canal, em ms (o sorteio da "Na sequência" fica entre o mínimo e este). */
+export function gapMaxDoTipoMs(cfg, tipo) { const c = cfg && cfg.canais && cfg.canais[tipo]; return Math.max(gapDoTipoMs(cfg, tipo), (Number(c && c.gapMax) || 0) * 1000); }
+export function limiteDoTipo(cfg, tipo) { const c = cfg && cfg.canais && cfg.canais[tipo]; return Number(c && c.max24h) || (CANAL_FILA_PADRAO[tipo] || {}).max24h || 20; }
 /** Se `ms` cai dentro da pausa, devolve o instante em que ela termina; senão devolve o próprio `ms`. */
 export function foraDaPausa(cfg, ms) {
   if (!cfg || !cfg.pausaAtiva) return ms;
@@ -797,16 +852,45 @@ export function ajustarHorario(cfg, tipo, desejadoMs, ocupadosMs, opts) {
   }
   return { t: t, ajustado: t !== desejadoMs, motivo: motivo };
 }
-/** "Na sequência": primeiro horário livre do tipo a partir de `desdeMs` (com uma folga aleatória para não parecer robô). */
-export function proximoLivre(cfg, tipo, ocupadosMs, desdeMs, sorteio) {
-  const r = typeof sorteio === 'function' ? sorteio : Math.random;
-  return ajustarHorario(cfg, tipo, desdeMs + Math.round(r() * (cfg.folga || 0) * 1000), ocupadosMs);
+/** Igual a `ajustarHorario`, mas para uma postagem que entra em VÁRIOS canais de contagem (ex.: Story + Status do WhatsApp): o horário só vale quando serve para todos. */
+export function ajustarHorarioMulti(cfg, buckets, desejadoMs, ocupMap, opts) {
+  if (opts && opts.ignorarRegras) return { t: desejadoMs, ajustado: false, motivo: '' };
+  let t = desejadoMs, motivo = '';
+  for (let i = 0; i < 50; i++) {
+    let mudou = false;
+    for (const b of buckets || []) { const r = ajustarHorario(cfg, b, t, (ocupMap && ocupMap[b]) || []); if (r.t !== t) { t = r.t; motivo = motivo || r.motivo; mudou = true; } }
+    if (!mudou) break;
+  }
+  return { t: t, ajustado: t !== desejadoMs, motivo: motivo };
 }
+/** "Na sequência": primeiro horário livre a partir de `desdeMs`, respeitando pausa e intervalo mínimo; depois o intervalo da postagem anterior é SORTEADO entre o mínimo e o máximo do canal (para não parecer robô). */
+export function proximoLivreMulti(cfg, buckets, ocupMap, desdeMs, sorteio) {
+  const r = typeof sorteio === 'function' ? sorteio : Math.random;
+  let a = ajustarHorarioMulti(cfg, buckets, desdeMs, ocupMap), alvo = a.t;
+  for (const b of buckets || []) {
+    const mn = gapDoTipoMs(cfg, b), mx = gapMaxDoTipoMs(cfg, b);
+    if (mx <= mn) continue;
+    const ant = ((ocupMap && ocupMap[b]) || []).filter((x) => isFinite(x) && x <= a.t).sort((p, q) => p - q).pop();
+    if (ant === undefined) continue;
+    const sorteado = ant + mn + Math.round(r() * (mx - mn));
+    if (sorteado > alvo) alvo = sorteado;
+  }
+  if (alvo > a.t) { const m = a.motivo; a = ajustarHorarioMulti(cfg, buckets, alvo, ocupMap); a.motivo = m || a.motivo; }
+  return a;
+}
+export function proximoLivre(cfg, tipo, ocupadosMs, desdeMs, sorteio) { return proximoLivreMulti(cfg, [tipo], { [tipo]: ocupadosMs }, desdeMs, sorteio); }
 async function lerCfgPost(env) { let j = null; try { j = JSON.parse((await cfgGet(env, 'po_cfg')) || 'null'); } catch (e) { j = null; } return normalizarCfgPost(j); }
-async function ocupadosDoTipo_(env, tipo, excluirId, gapMs, semAgendadas) {
-  const desde = new Date(Date.now() - gapMs - 60000).toISOString();
-  const q = (await env.DB.prepare("SELECT agendado_em, publicado_em, status FROM postagem WHERE tipo=? AND id!=? AND (status IN ('processando','manual_pendente'" + (semAgendadas ? '' : ",'agendado'") + ") OR (status IN ('publicado','manual_feito') AND publicado_em>=?))").bind(tipo, excluirId || 0, desde).all()).results || [];
+/** Horários já ocupados num canal de contagem (Story, Feed…, ou "status" do WhatsApp). `janelaMs` = quanto tempo para trás ainda importa. */
+async function ocupadosDoTipo_(env, bucket, excluirId, janelaMs, semAgendadas) {
+  const desde = new Date(Date.now() - janelaMs - 60000).toISOString();
+  const doCanal = bucket === 'status' ? "canal IN ('whatsapp','ambos')" : "tipo=? AND (canal IS NULL OR canal='' OR canal IN ('instagram','ambos'))";
+  const bind = bucket === 'status' ? [excluirId || 0, desde] : [bucket, excluirId || 0, desde];
+  const q = (await env.DB.prepare('SELECT agendado_em, publicado_em, status FROM postagem WHERE ' + doCanal + " AND id!=? AND (status IN ('processando','manual_pendente'" + (semAgendadas ? '' : ",'agendado'") + ") OR (status IN ('publicado','manual_feito') AND publicado_em>=?))").bind(...bind).all()).results || [];
   return q.map((r) => Date.parse(r.status === 'publicado' || r.status === 'manual_feito' ? r.publicado_em : r.agendado_em)).filter((x) => isFinite(x));
+}
+/** Ocupados de VÁRIOS canais de uma vez: { story: [...], status: [...] }. */
+async function ocupadosMulti_(env, cfg, buckets, excluirId, semAgendadas) {
+  const o = {}; for (const b of buckets) o[b] = await ocupadosDoTipo_(env, b, excluirId, gapMaxDoTipoMs(cfg, b), semAgendadas); return o;
 }
 export function validarPostagem(b) {
   const tipo = String((b && b.tipo) || '');
@@ -952,6 +1036,11 @@ export async function rotasFotos(env, ctx, req, url, J) {       // /fotos* (equi
   }
   return null;
 }
+async function uso24hPorCanal_(env) {
+  const o = {}, desde = new Date(Date.now() - 86400000).toISOString();
+  try { for (const b of CANAIS_FILA) o[b] = await contarUsados24h_(env, b, desde); } catch (e) { /* o painel só deixa de mostrar o uso */ }
+  return o;
+}
 async function rotasPostagem(env, ctx, req, url, J, perms) {
   const p = url.pathname;
   if (p === '/posts' && req.method === 'GET') {
@@ -959,7 +1048,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const q = (await env.DB.prepare("SELECT * FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
     const c = (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM postagem GROUP BY status").all()).results || [];
     const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
-    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', regras: 1, config: await lerCfgPost(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
+    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', regras: 1, config: await lerCfgPost(env), uso24h: await uso24hPorCanal_(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
   }
   let b = {}; if (req.method === 'POST') { try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); } }
   if (p === '/post' && req.method === 'POST') {
@@ -971,16 +1060,16 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const ids = [], quandos = [], por = String(b.por || '').slice(0, 60);
     const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [];
     for (let i = 0; i < vs.length; i++) {
-      const v = vs[i], gap = gapDoTipoMs(cfg, v.tipo);
-      if (!ocup[v.tipo]) ocup[v.tipo] = await ocupadosDoTipo_(env, v.tipo, 0, gap);
+      const v = vs[i], bs = bucketsDoPost(v.tipo, v.canal), ck = bs.join('+');
+      for (const b of bs) if (!ocup[b]) ocup[b] = await ocupadosDoTipo_(env, b, 0, gapMaxDoTipoMs(cfg, b));
       let t;
       if (v.urgente && cfg.agoraIgnora) t = Date.now();                                  // urgência: sai já, sem pausa nem intervalo
-      else if (v.sequencia) t = proximoLivre(cfg, v.tipo, ocup[v.tipo], cursores[v.tipo] == null ? Date.now() + 60000 : cursores[v.tipo] + gap).t;
+      else if (v.sequencia) t = proximoLivreMulti(cfg, bs, ocup, cursores[ck] == null ? Date.now() + 60000 : cursores[ck]).t;       // intervalo SORTEADO entre o mín. e o máx. do canal
       else {
-        const pedido = Math.max(Date.parse(v.quando), Date.now()), aj = ajustarHorario(cfg, v.tipo, pedido, ocup[v.tipo]);
+        const pedido = Math.max(Date.parse(v.quando), Date.now()), aj = ajustarHorarioMulti(cfg, bs, pedido, ocup);
         t = aj.t; if (aj.ajustado) ajustes.push({ i: i, tipo: v.tipo, de: new Date(pedido).toISOString(), para: new Date(t).toISOString(), motivo: aj.motivo });
       }
-      cursores[v.tipo] = t; ocup[v.tipo].push(t); v.quando = new Date(t).toISOString(); v.agora = t <= Date.now() + 1000;
+      cursores[ck] = t; bs.forEach((b) => ocup[b].push(t)); v.quando = new Date(t).toISOString(); v.agora = t <= Date.now() + 1000;
       quandos.push(v.quando);
 
 
@@ -993,7 +1082,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
   if (p === '/post/config' && req.method === 'GET') return J({ ok: true, config: await lerCfgPost(env), padrao: CFG_POST_PADRAO, podeEditar: (perms || []).indexOf('gerir_acessos') !== -1 });
   if (p === '/post/config' && req.method === 'POST') {
     if ((perms || []).indexOf('gerir_acessos') === -1) return J({ ok: false, erro: 'Só o gestor (Admin total) muda as regras da fila.' }, 403);
-    const nova = normalizarCfgPost(Object.assign({}, await lerCfgPost(env), b && b.config));
+    const nova = mesclarCfgPost(await lerCfgPost(env), b && b.config);
     await cfgSet(env, 'po_cfg', JSON.stringify(nova));
     return J({ ok: true, config: nova });
   }
@@ -1001,16 +1090,14 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     /* Ajusta as postagens JÁ agendadas às regras atuais (depois de o gestor mudar a pausa ou os intervalos). `simular:true` só conta. */
     if ((perms || []).indexOf('gerir_acessos') === -1) return J({ ok: false, erro: 'Só o gestor (Admin total) reorganiza a fila.' }, 403);
     const cfg = await lerCfgPost(env), limite = Date.now() + 60000;
-    let mudaram = 0; const detalhes = [];
-    for (const tipo of TIPOS_FILA) {
-      const gap = gapDoTipoMs(cfg, tipo), ocup = await ocupadosDoTipo_(env, tipo, 0, gap, true);
-      const lst = (await env.DB.prepare("SELECT id, agendado_em FROM postagem WHERE tipo=? AND status='agendado' AND urgente=0 ORDER BY agendado_em, id").bind(tipo).all()).results || [];
-      for (const x of lst) {
-        const atual = Date.parse(x.agendado_em);
-        if (!isFinite(atual) || atual <= limite) { if (isFinite(atual)) ocup.push(atual); continue; }     // o que já vai sair em instantes não se mexe
-        const r = ajustarHorario(cfg, tipo, atual, ocup); ocup.push(r.t);
-        if (r.t !== atual) { mudaram++; detalhes.push({ id: x.id, tipo: tipo, de: x.agendado_em, para: new Date(r.t).toISOString() }); if (!(b && b.simular)) await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(new Date(r.t).toISOString(), agora(), x.id).run(); }
-      }
+    let mudaram = 0; const detalhes = [], ocup = {};
+    for (const b of CANAIS_FILA) ocup[b] = await ocupadosDoTipo_(env, b, 0, gapMaxDoTipoMs(cfg, b), true);
+    const lst = (await env.DB.prepare("SELECT id, tipo, canal, agendado_em FROM postagem WHERE status='agendado' AND urgente=0 ORDER BY agendado_em, id").all()).results || [];
+    for (const x of lst) {                                                   // em ordem de horário; uma postagem "ambos" é ajustada para servir aos dois canais de uma vez
+      const bs = bucketsDoPost(x.tipo, x.canal), atual = Date.parse(x.agendado_em);
+      if (!isFinite(atual) || atual <= limite) { if (isFinite(atual)) bs.forEach((b) => ocup[b].push(atual)); continue; }     // o que já vai sair em instantes não se mexe
+      const r = ajustarHorarioMulti(cfg, bs, atual, ocup); bs.forEach((b) => ocup[b].push(r.t));
+      if (r.t !== atual) { mudaram++; detalhes.push({ id: x.id, tipo: x.tipo, de: x.agendado_em, para: new Date(r.t).toISOString() }); if (!(b && b.simular)) await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(new Date(r.t).toISOString(), agora(), x.id).run(); }
     }
     return J({ ok: true, mudaram: mudaram, simulado: !!(b && b.simular), detalhes: detalhes.slice(0, 30) });
   }
@@ -1026,10 +1113,10 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
       const r = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: b.quando }));
       if (r.erro) return J({ ok: false, erro: r.erro }, 400);
-      const cfg = await lerCfgPost(env), gap = gapDoTipoMs(cfg, linha.tipo);
+      const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, linha.canal);
       let t = Date.parse(r.v.quando), aj = { ajustado: false, motivo: '' };
       if (r.v.urgente && cfg.agoraIgnora) t = Date.now();
-      else { aj = ajustarHorario(cfg, linha.tipo, Math.max(t, Date.now()), await ocupadosDoTipo_(env, linha.tipo, id, gap)); t = aj.t; }
+      else { aj = ajustarHorarioMulti(cfg, bs, Math.max(t, Date.now()), await ocupadosMulti_(env, cfg, bs, id)); t = aj.t; }
       await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, tentativas=0, erro='', containers='', urgente=?, atualizado_em=? WHERE id=?").bind(new Date(t).toISOString(), r.v.urgente ? 1 : 0, agora(), id).run();
       if (t <= Date.now() + 1000 && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
       return J({ ok: true, quando: new Date(t).toISOString(), ajustado: aj.ajustado, motivo: aj.motivo });
@@ -1037,15 +1124,19 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     if (p === '/post/proximo') {
       /* "Mandar para o próximo horário livre" da fila do tipo (respeita pausa e intervalo). */
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
-      const cfg = await lerCfgPost(env), gap = gapDoTipoMs(cfg, linha.tipo);
-      const r = proximoLivre(cfg, linha.tipo, await ocupadosDoTipo_(env, linha.tipo, id, gap), Date.now() + 60000);
+      const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, linha.canal);
+      const r = proximoLivreMulti(cfg, bs, await ocupadosMulti_(env, cfg, bs, id), Date.now() + 60000);
       await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, tentativas=0, erro='', containers='', urgente=0, atualizado_em=? WHERE id=?").bind(new Date(r.t).toISOString(), agora(), id).run();
       return J({ ok: true, quando: new Date(r.t).toISOString() });
     }
     if (p === '/post/mover') {
       /* Muda a ORDEM na fila do mesmo tipo trocando os horários (os horários já respeitam as regras, então a nova ordem também respeita). */
       if (linha.status !== 'agendado') return J({ ok: false, erro: 'Só dá para mudar a ordem de postagens agendadas.' }, 409);
-      const lst = (await env.DB.prepare("SELECT id, agendado_em FROM postagem WHERE tipo=? AND status='agendado' ORDER BY agendado_em, id").bind(linha.tipo).all()).results || [];
+      if (normalizarCanal_(linha.canal) === 'ambos') return J({ ok: false, erro: 'Esta postagem vai para o Instagram e para o Status do WhatsApp: mude o horário em “🕐 Horário” ou “⏭ Próximo livre”.' }, 409);
+      /* só troca horários entre postagens do MESMO canal (sem as "ambos"): o conjunto de horários da fila não muda, então os intervalos continuam valendo. */
+      const lst = (normalizarCanal_(linha.canal) === 'whatsapp'
+        ? (await env.DB.prepare("SELECT id, agendado_em FROM postagem WHERE canal='whatsapp' AND status='agendado' ORDER BY agendado_em, id").all())
+        : (await env.DB.prepare("SELECT id, agendado_em FROM postagem WHERE tipo=? AND (canal IS NULL OR canal='' OR canal='instagram') AND status='agendado' ORDER BY agendado_em, id").bind(linha.tipo).all())).results || [];
       const i = lst.findIndex((x) => x.id === id), n = lst.length, alvo = { subir: i - 1, descer: i + 1, primeiro: 0, ultimo: n - 1 }[String(b.dir || '')];
       if (alvo === undefined) return J({ ok: false, erro: 'Direção inválida.' }, 400);
       if (i < 0 || alvo < 0 || alvo >= n || alvo === i) return J({ ok: false, erro: 'Já está na ponta da fila.' }, 409);
