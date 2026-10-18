@@ -469,7 +469,7 @@
     const blm = document.getElementById('btn-lote-menu'); if (blm) { blm.hidden = !(equipe_.pode && nSac > 0); if (blm.hidden) { const lm = document.getElementById('lote-menu'); if (lm) lm.hidden = true; } }
     if (!ativo) { bar.hidden = true; modoLink_ = false; return; }
     bar.classList.toggle('so-botao', modoLink_);
-    if (modoLink_) { document.getElementById('barra-filtros-txt').textContent = ''; document.getElementById('barra-filtros-limpar').textContent = 'Sair da seleção compartilhada'; bar.hidden = false; return; }
+    if (modoLink_) { document.getElementById('barra-filtros-txt').textContent = ''; document.getElementById('barra-filtros-limpar').textContent = 'Ver os outros produtos do site'; bar.hidden = false; return; }
     const n = listaFiltradaAtual.length;
     let t = selecaoFixa ? 'Seleção' : (n + (n === 1 ? ' peça' : ' peças'));
     if (!selecaoFixa && nFiltros) t += ' · ' + nFiltros + (nFiltros === 1 ? ' filtro' : ' filtros');
