@@ -2,8 +2,8 @@
 
 Branch: `feat/postagem-multicanal-wafly` · PR para `main` · 16/10/2026
 
-Este guia é o passo a passo do **deploy manual**. O PR **não dispara nada**: não há deploy do
-Render nem re-publicação de Workers. Quem publica é você.
+Este guia é o passo a passo da publicação. O site sobe **sozinho pelo GitHub** (`deploy.yml`) quando o
+PR é mesclado na `main`; o Apps Script continua sendo colado à mão.
 
 Ordem recomendada: **A (site) → B (Apps Script) → C (verificação)**. Se inverter, o painel novo
 aparece antes do backend novo e o canal `whatsapp` responde "WhatsApp não configurado no servidor".
@@ -25,15 +25,8 @@ aparece antes do backend novo e o canal `whatsapp` responde "WhatsApp não confi
 
 ## Passo A — Publicar o site (frontend)
 
-1. Mescle o Pull Request em `main` (o CI verde é o portão; o merge em si não publica).
-2. No painel do **Render** → serviço `tenkiter-catalogo` → **Manual Deploy → Deploy latest commit**.
-   - O `autoDeploy` é `false` de propósito neste projeto.
-   - Alternativa por API (se preferir terminal), com `RENDER_API_KEY` e `RENDER_SERVICE_ID`:
-     ```bash
-     curl -sS -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
-       -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
-       -H "Accept: application/json" -d '{"clearCache":"do_not_clear"}'
-     ```
+1. Mescle o Pull Request em `main` (o CI verde é o portão). O merge aciona o `deploy.yml`, que publica o site sozinho.
+2. Confira em `https://tenkiter-catalogo.onrender.com/version.json` se o campo `commit` é o do merge.
 3. Confirme no ar que o commit certo subiu:
    ```bash
    curl -sS https://tenkitermodas.com.br/version.json
@@ -112,7 +105,7 @@ O site novo só fala o parâmetro `canal`; **quem aciona a Wafly é o backend**.
 
 ## Reverter
 
-- **Site**: `git revert <SHA>` na `main` e disparar o deploy do Render de novo. Para forçar cache,
+- **Site**: `git revert <SHA>` na `main` (o deploy automático publica o revert). Para forçar cache,
   suba a `VERSAO` de `OneSignalSDKWorker.js` para `tk-3.13.0`.
 - **Apps Script**: `Gerenciar implantações` → editar → escolher a **versão anterior** → Implantar.
   (Nenhum dado é perdido: a mudança é de código.)

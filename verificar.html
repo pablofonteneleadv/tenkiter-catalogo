@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Verificar certificado · TENKiTER Modas</title>
+<style>
+:root{--bg:#F5F1E8;--surface:#fff;--text:#2C2C2C;--muted:#6B675E;--laranja:#E67E22;--ouro:#F39C12;--ok:#1E5631;--okbg:#E6F4EA;--ruim:#B3261E;--ruimbg:#FBEAE9;--borda:#E3DFD4}
+@media (prefers-color-scheme:dark){:root{--bg:#14161C;--surface:#1C1F27;--text:#ECEBE7;--muted:#9C998F;--ok:#A9E0BB;--okbg:#17301F;--ruim:#E5837C;--ruimbg:#3A1F1D;--borda:#333846}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Poppins,Inter,system-ui,sans-serif;line-height:1.5}
+main{max-width:520px;margin:0 auto;padding:24px 16px}
+h1{font-size:1.3rem;color:var(--laranja);margin:0 0 4px}
+.card{background:var(--surface);border:1px solid var(--borda);border-radius:16px;padding:18px;margin-top:16px}
+label{font-weight:600;display:block;margin-bottom:6px}
+input{width:100%;min-height:52px;padding:10px 12px;border:2px solid var(--borda);border-radius:12px;font:inherit;font-size:1.1rem;letter-spacing:.06em;text-transform:uppercase;background:var(--surface);color:var(--text)}
+button{width:100%;min-height:52px;margin-top:12px;border:0;border-radius:12px;background:var(--laranja);color:#fff;font:inherit;font-weight:800;cursor:pointer}
+.res{border-radius:14px;padding:14px;margin-top:16px}.ok{background:var(--okbg);color:var(--ok)}.ruim{background:var(--ruimbg);color:var(--ruim)}
+.res b.big{display:block;font-size:1.15rem}
+small{color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Verificar certificado</h1>
+  <small>TENKiTER Modas · certificados internos de treinamento</small>
+  <div class="card">
+    <form id="f"><label for="c">Código do certificado</label><input id="c" autocomplete="off" inputmode="text" placeholder="TK-XXXX-XXXX" maxlength="14"><button type="submit">Verificar</button></form>
+    <div id="r" role="status" aria-live="polite"></div>
+  </div>
+  <p><small>Este certificado é interno: comprova que a pessoa concluiu o treinamento da loja e teve a prática validada pela gestão. Não mostra nota nem dados pessoais.</small></p>
+</main>
+<script>
+(function(){
+  var API = 'https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec';
+  var MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  var E = function(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var r = document.getElementById('r'), c = document.getElementById('c');
+  function dataExt(iso){ var d = new Date(iso); return isNaN(d) ? '' : d.getDate() + ' de ' + MESES[d.getMonth()] + ' de ' + d.getFullYear(); }
+  async function verificar(cod){
+    r.innerHTML = '<div class="res">Conferindo…</div>';
+    try{
+      var res = await fetch(API + '?action=certificado_verificar&codigo=' + encodeURIComponent(cod));
+      var j = await res.json();
+      if (!j || !j.ok){ r.innerHTML = '<div class="res ruim">Não consegui conferir agora. Tente de novo em instantes.</div>'; return; }
+      if (!j.encontrado){ r.innerHTML = '<div class="res ruim"><b class="big">Código não encontrado</b>Confira se digitou certo. Se o problema continuar, fale com a TENKiTER Modas.</div>'; return; }
+      if (!j.valido){ r.innerHTML = '<div class="res ruim"><b class="big">Certificado cancelado</b>Este código existe, mas foi cancelado pela TENKiTER Modas.</div>'; return; }
+      r.innerHTML = '<div class="res ok"><b class="big">Certificado verificado ✓</b><p><b>' + E(j.nome) + '</b><br>concluiu o treinamento<br><b>' + E(j.titulo) + '</b><br>em ' + E(dataExt(j.emitidoEm)) + '</p><small>Prática validada por ' + E(j.validadoPor || 'a gestão') + ' · código ' + E(j.codigo) + '</small></div>';
+    }catch(e){ r.innerHTML = '<div class="res ruim">Sem conexão. Tente de novo.</div>'; }
+  }
+  document.getElementById('f').addEventListener('submit', function(e){ e.preventDefault(); if (c.value.trim()) verificar(c.value.trim()); });
+  var q = new URLSearchParams(location.search).get('c'); if (q){ c.value = q; verificar(q); }
+})();
+</script>
+</body>
+</html>

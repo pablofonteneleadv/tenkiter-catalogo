@@ -112,7 +112,7 @@ Criar 4 secrets em `Settings → Secrets and variables → Actions`:
 | `CLOUDFLARE_API_TOKEN` | Zone → **Cache Purge** na zona `tenkitermodas.com.br` |
 | `CLOUDFLARE_ZONE_ID` | id da zona |
 
-Enquanto os secrets não existirem, o job de deploy falha no passo 1 — comportamento correto e esperado. Também é preciso desligar o Auto-Deploy no painel do Render e definir o Build Command como `bash scripts/deploy/build_version.sh`.
+Enquanto os secrets não existirem, o job de deploy falha no passo 1 — comportamento correto e esperado.
 
 ---
 

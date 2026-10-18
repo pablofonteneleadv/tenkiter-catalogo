@@ -20,7 +20,7 @@ diff="$(git diff --cached 2>/dev/null || true)"
 pattern='(AIza[0-9A-Za-z_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|sk-[A-Za-z0-9]{20,}|xox[baprs]-[0-9A-Za-z-]{10,}|ghp_[0-9A-Za-z]{20,})'
 
 if printf '%s' "$diff" | grep -qE "$pattern"; then
-  echo "BLOQUEADO: o diff staged parece conter uma chave/token/credencial em texto plano. Este repo é público — remova o segredo (use variável de ambiente no Render ou Propriedades do Script no Apps Script) antes de comitar." >&2
+  echo "BLOQUEADO: o diff staged parece conter uma chave/token/credencial em texto plano. Este repo é público — remova o segredo (use as Propriedades do Script no Apps Script ou os segredos do GitHub) antes de comitar." >&2
   exit 2
 fi
 
