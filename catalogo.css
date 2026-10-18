@@ -392,3 +392,21 @@
   .btn-limpar, .btn-compartilhar-filtros { min-height: 44px; display: inline-flex; align-items: center; }
   .abrir-peca { min-height: 32px; }
   .acoes-card button { white-space: nowrap; min-width: 0; flex: 1 1 0; padding: 0 2px; font-size: 0.68rem; letter-spacing: -0.2px; overflow: hidden; }
+
+/* v4.27: placa "Antes de sair…" (libera / segura a seleção) */
+.sair-sel { padding: 20px 16px calc(18px + env(safe-area-inset-bottom)); text-align: center; }
+.sair-sel h2 { margin: 0 0 6px; font-size: 1.2rem; }
+.sair-sel p { margin: 0 0 14px; color: #444; font-size: .95rem; }
+.sair-sel button { width: 100%; min-height: 50px; margin-top: 8px; border-radius: 12px; font-size: .98rem; font-weight: 700; cursor: pointer; }
+.sair-sel .sair-sel-seg { background: #E67E22; color: #0d0d0d; border: 2px solid #0d0d0d; }
+.sair-sel .sair-sel-lib { background: #fff; color: #0d0d0d; border: 2px solid #0d0d0d; }
+.sair-sel .sair-sel-fica { margin: 8px 0 0; padding: 0 12px; background: transparent; color: #444; border: 0; text-decoration: underline; font-weight: 600; }
+
+/* v4.27: sugestões de busca (completar, sinônimos, "você quis dizer") */
+.sugestoes-busca { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 3; background: var(--branco); border: 1px solid #ddd; border-radius: 14px; box-shadow: 0 10px 22px rgba(0,0,0,.2); max-height: 56vh; overflow-y: auto; overscroll-behavior: contain; }
+.sugestoes-busca[hidden] { display: none; }
+.sugestoes-busca .sug-aviso { padding: 10px 14px 6px; font-size: .82rem; font-weight: 700; color: #444; }
+.sugestoes-busca .sug-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 8px 14px; cursor: pointer; font-size: .92rem; color: #1a1a1a; border-top: 1px solid #f0f0f0; }
+.sugestoes-busca .sug-item:first-child { border-top: 0; }
+.sugestoes-busca .sug-item.ativo, .sugestoes-busca .sug-item:hover { background: #fff3e0; }
+.sugestoes-busca .sug-qtd { flex: none; font-size: .76rem; color: #666; font-weight: 600; }

@@ -87,8 +87,9 @@ with sync_playwright() as p:
     b0 = [x for x in boxes(0) if x["k"] == k][0]; b1 = [x for x in boxes(1) if x["k"] == k][0]; b2 = [x for x in boxes(2) if x["k"] == k][0]
     chk("ligado: a posição do texto vira a mesma nas 3 fotos", abs(b0["cy"] - b1["cy"]) < 0.005 and abs(b0["cy"] - b2["cy"]) < 0.005 and abs(b0["cx"] - b1["cx"]) < 0.005, (b0["cx"], b0["cy"], b1["cy"], b2["cy"]))
     pg.evaluate("(k)=>{const s=document.getElementById('po-lw-'+k);s.value=1.5;s.dispatchEvent(new Event('input',{bubbles:true}))}", k); pg.wait_for_timeout(500)
-    vals = pg.evaluate("[...document.querySelectorAll('[data-lw]')].map(e=>Number(e.value))")
-    chk("ligado: a Largura vale para todos os textos", len(set(vals)) == 1 and abs(vals[0] - 1.5) < 0.01, vals)
+    ver(); bb = [x for x in boxes(1) if x["k"] == k][0]; toque(bb["x"], bb["y"]); pg.wait_for_timeout(500)
+    vals = pg.evaluate("[...document.querySelectorAll('[data-lw]')].map(e=>Number(e.value))"); mine = pg.evaluate("(k)=>Number(document.getElementById('po-lw-'+k).value)", k)
+    chk("ligado: a Largura deste texto vale também na foto 2 (e NÃO muda os outros textos)", abs(mine - 1.5) < 0.01 and sum(1 for v in vals if abs(v - 1) < 0.01) == len(vals) - 1, vals)
     chk("sem erro de JavaScript", not erros, erros)
     b.close()
 print("\nOK=%d FALHAS=%d %s" % (len(OK), len(BAD), BAD))

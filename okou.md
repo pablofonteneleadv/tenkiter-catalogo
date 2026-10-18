@@ -182,3 +182,8 @@ Recebidas 12 capturas do Pablo (`IMG_20261016_2252xx` a `2330xx`). Abaixo: o que
 - Pedido do Pablo: tirar totalmente a instrução de deploy no Render; o deploy é automático pelo GitHub (`deploy.yml` no merge na `main`).
 - Editados: `CLAUDE.md` (fluxo e linha do MCP do Render), `okou.md`, `README.md`, `LEIA-ME-ATUALIZAR.md`, `docs/CI-CD.md` (deploy manual, rollback pela API e item de checklist), `docs/RELATORIO-INFRA-CICD.md`, `.claude/commands/deploy.md` (reescrito para o fluxo GitHub), guias em `patches/` e a mensagem do hook de segredos.
 - Mantidos de propósito (são infraestrutura, não instrução): `deploy.yml` e `scripts/deploy/*` (a automação), `render.yaml`, a URL `tenkiter-catalogo.onrender.com/version.json` para conferir o commit no ar, as regras Rewrite do Render e a tela Conexões do painel.
+
+## 18/10/2026 — Seleção que expira, sugestões de busca, pendência flutuante, avulsas, texto por foto e Fotos com IA
+
+- Feito e testado (ver `CLAUDE.md` v4.27): seleção 2 h/3 h com placa "libera / segura", sugestões + sinônimos na busca, chip flutuante de ação pendente, fotos avulsas e ordem nas Postagens, texto por foto com "Fazer em todos" desligado, Worker `tenkiter-ig` v1.5 (Fotos com IA com fila que espera a cota) e painel `admin-fotoia.js`.
+- Publicar o Worker `tenkiter-ig` (o `deploy.yml` faz no merge). Gemini de imagens **não foi provado contra o Google** (sem chave no sandbox).

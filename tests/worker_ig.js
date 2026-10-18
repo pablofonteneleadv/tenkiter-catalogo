@@ -22,7 +22,7 @@ function d1() {
   const KV = { async get(k, t) { const v = kv.get(k); return v === undefined ? null : (t === 'json' ? JSON.parse(v) : v); }, async put(k, v) { kv.set(k, String(v)); }, async delete(k) { kv.delete(k); } };
   const TOKEN = 'IGQVJ_TOKEN_INVENTADO_PARA_TESTE_1234567890';
   // ---- Instagram falso ----
-  const GEMINI_OK = 'AIzaINVENTADA_PARA_TESTE_1234567890abcd'; let gemChamadas = [], gemModo = 'ok', gemTexto = '';
+  const GEMINI_OK = 'AIzaINVENTADA_PARA_TESTE_1234567890abcd'; let gemChamadas = [], gemModo = 'ok', gemTexto = '', imgChamadas = [], imgModo = 'ok';
   let contaChamadas = [], contaFora = false;
   let postChamadas = [], postErro = null, seqC = 0, containers = {}, publicados = [], videoStatus = 'FINISHED';
   let paginas = null, feed = [], stories = [], midia404 = {}, tokenValido = true, chamadas = [];
@@ -32,6 +32,20 @@ function d1() {
     if (u.startsWith('https://api.fake') && u.includes('action=categorias')) return new Response(JSON.stringify({ ok: true, categorias: ['Vestido', 'Conjunto', 'Blusa'] }));
     if (u.startsWith('https://api.fake') && u.includes('action=generos')) return new Response(JSON.stringify({ ok: true, generos: ['Feminino Adulto', 'Infantil'] }));
     if (u.startsWith('https://generativelanguage.googleapis.com/v1beta/models?')) { const k = new Headers(init.headers)['get']('x-goog-api-key'); return new Response(JSON.stringify(k === GEMINI_OK ? { models: [] } : { error: { message: 'API key not valid' } }), { status: k === GEMINI_OK ? 200 : 400 }); }
+    if (u.startsWith('https://generativelanguage.googleapis.com/') && (u.includes('/v1beta/interactions') || /models\/[^/:]*(image|banana)[^/:]*:generateContent/.test(u))) {   // imagens (Fotos com IA)
+      const corpo = JSON.parse(init.body), viaInter = u.includes('/interactions'), modelo = viaInter ? corpo.model : u.split('/models/')[1].split(':')[0];
+      imgChamadas.push({ url: u, modelo, viaInter, headers: new Headers(init.headers), body: corpo });
+      const R = (st, o) => new Response(JSON.stringify(o), { status: st });
+      const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(600, 7)]).toString('base64');
+      if (imgModo === 'cota') return R(429, { error: { message: 'You exceeded your current quota. Please retry in 2h10m5s. key=' + GEMINI_OK } });
+      if (imgModo === 'semplano') return R(429, { error: { message: 'Quota exceeded for metric generate_content_free_tier_requests, limit: 0' } });
+      if (imgModo === 'cota1' && modelo === 'gemini-nano-banana-2.1') return R(429, { error: { message: 'quota. Please retry in 21h26m11.19s.' } });
+      if (imgModo === '403') return R(403, { error: { message: 'API key not valid' } });
+      if (imgModo === 'recusa') return R(200, viaInter ? { steps: [{ type: 'model_output', content: [{ type: 'text', text: 'Não posso gerar essa imagem.' }] }] } : { candidates: [{ content: { parts: [{ text: 'Não posso gerar essa imagem.' }] } }] });
+      if (imgModo === 'so-classico' && viaInter) return R(404, { error: { message: 'not found' } });
+      if (imgModo === 'lixo') return R(200, { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: Buffer.alloc(900, 65).toString('base64') } }] } }] });
+      return R(200, viaInter ? { id: 'int_1', steps: [{ type: 'thought', content: [{ type: 'image', mime_type: 'image/jpeg', data: Buffer.alloc(900, 66).toString('base64') }] }, { type: 'model_output', content: [{ type: 'image', mime_type: 'image/jpeg', data: JPEG }] }] } : { candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/jpeg', data: JPEG } }] } }] });
+    }
     if (u.startsWith('https://generativelanguage.googleapis.com/')) {
       gemChamadas.push({ url: u, headers: new Headers(init.headers), body: JSON.parse(init.body) });
       if (gemModo === 'cota1' && u.includes('gemini-3.5-flash:')) return new Response(JSON.stringify({ error: { message: 'You exceeded your current quota. Please retry in 21h26m11.19s.' } }), { status: 429 });
@@ -655,6 +669,121 @@ function d1() {
     chk('mantém a temporária recente', objs.has('t/202610/bbbbbbbbbbbbbbbbbbbb.jpg'));
     chk('mantém a velha que ainda está numa postagem agendada', objs.has('t/202610/cccccccccccccccccccc.jpg'));
     chk('nunca mexe em mídia que não é temporária', objs.has('202610/dddddddddddddddddddd.jpg'));
+  }
+
+  {
+    console.log('== FOTOS COM IA (fila que espera a cota) ==');
+    const pend = [];
+    const A2 = async (m, pth, corpo) => { const r = await w.fetch(ped(m, pth, 'tk2.admin', corpo), env, { waitUntil: (x) => pend.push(x) }); const j = await r.json(); await Promise.all(pend.splice(0)); return { r, j }; };   // espera o disparo imediato (waitUntil) terminar
+    const G2 = async (m, pth, corpo) => { const r = await w.fetch(ped(m, pth, 'tk2.gerente', corpo), env, {}); return { r, j: await r.json() }; };
+    await A2('POST', '/ia-chave', { chave: GEMINI_OK });
+    const JPG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(500, 3)]).toString('base64');
+    const foto = { mime: 'image/jpeg', data: JPG };
+    let rr, jj;
+    ({ r: rr, j: jj } = await A2('GET', '/fotoia/config'));
+    chk('config traz a instrução padrão do Pablo (seta, 3 modelos, 9:16) e diz que a chave está guardada', jj.ok && /seta elegante/i.test(jj.config.instrucao) && /FIDELIDADE ABSOLUTA/.test(jj.config.instrucao) && jj.temChave === true && jj.fimChave === GEMINI_OK.slice(-4) && jj.podeEditar === true && jj.config.limiteDia === 20, jj.config && jj.config.limiteDia);
+    chk('a chave não aparece em lugar nenhum da config', !JSON.stringify(jj).includes(GEMINI_OK));
+    ({ r: rr, j: jj } = await G2('GET', '/fotoia/config')); chk('quem só cadastra vê a config mas NÃO pode editar', jj.ok && jj.podeEditar === false);
+    ({ r: rr, j: jj } = await G2('POST', '/fotoia/config', { config: { limiteDia: 3 } })); chk('quem só cadastra NÃO muda a instrução/limites (403)', rr.status === 403);
+    ({ r: rr, j: jj } = await w.fetch(ped('GET', '/fotoia/config', 'tk2.cliente'), env, {}).then(async (x) => ({ r: x, j: await x.json() }))); chk('conta comum não entra (403)', rr.status === 403);
+
+    ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Cropped Farm', fotos: [] })); chk('sem foto = 400', rr.status === 400);
+    ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'x', fotos: [{ mime: 'image/jpeg', data: Buffer.from('isto não é imagem nenhuma de verdade').toString('base64') }] })); chk('arquivo que não é imagem (bytes) é recusado', rr.status === 400);
+    ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'x', fotos: [{ mime: 'image/jpeg', data: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(1700 * 1024)]).toString('base64') }] })); chk('foto acima de 1,5 MB é recusada com frase', rr.status === 400 && /1,5 MB/.test(jj.erro), jj);
+
+    // ---- 1) caminho feliz (Interactions) ----
+    imgChamadas = []; imgModo = 'ok';
+    ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Cropped Farm', produto: 'TK-0264', extra: 'fundo areia', fotos: [foto, foto] }));
+    chk('pedido entra na fila', rr.status === 200 && jj.ok && jj.id > 0, jj);
+    const id1 = jj.id; let pf;                // o pedido já dispara a geração na hora (waitUntil); o A2 espera terminar
+    ({ j: jj } = await A2('GET', '/fotoia/lista'));
+    let it = jj.itens.find((x) => x.id === id1); chk('ficou PRONTA, com endereço da imagem e o modelo usado', it && it.status === 'pronta' && /\/m\/\d{6}\/[0-9a-f]{20}\.jpg$/.test(it.resultado) && it.modelo === 'gemini-nano-banana-2.1', it);
+    const c1 = imgChamadas[0];
+    chk('1º jeito = Interactions, com a chave no CABEÇALHO e nunca na URL', c1 && c1.viaInter && c1.headers.get('x-goog-api-key') === GEMINI_OK && !c1.url.includes(GEMINI_OK), c1 && c1.url);
+    chk('o pedido leva a instrução do Pablo, o nome da peça, a observação e as 2 fotos como imagem', c1.body.input[0].text.includes('FIDELIDADE ABSOLUTA') && /Cropped Farm/.test(c1.body.input[0].text) && /fundo areia/.test(c1.body.input[0].text) && c1.body.input.filter((x) => x.type === 'image' && x.data).length === 2 && c1.body.response_format.aspect_ratio === '9:16', c1.body.response_format);
+    chk('"--ar 9:16" vira texto comum (não é comando de Midjourney)', !/--ar/.test(c1.body.input[0].text) && /proporção 9:16/.test(c1.body.input[0].text));
+    const resChave = (await DB.prepare("SELECT resultado FROM fotoia WHERE id=?").bind(id1).first()).resultado;
+    chk('a imagem foi guardada no R2 (e fonte em t/, a temporária)', objs.has(resChave) && JSON.parse((await DB.prepare('SELECT fontes FROM fotoia WHERE id=?').bind(id1).first()).fontes).every((k) => /^t\//.test(k) && objs.has(k)));
+    ({ j: jj } = await A2('GET', '/fotoia/config')); chk('contador do dia subiu (1 de 20)', jj.hoje.usadas === 1 && jj.hoje.limite === 20, jj.hoje);
+
+    // ---- 2) sem cota: NÃO perde, volta para a fila com horário ----
+    imgChamadas = []; imgModo = 'cota';
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Saia Jeans', fotos: [foto] })); const id2 = jj.id;
+    ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === id2);
+    chk('cota acabou: continua NA FILA (não vira erro), com horário para tentar de novo e frase clara', it.status === 'fila' && it.espera && /cota/i.test(it.erro) && Date.parse(it.espera) > Date.now() + 4 * 60000 && it.tent === 0, it);
+    chk('a chave não vaza na frase de erro', !JSON.stringify(jj).includes(GEMINI_OK));
+    const nChamou = imgChamadas.length; chk('tentou os 4 modelos antes de desistir (cada um tem a sua cota)', new Set(imgChamadas.map((x) => x.modelo)).size === 4, imgChamadas.map((x) => x.modelo));
+    imgChamadas = []; pf = await W.processarFotoIA(env);
+    chk('antes do horário nada é chamado de novo (não gasta tentativa)', imgChamadas.length === 0 && pf.feitas === 0, pf);
+    // ---- 3) cota volta: o cron pega sozinho ----
+    imgModo = 'ok'; await env.CACHE.delete('ia_esgotados'); await DB.prepare("UPDATE fotoia SET prox_em='2000-01-01T00:00:00Z' WHERE id=?").bind(id2).run();
+    pf = await W.processarFotoIA(env); ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === id2);
+    chk('cota voltou: o cron faz o pedido que esperava', pf.feitas === 1 && it.status === 'pronta' && it.erro === '', { pf, it });
+    // ---- 4) plano gratuito sem imagem (limit: 0) ----
+    imgModo = 'semplano'; await env.CACHE.delete('ia_esgotados');
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Short', fotos: [foto] })); const id3 = jj.id;
+    ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === id3);
+    chk('limite 0 (plano sem imagens): fila, frase honesta e espera longa (≥ 5 h)', it.status === 'fila' && /não inclui geração de imagens/.test(it.erro) && Date.parse(it.espera) > Date.now() + 5 * 3600000, it);
+    // ---- 5) um modelo sem cota, o próximo faz ----
+    imgModo = 'cota1'; await env.CACHE.delete('ia_esgotados'); imgChamadas = [];
+    await A2('POST', '/fotoia/acao', { id: id3, acao: 'agora' });
+    ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === id3);
+    chk('1º modelo sem cota: usa o 2º da lista e fica pronta', it.status === 'pronta' && it.modelo === 'gemini-3.1-flash-lite-image', it);
+    // ---- 6) só o jeito clássico funciona ----
+    imgModo = 'so-classico'; await env.CACHE.delete('ia_esgotados'); imgChamadas = [];
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Body', fotos: [foto] })); const id4 = jj.id;
+    ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === id4);
+    chk('Interactions responde 404: cai para generateContent e acha a imagem em inlineData', it.status === 'pronta' && imgChamadas.some((x) => !x.viaInter) && imgChamadas[imgChamadas.length - 1].body.generationConfig.imageConfig.aspectRatio === '9:16', imgChamadas.map((x) => x.url));
+    // ---- 7) a IA responde só com texto (recusa) ----
+    imgModo = 'recusa'; ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Vestido', fotos: [foto] })); const id5 = jj.id;
+    ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === id5);
+    chk('resposta sem imagem: conta tentativa, mostra o que a IA disse e tenta de novo depois', it.status === 'fila' && it.tent === 1 && /Não posso gerar/.test(it.erro) && it.espera, it);
+    for (let i = 0; i < 2; i++) { await DB.prepare("UPDATE fotoia SET prox_em='' WHERE id=?").bind(id5).run(); await W.processarFotoIA(env, id5); }
+    ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === id5); chk('3 tentativas sem imagem: vira ERRO (não fica tentando para sempre)', it.status === 'erro' && it.tent === 3, it);
+    // ---- 8) chave recusada ----
+    imgModo = '403'; ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Calça', fotos: [foto] })); const id6 = jj.id;
+    ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === id6); chk('chave recusada pelo Google: erro na hora, com frase', it.status === 'erro' && /recusou a chave/.test(it.erro), it);
+    // ---- 9) arquivo que a IA devolve não é imagem ----
+    imgModo = 'lixo'; ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Blusa', fotos: [foto] })); const id7 = jj.id;
+    ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === id7); chk('bytes que não são JPG/PNG/WEBP não viram "pronta"', it.status === 'erro' && /não é imagem/.test(it.erro), it);
+    imgModo = 'ok';
+    // ---- 10) limite diário ----
+    ({ r: rr, j: jj } = await A2('POST', '/fotoia/config', { config: { limiteDia: 2 } })); chk('gestor muda o limite por dia', jj.ok && jj.config.limiteDia === 2);
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Cinto', fotos: [foto] })); const id8 = jj.id; imgChamadas = [];
+    pf = await W.processarFotoIA(env, id8); ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === id8);
+    chk('passou do limite do dia: NÃO chama o Google, fica na fila até amanhã', pf.limiteDia === true && imgChamadas.length === 0 && it.status === 'fila' && /Limite de 2/.test(it.erro) && Date.parse(it.espera) > Date.now(), { pf, it });
+    await A2('POST', '/fotoia/config', { config: { limiteDia: 20 } });
+    // ---- 11) instrução editada vale na hora ----
+    ({ r: rr, j: jj } = await A2('POST', '/fotoia/config', { config: { instrucao: 'FAÇA UMA FOTO SIMPLES COM FUNDO AZUL. ' + 'x'.repeat(20), formato: '4:5', modelos: 'gemini-nano-banana-2.1\n  modelo invalido!!\n gemini-3.1-flash-image' } }));
+    chk('instrução, formato e lista de modelos salvos (modelo com caracteres estranhos é descartado)', jj.ok && /FUNDO AZUL/.test(jj.config.instrucao) && jj.config.formato === '4:5' && JSON.stringify(jj.config.modelos) === JSON.stringify(['gemini-nano-banana-2.1', 'gemini-3.1-flash-image']), jj.config);
+    imgChamadas = []; await DB.prepare("UPDATE fotoia SET prox_em='' WHERE id=?").bind(id8).run(); await env.CACHE.delete('ia_esgotados'); await W.processarFotoIA(env, id8);
+    chk('a instrução NOVA e o formato novo são os que vão ao Google', imgChamadas.length >= 1 && /FUNDO AZUL/.test(imgChamadas[0].body.input[0].text) && imgChamadas[0].body.response_format.aspect_ratio === '4:5' && !/FIDELIDADE/.test(imgChamadas[0].body.input[0].text), imgChamadas[0] && imgChamadas[0].body.response_format);
+    ({ j: jj } = await A2('POST', '/fotoia/config', { padrao: true })); chk('"Voltar ao padrão" restaura a instrução do Pablo', /FIDELIDADE ABSOLUTA/.test(jj.config.instrucao) && jj.config.formato === '9:16');
+    ({ j: jj } = await A2('POST', '/fotoia/config', { config: { instrucao: '   ' } })); chk('instrução em branco volta para a padrão (nunca manda pedido vazio)', /FIDELIDADE ABSOLUTA/.test(jj.config.instrucao));
+    // ---- 12) ações: aprovar, descartar, refazer, cancelar ----
+    ({ r: rr } = await A2('POST', '/fotoia/acao', { id: id1, acao: 'aprovar' })); ({ j: jj } = await A2('GET', '/fotoia/lista')); chk('aprovar', rr.status === 200 && jj.itens.find((x) => x.id === id1).status === 'aprovada');
+    const usoAntes = (await KV.get('uso', 'json')).bytes;
+    ({ r: rr } = await A2('POST', '/fotoia/acao', { id: id2, acao: 'descartar' })); const k2 = resChave;
+    chk('descartar apaga a imagem do R2 e devolve o espaço do contador', rr.status === 200 && (await KV.get('uso', 'json')).bytes < usoAntes, { usoAntes, depois: (await KV.get('uso', 'json')).bytes });
+    ({ r: rr } = await A2('POST', '/fotoia/acao', { id: id1, acao: 'aprovar' })); chk('ação que não vale para o estado atual = 400', rr.status === 400);
+    const id9 = (await DB.prepare("INSERT INTO fotoia (status, prox_em, fontes, criado_em) VALUES ('fila','2999-01-01T00:00:00Z','[]','x')").run()).meta.last_row_id;
+    ({ r: rr } = await A2('POST', '/fotoia/acao', { id: id9, acao: 'cancelar' })); ({ j: jj } = await A2('GET', '/fotoia/lista?status=cancelada')); chk('cancelar tira da fila', rr.status === 200 && jj.itens.some((x) => x.id === id9));
+    ({ r: rr } = await A2('POST', '/fotoia/acao', { id: id1, acao: 'refazer' })); ({ j: jj } = await A2('GET', '/fotoia/lista')); chk('refazer volta para a fila (e já dispara)', rr.status === 200 && ['fila', 'gerando', 'pronta'].includes(jj.itens.find((x) => x.id === id1).status));
+    // ---- 13) sem chave / desligado ----
+    await A2('POST', '/fotoia/config', { config: { ligado: false } }); ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Parado', fotos: [foto] })); imgChamadas = [];
+    pf = await W.processarFotoIA(env); chk('desligado: o pedido espera na fila e nada é chamado', pf.desligado === true && imgChamadas.length === 0, pf);
+    await A2('POST', '/fotoia/config', { config: { ligado: true } });
+    await DB.prepare("DELETE FROM cfg WHERE chave='gemini_key'").run(); imgChamadas = []; pf = await W.processarFotoIA(env);
+    chk('sem a chave do Gemini: nada é chamado, pedidos ficam na fila', pf.semChave === true && imgChamadas.length === 0, pf);
+    ({ j: jj } = await A2('GET', '/fotoia/config')); chk('config diz que falta a chave', jj.temChave === false);
+    await A2('POST', '/ia-chave', { chave: GEMINI_OK });
+    // ---- 14) fila cheia ----
+    await DB.prepare("DELETE FROM fotoia").run();
+    for (let i = 0; i < 40; i++) await DB.prepare("INSERT INTO fotoia (status, prox_em, fontes, criado_em) VALUES ('fila','2999-01-01T00:00:00Z','[]','x')").run();
+    ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'a mais', fotos: [foto] })); chk('fila cheia (40 esperando) = 429 com frase', rr.status === 429 && /40/.test(jj.erro), jj);
+    // ---- 15) a leitura da imagem acha a imagem em qualquer formato ----
+    const ach = W.acharImagensIA; const big = Buffer.alloc(300, 1).toString('base64');
+    chk('acha em outputs/steps/candidates/inlineData/inline_data e pega a ÚLTIMA', ach({ outputs: [{ type: 'image', mime_type: 'image/png', data: big }] }).length === 1 && ach({ a: { b: [{ inline_data: { mime_type: 'image/webp', data: big } }] } })[0].mime === 'image/webp' && ach({ x: [{ mimeType: 'image/jpeg', data: big }, { mimeType: 'image/png', data: big + 'AA' }] }).slice(-1)[0].mime === 'image/png' && ach({ data: 'curto', mime_type: 'image/png' }).length === 0 && ach(null).length === 0);
   }
 
   console.log('\nOK=' + ok + ' FALHAS=' + falhas.length, falhas);
