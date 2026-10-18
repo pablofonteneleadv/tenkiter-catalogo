@@ -319,8 +319,8 @@
 
     const passaFiltros = p => {
       if (selecaoFixa && !naSelecaoFixa_(p)) return false;
-      if (!isNaN(min) && Number(p.Preco) < min) return false;
-      if (!isNaN(max) && Number(p.Preco) > max) return false;
+      if (!isNaN(min) && (ehConsulta(p) || Number(p.Preco) < min)) return false;   // "Consulte valor" não entra em filtro de preço
+      if (!isNaN(max) && (ehConsulta(p) || Number(p.Preco) > max)) return false;
       if (apenasNovidades && !ehNovidade(p)) return false;
       if (apenasFavoritos && !ehFavorito(p.ID)) return false;
       if (filtroCategorias.size) { const tags = listaDeTags(p.Categoria); if (!tags.some(t => filtroCategorias.has(t))) return false; }
@@ -396,8 +396,10 @@
   let sinonimosMapa_ = montarSinonimos(SINONIMOS_PADRAO);
   function ordenarLista_(lista) {
     const o = document.getElementById('ordem').value;
-    if (o === 'menor') return lista.slice().sort((a, b) => Number(a.Preco) - Number(b.Preco));
-    if (o === 'maior') return lista.slice().sort((a, b) => Number(b.Preco) - Number(a.Preco));
+    // "Consulte valor" vai sempre para o fim, nos dois sentidos
+    const cmpPreco_ = (a, b, dir) => { const ca = ehConsulta(a), cb = ehConsulta(b); if (ca || cb) return ca === cb ? 0 : (ca ? 1 : -1); return dir * (Number(a.Preco) - Number(b.Preco)); };
+    if (o === 'menor') return lista.slice().sort((a, b) => cmpPreco_(a, b, 1));
+    if (o === 'maior') return lista.slice().sort((a, b) => cmpPreco_(a, b, -1));
     if (o === 'az') return lista.slice().sort((a, b) => String(a.Nome).localeCompare(String(b.Nome), 'pt-BR'));
     return lista;                                   // "mais recentes": a ordem que o servidor mandou
   }
@@ -585,7 +587,7 @@
           <div class="card-info">
             ${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}
             <div class="nome"><button type="button" class="abrir-peca" aria-label="Ver detalhes: ${escaparHtml(p.Nome)}">${escaparHtml(p.Nome)}</button></div>
-            <div class="preco">${formatarReal(p.Preco)} <span>${formatarReal(avista)}</span></div>
+            <div class="preco">${ehConsulta(p) ? '<strong class="consulta">' + TEXTO_CONSULTA + '</strong>' : formatarReal(p.Preco) + ' <span>' + formatarReal(avista) + '</span>'}</div>
             <div class="tags">${escaparHtml(p.Categoria)}</div>
             ${disp && !esgotado ? `<div class="disponibilidade ${disp.classe}">${disp.texto}</div>` : ''}
             ${esgotado ? '' : `<div class="acoes-card">
@@ -678,7 +680,9 @@
     if (apenasFavoritos && !ehFavorito(id)) aplicarFiltros();
   }
   function dadosPixel_(p) {
-    return { content_ids: [p.Codigo || String(p.ID)], content_name: p.Nome, content_type: 'product', value: Number(p.Preco) * (1 - DESCONTO_AVISTA), currency: 'BRL' };
+    const d = { content_ids: [p.Codigo || String(p.ID)], content_name: p.Nome, content_type: 'product', currency: 'BRL' };
+    if (!ehConsulta(p)) d.value = Number(p.Preco) * (1 - DESCONTO_AVISTA);   // sem preço = sem valor para a Meta
+    return d;
   }
 
   // Foto/vídeo que está aparecendo na janela da peça (0 = capa). Os botões "Pedir" e "Compartilhar" da janela usam isso:
@@ -692,7 +696,7 @@
     const link = linkProduto(p, foto);
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const codigo = p.Codigo ? ('\nCódigo: ' + p.Codigo) : '';
-    const texto = `Olá! Quero garantir este produto:\n*${p.Nome}*${codigo}\n${formatarReal(avista)} à vista\n${link}`;
+    const texto = `Olá! Quero garantir este produto:\n*${p.Nome}*${codigo}\n${ehConsulta(p) ? 'Gostaria de saber o valor e a disponibilidade.' : formatarReal(avista) + ' à vista'}\n${link}`;
     const eidContato = novoEventId_('ct', p.ID);
     registrarEvento(p.ID, p.Codigo, 'whatsapp', eidContato);
     if (window.TKMeta) TKMeta.evento('Contact', dadosPixel_(p), eidContato);
@@ -726,7 +730,7 @@
     const link = linkProduto(p, foto);
     const avista = Number(p.Preco) * (1 - DESCONTO_AVISTA);
     const ehVideo = !!(slide && slide.tipo === 'video');
-    const texto = `${p.Nome} — ${formatarReal(avista)} à vista${ehVideo ? ' (vídeo)' : ''}\n${link}\n\nTENKiTER Modas — WhatsApp: ${linkWhatsApp()}`;
+    const texto = `${p.Nome} — ${ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(avista) + ' à vista'}${ehVideo ? ' (vídeo)' : ''}\n${link}\n\nTENKiTER Modas — WhatsApp: ${linkWhatsApp()}`;
     const btn = document.getElementById('btn-anexar-foto');
     const rotulo = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = ehVideo ? '⏳ Preparando o vídeo…' : '⏳ Preparando…'; }
@@ -777,9 +781,9 @@
   const META_PADRAO_ = { titulo: document.title, descricao: (document.querySelector('meta[name="description"]') || {}).content || '' };
   function definirMetaPeca_(p, avista) {
     const cod = p.Codigo ? ' [' + p.Codigo + ']' : '';
-    document.title = p.Nome + cod + ' — ' + formatarReal(avista) + ' à vista | TENKiTER Modas';
+    document.title = p.Nome + cod + ' — ' + (ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(avista) + ' à vista') + ' | TENKiTER Modas';
     const d = document.querySelector('meta[name="description"]');
-    if (d) d.content = (p.Descricao ? String(p.Descricao).slice(0, 110) + ' ' : '') + 'De ' + formatarReal(p.Preco) + ' por ' + formatarReal(avista) + ' à vista na TENKiTER Modas, Crateús-CE.';
+    if (d) d.content = (p.Descricao ? String(p.Descricao).slice(0, 110) + ' ' : '') + (ehConsulta(p) ? 'Consulte o valor pelo WhatsApp na TENKiTER Modas, Crateús-CE.' : 'De ' + formatarReal(p.Preco) + ' por ' + formatarReal(avista) + ' à vista na TENKiTER Modas, Crateús-CE.');
     let ld = document.getElementById('ld-produto');
     if (!ld) { ld = document.createElement('script'); ld.type = 'application/ld+json'; ld.id = 'ld-produto'; document.head.appendChild(ld); }
     const imgs = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',').map(x => x.trim()).filter(Boolean)).filter(Boolean);
@@ -788,6 +792,7 @@
       sku: p.Codigo || String(p.ID), brand: { '@type': 'Brand', name: 'TENKiTER Modas' }, url: linkProduto(p),
       offers: { '@type': 'Offer', url: linkProduto(p), priceCurrency: 'BRL', price: Number(avista).toFixed(2), availability: estaEsgotado(p) ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock', itemCondition: 'https://schema.org/NewCondition', seller: { '@type': 'Organization', name: 'TENKiTER Modas' } }
     };
+    if (ehConsulta(p)) delete dados.offers;   // sem preço não há oferta para os buscadores
     ld.textContent = JSON.stringify(dados);
   }
   function restaurarMeta_() {
@@ -835,8 +840,7 @@
         ${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}
         <div class="nome">${escaparHtml(p.Nome)}</div>
         <div class="preco-linha">
-          <span class="cheio">${formatarReal(p.Preco)}</span>
-          <span class="avista">${formatarReal(avista)} à vista</span>
+          ${ehConsulta(p) ? '<span class="consulta">' + TEXTO_CONSULTA + '</span>' : '<span class="cheio">' + formatarReal(p.Preco) + '</span>\n          <span class="avista">' + formatarReal(avista) + ' à vista</span>'}
         </div>
         <div class="tags">${escaparHtml(p.Categoria)} · ${escaparHtml(p.Genero)}</div>
         ${p.Tamanhos ? `<div class="extra"><strong>Tamanhos:</strong> ${escaparHtml(textoPlano(p.Tamanhos))}</div>` : ''}

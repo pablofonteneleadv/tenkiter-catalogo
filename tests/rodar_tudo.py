@@ -60,6 +60,8 @@ SUITES = [  # (arquivo, como saber que passou)
     ("envios_retomar.py", lambda o: "FALHAS=0" in o),      # fila de envios guardada no aparelho: retoma sozinha, sem duplicar
     ("opcoes_lista.py", lambda o: "0 falhas" in o),        # v4.18: tamanhos e cores do servidor, Admin total cria e vale para todos
     ("pre_envio.py", lambda o: "FALHAS=0" in o),          # v4.20: pré-envio das mídias, opId, keepalive ao minimizar, retomada sem perguntar
+    ("consultar_valor.py", lambda o: "FALHAS=0" in o),    # v4.21: "Consultar valor" (catálogo, sacola, cadastro, lote, Postagens)
+    ("admin_busca_status.py", lambda o: "FALHAS=0" in o), # v4.21: busca do admin respeita o filtro de status + emojis dos botões
     ("convite_app.py", lambda o: "FALHAS=0" in o),        # plaquinha flutuante de convite para instalar o app (só no site em celular)
     ("contas_cpf.py", lambda o: "FALHAS=0" in o),         # telas: login múltiplo, Esqueci a senha, conta já existe, faixa vermelha de CPF, CPF obrigatório no currículo
     ("backend_func.js", lambda o: "FALHAS=0" in o),      # backend de Funcionários/Acessos: vários perfis por pessoa + travas de Admin

@@ -63,6 +63,9 @@ const base = [
   ok(r.status === 200 && h.includes('Blusa Floral'), 'também acha pelo ID numérico');
   r = await pedir('/p/TK-0002'); h = await r.text();
   ok(JSON.parse(h.match(/ld\+json">([\s\S]*?)<\/script>/)[1]).offers.availability === 'https://schema.org/OutOfStock', 'peça esgotada vira OutOfStock no JSON-LD');
+  r = await pedir('/p/TK-0007'); h = await r.text();   // v4.21: peça "Consulte valor" (Preco 0)
+  ok(/<meta property="og:title" content="Preço zero \[TK-0007\] — Consulte valor">/.test(h) && !/R\$ 0,00/.test(h), 'peça sem preço: título "Consulte valor" e nunca R$ 0,00', (h.match(/og:title[^>]*>/) || [])[0]);
+  ok(!/product:price:amount/.test(h) && !/"offers"/.test(h), 'peça sem preço: sem meta de preço e sem oferta no JSON-LD');
   r = await pedir('/p/TK-0003'); h = await r.text();
   const blocoLd = h.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1];
   ok(!/<\/?script/i.test(blocoLd) && JSON.parse(blocoLd).name.includes('alert(1)'), 'nome malicioso não consegue fechar o <script> do JSON-LD');

@@ -1881,6 +1881,64 @@ function servicosFalsos(amb, est) {
   ok(amb.getJson({ action: 'versao' }).opcoesLista === true, 'versao anuncia opcoesLista');
 })();
 
+// ------------------------------------------------------------------ 8k. "Consultar valor" (v4.20)
+(function consultarValor() {
+  console.log('\n[8k Consultar valor: peça sem preço]');
+  const amb = criarAmbiente(); semear(amb);
+  const sh = amb.ss.getSheetByName('Sheet1');
+  const preco = (id) => { const d = sh.getDataRange().getValues(); const i = d.findIndex((r) => String(r[0]) === String(id)); return i < 0 ? null : d[i][4]; };
+  const FOTO = 'https://res.cloudinary.com/z/cv.jpg';
+  // sem a marca, o preço continua obrigatório
+  let r = amb.post(adm({ action: 'create', nome: 'Sem marca', categoria: 'Vestidos', genero: 'Feminino', fotoUrlExistente: FOTO }));
+  ok(r.ok === false && /pre[cç]o/i.test(r.erro), 'sem preço e sem a marca: recusa (como antes)', JSON.stringify(r));
+  r = amb.post(adm({ action: 'create', nome: 'Preço zero', preco: 0, categoria: 'Vestidos', genero: 'Feminino', fotoUrlExistente: FOTO }));
+  ok(r.ok === false, 'preço 0 sem a marca continua recusado');
+  // com a marca: grava Preco 0
+  r = amb.post(adm({ action: 'create', nome: 'Peça sob consulta', consultarValor: true, categoria: 'Vestidos', genero: 'Feminino', fotoUrlExistente: FOTO }));
+  ok(r.ok && r.id, 'create com consultarValor:true cadastra sem preço', JSON.stringify(r));
+  const idC = r.id;
+  ok(Number(preco(idC)) === 0, 'a planilha guarda Preco 0', String(preco(idC)));
+  const lista = amb.getJson({ action: 'list', todos: 'true' });
+  const pc = lista.produtos.filter((x) => String(x.ID) === String(idC))[0];
+  ok(pc && !(Number(pc.Preco) > 0), 'a lista pública devolve Preco 0 (o site mostra "Consulte valor")', pc && String(pc.Preco));
+  ok(amb.getJson({ action: 'versao' }).consultarValor === true, 'versao anuncia consultarValor');
+  // editar: marcar / desmarcar
+  r = amb.post(adm({ action: 'update', id: '101', consultarValor: true }));
+  ok(r.ok && Number(preco('101')) === 0, 'update com consultarValor:true zera o preço da peça', JSON.stringify(r));
+  r = amb.post(adm({ action: 'update', id: '101', consultarValor: false }));
+  ok(r.ok === false && /pre[cç]o/i.test(r.erro), 'desmarcar sem informar preço é recusado', JSON.stringify(r));
+  r = amb.post(adm({ action: 'update', id: '101', consultarValor: false, preco: 120 }));
+  ok(r.ok && Number(preco('101')) === 120, 'desmarcar COM preço volta ao valor escrito', String(preco('101')));
+  r = amb.post(adm({ action: 'update', id: '101', preco: 0 }));
+  ok(r.ok === false, 'update com preço 0 sem a marca continua recusado');
+  // lote: consultar / valor escrito / % pula peça sem preço
+  r = amb.post(adm({ action: 'bulkUpdate', ids: ['102', '105'], tipoAcao: 'consultarValor' }));
+  ok(r.ok && r.afetados === 2 && Number(preco('102')) === 0 && Number(preco('105')) === 0, 'lote consultarValor passa as marcadas para sem preço', JSON.stringify(r));
+  r = amb.post(adm({ action: 'bulkUpdate', ids: ['102', '106'], tipoAcao: 'ajustarPrecoPorcento', valor: '10' }));
+  ok(r.ok && r.afetados === 1 && r.semPreco === 1 && Number(preco('102')) === 0 && Math.abs(Number(preco('106')) - 82.5) < 0.01, 'lote % pula a peça "Consulte valor" e reajusta as outras', JSON.stringify(r) + ' ' + preco('106'));
+  r = amb.post(adm({ action: 'bulkUpdate', ids: ['102', '105'], tipoAcao: 'valorEscrito', valor: '99,9' }));
+  ok(r.ok === false, 'lote valorEscrito sem número válido é recusado', JSON.stringify(r));
+  r = amb.post(adm({ action: 'bulkUpdate', ids: ['102', '105'], tipoAcao: 'valorEscrito', valor: '99.9' }));
+  ok(r.ok && r.afetados === 2 && Number(preco('102')) === 99.9 && Number(preco('105')) === 99.9, 'lote valorEscrito dá o preço às duas', JSON.stringify(r));
+  r = amb.post(adm({ action: 'bulkUpdate', ids: ['102'], tipoAcao: 'valorEscrito', valor: '0' }));
+  ok(r.ok === false, 'lote valorEscrito com 0 é recusado');
+  // a permissão do lote novo é a de preços
+  ok(/consultarValor: 'catalogo_precos'/.test(codigoFonte) && /valorEscrito: 'catalogo_precos'/.test(codigoFonte), 'as duas ações de lote exigem a permissão de preços');
+  // pedido: peça "Consulte valor" entra, sem somar
+  const amb2 = criarAmbiente(); semear(amb2);
+  amb2.post(adm({ action: 'update', id: '102', consultarValor: true }));
+  r = amb2.post({ action: 'criarPedido', nome: 'Cliente Teste', whatsapp: '88999991111', entrega: 'retirada', itens: [{ id: '101' }, { id: '102' }] });
+  ok(r.ok && Math.abs(r.total - 90) < 0.01 && r.ignorados === 0, 'pedido com 1 peça com preço + 1 "Consulte valor": total só da com preço', JSON.stringify(r));
+  ok(r.itens && r.itens.some((i) => i.consultar === true), 'a resposta marca qual peça é "Consulte valor"');
+  const ab = amb2.ss.getSheetByName('Pedidos').getDataRange().getValues();
+  ok(ab.slice(1).some((l) => String(l[8]).indexOf('"consultar":true') > -1), 'o pedido guardado leva consultar:true no item');
+  r = amb2.post({ action: 'criarPedido', nome: 'Cliente Dois', whatsapp: '88999992222', entrega: 'retirada', itens: [{ id: '102' }] });
+  ok(r.ok && r.total === 0, 'pedido só com peça "Consulte valor" também vale (total 0)', JSON.stringify(r));
+  // página de compartilhar (?action=share) sem preço
+  const html = amb2.getHtml ? amb2.getHtml({ action: 'share', id: '102' }) : null;
+  if (html != null) ok(/Consulte valor/.test(html) && !/R\$ 0,00/.test(html), 'página de compartilhar diz "Consulte valor" (sem R$ 0,00)');
+})();
+
 console.log('\n' + (total - falhas.length) + '/' + total + ' verificações passaram');
 console.log('FALHAS=' + falhas.length + (falhas.length ? ' ' + JSON.stringify(falhas) : ''));
 process.exit(falhas.length ? 1 : 0);

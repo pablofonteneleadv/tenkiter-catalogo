@@ -364,6 +364,19 @@
   .overlay-sheet { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: flex-end; justify-content: center; }
   .overlay-sheet.aberto { display: flex; }
   .juntar-ajuda { font-size: .88rem; color: #444; margin: 4px 0 10px; }
+  .aviso-busca { background: #fff7ee; border: 1px solid var(--laranja); border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; font-size: .88rem; }
+  .aviso-busca button { width: auto; min-height: 44px; margin: 6px 0 0; padding: 8px 14px; border-radius: 8px; background: #0d0d0d; color: #fff; border: 0; font-weight: 700; display: block; }
+  .chk-consulta { display: flex; align-items: center; gap: 10px; min-height: 48px; margin: 8px 0 0; font-size: .92rem; cursor: pointer; }
+  .chk-consulta[hidden] { display: none; }
+  .chk-consulta input { width: 24px; height: 24px; flex: none; margin: 0; }
+  .chk-consulta small { color: #666; font-weight: 400; display: block; }
+  #preco:disabled { background: #eee; color: #888; }
+  .precos-modo { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 10px; margin-bottom: 6px; cursor: pointer; }
+  .precos-modo[hidden] { display: none; }
+  .precos-modo input { width: 22px; height: 22px; flex: none; margin: 2px 0 0; }
+  .precos-modo small { display: block; color: #666; font-size: .78rem; font-weight: 400; }
+  .precos-modo:has(input:checked) { border-color: var(--laranja); background: #fff7ee; }
+  #precos-campos label { display: block; font-weight: 700; margin: 8px 0 4px; }
   .juntar-item { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid #ddd; border-radius: 10px; margin-bottom: 6px; cursor: pointer; }
   .juntar-item input { width: auto; flex: none; }
   .juntar-item img { width: 44px; height: 54px; object-fit: cover; border-radius: 6px; flex: none; background: #eee; }
@@ -739,8 +752,9 @@
             <input type="number" id="estoque" step="1" min="0" placeholder="Ex: 5" inputmode="numeric">
           </div>
         </div>
+        <label class="chk-consulta" id="linha-consulta" hidden><input type="checkbox" id="consultar-valor"><span><b>💬 Consultar valor</b><small>Sem preço: o catálogo mostra “Consulte valor” (vale para todas as peças deste cadastro).</small></span></label>
         <div class="dica" id="dica-avista"></div>
-        <div class="passo-msg">Coloque o preço da peça (maior que zero).</div>
+        <div class="passo-msg">Coloque o preço da peça (maior que zero) ou marque “Consultar valor”.</div>
       </section>
 
       <section class="passo" data-passo="categoria">
@@ -869,6 +883,24 @@
     </div>
   </div>
 
+  <div class="overlay-sheet" id="overlay-precos">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="precos-titulo">
+      <div class="sheet-topo"><strong id="precos-titulo">Alterar preços</strong><button type="button" class="sheet-x" id="precos-fechar" aria-label="Fechar">✕</button></div>
+      <p class="juntar-ajuda" id="precos-resumo"></p>
+      <div role="radiogroup" aria-label="O que fazer com o preço">
+        <label class="precos-modo"><input type="radio" name="precos-modo" value="pct" checked><span><b>% Reajustar o preço</b><small>10 = +10% · -15 = 15% de desconto. Peças “Consulte valor” são puladas.</small></span></label>
+        <label class="precos-modo" id="precos-modo-escrito" hidden><input type="radio" name="precos-modo" value="escrito"><span><b>💲 Valor escrito (preço fixo)</b><small>Todas as marcadas ficam com o MESMO preço. Serve também para tirar do “Consulte valor”.</small></span></label>
+        <label class="precos-modo" id="precos-modo-consulta" hidden><input type="radio" name="precos-modo" value="consulta"><span><b>💬 Consultar valor</b><small>Tira o preço das marcadas e o catálogo mostra “Consulte valor”.</small></span></label>
+      </div>
+      <div id="precos-campos">
+        <div id="precos-campo-pct"><label for="precos-pct">Porcentagem</label><input type="text" id="precos-pct" inputmode="decimal" autocomplete="off" placeholder="Ex.: 10 ou -15"></div>
+        <div id="precos-campo-valor" hidden><label for="precos-valor">Preço (R$)</label><input type="text" id="precos-valor" inputmode="decimal" autocomplete="off" placeholder="Ex.: 89.90"></div>
+      </div>
+      <div id="precos-erro" class="juntar-erro" role="alert" hidden></div>
+      <button type="button" class="btn-primario" id="precos-ok">Aplicar</button>
+    </div>
+  </div>
+
   <div class="overlay-sheet" id="overlay-historico">
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="historico-titulo">
       <div class="sheet-topo"><strong id="historico-titulo">Histórico da peça</strong><button type="button" class="sheet-x" id="historico-fechar" aria-label="Fechar">✕</button></div>
@@ -982,7 +1014,7 @@
     const btn = document.getElementById('btn-toggle-log-debug');
     const painel = document.getElementById('log-debug-painel');
     if (!btn || !painel) return;
-    btn.textContent = logDebugAtivo ? '\u1FAB2 Desligar Log (ligado agora)' : '\u1FAB2 Ligar Log';
+    btn.textContent = logDebugAtivo ? '\u{1FAB2} Desligar Log (ligado agora)' : '\u{1FAB2} Ligar Log';
     btn.style.background = logDebugAtivo ? '#c62828' : 'var(--preto)';
     btn.style.color = logDebugAtivo ? '#fff' : 'var(--laranja)';
     painel.style.display = logDebugAtivo ? 'block' : 'none';
@@ -1230,7 +1262,7 @@
     btn.textContent = 'Sincronizando...';
     const resultado = await sincronizarFilaOffline();
     atualizarBarraSync();
-    btn.textContent = '\u1F504 Sincronizar';
+    btn.textContent = '\u{1F504} Sincronizar';
     if (resultado.restantes > 0) {
       alert(resultado.enviados + ' ação(ões) enviada(s). Ainda há ' + resultado.restantes + ' pendente(s) — verifique sua internet.');
     } else if (resultado.enviados > 0) {
@@ -1817,11 +1849,21 @@
   }
 
   function precoDigitado_() { return parseFloat(String(document.getElementById('preco').value).replace(',', '.')); }
+  /* v4.21: "Consultar valor" = peça sem preço (backend 4.20, bandeira consultarValor). Marcado: o campo de preço fica travado e vazio. */
+  let consultarLiberado_ = false;
+  function consultaMarcada_() { const c = document.getElementById('consultar-valor'); return !!(c && consultarLiberado_ && c.checked); }
+  function sincConsulta_() {
+    const on = consultaMarcada_(), campo = document.getElementById('preco');
+    campo.disabled = on; if (on && campo.value) campo.value = '';
+    return on;
+  }
+  versaoServidor().then(v => { consultarLiberado_ = !!(v && v.consultarValor); const l = document.getElementById('linha-consulta'); if (l) l.hidden = !consultarLiberado_; atualizarFaltas_(); }).catch(() => {});
+  document.getElementById('consultar-valor').addEventListener('change', () => atualizarFaltas_());
   function faltasDoForm_() {
     const f = [];
     if (!fotosItens.length) f.push(['fotos', 'foto']);
     if (!document.getElementById('nome').value.trim()) f.push(['nome', 'nome']);
-    if (!(precoDigitado_() > 0)) f.push(['preco', 'preço']);
+    if (!consultaMarcada_() && !(precoDigitado_() > 0)) f.push(['preco', 'preço']);
     if (!selecionadosGeneros.size) f.push(['genero', 'para quem é']);
     if (!selecionadasCategorias.size) f.push(['categoria', 'categoria']);
     return f;
@@ -1841,8 +1883,8 @@
     el.classList.toggle('pronto', !falta.length);
     const st = document.getElementById('status'); if (!falta.length && /^Falta preencher/.test(st.textContent)) st.textContent = '';
     el.textContent = falta.length ? 'Falta: ' + falta.map(x => x[1]).join(', ') + '.' : '✅ Tudo certo! Pode salvar.';
-    const p = precoDigitado_();
-    document.getElementById('dica-avista').textContent = p > 0 ? 'À vista (10% de desconto): ' + formatarReal(p * (1 - DESCONTO_AVISTA)) : '';
+    const consultar = sincConsulta_(), p = precoDigitado_();
+    document.getElementById('dica-avista').textContent = consultar ? 'No catálogo vai aparecer “Consulte valor”.' : (p > 0 ? 'À vista (10% de desconto): ' + formatarReal(p * (1 - DESCONTO_AVISTA)) : '');
     sincRapidos_();
   }
   function mostrarFaltas_(falta) {
@@ -1889,7 +1931,7 @@
       // Editando uma peça, só o nome é copiado (não troca os dados da peça aberta).
       if (modoFormulario !== 'editando') preencherFormComProduto(p);
       campo.value = String(p.Nome).slice(0, 80); nomeSugCopiado_ = campo.value;
-      if (modoFormulario !== 'editando') { const av = document.getElementById('aviso-copiado'); if (av) { av.hidden = false; av.textContent = '\u1F4CB Copiei os dados de “' + p.Nome + '” (preço, categoria, gênero, tamanhos, cores, descrição). Confira, escolha as fotos e mude o que for diferente.'; } }
+      if (modoFormulario !== 'editando') { const av = document.getElementById('aviso-copiado'); if (av) { av.hidden = false; av.textContent = '\u{1F4CB} Copiei os dados de “' + p.Nome + '” (preço, categoria, gênero, tamanhos, cores, descrição). Confira, escolha as fotos e mude o que for diferente.'; } }
       campo.focus(); try { campo.setSelectionRange(campo.value.length, campo.value.length); } catch (e) {}
       atualizarSugestoesNome_(); atualizarFaltas_();
       return;
@@ -1907,7 +1949,7 @@
   function tituloForm_(txt) {
     document.getElementById('titulo-form').textContent = txt;
     const s = document.getElementById('cad-sum-txt');
-    if (s) s.textContent = /^Editando/.test(txt) ? '✏️ ' + txt : /^Duplicando/.test(txt) ? '\u1F4CB ' + txt : '📝 Formulário da peça';
+    if (s) s.textContent = /^Editando/.test(txt) ? '✏️ ' + txt : /^Duplicando/.test(txt) ? '\u{1F4CB} ' + txt : '📝 Formulário da peça';
   }
   function abrirCadastro_() {
     const d = document.getElementById('card-form');
@@ -2156,7 +2198,9 @@
 
   function preencherFormComProduto(p) {
     document.getElementById('nome').value = p.Nome;
-    document.getElementById('preco').value = p.Preco;
+    { const zero = p.Preco !== '' && p.Preco != null && !(Number(p.Preco) > 0);   // 0 explícito = peça "Consulte valor" (vazio = ainda sem preço digitado)
+      document.getElementById('preco').value = zero ? '' : p.Preco;
+      const cv = document.getElementById('consultar-valor'); if (cv) cv.checked = zero && consultarLiberado_; }
     document.getElementById('estoque').value = p.Estoque || '';
     document.getElementById('tamanhos').value = textoPlano(p.Tamanhos);
     document.getElementById('cores').value = textoPlano(p.Cores);
@@ -2291,7 +2335,7 @@
     tituloForm_('Cadastro separado: ' + rs.length + ' produtos');
     document.getElementById('btn-salvar').textContent = 'Cadastrar os ' + rs.length + ' produtos';
     const al = document.getElementById('aviso-lote');
-    al.hidden = false; al.textContent = '\u1F9E9 Cadastro separado: preencha UMA vez. Ao cadastrar, este e mais ' + (rs.length - 1) + ' post(s) viram ' + rs.length + ' produtos diferentes, todos com estas mesmas informações; cada um fica com as fotos/vídeo do seu post.';
+    al.hidden = false; al.textContent = '\u{1F9E9} Cadastro separado: preencha UMA vez. Ao cadastrar, este e mais ' + (rs.length - 1) + ' post(s) viram ' + rs.length + ' produtos diferentes, todos com estas mesmas informações; cada um fica com as fotos/vídeo do seu post.';
   };
   /* v4.9: "Aceitar" vários posts, cada um com as suas informações (janela do importador). Cada item vira um envio na fila, com as fotos do SEU post. */
   window.tkListasLoja = function () { return { categorias: categorias.slice(), generos: generos.slice() }; };
@@ -2431,7 +2475,7 @@
     if (it.estado === 'enviando') return '<span class="env-spin">⏳</span> Enviando ' + (it.temVideo ? 'com vídeo (pode levar minutos) ' : '') + '"' + it.titulo + '"...' + (it.tentativa > 1 ? ' (tentativa ' + it.tentativa + ' de ' + it.maxTentativas + ')' : '');
     if (it.estado === 'ok') return '✅ "' + it.titulo + '" salvo!';
     if (it.estado === 'aviso') return '⚠️ "' + it.titulo + '": ' + it.msg;
-    if (it.estado === 'offline') return '\u1F4E5 "' + it.titulo + '": sem conexão. Guardado no aparelho; envie com "Sincronizar".';
+    if (it.estado === 'offline') return '\u{1F4E5} "' + it.titulo + '": sem conexão. Guardado no aparelho; envie com "Sincronizar".';
     return '❌ "' + it.titulo + '": ' + it.msg;
   }
   function desenharEnvios() {
@@ -2933,7 +2977,8 @@
         nome: document.getElementById('nome').value.trim(),
         categoria: Array.from(selecionadasCategorias).join(', '),
         genero: Array.from(selecionadosGeneros).join(', '),
-        preco: document.getElementById('preco').value,
+        preco: consultaMarcada_() ? '' : document.getElementById('preco').value,
+        ...(consultarLiberado_ ? { consultarValor: consultaMarcada_() } : {}),
         estoque: document.getElementById('estoque').value,
         tamanhos: document.getElementById('tamanhos').value.trim(),
         cores: document.getElementById('cores').value.trim(),
@@ -2964,7 +3009,8 @@
       nome: document.getElementById('nome').value.trim(),
       categoria: Array.from(selecionadasCategorias).join(', '),
       genero: Array.from(selecionadosGeneros).join(', '),
-      preco: document.getElementById('preco').value,
+      preco: consultaMarcada_() ? '' : document.getElementById('preco').value,
+      ...(consultarLiberado_ ? { consultarValor: consultaMarcada_() } : {}),
       estoque: document.getElementById('estoque').value,
       tamanhos: document.getElementById('tamanhos').value.trim(),
       cores: document.getElementById('cores').value.trim(),
@@ -3091,31 +3137,35 @@
     document.getElementById('filtros-lista').innerHTML = [['ativas', 'Ativas'], ['esgotadas', 'Esgotadas'], ['arquivadas', 'Arquivadas'], ['todas', 'Todas']]
       .map(([k, r]) => '<button type="button" class="chip' + (filtroLista === k ? ' selecionado' : '') + '" data-f="' + k + '">' + r + ' (' + cont[k] + ')</button>').join('');
   }
+  document.getElementById('lista-produtos').addEventListener('click', (ev) => { if (ev.target.closest('#busca-ver-todas')) { filtroLista = 'todas'; renderizarProdutos(); } });
   document.getElementById('filtros-lista').addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-f]'); if (!b) return;
     filtroLista = b.dataset.f; renderizarProdutos();
   });
 
-  /** As peças que estão aparecendo agora. Regra do projeto: com texto de busca, procura em TUDO, sem combinar com o filtro escolhido. */
-  function listaVisivel_() {
+  /** v4.21 (pedido do Pablo, 17/10/2026): a busca RESPEITA o filtro Ativas/Esgotadas/Arquivadas/Todas (antes ignorava e mostrava arquivadas com "Ativas" marcado).
+   *  Para a busca nunca "esconder" peça em silêncio, a lista avisa quantas peças de outros filtros também combinam e dá um toque para ver em "Todas". */
+  function passaStatus_(p) { return filtroLista === 'todas' ? true : filtroLista === 'arquivadas' ? ehInativo_(p) : filtroLista === 'esgotadas' ? (!ehInativo_(p) && estaEsgotado(p)) : !ehInativo_(p); }
+  function rotuloFiltro_(k) { return { ativas: 'Ativas', esgotadas: 'Esgotadas', arquivadas: 'Arquivadas', todas: 'Todas' }[k] || 'Todas'; }
+  /** Quantas peças combinam com a busca (e com categoria/gênero/preço) mas ficam de fora só por causa do filtro de status. */
+  function achadasForaDoFiltro_() { return listaFiltrada_(true).length - listaFiltrada_(false).length; }
+  function listaVisivel_() { return listaFiltrada_(false); }
+  function listaFiltrada_(ignorarStatus) {
     const busca = semAcento_(document.getElementById('busca-admin').value);
     const fCat = semAcento_((document.getElementById('fa-categoria') || {}).value || '');
     const fGen = semAcento_((document.getElementById('fa-genero') || {}).value || '');
     const pMin = parseFloat(String((document.getElementById('fa-preco-min') || {}).value || '').replace(',', '.'));
     const pMax = parseFloat(String((document.getElementById('fa-preco-max') || {}).value || '').replace(',', '.'));
     const ordem = (document.getElementById('fa-ordem') || {}).value || 'recentes';
-    let lista = busca
-      ? produtos.filter(p => semAcento_(p.Nome).includes(busca) || semAcento_(p.Codigo).includes(busca))
-      : produtos.filter(p => filtroLista === 'todas' ? true : filtroLista === 'arquivadas' ? ehInativo_(p) : filtroLista === 'esgotadas' ? (!ehInativo_(p) && estaEsgotado(p)) : !ehInativo_(p));
+    let lista = produtos.filter(p => (!busca || semAcento_(p.Nome).includes(busca) || semAcento_(p.Codigo).includes(busca)) && (ignorarStatus || passaStatus_(p)));
     // v4.10 (FE-08): filtros extras da busca do admin
     if (fCat) lista = lista.filter(p => semAcento_(p.Categoria).includes(fCat));
     if (fGen) lista = lista.filter(p => semAcento_(p.Genero).includes(fGen));
-    if (!isNaN(pMin)) lista = lista.filter(p => Number(p.Preco) >= pMin);
-    if (!isNaN(pMax)) lista = lista.filter(p => Number(p.Preco) <= pMax);
+    if (!isNaN(pMin)) lista = lista.filter(p => !ehConsulta(p) && Number(p.Preco) >= pMin);
+    if (!isNaN(pMax)) lista = lista.filter(p => !ehConsulta(p) && Number(p.Preco) <= pMax);
     if (ordem === 'antigas') lista = lista.slice().reverse();
     else if (ordem === 'nome') lista = lista.slice().sort((a, b) => String(a.Nome || '').localeCompare(String(b.Nome || ''), 'pt-BR'));
-    else if (ordem === 'preco-maior') lista = lista.slice().sort((a, b) => Number(b.Preco) - Number(a.Preco));
-    else if (ordem === 'preco-menor') lista = lista.slice().sort((a, b) => Number(a.Preco) - Number(b.Preco));
+    else if (ordem === 'preco-maior' || ordem === 'preco-menor') { const dir = ordem === 'preco-maior' ? -1 : 1; lista = lista.slice().sort((a, b) => { const ca = ehConsulta(a), cb = ehConsulta(b); if (ca || cb) return ca === cb ? 0 : (ca ? 1 : -1); return dir * (Number(a.Preco) - Number(b.Preco)); }); }   // "Consulte valor" sempre no fim
     return lista;
   }
 
@@ -3155,10 +3205,12 @@
     if (window.TKGestao) TKGestao.aoRenderizarLista(); // v3.1: aviso de peças sem código
 
     const lista = listaVisivel_();
+    const fora = busca ? achadasForaDoFiltro_() : 0;
+    const avisoFora = fora > 0 ? '<div class="aviso-busca" role="status">🔎 Mais ' + fora + (fora === 1 ? ' peça' : ' peças') + ' fora de “' + rotuloFiltro_(filtroLista) + '” também ' + (fora === 1 ? 'combina' : 'combinam') + ' com a busca. <button type="button" id="busca-ver-todas">Ver em “Todas”</button></div>' : '';
 
-    if (!lista.length) { container.innerHTML = '<p style="text-align:center;color:#666;padding:18px 0;">' + (busca ? 'Nenhuma peça com esse nome ou código.' : 'Nenhuma peça nesta lista.') + '</p>'; return; }
+    if (!lista.length) { container.innerHTML = avisoFora + '<p style="text-align:center;color:#666;padding:18px 0;">' + (busca ? 'Nenhuma peça com esse nome ou código' + (filtroLista !== 'todas' ? ' em “' + rotuloFiltro_(filtroLista) + '”' : '') + '.' : 'Nenhuma peça nesta lista.') + '</p>'; return; }
 
-    container.innerHTML = lista.map(p => {
+    container.innerHTML = avisoFora + lista.map(p => {
       const inativo = ehInativo_(p);
       const esg = !inativo && estaEsgotado(p);
       const idE = escaparHtml(p.ID);
@@ -3169,22 +3221,22 @@
         <div class="produto-info">
           <div class="codigo">${p.Codigo ? escaparHtml(p.Codigo) : '<span class="selo-inativo" style="background:#fff3e0;color:#7a4a00;margin-left:0">SEM CÓDIGO</span>'}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}${esg ? '<span class="sel-esg">ESGOTADO</span>' : ''}</div>
           <div class="nome">${escaparHtml(p.Nome)}</div>
-          <div class="preco">${formatarReal(p.Preco)} · à vista <span>${formatarReal(p.Preco * (1 - DESCONTO_AVISTA))}</span></div>
+          <div class="preco">${ehConsulta(p) ? '💬 <strong>Consulte valor</strong> <small>(sem preço)</small>' : formatarReal(p.Preco) + ' · à vista <span>' + formatarReal(p.Preco * (1 - DESCONTO_AVISTA)) + '</span>'}</div>
           ${estoqueInformado(p) && !esg ? `<div class="estoque-linha">Estoque: ${escaparHtml(p.Estoque)}</div>` : ''}
           ${auditoriaMapa_[String(p.ID)] ? `<span class="audit-linha">${escaparHtml(textoAuditoria_(auditoriaMapa_[String(p.ID)]))}</span>` : ''}
           <div class="acoes-linha">
             <button type="button" class="btn-editar" data-editar-id="${idE}">✏️ Editar</button>
-            <button type="button" class="btn-arte" data-arte-id="${idE}">\u1F3A8 Stories</button>
-            <button type="button" class="btn-link" data-link-id="${idE}">\u1F517 Link</button>
-            ${inativo ? '' : `<button type="button" class="btn-postar" data-postar-id="${idE}">\u1F4F8 Postar</button>`}
+            <button type="button" class="btn-arte" data-arte-id="${idE}">\u{1F3A8} Stories</button>
+            <button type="button" class="btn-link" data-link-id="${idE}">\u{1F517} Link</button>
+            ${inativo ? '' : `<button type="button" class="btn-postar" data-postar-id="${idE}">\u{1F4F8} Postar</button>`}
             <details class="mais"><summary aria-label="Mais ações">⋯</summary>
               <div class="mais-menu">
-                <button type="button" class="btn-duplicar" data-duplicar-id="${idE}">\u1F4CB Duplicar</button>
-                ${Object.keys(auditoriaMapa_).length ? `<button type="button" data-hist-id="${idE}">\u1F558 Histórico</button>` : ''}
+                <button type="button" class="btn-duplicar" data-duplicar-id="${idE}">\u{1F4CB} Duplicar</button>
+                ${Object.keys(auditoriaMapa_).length ? `<button type="button" data-hist-id="${idE}">\u{1F558} Histórico</button>` : ''}
                 ${inativo
-                  ? `<button type="button" class="btn-reativar" data-reativar-id="${idE}">\u1F504 Reativar</button>`
-                  : `<button type="button" class="btn-arquivar" data-arquivar-id="${idE}">\u1F5C3\uFE0F Arquivar</button>`}
-                <button type="button" class="btn-excluir" data-excluir-id="${idE}" data-codigo="${escaparHtml(p.Codigo || '')}" style="background:#fde3e3;color:var(--vermelho)">\u1F5D1\uFE0F Excluir</button>
+                  ? `<button type="button" class="btn-reativar" data-reativar-id="${idE}">\u{1F504} Reativar</button>`
+                  : `<button type="button" class="btn-arquivar" data-arquivar-id="${idE}">\u{1F5C3}\uFE0F Arquivar</button>`}
+                <button type="button" class="btn-excluir" data-excluir-id="${idE}" data-codigo="${escaparHtml(p.Codigo || '')}" style="background:#fde3e3;color:var(--vermelho)">\u{1F5D1}\uFE0F Excluir</button>
               </div>
             </details>
           </div>
@@ -3254,10 +3306,47 @@
     renderizarProdutos();
   });
 
-  document.getElementById('btn-bulk-preco').addEventListener('click', async () => {
-    const pct = prompt('Digite a porcentagem de reajuste (ex: 10 para +10%, -15 para 15% de desconto):');
-    if (!pct) return;
-    await executarAcaoEmLote('ajustarPrecoPorcento', pct);
+  /* v4.21: Alterar preços em lote — reajuste em %, valor escrito (preço fixo) ou "Consultar valor" (backend 4.20; sem ele só o %). */
+  function modoPrecos_() { const m = document.querySelector('input[name="precos-modo"]:checked'); return m ? m.value : 'pct'; }
+  function sincPrecos_() {
+    const m = modoPrecos_();
+    document.getElementById('precos-campo-pct').hidden = m !== 'pct';
+    document.getElementById('precos-campo-valor').hidden = m !== 'escrito';
+    document.getElementById('precos-erro').hidden = true;
+    document.getElementById('precos-ok').textContent = m === 'consulta' ? 'Passar para “Consulte valor”' : 'Aplicar';
+  }
+  document.querySelectorAll('input[name="precos-modo"]').forEach(r => r.addEventListener('change', sincPrecos_));
+  document.getElementById('btn-bulk-preco').addEventListener('click', () => {
+    const marcadas = Array.from(selecionadosBulk), semPreco = marcadas.filter(id => { const p = produtos.find(x => String(x.ID) === String(id)); return p && ehConsulta(p); }).length;
+    document.getElementById('precos-resumo').textContent = marcadas.length + (marcadas.length === 1 ? ' peça selecionada' : ' peças selecionadas') + (semPreco ? ' · ' + semPreco + ' em “Consulte valor”' : '') + '.';
+    document.getElementById('precos-modo-escrito').hidden = !consultarLiberado_;
+    document.getElementById('precos-modo-consulta').hidden = !consultarLiberado_;
+    document.querySelector('input[name="precos-modo"][value="pct"]').checked = true;
+    document.getElementById('precos-pct').value = ''; document.getElementById('precos-valor').value = '';
+    sincPrecos_();
+    abrirComHistorico_('overlay-precos');
+  });
+  document.getElementById('precos-fechar').addEventListener('click', () => fecharComHistorico_('overlay-precos'));
+  document.getElementById('overlay-precos').addEventListener('click', (ev) => { if (ev.target.id === 'overlay-precos') fecharComHistorico_('overlay-precos'); });
+  document.getElementById('precos-ok').addEventListener('click', async () => {
+    const m = modoPrecos_(), erro = document.getElementById('precos-erro');
+    const falha = t => { erro.textContent = t; erro.hidden = false; };
+    let tipo, valor;
+    if (m === 'pct') {
+      valor = parseFloat(String(document.getElementById('precos-pct').value).replace(',', '.'));
+      if (!isFinite(valor) || valor === 0) return falha('Digite a porcentagem (ex.: 10 para +10%, -15 para 15% de desconto).');
+      if (valor <= -100) return falha('A porcentagem de desconto precisa ser menor que 100%.');
+      tipo = 'ajustarPrecoPorcento';
+    } else if (m === 'escrito') {
+      valor = parseFloat(String(document.getElementById('precos-valor').value).replace(',', '.'));
+      if (!(valor > 0)) return falha('Digite o preço (maior que zero).');
+      tipo = 'valorEscrito'; valor = String(valor);
+    } else {
+      if (!confirm('Tirar o preço das ' + selecionadosBulk.size + ' peça(s) marcada(s)? O catálogo vai mostrar “Consulte valor”.')) return;
+      tipo = 'consultarValor'; valor = true;
+    }
+    fecharComHistorico_('overlay-precos');
+    await executarAcaoEmLote(tipo, valor);
   });
 
   document.getElementById('btn-bulk-novidade').addEventListener('click', async () => {
@@ -3394,7 +3483,7 @@
           alert('Concluído em ' + rr.afetados + ' de ' + pedidos + ' peças.\n\nNÃO foram alteradas (não encontradas — talvez já apagadas):\n• ' + rr.faltaram.map(nomeDe).join('\n• ') + '\n\nElas continuam marcadas para você tentar de novo.');
           selecionadosBulk = new Set(rr.faltaram.map(String));
         } else {
-          alert('Ação realizada em ' + rr.afetados + (rr.afetados === 1 ? ' produto!' : ' produtos!'));
+          alert('Ação realizada em ' + rr.afetados + (rr.afetados === 1 ? ' produto!' : ' produtos!') + (rr.semPreco ? '\n\n' + rr.semPreco + (rr.semPreco === 1 ? ' peça' : ' peças') + ' em “Consulte valor” não foi reajustada (não tem preço).' : ''));
           selecionadosBulk.clear();
         }
         atualizarBarraBulk();
@@ -3521,7 +3610,7 @@
   function abrirCriadorDeArte(id) {
     const p = produtos.find(x => String(x.ID) === String(id));
     if (!p) return;
-    const avistaPadrao = (Number(p.Preco) * (1 - DESCONTO_AVISTA)).toFixed(2);
+    const avistaPadrao = ehConsulta(p) ? '' : (Number(p.Preco) * (1 - DESCONTO_AVISTA)).toFixed(2);
     const fotos = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',').map(s => s.trim()).filter(Boolean));
     configArteAtual = { selo: ehNovidade(p) ? 'NOVIDADE' : 'DESTAQUE', precoStory: avistaPadrao, foto: fotos[0] };
     renderizarConfigArte(p, fotos);
@@ -3539,7 +3628,7 @@
     const mostrarCatIni = pref.cat !== false && !!subtitulo;
 
     painel.innerHTML = `
-      <h3 style="margin-top:0;text-align:center;">\u1F3A8 Arte para Stories</h3>
+      <h3 style="margin-top:0;text-align:center;">\u{1F3A8} Arte para Stories</h3>
 
       <div class="arte-preview-card" id="arte-preview-card">
         <div class="arte-preview-topo">
@@ -3599,10 +3688,10 @@
       <input type="number" id="input-preco-arte" step="0.01" min="0" value="${configArteAtual.precoStory}">
       <p style="font-size:0.72rem;color:#666;margin-top:4px;">Só muda o valor mostrado nesta arte — não altera o preço cadastrado no catálogo.</p>
 
-      <label style="margin-top:14px;">\u1F517 Link do adesivo (abre o WhatsApp de atendimento com a referência da peça)</label>
+      <label style="margin-top:14px;">\u{1F517} Link do adesivo (abre o WhatsApp de atendimento com a referência da peça)</label>
       <input type="text" id="input-link-arte" readonly style="font-size:0.72rem;">
       <div style="display:flex;gap:8px;margin-top:6px;">
-        <button type="button" id="btn-copiar-link-arte" style="background:var(--preto);color:var(--laranja);">\u1F4CB Copiar link</button>
+        <button type="button" id="btn-copiar-link-arte" style="background:var(--preto);color:var(--laranja);">\u{1F4CB} Copiar link</button>
         <button type="button" id="btn-testar-link-arte" style="background:#eee;color:#555;">Testar</button>
       </div>
       <p style="font-size:0.72rem;color:#666;margin-top:4px;">No Instagram, no Story, use o adesivo "Link" e cole este endereço no espaço reservado da arte. Quem tocar cai no WhatsApp da loja já com o nome, o código e o preço da peça escritos.</p>
@@ -3611,15 +3700,15 @@
       <button type="button" id="btn-baixar-arte" style="background:var(--laranja);margin-top:6px;">⬇️ Baixar Imagem</button>
 
       <section class="arte-video" id="arte-video" aria-labelledby="arte-video-titulo">
-        <h4 id="arte-video-titulo">\u1F3AC Story em vídeo <span class="arte-novo">novo · em teste</span></h4>
+        <h4 id="arte-video-titulo">\u{1F3AC} Story em vídeo <span class="arte-novo">novo · em teste</span></h4>
         <p>Grava aqui no seu celular um vídeo de ${VIDEO_STORY_SEGUNDOS} segundos (a foto se aproxima devagar e aparecem o nome e o preço). Sem som: escolha a música no Instagram. Nada é enviado para a internet. Toque, espere terminar e confira o resultado abaixo: ele diz se o arquivo serve para o Instagram.</p>
-        <button type="button" id="btn-gravar-video-arte" style="background:var(--preto);color:var(--laranja);">\u1F3AC Gravar Story em vídeo</button>
+        <button type="button" id="btn-gravar-video-arte" style="background:var(--preto);color:var(--laranja);">\u{1F3AC} Gravar Story em vídeo</button>
         <div id="status-video-arte" role="status" aria-live="polite"></div>
         <div id="resultado-video-arte" hidden>
           <video id="video-arte-preview" controls playsinline muted loop aria-label="Prévia do Story em vídeo"></video>
           <div id="info-video-arte" aria-live="polite"></div>
           <div class="linha-botoes">
-            <button type="button" id="btn-compartilhar-video-arte" style="background:var(--laranja);color:#0d0d0d;">\u1F4E4 Compartilhar</button>
+            <button type="button" id="btn-compartilhar-video-arte" style="background:var(--laranja);color:#0d0d0d;">\u{1F4E4} Compartilhar</button>
             <button type="button" id="btn-baixar-video-arte" style="background:#eee;color:#333;">⬇️ Baixar vídeo</button>
           </div>
         </div>
@@ -3633,7 +3722,7 @@
       const custom = document.getElementById('input-selo-custom').value.trim();
       const seloFinal = custom || (configArteAtual.selo === 'Nenhum' ? '' : configArteAtual.selo);
       const precoInput = document.getElementById('input-preco-arte').value;
-      const precoStory = precoInput !== '' ? Number(precoInput) : Number(p.Preco) * (1 - DESCONTO_AVISTA);
+      const precoStory = precoInput !== '' ? Number(precoInput) : (ehConsulta(p) ? 0 : Number(p.Preco) * (1 - DESCONTO_AVISTA));   // 0 = "Consulte valor"
       const nome = document.getElementById('input-nome-arte').value.replace(/\s+/g, ' ').trim();
       const desc = document.getElementById('input-desc-arte').value.replace(/\s+/g, ' ').trim();
       return {
@@ -3667,13 +3756,13 @@
       const precoStory = c.precoStory;
       const precoCheio = Number(p.Preco);
       const elDe = document.getElementById('arte-preview-de');
-      if (precoStory < precoCheio - 0.009) {
+      if (precoStory > 0 && precoStory < precoCheio - 0.009) {
         elDe.textContent = 'De ' + formatarReal(precoCheio);
         elDe.style.display = 'block';
       } else {
         elDe.style.display = 'none';
       }
-      document.getElementById('arte-preview-preco').textContent = formatarReal(precoStory) + ' à vista';
+      document.getElementById('arte-preview-preco').textContent = precoStory > 0 ? formatarReal(precoStory) + ' à vista' : TEXTO_CONSULTA;
       configArteAtual.precoStory = c.precoInput;
       document.getElementById('input-link-arte').value = linkWhatsAppArte_(p, precoStory);
     }
@@ -3683,7 +3772,7 @@
       const codigo = prod.Codigo ? ('\nCódigo: ' + prod.Codigo) : '';
       // link curto da própria loja (domínio nosso, sem encurtador de terceiros): ?c=<código> abre a peça direto
       const linkPeca = linkProduto(prod);
-      const texto = 'Olá! Vi no Story e quero este produto:\n*' + prod.Nome + '*' + codigo + '\n' + formatarReal(precoStory) + ' à vista\n' + linkPeca;
+      const texto = 'Olá! Vi no Story e quero este produto:\n*' + prod.Nome + '*' + codigo + '\n' + (precoStory > 0 ? formatarReal(precoStory) + ' à vista' : 'Gostaria de saber o valor e a disponibilidade.') + '\n' + linkPeca;
       return 'https://wa.me/' + WHATSAPP_NUMERO + '?text=' + encodeURIComponent(texto);
     }
     document.getElementById('btn-copiar-link-arte').addEventListener('click', async () => {
@@ -3843,10 +3932,10 @@
       blocos.push({ h: 40, cor: '#999999', font: '30px sans-serif', linhas: [config.categoria], lh: 40, gapDepois: 8 });
     }
     const precoCheio = Number(p.Preco);
-    if (config.precoStory < precoCheio - 0.009) {
+    if (config.precoStory > 0 && config.precoStory < precoCheio - 0.009) {
       blocos.push({ h: 46, cor: '#999999', font: '32px sans-serif', linhas: ['De ' + formatarReal(precoCheio)], lh: 46, gapDepois: 2, riscado: true });
     }
-    blocos.push({ h: 80, cor: '#7ee787', font: 'bold 64px sans-serif', linhas: [formatarReal(config.precoStory) + ' à vista'], lh: 80, gapDepois: 0 });
+    blocos.push({ h: 80, cor: '#7ee787', font: 'bold 64px sans-serif', linhas: [config.precoStory > 0 ? formatarReal(config.precoStory) + ' à vista' : TEXTO_CONSULTA], lh: 80, gapDepois: 0 });
 
     // centraliza o conjunto entre a marca e a zona do adesivo de link (y 1752+)
     const regiaoTopo = areaFotoAltura + 105, regiaoBase = 1745;
@@ -3896,7 +3985,7 @@
         a.click();
         if (status) status.textContent = '✅ Imagem baixada! Confira sua pasta de downloads.';
       } catch (erroCanvas) {
-        if (status) status.textContent = '❌ Não foi possível gerar a imagem (a foto está hospedada num serviço que bloqueia esse tipo de uso). Use o botão "\u1F517 Link" ou salve a foto manualmente para postar.';
+        if (status) status.textContent = '❌ Não foi possível gerar a imagem (a foto está hospedada num serviço que bloqueia esse tipo de uso). Use o botão "\u{1F517} Link" ou salve a foto manualmente para postar.';
       }
     };
     img.onerror = () => {
@@ -4236,8 +4325,8 @@
   async function abrirAuditoria() {
     const painel = document.getElementById('painel-compartilhar-conteudo');
     painel.innerHTML = `
-      <h3 style="margin-top:0;">\u1F4CB Auditoria / Histórico</h3>
-      <input type="text" id="busca-auditoria" placeholder="\u1F50E Filtrar por atendente, produto ou ação...">
+      <h3 style="margin-top:0;">\u{1F4CB} Auditoria / Histórico</h3>
+      <input type="text" id="busca-auditoria" placeholder="\u{1F50E} Filtrar por atendente, produto ou ação...">
       <div id="lista-auditoria" style="margin-top:10px;max-height:55vh;overflow-y:auto;"><p style="text-align:center;color:#666;">Carregando...</p></div>
       <button type="button" id="btn-fechar-auditoria" style="background:#eee;color:#555;margin-top:12px;">Fechar</button>
     `;
@@ -4272,7 +4361,7 @@
       container.innerHTML = filtrados.map(r => {
         const data = r.DataHora ? new Date(r.DataHora).toLocaleString('pt-BR') : '';
         const precos = (r.PrecoAnterior !== '' && r.PrecoAnterior !== undefined && String(r.PrecoAnterior) !== String(r.PrecoNovo))
-          ? ` · Preço: ${formatarReal(r.PrecoAnterior)} → ${formatarReal(r.PrecoNovo)}` : '';
+          ? ` · Preço: ${Number(r.PrecoAnterior) > 0 ? formatarReal(r.PrecoAnterior) : 'Consulte valor'} → ${Number(r.PrecoNovo) > 0 ? formatarReal(r.PrecoNovo) : 'Consulte valor'}` : '';
         return `
           <div class="auditoria-item">
             <div class="linha1"><span>${escaparHtml(r.Acao || '')}</span><span>${data}</span></div>
@@ -4372,7 +4461,7 @@
     if (btn.disabled) return;
     if (!fotosItens.length) { alert('Adicione ao menos uma foto antes.'); return; }
     const rotuloOriginal = btn.textContent;
-    btn.disabled = true; btn.textContent = '\u1F4F7 Analisando as fotos...'; box.innerHTML = '';
+    btn.disabled = true; btn.textContent = '\u{1F4F7} Analisando as fotos...'; box.innerHTML = '';
     try {
       const fotos = [];
       for (const it of fotosItens) {
@@ -4535,7 +4624,7 @@
       }, 500);
     }
   } catch(e) {}
-  // vindo do catálogo ("\u1F6E0\uFE0F Edição em lote"): marca as peças da seleção e aciona o botão escolhido
+  // vindo do catálogo ("\u{1F6E0}\uFE0F Edição em lote"): marca as peças da seleção e aciona o botão escolhido
   // v4.10 (FE-06): se o catálogo mandou a sessão compartilhada na URL, adota ANTES de qualquer coisa —
   // assim o admin não pede login de novo (mesma conta, mesma chave tm_session).
   try {
