@@ -71,12 +71,15 @@ with sync_playwright() as p:
     chk("sem erro de JavaScript", not erros, erros)
     ctx.close()
 
-    print("== Única foto não sai ==")
+    print("== Única foto = arquiva a PEÇA (v4.18) ==")
     ctx, pg, st, msgs, erros = abrir(b, PERMS_ALL)
-    pg.locator(".card", has_text=st["produtos"][1]["Codigo"]).first.locator(".abrir-peca").click(); pg.wait_for_selector("#overlay.aberto"); pg.wait_for_timeout(300)
+    cod = st["produtos"][1]["Codigo"]
+    pg.locator(".card", has_text=cod).first.locator(".abrir-peca").click(); pg.wait_for_selector("#overlay.aberto"); pg.wait_for_timeout(300)
     n0 = len([x for x in st.get("x_chamadas", []) if x["action"] == "arquivarMidia"])
-    pg.click("#x-slide"); pg.wait_for_timeout(500)
-    chk("peça com 1 foto só: avisa para arquivar a peça e não chama o servidor", msgs and "única foto" in msgs[-1] and len([x for x in st.get("x_chamadas", []) if x["action"] == "arquivarMidia"]) == n0, msgs)
+    pg.click("#x-slide"); pg.wait_for_timeout(600)
+    chk("peça com 1 foto só: pergunta se arquiva a PEÇA (não mostra o alerta antigo)", msgs and "Arquivar a peça" in msgs[-1] and "única foto" not in msgs[-1], msgs)
+    chk("chamou arquivarRapido e NÃO arquivarMidia", any(x["action"] == "arquivarRapido" for x in st.get("x_chamadas", [])) and len([x for x in st.get("x_chamadas", []) if x["action"] == "arquivarMidia"]) == n0, st.get("x_chamadas"))
+    chk("a peça saiu da grade e a janela fechou", pg.locator(".card", has_text=cod).count() == 0 and pg.locator("#overlay.aberto").count() == 0)
     ctx.close()
 
     print("== Visualização não é contada de novo ==")
