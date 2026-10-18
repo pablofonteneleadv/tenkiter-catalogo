@@ -1369,13 +1369,17 @@ try { tkSelExpirar_(); } catch (e) {}
   f.addEventListener('input', atualizarBadge);
 })();
 
-/* ===================== v4.27: vida da seleção — "Libera a seleção" / "Segura minha seleção" ao tentar sair da loja ===================== */
+/* ===================== v4.27/v4.28: vida da seleção — "Libera a seleção" / "Segura minha seleção" ao sair da loja ===================== */
 (function () {
-  let guardaAtiva = false, sairDepois = false, limparUrl_ = false;
+  let guardaAtiva = false, sairDepois = false, limparUrl_ = false, destino_ = '', modoVolta_ = false;
+  const CH_SAIU = 'tk_sel_saiu_v1', CH_DECIDIU = 'tk_sel_decidiu_v1';
+  const TXT_PADRAO = { titulo: 'Antes de sair…', segura: '\u{1F9E1} Segura minha seleção, volto já já', libera: 'Libera a seleção', fica: 'Continuar vendo a loja' };
   const temSelecao_ = () => getSacola().length > 0 || !!selecaoFixa;
   const nSelecao_ = () => getSacola().length || (selecaoFixa ? selecaoFixa.length : 0);
+  const voltaMs_ = () => (typeof window.TK_SEL_VOLTA_MS === 'number' ? window.TK_SEL_VOLTA_MS : 45000);
   function atualizarTudo_() { try { atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); atualizarBarraFiltros_(); } catch (e) {} }
   const deixar_ = () => setTimeout(() => { try { history.back(); } catch (e) {} }, 0);
+  const irPara_ = (url) => { try { location.assign(url); } catch (e) { location.href = url; } };
 
   // A entrada-guarda precisa ser criada DENTRO de um toque/clique (o Chrome ignora, no "voltar", entradas criadas sem interação).
   // Só arma com a tela livre (nenhuma janela aberta) e quando há seleção; o "voltar" então cai nela e mostra a placa em vez de sair.
@@ -1389,26 +1393,57 @@ try { tkSelExpirar_(); } catch (e) {}
   }
   document.addEventListener('click', (e) => { if (sairDepois || (e.target && e.target.closest && e.target.closest('#overlay-sair-sel'))) return; setTimeout(armarGuarda_, 0); }, true);   // cliques da própria placa não rearmam (corriam com o fechamento)
 
-  function mostrarPlaca_() {
-    if (!temSelecao_()) return;
+  // v4.28: tocar num link que LEVA PARA OUTRA PÁGINA (barra de baixo, rodapé, "cadastrar peça"…) também mostra a placa — antes só o botão "voltar" do aparelho mostrava.
+  // Não intercepta: link da mesma página (âncora, ?pedido=, ?c=), que abre em outra aba (target=_blank: a loja continua aberta aqui), download, e/mailto/tel.
+  const semIndex_ = (p) => String(p || '/').replace(/index\.html$/, '');
+  document.addEventListener('click', (e) => {
+    if (e.defaultPrevented || e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a || !temSelecao_() || a.closest('#overlay-sair-sel')) return;
+    if ((a.target && a.target !== '_self') || a.hasAttribute('download')) return;
+    let u; try { u = new URL(a.href, location.href); } catch (er) { return; }
+    if (!/^https?:$/.test(u.protocol)) return;
+    if (u.origin === location.origin && semIndex_(u.pathname) === semIndex_(location.pathname)) return;
+    e.preventDefault(); e.stopPropagation();
+    mostrarPlaca_({ destino: u.href });
+  }, true);
+
+  function textos_(t) {
+    document.getElementById('sair-sel-titulo').textContent = t.titulo;
+    document.getElementById('sair-sel-segura').textContent = t.segura;
+    document.getElementById('sair-sel-libera').textContent = t.libera;
+    document.getElementById('sair-sel-fica').textContent = t.fica;
+  }
+  function mostrarPlaca_(op) {
+    op = (op && typeof op === 'object' && !op.type) ? op : {};   // chamado por setTimeout/evento sem opções
+    if (!temSelecao_() || TKCamadas.aberta('overlay-sair-sel')) return false;
+    destino_ = op.destino || ''; modoVolta_ = !!op.volta;
     const n = nSelecao_(), doLink = !getSacola().length && !!selecaoFixa;
     const pecas = n === 1 ? '1 peça' : n + ' peças';
-    document.getElementById('sair-sel-txt').textContent = (doLink ? 'Separamos ' + pecas + ' para você.' : 'Você separou ' + pecas + '.') + ' Quer que eu segure essa seleção?';
+    if (modoVolta_) {
+      textos_({ titulo: 'Que bom que você voltou! \u{1F9E1}', segura: '\u{1F9E1} Segura minha seleção por 3 horas', libera: 'Libera a seleção', fica: 'Continuar vendo a loja' });
+      document.getElementById('sair-sel-txt').textContent = (doLink ? 'As ' + pecas + ' que separamos para você' : 'Suas ' + pecas + ' separadas') + ' continuam aqui. Quer que eu segure por mais tempo?';
+    } else {
+      textos_(TXT_PADRAO);
+      document.getElementById('sair-sel-txt').textContent = (doLink ? 'Separamos ' + pecas + ' para você.' : 'Você separou ' + pecas + '.') + ' Quer que eu segure essa seleção?';
+    }
     abrirComHistorico_('overlay-sair-sel');
     setTimeout(() => { const b = document.getElementById('sair-sel-segura'); if (b) b.focus(); }, 60);
+    return true;
   }
   function fecharPlaca_(sair) { sairDepois = !!sair; fecharComHistorico_('overlay-sair-sel'); }
+  function decidiu_() { try { localStorage.setItem(CH_DECIDIU, String(Date.now())); localStorage.removeItem(CH_SAIU); } catch (e) {} }
 
   document.getElementById('sair-sel-segura').addEventListener('click', () => {
-    tkSelSegurar_();
-    avisoEquipe_('Guardei sua seleção por 3 horas. Até já! 🧡');
-    fecharPlaca_(true);
+    tkSelSegurar_(); decidiu_();
+    avisoEquipe_('Guardei sua seleção por 3 horas. ' + (modoVolta_ ? 'Pode continuar! ' : 'Até já! ') + '\u{1F9E1}');
+    fecharPlaca_(!modoVolta_);
   });
   document.getElementById('sair-sel-libera').addEventListener('click', () => {
     if (getSacola().length) limparSacola();
     if (selecaoFixa || modoLink_) { limparUrl_ = true; document.getElementById('btn-limpar').click(); modoLink_ = false; }
-    atualizarTudo_();
-    fecharPlaca_(true);
+    decidiu_(); atualizarTudo_();
+    fecharPlaca_(!modoVolta_);
   });
   document.getElementById('sair-sel-fica').addEventListener('click', () => fecharPlaca_(false));
   document.getElementById('overlay-sair-sel').addEventListener('click', (e) => { if (e.target.id === 'overlay-sair-sel') fecharPlaca_(false); });
@@ -1416,21 +1451,51 @@ try { tkSelExpirar_(); } catch (e) {}
   document.addEventListener('tk:camada-fechada', (e) => {
     if (!e.detail || e.detail.chave !== 'overlay-sair-sel') return;
     if (limparUrl_) { limparUrl_ = false; try { history.replaceState(history.state, '', location.pathname); } catch (er) {} }
-    if (sairDepois) { sairDepois = false; deixar_(); }
+    const dest = destino_, sair = sairDepois;
+    destino_ = ''; sairDepois = false; modoVolta_ = false; textos_(TXT_PADRAO);
+    if (sair) { if (dest) irPara_(dest); else deixar_(); }
   });
 
-  // Voltou para a aba/app: a seleção pode ter vencido enquanto estava fora; se ainda está guardada, volta ao prazo normal.
+  // v4.28 — MINIMIZAR / trocar de app: o navegador não deixa mostrar nada na hora (a página é congelada), então anotamos que a pessoa saiu e,
+  // quando ela VOLTAR depois de um tempinho (45 s) com seleção ainda guardada, a placa aparece ("Que bom que você voltou… segura?").
+  // Não anota se ela acabou de escolher Segura/Libera (já decidiu) nem quando não há seleção.
+  function marcarSaida_() {
+    try {
+      if (!temSelecao_()) return;
+      const d = parseInt(localStorage.getItem(CH_DECIDIU) || '0', 10);
+      if (Date.now() - d < 15000) return;
+      localStorage.setItem(CH_SAIU, String(Date.now()));
+    } catch (e) {}
+  }
+  function verVolta_() {
+    try {
+      const t = parseInt(localStorage.getItem(CH_SAIU) || '0', 10);
+      if (!t) return;
+      localStorage.removeItem(CH_SAIU);
+      if (Date.now() - t < voltaMs_() || !temSelecao_()) return;
+      if (TKCamadas.total() > (guardaAtiva ? 1 : 0)) return;   // há outra janela aberta (ex.: pedido em andamento): não atrapalha
+      mostrarPlaca_({ volta: true });
+    } catch (e) {}
+  }
+  // Voltou para a aba/app: a seleção pode ter vencido enquanto estava fora; se ainda existe, mostra a placa de "volta".
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible') return;
+    if (document.visibilityState === 'hidden') { marcarSaida_(); return; }
     if (tkSelExpirar_()) atualizarTudo_();
+    verVolta_();
   });
+  window.addEventListener('pagehide', marcarSaida_);
   // Abriu de novo e a seleção estava guardada: avisa e volta a valer o prazo normal.
   if (tkSelSeguraAte_() && getSacola().length) {
     const n = getSacola().length;
     tkSelSoltarSegura_();
+    try { localStorage.removeItem(CH_SAIU); } catch (e) {}
     setTimeout(() => avisoEquipe_('Sua seleção estava guardada: ' + (n === 1 ? '1 peça' : n + ' peças') + ' \u{1F9E1}'), 1500);
+  } else {
+    // O navegador pode ter fechado a aba em segundo plano (Android): ao reabrir, vale a mesma regra do "voltar".
+    let saiuAntes_ = false; try { saiuAntes_ = !!localStorage.getItem(CH_SAIU); } catch (e) {}
+    if (saiuAntes_) setTimeout(() => { if (document.visibilityState === 'visible') verVolta_(); }, 1800);
   }
-  window.tkSelTeste_ = { mostrarPlaca: mostrarPlaca_, armar: armarGuarda_ };
+  window.tkSelTeste_ = { mostrarPlaca: mostrarPlaca_, armar: armarGuarda_, verVolta: verVolta_, marcarSaida: marcarSaida_ };
 })();
 
 /* ===================== v4.27: sugestões enquanto digita + sinônimos ("não achei igual, mas tem…") ===================== */
