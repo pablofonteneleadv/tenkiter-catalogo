@@ -176,8 +176,15 @@ with sync_playwright() as p:
     pg.set_input_files("#po-livre-arq", [os.path.join(d, "livre.mp4"), os.path.join(d, "livre0.jpg"), os.path.join(d, "livre1.jpg")]); pg.wait_for_timeout(500)
     pg.click("[data-q=agendar]"); pg.wait_for_timeout(200)
     amanha = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-    marca(pg, 1, 7, 0); pg.fill("#po-h-2", amanha + "T12:30"); pg.wait_for_timeout(200)
-    chk("com Dia e hora: caixa 'em sequência' e horário próprio por mídia", pg.locator("#po-seqag").count() == 1 and pg.locator("[data-hora]").count() == 3)
+    marca(pg, 1, 7, 0)
+    pg.click("[data-a=hora-abrir][data-i='2']"); pg.wait_for_timeout(200)
+    chk("horário próprio abre o seletor de dia/hora (sem o datetime-local nativo)", pg.locator("[data-pkc=m2]").count() > 0 and pg.locator("input[type=datetime-local]").count() == 0)
+    for k in ("d:1", "h:12", "m:30"): pg.click("[data-pkc=m2][data-pk='%s']" % k); pg.wait_for_timeout(120)
+    chk("o botão mostra o horário escolhido para essa mídia", "12:30" in pg.inner_text("[data-a=hora-abrir][data-i='2']"), pg.inner_text("[data-a=hora-abrir][data-i='2']"))
+    pg.click("[data-a=hora-fechar]"); pg.wait_for_timeout(200)
+    chk("com Dia e hora: caixa 'em sequência' e horário próprio por mídia", pg.locator("#po-seqag").count() == 1 and pg.locator("[data-a=hora-abrir]").count() == 3)
+    pg.click("[data-a=hora-abrir][data-i='1']"); pg.click("[data-pkc=m1][data-pk='h:9']"); pg.click("[data-a=hora-limpar][data-i='1']"); pg.wait_for_timeout(150)
+    chk("'Usar o horário geral' limpa o horário próprio", "usar o geral" in pg.inner_text("[data-a=hora-abrir][data-i='1']"), pg.inner_text("[data-a=hora-abrir][data-i='1']"))
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(3500)
     c = g["post_chamadas"][-1]["corpo"]["posts"]
     t = [q["quando"] for q in c]

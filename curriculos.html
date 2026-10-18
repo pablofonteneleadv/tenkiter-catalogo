@@ -84,18 +84,25 @@ function fotoErro(img) {
   img.style.visibility = 'hidden';
 }
 
+// v4.32: gravação NUNCA repete sozinha (se o 1º pedido chegou ao servidor e a resposta é que demorou, repetir gravaria duas vezes) e enquanto grava
+// o recarregar da tela fica protegido (TKOcupado, nav.js). Leitura continua tentando 2×: o Apps Script às vezes demora a "acordar".
+const ACOES_GRAVAM_ = { curriculos_atualizar: 1, curriculos_antigos_nota: 1 };
 async function chamar(action, corpo) {
   const s = getSessao(); if (!s) return { ok: false, erro: 'Entre de novo.', sessaoInvalida: true };
-  for (let tentativa = 1; tentativa <= 2; tentativa++) {
-    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 30000);
-    try {
-      const r = await fetch(TREIN_URL, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ token: TREIN_TOKEN, action, whatsapp: s.whatsapp, sessao: s.sessao }, corpo || {})) });
-      const j = await r.json(); clearTimeout(t);
-      if (j && (j.sessaoInvalida)) { limparSessao(); }
-      return j;
-    } catch (e) { clearTimeout(t); /* o Apps Script às vezes demora a "acordar": tenta mais uma vez */ }
-  }
-  return { ok: false, erro: 'Sem conexão ou o servidor demorou demais.' };
+  const grava = !!ACOES_GRAVAM_[action], fim = grava && window.TKOcupado ? TKOcupado.inicio('salvando currículo') : null;
+  const limite = grava ? (window.TK_CURR_LIMITE_ESCRITA_MS || 45000) : 30000;
+  try {
+    for (let tentativa = 1; tentativa <= (grava ? 1 : 2); tentativa++) {
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), limite);
+      try {
+        const r = await fetch(TREIN_URL, { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ token: TREIN_TOKEN, action, whatsapp: s.whatsapp, sessao: s.sessao }, corpo || {})) });
+        const j = await r.json(); clearTimeout(t);
+        if (j && (j.sessaoInvalida)) { limparSessao(); }
+        return j;
+      } catch (e) { clearTimeout(t); if (grava) return { ok: false, demorou: true, erro: 'Não recebi a resposta do servidor. A alteração pode ter sido salva: recarregue a lista para conferir antes de salvar de novo.' }; }
+    }
+    return { ok: false, erro: 'Sem conexão ou o servidor demorou demais.' };
+  } finally { if (fim) fim(); }
 }
 
 function telaLogin(msg) {
