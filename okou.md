@@ -162,3 +162,8 @@ Recebidas 12 capturas do Pablo (`IMG_20261016_2252xx` a `2330xx`). Abaixo: o que
 - Testes verdes: consultar_valor 43, admin_busca_status 10, backend_gs 615, worker_og 73, admin_gestao, jornada_lojista, pre_envio, opcoes_lista, juntar_admin, lote_falhas, selecao_botoes. Falhas antigas (não regressão): jornada_pedido (link completo), x_equipe (X de 1 foto).
 - Pablo precisa colar `catalogo-codigo-4.20.gs.txt` no Apps Script do CATÁLOGO + "Nova versão".
 - Próximo (checklist das imagens de 17/10): Postagens (Story/Encaixar padrão, prévia aberta, travar foto, girar, editar texto tocando), barra de lote responsiva, busca como menu expansível, remover duplicados do painel, vídeo como passo 2 do cadastro, remover "Mais detalhes", X da única foto = arquivar peça.
+
+## 17/10/2026 (noite) — Postagens: travar foto, girar, textos por toque
+- Feito: caixa "Travar a foto" (marcada), foto gira com 2 dedos, "Personalizar textos" por toque (escolhe, move, aumenta, gira; embaixo só o campo escolhido), sem texto explicativo; x_equipe.py corrigido (X da única foto já arquivava a peça).
+- Backend 4.20 colado pelo Pablo e conferido (`consultarValor: true`).
+- Falta da checklist: lote responsivo, busca expansível, duplicados do painel, vídeo no passo 2, remover "Mais detalhes" (conferir se já sumiu), categorias visíveis.

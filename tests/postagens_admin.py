@@ -9,6 +9,11 @@ AXE = open(os.path.join(AQUI, "axe.min.js")).read()
 OK = []; BAD = []
 def abre_det(pg):
     pg.evaluate("()=>{const d=document.getElementById('po-det'); if(d) d.open=true}")
+def sel_tx(pg, k):
+    """Escolhe o texto k (como tocar nele): só o campo dele aparece embaixo."""
+    abre_det(pg)
+    if pg.get_attribute("[data-seltx=%s]" % k, "aria-pressed") != "true": pg.click("[data-seltx=%s]" % k)
+    pg.wait_for_timeout(150)
 
 def chk(n, c, e=""):
     (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + ((" — " + str(e)) if (e and not c) else ""))
@@ -50,7 +55,7 @@ with sync_playwright() as p:
     chk("abre com as abas e o passo 1", pg.locator("#overlay-postagens.aberto").count() == 1 and pg.locator("#po-abas [role=tab]").count() == 6 and "Qual peça?" in corpo(pg))
     pg.fill("#po-busca", "TK-0003"); pg.wait_for_timeout(300)
     chk("busca por código mostra a peça", pg.locator(".po-card").count() >= 1, corpo(pg)[:200])
-    pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(400)
+    pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(400); pg.click("[data-tipo=feed]"); pg.wait_for_timeout(500)
     t = corpo(pg)
     chk("peça escolhida: tipos, visual, legenda e quando aparecem", all(x in t for x in ["O que postar?", "Visual", "Legenda", "Quando?"]), t[:300])
     leg = pg.input_value("#po-leg")
@@ -98,7 +103,7 @@ with sync_playwright() as p:
     chk("'Já postei' tira da lista", pg.locator(".po-item").count() == antes - 1)
 
     print("== Agendado, cancelar, erro ==")
-    aba(pg, "nova"); pg.fill("#po-busca", "TK-0005"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(300)
+    aba(pg, "nova"); pg.fill("#po-busca", "TK-0005"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(300); pg.click("[data-tipo=feed]"); pg.wait_for_timeout(300)
     pg.click("[data-q=agendar]"); pg.fill("#po-data", "2020-01-01T10:00"); pg.click("[data-a=enviar]"); pg.wait_for_timeout(300)
     chk("data no passado é barrada", "pelo menos 1 minuto" in corpo(pg))
     import datetime
@@ -202,10 +207,10 @@ with sync_playwright() as p:
         r = pg.locator("#po-previa canvas").nth(idx).bounding_box(); b = caixa(pg, idx, k)
         cx = r["x"] + (b["x0"] + b["x1"]) / 2 / b["w"] * r["width"]; cy = r["y"] + (b["y0"] + b["y1"]) / 2 / b["h"] * r["height"]
         pg.mouse.move(cx, cy); pg.mouse.down(); pg.mouse.move(cx + dx_frac * r["width"] / 2, cy + dy_frac * r["height"] / 2, steps=4); pg.mouse.move(cx + dx_frac * r["width"], cy + dy_frac * r["height"], steps=4); pg.mouse.up(); pg.wait_for_timeout(250)
-    garantir(pg); aba(pg, "nova"); pg.click("[data-modo=peca]"); pg.fill("#po-busca", "TK-0003"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(1200)
+    garantir(pg); aba(pg, "nova"); pg.click("[data-modo=peca]"); pg.fill("#po-busca", "TK-0003"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(600); pg.click("[data-tipo=feed]"); pg.wait_for_timeout(900)
     chk("template Clássico mostra a prévia sozinho e o editor com Selo, Nome, Preço e Código", pg.locator("#po-previa canvas").count() == 1 and all(pg.locator("#po-tx-%s" % k).count() == 1 for k in ["selo", "nome", "preco", "codigo"]))
     chk("os textos nascem com os dados da peça (editáveis)", "TK-0003" in pg.input_value("#po-tx-codigo") and "à vista" in pg.input_value("#po-tx-preco"))
-    b0 = caixa(pg, 0, "nome"); abre_det(pg); pg.fill("#po-tx-nome", "Vestido longo florido de verão"); pg.wait_for_timeout(300)
+    b0 = caixa(pg, 0, "nome"); sel_tx(pg, "nome"); pg.fill("#po-tx-nome", "Vestido longo florido de verão"); pg.wait_for_timeout(300)
     b1 = caixa(pg, 0, "nome")
     chk("editar o texto muda a imagem na hora (caixa do nome mudou)", b0 and b1 and abs((b1["x1"] - b1["x0"]) - (b0["x1"] - b0["x0"])) > 1, [b0, b1])
     chk("digitar não perde o foco do campo", pg.evaluate("document.activeElement.id") == "po-tx-nome")
@@ -251,7 +256,7 @@ with sync_playwright() as p:
     chk("uma prévia 1080×1920 por foto escolhida", pg.eval_on_selector_all("#po-previa canvas", "c=>c.length===2&&c.every(x=>x.width===1080&&x.height===1920)"))
     w0 = caixa(pg, 0, "marca"); pg.click("[data-var='ElasusamTM🧡']"); pg.wait_for_timeout(900); w1 = caixa(pg, 0, "marca")
     chk("tocar numa opção troca o texto da imagem e do campo", pg.input_value("#po-tx-marca") == "ElasusamTM🧡" and (w1["x1"] - w1["x0"]) > (w0["x1"] - w0["x0"]) + 20, [w0, w1])
-    abre_det(pg); pg.fill("#po-tx-marca", "ElaUsaTM 🧡"); pg.wait_for_timeout(300)
+    sel_tx(pg, "marca"); pg.fill("#po-tx-marca", "ElaUsaTM 🧡"); pg.wait_for_timeout(300)
     chk("também dá para escrever o seu texto", pg.input_value("#po-tx-marca") == "ElaUsaTM 🧡")
     m0 = caixa(pg, 0, "marca"); m1 = caixa(pg, 1, "marca"); arrastar(pg, 0, "marca", -0.2, 0.25); m0b = caixa(pg, 0, "marca"); m1b = caixa(pg, 1, "marca")
     chk("arrasta o texto com o dedo/mouse; cada foto tem a sua posição (a outra não mexeu)", m0b["y0"] > m0["y0"] + 80 and abs(m1b["y0"] - m1["y0"]) < 2 and m0b["x0"] < m0["x0"] - 30, [m0, m0b, m1, m1b])
