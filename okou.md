@@ -156,3 +156,9 @@ Recebidas 12 capturas do Pablo (`IMG_20261016_2252xx` a `2330xx`). Abaixo: o que
 ## 17/10/2026 (noite) — Tenkiter-cofre
 - Repositório privado `pablofonteneleadv/Tenkiter-cofre` anexado à sessão. Regra: toda entrega (`.gs.txt` + zip dos `.md`) também vai para lá, e o `.gs` mais novo DE LÁ é a base de qualquer edição de backend (regra completa na seção v4.21 do `CLAUDE.md`).
 - Achado: o cofre tinha `catalogo-codigo-4.18` (base exata do 4.19) e `funcionario-3.15`; a cópia local do funcionário era a 3.8 (velha). Backend de funcionários atual = **3.15**.
+
+## 17/10/2026 (noite) — v4.22 Consultar valor + busca respeitando filtro
+- Feito: "Consultar valor" ponta a ponta (backend 4.20 + catálogo + sacola/pedido + Worker OG + Postagens + admin cadastro/lote), busca do admin respeitando Ativas/Esgotadas/Arquivadas, emoji dos botões Stories/Link/Postar. SW tk-3.13.0.
+- Testes verdes: consultar_valor 43, admin_busca_status 10, backend_gs 615, worker_og 73, admin_gestao, jornada_lojista, pre_envio, opcoes_lista, juntar_admin, lote_falhas, selecao_botoes. Falhas antigas (não regressão): jornada_pedido (link completo), x_equipe (X de 1 foto).
+- Pablo precisa colar `catalogo-codigo-4.20.gs.txt` no Apps Script do CATÁLOGO + "Nova versão".
+- Próximo (checklist das imagens de 17/10): Postagens (Story/Encaixar padrão, prévia aberta, travar foto, girar, editar texto tocando), barra de lote responsiva, busca como menu expansível, remover duplicados do painel, vídeo como passo 2 do cadastro, remover "Mais detalhes", X da única foto = arquivar peça.

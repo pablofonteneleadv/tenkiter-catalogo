@@ -50,6 +50,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     if versao>="4.1" and novo: FLAGS["auditoriaProdutos"]=True
     if versao>="4.18" and novo: FLAGS["opcoesLista"]=True
     if versao>="4.19" and novo: FLAGS["opIdempotente"]=True
+    if versao>="4.20" and novo: FLAGS["consultarValor"]=True
     st["opcoes"]={"tamanhos":["PP","P","M","G","GG","Único"],"cores":["Preto","Branco","Estampado"]}
     st["opcoes_add"]=[]
     if avanc: FLAGS["metricasAvancadas"]=True; FLAGS["dispositivos"]=True
@@ -136,6 +137,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             op=b.get("opId"); cr_=st.setdefault("creates",{})
             if op and versao>="4.19" and op in cr_: return dict(cr_[op],repetido=True)
             r_={"ok":True,"id":"999","codigo":"TK-0099"}
+            st.setdefault("criados",[]).append(dict(b))
             if op: cr_[op]=r_
             return r_
         if a=="sugerirPorFoto": st.setdefault("ia_chamadas",[]).append(b.get("fotos",[])); return {"ok":False,"erro":"Teste: IA simulada."}
@@ -422,6 +424,9 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     if b.get("tipoAcao")=="alterarEstoque": x["Estoque"]=b.get("valor")
                     if b.get("tipoAcao")=="alterarCategoria": x["Categoria"]=b.get("valor")
                     if b.get("tipoAcao")=="arquivar": x["Status"]="Inativo"
+                    if b.get("tipoAcao")=="consultarValor": x["Preco"]=0
+                    if b.get("tipoAcao")=="valorEscrito": x["Preco"]=float(b.get("valor"))
+                    if b.get("tipoAcao")=="ajustarPrecoPorcento" and float(x.get("Preco") or 0)>0: x["Preco"]=round(float(x["Preco"])*(1+float(b.get("valor"))/100),2)
             st["lote"]=dict(b); return {"ok":True,"afetados":n,"pedidos":len(b.get("ids",[])),"faltaram":[str(i) for i in b.get("ids",[]) if str(i) in faltar]}
         if a=="gerarSeo":
             if st["ia"]: return {"ok":True,"titulo":"Título IA","descricao":"Descrição IA"}

@@ -94,8 +94,9 @@ function pagina(p, cod, f, semPoster) {
   const destino = SITE_URL + '?c=' + encodeURIComponent(cod) + (n > 1 ? '&f=' + n : '');
   const cheio = Number(p.Preco) || 0;
   const avista = cheio * (1 - DESCONTO_AVISTA);
-  const titulo = p.Nome + (p.Codigo ? ' [' + p.Codigo + ']' : '') + ' — ' + real(avista) + ' à vista';
-  const desc = (p.Descricao ? String(p.Descricao).slice(0, 160) + ' | ' : '') + 'De ' + real(cheio) + ' por ' + real(avista) + ' à vista na TENKiTER Modas — Crateús, CE.';
+  const semPreco = !(cheio > 0);   // "Consulte valor": nada de R$ 0,00 no título, na descrição nem nos dados estruturados
+  const titulo = p.Nome + (p.Codigo ? ' [' + p.Codigo + ']' : '') + ' — ' + (semPreco ? 'Consulte valor' : real(avista) + ' à vista');
+  const desc = (p.Descricao ? String(p.Descricao).slice(0, 160) + ' | ' : '') + (semPreco ? 'Consulte o valor pelo WhatsApp na TENKiTER Modas — Crateús, CE.' : 'De ' + real(cheio) + ' por ' + real(avista) + ' à vista na TENKiTER Modas — Crateús, CE.');
   const capa = p.Foto_URL || (SITE_URL + 'og-banner.jpg');
   const img = imagemDaMidia(lista[n - 1], semPoster) || imagemDaMidia(lista[0], semPoster) || capa;   // a foto escolhida; sem miniatura própria, a capa
   const canonico = linkPeca(p);
@@ -112,6 +113,7 @@ function pagina(p, cod, f, semPoster) {
       seller: { '@type': 'Organization', name: 'TENKiTER Modas' }
     }
   };
+  if (semPreco) delete produtoLd.offers;
   return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<title>' + esc(titulo) + '</title><meta name="description" content="' + esc(desc) + '">' +
@@ -119,7 +121,7 @@ function pagina(p, cod, f, semPoster) {
     '<meta property="og:type" content="product"><meta property="og:site_name" content="TENKiTER Modas"><meta property="og:locale" content="pt_BR">' +
     '<meta property="og:title" content="' + esc(titulo) + '"><meta property="og:description" content="' + esc(desc) + '">' +
     '<meta property="og:image" content="' + esc(img) + '"><meta property="og:url" content="' + esc(urlCompartilhada) + '">' +
-    '<meta property="product:price:amount" content="' + esc(cheio.toFixed(2)) + '"><meta property="product:price:currency" content="BRL">' +
+    (semPreco ? '' : '<meta property="product:price:amount" content="' + esc(cheio.toFixed(2)) + '"><meta property="product:price:currency" content="BRL">') +
     '<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="' + esc(titulo) + '">' +
     '<meta name="twitter:description" content="' + esc(desc) + '"><meta name="twitter:image" content="' + esc(img) + '">' +
     '<script type="application/ld+json">' + jsonLd(produtoLd) + '</script>' +

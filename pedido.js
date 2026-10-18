@@ -18,8 +18,15 @@
 /* ---------------- textos de WhatsApp (texto puro) ---------------- */
 function precoAvista_(p) { return Number(p.Preco) * (1 - DESCONTO_AVISTA); }
 function totalAvista_(itens) { return itens.reduce(function (s, p) { return s + precoAvista_(p); }, 0); }
+/** Total para mostrar/enviar: só soma as peças COM preço; as "Consulte valor" aparecem à parte (nunca R$ 0,00 como se fosse de graça). `longo` = frase para o WhatsApp. */
+function totalTexto_(itens, longo) {
+  var n = itens.filter(ehConsulta).length;
+  if (!n) return formatarReal(totalAvista_(itens));
+  if (n === itens.length) return longo ? 'valor a consultar com a loja' : 'A consultar';
+  return formatarReal(totalAvista_(itens)) + (longo ? ' (+ ' + n + (n === 1 ? ' peça' : ' peças') + ' com valor a consultar)' : ' + consulta');
+}
 function linhaItem_(p) {
-  return '• ' + p.Nome + (p.Codigo ? ' (' + p.Codigo + ')' : '') + ' — ' + formatarReal(precoAvista_(p)) + ' à vista';
+  return '• ' + p.Nome + (p.Codigo ? ' (' + p.Codigo + ')' : '') + ' — ' + (ehConsulta(p) ? 'consulte o valor' : formatarReal(precoAvista_(p)) + ' à vista');
 }
 /** Lista de peças. Põe o link de cada peça enquanto a mensagem couber no limite do wa.me (~1800 caracteres). */
 function listaDePecasTexto_(itens) {
@@ -121,11 +128,11 @@ function abrirSacola() {
           '<img src="' + escaparHtml(imagemDoSlide(p, fotoDaSacola(p.ID), 160)) + '" alt="" width="48" height="60" loading="lazy">' +
           '<div class="info"><div class="nome">' + escaparHtml(p.Nome) + '</div>' +
           (p.Codigo ? '<div class="codigo" style="font-size:.68rem;color:var(--laranja-txt);font-weight:800">' + escaparHtml(p.Codigo) + '</div>' : '') +
-          '<div class="preco">' + formatarReal(precoAvista_(p)) + ' à vista</div></div>' +
+          '<div class="preco">' + (ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(precoAvista_(p)) + ' à vista') + '</div></div>' +
           '<button type="button" class="btn-remover" data-remover-id="' + escaparHtml(p.ID) + '" aria-label="Remover da sacola: ' + escaparHtml(p.Nome) + '">✕</button></div>';
       }).join('') +
       (esgotados.length ? '<p class="texto-pequeno" role="status" style="margin-top:8px">' + esgotados.length + (esgotados.length === 1 ? ' peça da sacola está esgotada' : ' peças da sacola estão esgotadas') + ' e não entra no pedido.</p>' : '') +
-      '<div class="resumo-linha" style="margin-top:6px"><strong>Total estimado à vista</strong><span class="avista" style="color:#1a7a1a;font-weight:800">' + formatarReal(total) + '</span></div>' +
+      '<div class="resumo-linha" style="margin-top:6px"><strong>Total estimado à vista</strong><span class="avista" style="color:#1a7a1a;font-weight:800">' + totalTexto_(itens) + '</span></div>' +
       '<div class="form-pedido">' +
         '<h3>Seus dados</h3>' +
         '<label for="ped-nome">Seu nome *</label><input type="text" id="ped-nome" autocomplete="name" value="' + escaparHtml(d.nome) + '">' +
@@ -143,7 +150,7 @@ function abrirSacola() {
       '</div>' +
       '<p class="texto-pequeno">O pedido vai para o WhatsApp da loja. O pagamento e a combinação de retirada ou entrega são feitos por lá. Veja a <a href="privacidade.html" style="color:var(--laranja-txt);font-weight:700">política de privacidade</a>.</p>' +
       '<button type="button" class="btn-secundario-cta" id="btn-limpar-sacola" style="margin-top:12px">🗑️ Esvaziar seleção</button>' +
-      '<div class="barra-compra"><div class="bc-total"><small>Total à vista</small><strong>' + formatarReal(total) + '</strong></div>' +
+      '<div class="barra-compra"><div class="bc-total"><small>Total à vista</small><strong>' + totalTexto_(itens) + '</strong></div>' +
       '<button type="button" class="bc-pedir" id="btn-enviar-sacola">💬 ENVIAR MINHA SELEÇÃO</button></div>';
 
     container.querySelectorAll('[data-remover-id]').forEach(function (btn) {
@@ -193,7 +200,7 @@ function validarPedido_() {
 /** Mensagem do pedido para o WhatsApp da loja (texto puro; link completo de acompanhamento quando há código). */
 function textoPedido_(itens, dados, codigo) {
   var t = 'Olá! Quero fazer um pedido pelo catálogo' + (codigo ? ' (pedido ' + codigo + ')' : '') + ':\n\n';
-  t += listaDePecasTexto_(itens) + '\n\nTotal estimado à vista: ' + formatarReal(totalAvista_(itens)) + '\n\n';
+  t += listaDePecasTexto_(itens) + '\n\nTotal estimado à vista: ' + totalTexto_(itens, true) + '\n\n';
   t += 'Nome: ' + dados.nome + '\nWhatsApp: ' + formatarTelefone(dados.whatsapp) + '\n';
   t += 'Receber: ' + (dados.entrega === 'entrega' ? 'Entrega — ' + dados.endereco : 'Retirar na loja') + '\n';
   if (dados.obs) t += 'Observações: ' + dados.obs + '\n';
@@ -325,7 +332,7 @@ function htmlPedidoRastreio_(ped) {
     '<div style="margin-top:8px;font-weight:800;color:var(--laranja-txt)">' + escaparHtml(pedidoRotulo(ped.status, ped.entrega)) + '</div></div>' +
     etapas +
     '<ul style="margin:6px 0 4px;padding:0 16px 0 34px;font-size:.86rem">' + itens + '</ul>' +
-    '<div class="resumo-linha"><span>' + (ped.entrega === 'entrega' ? '🛵 Entrega' : '🏬 Retirada na loja') + '</span><strong>' + formatarReal(ped.total || 0) + ' à vista</strong></div>';
+    '<div class="resumo-linha"><span>' + (ped.entrega === 'entrega' ? '🛵 Entrega' : '🏬 Retirada na loja') + '</span><strong>' + (Number(ped.total) > 0 ? formatarReal(ped.total) + ' à vista' : 'valor a consultar') + '</strong></div>';
 }
 
 /* ====================================================================
@@ -348,11 +355,11 @@ function abrirFavoritos() {
         var esg = estaEsgotado(p);
         return '<div class="fav-linha"><img src="' + escaparHtml(fotoMini(p.Foto_URL, 160)) + '" alt="" width="48" height="60" loading="lazy">' +
           '<div class="info"><button type="button" class="nome-btn" data-abrir-id="' + escaparHtml(p.ID) + '" style="all:unset;cursor:pointer;font-weight:700;font-size:.85rem">' + escaparHtml(p.Nome) + '</button>' +
-          '<div style="font-size:.78rem;font-weight:700;color:' + (esg ? 'var(--vermelho)' : '#1a7a1a') + '">' + (esg ? 'Esgotado' : formatarReal(precoAvista_(p)) + ' à vista') + '</div></div>' +
+          '<div style="font-size:.78rem;font-weight:700;color:' + (esg ? 'var(--vermelho)' : '#1a7a1a') + '">' + (esg ? 'Esgotado' : (ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(precoAvista_(p)) + ' à vista')) + '</div></div>' +
           '<div class="acoes">' + (esg ? '' : '<button type="button" data-sac-id="' + escaparHtml(p.ID) + '" aria-label="' + (estaNaSacola(p.ID) ? 'Já está na sacola: ' : 'Adicionar à sacola: ') + escaparHtml(p.Nome) + '">' + (estaNaSacola(p.ID) ? '✓' : '🛍️') + '</button>') +
           '<button type="button" data-rem-id="' + escaparHtml(p.ID) + '" aria-label="Remover dos favoritos: ' + escaparHtml(p.Nome) + '">✕</button></div></div>';
       }).join('') +
-      '<div class="resumo-linha" style="margin-top:6px"><strong>Total à vista (' + disp.length + (disp.length === 1 ? ' peça' : ' peças') + ')</strong><span style="color:#1a7a1a;font-weight:800">' + formatarReal(totalAvista_(disp)) + '</span></div>' +
+      '<div class="resumo-linha" style="margin-top:6px"><strong>Total à vista (' + disp.length + (disp.length === 1 ? ' peça' : ' peças') + ')</strong><span style="color:#1a7a1a;font-weight:800">' + totalTexto_(disp) + '</span></div>' +
       (todos.length > disp.length ? '<p class="texto-pequeno">' + (todos.length - disp.length) + ' esgotada(s) não entram na conta.</p>' : '') +
       '<button type="button" class="btn-principal-cta" id="fav-pedir"' + (disp.length ? '' : ' disabled') + '>💬 CONSULTAR A LISTA COMPLETA NO WHATSAPP</button>' +
       '<button type="button" class="btn-secundario-cta" id="fav-mover"' + (disp.length ? '' : ' disabled') + '>🛍️ Adicionar todos à seleção</button>' +
@@ -362,7 +369,7 @@ function abrirFavoritos() {
     c.querySelectorAll('[data-rem-id]').forEach(function (b) { b.addEventListener('click', function () { toggleFavorito(b.dataset.remId); atualizarSacolaHeader_(); abrirFavoritos(); if (apenasFavoritos) aplicarFiltros(); }); });
     var ped = document.getElementById('fav-pedir');
     if (ped) ped.addEventListener('click', function () {
-      var t = 'Olá! Gostei destas peças do catálogo e queria saber se estão disponíveis:\n\n' + listaDePecasTexto_(disp) + '\n\nTotal estimado à vista: ' + formatarReal(totalAvista_(disp));
+      var t = 'Olá! Gostei destas peças do catálogo e queria saber se estão disponíveis:\n\n' + listaDePecasTexto_(disp) + '\n\nTotal estimado à vista: ' + totalTexto_(disp, true);
       disp.forEach(function (p) { try { registrarEvento(p.ID, p.Codigo, 'whatsapp', '', true); } catch (e) {} });
       if (window.TKMeta) TKMeta.evento('Contact', { content_ids: disp.map(function (p) { return p.Codigo || p.ID; }), content_type: 'product' });
       window.open(linkWhatsApp(t), '_blank');
