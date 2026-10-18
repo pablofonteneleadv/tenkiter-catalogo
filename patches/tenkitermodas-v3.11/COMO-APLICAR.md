@@ -26,7 +26,7 @@ patch -p1 < patches/tenkitermodas-v3.11/admin.html.patch
 patch -p1 < patches/tenkitermodas-v3.11/OneSignalSDKWorker.js.patch   # opcional
 ```
 
-Depois peça ao Render para publicar. Ao subir, **`catalogo.css` e `catalogo.js` precisam ir junto**
+O deploy é automático pelo GitHub. Ao subir, **`catalogo.css` e `catalogo.js` precisam ir junto**
 com o `index.html` (são referenciados por ele).
 
 ## Verificação aplicada antes de entregar

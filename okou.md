@@ -39,7 +39,7 @@ Documento de passagem para outra inteligência (ou pessoa) assumir o trabalho. F
 - `admin.html` é o painel. Os scripts `admin-postagens.js` e `admin-gestao.js` estão minificados/difíceis de buscar. Buscas por padrão exato podem falhar. Usar buscas com limite de caracteres (`cut -c1-300`) para não estourar a saída.
 - `MAX_GALERIA = 8` (`admin.html`, por volta da linha 1219) limita fotos de **uma** peça. No modo "várias peças", o limite agora vale por peça.
 - A pasta `/home/user/workspace` foi recriada em um sandbox novo. Não há mais clone local anterior nem `entregas/`; reclonar o repositório.
-- O `render.yaml` define `autoDeploy: false` de propósito. O deploy é disparado pela API dentro de `.github/workflows/deploy.yml` (ver `docs/CI-CD.md`).
+- O deploy é automático pelo GitHub: o merge na `main` aciona `.github/workflows/deploy.yml` (ver `docs/CI-CD.md`). Não existe deploy manual.
 - Os arquivos `CLAUDE.md` e `okou.md` da raiz eram pedidos explícitos da conversa. Antes faltavam no repositório; agora estão na branch.
 
 ## 5. Testes e como rodar
@@ -79,7 +79,7 @@ export TK_BASE=http://localhost:8765/
 ## 7a. Estado antes do merge
 
 - Nada foi mesclado na `main`.
-- Nenhum deploy foi feito no Render.
+- Nenhum deploy foi feito.
 - Branch enviada ao GitHub e PR #13 aberto para `main`. O merge e o deploy foram autorizados pelo Pablo em 17/10/2026 (ver seção 8).
 
 ## 8. Merge e deploy
@@ -176,3 +176,9 @@ Recebidas 12 capturas do Pablo (`IMG_20261016_2252xx` a `2330xx`). Abaixo: o que
 - Testes passando: `postagens_fila.py` 49, `postagens_colagem.py` 26, `postagens_v425.py` 16, `postagens_admin.py` 102, `postagens_v49.py` 71, `postagens_toque.py` 28, `visual_v58/59/60`, `editor_visual`, `editor_toque`, `worker_ig.js` 260, `backend_gs.js` 615, CI local (JS/HTML/segredos/workers).
 - Limites honestos: gestos de 2 dedos só simulados; se o SO matar o navegador, o cadastro leve retoma só ao reabrir; pausa padrão ligada (22:00–06:30) é decisão minha (o gestor muda na aba 🛡️ Regras); "Fazer em todos" cobre texto, não o enquadramento da foto.
 - Pendente: bateria completa (só com autorização do Pablo); "Horário só deste" da Postagem livre ainda usa o seletor nativo; pedir ao Pablo para revogar o token Cloudflare `cfut_…` (vale até 01/12/2026).
+
+## 18/10/2026 — Instruções de deploy no Render removidas
+
+- Pedido do Pablo: tirar totalmente a instrução de deploy no Render; o deploy é automático pelo GitHub (`deploy.yml` no merge na `main`).
+- Editados: `CLAUDE.md` (fluxo e linha do MCP do Render), `okou.md`, `README.md`, `LEIA-ME-ATUALIZAR.md`, `docs/CI-CD.md` (deploy manual, rollback pela API e item de checklist), `docs/RELATORIO-INFRA-CICD.md`, `.claude/commands/deploy.md` (reescrito para o fluxo GitHub), guias em `patches/` e a mensagem do hook de segredos.
+- Mantidos de propósito (são infraestrutura, não instrução): `deploy.yml` e `scripts/deploy/*` (a automação), `render.yaml`, a URL `tenkiter-catalogo.onrender.com/version.json` para conferir o commit no ar, as regras Rewrite do Render e a tela Conexões do painel.

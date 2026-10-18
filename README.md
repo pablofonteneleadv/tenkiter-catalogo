@@ -30,4 +30,4 @@ O catálogo usa `catalogo-codigo-4.4.gs.txt` e o RH/treinamento `funcionario-cod
 
 ## Como editar
 
-Não há build nem dependências — é HTML/CSS/JS puro. Basta editar os arquivos e subir no GitHub (branch `main`). O deploy automático do Render nem sempre dispara: depois de cada push, dispare o deploy e confirme que o site no ar tem o código novo (passo a passo em `CLAUDE.md`). **Os backends em Apps Script não sobem sozinhos**: cole o arquivo `.gs.txt` novo no editor do Apps Script e use *Gerenciar implantações → editar → Nova versão*. Rode `python3 tests/rodar_tudo.py` antes de publicar.
+Não há build nem dependências — é HTML/CSS/JS puro. Basta editar os arquivos e subir no GitHub (branch `main`). O deploy é automático pelo GitHub: o merge na `main` aciona `.github/workflows/deploy.yml`, que publica o site e confirma o commit no ar em `/version.json` (passo a passo em `CLAUDE.md`). **Os backends em Apps Script não sobem sozinhos**: cole o arquivo `.gs.txt` novo no editor do Apps Script e use *Gerenciar implantações → editar → Nova versão*. Rode `python3 tests/rodar_tudo.py` antes de publicar.

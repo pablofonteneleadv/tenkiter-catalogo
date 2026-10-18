@@ -35,20 +35,20 @@ Repositório público, sem build/dependências: HTML/CSS/JS puro + backend em Go
    número de versão no nome do arquivo, E atualizar o comentário de cabeçalho E o campo
    `versao` retornado por `doGet` com `action=='versao'` — os três têm que ficar sincronizados.
 
-## Deploy — como funciona de fato (não como o README promete)
+## Deploy — automático pelo GitHub
 
 - **Regra (Pablo, 17/10/2026)**: deploy é feito por você, direto pelo GitHub, sem pedir confirmação e sem enrolar. Não existe mais restrição de "deploy manual pelo Pablo" para o frontend. Sempre que houver acesso ao GitHub, fazer o deploy assim que o trabalho estiver pronto e testado.
+- **Regra (Pablo, 18/10/2026)**: não existe nenhuma instrução de deploy manual no Render (nem pelo MCP `mcp__Render__*`, nem pelo painel, nem pela API). O único caminho de publicação é o `deploy.yml` no merge na `main`. Se o deploy falhar, corrigir pelo GitHub (workflow/PR ou reverter a `main`).
 - **Ponto de restauração obrigatório antes de cada merge na `main`**: criar uma branch `backup/pre-<tema>-<data>` apontando para o commit atual da `main`. Assim qualquer deploy pode ser desfeito rapidamente.
-- **Fluxo padrão (frontend, Render)**:
+- **Fluxo padrão (frontend)**:
   1. Criar o ponto de restauração (`backup/pre-...`).
   2. Fazer o PR (ou usar o PR existente) e aguardar o check "Portão de qualidade" ficar verde.
-  3. Fazer o merge na `main`. O push na `main` dispara `.github/workflows/deploy.yml`, que publica no Render, acompanha até "live" e confirma o commit em `/version.json`.
+  3. Fazer o merge na `main`. O push na `main` dispara `.github/workflows/deploy.yml`, que publica o site sozinho, acompanha até "live" e confirma o commit em `/version.json`.
   4. Conferir no site publicado (`https://tenkiter-catalogo.onrender.com/<arquivo>`) com `grep` por uma string nova do commit.
   5. Se der errado: reverter com novo commit na `main` ou restaurar a partir do `backup/pre-...`.
 - **Cópia dos .md (pedido do Pablo, 17/10/2026)**: a cada atualização, além do deploy automático, gerar um zip com os `.md` alterados (sempre `CLAUDE.md` e `okou.md`) em `/home/user/workspace/entregas/okou-md-<data>.zip` e enviar ao chat com `okou web upload-file -f <zip> --json`. O Pablo guarda essa cópia. Não precisa subir arquivo manualmente no GitHub.
 - **Deploy automático autorizado**: o merge na `main` publica sozinho pelo `deploy.yml`. Não pedir confirmação. Verificar o término pelo `gh run list --branch main` e conferir `https://tenkiter-catalogo.onrender.com/version.json` (campo `commit`).
 - **Bateria final**: a bateria completa (`tests/rodar_tudo.py` com `TK_BASE=https://tenkiter-catalogo.onrender.com/`) roda só quando o Pablo pedir, depois que o site já estiver atualizado.
-- **Render via MCP/API**: `mcp__Render__trigger_deploy` (serviço `srv-dasa63fpn0mc73fh8fgg`, workspace `tea-d001phk9c44c73fd13h0`) continua disponível como alternativa se o deploy pelo GitHub falhar.
 - **Backend (Apps Script)**: **não pode ser deployado por automação** — precisa que o Pablo cole
   manualmente o `.gs.txt` no editor do Apps Script e clique em "Nova versão" (Gerenciar
   implantações → editar → Nova versão). Depois que ele confirmar, validar com:
@@ -244,7 +244,7 @@ Propriedades do Script do Apps Script, nunca no código versionado.
   painel. Para o Claude, em cada conversa: variáveis de ambiente `RENDER_API_KEY` / `CLOUDFLARE_API_TOKEN` na sessão, ou o Pablo cola de novo — sempre só como variável de
   ambiente do comando (`RENDER_API_KEY=… python3 …`), nunca em arquivo; ao fim pedir para revogar. Ver o skill `tenkiter-apis-e-acessos`.
 - **Render**: o MCP do Render não mexe em rotas/cabeçalhos; pela API REST: `GET/POST https://api.render.com/v1/services/srv-dasa63fpn0mc73fh8fgg/routes`
-  (`{"type":"rewrite","source":"/feed.csv","destination":"https://tenkiter-og.distkrpconfeccoes.workers.dev/feed.csv"}`), `POST .../deploys`. Regras que existem
+  (`{"type":"rewrite","source":"/feed.csv","destination":"https://tenkiter-og.distkrpconfeccoes.workers.dev/feed.csv"}`). Regras que existem
   (10/10/2026): `/p/*`, `/feed.csv`, `/feed.xml`, `/sitemap.xml`. `renderCriarRegras` só ACRESCENTA (nunca apaga nem troca regra que aponta para outro lugar).
   **Arquivo estático ganha da regra Rewrite**: nunca recriar `sitemap.xml` no repositório.
 - **Cloudflare**: Worker `tenkiter-og` publicado por `CLOUDFLARE_API_TOKEN=… python3 og-worker/publicar.py` (v2.1 publicada em 10/10/2026: `?f=N` por foto + currículo no sitemap).

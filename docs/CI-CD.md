@@ -21,7 +21,7 @@ Documentação operacional do pipeline. Cobre os itens **INFRA-01** (pipeline de
         ▼
   Deploy (deploy.yml)
         ├─ 1. reaproveita o portão de qualidade
-        ├─ 2. dispara o deploy na API do Render  (trigger explícito)
+        ├─ 2. publica o site                     (trigger explícito)
         ├─ 3. acompanha até o status "live"      (polling)
         ├─ 4. limpa o cache do Cloudflare        (purge)
         └─ 5. confirma o commit no ar            (curl /version.json)
@@ -76,14 +76,11 @@ em repositório privado (item **INFRA-03** do plano). O portão obrigatório é 
 
 ## 3. INFRA-02 — Deploy confiável
 
-### Por que não usar o autoDeploy do Render
+### Como o deploy é disparado
 
-O `autoDeploy` depende de um webhook do GitHub para o Render. Quando ele falha, **falha em
-silêncio**: o push acontece, o painel não acusa erro e o site continua no código antigo.
-O próprio `README.md` e o comando `.claude/commands/deploy.md` já registravam isso.
-
-**Decisão:** `autoDeploy: false` no `render.yaml` + deploy disparado pela API dentro do CI.
-Assim o deploy tem código de saída: se falhar, o workflow fica vermelho.
+O deploy é **automático pelo GitHub**: o merge na `main` aciona o `deploy.yml`, que publica o
+site, acompanha até "live" e confirma o commit em `/version.json`. É o único caminho de
+publicação (não há deploy manual). Ele tem código de saída: se falhar, o workflow fica vermelho.
 
 ### Arquivos
 
@@ -113,25 +110,10 @@ Assim o deploy tem código de saída: se falhar, o workflow fica vermelho.
 > **Nunca** cole esses valores no chat, em issue, em PR ou em arquivo do repositório.
 > Só no cofre de segredos do GitHub (ou nas variáveis de ambiente do Render).
 
-### Rodar o deploy manualmente (fora do CI)
-
-```bash
-export RENDER_API_KEY='rnd_...'
-export RENDER_SERVICE_ID='srv-...'
-export COMMIT_ESPERADO="$(git rev-parse HEAD)"
-bash scripts/deploy/render_deploy.sh
-
-export CLOUDFLARE_API_TOKEN='...'
-export CLOUDFLARE_ZONE_ID='...'
-bash scripts/deploy/cloudflare_purge.sh
-```
-
 ### Rollback
 
 1. **Rápido (código):** `git revert <commit>` na `main` → o CI dispara o deploy do revert.
 2. **Por tag:** `git checkout v1.0.0` → branch → PR → merge (o deploy publica a versão da tag).
-3. **Pela API do Render:** `POST /v1/services/{id}/rollback` com o `deployId` anterior
-   (ver `GET /v1/services/{id}/deploys`).
 
 ---
 
@@ -238,8 +220,6 @@ em `/settings`) e confere que a publicação é recente. `LIMITE_SEGUNDOS` ajust
 
 - [ ] Criar os 5 secrets no GitHub (tabela da seção 3)
 - [ ] Ativar a proteção de branch na `main` (seção 2)
-- [ ] No Render: desligar o Auto-Deploy do serviço e definir o Build Command como
-      `bash scripts/deploy/build_version.sh`
 - [ ] Rodar o workflow **Release** uma vez para criar a tag `v1.0.0`
 - [ ] Fazer um PR de teste e confirmar que o portão bloqueia/libera corretamente
 - [ ] **Revogar o token da Cloudflare que foi colado no chat** e criar um novo
