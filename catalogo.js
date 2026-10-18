@@ -1,3 +1,5 @@
+/* v4.27: a seleção vence sozinha (2 h; 3 h se a pessoa pediu para segurar) — tem que rodar ANTES de qualquer tela ler a sacola */
+try { tkSelExpirar_(); } catch (e) {}
   const POR_PAGINA = 24;
   const QTD_PILLS_CATEGORIA = 6;
 
@@ -90,7 +92,7 @@
     if (filtroCores.size) url.searchParams.set('cor', Array.from(filtroCores).join(',')); else url.searchParams.delete('cor');
     if (selecaoFixa) url.searchParams.set('sel', selecaoFixa.join(',')); else url.searchParams.delete('sel');
 
-    window.history.replaceState({}, '', url);
+    window.history.replaceState((window.history.state && window.history.state.overlay) ? window.history.state : {}, '', url);   // não apaga a entrada de uma janela aberta (placa, foto…)
   }
 
   function mostrarToastCarregando(texto) {
@@ -480,7 +482,7 @@
   }
   /** Sai dos filtros do link (ou limpa os filtros comuns) e mostra o site inteiro; sacola e favoritos da pessoa ficam como estão. */
   document.getElementById('btn-share-busca').addEventListener('click', () => { const bf = document.getElementById('badge-filtros'), q = document.getElementById('busca').value.trim(); const filtrando = (bf && !bf.hidden && (parseInt(bf.textContent, 10) || 0) > 0) || q || selecaoFixa || apenasFavoritos || apenasNovidades; if (!filtrando && getSacola().length) abrirSelecao(true); else document.getElementById('btn-share-filtros').click(); });
-  document.getElementById('btn-limpar-sel').addEventListener('click', () => { if (getSacola().length) { limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); } if (selecaoFixa || document.getElementById('busca').value.trim() || apenasFavoritos || apenasNovidades) document.getElementById('btn-share-filtros').click(); atualizarBarraFiltros_(); });
+  document.getElementById('btn-limpar-sel').addEventListener('click', () => { if (getSacola().length) { limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); } if (selecaoFixa || document.getElementById('busca').value.trim() || apenasFavoritos || apenasNovidades) document.getElementById('btn-limpar').click(); atualizarBarraFiltros_(); });
   document.getElementById('btn-lote-menu').addEventListener('click', (e) => { const m = document.getElementById('lote-menu'); m.hidden = !m.hidden; e.currentTarget.setAttribute('aria-expanded', String(!m.hidden)); });
   document.getElementById('lote-menu').addEventListener('click', (e) => { const b = e.target.closest('[data-lote]'); if (!b) return; if (b.dataset.lote === 'btn-bulk-juntar') { document.getElementById('lote-menu').hidden = true; abrirJuntarCatalogo_(); return; }
     // v4.10 (FE-06): "Enviar para postagem" (e as demais ações em lote) exigem a MESMA sessão compartilhada.
@@ -1365,4 +1367,178 @@
   busca.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { busca.blur(); if (f.classList.contains('compacto')) fechar(); } });
   f.addEventListener('click', () => setTimeout(atualizarBadge, 0));
   f.addEventListener('input', atualizarBadge);
+})();
+
+/* ===================== v4.27: vida da seleção — "Libera a seleção" / "Segura minha seleção" ao tentar sair da loja ===================== */
+(function () {
+  let guardaAtiva = false, sairDepois = false, limparUrl_ = false;
+  const temSelecao_ = () => getSacola().length > 0 || !!selecaoFixa;
+  const nSelecao_ = () => getSacola().length || (selecaoFixa ? selecaoFixa.length : 0);
+  function atualizarTudo_() { try { atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); atualizarBarraFiltros_(); } catch (e) {} }
+  const deixar_ = () => setTimeout(() => { try { history.back(); } catch (e) {} }, 0);
+
+  // A entrada-guarda precisa ser criada DENTRO de um toque/clique (o Chrome ignora, no "voltar", entradas criadas sem interação).
+  // Só arma com a tela livre (nenhuma janela aberta) e quando há seleção; o "voltar" então cai nela e mostra a placa em vez de sair.
+  function armarGuarda_() {
+    if (guardaAtiva || !temSelecao_() || TKCamadas.total() > 0) return;
+    guardaAtiva = TKCamadas.empilhar('guarda-sair-sel', () => {
+      guardaAtiva = false;
+      if (!temSelecao_()) { deixar_(); return; }   // a pessoa já limpou: o "voltar" segue o caminho normal
+      setTimeout(mostrarPlaca_, 0);                // fora do popstate (a pilha ainda está sendo esvaziada)
+    });
+  }
+  document.addEventListener('click', (e) => { if (sairDepois || (e.target && e.target.closest && e.target.closest('#overlay-sair-sel'))) return; setTimeout(armarGuarda_, 0); }, true);   // cliques da própria placa não rearmam (corriam com o fechamento)
+
+  function mostrarPlaca_() {
+    if (!temSelecao_()) return;
+    const n = nSelecao_(), doLink = !getSacola().length && !!selecaoFixa;
+    const pecas = n === 1 ? '1 peça' : n + ' peças';
+    document.getElementById('sair-sel-txt').textContent = (doLink ? 'Separamos ' + pecas + ' para você.' : 'Você separou ' + pecas + '.') + ' Quer que eu segure essa seleção?';
+    abrirComHistorico_('overlay-sair-sel');
+    setTimeout(() => { const b = document.getElementById('sair-sel-segura'); if (b) b.focus(); }, 60);
+  }
+  function fecharPlaca_(sair) { sairDepois = !!sair; fecharComHistorico_('overlay-sair-sel'); }
+
+  document.getElementById('sair-sel-segura').addEventListener('click', () => {
+    tkSelSegurar_();
+    avisoEquipe_('Guardei sua seleção por 3 horas. Até já! 🧡');
+    fecharPlaca_(true);
+  });
+  document.getElementById('sair-sel-libera').addEventListener('click', () => {
+    if (getSacola().length) limparSacola();
+    if (selecaoFixa || modoLink_) { limparUrl_ = true; document.getElementById('btn-limpar').click(); modoLink_ = false; }
+    atualizarTudo_();
+    fecharPlaca_(true);
+  });
+  document.getElementById('sair-sel-fica').addEventListener('click', () => fecharPlaca_(false));
+  document.getElementById('overlay-sair-sel').addEventListener('click', (e) => { if (e.target.id === 'overlay-sair-sel') fecharPlaca_(false); });
+
+  document.addEventListener('tk:camada-fechada', (e) => {
+    if (!e.detail || e.detail.chave !== 'overlay-sair-sel') return;
+    if (limparUrl_) { limparUrl_ = false; try { history.replaceState(history.state, '', location.pathname); } catch (er) {} }
+    if (sairDepois) { sairDepois = false; deixar_(); }
+  });
+
+  // Voltou para a aba/app: a seleção pode ter vencido enquanto estava fora; se ainda está guardada, volta ao prazo normal.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (tkSelExpirar_()) atualizarTudo_();
+  });
+  // Abriu de novo e a seleção estava guardada: avisa e volta a valer o prazo normal.
+  if (tkSelSeguraAte_() && getSacola().length) {
+    const n = getSacola().length;
+    tkSelSoltarSegura_();
+    setTimeout(() => avisoEquipe_('Sua seleção estava guardada: ' + (n === 1 ? '1 peça' : n + ' peças') + ' \u{1F9E1}'), 1500);
+  }
+  window.tkSelTeste_ = { mostrarPlaca: mostrarPlaca_, armar: armarGuarda_ };
+})();
+
+/* ===================== v4.27: sugestões enquanto digita + sinônimos ("não achei igual, mas tem…") ===================== */
+(function () {
+  const busca = document.getElementById('busca'), lista = document.getElementById('sugestoes-busca');
+  if (!busca || !lista) return;
+  const PARAR = new Set(['de', 'da', 'do', 'das', 'dos', 'para', 'com', 'sem', 'em', 'e', 'a', 'o', 'um', 'uma', 'por', 'no', 'na']);
+  let vocabRef_ = null, vocab_ = [], itens_ = [], ativo_ = -1, tReal_ = 0;
+
+  function vocabulario_() {
+    if (vocabRef_ === produtos && vocab_.length) return vocab_;
+    const mapa = new Map();
+    const guardar = (rotulo, peso) => {
+      const k = semAcentoBusca(rotulo).trim();
+      if (k.length < 3 || PARAR.has(k)) return;
+      const e = mapa.get(k);
+      if (e) e.peso += peso; else mapa.set(k, { k, rotulo: String(rotulo).trim().toLowerCase(), peso });
+    };
+    produtos.forEach((p) => {
+      String(p.Nome || '').split(/[^A-Za-zÀ-ÿ]+/).forEach((w) => guardar(w, 2));
+      [p.Categoria, p.Genero, textoPlano(p.Cores)].forEach((campo) => listaDeTags(campo).forEach((t) => {
+        guardar(t, 3);                                           // a categoria inteira ("vestido longo")
+        String(t).split(/[^A-Za-zÀ-ÿ]+/).forEach((w) => guardar(w, 1));
+      }));
+    });
+    vocabRef_ = produtos; vocab_ = Array.from(mapa.values());
+    return vocab_;
+  }
+  const contar_ = (frase) => { const t = termosDaBusca(frase); return t.length ? produtos.filter((p) => casaBusca(p, t)).length : 0; };
+  const trocar_ = (termos, i, novo) => termos.map((t, j) => (j === i ? novo : t)).join(' ');
+  function parecidos_(t) {                                      // sinônimos nos dois sentidos (camisa→camiseta e camiseta→camisa)
+    const ida = sinonimosMapa_[t] || [], volta = Object.keys(sinonimosMapa_).filter((k) => (sinonimosMapa_[k] || []).includes(t));
+    return Array.from(new Set(ida.concat(volta)));
+  }
+
+  /** Devolve { aviso, itens:[{texto, qtd, tipo}] } para o que a pessoa digitou até agora. */
+  function sugerir_(txt) {
+    const termos = termosDaBusca(txt);
+    if (!termos.length || semAcentoBusca(txt).trim().length < 2 || !produtos.length) return { aviso: '', itens: [] };
+    const itens = [], vistos = new Set();
+    const por = (texto, tipo) => {
+      const k = semAcentoBusca(texto).trim();
+      if (!k || vistos.has(k) || k === semAcentoBusca(txt).trim()) return;
+      const qtd = contar_(texto); if (!qtd) return;
+      vistos.add(k); itens.push({ texto, qtd, tipo });
+    };
+    // 1) completar a última palavra com o que existe na loja
+    const ult = termos[termos.length - 1], antes = termos.slice(0, -1).join(' '), tudo = semAcentoBusca(txt).trim();
+    vocabulario_().filter((e) => (e.k.startsWith(ult) && e.k !== ult) || (e.k.includes(' ') && e.k.startsWith(tudo) && e.k !== tudo))
+      .sort((a, b) => b.peso - a.peso || a.k.length - b.k.length)
+      .slice(0, 14).forEach((e) => { if (itens.length < 6) por(e.k.includes(' ') && e.k.startsWith(tudo) ? e.rotulo : (antes ? antes + ' ' : '') + e.rotulo, 'completa'); });
+    // 2) nada IGUAL (a grade até acha parecido por tolerância, mas a pessoa merece saber): aponta sinônimos que TÊM peças e "você quis dizer"
+    const existe_ = (t) => produtos.some((p) => indiceDe(p).texto.includes(t));
+    const faltam = termos.map((t, i) => ({ t, i })).filter((x) => x.t.length >= 3 && !existe_(x.t));
+    let aviso = '';
+    if (faltam.length) {
+      aviso = 'Não achei “' + txt.trim() + '” igual.';
+      const extras = [];
+      faltam.forEach(({ t, i }) => parecidos_(t).forEach((alt) => { const f = trocar_(termos, i, alt), q = contar_(f); if (q) extras.push({ texto: f, qtd: q, tipo: 'sinonimo' }); }));
+      faltam.forEach(({ t, i }) => { if (t.length >= 4) vocabulario_().forEach((e) => { if (e.k !== t && !e.k.includes(' ') && umaLetraDeDiferenca(t, e.k)) { const f = trocar_(termos, i, e.rotulo), q = contar_(f); if (q) extras.push({ texto: f, qtd: q, tipo: 'quis' }); } }); });
+      extras.sort((a, b) => (a.tipo === b.tipo ? b.qtd - a.qtd : (a.tipo === 'quis' ? -1 : 1))).forEach((x) => { const k = semAcentoBusca(x.texto).trim(); if (itens.length < 8 && !vistos.has(k)) { vistos.add(k); itens.push(x); } });
+      if (!itens.length) aviso += ' Tente outra palavra ou chame a gente no WhatsApp.';
+      else aviso += ' Mas temos:';
+    }
+    return { aviso, itens };
+  }
+
+  function fechar_() { lista.hidden = true; lista.textContent = ''; itens_ = []; ativo_ = -1; busca.setAttribute('aria-expanded', 'false'); busca.removeAttribute('aria-activedescendant'); }
+  function pintar_() {
+    const r = sugerir_(busca.value);
+    if (!r.aviso && !r.itens.length) { fechar_(); return; }
+    lista.textContent = ''; itens_ = r.itens; ativo_ = -1;
+    if (r.aviso) { const a = document.createElement('div'); a.className = 'sug-aviso'; a.setAttribute('role', 'presentation'); a.textContent = r.aviso; lista.appendChild(a); }
+    r.itens.forEach((it, i) => {
+      const d = document.createElement('div'); d.id = 'sug-' + i; d.className = 'sug-item'; d.setAttribute('role', 'option'); d.setAttribute('aria-selected', 'false'); d.dataset.i = String(i);
+      const tx = document.createElement('span'); tx.className = 'sug-txt';
+      tx.textContent = (it.tipo === 'sinonimo' ? 'Parecido: ' : it.tipo === 'quis' ? 'Você quis dizer: ' : '') + it.texto;
+      const q = document.createElement('span'); q.className = 'sug-qtd'; q.textContent = it.qtd === 1 ? '1 peça' : it.qtd + ' peças';
+      d.appendChild(tx); d.appendChild(q); lista.appendChild(d);
+    });
+    lista.hidden = false; busca.setAttribute('aria-expanded', 'true');
+  }
+  function escolher_(i) {
+    const it = itens_[i]; if (!it) return;
+    busca.value = it.texto; fechar_();
+    aplicarFiltros();
+    busca.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));   // mesmo caminho do Enter: fecha o teclado e a gaveta
+    busca.blur();
+  }
+  function marcar_(i) {
+    const els = lista.querySelectorAll('.sug-item'); if (!els.length) return;
+    ativo_ = (i + els.length) % els.length;
+    els.forEach((e, j) => { e.classList.toggle('ativo', j === ativo_); e.setAttribute('aria-selected', String(j === ativo_)); });
+    busca.setAttribute('aria-activedescendant', 'sug-' + ativo_);
+    els[ativo_].scrollIntoView({ block: 'nearest' });
+  }
+  busca.setAttribute('role', 'combobox'); busca.setAttribute('aria-autocomplete', 'list'); busca.setAttribute('aria-controls', 'sugestoes-busca'); busca.setAttribute('aria-expanded', 'false'); busca.setAttribute('autocomplete', 'off');
+  busca.addEventListener('input', () => { clearTimeout(tReal_); tReal_ = setTimeout(pintar_, 120); });
+  busca.addEventListener('focus', () => { if (busca.value.trim().length >= 2) pintar_(); });
+  busca.addEventListener('blur', () => { setTimeout(fechar_, 160); });
+  busca.addEventListener('keydown', (ev) => {
+    if (lista.hidden) return;
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); marcar_(ativo_ + 1); }
+    else if (ev.key === 'ArrowUp') { ev.preventDefault(); marcar_(ativo_ < 0 ? -1 : ativo_ - 1); }
+    else if (ev.key === 'Escape') { fechar_(); }
+    else if (ev.key === 'Enter' && ativo_ >= 0 && ev.isTrusted !== false) { ev.preventDefault(); ev.stopImmediatePropagation(); escolher_(ativo_); }
+  }, true);
+  lista.addEventListener('pointerdown', (ev) => { ev.preventDefault(); });          // não tira o foco do campo antes do toque valer
+  lista.addEventListener('click', (ev) => { const d = ev.target.closest('.sug-item'); if (d) escolher_(parseInt(d.dataset.i, 10)); });
+  window.tkSugestoes_ = { sugerir: sugerir_ };
 })();

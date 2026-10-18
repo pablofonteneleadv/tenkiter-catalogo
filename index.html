@@ -115,6 +115,7 @@ catch (e) { window.__precargaLista = null; }
   <div class="busca-wrap">
     <div class="busca-campo">
       <input type="text" id="busca" aria-label="Buscar por produto, código ou estilo" placeholder="🔎 Buscar por produto, código ou estilo..." enterkeyhint="search">
+      <div class="sugestoes-busca" id="sugestoes-busca" role="listbox" aria-label="Sugestões de busca" hidden></div>
       <button type="button" class="btn-voz" id="btn-voz" title="Buscar por comando de voz" aria-label="Buscar por comando de voz">🎤</button>
     </div>
     <button type="button" class="btn-filtros-toggle" id="btn-filtros-toggle" aria-expanded="false" aria-controls="filtros-extras" title="Mostrar ou esconder os filtros">
@@ -260,6 +261,13 @@ catch (e) { window.__precargaLista = null; }
   <div id="juntar-erro" class="juntar-erro" role="alert" hidden></div>
   <div id="juntar-prog" class="juntar-prog" role="status" aria-live="polite" hidden><span class="juntar-spin" aria-hidden="true"></span><span>Juntando… pode levar alguns segundos. <b>Está funcionando, não feche.</b></span></div>
   <button type="button" class="juntar-ok" id="juntar-ok">Juntar</button>
+</div></div>
+<div id="overlay-sair-sel" class="overlay-sheet-loja"><div class="modal sair-sel" role="dialog" aria-modal="true" aria-labelledby="sair-sel-titulo">
+  <h2 id="sair-sel-titulo">Antes de sair…</h2>
+  <p id="sair-sel-txt">Quer que eu segure a sua seleção?</p>
+  <button type="button" class="sair-sel-seg" id="sair-sel-segura">🧡 Segura minha seleção, volto já já</button>
+  <button type="button" class="sair-sel-lib" id="sair-sel-libera">Libera a seleção</button>
+  <button type="button" class="sair-sel-fica btn-fechar" id="sair-sel-fica">Continuar vendo a loja</button>
 </div></div>
 <div id="overlay-selecao" class="overlay-sheet-loja"><div class="modal" id="selecao-conteudo" role="dialog" aria-modal="true" aria-label="Compartilhar seleção"></div></div>
 

@@ -44,8 +44,16 @@
   .btn-trocar-user, .btn-sair { background: #f0f0f0; border: none; padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; cursor: pointer; white-space: nowrap; }
   .btn-sair { background: #fde3e3; color: var(--vermelho); font-weight: 700; }
 
-  .sync-bar { background: #fff3e0; border: 1px solid #ffcc80; color: #7a4a00; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; font-size: 0.78rem; display: none; align-items: center; justify-content: space-between; gap: 8px; }
+  /* v4.27: ação pendente de conexão = plaquinha FLUTUANTE (não some ao rolar; não dá para esquecer) */
+  .sync-bar { position: fixed; left: 12px; right: 12px; bottom: 86px; z-index: 84; max-width: 520px; margin: 0 auto; background: #fff3e0; border: 2px solid #f0a030; color: #5c3600; padding: 9px 12px; border-radius: 14px; font-size: 0.82rem; font-weight: 700; display: none; align-items: center; justify-content: space-between; gap: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.28); }
   .sync-bar.ativa { display: flex; }
+  .sync-bar[hidden] { display: none; }
+  body:has(.envios-flut:not([hidden])) .sync-bar { bottom: 160px; }
+  .sync-bar.sincronizando { border-color: #1a73e8; background: #e8f0fe; color: #0b3a8a; }
+  .sync-bar button { min-height: 40px; }
+  #aviso-rapido { position: fixed; left: 12px; right: 12px; bottom: 150px; z-index: 86; max-width: 520px; margin: 0 auto; background: #0d0d0d; color: #fff; border: 2px solid #4caf50; border-radius: 14px; padding: 10px 14px; font-size: .85rem; font-weight: 700; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+  #aviso-rapido[hidden] { display: none; }
+  #aviso-rapido.aviso { border-color: #f5c542; }
   .sync-bar button { width: auto; padding: 6px 10px; font-size: 0.72rem; background: var(--preto); color: var(--laranja); }
 
   .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
@@ -449,7 +457,7 @@
   .btn-ferr { width: auto; padding: 9px 14px; font-size: 0.85rem; border-radius: 8px; }
   .sem-cadastrar #card-pedidos, .sem-cadastrar #aviso-codigos, .sem-cadastrar #aviso-pedidos-novos, .sem-cadastrar #btn-bulk-estoque, .sem-cadastrar #btn-bulk-categoria { display: none !important; }
   .sem-auditoria #btn-abrir-metricas, .sem-precos #btn-importar-csv, .sem-gerir #btn-abrir-integracoes, .sem-gerir #btn-abrir-conexoes { display: none !important; }
-  .sem-cadastrar #btn-abrir-postagens { display: none !important; }
+  .sem-cadastrar #btn-abrir-postagens, .sem-cadastrar #btn-abrir-fotoia { display: none !important; }
   /* Ferramentas do gestor: cada bloco só para quem tem a permissão dele (o servidor já barra; aqui some da tela) */
   .sem-auditoria #stats-panel, .sem-auditoria #btn-exportar-csv, .sem-gerir #details-config, .sem-gerir #details-log-debug { display: none !important; }
   /* v4.9 — "Painel simplificado" (perfil Equipe catálogo 1): fica só cadastro, lista e Postagens. Nada é apagado: quem tem outra permissão (Encarregado, Admin…) não cai aqui (ver aplicarPermissoes). */
@@ -569,6 +577,7 @@
   </div>
 </div>
 
+<div id="aviso-rapido" role="status" aria-live="polite" hidden></div>
 <div id="toast-carregando" role="status" aria-live="polite"><span class="spinner-mini"></span><span id="texto-toast">Carregando peças...</span></div>
 <button type="button" id="envios-flut" class="envios-flut" aria-live="polite" hidden></button>
 
@@ -591,7 +600,7 @@
     </div>
   </div>
 
-  <div class="sync-bar" id="sync-bar">
+  <div class="sync-bar" id="sync-bar" role="status" aria-live="polite">
     <span id="sync-texto">0 ações pendentes de conexão</span>
     <button type="button" id="btn-sincronizar">🔄 Sincronizar</button>
   </div>
@@ -640,6 +649,7 @@
     <button type="button" class="btn-ferr" id="btn-importar-csv" hidden style="background:#444;color:#fff;">⬆️ Importar planilha</button>
     <button type="button" class="btn-ferr" id="btn-abrir-integracoes" hidden style="background:#5a2ea6;color:#fff;">🔌 Integrações</button>
     <button type="button" class="btn-ferr" id="btn-abrir-postagens" hidden style="background:#c13584;color:#fff;">📸 Postagens</button>
+    <button type="button" class="btn-ferr" id="btn-abrir-fotoia" hidden style="background:#6a1b9a;color:#fff;">🎨 Fotos com IA</button>
     <button type="button" class="btn-ferr" id="btn-abrir-conexoes" hidden style="background:#0b5d63;color:#fff;">🔗 Conexões</button>
     <a href="treinamentos.html" target="_blank" style="text-decoration:none;background:var(--preto);color:var(--laranja);border:1px solid var(--laranja);border-radius:8px;padding:9px 14px;font-size:0.85rem;font-weight:700;display:inline-flex;align-items:center;">📖 Treinamentos</a>
   </div>
@@ -1272,20 +1282,45 @@
   function atualizarBarraSync() {
     const qtd = getFilaOffline().length;
     const bar = document.getElementById('sync-bar');
-    document.getElementById('sync-texto').textContent = qtd + (qtd === 1 ? ' ação pendente de conexão' : ' ações pendentes de conexão');
+    document.getElementById('sync-texto').textContent = '\u26A0\uFE0F ' + qtd + (qtd === 1 ? ' ação pendente de conexão' : ' ações pendentes de conexão');
     bar.classList.toggle('ativa', qtd > 0);
   }
 
+  // v4.27: aviso rápido SEM travar a tela (no lugar do alert "Tudo sincronizado!")
+  let avisoRapidoT_ = 0;
+  function avisoRapido_(texto, tipo) {
+    const el = document.getElementById('aviso-rapido');
+    if (!el) return;
+    el.textContent = texto;
+    el.className = tipo === 'aviso' ? 'aviso' : '';
+    el.hidden = false;
+    clearTimeout(avisoRapidoT_);
+    avisoRapidoT_ = setTimeout(() => { el.hidden = true; }, tipo === 'aviso' ? 7000 : 4500);
+  }
+  window.tkAvisoRapido = avisoRapido_;
+
+  let sincronizando_ = false;
   document.getElementById('btn-sincronizar').addEventListener('click', async () => {
+    if (sincronizando_) return;
+    sincronizando_ = true;
     const btn = document.getElementById('btn-sincronizar');
+    const bar = document.getElementById('sync-bar');
+    btn.disabled = true;
     btn.textContent = 'Sincronizando...';
-    const resultado = await sincronizarFilaOffline();
-    atualizarBarraSync();
-    btn.textContent = '\u{1F504} Sincronizar';
-    if (resultado.restantes > 0) {
-      alert(resultado.enviados + ' ação(ões) enviada(s). Ainda há ' + resultado.restantes + ' pendente(s) — verifique sua internet.');
-    } else if (resultado.enviados > 0) {
-      alert('Tudo sincronizado! ' + resultado.enviados + ' ação(ões) enviada(s) com sucesso.');
+    bar.classList.add('sincronizando');
+    try {
+      const resultado = await sincronizarFilaOffline();
+      atualizarBarraSync();
+      if (resultado.restantes > 0) {
+        avisoRapido_(resultado.enviados + ' ação(ões) enviada(s). Ainda há ' + resultado.restantes + ' pendente(s) — verifique sua internet.', 'aviso');
+      } else if (resultado.enviados > 0) {
+        avisoRapido_('\u2714 Tudo sincronizado! ' + resultado.enviados + ' ação(ões) enviada(s) com sucesso.');
+      }
+    } finally {
+      bar.classList.remove('sincronizando');
+      btn.disabled = false;
+      btn.textContent = '\u{1F504} Sincronizar';
+      sincronizando_ = false;
     }
     await carregarProdutos();
   });
@@ -4699,6 +4734,7 @@
 <script src="admin-conexoes.js"></script>
 <script src="admin-instagram.js"></script>
 <script src="admin-postagens.js"></script>
+<script src="admin-fotoia.js"></script>
 <script src="nav.js" data-ativo="gestao"></script>
 <script src="a11y.js"></script>
 <script src="conta.js"></script>
