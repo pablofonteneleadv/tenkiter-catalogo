@@ -94,6 +94,7 @@ async function iniciar(env) {
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN seq INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   for (const col of COLUNAS_NOVAS) { try { await env.DB.prepare('ALTER TABLE rascunho ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  try { await env.DB.prepare("ALTER TABLE fotoia ADD COLUMN refs TEXT DEFAULT '[]'").run(); } catch (e) { /* já existe */ }
   try {   // v3.7: preço sempre calculado (o escrito é o à vista). Corrige os rascunhos antigos cujo preço da legenda foi gravado como se fosse o cheio.
     if (!(await cfgGet(env, 'mig_preco_v2'))) {
       const velhos = (await env.DB.prepare("SELECT id, preco_sug FROM rascunho WHERE COALESCE(preco_foto,'')='' AND COALESCE(preco_sug,'')!='' AND status IN ('pendente','descartado')").all()).results || [];
@@ -356,6 +357,7 @@ async function marcarEsgotado(env, modelo, msg) {
   try {
     const m = /retry in\s+(?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?/i.exec(String(msg || ''));
     let seg = 3600; if (m) seg = Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Math.ceil(Number(m[3] || 0));
+    if (!m && /limit:\s*0\b/i.test(String(msg || ''))) seg = 6 * 3600;           // cota 0 = o plano da chave não inclui esse modelo: não adianta tentar de hora em hora
     seg = Math.max(600, Math.min(seg, 86400));
     const mapa = await modelosEsgotados(env), agora = Date.now();
     Object.keys(mapa).forEach((k) => { if (mapa[k] <= agora) delete mapa[k]; });
@@ -1146,18 +1148,29 @@ Você é o motor de inteligência visual da **TENKiTER Modas**. Sua função é 
 
 3. **Validação Final:**
    - Verifique se todas as peças do cliente foram respeitadas e se a imagem gerada convida o usuário a abrir o post para ver os detalhes manuais.`;
-export const CFG_FOTOIA_PADRAO = { ligado: true, instrucao: INSTRUCAO_FOTOIA_PADRAO, modelos: ['gemini-nano-banana-2.1', 'gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image', 'gemini-2.5-flash-image'], modo: 'auto', formato: '9:16', tamanho: '1K', limiteDia: 20 };
-const FORMATOS_FOTOIA = ['9:16', '4:5', '1:1', '3:4', '16:9'], MODOS_FOTOIA = ['auto', 'interactions', 'generateContent'];
-const FOTOIA_MAX_FONTE = 1600 * 1024, FOTOIA_MAX_RESULTADO = 8 * 1024 * 1024, FOTOIA_MAX_FOTOS = 4, FOTOIA_MAX_FILA = 40;
+export const INSTRUCAO_CF_PADRAO = `Vertical fashion campaign cover photo for a Brazilian clothing store ({formato}).
+Use EXACTLY the garment shown in the reference image(s): same cut, color, print, fabric and details. Do not redesign, recolor or invent another piece.
+A happy, confident model wearing it, natural pose, clean bright modern background in soft light beige and sand tones, warm natural light, editorial lifestyle photography, sharp focus, high quality.
+Keep the top and the bottom of the frame calm and uncluttered. No text, no logos, no watermarks, no extra people.
+Product: {nome}. {extra}`;
+export const CF_MODELO_PADRAO = '@cf/black-forest-labs/flux-2-klein-4b';
+export const CFG_FOTOIA_PADRAO = { ligado: true, instrucao: INSTRUCAO_FOTOIA_PADRAO, modelos: ['gemini-nano-banana-2.1', 'gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image', 'gemini-2.5-flash-image'], modo: 'auto', formato: '9:16', tamanho: '1K', limiteDia: 20,
+  provedores: ['gemini', 'cloudflare'], cfModelo: CF_MODELO_PADRAO, instrucaoCf: INSTRUCAO_CF_PADRAO };
+const FORMATOS_FOTOIA = ['9:16', '4:5', '1:1', '3:4', '16:9'], MODOS_FOTOIA = ['auto', 'interactions', 'generateContent'], PROVEDORES_FOTOIA = ['gemini', 'cloudflare'];
+const FOTOIA_MAX_FONTE = 1600 * 1024, FOTOIA_MAX_REF = 300 * 1024, FOTOIA_MAX_RESULTADO = 8 * 1024 * 1024, FOTOIA_MAX_FOTOS = 4, FOTOIA_MAX_FILA = 40;
 export function normalizarCfgFotoIA(c) {
   const d = CFG_FOTOIA_PADRAO, x = c && typeof c === 'object' ? c : {};
   const instr = typeof x.instrucao === 'string' && x.instrucao.trim() ? x.instrucao.replace(/\r/g, '').slice(0, 12000) : d.instrucao;
+  const instrCf = typeof x.instrucaoCf === 'string' && x.instrucaoCf.trim() ? x.instrucaoCf.replace(/\r/g, '').slice(0, 3000) : d.instrucaoCf;
   let mods = (Array.isArray(x.modelos) ? x.modelos : String(x.modelos || '').split(/[\n,]+/)).map((m) => String(m).trim()).filter((m) => /^[A-Za-z0-9._\-]{3,70}$/.test(m));
   mods = mods.filter((m, i) => mods.indexOf(m) === i).slice(0, 8); if (!mods.length) mods = d.modelos.slice();
-  const lim = Number(x.limiteDia);
+  let provs = (Array.isArray(x.provedores) ? x.provedores : []).map((m) => String(m).trim()).filter((m, i, a) => PROVEDORES_FOTOIA.indexOf(m) !== -1 && a.indexOf(m) === i);
+  if (!provs.length) provs = d.provedores.slice();
+  const cfm = String(x.cfModelo || '').trim(), lim = Number(x.limiteDia);
   return { ligado: x.ligado === undefined ? d.ligado : !!x.ligado, instrucao: instr, modelos: mods, modo: MODOS_FOTOIA.indexOf(x.modo) !== -1 ? x.modo : d.modo,
     formato: FORMATOS_FOTOIA.indexOf(x.formato) !== -1 ? x.formato : d.formato, tamanho: ['1K', '2K'].indexOf(x.tamanho) !== -1 ? x.tamanho : d.tamanho,
-    limiteDia: isFinite(lim) && lim >= 1 ? Math.min(200, Math.round(lim)) : d.limiteDia };
+    limiteDia: isFinite(lim) && lim >= 1 ? Math.min(200, Math.round(lim)) : d.limiteDia,
+    provedores: provs, cfModelo: /^@cf\/[A-Za-z0-9._\-]+\/[A-Za-z0-9._\-]{2,80}$/.test(cfm) ? cfm : d.cfModelo, instrucaoCf: instrCf };
 }
 async function lerCfgFotoIA(env) { let v = null; try { v = JSON.parse((await cfgGet(env, 'fotoia_cfg')) || 'null'); } catch (e) { v = null; } return normalizarCfgFotoIA(v); }
 const diaFortaleza_ = (ms) => new Date(ms + FUSO_MIN * 60000).toISOString().slice(0, 10);
@@ -1222,6 +1235,90 @@ export async function chamarGeminiImagem(env, chave, cfg, prompt, fontes) {
   }
   return { ok: false, erro: ultimo || 'A IA não respondeu' };
 }
+/* ---------- Cloudflare Workers AI (FLUX.2 klein 4B) — 2º motor, grátis até o limite diário da conta (10 000 "neurons"/dia) ----------
+ * Aceita até 4 fotos de referência (cada uma < 512×512) e gera 1 imagem de 256 a 1920 px por lado. O pedido manda `refs` (cópias pequenas, feitas no aparelho).
+ * Passou do grátis do dia = erro 4006: o pedido VOLTA para a fila e espera a meia-noite UTC (21:05 em Fortaleza). Na conta grátis nada é cobrado. */
+const TAMANHOS_CF = { '9:16': { '1K': [720, 1280], '2K': [1088, 1920] }, '4:5': { '1K': [768, 960], '2K': [1088, 1360] }, '1:1': { '1K': [1024, 1024], '2K': [1536, 1536] }, '3:4': { '1K': [768, 1024], '2K': [1152, 1536] }, '16:9': { '1K': [1280, 720], '2K': [1920, 1088] } };
+/** Largura/altura de JPEG ou PNG lendo só o cabeçalho (sem decodificar). → [w, h] | null */
+export function dimensoesImagem(u8) {
+  try {
+    if (u8[0] === 0x89 && u8[1] === 0x50 && u8.length > 24) return [((u8[16] << 24) | (u8[17] << 16) | (u8[18] << 8) | u8[19]) >>> 0, ((u8[20] << 24) | (u8[21] << 16) | (u8[22] << 8) | u8[23]) >>> 0];
+    if (u8[0] === 0xff && u8[1] === 0xd8) {
+      let i = 2;
+      while (i + 9 < u8.length) {
+        if (u8[i] !== 0xff) { i++; continue; }
+        const m = u8[i + 1]; if (m === 0xd8 || m === 0x01 || (m >= 0xd0 && m <= 0xd7)) { i += 2; continue; }
+        const len = (u8[i + 2] << 8) | u8[i + 3];
+        if ((m >= 0xc0 && m <= 0xc3) || (m >= 0xc5 && m <= 0xc7) || (m >= 0xc9 && m <= 0xcb) || (m >= 0xcd && m <= 0xcf)) return [(u8[i + 7] << 8) | u8[i + 8], (u8[i + 5] << 8) | u8[i + 6]];
+        i += 2 + len;
+      }
+    }
+  } catch (e) { /* cabeçalho estranho: não bloqueia */ }
+  return null;
+}
+export function tamanhoCf(formato, tam) { const f = TAMANHOS_CF[formato] || TAMANHOS_CF['9:16']; return f[tam] || f['1K']; }
+const proximaMeiaNoiteUtcMs_ = () => { const d = new Date(); d.setUTCHours(24, 5, 0, 0); return d.getTime(); };
+export function promptCf(cfg, job, nRefs) {
+  let t = String(cfg.instrucaoCf || INSTRUCAO_CF_PADRAO);
+  const nome = job && job.nome ? String(job.nome).slice(0, 120) : '', extra = job && job.extra ? String(job.extra).slice(0, 400) : '';
+  const tinha = /\{nome\}/.test(t);
+  t = t.replace(/\{formato\}/g, cfg.formato).replace(/\{nome\}/g, nome).replace(/\{extra\}/g, extra).replace(/\{n\}/g, String(nRefs));
+  if (!tinha && nome) t += '\nProduct: ' + nome + '.';
+  if (!/\{extra\}/.test(cfg.instrucaoCf || INSTRUCAO_CF_PADRAO) && extra) t += '\n' + extra;
+  return t.replace(/[ \t]+\n/g, '\n').trim();
+}
+/** → {ok, buf, mime, modelo} | {ok:false, espera:true, ateMs, erro} | {ok:false, indisponivel:true} | {ok:false, erro}. Nunca lança. */
+export async function chamarCloudflareImagem(env, cfg, prompt, refs) {
+  if (!env.AI || typeof env.AI.run !== 'function') return { ok: false, indisponivel: true, erro: 'O Cloudflare (Workers AI) ainda não está ligado neste Worker.' };
+  const ate = Number(await env.CACHE.get('fotoia_cf_ate')) || 0;
+  if (ate > Date.now()) return { ok: false, espera: true, ateMs: ate, erro: 'Cloudflare: o grátis de hoje acabou (volta por volta das ' + new Date(ate + FUSO_MIN * 60000).toISOString().slice(11, 16) + ' de Fortaleza).' };
+  try {
+    const wh = tamanhoCf(cfg.formato, cfg.tamanho), form = new FormData();
+    form.append('prompt', prompt); form.append('width', String(wh[0])); form.append('height', String(wh[1]));
+    refs.slice(0, 4).forEach((r, i) => form.append('input_image_' + i, new Blob([r.buf], { type: r.mime || 'image/jpeg' }), 'ref' + i + '.jpg'));
+    const resp = new Response(form);
+    const out = await env.AI.run(cfg.cfModelo || CF_MODELO_PADRAO, { multipart: { body: resp.body, contentType: resp.headers.get('content-type') } });
+    const img = out && typeof out === 'object' ? (out.image || (out.result && out.result.image)) : '';
+    if (typeof img !== 'string' || img.length < 200) return { ok: false, erro: 'O Cloudflare respondeu sem imagem.' };
+    let buf; try { buf = b64ParaBuf_(img.replace(/^data:[^,]*,/, '').replace(/\s/g, '')); } catch (e) { return { ok: false, erro: 'O Cloudflare devolveu uma imagem corrompida.' }; }
+    return { ok: true, buf: buf, mime: 'image/jpeg', modelo: 'cloudflare:' + String(cfg.cfModelo || CF_MODELO_PADRAO).replace(/^@cf\/[^/]+\//, '') };
+  } catch (e) {
+    const msg = String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 220);
+    if (/4006|daily free allocation|used up your daily|neurons/i.test(msg)) { const ate2 = proximaMeiaNoiteUtcMs_(); try { await env.CACHE.put('fotoia_cf_ate', String(ate2), { expirationTtl: 86400 }); } catch (er) { /* sem KV: tenta de novo e recebe o mesmo erro */ } return { ok: false, espera: true, ateMs: ate2, erro: 'Cloudflare: o grátis de hoje (10 000 neurons) acabou; o pedido continua na fila e sai amanhã cedo.' }; }
+    if (/3040|capacity|temporar|overload|try again|429|rate limit/i.test(msg)) return { ok: false, espera: true, ateMs: Date.now() + 10 * 60000, erro: 'Cloudflare: servidor de imagens ocupado agora; o pedido tenta de novo em alguns minutos.' };
+    if (/10000|authentication|not authorized|permission|not enabled|binding/i.test(msg)) return { ok: false, fatal: true, erro: 'O Cloudflare recusou o uso do Workers AI (' + msg.slice(0, 120) + '). Confira se o Workers AI está ativo na conta.' };
+    return { ok: false, erro: 'Cloudflare: ' + msg };
+  }
+}
+/** Tenta os motores na ordem do gestor. Se nenhum deu imagem: junta os motivos (e, se algum só está esperando cota, o pedido espera). */
+export async function gerarComMotores_(env, cfg, job, fontes, refs, chaveGemini) {
+  const notas = []; let ateMs = 0, espera = false, fatal = false, ultimo = '', semPlanoGem = false, tentouGem = false, tentouCf = false, so = null;
+  for (const prov of cfg.provedores) {
+    let g = null;
+    if (prov === 'gemini') {
+      if (!chaveGemini) { notas.push('Gemini: falta a chave'); continue; }
+      tentouGem = true; g = await chamarGeminiImagem(env, chaveGemini, cfg, promptFotoIA(cfg, job, fontes.length), fontes);
+      if (g.ok) return g;
+      if (g.semPlano) semPlanoGem = true;
+      notas.push('Gemini: ' + (g.semPlano ? 'o plano desta chave não inclui geração de imagens (cota 0)' : g.erro));
+    } else if (prov === 'cloudflare') {
+      if (!refs.length) { if (env.AI) notas.push('Cloudflare: este pedido não tem a foto pequena que ele exige (cancele e coloque na fila de novo)'); continue; }
+      g = await chamarCloudflareImagem(env, cfg, promptCf(cfg, job, refs.length), refs);
+      if (g.indisponivel) continue;
+      tentouCf = true;
+      if (g.ok) return g;
+      notas.push(g.erro);
+    } else continue;
+    so = g;
+    if (g.espera) { espera = true; ateMs = ateMs ? Math.min(ateMs, g.ateMs || 0) : (g.ateMs || 0); }
+    else if (g.fatal) fatal = true; else ultimo = g.erro || ultimo;
+  }
+  if (!tentouGem && !tentouCf && !notas.length) return { ok: false, erro: 'Nenhum motor de imagem está disponível (ligue o Gemini com chave ou o Cloudflare).' };
+  if (tentouGem && !tentouCf && so && notas.length === 1) return so;   // só o Gemini foi tentado: devolve o resultado dele sem mudar nada
+  const erro = notas.join(' · ').slice(0, 480);
+  if (espera) return { ok: false, espera: true, ateMs: ateMs, semPlano: semPlanoGem && !tentouCf, contaTent: !!ultimo, erro: erro };   // um motor só espera cota, mas o outro deu erro de verdade: isso conta tentativa
+  return { ok: false, fatal: fatal && !ultimo, erro: erro || ultimo };
+}
 const linhaFotoIA_ = (env, x) => ({ id: x.id, status: x.status, nome: x.nome || '', produto: x.produto || '', extra: x.extra || '', resultado: x.resultado ? urlMidia(env, x.resultado) : '', modelo: x.modelo || '', erro: x.erro || '', espera: x.status === 'fila' && x.prox_em ? x.prox_em : '', tent: x.tent || 0,
   fontes: (function () { try { return JSON.parse(x.fontes || '[]').map((k) => urlMidia(env, k)); } catch (e) { return []; } })(), criado_em: x.criado_em, pronto_em: x.pronto_em || '' });
 /** Faz UM pedido da fila (o mais antigo que já pode, ou `soId`). Nunca lança. */
@@ -1229,7 +1326,8 @@ export async function processarFotoIA(env, soId) {
   try {
     await iniciar(env);
     const cfg = await lerCfgFotoIA(env); if (!cfg.ligado) return { feitas: 0, desligado: true };
-    const chave = await cfgGet(env, 'gemini_key'); if (!chave) return { feitas: 0, semChave: true };
+    const chave = await cfgGet(env, 'gemini_key');
+    if (!chave && !(env.AI && cfg.provedores.indexOf('cloudflare') !== -1)) return { feitas: 0, semChave: true };
     if (await env.CACHE.get('fotoia_trava')) return { feitas: 0, ocupado: true };
     const agoraMs = Date.now(), agoraIso = new Date(agoraMs).toISOString();
     await env.DB.prepare("UPDATE fotoia SET status='fila', atualizado_em=? WHERE status='gerando' AND atualizado_em < ?").bind(agoraIso, new Date(agoraMs - 10 * 60000).toISOString()).run();
@@ -1249,7 +1347,12 @@ export async function processarFotoIA(env, soId) {
       const fontes = [];
       for (const k of chaves) { try { const o = await env.MIDIA.get(k); if (!o) continue; const buf = await o.arrayBuffer(); fontes.push({ mime: /\.png$/.test(k) ? 'image/png' : /\.webp$/.test(k) ? 'image/webp' : 'image/jpeg', data: b64(buf) }); } catch (e) { /* foto ilegível é ignorada */ } }
       if (!fontes.length) { await env.DB.prepare("UPDATE fotoia SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('As fotos de origem não estão mais guardadas. Faça o pedido de novo.', agoraIso, job.id).run(); return { feitas: 0 }; }
-      const g = await chamarGeminiImagem(env, chave, cfg, promptFotoIA(cfg, job, fontes.length), fontes);
+      const refs = [];
+      if (env.AI && cfg.provedores.indexOf('cloudflare') !== -1) {
+        let rk = []; try { rk = JSON.parse(job.refs || '[]'); } catch (e) { rk = []; }
+        for (const k of rk) { try { const o = await env.MIDIA.get(k); if (!o) continue; refs.push({ mime: /\.png$/.test(k) ? 'image/png' : 'image/jpeg', buf: new Uint8Array(await o.arrayBuffer()) }); } catch (e) { /* ref ilegível é ignorada */ } }
+      }
+      const g = await gerarComMotores_(env, cfg, job, fontes, refs, chave);
       const t = new Date().toISOString();
       if (g.ok) {
         const ext = extensaoImagem(g.buf); if (!ext) { await env.DB.prepare("UPDATE fotoia SET status='erro', erro=?, tent=tent+1, atualizado_em=? WHERE id=?").bind('A IA devolveu um arquivo que não é imagem.', t, job.id).run(); return { feitas: 0 }; }
@@ -1264,8 +1367,10 @@ export async function processarFotoIA(env, soId) {
         return { feitas: 1, id: job.id };
       }
       if (g.espera) {
-        const ate = new Date(g.semPlano ? Date.now() + 6 * 3600000 : Math.max(Date.now() + 5 * 60000, Math.min(g.ateMs || (Date.now() + 1800000), Date.now() + 12 * 3600000))).toISOString();
-        await env.DB.prepare("UPDATE fotoia SET status='fila', prox_em=?, erro=?, atualizado_em=? WHERE id=?").bind(ate, g.erro, t, job.id).run();
+        const ate = new Date(g.semPlano ? Date.now() + 6 * 3600000 : Math.max(Date.now() + 5 * 60000, Math.min(g.ateMs || (Date.now() + 1800000), Date.now() + 26 * 3600000))).toISOString();
+        const tentE = (job.tent || 0) + (g.contaTent ? 1 : 0);
+        if (g.contaTent && tentE >= 3) { await env.DB.prepare("UPDATE fotoia SET status='erro', tent=?, erro=?, prox_em='', atualizado_em=? WHERE id=?").bind(tentE, g.erro, t, job.id).run(); return { feitas: 0, erro: g.erro }; }
+        await env.DB.prepare("UPDATE fotoia SET status='fila', prox_em=?, erro=?, tent=?, atualizado_em=? WHERE id=?").bind(ate, g.erro, tentE, t, job.id).run();
         return { feitas: 0, espera: true };
       }
       const tent = (job.tent || 0) + 1, fim = g.fatal || tent >= 3;
@@ -1282,7 +1387,8 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
     const cfg = await lerCfgFotoIA(env), chave = await cfgGet(env, 'gemini_key'), uso = await usoFotoIA_(env);
     const esg = await modelosEsgotados(env), agoraMs = Date.now(), de = {}; cfg.modelos.forEach((m) => { if (esg[m] && esg[m] > agoraMs) de[m] = new Date(esg[m]).toISOString(); });
     const cont = {}; ((await env.DB.prepare('SELECT status, COUNT(*) AS n FROM fotoia GROUP BY status').all()).results || []).forEach((x) => { cont[x.status] = x.n; });
-    return J({ ok: true, config: cfg, padrao: { instrucao: INSTRUCAO_FOTOIA_PADRAO, limiteDia: CFG_FOTOIA_PADRAO.limiteDia, modelos: CFG_FOTOIA_PADRAO.modelos }, podeEditar: gestor, temChave: !!chave, fimChave: chave ? String(chave).slice(-4) : '', hoje: { usadas: uso.n, limite: cfg.limiteDia }, semCota: de, contagens: cont });
+    const cfAte = Number(await env.CACHE.get('fotoia_cf_ate')) || 0;
+    return J({ ok: true, config: cfg, padrao: { instrucao: INSTRUCAO_FOTOIA_PADRAO, instrucaoCf: INSTRUCAO_CF_PADRAO, limiteDia: CFG_FOTOIA_PADRAO.limiteDia, modelos: CFG_FOTOIA_PADRAO.modelos, cfModelo: CF_MODELO_PADRAO }, cloudflare: { disponivel: !!(env.AI && typeof env.AI.run === 'function'), semGratisAte: cfAte > Date.now() ? new Date(cfAte).toISOString() : '' }, podeEditar: gestor, temChave: !!chave, fimChave: chave ? String(chave).slice(-4) : '', hoje: { usadas: uso.n, limite: cfg.limiteDia }, semCota: de, contagens: cont });
   }
   if (p === '/fotoia/config' && req.method === 'POST') {
     if (!gestor) return J({ ok: false, erro: 'Só o administrador total muda a instrução e os limites da IA.' }, 403);
@@ -1304,14 +1410,23 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
       const ext = extensaoImagem(buf); if (!ext) return J({ ok: false, erro: 'Só foto JPG, PNG ou WEBP.' }, 400);
       bufs.push({ buf: buf, ext: ext });
     }
-    const uso = await lerUso(env), total = bufs.reduce((s, x) => s + x.buf.length, 0);
+    const refsIn = Array.isArray(b && b.refs) ? b.refs.slice(0, FOTOIA_MAX_FOTOS) : [], refBufs = [];       // cópias pequenas (< 512 px) para o Cloudflare; opcionais
+    for (const f of refsIn) {
+      let buf; try { buf = b64ParaBuf_(String((f && f.data) || '').replace(/^data:[^,]*,/, '').replace(/\s/g, '')); } catch (e) { continue; }
+      const ext = extensaoImagem(buf); if (!buf.length || buf.length > FOTOIA_MAX_REF || !ext || ext === 'webp') continue;
+      const dm = dimensoesImagem(buf); if (dm && (dm[0] > 511 || dm[1] > 511)) continue;
+      refBufs.push({ buf: buf, ext: ext });
+    }
+    const uso = await lerUso(env), total = bufs.concat(refBufs).reduce((s, x) => s + x.buf.length, 0);
     if (uso.bytes + total > limite(env)) return J({ ok: false, erro: 'O armazenamento de fotos está cheio no momento.' }, 507);
     const d = new Date(), aaaamm = d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0'), chaves = [];
     for (const x of bufs) { const k = 't/' + aaaamm + '/' + hex(10) + '.' + x.ext; await env.MIDIA.put(k, x.buf, { httpMetadata: { contentType: x.ext === 'jpg' ? 'image/jpeg' : 'image/' + x.ext, cacheControl: 'public, max-age=31536000, immutable' } }); chaves.push(k); }
-    uso.bytes += total; uso.arquivos += bufs.length; await env.CACHE.put('uso', JSON.stringify(uso));
+    const chavesRef = [];
+    for (const x of refBufs) { const k = 't/' + aaaamm + '/' + hex(10) + '.' + x.ext; await env.MIDIA.put(k, x.buf, { httpMetadata: { contentType: x.ext === 'jpg' ? 'image/jpeg' : 'image/' + x.ext, cacheControl: 'public, max-age=31536000, immutable' } }); chavesRef.push(k); }
+    uso.bytes += total; uso.arquivos += bufs.length + refBufs.length; await env.CACHE.put('uso', JSON.stringify(uso));
     const nome = String((b && b.nome) || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 120), produto = String((b && b.produto) || '').replace(/[^\w.\-]/g, '').slice(0, 40), extra = String((b && b.extra) || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 600);
     const por = String(req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20), t = agoraIso();
-    const r = await env.DB.prepare("INSERT INTO fotoia (status, nome, produto, extra, fontes, criado_por, criado_em, atualizado_em) VALUES ('fila',?,?,?,?,?,?,?)").bind(nome, produto, extra, JSON.stringify(chaves), por, t, t).run();
+    const r = await env.DB.prepare("INSERT INTO fotoia (status, nome, produto, extra, fontes, refs, criado_por, criado_em, atualizado_em) VALUES ('fila',?,?,?,?,?,?,?,?)").bind(nome, produto, extra, JSON.stringify(chaves), JSON.stringify(chavesRef), por, t, t).run();
     const id = r.meta && r.meta.last_row_id; disparar(id);
     return J({ ok: true, id: id });
   }

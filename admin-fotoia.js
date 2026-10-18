@@ -127,10 +127,14 @@
     if (aba === 'gerar') desenharGerar(); else if (aba === 'fila') desenharFila(); else desenharInstrucao();
   }
   function statusHtml() {
-    const u = info.hoje || {}, semCota = Object.keys(info.semCota || {});
-    return '<div class="fia-st"><span>' + (info.temChave ? '🔑 Chave do Gemini: ✓ (…' + esc(info.fimChave) + ')' : '🔑 Chave do Gemini: falta') + '</span><span>🖼️ Hoje: ' + (u.usadas || 0) + ' de ' + (u.limite || 0) + '</span>' +
-      (nFila() ? '<span>⏳ Na fila: ' + nFila() + '</span>' : '') + (semCota.length ? '<span>⚠️ Sem cota agora: ' + semCota.length + ' modelo(s)</span>' : '') + (info.config && info.config.ligado === false ? '<span>⏸️ IA desligada</span>' : '') + '</div>' +
-      (info.temChave ? '' : '<p class="fia-erro">Falta a chave do Gemini. Cole-a em <b>Produtos para aceitar ▸ ⚙️ Instagram ▸ IA</b> (a mesma chave serve para ler as fotos e gerar imagens).</p>');
+    const u = info.hoje || {}, semCota = Object.keys(info.semCota || {}), cf = info.cloudflare || {}, provs = (info.config && info.config.provedores) || ['gemini', 'cloudflare'];
+    const usaGem = provs.indexOf('gemini') !== -1, usaCf = provs.indexOf('cloudflare') !== -1;
+    const algumMotor = (usaGem && info.temChave) || (usaCf && cf.disponivel);
+    return '<div class="fia-st">' + (usaGem ? '<span>' + (info.temChave ? '🔑 Gemini: chave ✓ (…' + esc(info.fimChave) + ')' : '🔑 Gemini: falta a chave') + '</span>' : '') +
+      (usaCf ? '<span>' + (cf.disponivel ? (cf.semGratisAte ? '☁️ Cloudflare: grátis de hoje acabou' : '☁️ Cloudflare: ligado (grátis por dia)') : '☁️ Cloudflare: ainda não ligado') + '</span>' : '') +
+      '<span>🖼️ Hoje: ' + (u.usadas || 0) + ' de ' + (u.limite || 0) + '</span>' +
+      (nFila() ? '<span>⏳ Na fila: ' + nFila() + '</span>' : '') + (semCota.length && usaGem ? '<span>⚠️ Gemini sem cota agora: ' + semCota.length + ' modelo(s)</span>' : '') + (info.config && info.config.ligado === false ? '<span>⏸️ IA desligada</span>' : '') + '</div>' +
+      (algumMotor ? '' : '<p class="fia-erro">Nenhum motor de imagem está pronto. Ligue o <b>Cloudflare</b> (aba ⚙️, grátis por dia) ou cole a chave do Gemini em <b>Produtos para aceitar ▸ ⚙️ Instagram ▸ IA</b>.</p>');
   }
   function pecasFiltradas() {
     let l = []; try { l = typeof produtos !== 'undefined' && Array.isArray(produtos) ? produtos : []; } catch (e) { l = []; }
@@ -147,7 +151,7 @@
     const pecas = pecasFiltradas(), fotos = escolhida ? fotosDaPeca(escolhida) : [];
     const sel = (u) => fotosEsc.indexOf(u) + 1;
     a.innerHTML = statusHtml() + (msgTxt ? '<p class="' + (msgTipo === 'erro' ? 'fia-erro' : 'fia-ok') + '">' + esc(msgTxt) + '</p>' : '') +
-      '<div class="fia-aviso">A IA recebe as fotos reais da peça e gera <b>1 imagem de capa</b> seguindo a sua instrução (aba ⚙️). Se a cota do Google acabar, o pedido <b>espera na fila</b> e sai sozinho quando voltar — não precisa ficar na tela.</div>' +
+      '<div class="fia-aviso">A IA recebe as fotos reais da peça e gera <b>1 imagem de capa</b> seguindo a sua instrução (aba ⚙️). Tenta primeiro o motor que você deixou na frente (aba ⚙️); se a cota dele acabar, tenta o outro, e se os dois estiverem sem cota o pedido <b>espera na fila</b> e sai sozinho quando voltar — não precisa ficar na tela.</div>' +
       '<label for="fia-busca">1. Escolha a peça</label><input type="text" id="fia-busca" placeholder="Nome ou código…" value="' + esc(busca) + '" autocomplete="off">' +
       '<div class="fia-pecas">' + (pecas.length ? pecas.map((p) => '<button type="button" class="fia-peca" data-a="peca" data-id="' + esc(p.ID) + '" aria-pressed="' + !!(escolhida && String(escolhida.ID) === String(p.ID)) + '"><img loading="lazy" decoding="async" alt="" ' + atribSrc(fotoMini(String(p.Foto_URL || ''), 220)) + '><b>' + esc((p.Codigo ? p.Codigo + ' · ' : '') + (p.Nome || 'Peça')) + '</b></button>').join('') : '<p class="fia-dica">Nenhuma peça encontrada.</p>') + '</div>' +
       (escolhida || extras.length ? '<label>2. Quais fotos a IA deve usar? (até ' + MAX_FOTOS + ', na ordem em que tocar)</label><div class="fia-fotos">' +
@@ -155,7 +159,7 @@
         extras.map((x, i) => '<div class="fia-foto" aria-pressed="' + (sel(x.url) > 0) + '"><img alt="" ' + atribSrc(x.url) + '>' + (sel(x.url) > 0 ? '<i>' + sel(x.url) + '</i>' : '') + '<button type="button" data-a="foto" data-u="' + esc(x.url) + '" aria-label="Usar esta foto do aparelho"></button></div>').join('') + '</div>' : '') +
       '<div class="fia-linha"><label class="fia-btn" for="fia-arq" style="margin:0">📎 Foto do aparelho</label><input type="file" id="fia-arq" accept="image/jpeg,image/png,image/webp" multiple hidden></div>' +
       '<label for="fia-extra">3. Observação para esta imagem (opcional)</label><input type="text" id="fia-extra" maxlength="300" value="' + esc(extraTxt) + '" placeholder="Ex.: fundo areia, só duas modelos…">' +
-      '<div class="fia-linha"><button type="button" class="fia-btn pri" data-a="enviar" ' + (enviando || !info.temChave ? 'disabled' : '') + '>' + (enviando ? 'Enviando…' : '➕ Colocar na fila') + '</button><span class="fia-dica">' + fotosEsc.length + ' de ' + MAX_FOTOS + ' fotos marcadas</span></div>';
+      '<div class="fia-linha"><button type="button" class="fia-btn pri" data-a="enviar" ' + (enviando || !((info.temChave && (info.config.provedores || []).indexOf('gemini') !== -1) || (info.cloudflare && info.cloudflare.disponivel && (info.config.provedores || []).indexOf('cloudflare') !== -1)) ? 'disabled' : '') + '>' + (enviando ? 'Enviando…' : '➕ Colocar na fila') + '</button><span class="fia-dica">' + fotosEsc.length + ' de ' + MAX_FOTOS + ' fotos marcadas</span></div>';
   }
   function dataBr(iso) { try { const d = new Date(iso); return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
   const ROT = { fila: 'Na fila', gerando: 'Gerando…', pronta: 'Pronta', aprovada: 'Aprovada', erro: 'Erro', descartada: 'Descartada', cancelada: 'Cancelada' };
@@ -192,16 +196,21 @@
       '<label for="fia-instr">Instrução enviada à IA em TODO pedido <span class="fia-dica" id="fia-cont"></span></label><textarea id="fia-instr" maxlength="12000"' + dis + '>' + esc(cfg.instrucao) + '</textarea>' +
       '<p class="fia-dica">Dica: mude uma coisa por vez e gere de novo (🔁 Refazer) para comparar. O nome da peça, as fotos e a observação do pedido são acrescentados no fim automaticamente.</p>' +
       '<label for="fia-formato">Proporção da imagem</label><select id="fia-formato"' + dis + '>' + ['9:16', '4:5', '3:4', '1:1'].map((f) => '<option value="' + f + '"' + (cfg.formato === f ? ' selected' : '') + '>' + f + (f === '9:16' ? ' (Story / Reels)' : f === '4:5' ? ' (Feed)' : '') + '</option>').join('') + '</select>' +
+      '<label for="fia-prov">Quem gera a imagem</label><select id="fia-prov"' + dis + '>' + [['gemini,cloudflare', 'Gemini primeiro; se estiver sem cota, Cloudflare (recomendado)'], ['cloudflare,gemini', 'Cloudflare primeiro; Gemini como reserva'], ['cloudflare', 'Só Cloudflare (grátis por dia)'], ['gemini', 'Só Gemini']].map((m) => '<option value="' + m[0] + '"' + ((cfg.provedores || ['gemini', 'cloudflare']).join(',') === m[0] ? ' selected' : '') + '>' + m[1] + '</option>').join('') + '</select>' +
+      '<p class="fia-dica">O Gemini gera imagens melhores, mas a conta grátis dele costuma ter cota 0 para imagem. O Cloudflare (FLUX) tem uma cota grátis por dia e aceita as fotos reais da peça como referência; a qualidade e a fidelidade à roupa precisam ser conferidas por você — comece com 🔁 Refazer e compare.</p>' +
+      '<label for="fia-instrcf">Instrução do Cloudflare (curta, em inglês funciona melhor) <span class="fia-dica" id="fia-contcf"></span></label><textarea id="fia-instrcf" maxlength="3000" style="min-height:150px"' + dis + '>' + esc(cfg.instrucaoCf || '') + '</textarea>' +
+      '<p class="fia-dica">Pode usar <b>{nome}</b> (nome da peça), <b>{extra}</b> (a observação do pedido) e <b>{formato}</b>. A instrução grande de cima vale só para o Gemini.</p>' +
+      '<label for="fia-cfmod">Modelo do Cloudflare</label><input type="text" id="fia-cfmod" value="' + esc(cfg.cfModelo || '') + '" maxlength="120"' + dis + '>' +
       '<label for="fia-modelos">Modelos (um por linha; tenta na ordem e pula o que estiver sem cota)</label><textarea id="fia-modelos" style="min-height:90px"' + dis + '>' + esc((cfg.modelos || []).join('\n')) + '</textarea>' +
       '<label for="fia-modo">Jeito de falar com o Google</label><select id="fia-modo"' + dis + '>' + [['auto', 'Automático (tenta o novo e depois o clássico)'], ['interactions', 'Só Interactions API'], ['generateContent', 'Só generateContent (clássico)']].map((m) => '<option value="' + m[0] + '"' + (cfg.modo === m[0] ? ' selected' : '') + '>' + m[1] + '</option>').join('') + '</select>' +
       '<label for="fia-lim">Máximo de imagens por dia (trava contra gasto)</label><input type="number" id="fia-lim" min="1" max="200" value="' + esc(cfg.limiteDia) + '"' + dis + '>' +
       '<label><input type="checkbox" id="fia-lig"' + (cfg.ligado !== false ? ' checked' : '') + dis + '> IA ligada (desmarcado: os pedidos esperam na fila)</label>' +
-      '<p class="fia-aviso">Sobre custo: os modelos de imagem do Google podem não ter plano gratuito. Se a sua chave não tiver cota de imagem, os pedidos ficam na fila (nada é cobrado) e a tela avisa. O limite por dia protege caso você ligue um plano pago.</p>' +
+      '<p class="fia-aviso">Sobre custo: os modelos de imagem do Google podem não ter plano gratuito. Sem cota, o pedido tenta o Cloudflare e, se os dois estiverem sem cota, fica na fila (nada é cobrado) e a tela avisa. O Cloudflare grátis tem um limite diário da conta; passou, o pedido espera até a manhã seguinte. O limite por dia acima protege caso você ligue um plano pago.</p>' +
       (msgTxt ? '<p class="' + (msgTipo === 'erro' ? 'fia-erro' : 'fia-ok') + '">' + esc(msgTxt) + '</p>' : '') +
       (ed ? '<div class="fia-linha"><button type="button" class="fia-btn pri" data-a="salvarcfg">💾 Salvar</button><button type="button" class="fia-btn" data-a="padrao">↺ Voltar à instrução padrão</button></div>' : '');
     contar();
   }
-  function contar() { const t = $('fia-instr'), c = $('fia-cont'); if (t && c) c.textContent = '(' + t.value.length + ' de 12000 letras)'; }
+  function contar() { const t = $('fia-instr'), c = $('fia-cont'); if (t && c) c.textContent = '(' + t.value.length + ' de 12000 letras)'; const t2 = $('fia-instrcf'), c2 = $('fia-contcf'); if (t2 && c2) c2.textContent = '(' + t2.value.length + ' de 3000 letras)'; }
 
   /* ---------- ações ---------- */
   function msg(t, tipo) { msgTxt = t || ''; msgTipo = tipo || ''; }
@@ -215,11 +224,11 @@
     if (a === 'ampliar') { try { if (window.TKFotoGrande) { window.TKFotoGrande.abrir({ itens: [{ url: b.dataset.u }], indice: 0 }); return; } } catch (er) { /* abre normal */ } window.open(b.dataset.u, '_blank', 'noopener'); return; }
     if (a === 'acao') return acao(b.dataset.v, Number(b.dataset.id), b);
     if (a === 'salvarcfg') return salvarCfg();
-    if (a === 'padrao') { if (!confirm('Voltar a instrução, a proporção, os modelos e o limite para o padrão?')) return; const r = await api('/fotoia/config', 'POST', { padrao: true }); if (r && r.ok) { cfg = JSON.parse(JSON.stringify(r.config)); await carregarConfig(); msg('Voltou ao padrão.', 'ok'); } else msg(erroTxt(r), 'erro'); desenhar(); return; }
+    if (a === 'padrao') { if (!confirm('Voltar as instruções, a proporção, os modelos, o motor e o limite para o padrão?')) return; const r = await api('/fotoia/config', 'POST', { padrao: true }); if (r && r.ok) { cfg = JSON.parse(JSON.stringify(r.config)); await carregarConfig(); msg('Voltou ao padrão.', 'ok'); } else msg(erroTxt(r), 'erro'); desenhar(); return; }
   }
   function entrada(e) {
     if (e.target.id === 'fia-busca') { busca = e.target.value; const pos = e.target.selectionStart; desenharGerar(); const n = $('fia-busca'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (er) { /* sem seleção */ } } }
-    if (e.target.id === 'fia-instr') contar();
+    if (e.target.id === 'fia-instr' || e.target.id === 'fia-instrcf') contar();
     if (e.target.id === 'fia-extra') extraTxt = e.target.value;
   }
   async function mudou(e) {
@@ -234,25 +243,33 @@
   }
   function reduzir(img, max) {
     const esc2 = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
-    c.width = Math.max(1, Math.round(img.width * esc2)); c.height = Math.max(1, Math.round(img.height * esc2));
+    c.width = Math.max(1, Math.floor(img.width * esc2)); c.height = Math.max(1, Math.floor(img.height * esc2));
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
     return c.toDataURL('image/jpeg', 0.86);
   }
   function arquivoParaDataUrl(file, max) {
     return new Promise((resolve) => { const o = URL.createObjectURL(file), img = new Image(); img.onerror = () => { URL.revokeObjectURL(o); resolve(null); }; img.onload = () => { try { resolve(reduzir(img, max)); } catch (e) { resolve(null); } URL.revokeObjectURL(o); }; img.src = o; });
   }
+  function dataUrlReduzida(url, max) {
+    return new Promise((resolve) => { const img = new Image(); img.onerror = () => resolve(null); img.onload = () => { try { resolve(reduzir(img, max)); } catch (e) { resolve(null); } }; img.src = url; });
+  }
   async function urlParaDataUrl(url, max) {
-    if (/^data:/.test(url)) return url;
+    if (/^data:/.test(url)) return max < 1000 ? dataUrlReduzida(url, max) : url;
     try { const r = await fetch(url, { mode: 'cors' }); if (!r.ok) return null; return await arquivoParaDataUrl(await r.blob(), max); } catch (e) { return null; }
   }
   async function enviar() {
     if (enviando) return;
     if (!fotosEsc.length) { msg('Toque em pelo menos 1 foto da peça.', 'erro'); desenharGerar(); return; }
     enviando = true; msg(''); desenharGerar();
-    const fotos = [];
-    for (const u of fotosEsc) { const d = await urlParaDataUrl(u, 1280); if (!d) { enviando = false; msg('Não consegui baixar uma das fotos para enviar. Tente outra foto ou envie do aparelho.', 'erro'); desenharGerar(); return; } fotos.push({ mime: 'image/jpeg', data: d.split(',')[1] }); }
+    const fotos = [], refs = [];
+    for (const u of fotosEsc) {
+      const d = await urlParaDataUrl(u, 1280); if (!d) { enviando = false; msg('Não consegui baixar uma das fotos para enviar. Tente outra foto ou envie do aparelho.', 'erro'); desenharGerar(); return; }
+      fotos.push({ mime: 'image/jpeg', data: d.split(',')[1] });
+      const pq = await urlParaDataUrl(d, 500);           // cópia pequena (< 512 px) que o Cloudflare exige; se falhar, o pedido segue só com o Gemini
+      if (pq) refs.push({ mime: 'image/jpeg', data: pq.split(',')[1] });
+    }
     const extra = extraTxt || '';
-    const r = await api('/fotoia/fila', 'POST', { nome: escolhida ? (escolhida.Nome || '') : 'Fotos do aparelho', produto: escolhida ? (escolhida.Codigo || escolhida.ID || '') : '', extra: extra, fotos: fotos });
+    const r = await api('/fotoia/fila', 'POST', { nome: escolhida ? (escolhida.Nome || '') : 'Fotos do aparelho', produto: escolhida ? (escolhida.Codigo || escolhida.ID || '') : '', extra: extra, fotos: fotos, refs: refs });
     enviando = false;
     if (!r || !r.ok) { msg(erroTxt(r), 'erro'); desenharGerar(); return; }
     fotosEsc = []; extras = []; escolhida = null; extraTxt = ''; msg('Pedido na fila! Acompanhe em “Fila e resultados”.', 'ok');
@@ -272,7 +289,7 @@
     await carregarConfig(); await carregarLista(); desenhar(); religar();
   }
   async function salvarCfg() {
-    const nova = { instrucao: $('fia-instr').value, formato: $('fia-formato').value, modelos: $('fia-modelos').value, modo: $('fia-modo').value, limiteDia: Number($('fia-lim').value) || 20, ligado: $('fia-lig').checked };
+    const nova = { instrucao: $('fia-instr').value, instrucaoCf: $('fia-instrcf').value, provedores: $('fia-prov').value.split(','), cfModelo: $('fia-cfmod').value, formato: $('fia-formato').value, modelos: $('fia-modelos').value, modo: $('fia-modo').value, limiteDia: Number($('fia-lim').value) || 20, ligado: $('fia-lig').checked };
     const r = await api('/fotoia/config', 'POST', { config: nova });
     if (r && r.ok) { cfg = JSON.parse(JSON.stringify(r.config)); await carregarConfig(); msg('Salvo. Vale para os próximos pedidos (use 🔁 Refazer para testar nos antigos).', 'ok'); } else msg(erroTxt(r), 'erro');
     desenhar();

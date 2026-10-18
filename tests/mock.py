@@ -494,17 +494,17 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if path.startswith("/fotoia"):      # Fotos com IA (Worker v1.5): st["ig"]["fotoia"]
                 import json as _j
                 fi=g.setdefault("fotoia",{"itens":[],"seq":0,"chamadas":[],"pode_editar":True,"tem_chave":True,
-                    "cfg":{"ligado":True,"instrucao":"# SKILL: Tenkiter Modas — FIDELIDADE ABSOLUTA ao produto. Seta →","modelos":["gemini-nano-banana-2.1","gemini-3.1-flash-lite-image"],"modo":"auto","formato":"9:16","tamanho":"1K","limiteDia":20}})
+                    "cfg":{"ligado":True,"instrucao":"# SKILL: Tenkiter Modas — FIDELIDADE ABSOLUTA ao produto. Seta →","modelos":["gemini-nano-banana-2.1","gemini-3.1-flash-lite-image"],"modo":"auto","formato":"9:16","tamanho":"1K","limiteDia":20,"provedores":["gemini","cloudflare"],"cfModelo":"@cf/black-forest-labs/flux-2-klein-4b","instrucaoCf":"Foto {nome} {extra}"},"cf":{"disponivel":True,"semGratisAte":""}})
                 body={}
                 try: body=_j.loads(route.request.post_data or "{}")
                 except Exception: body={}
-                fi["chamadas"].append({"m":m,"path":path,"body":{k:(v if k!="fotos" else "<%d fotos>"%len(v)) for k,v in body.items()}})
+                fi["chamadas"].append({"m":m,"path":path,"body":{k:(v if k not in ("fotos","refs") else "<%d %s>"%(len(v),k)) for k,v in body.items()}})
                 def cts():
                     c={}
                     for x in fi["itens"]: c[x["status"]]=c.get(x["status"],0)+1
                     return c
                 if path=="/fotoia/config" and m=="GET":
-                    return route.fulfill(json={"ok":True,"config":fi["cfg"],"padrao":{"instrucao":"PADRAO","limiteDia":20,"modelos":[]},"podeEditar":fi["pode_editar"],"temChave":fi["tem_chave"],"fimChave":"abcd","hoje":{"usadas":len([x for x in fi["itens"] if x["status"] in ("pronta","aprovada")]),"limite":fi["cfg"]["limiteDia"]},"semCota":{},"contagens":cts()})
+                    return route.fulfill(json={"ok":True,"config":fi["cfg"],"padrao":{"instrucao":"PADRAO","instrucaoCf":"PADRAO CF","limiteDia":20,"modelos":[]},"cloudflare":fi["cf"],"podeEditar":fi["pode_editar"],"temChave":fi["tem_chave"],"fimChave":"abcd","hoje":{"usadas":len([x for x in fi["itens"] if x["status"] in ("pronta","aprovada")]),"limite":fi["cfg"]["limiteDia"]},"semCota":{},"contagens":cts()})
                 if path=="/fotoia/config" and m=="POST":
                     if not fi["pode_editar"]: return route.fulfill(status=403,json={"ok":False,"erro":"Só o administrador total muda a instrução e os limites da IA."})
                     if body.get("padrao"): fi["cfg"]["instrucao"]="PADRAO"

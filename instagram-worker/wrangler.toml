@@ -30,6 +30,11 @@ id = "b199e2ba52774d95a99cc7930e67473e"
 binding = "MIDIA"
 bucket_name = "tenkiter-midia"
 
+# Workers AI (Cloudflare): 2º motor de "Fotos com IA" (FLUX.2 klein 4B). Cota gratis diaria da conta; sem plano pago nada e cobrado alem dela.
+# Se o deploy recusar este binding (token sem permissao de Workers AI), apague estas duas linhas: o painel passa a usar so o Gemini.
+[ai]
+binding = "AI"
+
 [vars]
 API_URL = "https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec"
 MIDIA_URL = "https://tenkiter-midia.distkrpconfeccoes.workers.dev"

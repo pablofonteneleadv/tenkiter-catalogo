@@ -784,6 +784,89 @@ function d1() {
     // ---- 15) a leitura da imagem acha a imagem em qualquer formato ----
     const ach = W.acharImagensIA; const big = Buffer.alloc(300, 1).toString('base64');
     chk('acha em outputs/steps/candidates/inlineData/inline_data e pega a ÚLTIMA', ach({ outputs: [{ type: 'image', mime_type: 'image/png', data: big }] }).length === 1 && ach({ a: { b: [{ inline_data: { mime_type: 'image/webp', data: big } }] } })[0].mime === 'image/webp' && ach({ x: [{ mimeType: 'image/jpeg', data: big }, { mimeType: 'image/png', data: big + 'AA' }] }).slice(-1)[0].mime === 'image/png' && ach({ data: 'curto', mime_type: 'image/png' }).length === 0 && ach(null).length === 0);
+    // ---- 16) 2º motor: Cloudflare Workers AI (FLUX.2 klein) — grátis por dia; Gemini sem cota não trava mais ----
+    console.log('== FOTOS COM IA — Cloudflare como 2º motor ==');
+    const jpgDim = (w, h) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, h >> 8, h & 255, w >> 8, w & 255, 0x03, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]), Buffer.alloc(300, 7)]).toString('base64');
+    const ref = { mime: 'image/jpeg', data: jpgDim(400, 300) };
+    let aiChamadas = [], aiModo = 'ok';
+    env.AI = { run: async (modelo, entrada) => {
+      const fd = await new Response(entrada.multipart.body, { headers: { 'content-type': entrada.multipart.contentType } }).formData();
+      const campos = {}; for (const [k, v] of fd.entries()) campos[k] = typeof v === 'string' ? v : { arquivo: true, tam: v.size };
+      aiChamadas.push({ modelo, campos });
+      if (aiModo === 'cota') throw new Error('4006: you have used up your daily free allocation of 10,000 neurons, please upgrade to Cloudflare\'s Workers Paid plan if you would like to continue usage.');
+      if (aiModo === 'ocupado') throw new Error('3040: Capacity temporarily exceeded, please try again.');
+      if (aiModo === 'sem-imagem') return { image: '' };
+      if (aiModo === 'recusa') throw new Error('3030: input prompt flagged');
+      return { image: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(2000, 9)]).toString('base64') };
+    } };
+    await DB.prepare('DELETE FROM fotoia').run(); await env.CACHE.delete('ia_esgotados'); await env.CACHE.delete('fotoia_cf_ate'); await KV.delete('fotoia_dia');
+    await A2('POST', '/fotoia/config', { padrao: true }); await A2('POST', '/fotoia/config', { config: { limiteDia: 200 } });
+    ({ j: jj } = await A2('GET', '/fotoia/config'));
+    chk('config informa que o Cloudflare está ligado e traz o padrão dele', jj.cloudflare && jj.cloudflare.disponivel === true && jj.config.provedores.join() === 'gemini,cloudflare' && jj.config.cfModelo === '@cf/black-forest-labs/flux-2-klein-4b' && /\{nome\}/.test(jj.config.instrucaoCf) && /EXACTLY the garment/.test(jj.padrao.instrucaoCf), jj.cloudflare);
+    ({ j: jj } = await A2('POST', '/fotoia/config', { config: { cfModelo: 'qualquer coisa; rm -rf', provedores: ['x', 'cloudflare', 'cloudflare'] } }));
+    chk('modelo estranho volta ao padrão; motor desconhecido é ignorado e repetido some', jj.config.cfModelo === '@cf/black-forest-labs/flux-2-klein-4b' && jj.config.provedores.join() === 'cloudflare', jj.config);
+    await A2('POST', '/fotoia/config', { config: { provedores: ['gemini', 'cloudflare'] } });
+
+    // a) Gemini sem plano (cota 0) → o Cloudflare entra sozinho
+    imgModo = 'semplano'; imgChamadas = []; aiChamadas = []; aiModo = 'ok';
+    ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Cropped Farm', extra: 'fundo areia', fotos: [foto, foto], refs: [ref, ref] }));
+    const idc1 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idc1);
+    chk('Gemini cota 0 + Cloudflare ligado: a imagem SAI pelo Cloudflare (pronta, modelo cloudflare:…)', it && it.status === 'pronta' && it.modelo === 'cloudflare:flux-2-klein-4b' && /\/m\/\d{6}\/[0-9a-f]{20}\.jpg$/.test(it.resultado), it);
+    const ac = aiChamadas[0] || { campos: {} };
+    chk('foi pedido com 2 fotos de referência, tamanho 720×1280 (9:16) e o nome da peça na instrução', aiChamadas.length === 1 && ac.modelo === '@cf/black-forest-labs/flux-2-klein-4b' && ac.campos.input_image_0 && ac.campos.input_image_1 && !ac.campos.input_image_2 && ac.campos.width === '720' && ac.campos.height === '1280' && /Product: Cropped Farm\./.test(ac.campos.prompt) && /fundo areia/.test(ac.campos.prompt) && /EXACTLY the garment/.test(ac.campos.prompt), ac);
+    chk('o Gemini foi tentado antes (e esbarrou na cota) — ficou de molho para não repetir', imgChamadas.length >= 1 && !!(await env.CACHE.get('ia_esgotados')));
+
+    // b) Gemini com cota: ele vem primeiro e o Cloudflare nem é chamado
+    await env.CACHE.delete('ia_esgotados'); imgModo = 'ok'; imgChamadas = []; aiChamadas = [];
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Vestido', fotos: [foto], refs: [ref] })); const idc2 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idc2);
+    chk('Gemini com cota: usa o Gemini e NÃO gasta o grátis do Cloudflare', it.status === 'pronta' && /^gemini/.test(it.modelo) && aiChamadas.length === 0, it);
+
+    // c) grátis do dia do Cloudflare acaba (erro 4006) → pedido espera até a manhã seguinte; os próximos nem chamam
+    await env.CACHE.delete('ia_esgotados'); imgModo = 'semplano'; aiModo = 'cota'; aiChamadas = [];
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Blusa', fotos: [foto], refs: [ref] })); const idc3 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idc3);
+    chk('Gemini sem plano + Cloudflare sem grátis: NA FILA (não vira erro), com o motivo dos dois', it.status === 'fila' && /Gemini: o plano desta chave não inclui/.test(it.erro) && /Cloudflare: o grátis de hoje/.test(it.erro) && it.tent === 0, it);
+    const amanhaUtc = new Date(); amanhaUtc.setUTCHours(24, 0, 0, 0);
+    chk('volta a tentar quando o PRIMEIRO motor puder (Gemini 6 h ou meia-noite UTC), nunca antes de 5 min', Date.parse(it.espera) > Date.now() + 5 * 60000 && Date.parse(it.espera) <= Math.min(Date.now() + 6 * 3600000, amanhaUtc.getTime() + 10 * 60000) + 60000, it.espera);
+    chk('guardou "sem grátis até" e o painel é avisado', !!(await env.CACHE.get('fotoia_cf_ate')) && (await A2('GET', '/fotoia/config')).j.cloudflare.semGratisAte !== '');
+    aiChamadas = []; await DB.prepare("UPDATE fotoia SET prox_em='' WHERE id=?").bind(idc3).run(); await env.CACHE.delete('ia_esgotados'); await W.processarFotoIA(env, idc3);
+    chk('com o grátis acabado, nem chama o Cloudflare de novo (sem desperdício)', aiChamadas.length === 0);
+
+    // d) Cloudflare ocupado → tenta de novo em minutos
+    await env.CACHE.delete('fotoia_cf_ate'); await env.CACHE.delete('ia_esgotados'); aiModo = 'ocupado'; aiChamadas = [];
+    await DB.prepare("UPDATE fotoia SET prox_em='' WHERE id=?").bind(idc3).run(); await W.processarFotoIA(env, idc3);
+    ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idc3);
+    chk('Cloudflare ocupado (3040): continua na fila e tenta de novo em ~10 min', aiChamadas.length === 1 && it.status === 'fila' && Date.parse(it.espera) > Date.now() + 5 * 60000 && Date.parse(it.espera) < Date.now() + 40 * 60000 && /ocupado/.test(it.erro), it);
+
+    // e) liberou: o mesmo pedido sai
+    await env.CACHE.delete('ia_esgotados'); aiModo = 'ok'; await DB.prepare("UPDATE fotoia SET prox_em='' WHERE id=?").bind(idc3).run(); await W.processarFotoIA(env, idc3);
+    ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idc3); chk('quando o Cloudflare volta, o pedido que esperava sai sozinho', it.status === 'pronta' && /^cloudflare:/.test(it.modelo), it);
+
+    // f) erros de verdade contam tentativa (3 = erro), como no Gemini
+    imgModo = 'semplano'; aiModo = 'recusa'; await env.CACHE.delete('ia_esgotados');
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Calça', fotos: [foto], refs: [ref] })); const idc4 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idc4);
+    chk('recusa do Cloudflare: erro com frase, volta à fila com 1 tentativa (não trava os outros)', it.status === 'fila' && it.tent === 1 && /Cloudflare: 3030/.test(it.erro), it);
+
+    // g) pedido SEM foto pequena (feito antes desta versão): não chama o Cloudflare e explica
+    aiModo = 'ok'; aiChamadas = []; await env.CACHE.delete('ia_esgotados');
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Antigo', fotos: [foto] })); const idc5 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idc5);
+    chk('pedido sem foto pequena: não chama o Cloudflare e diz como resolver', aiChamadas.length === 0 && /foto pequena/.test(it.erro) && it.status === 'fila', it);
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Grande', fotos: [foto], refs: [{ mime: 'image/jpeg', data: jpgDim(900, 700) }] })); const idc6 = jj.id;
+    chk('referência maior que 511 px é descartada no servidor (o Cloudflare recusaria)', (await DB.prepare('SELECT refs FROM fotoia WHERE id=?').bind(idc6).first()).refs === '[]');
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Ok', fotos: [foto], refs: [ref, ref, ref, ref, ref] })); const idc7 = jj.id;
+    chk('até 4 referências pequenas são guardadas', JSON.parse((await DB.prepare('SELECT refs FROM fotoia WHERE id=?').bind(idc7).first()).refs).length === 4);
+    chk('dimensoesImagem lê JPEG e PNG pelo cabeçalho', JSON.stringify(W.dimensoesImagem(Buffer.from(jpgDim(400, 300), 'base64'))) === '[400,300]' && JSON.stringify(W.dimensoesImagem(Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 1, 144, 0, 0, 1, 44]), Buffer.alloc(20)]))) === '[400,300]');
+
+    // h) só Cloudflare: o Gemini nem é chamado; sem chave do Gemini também funciona
+    await DB.prepare('DELETE FROM fotoia').run(); await A2('POST', '/fotoia/config', { config: { provedores: ['cloudflare'] } }); imgChamadas = []; aiChamadas = []; aiModo = 'ok'; imgModo = 'ok';
+    await DB.prepare("DELETE FROM cfg WHERE chave='gemini_key'").run();
+    ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Saia', fotos: [foto], refs: [ref] })); const idc8 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idc8);
+    chk('só Cloudflare e SEM chave do Gemini: funciona e o Google nem é chamado', it.status === 'pronta' && /^cloudflare:/.test(it.modelo) && imgChamadas.length === 0, it);
+    await A2('POST', '/fotoia/config', { config: { provedores: ['cloudflare', 'gemini'], formato: '4:5', tamanho: '2K' } });
+    aiChamadas = []; ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Short', fotos: [foto], refs: [ref] }));
+    chk('proporção e tamanho da config valem (4:5 em 2K = 1088×1360)', aiChamadas.length === 1 && aiChamadas[0].campos.width === '1088' && aiChamadas[0].campos.height === '1360', aiChamadas[0]);
+    chk('promptCf troca {nome}/{extra}/{formato} e acrescenta o produto se a instrução não tiver {nome}', W.promptCf({ instrucaoCf: 'Foto de {formato}. {extra}', formato: '9:16' }, { nome: 'Vestido', extra: 'sem sol' }, 1) === 'Foto de 9:16. sem sol\nProduct: Vestido.', W.promptCf({ instrucaoCf: 'Foto de {formato}. {extra}', formato: '9:16' }, { nome: 'Vestido', extra: 'sem sol' }, 1));
+    chk('tamanhoCf: 9:16 1K = 720×1280; 16:9 2K = 1920×1088 (dentro do máx. de 1920)', W.tamanhoCf('9:16', '1K').join() === '720,1280' && W.tamanhoCf('16:9', '2K').join() === '1920,1088' && W.tamanhoCf('xx', 'yy').join() === '720,1280');
+    delete env.AI; await A2('POST', '/ia-chave', { chave: GEMINI_OK }); await A2('POST', '/fotoia/config', { padrao: true });
   }
 
   console.log('\nOK=' + ok + ' FALHAS=' + falhas.length, falhas);
