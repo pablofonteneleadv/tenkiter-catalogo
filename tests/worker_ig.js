@@ -763,6 +763,19 @@ function d1() {
     x = await (await w.fetch(ped('GET', '/fotos/visuais', 'tk2.gerente'), env, {})).json(); chk('visuais: o conflito não sobrescreveu nada', x.dados.tk_po_cta_v1 === '{"b":2}');
     x = await (await w.fetch(ped('POST', '/fotos/visuais', 'tk2.gerente', { dados: { g: 'x'.repeat(210000) } }), env, {})).json(); chk('visuais: recusa configuração enorme', x.ok === false);
     r2 = await w.fetch(ped('GET', '/fotos/visuais'), env, {}); chk('visuais: sem login é recusado', r2.status === 401 || r2.status === 403);
+    // biblioteca de elementos fixos (PNG): todos USAM, só o Admin total grava (v4.36)
+    const EL1 = [{ url: 'https://tenkiter-midia.x.workers.dev/m/202610/aaaaaaaaaaaaaaaaaaaa.png', nome: 'Logo', em: 1 }];
+    x = await (await w.fetch(ped('POST', '/fotos/visuais', 'tk2.gerente', { dados: { tk_po_cta_v1: '{"d":4}', tk_po_elementos_v1: EL1 } }), env, {})).json();
+    chk('biblioteca: quem só cadastra salva o resto, mas é avisado que a biblioteca foi ignorada', x.ok === true && x.ignorouBiblioteca === true && x.biblioteca === false, x);
+    x = await (await w.fetch(ped('GET', '/fotos/visuais', 'tk2.gerente'), env, {})).json();
+    chk('biblioteca: a lista de elementos NÃO foi gravada por quem não é Admin total', !x.dados.tk_po_elementos_v1 && x.dados.tk_po_cta_v1 === '{"d":4}', x.dados);
+    x = await (await w.fetch(ped('POST', '/fotos/visuais', 'tk2.admin', { dados: { tk_po_cta_v1: '{"e":5}', tk_po_elementos_v1: EL1 } }), env, {})).json();
+    chk('biblioteca: o Admin total grava a biblioteca', x.ok === true && x.biblioteca === true && !x.ignorouBiblioteca, x);
+    x = await (await w.fetch(ped('GET', '/fotos/visuais', 'tk2.gerente'), env, {})).json();
+    chk('biblioteca: todos que postam enxergam os elementos do Admin', Array.isArray(x.dados.tk_po_elementos_v1) && x.dados.tk_po_elementos_v1[0].nome === 'Logo', x.dados);
+    x = await (await w.fetch(ped('POST', '/fotos/visuais', 'tk2.gerente', { dados: { tk_po_cta_v1: '{"f":6}', tk_po_elementos_v1: [] } }), env, {})).json();
+    x = await (await w.fetch(ped('GET', '/fotos/visuais', 'tk2.gerente'), env, {})).json();
+    chk('biblioteca: quem não é Admin não consegue apagar nem trocar a lista', x.dados.tk_po_elementos_v1.length === 1 && x.dados.tk_po_elementos_v1[0].nome === 'Logo', x.dados);
     r2 = await w.fetch(ped('GET', '/status', 'tk2.gerente'), env, {}); chk('quem só cadastra continua sem o importador', r2.status === 403);
   }
 
@@ -997,7 +1010,7 @@ function d1() {
       r1 = mp({ papeis: ['cima', 'baixo', 'cima', 'baixo'], looks: [[0, 3], [2, 1]] }, 4, {}); chk('combinação escolhida à mão (trocar quem veste com quem) vale', r1.ok && r1.plano.looks[0].partes[0].i === 0 && r1.plano.looks[0].partes[1].i === 3 && r1.plano.looks[1].partes[0].i === 2 && r1.plano.looks[1].partes[1].i === 1, r1);
       chk('combinação que repete foto, junta duas de cima ou deixa foto de fora é recusada', mp({ papeis: ['cima', 'baixo'], looks: [[0, 0]] }, 2, {}).ok === false && mp({ papeis: ['cima', 'cima', 'baixo', 'baixo'], looks: [[0, 1], [2, 3]] }, 4, {}).ok === false && mp({ papeis: ['cima', 'baixo', 'look'], looks: [[0, 1]] }, 3, {}).ok === false);
       chk('papel inventado ou lista de papéis do tamanho errado = recusado com frase', mp({ papeis: ['cima', 'x'] }, 2, {}).ok === false && mp({ papeis: ['look'] }, 3, {}).ok === false && /Diga o que a IA/.test(mp({ papeis: ['look'] }, 3, {}).erro));
-      r1 = mp({ papeis: ['look'], destino: 'reels', seta: true, quem: 'criancas' }, 1, {}); chk('destino reels = 9:16, seta e perfil infantil guardados', r1.ok && r1.plano.formato === '9:16' && r1.plano.destino === 'reels' && r1.plano.seta === true && r1.plano.quem === 'criancas');
+      r1 = mp({ papeis: ['look'], destino: 'reels', seta: true, quem: 'criancas' }, 1, {}); chk('destino reels = 9:16 e perfil infantil guardados; pedir "seta" é ignorado (v1.9: a imagem nunca leva seta nem texto)', r1.ok && r1.plano.formato === '9:16' && r1.plano.destino === 'reels' && r1.plano.seta === false && r1.plano.quem === 'criancas');
       r1 = mp({ papeis: ['look'], destino: 'carrossel' }, 1, {}); chk('destino carrossel = 4:5; destino/perfil estranhos voltam ao padrão (status, mulheres)', r1.ok && r1.plano.formato === '4:5' && mp({ papeis: ['look'], destino: 'xx', quem: 'yy' }, 1, {}).plano.destino === 'status' && mp({ papeis: ['look'], quem: 'yy' }, 1, {}).plano.quem === 'mulheres');
       const nc = W.normalizarCfgFotoIA({ instrucao: 'ANTIGA DE UM MODELO SÓ', instrucaoCf: 'OLD', limiteDia: 33, modelos: ['gemini-2.5-flash-image'] });
       chk('configuração gravada antes da v1.8 volta às instruções novas, mas mantém limite e modelos', nc.v === 2 && /UM MODELO POR LOOK/.test(nc.instrucao) && /\{looks\}/.test(nc.instrucaoCf) && nc.limiteDia === 33 && nc.modelos[0] === 'gemini-2.5-flash-image', nc);
@@ -1005,21 +1018,22 @@ function d1() {
     }
     delete env.AI; await DB.prepare('DELETE FROM fotoia').run(); await env.CACHE.delete('ia_esgotados'); await env.CACHE.delete('fotoia_cf_ate'); await KV.delete('fotoia_dia');
     await A2('POST', '/fotoia/config', { padrao: true }); await A2('POST', '/fotoia/config', { config: { limiteDia: 200 } }); await A2('POST', '/ia-chave', { chave: GEMINI_OK }); imgModo = 'ok'; imgChamadas = [];
-    // a) 6 fotos, 5 looks (1 cima + 1 baixo + 4 inteiros), com seta, para Reels → Gemini recebe a lista, a seta e as 6 fotos
+    // a) 6 fotos, 5 looks (1 cima + 1 baixo + 4 inteiros), para Reels → Gemini recebe a lista e as 6 fotos (mesmo que um painel antigo mande seta:true, a imagem sai SEM seta)
     ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Lote verão', fotos: [foto, foto, foto, foto, foto, foto], papeis: ['cima', 'baixo', 'look', 'look', 'look', 'look'], rotulos: ['Blusa Canelada', 'Saia Floral', '', '', '', ''], destino: 'reels', seta: true, quem: 'mulheres', extra: 'luz de fim de tarde' }));
     const idl1 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idl1);
     const tx1 = imgChamadas[0] ? imgChamadas[0].body.input[0].text : '', nImg1 = imgChamadas[0] ? imgChamadas[0].body.input.filter((x) => x.type === 'image').length : 0;
-    chk('6 fotos viram 5 looks: pedido pronto pelo Gemini com as 6 fotos de referência', it && it.status === 'pronta' && nImg1 === 6 && it.plano && it.plano.looks === 5 && it.plano.destino === 'reels' && it.plano.seta === true, { it, nImg1 });
+    chk('6 fotos viram 5 looks: pedido pronto pelo Gemini com as 6 fotos de referência', it && it.status === 'pronta' && nImg1 === 6 && it.plano && it.plano.looks === 5 && it.plano.destino === 'reels' && it.plano.seta === false, { it, nImg1 });
     chk('o texto diz "5 pessoas", lista Look 1…5 e liga cada foto ao seu look (cima + baixo juntos)', /NÚMERO DE LOOKS = NÚMERO DE PESSOAS NA IMAGEM: 5/.test(tx1) && /Look 1 — pessoa 1 \([^)]+\): veste a peça de CIMA da Foto 1 \(Blusa Canelada\) \+ a peça de BAIXO da Foto 2 \(Saia Floral\)/.test(tx1) && /Look 2 — pessoa 2 \([^)]+\): veste o LOOK INTEIRO \/ PEÇA ÚNICA da Foto 3/.test(tx1) && /Look 5 — pessoa 5/.test(tx1) && !/Look 6/.test(tx1), tx1.slice(-1500));
     chk('cada pessoa tem um perfil diferente (idade, pele, cabelo, manequim)', (function () { const ps = (tx1.match(/Look \d — pessoa \d \(([^)]+)\)/g) || []); return ps.length === 5 && new Set(ps).size === 5; })());
-    chk('com seta ligada: pede a seta e o texto exato "ARRASTE E VEJA AS FOTOS REAIS"; Reels deixa 22% livre embaixo; observação vai junto', /SETA E CHAMADA/.test(tx1) && /ARRASTE E VEJA AS FOTOS REAIS/.test(tx1) && /22% embaixo/.test(tx1) && /luz de fim de tarde/.test(tx1) && !/SEM TEXTO/.test(tx1));
+    chk('NUNCA pede seta nem chamada: manda "SEM TEXTO E SEM ENFEITES" (texto, seta e emoji a loja coloca depois); Reels deixa 22% livre embaixo; observação vai junto', !/SETA E CHAMADA/.test(tx1) && !/ARRASTE E VEJA/.test(tx1) && /SEM TEXTO E SEM ENFEITES/.test(tx1) && /seta, emoji, adesivo/.test(tx1) && /22% embaixo/.test(tx1) && /luz de fim de tarde/.test(tx1), tx1.slice(-900));
+    chk('a instrução padrão proíbe escrita/seta/emoji na imagem e diz que a loja coloca depois no editor de visuais', /NADA ESCRITO, NADA DESENHADO POR CIMA/.test(tx1) && /editor de visuais/.test(tx1) && !/EXCETO o que o pedido/.test(tx1));
     chk('Reels é 9:16', imgChamadas[0] && imgChamadas[0].body.response_format.aspect_ratio === '9:16');
     chk('a instrução (regras de ouro) vai antes dos dados do pedido, e a que ensina "não copie a modelo" está lá', /NÃO RESPEITE A MODELO DAS FOTOS/.test(tx1) && tx1.lastIndexOf('DADOS DESTE PEDIDO') > tx1.indexOf('UM MODELO POR LOOK'));
     // b) sem seta e capa de carrossel
     imgChamadas = [];
     ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Capa', fotos: [foto, foto], papeis: ['look', 'look'], destino: 'carrossel', seta: false, quem: 'criancas' })); const idl2 = jj.id;
     const tx2 = imgChamadas[0] ? imgChamadas[0].body.input[0].text : '';
-    chk('sem seta: "SEM TEXTO"; capa de carrossel = 4:5; perfil infantil', /SEM TEXTO/.test(tx2) && !/ARRASTE/.test(tx2) && imgChamadas[0].body.response_format.aspect_ratio === '4:5' && /criança de uns/.test(tx2) && !/mulher de uns/.test(tx2), tx2.slice(-700));
+    chk('capa de carrossel = 4:5; perfil infantil; também sem texto', /SEM TEXTO/.test(tx2) && !/ARRASTE/.test(tx2) && imgChamadas[0].body.response_format.aspect_ratio === '4:5' && /criança de uns/.test(tx2) && !/mulher de uns/.test(tx2), tx2.slice(-700));
     // c) 3 de cima e 1 de baixo: recusa no servidor também
     ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'x', fotos: [foto, foto, foto, foto], papeis: ['cima', 'cima', 'cima', 'baixo'] }));
     chk('servidor recusa 3 de cima + 1 de baixo (400) e diz qual falta', rr.status === 400 && jj.faltam === 'baixo' && /Faltam 2 peças de baixo/.test(jj.erro), jj);
@@ -1037,7 +1051,7 @@ function d1() {
     const idl3 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idl3);
     const ac2 = aiChamadas[0] || { campos: {} };
     chk('Cloudflare: 4 fotos / 3 looks saem pelo Cloudflare com as 4 referências na ordem', it && it.status === 'pronta' && /^cloudflare:/.test(it.modelo) && ac2.campos.input_image_3 && !ac2.campos.input_image_4, it);
-    chk('Cloudflare: prompt diz 3 pessoas, liga image 0 + image 1 ao look 1 e image 2/3 aos outros; 4:5 = 768×960; seta SEM palavras', /group of 3 different women/.test(ac2.campos.prompt || '') && /Person 1 \([^)]+\) wears the top garment from image 0 and the bottom garment from image 1\./.test(ac2.campos.prompt || '') && /Person 2 \([^)]+\) wears the full outfit from image 2\./.test(ac2.campos.prompt || '') && /Person 3 \([^)]+\) wears the full outfit from image 3\./.test(ac2.campos.prompt || '') && ac2.campos.width === '768' && ac2.campos.height === '960' && /arrow pointing right \(no words/.test(ac2.campos.prompt || ''), ac2.campos.prompt);
+    chk('Cloudflare: prompt diz 3 pessoas, liga image 0 + image 1 ao look 1 e image 2/3 aos outros; 4:5 = 768×960; sem seta nem texto mesmo com seta:true', /group of 3 different women/.test(ac2.campos.prompt || '') && /Person 1 \([^)]+\) wears the top garment from image 0 and the bottom garment from image 1\./.test(ac2.campos.prompt || '') && /Person 2 \([^)]+\) wears the full outfit from image 2\./.test(ac2.campos.prompt || '') && /Person 3 \([^)]+\) wears the full outfit from image 3\./.test(ac2.campos.prompt || '') && ac2.campos.width === '768' && ac2.campos.height === '960' && /No text, no letters, no numbers, no arrows, no emojis/.test(ac2.campos.prompt || '') && !/Add one small elegant arrow/.test(ac2.campos.prompt || ''), ac2.campos.prompt);
     chk('Cloudflare: manda que NÃO copie o rosto/corpo da modelo das fotos', /Do NOT copy the face, body, skin or hair/.test(ac2.campos.prompt || ''));
     // e) mais de 4 fotos: o Cloudflare não pode (limite dele) e, sem Gemini, o pedido acusa erro na hora com a saída (dividir)
     aiChamadas = []; await A2('DELETE', '/ia-chave'); 

@@ -37,7 +37,7 @@ with sync_playwright() as p:
     pg.fill("#fia-extra", "fundo areia"); pg.click(".fia-foto >> nth=0 >> button"); pg.click(".fia-foto >> nth=0 >> button"); pg.wait_for_timeout(200)
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(1500)
     ch = [c for c in g["fotoia"]["chamadas"] if c["path"] == "/fotoia/fila"]
-    chk("coloca na fila com nome, código, observação, 2 fotos, 2 cópias pequenas e os papéis/looks/destino", len(ch) == 1 and ch[0]["body"]["fotos"] == "<2 fotos>" and ch[0]["body"]["refs"] == "<2 refs>" and ch[0]["body"]["extra"] == "fundo areia" and ch[0]["body"]["produto"] == "TK-0003" and ch[0]["body"]["papeis"] == ["look", "look"] and ch[0]["body"]["looks"] == [[0], [1]] and ch[0]["body"]["destino"] == "status" and ch[0]["body"]["seta"] is False and ch[0]["body"]["quem"] == "mulheres", ch)
+    chk("coloca na fila com nome, código, observação, 2 fotos, 2 cópias pequenas e os papéis/looks/destino", len(ch) == 1 and ch[0]["body"]["fotos"] == "<2 fotos>" and ch[0]["body"]["refs"] == "<2 refs>" and ch[0]["body"]["extra"] == "fundo areia" and ch[0]["body"]["produto"] == "TK-0003" and ch[0]["body"]["papeis"] == ["look", "look"] and ch[0]["body"]["looks"] == [[0], [1]] and ch[0]["body"]["destino"] == "status" and "seta" not in ch[0]["body"] and ch[0]["body"]["quem"] == "mulheres", ch)
     chk("vai sozinho para 'Fila e resultados' e mostra o pedido 'Na fila'", pg.locator("[data-v=fila][aria-selected=true]").count() == 1 and pg.locator(".fia-cartao .fia-chip.fila").count() == 1)
     print("== fila / resultado ==")
     g["fotoia"]["itens"][0].update({"status": "fila", "erro": "A cota da IA de imagens acabou por agora.", "espera": "2026-10-18T18:30:00Z"}); pg.wait_for_timeout(800)
@@ -63,7 +63,7 @@ with sync_playwright() as p:
     chk("depois de salvar mostra confirmação", "Salvo" in pg.inner_text("#fia-aba"))
     pg.click("[data-a=padrao]"); pg.wait_for_timeout(700)
     chk("'Voltar à instrução padrão' pede ao servidor", any(x["body"].get("padrao") for x in g["fotoia"]["chamadas"] if x["path"] == "/fotoia/config"))
-    print("== várias peças, papéis, looks, destino, seta e divisão ==")
+    print("== várias peças, papéis, looks, destino e divisão ==")
     from PIL import Image
     import tempfile
     d = tempfile.mkdtemp(); fa = os.path.join(d, "aparelho.jpg"); Image.new("RGB", (900, 1200), (200, 120, 90)).save(fa, "JPEG")
@@ -95,14 +95,14 @@ with sync_playwright() as p:
     chk("5 fotos = 3 pessoas; mais de 4 fotos: explica o limite do Cloudflare e oferece dividir (padrão) ou uma imagem só", "3 pessoas na imagem" in pg.inner_text(".fia-looks") and "Mais de 4 fotos" in pg.inner_text("#fia-aba") and pg.input_value("#fia-divide") == "sim" and "(2 imagens)" in pg.inner_text("[data-a=enviar]"), pg.inner_text("[data-a=enviar]"))
     pg.click("[data-a=destino][data-v=reels]"); pg.wait_for_timeout(200)
     chk("destino Reels marcado (Status é o padrão)", pg.locator("[data-a=destino][data-v=reels][aria-pressed=true]").count() == 1 and pg.locator("[data-a=destino][data-v=status][aria-pressed=true]").count() == 0)
-    pg.check("#fia-seta"); pg.wait_for_timeout(200); pg.select_option("#fia-quem", "criancas"); pg.fill("#fia-extra", "luz de tarde"); pg.wait_for_timeout(100)
-    chk("seta marcada explica que o Cloudflare só desenha a seta", "Cloudflare só desenha a seta" in pg.inner_text("#fia-aba"))
+    chk("não existe mais caixinha de seta (a imagem sai sem texto; seta/emoji vão na Postagem)", pg.locator("#fia-seta").count() == 0 and "sem texto, sem seta e sem emoji" in pg.inner_text("#fia-aba"))
+    pg.select_option("#fia-quem", "criancas"); pg.fill("#fia-extra", "luz de tarde"); pg.wait_for_timeout(100)
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(2200)
     ch = [c for c in g["fotoia"]["chamadas"] if c["path"] == "/fotoia/fila"][1:]
     chk("dividiu em 2 pedidos (4 fotos + 1 foto), cada um com as suas cópias pequenas na mesma ordem", len(ch) == 2 and ch[0]["body"]["fotos"] == "<4 fotos>" and ch[0]["body"]["refs"] == "<4 refs>" and ch[1]["body"]["fotos"] == "<1 fotos>" and ch[1]["body"]["refs"] == "<1 refs>", [c["body"] for c in ch])
-    chk("cada pedido leva papéis, looks (índices da própria lista), rótulos, destino, seta e perfil", ch[0]["body"]["papeis"] in (["cima", "baixo", "cima", "baixo"], ["cima", "baixo", "baixo", "cima"], ["cima", "cima", "baixo", "baixo"]) and ch[0]["body"]["looks"][0] == [0, 1] and ch[0]["body"]["looks"][1] == [2, 3] and ch[1]["body"]["papeis"] == ["look"] and ch[1]["body"]["looks"] == [[0]] and all(c["body"]["destino"] == "reels" and c["body"]["seta"] is True and c["body"]["quem"] == "criancas" and c["body"]["extra"] == "luz de tarde" for c in ch), [c["body"] for c in ch])
+    chk("cada pedido leva papéis, looks (índices da própria lista), rótulos, destino e perfil (sem seta)", ch[0]["body"]["papeis"] in (["cima", "baixo", "cima", "baixo"], ["cima", "baixo", "baixo", "cima"], ["cima", "cima", "baixo", "baixo"]) and ch[0]["body"]["looks"][0] == [0, 1] and ch[0]["body"]["looks"][1] == [2, 3] and ch[1]["body"]["papeis"] == ["look"] and ch[1]["body"]["looks"] == [[0]] and all(c["body"]["destino"] == "reels" and "seta" not in c["body"] and c["body"]["quem"] == "criancas" and c["body"]["extra"] == "luz de tarde" for c in ch), [c["body"] for c in ch])
     chk("o nome diz parte 1/2 e 2/2", "(parte 1/2)" in ch[0]["body"]["nome"] and "(parte 2/2)" in ch[1]["body"]["nome"], [c["body"]["nome"] for c in ch])
-    chk("foi para 'Fila e resultados' com 2 pedidos novos, cada um mostrando looks e destino", pg.locator("[data-v=fila][aria-selected=true]").count() == 1 and pg.locator(".fia-cartao").count() == 2 and "2 looks (2 pessoas) · Reels · com seta" in pg.inner_text("#fia-aba") and "1 look (1 pessoa) · Reels" in pg.inner_text("#fia-aba"))
+    chk("foi para 'Fila e resultados' com 2 pedidos novos, cada um mostrando looks e destino", pg.locator("[data-v=fila][aria-selected=true]").count() == 1 and pg.locator(".fia-cartao").count() == 2 and "2 looks (2 pessoas) · Reels" in pg.inner_text("#fia-aba") and "1 look (1 pessoa) · Reels" in pg.inner_text("#fia-aba"))
     pg.click("[data-v=gerar]"); pg.wait_for_timeout(400)
     chk("depois de enviar a seleção zera", pg.locator(".fia-selitem").count() == 0 and pg.locator(".fia-grupo").count() == 0)
     # uma imagem só (Gemini com plano de imagens): 5 fotos, sem divisão, sem cópias pequenas
