@@ -1353,9 +1353,10 @@ export function textoLooks_(plano, en) {
   L.forEach((lk, k) => {
     const perfil = perfilDe_(plano.quem, k, en), nome = (i) => rot[i] ? ' (' + rot[i] + ')' : '';
     const pt = lk.partes.map((x) => x.papel === 'cima' ? 'a peça de CIMA da Foto ' + (x.i + 1) + nome(x.i) : x.papel === 'baixo' ? 'a peça de BAIXO da Foto ' + (x.i + 1) + nome(x.i) : 'o LOOK INTEIRO / PEÇA ÚNICA da Foto ' + (x.i + 1) + nome(x.i));
-    const ing = lk.partes.map((x) => x.papel === 'cima' ? 'the top garment from image ' + x.i : x.papel === 'baixo' ? 'the bottom garment from image ' + x.i : 'the full outfit from image ' + x.i);
+    const ing = lk.partes.map((x) => x.papel === 'cima' ? 'the top garment from image ' + (x.i + 1) : x.papel === 'baixo' ? 'the bottom garment from image ' + (x.i + 1) : 'the full outfit from image ' + (x.i + 1));   // referências numeradas a partir de 1 (image 1 = 1ª foto); antes era 0 e a IA trocava as roupas entre as pessoas
     out.push(en ? 'Person ' + (k + 1) + ' (' + perfil + ') wears ' + ing.join(' and ') + '.' : 'Look ' + (k + 1) + ' — pessoa ' + (k + 1) + ' (' + perfil + '): veste ' + pt.join(' + ') + '.');
   });
+  if (en && L.length) out.push('The reference images are numbered 1 to ' + (1 + Math.max.apply(null, [].concat.apply([], L.map((lk) => lk.partes.map((x) => x.i))))) + ' in the order given. For each person use ONLY the garment named for that person from its reference image: ignore any person, face, background or other clothing visible in the reference images, and never put one person\'s garment on another person.');
   return out.join('\n');
 }
 export function promptFotoIA(cfg, job, nFotos) {
@@ -1466,7 +1467,7 @@ export async function chamarCloudflareImagem(env, cfg, prompt, refs) {
   } catch (e) {
     const msg = String((e && e.message) || e).replace(/\s+/g, ' ').slice(0, 220);
     if (/4006|daily free allocation|used up your daily|neurons/i.test(msg)) { const ate2 = proximaMeiaNoiteUtcMs_(); try { await env.CACHE.put('fotoia_cf_ate', String(ate2), { expirationTtl: 86400 }); } catch (er) { /* sem KV: tenta de novo e recebe o mesmo erro */ } return { ok: false, espera: true, ateMs: ate2, erro: 'Cloudflare: o grátis de hoje (10 000 neurons) acabou; o pedido continua na fila e sai amanhã cedo.' }; }
-    if (/3040|capacity|temporar|overload|try again|429|rate limit/i.test(msg)) return { ok: false, espera: true, ateMs: Date.now() + 10 * 60000, erro: 'Cloudflare: servidor de imagens ocupado agora; o pedido tenta de novo em alguns minutos.' };
+    if (/3040|capacity|temporar|overload|try again|429|rate limit/i.test(msg)) return { ok: false, espera: true, ateMs: Date.now() + 3 * 60000, erro: 'Cloudflare: servidor de imagens ocupado agora; o pedido tenta de novo em alguns minutos.' };
     if (/10000|authentication|not authorized|permission|not enabled|binding/i.test(msg)) return { ok: false, fatal: true, erro: 'O Cloudflare recusou o uso do Workers AI (' + msg.slice(0, 120) + '). Confira se o Workers AI está ativo na conta.' };
     return { ok: false, erro: 'Cloudflare: ' + msg };
   }
@@ -1516,7 +1517,7 @@ export async function processarFotoIA(env, soId) {
     if (!chave && !(env.AI && cfg.provedores.indexOf('cloudflare') !== -1)) return { feitas: 0, semChave: true };
     if (await env.CACHE.get('fotoia_trava')) return { feitas: 0, ocupado: true };
     const agoraMs = Date.now(), agoraIso = new Date(agoraMs).toISOString();
-    await env.DB.prepare("UPDATE fotoia SET status='fila', atualizado_em=? WHERE status='gerando' AND atualizado_em < ?").bind(agoraIso, new Date(agoraMs - 10 * 60000).toISOString()).run();
+    await env.DB.prepare("UPDATE fotoia SET status='fila', atualizado_em=? WHERE status='gerando' AND atualizado_em < ?").bind(agoraIso, new Date(agoraMs - 4 * 60000).toISOString()).run();
     const job = soId ? await env.DB.prepare("SELECT * FROM fotoia WHERE id=? AND status='fila'").bind(soId).first()
       : await env.DB.prepare("SELECT * FROM fotoia WHERE status='fila' AND (prox_em='' OR prox_em<=?) ORDER BY id LIMIT 1").bind(agoraIso).first();
     if (!job) return { feitas: 0 };
