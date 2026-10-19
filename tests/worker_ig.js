@@ -944,7 +944,7 @@ function d1() {
     const idc1 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idc1);
     chk('Gemini cota 0 + Cloudflare ligado: a imagem SAI pelo Cloudflare (pronta, modelo cloudflare:…)', it && it.status === 'pronta' && it.modelo === 'cloudflare:flux-2-klein-4b' && /\/m\/\d{6}\/[0-9a-f]{20}\.jpg$/.test(it.resultado), it);
     const ac = aiChamadas[0] || { campos: {} };
-    chk('foi pedido com 2 fotos de referência, tamanho 720×1280 (9:16) e o nome da peça na instrução', aiChamadas.length === 1 && ac.modelo === '@cf/black-forest-labs/flux-2-klein-4b' && ac.campos.input_image_0 && ac.campos.input_image_1 && !ac.campos.input_image_2 && ac.campos.width === '720' && ac.campos.height === '1280' && /Product: Cropped Farm\./.test(ac.campos.prompt) && /fundo areia/.test(ac.campos.prompt) && /Copy each garment EXACTLY/.test(ac.campos.prompt) && /full outfit from image 0/.test(ac.campos.prompt), ac);
+    chk('foi pedido com 2 fotos de referência, tamanho 720×1280 (9:16) e o nome da peça na instrução', aiChamadas.length === 1 && ac.modelo === '@cf/black-forest-labs/flux-2-klein-4b' && ac.campos.input_image_0 && ac.campos.input_image_1 && !ac.campos.input_image_2 && ac.campos.width === '720' && ac.campos.height === '1280' && /Product: Cropped Farm\./.test(ac.campos.prompt) && /fundo areia/.test(ac.campos.prompt) && /Copy each garment EXACTLY/.test(ac.campos.prompt) && /full outfit from image 1/.test(ac.campos.prompt), ac);
     chk('o Gemini foi tentado antes (e esbarrou na cota) — ficou de molho para não repetir', imgChamadas.length >= 1 && !!(await env.CACHE.get('ia_esgotados')));
 
     // b) Gemini com cota: ele vem primeiro e o Cloudflare nem é chamado
@@ -966,7 +966,7 @@ function d1() {
     await env.CACHE.delete('fotoia_cf_ate'); await env.CACHE.delete('ia_esgotados'); aiModo = 'ocupado'; aiChamadas = [];
     await DB.prepare("UPDATE fotoia SET prox_em='' WHERE id=?").bind(idc3).run(); await W.processarFotoIA(env, idc3);
     ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idc3);
-    chk('Cloudflare ocupado (3040): continua na fila e tenta de novo em ~10 min', aiChamadas.length === 1 && it.status === 'fila' && Date.parse(it.espera) > Date.now() + 5 * 60000 && Date.parse(it.espera) < Date.now() + 40 * 60000 && /ocupado/.test(it.erro), it);
+    chk('Cloudflare ocupado (3040): continua na fila e tenta de novo em ~3 min', aiChamadas.length === 1 && it.status === 'fila' && Date.parse(it.espera) > Date.now() + 1 * 60000 && Date.parse(it.espera) < Date.now() + 40 * 60000 && /ocupado/.test(it.erro), it);
 
     // e) liberou: o mesmo pedido sai
     await env.CACHE.delete('ia_esgotados'); aiModo = 'ok'; await DB.prepare("UPDATE fotoia SET prox_em='' WHERE id=?").bind(idc3).run(); await W.processarFotoIA(env, idc3);
@@ -995,7 +995,7 @@ function d1() {
     await A2('POST', '/fotoia/config', { config: { provedores: ['cloudflare', 'gemini'], formato: '4:5', tamanho: '2K' } });
     aiChamadas = []; ({ j: jj } = await A2('POST', '/fotoia/fila', { nome: 'Short', fotos: [foto], refs: [ref] }));
     chk('proporção e tamanho da config valem (4:5 em 2K = 1088×1360)', aiChamadas.length === 1 && aiChamadas[0].campos.width === '1088' && aiChamadas[0].campos.height === '1360', aiChamadas[0]);
-    chk('promptCf troca {nome}/{extra}/{formato} e acrescenta o produto se a instrução não tiver {nome}', (function () { const t = W.promptCf({ instrucaoCf: 'Foto de {formato}. {extra}', formato: '9:16' }, { nome: 'Vestido', extra: 'sem sol' }, 1); return t.indexOf('Foto de 9:16. sem sol\n') === 0 && /Product: Vestido\./.test(t) && /full outfit from image 0/.test(t); })());
+    chk('promptCf troca {nome}/{extra}/{formato} e acrescenta o produto se a instrução não tiver {nome}', (function () { const t = W.promptCf({ instrucaoCf: 'Foto de {formato}. {extra}', formato: '9:16' }, { nome: 'Vestido', extra: 'sem sol' }, 1); return t.indexOf('Foto de 9:16. sem sol\n') === 0 && /Product: Vestido\./.test(t) && /full outfit from image 1/.test(t); })());
     chk('tamanhoCf: 9:16 1K = 720×1280; 16:9 2K = 1920×1088 (dentro do máx. de 1920)', W.tamanhoCf('9:16', '1K').join() === '720,1280' && W.tamanhoCf('16:9', '2K').join() === '1920,1088' && W.tamanhoCf('xx', 'yy').join() === '720,1280');
     // ---- 17) v1.8: LOOKS — cada foto tem um papel e cada look vira UMA pessoa na imagem ----
     console.log('== FOTOS COM IA — looks (um modelo por look) ==');
@@ -1039,7 +1039,7 @@ function d1() {
     chk('servidor recusa 3 de cima + 1 de baixo (400) e diz qual falta', rr.status === 400 && jj.faltam === 'baixo' && /Faltam 2 peças de baixo/.test(jj.erro), jj);
     ({ r: rr, j: jj } = await A2('POST', '/fotoia/fila', { nome: 'x', fotos: [foto, foto, foto, foto, foto, foto, foto], papeis: ['look', 'look', 'look', 'look', 'look', 'look', 'look'] }));
     chk('mais de 6 fotos = 400 com frase', rr.status === 400 && /No máximo 6 fotos/.test(jj.erro), jj);
-    // d) Cloudflare com looks: referências na ORDEM das fotos (image 0, image 1…), proporção do destino
+    // d) Cloudflare com looks: referências na ORDEM das fotos (image 1, image 2…), proporção do destino
     aiModo = 'ok'; aiChamadas = []; env.AI = { run: async (modelo, entrada) => {
       const fd = await new Response(entrada.multipart.body, { headers: { 'content-type': entrada.multipart.contentType } }).formData();
       const campos = {}; for (const [k, v] of fd.entries()) campos[k] = typeof v === 'string' ? v : { arquivo: true, tam: v.size };
@@ -1051,7 +1051,7 @@ function d1() {
     const idl3 = jj.id; ({ j: jj } = await A2('GET', '/fotoia/lista')); it = jj.itens.find((x) => x.id === idl3);
     const ac2 = aiChamadas[0] || { campos: {} };
     chk('Cloudflare: 4 fotos / 3 looks saem pelo Cloudflare com as 4 referências na ordem', it && it.status === 'pronta' && /^cloudflare:/.test(it.modelo) && ac2.campos.input_image_3 && !ac2.campos.input_image_4, it);
-    chk('Cloudflare: prompt diz 3 pessoas, liga image 0 + image 1 ao look 1 e image 2/3 aos outros; 4:5 = 768×960; sem seta nem texto mesmo com seta:true', /group of 3 different women/.test(ac2.campos.prompt || '') && /Person 1 \([^)]+\) wears the top garment from image 0 and the bottom garment from image 1\./.test(ac2.campos.prompt || '') && /Person 2 \([^)]+\) wears the full outfit from image 2\./.test(ac2.campos.prompt || '') && /Person 3 \([^)]+\) wears the full outfit from image 3\./.test(ac2.campos.prompt || '') && ac2.campos.width === '768' && ac2.campos.height === '960' && /No text, no letters, no numbers, no arrows, no emojis/.test(ac2.campos.prompt || '') && !/Add one small elegant arrow/.test(ac2.campos.prompt || ''), ac2.campos.prompt);
+    chk('Cloudflare: prompt diz 3 pessoas, liga image 1 + image 2 ao look 1 e image 3/4 aos outros (numeração a partir de 1); 4:5 = 768×960; sem seta nem texto mesmo com seta:true', /group of 3 different women/.test(ac2.campos.prompt || '') && /Person 1 \([^)]+\) wears the top garment from image 1 and the bottom garment from image 2\./.test(ac2.campos.prompt || '') && /Person 2 \([^)]+\) wears the full outfit from image 3\./.test(ac2.campos.prompt || '') && /Person 3 \([^)]+\) wears the full outfit from image 4\./.test(ac2.campos.prompt || '') && ac2.campos.width === '768' && ac2.campos.height === '960' && /No text, no letters, no numbers, no arrows, no emojis/.test(ac2.campos.prompt || '') && !/Add one small elegant arrow/.test(ac2.campos.prompt || ''), ac2.campos.prompt);
     chk('Cloudflare: manda que NÃO copie o rosto/corpo da modelo das fotos', /Do NOT copy the face, body, skin or hair/.test(ac2.campos.prompt || ''));
     // e) mais de 4 fotos: o Cloudflare não pode (limite dele) e, sem Gemini, o pedido acusa erro na hora com a saída (dividir)
     aiChamadas = []; await A2('DELETE', '/ia-chave'); 
