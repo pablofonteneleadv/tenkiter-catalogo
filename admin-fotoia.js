@@ -1,10 +1,12 @@
 /* ====================================================================
- * TENKiTER — admin-fotoia.js (v1.8) — "FOTOS COM IA" (a IA gera a capa de campanha a partir das fotos reais das peças)
+ * TENKiTER — admin-fotoia.js (v1.9) — "FOTOS COM IA" (a IA gera a arte das pessoas com as roupas a partir das fotos reais das peças)
+ *  v1.9 (18/10/2026, pedido do Pablo): a IA NÃO escreve mais texto nem desenha seta/emoji — "só faz a arte que interessa dos produtos e isso eu coloco na layout".
+ *  Seta, chamadas e emojis entram depois, em Postagens (➕ Adicionar → Elementos), onde quem posta pode mover/aumentar/girar. O campo `seta` saiu do painel e do pedido.
  *  v1.8 (18/10/2026, pedido do Pablo): até 6 fotos de VÁRIAS peças + do aparelho; cada foto tem um PAPEL (👚 cima, 👖 baixo, 👗 look inteiro); cima e baixo fecham par (a IA não
- *  inventa peça: se faltar, o painel mostra o filtro da que falta); N looks = N pessoas diferentes na imagem; destino Status/Reels/capa de carrossel; seta com chamada opcional;
+ *  inventa peça: se faltar, o painel mostra o filtro da que falta); N looks = N pessoas diferentes na imagem; destino Status/Reels/capa de carrossel;
  *  quem veste (mulheres/crianças/homens/misto); com mais de 4 fotos o pedido é dividido (limite do Cloudflare grátis) ou vai inteiro ao Gemini.
  *  Pedido do Pablo (18/10/2026): "de graça, respeitando os limites do plano; sem crédito entra na fila e faz quando tiver cota", com a instrução
- *  EDITÁVEL pelo gestor para ir testando os resultados (a de partida é a SKILL dele: Reels/Carrossel 9:16, seta →, modelos alegres, zero texto).
+ *  EDITÁVEL pelo gestor para ir testando os resultados (a de partida é a SKILL dele: Reels/Carrossel 9:16, modelos alegres, zero texto).
  *  Fala com o Worker `tenkiter-ig` (INSTAGRAM_URL, common.js) em /fotoia/*: o Worker guarda a fila, tenta uma por minuto e, se a cota acabou, deixa
  *  o pedido esperando (nada se perde, nada é cobrado a mais). A chave do Gemini é a mesma da leitura de fotos (⚙️ no importador) e NUNCA vem para cá.
  *  Quem usa: gerir_acessos OU catalogo_cadastrar. Só o Admin total (gerir_acessos) muda a instrução, os modelos e o limite por dia.
@@ -15,7 +17,7 @@
   const $ = (id) => document.getElementById(id);
   const esc = (v) => escaparHtml(v);
   let extraTxt = '', aba = 'gerar', cfg = null, info = null, itens = [], cont = {}, filtro = 'todas', timer = null, busca = '', enviando = false, msgTxt = '', msgTipo = '';
-  let sel = [], abertas = [], tipoFiltro = 'todas', giro = 0, destino = 'status', seta = false, quem = 'mulheres', dividirModo = 'sim';          // sel = fotos escolhidas {url, peca, cod, papel}
+  let sel = [], abertas = [], tipoFiltro = 'todas', giro = 0, destino = 'status', quem = 'mulheres', dividirModo = 'sim';          // sel = fotos escolhidas {url, peca, cod, papel}
   const MAX_FOTOS = 6, CF_MAX = 4;
 
   /* ---------- Worker ---------- */
@@ -221,8 +223,7 @@
         : '<div class="fia-looks"><b>' + ml.looks.length + (ml.looks.length === 1 ? ' pessoa' : ' pessoas') + ' na imagem (uma por look):</b><ol style="margin:4px 0 0 18px;padding:0">' + ml.looks.map((l) => '<li>' + esc(nomeLook(l)) + '</li>').join('') + '</ol>' +
           (ml.pares >= 2 ? '<div class="fia-linha"><button type="button" class="fia-btn" data-a="trocar">🔀 Trocar a combinação de cima e de baixo</button></div>' : '') + '</div>') : '') +
       '<label>3. Para onde vai a imagem?</label><div class="fia-filtros" role="group" aria-label="Destino">' + DESTINOS.map((d) => '<button type="button" data-a="destino" data-v="' + d[0] + '" aria-pressed="' + (destino === d[0]) + '">' + d[1] + ' <small>' + d[2] + '</small></button>').join('') + '</div>' +
-      '<label class="fia-chk"><input type="checkbox" id="fia-seta"' + (seta ? ' checked' : '') + '> ➡️ Seta com chamada “Arraste e veja as fotos reais” (para usar como capa de carrossel)</label>' +
-      (seta ? '<p class="fia-dica">O Gemini escreve a chamada. O Cloudflare só desenha a seta (ele não escreve texto direito).</p>' : '') +
+      '<p class="fia-dica">A imagem sai <b>sem texto, sem seta e sem emoji</b>: só as pessoas com as roupas. Setas, chamadas e emojis você coloca depois em <b>📸 Postagens → ➕ Adicionar</b>.</p>' +
       '<label for="fia-quem">Quem veste</label><select id="fia-quem">' + QUEM.map((q) => '<option value="' + q[0] + '"' + (quem === q[0] ? ' selected' : '') + '>' + q[1] + '</option>').join('') + '</select>' +
       (nSel > CF_MAX && !ml.erro ? '<div class="fia-aviso"><b>Mais de ' + CF_MAX + ' fotos:</b> o Cloudflare grátis aceita até ' + CF_MAX + ' fotos por imagem; o Gemini (plano com imagens) aceita ' + MAX_FOTOS + '.<label for="fia-divide" style="margin-top:6px">Como enviar</label><select id="fia-divide"><option value="sim"' + (dividirModo === 'sim' ? ' selected' : '') + '>Dividir em ' + dividirLooks(ml.looks).length + ' imagens (funciona no grátis; cada imagem tem alguns dos looks)</option><option value="nao"' + (dividirModo === 'nao' ? ' selected' : '') + '>Uma imagem só com todos os looks (só o Gemini com plano de imagens)</option></select>' + (!temGem && dividirModo === 'nao' ? '<p class="fia-erro">Sem a chave do Gemini, “uma imagem só” não vai sair. Escolha dividir.</p>' : '') + '</div>' : '') +
       '<label for="fia-extra">4. Observação para esta imagem (opcional)</label><input type="text" id="fia-extra" maxlength="300" value="' + esc(extraTxt) + '" placeholder="Ex.: luz de fim de tarde, só mulheres de cabelo longo…">' +
@@ -240,7 +241,7 @@
     if (x.status === 'descartada' || x.status === 'cancelada') botoes.push(['refazer', '🔁 Refazer', '']);
     return '<div class="fia-cartao" data-id="' + x.id + '"><h3>' + esc(x.nome || 'Peça sem nome') + ' <span class="fia-chip ' + esc(x.status) + '">' + esc(ROT[x.status] || x.status) + '</span></h3>' +
       '<small>' + (x.produto ? esc(x.produto) + ' · ' : '') + 'pedido em ' + esc(dataBr(x.criado_em)) + (x.modelo ? ' · ' + esc(x.modelo) : '') + '</small>' +
-      (x.plano ? '<small>' + x.plano.looks + (x.plano.looks === 1 ? ' look (1 pessoa)' : ' looks (' + x.plano.looks + ' pessoas)') + ' · ' + esc(({ status: 'Status', reels: 'Reels', carrossel: 'Capa de carrossel' })[x.plano.destino] || '') + (x.plano.seta ? ' · com seta' : '') + '</small>' : '') +
+      (x.plano ? '<small>' + x.plano.looks + (x.plano.looks === 1 ? ' look (1 pessoa)' : ' looks (' + x.plano.looks + ' pessoas)') + ' · ' + esc(({ status: 'Status', reels: 'Reels', carrossel: 'Capa de carrossel' })[x.plano.destino] || '') + '</small>' : '') +
       (x.extra ? '<small>Observação: ' + esc(x.extra) + '</small>' : '') +
       (x.status === 'fila' && x.espera ? '<p class="fia-aviso">⏳ ' + esc(x.erro || 'Esperando a cota.') + ' Tenta de novo por volta de <b>' + esc(dataBr(x.espera)) + '</b>.</p>' : '') +
       (x.status === 'fila' && !x.espera && !x.erro ? '<small>Aguardando a vez (1 por minuto).</small>' : '') +
@@ -263,7 +264,7 @@
     const a = $('fia-aba'); if (!a) return; const ed = ehGestor() && !!(info && info.podeEditar !== false), dis = ed ? '' : ' disabled';
     a.innerHTML = statusHtml() + (ed ? '' : '<p class="fia-aviso">Só o Admin total muda a instrução e os limites. Você pode ler e usar.</p>') +
       '<label for="fia-instr">Instrução enviada à IA em TODO pedido <span class="fia-dica" id="fia-cont"></span></label><textarea id="fia-instr" maxlength="12000"' + dis + '>' + esc(cfg.instrucao) + '</textarea>' +
-      '<p class="fia-dica">Dica: mude uma coisa por vez e gere de novo (🔁 Refazer) para comparar. No fim de cada pedido o sistema acrescenta sozinho: o nome do lote, a <b>lista de looks</b> (qual foto veste em qual pessoa, com o perfil de cada uma), o destino (Status, Reels ou capa), se leva seta com chamada e a observação — não precisa escrever isso aqui.</p>' +
+      '<p class="fia-dica">Dica: mude uma coisa por vez e gere de novo (🔁 Refazer) para comparar. No fim de cada pedido o sistema acrescenta sozinho: o nome do lote, a <b>lista de looks</b> (qual foto veste em qual pessoa, com o perfil de cada uma), o destino (Status, Reels ou capa) e a observação — não precisa escrever isso aqui. A imagem nunca leva texto nem seta: isso é colocado depois, em Postagens.</p>' +
       '<label for="fia-formato">Proporção da imagem</label><select id="fia-formato"' + dis + '>' + ['9:16', '4:5', '3:4', '1:1'].map((f) => '<option value="' + f + '"' + (cfg.formato === f ? ' selected' : '') + '>' + f + (f === '9:16' ? ' (Story / Reels)' : f === '4:5' ? ' (Feed)' : '') + '</option>').join('') + '</select>' +
       '<label for="fia-prov">Quem gera a imagem</label><select id="fia-prov"' + dis + '>' + [['gemini,cloudflare', 'Gemini primeiro; se estiver sem cota, Cloudflare (recomendado)'], ['cloudflare,gemini', 'Cloudflare primeiro; Gemini como reserva'], ['cloudflare', 'Só Cloudflare (grátis por dia)'], ['gemini', 'Só Gemini']].map((m) => '<option value="' + m[0] + '"' + ((cfg.provedores || ['gemini', 'cloudflare']).join(',') === m[0] ? ' selected' : '') + '>' + m[1] + '</option>').join('') + '</select>' +
       '<p class="fia-dica">O Gemini gera imagens melhores, mas a conta grátis dele costuma ter cota 0 para imagem. O Cloudflare (FLUX) tem uma cota grátis por dia e aceita as fotos reais da peça como referência; a qualidade e a fidelidade à roupa precisam ser conferidas por você — comece com 🔁 Refazer e compare.</p>' +
@@ -314,7 +315,6 @@
   }
   async function mudou(e) {
     const id = e.target.id;
-    if (id === 'fia-seta') { seta = !!e.target.checked; desenharGerar(); return; }
     if (id === 'fia-quem') { quem = e.target.value; return; }
     if (id === 'fia-divide') { dividirModo = e.target.value; desenharGerar(); return; }
     if (id !== 'fia-arq') return;
@@ -367,7 +367,7 @@
       const nomes = []; ordem.forEach((i) => { const n = sel[i].peca || 'Foto do aparelho'; if (nomes.indexOf(n) === -1) nomes.push(n); });
       const unica = new Set(ordem.map((i) => sel[i].cod || '')).size === 1 && sel[ordem[0]].cod ? sel[ordem[0]].cod : '';
       const corpo = { nome: (nomes.slice(0, 3).join(' + ') + (nomes.length > 3 ? ' +' + (nomes.length - 3) : '') + (grupos.length > 1 ? ' (parte ' + (gi + 1) + '/' + grupos.length + ')' : '')).slice(0, 120), produto: unica, extra: extra, fotos: fotos,
-        papeis: ordem.map((i) => sel[i].papel), looks: looks, rotulos: ordem.map((i) => sel[i].peca || ''), destino: destino, seta: !!seta, quem: quem };
+        papeis: ordem.map((i) => sel[i].papel), looks: looks, rotulos: ordem.map((i) => sel[i].peca || ''), destino: destino, quem: quem };
       if (refsOk && refs.length === fotos.length) corpo.refs = refs;
       const r = await api('/fotoia/fila', 'POST', corpo);
       if (!r || !r.ok) { enviando = false; msg((criados.length ? criados.length + ' pedido(s) já entraram na fila. ' : '') + erroTxt(r), 'erro'); if (criados.length) { sel = []; abertas = []; } desenharGerar(); return; }

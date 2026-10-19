@@ -993,21 +993,30 @@ export async function rotasFotosCliente(env, req, url, J) {     // /cliente/foto
   const r = await env.DB.prepare("INSERT INTO foto_cliente (origem, url, chave, whats, nome, instagram, obs, status, vinculo, criado_por, criado_em) VALUES ('cliente',?,?,?,?,?,?, 'nova','conta',?,?)").bind(g.url, g.chave, whats, info.nome, ig, obs, info.nome, agora()).run();
   return J({ ok: true, id: r.meta && r.meta.last_row_id });
 }
-export async function rotasFotos(env, ctx, req, url, J) {       // /fotos* (equipe: gerir_acessos ou catalogo_cadastrar)
+export async function rotasFotos(env, ctx, req, url, J, perms) {       // /fotos* (equipe: gerir_acessos ou catalogo_cadastrar)
   const p = url.pathname;
   if (p === '/fotos/visuais') {     // configuração dos visuais de Postagens (nomes, CTA, visuais próprios, tipos): igual em todos os aparelhos e para todos que têm acesso
     const vAtual = async () => Number(await cfgGet(env, 'po_visuais_v')) || 0;
     if (req.method === 'GET') { const v = await cfgGet(env, 'po_visuais'); let d = null; try { d = v ? JSON.parse(v) : null; } catch (e) {} return J({ ok: true, dados: d, v: await vAtual() }); }
     if (req.method === 'POST') {
       let b = {}; try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); }
-      const txt = JSON.stringify(b.dados && typeof b.dados === 'object' ? b.dados : {});
+      const dados = b.dados && typeof b.dados === 'object' && !Array.isArray(b.dados) ? b.dados : {};
+      const gestor = (perms || []).indexOf('gerir_acessos') !== -1;
+      let ignorouBiblioteca = false;
+      if (!gestor) {     // v1.9 (Pablo, 18/10/2026): a BIBLIOTECA de elementos fixos (PNGs que valem para todos) só o Admin total muda; quem posta só USA. Aqui o servidor descarta qualquer mudança vinda de outra pessoa.
+        const vv = await cfgGet(env, 'po_visuais'); let dd = null; try { dd = vv ? JSON.parse(vv) : null; } catch (e) {}
+        const libServidor = dd && typeof dd === 'object' ? dd.tk_po_elementos_v1 : undefined;
+        if (JSON.stringify(dados.tk_po_elementos_v1) !== JSON.stringify(libServidor)) ignorouBiblioteca = true;
+        if (libServidor === undefined) delete dados.tk_po_elementos_v1; else dados.tk_po_elementos_v1 = libServidor;
+      }
+      const txt = JSON.stringify(dados);
       if (txt.length > 200000) return J({ ok: false, erro: 'Configuração grande demais.' }, 400);
       const atual = await vAtual();
       if (b.base != null && Number(b.base) !== atual) {      // outra pessoa salvou antes: devolve o que está no servidor para o aparelho juntar
         const v = await cfgGet(env, 'po_visuais'); let d = null; try { d = v ? JSON.parse(v) : null; } catch (e) {}
         return J({ ok: false, conflito: true, dados: d, v: atual });
       }
-      await cfgSet(env, 'po_visuais', txt); await cfgSet(env, 'po_visuais_v', String(atual + 1)); return J({ ok: true, v: atual + 1 });
+      await cfgSet(env, 'po_visuais', txt); await cfgSet(env, 'po_visuais_v', String(atual + 1)); return J({ ok: true, v: atual + 1, biblioteca: gestor, ignorouBiblioteca });
     }
   }
   if (p === '/fotos' && req.method === 'GET') {
@@ -1199,7 +1208,7 @@ export async function limparTemporarios(env, agoraMs) {
 export const INSTRUCAO_FOTOIA_PADRAO = `# SKILL: TENKiTER Modas – Capa de Campanha com Looks (grupo de modelos diferentes)
 
 ## 🎯 Objetivo
-Você é o motor visual da **TENKiTER Modas** (moda de Crateús-CE: alegre, popular e sofisticada ao mesmo tempo). Receba as fotos reais das peças e gere **UMA única imagem de campanha**: um grupo de pessoas DIFERENTES, cada uma vestindo UM look do pedido, como num editorial de moda feito em estúdio. A lista exata de looks, o perfil de cada pessoa, o destino da imagem (Status, Reels ou capa de carrossel) e se leva seta com chamada vêm no final, em "DADOS DESTE PEDIDO".
+Você é o motor visual da **TENKiTER Modas** (moda de Crateús-CE: alegre, popular e sofisticada ao mesmo tempo). Receba as fotos reais das peças e gere **UMA única imagem de campanha**: um grupo de pessoas DIFERENTES, cada uma vestindo UM look do pedido, como num editorial de moda feito em estúdio. A lista exata de looks, o perfil de cada pessoa, o destino da imagem (Status, Reels ou capa de carrossel) vêm no final, em "DADOS DESTE PEDIDO". Você faz SÓ a arte das pessoas com as roupas: textos, setas, emojis e logotipo são colocados depois, pela loja, no editor de visuais.
 
 ## 📋 Regras de ouro (inegociáveis)
 
@@ -1215,7 +1224,7 @@ Você é o motor visual da **TENKiTER Modas** (moda de Crateús-CE: alegre, popu
 
 6. **COMPOSIÇÃO.** O grupo ocupa o terço central da altura, com respiro livre em cima e embaixo (as "zonas livres" do destino ficam sem rostos e sem peças). Ninguém cortado pelas bordas; a pessoa mais alta não encosta no topo.
 
-7. **TEXTO.** Nenhum texto, número ou logotipo na imagem, EXCETO o que o pedido pedir expressamente em "Seta e chamada".
+7. **NADA ESCRITO, NADA DESENHADO POR CIMA.** A imagem não leva texto, letras, números, logotipo, marca d'água, seta, emoji, adesivo, ícone nem moldura — só as pessoas e o cenário. Parede e chão ficam lisos (sem manchas, riscos ou sombras que pareçam letras). Setas, chamadas e emojis a loja coloca depois; deixe as áreas livres do destino realmente limpas para isso.
 
 ## ⚙️ Como executar
 1. Leia a lista de looks e associe cada foto de referência à pessoa que a veste (a foto marcada como "de cima" fornece só a peça de cima; a "de baixo", só a de baixo; a "look inteiro" fornece a roupa toda).
@@ -1325,7 +1334,9 @@ export function montarPlanoFotoIA_(b, n, cfg) {
   }
   if (!looks.length || looks.length > FOTOIA_MAX_FOTOS) return { ok: false, erro: 'Escolha de 1 a ' + FOTOIA_MAX_FOTOS + ' looks.' };
   const rot = Array.isArray(b.rotulos) ? b.rotulos.slice(0, n).map((x) => String(x || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 80)) : [];
-  return { ok: true, plano: { v: 1, destino: destino, formato: DESTINOS_FOTOIA[destino].formato, seta: !!b.seta, quem: quem, looks: looks.map((l) => ({ partes: l })), rotulos: rot } };
+  /* v1.9: a imagem NUNCA leva seta nem texto (o modelo errava as letras). `seta` fica sempre false só para pedidos/painéis antigos continuarem lendo o campo;
+   seta, chamada e emoji vão no editor de visuais da aba Postagens. */
+  return { ok: true, plano: { v: 1, destino: destino, formato: DESTINOS_FOTOIA[destino].formato, seta: false, quem: quem, looks: looks.map((l) => ({ partes: l })), rotulos: rot } };
 }
 /** Plano guardado no pedido; pedido antigo (sem plano) = cada foto é um look inteiro, destino pelo formato da configuração. */
 export function planoDe_(job, nFotos, cfg) {
@@ -1357,8 +1368,7 @@ export function promptFotoIA(cfg, job, nFotos) {
   t += 'NÚMERO DE LOOKS = NÚMERO DE PESSOAS NA IMAGEM: ' + nLooks + ' ' + (nLooks === 1 ? '(uma pessoa só)' : '(' + nLooks + ' pessoas diferentes, uma por look)') + '.\n\n';
   t += 'LOOKS DESTE PEDIDO (da esquerda para a direita):\n' + textoLooks_(plano, false) + '\n';
   t += 'Lembrete: as pessoas das fotos de referência (se houver) NÃO aparecem; só a roupa. Cada pessoa da imagem é nova e diferente das outras.\n\n';
-  t += plano.seta ? 'SETA E CHAMADA (pedido expressamente): no canto inferior direito, dentro da área livre de baixo, coloque uma seta elegante apontando para a direita (→) e, ao lado, o texto curto exato "ARRASTE E VEJA AS FOTOS REAIS", em letras brancas, caixa alta, fonte sem serifa, com sombra suave para ler em qualquer fundo. Escreva o texto exatamente assim, sem erro de grafia. Nenhum outro texto na imagem.\n'
-    : 'SEM TEXTO: nenhuma palavra, letra, número, seta ou logotipo na imagem.\n';
+  t += 'SEM TEXTO E SEM ENFEITES: nenhuma palavra, letra, número, seta, emoji, adesivo, ícone ou logotipo na imagem — nem nas áreas livres. Textos, setas e emojis são colocados depois, em outro programa; entregue só a arte limpa das pessoas e do cenário.\n';
   if (job && job.extra) t += 'Observação do lojista para esta imagem: ' + String(job.extra).slice(0, 600) + '\n';
   return t;
 }
@@ -1435,7 +1445,7 @@ export function promptCf(cfg, job, nRefs) {
   if (!tinhaLooks) t += '\n' + looksEn;
   if (!tinha && nome) t += '\nProduct: ' + nome + '.';
   if (!/\{extra\}/.test(base) && extra) t += '\n' + extra;
-  t += '\n' + (LIVRE_DESTINO_EN_[plano.destino] || '') + ' ' + (plano.seta ? 'Add one small elegant arrow pointing right (no words, no letters) in the bottom-right corner, inside the empty bottom area.' : 'No text, no letters, no arrows, no logos.');
+  t += '\n' + (LIVRE_DESTINO_EN_[plano.destino] || '') + ' No text, no letters, no numbers, no arrows, no emojis, no stickers, no logos, no watermark: clean image only.';
   return t.replace(/[ \t]+\n/g, '\n').trim();
 }
 /** → {ok, buf, mime, modelo} | {ok:false, espera:true, ateMs, erro} | {ok:false, indisponivel:true} | {ok:false, erro}. Nunca lança. */
@@ -1494,7 +1504,7 @@ export async function gerarComMotores_(env, cfg0, job, fontes, refs, chaveGemini
   if (espera) return { ok: false, espera: true, ateMs: ateMs, semPlano: semPlanoGem && !tentouCf, contaTent: !!ultimo, erro: erro };   // um motor só espera cota, mas o outro deu erro de verdade: isso conta tentativa
   return { ok: false, fatal: fatal && !ultimo, erro: erro || ultimo };
 }
-const resumoPlano_ = (x) => { try { const p = x.plano ? JSON.parse(x.plano) : null; return p && Array.isArray(p.looks) ? { looks: p.looks.length, destino: p.destino || '', seta: !!p.seta, quem: p.quem || '' } : null; } catch (e) { return null; } };
+const resumoPlano_ = (x) => { try { const p = x.plano ? JSON.parse(x.plano) : null; return p && Array.isArray(p.looks) ? { looks: p.looks.length, destino: p.destino || '', seta: false, quem: p.quem || '' } : null; } catch (e) { return null; } };
 const linhaFotoIA_ = (env, x) => ({ plano: resumoPlano_(x), id: x.id, status: x.status, nome: x.nome || '', produto: x.produto || '', extra: x.extra || '', resultado: x.resultado ? urlMidia(env, x.resultado) : '', modelo: x.modelo || '', erro: x.erro || '', espera: x.status === 'fila' && x.prox_em ? x.prox_em : '', tent: x.tent || 0,
   fontes: (function () { try { return JSON.parse(x.fontes || '[]').map((k) => urlMidia(env, k)); } catch (e) { return []; } })(), criado_em: x.criado_em, pronto_em: x.pronto_em || '' });
 /** Faz UM pedido da fila (o mais antigo que já pode, ou `soId`). Nunca lança. */
@@ -1578,7 +1588,7 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
     const fotos = Array.isArray(b && b.fotos) ? b.fotos : [];
     if (!fotos.length) return J({ ok: false, erro: 'Escolha pelo menos 1 foto da peça.' }, 400);
     if (fotos.length > FOTOIA_MAX_FOTOS) return J({ ok: false, erro: 'No máximo ' + FOTOIA_MAX_FOTOS + ' fotos por imagem.' }, 400);
-    const cfgPed = await lerCfgFotoIA(env), pl = montarPlanoFotoIA_(b, fotos.length, cfgPed), comPlano = !!(b && (b.papeis || b.looks || b.destino || b.seta || b.quem));      // sem nada disso = pedido no formato antigo (cada foto = um look, proporção da configuração)
+    const cfgPed = await lerCfgFotoIA(env), pl = montarPlanoFotoIA_(b, fotos.length, cfgPed), comPlano = !!(b && (b.papeis || b.looks || b.destino || b.quem));      // sem nada disso = pedido no formato antigo (cada foto = um look, proporção da configuração)
     if (!pl.ok) return J({ ok: false, erro: pl.erro, faltam: pl.faltam || '' }, 400);
     const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM fotoia WHERE status IN ('fila','gerando')").first()) || {}).n) || 0;
     if (pend >= FOTOIA_MAX_FILA) return J({ ok: false, erro: 'A fila já tem ' + pend + ' pedidos esperando. Aguarde alguns saírem.' }, 429);
@@ -1656,7 +1666,7 @@ export default {
     try {
       await iniciar(env);
       const p = url.pathname;
-      if (ehPost) { const rp = (await rotasFotoIA(env, ctx, req, url, J, perms)) || (await rotasFotos(env, ctx, req, url, J)) || (await rotasPostagem(env, ctx, req, url, J, perms)); if (rp) return rp; }
+      if (ehPost) { const rp = (await rotasFotoIA(env, ctx, req, url, J, perms)) || (await rotasFotos(env, ctx, req, url, J, perms)) || (await rotasPostagem(env, ctx, req, url, J, perms)); if (rp) return rp; }
       if (p === '/status' && req.method === 'GET') return J(await status(env));
       if (p === '/rascunhos' && req.method === 'GET') {
         const grupo = url.searchParams.get('grupo') || 'pendente';
