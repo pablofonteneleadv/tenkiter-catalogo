@@ -641,10 +641,56 @@ async function enviarWhatsAppSo_(env, p) {
     j = await r.json();
   } catch (e) { return { ok: false, erro: 'Sem conexao com o servidor do WhatsApp agora. Tento de novo.' }; }
   if (j && j.ok) return { ok: true, requestId: String(j.requestId || requestId) };
+  /* v1.9: 409 "resultado ainda não confirmado" / timeout da Wafly NÃO é erro: a postagem fica "aguardando confirmação"
+   * e o cron consulta o MESMO requestId (nunca reenvia a mídia nem cria outro requestId). */
+  if (j && j.pendente) return { ok: false, pendente: true, requestId: String(j.requestId || requestId), erro: String(j.erro || '') };
   return { ok: false, erro: String((j && j.erro) || 'O WhatsApp recusou o envio.') };
+}
+const ZAP_ESPERA_MAX_MS = 30 * 60000;       // depois disso vira "não confirmou" (continua dando para Consultar resultado)
+const ZAP_CONSULTA_GAP_MS = 2 * 60000;      // o cron consulta a Wafly a cada ~2 min (nunca passa de 10)
+const FRASE_AGUARDA_ZAP = 'Aguardando a confirmação do WhatsApp. Não precisa fazer nada: o sistema confere sozinho a cada poucos minutos, sem reenviar.';
+/** Só CONSULTA o recibo daquele requestId pelo backend (não baixa nem envia mídia). { estado:'aceito'|'desconhecido'|'falha' } */
+async function consultarWhatsApp_(env, requestId) {
+  const base = String(env.API_URL || '').trim();
+  if (!base) return { estado: 'falha', erro: 'Falta o endereco do backend (API_URL).' };
+  try {
+    const r = await fetch(base, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'waflyStatusRemoto', token: String(env.WORKER_TOKEN || ''), requestId: requestId, consultar: true }) });
+    const j = await r.json();
+    if (j && j.ok && String(j.estado || '').toLowerCase() === 'accepted' && j.confirmado) return { estado: 'aceito' };
+    if (j && j.ok) return { estado: 'desconhecido' };
+    return { estado: 'falha', erro: String((j && j.erro) || '') };
+  } catch (e) { return { estado: 'falha', erro: 'Sem conexao com o servidor agora.' }; }
+}
+/** Deixa a postagem "aguardando confirmação" (status 'processando' + marcador zapq:). */
+async function marcarAguardaZap_(env, p, requestId) {
+  await env.DB.prepare("UPDATE postagem SET status='processando', ig_id=?, inicio_proc=?, erro=?, atualizado_em=? WHERE id=?").bind('zapq:' + requestId, agora(), FRASE_AGUARDA_ZAP, agora(), p.id).run();
+  return { ok: true, aguardando: true };
+}
+/** Resolve uma postagem com marcador zapq:. Devolve 'aceito' (segue o fluxo), 'esperando' ou 'falhou'. `forcar` ignora o intervalo entre consultas (botão). */
+async function resolverZapPendente_(env, p, forcar) {
+  const requestId = String(p.ig_id || '').slice(5);
+  const desde = Date.parse(p.inicio_proc || p.atualizado_em || agora()) || Date.now();
+  if (!forcar && Date.now() - (Date.parse(p.atualizado_em || '') || 0) < ZAP_CONSULTA_GAP_MS) return 'esperando';
+  const c = await consultarWhatsApp_(env, requestId);
+  if (c.estado === 'aceito') {
+    p.ig_id = 'zap:' + requestId;
+    await env.DB.prepare("UPDATE postagem SET ig_id=?, erro='', atualizado_em=? WHERE id=?").bind(p.ig_id, agora(), p.id).run();
+    if (!canalUsaInstagram_(p.canal)) {                                  // só WhatsApp: confirmado = publicado (nada é reenviado)
+      await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', publicado_em=?, atualizado_em=? WHERE id=?").bind(requestId, agora(), agora(), p.id).run();
+      p.status = 'publicado';
+    } else if (p.status === 'erro') { await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=? WHERE id=?").bind(agora(), p.id).run(); p.status = 'processando'; }
+    return 'aceito';
+  }
+  if (Date.now() - desde > ZAP_ESPERA_MAX_MS) {
+    await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('WhatsApp: a Wafly ainda não confirmou depois de 30 min. Toque em “Consultar resultado” (não reenvia).', agora(), p.id).run();
+    return 'falhou';
+  }
+  await env.DB.prepare("UPDATE postagem SET atualizado_em=? WHERE id=?").bind(agora(), p.id).run();
+  return 'esperando';
 }
 async function enviarWhatsApp_(env, p) {
   const r = await enviarWhatsAppSo_(env, p);
+  if (r.pendente) return await marcarAguardaZap_(env, p, r.requestId);
   if (!r.ok) return marcarErroPost_(env, p, r.erro);
   await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', publicado_em=?, atualizado_em=? WHERE id=?").bind(r.requestId, agora(), agora(), p.id).run();
   return { ok: true, canal: 'whatsapp' };
@@ -656,6 +702,12 @@ async function marcarErroPost_(env, p, frase) {
 }
 async function avancarPostagem(env, token, p) {
   const m = JSON.parse(p.midias || '[]');
+  /* v1.9: aguardando a confirmação da Wafly (409/timeout). Só consulta; "aceito" publica (WhatsApp) ou segue para o Instagram (ambos). */
+  if (String(p.ig_id || '').indexOf('zapq:') === 0) {
+    const rz = await resolverZapPendente_(env, p, false);
+    if (rz !== 'aceito') return;
+    if (!canalUsaInstagram_(p.canal)) return { ok: true, canal: 'whatsapp' };
+  }
   /* v1.2: O CANAL MANDA. Quando o canal nao inclui o Instagram, as chamadas ao Graph nem sao feitas
    * -- a peca vai para o Status do WhatsApp pelo backend. Antes o campo era ignorado por completo e
    * tudo caia no caminho do Instagram. */
@@ -666,6 +718,7 @@ async function avancarPostagem(env, token, p) {
   const zapJaEnviado = String(p.ig_id || '').indexOf('zap:') === 0;
   if (canalUsaWhatsApp_(p.canal) && !zapJaEnviado) {
     const z = await enviarWhatsAppSo_(env, p);
+    if (z.pendente) return await marcarAguardaZap_(env, p, z.requestId);
     if (!z.ok) return await marcarErroPost_(env, p, 'WhatsApp: ' + z.erro);
     await env.DB.prepare("UPDATE postagem SET ig_id=?, atualizado_em=? WHERE id=?").bind('zap:' + z.requestId, agora(), p.id).run();
   }
@@ -927,7 +980,7 @@ export function validarPostagem(b) {
 }
 function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
-  return { id: r.id, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
+  return { id: r.id, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
 }
 
 /* ====================================================================
@@ -1123,6 +1176,12 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
   const linha = id ? await env.DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first() : null;
   if (p.indexOf('/post/') === 0 && req.method === 'POST') {
     if (!linha) return J({ ok: false, erro: 'Postagem não encontrada.' }, 404);
+    if (p === '/post/consultar') {                                       // v1.9: só consulta o resultado do WhatsApp (nunca reenvia)
+      if (String(linha.ig_id || '').indexOf('zapq:') !== 0 || ['processando', 'erro'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não está aguardando confirmação do WhatsApp.' }, 409);
+      const rz = await resolverZapPendente_(env, linha, true);
+      if (rz === 'aceito' && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
+      return J({ ok: true, resultado: rz });
+    }
     if (p === '/post/cancelar') {
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem já está sendo enviada ou foi publicada; não dá mais para cancelar.' }, 409);
       await env.DB.prepare("UPDATE postagem SET status='cancelado', atualizado_em=? WHERE id=?").bind(agora(), id).run(); return J({ ok: true });
