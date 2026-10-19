@@ -23,7 +23,7 @@ function d1() {
   const TOKEN = 'IGQVJ_TOKEN_INVENTADO_PARA_TESTE_1234567890';
   // ---- Instagram falso ----
   const GEMINI_OK = 'AIzaINVENTADA_PARA_TESTE_1234567890abcd'; let gemChamadas = [], gemModo = 'ok', gemTexto = '', imgChamadas = [], imgModo = 'ok';
-  let contaChamadas = [], contaFora = false, zapChamadas = [], zapModo = 'ok';
+  let contaChamadas = [], contaFora = false, zapChamadas = [], zapModo = 'ok', zapConsulta = 'desconhecido';
   let postChamadas = [], postErro = null, seqC = 0, containers = {}, publicados = [], videoStatus = 'FINISHED';
   let paginas = null, feed = [], stories = [], midia404 = {}, tokenValido = true, chamadas = [];
   const cdn = (id, tipo) => 'https://cdn.fake/' + id + (tipo === 'VIDEO' ? '.mp4' : '.jpg');
@@ -53,7 +53,7 @@ function d1() {
       if (gemModo === 'lixo') return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'não é json' }] } }] }));
       return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: gemTexto }] } }] }));
     }
-    if (u.startsWith('https://api.fake')) { const b = JSON.parse(init.body); if (b.action === 'waflyStatusRemoto') { zapChamadas.push(b); return new Response(JSON.stringify(zapModo === 'ok' ? { ok: true, requestId: b.requestId } : { ok: false, erro: 'WhatsApp fora do ar' })); } if (b.action === 'contaPorWhats') { contaChamadas.push(b); return new Response(JSON.stringify(b.sessao === 'tk2.cliente' ? { ok: false } : contaFora ? { ok: false, erro: 'x' } : String(b.alvo) === '88977776666' ? { ok: true, existe: true, nome: 'Joana Cadastrada' } : { ok: true, existe: false })); } return new Response(JSON.stringify(b.sessao === 'tk2.admin' ? { ok: true, usuario: { permissoes: ['gerir_acessos', 'catalogo_cadastrar'] } } : b.sessao === 'tk2.gerente' ? { ok: true, usuario: { permissoes: ['catalogo_cadastrar'], nome: 'Gerente' } } : b.sessao === 'tk2.cliente' ? { ok: true, usuario: { permissoes: [], nome: 'Maria Cliente', whatsapp: '88988887777' } } : { ok: false })); }
+    if (u.startsWith('https://api.fake')) { const b = JSON.parse(init.body); if (b.action === 'waflyStatusRemoto') { zapChamadas.push(b); if (b.consultar) return new Response(JSON.stringify({ ok: true, requestId: b.requestId, estado: zapConsulta === 'aceito' ? 'accepted' : 'unknown', confirmado: zapConsulta === 'aceito' })); if (zapModo === 'pendente') return new Response(JSON.stringify({ ok: false, pendente: true, requestId: b.requestId, erro: 'A Wafly respondeu com erro 409: Resultado ainda não confirmado.' })); return new Response(JSON.stringify(zapModo === 'ok' ? { ok: true, requestId: b.requestId } : { ok: false, erro: 'WhatsApp fora do ar' })); } if (b.action === 'contaPorWhats') { contaChamadas.push(b); return new Response(JSON.stringify(b.sessao === 'tk2.cliente' ? { ok: false } : contaFora ? { ok: false, erro: 'x' } : String(b.alvo) === '88977776666' ? { ok: true, existe: true, nome: 'Joana Cadastrada' } : { ok: true, existe: false })); } return new Response(JSON.stringify(b.sessao === 'tk2.admin' ? { ok: true, usuario: { permissoes: ['gerir_acessos', 'catalogo_cadastrar'] } } : b.sessao === 'tk2.gerente' ? { ok: true, usuario: { permissoes: ['catalogo_cadastrar'], nome: 'Gerente' } } : b.sessao === 'tk2.cliente' ? { ok: true, usuario: { permissoes: [], nome: 'Maria Cliente', whatsapp: '88988887777' } } : { ok: false })); }
     if (u.startsWith('https://ig.fake') && init && init.method === 'POST') {          // publicação (POST com o token no CORPO)
       const f = new URLSearchParams(String(init.body)), tk = f.get('access_token'); f.delete('access_token');
       postChamadas.push({ u, p: Object.fromEntries(f) });
@@ -684,10 +684,49 @@ function d1() {
     chk('com vaga no Status, o "ambos" sai nos dois (WhatsApp e Instagram)', (await linha(idAm)).status === 'publicado' && zapChamadas.length === zapAntes + 1 && publicados.length === pubAntes + 1, [await linha(idAm), zapChamadas.length, publicados.length]);
     x = await G('GET', '/posts');
     chk('o "ambos" contou no Story E no Status', x.j.uso24h.story === 2 && x.j.uso24h.status === 2, x.j.uso24h);
+
     x = await G('POST', '/post', { tipo: 'story', midias: [IMG(10)], quando: 'sequencia' }); const idIg2 = x.j.ids[0];
     await venc([idIg2]); const pub2 = publicados.length;
     await W.processarPostagens(env);
     chk('outro Story do Instagram agora espera: o limite do Story (2) já inclui o "ambos"', (await linha(idIg2)).status === 'agendado' && publicados.length === pub2);
+
+    // ---- v1.9: Wafly 409/timeout = "aguardando confirmação" (não é erro); o cron só consulta, nunca reenvia
+    console.log('== WHATSAPP: aguardando confirmação (409) ==');
+    await DB.prepare('DELETE FROM postagem').run(); zapChamadas = []; publicados = []; zapModo = 'pendente'; zapConsulta = 'desconhecido';
+    await set({ canais: { status: { max24h: 50 }, story: { max24h: 50 } } });
+    x = await G('POST', '/post', { tipo: 'story', canal: 'ambos', midias: [IMG(31)], quando: 'sequencia' }); const idP = x.j.ids[0];
+    x = await G('POST', '/post', { tipo: 'story', canal: 'whatsapp', midias: [IMG(32)], quando: 'sequencia' }); const idW = x.j.ids[0];
+    await venc([idP, idW]); await W.processarPostagens(env);
+    let LP = await linha(idP), LW = await linha(idW);
+    chk('409 NÃO vira erro: fica aguardando confirmação, com o requestId guardado', LP.status === 'processando' && LW.status === 'processando' && LP.ig_id === 'zapq:tkpost-' + String(idP).padStart(12, '0') && !/^erro$/.test(LP.status), [LP.status, LP.ig_id, LP.erro]);
+    chk('o Instagram do "ambos" NÃO foi publicado enquanto o WhatsApp não confirma', publicados.length === 0);
+    x = await G('GET', '/posts'); const fp = x.j.posts.find((v) => v.id === idP);
+    chk('/posts avisa aguardaZap para o painel', fp && fp.aguardaZap === true && fp.status === 'processando');
+    let n0 = zapChamadas.length; await W.processarPostagens(env);
+    chk('antes de 2 min o cron não consulta de novo (nem reenvia)', zapChamadas.length === n0);
+    const atras = (ms) => DB.prepare("UPDATE postagem SET atualizado_em=? WHERE ig_id LIKE 'zapq:%'").bind(new Date(Date.now() - ms).toISOString()).run();
+    await atras(3 * 60000); n0 = zapChamadas.length; await W.processarPostagens(env);
+    chk('depois de 2 min só CONSULTA (consultar:true, sem mídia/url) e state unknown continua esperando', zapChamadas.length === n0 + 2 && zapChamadas.slice(n0).every((c) => c.consultar === true && !c.url) && (await linha(idP)).status === 'processando');
+    zapConsulta = 'aceito'; await atras(3 * 60000); await W.processarPostagens(env);
+    LP = await linha(idP); LW = await linha(idW);
+    chk('accepted + serverAcknowledged: só WhatsApp vira publicado e o erro some', LW.status === 'publicado' && LW.erro === '' && LW.ig_id === 'tkpost-' + String(idW).padStart(12, '0'), LW);
+    chk('"ambos": WhatsApp confirmado → o Instagram segue e publica (WhatsApp não é reenviado)', LP.status === 'publicado' && LP.ig_id !== '' && !String(LP.ig_id).startsWith('zapq') && publicados.length === 1 && zapChamadas.filter((c) => !c.consultar).length === 2, [LP.status, LP.ig_id, publicados.length]);
+    // desiste de esperar depois de 30 min, mas o botão Consultar resultado continua valendo
+    zapConsulta = 'desconhecido'; x = await G('POST', '/post', { tipo: 'story', canal: 'whatsapp', midias: [IMG(33)], quando: 'sequencia' }); const idT = x.j.ids[0];
+    await venc([idT]); await W.processarPostagens(env);
+    await DB.prepare("UPDATE postagem SET inicio_proc=?, atualizado_em=? WHERE id=?").bind(new Date(Date.now() - 31 * 60000).toISOString(), new Date(Date.now() - 5 * 60000).toISOString(), idT).run();
+    await W.processarPostagens(env);
+    let LT = await linha(idT);
+    chk('30 min sem confirmar: vira aviso (erro) mas continua com o marcador para consultar', LT.status === 'erro' && LT.ig_id.startsWith('zapq:') && /Consultar resultado/.test(LT.erro), [LT.status, LT.erro]);
+    n0 = zapChamadas.length; x = await G('POST', '/post/consultar', { id: idT });
+    chk('botão Consultar resultado: só consulta, ainda sem confirmação', x.j.ok && x.j.resultado === 'esperando' || x.j.resultado === 'falhou', x.j);
+    zapConsulta = 'aceito'; x = await G('POST', '/post/consultar', { id: idT }); LT = await linha(idT);
+    chk('Consultar resultado com accepted: marca publicada, nada foi reenviado', x.j.resultado === 'aceito' && zapChamadas.slice(n0).every((c) => c.consultar === true), [x.j, LT.status]);
+    await W.processarPostagens(env);
+    chk('depois de confirmado o WhatsApp-só fica publicado', (await linha(idT)).status === 'publicado' && (await linha(idT)).erro === '');
+    x = await G('POST', '/post/consultar', { id: idP });
+    chk('/post/consultar recusa postagem que não está aguardando', x.r.status === 409);
+    zapModo = 'ok'; zapConsulta = 'desconhecido';
 
     // ---- "ambos" não troca de lugar com ▲▼ (serviria a um canal e quebraria o outro)
     x = await G('POST', '/post', { tipo: 'story', canal: 'ambos', midias: [IMG(11)], quando: ts(600) });
