@@ -37,7 +37,8 @@ def cenario(p, modo, video, sessao=True):
     pg.set_input_files("#galeria-input", [os.path.join(S, "r2foto1.jpg"), os.path.join(S, "r2foto2.jpg")]); pg.wait_for_timeout(1200)
     pg.set_input_files("#video-input", os.path.join(S, video)); pg.wait_for_timeout(500)
     pg.fill("#nome", "Vestido R2"); pg.fill("#preco", "99.90"); pg.fill("#estoque", "2")
-    pg.click("#chips-genero .chip:first-child")
+    if not pg.locator("#chips-genero .chip:first-child").evaluate('e => e.classList.contains("selecionado")'):
+        pg.click("#chips-genero .chip:first-child")
     pg.click("#btn-abrir-categorias"); pg.click("#cat-lista .cat-item:has-text('Vestido')"); pg.click("#cat-pronto")
     pg.locator('#chips-tamanhos .chip').filter(has_text=__import__('re').compile(r'^P$')).click()
     pg.click("#btn-salvar"); pg.wait_for_timeout(4500)

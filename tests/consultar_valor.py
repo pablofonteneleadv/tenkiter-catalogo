@@ -17,6 +17,7 @@ def abertos(pg): return [unquote(u) for u in pg.evaluate("window.__opened||[]")]
 
 def catalogo(b, versao="4.20"):
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
+    ctx.add_init_script("window.TK_PEDIDOS=true;")  # cenário de pedido opcional
     log = []; st = install(ctx, log=log, versao=versao)
     for q in st["produtos"][:3]: q["Status"] = "Ativo"; q["Estoque"] = 5
     st["produtos"][0]["Preco"] = 0            # a primeira peça é "Consulte valor"
@@ -36,7 +37,8 @@ def admin(b, versao="4.20", perms=PERMS_ALL):
 def preencher(pg, nome="Peça sob consulta", preco=None):
     pg.fill("#nome", nome)
     if preco: pg.fill("#preco", preco)
-    pg.click("#chips-genero .chip:first-child")
+    if not pg.locator("#chips-genero .chip:first-child").evaluate('e => e.classList.contains("selecionado")'):
+        pg.click("#chips-genero .chip:first-child")
     pg.click("#btn-abrir-categorias"); pg.click("#cat-lista .cat-item:has-text('Vestido')"); pg.click("#cat-pronto")
 
 with sync_playwright() as p:
