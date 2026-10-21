@@ -649,3 +649,5 @@ html.fx-travado, html.fx-travado body { overflow: hidden; }
 .barra-filtros-flut, .barra-filtros-flut.so-botao { left: 12px; right: auto; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); background: transparent; box-shadow: none; padding: 0; min-height: 0; }
 .barra-filtros-flut span { display: none; }
 .barra-filtros-flut button, .barra-filtros-flut.so-botao button { background: var(--laranja); color: #0d0d0d; border: 0; font-weight: 800; min-height: 44px; padding: 8px 18px; border-radius: 999px; box-shadow: 0 3px 12px rgba(0,0,0,.35); }
+
+.chips .chip[hidden], details.selecao-expansivel[hidden] { display: none !important; }
