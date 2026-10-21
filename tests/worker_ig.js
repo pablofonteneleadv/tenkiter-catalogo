@@ -702,6 +702,8 @@ function d1() {
     chk('o Instagram do "ambos" NÃO foi publicado enquanto o WhatsApp não confirma', publicados.length === 0);
     x = await G('GET', '/posts'); const fp = x.j.posts.find((v) => v.id === idP);
     chk('/posts avisa aguardaZap para o painel', fp && fp.aguardaZap === true && fp.status === 'processando');
+    chk('/posts informa fase e horários reais da confirmação', fp.progresso.fase === 'confirmacao' && Date.parse(fp.progresso.proximaConsultaEm) - Date.parse(LP.atualizado_em) === 120000 && Date.parse(fp.progresso.limiteEm) - Date.parse(LP.inicio_proc) === 1800000);
+    chk('progresso não expõe requestId ou credenciais', !JSON.stringify(fp.progresso).includes('tkpost-'));
     let n0 = zapChamadas.length; await W.processarPostagens(env);
     chk('antes de 2 min o cron não consulta de novo (nem reenvia)', zapChamadas.length === n0);
     const atras = (ms) => DB.prepare("UPDATE postagem SET atualizado_em=? WHERE ig_id LIKE 'zapq:%'").bind(new Date(Date.now() - ms).toISOString()).run();
