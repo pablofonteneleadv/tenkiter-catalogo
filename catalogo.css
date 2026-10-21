@@ -515,7 +515,6 @@
   background: var(--preto);
   color: #fff;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
-  cursor: pointer;
   text-align: left;
   -webkit-tap-highlight-color: transparent;
 }
@@ -560,6 +559,36 @@
   outline: 3px solid var(--laranja);
   outline-offset: 3px;
 }
+/* v6.3: a barra tem 3 partes — abrir (grande), Compartilhar e Limpar (um toque, com Desfazer). */
+.barra-minha-selecao .bms-abrir {
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; min-height: 44px;
+  width: auto; padding: 0; border: 0; background: none; color: inherit; font: inherit;
+  text-align: left; cursor: pointer;
+}
+.barra-minha-selecao .bms-acao {
+  flex: none; width: auto; min-height: 44px; padding: 0 12px; border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.35); background: transparent; color: #fff;
+  font-size: 0.8rem; font-weight: 800; cursor: pointer; white-space: nowrap;
+}
+.barra-minha-selecao .bms-limpar { border-color: #ff9d8f; color: #ffb4a8; }
+.barra-minha-selecao button:focus-visible { outline: 3px solid var(--laranja); outline-offset: 2px; }
+@media (max-width: 380px) {
+  .barra-minha-selecao { gap: 6px; padding: 8px 10px; }
+  .barra-minha-selecao .bms-icone { display: none; }
+  .barra-minha-selecao .bms-acao { padding: 0 9px; font-size: 0.74rem; }
+}
+.toast-desfazer {
+  position: fixed; z-index: 91; left: 12px; right: 12px; margin: 0 auto; max-width: 420px;
+  bottom: calc(150px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px; border-radius: 12px; background: #222; color: #fff; font-size: 0.88rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.toast-desfazer[hidden] { display: none !important; }
+.toast-desfazer button {
+  width: auto; min-height: 44px; padding: 0 14px; border: 0; border-radius: 10px;
+  background: var(--laranja); color: #0d0d0d; font-weight: 800; cursor: pointer;
+}
 body.tk-tem-nav.tem-selecao {
   padding-bottom: calc(148px + env(safe-area-inset-bottom, 0px));
 }
@@ -585,8 +614,8 @@ body.tk-tem-nav.tem-selecao {
 
 /* Convivência da barra "Minha seleção" com os outros avisos flutuantes (filtros, convite do app, aviso de notificações):
    com seleção, eles sobem para ficar ACIMA dela em vez de ficarem escondidos atrás. */
-body.tem-selecao .barra-filtros-flut { bottom: calc(148px + env(safe-area-inset-bottom, 0px)); }
+body.tem-selecao .barra-filtros-flut { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
 body.tem-selecao #tk-convite-app,
-body.tem-selecao #tk-placa-aviso { bottom: calc(150px + env(safe-area-inset-bottom, 0px)) !important; }
-body.tem-selecao .fab-zap { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
-body.tem-selecao #aviso-offline { bottom: calc(148px + env(safe-area-inset-bottom, 0px)); }
+body.tem-selecao #tk-placa-aviso { bottom: calc(176px + env(safe-area-inset-bottom, 0px)) !important; }
+body.tem-selecao .fab-zap { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
+body.tem-selecao #aviso-offline { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
