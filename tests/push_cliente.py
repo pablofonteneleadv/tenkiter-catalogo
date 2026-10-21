@@ -73,6 +73,7 @@ def ambiente(perm="default", standalone_ios=False, standalone_mm=False, share=Fa
 def novo_contexto(b, ua=UA_ANDROID, mobile=True, perm="default", configurado=True, sessao=False, versao="3.3", **amb):
     ctx = b.new_context(viewport={"width": 390, "height": 844} if mobile else {"width": 1200, "height": 800}, is_mobile=mobile, has_touch=mobile,
                         user_agent=ua, service_workers="block")
+    ctx.add_init_script("window.TK_PEDIDOS=true;")  # suíte cobre o fluxo opcional de pedidos
     st = install(ctx, versao=versao)
     reqs = {"sdk": 0, "sync": 0}
     def sync(route):

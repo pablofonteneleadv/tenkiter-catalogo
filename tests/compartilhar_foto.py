@@ -31,6 +31,7 @@ Object.defineProperty(navigator,'share',{value:async(d)=>{
 
 def nova_pagina(b, ctx_extra=None, drive=False, esgotada=False, nativo=True):
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
+    ctx.add_init_script("window.TK_PEDIDOS=true;")  # suíte cobre o fluxo opcional de pedidos
     st = install(ctx)
     P = st["produtos"][0]            # TK-0001
     P["Fotos_Galeria"] = ",".join(G); P["Video_URL"] = DRIVE if drive else VIDEO; P["Estoque"] = 0 if esgotada else 5
