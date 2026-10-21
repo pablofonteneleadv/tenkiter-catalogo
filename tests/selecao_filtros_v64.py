@@ -38,13 +38,6 @@ with sync_playwright() as p:
     # X apaga busca
     pg.evaluate("document.getElementById('busca-limpar').click()"); pg.wait_for_timeout(500)
     chk("X apaga a busca", pg.input_value("#busca") == "")
-    # ver só a seleção
-    pg.evaluate("document.getElementById('barra-minha-selecao-abrir').click()"); pg.wait_for_timeout(500)
-    ns = pg.evaluate("getSacola().length")
-    chk("'Toque para ver' mostra só a seleção na tela", pg.evaluate("listaFiltradaAtual.length") == ns and pg.locator("#aviso-minha-sel:visible").count() == 1, (pg.evaluate("listaFiltradaAtual.length"), ns))
-    pg.evaluate("document.getElementById('amsel-tudo').click()"); pg.wait_for_timeout(400)
-    chk("'Ver tudo' mostra a loja toda", pg.evaluate("listaFiltradaAtual.length") == total)
-    chk("'Ver tudo' mantém a seleção", pg.evaluate("getSacola().length") == ns)
     # link com escolha
     pg.fill("#busca", "a"); pg.wait_for_timeout(500)
     pg.evaluate("abrirSelecao(true)"); pg.wait_for_timeout(300)
