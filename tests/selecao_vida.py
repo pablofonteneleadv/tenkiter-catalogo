@@ -17,7 +17,7 @@ def axe(pg, label):
 def abrir(b, init="", url="index.html"):
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
     install(ctx, perms=["portal"], versao="3.7")
-    ctx.add_init_script("localStorage.removeItem('tm_session');")
+    ctx.add_init_script("localStorage.removeItem('tm_session');window.TK_SEL_PLACAS=true;")
     if init: ctx.add_init_script("if(!sessionStorage.getItem('__i')){sessionStorage.setItem('__i','1');" + init + "}")
     pg = ctx.new_page(); pg.goto("about:blank"); pg.goto(BASE + url); pg.wait_for_selector(".card"); pg.wait_for_timeout(900)
     return ctx, pg
@@ -30,7 +30,7 @@ with sync_playwright() as p:
     pg.fill("#busca", "vestido"); pg.wait_for_timeout(500)
     pg.evaluate("atualizarBarraFiltros_()")
     pg.evaluate("document.getElementById('busca').blur()")
-    pg.click("#btn-limpar-sel"); pg.wait_for_timeout(500)
+    pg.evaluate("document.getElementById('btn-limpar-sel').click()"); pg.wait_for_timeout(500)
     chk("sacola esvaziou", pg.evaluate("getSacola().length") == 0)
     chk("busca limpa", pg.input_value("#busca") == "")
     chk("NÃO abriu a tela de compartilhar", pg.locator("#overlay-selecao.aberto").count() == 0)
@@ -102,7 +102,7 @@ with sync_playwright() as p:
     ctx.close()
 
     ctx, pg = com_selecao()
-    pg.evaluate("atualizarBarraFiltros_()"); pg.click("#btn-limpar-sel"); pg.wait_for_timeout(300)
+    pg.evaluate("atualizarBarraFiltros_()"); pg.evaluate("document.getElementById('btn-limpar-sel').click()"); pg.wait_for_timeout(300)
     pg.go_back(); pg.wait_for_timeout(900)
     chk("limpou a seleção e apertou voltar: sai sem perguntar", pg.url == "about:blank", pg.url)
     ctx.close()

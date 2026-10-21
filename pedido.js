@@ -445,21 +445,37 @@ function descricaoDaSelecao_() {
 }
 function abrirSelecao(daSacola) {
   if (typeof atualizarURLComFiltros === 'function') atualizarURLComFiltros();
-  var lista = daSacola ? itensDaSacola_() : (listaFiltradaAtual || []);
+  var listaSac = itensDaSacola_(), listaFil = listaFiltradaAtual || [];
+  var temFiltro = descricaoDaSelecao_() !== 'todas as peças';
+  // v6.4: quando há seleção E filtro, a pessoa escolhe o que vai no link (3 opções claras).
+  var escolhaTripla = listaSac.length > 0 && temFiltro && !selecaoObrigatoriaFixa_() && listaFil.length > 0 && listaFil.length <= MAX_SELECAO_FIXA;
+  var modo = daSacola ? 'sel' : (escolhaTripla ? 'sel' : 'filtro');
+  var lista = daSacola ? listaSac : listaFil;
   var forcada = daSacola || selecaoObrigatoriaFixa_();
-  // Com filtros comuns (busca, categoria…) a pessoa escolhe: "filtros" acompanha a loja; "lista fixa" manda só estas peças.
-  var temFiltro = !daSacola && descricaoDaSelecao_() !== 'todas as peças';
-  var podeEscolher = !forcada && temFiltro && lista.length > 0 && lista.length <= MAX_SELECAO_FIXA;
+  var podeEscolher = !escolhaTripla && !forcada && temFiltro && lista.length > 0 && lista.length <= MAX_SELECAO_FIXA;
   var fixa = forcada && lista.length > 0;
   var c = document.getElementById('selecao-conteudo');
+  function aplicarModo_() {
+    if (!escolhaTripla && !(daSacola && temFiltro && listaFil.length && listaFil.length <= MAX_SELECAO_FIXA && listaSac.length)) return;
+    if (modo === 'sel') { lista = listaSac; fixa = true; }
+    else if (modo === 'lista') { lista = listaFil; fixa = true; }
+    else { lista = listaFil; fixa = false; }
+  }
+  var triplaNaSacola = daSacola && temFiltro && listaSac.length > 0 && listaFil.length > 0 && listaFil.length <= MAX_SELECAO_FIXA;
+  if (triplaNaSacola) escolhaTripla = true;
+  aplicarModo_();
 
   function desenhar() {
     var link = linkDaSelecao_(fixa, lista);
     var msg = mensagemDaSelecao_(link, fixa, lista);
     c.innerHTML =
       '<div class="sheet-topo"><div class="nome">🔗 Compartilhar seleção</div><button type="button" class="x" id="btn-fechar-selecao" aria-label="Fechar">✕</button></div>' +
-      '<p class="texto-pequeno" style="margin-bottom:8px"><b>' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + '</b> — ' + escaparHtml(daSacola ? 'as peças que você marcou em “Selecionar”' : descricaoDaSelecao_()) + '</p>' +
+      '<p class="texto-pequeno" style="margin-bottom:8px"><b>' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + '</b> — ' + escaparHtml(escolhaTripla ? (modo === 'sel' ? 'as peças da sua seleção' : (modo === 'lista' ? 'o que o filtro mostra' : descricaoDaSelecao_())) : (daSacola ? 'as peças que você marcou em “Selecionar”' : descricaoDaSelecao_())) + '</p>' +
       '<div class="preview-selecao">' + lista.slice(0, 4).map(function (p) { return '<img src="' + escaparHtml(fotoMini(p.Foto_URL, 160)) + '" alt="' + escaparHtml(p.Nome) + '" width="80" height="100" loading="lazy">'; }).join('') + '</div>' +
+      (escolhaTripla ? '<fieldset class="sel-modo"><legend>O que vai no link?</legend>' +
+        '<label><input type="radio" name="sel-modo" value="sel"' + (modo === 'sel' ? ' checked' : '') + '> <span>🛍️ Só a minha seleção (' + listaSac.length + (listaSac.length === 1 ? ' peça' : ' peças') + ')</span></label>' +
+        '<label><input type="radio" name="sel-modo" value="lista"' + (modo === 'lista' ? ' checked' : '') + '> <span>📋 As ' + listaFil.length + ' peças que o filtro mostra agora (lista fixa)</span></label>' +
+        '<label><input type="radio" name="sel-modo" value="filtro"' + (modo === 'filtro' ? ' checked' : '') + '> <span>🔎 O filtro que estou usando (' + escaparHtml(descricaoDaSelecao_()) + ')</span></label></fieldset>' : '') +
       (podeEscolher ? '<label class="sel-fixa"><input type="checkbox" id="sel-fixa"' + (fixa ? ' checked' : '') + '> <span>Enviar só estas ' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + ' (lista fixa)</span></label>' : '') +
       '<p class="texto-pequeno" id="sel-explica" style="margin-bottom:6px">' + (fixa
         ? 'Quem abrir o link vê exatamente estas peças.'
@@ -470,6 +486,9 @@ function abrirSelecao(daSacola) {
       (navigator.share ? '<button type="button" class="btn-secundario-cta" id="sel-nativo">↗ Mais opções de compartilhar…</button>' : '') +
       '<p class="texto-pequeno" id="sel-aviso" role="status" style="padding-bottom:16px"></p>';
     document.getElementById('btn-fechar-selecao').addEventListener('click', fecharSelecao);
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="sel-modo"]'), function (r) {
+      r.addEventListener('change', function () { modo = r.value; aplicarModo_(); desenhar(); var n = document.querySelector('input[name="sel-modo"]:checked'); if (n) n.focus(); });
+    });
     var cx = document.getElementById('sel-fixa');
     if (cx) cx.addEventListener('change', function () { fixa = cx.checked; desenhar(); var n = document.getElementById('sel-fixa'); if (n) n.focus(); });
     document.getElementById('sel-copiar').addEventListener('click', async function () {

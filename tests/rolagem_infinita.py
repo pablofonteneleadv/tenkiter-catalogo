@@ -43,8 +43,8 @@ with sync_playwright() as p:
     chk("com seleção ativa aparece 'Compartilhar seleção' abaixo da busca", pg2.locator("#linha-share-busca").is_visible())
     pg2.click("#barra-filtros-limpar"); pg2.wait_for_timeout(600)
     chk("o botão mostra o site inteiro e esconde a faixa", pg2.input_value("#busca") == "" and pg2.locator("#barra-filtros-flut").is_hidden())
-    chk("sem filtro, com 1 peça marcada em Selecionar, o Compartilhar continua (com a contagem)", pg2.locator("#linha-share-busca").is_visible() and "(1)" in pg2.inner_text("#btn-share-busca"))
-    pg2.click("#btn-share-busca"); pg2.wait_for_timeout(500)
+    chk("sem filtro, com 1 peça marcada em Selecionar, a barra fixa continua com Compartilhar e a contagem", pg2.locator("#bms-compartilhar").is_visible() and "1" in pg2.inner_text("#barra-minha-selecao-qtd"))   # v6.3: a barra fixa faz o papel do botão do topo
+    pg2.click("#bms-compartilhar"); pg2.wait_for_timeout(500)
     lk = pg2.input_value("#sel-link") if pg2.locator("#sel-link").count() else ""
     chk("e o link leva SÓ a peça marcada (?sel=…)", "?sel=" in lk and lk.count(",") == 0, lk)
     chk("a seleção que a pessoa fez continua (badge da sacola)", pg2.locator("#badge-sacola").inner_text() == "1")

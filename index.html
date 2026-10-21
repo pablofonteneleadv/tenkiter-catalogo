@@ -116,6 +116,7 @@ catch (e) { window.__precargaLista = null; }
     <div class="busca-campo">
       <input type="text" id="busca" aria-label="Buscar por produto, código ou estilo" placeholder="🔎 Buscar por produto, código ou estilo..." enterkeyhint="search">
       <div class="sugestoes-busca" id="sugestoes-busca" role="listbox" aria-label="Sugestões de busca" hidden></div>
+      <button type="button" class="busca-limpar" id="busca-limpar" aria-label="Apagar a busca" hidden>✕</button>
       <button type="button" class="btn-voz" id="btn-voz" title="Buscar por comando de voz" aria-label="Buscar por comando de voz">🎤</button>
     </div>
     <button type="button" class="btn-filtros-toggle" id="btn-filtros-toggle" aria-expanded="false" aria-controls="filtros-extras" title="Mostrar ou esconder os filtros">
@@ -147,6 +148,7 @@ catch (e) { window.__precargaLista = null; }
       <div class="chips" id="chips-genero"></div>
     </details>
 
+    <button type="button" class="btn-add-resultados" id="btn-add-resultados" hidden><span aria-hidden="true">➕</span> <span id="btn-add-resultados-txt">Adicionar estes à seleção</span></button>
     <div class="bar-acoes-filtros">
       <button type="button" class="btn-limpar" id="btn-limpar">Limpar filtros</button>
       <button type="button" class="btn-compartilhar-filtros" id="btn-share-filtros">🔗 Compartilhar esta seleção</button>
@@ -161,6 +163,11 @@ catch (e) { window.__precargaLista = null; }
 </section>
 
 <main>
+  <div class="aviso-selecao aviso-minha-sel" id="aviso-minha-sel" role="status" hidden>
+    <span id="aviso-minha-sel-txt"></span>
+    <button type="button" class="btn-neutro" id="amsel-enviar">💬 Enviar para a loja</button>
+    <button type="button" class="btn-neutro" id="amsel-tudo">↩ Ver tudo (mantém a seleção)</button>
+  </div>
   <div class="aviso-selecao" id="aviso-selecao" role="status" hidden>
     <span id="aviso-selecao-txt"></span>
     <button type="button" class="btn-neutro" id="aviso-selecao-todas">✕ Limpar e ver todas as peças da loja</button>

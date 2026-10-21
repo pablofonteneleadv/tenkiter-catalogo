@@ -27,7 +27,7 @@
 
   .filtros { background: var(--branco); padding: 12px 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); position: sticky; top: 62px; z-index: 19; }
   .filtros input[type=text], .filtros input[type=number] { width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 20px; font-size: 0.9rem; margin-bottom: 8px; outline: none; }
-  .busca-campo input[type=text] { padding-right: 42px; }
+  .busca-campo input[type=text] { padding-right: 90px; }
   .filtros input:focus { border-color: var(--laranja); }
   /* v3.0: ao rolar para baixo os filtros se recolhem e fica só a busca; tocar na busca (ou em "Filtros") abre de novo,
      como uma gaveta por cima da lista (sem empurrar o conteúdo, então a rolagem não pula). */
@@ -619,3 +619,15 @@ body.tem-selecao #tk-convite-app,
 body.tem-selecao #tk-placa-aviso { bottom: calc(176px + env(safe-area-inset-bottom, 0px)) !important; }
 body.tem-selecao .fab-zap { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
 body.tem-selecao #aviso-offline { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
+
+/* v6.4: escolha do que vai no link e botão de juntar os resultados à seleção */
+.sel-modo { border: 0; margin: 4px 16px 8px; padding: 0; display: grid; gap: 6px; }
+.sel-modo legend { font-weight: 800; font-size: .9rem; margin-bottom: 4px; padding: 0; }
+.sel-modo label { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border: 1px solid #d8d2c4; border-radius: 12px; background: #fff; font-size: .88rem; font-weight: 600; color: #222; cursor: pointer; }
+.sel-modo input { width: 22px; height: 22px; flex: none; }
+.btn-add-resultados { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; margin: 8px 0 0; padding: 0 14px; border: 2px dashed var(--laranja); border-radius: 12px; background: #fff; color: #0d0d0d; font-weight: 800; font-size: .92rem; cursor: pointer; }
+.btn-add-resultados[hidden] { display: none; }
+.btn-add-resultados:disabled { opacity: .55; cursor: default; border-style: solid; }
+.filtros .filtros-extras { overscroll-behavior: contain; }
+.busca-limpar { position: absolute; right: 54px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 50%; background: #e9e4d8; color: #222; font-size: 1rem; font-weight: 800; cursor: pointer; }
+.busca-limpar[hidden] { display: none; }
