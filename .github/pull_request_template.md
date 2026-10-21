@@ -7,14 +7,16 @@
 - [ ] Rodei `bash scripts/ci/check_secrets.sh` e não há credencial em texto plano
 - [ ] Rodei `bash scripts/ci/check_js.sh` (sintaxe dos .js)
 - [ ] Rodei `python3 scripts/ci/check_html.py` (estrutura das páginas)
-- [ ] Rodei a bateria de testes: `python3 tests/rodar_tudo.py`
+- [ ] Rodei os testes do setor antes/depois e registrei resultados (bateria completa só quando solicitada)
 - [ ] Se mexi em backend `.gs`: avisei que o redeploy no Apps Script é **manual**
-- [ ] Se mexi em Worker (`og-worker/`, `midia-worker/`, `instagram-worker/`): publiquei com `wrangler deploy`
+- [ ] Se mexi em Worker: conferirei a publicação automática dos três Workers após o merge
 - [ ] Atualizei o `CHANGELOG.md` se a mudança é visível para o usuário
 
 ## Como testar
 
 <!-- Passos para quem for revisar confirmar que funciona. -->
+
+- [ ] Backup/ponto de restauração disponível e escopo registrado antes do merge
 
 ## Risco e rollback
 
