@@ -640,7 +640,18 @@ try { tkSelExpirar_(); } catch (e) {}
     const badgeSacola = document.getElementById('badge-sacola');
     badgeSacola.textContent = qtdSacola;
     badgeSacola.style.display = qtdSacola > 0 ? 'flex' : 'none';
+    const barra = document.getElementById('barra-minha-selecao');
+    if (barra) {
+      const texto = document.getElementById('barra-minha-selecao-qtd');
+      barra.hidden = qtdSacola === 0;
+      barra.setAttribute('aria-label', 'Abrir minha seleção: ' + qtdSacola + (qtdSacola === 1 ? ' peça' : ' peças'));
+      if (texto) texto.textContent = qtdSacola === 0 ? 'Nenhuma peça selecionada' : qtdSacola + (qtdSacola === 1 ? ' peça selecionada' : ' peças selecionadas') + ' · toque para conferir';
+      document.body.classList.toggle('tem-selecao', qtdSacola > 0);
+    }
   }
+
+  const barraFlutuante = document.getElementById('barra-minha-selecao');
+  if (barraFlutuante) barraFlutuante.addEventListener('click', () => { if (typeof abrirSacola === 'function') abrirSacola(); });
 
   /** Põe ou tira a peça da sacola (cartão e folha usam a mesma função). Devolve true se agora está na sacola. */
   function alternarSacola_(p, foto) {
