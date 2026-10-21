@@ -411,3 +411,211 @@
 .sugestoes-busca .sug-item:first-child { border-top: 0; }
 .sugestoes-busca .sug-item.ativo, .sugestoes-busca .sug-item:hover { background: #fff3e0; }
 .sugestoes-busca .sug-qtd { flex: none; font-size: .76rem; color: #666; font-weight: 600; }
+
+
+/* UX FASE 2 — seleção clara e CTA persistente (21/10/2026) */
+/* Os cartões mantêm as ações existentes, mas deixam a seleção mais evidente e legível. */
+.card {
+  border: 1px solid rgba(32, 32, 32, 0.06);
+  border-radius: 16px;
+  box-shadow: 0 3px 12px rgba(20, 20, 20, 0.07);
+}
+.card:focus-within {
+  outline: 2px solid var(--laranja);
+  outline-offset: 2px;
+}
+.card-info {
+  padding: 10px 10px 12px;
+}
+.card-info .nome {
+  font-size: 0.9rem;
+  line-height: 1.35;
+  min-height: 2.4em;
+}
+.card-info .preco {
+  margin-top: 6px;
+  font-size: 0.82rem;
+}
+.card-info .preco > span {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.78rem;
+}
+.acoes-card {
+  gap: 7px;
+  margin-top: 12px;
+}
+.acoes-card button {
+  min-height: 46px;
+  padding: 8px 7px;
+  font-size: 0.76rem;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: normal;
+  overflow: visible;
+  border-radius: 11px;
+}
+.acoes-card .ac-sacola {
+  background: #fff4eb;
+  border: 1px solid var(--laranja);
+  color: #713b14;
+}
+.acoes-card .ac-sacola[aria-pressed="true"] {
+  background: var(--preto);
+  border-color: var(--preto);
+  color: var(--laranja);
+}
+.acoes-card .ac-pedir {
+  background: #fff;
+  border: 1px solid #b9d8c5;
+  color: #17683a;
+}
+.acoes-card button:focus-visible {
+  outline: 3px solid var(--laranja);
+  outline-offset: 2px;
+}
+
+/* No celular, cada ação ganha uma linha: evita rótulos espremidos nos cartões de duas colunas. */
+@media (max-width: 480px) {
+  .grid {
+    gap: 10px;
+  }
+  .card-info {
+    padding: 9px 9px 11px;
+  }
+  .acoes-card {
+    flex-direction: column;
+    gap: 7px;
+  }
+  .acoes-card button {
+    width: 100%;
+    flex: 0 0 auto;
+    min-height: 46px;
+    font-size: 0.8rem;
+  }
+}
+
+/* Acesso persistente à seleção: fica acima da navegação inferior do site. */
+.barra-minha-selecao {
+  position: fixed;
+  z-index: 89;
+  left: 12px;
+  right: 12px;
+  bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: auto;
+  max-width: 680px;
+  min-height: 58px;
+  margin: 0 auto;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: var(--preto);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.barra-minha-selecao[hidden] {
+  display: none !important;
+}
+.barra-minha-selecao .bms-icone {
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--laranja);
+  color: var(--preto);
+  font-size: 1.15rem;
+}
+.barra-minha-selecao .bms-textos {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.barra-minha-selecao .bms-titulo {
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+.barra-minha-selecao .bms-ajuda {
+  color: #d5d5d5;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+.barra-minha-selecao .bms-seta {
+  flex: none;
+  color: var(--laranja);
+  font-size: 1.25rem;
+  font-weight: 900;
+}
+.barra-minha-selecao:focus-visible {
+  outline: 3px solid var(--laranja);
+  outline-offset: 3px;
+}
+/* v6.3: a barra tem 3 partes — abrir (grande), Compartilhar e Limpar (um toque, com Desfazer). */
+.barra-minha-selecao .bms-abrir {
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; min-height: 44px;
+  width: auto; padding: 0; border: 0; background: none; color: inherit; font: inherit;
+  text-align: left; cursor: pointer;
+}
+.barra-minha-selecao .bms-acao {
+  flex: none; width: auto; min-height: 44px; padding: 0 12px; border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.35); background: transparent; color: #fff;
+  font-size: 0.8rem; font-weight: 800; cursor: pointer; white-space: nowrap;
+}
+.barra-minha-selecao .bms-limpar { border-color: #ff9d8f; color: #ffb4a8; }
+.barra-minha-selecao button:focus-visible { outline: 3px solid var(--laranja); outline-offset: 2px; }
+@media (max-width: 380px) {
+  .barra-minha-selecao { gap: 6px; padding: 8px 10px; }
+  .barra-minha-selecao .bms-icone { display: none; }
+  .barra-minha-selecao .bms-acao { padding: 0 9px; font-size: 0.74rem; }
+}
+.toast-desfazer {
+  position: fixed; z-index: 91; left: 12px; right: 12px; margin: 0 auto; max-width: 420px;
+  bottom: calc(150px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px; border-radius: 12px; background: #222; color: #fff; font-size: 0.88rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.toast-desfazer[hidden] { display: none !important; }
+.toast-desfazer button {
+  width: auto; min-height: 44px; padding: 0 14px; border: 0; border-radius: 10px;
+  background: var(--laranja); color: #0d0d0d; font-weight: 800; cursor: pointer;
+}
+body.tk-tem-nav.tem-selecao {
+  padding-bottom: calc(148px + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 900px) {
+  .barra-minha-selecao {
+    right: 24px;
+    left: auto;
+    width: 360px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}
+
+/* Identifica explicitamente o preço com desconto, em vez de mostrar dois valores sem contexto. */
+.card-info .preco > span::before {
+  content: "À vista: ";
+  color: #555;
+  font-weight: 600;
+}
+
+/* Convivência da barra "Minha seleção" com os outros avisos flutuantes (filtros, convite do app, aviso de notificações):
+   com seleção, eles sobem para ficar ACIMA dela em vez de ficarem escondidos atrás. */
+body.tem-selecao .barra-filtros-flut { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
+body.tem-selecao #tk-convite-app,
+body.tem-selecao #tk-placa-aviso { bottom: calc(176px + env(safe-area-inset-bottom, 0px)) !important; }
+body.tem-selecao .fab-zap { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
+body.tem-selecao #aviso-offline { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }

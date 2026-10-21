@@ -465,7 +465,7 @@ try { tkSelExpirar_(); } catch (e) {}
     const nFiltros = (bf && !bf.hidden ? (parseInt(bf.textContent, 10) || 0) : 0);
     const q = document.getElementById('busca').value.trim();
     const ativo = nFiltros > 0 || !!q || !!selecaoFixa || apenasFavoritos || apenasNovidades;
-    const nSac = getSacola().length, share = document.getElementById('linha-share-busca'); if (share) share.hidden = !(ativo || nSac > 0);
+    const nSac = getSacola().length, share = document.getElementById('linha-share-busca'); if (share) share.hidden = !(ativo || (nSac > 0 && equipe_.pode));
     const bsb = document.getElementById('btn-share-busca'); if (bsb) bsb.textContent = (nSac > 0 && !ativo) ? '🔗 Compartilhar seleção (' + nSac + ')' : '🔗 Compartilhar seleção';
     const bls = document.getElementById('btn-limpar-sel'); if (bls) bls.hidden = !(ativo || nSac > 0) || !!selecaoFixa || modoLink_;
     const blm = document.getElementById('btn-lote-menu'); if (blm) { blm.hidden = !(equipe_.pode && nSac > 0); if (blm.hidden) { const lm = document.getElementById('lote-menu'); if (lm) lm.hidden = true; } }
@@ -640,7 +640,38 @@ try { tkSelExpirar_(); } catch (e) {}
     const badgeSacola = document.getElementById('badge-sacola');
     badgeSacola.textContent = qtdSacola;
     badgeSacola.style.display = qtdSacola > 0 ? 'flex' : 'none';
+    const barra = document.getElementById('barra-minha-selecao');
+    if (barra) {
+      const texto = document.getElementById('barra-minha-selecao-qtd');
+      barra.hidden = qtdSacola === 0;
+      let antiga = false; try { const t = parseInt(localStorage.getItem('tk_sel_ativ_v1') || '0', 10); antiga = !!t && (Date.now() - t) > 2 * 60 * 60 * 1000; } catch (e) {}
+      if (texto) texto.textContent = qtdSacola === 0 ? 'Minha seleção' : (antiga ? 'Sua seleção de antes: ' : '') + qtdSacola + (qtdSacola === 1 ? ' peça' : ' peças');
+      document.body.classList.toggle('tem-selecao', qtdSacola > 0);
+    }
   }
+
+  const barraAbrir = document.getElementById('barra-minha-selecao-abrir');
+  if (barraAbrir) barraAbrir.addEventListener('click', () => { if (typeof abrirSacola === 'function') abrirSacola(); });
+  const barraShare = document.getElementById('bms-compartilhar');
+  if (barraShare) barraShare.addEventListener('click', () => { if (typeof abrirSelecao === 'function') abrirSelecao(true); });
+  // Limpar com UM toque e "Desfazer" por 8 s (no lugar de pedir confirmação).
+  let desfazerT_ = null, ultimaSel_ = null;
+  const barraLimpar = document.getElementById('bms-limpar');
+  function esconderDesfazer_() { const t = document.getElementById('toast-desfazer'); if (t) t.hidden = true; clearTimeout(desfazerT_); ultimaSel_ = null; }
+  if (barraLimpar) barraLimpar.addEventListener('click', () => {
+    const ids = getSacola().slice(); if (!ids.length) return;
+    const fotos = (() => { try { return JSON.parse(localStorage.getItem('tenkiter_sacola_foto_v1') || '{}'); } catch (e) { return {}; } })();
+    ultimaSel_ = { ids: ids, fotos: fotos };
+    limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); atualizarBarraFiltros_();
+    const t = document.getElementById('toast-desfazer'), tx = document.getElementById('toast-desfazer-txt');
+    if (tx) tx.textContent = 'Seleção limpa (' + ids.length + (ids.length === 1 ? ' peça).' : ' peças).'); if (t) t.hidden = false;
+    clearTimeout(desfazerT_); desfazerT_ = setTimeout(esconderDesfazer_, 8000);
+  });
+  const desfazerBtn = document.getElementById('toast-desfazer-btn');
+  if (desfazerBtn) desfazerBtn.addEventListener('click', () => {
+    if (ultimaSel_) { ultimaSel_.ids.forEach(id => adicionarNaSacola(id, (ultimaSel_.fotos && ultimaSel_.fotos[id]) || 1)); }
+    esconderDesfazer_(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); atualizarBarraFiltros_();
+  });
 
   /** Põe ou tira a peça da sacola (cartão e folha usam a mesma função). Devolve true se agora está na sacola. */
   function alternarSacola_(p, foto) {
@@ -1371,6 +1402,7 @@ try { tkSelExpirar_(); } catch (e) {}
 
 /* ===================== v4.27/v4.33: vida da seleção — ao tentar sair (botão voltar): "Libera / Segura"; ao CHEGAR (ou voltar depois de um bom tempo): "Você já tinha uma seleção — manter ou começar do zero?" ===================== */
 (function () {
+  if (!window.TK_SEL_PLACAS) return;   // v6.3: sem janelas de "manter/liberar"; a seleção dura 24 h e a barra fixa limpa com Desfazer. Ligue TK_SEL_PLACAS só para reativar o comportamento antigo (testes).
   let guardaAtiva = false, sairDepois = false, limparUrl_ = false, destino_ = '', modoVolta_ = false;   // modoVolta_ = placa de CHEGADA (outro momento)
   const CH_SAIU = 'tk_sel_saiu_v1', CH_DECIDIU = 'tk_sel_decidiu_v1', CH_CHEGOU = 'tk_sel_chegada_v1';   // CH_CHEGOU (sessionStorage): já perguntou nesta visita
   const TXT_PADRAO = { titulo: 'Antes de sair…', segura: '\u{1F9E1} Segura minha seleção, volto já já', libera: 'Libera a seleção', fica: 'Continuar vendo a loja' };

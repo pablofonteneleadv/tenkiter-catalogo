@@ -188,6 +188,16 @@ catch (e) { window.__precargaLista = null; }
   </aside>
 </main>
 
+<div class="barra-minha-selecao" id="barra-minha-selecao" role="region" aria-label="Minha seleção" hidden>
+  <button type="button" class="bms-abrir" id="barra-minha-selecao-abrir" aria-controls="sacola-conteudo">
+    <span class="bms-icone" aria-hidden="true">🛍️</span>
+    <span class="bms-textos"><span class="bms-titulo" id="barra-minha-selecao-qtd" aria-live="polite">Minha seleção</span><span class="bms-ajuda">Toque para ver e enviar →</span></span>
+  </button>
+  <button type="button" class="bms-acao" id="bms-compartilhar"><span aria-hidden="true">🔗</span> Compartilhar</button>
+  <button type="button" class="bms-acao bms-limpar" id="bms-limpar"><span aria-hidden="true">✕</span> Limpar</button>
+</div>
+<div class="toast-desfazer" id="toast-desfazer" role="status" hidden><span id="toast-desfazer-txt">Seleção limpa.</span><button type="button" id="toast-desfazer-btn">Desfazer</button></div>
+
 <footer class="rodape" id="rodape">
   <div class="rodape-int">
     <div>

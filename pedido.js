@@ -133,6 +133,7 @@ function abrirSacola() {
       }).join('') +
       (esgotados.length ? '<p class="texto-pequeno" role="status" style="margin-top:8px">' + esgotados.length + (esgotados.length === 1 ? ' peça da sacola está esgotada' : ' peças da sacola estão esgotadas') + ' e não entra no pedido.</p>' : '') +
       '<div class="resumo-linha" style="margin-top:6px"><strong>Total estimado à vista</strong><span class="avista" style="color:#1a7a1a;font-weight:800">' + totalTexto_(itens) + '</span></div>' +
+      (PEDIDOS_ATIVOS ? (
       '<div class="form-pedido">' +
         '<h3>Seus dados</h3>' +
         '<label for="ped-nome">Seu nome *</label><input type="text" id="ped-nome" autocomplete="name" value="' + escaparHtml(d.nome) + '">' +
@@ -148,26 +149,34 @@ function abrirSacola() {
         '<label class="lembrar"><input type="checkbox" id="ped-lembrar"' + (d.lembrar ? ' checked' : '') + '> Lembrar meus dados neste aparelho</label>' +
         '<div class="erro-campo" id="ped-erro" role="alert"></div>' +
       '</div>' +
-      '<p class="texto-pequeno">O pedido vai para o WhatsApp da loja. O pagamento e a combinação de retirada ou entrega são feitos por lá. Veja a <a href="privacidade.html" style="color:var(--laranja-txt);font-weight:700">política de privacidade</a>.</p>' +
+      '<p class="texto-pequeno">O pedido vai para o WhatsApp da loja. O pagamento e a combinação de retirada ou entrega são feitos por lá. Veja a <a href="privacidade.html" style="color:var(--laranja-txt);font-weight:700">política de privacidade</a>.</p>'
+      ) : '<p class="texto-pequeno">Toque em <b>Enviar para a loja</b> e a conversa abre no WhatsApp com as peças e os links. Sem cadastro, sem formulário. Veja a <a href="privacidade.html" style="color:var(--laranja-txt);font-weight:700">política de privacidade</a>.</p>') +
       '<button type="button" class="btn-secundario-cta" id="btn-limpar-sacola" style="margin-top:12px">🗑️ Esvaziar seleção</button>' +
       '<div class="barra-compra"><div class="bc-total"><small>Total à vista</small><strong>' + totalTexto_(itens) + '</strong></div>' +
-      '<button type="button" class="bc-pedir" id="btn-enviar-sacola">💬 ENVIAR MINHA SELEÇÃO</button></div>';
+      '<button type="button" class="bc-pedir" id="btn-enviar-sacola">' + (PEDIDOS_ATIVOS ? '💬 ENVIAR MINHA SELEÇÃO' : '💬 ENVIAR PARA A LOJA') + '</button></div>';
 
     container.querySelectorAll('[data-remover-id]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         guardarRascunho_(); removerDaSacola(btn.dataset.removerId); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); abrirSacola();
       });
     });
-    container.querySelectorAll('input[name="ped-entrega"]').forEach(function (r) {
+    if (PEDIDOS_ATIVOS) container.querySelectorAll('input[name="ped-entrega"]').forEach(function (r) {
       r.addEventListener('change', function () { document.getElementById('ped-endereco-wrap').hidden = (r.value !== 'entrega' || !r.checked); });
     });
-    document.getElementById('btn-enviar-sacola').addEventListener('click', function () { enviarPedido_(itens); });
+    document.getElementById('btn-enviar-sacola').addEventListener('click', function () { PEDIDOS_ATIVOS ? enviarPedido_(itens) : enviarSelecaoSimples_(itens); });
     document.getElementById('btn-limpar-sacola').addEventListener('click', function () {
       if (confirm('Esvaziar toda a seleção?')) { limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); abrirSacola(); }
     });
   }
   container.querySelectorAll('#btn-fechar-sacola').forEach(function (btn) { btn.addEventListener('click', fecharSacola); });
   abrirComHistorico_('overlay-sacola');
+}
+/** Sem pedido: abre o WhatsApp da loja com as peças e os links (sem nome, telefone, endereço nem código). A seleção continua guardada. */
+function enviarSelecaoSimples_(itens) {
+  var texto = 'Olá! Tenho interesse nestas peças do catálogo:\n\n' + listaDePecasTexto_(itens) + '\n\nTotal estimado à vista: ' + totalTexto_(itens, true);
+  itens.forEach(function (p) { try { registrarEvento(p.ID, p.Codigo, 'whatsapp', '', true); } catch (e) {} });
+  if (window.TKMeta) TKMeta.evento('Lead', { value: totalAvista_(itens), currency: 'BRL', content_ids: itens.map(function (p) { return p.Codigo || p.ID; }), content_type: 'product', num_items: itens.length }, 'sel_' + Date.now());
+  try { window.open(linkWhatsApp(texto), '_blank'); } catch (e) { location.href = linkWhatsApp(texto); }
 }
 function fecharSacola() { fecharComHistorico_('overlay-sacola'); }
 
@@ -493,7 +502,7 @@ function ligarPedidoNaPagina() {
     ov.addEventListener('click', function (e) { if (e.target === ov) par[1](); });
     habilitarArrastarParaFechar(ov.querySelector('.modal'), par[1]);
   });
-  var rast = document.getElementById('rod-rastrear');
+  var rast = document.getElementById('rod-rastrear'); if (rast && !PEDIDOS_ATIVOS && rast.parentElement) rast.parentElement.hidden = true;
   if (rast) rast.addEventListener('click', function (e) { e.preventDefault(); abrirRastreio('', ''); });
   var z = document.getElementById('rod-zap'); if (z) z.href = linkWhatsApp('Olá! Vim pelo catálogo da TENKiTER Modas.');
   var az = document.getElementById('ajuda-zap'); if (az) az.href = linkWhatsApp('Olá! Preciso de ajuda para escolher uma peça no catálogo da TENKiTER Modas.');
