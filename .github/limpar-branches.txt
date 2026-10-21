@@ -1,4 +1,3 @@
-# <nome><TAB><sha da ponta> — aprovado por Pablo em 18/10/2026 (A7+A9 do okou.md). Esvazie depois de rodar.
-# Rodadas concluídas em 18/10/2026: 55 branches obsoletas (run 39141035141), 2 de PRs mesclados, a do PR #45 e a do PR #46. Rodada seguinte: a do PR #48 (docs/estado-v432). Abaixo: a branch do PR #49 (já mesclado).
-feat/treino-rico-fotoia-postagens-2026-10-18	8206c471b2c319a910508c292e60f5be943252bf
-ux/catalogo-selecao-fase-2	dbc684c9977d2dddf9aef3cbae5c53c96e3a43be
+# Lista de exclusões vazia.
+# Em 21/10/2026, confirmados PRs #49 e #56 mesclados e respectivas refs remotas já ausentes.
+# Novas exclusões exigem validação do nome e SHA; backups e branches com trabalho devem ser preservados.
