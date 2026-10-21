@@ -588,3 +588,5 @@ body.tk-tem-nav.tem-selecao {
 body.tem-selecao .barra-filtros-flut { bottom: calc(148px + env(safe-area-inset-bottom, 0px)); }
 body.tem-selecao #tk-convite-app,
 body.tem-selecao #tk-placa-aviso { bottom: calc(150px + env(safe-area-inset-bottom, 0px)) !important; }
+body.tem-selecao .fab-zap { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+body.tem-selecao #aviso-offline { bottom: calc(148px + env(safe-area-inset-bottom, 0px)); }
