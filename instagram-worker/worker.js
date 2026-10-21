@@ -1406,7 +1406,17 @@ export function montarPlanoFotoIA_(b, n, cfg) {
   const rot = Array.isArray(b.rotulos) ? b.rotulos.slice(0, n).map((x) => String(x || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 80)) : [];
   /* v1.9: a imagem NUNCA leva seta nem texto (o modelo errava as letras). `seta` fica sempre false só para pedidos/painéis antigos continuarem lendo o campo;
    seta, chamada e emoji vão no editor de visuais da aba Postagens. */
-  return { ok: true, plano: { v: 1, destino: destino, formato: DESTINOS_FOTOIA[destino].formato, seta: false, quem: quem, looks: looks.map((l) => ({ partes: l })), rotulos: rot } };
+  const plano = { v: 1, destino: destino, formato: DESTINOS_FOTOIA[destino].formato, seta: false, quem: quem, looks: looks.map((l) => ({ partes: l })), rotulos: rot };
+  if (b.pecas !== undefined) {
+    if (!Array.isArray(b.pecas) || b.pecas.length !== n) return { ok: false, erro: 'As peças informadas não correspondem às fotos. Refaça o pedido.' };
+    plano.pecas = b.pecas.map((p) => {
+      p = p && typeof p === 'object' ? p : {};
+      const cod = String(p.codigo || '').trim();
+      const valor = typeof p.avista === 'number' && Number.isFinite(p.avista) && p.avista > 0 && p.avista <= 10000000 ? Math.round(p.avista * 100) / 100 : null;
+      return { codigo: /^[a-zA-Z0-9_.-]{1,60}$/.test(cod) ? cod : '', nome: String(p.nome || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 120), avista: valor };
+    });
+  }
+  return { ok: true, plano: plano };
 }
 /** Plano guardado no pedido; pedido antigo (sem plano) = cada foto é um look inteiro, destino pelo formato da configuração. */
 export function planoDe_(job, nFotos, cfg) {
@@ -1575,7 +1585,7 @@ export async function gerarComMotores_(env, cfg0, job, fontes, refs, chaveGemini
   if (espera) return { ok: false, espera: true, ateMs: ateMs, semPlano: semPlanoGem && !tentouCf, contaTent: !!ultimo, erro: erro };   // um motor só espera cota, mas o outro deu erro de verdade: isso conta tentativa
   return { ok: false, fatal: fatal && !ultimo, erro: erro || ultimo };
 }
-const resumoPlano_ = (x) => { try { const p = x.plano ? JSON.parse(x.plano) : null; return p && Array.isArray(p.looks) ? { looks: p.looks.length, destino: p.destino || '', seta: false, quem: p.quem || '' } : null; } catch (e) { return null; } };
+const resumoPlano_ = (x) => { try { const p = x.plano ? JSON.parse(x.plano) : null; return p && Array.isArray(p.looks) ? { looks: p.looks.length, destino: p.destino || '', seta: false, quem: p.quem || '', pecas: Array.isArray(p.pecas) ? p.pecas : [] } : null; } catch (e) { return null; } };
 const linhaFotoIA_ = (env, x) => ({ plano: resumoPlano_(x), id: x.id, status: x.status, nome: x.nome || '', produto: x.produto || '', extra: x.extra || '', resultado: x.resultado ? urlMidia(env, x.resultado) : '', modelo: x.modelo || '', erro: x.erro || '', espera: x.status === 'fila' && x.prox_em ? x.prox_em : '', tent: x.tent || 0,
   fontes: (function () { try { return JSON.parse(x.fontes || '[]').map((k) => urlMidia(env, k)); } catch (e) { return []; } })(), criado_em: x.criado_em, pronto_em: x.pronto_em || '' });
 /** Faz UM pedido da fila (o mais antigo que já pode, ou `soId`). Nunca lança. */

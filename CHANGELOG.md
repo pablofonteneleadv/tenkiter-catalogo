@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## Fotos com IA — 2026-10-21
+
+- Cada resultado guarda as peças e preços à vista usados no pedido; legenda e link da seleção podem ser copiados numa seção recolhível.
+
+
 ## Em revisão — cadastro (2026-10-21)
 
 - Duplicação mantém nome e atributos, sem mídia; padrões se aplicam somente a cadastros novos.

@@ -249,15 +249,28 @@
       (x.status === 'erro' ? '<p class="fia-erro">' + esc(x.erro || 'Não deu certo.') + '</p>' : '') +
       '<div class="fia-resu">' + (x.resultado ? '<img alt="Imagem gerada" data-a="ampliar" data-u="' + esc(x.resultado) + '" ' + atribSrc(x.resultado) + '>' : '') +
       '<div class="fia-fontes" title="Fotos enviadas à IA">' + (x.fontes || []).map((u) => '<img alt="" loading="lazy" ' + atribSrc(u) + '>').join('') + '</div></div>' +
-      '<div class="fia-linha">' + botoes.map((b) => '<button type="button" class="fia-btn ' + b[2] + '" data-a="acao" data-v="' + b[0] + '" data-id="' + x.id + '">' + b[1] + '</button>').join('') + '</div></div>';
+      legendaHtml(x) + '<div class="fia-linha">' + botoes.map((b) => '<button type="button" class="fia-btn ' + b[2] + '" data-a="acao" data-v="' + b[0] + '" data-id="' + x.id + '">' + b[1] + '</button>').join('') + '</div></div>';
+  }
+  function conteudoDasPecas(x) {
+    const ps = x && x.plano && Array.isArray(x.plano.pecas) ? x.plano.pecas : [];
+    const unicas = ps.filter((p, i) => p.codigo && ps.findIndex(q => q.codigo === p.codigo) === i);
+    const texto = unicas.map(p => (p.nome || 'Peça') + ' · ' + p.codigo + '\n' + (Number(p.avista) > 0 ? Number(p.avista).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) + ' à vista' : 'Consulte valor')).join('\n\n');
+    const link = unicas.length ? SITE_URL + '?sel=' + unicas.map(p => encodeURIComponent(p.codigo)).join(',') : '';
+    return { texto, link };
+  }
+  function legendaHtml(x) {
+    const c = conteudoDasPecas(x); if (!c.texto) return '';
+    return '<details class="fia-legenda"><summary>Legenda e link das peças</summary><p class="fia-dica">Preços à vista registrados ao gerar. Confira preço e disponibilidade antes de compartilhar.</p><label>Legenda<textarea readonly rows="5">' + esc(c.texto) + '</textarea></label><button type="button" class="fia-btn" data-a="copiar-legenda" data-id="' + x.id + '">Copiar legenda</button><label>Link destas peças<input readonly value="' + esc(c.link) + '"></label><button type="button" class="fia-btn" data-a="copiar-link" data-id="' + x.id + '">Copiar link</button></details>';
   }
   function desenharFila(manterRolagem) {
     const a = $('fia-aba'); if (!a) return;
+    const legendasAbertas = new Set(Array.from(a.querySelectorAll('.fia-cartao')).filter(c => c.querySelector('.fia-legenda[open]')).map(c => c.dataset.id));
     const y = $('fia-corpo').scrollTop;
     const filtros = [['todas', 'Todas'], ['fila', 'Na fila'], ['pronta', 'Prontas'], ['aprovada', 'Aprovadas'], ['erro', 'Com erro'], ['descartada', 'Descartadas']];
     const vis = itens.filter((x) => filtro === 'todas' ? x.status !== 'descartada' && x.status !== 'cancelada' : x.status === filtro || (filtro === 'fila' && x.status === 'gerando'));
     a.innerHTML = statusHtml() + '<div class="fia-abas">' + filtros.map((f) => '<button type="button" data-a="filtro" data-v="' + f[0] + '" aria-selected="' + (filtro === f[0]) + '">' + f[1] + '</button>').join('') + '</div>' +
       (vis.length ? vis.map(cartao).join('') : '<p class="fia-dica">Nada aqui ainda. Volte em “✨ Gerar” e coloque uma peça na fila.</p>');
+    a.querySelectorAll('.fia-cartao').forEach(c => { const d = c.querySelector('.fia-legenda'); if (d && legendasAbertas.has(c.dataset.id)) d.open = true; });
     if (manterRolagem) $('fia-corpo').scrollTop = y;
   }
   function desenharInstrucao() {
@@ -304,6 +317,13 @@
     if (a === 'destino') { destino = b.dataset.v; desenharGerar(); return; }
     if (a === 'enviar') return enviar();
     if (a === 'ampliar') { try { if (window.TKFotoGrande) { window.TKFotoGrande.abrir({ itens: [{ url: b.dataset.u }], indice: 0 }); return; } } catch (er) { /* abre normal */ } window.open(b.dataset.u, '_blank', 'noopener'); return; }
+    if (a === 'copiar-legenda' || a === 'copiar-link') {
+      const item = itens.find(x => String(x.id) === String(b.dataset.id));
+      const c = conteudoDasPecas(item);
+      try { await navigator.clipboard.writeText(a === 'copiar-link' ? c.link : c.texto); b.textContent = 'Copiado!'; }
+      catch (err) { b.textContent = 'Selecione o texto acima para copiar'; }
+      return;
+    }
     if (a === 'acao') return acao(b.dataset.v, Number(b.dataset.id), b);
     if (a === 'salvarcfg') return salvarCfg();
     if (a === 'padrao') { if (!confirm('Voltar as instruções, a proporção, os modelos, o motor e o limite para o padrão?')) return; const r = await api('/fotoia/config', 'POST', { padrao: true }); if (r && r.ok) { cfg = JSON.parse(JSON.stringify(r.config)); await carregarConfig(); msg('Voltou ao padrão.', 'ok'); } else msg(erroTxt(r), 'erro'); desenhar(); return; }
@@ -368,6 +388,11 @@
       const unica = new Set(ordem.map((i) => sel[i].cod || '')).size === 1 && sel[ordem[0]].cod ? sel[ordem[0]].cod : '';
       const corpo = { nome: (nomes.slice(0, 3).join(' + ') + (nomes.length > 3 ? ' +' + (nomes.length - 3) : '') + (grupos.length > 1 ? ' (parte ' + (gi + 1) + '/' + grupos.length + ')' : '')).slice(0, 120), produto: unica, extra: extra, fotos: fotos,
         papeis: ordem.map((i) => sel[i].papel), looks: looks, rotulos: ordem.map((i) => sel[i].peca || ''), destino: destino, quem: quem };
+      corpo.pecas = ordem.map(i => {
+        const p = (typeof produtos !== 'undefined' ? produtos : []).find(p => String(p.ID) === String(sel[i].pid));
+        const preco = p ? Number(p.Preco) : 0;
+        return { codigo: sel[i].cod || '', nome: sel[i].peca || '', avista: preco > 0 ? Number((preco * (1 - DESCONTO_AVISTA)).toFixed(2)) : null };
+      });
       if (refsOk && refs.length === fotos.length) corpo.refs = refs;
       const r = await api('/fotoia/fila', 'POST', corpo);
       if (!r || !r.ok) { enviando = false; msg((criados.length ? criados.length + ' pedido(s) já entraram na fila. ' : '') + erroTxt(r), 'erro'); if (criados.length) { sel = []; abertas = []; } desenharGerar(); return; }

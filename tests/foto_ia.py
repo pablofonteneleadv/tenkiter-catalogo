@@ -13,7 +13,7 @@ def abrir(pg):
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"]); erros = []
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
-    ctx.add_init_script(SESSION); ctx.add_init_script("window.TK_FOTOIA_POLL_MS=300;")
+    ctx.add_init_script(SESSION); ctx.add_init_script("window.TK_FOTOIA_POLL_MS=300; navigator.clipboard.writeText = async text => { window.__copiadoFotoIA = text; };")
     st = install(ctx, perms=PERMS_ALL, versao="4.3"); g = st["ig"]
     for _p in st["produtos"]: _p["Fotos_Galeria"] = "https://res.cloudinary.com/z/image/upload/v1/g1.jpg,https://res.cloudinary.com/z/image/upload/v1/g2.jpg"
     pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: d.accept())
@@ -37,6 +37,16 @@ with sync_playwright() as p:
     pg.fill("#fia-extra", "fundo areia"); pg.click(".fia-foto >> nth=0 >> button"); pg.click(".fia-foto >> nth=0 >> button"); pg.wait_for_timeout(200)
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(1500)
     ch = [c for c in g["fotoia"]["chamadas"] if c["path"] == "/fotoia/fila"]
+    meta = ch[0]["body"].get("pecas", []) if ch else []
+    chk("P-29 pedido preserva metadados das duas fotos na ordem", len(meta)==2 and all(x["codigo"]=="TK-0003" for x in meta) and all(x["nome"] for x in meta))
+    chk("P-29 legenda fica recolhida inicialmente", pg.locator(".fia-legenda").count()==1 and not pg.locator(".fia-legenda").evaluate("e => e.open"))
+    pg.locator(".fia-legenda summary").click()
+    chk("P-29 link da imagem usa só os códigos de suas peças, sem duplicar", pg.locator(".fia-legenda input").input_value()=="https://tenkitermodas.com.br/?sel=TK-0003")
+    pg.locator("[data-a=copiar-link]").evaluate("e => e.click()")
+    pg.wait_for_function('window.__copiadoFotoIA === "https://tenkitermodas.com.br/?sel=TK-0003"')
+    chk("P-29 copia link e mantém legenda aberta após atualização da fila", pg.locator(".fia-legenda").evaluate("e => e.open"))
+    chk("P-29 legenda inclui código, preço à vista e orientação de conferir valores", "TK-0003" in pg.locator(".fia-legenda textarea").input_value() and "à vista" in pg.locator(".fia-legenda textarea").input_value() and "Confira preço" in pg.locator(".fia-legenda").inner_text())
+
     chk("coloca na fila com nome, código, observação, 2 fotos, 2 cópias pequenas e os papéis/looks/destino", len(ch) == 1 and ch[0]["body"]["fotos"] == "<2 fotos>" and ch[0]["body"]["refs"] == "<2 refs>" and ch[0]["body"]["extra"] == "fundo areia" and ch[0]["body"]["produto"] == "TK-0003" and ch[0]["body"]["papeis"] == ["look", "look"] and ch[0]["body"]["looks"] == [[0], [1]] and ch[0]["body"]["destino"] == "status" and "seta" not in ch[0]["body"] and ch[0]["body"]["quem"] == "mulheres", ch)
     chk("vai sozinho para 'Fila e resultados' e mostra o pedido 'Na fila'", pg.locator("[data-v=fila][aria-selected=true]").count() == 1 and pg.locator(".fia-cartao .fia-chip.fila").count() == 1)
     print("== fila / resultado ==")
