@@ -825,3 +825,7 @@ Documentação técnica: `docs/CI-CD.md`, seção **6. CI otimizado**.
 
 - **Pedido do Pablo (21/10/2026)**: cada filtro marcado soma aos outros e os menus mostram SÓ as combinações possíveis, ao vivo (ex.: Feminino Adulto não oferece Calcinhas se não há peça ativa assim); tirar uma seleção faz as opções voltarem.
 - `passaFiltros(p, sem)` ignora a faceta `sem` (`cat|tam|cor|gen`); no fim de `aplicarFiltros` cada menu esconde (`chip.hidden`) o que não tem peça ATIVA (`estaEsgotado` fora) combinando com os OUTROS filtros, a busca e o preço; opção já marcada nunca some; menu sem opção some inteiro. CSS: `.chips .chip[hidden]`. Teste: `tests/filtros_facetas.py`.
+
+## v6.8 — Postagens: a montagem sobrevive ao recarregar (`admin-postagens.js`, só front, 21/10/2026)
+
+- **Pedido do Pablo (21/10/2026)**: ao recuperar a tela pelo cache a montagem se perdia (colagem, edições de textos/elementos). O rascunho automático (IndexedDB `tk_po_rascunho_v1`, PR #63) já guardava `nova`, mas imagens `blob:` morriam. Agora: a mídia da colagem guarda o `blob` e os elementos de imagem criados na hora registram o arquivo em `nova.blobs` (`blobUrl_`); `restaurarRascunho_` recria as URLs e troca as antigas em todo o `nova` (inclui `colUndo`). Teste: `tests/postagens_recuperar.py`. Não visto em celular real.

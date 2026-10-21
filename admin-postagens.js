@@ -36,6 +36,7 @@ async function guardarRascunhoAgora_(){
     console.warn("[TENKiTER] Não foi possível salvar o rascunho local:",e);
   }finally{db&&db.close()}
 }
+function blobUrl_(b){const u=URL.createObjectURL(b);if(nova){(nova.blobs=nova.blobs||{})[u]=b;agendarRascunho_()}return u}
 function agendarRascunho_(){
   if(!nova)return;
   clearTimeout(tkRascunhoTimer_);
@@ -64,7 +65,9 @@ async function restaurarRascunho_(){
     });
     if(!salvo||!salvo.nova||typeof salvo.nova!=="object")return false;
     nova=salvo.nova;
-    const renovarUrl=m=>{if(m&&m.gerada)delete m.gerada;if(!m||!m.file||!(m.file instanceof Blob))return;if(m.url&&String(m.url).startsWith("blob:"))try{URL.revokeObjectURL(m.url)}catch(e){}m.url=URL.createObjectURL(m.file)};
+    const renovarUrl=m=>{if(m&&m.gerada)delete m.gerada;const b=m&&(m.file instanceof Blob?m.file:m.blob instanceof Blob?m.blob:null);if(!b)return;if(m.url&&String(m.url).startsWith("blob:"))try{URL.revokeObjectURL(m.url)}catch(e){}m.url=URL.createObjectURL(b)};
+    if(nova.blobs&&typeof nova.blobs==="object"){const mapa={},novos={};Object.keys(nova.blobs).forEach(k=>{const b=nova.blobs[k];if(b instanceof Blob){const u=URL.createObjectURL(b);mapa[k]=u;novos[u]=b}});nova.blobs=novos;const troca=v=>{if(typeof v==="string")return mapa[v]||v;if(Array.isArray(v)){for(let i=0;i<v.length;i++)v[i]=troca(v[i]);return v}if(v&&typeof v==="object"&&!(v instanceof Blob)){Object.keys(v).forEach(k=>{if(k!=="blobs")v[k]=troca(v[k])})}return v};Object.keys(nova).forEach(k=>{if(k!=="blobs")nova[k]=troca(nova[k])})}
+    (nova.colUndo||[]).forEach(renovarUrl);
     (nova.livre||[]).forEach(renovarUrl);
     (nova.midias||[]).forEach(renovarUrl);
     if(nova.livre||nova.midias){aviso="Rascunho anterior recuperado automaticamente neste aparelho.";avisoErro=false}
@@ -602,7 +605,7 @@ async function colCriar_(baixar) {
     const cv = await colRender_(W, H), blob = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.92));
     if (!blob) throw new Error("Não consegui montar a colagem.");
     if (baixar) { baixarBlob_(blob, "colagem-" + (nova.p && nova.p.Codigo || "tenkiter") + ".jpg"); colStatus_("Colagem baixada. Ela continua aqui para você criar também.", false, true); return; }
-    const usados = c.fotos.slice().sort((a, b) => a - b), antes = nova.midias.slice(), novo = { url: URL.createObjectURL(blob), tipo: "imagem", sel: true, colagem: true };
+    const usados = c.fotos.slice().sort((a, b) => a - b), antes = nova.midias.slice(), novo = { url: URL.createObjectURL(blob), blob, tipo: "imagem", sel: true, colagem: true };
     const resto = nova.midias.filter((m, i) => usados.indexOf(i) === -1);
     resto.splice(Math.min(usados[0], resto.length), 0, novo);
     nova.colUndo = antes; nova.midias = resto;
@@ -1313,10 +1316,10 @@ function addImagemBlob_(blob, nome, w, h, dest) {
         src = await subirFixa_(blob);
         elementosAdd_(src, nome);
       } catch (e) {
-        src = URL.createObjectURL(blob);
+        src = blobUrl_(blob);
         addMsg_("Não consegui guardar na biblioteca da loja; usei só nesta postagem.", !0);
       }
-    } else src = URL.createObjectURL(blob);
+    } else src = blobUrl_(blob);
     imgCam_(src);
     try {
       await IMGCAM_[src].p;

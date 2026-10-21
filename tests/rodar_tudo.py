@@ -95,7 +95,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("postagens_colagem.py", lambda o: "FALHAS=0" in o),   # 🧩 Colagem + 🖼️ Gerar imagens
     ("postagens_v425.py", lambda o: "FALHAS=0" in o),      # prévia leve, foto travada/centralizada, largura, Fazer em todos
     ("video_validacao.py", lambda o: "FALHAS: 0" in o),   # v6.7: validação de vídeo no navegador (cadastro e agendamento)
-    ("postagens_avulsas.py", lambda o: "FALHAS=0" in o),   # v4.27: fotos/vídeos avulsos e ordem nas Postagens
+    ("postagens_avulsas.py", "postagens_recuperar.py", lambda o: "FALHAS=0" in o),   # v4.27: fotos/vídeos avulsos e ordem nas Postagens
     ("postagens_texto_foto.py", lambda o: "FALHAS=0" in o),# v4.27: texto por foto com "Fazer em todos" desligado
     ("postagens_elementos.py", lambda o: "FALHAS=0" in o),     # v4.36: mover/aumentar qualquer elemento, ➕ Adicionar, biblioteca só do Admin
     ("postagens_elementos_fotos.py", lambda o: "FALHAS=0" in o), # v4.36: elemento só nesta foto x todas
