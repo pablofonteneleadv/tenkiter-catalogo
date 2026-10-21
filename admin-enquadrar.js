@@ -160,7 +160,7 @@
           '<div class="enq-modo" role="group" aria-label="Como a foto ocupa o quadro"><button type="button" data-enq="modo" data-v="cortar" aria-pressed="true">✂ Cortar (preencher)</button><button type="button" data-enq="modo" data-v="encaixar" aria-pressed="false">🖼️ Encaixar (inteira)</button></div>' +
           '<div class="enq-sl"><label for="enq-z">Zoom</label><input type="range" id="enq-z" min="100" max="500" step="1" value="100"><output id="enq-z-v" for="enq-z">100%</output></div>' +
           '<div class="enq-sl"><label for="enq-r">Girar</label><input type="range" id="enq-r" min="-180" max="180" step="1" value="0"><output id="enq-r-v" for="enq-r">0°</output></div>' +
-          '<div class="enq-acoes"><button type="button" data-enq="g" data-v="-90">↺ 90°</button><button type="button" data-enq="g" data-v="90">↻ 90°</button><button type="button" data-enq="centro">Centralizar</button><button type="button" data-enq="zerar">Zerar</button><button type="button" data-enq="voltar" id="enq-voltar" hidden>↩ Voltar à original</button></div>' +
+          '<div class="enq-acoes"><button type="button" data-enq="desfazer">Desfazer</button><button type="button" data-enq="todas" id="enq-todas" hidden>Aplicar a todas</button><button type="button" data-enq="g" data-v="-90">↺ 90°</button><button type="button" data-enq="g" data-v="90">↻ 90°</button><button type="button" data-enq="centro">Centralizar</button><button type="button" data-enq="zerar">Zerar</button><button type="button" data-enq="voltar" id="enq-voltar" hidden>↩ Voltar à original</button></div>' +
           '<p class="enq-dica">O site, o Feed e o Carrossel usam o quadro 4:5. No Story a foto entra inteira sobre o próprio fundo desfocado (na aba Postagens você ainda pode cortar para preencher a tela).</p>' +
         '</div>' +
         '<div class="enq-rodape"><button type="button" class="enq-ok" data-enq="aplicar" id="enq-ok" disabled>✔ Usar esta foto</button><button type="button" class="btn-fechar" data-enq="fechar">Cancelar</button></div>' +
@@ -171,8 +171,16 @@
     ligarGestos($('#enq-cv'));
   }
   function aviso(txt) { var a = $('#enq-aviso'); if (!a) return; a.hidden = !txt; a.textContent = txt || ''; }
+  function ajuste(st) { return { modo: st.modo, z: st.z, x: st.x, y: st.y, r: st.r }; }
+  function guardarAntes(st) {
+    if (!st || !st.img) return;
+    var a = ajuste(st), h = st.historico;
+    if (!h.length || JSON.stringify(h[h.length - 1]) !== JSON.stringify(a)) h.push(a);
+    if (h.length > 60) h.shift();
+  }
   function entrada(ev) {
     var st = estado; if (!st || !st.img) return;
+    guardarAntes(st);
     if (ev.target.id === 'enq-z') { st.z = Number(ev.target.value) / 100; ajustarZoom(st); }
     else if (ev.target.id === 'enq-r') { st.r = Number(ev.target.value); ajustarZoom(st); }
     agendar();
@@ -181,6 +189,9 @@
     var b = ev.target.closest && ev.target.closest('[data-enq]'); if (!b || !estado) return;
     var a = b.getAttribute('data-enq'), st = estado;
     if (a === 'fechar') return fechar();
+    if (a === 'desfazer') { var anterior = st.historico.pop(); if (anterior) { Object.assign(st, anterior); agendar(); } return; }
+    if (a === 'todas') return aplicarTodas();
+    if (['modo', 'g', 'centro', 'zerar'].indexOf(a) !== -1) guardarAntes(st);
     if (a === 'modo') { var v = b.getAttribute('data-v'); if (v !== st.modo && st.img) { st.modo = v; st.z = 1; st.x = 0; st.y = 0; st.r = 0; } return agendar(); }
     if (!st.img) return;
     if (a === 'g') { st.r = ((st.r + Number(b.getAttribute('data-v')) + 540) % 360) - 180; ajustarZoom(st); }
@@ -195,9 +206,28 @@
     var c = document.createElement('canvas'); c.width = FW; c.height = FH;
     try {
       pintarQuadro(c.getContext('2d'), FW, FH, st);
-      var url = c.toDataURL('image/jpeg', 0.88), f = st.aoAplicar;
-      fechar(true); if (f) f(url);
+      var url = c.toDataURL('image/jpeg', 0.88), f = st.aoAplicar, a = ajuste(st);
+      fechar(true); if (f) f(url, a);
     } catch (e) { aviso('Não consegui montar a foto enquadrada. Tente de novo ou use a foto como está.'); }
+  }
+
+  async function renderizar(src, a) {
+    var img = await carregar(src), st = Object.assign({ img: img, modo: 'encaixar', z: 1, x: 0, y: 0, r: 0 }, a || {});
+    ajustarZoom(st);
+    var c = document.createElement('canvas'); c.width = FW; c.height = FH;
+    pintarQuadro(c.getContext('2d'), FW, FH, st);
+    return c.toDataURL('image/jpeg', 0.88);
+  }
+  async function aplicarTodas() {
+    var st = estado;
+    if (!st || !st.img || !st.aoAplicarTodas || st.ocupado) return;
+    st.ocupado = true; $('#enq-todas').disabled = true;
+    aviso('Preparando as fotos. Aguarde a confirmação.');
+    try {
+      var feito = await st.aoAplicarTodas(ajuste(st), function () { return estado === st && aberta; });
+      if (estado === st && feito !== false) fechar(true);
+    } catch (e) { if (estado === st) aviso('Não consegui ajustar todas as fotos. Nenhuma foto foi trocada. Confira as imagens e tente novamente.'); }
+    finally { if (estado === st) { st.ocupado = false; $('#enq-todas').disabled = false; } }
   }
 
   /* ---------- gestos: 1 dedo/mouse move · 2 dedos zoom + giro · roda do mouse zoom · setas/+/-/[ ] no teclado ---------- */
@@ -212,6 +242,7 @@
     cv.addEventListener('pointerdown', function (ev) {
       if (!estado || !estado.img) return;
       try { cv.setPointerCapture(ev.pointerId); } catch (e) { /* ok */ }
+      if (!ptrs.size) guardarAntes(estado);
       ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY }); ini(); ev.preventDefault(); cv.focus({ preventScroll: true });
     });
     cv.addEventListener('pointermove', function (ev) {
@@ -230,10 +261,11 @@
     cv.addEventListener('pointerup', fim); cv.addEventListener('pointercancel', fim);
     cv.addEventListener('wheel', function (ev) {
       var st = estado; if (!st || !st.img) return; ev.preventDefault();
+      guardarAntes(st);
       st.z = st.z * Math.exp(-ev.deltaY * 0.0015); ajustarZoom(st); agendar();
     }, { passive: false });
     cv.addEventListener('keydown', function (ev) {
-      var st = estado; if (!st || !st.img) return; var k = ev.key, passo = ev.shiftKey ? 0.05 : 0.01, ok = true;
+      var st = estado; if (!st || !st.img) return; guardarAntes(st); var k = ev.key, passo = ev.shiftKey ? 0.05 : 0.01, ok = true;
       if (k === 'ArrowLeft') mover(st, st.x - passo, st.y); else if (k === 'ArrowRight') mover(st, st.x + passo, st.y);
       else if (k === 'ArrowUp') mover(st, st.x, st.y - passo); else if (k === 'ArrowDown') mover(st, st.x, st.y + passo);
       else if (k === '+' || k === '=') { st.z *= 1.05; ajustarZoom(st); } else if (k === '-' || k === '_') { st.z /= 1.05; ajustarZoom(st); }
@@ -247,7 +279,10 @@
   var aberta = false, trava = '';
   function abrir(op) {
     montar();
-    estado = { img: null, modo: 'cortar', z: 1, x: 0, y: 0, r: 0, aoAplicar: op.aoAplicar, aoVoltar: op.aoVoltar };
+    estado = { img: null, modo: 'encaixar', z: 1, x: 0, y: 0, r: 0, historico: [], aoAplicar: op.aoAplicar, aoAplicarTodas: op.aoAplicarTodas, aoVoltar: op.aoVoltar };
+    Object.assign(estado, op.ajuste || {});
+    $('#enq-todas').hidden = !op.aoAplicarTodas; $('#enq-todas').disabled = false;
+    $('#enq-todas').textContent = 'Aplicar a todas (' + (op.quantidade || 0) + ')';
     var ok = $('#enq-ok'); ok.disabled = true; aviso('');
     $('#enq-voltar').hidden = !op.podeVoltar;
     el.classList.add('aberto'); aberta = true; trava = document.documentElement.style.overflow; document.documentElement.style.overflow = 'hidden';
@@ -276,5 +311,5 @@
     if (aplicou) sair();
   }
 
-  window.TKEnquadrar = { abrir: abrir, fechar: fechar, _estado: function () { return estado; } };
+  window.TKEnquadrar = { renderizar: renderizar, abrir: abrir, fechar: fechar, _estado: function () { return estado; } };
 })();

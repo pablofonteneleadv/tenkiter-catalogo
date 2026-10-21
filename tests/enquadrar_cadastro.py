@@ -63,7 +63,7 @@ with sync_playwright() as p:
     chk("a foto carregou (botão Usar habilitado)", pg.locator("#enq-ok").is_enabled())
     chk("a janela entrou na pilha do botão voltar", pg.evaluate("TKCamadas.aberta('enq')"))
     e = est()
-    chk("começa em Cortar, zoom 100%, sem giro", e and e["modo"] == "cortar" and abs(e["z"] - 1) < 1e-6 and e["r"] == 0 and e["x"] == 0 and e["y"] == 0, e)
+    chk("começa com a foto inteira, zoom 100%, sem giro", e and e["modo"] == "encaixar" and abs(e["z"] - 1) < 1e-6 and e["r"] == 0 and e["x"] == 0 and e["y"] == 0, e)
     chk("'Voltar à original' escondido (foto ainda não foi ajustada)", pg.locator("#enq-voltar").is_hidden())
 
     print("== B. prévias Site / Feed-Carrossel / Story ==")
@@ -78,6 +78,7 @@ with sync_playwright() as p:
     cvs = pg.evaluate("(()=>['site','feed','story'].map(k=>{const c=document.getElementById('enq-p-'+k);return c.width/c.height}))()")
     chk("proporções: Site 4:5, Feed 4:5, Story 9:16", abs(cvs[0] - .8) < .01 and abs(cvs[1] - .8) < .01 and abs(cvs[2] - 9 / 16) < .01, cvs)
 
+    pg.click('[data-enq="modo"][data-v="cortar"]'); pg.wait_for_timeout(150)
     print("== C. mover (dedo) — Cortar não deixa aparecer borda ==")
     cx, cy, w, h = centro()
     gesto([(cx, cy)], [(cx + 60, cy)])
@@ -135,9 +136,9 @@ with sync_playwright() as p:
     print("== G. Voltar à original ==")
     abrir()
     chk("agora 'Voltar à original' aparece", pg.locator("#enq-voltar").is_visible())
-    e = est(); chk("a janela reabre com a ORIGINAL (sem giro)", e["r"] == 0 and e["z"] == 1, e)
+    e = est(); chk("a janela recupera o ajuste salvo desta foto usando a original", e["r"] == 90 and e["z"] > 1, e)
     r = px_canvas(pg, "#enq-p-site", 40, 130)
-    chk("a prévia mostra a original (vermelho à esquerda)", verm(r), r)
+    chk("a prévia recupera a rotação salva (azul abaixo)", azul(r), r)
     pg.click("#enq-voltar"); pg.wait_for_timeout(600)
     chk("janela fechou e o selo 'ajustada' saiu", not aberta() and pg.locator("#galeria-grid .selo-enq").count() == 0)
     r1 = px_img(pg, "#galeria-grid img", 20, 100)

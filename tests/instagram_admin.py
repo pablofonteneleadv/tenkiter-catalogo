@@ -81,7 +81,8 @@ with sync_playwright() as p:
     chk("IA: o erro aparece em frase, não como JSON", "{" not in pg.locator("#foto-ia-box").inner_text(), pg.locator("#foto-ia-box").inner_text())
     chk("preço e tamanhos vieram", pg.input_value("#preco") in ("89.90", "89,90") and pg.input_value("#tamanhos") == "P, M, G", (pg.input_value("#preco"), pg.input_value("#tamanhos")))
     pg.fill("#nome", "Vestido floral"); pg.fill("#estoque", "2")
-    pg.click("#chips-genero .chip:first-child")
+    if not pg.locator("#chips-genero .chip:first-child").evaluate('e => e.classList.contains("selecionado")'):
+        pg.click("#chips-genero .chip:first-child")
     pg.click("#btn-abrir-categorias"); pg.click("#cat-lista .cat-item:has-text('Vestido')"); pg.click("#cat-pronto")
     pg.click("#btn-salvar"); pg.wait_for_timeout(4000)
     cr = [x for x in log if x.get("action") == "create"]
@@ -169,7 +170,8 @@ with sync_playwright() as p:
     pg.click("[data-ig=separadoMarcados]"); pg.wait_for_selector("#aviso-lote:not([hidden])", timeout=8000)
     chk("abre o cadastro com o aviso do lote e botão 'Cadastrar os 3 produtos'", "3" in pg.locator("#aviso-lote").inner_text() and "Cadastrar os 3" in pg.locator("#btn-salvar").inner_text(), pg.locator("#btn-salvar").inner_text())
     pg.fill("#nome", "Conjunto Verão"); pg.fill("#preco", "80"); pg.fill("#estoque", "2")
-    pg.click("#chips-genero .chip:first-child")
+    if not pg.locator("#chips-genero .chip:first-child").evaluate('e => e.classList.contains("selecionado")'):
+        pg.click("#chips-genero .chip:first-child")
     pg.click("#btn-abrir-categorias"); pg.click("#cat-lista .cat-item:has-text('Vestido')"); pg.click("#cat-pronto")
     pg.click("#btn-salvar"); pg.wait_for_timeout(7000)
     cr = [x for x in log if x.get("action") == "create"]

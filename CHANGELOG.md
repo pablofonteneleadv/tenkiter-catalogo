@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## Em revisão — cadastro (2026-10-21)
+
+- Duplicação mantém nome e atributos, sem mídia; padrões se aplicam somente a cadastros novos.
+- A primeira escolha de outro gênero substitui o padrão automático; escolhas seguintes permitem múltiplos gêneros.
+- Pendências de envio permanecem acessíveis e o retorno ao menu aguarda confirmação de sucesso.
+
+
 ## [Não publicado] - 2026-10-18 (v4.27)
 
 ### Adicionado

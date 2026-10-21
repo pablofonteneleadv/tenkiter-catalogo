@@ -35,6 +35,7 @@ with sync_playwright() as p:
     tentar(pg,"#btn-sacola-modal"); tentar(pg,"#btn-favorito-modal"); pg.keyboard.press("Escape"); pg.wait_for_timeout(500)
     pg.goto(BASE+"index.html"); pg.wait_for_timeout(1200)
     tentar(pg,"#btn-filtros-toggle"); axe(pg,"catálogo: filtros abertos")
+    pg.locator("#fx-fechar").click()
     for sel in ["#btn-sacola-header","#btn-sacola","button[aria-label*=eleção]","#btn-conta-header","#btn-conta"]:
         if pg.locator(sel).count(): 
             pg.locator(sel).first.click(); pg.wait_for_timeout(500); axe(pg,"catálogo: "+sel); pg.keyboard.press("Escape"); pg.wait_for_timeout(300)

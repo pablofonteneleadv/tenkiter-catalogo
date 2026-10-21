@@ -29,6 +29,10 @@ with sync_playwright() as p:
     page.evaluate('aplicarPadroesNovo_()')
     assert page.input_value('#cores') == 'Preto'
     assert page.input_value('#tamanhos') == 'P'
+    page.locator('#chips-genero .chip').filter(has_text=__import__('re').compile('^Masculino Adulto$')).click()
+    assert page.evaluate('Array.from(selecionadosGeneros)') == ['Masculino Adulto']
+    page.evaluate('aplicarPadroesNovo_()')
+    assert page.evaluate('Array.from(selecionadosGeneros)') == ['Masculino Adulto']
     original = state['produtos'][0]
     page.evaluate('(id) => { window.__rascunhoAtual = 999; duplicarProduto(id); }', original['ID'])
     assert page.input_value('#nome') == original['Nome']

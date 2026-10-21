@@ -42,6 +42,7 @@ with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
     print("== Catálogo ==")
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
+    ctx.add_init_script("window.TK_PEDIDOS=true;")  # suíte cobre o fluxo opcional de pedidos
     install(ctx); pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e))); pg.add_init_script(STUB)
     pg.goto(BASE + "index.html"); pg.wait_for_timeout(1800)
     D = ".card:not(.esqueleto):has(.ac-sacola)"
