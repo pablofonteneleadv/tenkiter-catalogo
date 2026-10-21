@@ -115,6 +115,7 @@ try { tkSelExpirar_(); } catch (e) {}
     generosDisponiveis = new Set();
     coresDisponiveis = new Set(); tamanhosDisponiveis = new Set();
     produtos.forEach(p => {
+      if (estaEsgotado(p)) return;   // v6.6: o menu só oferece o que tem peça ativa
       listaDeTags(textoPlano(p.Tamanhos)).forEach(t => { if (!/consult/i.test(t)) tamanhosDisponiveis.add(t); });
       listaDeTags(textoPlano(p.Cores)).forEach(c => coresDisponiveis.add(c));
       listaDeTags(p.Categoria).forEach(c => categoriasDisponiveis.add(c));
@@ -484,10 +485,10 @@ try { tkSelExpirar_(); } catch (e) {}
     const bar = document.getElementById('barra-filtros-flut');
     if (!bar) return;
     const bf = document.getElementById('badge-filtros');
-    const nFiltros = (bf && !bf.hidden ? (parseInt(bf.textContent, 10) || 0) : 0);
+    const nFiltros = document.querySelectorAll('#filtros-extras .chip.selecionado').length + (document.getElementById('preco-min').value ? 1 : 0) + (document.getElementById('preco-max').value ? 1 : 0);
     const q = document.getElementById('busca').value.trim();
     const ativo = nFiltros > 0 || !!q || !!selecaoFixa || apenasFavoritos || apenasNovidades;
-    const nSac = getSacola().length, share = document.getElementById('linha-share-busca'); if (share) share.hidden = !(ativo || (nSac > 0 && equipe_.pode));
+    const nSac = getSacola().length, share = document.getElementById('linha-share-busca'); if (share) share.hidden = !(ativo || nSac > 0);
     const bsb = document.getElementById('btn-share-busca'); if (bsb) bsb.textContent = (nSac > 0 && !ativo) ? '🔗 Compartilhar seleção (' + nSac + ')' : '🔗 Compartilhar seleção';
     const bls = document.getElementById('btn-limpar-sel'); if (bls) bls.hidden = !(ativo || nSac > 0) || !!selecaoFixa || modoLink_;
     const ams = document.getElementById('aviso-minha-sel');

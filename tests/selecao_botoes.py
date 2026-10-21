@@ -25,9 +25,8 @@ with sync_playwright() as p:
         if not lote:
             pg.evaluate('atualizarSacolaHeader_()'); pg.wait_for_timeout(200)
             # v6.3: o cliente usa a barra fixa (Compartilhar/Limpar); a linha do topo só aparece com filtro ativo.
-            chk("cliente: barra fixa com Compartilhar e Limpar", pg.locator("#bms-compartilhar:visible").count() == 1 and pg.locator("#bms-limpar:visible").count() == 1)
-            chk("cliente: linha do topo escondida sem filtro", pg.locator("#linha-share-busca:visible").count() == 0)
-            pg.click("#bms-limpar"); pg.wait_for_timeout(300)
+            chk("cliente: Compartilhar e Limpar no topo com seleção", pg.locator("#btn-share-busca:visible").count() == 1 and pg.locator("#btn-limpar-sel:visible").count() == 1)
+            pg.click("#btn-limpar-sel"); pg.wait_for_timeout(300)
             chk("Limpar esvazia a seleção", pg.evaluate("getSacola().length") == 0)
             ctx.close(); continue
         chk("Compartilhar e Limpar aparecem", pg.locator("#btn-share-busca:visible").count() == 1 and pg.locator("#btn-limpar-sel:visible").count() == 1)

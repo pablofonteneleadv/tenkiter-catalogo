@@ -595,9 +595,6 @@
   width: auto; min-height: 44px; padding: 0 14px; border: 0; border-radius: 10px;
   background: var(--laranja); color: #0d0d0d; font-weight: 800; cursor: pointer;
 }
-body.tk-tem-nav.tem-selecao {
-  padding-bottom: calc(148px + env(safe-area-inset-bottom, 0px));
-}
 @media (min-width: 900px) {
   .barra-minha-selecao {
     right: 24px;
@@ -620,11 +617,6 @@ body.tk-tem-nav.tem-selecao {
 
 /* Convivência da barra "Minha seleção" com os outros avisos flutuantes (filtros, convite do app, aviso de notificações):
    com seleção, eles sobem para ficar ACIMA dela em vez de ficarem escondidos atrás. */
-body.tem-selecao .barra-filtros-flut { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
-body.tem-selecao #tk-convite-app,
-body.tem-selecao #tk-placa-aviso { bottom: calc(176px + env(safe-area-inset-bottom, 0px)) !important; }
-body.tem-selecao .fab-zap { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
-body.tem-selecao #aviso-offline { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
 
 /* v6.4: escolha do que vai no link e botão de juntar os resultados à seleção */
 .sel-modo { border: 0; margin: 4px 16px 8px; padding: 0; display: grid; gap: 6px; }
@@ -652,3 +644,8 @@ body.tem-selecao #aviso-offline { bottom: calc(176px + env(safe-area-inset-botto
 }
 html.fx-travado, html.fx-travado body { overflow: hidden; }
 .linha-share-busca .btn-add-resultados { width: auto; flex: 1 1 100%; margin: 0; min-height: 44px; }
+
+/* v6.6 — embaixo fica SÓ o botão laranja "Limpar filtros", bem rente à barra de navegação mas separado dela. */
+.barra-filtros-flut, .barra-filtros-flut.so-botao { left: 12px; right: auto; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); background: transparent; box-shadow: none; padding: 0; min-height: 0; }
+.barra-filtros-flut span { display: none; }
+.barra-filtros-flut button, .barra-filtros-flut.so-botao button { background: var(--laranja); color: #0d0d0d; border: 0; font-weight: 800; min-height: 44px; padding: 8px 18px; border-radius: 999px; box-shadow: 0 3px 12px rgba(0,0,0,.35); }
