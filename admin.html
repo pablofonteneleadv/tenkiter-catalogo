@@ -1612,7 +1612,7 @@
     for (const f of arquivos) {
       if (vagas <= 0) { alert('Só cabem ' + maxVideos_() + ' vídeo(s) por peça. Os primeiros foram aproveitados.'); break; }
       const resultado = await TKVideoValidation.validar(f, { maxMB: MAX_VIDEO_MB });
-      if (!resultado.ok) { alert('Não foi possível aceitar "' + f.name + '":\\n\\n' + resultado.erros.join('\\n') + '\\n\\nEscolha outro arquivo ou exporte novamente como MP4.'); continue; }
+      if (!resultado.ok) { alert('Não foi possível aceitar "' + f.name + '":\n\n' + resultado.erros.join('\n') + '\n\nEscolha outro arquivo ou exporte novamente como MP4.'); continue; }
       const novoVideo = { file: f, mime: f.type || 'video/mp4', prev: URL.createObjectURL(f), validado: true, metadata: resultado.metadata };
       videosItens.push(novoVideo); preAgendar_(novoVideo, 'video'); vagas--;
     }
