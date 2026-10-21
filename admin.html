@@ -1673,7 +1673,13 @@
       chip.className = 'chip' + (conjunto.has(v) ? ' selecionado' : '');
       chip.textContent = v;
       chip.addEventListener('click', () => {
-        if (idContainer === 'chips-genero') generoNovoTocado_ = true;
+        if (idContainer === 'chips-genero') {
+          if (!generoNovoTocado_ && (modoFormulario === 'novo' || modoFormulario === 'varias') && !conjunto.has(v)) {
+            conjunto.clear();
+            container.querySelectorAll('.chip.selecionado').forEach(c => c.classList.remove('selecionado'));
+          }
+          generoNovoTocado_ = true;
+        }
         if (conjunto.has(v)) conjunto.delete(v); else conjunto.add(v);
         chip.classList.toggle('selecionado');
         atualizarFaltas_();
