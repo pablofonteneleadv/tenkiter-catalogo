@@ -86,7 +86,7 @@ l = login('BIA@EXEMPLO.COM', 'SenhaBia88'); ok(l.ok, 'e-mail sem diferenciar mai
 l = login('529.982.247-25', 'SenhaBia88'); ok(l.ok && l.usuario.whatsapp === '85992222222', 'entra com CPF formatado', l);
 l = login('52998224725', 'SenhaBia88'); ok(l.ok, 'entra com CPF só números', l);
 ok(l.usuario.cpf === '529.982.247-25' && l.usuario.email === 'bia@exemplo.com', 'o usuário devolvido traz o próprio CPF e e-mail', l.usuario);
-l = login('bia@exemplo.com', 'errada'); ok(!l.ok, 'senha errada continua recusada', l);
+l = login('bia@exemplo.com', 'SenhaErrada88'); ok(!l.ok, 'senha errada continua recusada', l);
 l = login('naoexiste@x.com', 'SenhaBia88'); ok(!l.ok, 'e-mail que não existe não entra', l);
 // 2 contas com o mesmo e-mail (cadastro antigo/manual na planilha): ambíguo = não entra por e-mail
 aba.d.find(l2 => l2[1] === '85991111111')[hd.indexOf('email')] = 'bia@exemplo.com';
