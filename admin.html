@@ -1494,6 +1494,19 @@
         a.href = info ? (info.tipo === 'drive' ? 'https://drive.google.com/file/d/' + info.id + '/view' : info.url) : v.url;
         card.appendChild(a);
       }
+      const capa = document.createElement('button'); capa.type = 'button'; capa.className = 'video-capa'; capa.textContent = '🖼 Escolher quadro para a capa';
+      capa.addEventListener('click', () => {
+        if (fotosItens.length >= MAX_GALERIA) { alert('O limite é de ' + MAX_GALERIA + ' fotos. Tire uma antes de escolher a capa.'); return; }
+        const listaOriginal = fotosItens;
+        TKCapaVideo.abrir(v.file || v.url || v.prev, (data) => {
+          if (fotosItens !== listaOriginal || !videosItens.includes(v)) throw new Error('Cadastro alterado');
+          if (fotosItens.length >= MAX_GALERIA) throw new Error('Limite de fotos');
+          fotosItens.forEach(f => { f.capa = false; });
+          const foto = { b64: data.split(',')[1], prev: data, capa: true };
+          fotosItens.push(foto); preAgendar_(foto, 'foto'); desenharFotos(); atualizarFaltas_();
+        });
+      });
+      card.appendChild(capa);
       const x = document.createElement('button'); x.type = 'button'; x.className = 'video-x'; x.textContent = '✕ Tirar este vídeo';
       x.addEventListener('click', () => {
         if (v.prev) URL.revokeObjectURL(v.prev);
@@ -4833,6 +4846,7 @@
 <script src="admin-postagens.js"></script>
 <script src="admin-fotoia.js"></script>
 <script src="admin-enquadrar.js"></script>
+<script src="admin-capa-video.js"></script>
 <script src="nav.js" data-ativo="gestao"></script>
 <script src="a11y.js"></script>
 <script src="conta.js"></script>
