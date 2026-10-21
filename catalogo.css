@@ -47,7 +47,13 @@
     .filtros .btn-filtros-toggle { display: inline-flex; }
     .filtros .busca-campo input[type=text] { margin-bottom: 0; }
     .filtros .filtros-extras { display: none; }
-    .filtros.aberto .filtros-extras { display: block; position: absolute; left: 0; right: 0; top: 100%; background: var(--branco); padding: 4px 14px 14px; max-height: calc(100vh - 190px); overflow-y: auto; box-shadow: 0 10px 18px rgba(0,0,0,0.18); border-radius: 0 0 14px 14px; }
+    /* v6.5: painel de tela cheia no celular — rolagem própria, topo e rodapé fixos, nada fica escondido atrás da barra de baixo */
+    .filtros.aberto .filtros-extras, .filtros.compacto.aberto .filtros-extras { display: flex; flex-direction: column; position: fixed; inset: 0; top: 0; z-index: 100; background: var(--branco); padding: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; box-shadow: none; border-radius: 0; }
+    .filtros.aberto .fx-topo { display: flex; }
+    .filtros.aberto .fx-ver { display: block; }
+    .filtros.aberto { z-index: 100; }   /* o painel fixo vive dentro de #filtros (z 19): sem isto a barra de baixo (z 90) ficava por cima */
+    .fx-corpo { padding: 4px 14px 12px; }
+    .fx-rodape { margin-top: auto; }
     .filtros.aberto .btn-filtros-toggle { background: var(--preto); color: var(--laranja); border-color: var(--preto); }
   }
 
@@ -631,3 +637,18 @@ body.tem-selecao #aviso-offline { bottom: calc(176px + env(safe-area-inset-botto
 .filtros .filtros-extras { overscroll-behavior: contain; }
 .busca-limpar { position: absolute; right: 54px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 50%; background: #e9e4d8; color: #222; font-size: 1rem; font-weight: 800; cursor: pointer; }
 .busca-limpar[hidden] { display: none; }
+
+/* v6.5: topo e rodapé do painel de filtros (só aparecem no celular; no computador a gaveta segue como era) */
+.fx-topo { display: none; position: sticky; top: 0; z-index: 2; align-items: center; gap: 10px; padding: 12px 14px; background: #fff; border-bottom: 1px solid #e5dfd0; }
+.fx-topo strong { font-size: 1.1rem; }
+.fx-cont { flex: 1; color: #555; font-size: .85rem; }
+.fx-fechar { width: auto; min-height: 44px; padding: 0 16px; border: 0; border-radius: 12px; background: #0d0d0d; color: #fff; font-weight: 800; font-size: .9rem; cursor: pointer; }
+.fx-rodape { padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px)); background: #fff; }
+.fx-ver { display: none; width: 100%; min-height: 52px; margin-top: 8px; border: 0; border-radius: 14px; background: var(--laranja); color: #0d0d0d; font-size: 1rem; font-weight: 800; cursor: pointer; }
+@media (max-width: 600px) {
+  .fx-rodape { position: sticky; bottom: 0; z-index: 2; border-top: 1px solid #e5dfd0; box-shadow: 0 -6px 14px rgba(0,0,0,.08); }
+  .fx-rodape .btn-add-resultados { margin: 0 0 8px; }
+  .selecao-expansivel .chips { max-height: none; }
+}
+html.fx-travado, html.fx-travado body { overflow: hidden; }
+.linha-share-busca .btn-add-resultados { width: auto; flex: 1 1 100%; margin: 0; min-height: 44px; }

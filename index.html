@@ -123,8 +123,10 @@ catch (e) { window.__precargaLista = null; }
       <span aria-hidden="true">⚙️</span><span class="rot">Filtros</span><span class="badge-filtros" id="badge-filtros" hidden>0</span>
     </button>
   </div>
-  <div class="linha-share-busca" id="linha-share-busca" hidden><button type="button" id="btn-share-busca">🔗 Compartilhar seleção</button><button type="button" id="btn-limpar-sel" hidden>✕ Limpar seleção</button><button type="button" id="btn-lote-menu" hidden aria-expanded="false">🛠️ Edição em lote</button><div class="lote-menu" id="lote-menu" hidden role="menu"><button type="button" role="menuitem" data-lote="btn-bulk-preco">% Alterar preços</button><button type="button" role="menuitem" data-lote="btn-bulk-novidade">Marcar novidades</button><button type="button" role="menuitem" data-lote="btn-bulk-arquivar">🗃️ Arquivar</button><button type="button" role="menuitem" data-lote="btn-bulk-reativar">🔄 Reativar</button><button type="button" role="menuitem" data-lote="btn-bulk-postar">📸 Enviar para Postagens</button><button type="button" role="menuitem" data-lote="btn-bulk-juntar">🔗 Juntar em 1 produto</button></div></div>
+  <div class="linha-share-busca" id="linha-share-busca" hidden><button type="button" id="btn-share-busca">🔗 Compartilhar seleção</button><button type="button" class="btn-add-resultados" id="btn-add-resultados-topo" hidden><span aria-hidden="true">➕</span> <span class="txt">Adicionar estes à seleção</span></button><button type="button" id="btn-limpar-sel" hidden>✕ Limpar seleção</button><button type="button" id="btn-lote-menu" hidden aria-expanded="false">🛠️ Edição em lote</button><div class="lote-menu" id="lote-menu" hidden role="menu"><button type="button" role="menuitem" data-lote="btn-bulk-preco">% Alterar preços</button><button type="button" role="menuitem" data-lote="btn-bulk-novidade">Marcar novidades</button><button type="button" role="menuitem" data-lote="btn-bulk-arquivar">🗃️ Arquivar</button><button type="button" role="menuitem" data-lote="btn-bulk-reativar">🔄 Reativar</button><button type="button" role="menuitem" data-lote="btn-bulk-postar">📸 Enviar para Postagens</button><button type="button" role="menuitem" data-lote="btn-bulk-juntar">🔗 Juntar em 1 produto</button></div></div>
   <div class="filtros-extras" id="filtros-extras">
+    <div class="fx-topo"><strong>Filtros</strong><span class="fx-cont" id="fx-cont" aria-live="polite"></span><button type="button" id="fx-fechar" class="fx-fechar">✕ Fechar</button></div>
+    <div class="fx-corpo">
     <div class="linha-preco">
       <span>Preço:</span>
       <input type="number" id="preco-min" aria-label="Preço mínimo em reais" placeholder="Mín R$" inputmode="decimal">
@@ -138,6 +140,11 @@ catch (e) { window.__precargaLista = null; }
       <div class="chips" id="chips-categoria"></div>
     </details>
 
+    <details class="selecao-expansivel" id="details-tamanho">
+      <summary>Tamanho <span class="resumo" id="resumo-tamanho">(todos)</span></summary>
+      <div class="chips" id="chips-tamanho"></div>
+    </details>
+
     <details class="selecao-expansivel" id="details-cor">
       <summary>Cor <span class="resumo" id="resumo-cor">(todas)</span></summary>
       <div class="chips" id="chips-cor"></div>
@@ -147,11 +154,15 @@ catch (e) { window.__precargaLista = null; }
       <summary>Gênero <span class="resumo" id="resumo-genero">(todos)</span></summary>
       <div class="chips" id="chips-genero"></div>
     </details>
+    </div>
 
-    <button type="button" class="btn-add-resultados" id="btn-add-resultados" hidden><span aria-hidden="true">➕</span> <span id="btn-add-resultados-txt">Adicionar estes à seleção</span></button>
-    <div class="bar-acoes-filtros">
-      <button type="button" class="btn-limpar" id="btn-limpar">Limpar filtros</button>
-      <button type="button" class="btn-compartilhar-filtros" id="btn-share-filtros">🔗 Compartilhar esta seleção</button>
+    <div class="fx-rodape">
+      <button type="button" class="btn-add-resultados" id="btn-add-resultados" hidden><span aria-hidden="true">➕</span> <span id="btn-add-resultados-txt" class="txt">Adicionar estes à seleção</span></button>
+      <div class="bar-acoes-filtros">
+        <button type="button" class="btn-limpar" id="btn-limpar">Limpar filtros</button>
+        <button type="button" class="btn-compartilhar-filtros" id="btn-share-filtros">🔗 Compartilhar esta seleção</button>
+      </div>
+      <button type="button" class="fx-ver" id="fx-ver">Ver peças</button>
     </div>
   </div>
 </div>

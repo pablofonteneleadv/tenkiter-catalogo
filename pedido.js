@@ -436,6 +436,8 @@ function descricaoDaSelecao_() {
   var q = document.getElementById('busca').value.trim(); if (q) partes.push('busca “' + q + '”');
   if (filtroCategorias.size) partes.push(Array.from(filtroCategorias).join(', '));
   if (filtroGeneros.size) partes.push(Array.from(filtroGeneros).join(', '));
+  if (typeof filtroCores !== 'undefined' && filtroCores.size) partes.push('cor ' + Array.from(filtroCores).join(', '));
+  if (typeof filtroTamanhos !== 'undefined' && filtroTamanhos.size) partes.push('tamanho ' + Array.from(filtroTamanhos).join(', '));
   var min = document.getElementById('preco-min').value, max = document.getElementById('preco-max').value;
   if (min || max) partes.push('preço ' + (min ? 'de R$ ' + min : '') + (min && max ? ' ' : '') + (max ? 'até R$ ' + max : ''));
   if (apenasNovidades) partes.push('novidades');

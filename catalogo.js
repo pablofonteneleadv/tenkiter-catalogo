@@ -11,6 +11,7 @@ try { tkSelExpirar_(); } catch (e) {}
   let generosDisponiveis = new Set();
   let coresDisponiveis = new Set();
   let filtroCores = new Set();
+  let filtroTamanhos = new Set(), tamanhosDisponiveis = new Set();   // v6.5
   let filtroCategorias = new Set();
   let filtroGeneros = new Set();
   let apenasNovidades = false;
@@ -62,6 +63,7 @@ try { tkSelExpirar_(); } catch (e) {}
     if (params.has('cat')) params.get('cat').split(',').forEach(c => filtroCategorias.add(c.trim()));
     if (params.has('gen')) params.get('gen').split(',').forEach(g => filtroGeneros.add(g.trim()));
     if (params.has('cor')) params.get('cor').split(',').forEach(g => filtroCores.add(g.trim()));
+    if (params.has('tam')) params.get('tam').split(',').forEach(g => filtroTamanhos.add(g.trim()));
     if (params.has('sel')) {
       const itens = Array.from(new Set(params.get('sel').split(',').map(s => s.trim().slice(0, 60)).filter(Boolean))).slice(0, 60);
       selecaoFixa = itens.length ? itens : null;
@@ -91,6 +93,7 @@ try { tkSelExpirar_(); } catch (e) {}
     if (filtroCategorias.size) url.searchParams.set('cat', Array.from(filtroCategorias).join(',')); else url.searchParams.delete('cat');
     if (filtroGeneros.size) url.searchParams.set('gen', Array.from(filtroGeneros).join(',')); else url.searchParams.delete('gen');
     if (filtroCores.size) url.searchParams.set('cor', Array.from(filtroCores).join(',')); else url.searchParams.delete('cor');
+    if (filtroTamanhos.size) url.searchParams.set('tam', Array.from(filtroTamanhos).join(',')); else url.searchParams.delete('tam');
     if (selecaoFixa) url.searchParams.set('sel', selecaoFixa.join(',')); else url.searchParams.delete('sel');
 
     window.history.replaceState((window.history.state && window.history.state.overlay) ? window.history.state : {}, '', url);   // não apaga a entrada de uma janela aberta (placa, foto…)
@@ -110,8 +113,9 @@ try { tkSelExpirar_(); } catch (e) {}
     produtos = lista;
     categoriasDisponiveis = new Set();
     generosDisponiveis = new Set();
-    coresDisponiveis = new Set();
+    coresDisponiveis = new Set(); tamanhosDisponiveis = new Set();
     produtos.forEach(p => {
+      listaDeTags(textoPlano(p.Tamanhos)).forEach(t => { if (!/consult/i.test(t)) tamanhosDisponiveis.add(t); });
       listaDeTags(textoPlano(p.Cores)).forEach(c => coresDisponiveis.add(c));
       listaDeTags(p.Categoria).forEach(c => categoriasDisponiveis.add(c));
       listaDeTags(p.Genero).forEach(g => generosDisponiveis.add(g));
@@ -121,6 +125,7 @@ try { tkSelExpirar_(); } catch (e) {}
     renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias, 'resumo-categoria');
     renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
     renderizarChipsFiltro('chips-cor', coresDisponiveis, filtroCores, 'resumo-cor');
+    renderizarChipsFiltro('chips-tamanho', tamanhosDisponiveis, filtroTamanhos, 'resumo-tamanho');
     atualizarBadges();
     aplicarFiltros();
     if (typeof aoAtualizarProdutos === 'function') aoAtualizarProdutos();
@@ -273,10 +278,21 @@ try { tkSelExpirar_(); } catch (e) {}
     if (el) el.textContent = conjunto.size ? '(' + Array.from(conjunto).join(', ') + ')' : '(todas)';
   }
 
+  const ORDEM_TAM_ = ['RN', 'PP', 'P', 'M', 'G', 'GG', 'XG', 'XGG', 'EG', 'EGG', 'G1', 'G2', 'G3', 'G4', 'ÚNICO', 'UNICO', 'U'];
+  function compararTamanhos_(a, b) {
+    const na = parseFloat(String(a).replace(',', '.')), nb = parseFloat(String(b).replace(',', '.'));
+    const aNum = !isNaN(na) && /^\d/.test(String(a)), bNum = !isNaN(nb) && /^\d/.test(String(b));
+    if (aNum && bNum) return na - nb || String(a).localeCompare(String(b), 'pt-BR');
+    if (aNum !== bNum) return aNum ? -1 : 1;
+    const ia = ORDEM_TAM_.indexOf(String(a).toUpperCase()), ib = ORDEM_TAM_.indexOf(String(b).toUpperCase());
+    if (ia >= 0 && ib >= 0) return ia - ib;
+    if (ia >= 0 || ib >= 0) return ia >= 0 ? -1 : 1;
+    return String(a).localeCompare(String(b), 'pt-BR');
+  }
   function renderizarChipsFiltro(idContainer, valores, conjunto, idResumo) {
     const container = document.getElementById(idContainer);
     container.innerHTML = '';
-    Array.from(valores).sort().forEach(v => {
+    Array.from(valores).sort(idContainer === 'chips-tamanho' ? compararTamanhos_ : undefined).forEach(v => {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'chip' + (conjunto.has(v) ? ' selecionado' : '');
@@ -303,12 +319,13 @@ try { tkSelExpirar_(); } catch (e) {}
     document.getElementById('busca').value = '';
     document.getElementById('preco-min').value = '';
     document.getElementById('preco-max').value = '';
-    filtroCategorias.clear(); filtroGeneros.clear(); filtroCores.clear(); apenasNovidades = false; apenasFavoritos = false; selecaoFixa = null; soSelecao_ = false;
+    filtroCategorias.clear(); filtroGeneros.clear(); filtroCores.clear(); filtroTamanhos.clear(); apenasNovidades = false; apenasFavoritos = false; selecaoFixa = null; soSelecao_ = false;
     renderizarChipExtra();
     renderizarPillsCategoria();
     renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias, 'resumo-categoria');
     renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
     renderizarChipsFiltro('chips-cor', coresDisponiveis, filtroCores, 'resumo-cor');
+    renderizarChipsFiltro('chips-tamanho', tamanhosDisponiveis, filtroTamanhos, 'resumo-tamanho');
     aplicarFiltros();
   });
 
@@ -318,7 +335,7 @@ try { tkSelExpirar_(); } catch (e) {}
     const termos = termosDaBusca(busca);
     const min = parseFloat(document.getElementById('preco-min').value);
     const max = parseFloat(document.getElementById('preco-max').value);
-    const filtrosAtivos = !isNaN(min) || !isNaN(max) || apenasNovidades || apenasFavoritos || filtroCategorias.size > 0 || filtroGeneros.size > 0 || filtroCores.size > 0 || !!selecaoFixa || soSelecao_;
+    const filtrosAtivos = !isNaN(min) || !isNaN(max) || apenasNovidades || apenasFavoritos || filtroCategorias.size > 0 || filtroGeneros.size > 0 || filtroCores.size > 0 || filtroTamanhos.size > 0 || !!selecaoFixa || soSelecao_;
 
     const passaFiltros = p => {
       if (selecaoFixa && !naSelecaoFixa_(p)) return false;
@@ -328,6 +345,7 @@ try { tkSelExpirar_(); } catch (e) {}
       if (apenasNovidades && !ehNovidade(p)) return false;
       if (apenasFavoritos && !ehFavorito(p.ID)) return false;
       if (filtroCategorias.size) { const tags = listaDeTags(p.Categoria); if (!tags.some(t => filtroCategorias.has(t))) return false; }
+      if (filtroTamanhos.size) { const tt = listaDeTags(textoPlano(p.Tamanhos)); if (!tt.some(t => filtroTamanhos.has(t))) return false; }
       if (filtroCores.size) { const tc = listaDeTags(textoPlano(p.Cores)); if (!tc.some(t => filtroCores.has(t))) return false; }
       if (filtroGeneros.size) { const tags = listaDeTags(p.Genero); if (!tags.some(t => filtroGeneros.has(t))) return false; }
       return true;
@@ -364,6 +382,7 @@ try { tkSelExpirar_(); } catch (e) {}
     filtroCategorias.forEach(c => itens.push([c, () => { filtroCategorias.delete(c); }]));
     filtroGeneros.forEach(g => itens.push([g, () => { filtroGeneros.delete(g); }]));
     filtroCores.forEach(g => itens.push([g, () => { filtroCores.delete(g); }]));
+    filtroTamanhos.forEach(g => itens.push(['Tam. ' + g, () => { filtroTamanhos.delete(g); }]));
     if (min !== '' || max !== '') {
       const rot = min !== '' && max !== '' ? 'R$ ' + min + ' a ' + max : (min !== '' ? 'a partir de R$ ' + min : 'até R$ ' + max);
       itens.push(['Preço: ' + rot, () => { document.getElementById('preco-min').value = ''; document.getElementById('preco-max').value = ''; }]);
@@ -384,6 +403,7 @@ try { tkSelExpirar_(); } catch (e) {}
         renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias, 'resumo-categoria');
         renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
     renderizarChipsFiltro('chips-cor', coresDisponiveis, filtroCores, 'resumo-cor');
+    renderizarChipsFiltro('chips-tamanho', tamanhosDisponiveis, filtroTamanhos, 'resumo-tamanho');
         aplicarFiltros();
       });
       box.appendChild(b);
@@ -475,14 +495,17 @@ try { tkSelExpirar_(); } catch (e) {}
     else if (soSelecao_ && nSac !== ultimoNSac_ && ultimoNSac_ !== -1) { ultimoNSac_ = nSac; setTimeout(aplicarFiltros, 0); }
     ultimoNSac_ = nSac;
     if (ams) { ams.hidden = !soSelecao_; const at = document.getElementById('aviso-minha-sel-txt'); if (at) at.textContent = '🛍️ Mostrando só a sua seleção: ' + nSac + (nSac === 1 ? ' peça.' : ' peças.'); }
-    const bar_ = document.getElementById('btn-add-resultados');
-    if (bar_) {
+    {
       const jaTem = new Set(getSacola().map(String)), lf = listaFiltradaAtual || [];
       const faltam = lf.filter(p => !estaEsgotado(p) && !jaTem.has(String(p.ID))).length;
-      bar_.hidden = !((nFiltros > 0 || !!q || apenasNovidades) && lf.length > 0 && !selecaoFixa);
-      bar_.disabled = faltam === 0;
-      const tx_ = document.getElementById('btn-add-resultados-txt');
-      if (tx_) tx_.textContent = faltam === 0 ? 'Todos já estão na seleção' : 'Adicionar estes ' + faltam + (faltam === 1 ? ' à seleção' : ' à seleção');
+      const nReal = filtroCategorias.size + filtroGeneros.size + filtroCores.size + filtroTamanhos.size + (document.getElementById('preco-min').value ? 1 : 0) + (document.getElementById('preco-max').value ? 1 : 0);
+      const mostrar = (nReal > 0 || nFiltros > 0 || !!q || apenasNovidades) && lf.length > 0 && !selecaoFixa;
+      document.querySelectorAll('.btn-add-resultados').forEach(bt => {
+        bt.hidden = !mostrar; bt.disabled = faltam === 0;
+        const tx_ = bt.querySelector('.txt'); if (tx_) tx_.textContent = faltam === 0 ? 'Todos já estão na seleção' : 'Adicionar estes ' + faltam + ' à seleção';
+      });
+      const fv = document.getElementById('fx-ver'); if (fv) fv.textContent = lf.length === 0 ? 'Nenhuma peça — ajuste os filtros' : 'Ver ' + lf.length + (lf.length === 1 ? ' peça' : ' peças');
+      const fc = document.getElementById('fx-cont'); if (fc) fc.textContent = lf.length + (lf.length === 1 ? ' peça' : ' peças');
     }
     const blm = document.getElementById('btn-lote-menu'); if (blm) { blm.hidden = !(equipe_.pode && nSac > 0); if (blm.hidden) { const lm = document.getElementById('lote-menu'); if (lm) lm.hidden = true; } }
     if (!ativo) { bar.hidden = true; modoLink_ = false; return; }
@@ -698,8 +721,7 @@ try { tkSelExpirar_(); } catch (e) {}
   });
 
   // v6.4: "➕ Adicionar estes N à seleção" (embaixo dos filtros): tudo que a busca/filtro mostra entra na seleção, somando ao que já estava.
-  const btnAddRes = document.getElementById('btn-add-resultados');
-  if (btnAddRes) btnAddRes.addEventListener('click', () => {
+  document.querySelectorAll('.btn-add-resultados').forEach(btnAddRes => btnAddRes.addEventListener('click', () => {
     const jaTem = new Set(getSacola().map(String));
     const novos = (listaFiltradaAtual || []).filter(p => !estaEsgotado(p) && !jaTem.has(String(p.ID))).map(p => String(p.ID));
     if (!novos.length) return;
@@ -709,7 +731,7 @@ try { tkSelExpirar_(); } catch (e) {}
     const t = document.getElementById('toast-desfazer'), tx = document.getElementById('toast-desfazer-txt');
     if (tx) tx.textContent = novos.length + (novos.length === 1 ? ' peça entrou' : ' peças entraram') + ' na seleção (agora ' + getSacola().length + ').'; if (t) t.hidden = false;
     clearTimeout(desfazerT_); desfazerT_ = setTimeout(esconderDesfazer_, 8000);
-  });
+  }));
 
   /** Põe ou tira a peça da sacola (cartão e folha usam a mesma função). Devolve true se agora está na sacola. */
   function alternarSacola_(p, foto) {
@@ -1400,13 +1422,33 @@ try { tkSelExpirar_(); } catch (e) {}
     const n = contarAtivos();
     badge.hidden = !n; badge.textContent = n;
   }
-  function abrir() { yAbertura = window.scrollY; f.classList.add('aberto'); btn.setAttribute('aria-expanded', 'true'); }
+  // v6.5: no celular o menu é um PAINEL de tela cheia (rolagem própria, topo e rodapé fixos); no computador continua sendo a gaveta.
+  const painel_ = () => window.matchMedia('(max-width: 600px)').matches;
+  const extras_ = document.getElementById('filtros-extras');
+  let voltarFoco_ = null;
+  function abrir() {
+    yAbertura = window.scrollY; f.classList.add('aberto'); btn.setAttribute('aria-expanded', 'true');
+    if (painel_() && extras_) {
+      document.documentElement.classList.add('fx-travado');
+      extras_.setAttribute('role', 'dialog'); extras_.setAttribute('aria-modal', 'true'); extras_.setAttribute('aria-label', 'Filtros');
+      voltarFoco_ = document.activeElement;
+      if (window.TKCamadas && !TKCamadas.aberta('filtros-painel')) TKCamadas.empilhar('filtros-painel', fecharNoCore_);
+      const x = document.getElementById('fx-fechar'); if (x) setTimeout(() => x.focus({ preventScroll: true }), 30);
+    }
+  }
+  function fecharNoCore_() {
+    f.classList.remove('aberto'); btn.setAttribute('aria-expanded', 'false');
+    document.documentElement.classList.remove('fx-travado');
+    if (extras_) { extras_.removeAttribute('role'); extras_.removeAttribute('aria-modal'); extras_.removeAttribute('aria-label'); }
+    try { if (voltarFoco_ && voltarFoco_.focus && document.contains(voltarFoco_)) voltarFoco_.focus({ preventScroll: true }); } catch (e) {}
+    voltarFoco_ = null;
+  }
   // abre sozinho ao procurar e fecha ao sair (só se foi aberto por esta busca)
   let autoAberto = false;
-  busca.addEventListener('focus', () => { if (!f.classList.contains('aberto')) { abrir(); autoAberto = true; } });
+  busca.addEventListener('focus', () => { if (!painel_() && !f.classList.contains('aberto')) { abrir(); autoAberto = true; } });   // no celular digitar NÃO abre o painel: os resultados aparecem atrás do teclado
   f.addEventListener('focusout', () => { setTimeout(() => { if (autoAberto && !f.contains(document.activeElement)) { fechar(); autoAberto = false; } }, 250); });
   btn.addEventListener('click', () => { autoAberto = false; }, true);
-  function fechar() { f.classList.remove('aberto'); btn.setAttribute('aria-expanded', 'false'); }
+  function fechar() { if (window.TKCamadas && TKCamadas.aberta('filtros-painel')) TKCamadas.desempilhar('filtros-painel'); else fecharNoCore_(); }
   function compactar(sim) {
     if (sim === f.classList.contains('compacto')) return;
     f.classList.toggle('compacto', sim);
@@ -1419,7 +1461,7 @@ try { tkSelExpirar_(); } catch (e) {}
   window.addEventListener('scroll', () => {
     const y = window.scrollY, descendo = y > ultimoY;
     ultimoY = y;
-    if (f.classList.contains('aberto') && (Date.now() - mexeuNoMenu < 2500 || f.querySelector('details[open]'))) { yAbertura = y; return; }
+    if (f.classList.contains('aberto') && (painel_() || Date.now() - mexeuNoMenu < 2500 || f.querySelector('details[open]'))) { yAbertura = y; return; }
     if (f.classList.contains('compacto')) {
       if (y < 60 && !CELULAR) compactar(false);                       // computador: voltou ao topo, filtros completos de novo
       else if (f.classList.contains('aberto') && Math.abs(y - yAbertura) > 140 && document.activeElement !== busca) fechar();
@@ -1429,13 +1471,14 @@ try { tkSelExpirar_(); } catch (e) {}
   }, { passive: true });
 
   if (CELULAR) compactar(true);
-  busca.addEventListener('focus', () => { if (f.classList.contains('compacto')) abrir(); });
+  busca.addEventListener('focus', () => { if (!painel_() && f.classList.contains('compacto')) abrir(); });
   btn.addEventListener('click', () => { f.classList.contains('aberto') ? fechar() : abrir(); });
   // tocar fora da barra fecha a gaveta
   document.addEventListener('pointerdown', (ev) => {
-    if (f.classList.contains('compacto') && f.classList.contains('aberto') && !ev.target.closest('#filtros')) fechar();
+    if (!painel_() && f.classList.contains('compacto') && f.classList.contains('aberto') && !ev.target.closest('#filtros')) fechar();
   });
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') fechar(); });
+  ['fx-fechar', 'fx-ver'].forEach(id => { const b = document.getElementById(id); if (b) b.addEventListener('click', fechar); });
   // X dentro do campo: apaga o que foi digitado de uma vez (v6.4)
   const bX = document.getElementById('busca-limpar');
   if (bX) {
