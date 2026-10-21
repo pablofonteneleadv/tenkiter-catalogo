@@ -167,7 +167,7 @@ with sync_playwright() as p:
     chk("'Foto inteira' fica marcado", pg.get_attribute("[data-ctaj=caber]", "aria-pressed") == "true")
     axe_ct("aba Estilo")
     aba("estilo")
-    guardado = pg.evaluate("JSON.parse(localStorage.getItem('tk_po_col_v1')||'{}')")
+    guardado = pg.evaluate("JSON.parse(localStorage.getItem('tk_po_col_v2')||'{}').story || {}")
     chk("o modelo (fundo, espaço, cantos) fica guardado neste aparelho", guardado.get("fundo") == "#F5F1E8" and guardado.get("gap") == 40 and guardado.get("rd") == 40 and guardado.get("aj") == "caber", guardado)
     slider("gap", 8); slider("rd", 0); pg.click("[data-ctfundo='#2C2C2C']"); aba("ajustar"); pg.click("[data-ctaj=cobrir]")
 
