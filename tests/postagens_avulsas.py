@@ -8,7 +8,7 @@ import tempfile
 from PIL import Image
 PASTA = tempfile.mkdtemp(prefix="tk_avulsas_") + "/"      # arquivos de teste gerados na hora (nada fica no repositório)
 for _i, _c in enumerate([(200, 40, 40), (40, 120, 200), (40, 180, 90)]): Image.new("RGB", (600, 800), _c).save(PASTA + "avulsa%d.jpg" % (_i + 1), "JPEG", quality=85)
-open(PASTA + "curto.mp4", "wb").write(b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom" + b"\x00" * 400)
+criar_mp4(PASTA + "curto.mp4")
 open(PASTA + "texto.txt", "w").write("não é imagem")
 BAD = []
 def chk(n, c, e=""):

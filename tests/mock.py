@@ -654,3 +654,15 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     ctx.route("**/*",hd)
     return st
 SESSION="localStorage.setItem('tm_session', JSON.stringify({whatsapp:'88999999999',sessao:'tk2.x.y'}));"
+
+
+def criar_mp4(caminho, segundos=1, extra_bytes=0):
+    """MP4 de verdade (VP9, 320x240: o Chromium do Playwright não decodifica H.264) gerado pelo ffmpeg: a validação de vídeo do painel lê duração e resolução
+    pelo navegador, então um arquivo com bytes soltos não serve mais. extra_bytes acrescenta uma caixa 'free' válida."""
+    import subprocess, struct
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=10",
+                    "-t", str(segundos), "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-f", "mp4", caminho], check=True)
+    if extra_bytes:
+        with open(caminho, "ab") as f:
+            f.write(struct.pack(">I", extra_bytes) + b"free" + b"\x00" * (extra_bytes - 8))
+    return caminho

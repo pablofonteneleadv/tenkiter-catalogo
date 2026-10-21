@@ -8,8 +8,8 @@ from PIL import Image
 BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
 S = os.path.join(AQUI, "saida")
 Image.new("RGB", (900, 1200), (190, 60, 110)).save(os.path.join(S, "r2foto1.jpg")); Image.new("RGB", (900, 1200), (60, 90, 190)).save(os.path.join(S, "r2foto2.jpg"))
-open(os.path.join(S, "r2v.mp4"), "wb").write(b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 2000)
-open(os.path.join(S, "r2grande.mp4"), "wb").write(b"\x00\x00\x00\x18ftypmp42" + b"\x00" * (16 * 1048576))
+criar_mp4(os.path.join(S, "r2v.mp4"))
+criar_mp4(os.path.join(S, "r2grande.mp4"), extra_bytes=16 * 1048576)
 OK = []; BAD = []
 def chk(n, c, e=""):
     (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + (" — " + str(e) if e and not c else ""))
