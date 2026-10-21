@@ -1042,6 +1042,12 @@ function d1() {
     console.log('== FOTOS COM IA — looks (um modelo por look) ==');
     {
       const mp = W.montarPlanoFotoIA_;
+      const meta = mp({ papeis: ['look', 'look'], pecas: [{codigo:'TK-0001',nome:'Vestido',avista:89.999},{codigo:'TK-0002',nome:'Blusa',avista:0}] }, 2, {});
+      chk('P-29 guarda códigos, nomes e preço à vista por referência na ordem', meta.ok && meta.plano.pecas[0].codigo === 'TK-0001' && meta.plano.pecas[0].avista === 90 && meta.plano.pecas[1].avista === null);
+      chk('P-29 recusa metadados sem correspondência com todas as fotos', !mp({pecas:[{codigo:'TK-1'}]}, 2, {}).ok);
+      const mal = mp({pecas:[{codigo:'<script>',nome:'x'.repeat(300),avista:Infinity}]}, 1, {});
+      chk('P-29 limita nome, remove código inválido e não persiste preço não finito', mal.ok && mal.plano.pecas[0].codigo === '' && mal.plano.pecas[0].nome.length === 120 && mal.plano.pecas[0].avista === null);
+
       let r1 = mp({ papeis: ['cima', 'cima', 'cima', 'baixo'] }, 4, {});
       chk('3 de cima e 1 de baixo: recusa e diz que faltam 2 de baixo (e qual filtro mostrar)', r1.ok === false && r1.faltam === 'baixo' && /Faltam 2 peças de baixo/.test(r1.erro) && /não inventa peças/.test(r1.erro), r1);
       r1 = mp({ papeis: ['baixo', 'cima'] }, 2, {}); chk('1 de cima + 1 de baixo = 1 look só (cima e baixo na mesma pessoa)', r1.ok && r1.plano.looks.length === 1 && r1.plano.looks[0].partes.map((x) => x.papel).sort().join() === 'baixo,cima');
