@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## Capa de vídeo — 2026-10-21
+
+- No cadastro, reproduzir o vídeo e escolher um quadro como nova foto de capa, preservando fotos e vídeo até salvar.
+
+
 ## Em revisão — cadastro (2026-10-21)
 
 - Duplicação mantém nome e atributos, sem mídia; padrões se aplicam somente a cadastros novos.
