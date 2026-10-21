@@ -101,27 +101,29 @@ console.log('\n[recuperar senha]');
 r = recup({ identificador: '000.000.000-00', novaSenha: 'NovaSenha88' }); ok(!r.ok && r.semConta, 'conta que não existe: avisa com frase', r);
 r = recup({ identificador: '85991111111', novaSenha: 'NovaSenha88' }); ok(!r.ok && r.precisaGestao && /gestão/.test(r.erro), 'Cliente sem CPF/nascimento: manda chamar a gestão', r);
 r = recup({ identificador: '85994444444', novaSenha: 'NovaSenha88' }); ok(!r.ok && r.inativa, 'conta desativada não recupera sozinha', r);
+run('acGravarCampo_("85992222222", "datanascimento", "DataNascimento", "01/01/1990")');   // SEC-08: toda conta precisa de CPF E nascimento para trocar a senha sozinha
 // Única senha curta intencional: este caso valida a recusa de senha abaixo do mínimo.
-r = recup({ identificador: '85992222222', cpf: '529.982.247-25', novaSenha: 'abc' }); ok(!r.ok && r.faltaSenha, 'senha nova curta é recusada', r);
-r = recup({ identificador: '85992222222', cpf: '111.111.111-11', novaSenha: 'NovaSenha88' }); ok(!r.ok && r.naoConfere && r.restam === 4, 'CPF errado: não confere e diz quantas tentativas restam', r);
+r = recup({ identificador: '85992222222', nascimento: '1990-01-01', cpf: '529.982.247-25', novaSenha: 'abc' }); ok(!r.ok && r.faltaSenha, 'senha nova curta é recusada', r);
+r = recup({ identificador: '85992222222', nascimento: '1990-01-01', cpf: '111.111.111-11', novaSenha: 'NovaSenha88' }); ok(!r.ok && r.naoConfere && r.restam === 4, 'CPF errado: não confere e diz quantas tentativas restam', r);
 ok(login('85992222222', 'SenhaBia88').ok, 'depois do erro a senha antiga continua valendo');
-r = recup({ identificador: 'bia@exemplo.com', cpf: '529.982.247-25', novaSenha: 'NovaSenha88' }); ok(r.ok && r.usuario && r.sessao, 'CPF certo (achando por e-mail): troca a senha e já entra', r);
+r = recup({ identificador: 'bia@exemplo.com', nascimento: '1990-01-01', cpf: '529.982.247-25', novaSenha: 'NovaSenha88' }); ok(r.ok && r.usuario && r.sessao, 'CPF certo (achando por e-mail): troca a senha e já entra', r);
 ok(!login('85992222222', 'SenhaBia88').ok && login('85992222222', 'NovaSenha88').ok, 'senha antiga deixa de valer, a nova entra');
-r = recup({ identificador: '85992222222', cpf: '529.982.247-25', novaSenha: 'NovaSenha99' }); ok(r.ok, 'o contador de erros zerou depois do acerto', r);
-r = recup({ identificador: '85992222222', cpf: '111.111.111-11', novaSenha: 'SenhaErrada88' }); ok(!r.ok && !JSON.stringify(r).includes('529.982') && !JSON.stringify(r).includes('2005'), 'a resposta de erro nunca devolve CPF/nascimento', r); CACHE.clear();
+r = recup({ identificador: '85992222222', nascimento: '1990-01-01', cpf: '529.982.247-25', novaSenha: 'NovaSenha99' }); ok(r.ok, 'o contador de erros zerou depois do acerto', r);
+r = recup({ identificador: '85992222222', nascimento: '1990-01-01', cpf: '111.111.111-11', novaSenha: 'SenhaErrada88' }); ok(!r.ok && !JSON.stringify(r).includes('529.982') && !JSON.stringify(r).includes('2005'), 'a resposta de erro nunca devolve CPF/nascimento', r); CACHE.clear();
 
 console.log('\n[nascimento: dd/mm/aaaa e aaaa-mm-dd valem igual]');
 run('acGravarCampo_("85991111111", "datanascimento", "DataNascimento", "10/02/2005")');
-r = recup({ identificador: '85991111111', nascimento: '2005-02-11', novaSenha: 'NovaSenha88' }); ok(!r.ok && r.naoConfere, 'data errada não confere', r);
-r = recup({ identificador: '85991111111', nascimento: '2005-02-10', novaSenha: 'SenhaAna999' }); ok(r.ok, 'só nascimento cadastrado (conta comum): aceita no formato ISO', r);
-ok(login('85991111111', 'SenhaAna999').ok, 'Ana entra com a senha nova');
+r = recup({ identificador: '85991111111', nascimento: '2005-02-10', novaSenha: 'SenhaAna999' }); ok(!r.ok && r.precisaGestao, 'só nascimento cadastrado (sem CPF): NÃO troca sozinho (SEC-08 exige CPF E nascimento)', r);
 run('acGravarCampo_("85991111111", "cpf", "CPF", "390.533.447-05")');
+r = recup({ identificador: '85991111111', cpf: '39053344705', nascimento: '2005-02-11', novaSenha: 'SenhaAna888' }); ok(!r.ok && r.naoConfere, 'data errada não confere', r);
+r = recup({ identificador: '85991111111', cpf: '39053344705', nascimento: '2005-02-10', novaSenha: 'SenhaAna999' }); ok(r.ok, 'CPF e nascimento (formato ISO) conferem: troca', r);
+ok(login('85991111111', 'SenhaAna999').ok, 'Ana entra com a senha nova');
 r = recup({ identificador: '85991111111', nascimento: '10/02/2005', novaSenha: 'SenhaAna000' }); ok(!r.ok && r.naoConfere && /CPF e a data/.test(r.erro), 'com CPF e nascimento cadastrados, os DOIS são exigidos', r);
 r = recup({ identificador: '85991111111', nascimento: '10/02/2005', cpf: '39053344705', novaSenha: 'SenhaAna000' }); ok(r.ok, 'com os dois certos (CPF só números) troca', r);
 
 console.log('\n[bloqueio por tentativas]');
-for (let i = 0; i < 5; i++) recup({ identificador: '85992222222', cpf: '111.111.111-11', novaSenha: 'SenhaErrada88' });
-r = recup({ identificador: '85992222222', cpf: '529.982.247-25', novaSenha: 'SenhaCorreta88' }); ok(!r.ok && r.bloqueado, 'após 5 erros nem o CPF certo passa (15 min)', r);
+for (let i = 0; i < 5; i++) recup({ identificador: '85992222222', nascimento: '1990-01-01', cpf: '111.111.111-11', novaSenha: 'SenhaErrada88' });
+r = recup({ identificador: '85992222222', nascimento: '1990-01-01', cpf: '529.982.247-25', novaSenha: 'SenhaCorreta88' }); ok(!r.ok && r.bloqueado, 'após 5 erros nem o CPF certo passa (15 min)', r);
 CACHE.clear();
 
 console.log('\n[conta da equipe]');
@@ -136,7 +138,7 @@ ctx.__x = null;
 r = run('acRegistrar_("Outra Bia", "85992222222", "qualquer", "Aluno", {})'); ok(!r.ok && r.contaExiste === true, 'cadastro com WhatsApp existente devolve contaExiste:true (a tela oferece Entrar/Esqueci a senha)', r);
 
 console.log('\n[os dois backends têm o MESMO bloco]');
-const tira = f => { const t = fs.readFileSync(path.join(RAIZ, f), 'utf8'); const i = t.indexOf('/* ---------- v3.9: CPF, e-mail'); const j = t.indexOf('function acTodasLinhas_() {'); return t.slice(i, j); };
+const tira = f => { const t = fs.readFileSync(path.join(RAIZ, f), 'utf8'); const i = t.indexOf('/* ---------- v3.9: CPF, e-mail'); const j = t.indexOf('function acTodasLinhas_() {'); return t.slice(i, j).replace(/\/\* -{10} v[\d.]+ \/ PERF-01[\s\S]*?\*\//, '/* PERF-01 (comentário próprio de cada backend, ignorado na comparação) */'); };
 const cat = fs.readdirSync(RAIZ).filter(f => /^catalogo-codigo-\d+\.\d+\.gs\.txt$/.test(f)).sort().pop();
 const blocoCatalogo = tira(cat), blocoFuncionario = tira(ARQ);
 ok(blocoCatalogo.length > 5000 && blocoCatalogo === blocoFuncionario, 'bloco compartilhado idêntico em ' + cat + ' e ' + ARQ,
