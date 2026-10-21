@@ -8,16 +8,21 @@ const ARQ = arqs[arqs.length - 1], fonte = fs.readFileSync(path.join(RAIZ, ARQ),
 let falhas = [], total = 0; const CACHE = new Map();
 function ok(c, n, d) { total++; if (!c) { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? (typeof d === 'string' ? '\n' + d : '  (' + JSON.stringify(d) + ')') : '')); } else console.log('  ✔ ' + n); }
 function diffTrechos(a, b) {
-  const aa = a.split('\n'), bb = b.split('\n'), linhas = [];
-  const n = Math.max(aa.length, bb.length);
-  for (let i = 0; i < n; i++) {
-    if (aa[i] !== bb[i]) {
-      linhas.push('@@ linha ' + (i + 1) + ' @@');
-      if (aa[i] !== undefined) linhas.push('- ' + aa[i]);
-      if (bb[i] !== undefined) linhas.push('+ ' + bb[i]);
+  const aa = a.split('\n'), bb = b.split('\n');
+  const dp = Array.from({ length: aa.length + 1 }, () => new Uint32Array(bb.length + 1));
+  for (let i = aa.length - 1; i >= 0; i--) {
+    for (let j = bb.length - 1; j >= 0; j--) {
+      dp[i][j] = aa[i] === bb[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
     }
   }
-  return linhas.length ? linhas.join('\n') : '(sem diferenças de linha; verificar espaços ou finais de linha)';
+  const linhas = ['--- bloco catálogo', '+++ bloco funcionário'];
+  let i = 0, j = 0;
+  while (i < aa.length || j < bb.length) {
+    if (i < aa.length && j < bb.length && aa[i] === bb[j]) { i++; j++; }
+    else if (i < aa.length && (j === bb.length || dp[i + 1][j] >= dp[i][j + 1])) linhas.push('-' + aa[i++]);
+    else linhas.push('+' + bb[j++]);
+  }
+  return linhas.length > 2 ? linhas.join('\n') : '(sem diferenças de linha; verificar espaços ou finais de linha)';
 }
 class Aba {
   constructor(n) { this.nome = n; this.d = []; }
