@@ -24,6 +24,7 @@ with sync_playwright() as p:
     chk("a contagem de peças acompanha", "peças encontradas" in pg.inner_text("#contagem") or "peça encontrada" in pg.inner_text("#contagem"), pg.inner_text("#contagem"))
     pg.fill("#preco-min", "100"); pg.wait_for_timeout(600)
     chk("preço mínimo vira outra etiqueta", pg.locator("#etiquetas-ativas .etiqueta-ativa").count() == 2 and "a partir de R$ 100" in pg.inner_text("#etiquetas-ativas"), pg.inner_text("#etiquetas-ativas"))
+    if pg.locator("#fx-fechar").is_visible(): pg.click("#fx-fechar"); pg.wait_for_timeout(300)   # v6.5: o menu é um painel de tela cheia no celular
     pg.locator("#etiquetas-ativas .etiqueta-ativa", has_text="Preço").click(); pg.wait_for_timeout(500)
     chk("tocar na etiqueta tira só aquele filtro", pg.input_value("#preco-min") == "" and pg.locator("#etiquetas-ativas .etiqueta-ativa").count() == 1)
     pg.locator("#etiquetas-ativas .btn-limpar").click(); pg.wait_for_timeout(500)
