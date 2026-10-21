@@ -1,5 +1,7 @@
 # okou.md — Estado do projeto e Pendências concretas
 
+- (21/10/2026) Seleção simples sem pedido no ar (CLAUDE.md v6.3). Conferir no celular real: barra Compartilhar/Limpar/Desfazer e o botão ENVIAR PARA A LOJA.
+
 Documento de passagem para outra inteligência (ou pessoa) assumir o trabalho. **Reescrito em 18/10/2026** (revisão geral dos `.md`): as seções antigas de 17/10 (plano das 12 fotos, estado da branch v4.17, "main está em …") eram histórico já superado e foram removidas; o que ainda vale está aqui. O detalhe técnico de cada versão fica no `CLAUDE.md`.
 
 **Como manter este arquivo:** a lista da seção 3 é a ÚNICA fonte de pendências. Ao concluir um item, apague-o (não marque como feito). Ao receber um pedido novo do Pablo, acrescente-o. Não deixe "Pendente" espalhado em outros arquivos — aponte para cá.
