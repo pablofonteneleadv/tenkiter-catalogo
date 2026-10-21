@@ -575,3 +575,10 @@ body.tk-tem-nav.tem-selecao {
     transition: none;
   }
 }
+
+/* Identifica explicitamente o preço com desconto, em vez de mostrar dois valores sem contexto. */
+.card-info .preco > span::before {
+  content: "À vista: ";
+  color: #555;
+  font-weight: 600;
+}
