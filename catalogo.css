@@ -582,3 +582,9 @@ body.tk-tem-nav.tem-selecao {
   color: #555;
   font-weight: 600;
 }
+
+/* Convivência da barra "Minha seleção" com os outros avisos flutuantes (filtros, convite do app, aviso de notificações):
+   com seleção, eles sobem para ficar ACIMA dela em vez de ficarem escondidos atrás. */
+body.tem-selecao .barra-filtros-flut { bottom: calc(148px + env(safe-area-inset-bottom, 0px)); }
+body.tem-selecao #tk-convite-app,
+body.tem-selecao #tk-placa-aviso { bottom: calc(150px + env(safe-area-inset-bottom, 0px)) !important; }
