@@ -9,7 +9,7 @@ from playwright.sync_api import sync_playwright
 BASE=os.environ.get("TK_BASE","http://localhost:8765/")
 from PIL import Image
 Image.new("RGB",(900,1200),(190,60,110)).save(os.path.join(AQUI,"saida","foto1.jpg")); Image.new("RGB",(900,1200),(60,90,190)).save(os.path.join(AQUI,"saida","foto2.jpg"))
-open(os.path.join(AQUI,"saida","v.mp4"),"wb").write(b"\x00\x00\x00\x18ftypmp42"+b"\x00"*2000)
+criar_mp4(os.path.join(AQUI,"saida","v.mp4"))
 OK=[];BAD=[]
 def chk(nome,cond,extra=""):
     (OK if cond else BAD).append(nome); print(("  ✔ " if cond else "  ✘ ")+nome+(" — "+str(extra) if extra and not cond else ""))
