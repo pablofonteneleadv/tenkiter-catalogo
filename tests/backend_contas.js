@@ -81,43 +81,43 @@ r = salvar('85992222222', { cpf: '529.982.247-25' }); ok(r.ok, 'a própria pesso
 
 console.log('\n[login por e-mail, WhatsApp ou CPF]');
 let l = login('85992222222', 'SenhaBia88'); ok(l.ok && l.usuario.whatsapp === '85992222222', 'WhatsApp continua entrando', l);
-l = login('bia@exemplo.com', 'senha22'); ok(l.ok && l.usuario.whatsapp === '85992222222', 'entra com e-mail', l);
-l = login('BIA@EXEMPLO.COM', 'senha22'); ok(l.ok, 'e-mail sem diferenciar maiúscula', l);
-l = login('529.982.247-25', 'senha22'); ok(l.ok && l.usuario.whatsapp === '85992222222', 'entra com CPF formatado', l);
-l = login('52998224725', 'senha22'); ok(l.ok, 'entra com CPF só números', l);
+l = login('bia@exemplo.com', 'SenhaBia88'); ok(l.ok && l.usuario.whatsapp === '85992222222', 'entra com e-mail', l);
+l = login('BIA@EXEMPLO.COM', 'SenhaBia88'); ok(l.ok, 'e-mail sem diferenciar maiúscula', l);
+l = login('529.982.247-25', 'SenhaBia88'); ok(l.ok && l.usuario.whatsapp === '85992222222', 'entra com CPF formatado', l);
+l = login('52998224725', 'SenhaBia88'); ok(l.ok, 'entra com CPF só números', l);
 ok(l.usuario.cpf === '529.982.247-25' && l.usuario.email === 'bia@exemplo.com', 'o usuário devolvido traz o próprio CPF e e-mail', l.usuario);
 l = login('bia@exemplo.com', 'errada'); ok(!l.ok, 'senha errada continua recusada', l);
-l = login('naoexiste@x.com', 'senha22'); ok(!l.ok, 'e-mail que não existe não entra', l);
+l = login('naoexiste@x.com', 'SenhaBia88'); ok(!l.ok, 'e-mail que não existe não entra', l);
 // 2 contas com o mesmo e-mail (cadastro antigo/manual na planilha): ambíguo = não entra por e-mail
 aba.d.find(l2 => l2[1] === '85991111111')[hd.indexOf('email')] = 'bia@exemplo.com';
-l = login('bia@exemplo.com', 'senha22'); ok(!l.ok, 'e-mail repetido em duas contas é ambíguo: não entra por ele', l);
-l = login('85992222222', 'senha22'); ok(l.ok, 'mas o WhatsApp dessas contas segue funcionando', l);
+l = login('bia@exemplo.com', 'SenhaBia88'); ok(!l.ok, 'e-mail repetido em duas contas é ambíguo: não entra por ele', l);
+l = login('85992222222', 'SenhaBia88'); ok(l.ok, 'mas o WhatsApp dessas contas segue funcionando', l);
 aba.d.find(l2 => l2[1] === '85991111111')[hd.indexOf('email')] = '';
 // 11 dígitos que são um CPF E o WhatsApp de outra conta: o WhatsApp ganha
 pessoa('Gêmeo', '52998224725', 'SenhaGemeo88', 'Cliente');
-l = login('52998224725', 'gem123'); ok(l.ok && l.usuario.whatsapp === '52998224725', 'número que é WhatsApp de uma conta entra nela (não confunde com CPF de outra)', l);
+l = login('52998224725', 'SenhaGemeo88'); ok(l.ok && l.usuario.whatsapp === '52998224725', 'número que é WhatsApp de uma conta entra nela (não confunde com CPF de outra)', l);
 
 console.log('\n[recuperar senha]');
 r = recup({ identificador: '000.000.000-00', novaSenha: 'NovaSenha88' }); ok(!r.ok && r.semConta, 'conta que não existe: avisa com frase', r);
-r = recup({ identificador: '85991111111', novaSenha: 'nova1' }); ok(!r.ok && r.precisaGestao && /gestão/.test(r.erro), 'Cliente sem CPF/nascimento: manda chamar a gestão', r);
-r = recup({ identificador: '85994444444', novaSenha: 'nova1' }); ok(!r.ok && r.inativa, 'conta desativada não recupera sozinha', r);
+r = recup({ identificador: '85991111111', novaSenha: 'NovaSenha88' }); ok(!r.ok && r.precisaGestao && /gestão/.test(r.erro), 'Cliente sem CPF/nascimento: manda chamar a gestão', r);
+r = recup({ identificador: '85994444444', novaSenha: 'NovaSenha88' }); ok(!r.ok && r.inativa, 'conta desativada não recupera sozinha', r);
 // Única senha curta intencional: este caso valida a recusa de senha abaixo do mínimo.
 r = recup({ identificador: '85992222222', cpf: '529.982.247-25', novaSenha: 'abc' }); ok(!r.ok && r.faltaSenha, 'senha nova curta é recusada', r);
-r = recup({ identificador: '85992222222', cpf: '111.111.111-11', novaSenha: 'nova1' }); ok(!r.ok && r.naoConfere && r.restam === 4, 'CPF errado: não confere e diz quantas tentativas restam', r);
-ok(login('85992222222', 'senha22').ok, 'depois do erro a senha antiga continua valendo');
-r = recup({ identificador: 'bia@exemplo.com', cpf: '529.982.247-25', novaSenha: 'nova1' }); ok(r.ok && r.usuario && r.sessao, 'CPF certo (achando por e-mail): troca a senha e já entra', r);
-ok(!login('85992222222', 'senha22').ok && login('85992222222', 'nova1').ok, 'senha antiga deixa de valer, a nova entra');
+r = recup({ identificador: '85992222222', cpf: '111.111.111-11', novaSenha: 'NovaSenha88' }); ok(!r.ok && r.naoConfere && r.restam === 4, 'CPF errado: não confere e diz quantas tentativas restam', r);
+ok(login('85992222222', 'SenhaBia88').ok, 'depois do erro a senha antiga continua valendo');
+r = recup({ identificador: 'bia@exemplo.com', cpf: '529.982.247-25', novaSenha: 'NovaSenha88' }); ok(r.ok && r.usuario && r.sessao, 'CPF certo (achando por e-mail): troca a senha e já entra', r);
+ok(!login('85992222222', 'SenhaBia88').ok && login('85992222222', 'NovaSenha88').ok, 'senha antiga deixa de valer, a nova entra');
 r = recup({ identificador: '85992222222', cpf: '529.982.247-25', novaSenha: 'NovaSenha99' }); ok(r.ok, 'o contador de erros zerou depois do acerto', r);
 r = recup({ identificador: '85992222222', cpf: '111.111.111-11', novaSenha: 'SenhaErrada88' }); ok(!r.ok && !JSON.stringify(r).includes('529.982') && !JSON.stringify(r).includes('2005'), 'a resposta de erro nunca devolve CPF/nascimento', r); CACHE.clear();
 
 console.log('\n[nascimento: dd/mm/aaaa e aaaa-mm-dd valem igual]');
 run('acGravarCampo_("85991111111", "datanascimento", "DataNascimento", "10/02/2005")');
-r = recup({ identificador: '85991111111', nascimento: '2005-02-11', novaSenha: 'nova1' }); ok(!r.ok && r.naoConfere, 'data errada não confere', r);
+r = recup({ identificador: '85991111111', nascimento: '2005-02-11', novaSenha: 'NovaSenha88' }); ok(!r.ok && r.naoConfere, 'data errada não confere', r);
 r = recup({ identificador: '85991111111', nascimento: '2005-02-10', novaSenha: 'SenhaAna999' }); ok(r.ok, 'só nascimento cadastrado (conta comum): aceita no formato ISO', r);
-ok(login('85991111111', 'cli999').ok, 'Ana entra com a senha nova');
+ok(login('85991111111', 'SenhaAna999').ok, 'Ana entra com a senha nova');
 run('acGravarCampo_("85991111111", "cpf", "CPF", "390.533.447-05")');
 r = recup({ identificador: '85991111111', nascimento: '10/02/2005', novaSenha: 'SenhaAna000' }); ok(!r.ok && r.naoConfere && /CPF e a data/.test(r.erro), 'com CPF e nascimento cadastrados, os DOIS são exigidos', r);
-r = recup({ identificador: '85991111111', nascimento: '10/02/2005', cpf: '39053344705', novaSenha: 'cli000' }); ok(r.ok, 'com os dois certos (CPF só números) troca', r);
+r = recup({ identificador: '85991111111', nascimento: '10/02/2005', cpf: '39053344705', novaSenha: 'SenhaAna000' }); ok(r.ok, 'com os dois certos (CPF só números) troca', r);
 
 console.log('\n[bloqueio por tentativas]');
 for (let i = 0; i < 5; i++) recup({ identificador: '85992222222', cpf: '111.111.111-11', novaSenha: 'SenhaErrada88' });
@@ -128,7 +128,7 @@ console.log('\n[conta da equipe]');
 run('acGravarCampo_("85993333333", "datanascimento", "DataNascimento", "01/01/1999")');
 r = recup({ identificador: '85993333333', nascimento: '01/01/1999', novaSenha: 'SenhaEva444' }); ok(!r.ok && r.precisaGestao && /gestão/.test(r.erro), 'Estagiário só com nascimento: NÃO troca sozinho (só a gestão)', r);
 run('acGravarCampo_("85993333333", "cpf", "CPF", "529.982.247-25")');   // (mesmo CPF da Bia só para o teste de equipe; a regra de unicidade é do cadastro)
-r = recup({ identificador: '85993333333', nascimento: '01/01/1999', cpf: '52998224725', novaSenha: 'eva444' }); ok(r.ok, 'Estagiário com CPF + nascimento cadastrados e conferidos troca sozinho', r);
+r = recup({ identificador: '85993333333', nascimento: '01/01/1999', cpf: '52998224725', novaSenha: 'SenhaEva444' }); ok(r.ok, 'Estagiário com CPF + nascimento cadastrados e conferidos troca sozinho', r);
 r = recup({ identificador: '85995555555', novaSenha: 'SenhaAdm666' }); ok(!r.ok && r.precisaGestao, 'Admin total sem CPF/nascimento: só a gestão', r);
 
 console.log('\n[conta que já existe]');
