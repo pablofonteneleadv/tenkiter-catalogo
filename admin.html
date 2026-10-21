@@ -725,6 +725,12 @@
     </div>
   </details>
 
+  <section class="cartao-cad" id="cad-envios" aria-labelledby="cad-envios-titulo" tabindex="-1" style="padding:16px">
+    <h2 id="cad-envios-titulo">Envios e pendências</h2>
+    <p>Confira o resultado de cada peça. Se houver falha, corrija a causa indicada e tente novamente.</p>
+    <div id="fila-envios" aria-live="polite"></div>
+  </section>
+
   <details class="cartao-cad" id="card-form">
     <summary><span id="cad-sum-txt">📝 Formulário da peça</span></summary>
     <div class="cad-corpo">
@@ -837,7 +843,7 @@
       <button type="submit" class="btn-primario" id="btn-salvar" style="margin-top:10px;">Cadastrar peça</button>
       <button type="button" class="btn-cancelar-duplicar" id="btn-cancelar-duplicar">Cancelar Duplicação / Nova peça</button>
       <div id="status" style="text-align:center;font-size:0.85rem;margin-top:8px;"></div>
-      <div id="fila-envios" aria-live="polite"></div>
+
     </form>
     </div>
   </details>
@@ -1339,6 +1345,7 @@
   let editandoCat_ = null;          // categoria que está sendo renomeada agora (linha vira campo de edição)
   let ocupadoCat_ = false;          // uma chamada de apagar/renomear em andamento
   let selecionadasCategorias = new Set(), selecionadosGeneros = new Set();
+  let generoNovoTocado_ = false;
   let selecionadosBulk = new Set();
   let juntarLiberado_ = false;
 
@@ -1666,6 +1673,7 @@
       chip.className = 'chip' + (conjunto.has(v) ? ' selecionado' : '');
       chip.textContent = v;
       chip.addEventListener('click', () => {
+        if (idContainer === 'chips-genero') generoNovoTocado_ = true;
         if (conjunto.has(v)) conjunto.delete(v); else conjunto.add(v);
         chip.classList.toggle('selecionado');
         atualizarFaltas_();
@@ -1880,6 +1888,20 @@
   const CORES_RAPIDAS = ['Preto', 'Branco', 'Off-white', 'Bege', 'Cinza', 'Azul', 'Vermelho', 'Rosa', 'Verde', 'Amarelo', 'Marrom', 'Estampado'];
   const PARES_RAPIDOS = [['chips-tamanhos', 'tamanhos', TAMANHOS_RAPIDOS], ['chips-cores', 'cores', CORES_RAPIDAS]];
 
+  const PADROES_NOVO_ = { cores: 'Consulte cor/estampa disponível', tamanhos: 'Consultar tamanhos disponíveis' };
+  function aplicarPadroesNovo_() {
+    if (modoFormulario !== 'novo' && modoFormulario !== 'varias') return;
+    Object.keys(PADROES_NOVO_).forEach(id => {
+      const campo = document.getElementById(id);
+      if (!campo.value.trim()) campo.value = PADROES_NOVO_[id];
+    });
+    // Usa o nome canônico já cadastrado no servidor, inclusive "Feminino Adulto".
+    const genero = generos.find(g => semAcento_(g).split(/\s+/).sort().join(' ') === 'adulto feminino');
+    if (genero && !generoNovoTocado_ && !selecionadosGeneros.size) selecionadosGeneros.add(genero);
+    renderizarChips('chips-genero', generos, selecionadosGeneros);
+    sincRapidos_();
+  }
+
   function listaDoCampo_(id) { return document.getElementById(id).value.split(',').map(s => s.trim()).filter(Boolean); }
   function sincRapidos_() {
     PARES_RAPIDOS.forEach(([idChips, idCampo, opcoes]) => {
@@ -1895,7 +1917,10 @@
   function chipRapido_(idCampo, opcoes, o) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = o; b.dataset.v = o;
     b.addEventListener('click', () => {
-      const lista = listaDoCampo_(idCampo);
+      let lista = listaDoCampo_(idCampo);
+      const padrao = PADROES_NOVO_[idCampo];
+      if (padrao && semAcento_(o) !== semAcento_(padrao)) lista = lista.filter(v => semAcento_(v) !== semAcento_(padrao));
+      else if (padrao) lista = lista.filter(v => semAcento_(v) === semAcento_(padrao));
       const k = lista.findIndex(x => semAcento_(x) === semAcento_(o));
       if (k >= 0) lista.splice(k, 1); else lista.push(o);
       const pos = (x) => { const i = opcoes.findIndex(y => semAcento_(y) === semAcento_(x)); return i === -1 ? 999 : i; };
@@ -2325,11 +2350,12 @@
   function duplicarProduto(id) {
     const p = produtos.find(x => String(x.ID) === String(id));
     if (!p) return;
+    cancelarDuplicacao(); // limpa IDs de importação, mídias e estados do formulário anterior
     modoFormulario = 'duplicando';
     document.getElementById('produto-id').value = '';
 
     preencherFormComProduto(p);
-    document.getElementById('nome').value = p.Nome + ' (cópia)';
+    document.getElementById('nome').value = p.Nome;
 
     zerarMidia(null);
 
@@ -2368,7 +2394,7 @@
     window.__loteSeparado = null; window.__loteBase = null; { const al = document.getElementById('aviso-lote'); if (al) al.hidden = true; }   // v3.7: cadastro separado de vários posts
     document.getElementById('form-produto').reset();
     document.getElementById('produto-id').value = '';
-    selecionadasCategorias.clear(); selecionadosGeneros.clear();
+    selecionadasCategorias.clear(); selecionadosGeneros.clear(); generoNovoTocado_ = false;
     renderizarChips('chips-categoria', categorias, selecionadasCategorias);
     renderizarChips('chips-genero', generos, selecionadosGeneros);
     zerarMidia(null);
@@ -2378,6 +2404,7 @@
     document.getElementById('btn-cancelar-duplicar').style.display = 'none';
     document.getElementById('seo-sugestao-box').innerHTML = '';
     document.querySelectorAll('#form-produto .passo.erro').forEach(x => x.classList.remove('erro'));
+    aplicarPadroesNovo_();
     atualizarFaltas_();
   }
 
@@ -2474,8 +2501,7 @@
   function sairDoCadastro_() {
     const d = document.getElementById('card-form');
     d.open = false;
-    const alvo = document.getElementById('lista-produtos') || d;
-    try { alvo.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { window.scrollTo(0, 0); }
+    // A fila ainda não confirmou a gravação: a rolagem só ocorre depois do sucesso.
     atualizarFlut_();
   }
   function atualizarFlut_() {
@@ -2496,7 +2522,7 @@
   }
   (function () {
     const el = document.getElementById('envios-flut');
-    el.addEventListener('click', () => { abrirCadastro_(); setTimeout(() => { const f = document.getElementById('fila-envios'); if (f) f.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 50); });
+    el.addEventListener('click', () => { const f = document.getElementById('cad-envios'); f.scrollIntoView({ behavior: 'smooth', block: 'start' }); f.focus({ preventScroll: true }); });
     document.getElementById('card-form').addEventListener('toggle', atualizarFlut_);
   })();
 
@@ -2601,6 +2627,7 @@
   function desenharEnvios() {
     const box = document.getElementById('fila-envios');
     box.innerHTML = '';
+    if (!envios.length) { const vazio = document.createElement('p'); vazio.textContent = 'Nenhum envio pendente.'; box.appendChild(vazio); }
     atualizarFlut_();
     { const pend = envios.filter(e => e.estado === 'fila' || e.estado === 'enviando').length;
       ajustarWakeLock_(pend);
@@ -3071,6 +3098,13 @@
       else sumirDepois(it, 6000);
     });
     desenharEnvios();
+    const formulario = document.getElementById('card-form');
+    const digitando = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
+    if (lote.every(it => it.estado === 'ok') && !formulario.open && !digitando && !document.querySelector('.overlay-sheet.aberto')) {
+      const cabecalho = document.querySelector('#card-menu-cadastro > summary');
+      cabecalho.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      cabecalho.focus({ preventScroll: true });
+    }
   }
   async function processarEnvios() {
     const LIMITE = 2;
@@ -4771,6 +4805,7 @@
     atualizarBarraSync();
     // tudo ao mesmo tempo (antes era um depois do outro, somando as esperas); lista e categorias já aparecem do cache do aparelho
     await Promise.all([carregarListas(), carregarProdutos(), carregarStats()]);
+    aplicarPadroesNovo_();
   })();
 </script>
 <script src="admin-gestao.js"></script>

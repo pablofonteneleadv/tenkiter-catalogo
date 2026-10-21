@@ -44,7 +44,8 @@ with sync_playwright() as p:
     chk("2 fotos aparecem", pg.locator("#galeria-grid .galeria-item").count()==2)
     pg.set_input_files("#video-input",os.path.join(AQUI,"saida","v.mp4")); pg.wait_for_timeout(500)
     pg.fill("#nome","Vestido Midi Floral"); pg.fill("#preco","129.90"); pg.fill("#estoque","4")
-    pg.click("#chips-genero .chip:first-child")
+    if not pg.locator("#chips-genero .chip:first-child").evaluate('e => e.classList.contains("selecionado")'):
+        pg.click("#chips-genero .chip:first-child")
     pg.click("#btn-abrir-categorias"); pg.click("#cat-lista .cat-item:has-text('Vestido')"); pg.click("#cat-pronto")
     pg.get_by_role('button',name='P',exact=True).click() if pg.locator('#chips-tamanhos button').count() else pg.locator('#chips-tamanhos .chip').filter(has_text=__import__('re').compile(r'^P$')).click(); pg.locator('#chips-tamanhos .chip').filter(has_text=__import__('re').compile(r'^M$')).click()
     pg.click("#chips-cores .chip:has-text('Preto')"); pg.fill("#descricao","Viscose, caimento leve."); pg.check("#novidade")
