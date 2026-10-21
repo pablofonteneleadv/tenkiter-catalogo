@@ -151,7 +151,7 @@ with sync_playwright() as p:
     from PIL import Image
     d = os.path.join(AQUI, "saida"); os.makedirs(d, exist_ok=True)
     for i, cor in enumerate(["red", "blue"]): Image.new("RGB", (600, 800), cor).save(os.path.join(d, "livre%d.jpg" % i))
-    open(os.path.join(d, "livre.mp4"), "wb").write(b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 4000)
+    criar_mp4(os.path.join(d, "livre.mp4"))
     pg.click("[data-modo=livre]"); pg.wait_for_timeout(300)
     chk("modo livre não pede peça e mostra o campo de mídias", pg.locator("#po-livre-arq").count() == 1 and "Qual peça?" not in corpo(pg))
     pg.click("[data-tipo=story]")

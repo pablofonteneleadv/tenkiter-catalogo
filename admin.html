@@ -1605,16 +1605,16 @@
     desenharFotos();
   });
 
-  document.getElementById('video-input').addEventListener('change', (e) => {
+  document.getElementById('video-input').addEventListener('change', async (e) => {
     const arquivos = Array.from(e.target.files || []); e.target.value = '';
     if (!arquivos.length) return;
     let vagas = maxVideos_() - videosItens.length;
     for (const f of arquivos) {
       if (vagas <= 0) { alert('Só cabem ' + maxVideos_() + ' vídeo(s) por peça. Os primeiros foram aproveitados.'); break; }
-      if (!/^video\/(mp4|quicktime|webm)$/.test(f.type)) { alert('Formato não aceito (' + f.name + '). Use MP4, MOV ou WEBM.'); continue; }
-      if (f.size > MAX_VIDEO_MB * 1024 * 1024) { alert('Vídeo com ' + (f.size / 1048576).toFixed(1) + ' MB. O máximo é ' + MAX_VIDEO_MB + ' MB — encurte o vídeo ou reduza a qualidade.'); continue; }
-      // Guarda o arquivo original (não converte pra base64 aqui) -- o envio sobe o arquivo direto na hora de salvar, junto com as fotos.
-      const novoVideo = { file: f, mime: f.type, prev: URL.createObjectURL(f) }; videosItens.push(novoVideo); preAgendar_(novoVideo, 'video'); vagas--;
+      const resultado = await TKVideoValidation.validar(f, { maxMB: MAX_VIDEO_MB });
+      if (!resultado.ok) { alert('Não foi possível aceitar "' + f.name + '":\n\n' + resultado.erros.join('\n') + '\n\nEscolha outro arquivo ou exporte novamente como MP4.'); continue; }
+      const novoVideo = { file: f, mime: f.type || 'video/mp4', prev: URL.createObjectURL(f), validado: true, metadata: resultado.metadata };
+      videosItens.push(novoVideo); preAgendar_(novoVideo, 'video'); vagas--;
     }
     desenharVideo();
   });
@@ -4777,6 +4777,7 @@
 <script src="admin-push.js"></script>
 <script src="admin-conexoes.js"></script>
 <script src="admin-instagram.js"></script>
+<script src="video-validation.js"></script>
 <script src="admin-postagens.js"></script>
 <script src="admin-fotoia.js"></script>
 <script src="admin-enquadrar.js"></script>
