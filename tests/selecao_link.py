@@ -67,6 +67,7 @@ with sync_playwright() as p:
     pg2.click("#btn-share-filtros"); pg2.wait_for_timeout(400)
     chk("recompartilhar a seleção recebida mantém as mesmas peças", set(parse_qs(urlparse(pg2.input_value('#sel-link')).query)['sel'][0].split(',')) == set(cods))
     pg2.click("#btn-fechar-selecao"); pg2.wait_for_timeout(250)
+    if pg2.locator("#fx-fechar").is_visible(): pg2.click("#fx-fechar"); pg2.wait_for_timeout(300)   # v6.5: o menu de filtros é um painel; fecha antes de seguir
     pg2.click("#aviso-selecao-todas"); pg2.wait_for_timeout(500)
     chk("'Ver todas as peças' sai da seleção", pg2.locator("#aviso-selecao").is_hidden() and len(visiveis(pg2)) > 4 and "sel=" not in pg2.url, pg2.url)
 
