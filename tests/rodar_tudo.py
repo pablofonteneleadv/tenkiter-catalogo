@@ -103,6 +103,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("postagens_elementos_fotos.py", lambda o: "FALHAS=0" in o), # v4.36: elemento só nesta foto x todas
     ("postagens_terminou.py", lambda o: "FALHAS=0" in o),  # v4.29: pergunta "terminou de editar?" ao rolar para baixo
     ("postagens_multi.py", lambda o: "FALHAS=0" in o),     # v4.29: várias peças juntas, escopo "fazer em todas" (mesma peça × todas)
+    ("enquadrar_lote.py", lambda o: "P-40 LOTE: PASS" in o),
     ("enquadrar_cadastro.py", lambda o: "FALHAS=0" in o),  # v4.32: janela ✂ Enquadrar do cadastro (zoom/mover/girar, prévias Site/Feed/Story, voltar à original)
     ("curriculos_lento.py", lambda o: "FALHAS=0" in o),    # v4.32: curriculos.html com servidor lento (não cai no login, gravação sem repetir, TKOcupado)
     ("selecao_vida.py", lambda o: "FALHAS=0" in o),        # v4.27: seleção que expira (2 h/3 h), placa libera/segura, sugestões e sinônimos da busca
