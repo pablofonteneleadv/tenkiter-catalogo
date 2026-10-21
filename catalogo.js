@@ -338,17 +338,17 @@ try { tkSelExpirar_(); } catch (e) {}
     const max = parseFloat(document.getElementById('preco-max').value);
     const filtrosAtivos = !isNaN(min) || !isNaN(max) || apenasNovidades || apenasFavoritos || filtroCategorias.size > 0 || filtroGeneros.size > 0 || filtroCores.size > 0 || filtroTamanhos.size > 0 || !!selecaoFixa || soSelecao_;
 
-    const passaFiltros = p => {
+    const passaFiltros = (p, sem) => {
       if (selecaoFixa && !naSelecaoFixa_(p)) return false;
       if (soSelecao_ && !estaNaSacola(p.ID)) return false;
       if (!isNaN(min) && (ehConsulta(p) || Number(p.Preco) < min)) return false;   // "Consulte valor" não entra em filtro de preço
       if (!isNaN(max) && (ehConsulta(p) || Number(p.Preco) > max)) return false;
       if (apenasNovidades && !ehNovidade(p)) return false;
       if (apenasFavoritos && !ehFavorito(p.ID)) return false;
-      if (filtroCategorias.size) { const tags = listaDeTags(p.Categoria); if (!tags.some(t => filtroCategorias.has(t))) return false; }
-      if (filtroTamanhos.size) { const tt = listaDeTags(textoPlano(p.Tamanhos)); if (!tt.some(t => filtroTamanhos.has(t))) return false; }
-      if (filtroCores.size) { const tc = listaDeTags(textoPlano(p.Cores)); if (!tc.some(t => filtroCores.has(t))) return false; }
-      if (filtroGeneros.size) { const tags = listaDeTags(p.Genero); if (!tags.some(t => filtroGeneros.has(t))) return false; }
+      if (sem !== 'cat') if (filtroCategorias.size) { const tags = listaDeTags(p.Categoria); if (!tags.some(t => filtroCategorias.has(t))) return false; }
+      if (sem !== 'tam') if (filtroTamanhos.size) { const tt = listaDeTags(textoPlano(p.Tamanhos)); if (!tt.some(t => filtroTamanhos.has(t))) return false; }
+      if (sem !== 'cor') if (filtroCores.size) { const tc = listaDeTags(textoPlano(p.Cores)); if (!tc.some(t => filtroCores.has(t))) return false; }
+      if (sem !== 'gen') if (filtroGeneros.size) { const tags = listaDeTags(p.Genero); if (!tags.some(t => filtroGeneros.has(t))) return false; }
       return true;
     };
     let porBusca = termos.length ? produtos.filter(p => casaBusca(p, termos)) : produtos;
@@ -361,7 +361,19 @@ try { tkSelExpirar_(); } catch (e) {}
         if (alt.length) { porBusca = alt; buscaPorSinonimo_ = busca; }
       }
     }
-    listaFiltradaAtual = ordenarLista_(porBusca.filter(passaFiltros));
+    listaFiltradaAtual = ordenarLista_(porBusca.filter(p => passaFiltros(p)));
+    // v6.7: opções AO VIVO — cada menu só oferece o que existe (peça ativa) combinado com os OUTROS filtros marcados.
+    try {
+      const F = { cat: ['chips-categoria', filtroCategorias, p => listaDeTags(p.Categoria), 'details-categoria'], gen: ['chips-genero', filtroGeneros, p => listaDeTags(p.Genero), 'details-genero'], cor: ['chips-cor', filtroCores, p => listaDeTags(textoPlano(p.Cores)), 'details-cor'], tam: ['chips-tamanho', filtroTamanhos, p => listaDeTags(textoPlano(p.Tamanhos)), 'details-tamanho'] };
+      Object.keys(F).forEach(k => {
+        const [idc, conj, tagsDe, idd] = F[k], disp = new Set();
+        porBusca.forEach(p => { if (!estaEsgotado(p) && passaFiltros(p, k)) tagsDe(p).forEach(t => disp.add(t)); });
+        const cont = document.getElementById(idc); if (!cont) return;
+        let vis = 0;
+        Array.from(cont.children).forEach(ch => { const ok = conj.has(ch.textContent) || disp.has(ch.textContent); ch.hidden = !ok; if (ok) vis++; });
+        const d = document.getElementById(idd); if (d) d.hidden = vis === 0;
+      });
+    } catch (e) {}
     // Busca nunca pode "sumir" por causa de um filtro escondido na gaveta: se com os filtros deu zero, mostra o resultado da loja toda.
     buscaIgnorouFiltros = !!(termos.length && filtrosAtivos && !listaFiltradaAtual.length && porBusca.length);
     if (buscaIgnorouFiltros) listaFiltradaAtual = ordenarLista_(porBusca);
