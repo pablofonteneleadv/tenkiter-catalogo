@@ -22,7 +22,7 @@ def axe(pg, label):
     r = pg.evaluate("async()=>{const r=await axe.run(document.querySelector('#overlay-postagens'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','best-practice']}});return r.violations.map(v=>v.id+'×'+v.nodes.length+' '+v.nodes.slice(0,2).map(n=>n.html.slice(0,90)).join('|'))}")
     chk("axe — " + label, not r, "; ".join(r))
 def novo(b, perms=PERMS_ALL, versao="4.3"):
-    ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block", permissions=["clipboard-read", "clipboard-write"])
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block", timezone_id="America/Fortaleza", permissions=["clipboard-read", "clipboard-write"])
     ctx.add_init_script(SESSION); ctx.add_init_script("window.TK_POSTAGENS_POLL_MS=400;")
     st = install(ctx, perms=perms, versao=versao); st["midia"]["modo"] = "ok"
     return ctx, st
@@ -109,7 +109,7 @@ with sync_playwright() as p:
 
     print("== Agendado, cancelar, erro ==")
     aba(pg, "nova"); pg.fill("#po-busca", "TK-0005"); pg.wait_for_timeout(300); pg.click(".po-card >> nth=0"); pg.click("[data-a=usarpecas]"); pg.wait_for_timeout(300); pg.click("[data-tipo=feed]"); pg.wait_for_timeout(300)
-    pg.click("[data-q=agendar]"); marca(pg, 0, datetime.datetime.now().hour, 0); pg.click("[data-a=enviar]"); pg.wait_for_timeout(300)
+    pg.click("[data-q=agendar]"); marca(pg, 0, pg.evaluate("new Date().getHours()"), 0); pg.click("[data-a=enviar]"); pg.wait_for_timeout(300)
     chk("data no passado é barrada", "pelo menos 1 minuto" in corpo(pg))
     marca(pg, 2, 10, 0); pg.click("[data-a=enviar]"); pg.wait_for_timeout(2500)
     c = g["post_chamadas"][-1]["corpo"]

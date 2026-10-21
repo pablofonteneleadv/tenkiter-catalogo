@@ -143,25 +143,24 @@ const base = [
 
   console.log('== /feed.csv e /feed.xml (mesmo catálogo do backend 3.1) ==');
   const back = fs.readdirSync(RAIZ).filter(f => /^catalogo-codigo-\d+\.\d+\.gs\.txt$/.test(f)).sort().pop();
-  const fonteBack = fs.readFileSync(path.join(RAIZ, back), 'utf8');
-  const colunasBack = JSON.parse(fonteBack.match(/const COLUNAS_FEED_ = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
+  const fonteBack = back ? fs.readFileSync(path.join(RAIZ, back), 'utf8') : null;
+  const colunasBack = ['id', 'title', 'description', 'availability', 'condition', 'price', 'link', 'image_link', 'additional_image_link', 'brand', 'gender', 'age_group', 'color', 'product_type', 'quantity_to_sell_on_facebook'];
   r = await pedir('/feed.csv'); let csv = await r.text();
   ok(r.status === 200 && /text\/csv/.test(r.headers.get('content-type')), 'feed.csv responde 200 em CSV');
   const linhas = csv.split('\r\n'); linhas.pop();
-  ok(linhas[0] === colunasBack.join(','), 'colunas iguais às do backend (' + back + ')', linhas[0]);
+  ok(linhas[0] === colunasBack.join(','), 'colunas do contrato público de feed', linhas[0]);
   ok(csv.endsWith('\r\n') && !/[^\r]\n/.test(csv.replace(/"[^"]*"/g, '')), 'linhas terminam em CRLF');
   ok(linhas.length === 1 + 4, 'só entram peças ativas, com foto e preço > 0 (4 de 7; a sem código usa o ID)', linhas.length);
   ok(linhas[1].startsWith('TK-0001,Blusa Floral,"Blusa leve, tecido ""viscose"" & renda",in stock,new,50.00 BRL,' + SITE + 'p/TK-0001,'), 'primeira linha: id, título, descrição com aspas escapadas, estoque, preço cheio, link curto', linhas[1]);
   ok(linhas[1].includes('Azul/Rosa/Verde') && !linhas[1].includes('Preto'), 'cores: no máximo 3, separadas por "/"');
   ok(linhas[2].includes('out of stock') && linhas[2].includes(',male,kids,'), 'esgotada vira out of stock; Menino -> male/kids');
-  // confere campo a campo com a função de verdade do backend
-  const ctxBack = vm.createContext({ SITE_URL: SITE, String, Number, Math });
-  vm.runInContext("function normalizar_(v){return String(v==null?'':v).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();}", ctxBack);
-  vm.runInContext(fonteBack.match(/function linkPecaSite_\(p\) \{[\s\S]*?\n\}\n/)[0] + fonteBack.match(/function itemFeed_\(p\) \{[\s\S]*?\n\}\n/)[0], ctxBack);
-  const csvCampo = (v) => { const t = String(v == null ? '' : v); return /[",\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
-  const esperado = base.filter(p => String(p.Status).toLowerCase() === 'ativo' && String(p.Foto_URL || '').trim() && Number(p.Preco) > 0)
-    .map(p => colunasBack.map(c => csvCampo(ctxBack.itemFeed_(p)[c])).join(',')).join('\r\n');
-  ok(linhas.slice(1).join('\r\n') === esperado, 'cada linha é idêntica ao que o backend 3.1 gera (itemFeed_)', linhas.slice(1).join('|').slice(0, 200));
+  // Fixture pública independente: o CI não tem acesso aos backends privados.
+  const esperado = fs.readFileSync(path.join(__dirname, 'fixtures', 'feed-esperado.csv'), 'utf8');
+  ok(csv === esperado, 'CSV completo corresponde ao contrato (inclusive código ausente, aspas e estoque)');
+  if (fonteBack) {
+    const colunasPrivadas = JSON.parse(fonteBack.match(/const COLUNAS_FEED_ = (\[[^\]]*\])/)[1].replace(/'/g, '"'));
+    ok(JSON.stringify(colunasBack) === JSON.stringify(colunasPrivadas), 'contrato público continua igual ao backend disponível');
+  }
   r = await pedir('/feed.xml'); x = await r.text();
   ok(r.status === 200 && x.startsWith('<?xml') && x.includes('xmlns:g="http://base.google.com/ns/1.0"'), 'feed.xml é RSS do Google Merchant');
   ok((x.match(/<item>/g) || []).length === 4 && x.includes('<g:price>50.00 BRL</g:price>') && x.includes('<g:id>TK-0001</g:id>'), 'quatro itens com g:id e g:price');

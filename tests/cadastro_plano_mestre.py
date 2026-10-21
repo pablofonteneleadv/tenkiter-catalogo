@@ -1,10 +1,9 @@
 """P-38/39/41/42: duplicação, padrões, confirmação e pendências com backend falso."""
 import os
-from pathlib import Path
 from playwright.sync_api import sync_playwright
 from mock import SESSION, install
 
-BASE = os.environ.get('TK_BASE', 'http://localhost:8766/')
+BASE = os.environ.get('TK_BASE', 'http://localhost:8765/')
 
 with sync_playwright() as p:
     browser = p.chromium.launch(args=['--no-sandbox'])

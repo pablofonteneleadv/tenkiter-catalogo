@@ -10,7 +10,11 @@ def chk(n, c, e=""):
     (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + ((" — " + str(e)) if (e and not c) else ""))
 C = "details[data-vz-det^='v:c_']"
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC")
-open("/tmp/claude-0/logo-teste.png", "wb").write(PNG)
+PASTA_SAIDA = os.path.join(AQUI, "saida")
+os.makedirs(PASTA_SAIDA, exist_ok=True)
+LOGO_TESTE = os.path.join(PASTA_SAIDA, "editor-logo-teste.png")
+with open(LOGO_TESTE, "wb") as arquivo:
+    arquivo.write(PNG)
 AXE = open(os.path.join(AQUI, "axe.min.js")).read()
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
@@ -72,7 +76,7 @@ with sync_playwright() as p:
     ch = [c for c in spec()["camadas"] if c.get("forma") == "coracao"]
     chk("+ Coração cria a forma (já selecionada)", len(ch) == 1 and pg.locator(C + " .ed-pill.sel").count() == 1)
     pg.locator(C + " [data-ed-p=cor]").first.evaluate("e=>{e.value='#ff0000';e.dispatchEvent(new Event('input',{bubbles:true}))}"); pg.wait_for_timeout(250)
-    pg.locator(C + " [data-ed-img]").first.set_input_files("/tmp/claude-0/logo-teste.png"); pg.wait_for_timeout(1200)
+    pg.locator(C + " [data-ed-img]").first.set_input_files(LOGO_TESTE); pg.wait_for_timeout(1200)
     im = [c for c in spec()["camadas"] if c["tipo"] == "imagem"]
     chk("enviar imagem cria camada de imagem com endereço https do R2", len(im) == 1 and im[0]["src"].startswith("https://tenkiter-midia"), im)
     chk("envio da imagem usou /u permanente (sem temp)", any(("/u" in u and "temp" not in u) for u in st["midia"].get("urls", ["/u"])) or True)

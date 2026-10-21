@@ -1,5 +1,5 @@
 """Painel -> R2: fotos e vídeos NOVOS vão para o Worker de mídia; foto/vídeo grande, PIN antigo ou falha do R2 caem no Cloudinary (o envio nunca para)."""
-import sys, os
+import sys, os, subprocess
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI); os.makedirs(os.path.join(AQUI, "saida"), exist_ok=True)
 import mock
 from mock import *
@@ -9,6 +9,8 @@ BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
 S = os.path.join(AQUI, "saida")
 Image.new("RGB", (900, 1200), (190, 60, 110)).save(os.path.join(S, "r2foto1.jpg")); Image.new("RGB", (900, 1200), (60, 90, 190)).save(os.path.join(S, "r2foto2.jpg"))
 criar_mp4(os.path.join(S, "r2v.mp4"))
+# Arquivo próprio: não depender de uma suíte anterior para produzir o WebM.
+subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", os.path.join(S, "r2v.mp4"), "-c:v", "copy", "-f", "webm", os.path.join(S, "r2v.webm")], check=True)
 criar_mp4(os.path.join(S, "r2grande.mp4"), extra_bytes=16 * 1048576)
 OK = []; BAD = []
 def chk(n, c, e=""):
