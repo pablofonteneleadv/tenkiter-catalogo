@@ -1406,9 +1406,20 @@
     const it = fotosItens[idx]; if (!it || !window.TKEnquadrar) return;
     const base = it.orig || it;
     TKEnquadrar.abrir({
-      src: base.url || base.prev, podeVoltar: !!it.orig,
-      aoAplicar: (dataUrl) => {
-        const novo = { b64: dataUrl.split(',')[1], prev: dataUrl, capa: !!it.capa, orig: base };
+      src: base.url || base.prev, podeVoltar: !!it.orig, ajuste: it.enquadramento, quantidade: fotosItens.length,
+      aoAplicarTodas: fotosItens.length > 1 ? async (ajuste, vigente) => {
+        const originais = fotosItens.slice(), novos = [];
+        for (const foto of originais) {
+          const origem = foto.orig || foto;
+          const url = await TKEnquadrar.renderizar(origem.url || origem.prev, ajuste);
+          novos.push({ b64: url.split(',')[1], prev: url, capa: !!foto.capa, orig: origem, enquadramento: Object.assign({}, ajuste) });
+        }
+        if (!vigente() || originais.length !== fotosItens.length || originais.some((foto, k) => fotosItens[k] !== foto)) return false;
+        fotosItens = novos; novos.forEach(foto => preAgendar_(foto, 'foto')); desenharFotos();
+        return true;
+      } : null,
+      aoAplicar: (dataUrl, ajuste) => {
+        const novo = { b64: dataUrl.split(',')[1], prev: dataUrl, capa: !!it.capa, orig: base, enquadramento: ajuste };
         const k = fotosItens.indexOf(it); if (k < 0) return;
         fotosItens[k] = novo; preAgendar_(novo, 'foto'); desenharFotos();
       },
