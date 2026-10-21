@@ -17,6 +17,7 @@ try { tkSelExpirar_(); } catch (e) {}
   let apenasFavoritos = false;
   /** Seleção fixa vinda de um link (?sel=TK-0010,TK-0011,…): mostra SÓ essas peças. null = não há seleção. */
   let selecaoFixa = null;
+  let soSelecao_ = false, ultimoNSac_ = -1;   // v6.4: "ver só a minha seleção" na tela, como uma opção de filtro
 
   function listaDeTags(c) { return String(c || '').split(',').map(s => s.trim()).filter(Boolean); }
 
@@ -302,7 +303,7 @@ try { tkSelExpirar_(); } catch (e) {}
     document.getElementById('busca').value = '';
     document.getElementById('preco-min').value = '';
     document.getElementById('preco-max').value = '';
-    filtroCategorias.clear(); filtroGeneros.clear(); filtroCores.clear(); apenasNovidades = false; apenasFavoritos = false; selecaoFixa = null;
+    filtroCategorias.clear(); filtroGeneros.clear(); filtroCores.clear(); apenasNovidades = false; apenasFavoritos = false; selecaoFixa = null; soSelecao_ = false;
     renderizarChipExtra();
     renderizarPillsCategoria();
     renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias, 'resumo-categoria');
@@ -317,10 +318,11 @@ try { tkSelExpirar_(); } catch (e) {}
     const termos = termosDaBusca(busca);
     const min = parseFloat(document.getElementById('preco-min').value);
     const max = parseFloat(document.getElementById('preco-max').value);
-    const filtrosAtivos = !isNaN(min) || !isNaN(max) || apenasNovidades || apenasFavoritos || filtroCategorias.size > 0 || filtroGeneros.size > 0 || filtroCores.size > 0 || !!selecaoFixa;
+    const filtrosAtivos = !isNaN(min) || !isNaN(max) || apenasNovidades || apenasFavoritos || filtroCategorias.size > 0 || filtroGeneros.size > 0 || filtroCores.size > 0 || !!selecaoFixa || soSelecao_;
 
     const passaFiltros = p => {
       if (selecaoFixa && !naSelecaoFixa_(p)) return false;
+      if (soSelecao_ && !estaNaSacola(p.ID)) return false;
       if (!isNaN(min) && (ehConsulta(p) || Number(p.Preco) < min)) return false;   // "Consulte valor" não entra em filtro de preço
       if (!isNaN(max) && (ehConsulta(p) || Number(p.Preco) > max)) return false;
       if (apenasNovidades && !ehNovidade(p)) return false;
@@ -468,6 +470,20 @@ try { tkSelExpirar_(); } catch (e) {}
     const nSac = getSacola().length, share = document.getElementById('linha-share-busca'); if (share) share.hidden = !(ativo || (nSac > 0 && equipe_.pode));
     const bsb = document.getElementById('btn-share-busca'); if (bsb) bsb.textContent = (nSac > 0 && !ativo) ? '🔗 Compartilhar seleção (' + nSac + ')' : '🔗 Compartilhar seleção';
     const bls = document.getElementById('btn-limpar-sel'); if (bls) bls.hidden = !(ativo || nSac > 0) || !!selecaoFixa || modoLink_;
+    const ams = document.getElementById('aviso-minha-sel');
+    if (soSelecao_ && nSac === 0) { soSelecao_ = false; setTimeout(aplicarFiltros, 0); }
+    else if (soSelecao_ && nSac !== ultimoNSac_ && ultimoNSac_ !== -1) { ultimoNSac_ = nSac; setTimeout(aplicarFiltros, 0); }
+    ultimoNSac_ = nSac;
+    if (ams) { ams.hidden = !soSelecao_; const at = document.getElementById('aviso-minha-sel-txt'); if (at) at.textContent = '🛍️ Mostrando só a sua seleção: ' + nSac + (nSac === 1 ? ' peça.' : ' peças.'); }
+    const bar_ = document.getElementById('btn-add-resultados');
+    if (bar_) {
+      const jaTem = new Set(getSacola().map(String)), lf = listaFiltradaAtual || [];
+      const faltam = lf.filter(p => !estaEsgotado(p) && !jaTem.has(String(p.ID))).length;
+      bar_.hidden = !((nFiltros > 0 || !!q || apenasNovidades) && lf.length > 0 && !selecaoFixa);
+      bar_.disabled = faltam === 0;
+      const tx_ = document.getElementById('btn-add-resultados-txt');
+      if (tx_) tx_.textContent = faltam === 0 ? 'Todos já estão na seleção' : 'Adicionar estes ' + faltam + (faltam === 1 ? ' à seleção' : ' à seleção');
+    }
     const blm = document.getElementById('btn-lote-menu'); if (blm) { blm.hidden = !(equipe_.pode && nSac > 0); if (blm.hidden) { const lm = document.getElementById('lote-menu'); if (lm) lm.hidden = true; } }
     if (!ativo) { bar.hidden = true; modoLink_ = false; return; }
     bar.classList.toggle('so-botao', modoLink_);
@@ -651,7 +667,14 @@ try { tkSelExpirar_(); } catch (e) {}
   }
 
   const barraAbrir = document.getElementById('barra-minha-selecao-abrir');
-  if (barraAbrir) barraAbrir.addEventListener('click', () => { if (typeof abrirSacola === 'function') abrirSacola(); });
+  if (barraAbrir) barraAbrir.addEventListener('click', () => {
+    if (!getSacola().length) return;
+    soSelecao_ = true; modoLink_ = false; aplicarFiltros();
+    const m = document.getElementById('aviso-minha-sel'); if (m && m.scrollIntoView) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  const amEnviar = document.getElementById('amsel-enviar'); if (amEnviar) amEnviar.addEventListener('click', () => { if (typeof abrirSacola === 'function') abrirSacola(); });
+  // "Ver tudo": sai da visão da seleção e limpa os filtros, mas MANTÉM a seleção.
+  const amTudo = document.getElementById('amsel-tudo'); if (amTudo) amTudo.addEventListener('click', () => { document.getElementById('btn-limpar').click(); });
   const barraShare = document.getElementById('bms-compartilhar');
   if (barraShare) barraShare.addEventListener('click', () => { if (typeof abrirSelecao === 'function') abrirSelecao(true); });
   // Limpar com UM toque e "Desfazer" por 8 s (no lugar de pedir confirmação).
@@ -669,8 +692,23 @@ try { tkSelExpirar_(); } catch (e) {}
   });
   const desfazerBtn = document.getElementById('toast-desfazer-btn');
   if (desfazerBtn) desfazerBtn.addEventListener('click', () => {
-    if (ultimaSel_) { ultimaSel_.ids.forEach(id => adicionarNaSacola(id, (ultimaSel_.fotos && ultimaSel_.fotos[id]) || 1)); }
+    if (ultimaSel_ && ultimaSel_.adicionados) { ultimaSel_.adicionados.forEach(id => removerDaSacola(id)); }
+    else if (ultimaSel_) { ultimaSel_.ids.forEach(id => adicionarNaSacola(id, (ultimaSel_.fotos && ultimaSel_.fotos[id]) || 1)); }
     esconderDesfazer_(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); atualizarBarraFiltros_();
+  });
+
+  // v6.4: "➕ Adicionar estes N à seleção" (embaixo dos filtros): tudo que a busca/filtro mostra entra na seleção, somando ao que já estava.
+  const btnAddRes = document.getElementById('btn-add-resultados');
+  if (btnAddRes) btnAddRes.addEventListener('click', () => {
+    const jaTem = new Set(getSacola().map(String));
+    const novos = (listaFiltradaAtual || []).filter(p => !estaEsgotado(p) && !jaTem.has(String(p.ID))).map(p => String(p.ID));
+    if (!novos.length) return;
+    novos.forEach(id => adicionarNaSacola(id, 1));
+    ultimaSel_ = { ids: getSacola().slice(), adicionados: novos };
+    atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); atualizarBarraFiltros_();
+    const t = document.getElementById('toast-desfazer'), tx = document.getElementById('toast-desfazer-txt');
+    if (tx) tx.textContent = novos.length + (novos.length === 1 ? ' peça entrou' : ' peças entraram') + ' na seleção (agora ' + getSacola().length + ').'; if (t) t.hidden = false;
+    clearTimeout(desfazerT_); desfazerT_ = setTimeout(esconderDesfazer_, 8000);
   });
 
   /** Põe ou tira a peça da sacola (cartão e folha usam a mesma função). Devolve true se agora está na sacola. */
@@ -1375,9 +1413,13 @@ try { tkSelExpirar_(); } catch (e) {}
     if (sim) { fechar(); atualizarBadge(); } else { f.classList.remove('aberto'); btn.setAttribute('aria-expanded', 'true'); }
   }
 
+  // v6.4: rolar DENTRO do menu (muitas categorias/cores) não pode fechá-lo: o fim da rolagem do menu "vaza" para a página e parecia rolagem da loja.
+  let mexeuNoMenu = 0;
+  ['pointerdown', 'touchstart', 'touchmove', 'wheel', 'click'].forEach(ev => f.addEventListener(ev, () => { mexeuNoMenu = Date.now(); }, { passive: true }));
   window.addEventListener('scroll', () => {
     const y = window.scrollY, descendo = y > ultimoY;
     ultimoY = y;
+    if (f.classList.contains('aberto') && (Date.now() - mexeuNoMenu < 2500 || f.querySelector('details[open]'))) { yAbertura = y; return; }
     if (f.classList.contains('compacto')) {
       if (y < 60 && !CELULAR) compactar(false);                       // computador: voltou ao topo, filtros completos de novo
       else if (f.classList.contains('aberto') && Math.abs(y - yAbertura) > 140 && document.activeElement !== busca) fechar();
@@ -1394,6 +1436,14 @@ try { tkSelExpirar_(); } catch (e) {}
     if (f.classList.contains('compacto') && f.classList.contains('aberto') && !ev.target.closest('#filtros')) fechar();
   });
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') fechar(); });
+  // X dentro do campo: apaga o que foi digitado de uma vez (v6.4)
+  const bX = document.getElementById('busca-limpar');
+  if (bX) {
+    const mostrarX = () => { bX.hidden = !busca.value; };
+    busca.addEventListener('input', mostrarX);
+    bX.addEventListener('click', () => { busca.value = ''; mostrarX(); busca.dispatchEvent(new Event('input', { bubbles: true })); busca.focus(); });
+    setInterval(mostrarX, 700);   // cobre a busca preenchida por voz, link ou "Limpar filtros"
+  }
   // Enter na busca: fecha o teclado e mostra os resultados
   busca.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { busca.blur(); if (f.classList.contains('compacto')) fechar(); } });
   f.addEventListener('click', () => setTimeout(atualizarBadge, 0));

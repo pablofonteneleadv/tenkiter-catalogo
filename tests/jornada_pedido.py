@@ -30,6 +30,7 @@ with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
     # ---------------------------------------------------------------- backend NOVO (3.1)
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
+    ctx.add_init_script("window.TK_PEDIDOS=true;")
     log = []; st = install(ctx, log=log)
     erros = []; csp = []
     pg = nova_pagina(ctx, erros, csp)
@@ -185,6 +186,7 @@ with sync_playwright() as p:
     # ---------------------------------------------------------------- backend ANTIGO (3.0): o site tem que seguir funcionando
     print("== Backend antigo (3.0): degradação elegante ==")
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
+    ctx.add_init_script("window.TK_PEDIDOS=true;")
     log = []; install(ctx, log=log, versao="3.0")
     erros = []; csp = []
     pg = nova_pagina(ctx, erros, csp)

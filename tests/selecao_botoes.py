@@ -22,6 +22,14 @@ with sync_playwright() as p:
         chk("sem seleção: nenhum dos 3 botões", pg.locator("#linha-share-busca:visible").count() == 0)
         pg.evaluate("salvarSacola([String(produtos[0].ID), String(produtos[1].ID)]); atualizarBarraFiltros_()")
         pg.wait_for_timeout(300)
+        if not lote:
+            pg.evaluate('atualizarSacolaHeader_()'); pg.wait_for_timeout(200)
+            # v6.3: o cliente usa a barra fixa (Compartilhar/Limpar); a linha do topo só aparece com filtro ativo.
+            chk("cliente: barra fixa com Compartilhar e Limpar", pg.locator("#bms-compartilhar:visible").count() == 1 and pg.locator("#bms-limpar:visible").count() == 1)
+            chk("cliente: linha do topo escondida sem filtro", pg.locator("#linha-share-busca:visible").count() == 0)
+            pg.click("#bms-limpar"); pg.wait_for_timeout(300)
+            chk("Limpar esvazia a seleção", pg.evaluate("getSacola().length") == 0)
+            ctx.close(); continue
         chk("Compartilhar e Limpar aparecem", pg.locator("#btn-share-busca:visible").count() == 1 and pg.locator("#btn-limpar-sel:visible").count() == 1)
         chk("Edição em lote só para a equipe", (pg.locator("#btn-lote-menu:visible").count() == 1) == lote)
         chk("botões com fundo próprio e ≥44px", pg.evaluate("(()=>{const r=document.querySelector('#btn-limpar-sel').getBoundingClientRect(); return r.height>=44 && getComputedStyle(document.querySelector('#btn-limpar-sel')).backgroundColor!=='rgba(0, 0, 0, 0)'})()"))

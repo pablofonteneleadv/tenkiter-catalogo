@@ -1,0 +1,60 @@
+"""v6.4: adicionar os resultados do filtro à seleção, ver só a seleção na tela, link com escolha, X da busca, menu que não fecha ao rolar."""
+import sys, os
+AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
+from mock import *
+from playwright.sync_api import sync_playwright
+BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
+BAD = []
+def chk(n, c, e=""):
+    if not c: BAD.append(n)
+    print(("  ✔ " if c else "  ✘ ") + n + ((" — " + str(e)) if (e and not c) else ""))
+with sync_playwright() as p:
+    b = p.chromium.launch()
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
+    install(ctx, perms=["portal"], versao="3.7"); ctx.add_init_script("localStorage.removeItem('tm_session');")
+    pg = ctx.new_page(); pg.goto(BASE + "index.html"); pg.wait_for_selector(".card"); pg.wait_for_timeout(1200)
+    total = pg.evaluate("produtos.length")
+    chk("sem filtro: botão de adicionar escondido", pg.locator("#btn-add-resultados:visible").count() == 0)
+    # X da busca
+    chk("X da busca escondido sem texto", pg.locator("#busca-limpar:visible").count() == 0)
+    pg.fill("#busca", "a"); pg.wait_for_timeout(500)
+    chk("X da busca aparece com texto", pg.evaluate("!document.getElementById('busca-limpar').hidden"))
+    pg.evaluate("document.getElementById('filtros').classList.add('aberto')")
+    n = pg.evaluate("listaFiltradaAtual.length")
+    vis = pg.evaluate("!document.getElementById('btn-add-resultados').hidden")
+    chk("com busca, botão 'Adicionar estes N' aparece", vis, n)
+    pg.evaluate("salvarSacola([String(produtos[0].ID)]); atualizarBarraFiltros_()")
+    antes = pg.evaluate("getSacola().length")
+    pg.evaluate("document.getElementById('btn-add-resultados').click()"); pg.wait_for_timeout(300)
+    depois = pg.evaluate("getSacola().length")
+    esperado = pg.evaluate("new Set([...getSacola()]).size")
+    chk("clicar soma os resultados à seleção (mantém a que já estava)", depois >= antes and pg.evaluate("estaNaSacola(produtos[0].ID)"), (antes, depois))
+    chk("todos os resultados ficaram na seleção", pg.evaluate("listaFiltradaAtual.filter(p=>!estaEsgotado(p)).every(p=>estaNaSacola(p.ID))"))
+    chk("botão muda para 'Todos já estão na seleção'", "já estão" in pg.inner_text("#btn-add-resultados-txt"))
+    chk("aparece 'Desfazer'", pg.locator("#toast-desfazer:visible").count() == 1)
+    pg.evaluate("document.getElementById('toast-desfazer-btn').click()"); pg.wait_for_timeout(200)
+    chk("Desfazer tira só os que entraram", pg.evaluate("getSacola().length") == antes, pg.evaluate("getSacola().length"))
+    pg.evaluate("document.getElementById('btn-add-resultados').click()"); pg.wait_for_timeout(200)
+    # X apaga busca
+    pg.evaluate("document.getElementById('busca-limpar').click()"); pg.wait_for_timeout(500)
+    chk("X apaga a busca", pg.input_value("#busca") == "")
+    # ver só a seleção
+    pg.evaluate("document.getElementById('barra-minha-selecao-abrir').click()"); pg.wait_for_timeout(500)
+    ns = pg.evaluate("getSacola().length")
+    chk("'Toque para ver' mostra só a seleção na tela", pg.evaluate("listaFiltradaAtual.length") == ns and pg.locator("#aviso-minha-sel:visible").count() == 1, (pg.evaluate("listaFiltradaAtual.length"), ns))
+    pg.evaluate("document.getElementById('amsel-tudo').click()"); pg.wait_for_timeout(400)
+    chk("'Ver tudo' mostra a loja toda", pg.evaluate("listaFiltradaAtual.length") == total)
+    chk("'Ver tudo' mantém a seleção", pg.evaluate("getSacola().length") == ns)
+    # link com escolha
+    pg.fill("#busca", "a"); pg.wait_for_timeout(500)
+    pg.evaluate("abrirSelecao(true)"); pg.wait_for_timeout(300)
+    chk("janela de compartilhar oferece 3 escolhas", pg.locator('input[name="sel-modo"]').count() == 3)
+    l1 = pg.input_value("#sel-link")
+    chk("padrão = só a seleção (?sel=)", "?sel=" in l1, l1)
+    pg.evaluate("document.querySelector('input[name=sel-modo][value=filtro]').click()"); pg.wait_for_timeout(200)
+    l2 = pg.input_value("#sel-link")
+    chk("opção filtro = link com a busca", "sel=" not in l2 and "q=" in l2, l2)
+    pg.evaluate("document.querySelector('input[name=sel-modo][value=lista]').click()"); pg.wait_for_timeout(200)
+    chk("opção lista fixa = ?sel= com as peças do filtro", "?sel=" in pg.input_value("#sel-link"))
+    b.close()
+print("FALHAS:", BAD); sys.exit(1 if BAD else 0)

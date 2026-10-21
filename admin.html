@@ -561,6 +561,10 @@
   body.sem-gerir .so-admin-cores { display: none !important; }
   /* v4.18: tamanhos e cores aparecem só como chips; o campo de texto continua existindo (guarda a escolha) mas não aparece */
   input#tamanhos, input#cores { display: none !important; }
+  .busca-admin-wrap { position: relative; flex: 1; min-width: 0; display: block; }
+  .busca-admin-wrap input { width: 100%; padding-right: 44px; }
+  .busca-admin-x { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 50%; background: #e9e4d8; color: #222; font-weight: 800; cursor: pointer; }
+  .busca-admin-x[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -970,13 +974,14 @@
 
   <div class="busca-bloco">
   <div class="busca-linha">
-    <input type="text" id="busca-admin" placeholder="🔎 Nome ou código da peça..." autocomplete="off">
+    <span class="busca-admin-wrap"><input type="text" id="busca-admin" placeholder="🔎 Nome ou código da peça..." autocomplete="off"><button type="button" id="busca-admin-x" class="busca-admin-x" aria-label="Apagar a busca" hidden>✕</button></span>
     <button type="button" id="fa-toggle" aria-expanded="false" aria-controls="filtros-admin">🎚️ Filtros<span class="fa-n" id="fa-n" hidden>0</span></button>
   </div>
   <div class="filtros-admin" id="filtros-admin">
     <select id="fa-categoria" aria-label="Filtrar por categoria"><option value="">Categoria: todas</option></select>
     <select id="fa-genero" aria-label="Filtrar por gênero"><option value="">Gênero: todos</option></select>
     <select id="fa-cor" aria-label="Filtrar por cor ou estampa"><option value="">Cor: todas</option></select>
+    <select id="fa-tam" aria-label="Filtrar por tamanho"><option value="">Tamanho: todos</option></select>
     <select id="fa-ordem" aria-label="Ordenar a lista">
       <option value="recentes">Mais recentes</option>
       <option value="antigas">Mais antigas</option>
@@ -3284,6 +3289,7 @@
     const fCat = semAcento_((document.getElementById('fa-categoria') || {}).value || '');
     const fGen = semAcento_((document.getElementById('fa-genero') || {}).value || '');
     const fCor = semAcento_((document.getElementById('fa-cor') || {}).value || '');
+    const fTam = semAcento_((document.getElementById('fa-tam') || {}).value || '');
     const pMin = parseFloat(String((document.getElementById('fa-preco-min') || {}).value || '').replace(',', '.'));
     const pMax = parseFloat(String((document.getElementById('fa-preco-max') || {}).value || '').replace(',', '.'));
     const ordem = (document.getElementById('fa-ordem') || {}).value || 'recentes';
@@ -3291,6 +3297,7 @@
     // v4.10 (FE-08): filtros extras da busca do admin
     if (fCat) lista = lista.filter(p => semAcento_(p.Categoria).includes(fCat));
     if (fGen) lista = lista.filter(p => semAcento_(p.Genero).includes(fGen));
+    if (fTam) lista = lista.filter(p => semAcento_(textoPlano(p.Tamanhos)).split(',').map(x => x.trim()).includes(fTam));
     if (fCor) lista = lista.filter(p => semAcento_(textoPlano(p.Cores)).split(',').map(x => x.trim()).includes(fCor));
     if (!isNaN(pMin)) lista = lista.filter(p => !ehConsulta(p) && Number(p.Preco) >= pMin);
     if (!isNaN(pMax)) lista = lista.filter(p => !ehConsulta(p) && Number(p.Preco) <= pMax);
@@ -3302,7 +3309,8 @@
 
   /** v4.10 (FE-08): preenche os selects de categoria/gênero com o que existe na loja. */
   function renderizarFiltrosAdmin_() {
-    const selC = document.getElementById('fa-categoria'), selG = document.getElementById('fa-genero'), selR = document.getElementById('fa-cor');
+    const selC = document.getElementById('fa-categoria'), selG = document.getElementById('fa-genero'), selR = document.getElementById('fa-cor'), selT = document.getElementById('fa-tam');
+    if (selT) { const tams = new Set(); produtos.forEach(p => { textoPlano(p.Tamanhos).split(',').map(s => s.trim()).filter(Boolean).forEach(t => tams.add(t)); }); const atualT = selT.value; selT.innerHTML = '<option value="">Tamanho: todos</option>' + Array.from(tams).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true })).map(t => '<option value="' + escaparHtml(t) + '">' + escaparHtml(t) + '</option>').join(''); selT.value = atualT; }
     if (!selC || !selG) return;
     const cats = new Set(), gens = new Set(), cores = new Set();
     produtos.forEach(p => { textoPlano(p.Cores).split(',').map(s => s.trim()).filter(Boolean).forEach(c => cores.add(c)); });
@@ -3317,7 +3325,7 @@
     const box = document.getElementById('filtros-admin'); if (!box) return;
     const busca = document.getElementById('busca-admin'), tog = document.getElementById('fa-toggle'), badge = document.getElementById('fa-n');
     function contar() {
-      let n = ['fa-categoria', 'fa-genero', 'fa-cor', 'fa-preco-min', 'fa-preco-max'].filter(id => { const el = document.getElementById(id); return el && el.value; }).length;
+      let n = ['fa-categoria', 'fa-genero', 'fa-cor', 'fa-tam', 'fa-preco-min', 'fa-preco-max'].filter(id => { const el = document.getElementById(id); return el && el.value; }).length;
       const o = document.getElementById('fa-ordem'); if (o && o.value && o.value !== 'recentes') n++;
       if (badge) { badge.hidden = !n; badge.textContent = n; }
     }
@@ -3332,11 +3340,18 @@
     busca.addEventListener('keydown', (e) => { if (e.key === 'Enter') { busca.blur(); if (auto) fechar(); } });
     /* tocar fora fecha DEPOIS do toque ser tratado (fechar antes empurraria a lista e o toque cairia em outro lugar) */
     document.addEventListener('click', (e) => { if (auto && box.classList.contains('aberto') && !e.target.closest('#filtros-admin, .busca-linha')) setTimeout(fechar, 0); }, true);
+    // X dentro do campo de busca (v6.4)
+    const bx = document.getElementById('busca-admin-x');
+    if (bx) {
+      const mx = () => { bx.hidden = !busca.value; };
+      busca.addEventListener('input', mx); setInterval(mx, 700);
+      bx.addEventListener('click', () => { busca.value = ''; mx(); busca.dispatchEvent(new Event('input', { bubbles: true })); busca.focus(); });
+    }
     box.addEventListener('change', () => { contar(); renderizarProdutos(); });
     box.addEventListener('input', (e) => { if (e.target && /fa-preco/.test(e.target.id)) { contar(); renderizarProdutos(); } });
     const limpar = document.getElementById('fa-limpar');
     if (limpar) limpar.addEventListener('click', () => {
-      ['fa-categoria', 'fa-genero', 'fa-cor', 'fa-preco-min', 'fa-preco-max'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      ['fa-categoria', 'fa-genero', 'fa-cor', 'fa-tam', 'fa-preco-min', 'fa-preco-max'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
       const o = document.getElementById('fa-ordem'); if (o) o.value = 'recentes';
       contar(); renderizarProdutos();
     });
