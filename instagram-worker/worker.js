@@ -978,9 +978,20 @@ export function validarPostagem(b) {
   }
   return { v: { tipo: tipo, modo: modo, legenda: legenda, midias: midias, link: link, quando: quando, agora: !sequencia && quando <= agora(), urgente: urgente, sequencia: sequencia, produto: String(b.produto || '').slice(0, 40), template: String(b.template || '').slice(0, 30), grupo: String(b.grupo || '').slice(0, 40), canal: normalizarCanal_(b.canal) } };
 }
+function progressoPostagem_(r) {
+  const aguardando = String(r.ig_id || '').startsWith('zapq:');
+  const fase = aguardando && r.status === 'processando' ? 'confirmacao' : ({agendado:'fila', processando:'processando', publicado:'confirmado', erro:'falha', manual_pendente:'manual', manual_feito:'confirmado'})[r.status];
+  const p = { fase: fase || '', desde: r.inicio_proc || r.atualizado_em || r.criado_em || '' };
+  if (aguardando && r.status === 'processando') {
+    const inicio = Date.parse(r.inicio_proc || ''), ultima = Date.parse(r.atualizado_em || '');
+    if (Number.isFinite(inicio)) p.limiteEm = new Date(inicio + ZAP_ESPERA_MAX_MS).toISOString();
+    if (Number.isFinite(ultima) && (!Number.isFinite(inicio) || ultima + ZAP_CONSULTA_GAP_MS <= inicio + ZAP_ESPERA_MAX_MS)) p.proximaConsultaEm = new Date(ultima + ZAP_CONSULTA_GAP_MS).toISOString();
+  }
+  return p;
+}
 function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
-  return { id: r.id, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
+  return { id: r.id, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
 }
 
 /* ====================================================================

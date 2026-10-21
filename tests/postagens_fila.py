@@ -199,6 +199,13 @@ with sync_playwright() as p:
     aba(pg, "regras")
     chk("a aba Regras explica que falta publicar o Worker", "ainda não tem as regras" in pg.inner_text("#po-corpo"))
     chk("sem erro de JavaScript", not erros, erros)
+    ctx.close()
+    print("== Confirmação com carimbos do servidor ==")
+    ctx, pg, st, g, erros, msgs = abrir(b)
+    g["posts"][0].update({"status":"processando", "aguardaZap":True, "progresso":{"fase":"confirmacao", "desde":"2026-10-21T10:00:00Z", "proximaConsultaEm":"2026-10-21T10:02:00Z", "limiteEm":"2026-10-21T10:30:00Z"}})
+    aba(pg, "fila"); pg.wait_for_timeout(900)
+    chk("a fila mostra próxima consulta e limite de 30 min informados pelo servidor", pg.locator(".po-progresso").count() > 0 and "Próxima consulta prevista" in pg.inner_text("#po-corpo") and "30 min" in pg.inner_text("#po-corpo"))
+    chk("a confirmação oferece consultar sem reenviar", pg.locator("[data-a=consultar]").count() > 0)
     ctx.close(); b.close()
 
 print("\nOK=%d FALHAS=%d %s" % (len(OK), len(BAD), BAD))

@@ -59,6 +59,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("auditoria_produto.py", lambda o: "FALHAS=0" in o),   # quem cadastrou/editou aparece na lista e no formulário (backend 4.1)
     ("envios_retomar.py", lambda o: "FALHAS=0" in o),      # fila de envios guardada no aparelho: retoma sozinha, sem duplicar
     ("opcoes_lista.py", lambda o: "0 falhas" in o),        # v4.18: tamanhos e cores do servidor, Admin total cria e vale para todos
+    ("cadastro_plano_mestre.py", lambda o: "P-38/39/41/42: PASS" in o),
     ("pre_envio.py", lambda o: "FALHAS=0" in o),          # v4.20: pré-envio das mídias, opId, keepalive ao minimizar, retomada sem perguntar
     ("consultar_valor.py", lambda o: "FALHAS=0" in o),    # v4.21: "Consultar valor" (catálogo, sacola, cadastro, lote, Postagens)
     ("admin_busca_status.py", lambda o: "FALHAS=0" in o), # v4.21: busca do admin respeita o filtro de status + emojis dos botões
@@ -92,6 +93,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("instagram_admin.py", lambda o: "FALHAS=0" in o),   # painel: Produtos para aceitar (lista, editor, aceitar -> cadastro, conectar)
     # --- v4.25–v4.27 (18/10/2026): estavam FORA da bateria até 18/10 (achado na revisão das pendências) ---
     ("postagens_fila.py", lambda o: "FALHAS=0" in o),      # fila de Postagens com regras (pausa, intervalo por tipo, ▲▼, Próximo livre)
+    ("postagens_modelo_formato.js", lambda o: "FALHAS=0" in o),
     ("postagens_colagem.py", lambda o: "FALHAS=0" in o),   # 🧩 Colagem + 🖼️ Gerar imagens
     ("postagens_v425.py", lambda o: "FALHAS=0" in o),      # prévia leve, foto travada/centralizada, largura, Fazer em todos
     ("video_validacao.py", lambda o: "FALHAS: 0" in o),   # v6.7: validação de vídeo no navegador (cadastro e agendamento)

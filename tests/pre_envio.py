@@ -34,7 +34,8 @@ def novo(p, modo="ok", cloud_ok=True):
 
 def preencher(pg, nome="Vestido Pré"):
     pg.fill("#nome", nome); pg.fill("#preco", "99.90"); pg.fill("#estoque", "2")
-    pg.click("#chips-genero .chip:first-child")
+    if not pg.locator("#chips-genero .chip:first-child").evaluate('e => e.classList.contains("selecionado")'):
+        pg.click("#chips-genero .chip:first-child")
     pg.click("#btn-abrir-categorias"); pg.click("#cat-lista .cat-item:has-text('Vestido')"); pg.click("#cat-pronto")
     pg.locator('#chips-tamanhos .chip').filter(has_text=re.compile(r'^P$')).click()
 

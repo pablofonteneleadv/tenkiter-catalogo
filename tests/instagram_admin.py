@@ -14,19 +14,25 @@ OK = []; BAD = []
 def chk(n, c, e=""):
     (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + (" — " + str(e) if e and not c else ""))
 
+def abrir_importador(pg):
+    if not pg.locator("#card-menu-cadastro").evaluate("e => e.open"):
+        pg.locator("#card-menu-cadastro > summary").click()
+    pg.click("#ig-abrir")
+
 def novo(p, perms=None):
     b = p.chromium.launch(args=["--no-sandbox"]); ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
     ctx.add_init_script(SESSION); log = []
     st = install(ctx, log=log, versao="3.5", **({"perms": perms} if perms else {}))
     pg = ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("dialog", lambda d: d.accept())
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2500)
+    pg.locator("#card-menu-cadastro > summary").click()
     return b, pg, st, log, errs
 
 with sync_playwright() as p:
     print("== Admin total: faixa, lista, filtros ==")
     b, pg, st, log, errs = novo(p)
     chk("faixa aparece com o contador (2 esperando)", pg.locator("#ig-abrir .ig-badge").inner_text().strip() == "2", pg.locator("#ig-faixa").inner_text())
-    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card")
+    abrir_importador(pg); pg.wait_for_selector(".ig-card")
     chk("pendentes: 2 cartões (Pendentes + Sem identificação juntos), o mais recente (Story) primeiro? ordem do servidor", pg.locator(".ig-card").count() == 2 and "89,90" in pg.locator(".ig-sug").inner_text() and "P, M, G" in pg.locator(".ig-sug").inner_text())
     chk("não existe mais a aba Sem identificação", pg.locator("[data-ig=aba][data-g=sem_id]").count() == 0)
     axe(pg, "lista")
@@ -88,7 +94,7 @@ with sync_playwright() as p:
     b, pg, st, log, errs = novo(p)
     st["ig"]["conectado"] = False
     pg.reload(); pg.wait_for_timeout(2500)
-    pg.click("#ig-abrir"); pg.wait_for_selector("#ig-token")
+    abrir_importador(pg); pg.wait_for_selector("#ig-token")
     axe(pg, "conectar")
     chk("pede o token (campo de senha)", pg.get_attribute("#ig-token", "type") == "password")
     pg.fill("#ig-token", "curto"); pg.click("[data-ig=conectar]"); pg.wait_for_selector(".ig-msg.erro")
@@ -106,7 +112,7 @@ with sync_playwright() as p:
     mid = lambda i: {"id": "z%d" % i, "tipo": "foto", "url": "https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/z%d.jpg" % i, "mini": "https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/z%d.jpg" % i, "capa": True}
     for n in (3, 4):
         st["ig"]["rasc"].append({"id": n, "grupo": "pendente", "status": "pendente", "origem": "feed", "legenda": "Post %d" % n, "permalink": "", "publicadoEm": "2026-10-09T10:00:00Z", "precoSug": "", "tamanhosSug": "", "codigoDup": "", "produtoId": "", "midias": [mid(n)]})
-    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card")
+    abrir_importador(pg); pg.wait_for_selector(".ig-card")
     chk("cada post tem a caixinha 'Marcar para juntar'", pg.locator(".ig-selr").count() == 3, pg.locator(".ig-selr").count())
     chk("botão Juntar em cima, desligado enquanto há menos de 2 marcados", pg.locator("[data-ig=juntarMarcados]").is_disabled())
     pg.locator(".ig-selr").nth(0).check(); chk("com 1 marcado continua desligado", pg.locator("[data-ig=juntarMarcados]").is_disabled())
@@ -132,7 +138,7 @@ with sync_playwright() as p:
     def mm(pref, n, tipo="foto"): return {"id": "%s%d" % (pref, n), "tipo": tipo, "url": H + "%s%d.%s" % (pref, n, "mp4" if tipo == "video" else "jpg"), "mini": H + "%s%d.jpg" % (pref, n), "capa": False}
     st["ig"]["rasc"].append({"id": 3, "grupo": "pendente", "status": "pendente", "origem": "feed", "legenda": "P3", "permalink": "", "publicadoEm": "2026-10-09T10:00:00Z", "precoSug": "", "tamanhosSug": "", "codigoDup": "", "produtoId": "", "midias": [mm("c", i) for i in range(5)]})
     st["ig"]["rasc"].append({"id": 4, "grupo": "pendente", "status": "pendente", "origem": "feed", "legenda": "P4", "permalink": "", "publicadoEm": "2026-10-08T10:00:00Z", "precoSug": "", "tamanhosSug": "", "codigoDup": "", "produtoId": "", "midias": [mm("d", i) for i in range(3)] + [mm("v", 0, "video"), mm("v", 1, "video")]})
-    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card")
+    abrir_importador(pg); pg.wait_for_selector(".ig-card")
     for i in range(3): pg.locator(".ig-selr").nth(i).check()
     pg.click("[data-ig=juntarMarcados]"); pg.wait_for_selector(".ig-esc")
     cont = lambda: pg.locator("#ig-esc-cont").inner_text()
@@ -156,7 +162,7 @@ with sync_playwright() as p:
     st["ig"]["rasc"][1]["grupo"] = "nao_produto"
     for n in (3, 4):
         st["ig"]["rasc"].append({"id": n, "grupo": "pendente", "status": "pendente", "origem": "feed", "legenda": "Post %d" % n, "permalink": "", "publicadoEm": "2026-10-09T10:00:00Z", "precoSug": "", "tamanhosSug": "", "codigoDup": "", "produtoId": "", "midias": [mm("s%d_" % n, 0), mm("s%d_" % n, 1)]})
-    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card")
+    abrir_importador(pg); pg.wait_for_selector(".ig-card")
     chk("botão Cadastrar separado desligado com menos de 2", pg.locator("[data-ig=separadoMarcados]").is_disabled())
     for i in range(3): pg.locator(".ig-selr").nth(i).check()
     chk("liga com 3 e diz quantos", pg.locator("[data-ig=separadoMarcados]").is_enabled() and "3" in pg.locator("[data-ig=separadoMarcados]").inner_text())
@@ -181,7 +187,7 @@ with sync_playwright() as p:
     for n in (3, 4):
         st["ig"]["rasc"].append(dict(st["ig"]["rasc"][0], id=n, legenda="Post %d" % n, midias=[dict(st["ig"]["rasc"][0]["midias"][0], id="mm%d" % n, url=st["ig"]["rasc"][0]["midias"][0]["url"].replace(".jpg", "_%d.jpg" % n) if ".jpg" in st["ig"]["rasc"][0]["midias"][0]["url"] else st["ig"]["rasc"][0]["midias"][0]["url"] + "_%d" % n)]))
     st["ig"]["rasc"][0]["ia"] = {"nome": "Vestido Floral IA", "categorias": ["Vestido"], "generos": ["Feminino"], "cores": ["Azul"], "descricao": "Vestido leve."}
-    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card")
+    abrir_importador(pg); pg.wait_for_selector(".ig-card")
     chk("Aceitar e Descartar começam desligados", pg.locator("[data-ig=aceitarMarcados]").is_disabled() and pg.locator("[data-ig=descartarMarcados]").is_disabled())
     for i in range(3): pg.locator(".ig-selr").nth(i).check()
     chk("ligam com os marcados e mostram quantos", pg.locator("[data-ig=aceitarMarcados]").is_enabled() and "3" in pg.locator("[data-ig=aceitarMarcados]").inner_text() and "3" in pg.locator("[data-ig=descartarMarcados]").inner_text())
@@ -209,7 +215,7 @@ with sync_playwright() as p:
     b, pg, st, log, errs = novo(p)
     st["ig"]["rasc"][1]["grupo"] = "nao_produto"
     st["ig"]["rasc"].append(dict(st["ig"]["rasc"][0], id=3, legenda="Post 3"))
-    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card")
+    abrir_importador(pg); pg.wait_for_selector(".ig-card")
     for i in range(2): pg.locator(".ig-selr").nth(i).check()
     pg.click("[data-ig=descartarMarcados]"); pg.wait_for_timeout(1500)
     chk("Descartar vários manda os 2 para Descartados", sum(1 for x in st["ig"]["rasc"] if x["status"] == "descartado") == 2, [(x["id"], x["status"]) for x in st["ig"]["rasc"]])
@@ -217,7 +223,7 @@ with sync_playwright() as p:
 
     print("== IA: ligar a chave, ler sozinha, e o cadastro já vem preenchido ==")
     b, pg, st, log, errs = novo(p)
-    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card")
+    abrir_importador(pg); pg.wait_for_selector(".ig-card")
     chk("IA desligada: cards sem sugestão da IA", pg.locator(".ig-iaok").count() == 0)
     pg.click("[data-ig=config]"); pg.wait_for_selector("#ig-ia-chave")
     axe(pg, "conectar-ia")
@@ -242,7 +248,7 @@ with sync_playwright() as p:
     print("== Importar TODOS os posts ==")
     b, pg, st, log, errs = novo(p)
     msgs = []; pg.on("dialog", lambda d: msgs.append(d.message))
-    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card"); pg.click("[data-ig=config]"); pg.wait_for_selector("[data-ig=todos]")
+    abrir_importador(pg); pg.wait_for_selector(".ig-card"); pg.click("[data-ig=config]"); pg.wait_for_selector("[data-ig=todos]")
     chk("botão 'Importar TODOS os posts' ao lado do dos 20", "TODOS" in pg.locator("[data-ig=todos]").inner_text() and "20" in pg.locator("[data-ig=historico]").inner_text(), pg.locator("[data-ig=todos]").inner_text())
     axe(pg, "conectado-importar")
     pg.click("[data-ig=todos]"); pg.wait_for_selector(".ig-msg.ok:has-text('Pronto')", timeout=15000)
@@ -258,7 +264,7 @@ with sync_playwright() as p:
     print("== Importar TODOS: erro no meio mostra frase e permite continuar ==")
     b, pg, st, log, errs = novo(p)
     st["ig"]["hist_erro_na"] = 2
-    pg.click("#ig-abrir"); pg.wait_for_selector(".ig-card"); pg.click("[data-ig=config]"); pg.wait_for_selector("[data-ig=todos]")
+    abrir_importador(pg); pg.wait_for_selector(".ig-card"); pg.click("[data-ig=config]"); pg.wait_for_selector("[data-ig=todos]")
     pg.click("[data-ig=todos]"); pg.wait_for_selector(".ig-msg.erro:has-text('Parei')", timeout=15000)
     t = pg.locator(".ig-msg").inner_text()
     chk("parou com frase clara (4 copiados) e diz como continuar, sem JSON", "limite de chamadas" in t and "4 copiados" in t and "continuar de onde parou" in t and "{" not in t, t)
@@ -269,6 +275,7 @@ with sync_playwright() as p:
     b, pg, st, log, errs = novo(p)
     st["ig"]["fora"] = True
     pg.reload(); pg.wait_for_timeout(2500)
+    pg.locator("#card-menu-cadastro > summary").click()
     chk("faixa visível dizendo que falta ativar o importador (nunca some em silêncio)", pg.locator("#ig-faixa").is_visible() and "ainda não foi ativado" in pg.locator("#ig-faixa").inner_text(), pg.locator("#ig-faixa").inner_text())
     b.close()
 
