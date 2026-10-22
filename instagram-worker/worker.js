@@ -726,6 +726,20 @@ async function respostaGrupo_(r) {
     return JSON.parse(new TextDecoder().decode(bytes));
   } catch (e) { return null; } finally { reader.releaseLock(); }
 }
+/** A Wafly aceita base64 e URL. Para mídia nossa de até 12 MiB, mandamos
+ * os bytes do R2: a Wafly não precisa baixar um URL que pode sofrer bloqueio
+ * ou expirar durante o processamento do vídeo. Mídia maior segue por URL. */
+async function conteudoGrupo_(env, m) {
+  const url = String(m.url || '');
+  const prefixo = String(env.MIDIA_URL || '').replace(/\/$/, '') + '/m/';
+  if (!url.startsWith(prefixo)) return url;
+  const chave = url.slice(prefixo.length);
+  if (!/^[a-z0-9/_-]+\.(?:jpg|jpeg|png|webp|mp4)$/.test(chave) || chave.includes('..')) return url;
+  const obj = await env.MIDIA.get(chave);
+  if (!obj) throw new Error('MIDIA_AUSENTE');
+  if (!Number.isFinite(obj.size) || obj.size > 12 * 1024 * 1024) return url;
+  return b64(await obj.arrayBuffer());
+}
 /** Recibo durável por mídia: nunca repetir um envio cujo resultado ficou incerto.
  * O messageId da API é reply, NÃO é chave de idempotência. Não o usamos como tal. */
 async function enviarGrupoClientes_(env, p) {
@@ -733,18 +747,26 @@ async function enviarGrupoClientes_(env, p) {
   if (!cfg) return marcarErroPost_(env, p, 'O Grupo clientes ainda não está configurado. Avise o gestor.');
   const midias = JSON.parse(p.midias || '[]');
   for (let i = 0; i < midias.length; i++) {
-    const antigo = await env.DB.prepare('SELECT estado FROM postagem_grupo_recibo WHERE postagem_id=? AND ordem=?').bind(p.id, i).first();
+    const antigo = await env.DB.prepare('SELECT estado, atualizado_em FROM postagem_grupo_recibo WHERE postagem_id=? AND ordem=?').bind(p.id, i).first();
     if (antigo && antigo.estado === 'aceito') continue;
+    // O cron seguinte pode rodar enquanto a Wafly ainda processa o vídeo.
+    // Não transformar uma requisição em andamento em erro só porque já existe recibo.
+    if (antigo && antigo.estado === 'enviando' && p.status === 'processando' && Date.now() - Date.parse(antigo.atualizado_em || '') < 3 * 60000) return { ok: true, aguardando: true };
     if (antigo) return marcarErroPost_(env, p, 'Grupo clientes: envio sem confirmação. Confira na Wafly antes de qualquer novo envio; não reenviamos para evitar duplicação.');
+    let conteudo;
+    try { conteudo = await conteudoGrupo_(env, midias[i]); }
+    catch (e) { return marcarErroPost_(env, p, 'Grupo clientes: não consegui ler a mídia. Confira o arquivo e tente novamente.'); }
     const claim = await env.DB.prepare("INSERT OR IGNORE INTO postagem_grupo_recibo (postagem_id, ordem, estado, atualizado_em) VALUES (?,?,'enviando',?)").bind(p.id, i, agora()).run();
     if (!claim.meta || claim.meta.changes !== 1) return;
+    await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(agora(), agora(), p.id).run();
+    p.status = 'processando';
     const video = midias[i].tipo === 'video';
     const payload = { phone: cfg.phone, caption: String(p.legenda || '') };
-    payload[video ? 'video' : 'image'] = midias[i].url;
+    payload[video ? 'video' : 'image'] = conteudo;
     let r, j;
     try {
       r = await fetch('https://wafly.com.br/api-bridge-whats/instances/' + encodeURIComponent(cfg.instance) + '/token/' + encodeURIComponent(cfg.token) + (video ? '/send-video' : '/send-image'), {
-        method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(25000),
+        method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(90000),
         headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
       j = await respostaGrupo_(r);
@@ -1055,7 +1077,7 @@ function progressoPostagem_(r) {
 }
 function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
-  return { id: r.id, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
+  return { id: r.id, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, grupoEnvioIncerto: !!r.grupo_envio_incerto, permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
 }
 
 /* ====================================================================
@@ -1190,7 +1212,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
   const p = url.pathname;
   if (p === '/posts' && req.method === 'GET') {
     const lim = Math.min(100, Number(url.searchParams.get('limite')) || 60);
-    const q = (await env.DB.prepare("SELECT * FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
+    const q = (await env.DB.prepare("SELECT postagem.*, EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id=postagem.id AND g.estado='enviando') AS grupo_envio_incerto FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
     const c = (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM postagem GROUP BY status").all()).results || [];
     const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
     return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), regras: 1, config: await lerCfgPost(env), uso24h: await uso24hPorCanal_(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
@@ -1302,6 +1324,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     }
     if (p === '/post/reagendar') {
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
+      if (linha.canal === 'grupo' && await env.DB.prepare("SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='enviando'").bind(id).first()) return J({ ok: false, erro: 'O envio ao grupo ficou sem confirmação. Confira na Wafly; depois use “Repostar com novo ID” ou “Descartar”.' }, 409);
       if (linha.canal === 'grupo') await env.DB.prepare("DELETE FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='recusado'").bind(id).run();
       const r = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: b.quando }));
       if (r.erro) return J({ ok: false, erro: r.erro }, 400);
@@ -1316,6 +1339,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     if (p === '/post/proximo') {
       /* "Mandar para o próximo horário livre" da fila do tipo (respeita pausa e intervalo). */
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
+      if (linha.canal === 'grupo' && await env.DB.prepare("SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='enviando'").bind(id).first()) return J({ ok: false, erro: 'O envio ao grupo ficou sem confirmação. Confira na Wafly; depois use “Repostar com novo ID” ou “Descartar”.' }, 409);
       if (linha.canal === 'grupo') await env.DB.prepare("DELETE FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='recusado'").bind(id).run();
       const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, linha.canal);
       const r = proximoLivreMulti(cfg, bs, await ocupadosMulti_(env, cfg, bs, id), Date.now() + 60000);

@@ -41,7 +41,7 @@ def aba(pg, nome): pg.click("#po-abas [data-aba=%s]" % nome); pg.wait_for_timeou
 with sync_playwright() as p:
     b=p.chromium.launch(args=['--no-sandbox']);ctx,st=novo(b);g=st['ig'];g['regras']=True
     origem={'id':901,'tipo':'story','modo':'auto','legenda':'Legenda original','midias':[],'canal':'ambos','status':'erro','aguardaZap':True,'agendadoEm':'2026-10-21T13:11:00Z','erro':'Wafly ainda não confirmou','tentativas':0,'criadoPor':'Equipe'}
-    g['posts']=[dict(origem),dict(origem,id=902)];pedidos=[];avisos=[]
+    g['posts']=[dict(origem),dict(origem,id=902),dict(origem,id=904,canal='grupo',aguardaZap=False,grupoEnvioIncerto=True)];pedidos=[];avisos=[]
     def repost(route):
         q=json.loads(route.request.post_data);pedidos.append(q)
         g['posts'][0]['status']='cancelado';g['posts'].append(dict(origem,id=903,status='agendado',aguardaZap=False))
@@ -51,6 +51,8 @@ with sync_playwright() as p:
     pg.goto(BASE+'admin.html');pg.wait_for_timeout(2600);abrir(pg);aba(pg,'fila')
     item=pg.locator('.po-item[data-id="901"]')
     chk('erro incerto oferece consultar, repostar e descartar',item.locator('[data-a=consultar]').count()==1 and item.locator('[data-a=repostar]').count()==1 and item.locator('[data-a=cancelar]').inner_text()=='Descartar')
+    grupo=pg.locator('.po-item[data-id="904"]')
+    chk('grupo sem confirmação oferece somente repostar ou descartar',grupo.locator('[data-a=agora], [data-a=hora], [data-a=proximo]').count()==0 and grupo.locator('[data-a=repostar]').count()==1 and grupo.locator('[data-a=cancelar]').inner_text()=='Descartar')
     axe(pg,'erro incerto com novas ações')
     item.locator('[data-a=repostar]').click();pg.wait_for_timeout(800)
     chk('confirmação explica duplicação e regras',bool(avisos) and 'duplicar' in avisos[-1] and 'próximo horário permitido' in avisos[-1])
