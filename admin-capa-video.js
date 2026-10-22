@@ -36,8 +36,16 @@
     v.addEventListener('error', () => { s.carregado = false; range.disabled = true; pronto(); aviso.textContent = 'Não consegui abrir este vídeo. Para vídeos antigos, tente escolher o arquivo do aparelho.'; });
     v.addEventListener('seeking', () => { s.buscando = true; pronto(); });
     v.addEventListener('seeked', () => { s.buscando = false; pronto(); });
-    v.addEventListener('timeupdate', () => { range.value = String(v.currentTime); });
-    range.addEventListener('input', () => { v.pause(); v.currentTime = Number(range.value); });
+    v.addEventListener('timeupdate', () => { if (!s.arrastando) range.value = String(v.currentTime); });
+    range.addEventListener('pointerdown', () => { s.arrastando = true; });
+    range.addEventListener('pointerup', () => { s.arrastando = false; });
+    range.addEventListener('change', () => { s.arrastando = false; });
+    range.addEventListener('input', () => {
+      if (!s.carregado || s.gerando) return;
+      v.pause();
+      const tempo = Math.max(0, Math.min(Number(range.value), Number(range.max)));
+      if (Number.isFinite(tempo)) v.currentTime = tempo;
+    });
     o.querySelector('#capa-video-fechar').addEventListener('click', fechar);
     o.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fechar(); return; }
@@ -52,6 +60,7 @@
       try {
         const c = document.createElement('canvas'), scale = Math.min(1, 1600 / Math.max(v.videoWidth, v.videoHeight));
         c.width = Math.max(1, Math.round(v.videoWidth * scale)); c.height = Math.max(1, Math.round(v.videoHeight * scale));
+        if (v.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || s.buscando) throw new Error('quadro ainda não carregado');
         c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
         const data = c.toDataURL('image/jpeg', 0.88);
         if (atual !== s) return;
@@ -59,7 +68,7 @@
         if (atual === s) fechar();
       } catch (e) {
         if (atual !== s) return;
-        aviso.textContent = 'Não consegui usar este quadro. Confira o limite de fotos ou escolha o vídeo do aparelho e tente novamente.';
+        aviso.textContent = 'Não consegui usar este quadro. Aguarde o vídeo carregar; se continuar, confira o limite de fotos ou escolha o arquivo original no aparelho. Alguns vídeos não permitem extrair imagens.';
         s.gerando = false; pronto();
       }
     });
