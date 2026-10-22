@@ -1,0 +1,18 @@
+const fs=require("node:fs"),assert=require("node:assert/strict");
+const html=fs.readFileSync("treinamento-postagens-fase1.html","utf8");
+const js=fs.readFileSync("treinamento-postagens-fase1.js","utf8");
+assert.match(html,/connect-src 'none'/);
+assert.match(html,/form-action 'none'/);
+assert.match(html,/id="editor"/);
+for(const name of ["modos","destinos","buscaPecas","gradePecas","acoesPecas","formatos","midias","legenda","quando"])assert.ok(js.includes("ui."+name+"("),name);
+assert.match(js,/data-hora/);
+assert.match(js,/s\.ids\.length>1&&s\.ids\.length<=8/);
+assert.match(js,/s\.destinos\.length/);
+assert.match(js,/s\.midia\.length/);
+assert.match(js,/document\.createTextNode\(valor\)/);
+assert.doesNotMatch(js,/\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon|\.publicar\s*\(|\.agendar\s*\(/);
+const ui=require("../postagens-controles.js");
+assert.match(ui.destinos(["instagram","grupo"]),/Grupo clientes/);
+assert.match(ui.acoesPecas(["TREINO-001","TREINO-002"],2,true),/usarjuntas/);
+assert.match(ui.formatos("story",true),/Story/);
+console.log("Fase 1: controles compartilhados, múltiplas peças, destinos e isolamento OK");
