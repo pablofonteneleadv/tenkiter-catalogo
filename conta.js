@@ -120,7 +120,9 @@
     function zap(nome, ident) {
       var num = digitos(o.whatsLoja || (typeof WHATSAPP_NUMERO !== 'undefined' ? WHATSAPP_NUMERO : ''));
       if (num && num.length <= 11) num = '55' + num;
-      var msg = 'Olá! Esqueci minha senha do site da TENKiTER Modas e preciso de ajuda para entrar.' + (nome ? '\nMeu nome: ' + nome : '') + (ident ? '\nMeu WhatsApp/e-mail/CPF de cadastro: ' + ident : '');
+      // O link wa.me pode ficar no histórico do navegador e em prévias.
+      // A identificação é conferida em conversa privada pela gestão.
+      var msg = 'Olá! Esqueci minha senha do site da TENKiTER Modas e preciso de ajuda para entrar.';
       return 'https://wa.me/' + num + '?text=' + encodeURIComponent(msg);
     }
     function telaGestao(nome, ident, motivo) {
@@ -130,6 +132,7 @@
       var a = el('a', { href: zap(nome, ident), target: '_blank', rel: 'noopener' });
       var b = el('button', { type: 'button', 'class': 'tkc-zap', text: '💬 Chamar a gestão no WhatsApp' });
       a.appendChild(b); box.appendChild(a);
+      box.appendChild(el('p', { text: 'Por segurança, confirme seus dados somente na conversa com a gestão. A mensagem pronta não inclui CPF, nascimento ou e-mail.' }));
       box.appendChild(el('p', { text: 'Depois que entrar, cadastre o seu CPF em "Meu perfil": assim da próxima vez você mesmo(a) recupera a senha, sem esperar ninguém.', style: 'margin-top:14px;font-size:.85rem;color:#555' }));
       var f = el('button', { type: 'button', 'class': 'tkc-sec btn-fechar', text: 'Fechar' }); f.addEventListener('click', fechar); box.appendChild(f);
     }

@@ -143,6 +143,10 @@ function d1() {
   const out=await A('POST','/post',body);
   const linhas=(await DB.prepare('SELECT * FROM postagem WHERE id IN (?,?) ORDER BY id').bind(...out.j.ids).all()).results;
   chk('Story manual cria grupo automático independente com legenda',linhas.length===2&&linhas[0].modo==='manual'&&linhas[1].modo==='auto'&&linhas[1].canal==='grupo'&&linhas[1].legenda===body.legenda);
+  const tres=await A('POST','/post',{...body,canal:'ambos'});
+  const separadas=(await DB.prepare('SELECT * FROM postagem WHERE id IN (?,?,?) ORDER BY id').bind(...tres.j.ids).all()).results;
+  chk('Story com link separa Instagram manual, Status automático e grupo automático',tres.j.ok&&tres.j.gruposClientes===1&&separadas.length===3&&separadas[0].canal==='instagram'&&separadas[0].modo==='manual'&&separadas[1].canal==='whatsapp'&&separadas[1].modo==='auto'&&separadas[2].canal==='grupo'&&separadas[2].modo==='auto');
+  chk('três destinos mantêm legenda, mídia e link só no Instagram',separadas.every(p=>p.legenda===body.legenda&&p.midias===separadas[0].midias)&&separadas[0].link===body.link&&separadas[1].link===''&&separadas[2].link==='');
   chk('fila identifica destino grupo', (await A('GET','/posts')).j.posts.some(p=>p.canal==='grupo'));
   await cfg('ig_token',TOKEN);
   for(const tipo of ['feed','carrossel','reels','story']) {

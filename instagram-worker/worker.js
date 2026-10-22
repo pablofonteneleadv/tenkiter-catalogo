@@ -1200,7 +1200,17 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const originais = Array.isArray(b.posts) ? b.posts : [b];
     if (!originais.length || originais.length > 12 || originais.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) return J({ ok: false, erro: 'Envie de uma a doze postagens por vez.' }, 400);
     if (originais.some((x) => x.grupoClientes === true || x.canal === 'grupo') && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado. Avise o gestor.' }, 409);
-    const lista = originais.flatMap((x) => x.grupoClientes === true && x.canal !== 'grupo' ? [x, Object.assign({}, x, { canal: 'grupo', modo: 'auto', link: '', grupoClientes: false })] : [x]);
+    const lista = originais.flatMap((x) => {
+      // Story com figurinha de link exige Instagram manual. O Status continua
+      // automático e precisa de um recibo próprio para nunca ser reenviado
+      // quando alguém concluir a etapa manual do Instagram.
+      const destinos = x.canal === 'ambos' && x.modo === 'manual'
+        ? [Object.assign({}, x, { canal: 'instagram', grupoClientes: false }),
+          Object.assign({}, x, { canal: 'whatsapp', modo: 'auto', link: '', grupoClientes: false })]
+        : [x];
+      if (x.grupoClientes === true && x.canal !== 'grupo') destinos.push(Object.assign({}, x, { canal: 'grupo', modo: 'auto', link: '', grupoClientes: false }));
+      return destinos;
+    });
     const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
     if (pend + lista.length > 200) return J({ ok: false, erro: 'Há postagens demais na fila (200). Espere algumas saírem.' }, 429);
     const vs = []; for (const x of lista) { const r = validarPostagem(x); if (r.erro) return J({ ok: false, erro: r.erro }, 400); vs.push(r.v); }
@@ -1228,7 +1238,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const criadas = await env.DB.batch(inserts);
     criadas.forEach((r) => ids.push(r.meta && r.meta.last_row_id));
     if (vs.some((v) => v.agora) && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
-    return J({ ok: true, ids: ids, quandos: quandos, ajustes: ajustes, postagensOriginais: originais.length, gruposClientes: lista.length - originais.length });
+    return J({ ok: true, ids: ids, quandos: quandos, ajustes: ajustes, postagensOriginais: originais.length, gruposClientes: originais.filter((x) => x.grupoClientes === true && x.canal !== 'grupo').length });
   }
   if (p === '/post/config' && req.method === 'GET') return J({ ok: true, config: await lerCfgPost(env), padrao: CFG_POST_PADRAO, podeEditar: (perms || []).indexOf('gerir_acessos') !== -1 });
   if (p === '/post/config' && req.method === 'POST') {
