@@ -35,6 +35,24 @@ export function tipoPelosBytes(b) {
   return null;
 }
 
+// Inspeciona identificadores de codec no contêiner MP4 antes de liberar a mídia.
+// Resultado 'desconhecido' não equivale a H.264 validado.
+function codecMp4_(buf) {
+  const b = new Uint8Array(buf);
+  if (b.length < 12) return 'desconhecido';
+  const marcas = ['hvc1', 'hev1', 'avc1', 'avc3'];
+  const achados = new Set();
+  // Procura sample entries (incluindo moov); não depende de metadados do navegador.
+  for (let i = 0; i + 4 <= b.length; i++) {
+    if (b[i] === 0x68 && b[i+1] === 0x76 && b[i+2] === 0x63 && b[i+3] === 0x31) achados.add('hvc1');
+    if (b[i] === 0x68 && b[i+1] === 0x65 && b[i+2] === 0x76 && b[i+3] === 0x31) achados.add('hev1');
+    if (b[i] === 0x61 && b[i+1] === 0x76 && b[i+2] === 0x63 && (b[i+3] === 0x31 || b[i+3] === 0x33)) achados.add('avc');
+  }
+  if (achados.has('hvc1') || achados.has('hev1')) return 'hevc';
+  if (achados.has('avc')) return 'h264';
+  return 'desconhecido';
+}
+
 function origemPermitida(env, req) {
   const o = req.headers.get('Origin') || '';
   const lista = (env.ORIGENS ? String(env.ORIGENS).split(',') : ORIGENS_PADRAO).map(s => s.trim());
@@ -133,6 +151,7 @@ export default {
       const buf = await req.arrayBuffer();
       if (buf.byteLength !== tam) return resp({ ok: false, erro: 'Envio incompleto.' }, 400, H());
       const tipo = tipoPelosBytes(buf);
+      const codecVideo = tipo && tipo.ext === 'mp4' ? codecMp4_(buf) : tipo && tipo.video ? 'desconhecido' : null;
       if (!tipo) return resp({ ok: false, erro: 'Formato não aceito. Use foto JPG/PNG/WEBP ou vídeo MP4/WEBM.' }, 415, H());
       if (!tipo.video && buf.byteLength > FOTO_MAX) return resp({ ok: false, erro: 'Foto grande demais (máximo 2,5 MB). Reduza e envie de novo.' }, 413, H());
       // ?poster=<chave do vídeo>: este arquivo é a MINIATURA de um vídeo já enviado — fica com o mesmo nome do vídeo, terminando em .jpg
@@ -159,7 +178,7 @@ export default {
       uso.bytes += buf.byteLength; uso.arquivos += 1;
       await gravarUso(env, uso);
       await env.CACHE.put(hoje, String(feitos + 1), { expirationTtl: 172800 });
-      return resp({ ok: true, chave: chave, url: url.origin + '/m/' + chave, tipo: tipo.video ? 'video' : 'foto', bytes: buf.byteLength }, 200, H());
+      return resp({ ok: true, chave: chave, url: url.origin + '/m/' + chave, tipo: tipo.video ? 'video' : 'foto', codecVideo, requerConversao: codecVideo === 'hevc', bytes: buf.byteLength }, 200, H());
     }
 
     if (caminho.startsWith('/m/') && req.method === 'DELETE') {
