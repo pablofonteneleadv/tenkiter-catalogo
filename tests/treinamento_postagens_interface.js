@@ -4,6 +4,8 @@ assert.match(html,/connect-src 'none'/);assert.match(html,/form-action 'none'/);
 for(const file of ["postagens-controles.js","treinamento-postagens-nucleo.js","treinamento-postagens-real.js"])assert.ok(html.includes('src="'+file+'"'));
 assert.ok(admin.includes('src="postagens-controles.js"'));
 assert.ok(painel.includes("TKPostagensControles.destinos(ds)"));
+assert.ok(js.includes("ui.buscaPecas(")&&js.includes("ui.gradePecas(")&&js.includes("ui.legenda("));
+assert.ok(painel.includes("TKPostagensControles.buscaPecas(n.busca)"));
 assert.ok(js.includes("ui.destinos([])")&&js.includes("ui.formatos(")&&js.includes("ui.modos(")&&js.includes("ui.produto(p)"));
 assert.doesNotMatch(js,/\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon/);
 assert.ok(js.includes("localStorage.setItem")&&js.includes("JSON.stringify(ultimo"));
