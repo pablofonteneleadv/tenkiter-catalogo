@@ -4,7 +4,9 @@ function destinos(selecionados){const ds=Array.isArray(selecionados)?selecionado
 function formatos(selecionado,apenasStory){return '<div class="po-chips" role="group" aria-label="Tipo de postagem">'+(apenasStory?[["story","Story"]]:[["story","Story"],["feed","Feed"],["carrossel","Carrossel"],["reels","Reels"]]).map(([id,nome])=>'<button type="button" data-tipo="'+id+'" aria-pressed="'+(selecionado===id)+'">'+nome+'</button>').join("")+'</div>';}
 function modos(selecionado){return '<div class="po-chips" role="group" aria-label="Tipo de conteúdo">'+[["peca","🛍️ Com peça"],["livre","✍️ Livre"],["cliente","🧡 Ela usa TM"]].map(([id,nome])=>'<button type="button" data-modo="'+id+'" aria-pressed="'+(selecionado===id)+'">'+nome+'</button>').join("")+'</div>';}
 function produto(p){return '<button type="button" class="po-card" data-psel="'+esc(p.ID)+'" aria-pressed="false"><b>'+esc(p.Nome)+'</b><small>'+esc(p.Codigo)+' · R$ '+Number(p.Preco).toFixed(2).replace(".",",")+'</small></button>';}
-const api=Object.freeze({destinos,formatos,modos,produto});
+function midias(lista){return '<div class="po-midias asp-9" role="group" aria-label="Mídias da peça">'+(lista||[]).map((m,i)=>'<button type="button" class="po-m" data-m="'+i+'" aria-pressed="'+!!m.sel+'" aria-label="'+(m.tipo==="video"?"Vídeo":"Foto "+(i+1))+(m.sel?", escolhida":", não escolhida")+'">'+(m.url?'<img src="'+esc(m.url)+'" alt="" loading="lazy">':'<span>🖼️ Foto fictícia</span>')+'</button>').join("")+'</div>';}
+function quando(opcao){return '<div class="po-chips" role="group" aria-label="Quando publicar">'+[["sequencia","Na sequência"],["agora","Agora mesmo"],["data","Dia e hora"]].map(([id,label])=>'<button type="button" data-quando="'+id+'" aria-pressed="'+(opcao===id)+'">'+label+'</button>').join("")+'</div>';}
+const api=Object.freeze({destinos,formatos,modos,produto,midias,quando});
 if(typeof module!=="undefined"&&module.exports)module.exports=api;
 if(root)root.TKPostagensControles=api;
 })(typeof window!=="undefined"?window:null);
