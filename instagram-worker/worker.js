@@ -711,6 +711,23 @@ function cfgGrupoClientes_(env) {
     return c.instance && c.token && c.clientToken && /^\d+-group$/.test(c.phone) ? c : null;
   } catch (e) { return null; }
 }
+/** Sonda somente de leitura. Nunca envia mensagens nem grava dados de clientes. */
+async function diagnosticarGrupoClientes_(env) {
+  const cfg = cfgGrupoClientes_(env);
+  if (!cfg) return { verificadoEm: agora(), configurado: false };
+  const base = 'https://wafly.com.br/api-bridge-whats/instances/' + encodeURIComponent(cfg.instance) + '/token/' + encodeURIComponent(cfg.token);
+  const out = { verificadoEm: agora(), configurado: true };
+  for (const [nome, caminho] of [['sessao', '/status'], ['grupo', '/group-metadata/' + encodeURIComponent(cfg.phone)]]) {
+    try {
+      const r = await fetch(base + caminho, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(12000), headers: { 'Client-Token': cfg.clientToken } });
+      const j = await respostaGrupo_(r);
+      out[nome] = { http: r.status };
+      if (nome === 'sessao' && j && typeof j.value === 'string') out[nome].estado = /^[A-Z_]{1,30}$/.test(j.value) ? j.value : 'DESCONHECIDO';
+      if (nome === 'grupo') out[nome].encontrado = r.ok && !!j && j.value !== false && !j.error;
+    } catch (e) { out[nome] = { erro: 'SEM_RESPOSTA' }; }
+  }
+  return out;
+}
 async function respostaGrupo_(r) {
   if (!r.body) return null;
   const reader = r.body.getReader(); let size = 0; const chunks = [];
@@ -771,11 +788,15 @@ async function enviarGrupoClientes_(env, p) {
       });
       j = await respostaGrupo_(r);
     } catch (e) { return marcarErroPost_(env, p, 'Grupo clientes: resposta interrompida. Confira na Wafly; o sistema não repetirá este envio automaticamente.'); }
+    const respostaInfo = { postagemId: p.id, ordem: i, em: agora(), http: r.status,
+      campos: j && typeof j === 'object' && !Array.isArray(j) ? Object.keys(j).filter(k => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 15) : [],
+      valor: j && typeof j.value === 'boolean' ? j.value : null, idPresente: !!(j && j.messageId) };
+    try { await cfgSet(env, 'grupo_ultimo_envio', JSON.stringify(respostaInfo)); } catch (e) { /* diagnóstico não bloqueia recibo */ }
     if (!r.ok || !j || j.value === false || j.error || !j.messageId) {
       // Só rejeições explícitas 4xx (exceto timeout/conflito/limite) permitem tentativa manual posterior.
       const rejeitado = r.status >= 400 && r.status < 500 && ![408, 409, 429].includes(r.status);
       if (rejeitado) await env.DB.prepare("UPDATE postagem_grupo_recibo SET estado='recusado', atualizado_em=? WHERE postagem_id=? AND ordem=?").bind(agora(), p.id, i).run();
-      return marcarErroPost_(env, p, rejeitado ? 'Grupo clientes: a Wafly recusou a publicação. Confira conexão e permissão de administrador antes de tentar novamente.' : 'Grupo clientes: não houve confirmação de aceite. Confira na Wafly; não reenviamos automaticamente.');
+      return marcarErroPost_(env, p, rejeitado ? 'Grupo clientes: a Wafly recusou a publicação (HTTP ' + r.status + '). Confira conexão e permissão antes de tentar novamente.' : 'Grupo clientes: sem confirmação da Wafly (HTTP ' + r.status + '). Confira na Wafly; não reenviamos automaticamente.');
     }
     await env.DB.prepare("UPDATE postagem_grupo_recibo SET estado='aceito', mensagem_id=?, atualizado_em=? WHERE postagem_id=? AND ordem=?").bind(String(j.messageId).slice(0, 200), agora(), p.id, i).run();
   }
@@ -844,6 +865,18 @@ async function falhaPostagem(env, p, e) {
 export async function processarPostagens(env) {
   try {
     await iniciar(env);
+    // Após uma falha de grupo, registrar a saúde da instância e do destino sem
+    // repetir a postagem. A sondagem é limitada a uma vez a cada cinco minutos.
+    if (cfgGrupoClientes_(env)) {
+      const ultimo = Number(await cfgGet(env, 'grupo_saude_ms')) || 0;
+      if (Date.now() - ultimo > 300000) {
+        const falha = await env.DB.prepare("SELECT id FROM postagem WHERE canal='grupo' AND status='erro' AND atualizado_em>? LIMIT 1").bind(new Date(Date.now() - 3600000).toISOString()).first();
+        if (falha) {
+          await cfgSet(env, 'grupo_saude_ms', Date.now());
+          await cfgSet(env, 'grupo_saude', JSON.stringify(await diagnosticarGrupoClientes_(env)));
+        }
+      }
+    }
     const t = agora();
     await env.DB.prepare("UPDATE postagem SET status='manual_pendente', atualizado_em=? WHERE modo='manual' AND status='agendado' AND agendado_em<=?").bind(t, t).run();
     const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY agendado_em, id LIMIT 40").bind(t).all()).results || [];
