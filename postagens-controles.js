@@ -13,7 +13,7 @@ function gradePecas(lista,selecionados,opcoes){
  const preco=typeof cfg.preco==="function"?cfg.preco:p=>Number(p.Preco)>0?"R$ "+Number(p.Preco).toFixed(2).replace(".",","):"Consulte valor";
  return '<div class="po-grade" role="group" aria-label="Peças">'+(itens.length?itens.map(p=>{
   const on=sel.includes(String(p.ID));
-  return '<button type="button" class="po-card" data-psel="'+esc(p.ID)+'" aria-pressed="'+on+'"><span class="po-ck" aria-hidden="true">'+(on?"✓":"")+'</span><img src="'+esc(foto(p))+'" alt="" loading="lazy"><b>'+esc(p.Nome)+'</b><small>'+esc(p.Codigo||"")+' · '+esc(preco(p))+'</small></button>';
+  return '<button type="button" class="po-card" data-psel="'+esc(p.ID)+'" aria-pressed="'+on+'"><span class="po-ck" aria-hidden="true">'+(on?"✓":"")+'</span>'+(foto(p)?'<img src="'+esc(foto(p))+'" alt="" loading="lazy">':'<span class="po-sem-foto" aria-hidden="true">🖼️</span>')+'<b>'+esc(p.Nome)+'</b><small>'+esc(p.Codigo||"")+' · '+esc(preco(p))+'</small></button>';
  }).join(""):'<p class="po-ajuda" style="padding:10px;grid-column:1/-1">Nenhuma peça com esses filtros.</p>')+'</div>';
 }
 function acoesPecas(selecionados,quantidadeVisivel,todas){
