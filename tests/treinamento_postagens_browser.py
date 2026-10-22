@@ -30,11 +30,13 @@ def main():
         page.locator('[data-acao="conclusao"]').click()
         assert page.locator("#final").is_visible()
         assert "Correções: 1" in page.locator("#resumo").inner_text()
+        assert "Nenhum envio realizado" in page.locator("#resumo").inner_text()
         with page.expect_download() as download:
             page.locator("#exportar").click()
         assert download.value.suggested_filename.endswith(".json")
         assert not requests,requests
         assert not errors,errors
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"),"Rolagem horizontal indevida"
         browser.close()
     print("Android 390px: nove passos, erro corrigido, exportação e isolamento OK")
 
