@@ -1,7 +1,7 @@
 (function(){"use strict";
 const TK_RASCUNHO_DB_="tk_po_rascunho_v1";
 
-function treinoPoInicio_(){window.location.href='treinamento-postagens-simulacao.html';}
+function treinoPoInicio_(){window.location.href='treinamento-postagens-real.html';}
 let tkRascunhoTimer_=null,tkRascunhoPendente_=false;
 function abrirDbRascunho_(){
   return new Promise((resolve,reject)=>{
