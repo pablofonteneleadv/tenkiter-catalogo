@@ -170,7 +170,9 @@ jobs:
 
       - name: Treinamento de postagens no Chromium mobile
         if: needs.escopo.outputs.suite_completa == 'true' || github.event_name == 'pull_request'
-        run: python3 tests/treinamento_postagens_browser.py
+        run: |
+          python3 tests/treinamento_postagens_browser.py
+          python3 tests/treinamento_postagens_fase4_browser.py
 
       - name: Bateria completa de jornadas, acessibilidade e integrações
         if: needs.escopo.outputs.suite_completa == 'true'
