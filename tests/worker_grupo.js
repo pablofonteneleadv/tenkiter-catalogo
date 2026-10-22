@@ -135,6 +135,9 @@ function d1() {
   await DB.prepare('UPDATE postagem SET midias=? WHERE id=?').bind(JSON.stringify([{url:env.MIDIA_URL+'/m/t/202610/hevc.mp4',tipo:'video'}]),hevc).run();
   await W.processarPostagens(env);
   chk('HEVC é bloqueado antes da Wafly, com erro claro e sem recibo',grupoCalls.length===2&&(await lerPost(hevc)).erro.includes('H.265/HEVC')&&!(await DB.prepare('SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=?').bind(hevc).first()));
+  const antesHevc=Number((await DB.prepare('SELECT COUNT(*) AS n FROM postagem').first()).n);
+  const agendaHevc=await A('POST','/post',{tipo:'story',modo:'auto',legenda:'Teste',midias:[{url:env.MIDIA_URL+'/m/t/202610/hevc.mp4',tipo:'video'}],quando:ts(15),canal:'grupo'});
+  chk('HEVC é recusado no agendamento, antes de criar item na fila',agendaHevc.r.status===400&&agendaHevc.j.erro.includes('H.264/AAC')&&Number((await DB.prepare('SELECT COUNT(*) AS n FROM postagem').first()).n)===antesHevc);
   modo='aguardar';
   const lento=await novaPostagem('grupo');
   const primeiroCron=W.processarPostagens(env);

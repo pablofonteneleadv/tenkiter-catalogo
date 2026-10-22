@@ -1287,6 +1287,12 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
     if (pend + lista.length > 200) return J({ ok: false, erro: 'Há postagens demais na fila (200). Espere algumas saírem.' }, 429);
     const vs = []; for (const x of lista) { const r = validarPostagem(x); if (r.erro) return J({ ok: false, erro: r.erro }, 400); vs.push(r.v); }
+    // Agendamento importante não pode esperar até a hora marcada para descobrir
+    // que o MP4 do grupo usa HEVC e será recusado pela ponte de mensagens.
+    for (const v of vs) if (v.canal === 'grupo') for (const m of v.midias) if (m.tipo === 'video') {
+      try { await conteudoGrupo_(env, m); }
+      catch (e) { return J({ ok: false, erro: e && e.message === 'VIDEO_HEVC' ? 'Este vídeo usa H.265/HEVC. Para o Grupo clientes, envie um MP4 H.264/AAC antes de agendar.' : 'Não consegui validar o vídeo do Grupo clientes. Envie-o novamente antes de agendar.' }, 400); }
+    }
     if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto' && canalUsaInstagram_(v.canal))) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
     const ids = [], inserts = [], quandos = [], por = String(b.por || '').slice(0, 60);
     const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [], intervaloMs = intervaloPedidoMs_(b.intervalo);
