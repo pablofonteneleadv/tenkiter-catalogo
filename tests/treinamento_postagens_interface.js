@@ -6,7 +6,7 @@ assert.ok(admin.includes('src="postagens-controles.js"'));
 assert.ok(painel.includes("TKPostagensControles.destinos(ds)"));
 assert.ok(js.includes("ui.buscaPecas(")&&js.includes("ui.gradePecas(")&&js.includes("ui.legenda("));
 assert.ok(painel.includes("TKPostagensControles.buscaPecas(n.busca)"));
-assert.ok(js.includes("ui.destinos([])")&&js.includes("ui.formatos(")&&js.includes("ui.modos(")&&js.includes("ui.produto(p)"));
+assert.ok(js.includes("ui.destinos([])")&&js.includes("ui.formatos(")&&js.includes("ui.modos(")&&js.includes("ui.gradePecas([p],[])"));
 assert.doesNotMatch(js,/\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon/);
 assert.ok(js.includes("localStorage.setItem")&&js.includes("JSON.stringify(ultimo"));
 console.log("Controles compartilhados, isolamento e relatorio local: OK");
