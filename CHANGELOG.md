@@ -13,6 +13,8 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## Fotos com IA — 2026-10-21
 
+- Planejar até 20 looks, dividir em grupos de até dois ou três respeitando quatro referências, trocar peças por arrasto/teclado e retomar somente o restante após falha parcial.
+
 - Cada resultado guarda as peças e preços à vista usados no pedido; legenda e link da seleção podem ser copiados numa seção recolhível.
 
 ## Capa de vídeo — 2026-10-21
