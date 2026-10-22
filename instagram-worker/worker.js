@@ -78,6 +78,7 @@ const DDL = [
   `CREATE TABLE IF NOT EXISTS postagem (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, modo TEXT NOT NULL DEFAULT 'auto', legenda TEXT DEFAULT '', midias TEXT NOT NULL DEFAULT '[]', produto TEXT DEFAULT '', template TEXT DEFAULT '', link TEXT DEFAULT '', agendado_em TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'agendado', containers TEXT DEFAULT '', inicio_proc TEXT DEFAULT '', tentativas INTEGER DEFAULT 0, erro TEXT DEFAULT '', ig_id TEXT DEFAULT '', permalink TEXT DEFAULT '', criado_por TEXT DEFAULT '', criado_em TEXT, atualizado_em TEXT, publicado_em TEXT DEFAULT '', grupo TEXT DEFAULT '', canal TEXT NOT NULL DEFAULT 'instagram')`,
   `CREATE TABLE IF NOT EXISTS foto_cliente (id INTEGER PRIMARY KEY AUTOINCREMENT, origem TEXT NOT NULL DEFAULT 'cliente', url TEXT NOT NULL, chave TEXT, whats TEXT DEFAULT '', nome TEXT DEFAULT '', instagram TEXT DEFAULT '', obs TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'nova', vinculo TEXT DEFAULT '', criado_por TEXT DEFAULT '', criado_em TEXT, usada_em TEXT DEFAULT '')`,
   `CREATE TABLE IF NOT EXISTS fotoia (id INTEGER PRIMARY KEY AUTOINCREMENT, status TEXT NOT NULL DEFAULT 'fila', nome TEXT DEFAULT '', produto TEXT DEFAULT '', extra TEXT DEFAULT '', fontes TEXT NOT NULL DEFAULT '[]', resultado TEXT DEFAULT '', modelo TEXT DEFAULT '', bytes INTEGER DEFAULT 0, tent INTEGER DEFAULT 0, prox_em TEXT DEFAULT '', erro TEXT DEFAULT '', criado_por TEXT DEFAULT '', criado_em TEXT, atualizado_em TEXT, pronto_em TEXT)`,
+  `CREATE TABLE IF NOT EXISTS postagem_grupo_recibo (postagem_id INTEGER NOT NULL, ordem INTEGER NOT NULL, estado TEXT NOT NULL, mensagem_id TEXT DEFAULT '', atualizado_em TEXT, PRIMARY KEY (postagem_id, ordem))`,
   `CREATE INDEX IF NOT EXISTS ix_fotoia ON fotoia (status, prox_em)`,
   `CREATE INDEX IF NOT EXISTS ix_fc ON foto_cliente (status, id)`,
   `CREATE INDEX IF NOT EXISTS ix_post ON postagem (status, agendado_em)`,
@@ -582,7 +583,7 @@ const TIPOS_POST = ['feed', 'carrossel', 'reels', 'story'];
  * O canal precisa ser GRAVADO junto com a peca e LIDO de volta pelo processador da fila. Era
  * exatamente isso que faltava: o campo chegava no POST, era descartado no INSERT e a fila publicava
  * sempre no Instagram -- mesmo com "somente WhatsApp" escolhido na tela. */
-const CANAIS_POSTAGEM = ['instagram', 'whatsapp', 'ambos'];
+const CANAIS_POSTAGEM = ['instagram', 'whatsapp', 'ambos', 'grupo'];
 const CANAL_POSTAGEM_PADRAO = 'instagram';
 function normalizarCanal_(v) { const c = String(v == null ? '' : v).trim().toLowerCase(); return CANAIS_POSTAGEM.indexOf(c) === -1 ? CANAL_POSTAGEM_PADRAO : c; }
 function canalUsaInstagram_(c) { const x = normalizarCanal_(c); return x === 'instagram' || x === 'ambos'; }
@@ -700,7 +701,65 @@ async function marcarErroPost_(env, p, frase) {
   try { await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind(String(frase || '').slice(0, 300), agora(), p.id).run(); } catch (e) { /* o proximo minuto tenta de novo */ }
   return { ok: false, erro: frase };
 }
+/** Destino privado e fixo: nunca aceitar telefone/credenciais vindos do navegador. */
+function cfgGrupoClientes_(env) {
+  try {
+    const c = JSON.parse(env.WAFLY_GRUPO_CLIENTES || '{}');
+    return c.instance && c.token && c.clientToken && /^\d+-group$/.test(c.phone) ? c : null;
+  } catch (e) { return null; }
+}
+async function respostaGrupo_(r) {
+  if (!r.body) return null;
+  const reader = r.body.getReader(); let size = 0; const chunks = [];
+  try {
+    for (;;) {
+      const { done, value } = await reader.read(); if (done) break;
+      size += value.byteLength;
+      if (size > 65536) { await reader.cancel(); return null; }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size); let offset = 0;
+    for (const c of chunks) { bytes.set(c, offset); offset += c.length; }
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch (e) { return null; } finally { reader.releaseLock(); }
+}
+/** Recibo durável por mídia: nunca repetir um envio cujo resultado ficou incerto.
+ * O messageId da API é reply, NÃO é chave de idempotência. Não o usamos como tal. */
+async function enviarGrupoClientes_(env, p) {
+  const cfg = cfgGrupoClientes_(env);
+  if (!cfg) return marcarErroPost_(env, p, 'O Grupo clientes ainda não está configurado. Avise o gestor.');
+  const midias = JSON.parse(p.midias || '[]');
+  for (let i = 0; i < midias.length; i++) {
+    const antigo = await env.DB.prepare('SELECT estado FROM postagem_grupo_recibo WHERE postagem_id=? AND ordem=?').bind(p.id, i).first();
+    if (antigo && antigo.estado === 'aceito') continue;
+    if (antigo) return marcarErroPost_(env, p, 'Grupo clientes: envio sem confirmação. Confira na Wafly antes de qualquer novo envio; não reenviamos para evitar duplicação.');
+    const claim = await env.DB.prepare("INSERT OR IGNORE INTO postagem_grupo_recibo (postagem_id, ordem, estado, atualizado_em) VALUES (?,?,'enviando',?)").bind(p.id, i, agora()).run();
+    if (!claim.meta || claim.meta.changes !== 1) return;
+    const video = midias[i].tipo === 'video';
+    const payload = { phone: cfg.phone, caption: String(p.legenda || '') };
+    payload[video ? 'video' : 'image'] = midias[i].url;
+    let r, j;
+    try {
+      r = await fetch('https://wafly.com.br/api-bridge-whats/instances/' + encodeURIComponent(cfg.instance) + '/token/' + encodeURIComponent(cfg.token) + (video ? '/send-video' : '/send-image'), {
+        method: 'POST', redirect: 'error', signal: AbortSignal.timeout(25000),
+        headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      });
+      j = await respostaGrupo_(r);
+    } catch (e) { return marcarErroPost_(env, p, 'Grupo clientes: resposta interrompida. Confira na Wafly; o sistema não repetirá este envio automaticamente.'); }
+    if (!r.ok || !j || j.value === false || j.error || !j.messageId) {
+      // Só rejeições explícitas 4xx (exceto timeout/conflito/limite) permitem tentativa manual posterior.
+      const rejeitado = r.status >= 400 && r.status < 500 && ![408, 409, 429].includes(r.status);
+      if (rejeitado) await env.DB.prepare("UPDATE postagem_grupo_recibo SET estado='recusado', atualizado_em=? WHERE postagem_id=? AND ordem=?").bind(agora(), p.id, i).run();
+      return marcarErroPost_(env, p, rejeitado ? 'Grupo clientes: a Wafly recusou a publicação. Confira conexão e permissão de administrador antes de tentar novamente.' : 'Grupo clientes: não houve confirmação de aceite. Confira na Wafly; não reenviamos automaticamente.');
+    }
+    await env.DB.prepare("UPDATE postagem_grupo_recibo SET estado='aceito', mensagem_id=?, atualizado_em=? WHERE postagem_id=? AND ordem=?").bind(String(j.messageId).slice(0, 200), agora(), p.id, i).run();
+  }
+  await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, erro='', publicado_em=?, atualizado_em=? WHERE id=?").bind('grupo:' + p.id, agora(), agora(), p.id).run();
+  return { ok: true, canal: 'grupo' };
+}
+
 async function avancarPostagem(env, token, p) {
+  if (p.canal === 'grupo') return enviarGrupoClientes_(env, p);
   const m = JSON.parse(p.midias || '[]');
   /* v1.9: aguardando a confirmação da Wafly (409/timeout). Só consulta; "aceito" publica (WhatsApp) ou segue para o Instagram (ambos). */
   if (String(p.ig_id || '').indexOf('zapq:') === 0) {
@@ -799,8 +858,8 @@ export async function processarPostagens(env) {
 }
 /** Quantas postagens deste canal já saíram nas últimas 24 h (Story, Feed… do Instagram; ou "status" do WhatsApp). */
 async function contarUsados24h_(env, bucket, desde) {
-  const doCanal = bucket === 'status' ? "canal IN ('whatsapp','ambos')" : "tipo=? AND (canal IS NULL OR canal='' OR canal IN ('instagram','ambos'))";
-  const bind = bucket === 'status' ? [desde] : [bucket, desde];
+  const doCanal = bucket === 'grupo' ? "canal='grupo'" : bucket === 'status' ? "canal IN ('whatsapp','ambos')" : "tipo=? AND (canal IS NULL OR canal='' OR canal IN ('instagram','ambos'))";
+  const bind = bucket === 'status' || bucket === 'grupo' ? [desde] : [bucket, desde];
   return Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status='publicado' AND " + doCanal + ' AND publicado_em>=?').bind(...bind).first()) || {}).n) || 0;
 }
 function httpsUrl(u) { try { const x = new URL(String(u)); return x.protocol === 'https:' && String(u).length <= 600; } catch (e) { return false; } }
@@ -828,10 +887,11 @@ const FUSO_MIN = -180;                       // Fortaleza = UTC-3, sem horário 
 export const TIPOS_FILA = ['story', 'feed', 'carrossel', 'reels'];
 /* v1.6 (18/10/2026) -- "canais de contagem": cada um tem o SEU limite de 24 h e o SEU intervalo aleatório (mín.–máx.).
  * Story, Feed, Carrossel e Reels são do Instagram; "status" é o Status do WhatsApp. Postagem "ambos" conta nos DOIS (o tipo dela + status). */
-export const CANAIS_FILA = ['story', 'status', 'feed', 'carrossel', 'reels'];
+export const CANAIS_FILA = ['story', 'status', 'feed', 'carrossel', 'reels', 'grupo'];
 export const CANAL_FILA_PADRAO = {
   story: { max24h: 40, gapMin: 120, gapMax: 300 },        // 2 a 5 min (exemplo do Pablo)
   status: { max24h: 40, gapMin: 120, gapMax: 300 },
+  grupo: { max24h: 40, gapMin: 120, gapMax: 300 },
   feed: { max24h: 20, gapMin: 300, gapMax: 600 },
   carrossel: { max24h: 20, gapMin: 300, gapMax: 600 },
   reels: { max24h: 10, gapMin: 600, gapMax: 1200 },
@@ -840,6 +900,7 @@ export const CFG_POST_PADRAO = { pausaAtiva: true, pausaDe: '22:00', pausaAte: '
 /** Em quais "canais de contagem" uma postagem entra: o tipo dela (se vai ao Instagram) e/ou "status" (se vai ao WhatsApp). */
 export function bucketsDoPost(tipo, canal) {
   const out = [];
+  if (canal === 'grupo') return ['grupo'];
   if (canalUsaInstagram_(canal) && TIPOS_FILA.indexOf(tipo) !== -1) out.push(tipo);
   if (canalUsaWhatsApp_(canal)) out.push('status');
   return out;
@@ -944,8 +1005,8 @@ async function lerCfgPost(env) { let j = null; try { j = JSON.parse((await cfgGe
 /** Horários já ocupados num canal de contagem (Story, Feed…, ou "status" do WhatsApp). `janelaMs` = quanto tempo para trás ainda importa. */
 async function ocupadosDoTipo_(env, bucket, excluirId, janelaMs, semAgendadas) {
   const desde = new Date(Date.now() - janelaMs - 60000).toISOString();
-  const doCanal = bucket === 'status' ? "canal IN ('whatsapp','ambos')" : "tipo=? AND (canal IS NULL OR canal='' OR canal IN ('instagram','ambos'))";
-  const bind = bucket === 'status' ? [excluirId || 0, desde] : [bucket, excluirId || 0, desde];
+  const doCanal = bucket === 'grupo' ? "canal='grupo'" : bucket === 'status' ? "canal IN ('whatsapp','ambos')" : "tipo=? AND (canal IS NULL OR canal='' OR canal IN ('instagram','ambos'))";
+  const bind = bucket === 'status' || bucket === 'grupo' ? [excluirId || 0, desde] : [bucket, excluirId || 0, desde];
   const q = (await env.DB.prepare('SELECT agendado_em, publicado_em, status FROM postagem WHERE ' + doCanal + " AND id!=? AND (status IN ('processando','manual_pendente'" + (semAgendadas ? '' : ",'agendado'") + ") OR (status IN ('publicado','manual_feito') AND publicado_em>=?))").bind(...bind).all()).results || [];
   return q.map((r) => Date.parse(r.status === 'publicado' || r.status === 'manual_feito' ? r.publicado_em : r.agendado_em)).filter((x) => isFinite(x));
 }
@@ -1129,11 +1190,14 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const q = (await env.DB.prepare("SELECT * FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
     const c = (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM postagem GROUP BY status").all()).results || [];
     const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
-    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', regras: 1, config: await lerCfgPost(env), uso24h: await uso24hPorCanal_(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
+    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), regras: 1, config: await lerCfgPost(env), uso24h: await uso24hPorCanal_(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
   }
   let b = {}; if (req.method === 'POST') { try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); } }
   if (p === '/post' && req.method === 'POST') {
-    const lista = Array.isArray(b.posts) ? b.posts.slice(0, 12) : [b];
+    const originais = Array.isArray(b.posts) ? b.posts : [b];
+    if (!originais.length || originais.length > 12 || originais.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) return J({ ok: false, erro: 'Envie de uma a doze postagens por vez.' }, 400);
+    if (originais.some((x) => x.grupoClientes === true || x.canal === 'grupo') && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado. Avise o gestor.' }, 409);
+    const lista = originais.flatMap((x) => x.grupoClientes === true && x.canal !== 'grupo' ? [x, Object.assign({}, x, { canal: 'grupo', modo: 'auto', link: '', grupoClientes: false })] : [x]);
     const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
     if (pend + lista.length > 200) return J({ ok: false, erro: 'Há postagens demais na fila (200). Espere algumas saírem.' }, 429);
     const vs = []; for (const x of lista) { const r = validarPostagem(x); if (r.erro) return J({ ok: false, erro: r.erro }, 400); vs.push(r.v); }
@@ -1159,7 +1223,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       ids.push(r.meta && r.meta.last_row_id);
     }
     if (vs.some((v) => v.agora) && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
-    return J({ ok: true, ids: ids, quandos: quandos, ajustes: ajustes });
+    return J({ ok: true, ids: ids, quandos: quandos, ajustes: ajustes, postagensOriginais: originais.length, gruposClientes: lista.length - originais.length });
   }
   if (p === '/post/config' && req.method === 'GET') return J({ ok: true, config: await lerCfgPost(env), padrao: CFG_POST_PADRAO, podeEditar: (perms || []).indexOf('gerir_acessos') !== -1 });
   if (p === '/post/config' && req.method === 'POST') {
@@ -1199,6 +1263,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     }
     if (p === '/post/reagendar') {
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
+      if (linha.canal === 'grupo') await env.DB.prepare("DELETE FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='recusado'").bind(id).run();
       const r = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: b.quando }));
       if (r.erro) return J({ ok: false, erro: r.erro }, 400);
       const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, linha.canal);
@@ -1212,6 +1277,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     if (p === '/post/proximo') {
       /* "Mandar para o próximo horário livre" da fila do tipo (respeita pausa e intervalo). */
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
+      if (linha.canal === 'grupo') await env.DB.prepare("DELETE FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='recusado'").bind(id).run();
       const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, linha.canal);
       const r = proximoLivreMulti(cfg, bs, await ocupadosMulti_(env, cfg, bs, id), Date.now() + 60000);
       await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, tentativas=0, erro='', containers='', urgente=0, atualizado_em=? WHERE id=?").bind(new Date(r.t).toISOString(), agora(), id).run();
@@ -1222,7 +1288,9 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       if (linha.status !== 'agendado') return J({ ok: false, erro: 'Só dá para mudar a ordem de postagens agendadas.' }, 409);
       if (normalizarCanal_(linha.canal) === 'ambos') return J({ ok: false, erro: 'Esta postagem vai para o Instagram e para o Status do WhatsApp: mude o horário em “🕐 Horário” ou “⏭ Próximo livre”.' }, 409);
       /* só troca horários entre postagens do MESMO canal (sem as "ambos"): o conjunto de horários da fila não muda, então os intervalos continuam valendo. */
-      const lst = (normalizarCanal_(linha.canal) === 'whatsapp'
+      const lst = (linha.canal === 'grupo'
+        ? (await env.DB.prepare("SELECT id, agendado_em FROM postagem WHERE canal='grupo' AND status='agendado' ORDER BY agendado_em, id").all())
+        : normalizarCanal_(linha.canal) === 'whatsapp'
         ? (await env.DB.prepare("SELECT id, agendado_em FROM postagem WHERE canal='whatsapp' AND status='agendado' ORDER BY agendado_em, id").all())
         : (await env.DB.prepare("SELECT id, agendado_em FROM postagem WHERE tipo=? AND (canal IS NULL OR canal='' OR canal='instagram') AND status='agendado' ORDER BY agendado_em, id").bind(linha.tipo).all())).results || [];
       const i = lst.findIndex((x) => x.id === id), n = lst.length, alvo = { subir: i - 1, descer: i + 1, primeiro: 0, ultimo: n - 1 }[String(b.dir || '')];

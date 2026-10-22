@@ -35,6 +35,8 @@ bucket_name = "tenkiter-midia"
 [ai]
 binding = "AI"
 
+# Secret WAFLY_GRUPO_CLIENTES: JSON privado {instance, token, clientToken, phone}.
+# Não declarar seu valor em vars; segredo é preservado pelo deploy.
 [vars]
 API_URL = "https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec"
 MIDIA_URL = "https://tenkiter-midia.distkrpconfeccoes.workers.dev"

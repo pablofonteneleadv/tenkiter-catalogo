@@ -133,6 +133,7 @@ jobs:
         run: |
           node tests/worker_ig.js
           node tests/worker_canal.js
+          node tests/worker_grupo.js
 
       # O teste do Worker do Instagram usa node:sqlite, disponível no Node 22+.
       - name: Node 22 para bateria completa
