@@ -768,7 +768,12 @@ async function conteudoGrupo_(env, m) {
   const obj = await env.MIDIA.get(chave);
   if (!obj) throw new Error('MIDIA_AUSENTE');
   if (!Number.isFinite(obj.size) || obj.size > 12 * 1024 * 1024) return url;
-  return b64(await obj.arrayBuffer());
+  const bytes = await obj.arrayBuffer();
+  // Celulares podem gravar MP4 em HEVC/H.265. O endpoint send-video da Wafly
+  // não promete conversão, ao contrário do endpoint de Status. Recusamos antes
+  // de criar recibo ou chamar a API: uma falha depois do envio fica incerta.
+  if (chave.endsWith('.mp4') && /hvc1|hev1/.test(new TextDecoder().decode(bytes))) throw new Error('VIDEO_HEVC');
+  return b64(bytes);
 }
 /** Recibo durável por mídia: nunca repetir um envio cujo resultado ficou incerto.
  * O messageId da API é reply, NÃO é chave de idempotência. Não o usamos como tal. */
@@ -785,7 +790,7 @@ async function enviarGrupoClientes_(env, p) {
     if (antigo) return marcarErroPost_(env, p, 'Grupo clientes: envio sem confirmação. Confira na Wafly antes de qualquer novo envio; não reenviamos para evitar duplicação.');
     let conteudo;
     try { conteudo = await conteudoGrupo_(env, midias[i]); }
-    catch (e) { return marcarErroPost_(env, p, 'Grupo clientes: não consegui ler a mídia. Confira o arquivo e tente novamente.'); }
+    catch (e) { return marcarErroPost_(env, p, e && e.message === 'VIDEO_HEVC' ? 'Grupo clientes: este MP4 usa H.265/HEVC. Converta para MP4 H.264/AAC e crie uma nova postagem; nada foi enviado à Wafly.' : 'Grupo clientes: não consegui ler a mídia. Confira o arquivo e tente novamente.'); }
     const claim = await env.DB.prepare("INSERT OR IGNORE INTO postagem_grupo_recibo (postagem_id, ordem, estado, atualizado_em) VALUES (?,?,'enviando',?)").bind(p.id, i, agora()).run();
     if (!claim.meta || claim.meta.changes !== 1) return;
     await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(agora(), agora(), p.id).run();
@@ -1282,6 +1287,12 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
     if (pend + lista.length > 200) return J({ ok: false, erro: 'Há postagens demais na fila (200). Espere algumas saírem.' }, 429);
     const vs = []; for (const x of lista) { const r = validarPostagem(x); if (r.erro) return J({ ok: false, erro: r.erro }, 400); vs.push(r.v); }
+    // Agendamento importante não pode esperar até a hora marcada para descobrir
+    // que o MP4 do grupo usa HEVC e será recusado pela ponte de mensagens.
+    for (const v of vs) if (v.canal === 'grupo') for (const m of v.midias) if (m.tipo === 'video') {
+      try { await conteudoGrupo_(env, m); }
+      catch (e) { return J({ ok: false, erro: e && e.message === 'VIDEO_HEVC' ? 'Este vídeo usa H.265/HEVC. Para o Grupo clientes, envie um MP4 H.264/AAC antes de agendar.' : 'Não consegui validar o vídeo do Grupo clientes. Envie-o novamente antes de agendar.' }, 400); }
+    }
     if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto' && canalUsaInstagram_(v.canal))) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
     const ids = [], inserts = [], quandos = [], por = String(b.por || '').slice(0, 60);
     const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [], intervaloMs = intervaloPedidoMs_(b.intervalo);

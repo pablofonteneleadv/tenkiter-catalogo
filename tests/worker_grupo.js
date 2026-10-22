@@ -130,6 +130,14 @@ function d1() {
   await DB.prepare('UPDATE postagem SET midias=? WHERE id=?').bind(JSON.stringify([{url:env.MIDIA_URL+'/m/t/202610/video.mp4',tipo:'video'}]),id).run();
   await W.processarPostagens(env);
   chk('vídeo do R2 vai à Wafly em base64 sem exigir download do URL',grupoCalls.length===2&&grupoCalls[1].url.endsWith('/send-video')&&grupoCalls[1].body.video===videoLocal.toString('base64')&&(await lerPost(id)).status==='publicado');
+  objs.set('t/202610/hevc.mp4',Buffer.concat([Buffer.from('ftypmp42'),Buffer.alloc(300000),Buffer.from('moovtrakstsdhvc1--HEVC')]));
+  const hevc=await novaPostagem('grupo');
+  await DB.prepare('UPDATE postagem SET midias=? WHERE id=?').bind(JSON.stringify([{url:env.MIDIA_URL+'/m/t/202610/hevc.mp4',tipo:'video'}]),hevc).run();
+  await W.processarPostagens(env);
+  chk('HEVC é bloqueado antes da Wafly, com erro claro e sem recibo',grupoCalls.length===2&&(await lerPost(hevc)).erro.includes('H.265/HEVC')&&!(await DB.prepare('SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=?').bind(hevc).first()));
+  const antesHevc=Number((await DB.prepare('SELECT COUNT(*) AS n FROM postagem').first()).n);
+  const agendaHevc=await A('POST','/post',{tipo:'story',modo:'auto',legenda:'Teste',midias:[{url:env.MIDIA_URL+'/m/t/202610/hevc.mp4',tipo:'video'}],quando:ts(15),canal:'grupo'});
+  chk('HEVC é recusado no agendamento, antes de criar item na fila',agendaHevc.r.status===400&&agendaHevc.j.erro.includes('H.264/AAC')&&Number((await DB.prepare('SELECT COUNT(*) AS n FROM postagem').first()).n)===antesHevc);
   modo='aguardar';
   const lento=await novaPostagem('grupo');
   const primeiroCron=W.processarPostagens(env);
