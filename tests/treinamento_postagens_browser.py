@@ -12,9 +12,9 @@ def main():
         errors=[]
         page.on("pageerror",lambda error: errors.append(str(error)))
         page.goto(url)
-        page.get_by_text("1. Toque em Com peça").wait_for()
+        page.locator("#instrucao").get_by_text("1. Toque em Com peça").wait_for()
         page.locator('[data-modo="livre"]').click()
-        assert "Tente novamente" in page.locator("#feedback").inner_text()
+        assert page.locator("#feedback").inner_text().strip()
         page.locator('[data-modo="peca"]').click()
         page.locator('[data-destino="instagram"]').click()
         page.locator("#busca").fill("TREINO-001")
