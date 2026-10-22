@@ -767,7 +767,11 @@ async function conteudoGrupo_(env, m) {
   if (!/^[a-z0-9/_-]+\.(?:jpg|jpeg|png|webp|mp4)$/.test(chave) || chave.includes('..')) return url;
   const obj = await env.MIDIA.get(chave);
   if (!obj) throw new Error('MIDIA_AUSENTE');
-  if (!Number.isFinite(obj.size) || obj.size > 12 * 1024 * 1024) return url;
+  if (!Number.isFinite(obj.size)) throw new Error('VIDEO_TAMANHO_DESCONHECIDO');
+  // Evita mudar silenciosamente para envio por URL: nesse caminho a Wafly pode falhar ao buscar o vídeo.
+  // Rejeição antes de criar recibo, sem qualquer envio à Wafly.
+  if (chave.endsWith('.mp4') && obj.size > 12 * 1024 * 1024) throw new Error('VIDEO_GRANDE_GRUPO');
+  if (obj.size > 12 * 1024 * 1024) return url;
   const bytes = await obj.arrayBuffer();
   // Celulares podem gravar MP4 em HEVC/H.265. O endpoint send-video da Wafly
   // não promete conversão, ao contrário do endpoint de Status. Recusamos antes
@@ -790,7 +794,7 @@ async function enviarGrupoClientes_(env, p) {
     if (antigo) return marcarErroPost_(env, p, 'Grupo clientes: envio sem confirmação. Confira na Wafly antes de qualquer novo envio; não reenviamos para evitar duplicação.');
     let conteudo;
     try { conteudo = await conteudoGrupo_(env, midias[i]); }
-    catch (e) { return marcarErroPost_(env, p, e && e.message === 'VIDEO_HEVC' ? 'Grupo clientes: este MP4 usa H.265/HEVC. Converta para MP4 H.264/AAC e crie uma nova postagem; nada foi enviado à Wafly.' : 'Grupo clientes: não consegui ler a mídia. Confira o arquivo e tente novamente.'); }
+    catch (e) { return marcarErroPost_(env, p, e && e.message === 'VIDEO_HEVC' ? 'Grupo clientes: este MP4 usa H.265/HEVC. Converta para MP4 H.264/AAC e crie uma nova postagem; nada foi enviado à Wafly.' : e && e.message === 'VIDEO_GRANDE_GRUPO' ? 'Grupo clientes: vídeo acima de 12 MiB. Comprima para até 12 MiB e crie nova postagem; nada foi enviado à Wafly.' : 'Grupo clientes: não consegui ler a mídia. Confira o arquivo e tente novamente.'); }
     const claim = await env.DB.prepare("INSERT OR IGNORE INTO postagem_grupo_recibo (postagem_id, ordem, estado, atualizado_em) VALUES (?,?,'enviando',?)").bind(p.id, i, agora()).run();
     if (!claim.meta || claim.meta.changes !== 1) return;
     await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(agora(), agora(), p.id).run();
