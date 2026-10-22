@@ -16,3 +16,9 @@ assert.match(ui.formatos("feed",false),/Carrossel/);
 assert.match(ui.destinos(["instagram"]),/data-destino="instagram"/);
 assert.match(ui.modos("peca"),/data-modo="peca"/);
 console.log("Controles compartilhados: modos, destinos e formatos OK");
+
+assert.match(ui.midias([{tipo:"imagem",url:"",sel:false}]),/data-m="0"/);
+assert.match(ui.quando(""),/data-quando="sequencia"/);
+assert.match(fs.readFileSync("treinamento-postagens-real.js","utf8"),/ui\.midias\(/);
+assert.match(fs.readFileSync("treinamento-postagens-real.js","utf8"),/ui\.quando\(/);
+console.log("Controles de mídia e agendamento no treinamento: OK");
