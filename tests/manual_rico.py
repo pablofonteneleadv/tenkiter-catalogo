@@ -68,6 +68,7 @@ def novo_backend(perms, estado):
                 if i.get("lido"): st["lidos"].add(i["capId"])
             return {"ok": True, "gravados": 0}
         if a == "criar_manual_vazio": return {"ok": True, "manualId": "m3", "docUrl": "https://docs.google.com/document/d/ddd/edit", "prova": {"ok": True, "modelo": True, "docUrl": "https://docs.google.com/document/d/eee/edit"}}
+        if a == "importar_manual_doc": return {"ok": True, "manualId": "m4", "privado": True}
         if a == "prova_sincronizar": return {"ok": True, "perguntas": 10, "avisos": [], "modelo": 10, "atualizadoEm": "2026-10-18T14:00:00.000Z"}
         if a == "sincronizar_manual": return {"ok": True, "parts": [], "atualizadoEm": "2026-10-18T14:00:00.000Z", "aviso": "O manual é grande: tirei cores."}
         if a == "relatorio_equipe": return {"ok": True, "funcionarios": [], "resultados": []}
@@ -87,7 +88,7 @@ def instalar(ctx, perms, estado):
             return route.fulfill(json=post(b), headers=cors)
         q = req.url.split("?", 1)[-1]
         st["gets"].append(q)
-        if "action=versao" in q: return route.fulfill(json={"ok": True, "versao": estado.get("versao", "3.17"), "configQuizProtegida": estado.get("versao") == "3.18", "acessos": True, "conteudoProtegido": True, "manualRico": True, "provaModelo": True}, headers=cors)
+        if "action=versao" in q: return route.fulfill(json={"ok": True, "versao": estado.get("versao", "3.17"), "configQuizProtegida": estado.get("versao") in ("3.18", "3.19"), "importarManualDoc": estado.get("versao") == "3.19", "acessos": True, "conteudoProtegido": True, "manualRico": True, "provaModelo": True}, headers=cors)
         return route.fulfill(json={"ok": True, "configs": [], "manuais": [], "produtos": []}, headers=cors)
     ctx.route("**/*", h)
     return st
@@ -225,6 +226,17 @@ with sync_playwright() as p:
     v = axe_viol(pg, "document.getElementById('guia-formatar')"); chk("guia 'Como formatar' aberto: sem problema de acessibilidade/contraste", not v, v)
     cfg_calls = [x for x in st["log"] if x.get("action") == "config_quiz"]
     chk("P-16 gestor 3.18 lê configuração com sessão pelo POST", bool(cfg_calls) and all(x.get("sessao") == "tk2.x.y" for x in cfg_calls))
+    estado["versao"] = "3.19"
+    pg.reload(); pg.wait_for_selector('.card[data-manual="1"]', timeout=10000)
+    pg.locator("#btn-admin-rh").click(); pg.wait_for_timeout(700)
+    pg.locator(".admin-tab", has_text="Conteúdo").click(); pg.wait_for_timeout(500)
+    chk("importar Doc aparece somente com RH 3.19", pg.locator("#btn-importar-manual").count() == 1)
+    pg.locator("#btn-importar-manual").click(); pg.wait_for_timeout(100)
+    chk("link inválido é bloqueado antes de enviar", not any(x.get("action") == "importar_manual_doc" for x in st["log"]))
+    pg.fill("#manual-doc-existente", "https://docs.google.com/document/d/EXEMPLO_ID_PARA_TESTE_123/edit")
+    pg.locator("#btn-importar-manual").click(); pg.wait_for_timeout(700)
+    chamadas_importar = [x for x in st["log"] if x.get("action") == "importar_manual_doc"]
+    chk("importa Doc com sessão do gestor e informa revisão privada", len(chamadas_importar) == 1 and chamadas_importar[0].get("docUrl", "").endswith("/edit") and "revisão" in pg.inner_text("#toast").lower())
     chk("sem erro de JavaScript (gestão)", not erros, erros)
     ctx.close(); b.close()
 print("\nOK=%d FALHAS=%d %s" % (len(OK), len(BAD), BAD)); sys.exit(1 if BAD else 0)

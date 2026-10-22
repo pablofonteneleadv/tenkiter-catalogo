@@ -661,6 +661,7 @@ var servidorNovo = false;
 var servidorChecado = false;
 var servidorAcessos = false; // v4: servidor com perfis e permissões (painel Acessos)
 var servidorQuizProtegido = false;
+var servidorImportarManualDoc = false;
 var servidorProtegido = false; // v3.4 do RH: manuais e provas só chegam por sessão + permissão (treinamento_conteudo)
 var conteudoEstado = ''; // '' (ainda não) | 'carregando' | 'ok' | 'falhou'
 var detectPromise = null;
@@ -677,6 +678,7 @@ async function detectarServidor(){
     servidorAcessos = !!(json && json.ok && json.acessos);
     servidorProtegido = !!(json && json.ok && json.conteudoProtegido);
     servidorQuizProtegido = !!(json && json.ok && json.configQuizProtegida);
+    servidorImportarManualDoc = !!(json && json.ok && json.importarManualDoc);
     if (window.TMV) TMV.servidor = !!(json && json.ok && json.certificados); // v3.16: prática validada + certificado
     if (servidorProtegido){ try{ localStorage.removeItem(CHAVE_CACHE_MANUAIS); }catch(e){} } // o texto dos manuais não fica mais guardado no aparelho
     servidorChecado = true;
@@ -2605,6 +2607,10 @@ function renderTabConteudo(){
         '<button type="button" class="btn btn-primary" id="btn-novo-manual">+ Novo manual</button>' +
       '</div>' +
       '<p class="sub">O texto de cada manual e as perguntas de cada prova são editados direto no Google Docs. No manual: "Título 1" separa partes e "Título 2" separa capítulos. Na prova: "1. pergunta", alternativas "a) b) c) d)" e a certa termina com *. Depois de editar, toque em Sincronizar.</p>' +
+      (servidorImportarManualDoc ? '<div class="callout callout-tip"><label for="manual-doc-existente"><strong>Já tem um Google Doc pronto?</strong></label>' +
+        '<input id="manual-doc-existente" type="url" inputmode="url" autocomplete="off" placeholder="https://docs.google.com/document/d/…/edit" style="width:100%;min-height:44px;margin:8px 0;box-sizing:border-box">' +
+        '<button type="button" class="btn" id="btn-importar-manual">Importar Doc para revisão</button>' +
+        '<p class="sub">O manual entra visível apenas à gestão. Depois de conferir o conteúdo, ajuste o nível mínimo no card para liberar à equipe.</p></div>' : '') +
       guiaFormatarHtml_() +
       migrarBanner +
       (manuais.length > 1 ? '<p class="mc-dica">☰ Segure e arraste (ou use ▲▼) para mudar a ordem: o número 1 é o primeiro manual que o candidato vê. Toque no card para abrir e editar.</p>' : '') +
@@ -2620,6 +2626,20 @@ function wireTabConteudo(){
     state._buscandoConteudo = true;
     carregarConteudoProtegido().then(function(){ state._buscandoConteudo = false; if (state.view === 'admin' && state.adminTab === 'conteudo') render(); });
   }
+  var importar = document.getElementById('btn-importar-manual');
+  if (importar) importar.addEventListener('click', async function(){
+    var campo = document.getElementById('manual-doc-existente');
+    var docUrl = campo && campo.value.trim();
+    if (!/^https:\/\/docs\.google\.com\/document\/d\/[A-Za-z0-9_-]+(?:\/|$)/.test(docUrl || '')) { toast('Cole o link completo de um Google Doc.'); if (campo) campo.focus(); return; }
+    importar.disabled = true; importar.textContent = 'Importando…';
+    var resp;
+    try { resp = await submitResult({ action:'importar_manual_doc', whatsappAdmin:state.user.whatsapp, senhaAdmin:state.user.password, docUrl:docUrl }); }
+    catch (e) { resp = null; }
+    importar.disabled = false; importar.textContent = 'Importar Doc para revisão';
+    if (!resp || !resp.ok) { toast((resp && resp.erro) || 'Não consegui importar este Doc agora.'); return; }
+    await recarregarManuais_(); render();
+    toast('Manual importado para revisão da gestão. Confira antes de liberar à equipe.');
+  });
   if (window.TMV){ var gf = document.getElementById('guia-formatar'); if (gf) TMV.ligar(gf); }
   document.querySelectorAll('details.manual-card').forEach(function(d){
     d.addEventListener('toggle', function(){ state.cardsAbertos = state.cardsAbertos || {}; state.cardsAbertos[d.getAttribute('data-manual-id')] = d.open; });
