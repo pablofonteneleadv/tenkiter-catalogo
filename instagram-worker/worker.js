@@ -781,6 +781,12 @@ async function conteudoGrupo_(env, m) {
 }
 /** Recibo durável por mídia: nunca repetir um envio cujo resultado ficou incerto.
  * O messageId da API é reply, NÃO é chave de idempotência. Não o usamos como tal. */
+/** Resposta inconclusiva: não significa que a Wafly deixou de entregar. Nunca repetir automaticamente. */
+async function aguardarConfirmacaoGrupo_(env, p, detalhe) {
+  const aviso = 'Grupo clientes: aguardando confirmação da entrega. ' + detalhe + ' Confira no WhatsApp; não reenviamos automaticamente.';
+  await env.DB.prepare("UPDATE postagem SET status='processando', erro=?, atualizado_em=? WHERE id=?").bind(aviso.slice(0, 300), agora(), p.id).run();
+  return { ok: true, aguardando: true };
+}
 async function enviarGrupoClientes_(env, p) {
   const cfg = cfgGrupoClientes_(env);
   if (!cfg) return marcarErroPost_(env, p, 'O Grupo clientes ainda não está configurado. Avise o gestor.');
@@ -790,7 +796,7 @@ async function enviarGrupoClientes_(env, p) {
     if (antigo && antigo.estado === 'aceito') continue;
     // O cron seguinte pode rodar enquanto a Wafly ainda processa o vídeo.
     // Não transformar uma requisição em andamento em erro só porque já existe recibo.
-    if (antigo && antigo.estado === 'enviando' && p.status === 'processando' && Date.now() - Date.parse(antigo.atualizado_em || '') < 3 * 60000) return { ok: true, aguardando: true };
+    if (antigo && antigo.estado === 'enviando' && p.status === 'processando') return { ok: true, aguardando: true };
     if (antigo) return marcarErroPost_(env, p, 'Grupo clientes: envio sem confirmação. Confira na Wafly antes de qualquer novo envio; não reenviamos para evitar duplicação.');
     let conteudo;
     try { conteudo = await conteudoGrupo_(env, midias[i]); }
@@ -809,7 +815,7 @@ async function enviarGrupoClientes_(env, p) {
         headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
       j = await respostaGrupo_(r);
-    } catch (e) { return marcarErroPost_(env, p, 'Grupo clientes: resposta interrompida. Confira na Wafly; o sistema não repetirá este envio automaticamente.'); }
+    } catch (e) { return aguardarConfirmacaoGrupo_(env, p, 'A resposta da Wafly foi interrompida.'); }
     const respostaInfo = { postagemId: p.id, ordem: i, em: agora(), http: r.status,
       campos: j && typeof j === 'object' && !Array.isArray(j) ? Object.keys(j).filter(k => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 15) : [],
       valor: j && typeof j.value === 'boolean' ? j.value : null, idPresente: !!(j && j.messageId) };
@@ -818,7 +824,7 @@ async function enviarGrupoClientes_(env, p) {
       // Só rejeições explícitas 4xx (exceto timeout/conflito/limite) permitem tentativa manual posterior.
       const rejeitado = r.status >= 400 && r.status < 500 && ![408, 409, 429].includes(r.status);
       if (rejeitado) await env.DB.prepare("UPDATE postagem_grupo_recibo SET estado='recusado', atualizado_em=? WHERE postagem_id=? AND ordem=?").bind(agora(), p.id, i).run();
-      return marcarErroPost_(env, p, rejeitado ? 'Grupo clientes: a Wafly recusou a publicação (HTTP ' + r.status + '). Confira conexão e permissão antes de tentar novamente.' : 'Grupo clientes: sem confirmação da Wafly (HTTP ' + r.status + '). Confira na Wafly; não reenviamos automaticamente.');
+      return rejeitado ? marcarErroPost_(env, p, 'Grupo clientes: a Wafly recusou a publicação (HTTP ' + r.status + '). Confira conexão e permissão antes de tentar novamente.') : aguardarConfirmacaoGrupo_(env, p, 'A Wafly respondeu HTTP ' + r.status + '.');
     }
     await env.DB.prepare("UPDATE postagem_grupo_recibo SET estado='aceito', mensagem_id=?, atualizado_em=? WHERE postagem_id=? AND ordem=?").bind(String(j.messageId).slice(0, 200), agora(), p.id, i).run();
   }
