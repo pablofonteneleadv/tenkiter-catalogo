@@ -1496,14 +1496,14 @@
       card.appendChild(tag);
       if (v.up) card.appendChild(criarSeloPre_(v, 'pre-inline'));
       if (v.prev) {
-        const vd = document.createElement('video'); vd.src = v.prev; vd.controls = true; vd.playsInline = true; vd.preload = 'metadata'; card.appendChild(vd);
+        const vd = document.createElement('video'); vd.src = v.prev; vd.controls = true; vd.playsInline = true; vd.preload = 'metadata'; vd.setAttribute('aria-label', 'Prévia do vídeo ' + (idx + 1)); card.appendChild(vd);
       } else {
         const info = infoVideoSalvo_(v.url);
         const a = document.createElement('a'); a.target = '_blank'; a.rel = 'noopener'; a.textContent = '🎬 Ver o vídeo salvo';
         a.href = info ? (info.tipo === 'drive' ? 'https://drive.google.com/file/d/' + info.id + '/view' : info.url) : v.url;
         card.appendChild(a);
       }
-      const capa = document.createElement('button'); capa.type = 'button'; capa.className = 'video-capa'; capa.textContent = '🖼 Escolher quadro para a capa';
+      const capa = document.createElement('button'); capa.type = 'button'; capa.className = 'video-capa'; capa.textContent = '🖼 Escolher quadro para a capa'; capa.setAttribute('aria-label', 'Escolher quadro do vídeo ' + (idx + 1) + ' como capa da peça');
       capa.addEventListener('click', () => {
         if (fotosItens.length >= MAX_GALERIA) { alert('O limite é de ' + MAX_GALERIA + ' fotos. Tire uma antes de escolher a capa.'); return; }
         const listaOriginal = fotosItens;
@@ -2680,6 +2680,7 @@
     resumo.appendChild(descricao);
     if (falhas.length) {
       const lista = document.createElement('ul');
+      lista.setAttribute('aria-label', 'Peças que precisam de atenção');
       falhas.forEach(it => {
         const linha = document.createElement('li');
         linha.textContent = (it.titulo || 'Peça') + ': ' + (it.msg || 'Precisa de atenção.');
@@ -2689,6 +2690,7 @@
     }
     const ir = document.createElement('button');
     ir.type = 'button';
+    ir.setAttribute('aria-controls', 'cad-envios');
     ir.textContent = falhas.length ? 'Ver problemas e tentar novamente' : 'Ver andamento dos envios';
     ir.addEventListener('click', () => {
       const fila = document.getElementById('cad-envios');
