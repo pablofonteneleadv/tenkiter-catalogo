@@ -11,8 +11,8 @@ let s;const fila=window.TKPostagensFilaTreino.criarFila(),avaliacao=window.TKPos
 function reset(){s={modo:"peca",destinos:[],ids:[],agrupamento:"",formato:"",midia:[],quando:"",legenda:"",data:""};$("revisao").hidden=true;$("fila").hidden=true;$("fim").hidden=true;$("editor").hidden=false;render();}
 function filtradas(){const q=($("po-busca")?.value||"").trim().toLocaleLowerCase("pt-BR");return pecas.filter(p=>(p.Nome+" "+p.Codigo).toLocaleLowerCase("pt-BR").includes(q));}
 function renderPecas(){const lista=filtradas();$("grade").innerHTML=ui.gradePecas(lista,s.ids);$("acoes").innerHTML=ui.acoesPecas(s.ids,lista.length,lista.length>0&&lista.every(p=>s.ids.includes(p.ID)));$("selecao").textContent=s.ids.length+" peça(s) selecionada(s)"+(s.agrupamento?" · "+(s.agrupamento==="juntas"?"Juntas":"Uma por vez"):"");}
-function render(){ $("modos").innerHTML=ui.modos(s.modo);$("destinos").innerHTML=ui.destinos(s.destinos);$("busca").innerHTML=ui.buscaPecas("");renderPecas();$("formatos").innerHTML=ui.formatos(s.formato,s.destinos.length>0&&s.destinos.every(x=>x!=="instagram"));$("midias").innerHTML=ui.midias(midias.map((m,i)=>({...m,sel:s.midia.includes(i)})));$("legenda").innerHTML=ui.legenda(s.legenda);$("quando").innerHTML=ui.quando(s.quando);$("horario").hidden=s.quando!=="data";if(s.data)$("data-hora").value=s.data;}
-function erro(msg){avaliacao.registrar("erro",msg);$("feedback").textContent=msg+" Confira a etapa indicada e tente novamente.";return false;}
+function render(){ $("modos").innerHTML=ui.modos(s.modo);$("destinos").innerHTML=ui.destinos(s.destinos);$("busca").innerHTML=ui.buscaPecas("");renderPecas();$("formatos").innerHTML=ui.formatos(s.formato,s.destinos.length>0&&s.destinos.every(x=>x!=="instagram"));$("midias").innerHTML=ui.midias(midias.map((m,i)=>({...m,sel:s.midia.includes(i)})));$("legenda").innerHTML=ui.legenda(s.legenda);$("midia-ajuda").textContent=s.midia.length?s.midia.length+" mídia(s) selecionada(s). Pode continuar.":"Toque em uma foto fictícia para selecionar.";$("quando").innerHTML=ui.quando(s.quando);$("horario").hidden=s.quando!=="data";if(s.data)$("data-hora").value=s.data;}
+function erro(msg,alvo){avaliacao.registrar("erro",msg);$("feedback").textContent=msg+" Confira a etapa indicada e tente novamente.";if(alvo){alvo.scrollIntoView({block:"center",behavior:"smooth"});alvo.focus?.({preventScroll:true});}return false;}
 $("busca").addEventListener("input",()=>renderPecas());
 $("editor").addEventListener("click",e=>{
  const b=e.target.closest("button");if(!b)return;const d=b.dataset;
@@ -23,17 +23,17 @@ $("editor").addEventListener("click",e=>{
  else if(d.a==="usarpecas"&&s.ids.length){s.agrupamento="separadas";renderPecas();}
  else if(d.a==="usarjuntas"&&s.ids.length>1&&s.ids.length<=8){s.agrupamento="juntas";renderPecas();}
  else if(d.tipo){s.formato=d.tipo;$("formatos").innerHTML=ui.formatos(s.formato,s.destinos.length>0&&s.destinos.every(x=>x!=="instagram"));}
- else if(d.m!==undefined){const i=Number(d.m);s.midia=s.midia.includes(i)?s.midia.filter(x=>x!==i):[...s.midia,i];$("midias").innerHTML=ui.midias(midias.map((m,j)=>({...m,sel:s.midia.includes(j)})));}
+ else if(d.m!==undefined){const i=Number(d.m);s.midia=s.midia.includes(i)?s.midia.filter(x=>x!==i):[...s.midia,i];$("midias").innerHTML=ui.midias(midias.map((m,j)=>({...m,sel:s.midia.includes(j)})));$("midia-ajuda").textContent=s.midia.length?s.midia.length+" mídia(s) selecionada(s). Pode continuar.":"Toque em uma foto fictícia para selecionar."; }
  else if(d.quando){s.quando=d.quando;$("quando").innerHTML=ui.quando(s.quando);$("horario").hidden=s.quando!=="data";}
 });
 $("revisar").addEventListener("click",()=>{
  s.legenda=$("po-legenda").value.trim();s.data=$("data-hora").value;
- if(!s.destinos.length)return erro("Selecione pelo menos um destino.");
+ if(!s.destinos.length)return erro("Selecione pelo menos um destino.",$("destinos").querySelector("button"));
  if(s.modo==="peca"&&(!s.ids.length||!s.agrupamento))return erro("Selecione peças e confirme como serão usadas.");
- if(!s.formato)return erro("Escolha um formato.");
- if(!s.midia.length)return erro("Escolha pelo menos uma mídia fictícia.");
- if(s.legenda.length<10)return erro("Escreva uma legenda com pelo menos 10 caracteres.");
- if(!s.quando)return erro("Escolha quando publicar.");
+ if(!s.formato)return erro("Escolha um formato.",$("formatos").querySelector("button"));
+ if(!s.midia.length)return erro("Toque em uma das fotos fictícias para selecioná-la.",$("midias").querySelector("button"));
+ if(s.legenda.length<10)return erro("Escreva uma legenda com pelo menos 10 caracteres.",$("po-legenda"));
+ if(!s.quando)return erro("Escolha quando publicar.",$("quando").querySelector("button"));
  if(s.quando==="data"&&(!s.data||new Date(s.data).getTime()<=Date.now()))return erro("Escolha uma data e hora futuras.");
  $("feedback").textContent="";
  const r=$("resumo");r.replaceChildren();
