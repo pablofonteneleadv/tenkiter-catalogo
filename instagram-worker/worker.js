@@ -1379,6 +1379,31 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       if (!cancelou.meta || cancelou.meta.changes !== 1) return J({ ok: false, erro: 'A postagem mudou durante a operação. Atualize a fila.' }, 409);
       return J({ ok: true });
     }
+    if (p === '/post/converter-grupo') {
+      // O runner do GitHub Actions busca apenas trabalhos solicitados pelo atendente.
+      // Nunca converter se algum recibo foi aberto: um envio pode ter ocorrido.
+      if (linha.canal !== 'grupo' || linha.status !== 'erro' ||
+          !String(linha.erro || '').includes('H.265/HEVC'))
+        return J({ ok: false, erro: 'Somente postagens do grupo recusadas por HEVC podem ser convertidas.' }, 409);
+      const recibo = await env.DB.prepare('SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=?').bind(id).first();
+      if (recibo) return J({ ok: false, erro: 'Existe registro de tentativa de envio; verifique antes de repetir.' }, 409);
+      const midias = JSON.parse(linha.midias || '[]');
+      if (midias.length !== 1 || midias[0].tipo !== 'video')
+        return J({ ok: false, erro: 'Conversão automática disponível para postagem com um vídeo.' }, 400);
+      const prefixo = String(env.MIDIA_URL || '').replace(/\\/$/, '') + '/m/';
+      if (!String(midias[0].url || '').startsWith(prefixo))
+        return J({ ok: false, erro: 'Vídeo fora do armazenamento TENKiTER.' }, 400);
+      const chave = midias[0].url.slice(prefixo.length);
+      if (!/^[a-z0-9/_-]+\\.mp4$/.test(chave) || chave.includes('..'))
+        return J({ ok: false, erro: 'Chave de vídeo inválida.' }, 400);
+      const obj = await env.MIDIA.head(chave);
+      if (!obj || obj.size > 12 * 1024 * 1024)
+        return J({ ok: false, erro: 'Vídeo ausente ou acima de 12 MiB.' }, 400);
+      const r = await env.DB.prepare("UPDATE postagem SET status='convertendo', erro='Conversão H.264 solicitada. Aguarde o processamento no servidor.', atualizado_em=? WHERE id=? AND status='erro' AND NOT EXISTS (SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=?)")
+        .bind(agora(), id, id).run();
+      if (!r.meta || r.meta.changes !== 1) return J({ ok: false, erro: 'Postagem alterada; atualize a fila.' }, 409);
+      return J({ ok: true, convertendo: true, mensagem: 'Conversão solicitada. O GitHub Actions verificará a fila.' });
+    }
     if (p === '/post/reagendar') {
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
       if (linha.canal === 'grupo' && await env.DB.prepare("SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='enviando'").bind(id).first()) return J({ ok: false, erro: 'O envio ao grupo ficou sem confirmação. Confira na Wafly; depois use “Repostar com novo ID” ou “Descartar”.' }, 409);
