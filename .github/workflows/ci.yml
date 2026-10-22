@@ -159,6 +159,10 @@ jobs:
           sudo apt-get install -y ffmpeg
           curl -fsSL https://cdn.jsdelivr.net/npm/axe-core@4.10.2/axe.min.js -o tests/axe.min.js
 
+      - name: Treinamento de postagens no Chromium mobile
+        if: needs.escopo.outputs.suite_completa == 'true'
+        run: python3 tests/treinamento_postagens_browser.py
+
       - name: Bateria completa de jornadas, acessibilidade e integrações
         if: needs.escopo.outputs.suite_completa == 'true'
         run: python3 tests/rodar_tudo.py
