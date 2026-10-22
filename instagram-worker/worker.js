@@ -717,11 +717,15 @@ async function diagnosticarGrupoClientes_(env) {
   if (!cfg) return { verificadoEm: agora(), configurado: false };
   const base = 'https://wafly.com.br/api-bridge-whats/instances/' + encodeURIComponent(cfg.instance) + '/token/' + encodeURIComponent(cfg.token);
   const out = { verificadoEm: agora(), configurado: true };
-  for (const [nome, caminho] of [['sessao', '/status'], ['grupo', '/group-metadata/' + encodeURIComponent(cfg.phone)]]) {
+  for (const [nome, caminho] of [['sessao', '/status'], ['grupo', '/group-metadata/' + encodeURIComponent(cfg.phone)], ['chat', '/chats/' + encodeURIComponent(cfg.phone)]]) {
     try {
       const r = await fetch(base + caminho, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(12000), headers: { 'Client-Token': cfg.clientToken } });
       const j = await respostaGrupo_(r);
       out[nome] = { http: r.status };
+      if (j && typeof j === 'object' && !Array.isArray(j)) {
+        out[nome].campos = Object.keys(j).filter(k => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 15);
+        out[nome].valorTipo = typeof j.value;
+      }
       if (nome === 'sessao' && j && typeof j.value === 'string') out[nome].estado = /^[A-Z_]{1,30}$/.test(j.value) ? j.value : 'DESCONHECIDO';
       if (nome === 'grupo') out[nome].encontrado = r.ok && !!j && j.value !== false && !j.error;
     } catch (e) { out[nome] = { erro: 'SEM_RESPOSTA' }; }
