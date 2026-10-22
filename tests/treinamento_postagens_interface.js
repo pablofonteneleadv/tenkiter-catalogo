@@ -8,3 +8,11 @@ assert.ok(js.includes("ui.destinos([])")&&js.includes("ui.formatos(")&&js.includ
 assert.doesNotMatch(js,/\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon/);
 assert.ok(js.includes("localStorage.setItem")&&js.includes("JSON.stringify(ultimo"));
 console.log("Controles compartilhados, isolamento e relatorio local: OK");
+
+const ui=require("../postagens-controles.js");
+assert.match(ui.formatos("story",true),/Story/);
+assert.doesNotMatch(ui.formatos("story",true),/Feed|Carrossel|Reels/);
+assert.match(ui.formatos("feed",false),/Carrossel/);
+assert.match(ui.destinos(["instagram"]),/data-destino="instagram"/);
+assert.match(ui.modos("peca"),/data-modo="peca"/);
+console.log("Controles compartilhados: modos, destinos e formatos OK");
