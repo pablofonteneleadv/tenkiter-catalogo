@@ -24,10 +24,12 @@ def main():
             page.locator('[data-quando="sequencia"]').click()
             page.locator("#revisar").click()
             assert page.locator("#revisao").is_visible()
+            assert not page.locator("#editor").is_visible()
             assert "Demonstração segura" in page.locator("#resumo").inner_text()
             page.locator("#confirmado").check()
             page.locator("#concluir").click()
             assert page.locator("#fila").is_visible()
+            assert not page.locator("#editor").is_visible()
             assert page.locator("#itens-fila .card").count()==2
             page.locator("#itens-fila .card").nth(0).get_by_text("Simular início").click()
             page.locator("#itens-fila .card").nth(0).get_by_text("Simular falha").click()
