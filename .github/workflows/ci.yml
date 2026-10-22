@@ -166,8 +166,8 @@ jobs:
       - name: Preparar Chromium para teste de treinamento no PR
         if: github.event_name == 'pull_request' && hashFiles('treinamento-postagens-real.html') != ''
         run: |
-          pip install playwright
-          python -m playwright install --with-deps chromium
+          python -m pip install playwright
+          python -m playwright install chromium
 
       - name: Treinamento de postagens no Chromium mobile
         if: needs.escopo.outputs.suite_completa == 'true' || github.event_name == 'pull_request'
