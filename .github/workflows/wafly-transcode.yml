@@ -1,5 +1,10 @@
 name: Converter vídeos HEVC da fila Wafly
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wafly-transcode.yml'
+      - 'scripts/wafly/**'
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
