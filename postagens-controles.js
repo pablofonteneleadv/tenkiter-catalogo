@@ -6,7 +6,10 @@ function modos(selecionado){return '<div class="po-chips" role="group" aria-labe
 function produto(p){return '<button type="button" class="po-card" data-psel="'+esc(p.ID)+'" aria-pressed="false"><b>'+esc(p.Nome)+'</b><small>'+esc(p.Codigo)+' · R$ '+Number(p.Preco).toFixed(2).replace(".",",")+'</small></button>';}
 function midias(lista){return '<div class="po-midias asp-9" role="group" aria-label="Mídias da peça">'+(lista||[]).map((m,i)=>'<button type="button" class="po-m" data-m="'+i+'" aria-pressed="'+!!m.sel+'" aria-label="'+(m.tipo==="video"?"Vídeo":"Foto "+(i+1))+(m.sel?", escolhida":", não escolhida")+'">'+(m.url?'<img src="'+esc(m.url)+'" alt="" loading="lazy">':'<span>🖼️ Foto fictícia</span>')+'</button>').join("")+'</div>';}
 function quando(opcao){return '<div class="po-chips" role="group" aria-label="Quando publicar">'+[["sequencia","Na sequência"],["agora","Agora mesmo"],["data","Dia e hora"]].map(([id,label])=>'<button type="button" data-quando="'+id+'" aria-pressed="'+(opcao===id)+'">'+label+'</button>').join("")+'</div>';}
-const api=Object.freeze({destinos,formatos,modos,produto,midias,quando});
+function buscaPecas(busca){return '<label for="po-busca" class="po-ajuda">Procure pelo nome ou código</label><input type="search" id="po-busca" value="'+esc(busca||"")+'" autocomplete="off" placeholder="Nome ou código da peça">';}
+function gradePecas(lista,selecionados){const sel=Array.isArray(selecionados)?selecionados:[];return '<div class="po-grade" role="group" aria-label="Peças">'+(lista||[]).map(p=>{const on=sel.includes(String(p.ID));return '<button type="button" class="po-card" data-psel="'+esc(p.ID)+'" aria-pressed="'+on+'"><span class="po-ck" aria-hidden="true">'+(on?"✓":"")+'</span><b>'+esc(p.Nome)+'</b><small>'+esc(p.Codigo)+' · R$ '+Number(p.Preco).toFixed(2).replace(".",",")+'</small></button>';}).join("")+'</div>';}
+function legenda(valor){return '<label for="po-legenda">Legenda da postagem</label><textarea id="po-legenda" placeholder="Descreva a peça">'+esc(valor||"")+'</textarea>';}
+const api=Object.freeze({destinos,formatos,modos,produto,midias,quando,buscaPecas,gradePecas,legenda});
 if(typeof module!=="undefined"&&module.exports)module.exports=api;
 if(root)root.TKPostagensControles=api;
 })(typeof window!=="undefined"?window:null);
