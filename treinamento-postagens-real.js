@@ -8,6 +8,8 @@ function salvar(){const registro={versao:2,data:new Date().toISOString(),colabor
 let ultimo=null;
 function agir(tipo,valor){const r=servico.treino.agir({tipo,valor});erros=r.estado.erros;const feedback=$("feedback");feedback.textContent=r.motivo;feedback.style.color=r.ok?"#17603a":"#a42d1c";if(r.ok){etapa=r.estado.etapa;desenhar();}}
 function desenhar(){
+ const nomes=["Modo","Destinos","Peça","Formato","Mídia","Legenda","Programação","Revisão","Conclusão"];
+ $("visao").innerHTML=nomes.map((nome,i)=>'<div class="'+(i<etapa?"feito":i===etapa?"atual":"")+'" aria-current="'+(i===etapa?"step":"false")+'"><strong>'+(i<etapa?"✓ ":i===etapa?"➜ ":"")+nome+'</strong><small>'+(i<etapa?"Concluído":i===etapa?"Pratique aqui":"Aguardando")+'</small></div>').join("");
  $("progresso").value=etapa;$("contador").textContent=etapa+" de 9 etapas concluídas";
  if(etapa===9){$("area").hidden=true;$("final").hidden=false;ultimo=salvar();$("resumo").textContent="Acertos: 9/9 · Correções: "+erros+" · Nenhum envio realizado.";return;}
  $("instrucao").textContent=(etapa+1)+". "+rotulos[etapa];$("feedback").textContent="";
