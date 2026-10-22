@@ -40,7 +40,6 @@ export function tipoPelosBytes(b) {
 function codecMp4_(buf) {
   const b = new Uint8Array(buf);
   if (b.length < 12) return 'desconhecido';
-  const marcas = ['hvc1', 'hev1', 'avc1', 'avc3'];
   const achados = new Set();
   // Procura sample entries (incluindo moov); não depende de metadados do navegador.
   for (let i = 0; i + 4 <= b.length; i++) {
