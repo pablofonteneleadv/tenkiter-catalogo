@@ -44,6 +44,7 @@ OPCIONAIS = {
     # Segredo do Worker tenkiter-ig (ponte para o Status do WhatsApp). Nao vai em [vars] (o repositorio
     # e publico): e gravado com `wrangler secret put WORKER_TOKEN` e sobrevive aos deploys.
     "WORKER_TOKEN",
+    "WAFLY_GRUPO_CLIENTES",  # JSON privado: credenciais e destino fixo, preservado como secret.
 }
 
 WORKERS = ["og-worker", "midia-worker", "instagram-worker"]
