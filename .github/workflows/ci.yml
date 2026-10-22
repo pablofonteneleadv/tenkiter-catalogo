@@ -118,6 +118,9 @@ jobs:
 
       # Modo rápido: testes unitários dos Workers, sem instalar Chromium.
       # Os testes que dependem dos .gs.txt não versionados não são executados aqui.
+      - name: Segurança do núcleo de treinamento de postagens
+        run: node tests/treinamento_postagens_nucleo.js
+
       - name: Worker de mídia (R2)
         if: needs.escopo.outputs.suite_completa != 'true'
         run: node tests/worker_midia.js
