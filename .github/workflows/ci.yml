@@ -124,6 +124,7 @@ jobs:
           node tests/treinamento_postagens_interface.js
           node tests/treinamento_postagens_fase1.js
           node tests/treinamento_postagens_fila.js
+          node tests/treinamento_postagens_avaliacao.js
 
       - name: Worker de mídia (R2)
         if: needs.escopo.outputs.suite_completa != 'true'
