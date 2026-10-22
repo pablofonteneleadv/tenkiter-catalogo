@@ -107,7 +107,8 @@ function d1() {
   const fAnterior=globalThis.fetch;
   globalThis.fetch=async(u,init)=>{
     if(String(u).startsWith('https://wafly.com.br/')) {
-      grupoCalls.push({url:String(u),body:JSON.parse(init.body),headers:new Headers(init.headers)});
+      if(init.redirect === 'error') throw new TypeError('Workers não implementa redirect error');
+      grupoCalls.push({url:String(u),body:JSON.parse(init.body),headers:new Headers(init.headers),redirect:init.redirect});
       if(modo==='timeout') throw new Error('timeout');
       if(modo==='negado') return new Response(JSON.stringify({error:'sem permissão TOKEN_TESTE'}),{status:403});
       return new Response(JSON.stringify({value:true,messageId:'M-'+grupoCalls.length}));
@@ -119,6 +120,7 @@ function d1() {
   chk('grupo sem Instagram publica com legenda e destino privado', (await lerPost(id)).status==='publicado' && grupoCalls.length===1 && grupoCalls[0].body.caption==='Vestido TK-0001 R$ 89,90' && grupoCalls[0].body.phone==='120363000000000000-group');
   chk('usa send-image e header, sem messageId como falsa idempotência',grupoCalls[0].url.endsWith('/send-image')&&grupoCalls[0].headers.get('Client-Token')==='CLIENT_TESTE'&&!grupoCalls[0].body.messageId);
   await W.processarPostagens(env);
+  chk('redirect manual é compatível com Workers e não encaminha credenciais',grupoCalls[0].redirect==='manual');
   chk('cron não repete envio publicado',grupoCalls.length===1);
   const medias=[{url:'https://cdn.fake/a.jpg',tipo:'imagem'},{url:'https://cdn.fake/b.mp4',tipo:'video'}];
   id=await novaPostagem('grupo');
