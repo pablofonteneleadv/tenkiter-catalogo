@@ -164,5 +164,55 @@ function d1() {
   const sem=await A('POST','/post',body);
   chk('sem configuração recusa antes de criar qualquer destino',sem.r.status===409&&Number((await DB.prepare('SELECT COUNT(*) AS n FROM postagem').first()).n)===antes);
   chk('grupo tem intervalo e limite próprios',JSON.stringify(W.bucketsDoPost('feed','grupo'))==='["grupo"]'&&W.CANAL_FILA_PADRAO.grupo.max24h===40);
+
+  console.log('== Repostar e descartar ==');
+  await cfg('po_cfg',JSON.stringify({pausaAtiva:true,pausaDe:'22:00',pausaAte:'06:30'}));
+  const origem=await novaPostagem('ambos','erro');
+  await DB.prepare("UPDATE postagem SET tipo='story',ig_id='zapq:tkpost-antigo',containers='antigo',tentativas=3,urgente=1,erro='Não confirmou' WHERE id=?").bind(origem).run();
+  let rep=await A('POST','/post/repostar',{id:origem});
+  chk('repostar exige reconhecimento do risco de duplicação',rep.r.status===409);
+  rep=await A('POST','/post/repostar',{id:origem,confirmarRisco:true,por:'Gestor'});
+  const cop=await lerPost(rep.j.id),old=await lerPost(origem);
+  chk('repostar cria ID novo e encerra origem',rep.j.ok&&cop.id!==origem&&old.status==='cancelado'&&cop.repostado_de===origem);
+  chk('repostagem preserva mídia, legenda e canais',cop.midias===old.midias&&cop.legenda===old.legenda&&cop.canal==='ambos'&&cop.tipo==='story');
+  chk('novo ID reinicia recibos/tentativas sem alterar histórico antigo',cop.ig_id===''&&cop.containers===''&&cop.tentativas===0&&old.ig_id==='zapq:tkpost-antigo'&&old.tentativas===3);
+  chk('repostar não usa urgência e agenda no futuro',cop.urgente===0&&cop.seq===1&&Date.parse(cop.agendado_em)>Date.now()+59000);
+  const conf=W.normalizarCfgPost({pausaAtiva:true,pausaDe:'22:00',pausaAte:'06:30'});
+  chk('repostagem respeita pausa',W.foraDaPausa(conf,Date.parse(cop.agendado_em))===Date.parse(cop.agendado_em));
+  const dupla=await A('POST','/post/repostar',{id:origem,confirmarRisco:true});
+  chk('muitos cliques retornam a mesma cópia',dupla.j.id===cop.id&&Number((await DB.prepare('SELECT COUNT(*) AS n FROM postagem WHERE repostado_de=?').bind(origem).first()).n)===1);
+  const desc=await novaPostagem('ambos','erro');
+  await DB.prepare("UPDATE postagem SET ig_id='zapq:incerto' WHERE id=?").bind(desc).run();
+  const descartou=await A('POST','/post/cancelar',{id:desc});
+  chk('descartar erro incerto encerra sem apagar recibo',descartou.j.ok&&(await lerPost(desc)).status==='cancelado'&&(await lerPost(desc)).ig_id==='zapq:incerto');
+  chk('descartado sai da fila',!(await A('GET','/posts')).j.posts.some(p=>p.id===desc));
+  const neg=await w.fetch(ped('POST','/post/repostar','tk2.cliente',{id:desc,confirmarRisco:true}),env,{});
+  chk('repostar exige permissão de postagem',neg.status===403);
+  const jaPublicado=await novaPostagem('instagram','publicado');
+  chk('não altera publicação concluída', (await A('POST','/post/repostar',{id:jaPublicado,confirmarRisco:true})).r.status===409);
+
+  const atrasada=await novaPostagem('ambos','erro');
+  await DB.prepare("UPDATE postagem SET ig_id='zapq:atrasada',inicio_proc=? WHERE id=?").bind(new Date(Date.now()-31*60000).toISOString(),atrasada).run();
+  let liberar,entrou;
+  const iniciou=new Promise(r=>entrou=r),fetchAtual=globalThis.fetch;
+  globalThis.fetch=async(u,init)=>{
+    if(String(u).startsWith('https://api.fake')&&init?.body){const b=JSON.parse(init.body);if(b.action==='waflyStatusRemoto'&&b.consultar){entrou();return new Promise(r=>liberar=r)}}
+    return fetchAtual(u,init);
+  };
+  const consulta=A('POST','/post/consultar',{id:atrasada});
+  await iniciou;await A('POST','/post/cancelar',{id:atrasada});
+  liberar(new Response(JSON.stringify({ok:true,estado:'accepted',confirmado:true})));
+  await consulta;
+  chk('consulta tardia não reativa postagem descartada', (await lerPost(atrasada)).status==='cancelado');
+  globalThis.fetch=fetchAtual;
+
+  const corrida=await novaPostagem('instagram','erro');
+  const paralelas=await Promise.all([A('POST','/post/repostar',{id:corrida,confirmarRisco:true}),A('POST','/post/repostar',{id:corrida,confirmarRisco:true})]);
+  chk('cliques simultâneos criam uma única repostagem',paralelas.every(r=>r.j.ok)&&paralelas[0].j.id===paralelas[1].j.id&&Number((await DB.prepare('SELECT COUNT(*) AS n FROM postagem WHERE repostado_de=?').bind(corrida).first()).n)===1);
+  const rollback=await novaPostagem('instagram','erro');
+  DB._db.exec("CREATE TRIGGER falha_repostagem BEFORE INSERT ON postagem WHEN NEW.repostado_de IS NOT NULL BEGIN SELECT RAISE(ABORT,'falha simulada'); END");
+  const abortou=await A('POST','/post/repostar',{id:rollback,confirmarRisco:true});
+  chk('falha ao criar cópia preserva origem e não deixa cópia parcial',abortou.r.status===500&&(await lerPost(rollback)).status==='erro'&&Number((await DB.prepare('SELECT COUNT(*) AS n FROM postagem WHERE repostado_de=?').bind(rollback).first()).n)===0);
+  DB._db.exec('DROP TRIGGER falha_repostagem');
   console.log('\nOK='+ok+' FALHAS='+falhas.length,falhas);process.exit(falhas.length?1:0);
 })().catch(e=>{console.error(e);process.exit(2)});
