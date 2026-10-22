@@ -75,6 +75,7 @@ with sync_playwright() as p:
     pg.goto(BASE+"treinamentos.html"); pg.wait_for_timeout(1200); pg.fill("#login-whats","88999999999"); pg.click("#link-esqueci"); pg.wait_for_timeout(300)
     pg.locator("#tkc-recuperar button:has-text('Não lembro')").click(); pg.wait_for_timeout(300)
     hr=pg.locator("#tkc-recuperar a").first.get_attribute("href") or ""
+    chk("link de ajuda não expõe CPF, e-mail nem identificador", "52998224725" not in hr and "@" not in hr and "identificador" not in hr.lower())
     chk("sem CPF/nascimento: chama a gestão no WhatsApp da loja (link completo com mensagem pronta)",hr.startswith("https://wa.me/5588993223998?text="),hr)
     ctx.close()
 
