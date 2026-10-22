@@ -158,7 +158,7 @@ function d1() {
   chk('timeout é visível e não publica', (await lerPost(id)).status==='erro');
   await W.processarPostagens(env);
   const saude=JSON.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='grupo_saude'").first()).valor);
-  chk('cron consulta sessão e grupo sem enviar outra mensagem',saude.sessao.estado==='CONNECTED'&&saude.grupo.encontrado===true&&grupoCalls.length===6);
+  chk('cron consulta sessão, grupo e chat sem enviar outra mensagem',saude.sessao.estado==='CONNECTED'&&saude.grupo.encontrado===true&&saude.chat.http===200&&saude.chat.campos.includes('value')&&grupoCalls.length===6);
   const count=grupoCalls.length;
   await DB.prepare("UPDATE postagem SET status='agendado' WHERE id=?").bind(id).run();
   modo='ok';await W.processarPostagens(env);
