@@ -25,7 +25,7 @@ function treinoPoRender_(){
  (passo?'<div class="po-passo"><p>Peça fictícia: TM-TREINO-024 · Blusa de teste · R$ 29,90</p><div class="po-chips">'+botoes.map(x=>'<button type="button" '+x[0]+'>'+x[1]+'</button>').join('')+'</div></div>':'<div class="po-passo"><p>Nenhuma postagem, fila ou produto real foi alterado.</p><a href="treinamento-postagens-simulacao.html">Praticar também as nove etapas completas</a></div>');
  if(passo){const alvo=corpo.querySelector(passo.selector);if(alvo){alvo.style.outline='3px solid #e67e22';alvo.style.outlineOffset='3px';alvo.scrollIntoView({block:'nearest'});}}
 }
-function treinoPoInicio_(){treinoPo_=true;treinoPoEtapa_=0;treinoPoErros_=0;treinoPoRender_();}
+function treinoPoInicio_(){window.location.href='treinamento-postagens-simulacao.html';}
 function treinoPoFim_(){treinoPo_=false;desenhar();}
 
 let tkRascunhoTimer_=null,tkRascunhoPendente_=false;
