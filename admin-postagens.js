@@ -1490,7 +1490,7 @@ async function adicionarAvulsas(arqs){
   let c=0;n.tipo==="carrossel"&&(n.midias.forEach(x=>{x.sel&&++c>10&&(x.sel=!1,c=10,erros.length||erros.push("Carrossel leva até 10 mídias: as últimas ficaram sem marcar"))}));
   n.previa=!1;aviso=erros.join(" · ");avisoErro=erros.length>0;desenhar()
 }
-async function adicionarLivres(arqs){
+async async function adicionarLivres(arqs){
   const erros=[];
   for(const f of arqs){
     const video=/^video\//.test(f.type)||/\.(mp4|mov|webm)$/i.test(f.name),foto=/^image\/(jpeg|png|webp)$/.test(f.type);
