@@ -2682,7 +2682,7 @@
       const lista = document.createElement('ul');
       falhas.forEach(it => {
         const linha = document.createElement('li');
-        linha.textContent = (it.titulo || 'Peça') + ': ' + (it.msg || 'Precisa de atenção.');
+        linha.textContent = (it.titulo || 'Peça') + ' · ' + (it.tentativa ? 'tentativa ' + it.tentativa + ' · ' : '') + (it.msg || 'Precisa de atenção.');
         lista.appendChild(linha);
       });
       resumo.appendChild(lista);
@@ -2692,7 +2692,7 @@
     ir.textContent = falhas.length ? 'Ver problemas e tentar novamente' : 'Ver andamento dos envios';
     ir.addEventListener('click', () => {
       const fila = document.getElementById('cad-envios');
-      fila.open = true;
+      if (!fila) return;
       fila.scrollIntoView({ behavior: 'smooth', block: 'start' });
       fila.focus({ preventScroll: true });
     });
