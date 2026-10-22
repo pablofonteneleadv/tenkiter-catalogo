@@ -17,10 +17,10 @@ function desenhar(){
  switch(etapa){
  case 0:h=ui.modos("peca");break;
  case 1:h=ui.destinos([]);break;
- case 2:h='<label for="busca">Buscar peça por código</label><input id="busca" placeholder="TREINO-001" autocomplete="off"><div id="pecas"></div>';break;
+ case 2:h=ui.buscaPecas("")+'<div id="pecas"></div>';break;
  case 3:h=ui.formatos("");break;
  case 4:h='<p>Foto de treinamento — nenhuma mídia real</p>'+ui.midias([{tipo:"imagem",url:"",sel:false}]);break;
- case 5:h='<label for="legenda">Legenda</label><textarea id="legenda" placeholder="Descreva a peça fictícia"></textarea>'+botao("data-acao","legenda","Confirmar legenda");break;
+ case 5:h=ui.legenda("")+botao("data-acao","legenda","Confirmar legenda");break;
  case 6:h=ui.quando("");break;
  case 7:h='<p><b>Peça:</b> '+p.Nome+' · '+p.Codigo+'</p><p><b>Destino:</b> Instagram · <b>Formato:</b> Story · <b>Programação:</b> Na sequência</p><label><input type="checkbox" id="revisado" style="width:auto"> Revisei os dados</label>'+botao("data-acao","revisao","Confirmar revisão");break;
  case 8:h='<p>Este botão apenas conclui a prática. Não existe ligação com a fila.</p>'+botao("data-acao","conclusao","Concluir sem publicar");break;
@@ -28,7 +28,7 @@ function desenhar(){
  $("controles").innerHTML=h;
  const esperado=[ '[data-modo="peca"]','[data-destino="instagram"]','[data-psel="TREINO-001"]','[data-tipo="story"]','[data-m="0"]','[data-acao="legenda"]','[data-quando="sequencia"]','[data-acao="revisao"]','[data-acao="conclusao"]'][etapa];
  function marcar(){const el=$("controles").querySelector(esperado);if(el)el.classList.add("alvo");}
- if(etapa===2){const busca=$("busca");busca.addEventListener("input",()=>{$("pecas").innerHTML=busca.value.trim().toUpperCase()===p.Codigo?ui.produto(p):'<small>Digite TREINO-001 para encontrar a peça fictícia.</small>';marcar();});}
+ if(etapa===2){const busca=$("po-busca");busca.addEventListener("input",()=>{$("pecas").innerHTML=busca.value.trim().toUpperCase()===p.Codigo?ui.gradePecas([p],[]):'<small>Digite TREINO-001 para encontrar a peça fictícia.</small>';marcar();});}
  marcar();
 }
 $("controles").addEventListener("click",ev=>{const b=ev.target.closest("button");if(!b)return;
@@ -39,7 +39,7 @@ $("controles").addEventListener("click",ev=>{const b=ev.target.closest("button")
  else if(d.tipo!==undefined)agir("formato",d.tipo);
  else if(d.m!==undefined)agir("midia",d.m==="0"?"TREINO-MIDIA":d.m);
  else if(d.quando!==undefined)agir("quando",d.quando);
- else if(d.acao==="legenda")agir("legenda",$("legenda").value);
+ else if(d.acao==="legenda")agir("legenda",$("po-legenda").value);
  else if(d.acao==="revisao")agir("revisao",$("revisado").checked);
  else if(d.acao==="conclusao")agir("conclusao",true);
 });
