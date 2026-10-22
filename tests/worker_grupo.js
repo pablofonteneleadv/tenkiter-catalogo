@@ -108,6 +108,7 @@ function d1() {
   globalThis.fetch=async(u,init)=>{
     if(String(u).startsWith('https://wafly.com.br/')) {
       if(init.redirect === 'error') throw new TypeError('Workers não implementa redirect error');
+      if(init.method === 'GET') return new Response(JSON.stringify(String(u).endsWith('/status') ? {value:'CONNECTED'} : {value:true,participants:[]}));
       grupoCalls.push({url:String(u),body:JSON.parse(init.body),headers:new Headers(init.headers),redirect:init.redirect});
       if(modo==='aguardar') await new Promise(resolve=>{liberarGrupo=resolve});
       if(modo==='timeout') throw new Error('timeout');
@@ -155,6 +156,9 @@ function d1() {
   chk('concorrência não duplica mídias', (await lerPost(id)).status==='publicado' && grupoCalls.length===5);
   modo='timeout';id=await novaPostagem('grupo');await W.processarPostagens(env);
   chk('timeout é visível e não publica', (await lerPost(id)).status==='erro');
+  await W.processarPostagens(env);
+  const saude=JSON.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='grupo_saude'").first()).valor);
+  chk('cron consulta sessão e grupo sem enviar outra mensagem',saude.sessao.estado==='CONNECTED'&&saude.grupo.encontrado===true&&grupoCalls.length===6);
   const count=grupoCalls.length;
   await DB.prepare("UPDATE postagem SET status='agendado' WHERE id=?").bind(id).run();
   modo='ok';await W.processarPostagens(env);
@@ -166,6 +170,8 @@ function d1() {
   chk('reagendar ou próximo livre não fingem novo envio após timeout',reag.r.status===409&&prox.r.status===409&&(await lerPost(id)).status==='erro');
   modo='negado';id=await novaPostagem('grupo');await W.processarPostagens(env);
   chk('403 preserva erro legível sem segredo',!(await lerPost(id)).erro.includes('TOKEN_TESTE')&&(await lerPost(id)).status==='erro');
+  const diagnostico=JSON.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='grupo_ultimo_envio'").first()).valor);
+  chk('diagnóstico do envio contém HTTP e campos, sem resposta privada',diagnostico.http===403&&diagnostico.campos.includes('error')&&!JSON.stringify(diagnostico).includes('TOKEN_TESTE'));
   const r=await A('POST','/post/reagendar',{id,quando:'agora'});
   modo='ok';await W.processarPostagens(env);
   chk('rejeição explícita permite nova tentativa manual',r.j.ok&&(await lerPost(id)).status==='publicado');
