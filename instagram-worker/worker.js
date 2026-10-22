@@ -772,7 +772,7 @@ async function conteudoGrupo_(env, m) {
   // Celulares podem gravar MP4 em HEVC/H.265. O endpoint send-video da Wafly
   // não promete conversão, ao contrário do endpoint de Status. Recusamos antes
   // de criar recibo ou chamar a API: uma falha depois do envio fica incerta.
-  if (chave.endsWith('.mp4') && /hvc1|hev1/.test(new TextDecoder().decode(bytes.slice(0, Math.min(bytes.byteLength, 262144))))) throw new Error('VIDEO_HEVC');
+  if (chave.endsWith('.mp4') && /hvc1|hev1/.test(new TextDecoder().decode(bytes))) throw new Error('VIDEO_HEVC');
   return b64(bytes);
 }
 /** Recibo durável por mídia: nunca repetir um envio cujo resultado ficou incerto.
