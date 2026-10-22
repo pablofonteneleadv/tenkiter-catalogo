@@ -24,3 +24,9 @@ assert.match(ui.quando(""),/data-quando="sequencia"/);
 assert.match(fs.readFileSync("treinamento-postagens-real.js","utf8"),/ui\.midias\(/);
 assert.match(fs.readFileSync("treinamento-postagens-real.js","utf8"),/ui\.quando\(/);
 console.log("Controles de mídia e agendamento no treinamento: OK");
+
+assert.match(ui.gradePecas([{ID:"TREINO-001",Nome:"Blusa fictícia",Codigo:"TREINO-001",Preco:29.9,Foto_URL:""}],["TREINO-001"]),/aria-pressed="true"/);
+assert.match(ui.gradePecas([],[]),/Nenhuma peça/);
+assert.match(ui.acoesPecas(["TREINO-001"],1,true),/data-a="usarpecas"/);
+assert.match(ui.acoesPecas([],0,false),/data-a="usarpecas" disabled/);
+console.log("Grade e barra de seleção reutilizáveis: OK");
