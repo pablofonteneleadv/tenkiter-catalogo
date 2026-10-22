@@ -43,7 +43,7 @@ def montar_blocos(hash_extra=""):
     ]
 
 def novo_backend(perms, estado):
-    st = {"lidos": set(), "log": []}
+    st = {"lidos": set(), "log": [], "gets": []}
     def conteudo():
         blocos = montar_blocos()
         caps = []
@@ -59,6 +59,7 @@ def novo_backend(perms, estado):
     def post(b):
         a = b.get("action"); st["log"].append(b)
         if a in ("sessao", "login"): return {"ok": True, "sessao": "tk2.x.y", "usuario": {"whatsapp": "88999999999", "name": "Ana", "nome": "Ana", "level": 10 if "gerir_manuais" in perms else 1, "permissoes": perms, "perfil": "Admin" if "gerir_manuais" in perms else "Aluno"}}
+        if a == "config_quiz": return {"ok": "gerir_manuais" in perms, "configs": []}
         if a == "treinamento_conteudo": return {"ok": True, "manuais": conteudo(), "provas": {}, "resets": {}}
         if a == "manual_marcar_lido":
             (st["lidos"].add if b.get("lido") else st["lidos"].discard)(b["capId"]); return {"ok": True}
@@ -85,7 +86,8 @@ def instalar(ctx, perms, estado):
             except Exception: b = {}
             return route.fulfill(json=post(b), headers=cors)
         q = req.url.split("?", 1)[-1]
-        if "action=versao" in q: return route.fulfill(json={"ok": True, "versao": "3.17", "acessos": True, "conteudoProtegido": True, "manualRico": True, "provaModelo": True}, headers=cors)
+        st["gets"].append(q)
+        if "action=versao" in q: return route.fulfill(json={"ok": True, "versao": estado.get("versao", "3.17"), "configQuizProtegida": estado.get("versao") == "3.18", "acessos": True, "conteudoProtegido": True, "manualRico": True, "provaModelo": True}, headers=cors)
         return route.fulfill(json={"ok": True, "configs": [], "manuais": [], "produtos": []}, headers=cors)
     ctx.route("**/*", h)
     return st
@@ -104,9 +106,14 @@ with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"]); erros = []
     estado = {"hash1": ""}
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block", locale="pt-BR")
-    ctx.add_init_script(SESSION); st = instalar(ctx, ALUNO, estado)
+    ctx.add_init_script(SESSION)
+    ctx.add_init_script("localStorage.setItem('tm_manuais_cache_v1', JSON.stringify({manuais:[{id:'antigo',titulo:'Conteúdo de outra sessão',parts:[]}]}));")
+    st = instalar(ctx, ALUNO, estado)
     pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: d.accept())
     pg.goto(BASE + "treinamentos.html"); pg.wait_for_selector('.card[data-manual="1"]', timeout=10000); pg.wait_for_timeout(500)
+    chk("P-16 HTML não embute manuais nem provas", pg.evaluate("Object.keys(JSON.parse(document.getElementById('app-data').textContent).manuals).length === 0"))
+    chk("P-16 cache de outra sessão é apagado", pg.evaluate("localStorage.getItem('tm_manuais_cache_v1')") is None)
+    chk("P-16 não consulta GET público de manual/configuração", not any("action=manuais_lista" in q or "action=config_quiz" in q for q in st["gets"]))
     pg.click('.card[data-manual="1"]'); pg.wait_for_selector(".chapter", timeout=8000); pg.wait_for_timeout(500)
     c1 = pg.locator(".chapter").nth(0)
 
@@ -190,6 +197,7 @@ with sync_playwright() as p:
     ctx.close()
 
     print("== Gestão: Doc da prova em todo card e guia de formatação ==")
+    estado["versao"] = "3.18"
     estado["hash1"] = ""
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block", locale="pt-BR")
     ctx.add_init_script(SESSION); st = instalar(ctx, GESTOR, estado)
@@ -215,6 +223,8 @@ with sync_playwright() as p:
     chk("a checagem do guia responde ao clique (é só exemplo)", g.locator(".tmv-chk .tmv-op.certa").count() == 1)
     shot(pg, "r5-guia", full=True)
     v = axe_viol(pg, "document.getElementById('guia-formatar')"); chk("guia 'Como formatar' aberto: sem problema de acessibilidade/contraste", not v, v)
+    cfg_calls = [x for x in st["log"] if x.get("action") == "config_quiz"]
+    chk("P-16 gestor 3.18 lê configuração com sessão pelo POST", bool(cfg_calls) and all(x.get("sessao") == "tk2.x.y" for x in cfg_calls))
     chk("sem erro de JavaScript (gestão)", not erros, erros)
     ctx.close(); b.close()
 print("\nOK=%d FALHAS=%d %s" % (len(OK), len(BAD), BAD)); sys.exit(1 if BAD else 0)
