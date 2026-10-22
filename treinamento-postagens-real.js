@@ -36,7 +36,7 @@ $("controles").addEventListener("click",ev=>{const b=ev.target.closest("button")
  const d=b.dataset;
  if(d.modo!==undefined)agir("modo",d.modo);
  else if(d.destino!==undefined)agir("destino",d.destino);
- else if(d.psel!==undefined){const item=$("controles").querySelector("[data-psel]");if(item){item.setAttribute("aria-pressed","true");item.querySelector(".po-ck").textContent="✓";$("acoes-pecas").innerHTML=ui.acoesPecas([d.psel],1,true);}}
+ else if(d.psel!==undefined){const item=$("controles").querySelector('[data-psel="'+d.psel+'"]');if(item){item.setAttribute("aria-pressed","true");const marca=item.querySelector(".po-ck");if(marca)marca.textContent="✓";$("acoes-pecas").innerHTML=ui.acoesPecas([d.psel],1,true);}}
  else if(d.a==="usarpecas")agir("produto","TREINO-001");
  else if(d.tipo!==undefined)agir("formato",d.tipo);
  else if(d.m!==undefined)agir("midia",d.m==="0"?"TREINO-MIDIA":d.m);
