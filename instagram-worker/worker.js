@@ -1202,7 +1202,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     if (pend + lista.length > 200) return J({ ok: false, erro: 'Há postagens demais na fila (200). Espere algumas saírem.' }, 429);
     const vs = []; for (const x of lista) { const r = validarPostagem(x); if (r.erro) return J({ ok: false, erro: r.erro }, 400); vs.push(r.v); }
     if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto' && canalUsaInstagram_(v.canal))) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
-    const ids = [], quandos = [], por = String(b.por || '').slice(0, 60);
+    const ids = [], inserts = [], quandos = [], por = String(b.por || '').slice(0, 60);
     const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [], intervaloMs = intervaloPedidoMs_(b.intervalo);
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], bs = bucketsDoPost(v.tipo, v.canal), ck = bs.join('+');
@@ -1219,9 +1219,11 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       quandos.push(v.quando);
 
 
-      const r = await env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal, urgente) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal, v.urgente ? 1 : 0).run();
-      ids.push(r.meta && r.meta.last_row_id);
+      inserts.push(env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal, urgente) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal, v.urgente ? 1 : 0));
     }
+    // Todos os destinos entram juntos ou nenhum: uma falha não deixa metade do pedido na fila.
+    const criadas = await env.DB.batch(inserts);
+    criadas.forEach((r) => ids.push(r.meta && r.meta.last_row_id));
     if (vs.some((v) => v.agora) && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
     return J({ ok: true, ids: ids, quandos: quandos, ajustes: ajustes, postagensOriginais: originais.length, gruposClientes: lista.length - originais.length });
   }

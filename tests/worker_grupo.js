@@ -8,8 +8,8 @@ const chk = (n, c, d) => { if (c) { ok++; console.log('  ✔ ' + n); } else { fa
 
 function d1() {
   const db = new DatabaseSync(':memory:');
-  const prep = (sql) => { const S = () => db.prepare(sql); let args = []; const o = { bind(...a) { args = a; return o; }, async all() { return { results: S().all(...args).map((x) => ({ ...x })) }; }, async first() { const r = S().get(...args); return r ? { ...r } : null; }, async run() { const r = S().run(...args); return { meta: { last_row_id: Number(r.lastInsertRowid), changes: r.changes } }; }, _run() { S().run(...args); } }; return o; };
-  return { prepare: prep, async batch(l) { db.exec('BEGIN'); try { for (const st of l) st._run(); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; } return []; }, _db: db };
+  const prep = (sql) => { const S = () => db.prepare(sql); let args = []; const o = { bind(...a) { args = a; return o; }, async all() { return { results: S().all(...args).map((x) => ({ ...x })) }; }, async first() { const r = S().get(...args); return r ? { ...r } : null; }, async run() { const r = S().run(...args); return { meta: { last_row_id: Number(r.lastInsertRowid), changes: r.changes } }; }, _run() { const r = S().run(...args); return { meta: { last_row_id: Number(r.lastInsertRowid), changes: r.changes } }; } }; return o; };
+  return { prepare: prep, async batch(l) { db.exec('BEGIN'); const results = []; try { for (const st of l) results.push(st._run()); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; } return results; }, _db: db };
 }
 
 (async () => {
@@ -152,6 +152,11 @@ function d1() {
   chk('Status do WhatsApp pode combinar com grupo sem Instagram',soZap.j.ok&&soZap.j.ids.length===2);
   const forbidden=await w.fetch(ped('POST','/post','tk2.cliente',body),env,{});
   chk('cliente sem permissão não agenda publicação no grupo',forbidden.status===403);
+  const qtdAntes=Number((await DB.prepare('SELECT COUNT(*) AS n FROM postagem').first()).n);
+  DB._db.exec("CREATE TRIGGER falha_grupo BEFORE INSERT ON postagem WHEN NEW.canal='grupo' BEGIN SELECT RAISE(ABORT, 'falha simulada'); END");
+  const falhaAtomica=await A('POST','/post',body);
+  chk('falha ao gravar grupo desfaz também destino principal',falhaAtomica.r.status===500&&Number((await DB.prepare('SELECT COUNT(*) AS n FROM postagem').first()).n)===qtdAntes);
+  DB._db.exec('DROP TRIGGER falha_grupo');
   const antes=Number((await DB.prepare('SELECT COUNT(*) AS n FROM postagem').first()).n);
   delete env.WAFLY_GRUPO_CLIENTES;
   const sem=await A('POST','/post',body);
