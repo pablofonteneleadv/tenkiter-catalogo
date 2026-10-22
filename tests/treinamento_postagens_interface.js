@@ -30,3 +30,13 @@ assert.match(ui.gradePecas([],[]),/Nenhuma peça/);
 assert.match(ui.acoesPecas(["TREINO-001"],1,true),/data-a="usarpecas"/);
 assert.match(ui.acoesPecas([],0,false),/data-a="usarpecas" disabled/);
 console.log("Grade e barra de seleção reutilizáveis: OK");
+
+assert.match(js,/legendaTreino=String\(valor\)\.trim\(\)/);
+assert.match(js,/\$\("legenda-revisao"\)\.textContent=legendaTreino/);
+assert.match(js,/legendaTreino="";ultimo=null/);
+console.log("Revisão exibe legenda real da simulação sem interpretar HTML: OK");
+
+assert.match(js,/ui\.acoesPecas\(/);
+assert.match(js,/d\.a==="usarpecas"/);
+assert.match(js,/setAttribute\("aria-pressed","true"\)/);
+console.log("Treinamento exige confirmação explícita da peça: OK");

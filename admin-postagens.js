@@ -1520,7 +1520,7 @@ async function adicionarAvulsas(arqs){
   for(const f of arqs){
     const video=/^video\//.test(f.type)||/\.(mp4|mov|webm)$/i.test(f.name),foto=/^image\/(jpeg|png|webp)$/.test(f.type);
     if(!video&&!foto){erros.push(f.name+": formato não aceito (use JPG, PNG, WEBP, MP4, MOV ou WEBM)");continue}
-    if(video){const resultado=await window.TKVideoValidation.validar(f,{maxMB:40});if(!resultado.ok){erros.push(f.name+": "+resultado.erros.join(" "));continue}}if(video){try{await checarCodecGrupo_(f)}catch(e){if(/H\.265\/HEVC/.test(e.message)){fcPendente=f;fcMensagem='O vídeo H.265/HEVC não pode ser enviado ao Grupo clientes sem conversão.';}erros.push(f.name+": "+e.message);continue}}
+    if(video){const resultado=await window.TKVideoValidation.validar(f,{maxMB:40});if(!resultado.ok){erros.push(f.name+": "+resultado.erros.join(" "));continue}}if(video){try{await checarCodecGrupo_(f)}catch(e){if(/H\.265\/HEVC/.test(e.message)){fcPendente=f;fcMensagem='O vídeo H.265/HEVC não pode ser enviado ao Grupo clientes sem conversão.';}else{erros.push(f.name+": "+e.message);}continue}}
     if(n.midias.filter(x=>x.avulsa).length>=20){erros.push("No máximo 20 avulsas por vez");continue}
     const serve=n.tipo==="feed"?!video:n.tipo==="reels"?video:!0;
     n.tipo==="feed"&&!video||n.tipo==="reels"&&video?n.midias.forEach(x=>{x.sel=!1}):0;
@@ -1535,7 +1535,7 @@ async function adicionarLivres(arqs){
   for(const f of arqs){
     const video=/^video\//.test(f.type)||/\.(mp4|mov|webm)$/i.test(f.name),foto=/^image\/(jpeg|png|webp)$/.test(f.type);
     if(!video&&!foto){erros.push(f.name+": formato não aceito (use JPG, PNG, WEBP, MP4, MOV ou WEBM)");continue}
-    if(video){const resultado=await window.TKVideoValidation.validar(f,{maxMB:40});if(!resultado.ok){erros.push(f.name+": "+resultado.erros.join(" "));continue}}if(video){try{await checarCodecGrupo_(f)}catch(e){if(/H\.265\/HEVC/.test(e.message)){fcPendente=f;fcMensagem='O vídeo H.265/HEVC não pode ser enviado ao Grupo clientes sem conversão.';}erros.push(f.name+": "+e.message);continue}}
+    if(video){const resultado=await window.TKVideoValidation.validar(f,{maxMB:40});if(!resultado.ok){erros.push(f.name+": "+resultado.erros.join(" "));continue}}if(video){try{await checarCodecGrupo_(f)}catch(e){if(/H\.265\/HEVC/.test(e.message)){fcPendente=f;fcMensagem='O vídeo H.265/HEVC não pode ser enviado ao Grupo clientes sem conversão.';}else{erros.push(f.name+": "+e.message);}continue}}
     if(nova.livre.length>=30){erros.push("No máximo 30 mídias por vez");continue}
     nova.livre.push({file:f,tipo:video?"video":"imagem",url:URL.createObjectURL(f),nome:f.name,hora:"",videoValidado:video});
   }
