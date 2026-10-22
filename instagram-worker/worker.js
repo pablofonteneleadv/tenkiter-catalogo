@@ -768,7 +768,12 @@ async function conteudoGrupo_(env, m) {
   const obj = await env.MIDIA.get(chave);
   if (!obj) throw new Error('MIDIA_AUSENTE');
   if (!Number.isFinite(obj.size) || obj.size > 12 * 1024 * 1024) return url;
-  return b64(await obj.arrayBuffer());
+  const bytes = await obj.arrayBuffer();
+  // Celulares podem gravar MP4 em HEVC/H.265. O endpoint send-video da Wafly
+  // não promete conversão, ao contrário do endpoint de Status. Recusamos antes
+  // de criar recibo ou chamar a API: uma falha depois do envio fica incerta.
+  if (chave.endsWith('.mp4') && /hvc1|hev1/.test(new TextDecoder().decode(bytes.slice(0, Math.min(bytes.byteLength, 262144))))) throw new Error('VIDEO_HEVC');
+  return b64(bytes);
 }
 /** Recibo durável por mídia: nunca repetir um envio cujo resultado ficou incerto.
  * O messageId da API é reply, NÃO é chave de idempotência. Não o usamos como tal. */
@@ -785,7 +790,7 @@ async function enviarGrupoClientes_(env, p) {
     if (antigo) return marcarErroPost_(env, p, 'Grupo clientes: envio sem confirmação. Confira na Wafly antes de qualquer novo envio; não reenviamos para evitar duplicação.');
     let conteudo;
     try { conteudo = await conteudoGrupo_(env, midias[i]); }
-    catch (e) { return marcarErroPost_(env, p, 'Grupo clientes: não consegui ler a mídia. Confira o arquivo e tente novamente.'); }
+    catch (e) { return marcarErroPost_(env, p, e && e.message === 'VIDEO_HEVC' ? 'Grupo clientes: este MP4 usa H.265/HEVC. Converta para MP4 H.264/AAC e crie uma nova postagem; nada foi enviado à Wafly.' : 'Grupo clientes: não consegui ler a mídia. Confira o arquivo e tente novamente.'); }
     const claim = await env.DB.prepare("INSERT OR IGNORE INTO postagem_grupo_recibo (postagem_id, ordem, estado, atualizado_em) VALUES (?,?,'enviando',?)").bind(p.id, i, agora()).run();
     if (!claim.meta || claim.meta.changes !== 1) return;
     await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(agora(), agora(), p.id).run();
