@@ -725,6 +725,15 @@ async function diagnosticarGrupoClientes_(env) {
       if (j && typeof j === 'object' && !Array.isArray(j)) {
         out[nome].campos = Object.keys(j).filter(k => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 15);
         out[nome].valorTipo = typeof j.value;
+        if (nome === 'sessao') {
+          if (typeof j.connected === 'boolean') out[nome].conectado = j.connected;
+          if (typeof j.smartphoneConnected === 'boolean') out[nome].celularConectado = j.smartphoneConnected;
+        }
+        if (nome === 'grupo') {
+          if (typeof j.adminOnlyMessage === 'boolean') out[nome].soAdministradores = j.adminOnlyMessage;
+          if (Array.isArray(j.participants)) out[nome].participantes = j.participants.length;
+        }
+        if (nome === 'chat' && Number.isFinite(Number(j.lastMessageTime))) out[nome].ultimaMensagemEm = Number(j.lastMessageTime);
       }
       if (nome === 'sessao' && j && typeof j.value === 'string') out[nome].estado = /^[A-Z_]{1,30}$/.test(j.value) ? j.value : 'DESCONHECIDO';
       if (nome === 'grupo') out[nome].encontrado = r.ok && !!j && j.value !== false && !j.error;

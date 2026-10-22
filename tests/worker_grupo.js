@@ -108,7 +108,7 @@ function d1() {
   globalThis.fetch=async(u,init)=>{
     if(String(u).startsWith('https://wafly.com.br/')) {
       if(init.redirect === 'error') throw new TypeError('Workers não implementa redirect error');
-      if(init.method === 'GET') return new Response(JSON.stringify(String(u).endsWith('/status') ? {value:'CONNECTED'} : {value:true,participants:[]}));
+      if(init.method === 'GET') return new Response(JSON.stringify(String(u).endsWith('/status') ? {value:'CONNECTED',connected:true,smartphoneConnected:true} : String(u).includes('/group-metadata/') ? {value:true,adminOnlyMessage:false,participants:[]} : {lastMessageTime:1792670000}));
       grupoCalls.push({url:String(u),body:JSON.parse(init.body),headers:new Headers(init.headers),redirect:init.redirect});
       if(modo==='aguardar') await new Promise(resolve=>{liberarGrupo=resolve});
       if(modo==='timeout') throw new Error('timeout');
@@ -158,7 +158,7 @@ function d1() {
   chk('timeout é visível e não publica', (await lerPost(id)).status==='erro');
   await W.processarPostagens(env);
   const saude=JSON.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='grupo_saude'").first()).valor);
-  chk('cron consulta sessão, grupo e chat sem enviar outra mensagem',saude.sessao.estado==='CONNECTED'&&saude.grupo.encontrado===true&&saude.chat.http===200&&saude.chat.campos.includes('value')&&grupoCalls.length===6);
+  chk('cron consulta sessão, grupo e chat sem enviar outra mensagem',saude.sessao.estado==='CONNECTED'&&saude.sessao.conectado===true&&saude.grupo.encontrado===true&&saude.grupo.soAdministradores===false&&saude.chat.ultimaMensagemEm===1792670000&&grupoCalls.length===6);
   const count=grupoCalls.length;
   await DB.prepare("UPDATE postagem SET status='agendado' WHERE id=?").bind(id).run();
   modo='ok';await W.processarPostagens(env);
