@@ -767,7 +767,11 @@ async function conteudoGrupo_(env, m) {
   if (!/^[a-z0-9/_-]+\.(?:jpg|jpeg|png|webp|mp4)$/.test(chave) || chave.includes('..')) return url;
   const obj = await env.MIDIA.get(chave);
   if (!obj) throw new Error('MIDIA_AUSENTE');
-  if (!Number.isFinite(obj.size) || obj.size > 12 * 1024 * 1024) return url;
+  if (!Number.isFinite(obj.size)) throw new Error('VIDEO_TAMANHO_DESCONHECIDO');
+  // Evita mudar silenciosamente para envio por URL: nesse caminho a Wafly pode falhar ao buscar o vídeo.
+  // Rejeição antes de criar recibo, sem qualquer envio à Wafly.
+  if (chave.endsWith('.mp4') && obj.size > 12 * 1024 * 1024) throw new Error('VIDEO_GRANDE_GRUPO');
+  if (obj.size > 12 * 1024 * 1024) return url;
   const bytes = await obj.arrayBuffer();
   // Celulares podem gravar MP4 em HEVC/H.265. O endpoint send-video da Wafly
   // não promete conversão, ao contrário do endpoint de Status. Recusamos antes
@@ -785,6 +789,12 @@ async function erroVideoGrupo_(env, midias) {
 }
 /** Recibo durável por mídia: nunca repetir um envio cujo resultado ficou incerto.
  * O messageId da API é reply, NÃO é chave de idempotência. Não o usamos como tal. */
+/** Resposta inconclusiva: não significa que a Wafly deixou de entregar. Nunca repetir automaticamente. */
+async function aguardarConfirmacaoGrupo_(env, p, detalhe) {
+  const aviso = 'Grupo clientes: aguardando confirmação da entrega. ' + detalhe + ' Confira no WhatsApp; não reenviamos automaticamente.';
+  await env.DB.prepare("UPDATE postagem SET status='processando', erro=?, atualizado_em=? WHERE id=?").bind(aviso.slice(0, 300), agora(), p.id).run();
+  return { ok: true, aguardando: true };
+}
 async function enviarGrupoClientes_(env, p) {
   const cfg = cfgGrupoClientes_(env);
   if (!cfg) return marcarErroPost_(env, p, 'O Grupo clientes ainda não está configurado. Avise o gestor.');
@@ -794,11 +804,11 @@ async function enviarGrupoClientes_(env, p) {
     if (antigo && antigo.estado === 'aceito') continue;
     // O cron seguinte pode rodar enquanto a Wafly ainda processa o vídeo.
     // Não transformar uma requisição em andamento em erro só porque já existe recibo.
-    if (antigo && antigo.estado === 'enviando' && p.status === 'processando' && Date.now() - Date.parse(antigo.atualizado_em || '') < 3 * 60000) return { ok: true, aguardando: true };
+    if (antigo && antigo.estado === 'enviando' && p.status === 'processando') return { ok: true, aguardando: true };
     if (antigo) return marcarErroPost_(env, p, 'Grupo clientes: envio sem confirmação. Confira na Wafly antes de qualquer novo envio; não reenviamos para evitar duplicação.');
     let conteudo;
     try { conteudo = await conteudoGrupo_(env, midias[i]); }
-    catch (e) { return marcarErroPost_(env, p, e && e.message === 'VIDEO_HEVC' ? 'Grupo clientes: este MP4 usa H.265/HEVC. Converta para MP4 H.264/AAC e crie uma nova postagem; nada foi enviado à Wafly.' : 'Grupo clientes: não consegui ler a mídia. Confira o arquivo e tente novamente.'); }
+    catch (e) { return marcarErroPost_(env, p, e && e.message === 'VIDEO_HEVC' ? 'Grupo clientes: este MP4 usa H.265/HEVC. Converta para MP4 H.264/AAC e crie uma nova postagem; nada foi enviado à Wafly.' : e && e.message === 'VIDEO_GRANDE_GRUPO' ? 'Grupo clientes: vídeo acima de 12 MiB. Comprima para até 12 MiB e crie nova postagem; nada foi enviado à Wafly.' : 'Grupo clientes: não consegui ler a mídia. Confira o arquivo e tente novamente.'); }
     const claim = await env.DB.prepare("INSERT OR IGNORE INTO postagem_grupo_recibo (postagem_id, ordem, estado, atualizado_em) VALUES (?,?,'enviando',?)").bind(p.id, i, agora()).run();
     if (!claim.meta || claim.meta.changes !== 1) return;
     await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(agora(), agora(), p.id).run();
@@ -813,7 +823,7 @@ async function enviarGrupoClientes_(env, p) {
         headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
       j = await respostaGrupo_(r);
-    } catch (e) { return marcarErroPost_(env, p, 'Grupo clientes: resposta interrompida. Confira na Wafly; o sistema não repetirá este envio automaticamente.'); }
+    } catch (e) { return aguardarConfirmacaoGrupo_(env, p, 'A resposta da Wafly foi interrompida.'); }
     const respostaInfo = { postagemId: p.id, ordem: i, em: agora(), http: r.status,
       campos: j && typeof j === 'object' && !Array.isArray(j) ? Object.keys(j).filter(k => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 15) : [],
       valor: j && typeof j.value === 'boolean' ? j.value : null, idPresente: !!(j && j.messageId) };
@@ -822,7 +832,7 @@ async function enviarGrupoClientes_(env, p) {
       // Só rejeições explícitas 4xx (exceto timeout/conflito/limite) permitem tentativa manual posterior.
       const rejeitado = r.status >= 400 && r.status < 500 && ![408, 409, 429].includes(r.status);
       if (rejeitado) await env.DB.prepare("UPDATE postagem_grupo_recibo SET estado='recusado', atualizado_em=? WHERE postagem_id=? AND ordem=?").bind(agora(), p.id, i).run();
-      return marcarErroPost_(env, p, rejeitado ? 'Grupo clientes: a Wafly recusou a publicação (HTTP ' + r.status + '). Confira conexão e permissão antes de tentar novamente.' : 'Grupo clientes: sem confirmação da Wafly (HTTP ' + r.status + '). Confira na Wafly; não reenviamos automaticamente.');
+      return rejeitado ? marcarErroPost_(env, p, 'Grupo clientes: a Wafly recusou a publicação (HTTP ' + r.status + '). Confira conexão e permissão antes de tentar novamente.') : aguardarConfirmacaoGrupo_(env, p, 'A Wafly respondeu HTTP ' + r.status + '.');
     }
     await env.DB.prepare("UPDATE postagem_grupo_recibo SET estado='aceito', mensagem_id=?, atualizado_em=? WHERE postagem_id=? AND ordem=?").bind(String(j.messageId).slice(0, 200), agora(), p.id, i).run();
   }
@@ -1271,7 +1281,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
   const p = url.pathname;
   if (p === '/posts' && req.method === 'GET') {
     const lim = Math.min(100, Number(url.searchParams.get('limite')) || 60);
-    const q = (await env.DB.prepare("SELECT postagem.*, EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id=postagem.id AND g.estado='enviando') AS grupo_envio_incerto FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
+    const q = (await env.DB.prepare("SELECT postagem.*, EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id=postagem.id AND g.estado='enviando') AS grupo_envio_incerto FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
     const c = (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM postagem GROUP BY status").all()).results || [];
     const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
     return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), regras: 1, config: await lerCfgPost(env), uso24h: await uso24hPorCanal_(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
@@ -1385,13 +1395,38 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       if (!cancelou.meta || cancelou.meta.changes !== 1) return J({ ok: false, erro: 'A postagem mudou durante a operação. Atualize a fila.' }, 409);
       return J({ ok: true });
     }
+    if (p === '/post/converter-grupo') {
+      // O runner do GitHub Actions busca apenas trabalhos solicitados pelo atendente.
+      // Nunca converter se algum recibo foi aberto: um envio pode ter ocorrido.
+      if (linha.canal !== 'grupo' || linha.status !== 'erro' ||
+          !String(linha.erro || '').includes('H.265/HEVC'))
+        return J({ ok: false, erro: 'Somente postagens do grupo recusadas por HEVC podem ser convertidas.' }, 409);
+      const recibo = await env.DB.prepare('SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=?').bind(id).first();
+      if (recibo) return J({ ok: false, erro: 'Existe registro de tentativa de envio; verifique antes de repetir.' }, 409);
+      const midias = JSON.parse(linha.midias || '[]');
+      if (midias.length !== 1 || midias[0].tipo !== 'video')
+        return J({ ok: false, erro: 'Conversão automática disponível para postagem com um vídeo.' }, 400);
+      const prefixo = String(env.MIDIA_URL || '').replace(/\/$/, '') + '/m/';
+      if (!String(midias[0].url || '').startsWith(prefixo))
+        return J({ ok: false, erro: 'Vídeo fora do armazenamento TENKiTER.' }, 400);
+      const chave = midias[0].url.slice(prefixo.length);
+      if (!/^[a-z0-9/_-]+\.mp4$/.test(chave) || chave.includes('..'))
+        return J({ ok: false, erro: 'Chave de vídeo inválida.' }, 400);
+      const obj = await env.MIDIA.head(chave);
+      if (!obj || obj.size > 12 * 1024 * 1024)
+        return J({ ok: false, erro: 'Vídeo ausente ou acima de 12 MiB.' }, 400);
+      const r = await env.DB.prepare("UPDATE postagem SET status='convertendo', erro='Conversão H.264 solicitada. Aguarde o processamento no servidor.', atualizado_em=? WHERE id=? AND status='erro' AND NOT EXISTS (SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=?)")
+        .bind(agora(), id, id).run();
+      if (!r.meta || r.meta.changes !== 1) return J({ ok: false, erro: 'Postagem alterada; atualize a fila.' }, 409);
+      return J({ ok: true, convertendo: true, mensagem: 'Conversão solicitada. O GitHub Actions verificará a fila.' });
+    }
     if (p === '/post/reagendar') {
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
       if (linha.canal === 'grupo' && await env.DB.prepare("SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='enviando'").bind(id).first()) return J({ ok: false, erro: 'O envio ao grupo ficou sem confirmação. Confira na Wafly; depois use “Repostar com novo ID” ou “Descartar”.' }, 409);
-      if (linha.canal === 'grupo') await env.DB.prepare("DELETE FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='recusado'").bind(id).run();
       const r = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: b.quando }));
       if (r.erro) return J({ ok: false, erro: r.erro }, 400);
       if (linha.canal === 'grupo') { const erro = await erroVideoGrupo_(env, r.v.midias); if (erro) return J({ ok: false, erro }, 400); }
+      if (linha.canal === 'grupo') await env.DB.prepare("DELETE FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='recusado'").bind(id).run();
       const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, linha.canal);
       let t = Date.parse(r.v.quando), aj = { ajustado: false, motivo: '' };
       if (r.v.urgente && cfg.agoraIgnora) t = Date.now();
@@ -1921,6 +1956,81 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
   return null;
 }
 
+
+// Conversão opcional FreeConvert: API key somente em segredo do Worker.
+// O resultado é validado novamente no navegador antes de ser usado.
+async function freeconvertRota_(env, req, url, J, h) {
+  if (!url.pathname.startsWith('/post/freeconvert/')) return null;
+  const freeconvertChave=await cfgGet(env,'freeconvert_api_key') || env.FREECONVERT_API_KEY;
+  if (!freeconvertChave) return J({ok:false,erro:'Configure a chave FreeConvert em Gestão → Configurações Avançadas.'},503);
+  const sessao = req.headers.get('X-TK-Sessao') || '';
+  const whats = req.headers.get('X-TK-Whats') || '';
+  if (!sessao || !whats) return J({ok:false,erro:'Sessão inválida.'},401);
+  const owner = await sha(whats + ':' + sessao);
+  const key = 'fc_job_' + owner;
+  const api = async (path, method, body) => {
+    const r = await fetch('https://api.freeconvert.com/v1'+path, {
+      method:method||'GET',
+      headers:{Authorization:'Bearer '+freeconvertChave,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},
+      body:body?JSON.stringify(body):undefined
+    });
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(r.status===429?'Limite gratuito atingido. Substitua o vídeo ou tente amanhã.':(j.message||j.error||'FreeConvert HTTP '+r.status));
+    return j;
+  };
+  try {
+    if(url.pathname==='/post/freeconvert/iniciar' && req.method==='POST') {
+      const b=await req.json();
+      const u=new URL(String(b.url||''));
+      if(u.protocol!=='https:' || u.hostname!=='tenkiter-midia.distkrpconfeccoes.workers.dev' || !u.pathname.startsWith('/m/'))
+        return J({ok:false,erro:'A conversão aceita apenas mídias previamente enviadas à TENKiTER.'},400);
+      const anterior=await env.CACHE.get(key,'json');
+      if(anterior && Date.now()-anterior.criado<15*60*1000)
+        return J({ok:false,erro:'Já existe uma conversão iniciada nesta sessão. Aguarde ou substitua o vídeo.'},409);
+      const formato=String(b.formato||'mp4').toLowerCase();
+      if(!['mp4','mov','webm'].includes(formato))return J({ok:false,erro:'Formato de entrada não aceito.'},400);
+      const job=await api('/process/jobs','POST',{
+        tag:'tenkiter-grupo',
+        tasks:{
+          importar:{operation:'import/url',url:u.href,filename:'video.'+formato},
+          converter:{operation:'convert',input:'importar',input_format:formato,output_format:'mp4',options:{video_codec:'h264',audio_codec:'aac'}},
+          exportar:{operation:'export/url',input:'converter',filename:'tenkiter-convertido.mp4'}
+        }
+      });
+      const id=String(job.id||job.job?.id||'');
+      if(!/^[a-zA-Z0-9_-]{10,80}$/.test(id))throw new Error('FreeConvert não retornou um identificador válido.');
+      await env.CACHE.put(key,JSON.stringify({id,criado:Date.now()}),{expirationTtl:3600});
+      return J({ok:true,id,status:'processing'});
+    }
+    const salvo=await env.CACHE.get(key,'json');
+    if(!salvo || Date.now()-salvo.criado>3600000)return J({ok:false,erro:'Conversão expirada ou não encontrada nesta sessão.'},404);
+    const job=await api('/process/jobs/'+encodeURIComponent(salvo.id));
+    const tasks=Array.isArray(job.tasks)?job.tasks:Object.values(job.tasks||{});
+    const exportar=tasks.find(t=>t.operation==='export/url');
+    const falha=tasks.find(t=>t.status==='failed');
+    const concluido=job.status==='completed' && exportar && exportar.status==='completed';
+    if(url.pathname==='/post/freeconvert/estado') {
+      return J({ok:true,status:falha?'failed':concluido?'completed':job.status||'processing',
+        erro:falha?String(falha.message||falha.payload?.msg||'A conversão falhou.').slice(0,250):undefined});
+    }
+    if(url.pathname==='/post/freeconvert/resultado' && req.method==='GET') {
+      if(!concluido)return J({ok:false,erro:'Conversão ainda não concluída.'},409);
+      const arquivos=exportar.result?.files||exportar.payload?.files||[];
+      const download=exportar.result?.url||exportar.payload?.url||arquivos[0]?.url;
+      if(!download || new URL(download).protocol!=='https:')return J({ok:false,erro:'FreeConvert não retornou URL de download.'},502);
+      const arquivo=await fetch(download);
+      if(!arquivo.ok)return J({ok:false,erro:'Não foi possível obter o vídeo convertido.'},502);
+      const tamanho=Number(arquivo.headers.get('Content-Length')||0);
+      if(tamanho>40*1048576)return J({ok:false,erro:'Vídeo convertido excedeu 40 MB.'},413);
+      const headers=new Headers(h);
+      headers.set('Content-Type','video/mp4');
+      headers.set('Cache-Control','no-store');
+      return new Response(arquivo.body,{status:200,headers});
+    }
+    return J({ok:false,erro:'Operação inválida.'},404);
+  }catch(e){return J({ok:false,erro:String(e.message||e).slice(0,250)},502);}
+}
+
 export default {
   async scheduled(ev, env, ctx) {
     ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
@@ -1943,6 +2053,22 @@ export default {
     try {
       await iniciar(env);
       const p = url.pathname;
+      if (p === '/post/freeconvert/config' && req.method === 'GET') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        const chave=await cfgGet(env,'freeconvert_api_key');
+        return J({ok:true,configurada:!!(chave||env.FREECONVERT_API_KEY),origem:chave?'gestao':env.FREECONVERT_API_KEY?'worker':'nenhuma'});
+      }
+      if (p === '/post/freeconvert/config' && req.method === 'POST') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        const dados=await req.json().catch(()=>({}));
+        if(dados.apagar===true){await cfgSet(env,'freeconvert_api_key','');return J({ok:true,configurada:!!env.FREECONVERT_API_KEY});}
+        const chave=String(dados.chave||'').trim();
+        if(!/^api_(?:production|sandbox)_[a-zA-Z0-9._-]{25,200}$/.test(chave))
+          return J({ok:false,erro:'Formato de chave FreeConvert inválido.'},400);
+        await cfgSet(env,'freeconvert_api_key',chave);
+        return J({ok:true,configurada:true});
+      }
+      if (p.startsWith('/post/freeconvert/')) return await freeconvertRota_(env,req,url,J,h);
       if (ehPost) { const rp = (await rotasFotoIA(env, ctx, req, url, J, perms)) || (await rotasFotos(env, ctx, req, url, J, perms)) || (await rotasPostagem(env, ctx, req, url, J, perms)); if (rp) return rp; }
       if (p === '/status' && req.method === 'GET') return J(await status(env));
       if (p === '/rascunhos' && req.method === 'GET') {

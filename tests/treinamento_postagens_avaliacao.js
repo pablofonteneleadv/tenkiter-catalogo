@@ -1,0 +1,14 @@
+const assert=require("node:assert/strict"),fs=require("node:fs");
+const {criarAvaliacao}=require("../treinamento-postagens-avaliacao.js");
+const a=criarAvaliacao();assert.equal(a.resultado([{estado:"aguardando"}]).aprovado,false);
+a.registrar("erro","Falha simulada");a.registrar("correcao","Tentou novamente");
+const ok=a.resultado([{estado:"concluido"}]);assert.equal(ok.aprovado,true);assert.equal(ok.erros,1);assert.equal(ok.correcoes,1);
+assert.equal(a.resultado([{estado:"cancelado"}]).aprovado,false);
+assert.equal(a.resultado([{estado:"concluido"},{estado:"falhou"}]).aprovado,false);
+a.registrar("erro","Teste");a.registrar("erro","Teste");assert.equal(a.resultado([{estado:"concluido"}]).aprovado,false);
+assert.throws(()=>a.registrar("outro","x"));
+const html=fs.readFileSync("treinamento-postagens-fase1.html","utf8"),js=fs.readFileSync("treinamento-postagens-fase1.js","utf8");
+assert.ok(html.includes('src="treinamento-postagens-avaliacao.js"'));
+assert.ok(js.includes("avaliacao.resultado(fila.listar())"));
+assert.doesNotMatch(fs.readFileSync("treinamento-postagens-avaliacao.js","utf8"),/fetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon/);
+console.log("Avaliação local: aprovado, pendente, descarte, erro e correção OK");

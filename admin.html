@@ -696,6 +696,13 @@
     <button type="button" id="btn-salvar-ia" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar Configuração da IA</button>
     <button type="button" id="btn-apagar-ia" style="margin-top:8px;background:#eee;color:#555;">Apagar chave guardada</button>
     <p style="font-size:0.72rem;color:#666;margin-top:8px;">A chave fica guardada só no servidor e nunca volta para esta tela (aparece apenas "configurada" e os 4 últimos caracteres). Usada pelos botões "Preencher pela foto" e "Gerar Título/Descrição". Deixe a chave em branco para mudar só o modelo. Só quem é Admin total consegue salvar.</p>
+    <hr style="border:none;border-top:1px dashed #ccc;margin:16px 0;">
+    <label for="input-freeconvert-chave">🎬 FreeConvert — conversão de vídeos H.265 para H.264</label>
+    <div id="freeconvert-status" role="status" aria-live="polite" style="font-size:0.8rem;margin:6px 0;">Abra esta seção para verificar a configuração.</div>
+    <input type="password" id="input-freeconvert-chave" placeholder="Cole sua nova chave de API FreeConvert" autocomplete="new-password" spellcheck="false">
+    <button type="button" id="btn-salvar-freeconvert" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar chave FreeConvert</button>
+    <button type="button" id="btn-apagar-freeconvert" style="margin-top:8px;background:#eee;color:#555;">Remover chave</button>
+    <p style="font-size:0.72rem;color:#666;margin-top:8px;">Apenas Admin total. A chave é enviada ao servidor e não é exibida novamente. Não use a chave anteriormente compartilhada no chat: gere uma nova na FreeConvert. O uso da API está sujeito aos limites da conta.</p>
   </details>
 
   <details class="extra" id="details-log-debug">
@@ -4643,6 +4650,43 @@
     try { mostrarStatusIA_(await chamarConfigIA_({ action: 'statusConfigIA' })); }
     catch (err) { mostrarStatusIA_({ ok: false, erro: 'Sem conexão agora.' }); }
   });
+  async function configFreeConvert_(metodo, dados) {
+    const sess=typeof getSessao==='function'?getSessao():null;
+    if(!sess||!sess.sessao||!sess.whatsapp)throw new Error('Entre com seu login de administrador.');
+    const resposta=await fetch(INSTAGRAM_URL+'/post/freeconvert/config',{
+      method:metodo,headers:{'Content-Type':'application/json','X-TK-Whats':sess.whatsapp,'X-TK-Sessao':sess.sessao},
+      body:dados?JSON.stringify(dados):undefined
+    });
+    const json=await resposta.json().catch(()=>({}));
+    if(!resposta.ok||!json.ok)throw new Error(json.erro||'Não foi possível salvar.');
+    return json;
+  }
+  function statusFreeConvert_(mensagem,erro){
+    const el=document.getElementById('freeconvert-status');
+    el.textContent=mensagem;el.style.color=erro?'#b42318':'#216e39';
+  }
+  document.getElementById('details-config').addEventListener('toggle',async e=>{
+    if(!e.target.open)return;
+    try{
+      const r=await configFreeConvert_('GET');
+      statusFreeConvert_(r.configurada?'✓ Chave FreeConvert configurada no servidor.':'Nenhuma chave FreeConvert cadastrada.',false);
+    }catch(err){statusFreeConvert_(err.message,true)}
+  });
+  document.getElementById('btn-salvar-freeconvert').addEventListener('click',async()=>{
+    const el=document.getElementById('input-freeconvert-chave'),chave=el.value.trim();
+    if(!chave){statusFreeConvert_('Cole a chave antes de salvar.',true);return}
+    const btn=document.getElementById('btn-salvar-freeconvert');btn.disabled=true;
+    try{
+      await configFreeConvert_('POST',{chave});
+      el.value='';statusFreeConvert_('✓ Chave FreeConvert salva no servidor.',false);
+    }catch(err){statusFreeConvert_(err.message,true)}
+    finally{btn.disabled=false}
+  });
+  document.getElementById('btn-apagar-freeconvert').addEventListener('click',async()=>{
+    if(!confirm('Remover a chave FreeConvert cadastrada pela Gestão?'))return;
+    try{const r=await configFreeConvert_('POST',{apagar:true});statusFreeConvert_(r.configurada?'A chave da Gestão foi removida; existe outra chave no Worker.':'Chave FreeConvert removida.',false)}
+    catch(err){statusFreeConvert_(err.message,true)}
+  });
   document.getElementById('btn-salvar-ia').addEventListener('click', async () => {
     const chave = document.getElementById('input-ia-chave').value.trim();
     const modelo = document.getElementById('input-ia-modelo').value.trim();
@@ -4843,6 +4887,7 @@
 <script src="admin-conexoes.js"></script>
 <script src="admin-instagram.js"></script>
 <script src="video-validation.js"></script>
+<script src="postagens-controles.js"></script>
 <script src="admin-postagens.js"></script>
 <script src="admin-fotoia.js"></script>
 <script src="admin-enquadrar.js"></script>

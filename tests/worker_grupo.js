@@ -161,7 +161,7 @@ function d1() {
   chk('cron não marca erro enquanto a Wafly ainda processa o vídeo',(await lerPost(emAndamento)).status==='processando'&&grupoCalls.length===3);
   await DB.prepare('UPDATE postagem_grupo_recibo SET atualizado_em=? WHERE postagem_id=?').bind(ts(-4),emAndamento).run();
   await W.processarPostagens(env);
-  chk('recibo antigo sem confirmação vira erro sem reenviar',(await lerPost(emAndamento)).status==='erro'&&grupoCalls.length===3);
+  chk('recibo antigo sem confirmação continua aguardando sem reenviar',(await lerPost(emAndamento)).status==='processando'&&grupoCalls.length===3);
   const medias=[{url:'https://cdn.fake/a.jpg',tipo:'imagem'},{url:'https://cdn.fake/b.mp4',tipo:'video'}];
   id=await novaPostagem('grupo');
   await DB.prepare('UPDATE postagem SET midias=? WHERE id=?').bind(JSON.stringify(medias),id).run();
@@ -169,7 +169,7 @@ function d1() {
   chk('carrossel misto mantém ordem e legenda em cada mídia',grupoCalls.length===5&&grupoCalls[3].url.endsWith('/send-image')&&grupoCalls[4].url.endsWith('/send-video')&&grupoCalls[4].body.caption==='Vestido TK-0001 R$ 89,90');
   chk('concorrência não duplica mídias', (await lerPost(id)).status==='publicado' && grupoCalls.length===5);
   modo='timeout';id=await novaPostagem('grupo');await W.processarPostagens(env);
-  chk('timeout é visível e não publica', (await lerPost(id)).status==='erro');
+  chk('timeout aguarda confirmação e não publica', (await lerPost(id)).status==='processando' && /aguardando confirmação/.test((await lerPost(id)).erro));
   await W.processarPostagens(env);
   const saude=JSON.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='grupo_saude'").first()).valor);
   chk('cron consulta sessão, grupo e chat sem enviar outra mensagem',saude.sessao.estado==='CONNECTED'&&saude.sessao.conectado===true&&saude.grupo.encontrado===true&&saude.grupo.soAdministradores===false&&saude.chat.ultimaMensagemEm===1792670000&&grupoCalls.length===6);
