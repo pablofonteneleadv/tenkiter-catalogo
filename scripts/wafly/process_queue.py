@@ -27,7 +27,7 @@ def sql(query,params=None):
     return res[0] if isinstance(res,list) else res
 
 def stamp():
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds").replace("+00:00","Z")
 
 def process(row):
     ident=row["id"]
