@@ -1943,7 +1943,8 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
 // O resultado é validado novamente no navegador antes de ser usado.
 async function freeconvertRota_(env, req, url, J, h) {
   if (!url.pathname.startsWith('/post/freeconvert/')) return null;
-  if (!env.FREECONVERT_API_KEY) return J({ok:false,erro:'Conversão indisponível: configure FREECONVERT_API_KEY no Worker.'},503);
+  const freeconvertChave=await cfgGet(env,'freeconvert_api_key') || env.FREECONVERT_API_KEY;
+  if (!freeconvertChave) return J({ok:false,erro:'Configure a chave FreeConvert em Gestão → Configurações Avançadas.'},503);
   const sessao = req.headers.get('X-TK-Sessao') || '';
   const whats = req.headers.get('X-TK-Whats') || '';
   if (!sessao || !whats) return J({ok:false,erro:'Sessão inválida.'},401);
@@ -1952,7 +1953,7 @@ async function freeconvertRota_(env, req, url, J, h) {
   const api = async (path, method, body) => {
     const r = await fetch('https://api.freeconvert.com/v1'+path, {
       method:method||'GET',
-      headers:{Authorization:'Bearer '+env.FREECONVERT_API_KEY,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},
+      headers:{Authorization:'Bearer '+freeconvertChave,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},
       body:body?JSON.stringify(body):undefined
     });
     const j=await r.json().catch(()=>({}));
@@ -2034,6 +2035,21 @@ export default {
     try {
       await iniciar(env);
       const p = url.pathname;
+      if (p === '/post/freeconvert/config' && req.method === 'GET') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        const chave=await cfgGet(env,'freeconvert_api_key');
+        return J({ok:true,configurada:!!(chave||env.FREECONVERT_API_KEY),origem:chave?'gestao':env.FREECONVERT_API_KEY?'worker':'nenhuma'});
+      }
+      if (p === '/post/freeconvert/config' && req.method === 'POST') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        const dados=await req.json().catch(()=>({}));
+        if(dados.apagar===true){await cfgSet(env,'freeconvert_api_key','');return J({ok:true,configurada:!!env.FREECONVERT_API_KEY});}
+        const chave=String(dados.chave||'').trim();
+        if(!/^api_(?:production|sandbox)_[a-zA-Z0-9._-]{25,200}$/.test(chave))
+          return J({ok:false,erro:'Formato de chave FreeConvert inválido.'},400);
+        await cfgSet(env,'freeconvert_api_key',chave);
+        return J({ok:true,configurada:true});
+      }
       if (p.startsWith('/post/freeconvert/')) return await freeconvertRota_(env,req,url,J,h);
       if (ehPost) { const rp = (await rotasFotoIA(env, ctx, req, url, J, perms)) || (await rotasFotos(env, ctx, req, url, J, perms)) || (await rotasPostagem(env, ctx, req, url, J, perms)); if (rp) return rp; }
       if (p === '/status' && req.method === 'GET') return J(await status(env));
