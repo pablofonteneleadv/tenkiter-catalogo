@@ -1,0 +1,12 @@
+(function(root){"use strict";
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function destinos(selecionados){const ds=Array.isArray(selecionados)?selecionados:[];return '<div class="po-canal" id="po-canal" role="group" aria-label="Destinos da postagem">'+[["instagram","Instagram"],["whatsapp","WhatsApp Status"],["grupo","Grupo clientes"]].map(([id,nome])=>'<button type="button" data-destino="'+id+'" aria-pressed="'+ds.includes(id)+'">'+nome+'</button>').join("")+'<button type="button" data-destino="todos" aria-pressed="'+(ds.length===3)+'">Os 3</button></div>';}
+function formatos(selecionado,apenasStory){return '<div class="po-chips" role="group" aria-label="Tipo de postagem">'+(apenasStory?[["story","Story"]]:[["story","Story"],["feed","Feed"],["carrossel","Carrossel"],["reels","Reels"]]).map(([id,nome])=>'<button type="button" data-tipo="'+id+'" aria-pressed="'+(selecionado===id)+'">'+nome+'</button>').join("")+'</div>';}
+function modos(selecionado){return '<div class="po-chips" role="group" aria-label="Tipo de conteúdo">'+[["peca","🛍️ Com peça"],["livre","✍️ Livre"],["cliente","🧡 Ela usa TM"]].map(([id,nome])=>'<button type="button" data-modo="'+id+'" aria-pressed="'+(selecionado===id)+'">'+nome+'</button>').join("")+'</div>';}
+function produto(p){return '<button type="button" class="po-card" data-psel="'+esc(p.ID)+'" aria-pressed="false"><b>'+esc(p.Nome)+'</b><small>'+esc(p.Codigo)+' · R$ '+Number(p.Preco).toFixed(2).replace(".",",")+'</small></button>';}
+function midias(lista){return '<div class="po-midias asp-9" role="group" aria-label="Mídias da peça">'+(lista||[]).map((m,i)=>'<button type="button" class="po-m" data-m="'+i+'" aria-pressed="'+!!m.sel+'" aria-label="'+(m.tipo==="video"?"Vídeo":"Foto "+(i+1))+(m.sel?", escolhida":", não escolhida")+'">'+(m.url?'<img src="'+esc(m.url)+'" alt="" loading="lazy">':'<span>🖼️ Foto fictícia</span>')+'</button>').join("")+'</div>';}
+function quando(opcao){return '<div class="po-chips" role="group" aria-label="Quando publicar">'+[["sequencia","Na sequência"],["agora","Agora mesmo"],["data","Dia e hora"]].map(([id,label])=>'<button type="button" data-quando="'+id+'" aria-pressed="'+(opcao===id)+'">'+label+'</button>').join("")+'</div>';}
+const api=Object.freeze({destinos,formatos,modos,produto,midias,quando});
+if(typeof module!=="undefined"&&module.exports)module.exports=api;
+if(root)root.TKPostagensControles=api;
+})(typeof window!=="undefined"?window:null);
