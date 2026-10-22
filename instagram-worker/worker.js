@@ -94,6 +94,8 @@ async function iniciar(env) {
   try { await env.DB.prepare("ALTER TABLE postagem ADD COLUMN canal TEXT DEFAULT ''").run(); } catch (e) { /* ja existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN seq INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
+  try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN repostado_de INTEGER').run(); } catch (e) { /* já existe */ }
+  await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_post_repostado_de ON postagem(repostado_de)').run();
   for (const col of COLUNAS_NOVAS) { try { await env.DB.prepare('ALTER TABLE rascunho ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   try { await env.DB.prepare("ALTER TABLE fotoia ADD COLUMN refs TEXT DEFAULT '[]'").run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare("ALTER TABLE fotoia ADD COLUMN plano TEXT DEFAULT ''").run(); } catch (e) { /* já existe */ }
@@ -675,18 +677,19 @@ async function resolverZapPendente_(env, p, forcar) {
   const c = await consultarWhatsApp_(env, requestId);
   if (c.estado === 'aceito') {
     p.ig_id = 'zap:' + requestId;
-    await env.DB.prepare("UPDATE postagem SET ig_id=?, erro='', atualizado_em=? WHERE id=?").bind(p.ig_id, agora(), p.id).run();
+    const gravou = await env.DB.prepare("UPDATE postagem SET ig_id=?, erro='', atualizado_em=? WHERE id=? AND status IN ('erro','processando')").bind(p.ig_id, agora(), p.id).run();
+    if (!gravou.meta || gravou.meta.changes !== 1) return 'encerrado';
     if (!canalUsaInstagram_(p.canal)) {                                  // só WhatsApp: confirmado = publicado (nada é reenviado)
-      await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', publicado_em=?, atualizado_em=? WHERE id=?").bind(requestId, agora(), agora(), p.id).run();
+      await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', publicado_em=?, atualizado_em=? WHERE id=? AND status IN ('erro','processando')").bind(requestId, agora(), agora(), p.id).run();
       p.status = 'publicado';
-    } else if (p.status === 'erro') { await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=? WHERE id=?").bind(agora(), p.id).run(); p.status = 'processando'; }
+    } else if (p.status === 'erro') { await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=? WHERE id=? AND status IN ('erro','processando')").bind(agora(), p.id).run(); p.status = 'processando'; }
     return 'aceito';
   }
   if (Date.now() - desde > ZAP_ESPERA_MAX_MS) {
-    await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('WhatsApp: a Wafly ainda não confirmou depois de 30 min. Toque em “Consultar resultado” (não reenvia).', agora(), p.id).run();
+    await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=? AND status IN ('erro','processando')").bind('WhatsApp: a Wafly ainda não confirmou depois de 30 min. Toque em “Consultar resultado” (não reenvia).', agora(), p.id).run();
     return 'falhou';
   }
-  await env.DB.prepare("UPDATE postagem SET atualizado_em=? WHERE id=?").bind(agora(), p.id).run();
+  await env.DB.prepare("UPDATE postagem SET atualizado_em=? WHERE id=? AND status IN ('erro','processando')").bind(agora(), p.id).run();
   return 'esperando';
 }
 async function enviarWhatsApp_(env, p) {
@@ -1052,7 +1055,7 @@ function progressoPostagem_(r) {
 }
 function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
-  return { id: r.id, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
+  return { id: r.id, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
 }
 
 /* ====================================================================
@@ -1253,6 +1256,28 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
   const linha = id ? await env.DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first() : null;
   if (p.indexOf('/post/') === 0 && req.method === 'POST') {
     if (!linha) return J({ ok: false, erro: 'Postagem não encontrada.' }, 404);
+    if (p === '/post/repostar') {
+      // Uma cópia por origem: duplo toque/repetição de rede retorna a mesma postagem.
+      const existente = await env.DB.prepare('SELECT id,agendado_em FROM postagem WHERE repostado_de=?').bind(id).first();
+      if (existente) return J({ ok: true, id: existente.id, quando: existente.agendado_em, existente: true });
+      if (linha.status !== 'erro') return J({ ok: false, erro: 'Só postagens com erro podem ser repostadas.' }, 409);
+      if (b.confirmarRisco !== true) return J({ ok: false, erro: 'Confirme que o envio antigo pode já ter sido publicado antes de repostar.' }, 409);
+      const v = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: 'sequencia' }));
+      if (v.erro) return J({ ok: false, erro: v.erro }, 400);
+      if (linha.canal === 'grupo' && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado.' }, 409);
+      const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
+      if (pend >= 200) return J({ ok: false, erro: 'A fila está cheia. Espere algumas postagens saírem.' }, 429);
+      const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, linha.canal);
+      const ajuste = proximoLivreMulti(cfg, bs, await ocupadosMulti_(env, cfg, bs, id), Date.now() + 60000);
+      const quando = new Date(ajuste.t).toISOString(), em = agora();
+      await env.DB.batch([
+        env.DB.prepare("INSERT OR IGNORE INTO postagem (tipo,modo,legenda,midias,produto,template,link,agendado_em,status,criado_por,criado_em,atualizado_em,grupo,seq,canal,urgente,repostado_de) SELECT tipo,modo,legenda,midias,produto,template,link,?,'agendado',?,?,?,grupo,1,canal,0,id FROM postagem WHERE id=? AND status='erro'").bind(quando, String(b.por || 'Repostagem').slice(0,60), em, em, id),
+        env.DB.prepare("UPDATE postagem SET status='cancelado',atualizado_em=? WHERE id=? AND status='erro' AND EXISTS (SELECT 1 FROM postagem WHERE repostado_de=?)").bind(em,id,id)
+      ]);
+      const nova = await env.DB.prepare('SELECT id,agendado_em FROM postagem WHERE repostado_de=?').bind(id).first();
+      if (!nova) return J({ ok: false, erro: 'Essa postagem mudou durante a operação. Atualize a fila.' }, 409);
+      return J({ ok: true, id: nova.id, quando: nova.agendado_em });
+    }
     if (p === '/post/consultar') {                                       // v1.9: só consulta o resultado do WhatsApp (nunca reenvia)
       if (String(linha.ig_id || '').indexOf('zapq:') !== 0 || ['processando', 'erro'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não está aguardando confirmação do WhatsApp.' }, 409);
       const rz = await resolverZapPendente_(env, linha, true);
@@ -1261,7 +1286,9 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     }
     if (p === '/post/cancelar') {
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem já está sendo enviada ou foi publicada; não dá mais para cancelar.' }, 409);
-      await env.DB.prepare("UPDATE postagem SET status='cancelado', atualizado_em=? WHERE id=?").bind(agora(), id).run(); return J({ ok: true });
+      const cancelou = await env.DB.prepare("UPDATE postagem SET status='cancelado', atualizado_em=? WHERE id=? AND status IN ('agendado','erro','manual_pendente')").bind(agora(), id).run();
+      if (!cancelou.meta || cancelou.meta.changes !== 1) return J({ ok: false, erro: 'A postagem mudou durante a operação. Atualize a fila.' }, 409);
+      return J({ ok: true });
     }
     if (p === '/post/reagendar') {
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
