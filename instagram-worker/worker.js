@@ -1390,11 +1390,11 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       const midias = JSON.parse(linha.midias || '[]');
       if (midias.length !== 1 || midias[0].tipo !== 'video')
         return J({ ok: false, erro: 'Conversão automática disponível para postagem com um vídeo.' }, 400);
-      const prefixo = String(env.MIDIA_URL || '').replace(/\\/$/, '') + '/m/';
+      const prefixo = String(env.MIDIA_URL || '').replace(/\/$/, '') + '/m/';
       if (!String(midias[0].url || '').startsWith(prefixo))
         return J({ ok: false, erro: 'Vídeo fora do armazenamento TENKiTER.' }, 400);
       const chave = midias[0].url.slice(prefixo.length);
-      if (!/^[a-z0-9/_-]+\\.mp4$/.test(chave) || chave.includes('..'))
+      if (!/^[a-z0-9/_-]+\.mp4$/.test(chave) || chave.includes('..'))
         return J({ ok: false, erro: 'Chave de vídeo inválida.' }, 400);
       const obj = await env.MIDIA.head(chave);
       if (!obj || obj.size > 12 * 1024 * 1024)
