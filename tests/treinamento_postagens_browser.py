@@ -19,6 +19,9 @@ def main():
         page.locator('[data-destino="instagram"]').click()
         page.locator("#po-busca").fill("TREINO-001")
         page.locator('[data-psel="TREINO-001"]').click()
+        assert page.locator('[data-psel="TREINO-001"]').get_attribute("aria-pressed") == "true"
+        assert page.locator('[data-a="usarpecas"]').is_visible()
+        page.locator('[data-a="usarpecas"]').click()
         page.locator('[data-tipo="story"]').click()
         page.locator('[data-m="0"]').click()
         page.locator("#po-legenda").fill("Uma blusa fictícia para treinamento")
