@@ -159,8 +159,14 @@ jobs:
           sudo apt-get install -y ffmpeg
           curl -fsSL https://cdn.jsdelivr.net/npm/axe-core@4.10.2/axe.min.js -o tests/axe.min.js
 
+      - name: Preparar Chromium para teste de treinamento no PR
+        if: github.event_name == 'pull_request' && hashFiles('treinamento-postagens-real.html') != ''
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
       - name: Treinamento de postagens no Chromium mobile
-        if: needs.escopo.outputs.suite_completa == 'true'
+        if: needs.escopo.outputs.suite_completa == 'true' || github.event_name == 'pull_request'
         run: python3 tests/treinamento_postagens_browser.py
 
       - name: Bateria completa de jornadas, acessibilidade e integrações
