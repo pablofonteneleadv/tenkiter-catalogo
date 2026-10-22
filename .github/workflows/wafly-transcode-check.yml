@@ -1,0 +1,24 @@
+name: Verificar transcodificacao Wafly (sem envio)
+on:
+  workflow_dispatch:
+  push:
+    branches: [ia/wafly-transcodificacao-20261022]
+    paths:
+      - '.github/workflows/wafly-transcode-check.yml'
+      - 'scripts/wafly/transcode.sh'
+permissions:
+  contents: read
+jobs:
+  ffmpeg:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Testar conversao real HEVC para H264
+        run: |
+          set -euo pipefail
+          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=320x240:rate=15 -t 2 -c:v libx265 -preset ultrafast -pix_fmt yuv420p -an -y /tmp/entrada.mp4
+          bash scripts/wafly/transcode.sh /tmp/entrada.mp4 /tmp/saida.mp4
+          codec="$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1:nk=1 /tmp/saida.mp4)"
+          test "$codec" = h264
+          echo "Transcodificacao HEVC -> H264 validada (sem acessar dados reais)." >> "$GITHUB_STEP_SUMMARY"
