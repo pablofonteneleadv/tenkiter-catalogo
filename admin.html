@@ -565,6 +565,7 @@
   .busca-admin-wrap input { width: 100%; padding-right: 44px; }
   .busca-admin-x { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 50%; background: #e9e4d8; color: #222; font-weight: 800; cursor: pointer; }
   .busca-admin-x[hidden] { display: none; }
+.cad-resumo-envios{margin:12px 0;padding:14px;border:1px solid #d8d8d8;border-radius:12px;background:#fff;color:#222}.cad-resumo-envios[hidden]{display:none}.cad-resumo-envios p{margin:6px 0}.cad-resumo-envios ul{padding-left:20px;max-height:180px;overflow:auto}.cad-resumo-envios li{margin:5px 0;overflow-wrap:anywhere}.cad-resumo-envios button{background:#222;color:#fff;max-width:100%;margin-top:8px}
 </style>
 </head>
 <body>
@@ -738,6 +739,7 @@
     <div id="fila-envios" aria-live="polite"></div>
   </section>
 
+  <section id="cad-resumo-envios" class="cad-resumo-envios" aria-label="Resumo dos cadastros" aria-live="polite" hidden></section>
   <details class="cartao-cad" id="card-form">
     <summary><span id="cad-sum-txt">📝 Formulário da peça</span></summary>
     <div class="cad-corpo">
@@ -1494,14 +1496,14 @@
       card.appendChild(tag);
       if (v.up) card.appendChild(criarSeloPre_(v, 'pre-inline'));
       if (v.prev) {
-        const vd = document.createElement('video'); vd.src = v.prev; vd.controls = true; vd.playsInline = true; vd.preload = 'metadata'; card.appendChild(vd);
+        const vd = document.createElement('video'); vd.src = v.prev; vd.controls = true; vd.playsInline = true; vd.preload = 'metadata'; vd.setAttribute('aria-label', 'Prévia do vídeo ' + (idx + 1)); card.appendChild(vd);
       } else {
         const info = infoVideoSalvo_(v.url);
         const a = document.createElement('a'); a.target = '_blank'; a.rel = 'noopener'; a.textContent = '🎬 Ver o vídeo salvo';
         a.href = info ? (info.tipo === 'drive' ? 'https://drive.google.com/file/d/' + info.id + '/view' : info.url) : v.url;
         card.appendChild(a);
       }
-      const capa = document.createElement('button'); capa.type = 'button'; capa.className = 'video-capa'; capa.textContent = '🖼 Escolher quadro para a capa';
+      const capa = document.createElement('button'); capa.type = 'button'; capa.className = 'video-capa'; capa.textContent = '🖼 Escolher quadro para a capa'; capa.setAttribute('aria-label', 'Escolher quadro do vídeo ' + (idx + 1) + ' como capa da peça');
       capa.addEventListener('click', () => {
         if (fotosItens.length >= MAX_GALERIA) { alert('O limite é de ' + MAX_GALERIA + ' fotos. Tire uma antes de escolher a capa.'); return; }
         const listaOriginal = fotosItens;
@@ -2661,8 +2663,46 @@
     if (it.estado === 'offline') return '\u{1F4E5} "' + it.titulo + '": sem conexão. Guardado no aparelho; envie com "Sincronizar".';
     return '❌ "' + it.titulo + '": ' + it.msg;
   }
+  function atualizarResumoEnvios_() {
+    const resumo = document.getElementById('cad-resumo-envios');
+    if (!resumo) return;
+    const falhas = envios.filter(e => e.estado === 'erro' || e.estado === 'aviso');
+    const pendentes = envios.filter(e => e.estado === 'fila' || e.estado === 'enviando' || e.estado === 'offline');
+    const salvos = envios.filter(e => e.estado === 'ok');
+    resumo.hidden = !(falhas.length || pendentes.length || salvos.length);
+    resumo.replaceChildren();
+    if (resumo.hidden) return;
+    const titulo = document.createElement('strong');
+    titulo.textContent = 'Acompanhe seus cadastros';
+    resumo.appendChild(titulo);
+    const descricao = document.createElement('p');
+    descricao.textContent = salvos.length + ' salva(s) · ' + pendentes.length + ' pendente(s) · ' + falhas.length + ' com atenção';
+    resumo.appendChild(descricao);
+    if (falhas.length) {
+      const lista = document.createElement('ul');
+      lista.setAttribute('aria-label', 'Peças que precisam de atenção');
+      falhas.forEach(it => {
+        const linha = document.createElement('li');
+        linha.textContent = (it.titulo || 'Peça') + ' · ' + (it.tentativa ? 'tentativa ' + it.tentativa + ' · ' : '') + (it.msg || 'Precisa de atenção.');
+        lista.appendChild(linha);
+      });
+      resumo.appendChild(lista);
+    }
+    const ir = document.createElement('button');
+    ir.type = 'button';
+    ir.setAttribute('aria-controls', 'cad-envios');
+    ir.textContent = falhas.length ? 'Ver problemas e tentar novamente' : 'Ver andamento dos envios';
+    ir.addEventListener('click', () => {
+      const fila = document.getElementById('cad-envios');
+      if (!fila) return;
+      fila.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      fila.focus({ preventScroll: true });
+    });
+    resumo.appendChild(ir);
+  }
   function desenharEnvios() {
     const box = document.getElementById('fila-envios');
+    atualizarResumoEnvios_();
     box.innerHTML = '';
     if (!envios.length) { const vazio = document.createElement('p'); vazio.textContent = 'Nenhum envio pendente.'; box.appendChild(vazio); }
     atualizarFlut_();

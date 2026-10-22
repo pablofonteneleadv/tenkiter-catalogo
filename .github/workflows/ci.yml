@@ -122,6 +122,10 @@ jobs:
         run: |
           node tests/treinamento_postagens_nucleo.js
           node tests/treinamento_postagens_interface.js
+          node tests/treinamento_postagens_fase1.js
+          node tests/treinamento_postagens_fila.js
+          node tests/treinamento_postagens_avaliacao.js
+          node tests/treinamento_postagens_midia_ux.js
 
       - name: Worker de mídia (R2)
         if: needs.escopo.outputs.suite_completa != 'true'
@@ -162,12 +166,14 @@ jobs:
       - name: Preparar Chromium para teste de treinamento no PR
         if: github.event_name == 'pull_request' && hashFiles('treinamento-postagens-real.html') != ''
         run: |
-          pip install playwright
-          python -m playwright install --with-deps chromium
+          python -m pip install playwright
+          python -m playwright install chromium
 
       - name: Treinamento de postagens no Chromium mobile
         if: needs.escopo.outputs.suite_completa == 'true' || github.event_name == 'pull_request'
-        run: python3 tests/treinamento_postagens_browser.py
+        run: |
+          python3 tests/treinamento_postagens_browser.py
+          python3 tests/treinamento_postagens_fase4_browser.py
 
       - name: Bateria completa de jornadas, acessibilidade e integrações
         if: needs.escopo.outputs.suite_completa == 'true'
