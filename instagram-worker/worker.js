@@ -741,7 +741,7 @@ async function enviarGrupoClientes_(env, p) {
     let r, j;
     try {
       r = await fetch('https://wafly.com.br/api-bridge-whats/instances/' + encodeURIComponent(cfg.instance) + '/token/' + encodeURIComponent(cfg.token) + (video ? '/send-video' : '/send-image'), {
-        method: 'POST', redirect: 'error', signal: AbortSignal.timeout(25000),
+        method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(25000),
         headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
       j = await respostaGrupo_(r);
