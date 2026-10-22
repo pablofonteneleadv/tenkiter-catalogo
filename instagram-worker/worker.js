@@ -1938,6 +1938,81 @@ export async function rotasFotoIA(env, ctx, req, url, J, perms) {          // /f
   return null;
 }
 
+
+// Conversão opcional FreeConvert: API key somente em segredo do Worker.
+// O resultado é validado novamente no navegador antes de ser usado.
+async function freeconvertRota_(env, req, url, J, h) {
+  if (!url.pathname.startsWith('/post/freeconvert/')) return null;
+  const freeconvertChave=await cfgGet(env,'freeconvert_api_key') || env.FREECONVERT_API_KEY;
+  if (!freeconvertChave) return J({ok:false,erro:'Configure a chave FreeConvert em Gestão → Configurações Avançadas.'},503);
+  const sessao = req.headers.get('X-TK-Sessao') || '';
+  const whats = req.headers.get('X-TK-Whats') || '';
+  if (!sessao || !whats) return J({ok:false,erro:'Sessão inválida.'},401);
+  const owner = await sha(whats + ':' + sessao);
+  const key = 'fc_job_' + owner;
+  const api = async (path, method, body) => {
+    const r = await fetch('https://api.freeconvert.com/v1'+path, {
+      method:method||'GET',
+      headers:{Authorization:'Bearer '+freeconvertChave,Accept:'application/json',...(body?{'Content-Type':'application/json'}:{})},
+      body:body?JSON.stringify(body):undefined
+    });
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(r.status===429?'Limite gratuito atingido. Substitua o vídeo ou tente amanhã.':(j.message||j.error||'FreeConvert HTTP '+r.status));
+    return j;
+  };
+  try {
+    if(url.pathname==='/post/freeconvert/iniciar' && req.method==='POST') {
+      const b=await req.json();
+      const u=new URL(String(b.url||''));
+      if(u.protocol!=='https:' || u.hostname!=='tenkiter-midia.distkrpconfeccoes.workers.dev' || !u.pathname.startsWith('/m/'))
+        return J({ok:false,erro:'A conversão aceita apenas mídias previamente enviadas à TENKiTER.'},400);
+      const anterior=await env.CACHE.get(key,'json');
+      if(anterior && Date.now()-anterior.criado<15*60*1000)
+        return J({ok:false,erro:'Já existe uma conversão iniciada nesta sessão. Aguarde ou substitua o vídeo.'},409);
+      const formato=String(b.formato||'mp4').toLowerCase();
+      if(!['mp4','mov','webm'].includes(formato))return J({ok:false,erro:'Formato de entrada não aceito.'},400);
+      const job=await api('/process/jobs','POST',{
+        tag:'tenkiter-grupo',
+        tasks:{
+          importar:{operation:'import/url',url:u.href,filename:'video.'+formato},
+          converter:{operation:'convert',input:'importar',input_format:formato,output_format:'mp4',options:{video_codec:'h264',audio_codec:'aac'}},
+          exportar:{operation:'export/url',input:'converter',filename:'tenkiter-convertido.mp4'}
+        }
+      });
+      const id=String(job.id||job.job?.id||'');
+      if(!/^[a-zA-Z0-9_-]{10,80}$/.test(id))throw new Error('FreeConvert não retornou um identificador válido.');
+      await env.CACHE.put(key,JSON.stringify({id,criado:Date.now()}),{expirationTtl:3600});
+      return J({ok:true,id,status:'processing'});
+    }
+    const salvo=await env.CACHE.get(key,'json');
+    if(!salvo || Date.now()-salvo.criado>3600000)return J({ok:false,erro:'Conversão expirada ou não encontrada nesta sessão.'},404);
+    const job=await api('/process/jobs/'+encodeURIComponent(salvo.id));
+    const tasks=Array.isArray(job.tasks)?job.tasks:Object.values(job.tasks||{});
+    const exportar=tasks.find(t=>t.operation==='export/url');
+    const falha=tasks.find(t=>t.status==='failed');
+    const concluido=job.status==='completed' && exportar && exportar.status==='completed';
+    if(url.pathname==='/post/freeconvert/estado') {
+      return J({ok:true,status:falha?'failed':concluido?'completed':job.status||'processing',
+        erro:falha?String(falha.message||falha.payload?.msg||'A conversão falhou.').slice(0,250):undefined});
+    }
+    if(url.pathname==='/post/freeconvert/resultado' && req.method==='GET') {
+      if(!concluido)return J({ok:false,erro:'Conversão ainda não concluída.'},409);
+      const arquivos=exportar.result?.files||exportar.payload?.files||[];
+      const download=exportar.result?.url||exportar.payload?.url||arquivos[0]?.url;
+      if(!download || new URL(download).protocol!=='https:')return J({ok:false,erro:'FreeConvert não retornou URL de download.'},502);
+      const arquivo=await fetch(download);
+      if(!arquivo.ok)return J({ok:false,erro:'Não foi possível obter o vídeo convertido.'},502);
+      const tamanho=Number(arquivo.headers.get('Content-Length')||0);
+      if(tamanho>40*1048576)return J({ok:false,erro:'Vídeo convertido excedeu 40 MB.'},413);
+      const headers=new Headers(h);
+      headers.set('Content-Type','video/mp4');
+      headers.set('Cache-Control','no-store');
+      return new Response(arquivo.body,{status:200,headers});
+    }
+    return J({ok:false,erro:'Operação inválida.'},404);
+  }catch(e){return J({ok:false,erro:String(e.message||e).slice(0,250)},502);}
+}
+
 export default {
   async scheduled(ev, env, ctx) {
     ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
@@ -1960,6 +2035,22 @@ export default {
     try {
       await iniciar(env);
       const p = url.pathname;
+      if (p === '/post/freeconvert/config' && req.method === 'GET') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        const chave=await cfgGet(env,'freeconvert_api_key');
+        return J({ok:true,configurada:!!(chave||env.FREECONVERT_API_KEY),origem:chave?'gestao':env.FREECONVERT_API_KEY?'worker':'nenhuma'});
+      }
+      if (p === '/post/freeconvert/config' && req.method === 'POST') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        const dados=await req.json().catch(()=>({}));
+        if(dados.apagar===true){await cfgSet(env,'freeconvert_api_key','');return J({ok:true,configurada:!!env.FREECONVERT_API_KEY});}
+        const chave=String(dados.chave||'').trim();
+        if(!/^api_(?:production|sandbox)_[a-zA-Z0-9._-]{25,200}$/.test(chave))
+          return J({ok:false,erro:'Formato de chave FreeConvert inválido.'},400);
+        await cfgSet(env,'freeconvert_api_key',chave);
+        return J({ok:true,configurada:true});
+      }
+      if (p.startsWith('/post/freeconvert/')) return await freeconvertRota_(env,req,url,J,h);
       if (ehPost) { const rp = (await rotasFotoIA(env, ctx, req, url, J, perms)) || (await rotasFotos(env, ctx, req, url, J, perms)) || (await rotasPostagem(env, ctx, req, url, J, perms)); if (rp) return rp; }
       if (p === '/status' && req.method === 'GET') return J(await status(env));
       if (p === '/rascunhos' && req.method === 'GET') {

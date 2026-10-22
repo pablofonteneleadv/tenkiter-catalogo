@@ -100,6 +100,7 @@
     status = s; itens = [];
     desenhar();
     conferir();
+    conferirFreeConvert_();
   }
 
   /* ---------- desenho ---------- */
@@ -176,6 +177,16 @@
       (status.conexoes && status.conexoes.instagram ? blocoChave('instagram', 'Instagram — token de acesso',
         'Gere em <b>developers.facebook.com → Meus apps → seu app → Instagram → API com login do Instagram → Gerar token</b> (a conta da loja precisa ser <b>Empresa</b>; para postar, marque a permissão <b>instagram_business_content_publish</b>). O painel testa o token no Instagram, liga o importador/postagens (Worker) e guarda uma cópia aqui no cofre.',
         'O token vale ~60 dias; o servidor renova o dele sozinho. Se o Instagram recusar, gere outro e cole aqui.') : '') +
+
+      '<div class="cx-bloco"><h3>🎬 FreeConvert — conversão de vídeos</h3>' +
+      '<p class="g-nota">Cole a chave de API da FreeConvert para converter vídeos H.265/HEVC em MP4 H.264/AAC nas postagens para grupos. A chave fica guardada no servidor e não volta para a tela.</p>' +
+      '<p id="cx-fc-status" role="status" class="cx-chave-sem">Conferindo chave…</p>' +
+      '<label for="cx-fc-chave">Chave da API FreeConvert</label>' +
+      '<input type="password" id="cx-fc-chave" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole a nova chave aqui">' +
+      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="fc-guardar">Salvar chave</button>' +
+      '<button type="button" class="cx-btn cx-perigo" data-cx="fc-apagar">Remover chave</button></div>' +
+      '<div id="cx-fc-msg" class="cx-msg" role="status"></div>' +
+      '<p class="g-nota">Use uma chave nova; revogue a que foi compartilhada na conversa. A conversão depende da cota disponível na FreeConvert.</p></div>' +
 
       blocoChave('cloudflare', 'Cloudflare — token (opcional)',
         'Crie em <b>Cloudflare → Meu perfil → API Tokens → Create Token</b>, modelo <b>Edit Cloudflare Workers</b>, de preferência com data de fim. Aqui serve só para conferir quando o Worker das miniaturas foi publicado.', '') +
@@ -377,10 +388,33 @@
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(aviso).catch(() => { el.select(); window.prompt('Copie o endereço abaixo:', texto); });
     else { el.select(); window.prompt('Copie o endereço abaixo:', texto); }
   }
+  async function conferirFreeConvert_(){
+    const el=$('cx-fc-status');if(!el)return;
+    const r=await igWorker_('/post/freeconvert/config','GET');
+    el.textContent=r.ok?(r.configurada?'✓ Chave FreeConvert configurada.':'Nenhuma chave FreeConvert cadastrada.') : erroTxt(r);
+    el.className=r.ok&&r.configurada?'cx-chave-ok':'cx-chave-sem';
+  }
+  async function guardarFreeConvert_(){
+    const campo=$('cx-fc-chave');if(!campo)return;
+    const chave=campo.value.trim();
+    if(!chave)return msg('cx-fc-msg','Cole uma chave para salvar.','erro');
+    msg('cx-fc-msg','Salvando…','');
+    const r=await igWorker_('/post/freeconvert/config','POST',{chave});
+    if(r.ok){campo.value='';msg('cx-fc-msg','Chave guardada no servidor.','ok');conferirFreeConvert_();}
+    else msg('cx-fc-msg',erroTxt(r),'erro');
+  }
+  async function apagarFreeConvert_(){
+    if(!confirm('Remover a chave FreeConvert da Gestão?'))return;
+    const r=await igWorker_('/post/freeconvert/config','POST',{apagar:true});
+    msg('cx-fc-msg',r.ok?'Chave da Gestão removida.':erroTxt(r),r.ok?'ok':'erro');
+    if(r.ok)conferirFreeConvert_();
+  }
   function clique(ev) {
     const b = ev.target.closest('[data-cx]'); if (!b) return;
     const a = b.dataset.cx;
-    if (a === 'conferir') conferir();
+    if (a === 'fc-guardar') guardarFreeConvert_();
+    else if (a === 'fc-apagar') apagarFreeConvert_();
+    else if (a === 'conferir') conferir();
     else if (a === 'guardar') guardar(b.dataset.nome);
     else if (a === 'apagar') apagar(b.dataset.nome);
     else if (a === 'deploy') publicar();
