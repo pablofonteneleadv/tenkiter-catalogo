@@ -85,6 +85,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("painel_v49.py", lambda o: "FALHAS=0" in o),
     ("equipe_catalogo1.py", lambda o: "FALHAS=0" in o),   # v4.9: perfil Equipe catálogo 1 (painel simplificado)   # v4.9: ferramentas no topo, Postagens fixa, miniatura amplia
     ("postagens_repostar.py", lambda o: "FALHAS=0" in o),
+    ("postagens_destinos.py", lambda o: "FALHAS=0" in o),
     ("postagens_grupo.py", lambda o: "FALHAS=0" in o),
     ("postagens_admin.py", lambda o: "FALHAS=0" in o),   # aba Postagens: feed/carrossel/reels/story, templates, agenda, fila, Story com link manual
     ("conteudo_protegido.py", lambda o: "FALHAS=0" in o),   # treinamentos: manuais e provas só pelo servidor, com sessão e permissão (RH 3.4)

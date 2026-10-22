@@ -116,7 +116,7 @@ with sync_playwright() as p:
     chk("agendado vai com data ISO no futuro", c["quando"].endswith("Z") and c["quando"] > "2026-10-12", c.get("quando"))
     chk("abre a Fila com 'Agendado'", "Agendado" in corpo(pg) and pg.locator("[data-a=cancelar]").count() >= 1)
     pg.click("[data-a=cancelar] >> nth=0"); pg.wait_for_timeout(600)
-    chk("cancelar pede confirmação e tira da fila", any("Cancelar" in d for d in dialogos) and "Nada na fila" in corpo(pg), corpo(pg)[:150])
+    chk("cancelar pede confirmação e tira da fila", any("Encerrar esta postagem" in d and "não apaga" in d for d in dialogos) and "Nada na fila" in corpo(pg), corpo(pg)[:150])
     g["posts"].append({"id": 900, "tipo": "feed", "modo": "auto", "legenda": "x", "midias": [{"url": "https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/a1.jpg", "tipo": "imagem"}], "agendadoEm": "2026-10-11T12:00:00Z", "status": "erro", "tentativas": 3, "erro": "O Instagram não aceitou a mídia. Confira o formato.", "permalink": "", "criadoPor": "Ana"})
     aba(pg, "fila")
     chk("erro aparece como frase (sem JSON) com 'Tentar de novo'", "O Instagram não aceitou" in corpo(pg) and "{" not in corpo(pg) and pg.locator("[data-a=agora]").count() == 1)
