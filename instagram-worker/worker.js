@@ -775,6 +775,14 @@ async function conteudoGrupo_(env, m) {
   if (chave.endsWith('.mp4') && /hvc1|hev1/.test(new TextDecoder().decode(bytes))) throw new Error('VIDEO_HEVC');
   return b64(bytes);
 }
+/** Valida antes de aceitar qualquer entrada ou retorno à fila do grupo. */
+async function erroVideoGrupo_(env, midias) {
+  for (const m of midias || []) if (m.tipo === 'video') {
+    try { await conteudoGrupo_(env, m); }
+    catch (e) { return e && e.message === 'VIDEO_HEVC' ? 'Este vídeo usa H.265/HEVC. Para o Grupo clientes, envie um MP4 H.264/AAC em uma nova postagem.' : 'Não consegui validar o vídeo do Grupo clientes. Envie-o novamente antes de agendar.'; }
+  }
+  return '';
+}
 /** Recibo durável por mídia: nunca repetir um envio cujo resultado ficou incerto.
  * O messageId da API é reply, NÃO é chave de idempotência. Não o usamos como tal. */
 async function enviarGrupoClientes_(env, p) {
@@ -1128,7 +1136,7 @@ function progressoPostagem_(r) {
 }
 function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
-  return { id: r.id, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, grupoEnvioIncerto: !!r.grupo_envio_incerto, permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
+  return { id: r.id, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, grupoEnvioIncerto: !!r.grupo_envio_incerto, grupoMidiaIncompativel: normalizarCanal_(r.canal) === 'grupo' && /H\.265\/HEVC/.test(String(r.erro || '')), permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
 }
 
 /* ====================================================================
@@ -1289,10 +1297,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const vs = []; for (const x of lista) { const r = validarPostagem(x); if (r.erro) return J({ ok: false, erro: r.erro }, 400); vs.push(r.v); }
     // Agendamento importante não pode esperar até a hora marcada para descobrir
     // que o MP4 do grupo usa HEVC e será recusado pela ponte de mensagens.
-    for (const v of vs) if (v.canal === 'grupo') for (const m of v.midias) if (m.tipo === 'video') {
-      try { await conteudoGrupo_(env, m); }
-      catch (e) { return J({ ok: false, erro: e && e.message === 'VIDEO_HEVC' ? 'Este vídeo usa H.265/HEVC. Para o Grupo clientes, envie um MP4 H.264/AAC antes de agendar.' : 'Não consegui validar o vídeo do Grupo clientes. Envie-o novamente antes de agendar.' }, 400); }
-    }
+    for (const v of vs) if (v.canal === 'grupo') { const erro = await erroVideoGrupo_(env, v.midias); if (erro) return J({ ok: false, erro }, 400); }
     if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto' && canalUsaInstagram_(v.canal))) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
     const ids = [], inserts = [], quandos = [], por = String(b.por || '').slice(0, 60);
     const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [], intervaloMs = intervaloPedidoMs_(b.intervalo);
@@ -1354,6 +1359,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       const v = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: 'sequencia' }));
       if (v.erro) return J({ ok: false, erro: v.erro }, 400);
       if (linha.canal === 'grupo' && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado.' }, 409);
+      if (linha.canal === 'grupo') { const erro = await erroVideoGrupo_(env, v.v.midias); if (erro) return J({ ok: false, erro }, 400); }
       const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
       if (pend >= 200) return J({ ok: false, erro: 'A fila está cheia. Espere algumas postagens saírem.' }, 429);
       const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, linha.canal);
@@ -1385,6 +1391,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       if (linha.canal === 'grupo') await env.DB.prepare("DELETE FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='recusado'").bind(id).run();
       const r = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: b.quando }));
       if (r.erro) return J({ ok: false, erro: r.erro }, 400);
+      if (linha.canal === 'grupo') { const erro = await erroVideoGrupo_(env, r.v.midias); if (erro) return J({ ok: false, erro }, 400); }
       const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, linha.canal);
       let t = Date.parse(r.v.quando), aj = { ajustado: false, motivo: '' };
       if (r.v.urgente && cfg.agoraIgnora) t = Date.now();
@@ -1397,6 +1404,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       /* "Mandar para o próximo horário livre" da fila do tipo (respeita pausa e intervalo). */
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
       if (linha.canal === 'grupo' && await env.DB.prepare("SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='enviando'").bind(id).first()) return J({ ok: false, erro: 'O envio ao grupo ficou sem confirmação. Confira na Wafly; depois use “Repostar com novo ID” ou “Descartar”.' }, 409);
+      if (linha.canal === 'grupo') { const erro = await erroVideoGrupo_(env, JSON.parse(linha.midias || '[]')); if (erro) return J({ ok: false, erro }, 400); }
       if (linha.canal === 'grupo') await env.DB.prepare("DELETE FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='recusado'").bind(id).run();
       const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, linha.canal);
       const r = proximoLivreMulti(cfg, bs, await ocupadosMulti_(env, cfg, bs, id), Date.now() + 60000);
