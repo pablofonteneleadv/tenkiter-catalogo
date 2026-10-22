@@ -2,7 +2,7 @@
 const $=id=>document.getElementById(id),api=window.TKPostagensTreino,ui=window.TKPostagensControles;
 if(!api||!ui){$("feedback").textContent="Componentes indisponíveis. Avise a gestão.";return;}
 let servico=api.criarServicoSimulado(),etapa=0,erros=0,legendaTreino="";
-const rotulos=["Toque em Com peça","Escolha Instagram como único destino","Selecione a peça fictícia","Escolha Story","Selecione a mídia fictícia","Escreva uma legenda com pelo menos dez caracteres","Escolha Na sequência","Confira os dados e confirme a revisão","Conclua a simulação sem publicar"];
+const rotulos=["Toque em Com peça","Escolha Instagram como único destino","Busque a peça fictícia, selecione e toque em Usar esta peça","Escolha Story","Selecione a mídia fictícia","Escreva uma legenda com pelo menos dez caracteres","Escolha Na sequência","Confira os dados e confirme a revisão","Conclua a simulação sem publicar"];
 const botao=(atributo,valor,rotulo)=>'<button type="button" '+atributo+'="'+valor+'">'+rotulo+'</button>';
 function salvar(){const registro={versao:2,data:new Date().toISOString(),colaborador:$("colaborador").value.trim().slice(0,60),...servico.relatorio()};try{const key="tk_postagens_treino_resultados_v2",old=JSON.parse(localStorage.getItem(key)||"[]");old.push(registro);localStorage.setItem(key,JSON.stringify(old.slice(-30)));}catch(e){$("feedback").textContent="Resultado não pôde ser salvo neste aparelho; baixe o relatório."; }return registro;}
 let ultimo=null;
@@ -17,7 +17,7 @@ function desenhar(){
  switch(etapa){
  case 0:h=ui.modos("peca");break;
  case 1:h=ui.destinos([]);break;
- case 2:h=ui.buscaPecas("")+'<div id="pecas"></div>';break;
+ case 2:h=ui.buscaPecas("")+'<div id="pecas"></div><div id="acoes-pecas"></div>';break;
  case 3:h=ui.formatos("");break;
  case 4:h='<p>Foto de treinamento — nenhuma mídia real</p>'+ui.midias([{tipo:"imagem",url:"",sel:false}]);break;
  case 5:h=ui.legenda("")+botao("data-acao","legenda","Confirmar legenda");break;
@@ -36,7 +36,8 @@ $("controles").addEventListener("click",ev=>{const b=ev.target.closest("button")
  const d=b.dataset;
  if(d.modo!==undefined)agir("modo",d.modo);
  else if(d.destino!==undefined)agir("destino",d.destino);
- else if(d.psel!==undefined)agir("produto",d.psel);
+ else if(d.psel!==undefined){const item=$("controles").querySelector("[data-psel]");if(item){item.setAttribute("aria-pressed","true");item.querySelector(".po-ck").textContent="✓";$("acoes-pecas").innerHTML=ui.acoesPecas([d.psel],1,true);}}
+ else if(d.a==="usarpecas")agir("produto","TREINO-001");
  else if(d.tipo!==undefined)agir("formato",d.tipo);
  else if(d.m!==undefined)agir("midia",d.m==="0"?"TREINO-MIDIA":d.m);
  else if(d.quando!==undefined)agir("quando",d.quando);
