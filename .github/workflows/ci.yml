@@ -118,6 +118,11 @@ jobs:
 
       # Modo rápido: testes unitários dos Workers, sem instalar Chromium.
       # Os testes que dependem dos .gs.txt não versionados não são executados aqui.
+      - name: Segurança do núcleo de treinamento de postagens
+        run: |
+          node tests/treinamento_postagens_nucleo.js
+          node tests/treinamento_postagens_interface.js
+
       - name: Worker de mídia (R2)
         if: needs.escopo.outputs.suite_completa != 'true'
         run: node tests/worker_midia.js
@@ -153,6 +158,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           curl -fsSL https://cdn.jsdelivr.net/npm/axe-core@4.10.2/axe.min.js -o tests/axe.min.js
+
+      - name: Preparar Chromium para teste de treinamento no PR
+        if: github.event_name == 'pull_request' && hashFiles('treinamento-postagens-real.html') != ''
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Treinamento de postagens no Chromium mobile
+        if: needs.escopo.outputs.suite_completa == 'true' || github.event_name == 'pull_request'
+        run: python3 tests/treinamento_postagens_browser.py
 
       - name: Bateria completa de jornadas, acessibilidade e integrações
         if: needs.escopo.outputs.suite_completa == 'true'
