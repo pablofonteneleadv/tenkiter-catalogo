@@ -22,6 +22,13 @@ with sync_playwright() as p:
     pg.evaluate('(u) => { cancelarDuplicacao(); fotosItens = [{prev:u,b64:u.split(",")[1],capa:true},{prev:u,b64:u.split(",")[1]}]; desenharFotos(); abrirEnquadrar_(0); }', url)
     pg.wait_for_function('TKEnquadrar._estado() && TKEnquadrar._estado().img')
     assert pg.evaluate('TKEnquadrar._estado().modo') == 'encaixar'
+    assert not pg.locator('#enq-ajustes').evaluate('e => e.open')
+    assert pg.locator('#enq-todas').is_visible()
+    assert pg.locator('#enq-z').is_hidden()
+    if os.environ.get('TK_PRINTS'):
+        os.makedirs(os.environ['TK_PRINTS'], exist_ok=True)
+        pg.screenshot(path=os.path.join(os.environ['TK_PRINTS'], 'enquadrar-simples.png'))
+    pg.click('#enq-ajustes summary')
     pg.click('[data-enq=g][data-v="90"]')
     assert pg.evaluate('TKEnquadrar._estado().r') == 90
     pg.click('[data-enq=desfazer]')

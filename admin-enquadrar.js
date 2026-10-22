@@ -123,6 +123,10 @@
       '.enq-palco canvas:focus-visible{outline:3px solid #0b57d0;outline-offset:2px}',
       '.enq-aviso{margin:8px 0;padding:8px 10px;border-radius:8px;background:#fdecea;color:#8a1c14;font-size:.85rem;line-height:1.35}',
       '.enq-aviso[hidden]{display:none}',
+      '.enq-palco{width:min(78vw,360px,calc(53dvh * .8))}',
+      '.enq-box:has(.enq-avancados[open]) .enq-palco{width:min(48vw,190px,calc(27dvh * .8))}',
+      '.enq-box:has(.enq-avancados[open]) .enq-dica-gestos{display:none}',
+      '.enq-avancados summary{min-height:44px;padding:12px 0;cursor:pointer;font-weight:700}',
       '.enq-modo{display:flex;gap:8px;margin:0 0 10px}',
       '.enq-modo button,.enq-acoes button,.enq-rodape button{width:auto;min-height:44px;padding:8px 12px;border-radius:12px;border:1.5px solid #c9c9c9;background:#fff;color:#222;font:inherit;font-size:.86rem;font-weight:700;cursor:pointer}',
       '.enq-modo button{flex:1 1 0}',
@@ -155,19 +159,24 @@
         '<div class="enq-corpo">' +
           '<div class="enq-palco"><canvas id="enq-cv" width="' + PW + '" height="' + PH + '" tabindex="0" role="img" aria-label="Foto da peça no quadro 4:5. Arraste para mover; dois dedos para aumentar e girar; setas movem, mais e menos dão zoom."></canvas></div>' +
           '<div class="enq-aviso" id="enq-aviso" role="status" hidden></div>' +
+          '<p class="enq-dica enq-dica-gestos">Arraste com um dedo. Use dois dedos para aumentar, diminuir e girar.</p>' +
+          '<div class="enq-acoes"><button type="button" data-enq="desfazer">Desfazer</button><button type="button" data-enq="todas" id="enq-todas" hidden>Aplicar a todas</button><button type="button" data-enq="voltar" id="enq-voltar" hidden>↩ Voltar à original</button></div>' +
+          '<details class="enq-avancados" id="enq-ajustes"><summary>Ajustes e prévias</summary>' +
           '<div class="enq-prev-tit">Como vai ficar</div>' +
           '<div class="enq-prev"><figure><canvas id="enq-p-site" width="208" height="260" role="img" aria-label="Prévia no site"></canvas><figcaption>🛍️ Site<br>4:5</figcaption></figure><figure><canvas id="enq-p-feed" width="208" height="260" role="img" aria-label="Prévia no Feed e no Carrossel"></canvas><figcaption>📸 Feed e<br>Carrossel 4:5</figcaption></figure><figure><canvas id="enq-p-story" width="146" height="260" role="img" aria-label="Prévia no Story"></canvas><figcaption>📱 Story<br>9:16</figcaption></figure></div>' +
           '<div class="enq-modo" role="group" aria-label="Como a foto ocupa o quadro"><button type="button" data-enq="modo" data-v="cortar" aria-pressed="true">✂ Cortar (preencher)</button><button type="button" data-enq="modo" data-v="encaixar" aria-pressed="false">🖼️ Encaixar (inteira)</button></div>' +
           '<div class="enq-sl"><label for="enq-z">Zoom</label><input type="range" id="enq-z" min="100" max="500" step="1" value="100"><output id="enq-z-v" for="enq-z">100%</output></div>' +
           '<div class="enq-sl"><label for="enq-r">Girar</label><input type="range" id="enq-r" min="-180" max="180" step="1" value="0"><output id="enq-r-v" for="enq-r">0°</output></div>' +
-          '<div class="enq-acoes"><button type="button" data-enq="desfazer">Desfazer</button><button type="button" data-enq="todas" id="enq-todas" hidden>Aplicar a todas</button><button type="button" data-enq="g" data-v="-90">↺ 90°</button><button type="button" data-enq="g" data-v="90">↻ 90°</button><button type="button" data-enq="centro">Centralizar</button><button type="button" data-enq="zerar">Zerar</button><button type="button" data-enq="voltar" id="enq-voltar" hidden>↩ Voltar à original</button></div>' +
+          '<div class="enq-acoes"><button type="button" data-enq="g" data-v="-90">↺ 90°</button><button type="button" data-enq="g" data-v="90">↻ 90°</button><button type="button" data-enq="centro">Centralizar</button><button type="button" data-enq="zerar">Zerar</button></div>' +
           '<p class="enq-dica">O site, o Feed e o Carrossel usam o quadro 4:5. No Story a foto entra inteira sobre o próprio fundo desfocado (na aba Postagens você ainda pode cortar para preencher a tela).</p>' +
+          '</details>' +
         '</div>' +
         '<div class="enq-rodape"><button type="button" class="enq-ok" data-enq="aplicar" id="enq-ok" disabled>✔ Usar esta foto</button><button type="button" class="btn-fechar" data-enq="fechar">Cancelar</button></div>' +
       '</div>';
     document.body.appendChild(el);
     el.addEventListener('click', clique);
     el.addEventListener('input', entrada);
+    $('#enq-ajustes').addEventListener('toggle', function () { el.querySelector('.enq-corpo').scrollTop = 0; });
     ligarGestos($('#enq-cv'));
   }
   function aviso(txt) { var a = $('#enq-aviso'); if (!a) return; a.hidden = !txt; a.textContent = txt || ''; }
@@ -279,6 +288,7 @@
   var aberta = false, trava = '';
   function abrir(op) {
     montar();
+    $('#enq-ajustes').open = false;
     estado = { img: null, modo: 'encaixar', z: 1, x: 0, y: 0, r: 0, historico: [], aoAplicar: op.aoAplicar, aoAplicarTodas: op.aoAplicarTodas, aoVoltar: op.aoVoltar };
     Object.assign(estado, op.ajuste || {});
     $('#enq-todas').hidden = !op.aoAplicarTodas; $('#enq-todas').disabled = false;

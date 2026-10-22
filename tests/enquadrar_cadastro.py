@@ -35,17 +35,24 @@ with sync_playwright() as p:
     cdp = ctx.new_cdp_session(pg)
     def tp(pts): return [{"x": x, "y": y, "id": i} for i, (x, y) in enumerate(pts)]
     def gesto(ini, fim, passos=8):
+        atual = centro()
+        dx, dy = atual[0] - cx, atual[1] - cy
+        ini = [(x + dx, y + dy) for x,y in ini]
+        fim = [(x + dx, y + dy) for x,y in fim]
         cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": tp(ini)})
         for i in range(1, passos + 1):
             cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": tp([(a[0] + (z[0] - a[0]) * i / passos, a[1] + (z[1] - a[1]) * i / passos) for a, z in zip(ini, fim)])}); pg.wait_for_timeout(16)
         cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []}); pg.wait_for_timeout(200)
     def centro():
+        pg.locator("#enq-cv").scroll_into_view_if_needed()
         return pg.evaluate("(()=>{const r=document.getElementById('enq-cv').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2,r.width,r.height]})()")
     def est(): return pg.evaluate("(()=>{const e=TKEnquadrar._estado();return e?{z:e.z,x:e.x,y:e.y,r:e.r,modo:e.modo,ok:!!e.img}:null})()")
     def set_range(sel, v): pg.eval_on_selector(sel, "(e,v)=>{e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}))}", v); pg.wait_for_timeout(120)
     def aberta(): return pg.evaluate("!!document.querySelector('#enq-ov.aberto')")
     def abrir(idx=0):
         pg.locator("#galeria-grid .btn-enq").nth(idx).click(); pg.wait_for_timeout(700)
+        assert not pg.locator("#enq-ajustes").evaluate("e => e.open")
+        pg.locator("#enq-ajustes summary").click()
 
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2400)
     pg.evaluate("document.getElementById('card-form').open=true"); pg.wait_for_timeout(300)
@@ -87,7 +94,7 @@ with sync_playwright() as p:
     e = est(); chk("na vertical anda só até onde a foto cobre o quadro (≤ 3,4%)", 0.005 < e["y"] <= 0.0345, e)
     set_range("#enq-z", 200)
     chk("zoom 200% pelo controle", abs(est()["z"] - 2) < 0.01, est())
-    gesto([(cx, cy)], [(cx + 40, cy)])
+    gesto([(cx, cy)], [(cx + w * 0.16, cy)])
     e = est(); chk("com zoom a foto anda para os lados", 0.10 < e["x"] < 0.20, e)
 
     print("== D. pinça (2 dedos): zoom e giro ==")
@@ -102,6 +109,7 @@ with sync_playwright() as p:
     pg.click("[data-enq=zerar]")
 
     print("== E. roda do mouse, teclado e botões ==")
+    cx, cy, w, h = centro()
     pg.mouse.move(cx, cy); pg.mouse.wheel(0, -400); pg.wait_for_timeout(150)
     chk("roda do mouse dá zoom", est()["z"] > 1.2, est())
     pg.click("[data-enq=zerar]")
