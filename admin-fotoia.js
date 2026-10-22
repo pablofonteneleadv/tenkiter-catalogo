@@ -19,6 +19,8 @@
   let extraTxt = '', aba = 'gerar', cfg = null, info = null, itens = [], cont = {}, filtro = 'todas', timer = null, busca = '', enviando = false, msgTxt = '', msgTipo = '';
   let sel = [], abertas = [], tipoFiltro = 'todas', giro = 0, destino = 'status', quem = 'mulheres', dividirModo = 'sim';          // sel = fotos escolhidas {url, peca, cod, papel}
   const MAX_FOTOS = 6, CF_MAX = 4;
+  let quantidadeLooks = 0, looksPorImagem = 2;
+  const limiteFotos = () => quantidadeLooks ? 40 : MAX_FOTOS;
 
   /* ---------- Worker ---------- */
   function sessao() { const s = typeof getSessao === 'function' ? getSessao() : null; return s && /^tk[12]\./.test(String(s.sessao)) ? s : null; }
@@ -195,39 +197,74 @@
   /** Parte os looks em pedidos de até 4 fotos (o limite do Cloudflare grátis); cada look fica inteiro. */
   function dividirLooks(looks) {
     const grupos = []; let atual = [], n = 0;
-    looks.forEach((l) => { if (n + l.length > CF_MAX && atual.length) { grupos.push(atual); atual = []; n = 0; } atual.push(l); n += l.length; });
+    looks.forEach((l) => { if ((n + l.length > CF_MAX || (quantidadeLooks && atual.length >= looksPorImagem)) && atual.length) { grupos.push(atual); atual = []; n = 0; } atual.push(l); n += l.length; });
     if (atual.length) grupos.push(atual);
     return grupos;
   }
   const nomeLook = (l) => l.map((i) => (sel[i].peca || 'Foto do aparelho') + (sel[i].papel === 'cima' ? ' (de cima)' : sel[i].papel === 'baixo' ? ' (de baixo)' : '')).join(' + ');
+  function gruposDoPlano(looks) {
+    return dividirModo === 'sim' && (sel.length > CF_MAX || quantidadeLooks) ? dividirLooks(looks) : [looks];
+  }
+  function trocarFotos(i, j) {
+    if (enviando || !sel[i] || !sel[j] || i === j) return;
+    if (sel[i].papel !== sel[j].papel) { msg('Troque peças do mesmo papel: cima com cima, baixo com baixo ou look inteiro com look inteiro.', 'erro'); desenharGerar(); return; }
+    const x = sel[i]; sel[i] = sel[j]; sel[j] = x; giro = 0; msg('Combinação atualizada. Confira os looks antes de gerar.', 'ok'); desenharGerar();
+  }
+  function ligarArrasto() {
+    document.querySelectorAll('#fia-aba .fia-arrastar').forEach(btn => {
+      btn.addEventListener('pointerdown', e => {
+        if (enviando || e.button !== 0) return;
+        e.preventDefault(); const i = Number(btn.dataset.i), x = e.clientX, y = e.clientY;
+        btn.setPointerCapture(e.pointerId); btn.setAttribute('aria-pressed', 'true');
+        const fim = ev => {
+          btn.removeEventListener('pointerup', fim); btn.removeEventListener('pointercancel', cancelar);
+          btn.setAttribute('aria-pressed', 'false');
+          if (Math.hypot(ev.clientX - x, ev.clientY - y) < 10) return;
+          const destino = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.fia-selitem');
+          if (destino) trocarFotos(i, Number(destino.dataset.i));
+        };
+        const cancelar = () => { btn.removeEventListener('pointerup', fim); btn.removeEventListener('pointercancel', cancelar); btn.setAttribute('aria-pressed', 'false'); };
+        btn.addEventListener('pointerup', fim); btn.addEventListener('pointercancel', cancelar);
+      });
+      btn.addEventListener('keydown', e => {
+        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+        e.preventDefault(); const i = Number(btn.dataset.i), delta = e.key === 'ArrowUp' ? -1 : 1;
+        for (let j = i + delta; j >= 0 && j < sel.length; j += delta) if (sel[j].papel === sel[i].papel) { trocarFotos(i, j); document.querySelector('.fia-arrastar[data-i="' + j + '"]')?.focus(); break; }
+      });
+    });
+  }
   function desenharGerar() {
     const a = $('fia-aba'); if (!a) return;
     const yC = $('fia-corpo').scrollTop, g0 = a.querySelector('.fia-pecas'), yG = g0 ? g0.scrollTop : 0;
     const pecas = pecasFiltradas(), ml = montarLooks(), nSel = sel.length, selDe = (u, pid) => sel.findIndex((x) => x.url === u && String(x.pid || '') === String(pid || ''));
     const abertasP = abertas.map((id) => (typeof produtos !== 'undefined' ? produtos : []).find((x) => String(x.ID) === String(id))).filter(Boolean);
     const provs = (info.config && info.config.provedores) || [], temGem = info.temChave && provs.indexOf('gemini') !== -1, temCf = !!(info.cloudflare && info.cloudflare.disponivel && provs.indexOf('cloudflare') !== -1);
-    const pedidos = !ml.erro && nSel > CF_MAX && dividirModo === 'sim' ? dividirLooks(ml.looks).length : 1;
+    const pedidos = !ml.erro ? gruposDoPlano(ml.looks).length : 1;
     const filtros = [['todas', 'Todas'], ['cima', '👚 De cima'], ['baixo', '👖 De baixo'], ['look', '👗 Looks e peças únicas']];
     a.innerHTML = statusHtml() + (msgTxt ? '<p class="' + (msgTipo === 'erro' ? 'fia-erro' : 'fia-ok') + '">' + esc(msgTxt) + '</p>' : '') +
-      '<div class="fia-aviso">Escolha até <b>' + MAX_FOTOS + ' fotos</b> (de várias peças e do aparelho) e diga o que a IA vai usar de cada uma. A imagem sai com <b>uma pessoa diferente para cada look</b> (modelos diversos, não as das fotos). Se a cota acabar, o pedido <b>espera na fila</b> e sai sozinho — não precisa ficar na tela.</div>' +
+      '<label for="fia-quantidade">Quantos looks deseja neste lote? (opcional)</label><input id="fia-quantidade" type="number" min="1" max="20" step="1" value="' + (quantidadeLooks || '') + '" placeholder="Ex.: 10"><p class="fia-dica">Informe a quantidade e escolha as peças para completar os looks. Não repetimos ou inventamos roupas para completar o lote.</p>' +
+      (quantidadeLooks ? '<label for="fia-looks-imagem">Divisão sugerida por imagem</label><select id="fia-looks-imagem"><option value="2"' + (looksPorImagem === 2 ? ' selected' : '') + '>Até 2 looks por imagem</option><option value="3"' + (looksPorImagem === 3 ? ' selected' : '') + '>Até 3 looks por imagem</option></select><p class="fia-dica">Até 4 fotos de referência por imagem no motor grátis. Três looks só cabem quando suas referências cabem nesse limite. Confira a qualidade: mais pessoas podem reduzir a fidelidade.</p>' : '') +
+      '<div class="fia-aviso">Escolha até <b>' + limiteFotos() + ' fotos</b> (de várias peças e do aparelho) e diga o que a IA vai usar de cada uma. A imagem sai com <b>uma pessoa diferente para cada look</b> (modelos diversos, não as das fotos). Se a cota acabar, o pedido <b>espera na fila</b> e sai sozinho — não precisa ficar na tela.</div>' +
       '<label for="fia-busca">1. Escolha as peças (toque para ver as fotos)</label><input type="text" id="fia-busca" placeholder="Nome ou código…" value="' + esc(busca) + '" autocomplete="off">' +
       '<div class="fia-filtros" role="group" aria-label="Tipo de peça">' + filtros.map((f) => '<button type="button" data-a="tipo" data-v="' + f[0] + '" aria-pressed="' + (tipoFiltro === f[0]) + '">' + f[1] + '</button>').join('') + '</div>' +
       (tipoFiltro === 'baixo' || tipoFiltro === 'cima' ? '<p class="fia-dica">Mostrando só ' + (tipoFiltro === 'baixo' ? 'peças de baixo (calça, short, saia…)' : 'peças de cima (blusa, cropped, camiseta…)') + '. Peça que não foi reconhecida só aparece em “Todas”.</p>' : '') +
       '<div class="fia-pecas">' + (pecas.length ? pecas.map((p) => '<button type="button" class="fia-peca" data-a="peca" data-id="' + esc(p.ID) + '" aria-pressed="' + (abertas.indexOf(String(p.ID)) !== -1) + '"><img loading="lazy" decoding="async" alt="" ' + atribSrc(fotoMini(String(p.Foto_URL || ''), 220)) + '><b>' + esc((p.Codigo ? p.Codigo + ' · ' : '') + (p.Nome || 'Peça')) + '</b></button>').join('') : '<p class="fia-dica">Nenhuma peça encontrada neste filtro.</p>') + '</div>' +
       abertasP.map((p) => '<div class="fia-grupo"><h4>' + esc((p.Codigo ? p.Codigo + ' · ' : '') + (p.Nome || 'Peça')) + '</h4><div class="fia-fotos">' + fotosDaPeca(p).map((u) => '<div class="fia-foto" aria-pressed="' + (selDe(u, p.ID) >= 0) + '"><img loading="lazy" decoding="async" alt="" ' + atribSrc(fotoMini(u, 200)) + '>' + (selDe(u, p.ID) >= 0 ? '<i>' + (selDe(u, p.ID) + 1) + '</i>' : '') + '<button type="button" data-a="foto" data-u="' + esc(u) + '" data-p="' + esc(p.ID) + '" aria-label="' + (selDe(u, p.ID) >= 0 ? 'Tirar esta foto' : 'Usar esta foto') + '"></button></div>').join('') + '</div></div>').join('') +
-      '<div class="fia-linha"><label class="fia-btn" for="fia-arq" style="margin:0">📎 Foto do aparelho</label><input type="file" id="fia-arq" accept="image/jpeg,image/png,image/webp" multiple hidden><span class="fia-dica">' + nSel + ' de ' + MAX_FOTOS + ' fotos marcadas</span></div>' +
+      '<div class="fia-linha"><label class="fia-btn" for="fia-arq" style="margin:0">📎 Foto do aparelho</label><input type="file" id="fia-arq" accept="image/jpeg,image/png,image/webp" multiple hidden><span class="fia-dica">' + nSel + ' de ' + limiteFotos() + ' fotos marcadas</span></div>' +
       '<label>2. O que a IA deve usar de cada foto?</label>' +
-      (nSel ? '<div class="fia-sel">' + sel.map((x, i) => '<div class="fia-selitem" data-i="' + i + '"><img alt="Foto ' + (i + 1) + '" data-a="ampliar" data-u="' + esc(x.url) + '" ' + atribSrc(/^data:/.test(x.url) ? x.url : fotoMini(x.url, 200)) + '><div class="fia-selinfo"><div class="nome"><b>' + (i + 1) + '.</b> ' + esc(x.peca || 'Foto do aparelho') + '</div><div class="fia-papeis" role="group" aria-label="Papel da foto ' + (i + 1) + '">' + ['cima', 'baixo', 'look'].map((r) => '<button type="button" data-a="papel" data-i="' + i + '" data-v="' + r + '" aria-pressed="' + (x.papel === r) + '" title="' + esc(PAPEL_DICA[r]) + '">' + PAPEL_ROT[r] + '</button>').join('') + '<button type="button" class="fia-x" data-a="tirar" data-i="' + i + '" aria-label="Tirar a foto ' + (i + 1) + '">✕</button></div></div></div>').join('') + '</div>'
+      (nSel ? '<div class="fia-sel">' + sel.map((x, i) => '<div class="fia-selitem" data-i="' + i + '"><img alt="Foto ' + (i + 1) + '" data-a="ampliar" data-u="' + esc(x.url) + '" ' + atribSrc(/^data:/.test(x.url) ? x.url : fotoMini(x.url, 200)) + '><div class="fia-selinfo"><button type="button" class="fia-arrastar" data-i="' + i + '" style="touch-action:none;min-height:44px" title="Arraste sobre outra peça do mesmo papel, ou use as setas do teclado">↕ Trocar de look</button><div class="nome"><b>' + (i + 1) + '.</b> ' + esc(x.peca || 'Foto do aparelho') + '</div><div class="fia-papeis" role="group" aria-label="Papel da foto ' + (i + 1) + '">' + ['cima', 'baixo', 'look'].map((r) => '<button type="button" data-a="papel" data-i="' + i + '" data-v="' + r + '" aria-pressed="' + (x.papel === r) + '" title="' + esc(PAPEL_DICA[r]) + '">' + PAPEL_ROT[r] + '</button>').join('') + '<button type="button" class="fia-x" data-a="tirar" data-i="' + i + '" aria-label="Tirar a foto ' + (i + 1) + '">✕</button></div></div></div>').join('') + '</div>'
         : '<p class="fia-dica">Nenhuma foto marcada ainda. Toque numa peça acima e depois nas fotos que quer usar, ou envie fotos do aparelho.</p>') +
       (nSel ? (ml.erro ? '<div class="fia-erro">Faltam <b>' + ml.erro.n + '</b> peça' + (ml.erro.n > 1 ? 's' : '') + ' de ' + ml.erro.faltam + ' (você marcou ' + ml.erro.nCima + ' de cima e ' + ml.erro.nBaixo + ' de baixo). A IA <b>não inventa peças</b>: escolha ' + (ml.erro.n > 1 ? 'as que faltam' : 'a que falta') + ' ou mude o papel de alguma foto.<div class="fia-linha"><button type="button" class="fia-btn pri" data-a="tipo" data-v="' + ml.erro.faltam + '">' + (ml.erro.faltam === 'baixo' ? '👖 Mostrar peças de baixo' : '👚 Mostrar peças de cima') + '</button></div></div>'
         : '<div class="fia-looks"><b>' + ml.looks.length + (ml.looks.length === 1 ? ' pessoa' : ' pessoas') + ' na imagem (uma por look):</b><ol style="margin:4px 0 0 18px;padding:0">' + ml.looks.map((l) => '<li>' + esc(nomeLook(l)) + '</li>').join('') + '</ol>' +
           (ml.pares >= 2 ? '<div class="fia-linha"><button type="button" class="fia-btn" data-a="trocar">🔀 Trocar a combinação de cima e de baixo</button></div>' : '') + '</div>') : '') +
+      (quantidadeLooks && !ml.erro ? '<p class="fia-dica">Plano: ' + ml.looks.length + ' de ' + quantidadeLooks + ' looks escolhidos. Divisão atual: ' + gruposDoPlano(ml.looks).map(g => g.length + (g.length === 1 ? ' look' : ' looks')).join(' + ') + '.</p>' : '') +
       '<label>3. Para onde vai a imagem?</label><div class="fia-filtros" role="group" aria-label="Destino">' + DESTINOS.map((d) => '<button type="button" data-a="destino" data-v="' + d[0] + '" aria-pressed="' + (destino === d[0]) + '">' + d[1] + ' <small>' + d[2] + '</small></button>').join('') + '</div>' +
       '<p class="fia-dica">A imagem sai <b>sem texto, sem seta e sem emoji</b>: só as pessoas com as roupas. Setas, chamadas e emojis você coloca depois em <b>📸 Postagens → ➕ Adicionar</b>.</p>' +
       '<label for="fia-quem">Quem veste</label><select id="fia-quem">' + QUEM.map((q) => '<option value="' + q[0] + '"' + (quem === q[0] ? ' selected' : '') + '>' + q[1] + '</option>').join('') + '</select>' +
       (nSel > CF_MAX && !ml.erro ? '<div class="fia-aviso"><b>Mais de ' + CF_MAX + ' fotos:</b> o Cloudflare grátis aceita até ' + CF_MAX + ' fotos por imagem; o Gemini (plano com imagens) aceita ' + MAX_FOTOS + '.<label for="fia-divide" style="margin-top:6px">Como enviar</label><select id="fia-divide"><option value="sim"' + (dividirModo === 'sim' ? ' selected' : '') + '>Dividir em ' + dividirLooks(ml.looks).length + ' imagens (funciona no grátis; cada imagem tem alguns dos looks)</option><option value="nao"' + (dividirModo === 'nao' ? ' selected' : '') + '>Uma imagem só com todos os looks (só o Gemini com plano de imagens)</option></select>' + (!temGem && dividirModo === 'nao' ? '<p class="fia-erro">Sem a chave do Gemini, “uma imagem só” não vai sair. Escolha dividir.</p>' : '') + '</div>' : '') +
       '<label for="fia-extra">4. Observação para esta imagem (opcional)</label><input type="text" id="fia-extra" maxlength="300" value="' + esc(extraTxt) + '" placeholder="Ex.: luz de fim de tarde, só mulheres de cabelo longo…">' +
-      '<div class="fia-linha"><button type="button" class="fia-btn pri" data-a="enviar" ' + (enviando || !nSel || ml.erro || !(temGem || temCf) ? 'disabled' : '') + '>' + (enviando ? 'Enviando…' : '➕ Colocar na fila' + (pedidos > 1 ? ' (' + pedidos + ' imagens)' : '')) + '</button></div>';
+      '<div class="fia-linha"><button type="button" class="fia-btn pri" data-a="enviar" ' + (enviando || !nSel || ml.erro || (quantidadeLooks && ml.looks.length !== quantidadeLooks) || !(temGem || temCf) ? 'disabled' : '') + '>' + (enviando ? 'Enviando…' : '➕ Colocar na fila' + (pedidos > 1 ? ' (' + pedidos + ' imagens)' : '')) + '</button></div>';
+    ligarArrasto();
     $('fia-corpo').scrollTop = yC; const g1 = a.querySelector('.fia-pecas'); if (g1) g1.scrollTop = yG;
   }
   function dataBr(iso) { try { const d = new Date(iso); return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
@@ -299,6 +336,7 @@
   /* ---------- ações ---------- */
   function msg(t, tipo) { msgTxt = t || ''; msgTipo = tipo || ''; }
   async function clique(e) {
+    if (enviando) return;
     const b = e.target.closest && e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a;
     if (a === 'aba') { aba = b.dataset.v; msg(''); await carregarConfig(); if (!info) return; if (aba === 'fila') await carregarLista(); desenhar(); return; }
     if (a === 'filtro') { filtro = b.dataset.v; desenharFila(); return; }
@@ -306,7 +344,7 @@
     if (a === 'foto') {
       const u = b.dataset.u, pid = String(b.dataset.p || ''), i = sel.findIndex((x) => x.url === u && String(x.pid || '') === pid);
       if (i >= 0) { sel.splice(i, 1); giro = 0; }
-      else if (sel.length >= MAX_FOTOS) { msg('Máximo de ' + MAX_FOTOS + ' fotos por pedido. Tire uma para escolher outra.', 'erro'); }
+      else if (sel.length >= limiteFotos()) { msg('Máximo de ' + limiteFotos() + ' fotos por pedido. Tire uma para escolher outra.', 'erro'); }
       else { const p = (typeof produtos !== 'undefined' ? produtos : []).find((x) => String(x.ID) === String(b.dataset.p)); sel.push({ url: u, pid: pid, peca: p ? (p.Nome || 'Peça') : '', cod: p ? (p.Codigo || p.ID || '') : '', papel: (p && tipoPeca(p)) || 'look' }); msg(''); }
       desenharGerar(); return;
     }
@@ -334,13 +372,16 @@
     if (e.target.id === 'fia-extra') extraTxt = e.target.value;
   }
   async function mudou(e) {
+    if (enviando) return;
+    if (e.target.id === 'fia-quantidade') { const n = Number(e.target.value); if (e.target.value && (!Number.isInteger(n) || n < 1 || n > 20)) { msg('Escolha de 1 a 20 looks.', 'erro'); desenharGerar(); return; } quantidadeLooks = n || 0; if (!quantidadeLooks && sel.length > MAX_FOTOS) { quantidadeLooks = Math.min(20, montarLooks().looks.length || 20); msg('Para sair do lote, reduza primeiro a seleção a seis fotos.', 'erro'); } dividirModo = 'sim'; desenharGerar(); return; }
+    if (e.target.id === 'fia-looks-imagem') { looksPorImagem = Number(e.target.value) === 3 ? 3 : 2; desenharGerar(); return; }
     const id = e.target.id;
     if (id === 'fia-quem') { quem = e.target.value; return; }
     if (id === 'fia-divide') { dividirModo = e.target.value; desenharGerar(); return; }
     if (id !== 'fia-arq') return;
     const arqs = Array.from(e.target.files || []); e.target.value = '';
     for (const f of arqs) {
-      if (sel.length >= MAX_FOTOS) { msg('Máximo de ' + MAX_FOTOS + ' fotos por pedido.', 'erro'); break; }
+      if (sel.length >= limiteFotos()) { msg('Máximo de ' + limiteFotos() + ' fotos por pedido.', 'erro'); break; }
       const d = await arquivoParaDataUrl(f, 1280); if (!d) { msg('Não consegui ler ' + f.name + '.', 'erro'); continue; }
       sel.push({ url: d, peca: '', cod: '', papel: 'look', aparelho: true });
     }
@@ -372,14 +413,17 @@
     if (!sel.length) { msg('Toque em pelo menos 1 foto.', 'erro'); desenharGerar(); return; }
     const ml = montarLooks(); if (ml.erro) { msg('Faltam ' + ml.erro.n + ' peça(s) de ' + ml.erro.faltam + ' para fechar os looks.', 'erro'); desenharGerar(); return; }
     const provs = (info.config && info.config.provedores) || [], usaCf = provs.indexOf('cloudflare') !== -1 && !!(info.cloudflare && info.cloudflare.disponivel);
-    const grupos = sel.length > CF_MAX && dividirModo === 'sim' ? dividirLooks(ml.looks) : [ml.looks];
+    if (quantidadeLooks && ml.looks.length !== quantidadeLooks) { msg('Complete exatamente ' + quantidadeLooks + ' looks antes de gerar.', 'erro'); desenharGerar(); return; }
+    if (dividirModo === 'nao' && sel.length > MAX_FOTOS) { msg('Este lote precisa ser dividido. Escolha a divisão antes de enviar.', 'erro'); desenharGerar(); return; }
+    const grupos = gruposDoPlano(ml.looks);
     enviando = true; msg(''); desenharGerar();
     const extra = extraTxt || '', criados = [];
+    function manterRestantes(gi) { if (!criados.length) return; sel = grupos.slice(gi).flatMap(g => g.flatMap(l => l.map(i => sel[i]))); giro = 0; if (quantidadeLooks) quantidadeLooks = grupos.slice(gi).reduce((n, g) => n + g.length, 0); abertas = []; }
     for (let gi = 0; gi < grupos.length; gi++) {
       const ordem = []; grupos[gi].forEach((l) => l.forEach((i) => ordem.push(i)));       // fotos na ordem dos looks; os índices dos looks passam a ser os desta lista
       const fotos = [], refs = []; let refsOk = usaCf && ordem.length <= CF_MAX;
       for (const i of ordem) {
-        const f = await fotoPronta(sel[i].url); if (!f) { enviando = false; msg('Não consegui baixar uma das fotos para enviar. Tente outra foto ou envie do aparelho.', 'erro'); desenharGerar(); return; }
+        const f = await fotoPronta(sel[i].url); if (!f) { manterRestantes(gi); enviando = false; msg((criados.length ? criados.length + ' imagem(ns) já na fila; só os looks restantes foram mantidos. ' : '') + 'Não consegui baixar uma das fotos. Tente outra foto ou envie do aparelho.', 'erro'); desenharGerar(); return; }
         fotos.push({ mime: 'image/jpeg', data: f.grande.split(',')[1] });
         if (refsOk) { if (f.pequena) refs.push({ mime: 'image/jpeg', data: f.pequena.split(',')[1] }); else refsOk = false; }   // a cópia pequena TEM que casar com a foto (a ordem liga foto ↔ look)
       }
@@ -395,7 +439,7 @@
       });
       if (refsOk && refs.length === fotos.length) corpo.refs = refs;
       const r = await api('/fotoia/fila', 'POST', corpo);
-      if (!r || !r.ok) { enviando = false; msg((criados.length ? criados.length + ' pedido(s) já entraram na fila. ' : '') + erroTxt(r), 'erro'); if (criados.length) { sel = []; abertas = []; } desenharGerar(); return; }
+      if (!r || !r.ok) { enviando = false; msg((criados.length ? criados.length + ' pedido(s) já entraram na fila. ' : '') + erroTxt(r), 'erro'); manterRestantes(gi); desenharGerar(); return; }
       criados.push(r.id);
     }
     Object.keys(cacheFoto).forEach((k) => { delete cacheFoto[k]; });
