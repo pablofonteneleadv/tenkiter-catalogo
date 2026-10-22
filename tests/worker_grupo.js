@@ -138,6 +138,12 @@ function d1() {
   const antesHevc=Number((await DB.prepare('SELECT COUNT(*) AS n FROM postagem').first()).n);
   const agendaHevc=await A('POST','/post',{tipo:'story',modo:'auto',legenda:'Teste',midias:[{url:env.MIDIA_URL+'/m/t/202610/hevc.mp4',tipo:'video'}],quando:ts(15),canal:'grupo'});
   chk('HEVC é recusado no agendamento, antes de criar item na fila',agendaHevc.r.status===400&&agendaHevc.j.erro.includes('H.264/AAC')&&Number((await DB.prepare('SELECT COUNT(*) AS n FROM postagem').first()).n)===antesHevc);
+  const hevcRepostar=await A('POST','/post/repostar',{id:hevc,confirmarRisco:true});
+  const hevcTentar=await A('POST','/post/reagendar',{id:hevc,quando:'agora'});
+  const hevcProximo=await A('POST','/post/proximo',{id:hevc});
+  const hevcNaFila=(await A('GET','/posts')).j.posts.find(p=>p.id===hevc);
+  chk('repostar, tentar e próximo livre recusam HEVC sem criar cópia',hevcRepostar.r.status===400&&hevcTentar.r.status===400&&hevcProximo.r.status===400&&!(await DB.prepare('SELECT id FROM postagem WHERE repostado_de=?').bind(hevc).first())&&(await lerPost(hevc)).status==='erro');
+  chk('fila marca vídeo incompatível para esconder ações inúteis',hevcNaFila.grupoMidiaIncompativel===true&&hevcNaFila.grupoEnvioIncerto===false);
   modo='aguardar';
   const lento=await novaPostagem('grupo');
   const primeiroCron=W.processarPostagens(env);
