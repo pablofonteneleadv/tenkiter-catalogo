@@ -22,10 +22,12 @@ def main():
         page.locator('[data-a="usarpecas"]').click()
         page.locator('[data-tipo="story"]').click()
         page.locator('[data-m="0"]').click()
-        page.locator("#po-legenda").fill("Uma blusa fictícia para treinamento")
+        page.locator("#po-legenda").fill("<b>Blusa fictícia</b> para treinamento")
         page.locator('[data-acao="legenda"]').click()
         page.locator('[data-quando="sequencia"]').click()
         page.locator("#revisado").check()
+        assert page.locator("#legenda-revisao").inner_text()=="<b>Blusa fictícia</b> para treinamento"
+        assert page.locator("#legenda-revisao b").count()==0
         page.locator('[data-acao="revisao"]').click()
         page.locator('[data-acao="conclusao"]').click()
         assert page.locator("#final").is_visible()
@@ -37,6 +39,10 @@ def main():
         assert not requests,requests
         assert not errors,errors
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"),"Rolagem horizontal indevida"
+        page.locator("#refazer").click()
+        assert page.locator("#final").is_hidden()
+        assert page.locator("#contador").inner_text().startswith("0 de 9")
+        assert page.locator("#instrucao").inner_text().startswith("1.")
         browser.close()
     print("Android 390px: nove passos, erro corrigido, exportação e isolamento OK")
 
