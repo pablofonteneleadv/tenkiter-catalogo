@@ -27,6 +27,7 @@ function desenhar(){
  case 8:h='<p>Este botão apenas conclui a prática. Não existe ligação com a fila.</p>'+botao("data-acao","conclusao","Concluir sem publicar");break;
  }
  $("controles").innerHTML=h;
+ $("voltar-etapa").hidden=etapa===0;
  if(etapa===7)$("legenda-revisao").textContent=legendaTreino;
  if(etapa===5){const campo=$("po-legenda");if(campo){campo.value=rascunhoLegenda;campo.addEventListener("input",()=>{rascunhoLegenda=campo.value;});}}
  const esperado=[ '[data-modo="peca"]','[data-destino="instagram"]','[data-psel="TREINO-001"]','[data-tipo="story"]','[data-m="0"]','[data-acao="legenda"]','[data-quando="sequencia"]','[data-acao="revisao"]','[data-acao="conclusao"]'][etapa];
@@ -48,6 +49,7 @@ $("controles").addEventListener("click",ev=>{const b=ev.target.closest("button")
  else if(d.acao==="revisao")agir("revisao",$("revisado").checked);
  else if(d.acao==="conclusao")agir("conclusao",true);
 });
+$("voltar-etapa").addEventListener("click",()=>{const r=servico.treino.voltar();if(!r.ok)return;etapa=r.estado.etapa;if(etapa<=5)legendaTreino=rascunhoLegenda;desenhar();});
 $("refazer").addEventListener("click",()=>{if(!window.confirm("Reiniciar a prática? O progresso atual será apagado, mas relatórios já baixados serão preservados."))return;servico=api.criarServicoSimulado();etapa=0;erros=0;legendaTreino="";rascunhoLegenda="";ultimo=null;$("area").hidden=false;$("final").hidden=true;desenhar();});
 $("exportar").addEventListener("click",()=>{if(!ultimo)return;const blob=new Blob([JSON.stringify(ultimo,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="tenkiter-treino-postagens-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);});
 desenhar();
