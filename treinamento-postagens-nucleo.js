@@ -22,6 +22,7 @@
   return Object.freeze({
    estado:copia,
    agir(acao){if(etapa===PASSOS.length)return{ok:false,motivo:"Treinamento concluído",estado:copia()};const passo=PASSOS[etapa],ok=!!(acao&&passo.test(acao));eventos.push({passo:passo.id,tipo:String(acao&&acao.tipo||""),ok});if(ok)etapa++;else erros++;return{ok,motivo:ok?"Correto. Continue.":"Tente novamente: "+passo.label,estado:copia()};},
+   voltar(){if(etapa===0||etapa===PASSOS.length)return{ok:false,estado:copia()};etapa--;return{ok:true,estado:copia()};},
    reiniciar(){etapa=0;erros=0;eventos.length=0;return copia();}
   });
  }
