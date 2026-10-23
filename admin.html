@@ -2817,11 +2817,9 @@
 
   // Pede ao Apps Script uma assinatura Cloudinary de curta duração (chamada pequena e rápida --
   // não carrega o arquivo, só autoriza o envio). O api_secret nunca sai do servidor. Apesar do
-  // nome (ficou de quando só existia upload de vídeo), a assinatura não amarra o tipo de arquivo
-  // -- serve igual pra foto (ver subirFotoDireta_), porque o Cloudinary assina só "folder" e
-  // "timestamp": o tipo de recurso (image/video) é só parte da URL de destino, nunca entra na
-  // assinatura.
-  async function pedirAssinaturaVideo_() {
+  // nome histórico, o contrato v2 restringe formatos, fixa um ID e impede sobrescrita.
+  // Compatível com o backend anterior durante a publicação manual do Apps Script.
+  async function pedirAssinaturaVideo_(tipoRecurso) {
     const inicio = Date.now();
     window.logDebug_('→ pedindo assinatura de upload ao Apps Script (action=assinarUploadVideo)');
     let resp;
@@ -2829,7 +2827,7 @@
       resp = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'assinarUploadVideo', pin: adminPin, funcionario: funcionarioNome })
+        body: JSON.stringify({ action: 'assinarUploadVideo', pin: adminPin, funcionario: funcionarioNome, assinaturaVersao: 2, tipoRecurso: tipoRecurso || 'video' })
       }).then(r => r.json());
     } catch (e) {
       window.logDebug_('✗ ERRO DE REDE pedindo assinatura, em ' + (Date.now() - inicio) + 'ms -- ' + ((e && e.message) || e) + ' -- navigator.onLine=' + navigator.onLine);
@@ -2851,6 +2849,13 @@
       form.append('timestamp', String(assinatura.timestamp));
       form.append('folder', assinatura.folder);
       form.append('signature', assinatura.signature);
+      if (assinatura.assinaturaVersao === 2) {
+        const p = assinatura.parametros;
+        if (!p || !p.allowed_formats || !p.public_id || p.overwrite !== 'false') {
+          reject(new Error('Autorização de mídia incompleta. Atualize a página e tente novamente.')); return;
+        }
+        ['allowed_formats', 'public_id', 'overwrite'].forEach(k => form.append(k, String(p[k])));
+      }
 
       const recurso = tipoRecurso || 'video';
       const nomeRotulo = rotulo || (recurso === 'image' ? 'foto' : 'vídeo');
@@ -3022,7 +3027,7 @@
       try { return await comTentativas_(it, () => subirParaR2_(file, aoProgredir, rotulo), rotulo + '→R2'); }
       catch (e) { window.logDebug_('R2 não serviu (' + ((e && e.message) || e) + ') -- usando o Cloudinary'); it.progresso = null; it.etaSegundos = null; }
     }
-    return comTentativas_(it, () => pedirAssinaturaVideo_().then((assinatura) => subirParaCloudinary_(file, assinatura, aoProgredir, tipoRecurso, rotulo)), rotulo + '→Cloudinary');
+    return comTentativas_(it, () => pedirAssinaturaVideo_(tipoRecurso).then((assinatura) => subirParaCloudinary_(file, assinatura, aoProgredir, tipoRecurso, rotulo)), rotulo + '→Cloudinary');
   }
 
   // ---- v4.18: velocidade. Tudo que é arquivo NOVO (vídeos + fotos) sobe JUNTO (até 4 por vez, o vídeo primeiro porque é o maior);

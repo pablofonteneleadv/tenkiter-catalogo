@@ -26,6 +26,11 @@ def novo(b,perms=PERMS_ALL,cfg=None):
             if a=="recuperar_senha":
                 if body.get("cpf")!=("52998224725"): return route.fulfill(json={"ok":False,"naoConfere":True,"restam":4,"erro":"Os dados não conferem. Restam 4 tentativas."})
                 return route.fulfill(json={"ok":True,"sessao":"tk2.n.z","usuario":{"whatsapp":"88999999999","name":"Ana Estagiária","level":2,"permissoes":["portal","catalogo_cadastrar","catalogo_admin"],"perfil":"Estagiário","cpf":CPF_OK}})
+            if a=="recuperar_whatsapp_iniciar":
+                return route.fulfill(json={"ok":True,"desafio":"a"*32,"mensagem":"Se houver uma conta ativa, o código chegará ao WhatsApp cadastrado."})
+            if a=="recuperar_whatsapp_concluir":
+                if body.get("codigo")!="AB12CD34EF": return route.fulfill(json={"ok":False,"erro":"Código inválido, expirado ou já utilizado."})
+                return route.fulfill(json={"ok":True})
             if a=="salvar_identificadores":
                 return route.fulfill(json={"ok":True,"usuario":{"whatsapp":"88999999999","name":"Ana Estagiária","level":2,"permissoes":["portal"],"cpf":CPF_OK}})
             if a=="registrar" and cfg.get("existe"):
@@ -70,6 +75,21 @@ with sync_playwright() as p:
     ins.nth(1).fill("52998224725"); ov.locator("button:has-text('Trocar a senha')").click(); pg.wait_for_timeout(1200)
     ctx2=None
     chk("recuperou e entrou",pg.locator("#tkc-recuperar").count()==0 and pg.locator(".hero h1").count()==1)
+    ctx.close()
+
+    print("== recuperação por código do WhatsApp ==")
+    ctx,cfg=novo(b); pg=ctx.new_page()
+    pg.goto(BASE+"treinamentos.html"); pg.wait_for_timeout(1200)
+    pg.fill("#login-whats","ana@email.com"); pg.click("#link-esqueci"); pg.wait_for_timeout(300)
+    pg.locator("#tkc-recuperar button:has-text('Receber código')").click(); pg.wait_for_timeout(400)
+    chk("resposta genérica não confirma se a conta existe","se houver uma conta" in pg.locator("#tkc-recuperar").inner_text().lower())
+    pg.fill("#tkc-codigo","ERRADO0000"); pg.fill("#tkc-senha-zap","senha-nova-segura")
+    pg.locator("#tkc-recuperar button:has-text('Salvar nova senha')").click(); pg.wait_for_timeout(400)
+    chk("código inválido não altera senha","inválido" in pg.locator("#tkc-recuperar").inner_text().lower())
+    pg.fill("#tkc-codigo","AB12CD34EF"); pg.locator("#tkc-recuperar button:has-text('Salvar nova senha')").click(); pg.wait_for_timeout(400)
+    chk("código válido é enviado com desafio e senha",any(x.get("action")=="recuperar_whatsapp_concluir" and x.get("desafio")=="a"*32 and x.get("novaSenha")=="senha-nova-segura" for x in cfg["acoes"]))
+    chk("sucesso consome os campos e encerra a ação",pg.locator("#tkc-senha-zap").input_value()=="" and pg.locator("#tkc-recuperar button:has-text('Salvar nova senha')").is_hidden())
+    axe(pg,"recuperação por código do WhatsApp")
     ctx.close()
     ctx,cfg=novo(b); pg=ctx.new_page()
     pg.goto(BASE+"treinamentos.html"); pg.wait_for_timeout(1200); pg.fill("#login-whats","88999999999"); pg.click("#link-esqueci"); pg.wait_for_timeout(300)
