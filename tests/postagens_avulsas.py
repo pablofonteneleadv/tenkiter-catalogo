@@ -49,7 +49,9 @@ with sync_playwright() as p:
     chk("Feed + avulsa nova: a nova vira a escolhida (só 1)", pg.locator(".po-m[aria-pressed=true]").count() == 1 and pg.locator(".po-m").last.get_attribute("aria-pressed") == "true")
     pg.click("[data-tipo=story]"); pg.wait_for_timeout(500)
     pg.set_input_files("#po-avulsa-arq", [PASTA + "curto.mp4"]); pg.wait_for_timeout(600)
-    chk("vídeo avulso entra no Story", any("avulsa" in x for x in ordem(pg)) and pg.locator(".po-ordem :text('Vídeo')").count() >= 1)
+    chk("vídeo sem H.264 é bloqueado quando Grupo clientes está selecionado", "Não foi possível confirmar H.264" in pg.inner_text("#po-corpo") and pg.locator(".po-ordem :text('Vídeo')").count() == 0)
+    pg.click('[data-destino=grupo]'); pg.set_input_files("#po-avulsa-arq", [PASTA + "curto.mp4"]); pg.wait_for_timeout(600)
+    chk("vídeo avulso entra no Story sem destino Grupo clientes", any("avulsa" in x for x in ordem(pg)) and pg.locator(".po-ordem :text('Vídeo')").count() >= 1)
     pg.set_input_files("#po-avulsa-arq", [PASTA + "texto.txt"]); pg.wait_for_timeout(400)
     chk("formato não aceito → aviso, nada entra", "formato não aceito" in pg.inner_text("#po-corpo"))
     # Story com as avulsas: sai na ordem escolhida

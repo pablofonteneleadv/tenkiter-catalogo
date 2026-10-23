@@ -155,6 +155,9 @@ with sync_playwright() as p:
     pg.click("[data-modo=livre]"); pg.wait_for_timeout(300)
     chk("modo livre não pede peça e mostra o campo de mídias", pg.locator("#po-livre-arq").count() == 1 and "Qual peça?" not in corpo(pg))
     pg.click("[data-tipo=story]")
+    # O MP4 sintético usa VP9 porque o Chromium do Playwright não decodifica H.264.
+    # Grupo clientes exige H.264; este cenário testa horários e ordem, sem o grupo.
+    if pg.get_attribute('[data-destino=grupo]', 'aria-pressed') == 'true': pg.click('[data-destino=grupo]')
     chk("os 3 horários existem: Agora mesmo, Na sequência, Dia e hora", all(x in corpo(pg) for x in ["Agora mesmo", "Na sequência", "Dia e hora"]))
     pg.set_input_files("#po-livre-arq", [os.path.join(d, "livre0.jpg"), os.path.join(d, "livre1.jpg"), os.path.join(d, "livre.mp4")]); pg.wait_for_timeout(500)
     chk("3 mídias na lista, na ordem", pg.locator("[data-lm=x]").count() == 3 and "1º · Foto" in corpo(pg) and "3º · Vídeo" in corpo(pg))
@@ -173,6 +176,7 @@ with sync_playwright() as p:
     chk("aviso mostra a janela de horários e vai para a Fila", "Na fila" in corpo(pg) and "Sai entre" in corpo(pg), corpo(pg)[:200])
     print("-- agendado: um vídeo às 7h, depois fotos em sequência, um horário próprio")
     aba(pg, "nova"); pg.click("[data-modo=livre]"); pg.click("[data-tipo=story]")
+    if pg.get_attribute('[data-destino=grupo]', 'aria-pressed') == 'true': pg.click('[data-destino=grupo]')
     pg.set_input_files("#po-livre-arq", [os.path.join(d, "livre.mp4"), os.path.join(d, "livre0.jpg"), os.path.join(d, "livre1.jpg")]); pg.wait_for_timeout(500)
     pg.click("[data-q=agendar]"); pg.wait_for_timeout(200)
     amanha = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")

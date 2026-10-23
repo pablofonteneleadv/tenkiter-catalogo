@@ -551,7 +551,7 @@ function colPainel_() {
     h += '<p class="po-ajuda" style="margin-top:0">Os números mostram a ordem. <b>Arraste</b> uma foto para outro lugar, ou use ◀ ▶. Toque numa foto de baixo para colocar ou tirar.</p>';
     h += '<div class="po-ct-slots" role="group" aria-label="Ordem das fotos na colagem">' + cel.map((q, k) => {
       const mi = c.fotos[k], m = mi !== undefined ? nova.midias[mi] : null;
-      return '<button type="button" class="po-ct-slot" data-cts="' + k + '" aria-pressed="' + (c.cur === k) + '" aria-label="Posição ' + (k + 1) + (m ? ", foto " + (mi + 1) : ", vazia") + '">' +
+      return '<button type="button" draggable="true" class="po-ct-slot" data-cts="' + k + '" aria-pressed="' + (c.cur === k) + '" aria-label="Posição ' + (k + 1) + (m ? ", foto " + (mi + 1) : ", vazia") + '">' +
         (m ? '<img src="' + esc(fotoMini(m.url, 160)) + '" alt="" draggable="false">' : '<span class="vazio">+</span>') + '<span class="po-n">' + (k + 1) + "</span></button>";
     }).join("") + "</div>";
     const tem = c.fotos[c.cur] !== undefined;
@@ -740,7 +740,10 @@ function colMontar_() {
     if (!ds.ativo && Math.hypot(ev.clientX - ds.x0, ev.clientY - ds.y0) > 10) { ds.ativo = true; ds.el.classList.add("arrastando"); }
     if (!ds.ativo) return;
     ev.preventDefault();
-    const sob = document.elementFromPoint(ev.clientX, ev.clientY), al = sob && sob.closest ? sob.closest("[data-cts]") : null;
+    const al = Array.from(o.querySelectorAll("[data-cts]")).find(el => {
+      const r = el.getBoundingClientRect();
+      return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
+    }) || null;
     o.querySelectorAll(".po-ct-slot.alvo").forEach(x => x.classList.remove("alvo"));
     ds.alvo = al ? Number(al.dataset.cts) : -1; if (al && al !== ds.el) al.classList.add("alvo");
   });
@@ -750,10 +753,32 @@ function colMontar_() {
     o.querySelectorAll(".po-ct-slot.alvo,.po-ct-slot.arrastando").forEach(x => x.classList.remove("alvo", "arrastando"));
     if (d.ativo) {
       colSupr_ = d.el; setTimeout(() => { colSupr_ = null; }, 120);
-      if (ev.type === "pointerup" && d.alvo >= 0 && d.alvo !== d.k) { colMover_(d.k, d.alvo); colPainel_(); colTopo_(); colAgendar_(); }
+      let alvo = d.alvo;
+      if (ev.type === "pointerup" && alvo < 0) {
+        let menor = Infinity;
+        Array.from(o.querySelectorAll("[data-cts]")).forEach(el => {
+          const r = el.getBoundingClientRect(), dist = Math.hypot(ev.clientX - (r.left + r.width / 2), ev.clientY - (r.top + r.height / 2));
+          if (dist < menor) { menor = dist; alvo = Number(el.dataset.cts); }
+        });
+      }
+      if (ev.type === "pointerup" && alvo >= 0 && alvo !== d.k) { colMover_(d.k, alvo); colPainel_(); colTopo_(); colAgendar_(); }
     }
   };
   o.addEventListener("pointerup", fimDrag); o.addEventListener("pointercancel", fimDrag);
+  /* Mouse/desktop: o arraste nativo complementa o gesto por Pointer Events. */
+  let dragNativo = -1;
+  o.addEventListener("dragstart", ev => {
+    const t = ev.target.closest && ev.target.closest("[data-cts]"); if (!t) return;
+    dragNativo = Number(t.dataset.cts); t.classList.add("arrastando");
+    if (ev.dataTransfer) { ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", String(dragNativo)); }
+  });
+  o.addEventListener("dragover", ev => { if (dragNativo >= 0 && ev.target.closest && ev.target.closest("[data-cts]")) ev.preventDefault(); });
+  o.addEventListener("drop", ev => {
+    const t = ev.target.closest && ev.target.closest("[data-cts]"), de = dragNativo; dragNativo = -1;
+    if (!t || de < 0) return; ev.preventDefault(); const para = Number(t.dataset.cts);
+    if (para !== de) { colMover_(de, para); colPainel_(); colTopo_(); colAgendar_(); }
+  });
+  o.addEventListener("dragend", () => { dragNativo = -1; o.querySelectorAll(".po-ct-slot.arrastando,.po-ct-slot.alvo").forEach(x => x.classList.remove("arrastando", "alvo")); });
   /* gestos na prévia: toque escolhe a foto; destravado, 1 dedo move e 2 dedos aumentam e giram */
   const cv = $("po-ct-cv"), ptrs = new Map(); let g = null;
   const ponto = ev => { const r = cv.getBoundingClientRect(), [W] = tamanhoAlvo(), f = r.width > 0 ? W / r.width : 1; return { x: (ev.clientX - r.left) * f, y: (ev.clientY - r.top) * f }; };
