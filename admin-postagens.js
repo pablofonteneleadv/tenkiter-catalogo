@@ -727,7 +727,8 @@ function colMontar_() {
   /* arrastar as fotinhas da aba Fotos para mudar a ordem */
   let ds = null;
   o.addEventListener("pointerdown", ev => {
-    const t = ev.target.closest && ev.target.closest("[data-cts]"); if (!t) return;
+    if (ev.pointerType === "touch" && !ev.isPrimary) return;
+    const t = ev.target.closest && ev.target.closest("[data-cts]"); if (!t || ev.target.closest("button,input,select,textarea,a")) return;
     ds = { k: Number(t.dataset.cts), x0: ev.clientX, y0: ev.clientY, ativo: false, alvo: -1, id: ev.pointerId, el: t };
     try { t.setPointerCapture(ev.pointerId); } catch (e) { /* ok */ }
   });
@@ -752,11 +753,11 @@ function colMontar_() {
   o.addEventListener("pointerup", fimDrag); o.addEventListener("pointercancel", fimDrag);
   /* gestos na prévia: toque escolhe a foto; destravado, 1 dedo move e 2 dedos aumentam e giram */
   const cv = $("po-ct-cv"), ptrs = new Map(); let g = null;
-  const ponto = ev => { const r = cv.getBoundingClientRect(), [W] = tamanhoAlvo(), f = W / r.width; return { x: (ev.clientX - r.left) * f, y: (ev.clientY - r.top) * f }; };
+  const ponto = ev => { const r = cv.getBoundingClientRect(), [W] = tamanhoAlvo(), f = r.width > 0 ? W / r.width : 1; return { x: (ev.clientX - r.left) * f, y: (ev.clientY - r.top) * f }; };
   const celulaEm = p => { const c = colEst_(), [W, H] = tamanhoAlvo(); const cel = colCel_(); for (let k = 0; k < cel.length; k++) { const [bx, by, bw, bh] = colRect_(cel[k], W, H, c.gap); if (p.x >= bx && p.x <= bx + bw && p.y >= by && p.y <= by + bh) return k; } return -1; };
   const iniciaMover = p => { const c = colEst_(), mi = c.fotos[c.cur]; g = { tipo: "mover", p0: p, tf0: mi !== undefined ? Object.assign({}, colTf_(mi)) : null, mexeu: false, mi }; };
   cv.addEventListener("pointerdown", ev => {
-    if (!nova || !nova.col) return;
+    if (!nova || !nova.col || (ev.pointerType === "mouse" && ev.button !== 0)) return;
     ev.preventDefault(); try { cv.setPointerCapture(ev.pointerId); } catch (e) { /* ok */ }
     const c = colEst_(), p = ponto(ev); ptrs.set(ev.pointerId, p);
     if (ptrs.size === 1) {
