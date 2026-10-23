@@ -756,9 +756,9 @@ async function respostaGrupo_(r) {
     return JSON.parse(new TextDecoder().decode(bytes));
   } catch (e) { return null; } finally { reader.releaseLock(); }
 }
-/** A Wafly aceita base64 e URL. Para mídia nossa de até 12 MiB, mandamos
- * os bytes do R2: a Wafly não precisa baixar um URL que pode sofrer bloqueio
- * ou expirar durante o processamento do vídeo. Mídia maior segue por URL. */
+/** A Wafly aceita base64 e URL. Validamos os bytes no R2, mas enviamos a URL
+ * HTTPS pública: base64 aumenta o corpo em ~33% e fez o proxy da Wafly encerrar
+ * requisições de mídia com HTTP 524 antes de devolver o messageId. */
 async function conteudoGrupo_(env, m) {
   const url = String(m.url || '');
   const prefixo = String(env.MIDIA_URL || '').replace(/\/$/, '') + '/m/';
@@ -777,7 +777,7 @@ async function conteudoGrupo_(env, m) {
   // não promete conversão, ao contrário do endpoint de Status. Recusamos antes
   // de criar recibo ou chamar a API: uma falha depois do envio fica incerta.
   if (chave.endsWith('.mp4') && /hvc1|hev1/.test(new TextDecoder().decode(bytes))) throw new Error('VIDEO_HEVC');
-  return b64(bytes);
+  return url;
 }
 /** Valida antes de aceitar qualquer entrada ou retorno à fila do grupo. */
 async function erroVideoGrupo_(env, midias) {
@@ -795,6 +795,7 @@ async function aguardarConfirmacaoGrupo_(env, p, detalhe) {
   await env.DB.prepare("UPDATE postagem SET status='processando', erro=?, atualizado_em=? WHERE id=?").bind(aviso.slice(0, 300), agora(), p.id).run();
   return { ok: true, aguardando: true };
 }
+const GRUPO_ESPERA_MAX_MS = 10 * 60000;
 async function enviarGrupoClientes_(env, p) {
   const cfg = cfgGrupoClientes_(env);
   if (!cfg) return marcarErroPost_(env, p, 'O Grupo clientes ainda não está configurado. Avise o gestor.');
@@ -804,7 +805,13 @@ async function enviarGrupoClientes_(env, p) {
     if (antigo && antigo.estado === 'aceito') continue;
     // O cron seguinte pode rodar enquanto a Wafly ainda processa o vídeo.
     // Não transformar uma requisição em andamento em erro só porque já existe recibo.
-    if (antigo && antigo.estado === 'enviando' && p.status === 'processando') return { ok: true, aguardando: true };
+    if (antigo && antigo.estado === 'enviando' && p.status === 'processando') {
+      const desde = Date.parse(antigo.atualizado_em || p.inicio_proc || p.atualizado_em || '') || Date.now();
+      if (Date.now() - desde <= GRUPO_ESPERA_MAX_MS) return { ok: true, aguardando: true };
+      await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=? AND status='processando'")
+        .bind('Grupo clientes: a Wafly não confirmou em 10 min. Confira o grupo; depois escolha “Repostar com novo ID” ou “Descartar”.', agora(), p.id).run();
+      return { ok: false, erro: 'Tempo de confirmação do Grupo clientes esgotado.' };
+    }
     if (antigo) return marcarErroPost_(env, p, 'Grupo clientes: envio sem confirmação. Confira na Wafly antes de qualquer novo envio; não reenviamos para evitar duplicação.');
     let conteudo;
     try { conteudo = await conteudoGrupo_(env, midias[i]); }
@@ -819,7 +826,7 @@ async function enviarGrupoClientes_(env, p) {
     let r, j;
     try {
       r = await fetch('https://wafly.com.br/api-bridge-whats/instances/' + encodeURIComponent(cfg.instance) + '/token/' + encodeURIComponent(cfg.token) + (video ? '/send-video' : '/send-image'), {
-        method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(90000),
+        method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(45000),
         headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
       j = await respostaGrupo_(r);
