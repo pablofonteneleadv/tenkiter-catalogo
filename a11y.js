@@ -148,3 +148,127 @@
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
+
+/* v7.1 NAV-1/A11Y-2/VIT-4 (so no catalogo). NAV-1: o nav.js reescreve o
+   innerHTML do MESMO <nav> de forma assincrona (permissoes/tk:sessao) e
+   apagava os itens de compra. Sem Favoritos e sem Categorias, por pedido. */
+(() => {
+  'use strict';
+  if (!document.getElementById('grid')) return;
+  const IT = [['inicio', 'index.html', '\u{1F3E0}', 'In\u00edcio'], ['buscar', '#busca', '\u{1F50E}', 'Buscar'],
+    ['selecao', '#selecao', '\u{1F6CD}', 'Sele\u00e7\u00e3o'], ['atendente', '#atendente', '\u{1F4AC}', 'Atendente']];
+  const SIG = IT.map((i) => i[0]).join(',');
+  const EQ = ['admin.html', 'curriculos.html', 'painel=rh'];
+  const NAV = () => document.querySelector('.tk-nav');
+  const QT = () => { try { return typeof getSacola === 'function' ? getSacola().length : 0; } catch (e) { return 0; } };
+
+  const ACAO = (id) => {
+    if (id === 'buscar') {
+      const c = document.getElementById('busca');
+      if (!c) return;
+      try { c.focus({ preventScroll: true }); } catch (e) { c.focus(); }
+      try { c.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+      return;
+    }
+    if (id === 'selecao') {
+      if (typeof abrirSacola === 'function') return abrirSacola();
+      const b = document.querySelector('[data-abrir-sacola], #btn-sacola');
+      if (b) b.click();
+      return;
+    }
+    let n = '';
+    try { n = window.WHATSAPP_NUMERO || ''; } catch (e) {}
+    window.open('https://wa.me/' + (n || '5588993223998') + '?text=' +
+      encodeURIComponent('Ol\u00e1! Vim pelo cat\u00e1logo e quero ajuda para escolher uma pe\u00e7a.'), '_blank', 'noopener');
+  };
+
+  const MONTAR = () => {
+    const el = NAV();
+    if (!el) return;
+    const as = Array.from(el.querySelectorAll('a'));
+    if (as.some((a) => EQ.some((x) => (a.getAttribute('href') || '').indexOf(x) !== -1))) return;
+    if (as.map((a) => a.dataset.nav || '').join(',') === SIG) {
+      const b = el.querySelector('[data-nav="selecao"] .tk-b');
+      if (b) b.textContent = QT();
+      return;
+    }
+    el.innerHTML = '';
+    IT.forEach(([id, href, ico, rot]) => {
+      const a = document.createElement('a'), i = document.createElement('span'),
+        r = document.createElement('span');
+      a.href = href; a.dataset.nav = id;
+      if (id === 'inicio') { a.className = 'tk-ativo'; a.setAttribute('aria-current', 'page'); }
+      i.className = 'tk-i'; i.setAttribute('aria-hidden', 'true'); i.textContent = ico;
+      r.className = 'tk-r'; r.textContent = rot;
+      if (id === 'selecao' && QT() > 0) {
+        const b = document.createElement('span');
+        b.className = 'tk-b'; b.textContent = QT(); r.appendChild(b);
+      }
+      a.append(i, r);
+      if (id !== 'inicio') a.addEventListener('click', (e) => { e.preventDefault(); ACAO(id); });
+      el.appendChild(a);
+    });
+  };
+
+  const NOMES = () => {
+    document.querySelectorAll('.ac-pedir').forEach((b) => {
+      const rot = b.querySelector('.v7-rot');
+      if (!rot) return;
+      const vis = (rot.textContent || '').trim();
+      if (!vis) return;
+      Array.from(b.childNodes).forEach((n) => { if (n.nodeType === 3) n.textContent = ''; });
+      const ar = String(b.getAttribute('aria-label') || '');
+      if (ar.toLowerCase().indexOf(vis.toLowerCase()) !== 0) b.setAttribute('aria-label', vis + (ar.indexOf(':') > -1 ? ar.slice(ar.indexOf(':')) : ''));
+    });
+  };
+
+  const CONTAR = (v, c) => {
+    try {
+      const l = typeof produtos !== 'undefined' && produtos ? produtos : [];
+      return l.filter((p) => {
+        if (typeof estaEsgotado === 'function' && estaEsgotado(p)) return false;
+        const b = c === 'cor' ? p.Cores : c === 'tamanho' ? p.Tamanhos : p[c];
+        const t = typeof textoPlano === 'function' ? textoPlano(b) : b;
+        return (typeof listaDeTags === 'function' ? listaDeTags(t) : []).indexOf(v) !== -1;
+      }).length;
+    } catch (e) { return 0; }
+  };
+  const FACETAS = () => {
+    [['chips-categoria', 'Categoria'], ['chips-genero', 'Genero'], ['chips-cor', 'cor'], ['chips-tamanho', 'tamanho']].forEach(([id, c]) => {
+      const box = document.getElementById(id);
+      if (!box) return;
+      box.querySelectorAll('button.chip').forEach((el) => {
+        if (el.querySelector('.chip-n')) return;
+        const v = (el.textContent || '').trim();
+        if (!v) return;
+        const n = CONTAR(v, c), s = document.createElement('span');
+        s.className = 'chip-n'; s.setAttribute('aria-hidden', 'true'); s.textContent = n;
+        el.appendChild(s);
+        el.setAttribute('aria-label', v + ': ' + n + (n === 1 ? ' pe\u00e7a' : ' pe\u00e7as'));
+      });
+    });
+  };
+
+  let pb = false, pf = false;
+  const AG_B = () => { if (pb) return; pb = true; (window.requestAnimationFrame || setTimeout)(() => { pb = false; MONTAR(); }); };
+  const AG_F = () => { if (pf) return; pf = true; (window.requestAnimationFrame || setTimeout)(() => { pf = false; NOMES(); FACETAS(); }); };
+
+  const INICIAR = () => {
+    const el = NAV();
+    if (el) {
+      MONTAR();
+      new MutationObserver(AG_B).observe(el, { childList: true });
+      window.addEventListener('tk:sessao', () => setTimeout(AG_B, 0));
+      window.addEventListener('storage', (e) => { if (!e || !e.key || e.key === 'tm_session') setTimeout(AG_B, 0); });
+      const api = window.TenkiterNav;
+      if (api && typeof api.redesenhar === 'function' && !api.redesenhar.__v71) {
+        const o = api.redesenhar, f = function () { const r = o.apply(this, arguments); MONTAR(); return r; };
+        f.__v71 = true; api.redesenhar = f;
+      }
+    }
+    AG_F();
+    new MutationObserver(AG_F).observe(document.body, { childList: true, subtree: true });
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', INICIAR); else INICIAR();
+})();
