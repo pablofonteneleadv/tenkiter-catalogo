@@ -587,6 +587,7 @@ function colTopo_() {
   const c = colEst_(), ok = c.fotos.length === colCel_().length, a = $("po-ct-criar"), b = $("po-ct-baixar"), tr = $("po-ct-trava");
   if (a) { a.disabled = !ok; a.title = ok ? "Adicionar a colagem pronta à postagem" : "Complete todas as fotos para criar a colagem"; } if (b) { b.disabled = !ok; b.title = ok ? "Salvar a imagem no aparelho" : "Complete todas as fotos para baixar"; }
   if (tr) { tr.setAttribute("aria-pressed", String(c.trava)); tr.textContent = c.trava ? "🔒 Fotos travadas" : "🔓 Fotos destravadas"; }
+  const dica = $("po-ct-dica"); if (dica) dica.textContent = c.trava ? "Fotos protegidas contra movimentos acidentais. Para ajustar, toque em Fotos travadas e depois arraste a imagem ou use dois dedos." : "Fotos liberadas: arraste para mover, use dois dedos para ampliar ou girar. Quando terminar, toque em Fotos destravadas para proteger o resultado.";
   colStatus_(ok ? "✔ " + c.fotos.length + " fotos prontas. Toque em Usar colagem para adicionar à postagem, ou Baixar para salvar no celular." : "Faltam " + (colCel_().length - c.fotos.length) + " foto(s): abra Fotos para completar antes de finalizar.");
 }
 let colStT_ = 0;
