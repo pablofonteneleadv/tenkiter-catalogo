@@ -34,7 +34,17 @@ api() {
 }
 
 echo "==> 1/4 Disparando o deploy do serviço $RENDER_SERVICE_ID"
-resposta="$(api POST "/services/$RENDER_SERVICE_ID/deploys" '{"clearCache":"do_not_clear"}')"
+corpo_deploy='{"clearCache":"do_not_clear"}'
+if [ -n "${COMMIT_ESPERADO:-}" ]; then
+  if ! printf '%s' "$COMMIT_ESPERADO" | grep -Eq '^[0-9a-f]{40}$'; then
+    echo "::error::COMMIT_ESPERADO não é um SHA Git completo: '$COMMIT_ESPERADO'"
+    exit 1
+  fi
+  # Sem commitId, a API pode repetir o último commit conhecido pelo Render
+  # quando o webhook do GitHub ainda não foi processado.
+  corpo_deploy="{\"clearCache\":\"do_not_clear\",\"commitId\":\"$COMMIT_ESPERADO\"}"
+fi
+resposta="$(api POST "/services/$RENDER_SERVICE_ID/deploys" "$corpo_deploy")"
 deploy_id="$(printf '%s' "$resposta" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id",""))' 2>/dev/null || true)"
 
 if [ -z "$deploy_id" ]; then
@@ -94,8 +104,8 @@ if [ -n "${COMMIT_ESPERADO:-}" ]; then
     sleep 10
   done
   if [ "$publicado" != "$COMMIT_ESPERADO" ]; then
-    echo "::warning::O commit no ar ($publicado) não confere com o esperado ($COMMIT_ESPERADO)."
-    echo "           Se o buildCommand do Render ainda não gera o version.json, configure-o (ver docs/CI-CD.md)."
+    echo "::error::O commit no ar ($publicado) não confere com o esperado ($COMMIT_ESPERADO)."
+    exit 1
   fi
 else
   echo "==> 4/4 Sem COMMIT_ESPERADO — verificação por /version.json pulada."
