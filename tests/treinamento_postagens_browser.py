@@ -29,6 +29,8 @@ def main():
         page.locator('[data-acao="legenda"]').click()
         page.locator('[data-quando="sequencia"]').click()
         page.locator("#voltar-etapa").click()
+        assert page.locator("#instrucao").inner_text().startswith("7.")
+        page.locator("#voltar-etapa").click()
         assert page.locator("#po-legenda").input_value()=="<b>Blusa fictícia</b> para treinamento"
         page.locator('[data-acao="legenda"]').click()
         page.locator('[data-quando="sequencia"]').click()
