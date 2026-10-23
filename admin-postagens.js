@@ -268,6 +268,7 @@ const $=id=>document.getElementById(id),esc=v=>escaparHtml(v),TIPOS=[["feed","ðŸ
       .po-ct-top button { width: auto; min-height: 44px; padding: 6px 12px; border-radius: 10px; border: 1px solid #999; background: #f3f3f3; color: #111; font-weight: 700; cursor: pointer; }
       .po-ct-top button.ok { background: #E67E22; border-color: #A85200; color: #0d0d0d; }
       .po-ct-top button:disabled { opacity: .45; cursor: default; }
+      @media (max-width: 420px) { .po-ct-top { flex-wrap: wrap; justify-content: space-between; gap: 6px; } .po-ct-top h3 { order: -1; flex: 1 0 100%; text-align: left; } .po-ct-top button { flex: 1 1 auto; padding: 6px 8px; font-size: .85rem; } .po-ct-top button.ok { flex-grow: 1.4; } }
       .po-ct-palco { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 8px; overflow: hidden; }
       .po-ct-cv { display: block; touch-action: none; background: #444; box-shadow: 0 0 0 1px #000; user-select: none; -webkit-user-select: none; }
       .po-ct-dica { margin: 0; padding: 6px 12px; font-size: .82rem; line-height: 1.35; text-align: center; color: #f5f5f5; background: #333; }
