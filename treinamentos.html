@@ -1569,6 +1569,14 @@ function manualNivelMinimo(id){
   return meta ? meta.nivelMinimo : (parseInt(id,10) || 1);
 }
 
+function praticaPostagensHtml(){
+  return '<aside id="pratica-postagens-card" style="margin:22px 0 0;padding:16px;border:2px solid #e67e22;border-radius:14px;background:#fff;color:#242424">' +
+    '<strong>📸 Prática de postagens</strong>' +
+    '<p>Treinamento interativo de nove etapas, com toques guiados e correção de erros. Não publica nem altera produtos.</p>' +
+    '<a href="treinamento-postagens-real.html" style="display:inline-block;padding:14px;background:#e67e22;color:#111;border-radius:9px;font-weight:800">Iniciar prática de postagens</a>' +
+  '</aside>';
+}
+
 function goHome(){
   state.view = 'home'; state.manual = null;
   sincNav();
@@ -1611,6 +1619,7 @@ function goHome(){
       '<div class="hero"><h1>Oi, ' + esc(state.user.name) + '!</h1><p>' + (state.user.perfil ? ('Seu perfil: ' + esc(state.user.perfil) + '. ') : ('Seu nível de acesso é ' + state.user.level + '. ')) + 'Escolha um manual para continuar.</p></div>' +
       '<div id="cv-slot"></div>' +
       '<div class="cards">' + (cards || '<p class="sub">Nenhum manual disponível ainda.</p>') + '</div>' +
+      praticaPostagensHtml() +
     '</div></div>';
   empurrarHistorico('home', null);
   wireTopbar();
@@ -3347,6 +3356,5 @@ function telaSemConexao_(){
 <script src="a11y.js"></script>
 <script src="conta.js"></script>
 <script src="push.js"></script>
-<aside style="max-width:720px;margin:18px auto;padding:16px;border:2px solid #e67e22;border-radius:14px;background:#fff;color:#242424;font:16px system-ui"><strong>📸 Prática de postagens</strong><p>Treinamento interativo de nove etapas, com toques guiados e correção de erros. Não publica nem altera produtos.</p><a href="treinamento-postagens-real.html" style="display:inline-block;padding:14px;background:#e67e22;color:#111;border-radius:9px;font-weight:800">Iniciar prática de postagens</a></aside>
 </body>
 </html>
