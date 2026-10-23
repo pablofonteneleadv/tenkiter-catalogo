@@ -1,0 +1,284 @@
+/* ====================================================================
+ * TENKiTER — camada de vitrine (v7.0)
+ *
+ * Sprint 1–3 do relatório de front: acessibilidade, navegação e caminho
+ * até o produto. Fica em arquivo próprio, no mesmo padrão de a11y.js /
+ * meta.js / push.js: só entra no catálogo, não mexe nas outras telas.
+ *
+ * Nada aqui reescreve o que já existe — apenas complementa e sobrescreve
+ * o que precisa mudar. Cada bloco aponta o item do relatório que atende.
+ * ==================================================================== */
+
+/* A11Y-4 contraste do CTA. A regra que já existia em catalogo.css (linha ~474)
+ * pinta o botão de branco com texto verde-escuro; como esta camada troca o fundo
+ * para o verde de conversão, o texto PRECISA ir para branco — senão fica verde
+ * sobre verde (1,03:1, reprovado). */
+.acoes-card .ac-pedir,
+.acoes-card .ac-pedir .v7-rot {
+  color: #fff !important;
+}
+:root { --verde-cta: #0f6b3f; -webkit-tap-highlight-color: transparent; }
+
+.acoes-card .ac-pedir,
+.btn-zap,
+.barra-compra .bc-pedir,
+.btn-ajuda-zap.zap-verde {
+  background: var(--verde-cta) !important;
+  border-color: var(--verde-cta) !important;
+}
+.btn-ajuda-zap.zap-verde { color: #fff; }
+
+/* ---------- A11Y-1: pular para as peças ----------
+ * O catálogo abre com cabeçalho, busca, filtros e faixa de vantagens:
+ * são ~12 controles antes da primeira peça. Quem navega por teclado ou
+ * leitor de tela precisa de uma porta de entrada direta. */
+.pular-conteudo {
+  position: absolute; left: 8px; top: 8px; z-index: 300;
+  transform: translateY(-220%);
+  background: #E67E22; color: #0d0d0d;
+  font: 800 0.9rem/1 "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: 12px 18px; border-radius: 10px; text-decoration: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
+  transition: transform .12s ease;
+}
+.pular-conteudo:focus,
+.pular-conteudo:focus-visible {
+  transform: translateY(0);
+  outline: 3px solid #0d0d0d; outline-offset: 2px;
+}
+/* O <main> recebe foco por causa do salto: não precisa desenhar anel nele. */
+main#pecas:focus { outline: none; }
+
+/* ---------- A11Y-3: foco visível de verdade ----------
+ * Os campos de filtro tinham `outline: none` e sinalizavam foco apenas
+ * trocando a borda para laranja (~2,9:1, abaixo dos 3:1 da 1.4.11).
+ * Agora o foco tem contorno, além da cor — quem usa teclado vê onde está. */
+.filtros input:focus-visible,
+.filtros select:focus-visible,
+.filtros button:focus-visible,
+#ordem:focus-visible,
+.pill-cat:focus-visible,
+.chip:focus-visible,
+.tam-op:focus-visible,
+.op-btn:focus-visible,
+.thumb-card:focus-visible {
+  outline: 3px solid #E67E22;
+  outline-offset: 2px;
+}
+
+/* ---------- NAV-3: facetas à esquerda no desktop ----------
+ * No celular o painel continua sendo a gaveta de tela cheia: nada muda
+ * abaixo de 1024px. No desktop, manter os filtros à vista é o que a
+ * pesquisa aponta (69% do olhar vai para a coluna esquerda). */
+@media (min-width: 1024px) {
+  .vitrine-layout {
+    display: grid;
+    grid-template-columns: 272px minmax(0, 1fr);
+    gap: 22px;
+    align-items: start;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 14px;
+  }
+  /* A faixa de vantagens é tarja da loja inteira: atravessa as 2 colunas. */
+  .vitrine-layout #beneficios { grid-column: 1 / -1; grid-row: 1; }
+  .vitrine-layout .filtros {
+    grid-column: 1; grid-row: 2; align-self: start;
+    position: sticky; top: 76px; z-index: 1; margin-top: 14px;
+    max-height: calc(100vh - 100px); overflow-y: auto;
+    border-radius: 14px; padding: 14px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .08);
+  }
+  .vitrine-layout .filtros .filtros-extras { display: block; }
+  .vitrine-layout .filtros .btn-filtros-toggle { display: none; }
+  .vitrine-layout main { grid-column: 2; grid-row: 2; padding: 14px 0; max-width: none; margin: 0; }
+  .barra-acoes-filtros { flex-wrap: wrap; gap: 6px; }
+  .ordem-wrap select { max-width: none; }
+}
+
+/* ---------- NAV-1: barra de compra na zona do polegar ----------
+ * Restrição do cliente: sem "Favoritos" e sem "Categorias" nesta barra.
+ * Só o caminho de compra e o atendimento. */
+.tk-nav a .tk-b {
+  display: inline-block; min-width: 15px; height: 15px;
+  margin-left: 3px; padding: 0 3px; border-radius: 8px;
+  background: #ff7a1a; color: #0d0d0d;
+  font-size: .58rem; line-height: 15px; vertical-align: 1px; text-align: center;
+}
+
+/* ---------- NAV-2: navegação em 2 níveis ----------
+ * Nível 1 = gênero (linha nova, acima das categorias). Nível 2 = as
+ * categorias que já existiam, agora filtradas pelo gênero escolhido.
+ * Uma árvore aberta de 14 categorias empurra a vitrine para fora da tela;
+ * dois níveis resolvem isso em um toque. */
+.pills-genero {
+  display: flex; gap: 8px; overflow-x: auto;
+  padding: 10px 14px 6px; margin: 0;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.pills-genero::-webkit-scrollbar { display: none; }
+.pills-genero[hidden] { display: none; }
+.pill-gen {
+  flex-shrink: 0; min-height: 40px; padding: 7px 14px;
+  border-radius: 18px; border: 1px solid #ddd; background: #fff;
+  font-size: .78rem; font-weight: 700; color: #333; cursor: pointer; white-space: nowrap;
+}
+.pill-gen[aria-pressed="true"] {
+  background: #0d0d0d; border-color: #0d0d0d; color: #E67E22;
+}
+.pill-gen .pill-n { font-weight: 700; margin-left: 4px; opacity: .75; font-size: .92em; }
+
+/* Contagem discreta dentro das pílulas e dos chips (NAV-2 / VIT-4). */
+.pill-cat .pill-n,
+.chip .chip-n {
+  font-weight: 700; margin-left: 4px; font-size: .92em; opacity: .8;
+}
+
+/* ---------- VIT-1: miniaturas no cartão ----------
+ * Três fotos sem abrir a peça. É o padrão dos grandes e o que mais reduz
+ * o "cliquei e não era o que eu pensava". */
+.thumbs-card {
+  display: flex; gap: 4px; padding: 5px 6px;
+  background: #fff; border-top: 1px solid #f0ece2;
+}
+.thumb-card {
+  flex: 1 1 0; height: 34px; padding: 0;
+  border: 2px solid #e6dfcf; border-radius: 6px;
+  background: #f7f4ec center/cover no-repeat;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.thumb-card:hover { border-color: #c9bfa8; }
+.thumb-card.on { border-color: #E67E22; }
+
+/* ---------- VIT-1: tamanho no cartão ----------
+ * Tamanho em botões (não em texto corrido): a pessoa marca antes de
+ * entrar e o pedido já sai com ele. */
+.tam-card {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-top: 6px;
+}
+.tam-op {
+  min-width: 32px; min-height: 32px; padding: 0 6px;
+  border: 1px solid #d8d2c4; border-radius: 8px;
+  background: #fff; color: #333;
+  font-size: .7rem; font-weight: 800; cursor: pointer;
+}
+.tam-op[aria-pressed="true"] {
+  background: #0d0d0d; border-color: #0d0d0d; color: #E67E22;
+}
+
+/* ---------- VIT-3: tamanho e cor em botões + guia de medidas ----------
+ * 57% dos sites erram o seletor de tamanho (Baymard). Botão é alvo de
+ * toque; texto corrido não é. A tabela é HTML de verdade, com <th scope>,
+ * para leitor de tela conseguir ler linha e coluna. */
+.op-escolha {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: 10px 0 2px;
+}
+.op-rot { flex: 0 0 auto; min-width: 58px; font-size: .8rem; font-weight: 800; color: #333; }
+.op-btn {
+  min-width: 44px; min-height: 44px; padding: 0 12px;
+  border: 1px solid #d8d2c4; border-radius: 10px;
+  background: #fff; color: #222;
+  font-size: .84rem; font-weight: 800; cursor: pointer;
+}
+.op-btn[aria-pressed="true"] {
+  background: #0d0d0d; border-color: #0d0d0d; color: #E67E22;
+}
+.op-livre { font-size: .74rem; color: #666; margin-left: 2px; }
+.op-erro { flex: 1 0 100%; font-size: .74rem; font-weight: 700; color: #b3261e; margin: 2px 0 0; }
+
+.guia-medidas { margin: 8px 0 2px; border: 1px solid #e5dfd0; border-radius: 10px; background: #fbf9f4; }
+.guia-medidas > summary {
+  min-height: 44px; display: flex; align-items: center; padding: 0 12px;
+  font-size: .82rem; font-weight: 800; color: #333; cursor: pointer;
+}
+.guia-medidas table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.guia-medidas caption { text-align: left; padding: 0 12px 6px; font-size: .74rem; color: #666; }
+.guia-medidas th, .guia-medidas td { border-top: 1px solid #e5dfd0; padding: 7px 8px; text-align: left; }
+.guia-medidas th { background: #f3efe5; font-weight: 800; color: #333; }
+.guia-medidas td:first-child, .guia-medidas th:first-child { padding-left: 12px; }
+
+/* ---------- VIT-5: prova social ----------
+ * Só aparece quando há sinal real do próprio aparelho. Sem número
+ * inventado: "você já viu esta peça" é verdade, "37 pessoas compraram"
+ * sem dado por trás é mentira que o cliente descobre no primeiro clique. */
+.prova-social {
+  display: flex; align-items: center; gap: 4px;
+  margin-top: 5px; font-size: .66rem; font-weight: 700; color: #8a6a2a;
+}
+
+/* ---------- NAV-4: buscas recentes ---------- */
+.sug-aviso {
+  padding: 8px 12px 4px; font-size: .68rem; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .4px; color: #8a8272;
+}
+
+/* ---------- A11Y-6: quem pediu mais contraste ----------
+ * prefers-contrast: more (e o modo de alto contraste do Windows, via
+ * forced-colors) precisa de bordas e texto mais duros para continuar
+ * legível. Sem isso, a vitrine fica um borrão cinza. */
+@media (prefers-contrast: more) {
+  .pill-cat, .pill-gen, .chip, .tam-op, .op-btn, .thumb-card,
+  .filtros input[type=text], .filtros input[type=number], .card {
+    border-color: #6b6250;
+  }
+  .pill-cat .pill-n, .chip .chip-n, .prova-social, .tags { opacity: 1; color: #333; }
+  .pill-cat.selecionado, .pill-gen[aria-pressed="true"],
+  .tam-op[aria-pressed="true"], .op-btn[aria-pressed="true"] {
+    outline: 2px solid #000; outline-offset: 1px;
+  }
+}
+@media (forced-colors: active) {
+  .pular-conteudo, .pill-cat, .pill-gen, .chip, .tam-op, .op-btn,
+  .thumb-card, .selo-card, .acoes-card button {
+    border: 2px solid CanvasText;
+  }
+  .pill-cat.selecionado, .pill-gen[aria-pressed="true"],
+  .tam-op[aria-pressed="true"], .op-btn[aria-pressed="true"] {
+    background: Highlight; color: HighlightText;
+  }
+}
+
+/* Alvos de toque em tela pequena: o seletor do cartão encolhe para caber
+ * em 2 colunas, mas continua com altura confortável para o dedo. */
+@media (max-width: 480px) {
+  .tam-op { min-width: 30px; min-height: 34px; font-size: .66rem; }
+  .thumbs-card { padding: 4px; gap: 3px; }
+  .thumb-card { height: 28px; }
+}
+
+/* No celular o container é invisível: display:contents mantém cada seção
+   exatamente onde estava, e nada se move em relação ao layout original.
+   IMPORTANTE: só abaixo de 1024px — declarado sem media query, ele venceria
+   o `display:grid` do desktop por vir depois no arquivo (mesma especificidade). */
+@media (max-width: 1023px) {
+  .vitrine-layout { display: contents; }
+}
+
+/* O wrapper das faixas é estrutural (dá landmark), não visual — no celular. */
+.faixas-vitrine { display: contents; }
+
+@media (min-width: 1024px) {
+  /* O wrapper das faixas precisa sumir como caixa dentro do grid: com
+     display:contents as duas faixas virariam itens de grid e empurrariam o
+     <main> para a coluna errada. Por isso, no desktop, ele vira um item de
+     largura total na linha 1 (as faixas continuam lado a lado na vertical). */
+  .vitrine-layout > .faixas-vitrine {
+    display: flex; flex-direction: column; gap: 2px;
+    grid-column: 1 / -1; grid-row: 1;
+  }
+}
+
+
+
+/* ---------- Colisão de widgets fixos ----------
+ * O botão flutuante do WhatsApp ficava sobre o canto inferior direito dos
+ * cartões — e agora os cartões são mais altos (miniaturas + tamanhos), então
+ * ele cobria justamente o seletor de tamanho e o botão de pedido.
+ * Como a barra inferior tem um item "Atendente" que faz o mesmo (abrir o
+ * WhatsApp), o flutuante é redundante no celular. No desktop, onde não há
+ * barra inferior, ele continua. */
+@media (max-width: 899px) {
+  .fab-zap { display: none !important; }
+}

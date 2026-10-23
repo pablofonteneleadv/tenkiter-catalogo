@@ -12,7 +12,9 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
     st = install(ctx, versao="3.7"); erros = []; pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e)))
     pg.goto(BASE + "index.html"); pg.wait_for_selector(".card"); pg.wait_for_timeout(900)
-    chk("cartão: botão 'Consultar' (não mais 'Pedir')", pg.locator(".ac-pedir").first.inner_text().strip().endswith("Consultar"), pg.locator(".ac-pedir").first.inner_text())
+    # v7.0 (VIT-6): o CTA do cartão diz o que faz e onde — "Pedir no WhatsApp" —
+    # em vez do genérico "Consultar", que não dizia para onde o toque levava.
+    chk("cartão: CTA nomeia o WhatsApp (não mais 'Consultar')", "WhatsApp" in pg.locator(".ac-pedir").first.inner_text(), pg.locator(".ac-pedir").first.inner_text())
     chk("cartão: botão 'Selecionar' e título da seleção", "Selecionar" in pg.locator(".ac-sacola").first.inner_text() and pg.get_attribute("#btn-sacola-header", "title") == "Abrir minha seleção")
     chk("a busca vem ANTES da faixa de vantagens", pg.evaluate("document.getElementById('busca').getBoundingClientRect().top < document.getElementById('beneficios').getBoundingClientRect().top"))
     chk("faixa de vantagens fala em 'Consulte'", "Consulte pelo WhatsApp" in pg.inner_text("#beneficios"))
