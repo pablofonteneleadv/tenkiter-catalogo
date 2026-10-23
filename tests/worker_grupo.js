@@ -129,7 +129,7 @@ function d1() {
   id=await novaPostagem('grupo');
   await DB.prepare('UPDATE postagem SET midias=? WHERE id=?').bind(JSON.stringify([{url:env.MIDIA_URL+'/m/t/202610/video.mp4',tipo:'video'}]),id).run();
   await W.processarPostagens(env);
-  chk('vídeo do R2 vai à Wafly em base64 sem exigir download do URL',grupoCalls.length===2&&grupoCalls[1].url.endsWith('/send-video')&&grupoCalls[1].body.video===videoLocal.toString('base64')&&(await lerPost(id)).status==='publicado');
+  chk('vídeo validado no R2 vai à Wafly pela URL pública, com corpo pequeno',grupoCalls.length===2&&grupoCalls[1].url.endsWith('/send-video')&&grupoCalls[1].body.video===env.MIDIA_URL+'/m/t/202610/video.mp4'&&(await lerPost(id)).status==='publicado');
   objs.set('t/202610/hevc.mp4',Buffer.concat([Buffer.from('ftypmp42'),Buffer.alloc(300000),Buffer.from('moovtrakstsdhvc1--HEVC')]));
   const hevc=await novaPostagem('grupo');
   await DB.prepare('UPDATE postagem SET midias=? WHERE id=?').bind(JSON.stringify([{url:env.MIDIA_URL+'/m/t/202610/hevc.mp4',tipo:'video'}]),hevc).run();
@@ -162,6 +162,9 @@ function d1() {
   await DB.prepare('UPDATE postagem_grupo_recibo SET atualizado_em=? WHERE postagem_id=?').bind(ts(-4),emAndamento).run();
   await W.processarPostagens(env);
   chk('recibo antigo sem confirmação continua aguardando sem reenviar',(await lerPost(emAndamento)).status==='processando'&&grupoCalls.length===3);
+  await DB.prepare('UPDATE postagem_grupo_recibo SET atualizado_em=? WHERE postagem_id=?').bind(ts(-11),emAndamento).run();
+  await W.processarPostagens(env);
+  chk('após 10 min libera decisão humana sem reenviar', (await lerPost(emAndamento)).status==='erro'&&/Repostar com novo ID/.test((await lerPost(emAndamento)).erro)&&grupoCalls.length===3);
   const medias=[{url:'https://cdn.fake/a.jpg',tipo:'imagem'},{url:'https://cdn.fake/b.mp4',tipo:'video'}];
   id=await novaPostagem('grupo');
   await DB.prepare('UPDATE postagem SET midias=? WHERE id=?').bind(JSON.stringify(medias),id).run();
