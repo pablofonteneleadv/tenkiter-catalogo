@@ -53,7 +53,7 @@ def novo_backend(perms, estado):
         if "gerir_manuais" in perms:
             m.update({"docUrl": "https://docs.google.com/document/d/aaa/edit", "provaDocUrl": "https://docs.google.com/document/d/bbb/edit", "provaAtualizadoEm": ""})
             m2 = {"id": "2", "titulo": "Manual sem prova", "blurb": "", "nivelMinimo": 1, "ordem": 2, "liberado": True,
-                  "parts": [{"title": "P", "chapters": [{"title": "C", "id": "c", "hash": "h", "blocks": [P("x")]}]}], "docUrl": "https://docs.google.com/document/d/ccc/edit"}
+                  "parts": [{"title": "P", "chapters": [{"title": "C", "id": "licao-1", "hash": "h-outro", "blocks": [P("x")]}]}], "docUrl": "https://docs.google.com/document/d/ccc/edit"}
             return [m, m2]
         return [m]
     def post(b):
@@ -202,9 +202,11 @@ with sync_playwright() as p:
     estado["hash1"] = ""
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block", locale="pt-BR")
     ctx.add_init_script(SESSION); st = instalar(ctx, GESTOR, estado)
+    ctx.add_init_script("localStorage.setItem('tm_progress_estavel_88999999999', JSON.stringify({'licao-1':{lido:true,hash:'hash-antigo'}}));")
     pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: d.accept())
     pg.goto(BASE + "treinamentos.html"); pg.wait_for_selector('.card[data-manual="1"]', timeout=10000); pg.wait_for_timeout(400)
     pg.click('.card[data-manual="1"]'); pg.wait_for_selector(".chapter", timeout=8000); pg.wait_for_timeout(400)
+    chk("capítulo nunca lido não herda leitura/aviso de outro manual com o mesmo id", pg.locator(".chapter-stale-alert").count() == 0 and pg.locator(".chapter").nth(0).locator(".cap-status.ok").count() == 0)
     chk("gestão vê o aviso de trava e o botão para abrir mesmo assim", pg.locator("button[data-livre='1']").count() == 2)
     pg.locator("#btn-admin-rh").click(); pg.wait_for_timeout(1200)
     pg.locator(".admin-tab", has_text="Conteúdo").click(); pg.wait_for_timeout(900)

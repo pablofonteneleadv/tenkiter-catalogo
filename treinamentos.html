@@ -858,7 +858,9 @@ function aplicarResets_(resets){
         var est = ls_get(progressStableKey(w), {});
         var man = DATA.manuals && DATA.manuals[alvo];
         if (man && man.parts && man.parts.length){
-          man.parts.forEach(function(pt){ (pt.chapters || []).forEach(function(c){ if (c.id) delete est[c.id]; }); });
+          man.parts.forEach(function(pt){ (pt.chapters || []).forEach(function(c){
+            if (c.id){ delete est[stableChapterKey(alvo, c.id)]; delete est[c.id]; }
+          }); });
           ls_set(progressStableKey(w), est);
         } else { ls_set(progressStableKey(w), {}); }
       }
@@ -965,11 +967,22 @@ function getHashMap(){ return ls_get(progressHashKey(state.user.whatsapp), {}); 
    momento em que a leitura foi confirmada -- se o conteúdo mudar depois (hash diferente), o
    capítulo "destrava" sozinho como não lido de novo, sem precisar de nada do servidor. */
 function getStableProgress(){ return ls_get(progressStableKey(state.user.whatsapp), {}); }
-function setStableChapterRead(capId, hash, lido){
+function stableChapterKey(level, capId){ return String(level) + '::' + String(capId); }
+function setStableChapterRead(level, capId, hash, lido){
   var m = getStableProgress();
-  if (lido) m[capId] = { lido: true, hash: hash };
-  else delete m[capId];
+  var k = stableChapterKey(level, capId);
+  if (lido) m[k] = { lido: true, hash: hash };
+  else delete m[k];
   ls_set(progressStableKey(state.user.whatsapp), m);
+}
+
+function capIdEhUnico_(capId){
+  var n = 0;
+  Object.keys(DATA.manuals || {}).forEach(function(mid){
+    var man = DATA.manuals[mid];
+    (man.parts || []).forEach(function(pt){ (pt.chapters || []).forEach(function(c){ if (c.id === capId) n++; }); });
+  });
+  return n === 1;
 }
 
 /* Estado efetivo de um capítulo. Usa o mapa estável (por capId) como fonte principal; na
@@ -985,16 +998,27 @@ function chapterStatus(level, pi, ci, ch){
     return { chId: chId, capId: null, done: !!p[chId], stale: false };
   }
   var mapa = getStableProgress();
-  if (!(ch.id in mapa)){
+  var chave = stableChapterKey(level, ch.id);
+  if (!(chave in mapa)){
+    // Versões antigas não incluíam o manual na chave. Só é seguro migrar a
+    // leitura quando este capId existe em um único manual; títulos como
+    // “Introdução” podem gerar o mesmo id em manuais diferentes.
+    if (mapa[ch.id] && capIdEhUnico_(ch.id)){
+      mapa[chave] = mapa[ch.id]; delete mapa[ch.id];
+      ls_set(progressStableKey(state.user.whatsapp), mapa);
+    }
+  }
+  if (!(chave in mapa)){
     var pLegado = getProgress();
-    if (pLegado[chId]){
-      var hashLegadoMap = getHashMap();
-      var hashLegado = hashLegadoMap[ch.id] || ch.hash;
-      setStableChapterRead(ch.id, hashLegado, true); // migra uma vez só
+    var hashLegadoMap = getHashMap();
+    // Não inventa uma leitura para capítulo novo só porque ele ocupa a mesma
+    // posição de um capítulo antigo. O hash ligado ao capId é a prova mínima.
+    if (pLegado[chId] && hashLegadoMap[ch.id]){
+      setStableChapterRead(level, ch.id, hashLegadoMap[ch.id], true); // migra uma vez só
       mapa = getStableProgress();
     }
   }
-  var entrada = mapa[ch.id];
+  var entrada = mapa[chave];
   if (!entrada) return { chId: chId, capId: ch.id, done: false, stale: false };
   if (entrada.hash !== ch.hash) return { chId: chId, capId: ch.id, done: false, stale: true }; // mudou depois que leu
   return { chId: chId, capId: ch.id, done: true, stale: false };
@@ -1786,7 +1810,7 @@ function aplicarLeitura_(level, chapterEl, lido){
   var capId = chapterEl.getAttribute('data-capid') || '';
   var capHash = chapterEl.getAttribute('data-caphash') || '';
   if (capId && capHash){
-    setStableChapterRead(capId, capHash, lido); // fonte da verdade: por id estável do capítulo
+    setStableChapterRead(level, capId, capHash, lido); // fonte da verdade: manual + id estável do capítulo
   } else {
     setChapterRead(chId, lido); // sem id/hash (não devia mais acontecer): só fallback por posição
   }
