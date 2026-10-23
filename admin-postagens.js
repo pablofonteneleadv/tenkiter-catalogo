@@ -584,9 +584,9 @@ function colPainel_() {
 }
 function colTopo_() {
   const c = colEst_(), ok = c.fotos.length === colCel_().length, a = $("po-ct-criar"), b = $("po-ct-baixar"), tr = $("po-ct-trava");
-  if (a) a.disabled = !ok; if (b) b.disabled = !ok;
+  if (a) { a.disabled = !ok; a.title = ok ? "Adicionar a colagem pronta à postagem" : "Complete todas as fotos para criar a colagem"; } if (b) { b.disabled = !ok; b.title = ok ? "Salvar a imagem no aparelho" : "Complete todas as fotos para baixar"; }
   if (tr) { tr.setAttribute("aria-pressed", String(c.trava)); tr.textContent = c.trava ? "🔒 Fotos travadas" : "🔓 Fotos destravadas"; }
-  colStatus_(ok ? "✔ " + c.fotos.length + " fotos prontas." : "Faltam " + (colCel_().length - c.fotos.length) + " foto(s): vá em Fotos.");
+  colStatus_(ok ? "✔ " + c.fotos.length + " fotos prontas. Toque em Usar colagem para adicionar à postagem, ou Baixar para salvar no celular." : "Faltam " + (colCel_().length - c.fotos.length) + " foto(s): abra Fotos para completar antes de finalizar.");
 }
 let colStT_ = 0;
 function colStatus_(t, erro, curto) {
@@ -679,7 +679,7 @@ function colMontar_() {
   if ($("po-ct")) return;
   const o = document.createElement("div"); o.className = "overlay-sheet po-ct"; o.id = "po-ct";
   o.innerHTML = '<div class="po-ct-in" role="dialog" aria-modal="true" aria-label="Colagem de fotos">' +
-    '<div class="po-ct-top"><button type="button" class="btn-fechar" id="po-ct-fechar" aria-label="Fechar">✕ Fechar</button><h3>🧩 Colagem</h3><button type="button" id="po-ct-baixar" data-ct="baixar">⬇ Baixar</button><button type="button" class="ok" id="po-ct-criar" data-ct="criar">✔ Criar</button></div>' +
+    '<div class="po-ct-top"><button type="button" class="btn-fechar" id="po-ct-fechar" aria-label="Fechar">✕ Fechar</button><h3>🧩 Colagem</h3><button type="button" id="po-ct-baixar" data-ct="baixar">⬇ Baixar</button><button type="button" class="ok" id="po-ct-criar" data-ct="criar">✔ Usar colagem</button></div>' +
     '<div class="po-ct-palco" id="po-ct-palco"><canvas id="po-ct-cv" class="po-ct-cv" role="img" aria-label="Prévia da colagem" width="10" height="10"></canvas><div class="po-ct-toast" id="po-ct-toast" role="status"></div></div>' +
     '<p class="po-ct-dica" id="po-ct-dica">Para ajustar uma foto, toque em “Fotos destravadas”. Arraste para mover; use dois dedos para ampliar ou girar. Se preferir, use os controles abaixo.</p>' +
     '<div class="po-ct-linha"><button type="button" id="po-ct-trava" data-ct="trava" aria-pressed="true">🔒 Fotos travadas</button><span id="po-ct-st" role="status" aria-live="polite"></span></div>' +
