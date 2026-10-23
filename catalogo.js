@@ -144,7 +144,7 @@ try { tkSelExpirar_(); } catch (e) {}
       const recebidos = (resp.produtos || []).reverse();
       salvarCatalogoCache(recebidos);
       aplicarProdutosRecebidos(recebidos);
-      avisoOffline_(false);
+      avisoOffline_(navigator.onLine === false);
     } catch (e) { /* segue com o que já está na tela */ }
   }
   window.addEventListener('offline', () => avisoOffline_(true));
@@ -171,7 +171,7 @@ try { tkSelExpirar_(); } catch (e) {}
       // (stale-while-revalidate). Antes só a busca do <head> atualizava, e ela podia chegar antes
       // do cache ser lido — a tela ficava com a versão velha até a próxima visita.
       buscarListaComCache(function (novos) {
-        if (Array.isArray(novos) && novos.length) { aplicarProdutosRecebidos(novos); avisoOffline_(false); }
+        if (Array.isArray(novos) && novos.length) { aplicarProdutosRecebidos(novos); avisoOffline_(navigator.onLine === false); }
       }).catch(function () {});
     } else {
       mostrarToastCarregando('Carregando produtos...');
@@ -189,7 +189,7 @@ try { tkSelExpirar_(); } catch (e) {}
       if (!Array.isArray(resp.produtos)) throw new Error('resposta sem lista');
       salvarCatalogoCache(recebidos);
       aplicarProdutosRecebidos(recebidos);
-      avisoOffline_(false);
+      avisoOffline_(navigator.onLine === false);
       if (!temCache) abrirProdutoDaURL();
     } catch (e) {
       if (!temCache) {
@@ -210,7 +210,10 @@ try { tkSelExpirar_(); } catch (e) {}
         acoes.appendChild(tentar); acoes.appendChild(zap);
         vazio.appendChild(msg); vazio.appendChild(acoes);
         vazio.style.display = 'block';
-      } else if (navigator.onLine === false) {
+      } else {
+        // Alguns navegadores/PWAs continuam informando navigator.onLine=true
+        // quando a rede do processo caiu. A falha real da atualização é a
+        // evidência correta; o catálogo salvo continua disponível.
         avisoOffline_(true);
       }
       // Com cache: mantém o que já está na tela em vez de mostrar erro — o
