@@ -44,7 +44,20 @@
 (() => {
   'use strict';
   if (window.TenkiterNav) return;
-  if (/[?&]embed=1/.test(location.search)) return; // página dentro de outra (iframe): sem barra
+  if (/[?&]embed=1/.test(location.search)) { // página dentro do app unificado: sem segunda barra
+    document.documentElement.classList.add('tk-app-embed');
+    // Links para uma das áreas principais devem trocar a tela do app inteiro.
+    // Links internos (detalhes, manuais, formulários) continuam dentro da área atual.
+    document.addEventListener('click', (ev) => {
+      const a = ev.target?.closest ? ev.target.closest('a[href]') : null;
+      if (!a || a.target === '_blank' || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+      let u; try { u = new URL(a.href, location.href); } catch (e) { return; }
+      if (u.origin !== location.origin || !/^\/(?:.*\/)?(?:index|admin|treinamentos|curriculos|curriculo)\.html$/.test(u.pathname)) return;
+      ev.preventDefault();
+      window.parent.postMessage({ tipo: 'tk-app-navegar', href: u.pathname + u.search + u.hash }, location.origin);
+    }, true);
+    return;
+  }
 
   const CHAVE_SESSAO = 'tm_session';
   const CHAVE_CACHE = 'tm_nav_perms';
@@ -64,6 +77,11 @@
   let logado = false;
   let ativoId = '';
   let nav = null;
+  let appViews = null;
+  const appFrames = new Map();
+  const rotaInicial = location.pathname + location.search + location.hash;
+  const tituloInicial = document.title;
+  let scrollInicial = 0;
 
   const lerJson = (chave) => { try { return JSON.parse(localStorage.getItem(chave) || 'null'); } catch (e) { return null; } };
   const sessao = () => { const s = lerJson(CHAVE_SESSAO); return s?.whatsapp ? s : null; };
@@ -110,6 +128,13 @@
       '.tk-nav a:active{background:rgba(255,255,255,.06)}' +
       '.tk-nav a:focus-visible{outline:2px solid #ff7a1a;outline-offset:-3px}' +
       'body.tk-tem-nav{padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}' +
+      '.tk-app-views{position:fixed;inset:0 0 calc(70px + env(safe-area-inset-bottom,0px)) 0;z-index:80;background:#fff}' +
+      '.tk-app-frame{display:block;width:100%;height:100%;border:0;background:#fff}' +
+      '.tk-app-frame[hidden],.tk-app-views[hidden]{display:none!important}' +
+      '.tk-app-loading{position:absolute;inset:0;z-index:2;display:grid;place-items:center;background:#fff;color:#5f391f;font:700 1rem/1.4 system-ui,sans-serif}' +
+      '.tk-app-loading[hidden]{display:none!important}' +
+      'body.tk-app-frame-ativo{overflow:hidden!important}' +
+      'body.tk-app-frame-ativo > :not(.tk-app-views):not(.tk-nav):not(script):not(style){visibility:hidden!important}' +
       '@media (min-width:900px){.tk-nav{justify-content:center}.tk-nav a{flex:0 0 130px}}' +
       '@media (prefers-reduced-motion:reduce){@view-transition{navigation:none}}';
     document.head.appendChild(s);
@@ -163,6 +188,88 @@
     if ('requestIdleCallback' in window) requestIdleCallback(fazer, { timeout: 4000 }); else setTimeout(fazer, 2500);
   };
 
+  const itemDaUrl = (url) => {
+    const u = new URL(url, location.href);
+    return ITENS.find((it) => {
+      const x = new URL(it.href, location.origin + location.pathname.replace(/[^/]*$/, ''));
+      if (x.pathname !== u.pathname) return false;
+      if (it.id === 'rh') return new URLSearchParams(u.search).get('painel') === 'rh';
+      if (it.id === 'treinamentos') return new URLSearchParams(u.search).get('painel') !== 'rh';
+      return true;
+    }) || null;
+  };
+  const appDisponivel = () => window.top === window.self && !!itemDaUrl(location.href);
+  const garantirViews = () => {
+    if (appViews) return appViews;
+    appViews = document.createElement('div');
+    appViews.className = 'tk-app-views'; appViews.hidden = true;
+    const carregando = document.createElement('div');
+    carregando.className = 'tk-app-loading'; carregando.hidden = true;
+    carregando.setAttribute('role', 'status'); carregando.textContent = 'Abrindo…';
+    appViews.appendChild(carregando);
+    document.body.appendChild(appViews);
+    return appViews;
+  };
+  const urlEmbed = (it) => {
+    const u = new URL(it.href, location.href);
+    u.searchParams.set('embed', '1'); u.searchParams.set('tkapp', '1');
+    return u.pathname + u.search + u.hash;
+  };
+  const bloquearSaidaAtiva = () => {
+    let w = window;
+    const visivel = appViews && appViews.querySelector('.tk-app-frame:not([hidden])');
+    if (visivel) { try { w = visivel.contentWindow || window; } catch (e) { w = window; } }
+    if (typeof w.TKSairBloqueio !== 'function') return '';
+    try { return w.TKSairBloqueio() || ''; } catch (e) { return ''; }
+  };
+  const mostrarRota = (it, historico) => {
+    if (!it || !appDisponivel()) return false;
+    const destino = new URL(it.href, location.href);
+    const inicial = new URL(rotaInicial, location.origin);
+    const itemInicial = itemDaUrl(inicial.href);
+    const ehInicial = !!itemInicial && it.id === itemInicial.id;
+    const rota = ehInicial ? rotaInicial : destino.pathname + destino.search + destino.hash;
+    let historicoDepoisDaCarga = false;
+    garantirViews();
+    appFrames.forEach((f) => { f.hidden = true; f.setAttribute('aria-hidden', 'true'); f.inert = true; });
+    if (ehInicial) {
+      appViews.hidden = true; document.body.classList.remove('tk-app-frame-ativo');
+      document.title = tituloInicial;
+      requestAnimationFrame(() => scrollTo(0, scrollInicial));
+    } else {
+      if (!document.body.classList.contains('tk-app-frame-ativo')) scrollInicial = scrollY;
+      let frame = appFrames.get(rota);
+      if (!frame) {
+        const carregando = appViews.querySelector('.tk-app-loading');
+        carregando.textContent = 'Abrindo ' + it.rotulo + '…'; carregando.hidden = false;
+        frame = document.createElement('iframe'); frame.className = 'tk-app-frame';
+        frame.name = 'tk-app-' + it.id; frame.title = it.rotulo;
+        frame.setAttribute('loading', 'eager');
+        historicoDepoisDaCarga = historico === 'push';
+        frame.addEventListener('load', () => {
+          carregando.hidden = true;
+          // A navegação inicial do iframe entra no histórico conjunto. Criamos
+          // a entrada da área depois dela para que um único Voltar mude de aba.
+          if (historicoDepoisDaCarga) setTimeout(() => {
+            if (ativoId === it.id && location.pathname !== destino.pathname) history.pushState({ tkApp: rota }, '', rota);
+          }, 0);
+        }, { once: true });
+        appFrames.set(rota, frame); appViews.appendChild(frame);
+        // Substitui o about:blank inicial, sem criar uma etapa extra no Voltar.
+        frame.contentWindow.location.replace(urlEmbed(it));
+      }
+      frame.hidden = false; frame.removeAttribute('aria-hidden'); frame.inert = false;
+      appViews.hidden = false; document.body.classList.add('tk-app-frame-ativo');
+      document.title = it.rotulo + ' — TENKiTER Modas';
+      try { frame.contentWindow.focus(); } catch (e) {}
+    }
+    ativoId = it.id; desenhar();
+    if (historico === 'push' && !historicoDepoisDaCarga) history.pushState({ tkApp: rota }, '', rota);
+    else if (historico === 'replace') history.replaceState({ tkApp: rota }, '', rota);
+    try { sessionStorage.setItem('tk_app_ultima', rota); } catch (e) {}
+    return true;
+  };
+
   const API = {
     ativo: (id) => { ativoId = id || ''; desenhar(); },
     setPerms: (lista) => {
@@ -189,10 +296,27 @@
   // Se devolver texto (ex.: envios em andamento), tocar na barra pede confirmação antes de sair.
   document.addEventListener('click', (ev) => {
     const a = ev.target?.closest ? ev.target.closest('a[data-nav]') : null;
-    if (!a || typeof window.TKSairBloqueio !== 'function') return;
-    let msg = ''; try { msg = window.TKSairBloqueio() || ''; } catch (e) {}
-    if (msg && !window.confirm(msg)) { ev.preventDefault(); ev.stopPropagation(); }
+    if (!a) return;
+    const msg = bloquearSaidaAtiva();
+    if (msg && !window.confirm(msg)) { ev.preventDefault(); ev.stopPropagation(); return; }
+    if (!appDisponivel() || ev.button > 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || a.target === '_blank') return;
+    const it = ITENS.find((x) => x.id === a.dataset.nav);
+    if (it) {
+      ev.preventDefault(); ev.stopPropagation();
+      if (it.id !== ativoId) mostrarRota(it, 'push');
+    }
   }, true);
+  window.addEventListener('popstate', () => {
+    const it = itemDaUrl(location.href);
+    if (it) mostrarRota(it, 'none');
+  });
+  window.addEventListener('message', (ev) => {
+    if (ev.origin !== location.origin || ev.data?.tipo !== 'tk-app-navegar') return;
+    const it = itemDaUrl(ev.data.href || '');
+    if (!it || it.id === ativoId) return;
+    const msg = bloquearSaidaAtiva();
+    if (!msg || window.confirm(msg)) mostrarRota(it, 'push');
+  });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { lerCache(); desenhar(); atualizarDoServidor(); preCarregar(); });
   else { lerCache(); desenhar(); atualizarDoServidor(); preCarregar(); }
 })();
