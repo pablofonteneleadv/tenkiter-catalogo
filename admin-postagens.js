@@ -270,6 +270,7 @@ const $=id=>document.getElementById(id),esc=v=>escaparHtml(v),TIPOS=[["feed","�
       .po-ct-top button:disabled { opacity: .45; cursor: default; }
       .po-ct-palco { flex: 1 1 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 8px; overflow: hidden; }
       .po-ct-cv { display: block; touch-action: none; background: #444; box-shadow: 0 0 0 1px #000; user-select: none; -webkit-user-select: none; }
+      .po-ct-dica { margin: 0; padding: 6px 12px; font-size: .82rem; line-height: 1.35; text-align: center; color: #f5f5f5; background: #333; }
       .po-ct-linha { flex: 0 0 auto; display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; padding: 2px 8px 6px; font-size: .82rem; color: #e6e6e6; }
       .po-ct-linha button { width: auto; min-height: 44px; padding: 6px 14px; border-radius: 10px; border: 1px solid #777; background: #2b2b2b; color: #fff; font-weight: 700; cursor: pointer; }
       .po-ct-linha button[aria-pressed="false"] { background: #E67E22; border-color: #A85200; color: #0d0d0d; }
@@ -680,6 +681,7 @@ function colMontar_() {
   o.innerHTML = '<div class="po-ct-in" role="dialog" aria-modal="true" aria-label="Colagem de fotos">' +
     '<div class="po-ct-top"><button type="button" class="btn-fechar" id="po-ct-fechar" aria-label="Fechar">✕ Fechar</button><h3>🧩 Colagem</h3><button type="button" id="po-ct-baixar" data-ct="baixar">⬇ Baixar</button><button type="button" class="ok" id="po-ct-criar" data-ct="criar">✔ Criar</button></div>' +
     '<div class="po-ct-palco" id="po-ct-palco"><canvas id="po-ct-cv" class="po-ct-cv" role="img" aria-label="Prévia da colagem" width="10" height="10"></canvas><div class="po-ct-toast" id="po-ct-toast" role="status"></div></div>' +
+    '<p class="po-ct-dica" id="po-ct-dica">Para ajustar uma foto, toque em “Fotos destravadas”. Arraste para mover; use dois dedos para ampliar ou girar. Se preferir, use os controles abaixo.</p>' +
     '<div class="po-ct-linha"><button type="button" id="po-ct-trava" data-ct="trava" aria-pressed="true">🔒 Fotos travadas</button><span id="po-ct-st" role="status" aria-live="polite"></span></div>' +
     '<div class="po-ct-baixo" id="po-ct-baixo"></div></div>';
   document.body.appendChild(o);
