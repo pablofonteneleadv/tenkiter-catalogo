@@ -585,7 +585,7 @@ function colPainel_() {
 }
 function colTopo_() {
   const c = colEst_(), ok = c.fotos.length === colCel_().length, a = $("po-ct-criar"), b = $("po-ct-baixar"), tr = $("po-ct-trava");
-  if (a) { a.disabled = !ok; a.title = ok ? "Adicionar a colagem pronta à postagem" : "Complete todas as fotos para criar a colagem"; } if (b) { b.disabled = !ok; b.title = ok ? "Salvar a imagem no aparelho" : "Complete todas as fotos para baixar"; }
+  if (a) { a.disabled = !ok || colOcup_; a.title = ok ? "Adicionar a colagem pronta à postagem" : "Complete todas as fotos para criar a colagem"; } if (b) { b.disabled = !ok || colOcup_; b.title = ok ? "Salvar a imagem no aparelho" : "Complete todas as fotos para baixar"; }
   if (tr) { tr.setAttribute("aria-pressed", String(c.trava)); tr.textContent = c.trava ? "🔒 Fotos travadas" : "🔓 Fotos destravadas"; }
   const dica = $("po-ct-dica"); if (dica) dica.textContent = c.trava ? "Fotos protegidas contra movimentos acidentais. Para ajustar, toque em Fotos travadas e depois arraste a imagem ou use dois dedos." : "Fotos liberadas: arraste para mover, use dois dedos para ampliar ou girar. Quando terminar, toque em Fotos destravadas para proteger o resultado.";
   colStatus_(ok ? "✔ " + c.fotos.length + " fotos prontas. Toque em Usar colagem para adicionar à postagem, ou Baixar para salvar no celular." : "Faltam " + (colCel_().length - c.fotos.length) + " foto(s): abra Fotos para completar antes de finalizar.");
@@ -642,7 +642,7 @@ async function colCriar_(baixar) {
   const c = colEst_(), cel = colCel_();
   if (colOcup_) return;
   if (c.fotos.length !== cel.length) return colStatus_("Escolha " + cel.length + " fotos para esse modelo.", true);
-  colOcup_ = true; colStatus_("Montando a colagem…", false);
+  colOcup_ = true; colTopo_(); colStatus_("Montando a colagem…", false);
   const [W, H] = tamanhoAlvo();
   try {
     const cv = await colRender_(W, H), blob = await new Promise(r => cv.toBlob(r, "image/jpeg", 0.92));
@@ -657,7 +657,7 @@ async function colCriar_(baixar) {
     window.TKCamadas && TKCamadas.aberta("po-ct") ? TKCamadas.desempilhar("po-ct") : colSair_();
     msg("Colagem criada. As " + usados.length + " fotos usadas saíram da lista (↩ Desfazer a colagem, se quiser voltar).", false);
   } catch (e) { colStatus_(e && e.message || "Não consegui montar a colagem.", true); }
-  finally { colOcup_ = false; }
+  finally { colOcup_ = false; if (nova && nova.col && nova.col.aberto) colTopo_(); }
 }
 function colSair_() {
   const c = nova && nova.col, o = $("po-ct");
