@@ -38,7 +38,9 @@ def main():
         assert download.value.suggested_filename.endswith(".json")
         assert not requests,requests
         assert not errors,errors
-        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"),"Rolagem horizontal indevida"
+        for largura in (320,360,390,430):
+            page.set_viewport_size({"width":largura,"height":844})
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"),f"Rolagem horizontal indevida em {largura}px"
         page.locator("#refazer").click()
         assert page.locator("#final").is_hidden()
         assert page.locator("#contador").inner_text().startswith("0 de 9")
