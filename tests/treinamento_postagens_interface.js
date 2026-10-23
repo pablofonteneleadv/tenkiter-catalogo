@@ -33,7 +33,7 @@ console.log("Grade e barra de seleção reutilizáveis: OK");
 
 assert.match(js,/legendaTreino=String\(valor\)\.trim\(\)/);
 assert.match(js,/\$\("legenda-revisao"\)\.textContent=legendaTreino/);
-assert.match(js,/legendaTreino="";ultimo=null/);
+assert.match(js,/rascunhoLegenda="";ultimo=null/);
 console.log("Revisão exibe legenda real da simulação sem interpretar HTML: OK");
 
 assert.match(js,/ui\.acoesPecas\(/);
