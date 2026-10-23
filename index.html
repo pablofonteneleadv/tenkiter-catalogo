@@ -40,6 +40,9 @@
      Só libera o que o catálogo realmente usa: o próprio site, o Apps Script (dados), Cloudinary/Google (fotos e vídeos), OneSignal (avisos) e Meta (só se o Pixel for ligado no painel). -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.onesignal.com https://*.onesignal.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.onesignal.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://tenkiter-og.distkrpconfeccoes.workers.dev https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com https://lh3.googleusercontent.com https://res.cloudinary.com https://tenkiter-midia.distkrpconfeccoes.workers.dev https://tenkiter-ig.distkrpconfeccoes.workers.dev https://drive.google.com https://onesignal.com https://*.onesignal.com https://www.facebook.com https://connect.facebook.net; frame-src 'self' https://drive.google.com https://*.onesignal.com https://onesignal.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <link rel="stylesheet" href="catalogo.css">
+<!-- v7.0: camada de vitrine (acessibilidade, navegação e caminho até o produto).
+     Arquivo próprio, como a11y.js / meta.js / push.js: só o catálogo carrega. -->
+<link rel="stylesheet" href="vitrine.css">
 <script src="common.js"></script>
 <script>
 /* v3.3: começa a buscar a lista de peças já aqui no <head> (antes do resto da página montar) -- o catálogo aparece mais cedo.
@@ -109,6 +112,14 @@ catch (e) { window.__precargaLista = null; }
   </div>
 </header>
 
+<!-- v7.0 (NAV-2): navegação em 2 níveis.
+     Nível 1 = gênero (#pills-genero). Nível 2 = as categorias, que passam a
+     ser filtradas pelo gênero escolhido. A vitrine.js envolve as duas num
+     <nav> próprio para o conteúdo ficar dentro de um landmark (axe: region). -->
+<nav class="pills-genero" id="pills-genero" aria-label="Navegar por gênero" hidden></nav>
+<!-- v7.0 (NAV-3): este container só vira grid no desktop (>=1024px); no celular
+     ele é display:contents e nada se move. -->
+<div class="vitrine-layout">
 <div class="pills-categoria" id="pills-categoria"></div>
 
 <div class="filtros" id="filtros" role="search" aria-label="Buscar e filtrar peças">
@@ -170,11 +181,11 @@ catch (e) { window.__precargaLista = null; }
 
 <section class="beneficios" id="beneficios" aria-label="Vantagens da loja">
   <span>💬 Consulte pelo WhatsApp</span>
-  <span>💰 10% de desconto à vista</span>
+  <span>💵 10% de desconto à vista</span>
   <span>📍 Retire na loja, em Crateús</span>
 </section>
 
-<main>
+<main id="pecas" tabindex="-1">
   <div class="aviso-selecao aviso-minha-sel" id="aviso-minha-sel" role="status" hidden>
     <span id="aviso-minha-sel-txt"></span>
     <button type="button" class="btn-neutro" id="amsel-enviar">💬 Enviar para a loja</button>
@@ -206,6 +217,7 @@ catch (e) { window.__precargaLista = null; }
     <a id="ajuda-zap" class="btn-ajuda-zap" href="#" target="_blank" rel="noopener">💬 Falar com a equipe</a>
   </aside>
 </main>
+</div>
 
 <div class="toast-desfazer" id="toast-desfazer" role="status" hidden><span id="toast-desfazer-txt">Seleção limpa.</span><button type="button" id="toast-desfazer-btn">Desfazer</button></div>
 
@@ -300,6 +312,9 @@ catch (e) { window.__precargaLista = null; }
 <script src="pedido.js"></script>
 <script src="catalogo.js"></script>
 <script src="nav.js" data-ativo="catalogo"></script>
+<!-- v7.0: por último, de propósito — depois de catalogo.js (funções que ela
+     envolve) e de nav.js (que cria a barra inferior que ela assume). -->
+<script src="vitrine.js"></script>
 <script src="a11y.js"></script>
 <script src="push.js"></script>
 <script src="pwa.js"></script>
