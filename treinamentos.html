@@ -535,7 +535,10 @@ var state = { user:null, view:'login', manual:null };
 var suprimirHistorico = false;
 function empurrarHistorico(view, manual){
   if (suprimirHistorico) return;
-  try{ history.pushState({ view: view, manual: manual || null }, ''); }catch(e){}
+  try{
+    var metodo = /[?&]tkapp=1/.test(location.search) ? 'replaceState' : 'pushState';
+    history[metodo]({ view: view, manual: manual || null }, '');
+  }catch(e){}
 }
 window.addEventListener('popstate', function(e){
   if (window.TKCamadas && TKCamadas.fechouAgora()) return; // este voltar só fechou uma janela
