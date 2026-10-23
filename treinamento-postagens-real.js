@@ -7,7 +7,7 @@ const rotulos=["Toque em Com peça","Escolha Instagram como único destino","Bus
 const botao=(atributo,valor,rotulo)=>'<button type="button" '+atributo+'="'+valor+'">'+rotulo+'</button>';
 function salvar(){const registro={versao:2,data:new Date().toISOString(),colaborador:$("colaborador").value.trim().slice(0,60),etapasConcluidas:9,totalEtapas:9,publicacaoReal:false,...servico.relatorio()};try{const key="tk_postagens_treino_resultados_v2",old=JSON.parse(localStorage.getItem(key)||"[]");old.push(registro);localStorage.setItem(key,JSON.stringify(old.slice(-30)));}catch(e){$("feedback").textContent="Resultado não pôde ser salvo neste aparelho; baixe o relatório."; }return registro;}
 let ultimo=null,rascunhoLegenda="";
-function agir(tipo,valor){const r=servico.treino.agir({tipo,valor});erros=r.estado.erros;const feedback=$("feedback");feedback.textContent=r.motivo;feedback.style.color=r.ok?"#17603a":"#a42d1c";if(r.ok){if(tipo==="legenda")legendaTreino=String(valor).trim();etapa=r.estado.etapa;desenhar();}}
+function agir(tipo,valor){const r=servico.treino.agir({tipo,valor});erros=r.estado.erros;const feedback=$("feedback");feedback.textContent=r.motivo;feedback.style.color=r.ok?"#17603a":"#a42d1c";if(r.ok){if(tipo==="legenda"){legendaTreino=String(valor).trim();rascunhoLegenda=legendaTreino;}etapa=r.estado.etapa;desenhar();}}
 function desenhar(){
  const nomes=["Modo","Destinos","Peça","Formato","Mídia","Legenda","Programação","Revisão","Conclusão"];
  $("visao").innerHTML=nomes.map((nome,i)=>'<div class="'+(i<etapa?"feito":i===etapa?"atual":"")+'" aria-current="'+(i===etapa?"step":"false")+'"><strong>'+(i<etapa?"✓ ":i===etapa?"➜ ":"")+nome+'</strong><small>'+(i<etapa?"Concluído":i===etapa?"Pratique aqui":"Aguardando")+'</small></div>').join("");
@@ -49,7 +49,7 @@ $("controles").addEventListener("click",ev=>{const b=ev.target.closest("button")
  else if(d.acao==="revisao")agir("revisao",$("revisado").checked);
  else if(d.acao==="conclusao")agir("conclusao",true);
 });
-$("voltar-etapa").addEventListener("click",()=>{const r=servico.treino.voltar();if(!r.ok)return;etapa=r.estado.etapa;if(etapa<=5)legendaTreino=rascunhoLegenda;desenhar();});
+$("voltar-etapa").addEventListener("click",()=>{const r=servico.treino.voltar();if(!r.ok)return;etapa=r.estado.etapa;desenhar();});
 $("refazer").addEventListener("click",()=>{if(!window.confirm("Reiniciar a prática? O progresso atual será apagado, mas relatórios já baixados serão preservados."))return;servico=api.criarServicoSimulado();etapa=0;erros=0;legendaTreino="";rascunhoLegenda="";ultimo=null;$("area").hidden=false;$("final").hidden=true;desenhar();});
 $("exportar").addEventListener("click",()=>{if(!ultimo)return;const blob=new Blob([JSON.stringify(ultimo,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="tenkiter-treino-postagens-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);});
 desenhar();
