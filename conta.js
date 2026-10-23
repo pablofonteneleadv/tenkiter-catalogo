@@ -144,12 +144,24 @@
       var cpf = el('input', { type: 'text', id: 'tkc-cpf', placeholder: '000.000.000-00' }); ligarCpf(cpf);
       var nasc = el('input', { type: 'text', id: 'tkc-nasc', inputmode: 'numeric', maxlength: '10', placeholder: 'dd/mm/aaaa' });
       nasc.addEventListener('input', function () { nasc.value = nascMask(nasc.value); });
-      var nova = el('input', { type: 'password', id: 'tkc-nova', autocomplete: 'new-password', placeholder: 'Mínimo 4 caracteres' });
+      var nova = el('input', { type: 'password', id: 'tkc-nova', autocomplete: 'new-password', placeholder: 'Mínimo 8 caracteres' });
       box.appendChild(el('label', { 'for': 'tkc-ident', text: 'Seu E-mail, WhatsApp ou CPF' })); box.appendChild(ident);
       box.appendChild(el('label', { 'for': 'tkc-cpf' }, [document.createTextNode('CPF '), el('small', { text: '(se você cadastrou)' })])); box.appendChild(cpf);
       box.appendChild(el('label', { 'for': 'tkc-nasc' }, [document.createTextNode('Data de nascimento '), el('small', { text: '(se você cadastrou)' })])); box.appendChild(nasc);
       box.appendChild(el('label', { 'for': 'tkc-nova', text: 'Senha nova' })); box.appendChild(nova);
       var msg = el('div', { id: 'tkc-msg', role: 'status' }); box.appendChild(msg);
+      var zapCodigo = el('button', {type:'button','class':'tkc-sec',text:'Receber código no meu WhatsApp'});
+      box.appendChild(zapCodigo);
+      zapCodigo.addEventListener('click', async function () {
+        if (!ident.value.trim()) return erro('Digite seu e-mail, WhatsApp ou CPF.');
+        zapCodigo.disabled = true;
+        try {
+          var r = await o.chamar({action:'recuperar_whatsapp_iniciar',identificador:ident.value.trim()});
+          if (!r || !r.ok || !r.desafio) return erro('Recuperação por WhatsApp indisponível agora. Use os dados cadastrados ou chame a gestão.');
+          telaCodigo(r.desafio,r.mensagem);
+        } catch(e) { erro('Sem conexão. Tente novamente em instantes.'); }
+        finally {zapCodigo.disabled=false;}
+      });
       var ok = el('button', { type: 'button', 'class': 'tkc-pri', text: 'Trocar a senha e entrar' }); box.appendChild(ok);
       var naoSei = el('button', { type: 'button', 'class': 'tkc-sec', text: 'Não lembro o que cadastrei — chamar a gestão' });
       naoSei.addEventListener('click', function () { telaGestao('', ident.value.trim(), 'A gestão confirma quem você é pelo WhatsApp e troca a sua senha na hora.'); });
@@ -160,7 +172,7 @@
         if (!ident.value.trim()) return erro('Digite o seu e-mail, WhatsApp ou CPF.');
         if (cpf.value && !cpfValido(cpf.value)) return erro('CPF inválido. Confira os 11 números.');
         if (nasc.value && !nascValida(nasc.value)) return erro('Data de nascimento inválida. Use dd/mm/aaaa.');
-        if (nova.value.length < 4) return erro('A senha nova precisa ter pelo menos 4 caracteres.');
+        if (nova.value.length < 8) return erro('A senha nova precisa ter pelo menos 8 caracteres.');
         ok.disabled = true; var rot = ok.textContent; ok.textContent = 'Conferindo...'; msg.className = ''; msg.textContent = '';
         var r;
         try { r = await o.chamar({ action: 'recuperar_senha', identificador: ident.value.trim(), cpf: digitos(cpf.value), nascimento: nasc.value, novaSenha: nova.value }); } catch (e) { r = null; }
@@ -172,6 +184,30 @@
         erro(r.erro || 'Não consegui agora. Tente de novo.');
       });
       setTimeout(function () { (inicial ? cpf : ident).focus(); }, 60);
+    }
+    function telaCodigo(desafio,texto) {
+      box.textContent='';
+      box.appendChild(el('h2',{id:'tkc-t',text:'Código do WhatsApp'}));
+      box.appendChild(el('p',{text:texto}));
+      var codigo=el('input',{id:'tkc-codigo',autocomplete:'one-time-code',maxlength:'10'});
+      var senha=el('input',{id:'tkc-senha-zap',type:'password',autocomplete:'new-password',minlength:'8',maxlength:'128'});
+      box.appendChild(el('label',{'for':'tkc-codigo',text:'Código de 10 letras e números'}));box.appendChild(codigo);
+      box.appendChild(el('label',{'for':'tkc-senha-zap',text:'Nova senha (mínimo 8 caracteres)'}));box.appendChild(senha);
+      var aviso=el('p',{role:'status'});box.appendChild(aviso);
+      var salvar=el('button',{type:'button','class':'tkc-pri',text:'Salvar nova senha'});box.appendChild(salvar);
+      salvar.addEventListener('click',async function(){
+        if(senha.value.length<8){aviso.textContent='Use pelo menos 8 caracteres.';return;}
+        salvar.disabled=true;
+        try {
+          var r=await o.chamar({action:'recuperar_whatsapp_concluir',desafio:desafio,codigo:codigo.value,novaSenha:senha.value});
+          aviso.textContent=r&&r.ok?'Senha alterada. Feche esta janela e entre com a nova senha.':r&&r.erro||'Não foi possível confirmar. Tente novamente.';
+          if(r&&r.ok){codigo.value='';senha.value='';salvar.hidden=true;}
+        }catch(e){aviso.textContent='Sem conexão agora.';}
+        finally{salvar.disabled=false;}
+      });
+      var voltar=el('button',{type:'button','class':'tkc-sec',text:'Voltar'});voltar.addEventListener('click',function(){formulario('');});box.appendChild(voltar);
+      var sair=el('button',{type:'button','class':'tkc-sec',text:'Fechar'});sair.addEventListener('click',fechar);box.appendChild(sair);
+      codigo.focus();
     }
     formulario(o.identificador || '');
     ov.classList.add('aberto');
