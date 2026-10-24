@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.2.4 — fotos e cartões no gravador — 2026-10-24
+
+- Escolher uma foto vira uma única etapa e é validado pela presença real do arquivo, inclusive nos tutoriais gravados antes desta correção.
+- Cartões de menu, como Cadastrar e Cadastrar nova peça, são capturados como controles completos e recebem uma borda de foco mais forte durante o teste.
+
 ## 7.2.3 — tutorial bloqueia toque fora da etapa — 2026-10-24
 
 - Durante o teste, somente o controle destacado da etapa atual responde; tocar em outro botão não navega nem executa a ação.
