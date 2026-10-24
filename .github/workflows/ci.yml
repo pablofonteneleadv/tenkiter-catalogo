@@ -116,6 +116,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Cadastro de públicos e tamanhos vinculados
+        run: node tests/cadastro_vinculos.js
+
       # Modo rápido: testes unitários dos Workers, sem instalar Chromium.
       # Os testes que dependem dos .gs.txt não versionados não são executados aqui.
       - name: Segurança do núcleo de treinamento de postagens

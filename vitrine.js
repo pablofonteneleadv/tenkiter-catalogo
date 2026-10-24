@@ -472,19 +472,20 @@
     }
 
     // VIT-1/VIT-3 — tamanho em botões dentro do cartão.
-    const tamanhos = listaDeTags(textoPlano(p.Tamanhos || '')).filter((t) => !/consult/i.test(t));
+    const tamanhosApresentados = TKTamanhos.cliente(textoPlano(p.Tamanhos || ''), p.Genero);
+    const tamanhos = tamanhosApresentados.valores;
     if (!esgotado && tamanhos.length && !info.querySelector('.tam-card')) {
       const box = document.createElement('div');
       box.className = 'tam-card';
       box.setAttribute('role', 'group');
-      box.setAttribute('aria-label', 'Tamanhos de ' + nome);
+      box.setAttribute('aria-label', tamanhosApresentados.titulo + ' de ' + nome);
       tamanhos.slice(0, 5).forEach((t) => {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'tam-op';
         b.dataset.tam = t;
         b.setAttribute('aria-pressed', 'false');
-        b.setAttribute('aria-label', 'Tamanho ' + t);
+        b.setAttribute('aria-label', (tamanhosApresentados.tipo === 'idade' ? 'Idade ' : tamanhosApresentados.tipo === 'numero' ? 'Numeração ' : 'Tamanho ') + t);
         b.textContent = t;
         b.addEventListener('click', (ev) => {
           ev.preventDefault();
@@ -550,7 +551,7 @@
     // Substitui o texto corrido "Tamanhos: P, M, G" por botões.
     modal.querySelectorAll('.extra').forEach((el) => {
       const rot = (el.querySelector('strong') || {}).textContent || '';
-      if (/tamanhos/i.test(rot) || /cores/i.test(rot)) el.hidden = true;
+      if (/tamanhos|idades|numerações|cores/i.test(rot)) el.hidden = true;
     });
 
     const alvo = modal.querySelector('.extra') || modal.querySelector('.modal-conteudo');
@@ -588,11 +589,12 @@
       bloco.appendChild(box);
     };
 
-    linha('tam', 'Tamanho', listaDeTags(textoPlano(p.Tamanhos || '')).filter((t) => !/consult/i.test(t)));
+    const tamanhosApresentados = TKTamanhos.cliente(textoPlano(p.Tamanhos || ''), p.Genero);
+    linha('tam', tamanhosApresentados.tipo === 'idade' ? 'Idade' : tamanhosApresentados.tipo === 'numero' ? 'Numeração' : 'Tamanho', tamanhosApresentados.valores);
     linha('cor', 'Cor', listaDeTags(textoPlano(p.Cores || '')));
 
     // Guia de medidas: tabela HTML com cabeçalho de linha e coluna.
-    if (bloco.children.length) {
+    if (bloco.children.length && tamanhosApresentados.tipo === 'legado') {
       const det = document.createElement('details');
       det.className = 'guia-medidas';
       det.id = 'guia-medidas';
