@@ -18,21 +18,23 @@ with sync_playwright() as p:
     page.locator("#tut-titulo").fill("Fluxo rápido")
     page.get_by_role("button", name="Gravação rápida").click()
     frame = page.frame_locator("#tut-frame")
+    frame.locator("body").wait_for()
     frame.locator("#menu").click()
     assert frame.locator("#dentro").is_visible(), "o clique gravado precisa abrir o menu"
+    page.get_by_role("button", name="Começar a gravação daqui").click()
     frame.locator("#opcao").click()
     frame.locator("#codigo").fill("TK-123")
     frame.locator("#codigo").blur()
-    page.get_by_role("button", name="Encerrar gravação").click()
+    page.get_by_role("button", name="Encerrar").click()
     total = page.locator("#tut-etapas tbody tr").count()
-    assert total == 3, f"esperava 3 etapas rápidas, recebeu {total}"
-    assert page.locator('[data-campo="valor"][data-i="2"]').input_value() == "TK-123"
+    assert total == 2, f"esperava 2 etapas visíveis após a preparação, recebeu {total}"
+    assert page.locator('[data-campo="valor"][data-i="1"]').input_value() == "TK-123"
     page.get_by_role("button", name="Texto flutuante").click()
     page.locator("#tf-texto").fill("Confira os dados antes de continuar")
     page.locator("#tf-b").check()
     page.locator("#tf-fundo").fill("#fff3cd")
     page.get_by_role("button", name="Salvar texto").click()
-    assert page.locator("#tut-etapas tbody tr").count() == 4
+    assert page.locator("#tut-etapas tbody tr").count() == 3
     browser.close()
 
 print("tutorial_gravacao_rapida: OK")

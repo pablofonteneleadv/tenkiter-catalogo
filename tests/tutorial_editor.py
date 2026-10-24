@@ -25,6 +25,7 @@ with sync_playwright() as p:
     page.locator("#tut-titulo").fill("Cadastrar uma peça")
     page.locator("#tut-desc").fill("Tutorial criado pelo editor visual")
     page.get_by_role("button", name="Adicionar explicando").click()
+    page.get_by_role("button", name="Começar a gravação daqui").click()
     frame = page.frame_locator("#tut-frame")
     frame.locator("body").wait_for()
     alvo = frame.locator("#cadastrar")
