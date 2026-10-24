@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.3.2 — identidade correta dos controles do tutorial — 2026-10-24
+
+- O jogador confirma que o elemento encontrado pelo seletor ainda corresponde ao nome do controle gravado, impedindo que uma posição antiga destaque outro botão ou uma caixa de dicas.
+- Quando a estrutura da tela mudou, o controle correto é procurado pelo nome acessível; números dinâmicos entre parênteses não invalidam a correspondência.
+- A etapa só aceita a ação no controle identificado corretamente e deixa de avançar por colisões de seletores antigos.
+
 ## 7.3.1 — jogador de tutorial estável — 2026-10-24
 
 - A indicação passa a acompanhar o elemento no documento e não fica mais presa ao topo da tela quando o alvo sai da área visível.
