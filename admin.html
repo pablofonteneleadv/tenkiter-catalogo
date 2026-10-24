@@ -1789,7 +1789,7 @@
     const par={Mulher:'Masculino Adulto',Homem:'Feminino Adulto',Menina:'Infantil Menino',Menino:'Infantil Menina','Baby Menina':'Baby Menino','Baby Menino':'Baby Menina'};
     const unissex=document.getElementById('cad-unissex');
     if(unissex)unissex.checked=arr.includes(par[cadPublico_]);
-    cadLerVinculos_();cadDesenharPublicos_();cadDesenharVinculos_();
+    cadDesenharPublicos_();cadDesenharVinculos_();
   }
   document.getElementById('cad-unissex')?.addEventListener('change',()=>{cadSincronizarPublicos_();atualizarFaltas_()});
   document.getElementById('form-produto')?.addEventListener('reset',()=>setTimeout(()=>{cadEtiqueta_='';cadFaixas_.clear();cadPublico_='Mulher';cadRestaurarPublicos_()},0));
