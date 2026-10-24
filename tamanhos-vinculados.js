@@ -47,11 +47,13 @@
       ...unico(Array.from(faixas || [])).map(v => prefixo + v)
     ]).join(', ');
   }
-  function cliente(valor) {
+  function cliente(valor, genero) {
     const d = ler(valor);
     if (d.idades.length) return { tipo: 'idade', titulo: 'Idades', valores: d.idades };
     if (d.numeros.length) return { tipo: 'numero', titulo: 'Numerações', valores: d.numeros };
-    const valores = unico(d.antigos.length ? d.antigos : (d.etiqueta ? [d.etiqueta] : []));
+    const publicoInfantil = /(?:Infantil|Baby)(?:\\s+|,)/i.test(String(genero || ''));
+    const valores = unico(d.antigos.length ? d.antigos : (d.etiqueta ? [d.etiqueta] : []))
+      .filter(t => !publicoInfantil || !ETIQUETAS.has(t.toLocaleUpperCase('pt-BR')));
     return { tipo: 'legado', titulo: 'Tamanhos', valores };
   }
   return Object.freeze({ ler, gravar, cliente });
