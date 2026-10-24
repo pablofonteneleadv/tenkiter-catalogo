@@ -581,6 +581,11 @@
 #form-produto .cad-vinculos button.ativo{background:#ed861d;border-color:#ed861d;color:#111}
 #form-produto .cad-vinculos-ajuda{font-size:12px;line-height:1.5;color:#666}
 @media(max-width:400px){#form-produto .publico-seis{gap:5px}#form-produto .publico-seis .chip{font-size:12px;padding:9px 3px}}
+#form-produto .cad-tamanhos-legados{margin:12px 0 0;padding:10px 12px;border:1px solid #ddd;border-radius:12px}
+#form-produto .cad-tamanhos-legados summary{font-size:13px;font-weight:650;cursor:pointer}
+#form-produto .cad-tamanhos-legados .chips{margin-top:12px}
+#form-produto .cad-tamanhos-legados input{width:100%;margin-top:8px}
+#form-produto .cad-vinculos button:focus-visible,#form-produto .publico-seis .chip:focus-visible{outline:3px solid #ea7b00;outline-offset:2px}
 </style>
 </head>
 <body>
@@ -824,8 +829,15 @@
         <div class="passo-msg">Escolha pelo menos uma categoria.</div>
       </section>
 
+      <section class="passo" data-passo="genero">
+        <div class="passo-tit"><span class="num">6</span>Para quem é? <i class="obg">*</i></div>
+        <div class="chips chips-grandes publico-seis" id="chips-genero"></div>
+        <label class="cad-unissex"><input type="checkbox" id="cad-unissex"> Também é unissex <small>Exibir para ambos os públicos da mesma faixa etária</small></label>
+        <div class="passo-msg">Escolha para quem é a peça.</div>
+      </section>
+
       <section class="passo" data-passo="tamanhos">
-        <div class="passo-tit"><span class="num">6</span>Tamanhos <span class="opc">(se souber)</span></div>
+        <div class="passo-tit"><span class="num">7</span>Tamanhos <span class="opc">(se souber)</span></div>
         <div class="cad-vinculos" id="cad-vinculos" aria-live="polite">
           <div class="cad-vinculos-titulo">Tamanho da etiqueta</div>
           <div class="cad-etiquetas" id="cad-etiquetas"></div>
@@ -833,23 +845,19 @@
           <div class="cad-faixas" id="cad-faixas"></div>
           <p class="cad-vinculos-ajuda">Escolha o tamanho escrito na etiqueta e as numerações ou idades correspondentes. No infantil, a cliente verá somente a idade.</p>
         </div>
-        <div class="chips chips-rapidos" id="chips-tamanhos"></div>
-        <input type="text" id="tamanhos" placeholder="Ou escreva: P, M, G, GG" autocomplete="off" class="so-admin-cores">
-        <button type="button" class="btn-escolher so-admin-cores" id="btn-abrir-tamanhos">＋ Escolher tamanhos</button>
+        <details id="cad-tamanhos-legados" class="cad-tamanhos-legados" hidden>
+          <summary>Editar tamanhos do cadastro antigo</summary>
+          <div class="chips chips-rapidos" id="chips-tamanhos"></div>
+          <input type="text" id="tamanhos" placeholder="Ex.: P, M, G" autocomplete="off" class="so-admin-cores">
+          <button type="button" class="btn-escolher so-admin-cores" id="btn-abrir-tamanhos">＋ Outros tamanhos</button>
+        </details>
       </section>
 
       <section class="passo" data-passo="cores">
-        <div class="passo-tit"><span class="num">7</span>Cores e estampas <span class="opc">(se souber)</span></div>
+        <div class="passo-tit"><span class="num">8</span>Cores e estampas <span class="opc">(se souber)</span></div>
         <div class="chips chips-rapidos" id="chips-cores"></div>
         <input type="text" id="cores" placeholder="Ou escreva: Preto, Off-white, Estampado" autocomplete="off" class="so-admin-cores">
         <button type="button" class="btn-escolher so-admin-cores" id="btn-abrir-cores">＋ Escolher cores e estampas</button>
-      </section>
-
-      <section class="passo" data-passo="genero">
-        <div class="passo-tit"><span class="num">8</span>Para quem é? <i class="obg">*</i></div>
-        <div class="chips chips-grandes publico-seis" id="chips-genero"></div>
-        <label class="cad-unissex"><input type="checkbox" id="cad-unissex"> Também é unissex <small>Exibir para ambos os públicos da mesma faixa etária</small></label>
-        <div class="passo-msg">Escolha para quem é a peça.</div>
       </section>
 
 
@@ -1045,6 +1053,7 @@
 
 
 <script src="common.js"></script>
+<script src="tamanhos-vinculados.js?v=1"></script>
 <script>
   let adminPin = sessionStorage.getItem('tenkiter_admin_pin') || '';
   let funcionarioNome = localStorage.getItem('tenkiter_funcionario') || '';
@@ -1729,21 +1738,27 @@
   const CAD_IDADES_ = ['RN','0-3 meses','3-6 meses','6-9 meses','9-12 meses',...Array.from({length:16},(_,i)=>(i+1)+' ano'+(i?'s':''))];
   let cadEtiqueta_ = '', cadFaixas_ = new Set(), cadPublico_ = '';
   function cadInfantil_() { return /Menina|Menino/.test(cadPublico_); }
+  function cadExibirLegados_() {
+    const campo = document.getElementById('tamanhos');
+    const detalhe = document.getElementById('cad-tamanhos-legados');
+    if (!campo || !detalhe) return;
+    const dados = TKTamanhos.ler(campo.value);
+    // Formulário antigo: acesso à edição livre somente quando necessário.
+    const legado = !dados.etiqueta && !dados.idades.length && !dados.numeros.length && dados.antigos.length > 0;
+    detalhe.hidden = !legado;
+    if (!legado) detalhe.open = false;
+  }
   function cadLerVinculos_() {
-    const raw = document.getElementById('tamanhos').value;
-    const etiqueta = raw.match(/(?:^|,)\s*Etiqueta:\s*([^,]+)/i);
-    const faixas = [...raw.matchAll(/(?:^|,)\s*(?:Idade|Veste):\s*([^,]+)/gi)].map(m=>m[1].trim());
-    cadEtiqueta_ = etiqueta ? etiqueta[1].trim() : '';
-    cadFaixas_ = new Set(faixas);
+    const dados = TKTamanhos.ler(document.getElementById('tamanhos').value);
+    cadEtiqueta_ = dados.etiqueta || (dados.antigos.length === 1 && CAD_ETIQUETAS_.includes(dados.antigos[0]) ? dados.antigos[0] : '');
+    cadFaixas_ = new Set([...dados.idades, ...dados.numeros]);
+    cadExibirLegados_();
   }
   function cadGravarVinculos_() {
     const campo = document.getElementById('tamanhos');
-    const antigo = campo.value.split(',').map(x=>x.trim()).filter(x=>x && !/^(Etiqueta|Idade|Veste):/i.test(x) && x!=='Consultar tamanhos disponíveis');
-    // Mantém tamanhos legados; novas faixas são tags estáveis e independentes.
-    // Etiqueta e faixas ficam vinculadas; manter somente tags legadas não conflitantes.
-    const tags = [...antigo.filter(x=>!CAD_ETIQUETAS_.includes(x)), ...(cadEtiqueta_?[cadEtiqueta_,'Etiqueta: '+cadEtiqueta_]:[]), ...Array.from(cadFaixas_,x=>(cadInfantil_()?'Idade: ':'Veste: ')+x)];
-    campo.value = [...new Set(tags)].join(', ');
-    campo.dispatchEvent(new Event('input',{bubbles:true}));
+    campo.value = TKTamanhos.gravar(campo.value, cadEtiqueta_, cadFaixas_, cadInfantil_());
+    campo.dispatchEvent(new Event('input', { bubbles: true }));
+    cadExibirLegados_();
     sincRapidos_();
   }
   function cadDesenharVinculos_() {
@@ -1787,13 +1802,22 @@
     const arr=Array.from(selecionadosGeneros);
     const prim=CAD_PUBLICOS_.find(x=>arr.includes(x[1]));
     cadPublico_=prim?prim[0]:(cadPublico_||'Mulher');
+    // O chip Mulher já é a opção inicial: garantir que o dado salvo acompanhe a tela.
+    if (!arr.length && (modoFormulario === 'novo' || modoFormulario === 'varias')) {
+      selecionadosGeneros.add('Feminino Adulto');
+    }
     const par={Mulher:'Masculino Adulto',Homem:'Feminino Adulto',Menina:'Infantil Menino',Menino:'Infantil Menina','Baby Menina':'Baby Menino','Baby Menino':'Baby Menina'};
     const unissex=document.getElementById('cad-unissex');
     if(unissex)unissex.checked=arr.includes(par[cadPublico_]);
     cadDesenharPublicos_();cadDesenharVinculos_();
   }
   document.getElementById('cad-unissex')?.addEventListener('change',()=>{cadSincronizarPublicos_();atualizarFaltas_()});
-  document.getElementById('form-produto')?.addEventListener('reset',()=>setTimeout(()=>{cadEtiqueta_='';cadFaixas_.clear();cadPublico_='Mulher';cadRestaurarPublicos_()},0));
+  document.getElementById('form-produto')?.addEventListener('reset',()=>setTimeout(()=>{
+    cadEtiqueta_=''; cadFaixas_.clear(); cadPublico_='Mulher';
+    const antigo=document.getElementById('cad-tamanhos-legados');
+    if (antigo) { antigo.hidden=true; antigo.open=false; }
+    cadRestaurarPublicos_();
+  },0));
   function renderizarChips(idContainer, valores, conjunto) {
     if (idContainer === 'chips-categoria') { renderizarCategorias_(); return; }
     if (idContainer === 'chips-genero') { cadRestaurarPublicos_(); return; }
