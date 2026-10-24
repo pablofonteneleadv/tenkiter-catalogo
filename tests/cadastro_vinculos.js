@@ -10,6 +10,7 @@ const raiz = path.join(__dirname, '..');
 const admin = fs.readFileSync(path.join(raiz, 'admin.html'), 'utf8');
 const index = fs.readFileSync(path.join(raiz, 'index.html'), 'utf8');
 const catalogo = fs.readFileSync(path.join(raiz, 'catalogo.js'), 'utf8');
+const vitrine = fs.readFileSync(path.join(raiz, 'vitrine.js'), 'utf8');
 
 const infantil3 = T.gravar('', 'M', ['3 anos', '4 anos'], true);
 const infantil13 = T.gravar('', 'M', ['13 anos', '14 anos'], true);
@@ -54,4 +55,6 @@ assert.ok(admin.includes('TKTamanhos.ler('), 'edição deve recuperar os víncul
 assert.ok(catalogo.includes('TKTamanhos.cliente('), 'vitrine deve usar o parser');
 assert.ok(catalogo.includes('linhaTamanhoCliente_(p)'), 'detalhes do produto devem omitir etiquetas internas');
 assert.ok(index.includes('Tamanho ou idade'), 'filtro deve comunicar idades infantis');
+assert.ok(vitrine.includes('TKTamanhos.cliente('), 'cards e modal devem usar idades/numerações reais');
+assert.ok(!vitrine.includes("listaDeTags(textoPlano(p.Tamanhos || '')).filter"), 'interface não pode expor metadados internos');
 console.log('Cadastro vinculado: 19 cenários/assertivas essenciais aprovados.');
