@@ -24,7 +24,7 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Gravar tutorial").click()
     page.locator("#tut-titulo").fill("Cadastrar uma peça")
     page.locator("#tut-desc").fill("Tutorial criado pelo editor visual")
-    page.get_by_role("button", name="Selecionar elemento na tela").click()
+    page.get_by_role("button", name="Adicionar explicando").click()
     frame = page.frame_locator("#tut-frame")
     frame.locator("body").wait_for()
     alvo = frame.locator("#cadastrar")
@@ -33,8 +33,8 @@ with sync_playwright() as p:
     page.locator("#te-obs").fill("Confira o destaque laranja")
     page.locator("#te-acao").select_option("click")
     page.locator("#te-regra").select_option("acao")
-    page.get_by_role("button", name="Adicionar etapa").click()
-    assert page.locator("#tut-etapas .tut-linha").count() == 1
+    page.get_by_role("button", name="Salvar etapa").click()
+    assert page.locator("#tut-etapas tbody tr").count() == 1
     page.get_by_role("button", name="Salvar rascunho").click()
     page.wait_for_function("window.__saved.length === 1")
     saved = page.evaluate("window.__saved[0]")
