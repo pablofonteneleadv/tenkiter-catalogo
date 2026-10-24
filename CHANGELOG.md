@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.2.6 — alvo visível e tela correta no tutorial — 2026-10-24
+
+- O tutorial só posiciona o destaque quando o controle está realmente visível; campos escondidos deixam de enviar a seta para o cabeçalho.
+- Se a tela necessária não terminou de abrir, a última ação de abertura é restaurada e o alvo é centralizado antes de mostrar a orientação.
+- A placa “TOQUE AQUI” fica ao lado do controle, escolhendo automaticamente espaço acima ou abaixo sem sair da tela.
+
 ## 7.2.5 — indicação visual inequívoca — 2026-10-24
 
 - A etapa destaca o cartão inteiro com contorno azul e branco pulsante, escurece o restante da tela e mostra a placa “👉 TOQUE AQUI”.
