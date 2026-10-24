@@ -22,12 +22,14 @@ try { tkSelExpirar_(); } catch (e) {}
 
   function listaDeTags(c) { return String(c || '').split(',').map(s => s.trim()).filter(Boolean); }
 
-  // Etiqueta é dado interno; a cliente filtra pelas idades ou numerações vinculadas.
+  // Não apresentar nem filtrar a etiqueta interna quando houver idades/números vinculados.
   function tagsTamanhoCliente_(p) {
-    const tags=listaDeTags(textoPlano(p.Tamanhos));
-    const vinculadas=tags.filter(t=>/^(Idade|Veste):\s*/i.test(t)).map(t=>t.replace(/^(Idade|Veste):\s*/i,'').trim());
-    if(vinculadas.length)return [...new Set(vinculadas)];
-    return tags.filter(t=>!/^Etiqueta:/i.test(t)&&!/^(Consultar tamanhos disponíveis)$/i.test(t));
+    return TKTamanhos.cliente(textoPlano(p.Tamanhos)).valores;
+  }
+  function linhaTamanhoCliente_(p) {
+    const d = TKTamanhos.cliente(textoPlano(p.Tamanhos));
+    return d.valores.length ? '<div class="extra"><strong>' +
+      escaparHtml(d.titulo) + ':</strong> ' + escaparHtml(d.valores.join(', ')) + '</div>' : '';
   }
   function nivelDisponibilidade(p) {
     if (!estoqueInformado(p)) return null;
@@ -966,7 +968,7 @@ try { tkSelExpirar_(); } catch (e) {}
           ${ehConsulta(p) ? '<span class="consulta">' + TEXTO_CONSULTA + '</span>' : '<span class="cheio">' + formatarReal(p.Preco) + '</span>\n          <span class="avista">' + formatarReal(avista) + ' à vista</span>'}
         </div>
         <div class="tags">${escaparHtml(p.Categoria)} · ${escaparHtml(p.Genero)}</div>
-        ${p.Tamanhos ? `<div class="extra"><strong>Tamanhos:</strong> ${escaparHtml(textoPlano(p.Tamanhos))}</div>` : ''}
+        ${linhaTamanhoCliente_(p)}
         ${p.Cores ? `<div class="extra"><strong>Cores:</strong> ${escaparHtml(textoPlano(p.Cores))}</div>` : ''}
         ${p.Descricao ? `<div class="desc">${escaparHtml(p.Descricao)}</div>` : ''}
         ${disp ? `<div class="disponibilidade ${disp.classe}" style="margin-top:10px;font-size:0.8rem;">${disp.texto}</div>` : ''}
