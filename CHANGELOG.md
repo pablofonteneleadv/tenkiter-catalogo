@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.3.0 — auditoria filtrável e recuperação geral do tutorial — 2026-10-24
+
+- A auditoria usa a sessão atual completa, eliminando o falso erro de PIN para contas autenticadas.
+- O histórico pode ser filtrado por data inicial, data final e vários usuários ao mesmo tempo, além da pesquisa por produto, código ou ação.
+- O jogador de tutoriais recupera sequências de menus, modais e painéis em qualquer setor ao procurar ações anteriores visíveis até reencontrar o alvo.
+
 ## 7.2.6 — alvo visível e tela correta no tutorial — 2026-10-24
 
 - O tutorial só posiciona o destaque quando o controle está realmente visível; campos escondidos deixam de enviar a seta para o cabeçalho.
