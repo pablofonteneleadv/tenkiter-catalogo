@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.2.0 — gravação rápida de tutoriais — 2026-10-24
+
+- Cliques gravados passam a executar normalmente, permitindo abrir menus e continuar gravando dentro deles.
+- O modo rápido registra cliques, seleções e textos digitados sem abrir o formulário a cada ação; campos recebem validação exata automaticamente.
+- Ao encerrar, todas as etapas aparecem numa planilha editável. Textos flutuantes aceitam tamanho, cores, borda, posição, negrito, itálico e sublinhado.
+
+
 ## 7.1.4 — atualização garantida do editor — 2026-10-24
 
 - Os arquivos do editor recebem versão na URL para o celular descartar a cópia antiga imediatamente.
