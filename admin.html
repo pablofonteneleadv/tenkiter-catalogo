@@ -586,6 +586,29 @@
 #form-produto .cad-tamanhos-legados .chips{margin-top:12px}
 #form-produto .cad-tamanhos-legados input{width:100%;margin-top:8px}
 #form-produto .cad-vinculos button:focus-visible,#form-produto .publico-seis .chip:focus-visible{outline:3px solid #ea7b00;outline-offset:2px}
+
+/* Cadastro visual: referencia TENKiTER — formulario unico, sem etapa de revisao. */
+#card-form .cad-corpo{background:#faf9f6}
+#card-form #titulo-form{font-size:clamp(1.3rem,4.5vw,1.75rem);letter-spacing:-.025em;margin:6px 0}
+#card-form .cad-sub{color:#69645f;line-height:1.5;margin-bottom:18px}
+#form-produto{display:flex;flex-direction:column;gap:13px}
+#form-produto .passo{background:#fff;border:1px solid #eae6df;border-radius:18px;padding:16px;box-shadow:0 2px 10px rgba(31,25,16,.035);margin:0}
+#form-produto .passo-tit{font-size:1rem;line-height:1.4;font-weight:800;margin-bottom:13px;color:#24211e;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#form-produto .passo-tit .num{display:inline-grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:#f1871b;color:#1d1711;font-size:.9rem;font-weight:850}
+#form-produto .passo-tit .opc,#form-produto .passo-tit .passo-cont{font-size:.76rem;font-weight:500;color:#77716b}
+#form-produto input:not([type="checkbox"]):not([type="file"]):not([type="hidden"]),#form-produto textarea{border-radius:12px;min-height:46px;border:1px solid #dcd7cf;background:#fff;font-size:16px}
+#form-produto input:focus-visible,#form-produto textarea:focus-visible{outline:2px solid #f1871b;outline-offset:1px}
+#form-produto .btn-foto{border:2px dashed #e3b47e;border-radius:15px;background:#fff9f2;color:#6a3a0e;min-height:92px;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px}
+#form-produto #chips-categorias{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+#form-produto #chips-categorias .chip{width:100%;min-width:0;min-height:47px;justify-content:center;border-radius:12px;white-space:normal;text-align:center}
+#form-produto .publico-seis .chip{border-radius:13px;min-height:56px}
+#form-produto .cad-vinculos{background:#fff9f2;border:1px solid #f0dfcc}
+#form-produto .cad-vinculos button.ativo{background:#f1871b;color:#23180c}
+#form-produto .cad-vinculos button{border-radius:12px}
+#form-produto #btn-salvar{min-height:54px;border-radius:14px;background:#f1871b;color:#20150a;font-weight:850;font-size:1.05rem;box-shadow:0 4px 14px rgba(241,135,27,.18)}
+#form-produto #details-mais{background:#fff;border:1px solid #eae6df;border-radius:18px;padding:16px}
+@media(max-width:440px){#form-produto .passo{padding:13px}#form-produto .cad-etiquetas,#form-produto .cad-faixas{gap:6px}#form-produto #chips-categorias .chip{font-size:.87rem;padding:10px 5px}}
+@media(prefers-reduced-motion:no-preference){#form-produto .chip,#form-produto .cad-vinculos button{transition:background-color .12s ease,border-color .12s ease}}
 </style>
 </head>
 <body>
