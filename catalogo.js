@@ -25,7 +25,7 @@ try { tkSelExpirar_(); } catch (e) {}
   // Etiqueta é dado interno; a cliente filtra pelas idades ou numerações vinculadas.
   function tagsTamanhoCliente_(p) {
     const tags=listaDeTags(textoPlano(p.Tamanhos));
-    const vinculadas=tags.filter(t=>/^(Idade|Veste):\\s*/i.test(t)).map(t=>t.replace(/^(Idade|Veste):\\s*/i,'').trim());
+    const vinculadas=tags.filter(t=>/^(Idade|Veste):\s*/i.test(t)).map(t=>t.replace(/^(Idade|Veste):\s*/i,'').trim());
     if(vinculadas.length)return [...new Set(vinculadas)];
     return tags.filter(t=>!/^Etiqueta:/i.test(t)&&!/^(Consultar tamanhos disponíveis)$/i.test(t));
   }
