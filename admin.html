@@ -3379,7 +3379,7 @@
   const R2_FOTO_MAX = 2.5 * 1048576, R2_VIDEO_MAX = 15 * 1048576;
   function sessaoR2_() {
     const s = typeof getSessao === 'function' ? getSessao() : null;
-    return s && /^tk[12]\./.test(String(s.sessao)) ? s : null;
+    return s && /^tk[123]\./.test(String(s.sessao)) ? s : null;
   }
   function podeR2_(file, tipoRecurso) {
     if (window.TK_MIDIA_R2 === false || !sessaoR2_()) return false;

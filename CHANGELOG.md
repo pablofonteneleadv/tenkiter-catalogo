@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.2.2 — sessão compartilhada em todos os módulos — 2026-10-24
+
+- Postagens, Foto IA, Instagram, fotos de clientes, telemetria e upload R2 passam a aceitar a sessão compartilhada `tk3` já emitida pelo login atual.
+- A prévia do gravador de tutoriais mantém o administrador autenticado ao abrir Postagens, sem pedir um segundo login.
+
 ## 7.2.1 — escolher início e visão do tutorial — 2026-10-24
 
 - O editor abre em modo de preparação e só cria etapas depois de “Começar a gravação daqui”; a preparação é repetida silenciosamente para o aluno.

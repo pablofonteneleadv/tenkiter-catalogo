@@ -9,7 +9,7 @@
   'use strict';
   const MAX_LADO = 1280, MAX_BYTES = 2.4 * 1048576;
   function el(tag, props, filhos) { const e = document.createElement(tag); Object.keys(props || {}).forEach((k) => { if (k === 'text') e.textContent = props[k]; else e[k] = props[k]; }); (filhos || []).forEach((f) => e.appendChild(f)); return e; }
-  function sessao() { const s = typeof getSessao === 'function' ? getSessao() : null; return s && /^tk[12]\./.test(String(s.sessao)) ? s : null; }
+  function sessao() { const s = typeof getSessao === 'function' ? getSessao() : null; return s && /^tk[123]\./.test(String(s.sessao)) ? s : null; }
   function reduzir(file) {
     return new Promise((res, rej) => {
       const url = URL.createObjectURL(file), img = new Image();
