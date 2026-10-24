@@ -59,4 +59,13 @@ assert.ok(catalogo.includes('linhaTamanhoCliente_(p)'), 'detalhes do produto dev
 assert.ok(index.includes('Tamanho ou idade'), 'filtro deve comunicar idades infantis');
 assert.ok(vitrine.includes('TKTamanhos.cliente('), 'cards e modal devem usar idades/numerações reais');
 assert.ok(!vitrine.includes("listaDeTags(textoPlano(p.Tamanhos || '')).filter"), 'interface não pode expor metadados internos');
+// Predefinicoes do cadastro: adulto automatico, infantil sem chute de etiqueta.
+for (const [etiqueta, numeros] of Object.entries({PP:['34'],P:['36'],M:['38','40'],G:['42','44'],GG:['46']})) {
+  assert.ok(admin.includes(etiqueta + ":[" + numeros.map(n=>"'"+n+"'").join(',') + "]"), 'predefinicao adulta ausente: '+etiqueta);
+}
+assert.ok(admin.includes('cadFaixas_=new Set(cadPredefinirFaixas_(cadEtiqueta_))'), 'clique na etiqueta deve preselecionar numeros');
+assert.ok(admin.includes("cadInfantil_() ? []"), 'etiquetas infantis nao devem presumir idade');
+assert.ok(admin.includes("CAD_IDADES_CRIANCA_ = Array.from({length:16},(_,i)=>(i+2)+' anos')"), 'crianca inicia aos 2 anos');
+assert.ok(admin.includes("'18-24 meses'"), 'baby termina em 24 meses');
+assert.ok(!admin.includes("const CAD_IDADES_ = ['RN'"), 'nao misturar meses de baby com anos de crianca');
 console.log('Cadastro vinculado: 19 cenários/assertivas essenciais aprovados.');
