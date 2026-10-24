@@ -1800,7 +1800,7 @@
   }
   function cadRestaurarPublicos_() {
     const arr=Array.from(selecionadosGeneros);
-    const prim=CAD_PUBLICOS_.find(x=>arr.includes(x[1]));
+    const prim=CAD_PUBLICOS_.find(x=>x[0]===cadPublico_ && arr.includes(x[1])) || CAD_PUBLICOS_.find(x=>arr.includes(x[1]));
     cadPublico_=prim?prim[0]:(cadPublico_||'Mulher');
     // O chip Mulher já é a opção inicial: garantir que o dado salvo acompanhe a tela.
     if (!arr.length && (modoFormulario === 'novo' || modoFormulario === 'varias')) {
