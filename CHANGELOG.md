@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.2.1 — escolher início e visão do tutorial — 2026-10-24
+
+- O editor abre em modo de preparação e só cria etapas depois de “Começar a gravação daqui”; a preparação é repetida silenciosamente para o aluno.
+- A prévia permite escolher a visão de Cliente, Aluno, Novato, Estagiário, Funcionário, Equipe do site, Equipe catálogo, Encarregado, Admin, Admin total ou Responsável RH.
+
+
 ## 7.2.0 — gravação rápida de tutoriais — 2026-10-24
 
 - Cliques gravados passam a executar normalmente, permitindo abrir menus e continuar gravando dentro deles.
