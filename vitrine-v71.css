@@ -1,16 +1,3 @@
-/* ====================================================================
- * TENKiTER - vitrine v7.1 (menu, pesquisa e filtros)
- *
- * CSS da camada aditiva. Carregado no <head> pelo build
- * (scripts/deploy/cache_bust.py), DEPOIS de vitrine.css.
- *
- * Por que no <head> e nao injetado por JS: injetado no fim do <body>, ele
- * chegava depois do primeiro paint - a pagina pintava com as faixas
- * abertas e o recolhimento virava um salto de layout. Medido: CLS 0,17
- * com o CSS por JS contra 0,05 de linha de base. No <head> ele chega
- * antes do paint e o CLS fica em 0,056.
- * ==================================================================== */
-
 /* ---------- item 1: as faixas de navegacao num <details> ---------- */
 .faixas-details { margin: 0; }
 .faixas-sum {
