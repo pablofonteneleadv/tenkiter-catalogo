@@ -1,5 +1,10 @@
 /* ---------- item 1: as faixas de navegacao num <details> ---------- */
 .faixas-details { margin: 0; }
+/* O navegador esconde o conteudo de um <details> fechado, mas o
+   display:flex de .faixas-vitrine (regra de autor, em vitrine.css) vence
+   essa regra do navegador - as pilulas continuavam a vista com o <details>
+   fechado, e o recolhimento nao acontecia. Esconder explicitamente. */
+.faixas-details:not([open]) > .faixas-vitrine { display: none; }
 .faixas-sum {
   display: flex; align-items: center; gap: 8px;
   min-height: 48px; padding: 0 14px; margin: 0;
@@ -9,7 +14,7 @@
 }
 .faixas-sum::-webkit-details-marker { display: none; }
 .faixas-sum::after {
-  content: "\25BE"; margin-left: auto; font-size: .9rem; color: #8a8272;
+  content: "\\25BE"; margin-left: auto; font-size: .9rem; color: #8a8272;
   transition: transform .15s ease;
 }
 .faixas-details[open] > .faixas-sum::after { transform: rotate(180deg); }
@@ -28,7 +33,7 @@
     font-size: .68rem; font-weight: 700; color: #5c5648;
     display: inline; text-align: left;
   }
-  .beneficios span + span::before { content: "\00b7"; margin-right: 10px; color: #c9bfa8; }
+  .beneficios span + span::before { content: "\\00b7"; margin-right: 10px; color: #c9bfa8; }
 }
 
 /* ---------- item 3: CLS < 0,10 ---------- */
