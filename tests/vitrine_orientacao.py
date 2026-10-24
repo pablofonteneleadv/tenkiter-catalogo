@@ -16,8 +16,13 @@ with sync_playwright() as p:
     # em vez do genérico "Consultar", que não dizia para onde o toque levava.
     chk("cartão: CTA nomeia o WhatsApp (não mais 'Consultar')", "WhatsApp" in pg.locator(".ac-pedir").first.inner_text(), pg.locator(".ac-pedir").first.inner_text())
     chk("cartão: botão 'Selecionar' e título da seleção", "Selecionar" in pg.locator(".ac-sacola").first.inner_text() and pg.get_attribute("#btn-sacola-header", "title") == "Abrir minha seleção")
-    chk("a busca vem ANTES da faixa de vantagens", pg.evaluate("document.getElementById('busca').getBoundingClientRect().top < document.getElementById('beneficios').getBoundingClientRect().top"))
+    # v7.1 (Pacote 1, item a): a faixa de vantagens passou a nascer RECOLHIDA no
+    # celular (é a 3ª coisa antes do 1º produto e não ajuda a escolher). O texto
+    # continua o mesmo — só não fica à vista até a pessoa abrir.
+    chk("a busca vem ANTES da faixa de vantagens", pg.evaluate("document.getElementById('busca').getBoundingClientRect().top < document.getElementById('beneficios-details').getBoundingClientRect().top"))
+    pg.click("#beneficios-details > summary"); pg.wait_for_timeout(300)
     chk("faixa de vantagens fala em 'Consulte'", "Consulte pelo WhatsApp" in pg.inner_text("#beneficios"))
+    pg.click("#beneficios-details > summary"); pg.wait_for_timeout(200)
     chk("sem filtro nenhum, a faixa de filtros ativos não aparece", pg.locator("#etiquetas-ativas").is_hidden())
     # etiquetas de filtros ativos
     pg.click("#btn-filtros-toggle"); pg.wait_for_timeout(200)
