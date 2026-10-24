@@ -270,7 +270,8 @@
     return '<div class="admin-panel tmv-adm" id="tmv-adm"><h2 style="margin-top:0">Prática e certificados</h2>' +
       '<p class="tmv-aviso-leitura">Escolha a pessoa e o manual, marque o que você viu na loja e aprove. Fica registrado quem validou e quando.</p>' +
       '<div class="row"><select id="tmv-pes" aria-label="Pessoa"></select><select id="tmv-man" aria-label="Manual"></select></div>' +
-      '<div id="tmv-itens"><p class="tmv-aviso-leitura">Carregando…</p></div><div id="tmv-lista"></div></div>';
+      '<div id="tmv-itens"><p class="tmv-aviso-leitura">Carregando…</p></div><div id="tmv-lista"></div></div>' +
+      '<div id="tut-editor-slot"></div>';
   };
   TMV.ligarGestor = async function(){
     var raiz = document.getElementById('tmv-adm'); if (!raiz) return;
@@ -314,5 +315,6 @@
     };
     pes.addEventListener('change', desenhar); man.addEventListener('change', desenhar);
     carregar();
+    if (window.TKTutorial) window.TKTutorial.montarEditor();
   };
 })();
