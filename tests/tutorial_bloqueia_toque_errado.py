@@ -24,6 +24,7 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Encerrar").click()
     page.get_by_role("button", name="Testar tutorial inteiro").click()
     teste = page.frame_locator("#tt-frame")
+    teste.locator("#certo.tk-tut-alvo").wait_for()
     teste.locator("#errado").click()
     assert teste.locator("body").evaluate("() => window.errados || 0") == 0
     assert page.locator("[data-tut-erro-toque]").is_visible()
