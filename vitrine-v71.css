@@ -1,5 +1,10 @@
 /* ---------- item 1: as faixas de navegacao num <details> ---------- */
 .faixas-details { margin: 0; }
+/* O navegador esconde o conteudo de um <details> fechado, mas o
+   display:flex de .faixas-vitrine (regra de autor, em vitrine.css) vence
+   essa regra do navegador - as pilulas continuavam a vista com o <details>
+   fechado, e o recolhimento nao acontecia. Esconder explicitamente. */
+.faixas-details:not([open]) > .faixas-vitrine { display: none; }
 .faixas-sum {
   display: flex; align-items: center; gap: 8px;
   min-height: 48px; padding: 0 14px; margin: 0;
