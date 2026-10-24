@@ -18,7 +18,7 @@
   let iaRodando = false, iaTxt = '', tela = '';      // tela: 'lista' | 'editor' | 'conectar' (a leitura por IA só redesenha a lista)
 
   /* ---------- Worker ---------- */
-  function sessao() { const s = typeof getSessao === 'function' ? getSessao() : null; return s && /^tk[12]\./.test(String(s.sessao)) ? s : null; }
+  function sessao() { const s = typeof getSessao === 'function' ? getSessao() : null; return s && /^tk[123]\./.test(String(s.sessao)) ? s : null; }
   async function ig(caminho, metodo, corpo) {
     const s = sessao();
     if (!s) return { ok: false, erro: 'Entre com o seu login (não vale só o PIN) para usar esta tela.' };

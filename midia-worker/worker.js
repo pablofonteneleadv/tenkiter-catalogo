@@ -78,7 +78,7 @@ async function sha(texto) {
 async function permissoes(env, req) {
   const whats = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
   const sessao = (req.headers.get('X-TK-Sessao') || '').slice(0, 400);
-  if (!whats || !/^tk[12]\./.test(sessao)) return null;           // só token de sessão, nunca senha
+  if (!whats || !/^tk[123]\./.test(sessao)) return null;           // só token de sessão, nunca senha
   const chave = new Request('https://sessao.invalid/' + (await sha(whats + '|' + sessao)));
   const cache = caches.default;
   const guardado = await cache.match(chave);
