@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.2.3 — tutorial bloqueia toque fora da etapa — 2026-10-24
+
+- Durante o teste, somente o controle destacado da etapa atual responde; tocar em outro botão não navega nem executa a ação.
+- Quando a próxima tela ainda está abrindo, o tutorial bloqueia a interface e procura novamente o alvo automaticamente.
+
 ## 7.2.2 — sessão compartilhada em todos os módulos — 2026-10-24
 
 - Postagens, Foto IA, Instagram, fotos de clientes, telemetria e upload R2 passam a aceitar a sessão compartilhada `tk3` já emitida pelo login atual.
