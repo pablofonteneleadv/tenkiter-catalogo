@@ -5013,54 +5013,78 @@
   async function abrirAuditoria() {
     const painel = document.getElementById('painel-compartilhar-conteudo');
     painel.innerHTML = `
-      <h3 style="margin-top:0;">\u{1F4CB} Auditoria / Histórico</h3>
-      <input type="text" id="busca-auditoria" placeholder="\u{1F50E} Filtrar por atendente, produto ou ação...">
-      <div id="lista-auditoria" style="margin-top:10px;max-height:55vh;overflow-y:auto;"><p style="text-align:center;color:#666;">Carregando...</p></div>
+      <h3 style="margin-top:0;">📋 Auditoria / Histórico</h3>
+      <input type="search" id="busca-auditoria" placeholder="🔎 Produto, código ou ação..." aria-label="Pesquisar na auditoria">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+        <label style="font-size:.8rem;font-weight:700">📅 De<input type="date" id="aud-data-de" style="margin-top:4px"></label>
+        <label style="font-size:.8rem;font-weight:700">📅 Até<input type="date" id="aud-data-ate" style="margin-top:4px"></label>
+      </div>
+      <details id="aud-usuarios" style="margin-top:10px;border:1px solid #ddd;border-radius:12px;padding:8px 10px">
+        <summary style="cursor:pointer;font-weight:800">👥 Usuários: <span id="aud-usuarios-resumo">todos</span></summary>
+        <div id="aud-usuarios-lista" style="display:grid;gap:6px;margin-top:8px"></div>
+      </details>
+      <div style="display:flex;gap:8px;margin-top:10px"><button type="button" id="aud-limpar" style="background:#eee;color:#444">Limpar filtros</button><span id="aud-total" style="align-self:center;font-size:.8rem;color:#666"></span></div>
+      <div id="lista-auditoria" style="margin-top:10px;max-height:48vh;overflow-y:auto;"><p style="text-align:center;color:#666;">Carregando...</p></div>
       <button type="button" id="btn-fechar-auditoria" style="background:#eee;color:#555;margin-top:12px;">Fechar</button>
     `;
     abrirComHistorico_('overlay-compartilhar');
-    document.getElementById('btn-fechar-auditoria').addEventListener('click', () => {
-      fecharComHistorico_('overlay-compartilhar');
-    });
+    document.getElementById('btn-fechar-auditoria').addEventListener('click', () => fecharComHistorico_('overlay-compartilhar'));
 
     let registros = [];
     try {
-      const resp = await fetch(API_URL + '?action=historico&pin=' + encodeURIComponent(adminPin) + '&limite=200').then(r => r.json());
-      if (resp.pinInvalido) {
-        document.getElementById('lista-auditoria').innerHTML = '<p style="text-align:center;color:#c62828;">PIN incorreto — não foi possível ver a auditoria.</p>';
+      const sess = (typeof getSessao === 'function' && getSessao()) || null;
+      const qs = new URLSearchParams({ action: 'historico', limite: '500', pin: adminPin, sessao: adminPin, whatsapp: sess ? sess.whatsapp : '' });
+      const resp = await fetch(API_URL + '?' + qs.toString()).then(r => r.json());
+      if (!resp.ok && (resp.pinInvalido || resp.sessaoInvalida || resp.exigeLogin || resp.semPermissao)) {
+        document.getElementById('lista-auditoria').innerHTML = '<p style="text-align:center;color:#c62828;">Sua sessão não autorizou a auditoria. Entre novamente com uma conta que tenha essa permissão.</p>';
         return;
       }
-      registros = resp.registros || [];
+      registros = Array.isArray(resp.registros) ? resp.registros : [];
     } catch (e) {
       document.getElementById('lista-auditoria').innerHTML = '<p style="text-align:center;color:#c62828;">Não foi possível carregar a auditoria agora.</p>';
       return;
     }
 
+    const nomes = [...new Set(registros.map(r => String(r.Funcionario || 'Sistema').trim() || 'Sistema'))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+    const listaUsuarios = document.getElementById('aud-usuarios-lista');
+    listaUsuarios.innerHTML = nomes.map((nome, i) => `<label style="display:flex;align-items:center;gap:8px;min-height:38px"><input type="checkbox" class="aud-usuario" value="${escaparHtml(nome)}" checked> <span>${escaparHtml(nome)}</span></label>`).join('') || '<span style="color:#666">Nenhum usuário encontrado.</span>';
+
+    function diaLocal(valor) {
+      if (!valor) return '';
+      const d = new Date(valor); if (Number.isNaN(d.getTime())) return '';
+      const dois = n => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + dois(d.getMonth() + 1) + '-' + dois(d.getDate());
+    }
+    function usuariosMarcados() { return new Set([...document.querySelectorAll('.aud-usuario:checked')].map(x => x.value)); }
     function renderizarListaAuditoria() {
       const termo = document.getElementById('busca-auditoria').value.trim().toLowerCase();
-      const filtrados = registros.filter(r => !termo ||
-        String(r.Funcionario || '').toLowerCase().includes(termo) ||
-        String(r.Nome || '').toLowerCase().includes(termo) ||
-        String(r.Codigo || '').toLowerCase().includes(termo) ||
-        String(r.Acao || '').toLowerCase().includes(termo)
-      );
+      const de = document.getElementById('aud-data-de').value, ate = document.getElementById('aud-data-ate').value;
+      const usuarios = usuariosMarcados();
+      const filtrados = registros.filter(r => {
+        const nome = String(r.Funcionario || 'Sistema').trim() || 'Sistema', dia = diaLocal(r.DataHora);
+        return usuarios.has(nome) && (!de || (dia && dia >= de)) && (!ate || (dia && dia <= ate)) && (!termo ||
+          nome.toLowerCase().includes(termo) || String(r.Nome || '').toLowerCase().includes(termo) ||
+          String(r.Codigo || '').toLowerCase().includes(termo) || String(r.Acao || '').toLowerCase().includes(termo));
+      });
+      const resumo = usuarios.size === nomes.length ? 'todos' : usuarios.size + ' de ' + nomes.length;
+      document.getElementById('aud-usuarios-resumo').textContent = resumo;
+      document.getElementById('aud-total').textContent = filtrados.length + (filtrados.length === 1 ? ' registro' : ' registros');
       const container = document.getElementById('lista-auditoria');
-      if (!filtrados.length) { container.innerHTML = '<p style="text-align:center;color:#666;">Nenhum registro encontrado.</p>'; return; }
+      if (!filtrados.length) { container.innerHTML = '<p style="text-align:center;color:#666;">Nenhum registro encontrado com estes filtros.</p>'; return; }
       container.innerHTML = filtrados.map(r => {
         const data = r.DataHora ? new Date(r.DataHora).toLocaleString('pt-BR') : '';
         const precos = (r.PrecoAnterior !== '' && r.PrecoAnterior !== undefined && String(r.PrecoAnterior) !== String(r.PrecoNovo))
           ? ` · Preço: ${Number(r.PrecoAnterior) > 0 ? formatarReal(r.PrecoAnterior) : 'Consulte valor'} → ${Number(r.PrecoNovo) > 0 ? formatarReal(r.PrecoNovo) : 'Consulte valor'}` : '';
-        return `
-          <div class="auditoria-item">
-            <div class="linha1"><span>${escaparHtml(r.Acao || '')}</span><span>${data}</span></div>
-            <div class="linha2">${escaparHtml(r.Funcionario || 'Sistema')} · ${escaparHtml(r.Codigo || '')} ${escaparHtml(r.Nome || '')}${precos}</div>
-          </div>
-        `;
+        return `<div class="auditoria-item"><div class="linha1"><span>${escaparHtml(r.Acao || '')}</span><span>${data}</span></div><div class="linha2">${escaparHtml(r.Funcionario || 'Sistema')} · ${escaparHtml(r.Codigo || '')} ${escaparHtml(r.Nome || '')}${precos}</div></div>`;
       }).join('');
     }
-
+    ['busca-auditoria','aud-data-de','aud-data-ate'].forEach(id => document.getElementById(id).addEventListener(id === 'busca-auditoria' ? 'input' : 'change', renderizarListaAuditoria));
+    listaUsuarios.addEventListener('change', renderizarListaAuditoria);
+    document.getElementById('aud-limpar').addEventListener('click', () => {
+      document.getElementById('busca-auditoria').value = ''; document.getElementById('aud-data-de').value = ''; document.getElementById('aud-data-ate').value = '';
+      document.querySelectorAll('.aud-usuario').forEach(x => { x.checked = true; }); renderizarListaAuditoria();
+    });
     renderizarListaAuditoria();
-    document.getElementById('busca-auditoria').addEventListener('input', debounce(renderizarListaAuditoria, 250));
   }
 
   /* ===================== Configuração da IA (chave/modelo do Gemini, guardados no servidor) ===================== */

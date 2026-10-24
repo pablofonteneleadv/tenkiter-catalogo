@@ -57,6 +57,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("backend_gs.js", lambda o: "FALHAS=0" in o),        # backend do Apps Script rodando em memória (sem planilha real)
     ("backend_contas.js", lambda o: "FALHAS=0" in o),     # bloco de contas compartilhado (CPF, e-mail, login múltiplo, recuperar senha) igual nos dois backends
     ("auditoria_produto.py", lambda o: "FALHAS=0" in o),   # quem cadastrou/editou aparece na lista e no formulário (backend 4.1)
+    ("auditoria_filtros.py", lambda o: "auditoria_filtros: OK" in o), # sessão atual + período + vários usuários
     ("envios_retomar.py", lambda o: "FALHAS=0" in o),      # fila de envios guardada no aparelho: retoma sozinha, sem duplicar
     ("opcoes_lista.py", lambda o: "0 falhas" in o),        # v4.18: tamanhos e cores do servidor, Admin total cria e vale para todos
     ("cadastro_plano_mestre.py", lambda o: "P-38/39/41/42: PASS" in o),

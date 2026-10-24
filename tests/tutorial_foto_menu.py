@@ -1,7 +1,8 @@
 from playwright.sync_api import sync_playwright
 
 BASE = "http://127.0.0.1:8766/"
-TELA = """<div data-acao='novo' onclick="window.menu=(window.menu||0)+1;document.getElementById('form').hidden=false"><span>Cadastrar nova peça</span></div>
+TELA = """<div data-acao='menu' onclick="document.getElementById('submenu').hidden=false"><span>Cadastrar</span></div>
+<section id='submenu' hidden><button data-acao='novo' onclick="document.getElementById('form').hidden=false;window.novoClicks=(window.novoClicks||0)+1;if(location.search.includes('tutorial_teste')&&window.novoClicks===1)setTimeout(()=>{document.getElementById('form').hidden=true;document.getElementById('submenu').hidden=true},80)"><span>Cadastrar nova peça</span></button></section>
 <section id='form' hidden><label id='foto-label' for='foto'>📷 Tirar foto ou escolher da galeria</label>
 <input id='foto' type='file' accept='image/*'></section>"""
 
@@ -21,25 +22,29 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Gravação rápida").click()
     page.get_by_role("button", name="Começar a gravação daqui").click()
     frame = page.frame_locator("#tut-frame")
+    frame.locator("[data-acao=menu] span").click()
     frame.locator("[data-acao=novo] span").click()
     with page.expect_file_chooser() as escolha:
         frame.locator("#foto-label").click()
     escolha.value.set_files({"name": "foto.jpg", "mimeType": "image/jpeg", "buffer": b"imagem"})
     page.get_by_role("button", name="Encerrar").click()
-    assert page.locator("#tut-etapas tbody tr").count() == 2, "foto deve virar uma etapa, sem clique duplicado no rótulo"
-    assert page.locator('[data-campo="instrucao"][data-i="0"]').input_value() == "Toque em Cadastrar nova peça"
-    assert page.locator('[data-campo="valor"][data-i="1"]').input_value() == ""
-    assert "Adicione uma foto" in page.locator('[data-campo="instrucao"][data-i="1"]').input_value()
+    assert page.locator("#tut-etapas tbody tr").count() == 3, "foto deve virar uma etapa, sem clique duplicado no rótulo"
+    assert page.locator('[data-campo="instrucao"][data-i="0"]').input_value() == "Toque em Cadastrar"
+    assert page.locator('[data-campo="valor"][data-i="2"]').input_value() == ""
+    assert "Adicione uma foto" in page.locator('[data-campo="instrucao"][data-i="2"]').input_value()
     page.get_by_role("button", name="Testar tutorial inteiro").click()
     teste = page.frame_locator("#tt-frame")
-    teste.locator("[data-acao=novo].tk-tut-alvo").wait_for()
-    assert "6px" in teste.locator("[data-acao=novo]").evaluate("el => getComputedStyle(el).outlineWidth")
+    teste.locator("[data-acao=menu].tk-tut-alvo").wait_for()
+    assert "6px" in teste.locator("[data-acao=menu]").evaluate("el => getComputedStyle(el).outlineWidth")
     assert teste.locator(".tk-tut-seta", has_text="TOQUE AQUI").is_visible()
     seta = teste.locator(".tk-tut-seta").bounding_box()
-    alvo = teste.locator("[data-acao=novo]").bounding_box()
+    alvo = teste.locator("[data-acao=menu]").bounding_box()
     assert abs((seta['y'] + seta['height']/2) - (alvo['y'] + alvo['height']/2)) < 120
+    teste.locator("[data-acao=menu]").click()
+    page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Etapa 2 de 3')")
+    teste.locator("[data-acao=novo].tk-tut-alvo").wait_for()
     teste.locator("[data-acao=novo]").click()
-    page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Etapa 2 de 2')")
+    page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Etapa 3 de 3')")
     teste.locator("#foto-label.tk-tut-alvo").wait_for()
     assert "6px" in teste.locator("#foto-label").evaluate("el => getComputedStyle(el).outlineWidth")
     teste.locator("#foto").set_input_files({"name": "outra.jpg", "mimeType": "image/jpeg", "buffer": b"outra"})

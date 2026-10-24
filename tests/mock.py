@@ -448,6 +448,13 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if "action=categorias" in u: return route.fulfill(json={"ok":True,"categorias":list(st["categorias"])})
             if "action=generos" in u: return route.fulfill(json={"ok":True,"generos":GENS})
             if "action=stats" in u: return route.fulfill(json={"ok":True,"totalVisualizacoes":120,"totalWhatsapp":18,"produtoMaisVistoId":"1790000000003","produtoMaisVistoCodigo":"TK-0003","produtoMaisVistoViews":40})
+            if "action=historico" in u:
+                st["historico_url"] = u
+                return route.fulfill(json={"ok":True,"registros":[
+                    {"DataHora":"2026-10-20T12:00:00Z","Funcionario":"Ana Lojista","Acao":"Cadastrou","Codigo":"TK-0001","Nome":"Vestido"},
+                    {"DataHora":"2026-10-21T12:00:00Z","Funcionario":"Beto Gestor","Acao":"Editou","Codigo":"TK-0002","Nome":"Blusa"},
+                    {"DataHora":"2026-10-22T12:00:00Z","Funcionario":"Ana Lojista","Acao":"Arquivou","Codigo":"TK-0003","Nome":"Saia"}
+                ]})
             if "manuais_lista" in u: return route.fulfill(json={"ok":True,"manuais":[]})
             return route.fulfill(json={"ok":True})
         if "tenkiter-ig." in u:        # Worker do importador do Instagram (simulado): st["ig"]
