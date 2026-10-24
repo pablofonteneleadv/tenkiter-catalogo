@@ -29,7 +29,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## Fotos com IA — 2026-10-21
 
-- Planejar até 20 looks, dividir em grupos de até dois ou três respeitando quatro referências, trocar peças por arrasto/teclado e zetomar somente o restante após falha parcial.
+- Planejar até 20 looks, dividir em grupos de até dois ou três respeitando quatro referências, trocar peças por arrasto/teclado e retomar somente o restante após falha parcial.
 
 - Cada resultado guarda as peças e preços à vista usados no pedido; legenda e link da seleção podem ser copiados numa seção recolhível.
 
@@ -49,9 +49,9 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ### Adicionado
 - **Seleção com validade**: a seleção de peças expira em 2 h sem uso (3 h se o cliente toca em "segura minha seleção"); ao tentar sair aparece a placa "Libera a seleção / Segura, volto já já / Continuar vendo a loja" (vale também para link `?sel=`).
-- **Busca com sugestões**: enquanto digita, mostra peças e categorias que têm resultado; se não existe igual, mostra "Não achei igual" e sinônimos (camisa/camiseta/blusa…).
-- **Painel**: ação pendente de conexão vira um chip fluuante (sem `alert`); "O que postar" aceita fotos e vídeos avulsos do aparelho com a ordem escolhida; com "Fazer em todos" desligado, editar o texto vale só para a foto selecionada.
-- **🎨 Fotos com IA*** (gestor e equipe do site): o Gemini gera uma capa de campanha a partir de 1–4 fotos reais da peça, com instrução editável pelo gestor; sem cota o pedido espera na fila e roda quando a cota volta. **Ainda não foi provado contra o Google real** (modelos de imagem costumam não ter plano gratuito).
+- **Busca com sugestões**: enquanto digtha, mostra peças e categorias que têm resultado; se não existe igual, mostra "Não achei igual" e sinônimos (camisa/camiseta/blusa…).
+- **Painel**: ação pendente de conexão vira um chip flutuante (sem `alert`); "O que postar" aceita fotos e vídeos avulsos do aparelho com a ordem escolhida; com "Fazer em todos" desligado, editar o texto vale só para a foto selecionada.
+- **🎨 Fotos com IA** (gestor e equipe do site): o Gemini gera uma capa de campanha a partir de 1–4 fotos reais da peça, com instrução editável pelo gestor; sem cota o pedido espera na fila e roda quando a cota volta. **Ainda não foi provado contra o Google real** (modelos de imagem costumam não ter plano gratuito).
 
 ### Corrigido
 - **Publicação dos Workers pelo deploy** (PR #34): com `skip_ci` os jobs `Publicar …` ficavam *skipped* e nenhum Worker era publicado desde 16/10/2026.
@@ -63,8 +63,8 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 ## [Não publicado] - 2026-10-18
 
 ### Adicionado
-- **Treinamento "verificado" (módulo 0, só administrador)**: checgagem rápida dentro da lição (sem nota; só libera
-  "Confirmo que li" depois de acertar), perguntas da *regra de ouro* na prova (`[CRÍTICA]:` erro uma, não passa),
+- **Treinamento "verificado" (módulo 0, só administrador)**: checagem rápida dentro da lição (sem nota; só libera
+  "Confirmo que li" depois de acertar), perguntas da *regra de ouro* na prova (`[CRÍTICA]`: errou uma, não passa),
   aba **Prática & Certificados** para a gestão validar a prática (fica registrado quem e quando), certificado com
   código e QR (sem nota, sem CPF) e página pública `verificar.html`. Novos arquivos: `tm-verificado.js`,
   `verificar.html`, `vendor-qrcode.js` (qrcode-generator 1.4.4, MIT).
@@ -75,7 +75,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 ### Adicionado
 - **Postagem multicanal (Instagram · WhatsApp · Ambos)**: seletor de canal na tela de postagem do
   painel. O contrato do canal passa a viver em `common.js` e o `POST /post` envia
-  `canal=instagram|whatsapp|ambos . Com `instagram` (padrão) o comportamento é idêntico ao de antes.
+  `canal=instagram|whatsapp|ambos`. Com `instagram` (padrão) o comportamento é idêntico ao de antes.
 - **Integração Wafly (status do WhatsApp) no backend** (Apps Script 4.14 / 3.14, **fora do
   repositório**): envio server-side de texto e status com deduplicação, retry idempotente e validação
   de webhook. As credenciais `WAFLY_CLIENT_TOKEN`, `WAFLY_INSTANCE` e `WAFLY_TOKEN` ficam **apenas**

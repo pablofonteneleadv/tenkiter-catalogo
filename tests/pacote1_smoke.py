@@ -16,7 +16,7 @@ with sync_playwright() as p:
     pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e)))
     pg.goto(BASE + "index.html"); pg.wait_for_selector(".card"); pg.wait_for_timeout(1200)
 
-    chk("sem erro de JavaScript (celular)", not erros, errors)
+    chk("sem erro de JavaScript (celular)", not erros, erros)
     chk("(a) genero+categorias dentro de um unico <details>", pg.locator("#nav-loja").count() == 1)
     chk("(a) o <details> nasce FECHADO no celular", pg.evaluate("document.getElementById('nav-loja').open") is False)
     chk("(a) faixa de vantagens recolhida no celular", pg.locator("#beneficios-details").count() == 1 and pg.evaluate("document.getElementById('beneficios-details').open") is False)
