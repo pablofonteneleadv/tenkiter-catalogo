@@ -751,6 +751,42 @@
  #form-produto #galeria-box>#galeria-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
  #form-produto #video-lista .video-item{grid-template-columns:minmax(0,1fr) minmax(100px,42%)}
 }
+
+/* Desktop: mesma experiencia do cadastro responsivo, usando a largura disponivel. */
+@media(min-width:900px){
+ main{max-width:1180px;width:calc(100% - 48px);padding:18px 12px 36px}
+ #card-form{max-width:none;width:100%;margin:14px auto 18px}
+ #card-form[open]>.cad-corpo{padding:16px 22px 22px}
+ #card-form #titulo-form{font-size:1.35rem}
+ #form-produto{gap:12px}
+ #form-produto .passo{padding:16px 18px;border-radius:16px}
+ #form-produto .passo-tit{font-size:1.05rem;margin-bottom:12px}
+ #form-produto .passo-tit .num{width:33px;height:33px;flex-basis:33px;font-size:.92rem}
+ #form-produto #galeria-box{grid-template-columns:minmax(165px,20%) minmax(0,1fr);gap:14px}
+ #form-produto #galeria-box>.btn-foto{grid-column:1;grid-row:1;min-height:145px;height:100%;font-size:.91rem}
+ #form-produto #galeria-box>#galeria-grid{grid-column:2;grid-row:1;grid-template-columns:repeat(8,minmax(0,1fr));gap:9px}
+ #form-produto #galeria-grid[data-quantidade="1"]{grid-template-columns:minmax(0,110px);justify-content:start}
+ #form-produto #galeria-grid[data-quantidade="2"]{grid-template-columns:repeat(2,minmax(0,110px));justify-content:start}
+ #form-produto #galeria-grid[data-quantidade="3"]{grid-template-columns:repeat(3,minmax(0,110px));justify-content:start}
+ #form-produto #galeria-grid .galeria-item{margin-bottom:35px}
+ #form-produto #video-box{grid-template-columns:minmax(165px,20%) minmax(0,1fr);gap:14px}
+ #form-produto #video-box>.btn-foto{grid-column:1;grid-row:1;min-height:120px;height:100%}
+ #form-produto #video-box>#video-lista{grid-column:2;grid-row:1;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+ #form-produto #video-lista .video-item{grid-template-columns:minmax(0,1fr);gap:8px}
+ #form-produto #video-lista .video-item video{grid-column:1;grid-row:auto;aspect-ratio:16/9;max-height:165px}
+ #form-produto #video-lista .video-acoes,#form-produto #video-lista .video-item:not(:has(.pre-badge)) .video-acoes{grid-column:1;grid-row:auto;display:grid;grid-template-columns:1fr 1fr;gap:7px}
+ #form-produto #video-lista .video-capa,#form-produto #video-lista .video-x{min-height:42px;font-size:.75rem}
+ #form-produto #chips-categorias{grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+ #form-produto #chips-categorias .chip{min-height:42px;font-size:.83rem}
+ #form-produto .publico-seis{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+ #form-produto .publico-seis .chip{min-height:48px;font-size:.9rem}
+ #form-produto .cad-nome-linha{grid-template-columns:minmax(0,1fr) 200px}
+ #form-produto .cad-nome-linha #btn-foto-ia{font-size:.86rem}
+}
+@media(min-width:1400px){
+ main{max-width:1320px}
+ #form-produto #chips-categorias{grid-template-columns:repeat(7,minmax(0,1fr))}
+}
 </style>
 </head>
 <body>
