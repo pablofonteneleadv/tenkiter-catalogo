@@ -14,7 +14,7 @@
 }
 .faixas-sum::-webkit-details-marker { display: none; }
 .faixas-sum::after {
-  content: "\\25BE"; margin-left: auto; font-size: .9rem; color: #8a8272;
+  content: "\25BE"; margin-left: auto; font-size: .9rem; color: #8a8272;
   transition: transform .15s ease;
 }
 .faixas-details[open] > .faixas-sum::after { transform: rotate(180deg); }
@@ -33,7 +33,7 @@
     font-size: .68rem; font-weight: 700; color: #5c5648;
     display: inline; text-align: left;
   }
-  .beneficios span + span::before { content: "\\00b7"; margin-right: 10px; color: #c9bfa8; }
+  .beneficios span + span::before { content: "\00b7"; margin-right: 10px; color: #c9bfa8; }
 }
 
 /* ---------- item 3: CLS < 0,10 ---------- */
