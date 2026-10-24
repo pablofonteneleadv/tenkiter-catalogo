@@ -2974,7 +2974,7 @@
       resp = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'assinarUploadVideo', pin: adminPin, funcionario: funcionarioNome, assinaturaVersao: 2, tipoRecurso: tipoRecurso || 'video' })
+        body: JSON.stringify({ action: 'assinarUploadVideo', pin: adminPin, sessao: adminPin, whatsapp: (typeof getSessao === 'function' && getSessao() || {}).whatsapp || '', funcionario: funcionarioNome, assinaturaVersao: 2, tipoRecurso: tipoRecurso || 'video' })
       }).then(r => r.json());
     } catch (e) {
       window.logDebug_('✗ ERRO DE REDE pedindo assinatura, em ' + (Date.now() - inicio) + 'ms -- ' + ((e && e.message) || e) + ' -- navigator.onLine=' + navigator.onLine);
