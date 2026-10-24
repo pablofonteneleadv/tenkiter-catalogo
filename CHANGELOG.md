@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.3.4 — etapas humanas, gravação e teste em tela cheia — 2026-10-24
+
+- Impede que cliques automáticos usados para recompor menus sejam aceitos como ação do funcionário e pulem etapas do tutorial.
+- Permite inserir, formatar e posicionar textos flutuantes sem encerrar a gravação rápida.
+- Gravação e teste ocupam a tela inteira, com barra de controle compacta e a aplicação usando todo o espaço restante.
+- Adiciona regressão específica para garantir que a etapa 3 só avance depois do toque real.
+
 ## 7.3.3 — seletor de foto e textos arrastáveis — 2026-10-24
 
 - O toque no quadro visível de foto/arquivo passa pelo bloqueio do tutorial e abre câmera ou galeria; a validação continua ocorrendo somente depois da escolha real do arquivo.
