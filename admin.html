@@ -1785,7 +1785,7 @@
   function cadRestaurarPublicos_() {
     const arr=Array.from(selecionadosGeneros);
     const prim=CAD_PUBLICOS_.find(x=>arr.includes(x[1]));
-    cadPublico_=prim?prim[0]:'Mulher';
+    cadPublico_=prim?prim[0]:(cadPublico_||'Mulher');
     const par={Mulher:'Masculino Adulto',Homem:'Feminino Adulto',Menina:'Infantil Menino',Menino:'Infantil Menina','Baby Menina':'Baby Menino','Baby Menino':'Baby Menina'};
     const unissex=document.getElementById('cad-unissex');
     if(unissex)unissex.checked=arr.includes(par[cadPublico_]);
