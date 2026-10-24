@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.1.2 — sessão preservada entre áreas — 2026-10-24
+
+- Uma rejeição de sessão pelo RH não apaga mais o login válido do Catálogo e da Gestão.
+- Quando uma sessão antiga precisa ser convertida, o portal explica que basta entrar uma vez e mantém as opções da barra inferior.
+
 ## 7.1.1 — gravador de tutoriais — 2026-10-24
 
 - O RH pode gravar um tutorial escolhendo controles diretamente numa prévia da tela real, escrever orientação e observação, ordenar etapas e definir a regra de acerto.
