@@ -39,12 +39,12 @@
 <!-- v3.3: política de segurança de conteúdo. Fica aqui (e não em cabeçalho HTTP) porque o Render estático não deixa configurar cabeçalhos por arquivo.
      Só libera o que o catálogo realmente usa: o próprio site, o Apps Script (dados), Cloudinary/Google (fotos e vídeos), OneSignal (avisos) e Meta (só se o Pixel for ligado no painel). -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.onesignal.com https://*.onesignal.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.onesignal.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://tenkiter-og.distkrpconfeccoes.workers.dev https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com https://lh3.googleusercontent.com https://res.cloudinary.com https://tenkiter-midia.distkrpconfeccoes.workers.dev https://tenkiter-ig.distkrpconfeccoes.workers.dev https://drive.google.com https://onesignal.com https://*.onesignal.com https://www.facebook.com https://connect.facebook.net; frame-src 'self' https://drive.google.com https://*.onesignal.com https://onesignal.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
-<link rel="stylesheet" href="catalogo.css?v=7.3.1">
+<link rel="stylesheet" href="catalogo.css?v=7.3.2">
 <!-- v7.0: camada de vitrine (acessibilidade, navegação e caminho até o produto).
      Arquivo próprio, como a11y.js / meta.js / push.js: só o catálogo carrega. -->
-<link rel="stylesheet" href="vitrine.css?v=7.3.1">
-<link rel="stylesheet" href="vitrine-v71.css?v=7.3.1">
-<script src="common.js?v=7.3.1"></script>
+<link rel="stylesheet" href="vitrine.css?v=7.3.2">
+<link rel="stylesheet" href="vitrine-v71.css?v=7.3.2">
+<script src="common.js?v=7.3.2"></script>
 <script src="tamanhos-vinculados.js?v=1"></script>
 <script>
 /* v3.3: começa a buscar a lista de peças já aqui no <head> (antes do resto da página montar) -- o catálogo aparece mais cedo.
@@ -313,7 +313,7 @@ catch (e) { window.__precargaLista = null; }
 <script src="foto-cliente.js"></script>
 <script src="meta.js"></script>
 <script src="pedido.js"></script>
-<script src="catalogo.js?v=7.3.1"></script>
+<script src="catalogo.js?v=7.3.2"></script>
 <script>
 document.addEventListener('DOMContentLoaded',function(){
  const interna=document.getElementById('fx-busca'),original=document.getElementById('busca');
@@ -325,14 +325,14 @@ document.addEventListener('DOMContentLoaded',function(){
  if(voz&&originalVoz)voz.addEventListener('click',function(){originalVoz.click();});
 });
 </script>
-<script src="nav.js?v=7.3.1" data-ativo="catalogo"></script>
+<script src="nav.js?v=7.3.2" data-ativo="catalogo"></script>
 <!-- v7.0: por último, de propósito — depois de catalogo.js (funções que ela
      envolve) e de nav.js (que cria a barra inferior que ela assume). -->
-<script src="vitrine.js?v=7.3.1"></script>
-<script src="a11y.js?v=7.3.1"></script>
+<script src="vitrine.js?v=7.3.2"></script>
+<script src="a11y.js?v=7.3.2"></script>
 <!-- v7.1: menu, pesquisa e filtros (itens 1,3,4,5,6,7,8). Camada aditiva,
      carregada por ultimo: so age no catalogo e nao reescreve regra existente. -->
-<script src="vitrine-v71.js?v=7.3.1"></script>
+<script src="vitrine-v71.js?v=7.3.2"></script>
 <script src="push.js"></script>
 <script src="pwa.js"></script>
 </body>
