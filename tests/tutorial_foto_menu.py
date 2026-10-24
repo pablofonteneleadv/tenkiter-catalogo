@@ -1,9 +1,9 @@
 from playwright.sync_api import sync_playwright
 
 BASE = "http://127.0.0.1:8766/"
-TELA = """<div data-acao='novo' onclick='window.menu=(window.menu||0)+1'><span>Cadastrar nova peça</span></div>
-<label id='foto-label' for='foto'>📷 Tirar foto ou escolher da galeria</label>
-<input id='foto' type='file' accept='image/*'>"""
+TELA = """<div data-acao='novo' onclick="window.menu=(window.menu||0)+1;document.getElementById('form').hidden=false"><span>Cadastrar nova peça</span></div>
+<section id='form' hidden><label id='foto-label' for='foto'>📷 Tirar foto ou escolher da galeria</label>
+<input id='foto' type='file' accept='image/*'></section>"""
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
@@ -32,10 +32,15 @@ with sync_playwright() as p:
     assert "Adicione uma foto" in page.locator('[data-campo="instrucao"][data-i="1"]').input_value()
     page.get_by_role("button", name="Testar tutorial inteiro").click()
     teste = page.frame_locator("#tt-frame")
+    teste.locator("[data-acao=novo].tk-tut-alvo").wait_for()
     assert "6px" in teste.locator("[data-acao=novo]").evaluate("el => getComputedStyle(el).outlineWidth")
     assert teste.locator(".tk-tut-seta", has_text="TOQUE AQUI").is_visible()
+    seta = teste.locator(".tk-tut-seta").bounding_box()
+    alvo = teste.locator("[data-acao=novo]").bounding_box()
+    assert abs((seta['y'] + seta['height']/2) - (alvo['y'] + alvo['height']/2)) < 120
     teste.locator("[data-acao=novo]").click()
     page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Etapa 2 de 2')")
+    teste.locator("#foto-label.tk-tut-alvo").wait_for()
     assert "6px" in teste.locator("#foto-label").evaluate("el => getComputedStyle(el).outlineWidth")
     teste.locator("#foto").set_input_files({"name": "outra.jpg", "mimeType": "image/jpeg", "buffer": b"outra"})
     page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Tutorial concluído corretamente')")
