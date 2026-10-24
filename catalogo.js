@@ -24,10 +24,10 @@ try { tkSelExpirar_(); } catch (e) {}
 
   // Não apresentar nem filtrar a etiqueta interna quando houver idades/números vinculados.
   function tagsTamanhoCliente_(p) {
-    return TKTamanhos.cliente(textoPlano(p.Tamanhos)).valores;
+    return TKTamanhos.cliente(textoPlano(p.Tamanhos), p.Genero).valores;
   }
   function linhaTamanhoCliente_(p) {
-    const d = TKTamanhos.cliente(textoPlano(p.Tamanhos));
+    const d = TKTamanhos.cliente(textoPlano(p.Tamanhos), p.Genero);
     return d.valores.length ? '<div class="extra"><strong>' +
       escaparHtml(d.titulo) + ':</strong> ' + escaparHtml(d.valores.join(', ')) + '</div>' : '';
   }
