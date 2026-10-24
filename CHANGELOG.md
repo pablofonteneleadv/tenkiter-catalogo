@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.3.5 — menu inferior visível no tutorial — 2026-10-24
+
+- Preserva o posicionamento `fixed` e `sticky` do elemento destacado, incluindo a navegação inferior do celular.
+- Usa a altura visual dinâmica do navegador para gravação e teste em tela cheia, acompanhando abertura e fechamento das barras móveis.
+- Mantém a placa de orientação dentro da área visível e fora do botão solicitado.
+
 ## 7.3.4 — etapas humanas, gravação e teste em tela cheia — 2026-10-24
 
 - Impede que cliques automáticos usados para recompor menus sejam aceitos como ação do funcionário e pulem etapas do tutorial.

@@ -38,7 +38,7 @@ with sync_playwright() as p:
     teste.locator("[data-acao=menu].tk-tut-alvo").wait_for()
     assert "7px" in teste.locator("[data-acao=menu]").evaluate("el => getComputedStyle(el).outlineWidth")
     assert teste.locator(".tk-tut-seta", has_text="TOQUE AQUI").is_visible()
-    assert teste.locator(".tk-tut-seta").evaluate("el => getComputedStyle(el).position") == "absolute"
+    assert teste.locator(".tk-tut-seta").evaluate("el => getComputedStyle(el).position") == "fixed"
     seta = teste.locator(".tk-tut-seta").bounding_box()
     alvo = teste.locator("[data-acao=menu]").bounding_box()
     assert abs((seta['y'] + seta['height']/2) - (alvo['y'] + alvo['height']/2)) < 120
