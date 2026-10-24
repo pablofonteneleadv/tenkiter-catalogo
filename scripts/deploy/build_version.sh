@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Gera o version.json publicado no ar, com o commit exato que o Render está servindo.
-# Roda como buildCommand do site estático no Render (RENDER_GIT_COMMIT� injetado pelo Render).
-# Fora do Render, cai para o git local — assim o arquivo também funciona em teste.
+# Gera o version.json publicado no ar, com o commit exato que o Render esta servindo.
+# Roda como buildCommand do site estatico no Render (RENDER_GIT_COMMIT e injetado pelo Render).
+# Fora do Render, cai para o git local - assim o arquivo tambem funciona em teste.
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -22,9 +22,9 @@ cat > version.json <<JSON
 }
 JSON
 
-echo "version.json gerado: versao=$VERSAO commit=$COMMIT branch=$BRANCH""
+echo "version.json gerado: versao=$VERSAO commit=$COMMIT branch=$BRANCH"
 
-# Cache-busting dos assets (item 2 do plano de front). Roda DEPOI S do
-# version.json para o `?v=` ser sempre o VERSION deste commit. Sem isso o
+# Cache-busting dos assets (item 2 do plano de front). Roda DEPOIS do
+# version.json para o ?v= ser sempre o VERSION deste commit. Sem isso o
 # navegador serve o JS antigo e o deploy nao chega em quem ja visitou o site.
 python3 scripts/deploy/cache_bust.py
