@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.3.3 — seletor de foto e textos arrastáveis — 2026-10-24
+
+- O toque no quadro visível de foto/arquivo passa pelo bloqueio do tutorial e abre câmera ou galeria; a validação continua ocorrendo somente depois da escolha real do arquivo.
+- Etapas de arquivo aparecem como `Escolher foto/arquivo`, em vez de `Preencher`.
+- Caixas de instrução aceitam posição por arraste no editor, guardam coordenadas, aparecem sobre a tela demonstrada e também podem ser movidas durante o tutorial.
+
 ## 7.3.2 — identidade correta dos controles do tutorial — 2026-10-24
 
 - O jogador confirma que o elemento encontrado pelo seletor ainda corresponde ao nome do controle gravado, impedindo que uma posição antiga destaque outro botão ou uma caixa de dicas.
