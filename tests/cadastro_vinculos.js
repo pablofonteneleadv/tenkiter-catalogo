@@ -35,6 +35,8 @@ assert.equal(desligouLetra, '', 'ao desmarcar a etiqueta, ela deixa de aparecer 
 assert.deepEqual(T.cliente('PP, P, M, G'), { tipo: 'legado', titulo: 'Tamanhos', valores: ['PP', 'P', 'M', 'G'] });
 assert.deepEqual(T.cliente('Consultar tamanhos disponíveis').valores, []);
 assert.deepEqual(T.cliente('Único').valores, ['Único']);
+assert.deepEqual(T.cliente('P, M, G', 'Infantil Menina').valores, [], 'letras legadas não devem aparecer no infantil');
+assert.deepEqual(T.cliente('M, Etiqueta: M, Idade: 3 anos', 'Infantil Menina').valores, ['3 anos']);
 assert.deepEqual(T.cliente('Idade: 3 anos, Idade: 3 anos').valores, ['3 anos']);
 assert.equal(T.gravar('P, M, G', '', [], false), 'P, M, G', 'editar outros campos não pode apagar tamanhos antigos');
 assert.equal(T.gravar('P, M, G', 'M', ['38'], false), 'M, Etiqueta: M, Veste: 38');
