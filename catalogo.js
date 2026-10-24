@@ -22,6 +22,13 @@ try { tkSelExpirar_(); } catch (e) {}
 
   function listaDeTags(c) { return String(c || '').split(',').map(s => s.trim()).filter(Boolean); }
 
+  // Etiqueta é dado interno; a cliente filtra pelas idades ou numerações vinculadas.
+  function tagsTamanhoCliente_(p) {
+    const tags=listaDeTags(textoPlano(p.Tamanhos));
+    const vinculadas=tags.filter(t=>/^(Idade|Veste):\\s*/i.test(t)).map(t=>t.replace(/^(Idade|Veste):\\s*/i,'').trim());
+    if(vinculadas.length)return [...new Set(vinculadas)];
+    return tags.filter(t=>!/^Etiqueta:/i.test(t)&&!/^(Consultar tamanhos disponíveis)$/i.test(t));
+  }
   function nivelDisponibilidade(p) {
     if (!estoqueInformado(p)) return null;
     const n = Number(p.Estoque);
@@ -116,7 +123,7 @@ try { tkSelExpirar_(); } catch (e) {}
     coresDisponiveis = new Set(); tamanhosDisponiveis = new Set();
     produtos.forEach(p => {
       if (estaEsgotado(p)) return;   // v6.6: o menu só oferece o que tem peça ativa
-      listaDeTags(textoPlano(p.Tamanhos)).forEach(t => { if (!/consult/i.test(t)) tamanhosDisponiveis.add(t); });
+      tagsTamanhoCliente_(p).forEach(t => { if (!/consult/i.test(t)) tamanhosDisponiveis.add(t); });
       listaDeTags(textoPlano(p.Cores)).forEach(c => coresDisponiveis.add(c));
       listaDeTags(p.Categoria).forEach(c => categoriasDisponiveis.add(c));
       listaDeTags(p.Genero).forEach(g => generosDisponiveis.add(g));
@@ -350,7 +357,7 @@ try { tkSelExpirar_(); } catch (e) {}
       if (apenasNovidades && !ehNovidade(p)) return false;
       if (apenasFavoritos && !ehFavorito(p.ID)) return false;
       if (sem !== 'cat') if (filtroCategorias.size) { const tags = listaDeTags(p.Categoria); if (!tags.some(t => filtroCategorias.has(t))) return false; }
-      if (sem !== 'tam') if (filtroTamanhos.size) { const tt = listaDeTags(textoPlano(p.Tamanhos)); if (!tt.some(t => filtroTamanhos.has(t))) return false; }
+      if (sem !== 'tam') if (filtroTamanhos.size) { const tt = tagsTamanhoCliente_(p); if (!tt.some(t => filtroTamanhos.has(t))) return false; }
       if (sem !== 'cor') if (filtroCores.size) { const tc = listaDeTags(textoPlano(p.Cores)); if (!tc.some(t => filtroCores.has(t))) return false; }
       if (sem !== 'gen') if (filtroGeneros.size) { const tags = listaDeTags(p.Genero); if (!tags.some(t => filtroGeneros.has(t))) return false; }
       return true;
@@ -368,7 +375,7 @@ try { tkSelExpirar_(); } catch (e) {}
     listaFiltradaAtual = ordenarLista_(porBusca.filter(p => passaFiltros(p)));
     // v6.7: opções AO VIVO — cada menu só oferece o que existe (peça ativa) combinado com os OUTROS filtros marcados.
     try {
-      const F = { cat: ['chips-categoria', filtroCategorias, p => listaDeTags(p.Categoria), 'details-categoria'], gen: ['chips-genero', filtroGeneros, p => listaDeTags(p.Genero), 'details-genero'], cor: ['chips-cor', filtroCores, p => listaDeTags(textoPlano(p.Cores)), 'details-cor'], tam: ['chips-tamanho', filtroTamanhos, p => listaDeTags(textoPlano(p.Tamanhos)), 'details-tamanho'] };
+      const F = { cat: ['chips-categoria', filtroCategorias, p => listaDeTags(p.Categoria), 'details-categoria'], gen: ['chips-genero', filtroGeneros, p => listaDeTags(p.Genero), 'details-genero'], cor: ['chips-cor', filtroCores, p => listaDeTags(textoPlano(p.Cores)), 'details-cor'], tam: ['chips-tamanho', filtroTamanhos, p => tagsTamanhoCliente_(p), 'details-tamanho'] };
       Object.keys(F).forEach(k => {
         const [idc, conj, tagsDe, idd] = F[k], disp = new Set();
         porBusca.forEach(p => { if (!estaEsgotado(p) && passaFiltros(p, k)) tagsDe(p).forEach(t => disp.add(t)); });
