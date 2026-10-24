@@ -1719,8 +1719,83 @@
     renderizarChips('chips-genero', generos, selecionadosGeneros);
   }
 
+  // Cadastro rápido: público e tamanhos vinculados, armazenados no campo Tamanhos existente.
+  const CAD_PUBLICOS_ = [
+    ['Mulher','Feminino Adulto'],['Menina','Infantil Menina'],['Baby Menina','Baby Menina'],
+    ['Homem','Masculino Adulto'],['Menino','Infantil Menino'],['Baby Menino','Baby Menino']
+  ];
+  const CAD_ETIQUETAS_ = ['PP','P','M','G','GG','G1','G2','G3','Único'];
+  const CAD_NUMEROS_ = ['34','36','38','40','42','44','46','48','50','52','54','56'];
+  const CAD_IDADES_ = ['RN','0-3 meses','3-6 meses','6-9 meses','9-12 meses',...Array.from({length:16},(_,i)=>(i+1)+' ano'+(i?'s':''))];
+  let cadEtiqueta_ = '', cadFaixas_ = new Set(), cadPublico_ = '';
+  function cadInfantil_() { return /Menina|Menino/.test(cadPublico_); }
+  function cadLerVinculos_() {
+    const raw = document.getElementById('tamanhos').value;
+    const etiqueta = raw.match(/(?:^|,)\\s*Etiqueta:\\s*([^,]+)/i);
+    const faixas = [...raw.matchAll(/(?:^|,)\\s*(?:Idade|Veste):\\s*([^,]+)/gi)].map(m=>m[1].trim());
+    cadEtiqueta_ = etiqueta ? etiqueta[1].trim() : '';
+    cadFaixas_ = new Set(faixas);
+  }
+  function cadGravarVinculos_() {
+    const campo = document.getElementById('tamanhos');
+    const antigo = campo.value.split(',').map(x=>x.trim()).filter(x=>x && !/^(Etiqueta|Idade|Veste):/i.test(x) && x!=='Consultar tamanhos disponíveis');
+    // Mantém tamanhos legados; novas faixas são tags estáveis e independentes.
+    const tags = [...antigo.filter(x=>!CAD_ETIQUETAS_.includes(x)), ...(cadEtiqueta_?[cadEtiqueta_,'Etiqueta: '+cadEtiqueta_]:[]), ...Array.from(cadFaixas_,x=>(cadInfantil_()?'Idade: ':'Veste: ')+x)];
+    campo.value = [...new Set(tags)].join(', ');
+    campo.dispatchEvent(new Event('input',{bubbles:true}));
+    sincRapidos_();
+  }
+  function cadDesenharVinculos_() {
+    const boxE = document.getElementById('cad-etiquetas'), boxF = document.getElementById('cad-faixas');
+    if (!boxE || !boxF) return;
+    const titulo = document.getElementById('cad-faixa-titulo');
+    titulo.textContent = cadInfantil_() ? 'Idades que veste' : 'Numerações que veste';
+    function montar(box, itens, marcado, clique) {
+      box.replaceChildren();
+      itens.forEach(v=>{const b=document.createElement('button');b.type='button';b.textContent=v;b.className=marcado(v)?'ativo':'';b.setAttribute('aria-pressed',String(marcado(v)));b.addEventListener('click',()=>{clique(v);cadGravarVinculos_();cadDesenharVinculos_()});box.appendChild(b)});
+    }
+    montar(boxE,CAD_ETIQUETAS_,v=>v===cadEtiqueta_,v=>{cadEtiqueta_=cadEtiqueta_===v?'':v});
+    montar(boxF,cadInfantil_()?CAD_IDADES_:CAD_NUMEROS_,v=>cadFaixas_.has(v),v=>{if(cadFaixas_.has(v))cadFaixas_.delete(v);else cadFaixas_.add(v)});
+  }
+  function cadDesenharPublicos_() {
+    const box = document.getElementById('chips-genero');
+    if (!box) return;
+    box.replaceChildren();
+    CAD_PUBLICOS_.forEach(([rotulo,valor])=>{
+      const b=document.createElement('button');b.type='button';b.className='chip'+(cadPublico_===rotulo?' selecionado':'');b.textContent=rotulo;
+      b.addEventListener('click',()=>{
+        const antesInfantil=cadInfantil_();cadPublico_=rotulo;
+        if(antesInfantil!==cadInfantil_())cadFaixas_.clear();
+        cadSincronizarPublicos_();cadGravarVinculos_();cadDesenharPublicos_();cadDesenharVinculos_();atualizarFaltas_();
+      });box.appendChild(b);
+    });
+  }
+  function cadSincronizarPublicos_() {
+    selecionadosGeneros.clear();
+    const principal=CAD_PUBLICOS_.find(x=>x[0]===cadPublico_);
+    if(!principal)return;
+    selecionadosGeneros.add(principal[1]);
+    const unissex=document.getElementById('cad-unissex');
+    if(unissex&&unissex.checked){
+      const par={Mulher:'Masculino Adulto',Homem:'Feminino Adulto',Menina:'Infantil Menino',Menino:'Infantil Menina','Baby Menina':'Baby Menino','Baby Menino':'Baby Menina'};
+      selecionadosGeneros.add(par[cadPublico_]);
+    }
+    generoNovoTocado_=true;
+  }
+  function cadRestaurarPublicos_() {
+    const arr=Array.from(selecionadosGeneros);
+    const prim=CAD_PUBLICOS_.find(x=>arr.includes(x[1]));
+    cadPublico_=prim?prim[0]:'Mulher';
+    const par={Mulher:'Masculino Adulto',Homem:'Feminino Adulto',Menina:'Infantil Menino',Menino:'Infantil Menina','Baby Menina':'Baby Menino','Baby Menino':'Baby Menina'};
+    const unissex=document.getElementById('cad-unissex');
+    if(unissex)unissex.checked=arr.includes(par[cadPublico_]);
+    cadLerVinculos_();cadDesenharPublicos_();cadDesenharVinculos_();
+  }
+  document.getElementById('cad-unissex')?.addEventListener('change',()=>{cadSincronizarPublicos_();atualizarFaltas_()});
+  document.getElementById('form-produto')?.addEventListener('reset',()=>setTimeout(()=>{cadEtiqueta_='';cadFaixas_.clear();cadPublico_='Mulher';cadRestaurarPublicos_()},0));
   function renderizarChips(idContainer, valores, conjunto) {
     if (idContainer === 'chips-categoria') { renderizarCategorias_(); return; }
+    if (idContainer === 'chips-genero') { cadRestaurarPublicos_(); return; }
     const container = document.getElementById(idContainer);
     container.innerHTML = '';
     valores.forEach(v => {
@@ -2398,6 +2473,7 @@
       const cv = document.getElementById('consultar-valor'); if (cv) cv.checked = zero && consultarLiberado_; }
     document.getElementById('estoque').value = p.Estoque || '';
     document.getElementById('tamanhos').value = textoPlano(p.Tamanhos);
+    cadLerVinculos_();
     document.getElementById('cores').value = textoPlano(p.Cores);
     document.getElementById('descricao').value = p.Descricao || '';
     document.getElementById('novidade').checked = ehNovidade(p);
