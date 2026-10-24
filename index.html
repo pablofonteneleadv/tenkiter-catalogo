@@ -39,10 +39,13 @@
 <!-- v3.3: política de segurança de conteúdo. Fica aqui (e não em cabeçalho HTTP) porque o Render estático não deixa configurar cabeçalhos por arquivo.
      Só libera o que o catálogo realmente usa: o próprio site, o Apps Script (dados), Cloudinary/Google (fotos e vídeos), OneSignal (avisos) e Meta (só se o Pixel for ligado no painel). -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.onesignal.com https://*.onesignal.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.onesignal.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://tenkiter-og.distkrpconfeccoes.workers.dev https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com https://lh3.googleusercontent.com https://res.cloudinary.com https://tenkiter-midia.distkrpconfeccoes.workers.dev https://tenkiter-ig.distkrpconfeccoes.workers.dev https://drive.google.com https://onesignal.com https://*.onesignal.com https://www.facebook.com https://connect.facebook.net; frame-src 'self' https://drive.google.com https://*.onesignal.com https://onesignal.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
-<link rel="stylesheet" href="catalogo.css">
+<link rel="stylesheet" href="catalogo.css?v=7.1.0">
 <!-- v7.0: camada de vitrine (acessibilidade, navegação e caminho até o produto).
      Arquivo próprio, como a11y.js / meta.js / push.js: só o catálogo carrega. -->
-<link rel="stylesheet" href="vitrine.css">
+<link rel="stylesheet" href="vitrine.css?v=7.1.0">
+<!-- v7.1 (Pacote 1): menu, pesquisa e filtros. Camada aditiva, carregada por
+     último de propósito — só acrescenta, não reescreve catalogo.css/vitrine.css. -->
+<link rel="stylesheet" href="pacote1.css?v=7.1.0">
 <script src="common.js"></script>
 <script>
 /* v3.3: começa a buscar a lista de peças já aqui no <head> (antes do resto da página montar) -- o catálogo aparece mais cedo.
@@ -128,7 +131,7 @@ catch (e) { window.__precargaLista = null; }
       <input type="text" id="busca" aria-label="Buscar por produto, código ou estilo" placeholder="🔎 Buscar por produto, código ou estilo..." enterkeyhint="search">
       <div class="sugestoes-busca" id="sugestoes-busca" role="listbox" aria-label="Sugestões de busca" hidden></div>
       <button type="button" class="busca-limpar" id="busca-limpar" aria-label="Apagar a busca" hidden>✕</button>
-      <button type="button" class="btn-voz" id="btn-voz" title="Buscar por comando de voz" aria-label="Buscar por comando de voz">🎤</button>
+      <button type="button" class="btn-voz" id="btn-voz" title="Buscar por comando de voz" aria-label="Buscar por comando de voi">🎤</button>
     </div>
     <button type="button" class="btn-filtros-toggle" id="btn-filtros-toggle" aria-expanded="false" aria-controls="filtros-extras" title="Mostrar ou esconder os filtros">
       <span aria-hidden="true">⚙️</span><span class="rot">Filtros</span><span class="badge-filtros" id="badge-filtros" hidden>0</span>
@@ -136,7 +139,7 @@ catch (e) { window.__precargaLista = null; }
   </div>
   <div class="linha-share-busca" id="linha-share-busca" hidden><button type="button" id="btn-share-busca">🔗 Compartilhar seleção</button><button type="button" class="btn-add-resultados" id="btn-add-resultados-topo" hidden><span aria-hidden="true">➕</span> <span class="txt">Adicionar estes à seleção</span></button><button type="button" id="btn-limpar-sel" hidden>✕ Limpar seleção</button><button type="button" id="btn-lote-menu" hidden aria-expanded="false">🛠️ Edição em lote</button><div class="lote-menu" id="lote-menu" hidden role="menu"><button type="button" role="menuitem" data-lote="btn-bulk-preco">% Alterar preços</button><button type="button" role="menuitem" data-lote="btn-bulk-novidade">Marcar novidades</button><button type="button" role="menuitem" data-lote="btn-bulk-arquivar">🗃️ Arquivar</button><button type="button" role="menuitem" data-lote="btn-bulk-reativar">🔄 Reativar</button><button type="button" role="menuitem" data-lote="btn-bulk-postar">📸 Enviar para Postagens</button><button type="button" role="menuitem" data-lote="btn-bulk-juntar">🔗 Juntar em 1 produto</button></div></div>
   <div class="filtros-extras" id="filtros-extras">
-    <div class="fx-topo"><strong>Filtros</strong><span class="fx-cont" id="fx-cont" aria-live="polite"></span><button type="button" id="fx-fechar" class="fx-fechar">✕ Fechar</button></div>
+    <div class="fx-topo"><strong>Filtros</strong><span class="fx-conti" id="fx-conti" aria-live="polite"></span><button type="button" id="fx-fechar" class="fx-fechar">✕ Fechar</button></div>
     <div class="fx-corpo">
     <div class="linha-preco">
       <span>Preço:</span>
@@ -156,7 +159,7 @@ catch (e) { window.__precargaLista = null; }
       <div class="chips" id="chips-categoria"></div>
     </details>
 
-    <details class="selecao-expansivel" id="details-tamanho">
+    <details class="selecao-expansivel" id="detalhs-tamanho">
       <summary>Tamanho <span class="resumo" id="resumo-tamanho">(todos)</span></summary>
       <div class="chips" id="chips-tamanho"></div>
     </details>
@@ -180,7 +183,7 @@ catch (e) { window.__precargaLista = null; }
 </div>
 
 <section class="beneficios" id="beneficios" aria-label="Vantagens da loja">
-  <span>💬 Consulte pelo WhatsApp</span>
+  <span>💲 Consulte pelo WhatsApp</span>
   <span>💰 10% de desconto à vista</span>
   <span>📍 Retire na loja, em Crateús</span>
 </section>
@@ -188,7 +191,7 @@ catch (e) { window.__precargaLista = null; }
 <main id="pecas" tabindex="-1">
   <div class="aviso-selecao aviso-minha-sel" id="aviso-minha-sel" role="status" hidden>
     <span id="aviso-minha-sel-txt"></span>
-    <button type="button" class="btn-neutro" id="amsel-enviar">💬 Enviar para a loja</button>
+    <button type="button" class="btn-neutro" id="amsel-enviar">💰 Enviar para a loja</button>
     <button type="button" class="btn-neutro" id="amsel-tudo">↩ Ver tudo (mantém a seleção)</button>
   </div>
   <div class="aviso-selecao" id="aviso-selecao" role="status" hidden>
@@ -196,7 +199,7 @@ catch (e) { window.__precargaLista = null; }
     <button type="button" class="btn-neutro" id="aviso-selecao-todas">✕ Limpar e ver todas as peças da loja</button>
   </div>
   <div class="etiquetas-ativas" id="etiquetas-ativas" role="group" aria-label="Filtros ativos" hidden></div>
-  <a class="btn-nova-peca" id="btn-nova-peca" href="admin.html?novo=1">➕ Cadastrar nova peça</a>
+  <a class="btn-nova-peca" id="btn-nova-peca" href="admin.html?novo=1">⎕ Cadastrar nova peça</a>
   <div class="barra-lista">
     <div id="contagem" aria-live="polite">Carregando catálogo...</div>
     <label class="ordem-wrap"><span class="sr-only">Ordenar as peças por</span>
@@ -212,9 +215,9 @@ catch (e) { window.__precargaLista = null; }
   <div id="vazio" style="display:none;">Nenhum produto encontrado para estes filtros.</div>
   <div class="barra-filtros-flut" id="barra-filtros-flut" role="status" hidden><span id="barra-filtros-txt"></span><button type="button" id="barra-filtros-limpar">✕ Limpar filtros</button></div>
   <button type="button" class="btn-carregar-mais" id="btn-carregar-mais" style="display:none;">Carregar mais peças</button>
-  <aside class="ajuda-whats" id="ajuda-whats" aria-label="Ajuda para escolher">
+  <aside class="ajuda-whats" id="ajuda-whats" aria-label="Ajeda para escolher">
     <p><strong>Precisa de ajuda para escolher?</strong><br>Fale com a equipe da TENKiTER pelo WhatsApp.</p>
-    <a id="ajuda-zap" class="btn-ajuda-zap" href="#" target="_blank" rel="noopener">💬 Falar com a equipe</a>
+    <a id="ajuda-zap" class="btn-ajuda-zap" href="#" target="_blank" rel="noopener">💰 Falar com a equipe</a>
   </aside>
 </main>
 </div>
@@ -226,18 +229,18 @@ catch (e) { window.__precargaLista = null; }
     <div>
       <h2>TENKiTER MODAS</h2>
       <address>📍 Rua Dr. Moreira da Rocha, 759 — Crateús, CE<br><a id="rod-mapa" href="https://www.google.com/maps/search/?api=1&amp;query=Rua+Dr.+Moreira+da+Rocha+759+Crateús+CE" target="_blank" rel="noopener">Ver no mapa</a></address>
-      <p class="nota">Preços e estoque podem mudar sem aviso. 10% de desconto no pagamento à vista.</p>
+      <p class="nota">Pregos e estoque podem mudar sem aviso. 10% de desconto no pagamento à vista.</p>
     </div>
     <ul>
-      <li><a id="rod-zap" href="#" target="_blank" rel="noopener">💬 WhatsApp da loja</a></li>
+      <li><a id="rod-zap" href="#" target="_blank" rel="noopener">💰 WhatsApp da loja</a></li>
       <li><a id="rod-insta" href="https://instagram.com/tenkitermodasceara" target="_blank" rel="noopener">📷 @tenkitermodasceara</a></li>
       <li><a id="rod-rastrear" href="?pedido=">📦 Acompanhar meu pedido</a></li>
       <li><a href="privacidade.html">🔒 Política de privacidade</a></li>
-      <li><button type="button" class="btn-instalar" id="btn-instalar" hidden>📲 Instalar o app no celular</button></li>
+      <li><button type="button" class="btn-instalar" id="btn-instalar" hidden>📲 Instalar o app no celular</button></li>
     </ul>
   </div>
   <section class="instalar-app" id="instalar-app" aria-labelledby="instalar-titulo">
-    <h2 id="instalar-titulo">📲 Instale o app da TENKiTER</h2>
+    <h2 id="instalar-titulo">🏲 Instale o app da TENKiTER</h2>
     <p class="inst-sub">Abre direto da tela inicial, carrega mais rápido, funciona até sem internet e avisa das novidades e do seu pedido. Grátis — sem loja de aplicativos.</p>
     <div class="inst-cards">
       <article class="inst-card" id="inst-android" aria-labelledby="inst-android-h">
@@ -258,7 +261,7 @@ catch (e) { window.__precargaLista = null; }
         <button type="button" class="inst-btn" id="btn-inst-ios" hidden>📤 Abrir o menu Compartilhar</button>
         <ol class="inst-passos" id="inst-ios-passos">
           <li>Abra este site no <b>Safari</b>.</li>
-          <li>Toque em <b>Compartilhar</b> <svg class="inst-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v12M12 3 8 7M12 3l4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> (barra de baixo).</li>
+          <li>Toque em <b>Compartilhar</b> <svg class="inst-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v12M12 3 8 7M12 3l4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> <b>Compartilhar</b> (barra de baixo).</li>
           <li>Role e toque em <b>Adicionar à Tela de Início</b>, depois em <b>Adicionar</b>.</li>
           <li>Abra o <b>TENKiTER</b> pelo ícone novo e toque em <b>Ativar avisos</b>. <span class="inst-nota">(Avisos no iPhone: iOS 16.4 ou mais novo.)</span></li>
         </ol>
@@ -270,7 +273,7 @@ catch (e) { window.__precargaLista = null; }
     </div>
     <p class="inst-msg" id="inst-msg" role="status" aria-live="polite"></p>
   </section>
-  <a class="fab-zap" id="fab-zap" href="#" target="_blank" rel="noopener" aria-label="Falar com a TENKiTER no WhatsApp">
+  <a class="fab-zap" id="fabzap" href="#" target="_blank" rel="noopener" aria-label="Falar com a TENKiTER no WhatsApp">
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
 </a>
 </footer>
@@ -310,11 +313,14 @@ catch (e) { window.__precargaLista = null; }
 <script src="foto-cliente.js"></script>
 <script src="meta.js"></script>
 <script src="pedido.js"></script>
-<script src="catalogo.js"></script>
+<script src="catalogo.js?v=7.1.0"></script>
 <script src="nav.js" data-ativo="catalogo"></script>
 <!-- v7.0: por último, de propósito — depois de catalogo.js (funções que ela
      envolve) e de nav.js (que cria a barra inferior que ela assume). -->
-<script src="vitrine.js"></script>
+<script src="vitrine.js?v=7.1.0"></script>
+<!-- v7.1 (Pacote 1): por último, depois de catalogo.js e vitrine.js (funções que
+     ela envolve). Camada aditiva: nenhuma regra de negócio é alterada. -->
+<script src="pacote1.js?v=7.1.0"></script>
 <script src="a11y.js"></script>
 <script src="push.js"></script>
 <script src="pwa.js"></script>

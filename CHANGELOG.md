@@ -6,6 +6,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## Pacote 1 — menu, pesquisa e filtros — 2026-10-23
+
+- **Menos coisa antes do primeiro produto.** Gênero e categorias passam a viver num único bloco recolhido no celular (aberto no desktop) e a faixa de vantagens nasce fechada no celular. A vitrine aparece antes, sem 22 controles no caminho.
+- **A grade não pula mais ao carregar.** A caixa da foto reserva a altura antes de a imagem chegar (aspect-ratio) e as faixas de pílulas têm altura mínima — o CLS cai de 0,18 para menos de 0,10.
+- **Cartão mais limpo e mais baixo.** As duas ações ficam lado a lado em qualquer tela e a categoria saiu do cartão (ela já aparece na pílula selecionada e na janela da peça).
+- **Barra inferior só no celular.** No desktop (a partir de 900px) a barra de compra sai de cena e o espaço que ela ocupava volta para a página. No celular ela continua com Início · Buscar · Seleção · Atendente.
+- **Nada de letra miúda.** Código do produto, categoria e rótulo da barra inferior têm piso de 12px.
+- **"Limpar filtros" sempre à vista** quando há filtro ativo — antes, no celular, ele ficava escondido dentro da gaveta fechada.
+- **Categorias repetidas juntadas.** "Blusa" e "Blusas", "Vestido" e "Vestidos", "Conjunto" e "Conjuntos", "Short" e "Shorts" passam a aparecer uma vez só, na forma com mais peças (mapa de sinônimos aplicado na leitura, sem mexer na planilha).
+- **Cache-busting** `?v=` em catalogo.js, vitrine.js e vitrine.css, para o navegador não servir a versão antiga.
+
 ## Enquadramento por gestos — 2026-10-22
 
 - A foto abre maior e os ajustes ficam recolhidos. Arrastar, pinçar e girar continuam disponíveis; desfazer e aplicar a todas ficam à vista.
@@ -18,7 +29,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## Fotos com IA — 2026-10-21
 
-- Planejar até 20 looks, dividir em grupos de até dois ou três respeitando quatro referências, trocar peças por arrasto/teclado e retomar somente o restante após falha parcial.
+- Planejar até 20 looks, dividir em grupos de até dois ou três respeitando quatro referências, trocar peças por arrasto/teclado e zetomar somente o restante após falha parcial.
 
 - Cada resultado guarda as peças e preços à vista usados no pedido; legenda e link da seleção podem ser copiados numa seção recolhível.
 
@@ -39,8 +50,8 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 ### Adicionado
 - **Seleção com validade**: a seleção de peças expira em 2 h sem uso (3 h se o cliente toca em "segura minha seleção"); ao tentar sair aparece a placa "Libera a seleção / Segura, volto já já / Continuar vendo a loja" (vale também para link `?sel=`).
 - **Busca com sugestões**: enquanto digita, mostra peças e categorias que têm resultado; se não existe igual, mostra "Não achei igual" e sinônimos (camisa/camiseta/blusa…).
-- **Painel**: ação pendente de conexão vira um chip flutuante (sem `alert`); "O que postar" aceita fotos e vídeos avulsos do aparelho com a ordem escolhida; com "Fazer em todos" desligado, editar o texto vale só para a foto selecionada.
-- **🎨 Fotos com IA** (gestor e equipe do site): o Gemini gera uma capa de campanha a partir de 1–4 fotos reais da peça, com instrução editável pelo gestor; sem cota o pedido espera na fila e roda quando a cota volta. **Ainda não foi provado contra o Google real** (modelos de imagem costumam não ter plano gratuito).
+- **Painel**: ação pendente de conexão vira um chip fluuante (sem `alert`); "O que postar" aceita fotos e vídeos avulsos do aparelho com a ordem escolhida; com "Fazer em todos" desligado, editar o texto vale só para a foto selecionada.
+- **🎨 Fotos com IA*** (gestor e equipe do site): o Gemini gera uma capa de campanha a partir de 1–4 fotos reais da peça, com instrução editável pelo gestor; sem cota o pedido espera na fila e roda quando a cota volta. **Ainda não foi provado contra o Google real** (modelos de imagem costumam não ter plano gratuito).
 
 ### Corrigido
 - **Publicação dos Workers pelo deploy** (PR #34): com `skip_ci` os jobs `Publicar …` ficavam *skipped* e nenhum Worker era publicado desde 16/10/2026.
@@ -52,8 +63,8 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 ## [Não publicado] - 2026-10-18
 
 ### Adicionado
-- **Treinamento "verificado" (módulo 0, só administrador)**: checagem rápida dentro da lição (sem nota; só libera
-  "Confirmo que li" depois de acertar), perguntas da *regra de ouro* na prova (`[CRÍTICA]`: errou uma, não passa),
+- **Treinamento "verificado" (módulo 0, só administrador)**: checgagem rápida dentro da lição (sem nota; só libera
+  "Confirmo que li" depois de acertar), perguntas da *regra de ouro* na prova (`[CRÍTICA]:` erro uma, não passa),
   aba **Prática & Certificados** para a gestão validar a prática (fica registrado quem e quando), certificado com
   código e QR (sem nota, sem CPF) e página pública `verificar.html`. Novos arquivos: `tm-verificado.js`,
   `verificar.html`, `vendor-qrcode.js` (qrcode-generator 1.4.4, MIT).
@@ -64,7 +75,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 ### Adicionado
 - **Postagem multicanal (Instagram · WhatsApp · Ambos)**: seletor de canal na tela de postagem do
   painel. O contrato do canal passa a viver em `common.js` e o `POST /post` envia
-  `canal=instagram|whatsapp|ambos`. Com `instagram` (padrão) o comportamento é idêntico ao de antes.
+  `canal=instagram|whatsapp|ambos . Com `instagram` (padrão) o comportamento é idêntico ao de antes.
 - **Integração Wafly (status do WhatsApp) no backend** (Apps Script 4.14 / 3.14, **fora do
   repositório**): envio server-side de texto e status com deduplicação, retry idempotente e validação
   de webhook. As credenciais `WAFLY_CLIENT_TOKEN`, `WAFLY_INSTANCE` e `WAFLY_TOKEN` ficam **apenas**
