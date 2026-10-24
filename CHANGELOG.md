@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.2.5 — indicação visual inequívoca — 2026-10-24
+
+- A etapa destaca o cartão inteiro com contorno azul e branco pulsante, escurece o restante da tela e mostra a placa “👉 TOQUE AQUI”.
+- Tutoriais antigos que apontam para um texto interno passam a destacar automaticamente o botão ou cartão clicável que contém esse texto.
+
 ## 7.2.4 — fotos e cartões no gravador — 2026-10-24
 
 - Escolher uma foto vira uma única etapa e é validado pela presença real do arquivo, inclusive nos tutoriais gravados antes desta correção.
