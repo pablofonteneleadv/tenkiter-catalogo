@@ -567,6 +567,21 @@
   .busca-admin-x[hidden] { display: none; }
 .cad-resumo-envios{margin:12px 0;padding:14px;border:1px solid #d8d8d8;border-radius:12px;background:#fff;color:#222}.cad-resumo-envios[hidden]{display:none}.cad-resumo-envios p{margin:6px 0}.cad-resumo-envios ul{padding-left:20px;max-height:180px;overflow:auto}.cad-resumo-envios li{margin:5px 0;overflow-wrap:anywhere}.cad-resumo-envios button{background:#222;color:#fff;max-width:100%;margin-top:8px}
 </style>
+<style id="cad-reformulacao-20261024">
+#form-produto .passo{border-radius:18px}
+#form-produto .publico-seis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+#form-produto .publico-seis .chip{width:100%;min-width:0;justify-content:center;min-height:52px;white-space:normal;text-align:center}
+#form-produto .cad-unissex{display:flex;align-items:center;gap:10px;padding:12px 14px;margin-top:12px;border:1px solid #ead8f6;border-radius:13px;background:#fbf5ff;font-weight:700;flex-wrap:wrap}
+#form-produto .cad-unissex input{width:20px;height:20px;accent-color:#ef861e}
+#form-produto .cad-unissex small{display:block;flex-basis:100%;padding-left:30px;font-weight:400;color:#666}
+#form-produto .cad-vinculos{padding:12px;background:#faf9f6;border-radius:14px;margin-bottom:12px}
+#form-produto .cad-vinculos-titulo{font-weight:750;margin:8px 0}
+#form-produto .cad-etiquetas,#form-produto .cad-faixas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+#form-produto .cad-vinculos button{min-height:43px;border:1px solid #ddd;background:white;border-radius:24px;font-weight:700}
+#form-produto .cad-vinculos button.ativo{background:#ed861d;border-color:#ed861d;color:#111}
+#form-produto .cad-vinculos-ajuda{font-size:12px;line-height:1.5;color:#666}
+@media(max-width:400px){#form-produto .publico-seis{gap:5px}#form-produto .publico-seis .chip{font-size:12px;padding:9px 3px}}
+</style>
 </head>
 <body>
 
@@ -811,6 +826,13 @@
 
       <section class="passo" data-passo="tamanhos">
         <div class="passo-tit"><span class="num">6</span>Tamanhos <span class="opc">(se souber)</span></div>
+        <div class="cad-vinculos" id="cad-vinculos" aria-live="polite">
+          <div class="cad-vinculos-titulo">Tamanho da etiqueta</div>
+          <div class="cad-etiquetas" id="cad-etiquetas"></div>
+          <div class="cad-vinculos-titulo" id="cad-faixa-titulo">Numeração ou idade que veste</div>
+          <div class="cad-faixas" id="cad-faixas"></div>
+          <p class="cad-vinculos-ajuda">Escolha o tamanho escrito na etiqueta e as numerações ou idades correspondentes. No infantil, a cliente verá somente a idade.</p>
+        </div>
         <div class="chips chips-rapidos" id="chips-tamanhos"></div>
         <input type="text" id="tamanhos" placeholder="Ou escreva: P, M, G, GG" autocomplete="off" class="so-admin-cores">
         <button type="button" class="btn-escolher so-admin-cores" id="btn-abrir-tamanhos">＋ Escolher tamanhos</button>
@@ -825,7 +847,8 @@
 
       <section class="passo" data-passo="genero">
         <div class="passo-tit"><span class="num">8</span>Para quem é? <i class="obg">*</i></div>
-        <div class="chips chips-grandes" id="chips-genero"></div>
+        <div class="chips chips-grandes publico-seis" id="chips-genero"></div>
+        <label class="cad-unissex"><input type="checkbox" id="cad-unissex"> Também é unissex <small>Exibir para ambos os públicos da mesma faixa etária</small></label>
         <div class="passo-msg">Escolha para quem é a peça.</div>
       </section>
 
