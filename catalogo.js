@@ -301,6 +301,7 @@ try { tkSelExpirar_(); } catch (e) {}
       chip.type = 'button';
       chip.className = 'chip' + (conjunto.has(v) ? ' selecionado' : '');
       chip.textContent = v;
+      chip.dataset.filterValue = v; // identidade estável, independente de contagens/etiquetas visuais
       chip.addEventListener('click', () => {
         if (conjunto.has(v)) conjunto.delete(v); else conjunto.add(v);
         chip.classList.toggle('selecionado');
@@ -373,8 +374,14 @@ try { tkSelExpirar_(); } catch (e) {}
         porBusca.forEach(p => { if (!estaEsgotado(p) && passaFiltros(p, k)) tagsDe(p).forEach(t => disp.add(t)); });
         const cont = document.getElementById(idc); if (!cont) return;
         let vis = 0;
-        Array.from(cont.children).forEach(ch => { const ok = conj.has(ch.textContent) || disp.has(ch.textContent); ch.hidden = !ok; if (ok) vis++; });
-        const d = document.getElementById(idd); if (d) d.hidden = vis === 0;
+        Array.from(cont.children).forEach(ch => {
+          const valor = ch.dataset.filterValue || ch.textContent.trim();
+          const ok = conj.has(valor) || disp.has(valor);
+          ch.hidden = !ok;
+          if (ok) vis++;
+        });
+        // Nunca ocultar o menu inteiro: a cliente precisa conseguir rever ou remover escolhas.
+        const d = document.getElementById(idd); if (d) d.hidden = false;
       });
     } catch (e) {}
     // Busca nunca pode "sumir" por causa de um filtro escondido na gaveta: se com os filtros deu zero, mostra o resultado da loja toda.
