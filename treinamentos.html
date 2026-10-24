@@ -661,6 +661,7 @@ function perfilCompletude(user){
  * a ser conferidos lá (a senha nunca mais precisa vir na lista de funcionários).
  * Se NÃO responder (script antigo ainda não atualizado), tudo funciona como
  * antes -- por isso a ordem de subir script e site não derruba ninguém. */
+var sessaoPrecisaAtualizar = false;
 var servidorNovo = false;
 var servidorChecado = false;
 var servidorAcessos = false; // v4: servidor com perfis e permissões (painel Acessos)
@@ -717,7 +718,8 @@ async function restaurarSessaoServidor(respPronta){
     }catch(e){ resp = null; }
   }
   if (!resp || !resp.ok){
-    if (resp && (resp.sessaoInvalida || resp.inativa)){ try{ localStorage.removeItem('tm_session'); }catch(e){} return false; }
+    if (resp && resp.inativa){ try{ localStorage.removeItem('tm_session'); }catch(e){} return false; }
+    if (resp && resp.sessaoInvalida){ sessaoPrecisaAtualizar = true; return false; }
     return 'rede'; // servidor lento/sem conexão: a sessão continua guardada, não manda para o login
   }
   var entry = entryFromServerUser(resp.usuario, resp.sessao);
@@ -1130,13 +1132,14 @@ function renderBlocks(blocks, chaveCap){
 
 /* ---------------- render: login ---------------- */
 function renderLogin(){
-  if (window.TenkiterNav) TenkiterNav.setPerms([]);
+  if (window.TenkiterNav && !ls_get('tm_session', null)) TenkiterNav.setPerms([]);
   var app = document.getElementById('app');
   app.innerHTML =
     '<div class="login-wrap"><div class="login-card">' +
       '<div class="mark"><img src="icon-192.png" alt="TENKiTER"></div>' +
       '<h1>Portal de treinamento</h1>' +
       '<p class="sub">TENKiTER Modas — entre com seu e-mail, WhatsApp ou CPF e a senha.</p>' +
+      (sessaoPrecisaAtualizar ? '<div class="aviso aviso-warn"><b class="aviso-tag">Atualizar sessão</b>Entre uma vez aqui para sincronizar Catálogo, Gestão e RH. Seu login das outras áreas foi preservado.</div>' : '') +
       '<div class="login-error" id="login-error"></div>' +
       '<div class="field"><label>E-mail, WhatsApp ou CPF</label><input type="text" id="login-whats" autocomplete="username" autocapitalize="none" placeholder="88999999999, e-mail ou CPF"></div>' +
       '<div class="field"><label>Senha</label><input type="password" id="login-pass" autocomplete="current-password"></div>' +
