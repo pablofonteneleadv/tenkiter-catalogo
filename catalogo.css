@@ -691,3 +691,14 @@ html.fx-travado, html.fx-travado body { overflow: hidden; }
  .filtros .fx-fechar{padding:10px}
 }
 @media(min-width:601px){.fx-busca-interna{display:none}}
+
+
+/* Barra de acoes do cliente: compacta, sem roubar a primeira linha de produtos. */
+@media(max-width:767px){
+ .linha-share-busca{display:flex;flex-wrap:wrap;gap:6px;padding:4px 0 5px;align-items:center}
+ .linha-share-busca[hidden]{display:none}
+ .linha-share-busca button{flex:0 1 auto;min-width:0;width:auto;min-height:34px;padding:6px 10px;font-size:.75rem;line-height:1.2;border-width:1px;border-radius:12px;box-shadow:none}
+ .linha-share-busca #btn-share-busca{flex:1 1 auto}
+ .linha-share-busca .btn-add-resultados{margin:0;min-height:34px;flex:0 1 auto;width:auto;border-style:solid;font-size:.75rem}
+ .linha-share-busca #btn-limpar-filtros-topo,.linha-share-busca #btn-limpar-sel{background:#fff;border-color:#d7d7d7;color:#444}
+}

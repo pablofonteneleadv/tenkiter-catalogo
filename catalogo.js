@@ -520,8 +520,9 @@ try { tkSelExpirar_(); } catch (e) {}
     const q = document.getElementById('busca').value.trim();
     const ativo = nFiltros > 0 || !!q || !!selecaoFixa || apenasFavoritos || apenasNovidades;
     const nSac = getSacola().length, share = document.getElementById('linha-share-busca'); if (share) share.hidden = !(ativo || nSac > 0);
-    const bsb = document.getElementById('btn-share-busca'); if (bsb) bsb.textContent = (nSac > 0 && !ativo) ? '🔗 Compartilhar seleção (' + nSac + ')' : '🔗 Compartilhar seleção';
-    const bls = document.getElementById('btn-limpar-sel'); if (bls) bls.hidden = !(ativo || nSac > 0) || !!selecaoFixa || modoLink_;
+    const bsb = document.getElementById('btn-share-busca'); if (bsb) bsb.textContent = ativo ? '🔗 Compartilhar filtro' : '🔗 Compartilhar seleção (' + nSac + ')';
+    const bls = document.getElementById('btn-limpar-sel'); if (bls) bls.hidden = nSac === 0;
+    const blf = document.getElementById('btn-limpar-filtros-topo'); if (blf) blf.hidden = !ativo;
     const ams = document.getElementById('aviso-minha-sel');
     if (soSelecao_ && nSac === 0) { soSelecao_ = false; setTimeout(aplicarFiltros, 0); }
     else if (soSelecao_ && nSac !== ultimoNSac_ && ultimoNSac_ !== -1) { ultimoNSac_ = nSac; setTimeout(aplicarFiltros, 0); }
@@ -553,7 +554,8 @@ try { tkSelExpirar_(); } catch (e) {}
   }
   /** Sai dos filtros do link (ou limpa os filtros comuns) e mostra o site inteiro; sacola e favoritos da pessoa ficam como estão. */
   document.getElementById('btn-share-busca').addEventListener('click', () => { const bf = document.getElementById('badge-filtros'), q = document.getElementById('busca').value.trim(); const filtrando = (bf && !bf.hidden && (parseInt(bf.textContent, 10) || 0) > 0) || q || selecaoFixa || apenasFavoritos || apenasNovidades; if (!filtrando && getSacola().length) abrirSelecao(true); else document.getElementById('btn-share-filtros').click(); });
-  document.getElementById('btn-limpar-sel').addEventListener('click', () => { if (getSacola().length) { limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); } if (selecaoFixa || document.getElementById('busca').value.trim() || apenasFavoritos || apenasNovidades) document.getElementById('btn-limpar').click(); atualizarBarraFiltros_(); });
+  document.getElementById('btn-limpar-filtros-topo').addEventListener('click', () => { document.getElementById('btn-limpar').click(); atualizarBarraFiltros_(); });
+  document.getElementById('btn-limpar-sel').addEventListener('click', () => { if (getSacola().length) { limparSacola(); atualizarSacolaHeader_(); if (window.tkSincronizarCards) window.tkSincronizarCards(); } atualizarBarraFiltros_(); });
   document.getElementById('btn-lote-menu').addEventListener('click', (e) => { const m = document.getElementById('lote-menu'); m.hidden = !m.hidden; e.currentTarget.setAttribute('aria-expanded', String(!m.hidden)); });
   document.getElementById('lote-menu').addEventListener('click', (e) => { const b = e.target.closest('[data-lote]'); if (!b) return; if (b.dataset.lote === 'btn-bulk-juntar') { document.getElementById('lote-menu').hidden = true; abrirJuntarCatalogo_(); return; }
     // v4.10 (FE-06): "Enviar para postagem" (e as demais ações em lote) exigem a MESMA sessão compartilhada.
