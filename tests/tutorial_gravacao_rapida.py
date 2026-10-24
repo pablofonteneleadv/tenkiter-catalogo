@@ -23,12 +23,15 @@ with sync_playwright() as p:
     frame.locator("#menu").click()
     assert frame.locator("#dentro").is_visible(), "o clique gravado precisa abrir o menu"
     page.get_by_role("button", name="Começar a gravação daqui").click()
+    assert page.locator(".tut-full-bar").bounding_box()["height"] < 70, "a barra de gravação deve ser compacta"
     frame.locator("#opcao").click()
     frame.locator("#codigo").fill("TK-123")
     frame.locator("#codigo").blur()
     page.get_by_role("button", name="Inserir texto").click()
     page.locator("#tfg-texto").fill("Texto criado durante a gravação")
-    page.get_by_role("button", name="Adicionar nesta posição").click()
+    page.get_by_role("button", name="Posicionar na tela").click()
+    assert page.locator(".tut-full-form").bounding_box()["height"] < 65, "ao posicionar, o editor deve virar uma faixa pequena"
+    page.get_by_role("button", name="Salvar", exact=True).click()
     page.get_by_role("button", name="Encerrar").click()
     total = page.locator("#tut-etapas tbody tr").count()
     assert total == 3, f"esperava 2 ações e 1 texto após a preparação, recebeu {total}"

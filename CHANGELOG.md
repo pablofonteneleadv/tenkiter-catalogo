@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.3.6 — gravador móvel compacto — 2026-10-24
+
+- Substitui o cabeçalho alto por uma barra compacta de estado e quatro controles, reduzida ainda mais depois que a gravação começa.
+- Divide a criação de texto em edição e posicionamento: a formatação fica recolhida e, ao posicionar, o painel vira uma faixa pequena para liberar a tela.
+- Mantém comandos rápidos para editar, salvar ou cancelar enquanto a caixa é arrastada sobre a aplicação.
+
 ## 7.3.5 — menu inferior visível no tutorial — 2026-10-24
 
 - Preserva o posicionamento `fixed` e `sticky` do elemento destacado, incluindo a navegação inferior do celular.
