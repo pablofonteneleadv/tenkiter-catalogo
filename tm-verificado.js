@@ -275,6 +275,10 @@
   };
   TMV.ligarGestor = async function(){
     var raiz = document.getElementById('tmv-adm'); if (!raiz) return;
+    // O editor de tutoriais é independente das práticas/certificados. Monte-o
+    // antes de qualquer retorno desta função, inclusive quando nenhum manual
+    // contém um capítulo chamado "Prática".
+    if (window.TKTutorial) window.TKTutorial.montarEditor();
     var pes = raiz.querySelector('#tmv-pes'), man = raiz.querySelector('#tmv-man'), itensBox = raiz.querySelector('#tmv-itens'), lista = raiz.querySelector('#tmv-lista');
     var func = ((S().adminData && S().adminData.funcionarios) || []).filter(function(f){ return String(f.status || 'ativo').toLowerCase() !== 'inativo'; });
     func.sort(function(a, b){ return String(a.nome || '').localeCompare(String(b.nome || '')); });
@@ -315,6 +319,5 @@
     };
     pes.addEventListener('change', desenhar); man.addEventListener('change', desenhar);
     carregar();
-    if (window.TKTutorial) window.TKTutorial.montarEditor();
   };
 })();
