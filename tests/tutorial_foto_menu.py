@@ -2,7 +2,7 @@ from playwright.sync_api import sync_playwright
 
 BASE = "http://127.0.0.1:8766/"
 TELA = """<div data-acao='menu' onclick="document.getElementById('submenu').hidden=false"><span>Cadastrar</span></div>
-<section id='submenu' hidden><button data-acao='novo' onclick="document.getElementById('form').hidden=false;window.novoClicks=(window.novoClicks||0)+1;if(location.search.includes('tutorial_teste')&&window.novoClicks===1)setTimeout(()=>{document.getElementById('form').hidden=true;document.getElementById('submenu').hidden=true},80)"><span>Cadastrar nova peça</span></button></section>
+<section id='submenu' hidden><button data-acao='novo' onclick="document.getElementById('form').hidden=false;window.novoClicks=(window.novoClicks||0)+1;if(location.search.includes('tutorial_teste')&&window.novoClicks===1){document.getElementById('form').outerHTML=document.getElementById('form').outerHTML;setTimeout(()=>{document.getElementById('form').hidden=true;document.getElementById('submenu').hidden=true},80)}"><span>Cadastrar nova peça</span></button></section>
 <section id='form' hidden><label id='foto-label' for='foto'>📷 Tirar foto ou escolher da galeria</label>
 <input id='foto' type='file' accept='image/*'></section>"""
 
@@ -35,8 +35,9 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Testar tutorial inteiro").click()
     teste = page.frame_locator("#tt-frame")
     teste.locator("[data-acao=menu].tk-tut-alvo").wait_for()
-    assert "6px" in teste.locator("[data-acao=menu]").evaluate("el => getComputedStyle(el).outlineWidth")
+    assert "7px" in teste.locator("[data-acao=menu]").evaluate("el => getComputedStyle(el).outlineWidth")
     assert teste.locator(".tk-tut-seta", has_text="TOQUE AQUI").is_visible()
+    assert teste.locator(".tk-tut-seta").evaluate("el => getComputedStyle(el).position") == "absolute"
     seta = teste.locator(".tk-tut-seta").bounding_box()
     alvo = teste.locator("[data-acao=menu]").bounding_box()
     assert abs((seta['y'] + seta['height']/2) - (alvo['y'] + alvo['height']/2)) < 120
@@ -46,7 +47,8 @@ with sync_playwright() as p:
     teste.locator("[data-acao=novo]").click()
     page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Etapa 3 de 3')")
     teste.locator("#foto-label.tk-tut-alvo").wait_for()
-    assert "6px" in teste.locator("#foto-label").evaluate("el => getComputedStyle(el).outlineWidth")
+    assert "7px" in teste.locator("#foto-label").evaluate("el => getComputedStyle(el).outlineWidth")
+    assert teste.locator("#foto-label").evaluate("el => { const r=el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight }")
     teste.locator("#foto").set_input_files({"name": "outra.jpg", "mimeType": "image/jpeg", "buffer": b"outra"})
     page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Tutorial concluído corretamente')")
     browser.close()

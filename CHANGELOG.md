@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.3.1 — jogador de tutorial estável — 2026-10-24
+
+- A indicação passa a acompanhar o elemento no documento e não fica mais presa ao topo da tela quando o alvo sai da área visível.
+- Rolagens suaves concorrentes são interrompidas; o jogador relocaliza, centraliza e aguarda o alvo estabilizar antes de liberar a etapa.
+- Elementos recriados dinamicamente por formulários, modais e abas são resolvidos novamente pelo seletor da etapa.
+
 ## 7.3.0 — auditoria filtrável e recuperação geral do tutorial — 2026-10-24
 
 - A auditoria usa a sessão atual completa, eliminando o falso erro de PIN para contas autenticadas.
