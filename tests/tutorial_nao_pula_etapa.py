@@ -1,7 +1,8 @@
 from playwright.sync_api import sync_playwright
 
 BASE = "http://127.0.0.1:8766/"
-TELA = """<button id='um'>Um</button><button id='dois'>Dois</button>
+TELA = """<style>#um{position:fixed;left:0;right:0;bottom:0;height:64px}</style>
+<button id='um'>Um</button><button id='dois'>Dois</button>
 <button id='tres'>Cadastrar nova peça</button><button id='quatro'>Adicionar foto</button>"""
 TUTORIAL = {
     "id": "sequencia", "titulo": "Sequência", "descricao": "", "pagina": "index.html",
@@ -27,7 +28,15 @@ with sync_playwright() as p:
       TKTutorial.montarAluno(); }""", TUTORIAL)
     page.get_by_role("button", name="Começar tutorial").click()
     frame = page.frame_locator("#tt-frame")
-    frame.locator("#um.tk-tut-alvo").click()
+    alvo_um = frame.locator("#um.tk-tut-alvo")
+    alvo_um.wait_for()
+    alvo_box = alvo_um.bounding_box()
+    placa_box = frame.locator(".tk-tut-seta").bounding_box()
+    assert placa_box["y"] + placa_box["height"] <= alvo_box["y"], "a placa não pode cobrir o menu inferior"
+    card = page.locator("#tut-teste .tut-modal-card").bounding_box()
+    visual_h = page.evaluate("visualViewport.height")
+    assert abs(card["height"] - visual_h) <= 2, "o teste deve usar a altura visual real do celular"
+    alvo_um.click()
     frame.locator("#dois.tk-tut-alvo").click()
     frame.locator("#tres.tk-tut-alvo").wait_for()
     assert "Etapa 3 de 4" in page.locator("#tt-guia").inner_text()
