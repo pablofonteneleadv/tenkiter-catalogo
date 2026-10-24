@@ -656,6 +656,55 @@
  #form-produto #chips-categorias{grid-template-columns:repeat(5,minmax(0,1fr))}
  #form-produto .foto-box{grid-template-columns:minmax(180px,27%) minmax(0,1fr)}
 }
+
+/* V2 densidade real: fotografia da tela Android e referencia visual. */
+#card-form{margin:10px 0 12px}
+#card-form>summary{padding:11px 14px;font-size:.95rem;border-radius:13px 13px 0 0}
+#card-form[open]>.cad-corpo{padding:9px 10px 12px}
+#card-form #titulo-form{font-size:1.15rem;line-height:1.2;margin:0 0 3px}
+#card-form .cad-sub{font-size:.77rem;line-height:1.35;margin:0 0 9px}
+#form-produto{gap:8px}
+#form-produto .passo{padding:11px 12px;border-radius:15px;box-shadow:0 1px 5px rgba(0,0,0,.025)}
+#form-produto .passo-tit{font-size:.95rem;gap:7px;margin:0 0 9px;line-height:1.2;flex-wrap:nowrap}
+#form-produto .passo-tit .num{width:27px;height:27px;flex-basis:27px;font-size:.81rem}
+#form-produto .passo-tit .passo-cont{margin-left:auto;white-space:nowrap;font-size:.7rem}
+#form-produto [data-passo="video"] .passo-tit .opc{font-size:.68rem;line-height:1.2}
+#form-produto .foto-box{grid-template-columns:minmax(112px,37%) minmax(0,1fr);gap:5px 8px}
+#form-produto .foto-box>.btn-foto{min-height:98px;height:98px;font-size:.77rem;padding:7px;overflow-wrap:anywhere}
+#form-produto .foto-box>#galeria-grid{padding:4px 5px 42px 2px;min-height:142px;scroll-snap-type:x proximity}
+#form-produto .galeria-item{flex:0 0 73px;width:73px;height:91px;scroll-snap-align:start}
+#form-produto .galeria-item .btn-enq{top:96px;height:34px;min-height:34px;font-size:.65rem;padding:0 2px;white-space:normal;line-height:1.05}
+#form-produto .galeria-item .btn-remover{width:24px;height:24px}
+#form-produto .foto-box>#video-lista{padding:2px 3px;min-height:98px;align-items:stretch}
+#form-produto #video-lista:empty::before{content:"Até 3 vídeos";display:flex;align-items:center;justify-content:center;width:100%;min-height:96px;border-radius:10px;border:1px dashed #e5e0d8;background:#faf9f6;color:#888;font-size:.74rem}
+#form-produto .video-item{flex:0 0 116px;width:116px;min-width:0;padding:5px;gap:4px}
+#form-produto .video-item video{max-width:100%;max-height:100px}
+#form-produto .video-x{min-height:32px;padding:5px 7px;font-size:.73rem}
+#form-produto .dica-midia-expansivel{padding:6px 9px;font-size:.71rem}
+#form-produto .cad-nome-linha{display:grid;grid-template-columns:minmax(0,1fr) minmax(112px,30%);align-items:stretch;gap:8px}
+#form-produto .cad-nome-linha input{width:100%;min-width:0;min-height:45px}
+#form-produto .cad-nome-linha #btn-foto-ia{margin:0;min-height:45px;padding:6px 7px;font-size:.8rem;line-height:1.2;white-space:normal}
+#form-produto .cad-nome-linha #btn-foto-ia small{display:block;font-size:.64rem;font-weight:500;margin-top:2px}
+#form-produto .chk-consulta{margin-top:5px;padding:5px 7px;border-radius:9px;background:#fff9f0}
+#form-produto #chips-categorias{gap:5px}
+#form-produto #chips-categorias .chip{min-height:35px;padding:5px 3px;font-size:.74rem;border-radius:999px}
+#form-produto .publico-seis .chip{min-height:41px}
+#form-produto .cad-unissex{margin-top:7px;padding:7px 9px}
+@media(max-width:440px){
+ #form-produto .passo{padding:10px}
+ #form-produto .passo-tit{font-size:.88rem}
+ #form-produto .foto-box{grid-template-columns:minmax(104px,39%) minmax(0,1fr)}
+ #form-produto .foto-box>.btn-foto{font-size:.73rem}
+ #form-produto .galeria-item{flex-basis:69px;width:69px;height:86px}
+ #form-produto .galeria-item .btn-enq{top:91px}
+ #form-produto #chips-categorias{grid-template-columns:repeat(3,minmax(0,1fr))}
+ #form-produto .cad-nome-linha{grid-template-columns:minmax(0,1fr) 112px}
+ #form-produto .cad-nome-linha #btn-foto-ia{font-size:.73rem}
+}
+@media(min-width:700px){
+ #form-produto .cad-nome-linha{grid-template-columns:minmax(0,1fr) 190px}
+ #form-produto #chips-categorias{grid-template-columns:repeat(5,minmax(0,1fr))}
+}
 </style>
 </head>
 <body>
@@ -848,8 +897,6 @@
           <div id="galeria-grid" class="galeria-grid"></div>
           <details class="dica-midia dica-midia-expansivel"><summary>★ A primeira foto é a capa · Dicas de enquadramento</summary><p>A foto com <b>★ CAPA</b> aparece primeiro no catálogo. Toque numa foto para vê-la grande (lá você pode escolher a capa), <b>✂ Enquadrar</b> para posicionar, girar e dar zoom vendo como fica no site, no Feed, no Carrossel e no Story, ‹ › para mudar a ordem e ✕ para tirar. A miniatura já mostra o recorte 4:5 que o site usa.</p></details>
         </div>
-        <button type="button" class="btn-seo-ia" id="btn-foto-ia">✨ Preencher os campos pela foto (IA)</button>
-        <div id="foto-ia-box"></div>
         <div class="passo-msg">Coloque pelo menos 1 foto da peça.</div>
       </section>
 
@@ -868,7 +915,11 @@
 
       <section class="passo" data-passo="nome">
         <div class="passo-tit"><span class="num">3</span>Nome da peça <i class="obg">*</i></div>
+        <div class="cad-nome-linha">
         <input type="text" id="nome" maxlength="80" placeholder="Ex: Vestido Floral Midi" autocomplete="off" dir="ltr" lang="pt-BR">
+          <button type="button" class="btn-seo-ia" id="btn-foto-ia">✨ Gerar com IA <small>Título e descrição</small></button>
+        </div>
+        <div id="foto-ia-box"></div>
         <div id="nome-sugestoes" aria-live="polite"></div>
       <div id="aviso-copiado" class="sug-aviso" role="status" hidden></div>
         <div class="passo-msg">Escreva o nome da peça.</div>
