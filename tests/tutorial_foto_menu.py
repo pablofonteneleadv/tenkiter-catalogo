@@ -31,6 +31,7 @@ with sync_playwright() as p:
     assert page.locator("#tut-etapas tbody tr").count() == 3, "foto deve virar uma etapa, sem clique duplicado no rótulo"
     assert page.locator('[data-campo="instrucao"][data-i="0"]').input_value() == "Toque em Cadastrar"
     assert page.locator('[data-campo="valor"][data-i="2"]').input_value() == ""
+    assert page.locator('[data-campo="acao"][data-i="2"]').input_value() == "arquivo"
     assert "Adicione uma foto" in page.locator('[data-campo="instrucao"][data-i="2"]').input_value()
     page.get_by_role("button", name="Testar tutorial inteiro").click()
     teste = page.frame_locator("#tt-frame")
@@ -49,7 +50,9 @@ with sync_playwright() as p:
     teste.locator("#foto-label.tk-tut-alvo").wait_for()
     assert "7px" in teste.locator("#foto-label").evaluate("el => getComputedStyle(el).outlineWidth")
     assert teste.locator("#foto-label").evaluate("el => { const r=el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight }")
-    teste.locator("#foto").set_input_files({"name": "outra.jpg", "mimeType": "image/jpeg", "buffer": b"outra"})
+    with page.expect_file_chooser() as escolha_teste:
+        teste.locator("#foto-label").click()
+    escolha_teste.value.set_files({"name": "outra.jpg", "mimeType": "image/jpeg", "buffer": b"outra"})
     page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Tutorial concluído corretamente')")
     browser.close()
 
