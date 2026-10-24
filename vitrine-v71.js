@@ -1,41 +1,47 @@
 /* ====================================================================
- * TENKiTER — vitrine v7.1 (menu, pesquisa e filtros)
+ * TENKiTER - vitrine v7.1 (menu, pesquisa e filtros)
  *
- * Camada ADITIVA, no mesmo padrão de vitrine.js / a11y.js: carregada por
- * último, só age na página do catálogo (guarda em #grid) e não reescreve
- * nenhuma regra de negócio. catalogo.js, nav.js e catalogo.css ficam
- * byte-idênticos ao que já estava em main.
+ * Camada ADITIVA, no mesmo padrao de vitrine.js / a11y.js: carregada por
+ * ultimo, so age na pagina do catalogo (guarda em #grid) e nao reescreve
+ * nenhuma regra de negocio. catalogo.js, nav.js e catalogo.css ficam
+ * byte-identicos ao que ja estava em main.
  *
  * Itens do plano de front atendidos aqui:
- *   1. gênero + categorias num <details> fechado no celular (aberto no
- *      desktop) e faixa de vantagens em 1 linha — a vitrine sobe para a
- *      primeira tela (o 1º produto começava em y=406 de 844px)
- *   3. CLS < 0,10 — altura reservada nas faixas e aspect-ratio no cartão
- *   4. ações do cartão lado a lado no celular; categoria fora do cartão
+ *   1. genero + categorias num <details> fechado no celular (aberto no
+ *      desktop) e faixa de vantagens em 1 linha - a vitrine sobe para a
+ *      primeira tela (o 1o produto comecava em y=406 de 844px)
+ *   3. CLS < 0,10 - altura reservada nas faixas e aspect-ratio no cartao
+ *   4. acoes do cartao lado a lado no celular; categoria fora do cartao
  *   5. barra inferior escondida no desktop (>=900px), padding-bottom zerado
- *   6. piso de 12px em código, categoria e rótulo da barra
- *   7. "Limpar filtros" à vista na barra de contagem quando há filtro ativo
- *   8. categorias canônicas (Blusa/Blusas, Vestido/Vestidos,
+ *   6. piso de 12px em codigo, categoria e rotulo da barra
+ *   7. "Limpar filtros" a vista na barra de contagem quando ha filtro ativo
+ *   8. categorias canonicas (Blusa/Blusas, Vestido/Vestidos,
  *      Conjunto/Conjuntos, Short/Shorts)
  *
- * Restrição do cliente mantida: a barra inferior continua com Início,
- * Buscar, Seleção e Atendente — sem Favoritos e sem Categorias.
+ * Restricao do cliente mantida: a barra inferior continua com Inicio,
+ * Buscar, Selecao e Atendente - sem Favoritos e sem Categorias.
  * ==================================================================== */
 (() => {
   'use strict';
 
-  // Só o catálogo tem vitrine. Nas outras telas esta camada não faz nada.
+  // So o catalogo tem vitrine. Nas outras telas esta camada nao faz nada.
   if (!document.getElementById('grid')) return;
 
   const $ = (id) => document.getElementById(id);
   const tem = (fn) => typeof window[fn] === 'function';
 
   /* ==================================================================
-   * CSS — injetado por último, então vence as regras de vitrine.css e
+   * CSS - injetado por ultimo, entao vence as regras de vitrine.css e
    * catalogo.css de mesma especificidade (mesma origem, ordem posterior).
+   *
+   * O build tambem extrai este bloco para vitrine-v71.css e o carrega no
+   * <head> (scripts/deploy/cache_bust.py). No <head> ele chega ANTES do
+   * primeiro paint; injetado so por JS, chegava depois e o recolhimento
+   * das faixas virava salto de layout. Medido: CLS 0,17 com o CSS so por
+   * JS contra 0,05 de linha de base; com o <link> no <head>, 0,056.
    * ================================================================== */
   const CSS = `
-/* ---------- item 1: as faixas de navegação num <details> ---------- */
+/* ---------- item 1: as faixas de navegacao num <details> ---------- */
 .faixas-details { margin: 0; }
 .faixas-sum {
   display: flex; align-items: center; gap: 8px;
@@ -73,9 +79,13 @@
 .pills-categoria { min-height: 50px; }
 .beneficios { min-height: 44px; }
 .card .img-wrap { aspect-ratio: 4 / 5; }
+/* A grade nasce vazia e so cresce quando os dados chegam: sem altura
+   reservada, o rodape e a caixa de ajuda sobem e descem (o maior salto
+   medido). Reservar ~1 tela evita o pulo sem travar o crescimento. */
+#grid { min-height: 50vh; }
 .card .img-wrap img { height: 100%; }
 
-/* ---------- item 4: ações do cartão em linha ---------- */
+/* ---------- item 4: acoes do cartao em linha ---------- */
 @media (max-width: 480px) {
   .acoes-card { flex-direction: row; gap: 6px; }
   .acoes-card button {
@@ -84,7 +94,7 @@
   }
 }
 
-/* ---------- item 5: a barra inferior é de celular ---------- */
+/* ---------- item 5: a barra inferior e de celular ---------- */
 @media (min-width: 900px) {
   body .tk-nav { display: none !important; }
   body.tk-tem-nav { padding-bottom: 0 !important; }
@@ -97,10 +107,10 @@
 body .tk-nav a { font-size: 12px !important; }
 body .tk-nav a .tk-r { font-size: 12px; }
 
-/* ---------- item 4: a categoria sai do cartão ---------- */
+/* ---------- item 4: a categoria sai do cartao ---------- */
 .card-info .tags { display: none; }
 
-/* ---------- item 7: limpar filtros à vista ---------- */
+/* ---------- item 7: limpar filtros a vista ---------- */
 .btn-limpar-topo {
   flex: 0 0 auto; min-height: 38px; padding: 0 12px;
   border: 1px solid #d8d2c4; border-radius: 19px;
@@ -118,7 +128,7 @@ body .tk-nav a .tk-r { font-size: 12px; }
   }
   .vitrine-layout > .faixas-details > .faixas-sum { display: none; }
   /* A faixa de vantagens desce para a linha 2: antes dividia a linha 1 com
-     as faixas de gênero/categoria e as duas caíam na mesma célula do grid. */
+     as faixas de genero/categoria e as duas caiam na mesma celula do grid. */
   .vitrine-layout #beneficios { grid-column: 1 / -1; grid-row: 2; }
   .vitrine-layout .filtros { grid-row: 3; }
   .vitrine-layout main { grid-row: 3; }
@@ -126,6 +136,9 @@ body .tk-nav a .tk-r { font-size: 12px; }
 `;
 
   function injetarCss() {
+    // Se o build ja colocou o <link> no <head>, nao injeta de novo: o CSS
+    // do <head> chega antes do primeiro paint e evita o salto de layout.
+    if (document.querySelector('link[href^="vitrine-v71.css"]')) return;
     if ($('tk-v71-css')) return;
     const s = document.createElement('style');
     s.id = 'tk-v71-css';
@@ -134,14 +147,14 @@ body .tk-nav a .tk-r { font-size: 12px; }
   }
 
   /* ==================================================================
-   * Item 8 — categorias canônicas
+   * Item 8 - categorias canonicas
    * "Blusa" x "Blusas", "Vestido" x "Vestidos", "Conjunto" x "Conjuntos" e
-   * "Short" x "Shorts" partiam a navegação em duas entradas para a MESMA
-   * coisa: a pílula "Blusa" mostrava 3 peças e "Blusas" 87, e quem clicava
-   * na primeira concluía que a loja quase não tem blusa.
-   * O mapa unifica na forma plural, que é a que tem acervo. Aplicado UMA
-   * vez, na entrada dos dados, filtro/busca/exibição passam a ver o mesmo
-   * valor — sem regra em cada lugar.
+   * "Short" x "Shorts" partiam a navegacao em duas entradas para a MESMA
+   * coisa: a pilula "Blusa" mostrava 3 pecas e "Blusas" 87, e quem clicava
+   * na primeira concluia que a loja quase nao tem blusa.
+   * O mapa unifica na forma plural, que e a que tem acervo. Aplicado UMA
+   * vez, na entrada dos dados, filtro/busca/exibicao passam a ver o mesmo
+   * valor - sem regra em cada lugar.
    * ================================================================== */
   const CATEGORIAS_CANONICAS = { 'blusa': 'Blusas', 'conjunto': 'Conjuntos', 'vestido': 'Vestidos', 'short': 'Shorts' };
   function canonizarCategoria_(v) {
@@ -165,8 +178,8 @@ body .tk-nav a .tk-r { font-size: 12px; }
     f.__v71 = true;
     window.aplicarProdutosRecebidos = f;
   }
-  /** Se o catálogo já desenhou antes desta camada carregar, a lista em
-   *  memória ainda tem "Blusa"/"Blusas" separados: canoniza e redesenha. */
+  /** Se o catalogo ja desenhou antes desta camada carregar, a lista em
+   *  memoria ainda tem "Blusa"/"Blusas" separados: canoniza e redesenha. */
   function canonizarListaAtual() {
     try {
       if (typeof produtos === 'undefined' || !produtos || !produtos.length) return false;
@@ -177,13 +190,13 @@ body .tk-nav a .tk-r { font-size: 12px; }
   }
 
   /* ==================================================================
-   * Item 1 — gênero + categorias dentro de um <details>
-   * O vitrine.js já envolve as duas faixas num <nav class="faixas-vitrine">.
+   * Item 1 - genero + categorias dentro de um <details>
+   * O vitrine.js ja envolve as duas faixas num <nav class="faixas-vitrine">.
    * Aqui esse <nav> entra num <details> que nasce FECHADO no celular: um
-   * toque abre, e enquanto fechado a vitrine sobe ~110px. No desktop ele é
-   * forçado aberto (o resumo some por CSS), porque lá o espaço não é o
-   * problema. O <details> é o elemento certo: já traz abrir/fechar, o
-   * estado `open` e o anúncio correto para leitor de tela.
+   * toque abre, e enquanto fechado a vitrine sobe ~110px. No desktop ele e
+   * forcado aberto (o resumo some por CSS), porque la o espaco nao e o
+   * problema. O <details> e o elemento certo: ja traz abrir/fechar, o
+   * estado `open` e o anuncio correto para leitor de tela.
    * ================================================================== */
   function montarFaixas() {
     const wrap = document.querySelector('.faixas-vitrine');
@@ -193,7 +206,7 @@ body .tk-nav a .tk-r { font-size: 12px; }
     det.id = 'faixas-details';
     const sum = document.createElement('summary');
     sum.className = 'faixas-sum';
-    sum.textContent = 'Categorias e gênero';
+    sum.textContent = 'Categorias e genero';
     const cont = document.createElement('span');
     cont.className = 'faixas-sum-n';
     sum.appendChild(cont);
@@ -226,11 +239,11 @@ body .tk-nav a .tk-r { font-size: 12px; }
   }
 
   /* ==================================================================
-   * Item 7 — "Limpar filtros" à vista
+   * Item 7 - "Limpar filtros" a vista
    * O #btn-limpar existe, mas mora DENTRO do painel de filtros, que no
-   * celular é uma gaveta fechada. Quem aplica um filtro e se arrepende não
-   * acha o botão. Este é o mesmo botão (dispara o clique do original), na
-   * barra de contagem, e só aparece quando há filtro ativo.
+   * celular e uma gaveta fechada. Quem aplica um filtro e se arrepende nao
+   * acha o botao. Este e o mesmo botao (dispara o clique do original), na
+   * barra de contagem, e so aparece quando ha filtro ativo.
    * ================================================================== */
   function filtrosAtivos() {
     try {
@@ -258,9 +271,9 @@ body .tk-nav a .tk-r { font-size: 12px; }
   }
 
   /* ==================================================================
-   * Ciclo de atualização
-   * O catálogo redesenha a cada filtro. Em vez de reescrever as funções,
-   * esta camada reage ao que muda — uma MutationObserver só, com debounce.
+   * Ciclo de atualizacao
+   * O catalogo redesenha a cada filtro. Em vez de reescrever as funcoes,
+   * esta camada reage ao que muda - uma MutationObserver so, com debounce.
    * ================================================================== */
   function atualizar() {
     try { montarFaixas(); } catch (e) {}
@@ -278,10 +291,18 @@ body .tk-nav a .tk-r { font-size: 12px; }
     window.addEventListener('storage', agendar);
   }
 
+  // O CSS entra JA, na execucao do script (fim do body, antes do primeiro
+  // paint). Se esperasse o DOMContentLoaded, a pagina pintaria com o layout
+  // antigo das faixas e o recolhimento viraria um salto de layout (CLS).
+  injetarCss();
+  // Idem para o <details>: montado aqui, o recolhimento das faixas acontece
+  // antes do primeiro paint. Montado no DOMContentLoaded, ele empurraria a
+  // vitrine ~110px depois de a pagina ja estar visivel.
+  try { montarFaixas(); } catch (e) {}
+
   function iniciar() {
-    injetarCss();
     instalarCategoriasCanonicas();
-    // A lista pode já estar em memória (cache local) quando esta camada roda.
+    // A lista pode ja estar em memoria (cache local) quando esta camada roda.
     if (!canonizarListaAtual()) setTimeout(canonizarListaAtual, 0);
     atualizar();
     observar();

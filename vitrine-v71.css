@@ -1,0 +1,92 @@
+/* ---------- item 1: as faixas de navegacao num <details> ---------- */
+.faixas-details { margin: 0; }
+.faixas-sum {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 48px; padding: 0 14px; margin: 0;
+  background: #fff; border-bottom: 1px solid #eee;
+  font-size: .82rem; font-weight: 800; color: #222; cursor: pointer;
+  list-style: none;
+}
+.faixas-sum::-webkit-details-marker { display: none; }
+.faixas-sum::after {
+  content: "\25BE"; margin-left: auto; font-size: .9rem; color: #8a8272;
+  transition: transform .15s ease;
+}
+.faixas-details[open] > .faixas-sum::after { transform: rotate(180deg); }
+.faixas-sum:focus-visible { outline: 3px solid #E67E22; outline-offset: -3px; }
+.faixas-sum .faixas-sum-n { font-weight: 700; font-size: .74rem; color: #8a8272; }
+
+/* ---------- item 1: vantagens em 1 linha no celular ---------- */
+@media (max-width: 899px) {
+  .beneficios {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 4px 10px; min-height: 0; padding: 6px 14px;
+    background: #fbf9f4; border-bottom: 1px solid #f0ece2;
+  }
+  .beneficios span {
+    background: none; border: 0; border-radius: 0; padding: 0;
+    font-size: .68rem; font-weight: 700; color: #5c5648;
+    display: inline; text-align: left;
+  }
+  .beneficios span + span::before { content: "\00b7"; margin-right: 10px; color: #c9bfa8; }
+}
+
+/* ---------- item 3: CLS < 0,10 ---------- */
+.pills-genero { min-height: 56px; }
+.pills-categoria { min-height: 50px; }
+.beneficios { min-height: 44px; }
+.card .img-wrap { aspect-ratio: 4 / 5; }
+/* A grade nasce vazia e so cresce quando os dados chegam: sem altura
+   reservada, o rodape e a caixa de ajuda sobem e descem (o maior salto
+   medido). Reservar ~1 tela evita o pulo sem travar o crescimento. */
+#grid { min-height: 50vh; }
+.card .img-wrap img { height: 100%; }
+
+/* ---------- item 4: acoes do cartao em linha ---------- */
+@media (max-width: 480px) {
+  .acoes-card { flex-direction: row; gap: 6px; }
+  .acoes-card button {
+    width: auto; flex: 1 1 0; min-width: 0;
+    min-height: 44px; font-size: .72rem; padding: 0 4px;
+  }
+}
+
+/* ---------- item 5: a barra inferior e de celular ---------- */
+@media (min-width: 900px) {
+  body .tk-nav { display: none !important; }
+  body.tk-tem-nav { padding-bottom: 0 !important; }
+  body { padding-bottom: 0; }
+  body.tem-aviso-offline { padding-bottom: 44px; }
+}
+
+/* ---------- item 6: piso de 12px ---------- */
+.card-info .codigo { font-size: 12px; }
+body .tk-nav a { font-size: 12px !important; }
+body .tk-nav a .tk-r { font-size: 12px; }
+
+/* ---------- item 4: a categoria sai do cartao ---------- */
+.card-info .tags { display: none; }
+
+/* ---------- item 7: limpar filtros a vista ---------- */
+.btn-limpar-topo {
+  flex: 0 0 auto; min-height: 38px; padding: 0 12px;
+  border: 1px solid #d8d2c4; border-radius: 19px;
+  background: #fff; color: #333;
+  font-size: .74rem; font-weight: 800; cursor: pointer; white-space: nowrap;
+}
+.btn-limpar-topo[hidden] { display: none; }
+.btn-limpar-topo:focus-visible { outline: 3px solid #E67E22; outline-offset: 2px; }
+
+/* ---------- desktop: o <details> fica aberto e o resumo some ---------- */
+@media (min-width: 1024px) {
+  .vitrine-layout > .faixas-details { grid-column: 1 / -1; grid-row: 1; }
+  .vitrine-layout > .faixas-details > .faixas-vitrine {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .vitrine-layout > .faixas-details > .faixas-sum { display: none; }
+  /* A faixa de vantagens desce para a linha 2: antes dividia a linha 1 com
+     as faixas de genero/categoria e as duas caiam na mesma celula do grid. */
+  .vitrine-layout #beneficios { grid-column: 1 / -1; grid-row: 2; }
+  .vitrine-layout .filtros { grid-row: 3; }
+  .vitrine-layout main { grid-row: 3; }
+}
