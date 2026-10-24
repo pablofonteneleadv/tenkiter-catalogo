@@ -6,6 +6,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.1.3 — editor de tutoriais sempre visível — 2026-10-24
+
+- O editor deixa de depender da existência de um manual com capítulo de prática e passa a aparecer sempre para quem pode gerir manuais.
+
 ## 7.1.2 — sessão preservada entre áreas — 2026-10-24
 
 - Uma rejeição de sessão pelo RH não apaga mais o login válido do Catálogo e da Gestão.
