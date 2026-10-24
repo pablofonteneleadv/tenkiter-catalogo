@@ -1740,6 +1740,7 @@
     const campo = document.getElementById('tamanhos');
     const antigo = campo.value.split(',').map(x=>x.trim()).filter(x=>x && !/^(Etiqueta|Idade|Veste):/i.test(x) && x!=='Consultar tamanhos disponíveis');
     // Mantém tamanhos legados; novas faixas são tags estáveis e independentes.
+    // Etiqueta e faixas ficam vinculadas; manter somente tags legadas não conflitantes.
     const tags = [...antigo.filter(x=>!CAD_ETIQUETAS_.includes(x)), ...(cadEtiqueta_?[cadEtiqueta_,'Etiqueta: '+cadEtiqueta_]:[]), ...Array.from(cadFaixas_,x=>(cadInfantil_()?'Idade: ':'Veste: ')+x)];
     campo.value = [...new Set(tags)].join(', ');
     campo.dispatchEvent(new Event('input',{bubbles:true}));
