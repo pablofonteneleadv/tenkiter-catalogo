@@ -538,6 +538,16 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     elif a=="cancelar": x["status"]="cancelada"
                     elif a in ("refazer","agora"): x["status"]="pronta"; x["resultado"]="https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/ia%d.jpg"%x["id"]; x["erro"]=""; x["espera"]=""; x["modelo"]="gemini-nano-banana-2.1"
                     return route.fulfill(json={"ok":True})
+            if path=="/post/wafly/config":
+                _w=g.setdefault("wafly",{})
+                if m=="GET": return route.fulfill(json={"ok":True,"slots":{str(n):{"configurada":bool(_w.get(n)),"instancia":(_w.get(n) or {}).get("instance",""),"origem":"gestao" if _w.get(n) else ("appscript" if n==1 else "nenhuma"),"ultimoTeste":None} for n in (1,2)}})
+                _b=json.loads(route.request.post_data or "{}"); g.setdefault("wafly_posts",[]).append(_b)
+                if _b.get("apagar"): _w[_b["slot"]]=None; return route.fulfill(json={"ok":True,"configurada":False})
+                if not (_b.get("instance") and _b.get("token") and _b.get("clientToken")): return route.fulfill(status=400,json={"ok":False,"erro":"Confira os três campos da Wafly."})
+                _w[_b["slot"]]={"instance":_b["instance"]}; return route.fulfill(json={"ok":True,"configurada":True,"origem":"gestao","instancia":_b["instance"]})
+            if path=="/post/wafly/teste":
+                g.setdefault("wafly_testes",[]).append(json.loads(route.request.post_data or "{}"))
+                return route.fulfill(json={"ok":True,"itens":[{"nome":"Sessão do WhatsApp","ok":True,"texto":"conectada"},{"nome":"Publicar Status","ok":True,"texto":"disponível"}]})
             if path=="/post/wame/config":
                 if m=="GET": return route.fulfill(json={"ok":True,"configurada":bool(g.get("wame_chave")),"origem":"gestao" if g.get("wame_chave") else "nenhuma","servidor":g.get("wame_serv","server.wame.api.br"),"servidores":["server.wame.api.br","us.api-wa.me","server.api-wa.me"]})
                 _b=json.loads(route.request.post_data or "{}"); g.setdefault("wame_posts",[]).append(_b)
