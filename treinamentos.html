@@ -144,19 +144,19 @@ button{font-family:inherit;}
 .login-card .btn-primary{width:100%; padding:12px; font-size:1rem; margin-top:4px;}
 
 /* ---------- home / manual cards ---------- */
-.hero{margin-bottom:26px;}
-.hero h1{font-size:1.7rem; margin:0 0 6px;}
+.hero{margin-bottom:14px;}
+.hero h1{font-size:1.45rem; margin:0 0 3px;}
 .hero p{color:var(--muted); margin:0; font-size:0.98rem;}
-.cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:16px;}
+.cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px;}
 .card{
-  background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px;
-  display:flex; flex-direction:column; gap:10px; cursor:pointer; transition:border-color .15s, transform .1s;
+  background:var(--surface); border:1px solid var(--border); border-radius:11px; padding:13px 14px;
+  display:flex; flex-direction:column; gap:6px; cursor:pointer; transition:border-color .15s, transform .1s;
 }
 .card:hover{border-color:var(--accent-2);}
 .card.locked{cursor:not-allowed; background:var(--surface-2); border-style:dashed;}
 .card.locked h3{color:var(--muted);}
 .card .level-tag{font-size:0.72rem; text-transform:uppercase; letter-spacing:.06em; color:var(--accent-txt,var(--accent-2)); font-weight:700;}
-.card h3{margin:0; font-size:1.15rem;}
+.card h3{margin:0; font-size:1.02rem; line-height:1.25;}
 .card p{margin:0; color:var(--muted); font-size:0.88rem; flex:1;}
 .card .progress-bar{height:6px; border-radius:4px; background:var(--surface-2); overflow:hidden;}
 .card .progress-bar > div{height:100%; background:var(--accent-2);}
@@ -517,7 +517,7 @@ details.manual-card[open]>summary::after{content:'▴';}
 
 <script id="app-data" type="application/json">{"manuals": {}, "titles": {"1": "TM Funcionário Iniciando", "2": "TM Funcionário Estágio", "3": "TM Funcionário Avançado"}, "blurbs": {"1": "Leitura rápida para quem vai ser entrevistado.", "2": "O manual completo de operação do dia a dia.", "3": "Responsabilidades ampliadas de apoio e coordenação."}, "quizzes": {}, "roster": [], "appsScriptUrl": "https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec", "appsScriptToken": "tenkiter2026"}</script>
 <script src="tm-verificado.js?v=7.2.1"></script>
-<script src="tutorial-app.js?v=7.3.6"></script>
+<script src="tutorial-app.js?v=7.4.0"></script>
 <script>
 (function(){
 "use strict";
@@ -1597,14 +1597,6 @@ function manualNivelMinimo(id){
   return meta ? meta.nivelMinimo : (parseInt(id,10) || 1);
 }
 
-function praticaPostagensHtml(){
-  return '<aside id="pratica-postagens-card" style="margin:22px 0 0;padding:16px;border:2px solid #e67e22;border-radius:14px;background:#fff;color:#242424">' +
-    '<strong>📸 Prática de postagens</strong>' +
-    '<p>Treinamento interativo de nove etapas, com toques guiados e correção de erros. Não publica nem altera produtos.</p>' +
-    '<a href="treinamento-postagens-real.html" style="display:inline-block;padding:14px;background:#e67e22;color:#111;border-radius:9px;font-weight:800">Iniciar prática de postagens</a>' +
-  '</aside>';
-}
-
 function goHome(){
   state.view = 'home'; state.manual = null;
   sincNav();
@@ -1648,7 +1640,6 @@ function goHome(){
       '<div id="cv-slot"></div>' +
       '<div id="tut-aluno-slot"></div>' +
       '<div class="cards">' + (cards || '<p class="sub">Nenhum manual disponível ainda.</p>') + '</div>' +
-      praticaPostagensHtml() +
     '</div></div>';
   empurrarHistorico('home', null);
   wireTopbar();
@@ -1792,6 +1783,7 @@ function renderManual(level){
   }
 
   if (window.TMV) bodyHtml += TMV.painelSlot(level);
+  bodyHtml += '<div id="tut-manual-slot"></div>';
   return '<button type="button" class="btn-toc-toggle" id="btn-toc-toggle">☰ Índice do manual</button>' +
     '<div class="sidebar" id="manual-sidebar">' + navHtml + '</div><div class="main">' + bodyHtml + '</div>';
 }
@@ -3314,6 +3306,7 @@ function render(){
     app.innerHTML = renderTopbar() + '<div class="shell">' + renderManual(state.manual) + '</div>';
     wireTopbar();
     wireManual(state.manual);
+    if (window.TKTutorial) TKTutorial.montarManual(state.manual);
   } else if (state.view === 'quiz'){
     app.innerHTML = renderTopbar() + '<div class="shell">' + renderQuizIntro(state.manual) + '</div>';
     wireTopbar();

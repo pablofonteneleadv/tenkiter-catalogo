@@ -1123,6 +1123,10 @@
           <input type="checkbox" id="novidade">
           <label for="novidade">Destacar como Novidade</label>
         </div>
+        <div class="checkbox-linha" id="linha-arquivar-depois">
+          <input type="checkbox" id="arquivar-depois">
+          <label for="arquivar-depois">Arquivar após cadastrar <small>(peça de teste)</small></label>
+        </div>
         <div class="checkbox-linha" id="linha-notificar-push" style="display:none;padding-left:22px;">
           <input type="checkbox" id="notificarPush" checked>
           <label for="notificarPush">📢 Avisar quem assina as notificações</label>
@@ -2765,6 +2769,7 @@
     document.getElementById('cores').value = textoPlano(p.Cores);
     document.getElementById('descricao').value = p.Descricao || '';
     document.getElementById('novidade').checked = ehNovidade(p);
+    document.getElementById('arquivar-depois').checked = false;
     document.getElementById('linha-notificar-push').style.display = ehNovidade(p) ? 'flex' : 'none';
 
     selecionadasCategorias = new Set(String(p.Categoria || '').split(',').map(s => s.trim()).filter(Boolean));
@@ -2781,6 +2786,7 @@
     document.getElementById('produto-id').value = '';
 
     preencherFormComProduto(p);
+    document.getElementById('linha-arquivar-depois').style.display = 'flex';
     document.getElementById('nome').value = p.Nome;
 
     zerarMidia(null);
@@ -2801,6 +2807,7 @@
     document.getElementById('produto-id').value = p.ID;
 
     preencherFormComProduto(p);
+    document.getElementById('linha-arquivar-depois').style.display = 'none';
 
     zerarMidia(p);
 
@@ -2819,6 +2826,7 @@
     window.__rascunhoAtual = null;   // v3.6: rascunho do Instagram que estava sendo aceito
     window.__loteSeparado = null; window.__loteBase = null; { const al = document.getElementById('aviso-lote'); if (al) al.hidden = true; }   // v3.7: cadastro separado de vários posts
     document.getElementById('form-produto').reset();
+    document.getElementById('linha-arquivar-depois').style.display = 'flex';
     document.getElementById('produto-id').value = '';
     selecionadasCategorias.clear(); selecionadosGeneros.clear(); generoNovoTocado_ = false;
     renderizarChips('chips-categoria', categorias, selecionadasCategorias);
@@ -3524,6 +3532,14 @@
     it.progresso = null; it.etaSegundos = null;
     atualizarBarraSync();
     if (resultado.ok && resultado.resp && resultado.resp.ok) {
+      if (it.arquivarDepois && !it.ehEdicao) {
+        const novoId = resultado.resp.id;
+        try {
+          const arq = await chamarAdmin_({ action: 'arquivarRapido', id: novoId });
+          if (!arq || !arq.ok) { it.estado = 'aviso'; it.msg = 'foi cadastrada, mas não consegui arquivar a peça de teste. Arquive em Gestão → Arquivadas.'; return; }
+          it.arquivadaDepois = true;
+        } catch (e) { it.estado = 'aviso'; it.msg = 'foi cadastrada, mas não consegui arquivar a peça de teste. Arquive em Gestão → Arquivadas.'; return; }
+      }
       // edição com vários vídeos: tira e acrescenta pelos comandos próprios do servidor (4.17+)
       if (it.ehEdicao && videosMulti_ && (it.videosRemover || []).length + novosVideos.length) {
         const id = resultado.resp.id || dados.id; let falhou = 0;
@@ -3533,7 +3549,7 @@
         if (falhou) { it.estado = 'aviso'; it.msg = 'foi salvo, mas ' + falhou + ' alteração(ões) de vídeo não passaram. Abra a peça e confira os vídeos.'; window.logDebug_('════ "' + it.titulo + '": salvo com aviso de vídeo ════'); return; }
       }
       // A conferência (recarregar a lista e ver se fotos/vídeos voltaram) acontece UMA vez no fim da fila, não a cada peça.
-      it.estado = 'ok'; it.respSalvo = resultado.resp; conferir_.push(it);
+      it.estado = 'ok'; it.respSalvo = resultado.resp; if (!it.arquivadaDepois) conferir_.push(it);
       if (it.rascunhoId) { try { window.dispatchEvent(new CustomEvent('tk:peca-salva', { detail: { rascunhoId: it.rascunhoId, id: resultado.resp.id, codigo: resultado.resp.codigo } })); } catch (e) {} }   // o importador marca o rascunho como aceito
       window.logDebug_('════ "' + it.titulo + '": salvo ════');
     } else if (!resultado.ok && resultado.enfileirado) {
@@ -3605,6 +3621,7 @@
     if (faltas.length) { mostrarFaltas_(faltas); return; } // sem foto/nome/preço/gênero/categoria a peça não é salva
     const idParaEditar = document.getElementById('produto-id').value;
     const ehEdicao = modoFormulario === 'editando' && idParaEditar;
+    const arquivarDepois = !ehEdicao && document.getElementById('arquivar-depois').checked;
     garantirCapa_();
 
     // v4.10 (FE-03): "Cadastrar várias peças" — cada foto vira um produto com os MESMOS dados.
@@ -3630,7 +3647,7 @@
       const vidsLoteItens = videosItens.filter(v => v.file);
       fotos.forEach((f, ix) => {
         const sem = sementePre_(f, [], ix === 0 ? vidsLoteItens : []);
-        envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Peça', ehEdicao: false, temVideo: ix === 0 && vidsLote.length > 0, videoArquivo: null, videoArquivos: ix === 0 ? vidsLote : [], capaNovaB64: f.b64, galeriaNovaB64: [], dados: Object.assign({}, base), estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila', subiu: sem.subiu, pre: sem.pre });
+        envios.push({ chave: ++seqEnvios, titulo: base.nome || 'Peça', ehEdicao: false, arquivarDepois: arquivarDepois, temVideo: ix === 0 && vidsLote.length > 0, videoArquivo: null, videoArquivos: ix === 0 ? vidsLote : [], capaNovaB64: f.b64, galeriaNovaB64: [], dados: Object.assign({}, base), estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila', subiu: sem.subiu, pre: sem.pre });
         guardarEnvio_(envios[envios.length - 1]);
       });
       cancelarDuplicacao();
@@ -3677,7 +3694,7 @@
     const semPre = sementePre_(capaItem && capaItem.b64 ? capaItem : null, resto.filter(i => i.b64), videosItens.filter(v => v.file));
     envios.push({
       subiu: semPre.subiu, pre: semPre.pre,
-      chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao,
+      chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: !!ehEdicao, arquivarDepois: arquivarDepois,
       temVideo: videosNovos.length > 0, videoArquivo: null, videoArquivos: videosNovos.map(v => v.file), videosSalvos: ehEdicao ? videosSalvos : [], videosRemover: ehEdicao ? videosRemovidos.slice() : [],
       capaNovaB64: capaNovaB64, galeriaNovaB64: galeriaNovaB64,
       dados: dados, estado: 'fila', msg: '', rascunhoId: window.__rascunhoAtual || null, k: novoKEnvio_(), etapa: 'fila'
@@ -5344,7 +5361,7 @@
 <script src="admin-instagram.js"></script>
 <script src="video-validation.js"></script>
 <script src="postagens-controles.js"></script>
-<script src="admin-postagens.js"></script>
+<script src="admin-postagens.js?v=7.4.0"></script>
 <script src="admin-fotoia.js"></script>
 <script src="admin-enquadrar.js"></script>
 <script src="admin-capa-video.js"></script>
