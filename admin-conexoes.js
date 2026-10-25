@@ -102,6 +102,7 @@
     conferir();
     conferirFreeConvert_();
     conferirWame_();
+    conferirWafly_();
   }
 
   /* ---------- desenho ---------- */
@@ -188,6 +189,36 @@
       '<button type="button" class="cx-btn cx-perigo" data-cx="fc-apagar">Remover chave</button></div>' +
       '<div id="cx-fc-msg" class="cx-msg" role="status"></div>' +
       '<p class="g-nota">Use uma chave nova; revogue a que foi compartilhada na conversa. A conversão depende da cota disponível na FreeConvert.</p></div>' +
+
+      '<div class="cx-bloco"><h3>💬 WhatsApp Status 1 — Wafly</h3>' +
+      '<p class="g-nota">Hoje o Status 1 sai pelo Apps Script. Ao salvar aqui, o servidor passa a falar direto com a Wafly. Se você remover, volta sozinho para o Apps Script. Os três códigos ficam guardados no servidor e não voltam para a tela.</p>' +
+      '<p id="cx-wf1-status" role="status" class="cx-chave-sem">Conferindo…</p>' +
+      '<label for="cx-wf1-inst">Instância (ID)</label>' +
+      '<input type="text" id="cx-wf1-inst" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Código da instância">' +
+      '<label for="cx-wf1-tok">Token da instância</label>' +
+      '<input type="password" id="cx-wf1-tok" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole o token aqui">' +
+      '<label for="cx-wf1-cli">Client-Token da conta</label>' +
+      '<input type="password" id="cx-wf1-cli" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole o Client-Token aqui">' +
+      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="wf1-guardar">Salvar</button>' +
+      '<button type="button" class="cx-btn" data-cx="wf1-testar">Testar conexão</button>' +
+      '<button type="button" class="cx-btn cx-perigo" data-cx="wf1-apagar">Remover</button></div>' +
+      '<div id="cx-wf1-msg" class="cx-msg" role="status"></div>' +
+      '<ul id="cx-wf1-res" class="g-nota" aria-live="polite"></ul></div>' +
+
+      '<div class="cx-bloco"><h3>💬 WhatsApp Status 2 — Wafly</h3>' +
+      '<p class="g-nota">Segunda instância da Wafly. Quando cadastrada, ela assume o Status 2 (a fila já agendada para o Status 2 segue por ela). Os três códigos ficam guardados no servidor e não voltam para a tela.</p>' +
+      '<p id="cx-wf2-status" role="status" class="cx-chave-sem">Conferindo…</p>' +
+      '<label for="cx-wf2-inst">Instância (ID)</label>' +
+      '<input type="text" id="cx-wf2-inst" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Código da instância">' +
+      '<label for="cx-wf2-tok">Token da instância</label>' +
+      '<input type="password" id="cx-wf2-tok" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole o token aqui">' +
+      '<label for="cx-wf2-cli">Client-Token da conta</label>' +
+      '<input type="password" id="cx-wf2-cli" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole o Client-Token aqui">' +
+      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="wf2-guardar">Salvar</button>' +
+      '<button type="button" class="cx-btn" data-cx="wf2-testar">Testar conexão</button>' +
+      '<button type="button" class="cx-btn cx-perigo" data-cx="wf2-apagar">Remover</button></div>' +
+      '<div id="cx-wf2-msg" class="cx-msg" role="status"></div>' +
+      '<ul id="cx-wf2-res" class="g-nota" aria-live="polite"></ul></div>' +
 
       '<div class="cx-bloco"><h3>💬 WhatsApp Status 2 — Wame</h3>' +
       '<p class="g-nota">Cole a chave da instância do Wame (WhatsApp 2) e escolha o servidor em que ela foi criada. A chave fica guardada no servidor e não volta para a tela.</p>' +
@@ -458,11 +489,48 @@
     msg('cx-wm-msg',r.ok?'Chave da Gestão removida.':erroTxt(r),r.ok?'ok':'erro');
     if(r.ok){const ul=$('cx-wm-res');ul&&(ul.textContent='');conferirWame_();}
   }
+  async function conferirWafly_(){
+    const r=await igWorker_('/post/wafly/config','GET');
+    [1,2].forEach(n=>{
+      const el=$('cx-wf'+n+'-status');if(!el)return;
+      const x=r.ok&&r.slots?r.slots[n]:null;
+      let t;
+      if(!r.ok)t=erroTxt(r);
+      else if(x&&x.configurada)t='✓ Cadastrada na Gestão · instância '+x.instancia+(x.ultimoTeste?(x.ultimoTeste.ok?' · último teste: ok':' · último teste: com problema'):'');
+      else t=n===1?'Em uso: Apps Script (nada cadastrado aqui).':'Nenhuma instância cadastrada.';
+      el.textContent=t;el.className=r.ok&&x&&x.configurada?'cx-chave-ok':'cx-chave-sem';
+      const i=$('cx-wf'+n+'-inst');if(i&&x&&x.instancia&&!i.value)i.value=x.instancia;
+    });
+  }
+  async function guardarWafly_(n){
+    const i=$('cx-wf'+n+'-inst'),t=$('cx-wf'+n+'-tok'),c=$('cx-wf'+n+'-cli');if(!i||!t||!c)return;
+    if(!i.value.trim()||!t.value.trim()||!c.value.trim())return msg('cx-wf'+n+'-msg','Preencha os três campos para salvar.','erro');
+    msg('cx-wf'+n+'-msg','Salvando…','');
+    const r=await igWorker_('/post/wafly/config','POST',{slot:n,instance:i.value.trim(),token:t.value.trim(),clientToken:c.value.trim()});
+    if(r.ok){t.value='';c.value='';msg('cx-wf'+n+'-msg','Guardado no servidor. Toque em “Testar conexão” para conferir.','ok');conferirWafly_();}
+    else msg('cx-wf'+n+'-msg',erroTxt(r),'erro');
+  }
+  async function testarWafly_(n){
+    const ul=$('cx-wf'+n+'-res');if(!ul)return;
+    msg('cx-wf'+n+'-msg','Testando a conexão…','');ul.textContent='';
+    const r=await igWorker_('/post/wafly/teste','POST',{slot:n});
+    (r.itens||[]).forEach(x=>{const li=document.createElement('li');li.textContent=x.nome+': '+x.texto+'.';ul.appendChild(li)});
+    if(r.itens)msg('cx-wf'+n+'-msg',r.ok?'✓ Tudo certo. O teste só consulta; nada foi enviado.':'Algo precisa de atenção (veja a lista).',r.ok?'ok':'erro');
+    else msg('cx-wf'+n+'-msg',erroTxt(r),'erro');
+    conferirWafly_();
+  }
+  async function apagarWafly_(n){
+    if(!confirm(n===1?'Remover o cadastro do Wafly 1? O Status 1 volta a sair pelo Apps Script.':'Remover o cadastro do Wafly 2? O Status 2 volta para o Wame (se houver).'))return;
+    const r=await igWorker_('/post/wafly/config','POST',{slot:n,apagar:true});
+    msg('cx-wf'+n+'-msg',r.ok?'Cadastro removido. A fila não foi alterada.':erroTxt(r),r.ok?'ok':'erro');
+    if(r.ok){const ul=$('cx-wf'+n+'-res');ul&&(ul.textContent='');conferirWafly_();}
+  }
   function clique(ev) {
     const b = ev.target.closest('[data-cx]'); if (!b) return;
     const a = b.dataset.cx;
     if (a === 'fc-guardar') guardarFreeConvert_();
     else if (a === 'fc-apagar') apagarFreeConvert_();
+    else if (/^wf[12]-/.test(a)) { const n = Number(a[2]), q = a.slice(4); if (q === 'guardar') guardarWafly_(n); else if (q === 'testar') testarWafly_(n); else if (q === 'apagar') apagarWafly_(n); }
     else if (a === 'wm-guardar') guardarWame_();
     else if (a === 'wm-apagar') apagarWame_();
     else if (a === 'wm-testar') testarWame_();
