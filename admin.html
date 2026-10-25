@@ -211,6 +211,12 @@
   .seo-sugestao .campo { margin-bottom: 8px; }
   .seo-sugestao .campo b { display: block; font-size: 0.68rem; color: #6b21a8; text-transform: uppercase; margin-bottom: 2px; }
   .seo-sugestao button { width: auto; padding: 6px 10px; font-size: 0.7rem; margin: 2px 4px 0 0; }
+  .seo-sugestao .sug-ia-chip { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #d9c2f7; border-radius: 999px; padding: 2px 4px 2px 10px; margin: 2px 4px 2px 0; font-size: .82rem; }
+  .seo-sugestao .sug-ia-x { width: 32px; min-width: 32px; height: 32px; padding: 0; margin: 0; border-radius: 50%; background: #fee2e2; color: #b91c1c; font-size: .8rem; font-weight: 800; flex: none; }
+  .seo-sugestao .sug-ia-linha { display: flex; gap: 6px; align-items: flex-start; }
+  .seo-sugestao .sug-ia-txt { flex: 1; min-width: 0; font-size: .85rem; padding: 6px 8px; border: 1px solid #d9c2f7; border-radius: 8px; background: #fff; }
+  .seo-sugestao .sug-ia-vazio { color: #777; font-size: .8rem; }
+  .seo-sugestao .sug-ia-volta { background: transparent; color: #6b21a8; text-decoration: underline; padding: 4px; font-size: .75rem; }
 
   .auditoria-item { border-bottom: 1px solid #eee; padding: 8px 0; font-size: 0.78rem; }
   .auditoria-item .linha1 { display: flex; justify-content: space-between; font-weight: 700; }
@@ -5238,30 +5244,49 @@
         box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">' + escaparHtml(resp.erro || 'Não foi possível analisar agora.') + '</div>';
         return;
       }
-      const linhas = [
-        ['Nome', resp.nome], ['Gênero', (resp.generos || []).join(', ')], ['Categoria', (resp.categorias || []).join(', ')],
-        ['Cores', (resp.cores || []).join(', ')], ['Descrição', resp.descricao]
-      ];
-      box.innerHTML = '<div class="seo-sugestao"><div style="font-size:.8rem;color:#666;margin-bottom:6px;">Analisei ' + resp.fotosAnalisadas + ' foto(s). Confira antes de aplicar — preço, estoque e tamanhos continuam com você.</div>' +
-        linhas.map(l => '<div class="campo"><b>' + l[0] + '</b>' + escaparHtml(l[1] || '—') + '</div>').join('') +
-        '<button type="button" id="btn-foto-ia-vazios" style="background:var(--laranja);">Aplicar nos campos vazios</button>' +
-        '<button type="button" id="btn-foto-ia-tudo" style="background:var(--laranja);">Substituir tudo</button>' +
-        '<button type="button" id="btn-foto-ia-descartar" style="background:#eee;color:#555;">Descartar</button></div>';
-      const aplicar = (substituir) => {
-        const campo = (id, valor) => {
-          const el = document.getElementById(id);
-          if (valor && (substituir || !el.value.trim())) el.value = valor;
-        };
-        campo('nome', resp.nome); campo('descricao', resp.descricao); campo('cores', (resp.cores || []).join(', '));
-        (resp.generos || []).forEach(g => selecionadosGeneros.add(g));
-        (resp.categorias || []).forEach(c => selecionadasCategorias.add(c));
-        renderizarChips('chips-genero', generos, selecionadosGeneros);
-        renderizarChips('chips-categoria', categorias, selecionadasCategorias);
-        box.innerHTML = '';
+      // Cada sugestão pode ser editada ou retirada (✕) antes de aplicar; só entra o que ficar na lista.
+      const sug = {
+        generos: (resp.generos || []).slice(), categorias: (resp.categorias || []).slice(), cores: (resp.cores || []).slice(),
+        nome: resp.nome || '', descricao: resp.descricao || '', usarNome: !!resp.nome, usarDescricao: !!resp.descricao
       };
-      document.getElementById('btn-foto-ia-vazios').addEventListener('click', () => aplicar(false));
-      document.getElementById('btn-foto-ia-tudo').addEventListener('click', () => aplicar(true));
-      document.getElementById('btn-foto-ia-descartar').addEventListener('click', () => { box.innerHTML = ''; });
+      const chipsHtml = (chave) => sug[chave].length
+        ? sug[chave].map((v, k) => '<span class="sug-ia-chip">' + escaparHtml(v) + '<button type="button" class="sug-ia-x" data-ia-chave="' + chave + '" data-ia-idx="' + k + '" aria-label="Retirar ' + escaparHtml(v) + '">✕</button></span>').join('')
+        : '<span class="sug-ia-vazio">nada sugerido</span>';
+      const textoHtml = (chave, uso, rotulo, linhasTxt) =>
+        '<div class="campo"><b>' + rotulo + '</b>' +
+        (sug[uso] ? '<div class="sug-ia-linha"><textarea class="sug-ia-txt" data-ia-txt="' + chave + '" rows="' + linhasTxt + '" aria-label="' + rotulo + ' sugerido">' + escaparHtml(sug[chave]) + '</textarea>' +
+          '<button type="button" class="sug-ia-x" data-ia-nao="' + uso + '" aria-label="Não usar ' + rotulo + '">✕</button></div>'
+          : '<span class="sug-ia-vazio">' + (sug[chave] ? 'não vou usar' : 'nada sugerido') + '</span>' +
+            (sug[chave] ? ' <button type="button" class="sug-ia-volta" data-ia-sim="' + uso + '">desfazer</button>' : '')) + '</div>';
+      const pintarSug = () => {
+        box.innerHTML = '<div class="seo-sugestao"><div style="font-size:.8rem;color:#666;margin-bottom:6px;">Analisei ' + resp.fotosAnalisadas + ' foto(s). Edite o texto ou toque no ✕ para retirar o que não quiser — só o que ficar será aplicado. Preço, estoque e tamanhos continuam com você.</div>' +
+          textoHtml('nome', 'usarNome', 'Nome', 1) +
+          '<div class="campo"><b>Gênero</b>' + chipsHtml('generos') + '</div>' +
+          '<div class="campo"><b>Categoria</b>' + chipsHtml('categorias') + '</div>' +
+          '<div class="campo"><b>Cores</b>' + chipsHtml('cores') + '</div>' +
+          textoHtml('descricao', 'usarDescricao', 'Descrição', 4) +
+          '<button type="button" id="btn-foto-ia-aplicar" style="background:var(--laranja);">Aplicar o que ficou</button>' +
+          '<button type="button" id="btn-foto-ia-descartar" style="background:#eee;color:#555;">Descartar tudo</button></div>';
+      };
+      pintarSug();
+      box.onclick = (ev) => {
+        const x = ev.target.closest('button'); if (!x || !box.contains(x)) return;
+        if (x.dataset.iaChave) { sug[x.dataset.iaChave].splice(Number(x.dataset.iaIdx), 1); pintarSug(); return; }
+        if (x.dataset.iaNao) { sug[x.dataset.iaNao] = false; pintarSug(); return; }
+        if (x.dataset.iaSim) { sug[x.dataset.iaSim] = true; pintarSug(); return; }
+        if (x.id === 'btn-foto-ia-descartar') { box.innerHTML = ''; box.onclick = null; return; }
+        if (x.id === 'btn-foto-ia-aplicar') {
+          box.querySelectorAll('[data-ia-txt]').forEach(t => { sug[t.dataset.iaTxt] = t.value; });
+          if (sug.usarNome && sug.nome.trim()) document.getElementById('nome').value = sug.nome.trim();
+          if (sug.usarDescricao && sug.descricao.trim()) document.getElementById('descricao').value = sug.descricao.trim();
+          if (sug.cores.length) document.getElementById('cores').value = sug.cores.join(', ');
+          sug.generos.forEach(g => selecionadosGeneros.add(g));
+          sug.categorias.forEach(c => selecionadasCategorias.add(c));
+          renderizarChips('chips-genero', generos, selecionadosGeneros);
+          renderizarChips('chips-categoria', categorias, selecionadasCategorias);
+          box.innerHTML = ''; box.onclick = null;
+        }
+      };
     } catch (e) {
       btn.disabled = false; btn.textContent = rotuloOriginal;
       logDebug_('IA foto: falhou — ' + (e && e.name) + ': ' + (e && e.message));
@@ -5287,7 +5312,8 @@
       const resp = await fetch(API_URL, {
         method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
-          action: 'gerarSeo', pin: adminPin,
+          action: 'gerarSeo', pin: adminPin, sessao: adminPin,
+          whatsapp: ((typeof getSessao === 'function' && getSessao()) || {}).whatsapp || '',
           nome: nomeAtual,
           categoria: Array.from(selecionadasCategorias).join(', '),
           genero: Array.from(selecionadosGeneros).join(', '),

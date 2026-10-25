@@ -140,7 +140,10 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             st.setdefault("criados",[]).append(dict(b))
             if op: cr_[op]=r_
             return r_
-        if a=="sugerirPorFoto": st.setdefault("ia_chamadas",[]).append(b.get("fotos",[])); return {"ok":False,"erro":"Teste: IA simulada."}
+        if a=="sugerirPorFoto":
+            st.setdefault("ia_chamadas",[]).append(b.get("fotos",[]))
+            if st.get("ia_foto_ok"): return {"ok":True,"fotosAnalisadas":1,"modelo":"teste","nome":"Conjunto Cropped Preto","generos":["Feminino Adulto"],"categorias":["Conjuntos","Cropped","Saias"],"cores":["Preto","Branco"],"descricao":"Conjunto feminino preto."}
+            return {"ok":False,"erro":"Teste: IA simulada."}
         if a in("addTamanho","addCor"):
             if "gerir_acessos" not in perms: return {"ok":False,"semPermissao":True,"erro":"Você não tem permissão para essa ação."}
             n=limpa(b.get("nome")); ch="cores" if a=="addCor" else "tamanhos"

@@ -39,7 +39,7 @@
 <!-- v3.3: política de segurança de conteúdo. Fica aqui (e não em cabeçalho HTTP) porque o Render estático não deixa configurar cabeçalhos por arquivo.
      Só libera o que o catálogo realmente usa: o próprio site, o Apps Script (dados), Cloudinary/Google (fotos e vídeos), OneSignal (avisos) e Meta (só se o Pixel for ligado no painel). -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.onesignal.com https://*.onesignal.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://*.onesignal.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://tenkiter-og.distkrpconfeccoes.workers.dev https://script.google.com https://script.googleusercontent.com https://*.googleusercontent.com https://lh3.googleusercontent.com https://res.cloudinary.com https://tenkiter-midia.distkrpconfeccoes.workers.dev https://tenkiter-ig.distkrpconfeccoes.workers.dev https://drive.google.com https://onesignal.com https://*.onesignal.com https://www.facebook.com https://connect.facebook.net; frame-src 'self' https://drive.google.com https://*.onesignal.com https://onesignal.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
-<link rel="stylesheet" href="catalogo.css?v=7.9.0">
+<link rel="stylesheet" href="catalogo.css?v=7.10.0">
 <!-- v7.0: camada de vitrine (acessibilidade, navegação e caminho até o produto).
      Arquivo próprio, como a11y.js / meta.js / push.js: só o catálogo carrega. -->
 <link rel="stylesheet" href="vitrine.css?v=7.3.3">

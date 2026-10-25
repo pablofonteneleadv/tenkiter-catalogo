@@ -722,10 +722,15 @@ html.fx-travado, html.fx-travado body { overflow: hidden; }
 /* v7.6 — cabeçalho centralizado e sem as faixas de gênero/categoria na tela inicial (25/10/2026).
    Pedido do Pablo: tirar "Catálogo Digital — Crateús / CE", centralizar tudo e retirar categorias e gênero.
    As categorias continuam no menu ☰ e em Filtros; só as faixas de botões saem da vista (o código dos filtros não muda). */
-.header-linha { flex-direction: column; justify-content: center; gap: 10px; }
-.header-titulo { justify-content: center; text-align: center; }
-.header-titulo-textos { text-align: center; }
-.header-icones { justify-content: center; }
+/* v7.10 — cabeçalho compacto numa linha só (logo + nome + ícones), sem subtítulo */
+header { padding: 8px 12px 8px; }
+.header-linha { flex-direction: row; justify-content: space-between; gap: 8px; }
+.header-titulo { justify-content: flex-start; text-align: left; gap: 8px; min-width: 0; flex: 1 1 auto; }
+.header-titulo-textos { text-align: left; min-width: 0; }
+.header-titulo h1 { font-size: 0.98rem; letter-spacing: 0.8px; line-height: 1.1; }
+.header-logo-img { height: 32px; }
+.header-icones { gap: 6px; flex: none; justify-content: flex-end; }
+.header-icones .btn-icone-header { width: 36px; height: 36px; }
 .faixas-details, .faixas-vitrine, #pills-genero, #pills-categoria { display: none !important; }
 
 /* v7.7 — busca interativa: peças com foto, refinar por chips, ajuda da loja (25/10/2026) */
