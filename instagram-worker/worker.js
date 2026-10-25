@@ -83,7 +83,11 @@ const DDL = [
   `CREATE INDEX IF NOT EXISTS ix_fc ON foto_cliente (status, id)`,
   `CREATE INDEX IF NOT EXISTS ix_post ON postagem (status, agendado_em)`,
   `CREATE INDEX IF NOT EXISTS ix_rasc ON rascunho (status, grupo, publicado_em)`,
-  `CREATE INDEX IF NOT EXISTS ix_rm ON rascunho_midia (midia_id)`
+  `CREATE INDEX IF NOT EXISTS ix_rm ON rascunho_midia (midia_id)`,
+  `CREATE TABLE IF NOT EXISTS msg_conversa (id INTEGER PRIMARY KEY AUTOINCREMENT, canal TEXT NOT NULL, contato TEXT NOT NULL, nome TEXT DEFAULT '', grupo INTEGER NOT NULL DEFAULT 0, ultima_em TEXT DEFAULT '', previa TEXT DEFAULT '', total INTEGER NOT NULL DEFAULT 0, criado_em TEXT, UNIQUE (canal, contato))`,
+  `CREATE TABLE IF NOT EXISTS msg_mensagem (id INTEGER PRIMARY KEY AUTOINCREMENT, conversa_id INTEGER NOT NULL, canal TEXT NOT NULL, ext_id TEXT NOT NULL, direcao TEXT NOT NULL, tipo TEXT NOT NULL DEFAULT 'texto', texto TEXT DEFAULT '', enviada_em TEXT DEFAULT '', gravada_em TEXT, UNIQUE (canal, ext_id))`,
+  `CREATE INDEX IF NOT EXISTS ix_msg_conv ON msg_mensagem (conversa_id, enviada_em)`,
+  `CREATE INDEX IF NOT EXISTS ix_msgc_ult ON msg_conversa (canal, ultima_em)`
 ];
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
@@ -2314,6 +2318,142 @@ async function freeconvertRota_(env, req, url, J, h) {
   }catch(e){return J({ok:false,erro:String(e.message||e).slice(0,250)},502);}
 }
 
+
+/* ==========================================================================
+ * v2.2 -- MÓDULO MENSAGENS (dashboard): guarda as conversas daqui para frente, separadas por canal
+ *
+ *  Canais: instagram | whatsapp1 | whatsapp2. Só grava o que chega DEPOIS de ligado (nada de buscar histórico).
+ *  Modelo inspirado no Chatwoot (db/schema.rb: inbox -> contato -> conversa -> mensagem; mensagem com direção,
+ *  tipo, source_id único para não duplicar, última atividade na conversa), enxuto para o D1:
+ *    msg_conversa (canal+contato únicos) e msg_mensagem (canal+ext_id únicos = INSERT OR IGNORE, webhook repetido não duplica).
+ *  Webhooks públicos protegidos por segredo no caminho (gerado aqui, nunca devolvido ao navegador, exceto na hora de ligar o webhook na Wafly).
+ *  Guardamos só texto (até 4000 caracteres) e o TIPO da mídia; o conteúdo bruto do webhook nunca é salvo.
+ * ========================================================================== */
+const MSG_CANAIS = ['instagram', 'whatsapp1', 'whatsapp2'];
+const MSG_TEXTO_MAX = 4000;
+async function msgSegredo_(env) {
+  let v = await cfgGet(env, 'msg_wh_segredo');
+  if (!v) { const b = crypto.getRandomValues(new Uint8Array(24)); v = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join(''); await cfgSet(env, 'msg_wh_segredo', v); }
+  return v;
+}
+function igualConst_(a, b) {
+  a = String(a); b = String(b); let d = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return d === 0;
+}
+/** Callback "ReceivedCallback" da Wafly -> linha pronta para gravar (ou null se não for conversa). */
+function normalizarWafly_(b) {
+  if (!b || typeof b !== 'object' || b.type !== 'ReceivedCallback') return null;
+  const id = String(b.messageId || ''), fone = String(b.phone || '');
+  if (!id || !fone || /broadcast|newsletter/i.test(fone) || b.isNewsletter === true) return null;
+  const tipos = [['text', 'texto'], ['image', 'imagem'], ['video', 'vídeo'], ['audio', 'áudio'], ['document', 'documento'], ['sticker', 'figurinha'], ['contact', 'contato'], ['location', 'localização'], ['reaction', 'reação'], ['buttonsResponseMessage', 'resposta'], ['listResponseMessage', 'resposta']];
+  let tipo = 'outro', texto = '';
+  for (const [k, nome] of tipos) {
+    if (b[k] && typeof b[k] === 'object') {
+      tipo = nome;
+      texto = String(b[k].message || b[k].caption || b[k].fileName || b[k].title || b[k].value || '');
+      break;
+    }
+  }
+  const ms = Number(b.momment || b.moment || 0);
+  const em = ms > 0 ? new Date(ms < 1e12 ? ms * 1000 : ms).toISOString() : agora();
+  const grupo = b.isGroup === true || /-group$|@g\.us$/.test(fone);
+  const fromMe = b.fromMe === true;
+  return { extId: id, contato: fone.slice(0, 80), nome: String((grupo ? b.chatName : (fromMe ? b.chatName : b.senderName || b.chatName)) || '').slice(0, 120), grupo: grupo ? 1 : 0, direcao: fromMe ? 'saida' : 'entrada', tipo: tipo, texto: texto.slice(0, MSG_TEXTO_MAX), em: em };
+}
+/** Evento "messaging" do webhook do Instagram (DM) -> linhas prontas. */
+function normalizarInstagram_(b) {
+  const out = [];
+  if (!b || b.object !== 'instagram' || !Array.isArray(b.entry)) return out;
+  for (const e of b.entry) for (const ev of (Array.isArray(e.messaging) ? e.messaging : [])) {
+    const m = ev && ev.message; if (!m || !m.mid) continue;
+    const dono = String(e.id || ''), eco = m.is_echo === true;
+    const contato = String(eco ? (ev.recipient && ev.recipient.id) : (ev.sender && ev.sender.id) || '');
+    if (!contato || contato === dono) continue;
+    const anexo = Array.isArray(m.attachments) && m.attachments[0] ? String(m.attachments[0].type || 'anexo') : '';
+    const mapa = { image: 'imagem', video: 'vídeo', audio: 'áudio', file: 'documento', share: 'compartilhamento', story_mention: 'menção em story', reel: 'reel' };
+    const ms = Number(ev.timestamp || 0);
+    out.push({ extId: String(m.mid), contato: contato.slice(0, 80), nome: '', grupo: 0, direcao: eco ? 'saida' : 'entrada', tipo: anexo ? (mapa[anexo] || anexo) : 'texto', texto: String(m.text || '').slice(0, MSG_TEXTO_MAX), em: ms > 0 ? new Date(ms < 1e12 ? ms * 1000 : ms).toISOString() : agora() });
+  }
+  return out;
+}
+/** Grava uma mensagem (idempotente por canal+ext_id). Devolve true se era nova. */
+async function gravarMensagem_(env, canal, m) {
+  if (!MSG_CANAIS.includes(canal)) return false;
+  const t = agora();
+  await env.DB.prepare('INSERT OR IGNORE INTO msg_conversa (canal, contato, nome, grupo, ultima_em, criado_em) VALUES (?,?,?,?,?,?)').bind(canal, m.contato, m.nome, m.grupo, '', t).run();
+  const c = await env.DB.prepare('SELECT id FROM msg_conversa WHERE canal=? AND contato=?').bind(canal, m.contato).first();
+  if (!c) return false;
+  const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em) VALUES (?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t).run();
+  if (!r.meta || r.meta.changes !== 1) return false;
+  const previa = (m.texto || ('[' + m.tipo + ']')).replace(/\s+/g, ' ').slice(0, 140);
+  await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END WHERE id=?").bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, c.id).run();
+  return true;
+}
+async function msgPausado_(env, canal) { try { return (await cfgGet(env, 'msg_pausa_' + canal)) === '1'; } catch (e) { return false; } }
+/** Webhooks públicos. Sempre responde rápido; só aceita com o segredo certo no caminho. */
+async function rotaWebhookMensagens_(env, req, url) {
+  const ok = (c, o) => new Response(JSON.stringify(o), { status: c, headers: { 'Content-Type': 'application/json' } });
+  const partes = url.pathname.split('/').filter(Boolean);                      // ['wh','wafly','1','<segredo>'] | ['wh','instagram','<segredo>']
+  await iniciar(env);
+  const segredo = await msgSegredo_(env);
+  if (partes[1] === 'instagram') {
+    if (!igualConst_(partes[2] || '', segredo)) return ok(404, { ok: false });
+    if (req.method === 'GET') {                                                // verificação do webhook pela Meta
+      return url.searchParams.get('hub.mode') === 'subscribe' && igualConst_(url.searchParams.get('hub.verify_token') || '', segredo)
+        ? new Response(String(url.searchParams.get('hub.challenge') || ''), { status: 200 }) : ok(403, { ok: false });
+    }
+    if (req.method !== 'POST') return ok(405, { ok: false });
+    if (!env.IG_APP_SECRET) return ok(503, { ok: false, erro: 'IG_APP_SECRET não configurado.' });
+    const bruto = await req.text();
+    if (bruto.length > 262144) return ok(413, { ok: false });
+    const assin = (req.headers.get('X-Hub-Signature-256') || '').replace(/^sha256=/, '');
+    const chave = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(env.IG_APP_SECRET)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const esperado = Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', chave, new TextEncoder().encode(bruto))), (x) => x.toString(16).padStart(2, '0')).join('');
+    if (!assin || !igualConst_(assin, esperado)) return ok(401, { ok: false });
+    if (await msgPausado_(env, 'instagram')) return ok(200, { ok: true, pausado: true });
+    let b = null; try { b = JSON.parse(bruto); } catch (e) { return ok(400, { ok: false }); }
+    let novas = 0; for (const m of normalizarInstagram_(b)) if (await gravarMensagem_(env, 'instagram', m)) novas++;
+    return ok(200, { ok: true, novas: novas });
+  }
+  if (partes[1] === 'wafly' && (partes[2] === '1' || partes[2] === '2')) {
+    if (!igualConst_(partes[3] || '', segredo)) return ok(404, { ok: false });
+    if (req.method !== 'POST') return ok(405, { ok: false });
+    const canal = 'whatsapp' + partes[2];
+    const bruto = await req.text();
+    if (bruto.length > 262144) return ok(413, { ok: false });
+    let b = null; try { b = JSON.parse(bruto); } catch (e) { return ok(400, { ok: false }); }
+    if (await msgPausado_(env, canal)) return ok(200, { ok: true, pausado: true });
+    const cfg = await cfgWafly_(env, Number(partes[2]));
+    if (cfg && b && b.instanceId && String(b.instanceId) !== cfg.instance) return ok(200, { ok: true, ignorado: 'outra instância' });
+    const m = normalizarWafly_(b);
+    if (!m) return ok(200, { ok: true, ignorado: true });
+    return ok(200, { ok: true, nova: await gravarMensagem_(env, canal, m) });
+  }
+  return ok(404, { ok: false });
+}
+/** Liga a gravação: aponta o webhook de mensagens da instância Wafly para este Worker. */
+async function ligarWebhookWafly_(env, slot, origem) {
+  const cfg = await cfgWafly_(env, slot);
+  if (!cfg) return { ok: false, erro: slot === 1 ? 'Cadastre o Wafly 1 em Conexões antes de ligar as mensagens.' : 'Cadastre o Wafly 2 em Conexões antes de ligar as mensagens.' };
+  const alvo = origem + '/wh/wafly/' + slot + '/' + (await msgSegredo_(env));
+  try {
+    const r = await fetch(waflyUrl_(cfg, '/update-webhook-received'), { method: 'PUT', redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify({ value: alvo }) });
+    if (!r.ok) return { ok: false, erro: 'A Wafly não aceitou ligar o recebimento (HTTP ' + r.status + '). Confira as credenciais e tente de novo.' };
+  } catch (e) { return { ok: false, erro: 'Sem resposta da Wafly agora. Tente de novo.' }; }
+  await cfgSet(env, 'msg_wh_ligado_whatsapp' + slot, agora());
+  await cfgSet(env, 'msg_pausa_whatsapp' + slot, null);
+  return { ok: true };
+}
+async function resumoMensagens_(env, origem) {
+  const canais = {};
+  for (const c of MSG_CANAIS) {
+    const x = await env.DB.prepare('SELECT COUNT(*) AS conversas, COALESCE(SUM(total),0) AS mensagens, COALESCE(MAX(ultima_em),\'\') AS ultima FROM msg_conversa WHERE canal=?').bind(c).first();
+    canais[c] = { conversas: Number(x.conversas) || 0, mensagens: Number(x.mensagens) || 0, ultima: x.ultima || '', ligadoEm: (await cfgGet(env, 'msg_wh_ligado_' + c)) || '', pausado: await msgPausado_(env, c) };
+  }
+  canais.instagram.pronto = !!env.IG_APP_SECRET;
+  return { ok: true, canais: canais, urlInstagram: env.IG_APP_SECRET ? origem + '/wh/instagram/' + (await msgSegredo_(env)) : '' };
+}
 export default {
   async scheduled(ev, env, ctx) {
     ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
@@ -2328,6 +2468,7 @@ export default {
     const url = new URL(req.url), h = cors(env, req), J = (c, s) => resp(c, s, h);
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
+    if (url.pathname.indexOf('/wh/') === 0) { try { return await rotaWebhookMensagens_(env, req, url); } catch (e) { return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
     const perms = await permissoes(env, req);
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
@@ -2350,6 +2491,36 @@ export default {
           return J({ok:false,erro:'Formato de chave FreeConvert inválido.'},400);
         await cfgSet(env,'freeconvert_api_key',chave);
         return J({ok:true,configurada:true});
+      }
+      if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
+      if (p === '/msg/conversas' && req.method === 'GET') {
+        const canal = url.searchParams.get('canal') || '', busca = String(url.searchParams.get('busca') || '').trim().slice(0, 60), antes = url.searchParams.get('antes') || '';
+        if (!MSG_CANAIS.includes(canal)) return J({ ok: false, erro: 'Escolha Instagram, WhatsApp 1 ou WhatsApp 2.' }, 400);
+        let sql = 'SELECT id, contato, nome, grupo, ultima_em, previa, total FROM msg_conversa WHERE canal=? AND total>0', args = [canal];
+        if (busca) { sql += ' AND (nome LIKE ? OR contato LIKE ? OR previa LIKE ?)'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q); }
+        if (antes) { sql += ' AND ultima_em<?'; args.push(antes); }
+        const rs = await env.DB.prepare(sql + ' ORDER BY ultima_em DESC LIMIT 50').bind(...args).all();
+        return J({ ok: true, conversas: rs.results });
+      }
+      if (p === '/msg/mensagens' && req.method === 'GET') {
+        const id = Number(url.searchParams.get('conversa')), antes = url.searchParams.get('antes') || '';
+        if (!id) return J({ ok: false, erro: 'Escolha uma conversa.' }, 400);
+        const conv = await env.DB.prepare('SELECT id, canal, contato, nome, grupo, total FROM msg_conversa WHERE id=?').bind(id).first();
+        if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
+        const rs = await env.DB.prepare('SELECT id, direcao, tipo, texto, enviada_em FROM msg_mensagem WHERE conversa_id=?' + (antes ? ' AND enviada_em<?' : '') + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...(antes ? [id, antes] : [id])).all();
+        return J({ ok: true, conversa: conv, mensagens: rs.results.reverse() });
+      }
+      if (p === '/msg/ligar' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({})), slot = Number(d.slot);
+        if (slot !== 1 && slot !== 2) return J({ ok: false, erro: 'Escolha o WhatsApp 1 ou o WhatsApp 2.' }, 400);
+        const r = await ligarWebhookWafly_(env, slot, url.origin);
+        return J(r, r.ok ? 200 : 409);
+      }
+      if (p === '/msg/pausar' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({}));
+        if (!MSG_CANAIS.includes(d.canal)) return J({ ok: false, erro: 'Canal inválido.' }, 400);
+        await cfgSet(env, 'msg_pausa_' + d.canal, d.pausar === true ? '1' : null);
+        return J({ ok: true, pausado: d.pausar === true });
       }
       if (p === '/post/wafly/config' && req.method === 'GET') {
         if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);

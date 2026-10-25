@@ -45,6 +45,7 @@ OPCIONAIS = {
     # e publico): e gravado com `wrangler secret put WORKER_TOKEN` e sobrevive aos deploys.
     "WORKER_TOKEN",
     "WAFLY_GRUPO_CLIENTES",  # JSON privado: credenciais e destino fixo, preservado como secret.
+    "IG_APP_SECRET",  # segredo do app Meta: valida a assinatura dos webhooks de DM do Instagram (módulo Mensagens).
     "WAME_STATUS_2",  # JSON privado: chave da instância Wame (WhatsApp 2), preservado como secret.
     "FREECONVERT_API_KEY",  # segredo externo; cadastrar no Cloudflare, nunca em [vars].
 }
