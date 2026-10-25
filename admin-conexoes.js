@@ -189,15 +189,19 @@
       '<div id="cx-fc-msg" class="cx-msg" role="status"></div>' +
       '<p class="g-nota">Use uma chave nova; revogue a que foi compartilhada na conversa. A conversão depende da cota disponível na FreeConvert.</p></div>' +
 
-      '<div class="cx-bloco"><h3>💬 WhatsApp Status 2 — chave do Wame</h3>' +
-      '<p class="g-nota">Cole a chave da instância do Wame (WhatsApp 2). Ela liga o envio dos status pelo WhatsApp Status 2. A chave fica guardada no servidor e não volta para a tela.</p>' +
+      '<div class="cx-bloco"><h3>💬 WhatsApp Status 2 — Wame</h3>' +
+      '<p class="g-nota">Cole a chave da instância do Wame (WhatsApp 2) e escolha o servidor em que ela foi criada. A chave fica guardada no servidor e não volta para a tela.</p>' +
       '<p id="cx-wm-status" role="status" class="cx-chave-sem">Conferindo chave…</p>' +
       '<label for="cx-wm-chave">Chave da instância Wame</label>' +
       '<input type="password" id="cx-wm-chave" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole a chave aqui">' +
-      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="wm-guardar">Salvar chave</button>' +
+      '<label for="cx-wm-servidor">Servidor</label>' +
+      '<select id="cx-wm-servidor"><option value="server.wame.api.br">server.wame.api.br (padrão)</option><option value="us.api-wa.me">us.api-wa.me (EUA)</option><option value="server.api-wa.me">server.api-wa.me</option></select>' +
+      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="wm-guardar">Salvar</button>' +
+      '<button type="button" class="cx-btn" data-cx="wm-testar">Testar conexão</button>' +
       '<button type="button" class="cx-btn cx-perigo" data-cx="wm-apagar">Remover chave</button></div>' +
       '<div id="cx-wm-msg" class="cx-msg" role="status"></div>' +
-      '<p class="g-nota">Depois de salvar, faça um primeiro teste com uma única postagem de verdade no Status 2.</p></div>' +
+      '<ul id="cx-wm-res" class="g-nota" aria-live="polite"></ul>' +
+      '<p class="g-nota">O teste só consulta a instância (não envia nada) e procura em qual servidor a chave funciona. Depois, faça um primeiro envio real com uma única postagem no Status 2.</p></div>' +
 
       blocoChave('cloudflare', 'Cloudflare — token (opcional)',
         'Crie em <b>Cloudflare → Meu perfil → API Tokens → Create Token</b>, modelo <b>Edit Cloudflare Workers</b>, de preferência com data de fim. Aqui serve só para conferir quando o Worker das miniaturas foi publicado.', '') +
@@ -423,23 +427,35 @@
   async function conferirWame_(){
     const el=$('cx-wm-status');if(!el)return;
     const r=await igWorker_('/post/wame/config','GET');
-    el.textContent=r.ok?(r.configurada?(r.origem==='worker'?'✓ Chave Wame configurada no servidor.':'✓ Chave Wame configurada.'):'Nenhuma chave Wame cadastrada.') : erroTxt(r);
+    if(r.ok&&r.servidor){const sel=$('cx-wm-servidor');if(sel&&Array.from(sel.options).some(o=>o.value===r.servidor))sel.value=r.servidor}
+    el.textContent=r.ok?(r.configurada?(r.origem==='worker'?'✓ Chave Wame configurada no servidor':'✓ Chave Wame configurada')+' · '+r.servidor:'Nenhuma chave Wame cadastrada.') : erroTxt(r);
     el.className=r.ok&&r.configurada?'cx-chave-ok':'cx-chave-sem';
   }
   async function guardarWame_(){
-    const campo=$('cx-wm-chave');if(!campo)return;
-    const chave=campo.value.trim();
-    if(!chave)return msg('cx-wm-msg','Cole a chave para salvar.','erro');
+    const campo=$('cx-wm-chave'),sel=$('cx-wm-servidor');if(!campo||!sel)return;
+    const chave=campo.value.trim(),corpo={servidor:sel.value};
+    if(chave)corpo.chave=chave;
     msg('cx-wm-msg','Salvando…','');
-    const r=await igWorker_('/post/wame/config','POST',{chave});
-    if(r.ok){campo.value='';msg('cx-wm-msg','Chave guardada no servidor.','ok');conferirWame_();}
+    const r=await igWorker_('/post/wame/config','POST',corpo);
+    if(r.ok){campo.value='';msg('cx-wm-msg',chave?'Chave e servidor guardados no servidor.':'Servidor atualizado.','ok');conferirWame_();}
     else msg('cx-wm-msg',erroTxt(r),'erro');
   }
+  async function testarWame_(){
+    const ul=$('cx-wm-res');if(!ul)return;
+    msg('cx-wm-msg','Testando a conexão…','');ul.textContent='';
+    const r=await igWorker_('/post/wame/teste','POST',{});
+    if(!r.ok)return msg('cx-wm-msg',erroTxt(r),'erro');
+    (r.resultados||[]).forEach(x=>{const li=document.createElement('li');li.textContent=x.servidor+': '+x.texto+'.';ul.appendChild(li)});
+    if(r.encontrado){
+      const outro=r.encontrado!==r.servidorAtual;
+      msg('cx-wm-msg',(r.conectado===true?'✓ WhatsApp conectado em ':'A chave funciona em ')+r.encontrado+'.'+(outro?' Escolha esse servidor acima e toque em Salvar.':''),r.conectado===false?'erro':'ok');
+    }else msg('cx-wm-msg','Nenhum servidor aceitou a chave. Confira se a chave está certa e a instância criada no painel do Wame.','erro');
+  }
   async function apagarWame_(){
-    if(!confirm('Remover a chave do Wame guardada na Gestão?'))return;
+    if(!confirm('Remover a chave e o servidor do Wame guardados na Gestão?'))return;
     const r=await igWorker_('/post/wame/config','POST',{apagar:true});
     msg('cx-wm-msg',r.ok?'Chave da Gestão removida.':erroTxt(r),r.ok?'ok':'erro');
-    if(r.ok)conferirWame_();
+    if(r.ok){const ul=$('cx-wm-res');ul&&(ul.textContent='');conferirWame_();}
   }
   function clique(ev) {
     const b = ev.target.closest('[data-cx]'); if (!b) return;
@@ -448,6 +464,7 @@
     else if (a === 'fc-apagar') apagarFreeConvert_();
     else if (a === 'wm-guardar') guardarWame_();
     else if (a === 'wm-apagar') apagarWame_();
+    else if (a === 'wm-testar') testarWame_();
     else if (a === 'conferir') conferir();
     else if (a === 'guardar') guardar(b.dataset.nome);
     else if (a === 'apagar') apagar(b.dataset.nome);

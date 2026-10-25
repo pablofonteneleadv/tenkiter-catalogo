@@ -104,10 +104,11 @@ function d1() {
   await W.processarPostagens(env);
   await cfg('po_cfg', JSON.stringify({pausaAtiva:false}));
   const MEDIA_URL = 'https://tenkiter-midia.fake/m/t/202610/dddddddddddddddddddd.jpg';
-  let wame = [], wmodo = 'ok', liberar = null;
+  let wame = [], wmodo = 'ok', liberar = null, instCham = [], instOk = 'us.api-wa.me', instConn = true, instPlano = false;
   const fAnt = globalThis.fetch;
   globalThis.fetch = async (u, init) => {
-    if (String(u).startsWith('https://server.wame.api.br/')) {
+    if (/^https:\/\/(server\.wame\.api\.br|us\.api-wa\.me|server\.api-wa\.me)\//.test(String(u))) {
+      if ((init.method || 'GET') === 'GET') { instCham.push(String(u)); const h = String(u).split('/')[2]; return h === instOk ? new Response(JSON.stringify({ status: 200, instance: { phoneConnected: instConn, state: instConn ? 'open' : 'close' } })) : h === 'server.wame.api.br' && instPlano ? new Response(JSON.stringify({ status: 'forbidden', reason: 'plan_required', feature: 'status', requiredPlanName: 'Pro', message: 'x' }), { status: 403 }) : new Response('nao', { status: 404 }); }
       wame.push({ url: String(u), body: JSON.parse(init.body), headers: new Headers(init.headers), redirect: init.redirect });
       if (wmodo === 'aguardar') await new Promise((r) => { liberar = r; });
       if (wmodo === 'timeout') throw new Error('timeout');
@@ -210,6 +211,27 @@ function d1() {
   env.WAME_STATUS_2 = JSON.stringify({ key: 'CHAVE_SEGREDO_WORKER_1' });
   chk('chave da Gestão tem prioridade sobre o segredo do Worker', (await A('GET', '/post/wame/config')).j.origem === 'gestao');
   let ap = await A('POST', '/post/wame/config', { apagar: true }); chk('remover apaga só a da Gestão e o segredo do Worker segue valendo', ap.j.ok && ap.j.configurada === true && (await A('GET', '/post/wame/config')).j.origem === 'worker', ap.j);
+  env.WAME_STATUS_2 = segredo;
+  // ---- servidor do Wame e teste de conexão ----
+  await A('POST', '/post/wame/config', { apagar: true });
+  env.WAME_STATUS_2 = undefined;
+  const CH2 = 'CHAVE_SERVIDOR_US_123456';
+  let sv0 = await A('POST', '/post/wame/config', { chave: CH2, servidor: 'evil.example.com' }); chk('servidor fora da lista é recusado', sv0.r.status === 400 && /não reconhecido/.test(sv0.j.erro), sv0.j);
+  let sv1 = await A('POST', '/post/wame/config', { chave: CH2 }); chk('sem servidor escolhido usa o padrão server.wame.api.br', (await A('GET', '/post/wame/config')).j.servidor === 'server.wame.api.br' && sv1.r.status === 200);
+  instOk = 'us.api-wa.me'; instPlano = true;
+  let t1 = await A('POST', '/post/wame/teste'); const hosts1 = t1.j.resultados.map((x) => x.servidor);
+  chk('teste começa pelo servidor configurado e procura nos outros', t1.j.ok && hosts1[0] === 'server.wame.api.br' && hosts1.includes('us.api-wa.me') && t1.j.encontrado === 'us.api-wa.me' && t1.j.conectado === true, t1.j);
+  chk('o 403 por plano aparece no resultado do teste, em português', /plano atual do Wame não inclui o recurso “status”/.test(t1.j.resultados[0].texto) && /plano Pro/.test(t1.j.resultados[0].texto), t1.j.resultados[0]);
+  chk('o teste só faz GET /instance (somente leitura) e nunca vaza a chave', instCham.every((u) => /\/instance$/.test(u)) && !JSON.stringify(t1.j).includes(CH2));
+  let sv2 = await A('POST', '/post/wame/config', { servidor: 'us.api-wa.me' }); chk('trocar só o servidor (sem colar a chave de novo) funciona', sv2.r.status === 200 && (await A('GET', '/post/wame/config')).j.servidor === 'us.api-wa.me');
+  wame.length = 0; wmodo = 'ok'; id = await novaPostagem('whatsapp2'); await W.processarPostagens(env);
+  chk('o Status 2 passa a sair pelo servidor escolhido (us.api-wa.me)', wame.length === 1 && wame[0].url.startsWith('https://us.api-wa.me/' + CH2 + '/status/'), wame.map((x) => x.url.split('/')[2]));
+  instConn = false; let t2 = await A('POST', '/post/wame/teste');
+  chk('teste diz quando o WhatsApp está desconectado', t2.j.resultados[0].servidor === 'us.api-wa.me' && /desconectado/.test(t2.j.resultados[0].texto) && t2.j.conectado === false, t2.j);
+  instConn = true;
+  const semP = await w.fetch(ped('POST', '/post/wame/teste', 'tk2.gerente', {}), env, {}); chk('gerente não consegue testar nem trocar o servidor', semP.status === 403 || semP.status === 401);
+  const g0 = await A('GET', '/post/wame/config'); chk('GET informa servidor e a lista de servidores permitidos, sem a chave', g0.j.servidor === 'us.api-wa.me' && g0.j.servidores.includes('us.api-wa.me') && !JSON.stringify(g0.j).includes(CH2), g0.j);
+  await A('POST', '/post/wame/config', { apagar: true }); chk('remover apaga chave e servidor', (await A('GET', '/post/wame/config')).j.configurada === false && (await A('GET', '/post/wame/config')).j.servidor === 'server.wame.api.br');
   env.WAME_STATUS_2 = segredo;
   console.log('\nOK=' + ok + ' FALHAS=' + falhas.length, falhas); process.exit(falhas.length ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(2); });

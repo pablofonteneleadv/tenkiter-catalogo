@@ -539,11 +539,16 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     elif a in ("refazer","agora"): x["status"]="pronta"; x["resultado"]="https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/ia%d.jpg"%x["id"]; x["erro"]=""; x["espera"]=""; x["modelo"]="gemini-nano-banana-2.1"
                     return route.fulfill(json={"ok":True})
             if path=="/post/wame/config":
-                if m=="GET": return route.fulfill(json={"ok":True,"configurada":bool(g.get("wame_chave")),"origem":"gestao" if g.get("wame_chave") else "nenhuma"})
+                if m=="GET": return route.fulfill(json={"ok":True,"configurada":bool(g.get("wame_chave")),"origem":"gestao" if g.get("wame_chave") else "nenhuma","servidor":g.get("wame_serv","server.wame.api.br"),"servidores":["server.wame.api.br","us.api-wa.me","server.api-wa.me"]})
                 _b=json.loads(route.request.post_data or "{}"); g.setdefault("wame_posts",[]).append(_b)
-                if _b.get("apagar"): g["wame_chave"]=""; return route.fulfill(json={"ok":True,"configurada":False})
-                if len(str(_b.get("chave","")))<8: return route.fulfill(status=400,json={"ok":False,"erro":"A chave do Wame parece inválida. Cole só a chave da instância, sem espaços nem aspas."})
-                g["wame_chave"]=_b["chave"]; return route.fulfill(json={"ok":True,"configurada":True})
+                if _b.get("apagar"): g["wame_chave"]=""; g["wame_serv"]="server.wame.api.br"; return route.fulfill(json={"ok":True,"configurada":False})
+                if _b.get("chave") and len(str(_b.get("chave","")))<8: return route.fulfill(status=400,json={"ok":False,"erro":"A chave do Wame parece inválida. Cole só a chave da instância, sem espaços nem aspas."})
+                if _b.get("chave"): g["wame_chave"]=_b["chave"]
+                if _b.get("servidor"): g["wame_serv"]=_b["servidor"]
+                return route.fulfill(json={"ok":True,"configurada":bool(g.get("wame_chave"))})
+            if path=="/post/wame/teste":
+                g.setdefault("wame_testes",[]).append(1)
+                return route.fulfill(json={"ok":True,"servidorAtual":g.get("wame_serv","server.wame.api.br"),"resultados":[{"servidor":g.get("wame_serv","server.wame.api.br"),"http":404,"texto":"este servidor não reconhece a chave"},{"servidor":"us.api-wa.me","http":200,"conectado":True,"texto":"conectado"}],"encontrado":"us.api-wa.me","conectado":True})
             if path=="/posts" or path.startswith("/post"):      # fila de postagens (Worker v4.6): st["ig"]["posts"]
                 g.setdefault("posts",[]); g.setdefault("post_chamadas",[]); g.setdefault("post_seq",100)
                 PADRAO_R={"pausaAtiva":True,"pausaDe":"22:00","pausaAte":"06:30","max24h":90,"agoraIgnora":True,"canais":{"story":{"max24h":40,"gapMin":120,"gapMax":300},"status":{"max24h":40,"gapMin":120,"gapMax":300},"feed":{"max24h":20,"gapMin":300,"gapMax":600},"carrossel":{"max24h":20,"gapMin":300,"gapMax":600},"reels":{"max24h":10,"gapMin":600,"gapMax":1200}}}
