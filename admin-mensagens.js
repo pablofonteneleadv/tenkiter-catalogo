@@ -172,6 +172,7 @@
     if (!u) t.push('A Meta ainda não enviou nenhum aviso para este endereço.');
     else if (u.res === 'assinatura') t.push('Último aviso da Meta (' + hora(u.em) + ') foi recusado: a chave secreta do app está diferente da Meta.');
     else t.push('Último aviso da Meta: ' + hora(u.em) + ' (' + (u.itens || 0) + ' mensagem(ns) lida(s), ' + (u.novas || 0) + ' nova(s)).' + (u.forma ? ' Formato recebido: ' + u.forma : ''));
+    if (u && u.forma && /messaging:read|messaging:delivery|messaging:reaction/.test(u.forma) && !/message\{/.test(u.forma)) t.push('A Meta só avisou LEITURAS, nenhuma mensagem. Confira: (1) no Instagram da loja, Configurações → Mensagens e respostas a stories → Ferramentas conectadas → ligar “Permitir acesso às mensagens”; (2) no app da Meta → Instagram → Configurar webhooks → campo “messages” ligado; (3) quem envia precisa ter função no app (ele está não publicado).');
     d.textContent = t.join(' ');
   }
   async function recarregar() { resumo = await worker_('/msg/resumo', 'GET'); if (!resumo.ok) { $('ms-corpo').textContent = resumo.erro || 'Não foi possível carregar agora.'; return; } await desenhar(); }

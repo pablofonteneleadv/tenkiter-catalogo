@@ -747,9 +747,18 @@ async function enviarWaflyDireto_(env, p, slot, cfg) {
   if (!/^https:\/\//i.test(url)) return { ok: false, erro: 'Mídia inválida para o ' + info.nome + ' (precisa ser https).' };
   let conteudo;
   try {
-    const rm = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(30000), headers: { 'User-Agent': UA } });
-    if (!rm.ok) return { ok: false, erro: 'Não consegui baixar a mídia (HTTP ' + rm.status + ').' };
-    const buf = await rm.arrayBuffer();
+    // Mídia do próprio bucket: lê direto do R2. Um Worker não consegue buscar outro Worker da mesma conta pelo endereço público (volta 404), e era isso que derrubava o Status 2.
+    let buf = null;
+    const pref = String(env.MIDIA_URL || '').replace(/\/$/, '') + '/m/';
+    if (url.startsWith(pref)) {
+      const chave = url.slice(pref.length).split('?')[0];
+      if (/^[A-Za-z0-9/_.-]+$/.test(chave) && !chave.includes('..')) { const obj = await env.MIDIA.get(chave); if (obj) buf = await obj.arrayBuffer(); }
+    }
+    if (!buf) {
+      const rm = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(30000), headers: { 'User-Agent': UA } });
+      if (!rm.ok) return { ok: false, erro: 'Não consegui baixar a mídia (HTTP ' + rm.status + ').' };
+      buf = await rm.arrayBuffer();
+    }
     if (buf.byteLength > 10485760) return { ok: false, erro: 'Mídia grande demais para o Status do WhatsApp (limite 10 MB).' };
     conteudo = bytesParaBase64_(buf);
   } catch (e) { return { ok: false, erro: 'Não consegui baixar a mídia agora. Tento de novo.' }; }
