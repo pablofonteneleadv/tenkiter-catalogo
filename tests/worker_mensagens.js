@@ -25,6 +25,7 @@ function d1() {
   const GEMINI_OK = 'AIzaINVENTADA_PARA_TESTE_1234567890abcd'; let gemChamadas = [], gemModo = 'ok', gemTexto = '';
   let contaChamadas = [], contaFora = false;
   let postChamadas = [], postErro = null, seqC = 0, containers = {}, publicados = [], videoStatus = 'FINISHED';
+  const subChamadas = []; let subAssinada = false;
   let paginas = null, feed = [], stories = [], midia404 = {}, tokenValido = true, chamadas = [];
   const cdn = (id, tipo) => 'https://cdn.fake/' + id + (tipo === 'VIDEO' ? '.mp4' : '.jpg');
   globalThis.fetch = async (u, init) => {
@@ -40,6 +41,11 @@ function d1() {
       return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: gemTexto }] } }] }));
     }
     if (u.startsWith('https://api.fake')) { const b = JSON.parse(init.body); if (b.action === 'contaPorWhats') { contaChamadas.push(b); return new Response(JSON.stringify(b.sessao === 'tk2.cliente' ? { ok: false } : contaFora ? { ok: false, erro: 'x' } : String(b.alvo) === '88977776666' ? { ok: true, existe: true, nome: 'Joana Cadastrada' } : { ok: true, existe: false })); } return new Response(JSON.stringify(b.sessao === 'tk2.admin' ? { ok: true, usuario: { permissoes: ['gerir_acessos', 'catalogo_cadastrar'] } } : b.sessao === 'tk2.gerente' ? { ok: true, usuario: { permissoes: ['catalogo_cadastrar'], nome: 'Gerente' } } : b.sessao === 'tk2.cliente' ? { ok: true, usuario: { permissoes: [], nome: 'Maria Cliente', whatsapp: '88988887777' } } : { ok: false })); }
+    if (u.startsWith('https://ig.fake/') && u.includes('/me/subscribed_apps')) {
+      subChamadas.push({ u, m: (init && init.method) || 'GET', auth: new Headers((init && init.headers) || {}).get('Authorization') });
+      if (init && init.method === 'POST') return new Response(JSON.stringify({ success: true }));
+      return new Response(JSON.stringify({ data: [{ subscribed_fields: subAssinada ? ['messages'] : [] }] }));
+    }
     if (u.startsWith('https://ig.fake') && init && init.method === 'POST') {          // publicação (POST com o token no CORPO)
       const f = new URLSearchParams(String(init.body)), tk = f.get('access_token'); f.delete('access_token');
       postChamadas.push({ u, p: Object.fromEntries(f) });
@@ -160,6 +166,20 @@ function d1() {
   const ver = await w.fetch(new Request('https://ig.test/wh/instagram/' + seg + '?hub.mode=subscribe&hub.verify_token=' + seg + '&hub.challenge=12345'), env, {});
   chk('verificação do webhook pela Meta devolve o desafio', ver.status === 200 && (await ver.text()) === '12345');
   chk('verificação com token errado: 403', (await w.fetch(new Request('https://ig.test/wh/instagram/' + seg + '?hub.mode=subscribe&hub.verify_token=errado&hub.challenge=1'), env, {})).status === 403);
+
+  // ---- diagnóstico do Instagram e assinatura da conta ----
+  const semTk = await A('GET', '/msg/instagram/situacao');
+  chk('semTk token do Instagram a situação avisa e não consulta a Meta', semTk.j.token === false && semTk.j.assinada === null && subChamadas.length === 0 && (await A('POST', '/msg/instagram/assinar', {})).r.status === 409);
+  await DB.prepare("INSERT OR REPLACE INTO cfg(chave,valor) VALUES('ig_token',?)").bind(TOKEN).run();
+  const sit = await A('GET', '/msg/instagram/situacao');
+  chk('situação guarda a última tentativa da Meta (ok, com contagem)', sit.j.ok && sit.j.ultimaTentativa && sit.j.ultimaTentativa.res === 'ok' && sit.j.ultimaTentativa.novas === 2, sit.j);
+  chk('situação confere a assinatura na Meta com o token guardado (sem assinatura ainda)', sit.j.token === true && sit.j.assinada === false && subChamadas[0].auth === 'Bearer ' + TOKEN, subChamadas);
+  const asn = await A('POST', '/msg/instagram/assinar', {}); subAssinada = true;
+  chk('assinar chama subscribed_apps com messages', asn.j.ok === true && subChamadas.some((c) => c.m === 'POST' && c.u.includes('subscribed_fields=messages')), subChamadas);
+  chk('depois de assinar, situação diz assinada', (await A('GET', '/msg/instagram/situacao')).j.assinada === true);
+  chk('o token nunca volta na situação', !JSON.stringify(sit.j).includes(TOKEN));
+  await wh('/wh/instagram/' + seg, corpoIg, { headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': 'sha256=00' } });
+  chk('assinatura recusada fica registrada para diagnóstico', (await A('GET', '/msg/instagram/situacao')).j.ultimaTentativa.res === 'assinatura');
 
   // ---- pausa ----
   const antesPausa = await cont('msg_mensagem');

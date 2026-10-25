@@ -15,7 +15,7 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   const esc = (v) => escaparHtml(v);
-  let itens = [], status = null, deployTimer = null, ocupado = false, temOnesignal = false, temCofre = false, cofreCodigo = '', cofreTimer = null, cofreFimEm = 0;
+  let itens = [], status = null, deployTimer = null, ocupado = false, temOnesignal = false, temIntegracoes = false, temCofre = false, cofreCodigo = '', cofreTimer = null, cofreFimEm = 0;
 
   /* ---------- backend ---------- */
   function chamar(extra) {
@@ -46,6 +46,15 @@
       .sheet-conexoes { max-width: 720px; height: 92vh; max-height: 92vh; }
       .cx-bloco { border: 1px solid #e3e3e3; border-radius: 12px; padding: 10px 12px; margin: 12px 0; background: #fff; }
       .cx-bloco > h3 { margin: 0 0 6px; font-size: 0.92rem; font-family: "Poppins", sans-serif; }
+      .cx-grupo { border: 1px solid #d9d9d9; border-radius: 14px; margin: 12px 0; background: #fafafa; }
+      .cx-grupo > summary { list-style: none; cursor: pointer; padding: 14px 14px; min-height: 48px; font-weight: 800; font-size: 1rem; font-family: "Poppins", sans-serif; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .cx-grupo > summary::-webkit-details-marker { display: none; }
+      .cx-grupo > summary::after { content: "▾"; transition: transform .15s; }
+      .cx-grupo[open] > summary::after { transform: rotate(180deg); }
+      .cx-grupo > summary:focus-visible { outline: 3px solid #0b5d63; outline-offset: 2px; border-radius: 12px; }
+      .cx-grupo > .cx-bloco, .cx-grupo > .cx-grupo-ajuda { margin-left: 10px; margin-right: 10px; }
+      .cx-grupo > .cx-grupo-ajuda { margin-top: 0; }
+      .cx-grupo > .cx-bloco:last-child { margin-bottom: 12px; }
       .cx-lista { list-style: none; margin: 6px 0; padding: 0; }
       .cx-lista li { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-bottom: 1px solid #eee; font-size: 0.85rem; }
       .cx-lista li:last-child { border-bottom: 0; }
@@ -91,7 +100,7 @@
   function fechar() { trancarCofre_(true); fecharComHistorico_('overlay-conexoes'); parouDeploy_(); }
   function parouDeploy_() { if (deployTimer) { clearTimeout(deployTimer); deployTimer = null; } }
 
-  async function abrir() {
+  async function abrir(secao) {
     montar();
     abrirComHistorico_('overlay-conexoes');
     $('cx-corpo').innerHTML = '<p class="g-info">Carregando…</p>';
@@ -100,8 +109,7 @@
     status = s; itens = [];
     desenhar();
     conferir();
-    conferirFreeConvert_();
-    conferirWafly_();
+    if (secao) { const g = $('cx-g-' + secao); if (g) { g.open = true; gruposAbertos.add(g.id); g.scrollIntoView({ block: 'start' }); } }
   }
 
   /* ---------- desenho ---------- */
@@ -151,44 +159,40 @@
     el.innerHTML = (passos && passos.length) ? '<ul class="cx-lista">' + passos.map((x) =>
       '<li><span class="cx-i" aria-hidden="true">' + ICONE[String(x.ok)] + '</span><span class="cx-t">' + esc(x.detalhe) + '</span></li>').join('') + '</ul>' : '';
   }
-  function desenhar() { desenharBase_(); desenharCofre(); }
+  let gruposAbertos = new Set(['cx-g-site']);
+  function desenhar() {
+    document.querySelectorAll('#cx-corpo .cx-grupo').forEach((g) => { if (g.open) gruposAbertos.add(g.id); else gruposAbertos.delete(g.id); });
+    desenharBase_();
+    document.querySelectorAll('#cx-corpo .cx-grupo').forEach((g) => { g.open = gruposAbertos.has(g.id); });
+    desenharCofre(); conferirFreeConvert_(); conferirWafly_(); conferirIg_(); if (temIntegracoes) carregarIntegracoes_();
+  }
+  function grupo_(id, titulo, ajuda, partes, aberto) {
+    return '<details class="cx-grupo" id="cx-g-' + id + '"' + (aberto ? ' open' : '') + '><summary><span>' + titulo + '</span></summary>' +
+      (ajuda ? '<p class="g-nota cx-grupo-ajuda">' + ajuda + '</p>' : '') + partes.join('') + '</details>';
+  }
   function desenharBase_() {
     const e = status.enderecos || {};
     $('cx-corpo').innerHTML =
       '<p class="g-info">Aqui ficam as chaves que o painel usa para cuidar do site sozinho. Elas ficam guardadas <b>no servidor</b> (Propriedades do Script): <b>nunca voltam para esta tela</b>, não ficam neste aparelho e não vão para o GitHub. Só o Admin total vê esta tela.</p>' +
-
+      grupo_('site', '🩺 Situação e publicação do site', '', [
       '<div class="cx-bloco"><h3>Situação agora</h3>' +
         '<div class="cx-linha"><button type="button" class="cx-btn cx-sec" data-cx="conferir" id="cx-conferir">🔄 Conferir de novo</button></div>' +
         '<ul class="cx-lista" id="cx-itens"><li><span class="cx-i">⏳</span><span class="cx-t">Conferindo…</span></li></ul>' +
         '<div class="cx-msg" id="cx-msg-itens" role="status"></div>' +
-      '</div>' +
-
+      '</div>',
       '<div class="cx-bloco"><h3>Publicar o site agora</h3>' +
         '<p class="g-nota">Manda o Render publicar a versão mais recente do site (o deploy automático às vezes não dispara). Leva cerca de 1 minuto.</p>' +
         '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="deploy" id="cx-deploy">🚀 Publicar agora</button></div>' +
         '<div class="cx-msg" id="cx-msg-deploy" role="status"></div>' +
-      '</div>' +
-
-      (temOnesignal ? blocoOneSignal() : '') +
-
-      blocoChave('render', 'Render — chave da API',
-        'Crie em <b>Render → Account Settings → API Keys → Create API Key</b> e cole aqui. Ela serve para conferir/criar as regras do site e publicar. O painel testa a chave antes de guardar.',
-        '⚠️ A chave do Render manda em <b>toda a sua conta do Render</b> (não dá para limitar). Por isso ela só fica no servidor e só o Admin total mexe. Se desconfiar de vazamento, apague a chave aqui <b>e</b> revogue-a no Render.') +
-
-      (status.conexoes && status.conexoes.instagram ? blocoChave('instagram', 'Instagram — token de acesso',
+      '</div>'
+      ], true) +
+      grupo_('instagram', '📸 Instagram', 'Conexão do importador e das mensagens, e leitura das fotos por IA.', [
+        blocoInstagramWorker_(),
+        ((status.conexoes && status.conexoes.instagram ? blocoChave('instagram', 'Instagram — token antigo (Apps Script)',
         'Gere em <b>developers.facebook.com → Meus apps → seu app → Instagram → API com login do Instagram → Gerar token</b> (a conta da loja precisa ser <b>Empresa</b>; para postar, marque a permissão <b>instagram_business_content_publish</b>). O painel testa o token no Instagram, liga o importador/postagens (Worker) e guarda uma cópia aqui no cofre.',
-        'O token vale ~60 dias; o servidor renova o dele sozinho. Se o Instagram recusar, gere outro e cole aqui.') : '') +
-
-      '<div class="cx-bloco"><h3>🎬 FreeConvert — conversão de vídeos</h3>' +
-      '<p class="g-nota">Cole a chave de API da FreeConvert para converter vídeos H.265/HEVC em MP4 H.264/AAC nas postagens para grupos. A chave fica guardada no servidor e não volta para a tela.</p>' +
-      '<p id="cx-fc-status" role="status" class="cx-chave-sem">Conferindo chave…</p>' +
-      '<label for="cx-fc-chave">Chave da API FreeConvert</label>' +
-      '<input type="password" id="cx-fc-chave" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole a nova chave aqui">' +
-      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="fc-guardar">Salvar chave</button>' +
-      '<button type="button" class="cx-btn cx-perigo" data-cx="fc-apagar">Remover chave</button></div>' +
-      '<div id="cx-fc-msg" class="cx-msg" role="status"></div>' +
-      '<p class="g-nota">Use uma chave nova; revogue a que foi compartilhada na conversa. A conversão depende da cota disponível na FreeConvert.</p></div>' +
-
+        'O token vale ~60 dias; o servidor renova o dele sozinho. Se o Instagram recusar, gere outro e cole aqui.') : ''))
+      ], false) +
+      grupo_('whatsapp', '💬 WhatsApp (Wafly)', 'Instâncias que publicam os Status e gravam as mensagens.', [
       '<div class="cx-bloco"><h3>💬 WhatsApp Status 1 — Wafly</h3>' +
       '<p class="g-nota">Hoje o Status 1 sai pelo Apps Script. Ao salvar aqui, o servidor passa a falar direto com a Wafly. Se você remover, volta sozinho para o Apps Script. Os três códigos ficam guardados no servidor e não voltam para a tela.</p>' +
       '<p id="cx-wf1-status" role="status" class="cx-chave-sem">Conferindo…</p>' +
@@ -202,8 +206,7 @@
       '<button type="button" class="cx-btn" data-cx="wf1-testar">Testar conexão</button>' +
       '<button type="button" class="cx-btn cx-perigo" data-cx="wf1-apagar">Remover</button></div>' +
       '<div id="cx-wf1-msg" class="cx-msg" role="status"></div>' +
-      '<ul id="cx-wf1-res" class="g-nota" aria-live="polite"></ul></div>' +
-
+      '<ul id="cx-wf1-res" class="g-nota" aria-live="polite"></ul></div>',
       '<div class="cx-bloco"><h3>💬 WhatsApp Status 2 — Wafly</h3>' +
       '<p class="g-nota">Segunda instância da Wafly. Quando cadastrada, ela assume o Status 2 (a fila já agendada para o Status 2 segue por ela). Os três códigos ficam guardados no servidor e não voltam para a tela.</p>' +
       '<p id="cx-wf2-status" role="status" class="cx-chave-sem">Conferindo…</p>' +
@@ -217,16 +220,36 @@
       '<button type="button" class="cx-btn" data-cx="wf2-testar">Testar conexão</button>' +
       '<button type="button" class="cx-btn cx-perigo" data-cx="wf2-apagar">Remover</button></div>' +
       '<div id="cx-wf2-msg" class="cx-msg" role="status"></div>' +
-      '<ul id="cx-wf2-res" class="g-nota" aria-live="polite"></ul></div>' +
-
-      blocoChave('cloudflare', 'Cloudflare — token (opcional)',
-        'Crie em <b>Cloudflare → Meu perfil → API Tokens → Create Token</b>, modelo <b>Edit Cloudflare Workers</b>, de preferência com data de fim. Aqui serve só para conferir quando o Worker das miniaturas foi publicado.', '') +
-
+      '<ul id="cx-wf2-res" class="g-nota" aria-live="polite"></ul></div>'
+      ], false) +
+      grupo_('meta', '📣 Meta, Google e busca', 'Pixel, catálogo, mapa do site, sinônimos e segmentos dos avisos.', [
+        blocoIntegracoes_(),
       '<div class="cx-bloco"><h3>Endereços para a Meta e o Google</h3>' +
         '<p class="g-nota">Já no domínio da loja. Na Meta (Gerenciador de Comércio) e no Google Merchant use “fonte de dados por link”; no Google Search Console cadastre o mapa do site.</p>' +
         [['cx-end-csv', 'Catálogo CSV — Meta e Google', e.feedCsv], ['cx-end-xml', 'Catálogo XML — Google Merchant', e.feedXml], ['cx-end-map', 'Mapa do site (sitemap) — Google Search Console', e.sitemap]].map((x) =>
           '<label for="' + x[0] + '">' + esc(x[1]) + '</label><div class="cx-copia"><input type="text" id="' + x[0] + '" readonly value="' + esc(x[2] || '') + '"><button type="button" data-cx="copiar" data-alvo="' + x[0] + '">Copiar</button></div>').join('') +
-      '</div>' + (temCofre ? '<div class="cx-bloco" id="cx-cofre"></div>' : '') + blocoDados();
+      '</div>'
+      ], false) +
+      grupo_('servicos', '☁️ Serviços do site', 'Avisos (OneSignal), publicação (Render), Cloudflare e conversão de vídeos.', [
+        (temOnesignal ? blocoOneSignal() : ''),
+      blocoChave('render', 'Render — chave da API',
+        'Crie em <b>Render → Account Settings → API Keys → Create API Key</b> e cole aqui. Ela serve para conferir/criar as regras do site e publicar. O painel testa a chave antes de guardar.',
+        '⚠️ A chave do Render manda em <b>toda a sua conta do Render</b> (não dá para limitar). Por isso ela só fica no servidor e só o Admin total mexe. Se desconfiar de vazamento, apague a chave aqui <b>e</b> revogue-a no Render.'),
+      blocoChave('cloudflare', 'Cloudflare — token (opcional)',
+        'Crie em <b>Cloudflare → Meu perfil → API Tokens → Create Token</b>, modelo <b>Edit Cloudflare Workers</b>, de preferência com data de fim. Aqui serve só para conferir quando o Worker das miniaturas foi publicado.', ''),
+      '<div class="cx-bloco"><h3>🎬 FreeConvert — conversão de vídeos</h3>' +
+      '<p class="g-nota">Cole a chave de API da FreeConvert para converter vídeos H.265/HEVC em MP4 H.264/AAC nas postagens para grupos. A chave fica guardada no servidor e não volta para a tela.</p>' +
+      '<p id="cx-fc-status" role="status" class="cx-chave-sem">Conferindo chave…</p>' +
+      '<label for="cx-fc-chave">Chave da API FreeConvert</label>' +
+      '<input type="password" id="cx-fc-chave" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole a nova chave aqui">' +
+      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="fc-guardar">Salvar chave</button>' +
+      '<button type="button" class="cx-btn cx-perigo" data-cx="fc-apagar">Remover chave</button></div>' +
+      '<div id="cx-fc-msg" class="cx-msg" role="status"></div>' +
+      '<p class="g-nota">Use uma chave nova; revogue a que foi compartilhada na conversa. A conversão depende da cota disponível na FreeConvert.</p></div>'
+      ], false) +
+      grupo_('cofre', '🔐 Cofre e dados', '', [
+(temCofre ? '<div class="cx-bloco" id="cx-cofre"></div>' : '') + blocoDados()
+      ], false);
   }
   /* ---------- COFRE (dupla verificação): 1) login de Admin total  2) senha da conta digitada de novo. O código de abertura vive só na memória desta tela. ---------- */
   const cofreBase_ = [['render', 'Render — chave da API', () => status.conexoes.render], ['cloudflare', 'Cloudflare — token', () => status.conexoes.cloudflare],
@@ -440,6 +463,104 @@
     msg('cx-fc-msg',r.ok?'Chave da Gestão removida.':erroTxt(r),r.ok?'ok':'erro');
     if(r.ok)conferirFreeConvert_();
   }
+
+  /* ---------- Instagram (Worker tenkiter-ig): conexão e leitura das fotos por IA ---------- */
+  function blocoInstagramWorker_() {
+    return '<div class="cx-bloco"><h3>📥 Instagram — conexão do importador</h3>' +
+      '<p id="cx-ig-status" role="status" class="cx-chave-sem">Conferindo…</p>' +
+      '<p class="g-nota">O código de acesso fica guardado só no servidor e nunca volta para a tela. Ele serve para importar os posts, ler as mensagens e conferir a conexão.</p>' +
+      '<details class="g-det"><summary>Como gerar o código (token)</summary><ol class="g-nota">' +
+        '<li>No celular, abra <b>developers.facebook.com</b> → <b>Meus apps</b> → seu app → <b>Casos de uso</b> → <b>Gerenciar mensagens e conteúdo no Instagram</b> → <b>Personalizar</b>.</li>' +
+        '<li>No passo <b>Gerar tokens de acesso</b>, toque em <b>Gerar token</b> na conta <b>@tenkitermodasceara</b> e aceite todas as permissões.</li>' +
+        '<li>Use o botão <b>Copiar</b> da própria caixa da Meta (o token é longo e começa com <b>IGAA</b>) e cole abaixo.</li></ol></details>' +
+      '<label for="cx-ig-token">Código de acesso (token)</label>' +
+      '<input type="password" id="cx-ig-token" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole o token aqui">' +
+      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="ig-conectar">Conectar / trocar</button>' +
+      '<button type="button" class="cx-btn cx-perigo" data-cx="ig-desconectar">Desconectar</button></div>' +
+      '<div class="cx-msg" id="cx-ig-msg" role="status"></div></div>' +
+      '<div class="cx-bloco"><h3>🤖 Leitura das fotos por IA (Gemini)</h3>' +
+      '<p id="cx-ia-status" role="status" class="cx-chave-sem">Conferindo…</p>' +
+      '<p class="g-nota">Com a chave, cada post novo chega com nome, preço escrito na foto, categoria e cores. Crie em <b>aistudio.google.com/apikey</b> → <b>Criar chave de API</b>.</p>' +
+      '<label for="cx-ia-chave">Chave da IA (Gemini)</label>' +
+      '<input type="password" id="cx-ia-chave" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole a chave aqui">' +
+      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="ia-ligar">Ligar a IA</button>' +
+      '<button type="button" class="cx-btn cx-perigo" data-cx="ia-desligar">Desligar a IA</button></div>' +
+      '<div class="cx-msg" id="cx-ia-msg" role="status"></div></div>';
+  }
+  async function conferirIg_() {
+    const a = $('cx-ig-status'), b = $('cx-ia-status'); if (!a || !b) return;
+    const r = await igWorker_('/status', 'GET');
+    if (!r || !r.ok) { a.textContent = erroTxt(r); b.textContent = ''; a.className = b.className = 'cx-chave-sem'; return; }
+    a.textContent = r.conectado ? '✔ Conectado' + (r.usuario ? ' como @' + r.usuario : '') + (r.venceEmDias != null ? ' · renovado sozinho (vence em ' + r.venceEmDias + ' dias se algo falhar)' : '') : 'Não conectado.';
+    a.className = r.conectado ? 'cx-chave-ok' : 'cx-chave-sem';
+    const ligada = !!(r.ia && r.ia.ligada);
+    b.textContent = ligada ? '✔ Ligada (chave terminada em ' + (r.ia.fim || '') + ')' : 'Desligada.';
+    b.className = ligada ? 'cx-chave-ok' : 'cx-chave-sem';
+  }
+  async function conectarIg_() {
+    const c = $('cx-ig-token'); if (!c) return;
+    const t = c.value.trim();
+    if (!t) return msg('cx-ig-msg', 'Cole o token primeiro.', 'erro');
+    msg('cx-ig-msg', 'Conferindo com o Instagram…', '');
+    const r = await igWorker_('/token', 'POST', { token: t });
+    if (r && r.ok) { c.value = ''; msg('cx-ig-msg', '✅ Conectado. O token ficou guardado no servidor.', 'ok'); conferirIg_(); }
+    else msg('cx-ig-msg', erroTxt(r), 'erro');
+  }
+  async function desconectarIg_() {
+    if (!confirm('Desconectar o Instagram? Os rascunhos já criados continuam em “Produtos para aceitar”.')) return;
+    const r = await igWorker_('/token', 'DELETE');
+    msg('cx-ig-msg', r && r.ok ? 'Desconectado.' : erroTxt(r), r && r.ok ? 'ok' : 'erro');
+    conferirIg_();
+  }
+  async function ligarIA_() {
+    const c = $('cx-ia-chave'); if (!c) return;
+    if (!c.value.trim()) return msg('cx-ia-msg', 'Cole a chave primeiro.', 'erro');
+    msg('cx-ia-msg', 'Conferindo a chave com o Google…', '');
+    const r = await igWorker_('/ia-chave', 'POST', { chave: c.value.trim() });
+    if (r && r.ok) { c.value = ''; msg('cx-ia-msg', '✅ IA ligada. Os posts pendentes vão sendo lidos.', 'ok'); conferirIg_(); }
+    else msg('cx-ia-msg', erroTxt(r), 'erro');
+  }
+  async function desligarIA_() {
+    if (!confirm('Desligar a leitura por IA? Os posts continuam chegando, só sem o preenchimento automático.')) return;
+    const r = await igWorker_('/ia-chave', 'DELETE');
+    msg('cx-ia-msg', r && r.ok ? 'IA desligada.' : erroTxt(r), r && r.ok ? 'ok' : 'erro');
+    conferirIg_();
+  }
+
+  /* ---------- Meta e catálogo (antiga janela "Integrações"): Pixel, API de Conversões, sinônimos, segmentos dos avisos ---------- */
+  function blocoIntegracoes_() {
+    return '<div class="cx-bloco" id="cx-int"><h3>Pixel, API de Conversões e busca</h3><p class="g-info" id="cx-int-carga">Carregando…</p></div>';
+  }
+  async function carregarIntegracoes_() {
+    const box = $('cx-int'); if (!box) return;
+    const r = await chamar({ action: 'statusIntegracoes' });
+    if (!r || !r.ok) { box.innerHTML = '<h3>Pixel, API de Conversões e busca</h3><p class="g-nota">' + esc(erroTxt(r)) + '</p>'; return; }
+    box.innerHTML = '<h3>Pixel, API de Conversões e busca</h3>' +
+      '<p class="g-nota">Tudo aqui fica pronto, mas <b>desligado</b>: com os campos vazios, nada é enviado para a Meta e o aviso de cookies nem aparece para o cliente.</p>' +
+      '<label for="int-pixel">ID do Pixel da Meta (só números)</label><input type="text" id="int-pixel" class="cx-campo" inputmode="numeric" autocomplete="off" value="' + esc(r.pixelId) + '" placeholder="Ex.: 1234567890123456">' +
+      '<p class="g-nota">Quando preenchido, o catálogo pede a autorização do cliente (aviso de cookies) e só então liga o Pixel. Eventos: ver peça, sacola, WhatsApp e pedido enviado.</p>' +
+      '<p class="' + (r.capiConfigurado ? 'cx-chave-ok' : 'cx-chave-sem') + '" id="int-capi-status">' + (r.capiConfigurado ? '✓ Token da API de Conversões configurado (guardado só no servidor)' : '✗ Sem token da API de Conversões') + '</p>' +
+      '<label for="int-token">Token de acesso da Meta (API de Conversões, opcional)</label><input type="password" id="int-token" autocomplete="new-password" placeholder="' + (r.capiConfigurado ? 'deixe vazio para manter o atual' : 'cole aqui o token') + '">' +
+      '<label for="int-teste">Código de teste de eventos (opcional)</label><input type="text" id="int-teste" class="cx-campo" autocomplete="off" value="' + esc(r.testeCodigo) + '" placeholder="Ex.: TEST12345">' +
+      '<details class="g-det"><summary>Avançado</summary><label for="int-graph">Versão da API</label><input type="text" id="int-graph" class="cx-campo" value="' + esc(r.graphVersao) + '"></details>' +
+      '<label for="int-sin">Sinônimos da busca: uma por linha, palavra=parecida1,parecida2</label><textarea id="int-sin" rows="4" placeholder="bermuda=short&#10;fantasia=roupa de festa">' + esc(r.sinonimos) + '</textarea>' +
+      '<p class="g-nota">Usado só quando o cliente digita algo que não acha nada. Já existem sinônimos padrão (camisa/camiseta, calça/jeans…).</p>' +
+      '<label for="int-seg">Segmentos dos avisos (OneSignal), separados por vírgula</label><input type="text" id="int-seg" class="cx-campo" autocomplete="off" value="' + esc(r.segmentosPush) + '" placeholder="Ex.: Clientes Infantil, Clientes Feminino">' +
+      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="int-salvar">Salvar</button>' +
+      (r.capiConfigurado ? '<button type="button" class="cx-btn cx-perigo" data-cx="int-limpar">Remover o token guardado</button>' : '') + '</div>' +
+      '<div class="cx-msg" id="int-msg" role="status"></div>';
+  }
+  async function salvarIntegracoes_(extra) {
+    msg('int-msg', 'Salvando…', '');
+    const corpo = Object.assign({ action: 'salvarIntegracoes', pixelId: $('int-pixel').value.trim(), testeCodigo: $('int-teste').value.trim(), graphVersao: $('int-graph').value.trim(), sinonimos: $('int-sin').value, segmentosPush: $('int-seg').value }, extra || {});
+    const t = $('int-token').value.trim(); if (t) corpo.tokenCapi = t;
+    const x = await chamar(corpo);
+    if (!x || !x.ok) { msg('int-msg', erroTxt(x), 'erro'); return; }
+    try { if (typeof CONFIG_PUBLICA_CHAVE !== 'undefined') localStorage.removeItem(CONFIG_PUBLICA_CHAVE); } catch (e) { /* sem armazenamento */ }
+    $('int-token').value = '';
+    const st = $('int-capi-status'); if (st) { st.textContent = x.capiConfigurado ? '✓ Token da API de Conversões configurado (guardado só no servidor)' : '✗ Sem token da API de Conversões'; st.className = x.capiConfigurado ? 'cx-chave-ok' : 'cx-chave-sem'; }
+    msg('int-msg', '✅ Salvo. ' + (x.pixelId ? 'Pixel ativo (' + x.pixelId + ').' : 'Pixel desligado.') + (x.capiConfigurado ? ' API de Conversões pronta.' : ''), 'ok');
+  }
   async function conferirWafly_(){
     const r=await igWorker_('/post/wafly/config','GET');
     [1,2].forEach(n=>{
@@ -482,6 +603,12 @@
     if (a === 'fc-guardar') guardarFreeConvert_();
     else if (a === 'fc-apagar') apagarFreeConvert_();
     else if (/^wf[12]-/.test(a)) { const n = Number(a[2]), q = a.slice(4); if (q === 'guardar') guardarWafly_(n); else if (q === 'testar') testarWafly_(n); else if (q === 'apagar') apagarWafly_(n); }
+    else if (a === 'ig-conectar') conectarIg_();
+    else if (a === 'ig-desconectar') desconectarIg_();
+    else if (a === 'ia-ligar') ligarIA_();
+    else if (a === 'ia-desligar') desligarIA_();
+    else if (a === 'int-salvar') salvarIntegracoes_();
+    else if (a === 'int-limpar') { if (confirm('Remover o token da API de Conversões guardado no servidor?')) salvarIntegracoes_({ limparTokenCapi: true }).then(carregarIntegracoes_); }
     else if (a === 'conferir') conferir();
     else if (a === 'guardar') guardar(b.dataset.nome);
     else if (a === 'apagar') apagar(b.dataset.nome);
@@ -509,11 +636,12 @@
     let v = null;
     try { v = await versaoServidor(); } catch (e) { v = null; }
     if (!v || typeof v !== 'object' || !v.conexoes) return;       // backend antigo: nada muda
-    temOnesignal = !!v.conexoesOnesignal; temCofre = !!v.conexoesCopiar;                          // backend 3.4: sem o bloco do OneSignal
+    temOnesignal = !!v.conexoesOnesignal; temIntegracoes = !!v.integracoes; temCofre = !!v.conexoesCopiar;                          // backend 3.4: sem o bloco do OneSignal
     botao.hidden = false;
     botao.addEventListener('click', () => {
       if (!podeGerir()) { alert('Esta tela é só para o Admin total.'); return; }
       abrir();
     });
+    window.TKConexoes = { abrir: (secao) => { if (!podeGerir()) { alert('Esta tela é só para o Admin total.'); return; } abrir(secao); } };
   })();
 })();

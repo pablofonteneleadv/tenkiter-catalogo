@@ -35,7 +35,7 @@ def abrir_ferramentas(pg):
         pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250)
 def abrir(pg):
     abrir_ferramentas(pg)
-    pg.click("#btn-abrir-conexoes"); pg.wait_for_timeout(1500)
+    pg.click("#btn-abrir-conexoes"); pg.wait_for_timeout(1500); pg.evaluate("document.querySelectorAll('#cx-corpo .cx-grupo').forEach(g=>g.open=true)"); pg.wait_for_timeout(300)
 def corpo(pg): return pg.inner_text("#cx-corpo")
 def novo_contexto(b, perms=PERMS_ALL, versao="3.4", log=None):
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")

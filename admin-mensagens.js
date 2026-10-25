@@ -103,6 +103,9 @@
       } else {
         caixa.appendChild(el('p', c.ultima ? 'ms-ok' : '', c.ultima ? 'Gravando mensagens.' : 'Pronto para receber. Cole este endereço no webhook de Instagram do app da Meta:'));
         const i = el('input', 'ms-copia'); i.readOnly = true; i.value = resumo.urlInstagram; i.setAttribute('aria-label', 'Endereço do webhook do Instagram'); caixa.appendChild(i);
+        const dg = el('p', '', 'Conferindo a assinatura da conta…'); dg.id = 'ms-diag'; caixa.appendChild(dg);
+        const l = el('div', 'ms-linha'), bt = el('button', 'ms-btn prim', 'Assinar mensagens desta conta'); bt.type = 'button'; bt.dataset.ms = 'assinar'; l.appendChild(bt); caixa.appendChild(l);
+        diagnosticar();
       }
       return caixa;
     }
@@ -158,6 +161,19 @@
     });
     corpo.appendChild(fio);
   }
+  async function diagnosticar() {
+    const r = await worker_('/msg/instagram/situacao', 'GET'), d = $('ms-diag'); if (!d) return;
+    if (!r.ok) { d.textContent = r.erro || 'Não foi possível conferir agora.'; return; }
+    const u = r.ultimaTentativa, t = [];
+    if (!r.token) t.push('Instagram não conectado em Conexões: cole o token longo (IGAA…).');
+    else if (r.assinada === true) t.push('Conta assinada para receber mensagens.');
+    else if (r.assinada === false) t.push('Conta NÃO assinada: toque em “Assinar mensagens desta conta”.');
+    else t.push('Não consegui conferir a assinatura (' + (r.erroMeta || 'sem resposta') + ').');
+    if (!u) t.push('A Meta ainda não enviou nenhum aviso para este endereço.');
+    else if (u.res === 'assinatura') t.push('Último aviso da Meta (' + hora(u.em) + ') foi recusado: a chave secreta do app está diferente da Meta.');
+    else t.push('Último aviso da Meta: ' + hora(u.em) + ' (' + (u.itens || 0) + ' mensagem(ns) lida(s), ' + (u.novas || 0) + ' nova(s)).');
+    d.textContent = t.join(' ');
+  }
   async function recarregar() { resumo = await worker_('/msg/resumo', 'GET'); if (!resumo.ok) { $('ms-corpo').textContent = resumo.erro || 'Não foi possível carregar agora.'; return; } await desenhar(); }
 
   async function clique(ev) {
@@ -168,6 +184,10 @@
       const v = ($('ms-segredo') || {}).value || '';
       const r = await worker_('/msg/instagram/segredo', 'POST', { segredo: v });
       if (!r.ok) alert(r.erro || 'Não foi possível guardar agora.'); else recarregar();
+    }
+    else if (a === 'assinar') {
+      b.disabled = true; const r = await worker_('/msg/instagram/assinar', 'POST', {}); b.disabled = false;
+      if (!r.ok) alert(r.erro || 'Não foi possível assinar agora.'); else { alert('Conta assinada. Mande uma mensagem de teste para o Instagram da loja.'); diagnosticar(); }
     }
     else if (a === 'abrir') abrirConversa(b.dataset.id);
     else if (a === 'voltar') recarregar();
