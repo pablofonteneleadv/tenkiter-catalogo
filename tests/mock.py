@@ -539,17 +539,10 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     elif a in ("refazer","agora"): x["status"]="pronta"; x["resultado"]="https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/ia%d.jpg"%x["id"]; x["erro"]=""; x["espera"]=""; x["modelo"]="gemini-nano-banana-2.1"
                     return route.fulfill(json={"ok":True})
             if path.startswith("/msg/"):
-                _m=g.setdefault("msg",{"ligado":{},"pausa":{},"calls":[]}); _m["calls"].append(path)
-                _cv={"whatsapp1":[{"id":1,"contato":"5588999990000","nome":"Maria","grupo":0,"ultima_em":"2026-10-25T17:00:00.000Z","previa":"Tem sim! <b>x</b>","total":2},{"id":2,"contato":"120363-group","nome":"","grupo":1,"ultima_em":"2026-10-24T10:00:00.000Z","previa":"[imagem]","total":5}],"whatsapp2":[],"instagram":[]}
-                if path=="/msg/resumo": return route.fulfill(json={"ok":True,"canais":{c:{"conversas":len(_cv[c]),"mensagens":sum(x["total"] for x in _cv[c]),"ultima":"","ligadoEm":_m["ligado"].get(c,"2026-10-25T16:00:00.000Z" if c=="whatsapp1" else ""),"pausado":bool(_m["pausa"].get(c)),**({"pronto":bool(_m.get("ig_pronto"))} if c=="instagram" else {})} for c in _cv},"urlInstagram":("https://tenkiter-ig.example/wh/instagram/SEGREDO" if _m.get("ig_pronto") else "")})
-                if path=="/msg/conversas":
-                    _c=route.request.url.split("canal=")[1].split("&")[0]; return route.fulfill(json={"ok":True,"conversas":_cv.get(_c,[])})
-                if path=="/msg/mensagens": return route.fulfill(json={"ok":True,"conversa":_cv["whatsapp1"][0],"mensagens":[{"id":1,"direcao":"entrada","tipo":"texto","texto":"Oi, tem o vestido? <img src=x onerror=window.__xss=1>","enviada_em":"2026-10-25T16:59:00.000Z"},{"id":2,"direcao":"saida","tipo":"imagem","texto":"","enviada_em":"2026-10-25T17:00:00.000Z"}]})
-                _b=json.loads(route.request.post_data or "{}")
-                if path=="/msg/instagram/situacao": return route.fulfill(json={"ok":True,"token":True,"assinada":_m.get("assinada",False),"ultimaTentativa":None})
-                if path=="/msg/instagram/assinar": _m["assinada"]=True; return route.fulfill(json={"ok":True})
-                if path=="/msg/ligar": _m["ligado"]["whatsapp"+str(_b["slot"])]="2026-10-25T17:10:00.000Z"; return route.fulfill(json={"ok":True})
-                if path=="/msg/pausar": _m["pausa"][_b["canal"]]=_b["pausar"]; return route.fulfill(json={"ok":True,"pausado":_b["pausar"]})
+                import mock_msg
+                _m=g.setdefault("msg",mock_msg.novo_estado())
+                _b=json.loads(route.request.post_data or "{}") if route.request.post_data else {}
+                if mock_msg.tratar(route,path,m,_b,_m): return
             if path=="/post/wafly/config":
                 _w=g.setdefault("wafly",{})
                 if m=="GET": return route.fulfill(json={"ok":True,"slots":{str(n):{"configurada":bool(_w.get(n)),"instancia":(_w.get(n) or {}).get("instance",""),"origem":"gestao" if _w.get(n) else ("appscript" if n==1 else "nenhuma"),"ultimoTeste":None} for n in (1,2)}})

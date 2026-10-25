@@ -1,9 +1,10 @@
-"""Mensagens: dashboard das conversas guardadas. Serviços simulados; texto de conversa nunca vira HTML."""
-import sys, os, json
+"""Mensagens (caixa estilo WhatsApp): lista, conversa, responder, não lidas, falta responder, ao vivo sem atrapalhar, exportar, painel. Serviços simulados (mock_msg.py)."""
+import sys, os, json, time
 AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, AQUI)
 os.makedirs(os.path.join(AQUI, 'saida'), exist_ok=True)
 from mock import *
+import mock_msg
 from playwright.sync_api import sync_playwright
 AXE = open(os.path.join(AQUI, 'axe.min.js')).read()
 BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
@@ -12,16 +13,12 @@ def chk(n, c, e=""):
     (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + ((" — " + str(e)) if (e and not c) else ""))
 def axe(pg, label):
     pg.evaluate(AXE)
-    r = pg.evaluate("async()=>{const r=await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa','best-practice']}});return r.violations.map(v=>({id:v.id,impact:v.impact,n:v.nodes.length,ex:v.nodes.slice(0,3).map(n=>n.target.join(' ')+' :: '+(n.failureSummary||'').split('\\n')[1])}))}")
-    chk("axe — " + label, not r, "; ".join("%s×%d %s" % (v['id'], v['n'], v['ex'][:2]) for v in r))
+    r = pg.evaluate("async()=>{const r=await axe.run(document.getElementById('overlay-mensagens'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa','best-practice']}});return r.violations.map(v=>({id:v.id,impact:v.impact,n:v.nodes.length,ex:v.nodes.slice(0,2).map(x=>x.target.join(' '))}))}")
+    chk("axe — " + label, not r, "; ".join("%s×%d %s" % (v['id'], v['n'], v['ex']) for v in r))
 DIALOGOS = []
 def dialogo(d):
     DIALOGOS.append((d.type, d.message)); d.accept()
-CHAVE_R = "rnd_SEGREDOSEGREDOSEGREDO7788"
-CHAVE_C = "cfut_SEGREDODACLOUDFLARE0123456789ab"
-CHAVE_O = "os_v2_org_SEGREDODAORGANIZACAOFALSA0123456789xyz"     # inventada: o repositório é público, nunca usar chave real em teste
-ORG_ID = "b0b0b0b0-1111-4222-8333-444444444444"
-POLL = "window.TK_CONEXOES_POLL_MS=250;"
+POLL = "window.TK_CONEXOES_POLL_MS=250;window.TK_MENSAGENS_POLL_MS=400;"
 
 def pagina(ctx, erros):
     pg = ctx.new_page()
@@ -33,54 +30,176 @@ def abrir_ferramentas(pg):
         pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250)
 def abrir(pg):
     abrir_ferramentas(pg)
-    pg.click("#btn-abrir-mensagens"); pg.wait_for_timeout(1500)
-def corpo(pg): return pg.inner_text("#cx-corpo")
-def novo_contexto(b, perms=PERMS_ALL, versao="3.4", log=None):
-    ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
+    pg.click("#btn-abrir-mensagens"); pg.wait_for_selector(".ms-conv", timeout=6000)
+def novo_contexto(b, perms=PERMS_ALL, mobile=True):
+    if mobile: ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
+    else: ctx = b.new_context(viewport={"width": 1440, "height": 900}, service_workers="block")
     ctx.add_init_script(SESSION); ctx.add_init_script(POLL)
-    st = install(ctx, perms=perms, log=log, versao=versao)
+    st = install(ctx, perms=perms, versao="3.4")
     return ctx, st
+def nova_msg(S, cid, direcao, texto, status=""):
+    S["seq"] += 1
+    mm = {"id": S["seq"], "conversa_id": cid, "direcao": direcao, "tipo": "texto", "texto": texto, "enviada_em": mock_msg.agora(), "status": status, "por": "", "status_em": mock_msg.agora()}
+    S["msgs"].append(mm)
+    c = next(x for x in S["convs"] if x["id"] == cid)
+    c.update({"ult_dir": direcao, "previa": texto, "ultima_em": mm["enviada_em"], "atualizada_em": mm["enviada_em"], "total": c["total"] + 1})
+    if direcao == "entrada": c["nao_lidas"] += 1; c["ult_entrada_em"] = mm["enviada_em"]
+    return mm
 
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
-    ctx, st = novo_contexto(b)
+    # ================= celular =================
+    ctx, st = novo_contexto(b); S = None
     erros = []
     pg = pagina(ctx, erros)
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
-    abrir(pg)
-    chk("abre o dashboard com as 3 abas", pg.locator(".ms-aba").count() == 3 and "Instagram" in pg.inner_text("#ms-corpo"))
-    chk("abas mostram quantas conversas", "2 conversas" in pg.inner_text("[data-canal=whatsapp1]"), pg.inner_text("#ms-corpo")[:200])
-    chk("WhatsApp 1 mostra que está gravando", "Gravando desde" in pg.inner_text(".ms-caixa"))
-    chk("lista mostra nome, número formatado de grupo e prévia", "Maria" in pg.inner_text("#ms-lista") and "Grupo 120363" in pg.inner_text("#ms-lista"), pg.inner_text("#ms-lista"))
-    chk("prévia com HTML aparece como texto", "<b>x</b>" in pg.inner_text("#ms-lista") and pg.locator("#ms-lista b >> text=x").count() == 0)
-    pg.click("[data-ms=abrir] >> nth=0"); pg.wait_for_timeout(600)
-    chk("abre a conversa com entrada e saída", pg.locator(".ms-bolha.entrada").count() == 1 and pg.locator(".ms-bolha.saida").count() == 1 and "[imagem]" in pg.inner_text(".ms-bolha.saida"))
+    abrir(pg); S = st["ig"]["msg"]
+    chk("abre com as 3 abas e a contagem de conversas", pg.locator(".ms-aba").count() == 3 and "3 conversas" in pg.inner_text("[data-canal=whatsapp1]"), pg.inner_text("#ms-abas"))
+    chk("aba mostra quantas conversas têm não lidas (selo com 1)", pg.locator("[data-canal=whatsapp1] .ms-pt").inner_text() == "1")
+    chk("falta ativar envios/leituras: aviso curto numa linha com botão (sem caixa grande)", pg.locator(".ms-estado").count() == 1 and pg.locator(".ms-caixa").count() == 0 and "Falta ativar" in pg.inner_text(".ms-estado") and pg.locator(".ms-estado [data-ms=ligar]").count() == 1, pg.inner_text("#ms-estado-wrap"))
+    pg.click(".ms-estado [data-ms=ligar]"); pg.wait_for_timeout(900)
+    chk("depois de ativar: 'Gravando desde' numa linha e o servidor recebeu o pedido do WhatsApp 1", "Gravando desde" in pg.inner_text(".ms-estado") and S["ligar"] == [1] and any(d[0] == "confirm" and "enviadas pelo celular" in d[1] for d in DIALOGOS), (pg.inner_text("#ms-estado-wrap"), S["ligar"]))
+    chk("lista: nome, prévia como TEXTO (HTML não executa) e 'Falta responder · há'", "Maria" in pg.inner_text("#ms-lista") and "<b>x</b>" in pg.inner_text("#ms-lista") and pg.locator("#ms-lista b").count() == 0 and "Falta responder" in pg.inner_text("#ms-lista"), pg.inner_text("#ms-lista"))
+    chk("conversa com não lidas: selo com 2 e nome em destaque", pg.locator(".ms-conv.nova .ms-badge").first.inner_text() == "2")
+    chk("conversa onde a loja respondeu mostra 'Você:' e tique azul de lida", "Você:" in pg.inner_text("#ms-lista") and pg.locator("#ms-lista .ms-tique.lida").count() == 1)
+    chk("o número formatado aparece quando não há nome", "(88) 98888-7777" in pg.inner_text("#ms-lista"), pg.inner_text("#ms-lista"))
+    chk("botão 'Mensagens' do painel mostra o total de conversas não lidas (3)", "(3)" in pg.inner_text("#btn-abrir-mensagens"), pg.inner_text("#btn-abrir-mensagens"))
+    # filtros
+    pg.click("[data-filtro=sem_resposta]"); pg.wait_for_timeout(500)
+    chk("filtro 'Falta responder' mostra só quem espera (grupo fora)", pg.locator(".ms-conv").count() == 1 and "Maria" in pg.inner_text("#ms-lista"))
+    pg.click("[data-filtro=nao_lidas]"); pg.wait_for_timeout(500)
+    chk("filtro 'Não lidas'", pg.locator(".ms-conv").count() == 1)
+    pg.click("[data-filtro=grupos]"); pg.wait_for_timeout(500)
+    chk("filtro 'Grupos'", pg.locator(".ms-conv").count() == 1 and "Clientes TK" in pg.inner_text("#ms-lista"))
+    pg.click("[data-filtro=todas]"); pg.wait_for_timeout(500)
+    pg.fill("#ms-busca", "entregam"); pg.wait_for_timeout(800)
+    chk("busca acha pelo texto de qualquer mensagem", pg.locator(".ms-conv").count() == 1)
+    pg.fill("#ms-busca", ""); pg.wait_for_timeout(800)
+    # abrir conversa
+    pg.click("[data-ms=abrir][data-id='1']"); pg.wait_for_selector(".ms-bolha", timeout=5000); pg.wait_for_timeout(500)
+    chk("no celular a conversa ocupa a tela (lista some)", pg.locator(".ms-lateral").is_hidden() and pg.locator(".ms-conversa").is_visible())
+    chk("bolhas de entrada/saída, imagem como rótulo, tique de lida", pg.locator(".ms-bolha.entrada").count() == 3 and pg.locator(".ms-bolha.saida").count() == 1 and "📷 Foto" in pg.inner_text("#ms-fio") and pg.locator(".ms-bolha.saida .ms-tique.lida").count() == 1)
     chk("texto com HTML malicioso não executa", pg.evaluate("window.__xss") is None and pg.locator(".ms-bolha img").count() == 0)
+    chk("separador de dia 'Hoje'", "Hoje" in pg.inner_text("#ms-fio"))
+    chk("abrir marca como lida no servidor e tira o selo", (1, False) in S["lidas"] and S["convs"][0]["nao_lidas"] == 0)
+    chk("campo de mensagem visível dentro da tela (390×844)", pg.evaluate("(()=>{const r=document.getElementById('ms-texto').getBoundingClientRect();return r.bottom<=innerHeight&&r.top>0&&r.height>=44})()"))
+    chk("botão Enviar começa desligado", pg.locator("#ms-enviar").is_disabled())
+    # enviar
+    pg.fill("#ms-texto", "Entregamos hoje sim! 😊"); pg.wait_for_timeout(100)
+    chk("Enviar liga ao digitar", pg.locator("#ms-enviar").is_enabled())
+    pg.click("#ms-enviar"); pg.wait_for_timeout(700)
+    chk("responder chama o servidor com a conversa, o texto e um idLocal", len(S["envios"]) == 1 and S["envios"][0]["conversa"] == 1 and S["envios"][0]["texto"] == "Entregamos hoje sim! 😊" and len(S["envios"][0]["idLocal"]) >= 16, S["envios"])
+    chk("a mensagem aparece como enviada e o campo limpa", pg.locator(".ms-bolha.saida").count() == 2 and pg.input_value("#ms-texto") == "" and pg.locator("#ms-enviar").is_disabled())
+    chk("não duplica depois do retorno ao vivo (espera o ciclo)", (pg.wait_for_timeout(1500) or True) and pg.locator(".ms-bolha.saida").count() == 2)
+    # erro + tentar de novo
+    S["envio"] = "erro"
+    pg.fill("#ms-texto", "segunda"); pg.click("#ms-enviar"); pg.wait_for_timeout(700)
+    chk("erro do servidor: bolha vermelha em português com 'Tentar de novo' (sem JSON cru)", pg.locator(".ms-bolha.falhou").count() == 1 and "recusou" in pg.inner_text(".ms-bolha.falhou") and "{" not in pg.inner_text(".ms-bolha.falhou"))
+    S["envio"] = "ok"
+    pg.click("[data-ms=reenviar]"); pg.wait_for_timeout(800)
+    chk("tentar de novo envia uma vez e troca a bolha", pg.locator(".ms-bolha.falhou").count() == 0 and pg.locator(".ms-bolha.saida").count() == 3 and len([e for e in S["envios"] if e["texto"] == "segunda"]) == 2)
+    S["envio"] = "incerto"
+    pg.fill("#ms-texto", "talvez"); pg.click("#ms-enviar"); pg.wait_for_timeout(700)
+    chk("resposta incerta mostra 'Sem confirmação' e pede conferir antes de reenviar", "Sem confirmação" in pg.inner_text("#ms-fio") and "antes de enviar de novo" in pg.inner_text("#ms-fio"))
+    S["envio"] = "ok"
+    # ao vivo sem atrapalhar: a pessoa está digitando e chega mensagem
+    pg.fill("#ms-texto", "estou digitando isto"); pg.focus("#ms-texto")
+    nova_msg(S, 1, "entrada", "Chegou agora do cliente"); pg.wait_for_timeout(1500)
+    chk("mensagem nova aparece sozinha na conversa aberta", "Chegou agora do cliente" in pg.inner_text("#ms-fio"))
+    chk("o que a pessoa digitava continua lá e o foco não saiu do campo", pg.input_value("#ms-texto") == "estou digitando isto" and pg.evaluate("document.activeElement.id") == "ms-texto")
+    chk("conversa aberta chegando mensagem não fica com selo (já lida)", S["convs"][0]["nao_lidas"] == 0 and (1, False) in S["lidas"])
+    # lendo mensagens antigas: nova chegada NÃO puxa a rolagem
+    for i in range(40): nova_msg(S, 1, "entrada" if i % 2 else "saida", "mensagem antiga %d com texto para encher a tela" % i)
+    pg.wait_for_timeout(1500)
+    pg.evaluate("document.getElementById('ms-fio').scrollTop = 0"); pg.wait_for_timeout(300)
+    nova_msg(S, 1, "entrada", "Esta chegou enquanto eu lia o começo"); pg.wait_for_timeout(1500)
+    chk("lendo o começo: a tela não salta para o fim", pg.evaluate("document.getElementById('ms-fio').scrollTop") < 50, pg.evaluate("document.getElementById('ms-fio').scrollTop"))
+    chk("aparece o aviso '↓ 1 nova mensagem'", pg.locator("#ms-nova").is_visible() and "1 nova mensagem" in pg.inner_text("#ms-nova"), pg.inner_text("#ms-nova"))
+    pg.click("#ms-nova"); pg.wait_for_timeout(400)
+    chk("tocar no aviso leva ao fim e some", pg.locator("#ms-nova").is_hidden() and pg.evaluate("(()=>{const f=document.getElementById('ms-fio');return f.scrollHeight-f.scrollTop-f.clientHeight<5})()"))
+    # tique mudando ao vivo
+    ult = [x for x in S["msgs"] if x["direcao"] == "saida" and x["conversa_id"] == 1][0]
+    ult["status"] = "entregue"; ult["status_em"] = mock_msg.agora(); next(c for c in S["convs"] if c["id"] == 1)["atualizada_em"] = mock_msg.agora(); pg.wait_for_timeout(1500)
+    chk("mudança de status chega ao vivo (sem recarregar)", pg.locator("#ms-fio .ms-tique[title=Entregue]").count() >= 1)
+    # teclado virtual encolhe a altura útil: o campo continua visível
+    pg.set_viewport_size({"width": 390, "height": 420}); pg.wait_for_timeout(400)
+    chk("com o teclado aberto (altura 420) o campo de mensagem continua visível", pg.evaluate("(()=>{const r=document.getElementById('ms-texto').getBoundingClientRect();return r.bottom<=innerHeight+1&&r.top>=0})()"))
+    pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(300)
+    # voltar
     pg.click("[data-ms=voltar]"); pg.wait_for_timeout(600)
-    pg.click("[data-canal=whatsapp2]"); pg.wait_for_timeout(600)
-    chk("WhatsApp 2 ainda não ligado oferece ligar", "Ainda não está gravando" in pg.inner_text(".ms-caixa") and pg.locator("[data-ms=ligar]").count() == 1)
-    chk("canal vazio explica em português", "Ainda não chegou nenhuma mensagem" in pg.inner_text("#ms-lista"))
-    pg.click("[data-ms=ligar]"); pg.wait_for_timeout(800)
-    chk("pediu confirmação antes de ligar", any(d[0] == "confirm" and "Nada é apagado" in d[1] for d in DIALOGOS), DIALOGOS)
-    chk("depois de ligar mostra gravando", "Gravando desde" in pg.inner_text(".ms-caixa"))
-    pg.click("[data-ms=pausar]"); pg.wait_for_timeout(600)
-    chk("pausar muda o estado e o botão", "Gravação pausada" in pg.inner_text(".ms-caixa") and "Retomar" in pg.inner_text(".ms-caixa"))
-    pg.click("[data-canal=instagram]"); pg.wait_for_timeout(600)
+    chk("voltar mostra a lista de novo", pg.locator(".ms-lateral").is_visible() and pg.locator(".ms-conversa").is_hidden())
+    pg.click("[data-ms=abrir][data-id='1']"); pg.wait_for_timeout(700)
+    chk("ao reabrir o rascunho digitado continua", pg.input_value("#ms-texto") == "estou digitando isto", pg.input_value("#ms-texto"))
+    pg.fill("#ms-texto", "")
+    # exportar
+    pg.click("#ms-mais-conv"); pg.wait_for_timeout(200)
+    chk("menu da conversa oferece copiar para IA e exportar", "Copiar conversa para IA" in pg.inner_text(".ms-menu") and "Exportar esta conversa (TXT)" in pg.inner_text(".ms-menu"))
+    with pg.expect_download() as dl:
+        pg.click("text=Exportar esta conversa (CSV)")
+    chk("exportar baixa o arquivo com o nome do servidor", dl.value.suggested_filename == "tenkiter-mensagens-teste.csv" and "formato=csv" in S["exportacoes"][-1] and "conversa=1" in S["exportacoes"][-1], S["exportacoes"])
+    pg.wait_for_timeout(300)
+    pg.click("[data-ms=voltar]"); pg.wait_for_timeout(500)
+    pg.click("#ms-mais"); pg.wait_for_timeout(200)
+    chk("menu geral: painel, exportar canal e tudo", all(t in pg.inner_text(".ms-menu") for t in ("Painel de atendimento", "Exportar este canal (CSV)", "Exportar tudo (JSON)")))
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+    chk("Esc fecha o menu e devolve o foco", pg.locator(".ms-menu").count() == 0)
+    pg.click("#ms-mais"); pg.click("text=Painel de atendimento"); pg.wait_for_selector(".ms-painel .ms-card", timeout=4000)
+    chk("painel de atendimento: aguardando, mediana e porcentagens", "esperando resposta agora" in pg.inner_text(".ms-painel") and "12 min" in pg.inner_text(".ms-painel") and "30%" in pg.inner_text(".ms-painel") and "Maria" in pg.inner_text(".ms-painel"), pg.inner_text(".ms-painel")[:300])
+    axe(pg, "Mensagens (painel)")
+    pg.click("[data-ms=fechar-painel]"); pg.wait_for_timeout(300)
+    # canais
+    pg.click("[data-canal=whatsapp2]"); pg.wait_for_timeout(700)
+    chk("WhatsApp 2 sem gravação oferece ligar", "Ainda não está gravando" in pg.inner_text(".ms-caixa") and pg.locator("[data-ms=ligar]").count() == 1)
+    pg.click("[data-ms=ligar]"); pg.wait_for_timeout(900)
+    chk("pediu confirmação antes de ligar e avisa das enviadas pelo celular", any(d[0] == "confirm" and "enviadas pelo celular" in d[1] for d in DIALOGOS), DIALOGOS)
+    chk("depois de ligar mostra gravando e a conversa do canal", "Gravando desde" in pg.inner_text(".ms-estado, .ms-caixa") and "João" in pg.inner_text("#ms-lista"))
+    pg.click("[data-canal=instagram]"); pg.wait_for_timeout(700)
     chk("Instagram explica o que falta, sem jargão cru", "Ainda não ligado" in pg.inner_text(".ms-caixa") and "{" not in pg.inner_text(".ms-caixa"))
-    chk("nada foi apagado: só chamadas de leitura, ligar e pausar", all(c in ("/msg/resumo", "/msg/conversas", "/msg/mensagens", "/msg/ligar", "/msg/pausar", "/msg/instagram/situacao", "/msg/instagram/assinar") for c in st["ig"]["msg"]["calls"]))
-    st["ig"]["msg"]["ig_pronto"] = True
-    pg.click("[data-canal=whatsapp1]"); pg.wait_for_timeout(300); pg.click("[data-ms=voltar]") if pg.locator("[data-ms=voltar]").count() else None
-    pg.evaluate("document.getElementById('ms-fechar') && document.getElementById('ms-fechar').click()"); pg.wait_for_timeout(500)
-    abrir_ferramentas(pg); pg.click("#btn-abrir-mensagens"); pg.wait_for_timeout(900); pg.click("[data-canal=instagram]"); pg.wait_for_timeout(900)
-    chk("Instagram pronto: mostra o endereço e a situação da assinatura", "wh/instagram" in pg.locator(".ms-copia").input_value() and "NÃO assinada" in pg.inner_text("#ms-diag"), pg.inner_text("#ms-diag"))
-    pg.click("[data-ms=assinar]"); pg.wait_for_timeout(900)
-    chk("Assinar mensagens muda a situação para assinada", "Conta assinada para receber" in pg.inner_text("#ms-diag"), pg.inner_text("#ms-diag"))
-    chk("a Meta ainda não avisou: o texto diz isso", "ainda não enviou nenhum aviso" in pg.inner_text("#ms-diag"))
-    axe(pg, "Mensagens")
+    S["ig_pronto"] = True; pg.click("#ms-mais"); pg.click("text=Atualizar agora"); pg.wait_for_timeout(900); pg.click("[data-ms=conexao]"); pg.wait_for_timeout(900)
+    chk("Instagram pronto: endereço do webhook e situação", "wh/instagram" in pg.locator(".ms-copia").input_value() and "NÃO assinada" in pg.inner_text("#ms-diag"), pg.inner_text("#ms-diag"))
+    axe(pg, "Mensagens (lista)")
+    # fechar: para de consultar
+    pg.click("#ms-fechar"); pg.wait_for_timeout(1200)
+    n0 = S["calls"].count("/msg/novidades"); pg.wait_for_timeout(1500)
+    chk("com a tela fechada não consulta novidades (só o selo leve)", S["calls"].count("/msg/novidades") == n0)
+    chk("sem erros JavaScript (celular)", not erros, erros)
+    ctx.close()
+
+    # ================= computador =================
+    ctx, st = novo_contexto(b, mobile=False); erros2 = []
+    pg = pagina(ctx, erros2); pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
+    abrir(pg); S = st["ig"]["msg"]
+    chk("computador: lista e conversa lado a lado", pg.locator(".ms-lateral").is_visible() and pg.locator(".ms-conversa").is_visible() and "Escolha uma conversa" in pg.inner_text(".ms-conversa"))
+    pg.click("[data-ms=abrir][data-id='2']"); pg.wait_for_selector(".ms-bolha", timeout=4000); pg.wait_for_timeout(400)
+    chk("abre a conversa e a lista continua à esquerda", pg.locator(".ms-lateral").is_visible() and pg.locator("#ms-fio .ms-bolha").count() == 2)
+    chk("link da conversa vira âncora segura (nova aba, noopener)", pg.locator("#ms-fio a.ms-link").count() == 1 and "noopener" in pg.get_attribute("#ms-fio a.ms-link", "rel") and pg.get_attribute("#ms-fio a.ms-link", "href") == "https://tenkitermodas.com.br/p/1")
+    chk("foco vai direto para o campo de mensagem", pg.evaluate("document.activeElement.id") == "ms-texto")
+    pg.keyboard.type("linha 1"); pg.keyboard.press("Shift+Enter"); pg.keyboard.type("linha 2"); pg.wait_for_timeout(150)
+    chk("Shift+Enter quebra linha", pg.input_value("#ms-texto") == "linha 1\nlinha 2")
+    pg.keyboard.press("Enter"); pg.wait_for_timeout(700)
+    chk("Enter envia (computador)", len(S["envios"]) == 1 and S["envios"][0]["texto"] == "linha 1\nlinha 2" and S["envios"][0]["conversa"] == 2)
+    chk("a lista da esquerda se atualiza sem recarregar (Você: linha 1)", "linha 1" in pg.inner_text("[data-ms=abrir][data-id='2']"))
+    # mensagem chega em OUTRA conversa enquanto leio esta: lista atualiza, conversa não muda
+    nova_msg(S, 1, "entrada", "Oi, ainda tem o vestido?"); pg.wait_for_timeout(1500)
+    chk("chegou em outra conversa: sobe na lista com selo, a conversa aberta não muda", pg.locator("[data-ms=abrir][data-id='1'] .ms-badge").count() == 1 and pg.locator("#ms-fio .ms-bolha").count() == 3 and "Oi, ainda tem" not in pg.inner_text("#ms-fio"))
+    chk("a conversa aberta continua marcada e a rolagem da lista intacta", pg.get_attribute("[data-ms=abrir][data-id='2']", "aria-current") == "true")
+    chk("sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+    axe(pg, "Mensagens (computador)")
+    chk("sem erros JavaScript (computador)", not erros2, erros2)
+    ctx.close()
+
+    # ================= 320 px e quem não é Admin =================
+    ctx, st = novo_contexto(b); ctx.close()
+    ctx3 = b.new_context(viewport={"width": 320, "height": 640}, is_mobile=True, has_touch=True, service_workers="block"); ctx3.add_init_script(SESSION); ctx3.add_init_script(POLL); st3 = install(ctx3, perms=PERMS_ALL, versao="3.4")
+    e3 = []; pg = pagina(ctx3, e3); pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600); abrir(pg)
+    chk("320 px: sem rolagem horizontal na lista", pg.evaluate("document.getElementById('overlay-mensagens').scrollWidth <= 320 && document.documentElement.scrollWidth <= 320"))
+    chk("320 px: alvos de toque com 44 px ou mais (abas, filtros, ⋯, ✕, conversas)", pg.evaluate("[...document.querySelectorAll('.ms-aba,.ms-chip,.ms-ico,.ms-conv')].every(e=>{const r=e.getBoundingClientRect();return r.height>=43.5&&r.width>=43.5})"))
+    pg.click("[data-ms=abrir][data-id='1']"); pg.wait_for_selector(".ms-bolha"); pg.wait_for_timeout(300)
+    chk("320 px: conversa sem rolagem horizontal e com campo visível", pg.evaluate("document.documentElement.scrollWidth <= 320") and pg.evaluate("document.getElementById('ms-texto').getBoundingClientRect().bottom <= innerHeight"))
+    ctx3.close()
     ctx2, st2 = novo_contexto(b, perms=[x for x in PERMS_ALL if x != "gerir_acessos"])
-    pg2 = pagina(ctx2, erros); pg2.goto(BASE + "admin.html"); pg2.wait_for_timeout(2600)
-    abrir_ferramentas(pg2)
+    e4 = []; pg2 = pagina(ctx2, e4); pg2.goto(BASE + "admin.html"); pg2.wait_for_timeout(2600); abrir_ferramentas(pg2)
     chk("quem não é Admin total não vê o botão", not pg2.locator("#btn-abrir-mensagens").is_visible())
-    chk("sem erros JavaScript", not erros, erros)
+    chk("quem não é Admin não consulta o servidor de mensagens", "msg" not in st2["ig"] or not st2["ig"]["msg"]["calls"])
     b.close()
 print("\nOK=%d FALHAS=%d %s" % (len(OK), len(BAD), BAD)); sys.exit(1 if BAD else 0)

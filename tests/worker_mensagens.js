@@ -204,7 +204,7 @@ function d1() {
 
   // ---- ligar webhook na Wafly ----
   let put = null; const f0 = globalThis.fetch;
-  globalThis.fetch = async (u, init) => { if (String(u).startsWith('https://wafly.com.br/')) { put = { u: String(u), m: init.method, b: JSON.parse(init.body), h: new Headers(init.headers) }; return new Response('{"value":true}'); } return f0(u, init); };
+  globalThis.fetch = async (u, init) => { if (String(u).startsWith('https://wafly.com.br/')) { if (!put) put = { u: String(u), m: init.method, b: JSON.parse(init.body), h: new Headers(init.headers) }; return new Response('{"value":true}'); } return f0(u, init); };
   const lig = await A('POST', '/msg/ligar', { slot: 2 });
   chk('ligar aponta o webhook da instância 2 para o Worker com o segredo', lig.j.ok && put.m === 'PUT' && put.u.endsWith('/update-webhook-received') && put.b.value === 'https://ig.test/wh/wafly/2/' + seg && put.h.get('client-token') === 'CLIENT_SECRETO_UVW000', put);
   chk('ligar registra data e não altera mensagens', (await A('GET', '/msg/resumo')).j.canais.whatsapp2.ligadoEm !== '' && (await cont('msg_mensagem')) === antesPausa + 1);
