@@ -118,6 +118,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Permissões da navegação após login
+        run: node tests/nav_permissoes.js
+
       - name: Cadastro de públicos e tamanhos vinculados
         run: node tests/cadastro_vinculos.js
 
