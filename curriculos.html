@@ -44,6 +44,12 @@
   .erro { background:#fde3e3; color:var(--vermelho); padding:10px 12px; border-radius:9px; font-size:.9rem; margin:10px 0; font-weight:600; }
   .oculto { display:none !important; }
   html.embed header, html.embed .nav-inferior { display:none; } html.embed body { padding-bottom:0; background:transparent; } html.embed main { padding:0; max-width:none; }
+  .det img { background:#f5f1e8; }
+  .det .acoes a { min-height:44px; display:inline-flex; align-items:center; }
+  .topo > div { min-width:0; }
+  .nome { overflow-wrap:anywhere; }
+  .det button, .det select { min-height:44px; }
+  @media(max-width:560px){ .topo { align-items:flex-start; flex-wrap:wrap; padding:12px; } .det { padding:0 12px 16px; } .linha > * { min-width:0; flex-basis:45%; } }
   @media(max-width:560px){ dl { grid-template-columns:1fr; } }
 </style>
 </head>
@@ -342,7 +348,9 @@ function errosHtml(ultima) {
 function treinoHtml(r, x) {
   const leitura = x.leitura || [], resultados = x.resultados || [];
   if (!leitura.length) return '<div class="meta">Nenhum manual cadastrado ainda.</div>';
-  return leitura.map(m => {
+  const ativos = leitura.filter(m => Number(m.lidos) > 0 || Number(m.precisamReler) > 0 || resultados.some(rr => rr.manual === m.titulo));
+  if (!ativos.length) return '<div class="meta">Ainda não iniciou nenhum manual ou avaliação.</div>';
+  return ativos.map(m => {
     const provas = resultados.filter(rr => rr.manual === m.titulo);
     const ultima = provas[0]; // o servidor já devolve mais recente primeiro
     const faltaLer = m.faltam > 0 || m.precisamReler > 0;
@@ -375,7 +383,7 @@ function itemNovo(r) {
   const paradaTxt = (diasParada !== null && diasParada >= 3) ? ` <span class="tag al" style="padding:1px 7px">⏳ ${diasParada}d parada</span>` : '';
   const etapaBloqueiaCobranca = r.Etapa === 'Enviado' || r.Etapa === 'Menor de 18';
   d.innerHTML = `<div class="topo"><div style="display:flex;gap:10px;align-items:center">${r.FotoUrl ? `<img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none">` : '<div style="width:44px;height:44px;border-radius:50%;background:#eee;flex:none"></div>'}<div><div class="nome">${E(r.Nome)}</div><div class="meta">${criadoTxt ? 'Cadastrada ' + criadoTxt + ' · ' : ''}${E(r.Idade ? r.Idade + ' anos · ' : '')}${E(r.Moradia || '')}${r.Etapa === 'Menor de 18' ? ' · faz 18 em ' + fmtData(r.Retomar18Em) : ''}${agendaMeta}${paradaTxt}</div></div></div><div>${tagEtapa(r)} <span class="tag ${corStatus(r.Status)}">${E(r.Status || 'Novo')}</span>${desistiuAntes(r) ? ' <span class="tag ru">↩️ já desistiu antes</span>' : ''}</div></div>
-    <div class="det">${r.FotoUrl ? `<div style="margin:12px 0"><img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:220px;width:100%;border-radius:12px"></div>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}${!etapaBloqueiaCobranca ? `<a href="${linkCobrarCurriculo(r)}" target="_blank" rel="noopener">📲 Cobrar currículo</a>` : ''}</div>
+    <div class="det">${r.FotoUrl ? `<div style="margin:12px 0"><img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:160px;width:100%;max-height:180px;object-fit:contain;border-radius:8px"></div>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}${!etapaBloqueiaCobranca ? `<a href="${linkCobrarCurriculo(r)}" target="_blank" rel="noopener">📲 Cobrar currículo</a>` : ''}</div>
     ${r.LegadoChamar ? `<div class="aviso">Anotação antiga da planilha ("chamar?"): <b>${E(r.LegadoChamar)}</b></div>` : ''}
     <div class="grupo">Treinamento</div><div data-k="treino" style="margin:4px 0 12px">Abra o card pra ver.</div>
     <div class="edit"><div class="linha"><select data-k="st">${STATUS.map(s => `<option ${s === (r.Status || 'Novo') ? 'selected' : ''}>${E(s)}</option>`).join('')}</select>
