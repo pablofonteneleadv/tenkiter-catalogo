@@ -702,3 +702,83 @@ html.fx-travado, html.fx-travado body { overflow: hidden; }
  .linha-share-busca .btn-add-resultados{margin:0;min-height:34px;flex:0 1 auto;width:auto;border-style:solid;font-size:.75rem}
  .linha-share-busca #btn-limpar-filtros-topo,.linha-share-busca #btn-limpar-sel{background:#fff;border-color:#d7d7d7;color:#444}
 }
+
+/* v7.4 (mockup aprovado 24/10/2026): à vista em destaque, cheio riscado ao lado. */
+.card-info .preco .avista-n { color: #1a7a1a; font-weight: 800; font-size: 1rem; }
+.card-info .preco .ar { color: #555; font-size: 0.72rem; font-weight: 500; }
+.card-info .preco .cheio { color: #666; font-weight: 500; font-size: 0.74rem; text-decoration: line-through; }
+
+/* v7.5 — alinhamento dos cartões (25/10/2026): na mesma linha todos têm a mesma altura;
+   tamanhos e botões "Selecionar / Consulte" ficam sempre na mesma linha, embaixo,
+   mesmo quando um cartão tem a frase "Você já viu esta peça" e o outro não. */
+.grid { align-items: stretch; }
+.grid .card { display: flex; flex-direction: column; height: 100%; }
+.grid .card .img-wrap { flex: none; }
+.grid .card .card-info { display: flex; flex-direction: column; flex: 1 1 auto; }
+.grid .card .card-info .acoes-card { margin-top: auto; padding-top: 8px; }
+.grid .card .card-info .tam-card { margin-top: auto; }
+.grid .card .card-info .tam-card + .acoes-card { margin-top: 0; }
+
+/* v7.6 — cabeçalho centralizado e sem as faixas de gênero/categoria na tela inicial (25/10/2026).
+   Pedido do Pablo: tirar "Catálogo Digital — Crateús / CE", centralizar tudo e retirar categorias e gênero.
+   As categorias continuam no menu ☰ e em Filtros; só as faixas de botões saem da vista (o código dos filtros não muda). */
+/* v7.10 — cabeçalho compacto numa linha só (logo + nome + ícones), sem subtítulo */
+header { padding: 8px 12px 8px; }
+.header-linha { flex-direction: row; justify-content: space-between; gap: 8px; }
+.header-titulo { justify-content: flex-start; text-align: left; gap: 8px; min-width: 0; flex: 1 1 auto; }
+.header-titulo-textos { text-align: left; min-width: 0; }
+.header-titulo h1 { font-size: 0.98rem; letter-spacing: 0.8px; line-height: 1.1; }
+.header-logo-img { height: 32px; }
+.header-icones { gap: 6px; flex: none; justify-content: flex-end; }
+.header-icones .btn-icone-header { width: 36px; height: 36px; }
+.faixas-details, .faixas-vitrine, #pills-genero, #pills-categoria { display: none !important; }
+
+/* v7.7 — busca interativa: peças com foto, refinar por chips, ajuda da loja (25/10/2026) */
+.sugestoes-busca { text-transform: none; letter-spacing: normal; max-height: min(56vh, 420px); max-height: min(52dvh, 420px); }
+.sugestoes-busca .sug-aviso { text-transform: none; letter-spacing: normal; font-size: .8rem; color: #555; padding: 12px 14px 4px; }
+.sugestoes-busca .sug-aviso-topo { color: #333; font-size: .86rem; }
+.sugestoes-busca .sug-col { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.sugestoes-busca .sug-txt { overflow-wrap: anywhere; }
+.sugestoes-busca .sug-sub { font-size: .76rem; color: #1a7a1a; font-weight: 700; margin-top: 1px; }
+.sugestoes-busca .sug-peca { justify-content: flex-start; gap: 12px; }
+.sugestoes-busca .sug-foto { flex: none; width: 44px; height: 55px; object-fit: cover; border-radius: 8px; background: #eee; }
+.sugestoes-busca .sug-refina { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 14px; }
+.sugestoes-busca .sug-rot { flex: none; font-size: .74rem; font-weight: 700; color: #555; min-width: 64px; }
+.sugestoes-busca .sug-chip { width: auto; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid #ccc; background: #fff; color: #1a1a1a; font-size: .8rem; font-weight: 600; cursor: pointer; }
+.sugestoes-busca .sug-chip.on { background: #fff3e0; border-color: #A85200; color: #7a3b00; }
+.sugestoes-busca .sug-chip:focus-visible, .sugestoes-busca .sug-zap:focus-visible { outline: 2px solid #A85200; outline-offset: 2px; }
+.sugestoes-busca .sug-zap { display: flex; align-items: center; justify-content: center; min-height: 48px; margin: 8px 12px 12px; padding: 0 12px; border-radius: 12px; background: #E67E22; color: #0d0d0d; font-weight: 800; font-size: .88rem; text-decoration: none; text-align: center; }
+
+/* v7.8 — tamanho acima do valor */
+.grid .card .card-info > * { order: 5; }
+.grid .card .card-info > .codigo { order: 1; }
+.grid .card .card-info > .nome { order: 2; }
+.grid .card .card-info > .tam-card { order: 3; margin-top: auto; margin-bottom: 6px; }
+.grid .card .card-info > .preco { order: 4; }
+.grid .card .card-info > .acoes-card { order: 9; margin-top: 0; }
+.grid .card .card-info > .preco:first-of-type { margin-top: auto; }
+.grid .card .card-info > .tam-card ~ .acoes-card { margin-top: 0; }
+
+/* v7.9 — alinhamento por linhas compartilhadas (subgrid): código, nome, tamanho, valor, avisos e botões
+   começam na mesma altura em todos os cards da mesma fileira. */
+@supports (grid-template-rows: subgrid) {
+  .grid { row-gap: 0; }
+  .grid .card {
+    display: grid; grid-template-rows: subgrid; grid-row: span 8; height: auto;
+    row-gap: 0; margin-bottom: 14px; align-content: start;
+  }
+  .grid .card .img-wrap { grid-row: 1; }
+  .grid .card .card-info {
+    display: grid; grid-template-rows: subgrid; grid-row: 2 / span 7; grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+  }
+  .grid .card .card-info > * { grid-column: 1; grid-row: 6; order: 0; margin-top: 0; }
+  .grid .card .card-info > .codigo { grid-row: 1; }
+  .grid .card .card-info > .nome { grid-row: 2; }
+  .grid .card .card-info > .tam-card { grid-row: 3; margin: 0 0 6px; align-self: start; }
+  .grid .card .card-info > .preco { grid-row: 4; }
+  .grid .card .card-info > .tags { grid-row: 5; }
+  .grid .card .card-info > .disponibilidade { grid-row: 6; }
+  .grid .card .card-info > .prova-social { grid-row: 7; }
+  .grid .card .card-info > .acoes-card { grid-row: 8; margin-top: 0; padding-top: 8px; align-self: end; }
+}

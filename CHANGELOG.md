@@ -6,7 +6,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
-## 7.4.0 — cursos interativos e híbridos — 2026-10-25
+## 7.11.0 — cursos interativos e híbridos — 2026-10-25
 
 - Substitui as páginas antigas de prática pelo gravador de atividades integrado aos cursos.
 - Permite publicar uma atividade como curso interativo independente ou como parte prática de um manual do Google Docs.

@@ -662,7 +662,7 @@ try { tkSelExpirar_(); } catch (e) {}
           <div class="card-info">
             ${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}
             <div class="nome"><button type="button" class="abrir-peca" aria-label="Ver detalhes: ${escaparHtml(p.Nome)}">${escaparHtml(p.Nome)}</button></div>
-            <div class="preco">${ehConsulta(p) ? '<strong class="consulta">' + TEXTO_CONSULTA + '</strong>' : formatarReal(p.Preco) + ' <span>' + formatarReal(avista) + '</span>'}</div>
+            <div class="preco">${ehConsulta(p) ? '<strong class="consulta">' + TEXTO_CONSULTA + '</strong>' : '<span class="avista-n">' + formatarReal(avista) + '</span> <s class="cheio">' + formatarReal(p.Preco) + '</s>'}</div>
             <div class="tags">${escaparHtml(p.Categoria)}</div>
             ${disp && !esgotado ? `<div class="disponibilidade ${disp.classe}">${disp.texto}</div>` : ''}
             ${esgotado ? '' : `<div class="acoes-card">
@@ -1170,14 +1170,21 @@ try { tkSelExpirar_(); } catch (e) {}
   /** Atalhos por endereço: ?abrir=sacola (atalho do app) e ?pedido=<código> (acompanhar pedido). Roda uma vez, na abertura. */
   function abrirJanelasDaURL_() {
     const params = new URLSearchParams(window.location.search);
-    const abrirSac = params.get('abrir') === 'sacola';
+    const abrir = params.get('abrir') || '';
+    const abrirSac = abrir === 'sacola';
     const temPedido = params.has('pedido');
-    if (!abrirSac && !temPedido) return;
+    // v7.1: atalhos da barra do cliente (nav.js). busca = foco no campo; selecao/favoritos = janelas existentes; atendente = WhatsApp fixo da loja.
+    const atalhoBarra = ['busca', 'selecao', 'favoritos', 'atendente'].indexOf(abrir) !== -1;
+    if (!abrirSac && !temPedido && !atalhoBarra) return;
     const limpa = new URL(window.location);
     ['abrir', 'pedido', 'origem'].forEach(k => limpa.searchParams.delete(k));
     window.history.replaceState({}, '', limpa);   // a janela empilha a própria entrada; voltar leva ao catálogo limpo
     if (abrirSac) abrirSacola();
     if (temPedido) abrirRastreio(params.get('pedido') || '', '');
+    if (abrir === 'selecao' && typeof abrirSelecao === 'function') abrirSelecao(false);
+    if (abrir === 'favoritos' && typeof abrirFavoritos === 'function') abrirFavoritos();
+    if (abrir === 'busca') { const b = document.getElementById('busca'); if (b) { b.focus(); b.scrollIntoView({ block: 'center' }); } }
+    if (abrir === 'atendente' && typeof linkWhatsApp === 'function') window.location.href = linkWhatsApp();
   }
 
   /* Notificações push: tudo em push.js (v3.4) — sininho #btn-push-header, convite, conta, pedidos, ajuda. */
@@ -1722,26 +1729,108 @@ try { tkSelExpirar_(); } catch (e) {}
   }
 
   function fechar_() { lista.hidden = true; lista.textContent = ''; itens_ = []; ativo_ = -1; busca.setAttribute('aria-expanded', 'false'); busca.removeAttribute('aria-activedescendant'); }
-  function pintar_() {
-    const r = sugerir_(busca.value);
-    if (!r.aviso && !r.itens.length) { fechar_(); return; }
-    lista.textContent = ''; itens_ = r.itens; ativo_ = -1;
-    if (r.aviso) { const a = document.createElement('div'); a.className = 'sug-aviso'; a.setAttribute('role', 'presentation'); a.textContent = r.aviso; lista.appendChild(a); }
-    r.itens.forEach((it, i) => {
-      const d = document.createElement('div'); d.id = 'sug-' + i; d.className = 'sug-item'; d.setAttribute('role', 'option'); d.setAttribute('aria-selected', 'false'); d.dataset.i = String(i);
-      const tx = document.createElement('span'); tx.className = 'sug-txt';
-      tx.textContent = (it.tipo === 'sinonimo' ? 'Parecido: ' : it.tipo === 'quis' ? 'Você quis dizer: ' : '') + it.texto;
-      const q = document.createElement('span'); q.className = 'sug-qtd'; q.textContent = it.qtd === 1 ? '1 peça' : it.qtd + ' peças';
-      d.appendChild(tx); d.appendChild(q); lista.appendChild(d);
-    });
+  /* v7.7 — painel de busca interativo: peças com foto, categorias, "refinar" por gênero/tamanho/cor e ajuda da loja.
+     Tudo só REUSA os filtros que já existem (mesmos conjuntos e mesma aplicarFiltros). */
+  const FACETAS_ = [
+    { id: 'cat', rot: 'Categoria', conj: () => filtroCategorias, tags: (p) => listaDeTags(p.Categoria), box: 'chips-categoria', disp: () => categoriasDisponiveis, res: 'resumo-categoria' },
+    { id: 'gen', rot: 'Para quem', conj: () => filtroGeneros, tags: (p) => listaDeTags(p.Genero), box: 'chips-genero', disp: () => generosDisponiveis, res: 'resumo-genero' },
+    { id: 'tam', rot: 'Tamanho', conj: () => filtroTamanhos, tags: (p) => tagsTamanhoCliente_(p).filter((t) => !/consult/i.test(t)), box: 'chips-tamanho', disp: () => tamanhosDisponiveis, res: 'resumo-tamanho' },
+    { id: 'cor', rot: 'Cor', conj: () => filtroCores, tags: (p) => listaDeTags(textoPlano(p.Cores)), box: 'chips-cor', disp: () => coresDisponiveis, res: 'resumo-cor' }
+  ];
+  const novoEl_ = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  function pecasDaBusca_(txt) {
+    const t = termosDaBusca(txt);
+    return t.length ? produtos.filter((p) => !estaEsgotado(p) && casaBusca(p, t)) : [];
+  }
+  function alternarFiltro_(f, valor) {
+    const c = f.conj(); if (c.has(valor)) c.delete(valor); else c.add(valor);
+    try { renderizarChipsFiltro(f.box, f.disp(), c, f.res); } catch (e) {}
+    aplicarFiltros();
+    pintar_(true);
+  }
+  function irParaGrade_() { const g = document.getElementById('grid'); if (g) g.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+  function aplicarBusca_(texto) {
+    busca.value = texto; fechar_(); aplicarFiltros();
+    busca.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    busca.blur(); irParaGrade_();
+  }
+  function secao_(titulo) { const a = novoEl_('div', 'sug-aviso', titulo); a.setAttribute('role', 'presentation'); lista.appendChild(a); }
+  function linha_(it) {
+    const i = itens_.length; itens_.push(it);
+    const d = novoEl_('div', 'sug-item' + (it.foto !== undefined ? ' sug-peca' : '')); d.id = 'sug-' + i; d.setAttribute('role', 'option'); d.setAttribute('aria-selected', 'false'); d.dataset.i = String(i);
+    if (it.foto !== undefined) {
+      const im = document.createElement('img'); im.className = 'sug-foto'; im.alt = ''; im.width = 44; im.height = 55; im.loading = 'lazy';
+      try { im.src = fotoMini(it.foto, 120); } catch (e) {}
+      d.appendChild(im);
+    }
+    const col = novoEl_('span', 'sug-col');
+    col.appendChild(novoEl_('span', 'sug-txt', (it.tipo === 'sinonimo' ? 'Parecido: ' : it.tipo === 'quis' ? 'Você quis dizer: ' : '') + it.texto));
+    if (it.sub) col.appendChild(novoEl_('span', 'sug-sub', it.sub));
+    d.appendChild(col);
+    if (it.qtd != null) d.appendChild(novoEl_('span', 'sug-qtd', it.qtd === 1 ? '1 peça' : it.qtd + ' peças'));
+    lista.appendChild(d);
+  }
+  function pintar_(manter) {
+    const txt = busca.value;
+    if (txt.trim().length < 2) { if (!manter) fechar_(); return; }
+    const r = sugerir_(txt), achadas = pecasDaBusca_(txt);
+    lista.textContent = ''; itens_ = []; ativo_ = -1;
+    if (r.aviso) { const a = novoEl_('div', 'sug-aviso sug-aviso-topo', r.aviso); a.setAttribute('role', 'presentation'); lista.appendChild(a); }
+    // 1) peças que combinam (toque = abre a peça)
+    if (achadas.length) {
+      secao_('Peças que combinam');
+      achadas.slice(0, 4).forEach((p) => linha_({
+        tipo: 'peca', foto: p.Foto_URL || '', texto: (p.Codigo ? p.Codigo + ' · ' : '') + p.Nome,
+        sub: ehConsulta(p) ? TEXTO_CONSULTA : 'À vista ' + formatarReal(Number(p.Preco) * (1 - DESCONTO_AVISTA)),
+        acao: () => { fechar_(); busca.blur(); abrirDetalhe(p.ID); }
+      }));
+    }
+    // 2) o que mais a pessoa pode querer digitar
+    if (r.itens.length) { secao_(achadas.length ? 'Ou busque por' : 'Sugestões'); r.itens.forEach((it) => linha_(it)); }
+    // 3) refinar (toque liga/desliga o filtro, a busca continua)
+    const grupos = FACETAS_.map((f) => {
+      const cont = new Map();
+      achadas.forEach((p) => f.tags(p).forEach((t) => cont.set(t, (cont.get(t) || 0) + 1)));
+      const ordem = Array.from(cont.entries()).sort((a, b) => (f.id === 'tam' ? compararTamanhos_(a[0], b[0]) : b[1] - a[1])).slice(0, 6);
+      f.conj().forEach((v) => { if (!cont.has(v)) ordem.unshift([v, 0]); });
+      return { f, ordem };
+    }).filter((g) => g.ordem.length > (g.f.id === 'cat' || g.f.id === 'gen' ? 0 : 0));
+    if (achadas.length && grupos.length) {
+      secao_('Refinar a busca');
+      grupos.forEach(({ f, ordem }) => {
+        const lin = novoEl_('div', 'sug-refina'); lin.appendChild(novoEl_('span', 'sug-rot', f.rot));
+        ordem.forEach(([v, n]) => {
+          const on = f.conj().has(v);
+          const b = novoEl_('button', 'sug-chip' + (on ? ' on' : ''), v + (n ? ' · ' + n : '')); b.type = 'button'; b.setAttribute('aria-pressed', String(on));
+          b.addEventListener('click', () => alternarFiltro_(f, v));
+          lin.appendChild(b);
+        });
+        lista.appendChild(lin);
+      });
+    }
+    // 4) ações finais
+    if (achadas.length > 4) linha_({ tipo: 'todas', texto: 'Ver as ' + achadas.length + ' peças de “' + txt.trim() + '”', acao: () => aplicarBusca_(txt.trim()) });
+    const zap = novoEl_('a', 'sug-zap', achadas.length ? '💬 Não é isso? Consulte a loja' : '💬 Não achou? Consulte a loja sobre “' + txt.trim() + '”');
+    zap.href = linkWhatsApp('Olá! Estou procurando: ' + txt.trim()); zap.target = '_blank'; zap.rel = 'noopener';
+    lista.appendChild(zap);
+    // sem nada igual: oferece caminhos pela loja (categorias mais completas)
+    if (!achadas.length && !r.itens.length) {
+      const top = new Map();
+      produtos.forEach((p) => { if (!estaEsgotado(p)) listaDeTags(p.Categoria).forEach((t) => top.set(t, (top.get(t) || 0) + 1)); });
+      const cats = Array.from(top.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
+      if (cats.length) {
+        secao_('Ou veja por categoria');
+        const lin = novoEl_('div', 'sug-refina');
+        cats.forEach(([c, n]) => { const b = novoEl_('button', 'sug-chip', c + ' · ' + n); b.type = 'button'; b.addEventListener('click', () => { busca.value = ''; fechar_(); busca.blur(); const f = FACETAS_[0]; f.conj().clear(); f.conj().add(c); try { renderizarChipsFiltro(f.box, f.disp(), f.conj(), f.res); } catch (e) {} aplicarFiltros(); irParaGrade_(); }); lin.appendChild(b); });
+        lista.appendChild(lin);
+      }
+    }
     lista.hidden = false; busca.setAttribute('aria-expanded', 'true');
   }
   function escolher_(i) {
     const it = itens_[i]; if (!it) return;
-    busca.value = it.texto; fechar_();
-    aplicarFiltros();
-    busca.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));   // mesmo caminho do Enter: fecha o teclado e a gaveta
-    busca.blur();
+    if (it.acao) { it.acao(); return; }
+    aplicarBusca_(it.texto);
   }
   function marcar_(i) {
     const els = lista.querySelectorAll('.sug-item'); if (!els.length) return;
