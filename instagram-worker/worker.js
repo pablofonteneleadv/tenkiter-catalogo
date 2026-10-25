@@ -2436,6 +2436,13 @@ async function gravarMensagem_(env, canal, m) {
   const c = await env.DB.prepare('SELECT id FROM msg_conversa WHERE canal=? AND contato=?').bind(canal, m.contato).first();
   if (!c) return false;
   const saida = m.direcao === 'saida';
+  if (saida && !String(m.extId).startsWith('inc:')) {      // o eco de uma resposta que ficou "sem confirmação" promove aquela linha (não cria uma segunda bolha)
+    try {
+      const desde = new Date(Date.parse(m.em) - 10 * 60000).toISOString();
+      const pr = await env.DB.prepare("UPDATE msg_mensagem SET ext_id=?, status='enviada', status_em=? WHERE id=(SELECT id FROM msg_mensagem WHERE conversa_id=? AND direcao='saida' AND ext_id LIKE 'inc:%' AND texto=? AND enviada_em>=? ORDER BY id LIMIT 1)").bind(m.extId, t, c.id, m.texto, desde).run();
+      if (pr.meta && pr.meta.changes === 1) { await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(t, c.id).run(); return false; }
+    } catch (e) { /* o eco já existe: segue o caminho normal */ }
+  }
   const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em) VALUES (?,?,?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t).run();
   if (!r.meta || r.meta.changes !== 1) return false;
   const previa = (m.texto || ('[' + m.tipo + ']')).replace(/\s+/g, ' ').slice(0, 140);
@@ -2550,7 +2557,7 @@ async function atualizarStatusWafly_(env, canal, b) {
     if (!m) continue;
     if (st === 'READ_BY_ME') { await env.DB.prepare('UPDATE msg_conversa SET nao_lidas=0, atualizada_em=? WHERE id=? AND nao_lidas<>0').bind(t, m.conversa_id).run(); n++; continue; }
     if (m.direcao !== 'saida') continue;
-    const r = await env.DB.prepare("UPDATE msg_mensagem SET status=?, status_em=? WHERE conversa_id=? AND direcao='saida' AND enviada_em<=? AND " + MSG_RANK_ + ' < ?').bind(novo, t, m.conversa_id, m.enviada_em, MSG_RANK_NOVO_[novo]).run();
+    const r = await env.DB.prepare("UPDATE msg_mensagem SET status=?, status_em=? WHERE conversa_id=? AND direcao='saida' AND status<>'incerta' AND enviada_em<=? AND " + MSG_RANK_ + ' < ?').bind(novo, t, m.conversa_id, m.enviada_em, MSG_RANK_NOVO_[novo]).run();
     if (r.meta && r.meta.changes > 0) { await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(t, m.conversa_id).run(); n++; }
   }
   return n;
@@ -2576,7 +2583,7 @@ async function aplicarLeiturasInstagram_(env, lst) {
   for (const x of lst) {
     const c = await env.DB.prepare("SELECT id FROM msg_conversa WHERE canal='instagram' AND contato=?").bind(x.contato).first();
     if (!c) continue;
-    const r = await env.DB.prepare("UPDATE msg_mensagem SET status='lida', status_em=? WHERE conversa_id=? AND direcao='saida' AND enviada_em<=? AND status<>'lida'").bind(t, c.id, x.ate).run();
+    const r = await env.DB.prepare("UPDATE msg_mensagem SET status='lida', status_em=? WHERE conversa_id=? AND direcao='saida' AND enviada_em<=? AND status NOT IN ('lida','incerta')").bind(t, c.id, x.ate).run();
     if (r.meta && r.meta.changes > 0) { await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(t, c.id).run(); n++; }
   }
   return n;
@@ -2627,17 +2634,23 @@ async function responderMensagem_(env, whats, d) {
   const conv = await env.DB.prepare('SELECT id, canal, contato, nome, grupo FROM msg_conversa WHERE id=?').bind(id).first();
   if (!conv) return [404, { ok: false, erro: 'Conversa não encontrada.' }];
   if (conv.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > MSG_TEXTO_MAX) return [400, { ok: false, erro: conv.canal === 'instagram' ? 'O Instagram aceita até 1000 letras por mensagem. Divida em duas.' : 'Mensagem grande demais. Divida em duas.' }];
-  const chave = 'msgenv:' + idLocal, ant = await env.CACHE.get(chave);
-  if (ant) { if (ant === 'enviando') return [409, { ok: false, erro: 'Essa mensagem já está sendo enviada. Aguarde um instante.' }]; try { return [200, JSON.parse(ant)]; } catch (e) { /* segue */ } }
-  await env.CACHE.put(chave, 'enviando', { expirationTtl: 90 });
+  /* Reserva atômica no D1 (chave única): sobrevive a queda do Worker e nunca deixa a mesma tentativa sair duas vezes. */
+  const chave = 'msgenv:' + idLocal, t0 = agora();
+  const reserva = await env.DB.prepare('INSERT OR IGNORE INTO cfg (chave, valor) VALUES (?, ?)').bind(chave, t0 + '|enviando').run();
+  if (!reserva.meta || reserva.meta.changes !== 1) {
+    const ant = await env.DB.prepare('SELECT valor FROM cfg WHERE chave=?').bind(chave).first(), carga = ant ? String(ant.valor).slice(25) : 'enviando';
+    if (carga !== 'enviando') { try { return [200, JSON.parse(carga)]; } catch (e) { /* cai no aviso */ } }
+    return [200, { ok: false, incerto: true, erro: 'Esta mensagem já foi tentada e ficou sem confirmação. Confira no ' + (conv.canal === 'instagram' ? 'Instagram' : 'WhatsApp') + ' antes de enviar de novo.' }];
+  }
+  try { await env.DB.prepare("DELETE FROM cfg WHERE chave LIKE 'msgenv:%' AND substr(valor,1,24)<?").bind(new Date(Date.now() - 3 * 86400000).toISOString()).run(); } catch (e) { /* limpeza é conforto */ }
   const res = conv.canal === 'instagram' ? await enviarTextoInstagram_(env, conv, texto) : await enviarTextoWhats_(env, conv, texto);
-  if (!res.ok && !res.incerto) { await env.CACHE.delete(chave); return [409, { ok: false, erro: res.erro }]; }
+  if (!res.ok && !res.incerto) { await env.DB.prepare('DELETE FROM cfg WHERE chave=?').bind(chave).run(); return [409, { ok: false, erro: res.erro }]; }
   const extId = res.ok ? res.extId : 'inc:' + idLocal, em = agora();
   await gravarMensagem_(env, conv.canal, { extId: extId, contato: conv.contato, nome: '', grupo: conv.grupo, direcao: 'saida', tipo: 'texto', texto: texto, em: em });
   await env.DB.prepare('UPDATE msg_mensagem SET por=?, status=CASE WHEN ? THEN status ELSE ? END WHERE canal=? AND ext_id=?').bind(String(whats || '').slice(-4), res.ok ? 1 : 0, 'incerta', conv.canal, extId).run();
   const linha = await env.DB.prepare('SELECT id, direcao, tipo, texto, enviada_em, status, por FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(conv.canal, extId).first();
   const corpo = res.ok ? { ok: true, mensagem: linha } : { ok: false, incerto: true, erro: res.erro, mensagem: linha };
-  await env.CACHE.put(chave, JSON.stringify(corpo), { expirationTtl: 600 });
+  await env.DB.prepare('UPDATE cfg SET valor=? WHERE chave=?').bind(t0 + '|' + JSON.stringify(corpo), chave).run();
   return [200, corpo];
 }
 /* ---- exportação ---- */
@@ -2664,7 +2677,7 @@ async function exportarMensagens_(env, q) {
   const dia = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : '';
   if (dia(q.de)) { onde.push('m.enviada_em>=?'); args.push(dia(q.de) + 'T03:00:00.000Z'); }
   if (dia(q.ate)) { onde.push('m.enviada_em<?'); args.push(new Date(Date.parse(dia(q.ate) + 'T03:00:00.000Z') + 86400000).toISOString()); }
-  const LIM = 50000;
+  const LIM = 20000;
   const rs = await env.DB.prepare('SELECT m.id, m.conversa_id, m.canal, m.direcao, m.tipo, m.texto, m.enviada_em, m.status, m.por, c.contato, c.nome, c.grupo FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id' + (onde.length ? ' WHERE ' + onde.join(' AND ') : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT ' + (LIM + 1)).bind(...args).all();
   let linhas = rs.results; const cortou = linhas.length > LIM; if (cortou) linhas = linhas.slice(0, LIM);
   comDemora_(linhas);
@@ -2695,7 +2708,7 @@ async function exportarMensagens_(env, q) {
 async function metricasMensagens_(env, canal, dias) {
   dias = [7, 30, 90].includes(Number(dias)) ? Number(dias) : 30;
   const desde = new Date(Date.now() - dias * 86400000).toISOString();
-  const rs = await env.DB.prepare('SELECT m.conversa_id, m.direcao, m.enviada_em FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0 AND m.enviada_em>=?' + (canal ? ' AND c.canal=?' : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT 60000').bind(...(canal ? [desde, canal] : [desde])).all();
+  const rs = await env.DB.prepare('SELECT m.conversa_id, m.direcao, m.enviada_em FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0 AND m.enviada_em>=?' + (canal ? ' AND c.canal=?' : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT 30000').bind(...(canal ? [desde, canal] : [desde])).all();
   let conv = null, aberto = null, entradas = 0, saidas = 0; const demoras = [], porHora = Array.from({ length: 24 }, () => ({ entradas: 0, demoras: [] })), convs = new Set(); let semResposta = 0, horaAberta = 0;
   const fechar = () => { if (aberto !== null) semResposta++; aberto = null; };
   for (const m of rs.results) {
@@ -2781,7 +2794,7 @@ export default {
         if (!MSG_CANAIS.includes(canal)) return J({ ok: false, erro: 'Escolha Instagram, WhatsApp 1 ou WhatsApp 2.' }, 400);
         let sql = 'SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE canal=? AND total>0', args = [canal];
         if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'sem_resposta') sql += " AND grupo=0 AND ult_dir='entrada'"; else if (filtro === 'grupos') sql += ' AND grupo=1';
-        if (busca) { sql += ' AND (nome LIKE ? OR contato LIKE ? OR previa LIKE ? OR EXISTS (SELECT 1 FROM msg_mensagem mm WHERE mm.conversa_id=msg_conversa.id AND mm.texto LIKE ?))'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q, q); }
+        if (busca) { sql += ' AND (nome LIKE ? OR contato LIKE ? OR previa LIKE ? ' + (busca.length >= 3 ? ' OR EXISTS (SELECT 1 FROM msg_mensagem mm WHERE mm.conversa_id=msg_conversa.id AND mm.texto LIKE ?)' : '') + ')'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q); if (busca.length >= 3) args.push(q); }
         if (antes) { sql += ' AND ultima_em<?'; args.push(antes); }
         const rs = await env.DB.prepare(sql + ' ORDER BY ultima_em DESC LIMIT 50').bind(...args).all();
         return J({ ok: true, conversas: rs.results, contagens: (await msgContagens_(env, canal))[canal], cursor: agora() });
@@ -2801,7 +2814,7 @@ export default {
         const cs = await env.DB.prepare('SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE atualizada_em>=? AND total>0 ORDER BY atualizada_em DESC LIMIT 100').bind(desde).all();
         let mensagens = [];
         if (conv) mensagens = (await env.DB.prepare('SELECT id, direcao, tipo, texto, enviada_em, status, por, status_em FROM msg_mensagem WHERE conversa_id=? AND (id>? OR status_em>=?) ORDER BY enviada_em, id LIMIT 200').bind(conv, depois, st).all()).results;
-        return J({ ok: true, cursor: agora(), conversas: cs.results, mensagens: mensagens, contagens: await msgContagens_(env) });
+        return J({ ok: true, cursor: agora(), conversas: cs.results, mensagens: mensagens, contagens: (cs.results.length || url.searchParams.get('cont') === '1') ? await msgContagens_(env) : undefined });
       }
       if (p === '/msg/contagem' && req.method === 'GET') return J({ ok: true, contagens: await msgContagens_(env) });
       if (p === '/msg/enviar' && req.method === 'POST') {

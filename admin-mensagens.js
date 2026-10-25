@@ -15,7 +15,7 @@
   const FILTROS = [['todas', 'Todas'], ['nao_lidas', 'Não lidas'], ['sem_resposta', 'Falta responder'], ['grupos', 'Grupos']];
   const ESPERA_MS = Number(window.TK_MENSAGENS_POLL_MS) || 4000, ESPERA_MAX_MS = Number(window.TK_MENSAGENS_POLL_MS) ? 3000 : 30000, ESPERA_SELO_MS = Number(window.TK_MENSAGENS_POLL_MS) ? 1500 : 60000;
   let canal = 'whatsapp1', filtro = 'todas', busca = '', resumo = null, contagens = null, lista = [], cursor = '', aberta = null, msgs = [], vista = 'lista', painel = '';
-  let timerBusca = null, timerLive = null, timerSelo = null, espera = ESPERA_MS, offline = false, abrindo = 0, novasAbaixo = 0, menuAberto = null, aviso = '';
+  let seqLista = 0, ultIdSrv = 0, nPoll = 0, timerBusca = null, timerLive = null, timerSelo = null, espera = ESPERA_MS, offline = false, abrindo = 0, novasAbaixo = 0, menuAberto = null, aviso = '';
   const rascunhos = {}, elMsgs = new Map(), elConvs = new Map(), pendentes = new Map();
 
   /* ---------- utilidades ---------- */
@@ -358,7 +358,7 @@
     return li;
   }
   function pintarLista() {
-    const ul = $('ms-lista'), extra = $('ms-extra'); if (!ul) return;
+    const ul = $('ms-lista'), extra = $('ms-extra'); if (!ul || painel === 'metricas') return;
     const vivos = new Set(lista.map((c) => c.id));
     elConvs.forEach((li, id) => { if (!vivos.has(id)) { li.remove(); elConvs.delete(id); } });
     let ref = ul.firstChild;
@@ -370,8 +370,9 @@
     }
   }
   async function carregarLista(reset) {
-    const w = abrindo; const r = await worker_('/msg/conversas?canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (busca.trim() ? '&busca=' + encodeURIComponent(busca.trim()) : ''), 'GET');
-    if (w !== abrindo) return;
+    const mine = ++seqLista, c0 = canal, f0 = filtro, b0 = busca.trim();
+    const r = await worker_('/msg/conversas?canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (b0 ? '&busca=' + encodeURIComponent(b0) : ''), 'GET');
+    if (mine !== seqLista || c0 !== canal || f0 !== filtro || b0 !== busca.trim()) return;       // resposta velha de outra aba/filtro/busca: ignora
     if (!r.ok) { if (reset || !lista.length) { lista = []; pintarLista(); $('ms-extra').textContent = ''; $('ms-extra').appendChild(el('p', 'ms-vazio', r.erro || 'Não foi possível carregar agora.')); } return; }
     lista = r.conversas; contagens = Object.assign({}, contagens || {}, { [canal]: r.contagens }); cursor = r.cursor || cursor;
     desenharFiltros(); desenharAbas(); pintarLista();
@@ -438,7 +439,7 @@
     fio.addEventListener('scroll', () => { if (perto_(fio, 60) && novasAbaixo) { novasAbaixo = 0; atualizarPill(); marcarLida(); } }, { passive: true });
     const dica = dicaComposer(c); if (dica) { const d = el('div', 'ms-dica', dica); d.id = 'ms-dica'; pai.appendChild(d); }
     const form = el('div', 'ms-compor');
-    const ta = el('textarea'); ta.id = 'ms-texto'; ta.rows = 1; ta.placeholder = 'Escreva uma mensagem'; ta.maxLength = limiteTexto(c); ta.setAttribute('aria-label', 'Mensagem para ' + rotuloContato(c)); ta.enterKeyHint = 'enter'; ta.value = rascunhoLer_(c.id);
+    const ta = el('textarea'); ta.id = 'ms-texto'; ta.rows = 1; ta.placeholder = 'Escreva uma mensagem'; if (c.canal !== 'instagram') ta.maxLength = limiteTexto(c); ta.setAttribute('aria-label', 'Mensagem para ' + rotuloContato(c)); ta.enterKeyHint = 'enter'; ta.value = rascunhoLer_(c.id);
     const bt = botao('ms-enviar', 'Enviar', 'enviar'); bt.id = 'ms-enviar'; bt.disabled = !ta.value.trim();
     form.append(ta, bt); pai.appendChild(form);
     const cresce = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim(); rascunhoSalvar_(c.id, ta.value); };
@@ -455,6 +456,7 @@
     if (!r.ok) { aviso_(r.erro || 'Não foi possível abrir a conversa agora.'); return; }
     aviso_('');
     const c = r.conversa; aberta = c;
+    ultIdSrv = r.mensagens.reduce((m, x) => (x.id > m ? x.id : m), 0);
     msgs = r.mensagens.concat(Array.from(pendentes.values()).filter((p) => p.conversa === id).map((p) => p.msg));
     montarConversa(c); pintarFio(true);
     vista = 'conversa'; const app = $('ms-app'); app.dataset.vista = 'conversa';
@@ -483,7 +485,7 @@
     if (reenvio) { const p = pendentes.get(reenvio); if (!p) return; tmp = p; texto = p.msg.texto; idLocal = p.idLocal; p.msg.status = 'pendente'; p.msg.erro = ''; }
     else {
       texto = ta.value.replace(/\r\n/g, '\n').trim(); if (!texto) return;
-      if (texto.length > limiteTexto(c)) { aviso_('Mensagem grande demais para este canal. Divida em duas.'); return; }
+      if (c.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > limiteTexto(c)) { aviso_('Mensagem grande demais para este canal. Divida em duas.'); return; }
       idLocal = idLocal_();
       const idTmp = 'tmp-' + idLocal;
       tmp = { idLocal: idLocal, conversa: c.id, msg: { id: idTmp, direcao: 'saida', tipo: 'texto', texto: texto, enviada_em: new Date().toISOString(), status: 'pendente' } };
@@ -493,13 +495,19 @@
     pintarFio(true);
     const r = await worker_('/msg/enviar', 'POST', { conversa: c.id, texto: texto, idLocal: idLocal });
     const idTmp = tmp.msg.id;
-    if (r.ok || r.incerto) {
-      pendentes.delete(idTmp); msgs = msgs.filter((m) => m.id !== idTmp);
-      const real = r.mensagem; if (real) { msgs = msgs.filter((m) => m.id !== real.id); msgs.push(real); if (r.incerto) real.status = 'incerta'; }
-      if (aberta && aberta.id === c.id) { aberta.ult_dir = 'saida'; aberta.nao_lidas = 0; }
+    if (r.ok || (r.incerto && r.mensagem)) {
+      pendentes.delete(idTmp);
+      if (aberta && aberta.id === c.id) {
+        msgs = msgs.filter((m) => m.id !== idTmp);
+        const real = r.mensagem; if (real) { msgs = msgs.filter((m) => m.id !== real.id); msgs.push(real); if (r.incerto) real.status = 'incerta'; }
+        aberta.ult_dir = 'saida'; aberta.nao_lidas = 0;
+      }
       if (r.incerto) aviso_(r.erro || 'Sem confirmação do envio.'); else aviso_('');
       carregarLista(false);
-    } else { tmp.msg.status = 'falhou'; tmp.msg.erro = r.erro || 'Não foi possível enviar agora.'; if (r.semRede) tmp.msg.erro = 'Sem conexão. A mensagem não foi enviada.'; }
+    } else {
+      tmp.msg.status = 'falhou'; tmp.msg.erro = r.erro || 'Não foi possível enviar agora.';
+      if (r.semRede) tmp.msg.erro = 'Sem resposta do servidor. A mensagem pode ter saído: confira antes de tentar de novo (tentar de novo não duplica).';
+    }
     if (aberta && aberta.id === c.id) pintarFio(true);
   }
 
@@ -512,13 +520,14 @@
     const o = $('overlay-mensagens');
     if (!o || !o.classList.contains('aberto')) { pararAoVivo(); return; }
     if (document.hidden) { agendar(ESPERA_MAX_MS); return; }
-    const ultId = msgs.reduce((m, x) => (typeof x.id === 'number' && x.id > m ? x.id : m), 0);
+    const ultId = ultIdSrv;
     const st = msgs.reduce((m, x) => (x.status_em && x.status_em > m ? x.status_em : m), '') || cursor;
-    const q = '/msg/novidades?desde=' + encodeURIComponent(cursor || new Date(Date.now() - 60000).toISOString()) + (aberta ? '&conversa=' + aberta.id + '&depois=' + ultId + '&st=' + encodeURIComponent(st) : '');
+    const q = '/msg/novidades?desde=' + encodeURIComponent(cursor || new Date(Date.now() - 60000).toISOString()) + ((nPoll++ % 10 === 0) ? '&cont=1' : '') + (aberta ? '&conversa=' + aberta.id + '&depois=' + ultId + '&st=' + encodeURIComponent(st) : '');
     const r = await worker_(q, 'GET');
     if (!r.ok) { offline = true; espera = Math.min(ESPERA_MAX_MS, espera * 2); atualizarVivo(); agendar(); return; }
     if (offline) { offline = false; atualizarVivo(); }
     espera = ESPERA_MS; cursor = r.cursor || cursor;
+    r.mensagens.forEach((m) => { if (typeof m.id === 'number' && m.id > ultIdSrv) ultIdSrv = m.id; });
     contagens = r.contagens || contagens; desenharAbas(); desenharFiltros(); selarBotao();
     if (r.conversas.some((c) => c.canal === canal)) await carregarLista(false);
     if (aberta) {
@@ -550,7 +559,7 @@
     clearTimeout(timerSelo);
     const o = $('overlay-mensagens');
     if (!document.hidden && podeGerir() && !(o && o.classList.contains('aberto'))) { const r = await worker_('/msg/contagem', 'GET'); if (r.ok) { contagens = r.contagens; selarBotao(); } }
-    timerSelo = setTimeout(sondarSelo, ESPERA_SELO_MS);
+    clearTimeout(timerSelo); timerSelo = setTimeout(sondarSelo, ESPERA_SELO_MS);
   }
 
   /* ---------- exportar ---------- */
@@ -623,7 +632,10 @@
     const b = ev.target.closest('[data-ms]'); if (!b) return;
     const a = b.dataset.ms;
     if (a !== 'menu-geral' && a !== 'menu-conversa') fecharMenu();
-    if (a === 'fechar') fecharComHistorico_('overlay-mensagens');
+    if (a === 'fechar') {
+      if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { document.addEventListener('tk:camada-fechada', function f(e) { if (e.detail && e.detail.chave === 'ms-conversa') { document.removeEventListener('tk:camada-fechada', f); fecharComHistorico_('overlay-mensagens'); } }); TKCamadas.desempilhar('ms-conversa'); }
+      else fecharComHistorico_('overlay-mensagens');
+    }
     else if (a === 'aba') { canal = b.dataset.canal; filtro = 'todas'; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); }
     else if (a === 'filtro') { filtro = b.dataset.filtro; fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true); }
     else if (a === 'abrir') abrirConversa(Number(b.dataset.id));

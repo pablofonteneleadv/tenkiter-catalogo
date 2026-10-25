@@ -145,6 +145,8 @@ with sync_playwright() as p:
     chk("Esc fecha o menu e devolve o foco", pg.locator(".ms-menu").count() == 0)
     pg.click("#ms-mais"); pg.click("text=Painel de atendimento"); pg.wait_for_selector(".ms-painel .ms-card", timeout=4000)
     chk("painel de atendimento: aguardando, mediana e porcentagens", "esperando resposta agora" in pg.inner_text(".ms-painel") and "12 min" in pg.inner_text(".ms-painel") and "30%" in pg.inner_text(".ms-painel") and "Maria" in pg.inner_text(".ms-painel"), pg.inner_text(".ms-painel")[:300])
+    nova_msg(S, 4, "entrada", "chegou com o painel aberto"); pg.wait_for_timeout(1500)
+    chk("chegar mensagem com o painel aberto NÃO apaga o painel", pg.locator(".ms-painel .ms-card").count() == 6)
     axe(pg, "Mensagens (painel)")
     pg.click("[data-ms=fechar-painel]"); pg.wait_for_timeout(300)
     # canais
