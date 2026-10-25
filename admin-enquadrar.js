@@ -157,7 +157,7 @@
       '<div class="enq-box">' +
         '<div class="enq-topo"><strong id="enq-tit">✂ Enquadrar a foto</strong><button type="button" class="sheet-x btn-fechar" aria-label="Fechar" data-enq="fechar">✕</button></div>' +
         '<div class="enq-corpo">' +
-          '<div class="enq-palco"><canvas id="enq-cv" width="' + PW + '" height="' + PH + '" tabindex="0" role="img" aria-label="Foto da peça no quadro 4:5. Arraste para mover; dois dedos para aumentar e girar; setas movem, mais e menos dão zoom."></canvas></div>' +
+          '<div class="enq-palco"><canvas id="enq-cv" data-tut-interagir="Foto da peça" width="' + PW + '" height="' + PH + '" tabindex="0" role="img" aria-label="Foto da peça no quadro 4:5. Arraste para mover; dois dedos para aumentar e girar; setas movem, mais e menos dão zoom."></canvas></div>' +
           '<div class="enq-aviso" id="enq-aviso" role="status" hidden></div>' +
           '<p class="enq-dica enq-dica-gestos">Arraste com um dedo. Use dois dedos para aumentar, diminuir e girar.</p>' +
           '<div class="enq-acoes"><button type="button" data-enq="desfazer">Desfazer</button><button type="button" data-enq="todas" id="enq-todas" hidden>Aplicar a todas</button><button type="button" data-enq="voltar" id="enq-voltar" hidden>↩ Voltar à original</button></div>' +
