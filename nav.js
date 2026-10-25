@@ -85,6 +85,7 @@
 
   let perms = [];
   let logado = false;
+  let permissoesVerificadas = false;
   let ativoId = '';
   let nav = null;
   let appViews = null;
@@ -99,10 +100,10 @@
   const lerCache = () => {
     const s = sessao();
     logado = !!s;
-    if (!s) { perms = []; try { localStorage.removeItem(CHAVE_CACHE); } catch (e) {} return null; }
+    if (!s) { perms = []; permissoesVerificadas = false; try { localStorage.removeItem(CHAVE_CACHE); } catch (e) {} return null; }
     const c = lerJson(CHAVE_CACHE);
-    if (c && c.w === s.whatsapp && Array.isArray(c.p)) { perms = c.p; return c; }
-    perms = [];
+    if (c && c.w === s.whatsapp && Array.isArray(c.p)) { perms = c.p; permissoesVerificadas = true; return c; }
+    perms = []; permissoesVerificadas = false;
     return null;
   };
   const gravarCache = (lista) => {
@@ -111,10 +112,14 @@
   };
 
   const tem = (chave) => perms.indexOf(chave) !== -1;
-  const ehEquipe = () => CHAVES_EQUIPE.some(tem);
+  // Se a sessão existe mas a API ainda não confirmou permissões, não esconder o atalho de Gestão.
+  // O painel admin.html continua validando a sessão no servidor: o menu não concede acesso.
+  const acessoPendente = () => logado && !permissoesVerificadas;
+  const ehEquipe = () => CHAVES_EQUIPE.some(tem) || acessoPendente();
 
   const visivel = (it) => {
     if (it.id === ativoId) return true; // a página em que a pessoa está sempre aparece (e destacada)
+    if (it.id === 'gestao' && acessoPendente()) return true; // acesso real é checado no painel
     if (it.qualquer) return it.qualquer.some(tem);
     if (it.visitanteOuPerm) return !logado || tem(it.visitanteOuPerm) || !perms.length; // sem lista ainda: mostra (a página decide o acesso)
     if (it.soVisitante) return !ehEquipe();
@@ -181,8 +186,8 @@
     fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'sessao', whatsapp: s.whatsapp, sessao: s.sessao }) })
       .then((r) => r.json())
       .then((j) => {
-        if (j?.ok && j.usuario && Array.isArray(j.usuario.permissoes)) { perms = j.usuario.permissoes; gravarCache(perms); desenhar(); }
-        else if (j && (j.sessaoInvalida || j.inativa)) { perms = []; try { localStorage.removeItem(CHAVE_CACHE); } catch (e) {} desenhar(); }
+        if (j?.ok && j.usuario && Array.isArray(j.usuario.permissoes)) { perms = j.usuario.permissoes; permissoesVerificadas = true; gravarCache(perms); desenhar(); }
+        else if (j && (j.sessaoInvalida || j.inativa)) { perms = []; permissoesVerificadas = true; try { localStorage.removeItem(CHAVE_CACHE); } catch (e) {} desenhar(); }
       })
       .catch(() => { /* sem rede: segue com o cache */ });
   };
@@ -286,6 +291,7 @@
     setPerms: (lista) => {
       logado = !!sessao();
       perms = Array.isArray(lista) ? lista.slice() : [];
+      permissoesVerificadas = true;
       if (logado) gravarCache(perms);
       desenhar();
     },
