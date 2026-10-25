@@ -394,6 +394,7 @@ var pre=null,jan=el.ownerDocument.defaultView;if(el.type==='file'){delete el.dat
   }
   /* O teste usa a tela de verdade, mas NADA pode ser gravado no servidor nem entrar na fila real de envios:
    * escritas (fetch/XHR/beacon) viram uma resposta de "teste, nada é salvo" e o banco local (fila) é outro, só do teste. */
+  window.TKTutorialIsolar=function(w){isolarEscritasDoTeste(w);};
   function isolarEscritasDoTeste(w){
     try{
       if(!w||w.__tkTesteIsolado)return;w.__tkTesteIsolado=true;
@@ -403,6 +404,9 @@ var pre=null,jan=el.ownerDocument.defaultView;if(el.type==='file'){delete el.dat
       var P=w.XMLHttpRequest&&w.XMLHttpRequest.prototype;
       if(P){var abrirOrig=P.open;P.open=function(m,u){var met=String(m||'GET').toUpperCase();if(met!=='GET'&&met!=='HEAD'){var a=[].slice.call(arguments);a[0]='GET';a[1]='data:application/json;charset=utf-8,'+encodeURIComponent(corpo);return abrirOrig.apply(this,a);}return abrirOrig.apply(this,arguments);};}
       if(w.navigator&&w.navigator.sendBeacon){try{w.navigator.sendBeacon=function(){return true;};}catch(e){}}
+      try{var ls=w.localStorage,redir=function(k){return String(k)==='tk_envios_hist_v1'?'tutorial_teste_tk_envios_hist_v1':k;};
+        var lsFalso={getItem:function(k){return ls.getItem(redir(k));},setItem:function(k,v){ls.setItem(redir(k),v);},removeItem:function(k){ls.removeItem(redir(k));},clear:function(){},key:function(i){return ls.key(i);}};
+        Object.defineProperty(lsFalso,'length',{get:function(){return ls.length;}});Object.defineProperty(w,'localStorage',{value:lsFalso,configurable:true});}catch(e){}
       var idb=w.indexedDB;
       if(idb){var falso={open:function(n,v){return idb.open('tutorial_teste_'+n,v);},deleteDatabase:function(n){return idb.deleteDatabase('tutorial_teste_'+n);},cmp:function(a,b){return idb.cmp(a,b);},databases:function(){return Promise.resolve([]);}};try{Object.defineProperty(w,'indexedDB',{value:falso,configurable:true});}catch(e){}}
     }catch(e){}
