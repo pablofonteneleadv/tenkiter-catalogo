@@ -67,7 +67,15 @@ with sync_playwright() as p:
     chk("pausar muda o estado e o botão", "Gravação pausada" in pg.inner_text(".ms-caixa") and "Retomar" in pg.inner_text(".ms-caixa"))
     pg.click("[data-canal=instagram]"); pg.wait_for_timeout(600)
     chk("Instagram explica o que falta, sem jargão cru", "Ainda não ligado" in pg.inner_text(".ms-caixa") and "{" not in pg.inner_text(".ms-caixa"))
-    chk("nada foi apagado: só chamadas de leitura, ligar e pausar", all(c in ("/msg/resumo", "/msg/conversas", "/msg/mensagens", "/msg/ligar", "/msg/pausar") for c in st["ig"]["msg"]["calls"]))
+    chk("nada foi apagado: só chamadas de leitura, ligar e pausar", all(c in ("/msg/resumo", "/msg/conversas", "/msg/mensagens", "/msg/ligar", "/msg/pausar", "/msg/instagram/situacao", "/msg/instagram/assinar") for c in st["ig"]["msg"]["calls"]))
+    st["ig"]["msg"]["ig_pronto"] = True
+    pg.click("[data-canal=whatsapp1]"); pg.wait_for_timeout(300); pg.click("[data-ms=voltar]") if pg.locator("[data-ms=voltar]").count() else None
+    pg.evaluate("document.getElementById('ms-fechar') && document.getElementById('ms-fechar').click()"); pg.wait_for_timeout(500)
+    abrir_ferramentas(pg); pg.click("#btn-abrir-mensagens"); pg.wait_for_timeout(900); pg.click("[data-canal=instagram]"); pg.wait_for_timeout(900)
+    chk("Instagram pronto: mostra o endereço e a situação da assinatura", "wh/instagram" in pg.locator(".ms-copia").input_value() and "NÃO assinada" in pg.inner_text("#ms-diag"), pg.inner_text("#ms-diag"))
+    pg.click("[data-ms=assinar]"); pg.wait_for_timeout(900)
+    chk("Assinar mensagens muda a situação para assinada", "Conta assinada para receber" in pg.inner_text("#ms-diag"), pg.inner_text("#ms-diag"))
+    chk("a Meta ainda não avisou: o texto diz isso", "ainda não enviou nenhum aviso" in pg.inner_text("#ms-diag"))
     axe(pg, "Mensagens")
     ctx2, st2 = novo_contexto(b, perms=[x for x in PERMS_ALL if x != "gerir_acessos"])
     pg2 = pagina(ctx2, erros); pg2.goto(BASE + "admin.html"); pg2.wait_for_timeout(2600)

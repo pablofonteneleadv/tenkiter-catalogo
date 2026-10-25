@@ -1,5 +1,5 @@
 """Acessibilidade (axe) e teclado das telas NOVAS da v3.3/3.1: favoritos, sacola com formulário, pedido enviado, acompanhar pedido,
-compartilhar seleção, privacidade, 404 e, no painel, pedidos / números / importar / integrações / avisos.
+compartilhar seleção, privacidade, 404 e, no painel, pedidos / números / importar / avisos.
 Também confere que as janelas novas prendem o Tab, fecham com Esc e devolvem o foco."""
 import sys, json, os
 AQUI = os.path.dirname(os.path.abspath(__file__))
@@ -98,7 +98,6 @@ with sync_playwright() as p:
     pg.set_input_files("#imp-arquivo", os.path.join(AQUI, "saida", "import_a11y.csv")); pg.wait_for_timeout(1200)
     axe(pg, "painel: importar com prévia")
     pg.keyboard.press("Escape"); pg.wait_for_timeout(400)
-    janela(pg, "painel: integrações", lambda: pg.click("#btn-abrir-integracoes"), "#overlay-gestao")
     pg.click("#btn-abrir-push"); pg.wait_for_timeout(500)
     pg.click('#push-modelos [data-pm="0"]'); pg.click("#btn-push-historico"); pg.wait_for_timeout(800)
     axe(pg, "painel: histórico de avisos")

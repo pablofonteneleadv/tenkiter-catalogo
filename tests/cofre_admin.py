@@ -19,7 +19,7 @@ def novo(b, perms=PERMS_ALL, versao="3.6"):
     pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: (DIAL.append((d.type, d.message)), d.accept()))
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
     pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250)
-    pg.click("#btn-abrir-conexoes"); pg.wait_for_timeout(1500)
+    pg.click("#btn-abrir-conexoes"); pg.wait_for_timeout(1500); pg.evaluate("document.querySelectorAll('#cx-corpo .cx-grupo').forEach(g=>g.open=true)"); pg.wait_for_timeout(300)
     return ctx, pg, st, erros
 SEGREDOS = re.compile(r"rnd_FALSO|cfut_FALSO|os_v2_(org|app)_FALSO|IGAA_FALSO")
 with sync_playwright() as p:

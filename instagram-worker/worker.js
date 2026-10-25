@@ -2416,10 +2416,11 @@ async function rotaWebhookMensagens_(env, req, url) {
     const assin = (req.headers.get('X-Hub-Signature-256') || '').replace(/^sha256=/, '');
     const chave = await crypto.subtle.importKey('raw', new TextEncoder().encode(segApp), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     const esperado = Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', chave, new TextEncoder().encode(bruto))), (x) => x.toString(16).padStart(2, '0')).join('');
-    if (!assin || !igualConst_(assin, esperado)) return ok(401, { ok: false });
+    if (!assin || !igualConst_(assin, esperado)) { await cfgSet(env, 'msg_ult_instagram', JSON.stringify({ em: agora(), res: 'assinatura', tem: !!assin })); return ok(401, { ok: false }); }
     if (await msgPausado_(env, 'instagram')) return ok(200, { ok: true, pausado: true });
     let b = null; try { b = JSON.parse(bruto); } catch (e) { return ok(400, { ok: false }); }
-    let novas = 0; for (const m of normalizarInstagram_(b)) if (await gravarMensagem_(env, 'instagram', m)) novas++;
+    const lista = normalizarInstagram_(b); let novas = 0; for (const m of lista) if (await gravarMensagem_(env, 'instagram', m)) novas++;
+    await cfgSet(env, 'msg_ult_instagram', JSON.stringify({ em: agora(), res: 'ok', itens: lista.length, novas: novas }));
     return ok(200, { ok: true, novas: novas });
   }
   if (partes[1] === 'wafly' && (partes[2] === '1' || partes[2] === '2')) {
@@ -2506,6 +2507,23 @@ export default {
         if (!/^[A-Za-z0-9]{16,80}$/.test(v)) return J({ ok: false, erro: 'O segredo do app parece inválido. Cole só o código (letras e números), sem espaços.' }, 400);
         await cfgSet(env, 'ig_app_secret', v);
         return J({ ok: true, configurado: true });
+      }
+      if (p === '/msg/instagram/situacao' && req.method === 'GET') {
+        let ult = null; try { ult = JSON.parse((await cfgGet(env, 'msg_ult_instagram')) || 'null'); } catch (e) { /* sem registro */ }
+        const out = { ok: true, ultimaTentativa: ult, token: !!(await cfgGet(env, 'ig_token')), assinada: null };
+        const tk = await cfgGet(env, 'ig_token');
+        if (tk) { try { const r = await fetch(igBase(env) + '/me/subscribed_apps', { headers: { Authorization: 'Bearer ' + tk }, signal: AbortSignal.timeout(15000) }); const j = await r.json().catch(() => ({})); if (r.ok && Array.isArray(j.data)) out.assinada = j.data.some((a) => Array.isArray(a.subscribed_fields) && a.subscribed_fields.indexOf('messages') !== -1); else out.erroMeta = (j.error && j.error.message) || ('HTTP ' + r.status); } catch (e) { out.erroMeta = 'Sem resposta da Meta agora.'; } }
+        return J(out);
+      }
+      if (p === '/msg/instagram/assinar' && req.method === 'POST') {
+        const tk = await cfgGet(env, 'ig_token');
+        if (!tk) return J({ ok: false, erro: 'Conecte o Instagram em Conexões antes (cole o token longo que começa com IGAA).' }, 409);
+        try {
+          const r = await fetch(igBase(env) + '/me/subscribed_apps?subscribed_fields=messages', { method: 'POST', headers: { Authorization: 'Bearer ' + tk }, signal: AbortSignal.timeout(15000) });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || j.success === false) return J({ ok: false, erro: 'A Meta não aceitou: ' + ((j.error && j.error.message) || ('HTTP ' + r.status)) }, 409);
+        } catch (e) { return J({ ok: false, erro: 'Sem resposta da Meta agora. Tente de novo.' }, 409); }
+        return J({ ok: true });
       }
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {

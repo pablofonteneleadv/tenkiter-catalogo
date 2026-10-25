@@ -327,13 +327,13 @@
   function desenharConectar(erro) {
     tela = 'conectar';
     const c = st || {};
-    $('ig-corpo').innerHTML = '<div class="ig-conectar">' + (c.conectado ? '<p><b>✅ Conectado' + (c.usuario ? ' como @' + esc(c.usuario) : '') + '</b>' + (c.venceEmDias != null ? ' · o acesso é renovado sozinho (vence em ' + c.venceEmDias + ' dias se algo falhar)' : '') + '.</p>' +
-      '<div class="ig-edit-barra"><button type="button" class="ig-sec" data-ig="historico">📚 Importar os últimos 20 posts</button><button type="button" class="ig-sec" data-ig="todos" id="ig-btn-todos">' + rotuloTodos(c) + '</button><button type="button" class="ig-ruim" data-ig="desconectar">Desconectar</button><button type="button" class="ig-sec" data-ig="voltarLista">← Voltar</button></div><hr>' + '<h3 style="font-size:.95rem;margin:8px 0 6px">🤖 Leitura das fotos por IA</h3>' + (c.ia && c.ia.ligada ? '<p style="font-size:.86rem">✅ <b>Ligada</b> (chave terminada em ' + esc(c.ia.fim || '') + '). Cada post novo é lido sozinho: nome, preço escrito na foto, categoria e cores já vêm preenchidos quando você aceita.</p><div class="ig-edit-barra"><button type="button" class="ig-ruim" data-ig="iaDesligar">Desligar a IA</button></div>' :
-        '<p style="font-size:.86rem">Para os posts chegarem já com nome, preço, categoria e cores, cole uma chave do Google (Gemini). No celular: abra <b>aistudio.google.com/apikey</b> → <b>Criar chave de API</b> → copie e cole aqui. Ela fica guardada só no servidor e nunca volta para a tela.</p><label for="ig-ia-chave">Chave da IA (Gemini)</label><input type="password" id="ig-ia-chave" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="ig-edit-barra"><button type="button" class="ig-ok" data-ig="iaLigar">Ligar a IA</button></div>') : '') +
-      '<h3 style="font-size:.95rem;margin:8px 0">' + (c.conectado ? 'Trocar o acesso do Instagram' : 'Conectar o Instagram') + '</h3>' +
-      '<p style="font-size:.85rem">O sistema só LÊ o seu Instagram (nunca posta). Para liberar, você cria um acesso na Meta e cola o código aqui:</p>' +
-      '<ol><li>No celular, abra <b>developers.facebook.com</b> → <b>Meus apps</b> → <b>Criar app</b> (tipo "Negócios") → adicione o produto <b>Instagram</b> → <b>API com login do Instagram</b>.</li><li>Em <b>Funções do app</b>, adicione a conta <b>@tenkitermodasceara</b> como testadora e aceite o convite no app do Instagram (Configurações → Apps e sites).</li><li>Em <b>Gerar tokens de acesso</b>, gere o token da conta e copie.</li><li>Cole abaixo e toque em Conectar. O código fica guardado só no servidor e nunca volta para a tela.</li></ol>' +
-      '<label for="ig-token">Código de acesso (token)</label><input type="password" id="ig-token" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="ig-edit-barra"><button type="button" class="ig-ok" data-ig="conectar">Conectar</button></div>' + (erro ? '<div class="ig-msg erro">' + esc(erro) + '</div>' : '<div class="ig-msg" id="ig-msg"></div>') + '</div>';
+    $('ig-corpo').innerHTML = '<div class="ig-conectar">' + (c.conectado
+      ? '<p><b>✅ Conectado' + (c.usuario ? ' como @' + esc(c.usuario) : '') + '</b>' + (c.venceEmDias != null ? ' · o acesso é renovado sozinho (vence em ' + c.venceEmDias + ' dias se algo falhar)' : '') + '.</p>' +
+        '<div class="ig-edit-barra"><button type="button" class="ig-sec" data-ig="historico">📚 Importar os últimos 20 posts</button><button type="button" class="ig-sec" data-ig="todos" id="ig-btn-todos">' + rotuloTodos(c) + '</button><button type="button" class="ig-sec" data-ig="voltarLista">← Voltar</button></div><hr>'
+      : '<p><b>O Instagram ainda não está conectado.</b></p>') +
+      '<p style="font-size:.86rem">O token do Instagram e a chave da leitura por IA agora ficam em <b>Conexões → Instagram</b>, junto com as outras chaves.</p>' +
+      '<div class="ig-edit-barra"><button type="button" class="ig-ok" data-ig="abrirConexoes">🔗 Abrir Conexões</button></div>' +
+      (erro ? '<div class="ig-msg erro">' + esc(erro) + '</div>' : '<div class="ig-msg" id="ig-msg"></div>') + '</div>';
   }
 
   /* ---------- importar TODOS os posts (em lotes; o servidor guarda onde parou) ---------- */
@@ -490,12 +490,15 @@
     else if (a === 'voltarEscolha') { escolha = null; desenharLista(); }
     else if (a === 'juntarEscolhidas') { if (escolha) { const manter = new Set(escolha.sel); if (confirm('Juntar com ' + contagemEscolha().f + ' foto(s) e ' + contagemEscolha().v + ' vídeo(s)?\n\nO que ficou de fora vai para "Pendentes" como mídia solta.')) await executarJuncao(escolha.ordem, manter); } }
     else if (a === 'limparMarcados') { marcados.clear(); desenharLista(); }
-    else if (a === 'iaLigar') { const k = ($('ig-ia-chave') || {}).value || ''; msg('Conferindo a chave com o Google…'); const r = await ig('/ia-chave', 'POST', { chave: k }); if (r && r.ok) { $('ig-ia-chave').value = ''; await carregarStatus(); desenharConectar(); msg('✅ IA ligada. Os posts pendentes vão sendo lidos.', 'ok'); rodarIA(); } else msg(erroTxt(r), 'erro'); }
-    else if (a === 'iaDesligar') { if (confirm('Desligar a leitura por IA? Os posts continuam chegando, só sem o preenchimento automático.')) { await ig('/ia-chave', 'DELETE'); await carregarStatus(); desenharConectar(); } }
     else if (a === 'lerIA') { msg('Lendo as fotos…'); const r = await ig('/acao', 'POST', { acao: 'lerIA', id }); if (r && r.ok) { await recarregarEditor(); msg('✅ Fotos lidas de novo.', 'ok'); } else msg(erroTxt(r), 'erro'); }
     else if (a === 'config') desenharConectar();
-    else if (a === 'conectar') { const t = ($('ig-token') || {}).value || ''; msg('Conferindo com o Instagram…'); const r = await ig('/token', 'POST', { token: t }); if (r && r.ok) { $('ig-token').value = ''; await carregarStatus(); grupo = 'pendente'; await carregarLista(true); } else desenharConectar(erroTxt(r)); }
-    else if (a === 'desconectar') { if (confirm('Desconectar o Instagram? Os rascunhos já criados continuam aqui.')) { await ig('/token', 'DELETE'); await carregarStatus(); desenharConectar(); } }
+    else if (a === 'abrirConexoes') {
+      // Fecha esta janela e só então abre a de Conexões: o "voltar" da camada fechada chega depois e fecharia a nova.
+      let feito = false; const abrirCx = () => { if (feito) return; feito = true; document.removeEventListener('tk:camada-fechada', aoFechar); if (window.TKConexoes) window.TKConexoes.abrir('instagram'); };
+      const aoFechar = (ev) => { if (ev.detail && ev.detail.chave === 'overlay-instagram') setTimeout(abrirCx, 60); };
+      document.addEventListener('tk:camada-fechada', aoFechar); setTimeout(abrirCx, 600);
+      fecharComHistorico_('overlay-instagram');
+    }
     else if (a === 'historico') { msg('Importando…'); const r = await ig('/buscar', 'POST', { ultimos: 20 }); if (r && r.ok) { msg(r.novas + ' post(s) importado(s).', 'ok'); await carregarStatus(); } else msg(erroTxt(r), 'erro'); }
     else if (a === 'todos') await importarTodos(!!(st && st.historico && st.historico.completo));
     else if (a === 'parar') { paraTodos = true; msg('Parando depois deste lote…'); }

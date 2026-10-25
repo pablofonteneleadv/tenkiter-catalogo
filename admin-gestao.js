@@ -4,7 +4,7 @@
  *   • Números reais (visualizações, cliques no WhatsApp, conversão, mais vistas, por dia)
  *   • Exportar / importar planilha CSV (com prévia antes de gravar)
  *   • Gerar códigos das peças antigas, lista de peças para o WhatsApp, lote de categoria e estoque
- *   • Integrações (Pixel da Meta, API de Conversões, sinônimos, endereços do catálogo para Meta/Google)
+ *   • (Integrações passaram para Conexões → Meta, Google e busca)
  *   • Avisos (push): modelos, segmento e histórico
  * Carrega DEPOIS do script de admin.html e usa o que ele já tem (adminPin, funcionarioNome, produtos, carregarProdutos...).
  * Cada recurso só aparece se o backend (?action=versao) disser que tem — com backend antigo o painel fica como sempre foi.
@@ -642,55 +642,6 @@
   }
 
   /* ====================================================================
-   * INTEGRAÇÕES (Pixel, API de Conversões, sinônimos, catálogo Meta/Google)
-   * ==================================================================== */
-  async function abrirIntegracoes_() {
-    abrirFolha_('🔌 Integrações', '<p class="g-info">Carregando…</p>');
-    const r = await chamar_({ action: 'statusIntegracoes' });
-    if (!r || !r.ok) { $('gestao-corpo').innerHTML = '<p class="g-erro">' + esc(erroTexto_(r)) + '</p>'; return; }
-    const feedCsv = API_URL + '?action=feed&formato=csv', feedXml = API_URL + '?action=feed&formato=xml';
-    $('gestao-corpo').innerHTML =
-      '<p class="g-info">Tudo aqui já fica pronto, mas <b>desligado</b>: enquanto os campos estiverem vazios, nada é enviado para a Meta e o aviso de cookies nem aparece para o cliente.</p>' +
-      '<h3>Pixel da Meta (Instagram e Facebook)</h3>' +
-      '<label for="int-pixel">ID do Pixel (só números)</label><input type="text" id="int-pixel" inputmode="numeric" autocomplete="off" value="' + esc(r.pixelId) + '" placeholder="Ex.: 1234567890123456">' +
-      '<p class="g-nota">Quando preenchido, o catálogo pede a autorização do cliente (aviso de cookies) e só então liga o Pixel. Eventos: ver peça, sacola, WhatsApp e pedido enviado.</p>' +
-      '<h3>API de Conversões (opcional)</h3>' +
-      '<p class="g-info" id="int-capi-status">' + (r.capiConfigurado ? '✓ Token configurado (guardado só no servidor)' : '✗ Sem token') + '</p>' +
-      '<label for="int-token">Token de acesso da Meta</label><input type="password" id="int-token" autocomplete="off" placeholder="' + (r.capiConfigurado ? 'deixe vazio para manter o atual' : 'cole aqui o token') + '">' +
-      '<label for="int-teste">Código de teste de eventos (opcional)</label><input type="text" id="int-teste" autocomplete="off" value="' + esc(r.testeCodigo) + '" placeholder="Ex.: TEST12345">' +
-      '<details class="g-det"><summary>Avançado</summary><label for="int-graph">Versão da API</label><input type="text" id="int-graph" value="' + esc(r.graphVersao) + '"></details>' +
-      '<p class="g-nota">O token <b>nunca volta para esta tela nem vai para o GitHub</b>: fica nas Propriedades do Script. Só entra em ação se o Pixel e o token estiverem preenchidos e o cliente tiver aceitado o aviso.</p>' +
-      '<h3>Busca: sinônimos</h3>' +
-      '<label for="int-sin">Uma por linha, no formato palavra=parecida1,parecida2</label><textarea id="int-sin" rows="4" placeholder="bermuda=short&#10;fantasia=roupa de festa">' + esc(r.sinonimos) + '</textarea>' +
-      '<p class="g-nota">Usado só quando o cliente digita algo que não acha nada. Já existem sinônimos padrão (camisa/camiseta, calça/jeans…).</p>' +
-      '<h3>Avisos (OneSignal): segmentos</h3>' +
-      '<label for="int-seg">Nomes dos segmentos criados no OneSignal, separados por vírgula</label><input type="text" id="int-seg" autocomplete="off" value="' + esc(r.segmentosPush) + '" placeholder="Ex.: Clientes Infantil, Clientes Feminino">' +
-      '<div class="g-linha"><button type="button" class="g-prim" id="int-salvar">Salvar integrações</button></div><p id="int-msg" class="g-info" aria-live="polite"></p>' +
-      '<h3>Catálogo para Instagram/Facebook e Google</h3>' +
-      '<p class="g-info">Endereços prontos com as peças ativas (atualizam sozinhos). Na Meta (Gerenciador de Comércio) e no Google Merchant Center, crie uma fonte de dados por link/URL e cole um destes endereços.</p>' +
-      '<label for="int-feed-csv">Planilha (CSV) — Meta e Google</label><div class="g-copia"><input type="text" id="int-feed-csv" readonly value="' + esc(feedCsv) + '"><button type="button" data-cp="int-feed-csv">Copiar</button></div>' +
-      '<label for="int-feed-xml">XML — Google Merchant</label><div class="g-copia"><input type="text" id="int-feed-xml" readonly value="' + esc(feedXml) + '"><button type="button" data-cp="int-feed-xml">Copiar</button></div>' +
-      '<label for="int-sitemap">Mapa do site (sitemap)</label><div class="g-copia"><input type="text" id="int-sitemap" readonly value="' + esc(API_URL + '?action=sitemap') + '"><button type="button" data-cp="int-sitemap">Copiar</button></div>' +
-      '<p class="g-nota">O Instagram não é publicado automaticamente (decisão do projeto). A sacola/loja do Instagram depende da Meta aprovar sua conta de comércio; este catálogo é a base para isso.</p>' +
-      '<div class="g-linha">' + (r.capiConfigurado ? '<button type="button" class="g-sec" id="int-limpar-token">Remover o token guardado</button>' : '') + '</div>';
-    $('gestao-corpo').querySelectorAll('[data-cp]').forEach((b) => b.addEventListener('click', () => copiar_($(b.dataset.cp).value, 'Endereço copiado!')));
-    const salvar = async (extra) => {
-      const msg = $('int-msg'); msg.textContent = 'Salvando…';
-      const corpo = Object.assign({ action: 'salvarIntegracoes', pixelId: $('int-pixel').value.trim(), testeCodigo: $('int-teste').value.trim(), graphVersao: $('int-graph').value.trim(), sinonimos: $('int-sin').value, segmentosPush: $('int-seg').value }, extra || {});
-      const t = $('int-token').value.trim(); if (t) corpo.tokenCapi = t;
-      const x = await chamar_(corpo);
-      if (!x || !x.ok) { msg.className = 'g-erro'; msg.textContent = erroTexto_(x); return; }
-      try { localStorage.removeItem(CONFIG_PUBLICA_CHAVE); } catch (e) {}
-      $('int-token').value = '';
-      msg.className = 'g-ok'; msg.textContent = '✅ Salvo. ' + (x.pixelId ? 'Pixel ativo (' + x.pixelId + ').' : 'Pixel desligado.') + (x.capiConfigurado ? ' API de Conversões pronta.' : '');
-      $('int-capi-status').textContent = x.capiConfigurado ? '✓ Token configurado (guardado só no servidor)' : '✗ Sem token';
-    };
-    $('int-salvar').addEventListener('click', () => salvar());
-    const lt = $('int-limpar-token');
-    if (lt) lt.addEventListener('click', () => { if (confirm('Remover o token da API de Conversões guardado no servidor?')) salvar({ limparTokenCapi: true }).then(() => { lt.remove(); }); });
-  }
-
-  /* ====================================================================
    * AVISOS (PUSH): modelos, segmento, histórico
    * ==================================================================== */
   const MODELOS_PUSH = [
@@ -747,14 +698,12 @@
     $('btn-exportar-csv').addEventListener('click', exportarCsv_);
     $('btn-importar-csv').addEventListener('click', telaImportar_);
     $('btn-abrir-metricas').addEventListener('click', () => abrirMetricas_(30));
-    $('btn-abrir-integracoes').addEventListener('click', abrirIntegracoes_);
     ligarPedidos_();
     const v = await versaoServidor();
     recursos = v && typeof v === 'object' ? v : {};
     esconder_('card-pedidos', !!recursos.pedidos);
     esconder_('btn-abrir-metricas', !!recursos.metricas);
     esconder_('btn-importar-csv', !!recursos.importacao);
-    esconder_('btn-abrir-integracoes', !!recursos.integracoes);
     ligarLote_();
     prepararPush_();
     atualizarAvisoCodigos_();
