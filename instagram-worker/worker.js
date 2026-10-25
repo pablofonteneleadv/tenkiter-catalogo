@@ -863,7 +863,8 @@ async function enviarGrupoClientes_(env, p) {
  *   - 4xx explícito = recusado (a pessoa pode tentar de novo depois de conferir);
  *   - 2xx sem erro declarado = aceito. Só guardamos os NOMES dos campos da resposta (diagnóstico), nunca o conteúdo.
  * ========================================================================== */
-const WAME_BASES_OK = /^https:\/\/(?:server\.wame\.api\.br|server\.api-wa\.me)$/;
+const WAME_SERVIDORES = ['server.wame.api.br', 'us.api-wa.me', 'server.api-wa.me'];
+const WAME_BASES_OK = /^https:\/\/(?:server\.wame\.api\.br|us\.api-wa\.me|server\.api-wa\.me)$/;
 function validarConfigWame_(bruto) {
   try {
     const c = JSON.parse(bruto || '{}'), key = String(c.key || '').trim();
@@ -872,11 +873,42 @@ function validarConfigWame_(bruto) {
     return WAME_BASES_OK.test(base) ? { key: key, base: base } : null;
   } catch (e) { return null; }
 }
-/** A chave cadastrada na Gestão (D1) vale primeiro; o segredo do Worker é o reserva. */
+/** A chave e o servidor cadastrados na Gestão (D1) valem primeiro; o segredo do Worker é o reserva. */
 async function cfgWameStatus_(env) {
-  let guardada = null;
-  try { guardada = await cfgGet(env, 'wame_status_2'); } catch (e) { /* sem D1: cai no segredo */ }
-  return validarConfigWame_(guardada ? JSON.stringify({ key: guardada }) : '') || validarConfigWame_(env.WAME_STATUS_2);
+  let guardada = null, servidor = null;
+  try { guardada = await cfgGet(env, 'wame_status_2'); servidor = await cfgGet(env, 'wame_status_2_servidor'); } catch (e) { /* sem D1: cai no segredo */ }
+  const base = servidor && WAME_SERVIDORES.includes(servidor) ? 'https://' + servidor : undefined;
+  if (guardada) return validarConfigWame_(JSON.stringify({ key: guardada, base: base }));
+  const sec = validarConfigWame_(env.WAME_STATUS_2);
+  return sec && base ? { key: sec.key, base: base } : sec;
+}
+/** Teste de conexão (somente leitura): GET /{chave}/instance em cada servidor permitido, começando pelo configurado. */
+async function testarWame_(env) {
+  const cfg = await cfgWameStatus_(env);
+  if (!cfg) return { ok: false, erro: 'Cadastre a chave do Wame antes de testar.' };
+  const hosts = [cfg.base.replace('https://', '')].concat(WAME_SERVIDORES.filter((h) => 'https://' + h !== cfg.base));
+  const res = [];
+  for (const h of hosts) {
+    let r, j = null;
+    try {
+      r = await fetch('https://' + h + '/' + encodeURIComponent(cfg.key) + '/instance', { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(12000), headers: { 'User-Agent': UA } });
+      j = await respostaGrupo_(r);
+    } catch (e) { res.push({ servidor: h, http: 0, texto: 'não respondeu' }); continue; }
+    const o = j && typeof j === 'object' && !Array.isArray(j) ? j : {}, inner = o.instance && typeof o.instance === 'object' ? o.instance : {};
+    const achar = (nomes) => { for (const src of [o, inner]) for (const n of nomes) if (typeof src[n] === 'boolean') return src[n]; return null; };
+    const conectado = achar(['phoneConnected', 'connected', 'isConnected']);
+    const estado = textoWame_(o.state || inner.state || o.connection || inner.connection || (typeof o.status === 'string' ? o.status : '') || (typeof inner.status === 'string' ? inner.status : ''), cfg.key);
+    let texto;
+    if (r.status === 403) texto = erroRecusaWame_(403, j, cfg.key);
+    else if (r.status === 401 || r.status === 404) texto = 'este servidor não reconhece a chave';
+    else if (!r.ok) texto = 'respondeu HTTP ' + r.status;
+    else texto = conectado === true ? 'conectado' : conectado === false ? 'responde, mas o WhatsApp está desconectado' : estado ? 'responde (estado: ' + estado + ')' : 'responde, mas não informou o estado';
+    res.push({ servidor: h, http: r.status, conectado: r.ok ? conectado : null, texto: texto, campos: Object.keys(o).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 15) });
+    if (r.ok) break;
+  }
+  const bom = res.find((x) => x.http >= 200 && x.http < 300);
+  try { await cfgSet(env, 'wame_ultimo_teste', JSON.stringify({ em: agora(), res: res })); } catch (e) { /* diagnóstico não bloqueia */ }
+  return { ok: true, servidorAtual: cfg.base.replace('https://', ''), resultados: res, encontrado: bom ? bom.servidor : null, conectado: bom ? bom.conectado : null };
 }
 /** Canais com recibo por mídia (nunca reenviar quando o resultado ficou incerto). */
 function canalComRecibo_(c) { return c === 'grupo' || c === 'whatsapp2'; }
@@ -2194,18 +2226,25 @@ export default {
       }
       if (p === '/post/wame/config' && req.method === 'GET') {
         if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
-        const g=await cfgGet(env,'wame_status_2');
-        return J({ok:true,configurada:!!(await cfgWameStatus_(env)),origem:g?'gestao':validarConfigWame_(env.WAME_STATUS_2)?'worker':'nenhuma'});
+        const g=await cfgGet(env,'wame_status_2'), cfgAtual=await cfgWameStatus_(env);
+        return J({ok:true,configurada:!!cfgAtual,origem:g?'gestao':validarConfigWame_(env.WAME_STATUS_2)?'worker':'nenhuma',servidor:cfgAtual?cfgAtual.base.replace('https://',''):WAME_SERVIDORES[0],servidores:WAME_SERVIDORES});
       }
       if (p === '/post/wame/config' && req.method === 'POST') {
         if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
         const dados=await req.json().catch(()=>({}));
-        if(dados.apagar===true){await cfgSet(env,'wame_status_2',null);return J({ok:true,configurada:!!validarConfigWame_(env.WAME_STATUS_2)});}
-        const chave=String(dados.chave||'').trim();
-        if(!/^[A-Za-z0-9._-]{8,200}$/.test(chave))
+        if(dados.apagar===true){await cfgSet(env,'wame_status_2',null);await cfgSet(env,'wame_status_2_servidor',null);return J({ok:true,configurada:!!validarConfigWame_(env.WAME_STATUS_2)});}
+        const chave=String(dados.chave||'').trim(), servidor=String(dados.servidor||'').trim().replace(/^https:\/\//,'').replace(/\/+$/,'');
+        if(!chave&&!servidor) return J({ok:false,erro:'Informe a chave ou o servidor do Wame.'},400);
+        if(servidor&&!WAME_SERVIDORES.includes(servidor)) return J({ok:false,erro:'Servidor do Wame não reconhecido. Use '+WAME_SERVIDORES.join(', ')+'.'},400);
+        if(chave&&!/^[A-Za-z0-9._-]{8,200}$/.test(chave))
           return J({ok:false,erro:'A chave do Wame parece inválida. Cole só a chave da instância, sem espaços nem aspas.'},400);
-        await cfgSet(env,'wame_status_2',chave);
-        return J({ok:true,configurada:true});
+        if(chave)await cfgSet(env,'wame_status_2',chave);
+        if(servidor)await cfgSet(env,'wame_status_2_servidor',servidor);
+        return J({ok:true,configurada:!!(await cfgWameStatus_(env))});
+      }
+      if (p === '/post/wame/teste' && req.method === 'POST') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        return J(await testarWame_(env));
       }
       if (p.startsWith('/post/freeconvert/')) return await freeconvertRota_(env,req,url,J,h);
       if (ehPost) { const rp = (await rotasFotoIA(env, ctx, req, url, J, perms)) || (await rotasFotos(env, ctx, req, url, J, perms)) || (await rotasPostagem(env, ctx, req, url, J, perms)); if (rp) return rp; }
