@@ -2390,6 +2390,11 @@ async function gravarMensagem_(env, canal, m) {
   await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END WHERE id=?").bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, c.id).run();
   return true;
 }
+/** Segredo do app da Meta: o cadastrado na Gestão (D1) vale primeiro; o secret do Worker é o reserva. */
+async function igAppSecret_(env) {
+  try { const v = await cfgGet(env, 'ig_app_secret'); if (v) return v; } catch (e) { /* cai no secret */ }
+  return String(env.IG_APP_SECRET || '');
+}
 async function msgPausado_(env, canal) { try { return (await cfgGet(env, 'msg_pausa_' + canal)) === '1'; } catch (e) { return false; } }
 /** Webhooks públicos. Sempre responde rápido; só aceita com o segredo certo no caminho. */
 async function rotaWebhookMensagens_(env, req, url) {
@@ -2404,11 +2409,12 @@ async function rotaWebhookMensagens_(env, req, url) {
         ? new Response(String(url.searchParams.get('hub.challenge') || ''), { status: 200 }) : ok(403, { ok: false });
     }
     if (req.method !== 'POST') return ok(405, { ok: false });
-    if (!env.IG_APP_SECRET) return ok(503, { ok: false, erro: 'IG_APP_SECRET não configurado.' });
+    const segApp = await igAppSecret_(env);
+    if (!segApp) return ok(503, { ok: false, erro: 'Segredo do app da Meta não configurado.' });
     const bruto = await req.text();
     if (bruto.length > 262144) return ok(413, { ok: false });
     const assin = (req.headers.get('X-Hub-Signature-256') || '').replace(/^sha256=/, '');
-    const chave = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(env.IG_APP_SECRET)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const chave = await crypto.subtle.importKey('raw', new TextEncoder().encode(segApp), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     const esperado = Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', chave, new TextEncoder().encode(bruto))), (x) => x.toString(16).padStart(2, '0')).join('');
     if (!assin || !igualConst_(assin, esperado)) return ok(401, { ok: false });
     if (await msgPausado_(env, 'instagram')) return ok(200, { ok: true, pausado: true });
@@ -2451,8 +2457,9 @@ async function resumoMensagens_(env, origem) {
     const x = await env.DB.prepare('SELECT COUNT(*) AS conversas, COALESCE(SUM(total),0) AS mensagens, COALESCE(MAX(ultima_em),\'\') AS ultima FROM msg_conversa WHERE canal=?').bind(c).first();
     canais[c] = { conversas: Number(x.conversas) || 0, mensagens: Number(x.mensagens) || 0, ultima: x.ultima || '', ligadoEm: (await cfgGet(env, 'msg_wh_ligado_' + c)) || '', pausado: await msgPausado_(env, c) };
   }
-  canais.instagram.pronto = !!env.IG_APP_SECRET;
-  return { ok: true, canais: canais, urlInstagram: env.IG_APP_SECRET ? origem + '/wh/instagram/' + (await msgSegredo_(env)) : '' };
+  const temSegApp = !!(await igAppSecret_(env));
+  canais.instagram.pronto = temSegApp;
+  return { ok: true, canais: canais, urlInstagram: temSegApp ? origem + '/wh/instagram/' + (await msgSegredo_(env)) : '' };
 }
 export default {
   async scheduled(ev, env, ctx) {
@@ -2491,6 +2498,14 @@ export default {
           return J({ok:false,erro:'Formato de chave FreeConvert inválido.'},400);
         await cfgSet(env,'freeconvert_api_key',chave);
         return J({ok:true,configurada:true});
+      }
+      if (p === '/msg/instagram/segredo' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({}));
+        if (d.apagar === true) { await cfgSet(env, 'ig_app_secret', null); return J({ ok: true, configurado: !!env.IG_APP_SECRET }); }
+        const v = String(d.segredo || '').trim();
+        if (!/^[A-Za-z0-9]{16,80}$/.test(v)) return J({ ok: false, erro: 'O segredo do app parece inválido. Cole só o código (letras e números), sem espaços.' }, 400);
+        await cfgSet(env, 'ig_app_secret', v);
+        return J({ ok: true, configurado: true });
       }
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {

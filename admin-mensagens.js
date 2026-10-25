@@ -96,7 +96,10 @@
     if (canal === 'instagram') {
       if (!c.pronto) {
         caixa.appendChild(el('p', 'ms-pausa', 'Ainda não ligado.'));
-        caixa.appendChild(el('p', '', 'O Instagram só entrega mensagens por um webhook da Meta. Falta guardar o “segredo do app” da Meta no Worker (IG_APP_SECRET) e ligar o produto de mensagens no app. Depois disso, o endereço do webhook aparece aqui.'));
+        caixa.appendChild(el('p', '', 'O Instagram só entrega mensagens por um webhook da Meta. Cole abaixo a “Chave secreta do app do Instagram” (Meta → caso de uso API do Instagram → Mostrar). Ela fica guardada no servidor e não volta para a tela. Depois disso, o endereço do webhook aparece aqui.'));
+        const campo = el('input', 'ms-busca'); campo.id = 'ms-segredo'; campo.type = 'password'; campo.autocomplete = 'new-password'; campo.setAttribute('aria-label', 'Chave secreta do app do Instagram'); campo.placeholder = 'Chave secreta do app do Instagram';
+        const l = el('div', 'ms-linha'), bt = el('button', 'ms-btn prim', 'Salvar chave'); bt.type = 'button'; bt.dataset.ms = 'segredo'; l.appendChild(bt);
+        caixa.appendChild(campo); caixa.appendChild(l);
       } else {
         caixa.appendChild(el('p', c.ultima ? 'ms-ok' : '', c.ultima ? 'Gravando mensagens.' : 'Pronto para receber. Cole este endereço no webhook de Instagram do app da Meta:'));
         const i = el('input', 'ms-copia'); i.readOnly = true; i.value = resumo.urlInstagram; i.setAttribute('aria-label', 'Endereço do webhook do Instagram'); caixa.appendChild(i);
@@ -161,6 +164,11 @@
     const b = ev.target.closest('[data-ms]'); if (!b) return;
     const a = b.dataset.ms;
     if (a === 'aba') { canal = b.dataset.canal; busca = ''; await desenhar(); }
+    else if (a === 'segredo') {
+      const v = ($('ms-segredo') || {}).value || '';
+      const r = await worker_('/msg/instagram/segredo', 'POST', { segredo: v });
+      if (!r.ok) alert(r.erro || 'Não foi possível guardar agora.'); else recarregar();
+    }
     else if (a === 'abrir') abrirConversa(b.dataset.id);
     else if (a === 'voltar') recarregar();
     else if (a === 'ligar') {
