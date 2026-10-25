@@ -392,6 +392,35 @@
 
   .overlay-sheet { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: flex-end; justify-content: center; }
   .overlay-sheet.aberto { display: flex; }
+  .tam-linha { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0 2px; font-size: .74rem; color: #555; align-items: center; }
+  .tam-linha span { border: 1px solid #ccc; border-radius: 6px; padding: 1px 7px; background: #fff; font-weight: 700; color: #222; }
+  .tam-linha .mais-n { border-style: dashed; color: #666; }
+  .tam-linha.tam-vazio { color: #8a5a00; } .tam-linha.tam-vazio i { font-style: normal; }
+  .lote-sheet { height: 92vh; max-height: 92vh; height: 92dvh; max-height: 92dvh; }
+  .lote-corpo.ancorado { padding-bottom: 55vh; }
+  .lote-corpo { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 2px; }
+  .lote-campo { border: 1px solid #e6e6e6; border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; background: #fff; }
+  .lote-campo.mudando { border-color: var(--laranja); background: #fff9f2; }
+  .lote-campo > label { display: block; font-weight: 800; margin: 0 0 6px; font-size: .92rem; }
+  .lote-campo input[type=text], .lote-campo input[type=number], .lote-campo select, .lote-campo textarea { width: 100%; min-height: 46px; font-size: 1rem; }
+  .lote-linha { margin-bottom: 6px; }
+  .lote-dica { display: block; color: #666; margin-top: 4px; font-size: .78rem; }
+  .lote-modo { display: flex; gap: 6px; margin-bottom: 8px; }
+  .lote-modo button { width: auto; flex: 1; min-height: 40px; padding: 6px 8px; font-size: .8rem; background: #eee; color: #333; border-radius: 10px; }
+  .lote-modo button[aria-pressed="true"] { background: #0d0d0d; color: var(--laranja); }
+  .lote-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .lote-chip { display: inline-flex; align-items: center; gap: 2px; background: #fff1e3; border: 1px solid var(--laranja); border-radius: 999px; padding: 2px 3px 2px 12px; font-weight: 700; font-size: .88rem; }
+  .lote-chip.novo { background: #e9f8ee; border-color: #1a7a1a; }
+  .lote-chip small { font-weight: 800; color: #1a7a1a; margin-left: 4px; font-size: .62rem; text-transform: uppercase; }
+  .lote-chip button { width: 36px; min-width: 36px; height: 36px; padding: 0; margin: 0; border-radius: 50%; background: transparent; color: #b91c1c; font-size: .9rem; font-weight: 800; }
+  .lote-sug { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .lote-sug button { width: auto; min-height: 40px; padding: 6px 12px; border-radius: 999px; background: #f2f2f2; color: #222; border: 1px solid #ddd; font-size: .86rem; font-weight: 600; }
+  .lote-sug button.criar { background: #fff8ee; border-color: var(--laranja); color: #7a3d00; font-weight: 800; }
+  .lote-sug .lote-nada { font-size: .8rem; color: #666; padding: 6px 2px; }
+  .lote-rodape { display: flex; gap: 10px; align-items: center; padding-top: 8px; border-top: 1px solid #eee; }
+  .lote-previa { flex: 1; font-size: .8rem; color: #444; min-width: 0; }
+  .lote-rodape .btn-primario { width: auto; margin: 0; min-height: 50px; padding: 0 18px; flex: none; }
+  .lote-rodape .btn-primario:disabled { opacity: .45; }
   .juntar-ajuda { font-size: .88rem; color: #444; margin: 4px 0 10px; }
   .aviso-busca { background: #fff7ee; border: 1px solid var(--laranja); border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; font-size: .88rem; }
   .aviso-busca button { width: auto; min-height: 44px; margin: 6px 0 0; padding: 8px 14px; border-radius: 8px; background: #0d0d0d; color: #fff; border: 0; font-weight: 700; display: block; }
@@ -1215,6 +1244,46 @@
     </div>
   </div>
 
+  <div class="overlay-sheet" id="overlay-lote">
+    <div class="sheet lote-sheet" role="dialog" aria-modal="true" aria-labelledby="lote-titulo">
+      <div class="sheet-topo"><strong id="lote-titulo">Editar peças</strong><button type="button" class="sheet-x btn-fechar" id="lote-fechar" aria-label="Fechar">✕</button></div>
+      <p class="juntar-ajuda" id="lote-resumo"></p>
+      <div class="lote-corpo" id="lote-corpo">
+        <section class="lote-campo" data-campo="nome">
+          <label for="lote-nome">Nome</label>
+          <div class="lote-linha"><select id="lote-nome-modo" aria-label="Como mudar o nome"><option value="trocar">Trocar o nome todo</option><option value="fim">Acrescentar no fim</option><option value="inicio">Acrescentar no início</option></select></div>
+          <input type="text" id="lote-nome" maxlength="80" autocomplete="off" lang="pt-BR" placeholder="Novo nome">
+        </section>
+        <section class="lote-campo" data-campo="preco">
+          <label for="lote-preco">Preço</label>
+          <div class="lote-linha"><select id="lote-preco-modo" aria-label="Como mudar o preço"><option value="valor">Definir o valor (R$)</option><option value="pct">Reajustar em % (use − para baixar)</option></select></div>
+          <input type="text" id="lote-preco" inputmode="decimal" autocomplete="off" placeholder="Ex.: 89,90 — deixe vazio para não mexer">
+          <small class="lote-dica" id="lote-preco-dica"></small>
+        </section>
+        <section class="lote-campo" data-campo="categoria"><label>Categoria</label><div class="lote-modo" data-modo-de="categoria"></div><div id="lote-lista-categoria"></div></section>
+        <section class="lote-campo" data-campo="genero"><label>Gênero</label><div class="lote-modo" data-modo-de="genero"></div><div id="lote-lista-genero"></div></section>
+        <section class="lote-campo" data-campo="tamanhos"><label>Tamanhos</label><div class="lote-modo" data-modo-de="tamanhos"></div><div id="lote-lista-tamanhos"></div></section>
+        <section class="lote-campo" data-campo="cores"><label>Cores e estampas</label><div class="lote-modo" data-modo-de="cores"></div><div id="lote-lista-cores"></div></section>
+        <section class="lote-campo" data-campo="estoque">
+          <label for="lote-estoque">Estoque</label>
+          <div class="lote-linha"><select id="lote-estoque-modo" aria-label="Como mudar o estoque"><option value="def">Definir a quantidade</option><option value="mais">Somar à quantidade</option><option value="menos">Tirar da quantidade</option></select></div>
+          <input type="number" id="lote-estoque" inputmode="numeric" min="0" step="1" placeholder="Quantidade">
+        </section>
+        <section class="lote-campo" data-campo="descricao">
+          <label for="lote-descricao">Descrição</label>
+          <div class="lote-linha"><select id="lote-descricao-modo" aria-label="Como mudar a descrição"><option value="trocar">Trocar a descrição</option><option value="fim">Acrescentar no fim</option></select></div>
+          <textarea id="lote-descricao" rows="3" placeholder="Deixe vazio para não mexer"></textarea>
+        </section>
+        <section class="lote-campo" data-campo="novidade">
+          <label for="lote-novidade">Novidade</label>
+          <select id="lote-novidade" aria-label="Selo de novidade"><option value="">Não mexer</option><option value="sim">Marcar como novidade</option><option value="nao">Tirar o selo de novidade</option></select>
+        </section>
+      </div>
+      <div id="lote-erro" class="juntar-erro" role="alert" hidden></div>
+      <div class="lote-rodape"><div id="lote-previa" class="lote-previa" aria-live="polite"></div><button type="button" class="btn-primario" id="lote-ok" disabled>Aplicar</button></div>
+    </div>
+  </div>
+
   <div class="overlay-sheet" id="overlay-precos">
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="precos-titulo">
       <div class="sheet-topo"><strong id="precos-titulo">Alterar preços</strong><button type="button" class="sheet-x" id="precos-fechar" aria-label="Fechar">✕</button></div>
@@ -1256,6 +1325,7 @@
       <button type="button" style="width:auto;padding:2px 8px;" id="btn-cancelar-bulk">Desmarcar todos</button>
     </div>
     <div class="bulk-bar-actions">
+      <button type="button" id="btn-bulk-editar">✏️ Editar peças</button>
       <button type="button" id="btn-bulk-preco">% Alterar Preços</button>
       <button type="button" id="btn-bulk-novidade">Marcar Novidades</button>
       <button type="button" id="btn-bulk-arquivar">🗃&#65039; Arquivar em Massa</button>
@@ -1266,7 +1336,6 @@
     </div>
     <div class="bulk-mais" id="bulk-mais" hidden>
       <button type="button" id="btn-bulk-separar" hidden>✂️ Separar em peças</button>
-      <button type="button" id="btn-bulk-editar">✏️ Editar em massa</button>
     </div>
   </div>
 
@@ -2333,6 +2402,12 @@
     sincRapidos_();
   }
 
+  /* Tamanhos da peça na lista da gestão (para conferir de relance sem abrir a edição). */
+  function tamanhosLinha_(p) {
+    const t = String(p.Tamanhos || '').split(',').map(x => x.trim()).filter(Boolean);
+    if (!t.length) return '<div class="tam-linha tam-vazio">Tamanhos: <i>não informado</i></div>';
+    return '<div class="tam-linha" aria-label="Tamanhos: ' + escaparHtml(t.join(', ')) + '">' + t.slice(0, 8).map(x => '<span>' + escaparHtml(x) + '</span>').join('') + (t.length > 8 ? '<span class="mais-n">+' + (t.length - 8) + '</span>' : '') + '</div>';
+  }
   function listaDoCampo_(id) { return document.getElementById(id).value.split(',').map(s => s.trim()).filter(Boolean); }
   function sincRapidos_() {
     PARES_RAPIDOS.forEach(([idChips, idCampo, opcoes]) => {
@@ -3896,6 +3971,7 @@
           <div class="codigo">${p.Codigo ? escaparHtml(p.Codigo) : '<span class="selo-inativo" style="background:#fff3e0;color:#7a4a00;margin-left:0">SEM CÓDIGO</span>'}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}${esg ? '<span class="sel-esg">ESGOTADO</span>' : ''}</div>
           <div class="nome">${escaparHtml(p.Nome)}</div>
           <div class="preco">${ehConsulta(p) ? '💬 <strong>Consulte valor</strong> <small>(sem preço)</small>' : formatarReal(p.Preco) + ' · à vista <span>' + formatarReal(p.Preco * (1 - DESCONTO_AVISTA)) + '</span>'}</div>
+          ${tamanhosLinha_(p)}
           ${estoqueInformado(p) && !esg ? `<div class="estoque-linha">Estoque: ${escaparHtml(p.Estoque)}</div>` : ''}
           ${auditoriaMapa_[String(p.ID)] ? `<span class="audit-linha">${escaparHtml(textoAuditoria_(auditoriaMapa_[String(p.ID)]))}</span>` : ''}
           <div class="acoes-linha">
@@ -4076,37 +4152,208 @@
     else alert('Não consegui separar' + (r && r.erro ? ': ' + r.erro : '.') + '\nSe o servidor ainda não tiver essa ação, use "Editar em massa" ou o cadastro normal.');
   });
 
-  /** Editar em massa: muda UM campo em várias peças de uma vez, mantendo os outros campos de cada uma. Não mexe em fotos/vídeo. */
-  document.getElementById('btn-bulk-editar').addEventListener('click', async () => {
-    const ids = Array.from(selecionadosBulk);
-    if (!ids.length) return;
-    const campos = [['preco', 'Preço (ex: 89,90)'], ['categoria', 'Categoria (separe por vírgula)'], ['genero', 'Gênero (Feminino/Masculino/Unissex)'], ['tamanhos', 'Tamanhos (ex: P, M, G)'], ['cores', 'Cores (ex: Preto, Off-white)'], ['estoque', 'Estoque (número)'], ['descricao', 'Descrição']];
-    const escolha = prompt('O que você quer mudar nas ' + ids.length + ' peças?\n\n' + campos.map((c, i) => (i + 1) + ') ' + c[1]).join('\n') + '\n\nDigite o número:');
-    const idx = parseInt(escolha, 10) - 1;
-    if (!(idx >= 0 && idx < campos.length)) return;
-    const campo = campos[idx][0];
-    const valor = prompt('Novo valor para "' + campos[idx][1] + '":');
-    if (valor === null) return;
-    let n = 0;
-    ids.forEach((id) => {
-      const p = produtos.find(x => String(x.ID) === String(id));
-      if (!p) return;
-      const dados = {
-        action: 'update', id: p.ID,
-        nome: p.Nome || '', categoria: p.Categoria || '', genero: p.Genero || '',
-        preco: p.Preco != null ? String(p.Preco) : '', estoque: p.Estoque != null ? String(p.Estoque) : '',
-        tamanhos: p.Tamanhos || '', cores: p.Cores || '', descricao: p.Descricao || '',
-        novidade: ehNovidade(p),
-        fotoUrlExistente: String(p.Foto_URL || '').trim(),
-        fotosGaleriaExistentes: String(p.Fotos_Galeria || '').split(',').map(s => s.trim()).filter(Boolean).join(',')
-      };
-      dados[campo] = valor;
-      envios.push({ chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: true, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: dados, estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila' });
-      guardarEnvio_(envios[envios.length - 1]); n++;
+  /* ===== Editar peças em lote (janela interativa) =====
+   * Muda vários campos de várias peças de uma vez. Só entra o que a pessoa preencheu; o resto de cada peça fica como está.
+   * Categoria, tamanhos e cores aceitam escrever: se não existir, aparece "Criar “…”" e a opção nasce no servidor ao aplicar
+   * (cancelar não cria nada). Fotos e vídeo nunca são tocados. */
+  const loteLista_ = {};
+  const LOTE_CFG_ = {
+    categoria: { rotulo: 'categoria', opcoes: () => categorias.slice(), criar: 'addCategoria' },
+    genero: { rotulo: 'gênero', opcoes: () => generos.slice(), criar: null },
+    tamanhos: { rotulo: 'tamanho', opcoes: () => opcoesEscolha_('tamanhos'), criar: 'addTamanho' },
+    cores: { rotulo: 'cor', opcoes: () => opcoesEscolha_('cores'), criar: 'addCor' }
+  };
+  const loteLimpa_ = (t) => String(t == null ? '' : t).replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
+  const loteSplit_ = (v) => String(v == null ? '' : v).split(',').map(x => x.trim()).filter(Boolean);
+
+  function loteMontarCampo_(chave) {
+    const cfg = LOTE_CFG_[chave];
+    const raiz = document.getElementById('lote-lista-' + chave);
+    const est = { itens: [], novos: new Set(), modo: 'somar', termo: '' };
+    loteLista_[chave] = est;
+    raiz.innerHTML = '<div class="lote-chips" data-chips></div>' +
+      '<input type="text" class="lote-input" data-entrada autocomplete="off" autocapitalize="sentences" lang="pt-BR" maxlength="60" aria-label="Escreva ou escolha ' + cfg.rotulo + '" placeholder="' + (cfg.criar ? 'Escreva ou toque para escolher…' : 'Toque para escolher…') + '">' +
+      '<div class="lote-sug" data-sug></div>';
+    const modoBox = document.querySelector('[data-modo-de="' + chave + '"]');
+    modoBox.innerHTML = '<button type="button" data-modo="somar" aria-pressed="true">Acrescentar</button><button type="button" data-modo="tirar" aria-pressed="false">Retirar</button><button type="button" data-modo="trocar" aria-pressed="false">Trocar tudo</button>';
+    modoBox.onclick = (ev) => { const b = ev.target.closest('button[data-modo]'); if (!b) return; est.modo = b.dataset.modo; modoBox.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); if (est.modo === 'tirar') { est.itens = est.itens.filter(n => !est.novos.has(n)); est.novos.clear(); } desenhar(); lotePrevia_(); };
+    const inp = raiz.querySelector('[data-entrada]');
+    const igual = (a, b) => semAcento_(a) === semAcento_(b);
+    const jaTem = (n) => est.itens.some(i => igual(i, n));
+    const podeCriar = () => !!cfg.criar && est.modo !== 'tirar';
+    const campoDaPeca = { categoria: 'Categoria', genero: 'Genero', tamanhos: 'Tamanhos', cores: 'Cores' }[chave];
+    const opcoesAtuais = () => {
+      if (est.modo !== 'tirar') return cfg.opcoes();
+      const vistos = new Map();
+      produtos.filter(p => selecionadosBulk.has(String(p.ID))).forEach(p => loteSplit_(p[campoDaPeca]).forEach(v => { const k = semAcento_(v); if (!vistos.has(k)) vistos.set(k, v); }));
+      return Array.from(vistos.values()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    };
+    function adicionar(nome, novo) {
+      nome = loteLimpa_(nome); if (!nome || jaTem(nome)) { inp.value = ''; est.termo = ''; desenhar(); soltar(); return; }
+      const existente = opcoesAtuais().find(o => igual(o, nome));
+      if (existente) nome = existente; else if (!podeCriar()) return;
+      est.itens.push(nome); if (!existente) est.novos.add(nome);
+      inp.value = ''; est.termo = ''; desenhar(); lotePrevia_(); soltar();
+    }
+    function desenhar() {
+      raiz.querySelector('[data-chips]').innerHTML = est.itens.map((n, k) => '<span class="lote-chip' + (est.novos.has(n) ? ' novo' : '') + '">' + escaparHtml(n) + (est.novos.has(n) ? '<small>nova</small>' : '') + '<button type="button" data-tira="' + k + '" aria-label="Retirar ' + escaparHtml(n) + '">✕</button></span>').join('');
+      const t = semAcento_(est.termo);
+      const todas = opcoesAtuais().filter(o => !jaTem(o));
+      const lista = (t ? todas.filter(o => semAcento_(o).indexOf(t) !== -1) : todas).slice(0, t ? 10 : 12);
+      const bruto = loteLimpa_(est.termo);
+      const existe = bruto && opcoesAtuais().some(o => igual(o, bruto));
+      let h = lista.map(o => '<button type="button" data-pega="' + escaparHtml(o) + '">' + escaparHtml(o) + '</button>').join('');
+      if (bruto && !existe && !jaTem(bruto)) h += podeCriar() ? '<button type="button" class="criar" data-cria="' + escaparHtml(bruto) + '">＋ Criar “' + escaparHtml(bruto) + '”</button>' : '<span class="lote-nada">' + (est.modo === 'tirar' ? 'Nenhuma peça marcada tem esse ' + cfg.rotulo + '.' : 'Não existe esse ' + cfg.rotulo + '.') + '</span>';
+      raiz.querySelector('[data-sug]').innerHTML = h || (t ? '' : '<span class="lote-nada">Nada mais para escolher.</span>');
+    }
+    est.redesenhar = desenhar; est.adicionar = adicionar;
+    raiz.onclick = (ev) => {
+      const b = ev.target.closest('button'); if (!b) return;
+      if (b.dataset.tira != null) { const n = est.itens.splice(Number(b.dataset.tira), 1)[0]; est.novos.delete(n); desenhar(); lotePrevia_(); }
+      else if (b.dataset.pega != null) adicionar(b.dataset.pega);
+      else if (b.dataset.cria != null) adicionar(b.dataset.cria, true);
+    };
+    const corpo = document.getElementById('lote-corpo');
+    function ancorar() {            // só quando começa a escrever (menu de opções abre): campo sobe ao topo, opções logo abaixo
+      if (est.ancorado) return; est.ancorado = true; est.voltarA = corpo.scrollTop; corpo.classList.add('ancorado');
+      const sobe = () => { const dy = inp.getBoundingClientRect().top - corpo.getBoundingClientRect().top - 8; if (Math.abs(dy) > 2) corpo.scrollTop = corpo.scrollTop + dy; };
+      sobe(); setTimeout(sobe, 120); setTimeout(sobe, 350);   // o navegador também rola ao digitar: reafirma a posição
+    }
+    function soltar() {             // ao escolher (ou apagar tudo): volta onde estava, fluido
+      if (!est.ancorado) return; est.ancorado = false; corpo.classList.remove('ancorado');
+      corpo.scrollTo({ top: est.voltarA || 0, behavior: 'smooth' });
+      setTimeout(() => { if (!est.ancorado && Math.abs(corpo.scrollTop - (est.voltarA || 0)) > 4) corpo.scrollTop = est.voltarA || 0; }, 500);
+    }
+    est.soltar = soltar;
+    inp.addEventListener('input', () => { if (inp.value.trim()) ancorar(); else soltar(); est.termo = inp.value; if (/,/.test(inp.value)) { const partes = inp.value.split(','); partes.slice(0, -1).forEach(x => adicionar(x)); inp.value = partes[partes.length - 1]; est.termo = inp.value; } desenhar(); });
+    inp.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Enter') return; ev.preventDefault();
+      const bruto = loteLimpa_(inp.value); if (!bruto) return;
+      const ex = opcoesAtuais().find(o => igual(o, bruto));
+      if (ex || podeCriar()) adicionar(bruto);
+      else { const p = opcoesAtuais().find(o => semAcento_(o).indexOf(semAcento_(bruto)) !== -1 && !jaTem(o)); if (p) adicionar(p); }
     });
-    if (!n) return;
-    document.getElementById('status').textContent = 'Editando ' + n + ' peça(s) em segundo plano.';
-    selecionadosBulk.clear(); atualizarBarraBulk(); desenharEnvios(); processarEnvios();
+    inp.addEventListener('focus', desenhar);
+    inp.addEventListener('blur', () => { if (!inp.value.trim()) setTimeout(soltar, 150); });
+    desenhar();
+  }
+
+  function loteMudancas_() {
+    const m = [];
+    const nome = document.getElementById('lote-nome').value.trim(); if (nome) m.push('nome');
+    const preco = document.getElementById('lote-preco').value.trim(); if (preco) m.push('preço');
+    [['categoria', 'categoria'], ['genero', 'gênero'], ['tamanhos', 'tamanhos'], ['cores', 'cores']].forEach(([c, r]) => { if (loteLista_[c] && loteLista_[c].itens.length) m.push(r); });
+    if (document.getElementById('lote-estoque').value.trim() !== '') m.push('estoque');
+    if (document.getElementById('lote-descricao').value.trim()) m.push('descrição');
+    if (document.getElementById('lote-novidade').value) m.push('novidade');
+    return m;
+  }
+  function lotePrevia_() {
+    const m = loteMudancas_(), n = selecionadosBulk.size;
+    document.querySelectorAll('#lote-corpo .lote-campo').forEach(sec => {
+      const c = sec.dataset.campo, ativo = { nome: !!document.getElementById('lote-nome').value.trim(), preco: !!document.getElementById('lote-preco').value.trim(), estoque: document.getElementById('lote-estoque').value.trim() !== '', descricao: !!document.getElementById('lote-descricao').value.trim(), novidade: !!document.getElementById('lote-novidade').value };
+      sec.classList.toggle('mudando', c in ativo ? ativo[c] : !!(loteLista_[c] && loteLista_[c].itens.length));
+    });
+    const pr = document.getElementById('lote-preco').value.trim(), dica = document.getElementById('lote-preco-dica');
+    if (pr && document.getElementById('lote-preco-modo').value === 'pct') { const v = parseFloat(pr.replace(',', '.')); dica.textContent = isFinite(v) && v !== 0 ? 'Cada peça com preço será reajustada em ' + (v > 0 ? '+' : '') + String(v).replace('.', ',') + '% (o à vista termina em ,99 ou ,49). Peças em “Consulte valor” não mudam.' : 'Digite o percentual, por exemplo 10 ou −5.'; }
+    else if (pr && typeof precoTerminacao === 'function') { const r = precoTerminacao(pr); dica.textContent = r.valido ? (r.mudou ? 'Vai ficar ' + formatarReal(r.cheio) + ' · à vista ' + formatarReal(r.avista) + ' (o à vista termina em ,99 ou ,49).' : 'Preço ' + formatarReal(r.cheio) + ' · à vista ' + formatarReal(r.avista) + '.') : 'Digite um valor maior que zero, por exemplo 89,90.'; } else dica.textContent = '';
+    document.getElementById('lote-previa').textContent = m.length ? 'Vai mudar em ' + n + (n === 1 ? ' peça: ' : ' peças: ') + m.join(', ') + '.' : 'Preencha só o que quer mudar. O resto fica como está.';
+    document.getElementById('lote-ok').disabled = !m.length;
+    document.getElementById('lote-ok').textContent = m.length ? 'Aplicar em ' + n + (n === 1 ? ' peça' : ' peças') : 'Aplicar';
+  }
+  function loteErro_(t) { const e = document.getElementById('lote-erro'); e.textContent = t || ''; e.hidden = !t; }
+
+  document.getElementById('btn-bulk-editar').addEventListener('click', () => {
+    const ids = Array.from(selecionadosBulk);
+    if (!ids.length) { alert('Marque pelo menos uma peça para editar.'); return; }
+    ['nome', 'preco', 'estoque', 'descricao'].forEach(c => { document.getElementById('lote-' + c).value = ''; });
+    ['lote-nome-modo', 'lote-preco-modo', 'lote-estoque-modo', 'lote-descricao-modo'].forEach(id => { const e = document.getElementById(id); e.selectedIndex = 0; });
+    document.getElementById('lote-novidade').value = '';
+    ['categoria', 'genero', 'tamanhos', 'cores'].forEach(loteMontarCampo_);
+    const sel = produtos.filter(p => selecionadosBulk.has(String(p.ID)));
+    document.getElementById('lote-resumo').innerHTML = '<b>' + ids.length + (ids.length === 1 ? ' peça marcada' : ' peças marcadas') + '</b>' + (sel.length ? ': ' + escaparHtml(sel.slice(0, 3).map(p => (p.Codigo ? p.Codigo + ' ' : '') + p.Nome).join('; ')) + (sel.length > 3 ? ' e mais ' + (sel.length - 3) : '') : '') + '. Só muda o que você preencher.';
+    loteErro_(''); lotePrevia_();
+    abrirComHistorico_('overlay-lote');
+    document.getElementById('lote-corpo').scrollTop = 0;
+  });
+  document.getElementById('lote-fechar').addEventListener('click', () => fecharComHistorico_('overlay-lote'));
+  document.getElementById('overlay-lote').addEventListener('click', (ev) => { if (ev.target.id === 'overlay-lote') fecharComHistorico_('overlay-lote'); });
+  ['lote-nome', 'lote-preco', 'lote-estoque', 'lote-descricao'].forEach(id => document.getElementById(id).addEventListener('input', lotePrevia_));
+  ['lote-nome-modo', 'lote-preco-modo', 'lote-estoque-modo', 'lote-descricao-modo', 'lote-novidade'].forEach(id => document.getElementById(id).addEventListener('change', lotePrevia_));
+
+  document.getElementById('lote-ok').addEventListener('click', async () => {
+    const btn = document.getElementById('lote-ok'); if (btn.disabled) return;
+    loteErro_('');
+    const ids = Array.from(selecionadosBulk);
+    const pecas = ids.map(id => produtos.find(x => String(x.ID) === String(id))).filter(Boolean);
+    if (!pecas.length) { loteErro_('Não achei as peças marcadas. Atualize a lista e marque de novo.'); return; }
+    const nomeNovo = document.getElementById('lote-nome').value.trim(), modoNome = document.getElementById('lote-nome-modo').value;
+    const precoTxt = document.getElementById('lote-preco').value.trim();
+    const estTxt = document.getElementById('lote-estoque').value.trim();
+    const descNova = document.getElementById('lote-descricao').value.trim();
+    let precoFinal = null, pct = null;
+    const modoPreco = document.getElementById('lote-preco-modo').value, modoEst = document.getElementById('lote-estoque-modo').value, modoDesc = document.getElementById('lote-descricao-modo').value, novidadeEsc = document.getElementById('lote-novidade').value;
+    if (precoTxt && modoPreco === 'pct') { pct = parseFloat(precoTxt.replace('−', '-').replace(',', '.')); if (!isFinite(pct) || pct === 0 || pct <= -90 || pct > 500) { loteErro_('Percentual inválido. Digite algo como 10 (aumenta 10%) ou -5 (baixa 5%).'); return; } }
+    else if (precoTxt) { const r = typeof precoTerminacao === 'function' ? precoTerminacao(precoTxt) : null; if (r && !r.valido) { loteErro_('Preço inválido. Digite um valor maior que zero, por exemplo 89,90.'); return; } precoFinal = r ? String(r.cheio.toFixed(2)) : precoTxt; }
+    if (estTxt !== '' && !/^\d+$/.test(estTxt)) { loteErro_('Estoque precisa ser um número inteiro, como 3.'); return; }
+    if (nomeNovo && modoNome !== 'trocar') {
+      const longos = pecas.filter(p => ((modoNome === 'fim' ? (p.Nome || '') + ' ' + nomeNovo : nomeNovo + ' ' + (p.Nome || ''))).length > 80);
+      if (longos.length) { loteErro_('O nome ficaria com mais de 80 letras em ' + longos.length + (longos.length === 1 ? ' peça' : ' peças') + ' (por exemplo ' + (longos[0].Codigo || longos[0].Nome) + '). Escreva algo mais curto.'); return; }
+    }
+    btn.disabled = true; const txt0 = btn.textContent; btn.textContent = 'Aplicando…';
+    try {
+      // 1) cria o que não existe (se falhar, nada foi alterado nas peças)
+      for (const chave of ['categoria', 'tamanhos', 'cores']) {
+        const est = loteLista_[chave]; if (!est || !est.novos.size) continue;
+        if (chave !== 'categoria' && !(await garantirOpcoesServidor_())) { loteErro_('Não consegui falar com o servidor para guardar ' + (chave === 'cores' ? 'a cor nova' : 'o tamanho novo') + ' para todos. Confira a internet e tente de novo (nenhuma peça foi alterada).'); return; }
+        for (const nome of Array.from(est.novos)) {
+          const resp = await chamarAdmin_({ action: LOTE_CFG_[chave].criar, nome: nome });
+          if (!resp || !resp.ok) {
+            const t = textoErroCat_(resp, (resp && resp.semRede) ? 'Sem conexão: “' + nome + '” NÃO foi criado. Tente de novo.' : 'Não consegui criar “' + nome + '”. Só o Admin total cria opções novas.');
+            loteErro_((t || 'Sua sessão não permite criar “' + nome + '”.') + ' Nenhuma peça foi alterada.'); return;
+          }
+          const salvo = (chave === 'categoria' ? limparNomeCategoria_(resp.nome || nome) : String(resp.nome || nome)) || nome;
+          const k = est.itens.indexOf(nome); if (k >= 0) est.itens[k] = salvo; est.novos.delete(nome);
+          if (chave === 'categoria') { if (!categorias.some(c => semAcento_(c) === semAcento_(salvo))) categorias.push(salvo); guardarCategoriasLocal_(); }
+          else { const cfg = CAMPOS_ESCOLHA_[chave]; if (!cfg.base.some(o => semAcento_(o) === semAcento_(salvo))) cfg.base.push(salvo); montarRapidos_(); try { localStorage.setItem(CACHE_OPCOES_, JSON.stringify({ tamanhos: TAMANHOS_RAPIDOS, cores: CORES_RAPIDAS })); } catch (e) {} }
+        }
+      }
+      // 2) monta a edição de cada peça (campos não preenchidos ficam como estão)
+      const juntar = (atual, novos, modo) => {
+        if (modo === 'trocar') return novos.slice();
+        if (modo === 'tirar') return loteSplit_(atual).filter(o => !novos.some(n => semAcento_(n) === semAcento_(o)));
+        const out = loteSplit_(atual); novos.forEach(n => { if (!out.some(o => semAcento_(o) === semAcento_(n))) out.push(n); }); return out;
+      };
+      let n = 0;
+      pecas.forEach((p) => {
+        const dados = {
+          action: 'update', id: p.ID,
+          nome: p.Nome || '', categoria: p.Categoria || '', genero: p.Genero || '',
+          preco: p.Preco != null ? String(p.Preco) : '', estoque: p.Estoque != null ? String(p.Estoque) : '',
+          tamanhos: p.Tamanhos || '', cores: p.Cores || '', descricao: p.Descricao || '',
+          novidade: ehNovidade(p),
+          fotoUrlExistente: String(p.Foto_URL || '').trim(),
+          fotosGaleriaExistentes: String(p.Fotos_Galeria || '').split(',').map(s => s.trim()).filter(Boolean).join(',')
+        };
+        if (nomeNovo) dados.nome = modoNome === 'fim' ? ((p.Nome || '') + ' ' + nomeNovo).trim() : modoNome === 'inicio' ? (nomeNovo + ' ' + (p.Nome || '')).trim() : nomeNovo;
+        if (precoFinal != null) dados.preco = precoFinal;
+        if (pct != null && Number(p.Preco) > 0) { const base = Number(p.Preco) * (1 + pct / 100), r = typeof precoTerminacao === 'function' ? precoTerminacao(base) : null; dados.preco = String((r && r.valido ? r.cheio : Math.round(base * 100) / 100).toFixed(2)); }
+        if (estTxt !== '') { const atual = Number(p.Estoque) || 0, q = Number(estTxt); dados.estoque = String(modoEst === 'mais' ? atual + q : modoEst === 'menos' ? Math.max(0, atual - q) : q); }
+        if (descNova) dados.descricao = modoDesc === 'fim' && p.Descricao ? (p.Descricao + ' ' + descNova).trim() : descNova;
+        if (novidadeEsc) dados.novidade = novidadeEsc === 'sim';
+        const L = loteLista_;
+        const L2 = { categoria: 'Categoria', genero: 'Genero', tamanhos: 'Tamanhos', cores: 'Cores' };
+        Object.keys(L2).forEach((c) => { if (L[c].itens.length) dados[c] = juntar(p[L2[c]], L[c].itens, L[c].modo).join(', '); });
+        envios.push({ chave: ++seqEnvios, titulo: dados.nome || 'Peça', ehEdicao: true, temVideo: false, videoArquivo: null, capaNovaB64: null, galeriaNovaB64: [], dados: dados, estado: 'fila', msg: '', rascunhoId: null, k: novoKEnvio_(), etapa: 'fila' });
+        guardarEnvio_(envios[envios.length - 1]); n++;
+      });
+      if (!n) { loteErro_('Nada para aplicar.'); return; }
+      fecharComHistorico_('overlay-lote');
+      document.getElementById('status').textContent = 'Editando ' + n + ' peça(s) em segundo plano.';
+      selecionadosBulk.clear(); atualizarBarraBulk(); desenharEnvios(); processarEnvios();
+    } catch (e) {
+      loteErro_('Não consegui aplicar agora. Confira a internet e tente de novo. Nenhuma peça foi perdida.');
+    } finally { btn.disabled = false; btn.textContent = txt0; lotePrevia_(); }
   });
 
   /* ===== v3.7: juntar produtos repetidos (backend juntarProdutos) ===== */
