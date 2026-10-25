@@ -315,6 +315,21 @@ var evento=el.type==='file'?'change':(x.acao==='fill'?'change':(x.acao==='select
     var fecharAntes=m.querySelector('#tt-fechar').onclick;m.querySelector('#tt-fechar').onclick=function(){if(vvTeste)vvTeste.removeEventListener('resize',acomodarTeclado);fecharAntes();};
     var preparado=false;
     function preparar(i){var lista=t.preparacao||[];if(i>=lista.length){preparado=true;delete f.dataset.passo;passo();return;}var x=lista[i],d=f.contentDocument,el;el=resolverElemento(d,x);if(!el){preparar(i+1);return;}if(x.acao==='fill'||x.acao==='select'){el.value=x.valor||'';el.dispatchEvent(new Event(x.acao==='select'?'change':'input',{bubbles:true}));}else if(x.acao==='check'){el.checked=x.valor==='true';el.dispatchEvent(new Event('change',{bubbles:true}));}else el.click();setTimeout(function(){preparar(i+1);},250);}
-    f.onload=function(){limparBloqueio();limparDestaque();delete f.dataset.passo;if(!preparado)preparar(0);else passo();};
+    f.onload=function(){isolarEscritasDoTeste(f.contentWindow);limparBloqueio();limparDestaque();delete f.dataset.passo;if(!preparado)preparar(0);else passo();};
+  }
+  /* O teste usa a tela de verdade, mas NADA pode ser gravado no servidor nem entrar na fila real de envios:
+   * escritas (fetch/XHR/beacon) viram uma resposta de "teste, nada é salvo" e o banco local (fila) é outro, só do teste. */
+  function isolarEscritasDoTeste(w){
+    try{
+      if(!w||w.__tkTesteIsolado)return;w.__tkTesteIsolado=true;
+      var msg='Teste do tutorial: nada é salvo de verdade.',corpo=JSON.stringify({ok:false,simulado:true,erro:msg});
+      var fetchOrig=w.fetch;
+      w.fetch=function(url,opts){var m=String((opts&&opts.method)||(url&&url.method)||'GET').toUpperCase();if(m!=='GET'&&m!=='HEAD')return Promise.resolve(new w.Response(corpo,{status:200,headers:{'Content-Type':'application/json'}}));return fetchOrig.apply(this,arguments);};
+      var P=w.XMLHttpRequest&&w.XMLHttpRequest.prototype;
+      if(P){var abrirOrig=P.open;P.open=function(m,u){var met=String(m||'GET').toUpperCase();if(met!=='GET'&&met!=='HEAD'){var a=[].slice.call(arguments);a[0]='GET';a[1]='data:application/json;charset=utf-8,'+encodeURIComponent(corpo);return abrirOrig.apply(this,a);}return abrirOrig.apply(this,arguments);};}
+      if(w.navigator&&w.navigator.sendBeacon){try{w.navigator.sendBeacon=function(){return true;};}catch(e){}}
+      var idb=w.indexedDB;
+      if(idb){var falso={open:function(n,v){return idb.open('tutorial_teste_'+n,v);},deleteDatabase:function(n){return idb.deleteDatabase('tutorial_teste_'+n);},cmp:function(a,b){return idb.cmp(a,b);},databases:function(){return Promise.resolve([]);}};try{Object.defineProperty(w,'indexedDB',{value:falso,configurable:true});}catch(e){}}
+    }catch(e){}
   }
 })();

@@ -61,6 +61,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("tutorial_seletor_antigo.py", lambda o: "tutorial_seletor_antigo: OK" in o), # botão reorganizado continua reconhecido pelo nome acessível
     ("tutorial_nav_simulada.py", lambda o: "tutorial_nav_simulada: OK" in o and "barra do app ok" in o),  # destaque do alvo na barra inferior simulada + barra do app some durante o teste
     ("tutorial_mexer_imagem.py", lambda o: "tutorial_mexer_imagem: OK" in o),  # gesto na imagem (Enquadrar): grava uma etapa e no teste basta mexer
+    ("tutorial_teste_sem_gravar.py", lambda o: "tutorial_teste_sem_gravar: OK" in o),  # o teste do tutorial nunca grava no servidor nem na fila real
     ("conexoes_unificada.py", lambda o: "FALHAS=0" in o),   # Conexões em grupos: Instagram, IA, WhatsApp, Meta/Google, serviços e cofre num só lugar
     ("envios_retomar.py", lambda o: "FALHAS=0" in o),      # fila de envios guardada no aparelho: retoma sozinha, sem duplicar
     ("opcoes_lista.py", lambda o: "0 falhas" in o),        # v4.18: tamanhos e cores do servidor, Admin total cria e vale para todos
