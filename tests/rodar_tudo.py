@@ -59,6 +59,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("auditoria_produto.py", lambda o: "FALHAS=0" in o),   # quem cadastrou/editou aparece na lista e no formulário (backend 4.1)
     ("auditoria_filtros.py", lambda o: "auditoria_filtros: OK" in o), # sessão atual + período + vários usuários
     ("tutorial_seletor_antigo.py", lambda o: "tutorial_seletor_antigo: OK" in o), # botão reorganizado continua reconhecido pelo nome acessível
+    ("tutorial_nav_simulada.py", lambda o: "tutorial_nav_simulada: OK" in o and "barra do app ok" in o),  # destaque do alvo na barra inferior simulada + barra do app some durante o teste
     ("envios_retomar.py", lambda o: "FALHAS=0" in o),      # fila de envios guardada no aparelho: retoma sozinha, sem duplicar
     ("opcoes_lista.py", lambda o: "0 falhas" in o),        # v4.18: tamanhos e cores do servidor, Admin total cria e vale para todos
     ("cadastro_plano_mestre.py", lambda o: "P-38/39/41/42: PASS" in o),

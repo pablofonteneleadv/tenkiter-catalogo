@@ -147,6 +147,7 @@
       '.tk-app-views{position:fixed;inset:0 0 calc(70px + env(safe-area-inset-bottom,0px)) 0;z-index:80;background:#fff}' +
       '.tk-app-frame{display:block;width:100%;height:100%;border:0;background:#fff}' +
       '.tk-app-frame[hidden],.tk-app-views[hidden]{display:none!important}' +
+      'body.tk-tutorial-teste .tk-nav{display:none!important}body.tk-tutorial-teste .tk-app-views{bottom:0}' +
       '.tk-app-loading{position:absolute;inset:0;z-index:2;display:grid;place-items:center;background:#fff;color:#5f391f;font:700 1rem/1.4 system-ui,sans-serif}' +
       '.tk-app-loading[hidden]{display:none!important}' +
       'body.tk-app-frame-ativo{overflow:hidden!important}' +
@@ -330,6 +331,7 @@
     if (it) mostrarRota(it, 'none');
   });
   window.addEventListener('message', (ev) => {
+    if (ev.origin === location.origin && ev.data?.tipo === 'tk-tutorial-teste') { document.body.classList.toggle('tk-tutorial-teste', ev.data.ativo === true); return; } // teste guiado aberto numa tela do app: esconde esta barra (o teste desenha a dele)
     if (ev.origin !== location.origin || ev.data?.tipo !== 'tk-app-navegar') return;
     const it = itemDaUrl(ev.data.href || '');
     if (!it || it.id === ativoId) return;
