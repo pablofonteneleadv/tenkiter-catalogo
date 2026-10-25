@@ -727,3 +727,19 @@ html.fx-travado, html.fx-travado body { overflow: hidden; }
 .header-titulo-textos { text-align: center; }
 .header-icones { justify-content: center; }
 .faixas-details, .faixas-vitrine, #pills-genero, #pills-categoria { display: none !important; }
+
+/* v7.7 — busca interativa: peças com foto, refinar por chips, ajuda da loja (25/10/2026) */
+.sugestoes-busca { text-transform: none; letter-spacing: normal; max-height: min(56vh, 420px); max-height: min(52dvh, 420px); }
+.sugestoes-busca .sug-aviso { text-transform: none; letter-spacing: normal; font-size: .8rem; color: #555; padding: 12px 14px 4px; }
+.sugestoes-busca .sug-aviso-topo { color: #333; font-size: .86rem; }
+.sugestoes-busca .sug-col { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.sugestoes-busca .sug-txt { overflow-wrap: anywhere; }
+.sugestoes-busca .sug-sub { font-size: .76rem; color: #1a7a1a; font-weight: 700; margin-top: 1px; }
+.sugestoes-busca .sug-peca { justify-content: flex-start; gap: 12px; }
+.sugestoes-busca .sug-foto { flex: none; width: 44px; height: 55px; object-fit: cover; border-radius: 8px; background: #eee; }
+.sugestoes-busca .sug-refina { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 14px; }
+.sugestoes-busca .sug-rot { flex: none; font-size: .74rem; font-weight: 700; color: #555; min-width: 64px; }
+.sugestoes-busca .sug-chip { width: auto; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid #ccc; background: #fff; color: #1a1a1a; font-size: .8rem; font-weight: 600; cursor: pointer; }
+.sugestoes-busca .sug-chip.on { background: #fff3e0; border-color: #A85200; color: #7a3b00; }
+.sugestoes-busca .sug-chip:focus-visible, .sugestoes-busca .sug-zap:focus-visible { outline: 2px solid #A85200; outline-offset: 2px; }
+.sugestoes-busca .sug-zap { display: flex; align-items: center; justify-content: center; min-height: 48px; margin: 8px 12px 12px; padding: 0 12px; border-radius: 12px; background: #E67E22; color: #0d0d0d; font-weight: 800; font-size: .88rem; text-decoration: none; text-align: center; }
