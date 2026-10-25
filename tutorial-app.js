@@ -28,6 +28,7 @@
   ].join('\n');
   css+='\n#tut-etapas .tut-planilha{display:block;width:100%;border-spacing:0}#tut-etapas tbody{display:grid;gap:12px}#tut-etapas tr{display:grid;grid-template-columns:36px minmax(0,1fr);padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}#tut-etapas td{display:block;min-width:0;padding:4px;background:transparent;border-radius:0}#tut-etapas td:nth-child(n+3){grid-column:2}#tut-etapas td:nth-child(3){display:flex;gap:8px;flex-wrap:wrap}#tut-etapas td:nth-child(3)>*{flex:1;min-width:120px}#tut-etapas textarea{min-height:76px;line-height:1.5}#tut-etapas small{display:block;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}#tut-etapas .tut-btn{min-height:44px;margin:4px 4px 0 0}#tut-etapas .tut-planilha .tut-input{min-width:0}';
   css+='\n#tut-teste.tut-teclado .tut-teste-bar{padding:3px 6px}#tut-teste.tut-teclado .tut-teste-bar b{display:none}#tut-teste.tut-teclado #tt-guia{max-height:72px;font-size:.82rem}#tut-teste.tut-teclado #tt-guia .tut-status{margin:3px 0;padding:4px 6px}';
+  css+='\n#tut-etapas tr{grid-template-columns:28px minmax(0,1fr) 52px;position:relative}#tut-etapas td:nth-child(2){grid-column:2}#tut-etapas td:last-child{grid-column:3;grid-row:1 / span 4;display:flex;flex-direction:column;align-items:stretch;padding-left:6px}#tut-etapas td:last-child .tut-btn{margin:0 0 6px;padding:6px 2px;min-width:44px;font-size:.72rem;overflow-wrap:anywhere}';
   var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
 
   if (window.TMV){
