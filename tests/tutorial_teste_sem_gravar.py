@@ -2,7 +2,7 @@
 from playwright.sync_api import sync_playwright
 
 BASE = "http://127.0.0.1:8766/"
-TELA = """<button id='salvar' onclick="window.rodou=1">Cadastrar</button>"""
+TELA = """<script src='common.js'></script><script>window.fetchGuardado=window.fetch.bind(window)</script><button id='salvar' onclick="window.rodou=1">Cadastrar</button>"""
 TUT = {"id": "sg", "titulo": "Salvar", "descricao": "", "pagina": "index.html", "status": "publicado", "versao": 1, "preparacao": [],
        "etapas": [{"selector": "#salvar", "alvoNome": "Cadastrar", "acao": "click", "regra": "acao", "valor": "",
                    "instrucao": "Toque em Cadastrar", "observacao": "", "erro": ""}]}
@@ -28,13 +28,17 @@ with sync_playwright() as p:
       const g = await (await fetch('https://alvo-real.invalid/exec')).json();
       const db = await new Promise(ok => { const q = indexedDB.open('tenkiter_admin_envios_v1', 1); q.onsuccess = () => ok('aberto'); q.onerror = () => ok('erro'); });
       const nomes = await new Promise(ok => { const q = parent.indexedDB.databases().then(l => ok(l.map(d => d.name))); });
-      return {f, x, g, db, nomes};
+      const guardado = await (await window.fetchGuardado('https://alvo-real.invalid/exec', {method:'POST', body:'{}'})).json();
+      return {f, x, g, db, nomes, guardado};
     }""")
     assert r["f"].get("simulado") and not r["f"]["ok"], r
     assert r["x"].get("simulado"), r
+    assert r["guardado"].get("simulado"), "o fetch guardado pela página no início (como o admin.html faz) também precisa ser isolado: " + str(r)
     assert r["g"].get("real") is True, "leituras (GET) continuam reais"
     assert not posts, f"nenhum POST pode sair da tela de teste: {posts}"
     assert "tenkiter_admin_envios_v1" not in r["nomes"] and any("tutorial_teste_tenkiter_admin_envios_v1" == n for n in r["nomes"]), r["nomes"]
+    hist = fr.locator("#salvar").evaluate("() => { localStorage.setItem('tk_envios_hist_v1', '[\"teste\"]'); localStorage.setItem('chave_normal_x', '1'); return [parent.localStorage.getItem('tk_envios_hist_v1'), parent.localStorage.getItem('chave_normal_x'), parent.localStorage.getItem('tutorial_teste_tk_envios_hist_v1')]; }")
+    assert hist[0] is None and hist[1] == "1" and hist[2] == '["teste"]', "histórico de envios do teste não pode ir para o histórico real: " + str(hist)
     fr.locator("#salvar").click()
     page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Tutorial concluído corretamente')")
     browser.close()
