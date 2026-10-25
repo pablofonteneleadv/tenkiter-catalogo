@@ -555,6 +555,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                 if g.get("regras"): g.setdefault("regras_cfg",json.loads(json.dumps(PADRAO_R)))
                 if path=="/posts":
                     r0={"ok":True,"posts":[x for x in g["posts"] if x["status"]!="cancelado"],"contagens":{},"conectado":g["conectado"],"usuario":"tenkitermodasceara"}
+                    if g.get("status2_bloq"): r0.update({"status2Disponivel":False,"status2Motivo":"o plano atual do Wame não inclui postar Status (é preciso o plano Pro)"})
                     if g.get("regras"): r0.update({"regras":1,"config":g["regras_cfg"],"podeRegras":g.get("pode_regras",True),"uso24h":g.get("uso24h",{"story":12,"status":3,"feed":1,"carrossel":0,"reels":0})})
                     return route.fulfill(json=r0)
                 pb=json.loads(route.request.post_data or "{}")

@@ -882,6 +882,15 @@ async function cfgWameStatus_(env) {
   const sec = validarConfigWame_(env.WAME_STATUS_2);
   return sec && base ? { key: sec.key, base: base } : sec;
 }
+/** Quando a Wame recusa o Status por falta de plano, guardamos o aviso para a tela não pré-marcar o destino. Só aviso: nunca impede o envio. */
+async function bloqueioWame_(env) {
+  try { const v = await cfgGet(env, 'wame_plano_bloqueio'); return v ? JSON.parse(v) : null; } catch (e) { return null; }
+}
+async function motivoWame_(env) {
+  if (!(await cfgWameStatus_(env))) return 'falta cadastrar a chave do Wame em Conexões';
+  const b = await bloqueioWame_(env);
+  return b ? 'o plano atual do Wame não inclui postar Status' + (b.plano ? ' (é preciso o plano ' + b.plano + ')' : '') : '';
+}
 /** Teste de conexão (somente leitura): GET /{chave}/instance em cada servidor permitido, começando pelo configurado. */
 async function testarWame_(env) {
   const cfg = await cfgWameStatus_(env);
@@ -908,7 +917,8 @@ async function testarWame_(env) {
   }
   const bom = res.find((x) => x.http >= 200 && x.http < 300);
   try { await cfgSet(env, 'wame_ultimo_teste', JSON.stringify({ em: agora(), res: res })); } catch (e) { /* diagnóstico não bloqueia */ }
-  return { ok: true, servidorAtual: cfg.base.replace('https://', ''), resultados: res, encontrado: bom ? bom.servidor : null, conectado: bom ? bom.conectado : null };
+  const bloqueio = await bloqueioWame_(env);
+  return { ok: true, bloqueioStatus: bloqueio ? 'O último envio de Status foi recusado: o plano atual do Wame não inclui postar Status' + (bloqueio.plano ? ' (é preciso o plano ' + bloqueio.plano + ')' : '') + '. A conexão em si está normal.' : '', servidorAtual: cfg.base.replace('https://', ''), resultados: res, encontrado: bom ? bom.servidor : null, conectado: bom ? bom.conectado : null };
 }
 /** Canais com recibo por mídia (nunca reenviar quando o resultado ficou incerto). */
 function canalComRecibo_(c) { return c === 'grupo' || c === 'whatsapp2'; }
@@ -978,11 +988,15 @@ async function enviarStatusWame_(env, p) {
     if (!r.ok || respostaWameComErro_(j)) {
       const rejeitado = r.status >= 400 && r.status < 500 && ![408, 409, 429].includes(r.status);
       if (rejeitado) await env.DB.prepare("UPDATE postagem_grupo_recibo SET estado='recusado', atualizado_em=? WHERE postagem_id=? AND ordem=?").bind(agora(), p.id, i).run();
+      if (rejeitado && r.status === 403 && j && typeof j === 'object' && (j.requiredPlan || j.requiredPlanName || j.reason === 'permission_denied')) {
+        try { await cfgSet(env, 'wame_plano_bloqueio', JSON.stringify({ em: agora(), plano: textoWame_(j.requiredPlanName || j.requiredPlan, cfg.key), recurso: textoWame_(j.feature, cfg.key) })); } catch (e) { /* aviso não bloqueia */ }
+      }
       if (rejeitado) return marcarErroPost_(env, p, erroRecusaWame_(r.status, j, cfg.key));
       if (r.ok) return aguardarConfirmacaoWame_(env, p, 'A Wame respondeu com aviso de erro.');
       return aguardarConfirmacaoWame_(env, p, 'A Wame respondeu HTTP ' + r.status + '.');
     }
     await env.DB.prepare("UPDATE postagem_grupo_recibo SET estado='aceito', mensagem_id=?, atualizado_em=? WHERE postagem_id=? AND ordem=?").bind(idMensagemWame_(j), agora(), p.id, i).run();
+    try { await cfgSet(env, 'wame_plano_bloqueio', null); } catch (e) { /* aviso */ }
   }
   await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, erro='', publicado_em=?, atualizado_em=? WHERE id=?").bind('wame:' + p.id, agora(), agora(), p.id).run();
   return { ok: true, canal: 'whatsapp2' };
@@ -1435,7 +1449,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const q = (await env.DB.prepare("SELECT postagem.*, EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id=postagem.id AND g.estado='enviando') AS grupo_envio_incerto FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
     const c = (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM postagem GROUP BY status").all()).results || [];
     const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
-    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), status2Disponivel: !!(await cfgWameStatus_(env)), regras: 1, config: await lerCfgPost(env), uso24h: await uso24hPorCanal_(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
+    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), status2Disponivel: !!(await cfgWameStatus_(env)) && !(await bloqueioWame_(env)), status2Motivo: await motivoWame_(env), regras: 1, config: await lerCfgPost(env), uso24h: await uso24hPorCanal_(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
   }
   let b = {}; if (req.method === 'POST') { try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); } }
   if (p === '/post' && req.method === 'POST') {
@@ -2238,6 +2252,7 @@ export default {
         if(servidor&&!WAME_SERVIDORES.includes(servidor)) return J({ok:false,erro:'Servidor do Wame não reconhecido. Use '+WAME_SERVIDORES.join(', ')+'.'},400);
         if(chave&&!/^[A-Za-z0-9._-]{8,200}$/.test(chave))
           return J({ok:false,erro:'A chave do Wame parece inválida. Cole só a chave da instância, sem espaços nem aspas.'},400);
+        await cfgSet(env,'wame_plano_bloqueio',null);
         if(chave)await cfgSet(env,'wame_status_2',chave);
         if(servidor)await cfgSet(env,'wame_status_2_servidor',servidor);
         return J({ok:true,configurada:!!(await cfgWameStatus_(env))});

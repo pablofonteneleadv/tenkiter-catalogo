@@ -108,12 +108,12 @@ function d1() {
   const fAnt = globalThis.fetch;
   globalThis.fetch = async (u, init) => {
     if (/^https:\/\/(server\.wame\.api\.br|us\.api-wa\.me|server\.api-wa\.me)\//.test(String(u))) {
-      if ((init.method || 'GET') === 'GET') { instCham.push(String(u)); const h = String(u).split('/')[2]; return h === instOk ? new Response(JSON.stringify({ status: 200, instance: { phoneConnected: instConn, state: instConn ? 'open' : 'close' } })) : h === 'server.wame.api.br' && instPlano ? new Response(JSON.stringify({ status: 'forbidden', reason: 'plan_required', feature: 'status', requiredPlanName: 'Pro', message: 'x' }), { status: 403 }) : new Response('nao', { status: 404 }); }
+      if ((init.method || 'GET') === 'GET') { instCham.push(String(u)); const h = String(u).split('/')[2]; return h === instOk ? new Response(JSON.stringify({ status: 200, instance: { phoneConnected: instConn, state: instConn ? 'open' : 'close' } })) : h === 'server.wame.api.br' && instPlano ? new Response(JSON.stringify({ status: 'forbidden', reason: 'permission_denied', feature: 'newsletter, community e status', requiredPlanName: 'Pro', message: 'x' }), { status: 403 }) : new Response('nao', { status: 404 }); }
       wame.push({ url: String(u), body: JSON.parse(init.body), headers: new Headers(init.headers), redirect: init.redirect });
       if (wmodo === 'aguardar') await new Promise((r) => { liberar = r; });
       if (wmodo === 'timeout') throw new Error('timeout');
       if (wmodo === 'negado') return new Response(JSON.stringify({ error: 'instância desconectada' }), { status: 401 });
-      if (wmodo === 'plano') return new Response(JSON.stringify({ status: 'forbidden', reason: 'plan_required', feature: 'status', requiredPlan: 'pro', requiredPlanName: 'Pro', message: 'Feature not available on your plan. key=' + u.split('/')[3] }), { status: 403 });
+      if (wmodo === 'plano') return new Response(JSON.stringify({ status: 'forbidden', reason: 'permission_denied', feature: 'newsletter, community e status', requiredPlan: 'pro', requiredPlanName: 'Pro', message: 'Feature not available on your plan. key=' + u.split('/')[3] }), { status: 403 });
       if (wmodo === '500') return new Response('oops', { status: 502 });
       if (wmodo === 'erro200') return new Response(JSON.stringify({ error: 'falhou' }), { status: 200 });
       return new Response(JSON.stringify({ key: { id: 'WAME-' + wame.length }, status: 'PENDING' }));
@@ -157,12 +157,17 @@ function d1() {
   // 403 por plano (caso real de 25/10/2026): mensagem em português com o plano exigido, sem chave nem JSON
   wmodo = 'plano'; id = await novaPostagem('whatsapp2'); await W.processarPostagens(env);
   let pp = await lerPost(id);
-  chk('403 por plano diz qual plano é preciso, em português', pp.status === 'erro' && /plano atual do Wame não inclui o recurso “status”/.test(pp.erro) && /plano Pro/.test(pp.erro) && !/CHAVE_WAME|\{|plan_required|forbidden/.test(pp.erro), pp.erro);
+  chk('403 por plano diz qual plano é preciso, em português', pp.status === 'erro' && /plano atual do Wame não inclui o recurso “newsletter, community e status”/.test(pp.erro) && /plano Pro/.test(pp.erro) && !/CHAVE_WAME|\{|plan_required|forbidden/.test(pp.erro), pp.erro);
   const diag = JSON.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='wame_ultimo_envio'").first()).valor);
-  chk('diagnóstico guarda só motivo/recurso/plano, sem a chave', diag.http === 403 && diag.plano === 'Pro' && diag.recurso === 'status' && !JSON.stringify(diag).includes('CHAVE_WAME'), diag);
+  chk('diagnóstico guarda só motivo/recurso/plano, sem a chave', diag.http === 403 && diag.plano === 'Pro' && diag.recurso === 'newsletter, community e status' && !JSON.stringify(diag).includes('CHAVE_WAME'), diag);
+  const fl1 = (await A('GET', '/posts')).j;
+  chk('após 403 por plano, /posts avisa que o Status 2 não está disponível e diz o motivo', fl1.status2Disponivel === false && /plano atual do Wame não inclui postar Status \(é preciso o plano Pro\)/.test(fl1.status2Motivo), [fl1.status2Disponivel, fl1.status2Motivo]);
+  const sp = await A('POST', '/post', { tipo: 'story', modo: 'auto', legenda: 'forcado', midias: [{ url: MEDIA_URL, tipo: 'imagem' }], quando: ts(15), canal: 'whatsapp2' });
+  chk('o aviso não impede o envio: marcar o Status 2 mesmo assim ainda é aceito', sp.r.status === 200, sp.j);
   wmodo = 'ok'; const antes0 = wame.length;
   const rt = await A('POST', '/post/reagendar', { id, quando: 'agora' }); await W.processarPostagens(env);
   chk('depois de trocar o plano, "Tentar de novo" publica', rt.r.status === 200 && (await lerPost(id)).status === 'publicado' && wame.length === antes0 + 1, [rt.j, await lerPost(id)]);
+  chk('um envio bem-sucedido limpa o aviso de plano', (await A('GET', '/posts')).j.status2Disponivel === true && (await A('GET', '/posts')).j.status2Motivo === '');
   // resposta incerta: nunca reenvia
   wmodo = '500'; id = await novaPostagem('whatsapp2'); let antes = wame.length; await W.processarPostagens(env);
   let pi = await lerPost(id);
@@ -221,7 +226,7 @@ function d1() {
   instOk = 'us.api-wa.me'; instPlano = true;
   let t1 = await A('POST', '/post/wame/teste'); const hosts1 = t1.j.resultados.map((x) => x.servidor);
   chk('teste começa pelo servidor configurado e procura nos outros', t1.j.ok && hosts1[0] === 'server.wame.api.br' && hosts1.includes('us.api-wa.me') && t1.j.encontrado === 'us.api-wa.me' && t1.j.conectado === true, t1.j);
-  chk('o 403 por plano aparece no resultado do teste, em português', /plano atual do Wame não inclui o recurso “status”/.test(t1.j.resultados[0].texto) && /plano Pro/.test(t1.j.resultados[0].texto), t1.j.resultados[0]);
+  chk('o 403 por plano aparece no resultado do teste, em português', /plano atual do Wame não inclui o recurso “newsletter, community e status”/.test(t1.j.resultados[0].texto) && /plano Pro/.test(t1.j.resultados[0].texto), t1.j.resultados[0]);
   chk('o teste só faz GET /instance (somente leitura) e nunca vaza a chave', instCham.every((u) => /\/instance$/.test(u)) && !JSON.stringify(t1.j).includes(CH2));
   let sv2 = await A('POST', '/post/wame/config', { servidor: 'us.api-wa.me' }); chk('trocar só o servidor (sem colar a chave de novo) funciona', sv2.r.status === 200 && (await A('GET', '/post/wame/config')).j.servidor === 'us.api-wa.me');
   wame.length = 0; wmodo = 'ok'; id = await novaPostagem('whatsapp2'); await W.processarPostagens(env);

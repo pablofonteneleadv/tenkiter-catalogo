@@ -445,6 +445,7 @@
     msg('cx-wm-msg','Testando a conexão…','');ul.textContent='';
     const r=await igWorker_('/post/wame/teste','POST',{});
     if(!r.ok)return msg('cx-wm-msg',erroTxt(r),'erro');
+    if(r.bloqueioStatus){const li=document.createElement('li');li.textContent=r.bloqueioStatus;ul.appendChild(li)}
     (r.resultados||[]).forEach(x=>{const li=document.createElement('li');li.textContent=x.servidor+': '+x.texto+'.';ul.appendChild(li)});
     if(r.encontrado){
       const outro=r.encontrado!==r.servidorAtual;
