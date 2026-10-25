@@ -1,0 +1,10 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const nav = fs.readFileSync(require('node:path').join(__dirname, '..', 'nav.js'), 'utf8');
+assert.ok(nav.includes("qualquer: ['catalogo_admin']"), 'Gestão continua exigindo permissão administrativa');
+assert.ok(nav.includes("j.usuario.permissoes"), 'permissões são obtidas do servidor');
+assert.ok(!nav.includes("Date.now() - (c.t || 0) < TTL_MS) return"), 'cache não deve impedir revalidação ao abrir');
+assert.ok(nav.includes("window.addEventListener('tk:sessao'"), 'login deve disparar atualização');
+assert.ok(nav.includes("localStorage.removeItem(CHAVE_CACHE)"), 'login deve descartar cache de permissão anterior');
+console.log('Navegação: revalidação e autorização preservadas.');
