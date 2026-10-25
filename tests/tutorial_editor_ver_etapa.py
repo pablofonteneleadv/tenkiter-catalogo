@@ -45,3 +45,25 @@ with sync_playwright() as p:
     assert abs(topo - e['alvoY']) < 0.06, (topo, e)
     b.close()
 print('tutorial_editor_ver_etapa: OK')
+
+# Etapa que é um LINK (navega a prévia, ex.: barra Gestão): a reprodução não pode entrar em loop.
+LINK_PAG = "<a id='ir' href='index.html?tutorial_editor=1&p=2'>Gestão</a><button id='b2'>Cadastrar</button>"
+T3 = {"id": "lk", "titulo": "Link", "pagina": "index.html", "tipo": "independente", "descricao": "", "status": "publicado", "versao": 1, "preparacao": [],
+      "etapas": [{"acao": "click", "selector": "#ir", "alvoNome": "Gestão", "instrucao": "Toque em Gestão", "regra": "acao"},
+                 {"acao": "click", "selector": "#b2", "alvoNome": "Cadastrar", "instrucao": "Toque em Cadastrar", "regra": "acao"}]}
+with sync_playwright() as p2:
+    b = p2.chromium.launch(headless=True)
+    pg = b.new_page(viewport={'width': 390, 'height': 844}); pg.set_default_timeout(9000)
+    cargas = []
+    pg.route('**/index.html?tutorial_editor=1*', lambda r: (cargas.append(r.request.url), r.fulfill(status=200, content_type='text/html', body=LINK_PAG)))
+    pg.goto(BASE + '404.html'); pg.evaluate("document.body.innerHTML='<div id=\"tut-editor-slot\"></div>';window.TMV={init:function(){}}")
+    pg.add_script_tag(url=BASE + 'tutorial-app.js')
+    pg.evaluate("""t => TMV.init({state:()=>({user:{whatsapp:'88',password:'s'},manuaisList:[]}),toast:()=>{},submit:async p=>{if(p.action==='treinamento_conteudo')return {ok:true,manuais:[]};if(p.action==='tutorial_listar')return {ok:true,tutoriais:[t]};return {ok:true}}})""", T3)
+    pg.evaluate("TKTutorial.montarEditor()")
+    pg.locator('[data-edit="lk"]').click(); pg.locator('[data-ed="1"]').click()
+    pg.wait_for_function("document.querySelector('#tv-status').innerText.includes('pronta')")
+    pg.wait_for_timeout(2500)
+    assert len(cargas) <= 3, f"a prévia recarregou {len(cargas)} vezes (loop)"
+    assert 'pronta' in pg.locator('#tv-status').inner_text() and 'Montando' not in pg.locator('#tv-status').inner_text()
+    b.close()
+print('tutorial_editor_ver_etapa (link sem loop): OK')
