@@ -15,6 +15,7 @@ with sync_playwright() as p:
   pg.locator('[data-tv="instrucao"]').fill('Escolha a foto correta')
   pg.locator('#tv-alvo').click();pg.frame_locator('#tv-frame').locator('#novo').click()
   assert 'Escolher foto' in pg.locator('#tv-status').inner_text()
+  pg.locator('#tv-painel').click();pg.locator('#tv-flutuante').check();pg.locator('#tv-enquadrar').click();pg.locator('#tv-recolher').click();
   pg.locator('#tv-proxima').click();pg.locator('#tv-painel').click()
   pg.locator('[data-tv="instrucao"]').fill('Confira o enquadramento da foto antes de continuar.')
   pg.locator('.tv-config summary').click();pg.locator('[data-estilo="tamanho"]').fill('22')
@@ -25,7 +26,7 @@ with sync_playwright() as p:
   pg.locator('#tv-anterior').click();pg.locator('#tv-painel').click()
   assert pg.locator('[data-tv="instrucao"]').input_value()=='Escolha a foto correta'
   pg.locator('#tv-salvar').click();pg.locator('#tut-salvar').click();pg.wait_for_function('__saved.length===1')
-  saved=pg.evaluate('__saved[0]');assert saved['etapas'][0]['selector']=='#novo';assert saved['etapas'][1]['estilo']['tamanho']==22
+  saved=pg.evaluate('__saved[0]');assert saved['etapas'][0]['flutuante'];assert 'enquadramento' in saved['etapas'][0];assert len(saved['etapas'])==2;assert saved['etapas'][0]['selector']=='#novo';assert saved['etapas'][1]['estilo']['tamanho']==22
   assert saved['etapas'][1]['estilo']['x']==51
   pg.close()
  b.close()
