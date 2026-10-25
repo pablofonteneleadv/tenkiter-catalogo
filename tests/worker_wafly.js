@@ -103,11 +103,12 @@ function d1() {
   const MEDIA_URL = 'https://tenkiter-midia.fake/m/t/202610/dddddddddddddddddddd.jpg';
   const SEG = { inst: 'INST_TESTE_001', tok: 'TOKEN_SECRETO_ABC123', cli: 'CLIENT_SECRETO_XYZ789' };
   const SEG2 = { inst: 'INST_TESTE_002', tok: 'TOKEN_SECRETO_DEF456', cli: 'CLIENT_SECRETO_UVW000' };
-  let waf = [], wmodo = 'ok', recibo = { state: 'accepted', serverAcknowledged: true }, wameChamado = 0;
+  let pubMidia404 = false, waf = [], wmodo = 'ok', recibo = { state: 'accepted', serverAcknowledged: true }, wameChamado = 0;
   const fAnt = globalThis.fetch;
   globalThis.fetch = async (u, init) => {
     u = String(u);
     if (/^https:\/\/(server\.wame\.api\.br|us\.api-wa\.me|server\.api-wa\.me)\//.test(u)) { wameChamado++; return new Response('{}'); }
+    if (pubMidia404 && u.startsWith('https://tenkiter-midia.fake/')) return new Response('nao achei', { status: 404 });
     if (u.startsWith('https://tenkiter-midia.fake/') || u.startsWith('https://x/')) return new Response(Buffer.alloc(900, 7), { headers: { 'content-type': 'image/jpeg' } });
     if (u.startsWith('https://wafly.com.br/api-bridge-whats/')) {
       const metodo = (init && init.method) || 'GET';
@@ -173,6 +174,12 @@ function d1() {
   const e1 = waf.find((x) => x.metodo === 'POST');
   chk('Wafly 1 cadastrada: fala direto com a Wafly e não usa o Apps Script', e1 && zapPedidos.length === 0 && (await lerPost(id)).status === 'publicado');
   chk('URL da instância, Client-Token e requestId estável', e1.url === 'https://wafly.com.br/api-bridge-whats/instances/' + SEG.inst + '/token/' + SEG.tok + '/status-publication' && e1.headers.get('client-token') === SEG.cli && e1.body.requestId === 'tkpost-' + String(id).padStart(12, '0') && e1.body.type === 'image' && e1.body.caption === 'Vestido TK-0001 R$ 89,90' && typeof e1.body.content === 'string' && e1.body.content.length > 100 && e1.redirect === 'manual', e1 && e1.body && Object.keys(e1.body));
+  // Endereço público da mídia devolve 404 para o Worker (Worker->Worker da mesma conta), mas o arquivo está no R2: tem que publicar lendo direto do bucket.
+  pubMidia404 = true; objs.set('t/202610/dddddddddddddddddddd.jpg', Buffer.alloc(900, 7));
+  const idR2 = await novaPostagem('whatsapp'); await DB.prepare("UPDATE postagem SET agendado_em='2020-01-01T00:00:00Z', midias=? WHERE id=?").bind(JSON.stringify([{ url: MEDIA_URL, tipo: 'imagem' }]), idR2).run();
+  waf = []; await W.processarPostagens(env);
+  chk('mídia do R2 é lida direto, mesmo com o endereço público dando 404', (await lerPost(idR2)).status === 'publicado' && waf.some((x) => x.metodo === 'POST'), await lerPost(idR2));
+  pubMidia404 = false;
   await W.processarPostagens(env);
   chk('cron não repete postagem publicada', waf.filter((x) => x.metodo === 'POST').length === 1);
 
