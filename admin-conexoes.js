@@ -101,7 +101,6 @@
     desenhar();
     conferir();
     conferirFreeConvert_();
-    conferirWame_();
     conferirWafly_();
   }
 
@@ -219,20 +218,6 @@
       '<button type="button" class="cx-btn cx-perigo" data-cx="wf2-apagar">Remover</button></div>' +
       '<div id="cx-wf2-msg" class="cx-msg" role="status"></div>' +
       '<ul id="cx-wf2-res" class="g-nota" aria-live="polite"></ul></div>' +
-
-      '<div class="cx-bloco"><h3>💬 WhatsApp Status 2 — Wame</h3>' +
-      '<p class="g-nota">Cole a chave da instância do Wame (WhatsApp 2) e escolha o servidor em que ela foi criada. A chave fica guardada no servidor e não volta para a tela.</p>' +
-      '<p id="cx-wm-status" role="status" class="cx-chave-sem">Conferindo chave…</p>' +
-      '<label for="cx-wm-chave">Chave da instância Wame</label>' +
-      '<input type="password" id="cx-wm-chave" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole a chave aqui">' +
-      '<label for="cx-wm-servidor">Servidor</label>' +
-      '<select id="cx-wm-servidor"><option value="server.wame.api.br">server.wame.api.br (padrão)</option><option value="us.api-wa.me">us.api-wa.me (EUA)</option><option value="server.api-wa.me">server.api-wa.me</option></select>' +
-      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="wm-guardar">Salvar</button>' +
-      '<button type="button" class="cx-btn" data-cx="wm-testar">Testar conexão</button>' +
-      '<button type="button" class="cx-btn cx-perigo" data-cx="wm-apagar">Remover chave</button></div>' +
-      '<div id="cx-wm-msg" class="cx-msg" role="status"></div>' +
-      '<ul id="cx-wm-res" class="g-nota" aria-live="polite"></ul>' +
-      '<p class="g-nota">O teste só consulta a instância (não envia nada) e procura em qual servidor a chave funciona. Depois, faça um primeiro envio real com uma única postagem no Status 2.</p></div>' +
 
       blocoChave('cloudflare', 'Cloudflare — token (opcional)',
         'Crie em <b>Cloudflare → Meu perfil → API Tokens → Create Token</b>, modelo <b>Edit Cloudflare Workers</b>, de preferência com data de fim. Aqui serve só para conferir quando o Worker das miniaturas foi publicado.', '') +
@@ -455,40 +440,6 @@
     msg('cx-fc-msg',r.ok?'Chave da Gestão removida.':erroTxt(r),r.ok?'ok':'erro');
     if(r.ok)conferirFreeConvert_();
   }
-  async function conferirWame_(){
-    const el=$('cx-wm-status');if(!el)return;
-    const r=await igWorker_('/post/wame/config','GET');
-    if(r.ok&&r.servidor){const sel=$('cx-wm-servidor');if(sel&&Array.from(sel.options).some(o=>o.value===r.servidor))sel.value=r.servidor}
-    el.textContent=r.ok?(r.configurada?(r.origem==='worker'?'✓ Chave Wame configurada no servidor':'✓ Chave Wame configurada')+' · '+r.servidor:'Nenhuma chave Wame cadastrada.') : erroTxt(r);
-    el.className=r.ok&&r.configurada?'cx-chave-ok':'cx-chave-sem';
-  }
-  async function guardarWame_(){
-    const campo=$('cx-wm-chave'),sel=$('cx-wm-servidor');if(!campo||!sel)return;
-    const chave=campo.value.trim(),corpo={servidor:sel.value};
-    if(chave)corpo.chave=chave;
-    msg('cx-wm-msg','Salvando…','');
-    const r=await igWorker_('/post/wame/config','POST',corpo);
-    if(r.ok){campo.value='';msg('cx-wm-msg',chave?'Chave e servidor guardados no servidor.':'Servidor atualizado.','ok');conferirWame_();}
-    else msg('cx-wm-msg',erroTxt(r),'erro');
-  }
-  async function testarWame_(){
-    const ul=$('cx-wm-res');if(!ul)return;
-    msg('cx-wm-msg','Testando a conexão…','');ul.textContent='';
-    const r=await igWorker_('/post/wame/teste','POST',{});
-    if(!r.ok)return msg('cx-wm-msg',erroTxt(r),'erro');
-    if(r.bloqueioStatus){const li=document.createElement('li');li.textContent=r.bloqueioStatus;ul.appendChild(li)}
-    (r.resultados||[]).forEach(x=>{const li=document.createElement('li');li.textContent=x.servidor+': '+x.texto+'.';ul.appendChild(li)});
-    if(r.encontrado){
-      const outro=r.encontrado!==r.servidorAtual;
-      msg('cx-wm-msg',(r.conectado===true?'✓ WhatsApp conectado em ':'A chave funciona em ')+r.encontrado+'.'+(outro?' Escolha esse servidor acima e toque em Salvar.':''),r.conectado===false?'erro':'ok');
-    }else msg('cx-wm-msg','Nenhum servidor aceitou a chave. Confira se a chave está certa e a instância criada no painel do Wame.','erro');
-  }
-  async function apagarWame_(){
-    if(!confirm('Remover a chave e o servidor do Wame guardados na Gestão?'))return;
-    const r=await igWorker_('/post/wame/config','POST',{apagar:true});
-    msg('cx-wm-msg',r.ok?'Chave da Gestão removida.':erroTxt(r),r.ok?'ok':'erro');
-    if(r.ok){const ul=$('cx-wm-res');ul&&(ul.textContent='');conferirWame_();}
-  }
   async function conferirWafly_(){
     const r=await igWorker_('/post/wafly/config','GET');
     [1,2].forEach(n=>{
@@ -520,7 +471,7 @@
     conferirWafly_();
   }
   async function apagarWafly_(n){
-    if(!confirm(n===1?'Remover o cadastro do Wafly 1? O Status 1 volta a sair pelo Apps Script.':'Remover o cadastro do Wafly 2? O Status 2 volta para o Wame (se houver).'))return;
+    if(!confirm(n===1?'Remover o cadastro do Wafly 1? O Status 1 volta a sair pelo Apps Script.':'Remover o cadastro do Wafly 2? Os itens do Status 2 ficam aguardando até você cadastrar outra instância.'))return;
     const r=await igWorker_('/post/wafly/config','POST',{slot:n,apagar:true});
     msg('cx-wf'+n+'-msg',r.ok?'Cadastro removido. A fila não foi alterada.':erroTxt(r),r.ok?'ok':'erro');
     if(r.ok){const ul=$('cx-wf'+n+'-res');ul&&(ul.textContent='');conferirWafly_();}
@@ -531,9 +482,6 @@
     if (a === 'fc-guardar') guardarFreeConvert_();
     else if (a === 'fc-apagar') apagarFreeConvert_();
     else if (/^wf[12]-/.test(a)) { const n = Number(a[2]), q = a.slice(4); if (q === 'guardar') guardarWafly_(n); else if (q === 'testar') testarWafly_(n); else if (q === 'apagar') apagarWafly_(n); }
-    else if (a === 'wm-guardar') guardarWame_();
-    else if (a === 'wm-apagar') apagarWame_();
-    else if (a === 'wm-testar') testarWame_();
     else if (a === 'conferir') conferir();
     else if (a === 'guardar') guardar(b.dataset.nome);
     else if (a === 'apagar') apagar(b.dataset.nome);
