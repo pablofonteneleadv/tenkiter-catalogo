@@ -718,3 +718,12 @@ html.fx-travado, html.fx-travado body { overflow: hidden; }
 .grid .card .card-info .acoes-card { margin-top: auto; padding-top: 8px; }
 .grid .card .card-info .tam-card { margin-top: auto; }
 .grid .card .card-info .tam-card + .acoes-card { margin-top: 0; }
+
+/* v7.6 — cabeçalho centralizado e sem as faixas de gênero/categoria na tela inicial (25/10/2026).
+   Pedido do Pablo: tirar "Catálogo Digital — Crateús / CE", centralizar tudo e retirar categorias e gênero.
+   As categorias continuam no menu ☰ e em Filtros; só as faixas de botões saem da vista (o código dos filtros não muda). */
+.header-linha { flex-direction: column; justify-content: center; gap: 10px; }
+.header-titulo { justify-content: center; text-align: center; }
+.header-titulo-textos { text-align: center; }
+.header-icones { justify-content: center; }
+.faixas-details, .faixas-vitrine, #pills-genero, #pills-categoria { display: none !important; }
