@@ -753,3 +753,27 @@ html.fx-travado, html.fx-travado body { overflow: hidden; }
 .grid .card .card-info > .acoes-card { order: 9; margin-top: 0; }
 .grid .card .card-info > .preco:first-of-type { margin-top: auto; }
 .grid .card .card-info > .tam-card ~ .acoes-card { margin-top: 0; }
+
+/* v7.9 — alinhamento por linhas compartilhadas (subgrid): código, nome, tamanho, valor, avisos e botões
+   começam na mesma altura em todos os cards da mesma fileira. */
+@supports (grid-template-rows: subgrid) {
+  .grid { row-gap: 0; }
+  .grid .card {
+    display: grid; grid-template-rows: subgrid; grid-row: span 8; height: auto;
+    row-gap: 0; margin-bottom: 14px; align-content: start;
+  }
+  .grid .card .img-wrap { grid-row: 1; }
+  .grid .card .card-info {
+    display: grid; grid-template-rows: subgrid; grid-row: 2 / span 7; grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+  }
+  .grid .card .card-info > * { grid-column: 1; grid-row: 6; order: 0; margin-top: 0; }
+  .grid .card .card-info > .codigo { grid-row: 1; }
+  .grid .card .card-info > .nome { grid-row: 2; }
+  .grid .card .card-info > .tam-card { grid-row: 3; margin: 0 0 6px; align-self: start; }
+  .grid .card .card-info > .preco { grid-row: 4; }
+  .grid .card .card-info > .tags { grid-row: 5; }
+  .grid .card .card-info > .disponibilidade { grid-row: 6; }
+  .grid .card .card-info > .prova-social { grid-row: 7; }
+  .grid .card .card-info > .acoes-card { grid-row: 8; margin-top: 0; padding-top: 8px; align-self: end; }
+}
