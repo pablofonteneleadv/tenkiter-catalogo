@@ -208,5 +208,12 @@ function d1() {
   const lig = await A('POST', '/msg/ligar', { slot: 2 });
   chk('ligar aponta o webhook da instância 2 para o Worker com o segredo', lig.j.ok && put.m === 'PUT' && put.u.endsWith('/update-webhook-received') && put.b.value === 'https://ig.test/wh/wafly/2/' + seg && put.h.get('client-token') === 'CLIENT_SECRETO_UVW000', put);
   chk('ligar registra data e não altera mensagens', (await A('GET', '/msg/resumo')).j.canais.whatsapp2.ligadoEm !== '' && (await cont('msg_mensagem')) === antesPausa + 1);
+  const corpoCh = JSON.stringify({ object: 'instagram', entry: [{ id: 'DONO', time: 1792000100, changes: [{ field: 'messages', value: { sender: { id: 'CLI2' }, recipient: { id: 'DONO' }, timestamp: '1792000100000', message: { mid: 'IGM3', text: 'tem P?' } } }] }] });
+  const okCh = await wh('/wh/instagram/' + seg, corpoCh, { headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': await assinar(corpoCh) } });
+  chk('Instagram no formato "changes" (botão Testar / apps novos) também grava', okCh.j.novas === 1 && (await DB.prepare("SELECT 1 FROM msg_conversa WHERE canal='instagram' AND contato='CLI2'").first()) != null, okCh.j);
+  const corpoLido = JSON.stringify({ object: 'instagram', entry: [{ id: 'DONO', messaging: [{ sender: { id: 'CLI1' }, recipient: { id: 'DONO' }, timestamp: 1792000200000, read: { mid: 'IGM1' } }] }] });
+  await wh('/wh/instagram/' + seg, corpoLido, { headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': await assinar(corpoLido) } });
+  const ultIg = JSON.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='msg_ult_instagram'").first()).valor);
+  chk('aviso sem mensagem registra só a FORMA (sem texto nem ids) para diagnóstico', ultIg.itens === 0 && /messaging:read/.test(ultIg.forma) && !/CLI1|DONO|IGM1/.test(ultIg.forma), ultIg);
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });

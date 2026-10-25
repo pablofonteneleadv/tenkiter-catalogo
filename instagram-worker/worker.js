@@ -2365,17 +2365,47 @@ function normalizarWafly_(b) {
 function normalizarInstagram_(b) {
   const out = [];
   if (!b || b.object !== 'instagram' || !Array.isArray(b.entry)) return out;
-  for (const e of b.entry) for (const ev of (Array.isArray(e.messaging) ? e.messaging : [])) {
-    const m = ev && ev.message; if (!m || !m.mid) continue;
-    const dono = String(e.id || ''), eco = m.is_echo === true;
-    const contato = String(eco ? (ev.recipient && ev.recipient.id) : (ev.sender && ev.sender.id) || '');
-    if (!contato || contato === dono) continue;
+  const mapa = { image: 'imagem', video: 'vídeo', audio: 'áudio', file: 'documento', share: 'compartilhamento', story_mention: 'menção em story', reel: 'reel', ig_reel: 'reel' };
+  const vistos = new Set();
+  const juntar = (dono, ev) => {
+    const m = ev && ev.message; if (!m || typeof m !== 'object') return;
+    const mid = String(m.mid || m.id || ''); if (!mid || vistos.has(mid)) return;
+    const eco = m.is_echo === true;
+    const idDe = (x) => String((x && typeof x === 'object' ? x.id : x) || '');
+    const contato = eco ? idDe(ev.recipient) : idDe(ev.sender);
+    if (!contato || contato === dono) return;
+    vistos.add(mid);
     const anexo = Array.isArray(m.attachments) && m.attachments[0] ? String(m.attachments[0].type || 'anexo') : '';
-    const mapa = { image: 'imagem', video: 'vídeo', audio: 'áudio', file: 'documento', share: 'compartilhamento', story_mention: 'menção em story', reel: 'reel' };
-    const ms = Number(ev.timestamp || 0);
-    out.push({ extId: String(m.mid), contato: contato.slice(0, 80), nome: '', grupo: 0, direcao: eco ? 'saida' : 'entrada', tipo: anexo ? (mapa[anexo] || anexo) : 'texto', texto: String(m.text || '').slice(0, MSG_TEXTO_MAX), em: ms > 0 ? new Date(ms < 1e12 ? ms * 1000 : ms).toISOString() : agora() });
+    const ms = Number(ev.timestamp || m.timestamp || 0);
+    out.push({ extId: mid, contato: contato.slice(0, 80), nome: '', grupo: 0, direcao: eco ? 'saida' : 'entrada', tipo: anexo ? (mapa[anexo] || anexo) : 'texto', texto: String(m.text || '').slice(0, MSG_TEXTO_MAX), em: ms > 0 ? new Date(ms < 1e12 ? ms * 1000 : ms).toISOString() : agora() });
+  };
+  for (const e of b.entry) {
+    if (!e || typeof e !== 'object') continue;
+    const dono = String(e.id || '');
+    for (const ev of (Array.isArray(e.messaging) ? e.messaging : [])) juntar(dono, ev);              // formato dos avisos reais
+    for (const ev of (Array.isArray(e.standby) ? e.standby : [])) juntar(dono, ev);                 // app em espera
+    for (const c of (Array.isArray(e.changes) ? e.changes : [])) if (c && /message/.test(String(c.field || '')) && c.value) juntar(dono, c.value);   // formato do botão "Testar" e de apps novos
   }
   return out;
+}
+/** Resumo SÓ da forma do aviso (nomes de campos e tipos de evento, nunca texto nem identificadores) para diagnosticar quando chega aviso e nenhuma mensagem é reconhecida. */
+function formaInstagram_(b) {
+  try {
+    if (!b || typeof b !== 'object') return 'corpo inválido';
+    const f = [];
+    f.push('objeto=' + String(b.object || '?').slice(0, 20));
+    const es = Array.isArray(b.entry) ? b.entry : [];
+    f.push('entradas=' + es.length);
+    for (const e of es.slice(0, 3)) {
+      f.push('[' + Object.keys(e || {}).slice(0, 8).join(',') + ']');
+      for (const k of ['messaging', 'standby']) for (const ev of (Array.isArray(e && e[k]) ? e[k] : []).slice(0, 3)) {
+        const tipos = Object.keys(ev || {}).filter((x) => !['sender', 'recipient', 'timestamp'].includes(x));
+        f.push(k + ':' + (tipos.join('+') || 'vazio') + (ev && ev.message ? '{' + Object.keys(ev.message).slice(0, 8).join(',') + '}' : ''));
+      }
+      for (const c of (Array.isArray(e && e.changes) ? e.changes : []).slice(0, 3)) f.push('change:' + String(c && c.field || '?').slice(0, 30) + (c && c.value ? '{' + Object.keys(c.value).slice(0, 8).join(',') + '}' : ''));
+    }
+    return f.join(' ').slice(0, 480);
+  } catch (e) { return 'forma ilegível'; }
 }
 /** Grava uma mensagem (idempotente por canal+ext_id). Devolve true se era nova. */
 async function gravarMensagem_(env, canal, m) {
@@ -2420,7 +2450,7 @@ async function rotaWebhookMensagens_(env, req, url) {
     if (await msgPausado_(env, 'instagram')) return ok(200, { ok: true, pausado: true });
     let b = null; try { b = JSON.parse(bruto); } catch (e) { return ok(400, { ok: false }); }
     const lista = normalizarInstagram_(b); let novas = 0; for (const m of lista) if (await gravarMensagem_(env, 'instagram', m)) novas++;
-    await cfgSet(env, 'msg_ult_instagram', JSON.stringify({ em: agora(), res: 'ok', itens: lista.length, novas: novas }));
+    await cfgSet(env, 'msg_ult_instagram', JSON.stringify({ em: agora(), res: 'ok', itens: lista.length, novas: novas, forma: lista.length ? '' : formaInstagram_(b) }));
     return ok(200, { ok: true, novas: novas });
   }
   if (partes[1] === 'wafly' && (partes[2] === '1' || partes[2] === '2')) {

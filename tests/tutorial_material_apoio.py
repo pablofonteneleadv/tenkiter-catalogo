@@ -43,3 +43,19 @@ with sync_playwright() as p:
     assert sorted(baixados) == ['a.jpg', 'c.jpg'], baixados
     b.close()
 print('tutorial_material_apoio: OK')
+
+# Servidor antigo (Apps Script sem a 3.28) descarta arquivos[]: o editor avisa claramente em vez de perder em silêncio.
+with sync_playwright() as p:
+    b = p.chromium.launch(headless=True)
+    pg = b.new_page(viewport={'width': 390, 'height': 844}); pg.set_default_timeout(9000)
+    pg.route('**/index.html?tutorial_editor=1*', lambda r: r.fulfill(status=200, content_type='text/html', body=PAGINA))
+    pg.route('https://midia.test/**', lambda r: r.fulfill(status=200, content_type='image/jpeg', headers={'access-control-allow-origin': '*'}, body=b'x'))
+    pg.goto(BASE + '404.html'); pg.evaluate("document.body.innerHTML='<div id=\"tut-editor-slot\"></div>';window.TMV={init:function(){}};window.__avisos=[]")
+    pg.add_script_tag(url=BASE + 'tutorial-app.js')
+    pg.evaluate("""t => TMV.init({state:()=>({user:{whatsapp:'88',password:'s'},manuaisList:[]}),toast:m=>window.__avisos.push(m),submit:async p=>{if(p.action==='treinamento_conteudo')return {ok:true,manuais:[]};if(p.action==='tutorial_listar')return {ok:true,tutoriais:[t]};if(p.action==='tutorial_salvar'){const c=JSON.parse(JSON.stringify(p.tutorial));c.etapas.forEach(e=>{delete e.arquivos;delete e.mostrarApoio});return {ok:true,tutorial:c}};return {ok:true}}})""", TUT)
+    pg.evaluate("TKTutorial.montarEditor()")
+    pg.locator('[data-edit="ma"]').click(); pg.locator('#tut-salvar').click()
+    pg.wait_for_function("__avisos.some(a=>a.includes('3.28'))")
+    assert 'materiais de apoio' in pg.evaluate("__avisos.join(' ')")
+    b.close()
+print('tutorial_material_apoio (servidor antigo avisa): OK')

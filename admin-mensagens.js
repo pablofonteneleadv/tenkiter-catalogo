@@ -171,7 +171,7 @@
     else t.push('Não consegui conferir a assinatura (' + (r.erroMeta || 'sem resposta') + ').');
     if (!u) t.push('A Meta ainda não enviou nenhum aviso para este endereço.');
     else if (u.res === 'assinatura') t.push('Último aviso da Meta (' + hora(u.em) + ') foi recusado: a chave secreta do app está diferente da Meta.');
-    else t.push('Último aviso da Meta: ' + hora(u.em) + ' (' + (u.itens || 0) + ' mensagem(ns) lida(s), ' + (u.novas || 0) + ' nova(s)).');
+    else t.push('Último aviso da Meta: ' + hora(u.em) + ' (' + (u.itens || 0) + ' mensagem(ns) lida(s), ' + (u.novas || 0) + ' nova(s)).' + (u.forma ? ' Formato recebido: ' + u.forma : ''));
     d.textContent = t.join(' ');
   }
   async function recarregar() { resumo = await worker_('/msg/resumo', 'GET'); if (!resumo.ok) { $('ms-corpo').textContent = resumo.erro || 'Não foi possível carregar agora.'; return; } await desenhar(); }
