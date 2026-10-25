@@ -411,17 +411,17 @@
     const esgotado = tem('estaEsgotado') ? estaEsgotado(p) : false;
     const nome = p.Nome || '';
 
-    // VIT-6 — o CTA diz o que faz: "Pedir no WhatsApp", não "Consultar".
+    // VIT-6 (v7.4, mockup aprovado 24/10/2026) — o CTA é "Consulte esta peça" (regra: "Consulte", nunca "pedir").
     const pedir = info.querySelector('.ac-pedir');
     if (pedir) {
       if (!pedir.querySelector('.v7-rot')) {
         pedir.textContent = '\u{1F4AC} ';
         const span = document.createElement('span');
         span.className = 'v7-rot';
-        span.textContent = 'Pedir no WhatsApp';
+        span.textContent = 'Consulte esta peça';
         pedir.appendChild(span);
       }
-      pedir.setAttribute('aria-label', 'Pedir no WhatsApp: ' + nome);
+      pedir.setAttribute('aria-label', 'Consulte esta peça: ' + nome);
     }
 
     // VIT-5 — prova social (só com sinal real).

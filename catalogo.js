@@ -662,7 +662,7 @@ try { tkSelExpirar_(); } catch (e) {}
           <div class="card-info">
             ${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}
             <div class="nome"><button type="button" class="abrir-peca" aria-label="Ver detalhes: ${escaparHtml(p.Nome)}">${escaparHtml(p.Nome)}</button></div>
-            <div class="preco">${ehConsulta(p) ? '<strong class="consulta">' + TEXTO_CONSULTA + '</strong>' : formatarReal(p.Preco) + ' <span>' + formatarReal(avista) + '</span>'}</div>
+            <div class="preco">${ehConsulta(p) ? '<strong class="consulta">' + TEXTO_CONSULTA + '</strong>' : '<span class="avista-n">' + formatarReal(avista) + '</span> <s class="cheio">' + formatarReal(p.Preco) + '</s>'}</div>
             <div class="tags">${escaparHtml(p.Categoria)}</div>
             ${disp && !esgotado ? `<div class="disponibilidade ${disp.classe}">${disp.texto}</div>` : ''}
             ${esgotado ? '' : `<div class="acoes-card">
