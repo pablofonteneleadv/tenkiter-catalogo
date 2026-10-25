@@ -59,6 +59,10 @@
     return;
   }
 
+  // Simulação isolada: a barra deve existir no iframe mesmo sem sessão real.
+  // Nunca gravar permissões fictícias no navegador nem consultar API nesse modo.
+  const tutorialSimulado = /[?&]tutorial_(?:teste|editor)=1(?:&|$)/.test(location.search);
+  const permissoesTutorial = ['catalogo_admin','portal','equipe_relatorio','gerir_manuais','gerir_acessos','dados_pessoais'];
   const CHAVE_SESSAO = 'tm_session';
   const CHAVE_CACHE = 'tm_nav_perms';
   const TTL_MS = 5 * 60 * 1000;
@@ -97,6 +101,7 @@
   const sessao = () => { const s = lerJson(CHAVE_SESSAO); return s?.whatsapp ? s : null; };
 
   const lerCache = () => {
+    if (tutorialSimulado) { logado = true; perms = permissoesTutorial.slice(); return null; }
     const s = sessao();
     logado = !!s;
     if (!s) { perms = []; try { localStorage.removeItem(CHAVE_CACHE); } catch (e) {} return null; }
@@ -106,6 +111,7 @@
     return null;
   };
   const gravarCache = (lista) => {
+    if (tutorialSimulado) return;
     const s = sessao(); if (!s) return;
     try { localStorage.setItem(CHAVE_CACHE, JSON.stringify({ w: s.whatsapp, p: lista, t: Date.now() })); } catch (e) {}
   };
@@ -171,6 +177,7 @@
 
   /** Atualiza as permissões a partir do catálogo (mesmo login do portal). Só se common.js estiver na página. */
   const atualizarDoServidor = () => {
+    if (tutorialSimulado) return;
     const s = sessao();
     if (!s?.sessao) return;
     const c = lerJson(CHAVE_CACHE);
@@ -189,6 +196,7 @@
 
   /** Pré-carrega as outras telas para o toque na barra abrir na hora. */
   const preCarregar = () => {
+    if (tutorialSimulado) return;
     const fazer = () => {
       ITENS.filter(visivel).forEach((it) => {
         if (it.id === ativoId) return;
