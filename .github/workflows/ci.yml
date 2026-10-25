@@ -118,6 +118,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Navegação com sessão pendente
+        run: node tests/nav_sessao_pendente.js
+
       - name: Cadastro de públicos e tamanhos vinculados
         run: node tests/cadastro_vinculos.js
 
