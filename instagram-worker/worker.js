@@ -896,6 +896,19 @@ async function aguardarConfirmacaoWame_(env, p, detalhe) {
   await env.DB.prepare("UPDATE postagem SET status='processando', erro=?, atualizado_em=? WHERE id=?").bind(aviso.slice(0, 300), agora(), p.id).run();
   return { ok: true, aguardando: true };
 }
+/** Texto curto e seguro vindo da Wame (nunca a chave), para mostrar ao gestor em português. */
+function textoWame_(v, key) {
+  let t = String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (key) t = t.split(key).join('…');
+  return t.slice(0, 140);
+}
+/** 403 com campos de plano = a instância do Wame não tem o recurso "status" no plano contratado. */
+function erroRecusaWame_(status, j, key) {
+  const o = j && typeof j === 'object' && !Array.isArray(j) ? j : {};
+  const plano = textoWame_(o.requiredPlanName || o.requiredPlan, key), recurso = textoWame_(o.feature, key), msg = textoWame_(o.message, key);
+  if (plano) return 'WhatsApp Status 2: o plano atual do Wame não inclui' + (recurso ? ' o recurso “' + recurso + '”' : ' esse recurso') + '. É preciso o plano ' + plano + '. Troque o plano no painel do Wame e use “Tentar de novo”.';
+  return 'WhatsApp Status 2: a Wame recusou a publicação (HTTP ' + status + ')' + (msg ? ': ' + msg : '') + '. Confira o plano e se o WhatsApp 2 está conectado; depois use “Tentar de novo”.';
+}
 async function enviarStatusWame_(env, p) {
   const cfg = await cfgWameStatus_(env);
   if (!cfg) return marcarErroPost_(env, p, 'O WhatsApp Status 2 ainda não está configurado. Avise o gestor.');
@@ -927,12 +940,13 @@ async function enviarStatusWame_(env, p) {
     } catch (e) { return aguardarConfirmacaoWame_(env, p, 'A resposta da Wame foi interrompida.'); }
     try {
       await cfgSet(env, 'wame_ultimo_envio', JSON.stringify({ postagemId: p.id, ordem: i, em: agora(), http: r.status,
-        campos: j && typeof j === 'object' && !Array.isArray(j) ? Object.keys(j).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 15) : [], idPresente: !!idMensagemWame_(j) }));
+        campos: j && typeof j === 'object' && !Array.isArray(j) ? Object.keys(j).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 15) : [], idPresente: !!idMensagemWame_(j),
+        motivo: textoWame_(j && j.reason, cfg.key), recurso: textoWame_(j && j.feature, cfg.key), plano: textoWame_(j && (j.requiredPlanName || j.requiredPlan), cfg.key) }));
     } catch (e) { /* diagnóstico não bloqueia o recibo */ }
     if (!r.ok || respostaWameComErro_(j)) {
       const rejeitado = r.status >= 400 && r.status < 500 && ![408, 409, 429].includes(r.status);
       if (rejeitado) await env.DB.prepare("UPDATE postagem_grupo_recibo SET estado='recusado', atualizado_em=? WHERE postagem_id=? AND ordem=?").bind(agora(), p.id, i).run();
-      if (rejeitado) return marcarErroPost_(env, p, 'WhatsApp Status 2: a Wame recusou a publicação (HTTP ' + r.status + '). Confira se o WhatsApp 2 está conectado e tente de novo.');
+      if (rejeitado) return marcarErroPost_(env, p, erroRecusaWame_(r.status, j, cfg.key));
       if (r.ok) return aguardarConfirmacaoWame_(env, p, 'A Wame respondeu com aviso de erro.');
       return aguardarConfirmacaoWame_(env, p, 'A Wame respondeu HTTP ' + r.status + '.');
     }
