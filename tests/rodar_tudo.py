@@ -65,6 +65,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("tutorial_editor_ver_etapa.py", lambda o: "tutorial_editor_ver_etapa: OK" in o),  # editor visual: reproduz a tela da etapa, rola e trava o enquadramento
     ("tutorial_material_apoio.py", lambda o: "tutorial_material_apoio: OK" in o),  # material de apoio: lista/adiciona/remove no editor e baixa tudo de uma vez
     ("tutorial_teste_area_visivel.py", lambda o: "tutorial_teste_area_visivel: OK" in o),  # teste dentro do app: a janela mede a área visível real e a barra inferior (alvo) nunca fica fora da tela
+    ("tutorial_arquivo_limpo_pelo_app.py", lambda o: "tutorial_arquivo_limpo_pelo_app: OK" in o),  # etapa de foto: conta mesmo quando o app limpa o campo de arquivo
     ("conexoes_unificada.py", lambda o: "FALHAS=0" in o),   # Conexões em grupos: Instagram, IA, WhatsApp, Meta/Google, serviços e cofre num só lugar
     ("envios_retomar.py", lambda o: "FALHAS=0" in o),      # fila de envios guardada no aparelho: retoma sozinha, sem duplicar
     ("opcoes_lista.py", lambda o: "0 falhas" in o),        # v4.18: tamanhos e cores do servidor, Admin total cria e vale para todos
