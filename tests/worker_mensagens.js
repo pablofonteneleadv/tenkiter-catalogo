@@ -146,7 +146,12 @@ function d1() {
   const corpoIg = JSON.stringify(ig);
   const semSecret = await wh('/wh/instagram/' + seg, corpoIg);
   chk('Instagram sem IG_APP_SECRET fica fechado (503)', semSecret.r.status === 503 && (await DB.prepare("SELECT 1 FROM msg_conversa WHERE canal='instagram'").first()) == null);
-  env.IG_APP_SECRET = 'segredo-do-app-teste';
+  const noSeg = await A('POST', '/msg/instagram/segredo', { segredo: 'curto' });
+  chk('segredo inválido é recusado em português', noSeg.r.status === 400 && /parece inválido/.test(noSeg.j.erro));
+  chk('antes de cadastrar, Instagram não está pronto', (await A('GET', '/msg/resumo')).j.canais.instagram.pronto === false);
+  chk('segredo cadastrado pela Gestão', (await A('POST', '/msg/instagram/segredo', { segredo: 'SegredoAppTeste1234567890' })).j.ok === true);
+  chk('o segredo nunca volta ao navegador', !JSON.stringify((await A('GET', '/msg/resumo')).j).includes('SegredoAppTeste1234567890'));
+  env.IG_APP_SECRET = 'SegredoAppTeste1234567890';
   const assinar = async (txt) => { const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.IG_APP_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']); return 'sha256=' + Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(txt))), (x) => x.toString(16).padStart(2, '0')).join(''); };
   chk('assinatura inválida: 401', (await wh('/wh/instagram/' + seg, corpoIg, { headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': 'sha256=00' } })).r.status === 401);
   const okIg = await wh('/wh/instagram/' + seg, corpoIg, { headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': await assinar(corpoIg) } });
