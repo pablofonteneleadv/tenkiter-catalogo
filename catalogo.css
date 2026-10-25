@@ -743,3 +743,13 @@ html.fx-travado, html.fx-travado body { overflow: hidden; }
 .sugestoes-busca .sug-chip.on { background: #fff3e0; border-color: #A85200; color: #7a3b00; }
 .sugestoes-busca .sug-chip:focus-visible, .sugestoes-busca .sug-zap:focus-visible { outline: 2px solid #A85200; outline-offset: 2px; }
 .sugestoes-busca .sug-zap { display: flex; align-items: center; justify-content: center; min-height: 48px; margin: 8px 12px 12px; padding: 0 12px; border-radius: 12px; background: #E67E22; color: #0d0d0d; font-weight: 800; font-size: .88rem; text-decoration: none; text-align: center; }
+
+/* v7.8 — tamanho acima do valor */
+.grid .card .card-info > * { order: 5; }
+.grid .card .card-info > .codigo { order: 1; }
+.grid .card .card-info > .nome { order: 2; }
+.grid .card .card-info > .tam-card { order: 3; margin-top: auto; margin-bottom: 6px; }
+.grid .card .card-info > .preco { order: 4; }
+.grid .card .card-info > .acoes-card { order: 9; margin-top: 0; }
+.grid .card .card-info > .preco:first-of-type { margin-top: auto; }
+.grid .card .card-info > .tam-card ~ .acoes-card { margin-top: 0; }
