@@ -21,3 +21,20 @@ with sync_playwright() as p:
     assert 'exatamente' not in pg.locator('#tt-guia').inner_text()
     b.close()
 print('tutorial_arquivo_limpo_pelo_app: OK')
+
+# Rede de segurança: se por qualquer motivo a foto não for reconhecida, o aluno nunca fica preso na etapa.
+with sync_playwright() as p:
+    b = p.chromium.launch(headless=True)
+    pg = b.new_page(viewport={'width': 390, 'height': 844}); pg.set_default_timeout(9000)
+    pg.route('**/index.html?tutorial_teste=1', lambda r: r.fulfill(status=200, content_type='text/html', body=PAGINA))
+    pg.goto(BASE + '404.html'); pg.evaluate("document.body.innerHTML='<div id=\"tut-aluno-slot\"></div>';window.TMV={init:function(){}}")
+    pg.add_script_tag(url=BASE + 'tutorial-app.js')
+    pg.evaluate("""t => { TMV.init({state:()=>({user:{whatsapp:'88',password:'s'}}),submit:async p=>p.action==='tutorial_listar'?{ok:true,tutoriais:[t]}:{ok:true},toast:()=>{}}); TKTutorial.montarAluno(); }""", TUT)
+    pg.get_by_role("button", name="Começar atividade").click()
+    fr = pg.frame_locator('#tt-frame')
+    fr.locator('#l.tk-tut-alvo').wait_for(state='attached')
+    fr.locator('#f').evaluate("e => e.dispatchEvent(new Event('change', {bubbles: true}))")   # evento sem arquivo (não confiável)
+    pg.get_by_role("button", name="Já coloquei — continuar").click()
+    pg.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Etapa 2')")
+    b.close()
+print('tutorial_arquivo_limpo_pelo_app (saída de segurança): OK')
