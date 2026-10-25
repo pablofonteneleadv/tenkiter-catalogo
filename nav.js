@@ -101,6 +101,8 @@
     logado = !!s;
     if (!s) { perms = []; try { localStorage.removeItem(CHAVE_CACHE); } catch (e) {} return null; }
     const c = lerJson(CHAVE_CACHE);
+    // Cache de outra sessão do mesmo WhatsApp pode conter permissões antigas.
+    // Uma nova autenticação força conferência com o servidor, sem liberar acessos localmente.
     if (c && c.w === s.whatsapp && Array.isArray(c.p)) { perms = c.p; return c; }
     perms = [];
     return null;
@@ -174,7 +176,9 @@
     const s = sessao();
     if (!s?.sessao) return;
     const c = lerJson(CHAVE_CACHE);
-    if (c && c.w === s.whatsapp && Date.now() - (c.t || 0) < TTL_MS) return;
+    // A navegação precisa revalidar ao entrar no site: cache recente pode
+    // pertencer ao login anterior e ocultar Gestão mesmo após autenticação.
+    // TTL continua útil para a renderização imediata, mas não impede refresh.
     let url = null;
     try { url = (typeof API_URL !== 'undefined') ? API_URL : null; } catch (e) { url = null; }
     if (!url) return;
@@ -184,7 +188,7 @@
         if (j?.ok && j.usuario && Array.isArray(j.usuario.permissoes)) { perms = j.usuario.permissoes; gravarCache(perms); desenhar(); }
         else if (j && (j.sessaoInvalida || j.inativa)) { perms = []; try { localStorage.removeItem(CHAVE_CACHE); } catch (e) {} desenhar(); }
       })
-      .catch(() => { /* sem rede: segue com o cache */ });
+      .catch(() => { /* sem rede: mantém permissões já confirmadas no cache */ });
   };
 
   /** Pré-carrega as outras telas para o toque na barra abrir na hora. */
@@ -296,8 +300,17 @@
   // v4.10 (FE-02): a sessão mudou (entrou/saiu nesta página ou em OUTRA aba/página) -> redesenha a barra
   // na hora, sem recarregar. Antes, entrar no catálogo só refletia na barra depois de um F5.
   try {
-    window.addEventListener('tk:sessao', () => { lerCache(); desenhar(); atualizarDoServidor(); });
-    window.addEventListener('storage', (e) => { if (e && e.key === CHAVE_SESSAO) { lerCache(); desenhar(); atualizarDoServidor(); } });
+    window.addEventListener('tk:sessao', () => {
+      // Login/renovação da sessão: permissões do cache anterior não são confiáveis.
+      try { localStorage.removeItem(CHAVE_CACHE); } catch (e) {}
+      lerCache(); desenhar(); atualizarDoServidor();
+    });
+    window.addEventListener('storage', (e) => {
+      if (e && e.key === CHAVE_SESSAO) {
+        try { localStorage.removeItem(CHAVE_CACHE); } catch (err) {}
+        lerCache(); desenhar(); atualizarDoServidor();
+      }
+    });
   } catch (e) { /* navegador sem eventos: segue como antes */ }
 
   // o <script> fica no fim do <body>: o DOM já existe. currentScript só vale agora, então guardamos antes.
