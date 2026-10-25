@@ -1170,14 +1170,21 @@ try { tkSelExpirar_(); } catch (e) {}
   /** Atalhos por endereço: ?abrir=sacola (atalho do app) e ?pedido=<código> (acompanhar pedido). Roda uma vez, na abertura. */
   function abrirJanelasDaURL_() {
     const params = new URLSearchParams(window.location.search);
-    const abrirSac = params.get('abrir') === 'sacola';
+    const abrir = params.get('abrir') || '';
+    const abrirSac = abrir === 'sacola';
     const temPedido = params.has('pedido');
-    if (!abrirSac && !temPedido) return;
+    // v7.1: atalhos da barra do cliente (nav.js). busca = foco no campo; selecao/favoritos = janelas existentes; atendente = WhatsApp fixo da loja.
+    const atalhoBarra = ['busca', 'selecao', 'favoritos', 'atendente'].indexOf(abrir) !== -1;
+    if (!abrirSac && !temPedido && !atalhoBarra) return;
     const limpa = new URL(window.location);
     ['abrir', 'pedido', 'origem'].forEach(k => limpa.searchParams.delete(k));
     window.history.replaceState({}, '', limpa);   // a janela empilha a própria entrada; voltar leva ao catálogo limpo
     if (abrirSac) abrirSacola();
     if (temPedido) abrirRastreio(params.get('pedido') || '', '');
+    if (abrir === 'selecao' && typeof abrirSelecao === 'function') abrirSelecao(false);
+    if (abrir === 'favoritos' && typeof abrirFavoritos === 'function') abrirFavoritos();
+    if (abrir === 'busca') { const b = document.getElementById('busca'); if (b) { b.focus(); b.scrollIntoView({ block: 'center' }); } }
+    if (abrir === 'atendente' && typeof linkWhatsApp === 'function') window.location.href = linkWhatsApp();
   }
 
   /* Notificações push: tudo em push.js (v3.4) — sininho #btn-push-header, convite, conta, pedidos, ajuda. */

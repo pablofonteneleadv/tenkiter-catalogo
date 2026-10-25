@@ -72,6 +72,16 @@
     { id: 'candidatura',  href: 'curriculo.html',             icone: '✍️', rotulo: 'Trabalhe conosco', soVisitante: true }
   ];
   const CHAVES_EQUIPE = ['catalogo_admin', 'equipe_relatorio', 'gerir_manuais', 'dados_pessoais', 'gerir_acessos'];
+  // v7.1 (mockup aprovado 24/10/2026): barra do CLIENTE = Início · Buscar · Seleção · Favoritos · Atendente.
+  // Equipe continua com as abas de ITENS (Catálogo, Gestão, Treinamentos, RH, Currículos).
+  // Trabalhe conosco e Treinamentos (alunos) saem da barra do cliente e ficam no rodapé da vitrine.
+  const ITENS_CLIENTE = () => [
+    { id: 'catalogo',   href: 'index.html',                        icone: '🏠', rotulo: 'Início' },
+    { id: 'busca',      href: 'index.html?abrir=busca',            icone: '🔎', rotulo: 'Buscar' },
+    { id: 'selecao',    href: 'index.html?abrir=selecao',          icone: '🛍️', rotulo: 'Seleção' },
+    { id: 'favoritos',  href: 'index.html?abrir=favoritos',        icone: '❤️', rotulo: 'Favoritos' },
+    { id: 'atendente',  href: (typeof window.linkWhatsApp === 'function' ? window.linkWhatsApp() : 'index.html?abrir=atendente'), icone: '💬', rotulo: 'Atendente', externo: true }
+  ];
 
   let perms = [];
   let logado = false;
@@ -150,9 +160,10 @@
       document.body.appendChild(nav);
       document.body.classList.add('tk-tem-nav');
     }
-    const html = ITENS.filter(visivel).map((it) => {
+    const lista = ehEquipe() ? ITENS.filter(visivel) : ITENS_CLIENTE();
+    const html = lista.map((it) => {
       const atual = it.id === ativoId;
-      return '<a href="' + it.href + '"' + (atual ? ' class="tk-ativo" aria-current="page"' : '') + ' data-nav="' + it.id + '">' +
+      return '<a href="' + it.href + '"' + (atual ? ' class="tk-ativo" aria-current="page"' : '') + (it.externo ? ' target="_blank" rel="noopener"' : '') + ' data-nav="' + it.id + '">' +
         '<span class="tk-i" aria-hidden="true">' + it.icone + '</span><span class="tk-r">' + it.rotulo + '</span></a>';
     }).join('');
     if (nav.getAttribute('data-h') !== html) { nav.innerHTML = html; nav.setAttribute('data-h', html); }

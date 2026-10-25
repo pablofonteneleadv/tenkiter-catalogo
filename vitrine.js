@@ -694,16 +694,18 @@
   }
 
   /* ==================================================================
-   * NAV-1 — barra inferior de compra (restrição do cliente)
-   * SEM "Favoritos" e SEM "Categorias". Só o caminho de compra e o
-   * atendimento: Início, Buscar, Seleção e Atendente.
-   * A barra do nav.js é preservada para a equipe (é ferramenta de
+   * NAV-1 — barra inferior do CLIENTE (mockup aprovado em 24/10/2026)
+   * Início, Buscar, Seleção, Favoritos e Atendente. Sem "Categorias"
+   * (ficam no menu e em Filtros). Favoritos só salva com conta; o
+   * visitante recebe o convite para entrar.
+   * A barra do nav.js continua valendo para a equipe (ferramenta de
    * trabalho); para o visitante, esta substitui.
    * ================================================================== */
   const ITENS_COMPRA = [
     { id: 'inicio', href: 'index.html', icone: '\u{1F3E0}', rotulo: 'Início' },
     { id: 'buscar', href: '#busca', icone: '\u{1F50E}', rotulo: 'Buscar', acao: 'buscar' },
     { id: 'selecao', href: '#selecao', icone: '\u{1F6CD}', rotulo: 'Seleção', acao: 'selecao', contador: true },
+    { id: 'favoritos', href: '#favoritos', icone: '\u{2764}\u{FE0F}', rotulo: 'Favoritos', acao: 'favoritos' },
     { id: 'atendente', href: '#atendente', icone: '\u{1F4AC}', rotulo: 'Atendente', acao: 'atendente' }
   ];
 
@@ -737,6 +739,12 @@
       if (tem('abrirSacola')) return abrirSacola();
       const b = document.querySelector('[data-abrir-sacola], #btn-sacola');
       if (b) b.click();
+      return;
+    }
+    if (nome === 'favoritos') {
+      if (typeof window.abrirFavoritos === 'function') return window.abrirFavoritos();
+      const f = document.getElementById('btn-favoritos-header');
+      if (f) f.click();
       return;
     }
     if (nome === 'atendente') {
