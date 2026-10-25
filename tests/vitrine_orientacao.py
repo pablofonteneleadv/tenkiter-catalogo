@@ -14,7 +14,7 @@ with sync_playwright() as p:
     pg.goto(BASE + "index.html"); pg.wait_for_selector(".card"); pg.wait_for_timeout(900)
     # v7.0 (VIT-6): o CTA do cartão diz o que faz e onde — "Pedir no WhatsApp" —
     # em vez do genérico "Consultar", que não dizia para onde o toque levava.
-    chk("cartão: CTA nomeia o WhatsApp (não mais 'Consultar')", "WhatsApp" in pg.locator(".ac-pedir").first.inner_text(), pg.locator(".ac-pedir").first.inner_text())
+    chk("cartão: CTA é 'Consulte esta peça' (mockup 24/10; nunca 'pedir')", "Consulte esta peça" in pg.locator(".ac-pedir").first.inner_text(), pg.locator(".ac-pedir").first.inner_text())
     chk("cartão: botão 'Selecionar' e título da seleção", "Selecionar" in pg.locator(".ac-sacola").first.inner_text() and pg.get_attribute("#btn-sacola-header", "title") == "Abrir minha seleção")
     # v7.1 (Pacote 1, item a): a faixa de vantagens passou a nascer RECOLHIDA no
     # celular (é a 3ª coisa antes do 1º produto e não ajuda a escolher). O texto
