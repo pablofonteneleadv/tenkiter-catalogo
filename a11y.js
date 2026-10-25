@@ -155,8 +155,10 @@
 (() => {
   'use strict';
   if (!document.getElementById('grid')) return;
+  // v7.4 (mockup aprovado 24/10/2026): Início, Buscar, Seleção, Favoritos e Atendente.
   const IT = [['inicio', 'index.html', '\u{1F3E0}', 'In\u00edcio'], ['buscar', '#busca', '\u{1F50E}', 'Buscar'],
-    ['selecao', '#selecao', '\u{1F6CD}', 'Sele\u00e7\u00e3o'], ['atendente', '#atendente', '\u{1F4AC}', 'Atendente']];
+    ['selecao', '#selecao', '\u{1F6CD}', 'Sele\u00e7\u00e3o'], ['favoritos', '#favoritos', '\u{2764}\u{FE0F}', 'Favoritos'],
+    ['atendente', '#atendente', '\u{1F4AC}', 'Atendente']];
   const SIG = IT.map((i) => i[0]).join(',');
   const EQ = ['admin.html', 'curriculos.html', 'painel=rh'];
   const NAV = () => document.querySelector('.tk-nav');
@@ -174,6 +176,12 @@
       if (typeof abrirSacola === 'function') return abrirSacola();
       const b = document.querySelector('[data-abrir-sacola], #btn-sacola');
       if (b) b.click();
+      return;
+    }
+    if (id === 'favoritos') {
+      if (typeof abrirFavoritos === 'function') return abrirFavoritos();
+      const f = document.getElementById('btn-favoritos-header');
+      if (f) f.click();
       return;
     }
     let n = '';
