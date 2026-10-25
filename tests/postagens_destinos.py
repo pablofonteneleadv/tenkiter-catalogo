@@ -39,9 +39,9 @@ def aba(pg, nome): pg.click("#po-abas [data-aba=%s]" % nome); pg.wait_for_timeou
 
 
 def selecionados(pg):
-    return {k for k in ['instagram','whatsapp','grupo'] if pg.locator('[data-destino='+k+']').get_attribute('aria-pressed')=='true'}
+    return {k for k in ['instagram','whatsapp','whatsapp2','grupo'] if pg.locator('[data-destino='+k+']').get_attribute('aria-pressed')=='true'}
 def escolher(pg,destinos):
-    for k in ['instagram','whatsapp','grupo']:
+    for k in ['instagram','whatsapp','whatsapp2','grupo']:
         if (k in selecionados(pg)) != (k in destinos): pg.locator('[data-destino='+k+']').click()
 def preparar(pg):
     pg.fill('#po-busca','TK-0003');pg.wait_for_timeout(200);pg.click('.po-card >> nth=0');pg.click('[data-a=usarpecas]');pg.wait_for_timeout(200)
@@ -49,19 +49,24 @@ def preparar(pg):
 with sync_playwright() as p:
     b=p.chromium.launch(args=['--no-sandbox']);ctx,st=novo(b);pg=ctx.new_page();erros=[];pg.on('pageerror',lambda e:erros.append(str(e)))
     pg.goto(BASE+'admin.html');pg.wait_for_timeout(2600);abrir(pg)
-    chk('três destinos no mesmo seletor e sem checkbox antigo',pg.locator('#po-canal [data-destino]').count()==4 and pg.locator('#po-grupo-clientes').count()==0 and 'Ambos' not in pg.inner_text('#po-canal'))
-    chk('Instagram e grupo começam selecionados',selecionados(pg)=={'instagram','grupo'})
+    chk('quatro destinos + Os 4 no mesmo seletor e sem checkbox antigo',pg.locator('#po-canal [data-destino]').count()==5 and pg.locator('#po-grupo-clientes').count()==0 and 'Ambos' not in pg.inner_text('#po-canal'))
+    chk('sem nada em andamento não há aviso de rascunho nem Recomeçar do zero',pg.locator('[data-a=recomecar]').count()==0 and 'Rascunho salvo' not in pg.inner_text('#po-corpo'))
+    chk('arquivo antigo de controles não é mais carregado (botões vêm do painel)',pg.evaluate('typeof window.TKPostagensControles')=='undefined')
+    chk('os 4 destinos começam pré-selecionados',selecionados(pg)=={'instagram','whatsapp','whatsapp2','grupo'},selecionados(pg))
+    chk('rótulos pedidos: WhatsApp Status 1, Status 2 e Grupo 1','WhatsApp Status 1' in pg.inner_text('#po-canal') and 'WhatsApp Status 2' in pg.inner_text('#po-canal') and 'WhatsApp Grupo 1' in pg.inner_text('#po-canal'))
     pg.click('[data-destino=todos]')
-    chk('Os 3 ilumina os três destinos e o atalho',len(selecionados(pg))==3 and pg.locator('[data-destino=todos]').get_attribute('aria-pressed')=='true')
+    chk('Os 4 desmarca quando já estão todos',len(selecionados(pg))==0)
+    pg.click('[data-destino=todos]')
+    chk('Os 4 ilumina os quatro destinos e o atalho',len(selecionados(pg))==4 and pg.locator('[data-destino=todos]').get_attribute('aria-pressed')=='true')
     if os.environ.get('TK_DESTINOS_SCREENSHOT'):pg.screenshot(path=os.environ['TK_DESTINOS_SCREENSHOT'])
     pg.click('[data-destino=whatsapp]')
-    chk('tirar um mantém outros dois e desliga atalho',selecionados(pg)=={'instagram','grupo'} and pg.locator('[data-destino=todos]').get_attribute('aria-pressed')=='false')
+    chk('tirar um mantém os outros três e desliga atalho',selecionados(pg)=={'instagram','whatsapp2','grupo'} and pg.locator('[data-destino=todos]').get_attribute('aria-pressed')=='false')
     escolher(pg,{'grupo'});pg.wait_for_timeout(300);pg.reload();pg.wait_for_timeout(2600);abrir(pg)
     chk('rascunho preserva grupo sozinho após recarregar',selecionados(pg)=={'grupo'})
     preparar(pg);escolher(pg,set());pg.click('[data-a=enviar]');pg.wait_for_timeout(300)
     chk('nenhum destino bloqueia envio sem trocar para Instagram',not st['ig'].get('post_chamadas') and 'Escolha pelo menos um destino' in corpo(pg))
     axe(pg,'seletor dos três destinos')
-    combos=[{'instagram'},{'whatsapp'},{'grupo'},{'instagram','whatsapp'},{'instagram','grupo'},{'whatsapp','grupo'},{'instagram','whatsapp','grupo'}]
+    combos=[{'instagram'},{'whatsapp'},{'whatsapp2'},{'grupo'},{'instagram','whatsapp'},{'instagram','grupo'},{'whatsapp','grupo'},{'whatsapp','whatsapp2'},{'instagram','whatsapp','whatsapp2','grupo'}]
     for i,ds in enumerate(combos):
         if i: aba(pg,'nova');preparar(pg)
         escolher(pg,ds);pg.click('[data-q=agora]');pg.wait_for_timeout(100)
@@ -69,14 +74,23 @@ with sync_playwright() as p:
         pg.click('[data-a=enviar]');pg.wait_for_timeout(1000)
         chamadas=[x['corpo'] for x in st['ig'].get('post_chamadas',[]) if x['path']=='/post']
         pedido=chamadas[-1] if chamadas else {}
-        esperado='ambos' if {'instagram','whatsapp'}<=ds else 'instagram' if 'instagram' in ds else 'whatsapp' if 'whatsapp' in ds else 'grupo'
-        chk('publicar somente em '+','.join(sorted(ds)),pedido.get('canal')==esperado and pedido.get('grupoClientes')==('grupo' in ds) and pedido.get('legenda')=='Legenda preservada nos destinos',pedido)
+        esperado='ambos' if {'instagram','whatsapp'}<=ds else 'instagram' if 'instagram' in ds else 'whatsapp' if 'whatsapp' in ds else 'whatsapp2' if ('whatsapp2' in ds and 'grupo' not in ds) else 'grupo'
+        chk('publicar somente em '+','.join(sorted(ds)),pedido.get('canal')==esperado and pedido.get('grupoClientes')==('grupo' in ds) and pedido.get('status2')==('whatsapp2' in ds) and pedido.get('legenda')=='Legenda preservada nos destinos',pedido)
     aba(pg,'nova');preparar(pg);pg.click('[data-tipo=story]');pg.click('[data-tpl=rodape]');pg.check('input[name=po-cta][value=link]');escolher(pg,{'grupo'})
     pg.click('[data-q=agora]');pg.wait_for_timeout(100)
     if pg.locator('[data-a=agora-sim]').count():pg.click('[data-a=agora-sim]')
     pg.click('[data-a=enviar]');pg.wait_for_timeout(1000)
     enviado=[x['corpo'] for x in st['ig']['post_chamadas'] if x['path']=='/post'][-1]
     chk('Story só no grupo é automático mesmo após usar link do Instagram',enviado['posts'][0]['canal']=='grupo' and enviado['posts'][0]['modo']=='auto')
+    aba(pg,'nova');preparar(pg)
+    chk('com peça e legenda aparece o aviso e o Recomeçar do zero',pg.locator('[data-a=recomecar]').count()==1)
+    pg.once('dialog',lambda d:d.accept());pg.click('[data-a=recomecar]');pg.wait_for_timeout(600)
+    chk('depois de recomeçar o aviso some, pois não há o que zerar',pg.locator('[data-a=recomecar]').count()==0 and 'Rascunho salvo' not in pg.inner_text('#po-corpo'))
+    ctx3,st3=novo(b);st3['ig']['status2_bloq']=True;pg3=ctx3.new_page();pg3.goto(BASE+'admin.html');pg3.wait_for_timeout(2600);abrir(pg3)
+    chk('com o Status 2 barrado por plano ele não vem marcado, mas os outros 3 sim',selecionados(pg3)=={'instagram','whatsapp','grupo'},selecionados(pg3))
+    chk('a tela explica o motivo (plano Pro) em português',('WhatsApp Status 2: o plano atual do Wame não inclui postar Status' in pg3.inner_text('#po-corpo')) and 'plano Pro' in pg3.inner_text('#po-corpo'),pg3.inner_text('#po-corpo')[:400])
+    pg3.click('[data-destino=whatsapp2]')
+    chk('mesmo assim dá para marcar o Status 2 à mão',selecionados(pg3)=={'instagram','whatsapp','whatsapp2','grupo'})
     chk('sem erros JavaScript',not erros,erros)
     b.close()
 print('\nOK=%d FALHAS=%d %s'%(len(OK),len(BAD),BAD));sys.exit(1 if BAD else 0)

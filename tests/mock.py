@@ -538,12 +538,44 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     elif a=="cancelar": x["status"]="cancelada"
                     elif a in ("refazer","agora"): x["status"]="pronta"; x["resultado"]="https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/ia%d.jpg"%x["id"]; x["erro"]=""; x["espera"]=""; x["modelo"]="gemini-nano-banana-2.1"
                     return route.fulfill(json={"ok":True})
+            if path.startswith("/msg/"):
+                _m=g.setdefault("msg",{"ligado":{},"pausa":{},"calls":[]}); _m["calls"].append(path)
+                _cv={"whatsapp1":[{"id":1,"contato":"5588999990000","nome":"Maria","grupo":0,"ultima_em":"2026-10-25T17:00:00.000Z","previa":"Tem sim! <b>x</b>","total":2},{"id":2,"contato":"120363-group","nome":"","grupo":1,"ultima_em":"2026-10-24T10:00:00.000Z","previa":"[imagem]","total":5}],"whatsapp2":[],"instagram":[]}
+                if path=="/msg/resumo": return route.fulfill(json={"ok":True,"canais":{c:{"conversas":len(_cv[c]),"mensagens":sum(x["total"] for x in _cv[c]),"ultima":"","ligadoEm":_m["ligado"].get(c,"2026-10-25T16:00:00.000Z" if c=="whatsapp1" else ""),"pausado":bool(_m["pausa"].get(c)),**({"pronto":False} if c=="instagram" else {})} for c in _cv},"urlInstagram":""})
+                if path=="/msg/conversas":
+                    _c=route.request.url.split("canal=")[1].split("&")[0]; return route.fulfill(json={"ok":True,"conversas":_cv.get(_c,[])})
+                if path=="/msg/mensagens": return route.fulfill(json={"ok":True,"conversa":_cv["whatsapp1"][0],"mensagens":[{"id":1,"direcao":"entrada","tipo":"texto","texto":"Oi, tem o vestido? <img src=x onerror=window.__xss=1>","enviada_em":"2026-10-25T16:59:00.000Z"},{"id":2,"direcao":"saida","tipo":"imagem","texto":"","enviada_em":"2026-10-25T17:00:00.000Z"}]})
+                _b=json.loads(route.request.post_data or "{}")
+                if path=="/msg/ligar": _m["ligado"]["whatsapp"+str(_b["slot"])]="2026-10-25T17:10:00.000Z"; return route.fulfill(json={"ok":True})
+                if path=="/msg/pausar": _m["pausa"][_b["canal"]]=_b["pausar"]; return route.fulfill(json={"ok":True,"pausado":_b["pausar"]})
+            if path=="/post/wafly/config":
+                _w=g.setdefault("wafly",{})
+                if m=="GET": return route.fulfill(json={"ok":True,"slots":{str(n):{"configurada":bool(_w.get(n)),"instancia":(_w.get(n) or {}).get("instance",""),"origem":"gestao" if _w.get(n) else ("appscript" if n==1 else "nenhuma"),"ultimoTeste":None} for n in (1,2)}})
+                _b=json.loads(route.request.post_data or "{}"); g.setdefault("wafly_posts",[]).append(_b)
+                if _b.get("apagar"): _w[_b["slot"]]=None; return route.fulfill(json={"ok":True,"configurada":False})
+                if not (_b.get("instance") and _b.get("token") and _b.get("clientToken")): return route.fulfill(status=400,json={"ok":False,"erro":"Confira os três campos da Wafly."})
+                _w[_b["slot"]]={"instance":_b["instance"]}; return route.fulfill(json={"ok":True,"configurada":True,"origem":"gestao","instancia":_b["instance"]})
+            if path=="/post/wafly/teste":
+                g.setdefault("wafly_testes",[]).append(json.loads(route.request.post_data or "{}"))
+                return route.fulfill(json={"ok":True,"itens":[{"nome":"Sessão do WhatsApp","ok":True,"texto":"conectada"},{"nome":"Publicar Status","ok":True,"texto":"disponível"}]})
+            if path=="/post/wame/config":
+                if m=="GET": return route.fulfill(json={"ok":True,"configurada":bool(g.get("wame_chave")),"origem":"gestao" if g.get("wame_chave") else "nenhuma","servidor":g.get("wame_serv","server.wame.api.br"),"servidores":["server.wame.api.br","us.api-wa.me","server.api-wa.me"]})
+                _b=json.loads(route.request.post_data or "{}"); g.setdefault("wame_posts",[]).append(_b)
+                if _b.get("apagar"): g["wame_chave"]=""; g["wame_serv"]="server.wame.api.br"; return route.fulfill(json={"ok":True,"configurada":False})
+                if _b.get("chave") and len(str(_b.get("chave","")))<8: return route.fulfill(status=400,json={"ok":False,"erro":"A chave do Wame parece inválida. Cole só a chave da instância, sem espaços nem aspas."})
+                if _b.get("chave"): g["wame_chave"]=_b["chave"]
+                if _b.get("servidor"): g["wame_serv"]=_b["servidor"]
+                return route.fulfill(json={"ok":True,"configurada":bool(g.get("wame_chave"))})
+            if path=="/post/wame/teste":
+                g.setdefault("wame_testes",[]).append(1)
+                return route.fulfill(json={"ok":True,"servidorAtual":g.get("wame_serv","server.wame.api.br"),"resultados":[{"servidor":g.get("wame_serv","server.wame.api.br"),"http":404,"texto":"este servidor não reconhece a chave"},{"servidor":"us.api-wa.me","http":200,"conectado":True,"texto":"conectado"}],"encontrado":"us.api-wa.me","conectado":True})
             if path=="/posts" or path.startswith("/post"):      # fila de postagens (Worker v4.6): st["ig"]["posts"]
                 g.setdefault("posts",[]); g.setdefault("post_chamadas",[]); g.setdefault("post_seq",100)
                 PADRAO_R={"pausaAtiva":True,"pausaDe":"22:00","pausaAte":"06:30","max24h":90,"agoraIgnora":True,"canais":{"story":{"max24h":40,"gapMin":120,"gapMax":300},"status":{"max24h":40,"gapMin":120,"gapMax":300},"feed":{"max24h":20,"gapMin":300,"gapMax":600},"carrossel":{"max24h":20,"gapMin":300,"gapMax":600},"reels":{"max24h":10,"gapMin":600,"gapMax":1200}}}
                 if g.get("regras"): g.setdefault("regras_cfg",json.loads(json.dumps(PADRAO_R)))
                 if path=="/posts":
                     r0={"ok":True,"posts":[x for x in g["posts"] if x["status"]!="cancelado"],"contagens":{},"conectado":g["conectado"],"usuario":"tenkitermodasceara"}
+                    if g.get("status2_bloq"): r0.update({"status2Disponivel":False,"status2Motivo":"o plano atual do Wame não inclui postar Status (é preciso o plano Pro)"})
                     if g.get("regras"): r0.update({"regras":1,"config":g["regras_cfg"],"podeRegras":g.get("pode_regras",True),"uso24h":g.get("uso24h",{"story":12,"status":3,"feed":1,"carrossel":0,"reels":0})})
                     return route.fulfill(json=r0)
                 pb=json.loads(route.request.post_data or "{}")

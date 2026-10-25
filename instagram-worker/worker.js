@@ -83,7 +83,11 @@ const DDL = [
   `CREATE INDEX IF NOT EXISTS ix_fc ON foto_cliente (status, id)`,
   `CREATE INDEX IF NOT EXISTS ix_post ON postagem (status, agendado_em)`,
   `CREATE INDEX IF NOT EXISTS ix_rasc ON rascunho (status, grupo, publicado_em)`,
-  `CREATE INDEX IF NOT EXISTS ix_rm ON rascunho_midia (midia_id)`
+  `CREATE INDEX IF NOT EXISTS ix_rm ON rascunho_midia (midia_id)`,
+  `CREATE TABLE IF NOT EXISTS msg_conversa (id INTEGER PRIMARY KEY AUTOINCREMENT, canal TEXT NOT NULL, contato TEXT NOT NULL, nome TEXT DEFAULT '', grupo INTEGER NOT NULL DEFAULT 0, ultima_em TEXT DEFAULT '', previa TEXT DEFAULT '', total INTEGER NOT NULL DEFAULT 0, criado_em TEXT, UNIQUE (canal, contato))`,
+  `CREATE TABLE IF NOT EXISTS msg_mensagem (id INTEGER PRIMARY KEY AUTOINCREMENT, conversa_id INTEGER NOT NULL, canal TEXT NOT NULL, ext_id TEXT NOT NULL, direcao TEXT NOT NULL, tipo TEXT NOT NULL DEFAULT 'texto', texto TEXT DEFAULT '', enviada_em TEXT DEFAULT '', gravada_em TEXT, UNIQUE (canal, ext_id))`,
+  `CREATE INDEX IF NOT EXISTS ix_msg_conv ON msg_mensagem (conversa_id, enviada_em)`,
+  `CREATE INDEX IF NOT EXISTS ix_msgc_ult ON msg_conversa (canal, ultima_em)`
 ];
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
@@ -585,7 +589,7 @@ const TIPOS_POST = ['feed', 'carrossel', 'reels', 'story'];
  * O canal precisa ser GRAVADO junto com a peca e LIDO de volta pelo processador da fila. Era
  * exatamente isso que faltava: o campo chegava no POST, era descartado no INSERT e a fila publicava
  * sempre no Instagram -- mesmo com "somente WhatsApp" escolhido na tela. */
-const CANAIS_POSTAGEM = ['instagram', 'whatsapp', 'ambos', 'grupo'];
+const CANAIS_POSTAGEM = ['instagram', 'whatsapp', 'ambos', 'grupo', 'whatsapp2'];   // whatsapp2 = Status do WhatsApp 2 (provedor Wame)
 const CANAL_POSTAGEM_PADRAO = 'instagram';
 function normalizarCanal_(v) { const c = String(v == null ? '' : v).trim().toLowerCase(); return CANAIS_POSTAGEM.indexOf(c) === -1 ? CANAL_POSTAGEM_PADRAO : c; }
 function canalUsaInstagram_(c) { const x = normalizarCanal_(c); return x === 'instagram' || x === 'ambos'; }
@@ -632,8 +636,12 @@ async function gravarContainers(env, id, c) { await env.DB.prepare('UPDATE posta
  * Idempotente: o `requestId` e estavel (deriva do id da postagem), entao repetir NAO republica.
  */
 /* v1.3: envio ao Status do WhatsApp SEM gravar o desfecho da postagem (usado também no canal "ambos"). */
-async function enviarWhatsAppSo_(env, p) {
-  const base = String(env.API_URL || '').trim();
+async function enviarWhatsAppSo_(env, p, slot) {
+  slot = slot === 2 ? 2 : 1;
+  const direto = await cfgWafly_(env, slot);
+  if (direto) return await enviarWaflyDireto_(env, p, slot, direto);          // v2.1: credenciais cadastradas na Gestão (D1)
+  if (slot === 2) return { ok: false, erro: 'O Wafly 2 ainda não está cadastrado em Conexões.' };
+  const base = String(env.API_URL || '').trim();           // Wafly 1 sem cadastro na Gestão: ponte do Apps Script (caminho de sempre)
   if (!base) return { ok: false, erro: 'Falta o endereco do backend (API_URL) para enviar ao WhatsApp.' };
   let m = []; try { m = JSON.parse(p.midias || '[]'); } catch (e) { m = []; }
   const primeira = m[0] || {};
@@ -654,6 +662,8 @@ const ZAP_CONSULTA_GAP_MS = 2 * 60000;      // o cron consulta a Wafly a cada ~2
 const FRASE_AGUARDA_ZAP = 'Aguardando a confirmação do WhatsApp. Não precisa fazer nada: o sistema confere sozinho a cada poucos minutos, sem reenviar.';
 /** Só CONSULTA o recibo daquele requestId pelo backend (não baixa nem envia mídia). { estado:'aceito'|'desconhecido'|'falha' } */
 async function consultarWhatsApp_(env, requestId) {
+  const direto = await cfgWafly_(env, slotDoRequestId_(requestId));
+  if (direto) return await consultarWaflyDireto_(direto, requestId);
   const base = String(env.API_URL || '').trim();
   if (!base) return { estado: 'falha', erro: 'Falta o endereco do backend (API_URL).' };
   try {
@@ -698,6 +708,113 @@ async function enviarWhatsApp_(env, p) {
   if (!r.ok) return marcarErroPost_(env, p, r.erro);
   await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', publicado_em=?, atualizado_em=? WHERE id=?").bind(r.requestId, agora(), agora(), p.id).run();
   return { ok: true, canal: 'whatsapp' };
+}
+
+/* ==========================================================================
+ * v2.1 -- WAFLY 1 e WAFLY 2 CADASTRADOS NA GESTÃO (Conexões) -- sem editar o Apps Script
+ *
+ *  Cada instância guarda { instance, token, clientToken } na tabela `cfg` (D1): chaves `wafly_1` e `wafly_2`.
+ *  Nada disso volta ao navegador (a tela só vê "configurada", o código da instância e o resultado do teste).
+ *  - Wafly 1 (canal whatsapp/ambos): se cadastrado aqui, o Worker fala direto com a Wafly; se não, continua pela ponte do Apps Script.
+ *  - Wafly 2 (canal whatsapp2): se cadastrado aqui, assume o Status 2; senão vale o Wame (se houver) como antes.
+ *  Mesma regra de segurança do Status 1: requestId estável por postagem (a Wafly não republica), 409/timeout/5xx = "aguardando
+ *  confirmação" (só consulta o MESMO requestId), nunca reenvia sozinho. O prefixo do requestId diz de qual instância é o recibo.
+ * ========================================================================== */
+const WAFLY_BASE_ = 'https://wafly.com.br/api-bridge-whats';
+const WAFLY_SLOTS_ = { 1: { chave: 'wafly_1', prefixo: 'tkpost-', nome: 'WhatsApp Status 1' }, 2: { chave: 'wafly_2', prefixo: 'tkpost2-', nome: 'WhatsApp Status 2' } };
+function validarWafly_(c) {
+  if (!c || typeof c !== 'object') return null;
+  const instance = String(c.instance || '').trim(), token = String(c.token || '').trim(), clientToken = String(c.clientToken || '').trim();
+  if (!/^[A-Za-z0-9_-]{6,80}$/.test(instance) || !/^[A-Za-z0-9._-]{6,200}$/.test(token) || !/^[A-Za-z0-9._-]{6,200}$/.test(clientToken)) return null;
+  return { instance: instance, token: token, clientToken: clientToken };
+}
+async function cfgWafly_(env, slot) {
+  try { const v = await cfgGet(env, WAFLY_SLOTS_[slot === 2 ? 2 : 1].chave); return v ? validarWafly_(JSON.parse(v)) : null; } catch (e) { return null; }
+}
+function slotDoRequestId_(rid) { return String(rid || '').indexOf('tkpost2-') === 0 ? 2 : 1; }
+function waflyUrl_(cfg, caminho) { return WAFLY_BASE_ + '/instances/' + encodeURIComponent(cfg.instance) + '/token/' + encodeURIComponent(cfg.token) + caminho; }
+function bytesParaBase64_(buf) {
+  const u = new Uint8Array(buf); let bin = '';
+  for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+async function enviarWaflyDireto_(env, p, slot, cfg) {
+  const info = WAFLY_SLOTS_[slot];
+  let m = []; try { m = JSON.parse(p.midias || '[]'); } catch (e) { m = []; }
+  const primeira = m[0] || {};
+  const requestId = info.prefixo + String(p.id).padStart(12, '0');
+  const url = String(primeira.url || '');
+  if (!/^https:\/\//i.test(url)) return { ok: false, erro: 'Mídia inválida para o ' + info.nome + ' (precisa ser https).' };
+  let conteudo;
+  try {
+    const rm = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(30000), headers: { 'User-Agent': UA } });
+    if (!rm.ok) return { ok: false, erro: 'Não consegui baixar a mídia (HTTP ' + rm.status + ').' };
+    const buf = await rm.arrayBuffer();
+    if (buf.byteLength > 10485760) return { ok: false, erro: 'Mídia grande demais para o Status do WhatsApp (limite 10 MB).' };
+    conteudo = bytesParaBase64_(buf);
+  } catch (e) { return { ok: false, erro: 'Não consegui baixar a mídia agora. Tento de novo.' }; }
+  const corpo = { requestId: requestId, type: primeira.tipo === 'video' ? 'video' : 'image', content: conteudo, audienceMode: 'contacts' };
+  if (p.legenda) corpo.caption = String(p.legenda).slice(0, 1024);
+  let r, j = null;
+  try {
+    r = await fetch(waflyUrl_(cfg, '/status-publication'), { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(60000), headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+    try { j = await r.json(); } catch (e) { j = null; }
+  } catch (e) { return { ok: false, pendente: true, requestId: requestId, erro: 'A resposta da Wafly foi interrompida.' }; }
+  if (r.ok && !(j && j.error)) return { ok: true, requestId: requestId };
+  if (r.status === 401 || r.status === 403) return { ok: false, erro: 'A Wafly recusou as credenciais do ' + info.nome + '. Confira a instância e os tokens em Conexões.' };
+  if (r.status === 402) return { ok: false, erro: 'A assinatura da Wafly do ' + info.nome + ' está inadimplente ou o período de teste acabou.' };
+  if (r.status === 409 || r.status === 408 || r.status === 429 || r.status >= 500) return { ok: false, pendente: true, requestId: requestId, erro: 'A Wafly respondeu HTTP ' + r.status + '.' };
+  return { ok: false, erro: 'A Wafly recusou a publicação do ' + info.nome + ' (HTTP ' + r.status + ').' };
+}
+async function consultarWaflyDireto_(cfg, requestId) {
+  try {
+    const r = await fetch(waflyUrl_(cfg, '/status-publication/requests/' + encodeURIComponent(requestId)), { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { 'Client-Token': cfg.clientToken } });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j && String(j.state || '').toLowerCase() === 'accepted' && j.serverAcknowledged) return { estado: 'aceito' };
+    if (r.ok) return { estado: 'desconhecido' };
+    return { estado: 'falha', erro: 'A Wafly respondeu HTTP ' + r.status + '.' };
+  } catch (e) { return { estado: 'falha', erro: 'Sem conexao com a Wafly agora.' }; }
+}
+/** Teste somente de leitura: sessão e capacidade de Status. Nunca envia nada. */
+async function testarWafly_(env, slot) {
+  const cfg = await cfgWafly_(env, slot);
+  if (!cfg) return { ok: false, erro: slot === 1 ? 'O Wafly 1 ainda usa o Apps Script. Cadastre as credenciais aqui para testar.' : 'Cadastre o Wafly 2 antes de testar.' };
+  const out = { ok: true, verificadoEm: agora(), itens: [] };
+  for (const [nome, caminho] of [['Sessão do WhatsApp', '/status'], ['Publicar Status', '/status-publication']]) {
+    try {
+      const r = await fetch(waflyUrl_(cfg, caminho), { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(12000), headers: { 'Client-Token': cfg.clientToken } });
+      const j = await r.json().catch(() => null);
+      let ok = r.ok, texto;
+      if (r.status === 401 || r.status === 403) texto = 'credenciais recusadas';
+      else if (!r.ok) texto = 'HTTP ' + r.status;
+      else if (caminho === '/status') { ok = !!(j && (j.value === 'CONNECTED' || j.connected === true)); texto = ok ? 'conectada' : 'não está conectada (leia o QR na Wafly)'; }
+      else { ok = !!(j && j.supported !== false && j.connected !== false); texto = ok ? 'disponível' : 'indisponível agora'; }
+      out.itens.push({ nome: nome, ok: ok, texto: texto });
+      if (!ok) out.ok = false;
+    } catch (e) { out.itens.push({ nome: nome, ok: false, texto: 'sem resposta' }); out.ok = false; }
+  }
+  try { await cfgSet(env, 'wafly_ultimo_teste_' + slot, JSON.stringify({ em: out.verificadoEm, ok: out.ok })); } catch (e) { /* diagnóstico */ }
+  return out;
+}
+/** Status 2: Wafly 2 (Gestão) tem prioridade; sem ele, o Wame de antes. { ok, provedor, motivo } */
+async function status2Info_(env) {
+  if (await cfgWafly_(env, 2)) return { ok: true, provedor: 'wafly', motivo: '' };
+  if (!(await cfgWameStatus_(env))) return { ok: false, provedor: null, motivo: 'falta cadastrar o Wafly 2 em Conexões' };
+  const motivo = await motivoWame_(env);
+  return { ok: !motivo, provedor: 'wame', motivo: motivo };
+}
+/** Envio do canal whatsapp2 pelo Wafly 2 (mesma máquina de espera do Status 1). Postagem com recibo antigo do Wame segue no Wame: nunca duplica. */
+async function enviarStatusWafly2_(env, p) {
+  if (await env.DB.prepare('SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=?').bind(p.id).first()) return enviarStatusWame_(env, p);
+  if (String(p.ig_id || '').indexOf('zapq:') === 0) {
+    const rz = await resolverZapPendente_(env, p, false);
+    return rz === 'aceito' ? { ok: true, canal: 'whatsapp2' } : undefined;
+  }
+  const r = await enviarWhatsAppSo_(env, p, 2);
+  if (r.pendente) return await marcarAguardaZap_(env, p, r.requestId);
+  if (!r.ok) return marcarErroPost_(env, p, r.erro);
+  await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', publicado_em=?, atualizado_em=? WHERE id=?").bind(r.requestId, agora(), agora(), p.id).run();
+  return { ok: true, canal: 'whatsapp2' };
 }
 /** Marca a postagem com a frase do erro (o painel mostra e oferece "Tentar de novo"). Nunca lanca. */
 async function marcarErroPost_(env, p, frase) {
@@ -847,8 +964,164 @@ async function enviarGrupoClientes_(env, p) {
   return { ok: true, canal: 'grupo' };
 }
 
+/* ==========================================================================
+ * v2.0 -- STATUS DO WHATSAPP 2 (provedor Wame) (25/10/2026)
+ *
+ *  Canal `whatsapp2`: publica no Status do segundo WhatsApp da loja pela API da Wame
+ *  (https://wame.api.br/docs/api): POST {base}/{key}/status/image e /status/video com { url, caption }.
+ *  A chave da instância vai no caminho da URL (a Wame não usa cabeçalho de autenticação).
+ *
+ *  Segredo privado WAME_STATUS_2 = JSON {"key":"…"} (opcional "base"). Nunca vem do navegador, nunca volta à tela, nunca vai ao Git.
+ *  Sem o segredo o destino fica "não configurado" e o painel avisa em português.
+ *
+ *  A Wame NÃO documenta idempotência nem o formato da resposta dos endpoints de status. Por isso o envio segue a regra do Grupo clientes:
+ *   - recibo durável por mídia (postagem_grupo_recibo) ANTES de chamar a API;
+ *   - resposta inconclusiva (rede, 5xx, 408/409/429) = "aguardando confirmação": NUNCA reenvia sozinho;
+ *   - 4xx explícito = recusado (a pessoa pode tentar de novo depois de conferir);
+ *   - 2xx sem erro declarado = aceito. Só guardamos os NOMES dos campos da resposta (diagnóstico), nunca o conteúdo.
+ * ========================================================================== */
+const WAME_SERVIDORES = ['server.wame.api.br', 'us.api-wa.me', 'server.api-wa.me'];
+const WAME_BASES_OK = /^https:\/\/(?:server\.wame\.api\.br|us\.api-wa\.me|server\.api-wa\.me)$/;
+function validarConfigWame_(bruto) {
+  try {
+    const c = JSON.parse(bruto || '{}'), key = String(c.key || '').trim();
+    if (!/^[A-Za-z0-9._-]{8,200}$/.test(key)) return null;
+    const base = String(c.base || 'https://server.wame.api.br').replace(/\/+$/, '');
+    return WAME_BASES_OK.test(base) ? { key: key, base: base } : null;
+  } catch (e) { return null; }
+}
+/** A chave e o servidor cadastrados na Gestão (D1) valem primeiro; o segredo do Worker é o reserva. */
+async function cfgWameStatus_(env) {
+  let guardada = null, servidor = null;
+  try { guardada = await cfgGet(env, 'wame_status_2'); servidor = await cfgGet(env, 'wame_status_2_servidor'); } catch (e) { /* sem D1: cai no segredo */ }
+  const base = servidor && WAME_SERVIDORES.includes(servidor) ? 'https://' + servidor : undefined;
+  if (guardada) return validarConfigWame_(JSON.stringify({ key: guardada, base: base }));
+  const sec = validarConfigWame_(env.WAME_STATUS_2);
+  return sec && base ? { key: sec.key, base: base } : sec;
+}
+/** Quando a Wame recusa o Status por falta de plano, guardamos o aviso para a tela não pré-marcar o destino. Só aviso: nunca impede o envio. */
+async function bloqueioWame_(env) {
+  try { const v = await cfgGet(env, 'wame_plano_bloqueio'); return v ? JSON.parse(v) : null; } catch (e) { return null; }
+}
+async function motivoWame_(env) {
+  if (!(await cfgWameStatus_(env))) return 'falta cadastrar a chave do Wame em Conexões';
+  const b = await bloqueioWame_(env);
+  return b ? 'o plano atual do Wame não inclui postar Status' + (b.plano ? ' (é preciso o plano ' + b.plano + ')' : '') : '';
+}
+/** Teste de conexão (somente leitura): GET /{chave}/instance em cada servidor permitido, começando pelo configurado. */
+async function testarWame_(env) {
+  const cfg = await cfgWameStatus_(env);
+  if (!cfg) return { ok: false, erro: 'Cadastre a chave do Wame antes de testar.' };
+  const hosts = [cfg.base.replace('https://', '')].concat(WAME_SERVIDORES.filter((h) => 'https://' + h !== cfg.base));
+  const res = [];
+  for (const h of hosts) {
+    let r, j = null;
+    try {
+      r = await fetch('https://' + h + '/' + encodeURIComponent(cfg.key) + '/instance', { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(12000), headers: { 'User-Agent': UA } });
+      j = await respostaGrupo_(r);
+    } catch (e) { res.push({ servidor: h, http: 0, texto: 'não respondeu' }); continue; }
+    const o = j && typeof j === 'object' && !Array.isArray(j) ? j : {}, inner = o.instance && typeof o.instance === 'object' ? o.instance : {};
+    const achar = (nomes) => { for (const src of [o, inner]) for (const n of nomes) if (typeof src[n] === 'boolean') return src[n]; return null; };
+    const conectado = achar(['phoneConnected', 'connected', 'isConnected']);
+    const estado = textoWame_(o.state || inner.state || o.connection || inner.connection || (typeof o.status === 'string' ? o.status : '') || (typeof inner.status === 'string' ? inner.status : ''), cfg.key);
+    let texto;
+    if (r.status === 403) texto = erroRecusaWame_(403, j, cfg.key);
+    else if (r.status === 401 || r.status === 404) texto = 'este servidor não reconhece a chave';
+    else if (!r.ok) texto = 'respondeu HTTP ' + r.status;
+    else texto = conectado === true ? 'conectado' : conectado === false ? 'responde, mas o WhatsApp está desconectado' : estado ? 'responde (estado: ' + estado + ')' : 'responde, mas não informou o estado';
+    res.push({ servidor: h, http: r.status, conectado: r.ok ? conectado : null, texto: texto, campos: Object.keys(o).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 15) });
+    if (r.ok) break;
+  }
+  const bom = res.find((x) => x.http >= 200 && x.http < 300);
+  try { await cfgSet(env, 'wame_ultimo_teste', JSON.stringify({ em: agora(), res: res })); } catch (e) { /* diagnóstico não bloqueia */ }
+  const bloqueio = await bloqueioWame_(env);
+  return { ok: true, bloqueioStatus: bloqueio ? 'O último envio de Status foi recusado: o plano atual do Wame não inclui postar Status' + (bloqueio.plano ? ' (é preciso o plano ' + bloqueio.plano + ')' : '') + '. A conexão em si está normal.' : '', servidorAtual: cfg.base.replace('https://', ''), resultados: res, encontrado: bom ? bom.servidor : null, conectado: bom ? bom.conectado : null };
+}
+/** Canais com recibo por mídia (nunca reenviar quando o resultado ficou incerto). */
+function canalComRecibo_(c) { return c === 'grupo' || c === 'whatsapp2'; }
+function nomeCanalRecibo_(c) { return c === 'whatsapp2' ? 'WhatsApp Status 2' : 'Grupo clientes'; }
+/** O corpo da resposta da Wame é desconhecido: "erro" = campo de erro explícito ou sucesso explicitamente falso. */
+function respostaWameComErro_(j) {
+  if (!j || typeof j !== 'object' || Array.isArray(j)) return false;
+  return !!(j.error || j.erro || j.success === false || j.ok === false || j.value === false || String(j.status || '').toLowerCase() === 'error');
+}
+function idMensagemWame_(j) {
+  const c = j && typeof j === 'object' ? [j.messageId, j.id, j.key && j.key.id, j.data && j.data.key && j.data.key.id, j.data && j.data.id, j.message && j.message.key && j.message.key.id] : [];
+  const x = c.find((v) => typeof v === 'string' && v);
+  return x ? String(x).slice(0, 200) : '';
+}
+async function aguardarConfirmacaoWame_(env, p, detalhe) {
+  const aviso = 'WhatsApp Status 2: aguardando confirmação da entrega. ' + detalhe + ' Confira no WhatsApp; não reenviamos automaticamente.';
+  await env.DB.prepare("UPDATE postagem SET status='processando', erro=?, atualizado_em=? WHERE id=?").bind(aviso.slice(0, 300), agora(), p.id).run();
+  return { ok: true, aguardando: true };
+}
+/** Texto curto e seguro vindo da Wame (nunca a chave), para mostrar ao gestor em português. */
+function textoWame_(v, key) {
+  let t = String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (key) t = t.split(key).join('…');
+  return t.slice(0, 140);
+}
+/** 403 com campos de plano = a instância do Wame não tem o recurso "status" no plano contratado. */
+function erroRecusaWame_(status, j, key) {
+  const o = j && typeof j === 'object' && !Array.isArray(j) ? j : {};
+  const plano = textoWame_(o.requiredPlanName || o.requiredPlan, key), recurso = textoWame_(o.feature, key), msg = textoWame_(o.message, key);
+  if (plano) return 'WhatsApp Status 2: o plano atual do Wame não inclui' + (recurso ? ' o recurso “' + recurso + '”' : ' esse recurso') + '. É preciso o plano ' + plano + '. Troque o plano no painel do Wame e use “Tentar de novo”.';
+  return 'WhatsApp Status 2: a Wame recusou a publicação (HTTP ' + status + ')' + (msg ? ': ' + msg : '') + '. Confira o plano e se o WhatsApp 2 está conectado; depois use “Tentar de novo”.';
+}
+async function enviarStatusWame_(env, p) {
+  const cfg = await cfgWameStatus_(env);
+  if (!cfg) return marcarErroPost_(env, p, 'O WhatsApp Status 2 ainda não está configurado. Avise o gestor.');
+  let midias = []; try { midias = JSON.parse(p.midias || '[]'); } catch (e) { midias = []; }
+  if (!midias.length) return marcarErroPost_(env, p, 'WhatsApp Status 2: a postagem não tem foto nem vídeo.');
+  for (let i = 0; i < midias.length; i++) {
+    const antigo = await env.DB.prepare('SELECT estado, atualizado_em FROM postagem_grupo_recibo WHERE postagem_id=? AND ordem=?').bind(p.id, i).first();
+    if (antigo && antigo.estado === 'aceito') continue;
+    if (antigo && antigo.estado === 'enviando' && p.status === 'processando') {
+      const desde = Date.parse(antigo.atualizado_em || p.inicio_proc || p.atualizado_em || '') || Date.now();
+      if (Date.now() - desde <= GRUPO_ESPERA_MAX_MS) return { ok: true, aguardando: true };
+      await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=? AND status='processando'")
+        .bind('WhatsApp Status 2: sem confirmação em 10 min. Confira o Status no WhatsApp; depois escolha “Repostar com novo ID” ou “Descartar”.', agora(), p.id).run();
+      return { ok: false, erro: 'Tempo de confirmação do WhatsApp Status 2 esgotado.' };
+    }
+    if (antigo) return marcarErroPost_(env, p, 'WhatsApp Status 2: envio sem confirmação. Confira o Status no WhatsApp antes de qualquer novo envio; não reenviamos para evitar duplicação.');
+    const claim = await env.DB.prepare("INSERT OR IGNORE INTO postagem_grupo_recibo (postagem_id, ordem, estado, atualizado_em) VALUES (?,?,'enviando',?)").bind(p.id, i, agora()).run();
+    if (!claim.meta || claim.meta.changes !== 1) return;
+    await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(agora(), agora(), p.id).run();
+    p.status = 'processando';
+    const video = midias[i].tipo === 'video';
+    let r, j;
+    try {
+      r = await fetch(cfg.base + '/' + encodeURIComponent(cfg.key) + (video ? '/status/video' : '/status/image'), {
+        method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(45000),
+        headers: { 'Content-Type': 'application/json', 'User-Agent': UA }, body: JSON.stringify({ url: String(midias[i].url || ''), caption: String(p.legenda || '') })
+      });
+      j = await respostaGrupo_(r);
+    } catch (e) { return aguardarConfirmacaoWame_(env, p, 'A resposta da Wame foi interrompida.'); }
+    try {
+      await cfgSet(env, 'wame_ultimo_envio', JSON.stringify({ postagemId: p.id, ordem: i, em: agora(), http: r.status,
+        campos: j && typeof j === 'object' && !Array.isArray(j) ? Object.keys(j).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 15) : [], idPresente: !!idMensagemWame_(j),
+        motivo: textoWame_(j && j.reason, cfg.key), recurso: textoWame_(j && j.feature, cfg.key), plano: textoWame_(j && (j.requiredPlanName || j.requiredPlan), cfg.key) }));
+    } catch (e) { /* diagnóstico não bloqueia o recibo */ }
+    if (!r.ok || respostaWameComErro_(j)) {
+      const rejeitado = r.status >= 400 && r.status < 500 && ![408, 409, 429].includes(r.status);
+      if (rejeitado) await env.DB.prepare("UPDATE postagem_grupo_recibo SET estado='recusado', atualizado_em=? WHERE postagem_id=? AND ordem=?").bind(agora(), p.id, i).run();
+      if (rejeitado && r.status === 403 && j && typeof j === 'object' && (j.requiredPlan || j.requiredPlanName || j.reason === 'permission_denied')) {
+        try { await cfgSet(env, 'wame_plano_bloqueio', JSON.stringify({ em: agora(), plano: textoWame_(j.requiredPlanName || j.requiredPlan, cfg.key), recurso: textoWame_(j.feature, cfg.key) })); } catch (e) { /* aviso não bloqueia */ }
+      }
+      if (rejeitado) return marcarErroPost_(env, p, erroRecusaWame_(r.status, j, cfg.key));
+      if (r.ok) return aguardarConfirmacaoWame_(env, p, 'A Wame respondeu com aviso de erro.');
+      return aguardarConfirmacaoWame_(env, p, 'A Wame respondeu HTTP ' + r.status + '.');
+    }
+    await env.DB.prepare("UPDATE postagem_grupo_recibo SET estado='aceito', mensagem_id=?, atualizado_em=? WHERE postagem_id=? AND ordem=?").bind(idMensagemWame_(j), agora(), p.id, i).run();
+    try { await cfgSet(env, 'wame_plano_bloqueio', null); } catch (e) { /* aviso */ }
+  }
+  await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, erro='', publicado_em=?, atualizado_em=? WHERE id=?").bind('wame:' + p.id, agora(), agora(), p.id).run();
+  return { ok: true, canal: 'whatsapp2' };
+}
+
 async function avancarPostagem(env, token, p) {
   if (p.canal === 'grupo') return enviarGrupoClientes_(env, p);
+  if (p.canal === 'whatsapp2') return (String(p.ig_id || '').indexOf('zapq:') === 0 || await cfgWafly_(env, 2)) ? enviarStatusWafly2_(env, p) : enviarStatusWame_(env, p);
   const m = JSON.parse(p.midias || '[]');
   /* v1.9: aguardando a confirmação da Wafly (409/timeout). Só consulta; "aceito" publica (WhatsApp) ou segue para o Instagram (ambos). */
   if (String(p.ig_id || '').indexOf('zapq:') === 0) {
@@ -959,8 +1232,8 @@ export async function processarPostagens(env) {
 }
 /** Quantas postagens deste canal já saíram nas últimas 24 h (Story, Feed… do Instagram; ou "status" do WhatsApp). */
 async function contarUsados24h_(env, bucket, desde) {
-  const doCanal = bucket === 'grupo' ? "canal='grupo'" : bucket === 'status' ? "canal IN ('whatsapp','ambos')" : "tipo=? AND (canal IS NULL OR canal='' OR canal IN ('instagram','ambos'))";
-  const bind = bucket === 'status' || bucket === 'grupo' ? [desde] : [bucket, desde];
+  const doCanal = bucket === 'grupo' ? "canal='grupo'" : bucket === 'status2' ? "canal='whatsapp2'" : bucket === 'status' ? "canal IN ('whatsapp','ambos')" : "tipo=? AND (canal IS NULL OR canal='' OR canal IN ('instagram','ambos'))";
+  const bind = bucket === 'status' || bucket === 'grupo' || bucket === 'status2' ? [desde] : [bucket, desde];
   return Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status='publicado' AND " + doCanal + ' AND publicado_em>=?').bind(...bind).first()) || {}).n) || 0;
 }
 function httpsUrl(u) { try { const x = new URL(String(u)); return x.protocol === 'https:' && String(u).length <= 600; } catch (e) { return false; } }
@@ -988,11 +1261,12 @@ const FUSO_MIN = -180;                       // Fortaleza = UTC-3, sem horário 
 export const TIPOS_FILA = ['story', 'feed', 'carrossel', 'reels'];
 /* v1.6 (18/10/2026) -- "canais de contagem": cada um tem o SEU limite de 24 h e o SEU intervalo aleatório (mín.–máx.).
  * Story, Feed, Carrossel e Reels são do Instagram; "status" é o Status do WhatsApp. Postagem "ambos" conta nos DOIS (o tipo dela + status). */
-export const CANAIS_FILA = ['story', 'status', 'feed', 'carrossel', 'reels', 'grupo'];
+export const CANAIS_FILA = ['story', 'status', 'feed', 'carrossel', 'reels', 'grupo', 'status2'];
 export const CANAL_FILA_PADRAO = {
   story: { max24h: 40, gapMin: 120, gapMax: 300 },        // 2 a 5 min (exemplo do Pablo)
   status: { max24h: 40, gapMin: 120, gapMax: 300 },
   grupo: { max24h: 40, gapMin: 120, gapMax: 300 },
+  status2: { max24h: 40, gapMin: 120, gapMax: 300 },
   feed: { max24h: 20, gapMin: 300, gapMax: 600 },
   carrossel: { max24h: 20, gapMin: 300, gapMax: 600 },
   reels: { max24h: 10, gapMin: 600, gapMax: 1200 },
@@ -1002,6 +1276,7 @@ export const CFG_POST_PADRAO = { pausaAtiva: true, pausaDe: '22:00', pausaAte: '
 export function bucketsDoPost(tipo, canal) {
   const out = [];
   if (canal === 'grupo') return ['grupo'];
+  if (canal === 'whatsapp2') return ['status2'];
   if (canalUsaInstagram_(canal) && TIPOS_FILA.indexOf(tipo) !== -1) out.push(tipo);
   if (canalUsaWhatsApp_(canal)) out.push('status');
   return out;
@@ -1106,8 +1381,8 @@ async function lerCfgPost(env) { let j = null; try { j = JSON.parse((await cfgGe
 /** Horários já ocupados num canal de contagem (Story, Feed…, ou "status" do WhatsApp). `janelaMs` = quanto tempo para trás ainda importa. */
 async function ocupadosDoTipo_(env, bucket, excluirId, janelaMs, semAgendadas) {
   const desde = new Date(Date.now() - janelaMs - 60000).toISOString();
-  const doCanal = bucket === 'grupo' ? "canal='grupo'" : bucket === 'status' ? "canal IN ('whatsapp','ambos')" : "tipo=? AND (canal IS NULL OR canal='' OR canal IN ('instagram','ambos'))";
-  const bind = bucket === 'status' || bucket === 'grupo' ? [excluirId || 0, desde] : [bucket, excluirId || 0, desde];
+  const doCanal = bucket === 'grupo' ? "canal='grupo'" : bucket === 'status2' ? "canal='whatsapp2'" : bucket === 'status' ? "canal IN ('whatsapp','ambos')" : "tipo=? AND (canal IS NULL OR canal='' OR canal IN ('instagram','ambos'))";
+  const bind = bucket === 'status' || bucket === 'grupo' || bucket === 'status2' ? [excluirId || 0, desde] : [bucket, excluirId || 0, desde];
   const q = (await env.DB.prepare('SELECT agendado_em, publicado_em, status FROM postagem WHERE ' + doCanal + " AND id!=? AND (status IN ('processando','manual_pendente'" + (semAgendadas ? '' : ",'agendado'") + ") OR (status IN ('publicado','manual_feito') AND publicado_em>=?))").bind(...bind).all()).results || [];
   return q.map((r) => Date.parse(r.status === 'publicado' || r.status === 'manual_feito' ? r.publicado_em : r.agendado_em)).filter((x) => isFinite(x));
 }
@@ -1291,13 +1566,14 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const q = (await env.DB.prepare("SELECT postagem.*, EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id=postagem.id AND g.estado='enviando') AS grupo_envio_incerto FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
     const c = (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM postagem GROUP BY status").all()).results || [];
     const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
-    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), regras: 1, config: await lerCfgPost(env), uso24h: await uso24hPorCanal_(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
+    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), status2Disponivel: (await status2Info_(env)).ok, status2Motivo: (await status2Info_(env)).motivo, regras: 1, config: await lerCfgPost(env), uso24h: await uso24hPorCanal_(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
   }
   let b = {}; if (req.method === 'POST') { try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); } }
   if (p === '/post' && req.method === 'POST') {
     const originais = Array.isArray(b.posts) ? b.posts : [b];
     if (!originais.length || originais.length > 12 || originais.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) return J({ ok: false, erro: 'Envie de uma a doze postagens por vez.' }, 400);
     if (originais.some((x) => x.grupoClientes === true || x.canal === 'grupo') && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado. Avise o gestor.' }, 409);
+    if (originais.some((x) => x.status2 === true || x.canal === 'whatsapp2') && !(await cfgWafly_(env, 2)) && !(await cfgWameStatus_(env))) return J({ ok: false, erro: 'O WhatsApp Status 2 ainda não está configurado. Avise o gestor.' }, 409);
     const lista = originais.flatMap((x) => {
       // Story com figurinha de link exige Instagram manual. O Status continua
       // automático e precisa de um recibo próprio para nunca ser reenviado
@@ -1306,7 +1582,8 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
         ? [Object.assign({}, x, { canal: 'instagram', grupoClientes: false }),
           Object.assign({}, x, { canal: 'whatsapp', modo: 'auto', link: '', grupoClientes: false })]
         : [x];
-      if (x.grupoClientes === true && x.canal !== 'grupo') destinos.push(Object.assign({}, x, { canal: 'grupo', modo: 'auto', link: '', grupoClientes: false }));
+      if (x.grupoClientes === true && x.canal !== 'grupo') destinos.push(Object.assign({}, x, { canal: 'grupo', modo: 'auto', link: '', grupoClientes: false, status2: false }));
+      if (x.status2 === true && x.canal !== 'whatsapp2') destinos.push(Object.assign({}, x, { canal: 'whatsapp2', modo: 'auto', link: '', grupoClientes: false, status2: false }));
       return destinos;
     });
     const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
@@ -1339,7 +1616,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const criadas = await env.DB.batch(inserts);
     criadas.forEach((r) => ids.push(r.meta && r.meta.last_row_id));
     if (vs.some((v) => v.agora) && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
-    return J({ ok: true, ids: ids, quandos: quandos, ajustes: ajustes, postagensOriginais: originais.length, gruposClientes: originais.filter((x) => x.grupoClientes === true && x.canal !== 'grupo').length });
+    return J({ ok: true, ids: ids, quandos: quandos, ajustes: ajustes, postagensOriginais: originais.length, gruposClientes: originais.filter((x) => x.grupoClientes === true && x.canal !== 'grupo').length, status2: originais.filter((x) => x.status2 === true && x.canal !== 'whatsapp2').length });
   }
   if (p === '/post/config' && req.method === 'GET') return J({ ok: true, config: await lerCfgPost(env), padrao: CFG_POST_PADRAO, podeEditar: (perms || []).indexOf('gerir_acessos') !== -1 });
   if (p === '/post/config' && req.method === 'POST') {
@@ -1376,6 +1653,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       const v = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: 'sequencia' }));
       if (v.erro) return J({ ok: false, erro: v.erro }, 400);
       if (linha.canal === 'grupo' && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado.' }, 409);
+      if (linha.canal === 'whatsapp2' && !(await cfgWafly_(env, 2)) && !(await cfgWameStatus_(env))) return J({ ok: false, erro: 'O WhatsApp Status 2 ainda não está configurado.' }, 409);
       if (linha.canal === 'grupo') { const erro = await erroVideoGrupo_(env, v.v.midias); if (erro) return J({ ok: false, erro }, 400); }
       const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
       if (pend >= 200) return J({ ok: false, erro: 'A fila está cheia. Espere algumas postagens saírem.' }, 429);
@@ -1429,11 +1707,11 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     }
     if (p === '/post/reagendar') {
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
-      if (linha.canal === 'grupo' && await env.DB.prepare("SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='enviando'").bind(id).first()) return J({ ok: false, erro: 'O envio ao grupo ficou sem confirmação. Confira na Wafly; depois use “Repostar com novo ID” ou “Descartar”.' }, 409);
+      if (canalComRecibo_(linha.canal) && await env.DB.prepare("SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='enviando'").bind(id).first()) return J({ ok: false, erro: 'O envio ao ' + (linha.canal === 'whatsapp2' ? 'WhatsApp Status 2' : 'grupo') + ' ficou sem confirmação. Confira no WhatsApp; depois use “Repostar com novo ID” ou “Descartar”.' }, 409);
       const r = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: b.quando }));
       if (r.erro) return J({ ok: false, erro: r.erro }, 400);
       if (linha.canal === 'grupo') { const erro = await erroVideoGrupo_(env, r.v.midias); if (erro) return J({ ok: false, erro }, 400); }
-      if (linha.canal === 'grupo') await env.DB.prepare("DELETE FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='recusado'").bind(id).run();
+      if (canalComRecibo_(linha.canal)) await env.DB.prepare("DELETE FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='recusado'").bind(id).run();
       const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, linha.canal);
       let t = Date.parse(r.v.quando), aj = { ajustado: false, motivo: '' };
       if (r.v.urgente && cfg.agoraIgnora) t = Date.now();
@@ -1445,9 +1723,9 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     if (p === '/post/proximo') {
       /* "Mandar para o próximo horário livre" da fila do tipo (respeita pausa e intervalo). */
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
-      if (linha.canal === 'grupo' && await env.DB.prepare("SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='enviando'").bind(id).first()) return J({ ok: false, erro: 'O envio ao grupo ficou sem confirmação. Confira na Wafly; depois use “Repostar com novo ID” ou “Descartar”.' }, 409);
+      if (canalComRecibo_(linha.canal) && await env.DB.prepare("SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='enviando'").bind(id).first()) return J({ ok: false, erro: 'O envio ao ' + (linha.canal === 'whatsapp2' ? 'WhatsApp Status 2' : 'grupo') + ' ficou sem confirmação. Confira no WhatsApp; depois use “Repostar com novo ID” ou “Descartar”.' }, 409);
       if (linha.canal === 'grupo') { const erro = await erroVideoGrupo_(env, JSON.parse(linha.midias || '[]')); if (erro) return J({ ok: false, erro }, 400); }
-      if (linha.canal === 'grupo') await env.DB.prepare("DELETE FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='recusado'").bind(id).run();
+      if (canalComRecibo_(linha.canal)) await env.DB.prepare("DELETE FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='recusado'").bind(id).run();
       const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, linha.canal);
       const r = proximoLivreMulti(cfg, bs, await ocupadosMulti_(env, cfg, bs, id), Date.now() + 60000);
       await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, tentativas=0, erro='', containers='', urgente=0, atualizado_em=? WHERE id=?").bind(new Date(r.t).toISOString(), agora(), id).run();
@@ -1460,6 +1738,8 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       /* só troca horários entre postagens do MESMO canal (sem as "ambos"): o conjunto de horários da fila não muda, então os intervalos continuam valendo. */
       const lst = (linha.canal === 'grupo'
         ? (await env.DB.prepare("SELECT id, agendado_em FROM postagem WHERE canal='grupo' AND status='agendado' ORDER BY agendado_em, id").all())
+        : linha.canal === 'whatsapp2'
+        ? (await env.DB.prepare("SELECT id, agendado_em FROM postagem WHERE canal='whatsapp2' AND status='agendado' ORDER BY agendado_em, id").all())
         : normalizarCanal_(linha.canal) === 'whatsapp'
         ? (await env.DB.prepare("SELECT id, agendado_em FROM postagem WHERE canal='whatsapp' AND status='agendado' ORDER BY agendado_em, id").all())
         : (await env.DB.prepare("SELECT id, agendado_em FROM postagem WHERE tipo=? AND (canal IS NULL OR canal='' OR canal='instagram') AND status='agendado' ORDER BY agendado_em, id").bind(linha.tipo).all())).results || [];
@@ -2038,6 +2318,142 @@ async function freeconvertRota_(env, req, url, J, h) {
   }catch(e){return J({ok:false,erro:String(e.message||e).slice(0,250)},502);}
 }
 
+
+/* ==========================================================================
+ * v2.2 -- MÓDULO MENSAGENS (dashboard): guarda as conversas daqui para frente, separadas por canal
+ *
+ *  Canais: instagram | whatsapp1 | whatsapp2. Só grava o que chega DEPOIS de ligado (nada de buscar histórico).
+ *  Modelo inspirado no Chatwoot (db/schema.rb: inbox -> contato -> conversa -> mensagem; mensagem com direção,
+ *  tipo, source_id único para não duplicar, última atividade na conversa), enxuto para o D1:
+ *    msg_conversa (canal+contato únicos) e msg_mensagem (canal+ext_id únicos = INSERT OR IGNORE, webhook repetido não duplica).
+ *  Webhooks públicos protegidos por segredo no caminho (gerado aqui, nunca devolvido ao navegador, exceto na hora de ligar o webhook na Wafly).
+ *  Guardamos só texto (até 4000 caracteres) e o TIPO da mídia; o conteúdo bruto do webhook nunca é salvo.
+ * ========================================================================== */
+const MSG_CANAIS = ['instagram', 'whatsapp1', 'whatsapp2'];
+const MSG_TEXTO_MAX = 4000;
+async function msgSegredo_(env) {
+  let v = await cfgGet(env, 'msg_wh_segredo');
+  if (!v) { const b = crypto.getRandomValues(new Uint8Array(24)); v = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join(''); await cfgSet(env, 'msg_wh_segredo', v); }
+  return v;
+}
+function igualConst_(a, b) {
+  a = String(a); b = String(b); let d = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return d === 0;
+}
+/** Callback "ReceivedCallback" da Wafly -> linha pronta para gravar (ou null se não for conversa). */
+function normalizarWafly_(b) {
+  if (!b || typeof b !== 'object' || b.type !== 'ReceivedCallback') return null;
+  const id = String(b.messageId || ''), fone = String(b.phone || '');
+  if (!id || !fone || /broadcast|newsletter/i.test(fone) || b.isNewsletter === true) return null;
+  const tipos = [['text', 'texto'], ['image', 'imagem'], ['video', 'vídeo'], ['audio', 'áudio'], ['document', 'documento'], ['sticker', 'figurinha'], ['contact', 'contato'], ['location', 'localização'], ['reaction', 'reação'], ['buttonsResponseMessage', 'resposta'], ['listResponseMessage', 'resposta']];
+  let tipo = 'outro', texto = '';
+  for (const [k, nome] of tipos) {
+    if (b[k] && typeof b[k] === 'object') {
+      tipo = nome;
+      texto = String(b[k].message || b[k].caption || b[k].fileName || b[k].title || b[k].value || '');
+      break;
+    }
+  }
+  const ms = Number(b.momment || b.moment || 0);
+  const em = ms > 0 ? new Date(ms < 1e12 ? ms * 1000 : ms).toISOString() : agora();
+  const grupo = b.isGroup === true || /-group$|@g\.us$/.test(fone);
+  const fromMe = b.fromMe === true;
+  return { extId: id, contato: fone.slice(0, 80), nome: String((grupo ? b.chatName : (fromMe ? b.chatName : b.senderName || b.chatName)) || '').slice(0, 120), grupo: grupo ? 1 : 0, direcao: fromMe ? 'saida' : 'entrada', tipo: tipo, texto: texto.slice(0, MSG_TEXTO_MAX), em: em };
+}
+/** Evento "messaging" do webhook do Instagram (DM) -> linhas prontas. */
+function normalizarInstagram_(b) {
+  const out = [];
+  if (!b || b.object !== 'instagram' || !Array.isArray(b.entry)) return out;
+  for (const e of b.entry) for (const ev of (Array.isArray(e.messaging) ? e.messaging : [])) {
+    const m = ev && ev.message; if (!m || !m.mid) continue;
+    const dono = String(e.id || ''), eco = m.is_echo === true;
+    const contato = String(eco ? (ev.recipient && ev.recipient.id) : (ev.sender && ev.sender.id) || '');
+    if (!contato || contato === dono) continue;
+    const anexo = Array.isArray(m.attachments) && m.attachments[0] ? String(m.attachments[0].type || 'anexo') : '';
+    const mapa = { image: 'imagem', video: 'vídeo', audio: 'áudio', file: 'documento', share: 'compartilhamento', story_mention: 'menção em story', reel: 'reel' };
+    const ms = Number(ev.timestamp || 0);
+    out.push({ extId: String(m.mid), contato: contato.slice(0, 80), nome: '', grupo: 0, direcao: eco ? 'saida' : 'entrada', tipo: anexo ? (mapa[anexo] || anexo) : 'texto', texto: String(m.text || '').slice(0, MSG_TEXTO_MAX), em: ms > 0 ? new Date(ms < 1e12 ? ms * 1000 : ms).toISOString() : agora() });
+  }
+  return out;
+}
+/** Grava uma mensagem (idempotente por canal+ext_id). Devolve true se era nova. */
+async function gravarMensagem_(env, canal, m) {
+  if (!MSG_CANAIS.includes(canal)) return false;
+  const t = agora();
+  await env.DB.prepare('INSERT OR IGNORE INTO msg_conversa (canal, contato, nome, grupo, ultima_em, criado_em) VALUES (?,?,?,?,?,?)').bind(canal, m.contato, m.nome, m.grupo, '', t).run();
+  const c = await env.DB.prepare('SELECT id FROM msg_conversa WHERE canal=? AND contato=?').bind(canal, m.contato).first();
+  if (!c) return false;
+  const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em) VALUES (?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t).run();
+  if (!r.meta || r.meta.changes !== 1) return false;
+  const previa = (m.texto || ('[' + m.tipo + ']')).replace(/\s+/g, ' ').slice(0, 140);
+  await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END WHERE id=?").bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, c.id).run();
+  return true;
+}
+async function msgPausado_(env, canal) { try { return (await cfgGet(env, 'msg_pausa_' + canal)) === '1'; } catch (e) { return false; } }
+/** Webhooks públicos. Sempre responde rápido; só aceita com o segredo certo no caminho. */
+async function rotaWebhookMensagens_(env, req, url) {
+  const ok = (c, o) => new Response(JSON.stringify(o), { status: c, headers: { 'Content-Type': 'application/json' } });
+  const partes = url.pathname.split('/').filter(Boolean);                      // ['wh','wafly','1','<segredo>'] | ['wh','instagram','<segredo>']
+  await iniciar(env);
+  const segredo = await msgSegredo_(env);
+  if (partes[1] === 'instagram') {
+    if (!igualConst_(partes[2] || '', segredo)) return ok(404, { ok: false });
+    if (req.method === 'GET') {                                                // verificação do webhook pela Meta
+      return url.searchParams.get('hub.mode') === 'subscribe' && igualConst_(url.searchParams.get('hub.verify_token') || '', segredo)
+        ? new Response(String(url.searchParams.get('hub.challenge') || ''), { status: 200 }) : ok(403, { ok: false });
+    }
+    if (req.method !== 'POST') return ok(405, { ok: false });
+    if (!env.IG_APP_SECRET) return ok(503, { ok: false, erro: 'IG_APP_SECRET não configurado.' });
+    const bruto = await req.text();
+    if (bruto.length > 262144) return ok(413, { ok: false });
+    const assin = (req.headers.get('X-Hub-Signature-256') || '').replace(/^sha256=/, '');
+    const chave = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(env.IG_APP_SECRET)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const esperado = Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', chave, new TextEncoder().encode(bruto))), (x) => x.toString(16).padStart(2, '0')).join('');
+    if (!assin || !igualConst_(assin, esperado)) return ok(401, { ok: false });
+    if (await msgPausado_(env, 'instagram')) return ok(200, { ok: true, pausado: true });
+    let b = null; try { b = JSON.parse(bruto); } catch (e) { return ok(400, { ok: false }); }
+    let novas = 0; for (const m of normalizarInstagram_(b)) if (await gravarMensagem_(env, 'instagram', m)) novas++;
+    return ok(200, { ok: true, novas: novas });
+  }
+  if (partes[1] === 'wafly' && (partes[2] === '1' || partes[2] === '2')) {
+    if (!igualConst_(partes[3] || '', segredo)) return ok(404, { ok: false });
+    if (req.method !== 'POST') return ok(405, { ok: false });
+    const canal = 'whatsapp' + partes[2];
+    const bruto = await req.text();
+    if (bruto.length > 262144) return ok(413, { ok: false });
+    let b = null; try { b = JSON.parse(bruto); } catch (e) { return ok(400, { ok: false }); }
+    if (await msgPausado_(env, canal)) return ok(200, { ok: true, pausado: true });
+    const cfg = await cfgWafly_(env, Number(partes[2]));
+    if (cfg && b && b.instanceId && String(b.instanceId) !== cfg.instance) return ok(200, { ok: true, ignorado: 'outra instância' });
+    const m = normalizarWafly_(b);
+    if (!m) return ok(200, { ok: true, ignorado: true });
+    return ok(200, { ok: true, nova: await gravarMensagem_(env, canal, m) });
+  }
+  return ok(404, { ok: false });
+}
+/** Liga a gravação: aponta o webhook de mensagens da instância Wafly para este Worker. */
+async function ligarWebhookWafly_(env, slot, origem) {
+  const cfg = await cfgWafly_(env, slot);
+  if (!cfg) return { ok: false, erro: slot === 1 ? 'Cadastre o Wafly 1 em Conexões antes de ligar as mensagens.' : 'Cadastre o Wafly 2 em Conexões antes de ligar as mensagens.' };
+  const alvo = origem + '/wh/wafly/' + slot + '/' + (await msgSegredo_(env));
+  try {
+    const r = await fetch(waflyUrl_(cfg, '/update-webhook-received'), { method: 'PUT', redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify({ value: alvo }) });
+    if (!r.ok) return { ok: false, erro: 'A Wafly não aceitou ligar o recebimento (HTTP ' + r.status + '). Confira as credenciais e tente de novo.' };
+  } catch (e) { return { ok: false, erro: 'Sem resposta da Wafly agora. Tente de novo.' }; }
+  await cfgSet(env, 'msg_wh_ligado_whatsapp' + slot, agora());
+  await cfgSet(env, 'msg_pausa_whatsapp' + slot, null);
+  return { ok: true };
+}
+async function resumoMensagens_(env, origem) {
+  const canais = {};
+  for (const c of MSG_CANAIS) {
+    const x = await env.DB.prepare('SELECT COUNT(*) AS conversas, COALESCE(SUM(total),0) AS mensagens, COALESCE(MAX(ultima_em),\'\') AS ultima FROM msg_conversa WHERE canal=?').bind(c).first();
+    canais[c] = { conversas: Number(x.conversas) || 0, mensagens: Number(x.mensagens) || 0, ultima: x.ultima || '', ligadoEm: (await cfgGet(env, 'msg_wh_ligado_' + c)) || '', pausado: await msgPausado_(env, c) };
+  }
+  canais.instagram.pronto = !!env.IG_APP_SECRET;
+  return { ok: true, canais: canais, urlInstagram: env.IG_APP_SECRET ? origem + '/wh/instagram/' + (await msgSegredo_(env)) : '' };
+}
 export default {
   async scheduled(ev, env, ctx) {
     ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
@@ -2052,6 +2468,7 @@ export default {
     const url = new URL(req.url), h = cors(env, req), J = (c, s) => resp(c, s, h);
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
+    if (url.pathname.indexOf('/wh/') === 0) { try { return await rotaWebhookMensagens_(env, req, url); } catch (e) { return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
     const perms = await permissoes(env, req);
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
@@ -2074,6 +2491,81 @@ export default {
           return J({ok:false,erro:'Formato de chave FreeConvert inválido.'},400);
         await cfgSet(env,'freeconvert_api_key',chave);
         return J({ok:true,configurada:true});
+      }
+      if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
+      if (p === '/msg/conversas' && req.method === 'GET') {
+        const canal = url.searchParams.get('canal') || '', busca = String(url.searchParams.get('busca') || '').trim().slice(0, 60), antes = url.searchParams.get('antes') || '';
+        if (!MSG_CANAIS.includes(canal)) return J({ ok: false, erro: 'Escolha Instagram, WhatsApp 1 ou WhatsApp 2.' }, 400);
+        let sql = 'SELECT id, contato, nome, grupo, ultima_em, previa, total FROM msg_conversa WHERE canal=? AND total>0', args = [canal];
+        if (busca) { sql += ' AND (nome LIKE ? OR contato LIKE ? OR previa LIKE ?)'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q); }
+        if (antes) { sql += ' AND ultima_em<?'; args.push(antes); }
+        const rs = await env.DB.prepare(sql + ' ORDER BY ultima_em DESC LIMIT 50').bind(...args).all();
+        return J({ ok: true, conversas: rs.results });
+      }
+      if (p === '/msg/mensagens' && req.method === 'GET') {
+        const id = Number(url.searchParams.get('conversa')), antes = url.searchParams.get('antes') || '';
+        if (!id) return J({ ok: false, erro: 'Escolha uma conversa.' }, 400);
+        const conv = await env.DB.prepare('SELECT id, canal, contato, nome, grupo, total FROM msg_conversa WHERE id=?').bind(id).first();
+        if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
+        const rs = await env.DB.prepare('SELECT id, direcao, tipo, texto, enviada_em FROM msg_mensagem WHERE conversa_id=?' + (antes ? ' AND enviada_em<?' : '') + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...(antes ? [id, antes] : [id])).all();
+        return J({ ok: true, conversa: conv, mensagens: rs.results.reverse() });
+      }
+      if (p === '/msg/ligar' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({})), slot = Number(d.slot);
+        if (slot !== 1 && slot !== 2) return J({ ok: false, erro: 'Escolha o WhatsApp 1 ou o WhatsApp 2.' }, 400);
+        const r = await ligarWebhookWafly_(env, slot, url.origin);
+        return J(r, r.ok ? 200 : 409);
+      }
+      if (p === '/msg/pausar' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({}));
+        if (!MSG_CANAIS.includes(d.canal)) return J({ ok: false, erro: 'Canal inválido.' }, 400);
+        await cfgSet(env, 'msg_pausa_' + d.canal, d.pausar === true ? '1' : null);
+        return J({ ok: true, pausado: d.pausar === true });
+      }
+      if (p === '/post/wafly/config' && req.method === 'GET') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        const slots={};
+        for (const n of [1,2]) { const c=await cfgWafly_(env,n); let t=null; try{t=JSON.parse(await cfgGet(env,'wafly_ultimo_teste_'+n)||'null');}catch(e){} slots[n]={configurada:!!c,instancia:c?c.instance:'',origem:c?'gestao':(n===1?'appscript':'nenhuma'),ultimoTeste:t}; }
+        return J({ok:true,slots:slots});
+      }
+      if (p === '/post/wafly/config' && req.method === 'POST') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        const dados=await req.json().catch(()=>({})), slot=Number(dados.slot);
+        if(slot!==1&&slot!==2) return J({ok:false,erro:'Escolha o Wafly 1 ou o Wafly 2.'},400);
+        if(dados.apagar===true){await cfgSet(env,WAFLY_SLOTS_[slot].chave,null);return J({ok:true,configurada:false,origem:slot===1?'appscript':'nenhuma'});}
+        const novo=validarWafly_(dados);
+        if(!novo) return J({ok:false,erro:'Confira os três campos da Wafly: instância, token e Client-Token. Cole só o valor, sem espaços nem aspas.'},400);
+        await cfgSet(env,WAFLY_SLOTS_[slot].chave,JSON.stringify(novo));
+        return J({ok:true,configurada:true,origem:'gestao',instancia:novo.instance});
+      }
+      if (p === '/post/wafly/teste' && req.method === 'POST') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        const dados=await req.json().catch(()=>({})), slot=Number(dados.slot);
+        if(slot!==1&&slot!==2) return J({ok:false,erro:'Escolha o Wafly 1 ou o Wafly 2.'},400);
+        return J(await testarWafly_(env,slot));
+      }
+      if (p === '/post/wame/config' && req.method === 'GET') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        const g=await cfgGet(env,'wame_status_2'), cfgAtual=await cfgWameStatus_(env);
+        return J({ok:true,configurada:!!cfgAtual,origem:g?'gestao':validarConfigWame_(env.WAME_STATUS_2)?'worker':'nenhuma',servidor:cfgAtual?cfgAtual.base.replace('https://',''):WAME_SERVIDORES[0],servidores:WAME_SERVIDORES});
+      }
+      if (p === '/post/wame/config' && req.method === 'POST') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        const dados=await req.json().catch(()=>({}));
+        if(dados.apagar===true){await cfgSet(env,'wame_status_2',null);await cfgSet(env,'wame_status_2_servidor',null);return J({ok:true,configurada:!!validarConfigWame_(env.WAME_STATUS_2)});}
+        const chave=String(dados.chave||'').trim(), servidor=String(dados.servidor||'').trim().replace(/^https:\/\//,'').replace(/\/+$/,'');
+        if(!chave&&!servidor) return J({ok:false,erro:'Informe a chave ou o servidor do Wame.'},400);
+        if(servidor&&!WAME_SERVIDORES.includes(servidor)) return J({ok:false,erro:'Servidor do Wame não reconhecido. Use '+WAME_SERVIDORES.join(', ')+'.'},400);
+        if(chave&&!/^[A-Za-z0-9._-]{8,200}$/.test(chave))
+          return J({ok:false,erro:'A chave do Wame parece inválida. Cole só a chave da instância, sem espaços nem aspas.'},400);
+        await cfgSet(env,'wame_plano_bloqueio',null);
+        if(chave)await cfgSet(env,'wame_status_2',chave);
+        if(servidor)await cfgSet(env,'wame_status_2_servidor',servidor);
+        return J({ok:true,configurada:!!(await cfgWameStatus_(env))});
+      }
+      if (p === '/post/wame/teste' && req.method === 'POST') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        return J(await testarWame_(env));
       }
       if (p.startsWith('/post/freeconvert/')) return await freeconvertRota_(env,req,url,J,h);
       if (ehPost) { const rp = (await rotasFotoIA(env, ctx, req, url, J, perms)) || (await rotasFotos(env, ctx, req, url, J, perms)) || (await rotasPostagem(env, ctx, req, url, J, perms)); if (rp) return rp; }

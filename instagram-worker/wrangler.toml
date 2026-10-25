@@ -36,6 +36,8 @@ bucket_name = "tenkiter-midia"
 binding = "AI"
 
 # Secret WAFLY_GRUPO_CLIENTES: JSON privado {instance, token, clientToken, phone}.
+# Secret IG_APP_SECRET: segredo do app da Meta (valida a assinatura dos webhooks de mensagens do Instagram). Sem ele, o Instagram fica "não ligado" no módulo Mensagens.
+# Secret WAME_STATUS_2: JSON privado {"key":"<chave da instância Wame do WhatsApp 2>"} (opcional "base"). Sem ele, o WhatsApp Status 2 aparece como não configurado.
 # Não declarar seu valor em vars; segredo é preservado pelo deploy.
 [vars]
 API_URL = "https://script.google.com/macros/s/AKfycbyWnKwT5-HB6rv-loxGUtumpWPlJsRZNYp06v5RC3wtiJDUaV9zCMJVRwOEScxwMase_Q/exec"

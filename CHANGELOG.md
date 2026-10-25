@@ -6,6 +6,15 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.13.0 — editor gráfico de tutoriais — 2026-10-25
+
+- Editar abre uma prévia em tela cheia com Anterior/Próxima, escolha visual do alvo e edição do texto flutuante na tela.
+- Alterações são aplicadas à lista ao confirmar e descartadas ao cancelar; salvar/publicar continua explícito.
+- Gestão das etapas responsiva com ações à esquerda e instruções multilinha.
+- Protege etapas contra eventos antigos e remove cliques automáticos de recuperação.
+- Valida digitação ao encerrar a edição e compara preços numéricos antes do ajuste do campo.
+
+
 ## 7.12.1 — marcador de tutorial reutilizável — 2026-10-25
 
 - Remove a escolha de curso do tipo “Conteúdo dentro de um capítulo”.
