@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.11.1 — tutoriais dentro dos cursos do Docs — 2026-10-25
+
+- Carrega os manuais autorizados antes de abrir o gravador, sem depender da ordem em que a tela de treinamentos terminou de iniciar.
+- Exibe cada manual do Google Docs no campo “Onde aparece”, ordenado e sem duplicações.
+- Mostra uma ação de nova tentativa quando a lista de cursos não puder ser carregada.
+
 ## 7.11.0 — cursos interativos e híbridos — 2026-10-25
 
 - Substitui as páginas antigas de prática pelo gravador de atividades integrado aos cursos.

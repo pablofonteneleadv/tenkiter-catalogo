@@ -19,11 +19,21 @@ with sync_playwright() as p:
       state:function(){return {user:{whatsapp:'5599999999999',password:'sessao'}}},
       submit:async function(p){
         if(p.action==='tutorial_listar') return {ok:true,tutoriais:[]};
+        if(p.action==='treinamento_conteudo') return {ok:true,manuais:[
+          {id:'2',titulo:'Manual 2 — Preparar postagens',ordem:2},
+          {id:'1',titulo:'Manual 1 — Atendimento',ordem:1}
+        ]};
         if(p.action==='tutorial_salvar'){window.__saved.push(p.tutorial);return {ok:true,tutorial:p.tutorial};}
         return {ok:true};
       }, toast:function(m){window.__toast=m}
     }); TKTutorial.montarEditor();""")
     page.get_by_role("button", name="Gravar tutorial").click()
+    assert page.locator('#tut-manual option').all_text_contents() == [
+      'Curso interativo independente',
+      'Manual 1 — Atendimento · parte prática',
+      'Manual 2 — Preparar postagens · parte prática'
+    ]
+    page.locator('#tut-manual').select_option('2')
     page.locator("#tut-titulo").fill("Cadastrar uma peça")
     page.locator("#tut-desc").fill("Tutorial criado pelo editor visual")
     page.get_by_role("button", name="Adicionar explicando").click()
@@ -64,6 +74,7 @@ with sync_playwright() as p:
     page.wait_for_function("window.__saved.length === 1")
     saved = page.evaluate("window.__saved[0]")
     assert saved["titulo"] == "Cadastrar uma peça"
+    assert saved["manualId"] == "2"
     assert saved["etapas"][0]["instrucao"] == "Toque neste controle"
     assert saved["etapas"][0]["selector"]
     assert saved["etapas"][1]["acao"] == "texto"

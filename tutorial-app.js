@@ -3,7 +3,7 @@
  * navegação/envio e apenas confere se a pessoa fez a ação definida. */
 (function(){
   'use strict';
-  var T = window.TKTutorial = {}, cfg = null, tutoriais = [], atual = null, etapaEditada = -1, modoRapido = true, gravando = false;
+  var T = window.TKTutorial = {}, cfg = null, tutoriais = [], cursos = [], cursosCarregados = false, atual = null, etapaEditada = -1, modoRapido = true, gravando = false;
   var E = function(s){ return String(s == null ? '' : s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); };
   var css = [
     '.tut-box{margin-top:14px;padding:14px 0;border:0;border-top:1px solid var(--border);border-radius:0;background:transparent}',
@@ -51,7 +51,18 @@
     ['curriculo.html','Currículo'],['curriculos.html','Gestão de currículos']
   ]; }
   function visoes(){return [['cliente','Cliente'],['aluno','Aluno'],['novato','Novato'],['estagiario','Estagiário'],['funcionario','Funcionário'],['equipe_site','Equipe do site'],['equipe_catalogo','Equipe catálogo 1'],['encarregado','Encarregado'],['admin','Admin'],['admin_total','Admin total'],['rh','Responsável RH']];}
-  function opcoesCursos(id){var l=(S().manuaisList||[]),h='<option value="">Curso interativo independente</option>';l.forEach(function(m){h+='<option value="'+E(m.id)+'"'+(String(id||'')===String(m.id)?' selected':'')+'>'+E(m.titulo||('Manual '+m.id))+' · parte prática</option>';});return h;}
+  function normalizarCursos(lista){var vistos={};return (lista||[]).filter(function(m){var id=String(m&&m.id||'').trim();if(!id||vistos[id])return false;vistos[id]=true;return true;}).sort(function(a,b){return (Number(a.ordem)||999)-(Number(b.ordem)||999)||String(a.titulo||'').localeCompare(String(b.titulo||''),'pt-BR');});}
+  async function carregarCursos(){
+    var estado=S(), locais=normalizarCursos(estado.manuaisList||[]);
+    if(locais.length){cursos=locais;cursosCarregados=true;return cursos;}
+    if(cursosCarregados)return cursos;
+    var r=await api({action:'treinamento_conteudo'});
+    if(!r||!r.ok||!Array.isArray(r.manuais))throw new Error((r&&r.erro)||'Não foi possível carregar os cursos do Google Docs.');
+    cursos=normalizarCursos(r.manuais);cursosCarregados=true;
+    estado.manuaisList=cursos;
+    return cursos;
+  }
+  function opcoesCursos(id){var h='<option value="">Curso interativo independente</option>';cursos.forEach(function(m){h+='<option value="'+E(m.id)+'"'+(String(id||'')===String(m.id)?' selected':'')+'>'+E(m.titulo||('Manual '+m.id))+' · parte prática</option>';});return h;}
   function dataConclusao(t){var c=t&&t.conclusao;if(!c||!c.concluidoEm)return'';try{return new Date(c.concluidoEm).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){return'';}}
   function cartaoAluno(t){var data=dataConclusao(t);return '<article class="tut-linha"><div class="tut-linha-top"><b>'+E(t.titulo)+'</b><span class="tut-chip">'+t.etapas.length+' etapas</span></div>'+(t.descricao?'<p class="tut-muted">'+E(t.descricao)+'</p>':'')+(data?'<div class="tut-concluido">✓ Concluído em '+E(data)+'</div>':'')+'<button class="tut-btn" data-play="'+E(t.id)+'">'+(data?'Refazer atividade':'Começar atividade')+'</button></article>';}
   function ligarBotoesAluno(slot,lista){slot.querySelectorAll('[data-play]').forEach(function(b){b.onclick=function(){abrirTeste(lista.find(function(x){return x.id===b.dataset.play;}),function(){T.montarAluno(true);if(S().manual)T.montarManual(S().manual);});};});}
@@ -81,9 +92,12 @@
     var slot=document.getElementById('tut-editor-slot'); if(!slot||slot.dataset.ok)return;
     slot.dataset.ok='1';
     slot.innerHTML='<section class="tut-box"><h2>🎥 Tutoriais no aplicativo</h2><p class="tut-muted">Grave etapas tocando nos elementos da tela real. Em cada etapa você escreve a orientação, limita os valores aceitos e define como o sistema avalia o acerto.</p><div id="tut-msg" class="tut-muted">Carregando…</div><div id="tut-lista"></div></section>';
-    var r=await api({action:'tutorial_listar',todos:true});
+    var respostas=await Promise.allSettled([api({action:'tutorial_listar',todos:true}),carregarCursos()]),r=respostas[0].status==='fulfilled'?respostas[0].value:null;
     if(!r||!r.ok){ slot.querySelector('#tut-msg').textContent=(r&&r.erro)||'O backend ainda não aceita tutoriais.'; return; }
-    tutoriais=r.tutoriais||[]; slot.querySelector('#tut-msg').innerHTML='<button class="tut-btn" id="tut-novo">＋ Gravar tutorial</button>';
+    tutoriais=r.tutoriais||[];
+    var falhaCursos=respostas[1].status==='rejected';
+    slot.querySelector('#tut-msg').innerHTML='<button class="tut-btn" id="tut-novo">＋ Gravar tutorial</button>'+(falhaCursos?'<div class="tut-status err" id="tut-cursos-erro">Os cursos do Google Docs não carregaram. Toque em tentar novamente antes de vincular o tutorial. <button class="tut-btn sec" id="tut-cursos-tentar">Tentar novamente</button></div>':'');
+    if(falhaCursos)slot.querySelector('#tut-cursos-tentar').onclick=async function(){var b=this;b.disabled=true;b.textContent='Carregando…';cursosCarregados=false;try{await carregarCursos();slot.querySelector('#tut-cursos-erro').remove();aviso('Cursos carregados.');}catch(e){b.disabled=false;b.textContent='Tentar novamente';aviso(e.message||'Não foi possível carregar os cursos.');}};
     slot.querySelector('#tut-novo').onclick=function(){ abrirEditor(novo()); }; desenharLista();
   };
   T.montarAluno=async function(){

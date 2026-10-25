@@ -15,6 +15,15 @@ with sync_playwright() as p:
   c=b.new_context(viewport={'width':w,'height':h},is_mobile=w<600,has_touch=w<600);c.add_init_script(SESSION);st=install(c);st['tutorials']=[dict(x) for x in T]
   pg=c.new_page();pg.goto(BASE+'treinamentos.html');pg.wait_for_timeout(2600)
   assert pg.locator('text=Prática de postagens').count()==0
+  editor=pg.locator('#tut-editor-slot')
+  if editor.count() and editor.get_by_role('button',name='Gravar tutorial').count():
+   editor.get_by_role('button',name='Gravar tutorial').click()
+   opcoes=pg.locator('#tut-manual option').all_text_contents()
+   assert opcoes==['Curso interativo independente','Manual Um · parte prática','Manual Dois · parte prática','Manual Três · parte prática'],(n,opcoes)
+   assert pg.evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth')
+   seletor=pg.locator('#tut-manual').bounding_box();assert seletor and seletor['height']>=44,(n,seletor)
+   pg.screenshot(path=str(OUT/f'cursos-editor-{n}.png'),full_page=True)
+   pg.locator('#tut-fechar').click()
   assert pg.locator('#tut-aluno-slot [data-play="ind"]').count()==1
   if pg.locator('.card').count():
    box=pg.locator('.card').first.bounding_box();assert box and box['height']<220,(n,box)
