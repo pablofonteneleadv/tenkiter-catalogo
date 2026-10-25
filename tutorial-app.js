@@ -192,7 +192,7 @@
   // Edição transacional: só altera a lista ao confirmar. Navegação da prévia não grava etapas.
   function abrirEditorGrafico(indice){
     lerCabecalho();
-    var etapas=JSON.parse(JSON.stringify(atual.etapas)),pos=indice,selecionando=false,marca=null,caixa=null,observer=null,geracao=0,reproduzindo=false;
+    var etapas=JSON.parse(JSON.stringify(atual.etapas)),pos=indice,selecionando=false,marca=null,caixa=null,observer=null,geracao=0,reproduzindo=false,recarregou=true;
     var m=document.createElement('div');m.className='tut-full tut-visual';m.id='tut-editor-grafico';
     m.innerHTML='<header class="tv-bar"><button type="button" class="tut-btn sec" id="tv-voltar">Cancelar</button><strong id="tv-contagem"></strong><button type="button" class="tut-btn" id="tv-salvar">Aplicar</button></header><nav class="tv-nav" aria-label="Etapas do editor"><button type="button" class="tut-btn sec" id="tv-anterior">← Anterior</button><button type="button" class="tut-btn sec" id="tv-painel" aria-expanded="false">Editar etapa</button><button type="button" class="tut-btn sec" id="tv-rever" title="Mostrar de novo a tela desta etapa">↻ Ver etapa</button><button type="button" class="tut-btn sec" id="tv-proxima">Próxima →</button></nav><p id="tv-status" role="status"></p><div class="tv-trava"><button type="button" class="tut-btn" id="tv-travar">🔒 Travar enquadramento</button></div><div class="tv-palco"><iframe class="tut-frame" id="tv-frame" title="Prévia para editar etapas" sandbox="allow-same-origin allow-scripts allow-forms allow-modals allow-downloads" src="'+E(atual.pagina)+'?tutorial_editor=1"></iframe><div class="tv-marca" hidden></div><div class="tv-texto" tabindex="0" aria-label="Texto flutuante: arraste ou use as setas" hidden></div></div><section class="tv-config" aria-label="Editar etapa" hidden></section>';
     document.body.appendChild(m);var viewportOff=ajustarViewport(m),f=m.querySelector('#tv-frame'),palco=m.querySelector('.tv-palco'),painel=m.querySelector('.tv-config'),status=m.querySelector('#tv-status');marca=m.querySelector('.tv-marca');caixa=m.querySelector('.tv-texto');
@@ -248,8 +248,8 @@
       mensagem(lista.length||(f.__preparacao.length)?'Montando a tela desta etapa…':'');
       reproduzirAteEtapa(f,lista,function(i,n){mensagem('Montando a tela desta etapa… ('+i+' de '+n+')');},function(){reproduzindo=false;localizar();var x=etapas[pos];mensagem(x&&x.enquadramento?'Tela da etapa. Enquadramento travado: role para mudar e toque em Travar de novo.':'Tela da etapa pronta. Role a prévia até mostrar o que quer e toque em “🔒 Travar enquadramento”.');},function(){return minha!==geracao;});
     }
-    function rever(){guardarCampos();geracao++;f.src=f.src.split('#')[0];}
-    function ir(delta){guardarCampos();pos+=delta;geracao++;f.src=f.src.split('#')[0];desenhar();}
+    function rever(){guardarCampos();geracao++;recarregou=true;f.src=f.src.split('#')[0];}
+    function ir(delta){guardarCampos();pos+=delta;geracao++;recarregou=true;f.src=f.src.split('#')[0];desenhar();}
     m.querySelector('#tv-rever').onclick=rever;m.querySelector('#tv-travar').onclick=travar;m.querySelector('#tv-anterior').onclick=function(){ir(-1);};m.querySelector('#tv-proxima').onclick=function(){ir(1);};
     m.querySelector('#tv-painel').onclick=function(){painelAberto(painel.hidden);};
     m.querySelector('#tv-voltar').onclick=function(){fechar();};
@@ -264,7 +264,7 @@
       d.addEventListener('submit',function(ev){ev.preventDefault();ev.stopImmediatePropagation();},true);
       d.addEventListener('click',function(ev){if(!selecionando)return;ev.preventDefault();ev.stopImmediatePropagation();var el=ev.target.closest('button,a,summary,label,input,textarea,select,[role="button"],[onclick]')||ev.target;var arq=inputArquivoDoRotulo(el,d);if(arq)el=arq;var x=etapas[pos];x.selector=selector(el,d);x.alvoNome=nomeElemento(alvoVisual(el,d));selecionando=false;desenhar();},true);
       d.addEventListener('scroll',localizar,true);observer=new MutationObserver(function(){if(!selecionando)localizar();});observer.observe(d.body,{childList:true,subtree:true});desenhar();
-      iniciarReproducao();
+      if(recarregou){recarregou=false;iniciarReproducao();}
     };
     desenhar();m.querySelector('#tv-painel').focus();
   }
