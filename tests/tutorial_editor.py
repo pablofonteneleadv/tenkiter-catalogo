@@ -34,7 +34,7 @@ with sync_playwright() as p:
       'Manual 2 — Preparar postagens · parte prática'
     ]
     page.locator('#tut-tipo').select_option('conteudo')
-    page.locator('#tut-manual').select_option('2')
+    assert not page.locator('#tut-manual-label').is_visible()
     assert '[[TUTORIAL:' in page.locator('#tut-vinculo-ajuda').inner_text()
     page.locator("#tut-titulo").fill("Cadastrar uma peça")
     page.locator("#tut-desc").fill("Tutorial criado pelo editor visual")
@@ -76,7 +76,8 @@ with sync_playwright() as p:
     page.wait_for_function("window.__saved.length === 1")
     saved = page.evaluate("window.__saved[0]")
     assert saved["titulo"] == "Cadastrar uma peça"
-    assert saved["manualId"] == "2"
+    assert saved["manualId"] == ""
+    assert saved["tipo"] == "conteudo"
     assert saved["etapas"][0]["instrucao"] == "Toque neste controle"
     assert saved["etapas"][0]["selector"]
     assert saved["etapas"][1]["acao"] == "texto"
