@@ -33,7 +33,9 @@ with sync_playwright() as p:
       'Manual 1 — Atendimento · parte prática',
       'Manual 2 — Preparar postagens · parte prática'
     ]
+    page.locator('#tut-tipo').select_option('conteudo')
     page.locator('#tut-manual').select_option('2')
+    assert '[[TUTORIAL:' in page.locator('#tut-vinculo-ajuda').inner_text()
     page.locator("#tut-titulo").fill("Cadastrar uma peça")
     page.locator("#tut-desc").fill("Tutorial criado pelo editor visual")
     page.get_by_role("button", name="Adicionar explicando").click()

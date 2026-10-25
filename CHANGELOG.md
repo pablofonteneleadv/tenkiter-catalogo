@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.12.0 — atividades dentro dos capítulos — 2026-10-25
+
+- Permite definir cada tutorial como curso independente, parte prática final ou conteúdo de um capítulo.
+- Gera um marcador copiável `[[TUTORIAL:id]]` para inserir em qualquer ponto do Google Docs.
+- Faz a conclusão do capítulo depender de todos os itens presentes: atividade interativa e checagens rápidas.
+- Mantém tutoriais antigos vinculados ao manual como parte prática final.
+
 ## 7.11.1 — tutoriais dentro dos cursos do Docs — 2026-10-25
 
 - Carrega os manuais autorizados antes de abrir o gravador, sem depender da ordem em que a tela de treinamentos terminou de iniciar.

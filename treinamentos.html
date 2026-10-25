@@ -517,7 +517,7 @@ details.manual-card[open]>summary::after{content:'▴';}
 
 <script id="app-data" type="application/json">{"manuals": {}, "titles": {"1": "TM Funcionário Iniciando", "2": "TM Funcionário Estágio", "3": "TM Funcionário Avançado"}, "blurbs": {"1": "Leitura rápida para quem vai ser entrevistado.", "2": "O manual completo de operação do dia a dia.", "3": "Responsabilidades ampliadas de apoio e coordenação."}, "quizzes": {}, "roster": [], "appsScriptUrl": "https://script.google.com/macros/s/AKfycbz5TfA0MqmKfc2deigXssPxLii_1yl-GyOokytCtnIqT4Uehja915MsUCvjHY4Z25TJ/exec", "appsScriptToken": "tenkiter2026"}</script>
 <script src="tm-verificado.js?v=7.2.1"></script>
-<script src="tutorial-app.js?v=7.11.1"></script>
+<script src="tutorial-app.js?v=7.12.0"></script>
 <script>
 (function(){
 "use strict";
@@ -1109,6 +1109,8 @@ function renderBlocks(blocks, chaveCap){
         html += TMV.renderBloco(b, chaveCap || 'x');
       } else if (b.type === 'video'){
         html += videoHtml_(b);
+      } else if (b.type === 'tutorial'){
+        html += '<div class="tut-inline" data-tutorial-inline="' + esc(b.id || '') + '"><div class="tut-muted">Carregando atividade…</div></div>';
       } else if (b.type === 'callout'){
         html += '<div class="callout callout-' + esc(b.kind) + '">' + esc(b.text) + '</div>';
       } else if (b.type === 'table'){
@@ -1734,8 +1736,9 @@ function renderManual(level){
       var st = chapterStatus(level, pi, ci, ch);
       var capKey = level + '|' + (ch.id || st.chId) + '|' + (ch.hash || '');
       var temChk = !!(window.TMV && TMV.temChecagem(ch.blocks));
-      plano.push({ pi: pi, ci: ci, ch: ch, st: st, capKey: capKey, temChk: temChk,
-        concl: st.done || (temChk && TMV.todasRespondidas(ch.blocks, capKey)) });
+      var temTut = (ch.blocks || []).some(function(b){ return b.type === 'tutorial' && b.id; });
+      plano.push({ pi: pi, ci: ci, ch: ch, st: st, capKey: capKey, temChk: temChk, temTut: temTut,
+        concl: st.done });
     });
   });
   var temPortao = plano.some(function(it){ return it.temChk; });
@@ -1746,9 +1749,9 @@ function renderManual(level){
       var it = plano[idxPlano++], st = it.st, capKey = it.capKey;
       var prox = plano[idxPlano] ? plano[idxPlano].st.chId : '';
       var rodape;
-      if (it.temChk){
+      if (it.temChk || it.temTut){
         rodape = '<div class="cap-status' + (it.concl ? ' ok' : '') + '" data-prox="' + esc(prox) + '" role="status">' +
-          '<span class="cap-status-txt">' + (it.concl ? '✓ Lição concluída' : '👆 Responda a checagem rápida acima para concluir esta lição' + (prox ? ' e abrir a próxima' : '')) + '</span>' +
+          '<span class="cap-status-txt">' + (it.concl ? '✓ Lição concluída' : 'Conclua ' + (it.temChk && it.temTut ? 'a atividade e as perguntas' : it.temTut ? 'a atividade' : 'as perguntas') + ' acima' + (prox ? ' para abrir a próxima lição' : '')) + '</span>' +
           (prox ? '<button type="button" class="cap-prox"' + (it.concl ? '' : ' hidden') + '>Próxima lição →</button>' : '') +
         '</div>';
       } else {
@@ -1759,7 +1762,7 @@ function renderManual(level){
       }
       var corpo = (st.stale ? '<div class="chapter-stale-alert">⚠️ Esse capítulo foi atualizado depois que você leu. ' + (it.temChk ? 'Leia de novo e responda a checagem para concluir.' : 'Dá uma olhada de novo e confirme a leitura.') + '</div>' : '') +
         renderBlocks(ch.blocks, capKey) + rodape;
-      bodyHtml += '<div class="chapter' + (it.concl ? ' cap-ok' : '') + '" id="ch-' + st.chId + '" data-manual="' + esc(level) + '" data-capid="' + esc(ch.id || '') + '" data-caphash="' + esc(ch.hash || '') + '"' + (it.temChk ? ' data-chk="1"' : '') + '>' +
+      bodyHtml += '<div class="chapter' + (it.concl ? ' cap-ok' : '') + '" id="ch-' + st.chId + '" data-manual="' + esc(level) + '" data-capid="' + esc(ch.id || '') + '" data-caphash="' + esc(ch.hash || '') + '"' + (it.temChk ? ' data-chk="1"' : '') + ((it.temChk||it.temTut) ? ' data-requisitos="1"' : '') + '>' +
         '<div class="chapter-head"><h3>' + esc(ch.title) + '</h3></div>' +
         (temPortao ? '<div class="cap-trava" role="status"></div><div class="cap-corpo">' + corpo + '</div>' : corpo) +
       '</div>';
@@ -1800,6 +1803,15 @@ function updateQuizCta(level){
   if (msg) msg.style.display = liberado ? 'none' : 'block';
 }
 
+function tentarConcluirCapitulo_(level, cap){
+  if (!cap || cap.getAttribute('data-requisitos') !== '1') return;
+  var perguntas = cap.querySelectorAll('.tmv-chk');
+  var perguntasOk = !perguntas.length || cap.querySelectorAll('.tmv-chk .tmv-op.certa').length === perguntas.length;
+  var atividades = cap.querySelectorAll('[data-tutorial-inline]');
+  var atividadesOk = !atividades.length || cap.querySelectorAll('[data-tutorial-inline].tut-inline-ok').length === atividades.length;
+  if (perguntasOk && atividadesOk && !cap.classList.contains('cap-ok')) aplicarLeitura_(level, cap, true);
+}
+
 /** Marca (ou desmarca) um capítulo como lido: guarda no aparelho, atualiza índice/etiquetas/painel e avisa o servidor.
     Usado pela caixinha "Confirmo que li" e, nas lições com checagem, quando a pessoa acerta a última pergunta. */
 function aplicarLeitura_(level, chapterEl, lido){
@@ -1825,7 +1837,7 @@ function aplicarLeitura_(level, chapterEl, lido){
   if (status){
     status.classList.toggle('ok', lido);
     var prox = status.getAttribute('data-prox');
-    status.querySelector('.cap-status-txt').textContent = lido ? '✓ Lição concluída' : '👆 Responda a checagem rápida acima para concluir esta lição' + (prox ? ' e abrir a próxima' : '');
+    status.querySelector('.cap-status-txt').textContent = lido ? '✓ Lição concluída' : 'Conclua todos os itens acima' + (prox ? ' para abrir a próxima lição' : '');
     var bt = status.querySelector('.cap-prox'); if (bt) bt.hidden = !lido;
   }
   if (lido && link){
@@ -1868,7 +1880,7 @@ function atualizarTravas_(){
           (gestao ? '<button type="button" data-livre="1">Abrir mesmo assim (só gestão)</button>' : '');
       } else if (faixa.innerHTML){ faixa.innerHTML = ''; }
     }
-    if (cap.getAttribute('data-chk') === '1' && !ok && !bloqueador) bloqueador = cap;
+    if (cap.getAttribute('data-requisitos') === '1' && !ok && !bloqueador) bloqueador = cap;
   });
 }
 
@@ -1878,14 +1890,14 @@ function wireManual(level){
     TMV.ligar(document, function(box){ // acertou uma checagem: se a lição toda foi respondida, ela está concluída
       var cap = box.closest('.chapter'); if (!cap) return;
       var ainda = cap.querySelectorAll('.tmv-chk .tmv-op.certa').length < cap.querySelectorAll('.tmv-chk').length;
-      if (!ainda && !cap.classList.contains('cap-ok')) aplicarLeitura_(level, cap, true);
+      if (!ainda) tentarConcluirCapitulo_(level, cap);
     });
     TMV.montarPainel(level);
   } // reenvia pro servidor qualquer leitura já confirmada localmente que ainda não tenha chegado lá
   document.querySelectorAll('.chapter[data-chk="1"]').forEach(function(cap){ // respondeu tudo antes (neste aparelho) mas a leitura não ficou registrada
     if (cap.classList.contains('cap-ok')) return;
     var n = cap.querySelectorAll('.tmv-chk').length;
-    if (n && cap.querySelectorAll('.tmv-chk .tmv-op.certa').length === n) aplicarLeitura_(level, cap, true);
+    if (n && cap.querySelectorAll('.tmv-chk .tmv-op.certa').length === n) tentarConcluirCapitulo_(level, cap);
   });
   document.querySelectorAll('.chapter').forEach(function(cap){
     cap.addEventListener('click', function(ev){
@@ -3306,7 +3318,10 @@ function render(){
     app.innerHTML = renderTopbar() + '<div class="shell">' + renderManual(state.manual) + '</div>';
     wireTopbar();
     wireManual(state.manual);
-    if (window.TKTutorial) TKTutorial.montarManual(state.manual);
+    if (window.TKTutorial){
+      TKTutorial.montarManual(state.manual);
+      TKTutorial.montarConteudos(document, state.manual, function(cap){ tentarConcluirCapitulo_(state.manual, cap); });
+    }
   } else if (state.view === 'quiz'){
     app.innerHTML = renderTopbar() + '<div class="shell">' + renderQuizIntro(state.manual) + '</div>';
     wireTopbar();
