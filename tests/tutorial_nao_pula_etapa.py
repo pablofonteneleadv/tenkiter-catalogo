@@ -26,7 +26,7 @@ with sync_playwright() as p:
     page.evaluate("""t => { TMV.init({state:()=>({user:{whatsapp:'88',password:'s'}}),
       submit:async p=>p.action==='tutorial_listar'?{ok:true,tutoriais:[t]}:{ok:true},toast:()=>{}});
       TKTutorial.montarAluno(); }""", TUTORIAL)
-    page.get_by_role("button", name="Começar tutorial").click()
+    page.get_by_role("button", name="Começar atividade").click()
     frame = page.frame_locator("#tt-frame")
     alvo_um = frame.locator("#um.tk-tut-alvo")
     alvo_um.wait_for()
