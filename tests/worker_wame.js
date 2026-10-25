@@ -112,6 +112,7 @@ function d1() {
       if (wmodo === 'aguardar') await new Promise((r) => { liberar = r; });
       if (wmodo === 'timeout') throw new Error('timeout');
       if (wmodo === 'negado') return new Response(JSON.stringify({ error: 'instância desconectada' }), { status: 401 });
+      if (wmodo === 'plano') return new Response(JSON.stringify({ status: 'forbidden', reason: 'plan_required', feature: 'status', requiredPlan: 'pro', requiredPlanName: 'Pro', message: 'Feature not available on your plan. key=' + u.split('/')[3] }), { status: 403 });
       if (wmodo === '500') return new Response('oops', { status: 502 });
       if (wmodo === 'erro200') return new Response(JSON.stringify({ error: 'falhou' }), { status: 200 });
       return new Response(JSON.stringify({ key: { id: 'WAME-' + wame.length }, status: 'PENDING' }));
@@ -152,6 +153,15 @@ function d1() {
   let pn = await lerPost(id);
   chk('401 da Wame vira erro claro, sem JSON cru nem chave', pn.status === 'erro' && /recusou a publicação \(HTTP 401\)/.test(pn.erro) && !/CHAVE_WAME|error|\{/.test(pn.erro), pn.erro);
   chk('recusa permite nova tentativa (recibo recusado)', (await DB.prepare("SELECT estado FROM postagem_grupo_recibo WHERE postagem_id=?").bind(id).first()).estado === 'recusado');
+  // 403 por plano (caso real de 25/10/2026): mensagem em português com o plano exigido, sem chave nem JSON
+  wmodo = 'plano'; id = await novaPostagem('whatsapp2'); await W.processarPostagens(env);
+  let pp = await lerPost(id);
+  chk('403 por plano diz qual plano é preciso, em português', pp.status === 'erro' && /plano atual do Wame não inclui o recurso “status”/.test(pp.erro) && /plano Pro/.test(pp.erro) && !/CHAVE_WAME|\{|plan_required|forbidden/.test(pp.erro), pp.erro);
+  const diag = JSON.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='wame_ultimo_envio'").first()).valor);
+  chk('diagnóstico guarda só motivo/recurso/plano, sem a chave', diag.http === 403 && diag.plano === 'Pro' && diag.recurso === 'status' && !JSON.stringify(diag).includes('CHAVE_WAME'), diag);
+  wmodo = 'ok'; const antes0 = wame.length;
+  const rt = await A('POST', '/post/reagendar', { id, quando: 'agora' }); await W.processarPostagens(env);
+  chk('depois de trocar o plano, "Tentar de novo" publica', rt.r.status === 200 && (await lerPost(id)).status === 'publicado' && wame.length === antes0 + 1, [rt.j, await lerPost(id)]);
   // resposta incerta: nunca reenvia
   wmodo = '500'; id = await novaPostagem('whatsapp2'); let antes = wame.length; await W.processarPostagens(env);
   let pi = await lerPost(id);

@@ -18,7 +18,7 @@ def post(i, tipo, quando, status="agendado"):
             "produto": "TK-0003", "template": "", "link": "", "agendadoEm": quando, "status": status, "erro": "", "criadoPor": "Loja", "permalink": ""}
 def abrir(b, perms=PERMS_ALL, gestor=True, extras=None):
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
-    ctx.add_init_script(SESSION); ctx.add_init_script("window.TK_POSTAGENS_POLL_MS=60000;")
+    ctx.add_init_script(SESSION); ctx.add_init_script("try{localStorage.setItem('tk_po_fila_abertos',JSON.stringify(['story','grupo','status','status2','feed','carrossel','reels']))}catch(e){}"); ctx.add_init_script("window.TK_POSTAGENS_POLL_MS=60000;")
     st = install(ctx, perms=perms, versao="4.3"); st["midia"]["modo"] = "ok"
     g = st["ig"]; g["regras"] = True; g["pode_regras"] = gestor; g["posts"] = [
         post(1, "story", "2026-10-19T11:00:00Z"), post(2, "story", "2026-10-19T11:02:00Z"), post(3, "story", "2026-10-19T11:04:00Z"), post(4, "feed", "2026-10-19T12:00:00Z")]
@@ -66,8 +66,8 @@ with sync_playwright() as p:
     aba(pg, "fila")
     gr = [pg.inner_text(".po-grupo >> nth=%d" % i) for i in range(pg.locator(".po-grupo").count())]
     chk("3 grupos na ordem Story, WhatsApp Status 1, Feed", len(gr) == 3 and "Story" in gr[0] and gr[1].startswith("WhatsApp Status 1") and "Feed" in gr[2], gr)
-    chk("o grupo do Status mostra o intervalo próprio (2 min a 5 min)", "2 min a 5 min" in gr[1], gr[1])
-    chk("o 'ambos' fica no grupo do Story (4 itens: 1, 2, 3 e o 'ambos')", gr[0].split("·")[1].strip() == "4", gr[0])
+    chk("o grupo do Status mostra o intervalo próprio (2 min a 5 min)", "2 min a 5 min" in pg.inner_text("[data-fg-sec=status]"), pg.inner_text("[data-fg-sec=status]"))
+    chk("o 'ambos' fica no grupo do Story (4 itens: 1, 2, 3 e o 'ambos')", pg.locator("[data-fg=story] .po-fg-c").inner_text().strip() == "4", gr[0])
     chk("'ambos' não tem ▲▼ (usar Horário/Próximo livre) e diz Instagram + WhatsApp", pg.locator(".po-item[data-id='6'] [data-a=subir]").count() == 0 and pg.locator(".po-item[data-id='6'] [data-a=hora]").count() == 1 and "Instagram + WhatsApp" in pg.inner_text(".po-item[data-id='6']"), pg.inner_text(".po-item[data-id='6']")[:200])
     chk("o Status mostra 'WhatsApp Status 1' e não tem ▲▼ (é o único do grupo)", "WhatsApp Status 1" in pg.inner_text(".po-item[data-id='5']") and pg.is_disabled(".po-item[data-id='5'] [data-a=subir]") and pg.is_disabled(".po-item[data-id='5'] [data-a=descer]"))
     chk("sem o 'ambos' na conta, a ordem do Story continua 1, 2, 3 (o 3 desce desabilitado)", pg.is_disabled(".po-item[data-id='3'] [data-a=descer]") and pg.is_enabled(".po-item[data-id='2'] [data-a=descer]"))

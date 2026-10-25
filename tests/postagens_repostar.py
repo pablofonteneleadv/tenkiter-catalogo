@@ -23,7 +23,7 @@ def axe(pg, label):
     chk("axe — " + label, not r, "; ".join(r))
 def novo(b, perms=PERMS_ALL, versao="4.3"):
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block", timezone_id="America/Fortaleza", permissions=["clipboard-read", "clipboard-write"])
-    ctx.add_init_script(SESSION); ctx.add_init_script("window.TK_POSTAGENS_POLL_MS=400;")
+    ctx.add_init_script(SESSION); ctx.add_init_script("try{localStorage.setItem('tk_po_fila_abertos',JSON.stringify(['story','grupo','status','status2','feed','carrossel','reels']))}catch(e){}"); ctx.add_init_script("window.TK_POSTAGENS_POLL_MS=400;")
     st = install(ctx, perms=perms, versao=versao); st["midia"]["modo"] = "ok"
     return ctx, st
 def abrir(pg):
