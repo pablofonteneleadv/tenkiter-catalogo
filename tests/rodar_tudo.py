@@ -31,6 +31,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("jornada_cliente.py", lambda o: "FALHAS=0" in o),
     ("jornada_lojista.py", lambda o: "FALHAS=0" in o),
     ("jornada_funcionaria.py", lambda o: "FALHAS=1 ['progresso foi enviado ao servidor']" in o or "FALHAS=0" in o),  # manuais-semente não têm id de capítulo: não sincronizam
+    ("mensagens_dashboard.py", lambda o: "FALHAS=0" in o),
     ("teclado.py", lambda o: "FALHAS=0" in o),
     ("busca.py", lambda o: "FALHAS=0" in o),
     ("jornada_pedido.py", lambda o: "FALHAS=0" in o),

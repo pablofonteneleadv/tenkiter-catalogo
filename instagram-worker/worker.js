@@ -99,6 +99,18 @@ async function iniciar(env) {
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN seq INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN repostado_de INTEGER').run(); } catch (e) { /* já existe */ }
+  /* Mensagens v2: lidas/não lidas, quem falta responder, estado de entrega e quem enviou pelo painel. */
+  for (const [t, col] of [['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  try { await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgc_atu ON msg_conversa (atualizada_em)').run(); await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgm_st ON msg_mensagem (conversa_id, status_em)').run(); } catch (e) { /* tenta de novo depois */ }
+  try {
+    if (!(await cfgGet(env, 'mig_msg_v2'))) {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE msg_mensagem SET status='enviada' WHERE direcao='saida' AND COALESCE(status,'')=''"),
+        env.DB.prepare("UPDATE msg_conversa SET ult_dir=COALESCE((SELECT m.direcao FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1),''), ult_entrada_em=COALESCE((SELECT MAX(m.enviada_em) FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id AND m.direcao='entrada'),''), ult_saida_em=COALESCE((SELECT MAX(m.enviada_em) FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id AND m.direcao='saida'),''), atualizada_em=CASE WHEN COALESCE(ultima_em,'')<>'' THEN ultima_em ELSE COALESCE(criado_em,'') END, nao_lidas=0")
+      ]);
+      await cfgSet(env, 'mig_msg_v2', '1');
+    }
+  } catch (e) { /* tenta de novo na próxima vez */ }
   await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS ix_post_repostado_de ON postagem(repostado_de)').run();
   for (const col of COLUNAS_NOVAS) { try { await env.DB.prepare('ALTER TABLE rascunho ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   try { await env.DB.prepare("ALTER TABLE fotoia ADD COLUMN refs TEXT DEFAULT '[]'").run(); } catch (e) { /* já existe */ }
@@ -2420,13 +2432,23 @@ function formaInstagram_(b) {
 async function gravarMensagem_(env, canal, m) {
   if (!MSG_CANAIS.includes(canal)) return false;
   const t = agora();
-  await env.DB.prepare('INSERT OR IGNORE INTO msg_conversa (canal, contato, nome, grupo, ultima_em, criado_em) VALUES (?,?,?,?,?,?)').bind(canal, m.contato, m.nome, m.grupo, '', t).run();
+  await env.DB.prepare('INSERT OR IGNORE INTO msg_conversa (canal, contato, nome, grupo, ultima_em, criado_em, atualizada_em) VALUES (?,?,?,?,?,?,?)').bind(canal, m.contato, m.nome, m.grupo, '', t, t).run();
   const c = await env.DB.prepare('SELECT id FROM msg_conversa WHERE canal=? AND contato=?').bind(canal, m.contato).first();
   if (!c) return false;
-  const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em) VALUES (?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t).run();
+  const saida = m.direcao === 'saida';
+  if (saida && !String(m.extId).startsWith('inc:')) {      // o eco de uma resposta que ficou "sem confirmação" promove aquela linha (não cria uma segunda bolha)
+    try {
+      const desde = new Date(Date.parse(m.em) - 10 * 60000).toISOString();
+      const pr = await env.DB.prepare("UPDATE msg_mensagem SET ext_id=?, status='enviada', status_em=? WHERE id=(SELECT id FROM msg_mensagem WHERE conversa_id=? AND direcao='saida' AND ext_id LIKE 'inc:%' AND texto=? AND enviada_em>=? ORDER BY id LIMIT 1)").bind(m.extId, t, c.id, m.texto, desde).run();
+      if (pr.meta && pr.meta.changes === 1) { await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(t, c.id).run(); return false; }
+    } catch (e) { /* o eco já existe: segue o caminho normal */ }
+  }
+  const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em) VALUES (?,?,?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t).run();
   if (!r.meta || r.meta.changes !== 1) return false;
   const previa = (m.texto || ('[' + m.tipo + ']')).replace(/\s+/g, ' ').slice(0, 140);
-  await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END WHERE id=?").bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, c.id).run();
+  /* Em SQLite o lado direito do SET usa os valores ANTIGOS da linha: por isso a comparação com ultima_em/ult_entrada_em vale como "antes desta mensagem". */
+  await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, atualizada_em=? WHERE id=?")
+    .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, t, c.id).run();
   return true;
 }
 /** Segredo do app da Meta: o cadastrado na Gestão (D1) vale primeiro; o secret do Worker é o reserva. */
@@ -2459,6 +2481,7 @@ async function rotaWebhookMensagens_(env, req, url) {
     if (await msgPausado_(env, 'instagram')) return ok(200, { ok: true, pausado: true });
     let b = null; try { b = JSON.parse(bruto); } catch (e) { return ok(400, { ok: false }); }
     const lista = normalizarInstagram_(b); let novas = 0; for (const m of lista) if (await gravarMensagem_(env, 'instagram', m)) novas++;
+    try { await aplicarLeiturasInstagram_(env, leiturasInstagram_(b)); } catch (e) { /* a leitura é conforto: nunca derruba a gravação */ }
     await cfgSet(env, 'msg_ult_instagram', JSON.stringify({ em: agora(), res: 'ok', itens: lista.length, novas: novas, forma: lista.length ? '' : formaInstagram_(b) }));
     return ok(200, { ok: true, novas: novas });
   }
@@ -2472,6 +2495,7 @@ async function rotaWebhookMensagens_(env, req, url) {
     if (await msgPausado_(env, canal)) return ok(200, { ok: true, pausado: true });
     const cfg = await cfgWafly_(env, Number(partes[2]));
     if (cfg && b && b.instanceId && String(b.instanceId) !== cfg.instance) return ok(200, { ok: true, ignorado: 'outra instância' });
+    if (b && b.type === 'MessageStatusCallback') return ok(200, { ok: true, atualizadas: await atualizarStatusWafly_(env, canal, b) });
     const m = normalizarWafly_(b);
     if (!m) return ok(200, { ok: true, ignorado: true });
     return ok(200, { ok: true, nova: await gravarMensagem_(env, canal, m) });
@@ -2489,17 +2513,217 @@ async function ligarWebhookWafly_(env, slot, origem) {
   } catch (e) { return { ok: false, erro: 'Sem resposta da Wafly agora. Tente de novo.' }; }
   await cfgSet(env, 'msg_wh_ligado_whatsapp' + slot, agora());
   await cfgSet(env, 'msg_pausa_whatsapp' + slot, null);
-  return { ok: true };
+  /* v2: também (1) registrar o que a loja envia pelo celular e (2) receber entregue/lida. Se a Wafly não aceitar, avisa sem desfazer a gravação. */
+  const avisos = [];
+  for (const [caminho, corpo, aviso] of [['/update-notify-sent-by-me', { notifySentByMe: true }, 'Não consegui ativar o registro das mensagens que você envia pelo celular.'], ['/update-webhook-message-status', { value: alvo }, 'Não consegui ativar o aviso de entregue/lida.']]) {
+    try {
+      const r = await fetch(waflyUrl_(cfg, caminho), { method: 'PUT', redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+      if (!r.ok) avisos.push(aviso);
+    } catch (e) { avisos.push(aviso); }
+  }
+  await cfgSet(env, 'msg_wh_v2_whatsapp' + slot, avisos.length ? null : agora());   // só marca "enviadas e leituras ativas" se a Wafly aceitou tudo
+  return { ok: true, avisos: avisos };
 }
 async function resumoMensagens_(env, origem) {
   const canais = {};
   for (const c of MSG_CANAIS) {
     const x = await env.DB.prepare('SELECT COUNT(*) AS conversas, COALESCE(SUM(total),0) AS mensagens, COALESCE(MAX(ultima_em),\'\') AS ultima FROM msg_conversa WHERE canal=?').bind(c).first();
-    canais[c] = { conversas: Number(x.conversas) || 0, mensagens: Number(x.mensagens) || 0, ultima: x.ultima || '', ligadoEm: (await cfgGet(env, 'msg_wh_ligado_' + c)) || '', pausado: await msgPausado_(env, c) };
+    canais[c] = { v2: !!(await cfgGet(env, 'msg_wh_v2_' + c)), conversas: Number(x.conversas) || 0, mensagens: Number(x.mensagens) || 0, ultima: x.ultima || '', ligadoEm: (await cfgGet(env, 'msg_wh_ligado_' + c)) || '', pausado: await msgPausado_(env, c) };
   }
+  const cont = await msgContagens_(env);
+  for (const c of MSG_CANAIS) { canais[c].naoLidas = cont[c].nao_lidas; canais[c].semResposta = cont[c].sem_resposta; }
   const temSegApp = !!(await igAppSecret_(env));
   canais.instagram.pronto = temSegApp;
   return { ok: true, canais: canais, urlInstagram: temSegApp ? origem + '/wh/instagram/' + (await msgSegredo_(env)) : '' };
+}
+/* ---------------------------------------------------------------------------
+ * Mensagens v2 — responder pelo painel, entrega/leitura, "falta responder", novidades ao vivo, exportação e métricas.
+ *  • Envio: nunca reenvia sozinho. Resposta incerta (tempo esgotado/5xx) vira "sem confirmação" e a pessoa decide.
+ *  • idLocal (gerado na tela) torna o envio idempotente: tocar duas vezes não manda duas mensagens.
+ *  • Leitura ("lida") vem da Wafly (MessageStatusCallback) e do Instagram (evento read); a loja só vê, nunca envia confirmação de leitura.
+ * ------------------------------------------------------------------------- */
+const MSG_RANK_ = "CASE status WHEN 'lida' THEN 3 WHEN 'entregue' THEN 2 WHEN 'enviada' THEN 1 ELSE 0 END";
+const MSG_RANK_NOVO_ = { enviada: 1, entregue: 2, lida: 3 };
+const MSG_NOME_CANAL_ = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2', instagram: 'Instagram' };
+/** MessageStatusCallback da Wafly: SENT/RECEIVED/READ/PLAYED sobem o "tique" (nunca descem); READ_BY_ME limpa o "não lida". */
+async function atualizarStatusWafly_(env, canal, b) {
+  const ids = (Array.isArray(b && b.ids) ? b.ids : []).map((x) => String(x)).filter(Boolean).slice(0, 50);
+  const st = String((b && b.status) || '').toUpperCase();
+  const novo = st === 'READ' || st === 'PLAYED' ? 'lida' : st === 'RECEIVED' ? 'entregue' : st === 'SENT' ? 'enviada' : '';
+  if (!ids.length || (!novo && st !== 'READ_BY_ME')) return 0;
+  const t = agora(); let n = 0;
+  for (const id of ids) {
+    const m = await env.DB.prepare('SELECT id, conversa_id, direcao, enviada_em FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(canal, id).first();
+    if (!m) continue;
+    if (st === 'READ_BY_ME') { await env.DB.prepare('UPDATE msg_conversa SET nao_lidas=0, atualizada_em=? WHERE id=? AND nao_lidas<>0').bind(t, m.conversa_id).run(); n++; continue; }
+    if (m.direcao !== 'saida') continue;
+    const r = await env.DB.prepare("UPDATE msg_mensagem SET status=?, status_em=? WHERE conversa_id=? AND direcao='saida' AND status<>'incerta' AND enviada_em<=? AND " + MSG_RANK_ + ' < ?').bind(novo, t, m.conversa_id, m.enviada_em, MSG_RANK_NOVO_[novo]).run();
+    if (r.meta && r.meta.changes > 0) { await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(t, m.conversa_id).run(); n++; }
+  }
+  return n;
+}
+/** Instagram: evento "read" (o cliente abriu a conversa) -> mensagens da loja até aquele momento ficam "lidas". */
+function leiturasInstagram_(b) {
+  const out = [];
+  if (!b || b.object !== 'instagram' || !Array.isArray(b.entry)) return out;
+  const idDe = (x) => String((x && typeof x === 'object' ? x.id : x) || '');
+  for (const e of b.entry) {
+    const dono = String((e && e.id) || '');
+    for (const ev of (Array.isArray(e && e.messaging) ? e.messaging : [])) {
+      if (!ev || !ev.read) continue;
+      const contato = idDe(ev.sender); if (!contato || contato === dono) continue;
+      const ms = Number(ev.timestamp || 0);
+      out.push({ contato: contato.slice(0, 80), ate: ms > 0 ? new Date(ms < 1e12 ? ms * 1000 : ms).toISOString() : agora() });
+    }
+  }
+  return out;
+}
+async function aplicarLeiturasInstagram_(env, lst) {
+  const t = agora(); let n = 0;
+  for (const x of lst) {
+    const c = await env.DB.prepare("SELECT id FROM msg_conversa WHERE canal='instagram' AND contato=?").bind(x.contato).first();
+    if (!c) continue;
+    const r = await env.DB.prepare("UPDATE msg_mensagem SET status='lida', status_em=? WHERE conversa_id=? AND direcao='saida' AND enviada_em<=? AND status NOT IN ('lida','incerta')").bind(t, c.id, x.ate).run();
+    if (r.meta && r.meta.changes > 0) { await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(t, c.id).run(); n++; }
+  }
+  return n;
+}
+const MSG_COLS_CONVERSA_ = "id, canal, contato, nome, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
+async function msgContagens_(env, canal) {
+  const rs = await env.DB.prepare("SELECT canal, COUNT(*) AS conversas, SUM(CASE WHEN nao_lidas>0 THEN 1 ELSE 0 END) AS nao_lidas, SUM(CASE WHEN grupo=0 AND ult_dir='entrada' THEN 1 ELSE 0 END) AS sem_resposta, SUM(CASE WHEN grupo=1 THEN 1 ELSE 0 END) AS grupos FROM msg_conversa WHERE total>0" + (canal ? ' AND canal=?' : '') + ' GROUP BY canal').bind(...(canal ? [canal] : [])).all();
+  const out = {}; for (const c of MSG_CANAIS) out[c] = { conversas: 0, nao_lidas: 0, sem_resposta: 0, grupos: 0 };
+  for (const x of rs.results) if (out[x.canal]) out[x.canal] = { conversas: Number(x.conversas) || 0, nao_lidas: Number(x.nao_lidas) || 0, sem_resposta: Number(x.sem_resposta) || 0, grupos: Number(x.grupos) || 0 };
+  return out;
+}
+/** Responder: texto simples para WhatsApp (Wafly) ou Instagram (DM). Devolve { ok, extId } | { ok:false, erro } | { ok:false, incerto:true, erro }. */
+async function enviarTextoWhats_(env, conv, texto) {
+  const slot = conv.canal === 'whatsapp1' ? 1 : 2, cfg = await cfgWafly_(env, slot);
+  if (!cfg) return { ok: false, erro: 'Cadastre o Wafly ' + slot + ' em Conexões antes de responder por aqui.' };
+  try {
+    const r = await fetch(waflyUrl_(cfg, '/send-text'), { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(25000), headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: conv.contato, message: texto }) });
+    const j = await r.json().catch(() => ({}));
+    const id = String((j && (j.messageId || j.id || j.zaapId)) || '');
+    if (r.ok && id) return { ok: true, extId: id };
+    if (r.ok) return { ok: false, incerto: true, erro: 'A Wafly respondeu sem confirmar o envio. Confira no WhatsApp antes de tentar de novo.' };
+    if (r.status === 401 || r.status === 403) return { ok: false, erro: 'A Wafly não aceitou as credenciais do WhatsApp ' + slot + '. Confira em Conexões.' };
+    if (r.status >= 400 && r.status < 500 && ![408, 409, 429].includes(r.status)) return { ok: false, erro: 'A Wafly recusou a mensagem (HTTP ' + r.status + '). Confira se o WhatsApp ' + slot + ' está conectado.' };
+    return { ok: false, incerto: true, erro: 'Sem confirmação da Wafly. Confira no WhatsApp antes de tentar de novo.' };
+  } catch (e) { return { ok: false, incerto: true, erro: 'Sem confirmação da Wafly. Confira no WhatsApp antes de tentar de novo.' }; }
+}
+async function enviarTextoInstagram_(env, conv, texto) {
+  const tk = await cfgGet(env, 'ig_token');
+  if (!tk) return { ok: false, erro: 'O Instagram não está conectado. Conecte em Produtos para aceitar → Conectar.' };
+  try {
+    const r = await fetch(igBase(env) + '/me/messages', { method: 'POST', signal: AbortSignal.timeout(25000), headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: { id: conv.contato }, message: { text: texto } }) });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j && j.message_id) return { ok: true, extId: String(j.message_id) };
+    if (r.ok) return { ok: false, incerto: true, erro: 'O Instagram respondeu sem confirmar. Confira no app antes de tentar de novo.' };
+    const e = (j && j.error) || {}, msg = String(e.message || '');
+    if (e.code === 10 || /window|24|outside/i.test(msg)) return { ok: false, erro: 'Já passaram mais de 24 horas da última mensagem deste cliente. O Instagram só deixa responder dentro desse prazo.' };
+    if (e.code === 190) return { ok: false, erro: 'O Instagram desconectou. Reconecte em Produtos para aceitar → Conectar.' };
+    if (e.code === 200 || e.code === 3 || /permission/i.test(msg)) return { ok: false, erro: 'Falta a permissão de mensagens do Instagram no app da Meta (instagram_business_manage_messages).' };
+    if (r.status >= 500) return { ok: false, incerto: true, erro: 'Sem confirmação do Instagram. Confira no app antes de tentar de novo.' };
+    return { ok: false, erro: 'O Instagram recusou a mensagem agora. Tente de novo em instantes.' };
+  } catch (e) { return { ok: false, incerto: true, erro: 'Sem confirmação do Instagram. Confira no app antes de tentar de novo.' }; }
+}
+async function responderMensagem_(env, whats, d) {
+  const id = Number(d.conversa), texto = String(d.texto == null ? '' : d.texto).replace(/\r\n/g, '\n').trim(), idLocal = String(d.idLocal || '');
+  if (!id) return [400, { ok: false, erro: 'Escolha uma conversa.' }];
+  if (!texto) return [400, { ok: false, erro: 'Escreva a mensagem antes de enviar.' }];
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(idLocal)) return [400, { ok: false, erro: 'Atualize a página e tente de novo.' }];
+  const conv = await env.DB.prepare('SELECT id, canal, contato, nome, grupo FROM msg_conversa WHERE id=?').bind(id).first();
+  if (!conv) return [404, { ok: false, erro: 'Conversa não encontrada.' }];
+  if (conv.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > MSG_TEXTO_MAX) return [400, { ok: false, erro: conv.canal === 'instagram' ? 'O Instagram aceita até 1000 letras por mensagem. Divida em duas.' : 'Mensagem grande demais. Divida em duas.' }];
+  /* Reserva atômica no D1 (chave única): sobrevive a queda do Worker e nunca deixa a mesma tentativa sair duas vezes. */
+  const chave = 'msgenv:' + idLocal, t0 = agora();
+  const reserva = await env.DB.prepare('INSERT OR IGNORE INTO cfg (chave, valor) VALUES (?, ?)').bind(chave, t0 + '|enviando').run();
+  if (!reserva.meta || reserva.meta.changes !== 1) {
+    const ant = await env.DB.prepare('SELECT valor FROM cfg WHERE chave=?').bind(chave).first(), carga = ant ? String(ant.valor).slice(25) : 'enviando';
+    if (carga !== 'enviando') { try { return [200, JSON.parse(carga)]; } catch (e) { /* cai no aviso */ } }
+    return [200, { ok: false, incerto: true, erro: 'Esta mensagem já foi tentada e ficou sem confirmação. Confira no ' + (conv.canal === 'instagram' ? 'Instagram' : 'WhatsApp') + ' antes de enviar de novo.' }];
+  }
+  try { await env.DB.prepare("DELETE FROM cfg WHERE chave LIKE 'msgenv:%' AND substr(valor,1,24)<?").bind(new Date(Date.now() - 3 * 86400000).toISOString()).run(); } catch (e) { /* limpeza é conforto */ }
+  const res = conv.canal === 'instagram' ? await enviarTextoInstagram_(env, conv, texto) : await enviarTextoWhats_(env, conv, texto);
+  if (!res.ok && !res.incerto) { await env.DB.prepare('DELETE FROM cfg WHERE chave=?').bind(chave).run(); return [409, { ok: false, erro: res.erro }]; }
+  const extId = res.ok ? res.extId : 'inc:' + idLocal, em = agora();
+  await gravarMensagem_(env, conv.canal, { extId: extId, contato: conv.contato, nome: '', grupo: conv.grupo, direcao: 'saida', tipo: 'texto', texto: texto, em: em });
+  await env.DB.prepare('UPDATE msg_mensagem SET por=?, status=CASE WHEN ? THEN status ELSE ? END WHERE canal=? AND ext_id=?').bind(String(whats || '').slice(-4), res.ok ? 1 : 0, 'incerta', conv.canal, extId).run();
+  const linha = await env.DB.prepare('SELECT id, direcao, tipo, texto, enviada_em, status, por FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(conv.canal, extId).first();
+  const corpo = res.ok ? { ok: true, mensagem: linha } : { ok: false, incerto: true, erro: res.erro, mensagem: linha };
+  await env.DB.prepare('UPDATE cfg SET valor=? WHERE chave=?').bind(t0 + '|' + JSON.stringify(corpo), chave).run();
+  return [200, corpo];
+}
+/* ---- exportação ---- */
+const fusoLocal_ = (iso) => { const d = new Date(Date.parse(iso) - 3 * 3600000); return isNaN(d) ? '' : d.toISOString(); };       // Fortaleza (UTC-3, sem horário de verão)
+const dataBR_ = (iso) => { const s = fusoLocal_(iso); return s ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) + ' ' + s.slice(11, 16) : ''; };
+function csvCelula_(v) { let s = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function rotuloContato_(c) { if (c.nome) return c.nome; const n = String(c.contato || '').replace(/-group$|@g\.us$|@s\.whatsapp\.net$/g, ''); return /^\d{10,15}$/.test(n) ? '+' + n : (c.grupo ? 'Grupo ' + n : n); }
+const ROTULO_STATUS_ = { enviada: 'enviada', entregue: 'entregue', lida: 'lida', incerta: 'sem confirmação' };
+/** Mensagens (já em ordem por conversa e tempo) -> mesmas linhas com a demora da PRIMEIRA resposta da loja a cada pergunta do cliente. */
+function comDemora_(linhas) {
+  let conv = null, aberto = null;
+  for (const m of linhas) {
+    if (m.conversa_id !== conv) { conv = m.conversa_id; aberto = null; }
+    m.demora_min = '';
+    if (m.direcao === 'entrada') { if (aberto === null) aberto = Date.parse(m.enviada_em); }
+    else if (aberto !== null) { m.demora_min = Math.max(0, Math.round((Date.parse(m.enviada_em) - aberto) / 60000)); aberto = null; }
+  }
+  return linhas;
+}
+async function exportarMensagens_(env, q) {
+  const onde = [], args = [];
+  const conversa = Number(q.conversa) || 0, canal = String(q.canal || '');
+  if (conversa) { onde.push('c.id=?'); args.push(conversa); } else if (canal) { if (!MSG_CANAIS.includes(canal)) return { erro: 'Escolha Instagram, WhatsApp 1 ou WhatsApp 2.' }; onde.push('c.canal=?'); args.push(canal); }
+  const dia = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : '';
+  if (dia(q.de)) { onde.push('m.enviada_em>=?'); args.push(dia(q.de) + 'T03:00:00.000Z'); }
+  if (dia(q.ate)) { onde.push('m.enviada_em<?'); args.push(new Date(Date.parse(dia(q.ate) + 'T03:00:00.000Z') + 86400000).toISOString()); }
+  const LIM = 20000;
+  const rs = await env.DB.prepare('SELECT m.id, m.conversa_id, m.canal, m.direcao, m.tipo, m.texto, m.enviada_em, m.status, m.por, c.contato, c.nome, c.grupo FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id' + (onde.length ? ' WHERE ' + onde.join(' AND ') : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT ' + (LIM + 1)).bind(...args).all();
+  let linhas = rs.results; const cortou = linhas.length > LIM; if (cortou) linhas = linhas.slice(0, LIM);
+  comDemora_(linhas);
+  const formato = ['csv', 'txt', 'json'].includes(q.formato) ? q.formato : 'csv', hoje = fusoLocal_(agora()).slice(0, 10).replace(/-/g, '');
+  const escopo = conversa ? 'conversa-' + conversa : (canal || 'todos-os-canais');
+  const nome = 'tenkiter-mensagens-' + escopo + '-' + hoje + '.' + formato;
+  let corpo, tipo;
+  if (formato === 'csv') {
+    const cab = ['canal', 'conversa', 'contato', 'nome', 'grupo', 'data_hora', 'quem', 'tipo', 'texto', 'status', 'enviado_por_final', 'demora_primeira_resposta_min'];
+    corpo = '﻿' + cab.join(';') + '\r\n' + linhas.map((m) => [MSG_NOME_CANAL_[m.canal] || m.canal, m.conversa_id, m.contato, m.nome, m.grupo ? 'sim' : 'não', dataBR_(m.enviada_em), m.direcao === 'saida' ? 'loja' : 'cliente', m.tipo, m.texto, m.direcao === 'saida' ? (ROTULO_STATUS_[m.status] || m.status || '') : '', m.por || '', m.demora_min].map(csvCelula_).join(';')).join('\r\n') + (linhas.length ? '\r\n' : '');
+    tipo = 'text/csv; charset=utf-8';
+  } else if (formato === 'json') {
+    const porConv = new Map();
+    for (const m of linhas) { if (!porConv.has(m.conversa_id)) porConv.set(m.conversa_id, { conversa: m.conversa_id, canal: MSG_NOME_CANAL_[m.canal] || m.canal, contato: m.contato, nome: m.nome, grupo: !!m.grupo, mensagens: [] }); porConv.get(m.conversa_id).mensagens.push({ data_hora: dataBR_(m.enviada_em), iso: m.enviada_em, quem: m.direcao === 'saida' ? 'loja' : 'cliente', tipo: m.tipo, texto: m.texto, status: m.direcao === 'saida' ? (m.status || '') : undefined, demora_primeira_resposta_min: m.demora_min === '' ? undefined : m.demora_min }); }
+    corpo = JSON.stringify({ exportado_em: agora(), fuso: 'America/Fortaleza (UTC-3)', cortado: cortou, conversas: Array.from(porConv.values()) }, null, 1); tipo = 'application/json; charset=utf-8';
+  } else {
+    const partes = []; let atual = null;
+    for (const m of linhas) {
+      if (m.conversa_id !== atual) { atual = m.conversa_id; partes.push((partes.length ? '\n' : '') + '=== ' + (MSG_NOME_CANAL_[m.canal] || m.canal) + ' · ' + rotuloContato_(m) + (m.grupo ? ' (grupo)' : '') + ' ===') ; }
+      const quem = m.direcao === 'saida' ? 'Loja' + (m.demora_min !== '' ? ' (respondeu em ' + m.demora_min + ' min)' : '') : 'Cliente';
+      partes.push('[' + dataBR_(m.enviada_em) + '] ' + quem + ': ' + ((m.texto || '') + (m.tipo && m.tipo !== 'texto' ? (m.texto ? ' ' : '') + '[' + m.tipo + ']' : '')).replace(/\n/g, '\n    '));
+    }
+    corpo = '﻿# Conversas da TENKiTER Modas (horário de Fortaleza)\n# "Cliente" = quem escreveu para a loja; "Loja" = respostas da equipe.\n\n' + partes.join('\n') + '\n'; tipo = 'text/plain; charset=utf-8';
+  }
+  return { corpo: corpo, tipo: tipo, nome: nome, cortado: cortou, total: linhas.length };
+}
+/* ---- métricas de atendimento (base para a auditoria) ---- */
+async function metricasMensagens_(env, canal, dias) {
+  dias = [7, 30, 90].includes(Number(dias)) ? Number(dias) : 30;
+  const desde = new Date(Date.now() - dias * 86400000).toISOString();
+  const rs = await env.DB.prepare('SELECT m.conversa_id, m.direcao, m.enviada_em FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0 AND m.enviada_em>=?' + (canal ? ' AND c.canal=?' : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT 30000').bind(...(canal ? [desde, canal] : [desde])).all();
+  let conv = null, aberto = null, entradas = 0, saidas = 0; const demoras = [], porHora = Array.from({ length: 24 }, () => ({ entradas: 0, demoras: [] })), convs = new Set(); let semResposta = 0, horaAberta = 0;
+  const fechar = () => { if (aberto !== null) semResposta++; aberto = null; };
+  for (const m of rs.results) {
+    if (m.conversa_id !== conv) { fechar(); conv = m.conversa_id; convs.add(conv); }
+    if (m.direcao === 'entrada') { entradas++; if (aberto === null) { aberto = Date.parse(m.enviada_em); horaAberta = new Date(aberto - 3 * 3600000).getUTCHours(); porHora[horaAberta].entradas++; } }
+    else { saidas++; if (aberto !== null) { const min = Math.max(0, (Date.parse(m.enviada_em) - aberto) / 60000); demoras.push(min); porHora[horaAberta].demoras.push(min); aberto = null; } }
+  }
+  fechar();
+  const med = (a) => { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y), k = Math.floor(s.length / 2); return Math.round(s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2); };
+  const pct = (a, f) => a.length ? Math.round(100 * a.filter(f).length / a.length) : null;
+  const espera = await env.DB.prepare("SELECT id, canal, contato, nome, ult_entrada_em FROM msg_conversa WHERE grupo=0 AND ult_dir='entrada' AND total>0" + (canal ? ' AND canal=?' : '') + ' ORDER BY ult_entrada_em ASC LIMIT 8').bind(...(canal ? [canal] : [])).all();
+  const totEspera = await env.DB.prepare("SELECT COUNT(*) AS n FROM msg_conversa WHERE grupo=0 AND ult_dir='entrada' AND total>0" + (canal ? ' AND canal=?' : '')).bind(...(canal ? [canal] : [])).first();
+  return { ok: true, dias: dias, canal: canal || 'todos', conversas: convs.size, entradas: entradas, saidas: saidas, perguntasRespondidas: demoras.length, perguntasSemResposta: semResposta, medianaMin: med(demoras), mediaMin: demoras.length ? Math.round(demoras.reduce((a, b) => a + b, 0) / demoras.length) : null, ate5min: pct(demoras, (x) => x <= 5), ate60min: pct(demoras, (x) => x <= 60), acima24h: pct(demoras, (x) => x > 1440),
+    aguardando: { total: Number((totEspera || {}).n) || 0, maisAntigas: espera.results.map((x) => ({ id: x.id, canal: x.canal, nome: rotuloContato_(x), desde: x.ult_entrada_em })) },
+    porHora: porHora.map((h, i) => ({ hora: i, entradas: h.entradas, medianaMin: med(h.demoras) })) };
 }
 export default {
   async scheduled(ev, env, ctx) {
@@ -2566,21 +2790,55 @@ export default {
       }
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {
-        const canal = url.searchParams.get('canal') || '', busca = String(url.searchParams.get('busca') || '').trim().slice(0, 60), antes = url.searchParams.get('antes') || '';
+        const canal = url.searchParams.get('canal') || '', busca = String(url.searchParams.get('busca') || '').trim().slice(0, 60), antes = url.searchParams.get('antes') || '', filtro = url.searchParams.get('filtro') || '';
         if (!MSG_CANAIS.includes(canal)) return J({ ok: false, erro: 'Escolha Instagram, WhatsApp 1 ou WhatsApp 2.' }, 400);
-        let sql = 'SELECT id, contato, nome, grupo, ultima_em, previa, total FROM msg_conversa WHERE canal=? AND total>0', args = [canal];
-        if (busca) { sql += ' AND (nome LIKE ? OR contato LIKE ? OR previa LIKE ?)'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q); }
+        let sql = 'SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE canal=? AND total>0', args = [canal];
+        if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'sem_resposta') sql += " AND grupo=0 AND ult_dir='entrada'"; else if (filtro === 'grupos') sql += ' AND grupo=1';
+        if (busca) { sql += ' AND (nome LIKE ? OR contato LIKE ? OR previa LIKE ? ' + (busca.length >= 3 ? ' OR EXISTS (SELECT 1 FROM msg_mensagem mm WHERE mm.conversa_id=msg_conversa.id AND mm.texto LIKE ?)' : '') + ')'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q); if (busca.length >= 3) args.push(q); }
         if (antes) { sql += ' AND ultima_em<?'; args.push(antes); }
         const rs = await env.DB.prepare(sql + ' ORDER BY ultima_em DESC LIMIT 50').bind(...args).all();
-        return J({ ok: true, conversas: rs.results });
+        return J({ ok: true, conversas: rs.results, contagens: (await msgContagens_(env, canal))[canal], cursor: agora() });
       }
       if (p === '/msg/mensagens' && req.method === 'GET') {
         const id = Number(url.searchParams.get('conversa')), antes = url.searchParams.get('antes') || '';
         if (!id) return J({ ok: false, erro: 'Escolha uma conversa.' }, 400);
-        const conv = await env.DB.prepare('SELECT id, canal, contato, nome, grupo, total FROM msg_conversa WHERE id=?').bind(id).first();
+        const conv = await env.DB.prepare('SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE id=?').bind(id).first();
         if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
-        const rs = await env.DB.prepare('SELECT id, direcao, tipo, texto, enviada_em FROM msg_mensagem WHERE conversa_id=?' + (antes ? ' AND enviada_em<?' : '') + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...(antes ? [id, antes] : [id])).all();
-        return J({ ok: true, conversa: conv, mensagens: rs.results.reverse() });
+        const rs = await env.DB.prepare('SELECT id, direcao, tipo, texto, enviada_em, status, por, status_em FROM msg_mensagem WHERE conversa_id=?' + (antes ? ' AND enviada_em<?' : '') + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...(antes ? [id, antes] : [id])).all();
+        return J({ ok: true, conversa: conv, mensagens: rs.results.reverse(), temMais: rs.results.length === 100, cursor: agora() });
+      }
+      if (p === '/msg/novidades' && req.method === 'GET') {
+        /* Consulta leve para a tela ao vivo: só o que mudou desde o último cursor (com folga de 3 s; a tela ignora repetidos). */
+        const d0 = Date.parse(url.searchParams.get('desde') || ''), desde = new Date((isNaN(d0) ? Date.now() - 60000 : d0) - 3000).toISOString();
+        const conv = Number(url.searchParams.get('conversa')) || 0, depois = Number(url.searchParams.get('depois')) || 0, st0 = Date.parse(url.searchParams.get('st') || ''), st = new Date((isNaN(st0) ? Date.now() - 60000 : st0) - 3000).toISOString();
+        const cs = await env.DB.prepare('SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE atualizada_em>=? AND total>0 ORDER BY atualizada_em DESC LIMIT 100').bind(desde).all();
+        let mensagens = [];
+        if (conv) mensagens = (await env.DB.prepare('SELECT id, direcao, tipo, texto, enviada_em, status, por, status_em FROM msg_mensagem WHERE conversa_id=? AND (id>? OR status_em>=?) ORDER BY enviada_em, id LIMIT 200').bind(conv, depois, st).all()).results;
+        return J({ ok: true, cursor: agora(), conversas: cs.results, mensagens: mensagens, contagens: (cs.results.length || url.searchParams.get('cont') === '1') ? await msgContagens_(env) : undefined });
+      }
+      if (p === '/msg/contagem' && req.method === 'GET') return J({ ok: true, contagens: await msgContagens_(env) });
+      if (p === '/msg/enviar' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({}));
+        const [cod, corpo] = await responderMensagem_(env, req.headers.get('X-TK-Whats') || '', d);
+        return J(corpo, cod);
+      }
+      if (p === '/msg/lida' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({})), id = Number(d.conversa);
+        if (!id) return J({ ok: false, erro: 'Escolha uma conversa.' }, 400);
+        const r = await env.DB.prepare('UPDATE msg_conversa SET nao_lidas=?, atualizada_em=? WHERE id=?').bind(d.naoLida === true ? 1 : 0, agora(), id).run();
+        return J({ ok: !!(r.meta && r.meta.changes), nao_lidas: d.naoLida === true ? 1 : 0 });
+      }
+      if (p === '/msg/exportar' && req.method === 'GET') {
+        const q = {}; for (const k of ['canal', 'conversa', 'formato', 'de', 'ate']) q[k] = url.searchParams.get(k) || '';
+        const x = await exportarMensagens_(env, q);
+        if (x.erro) return J({ ok: false, erro: x.erro }, 400);
+        const h2 = new Headers(h); h2.set('Content-Type', x.tipo); h2.set('Cache-Control', 'no-store'); h2.set('Content-Disposition', 'attachment; filename="' + x.nome + '"'); h2.set('X-TK-Total', String(x.total)); h2.set('X-TK-Cortado', x.cortado ? '1' : '0'); h2.set('Access-Control-Expose-Headers', 'Content-Disposition, X-TK-Total, X-TK-Cortado');
+        return new Response(x.corpo, { status: 200, headers: h2 });
+      }
+      if (p === '/msg/metricas' && req.method === 'GET') {
+        const canal = url.searchParams.get('canal') || '';
+        if (canal && !MSG_CANAIS.includes(canal)) return J({ ok: false, erro: 'Escolha Instagram, WhatsApp 1 ou WhatsApp 2.' }, 400);
+        return J(await metricasMensagens_(env, canal, url.searchParams.get('dias')));
       }
       if (p === '/msg/ligar' && req.method === 'POST') {
         const d = await req.json().catch(() => ({})), slot = Number(d.slot);
