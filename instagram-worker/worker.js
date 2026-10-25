@@ -864,13 +864,19 @@ async function enviarGrupoClientes_(env, p) {
  *   - 2xx sem erro declarado = aceito. Só guardamos os NOMES dos campos da resposta (diagnóstico), nunca o conteúdo.
  * ========================================================================== */
 const WAME_BASES_OK = /^https:\/\/(?:server\.wame\.api\.br|server\.api-wa\.me)$/;
-function cfgWameStatus_(env) {
+function validarConfigWame_(bruto) {
   try {
-    const c = JSON.parse(env.WAME_STATUS_2 || '{}'), key = String(c.key || '').trim();
+    const c = JSON.parse(bruto || '{}'), key = String(c.key || '').trim();
     if (!/^[A-Za-z0-9._-]{8,200}$/.test(key)) return null;
     const base = String(c.base || 'https://server.wame.api.br').replace(/\/+$/, '');
     return WAME_BASES_OK.test(base) ? { key: key, base: base } : null;
   } catch (e) { return null; }
+}
+/** A chave cadastrada na Gestão (D1) vale primeiro; o segredo do Worker é o reserva. */
+async function cfgWameStatus_(env) {
+  let guardada = null;
+  try { guardada = await cfgGet(env, 'wame_status_2'); } catch (e) { /* sem D1: cai no segredo */ }
+  return validarConfigWame_(guardada ? JSON.stringify({ key: guardada }) : '') || validarConfigWame_(env.WAME_STATUS_2);
 }
 /** Canais com recibo por mídia (nunca reenviar quando o resultado ficou incerto). */
 function canalComRecibo_(c) { return c === 'grupo' || c === 'whatsapp2'; }
@@ -891,7 +897,7 @@ async function aguardarConfirmacaoWame_(env, p, detalhe) {
   return { ok: true, aguardando: true };
 }
 async function enviarStatusWame_(env, p) {
-  const cfg = cfgWameStatus_(env);
+  const cfg = await cfgWameStatus_(env);
   if (!cfg) return marcarErroPost_(env, p, 'O WhatsApp Status 2 ainda não está configurado. Avise o gestor.');
   let midias = []; try { midias = JSON.parse(p.midias || '[]'); } catch (e) { midias = []; }
   if (!midias.length) return marcarErroPost_(env, p, 'WhatsApp Status 2: a postagem não tem foto nem vídeo.');
@@ -1383,14 +1389,14 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const q = (await env.DB.prepare("SELECT postagem.*, EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id=postagem.id AND g.estado='enviando') AS grupo_envio_incerto FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
     const c = (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM postagem GROUP BY status").all()).results || [];
     const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
-    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), status2Disponivel: !!cfgWameStatus_(env), regras: 1, config: await lerCfgPost(env), uso24h: await uso24hPorCanal_(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
+    return J({ ok: true, posts: q.map(linhaPostagem), contagens: conta, conectado: !!(await cfgGet(env, 'ig_token')), usuario: (await cfgGet(env, 'ig_usuario')) || '', grupoClientesDisponivel: !!cfgGrupoClientes_(env), status2Disponivel: !!(await cfgWameStatus_(env)), regras: 1, config: await lerCfgPost(env), uso24h: await uso24hPorCanal_(env), podeRegras: (perms || []).indexOf('gerir_acessos') !== -1 });
   }
   let b = {}; if (req.method === 'POST') { try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); } }
   if (p === '/post' && req.method === 'POST') {
     const originais = Array.isArray(b.posts) ? b.posts : [b];
     if (!originais.length || originais.length > 12 || originais.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) return J({ ok: false, erro: 'Envie de uma a doze postagens por vez.' }, 400);
     if (originais.some((x) => x.grupoClientes === true || x.canal === 'grupo') && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado. Avise o gestor.' }, 409);
-    if (originais.some((x) => x.status2 === true || x.canal === 'whatsapp2') && !cfgWameStatus_(env)) return J({ ok: false, erro: 'O WhatsApp Status 2 ainda não está configurado. Avise o gestor.' }, 409);
+    if (originais.some((x) => x.status2 === true || x.canal === 'whatsapp2') && !(await cfgWameStatus_(env))) return J({ ok: false, erro: 'O WhatsApp Status 2 ainda não está configurado. Avise o gestor.' }, 409);
     const lista = originais.flatMap((x) => {
       // Story com figurinha de link exige Instagram manual. O Status continua
       // automático e precisa de um recibo próprio para nunca ser reenviado
@@ -1470,7 +1476,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       const v = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: 'sequencia' }));
       if (v.erro) return J({ ok: false, erro: v.erro }, 400);
       if (linha.canal === 'grupo' && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado.' }, 409);
-      if (linha.canal === 'whatsapp2' && !cfgWameStatus_(env)) return J({ ok: false, erro: 'O WhatsApp Status 2 ainda não está configurado.' }, 409);
+      if (linha.canal === 'whatsapp2' && !(await cfgWameStatus_(env))) return J({ ok: false, erro: 'O WhatsApp Status 2 ainda não está configurado.' }, 409);
       if (linha.canal === 'grupo') { const erro = await erroVideoGrupo_(env, v.v.midias); if (erro) return J({ ok: false, erro }, 400); }
       const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
       if (pend >= 200) return J({ ok: false, erro: 'A fila está cheia. Espere algumas postagens saírem.' }, 429);
@@ -2170,6 +2176,21 @@ export default {
         if(!/^api_(?:production|sandbox)_[a-zA-Z0-9._-]{25,200}$/.test(chave))
           return J({ok:false,erro:'Formato de chave FreeConvert inválido.'},400);
         await cfgSet(env,'freeconvert_api_key',chave);
+        return J({ok:true,configurada:true});
+      }
+      if (p === '/post/wame/config' && req.method === 'GET') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        const g=await cfgGet(env,'wame_status_2');
+        return J({ok:true,configurada:!!(await cfgWameStatus_(env)),origem:g?'gestao':validarConfigWame_(env.WAME_STATUS_2)?'worker':'nenhuma'});
+      }
+      if (p === '/post/wame/config' && req.method === 'POST') {
+        if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
+        const dados=await req.json().catch(()=>({}));
+        if(dados.apagar===true){await cfgSet(env,'wame_status_2',null);return J({ok:true,configurada:!!validarConfigWame_(env.WAME_STATUS_2)});}
+        const chave=String(dados.chave||'').trim();
+        if(!/^[A-Za-z0-9._-]{8,200}$/.test(chave))
+          return J({ok:false,erro:'A chave do Wame parece inválida. Cole só a chave da instância, sem espaços nem aspas.'},400);
+        await cfgSet(env,'wame_status_2',chave);
         return J({ok:true,configurada:true});
       }
       if (p.startsWith('/post/freeconvert/')) return await freeconvertRota_(env,req,url,J,h);

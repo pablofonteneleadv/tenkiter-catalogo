@@ -183,5 +183,23 @@ function d1() {
   chk('regras da fila trazem o canal status2 com limites', fila2.config.canais.status2 && fila2.config.canais.status2.max24h === 40, fila2.config && fila2.config.canais);
   const rep = await A('POST', '/post/repostar', { id: (await DB.prepare("SELECT id FROM postagem WHERE canal='whatsapp2' AND status='erro' LIMIT 1").first())?.id || 0, confirmarRisco: true });
   chk('repostar um Status 2 com erro cria cópia com o mesmo canal', rep.r.status === 200 && (await DB.prepare('SELECT canal FROM postagem WHERE id=?').bind(rep.j.id).first()).canal === 'whatsapp2', rep.j);
+  // ---- chave cadastrada pela Gestão (admin) ----
+  const segredo = env.WAME_STATUS_2; delete env.WAME_STATUS_2;
+  let c0 = await A('GET', '/post/wame/config'); chk('sem chave nenhuma: configurada=false, origem nenhuma', c0.j.ok && c0.j.configurada === false && c0.j.origem === 'nenhuma', c0.j);
+  let ruim = await A('POST', '/post/wame/config', { chave: 'curta' }); chk('chave inválida é recusada em português', ruim.r.status === 400 && /inválida/.test(ruim.j.erro), ruim.j);
+  let ruim2 = await A('POST', '/post/wame/config', { chave: '{"key":"x"}' }); chk('JSON colado no lugar da chave é recusado', ruim2.r.status === 400, ruim2.j);
+  const CH = 'CHAVE_GESTAO_WAME_987654';
+  let ok1 = await A('POST', '/post/wame/config', { chave: '  ' + CH + ' ' }); chk('chave válida é guardada (com espaços aparados)', ok1.r.status === 200 && ok1.j.configurada === true, ok1.j);
+  let c1 = await A('GET', '/post/wame/config'); chk('GET diz configurada/gestao e NUNCA devolve a chave', c1.j.configurada === true && c1.j.origem === 'gestao' && !JSON.stringify(c1.j).includes(CH), c1.j);
+  chk('a chave não aparece em /posts', !JSON.stringify((await A('GET', '/posts')).j).includes(CH));
+  chk('/posts passa a informar Status 2 disponível', (await A('GET', '/posts')).j.status2Disponivel === true);
+  const semPerm = await w.fetch(ped('GET', '/post/wame/config', 'tk2.gerente'), env, {}); chk('sem gerir_acessos não lê nem grava', semPerm.status === 403 || semPerm.status === 401);
+  const semPerm2 = await w.fetch(ped('POST', '/post/wame/config', 'tk2.gerente', { chave: CH }), env, {}); chk('gerente não grava a chave', semPerm2.status === 403 || semPerm2.status === 401);
+  const pg = await A('POST', '/post', { tipo: 'story', modo: 'auto', legenda: 'ChaveGestao', midias: [{ url: MEDIA_URL, tipo: 'imagem' }], quando: ts(15), canal: 'whatsapp2' });
+  chk('postagem aceita só com a chave da Gestão (sem segredo do Worker)', pg.r.status === 200, pg.j);
+  env.WAME_STATUS_2 = JSON.stringify({ key: 'CHAVE_SEGREDO_WORKER_1' });
+  chk('chave da Gestão tem prioridade sobre o segredo do Worker', (await A('GET', '/post/wame/config')).j.origem === 'gestao');
+  let ap = await A('POST', '/post/wame/config', { apagar: true }); chk('remover apaga só a da Gestão e o segredo do Worker segue valendo', ap.j.ok && ap.j.configurada === true && (await A('GET', '/post/wame/config')).j.origem === 'worker', ap.j);
+  env.WAME_STATUS_2 = segredo;
   console.log('\nOK=' + ok + ' FALHAS=' + falhas.length, falhas); process.exit(falhas.length ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(2); });

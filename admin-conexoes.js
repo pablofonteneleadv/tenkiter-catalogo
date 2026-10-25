@@ -101,6 +101,7 @@
     desenhar();
     conferir();
     conferirFreeConvert_();
+    conferirWame_();
   }
 
   /* ---------- desenho ---------- */
@@ -187,6 +188,16 @@
       '<button type="button" class="cx-btn cx-perigo" data-cx="fc-apagar">Remover chave</button></div>' +
       '<div id="cx-fc-msg" class="cx-msg" role="status"></div>' +
       '<p class="g-nota">Use uma chave nova; revogue a que foi compartilhada na conversa. A conversão depende da cota disponível na FreeConvert.</p></div>' +
+
+      '<div class="cx-bloco"><h3>💬 WhatsApp Status 2 — chave do Wame</h3>' +
+      '<p class="g-nota">Cole a chave da instância do Wame (WhatsApp 2). Ela liga o envio dos status pelo WhatsApp Status 2. A chave fica guardada no servidor e não volta para a tela.</p>' +
+      '<p id="cx-wm-status" role="status" class="cx-chave-sem">Conferindo chave…</p>' +
+      '<label for="cx-wm-chave">Chave da instância Wame</label>' +
+      '<input type="password" id="cx-wm-chave" autocomplete="new-password" autocapitalize="off" spellcheck="false" placeholder="Cole a chave aqui">' +
+      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="wm-guardar">Salvar chave</button>' +
+      '<button type="button" class="cx-btn cx-perigo" data-cx="wm-apagar">Remover chave</button></div>' +
+      '<div id="cx-wm-msg" class="cx-msg" role="status"></div>' +
+      '<p class="g-nota">Depois de salvar, faça um primeiro teste com uma única postagem de verdade no Status 2.</p></div>' +
 
       blocoChave('cloudflare', 'Cloudflare — token (opcional)',
         'Crie em <b>Cloudflare → Meu perfil → API Tokens → Create Token</b>, modelo <b>Edit Cloudflare Workers</b>, de preferência com data de fim. Aqui serve só para conferir quando o Worker das miniaturas foi publicado.', '') +
@@ -409,11 +420,34 @@
     msg('cx-fc-msg',r.ok?'Chave da Gestão removida.':erroTxt(r),r.ok?'ok':'erro');
     if(r.ok)conferirFreeConvert_();
   }
+  async function conferirWame_(){
+    const el=$('cx-wm-status');if(!el)return;
+    const r=await igWorker_('/post/wame/config','GET');
+    el.textContent=r.ok?(r.configurada?(r.origem==='worker'?'✓ Chave Wame configurada no servidor.':'✓ Chave Wame configurada.'):'Nenhuma chave Wame cadastrada.') : erroTxt(r);
+    el.className=r.ok&&r.configurada?'cx-chave-ok':'cx-chave-sem';
+  }
+  async function guardarWame_(){
+    const campo=$('cx-wm-chave');if(!campo)return;
+    const chave=campo.value.trim();
+    if(!chave)return msg('cx-wm-msg','Cole a chave para salvar.','erro');
+    msg('cx-wm-msg','Salvando…','');
+    const r=await igWorker_('/post/wame/config','POST',{chave});
+    if(r.ok){campo.value='';msg('cx-wm-msg','Chave guardada no servidor.','ok');conferirWame_();}
+    else msg('cx-wm-msg',erroTxt(r),'erro');
+  }
+  async function apagarWame_(){
+    if(!confirm('Remover a chave do Wame guardada na Gestão?'))return;
+    const r=await igWorker_('/post/wame/config','POST',{apagar:true});
+    msg('cx-wm-msg',r.ok?'Chave da Gestão removida.':erroTxt(r),r.ok?'ok':'erro');
+    if(r.ok)conferirWame_();
+  }
   function clique(ev) {
     const b = ev.target.closest('[data-cx]'); if (!b) return;
     const a = b.dataset.cx;
     if (a === 'fc-guardar') guardarFreeConvert_();
     else if (a === 'fc-apagar') apagarFreeConvert_();
+    else if (a === 'wm-guardar') guardarWame_();
+    else if (a === 'wm-apagar') apagarWame_();
     else if (a === 'conferir') conferir();
     else if (a === 'guardar') guardar(b.dataset.nome);
     else if (a === 'apagar') apagar(b.dataset.nome);
