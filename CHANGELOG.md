@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.12.1 — marcador de tutorial reutilizável — 2026-10-25
+
+- Remove a escolha de curso do tipo “Conteúdo dentro de um capítulo”.
+- Permite reutilizar o mesmo código de atividade em qualquer manual e capítulo do Google Docs.
+- Mantém a escolha de curso somente para a parte prática exibida ao final.
+
 ## 7.12.0 — atividades dentro dos capítulos — 2026-10-25
 
 - Permite definir cada tutorial como curso independente, parte prática final ou conteúdo de um capítulo.
