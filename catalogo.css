@@ -707,3 +707,14 @@ html.fx-travado, html.fx-travado body { overflow: hidden; }
 .card-info .preco .avista-n { color: #1a7a1a; font-weight: 800; font-size: 1rem; }
 .card-info .preco .ar { color: #555; font-size: 0.72rem; font-weight: 500; }
 .card-info .preco .cheio { color: #666; font-weight: 500; font-size: 0.74rem; text-decoration: line-through; }
+
+/* v7.5 — alinhamento dos cartões (25/10/2026): na mesma linha todos têm a mesma altura;
+   tamanhos e botões "Selecionar / Consulte" ficam sempre na mesma linha, embaixo,
+   mesmo quando um cartão tem a frase "Você já viu esta peça" e o outro não. */
+.grid { align-items: stretch; }
+.grid .card { display: flex; flex-direction: column; height: 100%; }
+.grid .card .img-wrap { flex: none; }
+.grid .card .card-info { display: flex; flex-direction: column; flex: 1 1 auto; }
+.grid .card .card-info .acoes-card { margin-top: auto; padding-top: 8px; }
+.grid .card .card-info .tam-card { margin-top: auto; }
+.grid .card .card-info .tam-card + .acoes-card { margin-top: 0; }
