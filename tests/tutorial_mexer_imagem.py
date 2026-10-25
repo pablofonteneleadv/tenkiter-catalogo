@@ -52,4 +52,30 @@ with sync_playwright() as p:
     teste.locator("#usar").click()
     page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Tutorial concluído corretamente')")
     browser.close()
+
+# Gravação ANTIGA (sem a etapa de gesto): a imagem continua livre para mexer durante outra etapa, sem acusar erro.
+ANTIGO = {"id": "ant", "titulo": "Antigo", "descricao": "", "pagina": "index.html", "status": "publicado", "versao": 1, "preparacao": [],
+          "etapas": [{"selector": "#usar", "alvoNome": "Usar esta foto", "acao": "click", "regra": "acao", "valor": "",
+                      "instrucao": "Toque em Usar esta foto", "observacao": "", "erro": "Faça exatamente como foi pedido para continuar."}]}
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page(viewport={"width": 390, "height": 844})
+    page.route("**/index.html?tutorial_teste=1", lambda r: r.fulfill(status=200, content_type="text/html", body=TELA))
+    page.goto(BASE + "404.html")
+    page.evaluate("document.body.innerHTML='<div id=\"tut-aluno-slot\"></div>';window.TMV={init:function(){}}")
+    page.add_script_tag(url=BASE + "tutorial-app.js")
+    page.evaluate("""t => { TMV.init({state:()=>({user:{whatsapp:'88',password:'s'}}),
+      submit:async p=>p.action==='tutorial_listar'?{ok:true,tutoriais:[t]}:{ok:true},toast:()=>{}});
+      TKTutorial.montarAluno(); }""", ANTIGO)
+    page.get_by_role("button", name="Começar atividade").click()
+    teste = page.frame_locator("#tt-frame")
+    teste.locator("#usar.tk-tut-alvo").wait_for()
+    b = teste.locator("#enq-cv").bounding_box(); o = page.locator("#tt-frame").bounding_box()
+    x, y = o["x"] + b["x"] + 80, o["y"] + b["y"] + 80
+    page.mouse.move(x, y); page.mouse.down(); page.mouse.move(x + 30, y + 30, steps=4); page.mouse.up()
+    assert "Faça exatamente" not in page.locator("#tt-guia").inner_text(), "mexer na imagem não pode contar como erro"
+    assert "Etapa 1 de 1" in page.locator("#tt-guia").inner_text()
+    teste.locator("#usar").click()
+    page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Tutorial concluído corretamente')")
+    browser.close()
 print("tutorial_mexer_imagem: OK")

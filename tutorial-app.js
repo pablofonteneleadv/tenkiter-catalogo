@@ -294,7 +294,7 @@
     function bloquearOutros(d,el,x){
       limparBloqueio();
       var bloquear=function(ev){
-        var visual=alvoVisual(el,d),dentro=el&&(ev.target===el||el.contains(ev.target)||visual&&(ev.target===visual||visual.contains(ev.target)));if(dentro)return;if(x.acao==='fill'&&ev.type==='pointerdown'&&valida(el,x)){el.blur();ev.preventDefault();ev.stopImmediatePropagation();return;}
+        if(ev.target&&ev.target.closest&&ev.target.closest('[data-tut-interagir]')&&x.acao!=='fill')return;var visual=alvoVisual(el,d),dentro=el&&(ev.target===el||el.contains(ev.target)||visual&&(ev.target===visual||visual.contains(ev.target)));if(dentro)return;if(x.acao==='fill'&&ev.type==='pointerdown'&&valida(el,x)){el.blur();ev.preventDefault();ev.stopImmediatePropagation();return;}
         ev.preventDefault();ev.stopPropagation();ev.stopImmediatePropagation();
         if(ev.type==='click'||ev.type==='pointerdown')erroDeToque(x);if(x.acao==='fill'&&(ev.type==='focusin'||ev.type==='pointerdown'||ev.type==='beforeinput')){el.focus({preventScroll:true});}
       };
