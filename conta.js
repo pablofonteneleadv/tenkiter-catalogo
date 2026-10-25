@@ -66,7 +66,7 @@
     if (document.getElementById('tkconta-css')) return;
     var s = document.createElement('style'); s.id = 'tkconta-css';
     s.textContent =
-      '.tkc-ov{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;padding:0}' +
+      '.tkc-ov{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;padding:0}' +
       '.tkc-ov.aberto{display:flex}' +
       '.tkc-box{background:#fff;color:#111;width:100%;max-width:460px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:20px 18px 26px;font-family:inherit}' +
       '@media(min-width:600px){.tkc-ov{align-items:center}.tkc-box{border-radius:18px}}' +
