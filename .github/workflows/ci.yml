@@ -92,6 +92,8 @@ jobs:
         run: bash scripts/ci/check_js.sh
       - name: Estrutura das páginas HTML
         run: python3 scripts/ci/check_html.py
+      - name: Skill obrigatória de estética humana
+        run: python3 scripts/ci/check_ux_skill.py
       - name: Variáveis dos Workers declaradas (wrangler.toml)
         run: python3 scripts/ci/check_workers.py
       - name: Sintaxe dos scripts de deploy e CI
