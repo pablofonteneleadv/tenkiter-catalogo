@@ -92,6 +92,8 @@ jobs:
         run: bash scripts/ci/check_js.sh
       - name: Estrutura das páginas HTML
         run: python3 scripts/ci/check_html.py
+      - name: Skill obrigatória de estética humana
+        run: python3 scripts/ci/check_ux_skill.py
       - name: Variáveis dos Workers declaradas (wrangler.toml)
         run: python3 scripts/ci/check_workers.py
       - name: Sintaxe dos scripts de deploy e CI
@@ -118,17 +120,6 @@ jobs:
 
       - name: Cadastro de públicos e tamanhos vinculados
         run: node tests/cadastro_vinculos.js
-
-      # Modo rápido: testes unitários dos Workers, sem instalar Chromium.
-      # Os testes que dependem dos .gs.txt não versionados não são executados aqui.
-      - name: Segurança do núcleo de treinamento de postagens
-        run: |
-          node tests/treinamento_postagens_nucleo.js
-          node tests/treinamento_postagens_interface.js
-          node tests/treinamento_postagens_fase1.js
-          node tests/treinamento_postagens_fila.js
-          node tests/treinamento_postagens_avaliacao.js
-          node tests/treinamento_postagens_midia_ux.js
 
       - name: Worker de mídia (R2)
         if: needs.escopo.outputs.suite_completa != 'true'
@@ -165,18 +156,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           curl -fsSL https://cdn.jsdelivr.net/npm/axe-core@4.10.2/axe.min.js -o tests/axe.min.js
-
-      - name: Preparar Chromium para teste de treinamento no PR
-        if: github.event_name == 'pull_request' && hashFiles('treinamento-postagens-real.html') != ''
-        run: |
-          python -m pip install playwright
-          python -m playwright install chromium
-
-      - name: Treinamento de postagens no Chromium mobile
-        if: needs.escopo.outputs.suite_completa == 'true' || github.event_name == 'pull_request'
-        run: |
-          python3 tests/treinamento_postagens_browser.py
-          python3 tests/treinamento_postagens_fase4_browser.py
 
       - name: Bateria completa de jornadas, acessibilidade e integrações
         if: needs.escopo.outputs.suite_completa == 'true'

@@ -11,6 +11,7 @@
 - [ ] Se mexi em backend `.gs`: avisei que o redeploy no Apps Script é **manual**
 - [ ] Se mexi em Worker: conferirei a publicação automática dos três Workers após o merge
 - [ ] Atualizei o `CHANGELOG.md` se a mudança é visível para o usuário
+- [ ] Se alterei interface: apliquei a skill `tenkiter-estetica-humana`, testei 390×844, 412×915 e 1440×900 e registrei colisões/medidas
 
 ## Como testar
 

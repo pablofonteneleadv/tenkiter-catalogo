@@ -6,6 +6,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.11.0 — cursos interativos e híbridos — 2026-10-25
+
+- Substitui as páginas antigas de prática pelo gravador de atividades integrado aos cursos.
+- Permite publicar uma atividade como curso interativo independente ou como parte prática de um manual do Google Docs.
+- Registra conclusão, versão, acertos, correções, duração e data no servidor, com cópia local para resistir a falhas momentâneas de conexão.
+- Mostra relatório de conclusão à gestão e confirmação ao aluno no próprio curso.
+- Guarda o arquivo escolhido durante a gravação e oferece o mesmo arquivo para download durante a atividade.
+- Compacta cartões e espaçamentos da tela de treinamentos para reduzir rolagem no celular.
+- Adiciona a opção desmarcada “Arquivar após cadastrar” para peças criadas apenas em testes.
+
+
 ## 7.3.6 — gravador móvel compacto — 2026-10-24
 
 - Substitui o cabeçalho alto por uma barra compacta de estado e quatro controles, reduzida ainda mais depois que a gravação começa.

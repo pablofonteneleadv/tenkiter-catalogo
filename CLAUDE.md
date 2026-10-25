@@ -21,5 +21,6 @@ O estado atual e as instruções por setor ficam no Cofre privado:
 15. Janelas usam `TKCamadas`; imagens dinâmicas usam `atribSrc`.
 16. Não confunda simulação com validação Android ou integração real.
 17. Registre mudanças, testes, backup, deploy e pendências no log.
+18. Toda mudança visual ou de comportamento da interface passa pela skill `.claude/skills/tenkiter-estetica-humana/SKILL.md`, com revisão mobile/desktop e evidência antes do merge.
 
 [Histórico preservado](https://github.com/pablofonteneleadv/Tenkiter-cofre/blob/main/documentacao/operacao/HISTORICO.md) · [Acessos sem segredos](https://github.com/pablofonteneleadv/Tenkiter-cofre/blob/main/documentacao/operacao/ACESSOS.md)
