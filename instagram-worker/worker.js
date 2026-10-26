@@ -2563,8 +2563,58 @@ async function gravarMensagem_(env, canal, m) {
   /* Em SQLite o lado direito do SET usa os valores ANTIGOS da linha: por isso a comparação com ultima_em/ult_entrada_em vale como "antes desta mensagem". */
   await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=?")
     .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, t, c.id).run();
+  if(!saida && !m.grupo && Date.parse(m.em)>Date.now()-300000){try{await mobileTables_(env);await env.DB.prepare('INSERT OR IGNORE INTO msg_push_outbox(mensagem,conversa,canal,chave,criado) VALUES(?,?,?,?,?)').bind(Number(r.meta.last_row_id),c.id,canal,crypto.randomUUID(),t).run();}catch(_){/* falha de aviso não interrompe o recebimento */}}
   return true;
 }
+/* Android: fila persistente e entrega pelo OneSignal. Nunca contém texto de conversa. */
+async function mobilePushKey_(env){try{return String((await cfgGet(env,'mobile_onesignal_key'))||env.MOBILE_ONESIGNAL_KEY||'');}catch(_){return String(env.MOBILE_ONESIGNAL_KEY||'');}}
+async function mobileTables_(env) {
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS msg_mobile (subscription TEXT PRIMARY KEY, dono TEXT NOT NULL, atualizado TEXT NOT NULL)').run();
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_push_outbox (mensagem INTEGER PRIMARY KEY, conversa INTEGER NOT NULL, canal TEXT NOT NULL, chave TEXT NOT NULL, criado TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'pendente', tentativas INTEGER NOT NULL DEFAULT 0)").run();
+}
+export async function registrarMobile_(env, req) {
+  await mobileTables_(env);
+  const d=await req.json().catch(()=>({})), id=String(d.subscription||'');
+  if(!/^[a-f0-9-]{36}$/i.test(id))return {ok:false,erro:'Identificador do aparelho inválido.'};
+  const dono=(req.headers.get('X-TK-Whats')||'').replace(/\D/g,'');
+  if(req.method==='DELETE'){
+    const existente=await env.DB.prepare('SELECT dono FROM msg_mobile WHERE subscription=?').bind(id).first();
+    if(existente&&existente.dono!==dono)return {ok:false,erro:'Este aparelho está ligado a outra conta.'};
+    await env.DB.prepare('DELETE FROM msg_mobile WHERE subscription=? AND dono=?').bind(id,dono).run();await env.CACHE.delete('mobile-session:'+id);return {ok:true};
+  }
+  await env.DB.prepare('DELETE FROM msg_mobile WHERE atualizado<?').bind(new Date(Date.now()-30*86400000).toISOString()).run();
+  const count=await env.DB.prepare('SELECT COUNT(*) n FROM msg_mobile WHERE dono=? AND subscription<>?').bind(dono,id).first();
+  if(Number(count?.n)>=10)return {ok:false,erro:'Limite de dez aparelhos por conta. Desative um aparelho antes de adicionar outro.'};
+  await env.DB.prepare('INSERT INTO msg_mobile(subscription,dono,atualizado) VALUES(?,?,?) ON CONFLICT(subscription) DO UPDATE SET dono=excluded.dono,atualizado=excluded.atualizado').bind(id,dono,agora()).run();
+  // A sessão fica em KV com expiração e é revalidada antes de qualquer envio.
+  await env.CACHE.put('mobile-session:'+id,JSON.stringify({whats:dono,sessao:req.headers.get('X-TK-Sessao')||''}),{expirationTtl:30*86400});
+  return {ok:true,servidorConfigurado:!!(await mobilePushKey_(env)),renovarEmDias:30};
+}
+export async function processarPushMobile_(env) {
+  const pushKey=await mobilePushKey_(env);if(!pushKey)return {ok:false,motivo:'sem_configuracao'};
+  await mobileTables_(env);
+  const fila=(await env.DB.prepare("SELECT * FROM msg_push_outbox WHERE estado='pendente' AND tentativas<5 ORDER BY mensagem LIMIT 10").all()).results||[];
+  const devices=(await env.DB.prepare('SELECT subscription FROM msg_mobile ORDER BY atualizado DESC LIMIT 20').all()).results||[],ids=[];
+  for(const dev of devices){
+    const cred=await env.CACHE.get('mobile-session:'+dev.subscription,'json');if(!cred)continue;
+    const perms=await permissoes(env,new Request('https://sessao.invalid',{headers:{'X-TK-Whats':cred.whats,'X-TK-Sessao':cred.sessao}}));
+    if(Array.isArray(perms)&&perms.includes('gerir_acessos'))ids.push(dev.subscription);
+  }
+  let enviadas=0;
+  for(const item of fila){
+    if(Date.parse(item.criado)<Date.now()-3600000){await env.DB.prepare("UPDATE msg_push_outbox SET estado='expirada' WHERE mensagem=?").bind(item.mensagem).run();continue;}
+    if(!ids.length)continue;
+    try{
+      const r=await fetch('https://api.onesignal.com/notifications',{method:'POST',signal:AbortSignal.timeout(10000),headers:{'Content-Type':'application/json','Authorization':'Key '+pushKey},body:JSON.stringify({app_id:'535f6b0d-c866-43c2-b241-43bd7ab62fae',target_channel:'push',include_subscription_ids:ids,idempotency_key:item.chave,headings:{en:'TENKiTER · Nova mensagem',pt:'TENKiTER · Nova mensagem'},contents:{en:'Abra o aplicativo para responder.',pt:'Abra o aplicativo para responder.'},data:{conversa:item.conversa,canal:item.canal},collapse_id:'conversa-'+item.conversa,ttl:3600})});
+      const j=await r.json();
+      if(r.ok&&j.id){await env.DB.prepare("UPDATE msg_push_outbox SET estado='enviada' WHERE mensagem=?").bind(item.mensagem).run();enviadas++;}
+      else await env.DB.prepare('UPDATE msg_push_outbox SET tentativas=tentativas+1 WHERE mensagem=?').bind(item.mensagem).run();
+    }catch(_){await env.DB.prepare('UPDATE msg_push_outbox SET tentativas=tentativas+1 WHERE mensagem=?').bind(item.mensagem).run();}
+  }
+  await env.DB.prepare("DELETE FROM msg_push_outbox WHERE criado<?").bind(new Date(Date.now()-7*86400000).toISOString()).run();
+  return {ok:true,enviadas};
+}
+
 /** Segredo do app da Meta: o cadastrado na Gestão (D1) vale primeiro; o secret do Worker é o reserva. */
 async function igAppSecret_(env) {
   try { const v = await cfgGet(env, 'ig_app_secret'); if (v) return v; } catch (e) { /* cai no secret */ }
@@ -3046,6 +3096,7 @@ async function metricasMensagens_(env, canal, dias) {
 }
 export default {
   async scheduled(ev, env, ctx) {
+    ctx.waitUntil(processarPushMobile_(env).catch(()=>{}));
     ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
     ctx.waitUntil(processarFotoIA(env));                                      // a cada minuto: 1 imagem da fila de Fotos com IA (se já puder: cota/limite do dia)
     const min = ev && ev.scheduledTime ? new Date(ev.scheduledTime).getUTCMinutes() : 0;
@@ -3107,6 +3158,14 @@ export default {
         } catch (e) { return J({ ok: false, erro: 'Sem resposta da Meta agora. Tente de novo.' }, 409); }
         return J({ ok: true });
       }
+      if(p==='/msg/mobile/config'&&req.method==='GET')return J({ok:true,configurada:!!(await mobilePushKey_(env))});
+      if(p==='/msg/mobile/config'&&req.method==='POST'){
+        const d=await req.json().catch(()=>({}));if(d.apagar===true){await cfgSet(env,'mobile_onesignal_key',null);return J({ok:true,configurada:!!env.MOBILE_ONESIGNAL_KEY});}
+        const key=String(d.chave||'').trim();if(key.length<20||key.length>500||/\s/.test(key))return J({ok:false,erro:'Cole a App API Key completa do OneSignal.'},400);
+        try{const r=await fetch('https://api.onesignal.com/notifications?app_id=535f6b0d-c866-43c2-b241-43bd7ab62fae&limit=1',{headers:{Authorization:'Key '+key},signal:AbortSignal.timeout(10000)});if(r.body)await r.body.cancel();if(!r.ok)return J({ok:false,erro:'O OneSignal recusou essa chave. Use a App API Key do aplicativo da TENKiTER.'},400);}catch(_){return J({ok:false,erro:'Não foi possível conferir com o OneSignal agora.'},502);}
+        await cfgSet(env,'mobile_onesignal_key',key);return J({ok:true,configurada:true});
+      }
+      if(p==='/msg/mobile/subscription' && ['POST','DELETE'].includes(req.method)) return J(await registrarMobile_(env,req));
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {
         const canal = url.searchParams.get('canal') || '', busca = String(url.searchParams.get('busca') || '').trim().slice(0, 60), antes = url.searchParams.get('antes') || '', filtro = url.searchParams.get('filtro') || '';

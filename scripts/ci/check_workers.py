@@ -35,6 +35,7 @@ BINDINGS = {
 # Variaveis que o codigo le mas que NAO precisam estar no wrangler.toml:
 # sao opcionais por desenho (o codigo tem valor padrao) ou sao secrets.
 OPCIONAIS = {
+    "MOBILE_ONESIGNAL_KEY", # chave privada OneSignal para avisos Android; opcional, nunca publicar em vars.
     "IG_BASE",        # opcional: cai em IG_BASE_PADRAO
     "LIMITE_BYTES",   # opcional: cai em LIMITE_PADRAO
     # Binding KV opcional do og-worker: sem ele o Worker faz fetch direto e

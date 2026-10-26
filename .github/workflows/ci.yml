@@ -121,6 +121,12 @@ jobs:
       - name: Cadastro de públicos e tamanhos vinculados
         run: node tests/cadastro_vinculos.js
 
+      - name: Registro e fila de avisos Android
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node tests/worker_mobile_push.js
+
       - name: Worker de mídia (R2)
         if: needs.escopo.outputs.suite_completa != 'true'
         run: node tests/worker_midia.js

@@ -415,3 +415,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 ### Notas
 - Os backends `.gs` continuam fora do repositório (por segurança) e seguem com deploy manual
   no Apps Script — ver `docs/CI-CD.md`.
+
+## 7.30.0 — APK de atendimento e preparação de push Android — 2026-10-26
+
+- Adiciona app Android TENKiTER Mensagens (Kotlin, WebView, OneSignal nativo) com site separado no navegador, anexos, áudio autorizado e logout.
+- Modo app abre diretamente a caixa de mensagens após login autorizado.
+- Adiciona registro de aparelho, fila persistente de avisos individuais e configuração da App API Key em Conexões.
+- Notificações reais dependem da configuração Firebase/FCM no OneSignal pelo proprietário. Homologação Android física pendente.
