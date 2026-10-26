@@ -8,7 +8,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## 7.16.0 — copiar de outra peça, ordem alfabética e filtros — 2026-10-26
 
-- Cadastro, passo 3: as peças parecidas aparecem com foto, código, preço e situação; "Ver todas" abre a tela cheia "Copiar de outra peça" com busca por nome ou código, filtro Todas/Ativas/Arquivadas e fotos. Ao escolher, cada informação tem caixinha: copia só o que ficar marcado. "Editar esta peça" continua lá.
+- Cadastro, passo 3: botão "Copiar dados de outra peça" sempre à vista e as 3 parecidas com foto embaixo do nome. A tela cheia "Escolher peça para copiar" abre nos últimos cadastrados, com busca por nome ou código, filtros de situação, público e categoria (com contagem), ordem (mais recentes/A–Z) e fotos grandes. Tocar na peça copia todos os dados dela, com Desfazer; ✎ abre a peça para editar.
 - Cores e categorias em ordem alfabética no cadastro (também depois de criar uma opção nova; "Consulte…" por último) e gravadas assim na peça.
 - Loja: Tamanho e Cor já abrem expandidos nos filtros; filtros em ordem A→Z de verdade; Blusa/Conjunto/Short/Vestido não somem mais do menu.
 - Loja: fechar a peça com o botão voltar não leva mais a lista ao topo; botões da barra de seleção com 44 px numa linha.

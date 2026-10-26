@@ -103,58 +103,50 @@
   .sug-copiar .sug-dica { flex: 0 0 auto; font-size: 0.7rem; font-weight: 700; color: #666; }
   .sug-acao { flex: 0 0 auto; width: auto; min-width: 48px; background: #f4f4f4; color: #333; border-radius: 0; padding: 0 12px; font-size: 0.8rem; font-weight: 700; border-left: 1px solid #eee; }
   .sug-aviso { font-size: 0.8rem; color: #6b4300; background: #fff6e5; border-radius: 8px; padding: 8px 10px; margin-top: 6px; }
-  /* v7.16: peças parecidas com foto + "Copiar de outra peça" em tela cheia */
+  /* v7.16: peças parecidas com foto + "Escolher peça para copiar" em tela cheia */
+  .cp-abrir { width: 100%; min-height: 44px; margin: 8px 0 0; background: #fff; color: #141414; border: 1px dashed #c9bfa8; border-radius: 10px; font-size: 0.88rem; font-weight: 700; }
   .sug-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 6px; }
   .sug-cab .sug-titulo { margin: 0; }
   .sug-ver-todas { width: auto; min-height: 40px; padding: 0 10px; background: none; color: var(--laranja-txt); font-size: 0.82rem; font-weight: 700; border-radius: 8px; white-space: nowrap; }
-  .sug-peca { width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; background: #fff; border: 0; border-bottom: 1px solid #f0ece4; border-radius: 0; text-align: left; color: #141414; font-weight: 600; font-size: 0.88rem; min-height: 64px; }
-  .sug-peca:last-child { border-bottom: 0; }
-  .sug-peca img, .cp-item img { width: 44px; height: 55px; object-fit: cover; border-radius: 6px; background: #eee8de; display: block; }
-  .sug-peca .sug-sem-foto, .cp-item .sug-sem-foto { width: 44px; height: 55px; border-radius: 6px; background: #eee8de; display: block; }
-  .sug-peca small, .cp-item small { display: block; font-weight: 400; color: #625c53; font-size: 0.75rem; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sug-peca .sug-seta { color: #625c53; font-size: 1.2rem; font-weight: 400; }
+  .sug-cartoes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .sug-cartao { width: 100%; padding: 0; background: #fff; border: 1px solid #e3ddd3; border-radius: 10px; overflow: hidden; text-align: left; color: #141414; display: flex; flex-direction: column; }
+  .sug-cartao img, .sug-cartao .sug-sem-foto { width: 100%; aspect-ratio: 3 / 4; height: auto; object-fit: cover; background: #eee8de; display: block; }
+  .sug-cartao span { display: block; padding: 5px 7px 0; font-size: 0.76rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+  .sug-cartao small { display: block; padding: 1px 7px 7px; font-size: 0.7rem; color: #625c53; }
   .cp-overlay { align-items: stretch; }
-  #overlay-copiar .cp-sheet { position: relative; width: 100%; max-width: 640px; height: 100%; max-height: none; margin: 0 auto; border-radius: 0; padding: 0; animation: none; transform: none; }
-  .cp-sheet { width: 100%; max-width: 640px; height: 100%; max-height: 100dvh; margin: 0 auto; border-radius: 0; display: flex; flex-direction: column; background: #f6f3ee; padding: 0; overflow: hidden; }
-  .cp-topo { display: grid; grid-template-columns: 76px 1fr 76px; align-items: center; min-height: 56px; padding: env(safe-area-inset-top, 0px) 6px 0; background: #fff; border-bottom: 1px solid #e3ddd3; }
-  .cp-topo strong { grid-column: 2; text-align: center; font-size: 0.98rem; line-height: 1.2; }
-  .cp-voltar { grid-column: 1; } .cp-fechar { grid-column: 3; }
-  .cp-voltar, .cp-fechar { width: auto; min-height: 44px; min-width: 44px; background: none; color: #141414; font-size: 0.9rem; font-weight: 600; border-radius: 8px; padding: 0 10px; }
-  .cp-voltar { justify-self: start; } .cp-fechar { justify-self: end; font-size: 1.1rem; }
-  .cp-lista-tela, .cp-detalhe-tela { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-  .cp-lista-tela[hidden], .cp-detalhe-tela[hidden] { display: none; }
-  .cp-busca { padding: 10px 12px 6px; }
-  .cp-busca input { width: 100%; min-height: 46px; border: 1px solid #e3ddd3; border-radius: 8px; padding: 0 12px; font-size: 1rem; background: #fff; }
-  .cp-filtros { display: flex; align-items: center; gap: 6px; padding: 0 12px 8px; flex-wrap: wrap; }
-  .cp-filtro { width: auto; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid #e3ddd3; background: #fff; color: #141414; font-size: 0.82rem; font-weight: 600; }
-  .cp-filtro[aria-pressed="true"] { background: #141414; border-color: #141414; color: #fff; }
-  .cp-cont { margin-left: auto; font-size: 0.8rem; color: #625c53; }
-  .cp-lista { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 12px 16px; overscroll-behavior: contain; }
-  .cp-item { width: 100%; display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px; margin: 0 0 8px; background: #fff; border: 1px solid #e3ddd3; border-radius: 8px; text-align: left; color: #141414; font-weight: 600; font-size: 0.92rem; }
-  .cp-item img, .cp-item .sug-sem-foto { width: 56px; height: 70px; }
-  .cp-situ { font-size: 0.7rem; font-weight: 700; padding: 3px 7px; border-radius: 4px; background: #f1ede6; color: #625c53; white-space: nowrap; }
-  .cp-situ.arq { background: #fde8e6; color: #9b1c14; }
-  .cp-vazio { padding: 24px 8px; text-align: center; color: #625c53; font-size: 0.9rem; }
-  .cp-detalhe { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 12px 16px; overscroll-behavior: contain; }
-  .cp-fotos { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 10px; scrollbar-width: none; }
-  .cp-fotos img { flex: none; width: 120px; height: 150px; object-fit: cover; border-radius: 8px; background: #eee8de; }
-  .cp-det-nome { font-size: 1.05rem; font-weight: 700; margin: 0 0 2px; }
-  .cp-det-meta { font-size: 0.8rem; color: #625c53; margin: 0 0 12px; }
-  .cp-escolha { background: #fff; border: 1px solid #e3ddd3; border-radius: 8px; overflow: hidden; }
-  .cp-escolha-topo { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #f0ece4; font-size: 0.82rem; font-weight: 700; color: #141414; }
-  .cp-escolha-topo button { width: auto; min-height: 36px; padding: 0 8px; background: none; color: var(--laranja-txt); font-size: 0.8rem; font-weight: 700; border-radius: 6px; }
-  .cp-campo { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 12px; border-bottom: 1px solid #f0ece4; cursor: pointer; min-height: 48px; }
-  .cp-campo:last-child { border-bottom: 0; }
-  .cp-campo input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: #141414; }
-  .cp-campo b { display: block; font-size: 0.85rem; }
-  .cp-campo span { display: block; font-size: 0.82rem; color: #3a3631; overflow-wrap: anywhere; margin-top: 1px; }
-  .cp-campo.desligado { opacity: 0.5; cursor: default; }
-  .cp-nota { font-size: 0.78rem; color: #6b4300; background: #fff6e5; border-radius: 8px; padding: 8px 10px; margin: 0 0 10px; }
-  .cp-rodape { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); background: #fff; border-top: 1px solid #e3ddd3; }
-  .cp-editar { min-height: 50px; background: #fff; color: #141414; border: 1px solid #141414; border-radius: 8px; font-weight: 700; font-size: 0.9rem; }
-  .cp-copiar { min-height: 50px; background: var(--laranja); color: #0d0d0d; border-radius: 8px; font-weight: 800; font-size: 0.95rem; }
-  .cp-copiar:disabled { opacity: 0.5; }
-  .sug-peca:focus-visible, .cp-item:focus-visible, .cp-filtro:focus-visible, .sug-ver-todas:focus-visible { outline: 3px solid var(--laranja); outline-offset: -3px; }
+  #overlay-copiar .cp-sheet { position: relative; width: 100%; max-width: 900px; height: 100%; max-height: none; margin: 0 auto; border-radius: 0; padding: 0; animation: none; transform: none; display: flex; flex-direction: column; background: #f6f3ee; overflow: hidden; }
+  .cp-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 56px; padding: env(safe-area-inset-top, 0px) 6px 0 16px; background: #fff; border-bottom: 1px solid #e3ddd3; }
+  .cp-topo strong { font-size: 1.02rem; }
+  .cp-fechar { width: auto; min-height: 44px; min-width: 44px; background: none; color: #141414; font-size: 1.15rem; border-radius: 8px; }
+  .cp-ferramentas { background: #fff; padding: 10px 12px 4px; border-bottom: 1px solid #e3ddd3; display: grid; gap: 8px; }
+  .cp-ferramentas input { width: 100%; min-height: 46px; border: 1px solid #e3ddd3; border-radius: 8px; padding: 0 12px; font-size: 1rem; background: #fff; }
+  .cp-linha { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 6px; align-items: center; }
+  .cp-linha::-webkit-scrollbar { display: none; }
+  .cp-linha:empty { display: none; }
+  .cp-chip { flex: none; width: auto; min-height: 38px; padding: 0 12px; border-radius: 999px; border: 1px solid #e3ddd3; background: #fff; color: #141414; font-size: 0.82rem; font-weight: 600; white-space: nowrap; }
+  .cp-chip[aria-pressed="true"] { background: #141414; border-color: #141414; color: #fff; }
+  .cp-chip small { font-weight: 500; opacity: 0.75; margin-left: 3px; }
+  .cp-sep { flex: none; width: 1px; height: 24px; background: #e3ddd3; margin: 0 2px; }
+  .cp-resultado { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .cp-cab { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 8px; font-size: 0.85rem; font-weight: 700; color: #141414; }
+  .cp-cab #cp-cont { font-weight: 500; color: #625c53; font-size: 0.8rem; }
+  .cp-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  @media (min-width: 600px) { .cp-grade { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (min-width: 860px) { .cp-grade { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .cp-card { position: relative; background: #fff; border: 1px solid #e3ddd3; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+  .cp-usar { width: 100%; padding: 0; background: none; border: 0; border-radius: 0; text-align: left; color: #141414; display: flex; flex-direction: column; flex: 1 1 auto; }
+  .cp-usar img, .cp-usar .sug-sem-foto { width: 100%; aspect-ratio: 3 / 4; height: auto; object-fit: cover; background: #eee8de; display: block; }
+  .cp-usar .cp-nome { display: block; padding: 7px 9px 0; font-size: 0.86rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+  .cp-usar .cp-meta { display: block; padding: 2px 9px 0; font-size: 0.75rem; color: #625c53; }
+  .cp-usar .cp-meta b { color: #141414; font-weight: 700; }
+  .cp-usar .cp-extra { display: block; padding: 1px 9px 9px; font-size: 0.72rem; color: #625c53; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cp-usar .cp-acao { display: block; margin: auto 9px 9px; min-height: 36px; line-height: 36px; text-align: center; border-radius: 8px; background: var(--laranja); color: #0d0d0d; font-size: 0.8rem; font-weight: 800; }
+  .cp-situ { position: absolute; left: 6px; top: 6px; font-size: 0.68rem; font-weight: 800; padding: 3px 7px; border-radius: 4px; background: #fff; color: #9b1c14; text-transform: uppercase; letter-spacing: 0.04em; }
+  .cp-ed { position: absolute; right: 4px; top: 4px; width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.94) 17px, transparent 18px); color: #141414; font-size: 1rem; }
+  .cp-vazio { grid-column: 1 / -1; padding: 24px 8px; text-align: center; color: #625c53; font-size: 0.9rem; }
+  .cp-mais { grid-column: 1 / -1; min-height: 46px; background: #fff; color: #141414; border: 1px solid #e3ddd3; border-radius: 8px; font-weight: 700; }
+  .aviso-desfazer { width: auto; min-height: 36px; margin-left: 8px; padding: 0 12px; background: #fff; color: #6b4300; border: 1px solid #e6c88f; border-radius: 8px; font-weight: 700; font-size: 0.8rem; }
+  .cp-abrir:focus-visible, .sug-cartao:focus-visible, .cp-usar:focus-visible, .cp-chip:focus-visible, .cp-ed:focus-visible, .sug-ver-todas:focus-visible { outline: 3px solid var(--laranja); outline-offset: -3px; }
   /* linha da lista de categorias: nome + (só Admin total) ✎ corrigir e × apagar */
   .cat-linha { display: flex; align-items: stretch; border-bottom: 1px solid #f0f0f0; }
   .cat-linha:last-child { border-bottom: none; }
@@ -1137,6 +1129,7 @@
           <button type="button" class="btn-seo-ia" id="btn-foto-ia">✨ Gerar com IA <small>Título e descrição</small></button>
         </div>
         <div id="foto-ia-box"></div>
+        <button type="button" class="cp-abrir" id="cp-abrir">Copiar dados de outra peça</button>
         <div id="nome-sugestoes" aria-live="polite"></div>
       <div id="aviso-copiado" class="sug-aviso" role="status" hidden></div>
         <div class="passo-msg">Escreva o nome da peça.</div>
@@ -1300,30 +1293,30 @@
     </div>
   </div>
 
-  <!-- v7.16: "Copiar de outra peça" em tela cheia (passo 3 do cadastro): busca, fotos, escolher o que copiar -->
+  <!-- v7.16: "Escolher peça para copiar" em tela cheia (passo 3 do cadastro): últimos cadastrados, busca, filtros e fotos grandes.
+       Tocar na peça copia todos os dados dela (com Desfazer); ✎ abre a peça para editar. -->
   <div class="overlay-sheet cp-overlay" id="overlay-copiar">
     <div class="sheet cp-sheet" role="dialog" aria-modal="true" aria-labelledby="cp-titulo">
       <div class="cp-topo">
-        <button type="button" class="cp-voltar" id="cp-voltar" hidden aria-label="Voltar à lista">‹ Lista</button>
-        <strong id="cp-titulo">Copiar de outra peça</strong>
+        <strong id="cp-titulo">Escolher peça para copiar</strong>
         <button type="button" class="cp-fechar" id="cp-fechar" aria-label="Fechar">✕</button>
       </div>
-      <div class="cp-lista-tela" id="cp-lista-tela">
-        <div class="cp-busca"><input type="search" id="cp-busca" placeholder="Nome ou código da peça" autocomplete="off" lang="pt-BR" aria-label="Buscar peça por nome ou código"></div>
-        <div class="cp-filtros" role="group" aria-label="Mostrar">
-          <button type="button" class="cp-filtro" data-cp-filtro="todas" aria-pressed="true">Todas</button>
-          <button type="button" class="cp-filtro" data-cp-filtro="ativas" aria-pressed="false">Ativas</button>
-          <button type="button" class="cp-filtro" data-cp-filtro="arquivadas" aria-pressed="false">Arquivadas</button>
-          <span class="cp-cont" id="cp-cont" aria-live="polite"></span>
+      <div class="cp-ferramentas">
+        <input type="search" id="cp-busca" placeholder="Buscar por nome ou código (ex.: TK-0555)" autocomplete="off" lang="pt-BR" aria-label="Buscar peça por nome ou código">
+        <div class="cp-linha" role="group" aria-label="Situação e ordem">
+          <button type="button" class="cp-chip" data-cp-situ="ativas" aria-pressed="true">Ativas</button>
+          <button type="button" class="cp-chip" data-cp-situ="arquivadas" aria-pressed="false">Arquivadas</button>
+          <button type="button" class="cp-chip" data-cp-situ="todas" aria-pressed="false">Todas</button>
+          <span class="cp-sep" aria-hidden="true"></span>
+          <button type="button" class="cp-chip" data-cp-ordem="recentes" aria-pressed="true">Mais recentes</button>
+          <button type="button" class="cp-chip" data-cp-ordem="az" aria-pressed="false">A–Z</button>
         </div>
-        <div class="cp-lista" id="cp-lista"></div>
+        <div class="cp-linha" id="cp-generos" role="group" aria-label="Para quem é"></div>
+        <div class="cp-linha" id="cp-categorias" role="group" aria-label="Categoria"></div>
       </div>
-      <div class="cp-detalhe-tela" id="cp-detalhe-tela" hidden>
-        <div class="cp-detalhe" id="cp-detalhe"></div>
-        <div class="cp-rodape">
-          <button type="button" class="cp-editar" id="cp-editar">✎ Editar esta peça</button>
-          <button type="button" class="cp-copiar" id="cp-copiar">Copiar</button>
-        </div>
+      <div class="cp-resultado">
+        <div class="cp-cab"><span id="cp-rotulo">Últimos cadastrados</span><span id="cp-cont" aria-live="polite"></span></div>
+        <div class="cp-grade" id="cp-grade"></div>
       </div>
     </div>
   </div>
@@ -2651,145 +2644,144 @@
     return produtos.filter(p => String(p.ID) !== String(idAtual || '') && palavras.every(w => semAcento_(p.Nome).indexOf(w) !== -1))
       .sort((a, b) => comeca(a) - comeca(b) || String(a.Nome).localeCompare(String(b.Nome), 'pt-BR')).slice(0, 6);
   }
-  /* v7.16 — peças parecidas com foto embaixo do nome (as 3 primeiras) e "Copiar de outra peça" em tela cheia:
-     busca por nome/código, filtro de situação, fotos e a escolha do que copiar (antes "copiar" trazia tudo sem mostrar o quê). */
-  const fotoPeca_ = (p, w) => p && p.Foto_URL ? '<img ' + atribSrc(fotoMini(p.Foto_URL, w || 160)) + ' alt="" loading="lazy" decoding="async">' : '<span class="sug-sem-foto" aria-hidden="true"></span>';
+  /* v7.16 — achar a peça de onde copiar (pedido do Pablo): parecidas com foto embaixo do nome e a tela cheia
+     "Escolher peça para copiar" com os últimos cadastrados, busca por nome/código, filtros (situação, para quem, categoria),
+     ordem e fotos grandes. Tocar na peça copia TODOS os dados dela (menos código, fotos e vídeos), com Desfazer; ✎ abre para editar. */
+  const fotoPeca_ = (p, w) => p && p.Foto_URL ? '<img ' + atribSrc(fotoMini(p.Foto_URL, w || 240)) + ' alt="" loading="lazy" decoding="async">' : '<span class="sug-sem-foto" aria-hidden="true"></span>';
   const situPeca_ = (p) => ehInativo_(p) ? 'arquivada' : (estaEsgotado(p) ? 'esgotada' : '');
   const precoPeca_ = (p) => p.Preco !== '' && p.Preco != null && !(Number(p.Preco) > 0) ? 'Consultar valor' : (Number(p.Preco) > 0 ? formatarReal(p.Preco) : '');
+  const recencia_ = (p) => { const n = Number(p.ID); return isFinite(n) ? n : 0; };   // o ID é a hora do cadastro
+  const tags_ = (v) => String(v || '').split(',').map(x => x.trim()).filter(Boolean);
+  function casaTexto_(p, texto) {
+    const t = semAcento_(texto); if (!t) return true;
+    const palavras = t.split(/\s+/).filter(Boolean), nome = semAcento_(p.Nome);
+    return palavras.every(w => nome.indexOf(w) !== -1) || semAcento_(p.Codigo).indexOf(t.replace(/\s+/g, '')) !== -1;
+  }
   function atualizarSugestoesNome_() {
     const box = document.getElementById('nome-sugestoes');
-    const texto = document.getElementById('nome').value;
-    const todas = nomeSugCopiado_ === texto ? [] : buscarPecasParaCopiar_(texto, document.getElementById('produto-id').value, 'todas');
+    const texto = document.getElementById('nome').value, idAtual = document.getElementById('produto-id').value;
+    if (nomeSugCopiado_ === texto || semAcento_(texto).length < 2) { box.innerHTML = ''; return; }
+    const t = semAcento_(texto), comeca = (p) => semAcento_(p.Nome).indexOf(t) === 0 ? 0 : 1;
+    const todas = produtos.filter(p => String(p.ID) !== String(idAtual || '') && casaTexto_(p, texto))
+      .sort((a, b) => comeca(a) - comeca(b) || recencia_(b) - recencia_(a));
     if (!todas.length) { box.innerHTML = ''; return; }
-    const igual = todas.find(p => semAcento_(p.Nome) === semAcento_(texto));
-    box.innerHTML = (igual ? '<div class="sug-aviso">⚠️ Já existe uma peça com esse nome' + (igual.Codigo ? ' (' + escaparHtml(igual.Codigo) + ')' : '') + '. Se for outra peça, pode continuar; se queria mexer nela, toque nela e em “Editar esta peça”.</div>' : '')
-      + '<div class="sug-cab"><div class="sug-titulo">Parecidas já cadastradas — toque para ver e copiar dados</div>'
-      + '<button type="button" class="sug-ver-todas" data-copiar-todas="1">Ver todas (' + todas.length + ') ›</button></div><div class="sug-lista">'
-      + todas.slice(0, 3).map(p => {
-        const meta = [p.Codigo, precoPeca_(p), situPeca_(p)].filter(Boolean).join(' · ');
-        return '<button type="button" class="sug-peca" data-peca-ver="' + escaparHtml(p.ID) + '" aria-label="Ver ' + escaparHtml(p.Nome) + ' para copiar ou editar">' + fotoPeca_(p, 120)
-          + '<span><span class="sug-nome">' + escaparHtml(p.Nome) + '</span>' + (meta ? '<small>' + escaparHtml(meta) + '</small>' : '') + '</span><span class="sug-seta" aria-hidden="true">›</span></button>';
-      }).join('') + '</div>';
+    const igual = todas.find(p => semAcento_(p.Nome) === t);
+    box.innerHTML = (igual ? '<div class="sug-aviso">⚠️ Já existe uma peça com esse nome' + (igual.Codigo ? ' (' + escaparHtml(igual.Codigo) + ')' : '') + '. Se for outra peça, pode continuar; se queria mexer nela, abra "Ver todas" e toque no ✎.</div>' : '')
+      + '<div class="sug-cab"><div class="sug-titulo">Parecidas — toque na foto para copiar os dados</div>'
+      + '<button type="button" class="sug-ver-todas" data-copiar-todas="1">Ver todas (' + todas.length + ') ›</button></div><div class="sug-cartoes">'
+      + todas.slice(0, 3).map(p => '<button type="button" class="sug-cartao" data-peca-usar="' + escaparHtml(p.ID) + '" aria-label="Copiar os dados de ' + escaparHtml(p.Nome) + '">' + fotoPeca_(p, 200)
+        + '<span>' + escaparHtml(p.Nome) + '</span><small>' + escaparHtml([p.Codigo, precoPeca_(p), situPeca_(p)].filter(Boolean).join(' · ')) + '</small></button>').join('') + '</div>';
   }
-  /** Peças para copiar: todas as palavras no nome OU o código; as que começam igual vêm primeiro. Filtro: todas | ativas | arquivadas. */
-  function buscarPecasParaCopiar_(texto, idAtual, filtro) {
-    const t = semAcento_(texto), palavras = t.split(/\s+/).filter(Boolean);
-    if (t.length < 2) return filtro && texto === '' ? produtos.filter(p => String(p.ID) !== String(idAtual || '')).filter(p => filtroOk_(p, filtro)).slice(0, 80) : [];
-    const comeca = (p) => semAcento_(p.Nome).indexOf(t) === 0 ? 0 : 1;
-    return produtos.filter(p => String(p.ID) !== String(idAtual || '') && filtroOk_(p, filtro) &&
-        (palavras.every(w => semAcento_(p.Nome).indexOf(w) !== -1) || semAcento_(p.Codigo).indexOf(t) !== -1))
-      .sort((a, b) => comeca(a) - comeca(b) || String(a.Nome).localeCompare(String(b.Nome), 'pt-BR')).slice(0, 80);
-  }
-  function filtroOk_(p, filtro) { return filtro === 'ativas' ? !ehInativo_(p) : filtro === 'arquivadas' ? ehInativo_(p) : true; }
 
   // ---------- tela cheia
-  let cpFiltro_ = 'todas', cpPeca_ = null;
-  const CP_CAMPOS_ = [
-    ['nome', 'Nome', p => p.Nome],
-    ['preco', 'Preço', p => precoPeca_(p)],
-    ['categoria', 'Categoria', p => p.Categoria],
-    ['genero', 'Para quem é', p => p.Genero],
-    ['tamanhos', 'Tamanhos', p => textoPlano(p.Tamanhos)],
-    ['cores', 'Cores', p => textoPlano(p.Cores)],
-    ['descricao', 'Descrição', p => p.Descricao],
-    ['estoque', 'Quantidade', p => p.Estoque === '' || p.Estoque == null ? '' : String(p.Estoque)],
-    ['novidade', 'Novidade', p => ehNovidade(p) ? 'Sim' : '']
-  ];
-  function abrirCopiar_(idPeca) {
+  const cp_ = { situ: 'ativas', ordem: 'recentes', gen: '', cat: '', lim: 40 };
+  function abrirCopiar_(texto) {
     const busca = document.getElementById('cp-busca');
-    busca.value = document.getElementById('nome').value.trim();
+    busca.value = texto || '';
+    cp_.gen = ''; cp_.cat = ''; cp_.lim = 40;
     abrirComHistorico_('overlay-copiar');
-    if (idPeca) mostrarPecaCopiar_(idPeca); else { mostrarListaCopiar_(); setTimeout(() => { try { busca.focus({ preventScroll: true }); } catch (e) {} }, 60); }
+    pintarCopiar_();
+    document.querySelector('#overlay-copiar .cp-resultado').scrollTop = 0;
   }
-  function mostrarListaCopiar_() {
-    cpPeca_ = null;
-    document.getElementById('cp-lista-tela').hidden = false; document.getElementById('cp-detalhe-tela').hidden = true;
-    document.getElementById('cp-voltar').hidden = true; document.getElementById('cp-titulo').textContent = 'Copiar de outra peça';
-    const lista = buscarPecasParaCopiar_(document.getElementById('cp-busca').value, document.getElementById('produto-id').value, cpFiltro_);
-    document.getElementById('cp-cont').textContent = lista.length === 80 ? '80+ peças' : lista.length + (lista.length === 1 ? ' peça' : ' peças');
-    document.querySelectorAll('[data-cp-filtro]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cpFiltro === cpFiltro_)));
-    document.getElementById('cp-lista').innerHTML = lista.length ? lista.map(p => {
-      const meta = [p.Codigo, precoPeca_(p)].filter(Boolean).join(' · '), extra = [p.Categoria, textoPlano(p.Tamanhos)].filter(Boolean).join(' · '), situ = situPeca_(p);
-      return '<button type="button" class="cp-item" data-cp-peca="' + escaparHtml(p.ID) + '">' + fotoPeca_(p, 160)
-        + '<span><span>' + escaparHtml(p.Nome) + '</span>' + (meta ? '<small>' + escaparHtml(meta) + '</small>' : '') + (extra ? '<small>' + escaparHtml(extra) + '</small>' : '') + '</span>'
-        + (situ ? '<span class="cp-situ' + (ehInativo_(p) ? ' arq' : '') + '">' + situ + '</span>' : '<span class="sug-seta" aria-hidden="true">›</span>') + '</button>';
-    }).join('') : '<div class="cp-vazio">Nenhuma peça com esse nome ou código. Tente outra palavra.</div>';
+  function pecasCopiar_() {
+    const idAtual = document.getElementById('produto-id').value, texto = document.getElementById('cp-busca').value;
+    const base = produtos.filter(p => String(p.ID) !== String(idAtual || '') && (cp_.situ === 'todas' || (cp_.situ === 'ativas' ? !ehInativo_(p) : ehInativo_(p))));
+    const comBusca = base.filter(p => casaTexto_(p, texto));
+    const lista = comBusca.filter(p => (!cp_.gen || tags_(p.Genero).indexOf(cp_.gen) !== -1) && (!cp_.cat || tags_(p.Categoria).indexOf(cp_.cat) !== -1));
+    lista.sort(cp_.ordem === 'az' ? (a, b) => String(a.Nome).localeCompare(String(b.Nome), 'pt-BR', { sensitivity: 'base' }) || recencia_(b) - recencia_(a) : (a, b) => recencia_(b) - recencia_(a));
+    return { lista: lista, comBusca: comBusca };
   }
-  function mostrarPecaCopiar_(id) {
+  function chipsFiltro_(boxId, valores, atual, attr, rotuloTodas) {
+    const box = document.getElementById(boxId);
+    const itens = Object.keys(valores).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+    box.innerHTML = itens.length < 2 && !atual ? '' : '<button type="button" class="cp-chip" ' + attr + '="" aria-pressed="' + (!atual) + '">' + rotuloTodas + '</button>'
+      + itens.map(v => '<button type="button" class="cp-chip" ' + attr + '="' + escaparHtml(v) + '" aria-pressed="' + (atual === v) + '">' + escaparHtml(v) + '<small>' + valores[v] + '</small></button>').join('');
+  }
+  function pintarCopiar_() {
+    const r = pecasCopiar_(), texto = document.getElementById('cp-busca').value.trim();
+    document.querySelectorAll('[data-cp-situ]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cpSitu === cp_.situ)));
+    document.querySelectorAll('[data-cp-ordem]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cpOrdem === cp_.ordem)));
+    // filtros com a contagem do que a busca/situação deixam (cada um considera o outro escolhido)
+    const gens = {}, cats = {};
+    r.comBusca.forEach(p => {
+      if (!cp_.cat || tags_(p.Categoria).indexOf(cp_.cat) !== -1) tags_(p.Genero).forEach(g => { gens[g] = (gens[g] || 0) + 1; });
+      if (!cp_.gen || tags_(p.Genero).indexOf(cp_.gen) !== -1) tags_(p.Categoria).forEach(c => { cats[c] = (cats[c] || 0) + 1; });
+    });
+    chipsFiltro_('cp-generos', gens, cp_.gen, 'data-cp-gen', 'Todos os públicos');
+    chipsFiltro_('cp-categorias', cats, cp_.cat, 'data-cp-cat', 'Todas as categorias');
+    document.getElementById('cp-rotulo').textContent = !texto && !cp_.gen && !cp_.cat && cp_.ordem === 'recentes' ? 'Últimos cadastrados' : (texto ? 'Resultado da busca' : 'Peças');
+    document.getElementById('cp-cont').textContent = r.lista.length + (r.lista.length === 1 ? ' peça' : ' peças');
+    const mostrar = r.lista.slice(0, cp_.lim);
+    document.getElementById('cp-grade').innerHTML = mostrar.length ? mostrar.map(p => {
+      const situ = situPeca_(p), extra = [tags_(p.Categoria)[0], textoPlano(p.Tamanhos)].filter(Boolean).join(' · ');
+      return '<div class="cp-card"><button type="button" class="cp-usar" data-peca-usar="' + escaparHtml(p.ID) + '" aria-label="Copiar os dados de ' + escaparHtml(p.Nome) + '">' + fotoPeca_(p, 360)
+        + '<span class="cp-nome">' + escaparHtml(p.Nome) + '</span><span class="cp-meta">' + (p.Codigo ? escaparHtml(p.Codigo) + ' · ' : '') + '<b>' + escaparHtml(precoPeca_(p) || 'sem preço') + '</b></span>'
+        + (extra ? '<span class="cp-extra">' + escaparHtml(extra) + '</span>' : '') + '<span class="cp-acao">Copiar dados</span></button>'
+        + (situ ? '<span class="cp-situ">' + situ + '</span>' : '')
+        + '<button type="button" class="cp-ed" data-peca-editar="' + escaparHtml(p.ID) + '" aria-label="Editar ' + escaparHtml(p.Nome) + '" title="Editar esta peça">✎</button></div>';
+    }).join('') + (r.lista.length > mostrar.length ? '<button type="button" class="cp-mais" id="cp-mais">Mostrar mais ' + Math.min(40, r.lista.length - mostrar.length) + '</button>' : '')
+      : '<div class="cp-vazio">Nenhuma peça com esses filtros. Tente outra palavra ou toque em "Todas".</div>';
+  }
+  /** Copia TODOS os dados da peça (como antes), guardando o formulário para o Desfazer. Editando outra peça, só o nome. */
+  let desfazerCopia_ = null;
+  function usarPeca_(id) {
     const p = produtos.find(x => String(x.ID) === String(id)); if (!p) return;
-    cpPeca_ = p;
-    document.getElementById('cp-lista-tela').hidden = true; document.getElementById('cp-detalhe-tela').hidden = false;
-    document.getElementById('cp-voltar').hidden = false; document.getElementById('cp-titulo').textContent = 'O que copiar?';
-    const soNome = modoFormulario === 'editando';   // editando outra peça: só o nome (não troca os dados da peça aberta)
-    const fotos = [p.Foto_URL].concat(String(p.Fotos_Galeria || '').split(',').map(x => x.trim())).filter(Boolean).slice(0, 6);
-    const campos = CP_CAMPOS_.map(([k, rot, val]) => ({ k, rot, v: String(val(p) || '').trim() })).filter(c => c.v);
-    document.getElementById('cp-detalhe').innerHTML =
-      (fotos.length ? '<div class="cp-fotos">' + fotos.map(u => '<img ' + atribSrc(fotoMini(u, 320)) + ' alt="" loading="lazy" decoding="async">').join('') + '</div>' : '')
-      + '<p class="cp-det-nome">' + escaparHtml(p.Nome) + '</p><p class="cp-det-meta">' + escaparHtml([p.Codigo, situPeca_(p)].filter(Boolean).join(' · ')) + '</p>'
-      + (soNome ? '<div class="cp-nota">Você está editando outra peça: daqui só dá para copiar o nome.</div>' : '<div class="cp-nota">Fotos e vídeos não são copiados: escolha as fotos da peça nova.</div>')
-      + '<div class="cp-escolha"><div class="cp-escolha-topo"><span>Marque o que vai para o cadastro</span>' + (soNome ? '' : '<button type="button" id="cp-todos">Desmarcar tudo</button>') + '</div>'
-      + campos.map(c => '<label class="cp-campo' + (soNome && c.k !== 'nome' ? ' desligado' : '') + '"><input type="checkbox" data-cp-campo="' + c.k + '"' + (soNome && c.k !== 'nome' ? ' disabled' : ' checked') + '><span><b>' + c.rot + '</b><span>' + escaparHtml(c.v.length > 160 ? c.v.slice(0, 160) + '…' : c.v) + '</span></span></label>').join('')
-      + '</div>';
-    atualizarBotaoCopiar_();
-    document.getElementById('cp-detalhe').scrollTop = 0;
+    const v = (i) => document.getElementById(i).value, c = (i) => { const e = document.getElementById(i); return !!(e && e.checked); };
+    desfazerCopia_ = { nome: v('nome'), preco: v('preco'), consultar: c('consultar-valor'), estoque: v('estoque'), tamanhos: v('tamanhos'), cores: v('cores'), descricao: v('descricao'), novidade: c('novidade'), cats: new Set(selecionadasCategorias), gens: new Set(selecionadosGeneros) };
+    const campo = document.getElementById('nome');
+    if (modoFormulario !== 'editando') preencherFormComProduto(p);
+    campo.value = String(p.Nome).slice(0, 80); nomeSugCopiado_ = campo.value;
+    if (TKCamadas.aberta('overlay-copiar')) fecharComHistorico_('overlay-copiar');
+    const av = document.getElementById('aviso-copiado');
+    if (av) {
+      av.hidden = false;
+      av.innerHTML = escaparHtml(modoFormulario === 'editando' ? 'Copiei o nome de “' + p.Nome + '”.' : 'Copiei os dados de “' + p.Nome + '” (preço, categoria, gênero, tamanhos, cores, descrição). Confira e escolha as fotos da peça nova.')
+        + ' <button type="button" class="aviso-desfazer" id="btn-desfazer-copia">Desfazer</button>';
+    }
+    campo.focus(); try { campo.setSelectionRange(campo.value.length, campo.value.length); } catch (e) {}
+    atualizarSugestoesNome_(); atualizarFaltas_();
   }
-  function camposMarcados_() { return Array.from(document.querySelectorAll('#cp-detalhe [data-cp-campo]:checked')).map(i => i.dataset.cpCampo); }
-  function atualizarBotaoCopiar_() {
-    const n = camposMarcados_().length, b = document.getElementById('cp-copiar');
-    b.disabled = !n; b.textContent = n ? 'Copiar ' + n + (n === 1 ? ' informação' : ' informações') : 'Marque o que copiar';
-    const t = document.getElementById('cp-todos'); if (t) t.textContent = n ? 'Desmarcar tudo' : 'Marcar tudo';
+  function desfazerCopia() {
+    const d = desfazerCopia_; if (!d) return; desfazerCopia_ = null;
+    const put = (i, x) => { document.getElementById(i).value = x; };
+    put('nome', d.nome); put('preco', d.preco); put('estoque', d.estoque); put('tamanhos', d.tamanhos); put('cores', d.cores); put('descricao', d.descricao);
+    const cv = document.getElementById('consultar-valor'); if (cv) cv.checked = d.consultar;
+    document.getElementById('novidade').checked = d.novidade; document.getElementById('linha-notificar-push').style.display = d.novidade ? 'flex' : 'none';
+    selecionadasCategorias = d.cats; selecionadosGeneros = d.gens;
+    renderizarChips('chips-categoria', categorias, selecionadasCategorias); renderizarChips('chips-genero', generos, selecionadosGeneros);
+    try { cadLerVinculos_(); } catch (e) {}
+    nomeSugCopiado_ = null;
+    const av = document.getElementById('aviso-copiado'); if (av) { av.hidden = false; av.textContent = 'Desfeito: o formulário voltou como estava.'; }
+    atualizarSugestoesNome_(); atualizarFaltas_();
   }
-  /** Leva para o formulário só os campos marcados (mesma regra do preenchimento de sempre). */
-  function copiarCamposDaPeca_(p, campos) {
-    const tem = (k) => campos.indexOf(k) !== -1;
-    if (tem('nome')) { const c = document.getElementById('nome'); c.value = String(p.Nome).slice(0, 80); nomeSugCopiado_ = c.value; }
-    if (tem('preco')) { const zero = p.Preco !== '' && p.Preco != null && !(Number(p.Preco) > 0); document.getElementById('preco').value = zero ? '' : p.Preco; const cv = document.getElementById('consultar-valor'); if (cv) cv.checked = zero && consultarLiberado_; }
-    if (tem('estoque')) document.getElementById('estoque').value = p.Estoque || '';
-    if (tem('tamanhos')) { document.getElementById('tamanhos').value = textoPlano(p.Tamanhos); cadLerVinculos_(); }
-    if (tem('cores')) document.getElementById('cores').value = textoPlano(p.Cores);
-    if (tem('descricao')) document.getElementById('descricao').value = p.Descricao || '';
-    if (tem('novidade')) { document.getElementById('novidade').checked = ehNovidade(p); document.getElementById('linha-notificar-push').style.display = ehNovidade(p) ? 'flex' : 'none'; }
-    if (tem('categoria')) { selecionadasCategorias = new Set(String(p.Categoria || '').split(',').map(x => x.trim()).filter(Boolean)); renderizarChips('chips-categoria', categorias, selecionadasCategorias); }
-    if (tem('genero')) { selecionadosGeneros = new Set(String(p.Genero || '').split(',').map(x => x.trim()).filter(Boolean)); renderizarChips('chips-genero', generos, selecionadosGeneros); }
-    try { ['preco', 'estoque', 'tamanhos', 'cores', 'descricao'].forEach(id => { if (tem(id)) document.getElementById(id).dispatchEvent(new Event('input', { bubbles: true })); }); } catch (e) {}
+  function editarPecaDaLista_(id) {
+    const p = produtos.find(x => String(x.ID) === String(id)); if (!p) return;
+    const temOutrosDados = modoFormulario === 'editando' || !!(document.getElementById('preco').value || document.getElementById('descricao').value.trim() || selecionadasCategorias.size || selecionadosGeneros.size || (typeof fotosItens !== 'undefined' && fotosItens.length));
+    if (temOutrosDados && !confirm('Abrir “' + p.Nome + '” para editar? O que você já preencheu neste formulário será descartado.')) return;
+    if (TKCamadas.aberta('overlay-copiar')) fecharComHistorico_('overlay-copiar');
+    editarProduto(p.ID);
+    document.getElementById('nome-sugestoes').innerHTML = '';
   }
   document.getElementById('nome').addEventListener('input', () => { nomeSugCopiado_ = null; atualizarSugestoesNome_(); });
   document.getElementById('nome').addEventListener('focus', atualizarSugestoesNome_);
+  document.getElementById('cp-abrir').addEventListener('click', () => abrirCopiar_(''));
   document.getElementById('nome-sugestoes').addEventListener('click', (ev) => {
-    const v = ev.target.closest('[data-peca-ver]'); if (v) { abrirCopiar_(v.dataset.pecaVer); return; }
-    if (ev.target.closest('[data-copiar-todas]')) abrirCopiar_(null);
+    const u = ev.target.closest('[data-peca-usar]'); if (u) { usarPeca_(u.dataset.pecaUsar); return; }
+    if (ev.target.closest('[data-copiar-todas]')) abrirCopiar_(document.getElementById('nome').value.trim());
   });
-  document.getElementById('cp-busca').addEventListener('input', mostrarListaCopiar_);
-  document.querySelectorAll('[data-cp-filtro]').forEach(b => b.addEventListener('click', () => { cpFiltro_ = b.dataset.cpFiltro; mostrarListaCopiar_(); }));
-  document.getElementById('cp-lista').addEventListener('click', (ev) => { const it = ev.target.closest('[data-cp-peca]'); if (it) mostrarPecaCopiar_(it.dataset.cpPeca); });
-  document.getElementById('cp-voltar').addEventListener('click', mostrarListaCopiar_);
-  document.getElementById('cp-fechar').addEventListener('click', () => fecharComHistorico_('overlay-copiar'));
-  document.getElementById('overlay-copiar').addEventListener('click', (ev) => { if (ev.target.id === 'overlay-copiar') fecharComHistorico_('overlay-copiar'); });
-  document.getElementById('cp-detalhe').addEventListener('change', atualizarBotaoCopiar_);
-  document.getElementById('cp-detalhe').addEventListener('click', (ev) => {
-    if (ev.target.id !== 'cp-todos') return;
-    const marcar = !camposMarcados_().length;
-    document.querySelectorAll('#cp-detalhe [data-cp-campo]:not(:disabled)').forEach(i => { i.checked = marcar; });
-    atualizarBotaoCopiar_();
-  });
-  document.getElementById('cp-copiar').addEventListener('click', () => {
-    const p = cpPeca_; if (!p) return;
-    const campos = camposMarcados_(); if (!campos.length) return;
-    copiarCamposDaPeca_(p, campos);
-    fecharComHistorico_('overlay-copiar');
-    const nomes = CP_CAMPOS_.filter(c => campos.indexOf(c[0]) !== -1).map(c => c[1].toLowerCase());
-    const av = document.getElementById('aviso-copiado');
-    if (av) { av.hidden = false; av.textContent = 'Copiei de “' + p.Nome + '”: ' + nomes.join(', ') + '. Confira e escolha as fotos da peça nova.'; }
-    const campo = document.getElementById('nome'); campo.focus(); try { campo.setSelectionRange(campo.value.length, campo.value.length); } catch (e) {}
-    atualizarSugestoesNome_(); atualizarFaltas_();
-  });
-  document.getElementById('cp-editar').addEventListener('click', () => {
-    const p = cpPeca_; if (!p) return;
-    const temOutrosDados = modoFormulario === 'editando' || !!(document.getElementById('preco').value || document.getElementById('descricao').value.trim() || selecionadasCategorias.size || selecionadosGeneros.size || (typeof fotosItens !== 'undefined' && fotosItens.length));
-    if (temOutrosDados && !confirm('Abrir “' + p.Nome + '” para editar? O que você já preencheu neste formulário será descartado.')) return;
-    fecharComHistorico_('overlay-copiar');
-    editarProduto(p.ID);
-    document.getElementById('nome-sugestoes').innerHTML = '';
+  document.getElementById('aviso-copiado').addEventListener('click', (ev) => { if (ev.target.id === 'btn-desfazer-copia') desfazerCopia(); });
+  document.getElementById('cp-busca').addEventListener('input', () => { cp_.lim = 40; pintarCopiar_(); });
+  document.getElementById('overlay-copiar').addEventListener('click', (ev) => {
+    if (ev.target.id === 'overlay-copiar') { fecharComHistorico_('overlay-copiar'); return; }
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.id === 'cp-fechar') { fecharComHistorico_('overlay-copiar'); return; }
+    if (b.id === 'cp-mais') { cp_.lim += 40; pintarCopiar_(); return; }
+    if (b.dataset.cpSitu) { cp_.situ = b.dataset.cpSitu; cp_.lim = 40; pintarCopiar_(); return; }
+    if (b.dataset.cpOrdem) { cp_.ordem = b.dataset.cpOrdem; pintarCopiar_(); return; }
+    if (b.hasAttribute('data-cp-gen')) { cp_.gen = b.dataset.cpGen === cp_.gen ? '' : b.dataset.cpGen; cp_.lim = 40; pintarCopiar_(); return; }
+    if (b.hasAttribute('data-cp-cat')) { cp_.cat = b.dataset.cpCat === cp_.cat ? '' : b.dataset.cpCat; cp_.lim = 40; pintarCopiar_(); return; }
+    if (b.dataset.pecaEditar) { editarPecaDaLista_(b.dataset.pecaEditar); return; }
+    if (b.dataset.pecaUsar) usarPeca_(b.dataset.pecaUsar);
   });
 
   function tituloForm_(txt) {
