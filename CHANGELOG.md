@@ -6,6 +6,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.20.0 — Mensagens: quem mandou cada mensagem no grupo — 2026-10-26
+
+- Grupos do WhatsApp na tela de Mensagens: cada mensagem mostra quem mandou (nome do WhatsApp e número; sem nome, só o número), com uma cor por pessoa, como no WhatsApp. Antes não dava para saber quem tinha escrito.
+- Menções "@266124864270572" viram "@Nome" quando a pessoa já falou no grupo.
+- Grupo não mostra mais "Foi resposta a um story? Ver stories no ar" em toda mensagem; nas conversas individuais continua.
+- Worker de mensagens: grava o autor das mensagens de grupo (colunas `autor_nome`, `autor_fone` e `autor_lid`, criadas sozinhas). A prévia da conversa mostra "Nome: texto" e a exportação mostra o nome no lugar de "cliente".
+- Vale para mensagens que chegarem depois da publicação: as que já estavam gravadas não têm o autor, porque ele não era guardado.
+
 ## 7.19.0 — Ferramentas do gestor reorganizadas — 2026-10-26
 
 - Ferramentas em grupos (Vendas e clientes, Conteúdo, Planilha e histórico, Sistema), cada uma com ícone, título e uma linha dizendo para que serve. Antes eram onze botões de cores diferentes. Os botões e as permissões continuam os mesmos, e o grupo some quando a pessoa não tem nenhuma ferramenta dele.
