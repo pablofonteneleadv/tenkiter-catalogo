@@ -75,6 +75,12 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, service_workers="block"); install(ctx); pg = ctx.new_page()
     pg.goto(BASE + "privacidade.html"); pg.wait_for_timeout(700); axe(pg, "privacidade.html")
     chk("privacidade: sem CNPJ, com o endereço da loja", "cnpj" not in pg.content().lower() and "Moreira da Rocha" in pg.inner_text("body"))
+    chk("privacidade: explica as mensagens do Instagram e aponta a exclusão", "Mensagens do Instagram" in pg.inner_text("body") and pg.locator("a[href='exclusao-dados.html']").count() == 1)
+    pg.screenshot(path="tests/saida/privacidade_m390.png", full_page=True)
+    pg.goto(BASE + "exclusao-dados.html"); pg.wait_for_timeout(700); axe(pg, "exclusao-dados.html")
+    chk("exclusão: passo a passo, prazo e botão de WhatsApp com 44 px", "30 dias" in pg.inner_text("body") and "wa.me" in pg.get_attribute("#zap-btn", "href") and pg.evaluate("document.getElementById('zap-btn').getBoundingClientRect().height >= 43.5"))
+    chk("exclusão: sem rolagem horizontal no celular", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+    pg.screenshot(path="tests/saida/exclusao_m390.png", full_page=True)
     pg.goto(BASE + "404.html"); pg.wait_for_timeout(700); axe(pg, "404.html")
     ctx.close()
 
