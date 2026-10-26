@@ -19,10 +19,10 @@ with sync_playwright() as p:
     # v7.1 (Pacote 1, item a): a faixa de vantagens passou a nascer RECOLHIDA no
     # celular (é a 3ª coisa antes do 1º produto e não ajuda a escolher). O texto
     # continua o mesmo — só não fica à vista até a pessoa abrir.
-    chk("a busca vem ANTES da faixa de vantagens", pg.evaluate("document.getElementById('busca').getBoundingClientRect().top < document.getElementById('beneficios-details').getBoundingClientRect().top"))
-    pg.click("#beneficios-details > summary"); pg.wait_for_timeout(300)
-    chk("faixa de vantagens fala em 'Consulte'", "Consulte pelo WhatsApp" in pg.inner_text("#beneficios"))
-    pg.click("#beneficios-details > summary"); pg.wait_for_timeout(200)
+    # A faixa recolhida (#beneficios-details) foi superada pela faixa em uma linha (vitrine-v71.css, "vantagens em 1 linha no celular"):
+    # o texto fica à vista, logo abaixo da busca.
+    chk("a busca vem ANTES da faixa de vantagens", pg.evaluate("document.getElementById('busca').getBoundingClientRect().top < document.getElementById('beneficios').getBoundingClientRect().top"))
+    chk("faixa de vantagens fala em 'Consulte'", pg.locator("#beneficios").is_visible() and "Consulte pelo WhatsApp" in pg.inner_text("#beneficios"))
     chk("sem filtro nenhum, a faixa de filtros ativos não aparece", pg.locator("#etiquetas-ativas").is_hidden())
     # etiquetas de filtros ativos
     pg.click("#btn-filtros-toggle"); pg.wait_for_timeout(200)

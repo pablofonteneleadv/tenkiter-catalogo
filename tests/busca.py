@@ -28,7 +28,7 @@ with sync_playwright() as p:
     q("")
     if not pg.evaluate("document.getElementById('filtros').classList.contains('aberto')"): pg.click("#btn-filtros-toggle")
     pg.wait_for_timeout(300)
-    pg.locator("#details-categoria > summary").click(); pg.wait_for_timeout(200)
+    if not pg.evaluate("document.getElementById('details-categoria').open"): pg.locator("#details-categoria > summary").click(); pg.wait_for_timeout(200)   # a seção já nasce aberta: clicar no resumo a fecharia
     pg.locator("#chips-categoria .chip",has_text="Calça").first.click(); pg.wait_for_timeout(400)
     nf=pg.locator(".card:not(.esqueleto)").count(); chk("filtro Calça reduz a lista",0<nf<total,nf)
     pg.keyboard.press("Escape")

@@ -253,9 +253,12 @@
     garantirViews();
     appFrames.forEach((f) => { f.hidden = true; f.setAttribute('aria-hidden', 'true'); f.inert = true; });
     if (ehInicial) {
+      // Só devolve a rolagem guardada quando estava mesmo em outra tela do app. O "voltar" que fecha uma
+      // janela da própria página (ex.: a peça aberta) também chega aqui, e levava a lista para o topo.
+      const voltandoDeOutraTela = document.body.classList.contains('tk-app-frame-ativo');
       appViews.hidden = true; document.body.classList.remove('tk-app-frame-ativo');
       document.title = tituloInicial;
-      requestAnimationFrame(() => scrollTo(0, scrollInicial));
+      if (voltandoDeOutraTela) requestAnimationFrame(() => scrollTo(0, scrollInicial));
     } else {
       if (!document.body.classList.contains('tk-app-frame-ativo')) scrollInicial = scrollY;
       let frame = appFrames.get(rota);
