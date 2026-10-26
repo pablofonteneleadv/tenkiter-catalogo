@@ -519,6 +519,32 @@ function d1() {
   chk('respostas rápidas: salva, ignora sem título e corta tamanhos', rr.j.respostas.length === 2 && rr.j.respostas[1].t.length === 40 && rr.j.respostas[1].x.length === 1000, rr.j.respostas.map((r) => r.t.length));
   globalThis.fetch = fLe;
   chk('respostas rápidas voltam no GET', (await A('GET', '/msg/config')).j.respostas[0].x === 'Rua A, 10');
+  // ---- v2.13: motivo do encerramento e métricas ----
+  const Tm = Date.now() - 3 * 3600000;
+  await wh('/wh/wafly/1/' + seg, msg('MT1', '5588966660001', 'Tem o vestido azul?', { senderName: 'Bia', momment: Tm }));
+  const cm1 = (await conv('whatsapp1', '5588966660001')).id;
+  const m0 = (await A('GET', '/msg/metricas?canal=whatsapp1&dias=7')).j;
+  chk('antes de encerrar, a pergunta da Bia está esperando', m0.aguardando.maisAntigas.some((x) => x.id === cm1));
+  const e1 = await A('POST', '/msg/encerrar', { conversas: [cm1] });
+  const c1x = await conv('whatsapp1', '5588966660001'), h1 = await DB.prepare('SELECT * FROM msg_encerramento WHERE conversa_id=?').bind(cm1).all();
+  chk('sem motivo = "concluido"; vai para o histórico com quem encerrou', e1.j.ok && c1x.encerrada_motivo === 'concluido' && h1.results.length === 1 && h1.results[0].motivo === 'concluido' && h1.results[0].por === '0000' && h1.results[0].pessoa === c1x.pessoa, h1.results);
+  const m1 = (await A('GET', '/msg/metricas?canal=whatsapp1&dias=7')).j;
+  chk('"Concluído" conta como atendimento resolvido na hora (sai de esperando e entra no tempo de resposta)', !m1.aguardando.maisAntigas.some((x) => x.id === cm1) && m1.perguntasRespondidas === m0.perguntasRespondidas + 1 && m1.encerramentos.concluido >= 1, [m0.perguntasRespondidas, m1.perguntasRespondidas, m1.encerramentos]);
+  chk('lista mostra o motivo da encerrada', (await A('GET', '/msg/conversas?canal=whatsapp1&filtro=encerradas')).j.conversas.find((x) => x.id === cm1).encerrada_motivo === 'concluido');
+  await wh('/wh/wafly/1/' + seg, msg('MT2', '5588966660001', 'Voltei, e o rosa?', { senderName: 'Bia', momment: Date.now() - 3600000 }));
+  chk('cliente escreve de novo: reabre e o motivo sai (o histórico fica)', (await conv('whatsapp1', '5588966660001')).encerrada_motivo === '' && (await DB.prepare('SELECT COUNT(*) n FROM msg_encerramento WHERE conversa_id=?').bind(cm1).first()).n === 1);
+  await A('POST', '/msg/encerrar', { conversas: [cm1], motivo: 'sem_resposta' });
+  chk('"Cliente parou de responder" fica guardado', (await conv('whatsapp1', '5588966660001')).encerrada_motivo === 'sem_resposta' && (await DB.prepare("SELECT COUNT(*) n FROM msg_encerramento WHERE conversa_id=? AND motivo='sem_resposta'").bind(cm1).first()).n === 1);
+  await A('POST', '/msg/encerrar', { conversas: [cm1], motivo: 'xpto' }).then(() => {});
+  chk('motivo desconhecido vira "concluido"', (await conv('whatsapp1', '5588966660001')).encerrada_motivo === 'concluido');
+  await wh('/wh/wafly/1/' + seg, msg('MT3', '5588966660002', 'oi quero ganhar dinheiro', { senderName: 'Spam', momment: Tm }));
+  const cm2 = (await conv('whatsapp1', '5588966660002')).id;
+  const mA = (await A('GET', '/msg/metricas?canal=whatsapp1&dias=7')).j;
+  await A('POST', '/msg/encerrar', { conversas: [cm2], motivo: 'engano' });
+  const mB = (await A('GET', '/msg/metricas?canal=whatsapp1&dias=7')).j;
+  chk('"Engano ou spam" tira a conversa das métricas', mB.conversas === mA.conversas - 1 && mB.entradas === mA.entradas - 1 && mB.encerramentos.engano === 1, [mA.conversas, mB.conversas, mB.encerramentos]);
+  await A('POST', '/msg/encerrar', { conversas: [cm2], reabrir: true });
+  chk('reabrir limpa o motivo', (await conv('whatsapp1', '5588966660002')).encerrada_motivo === '');
   globalThis.fetch = f5;
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });

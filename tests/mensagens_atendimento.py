@@ -64,7 +64,7 @@ with sync_playwright() as p:
     chk("'Não lidas' marca só no painel (sem pedir o celular)", lt["ids"] == [2] and lt["naoLida"] is True and lt["celular"] is False and pg.locator("#ms-lista .ms-conv[data-id='2'] .ms-badge").count() == 1, lt)
     print("== Nos 2 WhatsApp + encerrar ==")
     chk("Maria nos 2 WhatsApp antes de encerrar", (pg.locator("[data-filtro=ambos]").text_content() or "").strip() == "Nos 2 WhatsApp · 2")
-    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click(".ms-menu [data-ms=selecionar]"); pg.click("#ms-lista .ms-conv[data-id='7']"); pg.click("[data-ms=sel-encerrar]"); pg.wait_for_timeout(800)
+    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click(".ms-menu [data-ms=selecionar]"); pg.click("#ms-lista .ms-conv[data-id='7']"); pg.click("[data-ms=sel-encerrar]"); pg.click("[data-ms=motivo][data-m=concluido]"); pg.wait_for_timeout(800)
     chk("encerrar uma das duas tira a outra de 'Nos 2 WhatsApp' (e o aviso 'Também no' some)", pg.locator("[data-filtro=ambos]").text_content().strip() == "Nos 2 WhatsApp" and pg.locator("#ms-lista .ms-conv[data-id='1'] .ms-ambos-tag").count() == 0, pg.locator("[data-filtro=ambos]").text_content())
     c7 = next(c for c in S["convs"] if c["id"] == 7); c7.update({"encerrada_em": "", "atualizada_em": agora(), "nao_lidas": 1})
     pg.wait_for_timeout(1500)

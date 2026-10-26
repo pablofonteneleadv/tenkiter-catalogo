@@ -246,6 +246,19 @@
       .ms-resp-item legend { font-size: 0.78rem; font-weight: 700; padding: 0 4px; }
       .ms-resp-item textarea { font: inherit; font-size: 0.85rem; resize: vertical; }
       .ms-bolha b { font-weight: 700; } .ms-bolha s { opacity: 0.8; }
+      .ms-motivos { position: absolute; inset: 0; z-index: 9; background: rgba(0,0,0,0.45); display: flex; align-items: flex-end; justify-content: center; }
+      @media (min-width: 860px) { .ms-motivos { align-items: center; } }
+      .ms-motivos-box { background: #fff; width: 100%; max-width: 440px; border-radius: 14px 14px 0 0; padding: 14px 14px calc(14px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; max-height: 92%; overflow-y: auto; }
+      @media (min-width: 860px) { .ms-motivos-box { border-radius: 14px; } }
+      .ms-motivos-box h3 { margin: 0; font-size: 1.02rem; }
+      .ms-motivos-box .ms-cfg-res { margin: 0 0 2px; }
+      .sheet-mensagens .ms-motivo { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 56px; padding: 10px 12px; border: 1px solid #e3ddd3; border-radius: 10px; background: #fff; font: inherit; text-align: left; cursor: pointer; }
+      .sheet-mensagens .ms-motivo:hover, .sheet-mensagens .ms-motivo:focus-visible { border-color: #141414; }
+      .sheet-mensagens .ms-motivo.padrao { border: 2px solid #141414; }
+      .ms-motivo b { font-size: 0.92rem; } .ms-motivo span { font-size: 0.78rem; color: #4a443b; }
+      .sheet-mensagens .ms-motivo-cancelar { align-self: stretch; }
+      .ms-motivo-tag { flex: none; font-size: 0.68rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: #f1ede3; color: #3d362c; white-space: nowrap; }
+      .ms-motivo-tag.ms-motivo-vendeu { background: #e8f3ec; color: #0f6b3f; } .ms-motivo-tag.ms-motivo-sem_resposta { background: #fff1e0; color: #7a3a00; } .ms-motivo-tag.ms-motivo-engano { background: #f3e8e8; color: #7a1f1f; }
       .ms-assina[hidden] { display: none; }
       .ms-assina b { color: #141414; }
       .ms-assina input { flex: 1 1 auto; min-width: 0; min-height: 40px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 8px; font: inherit; font-size: 0.9rem; }
@@ -389,6 +402,7 @@
   }
   function teclado(ev) {
     if (ev.key === 'Escape' && $('ms-luz')) { fecharLuz_(); ev.stopPropagation(); return; }
+    if (ev.key === 'Escape' && $('ms-motivos')) { fecharMotivos_(); ev.stopPropagation(); return; }
     if (ev.key === 'Escape' && $('ms-gaveta')) { fecharGaveta_(); const t = $('ms-texto'); if (t) t.focus(); ev.stopPropagation(); return; }
     if (ev.key === 'Escape' && selecao && !menuAberto) { sairSelecao_(); ev.stopPropagation(); return; }
     if (ev.key === 'Escape' && menuAberto) { const d = menuAberto.dataset.dono, a = $(d); fecharMenu(); if (a) a.focus(); ev.stopPropagation(); }
@@ -540,7 +554,7 @@
     b.className = 'ms-conv' + (nova ? ' nova' : ''); if (aberta && aberta.id === c.id) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
     const marcada = !!(selecao && selecao.has(c.id));
     if (selecao) b.setAttribute('aria-pressed', String(marcada)); else b.removeAttribute('aria-pressed');
-    const assinatura = [canal === 'todos' ? c.canal : '', c.nome, c.ultima_em, c.previa, c.nao_lidas, c.ult_dir, c.ult_status, espera ? Math.floor(Date.now() / 60000) : '', aberta && aberta.id === c.id, c.outro_id || '', selecao ? (marcada ? 'S' : 's') : ''].join('|');
+    const assinatura = [canal === 'todos' ? c.canal : '', c.nome, c.ultima_em, c.previa, c.nao_lidas, c.ult_dir, c.ult_status, espera ? Math.floor(Date.now() / 60000) : '', aberta && aberta.id === c.id, c.outro_id || '', c.encerrada_motivo || '', selecao ? (marcada ? 'S' : 's') : ''].join('|');
     if (li.dataset.ass === assinatura) return li;
     li.dataset.ass = assinatura; b.textContent = '';
     let av;
@@ -552,6 +566,7 @@
     // v7.22: canal e número numa linha própria, pequena: o nome fica inteiro e o número também (o nome é o que a pessoa colocou no WhatsApp)
     const l3 = el('span', 'ms-l3');
     if (canal === 'todos' && NOME_CANAL_[c.canal]) l3.appendChild(el('span', 'ms-canal-tag ms-canal-' + c.canal, NOME_CANAL_[c.canal]));
+    if (c.encerrada_em && NOME_MOTIVO_[c.encerrada_motivo]) l3.appendChild(el('span', 'ms-motivo-tag ms-motivo-' + c.encerrada_motivo, NOME_MOTIVO_[c.encerrada_motivo]));
     if (c.nome && !c.grupo && /^\d{10,15}$/.test(c.contato || '')) l3.appendChild(el('span', 'ms-fone', foneBonito_(c.contato)));
     const l2 = el('span', 'ms-l2'); const pv = el('span', 'ms-previa');
     if (saiu) { pv.appendChild(selo(c.ult_status || 'enviada')); pv.appendChild(document.createTextNode('Você: ')); }
@@ -760,14 +775,35 @@
     selecao = null; desenharSelbar_(); desenharAbas(); selarBotao();
     await carregarLista(true);
   }
-  async function encerrar_(ids, reabrir) {
+  /* v7.27: motivo do encerramento. Concluído (padrão), Vendeu e Cliente parou de responder contam como atendimento resolvido na hora;
+   * Engano ou spam fica fora das métricas. */
+  const MOTIVOS_ = [['concluido', 'Concluído', 'O atendimento terminou. Conta como respondido agora.'], ['vendeu', 'Vendeu', 'Terminou com venda.'],
+    ['sem_resposta', 'Cliente parou de responder', 'Fica no histórico do cliente.'], ['engano', 'Engano ou spam', 'Não entra nas métricas.']];
+  const NOME_MOTIVO_ = { concluido: 'Concluído', vendeu: 'Vendeu', sem_resposta: 'Cliente parou de responder', engano: 'Engano ou spam' };
+  let idsMotivo_ = null;
+  function fecharMotivos_() { const m = $('ms-motivos'); if (m) m.remove(); idsMotivo_ = null; if (window.TKCamadas && TKCamadas.aberta('ms-motivos')) TKCamadas.desempilhar('ms-motivos'); }
+  function escolherMotivo_(ids) {
     if (!ids.length) return;
-    const r = await worker_('/msg/encerrar', 'POST', { conversas: ids, reabrir: !!reabrir });
+    fecharMotivos_(); idsMotivo_ = ids.slice();
+    const sheet = document.querySelector('.sheet-mensagens'); if (!sheet) return;
+    const fundo = el('div', 'ms-motivos'); fundo.id = 'ms-motivos';
+    const box = el('div', 'ms-motivos-box'); box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'ms-motivos-tit');
+    const t = el('h3', '', ids.length === 1 ? 'Encerrar conversa' : 'Encerrar ' + ids.length + ' conversas'); t.id = 'ms-motivos-tit'; box.appendChild(t);
+    box.appendChild(el('p', 'ms-cfg-res', 'Por que está encerrando?'));
+    MOTIVOS_.forEach(([id, nome, desc], i) => { const b = botao('ms-motivo' + (i === 0 ? ' padrao' : ''), '', 'motivo', { m: id }); b.append(el('b', '', nome), el('span', '', desc)); box.appendChild(b); });
+    box.appendChild(botao('ms-btn ms-motivo-cancelar', 'Cancelar', 'motivo-cancelar'));
+    fundo.appendChild(box); sheet.appendChild(fundo);
+    if (window.TKCamadas) TKCamadas.empilhar('ms-motivos', () => { const m = $('ms-motivos'); if (m) m.remove(); idsMotivo_ = null; });
+    const p = box.querySelector('.ms-motivo'); if (p) p.focus();
+  }
+  async function encerrar_(ids, reabrir, motivo) {
+    if (!ids.length) return;
+    const r = await worker_('/msg/encerrar', 'POST', { conversas: ids, reabrir: !!reabrir, motivo: motivo || undefined });
     if (!r.ok) { aviso_(r.erro || 'Não foi possível agora. Tente de novo.'); return; }
     if (r.contagens) contagens = Object.assign({}, contagens || {}, r.contagens);
     const n = ids.length;
-    aviso_(reabrir ? (n === 1 ? 'Conversa reaberta.' : n + ' conversas reabertas.') : (n === 1 ? 'Conversa encerrada. Ela volta sozinha se o cliente escrever.' : n + ' conversas encerradas. Elas voltam sozinhas se o cliente escrever.'));
-    if (aberta && ids.indexOf(aberta.id) >= 0) aberta.encerrada_em = reabrir ? '' : new Date().toISOString();
+    aviso_(reabrir ? (n === 1 ? 'Conversa reaberta.' : n + ' conversas reabertas.') : (n === 1 ? 'Conversa encerrada' : n + ' conversas encerradas') + ' como “' + (NOME_MOTIVO_[motivo] || 'Concluído') + '”. ' + (n === 1 ? 'Ela volta sozinha' : 'Elas voltam sozinhas') + ' se o cliente escrever.');
+    if (aberta && ids.indexOf(aberta.id) >= 0) { aberta.encerrada_em = reabrir ? '' : new Date().toISOString(); aberta.encerrada_motivo = reabrir ? '' : (motivo || 'concluido'); }
     selecao = null; desenharSelbar_(); desenharAbas(); desenharFiltros(); selarBotao();
     await carregarLista(true);
   }
@@ -988,7 +1024,7 @@
       f.appendChild(botao('ms-btn', 'Abrir', 'abrir-outro', { id: String(c.outro_id), canal: outroCanal_(c) })); pai.appendChild(f);
     }
     if (c.encerrada_em) {
-      const f = el('div', 'ms-faixa'); f.appendChild(el('span', '', 'Conversa encerrada. Volta sozinha se o cliente escrever.'));
+      const f = el('div', 'ms-faixa'); f.appendChild(el('span', '', 'Conversa encerrada' + (NOME_MOTIVO_[c.encerrada_motivo] ? ' (' + NOME_MOTIVO_[c.encerrada_motivo] + ')' : '') + '. Volta sozinha se o cliente escrever.'));
       f.appendChild(botao('ms-btn', 'Reabrir', 'reabrir')); pai.appendChild(f);
     }
     if (espiando) {
@@ -1259,6 +1295,7 @@
     card(r.acima24h == null ? '—' : r.acima24h + '%', 'respostas depois de 24 h');
     p.appendChild(cards);
     p.appendChild(el('p', 'ms-vazio', r.conversas + ' conversas com mensagens · ' + r.entradas + ' recebidas · ' + r.saidas + ' enviadas (grupos ficam de fora).'));
+    if (r.encerramentos) { const e = r.encerramentos; p.appendChild(el('p', 'ms-vazio', 'Encerramentos no período: ' + e.concluido + ' concluídos · ' + e.vendeu + ' com venda · ' + e.sem_resposta + ' sem resposta do cliente · ' + e.engano + ' engano ou spam (fora das métricas).')); }
     if (r.aguardando.maisAntigas.length) {
       p.appendChild(el('h3', '', 'Esperando há mais tempo'));
       const ul2 = el('ul', 'ms-lista');
@@ -1310,9 +1347,16 @@
     else if (a === 'nome-salvar-cfg') { const i = $('ms-meu-nome'); await salvarNome_(i ? i.value : ''); }
     else if (a === 'sel-sair') sairSelecao_();
     else if (a === 'sel-todas' && selecao) { const todas = lista.length && lista.every((c) => selecao.has(c.id)); selecao = new Set(todas ? [] : lista.map((c) => c.id)); pintarLista(); desenharSelbar_(); }
-    else if (a === 'sel-encerrar' && selecao) await encerrar_(Array.from(selecao), filtro === 'encerradas');
+    else if (a === 'sel-encerrar' && selecao) { if (filtro === 'encerradas') await encerrar_(Array.from(selecao), true); else escolherMotivo_(Array.from(selecao)); }
+    else if (a === 'motivo' && idsMotivo_) {
+      const ids = idsMotivo_, m = b.dataset.m, eraAberta = aberta && ids.indexOf(aberta.id) >= 0; fecharMotivos_();
+      await encerrar_(ids, false, m);
+      if (eraAberta) voltarLista();
+    }
+    else if (a === 'motivo-cancelar') fecharMotivos_();
     else if ((a === 'sel-lidas' || a === 'sel-naolidas') && selecao) await marcarLote_(Array.from(selecao), a === 'sel-naolidas');
-    else if ((a === 'encerrar' || a === 'reabrir') && aberta) { const id = aberta.id; await encerrar_([id], a === 'reabrir'); if (aberta && aberta.id === id) { montarConversa(aberta); pintarFio(true); } if (a === 'encerrar') voltarLista(); }
+    else if (a === 'encerrar' && aberta) escolherMotivo_([aberta.id]);
+    else if (a === 'reabrir' && aberta) { const id = aberta.id; await encerrar_([id], true); if (aberta && aberta.id === id) { montarConversa(aberta); pintarFio(true); } }
     else if (a === 'abrir-outro') { if (canal !== 'todos') { canal = b.dataset.canal; filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); } abrirConversa(Number(b.dataset.id)); }
     else if (a === 'espiar') abrirConversa(Number(b.dataset.id), true);
     else if (a === 'atender' && aberta) { espiando = false; aberta.nao_lidas = Math.max(1, aberta.nao_lidas || 0); montarConversa(aberta); pintarFio(true); marcarLida(); const t = $('ms-texto'); if (t) t.focus(); }

@@ -100,7 +100,13 @@ async function iniciar(env) {
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN repostado_de INTEGER').run(); } catch (e) { /* já existe */ }
   /* Mensagens v2: lidas/não lidas, quem falta responder, estado de entrega e quem enviou pelo painel. */
-  for (const [t, col] of [['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  for (const [t, col] of [['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"], ['msg_conversa', "encerrada_motivo TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  /* v2.13: histórico de encerramentos (motivo, quando e por quem): base das métricas e, depois, do termômetro de cada cliente */
+  try {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_encerramento (id INTEGER PRIMARY KEY AUTOINCREMENT, conversa_id INTEGER NOT NULL, canal TEXT NOT NULL, pessoa TEXT DEFAULT '', contato TEXT DEFAULT '', motivo TEXT NOT NULL, em TEXT NOT NULL, por TEXT DEFAULT '')").run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_conv ON msg_encerramento (conversa_id, em)').run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_pessoa ON msg_encerramento (pessoa)').run();
+  } catch (e) { /* tenta de novo na próxima vez */ }
   /* v2.11: mesma pessoa nos dois WhatsApp (chave = número sem o 9º dígito) e o nome do próprio WhatsApp que tinha ido parar nas conversas */
   try {
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgc_pessoa ON msg_conversa (pessoa)').run();
@@ -2555,8 +2561,8 @@ async function gravarMensagem_(env, canal, m) {
   const quem = m.grupo && m.direcao === 'entrada' ? (m.autorNome || (m.autorFone ? '+' + m.autorFone : '')) : '';
   const previa = ((quem ? quem + ': ' : '') + (m.texto || ('[' + m.tipo + ']'))).replace(/\s+/g, ' ').slice(0, 140);
   /* Em SQLite o lado direito do SET usa os valores ANTIGOS da linha: por isso a comparação com ultima_em/ult_entrada_em vale como "antes desta mensagem". */
-  await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, atualizada_em=? WHERE id=?")
-    .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, t, c.id).run();
+  await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=?")
+    .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, t, c.id).run();
   return true;
 }
 /** Segredo do app da Meta: o cadastrado na Gestão (D1) vale primeiro; o secret do Worker é o reserva. */
@@ -2710,10 +2716,13 @@ async function aplicarLeiturasInstagram_(env, lst) {
   return n;
 }
 /* v2.11: chave da pessoa = número só com dígitos e, no Brasil, sem o 9º dígito do celular (o mesmo cliente às vezes chega com e sem ele). */
+/* v2.13: motivos de encerramento. Concluído/Vendeu/Cliente parou de responder contam como atendimento resolvido na hora do encerramento;
+ * Engano ou spam tira a conversa das métricas. */
+const MSG_MOTIVOS_ = ['concluido', 'vendeu', 'sem_resposta', 'engano'];
 const MSG_PESSOA_SQL_ = "(CASE WHEN length(contato)=13 AND substr(contato,1,2)='55' AND substr(contato,5,1)='9' THEN substr(contato,1,4)||substr(contato,6) ELSE contato END)";
 // v2.12: conversa encerrada não conta como "a pessoa também está no outro WhatsApp" (volta a contar quando o cliente escreve de novo nela)
 const MSG_OUTRO_SQL_ = "(SELECT o.id FROM msg_conversa o WHERE msg_conversa.pessoa<>'' AND o.pessoa=msg_conversa.pessoa AND o.canal<>msg_conversa.canal AND o.total>0 AND o.encerrada_em='' ORDER BY o.ultima_em DESC LIMIT 1)";
-const MSG_COLS_CONVERSA_ = "id, canal, contato, nome, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
+const MSG_COLS_CONVERSA_ = "id, canal, contato, nome, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
 const MSG_Q_ = (c) => "(SELECT q." + c + " FROM msg_mensagem q WHERE q.canal=msg_mensagem.canal AND q.ext_id=msg_mensagem.ctx_ref AND msg_mensagem.ctx_ref<>'' LIMIT 1)";
 const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + MSG_Q_('texto') + " AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir";
 async function msgContagens_(env, canal, tipo) {
@@ -2947,19 +2956,27 @@ async function metricasMensagens_(env, canal, dias) {
   dias = [7, 30, 90].includes(Number(dias)) ? Number(dias) : 30;
   const desde = new Date(Date.now() - dias * 86400000).toISOString();
   const rs = await env.DB.prepare('SELECT m.conversa_id, m.direcao, m.enviada_em FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0 AND m.enviada_em>=?' + (canal ? ' AND c.canal=?' : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT 30000').bind(...(canal ? [desde, canal] : [desde])).all();
+  /* v2.13: encerramentos entram na linha do tempo: Concluído/Vendeu/Parou de responder valem como atendimento resolvido naquela hora
+   * (sem mensagem da loja não é demora); conversa marcada como Engano ou spam fica fora das métricas. */
+  const enc = (await env.DB.prepare('SELECT e.conversa_id, e.motivo, e.em AS enviada_em FROM msg_encerramento e JOIN msg_conversa c ON c.id=e.conversa_id WHERE c.grupo=0 AND e.em>=?' + (canal ? ' AND c.canal=?' : '') + ' LIMIT 20000').bind(...(canal ? [desde, canal] : [desde])).all()).results;
+  const engano = new Set(enc.filter((e) => e.motivo === 'engano').map((e) => e.conversa_id)), encerramentos = { concluido: 0, vendeu: 0, sem_resposta: 0, engano: 0 };
+  enc.forEach((e) => { if (encerramentos[e.motivo] != null) encerramentos[e.motivo]++; });
+  const linha = rs.results.filter((m) => !engano.has(m.conversa_id)).concat(enc.filter((e) => !engano.has(e.conversa_id)).map((e) => ({ conversa_id: e.conversa_id, direcao: 'encerrou', enviada_em: e.enviada_em })))
+    .sort((a, b) => a.conversa_id - b.conversa_id || String(a.enviada_em).localeCompare(String(b.enviada_em)));
   let conv = null, aberto = null, entradas = 0, saidas = 0; const demoras = [], porHora = Array.from({ length: 24 }, () => ({ entradas: 0, demoras: [] })), convs = new Set(); let semResposta = 0, horaAberta = 0;
   const fechar = () => { if (aberto !== null) semResposta++; aberto = null; };
-  for (const m of rs.results) {
+  for (const m of linha) {
     if (m.conversa_id !== conv) { fechar(); conv = m.conversa_id; convs.add(conv); }
+    if (m.direcao === 'encerrou') { if (aberto !== null) { const min = Math.max(0, (Date.parse(m.enviada_em) - aberto) / 60000); demoras.push(min); porHora[horaAberta].demoras.push(min); aberto = null; } continue; }
     if (m.direcao === 'entrada') { entradas++; if (aberto === null) { aberto = Date.parse(m.enviada_em); horaAberta = new Date(aberto - 3 * 3600000).getUTCHours(); porHora[horaAberta].entradas++; } }
     else { saidas++; if (aberto !== null) { const min = Math.max(0, (Date.parse(m.enviada_em) - aberto) / 60000); demoras.push(min); porHora[horaAberta].demoras.push(min); aberto = null; } }
   }
   fechar();
   const med = (a) => { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y), k = Math.floor(s.length / 2); return Math.round(s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2); };
   const pct = (a, f) => a.length ? Math.round(100 * a.filter(f).length / a.length) : null;
-  const espera = await env.DB.prepare("SELECT id, canal, contato, nome, ult_entrada_em FROM msg_conversa WHERE grupo=0 AND ult_dir='entrada' AND total>0" + (canal ? ' AND canal=?' : '') + ' ORDER BY ult_entrada_em ASC LIMIT 8').bind(...(canal ? [canal] : [])).all();
-  const totEspera = await env.DB.prepare("SELECT COUNT(*) AS n FROM msg_conversa WHERE grupo=0 AND ult_dir='entrada' AND total>0" + (canal ? ' AND canal=?' : '')).bind(...(canal ? [canal] : [])).first();
-  return { ok: true, dias: dias, canal: canal || 'todos', conversas: convs.size, entradas: entradas, saidas: saidas, perguntasRespondidas: demoras.length, perguntasSemResposta: semResposta, medianaMin: med(demoras), mediaMin: demoras.length ? Math.round(demoras.reduce((a, b) => a + b, 0) / demoras.length) : null, ate5min: pct(demoras, (x) => x <= 5), ate60min: pct(demoras, (x) => x <= 60), acima24h: pct(demoras, (x) => x > 1440),
+  const espera = await env.DB.prepare("SELECT id, canal, contato, nome, ult_entrada_em FROM msg_conversa WHERE grupo=0 AND ult_dir='entrada' AND encerrada_em='' AND total>0" + (canal ? ' AND canal=?' : '') + ' ORDER BY ult_entrada_em ASC LIMIT 8').bind(...(canal ? [canal] : [])).all();
+  const totEspera = await env.DB.prepare("SELECT COUNT(*) AS n FROM msg_conversa WHERE grupo=0 AND ult_dir='entrada' AND encerrada_em='' AND total>0" + (canal ? ' AND canal=?' : '')).bind(...(canal ? [canal] : [])).first();
+  return { ok: true, dias: dias, canal: canal || 'todos', encerramentos: encerramentos, conversas: convs.size, entradas: entradas, saidas: saidas, perguntasRespondidas: demoras.length, perguntasSemResposta: semResposta, medianaMin: med(demoras), mediaMin: demoras.length ? Math.round(demoras.reduce((a, b) => a + b, 0) / demoras.length) : null, ate5min: pct(demoras, (x) => x <= 5), ate60min: pct(demoras, (x) => x <= 60), acima24h: pct(demoras, (x) => x > 1440),
     aguardando: { total: Number((totEspera || {}).n) || 0, maisAntigas: espera.results.map((x) => ({ id: x.id, canal: x.canal, nome: rotuloContato_(x), desde: x.ult_entrada_em })) },
     porHora: porHora.map((h, i) => ({ hora: i, entradas: h.entradas, medianaMin: med(h.demoras) })) };
 }
@@ -3140,7 +3157,10 @@ export default {
         const d = await req.json().catch(() => ({})), ids = [...new Set((Array.isArray(d.conversas) ? d.conversas : [d.conversa]).map(Number).filter((x) => Number.isInteger(x) && x > 0))].slice(0, 200);
         if (!ids.length) return J({ ok: false, erro: 'Escolha ao menos uma conversa.' }, 400);
         const t = agora(), reabrir = d.reabrir === true, marca = ids.map(() => '?').join(',');
-        const r = await env.DB.prepare(reabrir ? "UPDATE msg_conversa SET encerrada_em='', atualizada_em=? WHERE id IN (" + marca + ")" : 'UPDATE msg_conversa SET encerrada_em=?, nao_lidas=0, atualizada_em=? WHERE id IN (' + marca + ')').bind(...(reabrir ? [t] : [t, t]), ...ids).run();
+        // v2.13: motivo do encerramento (padrão "concluido"); cada encerramento fica no histórico
+        const motivo = MSG_MOTIVOS_.includes(d.motivo) ? d.motivo : 'concluido', por = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(-4);
+        const r = await env.DB.prepare(reabrir ? "UPDATE msg_conversa SET encerrada_em='', encerrada_motivo='', atualizada_em=? WHERE id IN (" + marca + ")" : 'UPDATE msg_conversa SET encerrada_em=?, encerrada_motivo=?, nao_lidas=0, atualizada_em=? WHERE id IN (' + marca + ')').bind(...(reabrir ? [t] : [t, motivo, t]), ...ids).run();
+        if (!reabrir) await env.DB.prepare('INSERT INTO msg_encerramento (conversa_id, canal, pessoa, contato, motivo, em, por) SELECT id, canal, pessoa, contato, ?, ?, ? FROM msg_conversa WHERE id IN (' + marca + ')').bind(motivo, t, por, ...ids).run();
         return J({ ok: true, alteradas: Number(r.meta && r.meta.changes) || 0, contagens: await msgContagens_(env) });
       }
       if (p === '/msg/config' && req.method === 'GET') {
