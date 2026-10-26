@@ -6,6 +6,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.28.0 — Google Contatos: ligar a ponte, cópia de segurança e relatório da primeira limpeza — 2026-10-26
+
+- Mensagens → ⋯ → Configurações → "Google Contatos (marcador Tenkiter Clientes G)": liga a ponte (`contatos-ponte-1.0`, Apps Script publicado na conta dos contatos), faz a cópia de segurança no Drive daquela conta e gera o relatório da primeira limpeza.
+- O relatório mostra pessoas repetidas pelo número, números a padronizar, números inválidos, contatos sem número e quem conversou no WhatsApp e não está no Google. Só lê: nada muda no Google nesta etapa.
+- Worker: rotas `/msg/contatos/*`. O endereço e a chave da ponte ficam só no servidor.
+- A caixa de Configurações rola por dentro.
+- Service worker renovado (tk-3.38.16).
+
 ## 7.27.0 — Mensagens: motivo ao encerrar — 2026-10-26
 
 - Encerrar pergunta o motivo:

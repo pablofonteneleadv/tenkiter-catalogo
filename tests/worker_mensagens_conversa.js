@@ -545,6 +545,48 @@ function d1() {
   chk('"Engano ou spam" tira a conversa das métricas', mB.conversas === mA.conversas - 1 && mB.entradas === mA.entradas - 1 && mB.encerramentos.engano === 1, [mA.conversas, mB.conversas, mB.encerramentos]);
   await A('POST', '/msg/encerrar', { conversas: [cm2], reabrir: true });
   chk('reabrir limpa o motivo', (await conv('whatsapp1', '5588966660002')).encerrada_motivo === '');
+  // ---- v2.14: ponte do Google Contatos (só leitura: cópia de segurança e relatório) ----
+  const PONTE = 'https://script.google.com/macros/s/AKfycbTESTEPONTE1234567890abcdef/exec', CHAVE_P = 'a'.repeat(64);
+  const contatosG = [
+    { r: 'people/c1', n: 'Maria Silva', f: ['+55 88 99999-0001'] }, { r: 'people/c2', n: 'Maria S.', f: ['(88) 9999-0001'], m: ['m@x.com'] },
+    { r: 'people/c3', n: 'Sem número', f: [] }, { r: 'people/c4', n: 'Fixo errado', f: ['12345'] }, { r: 'people/c5', n: 'Rita', f: ['+5588977770001'] }
+  ];
+  const pedidosPonte = []; const fPonte = globalThis.fetch;
+  globalThis.fetch = async (u, init) => {
+    if (String(u) === PONTE) {
+      const b = JSON.parse(init.body); pedidosPonte.push(b);
+      if (b.chave !== CHAVE_P) return new Response(JSON.stringify({ ok: false, erro: 'Chave da ponte inválida.' }));
+      if (b.acao === 'ping') return new Response(JSON.stringify({ ok: true, versao: 'contatos-ponte-1.0', conta: 'contatos@exemplo.com' }));
+      if (b.acao === 'backup') return new Response(JSON.stringify({ ok: true, total: contatosG.length, arquivo: 'contatos-google-2026-10-26-1800.json', url: 'https://drive.google.com/file/d/abc' }));
+      if (b.acao === 'listar') { const ini = Number(b.pagina || 0); return new Response(JSON.stringify({ ok: true, contatos: contatosG.slice(ini, ini + 3), proxima: ini + 3 < contatosG.length ? String(ini + 3) : '' })); }
+    }
+    if (String(u).startsWith('https://script.google.com/macros/s/AKfycbPAGINA')) return new Response('<html>Faça login</html>');
+    return fPonte(u, init);
+  };
+  const sit0 = await A('GET', '/msg/contatos/situacao');
+  chk('ponte começa desligada', sit0.j.ok && sit0.j.ligada === false && sit0.j.marcador === 'Tenkiter Clientes G');
+  chk('endereço errado: erro em português', /script\.google\.com/.test((await A('POST', '/msg/contatos/config', { url: 'https://exemplo.com/x', chave: CHAVE_P })).j.erro));
+  chk('chave curta: erro em português', /chave/.test((await A('POST', '/msg/contatos/config', { url: PONTE, chave: 'abc' })).j.erro));
+  chk('chave que a ponte não aceita: não liga', (await A('POST', '/msg/contatos/config', { url: PONTE, chave: 'b'.repeat(64) })).j.erro === 'Chave da ponte inválida.' && !(await A('GET', '/msg/contatos/situacao')).j.ligada);
+  chk('implantação que devolve página de login: explica o que conferir', /Qualquer pessoa/.test((await A('POST', '/msg/contatos/config', { url: 'https://script.google.com/macros/s/AKfycbPAGINA1234567890abcdefgh/exec', chave: CHAVE_P })).j.erro));
+  const ligP = await A('POST', '/msg/contatos/config', { url: PONTE, chave: CHAVE_P });
+  const sit1 = await A('GET', '/msg/contatos/situacao');
+  chk('ligar confirma com a ponte e guarda a conta', ligP.j.ok && ligP.j.conta === 'contatos@exemplo.com' && sit1.j.ligada && sit1.j.conta === 'contatos@exemplo.com', ligP.j);
+  chk('a chave nunca volta para a tela', !JSON.stringify(sit1.j).includes(CHAVE_P) && !JSON.stringify(ligP.j).includes(CHAVE_P));
+  chk('relatório antes da cópia de segurança: pede a cópia primeiro', (await A('POST', '/msg/contatos/relatorio')).j.erro === 'Faça a cópia de segurança dos contatos antes do relatório.');
+  const bkP = await A('POST', '/msg/contatos/backup');
+  chk('cópia de segurança no Drive da conta dos contatos', bkP.j.ok && bkP.j.total === 5 && bkP.j.url === 'https://drive.google.com/file/d/abc' && (await A('GET', '/msg/contatos/situacao')).j.backup.arquivo === 'contatos-google-2026-10-26-1800.json', bkP.j);
+  const nPed = pedidosPonte.length, relP = await A('POST', '/msg/contatos/relatorio');
+  chk('relatório lê todas as páginas da ponte', relP.j.ok && relP.j.total === 5 && pedidosPonte.slice(nPed).filter((x) => x.acao === 'listar').length === 2, relP.j);
+  chk('relatório: duplicados pelo número (com e sem o 9 e com máscara)', relP.j.duplicados.total === 1 && relP.j.duplicados.lista[0].contatos.map((c) => c.r).sort().join() === 'people/c1,people/c2', relP.j.duplicados);
+  chk('relatório: sem número e número inválido', relP.j.semFone === 1 && relP.j.invalidos.total === 1 && relP.j.invalidos.lista[0].n === 'Fixo errado');
+  chk('relatório: números a padronizar (+55 e o 9 do celular antigo; espaço e traço não contam)', relP.j.corrigir.lista.some((x) => x.r === 'people/c2' && x.para === '+5588999990001') && !relP.j.corrigir.lista.some((x) => x.r === 'people/c1'), relP.j.corrigir);
+  chk('relatório: quem conversou no WhatsApp e não está no Google', relP.j.semCadastro.total >= 1 && !relP.j.semCadastro.lista.some((x) => x.fone === '+5588977770001') && relP.j.semCadastro.lista.every((x) => /^\+55/.test(x.fone)), relP.j.semCadastro.lista.slice(0, 3));
+  chk('nenhuma ação de mudança foi pedida à ponte (só leitura)', pedidosPonte.every((x) => ['ping', 'backup', 'listar'].includes(x.acao)));
+  chk('relatório fica guardado para abrir depois', (await A('GET', '/msg/contatos/situacao?relatorio=1')).j.relatorio.total === 5);
+  const deslP = await A('POST', '/msg/contatos/config', { desligar: true });
+  chk('desligar apaga endereço e chave do servidor', deslP.j.ok && !(await A('GET', '/msg/contatos/situacao')).j.ligada && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='contatos_chave'").first()));
+  globalThis.fetch = fPonte;
   globalThis.fetch = f5;
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });

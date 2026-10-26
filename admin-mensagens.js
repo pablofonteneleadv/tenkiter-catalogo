@@ -265,7 +265,13 @@
       .ms-assina .ms-btn { min-height: 40px; padding: 6px 12px; }
       .sheet-mensagens .ms-link-btn { min-height: 44px; padding: 0 6px; border: 0; background: none; color: #7a3a00; font: inherit; font-size: 0.78rem; font-weight: 700; text-decoration: underline; cursor: pointer; }
       .ms-atendente { color: #0f6b3f; }
-      .ms-cfg-tit { margin: 12px 0 0; font-weight: 700; } .ms-cfg-tit.ms-cfg-tit1 { margin-top: 0; }
+      .ms-cfg-tit { margin: 12px 0 0; font-weight: 700; }
+      .ms-rel-quando { margin: 0 0 6px; font-size: 0.8rem; color: #4a443b; }
+      #ms-estado-wrap .ms-caixa { max-height: 58dvh; overflow-y: auto; overscroll-behavior: contain; }
+      .ms-contatos { border-top: 1px solid #eee; margin-top: 10px; padding-top: 2px; } .ms-contatos .ms-copia { margin: 4px 0; }
+      .ms-rel-sec { border: 1px solid #e6e1d6; border-radius: 10px; margin: 8px 0; background: #fff; }
+      .ms-rel-sec summary { min-height: 44px; display: flex; align-items: center; padding: 0 12px; font-weight: 700; cursor: pointer; }
+      .ms-rel-lista { margin: 0; padding: 0 12px 10px 28px; font-size: 0.82rem; } .ms-rel-lista li { margin: 4px 0; overflow-wrap: anywhere; } .ms-cfg-tit.ms-cfg-tit1 { margin-top: 0; }
       /* conversa */
       .ms-cab { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid #e6e1d6; background: #fff; }
       .ms-cab .ms-quem { flex: 1; min-width: 0; } .ms-cab .ms-quem b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ms-cab .ms-quem span { display: block; font-size: 0.76rem; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -518,8 +524,70 @@
     caixa.appendChild(el('p', 'ms-cfg-res', 'Sai assim: “' + (nomeAtendente_() || 'Pablo') + ': Temos sim!” (no WhatsApp, o nome vai em negrito).'));
     const ln = el('div', 'ms-linha'), inp = el('input', 'ms-copia'); inp.id = 'ms-meu-nome'; inp.type = 'text'; inp.maxLength = 30; inp.autocomplete = 'off'; inp.value = cfgLeitura.meuNome || ''; inp.placeholder = nomePadrao_() ? 'Seu nome (padrão: ' + nomePadrao_() + ')' : 'Seu nome nas respostas'; inp.setAttribute('aria-label', 'Seu nome nas respostas');
     inp.style.flex = '1 1 160px'; inp.style.width = 'auto'; ln.append(inp, botao('ms-btn', 'Salvar nome', 'nome-salvar-cfg')); caixa.appendChild(ln);
+    caixa.appendChild(blocoContatos_());
     const l = el('div', 'ms-linha'); l.appendChild(botao('ms-btn', 'Fechar', 'leitura-cfg')); caixa.appendChild(l);
     return caixa;
+  }
+  /* ---- v7.28: Google Contatos pela ponte (fase de leitura: cópia de segurança e relatório da primeira limpeza) ---- */
+  let contatosSit = null;
+  async function carregarContatos_() {
+    const r = await worker_('/msg/contatos/situacao', 'GET');
+    contatosSit = r.ok ? r : { ligada: false, erro: r.erro };
+    if (painel === 'leitura') desenharEstado();
+  }
+  function blocoContatos_() {
+    const b = el('div', 'ms-contatos'); b.id = 'ms-contatos';
+    b.appendChild(el('p', 'ms-cfg-tit', 'Google Contatos (marcador “Tenkiter Clientes G”)'));
+    if (!contatosSit) { b.appendChild(el('p', 'ms-cfg-res', 'Carregando…')); carregarContatos_(); return b; }
+    if (!contatosSit.ligada) {
+      b.appendChild(el('p', 'ms-cfg-res', 'Ainda não ligado. Publique a ponte (contatos-ponte) na conta dos contatos e cole aqui o endereço da implantação e a chave que a função “configurar” mostrou.'));
+      const u = el('input', 'ms-copia'); u.id = 'ms-ponte-url'; u.type = 'url'; u.placeholder = 'https://script.google.com/macros/s/…/exec'; u.setAttribute('aria-label', 'Endereço da ponte do Google Contatos');
+      const k = el('input', 'ms-copia'); k.id = 'ms-ponte-chave'; k.type = 'password'; k.autocomplete = 'new-password'; k.placeholder = 'Chave da ponte'; k.setAttribute('aria-label', 'Chave da ponte do Google Contatos');
+      const l = el('div', 'ms-linha'); l.appendChild(botao('ms-btn prim', 'Ligar a ponte', 'ponte-ligar'));
+      b.append(u, k, l); return b;
+    }
+    b.appendChild(el('p', 'ms-ok', 'Ligada à conta ' + (contatosSit.conta || '(sem e-mail)') + '.'));
+    const bk = contatosSit.backup;
+    const pb = el('p', 'ms-cfg-res', bk ? 'Última cópia de segurança: ' + hora(bk.em) + ' (' + bk.total + ' contatos). ' : 'Antes de qualquer limpeza, faça uma cópia de segurança dos contatos (fica no Drive da conta dos contatos).');
+    if (bk && bk.url) { const a = el('a', 'ms-link', 'Abrir no Drive'); a.href = bk.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; pb.appendChild(a); }
+    b.appendChild(pb);
+    const l = el('div', 'ms-linha');
+    l.appendChild(botao('ms-btn', 'Fazer cópia de segurança', 'ponte-backup'));
+    const rel = botao('ms-btn prim', 'Gerar relatório da limpeza', 'ponte-relatorio'); rel.disabled = !bk; l.appendChild(rel);
+    b.appendChild(l);
+    b.appendChild(el('p', 'ms-cfg-res', 'O relatório só lê os contatos: nada muda no Google até você aprovar.'));
+    const l2 = el('div', 'ms-linha'); l2.appendChild(botao('ms-link-btn', 'Ver o último relatório', 'ponte-ver')); l2.appendChild(botao('ms-link-btn', 'Desligar a ponte', 'ponte-desligar')); b.appendChild(l2);
+    return b;
+  }
+  function mostrarRelatorio_(r) {
+    painel = 'metricas'; const ex = $('ms-extra'), ul = $('ms-lista'); ul.hidden = true; chrome_(true); ex.textContent = '';
+    const p = el('div', 'ms-painel ms-relatorio');
+    const topo = el('div', 'ms-linha'); topo.appendChild(botao('ms-btn', '← Conversas', 'fechar-painel')); p.appendChild(topo);
+    p.appendChild(el('h3', '', 'Relatório da primeira limpeza dos contatos'));
+    if (!r) { p.appendChild(el('p', 'ms-vazio', 'Ainda não há relatório. Gere em ⋯ → Configurações → Google Contatos.')); ex.appendChild(p); return; }
+    p.appendChild(el('p', 'ms-rel-quando', 'Gerado ' + hora(r.em) + '. Nada foi mudado no Google.'));
+    const cards = el('div', 'ms-cards');
+    const card = (v, t, alerta) => { const c = el('div', 'ms-card' + (alerta ? ' alerta' : '')); c.appendChild(el('b', '', String(v))); c.appendChild(el('span', '', t)); cards.appendChild(c); };
+    card(r.total, 'contatos no Google');
+    card(r.duplicados.total, 'pessoas repetidas (' + r.duplicados.contatosEnvolvidos + ' contatos)', r.duplicados.total > 0);
+    card(r.corrigir.total, 'números a padronizar', r.corrigir.total > 0);
+    card(r.invalidos.total, 'números inválidos', r.invalidos.total > 0);
+    card(r.semFone, 'contatos sem número');
+    card(r.semCadastro.total, 'conversaram no WhatsApp e não estão no Google', r.semCadastro.total > 0);
+    p.appendChild(cards);
+    const secao = (titulo, lista, total, linha) => {
+      const d = el('details', 'ms-rel-sec'); d.appendChild(el('summary', '', titulo + ' (' + total + ')'));
+      const u2 = el('ul', 'ms-rel-lista'); lista.slice(0, 80).forEach((x) => u2.appendChild(el('li', '', linha(x))));
+      if (total > 80) u2.appendChild(el('li', 'ms-cfg-res', '… e mais ' + (total - 80) + '.'));
+      if (!total) u2.appendChild(el('li', 'ms-cfg-res', 'Nenhum.'));
+      d.appendChild(u2); p.appendChild(d);
+    };
+    secao('Pessoas repetidas (vão virar um contato só)', r.duplicados.lista, r.duplicados.total, (g) => g.contatos.map((c) => (c.n || 'Sem nome') + ' ' + (c.f || []).join(', ')).join(' + '));
+    secao('Números a padronizar', r.corrigir.lista, r.corrigir.total, (x) => (x.n || 'Sem nome') + ': ' + x.de + ' → ' + x.para);
+    secao('Números inválidos (ficam como estão; confira à mão)', r.invalidos.lista, r.invalidos.total, (x) => (x.n || 'Sem nome') + ': ' + x.f);
+    secao('Conversaram no WhatsApp e não estão no Google (vão ser criados no marcador)', r.semCadastro.lista, r.semCadastro.total, (x) => (x.nome || 'Sem nome') + ' · ' + foneBonito_(x.fone) + ' · ' + (NOME_CANAL[x.canal] || x.canal));
+    p.appendChild(el('p', 'ms-vazio', 'Quando você aprovar, a próxima etapa junta as pessoas repetidas, padroniza os números e cria no marcador “Tenkiter Clientes G” quem conversou e não está no Google. Depois disso, cada número novo que chegar sem cadastro entra sozinho.'));
+    ex.appendChild(p);
   }
   async function carregarCfgLeitura_() {
     const r = await worker_('/msg/config', 'GET');
@@ -1336,6 +1404,26 @@
     else if (a === 'abrir') { if (toqueLongo) { toqueLongo = false; return; } if (selecao) { const id = Number(b.dataset.id); if (selecao.has(id)) selecao.delete(id); else selecao.add(id); pintarLista(); desenharSelbar_(); } else abrirConversa(Number(b.dataset.id)); }
     else if (a === 'selecionar') iniciarSelecao_(0);
     else if (a === 'nome-editar') desenharAssina_(true);
+    else if (a === 'ponte-ligar') {
+      b.disabled = true; const r = await worker_('/msg/contatos/config', 'POST', { url: ($('ms-ponte-url') || {}).value || '', chave: ($('ms-ponte-chave') || {}).value || '' }); b.disabled = false;
+      if (!r.ok) { aviso_(r.erro || 'Não foi possível ligar agora.'); return; }
+      aviso_('Ponte ligada à conta ' + (r.conta || '') + '.'); contatosSit = null; desenharEstado();
+    }
+    else if (a === 'ponte-backup') {
+      b.disabled = true; aviso_('Fazendo a cópia de segurança dos contatos… pode levar um minuto.'); const r = await worker_('/msg/contatos/backup', 'POST', {}); b.disabled = false;
+      if (!r.ok) { aviso_(r.erro || 'Não foi possível fazer a cópia agora.'); return; }
+      aviso_('Cópia feita: ' + r.total + ' contatos salvos no Drive da conta dos contatos.'); contatosSit = null; desenharEstado();
+    }
+    else if (a === 'ponte-relatorio') {
+      b.disabled = true; aviso_('Lendo os contatos para o relatório… pode levar um minuto.'); const r = await worker_('/msg/contatos/relatorio', 'POST', {}); b.disabled = false;
+      if (!r.ok) { aviso_(r.erro || 'Não foi possível gerar agora.'); return; }
+      aviso_(''); mostrarRelatorio_(r);
+    }
+    else if (a === 'ponte-ver') { const r = await worker_('/msg/contatos/situacao?relatorio=1', 'GET'); mostrarRelatorio_(r.ok ? r.relatorio : null); }
+    else if (a === 'ponte-desligar') {
+      if (!confirm('Desligar a ponte do Google Contatos? O endereço e a chave saem do servidor da loja. Nenhum contato é apagado.')) return;
+      const r = await worker_('/msg/contatos/config', 'POST', { desligar: true }); if (r.ok) { aviso_('Ponte desligada.'); contatosSit = null; desenharEstado(); }
+    }
     else if (a === 'gaveta-produtos') abrirProdutos_();
     else if (a === 'gaveta-respostas') abrirRespostas_(false);
     else if (a === 'gaveta-fechar') { fecharGaveta_(); const t = $('ms-texto'); if (t) t.focus(); }
@@ -1360,7 +1448,7 @@
     else if (a === 'abrir-outro') { if (canal !== 'todos') { canal = b.dataset.canal; filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); } abrirConversa(Number(b.dataset.id)); }
     else if (a === 'espiar') abrirConversa(Number(b.dataset.id), true);
     else if (a === 'atender' && aberta) { espiando = false; aberta.nao_lidas = Math.max(1, aberta.nao_lidas || 0); montarConversa(aberta); pintarFio(true); marcarLida(); const t = $('ms-texto'); if (t) t.focus(); }
-    else if (a === 'leitura-cfg') { painel = painel === 'leitura' ? '' : 'leitura'; if (painel === 'leitura') cfgLeitura = null; desenharEstado(); }
+    else if (a === 'leitura-cfg') { painel = painel === 'leitura' ? '' : 'leitura'; if (painel === 'leitura') { cfgLeitura = null; contatosSit = null; } desenharEstado(); }
     else if (a === 'abrir-canal') { canal = b.dataset.canal; fecharPainelSilencioso(); filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); abrirConversa(Number(b.dataset.id)); }
     else if (a === 'voltar') voltarLista();
     else if (a === 'enviar') enviar();
