@@ -3546,6 +3546,9 @@
     // "WhatsApp ou senha incorretos" mesmo com a pessoa logada. Vai a sessão + o WhatsApp de quem está logado, como nas outras chamadas.
     const sessEnvio = (typeof getSessao === 'function' && getSessao()) || null;
     const dados = Object.assign({}, it.dados, { pin: adminPin, sessao: adminPin, whatsapp: sessEnvio ? sessEnvio.whatsapp : '', funcionario: funcionarioNome });
+    // v7.14.3: edição de peça "Consultar valor" (Preco 0) que não mexeu no preço — ex.: a janela "Editar peças" reenvia o preço atual, 0 —
+    // vai com a marca consultarValor. Sem ela o servidor recusava "Preço inválido". Vale também para envios antigos que falharam e são reenviados.
+    if (dados.action === 'update' && dados.consultarValor === undefined && consultarLiberado_ && !(Number(String(dados.preco == null ? '' : dados.preco).replace(',', '.')) > 0)) { dados.consultarValor = true; dados.preco = ''; }
     if (!it.ehEdicao) dados.opId = it.k;   // v4.20: código único da peça: reenviar a MESMA peça nunca cria outra (backend 4.19)
     const arqVideos = arquivosDeVideo_(it), galeria = it.galeriaNovaB64 || [], subiu = it.subiu || { capa: '', gal: {}, vid: {} };
     if (subiu.capa) dados.fotoUrlExistente = subiu.capa;
@@ -4381,6 +4384,7 @@
         };
         if (nomeNovo) dados.nome = modoNome === 'fim' ? ((p.Nome || '') + ' ' + nomeNovo).trim() : modoNome === 'inicio' ? (nomeNovo + ' ' + (p.Nome || '')).trim() : nomeNovo;
         if (precoFinal != null) dados.preco = precoFinal;
+        else if (ehConsulta(p) && consultarLiberado_) { dados.consultarValor = true; dados.preco = ''; }   // v7.14.3: continua "Consultar valor"
         if (pct != null && Number(p.Preco) > 0) { const base = Number(p.Preco) * (1 + pct / 100), r = typeof precoTerminacao === 'function' ? precoTerminacao(base) : null; dados.preco = String((r && r.valido ? r.cheio : Math.round(base * 100) / 100).toFixed(2)); }
         if (estTxt !== '') { const atual = Number(p.Estoque) || 0, q = Number(estTxt); dados.estoque = String(modoEst === 'mais' ? atual + q : modoEst === 'menos' ? Math.max(0, atual - q) : q); }
         if (descNova) dados.descricao = modoDesc === 'fim' && p.Descricao ? (p.Descricao + ' ' + descNova).trim() : descNova;
