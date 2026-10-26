@@ -100,7 +100,13 @@ async function iniciar(env) {
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN repostado_de INTEGER').run(); } catch (e) { /* já existe */ }
   /* Mensagens v2: lidas/não lidas, quem falta responder, estado de entrega e quem enviou pelo painel. */
-  for (const [t, col] of [['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  for (const [t, col] of [['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  /* v2.11: mesma pessoa nos dois WhatsApp (chave = número sem o 9º dígito) e o nome do próprio WhatsApp que tinha ido parar nas conversas */
+  try {
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgc_pessoa ON msg_conversa (pessoa)').run();
+    await env.DB.prepare("UPDATE msg_conversa SET pessoa=" + MSG_PESSOA_SQL_ + " WHERE pessoa='' AND grupo=0 AND canal IN ('whatsapp1','whatsapp2') AND contato<>'' AND contato NOT GLOB '*[^0-9]*'").run();
+    for (const c of ['whatsapp1', 'whatsapp2']) { const proprio = await cfgGet(env, 'msg_nome_proprio_' + c); if (proprio) await env.DB.prepare("UPDATE msg_conversa SET nome='' WHERE canal=? AND grupo=0 AND lower(nome)=lower(?)").bind(c, proprio).run(); }
+  } catch (e) { /* tenta de novo na próxima vez */ }
   try { await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgc_atu ON msg_conversa (atualizada_em)').run(); await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgm_st ON msg_mensagem (conversa_id, status_em)').run(); } catch (e) { /* tenta de novo depois */ }
   try {
     if (!(await cfgGet(env, 'mig_msg_v2'))) {
@@ -2393,7 +2399,12 @@ function normalizarWafly_(b) {
   const autorNome = grupo && !fromMe ? String(b.senderName || '').trim().slice(0, 80) : '';
   const autorFone = grupo && !fromMe ? soDig(b.participantPhone) : '';
   const autorLid = grupo && !fromMe ? soDig(b.participantLid) : '';
-  return { autorNome: autorNome, autorFone: autorFone, autorLid: autorLid, extId: id, contato: fone.slice(0, 80), nome: String((grupo ? b.chatName : (fromMe ? b.chatName : b.senderName || b.chatName)) || '').slice(0, 120), grupo: grupo ? 1 : 0, direcao: fromMe ? 'saida' : 'entrada', tipo: tipo, texto: texto.slice(0, MSG_TEXTO_MAX), em: em,
+  /* v2.11: numa mensagem que a LOJA enviou, senderName é o nome do próprio WhatsApp da loja e, com contato não salvo, chatName também vem
+   * com ele ("tenkitermodas"). Mensagem enviada nunca dá nome à conversa: o nome vem do cliente (o que ele colocou no WhatsApp). */
+  const proprio = fromMe && !grupo ? String(b.senderName || '').trim().slice(0, 120) : '';
+  const chat = String(b.chatName || '').trim();
+  const nome = grupo ? chat : fromMe ? '' : String(b.senderName || '').trim() || chat;
+  return { nomeProprio: proprio, autorNome: autorNome, autorFone: autorFone, autorLid: autorLid, extId: id, contato: fone.slice(0, 80), nome: nome.slice(0, 120), grupo: grupo ? 1 : 0, direcao: fromMe ? 'saida' : 'entrada', tipo: tipo, texto: texto.slice(0, MSG_TEXTO_MAX), em: em,
     midiaUrl: midiaUrl, midiaMime: midiaMime, midiaSeg: midiaSeg, ctxTipo: b.isStatusReply === true ? 'story' : (ref ? 'resposta' : ''), ctxRef: ref };
 }
 /** Evento "messaging" do webhook do Instagram (DM) -> linhas prontas. */
@@ -2505,14 +2516,28 @@ async function resolverStory_(env, canal, emIso) {
   const l = rs.results || [];
   return l.length ? { post: Number(l[0].id) || 0, aprox: l.length > 1 ? 1 : 0 } : { post: 0, aprox: 0 };
 }
+/* v2.11: o nome do próprio WhatsApp da loja (senderName das mensagens que ela envia) tinha virado nome de conversas ("tenkitermodas").
+ * Só é tido como "nome da loja" quando o MESMO nome aparece enviando para dois contatos diferentes; aí as conversas com esse nome
+ * voltam a mostrar o número (e ganham o nome do cliente quando ele escrever). */
+async function aprenderNomeProprio_(env, canal, nome, contato, t) {
+  if ((await cfgGet(env, 'msg_nome_proprio_' + canal)) === nome) return;
+  let cand = null; try { cand = JSON.parse((await cfgGet(env, 'msg_nome_proprio_cand_' + canal)) || 'null'); } catch (e) { cand = null; }
+  if (cand && cand.nome === nome && cand.contato !== contato) {
+    await cfgSet(env, 'msg_nome_proprio_' + canal, nome);
+    await cfgSet(env, 'msg_nome_proprio_cand_' + canal, null);
+    await env.DB.prepare("UPDATE msg_conversa SET nome='', atualizada_em=? WHERE canal=? AND grupo=0 AND lower(nome)=lower(?)").bind(t, canal, nome).run();
+  } else if (!cand || cand.nome !== nome) await cfgSet(env, 'msg_nome_proprio_cand_' + canal, JSON.stringify({ nome: nome, contato: contato }));
+}
 /** Grava uma mensagem (idempotente por canal+ext_id). Devolve true se era nova. */
 async function gravarMensagem_(env, canal, m) {
   if (!MSG_CANAIS.includes(canal)) return false;
   const t = agora();
+  if (m.nomeProprio && canal !== 'instagram') { try { await aprenderNomeProprio_(env, canal, m.nomeProprio, m.contato, t); } catch (e) { /* conserto do nome é conforto */ } }
   await env.DB.prepare('INSERT OR IGNORE INTO msg_conversa (canal, contato, nome, grupo, ultima_em, criado_em, atualizada_em) VALUES (?,?,?,?,?,?,?)').bind(canal, m.contato, m.nome, m.grupo, '', t, t).run();
-  const c = await env.DB.prepare('SELECT id FROM msg_conversa WHERE canal=? AND contato=?').bind(canal, m.contato).first();
+  const c = await env.DB.prepare('SELECT id, pessoa FROM msg_conversa WHERE canal=? AND contato=?').bind(canal, m.contato).first();
   if (!c) return false;
   const saida = m.direcao === 'saida';
+  if (!c.pessoa && !m.grupo && canal !== 'instagram' && /^\d{8,20}$/.test(m.contato)) { try { await env.DB.prepare('UPDATE msg_conversa SET pessoa=' + MSG_PESSOA_SQL_ + ' WHERE id=?').bind(c.id).run(); } catch (e) { /* o aviso de "nos 2 WhatsApp" é conforto */ } }
   if (saida && !String(m.extId).startsWith('inc:')) {      // o eco de uma resposta que ficou "sem confirmação" promove aquela linha (não cria uma segunda bolha)
     try {
       const desde = new Date(Date.parse(m.em) - 10 * 60000).toISOString();
@@ -2527,8 +2552,8 @@ async function gravarMensagem_(env, canal, m) {
   const quem = m.grupo && m.direcao === 'entrada' ? (m.autorNome || (m.autorFone ? '+' + m.autorFone : '')) : '';
   const previa = ((quem ? quem + ': ' : '') + (m.texto || ('[' + m.tipo + ']'))).replace(/\s+/g, ' ').slice(0, 140);
   /* Em SQLite o lado direito do SET usa os valores ANTIGOS da linha: por isso a comparação com ultima_em/ult_entrada_em vale como "antes desta mensagem". */
-  await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, atualizada_em=? WHERE id=?")
-    .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, t, c.id).run();
+  await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, atualizada_em=? WHERE id=?")
+    .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, t, c.id).run();
   return true;
 }
 /** Segredo do app da Meta: o cadastrado na Gestão (D1) vale primeiro; o secret do Worker é o reserva. */
@@ -2620,7 +2645,7 @@ async function ligarWebhookWafly_(env, slot, origem) {
 async function resumoMensagens_(env, origem) {
   const canais = {};
   for (const c of MSG_CANAIS) {
-    const x = await env.DB.prepare('SELECT COUNT(*) AS conversas, COALESCE(SUM(total),0) AS mensagens, COALESCE(MAX(ultima_em),\'\') AS ultima FROM msg_conversa WHERE canal=?').bind(c).first();
+    const x = await env.DB.prepare('SELECT SUM(CASE WHEN encerrada_em=\'\' THEN 1 ELSE 0 END) AS conversas, COALESCE(SUM(total),0) AS mensagens, COALESCE(MAX(ultima_em),\'\') AS ultima FROM msg_conversa WHERE canal=?').bind(c).first();
     canais[c] = { v2: !!(await cfgGet(env, 'msg_wh_v2_' + c)), conversas: Number(x.conversas) || 0, mensagens: Number(x.mensagens) || 0, ultima: x.ultima || '', ligadoEm: (await cfgGet(env, 'msg_wh_ligado_' + c)) || '', pausado: await msgPausado_(env, c) };
   }
   const cont = await msgContagens_(env);
@@ -2681,24 +2706,33 @@ async function aplicarLeiturasInstagram_(env, lst) {
   }
   return n;
 }
-const MSG_COLS_CONVERSA_ = "id, canal, contato, nome, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
+/* v2.11: chave da pessoa = número só com dígitos e, no Brasil, sem o 9º dígito do celular (o mesmo cliente às vezes chega com e sem ele). */
+const MSG_PESSOA_SQL_ = "(CASE WHEN length(contato)=13 AND substr(contato,1,2)='55' AND substr(contato,5,1)='9' THEN substr(contato,1,4)||substr(contato,6) ELSE contato END)";
+const MSG_OUTRO_SQL_ = "(SELECT o.id FROM msg_conversa o WHERE msg_conversa.pessoa<>'' AND o.pessoa=msg_conversa.pessoa AND o.canal<>msg_conversa.canal AND o.total>0 ORDER BY o.ultima_em DESC LIMIT 1)";
+const MSG_COLS_CONVERSA_ = "id, canal, contato, nome, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
 const MSG_Q_ = (c) => "(SELECT q." + c + " FROM msg_mensagem q WHERE q.canal=msg_mensagem.canal AND q.ext_id=msg_mensagem.ctx_ref AND msg_mensagem.ctx_ref<>'' LIMIT 1)";
 const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + MSG_Q_('texto') + " AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir";
 async function msgContagens_(env, canal) {
-  const rs = await env.DB.prepare("SELECT canal, COUNT(*) AS conversas, SUM(CASE WHEN nao_lidas>0 THEN 1 ELSE 0 END) AS nao_lidas, SUM(CASE WHEN grupo=0 AND ult_dir='entrada' THEN 1 ELSE 0 END) AS sem_resposta, SUM(CASE WHEN grupo=1 THEN 1 ELSE 0 END) AS grupos FROM msg_conversa WHERE total>0" + (canal ? ' AND canal=?' : '') + ' GROUP BY canal').bind(...(canal ? [canal] : [])).all();
-  const out = {}; for (const c of MSG_CANAIS) out[c] = { conversas: 0, nao_lidas: 0, sem_resposta: 0, grupos: 0 };
-  for (const x of rs.results) if (out[x.canal]) out[x.canal] = { conversas: Number(x.conversas) || 0, nao_lidas: Number(x.nao_lidas) || 0, sem_resposta: Number(x.sem_resposta) || 0, grupos: Number(x.grupos) || 0 };
+  // v2.11: encerradas ficam fora das outras contagens; "ambos" = conversas de quem também fala pelo outro WhatsApp
+  const rs = await env.DB.prepare("SELECT canal, SUM(CASE WHEN encerrada_em='' THEN 1 ELSE 0 END) AS conversas, SUM(CASE WHEN encerrada_em='' AND nao_lidas>0 THEN 1 ELSE 0 END) AS nao_lidas, SUM(CASE WHEN encerrada_em='' AND grupo=0 AND ult_dir='entrada' THEN 1 ELSE 0 END) AS sem_resposta, SUM(CASE WHEN encerrada_em='' AND grupo=1 THEN 1 ELSE 0 END) AS grupos, SUM(CASE WHEN encerrada_em<>'' THEN 1 ELSE 0 END) AS encerradas, SUM(CASE WHEN encerrada_em='' AND pessoa<>'' AND " + MSG_OUTRO_SQL_ + " IS NOT NULL THEN 1 ELSE 0 END) AS ambos FROM msg_conversa WHERE total>0" + (canal ? ' AND canal=?' : '') + ' GROUP BY canal').bind(...(canal ? [canal] : [])).all();
+  const CAMPOS = ['conversas', 'nao_lidas', 'sem_resposta', 'grupos', 'encerradas', 'ambos'], zero = () => CAMPOS.reduce((o, k) => (o[k] = 0, o), {});
+  const out = {}; for (const c of MSG_CANAIS) out[c] = zero();
+  for (const x of rs.results) if (out[x.canal]) for (const k of CAMPOS) out[x.canal][k] = Number(x[k]) || 0;
   // v2.10: aba "Todas" (os três canais juntos)
-  out.todos = MSG_CANAIS.reduce((t, c) => ({ conversas: t.conversas + out[c].conversas, nao_lidas: t.nao_lidas + out[c].nao_lidas, sem_resposta: t.sem_resposta + out[c].sem_resposta, grupos: t.grupos + out[c].grupos }), { conversas: 0, nao_lidas: 0, sem_resposta: 0, grupos: 0 });
+  out.todos = MSG_CANAIS.reduce((t, c) => { for (const k of CAMPOS) t[k] += out[c][k]; return t; }, zero());
   return out;
 }
 /* v2.10: confirmar a leitura no aparelho (WhatsApp pela Wafly; Instagram pela Graph API). Só quando a pessoa ABRE a conversa
  * normalmente e o canal está com "marcar como lida no celular" ligado; o "Espiar" do painel nunca chama isto. */
-const MSG_CFG_PADRAO_ = { lerCelular: { whatsapp1: true, whatsapp2: true, instagram: true } };
+// v2.11: assinatura = nome do atendente antes da resposta (ligada por padrão; o Admin liga/desliga para todos)
+const MSG_CFG_PADRAO_ = { lerCelular: { whatsapp1: true, whatsapp2: true, instagram: true }, assinatura: true };
+/** Nome que o atendente escolheu para aparecer nas respostas: sem símbolos de formatação do WhatsApp, até 30 letras. */
+const nomeAtendenteLimpo_ = (v) => String(v == null ? '' : v).replace(/[\u0000-\u001f*_~`]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30);
 async function msgCfg_(env) {
   let c = null; try { c = JSON.parse((await cfgGet(env, 'msg_cfg')) || 'null'); } catch (e) { c = null; }
   const out = JSON.parse(JSON.stringify(MSG_CFG_PADRAO_));
   if (c && c.lerCelular && typeof c.lerCelular === 'object') for (const k of MSG_CANAIS) if (typeof c.lerCelular[k] === 'boolean') out.lerCelular[k] = c.lerCelular[k];
+  if (c && typeof c.assinatura === 'boolean') out.assinatura = c.assinatura;
   return out;
 }
 async function confirmarLeituraCelular_(env, conv) {
@@ -2993,7 +3027,9 @@ export default {
         const todos = canal === 'todos';   // v2.10: aba "Todas" = os três canais juntos
         if (!todos && !MSG_CANAIS.includes(canal)) return J({ ok: false, erro: 'Escolha Todas, Instagram, WhatsApp 1 ou WhatsApp 2.' }, 400);
         let sql = 'SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE ' + (todos ? '' : 'canal=? AND ') + 'total>0', args = todos ? [] : [canal];
-        if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'lidas') sql += ' AND nao_lidas=0'; else if (filtro === 'sem_resposta') sql += " AND grupo=0 AND ult_dir='entrada'"; else if (filtro === 'grupos') sql += ' AND grupo=1';
+        // v2.11: encerradas só aparecem no filtro "Encerradas" (ou numa busca); voltam sozinhas quando o cliente escreve de novo
+        if (filtro === 'encerradas') sql += " AND encerrada_em<>''"; else if (!busca) sql += " AND encerrada_em=''";
+        if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'lidas') sql += ' AND nao_lidas=0'; else if (filtro === 'sem_resposta') sql += " AND grupo=0 AND ult_dir='entrada'"; else if (filtro === 'grupos') sql += ' AND grupo=1'; else if (filtro === 'ambos') sql += " AND pessoa<>'' AND " + MSG_OUTRO_SQL_ + ' IS NOT NULL';
         if (busca) { sql += ' AND (nome LIKE ? OR contato LIKE ? OR previa LIKE ? ' + (busca.length >= 3 ? ' OR EXISTS (SELECT 1 FROM msg_mensagem mm WHERE mm.conversa_id=msg_conversa.id AND mm.texto LIKE ?)' : '') + ')'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q); if (busca.length >= 3) args.push(q); }
         if (antes) { sql += ' AND ultima_em<?'; args.push(antes); }
         const rs = await env.DB.prepare(sql + ' ORDER BY ultima_em DESC LIMIT 50').bind(...args).all();
@@ -3073,15 +3109,30 @@ export default {
         }
         return J({ ok: !!(r.meta && r.meta.changes), nao_lidas: d.naoLida === true ? 1 : 0, celular: celular });
       }
+      if (p === '/msg/encerrar' && req.method === 'POST') {
+        /* v2.11: encerrar (uma ou várias) / reabrir. Encerrar zera o "não lida" só no painel; o celular não é tocado. */
+        const d = await req.json().catch(() => ({})), ids = [...new Set((Array.isArray(d.conversas) ? d.conversas : [d.conversa]).map(Number).filter((x) => Number.isInteger(x) && x > 0))].slice(0, 200);
+        if (!ids.length) return J({ ok: false, erro: 'Escolha ao menos uma conversa.' }, 400);
+        const t = agora(), reabrir = d.reabrir === true, marca = ids.map(() => '?').join(',');
+        const r = await env.DB.prepare(reabrir ? "UPDATE msg_conversa SET encerrada_em='', atualizada_em=? WHERE id IN (" + marca + ")" : 'UPDATE msg_conversa SET encerrada_em=?, nao_lidas=0, atualizada_em=? WHERE id IN (' + marca + ')').bind(...(reabrir ? [t] : [t, t]), ...ids).run();
+        return J({ ok: true, alteradas: Number(r.meta && r.meta.changes) || 0, contagens: await msgContagens_(env) });
+      }
       if (p === '/msg/config' && req.method === 'GET') {
         const diag = {}; for (const c of MSG_CANAIS) { try { diag[c] = JSON.parse((await cfgGet(env, 'msg_leitura_diag_' + c)) || 'null'); } catch (e) { diag[c] = null; } }
-        return J({ ok: true, config: await msgCfg_(env), ultimaLeitura: diag });
+        const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
+        return J({ ok: true, config: await msgCfg_(env), ultimaLeitura: diag, meuNome: quem ? ((await cfgGet(env, 'msg_atendente_' + quem)) || '') : '' });
       }
       if (p === '/msg/config' && req.method === 'POST') {
         const d = await req.json().catch(() => ({})), atual = await msgCfg_(env);
         if (d && d.lerCelular && typeof d.lerCelular === 'object') for (const c of MSG_CANAIS) if (typeof d.lerCelular[c] === 'boolean') atual.lerCelular[c] = d.lerCelular[c];
+        if (d && typeof d.assinatura === 'boolean') atual.assinatura = d.assinatura;
         await cfgSet(env, 'msg_cfg', JSON.stringify(atual));
-        return J({ ok: true, config: atual });
+        // cada atendente guarda o próprio nome (vazio = volta ao primeiro nome do cadastro)
+        const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
+        let meuNome;
+        if (d && typeof d.meuNome === 'string' && quem) { meuNome = nomeAtendenteLimpo_(d.meuNome); await cfgSet(env, 'msg_atendente_' + quem, meuNome || null); }
+        else meuNome = quem ? ((await cfgGet(env, 'msg_atendente_' + quem)) || '') : '';
+        return J({ ok: true, config: atual, meuNome: meuNome });
       }
       if (p === '/msg/exportar' && req.method === 'GET') {
         const q = {}; for (const k of ['canal', 'conversa', 'formato', 'de', 'ate']) q[k] = url.searchParams.get(k) || '';

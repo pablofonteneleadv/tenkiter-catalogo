@@ -2,6 +2,9 @@
 import json, datetime
 from urllib.parse import urlparse, parse_qs
 
+# testes que conferem só a mecânica do envio desligam a assinatura do atendente (como se o Admin a tivesse desmarcado)
+ASSINATURA_PADRAO = True
+
 def agora(): return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.") + "%03dZ" % (datetime.datetime.utcnow().microsecond // 1000)
 def iso(min_atras): return (datetime.datetime.utcnow() - datetime.timedelta(minutes=min_atras)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
@@ -40,9 +43,25 @@ def novo_estado():
     s["anexos"] = []; s["midia_baixada"] = []
     return s
 
+def pessoa(c):
+    """v7.22: mesma regra do Worker (número sem o 9º dígito); grupo e Instagram não entram."""
+    n = c["contato"]
+    if c["grupo"] or c["canal"] == "instagram" or not n.isdigit(): return ""
+    return n[:4] + n[5:] if len(n) == 13 and n.startswith("55") and n[4] == "9" else n
+
+def enfeitar(s, c):
+    """Campos calculados pelo Worker: outro_id (a mesma pessoa no outro WhatsApp) e encerrada_em."""
+    c.setdefault("encerrada_em", "")
+    p = pessoa(c)
+    outro = next((o for o in s["convs"] if p and o["id"] != c["id"] and o["canal"] != c["canal"] and pessoa(o) == p and o["total"] > 0), None)
+    c["outro_id"] = outro["id"] if outro else None
+    return c
+
 def cont(s, canal):
-    cs = [c for c in s["convs"] if (canal == "todos" or c["canal"] == canal) and c["total"] > 0]
-    return {"conversas": len(cs), "nao_lidas": sum(1 for c in cs if c["nao_lidas"] > 0), "sem_resposta": sum(1 for c in cs if not c["grupo"] and c["ult_dir"] == "entrada"), "grupos": sum(1 for c in cs if c["grupo"])}
+    todas = [enfeitar(s, c) for c in s["convs"] if (canal == "todos" or c["canal"] == canal) and c["total"] > 0]
+    cs = [c for c in todas if not c["encerrada_em"]]
+    return {"conversas": len(cs), "nao_lidas": sum(1 for c in cs if c["nao_lidas"] > 0), "sem_resposta": sum(1 for c in cs if not c["grupo"] and c["ult_dir"] == "entrada"), "grupos": sum(1 for c in cs if c["grupo"]),
+            "encerradas": len(todas) - len(cs), "ambos": sum(1 for c in cs if c["outro_id"])}
 
 def tratar(route, path, method, body, s):
     """Devolve True se tratou. Mutações feitas pelo teste em s ficam visíveis às próximas chamadas."""
@@ -58,7 +77,10 @@ def tratar(route, path, method, body, s):
         return J({"ok": True, "canais": canais, "urlInstagram": "https://tenkiter-ig.example/wh/instagram/SEGREDO" if s["ig_pronto"] else ""}) or True
     if path == "/msg/conversas":
         c = q.get("canal"); f = q.get("filtro", ""); b = (q.get("busca") or "").lower()
-        rs = [x for x in s["convs"] if (c == "todos" or x["canal"] == c) and x["total"] > 0]
+        rs = [enfeitar(s, x) for x in s["convs"] if (c == "todos" or x["canal"] == c) and x["total"] > 0]
+        if f == "encerradas": rs = [x for x in rs if x["encerrada_em"]]
+        elif not b: rs = [x for x in rs if not x["encerrada_em"]]
+        if f == "ambos": rs = [x for x in rs if x["outro_id"]]
         if f == "nao_lidas": rs = [x for x in rs if x["nao_lidas"] > 0]
         if f == "lidas": rs = [x for x in rs if x["nao_lidas"] == 0]
         if f == "sem_resposta": rs = [x for x in rs if not x["grupo"] and x["ult_dir"] == "entrada"]
@@ -67,12 +89,12 @@ def tratar(route, path, method, body, s):
         rs = sorted(rs, key=lambda x: x["ultima_em"], reverse=True)
         return J({"ok": True, "conversas": rs, "contagens": cont(s, c), "cursor": agora()}) or True
     if path == "/msg/mensagens":
-        cid = int(q["conversa"]); c = next(x for x in s["convs"] if x["id"] == cid)
+        cid = int(q["conversa"]); c = enfeitar(s, next(x for x in s["convs"] if x["id"] == cid))
         return J({"ok": True, "conversa": c, "mensagens": sorted([x for x in s["msgs"] if x["conversa_id"] == cid], key=lambda x: (x["enviada_em"], x["id"])), "temMais": False, "cursor": agora()}) or True
     if path == "/msg/novidades":
         cid = int(q.get("conversa") or 0); dep = int(q.get("depois") or 0); desde = q.get("desde", "")
         # a "folga" de 3 s do servidor real: devolve o que mudou desde o cursor
-        cs = [x for x in s["convs"] if x["atualizada_em"] >= desde[:-1] and x["total"] > 0]
+        cs = [enfeitar(s, x) for x in s["convs"] if x["atualizada_em"] >= desde[:-1] and x["total"] > 0]
         ms = [x for x in s["msgs"] if cid and x["conversa_id"] == cid and (x["id"] > dep or x["status_em"] >= q.get("st", "z")[:-1])] if cid else []
         return J({"ok": True, "cursor": agora(), "conversas": cs, "mensagens": ms, "contagens": {c: cont(s, c) for c in ("whatsapp1", "whatsapp2", "instagram", "todos")}}) or True
     if path == "/msg/contagem":
@@ -88,12 +110,24 @@ def tratar(route, path, method, body, s):
                 s.setdefault("celular", []).append((c["id"], c["canal"]))
             else: cel = {"ok": False, "desligado": True}
         return J({"ok": bool(c), "celular": cel}) or True
+    if path == "/msg/encerrar":
+        ids = [i for i in body.get("conversas", []) if isinstance(i, int)]
+        if not ids: return J({"ok": False, "erro": "Escolha ao menos uma conversa."}, 400) or True
+        s.setdefault("encerrar", []).append({"ids": ids, "reabrir": bool(body.get("reabrir"))})
+        for c in s["convs"]:
+            if c["id"] in ids:
+                c["encerrada_em"] = "" if body.get("reabrir") else agora(); c["atualizada_em"] = agora()
+                if not body.get("reabrir"): c["nao_lidas"] = 0
+        return J({"ok": True, "alteradas": len(ids), "contagens": {k: cont(s, k) for k in ("whatsapp1", "whatsapp2", "instagram", "todos")}}) or True
     if path == "/msg/config":
         cfg = s.setdefault("cfg_leitura", {"whatsapp1": True, "whatsapp2": True, "instagram": True})
         if method == "POST":
             for k, v in (body.get("lerCelular") or {}).items():
                 if k in cfg and isinstance(v, bool): cfg[k] = v
-        return J({"ok": True, "config": {"lerCelular": dict(cfg)}, "ultimaLeitura": {"whatsapp1": {"em": agora(), "ok": True, "rota": "/modify-chat"}, "whatsapp2": None, "instagram": None}}) or True
+            if isinstance(body.get("assinatura"), bool): s["assinatura"] = body["assinatura"]
+            if isinstance(body.get("meuNome"), str): s["meu_nome"] = " ".join(body["meuNome"].replace("*", " ").split())[:30]
+            s.setdefault("cfg_posts", []).append(body)
+        return J({"ok": True, "config": {"lerCelular": dict(cfg), "assinatura": s.get("assinatura", ASSINATURA_PADRAO)}, "meuNome": s.get("meu_nome", ""), "ultimaLeitura": {"whatsapp1": {"em": agora(), "ok": True, "rota": "/modify-chat"}, "whatsapp2": None, "instagram": None}}) or True
     if path == "/msg/enviar":
         s["envios"].append(body)
         if body.get("idLocal") in s["idem"]: return J(s["idem"][body["idLocal"]]) or True
