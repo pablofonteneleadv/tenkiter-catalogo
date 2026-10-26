@@ -2000,6 +2000,42 @@ function servicosFalsos(amb, est) {
   ok(g.ok === false && /cota/i.test(g.erro) && n === 5, 'cota de todos esgotada: avisa da cota e não fica repetindo', n + ' ' + g.erro);
 })();
 
+// ------------------------------------------------------------------ 8z2. v4.28: "Editar peças" numa chamada só (updateLote)
+(function v428() {
+  if (!/function atualizarLote_/.test(codigoFonte)) { console.log('  (backend sem v4.28: pulando)'); return; }
+  console.log('\n[8z2 v4.28: updateLote]');
+  const amb = criarAmbiente(); semear(amb);
+  const sh = amb.ss.getSheetByName('Sheet1');
+  const linha = (id) => { const d = sh.getDataRange().getValues(); return d.find((r) => String(r[0]) === String(id)); };
+  ok(amb.getJson({ action: 'versao' }).updateLote === true, 'versao anuncia updateLote');
+  let leituras = 0; const orig = sh.getDataRange.bind(sh); sh.getDataRange = function () { leituras++; return orig(); };
+  let r = amb.post(adm({ action: 'updateLote', itens: [
+    { id: '101', nome: 'Vestido Floral Novo', preco: '100', estoque: '7', categoria: 'Vestidos', genero: 'Feminino Adulto', tamanhos: 'P, M, G', cores: 'Preto', descricao: 'Desc nova', novidade: true, fotoUrlExistente: 'https://res.cloudinary.com/z/a.jpg', fotosGaleriaExistentes: '' },
+    { id: '102', preco: '0', nome: 'Fantasia' },
+    { id: '103', preco: '-3' },
+    { id: '999', nome: 'Não existe' },
+    { id: '101', nome: 'Repetida' },
+    { id: '105', fotoBase64: 'AAAA' }
+  ] }));
+  const leiturasLote = leituras; sh.getDataRange = orig;
+  ok(r.ok && Array.isArray(r.resultados) && r.resultados.length === 6, 'responde uma linha por peça', JSON.stringify(r));
+  const res = (k) => r.resultados[k] || {};
+  ok(res(0).ok && linha('101')[1] === 'Vestido Floral Novo' && Number(linha('101')[9]) === 7 && linha('101')[10] === 'P, M, G' && linha('101')[12] === true, 'grava os dados da peça como o update', JSON.stringify(linha('101')));
+  ok(Number(linha('101')[4]) === 99.99, 'preço segue a regra do à vista (,99/,49)', String(linha('101')[4]));
+  ok(res(1).ok && Number(linha('102')[4]) === 0, 'preço 0 = "Consultar valor" (regra 4.27)', JSON.stringify(res(1)));
+  ok(!res(2).ok && /Preço inválido/.test(res(2).erro) && Number(linha('103')[4]) === 50, 'preço negativo recusado só nesta peça; a linha fica como estava', JSON.stringify(res(2)));
+  ok(!res(3).ok && /não encontrado/i.test(res(3).erro), 'peça inexistente devolve erro legível', JSON.stringify(res(3)));
+  ok(!res(4).ok && /repetida/i.test(res(4).erro) && linha('101')[1] === 'Vestido Floral Novo', 'peça repetida no lote não é gravada duas vezes', JSON.stringify(res(4)));
+  ok(!res(5).ok && /edição normal/.test(res(5).erro), 'foto nova em base64 é recusada no lote', JSON.stringify(res(5)));
+  ok(JSON.stringify(r.salvos) === JSON.stringify(['101', '102']), 'salvos lista só as que gravaram', JSON.stringify(r.salvos));
+  ok(leiturasLote <= 2, 'a planilha é lida uma vez para o lote (não uma por peça)', String(leiturasLote));
+  ok(amb.post(adm({ action: 'updateLote', itens: [] })).ok === false, 'lote vazio é recusado');
+  const muitos = []; for (let i = 0; i < 61; i++) muitos.push({ id: '101' });
+  ok(amb.post(adm({ action: 'updateLote', itens: muitos })).ok === false, 'mais de 60 peças por vez é recusado');
+  ok(amb.post({ action: 'updateLote', itens: [{ id: '101', nome: 'Invasor' }] }).ok === false && linha('101')[1] === 'Vestido Floral Novo', 'sem login/permissão não grava nada');
+  ok(/updateLote: 'catalogo_cadastrar'/.test(codigoFonte), 'mesma permissão do update (catalogo_cadastrar)');
+})();
+
 console.log('\n' + (total - falhas.length) + '/' + total + ' verificações passaram');
 console.log('FALHAS=' + falhas.length + (falhas.length ? ' ' + JSON.stringify(falhas) : ''));
 process.exit(falhas.length ? 1 : 0);

@@ -1311,9 +1311,12 @@
           <span class="cp-sep" aria-hidden="true"></span>
           <button type="button" class="cp-chip" data-cp-ordem="recentes" aria-pressed="true">Mais recentes</button>
           <button type="button" class="cp-chip" data-cp-ordem="az" aria-pressed="false">A–Z</button>
+          <button type="button" class="cp-chip" data-cp-ordem="menor" aria-pressed="false">Menor valor</button>
+          <button type="button" class="cp-chip" data-cp-ordem="maior" aria-pressed="false">Maior valor</button>
         </div>
         <div class="cp-linha" id="cp-generos" role="group" aria-label="Para quem é"></div>
         <div class="cp-linha" id="cp-categorias" role="group" aria-label="Categoria"></div>
+        <div class="cp-linha" id="cp-precos" role="group" aria-label="Valor"></div>
       </div>
       <div class="cp-resultado">
         <div class="cp-cab"><span id="cp-rotulo">Últimos cadastrados</span><span id="cp-cont" aria-live="polite"></span></div>
@@ -1819,6 +1822,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   let generoNovoTocado_ = false;
   let selecionadosBulk = new Set();
   let juntarLiberado_ = false;
+  let updateLoteLiberado_ = false;   // v7.18: servidor 4.28 salva várias edições de dados numa chamada só
 
   /* ===================== v2.3: fotos unificadas (até 8, com capa e ordem) e vídeo (1) ===================== */
   const MAX_GALERIA = 8, MAX_VIDEO_MB = 20;
@@ -2678,11 +2682,14 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   }
 
   // ---------- tela cheia
-  const cp_ = { situ: 'ativas', ordem: 'recentes', gen: '', cat: '', lim: 40 };
+  const cp_ = { situ: 'ativas', ordem: 'recentes', gen: '', cat: '', valor: '', lim: 40 };
+  // v7.18: filtro por valor -- cada valor cadastrado vira um botão (com a contagem); "Consultar valor" fica por último
+  const valorPeca_ = (p) => precoPeca_(p) || 'Sem preço';
+  const numValor_ = (p) => Number(p.Preco) > 0 ? Number(p.Preco) : Infinity;
   function abrirCopiar_(texto) {
     const busca = document.getElementById('cp-busca');
     busca.value = texto || '';
-    cp_.gen = ''; cp_.cat = ''; cp_.lim = 40;
+    cp_.gen = ''; cp_.cat = ''; cp_.valor = ''; cp_.lim = 40;
     abrirComHistorico_('overlay-copiar');
     pintarCopiar_();
     document.querySelector('#overlay-copiar .cp-resultado').scrollTop = 0;
@@ -2691,13 +2698,17 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const idAtual = document.getElementById('produto-id').value, texto = document.getElementById('cp-busca').value;
     const base = produtos.filter(p => String(p.ID) !== String(idAtual || '') && (cp_.situ === 'todas' || (cp_.situ === 'ativas' ? !ehInativo_(p) : ehInativo_(p))));
     const comBusca = base.filter(p => casaTexto_(p, texto));
-    const lista = comBusca.filter(p => (!cp_.gen || tags_(p.Genero).indexOf(cp_.gen) !== -1) && (!cp_.cat || tags_(p.Categoria).indexOf(cp_.cat) !== -1));
-    lista.sort(cp_.ordem === 'az' ? (a, b) => String(a.Nome).localeCompare(String(b.Nome), 'pt-BR', { sensitivity: 'base' }) || recencia_(b) - recencia_(a) : (a, b) => recencia_(b) - recencia_(a));
+    const lista = comBusca.filter(p => (!cp_.gen || tags_(p.Genero).indexOf(cp_.gen) !== -1) && (!cp_.cat || tags_(p.Categoria).indexOf(cp_.cat) !== -1) && (!cp_.valor || valorPeca_(p) === cp_.valor));
+    const porNome = (a, b) => String(a.Nome).localeCompare(String(b.Nome), 'pt-BR', { sensitivity: 'base' });
+    lista.sort(cp_.ordem === 'az' ? (a, b) => porNome(a, b) || recencia_(b) - recencia_(a)
+      : cp_.ordem === 'menor' ? (a, b) => numValor_(a) - numValor_(b) || recencia_(b) - recencia_(a)
+      : cp_.ordem === 'maior' ? (a, b) => (numValor_(b) === Infinity ? -1 : numValor_(b)) - (numValor_(a) === Infinity ? -1 : numValor_(a)) || recencia_(b) - recencia_(a)
+      : (a, b) => recencia_(b) - recencia_(a));
     return { lista: lista, comBusca: comBusca };
   }
-  function chipsFiltro_(boxId, valores, atual, attr, rotuloTodas) {
+  function chipsFiltro_(boxId, valores, atual, attr, rotuloTodas, ordem) {
     const box = document.getElementById(boxId);
-    const itens = Object.keys(valores).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+    const itens = Object.keys(valores).sort(ordem || ((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })));
     box.innerHTML = itens.length < 2 && !atual ? '' : '<button type="button" class="cp-chip" ' + attr + '="" aria-pressed="' + (!atual) + '">' + rotuloTodas + '</button>'
       + itens.map(v => '<button type="button" class="cp-chip" ' + attr + '="' + escaparHtml(v) + '" aria-pressed="' + (atual === v) + '">' + escaparHtml(v) + '<small>' + valores[v] + '</small></button>').join('');
   }
@@ -2706,14 +2717,17 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     document.querySelectorAll('[data-cp-situ]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cpSitu === cp_.situ)));
     document.querySelectorAll('[data-cp-ordem]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cpOrdem === cp_.ordem)));
     // filtros com a contagem do que a busca/situação deixam (cada um considera o outro escolhido)
-    const gens = {}, cats = {};
+    const gens = {}, cats = {}, valores = {}, numDe = {};
     r.comBusca.forEach(p => {
-      if (!cp_.cat || tags_(p.Categoria).indexOf(cp_.cat) !== -1) tags_(p.Genero).forEach(g => { gens[g] = (gens[g] || 0) + 1; });
-      if (!cp_.gen || tags_(p.Genero).indexOf(cp_.gen) !== -1) tags_(p.Categoria).forEach(c => { cats[c] = (cats[c] || 0) + 1; });
+      const okGen = !cp_.gen || tags_(p.Genero).indexOf(cp_.gen) !== -1, okCat = !cp_.cat || tags_(p.Categoria).indexOf(cp_.cat) !== -1, okVal = !cp_.valor || valorPeca_(p) === cp_.valor;
+      if (okCat && okVal) tags_(p.Genero).forEach(g => { gens[g] = (gens[g] || 0) + 1; });
+      if (okGen && okVal) tags_(p.Categoria).forEach(c => { cats[c] = (cats[c] || 0) + 1; });
+      if (okGen && okCat) { const v = valorPeca_(p); valores[v] = (valores[v] || 0) + 1; numDe[v] = numValor_(p); }
     });
     chipsFiltro_('cp-generos', gens, cp_.gen, 'data-cp-gen', 'Todos os públicos');
     chipsFiltro_('cp-categorias', cats, cp_.cat, 'data-cp-cat', 'Todas as categorias');
-    document.getElementById('cp-rotulo').textContent = !texto && !cp_.gen && !cp_.cat && cp_.ordem === 'recentes' ? 'Últimos cadastrados' : (texto ? 'Resultado da busca' : 'Peças');
+    chipsFiltro_('cp-precos', valores, cp_.valor, 'data-cp-valor', 'Todos os valores', (a, b) => numDe[a] - numDe[b] || a.localeCompare(b, 'pt-BR'));
+    document.getElementById('cp-rotulo').textContent = !texto && !cp_.gen && !cp_.cat && !cp_.valor && cp_.ordem === 'recentes' ? 'Últimos cadastrados' : (texto ? 'Resultado da busca' : 'Peças');
     document.getElementById('cp-cont').textContent = r.lista.length + (r.lista.length === 1 ? ' peça' : ' peças');
     const mostrar = r.lista.slice(0, cp_.lim);
     document.getElementById('cp-grade').innerHTML = mostrar.length ? mostrar.map(p => {
@@ -2784,6 +2798,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (b.dataset.cpOrdem) { cp_.ordem = b.dataset.cpOrdem; pintarCopiar_(); return; }
     if (b.hasAttribute('data-cp-gen')) { cp_.gen = b.dataset.cpGen === cp_.gen ? '' : b.dataset.cpGen; cp_.lim = 40; pintarCopiar_(); return; }
     if (b.hasAttribute('data-cp-cat')) { cp_.cat = b.dataset.cpCat === cp_.cat ? '' : b.dataset.cpCat; cp_.lim = 40; pintarCopiar_(); return; }
+    if (b.hasAttribute('data-cp-valor')) { cp_.valor = b.dataset.cpValor === cp_.valor ? '' : b.dataset.cpValor; cp_.lim = 40; pintarCopiar_(); return; }
     if (b.dataset.pecaEditar) { editarPecaDaLista_(b.dataset.pecaEditar); return; }
     if (b.dataset.pecaUsar) usarPeca_(b.dataset.pecaUsar);
   });
@@ -3859,10 +3874,44 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     }
   }
 
+  // v7.18: edição só de DADOS (sem foto/vídeo novo, ex.: "Editar peças") vai em grupo numa chamada `updateLote` (servidor 4.28).
+  // Antes cada peça era uma chamada inteira (login, trava, leitura da planilha, carimbo): 20 peças demoravam como 20 cadastros com foto.
+  // Se o grupo não passar (rede, servidor antigo, sessão), cada peça volta para a fila e segue pelo envio normal, uma a uma.
+  const LOTE_MAX_ = 40;
+  function vaiNoLote_(it) {
+    return updateLoteLiberado_ && it.ehEdicao && !it.semLote && !it.capaNovaB64 && !(it.galeriaNovaB64 || []).length
+      && !arquivosDeVideo_(it).length && !(it.videosRemover || []).length && !!(it.dados && it.dados.id);
+  }
+  async function enviarGrupo_(grupo) {
+    grupo.forEach((it) => { it.estado = 'enviando'; it.etapa = 'salvando'; guardarEnvio_(it); });
+    desenharEnvios();
+    const pacotes = grupo.map((it) => montarDadosFinais_(it).dados);
+    const auth = pacotes[0];
+    const itens = pacotes.map((d) => { const x = Object.assign({}, d); ['pin', 'sessao', 'whatsapp', 'funcionario', 'action', 'opId'].forEach(k => delete x[k]); return x; });
+    window.logDebug_('════ salvando ' + grupo.length + ' edições numa chamada só (updateLote) ════');
+    let resp = null;
+    try { resp = await comTentativas_(grupo[0], () => enviarComProgresso({ action: 'updateLote', pin: auth.pin, sessao: auth.sessao, whatsapp: auth.whatsapp, funcionario: auth.funcionario, itens: itens }, () => {}), 'salvar edições em grupo'); }
+    catch (e) { resp = null; }
+    if (!resp || !resp.ok || !Array.isArray(resp.resultados)) {
+      window.logDebug_('[updateLote] não passou (' + ((resp && resp.erro) || 'sem resposta') + ') -- cada peça segue pelo envio normal');
+      grupo.forEach((it) => { it.semLote = true; it.estado = 'fila'; it.etapa = 'fila'; guardarEnvio_(it); });
+      return;
+    }
+    const porId = {}; resp.resultados.forEach((x) => { if (x && x.id !== undefined) porId[String(x.id)] = x; });
+    grupo.forEach((it) => {
+      const x = porId[String(it.dados.id)];
+      if (x && x.ok) { it.estado = 'ok'; it.respSalvo = { ok: true, id: it.dados.id }; conferir_.push(it); apagarEnvio_(it); }
+      else { it.estado = 'erro'; it.msg = (x && x.erro) || 'o servidor não confirmou esta peça. Toque em Tentar de novo.'; it.semLote = true; it.etapa = 'fila'; guardarEnvio_(it); }
+    });
+    window.logDebug_('════ grupo salvo: ' + grupo.filter(it => it.estado === 'ok').length + ' de ' + grupo.length + ' ════');
+  }
+
   // Fila: 2 peças ao mesmo tempo (os envios de arquivo são o que demora; o servidor grava uma de cada vez). Terminando a fila, recarrega a lista UMA vez e confere tudo.
   const conferir_ = []; let ativosEnvio_ = 0;
   async function trabalhadorEnvio_() {
     for (;;) {
+      const grupo = envios.filter(e => e.estado === 'fila' && vaiNoLote_(e)).slice(0, LOTE_MAX_);
+      if (grupo.length >= 2) { await enviarGrupo_(grupo); desenharEnvios(); continue; }
       const it = envios.find(e => e.estado === 'fila');
       if (!it) break;
       it.estado = 'enviando'; desenharEnvios();
@@ -4594,7 +4643,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   });
 
   /* ===== v3.7: juntar produtos repetidos (backend juntarProdutos) ===== */
-  versaoServidor().then(v => { juntarLiberado_ = !!(v && v.juntarProdutos); atualizarBarraBulk(); }).catch(() => {});
+  versaoServidor().then(v => { juntarLiberado_ = !!(v && v.juntarProdutos); updateLoteLiberado_ = !!(v && v.updateLote); atualizarBarraBulk(); }).catch(() => {});
   function juntarSelecionados_() { return produtos.filter(p => selecionadosBulk.has(String(p.ID))); }
   document.getElementById('btn-bulk-juntar').addEventListener('click', () => {
     const sel = juntarSelecionados_();

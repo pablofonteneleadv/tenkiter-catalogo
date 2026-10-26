@@ -197,6 +197,23 @@ with sync_playwright() as p:
     chk("Desfazer volta o formulário como estava", pg.input_value("#nome") == "Vestido" and pg.input_value("#preco") in ("", "0"), (pg.input_value("#nome"), pg.input_value("#preco")))
     pg.click("#cp-abrir"); pg.wait_for_timeout(300)
     chk("'Copiar dados de outra peça' abre a tela cheia com os últimos cadastrados", pg.locator("#overlay-copiar.aberto").count() == 1 and "Últimos cadastrados" in pg.inner_text("#cp-rotulo") and pg.locator("#cp-grade .cp-card").count() >= 4)
+    # v7.18 (pedido do Pablo): filtrar e ordenar pelo valor
+    vals = pg.evaluate("[...document.querySelectorAll('#cp-precos [data-cp-valor]')].map(b=>({v:b.dataset.cpValor,n:+(b.querySelector('small')||{textContent:0}).textContent}))")
+    nums = [float(x["v"].replace("R$","").replace(".","").replace(",",".").strip()) for x in vals[1:] if x["v"].startswith("R$")]
+    chk("linha de valores com 'Todos os valores' e os valores em ordem crescente, com contagem", len(vals) >= 3 and vals[0]["v"] == "" and nums == sorted(nums) and all(x["n"] >= 1 for x in vals[1:]), vals[:4])
+    pg.click("#cp-precos [data-cp-valor='%s']" % vals[1]["v"]); pg.wait_for_timeout(200)
+    metas = pg.evaluate("[...document.querySelectorAll('#cp-grade .cp-meta')].map(e=>e.textContent)")
+    chk("tocar num valor mostra só as peças desse valor", len(metas) == vals[1]["n"] and all(vals[1]["v"] in m for m in metas), (vals[1], metas[:3]))
+    pg.click("#cp-precos [data-cp-valor='']"); pg.wait_for_timeout(200)
+    pg.click("[data-cp-ordem=menor]"); pg.wait_for_timeout(200)
+    pr = pg.evaluate("[...document.querySelectorAll('#cp-grade .cp-meta b')].slice(0,6).map(e=>e.textContent)")
+    pn = [float(x.replace("R$","").replace(".","").replace(",",".").strip()) for x in pr if x.startswith("R$")]
+    chk("'Menor valor' ordena do mais barato ao mais caro", len(pn) >= 3 and pn == sorted(pn), pr)
+    pg.click("[data-cp-ordem=maior]"); pg.wait_for_timeout(200)
+    pr = pg.evaluate("[...document.querySelectorAll('#cp-grade .cp-meta b')].slice(0,6).map(e=>e.textContent)")
+    pn = [float(x.replace("R$","").replace(".","").replace(",",".").strip()) for x in pr if x.startswith("R$")]
+    chk("'Maior valor' ordena do mais caro ao mais barato", len(pn) >= 3 and pn == sorted(pn, reverse=True), pr)
+    pg.click("[data-cp-ordem=recentes]"); pg.wait_for_timeout(200)
     ids = pg.eval_on_selector_all("#cp-grade [data-peca-usar]", "es=>es.map(e=>Number(e.dataset.pecaUsar))")
     chk("mais recentes primeiro", ids == sorted(ids, reverse=True), ids[:5])
     pg.fill("#cp-busca", "TK-0003"); pg.wait_for_timeout(250)

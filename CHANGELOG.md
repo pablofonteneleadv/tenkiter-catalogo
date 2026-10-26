@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.18.0 — "Editar peças" rápido e filtro por valor — 2026-10-26
+
+- "Editar peças" (só dados, sem foto) salva todas as peças numa chamada só (`updateLote`, servidor catálogo 4.28). Antes era uma chamada completa por peça, e 20 peças demoravam o mesmo que 20 cadastros com foto. Se uma peça for recusada, só ela fica com erro e "Tentar de novo"; se o grupo não passar (rede, servidor antigo), cada peça segue pelo envio normal. Com o servidor 4.27, nada muda.
+- "Escolher peça para copiar": filtro por valor (cada valor cadastrado com a contagem; "Consultar valor" por último) e ordem "Menor valor" / "Maior valor".
+
 ## 7.17.0 — acabamento novo no painel de gestão (Opção A) — 2026-10-26
 
 - Painel no mesmo padrão da vitrine (`acabamento-admin.css`): ícones de linha no lugar dos emojis em "O que fazer agora", Cadastrar, busca, Filtros, cartão da peça, menu ⋯ e barra de seleção; cantos de 6–8 px, bordas finas, sem sombra, escolha marcada em preto.
