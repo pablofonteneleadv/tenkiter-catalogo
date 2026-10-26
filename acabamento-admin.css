@@ -115,7 +115,7 @@ body details.cartao-cad > summary > span { display: inline-flex; align-items: ce
 body details.cartao-cad > summary .ic .tk-ico { width: 20px; height: 20px; }
 body details.cartao-cad[open] > summary { background: var(--tk-texto); color: #fff; }
 body .cad-badge { background: #0d0d0d; color: #fff; font-size: 0.75rem; font-weight: 700; }
-body details.cartao-cad[open] > summary .cad-badge { background: var(--laranja); }
+body details.cartao-cad[open] > summary .cad-badge { background: var(--laranja); color: #0d0d0d; }   /* v7.23: branco no laranja não chegava a 4,5:1 */
 
 body .menu-cad { gap: 8px; padding: 12px; }
 body .menu-cad-item { border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); padding: 10px 12px; min-height: 64px; }

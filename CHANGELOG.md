@@ -6,6 +6,18 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.23.0 — Cadastro: "Cadastrar UM produto" e "Cadastrar vários produtos" — 2026-10-26
+
+- Menu Cadastrar com nomes que não se confundem:
+  - "Cadastrar UM produto" (até 8 fotos e 3 vídeos, tudo no mesmo produto);
+  - "Cadastrar vários produtos" (cada foto vira um produto, com o mesmo título, valor, tamanho e cor).
+- Cada cartão tem um desenho pequeno: 3 fotos → 1 produto, ou 3 fotos → 3 produtos.
+- Modo "vários produtos":
+  - título e botão com o novo nome;
+  - passo 1 "Fotos · uma por produto", com a contagem em produtos;
+  - sem o "★ CAPA" e sem a dica de capa, que não se aplicam.
+- Selo "novos" do Cadastrar legível (preto no laranja). Service worker renovado (tk-3.38.11).
+
 ## 7.22.0 — Mensagens: número do cliente, mesma pessoa nos 2 WhatsApp, encerrar conversas e nome do atendente — 2026-10-26
 
 - Conversas que mostravam "tenkitermodas" ou "Tenkitermodas Reserva" (o nome do próprio WhatsApp da loja, gravado quando a primeira mensagem saía do celular) voltam a mostrar o número. Quando o cliente escrever, aparece o nome que ele colocou no WhatsApp. Mensagem enviada pela loja não dá mais nome à conversa.
