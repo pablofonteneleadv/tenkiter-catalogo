@@ -68,23 +68,23 @@
   const TTL_MS = 5 * 60 * 1000;
 
   const ITENS = [
-    { id: 'catalogo',     href: 'index.html',                 icone: '👗', rotulo: 'Catálogo' },
-    { id: 'gestao',       href: 'admin.html',                 icone: '🔧', rotulo: 'Gestão',        qualquer: ['catalogo_admin'] },
-    { id: 'treinamentos', href: 'treinamentos.html',          icone: '🎓', rotulo: 'Treinamentos',  visitanteOuPerm: 'portal' },
-    { id: 'rh',           href: 'treinamentos.html?painel=rh', icone: '👥', rotulo: 'RH',            qualquer: ['equipe_relatorio', 'gerir_manuais', 'gerir_acessos'] },
-    { id: 'curriculos',   href: 'curriculos.html',            icone: '📄', rotulo: 'Currículos',    qualquer: ['dados_pessoais', 'gerir_acessos'] },
-    { id: 'candidatura',  href: 'curriculo.html',             icone: '✍️', rotulo: 'Trabalhe conosco', soVisitante: true }
+    { id: 'catalogo',     href: 'index.html',                 icone: '👗', svg: 'cabide', rotulo: 'Catálogo' },
+    { id: 'gestao',       href: 'admin.html',                 icone: '🔧', svg: 'ferramenta', rotulo: 'Gestão',        qualquer: ['catalogo_admin'] },
+    { id: 'treinamentos', href: 'treinamentos.html',          icone: '🎓', svg: 'capelo', rotulo: 'Treinamentos',  visitanteOuPerm: 'portal' },
+    { id: 'rh',           href: 'treinamentos.html?painel=rh', icone: '👥', svg: 'pessoas', rotulo: 'RH',            qualquer: ['equipe_relatorio', 'gerir_manuais', 'gerir_acessos'] },
+    { id: 'curriculos',   href: 'curriculos.html',            icone: '📄', svg: 'documento', rotulo: 'Currículos',    qualquer: ['dados_pessoais', 'gerir_acessos'] },
+    { id: 'candidatura',  href: 'curriculo.html',             icone: '✍️', svg: 'lapis', rotulo: 'Trabalhe conosco', soVisitante: true }
   ];
   const CHAVES_EQUIPE = ['catalogo_admin', 'equipe_relatorio', 'gerir_manuais', 'dados_pessoais', 'gerir_acessos'];
   // v7.1 (mockup aprovado 24/10/2026): barra do CLIENTE = Início · Buscar · Seleção · Favoritos · Atendente.
   // Equipe continua com as abas de ITENS (Catálogo, Gestão, Treinamentos, RH, Currículos).
   // Trabalhe conosco e Treinamentos (alunos) saem da barra do cliente e ficam no rodapé da vitrine.
   const ITENS_CLIENTE = () => [
-    { id: 'catalogo',   href: 'index.html',                        icone: '🏠', rotulo: 'Início' },
-    { id: 'busca',      href: 'index.html?abrir=busca',            icone: '🔎', rotulo: 'Buscar' },
-    { id: 'selecao',    href: 'index.html?abrir=selecao',          icone: '🛍️', rotulo: 'Seleção' },
-    { id: 'favoritos',  href: 'index.html?abrir=favoritos',        icone: '❤️', rotulo: 'Favoritos' },
-    { id: 'atendente',  href: (typeof window.linkWhatsApp === 'function' ? window.linkWhatsApp() : 'index.html?abrir=atendente'), icone: '💬', rotulo: 'Atendente', externo: true }
+    { id: 'catalogo',   href: 'index.html',                        icone: '🏠', svg: 'casa', rotulo: 'Início' },
+    { id: 'busca',      href: 'index.html?abrir=busca',            icone: '🔎', svg: 'busca', rotulo: 'Buscar' },
+    { id: 'selecao',    href: 'index.html?abrir=selecao',          icone: '🛍️', svg: 'sacola', rotulo: 'Seleção' },
+    { id: 'favoritos',  href: 'index.html?abrir=favoritos',        icone: '❤️', svg: 'coracao', rotulo: 'Favoritos' },
+    { id: 'atendente',  href: (typeof window.linkWhatsApp === 'function' ? window.linkWhatsApp() : 'index.html?abrir=atendente'), icone: '💬', svg: 'conversa', rotulo: 'Atendente', externo: true }
   ];
 
   let perms = [];
@@ -138,6 +138,7 @@
       '.tk-nav a{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 2px 7px;' +
         'color:#9a9a9a;text-decoration:none;font:700 .64rem/1.1 "Inter",-apple-system,Roboto,Arial,sans-serif;text-align:center;position:relative;-webkit-tap-highlight-color:transparent}' +
       '.tk-nav a .tk-i{font-size:1.15rem;line-height:1}' +
+      '.tk-nav a .tk-i .tk-ico{display:block;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}' +
       '.tk-nav a .tk-r{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       '.tk-nav a.tk-ativo{color:#ff7a1a}' +
       '.tk-nav a.tk-ativo::before{content:"";position:absolute;top:0;left:22%;right:22%;height:3px;border-radius:0 0 3px 3px;background:#ff7a1a}' +
@@ -171,7 +172,7 @@
     const html = lista.map((it) => {
       const atual = it.id === ativoId;
       return '<a href="' + it.href + '"' + (atual ? ' class="tk-ativo" aria-current="page"' : '') + (it.externo ? ' target="_blank" rel="noopener"' : '') + ' data-nav="' + it.id + '">' +
-        '<span class="tk-i" aria-hidden="true">' + it.icone + '</span><span class="tk-r">' + it.rotulo + '</span></a>';
+        '<span class="tk-i" aria-hidden="true">' + ((it.svg && window.TKIcone && TKIcone(it.svg)) || it.icone) + '</span><span class="tk-r">' + it.rotulo + '</span></a>';
     }).join('');
     if (nav.getAttribute('data-h') !== html) { nav.innerHTML = html; nav.setAttribute('data-h', html); }
   };

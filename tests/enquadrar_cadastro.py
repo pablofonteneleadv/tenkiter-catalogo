@@ -64,7 +64,7 @@ with sync_playwright() as p:
     chk("o botão é fácil de tocar (≥ 30 px de altura, largura da miniatura)", bb["h"] >= 30 and bb["w"] >= 80, bb)
     prop = pg.evaluate("(()=>{const i=document.querySelector('#galeria-grid img').getBoundingClientRect();return i.height/i.width})()")
     chk("a miniatura já é o quadro 4:5 do site", abs(prop - 1.25) < 0.05, prop)
-    chk("a dica fala do Enquadrar", "Enquadrar" in pg.inner_text(".dica-midia"))
+    chk("a dica fala do Enquadrar", "Enquadrar" in pg.text_content(".dica-midia"))  # a dica fica num <details> fechado
     abrir()
     chk("a janela abre", aberta())
     chk("a foto carregou (botão Usar habilitado)", pg.locator("#enq-ok").is_enabled())

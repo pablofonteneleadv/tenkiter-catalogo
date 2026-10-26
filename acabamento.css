@@ -300,3 +300,6 @@ body .aviso-selecao .tk-ico, body .barra-acoes-filtros .tk-ico, body .fx-rodape 
   body .vitrine-layout .filtros .bar-acoes-filtros button, body .vitrine-layout .filtros .btn-compartilhar-filtros { border-radius: var(--tk-raio-p); }
   body .modal { border-radius: 14px; }
 }
+
+/* v7.17: contagem, rótulos de preço e resumo dos filtros abertos usavam #777/#888 (abaixo do mínimo 4,5:1) */
+body .filtros .fx-topo .fx-cont, body .filtros .linha-preco span, body .filtros details.selecao-expansivel .resumo { color: var(--tk-texto-2); }

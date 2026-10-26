@@ -1,0 +1,231 @@
+/* ====================================================================
+ * TENKiTER — acabamento do painel de gestão (v7.17, "Opção A" no admin, 26/10/2026)
+ *
+ * Mesmas funções, mesma ordem e os mesmos textos; muda só a aparência,
+ * no padrão já aprovado na vitrine (acabamento.css):
+ *  - ícones de linha (icones.js) no lugar dos emojis dos botões principais;
+ *  - cabeçalho de uma faixa só (56 px), marca à esquerda;
+ *  - escala de texto 12/13/14/16/20, raio 6–8 px, borda fina, sem sombra;
+ *  - toques com 44 px no mínimo; escolha marcada em preto (como na vitrine);
+ *  - o laranja fica para a ação principal (Cadastrar) e o número de alertas.
+ *
+ * Carrega depois dos dois <style> do admin.html. Os seletores começam por
+ * `body` para vencer as regras antigas sem precisar de !important.
+ * ==================================================================== */
+
+:root {
+  --tk-texto: #141414;
+  --tk-texto-2: #625c53;
+  --tk-borda: #e3ddd3;
+  --tk-fundo: #f6f3ee;
+  --tk-superficie: #ffffff;
+  --tk-raio: 8px;
+  --tk-raio-p: 6px;
+}
+
+/* ---------- ícones ---------- */
+.tk-ico {
+  width: 1.25em; height: 1.25em; flex: none; display: inline-block; vertical-align: -0.25em;
+  fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.tk-ico .tk-ico-cheio, .tk-ico.tk-ico-cheio { fill: currentColor; stroke: none; }
+body .ic { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+body .ic .tk-ico { width: 18px; height: 18px; vertical-align: 0; }
+
+body { background: var(--tk-fundo); color: var(--tk-texto); }
+
+/* ---------- cabeçalho: uma faixa, marca à esquerda ---------- */
+body > header {
+  display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
+  min-height: 58px; padding: 6px 16px; text-align: left; box-shadow: none; border-bottom: 0;
+}
+body > header .header-brand-row { justify-content: flex-start; gap: 10px; width: 100%; max-width: 528px; margin: 0 auto; }
+body > header .header-logo-img { height: 28px; }
+body > header h1 { font-size: 0.94rem; letter-spacing: 0.08em; line-height: 1.2; }
+body > header p {
+  width: 100%; max-width: 528px; margin: 0 auto; padding-left: 38px;
+  font-size: 0.72rem; line-height: 1.3; color: #c9c3b8;
+}
+
+/* faixa do CPF: acompanha a largura do conteúdo (no computador ia de ponta a ponta) */
+body #faixa-cpf-slot { max-width: 560px; margin: 12px auto 0; padding: 0 16px !important; }
+body #faixa-cpf-slot .tkc-faixa { border-radius: var(--tk-raio); margin: 0; box-shadow: none; }
+/* mesmas larguras do <main> (admin.html: 560 px; 1180 px a partir de 900; 1320 px a partir de 1400) */
+@media (min-width: 900px) {
+  body > header .header-brand-row, body > header p { max-width: 1156px; }
+  body #faixa-cpf-slot { max-width: 1180px; width: calc(100% - 48px); padding: 0 12px !important; }
+  body #faixa-cpf-slot .tkc-faixa { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 6px 12px; align-items: center; }
+  body #faixa-cpf-slot .tkc-faixa > strong, body #faixa-cpf-slot .tkc-faixa > p, body #faixa-cpf-slot .tkc-faixa > .tkc-msg { grid-column: 1 / -1; }
+  body #faixa-cpf-slot .tkc-faixa > input, body #faixa-cpf-slot .tkc-faixa > button { margin: 0; }
+}
+
+@media (min-width: 1400px) {
+  body > header .header-brand-row, body > header p { max-width: 1296px; }
+  body #faixa-cpf-slot { max-width: 1320px; }
+}
+
+/* ---------- superfícies: borda fina, raio 8, sem sombra ---------- */
+body .usuario-bar, body .dashboard-card, body .atalhos-hoje, body details.cartao-cad, body section.cartao-cad,
+body .card, body .produto, body .stats-card {
+  border-radius: var(--tk-raio); border: 1px solid var(--tk-borda); box-shadow: none;
+}
+
+body .usuario-bar { padding: 6px 6px 6px 14px; font-size: 0.86rem; min-height: 56px; }
+body .btn-trocar-user, body .btn-sair {
+  min-height: 44px; padding: 0 14px; border-radius: var(--tk-raio-p); font-size: 0.82rem; font-weight: 600;
+}
+body .btn-trocar-user { background: transparent; border: 1px solid var(--tk-borda); color: var(--tk-texto); }
+body .btn-sair { background: transparent; border: 1px solid #f0c6c6; color: var(--vermelho); }
+
+body .dashboard { gap: 8px; margin-bottom: 12px; }
+body .dashboard-card { padding: 10px 8px; }
+body .dashboard-card span { font-size: 0.75rem; color: var(--tk-texto-2); }
+body .dashboard-card strong { font-size: 1.25rem; font-weight: 700; margin-top: 2px; }
+
+/* ---------- "O que fazer agora" ---------- */
+body .atalhos-hoje { padding: 12px; }
+body .atalhos-hoje strong { font-size: 0.82rem; font-weight: 600; color: var(--tk-texto-2); margin-bottom: 8px; }
+body .atalhos-linha { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+body .atalhos-linha button {
+  display: inline-flex; align-items: center; justify-content: flex-start; gap: 8px;
+  min-height: 44px; padding: 8px 12px; border-radius: var(--tk-raio-p);
+  background: var(--tk-superficie); border: 1px solid var(--tk-borda); color: var(--tk-texto);
+  font-size: 0.86rem; font-weight: 600; text-align: left; line-height: 1.2;
+}
+body .atalhos-linha button:hover { background: #f3efe8; }
+body .atalhos-linha button[hidden] { display: none; }
+@media (min-width: 600px) { body .atalhos-linha { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
+
+/* ---------- ferramentas do gestor (fechado) ---------- */
+body details.ferramentas { border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); background: var(--tk-superficie); padding: 0 12px; }
+body details.ferramentas > summary {
+  display: flex; align-items: center; gap: 8px; min-height: 48px;
+  font-size: 0.86rem; font-weight: 600; color: var(--tk-texto);
+}
+body details.ferramentas[open] { padding-bottom: 12px; }
+body details.extra:not(.ferramentas) > summary { min-height: 44px; display: flex; align-items: center; }
+
+/* ---------- cartões que abrem (Cadastrar, Formulário, Pedidos) ---------- */
+body details.cartao-cad { overflow: hidden; }
+body details.cartao-cad > summary {
+  min-height: 52px; padding: 12px 16px; border-radius: 0;
+  font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; font-weight: 700; font-size: 1rem;
+}
+body details.cartao-cad > summary > span { display: inline-flex; align-items: center; gap: 8px; }
+body details.cartao-cad > summary .ic .tk-ico { width: 20px; height: 20px; }
+body details.cartao-cad[open] > summary { background: var(--tk-texto); color: #fff; }
+body .cad-badge { background: #0d0d0d; color: #fff; font-size: 0.75rem; font-weight: 700; }
+body details.cartao-cad[open] > summary .cad-badge { background: var(--laranja); }
+
+body .menu-cad { gap: 8px; padding: 12px; }
+body .menu-cad-item { border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); padding: 10px 12px; min-height: 64px; }
+body .menu-cad-item:hover { border-color: var(--tk-texto); }
+body .menu-cad-item .mc-ic {
+  width: 44px; height: 44px; border-radius: var(--tk-raio-p); background: var(--tk-fundo);
+  display: inline-flex; align-items: center; justify-content: center; font-size: 1.3rem;
+}
+body .menu-cad-item .mc-ic .tk-ico { width: 22px; height: 22px; }
+body .menu-cad-item b { font-size: 0.94rem; font-weight: 700; }
+body .menu-cad-item small { font-size: 0.8rem; color: var(--tk-texto-2); }
+
+body section.cartao-cad#cad-envios h2 { font-size: 1rem; margin: 0 0 4px; }
+body section.cartao-cad#cad-envios > p { font-size: 0.84rem; color: var(--tk-texto-2); margin: 0; }
+
+/* ---------- lista: título, busca e filtros ---------- */
+body .lista-topo { margin: 20px 0 8px; }
+body .lista-topo h2 { font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; font-size: 1rem; font-weight: 700; }
+body #btn-select-all {
+  min-height: 44px; padding: 0 12px !important; border-radius: var(--tk-raio-p);
+  background: transparent; border: 1px solid var(--tk-borda); color: var(--tk-texto);
+  font-size: 0.82rem !important; font-weight: 600;
+}
+body .busca-admin-wrap input#busca-admin {
+  min-height: 44px; padding-left: 40px; border: 1px solid var(--tk-borda); border-radius: var(--tk-raio);
+  font-size: 1rem; background: var(--tk-superficie);
+}
+body .busca-admin-lupa {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  display: inline-flex; color: var(--tk-texto-2); pointer-events: none;
+}
+body .busca-admin-lupa .tk-ico { width: 19px; height: 19px; }
+body .busca-admin-x {
+  width: 40px; height: 40px; min-height: 40px; right: 2px; border-radius: var(--tk-raio-p);
+  background: transparent; color: var(--tk-texto-2); display: inline-flex; align-items: center; justify-content: center;
+}
+body .busca-admin-x[hidden] { display: none; }
+body #fa-toggle {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--tk-borda); border-radius: var(--tk-raio);
+  font-size: 0.86rem; font-weight: 600; color: var(--tk-texto);
+}
+
+body .chip { border-radius: var(--tk-raio-p); border-color: var(--tk-borda); font-weight: 500; color: var(--tk-texto); }
+body .chip.selecionado, body .chip[aria-pressed="true"] { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; font-weight: 600; }
+body .filtros-lista .chip { min-height: 40px; font-size: 0.82rem; padding: 6px 12px; }
+body #form-produto .cad-vinculos button { border-radius: var(--tk-raio-p); border-color: var(--tk-borda); }
+body #form-produto .cad-vinculos button.ativo { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
+
+/* ---------- cartão da peça ---------- */
+body .produto { padding: 12px; gap: 12px; }
+body .produto img { border-radius: var(--tk-raio-p); }
+body .produto-info .codigo { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; }
+body .produto-info .nome { font-size: 0.94rem; font-weight: 700; }
+body .produto-info .preco { font-size: 0.84rem; color: var(--tk-texto); }
+body .produto-info .preco span { color: var(--tk-texto); font-weight: 700; }
+body .produto-info .preco .tk-ico { width: 16px; height: 16px; vertical-align: -3px; }
+body .produto-info .estoque-linha { font-size: 0.78rem; color: var(--tk-texto-2); }
+body .acoes-linha { gap: 6px; margin-top: 10px; }
+body .acoes-linha > button {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px;
+  border-radius: var(--tk-raio-p); border: 1px solid var(--tk-borda);
+  background: var(--tk-superficie); color: var(--tk-texto); font-size: 0.8rem; font-weight: 600;
+}
+body .acoes-linha > button .tk-ico { width: 16px; height: 16px; }
+/* celular: os quatro botões em grade 2×2 de mesma largura (antes quebravam 3 + 1) */
+@media (max-width: 599px) {
+  body .acoes-linha { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body .acoes-linha > button { justify-content: center; padding: 0 8px; }
+}
+body .acoes-linha .btn-link, body .acoes-linha .btn-arte { background: var(--tk-superficie); color: var(--tk-texto); }
+body .acoes-linha > button:hover { background: #f3efe8; }
+body .acoes-linha .btn-editar { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
+body .acoes-linha .btn-editar:hover { background: #2a2a2a; }
+body .acoes-linha .btn-postar { background: var(--tk-superficie); color: #8a1259; border-color: #efcfe0; }
+body details.mais > summary {
+  width: 40px; height: 40px; border-radius: var(--tk-raio-p); background: transparent;
+  border: 1px solid var(--tk-borda); color: var(--tk-texto);
+}
+body .produto-info .codigo, body .produto-info .nome { padding-right: 46px; }
+body .mais-menu { top: 44px; border-radius: var(--tk-raio); border: 1px solid var(--tk-borda); box-shadow: 0 8px 24px rgba(0,0,0,.14); min-width: 170px; }
+body .mais-menu button {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; border-radius: var(--tk-raio-p);
+  background: transparent; color: var(--tk-texto); font-weight: 600;
+}
+body .mais-menu button:hover { background: #f3efe8; }
+body .mais-menu button .tk-ico { width: 18px; height: 18px; }
+body .mais-menu .btn-excluir { background: transparent !important; color: var(--vermelho) !important; }
+body .mais-menu .btn-excluir:hover { background: #fdecec !important; }
+
+/* ---------- barra de seleção em lote ---------- */
+body .bulk-bar { border-radius: var(--tk-raio); padding: 12px; }
+body .bulk-bar-header { font-size: 0.86rem; font-weight: 600; }
+body #btn-cancelar-bulk { min-height: 40px; padding: 0 12px !important; border-radius: var(--tk-raio-p); background: transparent; color: #fff; border: 1px solid #555; font-size: 0.8rem; }
+body .bulk-bar-actions button, body .bulk-mais button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border-radius: var(--tk-raio-p); background: #2a2a2a; border: 1px solid #3a3a3a; font-size: 0.8rem; font-weight: 600;
+}
+body .bulk-bar-actions button .tk-ico { width: 16px; height: 16px; }
+body .bulk-bar-actions button.mais { background: var(--laranja); border-color: var(--laranja); color: #0d0d0d; }
+body #btn-bulk-postar { background: #8a1259; border-color: #8a1259; }
+
+/* ---------- avisos ---------- */
+body .aviso-gestao { border-radius: var(--tk-raio); font-size: 0.84rem; }
+body .aviso-gestao button { min-height: 40px; border-radius: var(--tk-raio-p); }
+
+/* ---------- botões genéricos do painel: mesmo raio da vitrine ---------- */
+body main button { border-radius: var(--tk-raio-p); }
+body main .chip { border-radius: var(--tk-raio-p); }
+
+/* faixa "Produtos para aceitar" (admin-instagram.js) dentro do menu Cadastrar */
+body .ig-faixa-btn { border-width: 1px; border-radius: var(--tk-raio); min-height: 64px; }
+body .ig-faixa-btn b { font-size: 0.94rem; }
+body .ig-faixa-btn small { color: var(--tk-texto-2); }

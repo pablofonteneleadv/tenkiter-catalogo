@@ -22,14 +22,16 @@ with sync_playwright() as p:
     assert page.input_value('#cores') == 'Consulte cor/estampa disponível'
     assert page.input_value('#tamanhos') == 'Consultar tamanhos disponíveis'
     assert page.evaluate('Array.from(selecionadosGeneros)') == ['Feminino Adulto']
-    page.locator('#chips-tamanhos .chip').filter(has_text=__import__('re').compile('^P$')).click()
-    assert page.input_value('#tamanhos') == 'P'
+    # v4.18+: o tamanho novo vem do botão da etiqueta (os chips antigos só aparecem em cadastro antigo)
+    page.locator('#cad-etiquetas button').filter(has_text=__import__('re').compile('^P$')).click()
+    tam_p = page.input_value('#tamanhos')
+    assert tam_p.startswith('P') and 'Etiqueta: P' in tam_p, tam_p
     page.locator('#chips-cores .chip').filter(has_text=__import__('re').compile('^Preto$')).click()
     assert page.input_value('#cores') == 'Preto'
     page.evaluate('aplicarPadroesNovo_()')
     assert page.input_value('#cores') == 'Preto'
-    assert page.input_value('#tamanhos') == 'P'
-    page.locator('#chips-genero .chip').filter(has_text=__import__('re').compile('^Masculino Adulto$')).click()
+    assert page.input_value('#tamanhos') == tam_p
+    page.locator('#chips-genero .chip').filter(has_text=__import__('re').compile('^Homem$')).click()
     assert page.evaluate('Array.from(selecionadosGeneros)') == ['Masculino Adulto']
     page.evaluate('aplicarPadroesNovo_()')
     assert page.evaluate('Array.from(selecionadosGeneros)') == ['Masculino Adulto']

@@ -6,6 +6,16 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.17.0 — acabamento novo no painel de gestão (Opção A) — 2026-10-26
+
+- Painel no mesmo padrão da vitrine (`acabamento-admin.css`): ícones de linha no lugar dos emojis em "O que fazer agora", Cadastrar, busca, Filtros, cartão da peça, menu ⋯ e barra de seleção; cantos de 6–8 px, bordas finas, sem sombra, escolha marcada em preto.
+- Cabeçalho de uma faixa (58 px) com a marca à esquerda; faixa do CPF e conteúdo com a mesma largura no computador (antes ia de ponta a ponta).
+- Cartão da peça: Editar como botão principal e Stories/Link/Postar em grade 2×2 no celular, todos com 40 px; menu ⋯ com 44 px por item.
+- Barra inferior da equipe (todas as páginas) com ícones de linha.
+- Erros que já existiam: "Envios e pendências" não aparece mais vazio no meio do painel; botão "✂ Enquadrar" da miniatura com 32 px de toque (tinha 27); selo "novos" legível (era laranja sobre laranja); 15 escapes Unicode de cinco dígitos trocados pelo caractere.
+- Testes antigos atualizados para o cadastro atual (tamanho pela etiqueta, público "Homem"): `cadastro_plano_mestre`, `jornada_lojista`, `enquadrar_cadastro`, `admin_busca_status`.
+- Mesmas funções, mesma ordem e mesmos textos; service worker renovado (tk-3.38.7).
+
 ## 7.16.0 — copiar de outra peça, ordem alfabética e filtros — 2026-10-26
 
 - Cadastro, passo 3: botão "Copiar dados de outra peça" sempre à vista e as 3 parecidas com foto embaixo do nome. A tela cheia "Escolher peça para copiar" abre nos últimos cadastrados, com busca por nome ou código, filtros de situação, público e categoria (com contagem), ordem (mais recentes/A–Z) e fotos grandes. Tocar na peça copia todos os dados dela, com Desfazer; ✎ abre a peça para editar.

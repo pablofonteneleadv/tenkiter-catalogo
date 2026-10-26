@@ -47,7 +47,8 @@ with sync_playwright() as p:
     if not pg.locator("#chips-genero .chip:first-child").evaluate('e => e.classList.contains("selecionado")'):
         pg.click("#chips-genero .chip:first-child")
     pg.click("#btn-abrir-categorias"); pg.click("#cat-lista .cat-item:has-text('Vestido')"); pg.click("#cat-pronto")
-    pg.get_by_role('button',name='P',exact=True).click() if pg.locator('#chips-tamanhos button').count() else pg.locator('#chips-tamanhos .chip').filter(has_text=__import__('re').compile(r'^P$')).click(); pg.locator('#chips-tamanhos .chip').filter(has_text=__import__('re').compile(r'^M$')).click()
+    # v4.18+: tamanho novo = botão da etiqueta (os chips antigos só aparecem em cadastro antigo)
+    pg.locator('#cad-etiquetas button').filter(has_text=__import__('re').compile(r'^P$')).click()
     pg.click("#chips-cores .chip:has-text('Preto')"); pg.fill("#descricao","Viscose, caimento leve."); pg.check("#novidade")
     chk("checklist diz tudo certo", "Tudo certo" in pg.inner_text("#cad-falta"))
     pg.click("#btn-salvar"); pg.wait_for_timeout(3500)
@@ -57,7 +58,7 @@ with sync_playwright() as p:
         c=cr[0]
         chk("payload: nome/preço/estoque", (c["nome"],c["preco"],c["estoque"])==("Vestido Midi Floral","129.99","4"), (c["nome"],c["preco"],c["estoque"]))   # v4.25: o à vista termina em ,99/,49 (129,90 vira 129,99)
         chk("payload: categoria e gênero", c["categoria"]=="Vestido" and c["genero"]=="Feminino Adulto", (c["categoria"],c["genero"]))
-        chk("payload: tamanhos, cores, descrição", c["tamanhos"]=="P, M" and c["cores"]=="Preto" and c["descricao"].startswith("Viscose"), (c["tamanhos"],c["cores"],c["descricao"]))
+        chk("payload: tamanhos, cores, descrição", c["tamanhos"].startswith("P") and "Etiqueta: P" in c["tamanhos"] and c["cores"]=="Preto" and c["descricao"].startswith("Viscose"), (c["tamanhos"],c["cores"],c["descricao"]))
         chk("payload: novidade true", c["novidade"] is True)
         chk("payload: capa + galeria + vídeo (URLs do Cloudinary)", c["fotoUrlExistente"].startswith("https://res.cloudinary.com") and c["fotosGaleriaExistentes"].count("http")==1 and c.get("videoUrlExistente","").endswith(".mp4"), {k:c.get(k) for k in("fotoUrlExistente","fotosGaleriaExistentes","videoUrlExistente")})
     chk("3 uploads (2 fotos + 1 vídeo)", len(ups)==3, ups)

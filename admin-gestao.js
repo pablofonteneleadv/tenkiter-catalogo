@@ -623,20 +623,21 @@
   }
   function ligarLote_() {
     const barra = document.querySelector('#bulk-bar .bulk-bar-actions');
-    const add = (id, txt, fn) => { const b = document.createElement('button'); b.type = 'button'; b.id = id; b.textContent = txt; b.addEventListener('click', fn); barra.appendChild(b); };
+    // ícone de linha (icones.js) quando houver; senão o emoji de reserva
+    const add = (id, txt, fn, ico) => { const b = document.createElement('button'); b.type = 'button'; b.id = id; const svg = ico && window.TKIcone && TKIcone(ico); if (svg) b.innerHTML = '<span class="ic">' + svg + '</span> ' + txt.replace(/^\S+\s/, ''); else b.textContent = txt; b.addEventListener('click', fn); barra.appendChild(b); };
     add('btn-bulk-estoque', '📦 Estoque', async () => {
       const v = prompt('Novo estoque para as ' + selecionadosBulk.size + ' peças selecionadas (número, 0 = esgotado):');
       if (v === null || v.trim() === '') return;
       const n = Number(v.replace(',', '.'));
       if (isNaN(n) || n < 0) { alert('Digite um número (0 ou mais).'); return; }
       await lote_('alterarEstoque', n, 'Estoque alterado');
-    });
+    }, 'pacote');
     if (recursos.loteCategoria) add('btn-bulk-categoria', '🏷️ Categoria', async () => {
       const v = prompt('Categoria para as ' + selecionadosBulk.size + ' peças (substitui a atual).\nExistentes: ' + categorias.join(', '));
       if (v === null || !v.trim()) return;
       await lote_('alterarCategoria', v.trim(), 'Categoria alterada');
-    });
-    add('btn-bulk-lista', '📋 Copiar lista p/ WhatsApp', copiarListaWhats_);
+    }, 'etiqueta');
+    add('btn-bulk-lista', '📋 Copiar lista p/ WhatsApp', copiarListaWhats_, 'copiar');
     const antes = typeof BOTOES_BULK_IDS !== 'undefined' ? BOTOES_BULK_IDS : null;
     if (antes) antes.push('btn-bulk-estoque', 'btn-bulk-lista', 'btn-bulk-categoria');
   }

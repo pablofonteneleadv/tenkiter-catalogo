@@ -40,7 +40,7 @@ def cenario(p, modo, video, sessao=True):
     if not pg.locator("#chips-genero .chip:first-child").evaluate('e => e.classList.contains("selecionado")'):
         pg.click("#chips-genero .chip:first-child")
     pg.click("#btn-abrir-categorias"); pg.click("#cat-lista .cat-item:has-text('Vestido')"); pg.click("#cat-pronto")
-    pg.locator('#chips-tamanhos .chip').filter(has_text=__import__('re').compile(r'^P$')).click()
+    pg.locator('#cad-etiquetas button').filter(has_text=__import__('re').compile(r'^P$')).click()   # v4.18+: tamanho pela etiqueta
     pg.click("#btn-salvar"); pg.wait_for_timeout(4500)
     cr = [x for x in log if x.get("action") == "create"]
     r = (st, cr, ups, errs); b.close(); return r
