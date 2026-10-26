@@ -60,3 +60,25 @@ body.pg-treinamentos .cv-aviso { border-radius: var(--tk-raio); }
 body.pg-treinamentos .cv-aviso a.cv-btn { border-radius: var(--tk-raio-p); min-height: 44px; display: inline-flex; align-items: center; font-weight: 700; }
 body.pg-treinamentos .btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 body.pg-treinamentos input[type=search], body.pg-treinamentos input[type=text], body.pg-treinamentos input[type=tel], body.pg-treinamentos select { min-height: 44px; border-radius: var(--tk-raio); font-size: 1rem; }
+
+/* ---------- Trabalhe com a gente (curriculo.html, público) ---------- */
+body.pg-curriculo { background: var(--tk-fundo); color: var(--tk-texto); }
+body.pg-curriculo header { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 0 16px; text-align: left; }
+body.pg-curriculo header img { height: 28px; margin: 0; }
+body.pg-curriculo header h1 { display: block; font-size: 0.94rem; letter-spacing: 0.02em; max-width: 588px; }
+body.pg-curriculo .card { border-radius: var(--tk-raio); border: 1px solid var(--tk-borda); box-shadow: none; }
+body.pg-curriculo input[type=text], body.pg-curriculo input[type=email], body.pg-curriculo input[type=password], body.pg-curriculo input[type=tel],
+body.pg-curriculo input[type=number], body.pg-curriculo input[type=date], body.pg-curriculo textarea, body.pg-curriculo select { border-color: var(--tk-borda); border-radius: var(--tk-raio); min-height: 44px; }
+body.pg-curriculo input:focus, body.pg-curriculo textarea:focus { outline: 2px solid var(--tk-texto); }
+body.pg-curriculo .opcao { border-color: var(--tk-borda); border-radius: var(--tk-raio); min-height: 44px; align-items: center; }
+body.pg-curriculo .opcao input { margin-top: 0; accent-color: var(--tk-texto); }
+body.pg-curriculo .opcao:has(input:checked) { border-color: var(--tk-texto); background: var(--tk-superficie); box-shadow: inset 0 0 0 1px var(--tk-texto); }
+body.pg-curriculo button { border-radius: var(--tk-raio-p); min-height: 48px; }
+body.pg-curriculo .btn-p { background: var(--tk-texto); color: #fff; }
+body.pg-curriculo .btn-s { background: transparent; color: var(--tk-texto); border: 1px solid var(--tk-borda); }
+body.pg-curriculo .btn-l { min-height: 44px; }
+body.pg-curriculo .links a { background: var(--tk-texto); color: #fff; border-radius: var(--tk-raio-p); }
+body.pg-curriculo .obs { color: var(--tk-texto-2); }
+body.pg-curriculo p.sub { color: var(--tk-texto-2); }
+body.pg-curriculo .secao-situacoes { border-radius: var(--tk-raio); }
+body.pg-curriculo .erro, body.pg-curriculo .aviso, body.pg-curriculo .ref { border-radius: var(--tk-raio); }

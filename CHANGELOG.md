@@ -16,6 +16,8 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Importar planilha: botão "Escolher arquivo" em português, mostrando o nome do arquivo (o navegador mostrava "Choose File").
 - Números reais: cartões sem emoji e com o número em preto.
 - Configurações avançadas e Log em blocos com título; ação principal preta e secundária com borda, lado a lado no computador.
+- Painel: modos do "Editar peças" e opção marcada do "Alterar preços" em preto; formulário com ícone nos botões de foto e vídeo, o passo "9 Descrição e destaque" e o Cancelar com borda.
+- Páginas da equipe no mesmo padrão (`acabamento-equipe.css`): Currículos, Treinamentos e Painel do RH (o modo escuro continua) e o formulário público "Trabalhe com a gente".
 
 ## 7.18.0 — "Editar peças" rápido e filtro por valor — 2026-10-26
 
