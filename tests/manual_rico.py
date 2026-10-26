@@ -166,7 +166,7 @@ with sync_playwright() as p:
 
     print("== Lição com checagem: sem caixinha, só avança acertando ==")
     c2 = pg.locator(".chapter").nth(1); c3 = pg.locator(".chapter").nth(2)
-    chk("a lição 1 (com checagem) não tem a caixinha de leitura", c1.locator(".read-toggle-big").count() == 0 and "Responda a checagem" in c1.locator(".cap-status").inner_text())
+    chk("a lição 1 (com checagem) não tem a caixinha de leitura", c1.locator(".read-toggle-big").count() == 0 and "perguntas acima" in c1.locator(".cap-status").inner_text(), c1.locator(".cap-status").inner_text())   # texto atual: "Conclua as perguntas acima…"
     chk("lição 2 e 3 começam travadas; aluno não vê botão de gestão", pg.locator(".chapter.cap-travado").count() == 2 and pg.locator("button[data-livre]").count() == 0)
     chk("lição travada esconde o conteúdo e explica por quê", not c2.locator(".tmv-chk").first.is_visible() and "Lição 1" in c2.locator(".cap-trava").inner_text())
     c1.locator(".tmv-chk .tmv-op").nth(0).click(); pg.wait_for_timeout(250)
