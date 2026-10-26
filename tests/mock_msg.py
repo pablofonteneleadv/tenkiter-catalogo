@@ -122,10 +122,11 @@ def tratar(route, path, method, body, s):
     if path == "/msg/encerrar":
         ids = [i for i in body.get("conversas", []) if isinstance(i, int)]
         if not ids: return J({"ok": False, "erro": "Escolha ao menos uma conversa."}, 400) or True
-        s.setdefault("encerrar", []).append({"ids": ids, "reabrir": bool(body.get("reabrir"))})
+        s.setdefault("encerrar", []).append({"ids": ids, "reabrir": bool(body.get("reabrir")), "motivo": body.get("motivo")})
         for c in s["convs"]:
             if c["id"] in ids:
                 c["encerrada_em"] = "" if body.get("reabrir") else agora(); c["atualizada_em"] = agora()
+                c["encerrada_motivo"] = "" if body.get("reabrir") else (body.get("motivo") if body.get("motivo") in ("concluido", "vendeu", "sem_resposta", "engano") else "concluido")
                 if not body.get("reabrir"): c["nao_lidas"] = 0
         return J({"ok": True, "alteradas": len(ids), "contagens": {k: cont(s, k) for k in ("whatsapp1", "whatsapp2", "instagram", "todos")}}) or True
     if path == "/msg/config":
