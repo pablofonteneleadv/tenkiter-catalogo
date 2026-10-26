@@ -313,8 +313,7 @@ function d1() {
   await insPost('whatsapp', 'p/storyA.jpg', pubA, 'Conjunto Plus Size'); await insPost('whatsapp', 'p/storyB.jpg', pubB, 'Vestido alfaiataria'); await insPost('whatsapp2', 'p/storyA.jpg', pubA, 'So no 2');
   await wh('/wh/wafly/1/' + seg, msg('ST1', '5588966660000', 'Oi', { momment: tM + 5000, isStatusReply: true, referenceMessageId: 'REFSTATUS' }));
   const forma = (await A('GET', '/msg/diagnostico')).j.forma.whatsapp1;
-  const brutoD = (await A('GET', '/msg/diagnostico')).j.bruto.whatsapp1, brutoS = JSON.stringify(brutoD);
-  chk('diagnóstico guarda o FORMATO dos últimos avisos sem textos, números nem links', brutoD.length >= 1 && brutoD.length <= 8 && brutoS.includes('isStatusReply') && !brutoS.includes('5588') && !brutoS.includes('cdn.wafly.fake/') && !brutoS.includes('Oi') && /<texto/.test(brutoS), brutoS.slice(0, 300));
+  chk('diagnóstico não guarda mais avisos brutos (só o formato resumido)', (await A('GET', '/msg/diagnostico')).j.bruto === undefined);
   const st = (await A('GET', '/msg/mensagens?conversa=' + (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588966660000'").first()).id)).j.mensagens[0];
   chk('resposta a story: marca como story, acha o Status mais recente e avisa que é "provável" (havia dois)', st.texto === 'Oi' && st.ctx_tipo === 'story' && st.ctx_midia === 1 && st.ctx_aprox === 1 && st.ctx_legenda === 'Vestido alfaiataria' && st.ctx_mtipo === 'imagem' && !!st.ctx_em, st);
   const dls = await w.fetch(ped('GET', '/msg/midia?id=' + st.id + '&ctx=1', 'tk2.admin'), env, {});
