@@ -119,6 +119,26 @@ def tratar(route, path, method, body, s):
                 s.setdefault("celular", []).append((c["id"], c["canal"]))
             else: cel = {"ok": False, "desligado": True}
         return J({"ok": bool(c), "celular": cel}) or True
+    if path.startswith("/msg/contatos/"):
+        c = s.setdefault("contatos", {"ligada": False, "conta": "", "backup": None, "relatorio": None, "pedidos": []})
+        c["pedidos"].append((path, body))
+        if path == "/msg/contatos/situacao":
+            return J({"ok": True, "ligada": c["ligada"], "conta": c["conta"], "marcador": "Tenkiter Clientes G", "backup": c["backup"], "relatorio": c["relatorio"] if "relatorio=1" in route.request.url else None}) or True
+        if path == "/msg/contatos/config":
+            if body.get("desligar"): c.update({"ligada": False, "conta": ""}); return J({"ok": True, "ligada": False}) or True
+            if not str(body.get("url", "")).startswith("https://script.google.com/macros/s/"): return J({"ok": False, "erro": "Cole o endereço da implantação da ponte (começa com https://script.google.com/macros/s/ e termina em /exec)."}, 400) or True
+            c.update({"ligada": True, "conta": "contatos@exemplo.com"}); return J({"ok": True, "ligada": True, "conta": "contatos@exemplo.com"}) or True
+        if path == "/msg/contatos/backup":
+            c["backup"] = {"em": agora(), "total": 1234, "arquivo": "contatos-google-2026-10-26-1800.json", "url": "https://drive.google.com/file/d/abc"}
+            return J(dict(ok=True, **c["backup"])) or True
+        if path == "/msg/contatos/relatorio":
+            if not c["backup"]: return J({"ok": False, "erro": "Faça a cópia de segurança dos contatos antes do relatório."}, 409) or True
+            c["relatorio"] = {"em": agora(), "total": 1234, "comFone": 1200, "semFone": 34,
+                "duplicados": {"total": 2, "contatosEnvolvidos": 5, "lista": [{"chave": "558899990001", "contatos": [{"r": "people/c1", "n": "Maria Silva", "f": ["+5588999990001"]}, {"r": "people/c2", "n": "Maria S.", "f": ["(88) 9999-0001"]}]}, {"chave": "558877770001", "contatos": [{"r": "people/c3", "n": "Rita", "f": ["+5588977770001"]}, {"r": "people/c4", "n": "Rita Loja", "f": ["88977770001"]}, {"r": "people/c5", "n": "Rita 2", "f": ["977770001"]}]}]},
+                "corrigir": {"total": 1, "lista": [{"r": "people/c2", "n": "Maria S.", "de": "(88) 9999-0001", "para": "+5588999990001"}]},
+                "invalidos": {"total": 1, "lista": [{"r": "people/c9", "n": "Fixo errado", "f": "12345"}]},
+                "semCadastro": {"total": 1, "lista": [{"conversa": 2, "canal": "whatsapp1", "nome": "", "fone": "+5588988887777", "ultima": agora()}]}}
+            return J(dict(ok=True, **c["relatorio"])) or True
     if path == "/msg/encerrar":
         ids = [i for i in body.get("conversas", []) if isinstance(i, int)]
         if not ids: return J({"ok": False, "erro": "Escolha ao menos uma conversa."}, 400) or True

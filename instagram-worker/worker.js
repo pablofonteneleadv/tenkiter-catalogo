@@ -2952,6 +2952,70 @@ async function exportarMensagens_(env, q) {
   return { corpo: corpo, tipo: tipo, nome: nome, cortado: cortou, total: linhas.length };
 }
 /* ---- métricas de atendimento (base para a auditoria) ---- */
+/* ---------------------------------------------------------------------------
+ * v2.14 — Google Contatos pela "ponte" (contatos-ponte-*.gs.txt, publicada pelo Pablo na conta dos contatos).
+ * Esta fase só LÊ: cópia de segurança (no Drive daquela conta) e relatório da primeira limpeza. Nada muda no Google sem aprovação.
+ * O endereço e a chave da ponte ficam só aqui no servidor (cfg); a tela só sabe se está ligada.
+ * ------------------------------------------------------------------------- */
+const PONTE_URL_RE_ = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]{20,}\/exec$/;
+async function ponte_(env, corpo, cfgTeste) {
+  const url = cfgTeste ? cfgTeste.url : await cfgGet(env, 'contatos_url'), chave = cfgTeste ? cfgTeste.chave : await cfgGet(env, 'contatos_chave');
+  if (!url || !chave) return { ok: false, erro: 'A ponte do Google Contatos ainda não foi ligada.' };
+  let r;
+  try { r = await fetch(url, { method: 'POST', redirect: 'follow', signal: AbortSignal.timeout(90000), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({}, corpo, { chave: chave })) }); }
+  catch (e) { return { ok: false, erro: 'A ponte do Google Contatos não respondeu agora. Tente de novo.' }; }
+  const txt = await r.text();
+  try { const j = JSON.parse(txt); return j && typeof j === 'object' ? j : { ok: false, erro: 'Resposta estranha da ponte.' }; }
+  catch (e) { return { ok: false, erro: 'A ponte respondeu uma página em vez de dados. Confira se a implantação está como "App da Web", executar como "Eu" e acesso "Qualquer pessoa".' }; }
+}
+/** Número -> forma única. Brasil: 55 + DDD + número; aceita sem 55, com zero na frente e com máscara. */
+function foneNormal_(bruto) {
+  const s = String(bruto || '').trim(), mais = s.indexOf('+') === 0;
+  let d = s.replace(/\D/g, '');
+  if (!d) return { ok: false, motivo: 'vazio' };
+  if (!mais) { d = d.replace(/^00/, ''); if (d.length >= 11 && d.length <= 12 && d.charAt(0) === '0') d = d.slice(1); if (d.length === 10 || d.length === 11) d = '55' + d; }
+  // celular antigo de 8 dígitos (6 a 9 na frente) ganha o 9; fixo (2 a 5) fica com 8
+  if (/^55[1-9][1-9][6-9]\d{7}$/.test(d)) d = d.slice(0, 4) + '9' + d.slice(4);
+  const br = /^55[1-9][1-9](9\d{8}|[2-5]\d{7})$/.test(d);
+  if (br) return { ok: true, d: d, chave: d.length === 13 ? d.slice(0, 4) + d.slice(5) : d, br: true };
+  if (mais && d.length >= 8 && d.length <= 15 && d.indexOf('55') !== 0) return { ok: true, d: d, chave: d, br: false };
+  return { ok: false, motivo: 'inválido', d: d };
+}
+async function relatorioContatos_(env) {
+  const contatos = []; let pagina = '', voltas = 0, conta = '';
+  do {
+    const r = await ponte_(env, { acao: 'listar', pagina: pagina || undefined });
+    if (!r.ok) return r;
+    (r.contatos || []).forEach((c) => contatos.push(c));
+    pagina = r.proxima || ''; voltas++;
+  } while (pagina && voltas < 60);
+  const porChave = new Map(), invalidos = [], corrigir = []; let semFone = 0;
+  for (const c of contatos) {
+    const fs = Array.isArray(c.f) ? c.f : [];
+    if (!fs.length) { semFone++; continue; }
+    for (const f of fs) {
+      const n = foneNormal_(f);
+      if (!n.ok) { invalidos.push({ r: c.r, n: c.n, f: f }); continue; }
+      if ('+' + n.d !== String(f).replace(/[^\d+]/g, '')) corrigir.push({ r: c.r, n: c.n, de: f, para: '+' + n.d });
+      if (!porChave.has(n.chave)) porChave.set(n.chave, []);
+      const g = porChave.get(n.chave); if (!g.some((x) => x.r === c.r)) g.push({ r: c.r, n: c.n, f: fs, m: c.m || [] });
+    }
+  }
+  const duplicados = [...porChave.entries()].filter(([, g]) => g.length > 1).map(([chave, g]) => ({ chave: chave, contatos: g }));
+  const conv = (await env.DB.prepare("SELECT id, canal, contato, nome, pessoa, ultima_em FROM msg_conversa WHERE grupo=0 AND canal IN ('whatsapp1','whatsapp2') AND total>0 ORDER BY ultima_em DESC LIMIT 5000").all()).results;
+  const vistos = new Set(), semCadastro = [];
+  for (const c of conv) {
+    const n = foneNormal_('+' + c.contato); if (!n.ok || porChave.has(n.chave) || vistos.has(n.chave)) continue;
+    vistos.add(n.chave); semCadastro.push({ conversa: c.id, canal: c.canal, nome: c.nome || '', fone: '+' + n.d, ultima: c.ultima_em });
+  }
+  const corta = (a) => a.slice(0, 500);
+  const rel = { em: agora(), total: contatos.length, comFone: contatos.length - semFone, semFone: semFone,
+    duplicados: { total: duplicados.length, contatosEnvolvidos: duplicados.reduce((t, g) => t + g.contatos.length, 0), lista: corta(duplicados) },
+    corrigir: { total: corrigir.length, lista: corta(corrigir) }, invalidos: { total: invalidos.length, lista: corta(invalidos) },
+    semCadastro: { total: semCadastro.length, lista: corta(semCadastro) } };
+  try { await cfgSet(env, 'contatos_relatorio', JSON.stringify(rel)); } catch (e) { /* grande demais para guardar: só devolve */ }
+  return Object.assign({ ok: true }, rel);
+}
 async function metricasMensagens_(env, canal, dias) {
   dias = [7, 30, 90].includes(Number(dias)) ? Number(dias) : 30;
   const desde = new Date(Date.now() - dias * 86400000).toISOString();
@@ -3151,6 +3215,36 @@ export default {
           else celular = { ok: false, desligado: true };
         }
         return J({ ok: !!(r.meta && r.meta.changes), nao_lidas: d.naoLida === true ? 1 : 0, celular: celular });
+      }
+      if (p === '/msg/contatos/situacao' && req.method === 'GET') {
+        const ligada = !!(await cfgGet(env, 'contatos_url')) && !!(await cfgGet(env, 'contatos_chave'));
+        let backup = null, relatorio = null; try { backup = JSON.parse((await cfgGet(env, 'contatos_backup')) || 'null'); } catch (e) { backup = null; }
+        if (url.searchParams.get('relatorio') === '1') { try { relatorio = JSON.parse((await cfgGet(env, 'contatos_relatorio')) || 'null'); } catch (e) { relatorio = null; } }
+        return J({ ok: true, ligada: ligada, conta: (await cfgGet(env, 'contatos_conta')) || '', marcador: 'Tenkiter Clientes G', backup: backup, relatorio: relatorio });
+      }
+      if (p === '/msg/contatos/config' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({}));
+        if (d.desligar === true) { await cfgSet(env, 'contatos_url', null); await cfgSet(env, 'contatos_chave', null); await cfgSet(env, 'contatos_conta', null); return J({ ok: true, ligada: false }); }
+        const u = String(d.url || '').trim(), k = String(d.chave || '').trim();
+        if (!PONTE_URL_RE_.test(u)) return J({ ok: false, erro: 'Cole o endereço da implantação da ponte (começa com https://script.google.com/macros/s/ e termina em /exec).' }, 400);
+        if (!/^[A-Za-z0-9]{32,128}$/.test(k)) return J({ ok: false, erro: 'Cole a chave que a função "configurar" mostrou no registro da ponte.' }, 400);
+        const ping = await ponte_(env, { acao: 'ping' }, { url: u, chave: k });
+        if (!ping.ok) return J({ ok: false, erro: ping.erro || 'A ponte não confirmou.' }, 400);
+        await cfgSet(env, 'contatos_url', u); await cfgSet(env, 'contatos_chave', k); await cfgSet(env, 'contatos_conta', String(ping.conta || '').slice(0, 120));
+        return J({ ok: true, ligada: true, conta: ping.conta || '', versao: ping.versao || '' });
+      }
+      if (p === '/msg/contatos/backup' && req.method === 'POST') {
+        const r = await ponte_(env, { acao: 'backup' });
+        if (!r.ok) return J({ ok: false, erro: r.erro || 'Não foi possível fazer a cópia agora.' }, 502);
+        const b = { em: agora(), total: Number(r.total) || 0, arquivo: String(r.arquivo || '').slice(0, 120), url: /^https:\/\/drive\.google\.com\//.test(String(r.url || '')) ? r.url : '' };
+        await cfgSet(env, 'contatos_backup', JSON.stringify(b));
+        return J(Object.assign({ ok: true }, b));
+      }
+      if (p === '/msg/contatos/relatorio' && req.method === 'POST') {
+        const b = await cfgGet(env, 'contatos_backup');
+        if (!b) return J({ ok: false, erro: 'Faça a cópia de segurança dos contatos antes do relatório.' }, 409);
+        const r = await relatorioContatos_(env);
+        return J(r, r.ok ? 200 : 502);
       }
       if (p === '/msg/encerrar' && req.method === 'POST') {
         /* v2.11: encerrar (uma ou várias) / reabrir. Encerrar zera o "não lida" só no painel; o celular não é tocado. */

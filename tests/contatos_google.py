@@ -1,0 +1,66 @@
+"""Mensagens v7.28: Google Contatos pela ponte — ligar, cópia de segurança e relatório da primeira limpeza (só leitura).
+Serviços simulados (mock_msg.py): nada vai ao Google."""
+import sys, os
+AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
+from mock import *
+import mock_msg
+from playwright.sync_api import sync_playwright
+BASE = os.environ.get("TK_BASE", "http://localhost:8765/")
+EVID = os.environ.get("TK_EVID", "")
+AXE = open(os.path.join(AQUI, "axe.min.js")).read()
+OK = []; BAD = []
+def chk(n, c, e=""):
+    (OK if c else BAD).append(n); print(("  ✔ " if c else "  ✘ ") + n + ((" — " + str(e)) if (e and not c) else ""))
+def axe(pg, label):
+    pg.evaluate(AXE)
+    r = pg.evaluate("async()=>{const r=await axe.run(document.getElementById('overlay-mensagens'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','best-practice']}});return r.violations.filter(v=>['critical','serious'].includes(v.impact)).map(v=>v.id+'×'+v.nodes.length)}")
+    chk("axe — " + label, not r, r)
+def foto(pg, nome):
+    if EVID: pg.screenshot(path=os.path.join(EVID, nome))
+with sync_playwright() as p:
+    b = p.chromium.launch(args=["--no-sandbox"])
+    ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
+    ctx.add_init_script(SESSION); ctx.add_init_script("window.TK_MENSAGENS_POLL_MS=400;")
+    st = install(ctx, perms=PERMS_ALL, versao="3.4"); S = st["ig"].setdefault("msg", mock_msg.novo_estado())
+    erros = []; pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: d.accept())
+    pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
+    pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250)
+    pg.click("#btn-abrir-mensagens"); pg.wait_for_selector(".ms-conv", timeout=6000); pg.wait_for_timeout(500)
+    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click(".ms-menu [data-ms=leitura-cfg]"); pg.wait_for_selector("#ms-contatos #ms-ponte-url", timeout=5000)
+    chk("Configurações tem a parte 'Google Contatos (marcador Tenkiter Clientes G)'", "Tenkiter Clientes G" in pg.locator("#ms-contatos").inner_text())
+    chk("a chave é digitada num campo escondido (senha)", pg.get_attribute("#ms-ponte-chave", "type") == "password")
+    axe(pg, "Google Contatos desligado")
+    pg.fill("#ms-ponte-url", "https://exemplo.com/x"); pg.fill("#ms-ponte-chave", "a" * 64); pg.click("[data-ms=ponte-ligar]"); pg.wait_for_timeout(500)
+    chk("endereço errado: aviso em português, continua desligada", "script.google.com" in pg.locator("#ms-aviso").inner_text() and pg.locator("#ms-ponte-url").count() == 1)
+    pg.fill("#ms-ponte-url", "https://script.google.com/macros/s/AKfycbTESTE1234567890abcdefgh/exec"); pg.click("[data-ms=ponte-ligar]"); pg.wait_for_timeout(800)
+    chk("ligar mostra a conta dos contatos", "Ligada à conta contatos@exemplo.com" in pg.locator("#ms-contatos").inner_text())
+    chk("relatório só depois da cópia de segurança (botão travado)", pg.locator("[data-ms=ponte-relatorio]").is_disabled())
+    pg.click("[data-ms=ponte-backup]"); pg.wait_for_timeout(800)
+    txt = pg.locator("#ms-contatos").inner_text()
+    chk("cópia de segurança mostra quantos contatos e o link do Drive", "1234 contatos" in txt and pg.locator("#ms-contatos a[href^='https://drive.google.com/']").count() == 1 and pg.locator("[data-ms=ponte-relatorio]").is_enabled(), txt)
+    foto(pg, "01-configuracao.png")
+    pg.click("[data-ms=ponte-relatorio]"); pg.wait_for_selector(".ms-relatorio", timeout=5000); pg.wait_for_timeout(300)
+    rel = pg.locator(".ms-relatorio").inner_text()
+    chk("relatório: números do resumo (repetidas, padronizar, inválidos, sem número, sem cadastro)", all(x in rel for x in ["1234", "pessoas repetidas (5 contatos)", "números a padronizar", "números inválidos", "contatos sem número", "não estão no Google"]), rel[:400])
+    chk("relatório deixa claro que nada mudou no Google", "Nada foi mudado no Google" in rel)
+    pg.click(".ms-rel-sec >> nth=0"); pg.wait_for_timeout(200)
+    chk("abrir 'Pessoas repetidas' mostra quem vai virar um contato só", "Maria Silva +5588999990001 + Maria S. (88) 9999-0001" in pg.locator(".ms-rel-sec >> nth=0").inner_text())
+    pg.click(".ms-rel-sec >> nth=3"); pg.wait_for_timeout(200)
+    chk("lista quem conversou e não está no Google (número formatado e canal)", "(88) 98888-7777 · WhatsApp 1" in pg.locator(".ms-rel-sec >> nth=3").inner_text())
+    axe(pg, "relatório")
+    foto(pg, "02-relatorio.png")
+    acoes = {pth for pth, _ in S["contatos"]["pedidos"]}
+    chk("a tela só pediu situação, ligar, cópia e relatório (nenhuma mudança nos contatos)", acoes <= {"/msg/contatos/situacao", "/msg/contatos/config", "/msg/contatos/backup", "/msg/contatos/relatorio"}, acoes)
+    pg.click("[data-ms=fechar-painel]"); pg.wait_for_timeout(300)
+    chk("'← Conversas' volta para a lista", pg.locator("#ms-lista").is_visible() and pg.locator(".ms-relatorio").count() == 0)
+    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click(".ms-menu [data-ms=leitura-cfg]"); pg.wait_for_timeout(600)
+    pg.click("[data-ms=ponte-ver]"); pg.wait_for_selector(".ms-relatorio", timeout=5000)
+    chk("'Ver o último relatório' abre o guardado", "pessoas repetidas" in pg.locator(".ms-relatorio").inner_text())
+    pg.click("[data-ms=fechar-painel]"); pg.wait_for_timeout(200)
+    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click(".ms-menu [data-ms=leitura-cfg]"); pg.wait_for_timeout(600)
+    pg.click("[data-ms=ponte-desligar]"); pg.wait_for_timeout(800)
+    chk("desligar volta para os campos de ligar", pg.locator("#ms-ponte-url").count() == 1)
+    chk("sem erros de JavaScript", not erros, erros)
+    b.close()
+print("\n%d ok, %d falhas" % (len(OK), len(BAD)))
+if BAD: print("\n".join(BAD)); sys.exit(1)
