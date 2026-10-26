@@ -6,6 +6,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.19.0 — Ferramentas do gestor reorganizadas — 2026-10-26
+
+- Ferramentas em grupos (Vendas e clientes, Conteúdo, Planilha e histórico, Sistema), cada uma com ícone, título e uma linha dizendo para que serve. Antes eram onze botões de cores diferentes. Os botões e as permissões continuam os mesmos, e o grupo some quando a pessoa não tem nenhuma ferramenta dele.
+- Números do topo no padrão do painel. "Peça mais vista" mostra o código e o nome da peça; antes aparecia "Ver produto" sem ser link quando a peça não tinha código.
+- Pedidos com cabeçalho neutro (era laranja forte) e o botão Atualizar com ícone.
+- Janelas (Auditoria, Central de avisos, Números reais, Importar, Postagens, Fotos com IA, Mensagens, Conexões) com o mesmo cabeçalho: ícone no título, botão fechar de 44 px e abas com a escolhida em preto.
+- Campos de busca, data, telefone e senha com 44 px em todo o painel. Na Auditoria, a busca tinha 22 px.
+- Importar planilha: botão "Escolher arquivo" em português, mostrando o nome do arquivo (o navegador mostrava "Choose File").
+- Números reais: cartões sem emoji e com o número em preto.
+- Configurações avançadas e Log em blocos com título; ação principal preta e secundária com borda, lado a lado no computador.
+
 ## 7.18.0 — "Editar peças" rápido e filtro por valor — 2026-10-26
 
 - "Editar peças" (só dados, sem foto) salva todas as peças numa chamada só (`updateLote`, servidor catálogo 4.28). Antes era uma chamada completa por peça, e 20 peças demoravam o mesmo que 20 cadastros com foto. Se uma peça for recusada, só ela fica com erro e "Tentar de novo"; se o grupo não passar (rede, servidor antigo), cada peça segue pelo envio normal. Com o servidor 4.27, nada muda.

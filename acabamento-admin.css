@@ -229,3 +229,138 @@ body main .chip { border-radius: var(--tk-raio-p); }
 body .ig-faixa-btn { border-width: 1px; border-radius: var(--tk-raio); min-height: 64px; }
 body .ig-faixa-btn b { font-size: 0.94rem; }
 body .ig-faixa-btn small { color: var(--tk-texto-2); }
+
+/* ====================================================================
+ * v7.19 — Ferramentas do gestor e janelas
+ * ==================================================================== */
+
+/* campos: busca, data, telefone e senha ficavam com o tamanho do navegador (22 px na Auditoria) */
+body input[type=search], body input[type=date], body input[type=tel], body input[type=email], body input[type=password], body input[type=url],
+body input[type=text], body input[type=number], body select, body textarea {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); background: #fff; color: var(--tk-texto);
+}
+body input[type=search], body input[type=date], body input[type=tel], body input[type=email], body input[type=password], body input[type=url],
+body input[type=text], body input[type=number], body select { min-height: 44px; padding: 8px 12px; font-size: 1rem; }
+body input:focus-visible, body select:focus-visible, body textarea:focus-visible { outline: 2px solid var(--tk-texto); outline-offset: 1px; border-color: var(--tk-texto); }
+
+/* ---------- painel "Ferramentas do gestor" ---------- */
+body details.ferramentas[open] > summary { border-bottom: 1px solid var(--tk-borda); margin-bottom: 12px; }
+body .stats-panel { gap: 8px; margin-bottom: 12px; }
+body .stats-card { padding: 10px 8px; text-align: left; min-width: 0; }
+body .stats-card span { font-size: 0.75rem; color: var(--tk-texto-2); line-height: 1.25; }
+body .stats-card strong { font-size: 1.2rem; font-weight: 700; color: var(--tk-texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body .stats-card small { font-size: 0.72rem; color: var(--tk-texto-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+body #card-pedidos > summary { background: var(--tk-superficie); color: var(--tk-texto); min-height: 56px; font-size: 0.94rem; }
+body #card-pedidos[open] > summary { background: var(--tk-texto); color: #fff; }
+body .ped-sum { display: inline-flex; align-items: center; gap: 10px; }
+
+body .ferr-grupo { margin: 16px 0 0; }
+body .ferr-grupo[hidden] { display: none; }
+body .ferr-gtit { font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tk-texto-2); margin: 0 0 8px; }
+body .ferr-lista { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+@media (min-width: 600px) { body .ferr-lista { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 900px) { body .ferr-lista { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+body .ferr-tile {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 12px; margin: 0;
+  background: var(--tk-superficie); border: 1px solid var(--tk-borda); border-radius: var(--tk-raio);
+  color: var(--tk-texto); text-align: left; text-decoration: none; font-weight: 400; cursor: pointer; box-sizing: border-box;
+}
+body .ferr-tile:hover { background: #f8f5f0; border-color: #d3ccc0; }
+body .ferr-tile[hidden] { display: none; }
+body .ferr-ic {
+  flex: none; width: 40px; height: 40px; border-radius: var(--tk-raio-p); background: var(--tk-fundo);
+  display: inline-flex; align-items: center; justify-content: center; font-size: 1.2rem;
+}
+body .ferr-ic .tk-ico { width: 22px; height: 22px; }
+body .ferr-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+body .ferr-txt b { font-size: 0.92rem; font-weight: 700; line-height: 1.2; }
+body .ferr-txt small { font-size: 0.78rem; color: var(--tk-texto-2); line-height: 1.3; }
+body .ferr-badge {
+  flex: none; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--laranja); color: #0d0d0d;
+  font-size: 0.78rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
+}
+body .ferr-badge[hidden] { display: none; }
+
+/* Configurações avançadas e Log: mesmo cartão das outras seções (antes, borda tracejada) */
+body details.extra:not(.ferramentas) { border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); background: var(--tk-superficie); padding: 0 12px; margin-top: 12px; }
+body details.extra:not(.ferramentas) > summary { gap: 8px; font-size: 0.9rem; font-weight: 600; color: var(--tk-texto); min-height: 52px; }
+body details.extra:not(.ferramentas)[open] { padding-bottom: 12px; }
+body details.extra:not(.ferramentas)[open] > summary { border-bottom: 1px solid var(--tk-borda); margin-bottom: 10px; }
+
+/* ---------- janelas (todas as ferramentas) ---------- */
+body .overlay-sheet .sheet { border-radius: 12px 12px 0 0; }
+body .sheet-topo { gap: 8px; padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--tk-borda); font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; }
+body .gestao-titulo, body .sheet-topo h2, body .sheet-topo h3, body .aud-tit {
+  font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; font-size: 1.05rem; font-weight: 700; color: var(--tk-texto);
+  display: flex; align-items: center; gap: 8px; margin: 0; min-width: 0;
+}
+body .tit-ic { display: inline-flex; flex: none; }
+body .tit-ic .tk-ico { width: 20px; height: 20px; }
+body .sheet-x, body .overlay-sheet .btn-fechar, body #po-fechar, body #cp-fechar {
+  flex: none; width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: var(--tk-raio);
+  background: transparent; border: 1px solid var(--tk-borda); color: var(--tk-texto); font-size: 1rem;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+body .sheet-x:hover, body .overlay-sheet .btn-fechar:hover { background: #f3efe8; }
+body .overlay-sheet [role=tablist] button {
+  border-radius: var(--tk-raio-p); border: 1px solid var(--tk-borda); background: var(--tk-superficie); color: var(--tk-texto);
+  font-weight: 600; min-height: 40px;
+}
+body .overlay-sheet [role=tablist] button[aria-selected="true"] { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
+
+/* Auditoria */
+body .aud-tit { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--tk-borda); }
+body .aud-datas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+body .aud-datas label { margin: 0; font-size: 0.8rem; font-weight: 600; color: var(--tk-texto-2); }
+body .aud-datas input { margin-top: 4px; }
+body .aud-usuarios { margin-top: 10px; border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); padding: 0 12px; }
+body .aud-usuarios > summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+body .aud-usuarios[open] { padding-bottom: 8px; }
+body .aud-acoes { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+body #aud-limpar { width: auto; min-height: 44px; padding: 0 14px; border-radius: var(--tk-raio-p); background: transparent; border: 1px solid var(--tk-borda); color: var(--tk-texto); font-size: 0.86rem; font-weight: 600; }
+body #aud-total { font-size: 0.8rem; color: var(--tk-texto-2); }
+body .aud-fechar { margin-top: 12px; min-height: 44px; border-radius: var(--tk-raio-p); background: transparent; border: 1px solid var(--tk-borda); color: var(--tk-texto); }
+
+/* Importar planilha: botão em português no lugar do "Choose File" do navegador */
+body .g-rot { display: block; font-size: 0.8rem; font-weight: 600; margin: 12px 0 4px; }
+body .g-arquivo-inp { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+body .g-arquivo {
+  display: flex; align-items: center; gap: 10px; margin: 0; padding: 4px; min-height: 52px; cursor: pointer;
+  border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); background: #fff; font-weight: 400;
+}
+body .g-arquivo-inp:focus-visible + .g-arquivo { outline: 2px solid var(--tk-texto); outline-offset: 2px; }
+body .g-arquivo-bt { flex: none; display: inline-flex; align-items: center; min-height: 42px; padding: 0 14px; border-radius: var(--tk-raio-p); background: var(--tk-texto); color: #fff; font-size: 0.86rem; font-weight: 600; }
+body .g-arquivo-nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tk-texto-2); font-size: 0.86rem; }
+body .aud-usuarios > summary #aud-usuarios-resumo { margin-left: 0.3em; font-weight: 400; color: var(--tk-texto-2); }
+body .g-sec .tk-ico { width: 18px; height: 18px; vertical-align: -4px; }
+
+/* Números reais: cartões no padrão do painel (número em preto, rótulo à esquerda) */
+body .mt-grupo { font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; font-size: 0.92rem; font-weight: 700; margin: 16px 0 6px; }
+body .mt-grupo small { color: var(--tk-texto-2); font-size: 0.76rem; }
+body .mt-card { background: var(--tk-superficie); border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); text-align: left; padding: 10px 12px; }
+body .mt-card span { font-size: 0.76rem; color: var(--tk-texto-2); }
+body .mt-card strong { font-size: 1.35rem; font-weight: 700; color: var(--tk-texto); }
+body .mt-card small { font-size: 0.72rem; color: var(--tk-texto-2); }
+body .mt-card.ok strong { color: #146c43; }
+body .mt-card.atencao strong { color: var(--vermelho); }
+body .mt-resumo { border-radius: var(--tk-raio); }
+body .ms-titulo { font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; display: flex; align-items: center; gap: 8px; }
+
+/* Configurações avançadas e Log: blocos com título; ação principal preta, secundária com borda, lado a lado */
+body .cfg-bloco { padding: 12px 0; border-top: 1px solid var(--tk-borda); }
+body .cfg-bloco:first-of-type { border-top: 0; padding-top: 0; }
+body .cfg-tit { font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; font-size: 0.9rem; font-weight: 700; margin: 0 0 6px; }
+body .cfg-status { font-size: 0.8rem; margin: 2px 0 6px; }
+body .cfg-nota { font-size: 0.76rem; color: var(--tk-texto-2); line-height: 1.4; margin: 8px 0 0; }
+body .cfg-botoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+body .cfg-botoes button, body #btn-toggle-log-debug { flex: 1 1 180px; width: auto; min-height: 44px; padding: 0 14px; border-radius: var(--tk-raio-p); font-size: 0.86rem; font-weight: 600; }
+body .cfg-prim { background: var(--tk-texto); color: #fff; border: 1px solid var(--tk-texto); }
+body .cfg-sec { background: transparent; color: var(--tk-texto); border: 1px solid var(--tk-borda); }
+
+/* filtros dentro das janelas (Postagens, Fotos com IA): mesmo botão da lista de peças */
+body .po-chips button, body .fia-filtros button, body .fia-papeis button { border-radius: var(--tk-raio-p); border-color: var(--tk-borda); font-weight: 600; }
+body .po-chips button[aria-pressed="true"], body .fia-filtros button[aria-pressed="true"], body .fia-papeis button[aria-pressed="true"] { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
+body .fia-filtros button[aria-pressed="true"] small { color: #fff; }
+body #ped-atualizar { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: var(--tk-raio-p); background: transparent; border: 1px solid var(--tk-borda); color: var(--tk-texto); font-size: 0.82rem; font-weight: 600; }
+body #ped-atualizar .tk-ico { width: 16px; height: 16px; }

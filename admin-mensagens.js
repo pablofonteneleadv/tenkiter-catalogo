@@ -759,7 +759,10 @@
   function selarBotao() {
     const b = $('btn-abrir-mensagens'); if (!b || !contagens) return;
     const n = CANAIS.reduce((s, [id]) => s + ((contagens[id] || {}).nao_lidas || 0), 0);
-    b.textContent = '💬 Mensagens' + (n > 0 ? ' (' + n + ')' : '');
+    // v7.19: o botão virou um cartão (ícone + título + descrição); o total vai no selo dele
+    const selo = b.querySelector('.ferr-badge');
+    if (selo) { selo.textContent = n > 0 ? String(n) : ''; selo.hidden = !(n > 0); }
+    else b.textContent = '💬 Mensagens' + (n > 0 ? ' (' + n + ')' : '');
     b.setAttribute('aria-label', 'Mensagens' + (n > 0 ? ', ' + n + ' conversas não lidas' : ''));
   }
   async function sondarSelo() {

@@ -63,7 +63,7 @@ with sync_playwright() as p:
     chk("conversa com não lidas: selo com 2 e nome em destaque", pg.locator(".ms-conv.nova .ms-badge").first.inner_text() == "2")
     chk("conversa onde a loja respondeu mostra 'Você:' e tique azul de lida", "Você:" in pg.inner_text("#ms-lista") and pg.locator("#ms-lista .ms-tique.lida").count() == 1)
     chk("o número formatado aparece quando não há nome", "(88) 98888-7777" in pg.inner_text("#ms-lista"), pg.inner_text("#ms-lista"))
-    chk("botão 'Mensagens' do painel mostra o total de conversas não lidas (3)", "(3)" in pg.inner_text("#btn-abrir-mensagens"), pg.inner_text("#btn-abrir-mensagens"))
+    chk("botão 'Mensagens' do painel mostra o total de conversas não lidas (selo 3)", pg.inner_text("#btn-abrir-mensagens .ferr-badge").strip() == "3", pg.inner_text("#btn-abrir-mensagens"))
     # filtros
     pg.click("[data-filtro=sem_resposta]"); pg.wait_for_timeout(500)
     chk("filtro 'Falta responder' mostra só quem espera (grupo fora)", pg.locator(".ms-conv").count() == 1 and "Maria" in pg.inner_text("#ms-lista"))

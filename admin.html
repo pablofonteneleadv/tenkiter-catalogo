@@ -915,7 +915,7 @@
 }
 
 </style>
-<link rel="stylesheet" href="acabamento-admin.css?v=7.17.0">
+<link rel="stylesheet" href="acabamento-admin.css?v=7.19.0">
 </head>
 <body>
 
@@ -986,30 +986,49 @@
 
   <details class="extra ferramentas" id="details-ferramentas">
     <summary><span class="ic" data-ico="ferramenta">🛠&#65039;</span> Ferramentas do gestor (números, avisos, auditoria, configurações)</summary>
+  <div class="stats-panel" id="stats-panel">
+    <div class="stats-card"><span>Visualizações</span><strong id="stats-views">—</strong></div>
+    <div class="stats-card"><span>Cliques no WhatsApp</span><strong id="stats-whats">—</strong></div>
+    <div class="stats-card"><span>Peça mais vista</span><strong id="stats-mais-visto">—</strong><small id="stats-mais-visto-views"></small></div>
+  </div>
   <details class="cartao-cad" id="card-pedidos" hidden>
-    <summary><span id="ped-sum-txt">🧾 Pedidos</span></summary>
+    <summary><span class="ped-sum"><span class="ic" data-ico="recibo">🧾</span> <span id="ped-sum-txt">Pedidos</span></span></summary>
     <div class="cad-corpo">
-      <div class="ped-topo"><div class="filtros-lista" id="ped-filtros" role="group" aria-label="Filtrar pedidos por etapa"></div><button type="button" id="ped-atualizar">🔄 Atualizar</button></div>
+      <div class="ped-topo"><div class="filtros-lista" id="ped-filtros" role="group" aria-label="Filtrar pedidos por etapa"></div><button type="button" id="ped-atualizar"><span class="ic" data-ico="atualizar">🔄</span> Atualizar</button></div>
       <div id="ped-lista" aria-live="polite"><p class="ped-vazio">Carregando pedidos…</p></div>
     </div>
   </details>
-  <div class="stats-panel" id="stats-panel">
-    <div class="stats-card"><span>👁&#65039; Visualizações</span><strong id="stats-views">—</strong></div>
-    <div class="stats-card"><span>💬 Cliques WhatsApp</span><strong id="stats-whats">—</strong></div>
-    <div class="stats-card"><span>🔥 Mais visto</span><strong id="stats-mais-visto">—</strong><small id="stats-mais-visto-views"></small></div>
-  </div>
 
-  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-    <button type="button" id="btn-abrir-auditoria" style="background:#333;color:#fff;">📋 Auditoria</button>
-    <button type="button" id="btn-abrir-push" style="background:#0f5fa8;color:#fff;">📢 Enviar Notificação</button>
-    <button type="button" class="btn-ferr" id="btn-abrir-metricas" hidden style="background:#1f6f43;color:#fff;">📊 Números reais</button>
-    <button type="button" class="btn-ferr" id="btn-exportar-csv" style="background:#444;color:#fff;">⬇️ Exportar planilha</button>
-    <button type="button" class="btn-ferr" id="btn-importar-csv" hidden style="background:#444;color:#fff;">⬆️ Importar planilha</button>
-    <button type="button" class="btn-ferr" id="btn-abrir-postagens" hidden style="background:#c13584;color:#fff;">📸 Postagens</button>
-    <button type="button" class="btn-ferr" id="btn-abrir-fotoia" hidden style="background:#6a1b9a;color:#fff;">🎨 Fotos com IA</button>
-    <button type="button" class="btn-ferr" id="btn-abrir-mensagens" hidden style="background:#25786b;color:#fff;">💬 Mensagens</button>
-    <button type="button" class="btn-ferr" id="btn-abrir-conexoes" hidden style="background:#0b5d63;color:#fff;">🔗 Conexões</button>
-    <a href="treinamentos.html" target="_blank" style="text-decoration:none;background:var(--preto);color:var(--laranja);border:1px solid var(--laranja);border-radius:8px;padding:9px 14px;font-size:0.85rem;font-weight:700;display:inline-flex;align-items:center;">📖 Treinamentos</a>
+  <!-- v7.19: ferramentas em grupos (mesmos botões, mesmos ids; o que cada perfil não pode usar continua escondido) -->
+  <div class="ferr-grupo" data-grupo="vendas">
+    <h3 class="ferr-gtit">Vendas e clientes</h3>
+    <div class="ferr-lista">
+      <button type="button" class="ferr-tile btn-ferr" id="btn-abrir-metricas" hidden><span class="ferr-ic" data-ico="grafico">📊</span><span class="ferr-txt"><b>Números reais</b><small>Visitas, cliques no WhatsApp e pedidos por período</small></span><span class="ferr-badge" hidden></span></button>
+      <button type="button" class="ferr-tile btn-ferr" id="btn-abrir-mensagens" hidden><span class="ferr-ic" data-ico="conversa">💬</span><span class="ferr-txt"><b>Mensagens</b><small>Conversas do WhatsApp e do Instagram</small></span><span class="ferr-badge" hidden></span></button>
+      <button type="button" class="ferr-tile" id="btn-abrir-push"><span class="ferr-ic" data-ico="sino">📢</span><span class="ferr-txt"><b>Enviar notificação</b><small>Aviso no celular de quem ativou as notificações</small></span><span class="ferr-badge" hidden></span></button>
+    </div>
+  </div>
+  <div class="ferr-grupo" data-grupo="conteudo">
+    <h3 class="ferr-gtit">Conteúdo</h3>
+    <div class="ferr-lista">
+      <button type="button" class="ferr-tile btn-ferr" id="btn-abrir-postagens" hidden><span class="ferr-ic" data-ico="camera">📸</span><span class="ferr-txt"><b>Postagens</b><small>Instagram, Status e grupo do WhatsApp</small></span><span class="ferr-badge" hidden></span></button>
+      <button type="button" class="ferr-tile btn-ferr" id="btn-abrir-fotoia" hidden><span class="ferr-ic" data-ico="pincel">🎨</span><span class="ferr-txt"><b>Fotos com IA</b><small>Looks com modelo a partir das fotos das peças</small></span><span class="ferr-badge" hidden></span></button>
+      <a class="ferr-tile" href="treinamentos.html" target="_blank"><span class="ferr-ic" data-ico="capelo">📖</span><span class="ferr-txt"><b>Treinamentos</b><small>Abre o portal da equipe em outra aba</small></span></a>
+    </div>
+  </div>
+  <div class="ferr-grupo" data-grupo="dados">
+    <h3 class="ferr-gtit">Planilha e histórico</h3>
+    <div class="ferr-lista">
+      <button type="button" class="ferr-tile btn-ferr" id="btn-exportar-csv"><span class="ferr-ic" data-ico="pacote">⬇️</span><span class="ferr-txt"><b>Exportar planilha</b><small>Baixa todas as peças em CSV (Excel/Planilhas)</small></span><span class="ferr-badge" hidden></span></button>
+      <button type="button" class="ferr-tile btn-ferr" id="btn-importar-csv" hidden><span class="ferr-ic" data-ico="compartilhar">⬆️</span><span class="ferr-txt"><b>Importar planilha</b><small>Muda várias peças de uma vez, com prévia antes de gravar</small></span><span class="ferr-badge" hidden></span></button>
+      <button type="button" class="ferr-tile" id="btn-abrir-auditoria"><span class="ferr-ic" data-ico="documento">📋</span><span class="ferr-txt"><b>Auditoria</b><small>Quem cadastrou, editou ou arquivou cada peça</small></span><span class="ferr-badge" hidden></span></button>
+    </div>
+  </div>
+  <div class="ferr-grupo" data-grupo="sistema">
+    <h3 class="ferr-gtit">Sistema</h3>
+    <div class="ferr-lista">
+      <button type="button" class="ferr-tile btn-ferr" id="btn-abrir-conexoes" hidden><span class="ferr-ic" data-ico="link">🔗</span><span class="ferr-txt"><b>Conexões</b><small>Chaves e situação do site, avisos e Instagram</small></span><span class="ferr-badge" hidden></span></button>
+    </div>
   </div>
 
   <div class="painel-push" id="painel-push" style="display:none;background:#eef6ff;border:1px solid #bcd9f5;border-radius:10px;padding:14px;margin-bottom:14px;">
@@ -1030,40 +1049,54 @@
   </div>
 
   <details class="extra" id="details-config">
-    <summary>⚙️ Configurações Avançadas (URL do sistema)</summary>
-    <label>Endereço da API (Apps Script)</label>
-    <input type="text" id="input-api-url" placeholder="https://script.google.com/...">
-    <button type="button" id="btn-salvar-api-url" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar Endereço Personalizado</button>
-    <button type="button" id="btn-restaurar-api-url" style="margin-top:8px;background:#eee;color:#555;">Restaurar Endereço Padrão</button>
-    <p style="font-size:0.72rem;color:#666;margin-top:8px;">Só mude isto se um novo endereço do sistema for informado. Um endereço errado impede o catálogo de carregar.</p>
+    <summary><span class="ic" data-ico="ferramenta">⚙️</span> Configurações avançadas (endereço do sistema, IA, vídeos)</summary>
+    <div class="cfg-bloco">
+      <h4 class="cfg-tit">Endereço do sistema</h4>
+      <label for="input-api-url">Endereço da API (Apps Script)</label>
+      <input type="text" id="input-api-url" placeholder="https://script.google.com/...">
+      <div class="cfg-botoes">
+        <button type="button" id="btn-salvar-api-url" class="cfg-prim">Salvar endereço personalizado</button>
+        <button type="button" id="btn-restaurar-api-url" class="cfg-sec">Restaurar endereço padrão</button>
+      </div>
+      <p class="cfg-nota">Só mude isto se um novo endereço do sistema for informado. Um endereço errado impede o catálogo de carregar.</p>
+    </div>
 
-    <hr style="border:none;border-top:1px dashed #ccc;margin:16px 0;">
-    <label>🤖 Inteligência artificial (Gemini) — chave</label>
-    <div id="ia-status" style="font-size:0.78rem;color:#666;margin:2px 0 6px;">Verificando...</div>
-    <input type="password" id="input-ia-chave" placeholder="Cole aqui a chave do Gemini" autocomplete="off">
-    <label style="margin-top:8px;">Modelo</label>
-    <input type="text" id="input-ia-modelo" placeholder="vazio = padrão do sistema" autocomplete="off">
-    <button type="button" id="btn-salvar-ia" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar Configuração da IA</button>
-    <button type="button" id="btn-apagar-ia" style="margin-top:8px;background:#eee;color:#555;">Apagar chave guardada</button>
-    <p style="font-size:0.72rem;color:#666;margin-top:8px;">A chave fica guardada só no servidor e nunca volta para esta tela (aparece apenas "configurada" e os 4 últimos caracteres). Usada pelos botões "Preencher pela foto" e "Gerar Título/Descrição". Deixe a chave em branco para mudar só o modelo. Só quem é Admin total consegue salvar.</p>
-    <hr style="border:none;border-top:1px dashed #ccc;margin:16px 0;">
-    <label for="input-freeconvert-chave">🎬 FreeConvert — conversão de vídeos H.265 para H.264</label>
-    <div id="freeconvert-status" role="status" aria-live="polite" style="font-size:0.8rem;margin:6px 0;">Abra esta seção para verificar a configuração.</div>
-    <input type="password" id="input-freeconvert-chave" placeholder="Cole sua nova chave de API FreeConvert" autocomplete="new-password" spellcheck="false">
-    <button type="button" id="btn-salvar-freeconvert" style="margin-top:8px;background:var(--preto);color:var(--laranja);">Salvar chave FreeConvert</button>
-    <button type="button" id="btn-apagar-freeconvert" style="margin-top:8px;background:#eee;color:#555;">Remover chave</button>
-    <p style="font-size:0.72rem;color:#666;margin-top:8px;">Apenas Admin total. A chave é enviada ao servidor e não é exibida novamente. Não use a chave anteriormente compartilhada no chat: gere uma nova na FreeConvert. O uso da API está sujeito aos limites da conta.</p>
+    <div class="cfg-bloco">
+      <h4 class="cfg-tit">Inteligência artificial (Gemini)</h4>
+      <div id="ia-status" class="cfg-status">Verificando...</div>
+      <label for="input-ia-chave">Chave</label>
+      <input type="password" id="input-ia-chave" placeholder="Cole aqui a chave do Gemini" autocomplete="off">
+      <label for="input-ia-modelo">Modelo</label>
+      <input type="text" id="input-ia-modelo" placeholder="vazio = padrão do sistema" autocomplete="off">
+      <div class="cfg-botoes">
+        <button type="button" id="btn-salvar-ia" class="cfg-prim">Salvar configuração da IA</button>
+        <button type="button" id="btn-apagar-ia" class="cfg-sec">Apagar chave guardada</button>
+      </div>
+      <p class="cfg-nota">A chave fica guardada só no servidor e nunca volta para esta tela (aparece apenas "configurada" e os 4 últimos caracteres). Usada pelos botões "Preencher pela foto" e "Gerar Título/Descrição". Deixe a chave em branco para mudar só o modelo. Só quem é Admin total consegue salvar.</p>
+    </div>
+
+    <div class="cfg-bloco">
+      <h4 class="cfg-tit">Conversão de vídeos (FreeConvert)</h4>
+      <label for="input-freeconvert-chave">Chave da FreeConvert — converte vídeos H.265 para H.264</label>
+      <div id="freeconvert-status" class="cfg-status" role="status" aria-live="polite">Abra esta seção para verificar a configuração.</div>
+      <input type="password" id="input-freeconvert-chave" placeholder="Cole sua nova chave de API FreeConvert" autocomplete="new-password" spellcheck="false">
+      <div class="cfg-botoes">
+        <button type="button" id="btn-salvar-freeconvert" class="cfg-prim">Salvar chave FreeConvert</button>
+        <button type="button" id="btn-apagar-freeconvert" class="cfg-sec">Remover chave</button>
+      </div>
+      <p class="cfg-nota">Apenas Admin total. A chave é enviada ao servidor e não é exibida novamente. Não use a chave anteriormente compartilhada no chat: gere uma nova na FreeConvert. O uso da API está sujeito aos limites da conta.</p>
+    </div>
   </details>
 
   <details class="extra" id="details-log-debug">
-    <summary>🪲 Log de Depuração</summary>
-    <p style="font-size:0.72rem;color:#666;margin:0 0 8px;">Grava, passo a passo, tudo que o sistema faz ao enviar um produto (pedido, resposta, erro, cada tentativa) — liga só na hora de reproduzir um problema, pra não ficar rodando à toa.</p>
-    <button type="button" id="btn-toggle-log-debug" style="background:var(--preto);color:var(--laranja);">🪲 Ligar Log</button>
+    <summary><span class="ic" data-ico="documento">🪲</span> Log de depuração</summary>
+    <p class="cfg-nota" style="margin-top:0">Grava, passo a passo, tudo que o sistema faz ao enviar um produto (pedido, resposta, erro, cada tentativa) — liga só na hora de reproduzir um problema, pra não ficar rodando à toa.</p>
+    <button type="button" id="btn-toggle-log-debug" class="cfg-prim">Ligar log</button>
     <div id="log-debug-painel" style="display:none;margin-top:10px;">
       <textarea id="log-debug-texto" readonly style="width:100%;height:220px;font-family:monospace;font-size:0.68rem;white-space:pre;box-sizing:border-box;"></textarea>
-      <div style="display:flex;gap:8px;margin-top:6px;">
-        <button type="button" id="btn-copiar-log-debug" style="background:var(--laranja);">📋 Copiar Log</button>
-        <button type="button" id="btn-limpar-log-debug" style="background:#eee;color:#555;">🗑&#65039; Limpar</button>
+      <div class="cfg-botoes">
+        <button type="button" id="btn-copiar-log-debug" class="cfg-prim">Copiar log</button>
+        <button type="button" id="btn-limpar-log-debug" class="cfg-sec">Limpar</button>
       </div>
     </div>
   </details>
@@ -1532,7 +1565,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const btn = document.getElementById('btn-toggle-log-debug');
     const painel = document.getElementById('log-debug-painel');
     if (!btn || !painel) return;
-    btn.textContent = logDebugAtivo ? '🪲 Desligar Log (ligado agora)' : '🪲 Ligar Log';
+    btn.textContent = logDebugAtivo ? 'Desligar log (ligado agora)' : 'Ligar log';
     btn.style.background = logDebugAtivo ? '#c62828' : 'var(--preto)';
     btn.style.color = logDebugAtivo ? '#fff' : 'var(--laranja)';
     painel.style.display = logDebugAtivo ? 'block' : 'none';
@@ -5479,8 +5512,11 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       document.getElementById('stats-views').textContent = resp.totalVisualizacoes || 0;
       document.getElementById('stats-whats').textContent = resp.totalWhatsapp || 0;
       if (resp.produtoMaisVistoId) {
-        document.getElementById('stats-mais-visto').textContent = resp.produtoMaisVistoCodigo || 'Ver produto';
-        document.getElementById('stats-mais-visto-views').textContent = resp.produtoMaisVistoViews + ' visualizações';
+        // v7.19: mostrava "Ver produto" (sem ser link) quando a peça não tinha código; agora o código e o nome da peça
+        const pm = produtos.find(p => String(p.ID) === String(resp.produtoMaisVistoId));
+        const codigo = resp.produtoMaisVistoCodigo || (pm && pm.Codigo) || '';
+        document.getElementById('stats-mais-visto').textContent = codigo || (pm ? String(pm.Nome).slice(0, 28) : 'Peça sem código');
+        document.getElementById('stats-mais-visto-views').textContent = (codigo && pm ? String(pm.Nome).slice(0, 28) + ' · ' : '') + (resp.produtoMaisVistoViews || 0) + ' visualizações';
       } else {
         document.getElementById('stats-mais-visto').textContent = '—';
         document.getElementById('stats-mais-visto-views').textContent = '';
@@ -5552,19 +5588,19 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   async function abrirAuditoria() {
     const painel = document.getElementById('painel-compartilhar-conteudo');
     painel.innerHTML = `
-      <h3 style="margin-top:0;">📋 Auditoria / Histórico</h3>
-      <input type="search" id="busca-auditoria" placeholder="🔎 Produto, código ou ação..." aria-label="Pesquisar na auditoria">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
-        <label style="font-size:.8rem;font-weight:700">📅 De<input type="date" id="aud-data-de" style="margin-top:4px"></label>
-        <label style="font-size:.8rem;font-weight:700">📅 Até<input type="date" id="aud-data-ate" style="margin-top:4px"></label>
+      <h3 class="aud-tit">📋 Auditoria / Histórico</h3>
+      <input type="search" id="busca-auditoria" placeholder="Produto, código ou ação" aria-label="Pesquisar na auditoria">
+      <div class="aud-datas">
+        <label>De<input type="date" id="aud-data-de"></label>
+        <label>Até<input type="date" id="aud-data-ate"></label>
       </div>
-      <details id="aud-usuarios" style="margin-top:10px;border:1px solid #ddd;border-radius:12px;padding:8px 10px">
-        <summary style="cursor:pointer;font-weight:800">👥 Usuários: <span id="aud-usuarios-resumo">todos</span></summary>
+      <details id="aud-usuarios" class="aud-usuarios">
+        <summary>Usuários: <span id="aud-usuarios-resumo">todos</span></summary>
         <div id="aud-usuarios-lista" style="display:grid;gap:6px;margin-top:8px"></div>
       </details>
-      <div style="display:flex;gap:8px;margin-top:10px"><button type="button" id="aud-limpar" style="background:#eee;color:#444">Limpar filtros</button><span id="aud-total" style="align-self:center;font-size:.8rem;color:#666"></span></div>
+      <div class="aud-acoes"><button type="button" id="aud-limpar">Limpar filtros</button><span id="aud-total"></span></div>
       <div id="lista-auditoria" style="margin-top:10px;max-height:48vh;overflow-y:auto;"><p style="text-align:center;color:#666;">Carregando...</p></div>
-      <button type="button" id="btn-fechar-auditoria" style="background:#eee;color:#555;margin-top:12px;">Fechar</button>
+      <button type="button" id="btn-fechar-auditoria" class="aud-fechar">Fechar</button>
     `;
     abrirComHistorico_('overlay-compartilhar');
     document.getElementById('btn-fechar-auditoria').addEventListener('click', () => fecharComHistorico_('overlay-compartilhar'));
@@ -5931,10 +5967,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     aplicarPadroesNovo_();
   })();
 </script>
-<script src="admin-gestao.js?v=7.17.0"></script>
+<script src="admin-gestao.js?v=7.19.0"></script>
 <script src="admin-push.js"></script>
 <script src="admin-conexoes.js"></script>
-<script src="admin-mensagens.js"></script>
+<script src="admin-mensagens.js?v=7.19.0"></script>
 <script src="admin-instagram.js?v=7.17.0"></script>
 <script src="video-validation.js"></script>
 <script src="admin-postagens.js?v=7.13.3"></script>
@@ -5942,6 +5978,42 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="admin-enquadrar.js"></script>
 <script src="admin-capa-video.js"></script>
 <script src="nav.js?v=7.17.0" data-ativo="gestao"></script>
+<script>
+/* v7.19: acabamento das ferramentas do gestor.
+ * 1) Títulos das janelas: o emoji do começo vira ícone de linha (os títulos são escritos por vários scripts; aqui só troca a aparência).
+ * 2) Grupos de ferramentas: some o título do grupo quando a pessoa não tem nenhuma ferramenta dele. */
+(function () {
+  var MAPA = [['📋', 'documento'], ['📢', 'sino'], ['📊', 'grafico'], ['⬆️', 'compartilhar'], ['⬆', 'compartilhar'], ['📸', 'camera'], ['🎨', 'pincel'],
+    ['💬', 'conversa'], ['🔗', 'link'], ['🧾', 'recibo'], ['⚙️', 'ferramenta'], ['📥', 'pacote'], ['📜', 'relogio'], ['🖼️', 'camera']];
+  var SEL = '.overlay-sheet.aberto .sheet-topo h2, .overlay-sheet.aberto .sheet-topo h3, .overlay-sheet.aberto .sheet-topo strong, .overlay-sheet.aberto .gestao-titulo, #overlay-compartilhar .aud-tit, .overlay-sheet.aberto .ms-titulo';
+  function iconizar() {
+    if (!window.TKIcone) return;
+    document.querySelectorAll(SEL).forEach(function (h) {
+      var n = h.firstChild; if (!n || n.nodeType !== 3) return;
+      var txt = n.nodeValue.replace(/^\s+/, '');
+      for (var i = 0; i < MAPA.length; i++) {
+        if (txt.indexOf(MAPA[i][0]) !== 0) continue;
+        n.nodeValue = txt.slice(MAPA[i][0].length).replace(/^\uFE0F/, '').replace(/^\s+/, '');
+        var sp = document.createElement('span'); sp.className = 'tit-ic'; sp.setAttribute('aria-hidden', 'true'); sp.innerHTML = TKIcone(MAPA[i][1]);
+        h.insertBefore(sp, n); return;
+      }
+    });
+  }
+  function grupos() {
+    document.querySelectorAll('.ferr-grupo').forEach(function (g) {
+      var algum = Array.prototype.some.call(g.querySelectorAll('.ferr-tile'), function (t) { return !t.hidden && getComputedStyle(t).display !== 'none'; });
+      if (g.hidden !== !algum) g.hidden = !algum;   // só muda quando precisa (senão o observador se chamaria sem parar)
+    });
+  }
+  var pendente = false;
+  function agendar() { if (pendente) return; pendente = true; requestAnimationFrame(function () { pendente = false; iconizar(); }); }
+  new MutationObserver(agendar).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+  var det = document.getElementById('details-ferramentas');
+  if (det) det.addEventListener('toggle', grupos);
+  new MutationObserver(grupos).observe(document.querySelector('main') || document.body, { subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+  setTimeout(grupos, 0);
+})();
+</script>
 <script src="a11y.js"></script>
 <script src="conta.js"></script>
 <script src="push.js"></script>
