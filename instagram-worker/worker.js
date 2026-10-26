@@ -762,6 +762,30 @@ function bytesParaBase64_(buf) {
   for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
   return btoa(bin);
 }
+// Lê mvhd sem decodificar o vídeo. Percorre somente caixas MP4 válidas e limitadas ao buffer.
+export function duracaoMp4Status_(buf) {
+  const v = new DataView(buf), tipo = p => String.fromCharCode(v.getUint8(p),v.getUint8(p+1),v.getUint8(p+2),v.getUint8(p+3));
+  function caixas(inicio, fim, nivel) {
+    if (nivel > 2) return null;
+    for (let p = inicio; p + 8 <= fim;) {
+      let n = v.getUint32(p), cab = 8;
+      if (n === 1) { if (p + 16 > fim) return null; n = Number(v.getBigUint64(p + 8)); cab = 16; }
+      if (n === 0) n = fim - p;
+      if (!Number.isSafeInteger(n) || n < cab || p + n > fim) return null;
+      const t = tipo(p + 4), q = p + cab;
+      if (t === 'moov') { const d = caixas(q, p+n, nivel+1); if (d !== null) return d; }
+      if (t === 'mvhd' && q + 4 <= p+n) {
+        const versao = v.getUint8(q), offset = versao === 1 ? 20 : 12;
+        if (versao > 1 || q + offset + (versao === 1 ? 12 : 8) > p+n) return null;
+        const escala = v.getUint32(q+offset), duracao = versao === 1 ? Number(v.getBigUint64(q+offset+4)) : v.getUint32(q+offset+4);
+        return escala > 0 && duracao > 0 && Number.isSafeInteger(duracao) ? duracao / escala : null;
+      }
+      p += n;
+    }
+    return null;
+  }
+  return caixas(0, buf.byteLength, 0);
+}
 async function enviarWaflyDireto_(env, p, slot, cfg) {
   const info = WAFLY_SLOTS_[slot];
   let m = []; try { m = JSON.parse(p.midias || '[]'); } catch (e) { m = []; }
@@ -783,7 +807,12 @@ async function enviarWaflyDireto_(env, p, slot, cfg) {
       if (!rm.ok) return { ok: false, erro: 'Não consegui baixar a mídia (HTTP ' + rm.status + ').' };
       buf = await rm.arrayBuffer();
     }
-    if (buf.byteLength > 10485760) return { ok: false, erro: 'Mídia grande demais para o Status do WhatsApp (limite 10 MB).' };
+    const video = primeira.tipo === 'video', limite = (video ? 10 : 5) * 1048576;
+    const duracao = video ? duracaoMp4Status_(buf) : null;
+    const problemas = [];
+    if (buf.byteLength > limite) problemas.push('arquivo com ' + (buf.byteLength / 1048576).toFixed(2).replace('.', ',') + ' MB (máximo ' + (video ? 10 : 5) + ' MB)');
+    if (duracao !== null && duracao > 30) problemas.push('vídeo com ' + duracao.toFixed(1).replace('.', ',') + ' segundos (máximo 30)');
+    if (problemas.length) return { ok: false, erro: info.nome + ': ' + problemas.join('; ') + '. ' + (video ? 'Divida em partes de até 30 segundos e 10 MB e crie novas publicações. Grupo e Instagram têm limites próprios.' : 'Reduza a imagem e crie uma nova publicação.') };
     conteudo = bytesParaBase64_(buf);
   } catch (e) { return { ok: false, erro: 'Não consegui baixar a mídia agora. Tento de novo.' }; }
   const corpo = { requestId: requestId, type: primeira.tipo === 'video' ? 'video' : 'image', content: conteudo, audienceMode: 'contacts' };
@@ -795,6 +824,7 @@ async function enviarWaflyDireto_(env, p, slot, cfg) {
   } catch (e) { return { ok: false, pendente: true, requestId: requestId, erro: 'A resposta da Wafly foi interrompida.' }; }
   if (r.ok && !(j && j.error)) return { ok: true, requestId: requestId };
   if (r.status === 401 || r.status === 403) return { ok: false, erro: 'A Wafly recusou as credenciais do ' + info.nome + '. Confira a instância e os tokens em Conexões.' };
+  if (r.status === 422) return { ok: false, erro: info.nome + ': vídeo ou imagem recusado pela Wafly (HTTP 422). Para Status, use MP4 de até 30 segundos e 10 MB, ou JPEG/PNG de até 5 MB. Corrija a mídia e crie uma nova publicação; repetir o mesmo ID não corrige o arquivo.' };
   if (r.status === 402) return { ok: false, erro: 'A assinatura da Wafly do ' + info.nome + ' está inadimplente ou o período de teste acabou.' };
   if (r.status === 409 || r.status === 408 || r.status === 429 || r.status >= 500) return { ok: false, pendente: true, requestId: requestId, erro: 'A Wafly respondeu HTTP ' + r.status + '.' };
   return { ok: false, erro: 'A Wafly recusou a publicação do ' + info.nome + ' (HTTP ' + r.status + ').' };

@@ -6,6 +6,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.30.1 — Limites dos vídeos no WhatsApp Status — 2026-10-26
+
+- Antes de agendar, vídeos para Status 1 e 2 são conferidos: até 30 segundos e 10 MB. O rascunho permanece disponível para substituir os arquivos.
+- O Worker também lê a duração do MP4 antes de enviar à Wafly, e diferencia o limite de imagem (5 MB) do de vídeo (10 MB).
+- O HTTP 422 passa a explicar os formatos e limites exigidos, em vez de mostrar apenas uma recusa genérica.
+- Limites de grupo e Instagram continuam independentes. Nenhum item cancelado foi reativado.
+
+
 ## 7.29.0 — Mensagens: selecionar várias peças e mandar a seleção — 2026-10-26
 
 - Na gaveta Produtos da conversa, tocar na foto marca a peça (✓ e linha destacada); a seleção continua ao trocar a busca.

@@ -222,6 +222,34 @@ function d1() {
   chk('timeout não vira erro nem reenvia', (await lerPost(p6)).status === 'processando' && String((await lerPost(p6)).ig_id).startsWith('zapq:'));
   wmodo = 'ok';
 
+  // Duração MP4 real (mvhd), dois slots e tamanho: recusa local sem POST à Wafly.
+  function mp4(segundos, versao=0) {
+    const h=Buffer.alloc(versao?40:28), q=8;
+    h.writeUInt32BE(h.length,0);h.write('mvhd',4);h[q]=versao;
+    const off=q+(versao?20:12);h.writeUInt32BE(1000,off);
+    if(versao)h.writeBigUInt64BE(BigInt(segundos*1000),off+4);else h.writeUInt32BE(segundos*1000,off+4);
+    const b=Buffer.alloc(8+h.length);b.writeUInt32BE(b.length,0);b.write('moov',4);h.copy(b,8);return b;
+  }
+  for (const versao of [0,1]) {
+    const b=mp4(46,versao);chk('parser MP4 mvhd v'+versao,W.duracaoMp4Status_(b.buffer.slice(b.byteOffset,b.byteOffset+b.length))===46);
+  }
+  chk('MP4 truncado não causa exceção',W.duracaoMp4Status_(new ArrayBuffer(3))===null);
+  for (const slot of [1,2]) {
+    const key='t/202610/video-longo.mp4',b=mp4(46);objs.set(key,b);
+    const id=await novaPostagem(slot===1?'whatsapp':'whatsapp2');
+    await DB.prepare('UPDATE postagem SET midias=? WHERE id=?').bind(JSON.stringify([{url:'https://tenkiter-midia.fake/m/'+key,tipo:'video'}]),id).run();
+    waf=[];await W.processarPostagens(env);const row=await lerPost(id);
+    chk('Status '+slot+': 46 s barrados antes da API, instrução clara',row.status==='erro'&&/46,0 segundos/.test(row.erro)&&/máximo 30/.test(row.erro)&&!waf.some(x=>x.metodo==='POST'),row.erro);
+  }
+  const keyGrande='t/202610/video-grande.mp4';objs.set(keyGrande,Buffer.alloc(10485761));
+  const grande=await novaPostagem('whatsapp2');await DB.prepare('UPDATE postagem SET midias=? WHERE id=?').bind(JSON.stringify([{url:'https://tenkiter-midia.fake/m/'+keyGrande,tipo:'video'}]),grande).run();
+  waf=[];await W.processarPostagens(env);
+  chk('10 MB: bloqueio local, sem base64 nem POST',/máximo 10 MB/.test((await lerPost(grande)).erro)&&!waf.some(x=>x.metodo==='POST'));
+  objs.set('t/202610/video-curto.mp4',mp4(25));
+  const curto=await novaPostagem('whatsapp2');await DB.prepare('UPDATE postagem SET midias=? WHERE id=?').bind(JSON.stringify([{url:'https://tenkiter-midia.fake/m/t/202610/video-curto.mp4',tipo:'video'}]),curto).run();
+  waf=[];await W.processarPostagens(env);
+  chk('25 s: Status 2 envia vídeo uma vez', (await lerPost(curto)).status==='publicado'&&waf.filter(x=>x.metodo==='POST'&&x.body.type==='video').length===1);
+
   // ---- postagem com recibo antigo do Wame nunca vai para a Wafly ----
   await DB.prepare("UPDATE postagem SET status='agendado', agendado_em='2020-01-01T00:00:00Z' WHERE id=?").bind(velha).run();
   waf = [];
