@@ -31,7 +31,8 @@ with sync_playwright() as p:
     chk("busca sem resultado diz o filtro em que procurou", "em “Ativas”" in pg.inner_text("#lista-produtos"), pg.inner_text("#lista-produtos"))
     pg.fill("#busca-admin", ""); pg.wait_for_timeout(400)
     t = pg.evaluate("[...document.querySelectorAll('#lista-produtos .produto')][0].textContent")
-    chk("botões da linha com emoji certo (🎨 Stories, 🔗 Link, 📸 Postar)", "\U0001F3A8 Stories" in t and "\U0001F517 Link" in t and "\U0001F4F8 Postar" in t and "\\u1F" not in t, t[-120:])
+    # v7.17: os botões da linha usam ícone de linha (svg); o texto continua e o escape quebrado não volta
+    chk("botões da linha com ícone e texto (Stories, Link, Postar)", "Stories" in t and "Link" in t and "Postar" in t and "\\u1F" not in t and "ˮ" not in t and pg.locator(".produto .btn-arte svg.tk-ico").count() > 0, t[-120:])
     src = open(os.path.join(AQUI, "..", "admin.html"), encoding="utf-8").read()
     import re
     chk("nenhum escape \\uXXXXX de 5 dígitos sobrou no admin.html", not re.search(r"\\u1F[0-9A-Fa-f]{3}", src))

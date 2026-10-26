@@ -92,7 +92,7 @@
     css(); f.hidden = false;
     const n = (cont.pendente || 0) + (cont.sem_id || 0);
     f.innerHTML = '<button type="button" class="ig-faixa-btn" id="ig-abrir"><span class="ig-badge' + (n ? '' : ' zero') + '">' + (st.conectado ? n : '!') + '</span>' +
-      '<span><b>📥 Produtos para aceitar</b><small>' + (st.conectado ? (n ? n + ' do Instagram esperando você' : 'Nada novo agora') : 'Conecte o Instagram para começar') + (st.alertas && st.alertas.length ? ' · ⚠️ atenção' : '') + '</small></span></button>';
+      '<span><b>Produtos para aceitar</b><small>' + (st.conectado ? (n ? n + ' do Instagram esperando você' : 'Nada novo agora') : 'Conecte o Instagram para começar') + (st.alertas && st.alertas.length ? ' · ⚠️ atenção' : '') + '</small></span></button>';
     $('ig-abrir').addEventListener('click', abrir);
   }
   async function carregarStatus() {
@@ -106,7 +106,7 @@
     const f = $('ig-faixa'); if (!f) return;
     css(); f.hidden = false;
     const motivo = r && r.semRede ? 'Sem conexão agora.' : (r && r.erro && !/Não encontrado/.test(r.erro) ? r.erro : 'O importador ainda não foi ativado no servidor (falta publicar o Worker na Cloudflare).');
-    f.innerHTML = '<div class="ig-faixa-btn" style="cursor:default"><span class="ig-badge zero">!</span><span><b>📥 Produtos para aceitar</b><small>' + esc(motivo) + '</small></span></div>';
+    f.innerHTML = '<div class="ig-faixa-btn" style="cursor:default"><span class="ig-badge zero">!</span><span><b>Produtos para aceitar</b><small>' + esc(motivo) + '</small></span></div>';
   }
 
   /* ---------- janela ---------- */
@@ -114,7 +114,7 @@
     if ($('overlay-instagram')) return;
     css();
     const o = document.createElement('div'); o.className = 'overlay-sheet'; o.id = 'overlay-instagram';
-    o.innerHTML = '<div class="sheet sheet-ig" role="dialog" aria-modal="true" aria-labelledby="ig-titulo"><div class="sheet-topo"><h2 class="gestao-titulo" id="ig-titulo">📥 Produtos para aceitar</h2><button type="button" class="sheet-x" id="ig-fechar" aria-label="Fechar">✕</button></div><div class="gestao-corpo" id="ig-corpo" aria-live="polite"></div></div>';
+    o.innerHTML = '<div class="sheet sheet-ig" role="dialog" aria-modal="true" aria-labelledby="ig-titulo"><div class="sheet-topo"><h2 class="gestao-titulo" id="ig-titulo">Produtos para aceitar</h2><button type="button" class="sheet-x" id="ig-fechar" aria-label="Fechar">✕</button></div><div class="gestao-corpo" id="ig-corpo" aria-live="polite"></div></div>';
     document.body.appendChild(o);
     $('ig-fechar').addEventListener('click', fechar);
     $('ig-corpo').addEventListener('click', clique);
