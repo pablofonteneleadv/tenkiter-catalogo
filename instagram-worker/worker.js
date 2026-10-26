@@ -100,7 +100,7 @@ async function iniciar(env) {
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN repostado_de INTEGER').run(); } catch (e) { /* já existe */ }
   /* Mensagens v2: lidas/não lidas, quem falta responder, estado de entrega e quem enviou pelo painel. */
-  for (const [t, col] of [['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  for (const [t, col] of [['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   try { await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgc_atu ON msg_conversa (atualizada_em)').run(); await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgm_st ON msg_mensagem (conversa_id, status_em)').run(); } catch (e) { /* tenta de novo depois */ }
   try {
     if (!(await cfgGet(env, 'mig_msg_v2'))) {
@@ -2348,7 +2348,7 @@ async function freeconvertRota_(env, req, url, J, h) {
  *  tipo, source_id único para não duplicar, última atividade na conversa), enxuto para o D1:
  *    msg_conversa (canal+contato únicos) e msg_mensagem (canal+ext_id únicos = INSERT OR IGNORE, webhook repetido não duplica).
  *  Webhooks públicos protegidos por segredo no caminho (gerado aqui, nunca devolvido ao navegador, exceto na hora de ligar o webhook na Wafly).
- *  Guardamos só texto (até 4000 caracteres) e o TIPO da mídia; o conteúdo bruto do webhook nunca é salvo.
+ *  Guardamos o texto (até 4000 caracteres), o TIPO e, para foto/vídeo/áudio, uma cópia da mídia no R2 (prefixo msg/, servida só a quem está logado); o conteúdo bruto do webhook nunca é salvo.
  * ========================================================================== */
 const MSG_CANAIS = ['instagram', 'whatsapp1', 'whatsapp2'];
 const MSG_TEXTO_MAX = 4000;
@@ -2367,12 +2367,19 @@ function normalizarWafly_(b) {
   if (!b || typeof b !== 'object' || b.type !== 'ReceivedCallback') return null;
   const id = String(b.messageId || ''), fone = String(b.phone || '');
   if (!id || !fone || /broadcast|newsletter/i.test(fone) || b.isNewsletter === true) return null;
-  const tipos = [['text', 'texto'], ['image', 'imagem'], ['video', 'vídeo'], ['audio', 'áudio'], ['document', 'documento'], ['sticker', 'figurinha'], ['contact', 'contato'], ['location', 'localização'], ['reaction', 'reação'], ['buttonsResponseMessage', 'resposta'], ['listResponseMessage', 'resposta']];
-  let tipo = 'outro', texto = '';
+  const tipos = [['image', 'imagem'], ['video', 'vídeo'], ['audio', 'áudio'], ['document', 'documento'], ['sticker', 'figurinha'], ['contact', 'contato'], ['location', 'localização'], ['reaction', 'reação'], ['buttonsResponseMessage', 'resposta'], ['listResponseMessage', 'resposta'], ['text', 'texto']];   // mídia antes de texto: se vier os dois, vale a mídia
+  let tipo = 'outro', texto = '', midiaUrl = '', midiaMime = '', midiaSeg = 0;
+  const DICA_MIME = { 'imagem': 'image/jpeg', 'vídeo': 'video/mp4', 'áudio': 'audio/ogg', 'figurinha': 'image/webp' };
   for (const [k, nome] of tipos) {
     if (b[k] && typeof b[k] === 'object') {
       tipo = nome;
       texto = String(b[k].message || b[k].caption || b[k].fileName || b[k].title || b[k].value || '');
+      if (DICA_MIME[nome] || nome === 'documento') {                                   // mídia: guardamos o endereço só para copiar para o nosso armazenamento
+        const o = b[k];
+        midiaUrl = [o.imageUrl, o.videoUrl, o.audioUrl, o.stickerUrl, o.documentUrl, o.url, o.fileUrl, o.thumbnailUrl].find((x) => typeof x === 'string' && /^https:\/\//i.test(x)) || '';
+        midiaMime = String(o.mimeType || DICA_MIME[nome] || '').slice(0, 80);
+        midiaSeg = Math.max(0, Math.min(86400, Number(o.seconds) || 0));
+      }
       break;
     }
   }
@@ -2380,7 +2387,9 @@ function normalizarWafly_(b) {
   const em = ms > 0 ? new Date(ms < 1e12 ? ms * 1000 : ms).toISOString() : agora();
   const grupo = b.isGroup === true || /-group$|@g\.us$/.test(fone);
   const fromMe = b.fromMe === true;
-  return { extId: id, contato: fone.slice(0, 80), nome: String((grupo ? b.chatName : (fromMe ? b.chatName : b.senderName || b.chatName)) || '').slice(0, 120), grupo: grupo ? 1 : 0, direcao: fromMe ? 'saida' : 'entrada', tipo: tipo, texto: texto.slice(0, MSG_TEXTO_MAX), em: em };
+  const ref = String(b.referenceMessageId || '').slice(0, 200);
+  return { extId: id, contato: fone.slice(0, 80), nome: String((grupo ? b.chatName : (fromMe ? b.chatName : b.senderName || b.chatName)) || '').slice(0, 120), grupo: grupo ? 1 : 0, direcao: fromMe ? 'saida' : 'entrada', tipo: tipo, texto: texto.slice(0, MSG_TEXTO_MAX), em: em,
+    midiaUrl: midiaUrl, midiaMime: midiaMime, midiaSeg: midiaSeg, ctxTipo: b.isStatusReply === true ? 'story' : (ref ? 'resposta' : ''), ctxRef: ref };
 }
 /** Evento "messaging" do webhook do Instagram (DM) -> linhas prontas. */
 function normalizarInstagram_(b) {
@@ -2396,9 +2405,15 @@ function normalizarInstagram_(b) {
     const contato = eco ? idDe(ev.recipient) : idDe(ev.sender);
     if (!contato || contato === dono) return;
     vistos.add(mid);
-    const anexo = Array.isArray(m.attachments) && m.attachments[0] ? String(m.attachments[0].type || 'anexo') : '';
+    const a0 = Array.isArray(m.attachments) && m.attachments[0] && typeof m.attachments[0] === 'object' ? m.attachments[0] : null;
+    const anexo = a0 ? String(a0.type || 'anexo') : '';
     const ms = Number(ev.timestamp || m.timestamp || 0);
-    out.push({ extId: mid, contato: contato.slice(0, 80), nome: '', grupo: 0, direcao: eco ? 'saida' : 'entrada', tipo: anexo ? (mapa[anexo] || anexo) : 'texto', texto: String(m.text || '').slice(0, MSG_TEXTO_MAX), em: ms > 0 ? new Date(ms < 1e12 ? ms * 1000 : ms).toISOString() : agora() });
+    const pu = a0 && a0.payload && typeof a0.payload.url === 'string' && /^https:\/\//i.test(a0.payload.url) ? a0.payload.url : '';
+    const dica = { image: 'image/jpeg', video: 'video/mp4', audio: 'audio/mp4', story_mention: 'image/jpeg', reel: 'video/mp4', ig_reel: 'video/mp4' }[anexo] || '';
+    const rt = m.reply_to && typeof m.reply_to === 'object' ? m.reply_to : null;
+    const histUrl = rt && rt.story && typeof rt.story.url === 'string' && /^https:\/\//i.test(rt.story.url) ? rt.story.url : '';
+    out.push({ extId: mid, contato: contato.slice(0, 80), nome: '', grupo: 0, direcao: eco ? 'saida' : 'entrada', tipo: anexo ? (mapa[anexo] || anexo) : 'texto', texto: String(m.text || '').slice(0, MSG_TEXTO_MAX), em: ms > 0 ? new Date(ms < 1e12 ? ms * 1000 : ms).toISOString() : agora(),
+      midiaUrl: dica ? pu : '', midiaMime: dica, midiaSeg: 0, ctxTipo: rt && rt.story ? 'story' : (rt && rt.mid ? 'resposta' : ''), ctxRef: rt && rt.mid ? String(rt.mid).slice(0, 200) : '', ctxUrl: histUrl });
   };
   for (const e of b.entry) {
     if (!e || typeof e !== 'object') continue;
@@ -2428,6 +2443,48 @@ function formaInstagram_(b) {
     return f.join(' ').slice(0, 480);
   } catch (e) { return 'forma ilegível'; }
 }
+/* ---- mídia das conversas (foto, vídeo, áudio, figurinha, documento): copiada para o nosso R2 (prefixo msg/) porque os links da Wafly/Meta expiram ---- */
+const MSG_MIDIA_MAX_ = 20 * 1048576;
+const MSG_MIME_EXT_ = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'video/mp4': 'mp4', 'video/3gpp': '3gp', 'video/quicktime': 'mov', 'video/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/webm': 'weba', 'audio/wav': 'wav', 'audio/amr': 'amr', 'application/pdf': 'pdf' };
+const mimeLimpo_ = (m) => { const x = String(m || '').split(';')[0].trim().toLowerCase(); return x === 'image/jpg' ? 'image/jpeg' : x === 'audio/x-m4a' || x === 'audio/m4a' ? 'audio/mp4' : x === 'audio/mp3' ? 'audio/mpeg' : x; };
+async function guardarMidiaMsg_(env, bytes, mime) {
+  const b = crypto.getRandomValues(new Uint8Array(12)), hex = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+  const chave = 'msg/' + agora().slice(0, 7).replace('-', '') + '/' + hex + '.' + MSG_MIME_EXT_[mime];
+  await env.MIDIA.put(chave, bytes, { httpMetadata: { contentType: mime } });
+  return chave;
+}
+/** Baixa uma mídia de um endereço https e guarda no R2. Devolve { chave, mime, bytes } ou null (nunca derruba a gravação da mensagem). */
+async function copiarMidiaRemota_(env, url, dica) {
+  if (!/^https:\/\//i.test(String(url || ''))) return null;
+  try {
+    const r = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(12000), headers: { 'User-Agent': UA } });
+    if (!r.ok) return null;
+    if (Number(r.headers.get('Content-Length') || 0) > MSG_MIDIA_MAX_) return null;
+    const buf = await r.arrayBuffer();
+    if (!buf.byteLength || buf.byteLength > MSG_MIDIA_MAX_) return null;
+    let mime = mimeLimpo_(r.headers.get('Content-Type'));
+    if (!MSG_MIME_EXT_[mime]) mime = mimeLimpo_(dica);
+    if (!MSG_MIME_EXT_[mime]) return null;
+    return { chave: await guardarMidiaMsg_(env, buf, mime), mime: mime, bytes: buf.byteLength };
+  } catch (e) { return null; }
+}
+/** Antes de gravar: copia a mídia (e a imagem do story respondido, no Instagram). Se não for possível, guarda o endereço para tentar de novo quando alguém abrir. */
+async function prepararMidia_(env, canal, m) {
+  if (!m.midiaUrl && !m.ctxUrl) return;
+  const ja = await env.DB.prepare('SELECT 1 AS x FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(canal, m.extId).first();
+  if (ja) { m.midiaUrl = ''; m.ctxUrl = ''; return; }
+  if (m.midiaUrl) { const x = await copiarMidiaRemota_(env, m.midiaUrl, m.midiaMime); if (x) { m.midiaChave = x.chave; m.midiaMime = x.mime; m.midiaUrl = ''; } }
+  if (m.ctxUrl) { const x = await copiarMidiaRemota_(env, m.ctxUrl, 'image/jpeg'); if (x) m.ctxChave = x.chave; m.ctxUrl = ''; }
+}
+/** Resposta a story no WhatsApp: a Wafly não manda a imagem do story, então achamos o Status que a loja publicou nas 26 h anteriores. Se houver mais de um, usa o mais recente e marca como "provável". */
+async function resolverStory_(env, canal, emIso) {
+  const canais = canal === 'whatsapp1' ? ['whatsapp', 'ambos'] : canal === 'whatsapp2' ? ['whatsapp2'] : [];
+  if (!canais.length) return { post: 0, aprox: 0 };
+  const desde = new Date(Date.parse(emIso) - 26 * 3600000).toISOString();
+  const rs = await env.DB.prepare("SELECT id FROM postagem WHERE status='publicado' AND canal IN (" + canais.map(() => '?').join(',') + ") AND publicado_em<>'' AND publicado_em<=? AND publicado_em>=? AND midias<>'[]' ORDER BY publicado_em DESC LIMIT 6").bind(...canais, emIso, desde).all();
+  const l = rs.results || [];
+  return l.length ? { post: Number(l[0].id) || 0, aprox: l.length > 1 ? 1 : 0 } : { post: 0, aprox: 0 };
+}
 /** Grava uma mensagem (idempotente por canal+ext_id). Devolve true se era nova. */
 async function gravarMensagem_(env, canal, m) {
   if (!MSG_CANAIS.includes(canal)) return false;
@@ -2439,11 +2496,13 @@ async function gravarMensagem_(env, canal, m) {
   if (saida && !String(m.extId).startsWith('inc:')) {      // o eco de uma resposta que ficou "sem confirmação" promove aquela linha (não cria uma segunda bolha)
     try {
       const desde = new Date(Date.parse(m.em) - 10 * 60000).toISOString();
-      const pr = await env.DB.prepare("UPDATE msg_mensagem SET ext_id=?, status='enviada', status_em=? WHERE id=(SELECT id FROM msg_mensagem WHERE conversa_id=? AND direcao='saida' AND ext_id LIKE 'inc:%' AND texto=? AND enviada_em>=? ORDER BY id LIMIT 1)").bind(m.extId, t, c.id, m.texto, desde).run();
+      const pr = await env.DB.prepare("UPDATE msg_mensagem SET ext_id=?, status='enviada', status_em=? WHERE id=(SELECT id FROM msg_mensagem WHERE conversa_id=? AND direcao='saida' AND ext_id LIKE 'inc:%' AND texto=? AND tipo=? AND enviada_em>=? ORDER BY id LIMIT 1)").bind(m.extId, t, c.id, m.texto, m.tipo, desde).run();
       if (pr.meta && pr.meta.changes === 1) { await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(t, c.id).run(); return false; }
     } catch (e) { /* o eco já existe: segue o caminho normal */ }
   }
-  const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em) VALUES (?,?,?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t).run();
+  let story = { post: 0, aprox: 0 };
+  if (m.ctxTipo === 'story' && !saida) { try { story = await resolverStory_(env, canal, m.em); } catch (e) { /* sem a imagem do story: a tela mostra só o aviso */ } }
+  const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em, midia_chave, midia_mime, midia_seg, midia_url, ctx_tipo, ctx_ref, ctx_post, ctx_aprox, ctx_chave) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t, m.midiaChave || '', String(m.midiaMime || '').slice(0, 80), Number(m.midiaSeg) || 0, m.midiaUrl || '', m.ctxTipo || '', m.ctxRef || '', story.post, story.aprox, m.ctxChave || '').run();
   if (!r.meta || r.meta.changes !== 1) return false;
   const previa = (m.texto || ('[' + m.tipo + ']')).replace(/\s+/g, ' ').slice(0, 140);
   /* Em SQLite o lado direito do SET usa os valores ANTIGOS da linha: por isso a comparação com ultima_em/ult_entrada_em vale como "antes desta mensagem". */
@@ -2480,7 +2539,7 @@ async function rotaWebhookMensagens_(env, req, url) {
     if (!assin || !igualConst_(assin, esperado)) { await cfgSet(env, 'msg_ult_instagram', JSON.stringify({ em: agora(), res: 'assinatura', tem: !!assin })); return ok(401, { ok: false }); }
     if (await msgPausado_(env, 'instagram')) return ok(200, { ok: true, pausado: true });
     let b = null; try { b = JSON.parse(bruto); } catch (e) { return ok(400, { ok: false }); }
-    const lista = normalizarInstagram_(b); let novas = 0; for (const m of lista) if (await gravarMensagem_(env, 'instagram', m)) novas++;
+    const lista = normalizarInstagram_(b); let novas = 0; for (const m of lista) { try { await prepararMidia_(env, 'instagram', m); } catch (e) { /* a mídia é conforto */ } if (await gravarMensagem_(env, 'instagram', m)) novas++; }
     try { await aplicarLeiturasInstagram_(env, leiturasInstagram_(b)); } catch (e) { /* a leitura é conforto: nunca derruba a gravação */ }
     await cfgSet(env, 'msg_ult_instagram', JSON.stringify({ em: agora(), res: 'ok', itens: lista.length, novas: novas, forma: lista.length ? '' : formaInstagram_(b) }));
     return ok(200, { ok: true, novas: novas });
@@ -2498,6 +2557,8 @@ async function rotaWebhookMensagens_(env, req, url) {
     if (b && b.type === 'MessageStatusCallback') return ok(200, { ok: true, atualizadas: await atualizarStatusWafly_(env, canal, b) });
     const m = normalizarWafly_(b);
     if (!m) return ok(200, { ok: true, ignorado: true });
+    try { await prepararMidia_(env, canal, m); } catch (e) { /* a mídia é conforto: a mensagem é gravada de qualquer jeito */ }
+    if (m.tipo !== 'texto' || m.ctxTipo) { try { await cfgSet(env, 'msg_ult_forma_' + canal, JSON.stringify({ em: agora(), tipo: m.tipo, ctx: m.ctxTipo, copiada: !!m.midiaChave, campos: Object.keys(b).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 40), interno: Object.keys((b && b[({ imagem: 'image', 'vídeo': 'video', 'áudio': 'audio', documento: 'document', figurinha: 'sticker' })[m.tipo]]) || {}).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 20) })); } catch (e) { /* diagnóstico é conforto */ } }
     return ok(200, { ok: true, nova: await gravarMensagem_(env, canal, m) });
   }
   return ok(404, { ok: false });
@@ -2600,6 +2661,8 @@ async function aplicarLeiturasInstagram_(env, lst) {
   return n;
 }
 const MSG_COLS_CONVERSA_ = "id, canal, contato, nome, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
+const MSG_Q_ = (c) => "(SELECT q." + c + " FROM msg_mensagem q WHERE q.canal=msg_mensagem.canal AND q.ext_id=msg_mensagem.ctx_ref AND msg_mensagem.ctx_ref<>'' LIMIT 1)";
+const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + MSG_Q_('texto') + " AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir";
 async function msgContagens_(env, canal) {
   const rs = await env.DB.prepare("SELECT canal, COUNT(*) AS conversas, SUM(CASE WHEN nao_lidas>0 THEN 1 ELSE 0 END) AS nao_lidas, SUM(CASE WHEN grupo=0 AND ult_dir='entrada' THEN 1 ELSE 0 END) AS sem_resposta, SUM(CASE WHEN grupo=1 THEN 1 ELSE 0 END) AS grupos FROM msg_conversa WHERE total>0" + (canal ? ' AND canal=?' : '') + ' GROUP BY canal').bind(...(canal ? [canal] : [])).all();
   const out = {}; for (const c of MSG_CANAIS) out[c] = { conversas: 0, nao_lidas: 0, sem_resposta: 0, grupos: 0 };
@@ -2607,25 +2670,32 @@ async function msgContagens_(env, canal) {
   return out;
 }
 /** Responder: texto simples para WhatsApp (Wafly) ou Instagram (DM). Devolve { ok, extId } | { ok:false, erro } | { ok:false, incerto:true, erro }. */
-async function enviarTextoWhats_(env, conv, texto) {
+async function enviarWaflyGenerico_(env, conv, caminho, corpo, limiteMs) {
   const slot = conv.canal === 'whatsapp1' ? 1 : 2, cfg = await cfgWafly_(env, slot);
   if (!cfg) return { ok: false, erro: 'Cadastre o Wafly ' + slot + ' em Conexões antes de responder por aqui.' };
   try {
-    const r = await fetch(waflyUrl_(cfg, '/send-text'), { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(25000), headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: conv.contato, message: texto }) });
+    const r = await fetch(waflyUrl_(cfg, caminho), { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(limiteMs || 25000), headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ phone: conv.contato }, corpo)) });
     const j = await r.json().catch(() => ({}));
     const id = String((j && (j.messageId || j.id || j.zaapId)) || '');
-    if (r.ok && id) return { ok: true, extId: id };
+    if (r.ok && id && !(j && (j.error || j.value === false))) return { ok: true, extId: id };
     if (r.ok) return { ok: false, incerto: true, erro: 'A Wafly respondeu sem confirmar o envio. Confira no WhatsApp antes de tentar de novo.' };
     if (r.status === 401 || r.status === 403) return { ok: false, erro: 'A Wafly não aceitou as credenciais do WhatsApp ' + slot + '. Confira em Conexões.' };
-    if (r.status >= 400 && r.status < 500 && ![408, 409, 429].includes(r.status)) return { ok: false, erro: 'A Wafly recusou a mensagem (HTTP ' + r.status + '). Confira se o WhatsApp ' + slot + ' está conectado.' };
+    if (r.status >= 400 && r.status < 500 && ![408, 409, 429].includes(r.status)) return { ok: false, erro: 'A Wafly recusou a mensagem (HTTP ' + r.status + '). Confira se o WhatsApp ' + slot + ' está conectado' + (caminho === '/send-text' ? '.' : ' e se o arquivo é aceito pelo WhatsApp.') };
     return { ok: false, incerto: true, erro: 'Sem confirmação da Wafly. Confira no WhatsApp antes de tentar de novo.' };
   } catch (e) { return { ok: false, incerto: true, erro: 'Sem confirmação da Wafly. Confira no WhatsApp antes de tentar de novo.' }; }
 }
-async function enviarTextoInstagram_(env, conv, texto) {
+async function enviarTextoWhats_(env, conv, texto) { return enviarWaflyGenerico_(env, conv, '/send-text', { message: texto }); }
+const WHATS_ROTAS_MIDIA_ = { 'imagem': ['/send-image', 'image'], 'vídeo': ['/send-video', 'video'], 'áudio': ['/send-audio', 'audio'] };
+async function enviarMidiaWhats_(env, conv, anexo, legenda) {
+  const rota = WHATS_ROTAS_MIDIA_[anexo.tipo], corpo = {}; corpo[rota[1]] = anexo.url;
+  if (legenda && anexo.tipo !== 'áudio') corpo.caption = legenda;
+  return enviarWaflyGenerico_(env, conv, rota[0], corpo, 60000);
+}
+async function enviarInstagram_(env, conv, mensagem) {
   const tk = await cfgGet(env, 'ig_token');
   if (!tk) return { ok: false, erro: 'O Instagram não está conectado. Conecte em Produtos para aceitar → Conectar.' };
   try {
-    const r = await fetch(igBase(env) + '/me/messages', { method: 'POST', signal: AbortSignal.timeout(25000), headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: { id: conv.contato }, message: { text: texto } }) });
+    const r = await fetch(igBase(env) + '/me/messages', { method: 'POST', signal: AbortSignal.timeout(40000), headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: { id: conv.contato }, message: mensagem }) });
     const j = await r.json().catch(() => ({}));
     if (r.ok && j && j.message_id) return { ok: true, extId: String(j.message_id) };
     if (r.ok) return { ok: false, incerto: true, erro: 'O Instagram respondeu sem confirmar. Confira no app antes de tentar de novo.' };
@@ -2637,14 +2707,29 @@ async function enviarTextoInstagram_(env, conv, texto) {
     return { ok: false, erro: 'O Instagram recusou a mensagem agora. Tente de novo em instantes.' };
   } catch (e) { return { ok: false, incerto: true, erro: 'Sem confirmação do Instagram. Confira no app antes de tentar de novo.' }; }
 }
+async function enviarTextoInstagram_(env, conv, texto) { return enviarInstagram_(env, conv, { text: texto }); }
+async function enviarMidiaInstagram_(env, conv, anexo) { return enviarInstagram_(env, conv, { attachment: { type: ({ 'imagem': 'image', 'vídeo': 'video', 'áudio': 'audio' })[anexo.tipo], payload: { url: anexo.url } } }); }
+const MSG_ANEXO_RE_ = /^msg\/\d{6}\/[a-f0-9]{24}\.[a-z0-9]{2,4}$/;
+const MSG_TIPO_DE_MIME_ = (mime) => /^image\/(jpeg|png|webp)$/.test(mime) ? 'imagem' : /^video\/(mp4|quicktime)$/.test(mime) ? 'vídeo' : /^audio\//.test(mime) ? 'áudio' : '';
 async function responderMensagem_(env, whats, d) {
-  const id = Number(d.conversa), texto = String(d.texto == null ? '' : d.texto).replace(/\r\n/g, '\n').trim(), idLocal = String(d.idLocal || '');
+  const id = Number(d.conversa), texto = String(d.texto == null ? '' : d.texto).replace(/\r\n/g, '\n').trim(), idLocal = String(d.idLocal || ''), chaveAnexo = String(d.anexo || '');
   if (!id) return [400, { ok: false, erro: 'Escolha uma conversa.' }];
-  if (!texto) return [400, { ok: false, erro: 'Escreva a mensagem antes de enviar.' }];
+  if (!texto && !chaveAnexo) return [400, { ok: false, erro: 'Escreva a mensagem antes de enviar.' }];
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(idLocal)) return [400, { ok: false, erro: 'Atualize a página e tente de novo.' }];
   const conv = await env.DB.prepare('SELECT id, canal, contato, nome, grupo FROM msg_conversa WHERE id=?').bind(id).first();
   if (!conv) return [404, { ok: false, erro: 'Conversa não encontrada.' }];
-  if (conv.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > MSG_TEXTO_MAX) return [400, { ok: false, erro: conv.canal === 'instagram' ? 'O Instagram aceita até 1000 letras por mensagem. Divida em duas.' : 'Mensagem grande demais. Divida em duas.' }];
+  let anexo = null;
+  if (chaveAnexo) {
+    if (!MSG_ANEXO_RE_.test(chaveAnexo)) return [400, { ok: false, erro: 'Anexo inválido. Escolha o arquivo de novo.' }];
+    const cabeca = await env.MIDIA.head(chaveAnexo);
+    if (!cabeca) return [400, { ok: false, erro: 'O anexo não foi encontrado. Escolha o arquivo de novo.' }];
+    const mime = mimeLimpo_(cabeca.httpMetadata && cabeca.httpMetadata.contentType), tipo = MSG_TIPO_DE_MIME_(mime);
+    if (!tipo) return [400, { ok: false, erro: 'Este tipo de arquivo não pode ser enviado por aqui. Use foto, vídeo ou áudio.' }];
+    if (!env.MIDIA_URL) return [409, { ok: false, erro: 'O endereço público das mídias não está configurado. Avise o gestor.' }];
+    if (conv.canal === 'instagram' && texto) return [400, { ok: false, erro: 'O Instagram não aceita texto junto com a foto, o vídeo ou o áudio. Envie o anexo e depois o texto em outra mensagem.' }];
+    if (texto.length > 1024) return [400, { ok: false, erro: 'A legenda aceita até 1024 letras.' }];
+    anexo = { chave: chaveAnexo, mime: mime, tipo: tipo, url: urlMidia(env, chaveAnexo) };
+  } else if (conv.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > MSG_TEXTO_MAX) return [400, { ok: false, erro: conv.canal === 'instagram' ? 'O Instagram aceita até 1000 letras por mensagem. Divida em duas.' : 'Mensagem grande demais. Divida em duas.' }];
   /* Reserva atômica no D1 (chave única): sobrevive a queda do Worker e nunca deixa a mesma tentativa sair duas vezes. */
   const chave = 'msgenv:' + idLocal, t0 = agora();
   const reserva = await env.DB.prepare('INSERT OR IGNORE INTO cfg (chave, valor) VALUES (?, ?)').bind(chave, t0 + '|enviando').run();
@@ -2654,15 +2739,51 @@ async function responderMensagem_(env, whats, d) {
     return [200, { ok: false, incerto: true, erro: 'Esta mensagem já foi tentada e ficou sem confirmação. Confira no ' + (conv.canal === 'instagram' ? 'Instagram' : 'WhatsApp') + ' antes de enviar de novo.' }];
   }
   try { await env.DB.prepare("DELETE FROM cfg WHERE chave LIKE 'msgenv:%' AND substr(valor,1,24)<?").bind(new Date(Date.now() - 3 * 86400000).toISOString()).run(); } catch (e) { /* limpeza é conforto */ }
-  const res = conv.canal === 'instagram' ? await enviarTextoInstagram_(env, conv, texto) : await enviarTextoWhats_(env, conv, texto);
+  const res = anexo ? (conv.canal === 'instagram' ? await enviarMidiaInstagram_(env, conv, anexo) : await enviarMidiaWhats_(env, conv, anexo, texto))
+    : (conv.canal === 'instagram' ? await enviarTextoInstagram_(env, conv, texto) : await enviarTextoWhats_(env, conv, texto));
   if (!res.ok && !res.incerto) { await env.DB.prepare('DELETE FROM cfg WHERE chave=?').bind(chave).run(); return [409, { ok: false, erro: res.erro }]; }
   const extId = res.ok ? res.extId : 'inc:' + idLocal, em = agora();
-  await gravarMensagem_(env, conv.canal, { extId: extId, contato: conv.contato, nome: '', grupo: conv.grupo, direcao: 'saida', tipo: 'texto', texto: texto, em: em });
+  await gravarMensagem_(env, conv.canal, { extId: extId, contato: conv.contato, nome: '', grupo: conv.grupo, direcao: 'saida', tipo: anexo ? anexo.tipo : 'texto', texto: texto, em: em, midiaChave: anexo ? anexo.chave : '', midiaMime: anexo ? anexo.mime : '', midiaSeg: Math.max(0, Math.min(86400, Number(d.seg) || 0)) });
   await env.DB.prepare('UPDATE msg_mensagem SET por=?, status=CASE WHEN ? THEN status ELSE ? END WHERE canal=? AND ext_id=?').bind(String(whats || '').slice(-4), res.ok ? 1 : 0, 'incerta', conv.canal, extId).run();
-  const linha = await env.DB.prepare('SELECT id, direcao, tipo, texto, enviada_em, status, por FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(conv.canal, extId).first();
+  const linha = await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(conv.canal, extId).first();
   const corpo = res.ok ? { ok: true, mensagem: linha } : { ok: false, incerto: true, erro: res.erro, mensagem: linha };
   await env.DB.prepare('UPDATE cfg SET valor=? WHERE chave=?').bind(t0 + '|' + JSON.stringify(corpo), chave).run();
   return [200, corpo];
+}
+/** Detecta o tipo real do arquivo pelos primeiros bytes (nunca confia no nome nem no tipo declarado). */
+function detectarAnexo_(buf, tipoPedido) {
+  const u = new Uint8Array(buf, 0, Math.min(buf.byteLength, 32)), eq = (i, t) => t.split('').every((c, k) => u[i + k] === c.charCodeAt(0));
+  if (tipoPedido === 'imagem') {
+    if (u[0] === 0xFF && u[1] === 0xD8 && u[2] === 0xFF) return 'image/jpeg';
+    if (u[0] === 0x89 && eq(1, 'PNG')) return 'image/png';
+    if (eq(0, 'RIFF') && eq(8, 'WEBP')) return 'image/webp';
+    return '';
+  }
+  if (tipoPedido === 'vídeo') { if (eq(4, 'ftyp')) return eq(8, 'qt') ? 'video/quicktime' : 'video/mp4'; return ''; }
+  if (tipoPedido === 'áudio') {
+    if (eq(0, 'OggS')) return 'audio/ogg';
+    if (eq(0, 'ID3') || (u[0] === 0xFF && (u[1] & 0xE0) === 0xE0)) return 'audio/mpeg';
+    if (eq(4, 'ftyp')) return 'audio/mp4';
+    if (u[0] === 0x1A && u[1] === 0x45 && u[2] === 0xDF && u[3] === 0xA3) return 'audio/webm';
+    if (eq(0, 'RIFF') && eq(8, 'WAVE')) return 'audio/wav';
+    if (eq(0, '#!AMR')) return 'audio/amr';
+  }
+  return '';
+}
+const MSG_ANEXO_MAX_ = { 'imagem': 8 * 1048576, 'vídeo': 16 * 1048576, 'áudio': 16 * 1048576 };
+async function receberAnexo_(env, req, url) {
+  const tipo = String(url.searchParams.get('tipo') || '');
+  if (!MSG_ANEXO_MAX_[tipo]) return [400, { ok: false, erro: 'Escolha foto, vídeo ou áudio.' }];
+  const declarado = Number(req.headers.get('Content-Length') || 0);
+  if (declarado > MSG_ANEXO_MAX_[tipo]) return [413, { ok: false, erro: 'Arquivo grande demais (' + (tipo === 'imagem' ? 'foto: até 8 MB' : 'até 16 MB') + ').' }];
+  const buf = await req.arrayBuffer();
+  if (!buf.byteLength) return [400, { ok: false, erro: 'O arquivo veio vazio. Escolha de novo.' }];
+  if (buf.byteLength > MSG_ANEXO_MAX_[tipo]) return [413, { ok: false, erro: 'Arquivo grande demais (' + (tipo === 'imagem' ? 'foto: até 8 MB' : 'até 16 MB') + ').' }];
+  const mime = detectarAnexo_(buf, tipo);
+  if (!mime) return [415, { ok: false, erro: tipo === 'imagem' ? 'Use uma foto JPG, PNG ou WebP.' : tipo === 'vídeo' ? 'Use um vídeo MP4.' : 'Este áudio não é de um formato aceito (use MP3, OGG, M4A ou gravação do celular).' }];
+  if (tipo === 'vídeo' && /hvc1|hev1/.test(new TextDecoder('latin1').decode(buf))) return [415, { ok: false, erro: 'Este vídeo está em H.265/HEVC e o WhatsApp pode recusar. Grave ou converta em MP4 H.264.' }];
+  const chave = await guardarMidiaMsg_(env, buf, mime);
+  return [200, { ok: true, anexo: chave, tipo: tipo, mime: mime, bytes: buf.byteLength }];
 }
 /* ---- exportação ---- */
 const fusoLocal_ = (iso) => { const d = new Date(Date.parse(iso) - 3 * 3600000); return isNaN(d) ? '' : d.toISOString(); };       // Fortaleza (UTC-3, sem horário de verão)
@@ -2815,7 +2936,7 @@ export default {
         if (!id) return J({ ok: false, erro: 'Escolha uma conversa.' }, 400);
         const conv = await env.DB.prepare('SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE id=?').bind(id).first();
         if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
-        const rs = await env.DB.prepare('SELECT id, direcao, tipo, texto, enviada_em, status, por, status_em FROM msg_mensagem WHERE conversa_id=?' + (antes ? ' AND enviada_em<?' : '') + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...(antes ? [id, antes] : [id])).all();
+        const rs = await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=?' + (antes ? ' AND enviada_em<?' : '') + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...(antes ? [id, antes] : [id])).all();
         return J({ ok: true, conversa: conv, mensagens: rs.results.reverse(), temMais: rs.results.length === 100, cursor: agora() });
       }
       if (p === '/msg/novidades' && req.method === 'GET') {
@@ -2824,12 +2945,41 @@ export default {
         const conv = Number(url.searchParams.get('conversa')) || 0, depois = Number(url.searchParams.get('depois')) || 0, st0 = Date.parse(url.searchParams.get('st') || ''), st = new Date((isNaN(st0) ? Date.now() - 60000 : st0) - 3000).toISOString();
         const cs = await env.DB.prepare('SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE atualizada_em>=? AND total>0 ORDER BY atualizada_em DESC LIMIT 100').bind(desde).all();
         let mensagens = [];
-        if (conv) mensagens = (await env.DB.prepare('SELECT id, direcao, tipo, texto, enviada_em, status, por, status_em FROM msg_mensagem WHERE conversa_id=? AND (id>? OR status_em>=?) ORDER BY enviada_em, id LIMIT 200').bind(conv, depois, st).all()).results;
+        if (conv) mensagens = (await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=? AND (id>? OR status_em>=?) ORDER BY enviada_em, id LIMIT 200').bind(conv, depois, st).all()).results;
         return J({ ok: true, cursor: agora(), conversas: cs.results, mensagens: mensagens, contagens: (cs.results.length || url.searchParams.get('cont') === '1') ? await msgContagens_(env) : undefined });
       }
       if (p === '/msg/diagnostico' && req.method === 'GET') {
         const out = {}; for (const n of [1, 2]) { try { out['whatsapp' + n] = JSON.parse((await cfgGet(env, 'msg_ligar_diag_' + n)) || 'null'); } catch (e) { out['whatsapp' + n] = null; } }
-        return J({ ok: true, ligar: out });
+        const forma = {}; for (const c of ['whatsapp1', 'whatsapp2']) { try { forma[c] = JSON.parse((await cfgGet(env, 'msg_ult_forma_' + c)) || 'null'); } catch (e) { forma[c] = null; } }
+        return J({ ok: true, ligar: out, forma: forma });
+      }
+      if (p === '/msg/anexo' && req.method === 'POST') { const [cod, corpo] = await receberAnexo_(env, req, url); return J(corpo, cod); }
+      if (p === '/msg/midia' && req.method === 'GET') {
+        const id = Number(url.searchParams.get('id')), ctx = url.searchParams.get('ctx') === '1';
+        const m = id ? await env.DB.prepare('SELECT id, canal, midia_chave, midia_mime, midia_url, ctx_post, ctx_chave FROM msg_mensagem WHERE id=?').bind(id).first() : null;
+        if (!m) return J({ ok: false, erro: 'Mídia não encontrada.' }, 404);
+        let chave = '';
+        if (ctx) {
+          if (m.ctx_chave) chave = m.ctx_chave;
+          else if (m.ctx_post) {
+            const po = await env.DB.prepare('SELECT midias FROM postagem WHERE id=?').bind(m.ctx_post).first();
+            let l = []; try { l = JSON.parse((po && po.midias) || '[]'); } catch (e) { l = []; }
+            const u = String((l[0] && l[0].url) || ''), pref = String(env.MIDIA_URL || '').replace(/\/$/, '') + '/m/';
+            if (u.startsWith(pref)) chave = u.slice(pref.length);
+          }
+        } else {
+          chave = m.midia_chave || '';
+          if (!chave && m.midia_url) {
+            const x = await copiarMidiaRemota_(env, m.midia_url, m.midia_mime);
+            if (x) { chave = x.chave; await env.DB.prepare("UPDATE msg_mensagem SET midia_chave=?, midia_mime=?, midia_url='' WHERE id=?").bind(x.chave, x.mime, m.id).run(); }
+          }
+        }
+        if (!chave || chave.includes('..')) return J({ ok: false, erro: 'A mídia não está mais disponível (o link expirou).' }, 404);
+        const obj = await env.MIDIA.get(chave);
+        if (!obj) return J({ ok: false, erro: 'A mídia não está mais disponível.' }, 404);
+        const mime = mimeLimpo_((obj.httpMetadata && obj.httpMetadata.contentType) || m.midia_mime), seguro = /^(image\/(jpeg|png|webp|gif)|video\/(mp4|quicktime|webm|3gpp)|audio\/[a-z0-9.+-]+|application\/pdf)$/.test(mime);
+        const h2 = new Headers(h); h2.set('Content-Type', seguro ? mime : 'application/octet-stream'); h2.set('Cache-Control', 'private, max-age=86400'); h2.set('X-Content-Type-Options', 'nosniff'); h2.set('Content-Disposition', seguro ? 'inline' : 'attachment');
+        return new Response(obj.body, { status: 200, headers: h2 });
       }
       if (p === '/msg/contagem' && req.method === 'GET') return J({ ok: true, contagens: await msgContagens_(env) });
       if (p === '/msg/enviar' && req.method === 'POST') {

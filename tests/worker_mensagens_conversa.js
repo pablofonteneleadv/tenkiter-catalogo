@@ -17,7 +17,8 @@ function d1() {
   const cacheMem = new Map();
   globalThis.caches = { default: { async match(r) { const v = cacheMem.get(r.url); return v ? new Response(v) : undefined; }, async put(r, x) { cacheMem.set(r.url, await x.text()); } } };
   const objs = new Map(); const kv = new Map();
-  const R2 = { async get(k) { const v = objs.get(k); return v ? { size:v.length, async arrayBuffer() { return v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength); } } : null; }, async put(k, b) { objs.set(k, Buffer.from(b instanceof ReadableStream ? await new Response(b).arrayBuffer() : b)); }, async delete(k) { objs.delete(k); }, async list(o) { const pr = (o && o.prefix) || ''; return { objects: [...objs.keys()].filter((k) => k.startsWith(pr)).map((k) => ({ key: k, size: objs.get(k).length, uploaded: (tempDatas.get(k) || new Date()) })), truncated: false }; } };
+  const meta = new Map();
+  const R2 = { async get(k) { const v = objs.get(k); return v ? { size: v.length, httpMetadata: { contentType: (meta.get(k) || {}).contentType }, body: new Response(v).body, async arrayBuffer() { return v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength); } } : null; }, async head(k) { const v = objs.get(k); return v ? { size: v.length, httpMetadata: { contentType: (meta.get(k) || {}).contentType } } : null; }, async put(k, b, o) { objs.set(k, Buffer.from(b instanceof ReadableStream ? await new Response(b).arrayBuffer() : b)); meta.set(k, (o && o.httpMetadata) || {}); }, async delete(k) { objs.delete(k); }, async list(o) { const pr = (o && o.prefix) || ''; return { objects: [...objs.keys()].filter((k) => k.startsWith(pr)).map((k) => ({ key: k, size: objs.get(k).length, uploaded: (tempDatas.get(k) || new Date()) })), truncated: false }; } };
   const tempDatas = new Map();
   const KV = { async get(k, t) { const v = kv.get(k); return v === undefined ? null : (t === 'json' ? JSON.parse(v) : v); }, async put(k, v) { kv.set(k, String(v)); }, async delete(k) { kv.delete(k); } };
   const TOKEN = 'IGQVJ_TOKEN_INVENTADO_PARA_TESTE_1234567890';
@@ -259,5 +260,122 @@ function d1() {
   const antesCrash = envios.length;
   const crash = await A('POST', '/msg/enviar', { conversa: c.id, texto: 'tentativa que caiu no meio', idLocal: 'crash123456' });
   chk('reserva deixada por uma queda no meio: NÃO reenvia, avisa para conferir', crash.j.incerto === true && envios.length === antesCrash && /conferir|Confira/.test(crash.j.erro), crash.j);
+
+  // ======== Mídia (foto/vídeo/áudio) e resposta a story ========
+  const JPG = Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(900, 7)]);
+  const MP4 = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(2000, 1)]);
+  const MP4_HEVC = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.from('hvc1'), Buffer.alloc(2000, 1)]);
+  const OGG = Buffer.concat([Buffer.from('OggS'), Buffer.alloc(1500, 3)]);
+  let cdnOk = true, cdnChamadas = [], zapMidia = [], igEnvios = [];
+  const f5 = globalThis.fetch;
+  globalThis.fetch = async (u, init) => {
+    u = String(u);
+    if (u.startsWith('https://cdn.wafly.fake/')) { cdnChamadas.push(u); if (!cdnOk) return new Response('x', { status: 404 }); const aud = u.endsWith('.ogg'), vid = u.endsWith('.mp4'); return new Response(aud ? OGG : vid ? MP4 : JPG, { headers: { 'content-type': aud ? 'audio/ogg; codecs=opus' : vid ? 'video/mp4' : 'image/jpeg' } }); }
+    if (u.startsWith('https://wafly.com.br/') && /\/send-(image|video|audio)$/.test(u)) { const b = JSON.parse(init.body); zapMidia.push({ rota: u.split('/').pop(), b }); return new Response(JSON.stringify({ messageId: 'MID' + zapMidia.length })); }
+    if (u.startsWith('https://ig.fake/') && u.endsWith('/me/messages') && init && init.method === 'POST') { const b = JSON.parse(init.body); igEnvios.push(b); return new Response(JSON.stringify({ message_id: 'IGOUT' + igEnvios.length })); }
+    return f5(u, init);
+  };
+  await cfg('ig_token', TOKEN);
+  const tM = Date.now() + 3600000, img = (id, extra) => msg(id, '5588977770000', '', Object.assign({ momment: tM, image: { imageUrl: 'https://cdn.wafly.fake/' + id + '.jpg', caption: 'olha esta', mimeType: 'image/jpeg' } }, extra || {}));
+  await wh('/wh/wafly/1/' + seg, img('IMG1'));
+  let rI = await DB.prepare("SELECT * FROM msg_mensagem WHERE ext_id='IMG1'").first();
+  chk('foto recebida: copiada para o R2 (msg/), tipo imagem, legenda guardada, sem endereço remoto', rI && /^msg\/\d{6}\/[a-f0-9]{24}\.jpg$/.test(rI.midia_chave) && rI.tipo === 'imagem' && rI.texto === 'olha esta' && rI.midia_url === '' && objs.has(rI.midia_chave), rI);
+  const cI = await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588977770000'").first();
+  const lm = (await A('GET', '/msg/mensagens?conversa=' + cI.id)).j.mensagens;
+  chk('a lista de mensagens informa que há mídia (sem expor o caminho do R2)', lm.length === 1 && lm[0].midia === 1 && !JSON.stringify(lm).includes('msg/'), lm);
+  const dl = await w.fetch(ped('GET', '/msg/midia?id=' + rI.id, 'tk2.admin'), env, {});
+  chk('/msg/midia devolve os bytes com o tipo certo, só para quem está logado', dl.status === 200 && dl.headers.get('content-type') === 'image/jpeg' && (await dl.arrayBuffer()).byteLength === JPG.length && dl.headers.get('x-content-type-options') === 'nosniff');
+  chk('/msg/midia sem sessão: 401', (await w.fetch(ped('GET', '/msg/midia?id=' + rI.id, ''), env, {})).status === 401);
+  chk('/msg/midia de id inexistente: 404', (await w.fetch(ped('GET', '/msg/midia?id=99999', 'tk2.admin'), env, {})).status === 404);
+  const antesCdn = cdnChamadas.length;
+  await wh('/wh/wafly/1/' + seg, img('IMG1'));
+  chk('mesma foto reenviada pela Wafly: não baixa de novo nem duplica', cdnChamadas.length === antesCdn && (await DB.prepare("SELECT COUNT(*) AS n FROM msg_mensagem WHERE ext_id='IMG1'").first()).n === 1);
+  cdnOk = false;
+  await wh('/wh/wafly/1/' + seg, img('IMG2', { momment: tM + 1000 }));
+  rI = await DB.prepare("SELECT * FROM msg_mensagem WHERE ext_id='IMG2'").first();
+  chk('se a cópia falhar, a mensagem é gravada e o endereço fica para tentar depois', rI && rI.midia_chave === '' && /^https:\/\/cdn\.wafly\.fake\//.test(rI.midia_url) && rI.tipo === 'imagem');
+  cdnOk = true;
+  const dl2 = await w.fetch(ped('GET', '/msg/midia?id=' + rI.id, 'tk2.admin'), env, {});
+  chk('ao abrir, tenta copiar de novo e guarda', dl2.status === 200 && (await DB.prepare('SELECT midia_chave, midia_url FROM msg_mensagem WHERE id=?').bind(rI.id).first()).midia_chave.startsWith('msg/'));
+  await wh('/wh/wafly/1/' + seg, msg('AUD1', '5588977770000', '', { momment: tM + 2000, audio: { audioUrl: 'https://cdn.wafly.fake/a1.ogg', mimeType: 'audio/ogg; codecs=opus', seconds: 12, ptt: true } }));
+  await wh('/wh/wafly/1/' + seg, msg('VID1', '5588977770000', '', { momment: tM + 3000, video: { videoUrl: 'https://cdn.wafly.fake/v1.mp4', caption: 'prova', mimeType: 'video/mp4', seconds: 7 } }));
+  const ma = await DB.prepare("SELECT tipo, midia_mime, midia_seg, texto, midia_chave FROM msg_mensagem WHERE ext_id IN ('AUD1','VID1') ORDER BY ext_id").all();
+  chk('áudio (com duração) e vídeo (com legenda) são copiados', ma.results.length === 2 && ma.results[0].tipo === 'áudio' && ma.results[0].midia_mime === 'audio/ogg' && ma.results[0].midia_seg === 12 && ma.results[1].tipo === 'vídeo' && ma.results[1].texto === 'prova' && ma.results.every((x) => x.midia_chave.startsWith('msg/')), ma.results);
+  chk('a prévia da conversa mostra o tipo quando não há texto', /^\[(vídeo|áudio|imagem)\]$|prova/.test((await DB.prepare('SELECT previa FROM msg_conversa WHERE id=?').bind(cI.id).first()).previa));
+  await wh('/wh/wafly/1/' + seg, msg('DOC1', '5588977770000', '', { momment: tM + 4000, document: { documentUrl: 'https://cdn.wafly.fake/d.pdf', fileName: 'tabela.pdf', mimeType: 'application/pdf' } }));
+  chk('documento com tipo não aceito pelo CDN falso não derruba a gravação', (await DB.prepare("SELECT tipo FROM msg_mensagem WHERE ext_id='DOC1'").first()).tipo === 'documento');
+
+  // ---- resposta a story ----
+  const pubA = new Date(Date.now() + 3600000 - 5 * 3600000).toISOString(), pubB = new Date(Date.now() + 3600000 - 2 * 3600000).toISOString();
+  const midiasP = (k) => JSON.stringify([{ url: 'https://tenkiter-midia.fake/m/' + k, tipo: 'imagem' }]);
+  await R2.put('p/storyA.jpg', JPG, { httpMetadata: { contentType: 'image/jpeg' } }); await R2.put('p/storyB.jpg', MP4.length ? JPG : JPG, { httpMetadata: { contentType: 'image/jpeg' } });
+  const insPost = (canalP, k, quando, leg) => DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, agendado_em, status, canal, publicado_em, criado_em, atualizado_em) VALUES ('story','auto',?,?,?, 'publicado', ?, ?, ?, ?)").bind(leg, midiasP(k), quando, canalP, quando, quando, quando).run();
+  await insPost('whatsapp', 'p/storyA.jpg', pubA, 'Conjunto Plus Size'); await insPost('whatsapp', 'p/storyB.jpg', pubB, 'Vestido alfaiataria'); await insPost('whatsapp2', 'p/storyA.jpg', pubA, 'So no 2');
+  await wh('/wh/wafly/1/' + seg, msg('ST1', '5588966660000', 'Oi', { momment: tM + 5000, isStatusReply: true, referenceMessageId: 'REFSTATUS' }));
+  const forma = (await A('GET', '/msg/diagnostico')).j.forma.whatsapp1;
+  const st = (await A('GET', '/msg/mensagens?conversa=' + (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588966660000'").first()).id)).j.mensagens[0];
+  chk('resposta a story: marca como story, acha o Status mais recente e avisa que é "provável" (havia dois)', st.texto === 'Oi' && st.ctx_tipo === 'story' && st.ctx_midia === 1 && st.ctx_aprox === 1 && st.ctx_legenda === 'Vestido alfaiataria' && st.ctx_mtipo === 'imagem' && !!st.ctx_em, st);
+  const dls = await w.fetch(ped('GET', '/msg/midia?id=' + st.id + '&ctx=1', 'tk2.admin'), env, {});
+  chk('a imagem do story respondido é entregue pela rota autenticada', dls.status === 200 && dls.headers.get('content-type') === 'image/jpeg' && (await dls.arrayBuffer()).byteLength === JPG.length);
+  await wh('/wh/wafly/2/' + seg, msg('ST2', '5588955550000', 'Quanto é?', { momment: tM + 6000, isStatusReply: true, referenceMessageId: 'X' }));
+  const st2 = (await A('GET', '/msg/mensagens?conversa=' + (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588955550000'").first()).id)).j.mensagens[0];
+  chk('no WhatsApp 2 só vale story publicado no WhatsApp 2 (exato, não "provável")', st2.ctx_legenda === 'So no 2' && st2.ctx_aprox === 0, st2);
+  await wh('/wh/wafly/1/' + seg, msg('ST3', '5588944440000', 'Oi', { momment: tM + 7000, isStatusReply: true }));
+  await DB.prepare("UPDATE postagem SET status='erro' WHERE canal='whatsapp'").run();
+  await wh('/wh/wafly/1/' + seg, msg('ST4', '5588933330000', 'Oi', { momment: tM + 8000, isStatusReply: true }));
+  const st4 = (await A('GET', '/msg/mensagens?conversa=' + (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588933330000'").first()).id)).j.mensagens[0];
+  chk('sem Status publicado nas últimas 26 h: mostra só o aviso de story, sem imagem', st4.ctx_tipo === 'story' && st4.ctx_midia === 0 && !st4.ctx_em, st4);
+  chk('/msg/midia?ctx=1 sem story associado: 404 em português', (await w.fetch(ped('GET', '/msg/midia?id=' + (await DB.prepare("SELECT id FROM msg_mensagem WHERE ext_id='ST4'").first()).id + '&ctx=1', 'tk2.admin'), env, {})).status === 404);
+  // resposta citando uma mensagem
+  await wh('/wh/wafly/1/' + seg, msg('Q1', '5588922220000', 'Tem a camisa azul?', { momment: tM + 9000 }));
+  await wh('/wh/wafly/1/' + seg, msg('Q2', '5588922220000', 'Sim', { momment: tM + 9500, fromMe: true }));
+  await wh('/wh/wafly/1/' + seg, msg('Q3', '5588922220000', 'Quanto?', { momment: tM + 10000, referenceMessageId: 'Q2' }));
+  const q3 = (await A('GET', '/msg/mensagens?conversa=' + (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588922220000'").first()).id)).j.mensagens.find((x) => x.texto === 'Quanto?');
+  chk('resposta a uma mensagem anterior mostra o trecho citado e quem escreveu', q3.ctx_tipo === 'resposta' && q3.ctx_texto === 'Sim' && q3.ctx_qdir === 'saida', q3);
+  chk('diagnóstico guarda só NOMES dos campos do aviso (nunca conteúdo)', forma && forma.ctx === 'story' && forma.campos.includes('isStatusReply') && !JSON.stringify(forma).includes('REFSTATUS') && !JSON.stringify(forma).includes('5588'), forma);
+
+  // ---- enviar mídia pelo painel ----
+  const up = async (tipo, bytes, sess) => { const r = await w.fetch(new Request('https://ig.test/msg/anexo?tipo=' + encodeURIComponent(tipo), { method: 'POST', headers: { Origin: O, 'X-TK-Whats': '88999990000', 'X-TK-Sessao': sess === undefined ? 'tk2.admin' : sess, 'Content-Type': 'application/octet-stream' }, body: bytes }), env, {}); return { r, j: await r.json() }; };
+  const upJ = await up('imagem', JPG);
+  chk('anexo: foto JPEG válida é guardada em msg/ com o tipo detectado nos bytes', upJ.j.ok && upJ.j.mime === 'image/jpeg' && /^msg\/\d{6}\/[a-f0-9]{24}\.jpg$/.test(upJ.j.anexo) && objs.has(upJ.j.anexo), upJ.j);
+  chk('anexo: arquivo que não é foto (mesmo pedindo "imagem") é recusado em português', (await up('imagem', Buffer.from('<html><script>alert(1)</script></html>'))).r.status === 415);
+  chk('anexo: foto acima de 8 MB: 413', (await up('imagem', Buffer.concat([JPG, Buffer.alloc(8 * 1048576)]))).r.status === 413);
+  const hv = await up('vídeo', MP4_HEVC);
+  chk('anexo: vídeo H.265/HEVC é recusado antes de enviar', hv.r.status === 415 && /H\.265/.test(hv.j.erro), hv.j);
+  const upV = await up('vídeo', MP4), upA = await up('áudio', OGG);
+  chk('anexo: MP4 e áudio OGG válidos', upV.j.ok && upV.j.mime === 'video/mp4' && upA.j.ok && upA.j.mime === 'audio/ogg');
+  chk('anexo: tipo desconhecido: 400; sem sessão: 401', (await up('arquivo', JPG)).r.status === 400 && (await up('imagem', JPG, '')).r.status === 401);
+  const cWa = (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588977770000'").first()).id;
+  const eImg = await A('POST', '/msg/enviar', { conversa: cWa, texto: 'Segue a foto', idLocal: 'idmedia-0001', anexo: upJ.j.anexo });
+  const zi = zapMidia[zapMidia.length - 1];
+  chk('enviar foto pelo WhatsApp: usa /send-image com o endereço público e a legenda', eImg.j.ok && zi.rota === 'send-image' && zi.b.image === 'https://tenkiter-midia.fake/m/' + upJ.j.anexo && zi.b.caption === 'Segue a foto' && zi.b.phone === '5588977770000', zi);
+  chk('a foto enviada aparece como mensagem da loja com mídia e legenda', eImg.j.mensagem.tipo === 'imagem' && eImg.j.mensagem.midia === 1 && eImg.j.mensagem.texto === 'Segue a foto' && eImg.j.mensagem.direcao === 'saida', eImg.j.mensagem);
+  const eImg2 = await A('POST', '/msg/enviar', { conversa: cWa, texto: 'Segue a foto', idLocal: 'idmedia-0001', anexo: upJ.j.anexo });
+  chk('tocar duas vezes não manda duas fotos (idempotente)', eImg2.j.ok && zapMidia.length === 1);
+  const antesCdn2 = cdnChamadas.length;
+  await wh('/wh/wafly/1/' + seg, img('MID1', { fromMe: true, momment: Date.now() + 3600000 + 20000, image: { imageUrl: 'https://cdn.wafly.fake/eco.jpg', caption: 'Segue a foto' } }));
+  chk('o eco da foto enviada pelo painel não duplica a bolha nem baixa de novo', (await DB.prepare("SELECT COUNT(*) AS n FROM msg_mensagem WHERE conversa_id=? AND tipo='imagem' AND direcao='saida'").bind(cWa).first()).n === 1 && cdnChamadas.length === antesCdn2);
+  const eVid = await A('POST', '/msg/enviar', { conversa: cWa, texto: '', idLocal: 'idmedia-0002', anexo: upV.j.anexo }), eAud = await A('POST', '/msg/enviar', { conversa: cWa, texto: 'ignorada', idLocal: 'idmedia-0003', anexo: upA.j.anexo, seg: 9 });
+  chk('vídeo usa /send-video e áudio usa /send-audio (sem legenda)', eVid.j.ok && zapMidia[1].rota === 'send-video' && zapMidia[1].b.video && eAud.j.ok && zapMidia[2].rota === 'send-audio' && zapMidia[2].b.audio && zapMidia[2].b.caption === undefined && eAud.j.mensagem.midia_seg === 9, [zapMidia[1], zapMidia[2]]);
+  chk('anexo inexistente/forjado: recusado', (await A('POST', '/msg/enviar', { conversa: cWa, texto: '', idLocal: 'idmedia-0004', anexo: 'msg/202610/' + 'a'.repeat(24) + '.jpg' })).j.ok === false && (await A('POST', '/msg/enviar', { conversa: cWa, texto: '', idLocal: 'idmedia-0005', anexo: '../segredo' })).r.status === 400);
+  const unp = await A('POST', '/msg/enviar', { conversa: cWa, texto: '', idLocal: 'idmedia-0006' });
+  chk('sem texto e sem anexo: pede para escrever', unp.r.status === 400);
+  // Instagram
+  const cIg = (await DB.prepare("SELECT id FROM msg_conversa WHERE canal='instagram' AND contato='CLI9'").first()).id;
+  const upI = await up('imagem', JPG);
+  const igTxt = await A('POST', '/msg/enviar', { conversa: cIg, texto: 'legenda', idLocal: 'idmedia-0007', anexo: upI.j.anexo });
+  chk('Instagram não aceita texto junto com mídia: avisa antes de enviar', igTxt.r.status === 400 && /Instagram/.test(igTxt.j.erro) && igEnvios.length === 0, igTxt.j);
+  const igOk = await A('POST', '/msg/enviar', { conversa: cIg, texto: '', idLocal: 'idmedia-0008', anexo: upI.j.anexo });
+  chk('Instagram: foto vai como anexo com endereço público', igOk.j.ok && igEnvios[0].message.attachment.type === 'image' && igEnvios[0].message.attachment.payload.url === 'https://tenkiter-midia.fake/m/' + upI.j.anexo, igEnvios[0]);
+  // Instagram recebendo mídia e resposta a story
+  const corpoIgM = JSON.stringify({ object: 'instagram', entry: [{ id: 'DONO', messaging: [{ sender: { id: 'CLI77' }, recipient: { id: 'DONO' }, timestamp: Date.now() + 3600000 + 50000, message: { mid: 'IGM77', text: 'Amei!', attachments: [{ type: 'image', payload: { url: 'https://cdn.wafly.fake/ig77.jpg' } }], reply_to: { story: { id: 'S1', url: 'https://cdn.wafly.fake/storyig.jpg' } } } }] }] });
+  await wh('/wh/instagram/' + seg, corpoIgM, { headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': await assinar(corpoIgM) } });
+  const im = await DB.prepare("SELECT * FROM msg_mensagem WHERE ext_id='IGM77'").first();
+  chk('Instagram: foto recebida e imagem do story respondido são copiadas', im && im.tipo === 'imagem' && im.midia_chave.startsWith('msg/') && im.ctx_tipo === 'story' && im.ctx_chave.startsWith('msg/'), im);
+  const dIg = await w.fetch(ped('GET', '/msg/midia?id=' + im.id + '&ctx=1', 'tk2.admin'), env, {});
+  chk('Instagram: story respondido servido pela rota autenticada', dIg.status === 200 && dIg.headers.get('content-type') === 'image/jpeg');
+  const exp = await w.fetch(ped('GET', '/msg/exportar?formato=txt&conversa=' + cWa, 'tk2.admin'), env, {});
+  chk('exportação identifica fotos/vídeos/áudios como [imagem] etc. e nunca traz endereços de mídia', /\[imagem\]|\[vídeo\]|\[áudio\]/.test(await exp.text()));
+  globalThis.fetch = f5;
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });
