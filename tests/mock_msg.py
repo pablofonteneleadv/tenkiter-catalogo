@@ -25,6 +25,19 @@ def novo_estado():
         m(7, 4, "entrada", "Boa tarde", 20),
         m(8, 5, "entrada", "Tem P?", 40), m(9, 1, "entrada", "", 129, "", "imagem"),
     ]
+    # conversa só de mídia (WhatsApp 2), usada nos testes de foto/vídeo/áudio/story
+    s["convs"].append(conv(6, "whatsapp2", "5588900001111", "Ana Mídia", 0, "entrada", "[imagem]", 5, 0))
+    def mm(id, dir, texto, min_atras, tipo, extra=None):
+        x = m(id, 6, dir, texto, min_atras, "", tipo); x.update({"midia": 0, "ctx_tipo": "", "ctx_midia": 0, "ctx_aprox": 0}); x.update(extra or {}); return x
+    s["msgs"] += [
+        mm(20, "entrada", "Oi", 30, "texto", {"ctx_tipo": "story", "ctx_midia": 1, "ctx_mtipo": "imagem", "ctx_aprox": 1, "ctx_legenda": "Conjunto Plus Size", "ctx_em": iso(200)}),
+        mm(21, "entrada", "olha esta", 25, "imagem", {"midia": 1, "midia_mime": "image/jpeg"}),
+        mm(22, "entrada", "", 20, "áudio", {"midia": 1, "midia_mime": "audio/ogg", "midia_seg": 12}),
+        mm(23, "entrada", "prova", 15, "vídeo", {"midia": 1, "midia_mime": "video/mp4", "midia_seg": 7}),
+        mm(24, "entrada", "Quanto?", 10, "texto", {"ctx_tipo": "resposta", "ctx_texto": "R$ 29,99 à vista", "ctx_qdir": "saida"}),
+        mm(25, "entrada", "", 5, "imagem", {"midia": 0}),
+    ]
+    s["anexos"] = []; s["midia_baixada"] = []
     return s
 
 def cont(s, canal):
@@ -72,12 +85,21 @@ def tratar(route, path, method, body, s):
         if body.get("idLocal") in s["idem"]: return J(s["idem"][body["idLocal"]]) or True
         if s["envio"] == "erro": return J({"ok": False, "erro": "A Wafly recusou a mensagem (HTTP 400). Confira se o WhatsApp 1 está conectado."}, 409) or True
         s["seq"] += 1; c = next(x for x in s["convs"] if x["id"] == body["conversa"])
-        msg = {"id": s["seq"], "conversa_id": c["id"], "direcao": "saida", "tipo": "texto", "texto": body["texto"], "enviada_em": agora(), "status": "incerta" if s["envio"] == "incerto" else "enviada", "por": "9999", "status_em": agora()}
-        s["msgs"].append(msg); c.update({"ult_dir": "saida", "nao_lidas": 0, "previa": body["texto"], "ultima_em": msg["enviada_em"], "atualizada_em": msg["enviada_em"], "ult_status": msg["status"], "total": c["total"] + 1})
+        anexo = body.get("anexo"); tipo_a = {"imagem": "imagem"}.get("imagem") if anexo else "texto"
+        msg = {"id": s["seq"], "conversa_id": c["id"], "direcao": "saida", "tipo": tipo_a, "midia": 1 if anexo else 0, "texto": body.get("texto", ""), "enviada_em": agora(), "status": "incerta" if s["envio"] == "incerto" else "enviada", "por": "9999", "status_em": agora()}
+        s["msgs"].append(msg); c.update({"ult_dir": "saida", "nao_lidas": 0, "previa": body.get("texto", "") or "[imagem]", "ultima_em": msg["enviada_em"], "atualizada_em": msg["enviada_em"], "ult_status": msg["status"], "total": c["total"] + 1})
         r = {"ok": s["envio"] != "incerto", "mensagem": msg}
         if s["envio"] == "incerto": r["incerto"] = True; r["erro"] = "Sem confirmação da Wafly. Confira no WhatsApp antes de tentar de novo."
         s["idem"][body["idLocal"]] = r
         return J(r) or True
+    if path == "/msg/midia":
+        s["midia_baixada"].append(url.query)
+        if q.get("ctx") == "1" and q.get("id") == "99": return J({"ok": False, "erro": "x"}, 404) or True
+        PNG = bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cfc000000301010018dd8db00000000049454e44ae426082")
+        return route.fulfill(status=200, body=PNG, headers={"Content-Type": "image/png"}) or True
+    if path == "/msg/anexo":
+        s["anexos"].append(q.get("tipo"))
+        return J({"ok": True, "anexo": "msg/202610/" + "a" * 24 + ".jpg", "tipo": q.get("tipo"), "mime": "image/jpeg", "bytes": 100}) or True
     if path == "/msg/exportar":
         s["exportacoes"].append(url.query)
         fmt = q.get("formato", "csv")

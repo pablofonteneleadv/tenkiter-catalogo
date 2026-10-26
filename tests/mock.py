@@ -469,7 +469,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                 for r in g["rasc"]:
                     k=r["grupo"] if r["status"]=="pendente" else r["status"]; c[k]=c.get(k,0)+1
                 return c
-            g["chamadas"].append({"m":m,"path":path,"whats":h.get("x-tk-whats"),"sessao":h.get("x-tk-sessao"),"corpo":(route.request.post_data if "image/" not in (h.get("content-type") or "") else "<binário>")})
+            g["chamadas"].append({"m":m,"path":path,"whats":h.get("x-tk-whats"),"sessao":h.get("x-tk-sessao"),"corpo":(route.request.post_data if "image/" not in (h.get("content-type") or "") and "octet-stream" not in (h.get("content-type") or "") else "<binário>")})
             if m=="OPTIONS": return route.fulfill(status=204,body="")
             if g.get("fora"): return route.fulfill(status=404,json={"ok":False,"erro":"Não encontrado."})
             if not (h.get("x-tk-sessao") or "").startswith("tk"): return route.fulfill(status=401,json={"ok":False,"erro":"Entre na sua conta de administrador."})
@@ -541,7 +541,8 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             if path.startswith("/msg/"):
                 import mock_msg
                 _m=g.setdefault("msg",mock_msg.novo_estado())
-                _b=json.loads(route.request.post_data or "{}") if route.request.post_data else {}
+                try: _b=json.loads(route.request.post_data or "{}") if ("octet-stream" not in (h.get("content-type") or "") and route.request.post_data) else {}
+                except Exception: _b={}   # corpo binário (anexo de foto/vídeo/áudio)
                 if mock_msg.tratar(route,path,m,_b,_m): return
             if path=="/post/wafly/config":
                 _w=g.setdefault("wafly",{})

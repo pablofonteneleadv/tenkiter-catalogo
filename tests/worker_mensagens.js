@@ -131,7 +131,7 @@ function d1() {
   chk('WhatsApp 2 é separado (mesmo ext_id e contato, outro canal)', (await cont('msg_conversa')) === 2 && (await cont('msg_mensagem')) === 3);
   await wh('/wh/wafly/1/' + seg, msg('M3', '5588999990000', '', { text: undefined, image: { caption: 'foto do vestido', imageUrl: 'https://x/y.jpg' } }));
   const img = await DB.prepare("SELECT tipo, texto FROM msg_mensagem WHERE ext_id='M3'").first();
-  chk('imagem guarda só o tipo e a legenda (nunca a URL)', img.tipo === 'imagem' && img.texto === 'foto do vestido' && !JSON.stringify(await DB.prepare('SELECT * FROM msg_mensagem').all()).includes('x/y.jpg'));
+  chk('imagem guarda o tipo e a legenda (o endereço remoto só fica se a cópia falhar, e nunca sai para a tela)', img.tipo === 'imagem' && img.texto === 'foto do vestido');
   await wh('/wh/wafly/1/' + seg, msg('M4', 'status@broadcast', 'status de alguém'));
   await wh('/wh/wafly/1/' + seg, { type: 'MessageStatusCallback', ids: ['X'] });
   chk('status@broadcast e outros eventos são ignorados', (await cont('msg_mensagem')) === 4);

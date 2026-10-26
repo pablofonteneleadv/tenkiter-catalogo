@@ -1,9 +1,11 @@
 /* ====================================================================
- * TENKiTER — admin-mensagens.js (v2.0) — CAIXA DE MENSAGENS (Admin total)
+ * TENKiTER — admin-mensagens.js (v2.1) — CAIXA DE MENSAGENS (Admin total)
  *  • Lista de conversas + conversa no estilo WhatsApp: responde por aqui (WhatsApp 1, WhatsApp 2 e Instagram),
  *    vê o que a loja enviou, entregue/lida, não lidas e quem ainda falta responder.
  *  • Atualiza ao vivo (consulta leve a cada poucos segundos, só com a tela aberta e visível) SEM redesenhar
  *    a lista nem a conversa: mantém rolagem, texto digitado, busca e foco de quem está usando.
+ *  • Fotos, vídeos e áudios: aparecem na conversa (baixados com a sessão, nunca por link público) e podem ser enviados (anexo ou gravação).
+ *    Resposta a story mostra a imagem do story respondido.
  *  • Exporta uma conversa, um canal ou tudo (CSV, TXT para IA, JSON) e mostra métricas de atendimento.
  *  • Todo texto vindo das conversas entra na tela por textContent (nunca innerHTML); links só http(s).
  * ==================================================================== */
@@ -17,6 +19,8 @@
   let canal = 'whatsapp1', filtro = 'todas', busca = '', resumo = null, contagens = null, lista = [], cursor = '', aberta = null, msgs = [], vista = 'lista', painel = '';
   let seqLista = 0, ultIdSrv = 0, nPoll = 0, timerBusca = null, timerLive = null, timerSelo = null, espera = ESPERA_MS, offline = false, abrindo = 0, novasAbaixo = 0, menuAberto = null, aviso = '';
   const rascunhos = {}, elMsgs = new Map(), elConvs = new Map(), pendentes = new Map();
+  const blobs = new Map();                     // mídia já baixada nesta conversa: "id" ou "id|c" (story) -> promessa do endereço local
+  let anexoPend = null, gravacao = null, colarFimAte = 0;
 
   /* ---------- utilidades ---------- */
   async function worker_(caminho, metodo, corpo) {
@@ -181,6 +185,22 @@
       .ms-horas { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; align-items: end; height: 80px; margin: 6px 0 2px; }
       .ms-horas i { display: block; background: var(--laranja, #E67E22); border-radius: 2px 2px 0 0; min-height: 2px; }
       .ms-horas-leg { display: flex; justify-content: space-between; font-size: 0.7rem; color: #555; }
+      .ms-bolha .ms-ctx, .ms-bolha .ms-midia { white-space: normal; }
+      .ms-ctx { display: flex; gap: 8px; align-items: stretch; margin: 0 0 6px; padding: 6px 8px; border-left: 4px solid #7a4a1e; border-radius: 8px; background: rgba(0,0,0,0.06); font-size: 0.8rem; }
+      .ms-ctx-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; } .ms-ctx-txt b { color: #5c2e00; }
+      .ms-ctx-leg { color: #333; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; } .ms-ctx-det { color: #555; font-size: 0.72rem; }
+      .sheet-mensagens .ms-ctx-mini { flex: none; width: 56px; min-width: 56px; height: 74px; border: 0; padding: 0; border-radius: 8px; background: #d9d2c2 center / cover no-repeat; cursor: pointer; color: #333; font-size: 1.3rem; display: inline-flex; align-items: center; justify-content: center; }
+      .ms-midia { margin: 0 0 4px; }
+      .ms-img { display: block; width: min(260px, 100%); min-height: 120px; max-height: 340px; object-fit: cover; border-radius: 8px; background: #d9d2c2; cursor: zoom-in; }
+      .ms-play { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 14px; border: 0; border-radius: 22px; background: rgba(0,0,0,0.08); color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+      .ms-midia video { display: block; max-width: min(300px, 100%); max-height: 360px; border-radius: 8px; background: #000; } .ms-midia audio { display: block; width: min(280px, 100%); }
+      .ms-luz { position: absolute; inset: 0; z-index: 8; background: rgba(0,0,0,0.92); display: flex; align-items: center; justify-content: center; padding: 12px; }
+      .ms-luz img, .ms-luz video { max-width: 100%; max-height: 100%; object-fit: contain; }
+      .sheet-mensagens .ms-luz-x { position: absolute; top: 10px; right: 10px; min-width: 44px; min-height: 44px; border: 0; border-radius: 50%; background: #fff; color: #111; font-size: 1.1rem; font-weight: 700; cursor: pointer; }
+      .ms-stage { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid #e6e1d6; background: #faf7f0; font-size: 0.82rem; }
+      .ms-stage img, .ms-stage video { flex: none; width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: #d9d2c2; } .ms-stage audio { flex: 1; min-width: 0; height: 40px; }
+      .ms-stage .ms-stage-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ms-compor .ms-ico { width: 44px; flex: none; } .ms-compor .ms-ico.gravando { background: #c62828; color: #fff; width: auto; padding: 0 12px; font-size: 0.85rem; }
       @media (prefers-reduced-motion: no-preference) { .ms-conv, .ms-chip, .ms-aba { transition: background-color .15s; } }
     `;
     document.head.appendChild(s);
@@ -244,6 +264,7 @@
     menuAberto = m; const p = m.querySelector('button'); if (p) p.focus();
   }
   function teclado(ev) {
+    if (ev.key === 'Escape' && $('ms-luz')) { fecharLuz_(); ev.stopPropagation(); return; }
     if (ev.key === 'Escape' && menuAberto) { const d = menuAberto.dataset.dono, a = $(d); fecharMenu(); if (a) a.focus(); ev.stopPropagation(); }
   }
 
@@ -350,7 +371,7 @@
     const l1 = el('span', 'ms-l1'); l1.appendChild(el('span', 'ms-nome', rotuloContato(c))); l1.appendChild(el('time', '', horaLista(c.ultima_em)));
     const l2 = el('span', 'ms-l2'); const pv = el('span', 'ms-previa');
     if (saiu) { pv.appendChild(selo(c.ult_status || 'enviada')); pv.appendChild(document.createTextNode('Você: ')); }
-    pv.appendChild(document.createTextNode(c.previa || '')); l2.appendChild(pv);
+    const pr = /^\[(.+)\]$/.exec(c.previa || ''); pv.appendChild(document.createTextNode(pr ? (TIPO_ROTULO[pr[1]] || c.previa) : (c.previa || ''))); l2.appendChild(pv);
     if (nova) { const bd = el('span', 'ms-badge', c.nao_lidas > 99 ? '99+' : String(c.nao_lidas)); bd.setAttribute('aria-label', c.nao_lidas + ' não lidas'); l2.appendChild(bd); }
     corpo.append(l1, l2);
     if (espera) corpo.appendChild(el('span', 'ms-aguarda', 'Falta responder · há ' + espera_(c.ult_entrada_em || c.ultima_em)));
@@ -379,16 +400,96 @@
   }
 
   /* ---------- conversa ---------- */
+  /* ---- mídia: baixada com a sessão (nunca por link público) e guardada só enquanto a conversa está aberta ---- */
+  function midiaBlob_(id, story) {
+    const k = id + (story ? '|c' : '');
+    if (blobs.has(k)) return blobs.get(k);
+    const sess = (typeof getSessao === 'function' && getSessao()) || null;
+    const p = (async () => {
+      if (!sess) throw new Error('sem sessão');
+      const r = await fetch(INSTAGRAM_URL + '/msg/midia?id=' + encodeURIComponent(id) + (story ? '&ctx=1' : ''), { headers: { 'X-TK-Whats': sess.whatsapp, 'X-TK-Sessao': sess.sessao } });
+      if (!r.ok) { let e = null; try { e = await r.json(); } catch (x) { /* corpo vazio */ } throw new Error((e && e.erro) || 'Não foi possível carregar.'); }
+      return URL.createObjectURL(await r.blob());
+    })();
+    p.catch(() => { blobs.delete(k); });
+    blobs.set(k, p); return p;
+  }
+  function limparBlobs_() { blobs.forEach((p) => { p.then((u) => { if (typeof u === 'string' && u.indexOf('blob:') === 0) URL.revokeObjectURL(u); }, () => {}); }); blobs.clear(); }
+  const obsMidia = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { obsMidia.unobserve(e.target); if (e.target._carregar) e.target._carregar(); } }), { rootMargin: '240px' }) : null;
+  function carregarImg_(img, id, story) {
+    img._carregar = () => {
+      midiaBlob_(id, story).then((u) => {
+        img.onload = () => { const fio = $('ms-fio'); if (fio && Date.now() < colarFimAte) fio.scrollTop = fio.scrollHeight; };
+        img.src = u; img.removeAttribute('data-erro');
+      }, () => { img.alt = 'Imagem indisponível'; img.dataset.erro = '1'; });
+    };
+    if (obsMidia) obsMidia.observe(img); else img._carregar();
+  }
+  function fecharLuz_() { const l = $('ms-luz'); if (l) l.remove(); }
+  function abrirLuz_(tipo, url) {
+    fecharLuz_(); const sheet = document.querySelector('.sheet-mensagens'); if (!sheet) return;
+    const l = el('div', 'ms-luz'); l.id = 'ms-luz'; l.setAttribute('role', 'dialog'); l.setAttribute('aria-label', tipo === 'video' ? 'Vídeo' : 'Imagem ampliada');
+    let m; if (tipo === 'video') { m = el('video'); m.controls = true; m.autoplay = true; m.playsInline = true; } else { m = el('img'); m.alt = 'Imagem ampliada'; }
+    m.src = url; const x = botao('ms-luz-x', '✕', 'luz-fechar'); x.setAttribute('aria-label', 'Fechar');
+    l.append(m, x); sheet.appendChild(l); x.focus();
+  }
+  const mmss = (n) => { n = Math.max(0, Math.round(Number(n) || 0)); return Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0'); };
+  function blocoStory_(m) {
+    const q = el('div', 'ms-ctx'), col = el('div', 'ms-ctx-txt');
+    col.appendChild(el('b', '', m.direcao === 'saida' ? 'Você respondeu a um story' : 'Respondeu ao seu story'));
+    if (m.ctx_legenda) col.appendChild(el('span', 'ms-ctx-leg', m.ctx_legenda));
+    const det = []; if (m.ctx_em) det.push('publicado ' + hora(m.ctx_em)); if (m.ctx_aprox) det.push('story provável (havia mais de um no ar)');
+    if (!m.ctx_midia) det.push('não encontrei a imagem deste story');
+    if (det.length) col.appendChild(el('span', 'ms-ctx-det', det.join(' · ')));
+    q.appendChild(col);
+    if (m.ctx_midia && typeof m.id === 'number') {
+      const video = m.ctx_mtipo === 'video', mini = botao('ms-ctx-mini', video ? '▶' : '', 'story-ver', { id: String(m.id), video: video ? '1' : '' });
+      mini.setAttribute('aria-label', 'Ver o story respondido');
+      if (!video) { mini._carregar = () => { midiaBlob_(m.id, true).then((u) => { mini.style.backgroundImage = 'url("' + u + '")'; }, () => { mini.textContent = '🖼'; }); }; if (obsMidia) obsMidia.observe(mini); else mini._carregar(); }
+      q.appendChild(mini);
+    }
+    return q;
+  }
+  function blocoCitacao_(m) {
+    const q = el('div', 'ms-ctx'), col = el('div', 'ms-ctx-txt');
+    col.appendChild(el('b', '', m.ctx_qdir === 'saida' ? 'Você' : 'Cliente'));
+    col.appendChild(el('span', 'ms-ctx-leg', m.ctx_texto || TIPO_ROTULO[m.ctx_qtipo] || '[' + (m.ctx_qtipo || 'mensagem') + ']'));
+    q.appendChild(col); return q;
+  }
+  function blocoMidia_(m) {
+    const tipo = m.tipo, local = m.localUrl || '';
+    if (!local && !(m.midia && typeof m.id === 'number')) return null;
+    const w = el('div', 'ms-midia');
+    if (tipo === 'imagem' || tipo === 'figurinha') {
+      const img = el('img', 'ms-img'); img.alt = tipo === 'figurinha' ? 'Figurinha' : 'Foto'; img.loading = 'lazy';
+      if (local) img.src = local; else carregarImg_(img, m.id, false);
+      img.addEventListener('click', () => { if (img.src && !img.dataset.erro) abrirLuz_('imagem', img.src); });
+      w.appendChild(img); return w;
+    }
+    if (tipo === 'vídeo' || tipo === 'áudio') {
+      const video = tipo === 'vídeo';
+      const montarPlayer = (u, auto) => { const p = el(video ? 'video' : 'audio'); p.controls = true; p.preload = 'metadata'; if (video) p.playsInline = true; p.src = u; w.textContent = ''; w.appendChild(p); if (auto) { const r = p.play(); if (r && r.catch) r.catch(() => {}); } };
+      if (local) { montarPlayer(local, false); return w; }
+      const bt = botao('ms-play', '', 'x'); bt.removeAttribute('data-ms'); bt.textContent = (video ? '▶ Vídeo' : '▶ Áudio') + (m.midia_seg ? ' · ' + mmss(m.midia_seg) : '');
+      bt.addEventListener('click', async () => { bt.disabled = true; bt.textContent = 'Carregando…'; try { montarPlayer(await midiaBlob_(m.id, false), true); } catch (e) { bt.disabled = false; bt.textContent = 'Não foi possível carregar. Tentar de novo'; } });
+      w.appendChild(bt); return w;
+    }
+    const bt = botao('ms-play', '📄 Baixar ' + (TIPO_ROTULO[tipo] ? tipo : 'arquivo'), 'x'); bt.removeAttribute('data-ms');
+    bt.addEventListener('click', async () => { bt.disabled = true; try { const u = await midiaBlob_(m.id, false), a = document.createElement('a'); a.href = u; a.download = 'arquivo'; document.body.appendChild(a); a.click(); a.remove(); } catch (e) { aviso_('Não foi possível baixar o arquivo.'); } bt.disabled = false; });
+    w.appendChild(bt); return w;
+  }
   function bolha(m) {
     let b = elMsgs.get(m.id);
-    const ass = [m.texto, m.tipo, m.status, m.erro || ''].join('|');
+    const ass = [m.texto, m.tipo, m.status, m.erro || '', m.midia, m.localUrl || '', m.ctx_tipo || '', m.ctx_midia, m.ctx_texto || '', m.ctx_legenda || '', m.ctx_aprox].join('|');
     if (b && b.dataset.ass === ass) return b;
     if (!b) { b = el('div'); elMsgs.set(m.id, b); }
     b.dataset.ass = ass; b.dataset.id = String(m.id); b.textContent = '';
     const falhou = m.status === 'falhou';
     b.className = 'ms-bolha ' + (m.direcao === 'saida' ? 'saida' : 'entrada') + (m.status === 'pendente' ? ' pendente' : '') + (falhou ? ' falhou' : '');
+    if (m.ctx_tipo === 'story') b.appendChild(blocoStory_(m)); else if (m.ctx_tipo === 'resposta' && (m.ctx_texto || m.ctx_qtipo)) b.appendChild(blocoCitacao_(m));
+    const mid = blocoMidia_(m); if (mid) b.appendChild(mid);
     if (m.texto) linkar(b, m.texto);
-    if (m.tipo && m.tipo !== 'texto') b.appendChild(el('span', 'ms-tipo', (m.texto ? ' ' : '') + (TIPO_ROTULO[m.tipo] || '[' + m.tipo + ']')));
+    if (m.tipo && m.tipo !== 'texto' && !mid) b.appendChild(el('span', 'ms-tipo', (m.texto ? ' ' : '') + (TIPO_ROTULO[m.tipo] || '[' + m.tipo + ']') + (m.midia === 0 && m.direcao === 'entrada' && ['imagem', 'vídeo', 'áudio'].indexOf(m.tipo) >= 0 ? ' (arquivo não disponível)' : '')));
     const meta = el('span', 'ms-meta'); meta.appendChild(el('time', '', m.enviada_em ? hm(new Date(m.enviada_em)) : ''));
     if (m.direcao === 'saida') meta.appendChild(selo(m.status || 'enviada'));
     b.appendChild(meta);
@@ -411,7 +512,7 @@
       const b = bolha(m);
       if (b !== ref) fio.insertBefore(b, ref); else ref = ref.nextSibling;
     });
-    if (fim) { fio.scrollTop = fio.scrollHeight; novasAbaixo = 0; } else fio.scrollTop = fio.scrollHeight - antes;
+    if (fim) { colarFimAte = Date.now() + 2500; fio.scrollTop = fio.scrollHeight; novasAbaixo = 0; } else fio.scrollTop = fio.scrollHeight - antes;
     atualizarPill();
   }
   function atualizarPill() { const p = $('ms-nova'); if (!p) return; p.hidden = novasAbaixo <= 0; p.textContent = '↓ ' + novasAbaixo + (novasAbaixo === 1 ? ' nova mensagem' : ' novas mensagens'); }
@@ -438,19 +539,76 @@
     wrap.append(fio, pill); pai.appendChild(wrap);
     fio.addEventListener('scroll', () => { if (perto_(fio, 60) && novasAbaixo) { novasAbaixo = 0; atualizarPill(); marcarLida(); } }, { passive: true });
     const dica = dicaComposer(c); if (dica) { const d = el('div', 'ms-dica', dica); d.id = 'ms-dica'; pai.appendChild(d); }
+    const stage = el('div', 'ms-stage'); stage.id = 'ms-stage'; stage.hidden = !anexoPend; pai.appendChild(stage);
     const form = el('div', 'ms-compor');
-    const ta = el('textarea'); ta.id = 'ms-texto'; ta.rows = 1; ta.placeholder = 'Escreva uma mensagem'; if (c.canal !== 'instagram') ta.maxLength = limiteTexto(c); ta.setAttribute('aria-label', 'Mensagem para ' + rotuloContato(c)); ta.enterKeyHint = 'enter'; ta.value = rascunhoLer_(c.id);
-    const bt = botao('ms-enviar', 'Enviar', 'enviar'); bt.id = 'ms-enviar'; bt.disabled = !ta.value.trim();
-    form.append(ta, bt); pai.appendChild(form);
-    const cresce = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim(); rascunhoSalvar_(c.id, ta.value); };
+    const clip = botao('ms-ico', '📎', 'anexar'); clip.id = 'ms-anexar'; clip.setAttribute('aria-label', 'Anexar foto, vídeo ou áudio');
+    const arq = el('input'); arq.type = 'file'; arq.id = 'ms-arquivo'; arq.hidden = true; arq.accept = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime,audio/*';
+    arq.addEventListener('change', () => { const f = arq.files && arq.files[0]; arq.value = ''; if (f) escolherArquivo_(f); });
+    const ta = el('textarea'); ta.id = 'ms-texto'; ta.rows = 1; ta.placeholder = 'Mensagem'; if (c.canal !== 'instagram') ta.maxLength = limiteTexto(c); ta.setAttribute('aria-label', 'Mensagem para ' + rotuloContato(c)); ta.enterKeyHint = 'enter'; ta.value = rascunhoLer_(c.id);
+    const mic = botao('ms-ico', '🎤', 'gravar'); mic.id = 'ms-mic'; mic.setAttribute('aria-label', 'Gravar áudio'); if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)) mic.hidden = true;
+    const bt = botao('ms-enviar', 'Enviar', 'enviar'); bt.id = 'ms-enviar'; bt.disabled = !ta.value.trim() && !anexoPend;
+    form.append(clip, arq, ta, mic, bt); pai.appendChild(form);
+    const cresce = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); };
     ta.addEventListener('input', cresce);
     ta.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && window.matchMedia('(pointer: fine)').matches) { ev.preventDefault(); enviar(); } });
-    cresce();
+    cresce(); desenharStage_();
+  }
+  /* ---- anexos: foto (reduzida no aparelho), vídeo, áudio e gravação ---- */
+  function desenharStage_() {
+    const st = $('ms-stage'), bt = $('ms-enviar'), ta = $('ms-texto'); if (!st) return;
+    st.textContent = ''; st.hidden = !anexoPend;
+    if (bt) bt.disabled = !anexoPend && !(ta && ta.value.trim());
+    if (!anexoPend) return;
+    const a = anexoPend, m = el(a.tipo === 'imagem' ? 'img' : a.tipo === 'vídeo' ? 'video' : 'audio');
+    if (a.tipo === 'áudio') m.controls = true; else if (a.tipo === 'vídeo') { m.muted = true; m.preload = 'metadata'; } else m.alt = 'Prévia da foto';
+    m.src = a.urlLocal; st.appendChild(m);
+    if (a.tipo !== 'áudio') st.appendChild(el('span', 'ms-stage-nome', (a.tipo === 'imagem' ? 'Foto' : 'Vídeo') + ' · ' + (a.blob.size / 1048576).toFixed(1).replace('.', ',') + ' MB' + (aberta && aberta.canal !== 'instagram' ? ' · o texto vai como legenda' : '')));
+    const x = botao('ms-ico', '✕', 'anexo-tirar'); x.setAttribute('aria-label', 'Remover o anexo'); st.appendChild(x);
+  }
+  function limparAnexo_(soltarUrl) { if (anexoPend && soltarUrl) URL.revokeObjectURL(anexoPend.urlLocal); anexoPend = null; desenharStage_(); }
+  async function reduzirImagem_(f) {
+    try {
+      const bmp = await createImageBitmap(f), k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height)), c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k)); c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height); if (bmp.close) bmp.close();
+      const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.86)); if (blob) return blob;
+    } catch (e) { /* usa o original se for um formato aceito */ }
+    return /^image\/(jpeg|png|webp)$/.test(f.type) ? f : null;
+  }
+  async function escolherArquivo_(f, seg) {
+    const tipo = /^image\//.test(f.type) ? 'imagem' : /^video\//.test(f.type) ? 'vídeo' : /^audio\//.test(f.type) ? 'áudio' : '';
+    if (!tipo) { aviso_('Escolha uma foto, um vídeo ou um áudio.'); return; }
+    let blob = f;
+    if (tipo === 'imagem') { aviso_('Preparando a foto…'); blob = await reduzirImagem_(f); aviso_(''); if (!blob) { aviso_('Não consegui ler esta foto. Use JPG, PNG ou WebP.'); return; } if (blob.size > 8 * 1048576) { aviso_('A foto ficou grande demais (limite 8 MB). Escolha outra.'); return; } }
+    else if (blob.size > 16 * 1048576) { aviso_('Arquivo grande demais (limite 16 MB).'); return; }
+    if (tipo === 'vídeo' && !/^video\/(mp4|quicktime)$/.test(f.type)) { aviso_('Use um vídeo MP4.'); return; }
+    limparAnexo_(true);
+    anexoPend = { blob: blob, tipo: tipo, seg: Math.round(Number(seg) || 0), urlLocal: URL.createObjectURL(blob) };
+    desenharStage_(); const ta = $('ms-texto'); if (ta && larga()) ta.focus();
+  }
+  function atualizarMic_() {
+    const m = $('ms-mic'); if (!m) return;
+    if (gravacao) { m.className = 'ms-ico gravando'; m.textContent = '⏹ ' + mmss((Date.now() - gravacao.t0) / 1000); m.setAttribute('aria-label', 'Parar e usar a gravação'); }
+    else { m.className = 'ms-ico'; m.textContent = '🎤'; m.setAttribute('aria-label', 'Gravar áudio'); }
+  }
+  async function gravarAudio_() {
+    if (gravacao) { gravacao.rec.stop(); return; }
+    let stream; try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { aviso_('Não consegui usar o microfone. Libere a permissão do microfone neste site e tente de novo.'); return; }
+    const tipos = ['audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'], mt = tipos.find((t) => window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+    const rec = new MediaRecorder(stream, mt ? { mimeType: mt } : undefined), partes = [];
+    const g = { rec: rec, t0: Date.now(), timer: null };
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) partes.push(e.data); };
+    rec.onstop = () => {
+      clearInterval(g.timer); stream.getTracks().forEach((t) => t.stop()); gravacao = null; atualizarMic_();
+      const seg = (Date.now() - g.t0) / 1000, blob = new Blob(partes, { type: (rec.mimeType || mt || 'audio/webm').split(';')[0] });
+      if (blob.size && seg >= 1) escolherArquivo_(new File([blob], 'gravacao', { type: blob.type }), seg); else aviso_('Gravação muito curta. Segure um pouco mais.');
+    };
+    gravacao = g; rec.start(); atualizarMic_();
+    g.timer = setInterval(() => { atualizarMic_(); if (Date.now() - g.t0 > 300000) rec.stop(); }, 500);
   }
   async function abrirConversa(id) {
     const w = ++abrindo;
     const jaNaTela = aberta && aberta.id === id;
-    if (!jaNaTela) { elMsgs.clear(); msgs = []; novasAbaixo = 0; }
+    if (!jaNaTela) { elMsgs.clear(); msgs = []; novasAbaixo = 0; limparBlobs_(); limparAnexo_(true); fecharLuz_(); }
     const r = await worker_('/msg/mensagens?conversa=' + encodeURIComponent(id), 'GET');
     if (w !== abrindo) return;
     if (!r.ok) { aviso_(r.erro || 'Não foi possível abrir a conversa agora.'); return; }
@@ -478,35 +636,53 @@
   function ajustarContagemLocal() { desenharAbas(); desenharFiltros(); selarBotao(); }
 
   /* ---------- enviar ---------- */
+  async function subirAnexo_(a) {
+    const sess = (typeof getSessao === 'function' && getSessao()) || null; if (!sess) return { ok: false, erro: 'Entre com o seu login para enviar.' };
+    try {
+      const r = await fetch(INSTAGRAM_URL + '/msg/anexo?tipo=' + encodeURIComponent(a.tipo), { method: 'POST', headers: { 'X-TK-Whats': sess.whatsapp, 'X-TK-Sessao': sess.sessao, 'Content-Type': 'application/octet-stream' }, body: a.blob });
+      return await r.json();
+    } catch (e) { return { ok: false, erro: 'Sem conexão para enviar o arquivo. Tente de novo.', semRede: true }; }
+  }
   async function enviar(reenvio) {
     if (!aberta) return;
     const c = aberta, ta = $('ms-texto'); if (!ta && !reenvio) return;
     let tmp, texto, idLocal;
     if (reenvio) { const p = pendentes.get(reenvio); if (!p) return; tmp = p; texto = p.msg.texto; idLocal = p.idLocal; p.msg.status = 'pendente'; p.msg.erro = ''; }
     else {
-      texto = ta.value.replace(/\r\n/g, '\n').trim(); if (!texto) return;
-      if (c.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > limiteTexto(c)) { aviso_('Mensagem grande demais para este canal. Divida em duas.'); return; }
+      texto = ta.value.replace(/\r\n/g, '\n').trim(); const an = anexoPend;
+      if (!texto && !an) return;
+      if (an && c.canal === 'instagram' && texto) { aviso_('O Instagram não aceita texto junto com foto, vídeo ou áudio. Envie o anexo e depois o texto.'); return; }
+      if (!an && (c.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > limiteTexto(c))) { aviso_('Mensagem grande demais para este canal. Divida em duas.'); return; }
       idLocal = idLocal_();
       const idTmp = 'tmp-' + idLocal;
-      tmp = { idLocal: idLocal, conversa: c.id, msg: { id: idTmp, direcao: 'saida', tipo: 'texto', texto: texto, enviada_em: new Date().toISOString(), status: 'pendente' } };
+      tmp = { idLocal: idLocal, conversa: c.id, anexo: an ? { blob: an.blob, tipo: an.tipo, seg: an.seg, chave: '' } : null, msg: { id: idTmp, direcao: 'saida', tipo: an ? an.tipo : 'texto', texto: texto, enviada_em: new Date().toISOString(), status: 'pendente', midia: an ? 1 : 0, localUrl: an ? an.urlLocal : '' } };
       pendentes.set(idTmp, tmp); msgs.push(tmp.msg);
-      ta.value = ''; ta.style.height = 'auto'; rascunhoSalvar_(c.id, ''); $('ms-enviar').disabled = true; ta.focus();
+      ta.value = ''; ta.style.height = 'auto'; rascunhoSalvar_(c.id, ''); anexoPend = null; desenharStage_(); $('ms-enviar').disabled = true; ta.focus();
     }
     pintarFio(true);
-    const r = await worker_('/msg/enviar', 'POST', { conversa: c.id, texto: texto, idLocal: idLocal });
     const idTmp = tmp.msg.id;
+    let r;
+    if (tmp.anexo && !tmp.anexo.chave) {
+      const up = await subirAnexo_(tmp.anexo);
+      if (!up.ok) r = { ok: false, erro: up.erro || 'Não foi possível enviar o arquivo.', semRede: up.semRede, semEnvio: true };
+      else tmp.anexo.chave = up.anexo;
+    }
+    if (!r) r = await worker_('/msg/enviar', 'POST', { conversa: c.id, texto: texto, idLocal: idLocal, anexo: tmp.anexo ? tmp.anexo.chave : undefined, seg: tmp.anexo ? tmp.anexo.seg : undefined });
     if (r.ok || (r.incerto && r.mensagem)) {
       pendentes.delete(idTmp);
       if (aberta && aberta.id === c.id) {
         msgs = msgs.filter((m) => m.id !== idTmp);
-        const real = r.mensagem; if (real) { msgs = msgs.filter((m) => m.id !== real.id); msgs.push(real); if (r.incerto) real.status = 'incerta'; }
+        const real = r.mensagem; if (real) {
+          if (tmp.msg.localUrl) blobs.set(String(real.id), Promise.resolve(tmp.msg.localUrl));      // a prévia local vira a mídia da mensagem: nada para baixar de novo
+          msgs = msgs.filter((m) => m.id !== real.id); msgs.push(real); if (r.incerto) real.status = 'incerta';
+        }
         aberta.ult_dir = 'saida'; aberta.nao_lidas = 0;
       }
       if (r.incerto) aviso_(r.erro || 'Sem confirmação do envio.'); else aviso_('');
       carregarLista(false);
     } else {
       tmp.msg.status = 'falhou'; tmp.msg.erro = r.erro || 'Não foi possível enviar agora.';
-      if (r.semRede) tmp.msg.erro = 'Sem resposta do servidor. A mensagem pode ter saído: confira antes de tentar de novo (tentar de novo não duplica).';
+      if (r.semRede && !r.semEnvio) tmp.msg.erro = 'Sem resposta do servidor. A mensagem pode ter saído: confira antes de tentar de novo (tentar de novo não duplica).';
     }
     if (aberta && aberta.id === c.id) pintarFio(true);
   }
@@ -538,7 +714,7 @@
         const noFim = !fio || perto_(fio, 90), entradas = novas.filter((m) => m.direcao === 'entrada').length;
         mudancas.forEach((m) => { const x = msgs.find((y) => y.id === m.id); if (x) { x.status = m.status; x.status_em = m.status_em; } });
         // uma mensagem nossa que acabou de voltar pelo servidor substitui a "enviando…" (mesmo texto) sem duplicar
-        novas.forEach((m) => { if (m.direcao === 'saida') { const i = msgs.findIndex((x) => typeof x.id === 'string' && x.msg === undefined && x.texto === m.texto && x.status === 'pendente'); if (i >= 0) { pendentes.delete(msgs[i].id); msgs.splice(i, 1); } } });
+        novas.forEach((m) => { if (m.direcao === 'saida') { const i = msgs.findIndex((x) => typeof x.id === 'string' && x.msg === undefined && x.texto === m.texto && x.tipo === m.tipo && x.status === 'pendente'); if (i >= 0) { pendentes.delete(msgs[i].id); msgs.splice(i, 1); } } });
         msgs = msgs.concat(novas);
         if (!noFim && entradas) novasAbaixo += entradas;
         pintarFio(noFim);
@@ -629,6 +805,7 @@
 
   /* ---------- cliques ---------- */
   async function clique(ev) {
+    if (ev.target && ev.target.id === 'ms-luz') { fecharLuz_(); return; }
     const b = ev.target.closest('[data-ms]'); if (!b) return;
     const a = b.dataset.ms;
     if (a !== 'menu-geral' && a !== 'menu-conversa') fecharMenu();
@@ -636,12 +813,17 @@
       if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { document.addEventListener('tk:camada-fechada', function f(e) { if (e.detail && e.detail.chave === 'ms-conversa') { document.removeEventListener('tk:camada-fechada', f); fecharComHistorico_('overlay-mensagens'); } }); TKCamadas.desempilhar('ms-conversa'); }
       else fecharComHistorico_('overlay-mensagens');
     }
-    else if (a === 'aba') { canal = b.dataset.canal; filtro = 'todas'; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); }
+    else if (a === 'aba') { canal = b.dataset.canal; filtro = 'todas'; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); }
     else if (a === 'filtro') { filtro = b.dataset.filtro; fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true); }
     else if (a === 'abrir') abrirConversa(Number(b.dataset.id));
     else if (a === 'abrir-canal') { canal = b.dataset.canal; fecharPainelSilencioso(); filtro = 'todas'; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); abrirConversa(Number(b.dataset.id)); }
     else if (a === 'voltar') voltarLista();
     else if (a === 'enviar') enviar();
+    else if (a === 'anexar') { const i = $('ms-arquivo'); if (i) i.click(); }
+    else if (a === 'anexo-tirar') limparAnexo_(true);
+    else if (a === 'gravar') gravarAudio_();
+    else if (a === 'luz-fechar') fecharLuz_();
+    else if (a === 'story-ver') { const mid = Number(b.dataset.id); try { abrirLuz_(b.dataset.video ? 'video' : 'imagem', await midiaBlob_(mid, true)); } catch (e) { aviso_('Não consegui abrir o story agora.'); } }
     else if (a === 'reenviar') enviar(b.dataset.tmp);
     else if (a === 'descartar') { pendentes.delete(b.dataset.tmp); msgs = msgs.filter((m) => m.id !== b.dataset.tmp); pintarFio(false); }
     else if (a === 'fim') { const f = $('ms-fio'); if (f) { f.scrollTop = f.scrollHeight; novasAbaixo = 0; atualizarPill(); marcarLida(); } }
