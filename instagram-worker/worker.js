@@ -100,7 +100,7 @@ async function iniciar(env) {
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN repostado_de INTEGER').run(); } catch (e) { /* já existe */ }
   /* Mensagens v2: lidas/não lidas, quem falta responder, estado de entrega e quem enviou pelo painel. */
-  for (const [t, col] of [['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  for (const [t, col] of [['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   try { await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgc_atu ON msg_conversa (atualizada_em)').run(); await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgm_st ON msg_mensagem (conversa_id, status_em)').run(); } catch (e) { /* tenta de novo depois */ }
   try {
     if (!(await cfgGet(env, 'mig_msg_v2'))) {
@@ -2388,7 +2388,12 @@ function normalizarWafly_(b) {
   const grupo = b.isGroup === true || /-group$|@g\.us$/.test(fone);
   const fromMe = b.fromMe === true;
   const ref = String(b.referenceMessageId || '').slice(0, 200);
-  return { extId: id, contato: fone.slice(0, 80), nome: String((grupo ? b.chatName : (fromMe ? b.chatName : b.senderName || b.chatName)) || '').slice(0, 120), grupo: grupo ? 1 : 0, direcao: fromMe ? 'saida' : 'entrada', tipo: tipo, texto: texto.slice(0, MSG_TEXTO_MAX), em: em,
+  // v2.9: em grupo, quem mandou cada mensagem (antes só ficava o nome do grupo e não dava para saber quem escreveu)
+  const soDig = (x) => String(x || '').replace(/@.*$/, '').replace(/\D/g, '').slice(0, 20);
+  const autorNome = grupo && !fromMe ? String(b.senderName || '').trim().slice(0, 80) : '';
+  const autorFone = grupo && !fromMe ? soDig(b.participantPhone) : '';
+  const autorLid = grupo && !fromMe ? soDig(b.participantLid) : '';
+  return { autorNome: autorNome, autorFone: autorFone, autorLid: autorLid, extId: id, contato: fone.slice(0, 80), nome: String((grupo ? b.chatName : (fromMe ? b.chatName : b.senderName || b.chatName)) || '').slice(0, 120), grupo: grupo ? 1 : 0, direcao: fromMe ? 'saida' : 'entrada', tipo: tipo, texto: texto.slice(0, MSG_TEXTO_MAX), em: em,
     midiaUrl: midiaUrl, midiaMime: midiaMime, midiaSeg: midiaSeg, ctxTipo: b.isStatusReply === true ? 'story' : (ref ? 'resposta' : ''), ctxRef: ref };
 }
 /** Evento "messaging" do webhook do Instagram (DM) -> linhas prontas. */
@@ -2517,9 +2522,10 @@ async function gravarMensagem_(env, canal, m) {
   }
   let story = { post: 0, aprox: 0 };
   if (m.ctxTipo === 'story' && !saida) { try { story = await resolverStory_(env, canal, m.em); } catch (e) { /* sem a imagem do story: a tela mostra só o aviso */ } }
-  const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em, midia_chave, midia_mime, midia_seg, midia_url, ctx_tipo, ctx_ref, ctx_post, ctx_aprox, ctx_chave) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t, m.midiaChave || '', String(m.midiaMime || '').slice(0, 80), Number(m.midiaSeg) || 0, m.midiaUrl || '', m.ctxTipo || '', m.ctxRef || '', story.post, story.aprox, m.ctxChave || '').run();
+  const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em, midia_chave, midia_mime, midia_seg, midia_url, ctx_tipo, ctx_ref, ctx_post, ctx_aprox, ctx_chave, autor_nome, autor_fone, autor_lid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t, m.midiaChave || '', String(m.midiaMime || '').slice(0, 80), Number(m.midiaSeg) || 0, m.midiaUrl || '', m.ctxTipo || '', m.ctxRef || '', story.post, story.aprox, m.ctxChave || '', m.autorNome || '', m.autorFone || '', m.autorLid || '').run();
   if (!r.meta || r.meta.changes !== 1) return false;
-  const previa = (m.texto || ('[' + m.tipo + ']')).replace(/\s+/g, ' ').slice(0, 140);
+  const quem = m.grupo && m.direcao === 'entrada' ? (m.autorNome || (m.autorFone ? '+' + m.autorFone : '')) : '';
+  const previa = ((quem ? quem + ': ' : '') + (m.texto || ('[' + m.tipo + ']'))).replace(/\s+/g, ' ').slice(0, 140);
   /* Em SQLite o lado direito do SET usa os valores ANTIGOS da linha: por isso a comparação com ultima_em/ult_entrada_em vale como "antes desta mensagem". */
   await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, atualizada_em=? WHERE id=?")
     .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, t, c.id).run();
@@ -2677,7 +2683,7 @@ async function aplicarLeiturasInstagram_(env, lst) {
 }
 const MSG_COLS_CONVERSA_ = "id, canal, contato, nome, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
 const MSG_Q_ = (c) => "(SELECT q." + c + " FROM msg_mensagem q WHERE q.canal=msg_mensagem.canal AND q.ext_id=msg_mensagem.ctx_ref AND msg_mensagem.ctx_ref<>'' LIMIT 1)";
-const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + MSG_Q_('texto') + " AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir";
+const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + MSG_Q_('texto') + " AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir";
 async function msgContagens_(env, canal) {
   const rs = await env.DB.prepare("SELECT canal, COUNT(*) AS conversas, SUM(CASE WHEN nao_lidas>0 THEN 1 ELSE 0 END) AS nao_lidas, SUM(CASE WHEN grupo=0 AND ult_dir='entrada' THEN 1 ELSE 0 END) AS sem_resposta, SUM(CASE WHEN grupo=1 THEN 1 ELSE 0 END) AS grupos FROM msg_conversa WHERE total>0" + (canal ? ' AND canal=?' : '') + ' GROUP BY canal').bind(...(canal ? [canal] : [])).all();
   const out = {}; for (const c of MSG_CANAIS) out[c] = { conversas: 0, nao_lidas: 0, sem_resposta: 0, grupos: 0 };
@@ -2825,8 +2831,10 @@ async function exportarMensagens_(env, q) {
   if (dia(q.de)) { onde.push('m.enviada_em>=?'); args.push(dia(q.de) + 'T03:00:00.000Z'); }
   if (dia(q.ate)) { onde.push('m.enviada_em<?'); args.push(new Date(Date.parse(dia(q.ate) + 'T03:00:00.000Z') + 86400000).toISOString()); }
   const LIM = 20000;
-  const rs = await env.DB.prepare('SELECT m.id, m.conversa_id, m.canal, m.direcao, m.tipo, m.texto, m.enviada_em, m.status, m.por, c.contato, c.nome, c.grupo FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id' + (onde.length ? ' WHERE ' + onde.join(' AND ') : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT ' + (LIM + 1)).bind(...args).all();
+  const rs = await env.DB.prepare('SELECT m.id, m.conversa_id, m.canal, m.direcao, m.tipo, m.texto, m.enviada_em, m.status, m.por, m.autor_nome, m.autor_fone, c.contato, c.nome, c.grupo FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id' + (onde.length ? ' WHERE ' + onde.join(' AND ') : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT ' + (LIM + 1)).bind(...args).all();
   let linhas = rs.results; const cortou = linhas.length > LIM; if (cortou) linhas = linhas.slice(0, LIM);
+  // v2.9: em grupo, "quem" é o nome (ou número) de quem mandou; nas conversas individuais continua "cliente"
+  const autorDe_ = (m) => (m.grupo && (m.autor_nome || m.autor_fone)) ? (m.autor_nome || '+' + m.autor_fone) : '';
   comDemora_(linhas);
   const formato = ['csv', 'txt', 'json'].includes(q.formato) ? q.formato : 'csv', hoje = fusoLocal_(agora()).slice(0, 10).replace(/-/g, '');
   const escopo = conversa ? 'conversa-' + conversa : (canal || 'todos-os-canais');
@@ -2834,17 +2842,17 @@ async function exportarMensagens_(env, q) {
   let corpo, tipo;
   if (formato === 'csv') {
     const cab = ['canal', 'conversa', 'contato', 'nome', 'grupo', 'data_hora', 'quem', 'tipo', 'texto', 'status', 'enviado_por_final', 'demora_primeira_resposta_min'];
-    corpo = '﻿' + cab.join(';') + '\r\n' + linhas.map((m) => [MSG_NOME_CANAL_[m.canal] || m.canal, m.conversa_id, m.contato, m.nome, m.grupo ? 'sim' : 'não', dataBR_(m.enviada_em), m.direcao === 'saida' ? 'loja' : 'cliente', m.tipo, m.texto, m.direcao === 'saida' ? (ROTULO_STATUS_[m.status] || m.status || '') : '', m.por || '', m.demora_min].map(csvCelula_).join(';')).join('\r\n') + (linhas.length ? '\r\n' : '');
+    corpo = '﻿' + cab.join(';') + '\r\n' + linhas.map((m) => [MSG_NOME_CANAL_[m.canal] || m.canal, m.conversa_id, m.contato, m.nome, m.grupo ? 'sim' : 'não', dataBR_(m.enviada_em), m.direcao === 'saida' ? 'loja' : (autorDe_(m) || 'cliente'), m.tipo, m.texto, m.direcao === 'saida' ? (ROTULO_STATUS_[m.status] || m.status || '') : '', m.por || '', m.demora_min].map(csvCelula_).join(';')).join('\r\n') + (linhas.length ? '\r\n' : '');
     tipo = 'text/csv; charset=utf-8';
   } else if (formato === 'json') {
     const porConv = new Map();
-    for (const m of linhas) { if (!porConv.has(m.conversa_id)) porConv.set(m.conversa_id, { conversa: m.conversa_id, canal: MSG_NOME_CANAL_[m.canal] || m.canal, contato: m.contato, nome: m.nome, grupo: !!m.grupo, mensagens: [] }); porConv.get(m.conversa_id).mensagens.push({ data_hora: dataBR_(m.enviada_em), iso: m.enviada_em, quem: m.direcao === 'saida' ? 'loja' : 'cliente', tipo: m.tipo, texto: m.texto, status: m.direcao === 'saida' ? (m.status || '') : undefined, demora_primeira_resposta_min: m.demora_min === '' ? undefined : m.demora_min }); }
+    for (const m of linhas) { if (!porConv.has(m.conversa_id)) porConv.set(m.conversa_id, { conversa: m.conversa_id, canal: MSG_NOME_CANAL_[m.canal] || m.canal, contato: m.contato, nome: m.nome, grupo: !!m.grupo, mensagens: [] }); porConv.get(m.conversa_id).mensagens.push({ data_hora: dataBR_(m.enviada_em), iso: m.enviada_em, quem: m.direcao === 'saida' ? 'loja' : (autorDe_(m) || 'cliente'), tipo: m.tipo, texto: m.texto, status: m.direcao === 'saida' ? (m.status || '') : undefined, demora_primeira_resposta_min: m.demora_min === '' ? undefined : m.demora_min }); }
     corpo = JSON.stringify({ exportado_em: agora(), fuso: 'America/Fortaleza (UTC-3)', cortado: cortou, conversas: Array.from(porConv.values()) }, null, 1); tipo = 'application/json; charset=utf-8';
   } else {
     const partes = []; let atual = null;
     for (const m of linhas) {
       if (m.conversa_id !== atual) { atual = m.conversa_id; partes.push((partes.length ? '\n' : '') + '=== ' + (MSG_NOME_CANAL_[m.canal] || m.canal) + ' · ' + rotuloContato_(m) + (m.grupo ? ' (grupo)' : '') + ' ===') ; }
-      const quem = m.direcao === 'saida' ? 'Loja' + (m.demora_min !== '' ? ' (respondeu em ' + m.demora_min + ' min)' : '') : 'Cliente';
+      const quem = m.direcao === 'saida' ? 'Loja' + (m.demora_min !== '' ? ' (respondeu em ' + m.demora_min + ' min)' : '') : (autorDe_(m) || 'Cliente');
       partes.push('[' + dataBR_(m.enviada_em) + '] ' + quem + ': ' + ((m.texto || '') + (m.tipo && m.tipo !== 'texto' ? (m.texto ? ' ' : '') + '[' + m.tipo + ']' : '')).replace(/\n/g, '\n    '));
     }
     corpo = '﻿# Conversas da TENKiTER Modas (horário de Fortaleza)\n# "Cliente" = quem escreveu para a loja; "Loja" = respostas da equipe.\n\n' + partes.join('\n') + '\n'; tipo = 'text/plain; charset=utf-8';

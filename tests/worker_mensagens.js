@@ -137,6 +137,16 @@ function d1() {
   chk('status@broadcast e outros eventos são ignorados', (await cont('msg_mensagem')) === 4);
   await wh('/wh/wafly/1/' + seg, msg('G1', '120363-group', 'oi grupo', { isGroup: true, chatName: 'Clientes TK' }));
   chk('grupo vira conversa de grupo com o nome do grupo', (await DB.prepare("SELECT grupo, nome FROM msg_conversa WHERE contato='120363-group'").first()).nome === 'Clientes TK');
+  // v2.9: em grupo, cada mensagem guarda quem mandou (nome, número e o código interno usado nas menções)
+  await wh('/wh/wafly/1/' + seg, msg('G2', '120363-group', '@266124864270572 bom dia', { isGroup: true, chatName: 'Clientes TK', senderName: 'Pablo', participantPhone: '5588988776655', participantLid: '111222333444555@lid', momment: 1792000120000 }));
+  const g2 = await DB.prepare("SELECT autor_nome, autor_fone, autor_lid FROM msg_mensagem WHERE ext_id='G2'").first();
+  chk('grupo: mensagem guarda o nome, o número e o código de quem mandou', g2.autor_nome === 'Pablo' && g2.autor_fone === '5588988776655' && g2.autor_lid === '111222333444555', g2);
+  chk('grupo: a prévia da conversa diz quem mandou', (await DB.prepare("SELECT previa FROM msg_conversa WHERE contato='120363-group'").first()).previa === 'Pablo: @266124864270572 bom dia');
+  chk('grupo: o nome da conversa continua o do grupo (não vira o de quem mandou)', (await DB.prepare("SELECT nome FROM msg_conversa WHERE contato='120363-group'").first()).nome === 'Clientes TK');
+  await wh('/wh/wafly/1/' + seg, msg('G3', '120363-group', 'eu mandei', { isGroup: true, chatName: 'Clientes TK', fromMe: true, participantPhone: '5588900000000', momment: 1792000180000 }));
+  chk('grupo: mensagem da própria loja não leva autor', (await DB.prepare("SELECT autor_nome || autor_fone AS a FROM msg_mensagem WHERE ext_id='G3'").first()).a === '');
+  const m1 = await DB.prepare("SELECT autor_nome, autor_fone FROM msg_mensagem WHERE ext_id='M1' AND canal='whatsapp1'").first();
+  chk('conversa individual não grava autor (já é a própria pessoa)', m1.autor_nome === '' && m1.autor_fone === '', m1);
   await wh('/wh/wafly/1/' + seg, msg('L1', '5588999990000', 'x'.repeat(9000)));
   chk('texto longo é cortado em 4000', (await DB.prepare("SELECT LENGTH(texto) n FROM msg_mensagem WHERE ext_id='L1'").first()).n === 4000);
 

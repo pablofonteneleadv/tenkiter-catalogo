@@ -163,6 +163,8 @@
       .ms-fio-wrap { flex: 1; min-height: 0; position: relative; background: #efe9dc; }
       .ms-fio { position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; }
       .ms-dia { align-self: center; background: #fff; color: #444; font-size: 0.74rem; padding: 3px 10px; border-radius: 10px; margin: 8px 0 4px; box-shadow: 0 1px 1px rgba(0,0,0,0.08); }
+      .ms-autor { display: block; font-size: 0.8rem; font-weight: 700; margin: 0 0 2px; white-space: normal; }
+      .ms-autor small { font-weight: 500; color: #625c53; margin-left: 6px; }
       .ms-bolha { max-width: min(82%, 520px); padding: 7px 10px 5px; border-radius: 12px; font-size: 0.92rem; overflow-wrap: anywhere; white-space: pre-wrap; box-shadow: 0 1px 1px rgba(0,0,0,0.08); }
       .ms-bolha.entrada { align-self: flex-start; background: #fff; color: #111; border-top-left-radius: 4px; }
       .ms-bolha.saida { align-self: flex-end; background: #d8f3e3; color: #0d3b24; border-top-right-radius: 4px; }
@@ -506,19 +508,44 @@
     bt.addEventListener('click', async () => { bt.disabled = true; try { const u = await midiaBlob_(m.id, false), a = document.createElement('a'); a.href = u; a.download = 'arquivo'; document.body.appendChild(a); a.click(); a.remove(); } catch (e) { aviso_('Não foi possível baixar o arquivo.'); } bt.disabled = false; });
     w.appendChild(bt); return w;
   }
+  /* v7.20: em grupo, quem mandou cada mensagem (nome do WhatsApp; sem nome, o número) com uma cor por pessoa, como no WhatsApp.
+   * Menções "@número" viram "@Nome" quando a pessoa já falou na conversa. Mensagens gravadas antes desta versão não têm o autor. */
+  const CORES_AUTOR_ = ['#0f6b3f', '#8a1259', '#0b5d8a', '#7a4a00', '#5b3d99', '#a52714', '#00695c', '#6b5b00'];
+  const foneBonito_ = (d) => { d = String(d || '').replace(/\D/g, ''); if (d.length === 13 && d.startsWith('55')) return '(' + d.slice(2, 4) + ') ' + d.slice(4, 9) + '-' + d.slice(9); if (d.length === 12 && d.startsWith('55')) return '(' + d.slice(2, 4) + ') ' + d.slice(4, 8) + '-' + d.slice(8); return d ? '+' + d : ''; };
+  const ehGrupo_ = () => !!(aberta && Number(aberta.grupo) === 1);
+  function nomesDoGrupo_() {
+    const mapa = {};
+    msgs.forEach((x) => { if (x.autor_nome) { if (x.autor_lid) mapa[x.autor_lid] = x.autor_nome; if (x.autor_fone) mapa[x.autor_fone] = x.autor_nome; } });
+    return mapa;
+  }
+  function trocarMencoes_(texto) {
+    if (!ehGrupo_() || texto.indexOf('@') === -1) return texto;
+    const mapa = nomesDoGrupo_();
+    return texto.replace(/@(\d{8,})/g, (t, n) => mapa[n] ? '@' + mapa[n] : (n.length >= 14 ? '@alguém do grupo' : '@' + foneBonito_(n)));
+  }
+  function autorEl_(m) {
+    if (!ehGrupo_() || m.direcao !== 'entrada' || !(m.autor_nome || m.autor_fone)) return null;
+    // cor pela ordem em que a pessoa aparece na conversa: as 8 primeiras nunca repetem
+    const chave = (x) => x.autor_fone || x.autor_lid || x.autor_nome || '', ordem = [];
+    msgs.slice().sort((x, y) => (x.enviada_em || '').localeCompare(y.enviada_em || '')).forEach((x) => { const k = chave(x); if (k && ordem.indexOf(k) === -1) ordem.push(k); });
+    const a = el('span', 'ms-autor', m.autor_nome || foneBonito_(m.autor_fone)); a.style.color = CORES_AUTOR_[Math.max(0, ordem.indexOf(chave(m))) % CORES_AUTOR_.length];
+    if (m.autor_nome && m.autor_fone) a.appendChild(el('small', '', foneBonito_(m.autor_fone)));
+    return a;
+  }
   function bolha(m) {
     let b = elMsgs.get(m.id);
-    const ass = [m.texto, m.tipo, m.status, m.erro || '', m.midia, m.localUrl || '', m.ctx_tipo || '', m.ctx_midia, m.ctx_texto || '', m.ctx_legenda || '', m.ctx_aprox].join('|');
+    const ass = [m.autor_nome || '', m.autor_fone || '', ehGrupo_() ? Object.keys(nomesDoGrupo_()).length : 0, m.texto, m.tipo, m.status, m.erro || '', m.midia, m.localUrl || '', m.ctx_tipo || '', m.ctx_midia, m.ctx_texto || '', m.ctx_legenda || '', m.ctx_aprox].join('|');
     if (b && b.dataset.ass === ass) return b;
     if (!b) { b = el('div'); elMsgs.set(m.id, b); }
     b.dataset.ass = ass; b.dataset.id = String(m.id); b.textContent = '';
     const falhou = m.status === 'falhou';
     b.className = 'ms-bolha ' + (m.direcao === 'saida' ? 'saida' : 'entrada') + (m.status === 'pendente' ? ' pendente' : '') + (falhou ? ' falhou' : '');
+    const autor = autorEl_(m); if (autor) b.appendChild(autor);
     if (m.ctx_tipo === 'story') b.appendChild(blocoStory_(m)); else if (m.ctx_tipo === 'resposta' && (m.ctx_texto || m.ctx_qtipo)) b.appendChild(blocoCitacao_(m));
     const mid = blocoMidia_(m); if (mid) b.appendChild(mid);
-    if (m.texto) linkar(b, m.texto);
+    if (m.texto) linkar(b, trocarMencoes_(m.texto));
     if (m.tipo && m.tipo !== 'texto' && !mid) b.appendChild(el('span', 'ms-tipo', (m.texto ? ' ' : '') + (TIPO_ROTULO[m.tipo] || '[' + m.tipo + ']') + (m.midia === 0 && m.direcao === 'entrada' && ['imagem', 'vídeo', 'áudio'].indexOf(m.tipo) >= 0 ? ' (arquivo não disponível)' : '')));
-    if (m.direcao === 'entrada' && typeof m.id === 'number' && !m.ctx_tipo && m.tipo === 'texto' && m.texto && m.texto.length <= 80 && (canalDaConversa() === 'whatsapp1' || canalDaConversa() === 'whatsapp2')) b.appendChild(botao('ms-ver-stories', 'Foi resposta a um story? Ver stories no ar', 'stories-no-ar', { id: String(m.id) }));
+    if (m.direcao === 'entrada' && typeof m.id === 'number' && !m.ctx_tipo && m.tipo === 'texto' && m.texto && m.texto.length <= 80 && !ehGrupo_() && (canalDaConversa() === 'whatsapp1' || canalDaConversa() === 'whatsapp2')) b.appendChild(botao('ms-ver-stories', 'Foi resposta a um story? Ver stories no ar', 'stories-no-ar', { id: String(m.id) }));
     const meta = el('span', 'ms-meta'); meta.appendChild(el('time', '', m.enviada_em ? hm(new Date(m.enviada_em)) : ''));
     if (m.direcao === 'saida') meta.appendChild(selo(m.status || 'enviada'));
     b.appendChild(meta);
