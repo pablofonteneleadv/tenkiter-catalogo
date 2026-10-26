@@ -189,7 +189,10 @@ body .tk-nav a .tk-r { font-size: 12px; }
     try {
       if (typeof produtos === 'undefined' || !produtos || !produtos.length) return false;
       produtos.forEach(canonizarProduto_);
-      if (tem('aplicarFiltros')) aplicarFiltros();
+      // v7.16: refaz também as opções dos menus (antes só refiltrava: "Blusa"/"Conjunto"/"Short"/"Vestido" ficavam
+      // no menu com 0 peças e sumiam, enquanto as peças já estavam como "Blusas"...). aplicarProdutosRecebidos chama aplicarFiltros.
+      if (tem('aplicarProdutosRecebidos')) aplicarProdutosRecebidos(produtos);
+      else if (tem('aplicarFiltros')) aplicarFiltros();
       return true;
     } catch (e) { return false; }
   }
