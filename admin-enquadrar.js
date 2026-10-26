@@ -51,9 +51,13 @@
 
   /* ---------- desenho ---------- */
   function fundoDesfocado(ctx, W, H, img) {
-    var t = document.createElement('canvas'); t.width = 36; t.height = Math.max(8, Math.round(36 * H / W));
-    var tc = t.getContext('2d'), s = Math.max(t.width / img.naturalWidth, t.height / img.naturalHeight);
-    tc.drawImage(img, (t.width - img.naturalWidth * s) / 2, (t.height - img.naturalHeight * s) / 2, img.naturalWidth * s, img.naturalHeight * s);
+    // v7.25: a miniatura do fundo é feita uma vez por foto (antes reduzia a foto inteira a cada desenho, duas vezes por quadro)
+    var th = Math.max(8, Math.round(36 * H / W)), cache = img.__tkFundo || (img.__tkFundo = {}), t = cache[th];
+    if (!t) {
+      t = cache[th] = document.createElement('canvas'); t.width = 36; t.height = th;
+      var tc = t.getContext('2d'), s = Math.max(t.width / img.naturalWidth, t.height / img.naturalHeight);
+      tc.drawImage(img, (t.width - img.naturalWidth * s) / 2, (t.height - img.naturalHeight * s) / 2, img.naturalWidth * s, img.naturalHeight * s);
+    }
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(t, 0, 0, W, H);
     ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(0, 0, W, H);
@@ -97,15 +101,29 @@
   function agendar() { if (!rafId) rafId = requestAnimationFrame(pintarTudo); }
 
   /* ---------- carregar a foto ---------- */
+  // v7.25: a foto vira um ImageBitmap, decodificado fora da tela. Antes o navegador decodificava a foto no primeiro desenho, travando a
+  // abertura da janela (no celular, vários segundos). Sem createImageBitmap (navegador antigo), segue pelo <img> como sempre foi.
+  function bitmap(b) {
+    return createImageBitmap(b, { imageOrientation: 'from-image' }).catch(function () { return createImageBitmap(b); })
+      .then(function (bmp) { bmp.naturalWidth = bmp.width; bmp.naturalHeight = bmp.height; return bmp; });
+  }
   function carregar(src) {
     return new Promise(function (resolve, reject) {
       function img(u, rev) {
-        var i = new Image(); i.onload = function () { if (rev) setTimeout(function () { URL.revokeObjectURL(u); }, 3000); resolve(i); };
+        var i = new Image(); i.decoding = 'async';
+        i.onload = function () { var ok = function () { if (rev) setTimeout(function () { URL.revokeObjectURL(u); }, 3000); resolve(i); }; if (i.decode) i.decode().then(ok, ok); else ok(); };
         i.onerror = function () { if (rev) URL.revokeObjectURL(u); reject(new Error('imagem')); }; i.src = u;
       }
-      if (/^(data|blob):/.test(src)) return img(src, false);
+      var temBitmap = typeof createImageBitmap === 'function';
+      if (/^(data|blob):/.test(src)) {
+        if (!temBitmap) return img(src, false);
+        return fetch(src).then(function (r) { return r.blob(); }).then(bitmap).then(resolve, function () { img(src, false); });
+      }
       fetch(src, { mode: 'cors' }).then(function (r) { if (!r.ok) throw new Error('http'); return r.blob(); })
-        .then(function (b) { img(URL.createObjectURL(b), true); }).catch(function () { reject(new Error('cors')); });
+        .then(function (b) {
+          if (!temBitmap) return img(URL.createObjectURL(b), true);
+          return bitmap(b).then(resolve, function () { img(URL.createObjectURL(b), true); });
+        }).catch(function () { reject(new Error('cors')); });
     });
   }
 
@@ -114,7 +132,7 @@
     if (css) return; css = true;
     var s = document.createElement('style');
     s.textContent = [
-      '.enq-ov{align-items:flex-end}',
+      '.enq-ov{align-items:flex-end;overscroll-behavior:contain}',
       '.enq-box{background:var(--branco,#fff);width:100%;max-width:560px;height:96dvh;max-height:96dvh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden}',
       '.enq-topo{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;font-family:"Poppins",sans-serif;font-size:1.02rem}',
       '.enq-corpo{flex:1 1 auto;overflow-y:auto;padding:4px 16px 12px;-webkit-overflow-scrolling:touch}',
@@ -285,7 +303,7 @@
   }
 
   /* ---------- abrir / fechar ---------- */
-  var aberta = false, trava = '';
+  var aberta = false;
   function abrir(op) {
     montar();
     $('#enq-ajustes').open = false;
@@ -295,7 +313,9 @@
     $('#enq-todas').textContent = 'Aplicar a todas (' + (op.quantidade || 0) + ')';
     var ok = $('#enq-ok'); ok.disabled = true; aviso('');
     $('#enq-voltar').hidden = !op.podeVoltar;
-    el.classList.add('aberto'); aberta = true; trava = document.documentElement.style.overflow; document.documentElement.style.overflow = 'hidden';
+    // v7.25: não trava mais a rolagem do documento (no painel com centenas de peças isso refazia o layout da página inteira e a janela demorava a abrir);
+    // a janela cobre a tela e segura a rolagem dela mesma (overscroll-behavior), como as outras janelas do painel
+    el.classList.add('aberto'); aberta = true;
     if (window.TKCamadas) TKCamadas.empilhar('enq', function () { sair(); });
     var cv = $('#enq-cv'); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height);
     aviso('Abrindo a foto…');
@@ -313,7 +333,7 @@
   function sair() {
     if (!aberta) return; aberta = false;
     if (el) el.classList.remove('aberto');
-    document.documentElement.style.overflow = trava || '';
+
     estado = null;
   }
   function fechar(aplicou) {

@@ -6,6 +6,15 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.25.0 — Enquadrar abre mais rápido (e o painel fica mais leve) — 2026-10-26
+
+- "✂ Enquadrar" abre em cerca de metade do tempo num celular simples: de ~1,5 s para ~0,7 s no teste com 540 peças.
+  - A foto é decodificada fora da tela (`createImageBitmap`) antes do primeiro desenho.
+  - O fundo desfocado é calculado uma vez por foto.
+  - A janela não trava mais a rolagem do documento inteiro.
+- Painel e todas as páginas: os vigias de acessibilidade (`a11y.js`), de ícones dos títulos e dos grupos de ferramentas olham só o que mudou, sem varrer a página inteira a cada alteração. O comportamento é o mesmo.
+- Service worker renovado (tk-3.38.13).
+
 ## 7.24.0 — Mensagens para o atendimento: produtos, respostas rápidas, filtros Mensagens/Grupos e seleção — 2026-10-26
 
 - Filtros da lista:
