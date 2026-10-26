@@ -34,3 +34,29 @@ body.pg-curriculos .acoes a { background: var(--tk-superficie); color: var(--tk-
 body.pg-curriculos .acoes a:first-child { background: #0f6b3f; border-color: #0f6b3f; color: #fff; }
 body.pg-curriculos .aviso, body.pg-curriculos .erro { border-radius: var(--tk-raio); }
 body.pg-curriculos .det { border-top-color: var(--tk-borda); }
+
+/* ---------- Treinamentos e Painel do RH (treinamentos.html) ----------
+ * Usa as variáveis da própria página (--surface, --border, --text, --muted, --accent),
+ * então o modo escuro que ela tem continua funcionando. */
+body.pg-treinamentos .topbar { border-bottom: 0 !important; background: #0d0d0d !important; padding: 8px 16px !important; min-height: 58px; }
+body.pg-treinamentos .topbar .btn { color: #f2eee7; border-color: rgba(255,255,255,.22); border-radius: var(--tk-raio-p); min-height: 40px; font-weight: 600; }
+body.pg-treinamentos .topbar .btn:hover { border-color: #f2eee7; }
+body.pg-treinamentos .btn { border-radius: var(--tk-raio-p); min-height: 44px; }
+body.pg-treinamentos .card { border-radius: var(--tk-raio); }
+body.pg-treinamentos .card:hover { border-color: var(--muted); }
+body.pg-treinamentos .login-card { border-radius: var(--tk-raio); box-shadow: none; }
+body.pg-treinamentos .field input, body.pg-treinamentos .ac-form input { min-height: 44px; border-radius: var(--tk-raio); font-size: 1rem; }
+body.pg-treinamentos .admin-tab { min-height: 44px; }
+body.pg-treinamentos .admin-tab.active { color: var(--text); border-bottom-color: var(--text); }
+body.pg-treinamentos .admin-mini-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: var(--tk-raio-p); margin: 0 4px 6px 0; text-decoration: none; }
+body.pg-treinamentos .admin-mini-btn:hover { border-color: var(--text); }
+body.pg-treinamentos .ac-chip { border-radius: var(--tk-raio-p); min-height: 40px; padding: 0 12px; }
+body.pg-treinamentos .ac-chip:has(input:checked) { border-color: var(--text); background: var(--surface-2); }
+body.pg-treinamentos .ac-form, body.pg-treinamentos .ajuda-rh { border-style: solid; border-radius: var(--tk-raio); }
+/* "Faça seu currículo": cartão neutro com o botão principal (era um bloco laranja com sombra) */
+body.pg-treinamentos .cv-aviso:not(.cv-incompleto):not(.cv-desistiu) { background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: none; border-radius: var(--tk-raio); }
+body.pg-treinamentos .cv-aviso:not(.cv-incompleto):not(.cv-desistiu) a.cv-btn { background: var(--accent); color: var(--on-accent); }
+body.pg-treinamentos .cv-aviso { border-radius: var(--tk-raio); }
+body.pg-treinamentos .cv-aviso a.cv-btn { border-radius: var(--tk-raio-p); min-height: 44px; display: inline-flex; align-items: center; font-weight: 700; }
+body.pg-treinamentos .btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+body.pg-treinamentos input[type=search], body.pg-treinamentos input[type=text], body.pg-treinamentos input[type=tel], body.pg-treinamentos select { min-height: 44px; border-radius: var(--tk-raio); font-size: 1rem; }
