@@ -86,7 +86,7 @@
       '<div class="sheet sheet-avisos" role="dialog" aria-modal="true" aria-labelledby="av-titulo">' +
         '<div class="sheet-topo"><h2 class="gestao-titulo" id="av-titulo">📢 Central de avisos</h2><button type="button" class="sheet-x" id="av-fechar" aria-label="Fechar">✕</button></div>' +
         '<div class="av-abas" role="tablist" aria-label="Seções">' +
-          [['enviar', '✉️ Enviar'], ['historico', '📜 Histórico'], ['modelos', '🧩 Modelos'], ['preparar', '⚙️ Preparar']].map((a) => '<button type="button" role="tab" id="av-aba-' + a[0] + '" data-aba="' + a[0] + '" aria-selected="false">' + a[1] + '</button>').join('') +
+          [['enviar', 'Enviar'], ['historico', 'Histórico'], ['modelos', 'Modelos'], ['preparar', 'Preparar']].map((a) => '<button type="button" role="tab" id="av-aba-' + a[0] + '" data-aba="' + a[0] + '" aria-selected="false">' + a[1] + '</button>').join('') +
         '</div>' +
         '<div class="gestao-corpo" id="av-corpo" role="tabpanel" aria-live="polite"></div>' +
       '</div>';
@@ -162,7 +162,7 @@
     const rascunho = telaEnviar.rascunho || {};
     const opcoesPublico = PUBLICOS.filter((p) => p[0] !== 'segmento' || (st.segmentos && st.segmentos.length > 1)).map((p) => '<option value="' + p[0] + '">' + esc(p[1] + contagemPublico(p[0])) + '</option>').join('');
     const aviso = !st.chaveConfigurada || st.webPronto === false
-      ? '<div class="av-aviso">⚠️ Os avisos ainda não estão prontos para chegar nos aparelhos. Veja a aba <b>⚙️ Preparar</b> (faltam passos no OneSignal).</div>' : '';
+      ? '<div class="av-aviso">⚠️ Os avisos ainda não estão prontos para chegar nos aparelhos. Veja a aba <b>Preparar</b> (faltam passos no OneSignal).</div>' : '';
     $('av-corpo').innerHTML = aviso +
       '<div class="av-bloco"><h3>1. Para quem</h3>' +
         '<label for="av-publico">Público</label><select id="av-publico">' + opcoesPublico + '</select>' +
@@ -382,7 +382,7 @@
     let desc = '';
     if (teste) {
       const id = await descobrirMeuPushId();
-      if (!id) { res.innerHTML = '<p class="av-erro">Para testar no seu aparelho, entre com sua conta (WhatsApp e senha) e ative os avisos neste aparelho na aba ⚙️ Preparar.</p>'; return; }
+      if (!id) { res.innerHTML = '<p class="av-erro">Para testar no seu aparelho, entre com sua conta (WhatsApp e senha) e ative os avisos neste aparelho na aba Preparar.</p>'; return; }
       corpo.audiencia = { tipo: 'pessoas', ids: [id] }; corpo.titulo = '[Teste] ' + titulo.slice(0, 70);
       desc = 'o seu aparelho (teste)';
     } else {

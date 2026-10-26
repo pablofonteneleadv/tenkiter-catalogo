@@ -4889,7 +4889,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const mostrarCatIni = pref.cat !== false && !!subtitulo;
 
     painel.innerHTML = `
-      <h3 style="margin-top:0;text-align:center;">🎨 Arte para Stories</h3>
+      <h3 class="aud-tit">🎨 Arte para Stories</h3>
 
       <div class="arte-preview-card" id="arte-preview-card">
         <div class="arte-preview-topo">
@@ -5969,7 +5969,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   })();
 </script>
 <script src="admin-gestao.js?v=7.19.0"></script>
-<script src="admin-push.js"></script>
+<script src="admin-push.js?v=7.19.0"></script>
 <script src="admin-conexoes.js"></script>
 <script src="admin-mensagens.js?v=7.19.0"></script>
 <script src="admin-instagram.js?v=7.17.0"></script>
@@ -5985,8 +5985,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
  * 2) Grupos de ferramentas: some o título do grupo quando a pessoa não tem nenhuma ferramenta dele. */
 (function () {
   var MAPA = [['📋', 'documento'], ['📢', 'sino'], ['📊', 'grafico'], ['⬆️', 'compartilhar'], ['⬆', 'compartilhar'], ['📸', 'camera'], ['🎨', 'pincel'],
-    ['💬', 'conversa'], ['🔗', 'link'], ['🧾', 'recibo'], ['⚙️', 'ferramenta'], ['📥', 'pacote'], ['📜', 'relogio'], ['🖼️', 'camera']];
-  var SEL = '.overlay-sheet.aberto .sheet-topo h2, .overlay-sheet.aberto .sheet-topo h3, .overlay-sheet.aberto .sheet-topo strong, .overlay-sheet.aberto .gestao-titulo, #overlay-compartilhar .aud-tit, .overlay-sheet.aberto .ms-titulo';
+    ['💬', 'conversa'], ['🔗', 'link'], ['🧾', 'recibo'], ['⚙️', 'ferramenta'], ['📥', 'pacote'], ['📜', 'relogio'], ['🖼️', 'camera'], ['🎨', 'pincel']];
+  var SEL = '.overlay-sheet.aberto .sheet-topo h2, .overlay-sheet.aberto .sheet-topo h3, .overlay-sheet.aberto .sheet-topo strong, .overlay-sheet.aberto .gestao-titulo, #overlay-compartilhar.aberto .aud-tit, .overlay-sheet.aberto .ms-titulo';
   function iconizar() {
     if (!window.TKIcone) return;
     document.querySelectorAll(SEL).forEach(function (h) {
