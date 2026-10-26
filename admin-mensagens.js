@@ -1,5 +1,5 @@
 /* ====================================================================
- * TENKiTER — admin-mensagens.js (v2.3) — CAIXA DE MENSAGENS (Admin total)
+ * TENKiTER — admin-mensagens.js (v2.4) — CAIXA DE MENSAGENS (Admin total)
  *  • Lista de conversas + conversa no estilo WhatsApp: responde por aqui (WhatsApp 1, WhatsApp 2 e Instagram),
  *    vê o que a loja enviou, entregue/lida, não lidas e quem ainda falta responder.
  *  • Atualiza ao vivo (consulta leve a cada poucos segundos, só com a tela aberta e visível) SEM redesenhar
@@ -15,14 +15,17 @@
   const CANAIS = [['whatsapp1', 'WhatsApp 1'], ['whatsapp2', 'WhatsApp 2'], ['instagram', 'Instagram']];
   const NOME_CANAL = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2', instagram: 'Instagram' };
   // v7.22: "Nos 2 WhatsApp" (a mesma pessoa falando pelos dois números) e "Encerradas" (saem da lista e voltam quando o cliente escreve)
-  const FILTROS = [['todas', 'Todas'], ['nao_lidas', 'Não lidas'], ['lidas', 'Lidas'], ['sem_resposta', 'Falta responder'], ['ambos', 'Nos 2 WhatsApp'], ['grupos', 'Grupos'], ['encerradas', 'Encerradas']];
+  // v7.24: "Mensagens" e "Grupos" ligam/desligam juntos ou separados (os dois = tudo); os demais filtros são de um em um e desligam com novo toque
+  const FILTROS = [['nao_lidas', 'Não lidas'], ['sem_resposta', 'Falta responder'], ['ambos', 'Nos 2 WhatsApp'], ['encerradas', 'Encerradas']];
   // v7.21: aba mestre "Todas" (os três canais juntos) vem primeiro e é a que abre
   const ABAS = [['todos', 'Todas']].concat(CANAIS);
   const NOME_CANAL_ = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2', instagram: 'Instagram' };
   const ESPERA_MS = Number(window.TK_MENSAGENS_POLL_MS) || 4000, ESPERA_MAX_MS = Number(window.TK_MENSAGENS_POLL_MS) ? 3000 : 30000, ESPERA_SELO_MS = Number(window.TK_MENSAGENS_POLL_MS) ? 1500 : 60000;
   let espiando = false, cfgLeitura = null, avisouCelular = {};
   let selecao = null, timerToque = null, toqueLongo = false;      // v7.22: seleção de várias conversas (para encerrar/reabrir)
-  let canal = 'todos', filtro = 'todas', busca = '', resumo = null, contagens = null, lista = [], cursor = '', aberta = null, msgs = [], vista = 'lista', painel = '';
+  let tipos = { msg: true, grp: true }, contVista = null, contTipos = null;
+  const tipoParam_ = () => (tipos.msg && !tipos.grp ? 'individual' : tipos.grp && !tipos.msg ? 'grupo' : '');
+  let canal = 'todos', filtro = '', busca = '', resumo = null, contagens = null, lista = [], cursor = '', aberta = null, msgs = [], vista = 'lista', painel = '';
   let seqLista = 0, ultIdSrv = 0, nPoll = 0, timerBusca = null, timerLive = null, timerSelo = null, espera = ESPERA_MS, offline = false, abrindo = 0, novasAbaixo = 0, menuAberto = null, aviso = '';
   const rascunhos = {}, elMsgs = new Map(), elConvs = new Map(), pendentes = new Map();
   const blobs = new Map();                     // mídia já baixada nesta conversa: "id" ou "id|c" (story) -> promessa do endereço local
@@ -82,6 +85,18 @@
   const TIPO_ROTULO = { 'imagem': '📷 Foto', 'vídeo': '🎬 Vídeo', 'áudio': '🎤 Áudio', 'documento': '📄 Documento', 'figurinha': 'Figurinha', 'contato': '👤 Contato', 'localização': '📍 Localização', 'reação': 'Reação', 'resposta': 'Resposta', 'compartilhamento': 'Compartilhamento', 'menção em story': 'Menção em story', 'reel': 'Reel' };
   const STATUS = { pendente: ['🕓', 'Enviando', ''], enviada: ['✓', 'Enviada', ''], entregue: ['✓✓', 'Entregue', ''], lida: ['✓✓', 'Lida', 'lida'], incerta: ['⚠', 'Sem confirmação', 'incerta'], falhou: ['⚠', 'Não enviada', 'incerta'] };
   function selo(status) { const s = STATUS[status] || STATUS.enviada, e = el('span', 'ms-tique ' + s[2], s[0]); e.title = s[1]; e.setAttribute('role', 'img'); e.setAttribute('aria-label', s[1]); return e; }
+  /** v7.24: *negrito*, _itálico_ e ~riscado~ do WhatsApp nas bolhas (sem HTML: cada trecho vira um elemento) */
+  function formatarWa_(pai, texto) {
+    const re = /(^|[\s(])([*_~])([^\s*_~](?:[^\n]*?[^\s])?)\2(?=$|[\s).,!?:;])/g; let i = 0, m;
+    while ((m = re.exec(texto))) {
+      const ini = m.index + m[1].length;
+      if (ini > i) linkar(pai, texto.slice(i, ini));
+      const tag = m[2] === '*' ? 'b' : m[2] === '_' ? 'i' : 's', e = el(tag); linkar(e, m[3]); pai.appendChild(e);
+      i = ini + m[2].length * 2 + m[3].length;
+    }
+    if (i < texto.length) linkar(pai, texto.slice(i));
+  }
+  const semFormatacao_ = (t) => String(t || '').replace(/(^|[\s(])([*_~])([^\s*_~](?:[^\n]*?[^\s])?)\2(?=$|[\s).,!?:;])/g, '$1$3');
   function linkar(pai, texto) {
     const re = /https?:\/\/[^\s<>"']+/g; let i = 0, m;
     while ((m = re.exec(texto))) {
@@ -188,13 +203,49 @@
       .ms-conv[aria-pressed=true] { background: #f5efe0; } .ms-conv[aria-pressed=true] .ms-marca { background: #141414; border-color: #141414; }
       .ms-selbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid #e6e1d6; background: #fff; }
       .ms-selbar[hidden] { display: none; }
-      .ms-selbar span { flex: 1; min-width: 0; font-weight: 700; font-size: 0.88rem; }
-      @media (max-width: 400px) { .ms-selbar span:not(.dica) { display: none; } .ms-selbar { justify-content: flex-end; } .ms-selbar span.dica { font-size: 0.8rem; } }
+      .ms-selbar { flex-direction: column; align-items: stretch; gap: 6px; }
+      .ms-sel-topo, .ms-sel-acoes { display: flex; align-items: center; gap: 8px; }
+      .ms-sel-n { flex: 1; min-width: 0; font-weight: 700; font-size: 0.88rem; }
+      .ms-sel-acoes .ms-btn { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px; }
+      .ms-chip-sep { flex: none; width: 1px; align-self: stretch; margin: 6px 2px; background: #e3ddd3; }
+      .ms-chip-tipo[aria-pressed=true] { background: #141414; border-color: #141414; color: #fff; }
       .ms-selbar .ms-btn { flex: none; }
       .ms-faixa { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #e6e1d6; background: #faf7f0; color: #3d362c; font-size: 0.85rem; }
       .ms-faixa.ambos { background: #fff4e8; border-bottom-color: #f2d3b0; color: #5c2e00; }
       .ms-faixa .ms-btn { flex: none; min-height: 40px; }
-      .ms-assina { display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #fff; font-size: 0.78rem; color: #4a443b; min-height: 32px; }
+      .ms-assina { display: flex; align-items: center; gap: 6px; padding: 0 8px; background: #fff; font-size: 0.78rem; color: #4a443b; min-height: 32px; box-shadow: inset 0 1px 0 #f0ece2; }
+      .sheet-mensagens .ms-ferr-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: #141414; font: 600 0.82rem/1 Inter, -apple-system, Roboto, Arial, sans-serif; cursor: pointer; }
+      .sheet-mensagens .ms-ferr-btn:hover, .sheet-mensagens .ms-ferr-btn:focus-visible { background: #f6f3ee; }
+      .ms-ferr-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; stroke-linecap: round; flex: none; }
+      .sheet-mensagens .ms-assina-btn { margin-left: auto; color: #4a443b; font-weight: 500; max-width: 45%; }
+      .ms-assina-btn b { color: #141414; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ms-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      .ms-conversa { position: relative; }
+      .ms-gaveta { position: absolute; inset: 0; z-index: 6; background: #fff; display: flex; flex-direction: column; }
+      @media (min-width: 860px) { .ms-gaveta { left: auto; width: min(420px, 100%); border-left: 1px solid #e6e1d6; box-shadow: -8px 0 24px rgba(0,0,0,0.08); } }
+      .ms-gaveta-cab { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; border-bottom: 1px solid #e6e1d6; }
+      .ms-gaveta-cab h3 { margin: 0; flex: 1; font-size: 1rem; }
+      .ms-gaveta-corpo { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 10px 0 16px; }
+      .sheet-mensagens .ms-busca-prod { margin-bottom: 4px; }
+      .ms-prod-filtro { padding: 0 12px; font-weight: 500; font-size: 0.85rem; }
+      .ms-prod-lista, .ms-resp-lista { list-style: none; margin: 0; padding: 0; }
+      .ms-prod { display: flex; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #f0ece2; }
+      .ms-prod-foto { flex: none; width: 72px; height: 90px; object-fit: cover; border-radius: 6px; background: #efe9dc; }
+      .ms-prod-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+      .ms-prod-info b { font-size: 0.9rem; overflow-wrap: anywhere; }
+      .ms-prod-preco { font-weight: 700; font-size: 0.85rem; color: #141414; }
+      .ms-prod-det { font-size: 0.78rem; color: #4a443b; overflow-wrap: anywhere; }
+      .ms-prod-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+      .ms-prod-acoes .ms-btn { min-height: 40px; padding: 6px 10px; font-size: 0.8rem; }
+      .sheet-mensagens .ms-resp { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; padding: 10px 14px; min-height: 56px; border: 0; border-bottom: 1px solid #f0ece2; background: #fff; font: inherit; cursor: pointer; }
+      .sheet-mensagens .ms-resp:hover, .sheet-mensagens .ms-resp:focus-visible { background: #faf7f0; }
+      .ms-resp b { font-size: 0.9rem; } .ms-resp span { font-size: 0.8rem; color: #4a443b; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: pre-line; }
+      .ms-gaveta-corpo > .ms-linha, .ms-gaveta-corpo > .ms-cfg-res { padding: 0 12px; margin-left: 0; }
+      .ms-resp-edit { padding: 0 12px; }
+      .ms-resp-item { border: 1px solid #e6e1d6; border-radius: 8px; padding: 8px 10px; margin: 0 0 8px; display: flex; flex-direction: column; gap: 6px; }
+      .ms-resp-item legend { font-size: 0.78rem; font-weight: 700; padding: 0 4px; }
+      .ms-resp-item textarea { font: inherit; font-size: 0.85rem; resize: vertical; }
+      .ms-bolha b { font-weight: 700; } .ms-bolha s { opacity: 0.8; }
       .ms-assina[hidden] { display: none; }
       .ms-assina b { color: #141414; }
       .ms-assina input { flex: 1 1 auto; min-width: 0; min-height: 40px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 8px; font: inherit; font-size: 0.9rem; }
@@ -338,6 +389,7 @@
   }
   function teclado(ev) {
     if (ev.key === 'Escape' && $('ms-luz')) { fecharLuz_(); ev.stopPropagation(); return; }
+    if (ev.key === 'Escape' && $('ms-gaveta')) { fecharGaveta_(); const t = $('ms-texto'); if (t) t.focus(); ev.stopPropagation(); return; }
     if (ev.key === 'Escape' && selecao && !menuAberto) { sairSelecao_(); ev.stopPropagation(); return; }
     if (ev.key === 'Escape' && menuAberto) { const d = menuAberto.dataset.dono, a = $(d); fecharMenu(); if (a) a.focus(); ev.stopPropagation(); }
   }
@@ -362,11 +414,17 @@
   }
   function desenharFiltros() {
     const f = $('ms-filtros'); if (!f) return;
-    const c = contagemDe_(canal);
+    const c = contVista || contagemDe_(canal), t = contTipos || { individuais: Math.max(0, (c.conversas || 0) - (c.grupos || 0)), grupos: c.grupos || 0 };
     f.textContent = '';
+    if (canal !== 'instagram') {
+      [['msg', 'Mensagens', t.individuais], ['grp', 'Grupos', t.grupos]].forEach(([id, nome, n]) => {
+        const b = botao('ms-chip ms-chip-tipo', nome + (n > 0 ? ' · ' + n : ''), 'tipo', { tipo: id }); b.setAttribute('aria-pressed', String(!!tipos[id])); f.appendChild(b);
+      });
+      f.appendChild(el('span', 'ms-chip-sep'));
+    }
     FILTROS.forEach(([id, nome]) => {
-      if (id === 'ambos' && canal === 'instagram') return;
-      const n = id === 'nao_lidas' ? c.nao_lidas : id === 'lidas' ? Math.max(0, c.conversas - c.nao_lidas) : id === 'sem_resposta' ? c.sem_resposta : id === 'grupos' ? c.grupos : id === 'ambos' ? c.ambos : id === 'encerradas' ? c.encerradas : 0;
+      if (id === 'ambos' && (canal === 'instagram' || !tipos.msg)) return;
+      const n = id === 'nao_lidas' ? c.nao_lidas : id === 'sem_resposta' ? c.sem_resposta : id === 'ambos' ? c.ambos : id === 'encerradas' ? c.encerradas : 0;
       const b = botao('ms-chip' + (id === 'ambos' && n > 0 ? ' alerta' : ''), nome + (n > 0 ? ' · ' + n : ''), 'filtro', { filtro: id }); b.setAttribute('aria-pressed', String(id === filtro)); f.appendChild(b);
     });
   }
@@ -497,7 +555,7 @@
     if (c.nome && !c.grupo && /^\d{10,15}$/.test(c.contato || '')) l3.appendChild(el('span', 'ms-fone', foneBonito_(c.contato)));
     const l2 = el('span', 'ms-l2'); const pv = el('span', 'ms-previa');
     if (saiu) { pv.appendChild(selo(c.ult_status || 'enviada')); pv.appendChild(document.createTextNode('Você: ')); }
-    const pr = /^\[(.+)\]$/.exec(c.previa || ''); pv.appendChild(document.createTextNode(pr ? (TIPO_ROTULO[pr[1]] || c.previa) : String(c.previa || '').replace(/^\*([^*\n]{1,30}):\* ?/, '$1: '))); l2.appendChild(pv);
+    const pr = /^\[(.+)\]$/.exec(c.previa || ''); pv.appendChild(document.createTextNode(pr ? (TIPO_ROTULO[pr[1]] || c.previa) : semFormatacao_(c.previa))); l2.appendChild(pv);
     if (nova) { const bd = el('span', 'ms-badge', c.nao_lidas > 99 ? '99+' : String(c.nao_lidas)); bd.setAttribute('aria-label', c.nao_lidas + ' não lidas'); l2.appendChild(bd); }
     corpo.append(l1, l2); if (l3.firstChild) corpo.appendChild(l3);
     if (espera) corpo.appendChild(el('span', 'ms-aguarda', 'Falta responder · há ' + espera_(c.ult_entrada_em || c.ultima_em)));
@@ -519,19 +577,147 @@
     return c.canal === 'instagram' ? n + ':\n' + texto : '*' + n + ':*\n' + texto;
   }
   const RE_ASSINATURA_ = /^\*([^*\n]{1,30}):\*\n/;
+  /* v7.24: barra acima da caixa de mensagem = ferramentas de atendimento (Produtos, Respostas rápidas) + a assinatura */
+  const ICO_ = {
+    sacola: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
+    raio: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3 5 14h6l-1 7 8-11h-6l1-7z"/></svg>',
+    lapis: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/></svg>'
+  };
+  function botaoIco_(cls, ico, texto, acao) { const b = botao(cls, '', acao); b.innerHTML = ICO_[ico]; b.appendChild(el('span', '', texto)); return b; }
   function desenharAssina_(editando) {
     const w = $('ms-assina'); if (!w) return;
-    w.textContent = ''; w.hidden = espiando || !assinaturaLigada_(); if (w.hidden) return;
-    const n = nomeAtendente_();
-    if (editando || !n) {
+    w.textContent = ''; w.hidden = espiando; if (w.hidden) return;
+    const n = nomeAtendente_(), lig = assinaturaLigada_();
+    if (lig && (editando || !n)) {
       const i = el('input'); i.id = 'ms-meu-nome-rapido'; i.type = 'text'; i.maxLength = 30; i.autocomplete = 'off'; i.value = n; i.placeholder = 'Seu nome nas respostas'; i.setAttribute('aria-label', 'Seu nome nas respostas');
       i.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); salvarNome_(i.value); } else if (ev.key === 'Escape' && n) { ev.stopPropagation(); desenharAssina_(false); } });
       w.append(el('span', '', 'Assinar como'), i, botao('ms-btn', 'Salvar', 'nome-salvar'));
       if (editando) setTimeout(() => i.focus(), 0);
       return;
     }
-    const t = el('span', ''); t.append(document.createTextNode('Respondendo como '), el('b', '', n));
-    w.append(t, botao('ms-link-btn', 'Mudar nome', 'nome-editar'));
+    w.append(botaoIco_('ms-ferr-btn', 'sacola', 'Produtos', 'gaveta-produtos'), botaoIco_('ms-ferr-btn', 'raio', 'Respostas', 'gaveta-respostas'));
+    if (lig) {
+      const b = botao('ms-ferr-btn ms-assina-btn', '', 'nome-editar'); b.title = 'Respondendo como ' + n + ' · tocar para mudar o nome';
+      b.append(el('span', 'ms-sr', 'Respondendo como '), el('b', '', n)); b.insertAdjacentHTML('beforeend', ICO_.lapis); b.setAttribute('aria-label', 'Respondendo como ' + n + '. Mudar nome');
+      w.appendChild(b);
+    }
+  }
+  /* ---- v7.24: gaveta da conversa (Produtos do catálogo e Respostas rápidas): por cima da conversa, sem perder o que foi digitado ---- */
+  const semAcento_ = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  function produtosCatalogo_() { try { return typeof window.tkProdutosLista === 'function' ? (window.tkProdutosLista() || []) : []; } catch (e) { return []; } }
+  const ativo_ = (p) => !p.Status || String(p.Status).trim().toLowerCase() === 'ativo';
+  const esgotado_ = (p) => p.Estoque !== '' && p.Estoque != null && Number(p.Estoque) <= 0;
+  function precoTexto_(p) {
+    if (!(Number(p.Preco) > 0)) return 'Consulte valor';
+    const f = typeof precoTerminacao === 'function' ? precoTerminacao(p.Preco) : null, v = f && f.valido ? f.avista : Number(p.Preco);
+    return (typeof formatarReal === 'function' ? formatarReal(v) : 'R$ ' + v.toFixed(2).replace('.', ',')) + ' à vista';
+  }
+  const tamanhosDe_ = (p) => String(p.Tamanhos || '').split(',').map((x) => x.trim()).filter(Boolean);
+  function linkDe_(p) { try { return typeof linkProduto === 'function' ? linkProduto(p) : ''; } catch (e) { return ''; } }
+  function textoProduto_(p) {
+    const tam = tamanhosDe_(p), wa = !aberta || aberta.canal !== 'instagram';
+    return [(wa ? '*' + p.Nome + '*' : p.Nome), precoTexto_(p), tam.length ? 'Tamanhos: ' + tam.join(', ') : '', p.Cores ? 'Cores: ' + p.Cores : '', linkDe_(p)].filter(Boolean).join('\n');
+  }
+  function colocarNaMensagem_(txt) {
+    const ta = $('ms-texto'); if (!ta) return;
+    ta.value = (ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n\n' : '') + txt;
+    ta.dispatchEvent(new Event('input', { bubbles: true })); fecharGaveta_(); ta.focus();
+    try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) { /* campo sem seleção */ }
+  }
+  /* o "voltar" do celular fecha a gaveta; cada gaveta tem um número para o "voltar" atrasado de uma gaveta anterior não fechar a nova */
+  let genGaveta = 0;
+  const removerAte_ = (n) => () => { const e = $('ms-gaveta'); if (e && Number(e.dataset.gen) <= n) e.remove(); };
+  document.addEventListener('tk:camada-fechada', (ev) => {
+    if (!ev.detail || ev.detail.chave !== 'ms-gaveta') return;
+    setTimeout(() => { const e = $('ms-gaveta'); if (e && window.TKCamadas && !TKCamadas.aberta('ms-gaveta')) TKCamadas.empilhar('ms-gaveta', removerAte_(Number(e.dataset.gen))); }, 0);
+  });
+  function fecharGaveta_() { const g = $('ms-gaveta'); if (!g) return; g.remove(); if (window.TKCamadas && TKCamadas.aberta('ms-gaveta')) TKCamadas.desempilhar('ms-gaveta'); }
+  function gaveta_(titulo) {
+    fecharGaveta_(); const pai = $('ms-conversa'); if (!pai) return null;
+    const g = el('div', 'ms-gaveta'); g.id = 'ms-gaveta'; g.setAttribute('role', 'dialog'); g.setAttribute('aria-label', titulo);
+    const cab = el('div', 'ms-gaveta-cab'); cab.appendChild(el('h3', '', titulo));
+    const x = botao('ms-ico', '✕', 'gaveta-fechar'); x.setAttribute('aria-label', 'Fechar ' + titulo); cab.appendChild(x);
+    const corpo = el('div', 'ms-gaveta-corpo'); g.append(cab, corpo); g.dataset.gen = String(++genGaveta); pai.appendChild(g);
+    if (window.TKCamadas && !TKCamadas.aberta('ms-gaveta')) TKCamadas.empilhar('ms-gaveta', removerAte_(genGaveta));
+    x.focus();                    // o foco entra na gaveta (Esc e leitor de tela); Produtos depois leva o foco para a busca
+    return corpo;
+  }
+  function abrirProdutos_() {
+    const corpo = gaveta_('Produtos'); if (!corpo) return;
+    const q = el('input', 'ms-busca ms-busca-prod'); q.id = 'ms-prod-busca'; q.type = 'search'; q.placeholder = 'Nome, código, cor ou tamanho'; q.setAttribute('aria-label', 'Buscar produto');
+    const so = el('label', 'ms-cfg-linha ms-prod-filtro'), chk = el('input'); chk.type = 'checkbox'; chk.id = 'ms-prod-estoque'; chk.checked = true; so.append(chk, document.createTextNode(' Só com estoque'));
+    const ul = el('ul', 'ms-prod-lista'); ul.id = 'ms-prod-lista'; ul.setAttribute('aria-live', 'polite');
+    corpo.append(q, so, ul);
+    const pintar = () => {
+      const termos = semAcento_(q.value).split(/\s+/).filter(Boolean);
+      let ps = produtosCatalogo_().filter(ativo_);
+      if (chk.checked) ps = ps.filter((p) => !esgotado_(p));
+      if (termos.length) ps = ps.filter((p) => { const t = semAcento_([p.Nome, p.Codigo, p.Categoria, p.Cores, p.Tamanhos, p.Genero].join(' ')); return termos.every((x) => t.indexOf(x) >= 0); });
+      ul.textContent = '';
+      if (!produtosCatalogo_().length) { ul.appendChild(el('li', 'ms-vazio', 'O catálogo ainda está carregando. Tente de novo em alguns segundos.')); return; }
+      if (!ps.length) { ul.appendChild(el('li', 'ms-vazio', termos.length ? 'Nenhum produto com “' + q.value.trim() + '”.' + (chk.checked ? ' Desmarque “Só com estoque” para ver os esgotados.' : '') : 'Nenhum produto ativo.')); return; }
+      ps.slice(0, 40).forEach((p) => {
+        const li = el('li', 'ms-prod');
+        const img = el('img', 'ms-prod-foto'); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
+        const src = typeof fotoMini === 'function' ? fotoMini(p.Foto_URL, 160) : p.Foto_URL; if (src) img.setAttribute('src', src);
+        const info = el('div', 'ms-prod-info');
+        info.appendChild(el('b', '', p.Nome || 'Sem nome'));
+        info.appendChild(el('span', 'ms-prod-preco', precoTexto_(p) + (p.Codigo ? ' · ' + p.Codigo : '')));
+        const tam = tamanhosDe_(p);
+        info.appendChild(el('span', 'ms-prod-det', (tam.length ? tam.join(' · ') : 'Tamanho não informado') + (esgotado_(p) ? ' · Esgotado' : p.Estoque !== '' && p.Estoque != null ? ' · ' + p.Estoque + ' em estoque' : '')));
+        const acoes = el('div', 'ms-prod-acoes');
+        acoes.appendChild(botao('ms-btn prim', 'Colocar na mensagem', 'prod-usar', { id: String(p.ID) }));
+        if (linkDe_(p)) acoes.appendChild(botao('ms-btn', 'Copiar link', 'prod-link', { id: String(p.ID) }));
+        info.appendChild(acoes);
+        li.append(img, info); ul.appendChild(li);
+      });
+      if (ps.length > 40) ul.appendChild(el('li', 'ms-vazio', 'Mostrando 40 de ' + ps.length + '. Escreva mais para achar mais rápido.'));
+    };
+    q.addEventListener('input', pintar); chk.addEventListener('change', pintar); pintar();
+    setTimeout(() => q.focus(), 0);
+  }
+  const produtoPorId_ = (id) => produtosCatalogo_().find((p) => String(p.ID) === String(id));
+  /* respostas rápidas: as da loja (salvas no servidor) ou, enquanto ninguém salvou, só com o que o site já sabe */
+  function respostasPadrao_() {
+    const L = typeof LOJA !== 'undefined' ? LOJA : null, site = typeof SITE_URL !== 'undefined' ? SITE_URL : '';
+    return [
+      L && L.endereco ? { t: 'Endereço da loja', x: 'Nosso endereço: ' + L.endereco + (L.mapaUrl ? '\nComo chegar: ' + L.mapaUrl : '') } : null,
+      site ? { t: 'Catálogo no site', x: 'Veja todas as peças no nosso catálogo: ' + site } : null,
+      L && L.instagramUrl ? { t: 'Instagram', x: 'Siga a gente no Instagram: ' + L.instagramUrl } : null
+    ].filter(Boolean);
+  }
+  const respostas_ = () => (cfgLeitura && Array.isArray(cfgLeitura.respostas) ? cfgLeitura.respostas : respostasPadrao_());
+  function abrirRespostas_(editando) {
+    const corpo = gaveta_('Respostas rápidas'); if (!corpo) return;
+    if (!editando) {
+      const lista = respostas_(), ul = el('ul', 'ms-resp-lista');
+      if (!lista.length) ul.appendChild(el('li', 'ms-vazio', 'Nenhuma resposta salva ainda.'));
+      lista.forEach((r, i) => { const li = el('li'), b = botao('ms-resp', '', 'resp-usar', { i: String(i) }); b.append(el('b', '', r.t), el('span', '', r.x)); li.appendChild(b); ul.appendChild(li); });
+      corpo.appendChild(ul);
+      const l = el('div', 'ms-linha'); l.appendChild(botao('ms-btn', 'Editar respostas', 'resp-editar')); corpo.appendChild(l);
+      if (!(cfgLeitura && Array.isArray(cfgLeitura.respostas))) corpo.appendChild(el('p', 'ms-cfg-res', 'Estas são as respostas iniciais, com o que o site já sabe da loja. Em “Editar respostas” dá para colocar horário, formas de pagamento, entrega e o que mais a equipe repete.'));
+      return;
+    }
+    const lista = respostas_().map((r) => ({ t: r.t, x: r.x })), box = el('div', 'ms-resp-edit'); box.id = 'ms-resp-edit';
+    const desenhar = () => {
+      box.textContent = '';
+      lista.forEach((r, i) => {
+        const f = el('fieldset', 'ms-resp-item'); f.appendChild(el('legend', '', 'Resposta ' + (i + 1)));
+        const t = el('input', 'ms-copia'); t.value = r.t; t.maxLength = 40; t.placeholder = 'Título (ex.: Horário)'; t.setAttribute('aria-label', 'Título da resposta ' + (i + 1)); t.addEventListener('input', () => { r.t = t.value; });
+        const x = el('textarea', 'ms-copia'); x.value = r.x; x.maxLength = 1000; x.rows = 3; x.placeholder = 'Texto que vai para o cliente'; x.setAttribute('aria-label', 'Texto da resposta ' + (i + 1)); x.addEventListener('input', () => { r.x = x.value; });
+        const rm = botao('ms-link-btn', 'Remover', ''); rm.addEventListener('click', () => { lista.splice(i, 1); desenhar(); });
+        f.append(t, x, rm); box.appendChild(f);
+      });
+      const l = el('div', 'ms-linha'), add = botao('ms-btn', '+ Nova resposta', '');
+      add.addEventListener('click', () => { if (lista.length >= 30) return; lista.push({ t: '', x: '' }); desenhar(); const ins = box.querySelectorAll('input'); if (ins.length) ins[ins.length - 1].focus(); });
+      const salvar = botao('ms-btn prim', 'Salvar respostas', ''); salvar.addEventListener('click', async () => {
+        salvar.disabled = true; const r = await worker_('/msg/config', 'POST', { respostas: lista.filter((z) => z.t.trim() && z.x.trim()) }); salvar.disabled = false;
+        if (!r.ok) { aviso_(r.erro || 'Não foi possível salvar agora.'); return; }
+        cfgLeitura = Object.assign({}, cfgLeitura || {}, { respostas: r.respostas || [] }); aviso_('Respostas salvas para toda a equipe.'); abrirRespostas_(false);
+      });
+      l.append(add, salvar); box.appendChild(l);
+    };
+    desenhar(); corpo.appendChild(box);
   }
   async function salvarNome_(v) {
     const r = await worker_('/msg/config', 'POST', { meuNome: String(v || '') });
@@ -550,10 +736,29 @@
     const bar = $('ms-selbar'); if (!bar) return;
     bar.textContent = ''; bar.hidden = !selecao; if (!selecao) return;
     const n = selecao.size, reabrir = filtro === 'encerradas';
-    bar.appendChild(el('span', n ? '' : 'dica', n ? n + (n === 1 ? ' selecionada' : ' selecionadas') : 'Toque nas conversas'));
-    bar.appendChild(botao('ms-btn', lista.length && lista.every((c) => selecao.has(c.id)) ? 'Nenhuma' : 'Todas', 'sel-todas'));
-    const acao = botao('ms-btn prim', (reabrir ? 'Reabrir' : 'Encerrar') + (n ? ' ' + n : ''), 'sel-encerrar'); acao.disabled = !n; bar.appendChild(acao);
-    bar.appendChild(botao('ms-btn', 'Cancelar', 'sel-sair'));
+    const topo = el('div', 'ms-sel-topo');
+    topo.appendChild(el('span', n ? 'ms-sel-n' : 'ms-sel-n dica', n ? n + (n === 1 ? ' selecionada' : ' selecionadas') : 'Toque nas conversas'));
+    topo.appendChild(botao('ms-btn', lista.length && lista.every((c) => selecao.has(c.id)) ? 'Nenhuma' : 'Todas', 'sel-todas'));
+    const x = botao('ms-btn', 'Cancelar', 'sel-sair'); topo.appendChild(x);
+    // v7.24: ferramentas da seleção (lidas e não lidas aqui; lidas também no celular quando a opção do canal está ligada)
+    const acoes = el('div', 'ms-sel-acoes');
+    [['sel-lidas', 'Marcar lidas'], ['sel-naolidas', 'Não lidas'], ['sel-encerrar', (reabrir ? 'Reabrir' : 'Encerrar') + (n ? ' ' + n : '')]].forEach(([acao, txt], i) => {
+      const b = botao('ms-btn' + (i === 2 ? ' prim' : ''), txt, acao); b.disabled = !n; acoes.appendChild(b);
+    });
+    bar.append(topo, acoes);
+  }
+  async function marcarLote_(ids, naoLida) {
+    if (!ids.length) return;
+    const r = await worker_('/msg/lida', 'POST', { conversas: ids, naoLida: !!naoLida, celular: !naoLida });
+    if (!r.ok) { aviso_(r.erro || 'Não foi possível agora. Tente de novo.'); return; }
+    if (r.contagens) contagens = Object.assign({}, contagens || {}, r.contagens);
+    const n = r.alteradas || ids.length, cel = r.celular || {};
+    let t = naoLida ? (n === 1 ? 'Marcada como não lida (só aqui no painel).' : n + ' marcadas como não lidas (só aqui no painel).') : (n === 1 ? 'Marcada como lida.' : n + ' marcadas como lidas.');
+    if (!naoLida && cel.falhas) t += ' O celular não confirmou ' + cel.falhas + (cel.falhas === 1 ? ' delas' : ' delas') + ' (veja ⋯ → Configurações).';
+    aviso_(t);
+    if (aberta && ids.indexOf(aberta.id) >= 0) aberta.nao_lidas = naoLida ? 1 : 0;
+    selecao = null; desenharSelbar_(); desenharAbas(); selarBotao();
+    await carregarLista(true);
   }
   async function encerrar_(ids, reabrir) {
     if (!ids.length) return;
@@ -575,16 +780,17 @@
     lista.forEach((c) => { const li = linhaConversa(c); if (li !== ref) ul.insertBefore(li, ref); else ref = ref.nextSibling; });
     extra.textContent = '';
     if (!lista.length) {
-      const m = busca.trim() ? 'Nenhuma conversa encontrada.' : filtro === 'nao_lidas' ? 'Nenhuma conversa não lida. 🎉' : filtro === 'lidas' ? 'Nenhuma conversa lida ainda.' : filtro === 'sem_resposta' ? 'Ninguém esperando resposta agora. 🎉' : filtro === 'grupos' ? 'Nenhum grupo neste canal.' : filtro === 'ambos' ? 'Ninguém está falando pelos dois WhatsApp agora.' : filtro === 'encerradas' ? 'Nenhuma conversa encerrada. Para encerrar, segure o dedo numa conversa (ou ⋯ → Selecionar conversas).' : 'Ainda não chegou nenhuma mensagem neste canal.';
+      const m = busca.trim() ? 'Nenhuma conversa encontrada.' : filtro === 'nao_lidas' ? 'Nenhuma conversa não lida. 🎉' : filtro === 'sem_resposta' ? 'Ninguém esperando resposta agora. 🎉' : tipoParam_() === 'grupo' && !filtro ? 'Nenhum grupo aqui.' : filtro === 'ambos' ? 'Ninguém está falando pelos dois WhatsApp agora.' : filtro === 'encerradas' ? 'Nenhuma conversa encerrada. Para encerrar, segure o dedo numa conversa (ou ⋯ → Selecionar conversas).' : 'Ainda não chegou nenhuma mensagem neste canal.';
       extra.appendChild(el('p', 'ms-vazio', m));
     }
   }
   async function carregarLista(reset) {
-    const mine = ++seqLista, c0 = canal, f0 = filtro, b0 = busca.trim();
-    const r = await worker_('/msg/conversas?canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (b0 ? '&busca=' + encodeURIComponent(b0) : ''), 'GET');
-    if (mine !== seqLista || c0 !== canal || f0 !== filtro || b0 !== busca.trim()) return;       // resposta velha de outra aba/filtro/busca: ignora
+    const mine = ++seqLista, c0 = canal, f0 = filtro, b0 = busca.trim(), t0 = tipoParam_();
+    const r = await worker_('/msg/conversas?canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : ''), 'GET');
+    if (mine !== seqLista || c0 !== canal || f0 !== filtro || b0 !== busca.trim() || t0 !== tipoParam_()) return;       // resposta velha de outra aba/filtro/busca: ignora
     if (!r.ok) { if (reset || !lista.length) { lista = []; pintarLista(); $('ms-extra').textContent = ''; $('ms-extra').appendChild(el('p', 'ms-vazio', r.erro || 'Não foi possível carregar agora.')); } return; }
-    lista = r.conversas; contagens = Object.assign({}, contagens || {}, { [canal]: r.contagens }); cursor = r.cursor || cursor;
+    lista = r.conversas; contVista = r.contagens || null; contTipos = r.tipos || null; cursor = r.cursor || cursor;
+    if (!t0) contagens = Object.assign({}, contagens || {}, { [canal]: r.contagens });      // as abas mostram sempre o total do canal
     desenharFiltros(); desenharAbas(); pintarLista();
   }
 
@@ -727,7 +933,7 @@
     const sig = m.direcao === 'saida' && m.texto ? RE_ASSINATURA_.exec(m.texto) : null;
     if (sig) b.appendChild(el('span', 'ms-autor ms-atendente', sig[1]));
     const corpoTxt = sig ? m.texto.slice(sig[0].length) : m.texto;
-    if (corpoTxt) linkar(b, trocarMencoes_(corpoTxt));
+    if (corpoTxt) formatarWa_(b, trocarMencoes_(corpoTxt));
     if (m.tipo && m.tipo !== 'texto' && !mid) b.appendChild(el('span', 'ms-tipo', (m.texto ? ' ' : '') + (TIPO_ROTULO[m.tipo] || '[' + m.tipo + ']') + (m.midia === 0 && m.direcao === 'entrada' && ['imagem', 'vídeo', 'áudio'].indexOf(m.tipo) >= 0 ? ' (arquivo não disponível)' : '')));
     if (m.direcao === 'entrada' && typeof m.id === 'number' && !m.ctx_tipo && m.tipo === 'texto' && m.texto && m.texto.length <= 80 && !ehGrupo_() && (canalDaConversa() === 'whatsapp1' || canalDaConversa() === 'whatsapp2')) b.appendChild(botao('ms-ver-stories', 'Foi resposta a um story? Ver stories no ar', 'stories-no-ar', { id: String(m.id) }));
     const meta = el('span', 'ms-meta'); meta.appendChild(el('time', '', m.enviada_em ? hm(new Date(m.enviada_em)) : ''));
@@ -774,6 +980,7 @@
     return '';
   }
   function montarConversa(c) {
+    if ($('ms-gaveta')) fecharGaveta_();
     const pai = $('ms-conversa'); pai.textContent = '';
     pai.appendChild(cabecalhoConversa(c));
     if (c.outro_id) {
@@ -881,6 +1088,7 @@
     if (larga() && !espiando) { const t = $('ms-texto'); if (t) t.focus(); }
   }
   function voltarLista() {
+    if ($('ms-gaveta')) fecharGaveta_();
     if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { TKCamadas.desempilhar('ms-conversa'); return; }
     vista = 'lista'; const a = $('ms-app'); if (a) a.dataset.vista = 'lista';
   }
@@ -1079,22 +1287,37 @@
       if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { document.addEventListener('tk:camada-fechada', function f(e) { if (e.detail && e.detail.chave === 'ms-conversa') { document.removeEventListener('tk:camada-fechada', f); fecharComHistorico_('overlay-mensagens'); } }); TKCamadas.desempilhar('ms-conversa'); }
       else fecharComHistorico_('overlay-mensagens');
     }
-    else if (a === 'aba') { selecao = null; desenharSelbar_(); canal = b.dataset.canal; filtro = 'todas'; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); }
-    else if (a === 'filtro') { filtro = b.dataset.filtro; if (selecao) { selecao.clear(); desenharSelbar_(); } fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true); }
+    else if (a === 'aba') { selecao = null; desenharSelbar_(); contVista = null; contTipos = null; canal = b.dataset.canal; filtro = ''; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); }
+    else if (a === 'tipo') {
+      const k = b.dataset.tipo, outro = k === 'msg' ? 'grp' : 'msg';
+      if (tipos[k] && !tipos[outro]) { tipos[k] = false; tipos[outro] = true; } else tipos[k] = !tipos[k];       // desligar o único ligado = mostrar o outro (nunca fica tudo desligado)
+      if (!tipos.msg && filtro === 'ambos') filtro = '';
+      if (selecao) { selecao.clear(); desenharSelbar_(); }
+      fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true);
+    }
+    else if (a === 'filtro') { filtro = filtro === b.dataset.filtro ? '' : b.dataset.filtro; if (selecao) { selecao.clear(); desenharSelbar_(); } fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true); }
     else if (a === 'abrir') { if (toqueLongo) { toqueLongo = false; return; } if (selecao) { const id = Number(b.dataset.id); if (selecao.has(id)) selecao.delete(id); else selecao.add(id); pintarLista(); desenharSelbar_(); } else abrirConversa(Number(b.dataset.id)); }
     else if (a === 'selecionar') iniciarSelecao_(0);
     else if (a === 'nome-editar') desenharAssina_(true);
+    else if (a === 'gaveta-produtos') abrirProdutos_();
+    else if (a === 'gaveta-respostas') abrirRespostas_(false);
+    else if (a === 'gaveta-fechar') { fecharGaveta_(); const t = $('ms-texto'); if (t) t.focus(); }
+    else if (a === 'resp-editar') abrirRespostas_(true);
+    else if (a === 'resp-usar') { const r = respostas_()[Number(b.dataset.i)]; if (r) colocarNaMensagem_(r.x); }
+    else if (a === 'prod-usar') { const p = produtoPorId_(b.dataset.id); if (p) colocarNaMensagem_(textoProduto_(p)); }
+    else if (a === 'prod-link') { const p = produtoPorId_(b.dataset.id); if (p) { try { await navigator.clipboard.writeText(linkDe_(p)); aviso_('Link copiado.'); } catch (e) { aviso_('Não consegui copiar. Use “Colocar na mensagem”.'); } } }
     else if (a === 'nome-salvar') { const i = $('ms-meu-nome-rapido'); await salvarNome_(i ? i.value : ''); const t = $('ms-texto'); if (t) t.focus(); }
     else if (a === 'nome-salvar-cfg') { const i = $('ms-meu-nome'); await salvarNome_(i ? i.value : ''); }
     else if (a === 'sel-sair') sairSelecao_();
     else if (a === 'sel-todas' && selecao) { const todas = lista.length && lista.every((c) => selecao.has(c.id)); selecao = new Set(todas ? [] : lista.map((c) => c.id)); pintarLista(); desenharSelbar_(); }
     else if (a === 'sel-encerrar' && selecao) await encerrar_(Array.from(selecao), filtro === 'encerradas');
+    else if ((a === 'sel-lidas' || a === 'sel-naolidas') && selecao) await marcarLote_(Array.from(selecao), a === 'sel-naolidas');
     else if ((a === 'encerrar' || a === 'reabrir') && aberta) { const id = aberta.id; await encerrar_([id], a === 'reabrir'); if (aberta && aberta.id === id) { montarConversa(aberta); pintarFio(true); } if (a === 'encerrar') voltarLista(); }
-    else if (a === 'abrir-outro') { if (canal !== 'todos') { canal = b.dataset.canal; filtro = 'todas'; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); } abrirConversa(Number(b.dataset.id)); }
+    else if (a === 'abrir-outro') { if (canal !== 'todos') { canal = b.dataset.canal; filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); } abrirConversa(Number(b.dataset.id)); }
     else if (a === 'espiar') abrirConversa(Number(b.dataset.id), true);
     else if (a === 'atender' && aberta) { espiando = false; aberta.nao_lidas = Math.max(1, aberta.nao_lidas || 0); montarConversa(aberta); pintarFio(true); marcarLida(); const t = $('ms-texto'); if (t) t.focus(); }
     else if (a === 'leitura-cfg') { painel = painel === 'leitura' ? '' : 'leitura'; if (painel === 'leitura') cfgLeitura = null; desenharEstado(); }
-    else if (a === 'abrir-canal') { canal = b.dataset.canal; fecharPainelSilencioso(); filtro = 'todas'; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); abrirConversa(Number(b.dataset.id)); }
+    else if (a === 'abrir-canal') { canal = b.dataset.canal; fecharPainelSilencioso(); filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); abrirConversa(Number(b.dataset.id)); }
     else if (a === 'voltar') voltarLista();
     else if (a === 'enviar') enviar();
     else if (a === 'anexar') { const i = $('ms-arquivo'); if (i) i.click(); }

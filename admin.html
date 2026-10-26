@@ -205,6 +205,16 @@
   .menu-cad-item b { display: block; font-size: 0.95rem; }
   .menu-cad-item small { color: #555; font-size: 0.78rem; }
   .menu-cad-item[hidden] { display: none; }
+  /* v7.23: desenho "fotos → produtos" no lugar do ícone */
+  .menu-cad-item .mc-eq { flex: none; display: inline-flex; align-items: center; gap: 4px; width: 76px; }
+  .mc-eq .mc-fotos, .mc-eq .mc-prods { display: inline-flex; flex-direction: column; gap: 2px; }
+  .mc-eq .mc-fotos i { display: block; width: 18px; height: 11px; border: 1.5px solid #8a8378; border-radius: 3px; box-sizing: border-box; }
+  .mc-eq .mc-seta { color: #8a8378; font-size: .8rem; font-weight: 700; }
+  .mc-eq .mc-prods { min-height: 37px; justify-content: center; }
+  .mc-eq .mc-prods i { display: flex; align-items: center; justify-content: center; width: 22px; height: 11px; border-radius: 3px; background: #141414; color: #fff; font: 700 .55rem/1 Inter, -apple-system, Roboto, Arial, sans-serif; font-style: normal; }
+  #menu-cad-nova .mc-eq .mc-prods i { height: 37px; font-size: .8rem; }
+  .passo-sub { margin: -2px 0 10px; font-size: .82rem; color: #5c3a00; }
+  @media (max-width: 360px) { .menu-cad-item .mc-eq { width: 50px; gap: 2px; } .mc-eq .mc-fotos i { width: 13px; } .mc-eq .mc-prods i { width: 18px; } .menu-cad-item { gap: 8px; } }
   .cad-badge { background: var(--laranja); color: #0d0d0d; border-radius: 999px; padding: 1px 8px; font-size: .78rem; margin-left: 6px; }
   #card-form:not([open]) { display: none; }
   #ig-faixa { margin: 0; }
@@ -915,7 +925,7 @@
 }
 
 </style>
-<link rel="stylesheet" href="acabamento-admin.css?v=7.19.0">
+<link rel="stylesheet" href="acabamento-admin.css?v=7.23.0">
 </head>
 <body>
 
@@ -1110,8 +1120,9 @@
     <summary><span><span class="ic" data-ico="mais">➕</span> Cadastrar <b id="cad-badge" class="cad-badge" hidden></b></span></summary>
     <div class="menu-cad">
       <div id="ig-faixa" hidden></div>
-      <button type="button" class="menu-cad-item" id="menu-cad-nova"><span class="mc-ic" data-ico="camera">➕</span><span><b>Cadastrar nova peça</b><small>Uma peça, com fotos e vídeo</small></span></button>
-      <button type="button" class="menu-cad-item" id="menu-cad-varias"><span class="mc-ic" data-ico="copiar">📂&#65039;</span><span><b>Cadastrar várias peças</b><small>Mesmos dados, uma foto por peça</small></span></button>
+      <!-- v7.23: o desenho mostra a diferença sem texto longo: várias fotos → 1 produto, ou várias fotos → 1 produto para cada foto -->
+      <button type="button" class="menu-cad-item" id="menu-cad-nova"><span class="mc-eq" aria-hidden="true"><span class="mc-fotos"><i></i><i></i><i></i></span><span class="mc-seta">→</span><span class="mc-prods"><i>1</i></span></span><span><b>Cadastrar UM produto</b><small>Até 8 fotos e 3 vídeos, tudo no mesmo produto</small></span></button>
+      <button type="button" class="menu-cad-item" id="menu-cad-varias"><span class="mc-eq" aria-hidden="true"><span class="mc-fotos"><i></i><i></i><i></i></span><span class="mc-seta">→</span><span class="mc-prods"><i>1</i><i>2</i><i>3</i></span></span><span><b>Cadastrar vários produtos</b><small>Cada foto vira um produto, com o mesmo título, valor, tamanho e cor</small></span></button>
     </div>
   </details>
 
@@ -1133,7 +1144,8 @@
       <input type="hidden" id="produto-id">
 
       <section class="passo" data-passo="fotos">
-        <div class="passo-tit"><span class="num">1</span>Fotos da peça <i class="obg">*</i><span class="passo-cont" id="galeria-contador">(0 de 8)</span></div>
+        <div class="passo-tit"><span class="num">1</span><span id="passo-fotos-nome">Fotos da peça</span> <i class="obg">*</i><span class="passo-cont" id="galeria-contador">(0 de 8)</span></div>
+        <p class="passo-sub" id="passo-fotos-varias" hidden>Cada foto vira um produto separado, com os dados que você preencher abaixo.</p>
         <div class="foto-box" id="galeria-box">
           <label class="btn-foto" for="galeria-input"><span class="ic" data-ico="camera">📷</span> Tirar foto ou escolher da galeria</label>
           <input type="file" id="galeria-input" accept="image/*" multiple class="input-oculto">
@@ -1849,6 +1861,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   });
 
   let categorias = [], generos = [], produtos = [];
+  window.tkProdutosLista = () => produtos;   // v7.24: a tela de Mensagens procura produtos no catálogo já carregado (sem nova chamada ao servidor)
   let catGestaoNoServidor_ = false; // o backend (3.2+) sabe apagar/renomear categoria; só liga os botões se disser que sabe
   let editandoCat_ = null;          // categoria que está sendo renomeada agora (linha vira campo de edição)
   let ocupadoCat_ = false;          // uma chamada de apagar/renomear em andamento
@@ -1950,7 +1963,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       img.addEventListener('click', () => abrirFotoGrandeForm_(idx));
       box.appendChild(img);
 
-      if (it.capa) { const s = document.createElement('span'); s.className = 'selo-capa'; s.textContent = '★ CAPA'; box.appendChild(s); }
+      if (it.capa && modoFormulario !== 'varias') { const s = document.createElement('span'); s.className = 'selo-capa'; s.textContent = '★ CAPA'; box.appendChild(s); }   // v7.23: em "vários produtos" cada foto é a capa do próprio produto
       if (!it.url) { const n = document.createElement('span'); n.className = 'novo'; n.textContent = 'NOVA'; box.appendChild(n); }
       if (it.up) box.appendChild(criarSeloPre_(it, ''));
 
@@ -1976,8 +1989,12 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     });
     grid.dataset.quantidade = String(fotosItens.length);
     grid.setAttribute('aria-label', fotosItens.length + ' fotos selecionadas');
+    // v7.23: no modo "vários produtos" o título e a contagem dizem que cada foto vira um produto
+    { const v = modoFormulario === 'varias', n = document.getElementById('passo-fotos-nome'), sub = document.getElementById('passo-fotos-varias');
+      if (n) n.textContent = v ? 'Fotos · uma por produto' : 'Fotos da peça'; if (sub) sub.hidden = !v;
+      const dica = document.querySelector('#galeria-box .dica-midia-expansivel'); if (dica) dica.hidden = v; }
     if (modoFormulario === 'varias') {
-      document.getElementById('galeria-contador').textContent = '(' + fotosItens.length + ' foto(s) no lote)';
+      document.getElementById('galeria-contador').textContent = '(' + fotosItens.length + (fotosItens.length === 1 ? ' produto)' : ' produtos)');
       document.getElementById('galeria-input').disabled = false;
       document.getElementById('galeria-box').classList.remove('cheia');
     } else {
@@ -3201,10 +3218,11 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   function iniciarVarias_() {
     cancelarDuplicacao();
     modoFormulario = 'varias';
-    tituloForm_('Cadastrar várias peças');
+    tituloForm_('Cadastrar vários produtos');
     const al = document.getElementById('aviso-lote');
-    if (al) { al.hidden = false; al.textContent = '🗂\uFE0F Várias peças: preencha os dados UMA vez e escolha as fotos abaixo — cada foto vira uma peça separada com estes mesmos dados.'; }
-    document.getElementById('btn-salvar').textContent = 'Cadastrar as peças';
+    if (al) { al.hidden = false; al.textContent = 'Vários produtos: os dados são preenchidos uma vez e cada foto vira um produto separado com eles.'; }
+    document.getElementById('btn-salvar').textContent = 'Cadastrar os produtos';
+    desenharFotos();
     document.getElementById('btn-cancelar-duplicar').textContent = 'Cancelar / Nova peça';
     document.getElementById('btn-cancelar-duplicar').style.display = 'block';
     abrirCadastro_();
@@ -5971,14 +5989,14 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="admin-gestao.js?v=7.19.0"></script>
 <script src="admin-push.js?v=7.19.0"></script>
 <script src="admin-conexoes.js"></script>
-<script src="admin-mensagens.js?v=7.22.0"></script>
+<script src="admin-mensagens.js?v=7.24.0"></script>
 <script src="admin-instagram.js?v=7.17.0"></script>
 <script src="video-validation.js"></script>
 <script src="admin-postagens.js?v=7.13.3"></script>
 <script src="admin-fotoia.js"></script>
 <script src="admin-enquadrar.js"></script>
 <script src="admin-capa-video.js"></script>
-<script src="nav.js?v=7.22.0" data-ativo="gestao"></script>
+<script src="nav.js?v=7.24.0" data-ativo="gestao"></script>
 <script>
 /* v7.19: acabamento das ferramentas do gestor.
  * 1) Títulos das janelas: o emoji do começo vira ícone de linha (os títulos são escritos por vários scripts; aqui só troca a aparência).

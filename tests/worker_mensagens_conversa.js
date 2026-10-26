@@ -477,6 +477,48 @@ function d1() {
   await A('POST', '/msg/config', { assinatura: true });
   const ca3 = await A('POST', '/msg/config', { meuNome: '' });
   chk('nome vazio volta ao padrão (primeiro nome do cadastro)', ca3.j.meuNome === '' && ca3.j.config.assinatura === true);
+  // ---- v2.12: tipo, lidas em lote, "nos 2 WhatsApp" sem encerradas, contato, respostas rápidas ----
+  const Tg = Date.parse('2026-10-26T15:00:00Z');
+  await wh('/wh/wafly/1/' + seg, msg('RG1', '120363999-group', 'oi grupo', { isGroup: true, chatName: 'Equipe', senderName: 'Ana', participantPhone: '5588900000001', momment: Tg }));
+  const ti = await A('GET', '/msg/conversas?canal=whatsapp1&tipo=individual'), tg = await A('GET', '/msg/conversas?canal=whatsapp1&tipo=grupo');
+  chk('tipo=individual só traz conversas; tipo=grupo só grupos', ti.j.conversas.length > 0 && ti.j.conversas.every((x) => !x.grupo) && tg.j.conversas.length > 0 && tg.j.conversas.every((x) => x.grupo), [ti.j.conversas.length, tg.j.conversas.length]);
+  chk('contagens acompanham o tipo e trazem o total de conversas e de grupos', tg.j.contagens.conversas === tg.j.conversas.length && tg.j.tipos.grupos >= 1 && tg.j.tipos.individuais === ti.j.conversas.length, [tg.j.contagens, tg.j.tipos]);
+  // pessoa nos dois WhatsApp: encerrar uma tira a outra do filtro; quando o cliente escreve na encerrada, volta
+  await wh('/wh/wafly/1/' + seg, msg('RQ1', '5588977770001', 'Oi pelo 1', { senderName: 'Rita', momment: Tg + 1000 }));
+  await wh('/wh/wafly/2/' + seg, msg('RQ2', '558877770001', 'Oi pelo 2', { senderName: 'Rita', momment: Tg + 2000 }));
+  const rq1 = (await conv('whatsapp1', '5588977770001')).id, rq2 = (await conv('whatsapp2', '558877770001')).id;
+  const ambIds = async () => (await A('GET', '/msg/conversas?canal=todos&filtro=ambos')).j.conversas.map((x) => x.id);
+  chk('as duas conversas da Rita aparecem em "Nos 2 WhatsApp"', (await ambIds()).includes(rq1) && (await ambIds()).includes(rq2));
+  await A('POST', '/msg/encerrar', { conversas: [rq2] });
+  const aposEnc = await A('GET', '/msg/conversas?canal=whatsapp1');
+  chk('encerrar a do WhatsApp 2 tira a do WhatsApp 1 de "Nos 2 WhatsApp" (sem o aviso "Também no")', !(await ambIds()).includes(rq1) && aposEnc.j.conversas.find((x) => x.id === rq1).outro_id == null);
+  await wh('/wh/wafly/2/' + seg, msg('RQ3', '558877770001', 'Voltei', { senderName: 'Rita', momment: Tg + 3000 }));
+  chk('o cliente escreve na encerrada: as duas voltam para "Nos 2 WhatsApp"', (await ambIds()).includes(rq1) && (await ambIds()).includes(rq2));
+  // lidas em lote
+  const fLe = globalThis.fetch, chamadasLe = [];
+  globalThis.fetch = async (u, init) => { if (/\/(modify-chat|read-message)$/.test(String(u))) { chamadasLe.push(String(u)); return new Response('{}'); } return fLe(u, init); };
+  await DB.prepare('UPDATE msg_conversa SET nao_lidas=3 WHERE id IN (?,?)').bind(rq1, rq2).run();
+  const lote = await A('POST', '/msg/lida', { conversas: [rq1, rq2, 'x'], celular: true });
+  chk('marcar várias como lidas: zera no painel e confirma no celular as que estavam não lidas', lote.j.ok && lote.j.alteradas === 2 && lote.j.celular.ok + lote.j.celular.falhas === 2 && lote.j.celular.ok >= 1 && chamadasLe.length >= 1 && (await conv('whatsapp1', '5588977770001')).nao_lidas === 0, lote.j);
+  const lote2 = await A('POST', '/msg/lida', { conversas: [rq1, rq2], celular: true });
+  const n2 = chamadasLe.length;
+  chk('já lidas: não chama o celular de novo', lote2.j.celular.ok === 0 && lote2.j.celular.falhas === 0 && chamadasLe.length === n2);
+  const nl = await A('POST', '/msg/lida', { conversas: [rq1], naoLida: true });
+  chk('marcar várias como não lidas (só no painel)', nl.j.ok && (await conv('whatsapp1', '5588977770001')).nao_lidas === 1 && chamadasLe.length === n2);
+  chk('lote vazio: erro em português', (await A('POST', '/msg/lida', { conversas: ['x'] })).j.erro === 'Escolha ao menos uma conversa.');
+  chk('marcar uma só continua funcionando como antes', (await A('POST', '/msg/lida', { conversa: rq1 })).j.ok === true && (await conv('whatsapp1', '5588977770001')).nao_lidas === 0);
+  // cartão de contato e localização
+  await wh('/wh/wafly/1/' + seg, msg('RC1', '5588977770001', '', { senderName: 'Rita', momment: Tg + 4000, text: undefined, contact: { displayName: 'Maria Prima', vCard: 'BEGIN:VCARD\nVERSION:3.0\nFN:Maria Prima\nTEL;type=CELL:+55 88 99999-1234\nEND:VCARD' } }));
+  const cm = await DB.prepare("SELECT tipo, texto FROM msg_mensagem WHERE ext_id='RC1'").first();
+  chk('cartão de contato grava o nome e o número', cm.tipo === 'contato' && cm.texto === 'Maria Prima · +5588999991234', cm);
+  await wh('/wh/wafly/1/' + seg, msg('RL1', '5588977770001', '', { senderName: 'Rita', momment: Tg + 5000, text: undefined, location: { latitude: -5.17, longitude: -40.67, name: 'Loja', address: 'Rua X, 1' } }));
+  chk('localização grava nome e endereço', (await DB.prepare("SELECT texto FROM msg_mensagem WHERE ext_id='RL1'").first()).texto === 'Loja · Rua X, 1');
+  // respostas rápidas
+  chk('respostas rápidas começam vazias (a tela usa as da loja)', (await A('GET', '/msg/config')).j.respostas === null);
+  const rr = await A('POST', '/msg/config', { respostas: [{ t: 'Endereço', x: 'Rua A, 10' }, { t: '', x: 'sem título' }, { t: 'X'.repeat(60), x: 'Y'.repeat(1200) }] });
+  chk('respostas rápidas: salva, ignora sem título e corta tamanhos', rr.j.respostas.length === 2 && rr.j.respostas[1].t.length === 40 && rr.j.respostas[1].x.length === 1000, rr.j.respostas.map((r) => r.t.length));
+  globalThis.fetch = fLe;
+  chk('respostas rápidas voltam no GET', (await A('GET', '/msg/config')).j.respostas[0].x === 'Rua A, 10');
   globalThis.fetch = f5;
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });
