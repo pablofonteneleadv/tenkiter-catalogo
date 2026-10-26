@@ -1,0 +1,47 @@
+name: APK Android
+on:
+  pull_request:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-35 build-tools;35.0.0
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Compilar APK de teste do PR
+        if: github.event_name == 'pull_request'
+        run: gradle -p android :app:assembleDebug --console plain
+      - name: Compilar com a assinatura preservada
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          TK_ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        shell: bash
+        run: |
+          test -n "$ANDROID_KEYSTORE_B64"
+          test -n "$TK_ANDROID_STORE_PASSWORD"
+          export TK_ANDROID_KEYSTORE="$RUNNER_TEMP/tenkiter.jks"
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > "$TK_ANDROID_KEYSTORE"
+          gradle -p android :app:assembleRelease --console plain
+          rm -f "$TK_ANDROID_KEYSTORE"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TENKiTER-Mensagens-Android
+          path: android/app/build/outputs/apk/**/*.apk
+          retention-days: 90

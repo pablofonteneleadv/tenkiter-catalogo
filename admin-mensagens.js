@@ -1576,6 +1576,7 @@
     await recarregar(); ligarAoVivo();
     const f = $('ms-fechar'); if (f && larga()) f.focus();
   }
+  if(new URLSearchParams(location.search).get('app')==='mensagens')window.TKMensagensApp={abrirConversa:function(id){if(podeGerir()&&Number.isSafeInteger(id)&&id>0)return abrirConversa(id);}};
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { const o = $('overlay-mensagens'); if (o && o.classList.contains('aberto')) { espera = ESPERA_MS; agendar(300); } else sondarSelo(); } });
   (function init() {
     const botao_ = $('btn-abrir-mensagens'); if (!botao_) return;

@@ -164,7 +164,7 @@
     document.querySelectorAll('#cx-corpo .cx-grupo').forEach((g) => { if (g.open) gruposAbertos.add(g.id); else gruposAbertos.delete(g.id); });
     desenharBase_();
     document.querySelectorAll('#cx-corpo .cx-grupo').forEach((g) => { g.open = gruposAbertos.has(g.id); });
-    desenharCofre(); conferirFreeConvert_(); conferirWafly_(); conferirIg_(); if (temIntegracoes) carregarIntegracoes_();
+    desenharCofre(); conferirMobile_(); conferirFreeConvert_(); conferirWafly_(); conferirIg_(); if (temIntegracoes) carregarIntegracoes_();
   }
   function grupo_(id, titulo, ajuda, partes, aberto) {
     return '<details class="cx-grupo" id="cx-g-' + id + '"' + (aberto ? ' open' : '') + '><summary><span>' + titulo + '</span></summary>' +
@@ -186,6 +186,9 @@
         '<div class="cx-msg" id="cx-msg-deploy" role="status"></div>' +
       '</div>'
       ], true) +
+      grupo_('android', 'Aplicativo Android · Mensagens', 'Avisos nativos do atendimento.', [
+        '<div class="cx-bloco"><p id="cx-mobile-status" role="status">Conferindo…</p><p class="g-nota">Primeiro configure Google Android (FCM) no OneSignal com a conta de serviço do Firebase. Depois cole aqui a App API Key do aplicativo da TENKiTER, em OneSignal → Settings → Keys & IDs. A chave fica somente no servidor.</p><label for="cx-mobile-key">OneSignal · App API Key</label><input id="cx-mobile-key" type="password" autocomplete="new-password" placeholder="Cole a chave de envio aqui"><div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="mobile-guardar">Salvar chave</button><button type="button" class="cx-btn cx-sec" data-cx="mobile-apagar">Remover chave</button></div><p id="cx-mobile-msg" class="cx-msg" role="status"></p><p class="g-nota">Ter a chave salva não comprova a entrega no Android. Instale o APK, entre na conta, ative Avisos e confira uma nova mensagem com o app fechado.</p></div>'
+      ], false) +
       grupo_('instagram', '📸 Instagram', 'Conexão do importador e das mensagens, e leitura das fotos por IA.', [
         blocoInstagramWorker_(),
         ((status.conexoes && status.conexoes.instagram ? blocoChave('instagram', 'Instagram — token antigo (Apps Script)',
@@ -597,10 +600,14 @@
     msg('cx-wf'+n+'-msg',r.ok?'Cadastro removido. A fila não foi alterada.':erroTxt(r),r.ok?'ok':'erro');
     if(r.ok){const ul=$('cx-wf'+n+'-res');ul&&(ul.textContent='');conferirWafly_();}
   }
+  async function conferirMobile_(){const el=$('cx-mobile-status');if(!el)return;const r=await igWorker_('/msg/mobile/config','GET');el.textContent=r&&r.ok?(r.configurada?'Chave de envio salva. Falta conferir a entrega no aparelho.':'Chave de envio Android ainda não configurada.'):erroTxt(r);}
+  async function configurarMobile_(apagar){const input=$('cx-mobile-key');if(apagar&&!confirm('Desativar o envio de avisos Android pelo servidor?'))return;const r=await igWorker_('/msg/mobile/config','POST',apagar?{apagar:true}:{chave:input.value.trim()});if(r&&r.ok){input.value='';msg('cx-mobile-msg',apagar?'Chave removida.':'Chave conferida e salva no servidor.','ok');conferirMobile_();}else msg('cx-mobile-msg',erroTxt(r),'erro');}
   function clique(ev) {
     const b = ev.target.closest('[data-cx]'); if (!b) return;
     const a = b.dataset.cx;
-    if (a === 'fc-guardar') guardarFreeConvert_();
+    if(a==='mobile-guardar')configurarMobile_(false);
+    else if(a==='mobile-apagar')configurarMobile_(true);
+    else if (a === 'fc-guardar') guardarFreeConvert_();
     else if (a === 'fc-apagar') apagarFreeConvert_();
     else if (/^wf[12]-/.test(a)) { const n = Number(a[2]), q = a.slice(4); if (q === 'guardar') guardarWafly_(n); else if (q === 'testar') testarWafly_(n); else if (q === 'apagar') apagarWafly_(n); }
     else if (a === 'ig-conectar') conectarIg_();
