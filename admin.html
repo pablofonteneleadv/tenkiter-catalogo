@@ -5989,14 +5989,14 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="admin-gestao.js?v=7.19.0"></script>
 <script src="admin-push.js?v=7.19.0"></script>
 <script src="admin-conexoes.js"></script>
-<script src="admin-mensagens.js?v=7.24.0"></script>
+<script src="admin-mensagens.js?v=7.25.0"></script>
 <script src="admin-instagram.js?v=7.17.0"></script>
 <script src="video-validation.js"></script>
 <script src="admin-postagens.js?v=7.13.3"></script>
 <script src="admin-fotoia.js"></script>
-<script src="admin-enquadrar.js"></script>
+<script src="admin-enquadrar.js?v=7.25.0"></script>
 <script src="admin-capa-video.js"></script>
-<script src="nav.js?v=7.24.0" data-ativo="gestao"></script>
+<script src="nav.js?v=7.25.0" data-ativo="gestao"></script>
 <script>
 /* v7.19: acabamento das ferramentas do gestor.
  * 1) Títulos das janelas: o emoji do começo vira ícone de linha (os títulos são escritos por vários scripts; aqui só troca a aparência).
@@ -6026,10 +6026,19 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   }
   var pendente = false;
   function agendar() { if (pendente) return; pendente = true; requestAnimationFrame(function () { pendente = false; iconizar(); }); }
-  new MutationObserver(agendar).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+  /* v7.25: só reage ao que pode mudar um título de janela (janela abrindo/fechando ou o título sendo escrito). Antes qualquer mudança de
+   * classe na página (ex.: as fotos do cadastro) fazia varrer tudo, e o grupo de ferramentas recalculava o estilo da página inteira. */
+  var TITULOS = '.sheet-topo, .gestao-titulo, .aud-tit, .ms-titulo';
+  new MutationObserver(function (recs) {
+    for (var i = 0; i < recs.length; i++) {
+      var r = recs[i], t = r.target;
+      if (r.type === 'attributes' ? (t.classList && t.classList.contains('overlay-sheet')) : (t.closest && t.closest(TITULOS))) { agendar(); return; }
+    }
+  }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
   var det = document.getElementById('details-ferramentas');
   if (det) det.addEventListener('toggle', grupos);
-  new MutationObserver(grupos).observe(document.querySelector('main') || document.body, { subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+  new MutationObserver(grupos).observe(det || document.querySelector('main') || document.body, { subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+  new MutationObserver(grupos).observe(document.body, { attributes: true, attributeFilter: ['class'] });   // painel simplificado liga/desliga ferramentas pela classe do body
   setTimeout(grupos, 0);
 })();
 </script>

@@ -140,10 +140,17 @@
   const iniciar = () => {
     ligarRotulos(document); tornarTeclado(document);
     observarJanelas();
-    let agendado = false;
-    new MutationObserver(() => {
-      if (agendado) return; agendado = true;
-      (window.requestAnimationFrame || setTimeout)(() => { agendado = false; ligarRotulos(document); tornarTeclado(document); observarJanelas(); });
+    /* v7.25: antes cada mudança em qualquer lugar (até um texto trocado) varria a página inteira; no painel, com centenas de
+     * peças, isso travava a tela ao abrir janelas (ex.: Enquadrar). Agora só olha onde entrou elemento novo; troca de texto não conta. */
+    let agendado = false; const pais = new Set();
+    new MutationObserver((recs) => {
+      for (const r of recs) for (const n of r.addedNodes) if (n.nodeType === 1 && r.target && r.target.nodeType === 1) pais.add(r.target);
+      if (!pais.size || agendado) return; agendado = true;
+      (window.requestAnimationFrame || setTimeout)(() => {
+        agendado = false; const lista = [...pais]; pais.clear();
+        for (const p of lista) { if (!p.isConnected) continue; ligarRotulos(p); tornarTeclado(p); }
+        observarJanelas();
+      });
     }).observe(document.body, { childList: true, subtree: true });
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
