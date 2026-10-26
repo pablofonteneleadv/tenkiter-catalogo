@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d0d0d">
+<title>Exclusão de dados — TENKiTER Modas</title>
+<meta name="description" content="Como pedir a exclusão dos seus dados e das suas mensagens na TENKiTER Modas, de Crateús-CE.">
+<link rel="canonical" href="https://tenkitermodas.com.br/exclusao-dados.html">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<style>
+  :root { --preto: #0d0d0d; --laranja: #E67E22; --laranja-txt: #A85200; --cinza: #F5F1E8; --branco: #fff; --verde: #198754; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background: var(--cinza); color: #1a1a1a; padding-bottom: 76px; line-height: 1.6; }
+  header { background: var(--preto); border-bottom: 2px solid var(--laranja); padding: 14px; }
+  .topo { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 10px; }
+  .topo img { height: 38px; width: auto; }
+  .topo a { color: var(--laranja); font-weight: 800; letter-spacing: 1.5px; text-decoration: none; font-size: 1.1rem; }
+  main { max-width: 760px; margin: 0 auto; padding: 22px 16px 30px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.1rem; margin: 26px 0 6px; }
+  p, li { font-size: 0.95rem; }
+  ul { padding-left: 20px; }
+  .atualizada { color: #555; font-size: 0.85rem; margin: 0 0 14px; }
+  a { color: var(--laranja-txt); font-weight: 700; }
+  a:focus-visible { outline: 3px solid var(--preto); outline-offset: 2px; }
+  table { width: 100%; border-collapse: collapse; background: var(--branco); border-radius: 10px; overflow: hidden; font-size: 0.88rem; }
+  th, td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+  th { background: #f0ebdd; }
+  .caixa { background: var(--branco); border: 1px solid #e6dfcf; border-radius: 12px; padding: 14px 16px; margin: 14px 0; }
+  .zap { display: inline-block; background: var(--verde); color: #fff; text-decoration: none; padding: 12px 18px; border-radius: 12px; font-weight: 800; }
+  .voltar { display: inline-block; margin-top: 8px; }
+  @media (max-width: 560px) { th, td { padding: 8px 6px; font-size: 0.8rem; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="topo">
+    <img src="logo-mark.png" alt="" width="23" height="38">
+    <a href="index.html">TENKiTER MODAS</a>
+  </div>
+</header>
+
+<main id="conteudo">
+  <h1>Exclusão de dados</h1>
+  <p class="atualizada">Atualizada em 25 de outubro de 2026.</p>
+
+  <p>Você pode pedir, quando quiser, que a <b>TENKiTER Modas</b> apague os dados que tem sobre você: pedidos, conta, fotos enviadas e as <b>mensagens trocadas pelo Instagram ou pelo WhatsApp</b> com a loja.</p>
+
+  <h2>Como pedir</h2>
+  <ol>
+    <li>Toque no botão abaixo e envie a mensagem pronta pelo WhatsApp da loja. Se preferir, mande uma mensagem direta para o Instagram da loja escrevendo “quero apagar meus dados”.</li>
+    <li>Diga qual é o seu nome de usuário no Instagram ou o número de WhatsApp que usou, para encontrarmos as conversas certas.</li>
+    <li>Respondemos confirmando o pedido. Apagamos ou anonimizamos os dados em até <b>30 dias</b>, salvo o que a lei obrigue a loja a guardar (por exemplo, registros de uma compra).</li>
+  </ol>
+
+  <div class="caixa">
+    <b>Pedir a exclusão agora</b><br>
+    <a class="zap" id="zap-btn" href="#" style="margin-top:8px">💬 Pedir exclusão pelo WhatsApp</a>
+  </div>
+
+  <h2>O que é apagado</h2>
+  <ul>
+    <li>Suas mensagens, fotos, vídeos e áudios no atendimento do Instagram e do WhatsApp.</li>
+    <li>Dados da sua conta e de pedidos que não precisem ser mantidos por obrigação legal.</li>
+    <li>Fotos que você nos mandou para a loja.</li>
+  </ul>
+  <p>Também é possível remover o acesso do aplicativo da loja nas configurações do seu Instagram (Configurações → Apps e sites). Isso impede novas mensagens de serem lidas pelo painel, mas não apaga o que já foi recebido: para isso, faça o pedido acima.</p>
+
+  <p>Mais detalhes na <a href="privacidade.html">política de privacidade</a>.</p>
+  <a class="voltar" href="index.html">← Voltar ao catálogo</a>
+</main>
+
+<script src="common.js"></script>
+<script>
+  (function () {
+    var url = linkWhatsApp('Olá! Quero pedir a exclusão dos meus dados e mensagens. Meu usuário do Instagram ou número de WhatsApp é: ');
+    var a = document.getElementById('zap-btn'); if (a) { a.href = url; a.target = '_blank'; a.rel = 'noopener'; }
+  })();
+</script>
+<script src="nav.js?v=7.14.4" data-ativo=""></script>
+<script src="a11y.js"></script>
+</body>
+</html>
