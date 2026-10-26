@@ -32,7 +32,8 @@ with sync_playwright() as p:
     pg.evaluate("document.getElementById('busca').blur()")
     pg.evaluate("document.getElementById('btn-limpar-sel').click()"); pg.wait_for_timeout(500)
     chk("sacola esvaziou", pg.evaluate("getSacola().length") == 0)
-    chk("busca limpa", pg.input_value("#busca") == "")
+    # v7.x: "Limpar seleção" só esvazia a seleção; a busca tem o próprio "Limpar filtros" ao lado
+    chk("busca continua (Limpar filtros é outro botão)", pg.input_value("#busca") == "vestido", pg.input_value("#busca"))
     chk("NÃO abriu a tela de compartilhar", pg.locator("#overlay-selecao.aberto").count() == 0)
     chk("nenhuma janela aberta", pg.evaluate("TKCamadas.total()") <= 1)
     ctx.close()
@@ -127,7 +128,9 @@ with sync_playwright() as p:
 
     print("== v4.33: tocar num link NÃO mostra placa (o celular também não deixa na saída); a pergunta vem na CHEGADA")
     ctx, pg = com_selecao()
-    pg.locator(".tk-nav a[data-nav]:not(.tk-ativo)").first.click(); pg.wait_for_timeout(1200)
+    # a barra do cliente agora abre busca/seleção/favoritos na própria página; o link que sai da loja é o do rodapé
+    lk = pg.locator(".tk-nav a[data-nav]:not(.tk-ativo):not([href^='#'])")
+    (lk.first if lk.count() else pg.locator("a[href='privacidade.html']").first).click(); pg.wait_for_timeout(1200)
     chk("barra de baixo com seleção: vai DIRETO, sem placa", not pg.url.endswith("index.html") and pg.url != "about:blank", pg.url)
     pg.goto(BASE + "index.html"); pg.wait_for_selector(".card"); pg.wait_for_timeout(1800)
     chk("…e a seleção continua ao voltar (mesma visita: não pergunta de novo)", pg.evaluate("getSacola().length") == 2 and pg.locator("#overlay-sair-sel.aberto").count() == 0)
@@ -220,11 +223,14 @@ with sync_playwright() as p:
     chk("digitando 'vest' → lista aparece", pg.locator("#sugestoes-busca:visible").count() == 1)
     t = pg.inner_text("#sugestoes-busca").lower()
     chk("sugere 'vestido' com quantidade de peças", "vestido" in t and "peça" in t, t)
-    chk("papéis de combobox/listbox", pg.get_attribute("#busca", "role") == "combobox" and pg.get_attribute("#sugestoes-busca", "role") == "listbox" and pg.get_attribute("#busca", "aria-expanded") == "true")
+    chk("papéis de combobox/listbox", pg.get_attribute("#busca", "role") == "combobox" and pg.get_attribute("#sugestoes-opcoes", "role") == "listbox" and pg.get_attribute("#busca", "aria-controls") == "sugestoes-opcoes" and pg.get_attribute("#busca", "aria-expanded") == "true")
     pg.keyboard.press("ArrowDown"); pg.wait_for_timeout(100)
     chk("seta para baixo marca uma opção", pg.get_attribute("#busca", "aria-activedescendant") == "sug-0")
+    # v7.x: as primeiras opções agora são peças ("Peças que combinam"); desce até a 1ª sugestão de termo
+    k = pg.evaluate("[...document.querySelectorAll('#sugestoes-busca [role=option]')].findIndex(o=>!o.classList.contains('sug-peca'))")
+    for _ in range(max(0, k)): pg.keyboard.press("ArrowDown"); pg.wait_for_timeout(60)
     pg.keyboard.press("Enter"); pg.wait_for_timeout(500)
-    chk("Enter aplica a sugestão no campo", "vestido" in pg.input_value("#busca").lower())
+    chk("Enter aplica a sugestão de termo no campo", "vestido" in pg.input_value("#busca").lower(), (k, pg.input_value("#busca")))
     chk("lista fecha", pg.locator("#sugestoes-busca:visible").count() == 0)
     chk("grade só com vestidos", pg.evaluate("listaFiltradaAtual.length>0 && listaFiltradaAtual.every(p=>/vestido/i.test(p.Nome))"))
     pg.fill("#busca", ""); pg.wait_for_timeout(400)
@@ -233,7 +239,7 @@ with sync_playwright() as p:
     chk("'camisa' não existe → avisa e aponta o sinônimo que TEM peças", "não achei" in t and "camiseta" in t, t)
     chk("rótulo 'Parecido'", "parecido: camiseta" in t, t)
     axe(pg, "sugestões de busca abertas")
-    pg.locator("#sugestoes-busca .sug-item", has_text="camiseta").first.click(); pg.wait_for_timeout(500)
+    pg.locator("#sugestoes-busca .sug-item", has_text="Parecido: camiseta").first.click(); pg.wait_for_timeout(500)   # a peça "Camiseta…" também aparece; o toque é no sinônimo
     chk("tocar no sinônimo busca por ele", "camiseta" in pg.input_value("#busca").lower() and pg.evaluate("listaFiltradaAtual.length>0"))
     pg.fill("#busca", ""); pg.wait_for_timeout(400)
     pg.click("#busca"); pg.keyboard.type("vestdo", delay=40); pg.wait_for_timeout(500)

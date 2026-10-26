@@ -53,7 +53,7 @@
     if (btn && !silencioso) { btn.disabled = true; btn.textContent = 'Atualizando…'; }
     const r = await chamar_({ action: 'listarPedidos', limite: 300 });
     carregandoPed = false;
-    if (btn) { btn.disabled = false; btn.textContent = '🔄 Atualizar'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = ((window.TKIcone && TKIcone('atualizar')) || '🔄') + ' Atualizar'; }
     if (!r || !r.ok) {
       if (!silencioso) $('ped-lista').innerHTML = '<p class="ped-vazio ped-erro">' + esc(erroTexto_(r)) + '</p>';
       return;
@@ -68,7 +68,7 @@
   function atualizarResumoPed_() {
     const novos = contagemPed.novo || 0;
     const abertos = ABERTOS.reduce((s, k) => s + (contagemPed[k] || 0), 0);
-    $('ped-sum-txt').textContent = '🧾 Pedidos' + (abertos ? ' · ' + abertos + ' em aberto' : '') + (novos ? ' (' + novos + ' novo' + (novos > 1 ? 's' : '') + ')' : '');
+    $('ped-sum-txt').textContent = 'Pedidos' + (abertos ? ' · ' + abertos + ' em aberto' : '') + (novos ? ' (' + novos + ' novo' + (novos > 1 ? 's' : '') + ')' : '');
     const b = $('aviso-pedidos-novos');
     if (b) {
       b.hidden = !novos;
@@ -183,10 +183,10 @@
     let h = '<div class="filtros-lista">' + chips + '</div>';
     if (r.semDados) h += '<p class="g-info">Ainda não há visitas nem pedidos neste período. Os números aparecem conforme as pessoas usam o catálogo.</p>';
     h += '<div class="mt-cards">' +
-      '<div class="mt-card"><span>👁️ Visualizações de peças</span><strong>' + t.visualizacoes + '</strong></div>' +
-      '<div class="mt-card"><span>💬 Toques em “Pedir no WhatsApp”</span><strong>' + t.whatsapp + '</strong></div>' +
-      '<div class="mt-card"><span>📈 Toques por 100 visualizações</span><strong>' + taxa + '</strong></div>' +
-      '<div class="mt-card"><span>🧾 Pedidos pelo site</span><strong>' + ped.total + '</strong><small>' + formatarReal(ped.valor) + ' à vista (sem cancelados)</small></div></div>';
+      '<div class="mt-card"><span>Visualizações de peças</span><strong>' + t.visualizacoes + '</strong></div>' +
+      '<div class="mt-card"><span>Toques em “Pedir no WhatsApp”</span><strong>' + t.whatsapp + '</strong></div>' +
+      '<div class="mt-card"><span>Toques por 100 visualizações</span><strong>' + taxa + '</strong></div>' +
+      '<div class="mt-card"><span>Pedidos pelo site</span><strong>' + ped.total + '</strong><small>' + formatarReal(ped.valor) + ' à vista (sem cancelados)</small></div></div>';
     h += '<p class="g-nota">Toque no WhatsApp não é venda confirmada: é a pessoa que pediu para falar com a loja. Venda confirmada é o pedido marcado como “Concluído”' + (ped.concluidos ? ' (' + ped.concluidos + ' no período, ' + formatarReal(ped.valorConcluidos) + ')' : '') + '.</p>';
     h += '<h3>Visualizações por dia</h3><div class="mt-grafico" role="img" aria-label="Gráfico de visualizações por dia nos últimos ' + r.dias + ' dias' + (melhor && melhor.visualizacoes ? '. Melhor dia: ' + formatarDiaCurto_(melhor.dia) + ' com ' + melhor.visualizacoes + ' visualizações' : '') + '">' + r.porDia.map((d) => barraDia_(d, max)).join('') + '</div>' +
       '<div class="mt-eixo"><span>' + formatarDiaCurto_(r.porDia[0].dia) + '</span><span>' + (melhor && melhor.visualizacoes ? 'Melhor dia: ' + formatarDiaCurto_(melhor.dia) + ' (' + melhor.visualizacoes + ')' : '') + '</span><span>' + formatarDiaCurto_(r.porDia[r.porDia.length - 1].dia) + '</span></div>';
@@ -295,7 +295,8 @@
 
   function mtNum_(v) { return Number(v || 0).toLocaleString('pt-BR'); }
   function mtPct_(v) { return v === null || v === undefined ? '—' : String(v).replace('.', ',') + '%'; }
-  function mtCartao_(rotulo, valor, pequeno) { return '<div class="mt-card"><span>' + rotulo + '</span><strong>' + valor + '</strong>' + (pequeno ? '<small>' + pequeno + '</small>' : '') + '</div>'; }
+  // v7.19: rótulo sem o emoji do começo (os números ficam no padrão do painel)
+  function mtCartao_(rotulo, valor, pequeno) { rotulo = /^[0-9A-Za-zÀ-ÿ“"(]/.test(rotulo) ? rotulo : String(rotulo).replace(/^\S+\s+/, ''); return '<div class="mt-card"><span>' + rotulo + '</span><strong>' + valor + '</strong>' + (pequeno ? '<small>' + pequeno + '</small>' : '') + '</div>'; }
   function mtColuna_(rotulo, valor, max, dica) {
     const h = max ? Math.max(2, Math.round((valor / max) * 100)) : 2;
     return '<div class="mt-col" title="' + esc(dica || rotulo) + '"><div class="mt-barra" style="height:' + h + '%"></div></div>';
@@ -322,20 +323,20 @@
     const temVis = cob.comVisitante > 0;
     let h = '<p class="mt-resumo">Mostrando: <b>' + esc(r.filtrosDescricao) + '</b></p>';
     if (r.semDados) h += '<p class="g-info">Nada neste recorte. ' + (r.filtrado ? 'Experimente tirar algum filtro.' : 'Os números aparecem conforme as pessoas usam o catálogo.') + '</p>';
-    h += '<h3 class="mt-grupo">👀 Interesse <small>quem olhou</small></h3><div class="mt-cards">' +
+    h += '<h3 class="mt-grupo">Interesse <small>quem olhou</small></h3><div class="mt-cards">' +
       mtCartao_('👤 Pessoas reais que entraram', temVis ? mtNum_(t.visitantes) : '—', temVis ? 'pessoas diferentes, sem repetir — em qualquer app ou navegador' : 'conta a partir da atualização') +
       (t.pessoasViram !== undefined && temVis ? mtCartao_('👁️ Pessoas que viram peças', mtNum_(t.pessoasViram), 'de ' + mtNum_(t.visitantes) + ' que entraram · ' + mtNum_(t.visualizacoes) + ' visualizações no total') : mtCartao_('👁️ Visualizações de peças', mtNum_(t.visualizacoes))) +
       (t.visitas ? mtCartao_('🚪 Visitas à loja', mtNum_(t.visitas), 'quantas vezes abriram o site') : '') + '</div>';
-    h += '<h3 class="mt-grupo">💬 Intenção <small>pediram para falar com a loja — ainda não é venda</small></h3><div class="mt-cards">' +
+    h += '<h3 class="mt-grupo">Intenção <small>pediram para falar com a loja — ainda não é venda</small></h3><div class="mt-cards">' +
       (t.pessoasWhats !== undefined && temVis ? mtCartao_('💬 Pessoas que pediram no WhatsApp', mtNum_(t.pessoasWhats), 'de ' + mtNum_(t.visitantes) + ' que entraram · ' + mtNum_(t.whatsapp) + ' toques no total') : mtCartao_('💬 Toques em “Pedir no WhatsApp”', mtNum_(t.whatsapp))) +
       mtCartao_('📈 Toques por 100 visualizações', t.whatsappPor100Visualizacoes === null ? '—' : String(t.whatsappPor100Visualizacoes).replace('.', ',')) +
       mtCartao_('🧾 Pedidos pelo site', mtNum_(ped.total), formatarReal(ped.valor) + ' à vista (sem cancelados) — enviados, ainda não confirmados') + '</div>';
-    h += '<h3 class="mt-grupo">✅ Resultado confirmado <small>só pedido marcado como “Concluído”</small></h3><div class="mt-cards">' +
+    h += '<h3 class="mt-grupo">Resultado confirmado <small>só pedido marcado como “Concluído”</small></h3><div class="mt-cards">' +
       mtCartao_('✅ Pedidos concluídos', mtNum_(ped.concluidos || 0), ped.concluidos ? 'marcados por você no painel' : 'nenhum marcado neste período') + '</div>';
     h += '<p class="g-nota">Toque no WhatsApp não é venda confirmada: é a pessoa que pediu para falar com a loja. Venda confirmada é o pedido marcado como “Concluído”' + (ped.concluidos ? ' (' + ped.concluidos + ' no período, ' + formatarReal(ped.valorConcluidos) + ')' : '') + '.</p>';
 
     // ---- aparelhos e avisos (estado de agora; só "instalaram no período" segue o período)
-    h += '<h3>📲 Aparelhos e avisos</h3>';
+    h += '<h3 class="mt-grupo">Aparelhos e avisos</h3>';
     if (!ap.total) h += '<p class="g-info">Ainda nenhum aparelho se registrou. Eles aparecem conforme as pessoas voltam ao site depois da atualização.</p>';
     else {
       h += '<div class="mt-cards">' +
@@ -539,13 +540,17 @@
   function telaImportar_() {
     abrirFolha_('⬆️ Importar planilha (CSV)',
       '<p class="g-info">Serve para mudar preço, estoque, nome, categoria etc. de várias peças de uma vez, ou cadastrar peças novas. Primeiro toque em <b>Exportar planilha</b> (abaixo), edite no Excel/Google Planilhas e volte aqui com o arquivo. <b>Nada é gravado antes de você conferir a prévia.</b></p>' +
-      '<div class="g-linha"><button type="button" id="imp-exportar" class="g-sec">⬇️ Exportar planilha atual</button></div>' +
-      '<label for="imp-arquivo">Arquivo CSV</label><input type="file" id="imp-arquivo" accept=".csv,.txt,text/csv">' +
+      '<div class="g-linha"><button type="button" id="imp-exportar" class="g-sec">' + ((window.TKIcone && TKIcone('pacote')) || '⬇️') + ' Exportar planilha atual</button></div>' +
+      // v7.19: o campo de arquivo do navegador aparecia em inglês ("Choose File"); agora é um botão em português com o nome do arquivo escolhido
+      '<span class="g-rot">Arquivo CSV</span><input type="file" id="imp-arquivo" class="g-arquivo-inp" accept=".csv,.txt,text/csv">' +
+      '<label for="imp-arquivo" class="g-arquivo"><span class="g-arquivo-bt">Escolher arquivo</span><span class="g-arquivo-nome" id="imp-arquivo-nome">Nenhum arquivo escolhido</span></label>' +
       '<p class="g-nota">Coluna <b>codigo</b> identifica a peça. Célula vazia = não mexe. Peça nova precisa de nome, preço e foto (link https://).</p>' +
       '<div id="imp-previa" aria-live="polite"></div>');
     $('imp-exportar').addEventListener('click', exportarCsv_);
     $('imp-arquivo').addEventListener('change', async (ev) => {
-      const f = ev.target.files && ev.target.files[0]; if (!f) return;
+      const f = ev.target.files && ev.target.files[0];
+      $('imp-arquivo-nome').textContent = f ? f.name : 'Nenhum arquivo escolhido';
+      if (!f) return;
       const prev = $('imp-previa');
       prev.innerHTML = '<p class="g-info">Lendo o arquivo…</p>';
       let lido;

@@ -17,7 +17,7 @@ with sync_playwright() as p:
     ordem = pg.evaluate("[...document.querySelectorAll('#filtros-extras details.selecao-expansivel')].map(d=>d.id)")
     chk("Gênero é o primeiro menu", ordem[0] == "details-genero", ordem)
     # só opções de peças ativas
-    cats = set(pg.evaluate("[...document.querySelectorAll('#chips-categoria .chip')].map(c=>c.textContent)"))
+    cats = set(pg.evaluate("[...document.querySelectorAll('#chips-categoria .chip')].map(c=>c.dataset.filterValue||c.textContent)"))
     ativas = set(pg.evaluate("(()=>{const s=new Set();produtos.filter(p=>!estaEsgotado(p)).forEach(p=>listaDeTags(p.Categoria).forEach(c=>s.add(c)));return [...s]})()"))
     chk("categorias do menu = só as de peças ativas", cats == ativas, (cats ^ ativas))
     # filtro simples já mostra o 'adicionar'

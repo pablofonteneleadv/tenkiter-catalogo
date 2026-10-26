@@ -1,0 +1,96 @@
+/* ====================================================================
+ * TENKiTER — acabamento das páginas da equipe (v7.19, 26/10/2026)
+ * Mesmo padrão da vitrine e do painel (acabamento.css / acabamento-admin.css):
+ * texto #141414 / #625c53, borda #e3ddd3, fundo #f6f3ee, raio 8/6 px, sem sombra,
+ * toques de 44 px, escolha marcada em preto. Só aparência: nenhuma função muda.
+ * Carrega depois do <style> de cada página; seletores com `body.pg-...` vencem os antigos.
+ * ==================================================================== */
+:root {
+  --tk-texto: #141414; --tk-texto-2: #625c53; --tk-borda: #e3ddd3; --tk-fundo: #f6f3ee; --tk-superficie: #fff;
+  --tk-raio: 8px; --tk-raio-p: 6px;
+}
+.tk-ico { width: 1.2em; height: 1.2em; flex: none; display: inline-block; vertical-align: -0.22em; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- Currículos (curriculos.html) ---------- */
+body.pg-curriculos { background: var(--tk-fundo); color: var(--tk-texto); }
+body.pg-curriculos header {
+  background: #0d0d0d; background-image: none; border-bottom: 0; text-align: left; padding: 0 16px; min-height: 58px;
+  display: flex; align-items: center; gap: 10px; font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; letter-spacing: 0;
+}
+body.pg-curriculos header h1 { font-size: 1rem; font-weight: 700; color: #f2eee7; max-width: 860px; margin: 0 auto; width: 100%; }
+body.pg-curriculos .card, body.pg-curriculos .item { border-radius: var(--tk-raio); border: 1px solid var(--tk-borda); box-shadow: none; }
+body.pg-curriculos input, body.pg-curriculos select, body.pg-curriculos textarea { border-color: var(--tk-borda); border-radius: var(--tk-raio); font-size: 1rem; }
+body.pg-curriculos input, body.pg-curriculos select { min-height: 44px; }
+body.pg-curriculos button { border-radius: var(--tk-raio-p); background: var(--tk-texto); color: #fff; min-height: 44px; font-weight: 600; }
+body.pg-curriculos button.sec { background: transparent; color: var(--tk-texto); border: 1px solid var(--tk-borda); }
+body.pg-curriculos .abas button { background: var(--tk-superficie); color: var(--tk-texto); border: 1px solid var(--tk-borda); }
+body.pg-curriculos .abas button.on { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
+body.pg-curriculos .filtros button { background: var(--tk-superficie); color: var(--tk-texto); border: 1px solid var(--tk-borda); display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+body.pg-curriculos .filtros button.on { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
+body.pg-curriculos .meta { color: var(--tk-texto-2); }
+body.pg-curriculos .grupo { color: var(--tk-texto-2); }
+body.pg-curriculos .edit { background: var(--tk-fundo); border-radius: var(--tk-raio); }
+body.pg-curriculos .acoes a { background: var(--tk-superficie); color: var(--tk-texto); border: 1px solid var(--tk-borda); border-radius: var(--tk-raio-p); font-weight: 600; }
+body.pg-curriculos .acoes a:first-child { background: #0f6b3f; border-color: #0f6b3f; color: #fff; }
+body.pg-curriculos .aviso, body.pg-curriculos .erro { border-radius: var(--tk-raio); }
+body.pg-curriculos .det { border-top-color: var(--tk-borda); }
+
+/* ---------- Treinamentos e Painel do RH (treinamentos.html) ----------
+ * Usa as variáveis da própria página (--surface, --border, --text, --muted, --accent),
+ * então o modo escuro que ela tem continua funcionando. */
+body.pg-treinamentos .topbar { border-bottom: 0 !important; background: #0d0d0d !important; padding: 8px 16px !important; min-height: 58px; }
+body.pg-treinamentos .topbar .btn { color: #f2eee7; border-color: rgba(255,255,255,.22); border-radius: var(--tk-raio-p); min-height: 40px; font-weight: 600; }
+body.pg-treinamentos .topbar .btn:hover { border-color: #f2eee7; }
+body.pg-treinamentos .btn { border-radius: var(--tk-raio-p); min-height: 44px; }
+body.pg-treinamentos .card { border-radius: var(--tk-raio); }
+body.pg-treinamentos .card:hover { border-color: var(--muted); }
+body.pg-treinamentos .login-card { border-radius: var(--tk-raio); box-shadow: none; }
+body.pg-treinamentos .field input, body.pg-treinamentos .ac-form input { min-height: 44px; border-radius: var(--tk-raio); font-size: 1rem; }
+body.pg-treinamentos .admin-tab { min-height: 44px; }
+body.pg-treinamentos .admin-tab.active { color: var(--text); border-bottom-color: var(--text); }
+body.pg-treinamentos .admin-mini-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: var(--tk-raio-p); margin: 0 4px 6px 0; text-decoration: none; }
+body.pg-treinamentos .admin-mini-btn:hover { border-color: var(--text); }
+body.pg-treinamentos .ac-chip { border-radius: var(--tk-raio-p); min-height: 40px; padding: 0 12px; }
+body.pg-treinamentos .ac-chip:has(input:checked) { border-color: var(--text); background: var(--surface-2); }
+body.pg-treinamentos .ac-form, body.pg-treinamentos .ajuda-rh { border-style: solid; border-radius: var(--tk-raio); }
+/* "Faça seu currículo": cartão neutro com o botão principal (era um bloco laranja com sombra) */
+body.pg-treinamentos .cv-aviso:not(.cv-incompleto):not(.cv-desistiu) { background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: none; border-radius: var(--tk-raio); }
+body.pg-treinamentos .cv-aviso:not(.cv-incompleto):not(.cv-desistiu) a.cv-btn { background: var(--accent); color: var(--on-accent); }
+body.pg-treinamentos .cv-aviso { border-radius: var(--tk-raio); }
+body.pg-treinamentos .cv-aviso a.cv-btn { border-radius: var(--tk-raio-p); min-height: 44px; display: inline-flex; align-items: center; font-weight: 700; }
+body.pg-treinamentos .btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+body.pg-treinamentos input[type=search], body.pg-treinamentos input[type=text], body.pg-treinamentos input[type=tel], body.pg-treinamentos select { min-height: 44px; border-radius: var(--tk-raio); font-size: 1rem; }
+
+/* ---------- Trabalhe com a gente (curriculo.html, público) ---------- */
+body.pg-curriculo { background: var(--tk-fundo); color: var(--tk-texto); }
+body.pg-curriculo header { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 0 16px; text-align: left; }
+body.pg-curriculo header img { height: 28px; margin: 0; }
+body.pg-curriculo header h1 { display: block; font-size: 0.94rem; letter-spacing: 0.02em; max-width: 588px; }
+body.pg-curriculo .card { border-radius: var(--tk-raio); border: 1px solid var(--tk-borda); box-shadow: none; }
+body.pg-curriculo input[type=text], body.pg-curriculo input[type=email], body.pg-curriculo input[type=password], body.pg-curriculo input[type=tel],
+body.pg-curriculo input[type=number], body.pg-curriculo input[type=date], body.pg-curriculo textarea, body.pg-curriculo select { border-color: var(--tk-borda); border-radius: var(--tk-raio); min-height: 44px; }
+body.pg-curriculo input:focus, body.pg-curriculo textarea:focus { outline: 2px solid var(--tk-texto); }
+body.pg-curriculo .opcao { border-color: var(--tk-borda); border-radius: var(--tk-raio); min-height: 44px; align-items: center; }
+body.pg-curriculo .opcao input { margin-top: 0; accent-color: var(--tk-texto); }
+body.pg-curriculo .opcao:has(input:checked) { border-color: var(--tk-texto); background: var(--tk-superficie); box-shadow: inset 0 0 0 1px var(--tk-texto); }
+body.pg-curriculo button { border-radius: var(--tk-raio-p); min-height: 48px; }
+body.pg-curriculo .btn-p { background: var(--tk-texto); color: #fff; }
+body.pg-curriculo .btn-s { background: transparent; color: var(--tk-texto); border: 1px solid var(--tk-borda); }
+body.pg-curriculo .btn-l { min-height: 44px; }
+body.pg-curriculo .links a { background: var(--tk-texto); color: #fff; border-radius: var(--tk-raio-p); }
+body.pg-curriculo .obs { color: var(--tk-texto-2); }
+body.pg-curriculo p.sub { color: var(--tk-texto-2); }
+body.pg-curriculo .secao-situacoes { border-radius: var(--tk-raio); }
+body.pg-curriculo .erro, body.pg-curriculo .aviso, body.pg-curriculo .ref { border-radius: var(--tk-raio); }
+
+/* ---------- Privacidade e Exclusão de dados (páginas públicas de texto) ---------- */
+body.pg-legal { background: var(--tk-fundo); color: var(--tk-texto); }
+body.pg-legal header { border-bottom: 0; min-height: 58px; padding: 0 16px; display: flex; align-items: center; }
+body.pg-legal .topo { width: 100%; }
+body.pg-legal .topo img { height: 28px; }
+body.pg-legal .topo a { font-size: 0.94rem; letter-spacing: 0.08em; font-weight: 700; }
+body.pg-legal .caixa { border-color: var(--tk-borda); border-radius: var(--tk-raio); }
+body.pg-legal table { border-radius: var(--tk-raio); border: 1px solid var(--tk-borda); }
+body.pg-legal th { background: var(--tk-fundo); }
+body.pg-legal .zap { background: #0f6b3f; border-radius: var(--tk-raio-p); min-height: 48px; display: inline-flex; align-items: center; font-weight: 700; }
+body.pg-legal .atualizada { color: var(--tk-texto-2); }

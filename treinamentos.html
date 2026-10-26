@@ -509,8 +509,9 @@ details.manual-card[open]>summary::after{content:'▴';}
 .ds-certa{color:var(--muted); font-size:.8rem; margin-top:2px;}
 .ds-ok{margin-top:4px; font-size:.8rem; color:var(--accent-txt); font-weight:600;}
 </style>
+<link rel="stylesheet" href="acabamento-equipe.css?v=7.19.0">
 </head>
-<body>
+<body class="pg-treinamentos">
 
 <main id="app"><div class="boot-skel" aria-busy="true" aria-label="Carregando"><div class="sk-top"></div><div class="sk-wrap"><div class="sk" style="height:34px;width:55%"></div><div class="sk" style="height:18px;width:80%;margin-top:12px"></div><div class="sk" style="height:130px;margin-top:22px"></div><div class="sk" style="height:110px;margin-top:14px"></div><div class="sk" style="height:110px;margin-top:14px"></div></div></div></main>
 <div class="toast" id="toast"></div>
@@ -1372,7 +1373,7 @@ function renderTopbar(){
   return '<div class="topbar">' +
     '<div class="brand" style="cursor:pointer" id="brand-home"><span class="mark"><img src="icon-192.png" alt="TENKiTER"></span>Treinamento TENKiTER</div>' +
     '<div class="topbar-right">' +
-      (isAdmin ? '<button class="btn admin-btn-topbar" id="btn-admin-rh">⚙️ Painel do RH / Admin</button>' : '') +
+      (isAdmin ? '<button class="btn admin-btn-topbar" id="btn-admin-rh">Painel do RH / Admin</button>' : '') +
       '<div class="avatar-menu-wrap">' +
         '<button class="avatar-menu-btn" id="btn-avatar-menu" aria-label="Menu do funcionário">' +
           avatarHtml(state.user, 'sm') +
@@ -1685,7 +1686,7 @@ function cvBannerHtml(r){
     return '<div class="cv-aviso cv-desistiu"><h2>👋 Seu currículo ficou pausado</h2><p>Da última vez, seu currículo foi marcado como desistência. Se mudou de ideia, você pode reativar em poucos segundos.</p><a class="cv-btn" href="curriculo.html">Reativar meu currículo</a></div>';
   }
   // 'nenhum', servidor antigo ou sem rede: o cartão continua aparecendo
-  return '<div class="cv-aviso"><h2>📄 Faça seu currículo</h2><p>Quer crescer com a gente? Envie seu currículo para a TENKiTER Modas. Leva poucos minutos.</p><a class="cv-btn" href="curriculo.html">Fazer meu currículo</a></div>';
+  return '<div class="cv-aviso"><h2>Faça seu currículo</h2><p>Quer crescer com a gente? Envie seu currículo para a TENKiTER Modas. Leva poucos minutos.</p><a class="cv-btn" href="curriculo.html">Fazer meu currículo</a></div>';
 }
 async function carregarAvisoCurriculo(){
   if (!state.user) return;
@@ -2436,7 +2437,7 @@ function dsListaHtml(){
       '<summary><span class="ds-nome"><strong>' + esc(g.nome) + '</strong> <span class="ds-whats">' + esc(g.whatsapp) + '</span></span>' +
       '<span class="ds-resumo">' + g.tentativas.length + ' prova' + (g.tentativas.length > 1 ? 's' : '') + ' · melhor ' + g.melhor + '%' + (g.erros ? ' · ' + g.erros + ' erro' + (g.erros > 1 ? 's' : '') : '') + '</span></summary>' +
       g.tentativas.map(function(t){ return dsTentativaHtml(t, false); }).join('') +
-      (temPerm('gerir_acessos') && g.whatsapp ? '<button type="button" class="btn ds-zerar" data-whats="' + esc(g.whatsapp) + '" data-nome="' + esc(g.nome) + '">♻️ Zerar leitura / avaliações desta pessoa…</button>' : '') +
+      (temPerm('gerir_acessos') && g.whatsapp ? '<button type="button" class="btn ds-zerar" data-whats="' + esc(g.whatsapp) + '" data-nome="' + esc(g.nome) + '">Zerar leitura / avaliações desta pessoa…</button>' : '') +
     '</details>';
   }).join('');
 }
@@ -3042,13 +3043,13 @@ function acessosCard(p){
         '<div class="ac-perfis" role="group" aria-label="Perfis de ' + esc(p.nome || 'esta pessoa') + '">' + chips + '</div>' + semPerfilConhecido +
         '<button type="button" class="admin-mini-btn ac-abrir">' + (aberto ? '▾' : '▸') + ' Permissões (' + qtd + ')' + (diffs ? ' ✱' + diffs : '') + '</button>' +
         (p.curriculo ? '<button type="button" class="admin-mini-btn ac-vercv">📄 Ver currículo</button>' : '') +
-        (p.curriculo === 'andamento' || p.curriculo === '' ? '<a class="admin-mini-btn" target="_blank" rel="noopener" href="' + esc(cvLinkCobranca(p)) + '">📲 Cobrar currículo</a>' : '') +
+        (p.curriculo === 'andamento' || p.curriculo === '' ? '<a class="admin-mini-btn" target="_blank" rel="noopener" href="' + esc(cvLinkCobranca(p)) + '">Cobrar currículo</a>' : '') +
         (p.curriculoAntigo ? '<button type="button" class="admin-mini-btn ac-vercvantigo">📄 Currículo antigo</button>' : '') +
         (p.fotoCorpoUrl ? '<button type="button" class="admin-mini-btn ac-corpo">🧍 Foto de corpo inteiro</button>' : '') +
         '<button type="button" class="admin-mini-btn ac-status" data-ativo="' + (ativo ? '1' : '0') + '">' + (ativo ? 'Desativar' : 'Reativar') + '</button>' +
         '<button type="button" class="admin-mini-btn ac-reset">Resetar senha</button>' +
-        (temPerm('gerir_acessos') ? '<button type="button" class="admin-mini-btn ac-zerar">♻️ Zerar leitura/provas</button>' : '') +
-        '<button type="button" class="admin-mini-btn ac-excluir" style="color:var(--danger)">🗑️ Excluir</button>' +
+        (temPerm('gerir_acessos') ? '<button type="button" class="admin-mini-btn ac-zerar">Zerar leitura/provas</button>' : '') +
+        '<button type="button" class="admin-mini-btn ac-excluir" style="color:var(--danger)">Excluir</button>' +
       '</div>' +
     '</div>' + permsHtml + '</div>';
 }

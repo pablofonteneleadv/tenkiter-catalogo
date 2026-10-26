@@ -25,8 +25,10 @@ with sync_playwright() as p:
     chk("rodapé 'Ver N peças' sempre dentro da tela", pg.evaluate("document.getElementById('fx-ver').getBoundingClientRect().bottom <= innerHeight"))
     pg.evaluate("document.getElementById('details-categoria').open = true"); pg.evaluate("document.getElementById('details-cor').open = true"); pg.evaluate("document.getElementById('details-tamanho').open = true"); pg.wait_for_timeout(200)
     y0 = pg.evaluate("scrollY")
-    pg.evaluate("document.getElementById('filtros-extras').scrollTop = 99999"); pg.wait_for_timeout(500)
-    chk("rola por dentro do painel (chega ao fim)", pg.evaluate("(()=>{const e=document.getElementById('filtros-extras');return e.scrollTop>0 && e.scrollTop+e.clientHeight>=e.scrollHeight-2})()"))
+    # v7.x: topo e rodapé ficam fixos e quem rola é o corpo do painel (#fx-corpo); sem ele, o painel inteiro
+    ROLA = "(document.querySelector('#filtros-extras .fx-corpo, #fx-corpo')||document.getElementById('filtros-extras'))"
+    pg.evaluate(ROLA + ".scrollTop = 99999"); pg.wait_for_timeout(500)
+    chk("rola por dentro do painel (chega ao fim)", pg.evaluate("(()=>{const e=" + ROLA + ";return e.scrollTop>0 && e.scrollTop+e.clientHeight>=e.scrollHeight-2})()"))
     chk("a página de trás não rolou", pg.evaluate("scrollY") == y0)
     chk("o painel continua aberto depois de rolar", pg.evaluate("document.getElementById('filtros').classList.contains('aberto')"))
     chk("rodapé continua à vista no fim da rolagem", pg.evaluate("document.getElementById('fx-ver').getBoundingClientRect().bottom <= innerHeight") and pg.locator("#fx-ver").is_visible())

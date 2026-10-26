@@ -52,8 +52,9 @@
   @media(max-width:560px){ .topo { align-items:flex-start; flex-wrap:wrap; padding:12px; } .det { padding:0 12px 16px; } .linha > * { min-width:0; flex-basis:45%; } }
   @media(max-width:560px){ dl { grid-template-columns:1fr; } }
 </style>
+<link rel="stylesheet" href="acabamento-equipe.css?v=7.19.0">
 </head>
-<body>
+<body class="pg-curriculos">
 <script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed');</script>
 <header><h1>Currículos</h1></header>
 <main id="app"><div class="card">Carregando…</div></main>
@@ -210,8 +211,8 @@ function desenhar() {
     <div class="filtros"><input id="q" type="search" placeholder="Buscar nome, telefone, texto…" value="${E(busca)}">
     ${aba === 'novos' ? `<select id="fs" aria-label="Filtrar por status" ${soAgenda ? 'disabled' : ''}><option value="">Todos os status (${novos.length})</option>${STATUS.map(s => `<option value="${E(s)}" ${s === fStatus ? 'selected' : ''}>${E(s)} (${novos.filter(r => (r.Status || 'Novo') === s).length})</option>`).join('')}</select>
     <select id="fe" aria-label="Filtrar por etapa" ${soAgenda ? 'disabled' : ''}>${['', 'Enviado', 'Perfil', 'Instagram', 'Sem Instagram', 'Menor de 18'].map(x => `<option value="${x}" ${x === fEtapa ? 'selected' : ''}>${x ? E(x) : 'Todas as etapas'}</option>`).join('')}</select>
-    <button id="fa" class="${soAgenda ? 'on' : ''}">📅 Só agenda (ordenado por dia e hora)</button>
-    <button id="ord" ${soAgenda ? 'disabled' : ''}>${ordemAsc ? '⬆️ Mais antigas primeiro' : '⬇️ Mais novas primeiro'}</button>` : ''}</div>
+    <button id="fa" class="${soAgenda ? 'on' : ''}">Só agenda (ordenado por dia e hora)</button>
+    <button id="ord" ${soAgenda ? 'disabled' : ''}>${ordemAsc ? 'Mais antigas primeiro' : 'Mais novas primeiro'}</button>` : ''}</div>
     <div id="lista"></div>`;
   $('t1').onclick = () => { aba = 'novos'; desenhar(); };
   $('t2').onclick = () => { aba = 'antigos'; carregou.antigos ? desenhar() : (desenhar(), carregarAntigos()); };
@@ -360,7 +361,7 @@ function treinoHtml(r, x) {
     return `<div style="padding:8px 0;border-bottom:1px solid #eee">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
         <div><b>${E(m.titulo)}</b><br><span class="meta">${m.lidos} de ${m.total} capítulos lidos — ${statusLeitura}</span></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${faltaLer ? botaoAcao(linkCobrarLeitura(r, m), '📖 Cobrar leitura') : ''}${faltaProva ? botaoAcao(linkCobrarProva(r, m), '📝 Cobrar prova') : ''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${faltaLer ? botaoAcao(linkCobrarLeitura(r, m), 'Cobrar leitura') : ''}${faltaProva ? botaoAcao(linkCobrarProva(r, m), 'Cobrar prova') : ''}</div>
       </div>
       ${ultima ? `<div class="meta" style="margin-top:4px">Última prova: <b>${ultima.nota}/${ultima.total}</b> (${ultima.percentual}%) em ${fmtDataHora(ultima.dataHora)}${provas.length > 1 ? ' · +' + (provas.length - 1) + ' tentativa(s) anterior(es)' : ''}</div>${errosHtml(ultima)}` : ''}
     </div>`;
@@ -383,7 +384,7 @@ function itemNovo(r) {
   const paradaTxt = (diasParada !== null && diasParada >= 3) ? ` <span class="tag al" style="padding:1px 7px">⏳ ${diasParada}d parada</span>` : '';
   const etapaBloqueiaCobranca = r.Etapa === 'Enviado' || r.Etapa === 'Menor de 18';
   d.innerHTML = `<div class="topo"><div style="display:flex;gap:10px;align-items:center">${r.FotoUrl ? `<img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none">` : '<div style="width:44px;height:44px;border-radius:50%;background:#eee;flex:none"></div>'}<div><div class="nome">${E(r.Nome)}</div><div class="meta">${criadoTxt ? 'Cadastrada ' + criadoTxt + ' · ' : ''}${E(r.Idade ? r.Idade + ' anos · ' : '')}${E(r.Moradia || '')}${r.Etapa === 'Menor de 18' ? ' · faz 18 em ' + fmtData(r.Retomar18Em) : ''}${agendaMeta}${paradaTxt}</div></div></div><div>${tagEtapa(r)} <span class="tag ${corStatus(r.Status)}">${E(r.Status || 'Novo')}</span>${desistiuAntes(r) ? ' <span class="tag ru">↩️ já desistiu antes</span>' : ''}</div></div>
-    <div class="det">${r.FotoUrl ? `<div style="margin:12px 0"><img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:160px;width:100%;max-height:180px;object-fit:contain;border-radius:8px"></div>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}${!etapaBloqueiaCobranca ? `<a href="${linkCobrarCurriculo(r)}" target="_blank" rel="noopener">📲 Cobrar currículo</a>` : ''}</div>
+    <div class="det">${r.FotoUrl ? `<div style="margin:12px 0"><img src="${E(fotoUrlOk(r.FotoUrl))}" onerror="fotoErro(this)" data-w="${E(r.WhatsApp)}" referrerpolicy="no-referrer" alt="Foto de perfil" style="max-width:160px;width:100%;max-height:180px;object-fit:contain;border-radius:8px"></div>` : ''}<div class="acoes"><a href="${wa(r.WhatsApp)}" target="_blank" rel="noopener">WhatsApp</a>${r.Instagram ? `<a href="${ig(r.Instagram)}" target="_blank" rel="noopener">Ver Instagram</a>` : ''}${!etapaBloqueiaCobranca ? `<a href="${linkCobrarCurriculo(r)}" target="_blank" rel="noopener">Cobrar currículo</a>` : ''}</div>
     ${r.LegadoChamar ? `<div class="aviso">Anotação antiga da planilha ("chamar?"): <b>${E(r.LegadoChamar)}</b></div>` : ''}
     <div class="grupo">Treinamento</div><div data-k="treino" style="margin:4px 0 12px">Abra o card pra ver.</div>
     <div class="edit"><div class="linha"><select data-k="st">${STATUS.map(s => `<option ${s === (r.Status || 'Novo') ? 'selected' : ''}>${E(s)}</option>`).join('')}</select>
