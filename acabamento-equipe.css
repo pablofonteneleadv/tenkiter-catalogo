@@ -82,3 +82,15 @@ body.pg-curriculo .obs { color: var(--tk-texto-2); }
 body.pg-curriculo p.sub { color: var(--tk-texto-2); }
 body.pg-curriculo .secao-situacoes { border-radius: var(--tk-raio); }
 body.pg-curriculo .erro, body.pg-curriculo .aviso, body.pg-curriculo .ref { border-radius: var(--tk-raio); }
+
+/* ---------- Privacidade e Exclusão de dados (páginas públicas de texto) ---------- */
+body.pg-legal { background: var(--tk-fundo); color: var(--tk-texto); }
+body.pg-legal header { border-bottom: 0; min-height: 58px; padding: 0 16px; display: flex; align-items: center; }
+body.pg-legal .topo { width: 100%; }
+body.pg-legal .topo img { height: 28px; }
+body.pg-legal .topo a { font-size: 0.94rem; letter-spacing: 0.08em; font-weight: 700; }
+body.pg-legal .caixa { border-color: var(--tk-borda); border-radius: var(--tk-raio); }
+body.pg-legal table { border-radius: var(--tk-raio); border: 1px solid var(--tk-borda); }
+body.pg-legal th { background: var(--tk-fundo); }
+body.pg-legal .zap { background: #0f6b3f; border-radius: var(--tk-raio-p); min-height: 48px; display: inline-flex; align-items: center; font-weight: 700; }
+body.pg-legal .atualizada { color: var(--tk-texto-2); }
