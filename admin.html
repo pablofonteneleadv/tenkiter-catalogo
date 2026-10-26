@@ -5523,16 +5523,50 @@
       const corpoIa = JSON.stringify({ action: 'sugerirPorFoto', pin: adminPin, sessao: adminPin, whatsapp: sess ? sess.whatsapp : '', fotos: fotos, categorias: categorias, generos: generos });
       logDebug_('IA foto: enviando ' + fotos.length + ' foto(s), ' + Math.round(corpoIa.length / 1024) + ' KB');
       const t0 = Date.now();
-      const ctrl = new AbortController();
-      const limite = setTimeout(() => ctrl.abort(), 100000); // não deixa a tela presa pra sempre
-      let resp;
-      try {
-        resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: corpoIa, signal: ctrl.signal }).then(r => r.json());
-      } finally { clearTimeout(limite); }
-      logDebug_('IA foto: resposta em ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s — ' + (resp && resp.ok ? ('ok, modelo ' + resp.modelo) : ('erro: ' + (resp && resp.erro))));
+      // v7.14.2: Gemini sobrecarregado (503/500, "high demand", demora) não é erro definitivo: o painel tenta de novo sozinho,
+      // com espera crescente, até dar certo (o servidor 4.26 já passa por todos os modelos, do mais barato ao mais caro, em cada tentativa).
+      // Para na hora em chave recusada ou cota de todos esgotada (repetir não resolve). A pessoa pode cancelar a qualquer momento.
+      const MAX_TENTATIVAS_IA = 12;
+      const ehSobrecarga = (r) => {
+        const t = String((r && r.erro) || '');
+        if (/cota|quota|chave|API key/i.test(t)) return false;
+        return !!(r && (r.transitorio || /\b50[0234]\b|high demand|overloaded|UNAVAILABLE|sobrecarregad|demorou|timed? ?out|Timeout/i.test(t)));
+      };
+      let cancelada = false, ctrlAtual = null, acordar = null;
+      const cancelar = () => { cancelada = true; if (ctrlAtual) ctrlAtual.abort(); if (acordar) acordar(); };
+      const aviso = (texto) => {
+        box.innerHTML = '<div class="seo-sugestao" role="status" aria-live="polite" style="color:#5b3a00;">' + escaparHtml(texto) +
+          ' <button type="button" id="btn-foto-ia-cancelar" style="background:#eee;color:#333;margin-top:8px;">Cancelar</button></div>';
+        const bc = document.getElementById('btn-foto-ia-cancelar'); if (bc) bc.addEventListener('click', cancelar);
+      };
+      let resp = null;
+      for (let tentativa = 1; ; tentativa++) {
+        ctrlAtual = new AbortController();
+        const limite = setTimeout(() => ctrlAtual.abort(), 100000); // não deixa a tela presa pra sempre
+        try {
+          resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: corpoIa, signal: ctrlAtual.signal }).then(r => r.json());
+        } catch (e) {
+          resp = { ok: false, transitorio: true, erro: e && e.name === 'AbortError' ? 'A IA demorou demais para responder.' : 'Sem conexão agora.' };
+        } finally { clearTimeout(limite); }
+        logDebug_('IA foto: tentativa ' + tentativa + ', ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s — ' + (resp && resp.ok ? ('ok, modelo ' + resp.modelo) : ('erro: ' + (resp && resp.erro))));
+        if (cancelada || (resp && resp.ok) || !ehSobrecarga(resp) || tentativa >= MAX_TENTATIVAS_IA) break;
+        const espera = Math.min(4 * tentativa, 20);
+        btn.textContent = 'Tentando de novo...';
+        aviso('O Gemini está sobrecarregado agora. Vou tentar de novo em ' + espera + ' s (tentativa ' + (tentativa + 1) + ' de ' + MAX_TENTATIVAS_IA + ').');
+        await new Promise((ok) => { const t = setTimeout(ok, espera * (window.TK_IA_ESPERA_MS || 1000)); acordar = () => { clearTimeout(t); ok(); }; });   // TK_IA_ESPERA_MS: só para testes
+        acordar = null;
+        if (cancelada) break;
+        aviso('Tentando de novo com o Gemini (tentativa ' + (tentativa + 1) + ' de ' + MAX_TENTATIVAS_IA + ')...');
+      }
       btn.disabled = false; btn.textContent = rotuloOriginal;
-      if (!resp.ok) {
-        box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">' + escaparHtml(resp.erro || 'Não foi possível analisar agora.') + '</div>';
+      if (cancelada) { box.innerHTML = '<div class="seo-sugestao" style="color:#555;">Análise cancelada. Toque em Gerar com IA para tentar de novo.</div>'; return; }
+      if (!resp || !resp.ok) {
+        const sobrecarga = ehSobrecarga(resp);
+        // nada de JSON cru na tela: corta o que o serviço externo mandou depois de "--"
+        const texto = sobrecarga
+          ? 'O Gemini continua sobrecarregado depois de ' + MAX_TENTATIVAS_IA + ' tentativas. Tente de novo em alguns minutos.'
+          : String((resp && resp.erro) || 'Não foi possível analisar agora.').split(' -- ')[0];
+        box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">' + escaparHtml(texto) + '</div>';
         return;
       }
       // Cada sugestão pode ser editada ou retirada (✕) antes de aplicar; só entra o que ficar na lista.

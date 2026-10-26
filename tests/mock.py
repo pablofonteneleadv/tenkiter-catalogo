@@ -144,6 +144,11 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             return r_
         if a=="sugerirPorFoto":
             st.setdefault("ia_chamadas",[]).append(b.get("fotos",[]))
+            if st.get("ia_foto_sobrecarga",0)>0:   # Gemini sobrecarregado: o formato antigo (4.25) e o novo (4.26, transitorio)
+                st["ia_foto_sobrecarga"]-=1
+                if st.get("ia_foto_formato_novo"): return {"ok":False,"transitorio":True,"erro":"O Gemini está sobrecarregado agora (5 tentativas em todos os modelos). Tentando de novo."}
+                return {"ok":False,"erro":'Erro do Gemini: Falha ao falar com o servico externo depois de 1 tentativa(s): HTTP 503 -- { "error": { "code": 503, "message": "This model is currently experiencing high demand." (gemini-3.6-flash)'}
+            if st.get("ia_foto_chave_ruim"): return {"ok":False,"erro":"A chave do Gemini foi recusada. No admin, abra ⚙️ Configurações Avançadas e confira a chave."}
             if st.get("ia_foto_ok"): return {"ok":True,"fotosAnalisadas":1,"modelo":"teste","nome":"Conjunto Cropped Preto","generos":["Feminino Adulto"],"categorias":["Conjuntos","Cropped","Saias"],"cores":["Preto","Branco"],"descricao":"Conjunto feminino preto."}
             return {"ok":False,"erro":"Teste: IA simulada."}
         if a in("addTamanho","addCor"):
