@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.26.0 — Foto entra inteira no quadro (Encaixar como padrão) — 2026-10-26
+
+- Cadastro (um produto e vários): toda foto nova que não está em 4:5 entra **inteira** no quadro do site (1080×1350), com o fundo desfocado da própria foto nas sobras. Nada fica escondido pelo corte, como acontecia com capturas de tela compridas.
+- ✂ Enquadrar continua opcional (zoom, corte, giro). "Voltar à original" leva à foto encaixada padrão, já enviada.
+- Fotos de peças já cadastradas não mudam sozinhas.
+- Service worker renovado (tk-3.38.14).
+
 ## 7.25.0 — Enquadrar abre mais rápido (e o painel fica mais leve) — 2026-10-26
 
 - "✂ Enquadrar" abre em cerca de metade do tempo num celular simples: de ~1,5 s para ~0,7 s no teste com 540 peças.

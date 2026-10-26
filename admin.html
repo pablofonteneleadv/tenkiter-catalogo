@@ -1150,7 +1150,7 @@
           <label class="btn-foto" for="galeria-input"><span class="ic" data-ico="camera">📷</span> Tirar foto ou escolher da galeria</label>
           <input type="file" id="galeria-input" accept="image/*" multiple class="input-oculto">
           <div id="galeria-grid" class="galeria-grid"></div>
-          <details class="dica-midia dica-midia-expansivel"><summary>★ A primeira foto é a capa · Dicas de enquadramento</summary><p>A foto com <b>★ CAPA</b> aparece primeiro no catálogo. Toque numa foto para vê-la grande (lá você pode escolher a capa), <b>✂ Enquadrar</b> para posicionar, girar e dar zoom vendo como fica no site, no Feed, no Carrossel e no Story, ‹ › para mudar a ordem e ✕ para tirar. A miniatura já mostra o recorte 4:5 que o site usa.</p></details>
+          <details class="dica-midia dica-midia-expansivel"><summary>★ A primeira foto é a capa · Dicas de enquadramento</summary><p>A foto com <b>★ CAPA</b> aparece primeiro no catálogo. Cada foto entra <b>inteira</b> no quadro do site, sem nada cortado (as sobras ficam com o fundo da própria foto). Para dar zoom, cortar, girar ou posicionar, use <b>✂ Enquadrar</b>: lá dá para ver como fica no site, no Feed, no Carrossel e no Story. Toque numa foto para vê-la grande (e escolher a capa), ‹ › muda a ordem e ✕ tira.</p></details>
         </div>
         <div class="passo-msg">Coloque pelo menos 1 foto da peça.</div>
       </section>
@@ -1928,26 +1928,26 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const it = fotosItens[idx]; if (!it || !window.TKEnquadrar) return;
     const base = it.orig || it;
     TKEnquadrar.abrir({
-      src: base.url || base.prev, podeVoltar: !!it.orig, ajuste: it.enquadramento, quantidade: fotosItens.length,
+      src: base.url || base.prev, podeVoltar: !!it.orig && !it.auto, ajuste: it.enquadramento, quantidade: fotosItens.length,   // v7.26: encaixe automático não oferece "voltar" (para cortar, use Cortar)
       aoAplicarTodas: fotosItens.length > 1 ? async (ajuste, vigente) => {
         const originais = fotosItens.slice(), novos = [];
         for (const foto of originais) {
           const origem = foto.orig || foto;
           const url = await TKEnquadrar.renderizar(origem.url || origem.prev, ajuste);
-          novos.push({ b64: url.split(',')[1], prev: url, capa: !!foto.capa, orig: origem, enquadramento: Object.assign({}, ajuste) });
+          novos.push({ b64: url.split(',')[1], prev: url, capa: !!foto.capa, orig: origem, padrao: foto.auto ? foto : foto.padrao, enquadramento: Object.assign({}, ajuste) });
         }
         if (!vigente() || originais.length !== fotosItens.length || originais.some((foto, k) => fotosItens[k] !== foto)) return false;
         fotosItens = novos; novos.forEach(foto => preAgendar_(foto, 'foto')); desenharFotos();
         return true;
       } : null,
       aoAplicar: (dataUrl, ajuste) => {
-        const novo = { b64: dataUrl.split(',')[1], prev: dataUrl, capa: !!it.capa, orig: base, enquadramento: ajuste };
+        const novo = { b64: dataUrl.split(',')[1], prev: dataUrl, capa: !!it.capa, orig: base, padrao: it.auto ? it : it.padrao, enquadramento: ajuste };   // v7.26: "voltar" leva à foto encaixada padrão (já enviada)
         const k = fotosItens.indexOf(it); if (k < 0) return;
         fotosItens[k] = novo; preAgendar_(novo, 'foto'); desenharFotos();
       },
       aoVoltar: () => {
         const k = fotosItens.indexOf(it); if (k < 0) return;
-        base.capa = !!it.capa; fotosItens[k] = base; desenharFotos();
+        const volta = it.padrao || base; volta.capa = !!it.capa; fotosItens[k] = volta; desenharFotos();
       }
     });
   }
@@ -1967,7 +1967,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       if (!it.url) { const n = document.createElement('span'); n.className = 'novo'; n.textContent = 'NOVA'; box.appendChild(n); }
       if (it.up) box.appendChild(criarSeloPre_(it, ''));
 
-      if (it.orig) { const se = document.createElement('span'); se.className = 'selo-enq'; se.textContent = '✂ ajustada'; box.appendChild(se); }
+      if (it.orig && !it.auto) { const se = document.createElement('span'); se.className = 'selo-enq'; se.textContent = '✂ ajustada'; box.appendChild(se); }
 
       const x = document.createElement('button'); x.type = 'button'; x.className = 'btn-remover'; x.textContent = '✕'; x.title = 'Tirar esta foto'; x.setAttribute('aria-label', 'Tirar a foto ' + (idx + 1));
       x.addEventListener('click', () => { fotosItens.splice(idx, 1); desenharFotos(); });
@@ -2070,6 +2070,15 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   }
   versaoServidor().then(v => { videosMulti_ = !!(v && v.videosMultiplos); desenharVideo(); }).catch(() => {});
 
+  /** v7.26: toda foto nova entra INTEIRA no quadro 4:5 do site (Encaixar, com o fundo desfocado da própria foto nas sobras): nada fica
+   *  escondido pelo corte. O zoom/corte fica opcional no ✂ Enquadrar, que abre da original; "Voltar à original" continua valendo. */
+  async function encaixarPadrao_(foto) {
+    if (!foto || !foto.w || !foto.h || !window.TKEnquadrar || Math.abs(foto.w / foto.h - 0.8) <= 0.02) return foto;   // já está em 4:5
+    try {
+      const ajuste = { modo: 'encaixar', z: 1, x: 0, y: 0, r: 0 }, url = await TKEnquadrar.renderizar(foto.prev, ajuste);
+      return { b64: url.split(',')[1], prev: url, orig: foto, enquadramento: ajuste, auto: true };
+    } catch (e) { return foto; }          // se não der para encaixar, fica a foto como veio (o site corta como sempre)
+  }
   function lerFotoReduzida(file) {
     return new Promise((resolve, reject) => {
       const fr = new FileReader();
@@ -2083,7 +2092,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
           c.width = Math.max(1, Math.round(img.width * esc)); c.height = Math.max(1, Math.round(img.height * esc));
           c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
           const url = c.toDataURL('image/jpeg', 0.85);
-          resolve({ b64: url.split(',')[1], prev: url });
+          resolve({ b64: url.split(',')[1], prev: url, w: c.width, h: c.height });
         };
         img.src = fr.result;
       };
@@ -2161,7 +2170,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (!varias && arquivos.length > vagas) alert('Cabem só mais ' + vagas + ' foto(s) (máximo ' + MAX_GALERIA + '). As primeiras ' + vagas + ' foram aproveitadas.');
     for (const f of arquivos.slice(0, Math.max(vagas, 0))) {
       if (!/^image\//.test(f.type)) continue;
-      try { const novaFoto = await lerFotoReduzida(f); fotosItens.push(novaFoto); preAgendar_(novaFoto, 'foto'); } catch (err) { alert('Não consegui ler a foto "' + f.name + '".'); }
+      try { const novaFoto = await encaixarPadrao_(await lerFotoReduzida(f)); fotosItens.push(novaFoto); preAgendar_(novaFoto, 'foto'); } catch (err) { alert('Não consegui ler a foto "' + f.name + '".'); }
     }
     desenharFotos();
   });
@@ -5989,14 +5998,14 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="admin-gestao.js?v=7.19.0"></script>
 <script src="admin-push.js?v=7.19.0"></script>
 <script src="admin-conexoes.js"></script>
-<script src="admin-mensagens.js?v=7.25.0"></script>
+<script src="admin-mensagens.js?v=7.26.0"></script>
 <script src="admin-instagram.js?v=7.17.0"></script>
 <script src="video-validation.js"></script>
 <script src="admin-postagens.js?v=7.13.3"></script>
 <script src="admin-fotoia.js"></script>
-<script src="admin-enquadrar.js?v=7.25.0"></script>
+<script src="admin-enquadrar.js?v=7.26.0"></script>
 <script src="admin-capa-video.js"></script>
-<script src="nav.js?v=7.25.0" data-ativo="gestao"></script>
+<script src="nav.js?v=7.26.0" data-ativo="gestao"></script>
 <script>
 /* v7.19: acabamento das ferramentas do gestor.
  * 1) Títulos das janelas: o emoji do começo vira ícone de linha (os títulos são escritos por vários scripts; aqui só troca a aparência).
