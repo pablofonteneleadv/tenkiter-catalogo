@@ -237,6 +237,11 @@
       .ms-prod-det { font-size: 0.78rem; color: #4a443b; overflow-wrap: anywhere; }
       .ms-prod-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
       .ms-prod-acoes .ms-btn { min-height: 40px; padding: 6px 10px; font-size: 0.8rem; }
+      .ms-previa { display: flex; align-items: center; padding: 0 8px; background: #fff; box-shadow: inset 0 1px 0 #f0ece2; }
+      .ms-previa[hidden] { display: none; }
+      .ms-previa label { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 0.82rem; color: #141414; cursor: pointer; }
+      .ms-previa input { width: 20px; height: 20px; accent-color: #141414; margin: 0; }
+      .ms-previa small { color: #4a443b; font-size: 0.76rem; }
       .ms-prod.marcado { background: #fff7ee; box-shadow: inset 3px 0 0 #E67E22; }
       .sheet-mensagens .ms-prod-marca { position: relative; flex: none; width: 72px; height: 90px; padding: 0; border: 0; border-radius: 6px; background: none; cursor: pointer; }
       .ms-prod-marca .ms-prod-foto { display: block; }
@@ -1168,6 +1173,10 @@
     const dica = dicaComposer(c); if (dica) { const d = el('div', 'ms-dica', dica); d.id = 'ms-dica'; pai.appendChild(d); }
     const stage = el('div', 'ms-stage'); stage.id = 'ms-stage'; stage.hidden = !anexoPend; pai.appendChild(stage);
     const assina = el('div', 'ms-assina'); assina.id = 'ms-assina'; pai.appendChild(assina);
+    const prev = el('div', 'ms-previa'); prev.id = 'ms-previa'; prev.hidden = true;
+    const prevL = el('label'), prevC = el('input'); prevC.type = 'checkbox'; prevC.id = 'ms-previa-chk'; prevC.checked = previaPreferida_(c.canal);
+    prevC.addEventListener('change', () => guardarPrevia_(c.canal, prevC.checked));
+    prevL.append(prevC, el('span', '', 'Mostrar prévia do link'), el('small', '', '(miniatura)')); prev.appendChild(prevL); pai.appendChild(prev);
     const form = el('div', 'ms-compor');
     const clip = botao('ms-ico', '📎', 'anexar'); clip.id = 'ms-anexar'; clip.setAttribute('aria-label', 'Anexar foto, vídeo ou áudio');
     const arq = el('input'); arq.type = 'file'; arq.id = 'ms-arquivo'; arq.hidden = true; arq.accept = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime,audio/*';
@@ -1177,14 +1186,36 @@
     const bt = botao('ms-enviar', 'Enviar', 'enviar'); bt.id = 'ms-enviar'; bt.disabled = !ta.value.trim() && !anexoPend;
     form.append(clip, arq, ta, mic, bt); pai.appendChild(form);
     if (espiando) form.hidden = true;        // para responder, toque em Atender (aí marca como lida)
-    const cresce = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); };
+    const cresce = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); desenharPrevia_(); };
     ta.addEventListener('input', cresce);
     ta.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && window.matchMedia('(pointer: fine)').matches) { ev.preventDefault(); enviar(); } });
     cresce(); desenharStage_(); desenharAssina_(false);
   }
+  /* ---- v7.30: prévia do link (miniatura) escolhida em cada mensagem do WhatsApp; o último jeito usado em cada canal fica lembrado neste aparelho ---- */
+  const LINK_RE_ = /https?:\/\/[^\s<>"']+/i;
+  function previaPreferida_(canal) { try { return (JSON.parse(localStorage.getItem('tk_ms_previa_v1') || '{}') || {})[canal] === true; } catch (e) { return false; } }
+  function guardarPrevia_(canal, sim) { try { const o = JSON.parse(localStorage.getItem('tk_ms_previa_v1') || '{}') || {}; o[canal] = !!sim; localStorage.setItem('tk_ms_previa_v1', JSON.stringify(o)); } catch (e) { /* só conforto */ } }
+  function desenharPrevia_() {
+    const w = $('ms-previa'), ta = $('ms-texto'); if (!w) return;
+    w.hidden = !(aberta && aberta.canal !== 'instagram' && !anexoPend && ta && LINK_RE_.test(ta.value));
+  }
+  /* título e descrição do cartão: produto do site (nome e preço), seleção (?sel=) ou só o nome da loja; link de fora fica com o que o WhatsApp achar */
+  function cartaoDoLink_(texto) {
+    const m = String(texto || '').match(LINK_RE_); if (!m) return {};
+    const link = m[0].replace(/[).,;:!?*_~]+$/, ''), site = typeof SITE_URL !== 'undefined' ? String(SITE_URL).replace(/\/+$/, '') : '';
+    if (!site || link.indexOf(site) !== 0) return {};
+    const pm = link.match(/\/p\/([^/?#]+)/), sel = link.match(/[?&]sel=([^&#]+)/);
+    if (pm) {
+      const cod = decodeURIComponent(pm[1]).toLowerCase(), p = produtosCatalogo_().find((x) => String(x.Codigo || '').toLowerCase() === cod || String(x.ID) === cod);
+      if (p) { const tam = tamanhosDe_(p); return { titulo: p.Nome || 'TENKiTER Modas', descricao: precoTexto_(p) + (tam.length ? ' · ' + tam.join(', ') : '') }; }
+    }
+    if (sel) { const n = decodeURIComponent(sel[1]).split(',').filter(Boolean).length; return { titulo: 'Peças separadas para você', descricao: n + (n === 1 ? ' peça' : ' peças') + ' na TENKiTER Modas' }; }
+    return { titulo: 'TENKiTER Modas', descricao: '' };
+  }
   /* ---- anexos: foto (reduzida no aparelho), vídeo, áudio e gravação ---- */
   function desenharStage_() {
     const st = $('ms-stage'), bt = $('ms-enviar'), ta = $('ms-texto'); if (!st) return;
+    desenharPrevia_();
     st.textContent = ''; st.hidden = !anexoPend;
     if (bt) bt.disabled = !anexoPend && !(ta && ta.value.trim());
     if (!anexoPend) return;
@@ -1291,7 +1322,8 @@
       if (!an && (c.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > limiteTexto(c))) { aviso_('Mensagem grande demais para este canal. Divida em duas.'); return; }
       idLocal = idLocal_();
       const idTmp = 'tmp-' + idLocal;
-      tmp = { idLocal: idLocal, conversa: c.id, anexo: an ? { blob: an.blob, tipo: an.tipo, seg: an.seg, chave: '' } : null, msg: { id: idTmp, direcao: 'saida', tipo: an ? an.tipo : 'texto', texto: texto, enviada_em: new Date().toISOString(), status: 'pendente', midia: an ? 1 : 0, localUrl: an ? an.urlLocal : '' } };
+      const pc = $('ms-previa-chk'), comPrevia = !an && c.canal !== 'instagram' && !!pc && pc.checked && LINK_RE_.test(texto);
+      tmp = { idLocal: idLocal, conversa: c.id, previa: comPrevia ? cartaoDoLink_(texto) : null, anexo: an ? { blob: an.blob, tipo: an.tipo, seg: an.seg, chave: '' } : null, msg: { id: idTmp, direcao: 'saida', tipo: an ? an.tipo : 'texto', texto: texto, enviada_em: new Date().toISOString(), status: 'pendente', midia: an ? 1 : 0, localUrl: an ? an.urlLocal : '' } };
       pendentes.set(idTmp, tmp); msgs.push(tmp.msg);
       ta.value = ''; ta.style.height = 'auto'; rascunhoSalvar_(c.id, ''); anexoPend = null; desenharStage_(); $('ms-enviar').disabled = true; ta.focus();
     }
@@ -1303,7 +1335,8 @@
       if (!up.ok) r = { ok: false, erro: up.erro || 'Não foi possível enviar o arquivo.', semRede: up.semRede, semEnvio: true };
       else tmp.anexo.chave = up.anexo;
     }
-    if (!r) r = await worker_('/msg/enviar', 'POST', { conversa: c.id, texto: texto, idLocal: idLocal, anexo: tmp.anexo ? tmp.anexo.chave : undefined, seg: tmp.anexo ? tmp.anexo.seg : undefined });
+    if (!r) r = await worker_('/msg/enviar', 'POST', Object.assign({ conversa: c.id, texto: texto, idLocal: idLocal, anexo: tmp.anexo ? tmp.anexo.chave : undefined, seg: tmp.anexo ? tmp.anexo.seg : undefined },
+      tmp.previa ? { previa: true, previaTitulo: tmp.previa.titulo || '', previaDescricao: tmp.previa.descricao || '' } : {}));
     if (r.ok || (r.incerto && r.mensagem)) {
       pendentes.delete(idTmp);
       if (aberta && aberta.id === c.id) {

@@ -129,7 +129,7 @@ function d1() {
   const f1 = globalThis.fetch;
   globalThis.fetch = async (u, init) => {
     u = String(u);
-    if (u.startsWith('https://wafly.com.br/') && u.endsWith('/send-text')) {
+    if (u.startsWith('https://wafly.com.br/') && (u.endsWith('/send-text') || u.endsWith('/send-link'))) {
       envios.push({ u, h: new Headers(init.headers), b: JSON.parse(init.body) });
       if (modoZap === 'ok') return new Response(JSON.stringify({ zaapId: 'Z1', messageId: 'ENV' + envios.length, id: 'ENV' + envios.length }));
       if (modoZap === 'recusa') return new Response(JSON.stringify({ error: 'x' }), { status: 400 });
@@ -165,6 +165,17 @@ function d1() {
   chk('200 sem id também é tratado como incerto', (await A('POST', '/msg/enviar', { conversa: c.id, texto: 'sem id', idLocal: 'idlocal-0004' })).j.incerto === true);
   const gigante = await A('POST', '/msg/enviar', { conversa: c.id, texto: 'a'.repeat(4001), idLocal: 'idlocal-0005' });
   chk('texto grande demais: recusado em português', gigante.r.status === 400 && /grande/.test(gigante.j.erro));
+  modoZap = 'ok';
+  // v2.13: prévia do link escolhida na mensagem
+  const pv1 = await A('POST', '/msg/enviar', { conversa: c.id, texto: '*Ana:*\nBlusa\nhttps://tenkitermodas.com.br/p/TK-0754.', idLocal: 'idlocal-pv01', previa: true, previaTitulo: 'Térmica UV\ninfantil P', previaDescricao: 'R$ 24,99 à vista' });
+  const ePv = envios[envios.length - 1];
+  chk('com prévia: vai pelo /send-link com o primeiro link (sem o ponto final), título e descrição', pv1.j.ok && ePv.u.endsWith('/send-link') && ePv.b.linkUrl === 'https://tenkitermodas.com.br/p/TK-0754' && ePv.b.message.startsWith('*Ana:*') && ePv.b.title === 'Térmica UV infantil P' && ePv.b.linkDescription === 'R$ 24,99 à vista' && ePv.b.phone === '5588999990000', ePv);
+  const pv2 = await A('POST', '/msg/enviar', { conversa: c.id, texto: 'sem link aqui', idLocal: 'idlocal-pv02', previa: true });
+  chk('com prévia mas sem link: vai como texto simples', pv2.j.ok && envios[envios.length - 1].u.endsWith('/send-text'));
+  const pv3 = await A('POST', '/msg/enviar', { conversa: c.id, texto: 'veja https://tenkitermodas.com.br/?sel=TK-0001,TK-0002', idLocal: 'idlocal-pv03' });
+  chk('sem marcar a prévia: link vai como texto simples (como antes)', pv3.j.ok && envios[envios.length - 1].u.endsWith('/send-text'));
+  const pv4 = await A('POST', '/msg/enviar', { conversa: c.id, texto: 'https://x.com/a', idLocal: 'idlocal-pv04', previa: true, previaTitulo: 'x'.repeat(300) });
+  chk('cartão: título cortado em 100 letras e sem descrição vazia', pv4.j.ok && envios[envios.length - 1].b.title.length === 100 && !('linkDescription' in envios[envios.length - 1].b));
 
   // ---- responder pelo Instagram ----
   await cfg('ig_token', TOKEN);

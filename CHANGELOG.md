@@ -6,6 +6,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.30.0 — Mensagens: prévia do link escolhida em cada mensagem — 2026-10-26
+
+- No WhatsApp, quando a mensagem tem link, aparece logo acima do campo a caixinha "Mostrar prévia do link (miniatura)". A última escolha de cada canal fica lembrada no aparelho; começa desmarcada.
+- Marcada, a mensagem sai pelo envio "link com prévia" da Wafly (`/send-link`), usando o primeiro link do texto. O cartão leva o nome e o preço da peça, "Peças separadas para você" numa seleção ou o nome da loja nos links do site. Link de fora fica com o que o WhatsApp encontrar.
+- Desmarcada, ou sem link, tudo continua como antes (texto simples). No Instagram a caixinha não aparece.
+- Worker: `/msg/enviar` aceita `previa`, `previaTitulo` e `previaDescricao` (limpos e cortados em 100/200 letras).
+- Service worker renovado (tk-3.38.18).
+
 ## 7.29.0 — Mensagens: selecionar várias peças e mandar a seleção — 2026-10-26
 
 - Na gaveta Produtos da conversa, tocar na foto marca a peça (✓ e linha destacada); a seleção continua ao trocar a busca.

@@ -2798,6 +2798,17 @@ async function enviarWaflyGenerico_(env, conv, caminho, corpo, limiteMs) {
   } catch (e) { return { ok: false, incerto: true, erro: 'Sem confirmação da Wafly. Confira no WhatsApp antes de tentar de novo.' }; }
 }
 async function enviarTextoWhats_(env, conv, texto) { return enviarWaflyGenerico_(env, conv, '/send-text', { message: texto }); }
+/* v2.13: "Prévia do link" marcada na mensagem: sai pelo /send-link da Wafly (cartão com título e descrição) usando o primeiro link do texto. Sem link, vai como texto simples. */
+const MSG_LINK_RE_ = /https?:\/\/[^\s<>"']+/i;
+const textoCartao_ = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
+async function enviarTextoComPrevia_(env, conv, texto, d) {
+  const m = texto.match(MSG_LINK_RE_), link = m ? m[0].replace(/[).,;:!?*_~]+$/, '') : '';
+  if (!link) return enviarTextoWhats_(env, conv, texto);
+  const corpo = { message: texto, linkUrl: link }, titulo = textoCartao_(d.previaTitulo, 100), desc = textoCartao_(d.previaDescricao, 200);
+  if (titulo) corpo.title = titulo;
+  if (desc) corpo.linkDescription = desc;
+  return enviarWaflyGenerico_(env, conv, '/send-link', corpo);
+}
 const WHATS_ROTAS_MIDIA_ = { 'imagem': ['/send-image', 'image'], 'vídeo': ['/send-video', 'video'], 'áudio': ['/send-audio', 'audio'] };
 async function enviarMidiaWhats_(env, conv, anexo, legenda) {
   const rota = WHATS_ROTAS_MIDIA_[anexo.tipo], corpo = {}; corpo[rota[1]] = anexo.url;
@@ -2853,7 +2864,7 @@ async function responderMensagem_(env, whats, d) {
   }
   try { await env.DB.prepare("DELETE FROM cfg WHERE chave LIKE 'msgenv:%' AND substr(valor,1,24)<?").bind(new Date(Date.now() - 3 * 86400000).toISOString()).run(); } catch (e) { /* limpeza é conforto */ }
   const res = anexo ? (conv.canal === 'instagram' ? await enviarMidiaInstagram_(env, conv, anexo) : await enviarMidiaWhats_(env, conv, anexo, texto))
-    : (conv.canal === 'instagram' ? await enviarTextoInstagram_(env, conv, texto) : await enviarTextoWhats_(env, conv, texto));
+    : (conv.canal === 'instagram' ? await enviarTextoInstagram_(env, conv, texto) : d.previa === true ? await enviarTextoComPrevia_(env, conv, texto, d) : await enviarTextoWhats_(env, conv, texto));
   if (!res.ok && !res.incerto) { await env.DB.prepare('DELETE FROM cfg WHERE chave=?').bind(chave).run(); return [409, { ok: false, erro: res.erro }]; }
   const extId = res.ok ? res.extId : 'inc:' + idLocal, em = agora();
   await gravarMensagem_(env, conv.canal, { extId: extId, contato: conv.contato, nome: '', grupo: conv.grupo, direcao: 'saida', tipo: anexo ? anexo.tipo : 'texto', texto: texto, em: em, midiaChave: anexo ? anexo.chave : '', midiaMime: anexo ? anexo.mime : '', midiaSeg: Math.max(0, Math.min(86400, Number(d.seg) || 0)) });
