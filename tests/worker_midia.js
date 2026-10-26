@@ -52,6 +52,10 @@ const chk = (n, c, d) => { if (c) { ok++; console.log('  ✔ ' + n); } else { fa
   r = await w.fetch(new Request('https://midia.test/m/' + chave, { headers: { Range: 'bytes=0-9' } }), env);
   chk('Range (vídeo) devolve 206', r.status === 206 && r.headers.get('Content-Range').startsWith('bytes 0-9/'), r.status);
   r = await w.fetch(new Request('https://midia.test/m/202610/zzzz.jpg'), env); chk('chave fora do padrão = 404', r.status === 404);
+  const kOut = 'out/202610/' + 'ab12'.repeat(6) + '.m4a'; await R2.put(kOut, Buffer.from('audio'), { httpMetadata: { contentType: 'audio/mp4' } });
+  r = await w.fetch(new Request('https://midia.test/m/' + kOut), env); chk('mídia enviada por Mensagens (out/, áudio) abre pelo link público', r.status === 200);
+  r = await w.fetch(new Request('https://midia.test/m/msg/202610/' + 'ab12'.repeat(6) + '.jpg'), env); chk('mídia RECEBIDA de clientes (msg/) nunca abre pelo link público', r.status === 404);
+  r = await w.fetch(new Request('https://midia.test/m/out/202610/' + 'ab12'.repeat(6) + '.html'), env); chk('out/ só aceita extensões de mídia', r.status === 404);
   const antes = chamadasApi;
   await w.fetch(pedido('GET', '/uso', 'tk2.cadastra'), env); chk('sessão guardada 2 min (não pergunta ao Google de novo)', chamadasApi === antes);
   r = await w.fetch(pedido('GET', '/uso', 'tk2.cadastra'), env); j = await r.json(); chk('uso conta 1 arquivo', j.arquivos === 1 && j.bytes === jpg.length && j.limite > 9e9, j);

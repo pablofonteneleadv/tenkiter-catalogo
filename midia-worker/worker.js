@@ -103,6 +103,8 @@ function limite(env) { const n = Number(env.LIMITE_BYTES); return n > 0 ? n : LI
 function dia() { return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); }   // dia de Fortaleza
 
 const CHAVE_OK = /^(t\/)?[0-9]{6}\/[0-9a-f]{20}\.(jpg|png|webp|mp4|webm)$/;
+/** Mídia que a loja envia por Mensagens (foto/vídeo/áudio): chave aleatória de 96 bits, em out/. Só leitura pública (a Wafly e a Meta precisam abrir o link). */
+const SAIDA_OK = /^out\/[0-9]{6}\/[0-9a-f]{24}\.(jpg|png|webp|mp4|mov|ogg|mp3|m4a|aac|weba|wav|amr)$/;
 const POSTER_MAX = 400 * 1024;   // miniatura de vídeo: um quadro em JPG, pequeno de propósito
 
 export default {
@@ -118,7 +120,7 @@ export default {
     // ---- arquivo público ----
     if (caminho.startsWith('/m/') && (req.method === 'GET' || req.method === 'HEAD')) {
       const chave = caminho.slice(3);
-      if (!CHAVE_OK.test(chave)) return resp({ ok: false, erro: 'Não encontrado.' }, 404);
+      if (!CHAVE_OK.test(chave) && !SAIDA_OK.test(chave)) return resp({ ok: false, erro: 'Não encontrado.' }, 404);
       const range = req.headers.get('Range');
       const obj = await env.MIDIA.get(chave, range ? { range: req.headers } : undefined);
       if (!obj) return resp({ ok: false, erro: 'Não encontrado.' }, 404);

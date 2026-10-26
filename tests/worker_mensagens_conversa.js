@@ -313,6 +313,8 @@ function d1() {
   await insPost('whatsapp', 'p/storyA.jpg', pubA, 'Conjunto Plus Size'); await insPost('whatsapp', 'p/storyB.jpg', pubB, 'Vestido alfaiataria'); await insPost('whatsapp2', 'p/storyA.jpg', pubA, 'So no 2');
   await wh('/wh/wafly/1/' + seg, msg('ST1', '5588966660000', 'Oi', { momment: tM + 5000, isStatusReply: true, referenceMessageId: 'REFSTATUS' }));
   const forma = (await A('GET', '/msg/diagnostico')).j.forma.whatsapp1;
+  const brutoD = (await A('GET', '/msg/diagnostico')).j.bruto.whatsapp1, brutoS = JSON.stringify(brutoD);
+  chk('diagnóstico guarda o FORMATO dos últimos avisos sem textos, números nem links', brutoD.length >= 1 && brutoD.length <= 8 && brutoS.includes('isStatusReply') && !brutoS.includes('5588') && !brutoS.includes('cdn.wafly.fake/') && !brutoS.includes('Oi') && /<texto/.test(brutoS), brutoS.slice(0, 300));
   const st = (await A('GET', '/msg/mensagens?conversa=' + (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588966660000'").first()).id)).j.mensagens[0];
   chk('resposta a story: marca como story, acha o Status mais recente e avisa que é "provável" (havia dois)', st.texto === 'Oi' && st.ctx_tipo === 'story' && st.ctx_midia === 1 && st.ctx_aprox === 1 && st.ctx_legenda === 'Vestido alfaiataria' && st.ctx_mtipo === 'imagem' && !!st.ctx_em, st);
   const dls = await w.fetch(ped('GET', '/msg/midia?id=' + st.id + '&ctx=1', 'tk2.admin'), env, {});
@@ -337,7 +339,7 @@ function d1() {
   // ---- enviar mídia pelo painel ----
   const up = async (tipo, bytes, sess) => { const r = await w.fetch(new Request('https://ig.test/msg/anexo?tipo=' + encodeURIComponent(tipo), { method: 'POST', headers: { Origin: O, 'X-TK-Whats': '88999990000', 'X-TK-Sessao': sess === undefined ? 'tk2.admin' : sess, 'Content-Type': 'application/octet-stream' }, body: bytes }), env, {}); return { r, j: await r.json() }; };
   const upJ = await up('imagem', JPG);
-  chk('anexo: foto JPEG válida é guardada em msg/ com o tipo detectado nos bytes', upJ.j.ok && upJ.j.mime === 'image/jpeg' && /^msg\/\d{6}\/[a-f0-9]{24}\.jpg$/.test(upJ.j.anexo) && objs.has(upJ.j.anexo), upJ.j);
+  chk('anexo: foto JPEG válida é guardada em out/ (único prefixo público) com o tipo detectado nos bytes', upJ.j.ok && upJ.j.mime === 'image/jpeg' && /^out\/\d{6}\/[a-f0-9]{24}\.jpg$/.test(upJ.j.anexo) && objs.has(upJ.j.anexo), upJ.j);
   chk('anexo: arquivo que não é foto (mesmo pedindo "imagem") é recusado em português', (await up('imagem', Buffer.from('<html><script>alert(1)</script></html>'))).r.status === 415);
   chk('anexo: foto acima de 8 MB: 413', (await up('imagem', Buffer.concat([JPG, Buffer.alloc(8 * 1048576)]))).r.status === 413);
   const hv = await up('vídeo', MP4_HEVC);
