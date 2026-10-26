@@ -5,6 +5,7 @@ sys.path.insert(0, AQUI)
 os.makedirs(os.path.join(AQUI, 'saida'), exist_ok=True)
 from mock import *
 import mock_msg
+mock_msg.ASSINATURA_PADRAO = False   # v7.22: aqui confere a mecânica do envio; a assinatura tem o teste dela (mensagens_assinatura)
 from playwright.sync_api import sync_playwright
 AXE = open(os.path.join(AQUI, 'axe.min.js')).read()
 BASE = os.environ.get("TK_BASE", "http://localhost:8765/")

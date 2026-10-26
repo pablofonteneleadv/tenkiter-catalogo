@@ -1,4 +1,4 @@
-# Mensagens: número do cliente, mesma pessoa nos 2 WhatsApp e encerrar — 26/10/2026
+# Mensagens: número do cliente, mesma pessoa nos 2 WhatsApp, encerrar e nome do atendente — 26/10/2026
 
 Pedido do Pablo: "Tem vários que não estão cadastrados e que está aparecendo nome como Tenkitermodas. Se não está cadastrado era pra aparecer o telefone e nome que colocou no WhatsApp. Se tiver o mesmo número em ambos canais (...) uma forma de identificação, ou uma aba com alerta. Queria também o recurso encerrar (...) vai para uma aba de encerrados, e volta automaticamente se a conversa tiver nova mensagem. Podendo selecionar várias para encerrar também."
 
@@ -19,10 +19,19 @@ Quando a primeira mensagem da conversa sai do celular da loja, a Wafly manda com
 - Esc sai da seleção, e o foco vai para a barra quando a seleção começa pelo menu.
 - Correção de layout: a busca passava 24 px da coluna das conversas, por causa da regra geral de input.
 
+## Nome do atendente nas respostas
+Pedido: "opção de colocar nome do atendente. Pré-definido para primeiro nome, mas com a opção do atendente escrever o nome que gostaria (...) selecionado padrão, mas admin pode desmarcar ou marcar. Esse nome aparece antes da mensagem."
+- Ligado por padrão. A resposta sai como "*Ana:*" + quebra de linha + texto no WhatsApp, onde o nome aparece em negrito; no Instagram sai "Ana:", porque lá não existe negrito.
+- O padrão é o primeiro nome do cadastro de quem está logado; nome todo em maiúsculas vira "Pablo". Acima da caixa de mensagem fica a linha "Respondendo como **Ana** · Mudar nome", com 44 px de altura; ali o atendente escreve o nome que quer e salva com Enter. O nome fica guardado no servidor para aquela pessoa e vale em qualquer aparelho. Nome vazio volta ao primeiro nome.
+- ⋯ → "Configurações (leitura e nome)…" → "Nome do atendente nas respostas": a caixa "Mostrar o nome de quem responde antes da mensagem" liga ou desliga para todos (marcada por padrão), mostra um exemplo e tem o campo do nome.
+- Na conversa, a bolha enviada mostra o nome como rótulo verde, sem os asteriscos. A prévia da lista mostra "Ana: texto".
+- Espiando, a linha fica escondida junto com a caixa de resposta; volta ao tocar em Atender.
+- Evidência: `07-assinatura-390.png`, `08-assinatura-nome-escolhido.png`, `09-config-assinatura.png`, `10-assinatura-computador.png`.
+
 ## Medições
 - 320×700 e 412×915: sem rolagem horizontal. A barra de seleção fica colada ao pé (639–700 / 854–915). Os alvos da barra medem 68×44, 97×44 e 88×44.
 - 1280: a barra fica no pé da coluna das conversas, sem passar da largura dela.
 
-Testes: `mensagens_encerrar` (novo, 35 verificações, axe na seleção e na faixa), `mensagens_mestre` (21), `mensagens_dashboard` (99), `mensagens_grupo` (8), `worker_mensagens_conversa` (129, com 18 novas) e os demais `worker_*`.
+Testes: `mensagens_encerrar` (novo, 35 verificações, axe na seleção e na faixa), `mensagens_assinatura` (novo, 22, axe na linha e na configuração), `mensagens_mestre` (21), `mensagens_dashboard` (99), `mensagens_grupo` (8), `worker_mensagens_conversa` (134, com 23 novas) e os demais `worker_*`.
 
 Resultado: APROVADO COM LIMITAÇÃO. A regra do nome da loja segue o que a Wafly mandou nas conversas do print. Se em algum caso a Wafly mandar o nome do cliente nas mensagens enviadas, o efeito é só mostrar o número até o cliente escrever. Não foi testado no aparelho Android real.

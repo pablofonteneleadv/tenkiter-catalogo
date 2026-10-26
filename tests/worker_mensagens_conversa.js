@@ -466,6 +466,17 @@ function d1() {
   chk('reabrir à mão', re.j.ok && (await conv('whatsapp1', '5588911110001')).encerrada_em === '');
   chk('encerrar sem conversa: erro em português', (await A('POST', '/msg/encerrar', { conversas: ['x'] })).j.erro === 'Escolha ao menos uma conversa.');
   chk('encerrar exige Admin total (sem sessão: 401)', (await w.fetch(ped('POST', '/msg/encerrar', '', { conversas: [jw1.id] }), env, {})).status === 401);
+  // ---- v2.11: nome do atendente nas respostas ----
+  const ca0 = await A('GET', '/msg/config');
+  chk('assinatura começa ligada e sem nome próprio guardado', ca0.j.config.assinatura === true && ca0.j.meuNome === '', ca0.j);
+  const ca1 = await A('POST', '/msg/config', { meuNome: '  *Pa_blo*  ~Atendente~ `x` muito comprido demais para caber aqui ' });
+  chk('nome do atendente é limpo (sem símbolos do WhatsApp) e limitado a 30 letras', ca1.j.ok && ca1.j.meuNome.length <= 30 && !/[*_~`]/.test(ca1.j.meuNome) && ca1.j.meuNome.startsWith('Pa blo'), ca1.j.meuNome);
+  chk('o nome fica guardado para quem está logado', (await A('GET', '/msg/config')).j.meuNome === ca1.j.meuNome);
+  const ca2 = await A('POST', '/msg/config', { assinatura: false });
+  chk('Admin desliga a assinatura para todos (sem apagar o nome)', ca2.j.config.assinatura === false && ca2.j.meuNome === ca1.j.meuNome && ca2.j.config.lerCelular.whatsapp1 === true);
+  await A('POST', '/msg/config', { assinatura: true });
+  const ca3 = await A('POST', '/msg/config', { meuNome: '' });
+  chk('nome vazio volta ao padrão (primeiro nome do cadastro)', ca3.j.meuNome === '' && ca3.j.config.assinatura === true);
   globalThis.fetch = f5;
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -2724,11 +2724,15 @@ async function msgContagens_(env, canal) {
 }
 /* v2.10: confirmar a leitura no aparelho (WhatsApp pela Wafly; Instagram pela Graph API). Só quando a pessoa ABRE a conversa
  * normalmente e o canal está com "marcar como lida no celular" ligado; o "Espiar" do painel nunca chama isto. */
-const MSG_CFG_PADRAO_ = { lerCelular: { whatsapp1: true, whatsapp2: true, instagram: true } };
+// v2.11: assinatura = nome do atendente antes da resposta (ligada por padrão; o Admin liga/desliga para todos)
+const MSG_CFG_PADRAO_ = { lerCelular: { whatsapp1: true, whatsapp2: true, instagram: true }, assinatura: true };
+/** Nome que o atendente escolheu para aparecer nas respostas: sem símbolos de formatação do WhatsApp, até 30 letras. */
+const nomeAtendenteLimpo_ = (v) => String(v == null ? '' : v).replace(/[\u0000-\u001f*_~`]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30);
 async function msgCfg_(env) {
   let c = null; try { c = JSON.parse((await cfgGet(env, 'msg_cfg')) || 'null'); } catch (e) { c = null; }
   const out = JSON.parse(JSON.stringify(MSG_CFG_PADRAO_));
   if (c && c.lerCelular && typeof c.lerCelular === 'object') for (const k of MSG_CANAIS) if (typeof c.lerCelular[k] === 'boolean') out.lerCelular[k] = c.lerCelular[k];
+  if (c && typeof c.assinatura === 'boolean') out.assinatura = c.assinatura;
   return out;
 }
 async function confirmarLeituraCelular_(env, conv) {
@@ -3115,13 +3119,20 @@ export default {
       }
       if (p === '/msg/config' && req.method === 'GET') {
         const diag = {}; for (const c of MSG_CANAIS) { try { diag[c] = JSON.parse((await cfgGet(env, 'msg_leitura_diag_' + c)) || 'null'); } catch (e) { diag[c] = null; } }
-        return J({ ok: true, config: await msgCfg_(env), ultimaLeitura: diag });
+        const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
+        return J({ ok: true, config: await msgCfg_(env), ultimaLeitura: diag, meuNome: quem ? ((await cfgGet(env, 'msg_atendente_' + quem)) || '') : '' });
       }
       if (p === '/msg/config' && req.method === 'POST') {
         const d = await req.json().catch(() => ({})), atual = await msgCfg_(env);
         if (d && d.lerCelular && typeof d.lerCelular === 'object') for (const c of MSG_CANAIS) if (typeof d.lerCelular[c] === 'boolean') atual.lerCelular[c] = d.lerCelular[c];
+        if (d && typeof d.assinatura === 'boolean') atual.assinatura = d.assinatura;
         await cfgSet(env, 'msg_cfg', JSON.stringify(atual));
-        return J({ ok: true, config: atual });
+        // cada atendente guarda o próprio nome (vazio = volta ao primeiro nome do cadastro)
+        const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
+        let meuNome;
+        if (d && typeof d.meuNome === 'string' && quem) { meuNome = nomeAtendenteLimpo_(d.meuNome); await cfgSet(env, 'msg_atendente_' + quem, meuNome || null); }
+        else meuNome = quem ? ((await cfgGet(env, 'msg_atendente_' + quem)) || '') : '';
+        return J({ ok: true, config: atual, meuNome: meuNome });
       }
       if (p === '/msg/exportar' && req.method === 'GET') {
         const q = {}; for (const k of ['canal', 'conversa', 'formato', 'de', 'ate']) q[k] = url.searchParams.get(k) || '';

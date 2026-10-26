@@ -194,6 +194,14 @@
       .ms-faixa { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #e6e1d6; background: #faf7f0; color: #3d362c; font-size: 0.85rem; }
       .ms-faixa.ambos { background: #fff4e8; border-bottom-color: #f2d3b0; color: #5c2e00; }
       .ms-faixa .ms-btn { flex: none; min-height: 40px; }
+      .ms-assina { display: flex; align-items: center; gap: 8px; padding: 0 12px; background: #fff; font-size: 0.78rem; color: #4a443b; min-height: 32px; }
+      .ms-assina[hidden] { display: none; }
+      .ms-assina b { color: #141414; }
+      .ms-assina input { flex: 1 1 auto; min-width: 0; min-height: 40px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 8px; font: inherit; font-size: 0.9rem; }
+      .ms-assina .ms-btn { min-height: 40px; padding: 6px 12px; }
+      .sheet-mensagens .ms-link-btn { min-height: 44px; padding: 0 6px; border: 0; background: none; color: #7a3a00; font: inherit; font-size: 0.78rem; font-weight: 700; text-decoration: underline; cursor: pointer; }
+      .ms-atendente { color: #0f6b3f; }
+      .ms-cfg-tit { margin: 12px 0 0; font-weight: 700; } .ms-cfg-tit.ms-cfg-tit1 { margin-top: 0; }
       /* conversa */
       .ms-cab { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid #e6e1d6; background: #fff; }
       .ms-cab .ms-quem { flex: 1; min-width: 0; } .ms-cab .ms-quem b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ms-cab .ms-quem span { display: block; font-size: 0.76rem; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -286,6 +294,12 @@
     o.addEventListener('click', clique);
     // v7.21: liga/desliga "marcar como lida no celular" de cada canal
     o.addEventListener('change', async (ev) => {
+      const ass = ev.target && ev.target.dataset && ev.target.dataset.cfgAssinatura ? ev.target : null;
+      if (ass && cfgLeitura) {
+        ass.disabled = true; const r = await worker_('/msg/config', 'POST', { assinatura: ass.checked }); ass.disabled = false;
+        if (r.ok) { cfgLeitura.config = r.config; aviso_(r.config.assinatura ? 'O nome do atendente vai antes das respostas.' : 'As respostas saem sem o nome do atendente.'); desenharAssina_(false); } else { ass.checked = !ass.checked; aviso_(r.erro || 'Não foi possível salvar agora.'); }
+        return;
+      }
       const chk = ev.target && ev.target.dataset && ev.target.dataset.cfgCanal ? ev.target : null; if (!chk || !cfgLeitura) return;
       const novo = Object.assign({}, cfgLeitura.config.lerCelular, { [chk.dataset.cfgCanal]: chk.checked });
       chk.disabled = true; const r = await worker_('/msg/config', 'POST', { lerCelular: novo }); chk.disabled = false;
@@ -415,6 +429,7 @@
   /* v7.21: configuração "marcar como lida no celular" por canal + o resultado da última tentativa */
   function caixaLeitura_() {
     const caixa = el('div', 'ms-caixa');
+    caixa.appendChild(el('p', 'ms-cfg-tit ms-cfg-tit1', 'Leitura no celular'));
     caixa.appendChild(el('p', '', 'Ao abrir uma conversa normalmente, ela fica lida aqui no painel e, com a opção ligada, também no celular oficial (o WhatsApp/Instagram da loja mostra como lida e o cliente vê os dois tiques azuis, se ele tiver isso ligado). O botão “Espiar” nunca marca como lida, nem aqui nem no celular.'));
     if (!cfgLeitura) { caixa.appendChild(el('p', '', 'Carregando…')); carregarCfgLeitura_(); return caixa; }
     CANAIS.forEach(([id, nome]) => {
@@ -424,13 +439,21 @@
       const u = cfgLeitura.ultimaLeitura && cfgLeitura.ultimaLeitura[id];
       if (u) caixa.appendChild(el('p', 'ms-cfg-res ' + (u.ok ? 'ms-ok' : 'ms-pausa'), (u.ok ? 'Última confirmação no celular: ' : 'Última tentativa não confirmada: ') + hora(u.em) + (u.ok ? '' : ' — ' + (u.erro || 'sem resposta'))));
     });
+    // v7.22: nome do atendente antes da resposta
+    caixa.appendChild(el('p', 'ms-cfg-tit', 'Nome do atendente nas respostas'));
+    const la = el('label', 'ms-cfg-linha'), ca = el('input'); ca.type = 'checkbox'; ca.checked = cfgLeitura.config.assinatura !== false; ca.dataset.cfgAssinatura = '1';
+    la.append(ca, document.createTextNode(' Mostrar o nome de quem responde antes da mensagem')); caixa.appendChild(la);
+    caixa.appendChild(el('p', 'ms-cfg-res', 'Sai assim: “' + (nomeAtendente_() || 'Pablo') + ': Temos sim!” (no WhatsApp, o nome vai em negrito).'));
+    const ln = el('div', 'ms-linha'), inp = el('input', 'ms-copia'); inp.id = 'ms-meu-nome'; inp.type = 'text'; inp.maxLength = 30; inp.autocomplete = 'off'; inp.value = cfgLeitura.meuNome || ''; inp.placeholder = nomePadrao_() ? 'Seu nome (padrão: ' + nomePadrao_() + ')' : 'Seu nome nas respostas'; inp.setAttribute('aria-label', 'Seu nome nas respostas');
+    inp.style.flex = '1 1 160px'; inp.style.width = 'auto'; ln.append(inp, botao('ms-btn', 'Salvar nome', 'nome-salvar-cfg')); caixa.appendChild(ln);
     const l = el('div', 'ms-linha'); l.appendChild(botao('ms-btn', 'Fechar', 'leitura-cfg')); caixa.appendChild(l);
     return caixa;
   }
   async function carregarCfgLeitura_() {
     const r = await worker_('/msg/config', 'GET');
-    cfgLeitura = r.ok ? r : { config: { lerCelular: { whatsapp1: true, whatsapp2: true, instagram: true } }, ultimaLeitura: {} };
+    cfgLeitura = r.ok ? r : { config: { lerCelular: { whatsapp1: true, whatsapp2: true, instagram: true }, assinatura: true }, ultimaLeitura: {}, meuNome: '' };
     if (painel === 'leitura') desenharEstado();
+    desenharAssina_();
   }
   async function diagnosticar() {
     const r = await worker_('/msg/instagram/situacao', 'GET'), d = $('ms-diag'); if (!d) return;
@@ -474,7 +497,7 @@
     if (c.nome && !c.grupo && /^\d{10,15}$/.test(c.contato || '')) l3.appendChild(el('span', 'ms-fone', foneBonito_(c.contato)));
     const l2 = el('span', 'ms-l2'); const pv = el('span', 'ms-previa');
     if (saiu) { pv.appendChild(selo(c.ult_status || 'enviada')); pv.appendChild(document.createTextNode('Você: ')); }
-    const pr = /^\[(.+)\]$/.exec(c.previa || ''); pv.appendChild(document.createTextNode(pr ? (TIPO_ROTULO[pr[1]] || c.previa) : (c.previa || ''))); l2.appendChild(pv);
+    const pr = /^\[(.+)\]$/.exec(c.previa || ''); pv.appendChild(document.createTextNode(pr ? (TIPO_ROTULO[pr[1]] || c.previa) : String(c.previa || '').replace(/^\*([^*\n]{1,30}):\* ?/, '$1: '))); l2.appendChild(pv);
     if (nova) { const bd = el('span', 'ms-badge', c.nao_lidas > 99 ? '99+' : String(c.nao_lidas)); bd.setAttribute('aria-label', c.nao_lidas + ' não lidas'); l2.appendChild(bd); }
     corpo.append(l1, l2); if (l3.firstChild) corpo.appendChild(l3);
     if (espera) corpo.appendChild(el('span', 'ms-aguarda', 'Falta responder · há ' + espera_(c.ult_entrada_em || c.ultima_em)));
@@ -483,6 +506,40 @@
     return li;
   }
   const outroCanal_ = (c) => (c.canal === 'whatsapp1' ? 'whatsapp2' : 'whatsapp1');
+  /* ---- v7.22: nome do atendente antes da resposta ("*Pablo:*" no WhatsApp, em negrito; "Pablo:" no Instagram) ---- */
+  function nomePadrao_() {
+    let n = ''; try { n = typeof usuarioAdmin !== 'undefined' && usuarioAdmin ? String(usuarioAdmin.nome || '') : ''; } catch (e) { n = ''; }
+    n = n.trim().split(/\s+/)[0] || '';
+    return n && n === n.toUpperCase() ? n.charAt(0) + n.slice(1).toLowerCase() : n;
+  }
+  const nomeAtendente_ = () => (cfgLeitura && cfgLeitura.meuNome) || nomePadrao_();
+  const assinaturaLigada_ = () => !(cfgLeitura && cfgLeitura.config && cfgLeitura.config.assinatura === false);
+  function assinar_(c, texto) {
+    const n = nomeAtendente_(); if (!texto || !n || !assinaturaLigada_()) return texto;
+    return c.canal === 'instagram' ? n + ':\n' + texto : '*' + n + ':*\n' + texto;
+  }
+  const RE_ASSINATURA_ = /^\*([^*\n]{1,30}):\*\n/;
+  function desenharAssina_(editando) {
+    const w = $('ms-assina'); if (!w) return;
+    w.textContent = ''; w.hidden = espiando || !assinaturaLigada_(); if (w.hidden) return;
+    const n = nomeAtendente_();
+    if (editando || !n) {
+      const i = el('input'); i.id = 'ms-meu-nome-rapido'; i.type = 'text'; i.maxLength = 30; i.autocomplete = 'off'; i.value = n; i.placeholder = 'Seu nome nas respostas'; i.setAttribute('aria-label', 'Seu nome nas respostas');
+      i.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); salvarNome_(i.value); } else if (ev.key === 'Escape' && n) { ev.stopPropagation(); desenharAssina_(false); } });
+      w.append(el('span', '', 'Assinar como'), i, botao('ms-btn', 'Salvar', 'nome-salvar'));
+      if (editando) setTimeout(() => i.focus(), 0);
+      return;
+    }
+    const t = el('span', ''); t.append(document.createTextNode('Respondendo como '), el('b', '', n));
+    w.append(t, botao('ms-link-btn', 'Mudar nome', 'nome-editar'));
+  }
+  async function salvarNome_(v) {
+    const r = await worker_('/msg/config', 'POST', { meuNome: String(v || '') });
+    if (!r.ok) { aviso_(r.erro || 'Não foi possível salvar agora.'); return; }
+    cfgLeitura = Object.assign({}, cfgLeitura || {}, { config: r.config, meuNome: r.meuNome || '' });
+    aviso_('Nome salvo: as próximas respostas saem como “' + nomeAtendente_() + '”.');
+    desenharAssina_(false); if (painel === 'leitura') desenharEstado();
+  }
   /* ---- v7.22: seleção de várias conversas para encerrar (ou reabrir, no filtro Encerradas) ---- */
   function iniciarSelecao_(id) {
     selecao = new Set(id ? [id] : []); fecharMenu(); pintarLista(); desenharSelbar_();
@@ -667,7 +724,10 @@
     const autor = autorEl_(m); if (autor) b.appendChild(autor);
     if (m.ctx_tipo === 'story') b.appendChild(blocoStory_(m)); else if (m.ctx_tipo === 'resposta' && (m.ctx_texto || m.ctx_qtipo)) b.appendChild(blocoCitacao_(m));
     const mid = blocoMidia_(m); if (mid) b.appendChild(mid);
-    if (m.texto) linkar(b, trocarMencoes_(m.texto));
+    const sig = m.direcao === 'saida' && m.texto ? RE_ASSINATURA_.exec(m.texto) : null;
+    if (sig) b.appendChild(el('span', 'ms-autor ms-atendente', sig[1]));
+    const corpoTxt = sig ? m.texto.slice(sig[0].length) : m.texto;
+    if (corpoTxt) linkar(b, trocarMencoes_(corpoTxt));
     if (m.tipo && m.tipo !== 'texto' && !mid) b.appendChild(el('span', 'ms-tipo', (m.texto ? ' ' : '') + (TIPO_ROTULO[m.tipo] || '[' + m.tipo + ']') + (m.midia === 0 && m.direcao === 'entrada' && ['imagem', 'vídeo', 'áudio'].indexOf(m.tipo) >= 0 ? ' (arquivo não disponível)' : '')));
     if (m.direcao === 'entrada' && typeof m.id === 'number' && !m.ctx_tipo && m.tipo === 'texto' && m.texto && m.texto.length <= 80 && !ehGrupo_() && (canalDaConversa() === 'whatsapp1' || canalDaConversa() === 'whatsapp2')) b.appendChild(botao('ms-ver-stories', 'Foi resposta a um story? Ver stories no ar', 'stories-no-ar', { id: String(m.id) }));
     const meta = el('span', 'ms-meta'); meta.appendChild(el('time', '', m.enviada_em ? hm(new Date(m.enviada_em)) : ''));
@@ -735,6 +795,7 @@
     fio.addEventListener('scroll', () => { if (perto_(fio, 60) && novasAbaixo) { novasAbaixo = 0; atualizarPill(); marcarLida(); } }, { passive: true });
     const dica = dicaComposer(c); if (dica) { const d = el('div', 'ms-dica', dica); d.id = 'ms-dica'; pai.appendChild(d); }
     const stage = el('div', 'ms-stage'); stage.id = 'ms-stage'; stage.hidden = !anexoPend; pai.appendChild(stage);
+    const assina = el('div', 'ms-assina'); assina.id = 'ms-assina'; pai.appendChild(assina);
     const form = el('div', 'ms-compor');
     const clip = botao('ms-ico', '📎', 'anexar'); clip.id = 'ms-anexar'; clip.setAttribute('aria-label', 'Anexar foto, vídeo ou áudio');
     const arq = el('input'); arq.type = 'file'; arq.id = 'ms-arquivo'; arq.hidden = true; arq.accept = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime,audio/*';
@@ -747,7 +808,7 @@
     const cresce = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); };
     ta.addEventListener('input', cresce);
     ta.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && window.matchMedia('(pointer: fine)').matches) { ev.preventDefault(); enviar(); } });
-    cresce(); desenharStage_();
+    cresce(); desenharStage_(); desenharAssina_(false);
   }
   /* ---- anexos: foto (reduzida no aparelho), vídeo, áudio e gravação ---- */
   function desenharStage_() {
@@ -853,6 +914,7 @@
       texto = ta.value.replace(/\r\n/g, '\n').trim(); const an = anexoPend;
       if (!texto && !an) return;
       if (an && c.canal === 'instagram' && texto) { aviso_('O Instagram não aceita texto junto com foto, vídeo ou áudio. Envie o anexo e depois o texto.'); return; }
+      texto = assinar_(c, texto);
       if (!an && (c.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > limiteTexto(c))) { aviso_('Mensagem grande demais para este canal. Divida em duas.'); return; }
       idLocal = idLocal_();
       const idTmp = 'tmp-' + idLocal;
@@ -1021,6 +1083,9 @@
     else if (a === 'filtro') { filtro = b.dataset.filtro; if (selecao) { selecao.clear(); desenharSelbar_(); } fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true); }
     else if (a === 'abrir') { if (toqueLongo) { toqueLongo = false; return; } if (selecao) { const id = Number(b.dataset.id); if (selecao.has(id)) selecao.delete(id); else selecao.add(id); pintarLista(); desenharSelbar_(); } else abrirConversa(Number(b.dataset.id)); }
     else if (a === 'selecionar') iniciarSelecao_(0);
+    else if (a === 'nome-editar') desenharAssina_(true);
+    else if (a === 'nome-salvar') { const i = $('ms-meu-nome-rapido'); await salvarNome_(i ? i.value : ''); const t = $('ms-texto'); if (t) t.focus(); }
+    else if (a === 'nome-salvar-cfg') { const i = $('ms-meu-nome'); await salvarNome_(i ? i.value : ''); }
     else if (a === 'sel-sair') sairSelecao_();
     else if (a === 'sel-todas' && selecao) { const todas = lista.length && lista.every((c) => selecao.has(c.id)); selecao = new Set(todas ? [] : lista.map((c) => c.id)); pintarLista(); desenharSelbar_(); }
     else if (a === 'sel-encerrar' && selecao) await encerrar_(Array.from(selecao), filtro === 'encerradas');
@@ -1042,7 +1107,7 @@
     else if (a === 'descartar') { pendentes.delete(b.dataset.tmp); msgs = msgs.filter((m) => m.id !== b.dataset.tmp); pintarFio(false); }
     else if (a === 'fim') { const f = $('ms-fio'); if (f) { f.scrollTop = f.scrollHeight; novasAbaixo = 0; atualizarPill(); marcarLida(); } }
     else if (a === 'conexao') { painel = painel === 'conexao' ? '' : 'conexao'; desenharEstado(); }
-    else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Leitura no celular…', 'leitura-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar']]));
+    else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Configurações (leitura e nome)…', 'leitura-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar']]));
     else if (a === 'menu-conversa' && aberta) abrirMenu(b, [['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
     else if (a === 'exp') baixar(b.dataset.params, b.dataset.rotulo);
     else if (a === 'copiar-ia') copiarParaIA();
@@ -1079,6 +1144,7 @@
   async function recarregar() {
     resumo = await worker_('/msg/resumo', 'GET');
     if (!resumo.ok) { const ex = $('ms-extra'); ex.textContent = ''; ex.appendChild(el('p', 'ms-vazio', resumo.erro || 'Não foi possível carregar agora.')); return; }
+    if (!cfgLeitura) carregarCfgLeitura_();      // v7.22: traz também a assinatura do atendente
     if (!contagens) contagens = {};
     CANAIS.forEach(([id]) => { const c = resumo.canais[id]; contagens[id] = Object.assign({ grupos: 0, sem_resposta: c.semResposta || 0 }, contagens[id] || {}, { conversas: c.conversas, nao_lidas: c.naoLidas || 0, sem_resposta: c.semResposta || 0 }); });
     desenharAbas(); desenharFiltros(); desenharEstado(); selarBotao(); await carregarLista(true);

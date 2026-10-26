@@ -2,6 +2,9 @@
 import json, datetime
 from urllib.parse import urlparse, parse_qs
 
+# testes que conferem só a mecânica do envio desligam a assinatura do atendente (como se o Admin a tivesse desmarcado)
+ASSINATURA_PADRAO = True
+
 def agora(): return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.") + "%03dZ" % (datetime.datetime.utcnow().microsecond // 1000)
 def iso(min_atras): return (datetime.datetime.utcnow() - datetime.timedelta(minutes=min_atras)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
@@ -121,7 +124,10 @@ def tratar(route, path, method, body, s):
         if method == "POST":
             for k, v in (body.get("lerCelular") or {}).items():
                 if k in cfg and isinstance(v, bool): cfg[k] = v
-        return J({"ok": True, "config": {"lerCelular": dict(cfg)}, "ultimaLeitura": {"whatsapp1": {"em": agora(), "ok": True, "rota": "/modify-chat"}, "whatsapp2": None, "instagram": None}}) or True
+            if isinstance(body.get("assinatura"), bool): s["assinatura"] = body["assinatura"]
+            if isinstance(body.get("meuNome"), str): s["meu_nome"] = " ".join(body["meuNome"].replace("*", " ").split())[:30]
+            s.setdefault("cfg_posts", []).append(body)
+        return J({"ok": True, "config": {"lerCelular": dict(cfg), "assinatura": s.get("assinatura", ASSINATURA_PADRAO)}, "meuNome": s.get("meu_nome", ""), "ultimaLeitura": {"whatsapp1": {"em": agora(), "ok": True, "rota": "/modify-chat"}, "whatsapp2": None, "instagram": None}}) or True
     if path == "/msg/enviar":
         s["envios"].append(body)
         if body.get("idLocal") in s["idem"]: return J(s["idem"][body["idLocal"]]) or True
