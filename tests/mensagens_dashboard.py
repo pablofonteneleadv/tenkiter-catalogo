@@ -31,6 +31,8 @@ def abrir_ferramentas(pg):
 def abrir(pg):
     abrir_ferramentas(pg)
     pg.click("#btn-abrir-mensagens"); pg.wait_for_selector(".ms-conv", timeout=6000)
+    # v7.21: abre na aba "Todas"; este teste confere cada canal, a partir do WhatsApp 1
+    if pg.locator("[data-canal=whatsapp1][aria-selected=true]").count() == 0: pg.click("[data-canal=whatsapp1]"); pg.wait_for_timeout(500)
 def novo_contexto(b, perms=PERMS_ALL, mobile=True):
     if mobile: ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
     else: ctx = b.new_context(viewport={"width": 1440, "height": 900}, service_workers="block")
@@ -54,7 +56,7 @@ with sync_playwright() as p:
     pg = pagina(ctx, erros)
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
     abrir(pg); S = st["ig"]["msg"]
-    chk("abre com as 3 abas e a contagem de conversas", pg.locator(".ms-aba").count() == 3 and "3 conversas" in pg.inner_text("[data-canal=whatsapp1]"), pg.inner_text("#ms-abas"))
+    chk("abre com as 3 abas e a contagem de conversas", pg.locator(".ms-aba").count() == 4 and "3 conversas" in pg.inner_text("[data-canal=whatsapp1]"), pg.inner_text("#ms-abas"))
     chk("aba mostra quantas conversas têm não lidas (selo com 1)", pg.locator("[data-canal=whatsapp1] .ms-pt").inner_text() == "1")
     chk("falta ativar envios/leituras: aviso curto numa linha com botão (sem caixa grande)", pg.locator(".ms-estado").count() == 1 and pg.locator(".ms-caixa").count() == 0 and "Falta ativar" in pg.inner_text(".ms-estado") and pg.locator(".ms-estado [data-ms=ligar]").count() == 1, pg.inner_text("#ms-estado-wrap"))
     pg.click(".ms-estado [data-ms=ligar]"); pg.wait_for_timeout(900)

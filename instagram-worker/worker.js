@@ -2688,7 +2688,51 @@ async function msgContagens_(env, canal) {
   const rs = await env.DB.prepare("SELECT canal, COUNT(*) AS conversas, SUM(CASE WHEN nao_lidas>0 THEN 1 ELSE 0 END) AS nao_lidas, SUM(CASE WHEN grupo=0 AND ult_dir='entrada' THEN 1 ELSE 0 END) AS sem_resposta, SUM(CASE WHEN grupo=1 THEN 1 ELSE 0 END) AS grupos FROM msg_conversa WHERE total>0" + (canal ? ' AND canal=?' : '') + ' GROUP BY canal').bind(...(canal ? [canal] : [])).all();
   const out = {}; for (const c of MSG_CANAIS) out[c] = { conversas: 0, nao_lidas: 0, sem_resposta: 0, grupos: 0 };
   for (const x of rs.results) if (out[x.canal]) out[x.canal] = { conversas: Number(x.conversas) || 0, nao_lidas: Number(x.nao_lidas) || 0, sem_resposta: Number(x.sem_resposta) || 0, grupos: Number(x.grupos) || 0 };
+  // v2.10: aba "Todas" (os três canais juntos)
+  out.todos = MSG_CANAIS.reduce((t, c) => ({ conversas: t.conversas + out[c].conversas, nao_lidas: t.nao_lidas + out[c].nao_lidas, sem_resposta: t.sem_resposta + out[c].sem_resposta, grupos: t.grupos + out[c].grupos }), { conversas: 0, nao_lidas: 0, sem_resposta: 0, grupos: 0 });
   return out;
+}
+/* v2.10: confirmar a leitura no aparelho (WhatsApp pela Wafly; Instagram pela Graph API). Só quando a pessoa ABRE a conversa
+ * normalmente e o canal está com "marcar como lida no celular" ligado; o "Espiar" do painel nunca chama isto. */
+const MSG_CFG_PADRAO_ = { lerCelular: { whatsapp1: true, whatsapp2: true, instagram: true } };
+async function msgCfg_(env) {
+  let c = null; try { c = JSON.parse((await cfgGet(env, 'msg_cfg')) || 'null'); } catch (e) { c = null; }
+  const out = JSON.parse(JSON.stringify(MSG_CFG_PADRAO_));
+  if (c && c.lerCelular && typeof c.lerCelular === 'object') for (const k of MSG_CANAIS) if (typeof c.lerCelular[k] === 'boolean') out.lerCelular[k] = c.lerCelular[k];
+  return out;
+}
+async function confirmarLeituraCelular_(env, conv) {
+  const ult = await env.DB.prepare("SELECT ext_id FROM msg_mensagem WHERE conversa_id=? AND direcao='entrada' AND ext_id NOT LIKE 'inc:%' ORDER BY enviada_em DESC, id DESC LIMIT 1").bind(conv.id).first();
+  let res;
+  if (conv.canal === 'instagram') {
+    const tk = await cfgGet(env, 'ig_token');
+    if (!tk) res = { ok: false, erro: 'Instagram não conectado.' };
+    else {
+      try {
+        const rr = await fetch(igBase(env) + '/me/messages', { method: 'POST', signal: AbortSignal.timeout(15000), headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: { id: conv.contato }, sender_action: 'mark_seen' }) });
+        res = rr.ok ? { ok: true, rota: 'mark_seen' } : { ok: false, erro: 'O Instagram recusou (HTTP ' + rr.status + ').' };
+      } catch (e) { res = { ok: false, erro: 'Sem resposta do Instagram.' }; }
+    }
+  } else {
+    const slot = conv.canal === 'whatsapp1' ? 1 : 2, cfg = await cfgWafly_(env, slot);
+    if (!cfg) res = { ok: false, erro: 'Wafly ' + slot + ' não cadastrado em Conexões.' };
+    else {
+      // 1º marca a conversa inteira como lida (modify-chat); se a Wafly não aceitar, marca a última mensagem recebida (read-message)
+      const tentativas = [['/modify-chat', { phone: conv.contato, action: 'read' }]];
+      if (ult && ult.ext_id) tentativas.push(['/read-message', { phone: conv.contato, messageId: ult.ext_id }]);
+      res = { ok: false, erro: 'A Wafly não confirmou a leitura.' };
+      for (const [rota, corpo] of tentativas) {
+        try {
+          const rr = await fetch(waflyUrl_(cfg, rota), { method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+          const j = await rr.json().catch(() => ({}));
+          if (rr.ok && !(j && (j.error || j.value === false))) { res = { ok: true, rota: rota }; break; }
+          res = { ok: false, erro: 'A Wafly recusou (HTTP ' + rr.status + ').' };
+        } catch (e) { res = { ok: false, erro: 'Sem resposta da Wafly.' }; }
+      }
+    }
+  }
+  try { await cfgSet(env, 'msg_leitura_diag_' + conv.canal, JSON.stringify(Object.assign({ em: agora() }, res))); } catch (e) { /* diagnóstico é conforto */ }
+  return res;
 }
 /** Responder: texto simples para WhatsApp (Wafly) ou Instagram (DM). Devolve { ok, extId } | { ok:false, erro } | { ok:false, incerto:true, erro }. */
 async function enviarWaflyGenerico_(env, conv, caminho, corpo, limiteMs) {
@@ -2946,13 +2990,14 @@ export default {
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {
         const canal = url.searchParams.get('canal') || '', busca = String(url.searchParams.get('busca') || '').trim().slice(0, 60), antes = url.searchParams.get('antes') || '', filtro = url.searchParams.get('filtro') || '';
-        if (!MSG_CANAIS.includes(canal)) return J({ ok: false, erro: 'Escolha Instagram, WhatsApp 1 ou WhatsApp 2.' }, 400);
-        let sql = 'SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE canal=? AND total>0', args = [canal];
-        if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'sem_resposta') sql += " AND grupo=0 AND ult_dir='entrada'"; else if (filtro === 'grupos') sql += ' AND grupo=1';
+        const todos = canal === 'todos';   // v2.10: aba "Todas" = os três canais juntos
+        if (!todos && !MSG_CANAIS.includes(canal)) return J({ ok: false, erro: 'Escolha Todas, Instagram, WhatsApp 1 ou WhatsApp 2.' }, 400);
+        let sql = 'SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE ' + (todos ? '' : 'canal=? AND ') + 'total>0', args = todos ? [] : [canal];
+        if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'lidas') sql += ' AND nao_lidas=0'; else if (filtro === 'sem_resposta') sql += " AND grupo=0 AND ult_dir='entrada'"; else if (filtro === 'grupos') sql += ' AND grupo=1';
         if (busca) { sql += ' AND (nome LIKE ? OR contato LIKE ? OR previa LIKE ? ' + (busca.length >= 3 ? ' OR EXISTS (SELECT 1 FROM msg_mensagem mm WHERE mm.conversa_id=msg_conversa.id AND mm.texto LIKE ?)' : '') + ')'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q); if (busca.length >= 3) args.push(q); }
         if (antes) { sql += ' AND ultima_em<?'; args.push(antes); }
         const rs = await env.DB.prepare(sql + ' ORDER BY ultima_em DESC LIMIT 50').bind(...args).all();
-        return J({ ok: true, conversas: rs.results, contagens: (await msgContagens_(env, canal))[canal], cursor: agora() });
+        return J({ ok: true, conversas: rs.results, contagens: (await msgContagens_(env, todos ? '' : canal))[canal], cursor: agora() });
       }
       if (p === '/msg/mensagens' && req.method === 'GET') {
         const id = Number(url.searchParams.get('conversa')), antes = url.searchParams.get('antes') || '';
@@ -3020,7 +3065,23 @@ export default {
         const d = await req.json().catch(() => ({})), id = Number(d.conversa);
         if (!id) return J({ ok: false, erro: 'Escolha uma conversa.' }, 400);
         const r = await env.DB.prepare('UPDATE msg_conversa SET nao_lidas=?, atualizada_em=? WHERE id=?').bind(d.naoLida === true ? 1 : 0, agora(), id).run();
-        return J({ ok: !!(r.meta && r.meta.changes), nao_lidas: d.naoLida === true ? 1 : 0 });
+        let celular;
+        if (d.naoLida !== true && d.celular === true) {
+          const conv = await env.DB.prepare('SELECT id, canal, contato, grupo FROM msg_conversa WHERE id=?').bind(id).first();
+          if (conv && (await msgCfg_(env)).lerCelular[conv.canal]) celular = await confirmarLeituraCelular_(env, conv);
+          else celular = { ok: false, desligado: true };
+        }
+        return J({ ok: !!(r.meta && r.meta.changes), nao_lidas: d.naoLida === true ? 1 : 0, celular: celular });
+      }
+      if (p === '/msg/config' && req.method === 'GET') {
+        const diag = {}; for (const c of MSG_CANAIS) { try { diag[c] = JSON.parse((await cfgGet(env, 'msg_leitura_diag_' + c)) || 'null'); } catch (e) { diag[c] = null; } }
+        return J({ ok: true, config: await msgCfg_(env), ultimaLeitura: diag });
+      }
+      if (p === '/msg/config' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({})), atual = await msgCfg_(env);
+        if (d && d.lerCelular && typeof d.lerCelular === 'object') for (const c of MSG_CANAIS) if (typeof d.lerCelular[c] === 'boolean') atual.lerCelular[c] = d.lerCelular[c];
+        await cfgSet(env, 'msg_cfg', JSON.stringify(atual));
+        return J({ ok: true, config: atual });
       }
       if (p === '/msg/exportar' && req.method === 'GET') {
         const q = {}; for (const k of ['canal', 'conversa', 'formato', 'de', 'ate']) q[k] = url.searchParams.get(k) || '';

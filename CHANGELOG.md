@@ -6,6 +6,16 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.21.0 — Mensagens: aba Todas, Espiar e leitura no celular; aviso de versão nova — 2026-10-26
+
+- Mensagens: aba mestre "Todas" (WhatsApp 1, WhatsApp 2 e Instagram juntos), que é a que abre, com a etiqueta do canal em cada conversa. Novo filtro "Lidas" ao lado de "Não lidas".
+- "Espiar" nas conversas não lidas: mostra as mensagens sem marcar como lida, nem no painel nem no celular oficial. Uma faixa avisa que está espiando, e "Atender" libera a resposta e marca como lida.
+- Abrir uma conversa normalmente passa a marcar como lida também no celular oficial: WhatsApp pela Wafly (`modify-chat`, e `read-message` se ele não for aceito) e Instagram com o "visto". Antes o site nunca confirmava a leitura no aparelho.
+- Configuração em ⋯ → "Leitura no celular…": liga e desliga por canal e mostra o resultado da última tentativa. Se o celular não confirmar, aparece um aviso uma vez por canal.
+- Avisos da tela de Mensagens viraram um aviso flutuante: no celular, ficavam escondidos enquanto a conversa estava aberta.
+- Todas as páginas: quando sai uma versão nova do site com a página aberta, aparece a faixa "Saiu uma versão nova do site · Atualizar". Ela nunca recarrega sozinha.
+- Worker: `/msg/conversas?canal=todos`, filtro `lidas`, `/msg/lida` com `celular:true` e `/msg/config`. Service worker renovado (tk-3.38.9).
+
 ## 7.20.0 — Mensagens: quem mandou cada mensagem no grupo — 2026-10-26
 
 - Grupos do WhatsApp na tela de Mensagens: cada mensagem mostra quem mandou (nome do WhatsApp e número; sem nome, só o número), com uma cor por pessoa, como no WhatsApp. Antes não dava para saber quem tinha escrito.
