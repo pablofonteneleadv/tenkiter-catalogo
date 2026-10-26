@@ -1,0 +1,298 @@
+/* ====================================================================
+ * TENKiTER — acabamento da vitrine (v7.15, "Opção A", 26/10/2026)
+ *
+ * Mesma loja, mesmas funções e a mesma ordem; muda só a aparência:
+ *  - ícones de linha (icones.js) no lugar dos emojis;
+ *  - uma escala só: texto 12/13/14/16/20/22, raio 6–8 px, borda fina, sem sombra;
+ *  - preço em preto: "R$ x à vista" e "Normal R$ y" (sem riscado: não é promoção);
+ *  - o WhatsApp é o botão principal; Selecionar vira ação secundária;
+ *  - cabeçalho com 56 px e busca encostada nele (sem a faixa vazia ao rolar).
+ *
+ * Carrega depois de catalogo.css, vitrine.css e vitrine-v71.css. Os seletores
+ * começam por `body` onde precisam vencer estilos que outros scripts criam
+ * depois (nav.js, vitrine-v71.js). Destino futuro: juntar as camadas num CSS só.
+ * ==================================================================== */
+
+:root {
+  --tk-texto: #141414;
+  --tk-texto-2: #625c53;   /* 6,0:1 sobre o fundo creme; 6,6:1 sobre branco */
+  --tk-borda: #e3ddd3;
+  --tk-fundo: #f6f3ee;
+  --tk-superficie: #ffffff;
+  --tk-zap: #0f6b3f;        /* mesmo verde de conversão da v7.0 (contraste 6,6:1 com branco) */
+  --tk-raio: 8px;
+  --tk-raio-p: 6px;
+  --tk-cab: 56px;
+}
+
+/* ---------- ícones ---------- */
+.tk-ico {
+  width: 1.25em; height: 1.25em; flex: none; display: inline-block; vertical-align: -0.25em;
+  fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.tk-ico .tk-ico-cheio, .tk-ico.tk-ico-cheio { fill: currentColor; stroke: none; }
+
+body { background: var(--tk-fundo); color: var(--tk-texto); }
+
+/* ---------- cabeçalho ---------- */
+body header {
+  background: #0d0d0d; background-image: none; box-shadow: none;
+  padding: 0 4px 0 14px; height: calc(var(--tk-cab) + 2px); display: flex; align-items: center;
+}
+body header .header-linha { width: 100%; max-width: 1180px; }
+body .header-logo-img { height: 28px; }
+body .header-titulo h1 { font-size: 0.94rem; letter-spacing: 0.08em; }
+body .header-icones { gap: 0; }
+body .header-icones .btn-icone-header {
+  width: 44px; height: 44px; border: 0; border-radius: var(--tk-raio);
+  background: transparent; color: #f2eee7; font-size: 1.3rem; font-weight: 700;
+}
+body .header-icones .btn-icone-header:hover { background: rgba(255, 255, 255, 0.08); }
+body .header-icones .btn-icone-header .tk-ico { width: 22px; height: 22px; }
+body .header-icones .btn-icone-header.ativado { color: var(--laranja); }
+body .badge-contador { top: 5px; right: 3px; border: 2px solid #0d0d0d; }
+
+/* ---------- busca e filtros ---------- */
+body .filtros { top: calc(var(--tk-cab) + 2px); background: var(--tk-fundo); box-shadow: none; padding: 10px 14px 8px; }
+.busca-campo .busca-lupa {
+  position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+  width: 19px; height: 19px; color: var(--tk-texto-2); pointer-events: none; z-index: 1;
+}
+body .filtros .busca-campo:has(.busca-limpar[hidden]) input[type=text] { padding-right: 48px; }
+body .filtros .busca-campo input[type=text] {
+  min-height: 46px; height: 46px; padding-left: 40px; margin-bottom: 0;
+  border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); background: var(--tk-superficie);
+  font-size: 0.94rem; color: var(--tk-texto);
+}
+body .filtros input[type=text]::placeholder, body .filtros input[type=number]::placeholder, body .filtros input[type=search]::placeholder { color: #736d63; }
+body .filtros input:focus { border-color: var(--tk-texto); }
+body .btn-voz { top: 3px; right: 3px; width: 40px; height: 40px; border-radius: var(--tk-raio-p); background: transparent; color: var(--tk-texto-2); }
+body .btn-voz .tk-ico { width: 20px; height: 20px; }
+body .btn-voz.ouvindo { background: var(--vermelho); color: #fff; }
+body .busca-limpar { background: transparent; color: var(--tk-texto-2); }
+body .busca-limpar .tk-ico { width: 18px; height: 18px; }
+body .btn-filtros-toggle {
+  height: 46px; min-height: 46px; padding: 0 14px; gap: 7px; border: 1px solid var(--tk-borda);
+  border-radius: var(--tk-raio); background: var(--tk-superficie); color: var(--tk-texto);
+  font-size: 0.9rem; font-weight: 600;
+}
+body .btn-filtros-toggle .tk-ico { width: 19px; height: 19px; }
+body .filtros.aberto .btn-filtros-toggle, body .filtros.compacto.aberto .btn-filtros-toggle { background: var(--tk-texto); color: #fff; border-color: var(--tk-texto); }
+
+/* painel de filtros */
+body .fx-fechar { display: inline-flex; align-items: center; gap: 6px; }
+.fx-busca-interna .tk-ico { width: 18px; height: 18px; color: var(--tk-texto-2); }
+body .selecao-expansivel summary { font-weight: 600; }
+body .chip, body .pill-cat, body .pill-gen {
+  border-radius: var(--tk-raio-p); border-color: var(--tk-borda); font-weight: 500; color: var(--tk-texto);
+}
+body .chip.selecionado, body .chip[aria-pressed="true"], body .pill-cat.selecionado, body .pill-gen[aria-pressed="true"] {
+  background: var(--tk-texto); border-color: var(--tk-texto); color: #fff;
+}
+body .chip .tk-ico { width: 16px; height: 16px; vertical-align: -3px; }
+body .linha-preco { flex-wrap: wrap; }
+
+/* ---------- vantagens da loja: uma linha discreta ---------- */
+body .beneficios {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px;
+  min-height: 0; padding: 2px 14px 10px; margin: 0 auto; background: none; border: 0;
+}
+body .beneficios span {
+  display: inline-flex; align-items: center; gap: 5px; flex: none; white-space: nowrap;
+  background: none; border: 0; border-radius: 0; padding: 0;
+  font-size: 0.75rem; font-weight: 500; color: var(--tk-texto-2);
+}
+body .beneficios span + span::before { content: none; }
+body .beneficios .tk-ico { width: 15px; height: 15px; }
+
+/* ---------- contagem e ordem ---------- */
+body .barra-lista { align-items: center; }
+body #contagem { font-size: 0.82rem; font-weight: 500; color: var(--tk-texto-2); }
+body #ordem {
+  min-height: 40px; height: 40px; padding: 0 30px 0 12px; border: 1px solid var(--tk-borda);
+  border-radius: var(--tk-raio); background-color: var(--tk-superficie); font-size: 0.84rem; font-weight: 600; color: var(--tk-texto);
+}
+
+/* ---------- card ---------- */
+body .grid .card {
+  border: 1px solid var(--tk-borda); border-radius: var(--tk-raio); box-shadow: none; background: var(--tk-superficie);
+}
+body .card .img-wrap { aspect-ratio: 3 / 4; }
+body .card img { aspect-ratio: 3 / 4; }
+body .selo-card {
+  top: 8px; left: 8px; padding: 5px 7px; border-radius: 4px;
+  font-size: 0.64rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+}
+body .selo-card.novidade { background: #141414; color: #fff; }
+body .selo-card.esgotado { background: #fff; color: #b3261e; }
+body .selo-ultimas { display: none; }   /* repetia a linha de estoque logo abaixo da foto */
+body .btn-favorito-card {
+  top: 2px; right: 2px; width: 44px; height: 44px; border-radius: 50%; color: var(--tk-texto);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.92) 16px, rgba(255, 255, 255, 0) 17px);
+  display: grid; place-items: center; font-size: 1rem;
+}
+body .btn-favorito-card .tk-ico { width: 19px; height: 19px; }
+body .btn-favorito-card[aria-pressed="true"] { color: #c62828; }
+body .mini-selos .mini-selo { display: inline-flex; align-items: center; gap: 3px; }
+body .mini-selos .tk-ico { width: 13px; height: 13px; }
+
+body .card-info { padding: 10px 10px 12px; }
+body .card-info .codigo { font-size: 0.75rem; font-weight: 500; color: var(--tk-texto-2); letter-spacing: 0.02em; }
+body .card-info .nome { font-size: 0.875rem; font-weight: 600; line-height: 1.3; min-height: 2.6em; color: var(--tk-texto); }
+body .card-info .nome .abrir-peca { font: inherit; color: inherit; }
+body .card-info .preco { margin-top: 6px; font-size: 0.875rem; line-height: 1.3; }
+body .card-info .preco > span { display: inline; margin: 0; font-size: inherit; }
+body .card-info .preco > span::before { content: none; }
+body .card-info .preco .avista-n { color: var(--tk-texto); font-weight: 700; font-size: 1rem; }
+body .card-info .preco .avista-rot { color: var(--tk-texto-2); font-size: 0.75rem; font-weight: 500; }
+body .card-info .preco .cheio { display: block; margin-top: 2px; color: var(--tk-texto-2); font-size: 0.75rem; font-weight: 400; text-decoration: none; }
+body .card-info .preco .consulta { color: var(--tk-texto); font-weight: 700; }
+
+/* disponibilidade: ponto de cor + texto (a cor nunca é o único sinal) */
+body .disponibilidade { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 500; color: var(--tk-texto-2); }
+body .disponibilidade::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #2e7d32; flex: none; }
+body .disponibilidade.poucas { color: #7a5200; }
+body .disponibilidade.poucas::before { background: #d08a00; }
+body .disponibilidade.esgotado-txt { color: #b3261e; }
+body .disponibilidade.esgotado-txt::before { background: #b3261e; }
+
+body .tam-card .tam-op { border-radius: 4px; border-color: var(--tk-borda); font-weight: 500; }
+body .tam-card .tam-op[aria-pressed="true"] { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
+
+/* ações: WhatsApp principal em cima, Selecionar como ação secundária */
+body .acoes-card { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+body .acoes-card button {
+  width: 100%; flex: 0 0 auto; min-height: 44px; padding: 0 8px; border-radius: var(--tk-raio-p);
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 0.8125rem; font-weight: 600; line-height: 1.2; letter-spacing: 0; white-space: nowrap; box-shadow: none;
+}
+body .acoes-card .ac-pedir { order: -1; background: var(--tk-zap) !important; border: 1px solid var(--tk-zap) !important; color: #fff !important; }
+body .acoes-card .ac-pedir .tk-ico { width: 17px; height: 17px; }
+body .acoes-card .ac-sacola { background: transparent; border: 0; color: var(--laranja-txt); }
+body .acoes-card .ac-sacola .tk-ico { width: 17px; height: 17px; }
+body .acoes-card .ac-sacola[aria-pressed="true"] { background: transparent; color: var(--tk-texto); }
+body .acoes-card .ac-sacola:hover { background: #fbf3ea; }
+
+/* ---------- peça aberta ---------- */
+body .modal { border-radius: 14px 14px 0 0; }
+body .btn-x-modal { background: rgba(255, 255, 255, 0.94); color: var(--tk-texto); width: 44px; height: 44px; display: grid; place-items: center; }
+body .btn-x-modal .tk-ico { width: 20px; height: 20px; }
+body .modal-conteudo .codigo { font-size: 0.75rem; font-weight: 500; color: var(--tk-texto-2); }
+body .modal-conteudo .nome { font-family: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 1.25rem; font-weight: 700; line-height: 1.25; color: var(--tk-texto); }
+body .modal-conteudo .preco-linha { display: flex; flex-direction: column; gap: 2px; margin: 10px 0 6px; }
+body .modal-conteudo .preco-linha .avista { color: var(--tk-texto); font-size: 1.375rem; font-weight: 700; }
+body .modal-conteudo .preco-linha .avista small { font-size: 0.8125rem; font-weight: 500; color: var(--tk-texto-2); }
+body .modal-conteudo .preco-linha .cheio { color: var(--tk-texto-2); font-size: 0.8125rem; text-decoration: none; margin: 0; }
+body .modal-conteudo .preco-linha .consulta { color: var(--tk-texto); }
+body .modal-conteudo .tags { font-size: 0.8125rem; color: var(--tk-texto-2); }
+body .op-btn { min-height: 44px; min-width: 48px; border-radius: var(--tk-raio-p); border: 1px solid var(--tk-borda); font-weight: 600; }
+body .op-btn[aria-pressed="true"] { border: 2px solid var(--tk-texto); background: #fff; color: var(--tk-texto); }
+body .op-rot { font-weight: 600; font-size: 0.8125rem; }
+body .guia-medidas { background: none; border: 0; border-top: 1px solid var(--tk-borda); border-bottom: 1px solid var(--tk-borda); border-radius: 0; padding: 0; }
+body .guia-medidas summary { min-height: 48px; display: flex; align-items: center; gap: 8px; padding: 0; font-weight: 600; font-size: 0.875rem; }
+body .guia-medidas summary .tk-ico { width: 19px; height: 19px; }
+body .modal-conteudo .desc { background: none; border: 0; padding: 0; font-size: 0.875rem; line-height: 1.55; color: #3a3631; }
+
+/* barra de ações: Favoritar · Compartilhar · Selecionar numa linha leve; WhatsApp embaixo, inteiro */
+body .modal .barra-compra { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 6px; box-shadow: 0 -1px 0 var(--tk-borda); }
+body .modal .barra-compra .linha-secundaria, body .modal .barra-compra .bc-linha { display: contents; }
+body .modal .barra-compra .linha-secundaria button,
+body .modal .barra-compra .bc-sacola {
+  min-height: 44px; padding: 0 4px; border: 0; border-radius: var(--tk-raio-p); background: transparent;
+  color: var(--tk-texto); font-size: 0.8125rem; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+}
+body .modal .barra-compra .linha-secundaria button:hover, body .modal .barra-compra .bc-sacola:hover { background: #f3efe8; }
+body .modal .barra-compra .bc-sacola[aria-pressed="true"] { background: transparent; color: var(--laranja-txt); }
+body .modal .barra-compra .bc-sacola { order: 1; }
+body .modal .barra-compra .tk-ico { width: 19px; height: 19px; }
+body #btn-favorito-modal[aria-pressed="true"] .tk-ico { color: #c62828; }
+body .modal .barra-compra .bc-pedir, body .modal .barra-compra .bc-aviso {
+  order: 2; grid-column: 1 / -1; min-height: 50px; border-radius: var(--tk-raio);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 0.95rem; font-weight: 700; letter-spacing: 0; text-transform: none;
+}
+body .modal .barra-compra .bc-pedir .tk-ico { width: 20px; height: 20px; }
+body .modal .barra-compra .bc-aviso { min-height: 40px; background: #f1ede6; font-size: 0.85rem; }
+
+/* ---------- folhas: seleção, favoritos ---------- */
+body .sheet-topo .nome { font-weight: 700; }
+body .sheet-topo .x, body .btn-remover, body .fav-linha .acoes button { display: inline-grid; place-items: center; }
+body .sheet-topo .x .tk-ico, body .btn-remover .tk-ico, body .fav-linha .acoes .tk-ico { width: 18px; height: 18px; }
+body #sacola-conteudo .barra-compra .bc-pedir, body .btn-principal-cta, body .btn-zap {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-transform: none; letter-spacing: 0;
+}
+body .btn-zap .tk-ico, body .btn-principal-cta .tk-ico, body #sacola-conteudo .bc-pedir .tk-ico { width: 20px; height: 20px; }
+
+body .item-sacola .info .codigo { font-size: 0.75rem; color: var(--tk-texto-2); font-weight: 500; }
+body .item-sacola .info .preco, body .fav-preco { font-size: 0.8125rem; font-weight: 600; color: var(--tk-texto); }
+body .fav-preco.esgotado { color: #b3261e; }
+body .resumo-linha .avista, body .barra-compra .bc-total strong { color: var(--tk-texto); font-weight: 700; }
+body .item-sacola .btn-remover, body .fav-linha .acoes button { color: var(--tk-texto-2); min-width: 44px; min-height: 44px; }
+body .btn-secundario-cta { border-radius: var(--tk-raio); }
+
+/* painel de filtros no celular: mesmas medidas da loja */
+@media (max-width: 600px) {
+  body .filtros.aberto .filtros-extras, body .filtros.compacto.aberto .filtros-extras { border-radius: 14px 14px 0 0; }
+  body .filtros .fx-topo strong { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+  body .filtros .fx-fechar { border-radius: var(--tk-raio); font-weight: 600; padding: 0 14px; min-height: 44px; }
+  body .fx-busca-interna { border-radius: var(--tk-raio); border-color: var(--tk-borda); background: var(--tk-superficie); min-height: 48px; }
+  body .fx-busca-interna button { border-radius: var(--tk-raio-p); background: transparent; width: 40px; height: 40px; color: var(--tk-texto-2); }
+  body .filtros .linha-preco input { border-radius: var(--tk-raio-p); border-color: var(--tk-borda); }
+  body .filtros #chips-extra .chip { border-radius: var(--tk-raio-p); }
+  body .filtros details.selecao-expansivel { border-color: var(--tk-borda); border-radius: var(--tk-raio); }
+  body .filtros details.selecao-expansivel summary { font-size: 0.95rem; font-weight: 600; }
+  body .filtros details.selecao-expansivel .chip { border-radius: var(--tk-raio-p); box-shadow: none; font-weight: 500; }
+  body .filtros details.selecao-expansivel .chip.selecionado { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; box-shadow: none; }
+  body .filtros .btn-compartilhar-filtros { border-radius: var(--tk-raio-p); display: inline-flex; align-items: center; gap: 6px; }
+  body .filtros .fx-ver { background: var(--laranja); border-radius: var(--tk-raio); font-size: 1rem; font-weight: 700; min-height: 52px; }
+}
+body .linha-share-busca button { border-radius: var(--tk-raio-p); border-width: 1px; font-weight: 600; }
+body .linha-share-busca #btn-limpar-filtros-topo, body .linha-share-busca #btn-limpar-sel { background: var(--tk-superficie); border-color: var(--tk-borda); color: var(--tk-texto); }
+@media (max-width: 767px) {
+  body .linha-share-busca button { min-height: 36px; }
+}
+
+/* menu lateral e sugestões da busca */
+body .ml-fechar { border-radius: var(--tk-raio); }
+body .ml-ajuda { border-radius: var(--tk-raio); }
+body .sugestoes-busca .sug-sub { color: var(--tk-texto-2); font-weight: 600; }
+body .sugestoes-busca .sug-chip { border-radius: var(--tk-raio-p); }
+body .sugestoes-busca .sug-zap { border-radius: var(--tk-raio); }
+
+/* ---------- barra inferior (celular) ---------- */
+body .tk-nav { background: #0d0d0d; }
+body .tk-nav a .tk-i { display: grid; place-items: center; height: 24px; }
+body .tk-nav a .tk-i .tk-ico { width: 22px; height: 22px; }
+body .tk-nav a { color: #bdb6aa; }
+body .tk-nav a.tk-ativo { color: var(--laranja); }
+
+/* ---------- ajuda e rodapé ---------- */
+body .btn-ajuda-zap { display: inline-flex; align-items: center; gap: 8px; border-radius: var(--tk-raio); }
+body .btn-ajuda-zap .tk-ico { width: 19px; height: 19px; }
+body .rodape li a, body .rodape li button { gap: 8px; }
+body .rodape li .tk-ico { width: 17px; height: 17px; }
+body .rodape .btn-instalar { border-radius: var(--tk-raio); }
+body .inst-card { border-radius: var(--tk-raio); }
+body .inst-card h3, body .instalar-app h2 { font-family: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 700; }
+body .inst-btn { border-radius: var(--tk-raio); }
+body .aviso-selecao .tk-ico, body .barra-acoes-filtros .tk-ico, body .fx-rodape .tk-ico { width: 17px; height: 17px; }
+
+/* ---------- desktop ---------- */
+@media (min-width: 1024px) {
+  body header { padding: 0 24px; }
+  body .beneficios { gap: 28px; padding: 14px 14px 4px; }
+  body .beneficios span { font-size: 0.82rem; }
+  body .vitrine-layout .filtros {
+    top: calc(var(--tk-cab) + 18px); border: 1px solid var(--tk-borda); border-radius: var(--tk-raio);
+    box-shadow: none; background: var(--tk-superficie);
+  }
+  /* os campos ocupam a largura toda: "Buscar por produ" e "Mín R" deixam de ser cortados */
+  body .vitrine-layout .filtros .busca-wrap { display: block; }
+  body .vitrine-layout .filtros .linha-preco { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px; margin-top: 12px; }
+  body .vitrine-layout .filtros .busca-campo input[type=text] { padding-left: 36px; font-size: 0.9rem; }
+  body .vitrine-layout .filtros .busca-campo .busca-lupa { left: 11px; }
+  body .vitrine-layout .filtros .linha-preco > span:first-child { grid-column: 1 / -1; font-weight: 600; font-size: 0.8125rem; }
+  body .vitrine-layout .filtros .linha-preco input { margin: 0; min-width: 0; border-radius: var(--tk-raio-p); }
+  body .vitrine-layout .filtros .bar-acoes-filtros button, body .vitrine-layout .filtros .btn-compartilhar-filtros { border-radius: var(--tk-raio-p); }
+  body .modal { border-radius: 14px; }
+}

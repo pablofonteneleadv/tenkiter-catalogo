@@ -6,6 +6,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.15.0 — acabamento novo da vitrine (Opção A) — 2026-10-26
+
+- Ícones de linha (`icones.js`) no lugar dos emojis no cabeçalho, busca, filtros, cards, peça, seleção, favoritos, barra inferior e rodapé.
+- Nova camada `acabamento.css`: escala única de texto, cantos de 6–8 px, bordas finas, sem sombras, selos em preto.
+- Preço em preto: "R$ x à vista" e "Normal R$ y", sem o riscado que parecia promoção em todas as peças.
+- Card com "Consulte esta peça" como botão principal e "Selecionar" como ação secundária; estoque com ponto de cor e texto.
+- Peça aberta: Favoritar, Compartilhar e Selecionar numa linha leve e "Consultar no WhatsApp" inteiro, sem caixa alta.
+- Cabeçalho de 56 px com botões de 44 px; a busca fica encostada nele (sumiu a faixa vazia ao rolar).
+- Filtros do desktop com campos inteiros (sem "Buscar por produ" e "Mín R" cortados).
+- Mesmas funções, mesma ordem e mesmos textos de ação; service worker renovado (tk-3.38.5).
+
 ## 7.14.2 — IA insiste quando o Gemini está sobrecarregado — 2026-10-26
 
 - "Gerar com IA" (foto): com o Gemini sobrecarregado (503, "high demand", demora), o painel tenta de novo sozinho, com espera crescente, até 12 vezes; mostra o andamento e tem botão Cancelar.

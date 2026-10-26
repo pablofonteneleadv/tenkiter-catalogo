@@ -415,7 +415,7 @@
     const pedir = info.querySelector('.ac-pedir');
     if (pedir) {
       if (!pedir.querySelector('.v7-rot')) {
-        pedir.textContent = '\u{1F4AC} ';
+        if (window.TKIcone) pedir.innerHTML = window.TKIcone('whatsapp') + ' '; else pedir.textContent = '\u{1F4AC} ';
         const span = document.createElement('span');
         span.className = 'v7-rot';
         span.textContent = 'Consulte esta peça';
@@ -599,7 +599,7 @@
       det.className = 'guia-medidas';
       det.id = 'guia-medidas';
       const sum = document.createElement('summary');
-      sum.textContent = '\u{1F4CF} Guia de medidas';
+      if (window.TKIcone) sum.innerHTML = window.TKIcone('regua') + ' Guia de medidas'; else sum.textContent = '\u{1F4CF} Guia de medidas';
       det.appendChild(sum);
       const table = document.createElement('table');
       const cap = document.createElement('caption');
@@ -702,11 +702,11 @@
    * trabalho); para o visitante, esta substitui.
    * ================================================================== */
   const ITENS_COMPRA = [
-    { id: 'inicio', href: 'index.html', icone: '\u{1F3E0}', rotulo: 'Início' },
-    { id: 'buscar', href: '#busca', icone: '\u{1F50E}', rotulo: 'Buscar', acao: 'buscar' },
-    { id: 'selecao', href: '#selecao', icone: '\u{1F6CD}', rotulo: 'Seleção', acao: 'selecao', contador: true },
-    { id: 'favoritos', href: '#favoritos', icone: '\u{2764}\u{FE0F}', rotulo: 'Favoritos', acao: 'favoritos' },
-    { id: 'atendente', href: '#atendente', icone: '\u{1F4AC}', rotulo: 'Atendente', acao: 'atendente' }
+    { id: 'inicio', href: 'index.html', icone: '\u{1F3E0}', svg: 'casa', rotulo: 'Início' },
+    { id: 'buscar', href: '#busca', icone: '\u{1F50E}', svg: 'busca', rotulo: 'Buscar', acao: 'buscar' },
+    { id: 'selecao', href: '#selecao', icone: '\u{1F6CD}', svg: 'sacola', rotulo: 'Seleção', acao: 'selecao', contador: true },
+    { id: 'favoritos', href: '#favoritos', icone: '\u{2764}\u{FE0F}', svg: 'coracao', rotulo: 'Favoritos', acao: 'favoritos' },
+    { id: 'atendente', href: '#atendente', icone: '\u{1F4AC}', svg: 'whatsapp', rotulo: 'Atendente', acao: 'atendente' }
   ];
 
   /* Quem é da equipe recebe do nav.js uma barra com ÁREAS DE TRABALHO. O sinal
@@ -774,7 +774,7 @@
       const i = document.createElement('span');
       i.className = 'tk-i';
       i.setAttribute('aria-hidden', 'true');
-      i.textContent = it.icone;
+      if (window.TKIcone && it.svg) i.innerHTML = window.TKIcone(it.svg); else i.textContent = it.icone;
       const r = document.createElement('span');
       r.className = 'tk-r';
       r.textContent = it.rotulo;

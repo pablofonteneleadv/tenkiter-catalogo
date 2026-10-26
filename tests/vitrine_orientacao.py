@@ -40,7 +40,7 @@ with sync_playwright() as p:
     pg.evaluate("window.scrollTo(0,700)"); pg.wait_for_timeout(300)
     pg.evaluate("document.querySelectorAll('.card .abrir-peca')[6].click()"); pg.wait_for_timeout(600)
     chk("a peça abriu", pg.locator("#overlay.aberto").count() == 1)
-    chk("botão do modal diz 'CONSULTAR NO WHATSAPP'", "CONSULTAR NO WHATSAPP" in pg.inner_text("#btn-quero"), pg.inner_text("#btn-quero"))
+    chk("botão do modal diz 'Consultar no WhatsApp'", "Consultar no WhatsApp" in pg.inner_text("#btn-quero"), pg.inner_text("#btn-quero"))
     pg.go_back(); pg.wait_for_timeout(600)
     chk("ao voltar, a lista continua onde estava (rolagem preservada)", abs(pg.evaluate("scrollY") - 700) < 5, pg.evaluate("scrollY"))
     # ajuda no fim da lista

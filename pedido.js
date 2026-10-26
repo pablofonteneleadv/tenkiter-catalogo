@@ -110,29 +110,29 @@ function abrirSacola() {
   var esgotados = todos.filter(estaEsgotado);
 
   if (carregando) {
-    container.innerHTML = '<div class="sheet-topo"><div class="nome">🛍️ Minha seleção</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">✕</button></div>' +
+    container.innerHTML = '<div class="sheet-topo"><div class="nome">Minha seleção</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>' +
       '<p class="texto-pequeno" style="padding:20px 16px">Carregando as peças da sua seleção…</p>';
   } else if (!todos.length) {
     container.innerHTML =
-      '<div class="sheet-topo"><div class="nome">🛍️ Minha seleção</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">✕</button></div>' +
+      '<div class="sheet-topo"><div class="nome">Minha seleção</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>' +
       '<div id="sacola-vazia">Sua seleção está vazia. Toque em <b>Selecionar</b> nas peças que você gostar e envie tudo de uma vez para a loja.</div>' +
-      '<a class="btn-zap" style="margin:0 16px 16px" href="' + escaparHtml(linkWhatsApp('Olá! Vim pelo catálogo e quero ajuda para escolher.')) + '" target="_blank" rel="noopener">💬 Prefiro falar no WhatsApp</a>';
+      '<a class="btn-zap" style="margin:0 16px 16px" href="' + escaparHtml(linkWhatsApp('Olá! Vim pelo catálogo e quero ajuda para escolher.')) + '" target="_blank" rel="noopener">' + icPed_('whatsapp', '💬') + ' Prefiro falar no WhatsApp</a>';
   } else {
     var d = dadosIniciaisCliente_();
     var total = totalAvista_(itens);
     container.innerHTML =
-      '<div class="sheet-topo"><div class="nome">🛍️ Minha seleção (' + itens.length + ')</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">✕</button></div>' +
+      '<div class="sheet-topo"><div class="nome">Minha seleção (' + itens.length + ')</div><button type="button" class="x" id="btn-fechar-sacola" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>' +
       (sumiram > 0 ? '<p class="texto-pequeno" role="status">' + sumiram + (sumiram === 1 ? ' peça saiu' : ' peças saíram') + ' do catálogo e foi removida da sacola.</p>' : '') +
       itens.map(function (p) {
         return '<div class="item-sacola">' +
           '<img src="' + escaparHtml(imagemDoSlide(p, fotoDaSacola(p.ID), 160)) + '" alt="" width="48" height="60" loading="lazy">' +
           '<div class="info"><div class="nome">' + escaparHtml(p.Nome) + '</div>' +
-          (p.Codigo ? '<div class="codigo" style="font-size:.68rem;color:var(--laranja-txt);font-weight:800">' + escaparHtml(p.Codigo) + '</div>' : '') +
+          (p.Codigo ? '<div class="codigo">' + escaparHtml(p.Codigo) + '</div>' : '') +
           '<div class="preco">' + (ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(precoAvista_(p)) + ' à vista') + '</div></div>' +
-          '<button type="button" class="btn-remover" data-remover-id="' + escaparHtml(p.ID) + '" aria-label="Remover da sacola: ' + escaparHtml(p.Nome) + '">✕</button></div>';
+          '<button type="button" class="btn-remover" data-remover-id="' + escaparHtml(p.ID) + '" aria-label="Remover da sacola: ' + escaparHtml(p.Nome) + '">' + icPed_('fechar', '✕') + '</button></div>';
       }).join('') +
       (esgotados.length ? '<p class="texto-pequeno" role="status" style="margin-top:8px">' + esgotados.length + (esgotados.length === 1 ? ' peça da sacola está esgotada' : ' peças da sacola estão esgotadas') + ' e não entra no pedido.</p>' : '') +
-      '<div class="resumo-linha" style="margin-top:6px"><strong>Total estimado à vista</strong><span class="avista" style="color:#1a7a1a;font-weight:800">' + totalTexto_(itens) + '</span></div>' +
+      '<div class="resumo-linha" style="margin-top:6px"><strong>Total estimado à vista</strong><span class="avista">' + totalTexto_(itens) + '</span></div>' +
       (PEDIDOS_ATIVOS ? (
       '<div class="form-pedido">' +
         '<h3>Seus dados</h3>' +
@@ -140,8 +140,8 @@ function abrirSacola() {
         '<label for="ped-whats">WhatsApp com DDD *</label><input type="tel" id="ped-whats" inputmode="tel" autocomplete="tel" placeholder="(88) 99999-9999" value="' + escaparHtml(d.whats ? formatarTelefone(d.whats) : '') + '">' +
         '<h3>Como prefere receber?</h3>' +
         '<div class="opcoes" role="radiogroup" aria-label="Como prefere receber">' +
-          '<label><input type="radio" name="ped-entrega" value="retirada"' + (d.entrega === 'retirada' ? ' checked' : '') + '><span>🏬 Retirar na loja</span></label>' +
-          '<label><input type="radio" name="ped-entrega" value="entrega"' + (d.entrega === 'entrega' ? ' checked' : '') + '><span>🛵 Entrega</span></label>' +
+          '<label><input type="radio" name="ped-entrega" value="retirada"' + (d.entrega === 'retirada' ? ' checked' : '') + '><span>Retirar na loja</span></label>' +
+          '<label><input type="radio" name="ped-entrega" value="entrega"' + (d.entrega === 'entrega' ? ' checked' : '') + '><span>Entrega</span></label>' +
         '</div>' +
         '<div id="ped-endereco-wrap"' + (d.entrega === 'entrega' ? '' : ' hidden') + '><label for="ped-endereco">Endereço para entrega *</label>' +
           '<textarea id="ped-endereco" placeholder="Rua, número, bairro e ponto de referência">' + escaparHtml(d.endereco) + '</textarea></div>' +
@@ -151,9 +151,9 @@ function abrirSacola() {
       '</div>' +
       '<p class="texto-pequeno">O pedido vai para o WhatsApp da loja. O pagamento e a combinação de retirada ou entrega são feitos por lá. Veja a <a href="privacidade.html" style="color:var(--laranja-txt);font-weight:700">política de privacidade</a>.</p>'
       ) : '<p class="texto-pequeno">Toque em <b>Enviar para a loja</b> e a conversa abre no WhatsApp com as peças e os links. Sem cadastro, sem formulário. Veja a <a href="privacidade.html" style="color:var(--laranja-txt);font-weight:700">política de privacidade</a>.</p>') +
-      '<button type="button" class="btn-secundario-cta" id="btn-limpar-sacola" style="margin-top:12px">🗑️ Esvaziar seleção</button>' +
+      '<button type="button" class="btn-secundario-cta" id="btn-limpar-sacola" style="margin-top:12px">Esvaziar seleção</button>' +
       '<div class="barra-compra"><div class="bc-total"><small>Total à vista</small><strong>' + totalTexto_(itens) + '</strong></div>' +
-      '<button type="button" class="bc-pedir" id="btn-enviar-sacola">' + (PEDIDOS_ATIVOS ? '💬 ENVIAR MINHA SELEÇÃO' : '💬 ENVIAR PARA A LOJA') + '</button></div>';
+      '<button type="button" class="bc-pedir" id="btn-enviar-sacola">' + icPed_('whatsapp', '💬') + (PEDIDOS_ATIVOS ? ' Enviar minha seleção' : ' Enviar para a loja') + '</button></div>';
 
     container.querySelectorAll('[data-remover-id]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -260,8 +260,8 @@ function mostrarPedidoEnviado_(o) {
       (o.codigo ? '<p>Para acompanhar, guarde este código e os 4 últimos números do seu WhatsApp.<br><a href="' + escaparHtml(link) + '" id="link-rastreio-ok" style="color:var(--laranja-txt);font-weight:700;word-break:break-all">' + escaparHtml(link) + '</a></p>' : '') +
     '</div>' +
     (o.codigo ? '<div id="pedido-avisos"></div>' : '') +
-    '<a class="btn-principal-cta" style="text-decoration:none" id="btn-abrir-zap" href="' + escaparHtml(o.url) + '" target="_blank" rel="noopener">💬 ABRIR O WHATSAPP DA LOJA</a>' +
-    (o.codigo ? '<button type="button" class="btn-secundario-cta" id="btn-ir-rastreio">📦 Acompanhar este pedido</button>' : '<button type="button" class="btn-secundario-cta" id="btn-esvaziar-depois">🗑️ Já enviei — esvaziar a seleção</button>') +
+    '<a class="btn-principal-cta" style="text-decoration:none" id="btn-abrir-zap" href="' + escaparHtml(o.url) + '" target="_blank" rel="noopener">' + icPed_('whatsapp', '💬') + ' Abrir o WhatsApp da loja</a>' +
+    (o.codigo ? '<button type="button" class="btn-secundario-cta" id="btn-ir-rastreio">Acompanhar este pedido</button>' : '<button type="button" class="btn-secundario-cta" id="btn-esvaziar-depois">Já enviei, esvaziar a seleção</button>') +
     '<button type="button" class="btn-secundario-cta" id="btn-continuar">Continuar vendo o catálogo</button>';
   c.querySelectorAll('#btn-fechar-sacola, #btn-continuar').forEach(function (b) { b.addEventListener('click', fecharSacola); });
   var rast = document.getElementById('btn-ir-rastreio');
@@ -282,7 +282,7 @@ function mostrarPedidoEnviado_(o) {
 function abrirRastreio(codigo, final4) {
   var c = document.getElementById('rastreio-conteudo');
   c.innerHTML =
-    '<div class="sheet-topo"><div class="nome">📦 Acompanhar pedido</div><button type="button" class="x" id="btn-fechar-rastreio" aria-label="Fechar">✕</button></div>' +
+    '<div class="sheet-topo"><div class="nome">Acompanhar pedido</div><button type="button" class="x" id="btn-fechar-rastreio" aria-label="Fechar">✕</button></div>' +
     '<p class="texto-pequeno">Digite o código do pedido e os <b>4 últimos números</b> do WhatsApp usado nele.</p>' +
     '<form class="campo-rastreio" id="form-rastreio" novalidate>' +
       '<label for="rast-codigo">Código do pedido</label><input type="text" id="rast-codigo" placeholder="PED-0001" autocomplete="off" autocapitalize="characters" value="' + escaparHtml(codigo || '') + '">' +
@@ -347,31 +347,34 @@ function htmlPedidoRastreio_(ped) {
 /* ====================================================================
  * FAVORITOS (gaveta)
  * ==================================================================== */
+/* v7.15: ícone de linha (icones.js); sem o arquivo, cai no emoji antigo. */
+function icPed_(nome, emoji) { return window.TKIcone ? window.TKIcone(nome) : (emoji || ''); }
+
 function abrirFavoritos() {
   var c = document.getElementById('favoritos-conteudo');
   var ids = getFavoritos();
   var todos = ids.map(function (id) { return produtos.find(function (p) { return String(p.ID) === String(id); }); }).filter(Boolean);
   var disp = todos.filter(function (p) { return !estaEsgotado(p); });
-  var topo = '<div class="sheet-topo"><div class="nome">❤️ Seus favoritos (' + todos.length + ')</div><button type="button" class="x" id="btn-fechar-favoritos" aria-label="Fechar">✕</button></div>';
+  var topo = '<div class="sheet-topo"><div class="nome">Seus favoritos (' + todos.length + ')</div><button type="button" class="x" id="btn-fechar-favoritos" aria-label="Fechar">' + icPed_('fechar', '✕') + '</button></div>';
   if (!produtos.length && ids.length) {
     c.innerHTML = topo + '<p class="texto-pequeno" style="padding:20px 16px">Carregando seus favoritos…</p>';
   } else if (!todos.length) {
-    c.innerHTML = topo + '<div id="sacola-vazia">Você ainda não tem favoritos. Toque no 🤍 das peças que gostar para guardá-las aqui.</div>' +
-      '<a class="btn-zap" style="margin:0 16px 16px" href="' + escaparHtml(linkWhatsApp('Olá! Vim pelo catálogo e quero ajuda para escolher.')) + '" target="_blank" rel="noopener">💬 Prefiro falar no WhatsApp</a>';
+    c.innerHTML = topo + '<div id="sacola-vazia">Você ainda não tem favoritos. Toque no coração das peças que gostar para guardá-las aqui.</div>' +
+      '<a class="btn-zap" style="margin:0 16px 16px" href="' + escaparHtml(linkWhatsApp('Olá! Vim pelo catálogo e quero ajuda para escolher.')) + '" target="_blank" rel="noopener">' + icPed_('whatsapp', '💬') + ' Prefiro falar no WhatsApp</a>';
   } else {
     c.innerHTML = topo +
       todos.map(function (p) {
         var esg = estaEsgotado(p);
         return '<div class="fav-linha"><img src="' + escaparHtml(fotoMini(p.Foto_URL, 160)) + '" alt="" width="48" height="60" loading="lazy">' +
           '<div class="info"><button type="button" class="nome-btn" data-abrir-id="' + escaparHtml(p.ID) + '" style="all:unset;cursor:pointer;font-weight:700;font-size:.85rem">' + escaparHtml(p.Nome) + '</button>' +
-          '<div style="font-size:.78rem;font-weight:700;color:' + (esg ? 'var(--vermelho)' : '#1a7a1a') + '">' + (esg ? 'Esgotado' : (ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(precoAvista_(p)) + ' à vista')) + '</div></div>' +
-          '<div class="acoes">' + (esg ? '' : '<button type="button" data-sac-id="' + escaparHtml(p.ID) + '" aria-label="' + (estaNaSacola(p.ID) ? 'Já está na sacola: ' : 'Adicionar à sacola: ') + escaparHtml(p.Nome) + '">' + (estaNaSacola(p.ID) ? '✓' : '🛍️') + '</button>') +
-          '<button type="button" data-rem-id="' + escaparHtml(p.ID) + '" aria-label="Remover dos favoritos: ' + escaparHtml(p.Nome) + '">✕</button></div></div>';
+          '<div class="fav-preco' + (esg ? ' esgotado' : '') + '">' + (esg ? 'Esgotado' : (ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(precoAvista_(p)) + ' à vista')) + '</div></div>' +
+          '<div class="acoes">' + (esg ? '' : '<button type="button" data-sac-id="' + escaparHtml(p.ID) + '" aria-label="' + (estaNaSacola(p.ID) ? 'Já está na sacola: ' : 'Adicionar à sacola: ') + escaparHtml(p.Nome) + '">' + (estaNaSacola(p.ID) ? icPed_('certo', '✓') : icPed_('sacola', '🛍️')) + '</button>') +
+          '<button type="button" data-rem-id="' + escaparHtml(p.ID) + '" aria-label="Remover dos favoritos: ' + escaparHtml(p.Nome) + '">' + icPed_('fechar', '✕') + '</button></div></div>';
       }).join('') +
-      '<div class="resumo-linha" style="margin-top:6px"><strong>Total à vista (' + disp.length + (disp.length === 1 ? ' peça' : ' peças') + ')</strong><span style="color:#1a7a1a;font-weight:800">' + totalTexto_(disp) + '</span></div>' +
+      '<div class="resumo-linha" style="margin-top:6px"><strong>Total à vista (' + disp.length + (disp.length === 1 ? ' peça' : ' peças') + ')</strong><span class="avista">' + totalTexto_(disp) + '</span></div>' +
       (todos.length > disp.length ? '<p class="texto-pequeno">' + (todos.length - disp.length) + ' esgotada(s) não entram na conta.</p>' : '') +
-      '<button type="button" class="btn-principal-cta" id="fav-pedir"' + (disp.length ? '' : ' disabled') + '>💬 CONSULTAR A LISTA COMPLETA NO WHATSAPP</button>' +
-      '<button type="button" class="btn-secundario-cta" id="fav-mover"' + (disp.length ? '' : ' disabled') + '>🛍️ Adicionar todos à seleção</button>' +
+      '<button type="button" class="btn-principal-cta" id="fav-pedir"' + (disp.length ? '' : ' disabled') + '>' + icPed_('whatsapp', '💬') + ' Consultar a lista no WhatsApp</button>' +
+      '<button type="button" class="btn-secundario-cta" id="fav-mover"' + (disp.length ? '' : ' disabled') + '>Adicionar todos à seleção</button>' +
       '<button type="button" class="btn-secundario-cta" id="fav-ver">Ver só os favoritos na lista</button>';
     c.querySelectorAll('[data-abrir-id]').forEach(function (b) { b.addEventListener('click', function () { abrirDetalhe(b.dataset.abrirId); }); });
     c.querySelectorAll('[data-sac-id]').forEach(function (b) { b.addEventListener('click', function () { adicionarNaSacola(b.dataset.sacId); atualizarSacolaHeader_(); abrirFavoritos(); }); });
@@ -471,7 +474,7 @@ function abrirSelecao(daSacola) {
     var link = linkDaSelecao_(fixa, lista);
     var msg = mensagemDaSelecao_(link, fixa, lista);
     c.innerHTML =
-      '<div class="sheet-topo"><div class="nome">🔗 Compartilhar seleção</div><button type="button" class="x" id="btn-fechar-selecao" aria-label="Fechar">✕</button></div>' +
+      '<div class="sheet-topo"><div class="nome">Compartilhar seleção</div><button type="button" class="x" id="btn-fechar-selecao" aria-label="Fechar">✕</button></div>' +
       '<p class="texto-pequeno" style="margin-bottom:8px"><b>' + lista.length + (lista.length === 1 ? ' peça' : ' peças') + '</b> — ' + escaparHtml(escolhaTripla ? (modo === 'sel' ? 'as peças da sua seleção' : (modo === 'lista' ? 'o que o filtro mostra' : descricaoDaSelecao_())) : (daSacola ? 'as peças que você marcou em “Selecionar”' : descricaoDaSelecao_())) + '</p>' +
       '<div class="preview-selecao">' + lista.slice(0, 4).map(function (p) { return '<img src="' + escaparHtml(fotoMini(p.Foto_URL, 160)) + '" alt="' + escaparHtml(p.Nome) + '" width="80" height="100" loading="lazy">'; }).join('') + '</div>' +
       (escolhaTripla ? '<fieldset class="sel-modo"><legend>O que vai no link?</legend>' +

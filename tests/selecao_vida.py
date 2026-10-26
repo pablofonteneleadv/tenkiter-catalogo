@@ -109,7 +109,7 @@ with sync_playwright() as p:
 
     print("== Link com peças separadas (?sel=)")
     ctx, pg = abrir(b, "", "index.html?sel=TK-0001,TK-0002,TK-0003")
-    pg.mouse.click(195, 300); pg.wait_for_timeout(300)
+    pg.click("#aviso-selecao-txt"); pg.wait_for_timeout(300)   # um toque neutro (o ponto fixo 195,300 caía no botão "Limpar e ver todas")
     chk("link: guarda armada", pg.evaluate("TKCamadas.aberta('guarda-sair-sel')"))
     pg.go_back(); pg.wait_for_timeout(600)
     chk("link: placa fala de 'separamos 3 peças para você'", "Separamos 3 peças para você" in pg.inner_text("#sair-sel-txt"))
