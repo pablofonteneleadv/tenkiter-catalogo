@@ -364,3 +364,19 @@ body .po-chips button[aria-pressed="true"], body .fia-filtros button[aria-presse
 body .fia-filtros button[aria-pressed="true"] small { color: #fff; }
 body #ped-atualizar { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: var(--tk-raio-p); background: transparent; border: 1px solid var(--tk-borda); color: var(--tk-texto); font-size: 0.82rem; font-weight: 600; }
 body #ped-atualizar .tk-ico { width: 16px; height: 16px; }
+
+/* Editar peças e Alterar preços: escolha marcada no padrão (preto com texto branco; cartão marcado com borda preta) */
+body .lote-modo button { border-radius: var(--tk-raio-p); background: var(--tk-superficie); border: 1px solid var(--tk-borda); color: var(--tk-texto); font-weight: 600; }
+body .lote-modo button[aria-pressed="true"] { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
+body .precos-modo { border-radius: var(--tk-raio); border-color: var(--tk-borda); }
+body .precos-modo:has(input:checked) { border-color: var(--tk-texto); background: var(--tk-fundo); }
+body .lote-campo { border-radius: var(--tk-raio); border-color: var(--tk-borda); }
+
+/* formulário da peça: cartões dos passos com o mesmo canto do painel; botões de foto/vídeo com ícone em cima */
+body #form-produto .passo, body #form-produto #details-mais { border-radius: var(--tk-raio); border-color: var(--tk-borda); }
+body #form-produto #details-mais .passo-tit { margin-bottom: 10px; }
+body #form-produto .foto-box > .btn-foto { flex-direction: column; gap: 6px; border-radius: var(--tk-raio); }
+body #form-produto .btn-foto .ic .tk-ico { width: 24px; height: 24px; }
+body .cad-falta { border-radius: var(--tk-raio); }
+body #btn-cancelar-duplicar { background: transparent; border: 1px solid var(--tk-borda); color: var(--tk-texto); border-radius: var(--tk-raio-p); }
+body #btn-salvar { border-radius: var(--tk-raio-p); }

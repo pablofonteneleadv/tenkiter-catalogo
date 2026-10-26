@@ -1135,7 +1135,7 @@
       <section class="passo" data-passo="fotos">
         <div class="passo-tit"><span class="num">1</span>Fotos da peça <i class="obg">*</i><span class="passo-cont" id="galeria-contador">(0 de 8)</span></div>
         <div class="foto-box" id="galeria-box">
-          <label class="btn-foto" for="galeria-input">📷 Tirar foto ou escolher da galeria</label>
+          <label class="btn-foto" for="galeria-input"><span class="ic" data-ico="camera">📷</span> Tirar foto ou escolher da galeria</label>
           <input type="file" id="galeria-input" accept="image/*" multiple class="input-oculto">
           <div id="galeria-grid" class="galeria-grid"></div>
           <details class="dica-midia dica-midia-expansivel"><summary>★ A primeira foto é a capa · Dicas de enquadramento</summary><p>A foto com <b>★ CAPA</b> aparece primeiro no catálogo. Toque numa foto para vê-la grande (lá você pode escolher a capa), <b>✂ Enquadrar</b> para posicionar, girar e dar zoom vendo como fica no site, no Feed, no Carrossel e no Story, ‹ › para mudar a ordem e ✕ para tirar. A miniatura já mostra o recorte 4:5 que o site usa.</p></details>
@@ -1146,7 +1146,7 @@
       <section class="passo" data-passo="video" id="passo-video">
         <div class="passo-tit"><span class="num">2</span>Vídeos da peça <span class="opc">(opcional · até 3 · até 20 MB cada)</span><span class="passo-cont" id="video-contador"></span></div>
         <div class="foto-box" id="video-box">
-          <label class="btn-foto btn-video" for="video-input" id="video-label">🎬 Gravar ou escolher um vídeo</label>
+          <label class="btn-foto btn-video" for="video-input" id="video-label"><span class="ic" data-ico="play">🎬</span> Gravar ou escolher um vídeo</label>
           <input type="file" id="video-input" accept="video/mp4,video/quicktime,video/webm" multiple class="input-oculto">
           <div id="video-lista" class="video-lista"></div>
           <video id="video-preview" controls playsinline preload="metadata"></video>
@@ -1181,7 +1181,7 @@
             <input type="number" id="estoque" step="1" min="0" placeholder="Ex: 5" inputmode="numeric">
           </div>
         </div>
-        <label class="chk-consulta" id="linha-consulta" hidden><input type="checkbox" id="consultar-valor"><span><b>💬 Consultar valor</b><small>Sem preço: o catálogo mostra “Consulte valor” (vale para todas as peças deste cadastro).</small></span></label>
+        <label class="chk-consulta" id="linha-consulta" hidden><input type="checkbox" id="consultar-valor"><span><b>Consultar valor</b><small>Sem preço: o catálogo mostra “Consulte valor” (vale para todas as peças deste cadastro).</small></span></label>
         <div class="dica" id="dica-avista"></div>
         <div class="passo-msg">Coloque o preço da peça (maior que zero) ou marque “Consultar valor”.</div>
       </section>
@@ -1227,6 +1227,7 @@
 
 
       <div class="extra" id="details-mais">
+        <div class="passo-tit"><span class="num">9</span>Descrição e destaque <span class="opc">(opcional)</span></div>
         <label for="descricao">Descrição</label>
         <textarea id="descricao" rows="2" placeholder="Tecido viscose, caimento leve..."></textarea>
 
@@ -1243,7 +1244,7 @@
         </div>
         <div class="checkbox-linha" id="linha-notificar-push" style="display:none;padding-left:22px;">
           <input type="checkbox" id="notificarPush" checked>
-          <label for="notificarPush">📢 Avisar quem assina as notificações</label>
+          <label for="notificarPush">Avisar quem assina as notificações</label>
         </div>
       </div>
 
@@ -1260,7 +1261,7 @@
   <div class="overlay-sheet" id="overlay-categorias">
     <div class="sheet" role="dialog" aria-modal="true" aria-label="Escolher categoria">
       <div class="sheet-topo"><strong>Escolha a categoria</strong><button type="button" class="sheet-x" id="cat-fechar" aria-label="Fechar">✕</button></div>
-      <input type="text" id="cat-busca" placeholder="🔎 Digite para procurar (ex: vestido)" autocomplete="off">
+      <input type="text" id="cat-busca" placeholder="Digite para procurar (ex.: vestido)" autocomplete="off">
       <div class="cat-lista" id="cat-lista"></div>
       <div class="nova-categoria" id="nova-categoria-linha">
         <label for="input-nova-categoria">Nome da nova categoria</label>
@@ -1402,10 +1403,10 @@
       <div class="sheet-topo"><strong id="precos-titulo">Alterar preços</strong><button type="button" class="sheet-x" id="precos-fechar" aria-label="Fechar">✕</button></div>
       <p class="juntar-ajuda" id="precos-resumo"></p>
       <div role="radiogroup" aria-label="O que fazer com o preço">
-        <label class="precos-modo"><input type="radio" name="precos-modo" value="pct" checked><span><b>% Reajustar o preço</b><small>10 = +10% · -15 = 15% de desconto. Peças “Consulte valor” são puladas.</small></span></label>
-        <label class="precos-modo" id="precos-modo-escrito" hidden><input type="radio" name="precos-modo" value="escrito"><span><b>💲 Valor escrito (preço fixo)</b><small>Todas as marcadas ficam com o MESMO preço. Serve também para tirar do “Consulte valor”.</small></span></label>
-        <label class="precos-modo" id="precos-modo-padrao" hidden><input type="radio" name="precos-modo" value="padrao"><span><b>🎯 Arrumar para ,99 / ,49</b><small>Ajusta o preço para o valor à vista terminar em ,99 ou ,49. Mostra antes quantas mudam e exemplos.</small></span></label>
-        <label class="precos-modo" id="precos-modo-consulta" hidden><input type="radio" name="precos-modo" value="consulta"><span><b>💬 Consultar valor</b><small>Tira o preço das marcadas e o catálogo mostra “Consulte valor”.</small></span></label>
+        <label class="precos-modo"><input type="radio" name="precos-modo" value="pct" checked><span><b>Reajustar em %</b><small>10 = +10% · -15 = 15% de desconto. Peças “Consulte valor” são puladas.</small></span></label>
+        <label class="precos-modo" id="precos-modo-escrito" hidden><input type="radio" name="precos-modo" value="escrito"><span><b>Valor escrito (preço fixo)</b><small>Todas as marcadas ficam com o MESMO preço. Serve também para tirar do “Consulte valor”.</small></span></label>
+        <label class="precos-modo" id="precos-modo-padrao" hidden><input type="radio" name="precos-modo" value="padrao"><span><b>Arrumar para ,99 / ,49</b><small>Ajusta o preço para o valor à vista terminar em ,99 ou ,49. Mostra antes quantas mudam e exemplos.</small></span></label>
+        <label class="precos-modo" id="precos-modo-consulta" hidden><input type="radio" name="precos-modo" value="consulta"><span><b>Consultar valor</b><small>Tira o preço das marcadas e o catálogo mostra “Consulte valor”.</small></span></label>
       </div>
       <label class="precos-todas" id="precos-todas-box" hidden><input type="checkbox" id="precos-todas"> <span>Valer para <b>todas as peças com preço da loja</b> (não só as marcadas)</span></label>
       <div id="precos-campos">
@@ -2660,7 +2661,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (!el) return;
     el.classList.toggle('pronto', !falta.length);
     const st = document.getElementById('status'); if (!falta.length && /^Falta preencher/.test(st.textContent)) st.textContent = '';
-    el.textContent = falta.length ? 'Falta: ' + falta.map(x => x[1]).join(', ') + '.' : '✅ Tudo certo! Pode salvar.';
+    el.textContent = falta.length ? 'Falta: ' + falta.map(x => x[1]).join(', ') + '.' : 'Tudo certo! Pode salvar.';
     const consultar = sincConsulta_(), p = precoDigitado_();
     { const r = precoTerminacao(p);   // v4.25: o à vista do site sempre termina em ,99 ou ,49 (o valor digitado é ajustado)
       document.getElementById('dica-avista').textContent = consultar ? 'No catálogo vai aparecer “Consulte valor”.' : (r.valido ? (r.mudou ? 'Vai ficar ' + formatarReal(r.cheio) + ' · à vista ' + formatarReal(r.avista) + ' (o site sempre termina em ,99 ou ,49).' : 'À vista (10% de desconto): ' + formatarReal(r.avista)) : ''); }
