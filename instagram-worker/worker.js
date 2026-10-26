@@ -2514,15 +2514,24 @@ async function ligarWebhookWafly_(env, slot, origem) {
   await cfgSet(env, 'msg_wh_ligado_whatsapp' + slot, agora());
   await cfgSet(env, 'msg_pausa_whatsapp' + slot, null);
   /* v2: também (1) registrar o que a loja envia pelo celular e (2) receber entregue/lida. Se a Wafly não aceitar, avisa sem desfazer a gravação. */
-  const avisos = [];
-  for (const [caminho, corpo, aviso] of [['/update-notify-sent-by-me', { notifySentByMe: true }, 'Não consegui ativar o registro das mensagens que você envia pelo celular.'], ['/update-webhook-message-status', { value: alvo }, 'Não consegui ativar o aviso de entregue/lida.']]) {
-    try {
-      const r = await fetch(waflyUrl_(cfg, caminho), { method: 'PUT', redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
-      if (!r.ok) avisos.push(aviso);
-    } catch (e) { avisos.push(aviso); }
-  }
+  const avisos = [], diag = [], redigir = (t) => String(t || '').split(alvo).join('***').replace(/\s+/g, ' ').slice(0, 160);
+  const tentar = async (rotulo, caminho, variantes, aviso) => {
+    for (const [metodo, corpo] of variantes) {
+      try {
+        const r = await fetch(waflyUrl_(cfg, caminho), { method: metodo, redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { 'Client-Token': cfg.clientToken, 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+        const txt = await r.text().catch(() => '');
+        let falhou = !r.ok; try { const j = JSON.parse(txt); if (j && (j.value === false || j.error)) falhou = true; } catch (e) { /* corpo não é JSON */ }
+        diag.push(rotulo + ' ' + metodo + ' ' + r.status + (falhou ? ' ' + redigir(txt) : ' ok'));
+        if (!falhou) return true;
+      } catch (e) { diag.push(rotulo + ' ' + metodo + ' sem resposta'); }
+    }
+    avisos.push(aviso); return false;
+  };
+  await tentar('enviadas', '/update-notify-sent-by-me', [['PUT', { notifySentByMe: true }], ['PUT', { value: true }], ['POST', { notifySentByMe: true }]], 'Não consegui ativar o registro das mensagens que você envia pelo celular.');
+  await tentar('status', '/update-webhook-message-status', [['PUT', { value: alvo }], ['POST', { value: alvo }]], 'Não consegui ativar o aviso de entregue/lida.');
+  await cfgSet(env, 'msg_ligar_diag_' + slot, JSON.stringify({ em: agora(), tentativas: diag }));
   await cfgSet(env, 'msg_wh_v2_whatsapp' + slot, avisos.length ? null : agora());   // só marca "enviadas e leituras ativas" se a Wafly aceitou tudo
-  return { ok: true, avisos: avisos };
+  return { ok: true, avisos: avisos, detalhes: diag };
 }
 async function resumoMensagens_(env, origem) {
   const canais = {};
@@ -2815,6 +2824,10 @@ export default {
         let mensagens = [];
         if (conv) mensagens = (await env.DB.prepare('SELECT id, direcao, tipo, texto, enviada_em, status, por, status_em FROM msg_mensagem WHERE conversa_id=? AND (id>? OR status_em>=?) ORDER BY enviada_em, id LIMIT 200').bind(conv, depois, st).all()).results;
         return J({ ok: true, cursor: agora(), conversas: cs.results, mensagens: mensagens, contagens: (cs.results.length || url.searchParams.get('cont') === '1') ? await msgContagens_(env) : undefined });
+      }
+      if (p === '/msg/diagnostico' && req.method === 'GET') {
+        const out = {}; for (const n of [1, 2]) { try { out['whatsapp' + n] = JSON.parse((await cfgGet(env, 'msg_ligar_diag_' + n)) || 'null'); } catch (e) { out['whatsapp' + n] = null; } }
+        return J({ ok: true, ligar: out });
       }
       if (p === '/msg/contagem' && req.method === 'GET') return J({ ok: true, contagens: await msgContagens_(env) });
       if (p === '/msg/enviar' && req.method === 'POST') {
