@@ -2447,9 +2447,9 @@ function formaInstagram_(b) {
 const MSG_MIDIA_MAX_ = 20 * 1048576;
 const MSG_MIME_EXT_ = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'video/mp4': 'mp4', 'video/3gpp': '3gp', 'video/quicktime': 'mov', 'video/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/webm': 'weba', 'audio/wav': 'wav', 'audio/amr': 'amr', 'application/pdf': 'pdf' };
 const mimeLimpo_ = (m) => { const x = String(m || '').split(';')[0].trim().toLowerCase(); return x === 'image/jpg' ? 'image/jpeg' : x === 'audio/x-m4a' || x === 'audio/m4a' ? 'audio/mp4' : x === 'audio/mp3' ? 'audio/mpeg' : x; };
-async function guardarMidiaMsg_(env, bytes, mime) {
+async function guardarMidiaMsg_(env, bytes, mime, prefixo) {
   const b = crypto.getRandomValues(new Uint8Array(12)), hex = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
-  const chave = 'msg/' + agora().slice(0, 7).replace('-', '') + '/' + hex + '.' + MSG_MIME_EXT_[mime];
+  const chave = (prefixo || 'msg') + '/' + agora().slice(0, 7).replace('-', '') + '/' + hex + '.' + MSG_MIME_EXT_[mime];
   await env.MIDIA.put(chave, bytes, { httpMetadata: { contentType: mime } });
   return chave;
 }
@@ -2558,10 +2558,29 @@ async function rotaWebhookMensagens_(env, req, url) {
     const m = normalizarWafly_(b);
     if (!m) return ok(200, { ok: true, ignorado: true });
     try { await prepararMidia_(env, canal, m); } catch (e) { /* a mídia é conforto: a mensagem é gravada de qualquer jeito */ }
+    if (!m.direcao || m.direcao === 'entrada') { try { await guardarBrutoRedigido_(env, canal, b); } catch (e) { /* diagnóstico é conforto */ } }
     if (m.tipo !== 'texto' || m.ctxTipo) { try { await cfgSet(env, 'msg_ult_forma_' + canal, JSON.stringify({ em: agora(), tipo: m.tipo, ctx: m.ctxTipo, copiada: !!m.midiaChave, campos: Object.keys(b).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 40), interno: Object.keys((b && b[({ imagem: 'image', 'vídeo': 'video', 'áudio': 'audio', documento: 'document', figurinha: 'sticker' })[m.tipo]]) || {}).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 20) })); } catch (e) { /* diagnóstico é conforto */ } }
     return ok(200, { ok: true, nova: await gravarMensagem_(env, canal, m) });
   }
   return ok(404, { ok: false });
+}
+/** Diagnóstico temporário: guarda o FORMATO dos últimos avisos recebidos (textos, números e links trocados por marcas) para descobrir como a Wafly marca resposta a story. */
+function redigirAviso_(v, chave) {
+  if (v == null || typeof v === 'boolean' || typeof v === 'number') return typeof v === 'number' && String(Math.abs(v)).length >= 9 ? '<num>' : v;
+  if (typeof v === 'string') {
+    if (/^https?:\/\//i.test(v)) { try { return '<url ' + new URL(v).hostname + '>'; } catch (e) { return '<url>'; } }
+    if (/^(message|caption|title|senderName|chatName|fileName|value|text|body|description)$/.test(chave || '')) return '<texto ' + v.length + '>';
+    return /\d{6,}/.test(v) ? v.replace(/\d{6,}/g, '<num>').slice(0, 60) : v.slice(0, 60);
+  }
+  if (Array.isArray(v)) return v.slice(0, 5).map((x) => redigirAviso_(x, chave));
+  const o = {}; let n = 0;
+  for (const k of Object.keys(v)) { if (n++ >= 40) break; if (/^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)) o[k] = redigirAviso_(v[k], k); }
+  return o;
+}
+async function guardarBrutoRedigido_(env, canal, b) {
+  const chave = 'msg_bruto_' + canal; let l = []; try { l = JSON.parse((await cfgGet(env, chave)) || '[]'); } catch (e) { l = []; }
+  l.push({ em: agora(), corpo: redigirAviso_(b, '') }); l = l.slice(-8);
+  await cfgSet(env, chave, JSON.stringify(l).slice(0, 14000));
 }
 /** Liga a gravação: aponta o webhook de mensagens da instância Wafly para este Worker. */
 async function ligarWebhookWafly_(env, slot, origem) {
@@ -2709,7 +2728,7 @@ async function enviarInstagram_(env, conv, mensagem) {
 }
 async function enviarTextoInstagram_(env, conv, texto) { return enviarInstagram_(env, conv, { text: texto }); }
 async function enviarMidiaInstagram_(env, conv, anexo) { return enviarInstagram_(env, conv, { attachment: { type: ({ 'imagem': 'image', 'vídeo': 'video', 'áudio': 'audio' })[anexo.tipo], payload: { url: anexo.url } } }); }
-const MSG_ANEXO_RE_ = /^msg\/\d{6}\/[a-f0-9]{24}\.[a-z0-9]{2,4}$/;
+const MSG_ANEXO_RE_ = /^out\/\d{6}\/[a-f0-9]{24}\.[a-z0-9]{2,4}$/;
 const MSG_TIPO_DE_MIME_ = (mime) => /^image\/(jpeg|png|webp)$/.test(mime) ? 'imagem' : /^video\/(mp4|quicktime)$/.test(mime) ? 'vídeo' : /^audio\//.test(mime) ? 'áudio' : '';
 async function responderMensagem_(env, whats, d) {
   const id = Number(d.conversa), texto = String(d.texto == null ? '' : d.texto).replace(/\r\n/g, '\n').trim(), idLocal = String(d.idLocal || ''), chaveAnexo = String(d.anexo || '');
@@ -2782,7 +2801,7 @@ async function receberAnexo_(env, req, url) {
   const mime = detectarAnexo_(buf, tipo);
   if (!mime) return [415, { ok: false, erro: tipo === 'imagem' ? 'Use uma foto JPG, PNG ou WebP.' : tipo === 'vídeo' ? 'Use um vídeo MP4.' : 'Este áudio não é de um formato aceito (use MP3, OGG, M4A ou gravação do celular).' }];
   if (tipo === 'vídeo' && /hvc1|hev1/.test(new TextDecoder('latin1').decode(buf))) return [415, { ok: false, erro: 'Este vídeo está em H.265/HEVC e o WhatsApp pode recusar. Grave ou converta em MP4 H.264.' }];
-  const chave = await guardarMidiaMsg_(env, buf, mime);
+  const chave = await guardarMidiaMsg_(env, buf, mime, 'out');     // out/ = o único prefixo de mensagens com leitura pública (a Wafly e a Meta abrem o link)
   return [200, { ok: true, anexo: chave, tipo: tipo, mime: mime, bytes: buf.byteLength }];
 }
 /* ---- exportação ---- */
@@ -2951,7 +2970,8 @@ export default {
       if (p === '/msg/diagnostico' && req.method === 'GET') {
         const out = {}; for (const n of [1, 2]) { try { out['whatsapp' + n] = JSON.parse((await cfgGet(env, 'msg_ligar_diag_' + n)) || 'null'); } catch (e) { out['whatsapp' + n] = null; } }
         const forma = {}; for (const c of ['whatsapp1', 'whatsapp2']) { try { forma[c] = JSON.parse((await cfgGet(env, 'msg_ult_forma_' + c)) || 'null'); } catch (e) { forma[c] = null; } }
-        return J({ ok: true, ligar: out, forma: forma });
+        const bruto = {}; for (const c of ['whatsapp1', 'whatsapp2']) { try { bruto[c] = JSON.parse((await cfgGet(env, 'msg_bruto_' + c)) || '[]'); } catch (e) { bruto[c] = []; } }
+        return J({ ok: true, ligar: out, forma: forma, bruto: bruto });
       }
       if (p === '/msg/anexo' && req.method === 'POST') { const [cod, corpo] = await receberAnexo_(env, req, url); return J(corpo, cod); }
       if (p === '/msg/midia' && req.method === 'GET') {
