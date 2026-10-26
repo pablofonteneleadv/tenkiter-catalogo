@@ -670,7 +670,7 @@
       const r = await worker_('/msg/ligar', 'POST', { slot: Number(b.dataset.slot) });
       b.disabled = false;
       if (!r.ok) { aviso_(r.erro || 'Não foi possível ligar agora.'); return; }
-      aviso_(r.avisos && r.avisos.length ? 'Ligado, mas: ' + r.avisos.join(' ') + (r.detalhes && r.detalhes.length ? ' (Resposta da Wafly: ' + r.detalhes.join('; ') + ')' : '') : 'Ligado. Agora aparecem também as mensagens enviadas pelo celular e entregue/lida.');
+      aviso_(r.avisos && r.avisos.length ? 'Ligado, mas: ' + r.avisos.join(' ') + (r.detalhes && r.detalhes.length ? ' (Resposta da Wafly: ' + r.detalhes.join('; ') + ')' : '') : 'Ativado. Para conferir, mande uma mensagem pelo celular da loja: ela deve aparecer aqui em alguns segundos.');
       painel = ''; recarregar();
     } else if (a === 'pausar') {
       const r = await worker_('/msg/pausar', 'POST', { canal: canal, pausar: b.dataset.pausar === '1' });

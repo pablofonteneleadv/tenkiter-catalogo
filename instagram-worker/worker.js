@@ -2527,7 +2527,9 @@ async function ligarWebhookWafly_(env, slot, origem) {
     }
     avisos.push(aviso); return false;
   };
-  await tentar('enviadas', '/update-notify-sent-by-me', [['PUT', { notifySentByMe: true }], ['PUT', { value: true }], ['POST', { notifySentByMe: true }]], 'Não consegui ativar o registro das mensagens que você envia pelo celular.');
+  /* A Wafly não tem /update-notify-sent-by-me (404). Pede o mesmo no próprio endereço de recebimento; se não aceitar, tenta o "recebimento+entrega". */
+  const okEnv = await tentar('enviadas', '/update-webhook-received', [['PUT', { value: alvo, notifySentByMe: true }]], '');
+  if (okEnv) { avisos.length = 0; } else { avisos.length = 0; await tentar('enviadas', '/update-webhook-received-delivery', [['PUT', { value: alvo, notifySentByMe: true }]], 'Não consegui ativar o registro das mensagens que você envia pelo celular.'); }
   await tentar('status', '/update-webhook-message-status', [['PUT', { value: alvo }], ['POST', { value: alvo }]], 'Não consegui ativar o aviso de entregue/lida.');
   await cfgSet(env, 'msg_ligar_diag_' + slot, JSON.stringify({ em: agora(), tentativas: diag }));
   await cfgSet(env, 'msg_wh_v2_whatsapp' + slot, avisos.length ? null : agora());   // só marca "enviadas e leituras ativas" se a Wafly aceitou tudo
