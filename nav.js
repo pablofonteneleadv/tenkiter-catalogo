@@ -405,3 +405,40 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ciclo(); });
   setTimeout(ciclo, 1500);
 })();
+
+/* v7.20: aviso de versão nova. Quem deixa o site aberto (ou o app na memória do celular) continuava vendo a versão
+ * antiga depois de uma publicação. Guarda o commit de quando a página abriu e confere de novo ao voltar para a tela
+ * e a cada 10 min; se mudou, mostra uma faixa "Nova versão do site · Atualizar". Nunca recarrega sozinho
+ * (poderia perder o que a pessoa estava preenchendo). */
+(function () {
+  'use strict';
+  if (window.top !== window || window.__tkVersaoNav) return;   // só na janela principal (as telas do app em quadro não repetem)
+  window.__tkVersaoNav = true;
+  let inicial = '', aberta = false, ultima = 0;
+  const ler = async () => {
+    try { const r = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return ''; const j = await r.json(); return String((j && j.commit) || ''); } catch (e) { return ''; }
+  };
+  const faixa = () => {
+    if (aberta || document.getElementById('tk-versao-nova')) return; aberta = true;
+    const d = document.createElement('div'); d.id = 'tk-versao-nova'; d.setAttribute('role', 'status');
+    d.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:2147483000;max-width:520px;margin:0 auto;display:flex;align-items:center;gap:10px;padding:10px 10px 10px 14px;background:#141414;color:#fff;border-radius:8px;font:600 .9rem/1.3 Inter,-apple-system,Roboto,Arial,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.25)';
+    const t = document.createElement('span'); t.style.flex = '1'; t.textContent = 'Saiu uma versão nova do site.';
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Atualizar';
+    b.style.cssText = 'min-height:44px;padding:0 16px;border:0;border-radius:6px;background:#fff;color:#141414;font:700 .9rem Inter,-apple-system,Roboto,Arial,sans-serif;cursor:pointer';
+    b.addEventListener('click', () => { location.reload(); });
+    const x = document.createElement('button'); x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Fechar o aviso');
+    x.style.cssText = 'width:44px;height:44px;border:0;border-radius:6px;background:transparent;color:#fff;font-size:1rem;cursor:pointer';
+    x.addEventListener('click', () => { d.remove(); });
+    d.append(t, b, x); document.body.appendChild(d);
+  };
+  const conferir = async () => {
+    if (Date.now() - ultima < 60000) return; ultima = Date.now();
+    const v = await ler(); if (!v) return;
+    if (!inicial) { inicial = v; return; }
+    if (v !== inicial) faixa();
+  };
+  window.tkConferirVersao_ = () => { ultima = 0; return conferir(); };   // para testes
+  setTimeout(conferir, 2000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') conferir(); });
+  setInterval(() => { if (document.visibilityState === 'visible') conferir(); }, 600000);
+})();

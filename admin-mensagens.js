@@ -14,9 +14,13 @@
   const $ = (id) => document.getElementById(id);
   const CANAIS = [['whatsapp1', 'WhatsApp 1'], ['whatsapp2', 'WhatsApp 2'], ['instagram', 'Instagram']];
   const NOME_CANAL = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2', instagram: 'Instagram' };
-  const FILTROS = [['todas', 'Todas'], ['nao_lidas', 'Não lidas'], ['sem_resposta', 'Falta responder'], ['grupos', 'Grupos']];
+  const FILTROS = [['todas', 'Todas'], ['nao_lidas', 'Não lidas'], ['lidas', 'Lidas'], ['sem_resposta', 'Falta responder'], ['grupos', 'Grupos']];
+  // v7.21: aba mestre "Todas" (os três canais juntos) vem primeiro e é a que abre
+  const ABAS = [['todos', 'Todas']].concat(CANAIS);
+  const NOME_CANAL_ = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2', instagram: 'Instagram' };
   const ESPERA_MS = Number(window.TK_MENSAGENS_POLL_MS) || 4000, ESPERA_MAX_MS = Number(window.TK_MENSAGENS_POLL_MS) ? 3000 : 30000, ESPERA_SELO_MS = Number(window.TK_MENSAGENS_POLL_MS) ? 1500 : 60000;
-  let canal = 'whatsapp1', filtro = 'todas', busca = '', resumo = null, contagens = null, lista = [], cursor = '', aberta = null, msgs = [], vista = 'lista', painel = '';
+  let espiando = false, cfgLeitura = null, avisouCelular = {};
+  let canal = 'todos', filtro = 'todas', busca = '', resumo = null, contagens = null, lista = [], cursor = '', aberta = null, msgs = [], vista = 'lista', painel = '';
   let seqLista = 0, ultIdSrv = 0, nPoll = 0, timerBusca = null, timerLive = null, timerSelo = null, espera = ESPERA_MS, offline = false, abrindo = 0, novasAbaixo = 0, menuAberto = null, aviso = '';
   const rascunhos = {}, elMsgs = new Map(), elConvs = new Map(), pendentes = new Map();
   const blobs = new Map();                     // mídia já baixada nesta conversa: "id" ou "id|c" (story) -> promessa do endereço local
@@ -69,7 +73,7 @@
     if (c.nome) return c.nome;
     const n = String(c.contato || '').replace(/-group$|@g\.us$|@s\.whatsapp\.net$/g, '');
     if (/^\d{12,13}$/.test(n) && n.indexOf('55') === 0) return '+55 (' + n.slice(2, 4) + ') ' + n.slice(4, n.length - 4) + '-' + n.slice(-4);
-    return /^\d{10,15}$/.test(n) ? '+' + n : (c.grupo ? 'Grupo ' + n : (canal === 'instagram' ? 'Cliente do Instagram' : n));
+    return /^\d{10,15}$/.test(n) ? '+' + n : (c.grupo ? 'Grupo ' + n : ((c.canal || canal) === 'instagram' ? 'Cliente do Instagram' : n));
   }
   function iniciais(c) { const t = rotuloContato(c).replace(/[^\p{L}\p{N} ]/gu, '').trim(); return t ? (t.split(/\s+/).slice(0, 2).map((x) => x[0]).join('')).toUpperCase() : '?'; }
   function corAvatar(c) { let h = 0; const s = String(c.contato || c.id); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return ['#7a4a1e', '#2f5d62', '#5b3a6b', '#6b5a1e', '#3d5a3d', '#7a2f3d'][h % 6]; }
@@ -140,6 +144,19 @@
       .ms-lista-wrap { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
       .ms-lista { list-style: none; margin: 0; padding: 0; }
       .sheet-mensagens .ms-conv { width: 100%; }
+      .ms-conv-li { position: relative; display: flex; align-items: stretch; border-bottom: 1px solid #f0ece2; background: #fff; }
+      .ms-conv-li .ms-conv { border-bottom: 0; flex: 1; min-width: 0; }
+      .ms-espiar { flex: none; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 60px; min-height: 44px; margin: 8px 8px 8px 0; border: 1px solid #e3ddd3; border-radius: 8px; background: #fff; color: #141414; font: 600 0.72rem/1 Inter, -apple-system, Roboto, Arial, sans-serif; cursor: pointer; }
+      .ms-espiar:hover { background: #f6f3ee; }
+      .ms-olho { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+      .ms-canal-tag { flex: none; font-size: 0.68rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: #f6f3ee; color: #625c53; white-space: nowrap; }
+      .ms-canal-tag.ms-canal-whatsapp1, .ms-canal-tag.ms-canal-whatsapp2 { background: #e8f3ec; color: #0f6b3f; }
+      .ms-canal-tag.ms-canal-instagram { background: #fbe9f2; color: #8a1259; }
+      .ms-espiando { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; background: #fff7e6; border-bottom: 1px solid #f0d9a8; color: #5c3a00; font-size: 0.85rem; font-weight: 600; }
+      .ms-espiando .ms-btn { flex: none; min-height: 40px; }
+      .ms-cfg-linha { display: flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; margin: 4px 0 0; }
+      .ms-cfg-linha input { width: 20px; height: 20px; flex: none; accent-color: #141414; }
+      .ms-cfg-res { margin: 0 0 4px 28px; font-size: 0.78rem; }
       .ms-conv { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; background: #fff; border: 0; border-bottom: 1px solid #f0ece2; padding: 10px 12px; min-height: 68px; cursor: pointer; font: inherit; box-sizing: border-box; }
       .ms-conv:hover, .ms-conv:focus-visible { background: #faf7f0; } .ms-conv[aria-current=true] { background: #f5efe0; }
       .ms-av { flex: none; width: 44px; height: 44px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; }
@@ -155,7 +172,9 @@
       .ms-tique { font-size: 0.8rem; letter-spacing: -2px; color: #555; margin-right: 4px; } .ms-tique.lida { color: #0b57b0; } .ms-tique.incerta { color: #a33; letter-spacing: 0; }
       .ms-vazio { color: #555; padding: 18px 16px; font-size: 0.88rem; line-height: 1.4; }
       .ms-vazio-conversa { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; color: #666; padding: 24px; }
-      .ms-aviso { margin: 0 12px 6px; padding: 8px 10px; border-radius: 8px; background: #fff3cd; color: #5a4300; font-size: 0.8rem; }
+      /* v7.21: aviso flutuante (antes ficava na coluna da lista e, no celular, sumia com a conversa aberta) */
+      .ms-aviso { position: absolute; left: 12px; right: 12px; bottom: 88px; z-index: 7; margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff3cd; color: #5a4300; font-size: 0.85rem; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
+      .ms-aviso[hidden] { display: none; }
       /* conversa */
       .ms-cab { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid #e6e1d6; background: #fff; }
       .ms-cab .ms-quem { flex: 1; min-width: 0; } .ms-cab .ms-quem b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ms-cab .ms-quem span { display: block; font-size: 0.76rem; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -235,11 +254,18 @@
     const av = el('p', 'ms-aviso'); av.id = 'ms-aviso'; av.hidden = true; av.setAttribute('role', 'status');
     const wrap = el('div', 'ms-lista-wrap'); wrap.id = 'ms-lista-wrap'; const ul = el('ul', 'ms-lista'); ul.id = 'ms-lista'; wrap.appendChild(ul);
     const extra = el('div'); extra.id = 'ms-extra'; wrap.appendChild(extra);
-    lat.append(topo, abas, filtros, busq, estado, av, wrap);
+    lat.append(topo, abas, filtros, busq, estado, wrap);
     const conv = el('section', 'ms-conversa'); conv.id = 'ms-conversa'; conv.setAttribute('aria-label', 'Conversa');
     conv.appendChild(vazioConversa_());
-    app.append(lat, conv); sheet.appendChild(app); o.appendChild(sheet); document.body.appendChild(o);
+    app.append(lat, conv); sheet.appendChild(app); sheet.appendChild(av); o.appendChild(sheet); document.body.appendChild(o);
     o.addEventListener('click', clique);
+    // v7.21: liga/desliga "marcar como lida no celular" de cada canal
+    o.addEventListener('change', async (ev) => {
+      const chk = ev.target && ev.target.dataset && ev.target.dataset.cfgCanal ? ev.target : null; if (!chk || !cfgLeitura) return;
+      const novo = Object.assign({}, cfgLeitura.config.lerCelular, { [chk.dataset.cfgCanal]: chk.checked });
+      chk.disabled = true; const r = await worker_('/msg/config', 'POST', { lerCelular: novo }); chk.disabled = false;
+      if (r.ok) { cfgLeitura.config = r.config; aviso_('Salvo.'); } else { chk.checked = !chk.checked; aviso_(r.erro || 'Não foi possível salvar agora.'); }
+    });
     o.addEventListener('keydown', teclado);
     busq.addEventListener('input', () => { busca = busq.value; clearTimeout(timerBusca); timerBusca = setTimeout(() => carregarLista(true), 350); });
     document.addEventListener('click', (ev) => { if (menuAberto && !menuAberto.contains(ev.target) && !ev.target.closest('[data-ms^=menu-]')) fecharMenu(); }, true);
@@ -280,29 +306,38 @@
   function desenharAbas() {
     const abas = $('ms-abas'); if (!abas) return;
     abas.textContent = '';
-    CANAIS.forEach(([id, nome]) => {
-      const c = (contagens && contagens[id]) || (resumo && resumo.canais[id] ? { conversas: resumo.canais[id].conversas, nao_lidas: resumo.canais[id].naoLidas || 0 } : { conversas: 0, nao_lidas: 0 });
+    ABAS.forEach(([id, nome]) => {
+      const c = contagemDe_(id);
       const b = botao('ms-aba', '', 'aba', { canal: id }); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(id === canal));
       b.appendChild(document.createTextNode(nome)); b.appendChild(el('small', '', c.conversas + (c.conversas === 1 ? ' conversa' : ' conversas')));
       if (c.nao_lidas > 0) { const p = el('span', 'ms-pt', c.nao_lidas > 99 ? '99+' : String(c.nao_lidas)); p.setAttribute('aria-label', c.nao_lidas + ' não lidas'); b.appendChild(p); }
       abas.appendChild(b);
     });
   }
+  function contagemDe_(id) {
+    const vazio = { conversas: 0, nao_lidas: 0, sem_resposta: 0, grupos: 0 };
+    if (contagens && contagens[id]) return Object.assign({}, vazio, contagens[id]);
+    if (id === 'todos') return CANAIS.reduce((t, [k]) => { const c = contagemDe_(k); return { conversas: t.conversas + c.conversas, nao_lidas: t.nao_lidas + c.nao_lidas, sem_resposta: t.sem_resposta + c.sem_resposta, grupos: t.grupos + c.grupos }; }, vazio);
+    return resumo && resumo.canais[id] ? Object.assign({}, vazio, { conversas: resumo.canais[id].conversas, nao_lidas: resumo.canais[id].naoLidas || 0 }) : vazio;
+  }
   function desenharFiltros() {
     const f = $('ms-filtros'); if (!f) return;
-    const c = (contagens && contagens[canal]) || { nao_lidas: 0, sem_resposta: 0, grupos: 0 };
+    const c = contagemDe_(canal);
     f.textContent = '';
     FILTROS.forEach(([id, nome]) => {
-      const n = id === 'nao_lidas' ? c.nao_lidas : id === 'sem_resposta' ? c.sem_resposta : id === 'grupos' ? c.grupos : 0;
+      const n = id === 'nao_lidas' ? c.nao_lidas : id === 'lidas' ? Math.max(0, c.conversas - c.nao_lidas) : id === 'sem_resposta' ? c.sem_resposta : id === 'grupos' ? c.grupos : 0;
       const b = botao('ms-chip', nome + (n > 0 ? ' · ' + n : ''), 'filtro', { filtro: id }); b.setAttribute('aria-pressed', String(id === filtro)); f.appendChild(b);
     });
   }
   function ligadoOuPronto() {
+    if (canal === 'todos') return true;
     const c = resumo && resumo.canais[canal]; if (!c) return false;
     return canal === 'instagram' ? !!c.pronto && !!c.ultima : !!c.ligadoEm;
   }
   function desenharEstado() {
     const w = $('ms-estado-wrap'); if (!w) return; w.textContent = '';
+    if (painel === 'leitura') { w.appendChild(caixaLeitura_()); return; }
+    if (canal === 'todos') return;   // a aba Todas não tem conexão própria: a de cada canal fica na aba dele
     const c = resumo && resumo.canais[canal]; if (!c) return;
     const aberto = painel === 'conexao' || !ligadoOuPronto();
     if (aberto) { w.appendChild(caixaEstado()); return; }
@@ -350,6 +385,26 @@
     }
     return caixa;
   }
+  /* v7.21: configuração "marcar como lida no celular" por canal + o resultado da última tentativa */
+  function caixaLeitura_() {
+    const caixa = el('div', 'ms-caixa');
+    caixa.appendChild(el('p', '', 'Ao abrir uma conversa normalmente, ela fica lida aqui no painel e, com a opção ligada, também no celular oficial (o WhatsApp/Instagram da loja mostra como lida e o cliente vê os dois tiques azuis, se ele tiver isso ligado). O botão “Espiar” nunca marca como lida, nem aqui nem no celular.'));
+    if (!cfgLeitura) { caixa.appendChild(el('p', '', 'Carregando…')); carregarCfgLeitura_(); return caixa; }
+    CANAIS.forEach(([id, nome]) => {
+      const lab = el('label', 'ms-cfg-linha'), chk = el('input'); chk.type = 'checkbox'; chk.checked = !!cfgLeitura.config.lerCelular[id]; chk.dataset.cfgCanal = id;
+      lab.append(chk, document.createTextNode(' ' + nome + ': marcar como lida no celular ao abrir'));
+      caixa.appendChild(lab);
+      const u = cfgLeitura.ultimaLeitura && cfgLeitura.ultimaLeitura[id];
+      if (u) caixa.appendChild(el('p', 'ms-cfg-res ' + (u.ok ? 'ms-ok' : 'ms-pausa'), (u.ok ? 'Última confirmação no celular: ' : 'Última tentativa não confirmada: ') + hora(u.em) + (u.ok ? '' : ' — ' + (u.erro || 'sem resposta'))));
+    });
+    const l = el('div', 'ms-linha'); l.appendChild(botao('ms-btn', 'Fechar', 'leitura-cfg')); caixa.appendChild(l);
+    return caixa;
+  }
+  async function carregarCfgLeitura_() {
+    const r = await worker_('/msg/config', 'GET');
+    cfgLeitura = r.ok ? r : { config: { lerCelular: { whatsapp1: true, whatsapp2: true, instagram: true } }, ultimaLeitura: {} };
+    if (painel === 'leitura') desenharEstado();
+  }
   async function diagnosticar() {
     const r = await worker_('/msg/instagram/situacao', 'GET'), d = $('ms-diag'); if (!d) return;
     if (!r.ok) { d.textContent = r.erro || 'Não foi possível conferir agora.'; return; }
@@ -368,15 +423,21 @@
   /* ---------- lista de conversas (atualização por chave: não perde rolagem nem foco) ---------- */
   function linhaConversa(c) {
     let li = elConvs.get(c.id);
-    if (!li) { li = el('li'); const b = botao('ms-conv', '', 'abrir', { id: String(c.id) }); li.appendChild(b); elConvs.set(c.id, li); }
+    if (!li) { li = el('li', 'ms-conv-li'); const b = botao('ms-conv', '', 'abrir', { id: String(c.id) }); li.appendChild(b); elConvs.set(c.id, li); }
+    // v7.21: "Espiar" (só nas não lidas): lê sem marcar como lida aqui nem no celular
+    let esp = li.querySelector('.ms-espiar');
+    if (c.nao_lidas > 0 && !esp) { esp = botao('ms-espiar', '', 'espiar', { id: String(c.id) }); esp.innerHTML = '<svg class="ms-olho" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Espiar</span>'; esp.setAttribute('aria-label', 'Espiar ' + rotuloContato(c) + ' sem marcar como lida'); li.appendChild(esp); }
+    else if (!(c.nao_lidas > 0) && esp) esp.remove();
     const b = li.firstChild, nova = c.nao_lidas > 0, saiu = c.ult_dir === 'saida', espera = c.ult_dir === 'entrada' && !c.grupo;
     b.className = 'ms-conv' + (nova ? ' nova' : ''); if (aberta && aberta.id === c.id) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
-    const assinatura = [c.nome, c.ultima_em, c.previa, c.nao_lidas, c.ult_dir, c.ult_status, espera ? Math.floor(Date.now() / 60000) : '', aberta && aberta.id === c.id].join('|');
+    const assinatura = [canal === 'todos' ? c.canal : '', c.nome, c.ultima_em, c.previa, c.nao_lidas, c.ult_dir, c.ult_status, espera ? Math.floor(Date.now() / 60000) : '', aberta && aberta.id === c.id].join('|');
     if (li.dataset.ass === assinatura) return li;
     li.dataset.ass = assinatura; b.textContent = '';
     const av = el('span', 'ms-av', iniciais(c)); av.style.background = corAvatar(c); av.setAttribute('aria-hidden', 'true');
     const corpo = el('span', 'ms-conv-corpo');
-    const l1 = el('span', 'ms-l1'); l1.appendChild(el('span', 'ms-nome', rotuloContato(c))); l1.appendChild(el('time', '', horaLista(c.ultima_em)));
+    const l1 = el('span', 'ms-l1'); l1.appendChild(el('span', 'ms-nome', rotuloContato(c)));
+    if (canal === 'todos' && NOME_CANAL_[c.canal]) l1.appendChild(el('span', 'ms-canal-tag ms-canal-' + c.canal, NOME_CANAL_[c.canal]));
+    l1.appendChild(el('time', '', horaLista(c.ultima_em)));
     const l2 = el('span', 'ms-l2'); const pv = el('span', 'ms-previa');
     if (saiu) { pv.appendChild(selo(c.ult_status || 'enviada')); pv.appendChild(document.createTextNode('Você: ')); }
     const pr = /^\[(.+)\]$/.exec(c.previa || ''); pv.appendChild(document.createTextNode(pr ? (TIPO_ROTULO[pr[1]] || c.previa) : (c.previa || ''))); l2.appendChild(pv);
@@ -394,7 +455,7 @@
     lista.forEach((c) => { const li = linhaConversa(c); if (li !== ref) ul.insertBefore(li, ref); else ref = ref.nextSibling; });
     extra.textContent = '';
     if (!lista.length) {
-      const m = busca.trim() ? 'Nenhuma conversa encontrada.' : filtro === 'nao_lidas' ? 'Nenhuma conversa não lida. 🎉' : filtro === 'sem_resposta' ? 'Ninguém esperando resposta agora. 🎉' : filtro === 'grupos' ? 'Nenhum grupo neste canal.' : 'Ainda não chegou nenhuma mensagem neste canal.';
+      const m = busca.trim() ? 'Nenhuma conversa encontrada.' : filtro === 'nao_lidas' ? 'Nenhuma conversa não lida. 🎉' : filtro === 'lidas' ? 'Nenhuma conversa lida ainda.' : filtro === 'sem_resposta' ? 'Ninguém esperando resposta agora. 🎉' : filtro === 'grupos' ? 'Nenhum grupo neste canal.' : 'Ainda não chegou nenhuma mensagem neste canal.';
       extra.appendChild(el('p', 'ms-vazio', m));
     }
   }
@@ -592,6 +653,11 @@
   function montarConversa(c) {
     const pai = $('ms-conversa'); pai.textContent = '';
     pai.appendChild(cabecalhoConversa(c));
+    if (espiando) {
+      const e = el('div', 'ms-espiando'); e.setAttribute('role', 'status');
+      e.appendChild(el('span', '', 'Espiando: não marca como lida aqui nem no celular.'));
+      e.appendChild(botao('ms-btn prim', 'Atender', 'atender')); pai.appendChild(e);
+    }
     const wrap = el('div', 'ms-fio-wrap'), fio = el('div', 'ms-fio'); fio.id = 'ms-fio'; fio.setAttribute('role', 'log'); fio.setAttribute('aria-live', 'polite'); fio.setAttribute('aria-label', 'Mensagens da conversa');
     const pill = botao('ms-nova', '', 'fim'); pill.id = 'ms-nova'; pill.hidden = true;
     wrap.append(fio, pill); pai.appendChild(wrap);
@@ -606,6 +672,7 @@
     const mic = botao('ms-ico', '🎤', 'gravar'); mic.id = 'ms-mic'; mic.setAttribute('aria-label', 'Gravar áudio'); if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)) mic.hidden = true;
     const bt = botao('ms-enviar', 'Enviar', 'enviar'); bt.id = 'ms-enviar'; bt.disabled = !ta.value.trim() && !anexoPend;
     form.append(clip, arq, ta, mic, bt); pai.appendChild(form);
+    if (espiando) form.hidden = true;        // para responder, toque em Atender (aí marca como lida)
     const cresce = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); };
     ta.addEventListener('input', cresce);
     ta.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && window.matchMedia('(pointer: fine)').matches) { ev.preventDefault(); enviar(); } });
@@ -663,8 +730,9 @@
     gravacao = g; rec.start(); atualizarMic_();
     g.timer = setInterval(() => { atualizarMic_(); if (Date.now() - g.t0 > 300000) rec.stop(); }, 500);
   }
-  async function abrirConversa(id) {
+  async function abrirConversa(id, espiar) {
     const w = ++abrindo;
+    espiando = !!espiar;
     const jaNaTela = aberta && aberta.id === id;
     if (!jaNaTela) { elMsgs.clear(); msgs = []; novasAbaixo = 0; limparBlobs_(); limparAnexo_(true); fecharLuz_(); }
     const r = await worker_('/msg/mensagens?conversa=' + encodeURIComponent(id), 'GET');
@@ -678,17 +746,21 @@
     vista = 'conversa'; const app = $('ms-app'); app.dataset.vista = 'conversa';
     if (!larga() && window.TKCamadas && !TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa', () => { vista = 'lista'; const a = $('ms-app'); if (a) a.dataset.vista = 'lista'; });
     pintarLista(); marcarLida();
-    if (larga()) { const t = $('ms-texto'); if (t) t.focus(); }
+    if (larga() && !espiando) { const t = $('ms-texto'); if (t) t.focus(); }
   }
   function voltarLista() {
     if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { TKCamadas.desempilhar('ms-conversa'); return; }
     vista = 'lista'; const a = $('ms-app'); if (a) a.dataset.vista = 'lista';
   }
   async function marcarLida() {
+    if (espiando) return;                      // v7.21: espiando nunca marca como lida (nem aqui nem no celular)
     if (!aberta || !(aberta.nao_lidas > 0)) return;
-    const id = aberta.id; aberta.nao_lidas = 0;
+    const id = aberta.id, cn = aberta.canal; aberta.nao_lidas = 0;
     const c = lista.find((x) => x.id === id); if (c) { c.nao_lidas = 0; pintarLista(); }
-    await worker_('/msg/lida', 'POST', { conversa: id });
+    const r = await worker_('/msg/lida', 'POST', { conversa: id, celular: true });
+    // o celular não confirmou: avisa uma vez por canal nesta visita (a configuração mostra o motivo)
+    if (r && r.celular && r.celular.ok === false && !r.celular.desligado && !avisouCelular[cn]) { avisouCelular[cn] = true; aviso_('Lida aqui no painel, mas o celular (' + (NOME_CANAL_[cn] || cn) + ') não confirmou a leitura: ' + (r.celular.erro || 'sem resposta') + '. Veja em ⋯ → Leitura no celular.'); }
+    if (contagens) { const k = contagens[cn]; if (k && k.nao_lidas > 0) k.nao_lidas--; if (contagens.todos && contagens.todos.nao_lidas > 0) contagens.todos.nao_lidas--; }
     ajustarContagemLocal();
   }
   function ajustarContagemLocal() { desenharAbas(); desenharFiltros(); selarBotao(); }
@@ -763,7 +835,7 @@
     espera = ESPERA_MS; cursor = r.cursor || cursor;
     r.mensagens.forEach((m) => { if (typeof m.id === 'number' && m.id > ultIdSrv) ultIdSrv = m.id; });
     contagens = r.contagens || contagens; desenharAbas(); desenharFiltros(); selarBotao();
-    if (r.conversas.some((c) => c.canal === canal)) await carregarLista(false);
+    if (r.conversas.some((c) => canal === 'todos' || c.canal === canal)) await carregarLista(false);
     if (aberta) {
       const mudou = r.conversas.find((c) => c.id === aberta.id); if (mudou) aberta = Object.assign({}, aberta, mudou, { nao_lidas: aberta.nao_lidas });
       const fio = $('ms-fio'), novas = r.mensagens.filter((m) => !msgs.some((x) => x.id === m.id));
@@ -877,6 +949,9 @@
     else if (a === 'aba') { canal = b.dataset.canal; filtro = 'todas'; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); }
     else if (a === 'filtro') { filtro = b.dataset.filtro; fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true); }
     else if (a === 'abrir') abrirConversa(Number(b.dataset.id));
+    else if (a === 'espiar') abrirConversa(Number(b.dataset.id), true);
+    else if (a === 'atender' && aberta) { espiando = false; aberta.nao_lidas = Math.max(1, aberta.nao_lidas || 0); montarConversa(aberta); pintarFio(true); marcarLida(); const t = $('ms-texto'); if (t) t.focus(); }
+    else if (a === 'leitura-cfg') { painel = painel === 'leitura' ? '' : 'leitura'; if (painel === 'leitura') cfgLeitura = null; desenharEstado(); }
     else if (a === 'abrir-canal') { canal = b.dataset.canal; fecharPainelSilencioso(); filtro = 'todas'; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); abrirConversa(Number(b.dataset.id)); }
     else if (a === 'voltar') voltarLista();
     else if (a === 'enviar') enviar();
@@ -890,7 +965,7 @@
     else if (a === 'descartar') { pendentes.delete(b.dataset.tmp); msgs = msgs.filter((m) => m.id !== b.dataset.tmp); pintarFio(false); }
     else if (a === 'fim') { const f = $('ms-fio'); if (f) { f.scrollTop = f.scrollHeight; novasAbaixo = 0; atualizarPill(); marcarLida(); } }
     else if (a === 'conexao') { painel = painel === 'conexao' ? '' : 'conexao'; desenharEstado(); }
-    else if (a === 'menu-geral') abrirMenu(b, [['Painel de atendimento', 'painel'], '-', ['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }], ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar']]);
+    else if (a === 'menu-geral') abrirMenu(b, [['Painel de atendimento', 'painel'], ['Leitura no celular…', 'leitura-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar']]));
     else if (a === 'menu-conversa' && aberta) abrirMenu(b, [['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida']]);
     else if (a === 'exp') baixar(b.dataset.params, b.dataset.rotulo);
     else if (a === 'copiar-ia') copiarParaIA();

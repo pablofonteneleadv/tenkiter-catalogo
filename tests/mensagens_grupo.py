@@ -34,7 +34,7 @@ with sync_playwright() as p:
     t2 = pg.inner_text("[data-id='302']")
     chk("menção @número vira @Nome de quem já falou no grupo", "@Iara bom dia" in t2 and "266124864270572" not in t2, t2)
     chk("grupo não mostra 'Foi resposta a um story?'", pg.locator("#ms-fio .ms-ver-stories").count() == 0)
-    chk("mensagem antiga do grupo (sem autor gravado) continua aparecendo, sem rótulo", pg.locator("[data-id='6']").count() == 1 and pg.locator("[data-id='6'] .ms-autor").count() == 0)
+    chk("mensagem antiga do grupo (sem autor gravado) continua aparecendo, sem rótulo", pg.locator("#ms-fio [data-id='6']").count() == 1 and pg.locator("#ms-fio [data-id='6'] .ms-autor").count() == 0)
     pg.go_back(); pg.wait_for_timeout(400)
     if pg.locator("[data-ms=abrir][data-id='1']").count() == 0: pg.click("[data-canal=whatsapp1]"); pg.wait_for_timeout(400)
     pg.click("[data-ms=abrir][data-id='1']"); pg.wait_for_selector("[data-id='3']", timeout=5000); pg.wait_for_timeout(300)

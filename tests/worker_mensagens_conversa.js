@@ -390,6 +390,42 @@ function d1() {
   chk('Instagram: story respondido servido pela rota autenticada', dIg.status === 200 && dIg.headers.get('content-type') === 'image/jpeg');
   const exp = await w.fetch(ped('GET', '/msg/exportar?formato=txt&conversa=' + cWa, 'tk2.admin'), env, {});
   chk('exportação identifica fotos/vídeos/áudios como [imagem] etc. e nunca traz endereços de mídia', /\[imagem\]|\[vídeo\]|\[áudio\]/.test(await exp.text()));
+  // ---- v2.10: aba "Todas", filtro "Lidas", leitura no celular e configuração ----
+  const todas = await A('GET', '/msg/conversas?canal=todos');
+  const canaisTodas = new Set(todas.j.conversas.map((x) => x.canal));
+  chk('aba Todas junta conversas de mais de um canal', todas.j.ok && canaisTodas.size >= 2 && todas.j.contagens && typeof todas.j.contagens.conversas === 'number', [...canaisTodas]);
+  const soLidas = await A('GET', '/msg/conversas?canal=todos&filtro=lidas');
+  chk('filtro Lidas só traz conversas sem não lidas', soLidas.j.ok && soLidas.j.conversas.every((x) => x.nao_lidas === 0));
+  chk('canal inválido continua recusado', (await A('GET', '/msg/conversas?canal=xyz')).r.status === 400);
+  const leituras = [];
+  const f6 = globalThis.fetch;
+  globalThis.fetch = async (u, init) => {
+    u = String(u);
+    if (u.startsWith('https://wafly.com.br/') && (u.endsWith('/modify-chat') || u.endsWith('/read-message'))) { leituras.push({ u, b: JSON.parse(init.body), h: new Headers(init.headers) }); return new Response(JSON.stringify(u.endsWith('/modify-chat') && modoLeitura === 'recusa' ? { error: 'x' } : { value: true }), { status: u.endsWith('/modify-chat') && modoLeitura === 'recusa' ? 405 : 200 }); }
+    if (u.startsWith('https://ig.fake') && init && init.body && String(init.body).includes('mark_seen')) { leituras.push({ u, b: JSON.parse(init.body) }); return new Response('{"recipient_id":"x"}'); }
+    return f6(u, init);
+  };
+  let modoLeitura = 'ok';
+  await DB.prepare('UPDATE msg_conversa SET nao_lidas=2 WHERE id=?').bind(cWa).run();
+  const semCel = await A('POST', '/msg/lida', { conversa: cWa });
+  chk('marcar lida sem pedir o celular (Espiar/antigo): não chama a Wafly', semCel.j.ok && leituras.length === 0 && semCel.j.celular === undefined);
+  await DB.prepare('UPDATE msg_conversa SET nao_lidas=2 WHERE id=?').bind(cWa).run();
+  const comCel = await A('POST', '/msg/lida', { conversa: cWa, celular: true });
+  chk('abrir normal: zera não lidas e marca a conversa lida no celular pela Wafly (modify-chat)', comCel.j.ok && comCel.j.celular && comCel.j.celular.ok === true && leituras.length === 1 && leituras[0].u.endsWith('/modify-chat') && leituras[0].b.action === 'read' && leituras[0].h.get('client-token') === 'CLIENT_1' && (await DB.prepare('SELECT nao_lidas FROM msg_conversa WHERE id=?').bind(cWa).first()).nao_lidas === 0, comCel.j);
+  modoLeitura = 'recusa';
+  const fb = await A('POST', '/msg/lida', { conversa: cWa, celular: true });
+  chk('se a Wafly recusar o modify-chat, tenta marcar a última mensagem recebida (read-message)', fb.j.celular && fb.j.celular.ok === true && leituras.some((x) => x.u.endsWith('/read-message') && x.b.messageId), leituras.map((x) => x.u.split('/').pop()));
+  const cfg0 = await A('GET', '/msg/config');
+  chk('configuração começa com os 3 canais ligados e guarda a última tentativa', cfg0.j.ok && cfg0.j.config.lerCelular.whatsapp1 === true && cfg0.j.config.lerCelular.instagram === true && cfg0.j.ultimaLeitura.whatsapp1 && cfg0.j.ultimaLeitura.whatsapp1.ok === true, cfg0.j);
+  const cfg1 = await A('POST', '/msg/config', { lerCelular: { whatsapp1: false, lixo: true } });
+  chk('desligar um canal salva (e ignora o que não é canal)', cfg1.j.ok && cfg1.j.config.lerCelular.whatsapp1 === false && cfg1.j.config.lerCelular.lixo === undefined);
+  const n0 = leituras.length;
+  const desl = await A('POST', '/msg/lida', { conversa: cWa, celular: true });
+  chk('canal desligado: marca lida no painel e não chama a Wafly', desl.j.ok && desl.j.celular && desl.j.celular.desligado === true && leituras.length === n0);
+  await A('POST', '/msg/config', { lerCelular: { whatsapp1: true } });
+  const igLida = await A('POST', '/msg/lida', { conversa: cIg, celular: true });
+  chk('Instagram: abrir normal manda "visto" (mark_seen) para a pessoa', igLida.j.celular && igLida.j.celular.ok === true && leituras.some((x) => x.b && x.b.sender_action === 'mark_seen'), igLida.j);
+  globalThis.fetch = f6;
   globalThis.fetch = f5;
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });
