@@ -366,7 +366,7 @@
     const feito = async () => {
       const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 70000);
       try {
-        const resp = await fetch(api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({}, r.pacote, { pin: s.sessao })), signal: ctl.signal });
+        const resp = await fetch(api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({}, r.pacote, { pin: s.sessao, sessao: s.sessao, whatsapp: s.whatsapp || '' })), signal: ctl.signal });
         return await resp.json();
       } finally { clearTimeout(t); }
     };

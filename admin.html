@@ -1383,6 +1383,30 @@
 
 
 <script src="common.js"></script>
+<script>
+/* v4.26 (26/10/2026): a sessão nova "tk3.<whatsapp>.<prazo>.<assinatura>" só vale junto com o WhatsApp do dono, e várias
+   chamadas do painel (cadastro, edição em lote, excluir, avisos, fila offline) mandavam só a sessão: o servidor 4.25
+   respondia "WhatsApp ou senha incorretos" mesmo com a pessoa logada. Aqui, toda chamada ao servidor que leva uma sessão
+   e não leva o WhatsApp ganha o WhatsApp do próprio dono da sessão (lido de dentro dela). Não muda nenhuma outra chamada. */
+(function () {
+  var original = window.fetch;
+  if (typeof original !== 'function') return;
+  window.fetch = function (url, opcoes) {
+    try {
+      var base = String(typeof API_URL === 'string' ? API_URL : '').split('?')[0];
+      if (base && opcoes && typeof opcoes.body === 'string' && String(url).split('?')[0] === base && opcoes.body.charAt(0) === '{') {
+        var corpo = JSON.parse(opcoes.body), cred = String(corpo.sessao || corpo.pin || '');
+        var dono = (/^tk[23]\.(\d{8,13})\./.exec(cred) || [])[1] || '';
+        if (dono && !corpo.whatsapp) {
+          corpo.whatsapp = dono;
+          opcoes = Object.assign({}, opcoes, { body: JSON.stringify(corpo) });
+        }
+      }
+    } catch (e) { /* corpo que não é JSON: segue como veio */ }
+    return original.call(this, url, opcoes);
+  };
+})();
+</script>
 <script src="tamanhos-vinculados.js?v=1"></script>
 <script>
   let adminPin = sessionStorage.getItem('tenkiter_admin_pin') || '';
@@ -3518,7 +3542,10 @@
 
   // Monta o pacote do POST final (dados escritos + endereços das mídias). Só leitura do que já subiu: nunca sobe nada.
   function montarDadosFinais_(it) {
-    const dados = Object.assign({}, it.dados, { pin: adminPin, funcionario: funcionarioNome });
+    // v4.26: a sessão tk3 não carrega o WhatsApp de um jeito que o servidor 4.25 use; sem o WhatsApp no pacote ele respondia
+    // "WhatsApp ou senha incorretos" mesmo com a pessoa logada. Vai a sessão + o WhatsApp de quem está logado, como nas outras chamadas.
+    const sessEnvio = (typeof getSessao === 'function' && getSessao()) || null;
+    const dados = Object.assign({}, it.dados, { pin: adminPin, sessao: adminPin, whatsapp: sessEnvio ? sessEnvio.whatsapp : '', funcionario: funcionarioNome });
     if (!it.ehEdicao) dados.opId = it.k;   // v4.20: código único da peça: reenviar a MESMA peça nunca cria outra (backend 4.19)
     const arqVideos = arquivosDeVideo_(it), galeria = it.galeriaNovaB64 || [], subiu = it.subiu || { capa: '', gal: {}, vid: {} };
     if (subiu.capa) dados.fotoUrlExistente = subiu.capa;
@@ -5496,16 +5523,50 @@
       const corpoIa = JSON.stringify({ action: 'sugerirPorFoto', pin: adminPin, sessao: adminPin, whatsapp: sess ? sess.whatsapp : '', fotos: fotos, categorias: categorias, generos: generos });
       logDebug_('IA foto: enviando ' + fotos.length + ' foto(s), ' + Math.round(corpoIa.length / 1024) + ' KB');
       const t0 = Date.now();
-      const ctrl = new AbortController();
-      const limite = setTimeout(() => ctrl.abort(), 100000); // não deixa a tela presa pra sempre
-      let resp;
-      try {
-        resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: corpoIa, signal: ctrl.signal }).then(r => r.json());
-      } finally { clearTimeout(limite); }
-      logDebug_('IA foto: resposta em ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s — ' + (resp && resp.ok ? ('ok, modelo ' + resp.modelo) : ('erro: ' + (resp && resp.erro))));
+      // v7.14.2: Gemini sobrecarregado (503/500, "high demand", demora) não é erro definitivo: o painel tenta de novo sozinho,
+      // com espera crescente, até dar certo (o servidor 4.26 já passa por todos os modelos, do mais barato ao mais caro, em cada tentativa).
+      // Para na hora em chave recusada ou cota de todos esgotada (repetir não resolve). A pessoa pode cancelar a qualquer momento.
+      const MAX_TENTATIVAS_IA = 12;
+      const ehSobrecarga = (r) => {
+        const t = String((r && r.erro) || '');
+        if (/cota|quota|chave|API key/i.test(t)) return false;
+        return !!(r && (r.transitorio || /\b50[0234]\b|high demand|overloaded|UNAVAILABLE|sobrecarregad|demorou|timed? ?out|Timeout/i.test(t)));
+      };
+      let cancelada = false, ctrlAtual = null, acordar = null;
+      const cancelar = () => { cancelada = true; if (ctrlAtual) ctrlAtual.abort(); if (acordar) acordar(); };
+      const aviso = (texto) => {
+        box.innerHTML = '<div class="seo-sugestao" role="status" aria-live="polite" style="color:#5b3a00;">' + escaparHtml(texto) +
+          ' <button type="button" id="btn-foto-ia-cancelar" style="background:#eee;color:#333;margin-top:8px;">Cancelar</button></div>';
+        const bc = document.getElementById('btn-foto-ia-cancelar'); if (bc) bc.addEventListener('click', cancelar);
+      };
+      let resp = null;
+      for (let tentativa = 1; ; tentativa++) {
+        ctrlAtual = new AbortController();
+        const limite = setTimeout(() => ctrlAtual.abort(), 100000); // não deixa a tela presa pra sempre
+        try {
+          resp = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: corpoIa, signal: ctrlAtual.signal }).then(r => r.json());
+        } catch (e) {
+          resp = { ok: false, transitorio: true, erro: e && e.name === 'AbortError' ? 'A IA demorou demais para responder.' : 'Sem conexão agora.' };
+        } finally { clearTimeout(limite); }
+        logDebug_('IA foto: tentativa ' + tentativa + ', ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s — ' + (resp && resp.ok ? ('ok, modelo ' + resp.modelo) : ('erro: ' + (resp && resp.erro))));
+        if (cancelada || (resp && resp.ok) || !ehSobrecarga(resp) || tentativa >= MAX_TENTATIVAS_IA) break;
+        const espera = Math.min(4 * tentativa, 20);
+        btn.textContent = 'Tentando de novo...';
+        aviso('O Gemini está sobrecarregado agora. Vou tentar de novo em ' + espera + ' s (tentativa ' + (tentativa + 1) + ' de ' + MAX_TENTATIVAS_IA + ').');
+        await new Promise((ok) => { const t = setTimeout(ok, espera * (window.TK_IA_ESPERA_MS || 1000)); acordar = () => { clearTimeout(t); ok(); }; });   // TK_IA_ESPERA_MS: só para testes
+        acordar = null;
+        if (cancelada) break;
+        aviso('Tentando de novo com o Gemini (tentativa ' + (tentativa + 1) + ' de ' + MAX_TENTATIVAS_IA + ')...');
+      }
       btn.disabled = false; btn.textContent = rotuloOriginal;
-      if (!resp.ok) {
-        box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">' + escaparHtml(resp.erro || 'Não foi possível analisar agora.') + '</div>';
+      if (cancelada) { box.innerHTML = '<div class="seo-sugestao" style="color:#555;">Análise cancelada. Toque em Gerar com IA para tentar de novo.</div>'; return; }
+      if (!resp || !resp.ok) {
+        const sobrecarga = ehSobrecarga(resp);
+        // nada de JSON cru na tela: corta o que o serviço externo mandou depois de "--"
+        const texto = sobrecarga
+          ? 'O Gemini continua sobrecarregado depois de ' + MAX_TENTATIVAS_IA + ' tentativas. Tente de novo em alguns minutos.'
+          : String((resp && resp.erro) || 'Não foi possível analisar agora.').split(' -- ')[0];
+        box.innerHTML = '<div class="seo-sugestao" style="color:#c62828;">' + escaparHtml(texto) + '</div>';
         return;
       }
       // Cada sugestão pode ser editada ou retirada (✕) antes de aplicar; só entra o que ficar na lista.
@@ -5638,7 +5699,7 @@
 <script src="admin-fotoia.js"></script>
 <script src="admin-enquadrar.js"></script>
 <script src="admin-capa-video.js"></script>
-<script src="nav.js?v=7.14.4" data-ativo="gestao"></script>
+<script src="nav.js?v=7.15.0" data-ativo="gestao"></script>
 <script src="a11y.js"></script>
 <script src="conta.js"></script>
 <script src="push.js"></script>

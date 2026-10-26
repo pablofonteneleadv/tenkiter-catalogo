@@ -17,6 +17,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Filtros do desktop com campos inteiros (sem "Buscar por produ" e "Mín R" cortados).
 - Mesmas funções, mesma ordem e mesmos textos de ação; service worker renovado (tk-3.38.5).
 
+## 7.14.2 — IA insiste quando o Gemini está sobrecarregado — 2026-10-26
+
+- "Gerar com IA" (foto): com o Gemini sobrecarregado (503, "high demand", demora), o painel tenta de novo sozinho, com espera crescente, até 12 vezes; mostra o andamento e tem botão Cancelar.
+- Chave recusada ou cota de todos os modelos esgotada param na hora, com frase clara.
+- Nada de JSON cru na tela. Funciona com o servidor 4.25; o 4.26 (Cofre) também troca de modelo, do mais barato ao mais caro, em cada tentativa.
+
+## 7.14.1 — correção urgente do cadastro — 2026-10-26
+
+- Cadastro, edição em lote, excluir, avisos e fila offline voltavam "WhatsApp ou senha incorretos" com a pessoa logada: a sessão nova (tk3) ia sem o WhatsApp do dono. O painel agora completa o WhatsApp a partir da própria sessão.
+- O envio que termina em outra tela do app (nav.js) também manda o WhatsApp.
+
 ## 7.13.0 — editor gráfico de tutoriais — 2026-10-25
 
 - Editar abre uma prévia em tela cheia com Anterior/Próxima, escolha visual do alvo e edição do texto flutuante na tela.
