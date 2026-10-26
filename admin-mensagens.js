@@ -237,6 +237,19 @@
       .ms-prod-det { font-size: 0.78rem; color: #4a443b; overflow-wrap: anywhere; }
       .ms-prod-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
       .ms-prod-acoes .ms-btn { min-height: 40px; padding: 6px 10px; font-size: 0.8rem; }
+      .ms-prod.marcado { background: #fff7ee; box-shadow: inset 3px 0 0 #E67E22; }
+      .sheet-mensagens .ms-prod-marca { position: relative; flex: none; width: 72px; height: 90px; padding: 0; border: 0; border-radius: 6px; background: none; cursor: pointer; }
+      .ms-prod-marca .ms-prod-foto { display: block; }
+      .ms-prod-marca .ms-prod-caixa { position: absolute; top: 4px; left: 4px; width: 26px; height: 26px; border-radius: 6px; border: 2px solid #141414; background: rgba(255,255,255,0.92); display: flex; align-items: center; justify-content: center; font: 800 0.95rem/1 Inter, Arial, sans-serif; color: #141414; }
+      .ms-prod-marca[aria-pressed="true"] .ms-prod-caixa { background: #E67E22; border-color: #141414; }
+      .sheet-mensagens .ms-prod-marca:focus-visible { outline: 3px solid #141414; outline-offset: 2px; }
+      .ms-prod-dica { margin: 2px 12px 6px; font-size: 0.78rem; color: #4a443b; }
+      .ms-prod-selbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid #e6e1d6; background: #fff; }
+      .ms-prod-selbar[hidden] { display: none; }
+      .ms-prod-selbar .ms-prod-conta { flex: 1 1 auto; font-weight: 700; font-size: 0.88rem; }
+      .ms-prod-selbar .ms-btn { min-height: 44px; }
+      .ms-prod-selbar .ms-prod-env { display: flex; gap: 8px; flex: 1 1 100%; }
+      .ms-prod-selbar .ms-prod-env .ms-btn { flex: 1; }
       .sheet-mensagens .ms-resp { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; padding: 10px 14px; min-height: 56px; border: 0; border-bottom: 1px solid #f0ece2; background: #fff; font: inherit; cursor: pointer; }
       .sheet-mensagens .ms-resp:hover, .sheet-mensagens .ms-resp:focus-visible { background: #faf7f0; }
       .ms-resp b { font-size: 0.9rem; } .ms-resp span { font-size: 0.8rem; color: #4a443b; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: pre-line; }
@@ -727,10 +740,18 @@
   }
   function abrirProdutos_() {
     const corpo = gaveta_('Produtos'); if (!corpo) return;
+    const idConv = aberta ? aberta.id : null; if (idConv !== prodSelConv) { prodSel = []; prodSelConv = idConv; }
     const q = el('input', 'ms-busca ms-busca-prod'); q.id = 'ms-prod-busca'; q.type = 'search'; q.placeholder = 'Nome, código, cor ou tamanho'; q.setAttribute('aria-label', 'Buscar produto');
     const so = el('label', 'ms-cfg-linha ms-prod-filtro'), chk = el('input'); chk.type = 'checkbox'; chk.id = 'ms-prod-estoque'; chk.checked = true; so.append(chk, document.createTextNode(' Só com estoque'));
     const ul = el('ul', 'ms-prod-lista'); ul.id = 'ms-prod-lista'; ul.setAttribute('aria-live', 'polite');
-    corpo.append(q, so, ul);
+    const dica = el('p', 'ms-prod-dica', 'Toque na foto para selecionar várias peças e mandar um link só.');
+    corpo.append(q, so, dica, ul);
+    const bar = el('div', 'ms-prod-selbar'); bar.id = 'ms-prod-selbar'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Peças selecionadas'); bar.hidden = true;
+    const conta = el('span', 'ms-prod-conta'); conta.id = 'ms-prod-conta'; conta.setAttribute('aria-live', 'polite');
+    const env = el('div', 'ms-prod-env');
+    env.append(botao('ms-btn', 'Copiar link', 'prodsel-link'), botao('ms-btn prim', 'Enviar seleção', 'prodsel-usar'));
+    bar.append(conta, botao('ms-btn', 'Limpar', 'prodsel-limpar'), env);
+    corpo.parentNode.appendChild(bar);
     const pintar = () => {
       const termos = semAcento_(q.value).split(/\s+/).filter(Boolean);
       let ps = produtosCatalogo_().filter(ativo_);
@@ -743,6 +764,10 @@
         const li = el('li', 'ms-prod');
         const img = el('img', 'ms-prod-foto'); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
         const src = typeof fotoMini === 'function' ? fotoMini(p.Foto_URL, 160) : p.Foto_URL; if (src) img.setAttribute('src', src);
+        const sim = prodSelecionado_(p.ID), marca = botao('ms-prod-marca', '', 'prod-marcar', { id: String(p.ID) });
+        marca.setAttribute('aria-pressed', sim ? 'true' : 'false'); marca.setAttribute('aria-label', 'Selecionar ' + (p.Nome || 'peça') + (p.Codigo ? ' ' + p.Codigo : ''));
+        marca.append(img, el('span', 'ms-prod-caixa', sim ? '✓' : '')); marca.lastChild.setAttribute('aria-hidden', 'true');
+        if (sim) li.classList.add('marcado');
         const info = el('div', 'ms-prod-info');
         info.appendChild(el('b', '', p.Nome || 'Sem nome'));
         info.appendChild(el('span', 'ms-prod-preco', precoTexto_(p) + (p.Codigo ? ' · ' + p.Codigo : '')));
@@ -752,14 +777,50 @@
         acoes.appendChild(botao('ms-btn prim', 'Colocar na mensagem', 'prod-usar', { id: String(p.ID) }));
         if (linkDe_(p)) acoes.appendChild(botao('ms-btn', 'Copiar link', 'prod-link', { id: String(p.ID) }));
         info.appendChild(acoes);
-        li.append(img, info); ul.appendChild(li);
+        li.append(marca, info); ul.appendChild(li);
       });
       if (ps.length > 40) ul.appendChild(el('li', 'ms-vazio', 'Mostrando 40 de ' + ps.length + '. Escreva mais para achar mais rápido.'));
     };
-    q.addEventListener('input', pintar); chk.addEventListener('change', pintar); pintar();
+    q.addEventListener('input', pintar); chk.addEventListener('change', pintar); pintar(); desenharSelProd_();
     setTimeout(() => q.focus(), 0);
   }
   const produtoPorId_ = (id) => produtosCatalogo_().find((p) => String(p.ID) === String(id));
+  /* v7.29: seleção de produtos (igual ao "Selecionar" da loja): várias peças numa mensagem só, com o link ?sel= do site.
+     A seleção vale para a conversa aberta e continua entre buscas; some ao enviar ou ao trocar de conversa. */
+  const MAX_SEL_PROD = 60;
+  let prodSel = [], prodSelConv = null;
+  const prodSelecionado_ = (id) => prodSel.indexOf(String(id)) >= 0;
+  function linkSelecao_(ps) {
+    const site = typeof SITE_URL !== 'undefined' ? SITE_URL : '';
+    return site ? site + '?sel=' + ps.slice(0, MAX_SEL_PROD).map((p) => encodeURIComponent(String(p.Codigo || p.ID))).join(',') : '';
+  }
+  function textoSelecao_(ps) {
+    const n = Math.min(ps.length, MAX_SEL_PROD), link = linkSelecao_(ps);
+    let mostrar = Math.min(n, 12), msg = '';
+    do {
+      const linhas = ps.slice(0, mostrar).map((p) => '• ' + (p.Nome || 'Peça') + (p.Codigo ? ' (' + p.Codigo + ')' : '') + ' — ' + precoTexto_(p)).join('\n') + (n > mostrar ? '\n… e mais ' + (n - mostrar) + (n - mostrar === 1 ? ' peça' : ' peças') : '');
+      msg = 'Olha as peças que separei na TENKiTER Modas (' + n + (n === 1 ? ' peça' : ' peças') + '):\n' + linhas + (link ? '\n\nToque para ver as fotos de cada uma:\n' + link : '');
+      mostrar--;
+    } while (msg.length > 1500 && mostrar > 0);
+    return msg;
+  }
+  const produtosSelecionados_ = () => prodSel.map(produtoPorId_).filter(Boolean);
+  function desenharSelProd_() {
+    const bar = $('ms-prod-selbar'); if (!bar) return;
+    const n = produtosSelecionados_().length;
+    bar.hidden = !n;
+    const c = $('ms-prod-conta'); if (c) c.textContent = n + (n === 1 ? ' peça selecionada' : ' peças selecionadas');
+  }
+  function marcarProduto_(b) {
+    const id = String(b.dataset.id), li = b.closest('.ms-prod'), k = prodSel.indexOf(id);
+    if (k >= 0) prodSel.splice(k, 1);
+    else { if (prodSel.length >= MAX_SEL_PROD) { aviso_('Dá para mandar até ' + MAX_SEL_PROD + ' peças num link.'); return; } prodSel.push(id); }
+    const sim = k < 0;
+    b.setAttribute('aria-pressed', sim ? 'true' : 'false');
+    const cx = b.querySelector('.ms-prod-caixa'); if (cx) cx.textContent = sim ? '✓' : '';
+    if (li) li.classList.toggle('marcado', sim);
+    desenharSelProd_();
+  }
   /* respostas rápidas: as da loja (salvas no servidor) ou, enquanto ninguém salvou, só com o que o site já sabe */
   function respostasPadrao_() {
     const L = typeof LOJA !== 'undefined' ? LOJA : null, site = typeof SITE_URL !== 'undefined' ? SITE_URL : '';
@@ -1429,6 +1490,10 @@
     else if (a === 'gaveta-fechar') { fecharGaveta_(); const t = $('ms-texto'); if (t) t.focus(); }
     else if (a === 'resp-editar') abrirRespostas_(true);
     else if (a === 'resp-usar') { const r = respostas_()[Number(b.dataset.i)]; if (r) colocarNaMensagem_(r.x); }
+    else if (a === 'prod-marcar') marcarProduto_(b);
+    else if (a === 'prodsel-limpar') { prodSel = []; Array.prototype.forEach.call(document.querySelectorAll('#ms-prod-lista .ms-prod-marca'), (m) => { m.setAttribute('aria-pressed', 'false'); m.querySelector('.ms-prod-caixa').textContent = ''; m.closest('.ms-prod').classList.remove('marcado'); }); desenharSelProd_(); const q = $('ms-prod-busca'); if (q) q.focus(); }
+    else if (a === 'prodsel-usar') { const ps = produtosSelecionados_(); if (ps.length) { prodSel = []; colocarNaMensagem_(textoSelecao_(ps)); } }
+    else if (a === 'prodsel-link') { const ps = produtosSelecionados_(); if (ps.length) { try { await navigator.clipboard.writeText(linkSelecao_(ps)); aviso_('Link da seleção copiado.'); } catch (e) { aviso_('Não consegui copiar. Use “Enviar seleção”.'); } } }
     else if (a === 'prod-usar') { const p = produtoPorId_(b.dataset.id); if (p) colocarNaMensagem_(textoProduto_(p)); }
     else if (a === 'prod-link') { const p = produtoPorId_(b.dataset.id); if (p) { try { await navigator.clipboard.writeText(linkDe_(p)); aviso_('Link copiado.'); } catch (e) { aviso_('Não consegui copiar. Use “Colocar na mensagem”.'); } } }
     else if (a === 'nome-salvar') { const i = $('ms-meu-nome-rapido'); await salvarNome_(i ? i.value : ''); const t = $('ms-texto'); if (t) t.focus(); }

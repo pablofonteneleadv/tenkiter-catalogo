@@ -6,6 +6,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.29.0 — Mensagens: selecionar várias peças e mandar a seleção — 2026-10-26
+
+- Na gaveta Produtos da conversa, tocar na foto marca a peça (✓ e linha destacada); a seleção continua ao trocar a busca.
+- A barra embaixo mostra quantas peças estão marcadas, com "Limpar", "Copiar link" e "Enviar seleção".
+- "Enviar seleção" põe na mensagem o mesmo texto do "Selecionar" da loja: cada peça com código e preço à vista e o link `?sel=` do site, que abre só essas peças. Até 60 peças.
+- A seleção vale para a conversa aberta e recomeça ao enviar ou trocar de conversa.
+- Service worker renovado (tk-3.38.17).
+
 ## 7.28.0 — Google Contatos: ligar a ponte, cópia de segurança e relatório da primeira limpeza — 2026-10-26
 
 - Mensagens → ⋯ → Configurações → "Google Contatos (marcador Tenkiter Clientes G)": liga a ponte (`contatos-ponte-1.0`, Apps Script publicado na conta dos contatos), faz a cópia de segurança no Drive daquela conta e gera o relatório da primeira limpeza.
