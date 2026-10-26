@@ -1910,7 +1910,17 @@ function servicosFalsos(amb, est) {
   r = amb.post(adm({ action: 'update', id: '101', consultarValor: false, preco: 120 }));
   ok(r.ok && Number(preco('101')) === 119.99, 'desmarcar COM preço volta ao valor escrito', String(preco('101')));
   r = amb.post(adm({ action: 'update', id: '101', preco: 0 }));
-  ok(r.ok === false, 'update com preço 0 sem a marca continua recusado');
+  if (/precoZeroConsulta/.test(codigoFonte)) {
+    // v4.27 (pedido do Pablo): preço 0 sem a marca = "Consultar valor" (telas que reenviam o preço atual não travam mais)
+    ok(r.ok && Number(preco('101')) === 0, 'v4.27: update com preço 0 sem a marca vira "Consultar valor"', JSON.stringify(r));
+    r = amb.post(adm({ action: 'update', id: '101', preco: -5 }));
+    ok(r.ok === false && /Preço inválido/.test(r.erro), 'v4.27: preço negativo continua recusado', JSON.stringify(r));
+    r = amb.post(adm({ action: 'update', id: '101', preco: 'abc' }));
+    ok(r.ok === false, 'v4.27: preço em texto continua recusado', JSON.stringify(r));
+    amb.post(adm({ action: 'update', id: '101', consultarValor: false, preco: 120 }));
+  } else {
+    ok(r.ok === false, 'update com preço 0 sem a marca continua recusado');
+  }
   // lote: consultar / valor escrito / % pula peça sem preço
   r = amb.post(adm({ action: 'bulkUpdate', ids: ['102', '105'], tipoAcao: 'consultarValor' }));
   ok(r.ok && r.afetados === 2 && Number(preco('102')) === 0 && Number(preco('105')) === 0, 'lote consultarValor passa as marcadas para sem preço', JSON.stringify(r));
