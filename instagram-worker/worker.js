@@ -2573,29 +2573,10 @@ async function rotaWebhookMensagens_(env, req, url) {
     const m = normalizarWafly_(b);
     if (!m) return ok(200, { ok: true, ignorado: true });
     try { await prepararMidia_(env, canal, m); } catch (e) { /* a mídia é conforto: a mensagem é gravada de qualquer jeito */ }
-    if (!m.direcao || m.direcao === 'entrada') { try { await guardarBrutoRedigido_(env, canal, b); } catch (e) { /* diagnóstico é conforto */ } }
     if (m.tipo !== 'texto' || m.ctxTipo) { try { await cfgSet(env, 'msg_ult_forma_' + canal, JSON.stringify({ em: agora(), tipo: m.tipo, ctx: m.ctxTipo, copiada: !!m.midiaChave, campos: Object.keys(b).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 40), interno: Object.keys((b && b[({ imagem: 'image', 'vídeo': 'video', 'áudio': 'audio', documento: 'document', figurinha: 'sticker' })[m.tipo]]) || {}).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 20) })); } catch (e) { /* diagnóstico é conforto */ } }
     return ok(200, { ok: true, nova: await gravarMensagem_(env, canal, m) });
   }
   return ok(404, { ok: false });
-}
-/** Diagnóstico temporário: guarda o FORMATO dos últimos avisos recebidos (textos, números e links trocados por marcas) para descobrir como a Wafly marca resposta a story. */
-function redigirAviso_(v, chave) {
-  if (v == null || typeof v === 'boolean' || typeof v === 'number') return typeof v === 'number' && String(Math.abs(v)).length >= 9 ? '<num>' : v;
-  if (typeof v === 'string') {
-    if (/^https?:\/\//i.test(v)) { try { return '<url ' + new URL(v).hostname + '>'; } catch (e) { return '<url>'; } }
-    if (/^(message|caption|title|senderName|chatName|fileName|value|text|body|description)$/.test(chave || '')) return '<texto ' + v.length + '>';
-    return /\d{6,}/.test(v) ? v.replace(/\d{6,}/g, '<num>').slice(0, 60) : v.slice(0, 60);
-  }
-  if (Array.isArray(v)) return v.slice(0, 5).map((x) => redigirAviso_(x, chave));
-  const o = {}; let n = 0;
-  for (const k of Object.keys(v)) { if (n++ >= 40) break; if (/^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)) o[k] = redigirAviso_(v[k], k); }
-  return o;
-}
-async function guardarBrutoRedigido_(env, canal, b) {
-  const chave = 'msg_bruto_' + canal; let l = []; try { l = JSON.parse((await cfgGet(env, chave)) || '[]'); } catch (e) { l = []; }
-  l.push({ em: agora(), corpo: redigirAviso_(b, '') }); l = l.slice(-8);
-  await cfgSet(env, chave, JSON.stringify(l).slice(0, 14000));
 }
 /** Liga a gravação: aponta o webhook de mensagens da instância Wafly para este Worker. */
 async function ligarWebhookWafly_(env, slot, origem) {
@@ -2985,8 +2966,7 @@ export default {
       if (p === '/msg/diagnostico' && req.method === 'GET') {
         const out = {}; for (const n of [1, 2]) { try { out['whatsapp' + n] = JSON.parse((await cfgGet(env, 'msg_ligar_diag_' + n)) || 'null'); } catch (e) { out['whatsapp' + n] = null; } }
         const forma = {}; for (const c of ['whatsapp1', 'whatsapp2']) { try { forma[c] = JSON.parse((await cfgGet(env, 'msg_ult_forma_' + c)) || 'null'); } catch (e) { forma[c] = null; } }
-        const bruto = {}; for (const c of ['whatsapp1', 'whatsapp2']) { try { bruto[c] = JSON.parse((await cfgGet(env, 'msg_bruto_' + c)) || '[]'); } catch (e) { bruto[c] = []; } }
-        return J({ ok: true, ligar: out, forma: forma, bruto: bruto });
+        return J({ ok: true, ligar: out, forma: forma });
       }
       if (p === '/msg/anexo' && req.method === 'POST') { const [cod, corpo] = await receberAnexo_(env, req, url); return J(corpo, cod); }
       if (p === '/msg/stories' && req.method === 'GET') {
