@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.14.2 — IA insiste quando o Gemini está sobrecarregado — 2026-10-26
+
+- "Gerar com IA" (foto): com o Gemini sobrecarregado (503, "high demand", demora), o painel tenta de novo sozinho, com espera crescente, até 12 vezes; mostra o andamento e tem botão Cancelar.
+- Chave recusada ou cota de todos os modelos esgotada param na hora, com frase clara.
+- Nada de JSON cru na tela. Funciona com o servidor 4.25; o 4.26 (Cofre) também troca de modelo, do mais barato ao mais caro, em cada tentativa.
+
 ## 7.14.1 — correção urgente do cadastro — 2026-10-26
 
 - Cadastro, edição em lote, excluir, avisos e fila offline voltavam "WhatsApp ou senha incorretos" com a pessoa logada: a sessão nova (tk3) ia sem o WhatsApp do dono. O painel agora completa o WhatsApp a partir da própria sessão.
