@@ -77,7 +77,7 @@ with sync_playwright() as p:
         chk("o texto leva o link /p/TK-0001?f=3 (o link abre na mesma foto e a miniatura é ela)", "https://tenkitermodas.com.br/p/TK-0001?f=3" in sh[0]["text"], sh[0]["text"])
     baixou = [u for t, u in buscas if t == "fetch" and u == G[1]]
     chk("baixou a 3ª foto (a selecionada), não a capa", len(baixou) == 1, [u for t, u in buscas if t == "fetch"])
-    chk("o botão voltou ao normal depois", "Compartilhar foto e link" in (pg.locator("#btn-anexar-foto").text_content() or "") and pg.locator("#btn-anexar-foto").is_enabled())
+    chk("o botão voltou ao normal depois", "Compartilhar" in (pg.locator("#btn-anexar-foto").text_content() or "") and pg.get_attribute("#btn-anexar-foto", "aria-label") == "Compartilhar foto e link" and pg.locator("#btn-anexar-foto").is_enabled())
 
     print("== 'Pedir no WhatsApp' leva a mesma foto ==")
     pg.evaluate("window.__opened=[]")

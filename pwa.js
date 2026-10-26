@@ -72,8 +72,8 @@
     var jaInst = instalado();
     if (jaInst) {
       txtAnd.textContent = standalone()
-        ? '✅ Você já está usando o app. Para receber avisos, use o botão abaixo.'
-        : '✅ O app já está instalado neste aparelho. Abra pelo ícone TENKiTER na tela inicial.';
+        ? 'Você já está usando o app. Para receber avisos, use o botão abaixo.'
+        : 'O app já está instalado neste aparelho. Abra pelo ícone TENKiTER na tela inicial.';
       btnAnd.hidden = true; passosAnd.hidden = true;
     } else if (evento) {
       txtAnd.textContent = desktop ? 'Instale no computador: abre numa janela própria, rápido e com avisos.' : 'Toque em Instalar e confirme. O ícone da TENKiTER aparece na tela inicial.';
@@ -90,7 +90,7 @@
 
     /* ---- iPhone */
     if (standalone() && iOS) {
-      txtIos.textContent = '✅ Você já está usando o app no iPhone. Para receber avisos, use o botão abaixo.';
+      txtIos.textContent = 'Você já está usando o app no iPhone. Para receber avisos, use o botão abaixo.';
       btnIos.hidden = true; passosIos.hidden = true;
     } else if (iOS && embutido) {
       txtIos.textContent = 'Você está dentro do navegador de outro aplicativo. No iPhone a instalação só funciona no Safari: copie o endereço e abra no Safari.';
@@ -99,7 +99,7 @@
     } else {
       txtIos.textContent = iOS ? 'No iPhone a instalação é pelo Safari. É rapidinho:' : 'No iPhone a instalação é feita pelo Safari, em poucos toques:';
       var podeCompartilhar = iOS && typeof navigator.share === 'function';
-      btnIos.hidden = !podeCompartilhar; btnIos.textContent = '📤 Abrir o menu Compartilhar'; btnIos.setAttribute('data-modo', 'compartilhar');
+      btnIos.hidden = !podeCompartilhar; btnIos.textContent = 'Abrir o menu Compartilhar'; btnIos.setAttribute('data-modo', 'compartilhar');
       passosIos.hidden = false;
     }
 
@@ -112,12 +112,12 @@
       if (r === 'em-breve' || r === 'sem-app' || r === 'nao-suportado') mostra = false;
       linha.hidden = !mostra;
       if (mostra) {
-        if (r === 'ativo' || r === 'ativando') { t.textContent = '🔔 Avisos ativados neste aparelho.'; b.textContent = 'Ajustar avisos'; }
-        else if (r === 'pausado') { t.textContent = '🔕 Avisos pausados neste aparelho.'; b.textContent = 'Reativar avisos'; }
-        else if (r === 'negado') { t.textContent = '🚫 Os avisos estão bloqueados neste aparelho.'; b.textContent = 'Como liberar'; }
-        else if (r === 'ios-instalar') { t.textContent = '🔕 No iPhone, instale o app primeiro (passos acima) e depois ative os avisos dentro dele.'; b.textContent = 'Entender'; }
-        else if (r === 'embutido' || r === 'ios-antigo' || r === 'bloqueado') { t.textContent = '🔕 Avisos indisponíveis aqui.'; b.textContent = 'Ver o motivo'; }
-        else { t.textContent = '🔕 Avisos desligados. Ative para receber novidades e o andamento do seu pedido.'; b.textContent = '🔔 Ativar avisos'; }
+        if (r === 'ativo' || r === 'ativando') { t.textContent = 'Avisos ativados neste aparelho.'; b.textContent = 'Ajustar avisos'; }
+        else if (r === 'pausado') { t.textContent = 'Avisos pausados neste aparelho.'; b.textContent = 'Reativar avisos'; }
+        else if (r === 'negado') { t.textContent = 'Os avisos estão bloqueados neste aparelho.'; b.textContent = 'Como liberar'; }
+        else if (r === 'ios-instalar') { t.textContent = 'No iPhone, instale o app primeiro (passos acima) e depois ative os avisos dentro dele.'; b.textContent = 'Entender'; }
+        else if (r === 'embutido' || r === 'ios-antigo' || r === 'bloqueado') { t.textContent = 'Avisos indisponíveis aqui.'; b.textContent = 'Ver o motivo'; }
+        else { t.textContent = 'Avisos desligados. Ative para receber novidades e o andamento do seu pedido.'; b.textContent = 'Ativar avisos'; }
       }
     }
   }
@@ -128,7 +128,7 @@
   window.addEventListener('appinstalled', function () {
     evento = null; guardarInstalado(true); desenhar();
     if (window.TKDisp) TKDisp.registrar({ instalou: true });     // v3.5: conta no painel "quantas pessoas instalaram"
-    msg('✅ App instalado! Procure o ícone TENKiTER na tela inicial.');
+    msg('App instalado! Procure o ícone TENKiTER na tela inicial.');
     if (window.TKPush) setTimeout(function () { TKPush.aposInstalar(); }, 600);
   });
   try { window.matchMedia('(display-mode: standalone)').addEventListener('change', desenhar); } catch (e) {}
@@ -211,9 +211,9 @@
     var pode = !!evento, texto, rot;
     if (embutido) { texto = 'Você está dentro de outro app. Abra no Chrome ou Safari para instalar o app da TENKiTER.'; rot = 'Copiar endereço'; }
     else if (iOS) { texto = 'Instale o app na tela inicial: abre mais rápido e você recebe os avisos dos seus pedidos.'; rot = 'Como instalar'; }
-    else if (pode) { texto = 'Instale o app da TENKiTER: abre mais rápido, funciona sem sinal ruim e avisa quando seu pedido andar.'; rot = '📲 Instalar o app'; }
+    else if (pode) { texto = 'Instale o app da TENKiTER: abre mais rápido, funciona sem sinal ruim e avisa quando seu pedido andar.'; rot = 'Instalar o app'; }
     else { texto = 'Instale o app da TENKiTER pelo menu do navegador (⋮ → Instalar app ou Adicionar à tela inicial).'; rot = 'Ver o passo a passo'; }
-    box.innerHTML = '<b>📲 Leve a TENKiTER no seu celular</b><p></p><div class="tkcv-l"><button type="button" class="tkcv-p"></button><button type="button" class="tkcv-s">Agora não</button><button type="button" class="tkcv-n">Não mostrar mais</button></div>';
+    box.innerHTML = '<b>Leve a TENKiTER no seu celular</b><p></p><div class="tkcv-l"><button type="button" class="tkcv-p"></button><button type="button" class="tkcv-s">Agora não</button><button type="button" class="tkcv-n">Não mostrar mais</button></div>';
     box.querySelector('p').textContent = texto; box.querySelector('.tkcv-p').textContent = rot;
     box.querySelector('.tkcv-p').addEventListener('click', function () {
       if (embutido) { copiarEndereco(); return; }

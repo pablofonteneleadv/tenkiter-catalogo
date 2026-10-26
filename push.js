@@ -254,7 +254,7 @@
       if (est.permissao === 'denied') { abrirAjuda('negado'); return { ok: false, motivo: 'negado' }; }
       if (est.permissao === 'granted') {
         identificar().then(function () { return marcar(); });
-        aviso('Avisos ativados neste aparelho 🔔');
+        aviso('Avisos ativados neste aparelho.');
         return { ok: true };
       }
       return { ok: false, motivo: 'pendente' };      // a pessoa fechou a janelinha sem escolher
@@ -474,7 +474,7 @@
       } else {
         filhos.push(btn('Reativar avisos', function () { ativar().then(function () { fechar(); }); }));
       }
-      abrir('🔔 Meus avisos', filhos);
+      abrir('Meus avisos', filhos);
       return;
     }
     if (r === 'pendente') { abrirConvite('painel'); return; }
@@ -487,13 +487,13 @@
     var quem = est.tipo === 'equipe' ? 'os novos pedidos e os avisos da equipe' : (est.tipo === 'aluno' ? 'os avisos dos treinamentos e da equipe' : 'as novidades, as promoções e o andamento do seu pedido');
     var filhos = [
       el('p', { text: 'Ative para receber ' + quem + ' direto na tela do celular, mesmo com o app fechado.' }),
-      btn('🔔 Ativar avisos', function () { fechar(); ativar(); }),
+      btn('Ativar avisos', function () { fechar(); ativar(); }),
       btn('Agora não', fechar, 'link')
     ];
     if (origem === 'auto') {
       filhos.push(el('button', { type: 'button', class: 'tkp-btn link', text: 'Não quero receber', onclick: function () { var c = lerLS(K_CONVITE) || {}; c.nunca = true; gravarLS(K_CONVITE, c); fechar(); } }));
     }
-    abrir(origem === 'instalou' ? '✅ App instalado! Ative os avisos' : 'Receba os avisos da TENKiTER', filhos);
+    abrir(origem === 'instalou' ? 'App instalado! Ative os avisos' : 'Receba os avisos da TENKiTER', filhos);
   }
   /** Placa de verificação: TODA vez que o app instalado abre, confere a permissão de avisos. Ativo = não faz nada; desligado = placa flutuante pedindo.
    *  Sem "não mostrar mais" de propósito (só "Agora não", que vale até fechar o app). A permissão só é pedida DENTRO do toque do botão. */
@@ -519,10 +519,10 @@
       }
       var bloq = r === 'negado' || r === 'bloqueado';
       var box = document.createElement('div'); box.id = 'tk-placa-aviso'; box.setAttribute('role', 'region'); box.setAttribute('aria-label', 'Avisos desligados');
-      box.innerHTML = '<b>🔕 Os avisos estão desligados</b><p></p><div class="tkpl-l"><button type="button" class="tkpl-p"></button><button type="button" class="tkpl-s">Agora não</button></div>';
+      box.innerHTML = '<b>Os avisos estão desligados</b><p></p><div class="tkpl-l"><button type="button" class="tkpl-p"></button><button type="button" class="tkpl-s">Agora não</button></div>';
       box.querySelector('p').textContent = bloq ? 'Este aparelho está bloqueando os avisos da TENKiTER. Veja como liberar para não perder pedidos e novidades.'
         : 'Ative para receber ' + (est.tipo === 'equipe' ? 'os novos pedidos e os avisos da equipe' : 'as novidades e o andamento do seu pedido') + ' direto na tela do celular.';
-      var bp = box.querySelector('.tkpl-p'); bp.textContent = bloq ? 'Ver como liberar' : '🔔 Ativar avisos';
+      var bp = box.querySelector('.tkpl-p'); bp.textContent = bloq ? 'Ver como liberar' : 'Ativar avisos';
       bp.addEventListener('click', function () { removerPlaca(); if (bloq) { abrirAjuda(r); } else { ativar(); } });
       box.querySelector('.tkpl-s').addEventListener('click', function () { try { sessionStorage.setItem(K_PLACA, '1'); } catch (e) {} removerPlaca(); });
       document.body.appendChild(box);
@@ -555,7 +555,7 @@
     if (!APP_ID || r === 'em-breve' || r === 'nao-suportado' || r === 'sem-app') { b.style.display = 'none'; return; }
     b.style.display = '';
     var on = r === 'ativo' || r === 'ativando';
-    b.textContent = on ? '🔔' : '🔕';
+    if (window.TKIcone) b.innerHTML = window.TKIcone(on ? 'sino' : 'sino-off'); else b.textContent = on ? '🔔' : '🔕';
     b.classList.toggle('ativado', on);
     b.title = on ? 'Avisos ativados (toque para ajustar)' : 'Ativar avisos de novidades e do pedido';
     b.setAttribute('aria-label', b.title);
@@ -577,8 +577,8 @@
       caixa.textContent = '';
       if (r === 'em-breve' || r === 'sem-app' || r === 'nao-suportado') { caixa.style.display = 'none'; return; }
       caixa.style.display = '';
-      if (r === 'ativo' || r === 'ativando') { caixa.appendChild(el('b', { text: '🔔 Avisos ligados.' })); caixa.appendChild(document.createTextNode(' Você será avisado aqui quando o pedido mudar de etapa.')); return; }
-      caixa.appendChild(el('b', { text: '🔔 Quer ser avisado quando o pedido mudar?' }));
+      if (r === 'ativo' || r === 'ativando') { caixa.appendChild(el('b', { text: 'Avisos ligados.' })); caixa.appendChild(document.createTextNode(' Você será avisado aqui quando o pedido mudar de etapa.')); return; }
+      caixa.appendChild(el('b', { text: 'Quer ser avisado quando o pedido mudar?' }));
       caixa.appendChild(document.createTextNode(' Receba no celular: separando, pronto para retirar, etc.'));
       caixa.appendChild(el('button', { type: 'button', id: 'tkp-avisar-pedido', text: r === 'pendente' || r === 'pausado' ? 'Avisar quando o pedido mudar' : 'Como ativar os avisos', onclick: function () { if (r === 'pendente' || r === 'pausado') ativar().then(desenhar); else abrirAjuda(r); } }));
     }

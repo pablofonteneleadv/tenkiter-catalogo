@@ -111,7 +111,7 @@ with sync_playwright() as p:
     chk("não liga o sininho/notifyButton do OneSignal (usamos o nosso)", os_(pg, "S.initOpts.notifyButton.enable") is False)
     chk("estado 'pendente' (ainda não pediu nada)", e["resumo"] == "pendente" and e["sdk"] == "pronto", e)
     chk("NUNCA pede permissão sozinho", chamadas(pg, "requestPermission") == [] and pg.evaluate("window.__perm") == "default")
-    chk("sininho do topo aparece (🔕) quando dá para ativar", pg.locator("#btn-push-header").is_visible() and "🔕" in pg.inner_text("#btn-push-header"))
+    chk("sininho do topo aparece (desligado) quando dá para ativar", pg.locator("#btn-push-header").is_visible() and "ativado" not in (pg.get_attribute("#btn-push-header", "class") or "") and "Ativar avisos" in (pg.get_attribute("#btn-push-header", "aria-label") or ""))
     chk("etiqueta de origem 'site' (sem 'tipo' porque não há conta)", os_(pg, "S.tags.origem") == "site" and os_(pg, "S.tags.tipo") is None, os_(pg, "S.tags"))
     chk("sem conta, não há login no OneSignal", chamadas(pg, "login") == [])
 
@@ -126,7 +126,7 @@ with sync_playwright() as p:
     pg.click("#tkp-janela .tkp-btn:has-text('Ativar avisos')"); pg.wait_for_timeout(900)
     rp = chamadas(pg, "requestPermission")
     chk("a permissão é pedida UMA vez e DENTRO do toque da pessoa (userActivation)", len(rp) == 1 and rp[0][1] is True, rp)
-    chk("ficou ativo: sininho 🔔 e estado 'ativo'", resumo(pg) == "ativo" and "🔔" in pg.inner_text("#btn-push-header"), resumo(pg))
+    chk("ficou ativo: sininho ligado e estado 'ativo'", resumo(pg) == "ativo" and "ativado" in (pg.get_attribute("#btn-push-header", "class") or ""), resumo(pg))
     chk("aparece o aviso 'Avisos ativados neste aparelho'", pg.locator("#tkp-aviso").count() == 1 and "ativados" in pg.inner_text("#tkp-aviso"))
 
     pg.click("#btn-push-header"); pg.wait_for_timeout(700)

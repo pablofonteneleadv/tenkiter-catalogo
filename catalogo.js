@@ -1,5 +1,8 @@
 /* v4.27: a seleção vence sozinha (2 h; 3 h se a pessoa pediu para segurar) — tem que rodar ANTES de qualquer tela ler a sacola */
 try { tkSelExpirar_(); } catch (e) {}
+  /* v7.15: ícone de linha (icones.js); sem o arquivo, cai no emoji antigo. */
+  const ic_ = (nome, emoji) => (window.TKIcone ? window.TKIcone(nome) : (emoji || ''));
+  const coracao_ = (f) => ic_(f ? 'coracao-cheio' : 'coracao', f ? '❤️' : '🤍');
   const POR_PAGINA = 24;
   const QTD_PILLS_CATEGORIA = 6;
 
@@ -34,9 +37,9 @@ try { tkSelExpirar_(); } catch (e) {}
   function nivelDisponibilidade(p) {
     if (!estoqueInformado(p)) return null;
     const n = Number(p.Estoque);
-    if (n <= 0) return { texto: '🔴 Esgotado', classe: 'esgotado-txt' };
-    if (n <= 2) return { texto: n === 1 ? '🟡 Última unidade' : '🟡 Últimas ' + n + ' unidades', classe: 'poucas' };
-    return { texto: '🟢 Disponível', classe: 'disponivel' };
+    if (n <= 0) return { texto: 'Esgotado', classe: 'esgotado-txt' };
+    if (n <= 2) return { texto: n === 1 ? 'Última unidade' : 'Últimas ' + n + ' unidades', classe: 'poucas' };
+    return { texto: 'Disponível', classe: 'disponivel' };
   }
 
   /** Identificador único de UM evento: o mesmo texto vai ao Pixel (navegador) e à API de Conversões (servidor) para a Meta não contar 2x. */
@@ -210,12 +213,12 @@ try { tkSelExpirar_(); } catch (e) {}
         msg.textContent = 'Não foi possível carregar o catálogo agora. Verifique sua internet e tente de novo.';
         const acoes = document.createElement('div'); acoes.className = 'vazio-acoes';
         const tentar = document.createElement('button');
-        tentar.type = 'button'; tentar.className = 'btn-neutro'; tentar.id = 'btn-tentar-de-novo'; tentar.textContent = '🔄 Tentar de novo';
+        tentar.type = 'button'; tentar.className = 'btn-neutro'; tentar.id = 'btn-tentar-de-novo'; tentar.textContent = 'Tentar de novo';
         tentar.addEventListener('click', () => { vazio.style.display = 'none'; carregarCatalogo(); });
         const zap = document.createElement('a');
         zap.className = 'btn-zap'; zap.id = 'vazio-zap'; zap.target = '_blank'; zap.rel = 'noopener';
         zap.href = linkWhatsApp('Olá! Não consegui abrir o catálogo no site. Pode me ajudar a escolher uma peça?');
-        zap.textContent = '💬 Falar com a loja no WhatsApp';
+        zap.innerHTML = ic_('whatsapp') + ' Falar com a loja no WhatsApp';
         acoes.appendChild(tentar); acoes.appendChild(zap);
         vazio.appendChild(msg); vazio.appendChild(acoes);
         vazio.style.display = 'block';
@@ -239,14 +242,14 @@ try { tkSelExpirar_(); } catch (e) {}
     const chipNovidade = document.createElement('button');
     chipNovidade.type = 'button';
     chipNovidade.className = 'chip novidade-chip' + (apenasNovidades ? ' selecionado' : '');
-    chipNovidade.textContent = '🆕 Apenas Novidades';
+    chipNovidade.textContent = 'Apenas novidades';
     chipNovidade.addEventListener('click', () => { apenasNovidades = !apenasNovidades; chipNovidade.classList.toggle('selecionado'); aplicarFiltros(); });
     container.appendChild(chipNovidade);
 
     const chipFavoritos = document.createElement('button');
     chipFavoritos.type = 'button';
     chipFavoritos.className = 'chip favoritos-chip' + (apenasFavoritos ? ' selecionado' : '');
-    chipFavoritos.textContent = '❤️ Favoritos';
+    chipFavoritos.innerHTML = ic_('coracao') + ' Favoritos';
     chipFavoritos.addEventListener('click', () => { apenasFavoritos = !apenasFavoritos; chipFavoritos.classList.toggle('selecionado'); aplicarFiltros(); });
     container.appendChild(chipFavoritos);
   }
@@ -520,14 +523,14 @@ try { tkSelExpirar_(); } catch (e) {}
     const q = document.getElementById('busca').value.trim();
     const ativo = nFiltros > 0 || !!q || !!selecaoFixa || apenasFavoritos || apenasNovidades;
     const nSac = getSacola().length, share = document.getElementById('linha-share-busca'); if (share) share.hidden = !(ativo || nSac > 0);
-    const bsb = document.getElementById('btn-share-busca'); if (bsb) bsb.textContent = ativo ? '🔗 Compartilhar filtro' : '🔗 Compartilhar seleção (' + nSac + ')';
+    const bsb = document.getElementById('btn-share-busca'); if (bsb) bsb.textContent = ativo ? 'Compartilhar filtro' : 'Compartilhar seleção (' + nSac + ')';
     const bls = document.getElementById('btn-limpar-sel'); if (bls) bls.hidden = nSac === 0;
     const blf = document.getElementById('btn-limpar-filtros-topo'); if (blf) blf.hidden = !ativo;
     const ams = document.getElementById('aviso-minha-sel');
     if (soSelecao_ && nSac === 0) { soSelecao_ = false; setTimeout(aplicarFiltros, 0); }
     else if (soSelecao_ && nSac !== ultimoNSac_ && ultimoNSac_ !== -1) { ultimoNSac_ = nSac; setTimeout(aplicarFiltros, 0); }
     ultimoNSac_ = nSac;
-    if (ams) { ams.hidden = !soSelecao_; const at = document.getElementById('aviso-minha-sel-txt'); if (at) at.textContent = '🛍️ Mostrando só a sua seleção: ' + nSac + (nSac === 1 ? ' peça.' : ' peças.'); }
+    if (ams) { ams.hidden = !soSelecao_; const at = document.getElementById('aviso-minha-sel-txt'); if (at) at.textContent = 'Mostrando só a sua seleção: ' + nSac + (nSac === 1 ? ' peça.' : ' peças.'); }
     {
       const jaTem = new Set(getSacola().map(String)), lf = listaFiltradaAtual || [];
       const faltam = lf.filter(p => !estaEsgotado(p) && !jaTem.has(String(p.ID))).length;
@@ -549,7 +552,7 @@ try { tkSelExpirar_(); } catch (e) {}
     if (!selecaoFixa && nFiltros) t += ' · ' + nFiltros + (nFiltros === 1 ? ' filtro' : ' filtros');
     if (selecaoFixa) t = 'Seleção · ' + n + (n === 1 ? ' peça' : ' peças');
     document.getElementById('barra-filtros-txt').textContent = t;
-    document.getElementById('barra-filtros-limpar').textContent = selecaoFixa ? '✕ Sair da seleção compartilhada' : 'Limpar filtros';
+    document.getElementById('barra-filtros-limpar').textContent = selecaoFixa ? 'Sair da seleção compartilhada' : 'Limpar filtros';
     bar.hidden = false;
   }
   /** Sai dos filtros do link (ou limpa os filtros comuns) e mostra o site inteiro; sacola e favoritos da pessoa ficam como estão. */
@@ -586,7 +589,7 @@ try { tkSelExpirar_(); } catch (e) {}
     const zap = document.createElement('a');
     zap.className = 'btn-zap'; zap.target = '_blank'; zap.rel = 'noopener'; zap.id = 'vazio-zap';
     zap.href = linkWhatsApp(q ? 'Olá! Procuro: ' + q + '. Vocês têm?' : 'Olá! Vim pelo catálogo e quero ajuda para escolher.');
-    zap.textContent = q ? '💬 Perguntar no WhatsApp se tem “' + q + '”' : '💬 Falar com a loja no WhatsApp';
+    zap.textContent = q ? 'Perguntar no WhatsApp se tem “' + q + '”' : 'Falar com a loja no WhatsApp';
     acoes.appendChild(zap);
     const limpar = document.createElement('button');
     limpar.type = 'button'; limpar.className = 'btn-neutro'; limpar.id = 'vazio-limpar'; limpar.textContent = 'Limpar busca e filtros';
@@ -603,7 +606,7 @@ try { tkSelExpirar_(); } catch (e) {}
     if (!selecaoFixa) { box.hidden = true; return; }
     const total = selecaoFixa.length;
     const achadas = produtos.length ? produtos.filter(naSelecaoFixa_).length : total;
-    let t = '🔗 Peças separadas para você: ' + achadas + (achadas === 1 ? ' peça' : ' peças') + '.';
+    let t = 'Peças separadas para você: ' + achadas + (achadas === 1 ? ' peça' : ' peças') + '.';
     if (produtos.length && achadas < total) t += ' ' + (total - achadas) + (total - achadas === 1 ? ' peça desta seleção não está mais disponível.' : ' peças desta seleção não estão mais disponíveis.');
     document.getElementById('aviso-selecao-txt').textContent = t;
     box.hidden = false;
@@ -655,19 +658,19 @@ try { tkSelExpirar_(); } catch (e) {}
             <img ${atribSrc(fotoMini(p.Foto_URL, larguraMini()))} ${atribSrcSet(p.Foto_URL)}alt="${escaparHtml(p.Nome)}" ${pos === 0 ? 'fetchpriority="high" decoding="async"' : (pos < 4 ? 'decoding="async"' : 'loading="lazy" decoding="async"')}>
             ${esgotado ? '<span class="selo-card esgotado">ESGOTADO</span>' : (ehNovidade(p) ? '<span class="selo-card novidade">NOVIDADE</span>' : '')}
             ${equipe_.pode ? `<button type="button" class="x-equipe" data-x-prod="${escaparHtml(p.ID)}" title="Arquivar esta peça (equipe)" aria-label="Arquivar a peça: ${escaparHtml(p.Nome)}">✕</button>` : ''}
-            <button type="button" class="btn-favorito-card" data-fav-id="${escaparHtml(p.ID)}" title="Favoritar" aria-label="${favoritado ? 'Remover dos favoritos' : 'Favoritar'}: ${escaparHtml(p.Nome)}" aria-pressed="${favoritado}">${favoritado ? '❤️' : '🤍'}</button>
-            ${nFotos > 1 || temVideo ? `<span class="mini-selos" aria-hidden="true">${nFotos > 1 ? `<span class="mini-selo">📷 ${nFotos}</span>` : ''}${temVideo ? '<span class="mini-selo">▶ vídeo</span>' : ''}</span>` : ''}
+            <button type="button" class="btn-favorito-card" data-fav-id="${escaparHtml(p.ID)}" title="Favoritar" aria-label="${favoritado ? 'Remover dos favoritos' : 'Favoritar'}: ${escaparHtml(p.Nome)}" aria-pressed="${favoritado}">${coracao_(favoritado)}</button>
+            ${nFotos > 1 || temVideo ? `<span class="mini-selos" aria-hidden="true">${nFotos > 1 ? `<span class="mini-selo">${ic_('camera', '📷')} ${nFotos}</span>` : ''}${temVideo ? '<span class="mini-selo">' + ic_('play', '▶') + ' vídeo</span>' : ''}</span>` : ''}
             ${ultimas ? '<span class="selo-ultimas" aria-hidden="true">' + (Number(p.Estoque) === 1 ? 'Última!' : 'Últimas ' + Number(p.Estoque)) + '</span>' : ''}
           </div>
           <div class="card-info">
             ${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}
             <div class="nome"><button type="button" class="abrir-peca" aria-label="Ver detalhes: ${escaparHtml(p.Nome)}">${escaparHtml(p.Nome)}</button></div>
-            <div class="preco">${ehConsulta(p) ? '<strong class="consulta">' + TEXTO_CONSULTA + '</strong>' : '<span class="avista-n">' + formatarReal(avista) + '</span> <s class="cheio">' + formatarReal(p.Preco) + '</s>'}</div>
+            <div class="preco">${ehConsulta(p) ? '<strong class="consulta">' + TEXTO_CONSULTA + '</strong>' : '<span class="avista-n">' + formatarReal(avista) + '</span> <span class="avista-rot">à vista</span> <span class="cheio">Normal ' + formatarReal(p.Preco) + '</span>'}</div>
             <div class="tags">${escaparHtml(p.Categoria)}</div>
             ${disp && !esgotado ? `<div class="disponibilidade ${disp.classe}">${disp.texto}</div>` : ''}
             ${esgotado ? '' : `<div class="acoes-card">
               <button type="button" class="ac-sacola" data-sac-id="${escaparHtml(p.ID)}" aria-pressed="${naSacola}" aria-label="${escaparHtml(rotuloSacola_(p.Nome, naSacola))}">${conteudoSacola_(naSacola)}</button>
-              <button type="button" class="ac-pedir" data-pedir-id="${escaparHtml(p.ID)}" aria-label="${escaparHtml(p.Nome)}: consultar no WhatsApp"><span aria-hidden="true">💬</span> Consultar</button>
+              <button type="button" class="ac-pedir" data-pedir-id="${escaparHtml(p.ID)}" aria-label="${escaparHtml(p.Nome)}: consultar no WhatsApp">${ic_('whatsapp', '💬')} Consultar</button>
             </div>`}
           </div>
         </div>
@@ -685,7 +688,7 @@ try { tkSelExpirar_(); } catch (e) {}
       e.stopPropagation();
       const id = btn.dataset.favId;
       const agoraFavorito = toggleFavorito(id);
-      btn.textContent = agoraFavorito ? '❤️' : '🤍';
+      btn.innerHTML = coracao_(agoraFavorito);
       btn.setAttribute('aria-pressed', String(agoraFavorito));
       btn.setAttribute('aria-label', (agoraFavorito ? 'Remover dos favoritos' : 'Favoritar') + ': ' + (btn.closest('.card').querySelector('.abrir-peca') || {}).textContent);
       atualizarBadges();
@@ -781,7 +784,7 @@ try { tkSelExpirar_(); } catch (e) {}
    *  O ícone fica FORA do nome acessível (span aria-hidden) e o nome acessível SEMPRE contém o texto
    *  visível. Antes o nome fixo era "minha seleção" num botão que mostrava "Selecionar": o leitor de
    *  tela dizia uma coisa e o botão mostrava outra (achado "label-content-name-mismatch" da auditoria). */
-  function conteudoSacola_(na) { return na ? '<span aria-hidden="true">✓</span> Na seleção' : '<span aria-hidden="true">🛍️</span> Selecionar'; }
+  function conteudoSacola_(na) { return na ? ic_('certo', '<span aria-hidden="true">✓</span>') + ' Na seleção' : ic_('mais', '<span aria-hidden="true">🛍️</span>') + ' Selecionar'; }
   function rotuloSacola_(nome, na) { const estado = na ? 'na seleção' : 'selecionar'; return nome ? (nome + ': ' + estado) : estado; }
   function pintarBotaoSacola_(btn, nome, na) {
     if (!btn) return;
@@ -801,7 +804,7 @@ try { tkSelExpirar_(); } catch (e) {}
     const card = document.querySelector('.card[data-id="' + String(id).replace(/"/g, '') + '"]');
     if (!card) return;
     const fav = card.querySelector('.btn-favorito-card');
-    if (fav) { const f = ehFavorito(id); fav.textContent = f ? '❤️' : '🤍'; fav.setAttribute('aria-pressed', String(f)); }
+    if (fav) { const f = ehFavorito(id); fav.innerHTML = coracao_(f); fav.setAttribute('aria-pressed', String(f)); }
     const sac = card.querySelector('.ac-sacola');
     if (sac) pintarBotaoSacola_(sac, (card.querySelector('.abrir-peca') || {}).textContent || '', estaNaSacola(id));
     if (apenasFavoritos && !ehFavorito(id)) aplicarFiltros();
@@ -859,11 +862,11 @@ try { tkSelExpirar_(); } catch (e) {}
     const ehVideo = !!(slide && slide.tipo === 'video');
     const texto = `${p.Nome} — ${ehConsulta(p) ? TEXTO_CONSULTA : formatarReal(avista) + ' à vista'}${ehVideo ? ' (vídeo)' : ''}\n${link}\n\nTENKiTER Modas — WhatsApp: ${linkWhatsApp()}`;
     const btn = document.getElementById('btn-anexar-foto');
-    const rotulo = btn ? btn.textContent : '';
-    if (btn) { btn.disabled = true; btn.textContent = ehVideo ? '⏳ Preparando o vídeo…' : '⏳ Preparando…'; }
+    const rotulo = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.textContent = ehVideo ? 'Preparando o vídeo…' : 'Preparando…'; }
     let arquivo = null;
     try { arquivo = await arquivoDoSlide_(slide, p, 3500); }
-    finally { if (btn) { btn.disabled = false; btn.textContent = rotulo; } }
+    finally { if (btn) { btn.disabled = false; btn.innerHTML = rotulo; } }
 
     if (navigator.share) {
       try {
@@ -949,7 +952,7 @@ try { tkSelExpirar_(); } catch (e) {}
 
     document.getElementById('modal-conteudo').innerHTML = `
       <div class="sheet-handle" aria-hidden="true"></div>
-      <button type="button" class="btn-x-modal" id="btn-fechar-modal" aria-label="Fechar">✕</button>
+      <button type="button" class="btn-x-modal" id="btn-fechar-modal" aria-label="Fechar">${ic_('fechar', '✕')}</button>
       <div class="carrossel-wrap">
         <div class="slide-area" id="slide-area"><img id="foto-principal-modal" alt="${escaparHtml(p.Nome)}"></div>
         ${equipe_.pode ? `<a class="btn-editar-peca" id="btn-editar-peca" href="admin.html?editar=${encodeURIComponent(p.ID)}">✎ Editar produto</a>` : ''}
@@ -967,7 +970,7 @@ try { tkSelExpirar_(); } catch (e) {}
         ${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}
         <div class="nome">${escaparHtml(p.Nome)}</div>
         <div class="preco-linha">
-          ${ehConsulta(p) ? '<span class="consulta">' + TEXTO_CONSULTA + '</span>' : '<span class="cheio">' + formatarReal(p.Preco) + '</span>\n          <span class="avista">' + formatarReal(avista) + ' à vista</span>'}
+          ${ehConsulta(p) ? '<span class="consulta">' + TEXTO_CONSULTA + '</span>' : '<span class="avista">' + formatarReal(avista) + ' <small>à vista</small></span>\n          <span class="cheio">Normal ' + formatarReal(p.Preco) + '</span>'}
         </div>
         <div class="tags">${escaparHtml(p.Categoria)} · ${escaparHtml(p.Genero)}</div>
         ${linhaTamanhoCliente_(p)}
@@ -977,14 +980,14 @@ try { tkSelExpirar_(); } catch (e) {}
       </div>
       <div class="barra-compra">
         <div class="linha-secundaria">
-        <button type="button" id="btn-favorito-modal" aria-pressed="${favoritado}">${favoritado ? '❤️ Nos favoritos' : '🤍 Favoritar'}</button>
-        ${esgotado ? '' : '<button type="button" id="btn-anexar-foto">📎 Compartilhar foto e link</button>'}
+        <button type="button" id="btn-favorito-modal" aria-pressed="${favoritado}">${coracao_(favoritado)} ${favoritado ? 'Nos favoritos' : 'Favoritar'}</button>
+        ${esgotado ? '' : '<button type="button" id="btn-anexar-foto" aria-label="Compartilhar foto e link">' + ic_('compartilhar', '📎') + ' Compartilhar</button>'}
         </div>
         <div class="bc-linha">
         ${esgotado
-          ? '<span class="bc-aviso">Indisponível no momento</span><button type="button" class="bc-pedir" id="btn-perguntar">💬 Perguntar se volta</button>'
+          ? '<span class="bc-aviso">Indisponível no momento</span><button type="button" class="bc-pedir" id="btn-perguntar">' + ic_('whatsapp', '💬') + ' Perguntar se volta</button>'
           : `<button type="button" class="bc-sacola" id="btn-sacola-modal" aria-pressed="${naSacola}" aria-label="${escaparHtml(rotuloSacola_(p.Nome, naSacola))}">${conteudoSacola_(naSacola)}</button>
-             <button type="button" class="bc-pedir" id="btn-quero">💬 CONSULTAR NO WHATSAPP</button>`}
+             <button type="button" class="bc-pedir" id="btn-quero">${ic_('whatsapp', '💬')} Consultar no WhatsApp</button>`}
         </div>
       </div>
     `;
@@ -1004,7 +1007,7 @@ try { tkSelExpirar_(); } catch (e) {}
     const btnFav = document.getElementById('btn-favorito-modal');
     btnFav.addEventListener('click', () => {
       const agora = toggleFavorito(p.ID);
-      btnFav.textContent = agora ? '❤️ Nos favoritos' : '🤍 Favoritar';
+      btnFav.innerHTML = coracao_(agora) + (agora ? ' Nos favoritos' : ' Favoritar');
       btnFav.setAttribute('aria-pressed', String(agora));
       atualizarBadges(); sincronizarBotoesCard_(p.ID);
     });
@@ -1069,7 +1072,7 @@ try { tkSelExpirar_(); } catch (e) {}
               vid.muted = true;
               vid.play().catch(() => {});
               const btnSom = document.createElement('button');
-              btnSom.type = 'button'; btnSom.className = 'btn-ligar-som'; btnSom.textContent = '🔇 Toque para ouvir';
+              btnSom.type = 'button'; btnSom.className = 'btn-ligar-som'; btnSom.textContent = 'Toque para ouvir';
               btnSom.addEventListener('click', (ev) => {
                 ev.stopPropagation();
                 vid.muted = false; vid.play().catch(() => {});
@@ -1305,7 +1308,8 @@ try { tkSelExpirar_(); } catch (e) {}
 
     function atualizarBotao() {
       window.__usuarioCliente = usuario;   // pedido.js pré-preenche nome e WhatsApp com isto
-      btn.textContent = usuario ? (String(usuario.name || '?').trim().charAt(0).toUpperCase() || '👤') : '👤';
+      const inicial_ = usuario ? String(usuario.name || '').trim().charAt(0).toUpperCase() : '';
+      if (inicial_) btn.textContent = inicial_; else btn.innerHTML = ic_('conta', '👤');
       btn.title = usuario ? 'Minha conta (' + usuario.name + ')' : 'Entrar ou criar conta';
       btn.classList.toggle('ativado', !!usuario);
     }
@@ -1810,7 +1814,7 @@ try { tkSelExpirar_(); } catch (e) {}
     }
     // 4) ações finais
     if (achadas.length > 4) linha_({ tipo: 'todas', texto: 'Ver as ' + achadas.length + ' peças de “' + txt.trim() + '”', acao: () => aplicarBusca_(txt.trim()) });
-    const zap = novoEl_('a', 'sug-zap', achadas.length ? '💬 Não é isso? Consulte a loja' : '💬 Não achou? Consulte a loja sobre “' + txt.trim() + '”');
+    const zap = novoEl_('a', 'sug-zap', achadas.length ? 'Não é isso? Consulte a loja' : 'Não achou? Consulte a loja sobre “' + txt.trim() + '”');
     zap.href = linkWhatsApp('Olá! Estou procurando: ' + txt.trim()); zap.target = '_blank'; zap.rel = 'noopener';
     lista.appendChild(zap);
     // sem nada igual: oferece caminhos pela loja (categorias mais completas)

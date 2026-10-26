@@ -19,13 +19,13 @@ try { importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js')
 // v3.12 (16/10/2026): renova o cache do site em todos os aparelhos, para que o common.js e o
 // admin-postagens.js novos (seletor de canal Instagram/WhatsApp/Ambos + payload `canal`) cheguem
 // na hora, sem o atendente precisar limpar o cache na mao.
-var VERSAO = 'tk-3.38.4';
+var VERSAO = 'tk-3.38.5';
 var CACHE_SITE = 'tk-site-' + VERSAO;
 var CACHE_FOTOS = 'tk-fotos-v1';
 var MAX_FOTOS = 160;
 // v3.11: entram catalogo.css e catalogo.js (saíram de dentro do index.html na v3.10 — sem eles o
 // catálogo abre sem estilo offline), mais conta.js e foto-cliente.js, que também são do site.
-var BASICO = ['/', '/index.html', '/catalogo.css', '/catalogo.js', '/common.js', '/conta.js', '/foto-cliente.js', '/meta.js', '/pedido.js', '/push.js', '/pwa.js', '/nav.js', '/menu-lateral.js', '/vitrine.js', '/a11y.js', '/privacidade.html', '/site.webmanifest', '/logo-mark.png', '/icon-192.png', '/favicon.ico'];
+var BASICO = ['/', '/index.html', '/catalogo.css', '/catalogo.js', '/common.js', '/conta.js', '/foto-cliente.js', '/meta.js', '/pedido.js', '/push.js', '/pwa.js', '/nav.js', '/menu-lateral.js', '/vitrine.js', '/a11y.js', '/icones.js', '/acabamento.css', '/privacidade.html', '/site.webmanifest', '/logo-mark.png', '/icon-192.png', '/favicon.ico'];
 var PAGINAS = /^\/(index\.html|privacidade\.html)?$/;
 var ESTATICOS = /\.(?:js|css|png|jpg|jpeg|webp|svg|ico|webmanifest|woff2?)$/i;
 var FORA_DO_CACHE = /^\/(admin|treinamentos|curriculos|curriculo|manual)\.html$/;
