@@ -18,6 +18,9 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Configurações avançadas e Log em blocos com título; ação principal preta e secundária com borda, lado a lado no computador.
 - Painel: modos do "Editar peças" e opção marcada do "Alterar preços" em preto; formulário com ícone nos botões de foto e vídeo, o passo "9 Descrição e destaque" e o Cancelar com borda.
 - Páginas da equipe no mesmo padrão (`acabamento-equipe.css`): Currículos, Treinamentos e Painel do RH (o modo escuro continua) e o formulário público "Trabalhe com a gente".
+- Privacidade e Exclusão de dados no mesmo padrão; o service worker guarda `acabamento-equipe.css` (tk-3.38.8).
+- Loja, acessibilidade: a lista de sugestões da busca tinha botões de "Refinar" e o link do WhatsApp dentro da lista anunciada ao leitor de tela, o que é inválido. Agora só as opções ficam na lista; "Ver as N peças" passa para antes do Refinar.
+- Testes antigos atualizados para a loja e os manuais atuais: `filtros_facetas` e `filtros_v66` (chips com contagem), `filtro_menu_rolagem` (o corpo do painel é que rola), `selecao_vida`, `manual_rico` e `modulo0_verificado`.
 
 ## 7.18.0 — "Editar peças" rápido e filtro por valor — 2026-10-26
 

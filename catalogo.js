@@ -1758,7 +1758,10 @@ try { tkSelExpirar_(); } catch (e) {}
     busca.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     busca.blur(); irParaGrade_();
   }
-  function secao_(titulo) { const a = novoEl_('div', 'sug-aviso', titulo); a.setAttribute('role', 'presentation'); lista.appendChild(a); }
+  // v7.19: só as opções ficam dentro da lista (role=listbox); botões de refinar e o link do WhatsApp ficam fora dela (antes eram filhos inválidos da lista)
+  let opc_ = null;
+  function opcoes_() { if (!opc_) { opc_ = novoEl_('div', 'sug-opcoes'); opc_.id = 'sugestoes-opcoes'; opc_.setAttribute('role', 'listbox'); opc_.setAttribute('aria-label', 'Sugestões de busca'); lista.appendChild(opc_); } return opc_; }
+  function secao_(titulo, fora) { const a = novoEl_('div', 'sug-aviso', titulo); a.setAttribute('role', 'presentation'); (fora ? lista : opcoes_()).appendChild(a); }
   function linha_(it) {
     const i = itens_.length; itens_.push(it);
     const d = novoEl_('div', 'sug-item' + (it.foto !== undefined ? ' sug-peca' : '')); d.id = 'sug-' + i; d.setAttribute('role', 'option'); d.setAttribute('aria-selected', 'false'); d.dataset.i = String(i);
@@ -1772,13 +1775,13 @@ try { tkSelExpirar_(); } catch (e) {}
     if (it.sub) col.appendChild(novoEl_('span', 'sug-sub', it.sub));
     d.appendChild(col);
     if (it.qtd != null) d.appendChild(novoEl_('span', 'sug-qtd', it.qtd === 1 ? '1 peça' : it.qtd + ' peças'));
-    lista.appendChild(d);
+    opcoes_().appendChild(d);
   }
   function pintar_(manter) {
     const txt = busca.value;
     if (txt.trim().length < 2) { if (!manter) fechar_(); return; }
     const r = sugerir_(txt), achadas = pecasDaBusca_(txt);
-    lista.textContent = ''; itens_ = []; ativo_ = -1;
+    lista.textContent = ''; itens_ = []; ativo_ = -1; opc_ = null;
     if (r.aviso) { const a = novoEl_('div', 'sug-aviso sug-aviso-topo', r.aviso); a.setAttribute('role', 'presentation'); lista.appendChild(a); }
     // 1) peças que combinam (toque = abre a peça)
     if (achadas.length) {
@@ -1799,8 +1802,10 @@ try { tkSelExpirar_(); } catch (e) {}
       f.conj().forEach((v) => { if (!cont.has(v)) ordem.unshift([v, 0]); });
       return { f, ordem };
     }).filter((g) => g.ordem.length > (g.f.id === 'cat' || g.f.id === 'gen' ? 0 : 0));
+    // "Ver todas" é opção da lista: vem antes do Refinar (que fica fora da lista)
+    if (achadas.length > 4) linha_({ tipo: 'todas', texto: 'Ver as ' + achadas.length + ' peças de “' + txt.trim() + '”', acao: () => aplicarBusca_(txt.trim()) });
     if (achadas.length && grupos.length) {
-      secao_('Refinar a busca');
+      secao_('Refinar a busca', true);
       grupos.forEach(({ f, ordem }) => {
         const lin = novoEl_('div', 'sug-refina'); lin.appendChild(novoEl_('span', 'sug-rot', f.rot));
         ordem.forEach(([v, n]) => {
@@ -1813,7 +1818,6 @@ try { tkSelExpirar_(); } catch (e) {}
       });
     }
     // 4) ações finais
-    if (achadas.length > 4) linha_({ tipo: 'todas', texto: 'Ver as ' + achadas.length + ' peças de “' + txt.trim() + '”', acao: () => aplicarBusca_(txt.trim()) });
     const zap = novoEl_('a', 'sug-zap', achadas.length ? 'Não é isso? Consulte a loja' : 'Não achou? Consulte a loja sobre “' + txt.trim() + '”');
     zap.href = linkWhatsApp('Olá! Estou procurando: ' + txt.trim()); zap.target = '_blank'; zap.rel = 'noopener';
     lista.appendChild(zap);
@@ -1823,13 +1827,14 @@ try { tkSelExpirar_(); } catch (e) {}
       produtos.forEach((p) => { if (!estaEsgotado(p)) listaDeTags(p.Categoria).forEach((t) => top.set(t, (top.get(t) || 0) + 1)); });
       const cats = Array.from(top.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
       if (cats.length) {
-        secao_('Ou veja por categoria');
+        secao_('Ou veja por categoria', true);
         const lin = novoEl_('div', 'sug-refina');
         cats.forEach(([c, n]) => { const b = novoEl_('button', 'sug-chip', c + ' · ' + n); b.type = 'button'; b.addEventListener('click', () => { busca.value = ''; fechar_(); busca.blur(); const f = FACETAS_[0]; f.conj().clear(); f.conj().add(c); try { renderizarChipsFiltro(f.box, f.disp(), f.conj(), f.res); } catch (e) {} aplicarFiltros(); irParaGrade_(); }); lin.appendChild(b); });
         lista.appendChild(lin);
       }
     }
-    lista.hidden = false; busca.setAttribute('aria-expanded', 'true');
+    // sem nenhuma opção (só o aviso e o WhatsApp) não há lista para o leitor de tela percorrer
+    lista.hidden = false; busca.setAttribute('aria-expanded', opc_ ? 'true' : 'false');
   }
   function escolher_(i) {
     const it = itens_[i]; if (!it) return;
@@ -1843,7 +1848,7 @@ try { tkSelExpirar_(); } catch (e) {}
     busca.setAttribute('aria-activedescendant', 'sug-' + ativo_);
     els[ativo_].scrollIntoView({ block: 'nearest' });
   }
-  busca.setAttribute('role', 'combobox'); busca.setAttribute('aria-autocomplete', 'list'); busca.setAttribute('aria-controls', 'sugestoes-busca'); busca.setAttribute('aria-expanded', 'false'); busca.setAttribute('autocomplete', 'off');
+  busca.setAttribute('role', 'combobox'); busca.setAttribute('aria-autocomplete', 'list'); busca.setAttribute('aria-controls', 'sugestoes-opcoes'); busca.setAttribute('aria-expanded', 'false'); busca.setAttribute('autocomplete', 'off');
   busca.addEventListener('input', () => { clearTimeout(tReal_); tReal_ = setTimeout(pintar_, 120); });
   busca.addEventListener('focus', () => { if (busca.value.trim().length >= 2) pintar_(); });
   busca.addEventListener('blur', () => { setTimeout(fechar_, 160); });

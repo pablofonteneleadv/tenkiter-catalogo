@@ -106,7 +106,7 @@ with sync_playwright() as p:
     chk("há 7 lições/capítulos e 7 checagens de prática no total (a de prática não tem)", pg.locator(".chapter").count() == 7 and pg.locator(".tmv-chk").count() == 7, (pg.locator(".chapter").count(), pg.locator(".tmv-chk").count()))
     chk("'Faça agora' aparece destacado", pg.locator(".tmv-facaagora").count() == 6)
     cap1 = pg.locator(".chapter").first
-    chk("lição com checagem NÃO tem a caixinha 'Confirmo que li' (conclui acertando)", cap1.locator(".read-toggle-big").count() == 0 and "Responda a checagem" in cap1.locator(".cap-status").inner_text(), cap1.inner_text()[-200:])
+    chk("lição com checagem NÃO tem a caixinha 'Confirmo que li' (conclui acertando)", cap1.locator(".read-toggle-big").count() == 0 and "perguntas acima" in cap1.locator(".cap-status").inner_text(), cap1.inner_text()[-200:])
     chk("a lição de prática (sem checagem) continua com a caixinha de leitura", pg.locator(".chapter").nth(6).locator(".read-toggle-big input").count() == 1)
     cap1.scroll_into_view_if_needed(); shot(pg, "02-licao-1-checagem-pendente")
     cap1.locator(".tmv-op").nth(0).click(); pg.wait_for_timeout(300)
