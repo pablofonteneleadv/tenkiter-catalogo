@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.14.1 — correção urgente do cadastro — 2026-10-26
+
+- Cadastro, edição em lote, excluir, avisos e fila offline voltavam "WhatsApp ou senha incorretos" com a pessoa logada: a sessão nova (tk3) ia sem o WhatsApp do dono. O painel agora completa o WhatsApp a partir da própria sessão.
+- O envio que termina em outra tela do app (nav.js) também manda o WhatsApp.
+
 ## 7.13.0 — editor gráfico de tutoriais — 2026-10-25
 
 - Editar abre uma prévia em tela cheia com Anterior/Próxima, escolha visual do alvo e edição do texto flutuante na tela.
