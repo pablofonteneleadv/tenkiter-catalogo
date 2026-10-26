@@ -1001,7 +1001,7 @@
 
   <!-- v7.19: ferramentas em grupos (mesmos botões, mesmos ids; o que cada perfil não pode usar continua escondido) -->
   <div class="ferr-grupo" data-grupo="vendas">
-    <h3 class="ferr-gtit">Vendas e clientes</h3>
+    <h2 class="ferr-gtit">Vendas e clientes</h2>
     <div class="ferr-lista">
       <button type="button" class="ferr-tile btn-ferr" id="btn-abrir-metricas" hidden><span class="ferr-ic" data-ico="grafico">📊</span><span class="ferr-txt"><b>Números reais</b><small>Visitas, cliques no WhatsApp e pedidos por período</small></span><span class="ferr-badge" hidden></span></button>
       <button type="button" class="ferr-tile btn-ferr" id="btn-abrir-mensagens" hidden><span class="ferr-ic" data-ico="conversa">💬</span><span class="ferr-txt"><b>Mensagens</b><small>Conversas do WhatsApp e do Instagram</small></span><span class="ferr-badge" hidden></span></button>
@@ -1009,7 +1009,7 @@
     </div>
   </div>
   <div class="ferr-grupo" data-grupo="conteudo">
-    <h3 class="ferr-gtit">Conteúdo</h3>
+    <h2 class="ferr-gtit">Conteúdo</h2>
     <div class="ferr-lista">
       <button type="button" class="ferr-tile btn-ferr" id="btn-abrir-postagens" hidden><span class="ferr-ic" data-ico="camera">📸</span><span class="ferr-txt"><b>Postagens</b><small>Instagram, Status e grupo do WhatsApp</small></span><span class="ferr-badge" hidden></span></button>
       <button type="button" class="ferr-tile btn-ferr" id="btn-abrir-fotoia" hidden><span class="ferr-ic" data-ico="pincel">🎨</span><span class="ferr-txt"><b>Fotos com IA</b><small>Looks com modelo a partir das fotos das peças</small></span><span class="ferr-badge" hidden></span></button>
@@ -1017,7 +1017,7 @@
     </div>
   </div>
   <div class="ferr-grupo" data-grupo="dados">
-    <h3 class="ferr-gtit">Planilha e histórico</h3>
+    <h2 class="ferr-gtit">Planilha e histórico</h2>
     <div class="ferr-lista">
       <button type="button" class="ferr-tile btn-ferr" id="btn-exportar-csv"><span class="ferr-ic" data-ico="pacote">⬇️</span><span class="ferr-txt"><b>Exportar planilha</b><small>Baixa todas as peças em CSV (Excel/Planilhas)</small></span><span class="ferr-badge" hidden></span></button>
       <button type="button" class="ferr-tile btn-ferr" id="btn-importar-csv" hidden><span class="ferr-ic" data-ico="compartilhar">⬆️</span><span class="ferr-txt"><b>Importar planilha</b><small>Muda várias peças de uma vez, com prévia antes de gravar</small></span><span class="ferr-badge" hidden></span></button>
@@ -1025,7 +1025,7 @@
     </div>
   </div>
   <div class="ferr-grupo" data-grupo="sistema">
-    <h3 class="ferr-gtit">Sistema</h3>
+    <h2 class="ferr-gtit">Sistema</h2>
     <div class="ferr-lista">
       <button type="button" class="ferr-tile btn-ferr" id="btn-abrir-conexoes" hidden><span class="ferr-ic" data-ico="link">🔗</span><span class="ferr-txt"><b>Conexões</b><small>Chaves e situação do site, avisos e Instagram</small></span><span class="ferr-badge" hidden></span></button>
     </div>
@@ -1051,7 +1051,7 @@
   <details class="extra" id="details-config">
     <summary><span class="ic" data-ico="ferramenta">⚙️</span> Configurações avançadas (endereço do sistema, IA, vídeos)</summary>
     <div class="cfg-bloco">
-      <h4 class="cfg-tit">Endereço do sistema</h4>
+      <h3 class="cfg-tit">Endereço do sistema</h3>
       <label for="input-api-url">Endereço da API (Apps Script)</label>
       <input type="text" id="input-api-url" placeholder="https://script.google.com/...">
       <div class="cfg-botoes">
@@ -1062,7 +1062,7 @@
     </div>
 
     <div class="cfg-bloco">
-      <h4 class="cfg-tit">Inteligência artificial (Gemini)</h4>
+      <h3 class="cfg-tit">Inteligência artificial (Gemini)</h3>
       <div id="ia-status" class="cfg-status">Verificando...</div>
       <label for="input-ia-chave">Chave</label>
       <input type="password" id="input-ia-chave" placeholder="Cole aqui a chave do Gemini" autocomplete="off">
@@ -1076,7 +1076,7 @@
     </div>
 
     <div class="cfg-bloco">
-      <h4 class="cfg-tit">Conversão de vídeos (FreeConvert)</h4>
+      <h3 class="cfg-tit">Conversão de vídeos (FreeConvert)</h3>
       <label for="input-freeconvert-chave">Chave da FreeConvert — converte vídeos H.265 para H.264</label>
       <div id="freeconvert-status" class="cfg-status" role="status" aria-live="polite">Abra esta seção para verificar a configuração.</div>
       <input type="password" id="input-freeconvert-chave" placeholder="Cole sua nova chave de API FreeConvert" autocomplete="new-password" spellcheck="false">
