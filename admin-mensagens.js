@@ -1,5 +1,5 @@
 /* ====================================================================
- * TENKiTER — admin-mensagens.js (v2.1) — CAIXA DE MENSAGENS (Admin total)
+ * TENKiTER — admin-mensagens.js (v2.2) — CAIXA DE MENSAGENS (Admin total)
  *  • Lista de conversas + conversa no estilo WhatsApp: responde por aqui (WhatsApp 1, WhatsApp 2 e Instagram),
  *    vê o que a loja enviou, entregue/lida, não lidas e quem ainda falta responder.
  *  • Atualiza ao vivo (consulta leve a cada poucos segundos, só com a tela aberta e visível) SEM redesenhar
@@ -195,6 +195,12 @@
       .ms-play { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 14px; border: 0; border-radius: 22px; background: rgba(0,0,0,0.08); color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
       .ms-midia video { display: block; max-width: min(300px, 100%); max-height: 360px; border-radius: 8px; background: #000; } .ms-midia audio { display: block; width: min(280px, 100%); }
       .ms-luz { position: absolute; inset: 0; z-index: 8; background: rgba(0,0,0,0.92); display: flex; align-items: center; justify-content: center; padding: 12px; }
+      .ms-stories { align-items: flex-start; overflow: auto; }
+      .ms-st-caixa { background: #fff; color: #222; border-radius: 12px; padding: 14px; width: 100%; max-width: 560px; margin: 44px auto 0; display: flex; flex-direction: column; gap: 8px; }
+      .ms-st-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+      .ms-st-cel { display: flex; flex-direction: column; gap: 4px; min-width: 0; } .ms-st-cel .ms-ctx-det { overflow-wrap: anywhere; }
+      .sheet-mensagens .ms-st-item { width: 100%; aspect-ratio: 3 / 4; min-height: 100px; border: 0; padding: 0; border-radius: 10px; background: #d9d2c2 center / cover no-repeat; cursor: pointer; font-size: 1.6rem; color: #333; }
+      .sheet-mensagens .ms-ver-stories { border: 0; background: none; padding: 6px 0 0; min-height: 32px; font-size: 0.72rem; color: #7a4a1e; text-decoration: underline; cursor: pointer; display: block; }
       .ms-luz img, .ms-luz video { max-width: 100%; max-height: 100%; object-fit: contain; }
       .sheet-mensagens .ms-luz-x { position: absolute; top: 10px; right: 10px; min-width: 44px; min-height: 44px; border: 0; border-radius: 50%; background: #fff; color: #111; font-size: 1.1rem; font-weight: 700; cursor: pointer; }
       .ms-stage { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid #e6e1d6; background: #faf7f0; font-size: 0.82rem; }
@@ -401,13 +407,13 @@
 
   /* ---------- conversa ---------- */
   /* ---- mídia: baixada com a sessão (nunca por link público) e guardada só enquanto a conversa está aberta ---- */
-  function midiaBlob_(id, story) {
-    const k = id + (story ? '|c' : '');
+  function midiaBlob_(id, story, post) {
+    const k = post ? 'p' + post + '-' + id : id + (story ? '|c' : '');
     if (blobs.has(k)) return blobs.get(k);
     const sess = (typeof getSessao === 'function' && getSessao()) || null;
     const p = (async () => {
       if (!sess) throw new Error('sem sessão');
-      const r = await fetch(INSTAGRAM_URL + '/msg/midia?id=' + encodeURIComponent(id) + (story ? '&ctx=1' : ''), { headers: { 'X-TK-Whats': sess.whatsapp, 'X-TK-Sessao': sess.sessao } });
+      const r = await fetch(INSTAGRAM_URL + '/msg/midia?' + (post ? 'post=' + encodeURIComponent(post) + '&n=' + encodeURIComponent(id) : 'id=' + encodeURIComponent(id) + (story ? '&ctx=1' : '')), { headers: { 'X-TK-Whats': sess.whatsapp, 'X-TK-Sessao': sess.sessao } });
       if (!r.ok) { let e = null; try { e = await r.json(); } catch (x) { /* corpo vazio */ } throw new Error((e && e.erro) || 'Não foi possível carregar.'); }
       return URL.createObjectURL(await r.blob());
     })();
@@ -432,6 +438,28 @@
     let m; if (tipo === 'video') { m = el('video'); m.controls = true; m.autoplay = true; m.playsInline = true; } else { m = el('img'); m.alt = 'Imagem ampliada'; }
     m.src = url; const x = botao('ms-luz-x', '✕', 'luz-fechar'); x.setAttribute('aria-label', 'Fechar');
     l.append(m, x); sheet.appendChild(l); x.focus();
+  }
+  /* Wafly não informa qual story foi respondido: mostramos os stories no ar antes da mensagem para a equipe reconhecer. */
+  async function abrirStories_(m) {
+    fecharLuz_(); const sheet = document.querySelector('.sheet-mensagens'); if (!sheet || !aberta) return;
+    const l = el('div', 'ms-luz ms-stories'); l.id = 'ms-luz'; l.setAttribute('role', 'dialog'); l.setAttribute('aria-label', 'Stories no ar');
+    const caixa = el('div', 'ms-st-caixa'); caixa.appendChild(el('b', '', 'Stories no ar antes desta mensagem'));
+    caixa.appendChild(el('span', 'ms-ctx-det', 'O WhatsApp não informa qual story foi respondido. Estes são os que estavam publicados nas 26 h anteriores.'));
+    const grade = el('div', 'ms-st-grade'); grade.appendChild(el('span', 'ms-vazio', 'Carregando…')); caixa.appendChild(grade);
+    const x = botao('ms-luz-x', '✕', 'luz-fechar'); x.setAttribute('aria-label', 'Fechar');
+    l.append(caixa, x); sheet.appendChild(l); x.focus();
+    const r = await worker_('/msg/stories?conversa=' + encodeURIComponent(aberta.id) + '&em=' + encodeURIComponent(m.enviada_em || ''), 'GET');
+    if (!$('ms-luz') || $('ms-luz') !== l) return;
+    grade.textContent = '';
+    if (!r.ok) { grade.appendChild(el('span', 'ms-vazio', r.erro || 'Não foi possível carregar agora.')); return; }
+    if (!r.stories.length) { grade.appendChild(el('span', 'ms-vazio', 'Nenhum story publicado pelo sistema nesse período.')); return; }
+    r.stories.forEach((st) => {
+      const video = st.tipo === 'video', c = botao('ms-st-item', video ? '▶' : '', 'x'); c.removeAttribute('data-ms');
+      c.setAttribute('aria-label', 'Ver story publicado ' + hora(st.publicado_em));
+      c.addEventListener('click', async () => { try { abrirLuz_(video ? 'video' : 'imagem', await midiaBlob_(0, false, st.id)); } catch (e) { aviso_('Não consegui abrir este story.'); } });
+      if (!video) { c._carregar = () => { midiaBlob_(0, false, st.id).then((u) => { c.style.backgroundImage = 'url("' + u + '")'; }, () => { c.textContent = '🖼'; }); }; c._carregar(); }
+      const w = el('div', 'ms-st-cel'); w.appendChild(c); w.appendChild(el('span', 'ms-ctx-det', hora(st.publicado_em) + (st.legenda ? ' · ' + st.legenda : ''))); grade.appendChild(w);
+    });
   }
   const mmss = (n) => { n = Math.max(0, Math.round(Number(n) || 0)); return Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0'); };
   function blocoStory_(m) {
@@ -490,6 +518,7 @@
     const mid = blocoMidia_(m); if (mid) b.appendChild(mid);
     if (m.texto) linkar(b, m.texto);
     if (m.tipo && m.tipo !== 'texto' && !mid) b.appendChild(el('span', 'ms-tipo', (m.texto ? ' ' : '') + (TIPO_ROTULO[m.tipo] || '[' + m.tipo + ']') + (m.midia === 0 && m.direcao === 'entrada' && ['imagem', 'vídeo', 'áudio'].indexOf(m.tipo) >= 0 ? ' (arquivo não disponível)' : '')));
+    if (m.direcao === 'entrada' && typeof m.id === 'number' && !m.ctx_tipo && m.tipo === 'texto' && m.texto && m.texto.length <= 80 && (canalDaConversa() === 'whatsapp1' || canalDaConversa() === 'whatsapp2')) b.appendChild(botao('ms-ver-stories', 'Foi resposta a um story? Ver stories no ar', 'stories-no-ar', { id: String(m.id) }));
     const meta = el('span', 'ms-meta'); meta.appendChild(el('time', '', m.enviada_em ? hm(new Date(m.enviada_em)) : ''));
     if (m.direcao === 'saida') meta.appendChild(selo(m.status || 'enviada'));
     b.appendChild(meta);
@@ -500,7 +529,9 @@
   const canalDaConversa = () => (aberta && aberta.canal) || canal;
   function pintarFio(forcarFim) {
     const fio = $('ms-fio'); if (!fio) return;
-    const fim = forcarFim || perto_(fio, 90), antes = fio.scrollHeight - fio.scrollTop;
+    const fim = forcarFim || perto_(fio, 90);
+    let ancora = null, ancoraY = 0;                       // quem lê o meio/começo: prende a primeira bolha visível, para nada pular
+    if (!fim) for (const f of fio.children) { if (f.offsetTop + f.offsetHeight > fio.scrollTop) { ancora = f; ancoraY = f.offsetTop - fio.scrollTop; break; } }
     const ordenadas = msgs.slice().sort((a, b) => (a.enviada_em || '').localeCompare(b.enviada_em || '') || (typeof a.id === 'number' && typeof b.id === 'number' ? a.id - b.id : 0));
     const vivos = new Set(ordenadas.map((m) => m.id));
     elMsgs.forEach((b, id) => { if (!vivos.has(id)) { b.remove(); elMsgs.delete(id); } });
@@ -512,7 +543,7 @@
       const b = bolha(m);
       if (b !== ref) fio.insertBefore(b, ref); else ref = ref.nextSibling;
     });
-    if (fim) { colarFimAte = Date.now() + 2500; fio.scrollTop = fio.scrollHeight; novasAbaixo = 0; } else fio.scrollTop = fio.scrollHeight - antes;
+    if (fim) { colarFimAte = Date.now() + 2500; fio.scrollTop = fio.scrollHeight; novasAbaixo = 0; } else if (ancora && ancora.isConnected) fio.scrollTop = ancora.offsetTop - ancoraY;
     atualizarPill();
   }
   function atualizarPill() { const p = $('ms-nova'); if (!p) return; p.hidden = novasAbaixo <= 0; p.textContent = '↓ ' + novasAbaixo + (novasAbaixo === 1 ? ' nova mensagem' : ' novas mensagens'); }
@@ -824,6 +855,7 @@
     else if (a === 'gravar') gravarAudio_();
     else if (a === 'luz-fechar') fecharLuz_();
     else if (a === 'story-ver') { const mid = Number(b.dataset.id); try { abrirLuz_(b.dataset.video ? 'video' : 'imagem', await midiaBlob_(mid, true)); } catch (e) { aviso_('Não consegui abrir o story agora.'); } }
+    else if (a === 'stories-no-ar') { const mm = msgs.find((x) => String(x.id) === b.dataset.id); if (mm) abrirStories_(mm); }
     else if (a === 'reenviar') enviar(b.dataset.tmp);
     else if (a === 'descartar') { pendentes.delete(b.dataset.tmp); msgs = msgs.filter((m) => m.id !== b.dataset.tmp); pintarFio(false); }
     else if (a === 'fim') { const f = $('ms-fio'); if (f) { f.scrollTop = f.scrollHeight; novasAbaixo = 0; atualizarPill(); marcarLida(); } }

@@ -92,6 +92,9 @@ def tratar(route, path, method, body, s):
         if s["envio"] == "incerto": r["incerto"] = True; r["erro"] = "Sem confirmação da Wafly. Confira no WhatsApp antes de tentar de novo."
         s["idem"][body["idLocal"]] = r
         return J(r) or True
+    if path == "/msg/stories":
+        s["stories_pedidos"] = s.get("stories_pedidos", []) + [url.query]
+        return J({"ok": True, "em": agora(), "stories": [{"id": 71, "publicado_em": "2026-10-25T14:00:00.000Z", "legenda": "Vestido alfaiataria", "tipo": "imagem", "n": 1}, {"id": 72, "publicado_em": "2026-10-25T12:00:00.000Z", "legenda": "", "tipo": "video", "n": 1}]}) or True
     if path == "/msg/midia":
         s["midia_baixada"].append(url.query)
         if q.get("ctx") == "1" and q.get("id") == "99": return J({"ok": False, "erro": "x"}, 404) or True
