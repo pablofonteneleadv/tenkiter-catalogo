@@ -61,7 +61,7 @@ with sync_playwright() as p:
     foto(pg, "01-lista-numero-e-ambos.png")
     chip.click(); pg.wait_for_timeout(500)
     chk("filtro 'Nos 2 WhatsApp' traz só as duas conversas da Maria", sorted(pg.evaluate(IDS)) == [1, 7], pg.evaluate(IDS))
-    pg.click("[data-ms=filtro][data-filtro=todas]"); pg.wait_for_timeout(500)
+    chip.click(); pg.wait_for_timeout(500)
     pg.click("#ms-lista .ms-conv[data-id='1']"); pg.wait_for_selector(".ms-faixa.ambos", timeout=4000); pg.wait_for_timeout(300)
     chk("na conversa, faixa avisa que a pessoa também fala pelo outro número", "também está falando pelo WhatsApp 2" in (pg.locator(".ms-faixa.ambos").text_content() or ""))
     axe(pg, "conversa com a faixa 'nos 2 WhatsApp'")
@@ -112,7 +112,7 @@ with sync_playwright() as p:
     ult = S["encerrar"][-1]
     chk("'Reabrir' devolve as conversas", sorted(ult["ids"]) == [2, 4] and ult["reabrir"] is True and pg.evaluate(IDS) == [], ult)
     chk("lista de encerradas vazia explica como encerrar", "segure o dedo" in (pg.locator("#ms-extra").text_content() or ""))
-    pg.click("[data-ms=filtro][data-filtro=todas]"); pg.wait_for_timeout(500)
+    pg.click("[data-ms=filtro][data-filtro=encerradas]"); pg.wait_for_timeout(500)
 
     # ---- encerrar pela conversa e volta automática ----
     pg.click("#ms-lista .ms-conv[data-id='6']"); pg.wait_for_timeout(700)

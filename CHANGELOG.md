@@ -6,6 +6,27 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.24.0 — Mensagens para o atendimento: produtos, respostas rápidas, filtros Mensagens/Grupos e seleção — 2026-10-26
+
+- Filtros da lista:
+  - "Mensagens" e "Grupos" no lugar de "Todas", ligados juntos (tudo) ou cada um sozinho;
+  - saiu "Lidas";
+  - "Não lidas", "Falta responder", "Nos 2 WhatsApp" e "Encerradas" desligam com um novo toque.
+- Seleção com **Marcar lidas** (também no celular, quando o canal está com a opção ligada), **Não lidas** (só no painel) e **Encerrar**.
+- "Nos 2 WhatsApp": a conversa encerrada não conta; a pessoa sai do filtro e volta quando escreve de novo na encerrada.
+- Na conversa:
+  - nova barra com **Produtos** e **Respostas**;
+  - Produtos: busca no catálogo, com foto, preço à vista, tamanhos e estoque, e "Colocar na mensagem" (nome, preço, tamanhos, cores e link da peça);
+  - Respostas rápidas: começam com endereço, catálogo e Instagram, e a loja edita para toda a equipe.
+- Negrito, itálico e riscado do WhatsApp aparecem formatados; a prévia da lista sai sem asteriscos.
+- Cartão de contato com nome e número, e localização com nome e endereço.
+- Worker:
+  - `/msg/conversas` com `tipo` (individual/grupo) e `tipos` (contagens);
+  - `/msg/lida` com `conversas` (em lote);
+  - `/msg/config` com `respostas`;
+  - `outro_id` ignora conversas encerradas.
+- Service worker renovado (tk-3.38.12).
+
 ## 7.23.0 — Cadastro: "Cadastrar UM produto" e "Cadastrar vários produtos" — 2026-10-26
 
 - Menu Cadastrar com nomes que não se confundem:

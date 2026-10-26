@@ -65,7 +65,7 @@ with sync_playwright() as p:
     chk("desmarcar salva no servidor", S.get("assinatura") is False)
     pg.click("[data-ms=leitura-cfg]"); pg.wait_for_timeout(200)
     pg.click("#ms-lista .ms-conv[data-id='4']"); pg.wait_for_timeout(600)
-    chk("desligada: a linha 'Respondendo como' some", not pg.locator("#ms-assina").is_visible())
+    chk("desligada: 'Respondendo como' some (ficam só Produtos e Respostas)", pg.locator("#ms-assina [data-ms=nome-editar]").count() == 0 and pg.locator("#ms-assina [data-ms=gaveta-produtos]").is_visible())
     escrever_e_enviar(pg, "Boa tarde!")
     chk("desligada: a resposta sai sem nome", S["envios"][-1]["texto"] == "Boa tarde!", S["envios"][-1]["texto"])
     pg.click(".ms-cab [data-ms=voltar]"); pg.wait_for_timeout(300)

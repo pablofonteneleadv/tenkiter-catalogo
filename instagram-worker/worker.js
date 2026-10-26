@@ -2380,6 +2380,9 @@ function normalizarWafly_(b) {
     if (b[k] && typeof b[k] === 'object') {
       tipo = nome;
       texto = String(b[k].message || b[k].caption || b[k].fileName || b[k].title || b[k].value || '');
+      // v2.12: cartão de contato e localização com o que dá para ler (antes aparecia só "Contato")
+      if (nome === 'contato') { const o = b[k], tel = (/TEL[^:]*:([+\d\s()-]{8,20})/.exec(String(o.vCard || o.vcard || '')) || [])[1] || (Array.isArray(o.phones) ? String(o.phones[0] || '') : ''); texto = [String(o.displayName || o.name || '').trim(), String(tel).replace(/[^\d+]/g, '')].filter(Boolean).join(' · '); }
+      if (nome === 'localização') { const o = b[k]; texto = [o.name, o.address].map((x) => String(x || '').trim()).filter(Boolean).join(' · ') || (o.latitude != null && o.longitude != null ? 'https://maps.google.com/?q=' + Number(o.latitude) + ',' + Number(o.longitude) : ''); }
       if (DICA_MIME[nome] || nome === 'documento') {                                   // mídia: guardamos o endereço só para copiar para o nosso armazenamento
         const o = b[k];
         midiaUrl = [o.imageUrl, o.videoUrl, o.audioUrl, o.stickerUrl, o.documentUrl, o.url, o.fileUrl, o.thumbnailUrl].find((x) => typeof x === 'string' && /^https:\/\//i.test(x)) || '';
@@ -2708,14 +2711,16 @@ async function aplicarLeiturasInstagram_(env, lst) {
 }
 /* v2.11: chave da pessoa = número só com dígitos e, no Brasil, sem o 9º dígito do celular (o mesmo cliente às vezes chega com e sem ele). */
 const MSG_PESSOA_SQL_ = "(CASE WHEN length(contato)=13 AND substr(contato,1,2)='55' AND substr(contato,5,1)='9' THEN substr(contato,1,4)||substr(contato,6) ELSE contato END)";
-const MSG_OUTRO_SQL_ = "(SELECT o.id FROM msg_conversa o WHERE msg_conversa.pessoa<>'' AND o.pessoa=msg_conversa.pessoa AND o.canal<>msg_conversa.canal AND o.total>0 ORDER BY o.ultima_em DESC LIMIT 1)";
+// v2.12: conversa encerrada não conta como "a pessoa também está no outro WhatsApp" (volta a contar quando o cliente escreve de novo nela)
+const MSG_OUTRO_SQL_ = "(SELECT o.id FROM msg_conversa o WHERE msg_conversa.pessoa<>'' AND o.pessoa=msg_conversa.pessoa AND o.canal<>msg_conversa.canal AND o.total>0 AND o.encerrada_em='' ORDER BY o.ultima_em DESC LIMIT 1)";
 const MSG_COLS_CONVERSA_ = "id, canal, contato, nome, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
 const MSG_Q_ = (c) => "(SELECT q." + c + " FROM msg_mensagem q WHERE q.canal=msg_mensagem.canal AND q.ext_id=msg_mensagem.ctx_ref AND msg_mensagem.ctx_ref<>'' LIMIT 1)";
 const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + MSG_Q_('texto') + " AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir";
-async function msgContagens_(env, canal) {
+async function msgContagens_(env, canal, tipo) {
+  const filtroTipo = tipo === 'grupo' ? ' AND grupo=1' : tipo === 'individual' ? ' AND grupo=0' : '';
   // v2.11: encerradas ficam fora das outras contagens; "ambos" = conversas de quem também fala pelo outro WhatsApp
-  const rs = await env.DB.prepare("SELECT canal, SUM(CASE WHEN encerrada_em='' THEN 1 ELSE 0 END) AS conversas, SUM(CASE WHEN encerrada_em='' AND nao_lidas>0 THEN 1 ELSE 0 END) AS nao_lidas, SUM(CASE WHEN encerrada_em='' AND grupo=0 AND ult_dir='entrada' THEN 1 ELSE 0 END) AS sem_resposta, SUM(CASE WHEN encerrada_em='' AND grupo=1 THEN 1 ELSE 0 END) AS grupos, SUM(CASE WHEN encerrada_em<>'' THEN 1 ELSE 0 END) AS encerradas, SUM(CASE WHEN encerrada_em='' AND pessoa<>'' AND " + MSG_OUTRO_SQL_ + " IS NOT NULL THEN 1 ELSE 0 END) AS ambos FROM msg_conversa WHERE total>0" + (canal ? ' AND canal=?' : '') + ' GROUP BY canal').bind(...(canal ? [canal] : [])).all();
-  const CAMPOS = ['conversas', 'nao_lidas', 'sem_resposta', 'grupos', 'encerradas', 'ambos'], zero = () => CAMPOS.reduce((o, k) => (o[k] = 0, o), {});
+  const rs = await env.DB.prepare("SELECT canal, SUM(CASE WHEN encerrada_em='' THEN 1 ELSE 0 END) AS conversas, SUM(CASE WHEN encerrada_em='' AND nao_lidas>0 THEN 1 ELSE 0 END) AS nao_lidas, SUM(CASE WHEN encerrada_em='' AND grupo=0 AND ult_dir='entrada' THEN 1 ELSE 0 END) AS sem_resposta, SUM(CASE WHEN encerrada_em='' AND grupo=1 THEN 1 ELSE 0 END) AS grupos, SUM(CASE WHEN encerrada_em='' AND grupo=0 THEN 1 ELSE 0 END) AS individuais, SUM(CASE WHEN encerrada_em<>'' THEN 1 ELSE 0 END) AS encerradas, SUM(CASE WHEN encerrada_em='' AND pessoa<>'' AND " + MSG_OUTRO_SQL_ + " IS NOT NULL THEN 1 ELSE 0 END) AS ambos FROM msg_conversa WHERE total>0" + (canal ? ' AND canal=?' : '') + filtroTipo + ' GROUP BY canal').bind(...(canal ? [canal] : [])).all();
+  const CAMPOS = ['conversas', 'nao_lidas', 'sem_resposta', 'grupos', 'individuais', 'encerradas', 'ambos'], zero = () => CAMPOS.reduce((o, k) => (o[k] = 0, o), {});
   const out = {}; for (const c of MSG_CANAIS) out[c] = zero();
   for (const x of rs.results) if (out[x.canal]) for (const k of CAMPOS) out[x.canal][k] = Number(x[k]) || 0;
   // v2.10: aba "Todas" (os três canais juntos)
@@ -3024,16 +3029,19 @@ export default {
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {
         const canal = url.searchParams.get('canal') || '', busca = String(url.searchParams.get('busca') || '').trim().slice(0, 60), antes = url.searchParams.get('antes') || '', filtro = url.searchParams.get('filtro') || '';
+        const tipo = ['individual', 'grupo'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : '';   // v2.12: só conversas, só grupos ou os dois
         const todos = canal === 'todos';   // v2.10: aba "Todas" = os três canais juntos
         if (!todos && !MSG_CANAIS.includes(canal)) return J({ ok: false, erro: 'Escolha Todas, Instagram, WhatsApp 1 ou WhatsApp 2.' }, 400);
         let sql = 'SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE ' + (todos ? '' : 'canal=? AND ') + 'total>0', args = todos ? [] : [canal];
         // v2.11: encerradas só aparecem no filtro "Encerradas" (ou numa busca); voltam sozinhas quando o cliente escreve de novo
         if (filtro === 'encerradas') sql += " AND encerrada_em<>''"; else if (!busca) sql += " AND encerrada_em=''";
         if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'lidas') sql += ' AND nao_lidas=0'; else if (filtro === 'sem_resposta') sql += " AND grupo=0 AND ult_dir='entrada'"; else if (filtro === 'grupos') sql += ' AND grupo=1'; else if (filtro === 'ambos') sql += " AND pessoa<>'' AND " + MSG_OUTRO_SQL_ + ' IS NOT NULL';
+        if (tipo) sql += tipo === 'grupo' ? ' AND grupo=1' : ' AND grupo=0';
         if (busca) { sql += ' AND (nome LIKE ? OR contato LIKE ? OR previa LIKE ? ' + (busca.length >= 3 ? ' OR EXISTS (SELECT 1 FROM msg_mensagem mm WHERE mm.conversa_id=msg_conversa.id AND mm.texto LIKE ?)' : '') + ')'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q); if (busca.length >= 3) args.push(q); }
         if (antes) { sql += ' AND ultima_em<?'; args.push(antes); }
         const rs = await env.DB.prepare(sql + ' ORDER BY ultima_em DESC LIMIT 50').bind(...args).all();
-        return J({ ok: true, conversas: rs.results, contagens: (await msgContagens_(env, todos ? '' : canal))[canal], cursor: agora() });
+        const geral = (await msgContagens_(env, todos ? '' : canal))[canal];
+        return J({ ok: true, conversas: rs.results, contagens: tipo ? (await msgContagens_(env, todos ? '' : canal, tipo))[canal] : geral, tipos: { individuais: geral.individuais, grupos: geral.grupos }, cursor: agora() });
       }
       if (p === '/msg/mensagens' && req.method === 'GET') {
         const id = Number(url.searchParams.get('conversa')), antes = url.searchParams.get('antes') || '';
@@ -3097,6 +3105,24 @@ export default {
         const [cod, corpo] = await responderMensagem_(env, req.headers.get('X-TK-Whats') || '', d);
         return J(corpo, cod);
       }
+      if (p === '/msg/lida' && req.method === 'POST' && (await req.clone().json().catch(() => ({}))).conversas) {
+        /* v2.12: marcar várias como lidas/não lidas de uma vez. Lidas também no celular quando o canal está com a opção ligada (só as que estavam não lidas). */
+        const d = await req.json().catch(() => ({})), ids = [...new Set((Array.isArray(d.conversas) ? d.conversas : []).map(Number).filter((x) => Number.isInteger(x) && x > 0))].slice(0, 50);
+        if (!ids.length) return J({ ok: false, erro: 'Escolha ao menos uma conversa.' }, 400);
+        const naoLida = d.naoLida === true, marca = ids.map(() => '?').join(','), t = agora();
+        const antes = (await env.DB.prepare('SELECT id, canal, contato, grupo, nao_lidas FROM msg_conversa WHERE id IN (' + marca + ')').bind(...ids).all()).results;
+        await env.DB.prepare('UPDATE msg_conversa SET nao_lidas=?, atualizada_em=? WHERE id IN (' + marca + ')').bind(naoLida ? 1 : 0, t, ...ids).run();
+        const cel = { ok: 0, falhas: 0, desligado: 0 };
+        if (!naoLida && d.celular === true) {
+          const cfgL = (await msgCfg_(env)).lerCelular;
+          for (const c of antes) {
+            if (!(c.nao_lidas > 0)) continue;
+            if (!cfgL[c.canal]) { cel.desligado++; continue; }
+            try { const r = await confirmarLeituraCelular_(env, c); if (r && r.ok) cel.ok++; else cel.falhas++; } catch (e) { cel.falhas++; }
+          }
+        }
+        return J({ ok: true, alteradas: antes.length, celular: cel, contagens: await msgContagens_(env) });
+      }
       if (p === '/msg/lida' && req.method === 'POST') {
         const d = await req.json().catch(() => ({})), id = Number(d.conversa);
         if (!id) return J({ ok: false, erro: 'Escolha uma conversa.' }, 400);
@@ -3120,7 +3146,8 @@ export default {
       if (p === '/msg/config' && req.method === 'GET') {
         const diag = {}; for (const c of MSG_CANAIS) { try { diag[c] = JSON.parse((await cfgGet(env, 'msg_leitura_diag_' + c)) || 'null'); } catch (e) { diag[c] = null; } }
         const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
-        return J({ ok: true, config: await msgCfg_(env), ultimaLeitura: diag, meuNome: quem ? ((await cfgGet(env, 'msg_atendente_' + quem)) || '') : '' });
+        let respostas = null; try { respostas = JSON.parse((await cfgGet(env, 'msg_respostas')) || 'null'); } catch (e) { respostas = null; }
+        return J({ ok: true, config: await msgCfg_(env), ultimaLeitura: diag, meuNome: quem ? ((await cfgGet(env, 'msg_atendente_' + quem)) || '') : '', respostas: respostas });
       }
       if (p === '/msg/config' && req.method === 'POST') {
         const d = await req.json().catch(() => ({})), atual = await msgCfg_(env);
@@ -3132,7 +3159,13 @@ export default {
         let meuNome;
         if (d && typeof d.meuNome === 'string' && quem) { meuNome = nomeAtendenteLimpo_(d.meuNome); await cfgSet(env, 'msg_atendente_' + quem, meuNome || null); }
         else meuNome = quem ? ((await cfgGet(env, 'msg_atendente_' + quem)) || '') : '';
-        return J({ ok: true, config: atual, meuNome: meuNome });
+        // v2.12: respostas rápidas da loja (iguais para toda a equipe): até 30, título até 40 letras e texto até 1000
+        let respostas;
+        if (d && Array.isArray(d.respostas)) {
+          respostas = d.respostas.map((r) => ({ t: String((r && r.t) || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40), x: String((r && r.x) || '').replace(/\r\n/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, 1000) })).filter((r) => r.t && r.x).slice(0, 30);
+          await cfgSet(env, 'msg_respostas', JSON.stringify(respostas));
+        } else { try { respostas = JSON.parse((await cfgGet(env, 'msg_respostas')) || 'null'); } catch (e) { respostas = null; } }
+        return J({ ok: true, config: atual, meuNome: meuNome, respostas: respostas });
       }
       if (p === '/msg/exportar' && req.method === 'GET') {
         const q = {}; for (const k of ['canal', 'conversa', 'formato', 'de', 'ate']) q[k] = url.searchParams.get(k) || '';
