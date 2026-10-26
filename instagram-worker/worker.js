@@ -2476,9 +2476,24 @@ async function prepararMidia_(env, canal, m) {
   if (m.midiaUrl) { const x = await copiarMidiaRemota_(env, m.midiaUrl, m.midiaMime); if (x) { m.midiaChave = x.chave; m.midiaMime = x.mime; m.midiaUrl = ''; } }
   if (m.ctxUrl) { const x = await copiarMidiaRemota_(env, m.ctxUrl, 'image/jpeg'); if (x) m.ctxChave = x.chave; m.ctxUrl = ''; }
 }
+const STATUS_CANAIS_ = { whatsapp1: ['whatsapp', 'ambos'], whatsapp2: ['whatsapp2'] };
+/** Chave do R2 da n-ésima mídia de uma postagem (só se for do nosso armazenamento público). */
+async function chaveMidiaPostagem_(env, postId, n) {
+  const po = await env.DB.prepare('SELECT midias FROM postagem WHERE id=?').bind(postId).first();
+  let l = []; try { l = JSON.parse((po && po.midias) || '[]'); } catch (e) { l = []; }
+  const u = String((l[n || 0] && l[n || 0].url) || ''), pref = String(env.MIDIA_URL || '').replace(/\/$/, '') + '/m/';
+  return u.startsWith(pref) ? u.slice(pref.length) : '';
+}
+/** Status do WhatsApp publicados nas 26 h antes de um instante (candidatos a "story respondido"; a Wafly não diz qual foi). */
+async function storiesNoAr_(env, canal, emIso) {
+  const canais = STATUS_CANAIS_[canal]; if (!canais) return [];
+  const desde = new Date(Date.parse(emIso) - 26 * 3600000).toISOString();
+  const rs = await env.DB.prepare("SELECT id, legenda, midias, publicado_em FROM postagem WHERE status='publicado' AND canal IN (" + canais.map(() => '?').join(',') + ") AND publicado_em<>'' AND publicado_em<=? AND publicado_em>=? AND midias<>'[]' ORDER BY publicado_em DESC LIMIT 12").bind(...canais, emIso, desde).all();
+  return (rs.results || []).map((r) => { let l = []; try { l = JSON.parse(r.midias || '[]'); } catch (e) { l = []; } return { id: r.id, publicado_em: r.publicado_em, legenda: String(r.legenda || '').slice(0, 140), tipo: l[0] && l[0].tipo === 'video' ? 'video' : 'imagem', n: l.length }; });
+}
 /** Resposta a story no WhatsApp: a Wafly não manda a imagem do story, então achamos o Status que a loja publicou nas 26 h anteriores. Se houver mais de um, usa o mais recente e marca como "provável". */
 async function resolverStory_(env, canal, emIso) {
-  const canais = canal === 'whatsapp1' ? ['whatsapp', 'ambos'] : canal === 'whatsapp2' ? ['whatsapp2'] : [];
+  const canais = STATUS_CANAIS_[canal] || [];
   if (!canais.length) return { post: 0, aprox: 0 };
   const desde = new Date(Date.parse(emIso) - 26 * 3600000).toISOString();
   const rs = await env.DB.prepare("SELECT id FROM postagem WHERE status='publicado' AND canal IN (" + canais.map(() => '?').join(',') + ") AND publicado_em<>'' AND publicado_em<=? AND publicado_em>=? AND midias<>'[]' ORDER BY publicado_em DESC LIMIT 6").bind(...canais, emIso, desde).all();
@@ -2974,18 +2989,24 @@ export default {
         return J({ ok: true, ligar: out, forma: forma, bruto: bruto });
       }
       if (p === '/msg/anexo' && req.method === 'POST') { const [cod, corpo] = await receberAnexo_(env, req, url); return J(corpo, cod); }
+      if (p === '/msg/stories' && req.method === 'GET') {
+        const conv = await env.DB.prepare('SELECT canal FROM msg_conversa WHERE id=?').bind(Number(url.searchParams.get('conversa'))).first();
+        if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
+        const t = Date.parse(url.searchParams.get('em') || ''), em = new Date(isNaN(t) ? Date.now() : Math.min(t, Date.now())).toISOString();
+        return J({ ok: true, stories: await storiesNoAr_(env, conv.canal, em), em: em });
+      }
       if (p === '/msg/midia' && req.method === 'GET') {
-        const id = Number(url.searchParams.get('id')), ctx = url.searchParams.get('ctx') === '1';
-        const m = id ? await env.DB.prepare('SELECT id, canal, midia_chave, midia_mime, midia_url, ctx_post, ctx_chave FROM msg_mensagem WHERE id=?').bind(id).first() : null;
+        const id = Number(url.searchParams.get('id')), ctx = url.searchParams.get('ctx') === '1', post = Number(url.searchParams.get('post')) || 0;
+        const m = post ? { id: 0, midia_mime: '' } : (id ? await env.DB.prepare('SELECT id, canal, midia_chave, midia_mime, midia_url, ctx_post, ctx_chave FROM msg_mensagem WHERE id=?').bind(id).first() : null);
         if (!m) return J({ ok: false, erro: 'Mídia não encontrada.' }, 404);
         let chave = '';
-        if (ctx) {
+        if (post) {
+          const ok = await env.DB.prepare("SELECT 1 AS x FROM postagem WHERE id=? AND status='publicado' AND canal IN ('whatsapp','ambos','whatsapp2')").bind(post).first();
+          if (ok) chave = await chaveMidiaPostagem_(env, post, Math.max(0, Math.min(9, Number(url.searchParams.get('n')) || 0)));
+        } else if (ctx) {
           if (m.ctx_chave) chave = m.ctx_chave;
           else if (m.ctx_post) {
-            const po = await env.DB.prepare('SELECT midias FROM postagem WHERE id=?').bind(m.ctx_post).first();
-            let l = []; try { l = JSON.parse((po && po.midias) || '[]'); } catch (e) { l = []; }
-            const u = String((l[0] && l[0].url) || ''), pref = String(env.MIDIA_URL || '').replace(/\/$/, '') + '/m/';
-            if (u.startsWith(pref)) chave = u.slice(pref.length);
+            chave = await chaveMidiaPostagem_(env, m.ctx_post, 0);
           }
         } else {
           chave = m.midia_chave || '';

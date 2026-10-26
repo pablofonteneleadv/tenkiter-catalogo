@@ -322,6 +322,19 @@ function d1() {
   await wh('/wh/wafly/2/' + seg, msg('ST2', '5588955550000', 'Quanto é?', { momment: tM + 6000, isStatusReply: true, referenceMessageId: 'X' }));
   const st2 = (await A('GET', '/msg/mensagens?conversa=' + (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588955550000'").first()).id)).j.mensagens[0];
   chk('no WhatsApp 2 só vale story publicado no WhatsApp 2 (exato, não "provável")', st2.ctx_legenda === 'So no 2' && st2.ctx_aprox === 0, st2);
+  // ---- "stories no ar": a Wafly não diz qual story foi respondido; a equipe vê os candidatos ----
+  const cvS = await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588966660000'").first();
+  const rS = await A('GET', '/msg/stories?conversa=' + cvS.id + '&em=' + encodeURIComponent(new Date(Date.now() + 3600000).toISOString()));
+  chk('/msg/stories lista os Status do WhatsApp 1 das últimas 26 h, o mais novo primeiro, sem links', rS.r.status === 200 && rS.j.stories.length === 2 && rS.j.stories[0].legenda === 'Vestido alfaiataria' && rS.j.stories[1].legenda === 'Conjunto Plus Size' && !JSON.stringify(rS.j).includes('tenkiter-midia'), rS.j);
+  const rS2 = await A('GET', '/msg/stories?conversa=' + (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='5588955550000'").first()).id + '&em=' + encodeURIComponent(new Date(Date.now() + 3600000).toISOString()));
+  chk('/msg/stories do WhatsApp 2 só traz Status do WhatsApp 2', rS2.j.stories.length === 1 && rS2.j.stories[0].legenda === 'So no 2', rS2.j);
+  const rS3 = await A('GET', '/msg/stories?conversa=' + cvS.id + '&em=' + encodeURIComponent(new Date(Date.now() - 6 * 3600000).toISOString()));
+  chk('/msg/stories respeita o instante da mensagem (nada publicado antes dele)', rS3.j.stories.length === 0, rS3.j);
+  chk('/msg/stories de conversa inexistente: 404; sem sessão: 401', (await A('GET', '/msg/stories?conversa=99999')).r.status === 404 && (await w.fetch(ped('GET', '/msg/stories?conversa=' + cvS.id, ''), env, {})).status === 401);
+  const pidB = (await DB.prepare("SELECT id FROM postagem WHERE legenda='Vestido alfaiataria'").first()).id;
+  const dP = await w.fetch(ped('GET', '/msg/midia?post=' + pidB + '&n=0', 'tk2.admin'), env, {});
+  chk('/msg/midia?post= entrega a imagem do Status publicado pela rota autenticada', dP.status === 200 && dP.headers.get('content-type') === 'image/jpeg' && (await dP.arrayBuffer()).byteLength === JPG.length);
+  chk('/msg/midia?post= recusa postagem que não é Status publicado e sem sessão', (await w.fetch(ped('GET', '/msg/midia?post=99999&n=0', 'tk2.admin'), env, {})).status === 404 && (await w.fetch(ped('GET', '/msg/midia?post=' + pidB, ''), env, {})).status === 401);
   await wh('/wh/wafly/1/' + seg, msg('ST3', '5588944440000', 'Oi', { momment: tM + 7000, isStatusReply: true }));
   await DB.prepare("UPDATE postagem SET status='erro' WHERE canal='whatsapp'").run();
   await wh('/wh/wafly/1/' + seg, msg('ST4', '5588933330000', 'Oi', { momment: tM + 8000, isStatusReply: true }));
