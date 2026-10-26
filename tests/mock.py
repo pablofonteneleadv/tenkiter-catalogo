@@ -51,6 +51,7 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
     if versao>="4.18" and novo: FLAGS["opcoesLista"]=True
     if versao>="4.19" and novo: FLAGS["opIdempotente"]=True
     if versao>="4.20" and novo: FLAGS["consultarValor"]=True
+    if versao>="4.28" and novo: FLAGS["updateLote"]=True; FLAGS["precoZeroConsulta"]=True
     st["opcoes"]={"tamanhos":["PP","P","M","G","GG","Único"],"cores":["Preto","Branco","Estampado"]}
     st["opcoes_add"]=[]
     if avanc: FLAGS["metricasAvancadas"]=True; FLAGS["dispositivos"]=True
@@ -426,6 +427,19 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
         if a=="enviarPush":
             st["push"].append({"quando":"10/10/2026 12:00","quem":"Ana Lojista","titulo":b.get("titulo"),"mensagem":b.get("mensagem"),"segmento":b.get("segmento") or "Subscribed Users","destinatarios":7,"url":""}); st["ultimo_push"]=dict(b)
             return {"ok":True,"destinatarios":7}
+        if a=="updateLote" and FLAGS.get("updateLote"):   # v4.28: várias edições de dados numa chamada
+            st.setdefault("lotes_upd",[]).append([dict(x) for x in b.get("itens",[])])
+            if st.get("lote_upd_cair"): st["lote_upd_cair"]-=1; return {"ok":False,"erro":"Servidor ocupado."}
+            falhar=[str(i) for i in st.get("lote_upd_falhar",[])]; res=[]
+            for x in b.get("itens",[]):
+                i=str(x.get("id",""))
+                if i in falhar: res.append({"id":i,"ok":False,"erro":"Preço inválido — informe um valor maior que zero."}); continue
+                for p_ in P:
+                    if str(p_.get("ID"))==i:
+                        if x.get("nome") is not None: p_["Nome"]=x["nome"]
+                        if x.get("estoque") not in (None,""): p_["Estoque"]=x["estoque"]
+                res.append({"id":i,"ok":True})
+            return {"ok":True,"salvos":[r_["id"] for r_ in res if r_["ok"]],"resultados":res}
         if a=="bulkUpdate":
             n=0; faltar=[str(i) for i in st.get("lote_faltar",[])]
             for x in P:
