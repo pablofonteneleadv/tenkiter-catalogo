@@ -308,7 +308,7 @@ try { tkSelExpirar_(); } catch (e) {}
   function renderizarChipsFiltro(idContainer, valores, conjunto, idResumo) {
     const container = document.getElementById(idContainer);
     container.innerHTML = '';
-    Array.from(valores).sort(idContainer === 'chips-tamanho' ? compararTamanhos_ : undefined).forEach(v => {
+    Array.from(valores).sort(idContainer === 'chips-tamanho' ? compararTamanhos_ : (a, b) => String(a).localeCompare(String(b), 'pt-BR', { sensitivity: 'base' })).forEach(v => {   // v7.16: A→Z de verdade (acento e maiúscula não mudam a ordem)
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'chip' + (conjunto.has(v) ? ' selecionado' : '');
