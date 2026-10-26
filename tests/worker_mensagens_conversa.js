@@ -426,6 +426,46 @@ function d1() {
   const igLida = await A('POST', '/msg/lida', { conversa: cIg, celular: true });
   chk('Instagram: abrir normal manda "visto" (mark_seen) para a pessoa', igLida.j.celular && igLida.j.celular.ok === true && leituras.some((x) => x.b && x.b.sender_action === 'mark_seen'), igLida.j);
   globalThis.fetch = f6;
+  // ---- v2.11: nome do próprio WhatsApp, mesma pessoa nos 2 WhatsApp, encerrar ----
+  const T0 = Date.parse('2026-10-26T12:00:00Z');
+  const conv = async (canalX, fone) => DB.prepare('SELECT * FROM msg_conversa WHERE canal=? AND contato=?').bind(canalX, fone).first();
+  await wh('/wh/wafly/1/' + seg, msg('N1', '5588911110001', 'Vou te mandar as disponíveis', { fromMe: true, senderName: 'tenkitermodas', chatName: 'tenkitermodas', momment: T0 }));
+  chk('mensagem enviada pela loja não dá o nome da loja à conversa', (await conv('whatsapp1', '5588911110001')).nome === '', await conv('whatsapp1', '5588911110001'));
+  chk('um envio só ainda não decide qual é o nome da loja', ((await DB.prepare("SELECT valor FROM cfg WHERE chave='msg_nome_proprio_whatsapp1'").first()) || {}).valor !== 'tenkitermodas', await DB.prepare("SELECT valor FROM cfg WHERE chave='msg_nome_proprio_whatsapp1'").first());
+  await DB.prepare("UPDATE msg_conversa SET nome='tenkitermodas' WHERE contato='5588911110001'").run();   // como ficou no banco antes da correção
+  await DB.prepare("INSERT INTO msg_conversa (canal, contato, nome, grupo, total, ultima_em, criado_em, atualizada_em) VALUES ('whatsapp1','5588911110009','Cliente Salva',0,1,'2026-10-26T11:00:00Z','x','x')").run();
+  await wh('/wh/wafly/1/' + seg, msg('N2', '5588911110002', 'Qual seu nome?', { fromMe: true, senderName: 'tenkitermodas', chatName: 'tenkitermodas', momment: T0 + 1000 }));
+  await wh('/wh/wafly/1/' + seg, msg('N3', '5588911110003', 'Sábado a gente fecha às 14:00', { fromMe: true, senderName: 'tenkitermodas', chatName: 'tenkitermodas', momment: T0 + 2000 }));
+  chk('o mesmo nome enviando para outro contato = nome da loja: conversas antigas com ele voltam a mostrar o número', (await conv('whatsapp1', '5588911110001')).nome === '' && (await conv('whatsapp1', '5588911110009')).nome === 'Cliente Salva');
+  await wh('/wh/wafly/1/' + seg, msg('N4', '5588911110001', 'Oi! Quero ver', { senderName: 'Joana Lima', momment: T0 + 3000 }));
+  chk('quando o cliente escreve, a conversa ganha o nome que ele colocou no WhatsApp', (await conv('whatsapp1', '5588911110001')).nome === 'Joana Lima');
+  // mesma pessoa nos dois WhatsApp (com e sem o 9º dígito)
+  await wh('/wh/wafly/2/' + seg, msg('P1', '558811110001', 'Oi, aqui é a Joana de novo', { senderName: 'Joana', momment: T0 + 4000 }));
+  const lw1 = await A('GET', '/msg/conversas?canal=whatsapp1'), lw2 = await A('GET', '/msg/conversas?canal=whatsapp2');
+  const jw1 = lw1.j.conversas.find((x) => x.contato === '5588911110001'), jw2 = lw2.j.conversas.find((x) => x.contato === '558811110001');
+  chk('mesma pessoa nos 2 WhatsApp (com e sem o 9): cada conversa aponta para a outra', jw1 && jw2 && jw1.outro_id === jw2.id && jw2.outro_id === jw1.id, [jw1 && jw1.outro_id, jw2 && jw2.id]);
+  chk('quem só fala por um WhatsApp não aponta para nada', lw1.j.conversas.filter((x) => x.contato !== '5588911110001').every((x) => x.outro_id == null));
+  const amb = await A('GET', '/msg/conversas?canal=todos&filtro=ambos');
+  chk('filtro "Nos 2 WhatsApp" traz as duas conversas da pessoa e a contagem bate', amb.j.conversas.length === 2 && amb.j.contagens.ambos === 2, [amb.j.conversas.map((x) => x.contato), amb.j.contagens]);
+  chk('grupo nunca entra na conta de "mesma pessoa"', amb.j.conversas.every((x) => !x.grupo));
+  // encerrar / reabrir
+  const antesE = (await A('GET', '/msg/conversas?canal=todos')).j;
+  const enc = await A('POST', '/msg/encerrar', { conversas: [jw1.id, jw2.id] });
+  chk('encerrar várias de uma vez', enc.j.ok && enc.j.alteradas === 2 && enc.j.contagens.todos.encerradas >= 2, enc.j);
+  const depoisE = (await A('GET', '/msg/conversas?canal=todos')).j;
+  chk('encerradas saem de Todas e da contagem de conversas', !depoisE.conversas.some((x) => x.id === jw1.id || x.id === jw2.id) && depoisE.contagens.conversas === antesE.contagens.conversas - 2, [antesE.contagens, depoisE.contagens]);
+  const ab = (await A('GET', '/msg/conversas?canal=todos&filtro=encerradas')).j;
+  chk('filtro Encerradas mostra as duas', ab.conversas.length === 2 && ab.conversas.every((x) => x.encerrada_em));
+  chk('busca acha também as encerradas', (await A('GET', '/msg/conversas?canal=todos&busca=Joana')).j.conversas.some((x) => x.id === jw1.id));
+  chk('encerrada fica fora de "Falta responder"', !(await A('GET', '/msg/conversas?canal=whatsapp2&filtro=sem_resposta')).j.conversas.some((x) => x.id === jw2.id));
+  await wh('/wh/wafly/2/' + seg, msg('P2', '558811110001', 'Ainda tem o vestido?', { senderName: 'Joana', momment: T0 + 5000 }));
+  chk('nova mensagem do cliente reabre sozinha (e fica não lida)', (await conv('whatsapp2', '558811110001')).encerrada_em === '' && (await conv('whatsapp2', '558811110001')).nao_lidas === 1 && (await conv('whatsapp1', '5588911110001')).encerrada_em !== '');
+  await wh('/wh/wafly/1/' + seg, msg('P3', '5588911110001', 'Obrigada!', { fromMe: true, senderName: 'tenkitermodas', momment: T0 + 6000 }));
+  chk('mensagem enviada pela loja não reabre', (await conv('whatsapp1', '5588911110001')).encerrada_em !== '');
+  const re = await A('POST', '/msg/encerrar', { conversas: [jw1.id], reabrir: true });
+  chk('reabrir à mão', re.j.ok && (await conv('whatsapp1', '5588911110001')).encerrada_em === '');
+  chk('encerrar sem conversa: erro em português', (await A('POST', '/msg/encerrar', { conversas: ['x'] })).j.erro === 'Escolha ao menos uma conversa.');
+  chk('encerrar exige Admin total (sem sessão: 401)', (await w.fetch(ped('POST', '/msg/encerrar', '', { conversas: [jw1.id] }), env, {})).status === 401);
   globalThis.fetch = f5;
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });

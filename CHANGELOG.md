@@ -6,6 +6,15 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.22.0 — Mensagens: número do cliente, mesma pessoa nos 2 WhatsApp e encerrar conversas — 2026-10-26
+
+- Conversas que mostravam "tenkitermodas" ou "Tenkitermodas Reserva" (o nome do próprio WhatsApp da loja, gravado quando a primeira mensagem saía do celular) voltam a mostrar o número. Quando o cliente escrever, aparece o nome que ele colocou no WhatsApp. Mensagem enviada pela loja não dá mais nome à conversa.
+- O número do cliente aparece sempre: sem nome, no lugar do nome e formatado; com nome, numa linha pequena junto da etiqueta do canal.
+- Mesma pessoa nos dois WhatsApp (comparando com e sem o 9º dígito): sinal "Também no WhatsApp 2/1" na lista, faixa com "Abrir" na conversa e filtro "Nos 2 WhatsApp", em laranja quando há alguém.
+- Encerrar conversas: uma pelo ⋯ da conversa, ou várias por ⋯ → "Selecionar conversas" (ou segurando o dedo numa conversa). Encerradas vão para o filtro "Encerradas", saem das contagens e voltam sozinhas quando o cliente escreve de novo. Dá para reabrir à mão.
+- A busca da tela de Mensagens passava 24 px da coluna; corrigido.
+- Worker: colunas `pessoa` e `encerrada_em` (criadas sozinhas), `outro_id` na lista, filtros `ambos` e `encerradas`, contagens `ambos`/`encerradas` e a rota `/msg/encerrar`. Service worker renovado (tk-3.38.10).
+
 ## 7.21.0 — Mensagens: aba Todas, Espiar e leitura no celular; aviso de versão nova — 2026-10-26
 
 - Mensagens: aba mestre "Todas" (WhatsApp 1, WhatsApp 2 e Instagram juntos), que é a que abre, com a etiqueta do canal em cada conversa. Novo filtro "Lidas" ao lado de "Não lidas".
