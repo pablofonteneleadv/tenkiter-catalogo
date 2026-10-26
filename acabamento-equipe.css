@@ -1,0 +1,36 @@
+/* ====================================================================
+ * TENKiTER — acabamento das páginas da equipe (v7.19, 26/10/2026)
+ * Mesmo padrão da vitrine e do painel (acabamento.css / acabamento-admin.css):
+ * texto #141414 / #625c53, borda #e3ddd3, fundo #f6f3ee, raio 8/6 px, sem sombra,
+ * toques de 44 px, escolha marcada em preto. Só aparência: nenhuma função muda.
+ * Carrega depois do <style> de cada página; seletores com `body.pg-...` vencem os antigos.
+ * ==================================================================== */
+:root {
+  --tk-texto: #141414; --tk-texto-2: #625c53; --tk-borda: #e3ddd3; --tk-fundo: #f6f3ee; --tk-superficie: #fff;
+  --tk-raio: 8px; --tk-raio-p: 6px;
+}
+.tk-ico { width: 1.2em; height: 1.2em; flex: none; display: inline-block; vertical-align: -0.22em; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- Currículos (curriculos.html) ---------- */
+body.pg-curriculos { background: var(--tk-fundo); color: var(--tk-texto); }
+body.pg-curriculos header {
+  background: #0d0d0d; background-image: none; border-bottom: 0; text-align: left; padding: 0 16px; min-height: 58px;
+  display: flex; align-items: center; gap: 10px; font-family: "Inter", -apple-system, Roboto, Arial, sans-serif; letter-spacing: 0;
+}
+body.pg-curriculos header h1 { font-size: 1rem; font-weight: 700; color: #f2eee7; max-width: 860px; margin: 0 auto; width: 100%; }
+body.pg-curriculos .card, body.pg-curriculos .item { border-radius: var(--tk-raio); border: 1px solid var(--tk-borda); box-shadow: none; }
+body.pg-curriculos input, body.pg-curriculos select, body.pg-curriculos textarea { border-color: var(--tk-borda); border-radius: var(--tk-raio); font-size: 1rem; }
+body.pg-curriculos input, body.pg-curriculos select { min-height: 44px; }
+body.pg-curriculos button { border-radius: var(--tk-raio-p); background: var(--tk-texto); color: #fff; min-height: 44px; font-weight: 600; }
+body.pg-curriculos button.sec { background: transparent; color: var(--tk-texto); border: 1px solid var(--tk-borda); }
+body.pg-curriculos .abas button { background: var(--tk-superficie); color: var(--tk-texto); border: 1px solid var(--tk-borda); }
+body.pg-curriculos .abas button.on { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
+body.pg-curriculos .filtros button { background: var(--tk-superficie); color: var(--tk-texto); border: 1px solid var(--tk-borda); display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+body.pg-curriculos .filtros button.on { background: var(--tk-texto); border-color: var(--tk-texto); color: #fff; }
+body.pg-curriculos .meta { color: var(--tk-texto-2); }
+body.pg-curriculos .grupo { color: var(--tk-texto-2); }
+body.pg-curriculos .edit { background: var(--tk-fundo); border-radius: var(--tk-raio); }
+body.pg-curriculos .acoes a { background: var(--tk-superficie); color: var(--tk-texto); border: 1px solid var(--tk-borda); border-radius: var(--tk-raio-p); font-weight: 600; }
+body.pg-curriculos .acoes a:first-child { background: #0f6b3f; border-color: #0f6b3f; color: #fff; }
+body.pg-curriculos .aviso, body.pg-curriculos .erro { border-radius: var(--tk-raio); }
+body.pg-curriculos .det { border-top-color: var(--tk-borda); }
