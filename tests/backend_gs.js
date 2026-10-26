@@ -1910,7 +1910,17 @@ function servicosFalsos(amb, est) {
   r = amb.post(adm({ action: 'update', id: '101', consultarValor: false, preco: 120 }));
   ok(r.ok && Number(preco('101')) === 119.99, 'desmarcar COM preço volta ao valor escrito', String(preco('101')));
   r = amb.post(adm({ action: 'update', id: '101', preco: 0 }));
-  ok(r.ok === false, 'update com preço 0 sem a marca continua recusado');
+  if (/precoZeroConsulta/.test(codigoFonte)) {
+    // v4.27 (pedido do Pablo): preço 0 sem a marca = "Consultar valor" (telas que reenviam o preço atual não travam mais)
+    ok(r.ok && Number(preco('101')) === 0, 'v4.27: update com preço 0 sem a marca vira "Consultar valor"', JSON.stringify(r));
+    r = amb.post(adm({ action: 'update', id: '101', preco: -5 }));
+    ok(r.ok === false && /Preço inválido/.test(r.erro), 'v4.27: preço negativo continua recusado', JSON.stringify(r));
+    r = amb.post(adm({ action: 'update', id: '101', preco: 'abc' }));
+    ok(r.ok === false, 'v4.27: preço em texto continua recusado', JSON.stringify(r));
+    amb.post(adm({ action: 'update', id: '101', consultarValor: false, preco: 120 }));
+  } else {
+    ok(r.ok === false, 'update com preço 0 sem a marca continua recusado');
+  }
   // lote: consultar / valor escrito / % pula peça sem preço
   r = amb.post(adm({ action: 'bulkUpdate', ids: ['102', '105'], tipoAcao: 'consultarValor' }));
   ok(r.ok && r.afetados === 2 && Number(preco('102')) === 0 && Number(preco('105')) === 0, 'lote consultarValor passa as marcadas para sem preço', JSON.stringify(r));
@@ -1937,6 +1947,57 @@ function servicosFalsos(amb, est) {
   // página de compartilhar (?action=share) sem preço
   const html = amb2.getHtml ? amb2.getHtml({ action: 'share', id: '102' }) : null;
   if (html != null) ok(/Consulte valor/.test(html) && !/R\$ 0,00/.test(html), 'página de compartilhar diz "Consulte valor" (sem R$ 0,00)');
+})();
+
+// ------------------------------------------------------------------ 8z. v4.26: sessão tk3 sem WhatsApp no pedido e Gemini insistente
+(function v426() {
+  const amb = criarAmbiente(); semear(amb);
+  if (!/iaInsistente/.test(codigoFonte)) { console.log('  (backend sem v4.26: pulando)'); return; }
+  console.log('== v4.26: sessão tk3 e Gemini insistente');
+  amb.ctx.SpreadsheetApp.openById('x').getSheetByName('Pessoas').appendRow(['Nome', 'WhatsApp', 'Senha']);
+  amb.run("acRegistrar_('Pablo Admin', '88999990001', 'senha-forte-1', 'Admin total', {})");
+  const tok = amb.post({ action: 'login', whatsapp: '88999990001', senha: 'senha-forte-1' });
+  ok(tok.ok && /^tk3\.88999990001\./.test(tok.sessao), 'login devolve sessão tk3 com o WhatsApp do dono', String(tok.sessao).slice(0, 20));
+  let r = amb.post({ action: 'bulkUpdate', pin: tok.sessao, funcionario: 'Teste', ids: ['101'], tipoAcao: 'novidade', valor: true });
+  ok(r.ok === true, 'ação do painel só com a sessão tk3 (sem WhatsApp) é aceita', JSON.stringify(r).slice(0, 160));
+  r = amb.post({ action: 'bulkUpdate', pin: tok.sessao, whatsapp: '88999990002', funcionario: 'Teste', ids: ['101'], tipoAcao: 'novidade', valor: true });
+  ok(r.ok === false && r.sessaoInvalida === true, 'sessão tk3 com WhatsApp de OUTRA pessoa continua recusada', JSON.stringify(r).slice(0, 160));
+  const falsa = tok.sessao.replace(/\.(\w)(\w*)$/, (m, a, b) => '.' + (a === '0' ? '1' : '0') + b);
+  r = amb.post({ action: 'bulkUpdate', pin: falsa, funcionario: 'Teste', ids: ['101'], tipoAcao: 'novidade', valor: true });
+  ok(r.ok === false, 'sessão tk3 com assinatura alterada continua recusada', JSON.stringify(r).slice(0, 120));
+
+  amb.props.set('GEMINI_API_KEY', 'chave-de-teste');
+  const modelo = (url) => (/models\/([^:]+):/.exec(url) || [])[1];
+  // 1) o escolhido e os outros estão sobrecarregados; o mais barato (flash-lite) responde
+  let ordem = [];
+  amb.fetchResposta = (url) => { const m = modelo(url); if (!m) return { code: 200, body: '{}' }; ordem.push(m);
+    return /lite/.test(m) ? { code: 200, body: JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"titulo":"Vestido","descricao":"Leve."}' }] } }] }) }
+                          : { code: 503, body: '{"error":{"code":503,"message":"This model is currently experiencing high demand."}}' }; };
+  let g = amb.run("chamarGemini_({ contents: [] })");
+  ok(g.ok && /lite/.test(g.modelo), 'com o escolhido sobrecarregado, passa para o mais barato (flash-lite) e dá certo', JSON.stringify(g).slice(0, 120));
+  ok(ordem[0] === 'gemini-3.5-flash' && /lite/.test(ordem[1]), 'ordem: o escolhido primeiro, depois o mais barato', ordem.join(','));
+  // 2) todos sobrecarregados na 1ª volta; um responde na 2ª volta (antes parava depois de 3 modelos)
+  amb.cacheMem.clear(); ordem = []; let n = 0;
+  amb.fetchResposta = (url) => { const m = modelo(url); if (!m) return { code: 200, body: '{}' }; ordem.push(m); n++;
+    return n === 7 ? { code: 200, body: JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"ok":1}' }] } }] }) } : { code: 503, body: '{"error":{"message":"high demand"}}' }; };
+  g = amb.run("chamarGemini_({ contents: [] })");
+  ok(g.ok && n === 7, 'continua tentando além de 3 modelos e numa 2ª volta até um responder', n + ' ' + JSON.stringify(g).slice(0, 80));
+  // 3) sempre sobrecarregado: erro em português, sem JSON cru, marcado como transitório (o painel tenta de novo)
+  amb.cacheMem.clear(); n = 0;
+  amb.fetchResposta = (url) => { if (modelo(url)) n++; return { code: 503, body: '{"error":{"code":503,"message":"This model is currently experiencing high demand.","status":"UNAVAILABLE"}}' }; };
+  g = amb.run("chamarGemini_({ contents: [] })");
+  ok(g.ok === false && g.transitorio === true && /sobrecarregado/.test(g.erro) && !/[{}"]/.test(g.erro), 'sempre sobrecarregado: erro legível e transitorio:true', JSON.stringify(g).slice(0, 200));
+  ok(n > 5 && n <= 8 * 5, 'deu várias voltas, com limite', n);
+  // 4) chave recusada: para na hora (trocar de modelo não resolve)
+  amb.cacheMem.clear(); n = 0;
+  amb.fetchResposta = (url) => { if (modelo(url)) n++; return { code: 403, body: '{"error":{"message":"API key not valid"}}' }; };
+  g = amb.run("chamarGemini_({ contents: [] })");
+  ok(g.ok === false && !g.transitorio && n === 1 && /chave/i.test(g.erro), 'chave recusada: 1 tentativa e avisa para conferir a chave', n + ' ' + g.erro);
+  // 5) cota de todos acabou: avisa da cota, sem insistir
+  amb.cacheMem.clear(); n = 0;
+  amb.fetchResposta = (url) => { if (modelo(url)) n++; return { code: 429, body: '{"error":{"message":"You exceeded your current quota. Please retry in 2h"}}' }; };
+  g = amb.run("chamarGemini_({ contents: [] })");
+  ok(g.ok === false && /cota/i.test(g.erro) && n === 5, 'cota de todos esgotada: avisa da cota e não fica repetindo', n + ' ' + g.erro);
 })();
 
 console.log('\n' + (total - falhas.length) + '/' + total + ' verificações passaram');

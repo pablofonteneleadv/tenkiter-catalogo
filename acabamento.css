@@ -249,7 +249,11 @@ body .btn-secundario-cta { border-radius: var(--tk-raio); }
 body .linha-share-busca button { border-radius: var(--tk-raio-p); border-width: 1px; font-weight: 600; }
 body .linha-share-busca #btn-limpar-filtros-topo, body .linha-share-busca #btn-limpar-sel { background: var(--tk-superficie); border-color: var(--tk-borda); color: var(--tk-texto); }
 @media (max-width: 767px) {
-  body .linha-share-busca button { min-height: 36px; }
+  /* os botões dividem a linha por igual (a equipe tem 3) e o texto pode quebrar dentro do botão de 44 px */
+  body .linha-share-busca { flex-wrap: wrap; align-items: stretch; }
+  body .linha-share-busca > button, body .linha-share-busca > #btn-share-busca { flex: 1 1 0; min-width: 0; min-height: 44px; white-space: normal; padding: 4px 8px; }
+  body .linha-share-busca > .btn-add-resultados { flex: 1 1 100%; }
+  body .linha-share-busca > button[hidden] { display: none; }
 }
 
 /* menu lateral e sugestões da busca */
