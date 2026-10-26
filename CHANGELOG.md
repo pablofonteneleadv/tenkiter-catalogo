@@ -6,6 +6,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.15.1 — "Editar peças" com "Consultar valor" — 2026-10-26
+
+- A janela "Editar peças" recusava "Preço inválido" em peças "Consultar valor": reenviava o preço 0 sem a marca. Agora a peça segue como "Consultar valor" quando o preço não é alterado (também ao tocar em "Tentar de novo" nos envios que falharam).
+
 ## 7.15.0 — acabamento novo da vitrine (Opção A) — 2026-10-26
 
 - Ícones de linha (`icones.js`) no lugar dos emojis no cabeçalho, busca, filtros, cards, peça, seleção, favoritos, barra inferior e rodapé.
