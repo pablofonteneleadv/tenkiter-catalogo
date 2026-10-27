@@ -62,7 +62,7 @@ class NativeAdministrationTest {
     }}
     @Test fun dashboardReadsActualMetricsAndLetsTheUserChangePeriod(){Fixture().use{f->
         f.ui.dashboard("whatsapp2");val d=dialog("Painel de atendimento");assertTrue(all(d.window!!.decorView).filterIsInstance<TextView>().any{it.text.toString()=="Esperando resposta agora: 2"});assertTrue(f.fake.writes.isEmpty())
-        snapshot(d,"dashboard-native",390,780);all(d.window!!.decorView).filterIsInstance<ScrollView>().first().apply{isSmoothScrollingEnabled=false;scrollTo(0,getChildAt(0).height)};snapshot(d,"dashboard-hours-native",390,780);button(d,"7 dias").performClick();waitFor{f.fake.reads.any{it.contains("canal=whatsapp2")&&it.contains("dias=7")}};dialog("Painel de atendimento")
+        snapshot(d,"dashboard-native",390,780);all(d.window!!.decorView).filterIsInstance<ScrollView>().last().apply{isSmoothScrollingEnabled=false;scrollTo(0,getChildAt(0).height)};snapshot(d,"dashboard-hours-native",390,780);button(d,"7 dias").performClick();waitFor{f.fake.reads.any{it.contains("canal=whatsapp2")&&it.contains("dias=7")}};dialog("Painel de atendimento")
     }}
     @Test fun copyConversationUsesAuthenticatedExportAndNeverCopiesSession(){Fixture().use{f->
         f.ui.copyConversation(42);waitFor{f.fake.exportQuery.isNotBlank()};waitFor{(f.a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).hasPrimaryClip()}
