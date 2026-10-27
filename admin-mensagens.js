@@ -598,6 +598,9 @@
     contatosSit = r.ok ? r : { ligada: false, erro: r.erro };
     if (painel === 'leitura') desenharEstado();
   }
+  /* v7.33: a situação das ações da ponte fica escrita dentro do quadro (não some em 9 s): cópia e relatório podem passar de um minuto */
+  let pontesSt = '';
+  function pontesStatus_(t) { pontesSt = t || ''; const e = $('ms-ponte-st'); if (e) { e.textContent = pontesSt; e.hidden = !pontesSt; } }
   function blocoContatos_() {
     const b = el('div', 'ms-contatos'); b.id = 'ms-contatos';
     b.appendChild(el('p', 'ms-cfg-tit', 'Google Contatos (marcador “Tenkiter Clientes G”)'));
@@ -607,13 +610,15 @@
       const u = el('input', 'ms-copia'); u.id = 'ms-ponte-url'; u.type = 'url'; u.placeholder = 'https://script.google.com/macros/s/…/exec'; u.setAttribute('aria-label', 'Endereço da ponte do Google Contatos');
       const k = el('input', 'ms-copia'); k.id = 'ms-ponte-chave'; k.type = 'password'; k.autocomplete = 'new-password'; k.placeholder = 'Chave da ponte'; k.setAttribute('aria-label', 'Chave da ponte do Google Contatos');
       const l = el('div', 'ms-linha'); l.appendChild(botao('ms-btn prim', 'Ligar a ponte', 'ponte-ligar'));
-      b.append(u, k, l); return b;
+      const st = el('p', 'ms-cfg-res ms-ponte-st', pontesSt || ''); st.id = 'ms-ponte-st'; st.setAttribute('role', 'status'); st.hidden = !pontesSt;
+      b.append(u, k, l, st); return b;
     }
     b.appendChild(el('p', 'ms-ok', 'Ligada à conta ' + (contatosSit.conta || '(sem e-mail)') + '.'));
     const bk = contatosSit.backup;
     const pb = el('p', 'ms-cfg-res', bk ? 'Última cópia de segurança: ' + hora(bk.em) + ' (' + bk.total + ' contatos). ' : 'Antes de qualquer limpeza, faça uma cópia de segurança dos contatos (fica no Drive da conta dos contatos).');
     if (bk && bk.url) { const a = el('a', 'ms-link', 'Abrir no Drive'); a.href = bk.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; pb.appendChild(a); }
     b.appendChild(pb);
+    const st = el('p', 'ms-cfg-res ms-ponte-st', pontesSt || ''); st.id = 'ms-ponte-st'; st.setAttribute('role', 'status'); st.hidden = !pontesSt; b.appendChild(st);
     const l = el('div', 'ms-linha');
     l.appendChild(botao('ms-btn', 'Fazer cópia de segurança', 'ponte-backup'));
     const rel = botao('ms-btn prim', 'Gerar relatório da limpeza', 'ponte-relatorio'); rel.disabled = !bk; l.appendChild(rel);
@@ -1575,19 +1580,19 @@
     else if (a === 'selecionar') iniciarSelecao_(0);
     else if (a === 'nome-editar') desenharAssina_(true);
     else if (a === 'ponte-ligar') {
-      b.disabled = true; const r = await worker_('/msg/contatos/config', 'POST', { url: ($('ms-ponte-url') || {}).value || '', chave: ($('ms-ponte-chave') || {}).value || '' }); b.disabled = false;
-      if (!r.ok) { aviso_(r.erro || 'Não foi possível ligar agora.'); return; }
-      aviso_('Ponte ligada à conta ' + (r.conta || '') + '.'); contatosSit = null; desenharEstado();
+      b.disabled = true; pontesStatus_('Conferindo a ponte…'); const r = await worker_('/msg/contatos/config', 'POST', { url: ($('ms-ponte-url') || {}).value || '', chave: ($('ms-ponte-chave') || {}).value || '' }); b.disabled = false;
+      if (!r.ok) { pontesStatus_(r.erro || 'Não foi possível ligar agora.'); return; }
+      pontesStatus_('Ponte ligada à conta ' + (r.conta || '') + '.'); contatosSit = null; desenharEstado();
     }
     else if (a === 'ponte-backup') {
-      b.disabled = true; aviso_('Fazendo a cópia de segurança dos contatos… pode levar um minuto.'); const r = await worker_('/msg/contatos/backup', 'POST', {}); b.disabled = false;
-      if (!r.ok) { aviso_(r.erro || 'Não foi possível fazer a cópia agora.'); return; }
-      aviso_('Cópia feita: ' + r.total + ' contatos salvos no Drive da conta dos contatos.'); contatosSit = null; desenharEstado();
+      b.disabled = true; pontesStatus_('Fazendo a cópia de segurança dos contatos… pode levar um minuto. Não feche esta tela.'); const r = await worker_('/msg/contatos/backup', 'POST', {}); b.disabled = false;
+      if (!r.ok) { pontesStatus_('A cópia não foi feita: ' + (r.erro || 'tente de novo.')); return; }
+      pontesStatus_('✓ Cópia feita: ' + r.total + ' contatos salvos no Drive da conta dos contatos.'); contatosSit = null; desenharEstado();
     }
     else if (a === 'ponte-relatorio') {
-      b.disabled = true; aviso_('Lendo os contatos para o relatório… pode levar um minuto.'); const r = await worker_('/msg/contatos/relatorio', 'POST', {}); b.disabled = false;
-      if (!r.ok) { aviso_(r.erro || 'Não foi possível gerar agora.'); return; }
-      aviso_(''); mostrarRelatorio_(r);
+      b.disabled = true; pontesStatus_('Lendo os contatos para o relatório… pode levar um minuto. Não feche esta tela.'); const r = await worker_('/msg/contatos/relatorio', 'POST', {}); b.disabled = false;
+      if (!r.ok) { pontesStatus_('O relatório não foi gerado: ' + (r.erro || 'tente de novo.')); return; }
+      pontesStatus_(''); mostrarRelatorio_(r);
     }
     else if (a === 'ponte-ver') { const r = await worker_('/msg/contatos/situacao?relatorio=1', 'GET'); mostrarRelatorio_(r.ok ? r.relatorio : null); }
     else if (a === 'ponte-desligar') {

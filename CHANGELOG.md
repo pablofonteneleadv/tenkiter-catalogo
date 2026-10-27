@@ -12,6 +12,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - O servidor confere a chave listando as contas no Zernio (nada é enviado) e mostra qual Instagram está conectado. A chave fica só no servidor (`zernio_chave`) e nunca volta para a tela.
 - Nesta etapa só guarda a chave; as DMs do Instagram entram nas Mensagens na próxima versão.
 - Botões da tela Conexões com 44 px de altura (eram 40).
+- Google Contatos: o andamento e o resultado de ligar, cópia de segurança e relatório ficam escritos dentro do quadro (antes era um aviso que sumia em 9 segundos, e a cópia pode passar de um minuto).
 - Teste `conexoes_unificada` atualizado para o grupo Android (7 grupos).
 - Service worker renovado (tk-3.38.19).
 
