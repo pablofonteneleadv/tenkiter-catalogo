@@ -3035,7 +3035,8 @@ async function rotaZernio_(env, req, url, ctx) {
   if (!assin || !igualConst_(assin, await hmacHex_(seg, corpo))) { await cfgSet(env, 'msg_ult_zernio', JSON.stringify({ em: agora(), res: 'assinatura' })); return resp(401, { ok: false }); }
   let b = null; try { b = JSON.parse(corpo); } catch (e) { return resp(400, { ok: false }); }
   await cfgSet(env, 'msg_ult_zernio', JSON.stringify({ em: agora(), res: 'ok', evento: String((b && b.event) || '').slice(0, 40) }));
-  if (b && (b.event === 'message.received' || b.event === 'message.sent')) { const t = processarEventoZernio_(env, b).catch(() => {}); if (ctx && ctx.waitUntil) ctx.waitUntil(t); else await t; }
+  // DM nova: aviso no celular na hora, como no WhatsApp (antes esperava o cron)
+  if (b && (b.event === 'message.received' || b.event === 'message.sent')) { const t = processarEventoZernio_(env, b).then(() => (b.event === 'message.received' ? processarPushMobile_(env, true) : null)).catch(() => {}); if (ctx && ctx.waitUntil) ctx.waitUntil(t); else await t; }
   return resp(200, { ok: true });
 }
 const ZERNIO_TIPO_ = { image: 'imagem', video: 'vídeo', audio: 'áudio', file: 'documento', sticker: 'figurinha', share: 'compartilhamento' };

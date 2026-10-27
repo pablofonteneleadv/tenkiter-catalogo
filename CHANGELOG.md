@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.38.1 — Aviso no celular na hora para DM do Instagram — 2026-10-27
+
+- O aviso no celular (app Android) de uma DM nova do Instagram sai assim que o Zernio entrega a mensagem, como já era no WhatsApp. Antes ele ficava na fila esperando a rodada de 1 minuto, e a primeira DM real (27/10, 17:57) ficou sem aviso.
+- Medição da primeira DM real: o Zernio leva de 7 a 9 s para avisar o nosso servidor; o nosso servidor grava em menos de 1 s; o site confere a cada 4 s e o app a cada 8 s com a tela aberta.
+- Teste: `worker_mobile_push` (DM avisa sem esperar o cron; resposta da loja não avisa).
+
 ## 7.38.0 — Cofre mostra também as chaves do servidor das Mensagens — 2026-10-27
 
 - O "Cofre das chaves" (Conexões) passa a listar e copiar as chaves guardadas no servidor das Mensagens: **Zernio**, Wafly 1 e 2 (instância e tokens), Wame, Gemini, FreeConvert, ponte do Google Contatos e chave do aplicativo Android. Mostra só o final de cada uma; a chave continua indo direto para a área de transferência, nunca para a tela.
