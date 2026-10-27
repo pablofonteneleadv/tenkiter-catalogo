@@ -2620,10 +2620,10 @@ export async function registrarMobile_(env, req) {
   await env.CACHE.put('mobile-session:'+id,JSON.stringify({whats:dono,sessao:req.headers.get('X-TK-Sessao')||''}),{expirationTtl:30*86400});
   return {ok:true,servidorConfigurado:!!(await mobilePushKey_(env)),renovarEmDias:30};
 }
-export async function processarPushMobile_(env) {
+export async function processarPushMobile_(env, recentes = false) {
   const pushKey=await mobilePushKey_(env);if(!pushKey)return {ok:false,motivo:'sem_configuracao'};
   await mobileTables_(env);
-  const fila=(await env.DB.prepare("SELECT * FROM msg_push_outbox WHERE estado='pendente' AND tentativas<5 ORDER BY mensagem LIMIT 10").all()).results||[];
+  const fila=(await env.DB.prepare("SELECT * FROM msg_push_outbox WHERE estado='pendente' AND tentativas<5 ORDER BY mensagem "+(recentes?"DESC":"ASC")+" LIMIT 10").all()).results||[];
   const devices=(await env.DB.prepare('SELECT subscription FROM msg_mobile ORDER BY atualizado DESC LIMIT 20').all()).results||[],ids=[];
   for(const dev of devices){
     const cred=await env.CACHE.get('mobile-session:'+dev.subscription,'json');if(!cred)continue;
@@ -3139,7 +3139,15 @@ export default {
     const url = new URL(req.url), h = cors(env, req), J = (c, s) => resp(c, s, h);
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
-    if (url.pathname.indexOf('/wh/') === 0) { try { return await rotaWebhookMensagens_(env, req, url); } catch (e) { return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
+    if (url.pathname.indexOf('/wh/') === 0) { try {
+      const resposta = await rotaWebhookMensagens_(env, req, url);
+      if (req.method === 'POST' && resposta.ok) {
+        const recebido = await resposta.clone().json().catch(() => null);
+        // A mensagem já está persistida; push não atrasa nem derruba o aceite do webhook.
+        if (recebido && (recebido.nova === true || recebido.novas > 0) && typeof ctx?.waitUntil === 'function') ctx.waitUntil(processarPushMobile_(env,true).catch(() => {}));
+      }
+      return resposta;
+    } catch (e) { return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
     const perms = await permissoes(env, req);
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);

@@ -6,6 +6,15 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.31.0 — Mensagens: push imediato e abertura com recentes — 2026-10-27
+
+- Webhooks de mensagens novas disparam a fila Android em segundo plano, sem aguardar o cron. O cron permanece como recuperação; os IDs idempotentes e a validação de sessão continuam ativos.
+- No APK, lista e resumo carregam em paralelo. Produtos, categorias e estatísticas do catálogo deixam de competir pela rede na abertura; Produtos carrega ao abrir sua gaveta.
+- Lista e até 80 mensagens por conversa ficam em cache local, por conta/sessão, por até 24 horas (dez consultas, máximo 500 mil caracteres). Anexos, URLs de mídia e tokens não entram nesse cache.
+- Conversas salvas aparecem em modo de leitura até o servidor confirmar os dados. Sair ou receber recusa de acesso limpa o cache; falha de rede preserva a leitura local.
+- Funciona no APK 1.0.0 existente, sem reinstalação. Primeira carga da página e confirmação de login ainda exigem rede.
+
+
 ## 7.30.2 — Validar vídeos ao escolher arquivos — 2026-10-27
 
 - Vídeos fora dos limites de Status são recusados já na seleção, tanto em Livre quanto em mídias avulsas, antes de entrar na lista.

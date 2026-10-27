@@ -26,7 +26,7 @@ APK assinado para Android 8 ou superior. O aplicativo abre o módulo Mensagens e
 
 1. Com uma conta autorizada no APK, confirme que não aparece aviso de configuração pendente.
 2. Coloque o app em segundo plano. Peça a uma pessoa enviar uma mensagem nova a um dos canais conectados. Não reutilize webhook antigo.
-3. A fila do servidor processa os avisos a cada minuto. A entrega posterior depende de OneSignal/FCM, internet e restrições do Android. Não é uma garantia de tempo real.
+3. O servidor tenta enviar o aviso assim que grava a mensagem recebida. Uma rotina a cada minuto recupera falhas pendentes. A entrega posterior depende de OneSignal/FCM, internet e restrições do Android. Não é uma garantia de tempo real.
 4. Toque no aviso: ele abre a conversa. A tela bloqueada mostra somente um aviso genérico, sem texto do cliente.
 5. Repita com a tela bloqueada e depois com o app removido dos recentes. **Forçar parada nas configurações Android impede avisos até abrir o aplicativo novamente.** Em aparelhos com economia agressiva, permita execução/notificações em segundo plano conforme a configuração do fabricante.
 6. Teste Sair: o SDK é desinscrito no aparelho e o vínculo é removido do servidor. Uma conta sem permissão não deve acessar a caixa nem receber novos avisos.
@@ -42,3 +42,11 @@ APK release compilado e assinatura conferida. Caixa de mensagens, teclado com vi
 ## Assinatura e futuras versões
 
 Package: `br.com.tenkitermodas.mensagens`. A atualização precisa usar a mesma assinatura. A chave e sua senha foram guardadas no backup privado da loja; não ficam no código nem no APK. O workflow manual `APK Android` exige os GitHub Secrets `ANDROID_KEYSTORE_B64` e `ANDROID_KEYSTORE_PASSWORD`, que ainda precisam ser cadastrados por alguém com permissão de administrar os secrets. O ambiente desta sessão não conseguiu cadastrá-los.
+
+## Abertura e cache (site 7.31.0)
+
+O APK 1.0.0 recebe esta melhoria pela página publicada, sem reinstalar. A abertura não carrega mais o catálogo inteiro, categorias e estatísticas: Produtos carrega apenas ao abrir a gaveta. Lista e resumo de atendimento carregam em paralelo.
+
+Depois de um acesso autorizado, ficam salvas no aparelho as últimas listas e até 80 mensagens das conversas consultadas (até dez consultas, teto de 500 mil caracteres, validade de 24 horas). Anexos e URLs de mídia não são salvos. Ao reabrir, o sistema pode mostrar essa cópia enquanto atualiza; responder e demais gravações ficam bloqueados nessa conversa até confirmação do servidor. Sair e recusa de acesso limpam as cópias. O cache pertence à conta e sessão que o criou.
+
+Isto não é um aplicativo inteiramente offline: carregar a página e validar o login ainda dependem da rede. A notificação imediata significa que o servidor inicia o envio na chegada; a latência final depende da Wafly/Meta, OneSignal, FCM, conexão e Android.
