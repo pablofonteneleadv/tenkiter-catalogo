@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.38.2 — Conferir as entregas do Zernio — 2026-10-27
+
+- Conexões → Instagram Direct · Zernio: botões **"Conferir entregas"** e **"Testar aviso"**. O servidor pergunta ao próprio Zernio se o aviso de mensagens está ativo, se aponta para este servidor e para o Instagram da loja, e mostra as últimas 10 entregas com o resultado (ex.: "failed (HTTP 404)"). "Testar aviso" pede ao Zernio um aviso de teste e confere se ele chegou aqui.
+- Motivo: às 18:12 de 27/10, as DMs novas (respostas a story e "Oi") não chegaram ao servidor; o último aviso recebido foi às 17:57.
+- Worker: `POST /msg/zernio/config {diagnostico|testar}` (`GET /v1/webhooks/settings`, `/v1/webhooks/logs`, `POST /v1/webhooks/test`); nunca devolve chave nem segredo.
+- Testes: `worker_mensagens_conversa` 247, `conexoes_zernio` 30. SW tk-3.38.23.
+
 ## 7.38.1 — Aviso no celular na hora para DM do Instagram — 2026-10-27
 
 - O aviso no celular (app Android) de uma DM nova do Instagram sai assim que o Zernio entrega a mensagem, como já era no WhatsApp. Antes ele ficava na fila esperando a rodada de 1 minuto, e a primeira DM real (27/10, 17:57) ficou sem aviso.

@@ -66,6 +66,7 @@
       .cx-prim { background: var(--laranja); color: #0d0d0d; font-weight: 800; border: 0; }
       .cx-sec { background: #eee; color: #222; border: 0; font-weight: 700; }
       .cx-perigo { background: #fde3e3; color: #8a1c1c; border: 0; font-weight: 700; }
+      .cx-zr-diag { white-space: pre-line; font-size: 0.84rem; color: #222; margin: 6px 0; overflow-wrap: anywhere; }
       .cx-bloco .cx-btn:disabled { background: #e6e6e6; color: #555; cursor: not-allowed; }
       .cx-linha { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
       .cx-chave-ok { color: #146c43; font-weight: 700; font-size: 0.86rem; }
@@ -623,6 +624,8 @@
       '<label for="cx-zr-key">Zernio · chave de API</label><input id="cx-zr-key" type="password" autocomplete="new-password" placeholder="Cole a chave aqui">' +
       '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="zr-guardar">Salvar e conferir</button><button type="button" class="cx-btn cx-sec" data-cx="zr-apagar">Remover chave</button></div>' +
       '<p id="cx-zr-msg" class="cx-msg" role="status"></p>' +
+      '<div class="cx-linha" id="cx-zr-diag-l" hidden><button type="button" class="cx-btn cx-sec" data-cx="zr-diag">Conferir entregas</button><button type="button" class="cx-btn cx-sec" data-cx="zr-testar">Testar aviso</button></div>' +
+      '<div id="cx-zr-diag" class="cx-zr-diag" role="status"></div>' +
       '<p class="g-nota">O servidor confere a chave no Zernio sem enviar nenhuma mensagem e liga o aviso de mensagens novas: as DMs do Instagram aparecem em Mensagens → Instagram, com a foto do story que o cliente respondeu.</p></div>';
   }
   function textoZernio_(r) {
@@ -636,6 +639,7 @@
     const el = $('cx-zr-status'); if (!el) return;
     const r = await igWorker_('/msg/zernio/config', 'GET');
     el.textContent = textoZernio_(r); el.className = r && r.ok && r.configurada ? 'cx-chave-ok' : 'cx-chave-sem';
+    const dg = $('cx-zr-diag-l'); if (dg) dg.hidden = !(r && r.ok && r.configurada && r.conta);
     const lig = $('cx-zr-ligar'); if (lig) { lig.hidden = !(r && r.ok && r.configurada && r.conta && !r.avisoLigado); lig.dataset.conta = r && r.conta ? r.conta.id : ''; }
     if (r && r.ok && r.configurada) { const l = await igWorker_('/msg/zernio/config', 'POST', { listar: true }); desenharContasZernio_(l); } else desenharContasZernio_(null);
   }
@@ -653,6 +657,38 @@
     });
     const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'cx-btn cx-prim'; bt.dataset.cx = 'zr-escolher'; bt.textContent = 'Usar este Instagram';
     box.append(fs, bt);
+  }
+  /* v7.38.2: pergunta ao próprio Zernio se o aviso está ativo e como foram as últimas entregas para o nosso servidor */
+  const horaZr_ = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }); };
+  async function diagnosticoZernio_(testar) {
+    const box = $('cx-zr-diag'); if (!box) return;
+    box.textContent = testar ? 'Pedindo ao Zernio um aviso de teste…' : 'Conferindo no Zernio…';
+    const antes = await igWorker_('/msg/zernio/config', 'GET'), ultAntes = antes && antes.ultimoAviso ? antes.ultimoAviso.em : '';
+    const r = await igWorker_('/msg/zernio/config', 'POST', testar ? { testar: true } : { diagnostico: true });
+    if (!r || !r.ok) { box.textContent = erroTxt(r); return; }
+    const linhas = [];
+    const a = r.aviso || {};
+    if (!a.existe) linhas.push('✗ O Zernio não tem o aviso de mensagens deste servidor. Toque em "Ligar mensagens do Direct" ou em "Salvar e conferir".');
+    else {
+      linhas.push(a.ativo ? '✓ Aviso ativo no Zernio.' : '✗ O Zernio DESLIGOU o aviso (falhas seguidas). Toque em "Salvar e conferir" para religar.');
+      if (!a.esteServidor) linhas.push('✗ O aviso aponta para outro endereço. Toque em "Salvar e conferir".');
+      if (!a.contaCerta) linhas.push('✗ O aviso está ligado para outro Instagram. Escolha o da loja de novo.');
+      if (a.eventos && a.eventos.length) linhas.push('Eventos: ' + a.eventos.join(', ') + '.');
+    }
+    if (testar) {
+      if (!r.teste || !r.teste.enviado) linhas.push('✗ O Zernio não aceitou mandar o teste' + (r.teste ? ' (HTTP ' + r.teste.codigo + ')' : '') + '.');
+      else {
+        await new Promise((ok) => setTimeout(ok, 6000));
+        const depois = await igWorker_('/msg/zernio/config', 'GET'), u = depois && depois.ultimoAviso;
+        linhas.push(u && u.em && u.em !== ultAntes ? '✓ O teste chegou ao nosso servidor às ' + horaZr_(u.em) + (u.res === 'assinatura' ? ', mas com assinatura errada: toque em "Salvar e conferir".' : '.') : '✗ O teste não chegou ao nosso servidor em 6 segundos.');
+      }
+    }
+    if (r.entregas && r.entregas.length) {
+      linhas.push('Últimas entregas do Zernio:');
+      r.entregas.forEach((e) => linhas.push('• ' + horaZr_(e.em) + ' · ' + (e.evento || 'evento') + ' · ' + (e.situacao || '?') + (e.codigo ? ' (HTTP ' + e.codigo + ')' : '') + (e.erro ? ' · ' + e.erro : '') + (e.teste ? ' · teste' : '')));
+    } else linhas.push(r.logsDisponiveis ? 'O Zernio não registrou nenhuma entrega recente para este aviso.' : 'O Zernio não mostrou o histórico de entregas agora.');
+    if (r.ultimoRecebido && r.ultimoRecebido.em) linhas.push('Último aviso recebido aqui: ' + horaZr_(r.ultimoRecebido.em) + (r.ultimoRecebido.evento ? ' (' + r.ultimoRecebido.evento + ')' : '') + '.');
+    box.textContent = linhas.join('\n');
   }
   /* liga o aviso de mensagens usando a chave já guardada (não precisa colar de novo) */
   async function ligarDirectZernio_() {
@@ -690,6 +726,8 @@
     if(a==='mobile-guardar')configurarMobile_(false);
     else if (a === 'zr-guardar') configurarZernio_(false);
     else if (a === 'zr-apagar') configurarZernio_(true);
+    else if (a === 'zr-diag') diagnosticoZernio_(false);
+    else if (a === 'zr-testar') diagnosticoZernio_(true);
     else if (a === 'zr-escolher') escolherZernio_();
     else if (a === 'zr-ligar') ligarDirectZernio_();
     else if(a==='mobile-apagar')configurarMobile_(true);

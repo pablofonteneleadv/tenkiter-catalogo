@@ -58,6 +58,16 @@ with sync_playwright() as p:
     n0 = len(Z["zernio"]["posts"]); pg.click("[data-cx=zr-ligar]"); pg.wait_for_timeout(700)
     chk("ligar usa a chave já guardada (não pede colar de novo)", Z["zernio"]["posts"][n0:] and Z["zernio"]["posts"][n0] == {"escolher": "acc_1"} and "chave" not in str(Z["zernio"]["posts"][n0:]), Z["zernio"]["posts"][n0:])
     chk("depois de ligar: confirma e o botão some", "Mensagens → Instagram" in pg.inner_text("#cx-zr-msg") and not pg.locator("[data-cx=zr-ligar]").is_visible(), pg.inner_text("#cx-zr-msg"))
+    chk("com chave e Instagram: aparecem 'Conferir entregas' e 'Testar aviso'", pg.locator("[data-cx=zr-diag]").is_visible() and pg.locator("[data-cx=zr-testar]").is_visible())
+    pg.click("[data-cx=zr-diag]"); pg.wait_for_timeout(700)
+    dtx = pg.inner_text("#cx-zr-diag")
+    chk("conferir entregas: aviso ativo, entrega recusada com o código e o último aviso recebido", "Aviso ativo" in dtx and "HTTP 404" in dtx and "Último aviso recebido aqui" in dtx and "{" not in dtx, dtx)
+    Z["zernio"]["desligado"] = True; pg.click("[data-cx=zr-diag]"); pg.wait_for_timeout(700)
+    chk("aviso desligado pelo Zernio: diz o que fazer", "DESLIGOU" in pg.inner_text("#cx-zr-diag") and "Salvar e conferir" in pg.inner_text("#cx-zr-diag"))
+    Z["zernio"]["desligado"] = False
+    pg.click("[data-cx=zr-testar]"); pg.wait_for_timeout(7600)
+    chk("testar aviso: confirma que o teste chegou ao nosso servidor", "O teste chegou ao nosso servidor" in pg.inner_text("#cx-zr-diag"), pg.inner_text("#cx-zr-diag"))
+    if EVID: pg.locator("details:has(#cx-zr-status) .cx-bloco:has(#cx-zr-diag)").last.screenshot(path=os.path.join(EVID, "06-diagnostico-390.png"))
     Z["zernio"]["duas"] = True; Z["zernio"]["conta"] = {"id": "acc_p", "usuario": "pablo_fontenele88"}
     pg.fill("#cx-zr-key", CHAVE); pg.click("[data-cx=zr-guardar]"); pg.wait_for_timeout(700)
     chk("com dois Instagram: aparece 'Qual Instagram é o da loja?' com as duas contas", pg.locator("#cx-zr-contas").is_visible() and pg.locator("input[name=cx-zr-conta]").count() == 2 and "Qual Instagram é o da loja?" in pg.inner_text("#cx-zr-contas"))

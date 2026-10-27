@@ -121,10 +121,13 @@ def tratar(route, path, method, body, s):
         return J({"ok": bool(c), "celular": cel}) or True
     if path == "/msg/zernio/config":
         z = s.setdefault("zernio", {"chave": "", "conta": None, "posts": []})
-        if method == "GET": return J({"ok": True, "configurada": bool(z["chave"]), "conta": z["conta"], "conferidaEm": "", "avisoLigado": bool(z["chave"] and z["conta"] and not z.get("semAviso")), "ultimoAviso": None}) or True
+        if method == "GET": return J({"ok": True, "configurada": bool(z["chave"]), "conta": z["conta"], "conferidaEm": "", "avisoLigado": bool(z["chave"] and z["conta"] and not z.get("semAviso")), "ultimoAviso": {"em": z["ult"], "res": "ok", "evento": "message.received"} if z.get("ult") else None}) or True
         z["posts"].append(body)
         if body.get("apagar"): z["chave"] = ""; z["conta"] = None; return J({"ok": True, "configurada": False}) or True
         contas2 = [{"id": "acc_p", "usuario": "pablo_fontenele88"}, {"id": "acc_t", "usuario": "tenkitermodasceara"}] if z.get("duas") else ([z["conta"]] if z["conta"] else [])
+        if body.get("diagnostico") or body.get("testar"):
+            if body.get("testar"): z["ult"] = "2026-10-27T21:20:00Z"
+            return J({"ok": True, "aviso": {"existe": True, "ativo": not z.get("desligado"), "esteServidor": True, "contaCerta": True, "eventos": ["message.received", "message.sent"]}, "teste": {"enviado": True, "codigo": 200} if body.get("testar") else None, "entregas": [{"em": "2026-10-27T21:10:00Z", "evento": "message.received", "situacao": "failed", "codigo": 404, "erro": "Not Found", "teste": False}], "logsDisponiveis": True, "ultimoRecebido": {"em": "2026-10-27T20:57:52Z", "res": "ok", "evento": "message.sent"}}) or True
         if body.get("listar"): return J({"ok": True, "configurada": True, "conta": z["conta"], "contas": contas2}) or True
         if body.get("escolher"):
             esc = next((c for c in contas2 if c["id"] == body["escolher"]), None)
