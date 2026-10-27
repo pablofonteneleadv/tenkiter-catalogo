@@ -2,7 +2,22 @@ plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
 android {
     namespace 'br.com.tenkitermodas.mensagens'
     compileSdk 35
-    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 1; versionName '1.0.0' }
+    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 2; versionName '2.0.0' }
+    buildFeatures { buildConfig true }
+    def shared = new File(rootDir.parentFile, 'common.js').text
+    def loginApi = (shared =~ /API_URL_PADRAO="([^"]+)"/)[0][1]
+    def workerApi = (shared =~ /INSTAGRAM_URL="([^"]+)"/)[0][1]
+    defaultConfig {
+        buildConfigField 'String', 'LOGIN_URL', '"' + loginApi + '"'
+        buildConfigField 'String', 'WORKER_URL', '"' + workerApi + '"'
+    }
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            ['https.proxyHost','https.proxyPort','http.proxyHost','http.proxyPort','javax.net.ssl.trustStore','javax.net.ssl.trustStorePassword'].each { key -> if(System.getProperty(key)) systemProperty key,System.getProperty(key) }
+            systemProperty 'robolectric.dependency.repo.url','https://repo.maven.apache.org/maven2'
+        }
+    }
     signingConfigs {
         release {
             if (System.getenv('TK_ANDROID_KEYSTORE')) {
@@ -13,11 +28,15 @@ android {
             }
         }
     }
-    buildTypes { release { signingConfig signingConfigs.release; minifyEnabled false } }
+    buildTypes { release { signingConfig signingConfigs.release; minifyEnabled false; vcsInfo.include = false } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = '17' }
 }
 dependencies {
     implementation 'com.onesignal:OneSignal:5.10.2'
+    implementation 'androidx.work:work-runtime-ktx:2.10.0'
+    implementation 'androidx.core:core-ktx:1.15.0'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.14.1'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
 }

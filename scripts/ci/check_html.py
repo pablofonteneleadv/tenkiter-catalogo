@@ -12,6 +12,7 @@ Sai com código 1 se qualquer página falhar.
 import os
 import re
 import sys
+import subprocess
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -26,6 +27,17 @@ CONFLITO = re.compile(r"^(<{7}|={7}|>{7})", re.M)
 
 
 def paginas():
+    # Relatórios de build Android são ignorados pelo Git, não páginas do site.
+    try:
+        nomes = subprocess.check_output(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.html"],
+            cwd=RAIZ, stderr=subprocess.DEVNULL,
+        )
+        for nome in sorted(set(nomes.split(b"\0")) - {b""}):
+            yield os.path.join(RAIZ, os.fsdecode(nome))
+        return
+    except (OSError, subprocess.CalledProcessError):
+        pass  # também funciona quando executado fora de um checkout Git
     for base, dirs, arquivos in os.walk(RAIZ):
         dirs[:] = [d for d in dirs if d not in {".git", "node_modules", "__pycache__"}]
         for nome in sorted(arquivos):

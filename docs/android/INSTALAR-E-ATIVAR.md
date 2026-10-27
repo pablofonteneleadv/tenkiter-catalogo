@@ -1,14 +1,14 @@
-# TENKiTER Mensagens — Android 1.0.0
+# TENKiTER Mensagens — Android 2.0.0
 
-APK assinado para Android 8 ou superior. O aplicativo abre o módulo Mensagens e o botão Site abre o navegador, permitindo alternar entre atendimento e catálogo. Usa o login e as permissões já existentes: atualmente o módulo exige `gerir_acessos` (Admin total). Instalar o APK não concede novas permissões.
+APK assinado para Android 8 ou superior. A caixa principal é nativa e abre as conversas salvas no aparelho. O menu ⋮ → Site da loja abre o navegador; Completo abre as ferramentas de atendimento do site. Veja [APP-2.0.md](APP-2.0.md) e [PUBLICAR-VERSAO.md](PUBLICAR-VERSAO.md). Usa o login e as permissões já existentes: atualmente o módulo exige `gerir_acessos` (Admin total). Instalar o APK não concede novas permissões.
 
 ## Instalar
 
-1. Baixe `TENKiTER-Mensagens-1.0.0.apk` no celular.
-2. Abra o arquivo e autorize a instalação por esse navegador/gerenciador de arquivos, quando o Android pedir.
-3. Entre com a conta autorizada. O login do navegador não é copiado automaticamente para o app.
-4. Use Site para abrir o catálogo no navegador. Voltar retorna da conversa para a lista; na lista, envia o app para segundo plano.
-5. Para sair da conta e parar os avisos no aparelho, use Sair.
+1. Baixe `TENKiTER-Mensagens-2.0.0.apk` no celular.
+2. Instale sobre a versão anterior, sem desinstalar; autorize a instalação por esse navegador/gerenciador quando o Android pedir.
+3. Entre com a conta autorizada para fazer a primeira sincronização. Login alternativo/recuperação pelo site continua disponível.
+4. Use ⋮ → Site da loja para abrir o catálogo. Voltar retorna da conversa para a lista; na lista, envia o app para segundo plano.
+5. Para sair da conta, apagar o banco local e parar os avisos, use ⋮ → Sair da conta.
 
 ## Preparar Firebase e OneSignal (uma vez)
 
@@ -20,7 +20,7 @@ APK assinado para Android 8 ou superior. O aplicativo abre o módulo Mensagens e
 6. Este APK usa o SDK nativo do OneSignal: **não precisa incorporar google-services.json nem recompilar só por configurar FCM no OneSignal**. A configuração remota precisa estar no mesmo App ID acima.
 7. No OneSignal, Settings → Keys & IDs → crie/copiei uma **App API Key**, limitada ao aplicativo da TENKiTER. Não use Organization API Key.
 8. No site: Gestão → Outras ferramentas → Conexões → **Aplicativo Android · Mensagens**. Cole a App API Key e toque Salvar chave. O servidor confere a chave com uma consulta; isso não envia mensagem.
-9. No APK, toque Avisos → Ativar e aceite a permissão Android. Aguarde a inscrição e entre na conta. Se configurou FCM depois de instalar, feche/abra o app e use Avisos novamente.
+9. No APK, toque ⋮ → Avisos → Ativar e aceite a permissão Android. Aguarde a inscrição e entre na conta. Se configurou FCM depois de instalar, feche/abra o app e use Avisos novamente.
 
 ## Conferir entrega
 
@@ -31,7 +31,7 @@ APK assinado para Android 8 ou superior. O aplicativo abre o módulo Mensagens e
 5. Repita com a tela bloqueada e depois com o app removido dos recentes. **Forçar parada nas configurações Android impede avisos até abrir o aplicativo novamente.** Em aparelhos com economia agressiva, permita execução/notificações em segundo plano conforme a configuração do fabricante.
 6. Teste Sair: o SDK é desinscrito no aparelho e o vínculo é removido do servidor. Uma conta sem permissão não deve acessar a caixa nem receber novos avisos.
 
-A primeira versão avisa mensagens **individuais recebidas**, não respostas enviadas, mensagens históricas ou grupos. Conversas de grupo continuam disponíveis no app. O registro do aparelho é renovado ao abrir o app; após 30 dias sem revalidar a sessão, deixa de ser elegível para envio. Cada envio verifica a sessão/permissão no servidor, com o cache de sessão de até dois minutos já utilizado pelo módulo.
+O servidor avisa mensagens **individuais recebidas**, não respostas enviadas, mensagens históricas ou grupos. Conversas de grupo continuam disponíveis no app. O registro do aparelho é renovado ao abrir o app; após 30 dias sem revalidar a sessão, deixa de ser elegível para envio. Cada envio verifica a sessão/permissão no servidor, com o cache de sessão de até dois minutos já utilizado pelo módulo.
 
 ## O que foi e o que ainda não foi validado
 
@@ -43,10 +43,12 @@ APK release compilado e assinatura conferida. Caixa de mensagens, teclado com vi
 
 Package: `br.com.tenkitermodas.mensagens`. A atualização precisa usar a mesma assinatura. A chave e sua senha foram guardadas no backup privado da loja; não ficam no código nem no APK. O workflow manual `APK Android` exige os GitHub Secrets `ANDROID_KEYSTORE_B64` e `ANDROID_KEYSTORE_PASSWORD`, que ainda precisam ser cadastrados por alguém com permissão de administrar os secrets. O ambiente desta sessão não conseguiu cadastrá-los.
 
-## Abertura e cache (site 7.31.0)
+## Histórico: abertura e cache no APK 1.0 (site 7.31.0)
 
 O APK 1.0.0 recebe esta melhoria pela página publicada, sem reinstalar. A abertura não carrega mais o catálogo inteiro, categorias e estatísticas: Produtos carrega apenas ao abrir a gaveta. Lista e resumo de atendimento carregam em paralelo.
 
 Depois de um acesso autorizado, ficam salvas no aparelho as últimas listas e até 80 mensagens das conversas consultadas (até dez consultas, teto de 500 mil caracteres, validade de 24 horas). Anexos e URLs de mídia não são salvos. Ao reabrir, o sistema pode mostrar essa cópia enquanto atualiza; responder e demais gravações ficam bloqueados nessa conversa até confirmação do servidor. Sair e recusa de acesso limpam as cópias. O cache pertence à conta e sessão que o criou.
 
 Isto não é um aplicativo inteiramente offline: carregar a página e validar o login ainda dependem da rede. A notificação imediata significa que o servidor inicia o envio na chegada; a latência final depende da Wafly/Meta, OneSignal, FCM, conexão e Android.
+
+Na 2.0.0, prevalece o banco nativo descrito em APP-2.0.md. São sete testes Android Robolectric (telas/teclado, banco, credenciais, sincronização, descarte após logout, envio idempotente e manifesto), lint e compilação release. Ainda depende de teste físico para confirmar entrega FCM, recuperação após remover dos recentes e fluxo de instalação no aparelho.

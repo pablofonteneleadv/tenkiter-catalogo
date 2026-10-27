@@ -25,7 +25,7 @@ jobs:
           gradle-version: '8.10.2'
       - name: Compilar APK de teste do PR
         if: github.event_name == 'pull_request'
-        run: gradle -p android :app:assembleDebug --console plain
+        run: gradle -p android :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --console plain
       - name: Compilar com a assinatura preservada
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -43,5 +43,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: TENKiTER-Mensagens-Android
-          path: android/app/build/outputs/apk/**/*.apk
+          path: |
+            android/app/build/outputs/apk/**/*.apk
+            android/app/build/reports/native-ui/**
+            android/app/build/test-results/testDebugUnitTest/**
           retention-days: 90
