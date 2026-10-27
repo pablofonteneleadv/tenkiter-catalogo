@@ -43,6 +43,7 @@ with sync_playwright() as p:
     chk("chave certa sem Instagram: guarda e diz que falta conectar", "falta conectar" in pg.inner_text("#cx-zr-status") and "conecte o Instagram" in pg.inner_text("#cx-zr-msg"))
     pg.fill("#cx-zr-key", CHAVE); pg.click("[data-cx=zr-guardar]"); pg.wait_for_timeout(500)
     chk("chave certa: mostra o Instagram conectado e limpa o campo", "@tenkitermodasceara" in pg.inner_text("#cx-zr-status") and pg.input_value("#cx-zr-key") == "")
+    chk("mostra que as mensagens do Direct estão ligadas", "mensagens do Direct ligadas" in pg.inner_text("#cx-zr-status") and "Mensagens → Instagram" in pg.inner_text("#cx-zr-msg"), [pg.inner_text("#cx-zr-status"), pg.inner_text("#cx-zr-msg")])
     chk("a chave não aparece na tela nem no armazenamento do aparelho", CHAVE not in pg.content() and CHAVE not in pg.evaluate("JSON.stringify(localStorage)+JSON.stringify(sessionStorage)"))
     axe(pg, "Conexões com Zernio"); foto(pg, "02-conectado-390.png")
     chk("sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth<=innerWidth"))

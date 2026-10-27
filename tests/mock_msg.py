@@ -121,7 +121,7 @@ def tratar(route, path, method, body, s):
         return J({"ok": bool(c), "celular": cel}) or True
     if path == "/msg/zernio/config":
         z = s.setdefault("zernio", {"chave": "", "conta": None, "posts": []})
-        if method == "GET": return J({"ok": True, "configurada": bool(z["chave"]), "conta": z["conta"], "conferidaEm": ""}) or True
+        if method == "GET": return J({"ok": True, "configurada": bool(z["chave"]), "conta": z["conta"], "conferidaEm": "", "avisoLigado": bool(z["chave"] and z["conta"]), "ultimoAviso": None}) or True
         z["posts"].append(body)
         if body.get("apagar"): z["chave"] = ""; z["conta"] = None; return J({"ok": True, "configurada": False}) or True
         contas2 = [{"id": "acc_p", "usuario": "pablo_fontenele88"}, {"id": "acc_t", "usuario": "tenkitermodasceara"}] if z.get("duas") else ([z["conta"]] if z["conta"] else [])
@@ -134,7 +134,7 @@ def tratar(route, path, method, body, s):
         if len(k) < 20 or " " in k: return J({"ok": False, "erro": "Cole a chave de API completa do Zernio (Settings → API Keys)."}, 400) or True
         if k.startswith("ruim"): return J({"ok": False, "erro": "O Zernio recusou essa chave. Confira se copiou a chave inteira em Settings → API Keys."}, 400) or True
         z["chave"] = k; z["conta"] = None if k.startswith("semig") else {"id": "acc_1", "usuario": "tenkitermodasceara"}
-        return J({"ok": True, "configurada": True, "conta": z["conta"], "conferidaEm": agora()}) or True
+        return J({"ok": True, "configurada": True, "conta": z["conta"], "conferidaEm": agora(), "aviso": {"ok": True} if z["conta"] else None}) or True
     if path.startswith("/msg/contatos/"):
         c = s.setdefault("contatos", {"ligada": False, "conta": "", "backup": None, "relatorio": None, "pedidos": []})
         c["pedidos"].append((path, body))

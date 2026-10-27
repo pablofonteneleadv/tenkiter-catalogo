@@ -104,6 +104,7 @@ async function iniciar(env) {
   /* v2.13: histórico de encerramentos (motivo, quando e por quem): base das métricas e, depois, do termômetro de cada cliente */
   try {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_tmp (r TEXT PRIMARY KEY, n TEXT DEFAULT '', f TEXT DEFAULT '[]', m TEXT DEFAULT '[]')").run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_zernio_conv (contato TEXT PRIMARY KEY, conversa TEXT NOT NULL, em TEXT NOT NULL)").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_plano (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, dados TEXT NOT NULL)").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_fila (chave TEXT PRIMARY KEY, fone TEXT NOT NULL, nome TEXT DEFAULT '', canal TEXT DEFAULT '', em TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'pendente', tentativas INTEGER DEFAULT 0, erro TEXT DEFAULT '', r TEXT DEFAULT '')").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_encerramento (id INTEGER PRIMARY KEY AUTOINCREMENT, conversa_id INTEGER NOT NULL, canal TEXT NOT NULL, pessoa TEXT DEFAULT '', contato TEXT DEFAULT '', motivo TEXT NOT NULL, em TEXT NOT NULL, por TEXT DEFAULT '')").run();
@@ -2588,7 +2589,7 @@ async function gravarMensagem_(env, canal, m) {
     } catch (e) { /* o eco já existe: segue o caminho normal */ }
   }
   let story = { post: 0, aprox: 0 };
-  if (m.ctxTipo === 'story' && !saida) { try { story = await resolverStory_(env, canal, m.em); } catch (e) { /* sem a imagem do story: a tela mostra só o aviso */ } }
+  if (m.ctxTipo === 'story' && !saida) { if (m.ctxPost) story = { post: Number(m.ctxPost) || 0, aprox: 0 }; else { try { story = await resolverStory_(env, canal, m.em); } catch (e) { /* sem a imagem do story: a tela mostra só o aviso */ } } }
   const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em, midia_chave, midia_mime, midia_seg, midia_url, ctx_tipo, ctx_ref, ctx_post, ctx_aprox, ctx_chave, autor_nome, autor_fone, autor_lid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t, m.midiaChave || '', String(m.midiaMime || '').slice(0, 80), Number(m.midiaSeg) || 0, m.midiaUrl || '', m.ctxTipo || '', m.ctxRef || '', story.post, story.aprox, m.ctxChave || '', m.autorNome || '', m.autorFone || '', m.autorLid || '').run();
   if (!r.meta || r.meta.changes !== 1) return false;
   const quem = m.grupo && m.direcao === 'entrada' ? (m.autorNome || (m.autorFone ? '+' + m.autorFone : '')) : '';
@@ -2939,8 +2940,103 @@ async function enviarInstagram_(env, conv, mensagem) {
     return { ok: false, erro: 'O Instagram recusou a mensagem agora. Tente de novo em instantes.' };
   } catch (e) { return { ok: false, incerto: true, erro: 'Sem confirmação do Instagram. Confira no app antes de tentar de novo.' }; }
 }
-async function enviarTextoInstagram_(env, conv, texto) { return enviarInstagram_(env, conv, { text: texto }); }
-async function enviarMidiaInstagram_(env, conv, anexo) { return enviarInstagram_(env, conv, { attachment: { type: ({ 'imagem': 'image', 'vídeo': 'video', 'áudio': 'audio' })[anexo.tipo], payload: { url: anexo.url } } }); }
+async function enviarTextoInstagram_(env, conv, texto) { const z = await zernioCfg_(env); if (z) return enviarZernio_(env, z, conv, { message: texto }); return enviarInstagram_(env, conv, { text: texto }); }
+async function enviarMidiaInstagram_(env, conv, anexo) {
+  const tipo = ({ 'imagem': 'image', 'vídeo': 'video', 'áudio': 'audio' })[anexo.tipo], z = await zernioCfg_(env);
+  if (z) return enviarZernio_(env, z, conv, { attachmentUrl: anexo.url, attachmentType: tipo });
+  return enviarInstagram_(env, conv, { attachment: { type: tipo, payload: { url: anexo.url } } });
+}
+/* ---- v2.18: Instagram Direct pelo Zernio (API oficial da Meta pelo app aprovado deles) ----
+ * Recebe: /wh/zernio/<segredo> com assinatura HMAC-SHA256 (X-Zernio-Signature); responde 200 na hora e grava em segundo plano.
+ * Envia: POST /v1/inbox/conversations/{conversa}/messages; depois de 24 h, tenta de novo com HUMAN_AGENT (resposta digitada por pessoa, até 7 dias). */
+const ZERNIO_API_ = 'https://zernio.com/api/v1';
+async function zernioCfg_(env) {
+  const chave = await cfgGet(env, 'zernio_chave'); let conta = null;
+  try { conta = JSON.parse((await cfgGet(env, 'zernio_conta')) || 'null'); } catch (e) { conta = null; }
+  return chave && conta && conta.id ? { chave: chave, conta: conta } : null;
+}
+async function zernioApi_(chave, metodo, caminho, corpo, limiteMs) {
+  try {
+    const r = await fetch(ZERNIO_API_ + caminho, { method: metodo, signal: AbortSignal.timeout(limiteMs || 15000), headers: { Authorization: 'Bearer ' + chave, Accept: 'application/json', 'Content-Type': 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined });
+    return { ok: r.ok, status: r.status, j: await r.json().catch(() => null) };
+  } catch (e) { return { ok: false, status: 0, j: null }; }
+}
+/** Liga (ou atualiza) o aviso de mensagens do Zernio para este servidor, só para o Instagram escolhido. */
+async function ligarAvisoZernio_(env, origem, z) {
+  let seg = await cfgGet(env, 'zernio_wh_segredo');
+  if (!seg) { const a = new Uint8Array(32); crypto.getRandomValues(a); seg = Array.from(a, (x) => x.toString(16).padStart(2, '0')).join(''); await cfgSet(env, 'zernio_wh_segredo', seg); }
+  const corpo = { name: 'TENKiTER Mensagens', url: origem + '/wh/zernio/' + (await msgSegredo_(env)), secret: seg, events: ['message.received', 'message.sent'], accountIds: [z.conta.id], isActive: true };
+  const id = await cfgGet(env, 'zernio_wh_id');
+  let r = id ? await zernioApi_(z.chave, 'PUT', '/webhooks/settings', Object.assign({ webhookId: id }, corpo)) : null;
+  if (!r || !r.ok) r = await zernioApi_(z.chave, 'POST', '/webhooks/settings', corpo);
+  if (!r.ok) return { ok: false, erro: 'O Zernio não aceitou ligar o aviso de mensagens agora (HTTP ' + r.status + '). Toque em "Salvar e conferir" de novo.' };
+  const wid = r.j && r.j.webhook && r.j.webhook._id; if (wid) await cfgSet(env, 'zernio_wh_id', String(wid));
+  await cfgSet(env, 'zernio_wh_em', agora());
+  return { ok: true };
+}
+async function hmacHex_(segredo, texto) {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(segredo), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(texto))), (x) => x.toString(16).padStart(2, '0')).join('');
+}
+async function rotaZernio_(env, req, url, ctx) {
+  const resp = (s, o) => new Response(JSON.stringify(o), { status: s, headers: { 'Content-Type': 'application/json' } });
+  await iniciar(env);
+  if (!igualConst_(url.pathname.split('/')[3] || '', await msgSegredo_(env))) return resp(404, { ok: false });
+  const seg = await cfgGet(env, 'zernio_wh_segredo'), corpo = await req.text();
+  if (!seg) return resp(503, { ok: false });
+  const assin = String(req.headers.get('X-Zernio-Signature') || req.headers.get('X-Late-Signature') || '').toLowerCase();
+  if (!assin || !igualConst_(assin, await hmacHex_(seg, corpo))) { await cfgSet(env, 'msg_ult_zernio', JSON.stringify({ em: agora(), res: 'assinatura' })); return resp(401, { ok: false }); }
+  let b = null; try { b = JSON.parse(corpo); } catch (e) { return resp(400, { ok: false }); }
+  await cfgSet(env, 'msg_ult_zernio', JSON.stringify({ em: agora(), res: 'ok', evento: String((b && b.event) || '').slice(0, 40) }));
+  if (b && (b.event === 'message.received' || b.event === 'message.sent')) { const t = processarEventoZernio_(env, b).catch(() => {}); if (ctx && ctx.waitUntil) ctx.waitUntil(t); else await t; }
+  return resp(200, { ok: true });
+}
+const ZERNIO_TIPO_ = { image: 'imagem', video: 'vídeo', audio: 'áudio', file: 'documento', sticker: 'figurinha', share: 'compartilhamento' };
+async function processarEventoZernio_(env, b) {
+  const z = await zernioCfg_(env), msg = (b && b.message) || {}; if (!z || msg.platform !== 'instagram') return false;
+  const contaEv = b.account && (b.account.accountId || b.account.id); if (contaEv && String(contaEv) !== z.conta.id) return false;
+  if (await msgPausado_(env, 'instagram')) return false;
+  const entrada = msg.direction === 'incoming', cid = String(msg.conversationId || '').slice(0, 120), snd = msg.sender || {};
+  let contato = '';
+  if (entrada) { contato = String(snd.id || '').slice(0, 80); if (contato && cid) await env.DB.prepare('INSERT INTO msg_zernio_conv (contato, conversa, em) VALUES (?, ?, ?) ON CONFLICT(contato) DO UPDATE SET conversa=excluded.conversa, em=excluded.em').bind(contato, cid, agora()).run(); }
+  else if (cid) { const x = await env.DB.prepare('SELECT contato FROM msg_zernio_conv WHERE conversa=?').bind(cid).first(); contato = x ? x.contato : ''; }
+  if (!contato) return false;
+  const a0 = Array.isArray(msg.attachments) && msg.attachments[0] ? msg.attachments[0] : null;
+  const ot = a0 ? String(a0.originalType || '') : '', tipoA = a0 ? String(a0.type || '') : '';
+  const tipo = !a0 ? 'texto' : ot === 'story_mention' ? 'menção em story' : (ZERNIO_TIPO_[tipoA] || 'anexo');
+  const mime = { imagem: 'image/jpeg', 'vídeo': 'video/mp4', 'áudio': 'audio/mp4', 'menção em story': 'image/jpeg' }[tipo] || '';
+  const m = { extId: String(msg.platformMessageId || msg.id || '').slice(0, 200), contato: contato, nome: entrada ? String(snd.name || (snd.username ? '@' + snd.username : '')).slice(0, 80) : '', grupo: 0,
+    direcao: entrada ? 'entrada' : 'saida', tipo: tipo, texto: String(msg.text || '').slice(0, MSG_TEXTO_MAX), em: msg.sentAt && !isNaN(Date.parse(msg.sentAt)) ? new Date(msg.sentAt).toISOString() : agora(),
+    midiaUrl: mime && a0 && /^https:\/\//i.test(String(a0.url || '')) ? String(a0.url) : '', midiaMime: mime, midiaSeg: 0, ctxTipo: '', ctxRef: '', ctxUrl: '', ctxPost: 0 };
+  if (!m.extId) return false;
+  if (entrada && cid) {      // resposta a story: o aviso não traz, a lista de mensagens traz storyReply (link vence ~24 h: a mídia é copiada agora)
+    const r = await zernioApi_(z.chave, 'GET', '/inbox/conversations/' + encodeURIComponent(cid) + '/messages?accountId=' + encodeURIComponent(z.conta.id) + '&limit=10&sortOrder=desc', null, 8000);
+    const lista = r.ok && r.j && Array.isArray(r.j.messages) ? r.j.messages : [];
+    const mm = lista.find((x) => x && (String(x.id) === m.extId || String(x.id) === String(msg.id)));
+    const sr = mm && mm.storyReply;
+    if (sr) {
+      m.ctxTipo = 'story'; m.ctxUrl = /^https:\/\//i.test(String(sr.storyUrl || '')) ? String(sr.storyUrl) : '';
+      if (sr.storyId) { const po = await env.DB.prepare("SELECT id FROM postagem WHERE ig_id=? AND status='publicado' LIMIT 1").bind(String(sr.storyId)).first(); if (po) { m.ctxPost = Number(po.id) || 0; m.ctxUrl = ''; } }
+    }
+  }
+  try { await prepararMidia_(env, 'instagram', m); } catch (e) { /* a mídia é conforto */ }
+  return gravarMensagem_(env, 'instagram', m);
+}
+async function enviarZernio_(env, z, conv, corpo) {
+  const x = await env.DB.prepare('SELECT conversa FROM msg_zernio_conv WHERE contato=?').bind(conv.contato).first();
+  if (!x) return { ok: false, erro: 'Esta conversa ainda não chegou pelo Zernio. Responda pelo app do Instagram; quando o cliente escrever de novo, ela passa a sair por aqui.' };
+  const caminho = '/inbox/conversations/' + encodeURIComponent(x.conversa) + '/messages', base = Object.assign({ accountId: z.conta.id }, corpo);
+  let r = await zernioApi_(z.chave, 'POST', caminho, base, 40000);
+  const texto = JSON.stringify(r.j || {});
+  if (!r.ok && r.status >= 400 && r.status < 500 && /24|window|outside|janela/i.test(texto)) r = await zernioApi_(z.chave, 'POST', caminho, Object.assign({ messagingType: 'MESSAGE_TAG', messageTag: 'HUMAN_AGENT' }, base), 40000);
+  const id = r.j && r.j.data && (r.j.data.messageId || (Array.isArray(r.j.data.messageIds) && r.j.data.messageIds[0]));
+  if (r.ok && id) return { ok: true, extId: String(id) };
+  if (r.ok) return { ok: false, incerto: true, erro: 'O Zernio respondeu sem confirmar o envio. Confira no Instagram antes de tentar de novo.' };
+  if (r.status === 401 || r.status === 403) return { ok: false, erro: 'O Zernio não aceitou a chave. Confira em Conexões → Instagram Direct · Zernio.' };
+  if (r.status === 0 || r.status >= 500) return { ok: false, incerto: true, erro: 'Sem confirmação do Zernio. Confira no Instagram antes de tentar de novo.' };
+  if (/24|window|outside|7 days|7-day/i.test(JSON.stringify(r.j || {}))) return { ok: false, erro: 'Já passaram mais de 7 dias da última mensagem deste cliente. O Instagram não deixa responder por aqui.' };
+  return { ok: false, erro: 'O Instagram recusou a mensagem (HTTP ' + r.status + '). Tente de novo em instantes.' };
+}
 const MSG_ANEXO_RE_ = /^out\/\d{6}\/[a-f0-9]{24}\.[a-z0-9]{2,4}$/;
 const MSG_TIPO_DE_MIME_ = (mime) => /^image\/(jpeg|png|webp)$/.test(mime) ? 'imagem' : /^video\/(mp4|quicktime)$/.test(mime) ? 'vídeo' : /^audio\//.test(mime) ? 'áudio' : '';
 async function responderMensagem_(env, whats, d) {
@@ -3287,6 +3383,7 @@ export default {
     const url = new URL(req.url), h = cors(env, req), J = (c, s) => resp(c, s, h);
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
+    if (url.pathname.indexOf('/wh/zernio/') === 0 && req.method === 'POST') { try { return await rotaZernio_(env, req, url, ctx); } catch (e) { return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
     if (url.pathname.indexOf('/wh/') === 0) { try {
       const resposta = await rotaWebhookMensagens_(env, req, url);
       if (req.method === 'POST' && resposta.ok) {
@@ -3356,11 +3453,17 @@ export default {
       if (p === '/msg/zernio/config' && req.method === 'GET') {
         const conta = await cfgGet(env, 'zernio_conta');
         let c = null; try { c = conta ? JSON.parse(conta) : null; } catch (e) { c = null; }
-        return J({ ok: true, configurada: !!(await cfgGet(env, 'zernio_chave')), conta: c, conferidaEm: (await cfgGet(env, 'zernio_conferida')) || '' });
+        let ult = null; try { ult = JSON.parse((await cfgGet(env, 'msg_ult_zernio')) || 'null'); } catch (e) { ult = null; }
+        return J({ ok: true, configurada: !!(await cfgGet(env, 'zernio_chave')), conta: c, conferidaEm: (await cfgGet(env, 'zernio_conferida')) || '', avisoLigado: !!(await cfgGet(env, 'zernio_wh_id')), ultimoAviso: ult });
       }
       if (p === '/msg/zernio/config' && req.method === 'POST') {
         const d = await req.json().catch(() => ({}));
-        if (d.apagar === true) { for (const k of ['zernio_chave', 'zernio_conta', 'zernio_conferida']) await cfgSet(env, k, null); return J({ ok: true, configurada: false }); }
+        if (d.apagar === true) {
+          const zc = await cfgGet(env, 'zernio_chave'), wid = await cfgGet(env, 'zernio_wh_id');
+          if (zc && wid) await zernioApi_(zc, 'DELETE', '/webhooks/settings?webhookId=' + encodeURIComponent(wid), null, 10000);
+          for (const k of ['zernio_chave', 'zernio_conta', 'zernio_conferida', 'zernio_wh_id', 'zernio_wh_em']) await cfgSet(env, k, null);
+          return J({ ok: true, configurada: false });
+        }
         /* v2.17: com mais de um Instagram no Zernio, a tela lista e o gestor escolhe (listar / escolher usam a chave já guardada) */
         const usarGuardada = d.listar === true || typeof d.escolher === 'string';
         const chave = usarGuardada ? String((await cfgGet(env, 'zernio_chave')) || '') : String(d.chave || '').trim();
@@ -3376,7 +3479,9 @@ export default {
         else conta = contas.find((x) => /tenkiter/i.test(x.usuario)) || contas[0] || null;      // prefere o Instagram da loja quando há mais de um
         if (!usarGuardada) await cfgSet(env, 'zernio_chave', chave);
         if (d.listar !== true) { await cfgSet(env, 'zernio_conta', conta ? JSON.stringify(conta) : null); await cfgSet(env, 'zernio_conferida', agora()); }
-        return J({ ok: true, configurada: true, conta: conta, contas: contas, conferidaEm: await cfgGet(env, 'zernio_conferida') });
+        let aviso = null;
+        if (d.listar !== true && conta) aviso = await ligarAvisoZernio_(env, url.origin, { chave: chave, conta: conta });
+        return J({ ok: true, configurada: true, conta: conta, contas: contas, aviso: aviso, avisoLigado: !!(await cfgGet(env, 'zernio_wh_id')), conferidaEm: await cfgGet(env, 'zernio_conferida') });
       }
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {

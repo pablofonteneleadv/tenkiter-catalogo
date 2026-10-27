@@ -614,12 +614,14 @@
       '<label for="cx-zr-key">Zernio · chave de API</label><input id="cx-zr-key" type="password" autocomplete="new-password" placeholder="Cole a chave aqui">' +
       '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="zr-guardar">Salvar e conferir</button><button type="button" class="cx-btn cx-sec" data-cx="zr-apagar">Remover chave</button></div>' +
       '<p id="cx-zr-msg" class="cx-msg" role="status"></p>' +
-      '<p class="g-nota">O servidor confere a chave no Zernio sem enviar nenhuma mensagem. Guardar a chave ainda não liga o Direct no painel: isso entra na próxima versão.</p></div>';
+      '<p class="g-nota">O servidor confere a chave no Zernio sem enviar nenhuma mensagem e liga o aviso de mensagens novas: as DMs do Instagram aparecem em Mensagens → Instagram, com a foto do story que o cliente respondeu.</p></div>';
   }
   function textoZernio_(r) {
     if (!r || !r.ok) return erroTxt(r);
     if (!r.configurada) return 'Nenhuma chave guardada.';
-    return r.conta && r.conta.usuario ? '✓ Chave guardada · Instagram conectado: @' + r.conta.usuario : '✓ Chave guardada · falta conectar o Instagram no Zernio';
+    if (!(r.conta && r.conta.usuario)) return '✓ Chave guardada · falta conectar o Instagram no Zernio';
+    const ult = r.ultimoAviso && r.ultimoAviso.em ? ' · último aviso ' + fmtData(r.ultimoAviso.em) : '';
+    return '✓ Instagram conectado: @' + r.conta.usuario + (r.avisoLigado ? ' · mensagens do Direct ligadas' + ult : ' · mensagens do Direct ainda desligadas: toque em “Salvar e conferir”');
   }
   async function conferirZernio_() {
     const el = $('cx-zr-status'); if (!el) return;
@@ -654,7 +656,12 @@
     if (!apagar && !input.value.trim()) return msg('cx-zr-msg', 'Cole a chave do Zernio antes de salvar.', 'erro');
     msg('cx-zr-msg', apagar ? 'Removendo…' : 'Conferindo a chave no Zernio…', '');
     const r = await igWorker_('/msg/zernio/config', 'POST', apagar ? { apagar: true } : { chave: input.value.trim() });
-    if (r && r.ok) { input.value = ''; msg('cx-zr-msg', apagar ? 'Chave removida.' : (r.conta ? 'Chave conferida e guardada no servidor.' + (r.contas && r.contas.length > 1 ? ' Há mais de um Instagram: confira qual é o da loja abaixo.' : '') : 'Chave guardada. Agora conecte o Instagram no Zernio e toque em “Salvar e conferir” de novo.'), 'ok'); conferirZernio_(); }
+    if (r && r.ok) {
+      input.value = '';
+      const avisoTxt = r.aviso ? (r.aviso.ok ? ' As mensagens do Direct passam a chegar em Mensagens → Instagram.' : ' ' + r.aviso.erro) : '';
+      msg('cx-zr-msg', apagar ? 'Chave removida e aviso de mensagens desligado.' : (r.conta ? 'Chave conferida e guardada no servidor.' + avisoTxt + (r.contas && r.contas.length > 1 ? ' Há mais de um Instagram: confira qual é o da loja abaixo.' : '') : 'Chave guardada. Agora conecte o Instagram no Zernio e toque em “Salvar e conferir” de novo.'), r.aviso && !r.aviso.ok ? 'erro' : 'ok');
+      conferirZernio_();
+    }
     else msg('cx-zr-msg', erroTxt(r), 'erro');
   }
   async function conferirMobile_(){const el=$('cx-mobile-status');if(!el)return;const r=await igWorker_('/msg/mobile/config','GET');el.textContent=r&&r.ok?(r.configurada?'Chave de envio salva. Falta conferir a entrega no aparelho.':'Chave de envio Android ainda não configurada.'):erroTxt(r);}

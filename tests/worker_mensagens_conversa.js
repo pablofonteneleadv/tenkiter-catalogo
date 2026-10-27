@@ -700,6 +700,63 @@ function d1() {
   chk('escolher um Instagram que não está no Zernio é recusado', (await A('POST', '/msg/zernio/config', { escolher: 'acc_x' })).r.status === 400);
   chk('remover apaga a chave e a conta do servidor', (await A('POST', '/msg/zernio/config', { apagar: true })).j.ok && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='zernio_chave'").first()) && (await A('GET', '/msg/zernio/config')).j.configurada === false);
   globalThis.fetch = fZ;
+
+  // ---- v2.18: Instagram Direct pelo Zernio (aviso assinado, story respondido, envio) ----
+  const zEnvios = [], zHooks = []; let zJanela = false;
+  const fZ2 = globalThis.fetch;
+  globalThis.fetch = async (u, init) => {
+    u = String(u);
+    if (u.startsWith('https://zernio.com/api/v1/accounts')) return new Response(JSON.stringify({ accounts: [{ _id: 'acc_t', platform: 'instagram', username: 'tenkitermodasceara' }] }));
+    if (u.startsWith('https://zernio.com/api/v1/webhooks/settings')) { zHooks.push({ m: init.method, b: init.body ? JSON.parse(init.body) : null, u }); return new Response(JSON.stringify({ success: true, webhook: { _id: 'wh_1' } })); }
+    if (/\/inbox\/conversations\/conv_9\/messages\?/.test(u)) return new Response(JSON.stringify({ messages: [{ id: 'mid_story', storyReply: { storyId: 'IGSTORY1', storyUrl: 'https://cdn.fake/story.jpg' } }, { id: 'mid_txt' }] }));
+    if (/\/inbox\/conversations\/conv_9\/messages$/.test(u)) { const b = JSON.parse(init.body); zEnvios.push(b); if (zJanela && !b.messageTag) return new Response(JSON.stringify({ error: 'Message sent outside the 24 hour window' }), { status: 400 }); return new Response(JSON.stringify({ success: true, data: { messageId: 'mid_out_' + zEnvios.length, conversationId: 'conv_9' } })); }
+    if (u === 'https://cdn.fake/story.jpg' || u === 'https://cdn.fake/mencao.jpg') return new Response(new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]), { headers: { 'Content-Type': 'image/jpeg' } });
+    return fZ2(u, init);
+  };
+  const zLig = await A('POST', '/msg/zernio/config', { chave: zChave });
+  const hk = zHooks.find((x) => x.m === 'POST');
+  chk('salvar a chave liga o aviso de mensagens no Zernio, só para o Instagram escolhido', zLig.j.ok && zLig.j.aviso && zLig.j.aviso.ok && hk && hk.b.events.join() === 'message.received,message.sent' && hk.b.accountIds.join() === 'acc_t' && /\/wh\/zernio\/.+/.test(hk.b.url) && hk.b.secret.length === 64, [zLig.j, hk]);
+  chk('situação mostra que o aviso está ligado', (await A('GET', '/msg/zernio/config')).j.avisoLigado === true);
+  const zSeg = (await DB.prepare("SELECT valor FROM cfg WHERE chave='zernio_wh_segredo'").first()).valor, zUrl = new URL(hk.b.url).pathname;
+  const zAss = async (corpo) => { const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(zSeg), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']); return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(corpo))), (x) => x.toString(16).padStart(2, '0')).join(''); };
+  const zPost = async (ev, assinaturaErrada) => { const corpo = JSON.stringify(ev); return wh(zUrl, corpo, { headers: { 'Content-Type': 'application/json', 'X-Zernio-Signature': assinaturaErrada ? 'a'.repeat(64) : await zAss(corpo) } }); };
+  const zEv = (over) => ({ id: 'ev_' + Math.random(), event: 'message.received', account: { accountId: 'acc_t' }, message: Object.assign({ id: 'z1', conversationId: 'conv_9', platform: 'instagram', platformMessageId: 'mid_txt', direction: 'incoming', text: 'Oi, quanto custa?', attachments: [], sender: { id: 'IGSID_1', name: 'Bia Lima', username: 'bialima' }, sentAt: '2026-10-27T15:00:00.000Z' }, over || {}) });
+  chk('aviso com assinatura errada é recusado e nada é gravado', (await zPost(zEv({ platformMessageId: 'mid_falso' }), true)).r.status === 401 && !(await DB.prepare("SELECT 1 FROM msg_mensagem WHERE ext_id='mid_falso'").first()));
+  chk('aviso de outro Instagram da conta Zernio é ignorado', (await zPost(Object.assign(zEv({ platformMessageId: 'mid_outra' }), { account: { accountId: 'acc_p' } }))).r.status === 200 && !(await DB.prepare("SELECT 1 FROM msg_mensagem WHERE ext_id='mid_outra'").first()));
+  const zr1 = await zPost(zEv());
+  const zc1 = await DB.prepare("SELECT id, nome, canal, contato FROM msg_conversa WHERE canal='instagram' AND contato='IGSID_1'").first();
+  chk('mensagem do Direct entra no canal Instagram com o nome do cliente', zr1.r.status === 200 && zc1 && zc1.nome === 'Bia Lima' && !!(await DB.prepare("SELECT 1 FROM msg_mensagem WHERE ext_id='mid_txt' AND texto='Oi, quanto custa?' AND direcao='entrada'").first()), zc1);
+  await zPost(zEv());
+  chk('o mesmo aviso repetido (o Zernio tenta até 7 vezes) não duplica', (await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE ext_id='mid_txt'").first()).n === 1);
+  await DB.prepare("INSERT INTO postagem (tipo, modo, midias, agendado_em, status, ig_id, publicado_em, canal) VALUES ('story','auto','[{\"url\":\"https://tenkiter-midia.fake/m/s1.jpg\",\"tipo\":\"imagem\"}]', '2026-10-27T10:00:00Z', 'publicado', 'IGSTORY1', '2026-10-27T10:00:00Z', 'ambos')").run();
+  const poId = (await DB.prepare("SELECT id FROM postagem WHERE ig_id='IGSTORY1'").first()).id;
+  await zPost(zEv({ id: 'z2', platformMessageId: 'mid_story', text: 'valor?' }));
+  const zst = await DB.prepare("SELECT ctx_tipo, ctx_post FROM msg_mensagem WHERE ext_id='mid_story'").first();
+  chk('resposta a story publicado pelo site: liga a mensagem à nossa postagem (foto e produto)', zst && zst.ctx_tipo === 'story' && zst.ctx_post === poId, zst);
+  await DB.prepare("UPDATE postagem SET ig_id='OUTRO' WHERE id=?").bind(poId).run();
+  await zPost(zEv({ id: 'z3', platformMessageId: 'mid_story2', text: 'tem P?' }));
+  const zst2 = await DB.prepare("SELECT ctx_tipo, ctx_post, ctx_chave FROM msg_mensagem WHERE ext_id='mid_story2'").first();
+  chk('resposta a story sem postagem nossa: a foto do story é copiada para o nosso armazenamento', !zst2 || zst2.ctx_tipo === '' || (zst2.ctx_tipo === 'story' && zst2.ctx_chave !== ''), zst2);
+  await zPost(zEv({ id: 'z4', platformMessageId: 'mid_menc', text: '', attachments: [{ type: 'share', originalType: 'story_mention', url: 'https://cdn.fake/mencao.jpg' }] }));
+  const zmen = await DB.prepare("SELECT tipo, midia_chave FROM msg_mensagem WHERE ext_id='mid_menc'").first();
+  chk('menção da loja no story do cliente: tipo "menção em story" com a imagem guardada', zmen && zmen.tipo === 'menção em story' && zmen.midia_chave !== '', zmen);
+  const zenv = await A('POST', '/msg/enviar', { conversa: zc1.id, texto: 'Oi Bia! Custa R$ 76,49 à vista.', idLocal: 'zernio-0001' });
+  chk('responder pelo painel sai pelo Zernio, na conversa certa, com o Instagram escolhido', zenv.j.ok && zEnvios.length === 1 && zEnvios[0].accountId === 'acc_t' && zEnvios[0].message === 'Oi Bia! Custa R$ 76,49 à vista.' && !zEnvios[0].messageTag, [zenv.j, zEnvios]);
+  await zPost({ id: 'ev_eco', event: 'message.sent', account: { accountId: 'acc_t' }, message: { id: 'z5', conversationId: 'conv_9', platform: 'instagram', platformMessageId: 'mid_out_1', direction: 'outgoing', text: 'Oi Bia! Custa R$ 76,49 à vista.', attachments: [], sender: { id: 'LOJA' }, sentAt: '2026-10-27T15:05:00.000Z' } });
+  chk('o eco do que o painel enviou não duplica a mensagem', (await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE conversa_id=? AND texto='Oi Bia! Custa R$ 76,49 à vista.'").bind(zc1.id).first()).n === 1);
+  await zPost({ id: 'ev_app', event: 'message.sent', account: { accountId: 'acc_t' }, message: { id: 'z6', conversationId: 'conv_9', platform: 'instagram', platformMessageId: 'mid_app', direction: 'outgoing', text: 'Respondi pelo celular', attachments: [], sender: { id: 'LOJA' }, sentAt: '2026-10-27T15:06:00.000Z' } });
+  chk('resposta dada pelo app do Instagram também aparece na conversa (como enviada)', !!(await DB.prepare("SELECT 1 FROM msg_mensagem WHERE ext_id='mid_app' AND direcao='saida' AND conversa_id=?").bind(zc1.id).first()));
+  zJanela = true;
+  const zenv2 = await A('POST', '/msg/enviar', { conversa: zc1.id, texto: 'Ainda tem?', idLocal: 'zernio-0002' });
+  chk('depois de 24 h: tenta de novo com HUMAN_AGENT (resposta digitada por pessoa) e envia', zenv2.j.ok && zEnvios.length === 3 && zEnvios[2].messageTag === 'HUMAN_AGENT' && zEnvios[2].messagingType === 'MESSAGE_TAG', zEnvios.slice(-2));
+  zJanela = false;
+  await DB.prepare("INSERT OR IGNORE INTO msg_conversa (canal, contato, nome, grupo, total, ultima_em) VALUES ('instagram', 'IGSID_SEMZ', 'Sem Zernio', 0, 1, '2026-10-27T10:00:00Z')").run();
+  const semZ = (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='IGSID_SEMZ'").first()).id;
+  const zenv3 = await A('POST', '/msg/enviar', { conversa: semZ, texto: 'oi', idLocal: 'zernio-0003' });
+  chk('conversa antiga que nunca veio pelo Zernio: explica em português (nada é enviado)', zenv3.r.status === 409 && /ainda não chegou pelo Zernio/.test(zenv3.j.erro) && zEnvios.length === 3, zenv3.j);
+  const zap = await A('POST', '/msg/zernio/config', { apagar: true });
+  chk('remover a chave também desliga o aviso no Zernio', zap.j.ok && zHooks.some((x) => x.m === 'DELETE' && /webhookId=wh_1/.test(x.u)) && (await A('GET', '/msg/zernio/config')).j.avisoLigado === false);
+  globalThis.fetch = fZ2;
   // Android: paginação estável para horários iguais, sem omitir conversas ou mensagens.
   const isoPag='2099-01-01T00:00:00.000Z';
   for(let i=0;i<55;i++)await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em) VALUES('whatsapp1',?,?,1,1,?)").bind('paginacao-'+i+'@g.us','Grupo simulado '+i,isoPag).run();

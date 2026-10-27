@@ -6,6 +6,16 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.37.0 — Instagram Direct nas Mensagens pelo Zernio — 2026-10-27
+
+- Ao salvar a chave (ou escolher o Instagram) em Conexões, o servidor liga no Zernio o aviso de mensagens novas, só para o Instagram da loja, com senha própria (assinatura HMAC-SHA256).
+- As DMs entram em Mensagens → Instagram com o nome do cliente. Fotos, vídeos, áudios e a menção da loja no story do cliente são copiados para o nosso armazenamento.
+- **Story respondido:** o servidor busca no Zernio qual story o cliente respondeu. Se foi publicado pelo site, a conversa mostra a nossa foto (e o produto, quando escolhido); se não, copia a imagem do story antes de o link vencer.
+- Responder pelo painel sai pelo Zernio, na conversa certa. Passadas 24 h, tenta de novo com a marcação de atendimento humano da Meta (vale até 7 dias, só para resposta digitada por pessoa). Respostas dadas pelo app do Instagram também aparecem na conversa.
+- Conexões mostra "mensagens do Direct ligadas" e a hora do último aviso; remover a chave desliga o aviso no Zernio.
+- Worker: rota `/wh/zernio/<segredo>` (responde na hora e grava em segundo plano), tabela `msg_zernio_conv` e envio por `POST /v1/inbox/conversations/{id}/messages`.
+- Service worker renovado (tk-3.38.21).
+
 ## 7.36.0 — Google Contatos: limpeza aprovada e cadastro automático "TM Cliente" — 2026-10-27
 
 - No relatório, o botão **"Aplicar a limpeza aprovada"** faz tudo em 5 etapas, com a faixa de progresso, a tela acesa e o aviso antes de sair:
