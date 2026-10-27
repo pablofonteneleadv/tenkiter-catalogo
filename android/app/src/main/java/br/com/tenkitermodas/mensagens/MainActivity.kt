@@ -27,22 +27,25 @@ class MainActivity:Activity(),InboxView.Events {
     private lateinit var repo:NativeRepository
     private lateinit var inbox:InboxView
     private lateinit var updater:AppUpdater
+    private lateinit var tools:NativeTools
+    @Volatile private var peeking=false;@Volatile private var openGeneration=0;@Volatile private var activityVisible=false;@Volatile private var nativeVisible=true;private var pendingPeek=true;private var queryJob:Job?=null
     private lateinit var root:FrameLayout
     private var web:WebView?=null
     private var webPanel:LinearLayout?=null
     private var chooser:ValueCallback<Array<Uri>>?=null
     private var audioRequest:PermissionRequest?=null
     private var conversation=0L;private var online=false;private var syncing=false;private var sending=false
-    private var webTarget=0L;private var seededSession="";private var refreshSeq=0;private var pendingClick=0L
+    private var displayOwner="";private var webTarget=0L;private var seededSession="";private var refreshSeq=0;private var pendingClick=0L
     private val handler=Handler(Looper.getMainLooper())
     private val home="https://tenkitermodas.com.br/admin.html?app=mensagens"
     private val ticker=object:Runnable{override fun run(){if(repo.store.auth()!=null&&!sending)sync();handler.postDelayed(this,8000)}}
     private val changes=object:BroadcastReceiver(){override fun onReceive(c:Context?,i:Intent?){render()}}
-    private val clicks=object:INotificationClickListener{override fun onClick(event:INotificationClickEvent){runOnUiThread{pendingClick=event.notification.additionalData?.optLong("conversa",0)?:0;if(::inbox.isInitialized){conversation=pendingClick;pendingClick=0;showNative();render();sync()}}}}
+    private val clicks=object:INotificationClickListener{override fun onClick(event:INotificationClickEvent){runOnUiThread{pendingClick=event.notification.additionalData?.optLong("conversa",0)?:0;pendingPeek=event.result.actionId!="abrir";openGeneration++;if(::inbox.isInitialized){peeking=pendingPeek;conversation=pendingClick;pendingClick=0;showNative();render();sync()}}}}
     private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
     private fun trusted(url:String?)=try{val u=Uri.parse(url);u.scheme=="https"&&u.host=="tenkitermodas.com.br"&&u.path=="/admin.html"}catch(_:Exception){false}
     override fun onCreate(state:Bundle?){
-        super.onCreate(state);repo=NativeRepository.get(this);conversation=state?.getLong("conversation",0)?:0
+        super.onCreate(state);repo=NativeRepository.get(this);conversation=state?.getLong("conversation",0)?:0;peeking=state?.getBoolean("peeking",false)?:false
+        java.io.File(cacheDir,"received").deleteRecursively();java.io.File(cacheDir,"outgoing").deleteRecursively()
         updater=AppUpdater(this,scope)
         root=FrameLayout(this).apply{setBackgroundColor(Color.WHITE)}
         WindowCompat.setDecorFitsSystemWindows(window,false)
@@ -50,10 +53,10 @@ class MainActivity:Activity(),InboxView.Events {
             val bars=i.getInsets(WindowInsetsCompat.Type.systemBars());val ime=i.getInsets(WindowInsetsCompat.Type.ime())
             v.setPadding(bars.left,bars.top,bars.right,maxOf(bars.bottom,ime.bottom));i
         }
-        inbox=InboxView(this,this);root.addView(inbox,FrameLayout.LayoutParams(-1,-1));setContentView(root)
+        inbox=InboxView(this,this);tools=NativeTools(this,scope,repo,{conversation},{online&&!peeking},{inbox.insert(it)},{render()},{select(it)},{full(it)},{ids,action->inbox.selectionDone();if(conversation in ids&&action in listOf("nao_lidas","encerrar"))back()});root.addView(inbox,FrameLayout.LayoutParams(-1,-1));setContentView(root)
         ContextCompat.registerReceiver(this,changes,IntentFilter(NativeRepository.CHANGED),ContextCompat.RECEIVER_NOT_EXPORTED)
         OneSignal.Notifications.addClickListener(clicks)
-        if(pendingClick>0){conversation=pendingClick;pendingClick=0}
+        if(pendingClick>0){peeking=pendingPeek;conversation=pendingClick;pendingClick=0}
         render()
         if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync()}
     }
@@ -65,8 +68,9 @@ class MainActivity:Activity(),InboxView.Events {
                 Snapshot(a,canRead,if(canRead)repo.store.conversations()else emptyList(),if(canRead&&id>0)repo.store.messages(id)else emptyList(),if(canRead&&id>0)repo.store.pending(id)else emptyList())
             }
             if(seq!=refreshSeq||id!=conversation)return@launch
+            if(displayOwner!=(data.a?.owner?:"")){val previous=displayOwner;tools.close();displayOwner=data.a?.owner?:"";if(previous.isNotBlank()&&data.a!=null){openGeneration++;conversation=0;peeking=false;render();return@launch}}
             if(data.a==null){online=false;conversation=0}
-            inbox.render(data.a,data.read,data.chats,if(data.read)conversation else 0,data.messages,data.pending,online,repo.status.ifBlank{if(data.a==null)"Entre para sincronizar este aparelho"else "Conversas salvas · verificando conexão…"})
+            inbox.render(data.a,data.read,data.chats,if(data.read)conversation else 0,data.messages,data.pending,online,repo.status.ifBlank{if(data.a==null)"Entre para sincronizar este aparelho"else "Conversas salvas · verificando conexão…"},peeking)
         }
     }
     private data class Snapshot(val a:NativeAuth?,val read:Boolean,val chats:List<JSONObject>,val messages:List<JSONObject>,val pending:List<JSONObject>)
@@ -81,17 +85,18 @@ class MainActivity:Activity(),InboxView.Events {
     }
     override fun sync(){
         if(syncing||repo.store.auth()==null)return
-        syncing=true;val focus=conversation
+        syncing=true;val focus=conversation;val generation=openGeneration;val sessionGeneration=repo.store.generation
         scope.launch{
             var again=false
-            try{val ok=withContext(Dispatchers.IO){repo.sync(focus)};again=focus!=conversation;online=ok&&!again;if(ok&&focus>0&&!again)withContext(Dispatchers.IO){repo.markRead(focus)}}
+            try{val ok=withContext(Dispatchers.IO){repo.sync(focus)};again=focus!=conversation||generation!=openGeneration;online=ok&&!again;if(ok&&focus>0&&!again&&!peeking)withContext(Dispatchers.IO){repo.markRead(focus){openGeneration==generation&&repo.store.generation==sessionGeneration&&!peeking&&activityVisible&&nativeVisible}}}
             finally{syncing=false;render();if(again)sync()}
         }
     }
-    override fun select(id:Long){conversation=id;online=false;render();sync()}
-    override fun back(){conversation=0;render()}
+    override fun select(id:Long){openGeneration++;peeking=false;conversation=id;online=false;showNative();sync()}
+    override fun peek(id:Long){openGeneration++;peeking=true;conversation=id;online=false;showNative();sync()}
+    override fun back(){openGeneration++;peeking=false;conversation=0;render()}
     override fun send(id:Long,text:String):Boolean{
-        if(!online||sending||id!=conversation)return false
+        if(!online||peeking||sending||id!=conversation)return false
         sending=true
         scope.launch{
             try{withContext(Dispatchers.IO){repo.reply(id,text)}}
@@ -101,23 +106,40 @@ class MainActivity:Activity(),InboxView.Events {
         return true
     }
     override fun retry(id:Long,key:String,text:String){
-        if(sending||id!=conversation||repo.store.auth()==null)return;sending=true
+        if(peeking||sending||id!=conversation||repo.store.auth()==null)return;sending=true
         scope.launch{try{withContext(Dispatchers.IO){repo.reply(id,text,key)}}catch(_:Exception){}finally{sending=false;render()}}
+    }
+    override fun tool(id:Long,action:String){if(id==conversation)tools.show(id,action)}
+    override fun bulk(ids:Set<Long>,action:String){tools.batch(ids,action)}
+    override fun older(id:Long){val generation=repo.store.generation;scope.launch{try{withContext(Dispatchers.IO){repo.older(id)};render()}catch(e:AccessRevoked){if(repo.store.generation==generation)repo.logout();render()}catch(e:Exception){inbox.status(e.message?:"Não foi possível buscar o histórico.")}}}
+    override fun media(id:Long){tools.media(id)}
+    override fun context(id:Long){tools.media(id,true)}
+    override fun search(query:String,closed:Boolean){
+        queryJob?.cancel();if(query.isBlank()&&!closed){inbox.searchResults(null);return}
+        val generation=repo.store.generation
+        queryJob=scope.launch{
+            delay(450)
+            try{val ids=withContext(Dispatchers.IO){repo.find(query,closed)};if(repo.store.generation==generation){inbox.searchResults(ids);render()}}
+            catch(e:CancellationException){throw e}
+            catch(e:AccessRevoked){if(repo.store.generation==generation)repo.logout();render()}
+            catch(_:Exception){inbox.status("Sem conexão para buscar no servidor · mostrando as conversas salvas")}
+        }
     }
     override fun update(){updater.check()}
     override fun menu(anchor:View){
         PopupMenu(this,anchor).apply{
-            listOf("Sincronizar conversas","Atualizar aplicativo","Site da loja","Avisos","Atendimento completo","Sair da conta").forEach{menu.add(it)}
+            listOf("Selecionar conversas","Sincronizar conversas","Atualizar aplicativo","Site da loja","Avisos","Atendimento completo","Sair da conta").forEach{menu.add(it)}
             setOnMenuItemClickListener{when(it.title.toString()){
-                "Sincronizar conversas"->sync();"Atualizar aplicativo"->updater.check();"Site da loja"->external("https://tenkitermodas.com.br/")
+                "Selecionar conversas"->{back();inbox.beginSelection()};"Sincronizar conversas"->sync();"Atualizar aplicativo"->updater.check();"Site da loja"->external("https://tenkitermodas.com.br/")
                 "Avisos"->notificationSettings();"Atendimento completo"->full(conversation);"Sair da conta"->confirmLogout()
             };true};show()
         }
     }
     private fun confirmLogout(){AlertDialog.Builder(this).setTitle("Sair da conta?").setMessage("As conversas salvas neste aparelho serão removidas e os avisos serão desativados.").setPositiveButton("Sair"){_,_->
         OneSignal.User.pushSubscription.optOut()
+        queryJob?.cancel()
         val a=repo.store.auth();val subscription=OneSignal.User.pushSubscription.id
-        repo.logout();online=false;conversation=0;inbox.reset();web?.destroy();web=null;webPanel?.let{root.removeView(it)};webPanel=null;seededSession="";showNative();render()
+        tools.close();repo.logout();online=false;conversation=0;inbox.reset();web?.destroy();web=null;webPanel?.let{root.removeView(it)};webPanel=null;seededSession="";showNative();render()
         if(a!=null&&subscription.isNotBlank())scope.launch(Dispatchers.IO){runCatching{NativeApi().removeSubscription(a,subscription)}}
         CookieManager.getInstance().removeAllCookies(null);WebStorage.getInstance().deleteAllData()
     }.setNegativeButton("Cancelar",null).show()}
@@ -125,7 +147,7 @@ class MainActivity:Activity(),InboxView.Events {
         .setPositiveButton("Ativar"){_,_->scope.launch{OneSignal.Notifications.requestPermission(true);OneSignal.User.pushSubscription.optIn();sync()}}
         .setNeutralButton("Configurações"){_,_->startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName))}.setNegativeButton("Voltar",null).show()}
     override fun full(id:Long){
-        webTarget=id
+        nativeVisible=false;webTarget=id
         if(web==null)createWeb()
         inbox.visibility=View.GONE;webPanel?.visibility=View.VISIBLE
         val w=web?:return
@@ -137,7 +159,7 @@ class MainActivity:Activity(),InboxView.Events {
         top.addView(Button(this).apply{text="← Conversas";isAllCaps=false;minimumHeight=dp(48);setOnClickListener{showNative();importWebSession()}},LinearLayout.LayoutParams(0,dp(48),1f))
         top.addView(Button(this).apply{text="Recarregar";isAllCaps=false;minimumHeight=dp(48);setOnClickListener{web?.reload()}},LinearLayout.LayoutParams(-2,dp(48)));panel.addView(top)
         val w=WebView(this);web=w
-        w.settings.apply{javaScriptEnabled=true;domStorageEnabled=true;allowFileAccess=false;allowContentAccess=true;javaScriptCanOpenWindowsAutomatically=false;setSupportMultipleWindows(true);mediaPlaybackRequiresUserGesture=true;mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;userAgentString+=" TenkiterAndroid/2.0"}
+        w.settings.apply{javaScriptEnabled=true;domStorageEnabled=true;allowFileAccess=false;allowContentAccess=true;javaScriptCanOpenWindowsAutomatically=false;setSupportMultipleWindows(true);mediaPlaybackRequiresUserGesture=true;mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;userAgentString+=" TenkiterAndroid/2.1"}
         CookieManager.getInstance().setAcceptThirdPartyCookies(w,false)
         w.webViewClient=object:WebViewClient(){
             override fun shouldOverrideUrlLoading(v:WebView,r:WebResourceRequest):Boolean{if(!r.isForMainFrame)return false;val u=r.url.toString();if(trusted(u))return false;if(r.hasGesture())external(u);return true}
@@ -172,17 +194,17 @@ class MainActivity:Activity(),InboxView.Events {
             }
         }
     }
-    private fun showNative(){webPanel?.visibility=View.GONE;inbox.visibility=View.VISIBLE;render()}
+    private fun showNative(){nativeVisible=true;webPanel?.visibility=View.GONE;inbox.visibility=View.VISIBLE;render()}
     private fun external(address:String){val u=Uri.parse(address);if(u.scheme !in listOf("https","http","tel","mailto"))return;runCatching{startActivity(Intent(Intent.ACTION_VIEW,u))}}
-    override fun onResume(){super.onResume();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
-    override fun onPause(){handler.removeCallbacks(ticker);super.onPause()}
-    override fun onDestroy(){handler.removeCallbacks(ticker);runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();web?.destroy();super.onDestroy()}
-    override fun onSaveInstanceState(out:Bundle){out.putLong("conversation",conversation);super.onSaveInstanceState(out)}
+    override fun onResume(){super.onResume();activityVisible=true;if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
+    override fun onPause(){activityVisible=false;if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
+    override fun onDestroy(){handler.removeCallbacks(ticker);runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();web?.destroy();super.onDestroy()}
+    override fun onSaveInstanceState(out:Bundle){out.putLong("conversation",conversation);out.putBoolean("peeking",peeking);super.onSaveInstanceState(out)}
     @Deprecated("Legacy back API") override fun onBackPressed(){
         val w=web
         if(webPanel?.visibility==View.VISIBLE&&w!=null&&trusted(w.url)){w.evaluateJavascript("window.TKMobileBack ? window.TKMobileBack() : false"){r->if(r!="true"){showNative();importWebSession()}}}
         else if(conversation>0)back()else moveTaskToBack(true)
     }
-    @Deprecated("Activity result API") override fun onActivityResult(code:Int,result:Int,data:Intent?){super.onActivityResult(code,result,data);if(code==100){chooser?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result,data));chooser=null}}
-    override fun onRequestPermissionsResult(code:Int,p:Array<out String>,r:IntArray){super.onRequestPermissionsResult(code,p,r);if(code==101){val request=audioRequest;audioRequest=null;if(r.firstOrNull()==PackageManager.PERMISSION_GRANTED)request?.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))else request?.deny()}}
+    @Deprecated("Activity result API") override fun onActivityResult(code:Int,result:Int,data:Intent?){super.onActivityResult(code,result,data);if(code==201&&result==RESULT_OK)data?.data?.let{tools.picked(it)};if(code==100){chooser?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result,data));chooser=null}}
+    override fun onRequestPermissionsResult(code:Int,p:Array<out String>,r:IntArray){super.onRequestPermissionsResult(code,p,r);if(code==202)tools.audioPermission(r.firstOrNull()==PackageManager.PERMISSION_GRANTED);if(code==101){val request=audioRequest;audioRequest=null;if(r.firstOrNull()==PackageManager.PERMISSION_GRANTED)request?.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))else request?.deny()}}
 }

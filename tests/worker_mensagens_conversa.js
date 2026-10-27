@@ -588,5 +588,18 @@ function d1() {
   chk('desligar apaga endereço e chave do servidor', deslP.j.ok && !(await A('GET', '/msg/contatos/situacao')).j.ligada && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='contatos_chave'").first()));
   globalThis.fetch = fPonte;
   globalThis.fetch = f5;
+  // Android: paginação estável para horários iguais, sem omitir conversas ou mensagens.
+  const isoPag='2099-01-01T00:00:00.000Z';
+  for(let i=0;i<55;i++)await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em) VALUES('whatsapp1',?,?,1,1,?)").bind('paginacao-'+i+'@g.us','Grupo simulado '+i,isoPag).run();
+  const pg1=(await A('GET','/msg/conversas?canal=whatsapp1&tipo=grupo')).j.conversas;
+  const lastPg=pg1.at(-1),pg2=(await A('GET','/msg/conversas?canal=whatsapp1&tipo=grupo&antes='+encodeURIComponent(lastPg.ultima_em)+'&antesId='+lastPg.id)).j.conversas;
+  const allPg=[...pg1,...pg2].filter(c=>c.ultima_em===isoPag);
+  chk('paginação de conversas com mesmo horário não perde registros',allPg.length===55&&new Set(allPg.map(c=>c.id)).size===55);
+  chk('API inclui grupo para o filtro nativo',allPg.every(c=>c.grupo===1));
+  const cidPag=allPg[0].id;
+  for(let i=0;i<105;i++)await DB.prepare("INSERT INTO msg_mensagem(conversa_id,canal,ext_id,direcao,tipo,texto,enviada_em) VALUES(?,'whatsapp1',?,'entrada','texto','teste',?)").bind(cidPag,'pag-msg-'+i,isoPag).run();
+  const mp1=(await A('GET','/msg/mensagens?conversa='+cidPag)).j.mensagens;
+  const oldestPg=mp1[0],mp2=(await A('GET','/msg/mensagens?conversa='+cidPag+'&antes='+encodeURIComponent(oldestPg.enviada_em)+'&antesId='+oldestPg.id)).j.mensagens;
+  chk('paginação do histórico com mesmo horário não omite mensagens',mp1.length===100&&mp2.length===5&&new Set([...mp1,...mp2].map(m=>m.id)).size===105);
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });

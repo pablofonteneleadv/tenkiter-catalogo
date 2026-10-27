@@ -6,6 +6,16 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.33.0 — APK 2.1: atendimento nativo e notificações informativas — 2026-10-27
+
+- Lista nativa com canais e contagens locais, grupos/individuais, não lidas, falta responder com tempo de espera, nos dois WhatsApp e encerradas. Contato formatado, indicação de respostas da loja e seleção de até 50 conversas por menu ou toque longo.
+- Espiar mantém a conversa não lida; só a abertura normal em primeiro plano confirma leitura, respeitando a configuração de leitura no celular do canal. Ações em lote usam as rotas existentes de leitura, encerramento com motivo e reabertura.
+- Produtos e seleções com preços compatíveis com o catálogo, respostas rápidas editáveis para toda a equipe e assinatura conforme configuração do site.
+- Fotos/contextos abrem no app; outros anexos no visualizador Android. Envio de foto/vídeo/áudio e gravação AAC com revisão, sem reenvio automático. URLs de mídia e credenciais não entram no banco local.
+- Notificações com nome, canal, trecho/tipo da mensagem, ações Espiar/Abrir e privacidade de tela bloqueada. Tarefa antiga consulta a mensagem mais recente; notificações de conversas já lidas/encerradas são descartadas.
+- Paginação estável por data+ID e sincronização incremental; primeiro cursor preservado durante a carga inicial. APK 2.1.0/code 4 com a assinatura anterior, disponível pelo atualizador.
+
+
 ## 7.32.1 — APK 2.0.1: caixa de conversas mais clara — 2026-10-27
 
 - Explica a ordem por última mensagem, mostra horário/ontem/data, preserva a ordem temporal também no filtro Não lidas e usa desempate estável por ID.
