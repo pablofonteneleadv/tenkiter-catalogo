@@ -2950,6 +2950,53 @@ async function enviarMidiaInstagram_(env, conv, anexo) {
  * Recebe: /wh/zernio/<segredo> com assinatura HMAC-SHA256 (X-Zernio-Signature); responde 200 na hora e grava em segundo plano.
  * Envia: POST /v1/inbox/conversations/{conversa}/messages; depois de 24 h, tenta de novo com HUMAN_AGENT (resposta digitada por pessoa, até 7 dias). */
 const ZERNIO_API_ = 'https://zernio.com/api/v1';
+/* ---- v2.19: cofre das chaves guardadas NESTE servidor (D1). A senha da conta é conferida pelo Apps Script (abrirCofre, com o freio de
+ * tentativas dele); o código de abertura vale 5 min, fica no KV por pessoa e serve para os dois lados (as chaves do Apps Script e estas). ---- */
+const COFRE_W_ = {
+  zernio: { titulo: 'Zernio — chave da API (Instagram Direct)', ler: async (env) => (await cfgGet(env, 'zernio_chave')) || '' },
+  wafly1: { titulo: 'Wafly 1 — instância e tokens (WhatsApp 1)', ler: async (env) => { const c = await cfgWafly_(env, 1); return c ? 'Instância: ' + c.instance + '\nToken: ' + c.token + '\nClient-Token: ' + c.clientToken : ''; } },
+  wafly2: { titulo: 'Wafly 2 — instância e tokens (WhatsApp 2)', ler: async (env) => { const c = await cfgWafly_(env, 2); return c ? 'Instância: ' + c.instance + '\nToken: ' + c.token + '\nClient-Token: ' + c.clientToken : ''; } },
+  wame: { titulo: 'Wame — chave da instância (Status 2 antigo)', ler: async (env) => (await cfgGet(env, 'wame_status_2')) || '' },
+  gemini: { titulo: 'Gemini — chave da IA (leitura das fotos)', ler: async (env) => (await cfgGet(env, 'gemini_key')) || '' },
+  freeconvert: { titulo: 'FreeConvert — chave da API (vídeos)', ler: async (env) => (await cfgGet(env, 'freeconvert_api_key')) || '' },
+  contatos: { titulo: 'Google Contatos — endereço e chave da ponte', ler: async (env) => { const u = await cfgGet(env, 'contatos_url'), k = await cfgGet(env, 'contatos_chave'); return u && k ? 'Endereço: ' + u + '\nChave: ' + k : ''; } },
+  mobile: { titulo: 'OneSignal — chave de envio do app Android', ler: async (env) => (await cfgGet(env, 'mobile_onesignal_key')) || '' }
+};
+const fimChave_ = (v) => { const t = String(v || '').replace(/\s+/g, ''); return t.length >= 8 ? t.slice(-4) : ''; };
+async function rotasCofreW_(env, req, p, J) {
+  const whats = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20), kv = 'cofre_w:' + whats;
+  if (p === '/cofre/itens' && req.method === 'GET') {
+    const itens = [];
+    for (const [nome, c] of Object.entries(COFRE_W_)) { let v = ''; try { v = await c.ler(env); } catch (e) { v = ''; } itens.push({ nome: nome, titulo: c.titulo, temChave: !!v, fim: fimChave_(v.split('\n').pop()) }); }
+    return J({ ok: true, itens: itens });
+  }
+  if (p === '/cofre/abrir' && req.method === 'POST') {
+    const d = await req.json().catch(() => ({})), senha = String(d.senha == null ? '' : d.senha);
+    if (!senha) return J({ ok: false, erro: 'Digite a senha da sua conta.' }, 400);
+    let j = null;
+    try { const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', signal: AbortSignal.timeout(20000), headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'abrirCofre', whatsapp: whats, sessao: (req.headers.get('X-TK-Sessao') || '').slice(0, 400), senha: senha }) }); j = await r.json(); }
+    catch (e) { return J({ ok: false, erro: 'Não consegui conferir a senha agora. Tente de novo.' }, 503); }
+    if (!j || !j.ok || typeof j.cofre !== 'string') return J({ ok: false, erro: String((j && j.erro) || 'Senha incorreta.').slice(0, 200), bloqueado: !!(j && j.bloqueado), senhaRecusada: true }, 403);
+    const seg = Math.min(300, Math.max(60, Number(j.validoSegundos) || 300));
+    await env.CACHE.put(kv, j.cofre, { expirationTtl: seg });
+    return J({ ok: true, cofre: j.cofre, validoSegundos: seg });
+  }
+  if (p === '/cofre/fechar' && req.method === 'POST') { await env.CACHE.delete(kv); return J({ ok: true }); }
+  if (p === '/cofre/revelar' && req.method === 'POST') {
+    const d = await req.json().catch(() => ({})), item = Object.prototype.hasOwnProperty.call(COFRE_W_, String(d.nome || '')) ? COFRE_W_[d.nome] : null;
+    if (!item) return J({ ok: false, erro: 'Chave desconhecida.' }, 400);
+    const aberto = String((await env.CACHE.get(kv)) || '');
+    if (!aberto || typeof d.cofre !== 'string' || !igualConst_(aberto, d.cofre)) return J({ ok: false, cofreFechado: true, erro: 'O cofre está trancado. Digite sua senha para abrir.' }, 403);
+    const ku = 'cofre_w_usos:' + whats, usos = Number((await env.CACHE.get(ku)) || 0);
+    if (usos >= 30) return J({ ok: false, erro: 'Muitas cópias em pouco tempo. Espere alguns minutos.' }, 429);
+    await env.CACHE.put(ku, String(usos + 1), { expirationTtl: 600 });
+    const valor = await item.ler(env);
+    if (!valor) return J({ ok: false, erro: 'Essa chave ainda não está guardada no servidor.' }, 404);
+    try { await cfgSet(env, 'cofre_ult_' + d.nome, JSON.stringify({ em: agora(), quem: whats.slice(-4) })); } catch (e) { /* registro é conforto */ }
+    return J({ ok: true, nome: d.nome, valor: valor });
+  }
+  return null;
+}
 async function zernioCfg_(env) {
   const chave = await cfgGet(env, 'zernio_chave'); let conta = null;
   try { conta = JSON.parse((await cfgGet(env, 'zernio_conta')) || 'null'); } catch (e) { conta = null; }
@@ -3450,6 +3497,7 @@ export default {
       }
       if(p==='/msg/mobile/subscription' && ['POST','DELETE'].includes(req.method)) return J(await registrarMobile_(env,req));
       /* v2.14: Zernio (Instagram Direct pela API oficial, app já aprovado pela Meta). A chave fica só no D1; a tela recebe só se está ligada e qual Instagram. */
+      if (p.indexOf('/cofre/') === 0) { const rc = await rotasCofreW_(env, req, p, J); if (rc) return rc; }
       if (p === '/msg/zernio/config' && req.method === 'GET') {
         const conta = await cfgGet(env, 'zernio_conta');
         let c = null; try { c = conta ? JSON.parse(conta) : null; } catch (e) { c = null; }

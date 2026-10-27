@@ -47,9 +47,17 @@ with sync_playwright() as p:
     chk("a chave não aparece na tela nem no armazenamento do aparelho", CHAVE not in pg.content() and CHAVE not in pg.evaluate("JSON.stringify(localStorage)+JSON.stringify(sessionStorage)"))
     axe(pg, "Conexões com Zernio"); foto(pg, "02-conectado-390.png")
     chk("sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth<=innerWidth"))
-    alvos = pg.evaluate("[...document.querySelectorAll('[data-cx^=zr-]')].map(b=>Math.round(b.getBoundingClientRect().height))")
+    alvos = pg.evaluate("[...document.querySelectorAll('[data-cx^=zr-]')].filter(b=>b.offsetParent).map(b=>Math.round(b.getBoundingClientRect().height))")
     chk("botões com pelo menos 44 px", all(h >= 44 for h in alvos), alvos)
     chk("com um Instagram só, não aparece a escolha", not pg.locator("#cx-zr-contas").is_visible())
+    chk("aviso ligado: sem o botão 'Ligar mensagens do Direct'", not pg.locator("[data-cx=zr-ligar]").is_visible())
+    Z["zernio"]["semAviso"] = True
+    pg.fill("#cx-zr-key", CHAVE); pg.click("[data-cx=zr-guardar]"); pg.wait_for_timeout(700)
+    chk("chave guardada mas aviso desligado: aparece 'Ligar mensagens do Direct'", pg.locator("[data-cx=zr-ligar]").is_visible())
+    foto(pg, "05-ligar-direct-390.png")
+    n0 = len(Z["zernio"]["posts"]); pg.click("[data-cx=zr-ligar]"); pg.wait_for_timeout(700)
+    chk("ligar usa a chave já guardada (não pede colar de novo)", Z["zernio"]["posts"][n0:] and Z["zernio"]["posts"][n0] == {"escolher": "acc_1"} and "chave" not in str(Z["zernio"]["posts"][n0:]), Z["zernio"]["posts"][n0:])
+    chk("depois de ligar: confirma e o botão some", "Mensagens → Instagram" in pg.inner_text("#cx-zr-msg") and not pg.locator("[data-cx=zr-ligar]").is_visible(), pg.inner_text("#cx-zr-msg"))
     Z["zernio"]["duas"] = True; Z["zernio"]["conta"] = {"id": "acc_p", "usuario": "pablo_fontenele88"}
     pg.fill("#cx-zr-key", CHAVE); pg.click("[data-cx=zr-guardar]"); pg.wait_for_timeout(700)
     chk("com dois Instagram: aparece 'Qual Instagram é o da loja?' com as duas contas", pg.locator("#cx-zr-contas").is_visible() and pg.locator("input[name=cx-zr-conta]").count() == 2 and "Qual Instagram é o da loja?" in pg.inner_text("#cx-zr-contas"))

@@ -66,6 +66,7 @@
       .cx-prim { background: var(--laranja); color: #0d0d0d; font-weight: 800; border: 0; }
       .cx-sec { background: #eee; color: #222; border: 0; font-weight: 700; }
       .cx-perigo { background: #fde3e3; color: #8a1c1c; border: 0; font-weight: 700; }
+      .cx-bloco .cx-btn:disabled { background: #e6e6e6; color: #555; cursor: not-allowed; }
       .cx-linha { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
       .cx-chave-ok { color: #146c43; font-weight: 700; font-size: 0.86rem; }
       .cx-passos { margin: 4px 0 10px; padding-left: 20px; } .cx-passos li { margin: 2px 0; }
@@ -262,7 +263,10 @@
   /* ---------- COFRE (dupla verificação): 1) login de Admin total  2) senha da conta digitada de novo. O código de abertura vive só na memória desta tela. ---------- */
   const cofreBase_ = [['render', 'Render — chave da API', () => status.conexoes.render], ['cloudflare', 'Cloudflare — token', () => status.conexoes.cloudflare],
     ['onesignal', 'OneSignal — chave da organização', () => status.conexoes.onesignal], ['onesignalEnvio', 'OneSignal — chave de envio dos avisos', () => ({ temChave: !!(status.conexoes.onesignal || {}).chaveEnvio, fim: '' })]]
-  const cofreItens_ = () => cofreBase_.concat(status && status.conexoes && status.conexoes.instagram ? [['instagram', 'Instagram — token de acesso', () => status.conexoes.instagram]] : []);
+  /* v7.38: chaves guardadas no servidor das Mensagens (Zernio, Wafly, Wame, Gemini, FreeConvert, ponte dos contatos, Android) entram no mesmo cofre */
+  let cofreW = [];
+  const cofreItens_ = () => cofreBase_.concat(status && status.conexoes && status.conexoes.instagram ? [['instagram', 'Instagram — token de acesso', () => status.conexoes.instagram]] : [])
+    .concat(cofreW.map((x) => ['w:' + x.nome, x.titulo, () => ({ temChave: x.temChave, fim: x.fim })]));
   function desenharCofre() {
     const box = $('cx-cofre'); if (!box || !status) return;
     const aberto = !!cofreCodigo;
@@ -276,16 +280,20 @@
   function trancarCofre_(silencioso) {
     const tinha = !!cofreCodigo;
     cofreCodigo = ''; cofreFimEm = 0; if (cofreTimer) { clearInterval(cofreTimer); cofreTimer = null; }
-    if (tinha) chamar({ action: 'fecharCofre' });
+    if (tinha) { chamar({ action: 'fecharCofre' }); igWorker_('/cofre/fechar', 'POST', {}); }
     if (!silencioso) { desenharCofre(); msg('cx-msg-cofre', 'Cofre trancado.', 'ok'); }
   }
   async function abrirCofre_() {
     const campo = $('cx-cofre-senha'); const senha = campo ? campo.value : '';
     if (!senha) { msg('cx-msg-cofre', 'Digite a senha da sua conta.', 'erro'); return; }
     msg('cx-msg-cofre', 'Conferindo…', '');
-    const r = await chamar({ action: 'abrirCofre', senha: senha });
+    // abre pelo servidor das Mensagens (ele repassa a senha ao Apps Script e guarda o mesmo código 5 min); fora do ar, abre só o do Apps Script
+    let r = await igWorker_('/cofre/abrir', 'POST', { senha: senha });
+    const caiu = !r || (!r.ok && !r.senhaRecusada && !(r.erro && /senha/i.test(r.erro) && !r.semRede));   // senha recusada não tenta de novo (não conta falha em dobro)
+    if (caiu) r = await chamar({ action: 'abrirCofre', senha: senha });
     if (campo) campo.value = '';                                     // a senha não fica no campo
     if (!r || !r.ok) { msg('cx-msg-cofre', erroTxt(r), 'erro'); return; }
+    const it = caiu ? null : await igWorker_('/cofre/itens', 'GET'); cofreW = it && it.ok && Array.isArray(it.itens) ? it.itens : [];
     cofreCodigo = r.cofre; cofreFimEm = Date.now() + (r.validoSegundos || 300) * 1000;
     desenharCofre();
     cofreTimer = setInterval(() => {
@@ -297,7 +305,7 @@
   async function copiarChave_(nome) {
     if (!cofreCodigo) { desenharCofre(); return; }
     msg('cx-msg-cofre', 'Copiando…', '');
-    const r = await chamar({ action: 'revelarConexao', nome: nome, cofre: cofreCodigo });
+    const r = nome.indexOf('w:') === 0 ? await igWorker_('/cofre/revelar', 'POST', { nome: nome.slice(2), cofre: cofreCodigo }) : await chamar({ action: 'revelarConexao', nome: nome, cofre: cofreCodigo });
     if (!r || !r.ok) { if (r && r.cofreFechado) { cofreCodigo = ''; desenharCofre(); } msg('cx-msg-cofre', erroTxt(r), 'erro'); return; }
     let valor = r.valor; r.valor = '';
     const fim = () => msg('cx-msg-cofre', 'Copiada! Cole na conversa e revogue depois no site de origem.', 'ok');
@@ -610,6 +618,7 @@
     return '<div class="cx-bloco"><h3>Instagram Direct · Zernio</h3>' +
       '<p id="cx-zr-status" role="status">Conferindo…</p>' +
       '<div id="cx-zr-contas" hidden></div>' +
+      '<div class="cx-linha" id="cx-zr-ligar" hidden><button type="button" class="cx-btn cx-prim" data-cx="zr-ligar">Ligar mensagens do Direct</button></div>' +
       '<ol class="g-nota cx-passos"><li>Crie a conta em <b>zernio.com</b> (grátis até 2 contas).</li><li>No Zernio, conecte o Instagram da loja (conta Empresa ou Criador).</li><li>Em <b>Settings → API Keys</b>, crie uma chave e cole aqui.</li></ol>' +
       '<label for="cx-zr-key">Zernio · chave de API</label><input id="cx-zr-key" type="password" autocomplete="new-password" placeholder="Cole a chave aqui">' +
       '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="zr-guardar">Salvar e conferir</button><button type="button" class="cx-btn cx-sec" data-cx="zr-apagar">Remover chave</button></div>' +
@@ -621,12 +630,13 @@
     if (!r.configurada) return 'Nenhuma chave guardada.';
     if (!(r.conta && r.conta.usuario)) return '✓ Chave guardada · falta conectar o Instagram no Zernio';
     const ult = r.ultimoAviso && r.ultimoAviso.em ? ' · último aviso ' + fmtData(r.ultimoAviso.em) : '';
-    return '✓ Instagram conectado: @' + r.conta.usuario + (r.avisoLigado ? ' · mensagens do Direct ligadas' + ult : ' · mensagens do Direct ainda desligadas: toque em “Salvar e conferir”');
+    return '✓ Instagram conectado: @' + r.conta.usuario + (r.avisoLigado ? ' · mensagens do Direct ligadas' + ult : ' · mensagens do Direct ainda desligadas: toque em “Ligar mensagens do Direct”');
   }
   async function conferirZernio_() {
     const el = $('cx-zr-status'); if (!el) return;
     const r = await igWorker_('/msg/zernio/config', 'GET');
     el.textContent = textoZernio_(r); el.className = r && r.ok && r.configurada ? 'cx-chave-ok' : 'cx-chave-sem';
+    const lig = $('cx-zr-ligar'); if (lig) { lig.hidden = !(r && r.ok && r.configurada && r.conta && !r.avisoLigado); lig.dataset.conta = r && r.conta ? r.conta.id : ''; }
     if (r && r.ok && r.configurada) { const l = await igWorker_('/msg/zernio/config', 'POST', { listar: true }); desenharContasZernio_(l); } else desenharContasZernio_(null);
   }
   /* mais de um Instagram conectado no Zernio: o gestor escolhe qual é o da loja */
@@ -643,6 +653,14 @@
     });
     const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'cx-btn cx-prim'; bt.dataset.cx = 'zr-escolher'; bt.textContent = 'Usar este Instagram';
     box.append(fs, bt);
+  }
+  /* liga o aviso de mensagens usando a chave já guardada (não precisa colar de novo) */
+  async function ligarDirectZernio_() {
+    const lig = $('cx-zr-ligar'), id = lig ? lig.dataset.conta : ''; if (!id) return;
+    msg('cx-zr-msg', 'Ligando as mensagens do Direct…', '');
+    const r = await igWorker_('/msg/zernio/config', 'POST', { escolher: id });
+    if (r && r.ok && (!r.aviso || r.aviso.ok)) { msg('cx-zr-msg', 'Pronto: as mensagens do Direct passam a chegar em Mensagens → Instagram.', 'ok'); conferirZernio_(); }
+    else msg('cx-zr-msg', (r && r.aviso && r.aviso.erro) || erroTxt(r), 'erro');
   }
   async function escolherZernio_() {
     const sel = document.querySelector('input[name=cx-zr-conta]:checked'); if (!sel) return msg('cx-zr-msg', 'Marque o Instagram da loja.', 'erro');
@@ -673,6 +691,7 @@
     else if (a === 'zr-guardar') configurarZernio_(false);
     else if (a === 'zr-apagar') configurarZernio_(true);
     else if (a === 'zr-escolher') escolherZernio_();
+    else if (a === 'zr-ligar') ligarDirectZernio_();
     else if(a==='mobile-apagar')configurarMobile_(true);
     else if (a === 'fc-guardar') guardarFreeConvert_();
     else if (a === 'fc-apagar') apagarFreeConvert_();
