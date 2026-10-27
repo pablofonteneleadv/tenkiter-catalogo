@@ -121,7 +121,7 @@ def tratar(route, path, method, body, s):
         return J({"ok": bool(c), "celular": cel}) or True
     if path == "/msg/zernio/config":
         z = s.setdefault("zernio", {"chave": "", "conta": None, "posts": []})
-        if method == "GET": return J({"ok": True, "configurada": bool(z["chave"]), "conta": z["conta"], "conferidaEm": "", "avisoLigado": bool(z["chave"] and z["conta"]), "ultimoAviso": None}) or True
+        if method == "GET": return J({"ok": True, "configurada": bool(z["chave"]), "conta": z["conta"], "conferidaEm": "", "avisoLigado": bool(z["chave"] and z["conta"] and not z.get("semAviso")), "ultimoAviso": None}) or True
         z["posts"].append(body)
         if body.get("apagar"): z["chave"] = ""; z["conta"] = None; return J({"ok": True, "configurada": False}) or True
         contas2 = [{"id": "acc_p", "usuario": "pablo_fontenele88"}, {"id": "acc_t", "usuario": "tenkitermodasceara"}] if z.get("duas") else ([z["conta"]] if z["conta"] else [])
@@ -129,7 +129,7 @@ def tratar(route, path, method, body, s):
         if body.get("escolher"):
             esc = next((c for c in contas2 if c["id"] == body["escolher"]), None)
             if not esc: return J({"ok": False, "erro": "Esse Instagram não está conectado no Zernio."}, 400) or True
-            z["conta"] = esc; return J({"ok": True, "configurada": True, "conta": esc, "contas": contas2}) or True
+            z["conta"] = esc; z["semAviso"] = False; return J({"ok": True, "configurada": True, "conta": esc, "contas": contas2}) or True
         k = str(body.get("chave", ""))
         if len(k) < 20 or " " in k: return J({"ok": False, "erro": "Cole a chave de API completa do Zernio (Settings → API Keys)."}, 400) or True
         if k.startswith("ruim"): return J({"ok": False, "erro": "O Zernio recusou essa chave. Confira se copiou a chave inteira em Settings → API Keys."}, 400) or True

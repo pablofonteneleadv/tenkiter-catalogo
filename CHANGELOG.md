@@ -6,6 +6,15 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.38.0 — Cofre mostra também as chaves do servidor das Mensagens — 2026-10-27
+
+- O "Cofre das chaves" (Conexões) passa a listar e copiar as chaves guardadas no servidor das Mensagens: **Zernio**, Wafly 1 e 2 (instância e tokens), Wame, Gemini, FreeConvert, ponte do Google Contatos e chave do aplicativo Android. Mostra só o final de cada uma; a chave continua indo direto para a área de transferência, nunca para a tela.
+- Mesma dupla verificação: o servidor repassa a senha ao Apps Script e usa o mesmo código de abertura de 5 minutos. Senha errada conta uma vez só; com o servidor fora do ar, o cofre abre só com as chaves do Apps Script. Trancar ou fechar a janela tranca os dois.
+- Instagram Direct · Zernio: novo botão **"Ligar mensagens do Direct"** quando a chave e o Instagram já estão guardados mas o aviso de mensagens está desligado. Usa a chave guardada, sem precisar colar de novo.
+- Botão "Copiar" sem chave fica cinza (antes parecia ativo).
+- Worker: rotas `/cofre/itens`, `/cofre/abrir`, `/cofre/revelar` e `/cofre/fechar` (só quem gere acessos; código conferido em tempo constante; até 30 cópias em 10 min; registra quem copiou, sem o valor).
+- Service worker renovado (tk-3.38.22).
+
 ## 7.37.0 — Instagram Direct nas Mensagens pelo Zernio — 2026-10-27
 
 - Ao salvar a chave (ou escolher o Instagram) em Conexões, o servidor liga no Zernio o aviso de mensagens novas, só para o Instagram da loja, com senha própria (assinatura HMAC-SHA256).

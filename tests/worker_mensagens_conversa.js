@@ -757,6 +757,35 @@ function d1() {
   const zap = await A('POST', '/msg/zernio/config', { apagar: true });
   chk('remover a chave também desliga o aviso no Zernio', zap.j.ok && zHooks.some((x) => x.m === 'DELETE' && /webhookId=wh_1/.test(x.u)) && (await A('GET', '/msg/zernio/config')).j.avisoLigado === false);
   globalThis.fetch = fZ2;
+
+  // ---- v7.38: cofre das chaves do servidor (Zernio e outras), aberto pela mesma senha do Apps Script ----
+  const cofreAS = []; const fCof = globalThis.fetch;
+  globalThis.fetch = async (u, init) => {
+    if (String(u).startsWith('https://api.fake') && init && init.body && JSON.parse(init.body).action === 'abrirCofre') { const b = JSON.parse(init.body); cofreAS.push(b); return new Response(JSON.stringify(b.senha === 'senha-certa' ? { ok: true, cofre: 'COD_COFRE_1', validoSegundos: 300 } : { ok: false, erro: 'Senha incorreta.' })); }
+    return fCof(u, init);
+  };
+  await DB.prepare("INSERT INTO cfg (chave, valor) VALUES ('zernio_chave', ?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor").bind(zChave).run();
+  const cIt = await A('GET', '/cofre/itens'), cZ = (cIt.j.itens || []).find((x) => x.nome === 'zernio');
+  chk('cofre lista a chave do Zernio só com o final (nunca a chave)', cIt.j.ok && cZ && cZ.temChave && cZ.fim === zChave.slice(-4) && !JSON.stringify(cIt.j).includes(zChave), cIt.j);
+  chk('cofre lista também Wafly, Wame, Gemini, FreeConvert, ponte dos contatos e Android', ['wafly1', 'wafly2', 'wame', 'gemini', 'freeconvert', 'contatos', 'mobile'].every((n) => cIt.j.itens.some((x) => x.nome === n)));
+  const cGer = await w.fetch(ped('GET', '/cofre/itens', 'tk2.gerente'), env, {});
+  chk('quem não gere acessos não vê o cofre', cGer.status === 403);
+  chk('revelar com o cofre trancado é recusado', (await A('POST', '/cofre/revelar', { nome: 'zernio', cofre: 'qualquer' })).r.status === 403);
+  const cErr = await A('POST', '/cofre/abrir', { senha: 'errada' });
+  chk('senha errada: recusa em português e avisa que foi a senha (o painel não tenta de novo)', cErr.r.status === 403 && cErr.j.senhaRecusada === true && cErr.j.erro === 'Senha incorreta.' && !cErr.j.cofre);
+  chk('a senha vai ao Apps Script com o login de quem pediu', cofreAS.length === 1 && cofreAS[0].whatsapp === '88999990000' && cofreAS[0].sessao === 'tk2.admin');
+  const cAb = await A('POST', '/cofre/abrir', { senha: 'senha-certa' });
+  chk('senha certa: devolve o mesmo código do Apps Script', cAb.j.ok && cAb.j.cofre === 'COD_COFRE_1' && cAb.j.validoSegundos === 300);
+  chk('código errado não revela', (await A('POST', '/cofre/revelar', { nome: 'zernio', cofre: 'COD_ERRADO' })).r.status === 403);
+  chk('nome de chave desconhecido é recusado', (await A('POST', '/cofre/revelar', { nome: '__proto__', cofre: 'COD_COFRE_1' })).r.status === 400);
+  const cRv = await A('POST', '/cofre/revelar', { nome: 'zernio', cofre: 'COD_COFRE_1' });
+  chk('cofre aberto: revela a chave do Zernio e registra quem copiou', cRv.j.ok && cRv.j.valor === zChave && !!(await DB.prepare("SELECT valor FROM cfg WHERE chave='cofre_ult_zernio'").first()));
+  const cVaz = await A('POST', '/cofre/revelar', { nome: 'freeconvert', cofre: 'COD_COFRE_1' });
+  chk('chave que não está guardada: explica em português', cVaz.r.status === 404 && /ainda não está guardada/.test(cVaz.j.erro));
+  await A('POST', '/cofre/fechar', {});
+  chk('trancar: o mesmo código deixa de valer', (await A('POST', '/cofre/revelar', { nome: 'zernio', cofre: 'COD_COFRE_1' })).r.status === 403);
+  globalThis.fetch = fCof;
+  await DB.prepare("DELETE FROM cfg WHERE chave IN ('zernio_chave','cofre_ult_zernio')").run();
   // Android: paginação estável para horários iguais, sem omitir conversas ou mensagens.
   const isoPag='2099-01-01T00:00:00.000Z';
   for(let i=0;i<55;i++)await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em) VALUES('whatsapp1',?,?,1,1,?)").bind('paginacao-'+i+'@g.us','Grupo simulado '+i,isoPag).run();
