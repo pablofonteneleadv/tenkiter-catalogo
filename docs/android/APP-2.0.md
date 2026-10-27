@@ -1,3 +1,5 @@
+> Atualização: veja [APP-2.1.md](APP-2.1.md) para o atendimento nativo atual e as notificações.
+
 # TENKiTER Mensagens 2.0.0
 
 ## Usar a nova versão
@@ -6,7 +8,7 @@ Instale o APK 2.0.0 sobre a versão 1.0.0, sem desinstalar. O package e a assina
 
 A caixa principal agora é Android nativa: lista, busca local, filtro por canal, mensagens recentes e resposta de texto. Ela abre o banco local sem carregar o painel web. “Completo” abre o atendimento existente para fotos, áudio, vídeos, produtos, histórico mais antigo e demais ferramentas.
 
-O banco guarda dados de até 200 conversas para exibição; mensagens recentes são limitadas a 300 por conversa e cem conversas com histórico. A sessão fica cifrada com uma chave do Android Keystore; tokens e anexos não entram no banco. O banco privado do aplicativo não participa do backup Android. Sair apaga banco, credenciais e pendências locais e desativa a inscrição de push. Trocar de conta também remove as conversas locais anteriores.
+O banco guarda dados de até 1.000 conversas para exibição; mensagens recentes são limitadas a 1.000 por conversa e cem conversas com histórico. A sessão fica cifrada com uma chave do Android Keystore; tokens e anexos não entram no banco. O banco privado do aplicativo não participa do backup Android. Sair apaga banco, credenciais e pendências locais e desativa a inscrição de push. Trocar de conta também remove as conversas locais anteriores.
 
 Ao abrir, mostra o que estiver salvo e busca atualizações. A cópia local pode ser consultada por até 24 horas desde a última confirmação de acesso; responder exige confirmação da rede. Na primeira entrada, é necessário fazer a sincronização inicial. Não há histórico local anterior à instalação desta versão.
 

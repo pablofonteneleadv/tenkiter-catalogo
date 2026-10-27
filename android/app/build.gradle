@@ -2,12 +2,14 @@ plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
 android {
     namespace 'br.com.tenkitermodas.mensagens'
     compileSdk 35
-    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 3; versionName '2.0.1' }
+    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 4; versionName '2.1.0' }
     buildFeatures { buildConfig true }
     def shared = new File(rootDir.parentFile, 'common.js').text
     def loginApi = (shared =~ /API_URL_PADRAO="([^"]+)"/)[0][1]
     def workerApi = (shared =~ /INSTAGRAM_URL="([^"]+)"/)[0][1]
     defaultConfig {
+        buildConfigField 'double', 'CASH_DISCOUNT', (shared =~ /DESCONTO_AVISTA=([.0-9]+)/)[0][1]
+        buildConfigField 'String', 'SITE_URL', '"' + (shared =~ /const SITE_URL="([^"]+)"/)[0][1] + '"'
         buildConfigField 'String', 'LOGIN_URL', '"' + loginApi + '"'
         buildConfigField 'String', 'WORKER_URL', '"' + workerApi + '"'
     }
