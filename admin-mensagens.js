@@ -602,7 +602,7 @@
     contatosSit = r.ok ? r : { ligada: false, erro: r.erro };
     if (painel === 'leitura') desenharEstado();
   }
-  /* v7.34: trabalhos longos da ponte (15 mil+ contatos): o painel repete as partes, mostra o progresso numa faixa fixa,
+  /* v7.35: trabalhos longos da ponte (15 mil+ contatos): o painel repete as partes, mostra o progresso numa faixa fixa,
    * segura a tela acesa (Wake Lock, quando o aparelho deixa) e avisa antes de sair da página no meio */
   let trabalho = null, travaTela = null;
   const numBR_ = (n) => Number(n || 0).toLocaleString('pt-BR');
@@ -638,7 +638,7 @@
       return { ok: false, erro: 'A operação passou do limite de partes. Tente de novo.' };
     } finally { trabalho = null; window.removeEventListener('beforeunload', avisoSaida_); soltarTela_(); desenharTrabalho_(); travados.forEach((x) => { if (x.isConnected) x.disabled = false; }); }
   }
-  /* v7.34: a situação das ações da ponte fica escrita dentro do quadro (não some em 9 s): cópia e relatório podem passar de um minuto */
+  /* v7.35: a situação das ações da ponte fica escrita dentro do quadro (não some em 9 s): cópia e relatório podem passar de um minuto */
   let pontesSt = '';
   function pontesStatus_(t) { pontesSt = t || ''; const e = $('ms-ponte-st'); if (e) { e.textContent = pontesSt; e.hidden = !pontesSt; } }
   function blocoContatos_() {
@@ -1289,7 +1289,7 @@
     ta.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && window.matchMedia('(pointer: fine)').matches) { ev.preventDefault(); enviar(); } });
     cresce(); desenharStage_(); desenharAssina_(false);
   }
-  /* ---- v7.33: prévia do link (miniatura) escolhida em cada mensagem do WhatsApp; o último jeito usado em cada canal fica lembrado neste aparelho ---- */
+  /* ---- v7.34: prévia do link (miniatura) escolhida em cada mensagem do WhatsApp; o último jeito usado em cada canal fica lembrado neste aparelho ---- */
   const LINK_RE_ = /https?:\/\/[^\s<>"']+/i;
   function previaPreferida_(canal) { try { return (JSON.parse(localStorage.getItem('tk_ms_previa_v1') || '{}') || {})[canal] === true; } catch (e) { return false; } }
   function guardarPrevia_(canal, sim) { try { const o = JSON.parse(localStorage.getItem('tk_ms_previa_v1') || '{}') || {}; o[canal] = !!sim; localStorage.setItem('tk_ms_previa_v1', JSON.stringify(o)); } catch (e) { /* só conforto */ } }

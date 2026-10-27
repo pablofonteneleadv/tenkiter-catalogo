@@ -1,0 +1,70 @@
+[
+  {
+    "value": 0,
+    "expected": "Consulte valor"
+  },
+  {
+    "value": 1,
+    "expected": "R$ 0,99 à vista"
+  },
+  {
+    "value": 10,
+    "expected": "R$ 8,99 à vista"
+  },
+  {
+    "value": 49,
+    "expected": "R$ 43,99 à vista"
+  },
+  {
+    "value": 50,
+    "expected": "R$ 44,99 à vista"
+  },
+  {
+    "value": 89.9,
+    "expected": "R$ 80,99 à vista"
+  },
+  {
+    "value": 89.99,
+    "expected": "R$ 80,99 à vista"
+  },
+  {
+    "value": 100,
+    "expected": "R$ 89,99 à vista"
+  },
+  {
+    "value": 123.45,
+    "expected": "R$ 110,99 à vista"
+  },
+  {
+    "value": 199,
+    "expected": "R$ 178,99 à vista"
+  },
+  {
+    "value": 349.99,
+    "expected": "R$ 314,99 à vista"
+  },
+  {
+    "value": 999.99,
+    "expected": "R$ 899,99 à vista"
+  },
+  {
+    "value": 20.55,
+    "expected": "R$ 18,49 à vista"
+  },
+  {
+    "value": 1.01,
+    "expected": "R$ 0,99 à vista"
+  },
+  {
+    "value": 0.5,
+    "expected": "R$ 0,49 à vista"
+  },
+  {
+    "value": 0.49,
+    "expected": "R$ 0,49 à vista"
+  },
+  {
+    "value": 0.01,
+    "expected": "R$ 0,49 à vista"
+  }
+]

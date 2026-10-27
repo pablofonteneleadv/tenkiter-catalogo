@@ -63,6 +63,12 @@ jobs:
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: bash scripts/deploy/render_garantir_build.sh
 
+      - name: Impedir cache do manifesto Android
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: python3 scripts/deploy/render_android_headers.py
+
       - name: Disparar e acompanhar o deploy no Render
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
@@ -81,6 +87,9 @@ jobs:
       # em cascata (o purge saia com exit 1 e o job marcava o resto como skipped),
       # entao uma falha secundaria escondia o estado real de producao — nos runs
       # 38833465713, 38837548442 e 38840046234 ninguem chegou a conferir o ar.
+      - name: Conferir a versão oferecida pelo atualizador Android
+        run: python3 scripts/deploy/verificar_android_manifesto.py
+
       - name: Verificação final no ar
         if: always()
         env:

@@ -39,6 +39,9 @@ services:
       - path: /version.json
         name: Cache-Control
         value: no-store
+      - path: /android/latest.json
+        name: Cache-Control
+        value: no-store, max-age=0
     routes:
       # O mapa do site e os feeds são montados pelo Worker tenkiter-og.
       - type: rewrite

@@ -29,7 +29,8 @@ class NativeInboxTest {
     private fun conv(id:Long=1)=JSONObject().put("id",id).put("nome","Maria · Cliente").put("contato","5588999990000").put("previa","Tem esse vestido no tamanho M?").put("canal","whatsapp1").put("nao_lidas",2).put("ultima_em","2026-10-27T03:00:00Z").put("encerrada_em","")
     private fun msg(id:Long=1)=JSONObject().put("id",id).put("texto","Olá! Tem esse vestido no tamanho M?").put("direcao","entrada").put("tipo","texto").put("enviada_em","2026-10-27T03:00:00Z")
     private class Events:InboxView.Events{
-        var updates=0;var selected=0L;var sent="";var full=0L;var syncs=0
+        var updates=0;var selected=0L;var sent="";var full=0L;var media=0L;var peeked=0L;var bulkIds=emptySet<Long>();var bulkAction="";var syncs=0
+        override fun peek(id:Long){peeked=id};override fun media(id:Long){media=id};override fun bulk(ids:Set<Long>,action:String){bulkIds=ids;bulkAction=action}
         override fun login(identifier:String,password:String){};override fun sync(){syncs++};override fun select(id:Long){selected=id};override fun back(){}
         override fun send(id:Long,text:String):Boolean{sent=text;return true};override fun retry(id:Long,key:String,text:String){};override fun full(id:Long){full=id};override fun update(){updates++};override fun menu(anchor:View){}
     }
@@ -52,7 +53,8 @@ class NativeInboxTest {
             v.render(auth,true,listOf(conv()),1,listOf(msg()),emptyList(),true,"Atualizado agora");layout(v,w,h)
             val input=all(v).filterIsInstance<EditText>().first{it.hint=="Mensagem"};input.setText("Temos sim!")
             val send=all(v).filterIsInstance<Button>().first{it.text=="Enviar"};assertTrue(send.isEnabled);send.performClick();assertEquals("Temos sim!",events.sent)
-            for(b in all(v).filterIsInstance<Button>().filter{it.visibility==View.VISIBLE})assertTrue("Alvo pequeno: "+b.text,b.height>=48)
+            snapshot(v,"conversation-online-$w",w,h)
+            for(b in all(v).filterIsInstance<Button>().filter{it.isShown})assertTrue("Alvo pequeno: "+b.text,b.height>=48)
         }
         assertEquals(4,events.updates)
     }
@@ -64,7 +66,7 @@ class NativeInboxTest {
         first.close();val second=NativeStore(c,key);assertEquals(a,second.auth());assertEquals(1,second.messages(1).size)
         second.logout();assertNull(second.auth());assertTrue(second.messages(1).isEmpty());assertTrue(second.conversations().isEmpty())
         second.saveAuth(a);second.putConversation(a,conv());val old=a
-        val next=NativeAuth("88000000000","new-session","Outra conta");second.saveAuth(next);second.putConversation(old,conv(99))
+        val next=NativeAuth("88000000000","new-session","Outra conta");val oldGeneration=second.generation;second.saveAuth(next);assertTrue(second.generation>oldGeneration);second.putConversation(old,conv(99))
         assertTrue(second.conversations().isEmpty());assertFalse(second.canReadLocal(a.copy(checked=System.currentTimeMillis()-86400001)));second.close()
     }
     @Test fun releaseManifestRejectsUntrustedSourcesAndInvalidHash(){
@@ -139,7 +141,7 @@ class NativeInboxTest {
         v.render(auth,true,listOf(conv()),1,listOf(msg(),msg(2).put("texto","Tem em azul?")),emptyList(),true,"Atualizado");layout(v,390,844)
         assertEquals("Estou conferindo seu tamanho",all(v).filterIsInstance<EditText>().last().text.toString())
         v.render(auth,true,listOf(conv()),1,listOf(msg(3).put("tipo","imagem")),emptyList(),true,"Atualizado");layout(v,390,844)
-        all(v).filterIsInstance<android.widget.TextView>().first{it.text.contains("toque para abrir")}.performClick();assertEquals(1L,events.full)
+        all(v).filterIsInstance<android.widget.TextView>().first{it.text.contains("toque para abrir")}.performClick();assertEquals(3L,events.media)
     }
     @Test fun inboxExplainsOrderAndUnreadFilterPreservesChronology(){
         val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v)
@@ -152,12 +154,11 @@ class NativeInboxTest {
         val list=all(v).filterIsInstance<android.widget.ListView>().first()
         assertEquals(2L,list.adapter.getItemId(0));assertEquals(3L,list.adapter.getItemId(1))
         assertTrue(all(v).filterIsInstance<android.widget.TextView>().any{it.text.toString().contains("Mais recentes primeiro")})
-        all(v).filterIsInstance<Button>().first{it.text=="Não lidas"}.performClick()
+        all(v).filterIsInstance<Button>().first{it.tag=="Não lidas"}.performClick()
         assertEquals(2,list.adapter.count);assertEquals(3L,list.adapter.getItemId(0));assertEquals(1L,list.adapter.getItemId(1))
         val first=list.adapter.getView(1,null,list)
         assertTrue(all(first).filterIsInstance<android.widget.TextView>().any{it.text=="1 não lida"})
-        all(v).filterIsInstance<Button>().first{it.text=="Canal ▾"}.performClick()
-        org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().menu.performIdentifierAction(2,0)
+        all(v).filterIsInstance<Button>().first{it.tag=="WhatsApp 2"}.performClick()
         assertEquals(1,list.adapter.count);assertEquals(3L,list.adapter.getItemId(0))
         list.performItemClick(list.adapter.getView(0,null,list),0,3);assertEquals(3L,events.selected)
         layout(v,390,844);snapshot(v,"inbox-unread-channel",390,844)
@@ -168,7 +169,7 @@ class NativeInboxTest {
         val v=InboxView(a,Events());a.setContentView(v)
         v.render(NativeAuth("88999990000","session","Pablo"),true,listOf(conv()),0,emptyList(),emptyList(),false,"Sem conexão · conversas salvas")
         layout(v,320,480)
-        for(b in all(v).filterIsInstance<Button>()){
+        for(b in all(v).filterIsInstance<Button>().filter{it.isShown}){
             val point=IntArray(2);b.getLocationOnScreen(point)
             assertTrue("Ação fora da área útil: "+b.text,point[1]+b.height<=480);assertTrue(b.height>=48)
         }
@@ -176,6 +177,76 @@ class NativeInboxTest {
         layout(v,320,480)
         assertEquals(0,all(v).filterIsInstance<android.widget.ListView>().first().adapter.count)
         snapshot(v,"inbox-large-text-empty-keyboard",320,480)
+    }
+    @Test fun peekKeepsReadStateAndRequiresOpeningBeforeReply(){
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo")
+        val c=conv().put("ult_dir","entrada").put("ult_entrada_em","2026-10-27T03:00:00Z").put("outro_id",2)
+        v.render(auth,true,listOf(c),0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844)
+        all(v).filterIsInstance<Button>().first{it.text=="Espiar"}.performClick();assertEquals(1L,events.peeked);assertEquals(0L,events.selected)
+        v.render(auth,true,listOf(c),1,listOf(msg()),emptyList(),true,"Atualizado",true);layout(v,390,844)
+        assertFalse(all(v).filterIsInstance<Button>().any{it.text=="Enviar"})
+        assertTrue(all(v).filterIsInstance<EditText>().isEmpty())
+        snapshot(v,"peek-native",390,844)
+        all(v).filterIsInstance<Button>().first{it.text=="Espiando · abrir para responder"}.performClick();assertEquals(1L,events.selected)
+        v.render(auth,true,listOf(c),1,listOf(msg()),emptyList(),true,"Atualizado",false);layout(v,390,844)
+        assertTrue(all(v).filterIsInstance<Button>().first{it.text=="Enviar"}.isEnabled)
+    }
+    @Test fun selectionAndWaitingGroupFiltersRemainDistinct(){
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo")
+        val waiting=conv(1).put("grupo",0).put("ult_dir","entrada").put("nao_lidas",0)
+        val group=conv(2).put("grupo",1).put("ult_dir","entrada")
+        val answered=conv(3).put("grupo",0).put("ult_dir","saida")
+        v.render(auth,true,listOf(waiting,group,answered),0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844)
+        val list=all(v).filterIsInstance<android.widget.ListView>().first()
+        all(v).filterIsInstance<Button>().first{it.tag=="Falta responder"}.performClick();assertEquals(1,list.adapter.count);assertEquals(1L,list.adapter.getItemId(0))
+        all(v).filterIsInstance<Button>().first{it.tag=="Falta responder"}.performClick()
+        list.onItemLongClickListener.onItemLongClick(list,list.adapter.getView(0,null,list),0,list.adapter.getItemId(0))
+        layout(v,390,844);snapshot(v,"selection-native",390,844)
+        all(v).filterIsInstance<Button>().first{it.text=="Ações ▾"}.performClick()
+        org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().menu.getItem(0).let{org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().menu.performIdentifierAction(it.itemId,0)}
+        // Popup IDs are unique; the action callback receives the actual selected row, never every row.
+        assertEquals(1,events.bulkIds.size);assertEquals("lidas",events.bulkAction)
+        assertTrue(InboxRules.waiting(waiting));assertFalse(InboxRules.waiting(group));assertFalse(InboxRules.waiting(answered))
+    }
+    @Test fun readGuardAndBatchUseTheSameServerRoutesWithoutAutomaticReply(){
+        val a=activity;a.deleteDatabase("mensagens-local.db");a.getSharedPreferences("native-auth",0).edit().clear().commit()
+        val store=NativeStore(a,SecretKeySpec(ByteArray(32){8},"AES"));val auth=NativeAuth("88999990000","session","Pablo");store.saveAuth(auth);store.putConversation(auth,conv())
+        val calls=mutableListOf<Pair<String,JSONObject?>>()
+        val api=object:NativeApi(){override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject{calls.add(path to body);return JSONObject().put("ok",true)}}
+        val repo=NativeRepository(a,store,api)
+        repo.markRead(1){false};assertTrue(calls.isEmpty());assertEquals(2,store.conversation(1)?.optInt("nao_lidas"))
+        repo.markRead(1){true};assertEquals("/msg/lida",calls.last().first);assertEquals(0,store.conversation(1)?.optInt("nao_lidas"))
+        repo.batch(setOf(1),"nao_lidas");assertTrue(calls.last().second!!.getBoolean("naoLida"));assertEquals(1,store.conversation(1)?.optInt("nao_lidas"))
+        repo.batch(setOf(1),"encerrar","vendeu");assertEquals("/msg/encerrar",calls.last().first);assertEquals("vendeu",calls.last().second!!.getString("motivo"));assertTrue(store.conversation(1)!!.optString("encerrada_em").isNotBlank())
+        repo.batch(setOf(1),"reabrir");assertTrue(store.conversation(1)!!.optString("encerrada_em").isBlank());assertFalse(calls.any{it.first=="/msg/enviar"})
+        store.close()
+    }
+    @Test fun replySignatureRespectsTeamSettingAndChannel(){
+        val a=NativeAuth("88999990000","session","PABLO Fontenele")
+        assertEquals("*Pablo:*\nOlá",InboxRules.signature(a,conv(),JSONObject(),"Olá"))
+        val config=JSONObject().put("meuNome","Clarice").put("config",JSONObject().put("assinatura",true))
+        assertEquals("Clarice:\nOlá",InboxRules.signature(a,conv().put("canal","instagram"),config,"Olá"))
+        config.getJSONObject("config").put("assinatura",false);assertEquals("Olá",InboxRules.signature(a,conv(),config,"Olá"))
+    }
+    @Test fun fullSyncPagesThenUsesTheFirstCursorForDeltas(){
+        val c=activity;c.deleteDatabase("mensagens-local.db");c.getSharedPreferences("native-auth",0).edit().clear().commit()
+        val store=NativeStore(c,SecretKeySpec(ByteArray(32){4},"AES"));val auth=NativeAuth("88999990000","session","Pablo");store.saveAuth(auth);store.putConversation(auth,conv(999).put("ultima_em","2000-01-01T00:00:00Z"))
+        var lists=0;var deltas=0;var accounts=0
+        val api=object:NativeApi(){
+            override fun account(body:JSONObject):JSONObject{accounts++;return JSONObject().put("ok",true).put("usuario",JSONObject().put("permissoes",org.json.JSONArray().put("gerir_acessos")))}
+            override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject{
+                if(path.startsWith("/msg/conversas")){
+                    lists++;val ids=when{!path.contains("antesId")->(51L..100L).reversed();path.contains("antesId=51")->(1L..50L).reversed();else->emptyList()}
+                    return JSONObject().put("ok",true).put("cursor",if(lists==1)"2026-10-27T01:00:01Z"else"2026-10-27T01:00:09Z").put("conversas",org.json.JSONArray(ids.map{conv(it)}))
+                }
+                if(path.startsWith("/msg/novidades")){deltas++;assertTrue(path.contains("01%3A00%3A01Z"));return JSONObject().put("ok",true).put("cursor","2026-10-27T01:00:10Z").put("conversas",org.json.JSONArray())}
+                if(path.startsWith("/msg/mensagens")){val id=path.substringAfter("conversa=").substringBefore('&').toLong();return JSONObject().put("ok",true).put("conversa",conv(id)).put("mensagens",org.json.JSONArray().put(msg()))}
+                return JSONObject().put("ok",true)
+            }
+        }
+        val repo=NativeRepository(c,store,api);assertTrue(repo.sync());assertEquals(3,lists);assertEquals(100,store.conversations().count{!it.optBoolean("local_hidden")});assertTrue(store.conversation(999)!!.optBoolean("local_hidden"))
+        assertTrue(repo.sync());assertEquals(1,deltas);assertEquals(3,lists);assertEquals(1,accounts)
+        val received=File(c.cacheDir,"received/test").apply{parentFile!!.mkdirs();writeText("fake-media")};val outgoing=File(c.cacheDir,"outgoing/test").apply{parentFile!!.mkdirs();writeText("fake-audio")};store.logout();assertFalse(received.exists());assertFalse(outgoing.exists());store.close()
     }
     private fun snapshot(v:View,name:String,w:Int,h:Int){
         val bitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);v.draw(Canvas(bitmap))

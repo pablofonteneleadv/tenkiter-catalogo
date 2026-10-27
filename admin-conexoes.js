@@ -602,7 +602,7 @@
     msg('cx-wf'+n+'-msg',r.ok?'Cadastro removido. A fila não foi alterada.':erroTxt(r),r.ok?'ok':'erro');
     if(r.ok){const ul=$('cx-wf'+n+'-res');ul&&(ul.textContent='');conferirWafly_();}
   }
-  /* v7.34: Zernio (Instagram Direct pela API oficial). A chave fica só no servidor; aqui só aparece se está guardada e qual Instagram está conectado. */
+  /* v7.35: Zernio (Instagram Direct pela API oficial). A chave fica só no servidor; aqui só aparece se está guardada e qual Instagram está conectado. */
   function blocoZernio_() {
     return '<div class="cx-bloco"><h3>Instagram Direct · Zernio</h3>' +
       '<p id="cx-zr-status" role="status">Conferindo…</p>' +

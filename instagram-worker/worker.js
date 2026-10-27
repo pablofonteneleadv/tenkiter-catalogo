@@ -2621,6 +2621,16 @@ export async function registrarMobile_(env, req) {
   await env.CACHE.put('mobile-session:'+id,JSON.stringify({whats:dono,sessao:req.headers.get('X-TK-Sessao')||''}),{expirationTtl:30*86400});
   return {ok:true,servidorConfigurado:!!(await mobilePushKey_(env)),renovarEmDias:30};
 }
+/** Conteúdo mínimo para conferir pelo aviso, sem URLs de mídia, sessão ou credenciais. */
+export function previaPushMobile_(m) {
+  const limpo=(v,n)=>String(v||'').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,n);
+  const canal=({whatsapp1:'WhatsApp 1',whatsapp2:'WhatsApp 2',instagram:'Instagram'})[m.canal]||'Mensagens';
+  const nome=limpo(m.nome||m.contato,70)||'Novo contato';
+  const tipo=({'imagem':'Foto','image':'Foto','áudio':'Áudio','audio':'Áudio','vídeo':'Vídeo','video':'Vídeo','sticker':'Figurinha','contato':'Contato','localizacao':'Localização'})[m.tipo]||'Anexo';
+  const texto=limpo(m.texto,220), previa=m.tipo==='texto'?(texto||'Nova mensagem'):tipo+(texto?' · '+texto:'');
+  const autor=m.grupo?limpo(m.autor_nome,50):'';
+  return {titulo:nome+' · '+canal,texto:(autor?autor+': ':'')+previa};
+}
 export async function processarPushMobile_(env, recentes = false) {
   const pushKey=await mobilePushKey_(env);if(!pushKey)return {ok:false,motivo:'sem_configuracao'};
   await mobileTables_(env);
@@ -2636,7 +2646,10 @@ export async function processarPushMobile_(env, recentes = false) {
     if(Date.parse(item.criado)<Date.now()-3600000){await env.DB.prepare("UPDATE msg_push_outbox SET estado='expirada' WHERE mensagem=?").bind(item.mensagem).run();continue;}
     if(!ids.length)continue;
     try{
-      const r=await fetch('https://api.onesignal.com/notifications',{method:'POST',signal:AbortSignal.timeout(10000),headers:{'Content-Type':'application/json','Authorization':'Key '+pushKey},body:JSON.stringify({app_id:'535f6b0d-c866-43c2-b241-43bd7ab62fae',target_channel:'push',include_subscription_ids:ids,idempotency_key:item.chave,headings:{en:'TENKiTER · Nova mensagem',pt:'TENKiTER · Nova mensagem'},contents:{en:'Abra o aplicativo para responder.',pt:'Abra o aplicativo para responder.'},data:{conversa:item.conversa,canal:item.canal},collapse_id:'conversa-'+item.conversa,ttl:3600})});
+      const mensagem=await env.DB.prepare("SELECT c.nome,c.contato,c.grupo,c.canal,c.nao_lidas,c.encerrada_em,m.texto,m.tipo,m.autor_nome FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.id=? AND EXISTS(SELECT 1 FROM msg_mensagem original WHERE original.id=? AND original.conversa_id=c.id AND original.direcao='entrada') AND m.id=(SELECT recente.id FROM msg_mensagem recente WHERE recente.conversa_id=c.id AND recente.direcao='entrada' ORDER BY recente.enviada_em DESC,recente.id DESC LIMIT 1)").bind(item.conversa,item.mensagem).first();
+      if(!mensagem||Number(mensagem.nao_lidas)<=0||mensagem.encerrada_em){await env.DB.prepare("UPDATE msg_push_outbox SET estado='expirada' WHERE mensagem=?").bind(item.mensagem).run();continue;}
+      const previa=previaPushMobile_(mensagem);
+      const r=await fetch('https://api.onesignal.com/notifications',{method:'POST',signal:AbortSignal.timeout(10000),headers:{'Content-Type':'application/json','Authorization':'Key '+pushKey},body:JSON.stringify({app_id:'535f6b0d-c866-43c2-b241-43bd7ab62fae',target_channel:'push',include_subscription_ids:ids,idempotency_key:item.chave,headings:{en:previa.titulo,pt:previa.titulo},contents:{en:previa.texto,pt:previa.texto},priority:10,small_icon:'ic_stat_message',buttons:[{id:'espiar',text:'Espiar'},{id:'abrir',text:'Abrir conversa'}],android_visibility:0,data:{conversa:item.conversa,canal:item.canal,modo:'espiar'},collapse_id:'conversa-'+item.conversa,ttl:3600})});
       const j=await r.json();
       if(r.ok&&j.id){await env.DB.prepare("UPDATE msg_push_outbox SET estado='enviada' WHERE mensagem=?").bind(item.mensagem).run();enviadas++;}
       else await env.DB.prepare('UPDATE msg_push_outbox SET tentativas=tentativas+1 WHERE mensagem=?').bind(item.mensagem).run();
@@ -3271,6 +3284,7 @@ export default {
       }
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {
+        const cursorConsulta=agora();
         const canal = url.searchParams.get('canal') || '', busca = String(url.searchParams.get('busca') || '').trim().slice(0, 60), antes = url.searchParams.get('antes') || '', filtro = url.searchParams.get('filtro') || '';
         const tipo = ['individual', 'grupo'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : '';   // v2.12: só conversas, só grupos ou os dois
         const todos = canal === 'todos';   // v2.10: aba "Todas" = os três canais juntos
@@ -3281,27 +3295,31 @@ export default {
         if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'lidas') sql += ' AND nao_lidas=0'; else if (filtro === 'sem_resposta') sql += " AND grupo=0 AND ult_dir='entrada'"; else if (filtro === 'grupos') sql += ' AND grupo=1'; else if (filtro === 'ambos') sql += " AND pessoa<>'' AND " + MSG_OUTRO_SQL_ + ' IS NOT NULL';
         if (tipo) sql += tipo === 'grupo' ? ' AND grupo=1' : ' AND grupo=0';
         if (busca) { sql += ' AND (nome LIKE ? OR contato LIKE ? OR previa LIKE ? ' + (busca.length >= 3 ? ' OR EXISTS (SELECT 1 FROM msg_mensagem mm WHERE mm.conversa_id=msg_conversa.id AND mm.texto LIKE ?)' : '') + ')'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q); if (busca.length >= 3) args.push(q); }
-        if (antes) { sql += ' AND ultima_em<?'; args.push(antes); }
-        const rs = await env.DB.prepare(sql + ' ORDER BY ultima_em DESC LIMIT 50').bind(...args).all();
+        if (antes) { const antesId=Number(url.searchParams.get('antesId'))||0; if(antesId>0){sql+=' AND (ultima_em<? OR (ultima_em=? AND id<?))';args.push(antes,antes,antesId);}else{sql += ' AND ultima_em<?'; args.push(antes);} }
+        const rs = await env.DB.prepare(sql + ' ORDER BY ultima_em DESC, id DESC LIMIT 50').bind(...args).all();
         const geral = (await msgContagens_(env, todos ? '' : canal))[canal];
-        return J({ ok: true, conversas: rs.results, contagens: tipo ? (await msgContagens_(env, todos ? '' : canal, tipo))[canal] : geral, tipos: { individuais: geral.individuais, grupos: geral.grupos }, cursor: agora() });
+        return J({ ok: true, conversas: rs.results, contagens: tipo ? (await msgContagens_(env, todos ? '' : canal, tipo))[canal] : geral, tipos: { individuais: geral.individuais, grupos: geral.grupos }, cursor: cursorConsulta });
       }
       if (p === '/msg/mensagens' && req.method === 'GET') {
         const id = Number(url.searchParams.get('conversa')), antes = url.searchParams.get('antes') || '';
         if (!id) return J({ ok: false, erro: 'Escolha uma conversa.' }, 400);
         const conv = await env.DB.prepare('SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE id=?').bind(id).first();
         if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
-        const rs = await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=?' + (antes ? ' AND enviada_em<?' : '') + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...(antes ? [id, antes] : [id])).all();
+        const antesId=Number(url.searchParams.get('antesId'))||0;
+        const where=antes?(antesId>0?' AND (enviada_em<? OR (enviada_em=? AND id<?))':' AND enviada_em<?'):'';
+        const args=antes?(antesId>0?[id,antes,antes,antesId]:[id,antes]):[id];
+        const rs = await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=?' + where + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...args).all();
         return J({ ok: true, conversa: conv, mensagens: rs.results.reverse(), temMais: rs.results.length === 100, cursor: agora() });
       }
       if (p === '/msg/novidades' && req.method === 'GET') {
+        const cursorConsulta=agora();
         /* Consulta leve para a tela ao vivo: só o que mudou desde o último cursor (com folga de 3 s; a tela ignora repetidos). */
         const d0 = Date.parse(url.searchParams.get('desde') || ''), desde = new Date((isNaN(d0) ? Date.now() - 60000 : d0) - 3000).toISOString();
         const conv = Number(url.searchParams.get('conversa')) || 0, depois = Number(url.searchParams.get('depois')) || 0, st0 = Date.parse(url.searchParams.get('st') || ''), st = new Date((isNaN(st0) ? Date.now() - 60000 : st0) - 3000).toISOString();
         const cs = await env.DB.prepare('SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE atualizada_em>=? AND total>0 ORDER BY atualizada_em DESC LIMIT 100').bind(desde).all();
         let mensagens = [];
         if (conv) mensagens = (await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=? AND (id>? OR status_em>=?) ORDER BY enviada_em, id LIMIT 200').bind(conv, depois, st).all()).results;
-        return J({ ok: true, cursor: agora(), conversas: cs.results, mensagens: mensagens, contagens: (cs.results.length || url.searchParams.get('cont') === '1') ? await msgContagens_(env) : undefined });
+        return J({ ok: true, cursor: cursorConsulta, conversas: cs.results, mensagens: mensagens, contagens: (cs.results.length || url.searchParams.get('cont') === '1') ? await msgContagens_(env) : undefined });
       }
       if (p === '/msg/diagnostico' && req.method === 'GET') {
         const out = {}; for (const n of [1, 2]) { try { out['whatsapp' + n] = JSON.parse((await cfgGet(env, 'msg_ligar_diag_' + n)) || 'null'); } catch (e) { out['whatsapp' + n] = null; } }

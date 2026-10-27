@@ -14,12 +14,39 @@ open class NativeApi {
     }
     fun removeSubscription(a:NativeAuth,id:String)=call("/msg/mobile/subscription",a,JSONObject().put("subscription",id),"DELETE")
     open fun account(body:JSONObject)=request(BuildConfig.LOGIN_URL,body,emptyMap(),true)
-    private fun request(address:String,body:JSONObject?,headers:Map<String,String>,google:Boolean,method:String?=null):JSONObject {
+    open fun catalog()=request(BuildConfig.LOGIN_URL+"?action=list",null,emptyMap(),true,acceptCatalog=true)
+    open fun upload(a:NativeAuth,bytes:ByteArray,type:String):JSONObject {
+        require(type in listOf("imagem","vídeo","áudio"));require(bytes.isNotEmpty()&&bytes.size<=if(type=="imagem")8*1048576 else 16*1048576)
+        val c=(URL(BuildConfig.WORKER_URL+"/msg/anexo?tipo="+java.net.URLEncoder.encode(type,"UTF-8")).openConnection() as HttpURLConnection)
+        try{
+            c.connectTimeout=10000;c.readTimeout=65000;c.instanceFollowRedirects=false;c.requestMethod="POST";c.doOutput=true
+            c.setRequestProperty("X-TK-Whats",a.owner);c.setRequestProperty("X-TK-Sessao",a.session);c.setRequestProperty("Content-Type","application/octet-stream");c.setFixedLengthStreamingMode(bytes.size)
+            c.outputStream.use{it.write(bytes)}
+            if(c.responseCode in listOf(401,403))throw AccessRevoked()
+            val body=(if(c.responseCode in 200..299)c.inputStream else c.errorStream)?:throw Exception("Sem resposta do envio.")
+            val j=JSONObject(String(AppUpdater.limited(body,65536),Charsets.UTF_8))
+            if(!j.optBoolean("ok"))throw ApiFailure(j,c.responseCode)
+            return j
+        }finally{c.disconnect()}
+    }
+    open fun media(a:NativeAuth,id:Long,context:Boolean=false):Pair<ByteArray,String> {
+        require(id>0)
+        val c=(URL(BuildConfig.WORKER_URL+"/msg/midia?id=$id"+(if(context)"&ctx=1"else"")).openConnection() as HttpURLConnection)
+        try{
+            c.connectTimeout=10000;c.readTimeout=30000;c.instanceFollowRedirects=false
+            c.setRequestProperty("X-TK-Whats",a.owner);c.setRequestProperty("X-TK-Sessao",a.session)
+            if(c.responseCode in listOf(401,403))throw AccessRevoked()
+            if(c.responseCode!=200)throw Exception("Não foi possível abrir esta mídia. Ela pode ter expirado.")
+            val bytes=AppUpdater.limited(c.inputStream,32*1048576)
+            return bytes to (c.contentType?:"application/octet-stream").substringBefore(';')
+        }finally{c.disconnect()}
+    }
+    private fun request(address:String,body:JSONObject?,headers:Map<String,String>,google:Boolean,method:String?=null,acceptCatalog:Boolean=false):JSONObject {
         var url=URL(address);var payload=body;var credentials=headers
         repeat(4){
             require(url.protocol=="https")
             val c=(url.openConnection() as HttpURLConnection).apply{
-                connectTimeout=10000;readTimeout=15000;instanceFollowRedirects=false
+                connectTimeout=10000;readTimeout=if(address.contains("/msg/enviar"))75000 else 15000;instanceFollowRedirects=false
                 requestMethod=method?:if(payload==null)"GET" else "POST"
                 setRequestProperty("Accept","application/json");credentials.forEach{(k,v)->setRequestProperty(k,v)}
             }
@@ -37,7 +64,7 @@ open class NativeApi {
                     if(bytes.size>4*1024*1024)throw Exception("Resposta grande demais.")
                     val j=runCatching{JSONObject(String(bytes,Charsets.UTF_8))}.getOrElse{throw Exception("Não foi possível ler a resposta do servidor.")}
                     if(j.optBoolean("sessaoInvalida")||j.optBoolean("inativa")||j.optBoolean("exigeLogin")||j.optBoolean("semPermissao"))throw AccessRevoked()
-                    if(!j.optBoolean("ok"))throw ApiFailure(j,code)
+                    if(!j.optBoolean("ok")&&!(acceptCatalog&&code in 200..299&&j.optJSONArray("produtos")!=null))throw ApiFailure(j,code)
                     return j
                 }
             }finally{c.disconnect()}

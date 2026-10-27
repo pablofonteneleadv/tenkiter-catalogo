@@ -6,7 +6,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
-## 7.34.0 — Chave do Zernio em Conexões e Google Contatos para contas grandes — 2026-10-27
+## 7.35.0 — Chave do Zernio em Conexões e Google Contatos para contas grandes — 2026-10-27
 
 - Gestão → Conexões → Instagram ganhou o bloco "Instagram Direct · Zernio": passo a passo curto, campo de senha para a chave de API e os botões "Salvar e conferir" e "Remover chave".
 - O servidor confere a chave listando as contas no Zernio (nada é enviado) e mostra qual Instagram está conectado. A chave fica só no servidor (`zernio_chave`) e nunca volta para a tela.
@@ -20,13 +20,30 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Teste `conexoes_unificada` atualizado para o grupo Android (7 grupos).
 - Service worker renovado (tk-3.38.19).
 
-## 7.33.0 — Mensagens: prévia do link escolhida em cada mensagem — 2026-10-27
+## 7.34.0 — Mensagens: prévia do link escolhida em cada mensagem — 2026-10-27
 
 - No WhatsApp, quando a mensagem tem link, aparece logo acima do campo a caixinha "Mostrar prévia do link (miniatura)". A última escolha de cada canal fica lembrada no aparelho; começa desmarcada.
 - Marcada, a mensagem sai pelo envio "link com prévia" da Wafly (`/send-link`), usando o primeiro link do texto. O cartão leva o nome e o preço da peça, "Peças separadas para você" numa seleção ou o nome da loja nos links do site. Link de fora fica com o que o WhatsApp encontrar.
 - Desmarcada, ou sem link, tudo continua como antes (texto simples). No Instagram a caixinha não aparece.
 - Worker: `/msg/enviar` aceita `previa`, `previaTitulo` e `previaDescricao` (limpos e cortados em 100/200 letras).
 - Service worker renovado (tk-3.38.18).
+
+## 7.33.1 — Manifesto do atualizador Android sem cache — 2026-10-27
+
+- Corrige entrega do manifesto 2.0.1 após publicação do APK 2.1.0: configura no-store na origem Render, preservando as demais regras de cabeçalho.
+- Deploy passa a conferir no endereço público versão, código, tamanho, SHA, URL do APK e proibição de cache. A versão do site sozinha deixa de ser evidência de que o botão oferece o APK certo.
+- Mantém APK 2.1.0/code4 e sua assinatura; não exige outro instalador.
+
+
+## 7.33.0 — APK 2.1: atendimento nativo e notificações informativas — 2026-10-27
+
+- Lista nativa com canais e contagens locais, grupos/individuais, não lidas, falta responder com tempo de espera, nos dois WhatsApp e encerradas. Contato formatado, indicação de respostas da loja e seleção de até 50 conversas por menu ou toque longo.
+- Espiar mantém a conversa não lida; só a abertura normal em primeiro plano confirma leitura, respeitando a configuração de leitura no celular do canal. Ações em lote usam as rotas existentes de leitura, encerramento com motivo e reabertura.
+- Produtos e seleções com preços compatíveis com o catálogo, respostas rápidas editáveis para toda a equipe e assinatura conforme configuração do site.
+- Fotos/contextos abrem no app; outros anexos no visualizador Android. Envio de foto/vídeo/áudio e gravação AAC com revisão, sem reenvio automático. URLs de mídia e credenciais não entram no banco local.
+- Notificações com nome, canal, trecho/tipo da mensagem, ações Espiar/Abrir e privacidade de tela bloqueada. Tarefa antiga consulta a mensagem mais recente; notificações de conversas já lidas/encerradas são descartadas.
+- Paginação estável por data+ID e sincronização incremental; primeiro cursor preservado durante a carga inicial. APK 2.1.0/code 4 com a assinatura anterior, disponível pelo atualizador.
+
 
 ## 7.32.1 — APK 2.0.1: caixa de conversas mais clara — 2026-10-27
 
