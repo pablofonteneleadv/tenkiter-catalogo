@@ -48,6 +48,16 @@ with sync_playwright() as p:
     chk("sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth<=innerWidth"))
     alvos = pg.evaluate("[...document.querySelectorAll('[data-cx^=zr-]')].map(b=>Math.round(b.getBoundingClientRect().height))")
     chk("botões com pelo menos 44 px", all(h >= 44 for h in alvos), alvos)
+    chk("com um Instagram só, não aparece a escolha", not pg.locator("#cx-zr-contas").is_visible())
+    Z["zernio"]["duas"] = True; Z["zernio"]["conta"] = {"id": "acc_p", "usuario": "pablo_fontenele88"}
+    pg.fill("#cx-zr-key", CHAVE); pg.click("[data-cx=zr-guardar]"); pg.wait_for_timeout(700)
+    chk("com dois Instagram: aparece 'Qual Instagram é o da loja?' com as duas contas", pg.locator("#cx-zr-contas").is_visible() and pg.locator("input[name=cx-zr-conta]").count() == 2 and "Qual Instagram é o da loja?" in pg.inner_text("#cx-zr-contas"))
+    pg.locator("label:has-text('@tenkitermodasceara') input").check(); pg.click("[data-cx=zr-escolher]"); pg.wait_for_timeout(700)
+    chk("escolher a da loja: guarda e mostra @tenkitermodasceara", Z["zernio"]["conta"]["id"] == "acc_t" and "@tenkitermodasceara" in pg.inner_text("#cx-zr-status") and "@tenkitermodasceara" in pg.inner_text("#cx-zr-msg"), pg.inner_text("#cx-zr-status"))
+    alvo = pg.locator("#cx-zr-contas label").first.bounding_box()
+    chk("opções da escolha com 44 px de altura", alvo["height"] >= 44, alvo)
+    axe(pg, "escolha do Instagram"); pg.locator("#cx-zr-contas").scroll_into_view_if_needed(); foto(pg, "04-escolher-instagram-390.png")
+    Z["zernio"]["duas"] = False
     pg.click("[data-cx=zr-apagar]"); pg.wait_for_timeout(500)
     chk("remover (com confirmação) apaga e volta a 'Nenhuma chave'", "Nenhuma chave" in pg.inner_text("#cx-zr-status") and Z["zernio"]["posts"][-1] == {"apagar": True})
     chk("sem erros de JS (390)", not erros, erros); ctx.close()

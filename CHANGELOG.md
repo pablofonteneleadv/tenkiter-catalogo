@@ -6,6 +6,20 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.36.0 — Google Contatos: limpeza aprovada e cadastro automático "TM Cliente" — 2026-10-27
+
+- No relatório, o botão **"Aplicar a limpeza aprovada"** faz tudo em 5 etapas, com a faixa de progresso, a tela acesa e o aviso antes de sair:
+  1. cópia de segurança nova (em partes);
+  2. leitura dos contatos (relatório novo, com o plano completo);
+  3. juntar as pessoas repetidas (fica o contato de nome mais completo; os outros nomes vão para a observação "Também salvo como: …"; telefones e e-mails de todos ficam no que fica);
+  4. padronizar os números (+55 e o 9 do celular; 9 dígitos sem DDD ganham o 88; fixo não ganha o 9; número estrangeiro não muda);
+  5. criar quem conversou no WhatsApp e não está no Google como **"TM Cliente nome do WhatsApp"** (ou o número) no marcador "Tenkiter Clientes G".
+- Ao terminar, liga o **cadastro automático**: cada número novo que escreve no WhatsApp entra numa fila e, a cada minuto, até 5 viram "TM Cliente …" no Google (sem duplicar). Liga e desliga em Configurações → Google Contatos.
+- Worker: plano completo em `msg_contatos_plano` (repetidos ligados entre si viram um grupo só), `/msg/contatos/limpeza` por etapas (exige cópia com menos de 6 horas), fila `msg_contatos_fila` e `/msg/contatos/auto`. 9 dígitos sem DDD passam a valer como DDD 88 no relatório.
+- Pede a ponte 1.2 (`juntar_lote`, `padronizar_parte`, `criar_lote`, com as chamadas em lote do Google).
+- Conexões → Zernio: com mais de um Instagram conectado, o servidor prefere o da loja (nome com "tenkiter") e a tela mostra "Qual Instagram é o da loja?" para escolher (`listar`/`escolher` usam a chave já guardada).
+- Service worker renovado (tk-3.38.20).
+
 ## 7.35.0 — Chave do Zernio em Conexões e Google Contatos para contas grandes — 2026-10-27
 
 - Gestão → Conexões → Instagram ganhou o bloco "Instagram Direct · Zernio": passo a passo curto, campo de senha para a chave de API e os botões "Salvar e conferir" e "Remover chave".

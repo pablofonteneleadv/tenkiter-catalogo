@@ -19,3 +19,9 @@ O gestor cola a chave uma vez e tem certeza de que ela funcionou e de qual Insta
 - Continuam passando: `conexoes_wafly`, `conexoes_admin`, `cofre_admin`; `conexoes_unificada` atualizado para 7 grupos.
 
 Resultado: APROVADO COM LIMITAÇÃO. A conferência real depende da chave verdadeira do Pablo; o formato da resposta do Zernio foi tirado da documentação deles (GET /v1/accounts).
+
+## Escolher o Instagram certo (27/10/2026, site 7.36.0)
+Ao colar a chave real, o Zernio do Pablo tinha também o Instagram pessoal (@pablo_fontenele88) e o painel usou o primeiro da lista.
+- O servidor passa a preferir a conta com "tenkiter" no nome e devolve a lista de Instagram conectados.
+- Com mais de um, a tela mostra "Qual Instagram é o da loja?" com uma opção por conta (44 px) e o botão "Usar este Instagram"; com um só, nada aparece.
+- Evidência: `zernio-chave-20261027/04-escolher-instagram-390.png`. Testes: `conexoes_zernio` 21, `worker_mensagens_conversa` 216.

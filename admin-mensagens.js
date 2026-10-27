@@ -602,7 +602,7 @@
     contatosSit = r.ok ? r : { ligada: false, erro: r.erro };
     if (painel === 'leitura') desenharEstado();
   }
-  /* v7.35: trabalhos longos da ponte (15 mil+ contatos): o painel repete as partes, mostra o progresso numa faixa fixa,
+  /* v7.35/7.36: trabalhos longos da ponte (15 mil+ contatos): o painel repete as partes, mostra o progresso numa faixa fixa,
    * segura a tela acesa (Wake Lock, quando o aparelho deixa) e avisa antes de sair da página no meio */
   let trabalho = null, travaTela = null;
   const numBR_ = (n) => Number(n || 0).toLocaleString('pt-BR');
@@ -616,28 +616,42 @@
     if (!f) { if (!sheet) return; f = el('div', 'ms-trab'); f.id = 'ms-trab'; f.setAttribute('role', 'status'); sheet.appendChild(f); }
     const pct = trabalho.total ? Math.min(100, Math.round(trabalho.feito * 100 / trabalho.total)) : 0;
     f.textContent = '';
-    f.appendChild(el('b', '', '⏳ ' + trabalho.titulo + (trabalho.total ? ': ' + numBR_(trabalho.feito) + ' de ' + numBR_(trabalho.total) + ' contatos (' + pct + '%)' : '…')));
+    f.appendChild(el('b', '', '⏳ ' + (trabalho.etapa || '') + trabalho.titulo + (trabalho.total ? ': ' + numBR_(trabalho.feito) + ' de ' + numBR_(trabalho.total) + ' ' + (trabalho.unidade || 'contatos') + ' (' + pct + '%)' : '…')));
     const pr = el('progress'); pr.max = 100; pr.value = pct; pr.setAttribute('aria-label', trabalho.titulo); f.appendChild(pr);
     f.appendChild(el('small', '', 'Não feche esta tela. Ela fica acesa até terminar.'));
   }
-  /* passo(estado) -> { ok, fim, feito, total, estado } ; sem rede, tenta a mesma parte de novo (até 3 vezes) */
-  async function rodarTrabalho_(titulo, passo) {
+  /* fases: [{ titulo, unidade, passo(estado) -> { ok, fim, feito, total, estado }, depois?() -> {ok} }]. Sem rede, tenta a mesma parte de novo (até 3 vezes). */
+  async function rodarFases_(fases) {
     if (trabalho) return { ok: false, erro: 'Já há uma operação dos contatos em andamento.' };
-    trabalho = { titulo: titulo, feito: 0, total: 0 }; window.addEventListener('beforeunload', avisoSaida_); segurarTela_(); desenharTrabalho_();
-    const travados = Array.from(document.querySelectorAll('#ms-contatos button:not([disabled])')); travados.forEach((x) => { x.disabled = true; });
+    trabalho = { titulo: fases[0].titulo, unidade: fases[0].unidade || 'contatos', etapa: '', feito: 0, total: 0 }; window.addEventListener('beforeunload', avisoSaida_); segurarTela_(); desenharTrabalho_();
+    const travados = Array.from(document.querySelectorAll('#ms-contatos button:not([disabled]), .ms-relatorio button[data-ms=ponte-limpar]')); travados.forEach((x) => { x.disabled = true; });
     try {
-      let estado = {};
-      for (let volta = 0; volta < 400; volta++) {
-        let r = null;
-        for (let t = 0; t < 3; t++) { r = await passo(estado); if (r.ok || !r.semRede) break; await new Promise((ok) => setTimeout(ok, 2000 * (t + 1))); }
-        if (!r.ok) return r;
-        trabalho.feito = Number(r.feito) || 0; trabalho.total = Math.max(Number(r.total) || 0, trabalho.feito); desenharTrabalho_();
-        if (r.fim) return r;
-        estado = r.estado || {};
+      let r = { ok: true };
+      for (let i = 0; i < fases.length; i++) {
+        const f = fases[i]; Object.assign(trabalho, { titulo: f.titulo, unidade: f.unidade || 'contatos', etapa: fases.length > 1 ? 'Etapa ' + (i + 1) + ' de ' + fases.length + ' · ' : '', feito: 0, total: 0 }); desenharTrabalho_();
+        let estado = {}, acabou = false;
+        for (let volta = 0; volta < 400 && !acabou; volta++) {
+          for (let t = 0; t < 3; t++) { r = await f.passo(estado); if (r.ok || !r.semRede) break; await new Promise((ok) => setTimeout(ok, 2000 * (t + 1))); }
+          if (!r.ok) return r;
+          trabalho.feito = Number(r.feito) || 0; trabalho.total = Math.max(Number(r.total) || 0, trabalho.feito); desenharTrabalho_();
+          acabou = !!r.fim; estado = r.estado || {};
+        }
+        if (!acabou) return { ok: false, erro: 'A operação passou do limite de partes. Tente de novo.' };
+        if (f.depois) { const d = await f.depois(); if (!d.ok) return d; r = d; }
       }
-      return { ok: false, erro: 'A operação passou do limite de partes. Tente de novo.' };
+      return r;
     } finally { trabalho = null; window.removeEventListener('beforeunload', avisoSaida_); soltarTela_(); desenharTrabalho_(); travados.forEach((x) => { if (x.isConnected) x.disabled = false; }); }
   }
+  const rodarTrabalho_ = (titulo, passo) => rodarFases_([{ titulo: titulo, passo: passo }]);
+  const faseCopia_ = () => ({ titulo: 'Copiando os contatos do Google', passo: async (e) => {
+    const x = await worker_('/msg/contatos/backup', 'POST', { partes: true, pagina: e.pagina || undefined, pasta: e.pasta || undefined });
+    return x.ok ? { ok: true, fim: x.fim, feito: x.lidos, total: x.totalPessoas, estado: { pagina: x.proxima, pasta: x.pasta } } : x;
+  } });
+  const faseLeitura_ = () => ({ titulo: 'Lendo os contatos para o relatório', passo: async (e) => {
+    if (!e.iniciado) { const i = await worker_('/msg/contatos/relatorio', 'POST', { etapa: 'inicio' }); if (!i.ok) return i; }
+    const x = await worker_('/msg/contatos/relatorio', 'POST', { etapa: 'parte', pagina: e.pagina || undefined });
+    return x.ok ? { ok: true, fim: !x.proxima, feito: x.lidos, total: x.total, estado: { pagina: x.proxima, iniciado: true } } : x;
+  }, depois: () => worker_('/msg/contatos/relatorio', 'POST', { etapa: 'fim' }) });
   /* v7.35: a situação das ações da ponte fica escrita dentro do quadro (não some em 9 s): cópia e relatório podem passar de um minuto */
   let pontesSt = '';
   function pontesStatus_(t) { pontesSt = t || ''; const e = $('ms-ponte-st'); if (e) { e.textContent = pontesSt; e.hidden = !pontesSt; } }
@@ -664,6 +678,12 @@
     const rel = botao('ms-btn prim', 'Gerar relatório da limpeza', 'ponte-relatorio'); rel.disabled = !bk; l.appendChild(rel);
     b.appendChild(l);
     b.appendChild(el('p', 'ms-cfg-res', 'O relatório só lê os contatos: nada muda no Google até você aprovar.'));
+    const lp = contatosSit.limpeza;
+    if (lp) b.appendChild(el('p', 'ms-ok', 'Limpeza feita ' + hora(lp.em) + ': ' + numBR_(lp.juntados) + ' pessoas juntadas, ' + numBR_(lp.padronizados) + ' números padronizados, ' + numBR_(lp.criados) + ' contatos novos.'));
+    const au = el('label', 'ms-cfg-linha'), ac = el('input'); ac.type = 'checkbox'; ac.checked = !!contatosSit.auto; ac.dataset.ms = 'ponte-auto';
+    au.append(ac, document.createTextNode(' Cadastrar sozinho os números novos do WhatsApp no Google (“TM Cliente nome ou número”)')); b.appendChild(au);
+    const fl = contatosSit.fila || {};
+    if (fl.feitos || fl.pendentes || fl.falhas) b.appendChild(el('p', 'ms-cfg-res', 'Cadastro automático: ' + numBR_(fl.feitos) + ' criados' + (fl.pendentes ? ', ' + numBR_(fl.pendentes) + ' na fila' : '') + (fl.falhas ? ', ' + numBR_(fl.falhas) + ' com erro' : '') + '.'));
     const l2 = el('div', 'ms-linha'); l2.appendChild(botao('ms-link-btn', 'Ver o último relatório', 'ponte-ver')); l2.appendChild(botao('ms-link-btn', 'Desligar a ponte', 'ponte-desligar')); b.appendChild(l2);
     return b;
   }
@@ -694,7 +714,10 @@
     secao('Números a padronizar', r.corrigir.lista, r.corrigir.total, (x) => (x.n || 'Sem nome') + ': ' + x.de + ' → ' + x.para);
     secao('Números inválidos (ficam como estão; confira à mão)', r.invalidos.lista, r.invalidos.total, (x) => (x.n || 'Sem nome') + ': ' + x.f);
     secao('Conversaram no WhatsApp e não estão no Google (vão ser criados no marcador)', r.semCadastro.lista, r.semCadastro.total, (x) => (x.nome || 'Sem nome') + ' · ' + foneBonito_(x.fone) + ' · ' + (NOME_CANAL[x.canal] || x.canal));
-    p.appendChild(el('p', 'ms-vazio', 'Quando você aprovar, a próxima etapa junta as pessoas repetidas, padroniza os números e cria no marcador “Tenkiter Clientes G” quem conversou e não está no Google. Depois disso, cada número novo que chegar sem cadastro entra sozinho.'));
+    const ap = el('div', 'ms-rel-aprovar');
+    ap.appendChild(el('p', 'ms-cfg-res', 'Limpeza aprovada: juntar as repetidas (fica o nome mais completo; os outros vão para a observação), padronizar os números (+55 e o 9 do celular; 9 dígitos sem DDD ganham o 88; fixo não ganha o 9) e criar quem conversou como “TM Cliente …” no marcador “Tenkiter Clientes G”. Antes, faz uma cópia de segurança nova. Depois, cada número novo entra sozinho.'));
+    ap.appendChild(botao('ms-btn prim', 'Aplicar a limpeza aprovada', 'ponte-limpar'));
+    p.appendChild(ap);
     ex.appendChild(p);
   }
   async function carregarCfgLeitura_() {
@@ -1627,26 +1650,35 @@
     }
     else if (a === 'ponte-backup') {
       b.disabled = true; pontesStatus_('Fazendo a cópia de segurança dos contatos em partes. Com muitos contatos pode levar alguns minutos.');
-      const r = await rodarTrabalho_('Copiando os contatos do Google', async (e) => {
-        const x = await worker_('/msg/contatos/backup', 'POST', { partes: true, pagina: e.pagina || undefined, pasta: e.pasta || undefined });
-        return x.ok ? { ok: true, fim: x.fim, feito: x.lidos, total: x.totalPessoas, estado: { pagina: x.proxima, pasta: x.pasta } } : x;
-      });
+      const r = await rodarFases_([faseCopia_()]);
       b.disabled = false;
       if (!r.ok) { pontesStatus_('A cópia não foi feita: ' + (r.erro || 'tente de novo.')); return; }
       pontesStatus_('✓ Cópia feita: ' + numBR_(r.feito) + ' contatos salvos no Drive da conta dos contatos.'); contatosSit = null; desenharEstado();
     }
     else if (a === 'ponte-relatorio') {
       b.disabled = true; pontesStatus_('Lendo os contatos para o relatório em partes. Com muitos contatos pode levar alguns minutos.');
-      let r = await worker_('/msg/contatos/relatorio', 'POST', { etapa: 'inicio' });
-      if (r.ok) r = await rodarTrabalho_('Lendo os contatos para o relatório', async (e) => {
-        const x = await worker_('/msg/contatos/relatorio', 'POST', { etapa: 'parte', pagina: e.pagina || undefined });
-        return x.ok ? { ok: true, fim: !x.proxima, feito: x.lidos, total: x.total, estado: { pagina: x.proxima } } : x;
-      });
-      if (r.ok) { pontesStatus_('Montando o relatório…'); r = await worker_('/msg/contatos/relatorio', 'POST', { etapa: 'fim' }); }
+      const r = await rodarFases_([faseLeitura_()]);
       b.disabled = false;
       if (!r.ok) { pontesStatus_('O relatório não foi gerado: ' + (r.erro || 'tente de novo.')); return; }
       pontesStatus_(''); mostrarRelatorio_(r);
     }
+    else if (a === 'ponte-limpar') {
+      if (!confirm('Aplicar a limpeza aprovada nos contatos do Google?\n\n1. Faz uma cópia de segurança nova.\n2. Junta as pessoas repetidas (fica o nome mais completo; os outros nomes vão para a observação).\n3. Padroniza os números (+55 e o 9 do celular; 9 dígitos sem DDD ganham o 88; fixo não ganha o 9).\n4. Cria quem conversou no WhatsApp e não está no Google como “TM Cliente …”.\n5. Liga o cadastro automático dos números novos.\n\nCom muitos contatos leva vários minutos. Deixe esta tela aberta.')) return;
+      pontesStatus_('Aplicando a limpeza aprovada…');
+      const limp = (etapa, extra) => worker_('/msg/contatos/limpeza', 'POST', Object.assign({ etapa: etapa }, extra || {}));
+      const r = await rodarFases_([
+        faseCopia_(),
+        faseLeitura_(),
+        { titulo: 'Juntando as pessoas repetidas', unidade: 'pessoas', passo: async (e) => { const x = await limp('juntar', { desde: e.desde || 0 }); return x.ok ? { ok: true, fim: !x.proximo, feito: x.feito, total: x.total, estado: { desde: x.proximo } } : x; } },
+        { titulo: 'Padronizando os números', passo: async (e) => { const x = await limp('padronizar', { pagina: e.pagina || undefined }); return x.ok ? { ok: true, fim: !x.proxima, feito: x.feito, total: x.total, estado: { pagina: x.proxima } } : x; } },
+        { titulo: 'Criando os contatos novos (TM Cliente)', passo: async (e) => { const x = await limp('criar', { continuar: !!e.continuar }); return x.ok ? { ok: true, fim: !x.restantes, feito: x.feito, total: x.total, estado: { continuar: true } } : x; }, depois: () => limp('fim') }
+      ]);
+      if (!r.ok) { pontesStatus_('A limpeza parou: ' + (r.erro || 'tente de novo.') + ' O que já foi feito fica; ao tentar de novo, ela continua sem repetir.'); contatosSit = null; return; }
+      pontesStatus_('✓ Limpeza feita: ' + numBR_(r.juntados) + ' pessoas juntadas (' + numBR_(r.apagados) + ' contatos repetidos apagados), ' + numBR_(r.padronizados) + ' contatos com número padronizado e ' + numBR_(r.criados) + ' contatos novos. O cadastro automático dos números novos está ligado.');
+      contatosSit = null; fecharPainel(); painel = 'leitura'; cfgLeitura = null; desenharEstado();   // volta para Configurações, onde o resumo fica escrito
+      setTimeout(() => { const st = $('ms-ponte-st'); if (st && st.scrollIntoView) st.scrollIntoView({ block: 'center' }); }, 400);
+    }
+    else if (a === 'ponte-auto') { const ligar = !!(b.checked); const x = await worker_('/msg/contatos/auto', 'POST', { ligado: ligar }); if (!x.ok) { b.checked = !ligar; pontesStatus_(x.erro || 'Não foi possível mudar agora.'); return; } pontesStatus_(ligar ? 'Cadastro automático ligado: cada número novo vira “TM Cliente …” no Google.' : 'Cadastro automático desligado.'); contatosSit = null; desenharEstado(); }
     else if (a === 'ponte-ver') { const r = await worker_('/msg/contatos/situacao?relatorio=1', 'GET'); mostrarRelatorio_(r.ok ? r.relatorio : null); }
     else if (a === 'ponte-desligar') {
       if (!confirm('Desligar a ponte do Google Contatos? O endereço e a chave saem do servidor da loja. Nenhum contato é apagado.')) return;

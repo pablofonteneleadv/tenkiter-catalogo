@@ -104,6 +104,8 @@ async function iniciar(env) {
   /* v2.13: histórico de encerramentos (motivo, quando e por quem): base das métricas e, depois, do termômetro de cada cliente */
   try {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_tmp (r TEXT PRIMARY KEY, n TEXT DEFAULT '', f TEXT DEFAULT '[]', m TEXT DEFAULT '[]')").run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_plano (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, dados TEXT NOT NULL)").run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_fila (chave TEXT PRIMARY KEY, fone TEXT NOT NULL, nome TEXT DEFAULT '', canal TEXT DEFAULT '', em TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'pendente', tentativas INTEGER DEFAULT 0, erro TEXT DEFAULT '', r TEXT DEFAULT '')").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_encerramento (id INTEGER PRIMARY KEY AUTOINCREMENT, conversa_id INTEGER NOT NULL, canal TEXT NOT NULL, pessoa TEXT DEFAULT '', contato TEXT DEFAULT '', motivo TEXT NOT NULL, em TEXT NOT NULL, por TEXT DEFAULT '')").run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_conv ON msg_encerramento (conversa_id, em)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_pessoa ON msg_encerramento (pessoa)').run();
@@ -2594,6 +2596,7 @@ async function gravarMensagem_(env, canal, m) {
   /* Em SQLite o lado direito do SET usa os valores ANTIGOS da linha: por isso a comparação com ultima_em/ult_entrada_em vale como "antes desta mensagem". */
   await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=?")
     .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, t, c.id).run();
+  if (!saida && !m.grupo && canal !== 'instagram' && /^\d{10,15}$/.test(m.contato)) { try { if ((await cfgGet(env, 'contatos_auto')) === '1') await enfileirarContato_(env, canal, m.contato, m.nome); } catch (e) { /* o cadastro no Google é conforto: a mensagem já foi gravada */ } }
   if(!saida && !m.grupo && Date.parse(m.em)>Date.now()-300000){try{await mobileTables_(env);await env.DB.prepare('INSERT OR IGNORE INTO msg_push_outbox(mensagem,conversa,canal,chave,criado) VALUES(?,?,?,?,?)').bind(Number(r.meta.last_row_id),c.id,canal,crypto.randomUUID(),t).run();}catch(_){/* falha de aviso não interrompe o recebimento */}}
   return true;
 }
@@ -3089,7 +3092,7 @@ function foneNormal_(bruto) {
   const s = String(bruto || '').trim(), mais = s.indexOf('+') === 0;
   let d = s.replace(/\D/g, '');
   if (!d) return { ok: false, motivo: 'vazio' };
-  if (!mais) { d = d.replace(/^00/, ''); if (d.length >= 11 && d.length <= 12 && d.charAt(0) === '0') d = d.slice(1); if (d.length === 10 || d.length === 11) d = '55' + d; }
+  if (!mais) { d = d.replace(/^00/, ''); if (d.length >= 11 && d.length <= 12 && d.charAt(0) === '0') d = d.slice(1); if (d.length === 10 || d.length === 11) d = '55' + d; else if (d.length === 9 && d.charAt(0) === '9') d = '5588' + d; }   // v2.16: 9 dígitos sem DDD = DDD 88 da loja (aprovado pelo Pablo)
   // celular antigo de 8 dígitos (6 a 9 na frente) ganha o 9; fixo (2 a 5) fica com 8
   if (/^55[1-9][1-9][6-9]\d{7}$/.test(d)) d = d.slice(0, 4) + '9' + d.slice(4);
   const br = /^55[1-9][1-9](9\d{8}|[2-5]\d{7})$/.test(d);
@@ -3149,6 +3152,7 @@ async function montarRelatorioContatos_(env, contatos) {
     const n = foneNormal_('+' + c.contato); if (!n.ok || porChave.has(n.chave) || vistos.has(n.chave)) continue;
     vistos.add(n.chave); semCadastro.push({ conversa: c.id, canal: c.canal, nome: c.nome || '', fone: '+' + n.d, ultima: c.ultima_em });
   }
+  await salvarPlanoContatos_(env, duplicados, semCadastro);
   const corta = (a) => a.slice(0, 500);
   const rel = { em: agora(), total: contatos.length, comFone: contatos.length - semFone, semFone: semFone,
     duplicados: { total: duplicados.length, contatosEnvolvidos: duplicados.reduce((t, g) => t + g.contatos.length, 0), lista: corta(duplicados) },
@@ -3156,6 +3160,88 @@ async function montarRelatorioContatos_(env, contatos) {
     semCadastro: { total: semCadastro.length, lista: corta(semCadastro) } };
   try { await cfgSet(env, 'contatos_relatorio', JSON.stringify(rel)); } catch (e) { /* grande demais para guardar: só devolve */ }
   return Object.assign({ ok: true }, rel);
+}
+/* v2.16: plano completo da limpeza aprovada (o relatório guarda só 500 de cada lista).
+ * Repetidos ligados entre si (um contato com dois números em dois grupos) viram um grupo só; fica o nome mais completo. */
+async function salvarPlanoContatos_(env, duplicados, semCadastro) {
+  const pai = new Map(), dados = new Map();
+  const raiz = (x) => { while (pai.get(x) !== x) { pai.set(x, pai.get(pai.get(x))); x = pai.get(x); } return x; };
+  for (const g of duplicados) for (const c of g.contatos) { if (!pai.has(c.r)) { pai.set(c.r, c.r); dados.set(c.r, c); } }
+  for (const g of duplicados) for (let i = 1; i < g.contatos.length; i++) { const a = raiz(g.contatos[0].r), b = raiz(g.contatos[i].r); if (a !== b) pai.set(b, a); }
+  const comp = new Map(); for (const r of pai.keys()) { const k = raiz(r); if (!comp.has(k)) comp.set(k, []); comp.get(k).push(dados.get(r)); }
+  const peso = (c) => [String(c.n || '').trim().length, (c.f || []).length + (c.m || []).length];
+  const grupos = [...comp.values()].filter((g) => g.length > 1 && g.length <= 11).map((g) => {
+    const ord = g.slice().sort((a, b) => { const pa = peso(a), pb = peso(b); return pb[0] - pa[0] || pb[1] - pa[1]; });
+    return { manter: ord[0].r, nome: ord[0].n || '', apagar: ord.slice(1).map((c) => c.r) };
+  });
+  await env.DB.prepare('DELETE FROM msg_contatos_plano').run();
+  const SQL = 'INSERT INTO msg_contatos_plano (tipo, dados) VALUES (?, ?)', linhas = grupos.map((g) => ['dup', g]).concat(semCadastro.map((x) => ['novo', x]));
+  for (let i = 0; i < linhas.length; i += 100) await env.DB.batch(linhas.slice(i, i + 100).map(([t, d]) => env.DB.prepare(SQL).bind(t, JSON.stringify(d))));
+}
+const nomeTM_ = (nome, d) => {
+  const n = String(nome || '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+  const f = d && d.length >= 12 && d.indexOf('55') === 0 ? '(' + d.slice(2, 4) + ') ' + d.slice(4, -4) + '-' + d.slice(-4) : '+' + d;
+  return 'TM Cliente ' + (n || f);
+};
+/** Fila do cadastro no Google: número novo de WhatsApp (ou da limpeza) vira "TM Cliente …" no marcador. Sem duplicar pela chave do número. */
+async function enfileirarContato_(env, canal, fone, nome) {
+  const n = foneNormal_(String(fone || '').indexOf('+') === 0 ? fone : '+' + fone); if (!n.ok || !n.br) return false;
+  const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_contatos_fila (chave, fone, nome, canal, em) VALUES (?, ?, ?, ?, ?)').bind(n.chave, n.d, nomeTM_(nome, n.d), String(canal || ''), agora()).run();
+  return !!(r.meta && r.meta.changes === 1);
+}
+async function processarFilaContatos_(env, limite) {
+  const pend = (await env.DB.prepare("SELECT chave, fone, nome, canal FROM msg_contatos_fila WHERE estado='pendente' AND tentativas<5 ORDER BY em LIMIT ?").bind(limite || 5).all()).results;
+  if (!pend.length) return { ok: true, feitos: 0 };
+  const rotulo = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2' };
+  const r = await ponte_(env, { acao: 'criar_lote', contatos: pend.map((x) => ({ nome: x.nome, fone: x.fone, nota: 'Criado pelo site TENKiTER' + (rotulo[x.canal] ? ' (' + rotulo[x.canal] + ')' : '') })) });
+  if (!r.ok) { await env.DB.prepare("UPDATE msg_contatos_fila SET tentativas=tentativas+1, erro=? WHERE estado='pendente' AND chave IN (" + pend.map(() => '?').join(',') + ')').bind(String(r.erro || '').slice(0, 200), ...pend.map((x) => x.chave)).run(); return r; }
+  const porFone = new Map((r.resultados || []).map((x) => [String(x.fone), x]));
+  for (const x of pend) {
+    const res = porFone.get(x.fone);
+    if (res && res.ok) await env.DB.prepare('UPDATE msg_contatos_fila SET estado=?, r=?, erro=? WHERE chave=?').bind(res.ja ? 'ja' : 'feito', String(res.r || '').slice(0, 80), '', x.chave).run();
+    else await env.DB.prepare('UPDATE msg_contatos_fila SET tentativas=tentativas+1, erro=? WHERE chave=?').bind(String((res && res.erro) || 'sem resposta').slice(0, 200), x.chave).run();
+  }
+  return { ok: true, feitos: pend.length };
+}
+async function filaContatosAuto_(env) { try { if ((await cfgGet(env, 'contatos_auto')) !== '1' || !(await cfgGet(env, 'contatos_url'))) return; await processarFilaContatos_(env, 5); } catch (e) { /* a fila tenta de novo no próximo minuto */ } }
+/** v2.16: aplica a limpeza aprovada por etapas: juntar (100 grupos por vez), padronizar (páginas), criar (fila), fim. */
+async function limpezaContatos_(env, d) {
+  const b = JSON.parse((await cfgGet(env, 'contatos_backup')) || 'null');
+  if (!b || Date.now() - Date.parse(b.em) > 6 * 3600000) return { ok: false, cod: 409, erro: 'Faça uma cópia de segurança nova (menos de 6 horas) antes da limpeza.' };
+  const acc = JSON.parse((await cfgGet(env, 'contatos_limpeza_and')) || '{}'), salvar = () => cfgSet(env, 'contatos_limpeza_and', JSON.stringify(acc));
+  if (d.etapa === 'juntar') {
+    const desde = Math.max(0, Number(d.desde) || 0), total = (await env.DB.prepare("SELECT COUNT(*) n FROM msg_contatos_plano WHERE tipo='dup'").first()).n;
+    const rs = (await env.DB.prepare("SELECT id, dados FROM msg_contatos_plano WHERE tipo='dup' AND id>? ORDER BY id LIMIT 100").bind(desde).all()).results;
+    if (!desde) { for (const k of Object.keys(acc)) delete acc[k]; }
+    if (!rs.length) { await salvar(); return { ok: true, feito: total, total: total, proximo: '' }; }
+    const r = await ponte_(env, { acao: 'juntar_lote', confirmar: true, grupos: rs.map((x) => { const g = JSON.parse(x.dados); return { manter: g.manter, apagar: g.apagar }; }) });
+    if (!r.ok) return { ok: false, cod: 502, erro: r.erro === 'Ação desconhecida.' ? 'A ponte precisa da versão 1.2 (contatos-ponte-1.2) para a limpeza.' : r.erro };
+    acc.juntados = (acc.juntados || 0) + (Number(r.feitos) || 0); acc.apagados = (acc.apagados || 0) + (Number(r.apagados) || 0); await salvar();
+    const ultimo = rs[rs.length - 1].id, feito = (await env.DB.prepare("SELECT COUNT(*) n FROM msg_contatos_plano WHERE tipo='dup' AND id<=?").bind(ultimo).first()).n;
+    return { ok: true, feito: feito, total: total, proximo: feito < total ? String(ultimo) : '' };
+  }
+  if (d.etapa === 'padronizar') {
+    const r = await ponte_(env, { acao: 'padronizar_parte', pagina: typeof d.pagina === 'string' && d.pagina ? d.pagina.slice(0, 500) : undefined });
+    if (!r.ok) return { ok: false, cod: 502, erro: r.erro === 'Ação desconhecida.' ? 'A ponte precisa da versão 1.2 (contatos-ponte-1.2) para a limpeza.' : r.erro };
+    acc.padronizados = (acc.padronizados || 0) + (Number(r.mudados) || 0); acc.lidosPad = (d.pagina ? (acc.lidosPad || 0) : 0) + (Number(r.lidos) || 0); await salvar();
+    return { ok: true, feito: acc.lidosPad, total: Number(r.totalPessoas) || acc.lidosPad, proxima: String(r.proxima || '') };
+  }
+  if (d.etapa === 'criar') {
+    if (!d.continuar) { const novos = (await env.DB.prepare("SELECT dados FROM msg_contatos_plano WHERE tipo='novo'").all()).results; acc.criarTotal = 0; for (const x of novos) { const n = JSON.parse(x.dados); await enfileirarContato_(env, n.canal, n.fone, n.nome); acc.criarTotal++; } }
+    const r = await processarFilaContatos_(env, 15);
+    if (!r.ok) return { ok: false, cod: 502, erro: r.erro };
+    const rest = (await env.DB.prepare("SELECT COUNT(*) n FROM msg_contatos_fila WHERE estado='pendente' AND tentativas<5").first()).n;
+    const total = Math.max(acc.criarTotal || 0, rest); await salvar();
+    return { ok: true, feito: total - rest, total: total, restantes: rest };
+  }
+  if (d.etapa === 'fim') {
+    const criados = (await env.DB.prepare("SELECT COUNT(*) n FROM msg_contatos_fila WHERE estado='feito'").first()).n;
+    const res = { em: agora(), juntados: acc.juntados || 0, apagados: acc.apagados || 0, padronizados: acc.padronizados || 0, criados: criados };
+    await cfgSet(env, 'contatos_limpeza', JSON.stringify(res)); await cfgSet(env, 'contatos_limpeza_and', null); await cfgSet(env, 'contatos_auto', '1');
+    await env.DB.prepare('DELETE FROM msg_contatos_plano').run();
+    return Object.assign({ ok: true, auto: true }, res);
+  }
+  return { ok: false, cod: 400, erro: 'Etapa da limpeza inválida.' };
 }
 async function metricasMensagens_(env, canal, dias) {
   dias = [7, 30, 90].includes(Number(dias)) ? Number(dias) : 30;
@@ -3190,6 +3276,7 @@ export default {
     ctx.waitUntil(processarPushMobile_(env).catch(()=>{}));
     ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
     ctx.waitUntil(processarFotoIA(env));                                      // a cada minuto: 1 imagem da fila de Fotos com IA (se já puder: cota/limite do dia)
+    ctx.waitUntil(filaContatosAuto_(env));                                    // a cada minuto: até 5 números novos viram "TM Cliente …" no Google (se ligado)
     const min = ev && ev.scheduledTime ? new Date(ev.scheduledTime).getUTCMinutes() : 0;
     if (min === 7) ctx.waitUntil(limparTemporarios(env).catch(() => {}));      // 1x por dia: apaga do R2 o que é temporário (t/) com mais de 5 dias
     if (min % 30 !== 0) return;                                                // importar do Instagram só a cada 30 min (como antes)
@@ -3274,13 +3361,22 @@ export default {
       if (p === '/msg/zernio/config' && req.method === 'POST') {
         const d = await req.json().catch(() => ({}));
         if (d.apagar === true) { for (const k of ['zernio_chave', 'zernio_conta', 'zernio_conferida']) await cfgSet(env, k, null); return J({ ok: true, configurada: false }); }
-        const chave = String(d.chave || '').trim();
-        if (chave.length < 20 || chave.length > 300 || /\s/.test(chave)) return J({ ok: false, erro: 'Cole a chave de API completa do Zernio (Settings → API Keys).' }, 400);
+        /* v2.17: com mais de um Instagram no Zernio, a tela lista e o gestor escolhe (listar / escolher usam a chave já guardada) */
+        const usarGuardada = d.listar === true || typeof d.escolher === 'string';
+        const chave = usarGuardada ? String((await cfgGet(env, 'zernio_chave')) || '') : String(d.chave || '').trim();
+        if (usarGuardada && !chave) return J({ ok: false, erro: 'Guarde a chave do Zernio primeiro.' }, 409);
+        if (!usarGuardada && (chave.length < 20 || chave.length > 300 || /\s/.test(chave))) return J({ ok: false, erro: 'Cole a chave de API completa do Zernio (Settings → API Keys).' }, 400);
         const r = await zernioContas_(chave);
         if (!r.ok) return J({ ok: false, erro: r.erro }, r.cod || 400);
-        const ig = r.contas.find((x) => x && x.platform === 'instagram') || null, conta = ig ? { id: String(ig._id || ''), usuario: String(ig.username || ig.displayName || '').slice(0, 60) } : null;
-        await cfgSet(env, 'zernio_chave', chave); await cfgSet(env, 'zernio_conta', conta ? JSON.stringify(conta) : null); await cfgSet(env, 'zernio_conferida', agora());
-        return J({ ok: true, configurada: true, conta: conta, conferidaEm: await cfgGet(env, 'zernio_conferida') });
+        const contas = r.contas.filter((x) => x && x.platform === 'instagram').map((x) => ({ id: String(x._id || ''), usuario: String(x.username || x.displayName || '').slice(0, 60) })).filter((x) => x.id);
+        let atual = null; try { atual = JSON.parse((await cfgGet(env, 'zernio_conta')) || 'null'); } catch (e) { atual = null; }
+        let conta;
+        if (typeof d.escolher === 'string') { conta = contas.find((x) => x.id === d.escolher); if (!conta) return J({ ok: false, erro: 'Esse Instagram não está conectado no Zernio.' }, 400); }
+        else if (d.listar === true) conta = (atual && contas.find((x) => x.id === atual.id)) || null;
+        else conta = contas.find((x) => /tenkiter/i.test(x.usuario)) || contas[0] || null;      // prefere o Instagram da loja quando há mais de um
+        if (!usarGuardada) await cfgSet(env, 'zernio_chave', chave);
+        if (d.listar !== true) { await cfgSet(env, 'zernio_conta', conta ? JSON.stringify(conta) : null); await cfgSet(env, 'zernio_conferida', agora()); }
+        return J({ ok: true, configurada: true, conta: conta, contas: contas, conferidaEm: await cfgGet(env, 'zernio_conferida') });
       }
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {
@@ -3400,7 +3496,10 @@ export default {
         const ligada = !!(await cfgGet(env, 'contatos_url')) && !!(await cfgGet(env, 'contatos_chave'));
         let backup = null, relatorio = null; try { backup = JSON.parse((await cfgGet(env, 'contatos_backup')) || 'null'); } catch (e) { backup = null; }
         if (url.searchParams.get('relatorio') === '1') { try { relatorio = JSON.parse((await cfgGet(env, 'contatos_relatorio')) || 'null'); } catch (e) { relatorio = null; } }
-        return J({ ok: true, ligada: ligada, conta: (await cfgGet(env, 'contatos_conta')) || '', marcador: 'Tenkiter Clientes G', backup: backup, relatorio: relatorio });
+        let limpeza = null; try { limpeza = JSON.parse((await cfgGet(env, 'contatos_limpeza')) || 'null'); } catch (e) { limpeza = null; }
+        const plano = (await env.DB.prepare('SELECT COUNT(*) n FROM msg_contatos_plano').first()).n;
+        const fila = (await env.DB.prepare("SELECT SUM(estado='feito') feitos, SUM(estado='pendente' AND tentativas<5) pendentes, SUM(estado='pendente' AND tentativas>=5) falhas FROM msg_contatos_fila").first()) || {};
+        return J({ ok: true, ligada: ligada, conta: (await cfgGet(env, 'contatos_conta')) || '', marcador: 'Tenkiter Clientes G', backup: backup, relatorio: relatorio, limpeza: limpeza, planoPronto: plano > 0, auto: (await cfgGet(env, 'contatos_auto')) === '1', fila: { feitos: fila.feitos || 0, pendentes: fila.pendentes || 0, falhas: fila.falhas || 0 } });
       }
       if (p === '/msg/contatos/config' && req.method === 'POST') {
         const d = await req.json().catch(() => ({}));
@@ -3432,6 +3531,15 @@ export default {
         const b = { em: agora(), total: Number(r.total) || 0, arquivo: String(r.arquivo || '').slice(0, 120), url: /^https:\/\/drive\.google\.com\//.test(String(r.url || '')) ? r.url : '' };
         await cfgSet(env, 'contatos_backup', JSON.stringify(b));
         return J(Object.assign({ ok: true }, b));
+      }
+      if (p === '/msg/contatos/limpeza' && req.method === 'POST') {
+        if (!(await cfgGet(env, 'contatos_url'))) return J({ ok: false, erro: 'A ponte do Google Contatos ainda não foi ligada.' }, 409);
+        const r = await limpezaContatos_(env, await req.json().catch(() => ({})));
+        const cod = r.cod || (r.ok ? 200 : 502); delete r.cod; return J(r, cod);
+      }
+      if (p === '/msg/contatos/auto' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({})); await cfgSet(env, 'contatos_auto', d.ligado === true ? '1' : '0');
+        return J({ ok: true, auto: d.ligado === true });
       }
       if (p === '/msg/contatos/relatorio' && req.method === 'POST') {
         const b = await cfgGet(env, 'contatos_backup');

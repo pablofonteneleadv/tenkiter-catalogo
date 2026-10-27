@@ -69,6 +69,9 @@
       .cx-linha { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
       .cx-chave-ok { color: #146c43; font-weight: 700; font-size: 0.86rem; }
       .cx-passos { margin: 4px 0 10px; padding-left: 20px; } .cx-passos li { margin: 2px 0; }
+      .cx-zr-escolha { border: 1px solid #e3e3e3; border-radius: 8px; padding: 6px 10px 8px; margin: 6px 0 8px; }
+      .cx-zr-escolha legend { font-weight: 700; font-size: 0.86rem; padding: 0 4px; }
+      .cx-zr-escolha label { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 0.9rem; }
       .cx-chave-sem { color: #6b3f00; font-weight: 700; font-size: 0.86rem; }
       .cx-aviso { background: #fff3e0; border: 1px solid #ffcc80; color: #6b3f00; border-radius: 10px; padding: 8px 10px; font-size: 0.82rem; margin: 8px 0; }
       .cx-msg { min-height: 1.4em; font-size: 0.86rem; margin: 6px 0; overflow-wrap: anywhere; }
@@ -606,6 +609,7 @@
   function blocoZernio_() {
     return '<div class="cx-bloco"><h3>Instagram Direct · Zernio</h3>' +
       '<p id="cx-zr-status" role="status">Conferindo…</p>' +
+      '<div id="cx-zr-contas" hidden></div>' +
       '<ol class="g-nota cx-passos"><li>Crie a conta em <b>zernio.com</b> (grátis até 2 contas).</li><li>No Zernio, conecte o Instagram da loja (conta Empresa ou Criador).</li><li>Em <b>Settings → API Keys</b>, crie uma chave e cole aqui.</li></ol>' +
       '<label for="cx-zr-key">Zernio · chave de API</label><input id="cx-zr-key" type="password" autocomplete="new-password" placeholder="Cole a chave aqui">' +
       '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="zr-guardar">Salvar e conferir</button><button type="button" class="cx-btn cx-sec" data-cx="zr-apagar">Remover chave</button></div>' +
@@ -621,6 +625,28 @@
     const el = $('cx-zr-status'); if (!el) return;
     const r = await igWorker_('/msg/zernio/config', 'GET');
     el.textContent = textoZernio_(r); el.className = r && r.ok && r.configurada ? 'cx-chave-ok' : 'cx-chave-sem';
+    if (r && r.ok && r.configurada) { const l = await igWorker_('/msg/zernio/config', 'POST', { listar: true }); desenharContasZernio_(l); } else desenharContasZernio_(null);
+  }
+  /* mais de um Instagram conectado no Zernio: o gestor escolhe qual é o da loja */
+  function desenharContasZernio_(r) {
+    const box = $('cx-zr-contas'); if (!box) return;
+    const contas = r && r.ok && Array.isArray(r.contas) ? r.contas : [];
+    box.hidden = contas.length < 2; box.textContent = ''; if (box.hidden) return;
+    const fs = document.createElement('fieldset'); fs.className = 'cx-zr-escolha';
+    const lg = document.createElement('legend'); lg.textContent = 'Qual Instagram é o da loja?'; fs.appendChild(lg);
+    contas.forEach((c) => {
+      const lb = document.createElement('label'), i = document.createElement('input');
+      i.type = 'radio'; i.name = 'cx-zr-conta'; i.value = c.id; i.checked = !!(r.conta && r.conta.id === c.id);
+      lb.append(i, document.createTextNode(' @' + c.usuario)); fs.appendChild(lb);
+    });
+    const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'cx-btn cx-prim'; bt.dataset.cx = 'zr-escolher'; bt.textContent = 'Usar este Instagram';
+    box.append(fs, bt);
+  }
+  async function escolherZernio_() {
+    const sel = document.querySelector('input[name=cx-zr-conta]:checked'); if (!sel) return msg('cx-zr-msg', 'Marque o Instagram da loja.', 'erro');
+    msg('cx-zr-msg', 'Guardando…', '');
+    const r = await igWorker_('/msg/zernio/config', 'POST', { escolher: sel.value });
+    if (r && r.ok) { msg('cx-zr-msg', 'Pronto: o Direct vai usar @' + (r.conta ? r.conta.usuario : '') + '.', 'ok'); conferirZernio_(); } else msg('cx-zr-msg', erroTxt(r), 'erro');
   }
   async function configurarZernio_(apagar) {
     const input = $('cx-zr-key'); if (!input) return;
@@ -628,7 +654,7 @@
     if (!apagar && !input.value.trim()) return msg('cx-zr-msg', 'Cole a chave do Zernio antes de salvar.', 'erro');
     msg('cx-zr-msg', apagar ? 'Removendo…' : 'Conferindo a chave no Zernio…', '');
     const r = await igWorker_('/msg/zernio/config', 'POST', apagar ? { apagar: true } : { chave: input.value.trim() });
-    if (r && r.ok) { input.value = ''; msg('cx-zr-msg', apagar ? 'Chave removida.' : (r.conta ? 'Chave conferida e guardada no servidor.' : 'Chave guardada. Agora conecte o Instagram no Zernio e toque em “Salvar e conferir” de novo.'), 'ok'); conferirZernio_(); }
+    if (r && r.ok) { input.value = ''; msg('cx-zr-msg', apagar ? 'Chave removida.' : (r.conta ? 'Chave conferida e guardada no servidor.' + (r.contas && r.contas.length > 1 ? ' Há mais de um Instagram: confira qual é o da loja abaixo.' : '') : 'Chave guardada. Agora conecte o Instagram no Zernio e toque em “Salvar e conferir” de novo.'), 'ok'); conferirZernio_(); }
     else msg('cx-zr-msg', erroTxt(r), 'erro');
   }
   async function conferirMobile_(){const el=$('cx-mobile-status');if(!el)return;const r=await igWorker_('/msg/mobile/config','GET');el.textContent=r&&r.ok?(r.configurada?'Chave de envio salva. Falta conferir a entrega no aparelho.':'Chave de envio Android ainda não configurada.'):erroTxt(r);}
@@ -639,6 +665,7 @@
     if(a==='mobile-guardar')configurarMobile_(false);
     else if (a === 'zr-guardar') configurarZernio_(false);
     else if (a === 'zr-apagar') configurarZernio_(true);
+    else if (a === 'zr-escolher') escolherZernio_();
     else if(a==='mobile-apagar')configurarMobile_(true);
     else if (a === 'fc-guardar') guardarFreeConvert_();
     else if (a === 'fc-apagar') apagarFreeConvert_();

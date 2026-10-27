@@ -562,7 +562,7 @@ function d1() {
     { r: 'people/c1', n: 'Maria Silva', f: ['+55 88 99999-0001'] }, { r: 'people/c2', n: 'Maria S.', f: ['(88) 9999-0001'], m: ['m@x.com'] },
     { r: 'people/c3', n: 'Sem número', f: [] }, { r: 'people/c4', n: 'Fixo errado', f: ['12345'] }, { r: 'people/c5', n: 'Rita', f: ['+5588977770001'] }
   ];
-  const pedidosPonte = []; const fPonte = globalThis.fetch; let ponteVelha = false;
+  const pedidosPonte = []; const fPonte = globalThis.fetch; let ponteVelha = false; const juntados = [], criadosG = [];
   globalThis.fetch = async (u, init) => {
     if (String(u) === PONTE) {
       const b = JSON.parse(init.body); pedidosPonte.push(b);
@@ -570,6 +570,9 @@ function d1() {
       if (b.acao === 'ping') return new Response(JSON.stringify({ ok: true, versao: 'contatos-ponte-1.0', conta: 'contatos@exemplo.com' }));
       if (b.acao === 'backup') return new Response(JSON.stringify({ ok: true, total: contatosG.length, arquivo: 'contatos-google-2026-10-26-1800.json', url: 'https://drive.google.com/file/d/abc' }));
       if (b.acao === 'listar') { const ini = Number(b.pagina || 0); return new Response(JSON.stringify({ ok: true, contatos: contatosG.slice(ini, ini + 3), proxima: ini + 3 < contatosG.length ? String(ini + 3) : '', total: contatosG.length })); }
+      if (b.acao === 'juntar_lote') { if (!b.confirmar) return new Response(JSON.stringify({ ok: false, erro: 'Juntar contatos precisa de confirmação.' })); juntados.push(...b.grupos); return new Response(JSON.stringify({ ok: true, feitos: b.grupos.length, pulados: 0, apagados: b.grupos.reduce((t, g) => t + g.apagar.length, 0) })); }
+      if (b.acao === 'padronizar_parte') { const ini = Number(b.pagina || 0); return new Response(JSON.stringify({ ok: true, lidos: Math.min(3, contatosG.length - ini), mudados: ini ? 0 : 2, totalPessoas: contatosG.length, proxima: ini + 3 < contatosG.length ? String(ini + 3) : '' })); }
+      if (b.acao === 'criar_lote') { criadosG.push(...b.contatos); return new Response(JSON.stringify({ ok: true, resultados: b.contatos.map((c, i) => ({ fone: c.fone.replace(/\D/g, ''), ok: true, ja: c.fone.endsWith('0009'), r: 'people/n' + (criadosG.length + i) })) })); }
       if (b.acao === 'backup_parte') {
         if (ponteVelha) return new Response(JSON.stringify({ ok: false, erro: 'Ação desconhecida.' }));
         const ini = Number(b.pagina || 0), parte = ini / 2 + 1;
@@ -620,6 +623,43 @@ function d1() {
   const rf = await A('POST', '/msg/contatos/relatorio', { etapa: 'fim' });
   chk('etapa final: mesmo resultado do relatório de uma vez só', rf.j.ok && rf.j.total === 5 && rf.j.duplicados.total === relP.j.duplicados.total && rf.j.invalidos.total === relP.j.invalidos.total && rf.j.semFone === relP.j.semFone && rf.j.corrigir.total === relP.j.corrigir.total, rf.j);
   chk('etapa final limpa a tabela temporária (sem dados pessoais sobrando)', (await DB.prepare('SELECT COUNT(*) n FROM msg_contatos_tmp').first()).n === 0);
+  // v2.16: limpeza aprovada (juntar, padronizar, criar) e cadastro automático "TM Cliente …"
+  const planoN = await DB.prepare("SELECT tipo, COUNT(*) n FROM msg_contatos_plano GROUP BY tipo").all();
+  const planoDup = JSON.parse((await DB.prepare("SELECT dados FROM msg_contatos_plano WHERE tipo='dup'").first()).dados);
+  chk('relatório guarda o plano completo (repetidos e novos)', planoN.results.some((x) => x.tipo === 'dup' && x.n === 1) && planoN.results.some((x) => x.tipo === 'novo' && x.n >= 1), planoN.results);
+  chk('no plano, fica o contato de nome mais completo', planoDup.manter === 'people/c1' && planoDup.apagar.join() === 'people/c2', planoDup);
+  chk('situação avisa que o plano está pronto', (await A('GET', '/msg/contatos/situacao')).j.planoPronto === true);
+  const bkGuard = await DB.prepare("SELECT valor FROM cfg WHERE chave='contatos_backup'").first();
+  await cfg('contatos_backup', JSON.stringify(Object.assign(JSON.parse(bkGuard.valor), { em: '2026-01-01T00:00:00.000Z' })));
+  const velhoBk = await A('POST', '/msg/contatos/limpeza', { etapa: 'juntar' });
+  chk('limpeza sem cópia recente (6 h): pede cópia nova e não chama a ponte', velhoBk.r.status === 409 && /cópia de segurança nova/.test(velhoBk.j.erro) && juntados.length === 0);
+  await cfg('contatos_backup', bkGuard.valor);
+  chk('etapa inválida é recusada', (await A('POST', '/msg/contatos/limpeza', { etapa: 'xpto' })).r.status === 400);
+  const lj = await A('POST', '/msg/contatos/limpeza', { etapa: 'juntar' });
+  chk('juntar: manda os grupos do plano com confirmação e conta o progresso', lj.j.ok && lj.j.feito === 1 && lj.j.total === 1 && lj.j.proximo === '' && juntados.length === 1 && juntados[0].manter === 'people/c1', [lj.j, juntados]);
+  let lp = await A('POST', '/msg/contatos/limpeza', { etapa: 'padronizar' }), vp = 1;
+  while (lp.j.proxima && vp < 10) { lp = await A('POST', '/msg/contatos/limpeza', { etapa: 'padronizar', pagina: lp.j.proxima }); vp++; }
+  chk('padronizar: repete as páginas até o fim', lp.j.ok && vp === 2 && lp.j.feito === 5 && lp.j.total === 5, lp.j);
+  const nNovos = planoN.results.find((x) => x.tipo === 'novo').n;
+  let lc = await A('POST', '/msg/contatos/limpeza', { etapa: 'criar' }), vc = 1;
+  while (lc.j.restantes && vc < 10) { lc = await A('POST', '/msg/contatos/limpeza', { etapa: 'criar', continuar: true }); vc++; }
+  chk('criar: quem conversou e não está no Google vira "TM Cliente …"', lc.j.ok && lc.j.restantes === 0 && criadosG.length === nNovos && criadosG.every((c) => /^TM Cliente /.test(c.nome) && /^55\d{10,11}$/.test(c.fone)), [lc.j, criadosG.slice(0, 3)]);
+  const lf = await A('POST', '/msg/contatos/limpeza', { etapa: 'fim' });
+  const sitL = (await A('GET', '/msg/contatos/situacao')).j;
+  chk('fim: resumo guardado, plano apagado e cadastro automático ligado', lf.j.ok && lf.j.juntados === 1 && lf.j.apagados === 1 && lf.j.padronizados === 2 && sitL.limpeza.juntados === 1 && sitL.auto === true && sitL.planoPronto === false, [lf.j, sitL.limpeza]);
+  const nFila = criadosG.length;
+  await wh('/wh/wafly/1/' + seg, msg('AUTO1', '5588912340001', 'Oi, quero ver as blusas', { senderName: 'Joana Lima' }));
+  await wh('/wh/wafly/1/' + seg, msg('AUTO2', '5588912340001', 'Tem tamanho M?', { senderName: 'Joana Lima' }));
+  await wh('/wh/wafly/1/' + seg, msg('AUTO3', '5588912340002', 'Oi', { senderName: '' }));
+  const filaAuto = (await DB.prepare("SELECT nome, fone, estado FROM msg_contatos_fila WHERE fone IN ('5588912340001','5588912340002') ORDER BY fone").all()).results;
+  chk('número novo no WhatsApp entra na fila uma vez só, com o padrão "TM Cliente nome do WhatsApp"', filaAuto.length === 2 && filaAuto[0].nome === 'TM Cliente Joana Lima' && filaAuto[0].estado === 'pendente', filaAuto);
+  chk('sem nome no WhatsApp: "TM Cliente (88) 91234-0002"', filaAuto[1].nome === 'TM Cliente (88) 91234-0002', filaAuto[1]);
+  const esperas = []; await w.scheduled({ scheduledTime: Date.parse('2026-10-27T10:01:00Z') }, env, { waitUntil: (p) => esperas.push(p) }); await Promise.allSettled(esperas);
+  const filaDepois = (await DB.prepare("SELECT estado, r FROM msg_contatos_fila WHERE fone IN ('5588912340001','5588912340002')").all()).results;
+  chk('a cada minuto a fila cria os contatos no Google (marcados como feitos)', criadosG.length === nFila + 2 && filaDepois.every((x) => x.estado === 'feito' && /^people\//.test(x.r)), [filaDepois, criadosG.slice(-2)]);
+  chk('desligar o cadastro automático', (await A('POST', '/msg/contatos/auto', { ligado: false })).j.auto === false && (await A('GET', '/msg/contatos/situacao')).j.auto === false);
+  await wh('/wh/wafly/1/' + seg, msg('AUTO4', '5588912340003', 'Oi', { senderName: 'Pedro' }));
+  chk('com o automático desligado, número novo não entra na fila', !(await DB.prepare("SELECT 1 FROM msg_contatos_fila WHERE fone='5588912340003'").first()));
   const deslP = await A('POST', '/msg/contatos/config', { desligar: true });
   chk('desligar apaga endereço e chave do servidor', deslP.j.ok && !(await A('GET', '/msg/contatos/situacao')).j.ligada && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='contatos_chave'").first()));
   globalThis.fetch = fPonte;
@@ -632,6 +672,7 @@ function d1() {
       zChamadas.push({ u, auth: new Headers(init.headers).get('authorization') });
       if (zModo === 'recusa') return new Response('{"error":"invalid_credentials","key":"x"}', { status: 401 });
       if (zModo === 'semig') return new Response(JSON.stringify({ accounts: [], hasAnalyticsAccess: false }));
+      if (zModo === 'duas') return new Response(JSON.stringify({ accounts: [{ _id: 'acc_p', platform: 'instagram', username: 'pablo_fontenele88' }, { _id: 'acc_t', platform: 'instagram', username: 'tenkitermodasceara' }, { _id: 'acc_f', platform: 'facebook', username: 'pagina' }], hasAnalyticsAccess: false }));
       return new Response(JSON.stringify({ accounts: [{ _id: 'acc_1', platform: 'instagram', username: 'tenkitermodasceara' }], hasAnalyticsAccess: false }));
     }
     return fZ(u, init);
@@ -649,6 +690,14 @@ function d1() {
   zModo = 'semig';
   const zSem = await A('POST', '/msg/zernio/config', { chave: zChave });
   chk('chave certa sem Instagram conectado: salva e avisa que falta conectar', zSem.j.ok && zSem.j.conta === null);
+  zModo = 'duas';
+  const zDuas = await A('POST', '/msg/zernio/config', { chave: zChave });
+  chk('dois Instagram no Zernio: escolhe sozinho o da loja e lista os dois (sem o Facebook)', zDuas.j.ok && zDuas.j.conta.usuario === 'tenkitermodasceara' && zDuas.j.contas.map((c) => c.usuario).join() === 'pablo_fontenele88,tenkitermodasceara', zDuas.j);
+  const zLis = await A('POST', '/msg/zernio/config', { listar: true });
+  chk('listar usa a chave guardada e mostra qual está em uso', zLis.j.ok && zLis.j.contas.length === 2 && zLis.j.conta.id === 'acc_t' && !JSON.stringify(zLis.j).includes(zChave));
+  const zEsc = await A('POST', '/msg/zernio/config', { escolher: 'acc_p' });
+  chk('escolher outro Instagram troca a conta guardada', zEsc.j.ok && zEsc.j.conta.usuario === 'pablo_fontenele88' && (await A('GET', '/msg/zernio/config')).j.conta.id === 'acc_p');
+  chk('escolher um Instagram que não está no Zernio é recusado', (await A('POST', '/msg/zernio/config', { escolher: 'acc_x' })).r.status === 400);
   chk('remover apaga a chave e a conta do servidor', (await A('POST', '/msg/zernio/config', { apagar: true })).j.ok && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='zernio_chave'").first()) && (await A('GET', '/msg/zernio/config')).j.configurada === false);
   globalThis.fetch = fZ;
   // Android: paginação estável para horários iguais, sem omitir conversas ou mensagens.
