@@ -62,12 +62,13 @@
       .cx-t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
       .cx-t b { display: block; color: #111; }
       .cx-t span { color: #333; }
-      .cx-lista button, .cx-bloco .cx-btn { width: auto; flex: none; padding: 9px 13px; font-size: 0.82rem; min-height: 40px; border-radius: 8px; cursor: pointer; }
+      .cx-lista button, .cx-bloco .cx-btn { width: auto; flex: none; padding: 9px 13px; font-size: 0.82rem; min-height: 44px; border-radius: 8px; cursor: pointer; }
       .cx-prim { background: var(--laranja); color: #0d0d0d; font-weight: 800; border: 0; }
       .cx-sec { background: #eee; color: #222; border: 0; font-weight: 700; }
       .cx-perigo { background: #fde3e3; color: #8a1c1c; border: 0; font-weight: 700; }
       .cx-linha { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
       .cx-chave-ok { color: #146c43; font-weight: 700; font-size: 0.86rem; }
+      .cx-passos { margin: 4px 0 10px; padding-left: 20px; } .cx-passos li { margin: 2px 0; }
       .cx-chave-sem { color: #6b3f00; font-weight: 700; font-size: 0.86rem; }
       .cx-aviso { background: #fff3e0; border: 1px solid #ffcc80; color: #6b3f00; border-radius: 10px; padding: 8px 10px; font-size: 0.82rem; margin: 8px 0; }
       .cx-msg { min-height: 1.4em; font-size: 0.86rem; margin: 6px 0; overflow-wrap: anywhere; }
@@ -164,7 +165,7 @@
     document.querySelectorAll('#cx-corpo .cx-grupo').forEach((g) => { if (g.open) gruposAbertos.add(g.id); else gruposAbertos.delete(g.id); });
     desenharBase_();
     document.querySelectorAll('#cx-corpo .cx-grupo').forEach((g) => { g.open = gruposAbertos.has(g.id); });
-    desenharCofre(); conferirMobile_(); conferirFreeConvert_(); conferirWafly_(); conferirIg_(); if (temIntegracoes) carregarIntegracoes_();
+    desenharCofre(); conferirMobile_(); conferirZernio_(); conferirFreeConvert_(); conferirWafly_(); conferirIg_(); if (temIntegracoes) carregarIntegracoes_();
   }
   function grupo_(id, titulo, ajuda, partes, aberto) {
     return '<details class="cx-grupo" id="cx-g-' + id + '"' + (aberto ? ' open' : '') + '><summary><span>' + titulo + '</span></summary>' +
@@ -191,6 +192,7 @@
       ], false) +
       grupo_('instagram', '📸 Instagram', 'Conexão do importador e das mensagens, e leitura das fotos por IA.', [
         blocoInstagramWorker_(),
+        blocoZernio_(),
         ((status.conexoes && status.conexoes.instagram ? blocoChave('instagram', 'Instagram — token antigo (Apps Script)',
         'Gere em <b>developers.facebook.com → Meus apps → seu app → Instagram → API com login do Instagram → Gerar token</b> (a conta da loja precisa ser <b>Empresa</b>; para postar, marque a permissão <b>instagram_business_content_publish</b>). O painel testa o token no Instagram, liga o importador/postagens (Worker) e guarda uma cópia aqui no cofre.',
         'O token vale ~60 dias; o servidor renova o dele sozinho. Se o Instagram recusar, gere outro e cole aqui.') : ''))
@@ -600,12 +602,43 @@
     msg('cx-wf'+n+'-msg',r.ok?'Cadastro removido. A fila não foi alterada.':erroTxt(r),r.ok?'ok':'erro');
     if(r.ok){const ul=$('cx-wf'+n+'-res');ul&&(ul.textContent='');conferirWafly_();}
   }
+  /* v7.35: Zernio (Instagram Direct pela API oficial). A chave fica só no servidor; aqui só aparece se está guardada e qual Instagram está conectado. */
+  function blocoZernio_() {
+    return '<div class="cx-bloco"><h3>Instagram Direct · Zernio</h3>' +
+      '<p id="cx-zr-status" role="status">Conferindo…</p>' +
+      '<ol class="g-nota cx-passos"><li>Crie a conta em <b>zernio.com</b> (grátis até 2 contas).</li><li>No Zernio, conecte o Instagram da loja (conta Empresa ou Criador).</li><li>Em <b>Settings → API Keys</b>, crie uma chave e cole aqui.</li></ol>' +
+      '<label for="cx-zr-key">Zernio · chave de API</label><input id="cx-zr-key" type="password" autocomplete="new-password" placeholder="Cole a chave aqui">' +
+      '<div class="cx-linha"><button type="button" class="cx-btn cx-prim" data-cx="zr-guardar">Salvar e conferir</button><button type="button" class="cx-btn cx-sec" data-cx="zr-apagar">Remover chave</button></div>' +
+      '<p id="cx-zr-msg" class="cx-msg" role="status"></p>' +
+      '<p class="g-nota">O servidor confere a chave no Zernio sem enviar nenhuma mensagem. Guardar a chave ainda não liga o Direct no painel: isso entra na próxima versão.</p></div>';
+  }
+  function textoZernio_(r) {
+    if (!r || !r.ok) return erroTxt(r);
+    if (!r.configurada) return 'Nenhuma chave guardada.';
+    return r.conta && r.conta.usuario ? '✓ Chave guardada · Instagram conectado: @' + r.conta.usuario : '✓ Chave guardada · falta conectar o Instagram no Zernio';
+  }
+  async function conferirZernio_() {
+    const el = $('cx-zr-status'); if (!el) return;
+    const r = await igWorker_('/msg/zernio/config', 'GET');
+    el.textContent = textoZernio_(r); el.className = r && r.ok && r.configurada ? 'cx-chave-ok' : 'cx-chave-sem';
+  }
+  async function configurarZernio_(apagar) {
+    const input = $('cx-zr-key'); if (!input) return;
+    if (apagar && !confirm('Remover a chave do Zernio do servidor? Nada muda no Instagram.')) return;
+    if (!apagar && !input.value.trim()) return msg('cx-zr-msg', 'Cole a chave do Zernio antes de salvar.', 'erro');
+    msg('cx-zr-msg', apagar ? 'Removendo…' : 'Conferindo a chave no Zernio…', '');
+    const r = await igWorker_('/msg/zernio/config', 'POST', apagar ? { apagar: true } : { chave: input.value.trim() });
+    if (r && r.ok) { input.value = ''; msg('cx-zr-msg', apagar ? 'Chave removida.' : (r.conta ? 'Chave conferida e guardada no servidor.' : 'Chave guardada. Agora conecte o Instagram no Zernio e toque em “Salvar e conferir” de novo.'), 'ok'); conferirZernio_(); }
+    else msg('cx-zr-msg', erroTxt(r), 'erro');
+  }
   async function conferirMobile_(){const el=$('cx-mobile-status');if(!el)return;const r=await igWorker_('/msg/mobile/config','GET');el.textContent=r&&r.ok?(r.configurada?'Chave de envio salva. Falta conferir a entrega no aparelho.':'Chave de envio Android ainda não configurada.'):erroTxt(r);}
   async function configurarMobile_(apagar){const input=$('cx-mobile-key');if(apagar&&!confirm('Desativar o envio de avisos Android pelo servidor?'))return;const r=await igWorker_('/msg/mobile/config','POST',apagar?{apagar:true}:{chave:input.value.trim()});if(r&&r.ok){input.value='';msg('cx-mobile-msg',apagar?'Chave removida.':'Chave conferida e salva no servidor.','ok');conferirMobile_();}else msg('cx-mobile-msg',erroTxt(r),'erro');}
   function clique(ev) {
     const b = ev.target.closest('[data-cx]'); if (!b) return;
     const a = b.dataset.cx;
     if(a==='mobile-guardar')configurarMobile_(false);
+    else if (a === 'zr-guardar') configurarZernio_(false);
+    else if (a === 'zr-apagar') configurarZernio_(true);
     else if(a==='mobile-apagar')configurarMobile_(true);
     else if (a === 'fc-guardar') guardarFreeConvert_();
     else if (a === 'fc-apagar') apagarFreeConvert_();

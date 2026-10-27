@@ -166,6 +166,10 @@
     const s = document.createElement('style'); s.id = 'ms-css';
     s.textContent = `
       #overlay-mensagens { align-items: stretch; }
+      .ms-trab { position: absolute; bottom: calc(8px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 30; width: min(520px, calc(100% - 24px)); display: grid; gap: 4px; padding: 10px 14px; border-radius: 10px; background: #141414; color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,0.25); font-size: 0.86rem; }
+      .ms-trab progress { width: 100%; height: 10px; accent-color: #E67E22; }
+      .sheet-mensagens .ms-contatos button:disabled { opacity: 0.55; cursor: not-allowed; }
+      .ms-trab small { color: #e6e1d6; font-size: 0.78rem; }
       .sheet-mensagens { position: relative; max-width: 1120px; width: 100%; padding: 0; border-radius: 0; height: var(--ms-h, 100dvh); max-height: var(--ms-h, 100dvh); margin-top: var(--ms-top, 0); overflow: hidden; background: #fff; }
       @media (min-width: 860px) { #overlay-mensagens { align-items: center; } .sheet-mensagens { height: min(90dvh, 880px); max-height: min(90dvh, 880px); margin-top: 0; border-radius: 16px; } }
       .sheet-mensagens button { width: auto; margin: 0; font-family: inherit; }
@@ -282,6 +286,11 @@
       .ms-prod-det { font-size: 0.78rem; color: #4a443b; overflow-wrap: anywhere; }
       .ms-prod-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
       .ms-prod-acoes .ms-btn { min-height: 40px; padding: 6px 10px; font-size: 0.8rem; }
+      .ms-previa { display: flex; align-items: center; padding: 0 8px; background: #fff; box-shadow: inset 0 1px 0 #f0ece2; }
+      .ms-previa[hidden] { display: none; }
+      .ms-previa label { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 0.82rem; color: #141414; cursor: pointer; }
+      .ms-previa input { width: 20px; height: 20px; accent-color: #141414; margin: 0; }
+      .ms-previa small { color: #4a443b; font-size: 0.76rem; }
       .ms-prod.marcado { background: #fff7ee; box-shadow: inset 3px 0 0 #E67E22; }
       .sheet-mensagens .ms-prod-marca { position: relative; flex: none; width: 72px; height: 90px; padding: 0; border: 0; border-radius: 6px; background: none; cursor: pointer; }
       .ms-prod-marca .ms-prod-foto { display: block; }
@@ -593,6 +602,45 @@
     contatosSit = r.ok ? r : { ligada: false, erro: r.erro };
     if (painel === 'leitura') desenharEstado();
   }
+  /* v7.35: trabalhos longos da ponte (15 mil+ contatos): o painel repete as partes, mostra o progresso numa faixa fixa,
+   * segura a tela acesa (Wake Lock, quando o aparelho deixa) e avisa antes de sair da página no meio */
+  let trabalho = null, travaTela = null;
+  const numBR_ = (n) => Number(n || 0).toLocaleString('pt-BR');
+  async function segurarTela_() { try { if (trabalho && navigator.wakeLock && document.visibilityState === 'visible') travaTela = await navigator.wakeLock.request('screen'); } catch (e) { travaTela = null; } }
+  function soltarTela_() { try { if (travaTela) travaTela.release(); } catch (e) { /* já solta */ } travaTela = null; }
+  document.addEventListener('visibilitychange', () => { if (trabalho && document.visibilityState === 'visible') segurarTela_(); });
+  function avisoSaida_(ev) { if (!trabalho) return undefined; ev.preventDefault(); ev.returnValue = ''; return ''; }
+  function desenharTrabalho_() {
+    let f = $('ms-trab'); const sheet = document.querySelector('.sheet-mensagens');
+    if (!trabalho) { if (f) f.remove(); return; }
+    if (!f) { if (!sheet) return; f = el('div', 'ms-trab'); f.id = 'ms-trab'; f.setAttribute('role', 'status'); sheet.appendChild(f); }
+    const pct = trabalho.total ? Math.min(100, Math.round(trabalho.feito * 100 / trabalho.total)) : 0;
+    f.textContent = '';
+    f.appendChild(el('b', '', '⏳ ' + trabalho.titulo + (trabalho.total ? ': ' + numBR_(trabalho.feito) + ' de ' + numBR_(trabalho.total) + ' contatos (' + pct + '%)' : '…')));
+    const pr = el('progress'); pr.max = 100; pr.value = pct; pr.setAttribute('aria-label', trabalho.titulo); f.appendChild(pr);
+    f.appendChild(el('small', '', 'Não feche esta tela. Ela fica acesa até terminar.'));
+  }
+  /* passo(estado) -> { ok, fim, feito, total, estado } ; sem rede, tenta a mesma parte de novo (até 3 vezes) */
+  async function rodarTrabalho_(titulo, passo) {
+    if (trabalho) return { ok: false, erro: 'Já há uma operação dos contatos em andamento.' };
+    trabalho = { titulo: titulo, feito: 0, total: 0 }; window.addEventListener('beforeunload', avisoSaida_); segurarTela_(); desenharTrabalho_();
+    const travados = Array.from(document.querySelectorAll('#ms-contatos button:not([disabled])')); travados.forEach((x) => { x.disabled = true; });
+    try {
+      let estado = {};
+      for (let volta = 0; volta < 400; volta++) {
+        let r = null;
+        for (let t = 0; t < 3; t++) { r = await passo(estado); if (r.ok || !r.semRede) break; await new Promise((ok) => setTimeout(ok, 2000 * (t + 1))); }
+        if (!r.ok) return r;
+        trabalho.feito = Number(r.feito) || 0; trabalho.total = Math.max(Number(r.total) || 0, trabalho.feito); desenharTrabalho_();
+        if (r.fim) return r;
+        estado = r.estado || {};
+      }
+      return { ok: false, erro: 'A operação passou do limite de partes. Tente de novo.' };
+    } finally { trabalho = null; window.removeEventListener('beforeunload', avisoSaida_); soltarTela_(); desenharTrabalho_(); travados.forEach((x) => { if (x.isConnected) x.disabled = false; }); }
+  }
+  /* v7.35: a situação das ações da ponte fica escrita dentro do quadro (não some em 9 s): cópia e relatório podem passar de um minuto */
+  let pontesSt = '';
+  function pontesStatus_(t) { pontesSt = t || ''; const e = $('ms-ponte-st'); if (e) { e.textContent = pontesSt; e.hidden = !pontesSt; } }
   function blocoContatos_() {
     const b = el('div', 'ms-contatos'); b.id = 'ms-contatos';
     b.appendChild(el('p', 'ms-cfg-tit', 'Google Contatos (marcador “Tenkiter Clientes G”)'));
@@ -602,13 +650,15 @@
       const u = el('input', 'ms-copia'); u.id = 'ms-ponte-url'; u.type = 'url'; u.placeholder = 'https://script.google.com/macros/s/…/exec'; u.setAttribute('aria-label', 'Endereço da ponte do Google Contatos');
       const k = el('input', 'ms-copia'); k.id = 'ms-ponte-chave'; k.type = 'password'; k.autocomplete = 'new-password'; k.placeholder = 'Chave da ponte'; k.setAttribute('aria-label', 'Chave da ponte do Google Contatos');
       const l = el('div', 'ms-linha'); l.appendChild(botao('ms-btn prim', 'Ligar a ponte', 'ponte-ligar'));
-      b.append(u, k, l); return b;
+      const st = el('p', 'ms-cfg-res ms-ponte-st', pontesSt || ''); st.id = 'ms-ponte-st'; st.setAttribute('role', 'status'); st.hidden = !pontesSt;
+      b.append(u, k, l, st); return b;
     }
     b.appendChild(el('p', 'ms-ok', 'Ligada à conta ' + (contatosSit.conta || '(sem e-mail)') + '.'));
     const bk = contatosSit.backup;
-    const pb = el('p', 'ms-cfg-res', bk ? 'Última cópia de segurança: ' + hora(bk.em) + ' (' + bk.total + ' contatos). ' : 'Antes de qualquer limpeza, faça uma cópia de segurança dos contatos (fica no Drive da conta dos contatos).');
+    const pb = el('p', 'ms-cfg-res', bk ? 'Última cópia de segurança: ' + hora(bk.em) + ' (' + numBR_(bk.total) + ' contatos). ' : 'Antes de qualquer limpeza, faça uma cópia de segurança dos contatos (fica no Drive da conta dos contatos).');
     if (bk && bk.url) { const a = el('a', 'ms-link', 'Abrir no Drive'); a.href = bk.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; pb.appendChild(a); }
     b.appendChild(pb);
+    const st = el('p', 'ms-cfg-res ms-ponte-st', pontesSt || ''); st.id = 'ms-ponte-st'; st.setAttribute('role', 'status'); st.hidden = !pontesSt; b.appendChild(st);
     const l = el('div', 'ms-linha');
     l.appendChild(botao('ms-btn', 'Fazer cópia de segurança', 'ponte-backup'));
     const rel = botao('ms-btn prim', 'Gerar relatório da limpeza', 'ponte-relatorio'); rel.disabled = !bk; l.appendChild(rel);
@@ -1221,6 +1271,10 @@
     const dica = dicaComposer(c); if (dica) { const d = el('div', 'ms-dica', dica); d.id = 'ms-dica'; pai.appendChild(d); }
     const stage = el('div', 'ms-stage'); stage.id = 'ms-stage'; stage.hidden = !anexoPend; pai.appendChild(stage);
     const assina = el('div', 'ms-assina'); assina.id = 'ms-assina'; pai.appendChild(assina);
+    const prev = el('div', 'ms-previa'); prev.id = 'ms-previa'; prev.hidden = true;
+    const prevL = el('label'), prevC = el('input'); prevC.type = 'checkbox'; prevC.id = 'ms-previa-chk'; prevC.checked = previaPreferida_(c.canal);
+    prevC.addEventListener('change', () => guardarPrevia_(c.canal, prevC.checked));
+    prevL.append(prevC, el('span', '', 'Mostrar prévia do link'), el('small', '', '(miniatura)')); prev.appendChild(prevL); pai.appendChild(prev);
     const form = el('div', 'ms-compor');
     const clip = botao('ms-ico', '📎', 'anexar'); clip.id = 'ms-anexar'; clip.setAttribute('aria-label', 'Anexar foto, vídeo ou áudio');
     const arq = el('input'); arq.type = 'file'; arq.id = 'ms-arquivo'; arq.hidden = true; arq.accept = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime,audio/*';
@@ -1230,14 +1284,36 @@
     const bt = botao('ms-enviar', 'Enviar', 'enviar'); bt.id = 'ms-enviar'; bt.disabled = !ta.value.trim() && !anexoPend;
     form.append(clip, arq, ta, mic, bt); pai.appendChild(form);
     if (espiando) form.hidden = true;        // para responder, toque em Atender (aí marca como lida)
-    const cresce = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); };
+    const cresce = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); desenharPrevia_(); };
     ta.addEventListener('input', cresce);
     ta.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && window.matchMedia('(pointer: fine)').matches) { ev.preventDefault(); enviar(); } });
     cresce(); desenharStage_(); desenharAssina_(false);
   }
+  /* ---- v7.34: prévia do link (miniatura) escolhida em cada mensagem do WhatsApp; o último jeito usado em cada canal fica lembrado neste aparelho ---- */
+  const LINK_RE_ = /https?:\/\/[^\s<>"']+/i;
+  function previaPreferida_(canal) { try { return (JSON.parse(localStorage.getItem('tk_ms_previa_v1') || '{}') || {})[canal] === true; } catch (e) { return false; } }
+  function guardarPrevia_(canal, sim) { try { const o = JSON.parse(localStorage.getItem('tk_ms_previa_v1') || '{}') || {}; o[canal] = !!sim; localStorage.setItem('tk_ms_previa_v1', JSON.stringify(o)); } catch (e) { /* só conforto */ } }
+  function desenharPrevia_() {
+    const w = $('ms-previa'), ta = $('ms-texto'); if (!w) return;
+    w.hidden = !(aberta && aberta.canal !== 'instagram' && !anexoPend && ta && LINK_RE_.test(ta.value));
+  }
+  /* título e descrição do cartão: produto do site (nome e preço), seleção (?sel=) ou só o nome da loja; link de fora fica com o que o WhatsApp achar */
+  function cartaoDoLink_(texto) {
+    const m = String(texto || '').match(LINK_RE_); if (!m) return {};
+    const link = m[0].replace(/[).,;:!?*_~]+$/, ''), site = typeof SITE_URL !== 'undefined' ? String(SITE_URL).replace(/\/+$/, '') : '';
+    if (!site || link.indexOf(site) !== 0) return {};
+    const pm = link.match(/\/p\/([^/?#]+)/), sel = link.match(/[?&]sel=([^&#]+)/);
+    if (pm) {
+      const cod = decodeURIComponent(pm[1]).toLowerCase(), p = produtosCatalogo_().find((x) => String(x.Codigo || '').toLowerCase() === cod || String(x.ID) === cod);
+      if (p) { const tam = tamanhosDe_(p); return { titulo: p.Nome || 'TENKiTER Modas', descricao: precoTexto_(p) + (tam.length ? ' · ' + tam.join(', ') : '') }; }
+    }
+    if (sel) { const n = decodeURIComponent(sel[1]).split(',').filter(Boolean).length; return { titulo: 'Peças separadas para você', descricao: n + (n === 1 ? ' peça' : ' peças') + ' na TENKiTER Modas' }; }
+    return { titulo: 'TENKiTER Modas', descricao: '' };
+  }
   /* ---- anexos: foto (reduzida no aparelho), vídeo, áudio e gravação ---- */
   function desenharStage_() {
     const st = $('ms-stage'), bt = $('ms-enviar'), ta = $('ms-texto'); if (!st) return;
+    desenharPrevia_();
     st.textContent = ''; st.hidden = !anexoPend;
     if (bt) bt.disabled = !anexoPend && !(ta && ta.value.trim());
     if (!anexoPend) return;
@@ -1365,7 +1441,8 @@
       if (!an && (c.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > limiteTexto(c))) { aviso_('Mensagem grande demais para este canal. Divida em duas.'); return; }
       idLocal = idLocal_();
       const idTmp = 'tmp-' + idLocal;
-      tmp = { idLocal: idLocal, conversa: c.id, anexo: an ? { blob: an.blob, tipo: an.tipo, seg: an.seg, chave: '' } : null, msg: { id: idTmp, direcao: 'saida', tipo: an ? an.tipo : 'texto', texto: texto, enviada_em: new Date().toISOString(), status: 'pendente', midia: an ? 1 : 0, localUrl: an ? an.urlLocal : '' } };
+      const pc = $('ms-previa-chk'), comPrevia = !an && c.canal !== 'instagram' && !!pc && pc.checked && LINK_RE_.test(texto);
+      tmp = { idLocal: idLocal, conversa: c.id, previa: comPrevia ? cartaoDoLink_(texto) : null, anexo: an ? { blob: an.blob, tipo: an.tipo, seg: an.seg, chave: '' } : null, msg: { id: idTmp, direcao: 'saida', tipo: an ? an.tipo : 'texto', texto: texto, enviada_em: new Date().toISOString(), status: 'pendente', midia: an ? 1 : 0, localUrl: an ? an.urlLocal : '' } };
       pendentes.set(idTmp, tmp); msgs.push(tmp.msg);
       ta.value = ''; ta.style.height = 'auto'; rascunhoSalvar_(c.id, ''); anexoPend = null; desenharStage_(); $('ms-enviar').disabled = true; ta.focus();
     }
@@ -1377,7 +1454,8 @@
       if (!up.ok) r = { ok: false, erro: up.erro || 'Não foi possível enviar o arquivo.', semRede: up.semRede, semEnvio: true };
       else tmp.anexo.chave = up.anexo;
     }
-    if (!r) r = await worker_('/msg/enviar', 'POST', { conversa: c.id, texto: texto, idLocal: idLocal, anexo: tmp.anexo ? tmp.anexo.chave : undefined, seg: tmp.anexo ? tmp.anexo.seg : undefined });
+    if (!r) r = await worker_('/msg/enviar', 'POST', Object.assign({ conversa: c.id, texto: texto, idLocal: idLocal, anexo: tmp.anexo ? tmp.anexo.chave : undefined, seg: tmp.anexo ? tmp.anexo.seg : undefined },
+      tmp.previa ? { previa: true, previaTitulo: tmp.previa.titulo || '', previaDescricao: tmp.previa.descricao || '' } : {}));
     if (r.ok || (r.incerto && r.mensagem)) {
       pendentes.delete(idTmp);
       if (aberta && aberta.id === c.id) {
@@ -1526,6 +1604,7 @@
     const a = b.dataset.ms;
     if (a !== 'menu-geral' && a !== 'menu-conversa') fecharMenu();
     if (a === 'fechar') {
+      if (trabalho && !confirm('A operação dos contatos ainda está em andamento. Se fechar agora, ela para e precisa recomeçar. Fechar mesmo assim?')) return;
       if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { document.addEventListener('tk:camada-fechada', function f(e) { if (e.detail && e.detail.chave === 'ms-conversa') { document.removeEventListener('tk:camada-fechada', f); fecharComHistorico_('overlay-mensagens'); } }); TKCamadas.desempilhar('ms-conversa'); }
       else fecharComHistorico_('overlay-mensagens');
     }
@@ -1542,19 +1621,31 @@
     else if (a === 'selecionar') iniciarSelecao_(0);
     else if (a === 'nome-editar') desenharAssina_(true);
     else if (a === 'ponte-ligar') {
-      b.disabled = true; const r = await worker_('/msg/contatos/config', 'POST', { url: ($('ms-ponte-url') || {}).value || '', chave: ($('ms-ponte-chave') || {}).value || '' }); b.disabled = false;
-      if (!r.ok) { aviso_(r.erro || 'Não foi possível ligar agora.'); return; }
-      aviso_('Ponte ligada à conta ' + (r.conta || '') + '.'); contatosSit = null; desenharEstado();
+      b.disabled = true; pontesStatus_('Conferindo a ponte…'); const r = await worker_('/msg/contatos/config', 'POST', { url: ($('ms-ponte-url') || {}).value || '', chave: ($('ms-ponte-chave') || {}).value || '' }); b.disabled = false;
+      if (!r.ok) { pontesStatus_(r.erro || 'Não foi possível ligar agora.'); return; }
+      pontesStatus_('Ponte ligada à conta ' + (r.conta || '') + '.'); contatosSit = null; desenharEstado();
     }
     else if (a === 'ponte-backup') {
-      b.disabled = true; aviso_('Fazendo a cópia de segurança dos contatos… pode levar um minuto.'); const r = await worker_('/msg/contatos/backup', 'POST', {}); b.disabled = false;
-      if (!r.ok) { aviso_(r.erro || 'Não foi possível fazer a cópia agora.'); return; }
-      aviso_('Cópia feita: ' + r.total + ' contatos salvos no Drive da conta dos contatos.'); contatosSit = null; desenharEstado();
+      b.disabled = true; pontesStatus_('Fazendo a cópia de segurança dos contatos em partes. Com muitos contatos pode levar alguns minutos.');
+      const r = await rodarTrabalho_('Copiando os contatos do Google', async (e) => {
+        const x = await worker_('/msg/contatos/backup', 'POST', { partes: true, pagina: e.pagina || undefined, pasta: e.pasta || undefined });
+        return x.ok ? { ok: true, fim: x.fim, feito: x.lidos, total: x.totalPessoas, estado: { pagina: x.proxima, pasta: x.pasta } } : x;
+      });
+      b.disabled = false;
+      if (!r.ok) { pontesStatus_('A cópia não foi feita: ' + (r.erro || 'tente de novo.')); return; }
+      pontesStatus_('✓ Cópia feita: ' + numBR_(r.feito) + ' contatos salvos no Drive da conta dos contatos.'); contatosSit = null; desenharEstado();
     }
     else if (a === 'ponte-relatorio') {
-      b.disabled = true; aviso_('Lendo os contatos para o relatório… pode levar um minuto.'); const r = await worker_('/msg/contatos/relatorio', 'POST', {}); b.disabled = false;
-      if (!r.ok) { aviso_(r.erro || 'Não foi possível gerar agora.'); return; }
-      aviso_(''); mostrarRelatorio_(r);
+      b.disabled = true; pontesStatus_('Lendo os contatos para o relatório em partes. Com muitos contatos pode levar alguns minutos.');
+      let r = await worker_('/msg/contatos/relatorio', 'POST', { etapa: 'inicio' });
+      if (r.ok) r = await rodarTrabalho_('Lendo os contatos para o relatório', async (e) => {
+        const x = await worker_('/msg/contatos/relatorio', 'POST', { etapa: 'parte', pagina: e.pagina || undefined });
+        return x.ok ? { ok: true, fim: !x.proxima, feito: x.lidos, total: x.total, estado: { pagina: x.proxima } } : x;
+      });
+      if (r.ok) { pontesStatus_('Montando o relatório…'); r = await worker_('/msg/contatos/relatorio', 'POST', { etapa: 'fim' }); }
+      b.disabled = false;
+      if (!r.ok) { pontesStatus_('O relatório não foi gerado: ' + (r.erro || 'tente de novo.')); return; }
+      pontesStatus_(''); mostrarRelatorio_(r);
     }
     else if (a === 'ponte-ver') { const r = await worker_('/msg/contatos/situacao?relatorio=1', 'GET'); mostrarRelatorio_(r.ok ? r.relatorio : null); }
     else if (a === 'ponte-desligar') {

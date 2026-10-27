@@ -19,7 +19,7 @@ with sync_playwright() as p:
     chk("não existe mais o botão separado de Integrações", pg.locator("#btn-abrir-integracoes").count() == 0)
     pg.click("#btn-abrir-conexoes"); pg.wait_for_timeout(1500)
     nomes = [t.strip() for t in pg.locator("#cx-corpo .cx-grupo > summary").all_inner_texts()]
-    chk("grupos organizados: site, Instagram, WhatsApp, Meta/Google, serviços, cofre", len(nomes) == 6 and any("Instagram" in n for n in nomes) and any("WhatsApp" in n for n in nomes) and any("Meta" in n for n in nomes), nomes)
+    chk("grupos organizados: site, Android, Instagram, WhatsApp, Meta/Google, serviços, cofre", len(nomes) == 7 and any("Android" in n for n in nomes) and any("Instagram" in n for n in nomes) and any("WhatsApp" in n for n in nomes) and any("Meta" in n for n in nomes), nomes)
     chk("só o primeiro grupo vem aberto (tela curta no celular)", pg.locator("#cx-corpo .cx-grupo[open]").count() == 1, pg.locator("#cx-corpo .cx-grupo[open]").count())
     chk("não há rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"))
     pg.screenshot(path=os.path.join(AQUI, "saida", "conexoes_unificada_mobile.png"))
