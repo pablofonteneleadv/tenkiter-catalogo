@@ -6,13 +6,37 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
-## 7.30.0 — Mensagens: prévia do link escolhida em cada mensagem — 2026-10-26
+## 7.32.0 — Mensagens: prévia do link escolhida em cada mensagem — 2026-10-27
 
 - No WhatsApp, quando a mensagem tem link, aparece logo acima do campo a caixinha "Mostrar prévia do link (miniatura)". A última escolha de cada canal fica lembrada no aparelho; começa desmarcada.
 - Marcada, a mensagem sai pelo envio "link com prévia" da Wafly (`/send-link`), usando o primeiro link do texto. O cartão leva o nome e o preço da peça, "Peças separadas para você" numa seleção ou o nome da loja nos links do site. Link de fora fica com o que o WhatsApp encontrar.
 - Desmarcada, ou sem link, tudo continua como antes (texto simples). No Instagram a caixinha não aparece.
 - Worker: `/msg/enviar` aceita `previa`, `previaTitulo` e `previaDescricao` (limpos e cortados em 100/200 letras).
 - Service worker renovado (tk-3.38.18).
+
+## 7.31.0 — Mensagens: push imediato e abertura com recentes — 2026-10-27
+
+- Webhooks de mensagens novas disparam a fila Android em segundo plano, sem aguardar o cron. O cron permanece como recuperação; os IDs idempotentes e a validação de sessão continuam ativos.
+- No APK, lista e resumo carregam em paralelo. Produtos, categorias e estatísticas do catálogo deixam de competir pela rede na abertura; Produtos carrega ao abrir sua gaveta.
+- Lista e até 80 mensagens por conversa ficam em cache local, por conta/sessão, por até 24 horas (dez consultas, máximo 500 mil caracteres). Anexos, URLs de mídia e tokens não entram nesse cache.
+- Conversas salvas aparecem em modo de leitura até o servidor confirmar os dados. Sair ou receber recusa de acesso limpa o cache; falha de rede preserva a leitura local.
+- Funciona no APK 1.0.0 existente, sem reinstalação. Primeira carga da página e confirmação de login ainda exigem rede.
+
+
+## 7.30.2 — Validar vídeos ao escolher arquivos — 2026-10-27
+
+- Vídeos fora dos limites de Status são recusados já na seleção, tanto em Livre quanto em mídias avulsas, antes de entrar na lista.
+- Mudar o destino para Status confere também os vídeos já escolhidos e informa o problema sem apagá-los do rascunho.
+- O rótulo da seleção acompanha o destino: Status até 30 s/10 MB; demais canais preservam seus limites.
+
+
+## 7.30.1 — Limites dos vídeos no WhatsApp Status — 2026-10-26
+
+- Antes de agendar, vídeos para Status 1 e 2 são conferidos: até 30 segundos e 10 MB. O rascunho permanece disponível para substituir os arquivos.
+- O Worker também lê a duração do MP4 antes de enviar à Wafly, e diferencia o limite de imagem (5 MB) do de vídeo (10 MB).
+- O HTTP 422 passa a explicar os formatos e limites exigidos, em vez de mostrar apenas uma recusa genérica.
+- Limites de grupo e Instagram continuam independentes. Nenhum item cancelado foi reativado.
+
 
 ## 7.29.0 — Mensagens: selecionar várias peças e mandar a seleção — 2026-10-26
 
@@ -423,3 +447,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 ### Notas
 - Os backends `.gs` continuam fora do repositório (por segurança) e seguem com deploy manual
   no Apps Script — ver `docs/CI-CD.md`.
+
+## 7.30.0 — APK de atendimento e preparação de push Android — 2026-10-26
+
+- Adiciona app Android TENKiTER Mensagens (Kotlin, WebView, OneSignal nativo) com site separado no navegador, anexos, áudio autorizado e logout.
+- Modo app abre diretamente a caixa de mensagens após login autorizado.
+- Adiciona registro de aparelho, fila persistente de avisos individuais e configuração da App API Key em Conexões.
+- Notificações reais dependem da configuração Firebase/FCM no OneSignal pelo proprietário. Homologação Android física pendente.

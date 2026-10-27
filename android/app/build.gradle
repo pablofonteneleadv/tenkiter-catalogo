@@ -1,0 +1,23 @@
+plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
+android {
+    namespace 'br.com.tenkitermodas.mensagens'
+    compileSdk 35
+    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 1; versionName '1.0.0' }
+    signingConfigs {
+        release {
+            if (System.getenv('TK_ANDROID_KEYSTORE')) {
+                storeFile file(System.getenv('TK_ANDROID_KEYSTORE'))
+                storePassword System.getenv('TK_ANDROID_STORE_PASSWORD')
+                keyAlias 'tenkiter'
+                keyPassword System.getenv('TK_ANDROID_STORE_PASSWORD')
+            }
+        }
+    }
+    buildTypes { release { signingConfig signingConfigs.release; minifyEnabled false } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    kotlinOptions { jvmTarget = '17' }
+}
+dependencies {
+    implementation 'com.onesignal:OneSignal:5.10.2'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
+}
