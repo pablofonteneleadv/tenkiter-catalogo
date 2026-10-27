@@ -31,6 +31,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
     private var lastOwner="";private var auth:NativeAuth?=null
     private var chats=emptyList<JSONObject>();private var focus=0L;private var messages=emptyList<JSONObject>();private var pending=emptyList<JSONObject>()
     private var online=false;private var query="";private var channel="Todos";private var list:ListView?=null
+    private var unreadOnly=false;private var allTab:Button?=null;private var unreadTab:Button?=null;private var channelTab:Button?=null
     private var chatScroll:ScrollView?=null;private var restoreScroll:Int?=null;
     private var chatInput:EditText?=null;private var loginPassword:EditText?=null
     private val drafts=mutableMapOf<Long,String>()
@@ -38,7 +39,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
     init{
         orientation=VERTICAL;setBackgroundColor(Color.WHITE)
         val bar=LinearLayout(activity).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(12),0,dp(4),0);setBackgroundColor(Color.rgb(16,16,14))}
-        bar.addView(text("TENKiTER",17,true,Color.rgb(230,126,34)),LayoutParams(0,dp(52),1f))
+        bar.addView(text("Conversas",20,true,Color.rgb(230,126,34)),LayoutParams(0,dp(52),1f))
         bar.addView(button("Atualizar app"){events.update()}.apply{setTextColor(Color.WHITE);background=rounded(Color.TRANSPARENT,0)},LayoutParams(-2,dp(48)))
         bar.addView(button("⋮"){events.menu(it)}.apply{contentDescription="Opções do aplicativo";setTextColor(Color.WHITE);textSize=24f;background=rounded(Color.TRANSPARENT,0)},LayoutParams(dp(48),dp(48)))
         addView(bar)
@@ -64,7 +65,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
             val cursor=chatInput?.selectionStart?:0
             restoreScroll=if(sameChat)chatScroll?.let{if(it.getChildAt(0)!=null&&it.getChildAt(0).height-it.scrollY-it.height>80)it.scrollY else null}else null
             chatInput?.let{drafts[it.tag as? Long?:0L]=it.text.toString()};body.removeAllViews();chatInput=null;loginPassword=null;viewKey=key;if(id>0)showConversation()else showList();if(keepFocus)chatInput?.post{chatInput?.requestFocus();chatInput?.setSelection(cursor.coerceIn(0,chatInput?.text?.length?:0))}}
-        else if(id==0L){val pos=list?.firstVisiblePosition?:0;val top=list?.getChildAt(0)?.top?:0;list?.adapter=adapter();list?.setSelectionFromTop(pos,top)}
+        else if(id==0L){val pos=list?.firstVisiblePosition?:0;val top=list?.getChildAt(0)?.top?:0;refreshList();list?.setSelectionFromTop(pos,top)}
     }
     private fun showLogin(expired:Boolean){
         val scroll=ScrollView(activity);val form=LinearLayout(activity).apply{orientation=VERTICAL;setPadding(dp(24),dp(24),dp(24),dp(16))}
@@ -79,35 +80,71 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         scroll.addView(form);body.addView(scroll,LayoutParams(-1,-1));loginState(loginBusy)
     }
     private fun showList(){
-        val row=LinearLayout(activity).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(16),dp(8),dp(8),0)}
-        row.addView(text("Mensagens",23,true),LayoutParams(0,dp(48),1f));row.addView(button("↻"){events.sync()}.apply{contentDescription="Sincronizar conversas"},LayoutParams(dp(48),dp(48)));body.addView(row)
-        val search=EditText(activity).apply{hint="Buscar conversas salvas";setSingleLine();textSize=15f;setText(query);contentDescription=hint}
-        body.addView(search,LayoutParams(-1,dp(52)).apply{leftMargin=dp(16);rightMargin=dp(16);bottomMargin=dp(4)})
+        val search=EditText(activity).apply{hint="Buscar nome, número ou mensagem";setSingleLine();textSize=15f;setText(query);contentDescription=hint}
+        val searchRow=LinearLayout(activity).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(12),dp(4),dp(8),dp(4))}
+        searchRow.addView(search,LayoutParams(0,dp(48),1f))
+        searchRow.addView(button("↻"){events.sync()}.apply{contentDescription="Sincronizar conversas";background=rounded(Color.TRANSPARENT,0)},LayoutParams(dp(48),dp(48)));body.addView(searchRow)
         search.addTextChangedListener(object:TextWatcher{override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){};override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){query=s.toString();list?.adapter=adapter()};override fun afterTextChanged(e:Editable?) {}})
-        val filter=Spinner(activity).apply{contentDescription="Canal de atendimento";adapter=ArrayAdapter(activity,android.R.layout.simple_spinner_dropdown_item,listOf("Todos","WhatsApp 1","WhatsApp 2","Instagram"));setSelection(listOf("Todos","WhatsApp 1","WhatsApp 2","Instagram").indexOf(channel).coerceAtLeast(0))}
-        filter.onItemSelectedListener=object:AdapterView.OnItemSelectedListener{override fun onNothingSelected(p:AdapterView<*>?){};override fun onItemSelected(p:AdapterView<*>?,v:View?,pos:Int,id:Long){channel=listOf("Todos","WhatsApp 1","WhatsApp 2","Instagram")[pos];list?.adapter=adapter()}}
-        body.addView(filter,LayoutParams(-1,dp(48)).apply{leftMargin=dp(12);rightMargin=dp(12)})
+        val tabs=LinearLayout(activity).apply{setPadding(dp(12),0,dp(12),0)}
+        allTab=button("Todas"){unreadOnly=false;refreshList()}
+        unreadTab=button("Não lidas"){unreadOnly=true;refreshList()}
+        channelTab=button("Canal ▾"){anchor->
+            val popup=PopupMenu(activity,anchor)
+            val channels=listOf("Todos","WhatsApp 1","WhatsApp 2","Instagram")
+            channels.forEachIndexed{i,value->popup.menu.add(0,i,i,if(i==0)"Todos os canais"else value).apply{isCheckable=true;isChecked=channel==value}}
+            popup.setOnMenuItemClickListener{item->channel=channels[item.itemId];refreshList();true};popup.show()
+        }
+        tabs.addView(allTab,LayoutParams(0,dp(48),1f));tabs.addView(unreadTab,LayoutParams(0,dp(48),1f).apply{leftMargin=dp(6)})
+        tabs.addView(channelTab,LayoutParams(dp(88),dp(48)).apply{leftMargin=dp(6)});body.addView(tabs)
+        body.addView(text("Mais recentes primeiro · horário da última mensagem",12,false,Color.rgb(91,87,80)).apply{setPadding(dp(16),0,dp(16),dp(8))},LayoutParams(-1,-2))
         list=ListView(activity).apply{dividerHeight=dp(1);adapter=adapter();setOnItemClickListener{_,_,pos,_->val c=(adapter as ChatAdapter).items[pos];events.select(c.optLong("id"))}}
-        val empty=text("Nenhuma conversa salva nesta seleção.\nToque em ↻ para conferir o servidor.",15).apply{gravity=Gravity.CENTER;setPadding(dp(24),dp(24),dp(24),dp(24))}
+        val empty=text("Nenhuma conversa nesta seleção.\nTroque o filtro ou toque em ↻ para sincronizar.",15).apply{gravity=Gravity.CENTER;setPadding(dp(24),dp(24),dp(24),dp(24))}
         val frame=FrameLayout(activity);frame.addView(list,FrameLayout.LayoutParams(-1,-1));frame.addView(empty,FrameLayout.LayoutParams(-1,-1));list?.emptyView=empty
-        body.addView(frame,LayoutParams(-1,0,1f))
+        body.addView(frame,LayoutParams(-1,0,1f));refreshList()
     }
     private fun matches(c:JSONObject):Boolean {
         if(query.isBlank()&&(c.optBoolean("local_hidden")||c.optString("encerrada_em").isNotBlank()))return false
         val name=when(c.optString("canal")){"whatsapp1"->"WhatsApp 1";"whatsapp2"->"WhatsApp 2";else->"Instagram"}
-        return (channel=="Todos"||channel==name)&&(query.isBlank()||(c.optString("nome")+" "+c.optString("contato")+" "+c.optString("previa")).contains(query,true))
+        return (!unreadOnly||c.optInt("nao_lidas")>0)&&(channel=="Todos"||channel==name)&&(query.isBlank()||(c.optString("nome")+" "+c.optString("contato")+" "+c.optString("previa")).contains(query,true))
     }
-    private fun adapter()=ChatAdapter(chats.filter(::matches))
+    private fun refreshList(){
+        val count=chats.count{!it.optBoolean("local_hidden")&&it.optString("encerrada_em").isBlank()&&it.optInt("nao_lidas")>0}
+        allTab?.text="Todas";unreadTab?.apply{text="Não lidas";contentDescription="Não lidas, $count conversas"}
+        channelTab?.apply{text=when(channel){"WhatsApp 1"->"WA 1 ▾";"WhatsApp 2"->"WA 2 ▾";"Instagram"->"Insta ▾";else->"Canal ▾"};contentDescription="Filtrar canal: "+if(channel=="Todos")"Todos os canais"else channel;background=rounded(cream,10)}
+        for((tab,selected)in listOf(allTab to !unreadOnly,unreadTab to unreadOnly))tab?.apply{
+            isSelected=selected;setTextColor(if(selected)Color.WHITE else ink)
+            background=rounded(if(selected)ink else cream,10)
+            contentDescription=(if(this==unreadTab)"Não lidas, $count conversas"else text.toString())+if(selected)", selecionado"else""
+        }
+        list?.adapter=adapter()
+    }
+    private fun timeOf(c:JSONObject):java.time.Instant?=runCatching{java.time.Instant.parse(c.optString("ultima_em"))}.getOrNull()
+    private fun clock(c:JSONObject):String{
+        val at=timeOf(c)?.atZone(java.time.ZoneId.systemDefault())?:return ""
+        val today=java.time.LocalDate.now()
+        return when(at.toLocalDate()){
+            today->at.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+            today.minusDays(1)->"Ontem"
+            else->at.format(java.time.format.DateTimeFormatter.ofPattern(if(at.year==today.year)"dd/MM"else"dd/MM/yy"))
+        }
+    }
+    private fun adapter()=ChatAdapter(chats.filter(::matches).sortedWith(compareByDescending<JSONObject>{timeOf(it)?:java.time.Instant.MIN}.thenByDescending{it.optLong("id")}))
     private inner class ChatAdapter(val items:List<JSONObject>):BaseAdapter(){
         override fun getCount()=items.size;override fun getItem(position:Int)=items[position];override fun getItemId(position:Int)=items[position].optLong("id")
         override fun getView(position:Int,convert:View?,parent:android.view.ViewGroup?):View {
             val c=items[position];val row=LinearLayout(activity).apply{orientation=VERTICAL;minimumHeight=dp(80);setPadding(dp(16),dp(12),dp(16),dp(12))}
             val top=LinearLayout(activity).apply{gravity=Gravity.CENTER_VERTICAL}
-            val label=c.optString("nome").ifBlank{c.optString("contato","Conversa")};top.addView(text(label,16,true).apply{maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END},LayoutParams(0,-2,1f))
-            val unread=c.optInt("nao_lidas");if(unread>0)top.addView(text("$unread novas",12,true,Color.rgb(18,104,67)))
-            row.addView(top);row.addView(text(c.optString("previa"),14,false,Color.rgb(91,87,80)).apply{maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END},LayoutParams(-1,dp(24)))
-            row.addView(text(when(c.optString("canal")){"whatsapp1"->"WhatsApp 1";"whatsapp2"->"WhatsApp 2";else->"Instagram"},11,false,Color.rgb(91,87,80)))
-            row.contentDescription=label+", "+c.optString("previa")+if(unread>0)", $unread mensagens novas"else""
+            val unread=c.optInt("nao_lidas");val label=c.optString("nome").ifBlank{c.optString("contato","Conversa")}
+            top.addView(text(label,16,unread>0).apply{maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END},LayoutParams(0,-2,1f))
+            top.addView(text(clock(c),12,unread>0,if(unread>0)Color.rgb(18,104,67)else Color.rgb(91,87,80)).apply{setPadding(dp(12),0,0,0)})
+            val preview=when(c.optString("previa")){"[audio]","[áudio]"->"Áudio";"[imagem]"->"Foto";"[video]","[vídeo]"->"Vídeo";else->c.optString("previa").ifBlank{"Sem prévia da mensagem"}}
+            row.addView(top);row.addView(text(preview,14,false,Color.rgb(91,87,80)).apply{maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END},LayoutParams(-1,dp(24)))
+            val bottom=LinearLayout(activity).apply{gravity=Gravity.CENTER_VERTICAL}
+            val canal=when(c.optString("canal")){"whatsapp1"->"WhatsApp 1";"whatsapp2"->"WhatsApp 2";else->"Instagram"}
+            bottom.addView(text(canal,11,false,Color.rgb(91,87,80)),LayoutParams(0,-2,1f))
+            if(unread>0)bottom.addView(text(if(unread==1)"1 não lida"else"$unread não lidas",12,true,Color.rgb(18,104,67)))
+            row.addView(bottom)
+            row.contentDescription=label+", "+canal+", "+clock(c)+", "+preview+if(unread>0)", $unread mensagens não lidas"else""
             return row
         }
     }

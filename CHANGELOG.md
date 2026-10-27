@@ -6,6 +6,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.32.1 — APK 2.0.1: caixa de conversas mais clara — 2026-10-27
+
+- Explica a ordem por última mensagem, mostra horário/ontem/data, preserva a ordem temporal também no filtro Não lidas e usa desempate estável por ID.
+- Faixa compacta com Todas, Não lidas e seletor de canal; busca e sincronização na mesma linha, sem título duplicado.
+- Não lidas são identificadas por texto e nome em negrito; singular correto; tipos de mídia ficam legíveis.
+- Atualização assinada com a mesma chave, disponível pelo botão Atualizar app.
+
+
 ## 7.32.0 — APK Mensagens 2.0 e distribuição de atualizações — 2026-10-27
 
 - Nova caixa Android nativa com banco SQLite, leitura local, filtro, busca e resposta de texto. Histórico mais antigo e anexos seguem acessíveis em Completo.
