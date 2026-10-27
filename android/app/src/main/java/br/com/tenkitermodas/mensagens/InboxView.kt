@@ -124,7 +124,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
             val box=LinearLayout(activity).apply{orientation=VERTICAL;background=rounded(if(outgoing)Color.rgb(216,243,227)else Color.WHITE,12);setPadding(dp(12),dp(8),dp(12),dp(8))}
             var value=msg.optString("texto");val type=msg.optString("tipo","texto")
             if(type!="texto")value="[${type}] · toque para abrir no atendimento completo"+(if(value.isBlank())""else"\n$value")
-            box.addView(text(value,15).apply{setTextIsSelectable(true)})
+            box.addView(text(value,15).apply{setTextIsSelectable(type=="texto");if(type!="texto")setOnClickListener{events.full(focus)}})
             val stamp=runCatching{java.time.format.DateTimeFormatter.ofPattern("HH:mm").withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.parse(msg.optString("enviada_em")))}.getOrDefault("")
             box.addView(text(state?:stamp+if(outgoing&&msg.optString("status").isNotBlank())" · "+when(msg.optString("status")){"incerta"->"Sem confirmação";"enviada"->"Enviada";"entregue"->"Entregue";"lida"->"Lida";else->"Aguardando"}else"",11,false,Color.rgb(84,79,69)))
             if(type!="texto")box.setOnClickListener{events.full(focus)}

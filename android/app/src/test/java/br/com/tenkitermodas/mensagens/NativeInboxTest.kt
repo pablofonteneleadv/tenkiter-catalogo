@@ -138,6 +138,8 @@ class NativeInboxTest {
         all(v).filterIsInstance<EditText>().last().setText("Estou conferindo seu tamanho")
         v.render(auth,true,listOf(conv()),1,listOf(msg(),msg(2).put("texto","Tem em azul?")),emptyList(),true,"Atualizado");layout(v,390,844)
         assertEquals("Estou conferindo seu tamanho",all(v).filterIsInstance<EditText>().last().text.toString())
+        v.render(auth,true,listOf(conv()),1,listOf(msg(3).put("tipo","imagem")),emptyList(),true,"Atualizado");layout(v,390,844)
+        all(v).filterIsInstance<android.widget.TextView>().first{it.text.contains("toque para abrir")}.performClick();assertEquals(1L,events.full)
     }
     private fun snapshot(v:View,name:String,w:Int,h:Int){
         val bitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);v.draw(Canvas(bitmap))

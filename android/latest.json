@@ -1,8 +1,8 @@
 {
   "versionCode": 2,
   "versionName": "2.0.0",
-  "bytes": 4458097,
-  "sha256": "d242e09ff13f111f52f929dcddeb1d92e3be38eb58142acb6a5a36dd5d334cc2",
+  "bytes": 4458077,
+  "sha256": "f75d2f11330b735cd25e02047e46b310625074595c41b1a9b8a31f0c1249ee2b",
   "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.0.0/TENKiTER-Mensagens-2.0.0.apk",
   "notes": "Caixa de mensagens nativa, conversas salvas no aparelho, sincronização por notificações e botão Atualizar app."
 }
