@@ -38,12 +38,12 @@ class NativeInboxTest {
     @Test fun nativeScreensAndControls(){
         val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v)
         val auth=NativeAuth("88999990000","fake-session","Pablo")
-        for((w,h)in listOf(390 to 844,412 to 915,320 to 700,900 to 900)){
+        for((w,h)in listOf(390 to 844,412 to 915,320 to 700,1440 to 900)){
             layout(v,w,h)
-            v.render(auth,true,listOf(conv()),0,emptyList(),emptyList(),true,"Atualizado às 05:46")
+            v.render(auth,true,(1L..30L).map{conv(it).put("nome",if(it==1L)"Maria · Cliente"else"Cliente de demonstração $it").put("nao_lidas",if(it%3L==0L)0 else 2)},0,emptyList(),emptyList(),true,"Atualizado às 05:46")
             layout(v,w,h)
             val update=all(v).filterIsInstance<Button>().first{it.text=="Atualizar app"};assertTrue(update.height>=48);update.performClick()
-            assertTrue(all(v).filterIsInstance<android.widget.TextView>().any{it.text=="Mensagens"})
+            assertTrue(all(v).filterIsInstance<android.widget.TextView>().any{it.text=="Conversas"})
             snapshot(v,"inbox-$w",w,h)
             v.render(auth,true,listOf(conv()),1,listOf(msg()),emptyList(),false,"Sem conexão · mostrando conversas salvas");layout(v,w,h)
             assertFalse(all(v).filterIsInstance<Button>().first{it.text=="Enviar"}.isEnabled)
@@ -140,6 +140,42 @@ class NativeInboxTest {
         assertEquals("Estou conferindo seu tamanho",all(v).filterIsInstance<EditText>().last().text.toString())
         v.render(auth,true,listOf(conv()),1,listOf(msg(3).put("tipo","imagem")),emptyList(),true,"Atualizado");layout(v,390,844)
         all(v).filterIsInstance<android.widget.TextView>().first{it.text.contains("toque para abrir")}.performClick();assertEquals(1L,events.full)
+    }
+    @Test fun inboxExplainsOrderAndUnreadFilterPreservesChronology(){
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v)
+        val auth=NativeAuth("88999990000","session","Pablo")
+        val old=conv(1).put("ultima_em","2026-10-26T03:00:00Z").put("nao_lidas",1)
+        val recent=conv(2).put("ultima_em","2026-10-27T04:00:00Z").put("nao_lidas",0)
+        val middle=conv(3).put("ultima_em","2026-10-27T03:00:00Z").put("nao_lidas",2).put("canal","whatsapp2")
+        v.render(auth,true,listOf(old,recent,middle),0,emptyList(),emptyList(),true,"Atualizado")
+        layout(v,390,844)
+        val list=all(v).filterIsInstance<android.widget.ListView>().first()
+        assertEquals(2L,list.adapter.getItemId(0));assertEquals(3L,list.adapter.getItemId(1))
+        assertTrue(all(v).filterIsInstance<android.widget.TextView>().any{it.text.toString().contains("Mais recentes primeiro")})
+        all(v).filterIsInstance<Button>().first{it.text=="Não lidas"}.performClick()
+        assertEquals(2,list.adapter.count);assertEquals(3L,list.adapter.getItemId(0));assertEquals(1L,list.adapter.getItemId(1))
+        val first=list.adapter.getView(1,null,list)
+        assertTrue(all(first).filterIsInstance<android.widget.TextView>().any{it.text=="1 não lida"})
+        all(v).filterIsInstance<Button>().first{it.text=="Canal ▾"}.performClick()
+        org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().menu.performIdentifierAction(2,0)
+        assertEquals(1,list.adapter.count);assertEquals(3L,list.adapter.getItemId(0))
+        list.performItemClick(list.adapter.getView(0,null,list),0,3);assertEquals(3L,events.selected)
+        layout(v,390,844);snapshot(v,"inbox-unread-channel",390,844)
+    }
+    @Test fun inboxAtLargeTextAndKeyboardHeightKeepsActionsVisible(){
+        val a=activity;val cfg=android.content.res.Configuration(a.resources.configuration).apply{fontScale=1.3f}
+        a.resources.updateConfiguration(cfg,a.resources.displayMetrics)
+        val v=InboxView(a,Events());a.setContentView(v)
+        v.render(NativeAuth("88999990000","session","Pablo"),true,listOf(conv()),0,emptyList(),emptyList(),false,"Sem conexão · conversas salvas")
+        layout(v,320,480)
+        for(b in all(v).filterIsInstance<Button>()){
+            val point=IntArray(2);b.getLocationOnScreen(point)
+            assertTrue("Ação fora da área útil: "+b.text,point[1]+b.height<=480);assertTrue(b.height>=48)
+        }
+        val search=all(v).filterIsInstance<EditText>().first();search.requestFocus();search.setText("Nome inexistente")
+        layout(v,320,480)
+        assertEquals(0,all(v).filterIsInstance<android.widget.ListView>().first().adapter.count)
+        snapshot(v,"inbox-large-text-empty-keyboard",320,480)
     }
     private fun snapshot(v:View,name:String,w:Int,h:Int){
         val bitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);v.draw(Canvas(bitmap))

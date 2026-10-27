@@ -29,3 +29,8 @@ O botão **Atualizar app** fica na barra superior, inclusive na tela de login. E
 A instalação exige confirmação do usuário; não é instalação silenciosa. Na versão 1.0.0 ainda não existe esse botão: esta primeira troca para 2.0.0 é manual. As próximas poderão partir do próprio aplicativo.
 
 O Cofre privado guarda cópia do código e do instalador. A distribuição usa uma release pública do APK assinado, sem dados de clientes ou credenciais. A chave privada de assinatura continua no backup privado já existente e fora do Git.
+
+
+## Caixa de entrada 2.0.1
+
+A lista mostra a conversa com a última mensagem mais recente primeiro (recebida ou enviada). Horário de hoje, Ontem ou data aparecem à direita. Em Não lidas a mesma ordem é preservada; o número junto à conversa conta mensagens não lidas, não uma fila de clientes esperando resposta. Nome em negrito sinaliza não lidas. O seletor Canal combina com Todas/Não lidas e a busca; a busca cobre nome, número e prévia salvos neste aparelho. Conversas encerradas continuam ocultas na listagem padrão e pesquisáveis como antes. Atualizar app instala esta versão preservando conta e banco, com confirmação Android.
