@@ -147,6 +147,7 @@ jobs:
           node tests/worker_wafly.js
           node tests/worker_mensagens.js
           node tests/worker_mensagens_conversa.js
+          node tests/worker_mobile_push.js
 
       # O teste do Worker do Instagram usa node:sqlite, disponível no Node 22+.
       - name: Node 22 para bateria completa

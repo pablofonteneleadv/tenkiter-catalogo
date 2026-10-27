@@ -5991,6 +5991,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   (async function iniciar() {
     atualizarBarraSync();
     // tudo ao mesmo tempo (antes era um depois do outro, somando as esperas); lista e categorias já aparecem do cache do aparelho
+    if(new URLSearchParams(location.search).get('app')==='mensagens') return; // catálogo só quando abrir Produtos no app
     await Promise.all([carregarListas(), carregarProdutos(), carregarStats()]);
     aplicarPadroesNovo_();
   })();
@@ -5998,7 +5999,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="admin-gestao.js?v=7.19.0"></script>
 <script src="admin-push.js?v=7.19.0"></script>
 <script src="admin-conexoes.js"></script>
-<script src="admin-mensagens.js?v=7.30.0"></script>
+<script src="admin-mensagens.js?v=7.31.0"></script>
 <script src="admin-instagram.js?v=7.17.0"></script>
 <script src="video-validation.js"></script>
 <script src="admin-postagens.js?v=7.30.2"></script>
@@ -6136,6 +6137,6 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   });
 })();
 </script>
-<script src="app-mensagens.js?v=1.0.0"></script>
+<script src="app-mensagens.js?v=7.31.0"></script>
 </body>
 </html>
