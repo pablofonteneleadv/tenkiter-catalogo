@@ -1,8 +1,8 @@
 {
-  "versionCode": 4,
-  "versionName": "2.1.0",
-  "bytes": 4506805,
-  "sha256": "7d94480849f9c7b60f86bd592fafabc5d81adeeebbe7bf45452517242ae3c959",
-  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.1.0/TENKiTER-Mensagens-2.1.0.apk",
-  "notes": "Atendimento nativo com Espiar, grupos, falta responder, ações em lote, produtos, respostas rápidas e anexos. Notificações com nome, canal, prévia e ações Espiar/Abrir."
+  "versionCode": 5,
+  "versionName": "2.2.0",
+  "bytes": 4549125,
+  "sha256": "1089e1c7006159ce0e84b25942d25bcaaa7ee61a3d5bd192aa011849aa2e07f0",
+  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.2.0/TENKiTER-Mensagens-2.2.0.apk",
+  "notes": "Seleção por toque longo ou botão Selecionar, Encerrar visível, painel, exportações, leitura e assinatura, conexões e Google Contatos no app. Produtos com fotos, estoque e seleção; histórico anterior e avisos de novas mensagens."
 }

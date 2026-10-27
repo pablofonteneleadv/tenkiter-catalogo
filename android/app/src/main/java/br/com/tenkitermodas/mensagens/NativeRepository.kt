@@ -106,16 +106,31 @@ class NativeRepository internal constructor(private val context:Context,val stor
         for(i in 0 until rows.length()){val c=rows.getJSONObject(i);ids.add(c.getLong("id"));store.putConversation(a,c)}
         changed();ids
     }
-    fun older(id:Long)=lock.withLock{
-        val a=store.auth()?:throw AccessRevoked();val msgs=store.messages(id)
-        if(msgs.size>=1000)throw Exception("Mil mensagens já estão salvas. Use Completo para o histórico anterior.")
-        val before=msgs.firstOrNull()?.optString("enviada_em")?:return@withLock
-        val j=api.call("/msg/mensagens?conversa=$id&antes="+enc(before)+"&antesId="+(msgs.firstOrNull()?.optLong("id")?:0),a)
-        store.putMessages(a,id,j.getJSONArray("mensagens"));store.conversation(id)?.let{store.putConversation(a,it.put("local_has_more",j.optBoolean("temMais")))};changed()
+    fun older(id:Long,oldest:JSONObject?=null):List<JSONObject> =lock.withLock{
+        val a=store.auth()?:throw AccessRevoked();val first=oldest?:store.messages(id).firstOrNull()?:return@withLock emptyList()
+        val before=first.optString("enviada_em")
+        try{
+            val j=api.call("/msg/mensagens?conversa=$id&antes="+enc(before)+"&antesId="+first.optLong("id"),a)
+            if(!store.current(a))throw AccessRevoked()
+            val rows=j.getJSONArray("mensagens");store.putMessages(a,id,rows)
+            store.conversation(id)?.let{store.putConversation(a,it.put("local_has_more",j.optBoolean("temMais")))};changed()
+            (0 until rows.length()).map{rows.getJSONObject(it)}
+        }catch(e:AccessRevoked){logout();throw e}
     }
+    fun administration(path:String,body:JSONObject?=null):JSONObject=lock.withLock{
+        require(path.substringBefore('?') in setOf("/msg/config","/msg/metricas","/msg/resumo","/msg/diagnostico","/msg/instagram/situacao","/msg/instagram/segredo","/msg/instagram/assinar","/msg/ligar","/msg/pausar","/msg/contatos/situacao","/msg/contatos/config","/msg/contatos/backup","/msg/contatos/relatorio","/msg/stories"))
+        val a=store.auth()?:throw AccessRevoked()
+        try{api.call(path,a,body).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
+    }
+    fun export(query:String):NativeApi.Export=lock.withLock{
+        val a=store.auth()?:throw AccessRevoked()
+        try{api.export(a,query).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
+    }
+    fun discard(key:String){store.removePending(key);changed()}
     fun config(body:JSONObject?=null):JSONObject=lock.withLock{
         val a=store.auth()?:throw AccessRevoked();try{api.call("/msg/config",a,body).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
     }
+    fun productPhoto(url:String):ByteArray?=api.publicPhoto(url)
     fun catalog():List<JSONObject> =lock.withLock{
         val a=store.auth()?:throw AccessRevoked();val r=api.catalog().getJSONArray("produtos");if(!store.current(a))throw AccessRevoked()
         (0 until r.length()).map{r.getJSONObject(it)}.filter{it.optString("Status").isBlank()||it.optString("Status").equals("ativo",true)}
@@ -134,9 +149,9 @@ class NativeRepository internal constructor(private val context:Context,val stor
             }};changed()
         }catch(e:AccessRevoked){logout();throw e}
     }
-    fun media(id:Long,context:Boolean=false):Pair<ByteArray,String> =lock.withLock{
+    fun media(id:Long,context:Boolean=false,post:Long=0):Pair<ByteArray,String> =lock.withLock{
         val a=store.auth()?:throw AccessRevoked()
-        try{api.media(a,id,context).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
+        try{api.media(a,id,context,post).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
     }
     fun attachment(id:Long,bytes:ByteArray,type:String,caption:String,key:String="android-"+UUID.randomUUID()):String=lock.withLock{
         val a=store.auth()?:throw AccessRevoked()

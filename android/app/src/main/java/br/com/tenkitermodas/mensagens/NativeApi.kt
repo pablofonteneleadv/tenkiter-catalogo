@@ -29,9 +29,9 @@ open class NativeApi {
             return j
         }finally{c.disconnect()}
     }
-    open fun media(a:NativeAuth,id:Long,context:Boolean=false):Pair<ByteArray,String> {
-        require(id>0)
-        val c=(URL(BuildConfig.WORKER_URL+"/msg/midia?id=$id"+(if(context)"&ctx=1"else"")).openConnection() as HttpURLConnection)
+    open fun media(a:NativeAuth,id:Long,context:Boolean=false,post:Long=0):Pair<ByteArray,String> {
+        require(id>0||post>0)
+        val c=(URL(BuildConfig.WORKER_URL+"/msg/midia?id=$id"+(if(post>0)"&post=$post"else"")+(if(context)"&ctx=1"else"")).openConnection() as HttpURLConnection)
         try{
             c.connectTimeout=10000;c.readTimeout=30000;c.instanceFollowRedirects=false
             c.setRequestProperty("X-TK-Whats",a.owner);c.setRequestProperty("X-TK-Sessao",a.session)
@@ -39,6 +39,28 @@ open class NativeApi {
             if(c.responseCode!=200)throw Exception("Não foi possível abrir esta mídia. Ela pode ter expirado.")
             val bytes=AppUpdater.limited(c.inputStream,32*1048576)
             return bytes to (c.contentType?:"application/octet-stream").substringBefore(';')
+        }finally{c.disconnect()}
+    }
+    open fun publicPhoto(address:String):ByteArray? {
+        return try{
+            val url=URL(address)
+            if(url.protocol!="https"||url.userInfo!=null||url.host !in setOf("lh3.googleusercontent.com","res.cloudinary.com","tenkiter-midia.distkrpconfeccoes.workers.dev","midia.tenkitermodas.com.br"))return null
+            val c=url.openConnection() as HttpURLConnection
+            try{c.connectTimeout=8000;c.readTimeout=10000;c.instanceFollowRedirects=false;if(c.responseCode!=200||!c.contentType.orEmpty().startsWith("image/"))null else AppUpdater.limited(c.inputStream,4*1048576)}finally{c.disconnect()}
+        }catch(_:Exception){null}
+    }
+    data class Export(val bytes:ByteArray,val mime:String,val name:String,val total:Int,val cropped:Boolean)
+    open fun export(a:NativeAuth,query:String):Export {
+        require(query.length<1000&&!query.contains('#'))
+        val c=URL(BuildConfig.WORKER_URL+"/msg/exportar?"+query).openConnection() as HttpURLConnection
+        try{
+            c.connectTimeout=10000;c.readTimeout=65000;c.instanceFollowRedirects=false
+            c.setRequestProperty("X-TK-Whats",a.owner);c.setRequestProperty("X-TK-Sessao",a.session)
+            if(c.responseCode in listOf(401,403))throw AccessRevoked()
+            if(c.responseCode!=200)throw Exception("Não foi possível exportar agora. Confira o período e a conexão.")
+            val bytes=AppUpdater.limited(c.inputStream,32*1048576)
+            val name=c.getHeaderField("Content-Disposition")?.substringAfter("filename=","")?.substringBefore(';')?.trim()?.trim('"')?.replace(Regex("[^A-Za-z0-9._-]"),"_")?.take(120).orEmpty().ifBlank{"conversas.txt"}
+            return Export(bytes,c.contentType?.substringBefore(';')?:"text/plain",name,c.getHeaderField("X-TK-Total")?.toIntOrNull()?:0,c.getHeaderField("X-TK-Cortado")=="1")
         }finally{c.disconnect()}
     }
     private fun request(address:String,body:JSONObject?,headers:Map<String,String>,google:Boolean,method:String?=null,acceptCatalog:Boolean=false):JSONObject {

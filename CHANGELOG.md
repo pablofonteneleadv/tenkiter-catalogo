@@ -6,6 +6,15 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.34.0 — APK 2.2: seleção e ferramentas completas do atendimento — 2026-10-27
+
+- Corrige toque prolongado consumido pelos controles da linha. Texto, avatar e Espiar selecionam a conversa sem abri-la; botão Selecionar visível e barra com Encerrar/Lidas/Mais. Sincronização não interrompe gesto nem desloca a linha durante a seleção.
+- Painel de atendimento e gráfico por hora, configurações de leitura/nome/assinatura, exportação TXT/CSV/JSON e cópia para IA passam a funcionar na tela nativa pelas rotas existentes.
+- Conexões WhatsApp/Instagram, diagnósticos, pausa e retomada, segredo/assinatura Meta e ponte Google Contatos (cópia, relatório somente leitura e desligamento) disponíveis no menu nativo. Alterações exigem ações explícitas.
+- Produtos com fotos, estoque, busca sem acentos, seleção persistente e links; contexto de stories publicados; histórico anterior além da janela local e botão de novas mensagens. Avisos locais podem ser descartados sem reenviar.
+- APK 2.2.0/code5, mesma assinatura. 32 testes Android simulados; lint Release sem erros. Não envia mensagens ou muda conexões reais como teste.
+
+
 ## 7.33.1 — Manifesto do atualizador Android sem cache — 2026-10-27
 
 - Corrige entrega do manifesto 2.0.1 após publicação do APK 2.1.0: configura no-store na origem Render, preservando as demais regras de cabeçalho.

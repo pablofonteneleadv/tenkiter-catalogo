@@ -19,6 +19,7 @@ data class NativeAuth(val owner:String,val session:String,val name:String,val ch
 }
 class NativeStore(context:Context,private val keyOverride:javax.crypto.SecretKey?=null):SQLiteOpenHelper(context,"mensagens-local.db",null,1) {
     private val mediaDir=java.io.File(context.cacheDir,"received")
+    private val exportsDir=java.io.File(context.cacheDir,"exports")
     private val outgoingDir=java.io.File(context.cacheDir,"outgoing")
     private val prefs=context.getSharedPreferences("native-auth",Context.MODE_PRIVATE)
     override fun onCreate(db:SQLiteDatabase){
@@ -53,7 +54,7 @@ class NativeStore(context:Context,private val keyOverride:javax.crypto.SecretKey
     }
     @Synchronized fun current(a:NativeAuth)=auth()?.let{it.owner==a.owner&&it.session==a.session}==true
     @Synchronized fun logout(){generation++;prefs.edit().clear().commit();clearData()}
-    private fun clearData(){mediaDir.deleteRecursively();outgoingDir.deleteRecursively();writableDatabase.execSQL("DELETE FROM msg");writableDatabase.execSQL("DELETE FROM conv");writableDatabase.execSQL("DELETE FROM pending")}
+    private fun clearData(){mediaDir.deleteRecursively();outgoingDir.deleteRecursively();exportsDir.deleteRecursively();writableDatabase.execSQL("DELETE FROM msg");writableDatabase.execSQL("DELETE FROM conv");writableDatabase.execSQL("DELETE FROM pending")}
     fun canReadLocal(a:NativeAuth?)=a!=null&&System.currentTimeMillis()-a.checked in 0..86400000L
     private fun clean(j:JSONObject):JSONObject {
         val copy=JSONObject(j.toString());copy.keys().asSequence().toList().filter{it.endsWith("url",true)||it.endsWith("chave",true)||it.contains("sessao",true)||it.contains("token",true)}.forEach{copy.remove(it)}

@@ -83,6 +83,18 @@ class NativeToolsTest {
         assertEquals(1,uploads);assertEquals(1,sent.size);assertEquals("android-media-test",sent[0].getString("idLocal"));assertTrue(sent[0].getString("anexo").startsWith("out/"));assertEquals("Legenda",sent[0].getString("texto"))
         repo.sync(1);assertEquals(1,uploads);assertEquals(1,sent.size);assertTrue(store.pending(1).isEmpty());store.close()
     }
+    @Test fun productStockSearchAndCopyPreserveSelectionAcrossQueries(){
+        val a=Robolectric.buildActivity(Activity::class.java).setup().get();a.setContentView(android.widget.FrameLayout(a));a.deleteDatabase("mensagens-local.db");a.getSharedPreferences("native-auth",0).edit().clear().commit()
+        val store=NativeStore(a,SecretKeySpec(ByteArray(32){4},"AES"));store.saveAuth(NativeAuth("88999990000","test","Pablo"));val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main)
+        val api=object:NativeApi(){override fun catalog()=JSONObject().put("produtos",JSONArray().put(JSONObject().put("ID","a").put("Nome","Vestido viscose azul").put("Codigo","TK1").put("Estoque",2)).put(JSONObject().put("ID","b").put("Nome","Vestido viscose verde").put("Codigo","TK2").put("Estoque",0)))}
+        val tools=NativeTools(a,scope,NativeRepository(a,store,api),{1},{true},{},{},{},{},{_,_->});tools.show(1,"produtos");val d=dialog("Produtos · selecionar peças")
+        val list=all(d.window!!.decorView).filterIsInstance<ListView>().first();assertEquals(1,list.adapter.count);list.performItemClick(list.adapter.getView(0,null,list),0,0)
+        all(d.window!!.decorView).filterIsInstance<android.widget.CheckBox>().first{it.text=="Só com estoque"}.performClick();assertEquals(2,list.adapter.count)
+        all(d.window!!.decorView).filterIsInstance<EditText>().first().setText("víscose verde");assertEquals(1,list.adapter.count);list.performItemClick(list.adapter.getView(0,null,list),0,0)
+        all(d.window!!.decorView).filterIsInstance<android.widget.Button>().first{it.text=="Copiar link"}.performClick()
+        val clip=(a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).primaryClip!!.getItemAt(0).text.toString();assertTrue(clip.endsWith("?sel=TK1,TK2"))
+        all(d.window!!.decorView).filterIsInstance<android.widget.Button>().first{it.text=="Limpar seleção"}.performClick();assertFalse(list.isItemChecked(0));tools.close();scope.cancel();store.close()
+    }
     @Test fun nativeProductPricesMatchTheCatalogFixtures(){
         val fixtures=JSONArray(javaClass.classLoader!!.getResourceAsStream("precos-common.json")!!.bufferedReader().readText())
         for(i in 0 until fixtures.length()){val f=fixtures.getJSONObject(i);assertEquals(f.getString("expected"),ProductText.price(JSONObject().put("Preco",f.getDouble("value"))))}

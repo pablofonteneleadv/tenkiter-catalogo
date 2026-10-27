@@ -15,13 +15,16 @@ import java.io.File
 import java.util.UUID
 
 /** Ferramentas do atendimento usam as mesmas rotas e configurações do site. */
-class NativeTools(private val activity:Activity,private val scope:CoroutineScope,private val repo:NativeRepository,private val current:()->Long,private val canSend:()->Boolean,private val insert:(String)->Unit,private val refresh:()->Unit,private val open:(Long)->Unit,private val full:(Long)->Unit,private val batchDone:(Set<Long>,String)->Unit){
+class NativeTools(private val activity:Activity,private val scope:CoroutineScope,private val repo:NativeRepository,private val current:()->Long,private val canSend:()->Boolean,private val insert:(String)->Unit,private val refresh:()->Unit,private val open:(Long)->Unit,private val full:(Long)->Unit,private val batchDone:(Set<Long>,String)->Unit,private val advanced:(String,Long)->Unit={_,_->}){
+    private var productConversation=0L;private val productSelection=linkedMapOf<String,JSONObject>()
+    private val thumbs=android.util.LruCache<String,android.graphics.Bitmap>(20)
+    private val loadingPhotos=mutableSetOf<String>()
     private val dialogs=mutableListOf<AlertDialog>()
     private fun builder():AlertDialog.Builder=object:AlertDialog.Builder(activity){
         override fun create():AlertDialog=super.create().also{dialogs.removeAll{d->!d.isShowing};dialogs.add(it)}
         override fun show():AlertDialog=create().also{it.show()}
     }
-    fun close(){stopRecording(false);stopPlayback();dialogs.toList().forEach{it.dismiss()};dialogs.clear();pickedConversation=0}
+    fun close(){productSelection.clear();productConversation=0;thumbs.evictAll();stopRecording(false);stopPlayback();dialogs.toList().forEach{it.dismiss()};dialogs.clear();pickedConversation=0}
     private fun dp(n:Int)=(n*activity.resources.displayMetrics.density).toInt()
     private var pickedConversation=0L;private var attachmentBusy=false
     private var player:android.media.MediaPlayer?=null;private var playbackFile:File?=null
@@ -39,18 +42,21 @@ class NativeTools(private val activity:Activity,private val scope:CoroutineScope
             catch(e:Exception){toast(if(e is java.io.IOException)"Não foi possível concluir. Confira sua conexão."else e.message?.take(200)?:"Não foi possível concluir. Tente novamente.")}
         }
     }
-    fun show(id:Long,action:String){when(action){
-        "produtos"->products(id);"respostas"->responses(id);"anexo"->choose(id);"conversa"->conversationMenu(id)
+    fun show(id:Long,action:String){when{
+        action.startsWith("stories:")->stories(id,action.substringAfter(':').toLongOrNull()?:0)
+        action=="produtos"->products(id);action=="respostas"->responses(id);action=="anexo"->choose(id);action=="conversa"->conversationMenu(id)
     }}
     private fun conversationMenu(id:Long){
-        val c=repo.store.conversation(id);val labels=mutableListOf("Marcar não lida","Encerrar atendimento","Configurar assinatura","Atendimento completo")
+        val c=repo.store.conversation(id);val labels=mutableListOf("Marcar não lida","Encerrar atendimento","Configurar leitura e assinatura","Copiar conversa para IA","Exportar esta conversa")
         if(c?.optString("encerrada_em")?.isNotBlank()==true)labels[1]="Reabrir atendimento"
         if((c?.optLong("outro_id")?:0)>0)labels.add("Abrir no outro WhatsApp")
         builder().setTitle(c?.optString("nome")?:"Conversa").setItems(labels.toTypedArray()){_,n->when(labels[n]){
             "Marcar não lida"->batch(setOf(id),"nao_lidas")
             "Encerrar atendimento"->batch(setOf(id),"encerrar")
             "Reabrir atendimento"->batch(setOf(id),"reabrir")
-            "Configurar assinatura"->signature()
+            "Configurar leitura e assinatura"->advanced("settings",id)
+            "Copiar conversa para IA"->advanced("copy",id)
+            "Exportar esta conversa"->advanced("export",id)
             "Abrir no outro WhatsApp"->open(c!!.optLong("outro_id"))
             else->full(id)
         }}.setNegativeButton("Voltar",null).show()
@@ -65,28 +71,70 @@ class NativeTools(private val activity:Activity,private val scope:CoroutineScope
         }else builder().setTitle(when(action){"lidas"->"Marcar como lidas?";"nao_lidas"->"Marcar como não lidas?";else->"Reabrir atendimentos?"}).setMessage("Aplicar a ${ids.size} conversa(s).")
             .setPositiveButton("Confirmar"){_,_->execute()}.setNegativeButton("Cancelar",null).show()
     }
+    private fun thumbnail(view:CheckedTextView,photo:String){
+        view.tag=photo;if(photo.isBlank())return
+        val generation=repo.store.generation
+        fun show(bitmap:android.graphics.Bitmap){
+            val ratio=minOf(dp(56).toFloat()/bitmap.width,dp(72).toFloat()/bitmap.height)
+            val drawable=android.graphics.drawable.BitmapDrawable(activity.resources,bitmap).apply{setBounds(0,0,(bitmap.width*ratio).toInt(),(bitmap.height*ratio).toInt())}
+            view.setCompoundDrawables(drawable,null,null,null);view.compoundDrawablePadding=dp(8)
+        }
+        thumbs.get(photo)?.let{show(it);return}
+        val placeholder=android.graphics.drawable.ColorDrawable(android.graphics.Color.rgb(239,236,229)).apply{setBounds(0,0,dp(56),dp(64))};view.setCompoundDrawables(placeholder,null,null,null);view.compoundDrawablePadding=dp(8)
+        if(!loadingPhotos.add(photo))return
+        scope.launch{
+            try{
+                val bytes=withContext(Dispatchers.IO){repo.productPhoto(photo)}?:return@launch
+                val image=withContext(Dispatchers.Default){val opt=BitmapFactory.Options().apply{inJustDecodeBounds=true};BitmapFactory.decodeByteArray(bytes,0,bytes.size,opt);opt.inJustDecodeBounds=false;opt.inSampleSize=1;while(maxOf(opt.outWidth,opt.outHeight)/opt.inSampleSize>320)opt.inSampleSize*=2;BitmapFactory.decodeByteArray(bytes,0,bytes.size,opt)}?:return@launch
+                if(repo.store.generation==generation){thumbs.put(photo,image);if(view.tag==photo)show(image)}else image.recycle()
+            }finally{loadingPhotos.remove(photo)}
+        }
+    }
     private fun products(id:Long){
         toast("Buscando catálogo…")
         work({repo.catalog()}){products->
             if(current()!=id)return@work
-            val box=form();val search=field("Buscar peça, código ou tamanho");box.addView(search)
+            val box=form();val search=field("Nome, código, cor, tamanho ou categoria");box.addView(search)
+            val stocked=CheckBox(activity).apply{text="Só com estoque";minHeight=dp(48);isChecked=true};box.addView(stocked)
             val list=ListView(activity).apply{choiceMode=ListView.CHOICE_MODE_MULTIPLE}
-            box.addView(list,LinearLayout.LayoutParams(-1,dp(minOf(320,maxOf(80,products.size*64)))))
-            val selected=linkedMapOf<String,JSONObject>();var visible=products
-            fun draw(){visible=products.filter{(it.optString("Nome")+" "+it.optString("Codigo")+" "+it.optString("Tamanhos")+" "+it.optString("Cores")).contains(search.text.toString(),true)}
-                list.adapter=ArrayAdapter(activity,android.R.layout.simple_list_item_multiple_choice,visible.map{it.optString("Nome")+" · "+it.optString("Codigo")+"\n"+ProductText.price(it)+(if(it.optString("Tamanhos").isBlank())""else" · "+it.optString("Tamanhos"))})
+            box.addView(list,LinearLayout.LayoutParams(-1,dp(minOf(320,maxOf(80,products.size*64))),1f))
+            if(productConversation!=id){productSelection.clear();productConversation=id}
+            val selected=productSelection;selected.keys.retainAll(products.map{it.optString("ID")}.toSet());for(p in products)if(selected.containsKey(p.optString("ID")))selected[p.optString("ID")]=p
+            var visible=products
+            fun norm(value:String)=java.text.Normalizer.normalize(value,java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"),"").lowercase(java.util.Locale("pt","BR"))
+            fun draw(){
+                val terms=norm(search.text.toString()).split(Regex("\\s+")).filter{it.isNotBlank()}
+                visible=products.filter{p->val words=norm(listOf("Nome","Codigo","Categoria","Cores","Tamanhos","Genero").joinToString(" "){p.optString(it)})
+                    (!stocked.isChecked||p.optString("Estoque").toDoubleOrNull()?.let{it>0}!=false)&&terms.all{words.contains(it)}}
+                val labels=visible.map{it.optString("Nome")+" · "+it.optString("Codigo")+"\n"+ProductText.price(it)+(if(it.optString("Tamanhos").isBlank())""else" · "+it.optString("Tamanhos"))+(if(it.optString("Estoque").toDoubleOrNull()?.let{x->x<=0}==true)" · Esgotado"else"")}
+                list.adapter=object:ArrayAdapter<String>(activity,android.R.layout.simple_list_item_multiple_choice,labels){
+                    override fun getView(position:Int,convert:View?,parent:android.view.ViewGroup):View{
+                        val view=super.getView(position,convert,parent) as CheckedTextView;view.setCompoundDrawables(null,null,null,null);view.minHeight=dp(64)
+                        thumbnail(view,visible[position].optString("Foto_URL"));return view
+                    }
+                }
                 visible.forEachIndexed{i,p->list.setItemChecked(i,selected.containsKey(p.optString("ID")))}
             }
+            val copy=button("Copiar link"){};val clear=button("Limpar seleção"){}
+            val links=LinearLayout(activity);links.addView(copy,LinearLayout.LayoutParams(0,dp(48),1f));links.addView(clear,LinearLayout.LayoutParams(0,dp(48),1f));box.addView(links)
+            clear.setOnClickListener{selected.clear();draw()}
+            stocked.setOnCheckedChangeListener{_,_->draw()}
             list.setOnItemClickListener{_,_,pos,_->val p=visible[pos];val key=p.optString("ID");if(list.isItemChecked(pos)){if(selected.size>=60){list.setItemChecked(pos,false);toast("Selecione até 60 peças.")}else selected[key]=p}else selected.remove(key)}
             search.addTextChangedListener(object:android.text.TextWatcher{override fun beforeTextChanged(s:CharSequence?,st:Int,c:Int,a:Int){};override fun onTextChanged(s:CharSequence?,st:Int,b:Int,c:Int){draw()};override fun afterTextChanged(e:android.text.Editable?) {}});draw()
             val d=builder().setTitle("Produtos · selecionar peças").setView(box).setPositiveButton("Colocar na mensagem",null).setNegativeButton("Voltar",null).create()
-            d.setOnShowListener{d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener{
+            d.setOnShowListener{
+                copy.setOnClickListener{
+                    if(selected.isEmpty()){toast("Selecione ao menos uma peça.");return@setOnClickListener}
+                    val ps=selected.values.toList();val link=if(ps.size==1)productLink(ps[0])else BuildConfig.SITE_URL+"?sel="+ps.joinToString(","){Uri.encode(it.optString("Codigo").ifBlank{it.optString("ID")})}
+                    (activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Produtos TENKiTER",link));toast("Link copiado.")
+                }
+                d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener{
                 if(selected.isEmpty()){toast("Selecione ao menos uma peça.");return@setOnClickListener}
                 if(current()!=id||!canSend()){toast("Abra a conversa para responder.");return@setOnClickListener}
                 val values=selected.values.toList();val text=if(values.size==1){val p=values.first();listOf(p.optString("Nome"),ProductText.price(p),p.optString("Tamanhos").takeIf{it.isNotBlank()}?.let{"Tamanhos: $it"},p.optString("Cores").takeIf{it.isNotBlank()}?.let{"Cores: $it"},productLink(p)).filterNotNull().joinToString("\n")}
                     else "Olha as peças que separei na TENKiTER Modas (${values.size}):\n"+values.take(12).joinToString("\n"){"• "+it.optString("Nome")+" — "+ProductText.price(it)}+"\n\nVeja fotos, preços e disponibilidade:\n"+BuildConfig.SITE_URL+"?sel="+values.joinToString(","){Uri.encode(it.optString("Codigo").ifBlank{it.optString("ID")})}
                 if(repo.store.conversation(id)?.optString("canal")=="instagram"&&text.toByteArray(Charsets.UTF_8).size>900){toast("Selecione menos peças para caber na mensagem do Instagram.");return@setOnClickListener}
-                insert(text);d.dismiss()
+                insert(text);selected.clear();d.dismiss()
             }};d.show()
         }
     }
@@ -114,10 +162,6 @@ class NativeTools(private val activity:Activity,private val scope:CoroutineScope
         }};d.show()
     }
     private fun saveResponses(id:Long,rows:JSONArray){work({repo.config(JSONObject().put("respostas",rows))}){toast("Respostas salvas para toda a equipe.");if(current()==id)responses(id)}}
-    private fun signature(){work({repo.config()}){config->
-        val box=form();val name=field("Seu nome nas respostas",config.optString("meuNome"));val enabled=CheckBox(activity).apply{text="Nome do atendente nas respostas (toda a equipe)";minHeight=dp(48);isChecked=config.optJSONObject("config")?.optBoolean("assinatura",true)!=false};box.addView(name);box.addView(enabled)
-        builder().setTitle("Assinatura do atendente").setView(box).setPositiveButton("Salvar"){_,_->work({repo.config(JSONObject().put("meuNome",name.text.toString().take(30)).put("assinatura",enabled.isChecked))}){toast("Assinatura salva.")}}.setNegativeButton("Cancelar",null).show()
-    }}
     private fun choose(id:Long){
         if(!canSend()||attachmentBusy)return
         builder().setTitle("Anexar à conversa").setItems(arrayOf("Foto, vídeo ou áudio do aparelho","Gravar áudio")){_,i->if(i==0)chooseFile(id)else record(id)}.setNegativeButton("Cancelar",null).show()
@@ -191,12 +235,21 @@ class NativeTools(private val activity:Activity,private val scope:CoroutineScope
             work({try{file.inputStream().use{AppUpdater.limited(it,16*1048576)}}finally{file.delete()}}){confirmAttachment(id,it,"áudio")}
         }else file?.delete()
     }
-    fun media(id:Long,context:Boolean=false){
+    private fun stories(id:Long,message:Long){
+        val m=repo.store.messages(id).firstOrNull{it.optLong("id")==message}?:return
+        val timestamp=m.optString("enviada_em")
+        work({repo.administration("/msg/stories?conversa=$id&em="+Uri.encode(timestamp))}){r->
+            val rows=NativeAdministration.array(r,"stories")
+            if(rows.isEmpty()){toast("Nenhum story publicado pelo sistema nesse período.");return@work}
+            builder().setTitle("Stories nas 26h anteriores").setItems(rows.map{NativeAdministration.stamp(it.optString("publicado_em"))+" · "+it.optString("legenda").take(100)}.toTypedArray()){_,i->media(0,false,rows[i].getLong("id"))}.setNegativeButton("Voltar",null).show()
+        }
+    }
+    fun media(id:Long,context:Boolean=false,post:Long=0){
         toast("Abrindo anexo…");val generation=repo.store.generation;val owner=repo.store.auth()?.owner?:return
         scope.launch{
             var file:File?=null
             try{
-                val data=withContext(Dispatchers.IO){repo.media(id,context)}
+                val data=withContext(Dispatchers.IO){repo.media(id,context,post)}
                 if(activity.isFinishing||generation!=repo.store.generation||owner!=repo.store.auth()?.owner)return@launch
                 if(data.second.startsWith("image/")){
                     val bitmap=withContext(Dispatchers.Default){val options=BitmapFactory.Options().apply{inJustDecodeBounds=true};BitmapFactory.decodeByteArray(data.first,0,data.first.size,options);options.inSampleSize=maxOf(1,maxOf(options.outWidth,options.outHeight)/1600);options.inJustDecodeBounds=false;BitmapFactory.decodeByteArray(data.first,0,data.first.size,options)?:throw Exception("Imagem indisponível.")}
