@@ -129,7 +129,7 @@ function d1() {
   const f1 = globalThis.fetch;
   globalThis.fetch = async (u, init) => {
     u = String(u);
-    if (u.startsWith('https://wafly.com.br/') && u.endsWith('/send-text')) {
+    if (u.startsWith('https://wafly.com.br/') && (u.endsWith('/send-text') || u.endsWith('/send-link'))) {
       envios.push({ u, h: new Headers(init.headers), b: JSON.parse(init.body) });
       if (modoZap === 'ok') return new Response(JSON.stringify({ zaapId: 'Z1', messageId: 'ENV' + envios.length, id: 'ENV' + envios.length }));
       if (modoZap === 'recusa') return new Response(JSON.stringify({ error: 'x' }), { status: 400 });
@@ -165,6 +165,17 @@ function d1() {
   chk('200 sem id também é tratado como incerto', (await A('POST', '/msg/enviar', { conversa: c.id, texto: 'sem id', idLocal: 'idlocal-0004' })).j.incerto === true);
   const gigante = await A('POST', '/msg/enviar', { conversa: c.id, texto: 'a'.repeat(4001), idLocal: 'idlocal-0005' });
   chk('texto grande demais: recusado em português', gigante.r.status === 400 && /grande/.test(gigante.j.erro));
+  modoZap = 'ok';
+  // v2.13: prévia do link escolhida na mensagem
+  const pv1 = await A('POST', '/msg/enviar', { conversa: c.id, texto: '*Ana:*\nBlusa\nhttps://tenkitermodas.com.br/p/TK-0754.', idLocal: 'idlocal-pv01', previa: true, previaTitulo: 'Térmica UV\ninfantil P', previaDescricao: 'R$ 24,99 à vista' });
+  const ePv = envios[envios.length - 1];
+  chk('com prévia: vai pelo /send-link com o primeiro link (sem o ponto final), título e descrição', pv1.j.ok && ePv.u.endsWith('/send-link') && ePv.b.linkUrl === 'https://tenkitermodas.com.br/p/TK-0754' && ePv.b.message.startsWith('*Ana:*') && ePv.b.title === 'Térmica UV infantil P' && ePv.b.linkDescription === 'R$ 24,99 à vista' && ePv.b.phone === '5588999990000', ePv);
+  const pv2 = await A('POST', '/msg/enviar', { conversa: c.id, texto: 'sem link aqui', idLocal: 'idlocal-pv02', previa: true });
+  chk('com prévia mas sem link: vai como texto simples', pv2.j.ok && envios[envios.length - 1].u.endsWith('/send-text'));
+  const pv3 = await A('POST', '/msg/enviar', { conversa: c.id, texto: 'veja https://tenkitermodas.com.br/?sel=TK-0001,TK-0002', idLocal: 'idlocal-pv03' });
+  chk('sem marcar a prévia: link vai como texto simples (como antes)', pv3.j.ok && envios[envios.length - 1].u.endsWith('/send-text'));
+  const pv4 = await A('POST', '/msg/enviar', { conversa: c.id, texto: 'https://x.com/a', idLocal: 'idlocal-pv04', previa: true, previaTitulo: 'x'.repeat(300) });
+  chk('cartão: título cortado em 100 letras e sem descrição vazia', pv4.j.ok && envios[envios.length - 1].b.title.length === 100 && !('linkDescription' in envios[envios.length - 1].b));
 
   // ---- responder pelo Instagram ----
   await cfg('ig_token', TOKEN);
@@ -551,14 +562,19 @@ function d1() {
     { r: 'people/c1', n: 'Maria Silva', f: ['+55 88 99999-0001'] }, { r: 'people/c2', n: 'Maria S.', f: ['(88) 9999-0001'], m: ['m@x.com'] },
     { r: 'people/c3', n: 'Sem número', f: [] }, { r: 'people/c4', n: 'Fixo errado', f: ['12345'] }, { r: 'people/c5', n: 'Rita', f: ['+5588977770001'] }
   ];
-  const pedidosPonte = []; const fPonte = globalThis.fetch;
+  const pedidosPonte = []; const fPonte = globalThis.fetch; let ponteVelha = false;
   globalThis.fetch = async (u, init) => {
     if (String(u) === PONTE) {
       const b = JSON.parse(init.body); pedidosPonte.push(b);
       if (b.chave !== CHAVE_P) return new Response(JSON.stringify({ ok: false, erro: 'Chave da ponte inválida.' }));
       if (b.acao === 'ping') return new Response(JSON.stringify({ ok: true, versao: 'contatos-ponte-1.0', conta: 'contatos@exemplo.com' }));
       if (b.acao === 'backup') return new Response(JSON.stringify({ ok: true, total: contatosG.length, arquivo: 'contatos-google-2026-10-26-1800.json', url: 'https://drive.google.com/file/d/abc' }));
-      if (b.acao === 'listar') { const ini = Number(b.pagina || 0); return new Response(JSON.stringify({ ok: true, contatos: contatosG.slice(ini, ini + 3), proxima: ini + 3 < contatosG.length ? String(ini + 3) : '' })); }
+      if (b.acao === 'listar') { const ini = Number(b.pagina || 0); return new Response(JSON.stringify({ ok: true, contatos: contatosG.slice(ini, ini + 3), proxima: ini + 3 < contatosG.length ? String(ini + 3) : '', total: contatosG.length })); }
+      if (b.acao === 'backup_parte') {
+        if (ponteVelha) return new Response(JSON.stringify({ ok: false, erro: 'Ação desconhecida.' }));
+        const ini = Number(b.pagina || 0), parte = ini / 2 + 1;
+        return new Response(JSON.stringify({ ok: true, pasta: b.pasta || 'pastaCOPIA0001', pastaNome: 'contatos-google-2026-10-27-1500', url: 'https://drive.google.com/drive/folders/pastaCOPIA0001', parte, lidos: contatosG.slice(ini, ini + 2).length, totalPessoas: contatosG.length, proxima: ini + 2 < contatosG.length ? String(ini + 2) : '' }));
+      }
     }
     if (String(u).startsWith('https://script.google.com/macros/s/AKfycbPAGINA')) return new Response('<html>Faça login</html>');
     return fPonte(u, init);
@@ -584,10 +600,57 @@ function d1() {
   chk('relatório: quem conversou no WhatsApp e não está no Google', relP.j.semCadastro.total >= 1 && !relP.j.semCadastro.lista.some((x) => x.fone === '+5588977770001') && relP.j.semCadastro.lista.every((x) => /^\+55/.test(x.fone)), relP.j.semCadastro.lista.slice(0, 3));
   chk('nenhuma ação de mudança foi pedida à ponte (só leitura)', pedidosPonte.every((x) => ['ping', 'backup', 'listar'].includes(x.acao)));
   chk('relatório fica guardado para abrir depois', (await A('GET', '/msg/contatos/situacao?relatorio=1')).j.relatorio.total === 5);
+  // v2.15: cópia em partes e relatório em etapas (contas grandes)
+  ponteVelha = true;
+  const velha = await A('POST', '/msg/contatos/backup', { partes: true });
+  chk('cópia em partes com a ponte 1.0: pede para atualizar para a 1.1', velha.r.status === 502 && /contatos-ponte-1\.1/.test(velha.j.erro));
+  ponteVelha = false;
+  chk('continuar a cópia sem a pasta é recusado', (await A('POST', '/msg/contatos/backup', { partes: true, pagina: '2' })).r.status === 400);
+  let pc = await A('POST', '/msg/contatos/backup', { partes: true }), voltasBk = 1;
+  chk('1ª parte: devolve progresso (lidos, total, parte) e ainda não terminou', pc.j.ok && pc.j.fim === false && pc.j.lidos === 2 && pc.j.totalPessoas === 5 && pc.j.parte === 1 && pc.j.pasta === 'pastaCOPIA0001' && pc.j.proxima === '2', pc.j);
+  while (!pc.j.fim && voltasBk < 10) { pc = await A('POST', '/msg/contatos/backup', { partes: true, pagina: pc.j.proxima, pasta: pc.j.pasta }); voltasBk++; }
+  const bkSit = (await A('GET', '/msg/contatos/situacao')).j.backup;
+  chk('repete até o fim: soma as partes e registra a cópia com o link da pasta', pc.j.fim && pc.j.lidos === 5 && voltasBk === 3 && bkSit.total === 5 && bkSit.partes === 3 && bkSit.url === 'https://drive.google.com/drive/folders/pastaCOPIA0001' && bkSit.arquivo === 'contatos-google-2026-10-27-1500', [pc.j, bkSit]);
+  chk('ao terminar, o andamento da cópia é apagado', !(await DB.prepare("SELECT valor FROM cfg WHERE chave='contatos_backup_and'").first()));
+  chk('relatório: etapa inválida é recusada', (await A('POST', '/msg/contatos/relatorio', { etapa: 'xpto' })).r.status === 400);
+  await A('POST', '/msg/contatos/relatorio', { etapa: 'inicio' });
+  let rp = await A('POST', '/msg/contatos/relatorio', { etapa: 'parte' }), voltasRel = 1;
+  chk('relatório em etapas: cada parte lê uma página e conta o progresso', rp.j.ok && rp.j.lidos === 3 && rp.j.total === 5 && rp.j.proxima === '3', rp.j);
+  while (rp.j.proxima && voltasRel < 10) { rp = await A('POST', '/msg/contatos/relatorio', { etapa: 'parte', pagina: rp.j.proxima }); voltasRel++; }
+  const rf = await A('POST', '/msg/contatos/relatorio', { etapa: 'fim' });
+  chk('etapa final: mesmo resultado do relatório de uma vez só', rf.j.ok && rf.j.total === 5 && rf.j.duplicados.total === relP.j.duplicados.total && rf.j.invalidos.total === relP.j.invalidos.total && rf.j.semFone === relP.j.semFone && rf.j.corrigir.total === relP.j.corrigir.total, rf.j);
+  chk('etapa final limpa a tabela temporária (sem dados pessoais sobrando)', (await DB.prepare('SELECT COUNT(*) n FROM msg_contatos_tmp').first()).n === 0);
   const deslP = await A('POST', '/msg/contatos/config', { desligar: true });
   chk('desligar apaga endereço e chave do servidor', deslP.j.ok && !(await A('GET', '/msg/contatos/situacao')).j.ligada && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='contatos_chave'").first()));
   globalThis.fetch = fPonte;
   globalThis.fetch = f5;
+  // ---- v2.14: chave do Zernio ----
+  const fZ = globalThis.fetch; let zModo = 'ok', zChamadas = [];
+  globalThis.fetch = async (u, init) => {
+    u = String(u);
+    if (u.startsWith('https://zernio.com/api/v1/accounts')) {
+      zChamadas.push({ u, auth: new Headers(init.headers).get('authorization') });
+      if (zModo === 'recusa') return new Response('{"error":"invalid_credentials","key":"x"}', { status: 401 });
+      if (zModo === 'semig') return new Response(JSON.stringify({ accounts: [], hasAnalyticsAccess: false }));
+      return new Response(JSON.stringify({ accounts: [{ _id: 'acc_1', platform: 'instagram', username: 'tenkitermodasceara' }], hasAnalyticsAccess: false }));
+    }
+    return fZ(u, init);
+  };
+  chk('Zernio: sem chave, a tela vê "não configurada"', (await A('GET', '/msg/zernio/config')).j.configurada === false);
+  chk('Zernio: chave curta ou com espaço é recusada sem chamar o Zernio', (await A('POST', '/msg/zernio/config', { chave: 'abc' })).r.status === 400 && (await A('POST', '/msg/zernio/config', { chave: 'sk_' + 'a'.repeat(20) + ' b' })).r.status === 400 && zChamadas.length === 0);
+  zModo = 'recusa';
+  const zR = await A('POST', '/msg/zernio/config', { chave: 'sk_live_' + 'x'.repeat(32) });
+  chk('Zernio recusa a chave: erro em português, nada salvo e sem repassar a resposta', zR.r.status === 400 && /recusou/.test(zR.j.erro) && !zR.j.erro.includes('{') && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='zernio_chave'").first()));
+  zModo = 'ok';
+  const zChave = 'sk_live_' + 'k'.repeat(32), zOk = await A('POST', '/msg/zernio/config', { chave: zChave });
+  chk('Zernio aceita: guarda a chave, mostra o Instagram conectado e usa Bearer', zOk.j.ok && zOk.j.conta.usuario === 'tenkitermodasceara' && zOk.j.conta.id === 'acc_1' && zChamadas[zChamadas.length - 1].auth === 'Bearer ' + zChave && zChamadas[zChamadas.length - 1].u.includes('platform=instagram'));
+  const zSit = await A('GET', '/msg/zernio/config');
+  chk('a chave do Zernio nunca volta para a tela', zSit.j.configurada === true && !JSON.stringify(zSit.j).includes(zChave) && !JSON.stringify(zOk.j).includes(zChave));
+  zModo = 'semig';
+  const zSem = await A('POST', '/msg/zernio/config', { chave: zChave });
+  chk('chave certa sem Instagram conectado: salva e avisa que falta conectar', zSem.j.ok && zSem.j.conta === null);
+  chk('remover apaga a chave e a conta do servidor', (await A('POST', '/msg/zernio/config', { apagar: true })).j.ok && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='zernio_chave'").first()) && (await A('GET', '/msg/zernio/config')).j.configurada === false);
+  globalThis.fetch = fZ;
   // Android: paginação estável para horários iguais, sem omitir conversas ou mensagens.
   const isoPag='2099-01-01T00:00:00.000Z';
   for(let i=0;i<55;i++)await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em) VALUES('whatsapp1',?,?,1,1,?)").bind('paginacao-'+i+'@g.us','Grupo simulado '+i,isoPag).run();

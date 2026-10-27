@@ -6,6 +6,28 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.35.0 — Chave do Zernio em Conexões e Google Contatos para contas grandes — 2026-10-27
+
+- Gestão → Conexões → Instagram ganhou o bloco "Instagram Direct · Zernio": passo a passo curto, campo de senha para a chave de API e os botões "Salvar e conferir" e "Remover chave".
+- O servidor confere a chave listando as contas no Zernio (nada é enviado) e mostra qual Instagram está conectado. A chave fica só no servidor (`zernio_chave`) e nunca volta para a tela.
+- Nesta etapa só guarda a chave; as DMs do Instagram entram nas Mensagens na próxima versão.
+- Botões da tela Conexões com 44 px de altura (eram 40).
+- Google Contatos: o andamento e o resultado de ligar, cópia de segurança e relatório ficam escritos dentro do quadro (antes era um aviso que sumia em 9 segundos, e a cópia pode passar de um minuto).
+- Google Contatos para contas grandes (15 mil+ contatos):
+  - a cópia de segurança sai em partes pela ponte 1.1 (`backup_parte`): arquivos `parte-NN.json` numa subpasta de "TENKiTER backups";
+  - o relatório lê uma página por vez (`etapa: inicio/parte/fim`) e guarda só o necessário numa tabela temporária, apagada no fim;
+  - faixa fixa no pé da tela com o progresso ("5.000 de 15.300 contatos"), tela acesa (Wake Lock, quando o aparelho deixa), aviso antes de sair da página e confirmação ao fechar as Mensagens; botões dos contatos travados enquanto roda; sem rede, a mesma parte é tentada de novo até 3 vezes.
+- Teste `conexoes_unificada` atualizado para o grupo Android (7 grupos).
+- Service worker renovado (tk-3.38.19).
+
+## 7.34.0 — Mensagens: prévia do link escolhida em cada mensagem — 2026-10-27
+
+- No WhatsApp, quando a mensagem tem link, aparece logo acima do campo a caixinha "Mostrar prévia do link (miniatura)". A última escolha de cada canal fica lembrada no aparelho; começa desmarcada.
+- Marcada, a mensagem sai pelo envio "link com prévia" da Wafly (`/send-link`), usando o primeiro link do texto. O cartão leva o nome e o preço da peça, "Peças separadas para você" numa seleção ou o nome da loja nos links do site. Link de fora fica com o que o WhatsApp encontrar.
+- Desmarcada, ou sem link, tudo continua como antes (texto simples). No Instagram a caixinha não aparece.
+- Worker: `/msg/enviar` aceita `previa`, `previaTitulo` e `previaDescricao` (limpos e cortados em 100/200 letras).
+- Service worker renovado (tk-3.38.18).
+
 ## 7.33.1 — Manifesto do atualizador Android sem cache — 2026-10-27
 
 - Corrige entrega do manifesto 2.0.1 após publicação do APK 2.1.0: configura no-store na origem Render, preservando as demais regras de cabeçalho.

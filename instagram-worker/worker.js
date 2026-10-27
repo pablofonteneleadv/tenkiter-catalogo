@@ -103,6 +103,7 @@ async function iniciar(env) {
   for (const [t, col] of [['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"], ['msg_conversa', "encerrada_motivo TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   /* v2.13: histórico de encerramentos (motivo, quando e por quem): base das métricas e, depois, do termômetro de cada cliente */
   try {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_tmp (r TEXT PRIMARY KEY, n TEXT DEFAULT '', f TEXT DEFAULT '[]', m TEXT DEFAULT '[]')").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_encerramento (id INTEGER PRIMARY KEY AUTOINCREMENT, conversa_id INTEGER NOT NULL, canal TEXT NOT NULL, pessoa TEXT DEFAULT '', contato TEXT DEFAULT '', motivo TEXT NOT NULL, em TEXT NOT NULL, por TEXT DEFAULT '')").run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_conv ON msg_encerramento (conversa_id, em)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_pessoa ON msg_encerramento (pessoa)').run();
@@ -2890,7 +2891,29 @@ async function enviarWaflyGenerico_(env, conv, caminho, corpo, limiteMs) {
     return { ok: false, incerto: true, erro: 'Sem confirmação da Wafly. Confira no WhatsApp antes de tentar de novo.' };
   } catch (e) { return { ok: false, incerto: true, erro: 'Sem confirmação da Wafly. Confira no WhatsApp antes de tentar de novo.' }; }
 }
+/** Zernio: lista as contas conectadas (confere a chave sem enviar nada). Erros em português, sem repassar o corpo da resposta. */
+async function zernioContas_(chave) {
+  try {
+    const r = await fetch('https://zernio.com/api/v1/accounts?platform=instagram', { headers: { Authorization: 'Bearer ' + chave, Accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
+    if (r.status === 401 || r.status === 403) { if (r.body) await r.body.cancel(); return { ok: false, cod: 400, erro: 'O Zernio recusou essa chave. Confira se copiou a chave inteira em Settings → API Keys.' }; }
+    if (!r.ok) { if (r.body) await r.body.cancel(); return { ok: false, cod: 502, erro: 'O Zernio não respondeu direito agora (HTTP ' + r.status + '). Tente de novo em alguns minutos.' }; }
+    const j = await r.json().catch(() => null);
+    if (!j || !Array.isArray(j.accounts)) return { ok: false, cod: 502, erro: 'O Zernio respondeu num formato inesperado. Tente de novo.' };
+    return { ok: true, contas: j.accounts };
+  } catch (e) { return { ok: false, cod: 502, erro: 'Sem resposta do Zernio agora. Tente de novo.' }; }
+}
 async function enviarTextoWhats_(env, conv, texto) { return enviarWaflyGenerico_(env, conv, '/send-text', { message: texto }); }
+/* v2.13: "Prévia do link" marcada na mensagem: sai pelo /send-link da Wafly (cartão com título e descrição) usando o primeiro link do texto. Sem link, vai como texto simples. */
+const MSG_LINK_RE_ = /https?:\/\/[^\s<>"']+/i;
+const textoCartao_ = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
+async function enviarTextoComPrevia_(env, conv, texto, d) {
+  const m = texto.match(MSG_LINK_RE_), link = m ? m[0].replace(/[).,;:!?*_~]+$/, '') : '';
+  if (!link) return enviarTextoWhats_(env, conv, texto);
+  const corpo = { message: texto, linkUrl: link }, titulo = textoCartao_(d.previaTitulo, 100), desc = textoCartao_(d.previaDescricao, 200);
+  if (titulo) corpo.title = titulo;
+  if (desc) corpo.linkDescription = desc;
+  return enviarWaflyGenerico_(env, conv, '/send-link', corpo);
+}
 const WHATS_ROTAS_MIDIA_ = { 'imagem': ['/send-image', 'image'], 'vídeo': ['/send-video', 'video'], 'áudio': ['/send-audio', 'audio'] };
 async function enviarMidiaWhats_(env, conv, anexo, legenda) {
   const rota = WHATS_ROTAS_MIDIA_[anexo.tipo], corpo = {}; corpo[rota[1]] = anexo.url;
@@ -2946,7 +2969,7 @@ async function responderMensagem_(env, whats, d) {
   }
   try { await env.DB.prepare("DELETE FROM cfg WHERE chave LIKE 'msgenv:%' AND substr(valor,1,24)<?").bind(new Date(Date.now() - 3 * 86400000).toISOString()).run(); } catch (e) { /* limpeza é conforto */ }
   const res = anexo ? (conv.canal === 'instagram' ? await enviarMidiaInstagram_(env, conv, anexo) : await enviarMidiaWhats_(env, conv, anexo, texto))
-    : (conv.canal === 'instagram' ? await enviarTextoInstagram_(env, conv, texto) : await enviarTextoWhats_(env, conv, texto));
+    : (conv.canal === 'instagram' ? await enviarTextoInstagram_(env, conv, texto) : d.previa === true ? await enviarTextoComPrevia_(env, conv, texto, d) : await enviarTextoWhats_(env, conv, texto));
   if (!res.ok && !res.incerto) { await env.DB.prepare('DELETE FROM cfg WHERE chave=?').bind(chave).run(); return [409, { ok: false, erro: res.erro }]; }
   const extId = res.ok ? res.extId : 'inc:' + idLocal, em = agora();
   await gravarMensagem_(env, conv.canal, { extId: extId, contato: conv.contato, nome: '', grupo: conv.grupo, direcao: 'saida', tipo: anexo ? anexo.tipo : 'texto', texto: texto, em: em, midiaChave: anexo ? anexo.chave : '', midiaMime: anexo ? anexo.mime : '', midiaSeg: Math.max(0, Math.min(86400, Number(d.seg) || 0)) });
@@ -3082,6 +3105,31 @@ async function relatorioContatos_(env) {
     (r.contatos || []).forEach((c) => contatos.push(c));
     pagina = r.proxima || ''; voltas++;
   } while (pagina && voltas < 60);
+  return montarRelatorioContatos_(env, contatos);
+}
+/* v2.15: relatório em etapas para contas grandes (15 mil+ contatos): cada chamada lê UMA página da ponte e guarda
+ * só nome/telefones/e-mails em msg_contatos_tmp; a etapa "fim" monta o relatório e limpa a tabela. */
+async function relatorioContatosEtapa_(env, d) {
+  if (d.etapa === 'inicio') { await env.DB.prepare('DELETE FROM msg_contatos_tmp').run(); return { ok: true }; }
+  if (d.etapa === 'parte') {
+    const pagina = typeof d.pagina === 'string' ? d.pagina.slice(0, 500) : '';
+    const r = await ponte_(env, { acao: 'listar', pagina: pagina || undefined });
+    if (!r.ok) return r;
+    const lista = Array.isArray(r.contatos) ? r.contatos : [], SQL_INS = 'INSERT OR REPLACE INTO msg_contatos_tmp (r, n, f, m) VALUES (?, ?, ?, ?)';
+    for (let i = 0; i < lista.length; i += 100) await env.DB.batch(lista.slice(i, i + 100).filter((c) => c && c.r).map((c) => env.DB.prepare(SQL_INS).bind(String(c.r).slice(0, 80), String(c.n || '').slice(0, 120), JSON.stringify((Array.isArray(c.f) ? c.f : []).slice(0, 10)), JSON.stringify((Array.isArray(c.m) ? c.m : []).slice(0, 5)))));
+    const lidos = (await env.DB.prepare('SELECT COUNT(*) n FROM msg_contatos_tmp').first()).n;
+    return { ok: true, lidos: lidos, total: Number(r.total) || 0, proxima: r.proxima || '' };
+  }
+  if (d.etapa === 'fim') {
+    const rs = (await env.DB.prepare('SELECT r, n, f, m FROM msg_contatos_tmp').all()).results;
+    const contatos = rs.map((x) => ({ r: x.r, n: x.n, f: JSON.parse(x.f || '[]'), m: JSON.parse(x.m || '[]') }));
+    const rel = await montarRelatorioContatos_(env, contatos);
+    await env.DB.prepare('DELETE FROM msg_contatos_tmp').run();
+    return rel;
+  }
+  return { ok: false, erro: 'Etapa do relatório inválida.' };
+}
+async function montarRelatorioContatos_(env, contatos) {
   const porChave = new Map(), invalidos = [], corrigir = []; let semFone = 0;
   for (const c of contatos) {
     const fs = Array.isArray(c.f) ? c.f : [];
@@ -3217,6 +3265,23 @@ export default {
         await cfgSet(env,'mobile_onesignal_key',key);return J({ok:true,configurada:true});
       }
       if(p==='/msg/mobile/subscription' && ['POST','DELETE'].includes(req.method)) return J(await registrarMobile_(env,req));
+      /* v2.14: Zernio (Instagram Direct pela API oficial, app já aprovado pela Meta). A chave fica só no D1; a tela recebe só se está ligada e qual Instagram. */
+      if (p === '/msg/zernio/config' && req.method === 'GET') {
+        const conta = await cfgGet(env, 'zernio_conta');
+        let c = null; try { c = conta ? JSON.parse(conta) : null; } catch (e) { c = null; }
+        return J({ ok: true, configurada: !!(await cfgGet(env, 'zernio_chave')), conta: c, conferidaEm: (await cfgGet(env, 'zernio_conferida')) || '' });
+      }
+      if (p === '/msg/zernio/config' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({}));
+        if (d.apagar === true) { for (const k of ['zernio_chave', 'zernio_conta', 'zernio_conferida']) await cfgSet(env, k, null); return J({ ok: true, configurada: false }); }
+        const chave = String(d.chave || '').trim();
+        if (chave.length < 20 || chave.length > 300 || /\s/.test(chave)) return J({ ok: false, erro: 'Cole a chave de API completa do Zernio (Settings → API Keys).' }, 400);
+        const r = await zernioContas_(chave);
+        if (!r.ok) return J({ ok: false, erro: r.erro }, r.cod || 400);
+        const ig = r.contas.find((x) => x && x.platform === 'instagram') || null, conta = ig ? { id: String(ig._id || ''), usuario: String(ig.username || ig.displayName || '').slice(0, 60) } : null;
+        await cfgSet(env, 'zernio_chave', chave); await cfgSet(env, 'zernio_conta', conta ? JSON.stringify(conta) : null); await cfgSet(env, 'zernio_conferida', agora());
+        return J({ ok: true, configurada: true, conta: conta, conferidaEm: await cfgGet(env, 'zernio_conferida') });
+      }
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {
         const cursorConsulta=agora();
@@ -3349,6 +3414,19 @@ export default {
         return J({ ok: true, ligada: true, conta: ping.conta || '', versao: ping.versao || '' });
       }
       if (p === '/msg/contatos/backup' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({}));
+        if (d.partes === true) {
+          /* v2.15: cópia em partes (ponte 1.1): o painel repete com "pagina" e "pasta" até "proxima" vir vazia */
+          const pagina = typeof d.pagina === 'string' ? d.pagina.slice(0, 500) : '', pasta = typeof d.pasta === 'string' && /^[A-Za-z0-9_-]{10,120}$/.test(d.pasta) ? d.pasta : '';
+          if (pagina && !pasta) return J({ ok: false, erro: 'Recomece a cópia de segurança.' }, 400);
+          const r = await ponte_(env, { acao: 'backup_parte', pagina: pagina || undefined, pasta: pasta || undefined });
+          if (!r.ok) return J({ ok: false, erro: r.erro === 'Ação desconhecida.' ? 'A ponte está na versão 1.0. Atualize para contatos-ponte-1.1 (cole o arquivo novo e implante uma nova versão) para copiar contas grandes.' : (r.erro || 'Não foi possível copiar esta parte.') }, 502);
+          const and = pasta ? JSON.parse((await cfgGet(env, 'contatos_backup_and')) || '{"lidos":0}') : { lidos: 0 };
+          and.lidos = (Number(and.lidos) || 0) + (Number(r.lidos) || 0); and.pasta = String(r.pasta || ''); await cfgSet(env, 'contatos_backup_and', JSON.stringify(and));
+          const fim = !r.proxima, url = /^https:\/\/drive\.google\.com\//.test(String(r.url || '')) ? r.url : '';
+          if (fim) { const b = { em: agora(), total: and.lidos, arquivo: String(r.pastaNome || '').slice(0, 120), url: url, partes: Number(r.parte) || 1 }; await cfgSet(env, 'contatos_backup', JSON.stringify(b)); await cfgSet(env, 'contatos_backup_and', null); }
+          return J({ ok: true, fim: fim, lidos: and.lidos, totalPessoas: Number(r.totalPessoas) || 0, parte: Number(r.parte) || 1, pasta: String(r.pasta || ''), proxima: String(r.proxima || ''), url: url });
+        }
         const r = await ponte_(env, { acao: 'backup' });
         if (!r.ok) return J({ ok: false, erro: r.erro || 'Não foi possível fazer a cópia agora.' }, 502);
         const b = { em: agora(), total: Number(r.total) || 0, arquivo: String(r.arquivo || '').slice(0, 120), url: /^https:\/\/drive\.google\.com\//.test(String(r.url || '')) ? r.url : '' };
@@ -3358,8 +3436,9 @@ export default {
       if (p === '/msg/contatos/relatorio' && req.method === 'POST') {
         const b = await cfgGet(env, 'contatos_backup');
         if (!b) return J({ ok: false, erro: 'Faça a cópia de segurança dos contatos antes do relatório.' }, 409);
-        const r = await relatorioContatos_(env);
-        return J(r, r.ok ? 200 : 502);
+        const d = await req.clone().json().catch(() => ({}));
+        const r = d && d.etapa ? await relatorioContatosEtapa_(env, d) : await relatorioContatos_(env);
+        return J(r, r.ok ? 200 : (r.erro === 'Etapa do relatório inválida.' ? 400 : 502));
       }
       if (p === '/msg/encerrar' && req.method === 'POST') {
         /* v2.11: encerrar (uma ou várias) / reabrir. Encerrar zera o "não lida" só no painel; o celular não é tocado. */

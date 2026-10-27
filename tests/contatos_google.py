@@ -21,6 +21,13 @@ with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
     ctx = b.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, service_workers="block")
     ctx.add_init_script(SESSION); ctx.add_init_script("window.TK_MENSAGENS_POLL_MS=400;")
+    # registra: pedidos de tela acesa, aviso de saída (beforeunload) e o texto da faixa de progresso a cada mudança
+    ctx.add_init_script("""window.__tk={trava:0,solta:0,saida:[],faixa:[]};
+      Object.defineProperty(navigator,'wakeLock',{configurable:true,value:{request:async()=>{__tk.trava++;return{release:async()=>{__tk.solta++;}};}}});
+      const _ae=window.addEventListener.bind(window),_re=window.removeEventListener.bind(window);
+      window.addEventListener=(t,f,o)=>{if(t==='beforeunload')__tk.saida.push('+');return _ae(t,f,o);};
+      window.removeEventListener=(t,f,o)=>{if(t==='beforeunload')__tk.saida.push('-');return _re(t,f,o);};
+      new MutationObserver(()=>{const f=document.getElementById('ms-trab');if(f){const t=f.innerText;if(__tk.faixa[__tk.faixa.length-1]!==t)__tk.faixa.push(t);}}).observe(document,{childList:true,subtree:true,characterData:true});""")
     st = install(ctx, perms=PERMS_ALL, versao="3.4"); S = st["ig"].setdefault("msg", mock_msg.novo_estado())
     erros = []; pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: d.accept())
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
@@ -31,13 +38,21 @@ with sync_playwright() as p:
     chk("a chave é digitada num campo escondido (senha)", pg.get_attribute("#ms-ponte-chave", "type") == "password")
     axe(pg, "Google Contatos desligado")
     pg.fill("#ms-ponte-url", "https://exemplo.com/x"); pg.fill("#ms-ponte-chave", "a" * 64); pg.click("[data-ms=ponte-ligar]"); pg.wait_for_timeout(500)
-    chk("endereço errado: aviso em português, continua desligada", "script.google.com" in pg.locator("#ms-aviso").inner_text() and pg.locator("#ms-ponte-url").count() == 1)
+    chk("endereço errado: aviso em português, continua desligada", "script.google.com" in pg.locator("#ms-ponte-st").inner_text() and pg.locator("#ms-ponte-url").count() == 1)
     pg.fill("#ms-ponte-url", "https://script.google.com/macros/s/AKfycbTESTE1234567890abcdefgh/exec"); pg.click("[data-ms=ponte-ligar]"); pg.wait_for_timeout(800)
     chk("ligar mostra a conta dos contatos", "Ligada à conta contatos@exemplo.com" in pg.locator("#ms-contatos").inner_text())
     chk("relatório só depois da cópia de segurança (botão travado)", pg.locator("[data-ms=ponte-relatorio]").is_disabled())
     pg.click("[data-ms=ponte-backup]"); pg.wait_for_timeout(800)
     txt = pg.locator("#ms-contatos").inner_text()
-    chk("cópia de segurança mostra quantos contatos e o link do Drive", "1234 contatos" in txt and pg.locator("#ms-contatos a[href^='https://drive.google.com/']").count() == 1 and pg.locator("[data-ms=ponte-relatorio]").is_enabled(), txt)
+    chk("cópia de segurança mostra quantos contatos e o link do Drive", "15.300 contatos" in txt and pg.locator("#ms-contatos a[href^='https://drive.google.com/']").count() == 1 and pg.locator("[data-ms=ponte-relatorio]").is_enabled(), txt)
+    tk = pg.evaluate("window.__tk")
+    chk("cópia em partes: a faixa mostra o progresso (5.000 → 10.000 → 15.300 de 15.300)", any("5.000 de 15.300" in t for t in tk["faixa"]) and any("10.000 de 15.300" in t for t in tk["faixa"]) and any("Não feche esta tela" in t for t in tk["faixa"]), tk["faixa"])
+    chk("a tela fica acesa durante a cópia e é liberada no fim", tk["trava"] >= 1 and tk["solta"] >= 1, tk)
+    chk("aviso antes de sair da página só enquanto copia (liga e desliga)", tk["saida"][-2:] == ["+", "-"], tk["saida"])
+    chk("terminou: a faixa de progresso some", pg.locator("#ms-trab").count() == 0)
+    chk("as 3 partes foram pedidas com página e pasta", [ (x[1].get("pagina"), x[1].get("pasta")) for x in S["contatos"]["pedidos"] if x[0] == "/msg/contatos/backup"] == [(None, None), ("p2", "pastaTESTE00001"), ("p3", "pastaTESTE00001")], S["contatos"]["pedidos"])
+    pg.wait_for_timeout(9500)
+    chk("o resultado da cópia fica escrito no quadro (não some em 9 s)", "✓ Cópia feita: 15.300 contatos" in pg.locator("#ms-ponte-st").inner_text() and pg.locator("#ms-ponte-st").get_attribute("role") == "status")
     foto(pg, "01-configuracao.png")
     pg.click("[data-ms=ponte-relatorio]"); pg.wait_for_selector(".ms-relatorio", timeout=5000); pg.wait_for_timeout(300)
     rel = pg.locator(".ms-relatorio").inner_text()

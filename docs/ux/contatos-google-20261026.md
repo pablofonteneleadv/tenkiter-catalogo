@@ -35,3 +35,13 @@ Testes:
 - `contatos_google`: 17 verificações (novo), com axe.
 
 Resultado: APROVADO COM LIMITAÇÃO. A ponte ainda não foi publicada; a ligação real depende do Pablo seguir os 5 passos do cabeçalho do arquivo.
+
+## Atualização de 27/10/2026: contas grandes (15 mil+ contatos)
+A conta da loja tem mais de 15 mil contatos; a cópia de uma vez passava do tempo de espera do servidor (90 s) e o aviso sumia em 9 s, então nada aparecia.
+- **Cópia em partes** (ponte 1.1, `backup_parte`): cada parte dura até ~40 s e grava `parte-NN.json` numa subpasta. O painel repete até acabar.
+- **Relatório em etapas:** uma página por chamada, guardada numa tabela temporária, apagada ao montar o relatório.
+- **Na tela:** faixa preta fixa no pé com "⏳ Copiando os contatos do Google: 5.000 de 15.300 contatos (33%)", barra laranja e "Não feche esta tela. Ela fica acesa até terminar." (`role=status`). A faixa fica no pé para não cobrir o fechar nem os menus do topo.
+- Tela acesa por Wake Lock (pedida de novo se a pessoa volta para a aba); aviso do navegador antes de sair da página; confirmação ao fechar as Mensagens; botões dos contatos apagados enquanto roda.
+- Evidência: `contatos-google-20261026/03-copiando-390.png` e `04-copiando-1440.png` (faixa a 33%).
+- Testes: `contatos_google` 23 (progresso nas 3 partes, tela acesa e liberada, aviso de saída liga e desliga, faixa some no fim, página e pasta passadas); `worker_mensagens_conversa` 195; `validacao/contatos-ponte-1.1.js` 30 no Cofre.
+- Limitação: o Wake Lock depende do navegador do aparelho (Chrome no Android aceita; alguns navegadores ignoram). Sem ele, a faixa e o aviso continuam.
