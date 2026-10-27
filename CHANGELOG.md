@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.30.2 — Validar vídeos ao escolher arquivos — 2026-10-27
+
+- Vídeos fora dos limites de Status são recusados já na seleção, tanto em Livre quanto em mídias avulsas, antes de entrar na lista.
+- Mudar o destino para Status confere também os vídeos já escolhidos e informa o problema sem apagá-los do rascunho.
+- O rótulo da seleção acompanha o destino: Status até 30 s/10 MB; demais canais preservam seus limites.
+
+
 ## 7.30.1 — Limites dos vídeos no WhatsApp Status — 2026-10-26
 
 - Antes de agendar, vídeos para Status 1 e 2 são conferidos: até 30 segundos e 10 MB. O rascunho permanece disponível para substituir os arquivos.
