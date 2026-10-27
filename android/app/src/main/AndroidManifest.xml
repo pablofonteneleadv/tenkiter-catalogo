@@ -2,7 +2,10 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application android:name=".TenkiterApp" android:label="TENKiTER Mensagens" android:icon="@drawable/ic_launcher" android:theme="@style/AppTheme" android:usesCleartextTraffic="false" android:allowBackup="false" android:supportsRtl="true">
+        <meta-data android:name="com.onesignal.NotificationServiceExtension" android:value="br.com.tenkitermodas.mensagens.InboxNotificationExtension"/>
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.updates" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths"/></provider>
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>

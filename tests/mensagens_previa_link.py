@@ -1,4 +1,4 @@
-"""Mensagens v7.32: "Mostrar prévia do link" escolhida em cada mensagem do WhatsApp (caixinha junto da mensagem).
+"""Mensagens v7.33: "Mostrar prévia do link" escolhida em cada mensagem do WhatsApp (caixinha junto da mensagem).
 Marcada, o envio leva previa + título/descrição do cartão (produto, seleção ou loja). Serviços simulados (mock.py + mock_msg.py)."""
 import sys, os
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)
