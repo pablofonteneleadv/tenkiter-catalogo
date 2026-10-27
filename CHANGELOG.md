@@ -6,6 +6,30 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.37.0 — Instagram Direct nas Mensagens pelo Zernio — 2026-10-27
+
+- Ao salvar a chave (ou escolher o Instagram) em Conexões, o servidor liga no Zernio o aviso de mensagens novas, só para o Instagram da loja, com senha própria (assinatura HMAC-SHA256).
+- As DMs entram em Mensagens → Instagram com o nome do cliente. Fotos, vídeos, áudios e a menção da loja no story do cliente são copiados para o nosso armazenamento.
+- **Story respondido:** o servidor busca no Zernio qual story o cliente respondeu. Se foi publicado pelo site, a conversa mostra a nossa foto (e o produto, quando escolhido); se não, copia a imagem do story antes de o link vencer.
+- Responder pelo painel sai pelo Zernio, na conversa certa. Passadas 24 h, tenta de novo com a marcação de atendimento humano da Meta (vale até 7 dias, só para resposta digitada por pessoa). Respostas dadas pelo app do Instagram também aparecem na conversa.
+- Conexões mostra "mensagens do Direct ligadas" e a hora do último aviso; remover a chave desliga o aviso no Zernio.
+- Worker: rota `/wh/zernio/<segredo>` (responde na hora e grava em segundo plano), tabela `msg_zernio_conv` e envio por `POST /v1/inbox/conversations/{id}/messages`.
+- Service worker renovado (tk-3.38.21).
+
+## 7.36.0 — Google Contatos: limpeza aprovada e cadastro automático "TM Cliente" — 2026-10-27
+
+- No relatório, o botão **"Aplicar a limpeza aprovada"** faz tudo em 5 etapas, com a faixa de progresso, a tela acesa e o aviso antes de sair:
+  1. cópia de segurança nova (em partes);
+  2. leitura dos contatos (relatório novo, com o plano completo);
+  3. juntar as pessoas repetidas (fica o contato de nome mais completo; os outros nomes vão para a observação "Também salvo como: …"; telefones e e-mails de todos ficam no que fica);
+  4. padronizar os números (+55 e o 9 do celular; 9 dígitos sem DDD ganham o 88; fixo não ganha o 9; número estrangeiro não muda);
+  5. criar quem conversou no WhatsApp e não está no Google como **"TM Cliente nome do WhatsApp"** (ou o número) no marcador "Tenkiter Clientes G".
+- Ao terminar, liga o **cadastro automático**: cada número novo que escreve no WhatsApp entra numa fila e, a cada minuto, até 5 viram "TM Cliente …" no Google (sem duplicar). Liga e desliga em Configurações → Google Contatos.
+- Worker: plano completo em `msg_contatos_plano` (repetidos ligados entre si viram um grupo só), `/msg/contatos/limpeza` por etapas (exige cópia com menos de 6 horas), fila `msg_contatos_fila` e `/msg/contatos/auto`. 9 dígitos sem DDD passam a valer como DDD 88 no relatório.
+- Pede a ponte 1.2 (`juntar_lote`, `padronizar_parte`, `criar_lote`, com as chamadas em lote do Google).
+- Conexões → Zernio: com mais de um Instagram conectado, o servidor prefere o da loja (nome com "tenkiter") e a tela mostra "Qual Instagram é o da loja?" para escolher (`listar`/`escolher` usam a chave já guardada).
+- Service worker renovado (tk-3.38.20).
+
 ## 7.35.0 — Chave do Zernio em Conexões e Google Contatos para contas grandes — 2026-10-27
 
 - Gestão → Conexões → Instagram ganhou o bloco "Instagram Direct · Zernio": passo a passo curto, campo de senha para a chave de API e os botões "Salvar e conferir" e "Remover chave".
