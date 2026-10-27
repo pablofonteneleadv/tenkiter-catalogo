@@ -3021,6 +3021,24 @@ async function ligarAvisoZernio_(env, origem, z) {
   await cfgSet(env, 'zernio_wh_em', agora());
   return { ok: true };
 }
+/** Diagnóstico do aviso do Zernio: o aviso está ativo, aponta para este servidor e como foram as últimas entregas (sem chave nem segredo). */
+async function diagnosticoZernio_(env, origem, testar) {
+  const z = await zernioCfg_(env); if (!z) return { ok: false, erro: 'Guarde a chave do Zernio e escolha o Instagram primeiro.' };
+  const wid = String((await cfgGet(env, 'zernio_wh_id')) || ''), nosso = origem + '/wh/zernio/';
+  const st = await zernioApi_(z.chave, 'GET', '/webhooks/settings', null, 10000);
+  if (!st.ok) return { ok: false, erro: 'O Zernio não respondeu agora (HTTP ' + st.status + '). Tente de novo em instantes.' };
+  const lista = Array.isArray(st.j && st.j.webhooks) ? st.j.webhooks : Array.isArray(st.j) ? st.j : (st.j && st.j.webhook ? [st.j.webhook] : []);
+  const w = lista.find((x) => x && String(x._id || x.id || '') === wid) || lista.find((x) => x && String(x.url || '').indexOf(nosso) === 0) || null;
+  const aviso = w ? { existe: true, ativo: w.isActive !== false, esteServidor: String(w.url || '').indexOf(nosso) === 0, eventos: Array.isArray(w.events) ? w.events.slice(0, 10).map(String) : [], contas: Array.isArray(w.accountIds) ? w.accountIds.length : 0, contaCerta: !Array.isArray(w.accountIds) || !w.accountIds.length || w.accountIds.map(String).includes(z.conta.id) } : { existe: false };
+  let teste = null;
+  if (testar && w) { const t = await zernioApi_(z.chave, 'POST', '/webhooks/test', { webhookId: String(w._id || w.id), event: 'message.received' }, 15000); teste = { enviado: t.ok, codigo: t.status }; }
+  const lg = await zernioApi_(z.chave, 'GET', '/webhooks/logs?limit=10' + (w ? '&webhook_id=' + encodeURIComponent(String(w._id || w.id)) : ''), null, 10000);
+  const brutos = Array.isArray(lg.j && lg.j.logs) ? lg.j.logs : Array.isArray(lg.j && lg.j.data) ? lg.j.data : Array.isArray(lg.j) ? lg.j : [];
+  const txt = (v, n) => (v == null ? '' : String(typeof v === 'object' ? JSON.stringify(v) : v)).replace(/[\r\n]+/g, ' ').slice(0, n);
+  const entregas = brutos.slice(0, 10).map((x) => ({ em: txt(x.createdAt || x.timestamp || x.sentAt || x.deliveredAt, 40), evento: txt(x.event || x.eventType || x.type, 40), situacao: txt(x.status || x.deliveryStatus || (x.success === true ? 'success' : x.success === false ? 'failed' : ''), 30), codigo: Number(x.statusCode || x.responseStatus || x.httpStatus || 0) || 0, erro: txt(x.error || x.errorMessage || x.message, 160), teste: x.test === true }));
+  let ult = null; try { ult = JSON.parse((await cfgGet(env, 'msg_ult_zernio')) || 'null'); } catch (e) { ult = null; }
+  return { ok: true, aviso: aviso, teste: teste, entregas: entregas, logsDisponiveis: lg.ok, ultimoRecebido: ult };
+}
 async function hmacHex_(segredo, texto) {
   const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(segredo), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(texto))), (x) => x.toString(16).padStart(2, '0')).join('');
@@ -3513,6 +3531,7 @@ export default {
           for (const k of ['zernio_chave', 'zernio_conta', 'zernio_conferida', 'zernio_wh_id', 'zernio_wh_em']) await cfgSet(env, k, null);
           return J({ ok: true, configurada: false });
         }
+        if (d.diagnostico === true || d.testar === true) return J(await diagnosticoZernio_(env, url.origin, d.testar === true));
         /* v2.17: com mais de um Instagram no Zernio, a tela lista e o gestor escolhe (listar / escolher usam a chave já guardada) */
         const usarGuardada = d.listar === true || typeof d.escolher === 'string';
         const chave = usarGuardada ? String((await cfgGet(env, 'zernio_chave')) || '') : String(d.chave || '').trim();

@@ -754,6 +754,23 @@ function d1() {
   const semZ = (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='IGSID_SEMZ'").first()).id;
   const zenv3 = await A('POST', '/msg/enviar', { conversa: semZ, texto: 'oi', idLocal: 'zernio-0003' });
   chk('conversa antiga que nunca veio pelo Zernio: explica em português (nada é enviado)', zenv3.r.status === 409 && /ainda não chegou pelo Zernio/.test(zenv3.j.erro) && zEnvios.length === 3, zenv3.j);
+  // v7.38.2: diagnóstico das entregas do Zernio (sem chave nem segredo na resposta)
+  const fDg = globalThis.fetch; let dgAtivo = true; const dgTestes = [];
+  globalThis.fetch = async (u, init) => {
+    u = String(u);
+    if (u === 'https://zernio.com/api/v1/webhooks/settings' && (!init || !init.method || init.method === 'GET')) return new Response(JSON.stringify({ webhooks: [{ _id: 'wh_1', url: 'https://ig.test/wh/zernio/x', isActive: dgAtivo, events: ['message.received', 'message.sent'], accountIds: ['acc_t'], secret: 'NAO_PODE_VAZAR' }] }));
+    if (u.startsWith('https://zernio.com/api/v1/webhooks/logs')) return new Response(JSON.stringify({ logs: [{ createdAt: '2026-10-27T21:10:00Z', event: 'message.received', status: 'failed', statusCode: 404, error: 'Not Found' }] }));
+    if (u === 'https://zernio.com/api/v1/webhooks/test') { dgTestes.push(JSON.parse(init.body)); return new Response(JSON.stringify({ success: true })); }
+    return fDg(u, init);
+  };
+  const dg = await A('POST', '/msg/zernio/config', { diagnostico: true });
+  chk('diagnóstico: aviso ativo, deste servidor, conta certa e última entrega com o erro do Zernio', dg.j.ok && dg.j.aviso.existe && dg.j.aviso.ativo && dg.j.aviso.esteServidor && dg.j.aviso.contaCerta && dg.j.entregas[0].codigo === 404 && dg.j.entregas[0].situacao === 'failed', dg.j);
+  chk('diagnóstico não devolve chave nem segredo', !JSON.stringify(dg.j).includes('NAO_PODE_VAZAR') && !JSON.stringify(dg.j).includes(zChave));
+  dgAtivo = false;
+  chk('diagnóstico mostra quando o Zernio desligou o aviso', (await A('POST', '/msg/zernio/config', { diagnostico: true })).j.aviso.ativo === false);
+  const dgT = await A('POST', '/msg/zernio/config', { testar: true });
+  chk('testar pede ao Zernio um aviso de teste do webhook certo', dgT.j.ok && dgT.j.teste.enviado && dgTestes.length === 1 && dgTestes[0].webhookId === 'wh_1' && dgTestes[0].event === 'message.received');
+  globalThis.fetch = fDg;
   const zap = await A('POST', '/msg/zernio/config', { apagar: true });
   chk('remover a chave também desliga o aviso no Zernio', zap.j.ok && zHooks.some((x) => x.m === 'DELETE' && /webhookId=wh_1/.test(x.u)) && (await A('GET', '/msg/zernio/config')).j.avisoLigado === false);
   globalThis.fetch = fZ2;
