@@ -42,5 +42,17 @@ const {DatabaseSync}=require('node:sqlite');
  let response=await wh();assert.equal(response.status,200);assert.equal(jobs.length,1,'push disparado no webhook');await Promise.all(jobs);
  assert.equal(posted.length,antesWebhook+1,'novo aviso enviado sem cron');assert.equal(posted.at(-1).data.conversa,9);assert.equal(posted.at(-1).contents.pt,'Oi');const n=posted.length;
  await wh();assert.equal(jobs.length,1,'webhook duplicado não dispara novo processamento');assert.equal(posted.length,n);
+ // Instagram pelo Zernio: o aviso no celular sai na hora (antes esperava o cron de 1 minuto).
+ const f0=global.fetch;global.fetch=async(url,opt)=>String(url).startsWith('https://zernio.com/')?Response.json({messages:[]}):f0(url,opt);
+ db.prepare("INSERT INTO cfg(chave,valor) VALUES('zernio_chave','sk_teste_'||hex(randomblob(8))),('zernio_conta',?),('zernio_wh_segredo','segredo-zernio-teste')").run(JSON.stringify({id:'acc_t',usuario:'loja'}));
+ const zEv=(id,dir)=>JSON.stringify({id:'ev_'+id,event:dir==='incoming'?'message.received':'message.sent',account:{accountId:'acc_t'},message:{id:'z_'+id,conversationId:'conv_1',platform:'instagram',platformMessageId:'mid_'+id,direction:dir,text:dir==='incoming'?'Oi do Direct':'Blz',sentAt:new Date().toISOString(),sender:{id:'IGSID_1',name:'Cliente Insta'}}});
+ const zAss=async(c)=>{const k=await crypto.subtle.importKey('raw',new TextEncoder().encode('segredo-zernio-teste'),{name:'HMAC',hash:'SHA-256'},false,['sign']);return Buffer.from(await crypto.subtle.sign('HMAC',k,new TextEncoder().encode(c))).toString('hex')};
+ const zJobs=[],zCtx={waitUntil(p){zJobs.push(p)}};
+ const zWh=async(c)=>W.default.fetch(new Request('https://worker.test/wh/zernio/'+segredo,{method:'POST',headers:{'Content-Type':'application/json','X-Zernio-Signature':await zAss(c)},body:c}),env,zCtx);
+ const antesZ=posted.length;assert.equal((await zWh(zEv(1,'incoming'))).status,200);await Promise.all(zJobs);
+ assert.equal(posted.length,antesZ+1,'DM do Instagram avisa o celular sem esperar o cron');assert.equal(posted.at(-1).contents.pt,'Oi do Direct');
+ assert.equal(db.prepare("SELECT estado FROM msg_push_outbox WHERE canal='instagram'").get().estado,'enviada');
+ await zWh(zEv(2,'outgoing'));await Promise.all(zJobs);assert.equal(posted.length,antesZ+1,'resposta da loja não gera aviso');
+ global.fetch=f0;
  console.log('worker_mobile_push: OK (registro, entrega, deduplicação, revogação, logout e configuração ausente)');
 })().catch(e=>{console.error(e);process.exit(1)});
