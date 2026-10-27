@@ -599,5 +599,32 @@ function d1() {
   chk('desligar apaga endereço e chave do servidor', deslP.j.ok && !(await A('GET', '/msg/contatos/situacao')).j.ligada && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='contatos_chave'").first()));
   globalThis.fetch = fPonte;
   globalThis.fetch = f5;
+  // ---- v2.14: chave do Zernio ----
+  const fZ = globalThis.fetch; let zModo = 'ok', zChamadas = [];
+  globalThis.fetch = async (u, init) => {
+    u = String(u);
+    if (u.startsWith('https://zernio.com/api/v1/accounts')) {
+      zChamadas.push({ u, auth: new Headers(init.headers).get('authorization') });
+      if (zModo === 'recusa') return new Response('{"error":"invalid_credentials","key":"x"}', { status: 401 });
+      if (zModo === 'semig') return new Response(JSON.stringify({ accounts: [], hasAnalyticsAccess: false }));
+      return new Response(JSON.stringify({ accounts: [{ _id: 'acc_1', platform: 'instagram', username: 'tenkitermodasceara' }], hasAnalyticsAccess: false }));
+    }
+    return fZ(u, init);
+  };
+  chk('Zernio: sem chave, a tela vê "não configurada"', (await A('GET', '/msg/zernio/config')).j.configurada === false);
+  chk('Zernio: chave curta ou com espaço é recusada sem chamar o Zernio', (await A('POST', '/msg/zernio/config', { chave: 'abc' })).r.status === 400 && (await A('POST', '/msg/zernio/config', { chave: 'sk_' + 'a'.repeat(20) + ' b' })).r.status === 400 && zChamadas.length === 0);
+  zModo = 'recusa';
+  const zR = await A('POST', '/msg/zernio/config', { chave: 'sk_live_' + 'x'.repeat(32) });
+  chk('Zernio recusa a chave: erro em português, nada salvo e sem repassar a resposta', zR.r.status === 400 && /recusou/.test(zR.j.erro) && !zR.j.erro.includes('{') && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='zernio_chave'").first()));
+  zModo = 'ok';
+  const zChave = 'sk_live_' + 'k'.repeat(32), zOk = await A('POST', '/msg/zernio/config', { chave: zChave });
+  chk('Zernio aceita: guarda a chave, mostra o Instagram conectado e usa Bearer', zOk.j.ok && zOk.j.conta.usuario === 'tenkitermodasceara' && zOk.j.conta.id === 'acc_1' && zChamadas[zChamadas.length - 1].auth === 'Bearer ' + zChave && zChamadas[zChamadas.length - 1].u.includes('platform=instagram'));
+  const zSit = await A('GET', '/msg/zernio/config');
+  chk('a chave do Zernio nunca volta para a tela', zSit.j.configurada === true && !JSON.stringify(zSit.j).includes(zChave) && !JSON.stringify(zOk.j).includes(zChave));
+  zModo = 'semig';
+  const zSem = await A('POST', '/msg/zernio/config', { chave: zChave });
+  chk('chave certa sem Instagram conectado: salva e avisa que falta conectar', zSem.j.ok && zSem.j.conta === null);
+  chk('remover apaga a chave e a conta do servidor', (await A('POST', '/msg/zernio/config', { apagar: true })).j.ok && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='zernio_chave'").first()) && (await A('GET', '/msg/zernio/config')).j.configurada === false);
+  globalThis.fetch = fZ;
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });

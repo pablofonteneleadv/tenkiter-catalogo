@@ -2877,6 +2877,17 @@ async function enviarWaflyGenerico_(env, conv, caminho, corpo, limiteMs) {
     return { ok: false, incerto: true, erro: 'Sem confirmação da Wafly. Confira no WhatsApp antes de tentar de novo.' };
   } catch (e) { return { ok: false, incerto: true, erro: 'Sem confirmação da Wafly. Confira no WhatsApp antes de tentar de novo.' }; }
 }
+/** Zernio: lista as contas conectadas (confere a chave sem enviar nada). Erros em português, sem repassar o corpo da resposta. */
+async function zernioContas_(chave) {
+  try {
+    const r = await fetch('https://zernio.com/api/v1/accounts?platform=instagram', { headers: { Authorization: 'Bearer ' + chave, Accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
+    if (r.status === 401 || r.status === 403) { if (r.body) await r.body.cancel(); return { ok: false, cod: 400, erro: 'O Zernio recusou essa chave. Confira se copiou a chave inteira em Settings → API Keys.' }; }
+    if (!r.ok) { if (r.body) await r.body.cancel(); return { ok: false, cod: 502, erro: 'O Zernio não respondeu direito agora (HTTP ' + r.status + '). Tente de novo em alguns minutos.' }; }
+    const j = await r.json().catch(() => null);
+    if (!j || !Array.isArray(j.accounts)) return { ok: false, cod: 502, erro: 'O Zernio respondeu num formato inesperado. Tente de novo.' };
+    return { ok: true, contas: j.accounts };
+  } catch (e) { return { ok: false, cod: 502, erro: 'Sem resposta do Zernio agora. Tente de novo.' }; }
+}
 async function enviarTextoWhats_(env, conv, texto) { return enviarWaflyGenerico_(env, conv, '/send-text', { message: texto }); }
 /* v2.13: "Prévia do link" marcada na mensagem: sai pelo /send-link da Wafly (cartão com título e descrição) usando o primeiro link do texto. Sem link, vai como texto simples. */
 const MSG_LINK_RE_ = /https?:\/\/[^\s<>"']+/i;
@@ -3215,6 +3226,23 @@ export default {
         await cfgSet(env,'mobile_onesignal_key',key);return J({ok:true,configurada:true});
       }
       if(p==='/msg/mobile/subscription' && ['POST','DELETE'].includes(req.method)) return J(await registrarMobile_(env,req));
+      /* v2.14: Zernio (Instagram Direct pela API oficial, app já aprovado pela Meta). A chave fica só no D1; a tela recebe só se está ligada e qual Instagram. */
+      if (p === '/msg/zernio/config' && req.method === 'GET') {
+        const conta = await cfgGet(env, 'zernio_conta');
+        let c = null; try { c = conta ? JSON.parse(conta) : null; } catch (e) { c = null; }
+        return J({ ok: true, configurada: !!(await cfgGet(env, 'zernio_chave')), conta: c, conferidaEm: (await cfgGet(env, 'zernio_conferida')) || '' });
+      }
+      if (p === '/msg/zernio/config' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({}));
+        if (d.apagar === true) { for (const k of ['zernio_chave', 'zernio_conta', 'zernio_conferida']) await cfgSet(env, k, null); return J({ ok: true, configurada: false }); }
+        const chave = String(d.chave || '').trim();
+        if (chave.length < 20 || chave.length > 300 || /\s/.test(chave)) return J({ ok: false, erro: 'Cole a chave de API completa do Zernio (Settings → API Keys).' }, 400);
+        const r = await zernioContas_(chave);
+        if (!r.ok) return J({ ok: false, erro: r.erro }, r.cod || 400);
+        const ig = r.contas.find((x) => x && x.platform === 'instagram') || null, conta = ig ? { id: String(ig._id || ''), usuario: String(ig.username || ig.displayName || '').slice(0, 60) } : null;
+        await cfgSet(env, 'zernio_chave', chave); await cfgSet(env, 'zernio_conta', conta ? JSON.stringify(conta) : null); await cfgSet(env, 'zernio_conferida', agora());
+        return J({ ok: true, configurada: true, conta: conta, conferidaEm: await cfgGet(env, 'zernio_conferida') });
+      }
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {
         const canal = url.searchParams.get('canal') || '', busca = String(url.searchParams.get('busca') || '').trim().slice(0, 60), antes = url.searchParams.get('antes') || '', filtro = url.searchParams.get('filtro') || '';

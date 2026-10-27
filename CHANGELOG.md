@@ -6,6 +6,15 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.33.0 — Conexões: chave do Zernio para o Instagram Direct — 2026-10-27
+
+- Gestão → Conexões → Instagram ganhou o bloco "Instagram Direct · Zernio": passo a passo curto, campo de senha para a chave de API e os botões "Salvar e conferir" e "Remover chave".
+- O servidor confere a chave listando as contas no Zernio (nada é enviado) e mostra qual Instagram está conectado. A chave fica só no servidor (`zernio_chave`) e nunca volta para a tela.
+- Nesta etapa só guarda a chave; as DMs do Instagram entram nas Mensagens na próxima versão.
+- Botões da tela Conexões com 44 px de altura (eram 40).
+- Teste `conexoes_unificada` atualizado para o grupo Android (7 grupos).
+- Service worker renovado (tk-3.38.19).
+
 ## 7.32.0 — Mensagens: prévia do link escolhida em cada mensagem — 2026-10-27
 
 - No WhatsApp, quando a mensagem tem link, aparece logo acima do campo a caixinha "Mostrar prévia do link (miniatura)". A última escolha de cada canal fica lembrada no aparelho; começa desmarcada.
