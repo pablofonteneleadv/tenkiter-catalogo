@@ -30,11 +30,26 @@ jobs:
     name: Portão de qualidade
     uses: ./.github/workflows/ci.yml
 
+  # O site só expõe o manifesto depois de o instalador estar disponível e conferido.
+  android_release:
+    name: Publicar instalador Android
+    runs-on: ubuntu-24.04
+    needs: ci
+    environment: producao
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publicar e conferir o APK assinado
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/release/publicar_android.py
+
   # ------------------------------------------------------------- Site (Render)
   deploy:
     name: Publicar no Render + Cloudflare
     runs-on: ubuntu-24.04
-    needs: ci
+    needs: [ci, android_release]
     environment: producao
     steps:
       - uses: actions/checkout@v4

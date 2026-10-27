@@ -6,6 +6,15 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.32.0 — APK Mensagens 2.0 e distribuição de atualizações — 2026-10-27
+
+- Nova caixa Android nativa com banco SQLite, leitura local, filtro, busca e resposta de texto. Histórico mais antigo e anexos seguem acessíveis em Completo.
+- Sessão cifrada com Android Keystore; logout/troca de conta removem o banco anterior. Sincronização por extensão de notificação OneSignal e WorkManager, com tarefa periódica de recuperação.
+- Botão Atualizar app consulta android/latest.json, baixa a release oficial, confere hash/tamanho/package/versão/assinatura e abre o instalador Android com confirmação do usuário.
+- APK 2.0.0 assinado com a mesma chave da 1.0.0; instalação inicial sobre a anterior é manual. Próximas versões podem usar o botão interno.
+- CI Android passa a executar testes Robolectric, revisão lint e compilação; procedimento de publicação/backup documentado.
+
+
 ## 7.31.0 — Mensagens: push imediato e abertura com recentes — 2026-10-27
 
 - Webhooks de mensagens novas disparam a fila Android em segundo plano, sem aguardar o cron. O cron permanece como recuperação; os IDs idempotentes e a validação de sessão continuam ativos.
