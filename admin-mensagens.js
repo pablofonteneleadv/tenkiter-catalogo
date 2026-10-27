@@ -166,6 +166,10 @@
     const s = document.createElement('style'); s.id = 'ms-css';
     s.textContent = `
       #overlay-mensagens { align-items: stretch; }
+      .ms-trab { position: absolute; bottom: calc(8px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 30; width: min(520px, calc(100% - 24px)); display: grid; gap: 4px; padding: 10px 14px; border-radius: 10px; background: #141414; color: #fff; box-shadow: 0 8px 24px rgba(0,0,0,0.25); font-size: 0.86rem; }
+      .ms-trab progress { width: 100%; height: 10px; accent-color: #E67E22; }
+      .sheet-mensagens .ms-contatos button:disabled { opacity: 0.55; cursor: not-allowed; }
+      .ms-trab small { color: #e6e1d6; font-size: 0.78rem; }
       .sheet-mensagens { position: relative; max-width: 1120px; width: 100%; padding: 0; border-radius: 0; height: var(--ms-h, 100dvh); max-height: var(--ms-h, 100dvh); margin-top: var(--ms-top, 0); overflow: hidden; background: #fff; }
       @media (min-width: 860px) { #overlay-mensagens { align-items: center; } .sheet-mensagens { height: min(90dvh, 880px); max-height: min(90dvh, 880px); margin-top: 0; border-radius: 16px; } }
       .sheet-mensagens button { width: auto; margin: 0; font-family: inherit; }
@@ -598,6 +602,42 @@
     contatosSit = r.ok ? r : { ligada: false, erro: r.erro };
     if (painel === 'leitura') desenharEstado();
   }
+  /* v7.33: trabalhos longos da ponte (15 mil+ contatos): o painel repete as partes, mostra o progresso numa faixa fixa,
+   * segura a tela acesa (Wake Lock, quando o aparelho deixa) e avisa antes de sair da página no meio */
+  let trabalho = null, travaTela = null;
+  const numBR_ = (n) => Number(n || 0).toLocaleString('pt-BR');
+  async function segurarTela_() { try { if (trabalho && navigator.wakeLock && document.visibilityState === 'visible') travaTela = await navigator.wakeLock.request('screen'); } catch (e) { travaTela = null; } }
+  function soltarTela_() { try { if (travaTela) travaTela.release(); } catch (e) { /* já solta */ } travaTela = null; }
+  document.addEventListener('visibilitychange', () => { if (trabalho && document.visibilityState === 'visible') segurarTela_(); });
+  function avisoSaida_(ev) { if (!trabalho) return undefined; ev.preventDefault(); ev.returnValue = ''; return ''; }
+  function desenharTrabalho_() {
+    let f = $('ms-trab'); const sheet = document.querySelector('.sheet-mensagens');
+    if (!trabalho) { if (f) f.remove(); return; }
+    if (!f) { if (!sheet) return; f = el('div', 'ms-trab'); f.id = 'ms-trab'; f.setAttribute('role', 'status'); sheet.appendChild(f); }
+    const pct = trabalho.total ? Math.min(100, Math.round(trabalho.feito * 100 / trabalho.total)) : 0;
+    f.textContent = '';
+    f.appendChild(el('b', '', '⏳ ' + trabalho.titulo + (trabalho.total ? ': ' + numBR_(trabalho.feito) + ' de ' + numBR_(trabalho.total) + ' contatos (' + pct + '%)' : '…')));
+    const pr = el('progress'); pr.max = 100; pr.value = pct; pr.setAttribute('aria-label', trabalho.titulo); f.appendChild(pr);
+    f.appendChild(el('small', '', 'Não feche esta tela. Ela fica acesa até terminar.'));
+  }
+  /* passo(estado) -> { ok, fim, feito, total, estado } ; sem rede, tenta a mesma parte de novo (até 3 vezes) */
+  async function rodarTrabalho_(titulo, passo) {
+    if (trabalho) return { ok: false, erro: 'Já há uma operação dos contatos em andamento.' };
+    trabalho = { titulo: titulo, feito: 0, total: 0 }; window.addEventListener('beforeunload', avisoSaida_); segurarTela_(); desenharTrabalho_();
+    const travados = Array.from(document.querySelectorAll('#ms-contatos button:not([disabled])')); travados.forEach((x) => { x.disabled = true; });
+    try {
+      let estado = {};
+      for (let volta = 0; volta < 400; volta++) {
+        let r = null;
+        for (let t = 0; t < 3; t++) { r = await passo(estado); if (r.ok || !r.semRede) break; await new Promise((ok) => setTimeout(ok, 2000 * (t + 1))); }
+        if (!r.ok) return r;
+        trabalho.feito = Number(r.feito) || 0; trabalho.total = Math.max(Number(r.total) || 0, trabalho.feito); desenharTrabalho_();
+        if (r.fim) return r;
+        estado = r.estado || {};
+      }
+      return { ok: false, erro: 'A operação passou do limite de partes. Tente de novo.' };
+    } finally { trabalho = null; window.removeEventListener('beforeunload', avisoSaida_); soltarTela_(); desenharTrabalho_(); travados.forEach((x) => { if (x.isConnected) x.disabled = false; }); }
+  }
   /* v7.33: a situação das ações da ponte fica escrita dentro do quadro (não some em 9 s): cópia e relatório podem passar de um minuto */
   let pontesSt = '';
   function pontesStatus_(t) { pontesSt = t || ''; const e = $('ms-ponte-st'); if (e) { e.textContent = pontesSt; e.hidden = !pontesSt; } }
@@ -615,7 +655,7 @@
     }
     b.appendChild(el('p', 'ms-ok', 'Ligada à conta ' + (contatosSit.conta || '(sem e-mail)') + '.'));
     const bk = contatosSit.backup;
-    const pb = el('p', 'ms-cfg-res', bk ? 'Última cópia de segurança: ' + hora(bk.em) + ' (' + bk.total + ' contatos). ' : 'Antes de qualquer limpeza, faça uma cópia de segurança dos contatos (fica no Drive da conta dos contatos).');
+    const pb = el('p', 'ms-cfg-res', bk ? 'Última cópia de segurança: ' + hora(bk.em) + ' (' + numBR_(bk.total) + ' contatos). ' : 'Antes de qualquer limpeza, faça uma cópia de segurança dos contatos (fica no Drive da conta dos contatos).');
     if (bk && bk.url) { const a = el('a', 'ms-link', 'Abrir no Drive'); a.href = bk.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; pb.appendChild(a); }
     b.appendChild(pb);
     const st = el('p', 'ms-cfg-res ms-ponte-st', pontesSt || ''); st.id = 'ms-ponte-st'; st.setAttribute('role', 'status'); st.hidden = !pontesSt; b.appendChild(st);
@@ -1564,6 +1604,7 @@
     const a = b.dataset.ms;
     if (a !== 'menu-geral' && a !== 'menu-conversa') fecharMenu();
     if (a === 'fechar') {
+      if (trabalho && !confirm('A operação dos contatos ainda está em andamento. Se fechar agora, ela para e precisa recomeçar. Fechar mesmo assim?')) return;
       if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { document.addEventListener('tk:camada-fechada', function f(e) { if (e.detail && e.detail.chave === 'ms-conversa') { document.removeEventListener('tk:camada-fechada', f); fecharComHistorico_('overlay-mensagens'); } }); TKCamadas.desempilhar('ms-conversa'); }
       else fecharComHistorico_('overlay-mensagens');
     }
@@ -1585,12 +1626,24 @@
       pontesStatus_('Ponte ligada à conta ' + (r.conta || '') + '.'); contatosSit = null; desenharEstado();
     }
     else if (a === 'ponte-backup') {
-      b.disabled = true; pontesStatus_('Fazendo a cópia de segurança dos contatos… pode levar um minuto. Não feche esta tela.'); const r = await worker_('/msg/contatos/backup', 'POST', {}); b.disabled = false;
+      b.disabled = true; pontesStatus_('Fazendo a cópia de segurança dos contatos em partes. Com muitos contatos pode levar alguns minutos.');
+      const r = await rodarTrabalho_('Copiando os contatos do Google', async (e) => {
+        const x = await worker_('/msg/contatos/backup', 'POST', { partes: true, pagina: e.pagina || undefined, pasta: e.pasta || undefined });
+        return x.ok ? { ok: true, fim: x.fim, feito: x.lidos, total: x.totalPessoas, estado: { pagina: x.proxima, pasta: x.pasta } } : x;
+      });
+      b.disabled = false;
       if (!r.ok) { pontesStatus_('A cópia não foi feita: ' + (r.erro || 'tente de novo.')); return; }
-      pontesStatus_('✓ Cópia feita: ' + r.total + ' contatos salvos no Drive da conta dos contatos.'); contatosSit = null; desenharEstado();
+      pontesStatus_('✓ Cópia feita: ' + numBR_(r.feito) + ' contatos salvos no Drive da conta dos contatos.'); contatosSit = null; desenharEstado();
     }
     else if (a === 'ponte-relatorio') {
-      b.disabled = true; pontesStatus_('Lendo os contatos para o relatório… pode levar um minuto. Não feche esta tela.'); const r = await worker_('/msg/contatos/relatorio', 'POST', {}); b.disabled = false;
+      b.disabled = true; pontesStatus_('Lendo os contatos para o relatório em partes. Com muitos contatos pode levar alguns minutos.');
+      let r = await worker_('/msg/contatos/relatorio', 'POST', { etapa: 'inicio' });
+      if (r.ok) r = await rodarTrabalho_('Lendo os contatos para o relatório', async (e) => {
+        const x = await worker_('/msg/contatos/relatorio', 'POST', { etapa: 'parte', pagina: e.pagina || undefined });
+        return x.ok ? { ok: true, fim: !x.proxima, feito: x.lidos, total: x.total, estado: { pagina: x.proxima } } : x;
+      });
+      if (r.ok) { pontesStatus_('Montando o relatório…'); r = await worker_('/msg/contatos/relatorio', 'POST', { etapa: 'fim' }); }
+      b.disabled = false;
       if (!r.ok) { pontesStatus_('O relatório não foi gerado: ' + (r.erro || 'tente de novo.')); return; }
       pontesStatus_(''); mostrarRelatorio_(r);
     }

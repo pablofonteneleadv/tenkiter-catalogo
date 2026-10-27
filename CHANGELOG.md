@@ -13,6 +13,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Nesta etapa só guarda a chave; as DMs do Instagram entram nas Mensagens na próxima versão.
 - Botões da tela Conexões com 44 px de altura (eram 40).
 - Google Contatos: o andamento e o resultado de ligar, cópia de segurança e relatório ficam escritos dentro do quadro (antes era um aviso que sumia em 9 segundos, e a cópia pode passar de um minuto).
+- Google Contatos para contas grandes (15 mil+ contatos):
+  - a cópia de segurança sai em partes pela ponte 1.1 (`backup_parte`): arquivos `parte-NN.json` numa subpasta de "TENKiTER backups";
+  - o relatório lê uma página por vez (`etapa: inicio/parte/fim`) e guarda só o necessário numa tabela temporária, apagada no fim;
+  - faixa fixa no pé da tela com o progresso ("5.000 de 15.300 contatos"), tela acesa (Wake Lock, quando o aparelho deixa), aviso antes de sair da página e confirmação ao fechar as Mensagens; botões dos contatos travados enquanto roda; sem rede, a mesma parte é tentada de novo até 3 vezes.
 - Teste `conexoes_unificada` atualizado para o grupo Android (7 grupos).
 - Service worker renovado (tk-3.38.19).
 

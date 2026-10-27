@@ -139,10 +139,21 @@ def tratar(route, path, method, body, s):
             if not str(body.get("url", "")).startswith("https://script.google.com/macros/s/"): return J({"ok": False, "erro": "Cole o endereço da implantação da ponte (começa com https://script.google.com/macros/s/ e termina em /exec)."}, 400) or True
             c.update({"ligada": True, "conta": "contatos@exemplo.com"}); return J({"ok": True, "ligada": True, "conta": "contatos@exemplo.com"}) or True
         if path == "/msg/contatos/backup":
+            if body.get("partes"):     # v7.33: cópia em partes (ponte 1.1), 15.300 contatos em 3 partes
+                passos = {"": ("p2", 5000), "p2": ("p3", 10000), "p3": ("", 15300)}
+                prox, lidos = passos.get(body.get("pagina") or "", ("", 15300))
+                if not prox: c["backup"] = {"em": agora(), "total": lidos, "arquivo": "contatos-google-2026-10-27-1500", "url": "https://drive.google.com/drive/folders/pastaTESTE00001", "partes": 3}
+                return J({"ok": True, "fim": not prox, "lidos": lidos, "totalPessoas": 15300, "parte": 1, "pasta": "pastaTESTE00001", "proxima": prox, "url": "https://drive.google.com/drive/folders/pastaTESTE00001"}) or True
             c["backup"] = {"em": agora(), "total": 1234, "arquivo": "contatos-google-2026-10-26-1800.json", "url": "https://drive.google.com/file/d/abc"}
             return J(dict(ok=True, **c["backup"])) or True
         if path == "/msg/contatos/relatorio":
             if not c["backup"]: return J({"ok": False, "erro": "Faça a cópia de segurança dos contatos antes do relatório."}, 409) or True
+            et = body.get("etapa")
+            if et == "inicio": return J({"ok": True}) or True
+            if et == "parte":
+                passos = {"": ("p2", 6000), "p2": ("p3", 12000), "p3": ("", 15300)}
+                prox, lidos = passos.get(body.get("pagina") or "", ("", 15300))
+                return J({"ok": True, "lidos": lidos, "total": 15300, "proxima": prox}) or True
             c["relatorio"] = {"em": agora(), "total": 1234, "comFone": 1200, "semFone": 34,
                 "duplicados": {"total": 2, "contatosEnvolvidos": 5, "lista": [{"chave": "558899990001", "contatos": [{"r": "people/c1", "n": "Maria Silva", "f": ["+5588999990001"]}, {"r": "people/c2", "n": "Maria S.", "f": ["(88) 9999-0001"]}]}, {"chave": "558877770001", "contatos": [{"r": "people/c3", "n": "Rita", "f": ["+5588977770001"]}, {"r": "people/c4", "n": "Rita Loja", "f": ["88977770001"]}, {"r": "people/c5", "n": "Rita 2", "f": ["977770001"]}]}]},
                 "corrigir": {"total": 1, "lista": [{"r": "people/c2", "n": "Maria S.", "de": "(88) 9999-0001", "para": "+5588999990001"}]},

@@ -562,14 +562,19 @@ function d1() {
     { r: 'people/c1', n: 'Maria Silva', f: ['+55 88 99999-0001'] }, { r: 'people/c2', n: 'Maria S.', f: ['(88) 9999-0001'], m: ['m@x.com'] },
     { r: 'people/c3', n: 'Sem número', f: [] }, { r: 'people/c4', n: 'Fixo errado', f: ['12345'] }, { r: 'people/c5', n: 'Rita', f: ['+5588977770001'] }
   ];
-  const pedidosPonte = []; const fPonte = globalThis.fetch;
+  const pedidosPonte = []; const fPonte = globalThis.fetch; let ponteVelha = false;
   globalThis.fetch = async (u, init) => {
     if (String(u) === PONTE) {
       const b = JSON.parse(init.body); pedidosPonte.push(b);
       if (b.chave !== CHAVE_P) return new Response(JSON.stringify({ ok: false, erro: 'Chave da ponte inválida.' }));
       if (b.acao === 'ping') return new Response(JSON.stringify({ ok: true, versao: 'contatos-ponte-1.0', conta: 'contatos@exemplo.com' }));
       if (b.acao === 'backup') return new Response(JSON.stringify({ ok: true, total: contatosG.length, arquivo: 'contatos-google-2026-10-26-1800.json', url: 'https://drive.google.com/file/d/abc' }));
-      if (b.acao === 'listar') { const ini = Number(b.pagina || 0); return new Response(JSON.stringify({ ok: true, contatos: contatosG.slice(ini, ini + 3), proxima: ini + 3 < contatosG.length ? String(ini + 3) : '' })); }
+      if (b.acao === 'listar') { const ini = Number(b.pagina || 0); return new Response(JSON.stringify({ ok: true, contatos: contatosG.slice(ini, ini + 3), proxima: ini + 3 < contatosG.length ? String(ini + 3) : '', total: contatosG.length })); }
+      if (b.acao === 'backup_parte') {
+        if (ponteVelha) return new Response(JSON.stringify({ ok: false, erro: 'Ação desconhecida.' }));
+        const ini = Number(b.pagina || 0), parte = ini / 2 + 1;
+        return new Response(JSON.stringify({ ok: true, pasta: b.pasta || 'pastaCOPIA0001', pastaNome: 'contatos-google-2026-10-27-1500', url: 'https://drive.google.com/drive/folders/pastaCOPIA0001', parte, lidos: contatosG.slice(ini, ini + 2).length, totalPessoas: contatosG.length, proxima: ini + 2 < contatosG.length ? String(ini + 2) : '' }));
+      }
     }
     if (String(u).startsWith('https://script.google.com/macros/s/AKfycbPAGINA')) return new Response('<html>Faça login</html>');
     return fPonte(u, init);
@@ -595,6 +600,26 @@ function d1() {
   chk('relatório: quem conversou no WhatsApp e não está no Google', relP.j.semCadastro.total >= 1 && !relP.j.semCadastro.lista.some((x) => x.fone === '+5588977770001') && relP.j.semCadastro.lista.every((x) => /^\+55/.test(x.fone)), relP.j.semCadastro.lista.slice(0, 3));
   chk('nenhuma ação de mudança foi pedida à ponte (só leitura)', pedidosPonte.every((x) => ['ping', 'backup', 'listar'].includes(x.acao)));
   chk('relatório fica guardado para abrir depois', (await A('GET', '/msg/contatos/situacao?relatorio=1')).j.relatorio.total === 5);
+  // v2.15: cópia em partes e relatório em etapas (contas grandes)
+  ponteVelha = true;
+  const velha = await A('POST', '/msg/contatos/backup', { partes: true });
+  chk('cópia em partes com a ponte 1.0: pede para atualizar para a 1.1', velha.r.status === 502 && /contatos-ponte-1\.1/.test(velha.j.erro));
+  ponteVelha = false;
+  chk('continuar a cópia sem a pasta é recusado', (await A('POST', '/msg/contatos/backup', { partes: true, pagina: '2' })).r.status === 400);
+  let pc = await A('POST', '/msg/contatos/backup', { partes: true }), voltasBk = 1;
+  chk('1ª parte: devolve progresso (lidos, total, parte) e ainda não terminou', pc.j.ok && pc.j.fim === false && pc.j.lidos === 2 && pc.j.totalPessoas === 5 && pc.j.parte === 1 && pc.j.pasta === 'pastaCOPIA0001' && pc.j.proxima === '2', pc.j);
+  while (!pc.j.fim && voltasBk < 10) { pc = await A('POST', '/msg/contatos/backup', { partes: true, pagina: pc.j.proxima, pasta: pc.j.pasta }); voltasBk++; }
+  const bkSit = (await A('GET', '/msg/contatos/situacao')).j.backup;
+  chk('repete até o fim: soma as partes e registra a cópia com o link da pasta', pc.j.fim && pc.j.lidos === 5 && voltasBk === 3 && bkSit.total === 5 && bkSit.partes === 3 && bkSit.url === 'https://drive.google.com/drive/folders/pastaCOPIA0001' && bkSit.arquivo === 'contatos-google-2026-10-27-1500', [pc.j, bkSit]);
+  chk('ao terminar, o andamento da cópia é apagado', !(await DB.prepare("SELECT valor FROM cfg WHERE chave='contatos_backup_and'").first()));
+  chk('relatório: etapa inválida é recusada', (await A('POST', '/msg/contatos/relatorio', { etapa: 'xpto' })).r.status === 400);
+  await A('POST', '/msg/contatos/relatorio', { etapa: 'inicio' });
+  let rp = await A('POST', '/msg/contatos/relatorio', { etapa: 'parte' }), voltasRel = 1;
+  chk('relatório em etapas: cada parte lê uma página e conta o progresso', rp.j.ok && rp.j.lidos === 3 && rp.j.total === 5 && rp.j.proxima === '3', rp.j);
+  while (rp.j.proxima && voltasRel < 10) { rp = await A('POST', '/msg/contatos/relatorio', { etapa: 'parte', pagina: rp.j.proxima }); voltasRel++; }
+  const rf = await A('POST', '/msg/contatos/relatorio', { etapa: 'fim' });
+  chk('etapa final: mesmo resultado do relatório de uma vez só', rf.j.ok && rf.j.total === 5 && rf.j.duplicados.total === relP.j.duplicados.total && rf.j.invalidos.total === relP.j.invalidos.total && rf.j.semFone === relP.j.semFone && rf.j.corrigir.total === relP.j.corrigir.total, rf.j);
+  chk('etapa final limpa a tabela temporária (sem dados pessoais sobrando)', (await DB.prepare('SELECT COUNT(*) n FROM msg_contatos_tmp').first()).n === 0);
   const deslP = await A('POST', '/msg/contatos/config', { desligar: true });
   chk('desligar apaga endereço e chave do servidor', deslP.j.ok && !(await A('GET', '/msg/contatos/situacao')).j.ligada && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='contatos_chave'").first()));
   globalThis.fetch = fPonte;
