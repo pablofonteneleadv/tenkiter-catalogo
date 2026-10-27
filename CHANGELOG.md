@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.33.1 — Manifesto do atualizador Android sem cache — 2026-10-27
+
+- Corrige entrega do manifesto 2.0.1 após publicação do APK 2.1.0: configura no-store na origem Render, preservando as demais regras de cabeçalho.
+- Deploy passa a conferir no endereço público versão, código, tamanho, SHA, URL do APK e proibição de cache. A versão do site sozinha deixa de ser evidência de que o botão oferece o APK certo.
+- Mantém APK 2.1.0/code4 e sua assinatura; não exige outro instalador.
+
+
 ## 7.33.0 — APK 2.1: atendimento nativo e notificações informativas — 2026-10-27
 
 - Lista nativa com canais e contagens locais, grupos/individuais, não lidas, falta responder com tempo de espera, nos dois WhatsApp e encerradas. Contato formatado, indicação de respostas da loja e seleção de até 50 conversas por menu ou toque longo.
