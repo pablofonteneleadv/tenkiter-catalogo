@@ -1030,5 +1030,80 @@ function d1() {
       chk('automáticas (hora real): resposta da atendente continua virando dono', env1.j.ok && cR2.dono && cR2.ult_dir === 'saida', cR2);
     } finally { globalThis.fetch = fAuto; await A('POST', '/msg/auto', { boasVindas: { ligado: false }, foraHorario: { ligado: false } }); }
   }
+  // ======== v7.40.13: agendar mensagem ========
+  {
+    const fAg = globalThis.fetch; let agEnv = [], agModo = 'ok';
+    globalThis.fetch = async (u, init) => {
+      const U = String(u);
+      if (U.startsWith('https://wafly.com.br/') && U.endsWith('/send-text')) {
+        agEnv.push(JSON.parse(init.body));
+        if (agModo === 'recusa') return new Response(JSON.stringify({ error: 'bad' }), { status: 400 });
+        return new Response(JSON.stringify({ messageId: 'AGENDA-' + agEnv.length }));
+      }
+      return fAg(u, init);
+    };
+    try {
+      await wh('/wh/wafly/1/' + seg, msg('AG-1', '5588977770001', 'A peça chega quando?', { momment: Date.now() - 60000 }));
+      const cA = await DB.prepare("SELECT id FROM msg_conversa WHERE canal='whatsapp1' AND contato='5588977770001'").first();
+      const daqui = (min) => new Date(Date.now() + min * 60000).toISOString();
+      const v1 = await A('POST', '/msg/agendar', { conversa: cA.id, texto: '  Oi! Sua peça chegou.  ', quando: daqui(120) });
+      chk('agendar: válido grava pendente com autor, whats e texto limpo', v1.r.status === 200 && v1.j.ok && v1.j.agendada.status === 'pendente' && v1.j.agendada.texto === 'Oi! Sua peça chegou.' && v1.j.agendada.autor && v1.j.pendentes.length === 1, v1.j);
+      const lin = await DB.prepare('SELECT whats, autor FROM msg_agenda WHERE id=?').bind(v1.j.agendada.id).first();
+      chk('agendar: guarda o WhatsApp de quem agendou (X-TK-Whats)', lin.whats === '88999990000' && lin.autor.length > 0, lin);
+      const pas = await A('POST', '/msg/agendar', { conversa: cA.id, texto: 'oi', quando: daqui(-5) });
+      chk('agendar: horário no passado é recusado em português', pas.r.status === 400 && /já passou/.test(pas.j.erro) && !pas.j.erro.includes('{'), pas.j);
+      const vaz = await A('POST', '/msg/agendar', { conversa: cA.id, texto: '   ', quando: daqui(60) });
+      chk('agendar: texto vazio é recusado', vaz.r.status === 400 && /Escreva/.test(vaz.j.erro), vaz.j);
+      chk('agendar: texto acima de 1000 letras é recusado', (await A('POST', '/msg/agendar', { conversa: cA.id, texto: 'a'.repeat(1001), quando: daqui(60) })).r.status === 400);
+      chk('agendar: mais de 60 dias à frente é recusado', /60 dias/.test((await A('POST', '/msg/agendar', { conversa: cA.id, texto: 'oi', quando: daqui(61 * 1440) })).j.erro || ''));
+      chk('agendar: data inválida é recusada', /dia e a hora/.test((await A('POST', '/msg/agendar', { conversa: cA.id, texto: 'oi', quando: 'amanhã' })).j.erro || ''));
+      chk('agendar: conversa inexistente dá 404 legível', (await A('POST', '/msg/agendar', { conversa: 999999, texto: 'oi', quando: daqui(60) })).r.status === 404);
+      const lst = await A('GET', '/msg/agendadas?conversa=' + cA.id);
+      chk('agendadas: lista a pendente da conversa', lst.j.ok && lst.j.pendentes.length === 1 && Array.isArray(lst.j.historico), lst.j);
+      const ms1 = await A('GET', '/msg/mensagens?conversa=' + cA.id);
+      chk('mensagens (1ª página) traz as agendadas pendentes', Array.isArray(ms1.j.agendadas) && ms1.j.agendadas.length === 1 && ms1.j.agendadas[0].id === v1.j.agendada.id, ms1.j.agendadas);
+      const can = await A('POST', '/msg/agendar/cancelar', { id: v1.j.agendada.id });
+      chk('cancelar: pendente vira cancelada e sai da lista', can.j.ok && can.j.pendentes.length === 0 && (await DB.prepare('SELECT status FROM msg_agenda WHERE id=?').bind(v1.j.agendada.id).first()).status === 'cancelada', can.j);
+      const can2 = await A('POST', '/msg/agendar/cancelar', { id: v1.j.agendada.id });
+      chk('cancelar de novo: recusa legível', can2.r.status === 409 && /cancelado/.test(can2.j.erro), can2.j);
+      chk('cancelar inexistente: 404', (await A('POST', '/msg/agendar/cancelar', { id: 987654 })).r.status === 404);
+      // envio na hora
+      const v2 = await A('POST', '/msg/agendar', { conversa: cA.id, texto: 'Chegou a sua blusa!', quando: daqui(2) });
+      const antes0 = await W.processarAgenda_(env, Date.now());
+      chk('processarAgenda_: antes da hora não envia', antes0.enviadas === 0 && agEnv.length === 0 && (await DB.prepare('SELECT status FROM msg_agenda WHERE id=?').bind(v2.j.agendada.id).first()).status === 'pendente', antes0);
+      const [p1, p2] = await Promise.all([W.processarAgenda_(env, Date.now() + 3 * 60000), W.processarAgenda_(env, Date.now() + 3 * 60000)]);
+      const a2 = await DB.prepare('SELECT status, erro, enviado_em FROM msg_agenda WHERE id=?').bind(v2.j.agendada.id).first();
+      chk('processarAgenda_: na hora envia pela Wafly com telefone e texto certos', agEnv.length === 1 && agEnv[0].phone === '5588977770001' && agEnv[0].message === 'Chegou a sua blusa!' && a2.status === 'enviada' && a2.enviado_em, { agEnv, a2, p1, p2 });
+      const mA = await DB.prepare("SELECT direcao, por, status FROM msg_mensagem WHERE conversa_id=? AND texto='Chegou a sua blusa!'").bind(cA.id).all();
+      chk('processarAgenda_: a mensagem aparece na conversa como saída da atendente', mA.results.length === 1 && mA.results[0].direcao === 'saida' && mA.results[0].por === '0000', mA.results);
+      await W.processarAgenda_(env, Date.now() + 5 * 60000);
+      chk('processarAgenda_: rodar de novo (ou em paralelo) não duplica', agEnv.length === 1);
+      const h1 = await A('GET', '/msg/agendadas?conversa=' + cA.id);
+      chk('agendadas: enviada aparece no histórico', h1.j.historico.some((x) => x.id === v2.j.agendada.id && x.status === 'enviada'), h1.j);
+      chk('cancelar já enviada: recusa legível', /foi enviada/.test((await A('POST', '/msg/agendar/cancelar', { id: v2.j.agendada.id })).j.erro || ''));
+      // falha registrada
+      agModo = 'recusa';
+      const v3 = await A('POST', '/msg/agendar', { conversa: cA.id, texto: 'Vai falhar', quando: daqui(2) });
+      await W.processarAgenda_(env, Date.now() + 3 * 60000);
+      const a3 = await DB.prepare('SELECT status, erro FROM msg_agenda WHERE id=?').bind(v3.j.agendada.id).first();
+      chk('processarAgenda_: falha fica "falhou" com erro curto em português (sem JSON)', a3.status === 'falhou' && a3.erro && a3.erro.length <= 200 && !a3.erro.includes('{') && agEnv.length === 2, a3);
+      await W.processarAgenda_(env, Date.now() + 6 * 60000);
+      chk('processarAgenda_: falha não é reenviada sozinha', agEnv.length === 2);
+      agModo = 'ok';
+      // travada em "enviando" (Worker caiu no meio) vira falha sem reenviar
+      const v4 = await A('POST', '/msg/agendar', { conversa: cA.id, texto: 'Travada', quando: daqui(2) });
+      await DB.prepare("UPDATE msg_agenda SET status='enviando' WHERE id=?").bind(v4.j.agendada.id).run();
+      await W.processarAgenda_(env, Date.now() + 20 * 60000);
+      const a4 = await DB.prepare('SELECT status, erro FROM msg_agenda WHERE id=?').bind(v4.j.agendada.id).first();
+      chk('processarAgenda_: "enviando" esquecida vira falha para conferir, sem reenviar', a4.status === 'falhou' && /Confira/.test(a4.erro) && agEnv.length === 2, a4);
+      // grupo: permitido (a atendente escolheu a conversa)
+      await wh('/wh/wafly/1/' + seg, msg('AG-G1', '120363777-group', 'oi', { isGroup: true, chatName: 'Grupo Agenda', momment: Date.now() - 60000 }));
+      const cG = await DB.prepare("SELECT id FROM msg_conversa WHERE contato='120363777-group'").first();
+      await A('POST', '/msg/agendar', { conversa: cG.id, texto: 'Aviso ao grupo', quando: daqui(2) });
+      await W.processarAgenda_(env, Date.now() + 3 * 60000);
+      chk('processarAgenda_: conversa de grupo agendada também sai', agEnv.length === 3 && agEnv[2].message === 'Aviso ao grupo', agEnv[2]);
+      chk('scheduled chama processarAgenda_ a cada minuto', /ctx\.waitUntil\(processarAgenda_\(env\)\.catch/.test(fs.readFileSync(path.join(__dirname, '..', 'instagram-worker', 'worker.js'), 'utf8')));
+    } finally { globalThis.fetch = fAg; }
+  }
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });

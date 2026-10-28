@@ -6,6 +6,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.13 — 28/10/2026
+- Mensagens: **Agendar mensagem** (menu ⋯ da conversa). Escreva agora e escolha “Daqui a 1 hora”, “Amanhã 8h”, “Amanhã 14h” ou o dia e a hora (horário de Fortaleza); o servidor envia sozinho na hora marcada, sem duplicar.
+- A conversa mostra uma faixa “1 mensagem agendada para amanhã 08:00 · Ver”; dá para cancelar antes de sair, e falhas ficam registradas com o motivo.
+
 ## 7.40.12 — 28/10/2026
 - Mensagens: filtro **Retomar** — clientes que pararam de responder (última mensagem foi da loja) ou com etiqueta Reserva/Aguardando pagamento, parados entre 1 e 30 dias. Use o atalho /retorno para chamar de volta.
 - Meta de resposta: cliente esperando há mais de 15 min aparece em vermelho na lista, com ⚠.
