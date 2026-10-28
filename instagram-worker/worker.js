@@ -2736,6 +2736,8 @@ async function rotaWebhookMensagens_(env, req, url) {
     const m = normalizarWafly_(b);
     if (!m) return ok(200, { ok: true, ignorado: true });
     try { await prepararMidia_(env, canal, m); } catch (e) { /* a mídia é conforto: a mensagem é gravada de qualquer jeito */ }
+    // v7.40.5: diagnóstico do texto comum (só nomes de campos e sinais de status, sem conteúdo) para comparar WhatsApp 1 e 2
+    if (m.tipo === 'texto' && !m.ctxTipo) { try { await cfgSet(env, 'msg_ult_forma_txt_' + canal, JSON.stringify({ em: agora(), campos: Object.keys(b).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 40), isStatusReply: b.isStatusReply === true, temRef: !!b.referenceMessageId, temStatusReply: !!b.statusReply, interno: Object.keys((b && b.text) || {}).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 20) })); } catch (e) { /* diagnóstico */ } }
     if (m.tipo !== 'texto' || m.ctxTipo) { try { await cfgSet(env, 'msg_ult_forma_' + canal, JSON.stringify({ em: agora(), tipo: m.tipo, ctx: m.ctxTipo, copiada: !!m.midiaChave, contexto: Object.keys((b.statusReply && typeof b.statusReply==='object')?b.statusReply:{}).filter(k=>/^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0,30), campos: Object.keys(b).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 40), interno: Object.keys((b && b[({ imagem: 'image', 'vídeo': 'video', 'áudio': 'audio', documento: 'document', figurinha: 'sticker', texto:'text' })[m.tipo]]) || {}).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 20) })); } catch (e) { /* diagnóstico é conforto */ } }
     return ok(200, { ok: true, nova: await gravarMensagem_(env, canal, m) });
   }
