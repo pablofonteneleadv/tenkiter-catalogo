@@ -3701,7 +3701,7 @@ export default {
       if (p === '/msg/notas' && req.method === 'POST') {   // v7.40.3: nota interna, compartilhada entre os canais vinculados da pessoa
         const d = await req.json().catch(() => ({})), id = Number(d.conversa) || 0, texto = String(d.texto || '').trim().slice(0, 1000);
         if (!texto) return J({ ok: false, erro: 'Escreva a nota antes de salvar.' }, 400);
-        const conv = await env.DB.prepare('SELECT id, pessoa FROM msg_conversa WHERE id=?').bind(id).first();
+        const conv = await env.DB.prepare('SELECT id, ' + MSG_IDENTIDADE_SQL_ + ' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first();   // mesma identidade da leitura (canais vinculados)
         if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
         const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20), autor = (quem && (await cfgGet(env, 'msg_atendente_' + quem))) || 'Equipe', em = agora();
         const r = await env.DB.prepare('INSERT INTO msg_nota (alvo, texto, autor, em) VALUES (?,?,?,?)').bind(conv.pessoa ? String(conv.pessoa) : 'c:' + id, texto, String(autor).slice(0, 30), em).run();
