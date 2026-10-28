@@ -8,7 +8,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [7.40.17] - 2026-10-28
 
-- Correções do lote: recebimento durável do Instagram, contatos, busca de produtos e alinhamento das fotos
+- Instagram: recebimento durável com recuperação automática de falhas. Catálogo: fotos extras sem sobrepor botões e cartões alinhados. Alterações do APK retiradas por orientação do proprietário.
 
 
 ## 7.40.16 — 28/10/2026

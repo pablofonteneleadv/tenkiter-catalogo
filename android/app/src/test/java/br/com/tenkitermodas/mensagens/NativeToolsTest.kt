@@ -8,8 +8,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.ListView
-import android.widget.Button
-import android.widget.TextView
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -59,7 +57,7 @@ class NativeToolsTest {
         }
         val repo=NativeRepository(a,store,api);val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main)
         val tools=NativeTools(a,scope,repo,{1},{true},{draft=it},{},{},{},{_,_->})
-        tools.show(1,"produtos");val products=dialog("Produtos · selecionar peças");waitFor{all(products.window!!.decorView).filterIsInstance<ListView>().first().adapter.count>0}
+        tools.show(1,"produtos");val products=dialog("Produtos · selecionar peças")
         snapshot(products,"products-native")
         for((width,height)in listOf(320 to 700,390 to 844,412 to 915,1440 to 900)){
             snapshot(products,"products-$width",height,width)
@@ -109,38 +107,12 @@ class NativeToolsTest {
         val store=NativeStore(a,SecretKeySpec(ByteArray(32){4},"AES"));store.saveAuth(NativeAuth("88999990000","test","Pablo"));val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main)
         val api=object:NativeApi(){override fun catalog()=JSONObject().put("produtos",JSONArray().put(JSONObject().put("ID","a").put("Nome","Vestido viscose azul").put("Codigo","TK1").put("Estoque",2)).put(JSONObject().put("ID","b").put("Nome","Vestido viscose verde").put("Codigo","TK2").put("Estoque",0)))}
         val tools=NativeTools(a,scope,NativeRepository(a,store,api),{1},{true},{},{},{},{},{_,_->});tools.show(1,"produtos");val d=dialog("Produtos · selecionar peças")
-        val list=all(d.window!!.decorView).filterIsInstance<ListView>().first();waitFor{list.adapter.count>0};assertEquals(1,list.adapter.count);list.performItemClick(list.adapter.getView(0,null,list),0,0)
+        val list=all(d.window!!.decorView).filterIsInstance<ListView>().first();assertEquals(1,list.adapter.count);list.performItemClick(list.adapter.getView(0,null,list),0,0)
         all(d.window!!.decorView).filterIsInstance<android.widget.CheckBox>().first{it.text=="Só com estoque"}.performClick();assertEquals(2,list.adapter.count)
         all(d.window!!.decorView).filterIsInstance<EditText>().first().setText("víscose verde");assertEquals(1,list.adapter.count);list.performItemClick(list.adapter.getView(0,null,list),0,0)
         all(d.window!!.decorView).filterIsInstance<android.widget.Button>().first{it.text=="Copiar seleção"}.performClick()
         val clip=(a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).primaryClip!!.getItemAt(0).text.toString();assertTrue(clip.endsWith("?sel=TK1,TK2"))
         all(d.window!!.decorView).filterIsInstance<android.widget.Button>().first{it.text=="Limpar seleção"}.performClick();assertFalse(list.isItemChecked(0));tools.close();scope.cancel();store.close()
-    }
-    @Test fun catalogSnapshotSurvivesRecreationRefreshesExplicitlyAndClearsOnLogout(){
-        val a=Robolectric.buildActivity(Activity::class.java).setup().get();a.deleteDatabase("mensagens-local.db");a.getSharedPreferences("native-auth",0).edit().clear().commit()
-        val store=NativeStore(a,SecretKeySpec(ByteArray(32){4},"AES"));store.saveAuth(NativeAuth("88999990000","test","Equipe"));var calls=0
-        val api=object:NativeApi(){override fun catalog():JSONObject{calls++;return JSONObject().put("produtos",JSONArray().put(JSONObject().put("ID","one").put("Nome","Vestido")))}}
-        val repo=NativeRepository(a,store,api);assertEquals(1,repo.catalog().size);repo.catalog();assertEquals(1,calls)
-        val recreated=NativeRepository(a,store,api);assertEquals(1,recreated.cachedCatalog().size);recreated.catalog();assertEquals(1,calls)
-        recreated.catalog(true);assertEquals(2,calls);store.logout();store.saveAuth(NativeAuth("other-owner","other-session","Outra conta"));assertTrue(NativeRepository(a,store,api).cachedCatalog().isEmpty());store.close()
-    }
-    @Test fun productsOpenImmediatelyOnceAndTypingOffersLocalSiteFacets(){
-        val a=Robolectric.buildActivity(Activity::class.java).setup().get();a.setContentView(android.widget.FrameLayout(a));a.deleteDatabase("mensagens-local.db");a.getSharedPreferences("native-auth",0).edit().clear().commit()
-        val store=NativeStore(a,SecretKeySpec(ByteArray(32){4},"AES"));store.saveAuth(NativeAuth("88999990000","test","Equipe"));val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main)
-        val gate=java.util.concurrent.CountDownLatch(1);var calls=0
-        val api=object:NativeApi(){override fun catalog():JSONObject{calls++;gate.await(30,java.util.concurrent.TimeUnit.SECONDS);return JSONObject().put("produtos",JSONArray().put(JSONObject().put("ID","a").put("Nome","Vestido azul").put("Categoria","Vestido").put("Genero","Feminino").put("Tamanhos","M, 38").put("Cores","Azul").put("Estoque",2)).put(JSONObject().put("ID","b").put("Nome","Vestido verde").put("Categoria","Vestido").put("Genero","Feminino").put("Tamanhos","G, 40").put("Cores","Verde").put("Estoque",1)))}}
-        val tools=NativeTools(a,scope,NativeRepository(a,store,api),{1},{true},{},{},{},{},{_,_->})
-        tools.show(1,"produtos");val d=dialog("Produtos · selecionar peças");repeat(5){tools.show(1,"produtos")};assertSame(d,ShadowAlertDialog.getLatestAlertDialog())
-        val list=all(d.window!!.decorView).filterIsInstance<ListView>().first();assertEquals(0,list.adapter.count);snapshot(d,"products-loading")
-        gate.countDown();waitFor{list.adapter.count==2}
-        val query=all(d.window!!.decorView).filterIsInstance<EditText>().first();query.setText("vest")
-        assertTrue(all(d.window!!.decorView).filterIsInstance<TextView>().any{it.text=="Refinar a busca"})
-        val color=all(d.window!!.decorView).filterIsInstance<Button>().first{it.contentDescription=="Cores: Azul"};color.performClick();assertEquals(1,list.adapter.count)
-        for((w,h)in listOf(320 to 700,390 to 844,412 to 915,1440 to 900,390 to 480))snapshot(d,"products-filters-$w-$h",h,w)
-        all(d.window!!.decorView).filterIsInstance<Button>().first{it.text.toString().contains("Fechar filtros")}.performClick();assertEquals(View.VISIBLE,list.visibility)
-        query.setText("vés");assertEquals(1,calls);assertEquals(1,list.adapter.count)
-        all(d.window!!.decorView).filterIsInstance<Button>().first{it.text=="Limpar filtros"}.performClick();assertEquals(2,list.adapter.count)
-        tools.close();scope.cancel();store.close()
     }
     @Test fun nativeProductPricesMatchTheCatalogFixtures(){
         val fixtures=JSONArray(javaClass.classLoader!!.getResourceAsStream("precos-common.json")!!.bufferedReader().readText())

@@ -108,10 +108,6 @@ async function iniciar(env) {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_pessoa (id TEXT PRIMARY KEY,nome TEXT NOT NULL,whatsapp TEXT DEFAULT '',segundo TEXT DEFAULT '',em TEXT NOT NULL)").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_pessoa_alias (canal TEXT NOT NULL,contato TEXT NOT NULL,pessoa TEXT NOT NULL,PRIMARY KEY(canal,contato))").run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_pessoa_alias ON msg_pessoa_alias(pessoa)').run();
-    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_pessoa_instagram (pessoa TEXT PRIMARY KEY,usuario TEXT NOT NULL DEFAULT '')").run();
-    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_instagram_perfil (contato TEXT PRIMARY KEY,usuario TEXT NOT NULL)").run();
-    await env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_pessoa_ig_usuario ON msg_pessoa_instagram(usuario)").run();
-    await env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_ig_perfil_usuario ON msg_instagram_perfil(usuario)").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_tmp (r TEXT PRIMARY KEY, n TEXT DEFAULT '', f TEXT DEFAULT '[]', m TEXT DEFAULT '[]')").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_zernio_conv (contato TEXT PRIMARY KEY, conversa TEXT NOT NULL, em TEXT NOT NULL)").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_plano (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, dados TEXT NOT NULL)").run();
@@ -2746,22 +2742,12 @@ async function rotaWebhookMensagens_(env, req, url, ctx) {
     const m = normalizarWafly_(b);
     if (!m) return ok(200, { ok: true, ignorado: true });
     try { await prepararMidia_(env, canal, m); } catch (e) { /* a mídia é conforto: a mensagem é gravada de qualquer jeito */ }
-    try {
-      const keys=o=>o&&typeof o==='object'?Object.keys(o).filter(k=>/^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0,30):[];
-      const node=b[({imagem:'image','vídeo':'video','áudio':'audio',documento:'document',figurinha:'sticker',texto:'text'})[m.tipo]]||{};
-      const shape={em:agora(),tipo:m.tipo,ctx:m.ctxTipo,copiada:!!m.midiaChave,flagStatus:b.isStatusReply===true,contexto:keys(b.statusReply),campos:keys(b),interno:keys(node),contextInfo:keys(b.contextInfo||node.contextInfo),referencia:!!m.ctxRef};
-      await cfgSet(env,'msg_ult_forma_'+canal,JSON.stringify(shape));
-      if(m.ctxTipo==='story')await cfgSet(env,'msg_ult_status_forma_'+canal,JSON.stringify(shape));
-      const connected=String(b.connectedPhone||'').replace(/\D/g,'').slice(0,20);
-      if(connected)await cfgSet(env,'msg_origem_'+canal,JSON.stringify({em:shape.em,canal:canal,telefoneDaLoja:connected,instanciaConferida:!!cfg&&String(b.instanceId||'')===cfg.instance}));
-    } catch(e) { /* somente forma, flags e número da própria loja; nunca texto ou tokens */ }
-
     // v7.40.5: diagnóstico do texto comum (só nomes de campos e sinais de status, sem conteúdo) para comparar WhatsApp 1 e 2
     if (m.tipo === 'texto' && !m.ctxTipo) { try { await cfgSet(env, 'msg_ult_forma_txt_' + canal, JSON.stringify({ em: agora(), campos: Object.keys(b).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 40), isStatusReply: b.isStatusReply === true, temRef: !!b.referenceMessageId, temStatusReply: !!b.statusReply, interno: Object.keys((b && b.text) || {}).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 20) })); } catch (e) { /* diagnóstico */ } }
+    if (m.tipo !== 'texto' || m.ctxTipo) { try { await cfgSet(env, 'msg_ult_forma_' + canal, JSON.stringify({ em: agora(), tipo: m.tipo, ctx: m.ctxTipo, copiada: !!m.midiaChave, contexto: Object.keys((b.statusReply && typeof b.statusReply==='object')?b.statusReply:{}).filter(k=>/^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0,30), campos: Object.keys(b).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 40), interno: Object.keys((b && b[({ imagem: 'image', 'vídeo': 'video', 'áudio': 'audio', documento: 'document', figurinha: 'sticker', texto:'text' })[m.tipo]]) || {}).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 20) })); } catch (e) { /* diagnóstico é conforto */ } }
     const nova = await gravarMensagem_(env, canal, m);
     if (nova) await agendarAuto_(ctx, env, canal, m);
     return ok(200, { ok: true, nova: nova });
-
   }
   return ok(404, { ok: false });
 }
@@ -2882,60 +2868,29 @@ async function indexarNomesGoogle_(env) {
   if (!r.proxima) { await cfgSet(env, 'msg_google_index_em', agora()); await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE grupo=0').bind(agora()).run(); }
   return { ok: true, fim: !r.proxima, lidos: Number(r.contatos && r.contatos.length) || 0, total: Number(r.total) || 0 };
 }
-function instagramUsuario_(value){
-  const s=String(value||'').trim().replace(/^https?:\/\/(?:www\.)?instagram\.com\//i,'').replace(/^@/,'').replace(/\/$/,'').toLowerCase();
-  return /^[a-z0-9._]{1,30}$/.test(s)?s:'';
-}
 async function pessoaAtendimento_(env, id) {
   const c = await env.DB.prepare('SELECT '+MSG_COLS_CONVERSA_+' FROM msg_conversa WHERE id=?').bind(id).first();
   if (!c || c.grupo) return null;
   const key = c.pessoa || 'ig:'+c.contato;
   const pessoa = await env.DB.prepare('SELECT nome,whatsapp,segundo FROM msg_pessoa WHERE id=?').bind(key).first();
   const canais = (await env.DB.prepare('SELECT '+MSG_COLS_CONVERSA_+' FROM msg_conversa WHERE grupo=0 AND ('+MSG_IDENTIDADE_SQL_+'=? OR id=?) ORDER BY ultima_em DESC LIMIT 50').bind(key,id).all()).results;
-  const ig = await env.DB.prepare("SELECT usuario FROM msg_pessoa_instagram WHERE pessoa=?").bind(key).first();
-  const perfil = !ig && canais.find(x=>x.canal==='instagram');
-  const detected = perfil ? await env.DB.prepare('SELECT usuario FROM msg_instagram_perfil WHERE contato=?').bind(perfil.contato).first() : null;
-  return { ok:true, instagramNome:(canais.find(x=>x.canal==='instagram')||{}).nome||'', instagram:(ig&&ig.usuario)||(detected&&detected.usuario)||'', conversa:c, pessoa:key, nome:(pessoa && pessoa.nome)||c.nome||'', whatsapp:(pessoa && pessoa.whatsapp)||(c.canal!=='instagram'?c.contato:''), segundo:(pessoa && pessoa.segundo)||'', canais:canais };
+  return { ok:true, conversa:c, pessoa:key, nome:(pessoa && pessoa.nome)||c.nome||'', whatsapp:(pessoa && pessoa.whatsapp)||(c.canal!=='instagram'?c.contato:''), segundo:(pessoa && pessoa.segundo)||'', canais:canais };
 }
 async function salvarPessoaAtendimento_(env, d) {
   const atual = await pessoaAtendimento_(env,Number(d.conversa)); if (!atual) return {ok:false,erro:'Conversa individual não encontrada.'};
   const nome = String(d.nome || '').trim().slice(0,120);
-  let phone = pessoaTelefone_(d.whatsapp);
-  const isIg=atual.conversa.canal==='instagram';
-  let second = String(d.segundo || '').trim()?pessoaTelefone_(d.segundo):null;
-  const rawIg=Object.prototype.hasOwnProperty.call(d,'instagram')?String(d.instagram||'').trim():atual.instagram;
-  const handle=instagramUsuario_(rawIg);
-  if(rawIg&&!handle)return {ok:false,erro:'Informe o usuário do Instagram, como @usuario.'};
+  const phone = pessoaTelefone_(d.whatsapp), second = String(d.segundo || '').trim()?pessoaTelefone_(d.segundo):null;
   if (!nome) return {ok:false,erro:'Informe o nome da pessoa.'};
-  if(String(d.whatsapp||'').trim()&&!phone)return {ok:false,erro:'Confira o WhatsApp informado.'};
   if (!phone && !(atual.conversa.canal==='instagram'&&d.semWhatsApp===true)) return {ok:false,erro:'Informe um WhatsApp válido ou indique que o cliente não informou o número.'};
   if (String(d.segundo || '').trim()&&!second) return {ok:false,erro:'Confira o segundo WhatsApp.'};
   if(!phone&&atual.canais.some(c=>c.canal!=='instagram'))return {ok:false,erro:'Esse cadastro já tem um WhatsApp vinculado. Mantenha o número principal.'};
-  // Resolve either phone through the existing canonical record before writing.
-  let matched=null,resolved="";
-  if(phone){
-    const alias=await env.DB.prepare("SELECT pessoa FROM msg_pessoa_alias WHERE canal IN ('whatsapp1','whatsapp2') AND contato IN (?,?) LIMIT 1").bind(phone.d,phone.chave).first();
-    const google=!alias?await env.DB.prepare('SELECT pessoa FROM msg_google_nome WHERE chave=?').bind(phone.chave).first():null;
-    resolved=(alias||google||{}).pessoa||phone.chave;
-    matched=await env.DB.prepare('SELECT * FROM msg_pessoa WHERE id=? OR whatsapp=? OR segundo=? LIMIT 1').bind((alias||google||{}).pessoa||phone.chave,phone.d,phone.d).first();
-  }
-  const key = matched ? matched.id : resolved || atual.pessoa;
-  if(isIg){
-    const existing=matched||await env.DB.prepare('SELECT * FROM msg_pessoa WHERE id=?').bind(key).first();
-    if(existing){phone=pessoaTelefone_(existing.whatsapp)||phone;second=pessoaTelefone_(existing.segundo);}
-    else if(phone&&resolved&&resolved!==phone.chave){second=phone;phone=pessoaTelefone_(resolved)||phone;}
-  }
-  const profile=isIg?await env.DB.prepare('SELECT usuario FROM msg_instagram_perfil WHERE contato=?').bind(atual.conversa.contato).first():null;
-  const usuario=isIg?((profile&&profile.usuario)||atual.instagram):handle;
-  const sameIg=usuario?(await env.DB.prepare("SELECT c.id FROM msg_conversa c JOIN msg_instagram_perfil p ON p.contato=c.contato WHERE c.canal='instagram' AND c.grupo=0 AND p.usuario=?").bind(usuario).all()).results:[];
-  const ids = [...new Set([Number(d.conversa),...sameIg.map(x=>x.id),...(Array.isArray(d.vincular)?d.vincular:[]).map(Number)])].filter(x=>Number.isSafeInteger(x)&&x>0).slice(0,20);
+  const key = phone ? phone.chave : atual.pessoa;
+  const ids = [...new Set([Number(d.conversa),...(Array.isArray(d.vincular)?d.vincular:[]).map(Number)])].filter(x=>Number.isSafeInteger(x)&&x>0).slice(0,20);
   const selected = (await env.DB.prepare('SELECT '+MSG_COLS_CONVERSA_+' FROM msg_conversa WHERE grupo=0 AND id IN ('+ids.map(()=>'?').join(',')+')').bind(...ids).all()).results;
   if (selected.length!==ids.length) return {ok:false,erro:'Um dos contatos escolhidos não está disponível.'};
   const keys = [...new Set([atual.pessoa,key,...selected.map(x=>x.pessoa).filter(Boolean),...(second?[second.chave]:[])])];
   const all = (await env.DB.prepare('SELECT '+MSG_COLS_CONVERSA_+' FROM msg_conversa WHERE grupo=0 AND ('+MSG_IDENTIDADE_SQL_+' IN ('+keys.map(()=>'?').join(',')+') OR id IN ('+ids.map(()=>'?').join(',')+')) LIMIT 100').bind(...keys,...ids).all()).results;
   const t=agora(), batch=[env.DB.prepare('INSERT INTO msg_pessoa (id,nome,whatsapp,segundo,em) VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome,whatsapp=excluded.whatsapp,segundo=excluded.segundo,em=excluded.em').bind(key,nome,phone?phone.d:'',second?second.d:'',t)];
-  for(const previous of keys.filter(x=>x!==key))batch.push(env.DB.prepare('DELETE FROM msg_pessoa_instagram WHERE pessoa=?').bind(previous));
-  if(usuario||!isIg)batch.push(env.DB.prepare('INSERT INTO msg_pessoa_instagram (pessoa,usuario) VALUES (?,?) ON CONFLICT(pessoa) DO UPDATE SET usuario=excluded.usuario').bind(key,usuario));
   for(const c of all){batch.push(env.DB.prepare('INSERT INTO msg_pessoa_alias (canal,contato,pessoa) VALUES (?,?,?) ON CONFLICT(canal,contato) DO UPDATE SET pessoa=excluded.pessoa').bind(c.canal,c.contato,key));batch.push(env.DB.prepare('UPDATE msg_conversa SET pessoa=?,atualizada_em=? WHERE id=?').bind(key,t,c.id));}
   for(const n of [phone,second].filter(Boolean)) for(const canal of ['whatsapp1','whatsapp2']) for(const fone of [...new Set([n.d,n.chave])]) batch.push(env.DB.prepare('INSERT INTO msg_pessoa_alias (canal,contato,pessoa) VALUES (?,?,?) ON CONFLICT(canal,contato) DO UPDATE SET pessoa=excluded.pessoa').bind(canal,fone,key));
   await env.DB.batch(batch);
@@ -3364,15 +3319,6 @@ async function processarEventoZernio_(env, b) {
   if (entrada) { contato = String(snd.id || '').slice(0, 80); if (contato && cid) await env.DB.prepare('INSERT INTO msg_zernio_conv (contato, conversa, em) VALUES (?, ?, ?) ON CONFLICT(contato) DO UPDATE SET conversa=excluded.conversa, em=excluded.em').bind(contato, cid, agora()).run(); }
   else if (cid) { const x = await env.DB.prepare('SELECT contato FROM msg_zernio_conv WHERE conversa=?').bind(cid).first(); contato = x ? x.contato : ''; }
   if (!contato) return false;
-  const username=entrada?instagramUsuario_(snd.username):'';
-  if(username){
-    await env.DB.prepare('INSERT INTO msg_instagram_perfil (contato,usuario) VALUES (?,?) ON CONFLICT(contato) DO UPDATE SET usuario=excluded.usuario').bind(contato,username).run();
-    const saved=await env.DB.prepare('SELECT pessoa FROM msg_pessoa_instagram WHERE usuario=? LIMIT 1').bind(username).first();
-    if(saved)await env.DB.batch([
-      env.DB.prepare("INSERT INTO msg_pessoa_alias(canal,contato,pessoa) VALUES('instagram',?,?) ON CONFLICT(canal,contato) DO UPDATE SET pessoa=excluded.pessoa").bind(contato,saved.pessoa),
-      env.DB.prepare("UPDATE msg_conversa SET pessoa=?,atualizada_em=? WHERE canal='instagram' AND contato=?").bind(saved.pessoa,agora(),contato)
-    ]);
-  }
   const a0 = Array.isArray(msg.attachments) && msg.attachments[0] ? msg.attachments[0] : null;
   const ot = a0 ? String(a0.originalType || '') : '', tipoA = a0 ? String(a0.type || '') : '';
   const tipo = !a0 ? 'texto' : ot === 'story_mention' ? 'menção em story' : (ZERNIO_TIPO_[tipoA] || 'anexo');

@@ -55,12 +55,6 @@ class NativeStore(context:Context,private val keyOverride:javax.crypto.SecretKey
     @Synchronized fun current(a:NativeAuth)=auth()?.let{it.owner==a.owner&&it.session==a.session}==true
     @Synchronized fun logout(){generation++;prefs.edit().clear().commit();clearData()}
     private fun clearData(){mediaDir.deleteRecursively();outgoingDir.deleteRecursively();exportsDir.deleteRecursively();writableDatabase.execSQL("DELETE FROM msg");writableDatabase.execSQL("DELETE FROM conv");writableDatabase.execSQL("DELETE FROM pending")}
-    // Public catalog snapshot belongs to the signed-in owner and is erased with the session.
-    @Synchronized fun catalogSnapshot(a:NativeAuth):Pair<List<JSONObject>,Long>{
-        if(!current(a)||prefs.getString("catalog-owner","")!=a.owner)return emptyList<JSONObject>() to 0L
-        return runCatching{val rows=org.json.JSONArray(prefs.getString("catalog-data","[]"));(0 until rows.length()).map{rows.getJSONObject(it)} to prefs.getLong("catalog-time",0)}.getOrDefault(emptyList<JSONObject>() to 0L)
-    }
-    @Synchronized fun saveCatalog(a:NativeAuth,rows:List<JSONObject>,at:Long){if(current(a))prefs.edit().putString("catalog-owner",a.owner).putString("catalog-data",org.json.JSONArray(rows).toString()).putLong("catalog-time",at).commit()}
     fun canReadLocal(a:NativeAuth?)=a!=null&&System.currentTimeMillis()-a.checked in 0..86400000L
     private fun clean(j:JSONObject):JSONObject {
         val copy=JSONObject(j.toString());copy.keys().asSequence().toList().filter{it.endsWith("url",true)||it.endsWith("chave",true)||it.contains("sessao",true)||it.contains("token",true)}.forEach{copy.remove(it)}

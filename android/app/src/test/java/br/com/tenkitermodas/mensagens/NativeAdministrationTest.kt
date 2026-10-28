@@ -33,12 +33,11 @@ class NativeAdministrationTest {
     private class Fake:NativeApi(){
         val writes=java.util.concurrent.CopyOnWriteArrayList<Pair<String,JSONObject>>()
         val reads=java.util.concurrent.CopyOnWriteArrayList<String>()
-        var instagramName="";var personGate:java.util.concurrent.CountDownLatch?=null;var personChannel="whatsapp1";var personFail=false;var linked=false;var backup=false;var exportQuery="";var revoked=false
+        var linked=false;var backup=false;var exportQuery="";var revoked=false
         override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject{
-            if(path.startsWith("/msg/pessoa")&&body==null){personGate?.await(30,java.util.concurrent.TimeUnit.SECONDS);if(personFail)throw java.io.IOException("offline")}
             if(revoked)throw AccessRevoked();if(body!=null){writes.add(path to JSONObject(body.toString()));if(path=="/msg/contatos/config")linked=true}else reads.add(path)
             return when{
-                path.startsWith("/msg/pessoa")->JSONObject().put("instagramNome",instagramName).put("ok",true).put("nome","Contato do Google").put("whatsapp","5588989012345").put("segundo","").put("conversa",JSONObject().put("id",1).put("canal",personChannel)).put("canais",JSONArray().put(JSONObject().put("id",1).put("canal","whatsapp1").put("contato","5588989012345").put("nome","Contato do Google")))
+                path.startsWith("/msg/pessoa")->JSONObject().put("ok",true).put("nome","Contato do Google").put("whatsapp","5588989012345").put("segundo","").put("conversa",JSONObject().put("id",1).put("canal","whatsapp1")).put("canais",JSONArray().put(JSONObject().put("id",1).put("canal","whatsapp1").put("contato","5588989012345").put("nome","Contato do Google")))
                 path.startsWith("/msg/conversas")->JSONObject().put("ok",true).put("conversas",JSONArray().put(JSONObject().put("id",2).put("nome","Perfil de teste").put("canal","instagram").put("contato","ig-test")))
                 path=="/msg/config"->JSONObject().put("ok",true).put("meuNome","Clarice").put("config",JSONObject().put("assinatura",true).put("lerCelular",JSONObject().put("whatsapp1",true).put("whatsapp2",false).put("instagram",true)))
                 path.startsWith("/msg/metricas")->JSONObject().put("ok",true).put("dias",if(path.contains("dias=7"))7 else 30).put("entradas",24).put("saidas",20).put("conversas",5).put("medianaMin",JSONObject.NULL).put("ate5min",70).put("aguardando",JSONObject().put("total",2).put("maisAntigas",JSONArray().put(JSONObject().put("id",1).put("nome","Cliente teste").put("desde","2026-10-27T00:00:00Z")))).put("porHora",JSONArray((0..23).map{JSONObject().put("hora",it).put("entradas",it).put("medianaMin",5)}))
@@ -60,43 +59,11 @@ class NativeAdministrationTest {
         init{a.deleteDatabase("mensagens-local.db");a.getSharedPreferences("native-auth",0).edit().clear().commit();store=NativeStore(a,SecretKeySpec(ByteArray(32){7},"AES"));store.saveAuth(NativeAuth("88999990000","test-auth","Atendente"));repo=NativeRepository(a,store,fake);ui=NativeAdministration(a,scope,repo,{},{})}
         override fun close(){ui.close();scope.cancel();store.close()}
     }
-    @Test fun personEditorOpensOnceImmediatelyAndSavesFieldsWithoutLinkButtons(){Fixture().use{f->
-        val gate=java.util.concurrent.CountDownLatch(1);f.fake.personGate=gate
-        f.ui.person(1);val d=dialog("Editar contato");repeat(6){f.ui.person(1)}
-        assertTrue("active immediately",f.ui.active);assertTrue("loading: "+all(d.window!!.decorView).filterIsInstance<TextView>().map{it.text.toString()},all(d.window!!.decorView).filterIsInstance<TextView>().any{it.text.toString()=="Carregando contato…"})
-        gate.countDown();waitFor{all(d.window!!.decorView).filterIsInstance<EditText>().size==4}
-        assertSame(d,ShadowAlertDialog.getLatestAlertDialog());waitFor{f.fake.reads.size==1}
-        assertFalse(all(d.window!!.decorView).filterIsInstance<Button>().any{it.text.contains("Vincular")})
-        val fields=all(d.window!!.decorView).filterIsInstance<EditText>();fields[0].setText("Nome confirmado");fields[3].setText("@cliente.teste")
-        snapshot(d,"person-editor",390,780);button(d,"Salvar").performClick();button(d,"Salvar").performClick();waitFor{f.fake.writes.size==1}
-        val body=f.fake.writes.single().second;assertEquals("@cliente.teste",body.getString("instagram"));assertFalse(body.has("vincular"));assertEquals("Nome confirmado",body.getString("nome"))
-    }}
-    @Test fun instagramEditorOnlyHasNameAndOnePhoneAndPreservesHiddenFields(){Fixture().use{f->
-        f.fake.personChannel="instagram";f.ui.person(1);val d=dialog("Editar contato");waitFor{all(d.window!!.decorView).filterIsInstance<EditText>().size==2}
-        val fields=all(d.window!!.decorView).filterIsInstance<EditText>();fields[1].setText("5588989012346")
-        snapshot(d,"person-instagram",390,780);button(d,"Salvar").performClick();waitFor{f.fake.writes.size==1}
-        val body=f.fake.writes.single().second;assertFalse(body.has("segundo"));assertFalse(body.has("instagram"));assertFalse(body.has("vincular"));assertEquals("5588989012346",body.getString("whatsapp"))
-    }}
-    @Test fun closingWhileLoadingDoesNotReopenAndLoadingErrorCanRetry(){Fixture().use{f->
-        val gate=java.util.concurrent.CountDownLatch(1);f.fake.personGate=gate;f.ui.person(1);val first=dialog("Editar contato");first.dismiss();gate.countDown();Shadows.shadowOf(Looper.getMainLooper()).idle();assertFalse(first.isShowing)
-        f.fake.personGate=null;f.fake.personFail=true;f.ui.person(1);val d=dialog("Editar contato");waitFor{button(d,"Tentar novamente").visibility==View.VISIBLE}
-        f.fake.personFail=false;button(d,"Tentar novamente").performClick();waitFor{all(d.window!!.decorView).filterIsInstance<EditText>().size==4};assertSame(d,ShadowAlertDialog.getLatestAlertDialog())
-    }}
-    @Test fun linkedHistoricalInstagramDisplaysItsNameWithoutInventingAUsername(){Fixture().use{f->
-        f.fake.instagramName="Perfil já associado";f.ui.person(1);val d=dialog("Editar contato");waitFor{all(d.window!!.decorView).filterIsInstance<EditText>().size==4}
-        assertEquals("Perfil já associado",all(d.window!!.decorView).filterIsInstance<EditText>()[3].text.toString())
-        button(d,"Salvar").performClick();waitFor{f.fake.writes.size==1};assertFalse(f.fake.writes.single().second.has("instagram"))
-    }}
-    @Test fun contactSaveRemainsReachableWithSmallHeightAndLargeText(){Fixture().use{f->
-        for(channel in listOf("whatsapp1","instagram"))for((w,h)in listOf(320 to 480,390 to 844,412 to 915,1440 to 900)){
-            f.fake.personChannel=channel;f.ui.person(1);val d=dialog("Editar contato");waitFor{all(d.window!!.decorView).filterIsInstance<EditText>().isNotEmpty()}
-            all(d.window!!.decorView).filterIsInstance<EditText>().first().setText("Contato com nome muito longo para conferir edição e acesso ao botão de salvar")
-            all(d.window!!.decorView).filterIsInstance<TextView>().forEach{it.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,it.textSize*1.3f)}
-            snapshot(d,"contact-$channel-$w",w,h,bottom=true)
-            val save=button(d,"Salvar");val pos=IntArray(2);save.getLocationInWindow(pos)
-            assertTrue(save.height>=48);assertTrue("save visible at $w/$h",pos[1]>=0&&pos[1]+save.height<=h)
-            assertTrue(save.requestFocus());f.ui.close()
-        }
+    @Test fun personEditorLinksOnlyTheExplicitlyChosenChannelAfterConfirmation(){Fixture().use{f->
+        f.ui.person(1);val d=dialog("Contato e canais");snapshot(d,"person-editor",390,780);val fields=all(d.window!!.decorView).filterIsInstance<EditText>();fields[0].setText("Nome confirmado")
+        button(d,"Vincular conversa do Instagram").performClick();val pick=dialog("Vincular canal existente");button(pick,"Buscar contatos").performClick();waitFor{all(pick.window!!.decorView).filterIsInstance<Button>().any{it.text.toString().startsWith("Perfil de teste")}};all(pick.window!!.decorView).filterIsInstance<Button>().first{it.text.toString().startsWith("Perfil de teste")}.performClick()
+        assertTrue(f.fake.writes.isEmpty());button(d,"Salvar nome e vínculos").performClick();val confirm=dialog("Salvar este cadastro?");assertTrue(f.fake.writes.isEmpty());confirm.getButton(AlertDialog.BUTTON_POSITIVE).performClick();waitFor{f.fake.writes.size==1}
+        val write=f.fake.writes.single();assertEquals("/msg/pessoa",write.first);assertEquals("Nome confirmado",write.second.getString("nome"));assertEquals(listOf(1L,2L),(0 until write.second.getJSONArray("vincular").length()).map{write.second.getJSONArray("vincular").getLong(it)})
     }}
     @Test fun settingsSaveTheSameChannelAndSignatureConfigurationOnlyOnSave(){Fixture().use{f->
         f.ui.settings();val d=dialog("Leitura e assinatura");assertTrue(f.fake.writes.isEmpty())

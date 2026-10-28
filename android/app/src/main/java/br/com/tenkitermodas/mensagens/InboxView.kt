@@ -225,12 +225,12 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         row.addView(text(c?.optString("nome")?.ifBlank{c.optString("contato")}?:"Conversa",17,true).apply{maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END;setOnClickListener{events.tool(focus,"pessoa")};contentDescription="Configurar contato e canais vinculados"},LayoutParams(0,dp(52),1f))
         row.addView(button("⋮"){events.tool(focus,"conversa")}.apply{contentDescription="Opções da conversa";textSize=24f;background=rounded(Color.TRANSPARENT,0)},LayoutParams(dp(48),dp(48)));body.addView(row)
         val detail=LinearLayout(activity).apply{orientation=VERTICAL;setPadding(dp(12),0,dp(12),dp(4))}
-        detail.addView(text("Canal atual: "+(c?.let{InboxRules.channel(it)}?:"")+" · "+(c?.let{InboxRules.contact(it)}?:""),12))
+        detail.addView(text((c?.let{InboxRules.channel(it)}?:"")+" · "+(c?.let{InboxRules.contact(it)}?:""),12))
         if(peeking)detail.addView(button("Espiando · abrir para responder"){events.select(focus)}.apply{setTextColor(orange);background=rounded(cream,10)},LayoutParams(-1,dp(48)))
         if(c!=null&&!InboxRules.group(c)){
             val linked=chats.filter{it.optLong("id")!=focus&&InboxRules.person(it)==InboxRules.person(c)&&it.optString("encerrada_em").isBlank()}
             if(linked.isNotEmpty()){
-                val channels=LinearLayout(activity);linked.forEach{item->channels.addView(button("Abrir conversa no "+InboxRules.channel(item)){events.select(item.optLong("id"))},LayoutParams(-2,dp(48)).apply{rightMargin=dp(6)})}
+                val channels=LinearLayout(activity);linked.forEach{item->channels.addView(button(InboxRules.channel(item)){events.select(item.optLong("id"))},LayoutParams(-2,dp(48)).apply{rightMargin=dp(6)})}
                 detail.addView(HorizontalScrollView(activity).apply{isHorizontalScrollBarEnabled=false;addView(channels)})
             }
         }

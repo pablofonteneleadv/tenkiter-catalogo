@@ -10,10 +10,7 @@ import kotlin.concurrent.withLock
 
 class NativeRepository internal constructor(private val context:Context,val store:NativeStore=NativeStore(context),private val api:NativeApi=NativeApi()){
     private val lock=ReentrantLock()
-    @Volatile private var catalogCache=emptyList<JSONObject>()
-    @Volatile private var catalogAt=0L
-    @Volatile private var catalogOwner=""
-    private val catalogLock=Any()
+    private var catalogCache=emptyList<JSONObject>()
     private var cursor="";private var fullAt=0L;private var accountAt=0L
     @Volatile var status="";private set
     companion object {
@@ -40,7 +37,7 @@ class NativeRepository internal constructor(private val context:Context,val stor
         api.call("/msg/conversas?canal=todos&filtro=",fresh)
         if(!store.saveIfGeneration(generation,fresh))throw Exception("O acesso foi cancelado.")
     }}
-    fun logout(){catalogCache=emptyList();catalogAt=0;catalogOwner="";cursor="";fullAt=0;accountAt=0;java.io.File(context.cacheDir,"received").deleteRecursively();runCatching{OneSignal.User.pushSubscription.optOut()};store.logout();status="";runCatching{BackgroundSync.cancel(context)};changed()}
+    fun logout(){catalogCache=emptyList();cursor="";fullAt=0;accountAt=0;java.io.File(context.cacheDir,"received").deleteRecursively();runCatching{OneSignal.User.pushSubscription.optOut()};store.logout();status="";runCatching{BackgroundSync.cancel(context)};changed()}
     private fun freshSession():NativeAuth {
         val old=store.auth()?:throw AccessRevoked()
         val j=api.account(JSONObject().put("action","sessao").put("whatsapp",old.owner).put("sessao",old.session))
@@ -142,20 +139,9 @@ class NativeRepository internal constructor(private val context:Context,val stor
         val a=store.auth()?:throw AccessRevoked();try{api.call("/msg/config",a,body).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
     }
     fun productPhoto(url:String):ByteArray?=api.publicPhoto(url)
-    fun cachedCatalog():List<JSONObject>{
-        val a=store.auth()?:throw AccessRevoked()
-        if(catalogOwner==a.owner&&catalogAt>0)return catalogCache
-        val (rows,time)=store.catalogSnapshot(a);if(!store.current(a))throw AccessRevoked()
-        catalogCache=rows;catalogAt=time;catalogOwner=a.owner;return rows
-    }
-    fun catalog(force:Boolean=false):List<JSONObject> =synchronized(catalogLock){
-        val a=store.auth()?:throw AccessRevoked();val cached=cachedCatalog()
-        if(!force&&catalogAt>0&&System.currentTimeMillis()-catalogAt in 0..300000L)return@synchronized cached
-        // Catalog traffic must not wait behind message synchronization or block it.
-        val r=api.catalog().getJSONArray("produtos");if(!store.current(a))throw AccessRevoked()
-        val rows=(0 until r.length()).map{r.getJSONObject(it)}.filter{it.optString("Status").isBlank()||it.optString("Status").equals("ativo",true)}
-        val at=System.currentTimeMillis();store.saveCatalog(a,rows,at);if(!store.current(a))throw AccessRevoked()
-        catalogCache=rows;catalogAt=at;catalogOwner=a.owner;rows
+    fun catalog():List<JSONObject> =lock.withLock{
+        val a=store.auth()?:throw AccessRevoked();val r=api.catalog().getJSONArray("produtos");if(!store.current(a))throw AccessRevoked()
+        (0 until r.length()).map{r.getJSONObject(it)}.filter{it.optString("Status").isBlank()||it.optString("Status").equals("ativo",true)}.also{catalogCache=it}
     }
     fun batch(ids:Set<Long>,action:String,reason:String="concluido")=lock.withLock{
         require(ids.isNotEmpty()&&ids.size<=50);val a=store.auth()?:throw AccessRevoked()
