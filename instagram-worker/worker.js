@@ -113,6 +113,8 @@ async function iniciar(env) {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_plano (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, dados TEXT NOT NULL)").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_fila (chave TEXT PRIMARY KEY, fone TEXT NOT NULL, nome TEXT DEFAULT '', canal TEXT DEFAULT '', em TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'pendente', tentativas INTEGER DEFAULT 0, erro TEXT DEFAULT '', r TEXT DEFAULT '')").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_encerramento (id INTEGER PRIMARY KEY AUTOINCREMENT, conversa_id INTEGER NOT NULL, canal TEXT NOT NULL, pessoa TEXT DEFAULT '', contato TEXT DEFAULT '', motivo TEXT NOT NULL, em TEXT NOT NULL, por TEXT DEFAULT '')").run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_nota (id INTEGER PRIMARY KEY AUTOINCREMENT, alvo TEXT NOT NULL, texto TEXT NOT NULL, autor TEXT DEFAULT '', em TEXT NOT NULL)").run();   // v7.40.3: notas internas (o cliente nunca vê)
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msg_nota_alvo ON msg_nota (alvo, em)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_conv ON msg_encerramento (conversa_id, em)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_pessoa ON msg_encerramento (pessoa)').run();
   } catch (e) { /* tenta de novo na próxima vez */ }
@@ -3693,7 +3695,17 @@ export default {
         const where=antes?(antesId>0?' AND (enviada_em<? OR (enviada_em=? AND id<?))':' AND enviada_em<?'):'';
         const args=antes?(antesId>0?[id,antes,antes,antesId]:[id,antes]):[id];
         const rs = await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=?' + where + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...args).all();
-        return J({ ok: true, conversa: conv, mensagens: rs.results.reverse(), temMais: rs.results.length === 100, cursor: agora() });
+        const notas = antes ? [] : ((await env.DB.prepare('SELECT id, texto, autor, em FROM msg_nota WHERE alvo=? ORDER BY em LIMIT 200').bind(conv.pessoa ? String(conv.pessoa) : 'c:' + id).all()).results || []);
+        return J({ ok: true, conversa: conv, mensagens: rs.results.reverse(), notas: notas, temMais: rs.results.length === 100, cursor: agora() });
+      }
+      if (p === '/msg/notas' && req.method === 'POST') {   // v7.40.3: nota interna, compartilhada entre os canais vinculados da pessoa
+        const d = await req.json().catch(() => ({})), id = Number(d.conversa) || 0, texto = String(d.texto || '').trim().slice(0, 1000);
+        if (!texto) return J({ ok: false, erro: 'Escreva a nota antes de salvar.' }, 400);
+        const conv = await env.DB.prepare('SELECT id, ' + MSG_IDENTIDADE_SQL_ + ' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first();   // mesma identidade da leitura (canais vinculados)
+        if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
+        const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20), autor = (quem && (await cfgGet(env, 'msg_atendente_' + quem))) || 'Equipe', em = agora();
+        const r = await env.DB.prepare('INSERT INTO msg_nota (alvo, texto, autor, em) VALUES (?,?,?,?)').bind(conv.pessoa ? String(conv.pessoa) : 'c:' + id, texto, String(autor).slice(0, 30), em).run();
+        return J({ ok: true, nota: { id: r.meta && r.meta.last_row_id, texto: texto, autor: autor, em: em } });
       }
       if (p === '/msg/novidades' && req.method === 'GET') {
         const cursorConsulta=agora();

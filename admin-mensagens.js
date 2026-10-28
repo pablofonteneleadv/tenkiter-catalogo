@@ -240,6 +240,10 @@
       .ms-vazio { color: #555; padding: 18px 16px; font-size: 0.88rem; line-height: 1.4; }
       .ms-vazio-conversa { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; color: #666; padding: 24px; }
       /* v7.21: aviso flutuante (antes ficava na coluna da lista e, no celular, sumia com a conversa aberta) */
+      .ms-bolha.ms-nota { align-self: stretch; max-width: none; background: #fff6d6; border: 1px dashed #e0c56e; color: #2b2410; }
+      .ms-nota-rot { display: block; font-size: 0.72rem; font-weight: 700; color: #6b5000; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 2px; }
+      .ms-modo-nota textarea, textarea.ms-modo-nota, .ms-modo-nota #ms-texto { background: #fff6d6 !important; border-color: #e0c56e !important; }
+      .ms-nota-btn[aria-pressed="true"] { background: #fff6d6; }
       .ms-saude { margin: 0 12px 8px; padding: 10px 12px; border-radius: 8px; background: #fdecec; color: #8f1d1d; border: 1px solid #f3c7c7; font-size: 0.85rem; display: grid; gap: 2px; }
       .ms-saude b { color: #c62828; }
       .ms-aviso { position: absolute; left: 12px; right: 12px; bottom: 88px; z-index: 7; margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff3cd; color: #5a4300; font-size: 0.85rem; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
@@ -796,6 +800,7 @@
   const RE_ASSINATURA_ = /^\*([^*\n]{1,30}):\*\n/;
   /* v7.24: barra acima da caixa de mensagem = ferramentas de atendimento (Produtos, Respostas rápidas) + a assinatura */
   const ICO_ = {
+    nota: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5"/></svg>',
     sacola: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
     raio: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3 5 14h6l-1 7 8-11h-6l1-7z"/></svg>',
     lapis: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/></svg>'
@@ -812,7 +817,7 @@
       if (editando) setTimeout(() => i.focus(), 0);
       return;
     }
-    w.append(botaoIco_('ms-ferr-btn', 'sacola', 'Produtos', 'gaveta-produtos'), botaoIco_('ms-ferr-btn', 'raio', 'Respostas', 'gaveta-respostas'));
+    w.append(botaoIco_('ms-ferr-btn', 'sacola', 'Produtos', 'gaveta-produtos'), botaoIco_('ms-ferr-btn', 'raio', 'Respostas', 'gaveta-respostas'), botaoIco_('ms-ferr-btn ms-nota-btn', 'nota', 'Nota', 'modo-nota'));
     if (lig) {
       const b = botao('ms-ferr-btn ms-assina-btn', '', 'nome-editar'); b.title = 'Respondendo como ' + n + ' · tocar para mudar o nome';
       b.append(el('span', 'ms-sr', 'Respondendo como '), el('b', '', n)); b.insertAdjacentHTML('beforeend', ICO_.lapis); b.setAttribute('aria-label', 'Respondendo como ' + n + '. Mudar nome');
@@ -1226,6 +1231,11 @@
     if (b && b.dataset.ass === ass) return b;
     if (!b) { b = el('div'); elMsgs.set(m.id, b); }
     b.dataset.ass = ass; b.dataset.id = String(m.id); b.textContent = '';
+    if (m.direcao === 'nota') {   // nota interna: largura total, amarela, nunca parece mensagem enviada
+      b.className = 'ms-bolha ms-nota'; const d = new Date(m.enviada_em);
+      b.append(el('span', 'ms-nota-rot', 'Só a equipe vê · ' + (m.autor || 'Equipe') + (isNaN(d) ? '' : ' · ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))), el('div', 'ms-nota-tx', m.texto || ''));
+      return b;
+    }
     const falhou = m.status === 'falhou';
     b.className = 'ms-bolha ' + (m.direcao === 'saida' ? 'saida' : 'entrada') + (m.status === 'pendente' ? ' pendente' : '') + (falhou ? ' falhou' : '');
     const autor = autorEl_(m); if (autor) b.appendChild(autor);
@@ -1442,7 +1452,7 @@
     aviso_('');
     const c = r.conversa; aberta = c;
     ultIdSrv = r.mensagens.reduce((m, x) => (x.id > m ? x.id : m), 0);
-    msgs = r.mensagens.concat(Array.from(pendentes.values()).filter((p) => p.conversa === id).map((p) => p.msg));
+    msgs = r.mensagens.concat((r.notas || []).map(notaMsg_)).concat(Array.from(pendentes.values()).filter((p) => p.conversa === id).map((p) => p.msg));
     montarConversa(c); pintarFio(true);
     vista = 'conversa'; const app = $('ms-app'); app.dataset.vista = 'conversa';
     if (!larga() && window.TKCamadas && !TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa', () => { vista = 'lista'; const a = $('ms-app'); if (a) a.dataset.vista = 'lista'; });
@@ -1475,10 +1485,28 @@
       return await r.json();
     } catch (e) { return { ok: false, erro: 'Sem conexão para enviar o arquivo. Tente de novo.', semRede: true }; }
   }
+  /* v7.40.3: notas internas — mesmo campo de texto, salva em /msg/notas e nunca chama /msg/enviar */
+  let modoNota = false;
+  const notaMsg_ = (n) => ({ id: 'nota-' + n.id, direcao: 'nota', tipo: 'nota', texto: n.texto, autor: n.autor, enviada_em: n.em });
+  function alternarNota_(forcar) {
+    modoNota = forcar === undefined ? !modoNota : forcar;
+    const ta = $('ms-texto'), cx = ta && ta.parentElement; if (ta) ta.placeholder = modoNota ? 'Nota interna: só a equipe vê' : 'Mensagem';
+    if (cx) cx.classList.toggle('ms-modo-nota', modoNota);
+    document.querySelectorAll('.ms-nota-btn').forEach((b) => b.setAttribute('aria-pressed', String(modoNota)));
+    if (ta) ta.focus();
+  }
+  async function salvarNota_(c, ta) {
+    const texto = (ta.value || '').trim(); if (!texto) { aviso_('Escreva a nota antes de salvar.'); return; }
+    const r = await worker_('/msg/notas', 'POST', { conversa: c.id, texto: texto });
+    if (!r.ok) { aviso_(r.erro || 'Não consegui salvar a nota. Tente de novo.'); return; }
+    ta.value = ''; if (aberta && aberta.id === c.id) { msgs.push(notaMsg_(r.nota)); pintarFio(true); }
+    alternarNota_(false); aviso_('Nota salva. Só a equipe vê.');
+  }
   async function enviar(reenvio) {
     if (cacheConversa) { aviso_('Aguarde atualizar a conversa para responder.'); return; }
     if (!aberta) return;
     const c = aberta, ta = $('ms-texto'); if (!ta && !reenvio) return;
+    if (modoNota && !reenvio) { await salvarNota_(c, ta); return; }
     let tmp, texto, idLocal;
     if (reenvio) { const p = pendentes.get(reenvio); if (!p) return; tmp = p; texto = p.msg.texto; idLocal = p.idLocal; p.msg.status = 'pendente'; p.msg.erro = ''; }
     else {
@@ -1721,6 +1749,7 @@
     }
     else if (a === 'gaveta-produtos') abrirProdutos_();
     else if (a === 'gaveta-respostas') abrirRespostas_(false);
+    else if (a === 'modo-nota') alternarNota_();
     else if (a === 'gaveta-fechar') { fecharGaveta_(); const t = $('ms-texto'); if (t) t.focus(); }
     else if (a === 'resp-editar') abrirRespostas_(true);
     else if (a === 'resp-usar') { const r = respostas_()[Number(b.dataset.i)]; if (r) colocarNaMensagem_(r.x); }

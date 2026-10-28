@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.3 — Nota interna na conversa — 2026-10-28
+
+- Conversa: botão **Nota** na barra (ao lado de Produtos e Respostas). Com ele ligado, a caixa fica amarela e o texto vira nota interna, que só a equipe vê; nada é enviado ao cliente.
+- A nota aparece no fio como cartão amarelo de largura total, com "Só a equipe vê · autor · hora", e vale para todos os canais vinculados da pessoa.
+- Servidor: tabela `msg_nota`, `POST /msg/notas` e as notas junto com `/msg/mensagens`. Teste: `worker_mensagens_conversa` 271.
+
 ## 7.40.2 — Aviso quando as mensagens param de chegar — 2026-10-28
 
 - Mensagens: faixa vermelha no topo da lista ("Mensagens não estão chegando desde HH:MM") quando o servidor recusa os avisos do WhatsApp ou do Instagram, como no limite do banco em 27/10. Some sozinha quando uma mensagem volta a ser gravada.

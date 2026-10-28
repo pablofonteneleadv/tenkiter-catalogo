@@ -812,6 +812,12 @@ function d1() {
   chk('trancar: o mesmo código deixa de valer', (await A('POST', '/cofre/revelar', { nome: 'zernio', cofre: 'COD_COFRE_1' })).r.status === 403);
   globalThis.fetch = fCof;
   await DB.prepare("DELETE FROM cfg WHERE chave IN ('zernio_chave','cofre_ult_zernio')").run();
+  // v7.40.3: nota interna
+  const nConv = (await DB.prepare('SELECT id FROM msg_conversa ORDER BY id LIMIT 1').first()).id;
+  chk('nota vazia é recusada em português', (await A('POST', '/msg/notas', { conversa: nConv, texto: '  ' })).r.status === 400);
+  const nOk = await A('POST', '/msg/notas', { conversa: nConv, texto: 'Confirmar o Pix antes de separar' });
+  const nLe = await A('GET', '/msg/mensagens?conversa=' + nConv);
+  chk('nota salva volta junto com a conversa e nunca vira mensagem', nOk.j.ok && nLe.j.notas.some((n) => n.texto === 'Confirmar o Pix antes de separar') && !nLe.j.mensagens.some((m) => m.texto === 'Confirmar o Pix antes de separar'), [nOk.j, nLe.j.notas]);
   // Android: paginação estável para horários iguais, sem omitir conversas ou mensagens.
   const isoPag='2099-01-01T00:00:00.000Z';
   for(let i=0;i<55;i++)await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em) VALUES('whatsapp1',?,?,1,1,?)").bind('paginacao-'+i+'@g.us','Grupo simulado '+i,isoPag).run();
