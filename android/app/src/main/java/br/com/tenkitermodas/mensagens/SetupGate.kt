@@ -41,6 +41,8 @@ class SetupGate(private val activity:Activity,private val close:()->Unit,private
         item("Rodar em segundo plano","Na janela que abrir, toque em Permitir. Assim o Android não fecha o app.",batteryOk(activity)){
             runCatching{activity.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,Uri.parse("package:"+activity.packageName)))}
                 .onFailure{runCatching{activity.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))}}}
+        if(reviewing)item("Microfone para áudios","Usado somente quando você toca em Gravar áudio. Ative Microfone em Permissões do aplicativo.",activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED){
+            runCatching{activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+activity.packageName)))}}
         if(XIAOMI)item("Início automático (Xiaomi)","Recomendado: ligue \"Início automático\" para o TENKiTER Mensagens.",null){
             val miui=Intent().setClassName("com.miui.securitycenter","com.miui.permcenter.autostart.AutoStartManagementActivity")
             runCatching{activity.startActivity(miui)}.onFailure{runCatching{activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+activity.packageName)))}}}

@@ -25,6 +25,8 @@ object WebKeeper {
     @Volatile var download:((Long,String)->Unit)?=null
     private val bridge=object{
         @JavascriptInterface fun baixarArquivo(id:Long,nome:String){handler.post{download?.invoke(id,nome)}}
+        @JavascriptInterface fun audioNativo()=true
+        @JavascriptInterface fun lista(){handler.post{if(ReceivedFiles.trusted(web?.url))actions?.invoke("lista")}}
         @JavascriptInterface fun atualizar(){handler.post{actions?.invoke("atualizar")}}
         @JavascriptInterface fun permissoes(){handler.post{actions?.invoke("permissoes")}}
         @JavascriptInterface fun versao()=BuildConfig.VERSION_NAME

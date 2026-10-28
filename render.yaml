@@ -35,7 +35,7 @@ services:
         value: strict-origin-when-cross-origin
       - path: /*
         name: Permissions-Policy
-        value: geolocation=(), microphone=(), camera=()
+        value: geolocation=(), microphone=(self), camera=()
       - path: /version.json
         name: Cache-Control
         value: no-store
