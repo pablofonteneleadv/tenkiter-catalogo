@@ -1875,7 +1875,7 @@
     if(salvo){
       aberta=salvo.conversa;msgs=salvo.mensagens;montarConversa(aberta);pintarFio(true);
       vista='conversa';$('ms-app').dataset.vista='conversa';
-      if(!larga()&&window.TKCamadas&&!TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa',()=>{vista='lista';if($('ms-app')) $('ms-app').dataset.vista='lista';});
+      if(!larga()&&window.TKCamadas&&!TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa',mostrarLista_);
       document.querySelector('.ms-compor')?.setAttribute('inert','');
       document.querySelectorAll('.ms-compor textarea,.ms-compor input,.ms-compor button').forEach(e=>{e.disabled=true;});
       const info=el('p','','Salva no aparelho · atualizando para responder…');info.id='ms-cache-status';info.setAttribute('role','status');
@@ -1897,14 +1897,22 @@
     msgs = r.mensagens.concat((r.notas || []).map(notaMsg_)).concat(Array.from(pendentes.values()).filter((p) => p.conversa === id).map((p) => p.msg));
     montarConversa(c); pintarFio(true);
     vista = 'conversa'; const app = $('ms-app'); app.dataset.vista = 'conversa';
-    if (!larga() && window.TKCamadas && !TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa', () => { vista = 'lista'; const a = $('ms-app'); if (a) a.dataset.vista = 'lista'; });
+    if (!larga() && window.TKCamadas && !TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa', mostrarLista_);
     pintarLista(); marcarLida();
     if (larga() && !espiando) { const t = $('ms-texto'); if (t) t.focus(); }
   }
+  function mostrarLista_() {
+    // Leaving a cached chat also cancels its pending open/retry. A late response must not navigate.
+    if (vista === 'lista' && !aberta && !cacheConversa) return;
+    ++abrindo; cacheConversa = false; aberta = null; vista = 'lista';
+    const a = $('ms-app'); if (a) a.dataset.vista = 'lista';
+    const c = $('ms-conversa'); if (c) { c.textContent = ''; c.appendChild(vazioConversa_()); }
+  }
   function voltarLista() {
+    if (vista !== 'conversa') return;
     if ($('ms-gaveta')) fecharGaveta_();
-    if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { TKCamadas.desempilhar('ms-conversa'); return; }
-    vista = 'lista'; const a = $('ms-app'); if (a) a.dataset.vista = 'lista';
+    mostrarLista_();
+    if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) TKCamadas.desempilhar('ms-conversa');
   }
   async function marcarLida() {
     if (espiando || cacheConversa) return;                      // v7.21: espiando nunca marca como lida (nem aqui nem no celular)
@@ -2035,11 +2043,13 @@
     const o = $('overlay-mensagens');
     if (!o || !o.classList.contains('aberto')) { pararAoVivo(); return; }
     if (document.hidden) { agendar(ESPERA_MAX_MS); return; }
+    const aberturaDaSonda = abrindo;
     const ultId = ultIdSrv;
     const st = msgs.reduce((m, x) => (x.status_em && x.status_em > m ? x.status_em : m), '') || cursor;
     const q = '/msg/novidades?desde=' + encodeURIComponent(cursor || new Date(Date.now() - 60000).toISOString()) + ((nPoll++ % 10 === 0) ? '&cont=1' : '') + (aberta ? '&conversa=' + aberta.id + '&depois=' + ultId + '&st=' + encodeURIComponent(st) : '');
     const r = await worker_(q, 'GET');
     if (!r.ok) { offline = true; espera = Math.min(ESPERA_MAX_MS, espera * 2); atualizarVivo(); agendar(); return; }
+    if(aberturaDaSonda!==abrindo){agendar();return;}
     if(cacheConversa&&aberta){await abrirConversa(aberta.id,espiando);agendar();return;}
     if (offline) { offline = false; atualizarVivo(); }
     espera = ESPERA_MS; cursor = r.cursor || cursor;
@@ -2047,6 +2057,7 @@
     if (r.saude) pintarSaude_(r.saude);
     contagens = r.contagens || contagens; desenharAbas(); desenharFiltros(); selarBotao();
     if (r.conversas.some((c) => canal === 'todos' || c.canal === canal)) await carregarLista(false);
+    if(aberturaDaSonda!==abrindo){agendar();return;}
     if (aberta) {
       const mudou = r.conversas.find((c) => c.id === aberta.id); if (mudou) aberta = Object.assign({}, aberta, mudou, { nao_lidas: aberta.nao_lidas });
       const fio = $('ms-fio'), novas = r.mensagens.filter((m) => !msgs.some((x) => x.id === m.id));
@@ -2060,6 +2071,7 @@
         if (!noFim && entradas) novasAbaixo += entradas;
         pintarFio(noFim);
         if(APP_RECENTES&&!cacheConversa) await recentes_('/msg/mensagens?conversa='+aberta.id,{ok:true,conversa:aberta,mensagens:msgs.filter(m=>typeof m.id==='number')});
+        if(aberturaDaSonda!==abrindo){agendar();return;}
         if (noFim && entradas && !document.hidden) { aberta.nao_lidas = 1; marcarLida(); }
         else if (entradas && aberta) aberta.nao_lidas = (aberta.nao_lidas || 0) + entradas;
       }

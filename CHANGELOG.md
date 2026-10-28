@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.18] - 2026-10-28
+
+- App Mensagens: Voltar após abrir por notificação permanece na lista e ignora respostas atrasadas
+
+
 ## [7.40.17] - 2026-10-28
 
 - Instagram: recebimento durável com recuperação automática de falhas. Catálogo: fotos extras sem sobrepor botões e cartões alinhados. Alterações do APK retiradas por orientação do proprietário.
