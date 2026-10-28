@@ -43,6 +43,8 @@ def novo_estado():
     s["anexos"] = []; s["midia_baixada"] = []
     return s
 
+ETQ_PADRAO = [{"id": i + 1, "nome": n, "cor": c, "venda": v, "ordem": i, "pessoas": 0} for i, (n, c, v) in enumerate([("Novo cliente", "cinza", 1), ("Reserva", "ambar", 1), ("Aguardando pagamento", "azul", 1), ("Pago", "verde", 1), ("Enviado", "roxo", 1), ("Troca", "rosa", 0)])]
+
 def pessoa(c):
     """v7.22: mesma regra do Worker (número sem o 9º dígito); grupo e Instagram não entram."""
     if c.get("pessoa"): return c["pessoa"]
@@ -160,6 +162,38 @@ def tratar(route, path, method, body, s):
         c = next(x for x in s["convs"] if x["id"] == body.get("conversa"))
         c["etiquetas"] = [e for e in s["etq_mock"] if e["id"] in body.get("etiquetas", [])]
         return J({"ok": True, "etiquetas": c["etiquetas"]}) or True
+    if path in ("/msg/funil", "/msg/funil/mover"):   # v7.40.15: funil de vendas (mesmas regras do Worker: colunas = etiquetas de venda; uma pessoa = um cartão)
+        etqs = s.get("etq_mock") or ETQ_PADRAO
+        venda = [e for e in sorted(etqs, key=lambda e: (e.get("ordem", 0), e["id"])) if e["venda"] and not e.get("arquivada")]
+        alvo = lambda c: pessoa(c) or "c:%d" % c["id"]
+        def etq_de(a):   # as etiquetas são da pessoa: vale a de qualquer conversa dela
+            for c in s["convs"]:
+                if alvo(c) == a and c.get("etiquetas") is not None: return c["etiquetas"]
+            return []
+        if path == "/msg/funil/mover":
+            s.setdefault("funil_posts", []).append(body)
+            if s.get("funil_falha"): return J({"ok": False, "erro": s["funil_falha"]}, 500) or True
+            c = next((x for x in s["convs"] if x["id"] == body.get("conversa")), None)
+            if not c: return J({"ok": False, "erro": "Conversa não encontrada."}, 404) or True
+            if c["grupo"]: return J({"ok": False, "erro": "O funil de vendas é só para conversas individuais, não para grupos."}, 400) or True
+            e_id = body.get("etiqueta")
+            if e_id and not any(e["id"] == e_id for e in venda): return J({"ok": False, "erro": "Essa etapa não existe mais. Atualize o funil e tente de novo."}, 400) or True
+            a = alvo(c); novas = [e for e in etq_de(a) if not e["venda"]] + [e for e in venda if e["id"] == e_id]
+            for x in s["convs"]:
+                if alvo(x) == a: x["etiquetas"] = novas; x["atualizada_em"] = agora()
+            return J({"ok": True, "etiquetas": novas}) or True
+        cf = q.get("canal") or "todos"
+        if cf not in ("todos", "whatsapp1", "whatsapp2", "instagram"): return J({"ok": False, "erro": "Escolha Todas, Instagram, WhatsApp 1 ou WhatsApp 2."}, 400) or True
+        s.setdefault("funil_consultas", []).append(cf)
+        if s.get("funil_erro"): return J({"ok": False, "erro": s["funil_erro"]}, 500) or True
+        melhor = {}
+        for c in sorted([x for x in s["convs"] if not x["grupo"] and not x.get("encerrada_em") and x["total"] > 0 and (cf == "todos" or x["canal"] == cf)], key=lambda x: (x["ultima_em"], x["id"]), reverse=True):
+            melhor.setdefault(alvo(c), c)
+        cols = []
+        for e in venda:
+            cs = [c for a, c in melhor.items() if any(x["id"] == e["id"] for x in etq_de(a))]
+            cols.append({"etiqueta": {"id": e["id"], "nome": e["nome"], "cor": e["cor"]}, "total": len(cs), "cartoes": [{"conversa": c["id"], "nome": c["nome"], "contato": c["contato"], "canal": c["canal"], "previa": c["previa"][:90], "ultima_em": c["ultima_em"], "dono": c.get("dono", "")} for c in cs[:30]]})
+        return J({"ok": True, "canal": cf, "colunas": cols}) or True
     if path == "/msg/novidades":
         cid = int(q.get("conversa") or 0); dep = int(q.get("depois") or 0); desde = q.get("desde", "")
         # a "folga" de 3 s do servidor real: devolve o que mudou desde o cursor

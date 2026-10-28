@@ -3406,6 +3406,45 @@ export function validarFicha_(d) {
   }
   return [null, v];
 }
+/* v7.40.15: etiquetas da pessoa gravadas de uma vez (usado por "Etiquetas" e pelo funil). fica = ids que a pessoa passa a ter. */
+async function gravarEtiquetas_(env, conv, fica) {
+  const alvo = alvoDe_(conv), em = agora();
+  await env.DB.batch([env.DB.prepare('DELETE FROM msg_alvo_etiqueta WHERE alvo=?').bind(alvo)].concat(Array.from(new Set(fica)).map((x) => env.DB.prepare('INSERT OR IGNORE INTO msg_alvo_etiqueta (alvo, etiqueta_id, em) VALUES (?,?,?)').bind(alvo, x, em))));
+  await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(em, conv.id).run();
+  return (await etiquetasDosAlvos_(env, [alvo]))[alvo] || [];
+}
+/* v7.40.15: funil de vendas. Colunas = etiquetas de venda ativas, na ordem da equipe (renomear/arquivar muda o quadro sozinho).
+ * Cartão = uma pessoa: só conversas individuais abertas; a pessoa com vários canais aparece uma vez, pela conversa mais recente (no filtro de canal, a mais recente daquele canal).
+ * Se, por dado antigo, a pessoa tiver duas etiquetas de venda, vale a mais adiantada. Cada coluna traz o total e até 30 cartões, os mais recentes primeiro. */
+const MSG_ALVO_SQL_ = "(CASE WHEN " + MSG_IDENTIDADE_SQL_ + "<>'' THEN " + MSG_IDENTIDADE_SQL_ + " ELSE 'c:'||msg_conversa.id END)";
+export async function funilVendas_(env, canal) {
+  const etapas = (await etiquetas_(env)).filter((e) => e.venda);
+  if (!etapas.length) return [];
+  const ids = etapas.map((e) => e.id);
+  const sql = "WITH fc AS (SELECT id, ultima_em, " + MSG_ALVO_SQL_ + " AS alvo FROM msg_conversa WHERE grupo=0 AND encerrada_em='' AND total>0" + (canal ? ' AND canal=?' : '') + "), " +
+    "fp AS (SELECT id, alvo, ultima_em, ROW_NUMBER() OVER (PARTITION BY alvo ORDER BY ultima_em DESC, id DESC) AS rn FROM fc), " +
+    "fe AS (SELECT x.alvo, x.etiqueta_id, ROW_NUMBER() OVER (PARTITION BY x.alvo ORDER BY et.ordem DESC, et.id DESC) AS rn FROM msg_alvo_etiqueta x JOIN msg_etiqueta et ON et.id=x.etiqueta_id WHERE x.etiqueta_id IN (" + ids.map(() => '?').join(',') + ")), " +
+    "fr AS (SELECT fp.id, fe.etiqueta_id, ROW_NUMBER() OVER (PARTITION BY fe.etiqueta_id ORDER BY fp.ultima_em DESC, fp.id DESC) AS pos, COUNT(*) OVER (PARTITION BY fe.etiqueta_id) AS n FROM fp JOIN fe ON fe.alvo=fp.alvo AND fe.rn=1 WHERE fp.rn=1) " +
+    "SELECT fr.etiqueta_id, fr.n, msg_conversa.id, msg_conversa.canal, msg_conversa.contato, msg_conversa.dono, msg_conversa.ultima_em, substr(msg_conversa.previa,1,90) AS previa, " + MSG_NOME_SQL_ + " AS nome FROM fr JOIN msg_conversa ON msg_conversa.id=fr.id WHERE fr.pos<=30 ORDER BY fr.pos";
+  const rs = (await env.DB.prepare(sql).bind(...(canal ? [canal] : []), ...ids).all()).results || [];
+  return etapas.map((e) => {
+    const meus = rs.filter((r) => r.etiqueta_id === e.id);
+    return { etiqueta: { id: e.id, nome: e.nome, cor: e.cor }, total: meus.length ? Number(meus[0].n) || 0 : 0, cartoes: meus.map((r) => ({ conversa: r.id, nome: r.nome || '', contato: r.contato || '', canal: r.canal, previa: r.previa || '', ultima_em: r.ultima_em || '', dono: r.dono || '' })) };
+  });
+}
+/* Mover o cartão = trocar só a etiqueta de venda da pessoa (as outras etiquetas ficam). etiqueta 0 = tirar do funil. Devolve [status, erro] ou [0, resultado]. */
+export async function moverNoFunil_(env, d) {
+  const id = Number(d && d.conversa) || 0, etq = Number(d && d.etiqueta);
+  if (!id) return [400, 'Escolha a conversa que vai mudar de etapa.'];
+  if (!Number.isInteger(etq) || etq < 0) return [400, 'Escolha a etapa da venda.'];
+  const conv = await env.DB.prepare('SELECT id, grupo, ' + MSG_IDENTIDADE_SQL_ + ' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first();
+  if (!conv) return [404, 'Conversa não encontrada.'];
+  if (conv.grupo) return [400, 'O funil de vendas é só para conversas individuais, não para grupos.'];
+  const etapas = (await etiquetas_(env)).filter((e) => e.venda);
+  if (etq && !etapas.some((e) => e.id === etq)) return [400, 'Essa etapa não existe mais. Atualize o funil e tente de novo.'];
+  const outras = ((await env.DB.prepare('SELECT x.etiqueta_id AS id FROM msg_alvo_etiqueta x JOIN msg_etiqueta e ON e.id=x.etiqueta_id WHERE x.alvo=? AND e.venda=0').bind(alvoDe_(conv)).all()).results || []).map((r) => r.id);
+  return [0, { etiquetas: await gravarEtiquetas_(env, conv, outras.concat(etq ? [etq] : [])) }];
+}
 async function convFicha_(env, id) {
   const conv = id ? await env.DB.prepare('SELECT id, canal, contato, grupo, ' + MSG_IDENTIDADE_SQL_ + ' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first() : null;
   if (!conv) return [404, 'Conversa não encontrada.'];
@@ -3950,10 +3989,16 @@ export default {
         if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
         const validas = await etiquetas_(env), quer = (Array.isArray(d.etiquetas) ? d.etiquetas : []).map(Number).filter((x) => validas.some((e) => e.id === x));
         const venda = quer.filter((x) => validas.find((e) => e.id === x).venda), fica = quer.filter((x) => !validas.find((e) => e.id === x).venda).concat(venda.slice(-1));
-        const alvo = alvoDe_(conv), em = agora();
-        await env.DB.batch([env.DB.prepare('DELETE FROM msg_alvo_etiqueta WHERE alvo=?').bind(alvo)].concat(fica.map((x) => env.DB.prepare('INSERT OR IGNORE INTO msg_alvo_etiqueta (alvo, etiqueta_id, em) VALUES (?,?,?)').bind(alvo, x, em))));
-        await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(em, id).run();
-        return J({ ok: true, etiquetas: (await etiquetasDosAlvos_(env, [alvo]))[alvo] || [] });
+        return J({ ok: true, etiquetas: await gravarEtiquetas_(env, conv, fica) });
+      }
+      if (p === '/msg/funil' && req.method === 'GET') {   // v7.40.15: funil de vendas
+        const cf = url.searchParams.get('canal') || 'todos';
+        if (cf !== 'todos' && !MSG_CANAIS.includes(cf)) return J({ ok: false, erro: 'Escolha Todas, Instagram, WhatsApp 1 ou WhatsApp 2.' }, 400);
+        return J({ ok: true, canal: cf, colunas: await funilVendas_(env, cf === 'todos' ? '' : cf) });
+      }
+      if (p === '/msg/funil/mover' && req.method === 'POST') {
+        const [st, r] = await moverNoFunil_(env, await req.json().catch(() => ({})));
+        return st ? J({ ok: false, erro: r }, st) : J(Object.assign({ ok: true }, r));
       }
       if (p === '/msg/notas' && req.method === 'POST') {   // v7.40.3: nota interna, compartilhada entre os canais vinculados da pessoa
         const d = await req.json().catch(() => ({})), id = Number(d.conversa) || 0, texto = String(d.texto || '').trim().slice(0, 1000);
