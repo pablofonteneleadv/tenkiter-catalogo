@@ -8,7 +8,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [7.40.18] - 2026-10-28
 
-- App Mensagens: Voltar após abrir por notificação permanece na lista e ignora respostas atrasadas
+- App Mensagens: Voltar após abrir por notificação permanece na lista e ignora respostas atrasadas; aba Instagram não herda filtros ocultos de grupos ou etiquetas do WhatsApp
 
 
 ## [7.40.17] - 2026-10-28

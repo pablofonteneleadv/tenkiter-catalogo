@@ -24,7 +24,7 @@
   let espiando = false, cfgLeitura = null, avisouCelular = {};
   let selecao = null, timerToque = null, toqueLongo = false;      // v7.22: seleção de várias conversas (para encerrar/reabrir)
   let tipos = { msg: true, grp: false }, contVista = null, contTipos = null;
-  const tipoParam_ = () => (tipos.msg && !tipos.grp ? 'individual' : tipos.grp && !tipos.msg ? 'grupo' : '');
+  const tipoParam_ = () => canal === 'instagram' ? 'individual' : (tipos.msg && !tipos.grp ? 'individual' : tipos.grp && !tipos.msg ? 'grupo' : '');
   let canal = 'todos', filtro = '', busca = '', resumo = null, contagens = null, lista = [], cursor = '', aberta = null, msgs = [], vista = 'lista', painel = '';
   let seqLista = 0, ultIdSrv = 0, nPoll = 0, timerBusca = null, timerLive = null, timerSelo = null, espera = ESPERA_MS, offline = false, abrindo = 0, novasAbaixo = 0, menuAberto = null, aviso = '';
   const rascunhos = {}, elMsgs = new Map(), elConvs = new Map(), pendentes = new Map();
@@ -1292,6 +1292,7 @@
   async function nomesGoogle_(){if(indexandoNomes)return;indexandoNomes=true;try{for(let i=0;i<40;i++){const r=await worker_('/msg/pessoas/google','POST',{});if(!r.ok||r.fim)break;}await carregarLista(true);}finally{indexandoNomes=false;}}
   function pintarLista() {
     const ul = $('ms-lista'), extra = $('ms-extra'); if (!ul || painel === 'metricas' || painel === 'funil') return;
+    ul.hidden = false; extra.hidden = false;
     const vivos = new Set(lista.map((c) => c.id));
     if (selecao) { selecao.forEach((id) => { if (!vivos.has(id)) selecao.delete(id); }); desenharSelbar_(); }
     elConvs.forEach((li, id) => { if (!vivos.has(id)) { li.remove(); elConvs.delete(id); } });
@@ -1301,7 +1302,7 @@
     [...blocos.values()].map(b=>b.sort((a,c)=>String(c.ultima_em).localeCompare(String(a.ultima_em))||c.id-a.id)).sort((a,b)=>String(b[0].ultima_em).localeCompare(String(a[0].ultima_em))||b[0].id-a[0].id).forEach(b=>b.forEach((c,i)=>{const li=linhaConversa(c);li.classList.toggle('ms-vinculada',i>0);li.style.marginLeft=i?'24px':'';li.style.background=i?'#faf8f3':'';if(li!==ref)ul.insertBefore(li,ref);else ref=ref.nextSibling;}));
     extra.textContent = '';
     if (!lista.length) {
-      const m = busca.trim() ? 'Nenhuma conversa encontrada.' : filtro === 'nao_lidas' ? 'Nenhuma conversa não lida. 🎉' : filtro === 'sem_resposta' ? 'Ninguém esperando resposta agora. 🎉' : tipoParam_() === 'grupo' && !filtro ? 'Nenhum grupo aqui.' : filtro === 'ambos' ? 'Ninguém está falando pelos dois WhatsApp agora.' : filtro === 'encerradas' ? 'Nenhuma conversa encerrada. Para encerrar, segure o dedo numa conversa (ou ⋯ → Selecionar conversas).' : 'Ainda não chegou nenhuma mensagem neste canal.';
+      const m = busca.trim() ? 'Nenhuma conversa encontrada.' : etqFiltro ? 'Nenhuma conversa com esta etiqueta neste canal.' : filtro === 'nao_lidas' ? 'Nenhuma conversa não lida. 🎉' : filtro === 'sem_resposta' ? 'Ninguém esperando resposta agora. 🎉' : tipoParam_() === 'grupo' && !filtro ? 'Nenhum grupo aqui.' : filtro === 'ambos' ? 'Ninguém está falando pelos dois WhatsApp agora.' : filtro === 'encerradas' ? 'Nenhuma conversa encerrada. Para encerrar, segure o dedo numa conversa (ou ⋯ → Selecionar conversas).' : 'Ainda não chegou nenhuma mensagem neste canal.';
       extra.appendChild(el('p', 'ms-vazio', m));
     }
   }
@@ -2309,7 +2310,7 @@
       if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { document.addEventListener('tk:camada-fechada', function f(e) { if (e.detail && e.detail.chave === 'ms-conversa') { document.removeEventListener('tk:camada-fechada', f); fecharComHistorico_('overlay-mensagens'); } }); TKCamadas.desempilhar('ms-conversa'); }
       else fecharComHistorico_('overlay-mensagens');
     }
-    else if (a === 'aba') { const eraFunil = painel === 'funil'; selecao = null; desenharSelbar_(); contVista = null; contTipos = null; canal = b.dataset.canal; filtro = ''; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); if (eraFunil) { chrome_(true); abrirFunil_(); } await carregarLista(true); }
+    else if (a === 'aba') { const eraFunil = painel === 'funil'; selecao = null; desenharSelbar_(); contVista = null; contTipos = null; canal = b.dataset.canal; filtro = ''; etqFiltro = 0; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); if (eraFunil) { chrome_(true); abrirFunil_(); } else { $('ms-extra').textContent = 'Carregando conversas…'; } await carregarLista(true); }
     else if (a === 'tipo') {
       const k = b.dataset.tipo, outro = k === 'msg' ? 'grp' : 'msg';
       if (tipos[k] && !tipos[outro]) { tipos[k] = false; tipos[outro] = true; } else tipos[k] = !tipos[k];       // desligar o único ligado = mostrar o outro (nunca fica tudo desligado)
