@@ -118,6 +118,9 @@ async function iniciar(env) {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_etiqueta (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, cor TEXT NOT NULL DEFAULT 'cinza', ordem INTEGER NOT NULL DEFAULT 0, venda INTEGER NOT NULL DEFAULT 0, arquivada INTEGER NOT NULL DEFAULT 0)").run();   // v7.40.4: etiquetas
     await env.DB.prepare('CREATE TABLE IF NOT EXISTS msg_alvo_etiqueta (alvo TEXT NOT NULL, etiqueta_id INTEGER NOT NULL, em TEXT NOT NULL, PRIMARY KEY (alvo, etiqueta_id))').run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_auto_envio (conversa_id INTEGER NOT NULL, tipo TEXT NOT NULL, periodo TEXT NOT NULL, em TEXT NOT NULL, res TEXT DEFAULT '', PRIMARY KEY (conversa_id, tipo, periodo))").run();   // v7.40.9: respostas automáticas já enviadas (não repetir)
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_agenda (id INTEGER PRIMARY KEY AUTOINCREMENT, conversa_id INTEGER NOT NULL, texto TEXT NOT NULL, quando TEXT NOT NULL, autor TEXT DEFAULT '', whats TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'pendente', erro TEXT DEFAULT '', criado_em TEXT NOT NULL, enviado_em TEXT DEFAULT '')").run();   // v7.40.13: mensagens agendadas
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msg_agenda_st ON msg_agenda (status, quando)').run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msg_agenda_conv ON msg_agenda (conversa_id, status)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_conv ON msg_encerramento (conversa_id, em)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_pessoa ON msg_encerramento (pessoa)').run();
   } catch (e) { /* tenta de novo na próxima vez */ }
@@ -3387,6 +3390,47 @@ async function responderMensagem_(env, whats, d) {
   await env.DB.prepare('UPDATE cfg SET valor=? WHERE chave=?').bind(t0 + '|' + JSON.stringify(corpo), chave).run();
   return [200, corpo];
 }
+/* ---- v7.40.13: mensagens agendadas (a atendente escreve agora e o texto sai sozinho na hora marcada) ---- */
+const AGENDA_COLS_ = 'id, conversa_id, texto, quando, autor, status, erro, criado_em, enviado_em';
+const AGENDA_MAX_DIAS_ = 60;
+/** Valida o pedido de agendamento. Devolve [erro] ou [null, {texto, quando}]. */
+export function validarAgenda_(d, agoraMs) {
+  const texto = String(d && d.texto != null ? d.texto : '').replace(/\r\n/g, '\n').trim();
+  if (!texto) return ['Escreva a mensagem antes de agendar.'];
+  if (texto.length > 1000) return ['A mensagem agendada aceita até 1000 letras. Divida em duas.'];
+  const t = Date.parse(String((d && d.quando) || '')), n = agoraMs || Date.now();
+  if (!d || !d.quando || isNaN(t)) return ['Escolha o dia e a hora do envio.'];
+  if (t <= n + 30000) return ['Esse horário já passou. Escolha um horário no futuro.'];
+  if (t > n + AGENDA_MAX_DIAS_ * 86400000) return ['Dá para agendar no máximo ' + AGENDA_MAX_DIAS_ + ' dias à frente.'];
+  return [null, { texto: texto, quando: new Date(t).toISOString() }];
+}
+export async function agendasDaConversa_(env, conversa) {
+  const pendentes = (await env.DB.prepare("SELECT " + AGENDA_COLS_ + " FROM msg_agenda WHERE conversa_id=? AND status IN ('pendente','enviando') ORDER BY quando, id LIMIT 50").bind(conversa).all()).results || [];
+  const historico = (await env.DB.prepare("SELECT " + AGENDA_COLS_ + " FROM msg_agenda WHERE conversa_id=? AND status IN ('enviada','falhou') ORDER BY COALESCE(NULLIF(enviado_em,''),quando) DESC, id DESC LIMIT 10").bind(conversa).all()).results || [];
+  return { pendentes: pendentes, historico: historico };
+}
+/** Roda a cada minuto: envia até 5 agendadas vencidas. Marca "enviando" antes (nunca sai duas vezes) e usa o mesmo envio do POST /msg/enviar. */
+export async function processarAgenda_(env, agoraMs) {
+  await iniciar(env);
+  const t = new Date(agoraMs || Date.now()).toISOString();
+  /* "enviando" há mais de 10 min = o Worker caiu no meio: não reenvia sozinho (pode ter saído); avisa para conferir */
+  await env.DB.prepare("UPDATE msg_agenda SET status='falhou', erro=? WHERE status='enviando' AND quando<?").bind('Ficou sem confirmação. Confira na conversa antes de mandar de novo.', new Date(Date.parse(t) - 10 * 60000).toISOString()).run();
+  const rs = (await env.DB.prepare("SELECT id, conversa_id, texto, whats, autor FROM msg_agenda WHERE status='pendente' AND quando<=? ORDER BY quando, id LIMIT 5").bind(t).all()).results || [];
+  let enviadas = 0;
+  for (const a of rs) {
+    const trava = await env.DB.prepare("UPDATE msg_agenda SET status='enviando' WHERE id=? AND status='pendente'").bind(a.id).run();
+    if (!trava.meta || trava.meta.changes !== 1) continue;          // outra execução já pegou
+    let status = 'falhou', erro = '';
+    try {
+      const [, corpo] = await responderMensagem_(env, a.whats || '', { conversa: a.conversa_id, texto: a.texto, idLocal: 'agenda-' + String(a.id).padStart(6, '0') });
+      if (corpo && corpo.ok) { status = 'enviada'; enviadas++; }
+      else erro = String((corpo && corpo.erro) || 'Não foi possível enviar.').slice(0, 200);
+    } catch (e) { erro = 'Erro inesperado ao enviar. Agende de novo.'; }
+    await env.DB.prepare('UPDATE msg_agenda SET status=?, erro=?, enviado_em=? WHERE id=?').bind(status, erro, agora(), a.id).run();
+    if (status === 'enviada' && a.autor) { try { await env.DB.prepare("UPDATE msg_conversa SET dono=? WHERE id=? AND (dono IS NULL OR dono='')").bind(a.autor, a.conversa_id).run(); } catch (e) { /* dono é conforto */ } }
+  }
+  return { vistas: rs.length, enviadas: enviadas };
+}
 /** Detecta o tipo real do arquivo pelos primeiros bytes (nunca confia no nome nem no tipo declarado). */
 function detectarAnexo_(buf, tipoPedido) {
   const u = new Uint8Array(buf, 0, Math.min(buf.byteLength, 32)), eq = (i, t) => t.split('').every((c, k) => u[i + k] === c.charCodeAt(0));
@@ -3696,6 +3740,7 @@ async function saudeAvisos_(env) {
 export default {
   async scheduled(ev, env, ctx) {
     ctx.waitUntil(processarPushMobile_(env).catch(()=>{}));
+    ctx.waitUntil(processarAgenda_(env).catch(()=>{}));                      // a cada minuto: mensagens agendadas que chegaram na hora
     ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
     ctx.waitUntil(processarFotoIA(env));                                      // a cada minuto: 1 imagem da fila de Fotos com IA (se já puder: cota/limite do dia)
     ctx.waitUntil(filaContatosAuto_(env));                                    // a cada minuto: até 5 números novos viram "TM Cliente …" no Google (se ligado)
@@ -3853,7 +3898,8 @@ export default {
         const rs = await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=?' + where + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...args).all();
         const notas = antes ? [] : ((await env.DB.prepare('SELECT id, texto, autor, em FROM msg_nota WHERE alvo=? ORDER BY em LIMIT 200').bind(conv.pessoa ? String(conv.pessoa) : 'c:' + id).all()).results || []);
         try { conv.etiquetas = (await etiquetasDosAlvos_(env, [alvoDe_(conv)]))[alvoDe_(conv)] || []; } catch (e) { conv.etiquetas = []; }
-        return J({ ok: true, conversa: conv, mensagens: rs.results.reverse(), notas: notas, temMais: rs.results.length === 100, cursor: agora() });
+        let agendadas; if (!antes) { try { agendadas = (await agendasDaConversa_(env, id)).pendentes; } catch (e) { agendadas = []; } }
+        return J({ ok: true, conversa: conv, mensagens: rs.results.reverse(), notas: notas, agendadas: agendadas, temMais: rs.results.length === 100, cursor: agora() });
       }
       if (p === '/msg/etiquetas' && req.method === 'GET') {
         const lista = await etiquetas_(env);
@@ -3937,6 +3983,32 @@ export default {
         const [cod, corpo] = await responderMensagem_(env, req.headers.get('X-TK-Whats') || '', d);
         if (cod === 200 && corpo && corpo.ok && Number(d.conversa)) { try { await env.DB.prepare("UPDATE msg_conversa SET dono=? WHERE id=? AND (dono IS NULL OR dono='')").bind(await meuNomeAtendente_(env, req), Number(d.conversa)).run(); } catch (e) { /* dono é conforto */ } }   // v7.40.6: quem responde primeiro vira o responsável
         return J(corpo, cod);
+      }
+      if (p === '/msg/agendar' && req.method === 'POST') {   // v7.40.13: agendar mensagem
+        const d = await req.json().catch(() => ({})), id = Number(d.conversa) || 0;
+        const conv = id ? await env.DB.prepare('SELECT id FROM msg_conversa WHERE id=?').bind(id).first() : null;
+        if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
+        const [erro, v] = validarAgenda_(d);
+        if (erro) return J({ ok: false, erro: erro }, 400);
+        const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM msg_agenda WHERE conversa_id=? AND status='pendente'").bind(id).first();
+        if (n && n.n >= 20) return J({ ok: false, erro: 'Esta conversa já tem 20 mensagens agendadas. Cancele alguma antes.' }, 409);
+        const whats = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20), autor = await meuNomeAtendente_(env, req), em = agora();
+        const r = await env.DB.prepare('INSERT INTO msg_agenda (conversa_id, texto, quando, autor, whats, status, criado_em) VALUES (?,?,?,?,?,?,?)').bind(id, v.texto, v.quando, autor, whats, 'pendente', em).run();
+        const nova = await env.DB.prepare('SELECT ' + AGENDA_COLS_ + ' FROM msg_agenda WHERE id=?').bind(r.meta && r.meta.last_row_id).first();
+        return J(Object.assign({ ok: true, agendada: nova }, await agendasDaConversa_(env, id)));
+      }
+      if (p === '/msg/agendadas' && req.method === 'GET') {
+        const id = Number(url.searchParams.get('conversa')) || 0;
+        if (!id) return J({ ok: false, erro: 'Escolha uma conversa.' }, 400);
+        return J(Object.assign({ ok: true }, await agendasDaConversa_(env, id)));
+      }
+      if (p === '/msg/agendar/cancelar' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({})), id = Number(d.id) || 0;
+        const a = id ? await env.DB.prepare('SELECT conversa_id, status FROM msg_agenda WHERE id=?').bind(id).first() : null;
+        if (!a) return J({ ok: false, erro: 'Agendamento não encontrado.' }, 404);
+        const r = await env.DB.prepare("UPDATE msg_agenda SET status='cancelada' WHERE id=? AND status='pendente'").bind(id).run();
+        if (!r.meta || r.meta.changes !== 1) return J({ ok: false, erro: a.status === 'cancelada' ? 'Este agendamento já estava cancelado.' : 'Não dá mais para cancelar: a mensagem já ' + (a.status === 'enviando' ? 'está saindo' : a.status === 'enviada' ? 'foi enviada' : 'foi processada') + '.' }, 409);
+        return J(Object.assign({ ok: true }, await agendasDaConversa_(env, a.conversa_id)));
       }
       if (p === '/msg/dono' && req.method === 'POST') {
         const d = await req.json().catch(() => ({})), id = Number(d.conversa) || 0, nome = d.assumir === false ? '' : await meuNomeAtendente_(env, req);

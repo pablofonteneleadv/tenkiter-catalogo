@@ -30,6 +30,7 @@
   const rascunhos = {}, elMsgs = new Map(), elConvs = new Map(), pendentes = new Map();
   const blobs = new Map();                     // mídia já baixada nesta conversa: "id" ou "id|c" (story) -> promessa do endereço local
   let anexoPend = null, gravacao = null, colarFimAte = 0;
+  let agendadas_ = [], timerAgenda_ = null, agendaQuando_ = 0, agendaAtalho_ = '';   // v7.40.13: mensagens agendadas da conversa aberta
 
   // Cache apenas do app, por conta + sessão. Nunca guarda tokens, anexos ou URLs de mídia.
   const APP_RECENTES = new URLSearchParams(location.search).get('app') === 'mensagens';
@@ -361,6 +362,26 @@
       .ms-auto .ms-linha input[type=date] { flex: 1 1 150px; width: auto; min-height: 44px; font-size: 0.9rem; background: #fff; }
       .ms-auto-pe { display: flex; justify-content: flex-end; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid #e6e1d6; background: #fff; }
       .ms-auto-pe .ms-btn { min-width: 120px; min-height: 48px; }
+      /* v7.40.13: agendar mensagem */
+      .ms-agenda { padding: 0 14px; }
+      .ms-agenda-rot { display: block; margin: 4px 0 6px; font-size: 0.85rem; font-weight: 700; color: #2b261f; }
+      .ms-agenda textarea.ms-copia { font: inherit; font-size: 0.95rem; line-height: 1.35; resize: vertical; min-height: 104px; background: #fff; }
+      .ms-agenda-atalhos { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 8px; }
+      .ms-agenda-atalhos .ms-btn { flex: 1 1 auto; font-weight: 600; background: #f3efe6; border: 1px solid transparent; }
+      .ms-agenda-atalhos .ms-btn[aria-pressed=true] { background: #fff4e8; border-color: var(--laranja, #E67E22); color: #5c2e00; }
+      .ms-agenda input[type=datetime-local] { width: 100%; min-height: 44px; font: inherit; font-size: 0.95rem; background: #fff; box-sizing: border-box; }
+      .ms-agenda-res { margin: 6px 0 4px; font-size: 0.85rem; color: #4a443b; min-height: 1.3em; }
+      .ms-agenda-sec { padding: 10px 0 12px; border-bottom: 1px solid #f0ece5; }
+      .ms-agenda-lista { list-style: none; margin: 0; padding: 0; }
+      .ms-agenda-lista li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f0ece5; }
+      .ms-agenda-lista li > div { flex: 1; min-width: 0; }
+      .ms-agenda-lista b { display: block; font-size: 0.85rem; color: #2b261f; }
+      .ms-agenda-lista p { margin: 2px 0 0; font-size: 0.85rem; color: #3d362c; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+      .ms-agenda-lista small { display: block; font-size: 0.75rem; color: #625c53; margin-top: 2px; }
+      .ms-agenda-lista small.falha { color: #8a2b2b; }
+      .ms-agenda-lista .ms-btn { flex: none; }
+      .ms-faixa.ms-agenda-faixa { background: #fffaf2; }
+      .ms-agenda-faixa span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .ms-resp-dica { margin: 8px 12px 0; font-size: 0.78rem; color: #4a443b; }
       .sheet-mensagens .ms-link-btn { min-height: 44px; padding: 0 6px; border: 0; background: none; color: #7a3a00; font: inherit; font-size: 0.78rem; font-weight: 700; text-decoration: underline; cursor: pointer; }
       .ms-atendente { color: #0f6b3f; }
@@ -1426,6 +1447,127 @@
     const save=el('button','prim','Salvar nome e vínculos');save.type='button';save.style.minHeight='48px';save.onclick=async()=>{if(!confirm('Salvar este nome e reunir os canais escolhidos, preservando o histórico?'))return;save.disabled=true;const out=await worker_('/msg/pessoa','POST',{conversa:id,nome:name.value,whatsapp:phone.value,segundo:second.value,semWhatsApp:without.checked,vincular:[...linked]});save.disabled=false;if(!out.ok){aviso_(out.erro||'Não foi possível salvar.');return;}finish();await carregarLista(true);if(aberta&&aberta.id===id){aberta=out.conversa;montarConversa(aberta);pintarFio(false);}};
     const close=el('button','','Cancelar');close.type='button';close.style.minHeight='48px';close.onclick=finish;form.append(save,close);overlay.appendChild(form);document.body.appendChild(overlay);if(window.TKCamadas)TKCamadas.empilhar('ms-pessoa',()=>overlay.remove());name.focus();
   }
+  /* ---- v7.40.13: agendar mensagem (horário de Fortaleza, UTC-3 sem horário de verão) ---- */
+  const FORT_MS_ = 3 * 3600000;
+  const fortIso_ = (ms) => new Date(ms - FORT_MS_).toISOString();                     // "relógio de Fortaleza" em formato ISO
+  const fortDia_ = (ms) => fortIso_(ms).slice(0, 10);
+  const fortParaMs_ = (diaHora) => Date.parse(diaHora + ':00-03:00');                  // "AAAA-MM-DDTHH:MM" de Fortaleza → instante
+  function quandoRotulo_(iso) {
+    const t = Date.parse(iso); if (isNaN(t)) return '';
+    const dia = fortDia_(t), hojeD = fortDia_(Date.now()), amanhaD = fortDia_(Date.now() + 86400000), h = fortIso_(t).slice(11, 16);
+    if (dia === hojeD) return 'hoje ' + h;
+    if (dia === amanhaD) return 'amanhã ' + h;
+    return dia.slice(8, 10) + '/' + dia.slice(5, 7) + ' ' + h;
+  }
+  function atalhoMs_(k) {
+    if (k === '1h') return Math.ceil((Date.now() + 3600000) / 60000) * 60000;
+    const amanha = fortDia_(Date.now() + 86400000);
+    return fortParaMs_(amanha + (k === 'am8' ? 'T08:00' : 'T14:00'));
+  }
+  function desenharFaixaAgenda_() {
+    const velha = $('ms-agenda-faixa'); if (velha) velha.remove();
+    clearTimeout(timerAgenda_); timerAgenda_ = null;
+    const pai = $('ms-conversa'), wrap = pai && pai.querySelector('.ms-fio-wrap'); if (!wrap || !aberta) return;
+    const pend = agendadas_.filter((x) => x.status === 'pendente' || x.status === 'enviando').sort((x, y) => Date.parse(x.quando) - Date.parse(y.quando));
+    if (!pend.length) return;
+    const f = el('div', 'ms-faixa ms-agenda-faixa'); f.id = 'ms-agenda-faixa'; f.setAttribute('role', 'status');
+    const t = pend.length === 1 ? '1 mensagem agendada para ' + quandoRotulo_(pend[0].quando) : pend.length + ' mensagens agendadas · a próxima sai ' + quandoRotulo_(pend[0].quando);
+    const sp = el('span', '', '🕓 ' + t); sp.title = t; f.appendChild(sp);
+    const ver = botao('ms-btn', 'Ver', 'agenda-abrir'); ver.setAttribute('aria-label', 'Ver mensagens agendadas'); f.appendChild(ver);
+    pai.insertBefore(f, wrap);
+    const conv = aberta.id, falta = Date.parse(pend[0].quando) - Date.now() + 75000;    // passou a hora: confere de novo (o servidor envia a cada minuto)
+    timerAgenda_ = setTimeout(() => recarregarAgenda_(conv), Math.min(Math.max(falta, 15000), 2147000000));
+  }
+  async function recarregarAgenda_(conv) {
+    if (!aberta || aberta.id !== conv) return;
+    const r = await worker_('/msg/agendadas?conversa=' + encodeURIComponent(conv), 'GET');
+    if (!aberta || aberta.id !== conv || !r.ok) return;
+    agendadas_ = r.pendentes || []; desenharFaixaAgenda_();
+    const g = $('ms-gaveta'); if (g && g.dataset.tipo === 'agenda') desenharListaAgenda_(r);
+  }
+  async function abrirAgenda_() {
+    if (!aberta) return;
+    const conv = aberta, ta0 = $('ms-texto'), rascunho = ta0 ? ta0.value.trim() : '';
+    const corpo = gaveta_('Agendar mensagem'); if (!corpo) return;
+    const g = $('ms-gaveta'); g.dataset.tipo = 'agenda'; const gen = g.dataset.gen;
+    agendaQuando_ = 0; agendaAtalho_ = '';
+    const w = el('div', 'ms-agenda');
+    const s1 = el('section', 'ms-agenda-sec'), lb = el('label', 'ms-agenda-rot', 'Mensagem'); lb.htmlFor = 'ms-ag-texto';
+    const ta = el('textarea', 'ms-copia'); ta.id = 'ms-ag-texto'; ta.rows = 4; ta.maxLength = 1000; ta.value = rascunho.slice(0, 1000); ta.placeholder = 'Ex.: Oi! A peça que você pediu chegou. Posso separar?';
+    s1.append(lb, ta);
+    if (conv.grupo) s1.appendChild(el('p', 'ms-auto-exp', 'Vai para todo o grupo.'));
+    const s2 = el('section', 'ms-agenda-sec'), lq = el('span', 'ms-agenda-rot', 'Quando enviar'); lq.id = 'ms-ag-rot-q';
+    const at = el('div', 'ms-agenda-atalhos'); at.setAttribute('role', 'group'); at.setAttribute('aria-labelledby', 'ms-ag-rot-q');
+    [['1h', 'Daqui a 1 hora'], ['am8', 'Amanhã 8h'], ['am14', 'Amanhã 14h']].forEach(([k, t]) => { const b = botao('ms-btn', t, 'agenda-atalho', { k: k }); b.setAttribute('aria-pressed', 'false'); at.appendChild(b); });
+    const ld = el('label', 'ms-agenda-rot', 'Ou escolha dia e hora (horário de Fortaleza)'); ld.htmlFor = 'ms-ag-quando';
+    const dq = el('input', 'ms-copia'); dq.type = 'datetime-local'; dq.id = 'ms-ag-quando'; dq.step = '60';
+    dq.min = fortIso_(Date.now() + 60000).slice(0, 16); dq.max = fortIso_(Date.now() + 60 * 86400000).slice(0, 16);
+    dq.addEventListener('input', () => { agendaAtalho_ = ''; agendaQuando_ = dq.value ? fortParaMs_(dq.value) : 0; marcarAgenda_(); });
+    const res = el('p', 'ms-agenda-res'); res.id = 'ms-ag-res'; res.setAttribute('aria-live', 'polite');
+    s2.append(lq, at, ld, dq, res);
+    const s3 = el('section', 'ms-agenda-sec'); s3.id = 'ms-ag-lista'; s3.appendChild(el('p', 'ms-auto-exp', 'Carregando as agendadas…'));
+    w.append(s1, s2, s3); corpo.appendChild(w);
+    const pe = el('div', 'ms-auto-pe'), bt = botao('ms-btn prim', 'Agendar', 'agenda-salvar'); bt.id = 'ms-ag-salvar'; pe.appendChild(bt); g.appendChild(pe);
+    marcarAgenda_();
+    if (!rascunho) setTimeout(() => { if ($('ms-ag-texto') && larga()) $('ms-ag-texto').focus(); }, 0);
+    const r = await worker_('/msg/agendadas?conversa=' + encodeURIComponent(conv.id), 'GET');
+    const g2 = $('ms-gaveta'); if (!g2 || g2.dataset.gen !== gen) return;
+    if (!r.ok) { s3.textContent = ''; s3.appendChild(el('p', 'ms-auto-exp', r.erro || 'Não foi possível carregar as agendadas agora.')); return; }
+    agendadas_ = r.pendentes || []; desenharFaixaAgenda_(); desenharListaAgenda_(r);
+  }
+  function marcarAgenda_() {
+    document.querySelectorAll('#ms-gaveta [data-ms=agenda-atalho]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === agendaAtalho_)));
+    const dq = $('ms-ag-quando'); if (dq && agendaAtalho_ && agendaQuando_) dq.value = fortIso_(agendaQuando_).slice(0, 16);
+    const res = $('ms-ag-res'); if (!res) return;
+    res.textContent = agendaQuando_ ? (agendaQuando_ <= Date.now() ? 'Esse horário já passou. Escolha outro.' : 'Sai ' + quandoRotulo_(new Date(agendaQuando_).toISOString()) + ', sozinha.') : 'Escolha um atalho ou o dia e a hora.';
+  }
+  function desenharListaAgenda_(r) {
+    const s3 = $('ms-ag-lista'); if (!s3) return; s3.textContent = '';
+    const pend = r.pendentes || [], hist = r.historico || [];
+    s3.appendChild(el('span', 'ms-agenda-rot', pend.length ? 'Agendadas nesta conversa' : 'Nenhuma mensagem agendada nesta conversa.'));
+    const item = (a, comCancelar) => {
+      const li = el('li'), d = el('div');
+      const st = a.status === 'enviada' ? 'Enviada ' + quandoRotulo_(a.enviado_em || a.quando) : a.status === 'falhou' ? 'Não enviada' : a.status === 'enviando' ? 'Saindo agora…' : quandoRotulo_(a.quando);
+      d.append(el('b', '', st), el('p', '', a.texto));
+      const sub = el('small', a.status === 'falhou' ? 'falha' : '', a.status === 'falhou' ? (a.erro || 'Não foi possível enviar.') : (a.autor ? 'Agendada por ' + a.autor : ''));
+      if (sub.textContent) d.appendChild(sub);
+      li.appendChild(d);
+      if (comCancelar && a.status === 'pendente') { const c = botao('ms-btn', 'Cancelar', 'agenda-cancelar', { id: String(a.id) }); c.setAttribute('aria-label', 'Cancelar a mensagem agendada para ' + quandoRotulo_(a.quando)); li.appendChild(c); }
+      return li;
+    };
+    if (pend.length) { const ul = el('ul', 'ms-agenda-lista'); pend.forEach((a) => ul.appendChild(item(a, true))); s3.appendChild(ul); }
+    if (hist.length) {
+      s3.appendChild(el('span', 'ms-agenda-rot', 'Últimas enviadas ou com falha'));
+      const ul = el('ul', 'ms-agenda-lista'); hist.forEach((a) => ul.appendChild(item(a, false))); s3.appendChild(ul);
+    }
+  }
+  async function salvarAgenda_(b) {
+    if (!aberta) return;
+    const ta = $('ms-ag-texto'), texto = ta ? ta.value.trim() : '';
+    if (!texto) { aviso_('Escreva a mensagem antes de agendar.'); if (ta) ta.focus(); return; }
+    if (!agendaQuando_) { aviso_('Escolha quando a mensagem deve sair.'); const a1 = document.querySelector('#ms-gaveta [data-ms=agenda-atalho]'); if (a1) a1.focus(); return; }
+    if (agendaQuando_ <= Date.now()) { aviso_('Esse horário já passou. Escolha um horário no futuro.'); return; }
+    const conv = aberta.id; b.disabled = true;
+    const r = await worker_('/msg/agendar', 'POST', { conversa: conv, texto: texto, quando: new Date(agendaQuando_).toISOString() });
+    b.disabled = false;
+    if (!r.ok) { aviso_(r.erro || 'Não foi possível agendar agora. Tente de novo.'); b.focus(); return; }
+    if (!aberta || aberta.id !== conv) return;
+    const comp = $('ms-texto');
+    if (comp && comp.value.trim() === texto) { comp.value = ''; comp.dispatchEvent(new Event('input', { bubbles: true })); }   // o texto do compositor foi agendado: não fica para enviar de novo
+    if (ta) ta.value = '';
+    agendaQuando_ = 0; agendaAtalho_ = ''; const dq = $('ms-ag-quando'); if (dq) dq.value = ''; marcarAgenda_();
+    agendadas_ = r.pendentes || []; desenharFaixaAgenda_(); desenharListaAgenda_(r);
+    aviso_('Mensagem agendada para ' + quandoRotulo_(r.agendada.quando) + '.'); { const f = larga() ? ta : document.querySelector('#ms-gaveta [data-ms=gaveta-fechar]'); if (f) f.focus(); }   // o botão ficou desligado durante o envio: o foco volta para dentro da gaveta (no celular sem abrir o teclado)
+  }
+  async function cancelarAgenda_(b) {
+    if (!aberta || !confirm('Cancelar esta mensagem agendada? Ela não será enviada.')) return;
+    const conv = aberta.id; b.disabled = true;
+    const r = await worker_('/msg/agendar/cancelar', 'POST', { id: Number(b.dataset.id) });
+    if (!r.ok) { b.disabled = false; aviso_(r.erro || 'Não foi possível cancelar agora.'); recarregarAgenda_(conv); return; }
+    if (!aberta || aberta.id !== conv) return;
+    agendadas_ = r.pendentes || []; desenharFaixaAgenda_(); desenharListaAgenda_(r); aviso_('Agendamento cancelado.');
+    const prox = document.querySelector('#ms-gaveta [data-ms=agenda-cancelar]') || $('ms-ag-texto'); if (prox) prox.focus();
+  }
   function cabecalhoConversa(c) {
     const cab = el('div', 'ms-cab');
     const v = botao('ms-ico ms-voltar', '←', 'voltar'); v.setAttribute('aria-label', 'Voltar para as conversas');
@@ -1482,7 +1624,7 @@
     const cresce = () => { if (expandirAtalho_(ta)) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); desenharPrevia_(); };
     ta.addEventListener('input', cresce);
     ta.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && window.matchMedia('(pointer: fine)').matches) { ev.preventDefault(); enviar(); } });
-    cresce(); desenharStage_(); desenharAssina_(false);
+    cresce(); desenharStage_(); desenharAssina_(false); desenharFaixaAgenda_();
   }
   /* ---- v7.34: prévia do link (miniatura) escolhida em cada mensagem do WhatsApp; o último jeito usado em cada canal fica lembrado neste aparelho ---- */
   const LINK_RE_ = /https?:\/\/[^\s<>"']+/i;
@@ -1562,7 +1704,7 @@
     const w = ++abrindo;
     espiando = !!espiar;
     const jaNaTela = aberta && aberta.id === id;
-    if (!jaNaTela) { elMsgs.clear(); msgs = []; novasAbaixo = 0; limparBlobs_(); limparAnexo_(true); fecharLuz_(); }
+    if (!jaNaTela) { elMsgs.clear(); msgs = []; novasAbaixo = 0; limparBlobs_(); limparAnexo_(true); fecharLuz_(); agendadas_ = []; }
     const path='/msg/mensagens?conversa=' + encodeURIComponent(id);
     const salvo=APP_RECENTES ? await recentes_(path) : null;
     if(w!==abrindo)return;
@@ -1587,7 +1729,7 @@
     }
     cacheConversa=false;
     aviso_('');
-    const c = r.conversa; aberta = c;
+    const c = r.conversa; aberta = c; if (Array.isArray(r.agendadas)) agendadas_ = r.agendadas;
     ultIdSrv = r.mensagens.reduce((m, x) => (x.id > m ? x.id : m), 0);
     msgs = r.mensagens.concat((r.notas || []).map(notaMsg_)).concat(Array.from(pendentes.values()).filter((p) => p.conversa === id).map((p) => p.msg));
     montarConversa(c); pintarFio(true);
@@ -1920,6 +2062,10 @@
     else if (a === 'resp-editar') abrirRespostas_(true);
     else if (a === 'resp-usar') { const r = respostas_()[Number(b.dataset.i)]; if (r) colocarResposta_(r.x); }
     else if (a === 'auto-cfg') abrirAuto_();
+    else if (a === 'agenda-abrir') { fecharMenu(); abrirAgenda_(); }
+    else if (a === 'agenda-atalho') { agendaAtalho_ = b.dataset.k; agendaQuando_ = atalhoMs_(agendaAtalho_); marcarAgenda_(); aviso_(''); }
+    else if (a === 'agenda-salvar') await salvarAgenda_(b);
+    else if (a === 'agenda-cancelar') await cancelarAgenda_(b);
     else if (a === 'auto-salvar') await salvarAuto_(b);
     else if (a === 'auto-feriado-add') { const di = $('ms-auto-data'), v = di ? di.value : ''; if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) { aviso_('Escolha a data do feriado.'); if (di) di.focus(); } else if (autoEdit_) { if (autoEdit_.feriados.indexOf(v) < 0) autoEdit_.feriados = autoEdit_.feriados.concat(v).sort(); desenharAuto_(); const d2 = $('ms-auto-data'); if (d2) d2.focus(); aviso_('Feriado incluído. Toque em Salvar para valer.'); } }
     else if (a === 'auto-feriado-tirar' && autoEdit_) { autoEdit_.feriados = autoEdit_.feriados.filter((d) => d !== b.dataset.d); desenharAuto_(); const d2 = $('ms-auto-data'); if (d2) d2.focus(); aviso_('Feriado retirado. Toque em Salvar para valer.'); }
@@ -1968,7 +2114,7 @@
     else if (a === 'esquecer-conta') { guardarContas_(contasSalvas_().filter((x) => x.whatsapp !== b.dataset.w)); abrirTrocaUsuario_(); }
     else if (a === 'outra-conta') { lembrarSessao_(); limparSessao(); location.reload(); }
     else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Configurações (leitura e nome)…', 'leitura-cfg'], ['Respostas automáticas…', 'auto-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar'], '-', ['Trocar usuário…', 'trocar-usuario']]).concat(window.TKAndroid ? ['-', ['Atualizar app', 'app-atualizar'], ['Permissões do app', 'app-permissoes']] : []));
-    else if (a === 'menu-conversa' && aberta) abrirMenu(b, [['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
+    else if (a === 'menu-conversa' && aberta) abrirMenu(b, [['Agendar mensagem…', 'agenda-abrir'], '-', ['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
     else if (a === 'exp') baixar(b.dataset.params, b.dataset.rotulo);
     else if (a === 'copiar-ia') copiarParaIA();
     else if (a === 'painel') abrirPainel(30);

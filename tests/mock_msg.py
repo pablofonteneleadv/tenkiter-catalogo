@@ -65,6 +65,10 @@ def cont(s, canal, tipo=""):
     return {"conversas": len(cs), "nao_lidas": sum(1 for c in cs if c["nao_lidas"] > 0), "sem_resposta": sum(1 for c in cs if not c["grupo"] and c["ult_dir"] == "entrada"), "grupos": sum(1 for c in cs if c["grupo"]),
             "encerradas": len(todas) - len(cs), "ambos": sum(1 for c in cs if c["outro_id"]), "individuais": sum(1 for c in cs if not c["grupo"])}
 
+def agendas(s, cid):
+    ag = [x for x in s.get("agenda", []) if x["conversa_id"] == cid]
+    return {"pendentes": sorted([x for x in ag if x["status"] in ("pendente", "enviando")], key=lambda x: x["quando"]), "historico": [x for x in ag if x["status"] in ("enviada", "falhou")][-10:]}
+
 def tratar(route, path, method, body, s):
     """Devolve True se tratou. Mutações feitas pelo teste em s ficam visíveis às próximas chamadas."""
     s["calls"].append(path)
@@ -106,7 +110,24 @@ def tratar(route, path, method, body, s):
         return J({"ok":True,"conversa":c,"pessoa":pessoa(c),"nome":c["nome"],"whatsapp":c["contato"] if c["canal"] != "instagram" else "","segundo":"","canais":[enfeitar(s,x) for x in s["convs"] if pessoa(x) == pessoa(c)]}) or True
     if path == "/msg/mensagens":
         cid = int(q["conversa"]); c = enfeitar(s, next(x for x in s["convs"] if x["id"] == cid))
-        return J({"ok": True, "conversa": c, "mensagens": sorted([x for x in s["msgs"] if x["conversa_id"] == cid], key=lambda x: (x["enviada_em"], x["id"])), "temMais": False, "cursor": agora()}) or True
+        return J({"ok": True, "conversa": c, "mensagens": sorted([x for x in s["msgs"] if x["conversa_id"] == cid], key=lambda x: (x["enviada_em"], x["id"])), "agendadas": agendas(s, cid)["pendentes"], "temMais": False, "cursor": agora()}) or True
+    if path == "/msg/agendadas":   # v7.40.13: mensagens agendadas
+        return J(dict({"ok": True}, **agendas(s, int(q["conversa"])))) or True
+    if path == "/msg/agendar":
+        s.setdefault("agendar_posts", []).append(body)
+        texto = str(body.get("texto") or "").strip(); quando = str(body.get("quando") or "")
+        if not texto: return J({"ok": False, "erro": "Escreva a mensagem antes de agendar."}, 400) or True
+        if not quando or quando <= agora(): return J({"ok": False, "erro": "Esse horário já passou. Escolha um horário no futuro."}, 400) or True
+        s["seq"] += 1
+        a = {"id": s["seq"], "conversa_id": body["conversa"], "texto": texto, "quando": quando, "autor": "Ana", "status": "pendente", "erro": "", "criado_em": agora(), "enviado_em": ""}
+        s.setdefault("agenda", []).append(a)
+        return J(dict({"ok": True, "agendada": a}, **agendas(s, body["conversa"]))) or True
+    if path == "/msg/agendar/cancelar":
+        a = next((x for x in s.get("agenda", []) if x["id"] == body.get("id")), None)
+        if not a: return J({"ok": False, "erro": "Agendamento não encontrado."}, 404) or True
+        if a["status"] != "pendente": return J({"ok": False, "erro": "Não dá mais para cancelar: a mensagem já foi enviada."}, 409) or True
+        a["status"] = "cancelada"; s.setdefault("cancelados", []).append(a["id"])
+        return J(dict({"ok": True}, **agendas(s, a["conversa_id"]))) or True
     if path == "/msg/novidades":
         cid = int(q.get("conversa") or 0); dep = int(q.get("depois") or 0); desde = q.get("desde", "")
         # a "folga" de 3 s do servidor real: devolve o que mudou desde o cursor
