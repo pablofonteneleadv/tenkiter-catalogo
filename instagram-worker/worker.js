@@ -117,6 +117,7 @@ async function iniciar(env) {
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msg_nota_alvo ON msg_nota (alvo, em)').run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_etiqueta (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, cor TEXT NOT NULL DEFAULT 'cinza', ordem INTEGER NOT NULL DEFAULT 0, venda INTEGER NOT NULL DEFAULT 0, arquivada INTEGER NOT NULL DEFAULT 0)").run();   // v7.40.4: etiquetas
     await env.DB.prepare('CREATE TABLE IF NOT EXISTS msg_alvo_etiqueta (alvo TEXT NOT NULL, etiqueta_id INTEGER NOT NULL, em TEXT NOT NULL, PRIMARY KEY (alvo, etiqueta_id))').run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_auto_envio (conversa_id INTEGER NOT NULL, tipo TEXT NOT NULL, periodo TEXT NOT NULL, em TEXT NOT NULL, res TEXT DEFAULT '', PRIMARY KEY (conversa_id, tipo, periodo))").run();   // v7.40.9: respostas automáticas já enviadas (não repetir)
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_conv ON msg_encerramento (conversa_id, em)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_pessoa ON msg_encerramento (pessoa)').run();
   } catch (e) { /* tenta de novo na próxima vez */ }
@@ -2617,6 +2618,7 @@ async function gravarMensagem_(env, canal, m) {
   await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=?")
     .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, t, c.id).run();
   if (!saida && !m.grupo && canal !== 'instagram' && /^\d{10,15}$/.test(m.contato)) { try { if ((await cfgGet(env, 'contatos_auto')) === '1') await enfileirarContato_(env, canal, m.contato, m.nome); } catch (e) { /* o cadastro no Google é conforto: a mensagem já foi gravada */ } }
+  m._conversaId = c.id; m._msgId = Number(r.meta.last_row_id) || 0;      // v7.40.9: para a resposta automática
   if(!saida && !m.grupo && Date.parse(m.em)>Date.now()-300000){try{await mobileTables_(env);await env.DB.prepare('INSERT OR IGNORE INTO msg_push_outbox(mensagem,conversa,canal,chave,criado) VALUES(?,?,?,?,?)').bind(Number(r.meta.last_row_id),c.id,canal,crypto.randomUUID(),t).run();}catch(_){/* falha de aviso não interrompe o recebimento */}}
   return true;
 }
@@ -2690,7 +2692,7 @@ async function igAppSecret_(env) {
 }
 async function msgPausado_(env, canal) { try { return (await cfgGet(env, 'msg_pausa_' + canal)) === '1'; } catch (e) { return false; } }
 /** Webhooks públicos. Sempre responde rápido; só aceita com o segredo certo no caminho. */
-async function rotaWebhookMensagens_(env, req, url) {
+async function rotaWebhookMensagens_(env, req, url, ctx) {
   const ok = (c, o) => new Response(JSON.stringify(o), { status: c, headers: { 'Content-Type': 'application/json' } });
   const partes = url.pathname.split('/').filter(Boolean);                      // ['wh','wafly','1','<segredo>'] | ['wh','instagram','<segredo>']
   await iniciar(env);
@@ -2712,7 +2714,7 @@ async function rotaWebhookMensagens_(env, req, url) {
     if (!assin || !igualConst_(assin, esperado)) { await cfgSet(env, 'msg_ult_instagram', JSON.stringify({ em: agora(), res: 'assinatura', tem: !!assin })); return ok(401, { ok: false }); }
     if (await msgPausado_(env, 'instagram')) return ok(200, { ok: true, pausado: true });
     let b = null; try { b = JSON.parse(bruto); } catch (e) { return ok(400, { ok: false }); }
-    const lista = normalizarInstagram_(b); let novas = 0; for (const m of lista) { try { await prepararMidia_(env, 'instagram', m); } catch (e) { /* a mídia é conforto */ } if (await gravarMensagem_(env, 'instagram', m)) novas++; }
+    const lista = normalizarInstagram_(b); let novas = 0; for (const m of lista) { try { await prepararMidia_(env, 'instagram', m); } catch (e) { /* a mídia é conforto */ } if (await gravarMensagem_(env, 'instagram', m)) { novas++; await agendarAuto_(ctx, env, 'instagram', m); } }
     try { await aplicarLeiturasInstagram_(env, leiturasInstagram_(b)); } catch (e) { /* a leitura é conforto: nunca derruba a gravação */ }
     await cfgSet(env, 'msg_ult_instagram', JSON.stringify({ em: agora(), res: 'ok', itens: lista.length, novas: novas, forma: lista.length ? '' : formaInstagram_(b) }));
     return ok(200, { ok: true, novas: novas });
@@ -2739,7 +2741,9 @@ async function rotaWebhookMensagens_(env, req, url) {
     // v7.40.5: diagnóstico do texto comum (só nomes de campos e sinais de status, sem conteúdo) para comparar WhatsApp 1 e 2
     if (m.tipo === 'texto' && !m.ctxTipo) { try { await cfgSet(env, 'msg_ult_forma_txt_' + canal, JSON.stringify({ em: agora(), campos: Object.keys(b).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 40), isStatusReply: b.isStatusReply === true, temRef: !!b.referenceMessageId, temStatusReply: !!b.statusReply, interno: Object.keys((b && b.text) || {}).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 20) })); } catch (e) { /* diagnóstico */ } }
     if (m.tipo !== 'texto' || m.ctxTipo) { try { await cfgSet(env, 'msg_ult_forma_' + canal, JSON.stringify({ em: agora(), tipo: m.tipo, ctx: m.ctxTipo, copiada: !!m.midiaChave, contexto: Object.keys((b.statusReply && typeof b.statusReply==='object')?b.statusReply:{}).filter(k=>/^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0,30), campos: Object.keys(b).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 40), interno: Object.keys((b && b[({ imagem: 'image', 'vídeo': 'video', 'áudio': 'audio', documento: 'document', figurinha: 'sticker', texto:'text' })[m.tipo]]) || {}).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 20) })); } catch (e) { /* diagnóstico é conforto */ } }
-    return ok(200, { ok: true, nova: await gravarMensagem_(env, canal, m) });
+    const nova = await gravarMensagem_(env, canal, m);
+    if (nova) await agendarAuto_(ctx, env, canal, m);
+    return ok(200, { ok: true, nova: nova });
   }
   return ok(404, { ok: false });
 }
@@ -2907,6 +2911,121 @@ async function etiquetas_(env) {
     rs = (await env.DB.prepare('SELECT id, nome, cor, ordem, venda FROM msg_etiqueta WHERE arquivada=0 ORDER BY ordem, id').all()).results || [];
   }
   return rs;
+}
+/* v7.40.9: atalhos de resposta rápida (semeados uma vez, sem apagar os que a equipe já salvou) e respostas automáticas (desligadas por padrão).
+ * Os dados da loja que mudam (chave Pix, nome da titular, valores) NUNCA ficam aqui: a semente traz [chave Pix], [nome] e [valor …] para a atendente completar no app. */
+const MSG_ATALHOS_PADRAO_ = [
+  ['/oi', 'Oi, tudo bem? Aqui é a [nome], da TENKiTER 😊 Me diz o que você tá procurando que eu te mostro.'],
+  ['/preco', 'Esse sai por R$ [valor no Pix] no Pix ou dinheiro, ou R$ [valor no cartão] em até 10x sem juros. Qual tamanho você usa? Vejo aqui se tem.'],
+  ['/foto', 'Conseguiu ver as fotos? Se quiser, mando de outro jeito ou vejo outra cor pra você.'],
+  ['/tamanho', 'Tem sim! Qual número você veste? Já confiro as cores que tem no seu tamanho.'],
+  ['/entrega', 'Aqui em Crateús a gente entrega por mototáxi, a taxa é R$ 5. Me manda seu endereço com um ponto de referência que eu combino a entrega.'],
+  ['/outracidade', 'Pra outra cidade a gente manda por carro de linha ou ônibus. Me diz qual é a cidade que eu vejo certinho como fica pra você.'],
+  ['/pix', 'Pode fazer o Pix nessa chave: [chave Pix] ([nome]). Quando pagar, me manda o comprovante que eu já separo sua peça.'],
+  ['/endereco', 'A loja fica na Rua Dr. Moreira da Rocha, 759, Centro. Abrimos de segunda a sexta das 7h30 às 18h e sábado das 7h30 às 14h. https://www.google.com/maps/search/?api=1&query=Rua%20Dr.%20Moreira%20da%20Rocha%20759%20Crate%C3%BAs%20CE'],
+  ['/retorno', 'Oi! Passando pra saber se você ainda quer aquela peça. Quer que eu separe pra você?'],
+  ['/obrigado', 'Prontinho, sua compra tá separada! Obrigada pela preferência 😊 Depois me conta se gostou.'],
+  ['/saiu', 'Sua encomenda já saiu com o mototáxi! Fica de olho no celular que ele já tá chegando.']
+];
+async function respostasRapidas_(env) {
+  let lista = null; try { lista = JSON.parse((await cfgGet(env, 'msg_respostas')) || 'null'); } catch (e) { lista = null; }
+  if (!(await cfgGet(env, 'msg_resp_semeada'))) {
+    const base = Array.isArray(lista) ? lista.slice() : [], tem = new Set(base.map((r) => String((r && r.t) || '').trim().toLowerCase()));
+    for (const [t, x] of MSG_ATALHOS_PADRAO_) if (base.length < 30 && !tem.has(t)) base.push({ t: t, x: x });
+    await cfgSet(env, 'msg_respostas', JSON.stringify(base)); await cfgSet(env, 'msg_resp_semeada', '1'); lista = base;
+  }
+  return Array.isArray(lista) ? lista : null;
+}
+/* Horário da loja em Fortaleza (UTC-3, sem horário de verão), em minutos do dia: seg–sex 7h30–18h; sáb 7h30–14h; domingo fechado.
+ * Feriado da lista (dia em que o comércio abre) = 8h–13h, em qualquer dia da semana. O fim é exclusivo (sábado 14:00 já está fechado). */
+const HORARIO_LOJA_ = { 1: [450, 1080], 2: [450, 1080], 3: [450, 1080], 4: [450, 1080], 5: [450, 1080], 6: [450, 840] }, HORARIO_FERIADO_ = [480, 780];
+const DIAS_SEMANA_ = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+const FUSO_MS_ = 3 * 3600000, DIA_MS_ = 86400000;
+export function textoAbertura_(dias, diaSemana, minutos, dataIso) {
+  const hora = Math.floor(minutos / 60) + 'h' + (minutos % 60 ? String(minutos % 60).padStart(2, '0') : '');
+  const quando = dias === 0 ? 'hoje' : dias === 1 ? 'amanhã' : dias < 7 ? DIAS_SEMANA_[diaSemana] : 'dia ' + String(dataIso).slice(8, 10) + '/' + String(dataIso).slice(5, 7);
+  return quando + ' às ' + hora;
+}
+/** Situação da loja no instante ms: { aberta, feriado } ou { aberta:false, abreEm (ISO, UTC), abertura: "amanhã às 7h30" }. */
+export function horarioLoja_(ms, feriados) {
+  const F = new Set(Array.isArray(feriados) ? feriados : []), L = ms - FUSO_MS_, dia0 = Math.floor(L / DIA_MS_), min = (L - dia0 * DIA_MS_) / 60000;
+  const faixa = (dia) => { const d = new Date(dia * DIA_MS_), iso = d.toISOString().slice(0, 10); if (F.has(iso)) return { f: HORARIO_FERIADO_, feriado: true, iso: iso, dow: d.getUTCDay() }; const f = HORARIO_LOJA_[d.getUTCDay()]; return f ? { f: f, feriado: false, iso: iso, dow: d.getUTCDay() } : null; };
+  const hoje = faixa(dia0);
+  if (hoje && min >= hoje.f[0] && min < hoje.f[1]) return { aberta: true, feriado: hoje.feriado };
+  for (let k = 0; k <= 21; k++) {
+    const x = faixa(dia0 + k); if (!x || (k === 0 && min >= x.f[0])) continue;
+    return { aberta: false, feriado: x.feriado, abreEm: new Date((dia0 + k) * DIA_MS_ + x.f[0] * 60000 + FUSO_MS_).toISOString(), abertura: textoAbertura_(k, x.dow, x.f[0], x.iso) };
+  }
+  return { aberta: false, feriado: false, abreEm: '', abertura: 'em breve' };
+}
+const MSG_AUTO_PADRAO_ = {
+  boasVindas: { ligado: false, texto: 'Oi! Que bom ter você aqui 😊 Já já uma das meninas te responde. Se já viu alguma peça, pode mandar o print ou o código que agiliza.' },
+  foraHorario: { ligado: false, texto: 'Oi! A loja tá fechada agora, mas sua mensagem ficou guardada aqui. A gente volta {abertura} e te responde 😊 Se quiser, já deixa o print da peça e seu tamanho.' },
+  feriados: []
+};
+const textoAuto_ = (v) => String(v == null ? '' : v).replace(/\r\n/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, 1000);
+const feriadosLimpos_ = (l) => Array.from(new Set((Array.isArray(l) ? l : []).map(String).filter((x) => /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(x) && new Date(x + 'T12:00:00Z').toISOString().slice(0, 10) === x))).sort().slice(-60);
+/** Configuração das respostas automáticas: o que foi salvo por cima do padrão (desligadas; textos padrão; nenhum feriado). */
+async function msgAuto_(env) {
+  let c = null; try { c = JSON.parse((await cfgGet(env, 'msg_auto')) || 'null'); } catch (e) { c = null; }
+  const out = JSON.parse(JSON.stringify(MSG_AUTO_PADRAO_));
+  for (const k of ['boasVindas', 'foraHorario']) if (c && c[k] && typeof c[k] === 'object') { if (typeof c[k].ligado === 'boolean') out[k].ligado = c[k].ligado; const t = textoAuto_(c[k].texto); if (t) out[k].texto = t; }
+  if (c && Array.isArray(c.feriados)) out.feriados = feriadosLimpos_(c.feriados);
+  return out;
+}
+async function salvarMsgAuto_(env, d) {
+  const atual = await msgAuto_(env);
+  for (const k of ['boasVindas', 'foraHorario']) if (d && d[k] && typeof d[k] === 'object') { if (typeof d[k].ligado === 'boolean') atual[k].ligado = d[k].ligado; if (typeof d[k].texto === 'string') atual[k].texto = textoAuto_(d[k].texto) || MSG_AUTO_PADRAO_[k].texto; }
+  if (d && Array.isArray(d.feriados)) atual.feriados = feriadosLimpos_(d.feriados);
+  await cfgSet(env, 'msg_auto', JSON.stringify(atual));
+  return atual;
+}
+/** Webhook: agenda a resposta automática sem atrasar o aceite (ctx.waitUntil); sem ctx (testes), roda na hora. Nunca derruba o webhook. */
+const autoElegivel_ = (canal, m) => !!(m && m._conversaId && m.direcao === 'entrada' && !m.grupo && MSG_CANAIS.includes(canal) && m.tipo !== 'reação' && !(m.ctxTipo === 'story' && !String(m.texto || '').trim()));
+async function agendarAuto_(ctx, env, canal, m) {
+  if (!autoElegivel_(canal, m)) return;
+  let cfg; try { cfg = await msgAuto_(env); } catch (e) { return; }
+  if (!cfg.boasVindas.ligado && !cfg.foraHorario.ligado) return;            // desligadas: nada é agendado
+  const p = respostaAutomatica_(env, canal, m, cfg).catch(() => null);
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p); else await p;
+}
+/** Boas-vindas (loja aberta, 12 h sem nenhuma mensagem na conversa) ou Fora do horário (loja fechada, 1 vez por período fechado).
+ *  Nunca em grupo, nunca para mensagem da loja, nunca para resposta a status sem texto nem para reação. Sai pela mesma função do /msg/enviar,
+ *  marcada como automática (por='auto'): aparece na conversa, não vira "dono" e não tira a conversa de "falta responder". */
+async function respostaAutomatica_(env, canal, m, cfgPronta) {
+  if (!autoElegivel_(canal, m)) return null;
+  const t = Date.parse(m.em); if (isNaN(t) || Math.abs(Date.now() - t) > 10 * 60000) return null;      // só mensagem que acabou de chegar (nada de histórico reenviado)
+  const cfg = cfgPronta || (await msgAuto_(env)); if (!cfg.boasVindas.ligado && !cfg.foraHorario.ligado) return null;
+  const conv = m._conversaId, h = horarioLoja_(t, cfg.feriados);
+  let tipo, periodo, texto;
+  if (h.aberta) {
+    if (!cfg.boasVindas.ligado) return null;
+    const antes = await env.DB.prepare('SELECT 1 AS x FROM msg_mensagem WHERE conversa_id=? AND id<>? AND enviada_em>=? LIMIT 1').bind(conv, m._msgId || 0, new Date(t - 12 * 3600000).toISOString()).first();
+    if (antes) return null;
+    tipo = 'boas_vindas'; periodo = String(m.extId).slice(0, 200); texto = cfg.boasVindas.texto;
+  } else {
+    if (!cfg.foraHorario.ligado) return null;
+    const equipe = await env.DB.prepare("SELECT 1 AS x FROM msg_mensagem WHERE conversa_id=? AND direcao='saida' AND COALESCE(por,'')<>'auto' AND enviada_em>=? LIMIT 1").bind(conv, new Date(t - 30 * 60000).toISOString()).first();
+    if (equipe) return null;                                                     // alguém da equipe está conversando agora: não interrompe com "loja fechada"
+    tipo = 'fora_horario'; periodo = h.abreEm || 'sem-abertura'; texto = cfg.foraHorario.texto.replace(/\{abertura\}/g, h.abertura);
+  }
+  const reserva = await env.DB.prepare('INSERT OR IGNORE INTO msg_auto_envio (conversa_id, tipo, periodo, em, res) VALUES (?,?,?,?,?)').bind(conv, tipo, periodo, agora(), 'enviando').run();
+  if (!reserva.meta || reserva.meta.changes !== 1) return null;                 // já saiu (ou está saindo) neste período
+  let res = { ok: false, erro: 'falha inesperada' };
+  try {
+    const antes = await env.DB.prepare('SELECT previa, ult_dir, nao_lidas FROM msg_conversa WHERE id=?').bind(conv).first(), t0 = agora();
+    const idLocal = 'auto' + Array.from(crypto.getRandomValues(new Uint8Array(10)), (x) => x.toString(16).padStart(2, '0')).join('');
+    const [cod, corpo] = await responderMensagem_(env, 'auto', { conversa: conv, texto: texto, idLocal: idLocal });
+    res = corpo && corpo.ok ? { ok: true } : { ok: false, incerto: !!(corpo && corpo.incerto), erro: String((corpo && corpo.erro) || ('HTTP ' + cod)).slice(0, 200) };
+    if (antes && (res.ok || res.incerto)) await env.DB.prepare("UPDATE msg_conversa SET previa=?, ult_dir=?, nao_lidas=MAX(nao_lidas, ?) WHERE id=? AND ult_dir='saida' AND NOT EXISTS (SELECT 1 FROM msg_mensagem q WHERE q.conversa_id=? AND q.direcao='saida' AND COALESCE(q.por,'')<>'auto' AND q.gravada_em>=?)").bind(antes.previa, antes.ult_dir, Number(antes.nao_lidas) || 0, conv, conv, t0).run();
+  } catch (e) { res = { ok: false, erro: 'falha ao enviar' }; }
+  try {
+    if (res.ok || res.incerto) await env.DB.prepare('UPDATE msg_auto_envio SET res=? WHERE conversa_id=? AND tipo=? AND periodo=?').bind(res.ok ? 'ok' : 'incerta', conv, tipo, periodo).run();
+    else await env.DB.prepare('DELETE FROM msg_auto_envio WHERE conversa_id=? AND tipo=? AND periodo=?').bind(conv, tipo, periodo).run();   // falhou de vez: a próxima mensagem do cliente tenta de novo
+    await env.DB.prepare('DELETE FROM msg_auto_envio WHERE em<?').bind(new Date(Date.now() - 45 * DIA_MS_).toISOString()).run();
+    await cfgSet(env, 'msg_auto_diag', JSON.stringify({ em: agora(), tipo: tipo, canal: canal, ok: !!res.ok, incerto: !!res.incerto, erro: res.ok ? '' : res.erro }));
+  } catch (e) { /* diagnóstico é conforto */ }
+  return Object.assign({ tipo: tipo }, res);
 }
 async function etiquetasDosAlvos_(env, alvos) {
   const mapa = {}; const lista = Array.from(new Set(alvos.filter(Boolean))).slice(0, 90); if (!lista.length) return mapa;
@@ -3188,7 +3307,9 @@ async function processarEventoZernio_(env, b) {
     }
   }
   try { await prepararMidia_(env, 'instagram', m); } catch (e) { /* a mídia é conforto */ }
-  return gravarMensagem_(env, 'instagram', m);
+  const nova = await gravarMensagem_(env, 'instagram', m);
+  if (nova) { try { await respostaAutomatica_(env, 'instagram', m); } catch (e) { /* resposta automática nunca derruba o recebimento */ } }
+  return nova;
 }
 async function repararContextoInstagram_(env,id){
   const c=await env.DB.prepare('SELECT id,canal,contato FROM msg_conversa WHERE id=?').bind(id).first();
@@ -3314,7 +3435,7 @@ function comDemora_(linhas) {
     if (m.conversa_id !== conv) { conv = m.conversa_id; aberto = null; }
     m.demora_min = '';
     if (m.direcao === 'entrada') { if (aberto === null) aberto = Date.parse(m.enviada_em); }
-    else if (aberto !== null) { m.demora_min = Math.max(0, Math.round((Date.parse(m.enviada_em) - aberto) / 60000)); aberto = null; }
+    else if (aberto !== null && m.por !== 'auto') { m.demora_min = Math.max(0, Math.round((Date.parse(m.enviada_em) - aberto) / 60000)); aberto = null; }
   }
   return linhas;
 }
@@ -3341,13 +3462,13 @@ async function exportarMensagens_(env, q) {
     tipo = 'text/csv; charset=utf-8';
   } else if (formato === 'json') {
     const porConv = new Map();
-    for (const m of linhas) { if (!porConv.has(m.conversa_id)) porConv.set(m.conversa_id, { conversa: m.conversa_id, canal: MSG_NOME_CANAL_[m.canal] || m.canal, contato: m.contato, nome: m.nome, grupo: !!m.grupo, mensagens: [] }); porConv.get(m.conversa_id).mensagens.push({ data_hora: dataBR_(m.enviada_em), iso: m.enviada_em, quem: m.direcao === 'saida' ? 'loja' : (autorDe_(m) || 'cliente'), tipo: m.tipo, texto: m.texto, status: m.direcao === 'saida' ? (m.status || '') : undefined, demora_primeira_resposta_min: m.demora_min === '' ? undefined : m.demora_min }); }
+    for (const m of linhas) { if (!porConv.has(m.conversa_id)) porConv.set(m.conversa_id, { conversa: m.conversa_id, canal: MSG_NOME_CANAL_[m.canal] || m.canal, contato: m.contato, nome: m.nome, grupo: !!m.grupo, mensagens: [] }); porConv.get(m.conversa_id).mensagens.push({ data_hora: dataBR_(m.enviada_em), iso: m.enviada_em, quem: m.direcao === 'saida' ? (m.por === 'auto' ? 'loja (automática)' : 'loja') : (autorDe_(m) || 'cliente'), tipo: m.tipo, texto: m.texto, status: m.direcao === 'saida' ? (m.status || '') : undefined, demora_primeira_resposta_min: m.demora_min === '' ? undefined : m.demora_min }); }
     corpo = JSON.stringify({ exportado_em: agora(), fuso: 'America/Fortaleza (UTC-3)', cortado: cortou, conversas: Array.from(porConv.values()) }, null, 1); tipo = 'application/json; charset=utf-8';
   } else {
     const partes = []; let atual = null;
     for (const m of linhas) {
       if (m.conversa_id !== atual) { atual = m.conversa_id; partes.push((partes.length ? '\n' : '') + '=== ' + (MSG_NOME_CANAL_[m.canal] || m.canal) + ' · ' + rotuloContato_(m) + (m.grupo ? ' (grupo)' : '') + ' ===') ; }
-      const quem = m.direcao === 'saida' ? 'Loja' + (m.demora_min !== '' ? ' (respondeu em ' + m.demora_min + ' min)' : '') : (autorDe_(m) || 'Cliente');
+      const quem = m.direcao === 'saida' ? (m.por === 'auto' ? 'Loja (automática)' : 'Loja') + (m.demora_min !== '' ? ' (respondeu em ' + m.demora_min + ' min)' : '') : (autorDe_(m) || 'Cliente');
       partes.push('[' + dataBR_(m.enviada_em) + '] ' + quem + ': ' + ((m.texto || '') + (m.tipo && m.tipo !== 'texto' ? (m.texto ? ' ' : '') + '[' + m.tipo + ']' : '')).replace(/\n/g, '\n    '));
     }
     corpo = '﻿# Conversas da TENKiTER Modas (horário de Fortaleza)\n# "Cliente" = quem escreveu para a loja; "Loja" = respostas da equipe.\n\n' + partes.join('\n') + '\n'; tipo = 'text/plain; charset=utf-8';
@@ -3530,7 +3651,7 @@ async function limpezaContatos_(env, d) {
 async function metricasMensagens_(env, canal, dias) {
   dias = [7, 30, 90].includes(Number(dias)) ? Number(dias) : 30;
   const desde = new Date(Date.now() - dias * 86400000).toISOString();
-  const rs = await env.DB.prepare('SELECT m.conversa_id, m.direcao, m.enviada_em FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0 AND m.enviada_em>=?' + (canal ? ' AND c.canal=?' : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT 30000').bind(...(canal ? [desde, canal] : [desde])).all();
+  const rs = await env.DB.prepare("SELECT m.conversa_id, m.direcao, m.enviada_em FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0 AND COALESCE(m.por,'')<>'auto' AND m.enviada_em>=?" + (canal ? ' AND c.canal=?' : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT 30000').bind(...(canal ? [desde, canal] : [desde])).all();
   /* v2.13: encerramentos entram na linha do tempo: Concluído/Vendeu/Parou de responder valem como atendimento resolvido naquela hora
    * (sem mensagem da loja não é demora); conversa marcada como Engano ou spam fica fora das métricas. */
   const enc = (await env.DB.prepare('SELECT e.conversa_id, e.motivo, e.em AS enviada_em FROM msg_encerramento e JOIN msg_conversa c ON c.id=e.conversa_id WHERE c.grupo=0 AND e.em>=?' + (canal ? ' AND c.canal=?' : '') + ' LIMIT 20000').bind(...(canal ? [desde, canal] : [desde])).all()).results;
@@ -3590,7 +3711,7 @@ export default {
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
     if (url.pathname.indexOf('/wh/zernio/') === 0 && req.method === 'POST') { try { const rz = await rotaZernio_(env, req, url, ctx); if (rz.status >= 500) await anotarFalha_(env, url.pathname, rz.status); return rz; } catch (e) { await anotarFalha_(env, url.pathname, 500); return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
     if (url.pathname.indexOf('/wh/') === 0) { try {
-      const resposta = await rotaWebhookMensagens_(env, req, url);
+      const resposta = await rotaWebhookMensagens_(env, req, url, ctx);
       if (req.method === 'POST' && resposta.ok) {
         const recebido = await resposta.clone().json().catch(() => null);
         // A mensagem já está persistida; push não atrasa nem derruba o aceite do webhook.
@@ -3919,7 +4040,7 @@ export default {
       if (p === '/msg/config' && req.method === 'GET') {
         const diag = {}; for (const c of MSG_CANAIS) { try { diag[c] = JSON.parse((await cfgGet(env, 'msg_leitura_diag_' + c)) || 'null'); } catch (e) { diag[c] = null; } }
         const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
-        let respostas = null; try { respostas = JSON.parse((await cfgGet(env, 'msg_respostas')) || 'null'); } catch (e) { respostas = null; }
+        const respostas = await respostasRapidas_(env);   // v7.40.9: semeia os atalhos uma vez
         return J({ ok: true, config: await msgCfg_(env), ultimaLeitura: diag, meuNome: quem ? ((await cfgGet(env, 'msg_atendente_' + quem)) || '') : '', respostas: respostas });
       }
       if (p === '/msg/config' && req.method === 'POST') {
@@ -3936,9 +4057,14 @@ export default {
         let respostas;
         if (d && Array.isArray(d.respostas)) {
           respostas = d.respostas.map((r) => ({ t: String((r && r.t) || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40), x: String((r && r.x) || '').replace(/\r\n/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, 1000) })).filter((r) => r.t && r.x).slice(0, 30);
-          await cfgSet(env, 'msg_respostas', JSON.stringify(respostas));
-        } else { try { respostas = JSON.parse((await cfgGet(env, 'msg_respostas')) || 'null'); } catch (e) { respostas = null; } }
+          await cfgSet(env, 'msg_respostas', JSON.stringify(respostas)); await cfgSet(env, 'msg_resp_semeada', '1');
+        } else respostas = await respostasRapidas_(env);
         return J({ ok: true, config: atual, meuNome: meuNome, respostas: respostas });
+      }
+      if (p === '/msg/auto' && (req.method === 'GET' || req.method === 'POST')) {   // v7.40.9: respostas automáticas (desligadas por padrão)
+        const auto = req.method === 'POST' ? await salvarMsgAuto_(env, await req.json().catch(() => ({}))) : await msgAuto_(env);
+        let diag = null; try { diag = JSON.parse((await cfgGet(env, 'msg_auto_diag')) || 'null'); } catch (e) { diag = null; }
+        return J({ ok: true, auto: auto, agora: horarioLoja_(Date.now(), auto.feriados), ultimo: diag });
       }
       if (p === '/msg/exportar' && req.method === 'GET') {
         const q = {}; for (const k of ['canal', 'conversa', 'formato', 'de', 'ate']) q[k] = url.searchParams.get(k) || '';
