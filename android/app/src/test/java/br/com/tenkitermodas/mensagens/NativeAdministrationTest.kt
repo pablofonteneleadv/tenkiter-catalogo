@@ -39,7 +39,7 @@ class NativeAdministrationTest {
             return when{
                 path=="/msg/config"->JSONObject().put("ok",true).put("meuNome","Clarice").put("config",JSONObject().put("assinatura",true).put("lerCelular",JSONObject().put("whatsapp1",true).put("whatsapp2",false).put("instagram",true)))
                 path.startsWith("/msg/metricas")->JSONObject().put("ok",true).put("dias",if(path.contains("dias=7"))7 else 30).put("entradas",24).put("saidas",20).put("conversas",5).put("medianaMin",JSONObject.NULL).put("ate5min",70).put("aguardando",JSONObject().put("total",2).put("maisAntigas",JSONArray().put(JSONObject().put("id",1).put("nome","Cliente teste").put("desde","2026-10-27T00:00:00Z")))).put("porHora",JSONArray((0..23).map{JSONObject().put("hora",it).put("entradas",it).put("medianaMin",5)}))
-                path.startsWith("/msg/contatos/situacao")->JSONObject().put("ok",true).put("ligada",linked).put("conta","teste@example.invalid").apply{if(backup)put("backup",JSONObject().put("em","2026-10-27T00:00:00Z").put("total",2))}
+                path.startsWith("/msg/contatos/situacao")->JSONObject().put("ok",true).put("ligada",linked).put("conta","teste@example.invalid").apply{if(backup){put("backup",JSONObject().put("em","2026-10-27T00:00:00Z").put("total",2));put("relatorio",JSONObject().put("total",2))}}
                 path=="/msg/contatos/backup"->JSONObject().put("ok",true).put("fim",body?.optString("pagina")=="next").put("proxima",if(body?.optString("pagina")=="next")""else"next").put("pasta","folder-test-123").put("lidos",if(body?.optString("pagina")=="next")2 else 1).put("totalPessoas",2)
                 path=="/msg/contatos/relatorio"&&body?.optString("etapa")=="inicio"->JSONObject().put("ok",true)
                 path=="/msg/contatos/relatorio"&&body?.optString("etapa")=="parte"->JSONObject().put("ok",true).put("lidos",if(body.optString("pagina")=="next")2 else 1).put("total",2).put("proxima",if(body.optString("pagina")=="next")""else"next")
@@ -91,6 +91,15 @@ class NativeAdministrationTest {
         f.fake.linked=true;f.ui.contacts();val d=dialog("Google Contatos");button(d,"Fazer cópia de segurança").performClick();assertTrue(f.fake.writes.isEmpty());dialog("Fazer cópia dos contatos?").getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         waitFor{f.fake.writes.size==2};dialog("Google Contatos")
         val first=f.fake.writes[0].second;val second=f.fake.writes[1].second;assertTrue(first.getBoolean("partes"));assertFalse(first.has("pagina"));assertEquals("next",second.getString("pagina"));assertEquals("folder-test-123",second.getString("pasta"));assertFalse(f.ui.active.not())
+    }}
+    @Test fun cleanupRequiresConfirmationAndMakesBackupAndReportBeforeMutations(){Fixture().use{f->
+        f.fake.linked=true;f.fake.backup=true;f.ui.contacts();button(dialog("Google Contatos"),"Ver último relatório").performClick();val report=dialog("Relatório dos contatos")
+        button(report,"Aplicar a limpeza aprovada").performClick();val confirm=dialog("Aplicar limpeza no Google?");assertTrue(f.fake.writes.isEmpty());confirm.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();assertTrue(f.fake.writes.isEmpty())
+        button(report,"Aplicar a limpeza aprovada").performClick();dialog("Aplicar limpeza no Google?").getButton(AlertDialog.BUTTON_POSITIVE).performClick();waitFor{f.fake.writes.size==10};dialog("Google Contatos")
+        assertEquals(listOf("/msg/contatos/backup","/msg/contatos/backup","/msg/contatos/relatorio","/msg/contatos/relatorio","/msg/contatos/relatorio","/msg/contatos/relatorio","/msg/contatos/limpeza","/msg/contatos/limpeza","/msg/contatos/limpeza","/msg/contatos/limpeza"),f.fake.writes.map{it.first});assertEquals(listOf("juntar","padronizar","criar","fim"),f.fake.writes.takeLast(4).map{it.second.getString("etapa")})
+    }}
+    @Test fun automaticContactsDoNotChangeUntilSavedAndConfirmed(){Fixture().use{f->
+        f.fake.linked=true;f.ui.contacts();val d=dialog("Google Contatos");val check=all(d.window!!.decorView).filterIsInstance<CheckBox>().first{it.text.startsWith("Cadastrar números")};check.performClick();assertTrue(f.fake.writes.isEmpty());button(d,"Salvar cadastro automático").performClick();assertTrue(f.fake.writes.isEmpty());dialog("Alterar cadastro automático?").getButton(AlertDialog.BUTTON_POSITIVE).performClick();waitFor{f.fake.writes.size==1};assertEquals("/msg/contatos/auto",f.fake.writes.single().first);assertTrue(f.fake.writes.single().second.getBoolean("ligado"))
     }}
     @Test fun bridgeSetupMasksTheKeyAndDoesNotSaveBeforeTheUserChooses(){Fixture().use{f->
         f.ui.contacts();val d=dialog("Google Contatos");val fields=all(d.window!!.decorView).filterIsInstance<EditText>()

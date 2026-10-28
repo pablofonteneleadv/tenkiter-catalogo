@@ -21,14 +21,15 @@ Referência: ações do controlador `admin-mensagens.js`, mantidas nas rotas exi
 | `painel`, `painel-dias`, `fechar-painel` | Painel nativo com 7/30/90 dias, canais, indicadores, espera, gráfico/detalhe de horas, exportar e fechar |
 | `conexao`, `ligar`, `pausar` | Conexões e gravação: WhatsApps, pausa/retomada, diagnóstico e confirmação explícita |
 | `segredo`, `assinar` | Diagnóstico Instagram: segredo Meta mascarado, guardar no servidor e assinatura de mensagens |
+| `ponte-limpar`, `ponte-auto` | Aplicar limpeza com confirmação, cópia/relatório novos antes de juntar/padronizar/criar; progresso/parada e cadastro automático salvo explicitamente |
 | `ponte-ligar`, `ponte-backup`, `ponte-relatorio`, `ponte-ver`, `ponte-desligar` | Google Contatos: ponte, cópia no Drive, relatório somente leitura/detalhes e desligamento |
 
-A versão 7.35 foi integrada sem sobrescrever prévia de links, Zernio ou o novo contrato de contatos do site. No nativo, a escolha de prévia aparece no compositor e usa `/msg/enviar` com os mesmos campos; Google Contatos usa `partes` e `etapa: inicio/parte/fim`, exibe progresso e permite parar após a parte corrente. Nenhuma configuração Zernio foi modificada: ela pertence a Conexões da Gestão, fora do módulo de atendimento.
+A versão 7.38.2 foi integrada sem sobrescrever prévia de links, Zernio ou o novo contrato de contatos do site. No nativo, a escolha de prévia aparece no compositor e usa `/msg/enviar` com os mesmos campos; Google Contatos usa `partes` e `etapa: inicio/parte/fim`, exibe progresso e permite parar após a parte corrente. Nenhuma configuração Zernio foi modificada: ela pertence a Conexões da Gestão, fora do módulo de atendimento.
 
 ## Verificação e limites
 
 - `NativeInboxTest` (19): gesto real despachado por ListView/filhos e Espiar, atualização durante gesto, seleção/bulk, abertura/leitura, filtros, rascunhos, paginação/histórico além de mil, estados e viewports. O teste antigo que chamava o listener manualmente não demonstrava o gesto; foi substituído.
 - `NativeToolsTest` (7): produtos/seleção/estoque/busca/link, respostas, preços com 17 fixtures do catálogo, anexos e microfone/nenhum reenvio automático.
-- `NativeAdministrationTest` (10): configuração salva explicitamente, métricas/periodicidade/canal, exportação e datas, cópia sem sessão, limpeza após revogação, pausa confirmada, ponte/relatório sem mutação implícita, controles alcançáveis em várias larguras.
+- `NativeAdministrationTest` (12): configuração salva explicitamente, métricas/periodicidade/canal, exportação e datas, cópia sem sessão, limpeza após revogação, pausa confirmada, ponte/relatório sem mutação implícita, controles alcançáveis em várias larguras.
 - Serviços e Android simulados (API35/Robolectric); sem efeitos em conversas, conexões ou contatos reais. Sem teste físico de notificações, instalação, codecs ou TalkBack. Notificações existentes foram preservadas; não se afirma que o Android sempre expande o aviso.
-- Janela local e exportações têm limites documentados no [guia](APP-2.2.md). O compartilhamento abre o seletor Android, não envia automaticamente para alguém. Relatório de contatos nunca aplica limpeza.
+- Janela local e exportações têm limites documentados no [guia](APP-2.2.md). O compartilhamento abre o seletor Android, não envia automaticamente para alguém. Gerar relatório nunca aplica limpeza; Aplicar limpeza é uma ação separada, confirmada pelo usuário.

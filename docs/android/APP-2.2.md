@@ -13,7 +13,7 @@ No menu **⋮** da lista:
 - **Painel de atendimento:** espera atual, primeira resposta, encerramentos, perguntas por hora, canais e períodos de 7/30/90 dias. Toque nas conversas que esperam há mais tempo para atender.
 - **Configurações de leitura e nome:** confirmação de leitura por canal, últimas tentativas, nome do atendente e assinatura compartilhada. Só Salvar altera a configuração.
 - **Conexões e gravação:** ativar recebimento/envios/leituras nos WhatsApps, pausar/retomar, diagnósticos WhatsApp e Instagram, guardar segredo Meta, assinar mensagens e copiar webhook protegido. Confirme as operações de alteração.
-- **Google Contatos:** ligar a ponte existente, fazer cópia no Drive, gerar/ver relatório e desligar. Relatório não junta nem apaga contatos. A aplicação de limpeza não faz parte dessa tela.
+- **Google Contatos:** ligar a ponte existente, fazer cópia no Drive, gerar/ver relatório e desligar. Relatório não junta nem apaga contatos. **Aplicar a limpeza aprovada**, no relatório, pede confirmação e faz cópia nova antes de juntar/padronizar/criar contatos; ao terminar liga o cadastro automático. Essa operação altera contatos reais, diferentemente de gerar o relatório.
 - **Exportar conversas:** TXT para IA, CSV ou JSON; todas, canal ou conversa; datas inicial e final. O Android abre Salvar/Compartilhar e o usuário escolhe o destino. Arquivos grandes podem ser limitados pelo servidor, com aviso para dividir por datas.
 
 No menu de uma conversa: encerrar/reabrir, marcar não lida, abrir no outro WhatsApp, leitura/assinatura, copiar texto para IA e exportar. **Espiar** conserva não lida e oculta o envio; **Abrir para responder** inicia atendimento normal. Produtos, respostas rápidas, anexos e gravação continuam disponíveis.
@@ -30,8 +30,8 @@ A lista local mostra até mil conversas por consulta; busca também consulta o t
 
 A prévia de links acompanha o painel web atual: ao escrever um link no WhatsApp, **Mostrar prévia do link (miniatura)** aparece acima do campo; começa desmarcada e lembra a escolha por canal. Não se aplica a anexos ou Instagram. Produtos/seleções usam o título correspondente quando o catálogo já foi consultado.
 
-Cópia e relatório de Google Contatos usam partes, com andamento visível, tela mantida acesa enquanto o app está aberto e **Parar após esta parte**. A cópia requer a ponte 1.1 já publicada. Se interromper ou perder conexão, recomece; nenhuma limpeza é aplicada.
+Cópia e relatório de Google Contatos usam partes, com andamento visível, tela mantida acesa enquanto o app está aberto e **Parar após esta parte**. A cópia requer a ponte atualizada (1.2 para limpeza). Se interromper ou perder conexão, recomece; relatório/cópia não aplicam limpeza. Na limpeza confirmada, alterações já aplicadas permanecem se parar.
 
 O menu Atendimento completo continua como alternativa, mas as operações listadas acima já são nativas. Veja [matriz de funções](PARIDADE-ATENDIMENTO-2.2.md) e [revisão visual](../revisoes/android-paridade-2.2.md).
 
-36 testes Robolectric, lint Release e compilação assinada passaram. Instalação, teclado real, TalkBack, microfone/codecs, compartilhamento com outros apps e entrega de notificação com app fechado precisam de conferência no aparelho. Nenhuma mensagem, notificação ou alteração de conexão real foi usada como teste.
+38 testes Robolectric, lint Release e compilação assinada passaram. Instalação, teclado real, TalkBack, microfone/codecs, compartilhamento com outros apps e entrega de notificação com app fechado precisam de conferência no aparelho. Nenhuma mensagem, notificação ou alteração de conexão real foi usada como teste.

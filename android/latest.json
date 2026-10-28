@@ -1,8 +1,8 @@
 {
   "versionCode": 5,
   "versionName": "2.2.0",
-  "bytes": 4553293,
-  "sha256": "3ecc3d73eecdef40f3dab6aab216d56b3b9cd4cc3fe0c215c36dbe076a92f7c9",
+  "bytes": 4554309,
+  "sha256": "844da43301ae0a3452b2d3b41cb8cef1f84a9b59841f01f1839b6e9940d28cbd",
   "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.2.0/TENKiTER-Mensagens-2.2.0.apk",
-  "notes": "Seleção por toque longo ou Selecionar, Encerrar visível, painel, exportações, leitura/assinatura, conexões e Google Contatos com progresso. Produtos com fotos/estoque; prévia de links e histórico anterior no app."
+  "notes": "Seleção por toque longo ou Selecionar, Encerrar visível e ferramentas do atendimento no app: painel, exportações, produtos, respostas, anexos, leitura, conexões e Google Contatos com progresso. Prévia de links, histórico anterior e notificações preservadas."
 }

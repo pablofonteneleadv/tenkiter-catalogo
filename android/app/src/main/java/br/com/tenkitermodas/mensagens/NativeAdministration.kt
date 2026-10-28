@@ -157,6 +157,12 @@ class NativeAdministration(private val activity:Activity,private val scope:Corou
             box.addView(button("Gerar relatório da limpeza"){
                 builder().setTitle("Gerar relatório?").setMessage("O relatório somente lê os contatos em partes. Não junta, corrige ou apaga contatos.").setPositiveButton("Confirmar"){_,_->contactsJob(true)}.setNegativeButton("Cancelar",null).show()
             }.apply{isEnabled=backup!=null})
+            r.optJSONObject("limpeza")?.let{last->box.addView(text("Última limpeza: "+stamp(last.optString("em"))+" · ${last.optInt("juntados")} pessoas juntadas · ${last.optInt("padronizados")} padronizados · ${last.optInt("criados")} novos"))}
+            val automatic=CheckBox(activity).apply{text="Cadastrar números novos como TM Cliente no Google";minHeight=dp(48);isChecked=r.optBoolean("auto")};box.addView(automatic)
+            box.addView(button("Salvar cadastro automático"){
+                confirm("Alterar cadastro automático?",if(automatic.isChecked)"Cada número novo do WhatsApp poderá criar um contato TM Cliente no Google."else"Os próximos números não serão cadastrados automaticamente.",{repo.administration("/msg/contatos/auto",JSONObject().put("ligado",automatic.isChecked))}){toast("Cadastro automático atualizado.");close();contacts()}
+            })
+            r.optJSONObject("fila")?.let{queue->box.addView(text("Cadastro automático: ${queue.optInt("feitos")} criados · ${queue.optInt("pendentes")} na fila · ${queue.optInt("falhas")} com erro"))}
             box.addView(button("Ver último relatório"){report(r.optJSONObject("relatorio"))})
             box.addView(button("Desligar ponte"){
                 confirm("Desligar a ponte?","A conexão com Google Contatos será removida. Nenhum contato será apagado.",{repo.administration("/msg/contatos/config",JSONObject().put("desligar",true))}){close();contacts()}
@@ -164,35 +170,49 @@ class NativeAdministration(private val activity:Activity,private val scope:Corou
         }
         sheet("Google Contatos",box)
     }}
-    private fun contactsJob(reporting:Boolean){
+    private fun contactsJob(reporting:Boolean,cleaning:Boolean=false){
         val box=column();val label=text("Preparando…");box.addView(label)
         val progress=ProgressBar(activity,null,android.R.attr.progressBarStyleHorizontal).apply{max=100;isIndeterminate=true};box.addView(progress)
-        box.addView(text("Mantenha esta tela aberta. Parar não altera os contatos; uma nova tentativa recomeça a operação."))
+        box.addView(text(if(cleaning)"Mantenha esta tela aberta. Se parar, alterações já aplicadas permanecem. Confira o resultado antes de continuar."else"Mantenha esta tela aberta. Parar não altera os contatos; uma nova tentativa recomeça a operação."))
         val stop=java.util.concurrent.atomic.AtomicBoolean(false)
-        val d=builder().setTitle(if(reporting)"Lendo contatos"else"Copiando contatos").setView(box).setCancelable(false).setNegativeButton("Parar após esta parte",null).show()
+        val d=builder().setTitle(if(cleaning)"Aplicando limpeza"else if(reporting)"Lendo contatos"else"Copiando contatos").setView(box).setCancelable(false).setNegativeButton("Parar após esta parte",null).show()
         d.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener{stop.set(true);it.isEnabled=false;label.text="Parando após esta parte…"}
         activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val owner=repo.store.stampedAuth()
         fun currentOwner()=owner.second==repo.store.generation&&owner.first?.owner==repo.store.auth()?.owner
         work({
-            fun check(){if(stop.get())throw Exception("Operação interrompida. Os contatos não foram alterados.");if(!currentOwner())throw AccessRevoked();if(!scope.isActive)throw CancellationException()}
+            fun check(){if(stop.get())throw Exception(if(cleaning)"Limpeza interrompida. O que já foi feito permanece; confira o resultado."else"Operação interrompida. Os contatos não foram alterados.");if(!currentOwner())throw AccessRevoked();if(!scope.isActive)throw CancellationException()}
             fun call(path:String,body:JSONObject):JSONObject{check();return repo.administration(path,body)}
-            try{
-                if(reporting)call("/msg/contatos/relatorio",JSONObject().put("etapa","inicio"))
-                var page="";var folder="";var finished=false;var latest=JSONObject()
+            fun update(title:String,r:JSONObject,count:String="lidos",totalKey:String="total"){
+                val read=r.optInt(count);val total=maxOf(read,r.optInt(totalKey))
+                activity.runOnUiThread{if(d.isShowing&&currentOwner()){label.text="$title · $read de $total";progress.isIndeterminate=total==0;if(total>0)progress.progress=(read.toLong()*100/total).toInt()}}
+            }
+            fun pages(report:Boolean):JSONObject{
+                if(report)call("/msg/contatos/relatorio",JSONObject().put("etapa","inicio"))
+                var page="";var folder=""
                 for(part in 0 until 400){
-                    val payload=if(reporting)JSONObject().put("etapa","parte")else JSONObject().put("partes",true)
+                    val payload=if(report)JSONObject().put("etapa","parte")else JSONObject().put("partes",true)
                     if(page.isNotBlank())payload.put("pagina",page);if(folder.isNotBlank())payload.put("pasta",folder)
-                    latest=call(if(reporting)"/msg/contatos/relatorio"else"/msg/contatos/backup",payload)
-                    val read=latest.optInt("lidos");val total=maxOf(read,latest.optInt(if(reporting)"total"else"totalPessoas"))
-                    activity.runOnUiThread{if(d.isShowing&&currentOwner()){label.text="$read de $total contatos";progress.isIndeterminate=total==0;if(total>0)progress.progress=(read.toLong()*100/total).toInt()}}
-                    page=latest.optString("proxima");folder=latest.optString("pasta")
-                    if(if(reporting)page.isBlank()else latest.optBoolean("fim")){finished=true;break}
-                }
-                if(!finished)throw Exception("Limite de partes atingido. Recomece a operação.")
-                if(reporting)call("/msg/contatos/relatorio",JSONObject().put("etapa","fim"))else latest
+                    val r=call(if(report)"/msg/contatos/relatorio"else"/msg/contatos/backup",payload)
+                    update(if(report)"Lendo contatos"else"Cópia de segurança",r,totalKey=if(report)"total"else"totalPessoas")
+                    page=r.optString("proxima");folder=r.optString("pasta")
+                    if(if(report)page.isBlank()else r.optBoolean("fim"))return if(report)call("/msg/contatos/relatorio",JSONObject().put("etapa","fim"))else r
+                };throw Exception("Limite de partes atingido. Recomece a operação.")
+            }
+            fun cleanStage(stage:String,title:String){
+                var since=0;var page="";var continuing=false
+                for(part in 0 until 400){
+                    val body=JSONObject().put("etapa",stage)
+                    when(stage){"juntar"->body.put("desde",since);"padronizar"->if(page.isNotBlank())body.put("pagina",page);"criar"->body.put("continuar",continuing)}
+                    val r=call("/msg/contatos/limpeza",body);update(title,r,"feito")
+                    since=r.optInt("proximo");page=r.optString("proxima");continuing=true
+                    if(when(stage){"juntar"->since==0;"padronizar"->page.isBlank();else->r.optInt("restantes")==0})return
+                };throw Exception("Limpeza interrompida pelo limite de partes. Confira o resultado.")
+            }
+            try{
+                if(cleaning){pages(false);pages(true);cleanStage("juntar","Juntando pessoas");cleanStage("padronizar","Padronizando números");cleanStage("criar","Criando TM Cliente");call("/msg/contatos/limpeza",JSONObject().put("etapa","fim"))}else pages(reporting)
             }finally{activity.runOnUiThread{d.dismiss();activity.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}}
-        }){r->if(reporting)report(r.optJSONObject("relatorio")?:r)else{toast("Cópia de segurança concluída.");close();contacts()}}
+        }){r->if(cleaning){toast("Limpeza concluída: ${r.optInt("juntados")} pessoas juntadas, ${r.optInt("padronizados")} padronizados e ${r.optInt("criados")} novos. Cadastro automático ligado.");close();contacts()}else if(reporting)report(r.optJSONObject("relatorio")?:r)else{toast("Cópia de segurança concluída.");close();contacts()}}
     }
     private fun report(r:JSONObject?){
         val box=column();if(r==null){box.addView(text("Ainda não há relatório. Gere após a cópia de segurança."));sheet("Relatório dos contatos",box);return}
@@ -205,7 +225,11 @@ class NativeAdministration(private val activity:Activity,private val scope:Corou
                     detail.addView(text(line))
                 };if(detail.childCount==0)detail.addView(text("Nenhum."));sheet(label,detail)
             })
-        };sheet("Relatório dos contatos",box)
+        }
+        box.addView(text("A limpeza faz cópia nova, relê o relatório, junta pessoas repetidas, padroniza números e cria TM Cliente. Ao terminar liga o cadastro automático. Requer ponte 1.2."))
+        box.addView(button("Aplicar a limpeza aprovada"){
+            builder().setTitle("Aplicar limpeza no Google?").setMessage("Faz uma cópia nova e um relatório, junta repetidos preservando o nome mais completo, padroniza números e cria contatos TM Cliente. Duplicados são removidos após junção. Ao terminar, liga o cadastro automático. Isso altera contatos reais. Mantenha esta tela aberta.").setPositiveButton("Aplicar limpeza"){_,_->contactsJob(true,true)}.setNegativeButton("Cancelar",null).show()
+        });sheet("Relatório dos contatos",box)
     }
     private class HourChart(c:android.content.Context,private val hours:List<JSONObject>):View(c){
         private val ink=android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
