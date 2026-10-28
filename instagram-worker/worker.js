@@ -100,7 +100,7 @@ async function iniciar(env) {
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN repostado_de INTEGER').run(); } catch (e) { /* já existe */ }
   /* Mensagens v2: lidas/não lidas, quem falta responder, estado de entrega e quem enviou pelo painel. */
-  for (const [t, col] of [['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"], ['msg_conversa', "encerrada_motivo TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  for (const [t, col] of [['msg_conversa', "dono TEXT DEFAULT ''"], ['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"], ['msg_conversa', "encerrada_motivo TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   /* v2.13: histórico de encerramentos (motivo, quando e por quem): base das métricas e, depois, do termômetro de cada cliente */
   try {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_status_ref (canal TEXT NOT NULL,ext_id TEXT NOT NULL,chave TEXT NOT NULL,mime TEXT NOT NULL,em TEXT NOT NULL,PRIMARY KEY(canal,ext_id))").run();
@@ -2914,10 +2914,14 @@ async function etiquetasDosAlvos_(env, alvos) {
   rs.forEach((r) => { (mapa[r.alvo] = mapa[r.alvo] || []).push({ id: r.id, nome: r.nome, cor: r.cor, venda: r.venda }); });
   return mapa;
 }
+async function meuNomeAtendente_(env, req) {
+  const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
+  return String((quem && (await cfgGet(env, 'msg_atendente_' + quem))) || (quem ? 'Atendente ' + quem.slice(-4) : 'Equipe')).slice(0, 30);
+}
 const alvoDe_ = (c) => (c && c.pessoa ? String(c.pessoa) : 'c:' + (c && c.id));
 const MSG_IDENTIDADE_SQL_ = "COALESCE((SELECT a.pessoa FROM msg_pessoa_alias a WHERE a.canal=msg_conversa.canal AND a.contato=msg_conversa.contato),(SELECT g.pessoa FROM msg_google_nome g WHERE g.chave=msg_conversa.pessoa),NULLIF(msg_conversa.pessoa,''),'')";
 const MSG_NOME_SQL_ = "COALESCE((SELECT p.nome FROM msg_pessoa p WHERE p.id="+MSG_IDENTIDADE_SQL_+"),(SELECT g.nome FROM msg_google_nome g WHERE g.chave=msg_conversa.pessoa),msg_conversa.nome)";
-const MSG_COLS_CONVERSA_ = "id, canal, contato, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
+const MSG_COLS_CONVERSA_ = "id, canal, contato, dono, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
 const MSG_Q_ = (c) => "(SELECT q." + c + " FROM msg_mensagem q WHERE q.canal=msg_mensagem.canal AND q.ext_id=msg_mensagem.ctx_ref AND msg_mensagem.ctx_ref<>'' LIMIT 1)";
 const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, CASE WHEN ctx_chave LIKE '%.mp4' OR ctx_chave LIKE '%.mov' OR ctx_chave LIKE '%.webm' THEN 'video' ELSE (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) END AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + MSG_Q_('texto') + " AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir";
 async function msgContagens_(env, canal, tipo) {
@@ -3703,6 +3707,7 @@ export default {
         if (filtro === 'encerradas') sql += " AND encerrada_em<>''"; else if (!busca) sql += " AND encerrada_em=''";
         if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'lidas') sql += ' AND nao_lidas=0'; else if (filtro === 'sem_resposta') sql += " AND (nao_lidas>0 OR ult_dir='entrada')"; else if (filtro === 'grupos') sql += ' AND grupo=1'; else if (filtro === 'ambos') sql += " AND pessoa<>'' AND " + MSG_OUTRO_SQL_ + ' IS NOT NULL';
         if (tipo) sql += tipo === 'grupo' ? ' AND grupo=1' : ' AND grupo=0';
+        if (filtro === 'minhas') { sql += ' AND dono=?'; args.push(await meuNomeAtendente_(env, req)); }
         const etqF = Number(url.searchParams.get('etiqueta')) || 0;
         if (etqF) { sql += " AND (CASE WHEN " + MSG_IDENTIDADE_SQL_ + "<>'' THEN " + MSG_IDENTIDADE_SQL_ + " ELSE 'c:'||msg_conversa.id END) IN (SELECT alvo FROM msg_alvo_etiqueta WHERE etiqueta_id=?)"; args.push(etqF); }
         if (busca) { sql += ' AND ('+MSG_NOME_SQL_+' LIKE ? OR contato LIKE ? OR previa LIKE ? ' + (busca.length >= 3 ? ' OR EXISTS (SELECT 1 FROM msg_mensagem mm WHERE mm.conversa_id=msg_conversa.id AND mm.texto LIKE ?)' : '') + ')'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q); if (busca.length >= 3) args.push(q); }
@@ -3805,7 +3810,14 @@ export default {
       if (p === '/msg/enviar' && req.method === 'POST') {
         const d = await req.json().catch(() => ({}));
         const [cod, corpo] = await responderMensagem_(env, req.headers.get('X-TK-Whats') || '', d);
+        if (cod === 200 && corpo && corpo.ok && Number(d.conversa)) { try { await env.DB.prepare("UPDATE msg_conversa SET dono=? WHERE id=? AND (dono IS NULL OR dono='')").bind(await meuNomeAtendente_(env, req), Number(d.conversa)).run(); } catch (e) { /* dono é conforto */ } }   // v7.40.6: quem responde primeiro vira o responsável
         return J(corpo, cod);
+      }
+      if (p === '/msg/dono' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({})), id = Number(d.conversa) || 0, nome = d.assumir === false ? '' : await meuNomeAtendente_(env, req);
+        const r = await env.DB.prepare('UPDATE msg_conversa SET dono=?, atualizada_em=? WHERE id=?').bind(nome, agora(), id).run();
+        if (!r.meta || !r.meta.changes) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
+        return J({ ok: true, dono: nome });
       }
       if (p === '/msg/lida' && req.method === 'POST' && (await req.clone().json().catch(() => ({}))).conversas) {
         /* v2.12: marcar várias como lidas/não lidas de uma vez. Lidas também no celular quando o canal está com a opção ligada (só as que estavam não lidas). */
