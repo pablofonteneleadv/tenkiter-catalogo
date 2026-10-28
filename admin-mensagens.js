@@ -240,6 +240,8 @@
       .ms-vazio { color: #555; padding: 18px 16px; font-size: 0.88rem; line-height: 1.4; }
       .ms-vazio-conversa { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; color: #666; padding: 24px; }
       /* v7.21: aviso flutuante (antes ficava na coluna da lista e, no celular, sumia com a conversa aberta) */
+      .ms-saude { margin: 0 12px 8px; padding: 10px 12px; border-radius: 8px; background: #fdecec; color: #8f1d1d; border: 1px solid #f3c7c7; font-size: 0.85rem; display: grid; gap: 2px; }
+      .ms-saude b { color: #c62828; }
       .ms-aviso { position: absolute; left: 12px; right: 12px; bottom: 88px; z-index: 7; margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff3cd; color: #5a4300; font-size: 0.85rem; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
       .ms-aviso[hidden] { display: none; }
       /* v7.22: número ao lado do nome, mesma pessoa nos 2 WhatsApp, seleção e encerradas */
@@ -419,7 +421,8 @@
     const wrap = el('div', 'ms-lista-wrap'); wrap.id = 'ms-lista-wrap'; const ul = el('ul', 'ms-lista'); ul.id = 'ms-lista'; wrap.appendChild(ul);
     const extra = el('div'); extra.id = 'ms-extra'; wrap.appendChild(extra);
     const selbar = el('div', 'ms-selbar'); selbar.id = 'ms-selbar'; selbar.hidden = true; selbar.setAttribute('role', 'toolbar'); selbar.setAttribute('aria-label', 'Conversas selecionadas');
-    lat.append(topo, abas, filtros, busq, estado, wrap, selbar);
+    const saudeEl = el('div', 'ms-saude'); saudeEl.id = 'ms-saude'; saudeEl.hidden = true; saudeEl.setAttribute('role', 'alert');
+    lat.append(topo, saudeEl, abas, filtros, busq, estado, wrap, selbar);
     // v7.22: segurar o dedo numa conversa começa a seleção (como no WhatsApp)
     ul.addEventListener('pointerdown', (ev) => { const b = ev.target.closest('.ms-conv'); if (!b || selecao) return; clearTimeout(timerToque); toqueLongo = false; timerToque = setTimeout(() => { toqueLongo = true; iniciarSelecao_(Number(b.dataset.id)); if (navigator.vibrate) try { navigator.vibrate(20); } catch (e) { /* sem vibração */ } }, 550); });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => ul.addEventListener(t, () => clearTimeout(timerToque)));
@@ -1521,6 +1524,15 @@
   }
 
   /* ---------- ao vivo ---------- */
+  /* v7.40.2: faixa vermelha quando o servidor está recusando os avisos (ex.: limite do banco) */
+  function pintarSaude_(sd) {
+    const e = $('ms-saude'); if (!e) return;
+    e.hidden = !sd.alerta; if (!sd.alerta) { e.textContent = ''; return; }
+    const hora = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+    const b = el('b', '', 'Mensagens não estão chegando desde ' + hora(sd.desde));
+    const t = el('span', '', 'O servidor recusou os avisos' + (NOME_CANAL_[sd.canal] ? ' do ' + NOME_CANAL_[sd.canal] : '') + (sd.cod ? ' (erro ' + sd.cod + ')' : '') + '. As mensagens continuam no celular; o site volta a mostrar sozinho quando o servidor aceitar de novo.');
+    e.replaceChildren(b, t);
+  }
   function ligarAoVivo() { pararAoVivo(); offline = false; espera = ESPERA_MS; atualizarVivo(); agendar(1200); }
   function pararAoVivo() { clearTimeout(timerLive); timerLive = null; }
   function agendar(ms) { clearTimeout(timerLive); timerLive = setTimeout(sondar, ms == null ? espera : ms); }
@@ -1538,6 +1550,7 @@
     if (offline) { offline = false; atualizarVivo(); }
     espera = ESPERA_MS; cursor = r.cursor || cursor;
     r.mensagens.forEach((m) => { if (typeof m.id === 'number' && m.id > ultIdSrv) ultIdSrv = m.id; });
+    if (r.saude) pintarSaude_(r.saude);
     contagens = r.contagens || contagens; desenharAbas(); desenharFiltros(); selarBotao();
     if (r.conversas.some((c) => canal === 'todos' || c.canal === canal)) await carregarLista(false);
     if (aberta) {

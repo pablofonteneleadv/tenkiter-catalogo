@@ -3526,6 +3526,23 @@ async function metricasMensagens_(env, canal, dias) {
     aguardando: { total: Number((totEspera || {}).n) || 0, maisAntigas: espera.results.map((x) => ({ id: x.id, canal: x.canal, nome: rotuloContato_(x), desde: x.ult_entrada_em })) },
     porHora: porHora.map((h, i) => ({ hora: i, entradas: h.entradas, medianaMin: med(h.demoras) })) };
 }
+/* v7.40.2: saúde dos avisos. Só grava no KV quando um aviso FALHA (raro); a tela lê a cada ~40 s.
+   O alerta some sozinho quando uma mensagem volta a ser gravada depois da falha. */
+async function anotarFalha_(env, pathname, cod) {
+  try {
+    const k = 'saude:falha', a = await env.CACHE.get(k, 'json'), t = Date.now();
+    if (a && t - Date.parse(a.em) < 20000) return;
+    const seg = pathname.split('/'), canal = seg[2] === 'zernio' ? 'instagram' : seg[2] === 'wafly' ? 'whatsapp' + (seg[3] || '') : String(seg[2] || '');
+    const junto = a && t - Date.parse(a.em) < 1800000;
+    await env.CACHE.put(k, JSON.stringify({ desde: junto ? a.desde : new Date(t).toISOString(), em: new Date(t).toISOString(), n: junto ? (a.n || 1) + 1 : 1, canal: canal.slice(0, 20), cod: Number(cod) || 0 }), { expirationTtl: 172800 });
+  } catch (e) { /* conforto */ }
+}
+async function saudeAvisos_(env) {
+  let a = null; try { a = await env.CACHE.get('saude:falha', 'json'); } catch (e) { return { alerta: false }; }
+  if (!a || (a.n || 1) < 2) return { alerta: false };
+  try { const r = await env.DB.prepare('SELECT MAX(gravada_em) AS u FROM msg_mensagem').first(); const u = (r && r.u) || ''; return { alerta: a.em > u, desde: a.desde, em: a.em, canal: a.canal, cod: a.cod, ultimaOk: u }; }
+  catch (e) { return { alerta: true, desde: a.desde, em: a.em, canal: a.canal, cod: a.cod, ultimaOk: '' }; }
+}
 export default {
   async scheduled(ev, env, ctx) {
     ctx.waitUntil(processarPushMobile_(env).catch(()=>{}));
@@ -3542,7 +3559,7 @@ export default {
     const url = new URL(req.url), h = cors(env, req), J = (c, s) => resp(c, s, h);
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
-    if (url.pathname.indexOf('/wh/zernio/') === 0 && req.method === 'POST') { try { return await rotaZernio_(env, req, url, ctx); } catch (e) { return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
+    if (url.pathname.indexOf('/wh/zernio/') === 0 && req.method === 'POST') { try { const rz = await rotaZernio_(env, req, url, ctx); if (rz.status >= 500) await anotarFalha_(env, url.pathname, rz.status); return rz; } catch (e) { await anotarFalha_(env, url.pathname, 500); return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
     if (url.pathname.indexOf('/wh/') === 0) { try {
       const resposta = await rotaWebhookMensagens_(env, req, url);
       if (req.method === 'POST' && resposta.ok) {
@@ -3550,8 +3567,9 @@ export default {
         // A mensagem já está persistida; push não atrasa nem derruba o aceite do webhook.
         if (recebido && (recebido.nova === true || recebido.novas > 0) && typeof ctx?.waitUntil === 'function') ctx.waitUntil(processarPushMobile_(env,true).catch(() => {}));
       }
+      if (resposta.status >= 500) await anotarFalha_(env, url.pathname, resposta.status);
       return resposta;
-    } catch (e) { return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
+    } catch (e) { await anotarFalha_(env, url.pathname, 500); return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
     const perms = await permissoes(env, req);
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
@@ -3685,7 +3703,8 @@ export default {
         const cs = await env.DB.prepare('SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE atualizada_em>=? AND total>0 ORDER BY atualizada_em DESC LIMIT 100').bind(desde).all();
         let mensagens = [];
         if (conv) mensagens = (await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=? AND (id>? OR status_em>=?) ORDER BY enviada_em, id LIMIT 200').bind(conv, depois, st).all()).results;
-        return J({ ok: true, cursor: cursorConsulta, conversas: cs.results, mensagens: mensagens, contagens: (cs.results.length || url.searchParams.get('cont') === '1') ? await msgContagens_(env) : undefined });
+        const saude = url.searchParams.get('cont') === '1' ? await saudeAvisos_(env) : undefined;
+        return J({ ok: true, cursor: cursorConsulta, saude: saude, conversas: cs.results, mensagens: mensagens, contagens: (cs.results.length || url.searchParams.get('cont') === '1') ? await msgContagens_(env) : undefined });
       }
       if (p === '/msg/diagnostico' && req.method === 'GET') {
         const out = {}; for (const n of [1, 2]) { try { out['whatsapp' + n] = JSON.parse((await cfgGet(env, 'msg_ligar_diag_' + n)) || 'null'); } catch (e) { out['whatsapp' + n] = null; } }
