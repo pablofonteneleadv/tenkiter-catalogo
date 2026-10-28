@@ -60,6 +60,7 @@ class MainActivity:Activity(),InboxView.Events {
         ContextCompat.registerReceiver(this,changes,IntentFilter(NativeRepository.CHANGED),ContextCompat.RECEIVER_NOT_EXPORTED)
         OneSignal.Notifications.addClickListener(clicks)
         if(pendingClick>0){peeking=pendingPeek;conversation=pendingClick;pendingClick=0}
+        WebKeeper.actions={a->if(a=="atualizar")updater.check() else if(a=="permissoes"){showSetup();setup?.reviewing=true;setup?.refresh()}}
         render();if(SetupGate.ok(this))full(conversation)else showSetup()
         if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync();syncNames()}
     }
@@ -67,12 +68,12 @@ class MainActivity:Activity(),InboxView.Events {
     /** Tela obrigatória de configuração: avisos e segundo plano antes de abrir as mensagens. */
     private fun showSetup(){
         if(setup!=null)return
-        val g=SetupGate(this){scope.launch{OneSignal.Notifications.requestPermission(true);OneSignal.User.pushSubscription.optIn();setup?.refresh()}}
+        val g=SetupGate(this,{checkSetup(true)}){scope.launch{OneSignal.Notifications.requestPermission(true);OneSignal.User.pushSubscription.optIn();setup?.refresh()}}
         setup=g;root.addView(g,FrameLayout.LayoutParams(-1,-1))
     }
-    private fun checkSetup(){
+    private fun checkSetup(close:Boolean=false){
         val g=setup?:return
-        if(SetupGate.ok(this)){root.removeView(g);setup=null;full(conversation)}else g.refresh()
+        if(SetupGate.ok(this)&&(close||!g.reviewing)){root.removeView(g);setup=null;full(conversation)}else g.refresh()
     }
     private fun syncNames(){if(namesChecked)return;namesChecked=true;scope.launch{try{withContext(Dispatchers.IO){repo.googleNames()};sync()}catch(_:Exception){namesChecked=false}}}
     private fun render(){
@@ -220,7 +221,7 @@ class MainActivity:Activity(),InboxView.Events {
     private fun external(address:String){val u=Uri.parse(address);if(u.scheme !in listOf("https","http","tel","mailto"))return;runCatching{startActivity(Intent(Intent.ACTION_VIEW,u))}}
     override fun onResume(){super.onResume();activityVisible=true;WebKeeper.attach();checkSetup();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
     override fun onPause(){activityVisible=false;WebKeeper.detach();if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
-    override fun onDestroy(){handler.removeCallbacks(ticker);runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it)};WebKeeper.context?.baseContext=applicationContext;super.onDestroy()}
+    override fun onDestroy(){handler.removeCallbacks(ticker);WebKeeper.actions=null;runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it)};WebKeeper.context?.baseContext=applicationContext;super.onDestroy()}
     override fun onSaveInstanceState(out:Bundle){out.putLong("conversation",conversation);out.putBoolean("peeking",peeking);super.onSaveInstanceState(out)}
     @Deprecated("Legacy back API") override fun onBackPressed(){
         val w=web

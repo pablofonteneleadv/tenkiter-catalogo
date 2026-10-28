@@ -36,6 +36,11 @@ with sync_playwright() as p:
    assert pg.evaluate('window.TKMobileBack()')==True;pg.wait_for_timeout(500)
    assert pg.evaluate("document.getElementById('ms-app').dataset.vista")=='lista'
    assert pg.evaluate('window.TKMobileBack()')==False
+  # 7.40.11: o app guarda o login no aparelho e reabre com ele, sem esperar o servidor de contas.
+  if w==390:
+   assert pg.evaluate("!!localStorage.getItem('tk_app_usuario')"),'login do app não foi guardado'
+   pg.reload();pg.wait_for_selector('.ms-conv',timeout=15000)
+   assert pg.evaluate("JSON.parse(localStorage.getItem('tk_app_usuario')).sessao===JSON.parse(localStorage.getItem('tm_session')).sessao")
   assert not errors,errors
   c.close()
  b.close()

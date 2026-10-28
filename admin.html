@@ -1647,8 +1647,14 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
   function esconderLogin() { document.getElementById('login-overlay').classList.remove('visivel'); setTimeout(() => { try { restaurarEnvios_(); } catch (e) {} }, 400); }
 
+  // v7.40.11 (app Mensagens): guarda quem está logado neste aparelho para abrir na hora, sem esperar o servidor de contas.
+  const APP_MENSAGENS_ = new URLSearchParams(location.search).get('app') === 'mensagens';
+  function guardarUsuarioApp_(usuario) { if (!APP_MENSAGENS_) return; try { const s = getSessao(); if (s && usuario) localStorage.setItem('tk_app_usuario', JSON.stringify({ sessao: s.sessao, usuario })); } catch (e) {} }
+  function usuarioAppGuardado_() { if (!APP_MENSAGENS_) return null; try { const c = JSON.parse(localStorage.getItem('tk_app_usuario') || 'null'), s = getSessao(); return c && s && c.sessao === s.sessao && c.usuario && temPermissao(c.usuario, 'catalogo_admin') ? c.usuario : null; } catch (e) { return null; } }
+
   function aplicarUsuario(usuario) {
     usuarioAdmin = usuario;
+    guardarUsuarioApp_(usuario);
     const s = getSessao();
     adminPin = s ? s.sessao : '';
     sessionStorage.removeItem('tenkiter_admin_pin');
@@ -1756,6 +1762,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   })();
   async function iniciarAcessoCorpo_() {
     const pSessao = getSessao() ? conferirSessao() : null; // em paralelo com a versão: uma ida ao servidor a menos
+    const rapido = usuarioAppGuardado_();               // app: abre já com o login guardado; a conferência segue por trás
+    if (rapido) { modoLogin = true; aplicarUsuario(rapido); }
     const v = await versaoServidor();
     if (v === null || (getSessao() && !v.acessos && !v.ok)) {
       // sem internet (ou servidor lento/fora do ar) agora: se já havia login, segue com o token guardado; senão, como sempre foi
@@ -1769,7 +1777,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     pinAindaAtivo = !!v.pinAtivo;
     const usr = pSessao ? await pSessao : await conferirSessao();
     if (usr && usr.semRede) { const s = getSessao(); if (s) { adminPin = s.sessao; document.getElementById('btn-trocar-user').style.display = 'none'; return; } }
-    if (usr && temPermissao(usr, 'catalogo_admin')) return aplicarUsuario(usr);
+    if (usr && temPermissao(usr, 'catalogo_admin')) { if (rapido) { usuarioAdmin = usr; guardarUsuarioApp_(usr); return; } return aplicarUsuario(usr); }
+    if (usr && !usr.semRede) try { localStorage.removeItem('tk_app_usuario'); } catch (e) {}
     if (!usr && getSessao()) { // a sessão NÃO foi recusada pelo servidor (só não respondeu): não derruba o login
       const s2 = getSessao(); modoLogin = true; adminPin = s2.sessao; document.getElementById('lbl-funcionario').textContent = funcionarioNome || s2.whatsapp; document.getElementById('btn-trocar-user').style.display = 'none'; return;
     }
@@ -5999,7 +6008,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="admin-gestao.js?v=7.19.0"></script>
 <script src="admin-push.js?v=7.19.0"></script>
 <script src="admin-conexoes.js?v=7.38.2"></script>
-<script src="admin-mensagens.js?v=7.40.9"></script>
+<script src="admin-mensagens.js?v=7.40.11"></script>
 <script src="admin-instagram.js?v=7.17.0"></script>
 <script src="video-validation.js"></script>
 <script src="admin-postagens.js?v=7.30.2"></script>

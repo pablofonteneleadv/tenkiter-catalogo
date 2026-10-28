@@ -34,3 +34,8 @@ Cada PR do app gera no GitHub o artefato `TENKiTER-Mensagens-Android`, com o APK
 - Com o app fora da tela, a página para de consultar o servidor depois de 2 min (`pauseTimers`), para economizar bateria e leituras do D1. Ela continua carregada e volta a atualizar ao abrir.
 - Tela obrigatória de configuração (`SetupGate`): o app só abre as mensagens com os avisos e o segundo plano ativados (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`). Em Xiaomi/Redmi/POCO há um atalho recomendado para "Início automático", que o app não consegue conferir. A tela é verificada de novo sempre que o app volta.
 - Se o Android encerrar o processo por completo, a primeira abertura ainda carrega, mas usa o cache que o site guarda das conversas recentes.
+
+## 2.4.3 (código 10) + site 7.40.11
+
+- Ponte `TKAndroid` (`atualizar`, `permissoes`, `versao`): o menu ⋯ das Mensagens mostra **Atualizar app** e **Permissões do app**. A tela de permissões aberta pelo menu fica aberta até tocar em "Voltar às mensagens".
+- Site: o app guarda o login no aparelho (`tk_app_usuario`, ligado à sessão) e abre na hora com ele. A conferência com o servidor de contas continua por trás, e se a sessão for recusada a tela de login volta. As conversas aparecem do cache local (`recentes_`) e são atualizadas em seguida.

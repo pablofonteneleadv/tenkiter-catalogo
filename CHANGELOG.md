@@ -6,6 +6,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.11 — 28/10/2026
+- App Mensagens: abre na hora com o login guardado no aparelho (a conferência com o servidor de contas segue por trás) e mostra as conversas salvas enquanto atualiza.
+- Menu ⋯ no app Android 2.4.3: Atualizar app e Permissões do app.
+
 ## 7.40.10 — 28/10/2026
 - App Mensagens: o Voltar do celular, numa conversa aberta pelo aviso, volta para a lista de conversas em vez de mandar o app para o fundo.
 
