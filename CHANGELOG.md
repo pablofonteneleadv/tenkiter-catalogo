@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.15 — 28/10/2026
+- Mensagens: **Funil de vendas** (⋯ → Funil de vendas). Um quadro com uma coluna para cada etiqueta de venda (Novo cliente, Reserva, Aguardando pagamento, Pago, Enviado — as mesmas de Etiquetas; se a equipe renomear ou arquivar, o quadro acompanha). Cada cartão é uma pessoa: nome, canal, prévia, há quanto tempo e responsável. Respeita a aba de canal (Todas, WhatsApp 1, WhatsApp 2, Instagram).
+- Mover o cartão troca só a etapa da venda da pessoa; as outras etiquetas (ex.: Troca) ficam. No celular: uma coluna por tela (deslize ou use ‹ ›) e toque no cartão para “Mover para…”, “Tirar do funil” ou “Abrir conversa”. No computador: colunas lado a lado, arrastar e soltar, ou clicar/Enter no cartão para o mesmo menu.
+- Servidor: `GET /msg/funil?canal=` (só conversas individuais abertas; a pessoa com vários canais aparece uma vez, pela conversa mais recente; até 30 cartões por coluna, com o total) e `POST /msg/funil/mover` (`etiqueta: 0` tira a etapa). Erros em português.
+
 ## 7.40.14 — 28/10/2026
 - Mensagens: **Ficha do cliente** — toque no nome/avatar da conversa (ou ⋯ → Ficha do cliente…). Num só lugar: tamanhos que a cliente usa (atalhos PP a GG e 36 a 46 + texto), preferências, cidade/bairro, etiquetas (com “Mudar etiquetas”), as 5 notas internas mais recentes, compras (conversas encerradas como “Vendeu”, com data e canal) e os canais vinculados (WhatsApp 1/2/Instagram, com “Abrir”).
 - A ficha é da pessoa: vale para todos os canais vinculados, como notas e etiquetas. Só mostra o que existe (“Nenhuma compra registrada ainda”). A faixa da conversa mostra discretamente “Veste M · 38”.

@@ -471,6 +471,45 @@
       .ms-stage .ms-stage-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .ms-compor .ms-ico { width: 44px; flex: none; } .ms-compor .ms-ico.gravando { background: #c62828; color: #fff; width: auto; padding: 0 12px; font-size: 0.85rem; }
       @media (prefers-reduced-motion: no-preference) { .ms-conv, .ms-chip, .ms-aba { transition: background-color .15s; } }
+      /* v7.40.15: funil de vendas. Celular: uma coluna por tela, rolagem lateral com encaixe só dentro do quadro. Computador: colunas lado a lado. */
+      .ms-funil { min-width: 0; padding: 4px 0 16px; font-size: 0.88rem; }
+      .ms-funil > .ms-linha, .ms-funil > h3, .ms-funil > .ms-fdica, .ms-funil > .ms-vazio { margin-left: 12px; margin-right: 12px; }
+      .ms-funil > h3 { margin-top: 4px; margin-bottom: 2px; font-size: 1rem; }
+      .ms-fdica { margin-top: 0; margin-bottom: 8px; font-size: 0.8rem; color: #555; }
+      .ms-fq { display: flex; gap: 8px; align-items: flex-start; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-padding: 0 12px; padding: 0 12px 8px; -webkit-overflow-scrolling: touch; }
+      .ms-fcol { flex: 0 0 calc(100% - 28px); min-width: 0; box-sizing: border-box; scroll-snap-align: start; background: #f6f3ec; border-radius: 12px; padding: 0 8px 8px; border: 2px solid transparent; }
+      .ms-fcol.alvo { border-color: #141414; background: #efe9dc; }
+      .ms-fcol-cab { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 0 2px; }
+      .ms-fcol-cab h4 { margin: 0; flex: 1; min-width: 0; font-size: 0.95rem; line-height: 1.2; overflow-wrap: anywhere; }
+      .ms-fcol-cab h4:focus-visible { outline: 3px solid #141414; outline-offset: 2px; border-radius: 4px; }
+      .ms-fcol-cab .ms-etq-ponto { width: 12px; height: 12px; }
+      .ms-ftot { flex: none; min-width: 28px; padding: 2px 8px; border-radius: 12px; background: #fff; border: 1px solid #e3ddd3; font-weight: 700; font-size: 0.8rem; text-align: center; box-sizing: border-box; }
+      .ms-fpos { flex: none; font-size: 0.74rem; color: #555; }
+      .sheet-mensagens .ms-fir { flex: none; width: 44px; min-height: 44px; border: 0; border-radius: 50%; background: #fff; color: #222; font-size: 1.1rem; font-weight: 700; cursor: pointer; padding: 0; }
+      .sheet-mensagens .ms-fir:disabled { opacity: 0.35; cursor: default; }
+      .ms-fcards { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+      .sheet-mensagens .ms-fcard { display: grid; gap: 3px; width: 100%; min-height: 64px; text-align: left; background: #fff; border: 1px solid #e3ddd3; border-radius: 10px; padding: 10px 12px; font: inherit; color: #111; cursor: pointer; box-sizing: border-box; }
+      .sheet-mensagens .ms-fcard:hover { border-color: #b9b0a2; } .sheet-mensagens .ms-fcard:focus-visible { outline: 3px solid #141414; outline-offset: 2px; }
+      .sheet-mensagens .ms-fcard[draggable=true] { cursor: grab; } .sheet-mensagens .ms-fcard.arrastando { opacity: 0.5; }
+      .ms-fcard-l1 { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+      .ms-fcard-nome { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ms-fcard-l1 time { flex: none; font-size: 0.74rem; color: #555; }
+      .ms-fcard-prev { font-size: 0.82rem; color: #333; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+      .ms-fcard-meta { font-size: 0.74rem; color: #5f584e; overflow-wrap: anywhere; }
+      .ms-fcol-vazio, .ms-fcol-mais { margin: 4px 2px; font-size: 0.8rem; color: #555; }
+      .ms-fop-info { margin: 0 14px 4px; font-size: 0.82rem; color: #555; }
+      .ms-gaveta-corpo > .ms-etq-rot { margin-left: 14px; margin-right: 14px; }
+      .sheet-mensagens .ms-fop { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 14px; border: 0; border-bottom: 1px solid #f0ece5; background: #fff; font: inherit; font-size: 0.95rem; color: #111; text-align: left; cursor: pointer; }
+      .sheet-mensagens .ms-fop:hover, .sheet-mensagens .ms-fop:focus-visible { background: #f5f1e8; }
+      .sheet-mensagens .ms-fop[aria-current=true] { cursor: default; color: #555; background: #faf8f3; }
+      .sheet-mensagens .ms-fop .ms-etq-ponto { width: 12px; height: 12px; }
+      .ms-fop small { margin-left: auto; font-size: 0.76rem; color: #555; }
+      .ms-gaveta-corpo > .ms-fpe { display: flex; gap: 8px; flex-wrap: wrap; padding: 14px 14px 0; }
+      .ms-fpe .ms-btn { flex: 1 1 140px; }
+      @media (min-width: 860px) {
+        .ms-app[data-painel=funil] { grid-template-columns: 1fr; } .ms-app[data-painel=funil] .ms-conversa { display: none; } .ms-app[data-painel=funil] .ms-lateral { border-right: 0; }
+        .ms-fq { scroll-snap-type: none; } .ms-fcol { flex: 1 0 200px; } .ms-fpos, .sheet-mensagens .ms-fir { display: none; }
+      }
     `;
     document.head.appendChild(s);
   }
@@ -807,7 +846,7 @@
     return b;
   }
   function mostrarRelatorio_(r) {
-    painel = 'metricas'; const ex = $('ms-extra'), ul = $('ms-lista'); ul.hidden = true; chrome_(true); ex.textContent = '';
+    largarFunil_(); painel = 'metricas'; const ex = $('ms-extra'), ul = $('ms-lista'); ul.hidden = true; chrome_(true); ex.textContent = '';
     const p = el('div', 'ms-painel ms-relatorio');
     const topo = el('div', 'ms-linha'); topo.appendChild(botao('ms-btn', '← Conversas', 'fechar-painel')); p.appendChild(topo);
     p.appendChild(el('h3', '', 'Relatório da primeira limpeza dos contatos'));
@@ -1252,7 +1291,7 @@
   let indexandoNomes = false, nomesConferidos = false;
   async function nomesGoogle_(){if(indexandoNomes)return;indexandoNomes=true;try{for(let i=0;i<40;i++){const r=await worker_('/msg/pessoas/google','POST',{});if(!r.ok||r.fim)break;}await carregarLista(true);}finally{indexandoNomes=false;}}
   function pintarLista() {
-    const ul = $('ms-lista'), extra = $('ms-extra'); if (!ul || painel === 'metricas') return;
+    const ul = $('ms-lista'), extra = $('ms-extra'); if (!ul || painel === 'metricas' || painel === 'funil') return;
     const vivos = new Set(lista.map((c) => c.id));
     if (selecao) { selecao.forEach((id) => { if (!vivos.has(id)) selecao.delete(id); }); desenharSelbar_(); }
     elConvs.forEach((li, id) => { if (!vivos.has(id)) { li.remove(); elConvs.delete(id); } });
@@ -2072,7 +2111,7 @@
   /* ---------- painel de atendimento ---------- */
   const fmtMin = (m) => m == null ? '—' : m < 60 ? m + ' min' : m < 1440 ? Math.round(m / 6) / 10 + ' h' : Math.round(m / 144) / 10 + ' dias';
   async function abrirPainel(dias) {
-    painel = 'metricas'; const ex = $('ms-extra'), ul = $('ms-lista'); ul.hidden = true; ex.textContent = 'Carregando…'; chrome_(true);
+    largarFunil_(); painel = 'metricas'; const ex = $('ms-extra'), ul = $('ms-lista'); ul.hidden = true; ex.textContent = 'Carregando…'; chrome_(true);
     const r = await worker_('/msg/metricas?canal=' + encodeURIComponent(canal) + '&dias=' + (dias || 30), 'GET');
     ex.textContent = '';
     const p = el('div', 'ms-painel');
@@ -2108,7 +2147,141 @@
   }
   /** No painel de atendimento, abas de filtro/busca/estado saem do caminho para dar espaço aos números. */
   function chrome_(esconder) { ['ms-filtros', 'ms-busca', 'ms-estado-wrap'].forEach((id) => { const e = $(id); if (e) e.hidden = esconder; }); }
-  function fecharPainel() { painel = ''; chrome_(false); const ul = $('ms-lista'); if (ul) ul.hidden = false; pintarLista(); }
+  function fecharPainel() { if (painel === 'funil') sairFunil_(); painel = ''; chrome_(false); const ul = $('ms-lista'); if (ul) ul.hidden = false; pintarLista(); }
+
+  /* ---------- v7.40.15: funil de vendas ----------
+   * Colunas = etiquetas de venda (as que a equipe mantém em Etiquetas, na mesma ordem); cartão = uma pessoa.
+   * Mover o cartão troca só a etapa da venda da pessoa (as outras etiquetas ficam). Celular: tocar no cartão abre "Mover para…" e "Abrir conversa".
+   * Computador: arrastar e soltar entre colunas, ou clicar/Enter no cartão para o mesmo menu (teclado). Dados entram só por textContent. */
+  let funil_ = [], funilSeq_ = 0;
+  const funilMapa_ = new Map();
+  const arrastavel_ = () => larga() && window.matchMedia('(pointer: fine)').matches;
+  const haQuanto_ = (iso) => { const e = espera_(iso); return !e ? '' : e === 'agora' ? 'agora' : 'há ' + e; };
+  function sairFunil_() { const b = $('ms-funil'); if (b) { b.hidden = true; b.textContent = ''; } const ex = $('ms-extra'); if (ex) ex.hidden = false; const app = $('ms-app'); if (app) delete app.dataset.painel; funilMapa_.clear(); funilSeq_++; }
+  /** Sai do funil sem esperar o "voltar" (outra tela do menu tomou o lugar). */
+  function largarFunil_() { if (painel !== 'funil') return; sairFunil_(); painel = ''; if (window.TKCamadas && TKCamadas.aberta('ms-funil')) TKCamadas.desempilhar('ms-funil'); }
+  function desempilharEsperando_(chave) {
+    return new Promise((res) => {
+      if (!(window.TKCamadas && TKCamadas.aberta(chave))) { res(); return; }
+      let feito = false; const fim = () => { if (feito) return; feito = true; document.removeEventListener('tk:camada-fechada', f); res(); };
+      const f = (e) => { if (e.detail && e.detail.chave === chave) fim(); };
+      document.addEventListener('tk:camada-fechada', f); TKCamadas.desempilhar(chave); setTimeout(fim, 700);
+    });
+  }
+  function caixaFunil_() {
+    let box = $('ms-funil'); if (box) return box;
+    box = el('div', 'ms-funil'); box.id = 'ms-funil'; box.hidden = true; $('ms-lista-wrap').appendChild(box);
+    box.addEventListener('dragstart', (ev) => { const c = ev.target.closest && ev.target.closest('.ms-fcard'); if (!c) return; ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', 'tk-funil:' + c.dataset.id); c.classList.add('arrastando'); });
+    box.addEventListener('dragend', () => { box.querySelectorAll('.arrastando, .alvo').forEach((x) => x.classList.remove('arrastando', 'alvo')); });
+    box.addEventListener('dragover', (ev) => { const col = ev.target.closest && ev.target.closest('.ms-fcol'); if (!col || !box.querySelector('.ms-fcard.arrastando')) return; ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; box.querySelectorAll('.ms-fcol.alvo').forEach((x) => { if (x !== col) x.classList.remove('alvo'); }); col.classList.add('alvo'); });
+    box.addEventListener('dragleave', (ev) => { const col = ev.target.closest && ev.target.closest('.ms-fcol'); if (col && !col.contains(ev.relatedTarget)) col.classList.remove('alvo'); });
+    box.addEventListener('drop', (ev) => {
+      const col = ev.target.closest && ev.target.closest('.ms-fcol'); if (!col) return; ev.preventDefault(); col.classList.remove('alvo');
+      const m = /^tk-funil:(\d+)$/.exec(ev.dataTransfer.getData('text/plain') || ''); if (m) moverFunil_(Number(m[1]), Number(col.dataset.etq));
+    });
+    box.addEventListener('scroll', () => posFunil_(), { passive: true, capture: true });
+    return box;
+  }
+  /** Celular: setas ‹ › ligadas conforme a coluna (a primeira não volta, a última não avança) e marca a coluna à mostra. */
+  function posFunil_() {
+    const q = $('ms-fq'); if (!q || !q.firstElementChild) return;
+    const w = q.firstElementChild.getBoundingClientRect().width + 8, i = Math.max(0, Math.min(funil_.length - 1, Math.round(q.scrollLeft / (w || 1))));
+    q.querySelectorAll('.ms-fcol').forEach((c, k) => { c.querySelectorAll('.ms-fir').forEach((b) => { b.disabled = b.dataset.dir === '-1' ? k === 0 : k === funil_.length - 1; }); c.toggleAttribute('data-visivel', k === i); });
+  }
+  function irColuna_(b) {
+    const q = $('ms-fq'), col = b.closest('.ms-fcol'), alvo = col && (b.dataset.dir === '1' ? col.nextElementSibling : col.previousElementSibling);
+    if (!q || !alvo) return;
+    q.scrollTo({ left: alvo.offsetLeft - q.firstElementChild.offsetLeft, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    const h4 = alvo.querySelector('h4'); if (h4) setTimeout(() => h4.focus({ preventScroll: true }), 260);
+  }
+  function cartaoFunil_(c, arr) {
+    const li = el('li'), b = botao('ms-fcard', '', 'funil-cartao', { id: String(c.conversa) }); b.setAttribute('aria-haspopup', 'dialog');
+    if (arr) b.draggable = true;
+    const l1 = el('span', 'ms-fcard-l1'); l1.appendChild(el('span', 'ms-fcard-nome', rotuloContato(c)));
+    const tm = el('time', '', haQuanto_(c.ultima_em)); if (c.ultima_em) tm.dateTime = c.ultima_em; l1.appendChild(tm); b.appendChild(l1);
+    if (c.previa) b.appendChild(el('span', 'ms-fcard-prev', c.previa));
+    b.appendChild(el('span', 'ms-fcard-meta', (NOME_CANAL[c.canal] || c.canal) + (c.dono ? ' · Responsável: ' + c.dono : ' · Sem responsável')));
+    li.appendChild(b); return li;
+  }
+  async function abrirFunil_(focoId) {
+    fecharMenu(); const g0 = $('ms-gaveta'); if (g0) { g0.remove(); await desempilharEsperando_('ms-gaveta'); }
+    if (painel === 'metricas') { const ex0 = $('ms-extra'); if (ex0) ex0.textContent = ''; }
+    const novo = painel !== 'funil'; painel = 'funil'; chrome_(true);
+    const ul = $('ms-lista'), ex = $('ms-extra'), app = $('ms-app'), box = caixaFunil_(); ul.hidden = true; ex.hidden = true; app.dataset.painel = 'funil'; box.hidden = false;
+    if (novo && window.TKCamadas && !TKCamadas.aberta('ms-funil')) TKCamadas.empilhar('ms-funil', () => { if (painel === 'funil') fecharPainel(); });
+    const q0 = $('ms-fq'), sx = q0 && !novo ? q0.scrollLeft : 0;
+    if (novo || !q0) { box.textContent = ''; const t = el('div', 'ms-linha'); t.appendChild(botao('ms-btn', '← Conversas', 'fechar-painel')); box.appendChild(t); box.appendChild(el('p', 'ms-vazio', 'Carregando o funil…')); }
+    const mine = ++funilSeq_, c0 = canal;
+    const r = await worker_('/msg/funil?canal=' + encodeURIComponent(canal), 'GET');
+    if (mine !== funilSeq_ || painel !== 'funil' || c0 !== canal) return;
+    box.textContent = ''; funilMapa_.clear();
+    const topo = el('div', 'ms-linha'); topo.appendChild(botao('ms-btn', '← Conversas', 'fechar-painel')); topo.appendChild(botao('ms-chip', 'Atualizar', 'funil-atualizar')); box.appendChild(topo);
+    const h = el('h3', '', 'Funil de vendas · ' + (canal === 'todos' ? 'Todas' : NOME_CANAL[canal])); h.id = 'ms-ftitulo'; box.appendChild(h);
+    if (!r.ok) { funil_ = []; box.appendChild(el('p', 'ms-vazio', r.erro || 'Não foi possível carregar o funil agora. Tente de novo.')); return; }
+    funil_ = r.colunas || [];
+    if (!funil_.length) { box.appendChild(el('p', 'ms-vazio', 'Nenhuma etiqueta de venda ativa. As etapas do funil são as etiquetas de venda (Novo cliente, Reserva…).')); return; }
+    const arr = arrastavel_();
+    box.appendChild(el('p', 'ms-fdica', arr ? 'Arraste o cartão para outra coluna, ou clique nele para mover ou abrir a conversa.' : 'Toque num cartão para mudar a etapa ou abrir a conversa. Deslize para o lado para ver as outras etapas.'));
+    const q = el('div', 'ms-fq'); q.id = 'ms-fq'; q.setAttribute('role', 'region'); q.setAttribute('aria-labelledby', 'ms-ftitulo');
+    funil_.forEach((col, k) => {
+      const e = col.etiqueta, sec = el('section', 'ms-fcol'); sec.dataset.etq = String(e.id); sec.setAttribute('aria-labelledby', 'ms-fcol-' + e.id);
+      const cab = el('div', 'ms-fcol-cab'); const h4 = el('h4', '', e.nome); h4.id = 'ms-fcol-' + e.id; h4.tabIndex = -1;
+      const tot = el('span', 'ms-ftot', String(col.total)); tot.title = col.total + (col.total === 1 ? ' pessoa' : ' pessoas');
+      const ant = botao('ms-fir', '‹', 'funil-ir', { dir: '-1' }); ant.setAttribute('aria-label', 'Etapa anterior');
+      const prox = botao('ms-fir', '›', 'funil-ir', { dir: '1' }); prox.setAttribute('aria-label', 'Próxima etapa');
+      const pos = el('span', 'ms-fpos', (k + 1) + ' de ' + funil_.length);
+      cab.append(pontoEtq_(e), h4, tot, pos, ant, prox); sec.appendChild(cab);
+      const ulc = el('ul', 'ms-fcards');
+      col.cartoes.forEach((c) => { funilMapa_.set(c.conversa, { c: c, etq: e.id }); ulc.appendChild(cartaoFunil_(c, arr)); });
+      if (col.cartoes.length) sec.appendChild(ulc);
+      else sec.appendChild(el('p', 'ms-fcol-vazio', 'Ninguém nesta etapa.'));
+      if (col.total > col.cartoes.length) sec.appendChild(el('p', 'ms-fcol-mais', 'Mostrando as ' + col.cartoes.length + ' mais recentes de ' + col.total + '.'));
+      q.appendChild(sec);
+    });
+    box.appendChild(q);
+    if (sx) q.scrollLeft = sx;
+    posFunil_();
+    if (focoId) { const f = q.querySelector('.ms-fcard[data-id="' + Number(focoId) + '"]'); if (f) f.focus({ preventScroll: true }); else { const v = q.querySelector('.ms-fcol[data-visivel] h4') || q.querySelector('h4'); if (v) v.focus({ preventScroll: true }); } }
+    else if (novo) { const b0 = box.querySelector('[data-ms=fechar-painel]'); if (b0 && larga()) b0.focus(); }
+  }
+  function opcoesFunil_(id) {
+    const k = funilMapa_.get(id); if (!k) return;
+    const nome = rotuloContato(k.c), atual = funil_.find((col) => col.etiqueta.id === k.etq);
+    const corpo = gaveta_(nome); if (!corpo) return;
+    corpo.appendChild(el('p', 'ms-fop-info', 'Agora em ' + (atual ? atual.etiqueta.nome : '—') + ' · ' + (NOME_CANAL[k.c.canal] || k.c.canal)));
+    corpo.appendChild(el('p', 'ms-etq-rot', 'Mover para'));
+    funil_.forEach((col) => {
+      const e = col.etiqueta, eu = e.id === k.etq;
+      const b = botao('ms-fop', '', eu ? '' : 'funil-mover', { id: String(id), etq: String(e.id) });
+      b.append(pontoEtq_(e), document.createTextNode(e.nome));
+      if (eu) { b.setAttribute('aria-current', 'true'); b.setAttribute('aria-disabled', 'true'); b.appendChild(el('small', '', 'etapa atual')); }
+      else b.setAttribute('aria-label', 'Mover para ' + e.nome);
+      corpo.appendChild(b);
+    });
+    const pe = el('div', 'ms-fpe');
+    pe.append(botao('ms-btn', 'Tirar do funil', 'funil-mover', { id: String(id), etq: '0' }), botao('ms-btn prim', 'Abrir conversa', 'funil-abrir', { id: String(id) }));
+    corpo.appendChild(pe);
+  }
+  async function moverFunil_(id, etq, botaoEl) {
+    const k = funilMapa_.get(id); if (!k || k.etq === etq) return;
+    if (botaoEl) botaoEl.disabled = true;
+    const r = await worker_('/msg/funil/mover', 'POST', { conversa: id, etiqueta: etq });
+    if (botaoEl) botaoEl.disabled = false;
+    if (!r.ok) { aviso_(r.erro || 'Não consegui mudar a etapa. Tente de novo.'); return; }
+    const nome = rotuloContato(k.c), dest = funil_.find((col) => col.etiqueta.id === etq);
+    if (aberta && aberta.id === id) { aberta.etiquetas = r.etiquetas || []; const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(aberta)); }
+    lista.forEach((c) => { if (c.id === id) c.etiquetas = r.etiquetas || []; });
+    ETQ = null;
+    const g = $('ms-gaveta'); if (g) { g.remove(); await desempilharEsperando_('ms-gaveta'); }
+    aviso_(etq ? nome + ' agora está em ' + (dest ? dest.etiqueta.nome : 'outra etapa') + '.' : nome + ' saiu do funil.');
+    if (painel === 'funil') await abrirFunil_(id);
+  }
+  async function abrirDoFunil_(id) {
+    const g = $('ms-gaveta'); if (g) { g.remove(); await desempilharEsperando_('ms-gaveta'); }
+    await desempilharEsperando_('ms-funil');
+    if (painel === 'funil') fecharPainel();
+    abrirConversa(id);
+  }
 
   /* ---------- cliques ---------- */
   async function clique(ev) {
@@ -2116,12 +2289,15 @@
     const b = ev.target.closest('[data-ms]'); if (!b) return;
     const a = b.dataset.ms;
     if (a !== 'menu-geral' && a !== 'menu-conversa') fecharMenu();
+    if (painel === 'funil' && (a === 'leitura-cfg' || a === 'selecionar')) { largarFunil_(); chrome_(false); const ul0 = $('ms-lista'); if (ul0) ul0.hidden = false; pintarLista(); }
+    if (painel === 'funil' && a === 'atualizar') { abrirFunil_(); return; }
     if (a === 'fechar') {
       if (trabalho && !confirm('A operação dos contatos ainda está em andamento. Se fechar agora, ela para e precisa recomeçar. Fechar mesmo assim?')) return;
+      if (painel === 'funil') { const g0 = $('ms-gaveta'); if (g0) { g0.remove(); await desempilharEsperando_('ms-gaveta'); } await desempilharEsperando_('ms-funil'); if (painel === 'funil') fecharPainel(); }   // v7.40.15
       if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { document.addEventListener('tk:camada-fechada', function f(e) { if (e.detail && e.detail.chave === 'ms-conversa') { document.removeEventListener('tk:camada-fechada', f); fecharComHistorico_('overlay-mensagens'); } }); TKCamadas.desempilhar('ms-conversa'); }
       else fecharComHistorico_('overlay-mensagens');
     }
-    else if (a === 'aba') { selecao = null; desenharSelbar_(); contVista = null; contTipos = null; canal = b.dataset.canal; filtro = ''; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); }
+    else if (a === 'aba') { const eraFunil = painel === 'funil'; selecao = null; desenharSelbar_(); contVista = null; contTipos = null; canal = b.dataset.canal; filtro = ''; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); if (eraFunil) { chrome_(true); abrirFunil_(); } await carregarLista(true); }
     else if (a === 'tipo') {
       const k = b.dataset.tipo, outro = k === 'msg' ? 'grp' : 'msg';
       if (tipos[k] && !tipos[outro]) { tipos[k] = false; tipos[outro] = true; } else tipos[k] = !tipos[k];       // desligar o único ligado = mostrar o outro (nunca fica tudo desligado)
@@ -2242,13 +2418,18 @@
     else if (a === 'usar-conta') { const l = contasSalvas_(), c = l.find((x) => x.whatsapp === b.dataset.w); if (!c) return; salvarSessao(c.whatsapp, c.sessao); location.reload(); }
     else if (a === 'esquecer-conta') { guardarContas_(contasSalvas_().filter((x) => x.whatsapp !== b.dataset.w)); abrirTrocaUsuario_(); }
     else if (a === 'outra-conta') { lembrarSessao_(); limparSessao(); location.reload(); }
-    else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Configurações (leitura e nome)…', 'leitura-cfg'], ['Respostas automáticas…', 'auto-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar'], '-', ['Trocar usuário…', 'trocar-usuario']]).concat(window.TKAndroid ? ['-', ['Atualizar app', 'app-atualizar'], ['Permissões do app', 'app-permissoes']] : []));
+    else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Funil de vendas', 'funil'], ['Configurações (leitura e nome)…', 'leitura-cfg'], ['Respostas automáticas…', 'auto-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar'], '-', ['Trocar usuário…', 'trocar-usuario']]).concat(window.TKAndroid ? ['-', ['Atualizar app', 'app-atualizar'], ['Permissões do app', 'app-permissoes']] : []));
     else if (a === 'menu-conversa' && aberta) abrirMenu(b, [...(aberta.grupo ? [] : [['Ficha do cliente…', 'ficha']]), ['Agendar mensagem…', 'agenda-abrir'], '-', ['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
     else if (a === 'exp') baixar(b.dataset.params, b.dataset.rotulo);
     else if (a === 'copiar-ia') copiarParaIA();
     else if (a === 'painel') abrirPainel(30);
     else if (a === 'painel-dias') abrirPainel(Number(b.dataset.dias));
-    else if (a === 'fechar-painel') fecharPainel();
+    else if (a === 'fechar-painel') { if (painel === 'funil' && window.TKCamadas && TKCamadas.aberta('ms-funil')) TKCamadas.desempilhar('ms-funil'); else fecharPainel(); }
+    else if (a === 'funil' || a === 'funil-atualizar') abrirFunil_();   // v7.40.15
+    else if (a === 'funil-cartao') opcoesFunil_(Number(b.dataset.id));
+    else if (a === 'funil-mover') await moverFunil_(Number(b.dataset.id), Number(b.dataset.etq), b);
+    else if (a === 'funil-abrir') await abrirDoFunil_(Number(b.dataset.id));
+    else if (a === 'funil-ir') irColuna_(b);
     else if (a === 'atualizar') { await recarregar(); }
     else if (a === 'nao-lida' && aberta) { await worker_('/msg/lida', 'POST', { conversa: aberta.id, naoLida: true }); aberta.nao_lidas = 1; voltarLista(); await carregarLista(false); }
     else if (a === 'segredo') {

@@ -1161,5 +1161,53 @@ function d1() {
     chk('ficha: Instagram solto não herda compras da outra pessoa', (await A('GET', '/msg/ficha?conversa=' + solto)).j.compras.length === 0);
     chk('ficha: validarFicha_ exportada e limites em código', typeof W.validarFicha_ === 'function' && W.validarFicha_({ tamanhos: 'M' })[1].tamanhos === 'M' && !!W.validarFicha_({ cidade: 'c'.repeat(61) })[0]);
   }
+  // ======== v7.40.15: funil de vendas ========
+  {
+    const t = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+    const ins = async (canal, contato, nome, extra) => { const x = Object.assign({ pessoa: '', grupo: 0, encerrada_em: '', ultima_em: t(1), previa: 'Oi, tem no M?' }, extra || {}); await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em,previa,pessoa,encerrada_em) VALUES(?,?,?,?,3,?,?,?,?)").bind(canal, contato, nome, x.grupo, x.ultima_em, x.previa, x.pessoa, x.encerrada_em).run(); return (await DB.prepare('SELECT id FROM msg_conversa WHERE canal=? AND contato=?').bind(canal, contato).first()).id; };
+    const fWa = await ins('whatsapp1', '5588977001111', 'Funil Pessoa', { pessoa: '558877001111', ultima_em: t(-1), previa: 'Pelo WhatsApp' });
+    const fIg = await ins('instagram', 'ig-funil-1', 'Funil Pessoa IG', { pessoa: '558877001111', ultima_em: t(-2), previa: 'Pelo Instagram' });
+    const fSolto = await ins('whatsapp2', '5588977002222', 'Solto Funil', { ultima_em: t(-3) });
+    const fEnc = await ins('whatsapp1', '5588977003333', 'Encerrada Funil', { pessoa: '558877003333', encerrada_em: t(0.5) });
+    const fGrp = await ins('whatsapp1', '120363999@g.us', 'Grupo Funil', { grupo: 1, ultima_em: t(0.2) });
+    const todos = (j) => j.colunas.flatMap((c) => c.cartoes.map((k) => k.conversa));
+    const col = (j, n) => j.colunas.find((c) => c.etiqueta.nome === n);
+    await A('POST', '/msg/rotular', { conversa: fWa, etiquetas: [eId('Reserva'), eId('Troca')] });
+    await A('POST', '/msg/rotular', { conversa: fSolto, etiquetas: [eId('Reserva')] });
+    await A('POST', '/msg/rotular', { conversa: fEnc, etiquetas: [eId('Reserva')] });
+    await DB.prepare('INSERT OR IGNORE INTO msg_alvo_etiqueta (alvo, etiqueta_id, em) VALUES (?,?,?)').bind('c:' + fGrp, eId('Reserva'), t(0)).run();
+    let f = await A('GET', '/msg/funil?canal=todos');
+    chk('funil: colunas = etiquetas de venda, na ordem (sem Troca)', f.r.status === 200 && f.j.ok && f.j.colunas.map((c) => c.etiqueta.nome).join('|') === 'Novo cliente|Reserva|Aguardando pagamento|Pago|Enviado' && f.j.colunas.every((c) => c.etiqueta.id && c.etiqueta.cor && Array.isArray(c.cartoes)), f.j);
+    chk('funil: pessoa com 2 canais aparece uma vez, pela conversa mais recente (Instagram)', todos(f.j).filter((id) => id === fIg || id === fWa).length === 1 && col(f.j, 'Reserva').cartoes.some((k) => k.conversa === fIg), col(f.j, 'Reserva'));
+    const kIg = col(f.j, 'Reserva').cartoes.find((k) => k.conversa === fIg) || {};
+    chk('funil: cartão traz nome, canal, prévia, quando e responsável', kIg.canal === 'instagram' && kIg.previa === 'Pelo Instagram' && kIg.ultima_em && typeof kIg.nome === 'string' && kIg.nome.length > 0 && 'dono' in kIg, kIg);
+    chk('funil: mais recente primeiro na coluna e total contado', col(f.j, 'Reserva').cartoes[0].conversa === fSolto && col(f.j, 'Reserva').total === col(f.j, 'Reserva').cartoes.length, col(f.j, 'Reserva').cartoes.map((k) => k.conversa));
+    chk('funil: encerradas e grupos ficam de fora', !todos(f.j).includes(fEnc) && !todos(f.j).includes(fGrp));
+    const fW1 = await A('GET', '/msg/funil?canal=whatsapp1');
+    chk('funil: filtro de canal mostra a conversa daquele canal', fW1.j.ok && todos(fW1.j).includes(fWa) && !todos(fW1.j).includes(fIg) && !todos(fW1.j).includes(fSolto), todos(fW1.j));
+    const totRes = col(f.j, 'Reserva').total;
+    let mv = await A('POST', '/msg/funil/mover', { conversa: fIg, etiqueta: eId('Pago') });
+    chk('funil: mover troca a etiqueta de venda e mantém a não-venda (Troca)', mv.r.status === 200 && mv.j.ok && mv.j.etiquetas.map((e) => e.nome).sort().join() === 'Pago,Troca', mv.j);
+    f = await A('GET', '/msg/funil?canal=todos');
+    chk('funil: depois de mover, o cartão está só na coluna nova', col(f.j, 'Pago').cartoes.some((k) => k.conversa === fIg) && !col(f.j, 'Reserva').cartoes.some((k) => k.conversa === fIg) && col(f.j, 'Reserva').total === totRes - 1);
+    chk('funil: a conversa do outro canal vê as mesmas etiquetas', (await A('GET', '/msg/mensagens?conversa=' + fWa)).j.conversa.etiquetas.map((e) => e.nome).sort().join() === 'Pago,Troca');
+    mv = await A('POST', '/msg/funil/mover', { conversa: fWa, etiqueta: 0 });
+    f = await A('GET', '/msg/funil?canal=todos');
+    chk('funil: etiqueta=0 tira a etapa, fica só Troca, e a pessoa sai do quadro', mv.j.ok && mv.j.etiquetas.map((e) => e.nome).join() === 'Troca' && !todos(f.j).includes(fIg) && !todos(f.j).includes(fWa), mv.j);
+    const e1 = await A('POST', '/msg/funil/mover', { conversa: fWa, etiqueta: eId('Troca') });
+    chk('funil: etiqueta que não é de venda é recusada em português', e1.r.status === 400 && /etapa não existe mais/.test(e1.j.erro) && !e1.j.erro.includes('{'), e1.j);
+    chk('funil: grupo não entra no funil', (await A('POST', '/msg/funil/mover', { conversa: fGrp, etiqueta: eId('Pago') })).r.status === 400);
+    chk('funil: conversa inexistente dá 404 legível', (await A('POST', '/msg/funil/mover', { conversa: 987654, etiqueta: eId('Pago') })).j.erro === 'Conversa não encontrada.');
+    chk('funil: etapa inválida (negativa) recusada', (await A('POST', '/msg/funil/mover', { conversa: fWa, etiqueta: -1 })).r.status === 400);
+    chk('funil: canal inválido recusado em português', (await A('GET', '/msg/funil?canal=telegram')).r.status === 400);
+    chk('funil: exige Admin (sem sessão: 401)', (await w.fetch(ped('GET', '/msg/funil?canal=todos', ''), env, {})).status === 401);
+    await DB.prepare("UPDATE msg_etiqueta SET nome='Separado' WHERE id=?").bind(eId('Reserva')).run();
+    await DB.prepare("UPDATE msg_etiqueta SET arquivada=1 WHERE id=?").bind(eId('Enviado')).run();
+    f = await A('GET', '/msg/funil?canal=todos');
+    chk('funil: segue as etiquetas da equipe (renomeada aparece com o nome novo, arquivada some)', f.j.colunas.map((c) => c.etiqueta.nome).join('|') === 'Novo cliente|Separado|Aguardando pagamento|Pago', f.j.colunas.map((c) => c.etiqueta.nome));
+    await DB.prepare("UPDATE msg_etiqueta SET nome='Reserva' WHERE id=?").bind(eId('Reserva')).run();
+    await DB.prepare("UPDATE msg_etiqueta SET arquivada=0 WHERE id=?").bind(eId('Enviado')).run();
+    chk('funil: funções exportadas', typeof W.funilVendas_ === 'function' && typeof W.moverNoFunil_ === 'function');
+  }
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });
