@@ -28,6 +28,10 @@ Continuam as notificações de 2.1 com nome, canal, prévia e ações **Espiar/A
 
 A lista local mostra até mil conversas por consulta; busca também consulta o texto no servidor. Banco mantém mil mensagens por conversa em cem conversas recentes; páginas anteriores abertas ficam temporariamente em memória. Sessão cifrada e validade local máxima de 24h desde a confirmação de acesso. Exportações/mídias temporárias: até uma hora/64 MB, removidas ao abrir o app, sair ou trocar de conta. Chaves de integração ficam no servidor; não são incluídas no APK, exportação ou banco local. URLs externas de fotos públicas usam download anônimo permitido, sem enviar sessão.
 
+A prévia de links acompanha o painel web atual: ao escrever um link no WhatsApp, **Mostrar prévia do link (miniatura)** aparece acima do campo; começa desmarcada e lembra a escolha por canal. Não se aplica a anexos ou Instagram. Produtos/seleções usam o título correspondente quando o catálogo já foi consultado.
+
+Cópia e relatório de Google Contatos usam partes, com andamento visível, tela mantida acesa enquanto o app está aberto e **Parar após esta parte**. A cópia requer a ponte 1.1 já publicada. Se interromper ou perder conexão, recomece; nenhuma limpeza é aplicada.
+
 O menu Atendimento completo continua como alternativa, mas as operações listadas acima já são nativas. Veja [matriz de funções](PARIDADE-ATENDIMENTO-2.2.md) e [revisão visual](../revisoes/android-paridade-2.2.md).
 
-32 testes Robolectric, lint Release e compilação assinada passaram. Instalação, teclado real, TalkBack, microfone/codecs, compartilhamento com outros apps e entrega de notificação com app fechado precisam de conferência no aparelho. Nenhuma mensagem, notificação ou alteração de conexão real foi usada como teste.
+36 testes Robolectric, lint Release e compilação assinada passaram. Instalação, teclado real, TalkBack, microfone/codecs, compartilhamento com outros apps e entrega de notificação com app fechado precisam de conferência no aparelho. Nenhuma mensagem, notificação ou alteração de conexão real foi usada como teste.

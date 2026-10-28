@@ -18,7 +18,7 @@ class NativeAdministration(private val activity:Activity,private val scope:Corou
     @Volatile var active=false;private set
     private val dialogs=mutableListOf<AlertDialog>()
     private fun builder():AlertDialog.Builder=object:AlertDialog.Builder(activity){override fun create()=super.create().also{dialogs.removeAll{d->!d.isShowing};dialogs.add(it);it.setOnShowListener{active=true};it.setOnDismissListener{active=dialogs.any{d->d.isShowing}}};override fun show()=create().also{it.show()}}
-    fun close(){dialogs.toList().forEach{it.dismiss()};dialogs.clear();active=false}
+    fun close(){activity.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);dialogs.toList().forEach{it.dismiss()};dialogs.clear();active=false}
     private fun dp(n:Int)=(n*activity.resources.displayMetrics.density).toInt()
     private fun column()=LinearLayout(activity).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(8),dp(20),dp(12))}
     private fun text(value:String,bold:Boolean=false)=TextView(activity).apply{text=value;textSize=15f;setTextColor(Color.rgb(30,30,25));setPadding(0,dp(6),0,dp(6));setTextIsSelectable(true);if(bold)setTypeface(typeface,android.graphics.Typeface.BOLD)}
@@ -152,10 +152,10 @@ class NativeAdministration(private val activity:Activity,private val scope:Corou
             box.addView(text(if(backup==null)"Faça a cópia de segurança antes do relatório."else"Última cópia: "+stamp(backup.optString("em"))+" · ${backup.optInt("total")} contatos"))
             if(backup?.optString("url")?.startsWith("https://drive.google.com/")==true)box.addView(button("Abrir cópia no Drive"){activity.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(backup.optString("url"))))})
             box.addView(button("Fazer cópia de segurança"){
-                confirm("Fazer cópia dos contatos?","Um arquivo será criado no Drive da conta dos contatos; os contatos não serão alterados.",{repo.administration("/msg/contatos/backup",JSONObject())}){toast("Cópia de segurança concluída.");close();contacts()}
+                builder().setTitle("Fazer cópia dos contatos?").setMessage("Arquivos em partes serão criados no Drive. Os contatos não serão alterados. Mantenha esta tela aberta.").setPositiveButton("Confirmar"){_,_->contactsJob(false)}.setNegativeButton("Cancelar",null).show()
             })
             box.addView(button("Gerar relatório da limpeza"){
-                confirm("Gerar relatório?","O relatório somente lê os contatos. Não junta, corrige ou apaga contatos.",{repo.administration("/msg/contatos/relatorio",JSONObject())}){report(it.optJSONObject("relatorio")?:it)}
+                builder().setTitle("Gerar relatório?").setMessage("O relatório somente lê os contatos em partes. Não junta, corrige ou apaga contatos.").setPositiveButton("Confirmar"){_,_->contactsJob(true)}.setNegativeButton("Cancelar",null).show()
             }.apply{isEnabled=backup!=null})
             box.addView(button("Ver último relatório"){report(r.optJSONObject("relatorio"))})
             box.addView(button("Desligar ponte"){
@@ -164,6 +164,36 @@ class NativeAdministration(private val activity:Activity,private val scope:Corou
         }
         sheet("Google Contatos",box)
     }}
+    private fun contactsJob(reporting:Boolean){
+        val box=column();val label=text("Preparando…");box.addView(label)
+        val progress=ProgressBar(activity,null,android.R.attr.progressBarStyleHorizontal).apply{max=100;isIndeterminate=true};box.addView(progress)
+        box.addView(text("Mantenha esta tela aberta. Parar não altera os contatos; uma nova tentativa recomeça a operação."))
+        val stop=java.util.concurrent.atomic.AtomicBoolean(false)
+        val d=builder().setTitle(if(reporting)"Lendo contatos"else"Copiando contatos").setView(box).setCancelable(false).setNegativeButton("Parar após esta parte",null).show()
+        d.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener{stop.set(true);it.isEnabled=false;label.text="Parando após esta parte…"}
+        activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val owner=repo.store.stampedAuth()
+        fun currentOwner()=owner.second==repo.store.generation&&owner.first?.owner==repo.store.auth()?.owner
+        work({
+            fun check(){if(stop.get())throw Exception("Operação interrompida. Os contatos não foram alterados.");if(!currentOwner())throw AccessRevoked();if(!scope.isActive)throw CancellationException()}
+            fun call(path:String,body:JSONObject):JSONObject{check();return repo.administration(path,body)}
+            try{
+                if(reporting)call("/msg/contatos/relatorio",JSONObject().put("etapa","inicio"))
+                var page="";var folder="";var finished=false;var latest=JSONObject()
+                for(part in 0 until 400){
+                    val payload=if(reporting)JSONObject().put("etapa","parte")else JSONObject().put("partes",true)
+                    if(page.isNotBlank())payload.put("pagina",page);if(folder.isNotBlank())payload.put("pasta",folder)
+                    latest=call(if(reporting)"/msg/contatos/relatorio"else"/msg/contatos/backup",payload)
+                    val read=latest.optInt("lidos");val total=maxOf(read,latest.optInt(if(reporting)"total"else"totalPessoas"))
+                    activity.runOnUiThread{if(d.isShowing&&currentOwner()){label.text="$read de $total contatos";progress.isIndeterminate=total==0;if(total>0)progress.progress=(read.toLong()*100/total).toInt()}}
+                    page=latest.optString("proxima");folder=latest.optString("pasta")
+                    if(if(reporting)page.isBlank()else latest.optBoolean("fim")){finished=true;break}
+                }
+                if(!finished)throw Exception("Limite de partes atingido. Recomece a operação.")
+                if(reporting)call("/msg/contatos/relatorio",JSONObject().put("etapa","fim"))else latest
+            }finally{activity.runOnUiThread{d.dismiss();activity.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}}
+        }){r->if(reporting)report(r.optJSONObject("relatorio")?:r)else{toast("Cópia de segurança concluída.");close();contacts()}}
+    }
     private fun report(r:JSONObject?){
         val box=column();if(r==null){box.addView(text("Ainda não há relatório. Gere após a cópia de segurança."));sheet("Relatório dos contatos",box);return}
         box.addView(text("Gerado "+stamp(r.optString("em"))+". Nada foi alterado no Google."));box.addView(text("${r.optInt("total")} contatos · ${r.optInt("semFone")} sem número"))

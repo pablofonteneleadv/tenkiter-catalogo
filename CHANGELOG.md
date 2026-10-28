@@ -12,7 +12,8 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 - Painel de atendimento e gráfico por hora, configurações de leitura/nome/assinatura, exportação TXT/CSV/JSON e cópia para IA passam a funcionar na tela nativa pelas rotas existentes.
 - Conexões WhatsApp/Instagram, diagnósticos, pausa e retomada, segredo/assinatura Meta e ponte Google Contatos (cópia, relatório somente leitura e desligamento) disponíveis no menu nativo. Alterações exigem ações explícitas.
 - Produtos com fotos, estoque, busca sem acentos, seleção persistente e links; contexto de stories publicados; histórico anterior além da janela local e botão de novas mensagens. Avisos locais podem ser descartados sem reenviar.
-- APK 2.2.0/code5, mesma assinatura. 32 testes Android simulados; lint Release sem erros. Não envia mensagens ou muda conexões reais como teste.
+- Integra as mudanças simultâneas de 7.35 sem perda: prévia de links no compositor e contatos por partes com progresso/parada/tela acesa.
+- APK 2.2.0/code5, mesma assinatura. 36 testes Android simulados; lint Release sem erros. Não envia mensagens ou muda conexões reais como teste.
 
 ## 7.35.0 — Chave do Zernio em Conexões e Google Contatos para contas grandes — 2026-10-27
 

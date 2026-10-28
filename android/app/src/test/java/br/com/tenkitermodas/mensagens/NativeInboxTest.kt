@@ -58,6 +58,14 @@ class NativeInboxTest {
         }
         assertEquals(4,events.updates)
     }
+    @Test fun linkPreviewChoiceAppearsOnlyForWhatsAppLinksAndIsRememberedPerChannel(){
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","test","Pablo");a.getSharedPreferences("link-preview",0).edit().clear().commit()
+        v.render(auth,true,listOf(conv()),1,listOf(msg()),emptyList(),true,"Atualizado");layout(v,390,844)
+        val input=all(v).filterIsInstance<EditText>().first{it.hint=="Mensagem"};val choice=all(v).filterIsInstance<android.widget.CheckBox>().first{it.text.toString().startsWith("Mostrar prévia")}
+        assertEquals(View.GONE,choice.visibility);input.setText(BuildConfig.SITE_URL+"/p/TK-1");assertEquals(View.VISIBLE,choice.visibility);assertFalse(choice.isChecked);choice.performClick();assertTrue(a.getSharedPreferences("link-preview",0).getBoolean("whatsapp1",false));assertFalse(a.getSharedPreferences("link-preview",0).getBoolean("whatsapp2",false));layout(v,390,844);snapshot(v,"conversation-link-preview",390,844)
+        input.setText("sem link");assertEquals(View.GONE,choice.visibility)
+        v.render(auth,true,listOf(conv().put("canal","instagram")),1,listOf(msg()),emptyList(),true,"Atualizado");v.insert("https://example.invalid");assertFalse(all(v).filterIsInstance<android.widget.CheckBox>().any{it.isShown&&it.text.toString().startsWith("Mostrar prévia")})
+    }
     @Test fun encryptedAuthAndDatabaseSurviveReopenAndLogout(){
         val c=activity;c.deleteDatabase("mensagens-local.db");c.getSharedPreferences("native-auth",0).edit().clear().commit()
         val key=SecretKeySpec(ByteArray(32){7},"AES");val a=NativeAuth("88999990000","tk-test-secret","Pablo")

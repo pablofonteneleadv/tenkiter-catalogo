@@ -76,7 +76,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         auth=a;peeking=peek;chats=conversations;focus=id;messages=msgs;pending=outgoing;online=connected
         status(state)
         if(a==null||!canRead){if(viewKey!="login"){viewKey="login";showLogin(a!=null)};return}
-        val key=if(id>0)"chat:$id:${conversations.firstOrNull{it.optLong("id")==id}?.optString("nome")}:${msgs.joinToString("|"){it.toString()}.hashCode()}:${outgoing.joinToString("|"){it.toString()}.hashCode()}:$connected:$peek:${conversations.firstOrNull{it.optLong("id")==id}?.optBoolean("local_has_more")}" else "list"
+        val key=if(id>0)"chat:$id:${conversations.firstOrNull{it.optLong("id")==id}?.optString("canal")}:${conversations.firstOrNull{it.optLong("id")==id}?.optString("nome")}:${msgs.joinToString("|"){it.toString()}.hashCode()}:${outgoing.joinToString("|"){it.toString()}.hashCode()}:$connected:$peek:${conversations.firstOrNull{it.optLong("id")==id}?.optBoolean("local_has_more")}" else "list"
         if(viewKey!=key){
             val sameChat=viewKey.startsWith("chat:$id:")
             val keepFocus=chatInput?.hasFocus()==true&&sameChat
@@ -261,6 +261,12 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         val compose=LinearLayout(activity).apply{gravity=Gravity.BOTTOM;setPadding(dp(8),dp(6),dp(8),dp(8))}
         val input=EditText(activity).apply{hint=if(online)"Mensagem"else"Mensagem · envie após sincronizar";contentDescription="Mensagem para a conversa";setText(drafts[focus]?:"");minHeight=dp(48);maxLines=4;inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES;tag=focus}
         input.isEnabled=!peeking;chatInput=input;compose.addView(input,LayoutParams(0,-2,1f))
+        val channel=chats.firstOrNull{it.optLong("id")==focus}?.optString("canal").orEmpty()
+        val preferences=activity.getSharedPreferences("link-preview",0)
+        val preview=CheckBox(activity).apply{text="Mostrar prévia do link (miniatura)";minHeight=dp(48);textSize=14f;isChecked=preferences.getBoolean(channel,false);setOnCheckedChangeListener{_,checked->preferences.edit().putBoolean(channel,checked).apply()}}
+        fun updatePreview(){preview.visibility=if(channel.startsWith("whatsapp")&&Regex("https?://[^\\s<>\"']+",RegexOption.IGNORE_CASE).containsMatchIn(input.text))View.VISIBLE else View.GONE}
+        input.addTextChangedListener(object:TextWatcher{override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){};override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){updatePreview()};override fun afterTextChanged(e:Editable?) {}})
+        updatePreview();body.addView(preview,LayoutParams(-1,-2))
         compose.addView(button("Enviar"){val t=input.text.toString().trim();if(t.isNotBlank()&&online&&!peeking){if(events.send(focus,t)){drafts[focus]="";input.text.clear()}}}.apply{isEnabled=online&&!peeking;setTextColor(if(online)orange else Color.GRAY)},LayoutParams(-2,dp(48)));body.addView(compose)
     }
 }

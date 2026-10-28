@@ -40,6 +40,9 @@ class NativeAdministrationTest {
                 path=="/msg/config"->JSONObject().put("ok",true).put("meuNome","Clarice").put("config",JSONObject().put("assinatura",true).put("lerCelular",JSONObject().put("whatsapp1",true).put("whatsapp2",false).put("instagram",true)))
                 path.startsWith("/msg/metricas")->JSONObject().put("ok",true).put("dias",if(path.contains("dias=7"))7 else 30).put("entradas",24).put("saidas",20).put("conversas",5).put("medianaMin",JSONObject.NULL).put("ate5min",70).put("aguardando",JSONObject().put("total",2).put("maisAntigas",JSONArray().put(JSONObject().put("id",1).put("nome","Cliente teste").put("desde","2026-10-27T00:00:00Z")))).put("porHora",JSONArray((0..23).map{JSONObject().put("hora",it).put("entradas",it).put("medianaMin",5)}))
                 path.startsWith("/msg/contatos/situacao")->JSONObject().put("ok",true).put("ligada",linked).put("conta","teste@example.invalid").apply{if(backup)put("backup",JSONObject().put("em","2026-10-27T00:00:00Z").put("total",2))}
+                path=="/msg/contatos/backup"->JSONObject().put("ok",true).put("fim",body?.optString("pagina")=="next").put("proxima",if(body?.optString("pagina")=="next")""else"next").put("pasta","folder-test-123").put("lidos",if(body?.optString("pagina")=="next")2 else 1).put("totalPessoas",2)
+                path=="/msg/contatos/relatorio"&&body?.optString("etapa")=="inicio"->JSONObject().put("ok",true)
+                path=="/msg/contatos/relatorio"&&body?.optString("etapa")=="parte"->JSONObject().put("ok",true).put("lidos",if(body.optString("pagina")=="next")2 else 1).put("total",2).put("proxima",if(body.optString("pagina")=="next")""else"next")
                 path=="/msg/contatos/relatorio"->JSONObject().put("ok",true).put("total",2).put("semFone",1).put("duplicados",JSONObject().put("total",0).put("lista",JSONArray()))
                 path=="/msg/resumo"->JSONObject().put("ok",true).put("canais",JSONObject().put("whatsapp1",JSONObject().put("ligadoEm","2026-10-27T00:00:00Z").put("pausado",false)))
                 else->JSONObject().put("ok",true)
@@ -62,7 +65,7 @@ class NativeAdministrationTest {
     }}
     @Test fun dashboardReadsActualMetricsAndLetsTheUserChangePeriod(){Fixture().use{f->
         f.ui.dashboard("whatsapp2");val d=dialog("Painel de atendimento");assertTrue(all(d.window!!.decorView).filterIsInstance<TextView>().any{it.text.toString()=="Esperando resposta agora: 2"});assertTrue(f.fake.writes.isEmpty())
-        snapshot(d,"dashboard-native",390,780);all(d.window!!.decorView).filterIsInstance<ScrollView>().last().apply{isSmoothScrollingEnabled=false;scrollTo(0,getChildAt(0).height)};snapshot(d,"dashboard-hours-native",390,780);button(d,"7 dias").performClick();waitFor{f.fake.reads.any{it.contains("canal=whatsapp2")&&it.contains("dias=7")}};dialog("Painel de atendimento")
+        snapshot(d,"dashboard-native",390,780);snapshot(d,"dashboard-hours-native",390,780,bottom=true);button(d,"7 dias").performClick();waitFor{f.fake.reads.any{it.contains("canal=whatsapp2")&&it.contains("dias=7")}};dialog("Painel de atendimento")
     }}
     @Test fun copyConversationUsesAuthenticatedExportAndNeverCopiesSession(){Fixture().use{f->
         f.ui.copyConversation(42);waitFor{f.fake.exportQuery.isNotBlank()};waitFor{(f.a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).hasPrimaryClip()}
@@ -82,7 +85,12 @@ class NativeAdministrationTest {
     @Test fun contactsReportStaysReadOnlyAndRequiresAnExplicitConfirmation(){Fixture().use{f->
         f.fake.linked=true;f.fake.backup=true;f.ui.contacts();val d=dialog("Google Contatos");assertTrue(f.fake.writes.isEmpty());snapshot(d,"contacts-native",390,780)
         button(d,"Gerar relatório da limpeza").performClick();val confirm=dialog("Gerar relatório?");assertTrue(f.fake.writes.isEmpty());confirm.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
-        dialog("Relatório dos contatos");assertEquals(listOf("/msg/contatos/relatorio"),f.fake.writes.map{it.first});assertFalse(f.fake.writes.any{it.first.contains("config")})
+        dialog("Relatório dos contatos");assertEquals(listOf("inicio","parte","parte","fim"),f.fake.writes.map{it.second.optString("etapa")});assertEquals("next",f.fake.writes[2].second.optString("pagina"));assertFalse(f.fake.writes.any{it.first.contains("config")})
+    }}
+    @Test fun backupContinuesWithTheExactPageAndFolderUntilFinished(){Fixture().use{f->
+        f.fake.linked=true;f.ui.contacts();val d=dialog("Google Contatos");button(d,"Fazer cópia de segurança").performClick();assertTrue(f.fake.writes.isEmpty());dialog("Fazer cópia dos contatos?").getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        waitFor{f.fake.writes.size==2};dialog("Google Contatos")
+        val first=f.fake.writes[0].second;val second=f.fake.writes[1].second;assertTrue(first.getBoolean("partes"));assertFalse(first.has("pagina"));assertEquals("next",second.getString("pagina"));assertEquals("folder-test-123",second.getString("pasta"));assertFalse(f.ui.active.not())
     }}
     @Test fun bridgeSetupMasksTheKeyAndDoesNotSaveBeforeTheUserChooses(){Fixture().use{f->
         f.ui.contacts();val d=dialog("Google Contatos");val fields=all(d.window!!.decorView).filterIsInstance<EditText>()
@@ -102,8 +110,9 @@ class NativeAdministrationTest {
         }
         f.ui.settings();val settings=dialog("Leitura e assinatura");snapshot(settings,"settings-native",390,780)
     }}
-    private fun snapshot(d:AlertDialog,name:String,w:Int,h:Int){
+    private fun snapshot(d:AlertDialog,name:String,w:Int,h:Int,bottom:Boolean=false){
         val v=d.window!!.decorView;v.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(h,View.MeasureSpec.AT_MOST));v.layout(0,0,v.measuredWidth,v.measuredHeight)
+        if(bottom)all(v).filterIsInstance<ScrollView>().forEach{it.scrollTo(0,it.getChildAt(0).height)}
         val bitmap=android.graphics.Bitmap.createBitmap(v.width,v.height,android.graphics.Bitmap.Config.ARGB_8888);v.draw(android.graphics.Canvas(bitmap));val f=java.io.File("build/reports/native-ui/$name.png");f.parentFile!!.mkdirs();f.outputStream().use{bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()
     }
 }

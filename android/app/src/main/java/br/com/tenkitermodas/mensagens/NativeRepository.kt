@@ -10,6 +10,7 @@ import kotlin.concurrent.withLock
 
 class NativeRepository internal constructor(private val context:Context,val store:NativeStore=NativeStore(context),private val api:NativeApi=NativeApi()){
     private val lock=ReentrantLock()
+    private var catalogCache=emptyList<JSONObject>()
     private var cursor="";private var fullAt=0L;private var accountAt=0L
     @Volatile var status="";private set
     companion object {
@@ -36,7 +37,7 @@ class NativeRepository internal constructor(private val context:Context,val stor
         api.call("/msg/conversas?canal=todos&filtro=",fresh)
         if(!store.saveIfGeneration(generation,fresh))throw Exception("O acesso foi cancelado.")
     }}
-    fun logout(){cursor="";fullAt=0;accountAt=0;java.io.File(context.cacheDir,"received").deleteRecursively();runCatching{OneSignal.User.pushSubscription.optOut()};store.logout();status="";runCatching{BackgroundSync.cancel(context)};changed()}
+    fun logout(){catalogCache=emptyList();cursor="";fullAt=0;accountAt=0;java.io.File(context.cacheDir,"received").deleteRecursively();runCatching{OneSignal.User.pushSubscription.optOut()};store.logout();status="";runCatching{BackgroundSync.cancel(context)};changed()}
     private fun freshSession():NativeAuth {
         val old=store.auth()?:throw AccessRevoked()
         val j=api.account(JSONObject().put("action","sessao").put("whatsapp",old.owner).put("sessao",old.session))
@@ -133,7 +134,7 @@ class NativeRepository internal constructor(private val context:Context,val stor
     fun productPhoto(url:String):ByteArray?=api.publicPhoto(url)
     fun catalog():List<JSONObject> =lock.withLock{
         val a=store.auth()?:throw AccessRevoked();val r=api.catalog().getJSONArray("produtos");if(!store.current(a))throw AccessRevoked()
-        (0 until r.length()).map{r.getJSONObject(it)}.filter{it.optString("Status").isBlank()||it.optString("Status").equals("ativo",true)}
+        (0 until r.length()).map{r.getJSONObject(it)}.filter{it.optString("Status").isBlank()||it.optString("Status").equals("ativo",true)}.also{catalogCache=it}
     }
     fun batch(ids:Set<Long>,action:String,reason:String="concluido")=lock.withLock{
         require(ids.isNotEmpty()&&ids.size<=50);val a=store.auth()?:throw AccessRevoked()
@@ -176,7 +177,9 @@ class NativeRepository internal constructor(private val context:Context,val stor
         try{
             val config=api.call("/msg/config",a)
             val signed=if(attachment.isNotBlank()&&(type=="áudio"||store.conversation(id)?.optString("canal")=="instagram"))""else InboxRules.signature(a,store.conversation(id),config,text)
-            val j=api.call("/msg/enviar",a,JSONObject().put("conversa",id).put("texto",signed).put("idLocal",key).apply{if(attachment.isNotBlank())put("anexo",attachment)})
+            val j=api.call("/msg/enviar",a,JSONObject().put("conversa",id).put("texto",signed).put("idLocal",key).apply{if(attachment.isNotBlank())put("anexo",attachment)
+                else if(store.conversation(id)?.optString("canal").orEmpty().startsWith("whatsapp")&&context.getSharedPreferences("link-preview",0).getBoolean(store.conversation(id)?.optString("canal"),false))LinkPreview.fields(signed,catalogCache).let{fields->fields.keys().forEach{put(it,fields.get(it))}}
+            })
             if(!store.current(a))throw Exception("A conta mudou.")
             val m=j.optJSONObject("mensagem")
             if(m!=null){store.putMessages(a,id,org.json.JSONArray().put(m));store.removePending(key)}
