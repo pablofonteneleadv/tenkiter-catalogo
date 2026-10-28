@@ -87,6 +87,14 @@ class NativeInboxTest {
         v.render(auth,true,listOf(conv()),1,listOf(context),emptyList(),true,"Atualizado");layout(v,390,844)
         assertFalse(all(v).filterIsInstance<android.widget.TextView>().any{it.isShown&&it.text.contains("null")});assertTrue(all(v).filterIsInstance<Button>().any{it.text=="▶ Ver vídeo do story"});assertTrue(all(v).filterIsInstance<android.widget.ImageView>().any{it.contentDescription=="Prévia do story respondido"});assertFalse(all(v).filterIsInstance<Button>().first{it.text=="Atualizar app"}.isShown);snapshot(v,"conversation-story-video",390,844)
     }
+    @Test fun otherChannelShortcutIsExplicitAndDoesNotRelabelTheCurrentConversation(){
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","test","Pablo")
+        val main=conv(1).put("pessoa","same-person");val reserve=conv(2).put("pessoa","same-person").put("canal","whatsapp2")
+        v.render(auth,true,listOf(main,reserve),1,listOf(msg()),emptyList(),true,"Atualizado");layout(v,390,844)
+        assertTrue(all(v).filterIsInstance<android.widget.TextView>().any{it.isShown&&it.text.startsWith("Canal atual: WhatsApp 1")})
+        val shortcut=all(v).filterIsInstance<Button>().first{it.text=="Abrir conversa no WhatsApp 2"};shortcut.performClick();assertEquals(2L,events.selected)
+        snapshot(v,"pending-channel-shortcut",390,844)
+    }
     @Test fun encryptedAuthAndDatabaseSurviveReopenAndLogout(){
         val c=activity;c.deleteDatabase("mensagens-local.db");c.getSharedPreferences("native-auth",0).edit().clear().commit()
         val key=SecretKeySpec(ByteArray(32){7},"AES");val a=NativeAuth("88999990000","tk-test-secret","Pablo")

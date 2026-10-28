@@ -2732,7 +2732,16 @@ async function rotaWebhookMensagens_(env, req, url) {
     const m = normalizarWafly_(b);
     if (!m) return ok(200, { ok: true, ignorado: true });
     try { await prepararMidia_(env, canal, m); } catch (e) { /* a mídia é conforto: a mensagem é gravada de qualquer jeito */ }
-    if (m.tipo !== 'texto' || m.ctxTipo) { try { await cfgSet(env, 'msg_ult_forma_' + canal, JSON.stringify({ em: agora(), tipo: m.tipo, ctx: m.ctxTipo, copiada: !!m.midiaChave, contexto: Object.keys((b.statusReply && typeof b.statusReply==='object')?b.statusReply:{}).filter(k=>/^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0,30), campos: Object.keys(b).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 40), interno: Object.keys((b && b[({ imagem: 'image', 'vídeo': 'video', 'áudio': 'audio', documento: 'document', figurinha: 'sticker', texto:'text' })[m.tipo]]) || {}).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 20) })); } catch (e) { /* diagnóstico é conforto */ } }
+    try {
+      const keys=o=>o&&typeof o==='object'?Object.keys(o).filter(k=>/^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0,30):[];
+      const node=b[({imagem:'image','vídeo':'video','áudio':'audio',documento:'document',figurinha:'sticker',texto:'text'})[m.tipo]]||{};
+      const shape={em:agora(),tipo:m.tipo,ctx:m.ctxTipo,copiada:!!m.midiaChave,flagStatus:b.isStatusReply===true,contexto:keys(b.statusReply),campos:keys(b),interno:keys(node),contextInfo:keys(b.contextInfo||node.contextInfo),referencia:!!m.ctxRef};
+      await cfgSet(env,'msg_ult_forma_'+canal,JSON.stringify(shape));
+      if(m.ctxTipo==='story')await cfgSet(env,'msg_ult_status_forma_'+canal,JSON.stringify(shape));
+      const connected=String(b.connectedPhone||'').replace(/\D/g,'').slice(0,20);
+      if(connected)await cfgSet(env,'msg_origem_'+canal,JSON.stringify({em:shape.em,canal:canal,telefoneDaLoja:connected,instanciaConferida:!!cfg&&String(b.instanceId||'')===cfg.instance}));
+    } catch(e) { /* somente forma, flags e número da própria loja; nunca texto ou tokens */ }
+
     return ok(200, { ok: true, nova: await gravarMensagem_(env, canal, m) });
   }
   return ok(404, { ok: false });

@@ -873,5 +873,14 @@ function d1() {
   chk('Instagram sem número exige decisão explícita',(await A('POST','/msg/pessoa',{conversa:noWa,nome:'Sem número informado',whatsapp:''})).r.status===400);
   chk('Instagram pode permanecer sem WhatsApp se cliente não informar',(await A('POST','/msg/pessoa',{conversa:noWa,nome:'Sem número informado',whatsapp:'',semWhatsApp:true})).j.ok);
   chk('não apaga WhatsApp de cadastro já vinculado',(await A('POST','/msg/pessoa',{conversa:igPerson.id,nome:'Nome confirmado',whatsapp:'',semWhatsApp:true})).r.status===400);
+  await wh('/wh/wafly/1/'+seg,msg('DIAG-TEXT-PRINCIPAL','5588989012345','Texto privado que não pode ir ao diagnóstico',{connectedPhone:'5588999991111',momment:Date.now()}));
+  const firstShape=JSON.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='msg_ult_forma_whatsapp1'").first()).valor);
+  const firstOrigin=JSON.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='msg_origem_whatsapp1'").first()).valor);
+  chk('texto sem contexto também atualiza diagnóstico de forma',firstShape.tipo==='texto'&&firstShape.interno.includes('message')&&!firstShape.ctx);
+  chk('diagnóstico não guarda conteúdo ou número do cliente',!JSON.stringify(firstShape).includes('Texto privado')&&!JSON.stringify(firstShape).includes('5588989012345'));
+  chk('origem registra só o número da loja e o canal recebido',firstOrigin.telefoneDaLoja==='5588999991111'&&firstOrigin.canal==='whatsapp1');
+  await wh('/wh/wafly/2/'+seg,msg('DIAG-TEXT-RESERVA','5588989012345','Texto do reserva',{connectedPhone:'5588999992222',momment:Date.now()}));
+  const secondOrigin=JSON.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='msg_origem_whatsapp2'").first()).valor);
+  chk('diagnóstico não troca canais nem copia credenciais entre instâncias',secondOrigin.canal==='whatsapp2'&&secondOrigin.telefoneDaLoja==='5588999992222'&&!('token' in secondOrigin));
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });
