@@ -212,6 +212,16 @@ def tratar(route, path, method, body, s):
                 c["encerrada_motivo"] = "" if body.get("reabrir") else (body.get("motivo") if body.get("motivo") in ("concluido", "vendeu", "sem_resposta", "engano") else "concluido")
                 if not body.get("reabrir"): c["nao_lidas"] = 0
         return J({"ok": True, "alteradas": len(ids), "contagens": {k: cont(s, k) for k in ("whatsapp1", "whatsapp2", "instagram", "todos")}}) or True
+    if path == "/msg/auto":   # v7.40.8: respostas automáticas (desligadas por padrão)
+        au = s.setdefault("auto", {"boasVindas": {"ligado": False, "texto": "Oi! Que bom ter você aqui 😊 Já já uma das meninas te responde. Se já viu alguma peça, pode mandar o print ou o código que agiliza."}, "foraHorario": {"ligado": False, "texto": "Oi! A loja tá fechada agora, mas sua mensagem ficou guardada aqui. A gente volta {abertura} e te responde 😊 Se quiser, já deixa o print da peça e seu tamanho."}, "feriados": []})
+        if method == "POST":
+            for k in ("boasVindas", "foraHorario"):
+                d = body.get(k) or {}
+                if isinstance(d.get("ligado"), bool): au[k]["ligado"] = d["ligado"]
+                if isinstance(d.get("texto"), str) and d["texto"].strip(): au[k]["texto"] = d["texto"].strip()[:1000]
+            if isinstance(body.get("feriados"), list): au["feriados"] = sorted(set(x for x in body["feriados"] if isinstance(x, str) and len(x) == 10))
+            s.setdefault("auto_posts", []).append(body)
+        return J({"ok": True, "auto": au, "agora": {"aberta": False, "abertura": "amanhã às 7h30"}, "ultimo": s.get("auto_ultimo")}) or True
     if path == "/msg/config":
         cfg = s.setdefault("cfg_leitura", {"whatsapp1": True, "whatsapp2": True, "instagram": True})
         if method == "POST":

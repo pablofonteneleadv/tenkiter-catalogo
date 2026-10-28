@@ -174,7 +174,7 @@
       @media (min-width: 860px) { #overlay-mensagens { align-items: center; } .sheet-mensagens { height: min(90dvh, 880px); max-height: min(90dvh, 880px); margin-top: 0; border-radius: 16px; } }
       .sheet-mensagens button { width: auto; margin: 0; font-family: inherit; }
       .sheet-mensagens textarea, .sheet-mensagens input[type=search] { font-family: inherit; }
-      .ms-app { display: grid; grid-template-columns: 1fr; height: 100%; min-height: 0; }
+      .ms-app { position: relative; display: grid; grid-template-columns: 1fr; height: 100%; min-height: 0; }
       @media (min-width: 860px) { .ms-app { grid-template-columns: minmax(310px, 380px) 1fr; } }
       .ms-lateral, .ms-conversa { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: #fff; }
       .ms-lateral { border-right: 1px solid #e6e1d6; }
@@ -346,6 +346,20 @@
       .ms-assina b { color: #141414; }
       .ms-assina input { flex: 1 1 auto; min-width: 0; min-height: 40px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 8px; font: inherit; font-size: 0.9rem; }
       .ms-assina .ms-btn { min-height: 40px; padding: 6px 12px; }
+      /* v7.40.9: respostas automáticas (gaveta) e selo "Automática" na bolha */
+      .ms-auto-tag { font-size: 0.68rem; font-weight: 700; color: #5c3a00; background: #fff1dc; border-radius: 4px; padding: 0 5px; margin-right: 4px; }
+      .ms-auto { padding: 0 14px; }
+      .ms-auto-agora { margin: 0 0 4px; padding: 8px 10px; border-radius: 8px; background: #f7f4ec; font-size: 0.85rem; font-weight: 600; color: #333; }
+      .ms-auto-sec { padding: 8px 0 12px; border-bottom: 1px solid #f0ece5; }
+      .ms-auto-sec .ms-cfg-linha { font-size: 0.95rem; }
+      .ms-auto-exp { margin: 2px 0 8px; font-size: 0.8rem; color: #4a443b; line-height: 1.4; }
+      .ms-auto textarea.ms-copia { font: inherit; font-size: 0.9rem; line-height: 1.35; resize: vertical; min-height: 96px; background: #fff; }
+      .ms-auto-feriados { list-style: none; margin: 0; padding: 0; }
+      .ms-auto-feriados li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; border-bottom: 1px solid #f0ece5; font-size: 0.9rem; }
+      .ms-auto .ms-linha input[type=date] { flex: 1 1 150px; width: auto; min-height: 44px; font-size: 0.9rem; background: #fff; }
+      .ms-auto-pe { display: flex; justify-content: flex-end; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid #e6e1d6; background: #fff; }
+      .ms-auto-pe .ms-btn { min-width: 120px; min-height: 48px; }
+      .ms-resp-dica { margin: 8px 12px 0; font-size: 0.78rem; color: #4a443b; }
       .sheet-mensagens .ms-link-btn { min-height: 44px; padding: 0 6px; border: 0; background: none; color: #7a3a00; font: inherit; font-size: 0.78rem; font-weight: 700; text-decoration: underline; cursor: pointer; }
       .ms-atendente { color: #0f6b3f; }
       .ms-cfg-tit { margin: 12px 0 0; font-weight: 700; }
@@ -905,7 +919,8 @@
   });
   function fecharGaveta_() { const g = $('ms-gaveta'); if (!g) return; g.remove(); if (window.TKCamadas && TKCamadas.aberta('ms-gaveta')) TKCamadas.desempilhar('ms-gaveta'); }
   function gaveta_(titulo) {
-    fecharGaveta_(); const pai = $('ms-conversa'); if (!pai) return null;
+    // v7.40.9: no celular, com a lista à mostra (ex.: gavetas abertas pelo menu ⋯), a gaveta cobre o app inteiro em vez da conversa escondida
+    fecharGaveta_(); const cv = $('ms-conversa'), pai = cv && cv.getClientRects().length ? cv : $('ms-app'); if (!pai) return null;
     const g = el('div', 'ms-gaveta'); g.id = 'ms-gaveta'; g.setAttribute('role', 'dialog'); g.setAttribute('aria-label', titulo);
     const cab = el('div', 'ms-gaveta-cab'); cab.appendChild(el('h3', '', titulo));
     const x = botao('ms-ico', '✕', 'gaveta-fechar'); x.setAttribute('aria-label', 'Fechar ' + titulo); cab.appendChild(x);
@@ -1011,6 +1026,24 @@
     ].filter(Boolean);
   }
   const respostas_ = () => (cfgLeitura && Array.isArray(cfgLeitura.respostas) ? cfgLeitura.respostas : respostasPadrao_());
+  /* v7.40.9: [nome] vira o nome da atendente (menos no Pix, onde [nome] é a titular da chave); o primeiro [lacuna] fica selecionado para completar */
+  const RE_LACUNA_ = /\[(nome|chave pix|valor[^\]\n]{0,20})\]/i;
+  function textoResposta_(x) { const n = nomeAtendente_(); return n && !/pix/i.test(x) ? String(x).replace(/\[nome\]/g, n) : String(x); }
+  function marcarLacuna_(desde) {
+    const ta = $('ms-texto'); if (!ta) return false;
+    const resto = ta.value.slice(desde || 0), mt = RE_LACUNA_.exec(resto); if (!mt) return false;
+    const i = (desde || 0) + mt.index; try { ta.focus(); ta.setSelectionRange(i, i + mt[0].length); } catch (e) { /* campo sem seleção */ }
+    aviso_('Complete o que está entre colchetes antes de enviar.'); return true;
+  }
+  function colocarResposta_(x) {
+    const ta = $('ms-texto'), txt = textoResposta_(x); colocarNaMensagem_(txt);
+    if (ta) marcarLacuna_(Math.max(0, ta.value.length - txt.length));
+  }
+  function expandirAtalho_(ta) {
+    const mt = /^\/([a-z0-9_-]{1,38})\s$/i.exec(ta.value); if (!mt) return false;
+    const r = respostas_().find((z) => String(z.t || '').toLowerCase() === '/' + mt[1].toLowerCase()); if (!r) return false;
+    ta.value = ''; colocarResposta_(r.x); return true;
+  }
   function abrirRespostas_(editando) {
     const corpo = gaveta_('Respostas rápidas'); if (!corpo) return;
     if (!editando) {
@@ -1018,6 +1051,7 @@
       if (!lista.length) ul.appendChild(el('li', 'ms-vazio', 'Nenhuma resposta salva ainda.'));
       lista.forEach((r, i) => { const li = el('li'), b = botao('ms-resp', '', 'resp-usar', { i: String(i) }); b.append(el('b', '', r.t), el('span', '', r.x)); li.appendChild(b); ul.appendChild(li); });
       corpo.appendChild(ul);
+      if (lista.some((r) => /^\/\S/.test(r.t || ''))) corpo.appendChild(el('p', 'ms-resp-dica', 'Atalho: escreva /oi (ou outro título com /) e um espaço na mensagem.'));
       const l = el('div', 'ms-linha'); l.appendChild(botao('ms-btn', 'Editar respostas', 'resp-editar')); corpo.appendChild(l);
       if (!(cfgLeitura && Array.isArray(cfgLeitura.respostas))) corpo.appendChild(el('p', 'ms-cfg-res', 'Estas são as respostas iniciais, com o que o site já sabe da loja. Em “Editar respostas” dá para colocar horário, formas de pagamento, entrega e o que mais a equipe repete.'));
       return;
@@ -1042,6 +1076,55 @@
       l.append(add, salvar); box.appendChild(l);
     };
     desenhar(); corpo.appendChild(box);
+  }
+  /* ---- v7.40.9: respostas automáticas (desligadas por padrão). Tudo é salvo junto, no botão Salvar fixo no pé da gaveta ---- */
+  let autoEdit_ = null, autoUlt_ = null;
+  const dataCurta_ = (iso) => String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7) + '/' + String(iso).slice(0, 4);
+  async function abrirAuto_() {
+    const corpo = gaveta_('Respostas automáticas'); if (!corpo) return;
+    const g = $('ms-gaveta'), gen = g.dataset.gen; corpo.appendChild(el('p', 'ms-vazio', 'Carregando…'));
+    const r = await worker_('/msg/auto', 'GET');
+    const g2 = $('ms-gaveta'); if (!g2 || g2.dataset.gen !== gen) return;      // a pessoa fechou ou abriu outra gaveta enquanto carregava
+    if (!r.ok) { corpo.textContent = ''; corpo.appendChild(el('p', 'ms-vazio', r.erro || 'Não foi possível carregar agora. Feche e abra de novo.')); return; }
+    autoEdit_ = JSON.parse(JSON.stringify(r.auto)); autoUlt_ = r; desenharAuto_();
+    const pe = el('div', 'ms-auto-pe'); pe.appendChild(botao('ms-btn prim', 'Salvar', 'auto-salvar')); g2.appendChild(pe);
+  }
+  function desenharAuto_() {
+    const g = $('ms-gaveta'), corpo = g && g.querySelector('.ms-gaveta-corpo'); if (!corpo || !autoEdit_) return;
+    const rolagem = corpo.scrollTop; corpo.textContent = '';
+    const w = el('div', 'ms-auto'), ag = (autoUlt_ && autoUlt_.agora) || {};
+    w.appendChild(el('p', 'ms-auto-agora', ag.aberta ? 'Agora a loja está aberta.' : 'Agora a loja está fechada · abre ' + (ag.abertura || 'em breve') + '.'));
+    const secao = (k, titulo, explica) => {
+      const s = el('section', 'ms-auto-sec'), lb = el('label', 'ms-cfg-linha'), c = el('input'); c.type = 'checkbox'; c.checked = !!autoEdit_[k].ligado;
+      c.addEventListener('change', () => { autoEdit_[k].ligado = c.checked; });
+      lb.append(c, document.createTextNode(titulo)); s.appendChild(lb); s.appendChild(el('p', 'ms-auto-exp', explica));
+      const ta = el('textarea', 'ms-copia'); ta.rows = 4; ta.maxLength = 1000; ta.value = autoEdit_[k].texto; ta.setAttribute('aria-label', 'Texto da mensagem de ' + titulo.toLowerCase());
+      ta.addEventListener('input', () => { autoEdit_[k].texto = ta.value; }); s.appendChild(ta); w.appendChild(s);
+    };
+    secao('boasVindas', 'Boas-vindas', 'Loja aberta: quando o cliente escreve e a conversa estava parada havia 12 h. Sai uma vez, na hora.');
+    secao('foraHorario', 'Fora do horário', 'Loja fechada: no máximo 1 vez por conversa até a loja abrir. {abertura} vira o dia e a hora, como “amanhã às 7h30”.');
+    const h = el('section', 'ms-auto-sec');
+    h.appendChild(el('p', 'ms-etq-rot', 'Horário da loja'));
+    h.appendChild(el('p', 'ms-auto-exp', 'Segunda a sexta, 7h30 às 18h · Sábado, 7h30 às 14h · Domingo fechado'));
+    h.appendChild(el('p', 'ms-etq-rot', 'Feriados com comércio aberto (8h às 13h)'));
+    const ul = el('ul', 'ms-auto-feriados');
+    if (!autoEdit_.feriados.length) ul.appendChild(el('li', '', 'Nenhum feriado cadastrado.'));
+    autoEdit_.feriados.forEach((d) => { const li = el('li'), x = botao('ms-link-btn', 'Remover', 'auto-feriado-tirar', { d: d }); x.setAttribute('aria-label', 'Remover o feriado de ' + dataCurta_(d)); li.append(el('span', '', dataCurta_(d)), x); ul.appendChild(li); });
+    h.appendChild(ul);
+    const ln = el('div', 'ms-linha'), di = el('input', 'ms-copia'); di.type = 'date'; di.id = 'ms-auto-data'; di.setAttribute('aria-label', 'Data do feriado');
+    ln.append(di, botao('ms-btn', 'Incluir feriado', 'auto-feriado-add')); h.appendChild(ln); w.appendChild(h);
+    w.appendChild(el('p', 'ms-auto-exp', 'Nunca vai para grupos, respostas a status sem texto nem mensagens da própria loja. A mensagem automática aparece na conversa com o selo “Automática” e a conversa continua em “Falta responder”.'));
+    const u = autoUlt_ && autoUlt_.ultimo;
+    if (u && u.em) { const d = new Date(u.em); w.appendChild(el('p', 'ms-auto-exp' + (u.ok ? '' : ' ms-pausa'), 'Último envio automático: ' + (isNaN(d) ? '' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })) + (u.ok ? ' · enviado' : ' · não confirmado: ' + (u.erro || 'sem resposta')))); }
+    corpo.appendChild(w); corpo.scrollTop = rolagem;
+  }
+  async function salvarAuto_(b) {
+    if (!autoEdit_) return;
+    b.disabled = true; const r = await worker_('/msg/auto', 'POST', autoEdit_); b.disabled = false;
+    if (!r.ok) { aviso_(r.erro || 'Não foi possível salvar agora. Tente de novo.'); return; }
+    autoEdit_ = JSON.parse(JSON.stringify(r.auto)); autoUlt_ = r; desenharAuto_();
+    const n = (r.auto.boasVindas.ligado ? 1 : 0) + (r.auto.foraHorario.ligado ? 1 : 0);
+    aviso_(n ? 'Salvo. ' + (n === 2 ? 'As duas respostas automáticas estão ligadas.' : (r.auto.boasVindas.ligado ? 'Boas-vindas ligada.' : 'Fora do horário ligada.')) : 'Salvo. As respostas automáticas estão desligadas.');
   }
   async function salvarNome_(v) {
     const r = await worker_('/msg/config', 'POST', { meuNome: String(v || '') });
@@ -1277,7 +1360,7 @@
 
   function bolha(m) {
     let b = elMsgs.get(m.id);
-    const ass = [m.autor_nome || '', m.autor_fone || '', ehGrupo_() ? Object.keys(nomesDoGrupo_()).length : 0, m.texto, m.tipo, m.status, m.erro || '', m.midia, m.localUrl || '', m.ctx_tipo || '', m.ctx_midia, m.ctx_texto || '', m.ctx_legenda || '', m.ctx_aprox].join('|');
+    const ass = [m.autor_nome || '', m.autor_fone || '', ehGrupo_() ? Object.keys(nomesDoGrupo_()).length : 0, m.texto, m.tipo, m.status, m.erro || '', m.midia, m.localUrl || '', m.ctx_tipo || '', m.ctx_midia, m.ctx_texto || '', m.ctx_legenda || '', m.ctx_aprox, m.por || ''].join('|');
     if (b && b.dataset.ass === ass) return b;
     if (!b) { b = el('div'); elMsgs.set(m.id, b); }
     b.dataset.ass = ass; b.dataset.id = String(m.id); b.textContent = '';
@@ -1297,7 +1380,8 @@
     if (corpoTxt) formatarWa_(b, trocarMencoes_(corpoTxt));
     if (m.tipo && m.tipo !== 'texto' && !mid) b.appendChild(el('span', 'ms-tipo', (m.texto ? ' ' : '') + (TIPO_ROTULO[m.tipo] || '[' + m.tipo + ']') + (m.midia === 0 && m.direcao === 'entrada' && ['imagem', 'vídeo', 'áudio'].indexOf(m.tipo) >= 0 ? ' (arquivo não disponível)' : '')));
     /* v7.40.8: link "Foi resposta a um story?" removido; o contexto do story vem da Wafly quando ela envia a referência */
-    const meta = el('span', 'ms-meta'); meta.appendChild(el('time', '', m.enviada_em ? hm(new Date(m.enviada_em)) : ''));
+    const meta = el('span', 'ms-meta'); if (m.direcao === 'saida' && m.por === 'auto') meta.appendChild(el('span', 'ms-auto-tag', 'Automática'));
+    meta.appendChild(el('time', '', m.enviada_em ? hm(new Date(m.enviada_em)) : ''));
     if (m.direcao === 'saida') meta.appendChild(selo(m.status || 'enviada'));
     b.appendChild(meta);
     if (m.status === 'incerta') b.appendChild(el('span', 'ms-erro', 'Sem confirmação. Confira no ' + (canalDaConversa() === 'instagram' ? 'Instagram' : 'WhatsApp') + ' antes de enviar de novo.'));
@@ -1393,7 +1477,7 @@
     const bt = botao('ms-enviar', 'Enviar', 'enviar'); bt.id = 'ms-enviar'; bt.disabled = !ta.value.trim() && !anexoPend;
     form.append(clip, arq, ta, mic, bt); pai.appendChild(form);
     if (espiando) form.hidden = true;        // para responder, toque em Atender (aí marca como lida)
-    const cresce = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); desenharPrevia_(); };
+    const cresce = () => { if (expandirAtalho_(ta)) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); desenharPrevia_(); };
     ta.addEventListener('input', cresce);
     ta.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && window.matchMedia('(pointer: fine)').matches) { ev.preventDefault(); enviar(); } });
     cresce(); desenharStage_(); desenharAssina_(false);
@@ -1564,6 +1648,7 @@
       texto = ta.value.replace(/\r\n/g, '\n').trim(); const an = anexoPend;
       if (!texto && !an) return;
       if (an && c.canal === 'instagram' && texto) { aviso_('O Instagram não aceita texto junto com foto, vídeo ou áudio. Envie o anexo e depois o texto.'); return; }
+      if (RE_LACUNA_.test(texto)) { marcarLacuna_(0); return; }   // v7.40.9: [valor no Pix], [chave Pix]… ainda sem completar
       texto = assinar_(c, texto);
       if (!an && (c.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > limiteTexto(c))) { aviso_('Mensagem grande demais para este canal. Divida em duas.'); return; }
       idLocal = idLocal_();
@@ -1831,7 +1916,11 @@
     else if (a === 'modo-nota') alternarNota_();
     else if (a === 'gaveta-fechar') { fecharGaveta_(); const t = $('ms-texto'); if (t) t.focus(); }
     else if (a === 'resp-editar') abrirRespostas_(true);
-    else if (a === 'resp-usar') { const r = respostas_()[Number(b.dataset.i)]; if (r) colocarNaMensagem_(r.x); }
+    else if (a === 'resp-usar') { const r = respostas_()[Number(b.dataset.i)]; if (r) colocarResposta_(r.x); }
+    else if (a === 'auto-cfg') abrirAuto_();
+    else if (a === 'auto-salvar') await salvarAuto_(b);
+    else if (a === 'auto-feriado-add') { const di = $('ms-auto-data'), v = di ? di.value : ''; if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) { aviso_('Escolha a data do feriado.'); if (di) di.focus(); } else if (autoEdit_) { if (autoEdit_.feriados.indexOf(v) < 0) autoEdit_.feriados = autoEdit_.feriados.concat(v).sort(); desenharAuto_(); const d2 = $('ms-auto-data'); if (d2) d2.focus(); aviso_('Feriado incluído. Toque em Salvar para valer.'); } }
+    else if (a === 'auto-feriado-tirar' && autoEdit_) { autoEdit_.feriados = autoEdit_.feriados.filter((d) => d !== b.dataset.d); desenharAuto_(); const d2 = $('ms-auto-data'); if (d2) d2.focus(); aviso_('Feriado retirado. Toque em Salvar para valer.'); }
     else if (a === 'prod-marcar') marcarProduto_(b);
     else if (a === 'prodsel-limpar') { prodSel = []; Array.prototype.forEach.call(document.querySelectorAll('#ms-prod-lista .ms-prod-marca'), (m) => { m.setAttribute('aria-pressed', 'false'); m.querySelector('.ms-prod-caixa').textContent = ''; m.closest('.ms-prod').classList.remove('marcado'); }); desenharSelProd_(); const q = $('ms-prod-busca'); if (q) q.focus(); }
     else if (a === 'prodsel-usar') { const ps = produtosSelecionados_(); if (ps.length) { prodSel = []; colocarNaMensagem_(textoSelecao_(ps)); } }
@@ -1874,7 +1963,7 @@
     else if (a === 'usar-conta') { const l = contasSalvas_(), c = l.find((x) => x.whatsapp === b.dataset.w); if (!c) return; salvarSessao(c.whatsapp, c.sessao); location.reload(); }
     else if (a === 'esquecer-conta') { guardarContas_(contasSalvas_().filter((x) => x.whatsapp !== b.dataset.w)); abrirTrocaUsuario_(); }
     else if (a === 'outra-conta') { lembrarSessao_(); limparSessao(); location.reload(); }
-    else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Configurações (leitura e nome)…', 'leitura-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar'], '-', ['Trocar usuário…', 'trocar-usuario']]));
+    else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Configurações (leitura e nome)…', 'leitura-cfg'], ['Respostas automáticas…', 'auto-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar'], '-', ['Trocar usuário…', 'trocar-usuario']]));
     else if (a === 'menu-conversa' && aberta) abrirMenu(b, [['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
     else if (a === 'exp') baixar(b.dataset.params, b.dataset.rotulo);
     else if (a === 'copiar-ia') copiarParaIA();
