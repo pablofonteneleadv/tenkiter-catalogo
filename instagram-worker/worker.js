@@ -208,7 +208,7 @@ async function permissoes(env, req) {
 }
 
 // Acessos adicionais são privados no Worker; não alteram os perfis do cadastro.
-const MSG_FERRAMENTAS_ = { acessar:'Acessar Mensagens', responder:'Responder e encerrar atendimentos', arquivos:'Baixar arquivos recebidos', contatos:'Editar cadastro e canais', etiquetas:'Mudar etiquetas', notas:'Ver e editar notas da equipe', agenda:'Agendar mensagens', respostas:'Usar e editar respostas rápidas', funil:'Ver e mover o funil', metricas:'Ver métricas', exportar:'Exportar e consultar exclusões', configuracoes:'Configurar conexões e automações' };
+const MSG_FERRAMENTAS_ = { acessar:'Acessar Mensagens', responder:'Responder e encerrar atendimentos', produtos:'Selecionar produtos no atendimento', arquivos:'Baixar arquivos recebidos', contatos:'Editar cadastro e canais', etiquetas:'Mudar etiquetas', notas:'Ver e editar notas da equipe', agenda:'Agendar mensagens', respostas:'Usar e editar respostas rápidas', funil:'Ver e mover o funil', metricas:'Ver métricas', exportar:'Exportar e consultar exclusões', configuracoes:'Configurar conexões e automações' };
 const msgPerfil_ = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,100);
 const msgTelefone_ = s => foneNormal_(s).chave || String(s || '').replace(/\D/g,'').slice(0,20);
 async function msgRegras_(env) { const raw = await cfgGet(env,'msg_acessos_v1'); return raw ? JSON.parse(raw) : { perfis:{}, pessoas:{} }; }

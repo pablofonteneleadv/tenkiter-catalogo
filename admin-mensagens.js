@@ -91,6 +91,7 @@
   }
   function podeFerramenta_(k) { return window.TKMensagensAcessos ? TKMensagensAcessos.pode(k) : podeGerir(); }
   function recursoAcao_(a) {
+    if (/^(gaveta-produtos|prod-?|prodsel-)/.test(a)) return 'produtos';
     if (/^(notas-|modo-nota)/.test(a)) return 'notas';
     if (/^(ficha|pessoa|nome-)/.test(a)) return 'contatos';
     if (/^(etq|etiquetas)/.test(a)) return 'etiquetas';
