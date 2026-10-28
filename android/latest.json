@@ -1,8 +1,8 @@
 {
-  "versionCode": 10,
-  "versionName": "2.4.3",
-  "bytes": 4578493,
-  "sha256": "78000c39cf3c5de31fdd373ad0e37fa207351b333afa362006ed6bb47195e635",
-  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.3/TENKiTER-Mensagens-2.4.3.apk",
-  "notes": "Instale sobre a versão anterior. No menu ⋯ das Mensagens agora há Atualizar app e Permissões do app."
+  "versionCode": 11,
+  "versionName": "2.4.4",
+  "bytes": 4580785,
+  "sha256": "9f92bfbf517c05f1d440d4da381ef92cd6464f57bd8378acd5968e8d04e11158",
+  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.4/TENKiTER-Mensagens-2.4.4.apk",
+  "notes": "Notas da equipe no modo Espiar, filtro Com notas e exclusão com histórico. Produtos com filtros de tamanho, categoria, cor e público ao digitar. Acessos por ferramenta no RH, download de arquivos e atualização da lista ao voltar ao app ou receber aviso. Instale sobre a versão anterior, sem desinstalar; o Android pede confirmação."
 }

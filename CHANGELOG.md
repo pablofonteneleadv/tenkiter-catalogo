@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.20] - 2026-10-28
+
+- Disponibiliza Android 2.4.4 com assinatura preservada e manifesto conferido
+
+
 ## [7.40.19] - 2026-10-28
 
 - Notas da equipe em Espiar, filtro Com notas, acessos por ferramenta, downloads e filtros de produtos no atendimento

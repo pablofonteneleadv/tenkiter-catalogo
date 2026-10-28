@@ -23,3 +23,7 @@ Produtos têm filtros por tamanho, categoria, cor e público. O painel abre ao d
 Revisão visual: tarefa principal é anotar/escolher uma peça sem perder o atendimento. Referência: telas enviadas pelo proprietário. Viewports 320×700, 390×844, 412×915 e 1440×900; fonte 130% e altura reduzida a 470 px para simular teclado. Notas usam corpo rolável com padding 16 px, botões críticos 48 px e X com nome acessível. Filtros têm área rolável de até 240 px e seleção fora da lista. Estado vazio, espera, sucesso e erro preservam a próxima ação. **APROVADO COM LIMITAÇÃO**: evidência em testes simulados, sem homologação em aparelho físico.
 
 O workflow Android passa a compilar também no push protegido da main com alterações em `android/**` ou no próprio workflow. PRs continuam compilando somente APK de teste, sem secrets. O manifesto público só muda depois de verificar o APK oficial assinado.
+
+## Instalador oficial conferido
+
+Artefato do workflow `APK Android` 40758508536, fonte main `41c06ca5a01902b04e311b040607ba625b8c3cfc`. Pacote `br.com.tenkitermodas.mensagens`, versão 2.4.4, código 11, 4.580.785 bytes. Assinatura v2 válida e mesmo certificado de 2.4.3: `09ed81d57207c72a9d49cc5065483a22f57a15528d8a626aa3a99467e1b59a76`. SHA-256 do APK: `9f92bfbf517c05f1d440d4da381ef92cd6464f57bd8378acd5968e8d04e11158`. Cópia recuperável em `android-installers/releases/2.4.4/`. A distribuição ocorre pelo deploy oficial depois da aprovação do PR de manifesto.
