@@ -115,6 +115,8 @@ async function iniciar(env) {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_encerramento (id INTEGER PRIMARY KEY AUTOINCREMENT, conversa_id INTEGER NOT NULL, canal TEXT NOT NULL, pessoa TEXT DEFAULT '', contato TEXT DEFAULT '', motivo TEXT NOT NULL, em TEXT NOT NULL, por TEXT DEFAULT '')").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_nota (id INTEGER PRIMARY KEY AUTOINCREMENT, alvo TEXT NOT NULL, texto TEXT NOT NULL, autor TEXT DEFAULT '', em TEXT NOT NULL)").run();   // v7.40.3: notas internas (o cliente nunca vê)
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msg_nota_alvo ON msg_nota (alvo, em)').run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_etiqueta (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, cor TEXT NOT NULL DEFAULT 'cinza', ordem INTEGER NOT NULL DEFAULT 0, venda INTEGER NOT NULL DEFAULT 0, arquivada INTEGER NOT NULL DEFAULT 0)").run();   // v7.40.4: etiquetas
+    await env.DB.prepare('CREATE TABLE IF NOT EXISTS msg_alvo_etiqueta (alvo TEXT NOT NULL, etiqueta_id INTEGER NOT NULL, em TEXT NOT NULL, PRIMARY KEY (alvo, etiqueta_id))').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_conv ON msg_encerramento (conversa_id, em)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_pessoa ON msg_encerramento (pessoa)').run();
   } catch (e) { /* tenta de novo na próxima vez */ }
@@ -2892,6 +2894,25 @@ const MSG_MOTIVOS_ = ['concluido', 'vendeu', 'sem_resposta', 'engano'];
 const MSG_PESSOA_SQL_ = "(CASE WHEN length(contato)=13 AND substr(contato,1,2)='55' AND substr(contato,5,1)='9' THEN substr(contato,1,4)||substr(contato,6) ELSE contato END)";
 // v2.12: conversa encerrada não conta como "a pessoa também está no outro WhatsApp" (volta a contar quando o cliente escreve de novo nela)
 const MSG_OUTRO_SQL_ = "(SELECT o.id FROM msg_conversa o WHERE msg_conversa.pessoa<>'' AND o.pessoa=msg_conversa.pessoa AND o.canal<>msg_conversa.canal AND o.canal IN ('whatsapp1','whatsapp2') AND msg_conversa.canal IN ('whatsapp1','whatsapp2') AND o.total>0 AND o.encerrada_em='' ORDER BY o.ultima_em DESC LIMIT 1)";
+/* v7.40.4: etiquetas da pessoa (alvo = identidade da pessoa ou "c:<id da conversa>") */
+const ETIQUETAS_PADRAO_ = [['Novo cliente', 'cinza', 1], ['Reserva', 'ambar', 1], ['Aguardando pagamento', 'azul', 1], ['Pago', 'verde', 1], ['Enviado', 'roxo', 1], ['Troca', 'rosa', 0]];
+const ETQ_CORES_ = ['cinza', 'ambar', 'azul', 'verde', 'roxo', 'rosa'];
+async function etiquetas_(env) {
+  let rs = (await env.DB.prepare('SELECT id, nome, cor, ordem, venda FROM msg_etiqueta WHERE arquivada=0 ORDER BY ordem, id').all()).results || [];
+  if (!rs.length && !(await cfgGet(env, 'msg_etq_semeada'))) {
+    await env.DB.batch(ETIQUETAS_PADRAO_.map((e, i) => env.DB.prepare('INSERT INTO msg_etiqueta (nome, cor, ordem, venda) VALUES (?,?,?,?)').bind(e[0], e[1], i, e[2])));
+    await cfgSet(env, 'msg_etq_semeada', '1');
+    rs = (await env.DB.prepare('SELECT id, nome, cor, ordem, venda FROM msg_etiqueta WHERE arquivada=0 ORDER BY ordem, id').all()).results || [];
+  }
+  return rs;
+}
+async function etiquetasDosAlvos_(env, alvos) {
+  const mapa = {}; const lista = Array.from(new Set(alvos.filter(Boolean))).slice(0, 90); if (!lista.length) return mapa;
+  const rs = (await env.DB.prepare('SELECT a.alvo, e.id, e.nome, e.cor, e.venda FROM msg_alvo_etiqueta a JOIN msg_etiqueta e ON e.id=a.etiqueta_id WHERE e.arquivada=0 AND a.alvo IN (' + lista.map(() => '?').join(',') + ') ORDER BY e.venda DESC, e.ordem').bind(...lista).all()).results || [];
+  rs.forEach((r) => { (mapa[r.alvo] = mapa[r.alvo] || []).push({ id: r.id, nome: r.nome, cor: r.cor, venda: r.venda }); });
+  return mapa;
+}
+const alvoDe_ = (c) => (c && c.pessoa ? String(c.pessoa) : 'c:' + (c && c.id));
 const MSG_IDENTIDADE_SQL_ = "COALESCE((SELECT a.pessoa FROM msg_pessoa_alias a WHERE a.canal=msg_conversa.canal AND a.contato=msg_conversa.contato),(SELECT g.pessoa FROM msg_google_nome g WHERE g.chave=msg_conversa.pessoa),NULLIF(msg_conversa.pessoa,''),'')";
 const MSG_NOME_SQL_ = "COALESCE((SELECT p.nome FROM msg_pessoa p WHERE p.id="+MSG_IDENTIDADE_SQL_+"),(SELECT g.nome FROM msg_google_nome g WHERE g.chave=msg_conversa.pessoa),msg_conversa.nome)";
 const MSG_COLS_CONVERSA_ = "id, canal, contato, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
@@ -3680,9 +3701,12 @@ export default {
         if (filtro === 'encerradas') sql += " AND encerrada_em<>''"; else if (!busca) sql += " AND encerrada_em=''";
         if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'lidas') sql += ' AND nao_lidas=0'; else if (filtro === 'sem_resposta') sql += " AND (nao_lidas>0 OR ult_dir='entrada')"; else if (filtro === 'grupos') sql += ' AND grupo=1'; else if (filtro === 'ambos') sql += " AND pessoa<>'' AND " + MSG_OUTRO_SQL_ + ' IS NOT NULL';
         if (tipo) sql += tipo === 'grupo' ? ' AND grupo=1' : ' AND grupo=0';
+        const etqF = Number(url.searchParams.get('etiqueta')) || 0;
+        if (etqF) { sql += " AND (CASE WHEN " + MSG_IDENTIDADE_SQL_ + "<>'' THEN " + MSG_IDENTIDADE_SQL_ + " ELSE 'c:'||msg_conversa.id END) IN (SELECT alvo FROM msg_alvo_etiqueta WHERE etiqueta_id=?)"; args.push(etqF); }
         if (busca) { sql += ' AND ('+MSG_NOME_SQL_+' LIKE ? OR contato LIKE ? OR previa LIKE ? ' + (busca.length >= 3 ? ' OR EXISTS (SELECT 1 FROM msg_mensagem mm WHERE mm.conversa_id=msg_conversa.id AND mm.texto LIKE ?)' : '') + ')'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q); if (busca.length >= 3) args.push(q); }
         if (antes) { const antesId=Number(url.searchParams.get('antesId'))||0; if(antesId>0){sql+=' AND (ultima_em<? OR (ultima_em=? AND id<?))';args.push(antes,antes,antesId);}else{sql += ' AND ultima_em<?'; args.push(antes);} }
         const rs = await env.DB.prepare(sql + ' ORDER BY ultima_em DESC, id DESC LIMIT 50').bind(...args).all();
+        try { const mp = await etiquetasDosAlvos_(env, rs.results.map(alvoDe_)); rs.results.forEach((r) => { r.etiquetas = mp[alvoDe_(r)] || []; }); } catch (e) { /* etiqueta é conforto */ }
         const geral = (await msgContagens_(env, todos ? '' : canal))[canal];
         return J({ ok: true, conversas: rs.results, contagens: tipo ? (await msgContagens_(env, todos ? '' : canal, tipo))[canal] : geral, tipos: { individuais: geral.individuais, grupos: geral.grupos }, cursor: cursorConsulta });
       }
@@ -3696,7 +3720,25 @@ export default {
         const args=antes?(antesId>0?[id,antes,antes,antesId]:[id,antes]):[id];
         const rs = await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=?' + where + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...args).all();
         const notas = antes ? [] : ((await env.DB.prepare('SELECT id, texto, autor, em FROM msg_nota WHERE alvo=? ORDER BY em LIMIT 200').bind(conv.pessoa ? String(conv.pessoa) : 'c:' + id).all()).results || []);
+        try { conv.etiquetas = (await etiquetasDosAlvos_(env, [alvoDe_(conv)]))[alvoDe_(conv)] || []; } catch (e) { conv.etiquetas = []; }
         return J({ ok: true, conversa: conv, mensagens: rs.results.reverse(), notas: notas, temMais: rs.results.length === 100, cursor: agora() });
+      }
+      if (p === '/msg/etiquetas' && req.method === 'GET') {
+        const lista = await etiquetas_(env);
+        const cont = (await env.DB.prepare('SELECT etiqueta_id AS id, COUNT(*) AS n FROM msg_alvo_etiqueta GROUP BY etiqueta_id').all()).results || [];
+        lista.forEach((e) => { const x = cont.find((c) => c.id === e.id); e.pessoas = x ? x.n : 0; });
+        return J({ ok: true, etiquetas: lista, cores: ETQ_CORES_ });
+      }
+      if (p === '/msg/rotular' && req.method === 'POST') {   // substitui as etiquetas da pessoa; de venda fica só uma (a etapa)
+        const d = await req.json().catch(() => ({})), id = Number(d.conversa) || 0;
+        const conv = await env.DB.prepare('SELECT id, ' + MSG_IDENTIDADE_SQL_ + ' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first();
+        if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
+        const validas = await etiquetas_(env), quer = (Array.isArray(d.etiquetas) ? d.etiquetas : []).map(Number).filter((x) => validas.some((e) => e.id === x));
+        const venda = quer.filter((x) => validas.find((e) => e.id === x).venda), fica = quer.filter((x) => !validas.find((e) => e.id === x).venda).concat(venda.slice(-1));
+        const alvo = alvoDe_(conv), em = agora();
+        await env.DB.batch([env.DB.prepare('DELETE FROM msg_alvo_etiqueta WHERE alvo=?').bind(alvo)].concat(fica.map((x) => env.DB.prepare('INSERT OR IGNORE INTO msg_alvo_etiqueta (alvo, etiqueta_id, em) VALUES (?,?,?)').bind(alvo, x, em))));
+        await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(em, id).run();
+        return J({ ok: true, etiquetas: (await etiquetasDosAlvos_(env, [alvo]))[alvo] || [] });
       }
       if (p === '/msg/notas' && req.method === 'POST') {   // v7.40.3: nota interna, compartilhada entre os canais vinculados da pessoa
         const d = await req.json().catch(() => ({})), id = Number(d.conversa) || 0, texto = String(d.texto || '').trim().slice(0, 1000);
