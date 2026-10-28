@@ -30,8 +30,8 @@ class NativeToolsTest {
     private fun waitFor(test:()->Boolean){val until=System.currentTimeMillis()+5000;while(System.currentTimeMillis()<until){Shadows.shadowOf(Looper.getMainLooper()).idle();if(test())return;Thread.sleep(15)};fail("A interface não respondeu no tempo do teste")}
     private fun dialog(title:String):AlertDialog {waitFor{ShadowAlertDialog.getLatestAlertDialog()?.let{it.isShowing&&Shadows.shadowOf(it).title.toString()==title}==true};return ShadowAlertDialog.getLatestAlertDialog()}
     private fun click(d:AlertDialog,n:Int){d.listView.performItemClick(d.listView.adapter.getView(n,null,d.listView),n,n.toLong());Shadows.shadowOf(Looper.getMainLooper()).idle()}
-    private fun snapshot(d:AlertDialog,name:String,height:Int=720){
-        val v=d.window!!.decorView;repeat(2){v.measure(View.MeasureSpec.makeMeasureSpec(390,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(height,if(name.startsWith("products"))View.MeasureSpec.EXACTLY else View.MeasureSpec.AT_MOST));v.layout(0,0,v.measuredWidth,v.measuredHeight)}
+    private fun snapshot(d:AlertDialog,name:String,height:Int=720,width:Int=390){
+        val v=d.window!!.decorView;repeat(2){v.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(height,if(name.startsWith("products"))View.MeasureSpec.EXACTLY else View.MeasureSpec.AT_MOST));v.layout(0,0,v.measuredWidth,v.measuredHeight)}
         val bitmap=android.graphics.Bitmap.createBitmap(v.width,v.height,android.graphics.Bitmap.Config.ARGB_8888);v.draw(android.graphics.Canvas(bitmap))
         val out=java.io.File("build/reports/native-ui/$name.png");out.parentFile!!.mkdirs();out.outputStream().use{bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()
     }
@@ -59,6 +59,12 @@ class NativeToolsTest {
         val tools=NativeTools(a,scope,repo,{1},{true},{draft=it},{},{},{},{_,_->})
         tools.show(1,"produtos");val products=dialog("Produtos · selecionar peças")
         snapshot(products,"products-native")
+        for((width,height)in listOf(320 to 700,390 to 844,412 to 915,1440 to 900)){
+            snapshot(products,"products-$width",height,width)
+            val productLabel=all(products.window!!.decorView).filterIsInstance<android.widget.CheckedTextView>().first()
+            assertTrue("Texto do produto cortado em $width",productLabel.height>=productLabel.layout.lineCount*productLabel.lineHeight+productLabel.compoundPaddingTop+productLabel.compoundPaddingBottom)
+        }
+
         all(products.window!!.decorView).filterIsInstance<EditText>().first().requestFocus();snapshot(products,"products-keyboard-native",480)
         val point=IntArray(2);products.getButton(AlertDialog.BUTTON_POSITIVE).getLocationInWindow(point);assertTrue(point[1]+products.getButton(AlertDialog.BUTTON_POSITIVE).height<=480)
         val list=all(products.window!!.decorView).filterIsInstance<ListView>().first();list.performItemClick(list.adapter.getView(0,null,list),0,0)

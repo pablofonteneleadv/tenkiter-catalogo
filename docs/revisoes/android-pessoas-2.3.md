@@ -8,6 +8,7 @@ Skill `.agents/skills/tenkiter-estetica-humana/SKILL.md`, fontes e checklist usa
 
 - Lista longa: [320](android-pessoas-2.3/inbox-320.png), [390](android-pessoas-2.3/inbox-390.png), [412](android-pessoas-2.3/inbox-412.png), [1440](android-pessoas-2.3/inbox-1440.png).
 - [Bloco de canais](android-pessoas-2.3/inbox-linked-channels.png), [conversa/contexto](android-pessoas-2.3/conversation-story-video.png), [cadastro de pessoa](android-pessoas-2.3/person-editor.png).
+- Produtos em [320](android-pessoas-2.3/products-320.png), [390](android-pessoas-2.3/products-390.png), [412](android-pessoas-2.3/products-412.png) e [1440](android-pessoas-2.3/products-1440.png), com assert de altura do texto.
 - [Produtos amplos](android-pessoas-2.3/products-native.png), [busca focada com altura útil480](android-pessoas-2.3/products-keyboard-native.png), [texto130%/320×480](android-pessoas-2.3/inbox-large-text-empty-keyboard.png).
 - Web [320](android-pessoas-2.3/lista-320.png), [390](android-pessoas-2.3/lista-390.png), [412](android-pessoas-2.3/lista-412.png), [1440](android-pessoas-2.3/lista-1440.png), [editor390](android-pessoas-2.3/contato-390.png).
 
