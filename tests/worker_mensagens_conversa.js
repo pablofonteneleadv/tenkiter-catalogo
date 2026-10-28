@@ -826,6 +826,11 @@ function d1() {
   const eF = await A('GET', '/msg/conversas?canal=todos&etiqueta=' + eId('Reserva'));
   chk('filtro por etiqueta traz a conversa com as etiquetas', eF.j.ok && eF.j.conversas.some((c) => c.id === nConv && c.etiquetas.length === 2), eF.j.conversas.length);
   chk('conversa aberta traz as etiquetas', (await A('GET', '/msg/mensagens?conversa=' + nConv)).j.conversa.etiquetas.length === 2);
+  // v7.40.6: responsável pela conversa
+  const dA = await A('POST', '/msg/dono', { conversa: nConv, assumir: true });
+  const dM = await A('GET', '/msg/conversas?canal=todos&filtro=minhas');
+  chk('assumir grava o responsável e o filtro Minhas traz a conversa', dA.j.ok && !!dA.j.dono && dM.j.conversas.some((c) => c.id === nConv && c.dono === dA.j.dono), [dA.j, dM.j.conversas.length]);
+  chk('liberar tira o responsável', (await A('POST', '/msg/dono', { conversa: nConv, assumir: false })).j.dono === '' && !(await A('GET', '/msg/conversas?canal=todos&filtro=minhas')).j.conversas.some((c) => c.id === nConv));
   // Android: paginação estável para horários iguais, sem omitir conversas ou mensagens.
   const isoPag='2099-01-01T00:00:00.000Z';
   for(let i=0;i<55;i++)await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em) VALUES('whatsapp1',?,?,1,1,?)").bind('paginacao-'+i+'@g.us','Grupo simulado '+i,isoPag).run();

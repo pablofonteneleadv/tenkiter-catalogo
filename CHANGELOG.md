@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.6 — Responsável pela conversa — 2026-10-28
+
+- Quem responde primeiro uma conversa sem responsável vira o responsável, automaticamente.
+- Conversa: "Responsável: Pablo" com Liberar, ou o botão Assumir, na faixa abaixo do cabeçalho.
+- Lista: "Resp.: Pablo" em cada linha e o filtro **Minhas**.
+- Servidor: coluna `dono` em `msg_conversa`, `POST /msg/dono` e `filtro=minhas`. O nome é o de "Respondendo como". Teste: `worker_mensagens_conversa` 277.
+
 ## 7.40.5 — Diagnóstico de status no WhatsApp 1 — 2026-10-28
 
 - Servidor: guarda o formato (só nomes de campos e se veio sinal de resposta a status) do último texto comum de cada WhatsApp, para comparar o WhatsApp 1 (respostas a status chegando sem a referência) com o WhatsApp 2 (chegando certo).
