@@ -104,6 +104,9 @@ async function iniciar(env) {
   /* v2.13: histórico de encerramentos (motivo, quando e por quem): base das métricas e, depois, do termômetro de cada cliente */
   try {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_tmp (r TEXT PRIMARY KEY, n TEXT DEFAULT '', f TEXT DEFAULT '[]', m TEXT DEFAULT '[]')").run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_zernio_conv (contato TEXT PRIMARY KEY, conversa TEXT NOT NULL, em TEXT NOT NULL)").run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_plano (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, dados TEXT NOT NULL)").run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_contatos_fila (chave TEXT PRIMARY KEY, fone TEXT NOT NULL, nome TEXT DEFAULT '', canal TEXT DEFAULT '', em TEXT NOT NULL, estado TEXT NOT NULL DEFAULT 'pendente', tentativas INTEGER DEFAULT 0, erro TEXT DEFAULT '', r TEXT DEFAULT '')").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_encerramento (id INTEGER PRIMARY KEY AUTOINCREMENT, conversa_id INTEGER NOT NULL, canal TEXT NOT NULL, pessoa TEXT DEFAULT '', contato TEXT DEFAULT '', motivo TEXT NOT NULL, em TEXT NOT NULL, por TEXT DEFAULT '')").run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_conv ON msg_encerramento (conversa_id, em)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_pessoa ON msg_encerramento (pessoa)').run();
@@ -2586,7 +2589,7 @@ async function gravarMensagem_(env, canal, m) {
     } catch (e) { /* o eco já existe: segue o caminho normal */ }
   }
   let story = { post: 0, aprox: 0 };
-  if (m.ctxTipo === 'story' && !saida) { try { story = await resolverStory_(env, canal, m.em); } catch (e) { /* sem a imagem do story: a tela mostra só o aviso */ } }
+  if (m.ctxTipo === 'story' && !saida) { if (m.ctxPost) story = { post: Number(m.ctxPost) || 0, aprox: 0 }; else { try { story = await resolverStory_(env, canal, m.em); } catch (e) { /* sem a imagem do story: a tela mostra só o aviso */ } } }
   const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em, midia_chave, midia_mime, midia_seg, midia_url, ctx_tipo, ctx_ref, ctx_post, ctx_aprox, ctx_chave, autor_nome, autor_fone, autor_lid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t, m.midiaChave || '', String(m.midiaMime || '').slice(0, 80), Number(m.midiaSeg) || 0, m.midiaUrl || '', m.ctxTipo || '', m.ctxRef || '', story.post, story.aprox, m.ctxChave || '', m.autorNome || '', m.autorFone || '', m.autorLid || '').run();
   if (!r.meta || r.meta.changes !== 1) return false;
   const quem = m.grupo && m.direcao === 'entrada' ? (m.autorNome || (m.autorFone ? '+' + m.autorFone : '')) : '';
@@ -2594,6 +2597,7 @@ async function gravarMensagem_(env, canal, m) {
   /* Em SQLite o lado direito do SET usa os valores ANTIGOS da linha: por isso a comparação com ultima_em/ult_entrada_em vale como "antes desta mensagem". */
   await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=?")
     .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, t, c.id).run();
+  if (!saida && !m.grupo && canal !== 'instagram' && /^\d{10,15}$/.test(m.contato)) { try { if ((await cfgGet(env, 'contatos_auto')) === '1') await enfileirarContato_(env, canal, m.contato, m.nome); } catch (e) { /* o cadastro no Google é conforto: a mensagem já foi gravada */ } }
   if(!saida && !m.grupo && Date.parse(m.em)>Date.now()-300000){try{await mobileTables_(env);await env.DB.prepare('INSERT OR IGNORE INTO msg_push_outbox(mensagem,conversa,canal,chave,criado) VALUES(?,?,?,?,?)').bind(Number(r.meta.last_row_id),c.id,canal,crypto.randomUUID(),t).run();}catch(_){/* falha de aviso não interrompe o recebimento */}}
   return true;
 }
@@ -2936,8 +2940,169 @@ async function enviarInstagram_(env, conv, mensagem) {
     return { ok: false, erro: 'O Instagram recusou a mensagem agora. Tente de novo em instantes.' };
   } catch (e) { return { ok: false, incerto: true, erro: 'Sem confirmação do Instagram. Confira no app antes de tentar de novo.' }; }
 }
-async function enviarTextoInstagram_(env, conv, texto) { return enviarInstagram_(env, conv, { text: texto }); }
-async function enviarMidiaInstagram_(env, conv, anexo) { return enviarInstagram_(env, conv, { attachment: { type: ({ 'imagem': 'image', 'vídeo': 'video', 'áudio': 'audio' })[anexo.tipo], payload: { url: anexo.url } } }); }
+async function enviarTextoInstagram_(env, conv, texto) { const z = await zernioCfg_(env); if (z) return enviarZernio_(env, z, conv, { message: texto }); return enviarInstagram_(env, conv, { text: texto }); }
+async function enviarMidiaInstagram_(env, conv, anexo) {
+  const tipo = ({ 'imagem': 'image', 'vídeo': 'video', 'áudio': 'audio' })[anexo.tipo], z = await zernioCfg_(env);
+  if (z) return enviarZernio_(env, z, conv, { attachmentUrl: anexo.url, attachmentType: tipo });
+  return enviarInstagram_(env, conv, { attachment: { type: tipo, payload: { url: anexo.url } } });
+}
+/* ---- v2.18: Instagram Direct pelo Zernio (API oficial da Meta pelo app aprovado deles) ----
+ * Recebe: /wh/zernio/<segredo> com assinatura HMAC-SHA256 (X-Zernio-Signature); responde 200 na hora e grava em segundo plano.
+ * Envia: POST /v1/inbox/conversations/{conversa}/messages; depois de 24 h, tenta de novo com HUMAN_AGENT (resposta digitada por pessoa, até 7 dias). */
+const ZERNIO_API_ = 'https://zernio.com/api/v1';
+/* ---- v2.19: cofre das chaves guardadas NESTE servidor (D1). A senha da conta é conferida pelo Apps Script (abrirCofre, com o freio de
+ * tentativas dele); o código de abertura vale 5 min, fica no KV por pessoa e serve para os dois lados (as chaves do Apps Script e estas). ---- */
+const COFRE_W_ = {
+  zernio: { titulo: 'Zernio — chave da API (Instagram Direct)', ler: async (env) => (await cfgGet(env, 'zernio_chave')) || '' },
+  wafly1: { titulo: 'Wafly 1 — instância e tokens (WhatsApp 1)', ler: async (env) => { const c = await cfgWafly_(env, 1); return c ? 'Instância: ' + c.instance + '\nToken: ' + c.token + '\nClient-Token: ' + c.clientToken : ''; } },
+  wafly2: { titulo: 'Wafly 2 — instância e tokens (WhatsApp 2)', ler: async (env) => { const c = await cfgWafly_(env, 2); return c ? 'Instância: ' + c.instance + '\nToken: ' + c.token + '\nClient-Token: ' + c.clientToken : ''; } },
+  wame: { titulo: 'Wame — chave da instância (Status 2 antigo)', ler: async (env) => (await cfgGet(env, 'wame_status_2')) || '' },
+  gemini: { titulo: 'Gemini — chave da IA (leitura das fotos)', ler: async (env) => (await cfgGet(env, 'gemini_key')) || '' },
+  freeconvert: { titulo: 'FreeConvert — chave da API (vídeos)', ler: async (env) => (await cfgGet(env, 'freeconvert_api_key')) || '' },
+  contatos: { titulo: 'Google Contatos — endereço e chave da ponte', ler: async (env) => { const u = await cfgGet(env, 'contatos_url'), k = await cfgGet(env, 'contatos_chave'); return u && k ? 'Endereço: ' + u + '\nChave: ' + k : ''; } },
+  mobile: { titulo: 'OneSignal — chave de envio do app Android', ler: async (env) => (await cfgGet(env, 'mobile_onesignal_key')) || '' }
+};
+const fimChave_ = (v) => { const t = String(v || '').replace(/\s+/g, ''); return t.length >= 8 ? t.slice(-4) : ''; };
+async function rotasCofreW_(env, req, p, J) {
+  const whats = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20), kv = 'cofre_w:' + whats;
+  if (p === '/cofre/itens' && req.method === 'GET') {
+    const itens = [];
+    for (const [nome, c] of Object.entries(COFRE_W_)) { let v = ''; try { v = await c.ler(env); } catch (e) { v = ''; } itens.push({ nome: nome, titulo: c.titulo, temChave: !!v, fim: fimChave_(v.split('\n').pop()) }); }
+    return J({ ok: true, itens: itens });
+  }
+  if (p === '/cofre/abrir' && req.method === 'POST') {
+    const d = await req.json().catch(() => ({})), senha = String(d.senha == null ? '' : d.senha);
+    if (!senha) return J({ ok: false, erro: 'Digite a senha da sua conta.' }, 400);
+    let j = null;
+    try { const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', signal: AbortSignal.timeout(20000), headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'abrirCofre', whatsapp: whats, sessao: (req.headers.get('X-TK-Sessao') || '').slice(0, 400), senha: senha }) }); j = await r.json(); }
+    catch (e) { return J({ ok: false, erro: 'Não consegui conferir a senha agora. Tente de novo.' }, 503); }
+    if (!j || !j.ok || typeof j.cofre !== 'string') return J({ ok: false, erro: String((j && j.erro) || 'Senha incorreta.').slice(0, 200), bloqueado: !!(j && j.bloqueado), senhaRecusada: true }, 403);
+    const seg = Math.min(300, Math.max(60, Number(j.validoSegundos) || 300));
+    await env.CACHE.put(kv, j.cofre, { expirationTtl: seg });
+    return J({ ok: true, cofre: j.cofre, validoSegundos: seg });
+  }
+  if (p === '/cofre/fechar' && req.method === 'POST') { await env.CACHE.delete(kv); return J({ ok: true }); }
+  if (p === '/cofre/revelar' && req.method === 'POST') {
+    const d = await req.json().catch(() => ({})), item = Object.prototype.hasOwnProperty.call(COFRE_W_, String(d.nome || '')) ? COFRE_W_[d.nome] : null;
+    if (!item) return J({ ok: false, erro: 'Chave desconhecida.' }, 400);
+    const aberto = String((await env.CACHE.get(kv)) || '');
+    if (!aberto || typeof d.cofre !== 'string' || !igualConst_(aberto, d.cofre)) return J({ ok: false, cofreFechado: true, erro: 'O cofre está trancado. Digite sua senha para abrir.' }, 403);
+    const ku = 'cofre_w_usos:' + whats, usos = Number((await env.CACHE.get(ku)) || 0);
+    if (usos >= 30) return J({ ok: false, erro: 'Muitas cópias em pouco tempo. Espere alguns minutos.' }, 429);
+    await env.CACHE.put(ku, String(usos + 1), { expirationTtl: 600 });
+    const valor = await item.ler(env);
+    if (!valor) return J({ ok: false, erro: 'Essa chave ainda não está guardada no servidor.' }, 404);
+    try { await cfgSet(env, 'cofre_ult_' + d.nome, JSON.stringify({ em: agora(), quem: whats.slice(-4) })); } catch (e) { /* registro é conforto */ }
+    return J({ ok: true, nome: d.nome, valor: valor });
+  }
+  return null;
+}
+async function zernioCfg_(env) {
+  const chave = await cfgGet(env, 'zernio_chave'); let conta = null;
+  try { conta = JSON.parse((await cfgGet(env, 'zernio_conta')) || 'null'); } catch (e) { conta = null; }
+  return chave && conta && conta.id ? { chave: chave, conta: conta } : null;
+}
+async function zernioApi_(chave, metodo, caminho, corpo, limiteMs) {
+  try {
+    const r = await fetch(ZERNIO_API_ + caminho, { method: metodo, signal: AbortSignal.timeout(limiteMs || 15000), headers: { Authorization: 'Bearer ' + chave, Accept: 'application/json', 'Content-Type': 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined });
+    return { ok: r.ok, status: r.status, j: await r.json().catch(() => null) };
+  } catch (e) { return { ok: false, status: 0, j: null }; }
+}
+/** Liga (ou atualiza) o aviso de mensagens do Zernio para este servidor, só para o Instagram escolhido. */
+async function ligarAvisoZernio_(env, origem, z) {
+  let seg = await cfgGet(env, 'zernio_wh_segredo');
+  if (!seg) { const a = new Uint8Array(32); crypto.getRandomValues(a); seg = Array.from(a, (x) => x.toString(16).padStart(2, '0')).join(''); await cfgSet(env, 'zernio_wh_segredo', seg); }
+  const corpo = { name: 'TENKiTER Mensagens', url: origem + '/wh/zernio/' + (await msgSegredo_(env)), secret: seg, events: ['message.received', 'message.sent'], accountIds: [z.conta.id], isActive: true };
+  const id = await cfgGet(env, 'zernio_wh_id');
+  let r = id ? await zernioApi_(z.chave, 'PUT', '/webhooks/settings', Object.assign({ webhookId: id }, corpo)) : null;
+  if (!r || !r.ok) r = await zernioApi_(z.chave, 'POST', '/webhooks/settings', corpo);
+  if (!r.ok) return { ok: false, erro: 'O Zernio não aceitou ligar o aviso de mensagens agora (HTTP ' + r.status + '). Toque em "Salvar e conferir" de novo.' };
+  const wid = r.j && r.j.webhook && r.j.webhook._id; if (wid) await cfgSet(env, 'zernio_wh_id', String(wid));
+  await cfgSet(env, 'zernio_wh_em', agora());
+  return { ok: true };
+}
+/** Diagnóstico do aviso do Zernio: o aviso está ativo, aponta para este servidor e como foram as últimas entregas (sem chave nem segredo). */
+async function diagnosticoZernio_(env, origem, testar) {
+  const z = await zernioCfg_(env); if (!z) return { ok: false, erro: 'Guarde a chave do Zernio e escolha o Instagram primeiro.' };
+  const wid = String((await cfgGet(env, 'zernio_wh_id')) || ''), nosso = origem + '/wh/zernio/';
+  const st = await zernioApi_(z.chave, 'GET', '/webhooks/settings', null, 10000);
+  if (!st.ok) return { ok: false, erro: 'O Zernio não respondeu agora (HTTP ' + st.status + '). Tente de novo em instantes.' };
+  const lista = Array.isArray(st.j && st.j.webhooks) ? st.j.webhooks : Array.isArray(st.j) ? st.j : (st.j && st.j.webhook ? [st.j.webhook] : []);
+  const w = lista.find((x) => x && String(x._id || x.id || '') === wid) || lista.find((x) => x && String(x.url || '').indexOf(nosso) === 0) || null;
+  const aviso = w ? { existe: true, ativo: w.isActive !== false, esteServidor: String(w.url || '').indexOf(nosso) === 0, eventos: Array.isArray(w.events) ? w.events.slice(0, 10).map(String) : [], contas: Array.isArray(w.accountIds) ? w.accountIds.length : 0, contaCerta: !Array.isArray(w.accountIds) || !w.accountIds.length || w.accountIds.map(String).includes(z.conta.id) } : { existe: false };
+  let teste = null;
+  if (testar && w) { const t = await zernioApi_(z.chave, 'POST', '/webhooks/test', { webhookId: String(w._id || w.id), event: 'message.received' }, 15000); teste = { enviado: t.ok, codigo: t.status }; }
+  const lg = await zernioApi_(z.chave, 'GET', '/webhooks/logs?limit=10' + (w ? '&webhook_id=' + encodeURIComponent(String(w._id || w.id)) : ''), null, 10000);
+  const brutos = Array.isArray(lg.j && lg.j.logs) ? lg.j.logs : Array.isArray(lg.j && lg.j.data) ? lg.j.data : Array.isArray(lg.j) ? lg.j : [];
+  const txt = (v, n) => (v == null ? '' : String(typeof v === 'object' ? JSON.stringify(v) : v)).replace(/[\r\n]+/g, ' ').slice(0, n);
+  const entregas = brutos.slice(0, 10).map((x) => ({ em: txt(x.createdAt || x.timestamp || x.sentAt || x.deliveredAt, 40), evento: txt(x.event || x.eventType || x.type, 40), situacao: txt(x.status || x.deliveryStatus || (x.success === true ? 'success' : x.success === false ? 'failed' : ''), 30), codigo: Number(x.statusCode || x.responseStatus || x.httpStatus || 0) || 0, erro: txt(x.error || x.errorMessage || x.message, 160), teste: x.test === true }));
+  let ult = null; try { ult = JSON.parse((await cfgGet(env, 'msg_ult_zernio')) || 'null'); } catch (e) { ult = null; }
+  return { ok: true, aviso: aviso, teste: teste, entregas: entregas, logsDisponiveis: lg.ok, ultimoRecebido: ult };
+}
+async function hmacHex_(segredo, texto) {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(segredo), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(texto))), (x) => x.toString(16).padStart(2, '0')).join('');
+}
+async function rotaZernio_(env, req, url, ctx) {
+  const resp = (s, o) => new Response(JSON.stringify(o), { status: s, headers: { 'Content-Type': 'application/json' } });
+  await iniciar(env);
+  if (!igualConst_(url.pathname.split('/')[3] || '', await msgSegredo_(env))) return resp(404, { ok: false });
+  const seg = await cfgGet(env, 'zernio_wh_segredo'), corpo = await req.text();
+  if (!seg) return resp(503, { ok: false });
+  const assin = String(req.headers.get('X-Zernio-Signature') || req.headers.get('X-Late-Signature') || '').toLowerCase();
+  if (!assin || !igualConst_(assin, await hmacHex_(seg, corpo))) { await cfgSet(env, 'msg_ult_zernio', JSON.stringify({ em: agora(), res: 'assinatura' })); return resp(401, { ok: false }); }
+  let b = null; try { b = JSON.parse(corpo); } catch (e) { return resp(400, { ok: false }); }
+  await cfgSet(env, 'msg_ult_zernio', JSON.stringify({ em: agora(), res: 'ok', evento: String((b && b.event) || '').slice(0, 40) }));
+  // DM nova: aviso no celular na hora, como no WhatsApp (antes esperava o cron)
+  if (b && (b.event === 'message.received' || b.event === 'message.sent')) { const t = processarEventoZernio_(env, b).then(() => (b.event === 'message.received' ? processarPushMobile_(env, true) : null)).catch(() => {}); if (ctx && ctx.waitUntil) ctx.waitUntil(t); else await t; }
+  return resp(200, { ok: true });
+}
+const ZERNIO_TIPO_ = { image: 'imagem', video: 'vídeo', audio: 'áudio', file: 'documento', sticker: 'figurinha', share: 'compartilhamento' };
+async function processarEventoZernio_(env, b) {
+  const z = await zernioCfg_(env), msg = (b && b.message) || {}; if (!z || msg.platform !== 'instagram') return false;
+  const contaEv = b.account && (b.account.accountId || b.account.id); if (contaEv && String(contaEv) !== z.conta.id) return false;
+  if (await msgPausado_(env, 'instagram')) return false;
+  const entrada = msg.direction === 'incoming', cid = String(msg.conversationId || '').slice(0, 120), snd = msg.sender || {};
+  let contato = '';
+  if (entrada) { contato = String(snd.id || '').slice(0, 80); if (contato && cid) await env.DB.prepare('INSERT INTO msg_zernio_conv (contato, conversa, em) VALUES (?, ?, ?) ON CONFLICT(contato) DO UPDATE SET conversa=excluded.conversa, em=excluded.em').bind(contato, cid, agora()).run(); }
+  else if (cid) { const x = await env.DB.prepare('SELECT contato FROM msg_zernio_conv WHERE conversa=?').bind(cid).first(); contato = x ? x.contato : ''; }
+  if (!contato) return false;
+  const a0 = Array.isArray(msg.attachments) && msg.attachments[0] ? msg.attachments[0] : null;
+  const ot = a0 ? String(a0.originalType || '') : '', tipoA = a0 ? String(a0.type || '') : '';
+  const tipo = !a0 ? 'texto' : ot === 'story_mention' ? 'menção em story' : (ZERNIO_TIPO_[tipoA] || 'anexo');
+  const mime = { imagem: 'image/jpeg', 'vídeo': 'video/mp4', 'áudio': 'audio/mp4', 'menção em story': 'image/jpeg' }[tipo] || '';
+  const m = { extId: String(msg.platformMessageId || msg.id || '').slice(0, 200), contato: contato, nome: entrada ? String(snd.name || (snd.username ? '@' + snd.username : '')).slice(0, 80) : '', grupo: 0,
+    direcao: entrada ? 'entrada' : 'saida', tipo: tipo, texto: String(msg.text || '').slice(0, MSG_TEXTO_MAX), em: msg.sentAt && !isNaN(Date.parse(msg.sentAt)) ? new Date(msg.sentAt).toISOString() : agora(),
+    midiaUrl: mime && a0 && /^https:\/\//i.test(String(a0.url || '')) ? String(a0.url) : '', midiaMime: mime, midiaSeg: 0, ctxTipo: '', ctxRef: '', ctxUrl: '', ctxPost: 0 };
+  if (!m.extId) return false;
+  if (entrada && cid) {      // resposta a story: o aviso não traz, a lista de mensagens traz storyReply (link vence ~24 h: a mídia é copiada agora)
+    const r = await zernioApi_(z.chave, 'GET', '/inbox/conversations/' + encodeURIComponent(cid) + '/messages?accountId=' + encodeURIComponent(z.conta.id) + '&limit=10&sortOrder=desc', null, 8000);
+    const lista = r.ok && r.j && Array.isArray(r.j.messages) ? r.j.messages : [];
+    const mm = lista.find((x) => x && (String(x.id) === m.extId || String(x.id) === String(msg.id)));
+    const sr = mm && mm.storyReply;
+    if (sr) {
+      m.ctxTipo = 'story'; m.ctxUrl = /^https:\/\//i.test(String(sr.storyUrl || '')) ? String(sr.storyUrl) : '';
+      if (sr.storyId) { const po = await env.DB.prepare("SELECT id FROM postagem WHERE ig_id=? AND status='publicado' LIMIT 1").bind(String(sr.storyId)).first(); if (po) { m.ctxPost = Number(po.id) || 0; m.ctxUrl = ''; } }
+    }
+  }
+  try { await prepararMidia_(env, 'instagram', m); } catch (e) { /* a mídia é conforto */ }
+  return gravarMensagem_(env, 'instagram', m);
+}
+async function enviarZernio_(env, z, conv, corpo) {
+  const x = await env.DB.prepare('SELECT conversa FROM msg_zernio_conv WHERE contato=?').bind(conv.contato).first();
+  if (!x) return { ok: false, erro: 'Esta conversa ainda não chegou pelo Zernio. Responda pelo app do Instagram; quando o cliente escrever de novo, ela passa a sair por aqui.' };
+  const caminho = '/inbox/conversations/' + encodeURIComponent(x.conversa) + '/messages', base = Object.assign({ accountId: z.conta.id }, corpo);
+  let r = await zernioApi_(z.chave, 'POST', caminho, base, 40000);
+  const texto = JSON.stringify(r.j || {});
+  if (!r.ok && r.status >= 400 && r.status < 500 && /24|window|outside|janela/i.test(texto)) r = await zernioApi_(z.chave, 'POST', caminho, Object.assign({ messagingType: 'MESSAGE_TAG', messageTag: 'HUMAN_AGENT' }, base), 40000);
+  const id = r.j && r.j.data && (r.j.data.messageId || (Array.isArray(r.j.data.messageIds) && r.j.data.messageIds[0]));
+  if (r.ok && id) return { ok: true, extId: String(id) };
+  if (r.ok) return { ok: false, incerto: true, erro: 'O Zernio respondeu sem confirmar o envio. Confira no Instagram antes de tentar de novo.' };
+  if (r.status === 401 || r.status === 403) return { ok: false, erro: 'O Zernio não aceitou a chave. Confira em Conexões → Instagram Direct · Zernio.' };
+  if (r.status === 0 || r.status >= 500) return { ok: false, incerto: true, erro: 'Sem confirmação do Zernio. Confira no Instagram antes de tentar de novo.' };
+  if (/24|window|outside|7 days|7-day/i.test(JSON.stringify(r.j || {}))) return { ok: false, erro: 'Já passaram mais de 7 dias da última mensagem deste cliente. O Instagram não deixa responder por aqui.' };
+  return { ok: false, erro: 'O Instagram recusou a mensagem (HTTP ' + r.status + '). Tente de novo em instantes.' };
+}
 const MSG_ANEXO_RE_ = /^out\/\d{6}\/[a-f0-9]{24}\.[a-z0-9]{2,4}$/;
 const MSG_TIPO_DE_MIME_ = (mime) => /^image\/(jpeg|png|webp)$/.test(mime) ? 'imagem' : /^video\/(mp4|quicktime)$/.test(mime) ? 'vídeo' : /^audio\//.test(mime) ? 'áudio' : '';
 async function responderMensagem_(env, whats, d) {
@@ -3089,7 +3254,7 @@ function foneNormal_(bruto) {
   const s = String(bruto || '').trim(), mais = s.indexOf('+') === 0;
   let d = s.replace(/\D/g, '');
   if (!d) return { ok: false, motivo: 'vazio' };
-  if (!mais) { d = d.replace(/^00/, ''); if (d.length >= 11 && d.length <= 12 && d.charAt(0) === '0') d = d.slice(1); if (d.length === 10 || d.length === 11) d = '55' + d; }
+  if (!mais) { d = d.replace(/^00/, ''); if (d.length >= 11 && d.length <= 12 && d.charAt(0) === '0') d = d.slice(1); if (d.length === 10 || d.length === 11) d = '55' + d; else if (d.length === 9 && d.charAt(0) === '9') d = '5588' + d; }   // v2.16: 9 dígitos sem DDD = DDD 88 da loja (aprovado pelo Pablo)
   // celular antigo de 8 dígitos (6 a 9 na frente) ganha o 9; fixo (2 a 5) fica com 8
   if (/^55[1-9][1-9][6-9]\d{7}$/.test(d)) d = d.slice(0, 4) + '9' + d.slice(4);
   const br = /^55[1-9][1-9](9\d{8}|[2-5]\d{7})$/.test(d);
@@ -3149,6 +3314,7 @@ async function montarRelatorioContatos_(env, contatos) {
     const n = foneNormal_('+' + c.contato); if (!n.ok || porChave.has(n.chave) || vistos.has(n.chave)) continue;
     vistos.add(n.chave); semCadastro.push({ conversa: c.id, canal: c.canal, nome: c.nome || '', fone: '+' + n.d, ultima: c.ultima_em });
   }
+  await salvarPlanoContatos_(env, duplicados, semCadastro);
   const corta = (a) => a.slice(0, 500);
   const rel = { em: agora(), total: contatos.length, comFone: contatos.length - semFone, semFone: semFone,
     duplicados: { total: duplicados.length, contatosEnvolvidos: duplicados.reduce((t, g) => t + g.contatos.length, 0), lista: corta(duplicados) },
@@ -3156,6 +3322,88 @@ async function montarRelatorioContatos_(env, contatos) {
     semCadastro: { total: semCadastro.length, lista: corta(semCadastro) } };
   try { await cfgSet(env, 'contatos_relatorio', JSON.stringify(rel)); } catch (e) { /* grande demais para guardar: só devolve */ }
   return Object.assign({ ok: true }, rel);
+}
+/* v2.16: plano completo da limpeza aprovada (o relatório guarda só 500 de cada lista).
+ * Repetidos ligados entre si (um contato com dois números em dois grupos) viram um grupo só; fica o nome mais completo. */
+async function salvarPlanoContatos_(env, duplicados, semCadastro) {
+  const pai = new Map(), dados = new Map();
+  const raiz = (x) => { while (pai.get(x) !== x) { pai.set(x, pai.get(pai.get(x))); x = pai.get(x); } return x; };
+  for (const g of duplicados) for (const c of g.contatos) { if (!pai.has(c.r)) { pai.set(c.r, c.r); dados.set(c.r, c); } }
+  for (const g of duplicados) for (let i = 1; i < g.contatos.length; i++) { const a = raiz(g.contatos[0].r), b = raiz(g.contatos[i].r); if (a !== b) pai.set(b, a); }
+  const comp = new Map(); for (const r of pai.keys()) { const k = raiz(r); if (!comp.has(k)) comp.set(k, []); comp.get(k).push(dados.get(r)); }
+  const peso = (c) => [String(c.n || '').trim().length, (c.f || []).length + (c.m || []).length];
+  const grupos = [...comp.values()].filter((g) => g.length > 1 && g.length <= 11).map((g) => {
+    const ord = g.slice().sort((a, b) => { const pa = peso(a), pb = peso(b); return pb[0] - pa[0] || pb[1] - pa[1]; });
+    return { manter: ord[0].r, nome: ord[0].n || '', apagar: ord.slice(1).map((c) => c.r) };
+  });
+  await env.DB.prepare('DELETE FROM msg_contatos_plano').run();
+  const SQL = 'INSERT INTO msg_contatos_plano (tipo, dados) VALUES (?, ?)', linhas = grupos.map((g) => ['dup', g]).concat(semCadastro.map((x) => ['novo', x]));
+  for (let i = 0; i < linhas.length; i += 100) await env.DB.batch(linhas.slice(i, i + 100).map(([t, d]) => env.DB.prepare(SQL).bind(t, JSON.stringify(d))));
+}
+const nomeTM_ = (nome, d) => {
+  const n = String(nome || '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+  const f = d && d.length >= 12 && d.indexOf('55') === 0 ? '(' + d.slice(2, 4) + ') ' + d.slice(4, -4) + '-' + d.slice(-4) : '+' + d;
+  return 'TM Cliente ' + (n || f);
+};
+/** Fila do cadastro no Google: número novo de WhatsApp (ou da limpeza) vira "TM Cliente …" no marcador. Sem duplicar pela chave do número. */
+async function enfileirarContato_(env, canal, fone, nome) {
+  const n = foneNormal_(String(fone || '').indexOf('+') === 0 ? fone : '+' + fone); if (!n.ok || !n.br) return false;
+  const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_contatos_fila (chave, fone, nome, canal, em) VALUES (?, ?, ?, ?, ?)').bind(n.chave, n.d, nomeTM_(nome, n.d), String(canal || ''), agora()).run();
+  return !!(r.meta && r.meta.changes === 1);
+}
+async function processarFilaContatos_(env, limite) {
+  const pend = (await env.DB.prepare("SELECT chave, fone, nome, canal FROM msg_contatos_fila WHERE estado='pendente' AND tentativas<5 ORDER BY em LIMIT ?").bind(limite || 5).all()).results;
+  if (!pend.length) return { ok: true, feitos: 0 };
+  const rotulo = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2' };
+  const r = await ponte_(env, { acao: 'criar_lote', contatos: pend.map((x) => ({ nome: x.nome, fone: x.fone, nota: 'Criado pelo site TENKiTER' + (rotulo[x.canal] ? ' (' + rotulo[x.canal] + ')' : '') })) });
+  if (!r.ok) { await env.DB.prepare("UPDATE msg_contatos_fila SET tentativas=tentativas+1, erro=? WHERE estado='pendente' AND chave IN (" + pend.map(() => '?').join(',') + ')').bind(String(r.erro || '').slice(0, 200), ...pend.map((x) => x.chave)).run(); return r; }
+  const porFone = new Map((r.resultados || []).map((x) => [String(x.fone), x]));
+  for (const x of pend) {
+    const res = porFone.get(x.fone);
+    if (res && res.ok) await env.DB.prepare('UPDATE msg_contatos_fila SET estado=?, r=?, erro=? WHERE chave=?').bind(res.ja ? 'ja' : 'feito', String(res.r || '').slice(0, 80), '', x.chave).run();
+    else await env.DB.prepare('UPDATE msg_contatos_fila SET tentativas=tentativas+1, erro=? WHERE chave=?').bind(String((res && res.erro) || 'sem resposta').slice(0, 200), x.chave).run();
+  }
+  return { ok: true, feitos: pend.length };
+}
+async function filaContatosAuto_(env) { try { if ((await cfgGet(env, 'contatos_auto')) !== '1' || !(await cfgGet(env, 'contatos_url'))) return; await processarFilaContatos_(env, 5); } catch (e) { /* a fila tenta de novo no próximo minuto */ } }
+/** v2.16: aplica a limpeza aprovada por etapas: juntar (100 grupos por vez), padronizar (páginas), criar (fila), fim. */
+async function limpezaContatos_(env, d) {
+  const b = JSON.parse((await cfgGet(env, 'contatos_backup')) || 'null');
+  if (!b || Date.now() - Date.parse(b.em) > 6 * 3600000) return { ok: false, cod: 409, erro: 'Faça uma cópia de segurança nova (menos de 6 horas) antes da limpeza.' };
+  const acc = JSON.parse((await cfgGet(env, 'contatos_limpeza_and')) || '{}'), salvar = () => cfgSet(env, 'contatos_limpeza_and', JSON.stringify(acc));
+  if (d.etapa === 'juntar') {
+    const desde = Math.max(0, Number(d.desde) || 0), total = (await env.DB.prepare("SELECT COUNT(*) n FROM msg_contatos_plano WHERE tipo='dup'").first()).n;
+    const rs = (await env.DB.prepare("SELECT id, dados FROM msg_contatos_plano WHERE tipo='dup' AND id>? ORDER BY id LIMIT 100").bind(desde).all()).results;
+    if (!desde) { for (const k of Object.keys(acc)) delete acc[k]; }
+    if (!rs.length) { await salvar(); return { ok: true, feito: total, total: total, proximo: '' }; }
+    const r = await ponte_(env, { acao: 'juntar_lote', confirmar: true, grupos: rs.map((x) => { const g = JSON.parse(x.dados); return { manter: g.manter, apagar: g.apagar }; }) });
+    if (!r.ok) return { ok: false, cod: 502, erro: r.erro === 'Ação desconhecida.' ? 'A ponte precisa da versão 1.2 (contatos-ponte-1.2) para a limpeza.' : r.erro };
+    acc.juntados = (acc.juntados || 0) + (Number(r.feitos) || 0); acc.apagados = (acc.apagados || 0) + (Number(r.apagados) || 0); await salvar();
+    const ultimo = rs[rs.length - 1].id, feito = (await env.DB.prepare("SELECT COUNT(*) n FROM msg_contatos_plano WHERE tipo='dup' AND id<=?").bind(ultimo).first()).n;
+    return { ok: true, feito: feito, total: total, proximo: feito < total ? String(ultimo) : '' };
+  }
+  if (d.etapa === 'padronizar') {
+    const r = await ponte_(env, { acao: 'padronizar_parte', pagina: typeof d.pagina === 'string' && d.pagina ? d.pagina.slice(0, 500) : undefined });
+    if (!r.ok) return { ok: false, cod: 502, erro: r.erro === 'Ação desconhecida.' ? 'A ponte precisa da versão 1.2 (contatos-ponte-1.2) para a limpeza.' : r.erro };
+    acc.padronizados = (acc.padronizados || 0) + (Number(r.mudados) || 0); acc.lidosPad = (d.pagina ? (acc.lidosPad || 0) : 0) + (Number(r.lidos) || 0); await salvar();
+    return { ok: true, feito: acc.lidosPad, total: Number(r.totalPessoas) || acc.lidosPad, proxima: String(r.proxima || '') };
+  }
+  if (d.etapa === 'criar') {
+    if (!d.continuar) { const novos = (await env.DB.prepare("SELECT dados FROM msg_contatos_plano WHERE tipo='novo'").all()).results; acc.criarTotal = 0; for (const x of novos) { const n = JSON.parse(x.dados); await enfileirarContato_(env, n.canal, n.fone, n.nome); acc.criarTotal++; } }
+    const r = await processarFilaContatos_(env, 15);
+    if (!r.ok) return { ok: false, cod: 502, erro: r.erro };
+    const rest = (await env.DB.prepare("SELECT COUNT(*) n FROM msg_contatos_fila WHERE estado='pendente' AND tentativas<5").first()).n;
+    const total = Math.max(acc.criarTotal || 0, rest); await salvar();
+    return { ok: true, feito: total - rest, total: total, restantes: rest };
+  }
+  if (d.etapa === 'fim') {
+    const criados = (await env.DB.prepare("SELECT COUNT(*) n FROM msg_contatos_fila WHERE estado='feito'").first()).n;
+    const res = { em: agora(), juntados: acc.juntados || 0, apagados: acc.apagados || 0, padronizados: acc.padronizados || 0, criados: criados };
+    await cfgSet(env, 'contatos_limpeza', JSON.stringify(res)); await cfgSet(env, 'contatos_limpeza_and', null); await cfgSet(env, 'contatos_auto', '1');
+    await env.DB.prepare('DELETE FROM msg_contatos_plano').run();
+    return Object.assign({ ok: true, auto: true }, res);
+  }
+  return { ok: false, cod: 400, erro: 'Etapa da limpeza inválida.' };
 }
 async function metricasMensagens_(env, canal, dias) {
   dias = [7, 30, 90].includes(Number(dias)) ? Number(dias) : 30;
@@ -3190,6 +3438,7 @@ export default {
     ctx.waitUntil(processarPushMobile_(env).catch(()=>{}));
     ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
     ctx.waitUntil(processarFotoIA(env));                                      // a cada minuto: 1 imagem da fila de Fotos com IA (se já puder: cota/limite do dia)
+    ctx.waitUntil(filaContatosAuto_(env));                                    // a cada minuto: até 5 números novos viram "TM Cliente …" no Google (se ligado)
     const min = ev && ev.scheduledTime ? new Date(ev.scheduledTime).getUTCMinutes() : 0;
     if (min === 7) ctx.waitUntil(limparTemporarios(env).catch(() => {}));      // 1x por dia: apaga do R2 o que é temporário (t/) com mais de 5 dias
     if (min % 30 !== 0) return;                                                // importar do Instagram só a cada 30 min (como antes)
@@ -3200,6 +3449,7 @@ export default {
     const url = new URL(req.url), h = cors(env, req), J = (c, s) => resp(c, s, h);
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
+    if (url.pathname.indexOf('/wh/zernio/') === 0 && req.method === 'POST') { try { return await rotaZernio_(env, req, url, ctx); } catch (e) { return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
     if (url.pathname.indexOf('/wh/') === 0) { try {
       const resposta = await rotaWebhookMensagens_(env, req, url);
       if (req.method === 'POST' && resposta.ok) {
@@ -3266,21 +3516,40 @@ export default {
       }
       if(p==='/msg/mobile/subscription' && ['POST','DELETE'].includes(req.method)) return J(await registrarMobile_(env,req));
       /* v2.14: Zernio (Instagram Direct pela API oficial, app já aprovado pela Meta). A chave fica só no D1; a tela recebe só se está ligada e qual Instagram. */
+      if (p.indexOf('/cofre/') === 0) { const rc = await rotasCofreW_(env, req, p, J); if (rc) return rc; }
       if (p === '/msg/zernio/config' && req.method === 'GET') {
         const conta = await cfgGet(env, 'zernio_conta');
         let c = null; try { c = conta ? JSON.parse(conta) : null; } catch (e) { c = null; }
-        return J({ ok: true, configurada: !!(await cfgGet(env, 'zernio_chave')), conta: c, conferidaEm: (await cfgGet(env, 'zernio_conferida')) || '' });
+        let ult = null; try { ult = JSON.parse((await cfgGet(env, 'msg_ult_zernio')) || 'null'); } catch (e) { ult = null; }
+        return J({ ok: true, configurada: !!(await cfgGet(env, 'zernio_chave')), conta: c, conferidaEm: (await cfgGet(env, 'zernio_conferida')) || '', avisoLigado: !!(await cfgGet(env, 'zernio_wh_id')), ultimoAviso: ult });
       }
       if (p === '/msg/zernio/config' && req.method === 'POST') {
         const d = await req.json().catch(() => ({}));
-        if (d.apagar === true) { for (const k of ['zernio_chave', 'zernio_conta', 'zernio_conferida']) await cfgSet(env, k, null); return J({ ok: true, configurada: false }); }
-        const chave = String(d.chave || '').trim();
-        if (chave.length < 20 || chave.length > 300 || /\s/.test(chave)) return J({ ok: false, erro: 'Cole a chave de API completa do Zernio (Settings → API Keys).' }, 400);
+        if (d.apagar === true) {
+          const zc = await cfgGet(env, 'zernio_chave'), wid = await cfgGet(env, 'zernio_wh_id');
+          if (zc && wid) await zernioApi_(zc, 'DELETE', '/webhooks/settings?webhookId=' + encodeURIComponent(wid), null, 10000);
+          for (const k of ['zernio_chave', 'zernio_conta', 'zernio_conferida', 'zernio_wh_id', 'zernio_wh_em']) await cfgSet(env, k, null);
+          return J({ ok: true, configurada: false });
+        }
+        if (d.diagnostico === true || d.testar === true) return J(await diagnosticoZernio_(env, url.origin, d.testar === true));
+        /* v2.17: com mais de um Instagram no Zernio, a tela lista e o gestor escolhe (listar / escolher usam a chave já guardada) */
+        const usarGuardada = d.listar === true || typeof d.escolher === 'string';
+        const chave = usarGuardada ? String((await cfgGet(env, 'zernio_chave')) || '') : String(d.chave || '').trim();
+        if (usarGuardada && !chave) return J({ ok: false, erro: 'Guarde a chave do Zernio primeiro.' }, 409);
+        if (!usarGuardada && (chave.length < 20 || chave.length > 300 || /\s/.test(chave))) return J({ ok: false, erro: 'Cole a chave de API completa do Zernio (Settings → API Keys).' }, 400);
         const r = await zernioContas_(chave);
         if (!r.ok) return J({ ok: false, erro: r.erro }, r.cod || 400);
-        const ig = r.contas.find((x) => x && x.platform === 'instagram') || null, conta = ig ? { id: String(ig._id || ''), usuario: String(ig.username || ig.displayName || '').slice(0, 60) } : null;
-        await cfgSet(env, 'zernio_chave', chave); await cfgSet(env, 'zernio_conta', conta ? JSON.stringify(conta) : null); await cfgSet(env, 'zernio_conferida', agora());
-        return J({ ok: true, configurada: true, conta: conta, conferidaEm: await cfgGet(env, 'zernio_conferida') });
+        const contas = r.contas.filter((x) => x && x.platform === 'instagram').map((x) => ({ id: String(x._id || ''), usuario: String(x.username || x.displayName || '').slice(0, 60) })).filter((x) => x.id);
+        let atual = null; try { atual = JSON.parse((await cfgGet(env, 'zernio_conta')) || 'null'); } catch (e) { atual = null; }
+        let conta;
+        if (typeof d.escolher === 'string') { conta = contas.find((x) => x.id === d.escolher); if (!conta) return J({ ok: false, erro: 'Esse Instagram não está conectado no Zernio.' }, 400); }
+        else if (d.listar === true) conta = (atual && contas.find((x) => x.id === atual.id)) || null;
+        else conta = contas.find((x) => /tenkiter/i.test(x.usuario)) || contas[0] || null;      // prefere o Instagram da loja quando há mais de um
+        if (!usarGuardada) await cfgSet(env, 'zernio_chave', chave);
+        if (d.listar !== true) { await cfgSet(env, 'zernio_conta', conta ? JSON.stringify(conta) : null); await cfgSet(env, 'zernio_conferida', agora()); }
+        let aviso = null;
+        if (d.listar !== true && conta) aviso = await ligarAvisoZernio_(env, url.origin, { chave: chave, conta: conta });
+        return J({ ok: true, configurada: true, conta: conta, contas: contas, aviso: aviso, avisoLigado: !!(await cfgGet(env, 'zernio_wh_id')), conferidaEm: await cfgGet(env, 'zernio_conferida') });
       }
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {
@@ -3400,7 +3669,10 @@ export default {
         const ligada = !!(await cfgGet(env, 'contatos_url')) && !!(await cfgGet(env, 'contatos_chave'));
         let backup = null, relatorio = null; try { backup = JSON.parse((await cfgGet(env, 'contatos_backup')) || 'null'); } catch (e) { backup = null; }
         if (url.searchParams.get('relatorio') === '1') { try { relatorio = JSON.parse((await cfgGet(env, 'contatos_relatorio')) || 'null'); } catch (e) { relatorio = null; } }
-        return J({ ok: true, ligada: ligada, conta: (await cfgGet(env, 'contatos_conta')) || '', marcador: 'Tenkiter Clientes G', backup: backup, relatorio: relatorio });
+        let limpeza = null; try { limpeza = JSON.parse((await cfgGet(env, 'contatos_limpeza')) || 'null'); } catch (e) { limpeza = null; }
+        const plano = (await env.DB.prepare('SELECT COUNT(*) n FROM msg_contatos_plano').first()).n;
+        const fila = (await env.DB.prepare("SELECT SUM(estado='feito') feitos, SUM(estado='pendente' AND tentativas<5) pendentes, SUM(estado='pendente' AND tentativas>=5) falhas FROM msg_contatos_fila").first()) || {};
+        return J({ ok: true, ligada: ligada, conta: (await cfgGet(env, 'contatos_conta')) || '', marcador: 'Tenkiter Clientes G', backup: backup, relatorio: relatorio, limpeza: limpeza, planoPronto: plano > 0, auto: (await cfgGet(env, 'contatos_auto')) === '1', fila: { feitos: fila.feitos || 0, pendentes: fila.pendentes || 0, falhas: fila.falhas || 0 } });
       }
       if (p === '/msg/contatos/config' && req.method === 'POST') {
         const d = await req.json().catch(() => ({}));
@@ -3432,6 +3704,15 @@ export default {
         const b = { em: agora(), total: Number(r.total) || 0, arquivo: String(r.arquivo || '').slice(0, 120), url: /^https:\/\/drive\.google\.com\//.test(String(r.url || '')) ? r.url : '' };
         await cfgSet(env, 'contatos_backup', JSON.stringify(b));
         return J(Object.assign({ ok: true }, b));
+      }
+      if (p === '/msg/contatos/limpeza' && req.method === 'POST') {
+        if (!(await cfgGet(env, 'contatos_url'))) return J({ ok: false, erro: 'A ponte do Google Contatos ainda não foi ligada.' }, 409);
+        const r = await limpezaContatos_(env, await req.json().catch(() => ({})));
+        const cod = r.cod || (r.ok ? 200 : 502); delete r.cod; return J(r, cod);
+      }
+      if (p === '/msg/contatos/auto' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({})); await cfgSet(env, 'contatos_auto', d.ligado === true ? '1' : '0');
+        return J({ ok: true, auto: d.ligado === true });
       }
       if (p === '/msg/contatos/relatorio' && req.method === 'POST') {
         const b = await cfgGet(env, 'contatos_backup');

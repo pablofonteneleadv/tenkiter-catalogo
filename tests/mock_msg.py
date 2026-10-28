@@ -121,19 +121,48 @@ def tratar(route, path, method, body, s):
         return J({"ok": bool(c), "celular": cel}) or True
     if path == "/msg/zernio/config":
         z = s.setdefault("zernio", {"chave": "", "conta": None, "posts": []})
-        if method == "GET": return J({"ok": True, "configurada": bool(z["chave"]), "conta": z["conta"], "conferidaEm": ""}) or True
+        if method == "GET": return J({"ok": True, "configurada": bool(z["chave"]), "conta": z["conta"], "conferidaEm": "", "avisoLigado": bool(z["chave"] and z["conta"] and not z.get("semAviso")), "ultimoAviso": {"em": z["ult"], "res": "ok", "evento": "message.received"} if z.get("ult") else None}) or True
         z["posts"].append(body)
         if body.get("apagar"): z["chave"] = ""; z["conta"] = None; return J({"ok": True, "configurada": False}) or True
+        contas2 = [{"id": "acc_p", "usuario": "pablo_fontenele88"}, {"id": "acc_t", "usuario": "tenkitermodasceara"}] if z.get("duas") else ([z["conta"]] if z["conta"] else [])
+        if body.get("diagnostico") or body.get("testar"):
+            if body.get("testar"): z["ult"] = "2026-10-27T21:20:00Z"
+            return J({"ok": True, "aviso": {"existe": True, "ativo": not z.get("desligado"), "esteServidor": True, "contaCerta": True, "eventos": ["message.received", "message.sent"]}, "teste": {"enviado": True, "codigo": 200} if body.get("testar") else None, "entregas": [{"em": "2026-10-27T21:10:00Z", "evento": "message.received", "situacao": "failed", "codigo": 404, "erro": "Not Found", "teste": False}], "logsDisponiveis": True, "ultimoRecebido": {"em": "2026-10-27T20:57:52Z", "res": "ok", "evento": "message.sent"}}) or True
+        if body.get("listar"): return J({"ok": True, "configurada": True, "conta": z["conta"], "contas": contas2}) or True
+        if body.get("escolher"):
+            esc = next((c for c in contas2 if c["id"] == body["escolher"]), None)
+            if not esc: return J({"ok": False, "erro": "Esse Instagram não está conectado no Zernio."}, 400) or True
+            z["conta"] = esc; z["semAviso"] = False; return J({"ok": True, "configurada": True, "conta": esc, "contas": contas2}) or True
         k = str(body.get("chave", ""))
         if len(k) < 20 or " " in k: return J({"ok": False, "erro": "Cole a chave de API completa do Zernio (Settings → API Keys)."}, 400) or True
         if k.startswith("ruim"): return J({"ok": False, "erro": "O Zernio recusou essa chave. Confira se copiou a chave inteira em Settings → API Keys."}, 400) or True
         z["chave"] = k; z["conta"] = None if k.startswith("semig") else {"id": "acc_1", "usuario": "tenkitermodasceara"}
-        return J({"ok": True, "configurada": True, "conta": z["conta"], "conferidaEm": agora()}) or True
+        return J({"ok": True, "configurada": True, "conta": z["conta"], "conferidaEm": agora(), "aviso": {"ok": True} if z["conta"] else None}) or True
     if path.startswith("/msg/contatos/"):
         c = s.setdefault("contatos", {"ligada": False, "conta": "", "backup": None, "relatorio": None, "pedidos": []})
         c["pedidos"].append((path, body))
         if path == "/msg/contatos/situacao":
-            return J({"ok": True, "ligada": c["ligada"], "conta": c["conta"], "marcador": "Tenkiter Clientes G", "backup": c["backup"], "relatorio": c["relatorio"] if "relatorio=1" in route.request.url else None}) or True
+            return J({"ok": True, "ligada": c["ligada"], "conta": c["conta"], "marcador": "Tenkiter Clientes G", "backup": c["backup"], "relatorio": c["relatorio"] if "relatorio=1" in route.request.url else None,
+                      "limpeza": c.get("limpeza"), "auto": bool(c.get("auto")), "planoPronto": bool(c.get("relatorio")), "fila": {"feitos": 38 if c.get("limpeza") else 0, "pendentes": 0, "falhas": 0}}) or True
+        if path == "/msg/contatos/limpeza":     # v7.36: limpeza aprovada em etapas
+            et = body.get("etapa")
+            if et == "juntar":
+                passos = {0: ("488", 488), 488: ("", 976)}
+                prox, feito = passos.get(int(body.get("desde") or 0), ("", 976))
+                return J({"ok": True, "feito": feito, "total": 976, "proximo": prox}) or True
+            if et == "padronizar":
+                passos = {"": ("q2", 7000), "q2": ("", 13720)}
+                prox, feito = passos.get(body.get("pagina") or "", ("", 13720))
+                return J({"ok": True, "feito": feito, "total": 13720, "proxima": prox}) or True
+            if et == "criar":
+                rest = 0 if body.get("continuar") else 23
+                return J({"ok": True, "feito": 38 - rest, "total": 38, "restantes": rest}) or True
+            if et == "fim":
+                c["limpeza"] = {"em": agora(), "juntados": 976, "apagados": 1027, "padronizados": 8790, "criados": 38}; c["auto"] = True
+                return J(dict(ok=True, auto=True, **c["limpeza"])) or True
+            return J({"ok": False, "erro": "Etapa da limpeza inválida."}, 400) or True
+        if path == "/msg/contatos/auto":
+            c["auto"] = bool(body.get("ligado")); return J({"ok": True, "auto": c["auto"]}) or True
         if path == "/msg/contatos/config":
             if body.get("desligar"): c.update({"ligada": False, "conta": ""}); return J({"ok": True, "ligada": False}) or True
             if not str(body.get("url", "")).startswith("https://script.google.com/macros/s/"): return J({"ok": False, "erro": "Cole o endereço da implantação da ponte (começa com https://script.google.com/macros/s/ e termina em /exec)."}, 400) or True

@@ -19,3 +19,15 @@ O gestor cola a chave uma vez e tem certeza de que ela funcionou e de qual Insta
 - Continuam passando: `conexoes_wafly`, `conexoes_admin`, `cofre_admin`; `conexoes_unificada` atualizado para 7 grupos.
 
 Resultado: APROVADO COM LIMITAÇÃO. A conferência real depende da chave verdadeira do Pablo; o formato da resposta do Zernio foi tirado da documentação deles (GET /v1/accounts).
+
+## Escolher o Instagram certo (27/10/2026, site 7.36.0)
+Ao colar a chave real, o Zernio do Pablo tinha também o Instagram pessoal (@pablo_fontenele88) e o painel usou o primeiro da lista.
+- O servidor passa a preferir a conta com "tenkiter" no nome e devolve a lista de Instagram conectados.
+- Com mais de um, a tela mostra "Qual Instagram é o da loja?" com uma opção por conta (44 px) e o botão "Usar este Instagram"; com um só, nada aparece.
+- Evidência: `zernio-chave-20261027/04-escolher-instagram-390.png`. Testes: `conexoes_zernio` 21, `worker_mensagens_conversa` 216.
+
+## Direct ligado nas Mensagens (27/10/2026, site 7.37.0)
+- Conexões: a linha de situação passa a dizer "✓ Instagram conectado: @tenkitermodasceara · mensagens do Direct ligadas · último aviso …"; sem o aviso, pede para tocar em "Salvar e conferir". O rodapé explica que as DMs aparecem em Mensagens → Instagram com a foto do story respondido.
+- A conversa do Instagram usa a mesma tela das Mensagens (bolhas, story respondido com a foto, anexos); nada novo para aprender.
+- Testes: `worker_mensagens_conversa` 231 (aviso ligado só para a conta da loja, assinatura errada recusada, conta de outro Instagram ignorada, nome do cliente, aviso repetido sem duplicar, story publicado pelo site ligado à postagem, story de fora copiado, menção em story, resposta pelo Zernio, eco sem duplicar, resposta pelo app aparece, 24 h com HUMAN_AGENT, conversa antiga sem Zernio explicada, remover desliga o aviso); `conexoes_zernio` 22.
+- Limitação: o caminho real (Zernio → nosso servidor → tela) só se confirma com uma DM de verdade depois de publicado.

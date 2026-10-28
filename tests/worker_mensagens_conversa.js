@@ -562,7 +562,7 @@ function d1() {
     { r: 'people/c1', n: 'Maria Silva', f: ['+55 88 99999-0001'] }, { r: 'people/c2', n: 'Maria S.', f: ['(88) 9999-0001'], m: ['m@x.com'] },
     { r: 'people/c3', n: 'Sem número', f: [] }, { r: 'people/c4', n: 'Fixo errado', f: ['12345'] }, { r: 'people/c5', n: 'Rita', f: ['+5588977770001'] }
   ];
-  const pedidosPonte = []; const fPonte = globalThis.fetch; let ponteVelha = false;
+  const pedidosPonte = []; const fPonte = globalThis.fetch; let ponteVelha = false; const juntados = [], criadosG = [];
   globalThis.fetch = async (u, init) => {
     if (String(u) === PONTE) {
       const b = JSON.parse(init.body); pedidosPonte.push(b);
@@ -570,6 +570,9 @@ function d1() {
       if (b.acao === 'ping') return new Response(JSON.stringify({ ok: true, versao: 'contatos-ponte-1.0', conta: 'contatos@exemplo.com' }));
       if (b.acao === 'backup') return new Response(JSON.stringify({ ok: true, total: contatosG.length, arquivo: 'contatos-google-2026-10-26-1800.json', url: 'https://drive.google.com/file/d/abc' }));
       if (b.acao === 'listar') { const ini = Number(b.pagina || 0); return new Response(JSON.stringify({ ok: true, contatos: contatosG.slice(ini, ini + 3), proxima: ini + 3 < contatosG.length ? String(ini + 3) : '', total: contatosG.length })); }
+      if (b.acao === 'juntar_lote') { if (!b.confirmar) return new Response(JSON.stringify({ ok: false, erro: 'Juntar contatos precisa de confirmação.' })); juntados.push(...b.grupos); return new Response(JSON.stringify({ ok: true, feitos: b.grupos.length, pulados: 0, apagados: b.grupos.reduce((t, g) => t + g.apagar.length, 0) })); }
+      if (b.acao === 'padronizar_parte') { const ini = Number(b.pagina || 0); return new Response(JSON.stringify({ ok: true, lidos: Math.min(3, contatosG.length - ini), mudados: ini ? 0 : 2, totalPessoas: contatosG.length, proxima: ini + 3 < contatosG.length ? String(ini + 3) : '' })); }
+      if (b.acao === 'criar_lote') { criadosG.push(...b.contatos); return new Response(JSON.stringify({ ok: true, resultados: b.contatos.map((c, i) => ({ fone: c.fone.replace(/\D/g, ''), ok: true, ja: c.fone.endsWith('0009'), r: 'people/n' + (criadosG.length + i) })) })); }
       if (b.acao === 'backup_parte') {
         if (ponteVelha) return new Response(JSON.stringify({ ok: false, erro: 'Ação desconhecida.' }));
         const ini = Number(b.pagina || 0), parte = ini / 2 + 1;
@@ -620,6 +623,43 @@ function d1() {
   const rf = await A('POST', '/msg/contatos/relatorio', { etapa: 'fim' });
   chk('etapa final: mesmo resultado do relatório de uma vez só', rf.j.ok && rf.j.total === 5 && rf.j.duplicados.total === relP.j.duplicados.total && rf.j.invalidos.total === relP.j.invalidos.total && rf.j.semFone === relP.j.semFone && rf.j.corrigir.total === relP.j.corrigir.total, rf.j);
   chk('etapa final limpa a tabela temporária (sem dados pessoais sobrando)', (await DB.prepare('SELECT COUNT(*) n FROM msg_contatos_tmp').first()).n === 0);
+  // v2.16: limpeza aprovada (juntar, padronizar, criar) e cadastro automático "TM Cliente …"
+  const planoN = await DB.prepare("SELECT tipo, COUNT(*) n FROM msg_contatos_plano GROUP BY tipo").all();
+  const planoDup = JSON.parse((await DB.prepare("SELECT dados FROM msg_contatos_plano WHERE tipo='dup'").first()).dados);
+  chk('relatório guarda o plano completo (repetidos e novos)', planoN.results.some((x) => x.tipo === 'dup' && x.n === 1) && planoN.results.some((x) => x.tipo === 'novo' && x.n >= 1), planoN.results);
+  chk('no plano, fica o contato de nome mais completo', planoDup.manter === 'people/c1' && planoDup.apagar.join() === 'people/c2', planoDup);
+  chk('situação avisa que o plano está pronto', (await A('GET', '/msg/contatos/situacao')).j.planoPronto === true);
+  const bkGuard = await DB.prepare("SELECT valor FROM cfg WHERE chave='contatos_backup'").first();
+  await cfg('contatos_backup', JSON.stringify(Object.assign(JSON.parse(bkGuard.valor), { em: '2026-01-01T00:00:00.000Z' })));
+  const velhoBk = await A('POST', '/msg/contatos/limpeza', { etapa: 'juntar' });
+  chk('limpeza sem cópia recente (6 h): pede cópia nova e não chama a ponte', velhoBk.r.status === 409 && /cópia de segurança nova/.test(velhoBk.j.erro) && juntados.length === 0);
+  await cfg('contatos_backup', bkGuard.valor);
+  chk('etapa inválida é recusada', (await A('POST', '/msg/contatos/limpeza', { etapa: 'xpto' })).r.status === 400);
+  const lj = await A('POST', '/msg/contatos/limpeza', { etapa: 'juntar' });
+  chk('juntar: manda os grupos do plano com confirmação e conta o progresso', lj.j.ok && lj.j.feito === 1 && lj.j.total === 1 && lj.j.proximo === '' && juntados.length === 1 && juntados[0].manter === 'people/c1', [lj.j, juntados]);
+  let lp = await A('POST', '/msg/contatos/limpeza', { etapa: 'padronizar' }), vp = 1;
+  while (lp.j.proxima && vp < 10) { lp = await A('POST', '/msg/contatos/limpeza', { etapa: 'padronizar', pagina: lp.j.proxima }); vp++; }
+  chk('padronizar: repete as páginas até o fim', lp.j.ok && vp === 2 && lp.j.feito === 5 && lp.j.total === 5, lp.j);
+  const nNovos = planoN.results.find((x) => x.tipo === 'novo').n;
+  let lc = await A('POST', '/msg/contatos/limpeza', { etapa: 'criar' }), vc = 1;
+  while (lc.j.restantes && vc < 10) { lc = await A('POST', '/msg/contatos/limpeza', { etapa: 'criar', continuar: true }); vc++; }
+  chk('criar: quem conversou e não está no Google vira "TM Cliente …"', lc.j.ok && lc.j.restantes === 0 && criadosG.length === nNovos && criadosG.every((c) => /^TM Cliente /.test(c.nome) && /^55\d{10,11}$/.test(c.fone)), [lc.j, criadosG.slice(0, 3)]);
+  const lf = await A('POST', '/msg/contatos/limpeza', { etapa: 'fim' });
+  const sitL = (await A('GET', '/msg/contatos/situacao')).j;
+  chk('fim: resumo guardado, plano apagado e cadastro automático ligado', lf.j.ok && lf.j.juntados === 1 && lf.j.apagados === 1 && lf.j.padronizados === 2 && sitL.limpeza.juntados === 1 && sitL.auto === true && sitL.planoPronto === false, [lf.j, sitL.limpeza]);
+  const nFila = criadosG.length;
+  await wh('/wh/wafly/1/' + seg, msg('AUTO1', '5588912340001', 'Oi, quero ver as blusas', { senderName: 'Joana Lima' }));
+  await wh('/wh/wafly/1/' + seg, msg('AUTO2', '5588912340001', 'Tem tamanho M?', { senderName: 'Joana Lima' }));
+  await wh('/wh/wafly/1/' + seg, msg('AUTO3', '5588912340002', 'Oi', { senderName: '' }));
+  const filaAuto = (await DB.prepare("SELECT nome, fone, estado FROM msg_contatos_fila WHERE fone IN ('5588912340001','5588912340002') ORDER BY fone").all()).results;
+  chk('número novo no WhatsApp entra na fila uma vez só, com o padrão "TM Cliente nome do WhatsApp"', filaAuto.length === 2 && filaAuto[0].nome === 'TM Cliente Joana Lima' && filaAuto[0].estado === 'pendente', filaAuto);
+  chk('sem nome no WhatsApp: "TM Cliente (88) 91234-0002"', filaAuto[1].nome === 'TM Cliente (88) 91234-0002', filaAuto[1]);
+  const esperas = []; await w.scheduled({ scheduledTime: Date.parse('2026-10-27T10:01:00Z') }, env, { waitUntil: (p) => esperas.push(p) }); await Promise.allSettled(esperas);
+  const filaDepois = (await DB.prepare("SELECT estado, r FROM msg_contatos_fila WHERE fone IN ('5588912340001','5588912340002')").all()).results;
+  chk('a cada minuto a fila cria os contatos no Google (marcados como feitos)', criadosG.length === nFila + 2 && filaDepois.every((x) => x.estado === 'feito' && /^people\//.test(x.r)), [filaDepois, criadosG.slice(-2)]);
+  chk('desligar o cadastro automático', (await A('POST', '/msg/contatos/auto', { ligado: false })).j.auto === false && (await A('GET', '/msg/contatos/situacao')).j.auto === false);
+  await wh('/wh/wafly/1/' + seg, msg('AUTO4', '5588912340003', 'Oi', { senderName: 'Pedro' }));
+  chk('com o automático desligado, número novo não entra na fila', !(await DB.prepare("SELECT 1 FROM msg_contatos_fila WHERE fone='5588912340003'").first()));
   const deslP = await A('POST', '/msg/contatos/config', { desligar: true });
   chk('desligar apaga endereço e chave do servidor', deslP.j.ok && !(await A('GET', '/msg/contatos/situacao')).j.ligada && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='contatos_chave'").first()));
   globalThis.fetch = fPonte;
@@ -632,6 +672,7 @@ function d1() {
       zChamadas.push({ u, auth: new Headers(init.headers).get('authorization') });
       if (zModo === 'recusa') return new Response('{"error":"invalid_credentials","key":"x"}', { status: 401 });
       if (zModo === 'semig') return new Response(JSON.stringify({ accounts: [], hasAnalyticsAccess: false }));
+      if (zModo === 'duas') return new Response(JSON.stringify({ accounts: [{ _id: 'acc_p', platform: 'instagram', username: 'pablo_fontenele88' }, { _id: 'acc_t', platform: 'instagram', username: 'tenkitermodasceara' }, { _id: 'acc_f', platform: 'facebook', username: 'pagina' }], hasAnalyticsAccess: false }));
       return new Response(JSON.stringify({ accounts: [{ _id: 'acc_1', platform: 'instagram', username: 'tenkitermodasceara' }], hasAnalyticsAccess: false }));
     }
     return fZ(u, init);
@@ -649,8 +690,119 @@ function d1() {
   zModo = 'semig';
   const zSem = await A('POST', '/msg/zernio/config', { chave: zChave });
   chk('chave certa sem Instagram conectado: salva e avisa que falta conectar', zSem.j.ok && zSem.j.conta === null);
+  zModo = 'duas';
+  const zDuas = await A('POST', '/msg/zernio/config', { chave: zChave });
+  chk('dois Instagram no Zernio: escolhe sozinho o da loja e lista os dois (sem o Facebook)', zDuas.j.ok && zDuas.j.conta.usuario === 'tenkitermodasceara' && zDuas.j.contas.map((c) => c.usuario).join() === 'pablo_fontenele88,tenkitermodasceara', zDuas.j);
+  const zLis = await A('POST', '/msg/zernio/config', { listar: true });
+  chk('listar usa a chave guardada e mostra qual está em uso', zLis.j.ok && zLis.j.contas.length === 2 && zLis.j.conta.id === 'acc_t' && !JSON.stringify(zLis.j).includes(zChave));
+  const zEsc = await A('POST', '/msg/zernio/config', { escolher: 'acc_p' });
+  chk('escolher outro Instagram troca a conta guardada', zEsc.j.ok && zEsc.j.conta.usuario === 'pablo_fontenele88' && (await A('GET', '/msg/zernio/config')).j.conta.id === 'acc_p');
+  chk('escolher um Instagram que não está no Zernio é recusado', (await A('POST', '/msg/zernio/config', { escolher: 'acc_x' })).r.status === 400);
   chk('remover apaga a chave e a conta do servidor', (await A('POST', '/msg/zernio/config', { apagar: true })).j.ok && !(await DB.prepare("SELECT valor FROM cfg WHERE chave='zernio_chave'").first()) && (await A('GET', '/msg/zernio/config')).j.configurada === false);
   globalThis.fetch = fZ;
+
+  // ---- v2.18: Instagram Direct pelo Zernio (aviso assinado, story respondido, envio) ----
+  const zEnvios = [], zHooks = []; let zJanela = false;
+  const fZ2 = globalThis.fetch;
+  globalThis.fetch = async (u, init) => {
+    u = String(u);
+    if (u.startsWith('https://zernio.com/api/v1/accounts')) return new Response(JSON.stringify({ accounts: [{ _id: 'acc_t', platform: 'instagram', username: 'tenkitermodasceara' }] }));
+    if (u.startsWith('https://zernio.com/api/v1/webhooks/settings')) { zHooks.push({ m: init.method, b: init.body ? JSON.parse(init.body) : null, u }); return new Response(JSON.stringify({ success: true, webhook: { _id: 'wh_1' } })); }
+    if (/\/inbox\/conversations\/conv_9\/messages\?/.test(u)) return new Response(JSON.stringify({ messages: [{ id: 'mid_story', storyReply: { storyId: 'IGSTORY1', storyUrl: 'https://cdn.fake/story.jpg' } }, { id: 'mid_txt' }] }));
+    if (/\/inbox\/conversations\/conv_9\/messages$/.test(u)) { const b = JSON.parse(init.body); zEnvios.push(b); if (zJanela && !b.messageTag) return new Response(JSON.stringify({ error: 'Message sent outside the 24 hour window' }), { status: 400 }); return new Response(JSON.stringify({ success: true, data: { messageId: 'mid_out_' + zEnvios.length, conversationId: 'conv_9' } })); }
+    if (u === 'https://cdn.fake/story.jpg' || u === 'https://cdn.fake/mencao.jpg') return new Response(new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]), { headers: { 'Content-Type': 'image/jpeg' } });
+    return fZ2(u, init);
+  };
+  const zLig = await A('POST', '/msg/zernio/config', { chave: zChave });
+  const hk = zHooks.find((x) => x.m === 'POST');
+  chk('salvar a chave liga o aviso de mensagens no Zernio, só para o Instagram escolhido', zLig.j.ok && zLig.j.aviso && zLig.j.aviso.ok && hk && hk.b.events.join() === 'message.received,message.sent' && hk.b.accountIds.join() === 'acc_t' && /\/wh\/zernio\/.+/.test(hk.b.url) && hk.b.secret.length === 64, [zLig.j, hk]);
+  chk('situação mostra que o aviso está ligado', (await A('GET', '/msg/zernio/config')).j.avisoLigado === true);
+  const zSeg = (await DB.prepare("SELECT valor FROM cfg WHERE chave='zernio_wh_segredo'").first()).valor, zUrl = new URL(hk.b.url).pathname;
+  const zAss = async (corpo) => { const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(zSeg), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']); return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(corpo))), (x) => x.toString(16).padStart(2, '0')).join(''); };
+  const zPost = async (ev, assinaturaErrada) => { const corpo = JSON.stringify(ev); return wh(zUrl, corpo, { headers: { 'Content-Type': 'application/json', 'X-Zernio-Signature': assinaturaErrada ? 'a'.repeat(64) : await zAss(corpo) } }); };
+  const zEv = (over) => ({ id: 'ev_' + Math.random(), event: 'message.received', account: { accountId: 'acc_t' }, message: Object.assign({ id: 'z1', conversationId: 'conv_9', platform: 'instagram', platformMessageId: 'mid_txt', direction: 'incoming', text: 'Oi, quanto custa?', attachments: [], sender: { id: 'IGSID_1', name: 'Bia Lima', username: 'bialima' }, sentAt: '2026-10-27T15:00:00.000Z' }, over || {}) });
+  chk('aviso com assinatura errada é recusado e nada é gravado', (await zPost(zEv({ platformMessageId: 'mid_falso' }), true)).r.status === 401 && !(await DB.prepare("SELECT 1 FROM msg_mensagem WHERE ext_id='mid_falso'").first()));
+  chk('aviso de outro Instagram da conta Zernio é ignorado', (await zPost(Object.assign(zEv({ platformMessageId: 'mid_outra' }), { account: { accountId: 'acc_p' } }))).r.status === 200 && !(await DB.prepare("SELECT 1 FROM msg_mensagem WHERE ext_id='mid_outra'").first()));
+  const zr1 = await zPost(zEv());
+  const zc1 = await DB.prepare("SELECT id, nome, canal, contato FROM msg_conversa WHERE canal='instagram' AND contato='IGSID_1'").first();
+  chk('mensagem do Direct entra no canal Instagram com o nome do cliente', zr1.r.status === 200 && zc1 && zc1.nome === 'Bia Lima' && !!(await DB.prepare("SELECT 1 FROM msg_mensagem WHERE ext_id='mid_txt' AND texto='Oi, quanto custa?' AND direcao='entrada'").first()), zc1);
+  await zPost(zEv());
+  chk('o mesmo aviso repetido (o Zernio tenta até 7 vezes) não duplica', (await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE ext_id='mid_txt'").first()).n === 1);
+  await DB.prepare("INSERT INTO postagem (tipo, modo, midias, agendado_em, status, ig_id, publicado_em, canal) VALUES ('story','auto','[{\"url\":\"https://tenkiter-midia.fake/m/s1.jpg\",\"tipo\":\"imagem\"}]', '2026-10-27T10:00:00Z', 'publicado', 'IGSTORY1', '2026-10-27T10:00:00Z', 'ambos')").run();
+  const poId = (await DB.prepare("SELECT id FROM postagem WHERE ig_id='IGSTORY1'").first()).id;
+  await zPost(zEv({ id: 'z2', platformMessageId: 'mid_story', text: 'valor?' }));
+  const zst = await DB.prepare("SELECT ctx_tipo, ctx_post FROM msg_mensagem WHERE ext_id='mid_story'").first();
+  chk('resposta a story publicado pelo site: liga a mensagem à nossa postagem (foto e produto)', zst && zst.ctx_tipo === 'story' && zst.ctx_post === poId, zst);
+  await DB.prepare("UPDATE postagem SET ig_id='OUTRO' WHERE id=?").bind(poId).run();
+  await zPost(zEv({ id: 'z3', platformMessageId: 'mid_story2', text: 'tem P?' }));
+  const zst2 = await DB.prepare("SELECT ctx_tipo, ctx_post, ctx_chave FROM msg_mensagem WHERE ext_id='mid_story2'").first();
+  chk('resposta a story sem postagem nossa: a foto do story é copiada para o nosso armazenamento', !zst2 || zst2.ctx_tipo === '' || (zst2.ctx_tipo === 'story' && zst2.ctx_chave !== ''), zst2);
+  await zPost(zEv({ id: 'z4', platformMessageId: 'mid_menc', text: '', attachments: [{ type: 'share', originalType: 'story_mention', url: 'https://cdn.fake/mencao.jpg' }] }));
+  const zmen = await DB.prepare("SELECT tipo, midia_chave FROM msg_mensagem WHERE ext_id='mid_menc'").first();
+  chk('menção da loja no story do cliente: tipo "menção em story" com a imagem guardada', zmen && zmen.tipo === 'menção em story' && zmen.midia_chave !== '', zmen);
+  const zenv = await A('POST', '/msg/enviar', { conversa: zc1.id, texto: 'Oi Bia! Custa R$ 76,49 à vista.', idLocal: 'zernio-0001' });
+  chk('responder pelo painel sai pelo Zernio, na conversa certa, com o Instagram escolhido', zenv.j.ok && zEnvios.length === 1 && zEnvios[0].accountId === 'acc_t' && zEnvios[0].message === 'Oi Bia! Custa R$ 76,49 à vista.' && !zEnvios[0].messageTag, [zenv.j, zEnvios]);
+  await zPost({ id: 'ev_eco', event: 'message.sent', account: { accountId: 'acc_t' }, message: { id: 'z5', conversationId: 'conv_9', platform: 'instagram', platformMessageId: 'mid_out_1', direction: 'outgoing', text: 'Oi Bia! Custa R$ 76,49 à vista.', attachments: [], sender: { id: 'LOJA' }, sentAt: '2026-10-27T15:05:00.000Z' } });
+  chk('o eco do que o painel enviou não duplica a mensagem', (await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE conversa_id=? AND texto='Oi Bia! Custa R$ 76,49 à vista.'").bind(zc1.id).first()).n === 1);
+  await zPost({ id: 'ev_app', event: 'message.sent', account: { accountId: 'acc_t' }, message: { id: 'z6', conversationId: 'conv_9', platform: 'instagram', platformMessageId: 'mid_app', direction: 'outgoing', text: 'Respondi pelo celular', attachments: [], sender: { id: 'LOJA' }, sentAt: '2026-10-27T15:06:00.000Z' } });
+  chk('resposta dada pelo app do Instagram também aparece na conversa (como enviada)', !!(await DB.prepare("SELECT 1 FROM msg_mensagem WHERE ext_id='mid_app' AND direcao='saida' AND conversa_id=?").bind(zc1.id).first()));
+  zJanela = true;
+  const zenv2 = await A('POST', '/msg/enviar', { conversa: zc1.id, texto: 'Ainda tem?', idLocal: 'zernio-0002' });
+  chk('depois de 24 h: tenta de novo com HUMAN_AGENT (resposta digitada por pessoa) e envia', zenv2.j.ok && zEnvios.length === 3 && zEnvios[2].messageTag === 'HUMAN_AGENT' && zEnvios[2].messagingType === 'MESSAGE_TAG', zEnvios.slice(-2));
+  zJanela = false;
+  await DB.prepare("INSERT OR IGNORE INTO msg_conversa (canal, contato, nome, grupo, total, ultima_em) VALUES ('instagram', 'IGSID_SEMZ', 'Sem Zernio', 0, 1, '2026-10-27T10:00:00Z')").run();
+  const semZ = (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='IGSID_SEMZ'").first()).id;
+  const zenv3 = await A('POST', '/msg/enviar', { conversa: semZ, texto: 'oi', idLocal: 'zernio-0003' });
+  chk('conversa antiga que nunca veio pelo Zernio: explica em português (nada é enviado)', zenv3.r.status === 409 && /ainda não chegou pelo Zernio/.test(zenv3.j.erro) && zEnvios.length === 3, zenv3.j);
+  // v7.38.2: diagnóstico das entregas do Zernio (sem chave nem segredo na resposta)
+  const fDg = globalThis.fetch; let dgAtivo = true; const dgTestes = [];
+  globalThis.fetch = async (u, init) => {
+    u = String(u);
+    if (u === 'https://zernio.com/api/v1/webhooks/settings' && (!init || !init.method || init.method === 'GET')) return new Response(JSON.stringify({ webhooks: [{ _id: 'wh_1', url: 'https://ig.test/wh/zernio/x', isActive: dgAtivo, events: ['message.received', 'message.sent'], accountIds: ['acc_t'], secret: 'NAO_PODE_VAZAR' }] }));
+    if (u.startsWith('https://zernio.com/api/v1/webhooks/logs')) return new Response(JSON.stringify({ logs: [{ createdAt: '2026-10-27T21:10:00Z', event: 'message.received', status: 'failed', statusCode: 404, error: 'Not Found' }] }));
+    if (u === 'https://zernio.com/api/v1/webhooks/test') { dgTestes.push(JSON.parse(init.body)); return new Response(JSON.stringify({ success: true })); }
+    return fDg(u, init);
+  };
+  const dg = await A('POST', '/msg/zernio/config', { diagnostico: true });
+  chk('diagnóstico: aviso ativo, deste servidor, conta certa e última entrega com o erro do Zernio', dg.j.ok && dg.j.aviso.existe && dg.j.aviso.ativo && dg.j.aviso.esteServidor && dg.j.aviso.contaCerta && dg.j.entregas[0].codigo === 404 && dg.j.entregas[0].situacao === 'failed', dg.j);
+  chk('diagnóstico não devolve chave nem segredo', !JSON.stringify(dg.j).includes('NAO_PODE_VAZAR') && !JSON.stringify(dg.j).includes(zChave));
+  dgAtivo = false;
+  chk('diagnóstico mostra quando o Zernio desligou o aviso', (await A('POST', '/msg/zernio/config', { diagnostico: true })).j.aviso.ativo === false);
+  const dgT = await A('POST', '/msg/zernio/config', { testar: true });
+  chk('testar pede ao Zernio um aviso de teste do webhook certo', dgT.j.ok && dgT.j.teste.enviado && dgTestes.length === 1 && dgTestes[0].webhookId === 'wh_1' && dgTestes[0].event === 'message.received');
+  globalThis.fetch = fDg;
+  const zap = await A('POST', '/msg/zernio/config', { apagar: true });
+  chk('remover a chave também desliga o aviso no Zernio', zap.j.ok && zHooks.some((x) => x.m === 'DELETE' && /webhookId=wh_1/.test(x.u)) && (await A('GET', '/msg/zernio/config')).j.avisoLigado === false);
+  globalThis.fetch = fZ2;
+
+  // ---- v7.38: cofre das chaves do servidor (Zernio e outras), aberto pela mesma senha do Apps Script ----
+  const cofreAS = []; const fCof = globalThis.fetch;
+  globalThis.fetch = async (u, init) => {
+    if (String(u).startsWith('https://api.fake') && init && init.body && JSON.parse(init.body).action === 'abrirCofre') { const b = JSON.parse(init.body); cofreAS.push(b); return new Response(JSON.stringify(b.senha === 'senha-certa' ? { ok: true, cofre: 'COD_COFRE_1', validoSegundos: 300 } : { ok: false, erro: 'Senha incorreta.' })); }
+    return fCof(u, init);
+  };
+  await DB.prepare("INSERT INTO cfg (chave, valor) VALUES ('zernio_chave', ?) ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor").bind(zChave).run();
+  const cIt = await A('GET', '/cofre/itens'), cZ = (cIt.j.itens || []).find((x) => x.nome === 'zernio');
+  chk('cofre lista a chave do Zernio só com o final (nunca a chave)', cIt.j.ok && cZ && cZ.temChave && cZ.fim === zChave.slice(-4) && !JSON.stringify(cIt.j).includes(zChave), cIt.j);
+  chk('cofre lista também Wafly, Wame, Gemini, FreeConvert, ponte dos contatos e Android', ['wafly1', 'wafly2', 'wame', 'gemini', 'freeconvert', 'contatos', 'mobile'].every((n) => cIt.j.itens.some((x) => x.nome === n)));
+  const cGer = await w.fetch(ped('GET', '/cofre/itens', 'tk2.gerente'), env, {});
+  chk('quem não gere acessos não vê o cofre', cGer.status === 403);
+  chk('revelar com o cofre trancado é recusado', (await A('POST', '/cofre/revelar', { nome: 'zernio', cofre: 'qualquer' })).r.status === 403);
+  const cErr = await A('POST', '/cofre/abrir', { senha: 'errada' });
+  chk('senha errada: recusa em português e avisa que foi a senha (o painel não tenta de novo)', cErr.r.status === 403 && cErr.j.senhaRecusada === true && cErr.j.erro === 'Senha incorreta.' && !cErr.j.cofre);
+  chk('a senha vai ao Apps Script com o login de quem pediu', cofreAS.length === 1 && cofreAS[0].whatsapp === '88999990000' && cofreAS[0].sessao === 'tk2.admin');
+  const cAb = await A('POST', '/cofre/abrir', { senha: 'senha-certa' });
+  chk('senha certa: devolve o mesmo código do Apps Script', cAb.j.ok && cAb.j.cofre === 'COD_COFRE_1' && cAb.j.validoSegundos === 300);
+  chk('código errado não revela', (await A('POST', '/cofre/revelar', { nome: 'zernio', cofre: 'COD_ERRADO' })).r.status === 403);
+  chk('nome de chave desconhecido é recusado', (await A('POST', '/cofre/revelar', { nome: '__proto__', cofre: 'COD_COFRE_1' })).r.status === 400);
+  const cRv = await A('POST', '/cofre/revelar', { nome: 'zernio', cofre: 'COD_COFRE_1' });
+  chk('cofre aberto: revela a chave do Zernio e registra quem copiou', cRv.j.ok && cRv.j.valor === zChave && !!(await DB.prepare("SELECT valor FROM cfg WHERE chave='cofre_ult_zernio'").first()));
+  const cVaz = await A('POST', '/cofre/revelar', { nome: 'freeconvert', cofre: 'COD_COFRE_1' });
+  chk('chave que não está guardada: explica em português', cVaz.r.status === 404 && /ainda não está guardada/.test(cVaz.j.erro));
+  await A('POST', '/cofre/fechar', {});
+  chk('trancar: o mesmo código deixa de valer', (await A('POST', '/cofre/revelar', { nome: 'zernio', cofre: 'COD_COFRE_1' })).r.status === 403);
+  globalThis.fetch = fCof;
+  await DB.prepare("DELETE FROM cfg WHERE chave IN ('zernio_chave','cofre_ult_zernio')").run();
   // Android: paginação estável para horários iguais, sem omitir conversas ou mensagens.
   const isoPag='2099-01-01T00:00:00.000Z';
   for(let i=0;i<55;i++)await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em) VALUES('whatsapp1',?,?,1,1,?)").bind('paginacao-'+i+'@g.us','Grupo simulado '+i,isoPag).run();

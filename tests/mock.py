@@ -557,6 +557,23 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
                     elif a=="cancelar": x["status"]="cancelada"
                     elif a in ("refazer","agora"): x["status"]="pronta"; x["resultado"]="https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/ia%d.jpg"%x["id"]; x["erro"]=""; x["espera"]=""; x["modelo"]="gemini-nano-banana-2.1"
                     return route.fulfill(json={"ok":True})
+            if path.startswith("/cofre/"):   # v7.38: cofre do servidor das Mensagens (repassa a senha ao Apps Script e usa o mesmo código)
+                if g.get("cofre_fora"): return route.fulfill(status=404,json={"ok":False,"erro":"Não encontrado."})
+                cf=st.setdefault("cofre",{"codigo":"","chamadas":[],"falhas":0,"valores":{"render":"rnd_FALSO_PARA_TESTE_123456","cloudflare":"cfut_FALSO_PARA_TESTE_123456","onesignal":"os_v2_org_FALSO_PARA_TESTE","onesignalEnvio":"os_v2_app_FALSO_PARA_TESTE","instagram":"IGAA_FALSO_PARA_TESTE_123456"}})
+                wv=g.setdefault("cofre_w",{"zernio":"sk_ZERNIO_FALSO_PARA_TESTE_9z8y","gemini":"","wafly1":"Instância: 123\nToken: WAF_FALSO_PARA_TESTE\nClient-Token: CT_FALSO_1a2b"})
+                try: bw=json.loads(route.request.post_data or "{}") if route.request.post_data else {}
+                except Exception: bw={}
+                cf["chamadas"].append({"origem":"w","caminho":path,**{k:v for k,v in bw.items() if k!="senha"}})
+                if path=="/cofre/itens": return route.fulfill(json={"ok":True,"itens":[{"nome":"zernio","titulo":"Zernio — Direct do Instagram","temChave":bool(wv["zernio"]),"fim":wv["zernio"][-4:]},{"nome":"wafly1","titulo":"Wafly — WhatsApp 1","temChave":bool(wv["wafly1"]),"fim":wv["wafly1"][-4:]},{"nome":"gemini","titulo":"Gemini — IA","temChave":False,"fim":""}]})
+                if path=="/cofre/abrir":
+                    if bw.get("senha")!="senha-certa": cf["falhas"]+=1; return route.fulfill(status=403,json={"ok":False,"erro":"Senha incorreta.","senhaRecusada":True})
+                    cf["codigo"]="abc123COFRE"; g["cofre_w_aberto"]=True; return route.fulfill(json={"ok":True,"cofre":cf["codigo"],"validoSegundos":300})
+                if path=="/cofre/fechar": g["cofre_w_aberto"]=False; return route.fulfill(json={"ok":True})
+                if path=="/cofre/revelar":
+                    if not g.get("cofre_w_aberto") or bw.get("cofre")!=cf["codigo"] or not cf["codigo"]: return route.fulfill(status=403,json={"ok":False,"cofreFechado":True,"erro":"O cofre está trancado. Digite sua senha para abrir."})
+                    v=wv.get(bw.get("nome"),"")
+                    if not v: return route.fulfill(status=404,json={"ok":False,"erro":"Essa chave ainda não está guardada no servidor."})
+                    return route.fulfill(json={"ok":True,"nome":bw["nome"],"valor":v})
             if path.startswith("/msg/"):
                 import mock_msg
                 _m=g.setdefault("msg",mock_msg.novo_estado())

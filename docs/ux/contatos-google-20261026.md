@@ -45,3 +45,11 @@ A conta da loja tem mais de 15 mil contatos; a cópia de uma vez passava do temp
 - Evidência: `contatos-google-20261026/03-copiando-390.png` e `04-copiando-1440.png` (faixa a 33%).
 - Testes: `contatos_google` 23 (progresso nas 3 partes, tela acesa e liberada, aviso de saída liga e desliga, faixa some no fim, página e pasta passadas); `worker_mensagens_conversa` 195; `validacao/contatos-ponte-1.1.js` 30 no Cofre.
 - Limitação: o Wake Lock depende do navegador do aparelho (Chrome no Android aceita; alguns navegadores ignoram). Sem ele, a faixa e o aviso continuam.
+
+## Limpeza aprovada e cadastro automático (27/10/2026, site 7.36.0)
+Decisões do Pablo sobre o relatório real (14.699 contatos): juntar repetidos ficando o nome mais completo; padronizar (+55 e o 9; fixo sem o 9); 9 dígitos sem DDD → DDD 88; criar novos como "TM Cliente nome do WhatsApp ou número".
+- **Tela:** no relatório, quadro "Limpeza aprovada" com as regras escritas e o botão "Aplicar a limpeza aprovada" (confirmação com os 5 passos). A faixa mostra "Etapa 3 de 5 · Juntando as pessoas repetidas: 488 de 976 pessoas (50%)". Ao terminar, volta para Configurações com o resumo escrito ("✓ Limpeza feita: 976 pessoas juntadas…"), a linha "Limpeza feita …" e a caixinha "Cadastrar sozinho os números novos do WhatsApp no Google".
+- **Se cair no meio:** o que já foi feito fica; juntar e criar pulam o que já existe, e padronizar não muda o que já está certo. Tentar de novo continua sem estragar.
+- Evidência: `contatos-google-20261026/05-limpeza-feita.png`.
+- Testes: `contatos_google` 29 (as 5 etapas na ordem, relatório antes de juntar, resumo, caixinha ligada e desligada); `worker_mensagens_conversa` 212 (plano, nome mais completo, cópia de 6 h, juntar, padronizar, criar "TM Cliente", fim liga o automático, fila uma vez por número, nome ou número formatado, desligar); `validacao/contatos-ponte-1.2.js` 47 no Cofre.
+- Limitação: as chamadas em lote do Google têm cota por minuto; se o Google recusar no meio, a tela mostra o erro e basta tentar de novo.
