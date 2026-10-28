@@ -59,8 +59,9 @@ class ReceivedFiles(private val activity:Activity,private val scope:CoroutineSco
         if(result!=Activity.RESULT_OK||uri==null)return
         session{current->
             scope.launch{
-                val temp=java.io.File.createTempFile("arquivo-recebido-",".part",activity.cacheDir)
+                var temporario:java.io.File?=null
                 try{
+                    val temp=java.io.File.createTempFile("arquivo-recebido-",".part",activity.cacheDir);temporario=temp
                     if(current==null||current.owner!=p.auth.owner||current.session!=p.auth.session)throw Exception("A conta mudou. Baixe novamente pela conta atual.")
                     message("Baixando arquivo…")
                     withContext(Dispatchers.IO){temp.outputStream().use{transfer(current,p.id,it)}}
@@ -68,7 +69,7 @@ class ReceivedFiles(private val activity:Activity,private val scope:CoroutineSco
                     if(atual==null||atual.owner!=p.auth.owner||atual.session!=p.auth.session)throw Exception("A conta mudou. Baixe novamente pela conta atual.")
                     withContext(Dispatchers.IO){activity.contentResolver.openOutputStream(uri,"w")?.use{out->temp.inputStream().use{it.copyTo(out,16384)}}?:throw Exception("Não foi possível salvar neste local.")}
                     message("Arquivo salvo.")
-                }catch(e:Exception){if(e is CancellationException)throw e;message(e.message?:"Não foi possível baixar o arquivo.")}finally{temp.delete()}
+                }catch(e:Exception){if(e is CancellationException)throw e;message(e.message?:"Não foi possível baixar o arquivo.")}finally{temporario?.delete()}
             }
         }
     }
