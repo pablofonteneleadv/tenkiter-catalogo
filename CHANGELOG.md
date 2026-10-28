@@ -6,6 +6,9 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.17 — 28/10/2026
+- Mensagens/app: o ← do topo fecha a conversa mesmo quando ela foi aberta pelo aviso (o Android ignorava o "voltar" criado sem toque). Janelas do site (TKCamadas) passam a fechar mesmo se o navegador pular esse passo do histórico.
+
 ## 7.40.16 — 28/10/2026
 - Mensagens: quem fala pelo WhatsApp 1 e pelo WhatsApp 2 com o mesmo número aparece agrupado na lista (como as pessoas vinculadas), sem precisar vincular à mão.
 

@@ -41,6 +41,12 @@ with sync_playwright() as p:
    assert pg.evaluate("!!localStorage.getItem('tk_app_usuario')"),'login do app não foi guardado'
    pg.reload();pg.wait_for_selector('.ms-conv',timeout=15000)
    assert pg.evaluate("JSON.parse(localStorage.getItem('tk_app_usuario')).sessao===JSON.parse(localStorage.getItem('tm_session')).sessao")
+  # 7.40.17: conversa aberta pelo aviso (sem toque) fecha no ← do topo
+  if w<600:
+   cid=pg.evaluate("Number(document.querySelector('.ms-conv').dataset.id)")
+   pg.evaluate(f"window.TKMobileOpenConversation({cid})");pg.wait_for_selector('#ms-texto',timeout=5000);pg.wait_for_timeout(300)
+   pg.locator('#ms-app .ms-voltar').click();pg.wait_for_timeout(700)
+   assert pg.evaluate("document.getElementById('ms-app').dataset.vista")=='lista','← não voltou para a lista'
   assert not errors,errors
   c.close()
  b.close()
