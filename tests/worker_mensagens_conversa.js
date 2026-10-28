@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), os = require('os');
 const { DatabaseSync } = require('node:sqlite');
 const tmp = path.join(os.tmpdir(), 'tk_ig_msg_conversa.mjs');
-fs.writeFileSync(tmp, fs.readFileSync(path.join(__dirname, '..', 'instagram-worker', 'worker.js')));
+fs.writeFileSync(tmp, fs.readFileSync(path.join(__dirname, '..', 'instagram-worker', 'worker.js'))+'\nexport {processarFilaZernio_};');
 let ok = 0, falhas = [];
 const chk = (n, c, d) => { if (c) { ok++; console.log('  ✔ ' + n); } else { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? ' — ' + JSON.stringify(d).slice(0, 300) : '')); } };
 
@@ -900,6 +900,16 @@ function d1() {
   chk('Instagram sem número exige decisão explícita',(await A('POST','/msg/pessoa',{conversa:noWa,nome:'Sem número informado',whatsapp:''})).r.status===400);
   chk('Instagram pode permanecer sem WhatsApp se cliente não informar',(await A('POST','/msg/pessoa',{conversa:noWa,nome:'Sem número informado',whatsapp:'',semWhatsApp:true})).j.ok);
   chk('não apaga WhatsApp de cadastro já vinculado',(await A('POST','/msg/pessoa',{conversa:igPerson.id,nome:'Nome confirmado',whatsapp:'',semWhatsApp:true})).r.status===400);
+  // Durable acceptance: a failed write stays queued, and cron can recover it without a duplicate.
+  await cfg('zernio_chave',zChave);await cfg('zernio_conta',JSON.stringify({id:'acc_t',usuario:'tenkitermodasceara'}));
+  const originalDb=env.DB;let queueFail=true;
+  env.DB={...originalDb,prepare(sql){if(queueFail&&/INSERT.*msg_mensagem/i.test(sql))throw new Error('falha simulada de armazenamento');return originalDb.prepare(sql);}};
+  const queuedEvent=zEv({platformMessageId:'durable-ig-message',sender:{id:'IG-DURABLE',name:'Contato de teste',username:'durable.teste'}});
+  const queuedReply=await zPost(queuedEvent);
+  chk('Instagram aceita só depois de preservar evento e mantém em fila se gravação falhar',queuedReply.r.status===200&&(await DB.prepare('SELECT COUNT(*) n FROM msg_zernio_fila').first()).n===1&&!(await DB.prepare("SELECT id FROM msg_mensagem WHERE ext_id='durable-ig-message'").first()));
+  queueFail=false;env.DB=originalDb;await DB.prepare('UPDATE msg_zernio_fila SET prox=0,trava=0').run();await W.processarFilaZernio_(env);
+  chk('nova tentativa recupera a mensagem e remove payload da fila',(await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE ext_id='durable-ig-message'").first()).n===1&&(await DB.prepare('SELECT COUNT(*) n FROM msg_zernio_fila').first()).n===0);
+  await zPost(queuedEvent);chk('reentrega do mesmo evento não duplica mensagens',(await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE ext_id='durable-ig-message'").first()).n===1);
   // ======== v7.40.8: atalhos de resposta rápida e respostas automáticas ========
   {
     const H = (iso, F) => W.horarioLoja_(Date.parse(iso), F);   // iso em UTC; Fortaleza = UTC-3
