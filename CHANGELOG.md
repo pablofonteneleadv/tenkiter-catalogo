@@ -6,6 +6,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.7 — Trocar usuário — 2026-10-28
+
+- Mensagens → ⋯ → **Trocar usuário…**: mostra as contas já usadas neste aparelho, com "Usar" para trocar com um toque, "Esquecer" para tirar da lista e "Entrar com outra conta". Trocar não apaga as conversas carregadas. Vale no site e no atendimento do app.
+
 ## 7.40.6 — Responsável pela conversa — 2026-10-28
 
 - Quem responde primeiro uma conversa sem responsável vira o responsável, automaticamente.

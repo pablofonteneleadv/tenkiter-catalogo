@@ -1612,7 +1612,30 @@
     const t = el('span', '', 'O servidor recusou os avisos' + (NOME_CANAL_[sd.canal] ? ' do ' + NOME_CANAL_[sd.canal] : '') + (sd.cod ? ' (erro ' + sd.cod + ')' : '') + '. As mensagens continuam no celular; o site volta a mostrar sozinho quando o servidor aceitar de novo.');
     e.replaceChildren(b, t);
   }
-  function ligarAoVivo() { pararAoVivo(); offline = false; espera = ESPERA_MS; atualizarVivo(); agendar(1200); }
+  /* v7.40.7: trocar de usuário sem sair do aparelho — as contas já usadas ficam guardadas aqui e as conversas carregadas continuam */
+  const CHAVE_CONTAS_ = 'tm_sessoes_v1';
+  function contasSalvas_() { try { const l = JSON.parse(localStorage.getItem(CHAVE_CONTAS_) || '[]'); return Array.isArray(l) ? l.filter((x) => x && x.whatsapp && x.sessao) : []; } catch (e) { return []; } }
+  function guardarContas_(l) { try { localStorage.setItem(CHAVE_CONTAS_, JSON.stringify(l.slice(0, 6))); } catch (e) { /* aparelho sem armazenamento */ } }
+  function lembrarSessao_() {
+    const s = typeof getSessao === 'function' ? getSessao() : null; if (!s) return;
+    let nome = ''; try { nome = typeof usuarioAdmin !== 'undefined' && usuarioAdmin ? String(usuarioAdmin.nome || '') : ''; } catch (e) { nome = ''; }
+    const l = contasSalvas_().filter((x) => x.whatsapp !== s.whatsapp); l.unshift({ whatsapp: s.whatsapp, sessao: s.sessao, nome: nome, em: new Date().toISOString() }); guardarContas_(l);
+  }
+  function abrirTrocaUsuario_() {
+    lembrarSessao_(); const corpo = gaveta_('Trocar usuário'); if (!corpo) return;
+    const atual = (typeof getSessao === 'function' && getSessao()) || {}, l = contasSalvas_();
+    corpo.appendChild(el('p', 'ms-etq-rot', 'Contas usadas neste aparelho'));
+    l.forEach((c) => {
+      const linha = el('div', 'ms-etq-op'), rot = (c.nome || 'Conta') + ' · final ' + String(c.whatsapp).slice(-4);
+      linha.appendChild(el('span', '', rot + (c.whatsapp === atual.whatsapp ? ' (em uso)' : '')));
+      if (c.whatsapp !== atual.whatsapp) { const u = botao('ms-btn prim', 'Usar', 'usar-conta', { w: c.whatsapp }); u.style.marginLeft = 'auto'; linha.appendChild(u); }
+      const x = botao('ms-btn', 'Esquecer', 'esquecer-conta', { w: c.whatsapp }); if (c.whatsapp === atual.whatsapp) x.style.marginLeft = 'auto'; linha.appendChild(x);
+      corpo.appendChild(linha);
+    });
+    const pe = el('div', 'ms-etq-pe'); pe.appendChild(botao('ms-btn', 'Entrar com outra conta', 'outra-conta')); corpo.appendChild(pe);
+    corpo.appendChild(el('p', 'ms-dica', 'Trocar não apaga as conversas já carregadas neste aparelho. "Esquecer" tira a conta da lista; para encerrar o acesso de vez, use Sair da conta no painel.'));
+  }
+  function ligarAoVivo() { lembrarSessao_(); pararAoVivo(); offline = false; espera = ESPERA_MS; atualizarVivo(); agendar(1200); }
   function pararAoVivo() { clearTimeout(timerLive); timerLive = null; }
   function agendar(ms) { clearTimeout(timerLive); timerLive = setTimeout(sondar, ms == null ? espera : ms); }
   function atualizarVivo() { const v = $('ms-vivo'); if (!v) return; v.className = 'ms-ao-vivo' + (offline ? ' off' : ''); v.textContent = offline ? 'Sem conexão…' : '● ao vivo'; }
@@ -1847,7 +1870,11 @@
     else if (a === 'descartar') { pendentes.delete(b.dataset.tmp); msgs = msgs.filter((m) => m.id !== b.dataset.tmp); pintarFio(false); }
     else if (a === 'fim') { const f = $('ms-fio'); if (f) { f.scrollTop = f.scrollHeight; novasAbaixo = 0; atualizarPill(); marcarLida(); } }
     else if (a === 'conexao') { painel = painel === 'conexao' ? '' : 'conexao'; desenharEstado(); }
-    else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Configurações (leitura e nome)…', 'leitura-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar']]));
+    else if (a === 'trocar-usuario') abrirTrocaUsuario_();
+    else if (a === 'usar-conta') { const l = contasSalvas_(), c = l.find((x) => x.whatsapp === b.dataset.w); if (!c) return; salvarSessao(c.whatsapp, c.sessao); location.reload(); }
+    else if (a === 'esquecer-conta') { guardarContas_(contasSalvas_().filter((x) => x.whatsapp !== b.dataset.w)); abrirTrocaUsuario_(); }
+    else if (a === 'outra-conta') { lembrarSessao_(); limparSessao(); location.reload(); }
+    else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Configurações (leitura e nome)…', 'leitura-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar'], '-', ['Trocar usuário…', 'trocar-usuario']]));
     else if (a === 'menu-conversa' && aberta) abrirMenu(b, [['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
     else if (a === 'exp') baixar(b.dataset.params, b.dataset.rotulo);
     else if (a === 'copiar-ia') copiarParaIA();
