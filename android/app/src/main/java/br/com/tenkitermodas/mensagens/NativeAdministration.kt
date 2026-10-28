@@ -35,28 +35,48 @@ class NativeAdministration(private val activity:Activity,private val scope:Corou
             catch(e:Exception){toast(if(e is java.io.IOException)"Não foi possível concluir. Confira a conexão."else e.message?.take(250)?:"Não foi possível concluir agora.")}}
     }
     private fun confirm(title:String,message:String,task:()->JSONObject,done:(JSONObject)->Unit){builder().setTitle(title).setMessage(message).setPositiveButton("Confirmar"){_,_->work(task,done)}.setNegativeButton("Cancelar",null).show()}
-    fun person(id:Long){work({repo.administration("/msg/pessoa?conversa=$id")}){r->
-        val box=column();box.addView(text("Um cadastro para os canais da mesma pessoa. Confira os dados antes de vincular."))
-        val name=input("Nome do contato",r.optString("nome"));val phone=input("WhatsApp principal",r.optString("whatsapp"));val second=input("Segundo WhatsApp (opcional)",r.optString("segundo"))
-        phone.inputType=android.text.InputType.TYPE_CLASS_PHONE;second.inputType=android.text.InputType.TYPE_CLASS_PHONE
-        box.addView(text("Nome do contato",true));box.addView(name);box.addView(text("WhatsApp principal",true));box.addView(phone);box.addView(text("Segundo WhatsApp",true));box.addView(second)
-        val noPhone=CheckBox(activity).apply{text="Cliente do Instagram não informou WhatsApp";minHeight=dp(48);isChecked=false;visibility=if(r.optJSONObject("conversa")?.optString("canal")=="instagram")View.VISIBLE else View.GONE};box.addView(noPhone)
-        val linked=linkedSetOf<Long>();array(r,"canais").forEach{linked.add(it.optLong("id"));box.addView(text(InboxRules.channel(it)+" · "+InboxRules.contact(it)))}
-        val chosen=text("Nenhum canal adicional escolhido");box.addView(chosen)
-        fun chooseChannel(channel:String){
-            val b=column();val search=input("Buscar por nome, número ou Instagram");b.addView(search);val results=LinearLayout(activity).apply{orientation=LinearLayout.VERTICAL};b.addView(results)
-            val pick=sheet("Vincular canal existente",b)
-            b.addView(button("Buscar contatos"){
-                work({repo.administration("/msg/conversas?canal="+channel+"&busca="+Uri.encode(search.text.toString()))}){found->results.removeAllViews();array(found,"conversas").filter{it.optInt("grupo")==0}.forEach{c->results.addView(button(c.optString("nome")+" · "+InboxRules.channel(c)+" · "+InboxRules.contact(c)){linked.add(c.optLong("id"));if(c.optString("canal").startsWith("whatsapp")&&phone.text.isBlank()){phone.setText(c.optString("contato"));noPhone.isChecked=false};chosen.text="${linked.size} canais escolhidos; salve para vincular";pick.dismiss()})};if(results.childCount==0)results.addView(text("Nenhum contato encontrado. Tente outro nome ou número."))}
-            })
+    private var personDialog:AlertDialog?=null
+    fun person(id:Long){
+        if(personDialog?.isShowing==true)return
+        val (auth,generation)=repo.store.stampedAuth();if(auth==null)return
+        val box=column();val status=text("Carregando contato…");box.addView(status)
+        val d=sheet("Editar contato",box);personDialog=d;active=true
+        var requestJob:Job?=null
+        d.setOnDismissListener{requestJob?.cancel();if(personDialog===d)personDialog=null;active=dialogs.any{it.isShowing}}
+        fun valid()=d.isShowing&&!activity.isFinishing&&repo.store.generation==generation&&repo.store.auth()?.owner==auth.owner
+        fun run(task:()->JSONObject,done:(JSONObject)->Unit){
+            requestJob=scope.launch{try{val r=withContext(Dispatchers.IO){task()};if(valid())done(r)}
+                catch(e:CancellationException){throw e}
+                catch(e:AccessRevoked){if(valid()){repo.logout();d.dismiss();refresh()}}
+                catch(e:Exception){if(valid()){status.text=if(e is java.io.IOException)"Não foi possível carregar ou salvar. Confira a conexão e tente novamente." else e.message?.take(250)?:"Não foi possível concluir. Tente novamente.";box.findViewWithTag<Button>("person-save")?.isEnabled=true;box.findViewWithTag<Button>("person-retry")?.visibility=View.VISIBLE}}
+            }
         }
-        box.addView(button("Vincular conversa do Instagram"){chooseChannel("instagram")});box.addView(button("Vincular conversa do WhatsApp"){chooseChannel("todos")})
-        val d=sheet("Contato e canais",box)
-        box.addView(button("Salvar nome e vínculos"){
-            val body=JSONObject().put("conversa",id).put("nome",name.text.toString()).put("whatsapp",phone.text.toString()).put("segundo",second.text.toString()).put("semWhatsApp",noPhone.isChecked).put("vincular",JSONArray(linked.toList()))
-            confirm("Salvar este cadastro?","Os canais escolhidos passam a aparecer juntos e com este nome. O histórico de cada canal será preservado.",{repo.administration("/msg/pessoa",body)}){saved->work({repo.refreshPerson(saved)}){d.dismiss();close();refresh();toast("Nome e canais vinculados salvos.")}}
-        })
-    }}
+        fun populate(r:JSONObject){
+            box.removeAllViews();val instagram=r.optJSONObject("conversa")?.optString("canal")=="instagram"
+            val name=input("Nome do contato",r.optString("nome"));val phone=input(if(instagram)"WhatsApp"else"WhatsApp principal",r.optString("whatsapp"));phone.inputType=android.text.InputType.TYPE_CLASS_PHONE
+            box.addView(text("Nome do contato",true));box.addView(name);box.addView(text(if(instagram)"WhatsApp"else"WhatsApp principal",true));box.addView(phone)
+            val second=input("Segundo WhatsApp (opcional)",r.optString("segundo"));second.inputType=android.text.InputType.TYPE_CLASS_PHONE
+            val originalInstagram=r.optString("instagram").ifBlank{r.optString("instagramNome")}
+            val handle=input("Instagram (opcional)",originalInstagram)
+            if(!instagram){box.addView(text("Segundo WhatsApp",true));box.addView(second);box.addView(text("Instagram",true));box.addView(handle)}
+            else box.addView(text("Informe um dos números do cadastro. Se o cliente não informar WhatsApp, deixe vazio."))
+            status.text="";box.addView(status)
+            lateinit var save:Button
+            save=button("Salvar"){
+                if(!save.isEnabled)return@button
+                if(name.text.isBlank()){name.error="Informe o nome";return@button}
+                val body=JSONObject().put("conversa",id).put("nome",name.text.toString()).put("whatsapp",phone.text.toString())
+                if(instagram)body.put("semWhatsApp",phone.text.isBlank())else {body.put("segundo",second.text.toString());if(handle.text.toString()!=originalInstagram||originalInstagram.isBlank())body.put("instagram",handle.text.toString())}
+                save.isEnabled=false;status.text="Salvando…"
+                run({val saved=repo.administration("/msg/pessoa",body);repo.refreshPerson(saved);saved}){d.dismiss();refresh();toast("Contato salvo.")}
+            };save.tag="person-save";save.isFocusableInTouchMode=true;save.setTextColor(Color.WHITE);(save.background as android.graphics.drawable.GradientDrawable).setColor(Color.rgb(171,79,0));box.addView(save)
+        }
+        val retry=button("Tentar novamente"){person(id)}.apply{tag="person-retry";visibility=View.GONE}
+        // Retry keeps the same visible sheet and never stacks another window.
+        retry.setOnClickListener{retry.visibility=View.GONE;status.text="Carregando contato…";run({repo.administration("/msg/pessoa?conversa=$id")},::populate)}
+        box.addView(retry)
+        run({repo.administration("/msg/pessoa?conversa=$id")},::populate)
+    }
     fun settings(){work({repo.config()}){r->
         val box=column();box.addView(text("Espiar nunca marca leitura. A abertura normal usa as opções abaixo."))
         val flags=JSONObject();val saved=r.optJSONObject("config")?:JSONObject();val read=saved.optJSONObject("lerCelular")?:JSONObject()
