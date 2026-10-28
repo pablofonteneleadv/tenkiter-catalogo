@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.22] - 2026-10-28
+
+- Disponibiliza Android 2.4.5 assinado: retomada, Voltar, áudio nativo e seletor visual
+
+
 ## [7.40.21] - 2026-10-28
 
 - Corrige retomada da sessão, Voltar da notificação e prepara áudio e seletor visual nativos no Android 2.4.5
