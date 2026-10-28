@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.8 — Respostas automáticas e atalhos — 2026-10-28
+
+- Mensagens → Respostas: 11 atalhos prontos (/oi, /preco, /foto, /tamanho, /entrega, /outracidade, /pix, /endereco, /retorno, /obrigado, /saiu), semeados uma vez sem apagar as respostas que a equipe já tinha. Escrever "/oi" e espaço na mensagem coloca o texto; [nome] vira o nome da atendente; o primeiro [colchete] fica selecionado e o envio é bloqueado enquanto houver [valor…], [chave Pix] ou [nome] sem completar. O /pix vem com [chave Pix] e [nome] para a loja completar no app (nada da chave fica no código).
+- Mensagens → ⋯ → **Respostas automáticas…** (desligadas por padrão): Boas-vindas (loja aberta, conversa parada havia 12 h, uma vez) e Fora do horário (loja fechada, no máximo 1 vez por período fechado, com {abertura} = "hoje às 7h30", "amanhã às 7h30", "segunda às 7h30", "amanhã às 8h"…). Horário de Fortaleza: seg–sex 7h30–18h, sáb 7h30–14h, domingo fechado; feriados com comércio aberto (8h–13h) editáveis no app. Fora do horário não sai se alguém da equipe respondeu nos últimos 30 min.
+- Nunca em grupos, respostas a status sem texto, reações ou mensagens da loja. Sai pela mesma função do "Enviar", com o selo "Automática" na conversa; não vira responsável, não tira a conversa de "Falta responder" e não conta nas métricas de demora. Falha de envio não derruba o webhook e aparece no diagnóstico da gaveta.
+- Servidor: `GET/POST /msg/auto`, tabela `msg_auto_envio` (não repetir), cfg `msg_auto`, `msg_auto_diag` e `msg_resp_semeada`. Testes: `worker_mensagens_conversa` 320, `worker_mobile_push` OK.
+
 ## 7.40.7 — Trocar usuário — 2026-10-28
 
 - Mensagens → ⋯ → **Trocar usuário…**: mostra as contas já usadas neste aparelho, com "Usar" para trocar com um toque, "Esquecer" para tirar da lista e "Entrar com outra conta". Trocar não apaga as conversas carregadas. Vale no site e no atendimento do app.
