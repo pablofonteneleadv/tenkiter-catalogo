@@ -1297,7 +1297,7 @@
     elConvs.forEach((li, id) => { if (!vivos.has(id)) { li.remove(); elConvs.delete(id); } });
     let ref = ul.firstChild;
     const blocos = new Map();
-    lista.forEach(c=>{const key=c.grupo?'grupo:'+c.id:c.pessoa||'conversa:'+c.id;if(!blocos.has(key))blocos.set(key,[]);blocos.get(key).push(c);});
+    lista.forEach(c=>{const key=c.grupo?'grupo:'+c.id:c.pessoa||(c.outro_id?'par:'+Math.min(c.id,c.outro_id):'conversa:'+c.id);   /* v7.40.16: mesmo número nos dois WhatsApp fica junto, mesmo sem vínculo manual */if(!blocos.has(key))blocos.set(key,[]);blocos.get(key).push(c);});
     [...blocos.values()].map(b=>b.sort((a,c)=>String(c.ultima_em).localeCompare(String(a.ultima_em))||c.id-a.id)).sort((a,b)=>String(b[0].ultima_em).localeCompare(String(a[0].ultima_em))||b[0].id-a[0].id).forEach(b=>b.forEach((c,i)=>{const li=linhaConversa(c);li.classList.toggle('ms-vinculada',i>0);li.style.marginLeft=i?'24px':'';li.style.background=i?'#faf8f3':'';if(li!==ref)ul.insertBefore(li,ref);else ref=ref.nextSibling;}));
     extra.textContent = '';
     if (!lista.length) {

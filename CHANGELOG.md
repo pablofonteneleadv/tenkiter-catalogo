@@ -6,6 +6,9 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.16 — 28/10/2026
+- Mensagens: quem fala pelo WhatsApp 1 e pelo WhatsApp 2 com o mesmo número aparece agrupado na lista (como as pessoas vinculadas), sem precisar vincular à mão.
+
 ## 7.40.15 — 28/10/2026
 - Mensagens: **Funil de vendas** (⋯ → Funil de vendas). Um quadro com uma coluna para cada etiqueta de venda (Novo cliente, Reserva, Aguardando pagamento, Pago, Enviado — as mesmas de Etiquetas; se a equipe renomear ou arquivar, o quadro acompanha). Cada cartão é uma pessoa: nome, canal, prévia, há quanto tempo e responsável. Respeita a aba de canal (Todas, WhatsApp 1, WhatsApp 2, Instagram).
 - Mover o cartão troca só a etapa da venda da pessoa; as outras etiquetas (ex.: Troca) ficam. No celular: uma coluna por tela (deslize ou use ‹ ›) e toque no cartão para “Mover para…”, “Tirar do funil” ou “Abrir conversa”. No computador: colunas lado a lado, arrastar e soltar, ou clicar/Enter no cartão para o mesmo menu.
