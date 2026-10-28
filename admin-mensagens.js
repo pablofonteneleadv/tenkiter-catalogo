@@ -316,6 +316,10 @@
       .ms-prod-marca .ms-prod-caixa { position: absolute; top: 4px; left: 4px; width: 26px; height: 26px; border-radius: 6px; border: 2px solid #141414; background: rgba(255,255,255,0.92); display: flex; align-items: center; justify-content: center; font: 800 0.95rem/1 Inter, Arial, sans-serif; color: #141414; }
       .ms-prod-marca[aria-pressed="true"] .ms-prod-caixa { background: #E67E22; border-color: #141414; }
       .sheet-mensagens .ms-prod-marca:focus-visible { outline: 3px solid #141414; outline-offset: 2px; }
+      .ms-prod-refina { min-height:0;flex:1 1 auto;overflow:auto;padding:8px 12px; }
+      .ms-prod-refina[hidden],.ms-prod-lista[hidden] { display:none; }
+      .ms-prod-filtro { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+      .ms-prod-filtro > button { margin-left:auto; }
       .ms-prod-dica { margin: 2px 12px 6px; font-size: 0.78rem; color: #4a443b; }
       .ms-prod-selbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid #e6e1d6; background: #fff; }
       .ms-prod-selbar[hidden] { display: none; }
@@ -1020,16 +1024,19 @@
   }
   async function abrirProdutos_() {
     const corpo = gaveta_('Produtos'); if (!corpo) return;
-    if(APP_RECENTES&&!produtosCatalogo_().length&&typeof carregarProdutos==='function'){
-      corpo.textContent='Carregando produtos…';await carregarProdutos();
-      if(!corpo.isConnected)return;corpo.textContent='';
-    }
+    if(typeof window.tkProdutosPreparar==='function')window.tkProdutosPreparar();
     const idConv = aberta ? aberta.id : null; if (idConv !== prodSelConv) { prodSel = []; prodSelConv = idConv; }
     const q = el('input', 'ms-busca ms-busca-prod'); q.id = 'ms-prod-busca'; q.type = 'search'; q.placeholder = 'Nome, código, cor ou tamanho'; q.setAttribute('aria-label', 'Buscar produto');
     const so = el('label', 'ms-cfg-linha ms-prod-filtro'), chk = el('input'); chk.type = 'checkbox'; chk.id = 'ms-prod-estoque'; chk.checked = true; so.append(chk, document.createTextNode(' Só com estoque'));
     const ul = el('ul', 'ms-prod-lista'); ul.id = 'ms-prod-lista'; ul.setAttribute('aria-live', 'polite');
     const dica = el('p', 'ms-prod-dica', 'Toque na foto para selecionar várias peças e mandar um link só.');
-    corpo.append(q, so, dica, ul);
+    const filter=el('button','ms-btn','Refinar busca');filter.type='button';filter.id='ms-prod-refinar';filter.hidden=true;
+    const panel=el('div','ms-prod-refina');panel.id='ms-prod-refina';panel.hidden=true;panel.setAttribute('aria-label','Filtros de produtos');
+    const facets=[['Categoria','Categoria'],['Genero','Para quem'],['Tamanhos','Tamanho'],['Cores','Cor']],chosen=Object.fromEntries(facets.map(([k])=>[k,new Set()]));let menu=false;
+    const tags=(p,k)=>k==='Tamanhos'&&typeof TKTamanhos!=='undefined'?TKTamanhos.cliente(p.Tamanhos||'',p.Genero).valores:String(p[k]||'').replace(/<[^>]*>/g,' ').split(/[,;|·]+/).map(x=>x.trim()).filter(Boolean);
+    const fits=(p,except)=>facets.every(([k])=>k===except||!chosen[k].size||tags(p,k).some(v=>[...chosen[k]].some(x=>semAcento_(x)===semAcento_(v))));
+    const reload=el('button','ms-btn','Atualizar catálogo');reload.type='button';reload.style.minHeight='48px';so.append(reload);
+    corpo.append(q, so, dica, filter, panel, ul);
     const bar = el('div', 'ms-prod-selbar'); bar.id = 'ms-prod-selbar'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Peças selecionadas'); bar.hidden = true;
     const conta = el('span', 'ms-prod-conta'); conta.id = 'ms-prod-conta'; conta.setAttribute('aria-live', 'polite');
     const env = el('div', 'ms-prod-env');
@@ -1041,6 +1048,11 @@
       let ps = produtosCatalogo_().filter(ativo_);
       if (chk.checked) ps = ps.filter((p) => !esgotado_(p));
       if (termos.length) ps = ps.filter((p) => { const t = semAcento_([p.Nome, p.Codigo, p.Categoria, p.Cores, p.Tamanhos, p.Genero].join(' ')); return termos.every((x) => t.indexOf(x) >= 0); });
+      const matching=ps;ps=ps.filter(p=>fits(p));
+      filter.hidden=q.value.trim().length<2&&!facets.some(([k])=>chosen[k].size);const amount=ps.length+(ps.length===1?' peça':' peças');filter.textContent=menu?'Ver '+amount+' · Fechar filtros':'Refinar busca · '+amount;filter.setAttribute('aria-expanded',String(menu));
+      panel.hidden=!menu;ul.hidden=menu;dica.hidden=menu;panel.textContent='';
+      facets.forEach(([key,label])=>{const group=el('div','ms-prod-faceta');group.append(el('b','',label));const counts=new Map();matching.filter(p=>fits(p,key)).forEach(p=>tags(p,key).forEach(v=>counts.set(v,(counts.get(v)||0)+1)));const choices=el('div');choices.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 16px';[...new Set([...counts.keys(),...chosen[key]])].sort().forEach(v=>{const btn=el('button','ms-btn',v+' · '+(counts.get(v)||0));btn.type='button';btn.style.minHeight='48px';btn.setAttribute('aria-label',label+': '+v);btn.setAttribute('aria-pressed',String(chosen[key].has(v)));if(chosen[key].has(v))btn.style.background='#ffe7cc';btn.onclick=()=>{chosen[key].has(v)?chosen[key].delete(v):chosen[key].add(v);pintar();};choices.append(btn);});group.append(choices);panel.append(group);});
+      const clear=el('button','ms-btn','Limpar filtros');clear.type='button';clear.onclick=()=>{facets.forEach(([k])=>chosen[k].clear());pintar();};panel.append(clear);
       ul.textContent = '';
       if (!produtosCatalogo_().length) { ul.appendChild(el('li', 'ms-vazio', 'O catálogo ainda está carregando. Tente de novo em alguns segundos.')); return; }
       if (!ps.length) { ul.appendChild(el('li', 'ms-vazio', termos.length ? 'Nenhum produto com “' + q.value.trim() + '”.' + (chk.checked ? ' Desmarque “Só com estoque” para ver os esgotados.' : '') : 'Nenhum produto ativo.')); return; }
@@ -1065,7 +1077,9 @@
       });
       if (ps.length > 40) ul.appendChild(el('li', 'ms-vazio', 'Mostrando 40 de ' + ps.length + '. Escreva mais para achar mais rápido.'));
     };
-    q.addEventListener('input', pintar); chk.addEventListener('change', pintar); pintar(); desenharSelProd_();
+    q.addEventListener('input',()=>{menu=q.value.trim().length>=2;pintar();});filter.onclick=()=>{menu=!menu;pintar();};chk.addEventListener('change', pintar);pintar();desenharSelProd_();
+    async function update(){if(reload.disabled)return;reload.disabled=true;reload.textContent='Atualizando…';try{await carregarProdutos();if(corpo.isConnected)pintar();}finally{reload.disabled=false;reload.textContent='Atualizar catálogo';}}
+    reload.onclick=update;if(APP_RECENTES&&typeof carregarProdutos==='function')update();
     setTimeout(() => q.focus(), 0);
   }
   const produtoPorId_ = (id) => produtosCatalogo_().find((p) => String(p.ID) === String(id));
@@ -1499,19 +1513,25 @@
   }
   function atualizarPill() { const p = $('ms-nova'); if (!p) return; p.hidden = novasAbaixo <= 0; p.textContent = '↓ ' + novasAbaixo + (novasAbaixo === 1 ? ' nova mensagem' : ' novas mensagens'); }
   async function editarPessoa_(id){
-    const r=await worker_('/msg/pessoa?conversa='+id,'GET');if(!r.ok){aviso_(r.erro||'Não foi possível abrir o contato.');return;}
-    const old=$('ms-pessoa-editor');if(old)old.remove();
+    if($('ms-pessoa-editor'))return;
     const overlay=el('div');overlay.id='ms-pessoa-editor';Object.assign(overlay.style,{position:'fixed',inset:'0',zIndex:'10020',background:'rgba(0,0,0,.4)',display:'flex',alignItems:'center',justifyContent:'center',padding:'12px'});
-    const form=el('div');Object.assign(form.style,{background:'#fff',padding:'20px',borderRadius:'20px',width:'min(520px,100%)',maxHeight:'90dvh',overflowY:'auto'});form.setAttribute('role','dialog');form.setAttribute('aria-modal','true');form.setAttribute('aria-label','Contato e canais');form.appendChild(el('h2','','Contato e canais'));
-    const field=(label,value)=>{const l=el('label','',label),input=el('input');input.value=value||'';input.setAttribute('aria-label',label);input.style.minHeight='48px';input.style.width='100%';l.appendChild(input);form.appendChild(l);return input;};
-    const name=field('Nome',r.nome),phone=field('WhatsApp principal',r.whatsapp),second=field('Segundo WhatsApp (opcional)',r.segundo);phone.type=second.type='tel';
-    const without=el('input');without.type='checkbox';without.checked=false;const info=el('label','','Cliente do Instagram não informou WhatsApp');info.prepend(without);info.hidden=r.conversa.canal!=='instagram';form.appendChild(info);
-    const linked=new Set((r.canais||[]).map(x=>x.id));form.appendChild(el('p','',(r.canais||[]).map(x=>NOME_CANAL[x.canal]+' · '+rotuloContato(x)).join('\n')));
-    const search=field('Buscar outro canal para vincular',''),results=el('div');form.appendChild(results);
-    const find=el('button','','Buscar contato');find.type='button';find.style.minHeight='48px';find.onclick=async()=>{const found=await worker_('/msg/conversas?canal=todos&busca='+encodeURIComponent(search.value),'GET');results.textContent='';(found.conversas||[]).filter(c=>!c.grupo).forEach(c=>{const label=el('label'),check=el('input');check.type='checkbox';check.checked=linked.has(c.id);check.disabled=check.checked;check.onchange=()=>{if(check.checked){linked.add(c.id);if(c.canal!=='instagram'&&!phone.value){phone.value=c.contato;without.checked=false;}}else linked.delete(c.id);};label.append(check,document.createTextNode(rotuloContato(c)+' · '+NOME_CANAL[c.canal]));label.style.display='block';label.style.minHeight='48px';results.appendChild(label);});};form.appendChild(find);
+    const form=el('form');Object.assign(form.style,{background:'#fff',padding:'20px',borderRadius:'20px',width:'min(520px,100%)',maxHeight:'90dvh',overflowY:'auto'});form.setAttribute('role','dialog');form.setAttribute('aria-modal','true');form.setAttribute('aria-label','Editar contato');
+    const title=el('h2','','Editar contato'),fields=el('div'),status=el('p','','Carregando contato…'),actions=el('div');status.setAttribute('role','status');
     const finish=()=>{if(window.TKCamadas)TKCamadas.desempilhar('ms-pessoa');else overlay.remove();};
-    const save=el('button','prim','Salvar nome e vínculos');save.type='button';save.style.minHeight='48px';save.onclick=async()=>{if(!confirm('Salvar este nome e reunir os canais escolhidos, preservando o histórico?'))return;save.disabled=true;const out=await worker_('/msg/pessoa','POST',{conversa:id,nome:name.value,whatsapp:phone.value,segundo:second.value,semWhatsApp:without.checked,vincular:[...linked]});save.disabled=false;if(!out.ok){aviso_(out.erro||'Não foi possível salvar.');return;}finish();await carregarLista(true);if(aberta&&aberta.id===id){aberta=out.conversa;montarConversa(aberta);pintarFio(false);}};
-    const close=el('button','','Cancelar');close.type='button';close.style.minHeight='48px';close.onclick=finish;form.append(save,close);overlay.appendChild(form);document.body.appendChild(overlay);if(window.TKCamadas)TKCamadas.empilhar('ms-pessoa',()=>overlay.remove());name.focus();
+    const close=el('button','ms-btn','Fechar');close.type='button';close.style.minHeight='48px';close.onclick=finish;actions.append(close);form.append(title,fields,status,actions);overlay.append(form);document.body.append(overlay);if(window.TKCamadas)TKCamadas.empilhar('ms-pessoa',()=>overlay.remove());close.focus();
+    async function load(){
+      status.textContent='Carregando contato…';const r=await worker_('/msg/pessoa?conversa='+id,'GET');if(!overlay.isConnected)return;
+      if(!r.ok){status.textContent=r.erro||'Não foi possível carregar. Tente novamente.';const retry=el('button','ms-btn','Tentar novamente');retry.type='button';retry.onclick=()=>{retry.remove();load();};fields.replaceChildren(retry);return;}
+      fields.textContent='';status.textContent='';
+      const field=(label,value)=>{const l=el('label','',label),input=el('input');Object.assign(l.style,{display:'block',marginBottom:'12px'});input.value=value||'';input.setAttribute('aria-label',label);Object.assign(input.style,{minHeight:'48px',width:'100%',boxSizing:'border-box'});l.append(input);fields.append(l);return input;};
+      const ig=r.conversa.canal==='instagram',name=field('Nome',r.nome),phone=field(ig?'WhatsApp':'WhatsApp principal',r.whatsapp);name.required=true;phone.type='tel';
+      const second=ig?null:field('Segundo WhatsApp (opcional)',r.segundo),originalIg=r.instagram||r.instagramNome||'',handle=ig?null:field('Instagram',originalIg);if(second)second.type='tel';
+      if(ig)fields.append(el('p','','Informe um dos números do cadastro. Se o cliente não informar WhatsApp, deixe vazio.'));
+      const save=el('button','ms-btn prim','Salvar');save.type='submit';save.style.minHeight='48px';actions.prepend(save);
+      form.onsubmit=async(e)=>{e.preventDefault();if(save.disabled)return;save.disabled=true;status.textContent='Salvando…';const body={conversa:id,nome:name.value,whatsapp:phone.value};if(ig)body.semWhatsApp=!phone.value.trim();else{body.segundo=second.value;if(handle.value!==originalIg||!originalIg)body.instagram=handle.value;}
+        const out=await worker_('/msg/pessoa','POST',body);if(!overlay.isConnected)return;save.disabled=false;if(!out.ok){status.textContent=out.erro||'Não foi possível salvar. Tente novamente.';return;}finish();await carregarLista(true);if(aberta&&aberta.id===id){aberta=out.conversa;montarConversa(aberta);pintarFio(false);}
+      };
+    }await load();
   }
   /* ---- v7.40.13: agendar mensagem (horário de Fortaleza, UTC-3 sem horário de verão) ---- */
   const FORT_MS_ = 3 * 3600000;
@@ -1735,7 +1755,7 @@
     const v = botao('ms-ico ms-voltar', '←', 'voltar'); v.setAttribute('aria-label', 'Voltar para as conversas');
     const av = el('span', 'ms-av', iniciais(c)); av.style.background = corAvatar(c); av.setAttribute('aria-hidden', 'true');
     if (!c.grupo) { av.dataset.ms = 'ficha'; av.style.cursor = 'pointer'; }   // v7.40.14: nome/avatar abrem a ficha do cliente (o teclado usa o botão do nome)
-    const q = botao('ms-quem', '', c.grupo ? 'pessoa' : 'ficha');q.setAttribute('aria-label',c.grupo?'Grupo '+rotuloContato(c):'Abrir a ficha do cliente '+rotuloContato(c));q.style.textAlign='left';q.style.background='transparent';q.appendChild(el('b', '', rotuloContato(c)));
+    const q = botao('ms-quem', '', 'pessoa');q.setAttribute('aria-label',c.grupo?'Grupo '+rotuloContato(c):'Editar contato '+rotuloContato(c));q.style.textAlign='left';q.style.background='transparent';q.appendChild(el('b', '', rotuloContato(c)));
     q.appendChild(el('span', '', NOME_CANAL[c.canal] + (c.grupo ? ' · grupo' : (/^\d{10,15}$/.test(c.contato) ? ' · ' + foneBonito_(c.contato) : ''))));
     const mais = botao('ms-ico', '⋯', 'menu-conversa'); mais.id = 'ms-mais-conv'; mais.setAttribute('aria-label', 'Opções da conversa'); mais.setAttribute('aria-haspopup', 'menu');
     cab.append(v, av, q, mais); return cab;

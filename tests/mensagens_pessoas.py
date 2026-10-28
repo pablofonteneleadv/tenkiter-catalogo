@@ -22,12 +22,12 @@ with sync_playwright() as p:
         assert ids==[7,6,1,8],ids
         assert pg.locator('[data-ms=filtro][data-filtro=ambos]').count()==0
         pg.screenshot(path=f'{OUT}/lista-{width}.png')
-        pg.click('#ms-lista .ms-conv[data-id="1"]');pg.wait_for_timeout(300);pg.click('.ms-cab .ms-quem');pg.wait_for_selector('#ms-fi-salvar');pg.click('#ms-ficha [data-ms=pessoa]');pg.wait_for_selector('#ms-pessoa-editor')   # v7.40.14: o nome abre a ficha; o editor fica em Canais
+        pg.click('#ms-lista .ms-conv[data-id="1"]');pg.wait_for_timeout(300);pg.click('.ms-cab .ms-quem');pg.wait_for_selector('#ms-pessoa-editor')   # v7.40.14: o nome abre a ficha; o editor fica em Canais
         pg.get_by_role('textbox',name='Nome',exact=True).fill('Nome confirmado')
         assert not s.get('pessoas_salvas')
         assert pg.evaluate('document.documentElement.scrollWidth<=window.innerWidth')
         pg.screenshot(path=f'{OUT}/contato-{width}.png')
-        pg.get_by_role('button',name='Salvar nome e vínculos',exact=True).click();pg.wait_for_timeout(300);assert s.get('pessoas_salvas')
+        pg.get_by_role('button',name='Salvar',exact=True).click();pg.wait_for_timeout(300);assert s.get('pessoas_salvas')
         assert not errors,errors
         ctx.close()
     browser.close()

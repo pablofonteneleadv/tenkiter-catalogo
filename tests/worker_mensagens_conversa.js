@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), os = require('os');
 const { DatabaseSync } = require('node:sqlite');
 const tmp = path.join(os.tmpdir(), 'tk_ig_msg_conversa.mjs');
-fs.writeFileSync(tmp, fs.readFileSync(path.join(__dirname, '..', 'instagram-worker', 'worker.js')));
+fs.writeFileSync(tmp, fs.readFileSync(path.join(__dirname, '..', 'instagram-worker', 'worker.js'))+'\nexport {processarFilaZernio_};');
 let ok = 0, falhas = [];
 const chk = (n, c, d) => { if (c) { ok++; console.log('  ✔ ' + n); } else { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? ' — ' + JSON.stringify(d).slice(0, 300) : '')); } };
 
@@ -83,7 +83,8 @@ function d1() {
   const agoraIso = () => new Date().toISOString();
   const ts = (min) => new Date(Date.now() + min * 60000).toISOString();     // minutos a partir de agora (positivo = depois de conectar)
 
-  // ======== Mensagens v2: responder, entrega/leitura, falta responder, ao vivo, exportar, métricas =  const wh = async (caminho, corpo, extra) => { const r = await w.fetch(new Request('https://ig.test' + caminho, Object.assign({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: typeof corpo === 'string' ? corpo : JSON.stringify(corpo) }, extra || {})), env, {}); return { r, j: await r.json().catch(() => null) }; };
+  // ======== Mensagens v2: responder, entrega/leitura, falta responder, ao vivo, exportar, métricas ========
+  const wh = async (caminho, corpo, extra) => { const r = await w.fetch(new Request('https://ig.test' + caminho, Object.assign({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: typeof corpo === 'string' ? corpo : JSON.stringify(corpo) }, extra || {})), env, {}); return { r, j: await r.json().catch(() => null) }; };
   const cfg = (k, v) => DB.prepare('INSERT OR REPLACE INTO cfg (chave, valor) VALUES (?, ?)').bind(k, v).run();
   await wh('/wh/wafly/1/inicial', {});                                  // cria tabelas e o segredo
   const seg = (await DB.prepare("SELECT valor FROM cfg WHERE chave='msg_wh_segredo'").first()).valor;
@@ -271,7 +272,8 @@ function d1() {
   const crash = await A('POST', '/msg/enviar', { conversa: c.id, texto: 'tentativa que caiu no meio', idLocal: 'crash123456' });
   chk('reserva deixada por uma queda no meio: NÃO reenvia, avisa para conferir', crash.j.incerto === true && envios.length === antesCrash && /conferir|Confira/.test(crash.j.erro), crash.j);
 
-  // ======== Mídia (foto/vídeo/áudio) e resposta a story =  const JPG = Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(900, 7)]);
+  // ======== Mídia (foto/vídeo/áudio) e resposta a story ========
+  const JPG = Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(900, 7)]);
   const MP4 = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(2000, 1)]);
   const MP4_HEVC = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.from('hvc1'), Buffer.alloc(2000, 1)]);
   const OGG = Buffer.concat([Buffer.from('OggS'), Buffer.alloc(1500, 3)]);
@@ -929,7 +931,18 @@ function d1() {
   await wh('/wh/wafly/2/'+seg,msg('DIAG-TEXT-RESERVA','5588989012345','Texto do reserva',{connectedPhone:'5588999992222',momment:Date.now()}));
   const secondOrigin=JSON.parse((await DB.prepare("SELECT valor FROM cfg WHERE chave='msg_origem_whatsapp2'").first()).valor);
   chk('diagnóstico não troca canais nem copia credenciais entre instâncias',secondOrigin.canal==='whatsapp2'&&secondOrigin.telefoneDaLoja==='5588999992222'&&!('token' in secondOrigin));
-  // ======== v7.40.8: atalhos de resposta rápida e respostas automáticas =  {
+  // Durable acceptance: a failed write stays queued, and cron can recover it without a duplicate.
+  await cfg('zernio_chave',zChave);await cfg('zernio_conta',JSON.stringify({id:'acc_t',usuario:'tenkitermodasceara'}));
+  const originalDb=env.DB;let queueFail=true;
+  env.DB={...originalDb,prepare(sql){if(queueFail&&/INSERT.*msg_mensagem/i.test(sql))throw new Error('falha simulada de armazenamento');return originalDb.prepare(sql);}};
+  const queuedEvent=zEv({platformMessageId:'durable-ig-message',sender:{id:'IG-DURABLE',name:'Contato de teste',username:'durable.teste'}});
+  const queuedReply=await zPost(queuedEvent);
+  chk('Instagram aceita só depois de preservar evento e mantém em fila se gravação falhar',queuedReply.r.status===200&&(await DB.prepare('SELECT COUNT(*) n FROM msg_zernio_fila').first()).n===1&&!(await DB.prepare("SELECT id FROM msg_mensagem WHERE ext_id='durable-ig-message'").first()));
+  queueFail=false;env.DB=originalDb;await DB.prepare('UPDATE msg_zernio_fila SET prox=0,trava=0').run();await W.processarFilaZernio_(env);
+  chk('nova tentativa recupera a mensagem e remove payload da fila',(await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE ext_id='durable-ig-message'").first()).n===1&&(await DB.prepare('SELECT COUNT(*) n FROM msg_zernio_fila').first()).n===0);
+  await zPost(queuedEvent);chk('reentrega do mesmo evento não duplica mensagens',(await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE ext_id='durable-ig-message'").first()).n===1);
+  // ======== v7.40.8: atalhos de resposta rápida e respostas automáticas ========
+  {
     const H = (iso, F) => W.horarioLoja_(Date.parse(iso), F);   // iso em UTC; Fortaleza = UTC-3
     // 2026-11-04 = quarta; 2026-11-06 = sexta; 2026-11-07 = sábado; 2026-11-08 = domingo
     chk('horário: quarta 10h aberta', H('2026-11-04T13:00:00Z').aberta === true);
@@ -1058,7 +1071,8 @@ function d1() {
       chk('automáticas (hora real): resposta da atendente continua virando dono', env1.j.ok && cR2.dono && cR2.ult_dir === 'saida', cR2);
     } finally { globalThis.fetch = fAuto; await A('POST', '/msg/auto', { boasVindas: { ligado: false }, foraHorario: { ligado: false } }); }
   }
-  // ======== v7.40.13: agendar mensagem =  {
+  // ======== v7.40.13: agendar mensagem ========
+  {
     const fAg = globalThis.fetch; let agEnv = [], agModo = 'ok';
     globalThis.fetch = async (u, init) => {
       const U = String(u);
@@ -1132,7 +1146,8 @@ function d1() {
       chk('scheduled chama processarAgenda_ a cada minuto', /ctx\.waitUntil\(processarAgenda_\(env\)\.catch/.test(fs.readFileSync(path.join(__dirname, '..', 'instagram-worker', 'worker.js'), 'utf8')));
     } finally { globalThis.fetch = fAg; }
   }
-  // ======== v7.40.14: ficha do cliente =  {
+  // ======== v7.40.14: ficha do cliente ========
+  {
     const pausa = () => new Promise((r) => setTimeout(r, 8));
     const wa2P = (await DB.prepare("SELECT id FROM msg_conversa WHERE canal='whatsapp2' AND contato='5588989012345'").first()).id;
     const f0 = await A('GET', '/msg/ficha?conversa=' + waPerson.id);
@@ -1187,7 +1202,8 @@ function d1() {
     chk('ficha: Instagram solto não herda compras da outra pessoa', (await A('GET', '/msg/ficha?conversa=' + solto)).j.compras.length === 0);
     chk('ficha: validarFicha_ exportada e limites em código', typeof W.validarFicha_ === 'function' && W.validarFicha_({ tamanhos: 'M' })[1].tamanhos === 'M' && !!W.validarFicha_({ cidade: 'c'.repeat(61) })[0]);
   }
-  // ======== v7.40.15: funil de vendas =  {
+  // ======== v7.40.15: funil de vendas ========
+  {
     const t = (h) => new Date(Date.now() - h * 3600e3).toISOString();
     const ins = async (canal, contato, nome, extra) => { const x = Object.assign({ pessoa: '', grupo: 0, encerrada_em: '', ultima_em: t(1), previa: 'Oi, tem no M?' }, extra || {}); await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em,previa,pessoa,encerrada_em) VALUES(?,?,?,?,3,?,?,?,?)").bind(canal, contato, nome, x.grupo, x.ultima_em, x.previa, x.pessoa, x.encerrada_em).run(); return (await DB.prepare('SELECT id FROM msg_conversa WHERE canal=? AND contato=?').bind(canal, contato).first()).id; };
     const fWa = await ins('whatsapp1', '5588977001111', 'Funil Pessoa', { pessoa: '558877001111', ultima_em: t(-1), previa: 'Pelo WhatsApp' });

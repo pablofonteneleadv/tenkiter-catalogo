@@ -3315,7 +3315,6 @@ async function hmacHex_(segredo, texto) {
 }
 async function rotaZernio_(env, req, url, ctx) {
   const resp = (s, o) => new Response(JSON.stringify(o), { status: s, headers: { 'Content-Type': 'application/json' } });
-  await iniciar(env);
   if (!igualConst_(url.pathname.split('/')[3] || '', await msgSegredo_(env))) return resp(404, { ok: false });
   const seg = await cfgGet(env, 'zernio_wh_segredo'), corpo = await req.text();
   if (!seg) return resp(503, { ok: false });
@@ -3323,9 +3322,37 @@ async function rotaZernio_(env, req, url, ctx) {
   if (!assin || !igualConst_(assin, await hmacHex_(seg, corpo))) { await cfgSet(env, 'msg_ult_zernio', JSON.stringify({ em: agora(), res: 'assinatura' })); return resp(401, { ok: false }); }
   let b = null; try { b = JSON.parse(corpo); } catch (e) { return resp(400, { ok: false }); }
   await cfgSet(env, 'msg_ult_zernio', JSON.stringify({ em: agora(), res: 'ok', evento: String((b && b.event) || '').slice(0, 40) }));
-  // DM nova: aviso no celular na hora, como no WhatsApp (antes esperava o cron)
-  if (b && (b.event === 'message.received' || b.event === 'message.sent')) { const t = processarEventoZernio_(env, b).then(() => (b.event === 'message.received' ? processarPushMobile_(env, true) : null)).catch(() => {}); if (ctx && ctx.waitUntil) ctx.waitUntil(t); else await t; }
+  // Persist first, acknowledge promptly; DDL/media/vendor calls run after durable acceptance.
+  if(b&&(b.event==='message.received'||b.event==='message.sent')){
+    if(corpo.length>1048576)return resp(413,{ok:false});
+    await criarFilaZernio_(env);
+    const id=String(b.id||assin).slice(0,200);
+    await env.DB.prepare('INSERT OR IGNORE INTO msg_zernio_fila(id,payload,em,prox,trava,tentativas) VALUES(?,?,?,0,0,0)').bind(id,corpo,agora()).run();
+    const t=processarFilaZernio_(env).catch(()=>{});if(ctx&&ctx.waitUntil)ctx.waitUntil(t);else await t;
+  }
   return resp(200, { ok: true });
+}
+async function criarFilaZernio_(env){
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_zernio_fila(id TEXT PRIMARY KEY,payload TEXT NOT NULL,em TEXT NOT NULL,prox INTEGER NOT NULL DEFAULT 0,trava INTEGER NOT NULL DEFAULT 0,tentativas INTEGER NOT NULL DEFAULT 0)").run();
+}
+async function processarFilaZernio_(env){
+  await criarFilaZernio_(env);const now=Date.now();
+  const rows=(await env.DB.prepare('SELECT id,payload,tentativas FROM msg_zernio_fila WHERE prox<=? AND trava<=? ORDER BY em LIMIT 5').bind(now,now).all()).results;
+  if(!rows.length)return;
+  await iniciar(env);
+  for(const row of rows){
+    const claimed=await env.DB.prepare('UPDATE msg_zernio_fila SET trava=? WHERE id=? AND trava<=?').bind(Date.now()+120000,row.id,Date.now()).run();if(!claimed.meta.changes)continue;
+    try{
+      const b=JSON.parse(row.payload);await processarEventoZernio_(env,b);
+      await env.DB.prepare('DELETE FROM msg_zernio_fila WHERE id=?').bind(row.id).run();
+      await cfgSet(env,'msg_zernio_processado',JSON.stringify({em:agora(),ok:true}));
+      // Push failures cannot make the already-saved message disappear or retry ingestion.
+      if(b.event==='message.received')await processarPushMobile_(env,true).catch(()=>{});
+    }catch(e){
+      await env.DB.prepare('UPDATE msg_zernio_fila SET tentativas=tentativas+1,prox=?,trava=0 WHERE id=?').bind(Date.now()+Math.min(1800000,30000*Math.pow(2,Math.min(6,row.tentativas))),row.id).run();
+      await cfgSet(env,'msg_zernio_processado',JSON.stringify({em:agora(),ok:false,erro:'Falha ao gravar; evento preservado para nova tentativa.'}));
+    }
+  }
 }
 const ZERNIO_TIPO_ = { image: 'imagem', video: 'vídeo', audio: 'áudio', file: 'documento', sticker: 'figurinha', share: 'compartilhamento' };
 async function processarEventoZernio_(env, b) {
@@ -3869,6 +3896,7 @@ async function saudeAvisos_(env) {
 export default {
   async scheduled(ev, env, ctx) {
     ctx.waitUntil(processarPushMobile_(env).catch(()=>{}));
+    ctx.waitUntil(processarFilaZernio_(env).catch(()=>{}));
     ctx.waitUntil(processarAgenda_(env).catch(()=>{}));                      // a cada minuto: mensagens agendadas que chegaram na hora
     ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
     ctx.waitUntil(processarFotoIA(env));                                      // a cada minuto: 1 imagem da fila de Fotos com IA (se já puder: cota/limite do dia)

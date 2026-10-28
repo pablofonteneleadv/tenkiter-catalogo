@@ -53,8 +53,8 @@ with sync_playwright() as p:
     S["vendas"] = [{"conversa_id": 5, "em": "2026-10-12T15:00:00.000Z"}]
     S["convs"][0]["etiquetas"] = [S["etq_mock"][0]]
     chk("sem ficha: a faixa da conversa não inventa tamanhos", pg.locator("#ms-veste").count() == 0)
-    chk("botão do nome tem nome acessível de abrir a ficha", "ficha do cliente" in (pg.get_attribute(".ms-cab .ms-quem", "aria-label") or ""))
-    pg.click(".ms-cab .ms-quem"); esperar_ficha(pg)
+    chk("botão do nome tem nome acessível de editar contato", "Editar contato" in (pg.get_attribute(".ms-cab .ms-quem", "aria-label") or ""))
+    pg.click("#ms-mais-conv");pg.click(".ms-menu [data-ms=ficha]"); esperar_ficha(pg)
     chk("tocar no nome abre a gaveta 'Ficha do cliente'", pg.locator("#ms-gaveta").is_visible() and "Ficha do cliente" in txt(pg, ".ms-gaveta-cab"))
     corpo = txt(pg, "#ms-ficha")
     chk("seções: Tamanhos, Preferências, Cidade/bairro, Etiquetas, Notas recentes, Compras, Canais", all(x in corpo for x in ["Tamanhos que usa", "Preferências", "Cidade / bairro", "Etiquetas", "Notas recentes", "Compras", "Canais"]), corpo[:300])

@@ -1,3 +1,5 @@
+> Atualização: o proprietário autorizou concluir e publicar o lote em 28/10/2026. As restrições abaixo descrevem a fase anterior; ver PUBLICACAO.md para o resultado final.
+
 # Erro 1 — canal atual/atalho e contexto de status
 
 **Lote em preparação. Não publicar, fazer merge, alterar conexões ou replicar configuração de produção antes da autorização explícita do proprietário.** Próximos erros entram no mesmo lote.

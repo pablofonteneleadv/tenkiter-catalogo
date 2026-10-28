@@ -1870,6 +1870,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   });
 
   let categorias = [], generos = [], produtos = [];
+  window.tkProdutosPreparar = () => { if(!produtos.length){const cache=lerCacheAdmin_(CACHE_ADMIN_PROD);if(cache&&Array.isArray(cache.produtos))produtos=cache.produtos;} };
   window.tkProdutosLista = () => produtos;   // v7.24: a tela de Mensagens procura produtos no catálogo já carregado (sem nova chamada ao servidor)
   let catGestaoNoServidor_ = false; // o backend (3.2+) sabe apagar/renomear categoria; só liga os botões se disser que sabe
   let editandoCat_ = null;          // categoria que está sendo renomeada agora (linha vira campo de edição)

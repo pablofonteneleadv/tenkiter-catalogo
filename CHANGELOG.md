@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.17] - 2026-10-28
+
+- Correções do lote: recebimento durável do Instagram, contatos, busca de produtos e alinhamento das fotos
+
+
 ## 7.40.16 — 28/10/2026
 - Mensagens: quem fala pelo WhatsApp 1 e pelo WhatsApp 2 com o mesmo número aparece agrupado na lista (como as pessoas vinculadas), sem precisar vincular à mão.
 

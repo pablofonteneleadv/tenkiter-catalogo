@@ -1,3 +1,5 @@
+> Atualização: o proprietário autorizou concluir e publicar o lote em 28/10/2026. As restrições abaixo descrevem a fase anterior; ver PUBLICACAO.md para o resultado final.
+
 # Erro 2 — editor de contato único e associação pelo número
 
 **Preparado, sem publicação. Faz parte do mesmo lote do erro 1; merge, deploy e distribuição do APK dependem da autorização explícita do proprietário.**
