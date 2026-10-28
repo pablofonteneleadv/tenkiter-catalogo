@@ -2970,6 +2970,23 @@ function acessosEstado(){
   if (!state.acessos) state.acessos = { pessoas: [], perfis: [], permissoes: [], busca: '', ordem: 'nome', fCv: 'todos', filtro: null, contagem: {}, truncado: false, abertos: {}, carregado: false, erro: '', totalClientes: 0, criando: false, log: null, eu: '' };
   return state.acessos;
 }
+async function msgAcessosReq_(method, body){
+  var r = await fetch(INSTAGRAM_URL+'/msg/acessos',{method:method||'GET',headers:{'Content-Type':'application/json','X-TK-Whats':state.user.whatsapp,'X-TK-Sessao':state.user.password},body:body?JSON.stringify(body):undefined,cache:'no-store'});
+  var j = await r.json(); if(!r.ok||!j.ok)throw new Error(j.erro||'Não foi possível consultar os acessos de Mensagens.');return j;
+}
+function msgAcessosHtml_(p){
+  var a=acessosEstado(),m=a.msgAcessos;
+  if(!m)return '<div class="ac-grupo"><div class="ac-grupo-t">Mensagens</div><p>'+esc(a.msgErro||'Carregando acessos…')+'</p></div>';
+  var n=String(p.whatsapp||'').replace(/\D/g,'');if(n.length===11)n='55'+n;if(n.length===13&&n.charAt(4)==='9')n=n.slice(0,4)+n.slice(5);
+  var pessoal=(m.regras.pessoas||{})[n]||{},perfis=perfisDe(p).map(function(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,'');});
+  var admin=!!permObj(p.permissoes).gerir_acessos;
+  return '<div class="ac-grupo"><div class="ac-grupo-t">Ferramentas de Mensagens</div><p>Os acessos abaixo valem para o site e o aplicativo.</p>'+Object.keys(m.ferramentas).map(function(k){
+    var def=perfis.indexOf('equipecatalogo1')!==-1&&['funil','metricas','exportar','configuracoes'].indexOf(k)===-1;
+    var overrides=perfis.map(function(n){return (m.regras.perfis||{})[n];}).filter(function(r){return r&&typeof r[k]==='boolean';});if(overrides.length)def=overrides.some(function(r){return r[k];});
+    var valor=typeof pessoal[k]==='boolean'?String(pessoal[k]):'';
+    return '<label class="ac-perm" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:48px">'+esc(m.ferramentas[k])+'<select data-msg-chave="'+esc(k)+'" style="min-height:48px;max-width:100%"'+(admin?' disabled':'')+'><option value=""'+(!valor?' selected':'')+'>Perfil: '+(admin||def?'permitido':'não permitido')+'</option><option value="true"'+(valor==='true'?' selected':'')+'>Permitir para esta pessoa</option><option value="false"'+(valor==='false'?' selected':'')+'>Não permitir para esta pessoa</option></select></label>';
+  }).join('')+(admin?'<p>Admin total mantém todos os acessos.</p>':'')+'</div>';
+}
 async function carregarAcessos(){
   var a = acessosEstado();
   var resp = await acessosReq({ action: 'acessos_listar', todos: true });
@@ -2981,6 +2998,7 @@ async function carregarAcessos(){
     a.contagem = {}; a.pessoas.forEach(function(x){ perfisDe(x).forEach(function(n){ a.contagem[n] = (a.contagem[n] || 0) + 1; }); }); a.truncado = !!resp.truncado;
     if (!a.filtro){ a.filtro = {}; a.perfis.forEach(function(x){ a.filtro[x.nome] = (String(x.nome).toLowerCase() !== 'cliente'); }); }
   }
+  try{a.msgAcessos=await msgAcessosReq_();a.msgErro='';}catch(e){a.msgAcessos=null;a.msgErro=e.message;}
   a.carregado = true;
   if (state.view === 'admin' && state.adminTab === 'acessos'){ pintarFiltroAcessos(); pintarAcessos(); }
 }
@@ -3032,7 +3050,7 @@ function acessosCard(p){
       var muda = base && (!!mine[x.chave] !== !!base[x.chave]);
       return '<label class="ac-perm' + (muda ? ' ac-diff' : '') + '"><input type="checkbox" data-chave="' + esc(x.chave) + '"' + (mine[x.chave] ? ' checked' : '') + '> ' + esc(x.rotulo) + (muda ? ' <span class="ac-star" title="Diferente do padrão do perfil">✱</span>' : '') + '</label>';
     }).join('') + '</div>';
-  }).join('') + '</div>') : '';
+  }).join('') + msgAcessosHtml_(p) + '</div>') : '';
   return '<div class="ac-card' + (ativo ? '' : ' ac-off') + '" data-whats="' + esc(p.whatsapp) + '">' +
     '<div class="ac-head">' +
       '<div class="ac-foto-col">' + acFotoHtml(p) + '</div>' +
@@ -3286,6 +3304,11 @@ function wireTabAcessos(){
       await carregarAcessos();
       if (p.whatsapp === state.user.whatsapp) refrescarMinhas();
       return;
+    }
+    if(e.target.matches('select[data-msg-chave]')){
+      var select=e.target;select.disabled=true;
+      try{var j=await msgAcessosReq_('POST',{tipo:'pessoa',alvo:p.whatsapp,chave:select.dataset.msgChave,valor:select.value===''?null:select.value==='true'});acessosEstado().msgAcessos=j;toast('Acesso de Mensagens salvo.');}catch(err){toast(err.message);}
+      await carregarAcessos();return;
     }
     if (e.target.matches('input[type=checkbox][data-chave]')){
       var chave = e.target.getAttribute('data-chave'), marcado = e.target.checked;

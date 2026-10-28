@@ -557,6 +557,9 @@
   .painel-simples #card-pedidos, .painel-simples #aviso-pedidos-novos, .painel-simples #aviso-codigos, .painel-simples #atalho-pedidos, .painel-simples #atalho-numeros,
   .painel-simples [data-atalho="ferramentas"], .painel-simples #details-ferramentas, .painel-simples #ig-faixa, .painel-simples #btn-bulk-preco, .painel-simples #btn-bulk-novidade,
   .painel-simples #btn-bulk-arquivar, .painel-simples #btn-bulk-reativar, .painel-simples #btn-bulk-juntar, .painel-simples #btn-bulk-estoque, .painel-simples #btn-bulk-categoria,
+  .sem-gerir.tem-mensagens #btn-abrir-mensagens { display: flex !important; }
+  .painel-simples.tem-mensagens #details-ferramentas { display: block !important; }
+  .painel-simples.tem-mensagens #details-ferramentas .ferr-tile:not(#btn-abrir-mensagens) { display: none !important; }
   .painel-simples .dashboard { display: none !important; }
   .ped-topo { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
   #ped-atualizar { width: auto; flex: none; padding: 7px 12px; font-size: 0.78rem; background: #eee; color: #333; }
@@ -6008,7 +6011,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="admin-gestao.js?v=7.19.0"></script>
 <script src="admin-push.js?v=7.19.0"></script>
 <script src="admin-conexoes.js?v=7.38.2"></script>
-<script src="admin-mensagens.js?v=7.40.16"></script>
+<script src="mensagens-acessos.js?v=7.40.19"></script>
+<script src="admin-mensagens.js?v=7.40.19"></script>
 <script src="admin-instagram.js?v=7.17.0"></script>
 <script src="video-validation.js"></script>
 <script src="admin-postagens.js?v=7.30.2"></script>
@@ -6146,6 +6150,6 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   });
 })();
 </script>
-<script src="app-mensagens.js?v=7.40.10"></script>
+<script src="app-mensagens.js?v=7.40.19"></script>
 </body>
 </html>

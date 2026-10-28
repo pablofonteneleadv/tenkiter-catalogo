@@ -818,6 +818,23 @@ function d1() {
   const nOk = await A('POST', '/msg/notas', { conversa: nConv, texto: 'Confirmar o Pix antes de separar' });
   const nLe = await A('GET', '/msg/mensagens?conversa=' + nConv);
   chk('nota salva volta junto com a conversa e nunca vira mensagem', nOk.j.ok && nLe.j.notas.some((n) => n.texto === 'Confirmar o Pix antes de separar') && !nLe.j.mensagens.some((m) => m.texto === 'Confirmar o Pix antes de separar'), [nOk.j, nLe.j.notas]);
+  const naoLidasAntes = (await DB.prepare('SELECT nao_lidas FROM msg_conversa WHERE id=?').bind(nConv).first()).nao_lidas;
+  await DB.prepare("UPDATE msg_conversa SET encerrada_em='' WHERE id=?").bind(nConv).run();
+  let comNotas = await A('GET','/msg/conversas?canal=todos&filtro=com_notas');
+  chk('Com notas inclui a conversa aberta com nota ativa',comNotas.j.conversas.some(c=>c.id===nConv));
+  await DB.prepare("UPDATE msg_conversa SET encerrada_em='2026-10-28' WHERE id=?").bind(nConv).run();
+  comNotas = await A('GET','/msg/conversas?canal=todos&filtro=com_notas&busca=Pix');
+  chk('Com notas nunca traz encerradas, mesmo buscando',!comNotas.j.conversas.some(c=>c.id===nConv));
+  await DB.prepare("UPDATE msg_conversa SET encerrada_em='' WHERE id=?").bind(nConv).run();
+  const excluiu = await A('DELETE','/msg/notas?conversa='+nConv+'&id='+nOk.j.nota.id);
+  const logNotas = await A('GET','/msg/notas/log?conversa='+nConv);
+  chk('X remove nota ativa e preserva texto, autor e identificação de quem apagou',excluiu.j.ok&&!excluiu.j.notas.some(n=>n.id===nOk.j.nota.id)&&logNotas.j.exclusoes.some(n=>n.id===nOk.j.nota.id&&n.texto==='Confirmar o Pix antes de separar'&&n.autor&&n.excluida_em&&n.excluida_por.includes('88999990000')));
+  const repete = await A('DELETE','/msg/notas?conversa='+nConv+'&id='+nOk.j.nota.id);
+  chk('apagar de novo é idempotente e não substitui o log',repete.j.ok&&(await A('GET','/msg/notas/log?conversa='+nConv)).j.exclusoes[0].excluida_em===logNotas.j.exclusoes[0].excluida_em);
+  chk('notas não marcam conversa como lida',(await DB.prepare('SELECT nao_lidas FROM msg_conversa WHERE id=?').bind(nConv).first()).nao_lidas===naoLidasAntes);
+  const otherNote=await A('POST','/msg/notas',{conversa:nConv,texto:'Nota que permanece'});
+  const outraConv=(await DB.prepare('SELECT id FROM msg_conversa WHERE id<>? AND pessoa<> (SELECT pessoa FROM msg_conversa WHERE id=?) LIMIT 1').bind(nConv,nConv).first());
+  if(outraConv){await A('DELETE','/msg/notas?conversa='+outraConv.id+'&id='+otherNote.j.nota.id);chk('não apaga nota de outra pessoa',(await A('GET','/msg/notas?conversa='+nConv)).j.notas.some(n=>n.id===otherNote.j.nota.id));}
   // v7.40.4: etiquetas
   const eL = await A('GET', '/msg/etiquetas'), eId = (n) => eL.j.etiquetas.find((e) => e.nome === n).id;
   chk('etiquetas padrão criadas na primeira vez', eL.j.ok && eL.j.etiquetas.length === 6 && eL.j.etiquetas[0].nome === 'Novo cliente');
@@ -1219,5 +1236,40 @@ function d1() {
     await DB.prepare("UPDATE msg_etiqueta SET arquivada=0 WHERE id=?").bind(eId('Enviado')).run();
     chk('funil: funções exportadas', typeof W.funilVendas_ === 'function' && typeof W.moverNoFunil_ === 'function');
   }
+  // ACL: catálogo 1, delegação, negação e redirecionamento inexistente.
+  const originalFetchAcl=globalThis.fetch;
+  globalThis.fetch=async(u,init)=>{
+    if(String(u).startsWith('https://api.fake')&&init?.body){const d=JSON.parse(init.body);if(d.sessao==='tk2.catalogo1')return Response.json({ok:true,usuario:{permissoes:['catalogo_admin','catalogo_cadastrar','painel_simples'],perfil:'Equipe catálogo 1'}});}
+    return originalFetchAcl(u,init);
+  };
+  const staff=async(m,p,b)=>{const r=await w.fetch(ped(m,p,'tk2.catalogo1',b),env,{});return {r,j:await r.json()};};
+  chk('Equipe catálogo 1 recebe atendimento sem configurações',(await staff('GET','/msg/acesso')).j.direitos.acessar&&!(await staff('GET','/msg/acesso')).j.direitos.configuracoes);
+  chk('Equipe catálogo 1 lista conversas',(await staff('GET','/msg/conversas?canal=todos')).r.status===200);
+  chk('equipe não altera conexões nem administra acessos',(await staff('POST','/msg/zernio/config',{chave:'fake'})).r.status===403&&(await staff('GET','/msg/acessos')).r.status===403);
+  let regra=await A('POST','/msg/acessos',{tipo:'pessoa',alvo:'88999990000',chave:'notas',valor:false});
+  chk('gestão salva negação individual',regra.j.ok,regra.j);
+  chk('negação é aplicada no servidor e remove notas da resposta',(await staff('GET','/msg/notas?conversa='+nConv)).r.status===403&&!Object.hasOwn((await staff('GET','/msg/mensagens?conversa='+nConv)).j,'notas')&&(await staff('GET','/msg/conversas?canal=todos&filtro=com_notas')).r.status===403);
+  chk('gestor conserva acesso e log ao retirar permissão de homônimo',(await A('GET','/msg/notas/log?conversa='+nConv)).r.status===200);
+  await A('POST','/msg/acessos',{tipo:'pessoa',alvo:'88999990000',chave:'notas',valor:null});
+  chk('reset volta ao perfil sem publicação Apps Script',(await staff('GET','/msg/notas?conversa='+nConv)).r.status===200);
+  chk('chave desconhecida e protótipo recusados',(await A('POST','/msg/acessos',{tipo:'pessoa',alvo:'88999990000',chave:'__proto__',valor:true})).r.status===400);
+  await A('POST','/msg/acessos',{tipo:'pessoa',alvo:'88999990000',chave:'acessar',valor:false});
+  chk('revogação interrompe todo atendimento',(await staff('GET','/msg/conversas?canal=todos')).r.status===403);
+  await DB.prepare("DELETE FROM cfg WHERE chave='msg_acessos_v1'").run();globalThis.fetch=originalFetchAcl;
+  // APK e nome são servidos como download privado; não executamos anexos.
+  const apkBytes=new Uint8Array([80,75,3,4,1,2,3]);await R2.put('msg/fake.apk',apkBytes,{httpMetadata:{contentType:'application/vnd.android.package-archive'}});
+  const arquivo=await DB.prepare("INSERT INTO msg_mensagem(conversa_id,canal,ext_id,direcao,tipo,texto,enviada_em,midia_chave,midia_mime) VALUES(?,'whatsapp1','test-download','entrada','documento','TENKiTER-Mensagens-2.4.2.apk',?,'msg/fake.apk','application/vnd.android.package-archive')").bind(nConv,agoraIso()).run();
+  const ar=await w.fetch(ped('GET','/msg/midia?id='+arquivo.meta.last_row_id+'&baixar=1','tk2.admin'),env,{});
+  chk('APK tem conteúdo original, nome e download privado',ar.status===200&&ar.headers.get('content-disposition').includes('TENKiTER-Mensagens-2.4.2.apk')&&ar.headers.get('cache-control').includes('no-store')&&Buffer.from(await ar.arrayBuffer()).equals(Buffer.from(apkBytes)));
+  const cold=(await import(tmp+'?cold-permissions')).default, prepareOriginal=DB.prepare;let alters=0;
+  DB.prepare=function(sql){if(/^ALTER/i.test(sql))alters++;return prepareOriginal.call(DB,sql);};
+  const coldResults=await Promise.all([cold.fetch(ped('GET','/msg/acesso','tk2.admin'),env,{}),cold.fetch(ped('GET','/msg/acesso','tk2.admin'),env,{})]);
+  DB.prepare=prepareOriginal;
+  chk('isolado novo usa versão persistida sem repetir ALTER e atende chamadas simultâneas',coldResults.every(r=>r.status===200)&&alters===0,alters);
+  const remoteFetch=globalThis.fetch;globalThis.fetch=async(u,i)=>String(u)==='https://cdn.fake/recebido.apk'?new Response(apkBytes,{headers:{'Content-Type':'application/vnd.android.package-archive'}}):remoteFetch(u,i);
+  await DB.prepare("UPDATE msg_mensagem SET midia_chave='',midia_url='https://cdn.fake/recebido.apk' WHERE id=?").bind(arquivo.meta.last_row_id).run();
+  const remoteApk=await w.fetch(ped('GET','/msg/midia?id='+arquivo.meta.last_row_id+'&baixar=1','tk2.admin'),env,{});
+  chk('APK remoto antes recusado é copiado e baixado',remoteApk.status===200&&Buffer.from(await remoteApk.arrayBuffer()).equals(Buffer.from(apkBytes)));
+  globalThis.fetch=remoteFetch;
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });

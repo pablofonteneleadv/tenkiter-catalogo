@@ -22,7 +22,9 @@ object WebKeeper {
     private val pause=Runnable{if(!attached)web?.pauseTimers()}
     /** Ações pedidas pelo menu do site (Atualizar app, Permissões do app); a tela aberta no momento responde. */
     @Volatile var actions:((String)->Unit)?=null
+    @Volatile var download:((Long,String)->Unit)?=null
     private val bridge=object{
+        @JavascriptInterface fun baixarArquivo(id:Long,nome:String){handler.post{download?.invoke(id,nome)}}
         @JavascriptInterface fun atualizar(){handler.post{actions?.invoke("atualizar")}}
         @JavascriptInterface fun permissoes(){handler.post{actions?.invoke("permissoes")}}
         @JavascriptInterface fun versao()=BuildConfig.VERSION_NAME
@@ -49,7 +51,8 @@ object WebKeeper {
         }
     }
     /** A tela do app voltou: a página volta a atualizar sozinha. */
-    fun attach(){attached=true;handler.removeCallbacks(pause);web?.resumeTimers()}
+    fun refresh(){handler.post{if(attached)web?.evaluateJavascript("window.TKMensagensApp && window.TKMensagensApp.atualizar()",null)}}
+    fun attach(){attached=true;handler.removeCallbacks(pause);web?.resumeTimers();refresh()}
     /** O app saiu da tela: depois de um tempo a página para de consultar o servidor, mas continua carregada. */
     fun detach(){attached=false;handler.removeCallbacks(pause);handler.postDelayed(pause,120000)}
 }

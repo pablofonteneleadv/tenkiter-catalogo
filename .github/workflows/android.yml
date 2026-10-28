@@ -3,6 +3,9 @@ on:
   pull_request:
     branches: [main]
     paths: ['android/**', '.github/workflows/android.yml']
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -27,7 +30,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: gradle -p android :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --console plain
       - name: Compilar com a assinatura preservada
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
           TK_ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}

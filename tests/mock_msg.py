@@ -76,6 +76,20 @@ def tratar(route, path, method, body, s):
     s["calls"].append(path)
     url = urlparse(route.request.url); q = {k: v[0] for k, v in parse_qs(url.query).items()}
     J = lambda o, st=200, h=None: route.fulfill(status=st, json=o, headers=h or {})
+    if path == "/msg/notas":
+        cid = int(q.get("conversa", 0)) if method != "POST" else int(body.get("conversa", 0))
+        c = next(x for x in s["convs"] if x["id"] == cid)
+        alvo = pessoa(c) or "c:%d" % cid
+        notas = s.setdefault("notas", {}).setdefault(alvo, [])
+        if method == "POST":
+            s["seq"] += 1
+            n = {"id": s["seq"], "texto": body["texto"], "autor": "Ana", "em": agora()}
+            notas.append(n)
+            return J({"ok": True, "nota": n}) or True
+        if method == "DELETE":
+            s.setdefault("notas_apagadas", []).extend(x for x in notas if str(x["id"]) == q.get("id"))
+            notas[:] = [x for x in notas if str(x["id"]) != q.get("id")]
+        return J({"ok": True, "notas": notas}) or True
     if path == "/msg/resumo":
         canais = {}
         for c in ("whatsapp1", "whatsapp2", "instagram"):
@@ -89,6 +103,7 @@ def tratar(route, path, method, body, s):
         rs = [enfeitar(s, x) for x in s["convs"] if (c == "todos" or x["canal"] == c) and x["total"] > 0]
         if f == "encerradas": rs = [x for x in rs if x["encerrada_em"]]
         elif not b: rs = [x for x in rs if not x["encerrada_em"]]
+        if f == "com_notas": rs = [x for x in rs if not x["encerrada_em"] and s.get("notas", {}).get(pessoa(x) or "c:%d" % x["id"])]
         if f == "ambos": rs = [x for x in rs if x["outro_id"]]
         if f == "nao_lidas": rs = [x for x in rs if x["nao_lidas"] > 0]
         if f == "lidas": rs = [x for x in rs if x["nao_lidas"] == 0]
@@ -114,7 +129,7 @@ def tratar(route, path, method, body, s):
     if path == "/msg/mensagens":
         cid = int(q["conversa"]); c = enfeitar(s, next(x for x in s["convs"] if x["id"] == cid))
         if not c["grupo"]: c["tamanhos"] = (s.get("fichas", {}).get(pessoa(c) or "c:%d" % cid) or {}).get("tamanhos", "")
-        return J({"ok": True, "conversa": c, "mensagens": sorted([x for x in s["msgs"] if x["conversa_id"] == cid], key=lambda x: (x["enviada_em"], x["id"])), "agendadas": agendas(s, cid)["pendentes"], "temMais": False, "cursor": agora()}) or True
+        return J({"ok": True, "conversa": c, "mensagens": sorted([x for x in s["msgs"] if x["conversa_id"] == cid], key=lambda x: (x["enviada_em"], x["id"])), "notas": s.get("notas", {}).get(pessoa(c) or "c:%d" % cid, []), "agendadas": agendas(s, cid)["pendentes"], "temMais": False, "cursor": agora()}) or True
     if path == "/msg/agendadas":   # v7.40.13: mensagens agendadas
         return J(dict({"ok": True}, **agendas(s, int(q["conversa"])))) or True
     if path == "/msg/agendar":
@@ -200,7 +215,7 @@ def tratar(route, path, method, body, s):
         # a "folga" de 3 s do servidor real: devolve o que mudou desde o cursor
         cs = [enfeitar(s, x) for x in s["convs"] if x["atualizada_em"] >= desde[:-1] and x["total"] > 0]
         ms = [x for x in s["msgs"] if cid and x["conversa_id"] == cid and (x["id"] > dep or x["status_em"] >= q.get("st", "z")[:-1])] if cid else []
-        return J({"ok": True, "cursor": agora(), "conversas": cs, "mensagens": ms, "contagens": {c: cont(s, c) for c in ("whatsapp1", "whatsapp2", "instagram", "todos")}}) or True
+        return J({"ok": True, "cursor": agora(), "conversas": cs, "mensagens": ms, "notas": s.get("notas", {}).get(pessoa(next(x for x in s["convs"] if x["id"] == cid)) or "c:%d" % cid, []) if cid else [], "contagens": {c: cont(s, c) for c in ("whatsapp1", "whatsapp2", "instagram", "todos")}}) or True
     if path == "/msg/contagem":
         return J({"ok": True, "contagens": {c: cont(s, c) for c in ("whatsapp1", "whatsapp2", "instagram", "todos")}}) or True
     if path == "/msg/lida" and isinstance(body.get("conversas"), list):
