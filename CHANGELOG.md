@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.17 — 28/10/2026
+- Mensagens: **IA no atendimento**, dentro da conversa (⋯ → “Resumo da conversa (IA)” / “Sugerir resposta (IA)”; no computador também pelo botão **IA** da barra Produtos · Respostas · Nota).
+- **Resumo da conversa**: gaveta com 3 a 5 linhas — o que a cliente quer, o que já foi combinado e o próximo passo — e botão **Copiar**.
+- **Sugerir resposta**: um rascunho curto no tom da loja (simples, próximo, sem formalidade de call-center, termina com pergunta ou próximo passo) cai no campo de mensagem com o foco lá e o aviso “Revise antes de enviar”. **Nunca é enviado sozinho.** Quando falta um dado (preço, prazo, endereço…), a IA escreve “[confirmar]”, que já vem selecionado para trocar.
+- Usa só dados reais: últimas 40 mensagens (mídia vira [foto]/[vídeo]/[áudio], nada em binário), ficha do cliente, etiquetas, produtos marcados na gaveta Produtos e as respostas rápidas da equipe como exemplo de tom.
+- Servidor: `POST /msg/ia {conversa, tipo: 'resumo'|'sugestao'}` reaproveita a mesma chave do Gemini (`gemini_key` no cfg), os mesmos modelos e o mesmo controle de cota por modelo da leitura das fotos; limite de 60 usos por dia (cfg `msg_ia_limite`), tempo máximo de 25 s, resumo em cache por 10 min (some se chegar mensagem). Sem chave: “IA ainda não configurada no servidor”.
+
 ## 7.40.15 — 28/10/2026
 - Mensagens: **Funil de vendas** (⋯ → Funil de vendas). Um quadro com uma coluna para cada etiqueta de venda (Novo cliente, Reserva, Aguardando pagamento, Pago, Enviado — as mesmas de Etiquetas; se a equipe renomear ou arquivar, o quadro acompanha). Cada cartão é uma pessoa: nome, canal, prévia, há quanto tempo e responsável. Respeita a aba de canal (Todas, WhatsApp 1, WhatsApp 2, Instagram).
 - Mover o cartão troca só a etapa da venda da pessoa; as outras etiquetas (ex.: Troca) ficam. No celular: uma coluna por tela (deslize ou use ‹ ›) e toque no cartão para “Mover para…”, “Tirar do funil” ou “Abrir conversa”. No computador: colunas lado a lado, arrastar e soltar, ou clicar/Enter no cartão para o mesmo menu.

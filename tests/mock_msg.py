@@ -156,6 +156,18 @@ def tratar(route, path, method, body, s):
                   "etiquetas": c.get("etiquetas", []), "notas": list(reversed(s.get("notas", {}).get(alvo, [])))[:5],
                   "canais": [{"id": x["id"], "canal": x["canal"], "contato": x["contato"], "atual": x["id"] == cid} for x in canais],
                   "compras": sorted([{"em": v["em"], "canal": next(x["canal"] for x in canais if x["id"] == v["conversa_id"])} for v in s.get("vendas", []) if v["conversa_id"] in ids], key=lambda v: v["em"], reverse=True)}) or True
+    if path == "/msg/ia" and method == "POST":   # v7.40.17: IA no atendimento (só lê; nunca envia). ia_modo: ok | sem_chave | limite | falha
+        s.setdefault("ia_posts", []).append(body)
+        c = next((x for x in s["convs"] if x["id"] == int(body.get("conversa") or 0)), None)
+        if not c: return J({"ok": False, "erro": "Conversa não encontrada."}, 404) or True
+        if body.get("tipo") not in ("resumo", "sugestao"): return J({"ok": False, "erro": 'Escolha "Resumo da conversa" ou "Sugerir resposta".'}, 400) or True
+        modo = s.get("ia_modo", "ok")
+        if modo == "sem_chave": return J({"ok": False, "erro": "IA ainda não configurada no servidor.", "semChave": True}, 409) or True
+        if modo == "limite": return J({"ok": False, "erro": "A IA do atendimento já foi usada 60 vezes hoje (limite do dia). Volta amanhã.", "limite": True}, 429) or True
+        if modo == "falha": return J({"ok": False, "erro": "A IA não conseguiu responder agora. Tente de novo em instantes."}, 502) or True
+        if body["tipo"] == "resumo":
+            return J({"ok": True, "texto": s.get("ia_resumo", "• Quer saber se a loja entrega o vestido.\n• A loja já disse que tem o vestido.\n• Próximo passo: perguntar o endereço e o tamanho.")}) or True
+        return J({"ok": True, "texto": s.get("ia_sugestao", "Entrega sim! Aqui em Crateús a taxa fica [confirmar]. Me manda seu endereço que eu já combino?")}) or True
     if path == "/msg/etiquetas" and s.get("etq_mock"):   # só quando o teste pede (os outros testes contam os filtros sem etiquetas)
         return J({"ok": True, "etiquetas": s["etq_mock"], "cores": ["cinza", "ambar", "azul", "verde", "roxo", "rosa"]}) or True
     if path == "/msg/rotular" and s.get("etq_mock"):

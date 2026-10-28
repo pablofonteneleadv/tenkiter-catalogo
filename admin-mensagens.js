@@ -406,6 +406,18 @@
       .ms-ficha-acao { margin-top: 8px; }
       .ms-ficha-pe { align-items: center; gap: 10px; }
       .ms-ficha-pe small { flex: 1; min-width: 0; font-size: 0.75rem; color: #625c53; }
+      .sheet-mensagens .ms-ia-btn { display: none; }
+      @media (min-width: 700px) { .sheet-mensagens .ms-ia-btn { display: inline-flex; } }
+      .ms-ia { padding: 0 14px; }
+      .ms-ia-texto { margin: 4px 0 0; padding: 12px 14px; background: #faf8f4; border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.95rem; line-height: 1.5; color: #1f1b16; }
+      .ms-ia-texto:focus { outline: none; } .ms-ia-texto:focus-visible { outline: 2px solid var(--laranja, #E67E22); outline-offset: 2px; }
+      .ms-ia-nota { margin: 10px 0 0; font-size: 0.78rem; color: #625c53; line-height: 1.4; }
+      .ms-ia-erro { margin: 4px 0 8px; font-size: 0.9rem; color: #8a2a00; line-height: 1.4; }
+      .ms-ia-pe { gap: 10px; }
+      .ms-ia-pe .ms-btn { min-width: 0; flex: 1 1 0; } @media (min-width: 860px) { .ms-ia-pe .ms-btn { flex: none; min-width: 120px; } }
+      .ms-ia-status { font-size: 0.78rem; color: #4a443b; padding: 6px 12px 2px; background: #fff; }
+      .ms-ia-status[data-tipo=erro] { color: #8a2a00; }
+      .ms-ia-status[data-tipo=ok] { color: #5c2e00; font-weight: 600; }
       .ms-veste { font-size: 0.72rem; font-weight: 600; color: #3b352c; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .ms-resp-dica { margin: 8px 12px 0; font-size: 0.78rem; color: #4a443b; }
       .sheet-mensagens .ms-link-btn { min-height: 44px; padding: 0 6px; border: 0; background: none; color: #7a3a00; font: inherit; font-size: 0.78rem; font-weight: 700; text-decoration: underline; cursor: pointer; }
@@ -589,6 +601,7 @@
     const alvo = ancora.closest('.sheet-mensagens'); alvo.appendChild(m);
     const r = ancora.getBoundingClientRect(), s = alvo.getBoundingClientRect();
     m.style.top = Math.round(r.bottom - s.top + 4) + 'px'; m.style.right = Math.max(8, Math.round(s.right - r.right)) + 'px';
+    if (r.bottom + 4 + m.offsetHeight > s.bottom - 8 && r.top - s.top - 4 - m.offsetHeight >= 8) m.style.top = Math.round(r.top - s.top - 4 - m.offsetHeight) + 'px';   // v7.40.17: perto do rodapé, abre para cima
     menuAberto = m; const p = m.querySelector('button'); if (p) p.focus();
   }
   function teclado(ev) {
@@ -956,6 +969,7 @@
     nota: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5"/></svg>',
     sacola: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
     raio: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3 5 14h6l-1 7 8-11h-6l1-7z"/></svg>',
+    brilho: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7z"/></svg>',
     lapis: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/></svg>'
   };
   function botaoIco_(cls, ico, texto, acao) { const b = botao(cls, '', acao); b.innerHTML = ICO_[ico]; b.appendChild(el('span', '', texto)); return b; }
@@ -970,7 +984,8 @@
       if (editando) setTimeout(() => i.focus(), 0);
       return;
     }
-    w.append(botaoIco_('ms-ferr-btn', 'sacola', 'Produtos', 'gaveta-produtos'), botaoIco_('ms-ferr-btn', 'raio', 'Respostas', 'gaveta-respostas'), botaoIco_('ms-ferr-btn ms-nota-btn', 'nota', 'Nota', 'modo-nota'));
+    const ia = botaoIco_('ms-ferr-btn ms-ia-btn', 'brilho', 'IA', 'menu-ia'); ia.id = 'ms-ia-btn'; ia.setAttribute('aria-haspopup', 'menu'); ia.setAttribute('aria-label', 'IA: resumo ou sugestão de resposta');   // v7.40.17
+    w.append(botaoIco_('ms-ferr-btn', 'sacola', 'Produtos', 'gaveta-produtos'), botaoIco_('ms-ferr-btn', 'raio', 'Respostas', 'gaveta-respostas'), botaoIco_('ms-ferr-btn ms-nota-btn', 'nota', 'Nota', 'modo-nota'), ia);
     if (lig) {
       const b = botao('ms-ferr-btn ms-assina-btn', '', 'nome-editar'); b.title = 'Respondendo como ' + n + ' · tocar para mudar o nome';
       b.append(el('span', 'ms-sr', 'Respondendo como '), el('b', '', n)); b.insertAdjacentHTML('beforeend', ICO_.lapis); b.setAttribute('aria-label', 'Respondendo como ' + n + '. Mudar nome');
@@ -1730,6 +1745,67 @@
     fichaOrig_ = null; fecharGaveta_(); aviso_('Ficha salva.');
     const q = document.querySelector('#ms-conversa .ms-quem'); if (q) q.focus();
   }
+  /* ---- v7.40.17: IA no atendimento — "Resumo da conversa" (gaveta, com Copiar) e "Sugerir resposta" (vai para o campo de mensagem e NUNCA é enviada sozinha) ---- */
+  let iaOcupada = false;
+  function produtosParaIA_() {
+    try { return produtosSelecionados_().slice(0, 6).map((p) => ({ nome: String(p.Nome || ''), preco: precoTexto_(p), tamanhos: tamanhosDe_(p).join(', '), cores: String(p.Cores || '') })); } catch (e) { return []; }
+  }
+  function iaStatus_(texto, tipo) {
+    const ta = $('ms-texto'), form = ta && ta.closest('.ms-compor'); let s = $('ms-ia-status');
+    if (!texto) { if (s) s.remove(); return; }
+    if (!s && form) { s = el('div', 'ms-ia-status'); s.id = 'ms-ia-status'; s.setAttribute('role', 'status'); form.parentElement.insertBefore(s, $('ms-assina') || form); }
+    if (!s) return;
+    s.textContent = texto; s.dataset.tipo = tipo || '';
+    if (tipo === 'erro') { clearTimeout(s._t); s._t = setTimeout(() => { if ($('ms-ia-status') === s && s.dataset.tipo === 'erro') s.remove(); }, 9000); }
+  }
+  async function abrirResumoIA_() {
+    if (!aberta) return;
+    const conv = aberta, corpo = gaveta_('Resumo da conversa'); if (!corpo) return;
+    const g = $('ms-gaveta'); g.dataset.tipo = 'ia-resumo'; const gen = g.dataset.gen;
+    const w = el('div', 'ms-ia'); w.id = 'ms-ia-resumo'; w.setAttribute('aria-busy', 'true');
+    w.appendChild(el('p', 'ms-auto-exp', 'Lendo as últimas mensagens…')); corpo.appendChild(w);
+    const r = await worker_('/msg/ia', 'POST', { conversa: conv.id, tipo: 'resumo' });
+    const g2 = $('ms-gaveta'); if (!g2 || g2.dataset.gen !== gen || !aberta || aberta.id !== conv.id) return;
+    w.removeAttribute('aria-busy'); w.textContent = '';
+    if (!r.ok || !r.texto) {
+      w.appendChild(el('p', 'ms-ia-erro', r.erro || 'A IA não conseguiu responder agora. Tente de novo.'));
+      if (!r.semChave && !r.limite) { const l = el('div', 'ms-ficha-acao'); l.appendChild(botao('ms-btn', 'Tentar de novo', 'ia-resumo')); w.appendChild(l); }
+      return;
+    }
+    const t = el('div', 'ms-ia-texto', r.texto); t.id = 'ms-ia-texto'; t.tabIndex = -1; w.appendChild(t);
+    w.appendChild(el('p', 'ms-ia-nota', 'Feito pela IA com as últimas mensagens. Confira na conversa antes de combinar algo.'));
+    const pe = el('div', 'ms-auto-pe ms-ia-pe');
+    const sug = botao('ms-btn', 'Sugerir resposta', 'ia-sugerir'); if (espiando) sug.hidden = true;
+    const cp = botao('ms-btn prim', 'Copiar', 'ia-copiar'); cp.id = 'ms-ia-copiar';
+    pe.append(sug, cp); g2.appendChild(pe);
+    t.focus();
+  }
+  async function copiarResumoIA_() {
+    const t = $('ms-ia-texto'); if (!t) return;
+    try { await navigator.clipboard.writeText(t.textContent); aviso_('Resumo copiado.'); }
+    catch (e) { try { const s = window.getSelection(), rg = document.createRange(); rg.selectNodeContents(t); s.removeAllRanges(); s.addRange(rg); } catch (e2) { /* sem seleção */ } aviso_('Não consegui copiar sozinha. O texto ficou selecionado: copie pelo celular.'); }
+  }
+  async function sugerirRespostaIA_() {
+    if (!aberta || iaOcupada) return;
+    if (espiando) { aviso_('Toque em Atender para responder esta conversa.'); return; }
+    const conv = aberta, ta0 = $('ms-texto'); if (!ta0) return;
+    if (ta0.value.trim() && !confirm('Trocar o que já está escrito por uma sugestão da IA?')) { ta0.focus(); return; }
+    if ($('ms-gaveta')) fecharGaveta_();
+    iaOcupada = true; iaStatus_('A IA está escrevendo uma sugestão…', 'carregando');
+    const cx = ta0.closest('.ms-compor'); if (cx) cx.setAttribute('aria-busy', 'true');
+    const r = await worker_('/msg/ia', 'POST', { conversa: conv.id, tipo: 'sugestao', produtos: produtosParaIA_() });
+    iaOcupada = false; const cx2 = $('ms-texto') && $('ms-texto').closest('.ms-compor'); if (cx2) cx2.removeAttribute('aria-busy');
+    if (!aberta || aberta.id !== conv.id) return;
+    const ta = $('ms-texto'); if (!ta) return;
+    if (!r.ok || !r.texto) { iaStatus_(r.erro || 'A IA não conseguiu responder agora. Tente de novo.', 'erro'); ta.focus(); return; }
+    if (modoNota) alternarNota_(false);
+    ta.value = r.texto; ta.dispatchEvent(new Event('input', { bubbles: true })); ta.focus();
+    const i = ta.value.indexOf('[confirmar]');
+    try { if (i >= 0) ta.setSelectionRange(i, i + 11); else ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) { /* campo sem seleção */ }
+    iaStatus_(i >= 0 ? 'Sugestão da IA: troque o [confirmar]. Revise antes de enviar.' : 'Sugestão da IA. Revise antes de enviar.', 'ok');
+    const some = () => { if (!ta.value.trim()) { iaStatus_(''); ta.removeEventListener('input', some); } };
+    ta.addEventListener('input', some);
+  }
   function cabecalhoConversa(c) {
     const cab = el('div', 'ms-cab');
     const v = botao('ms-ico ms-voltar', '←', 'voltar'); v.setAttribute('aria-label', 'Voltar para as conversas');
@@ -1963,7 +2039,7 @@
       const pc = $('ms-previa-chk'), comPrevia = !an && c.canal !== 'instagram' && !!pc && pc.checked && LINK_RE_.test(texto);
       tmp = { idLocal: idLocal, conversa: c.id, previa: comPrevia ? cartaoDoLink_(texto) : null, anexo: an ? { blob: an.blob, tipo: an.tipo, seg: an.seg, chave: '' } : null, msg: { id: idTmp, direcao: 'saida', tipo: an ? an.tipo : 'texto', texto: texto, enviada_em: new Date().toISOString(), status: 'pendente', midia: an ? 1 : 0, localUrl: an ? an.urlLocal : '' } };
       pendentes.set(idTmp, tmp); msgs.push(tmp.msg);
-      ta.value = ''; ta.style.height = 'auto'; rascunhoSalvar_(c.id, ''); anexoPend = null; desenharStage_(); $('ms-enviar').disabled = true; ta.focus();
+      ta.value = ''; ta.style.height = 'auto'; rascunhoSalvar_(c.id, ''); anexoPend = null; desenharStage_(); $('ms-enviar').disabled = true; iaStatus_(''); ta.focus();
     }
     pintarFio(true);
     const idTmp = tmp.msg.id;
@@ -2288,7 +2364,7 @@
     if (ev.target && ev.target.id === 'ms-luz') { fecharLuz_(); return; }
     const b = ev.target.closest('[data-ms]'); if (!b) return;
     const a = b.dataset.ms;
-    if (a !== 'menu-geral' && a !== 'menu-conversa') fecharMenu();
+    if (a !== 'menu-geral' && a !== 'menu-conversa' && a !== 'menu-ia') fecharMenu();
     if (painel === 'funil' && (a === 'leitura-cfg' || a === 'selecionar')) { largarFunil_(); chrome_(false); const ul0 = $('ms-lista'); if (ul0) ul0.hidden = false; pintarLista(); }
     if (painel === 'funil' && a === 'atualizar') { abrirFunil_(); return; }
     if (a === 'fechar') {
@@ -2368,6 +2444,10 @@
     else if (a === 'resp-usar') { const r = respostas_()[Number(b.dataset.i)]; if (r) colocarResposta_(r.x); }
     else if (a === 'auto-cfg') abrirAuto_();
     else if (a === 'agenda-abrir') { fecharMenu(); abrirAgenda_(); }
+    else if (a === 'menu-ia' && aberta) abrirMenu(b, [['Resumo da conversa', 'ia-resumo'], ['Sugerir resposta', 'ia-sugerir']]);   // v7.40.17
+    else if (a === 'ia-resumo') abrirResumoIA_();
+    else if (a === 'ia-sugerir') sugerirRespostaIA_();
+    else if (a === 'ia-copiar') copiarResumoIA_();
     else if (a === 'agenda-atalho') { agendaAtalho_ = b.dataset.k; agendaQuando_ = atalhoMs_(agendaAtalho_); marcarAgenda_(); aviso_(''); }
     else if (a === 'agenda-salvar') await salvarAgenda_(b);
     else if (a === 'agenda-cancelar') await cancelarAgenda_(b);
@@ -2419,7 +2499,7 @@
     else if (a === 'esquecer-conta') { guardarContas_(contasSalvas_().filter((x) => x.whatsapp !== b.dataset.w)); abrirTrocaUsuario_(); }
     else if (a === 'outra-conta') { lembrarSessao_(); limparSessao(); location.reload(); }
     else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Funil de vendas', 'funil'], ['Configurações (leitura e nome)…', 'leitura-cfg'], ['Respostas automáticas…', 'auto-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar'], '-', ['Trocar usuário…', 'trocar-usuario']]).concat(window.TKAndroid ? ['-', ['Atualizar app', 'app-atualizar'], ['Permissões do app', 'app-permissoes']] : []));
-    else if (a === 'menu-conversa' && aberta) abrirMenu(b, [...(aberta.grupo ? [] : [['Ficha do cliente…', 'ficha']]), ['Agendar mensagem…', 'agenda-abrir'], '-', ['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
+    else if (a === 'menu-conversa' && aberta) abrirMenu(b, [...(aberta.grupo ? [] : [['Ficha do cliente…', 'ficha']]), ['Agendar mensagem…', 'agenda-abrir'], '-', ['Resumo da conversa (IA)', 'ia-resumo'], ...(espiando ? [] : [['Sugerir resposta (IA)', 'ia-sugerir']]), ['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
     else if (a === 'exp') baixar(b.dataset.params, b.dataset.rotulo);
     else if (a === 'copiar-ia') copiarParaIA();
     else if (a === 'painel') abrirPainel(30);

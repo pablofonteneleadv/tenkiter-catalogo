@@ -415,14 +415,14 @@ async function marcarEsgotado(env, modelo, msg) {
     await env.CACHE.put('ia_esgotados', JSON.stringify(mapa), { expirationTtl: 86400 });
   } catch (e) { /* sem KV: só não lembra */ }
 }
-async function chamarGemini(env, chave, payload) {
+async function chamarGemini(env, chave, payload, sinal) {   // v7.40.17: `sinal` opcional (tempo máximo da IA do atendimento)
   let ultimo = '', quota = 0, falhas = 0;
   const esg = await modelosEsgotados(env), agora = Date.now();
   let fila = MODELOS_IA.filter((m) => !(esg[m] && esg[m] > agora));
   if (!fila.length) fila = MODELOS_IA.slice();      // todos de molho: tenta de novo (a cota pode ter voltado)
   for (const modelo of fila) {
     try {
-      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave }, body: JSON.stringify(payload) });
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + modelo + ':generateContent', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave }, body: JSON.stringify(payload), signal: sinal });
       let j = {}; try { j = await r.json(); } catch (e) { j = {}; }
       if (r.status === 200) {
         const partes = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
@@ -436,7 +436,7 @@ async function chamarGemini(env, chave, payload) {
       if (r.status === 404) continue;
       if (r.status === 400 || r.status === 401 || r.status === 403) break;
       if (++falhas >= 3) break;
-    } catch (e) { ultimo = 'sem conexão com a IA'; if (++falhas >= 3) break; }
+    } catch (e) { ultimo = 'sem conexão com a IA'; if ((sinal && sinal.aborted) || ++falhas >= 3) break; }
   }
   if (quota && quota >= fila.length) return { ok: false, erro: 'A cota gratuita da IA acabou em todos os modelos por agora (volta sozinha em até 24 h).', espera: true };
   return { ok: false, erro: 'Erro da IA: ' + ultimo };
@@ -3465,6 +3465,82 @@ export async function fichaDaConversa_(env, conv) {
     etiquetas: etiquetas, notas: notas, canais: canais.map((c) => ({ id: c.id, canal: c.canal, contato: c.contato, atual: c.id === conv.id })), compras: compras.map((c) => ({ em: c.em, canal: c.canal }))
   };
 }
+/* ---- v7.40.17: IA no atendimento (Resumo da conversa e Sugerir resposta) ----
+ * Reaproveita a MESMA chave (`gemini_key` no cfg, nunca volta ao navegador), a MESMA lista de modelos (MODELOS_IA) e o MESMO controle de
+ * cota por modelo (chamarGemini + "de molho" no KV). Por cima, um limite diário simples (cfg `msg_ia_limite`, padrão 60) e um tempo máximo.
+ * Só LÊ: nunca envia mensagem e não grava a conversa em lugar novo; só o último resumo fica 10 min em cache no KV (some se chegar mensagem). */
+export const MSG_IA_LIMITE_PADRAO_ = 60;
+const MSG_IA_MAX_MSGS_ = 40, MSG_IA_TEMPO_MS_ = 25000;
+const MSG_IA_MIDIA_ = { imagem: 'foto', image: 'foto', 'vídeo': 'vídeo', video: 'vídeo', 'áudio': 'áudio', audio: 'áudio', figurinha: 'figurinha', sticker: 'figurinha', documento: 'documento', contato: 'contato', 'localização': 'localização', localizacao: 'localização', reel: 'reel', compartilhamento: 'post compartilhado', 'menção em story': 'menção em story', 'reação': 'reação' };
+/** Uma mensagem vira uma linha de texto para a IA. Mídia NUNCA vai em binário: só "[foto]", "[vídeo]", "[áudio]"… */
+export function linhaIA_(m) {
+  const quem = m.direcao === 'saida' ? 'Loja' : (m.autor_nome ? 'Cliente (' + String(m.autor_nome).slice(0, 30) + ')' : 'Cliente');
+  let t = String(m.texto || '').replace(/^\*[^*\n]{1,30}:\*\n/, '').replace(/\s+/g, ' ').trim().slice(0, 600);
+  if (m.tipo && m.tipo !== 'texto') t = ('[' + (MSG_IA_MIDIA_[m.tipo] || 'anexo') + '] ' + t).trim();
+  return t ? quem + ': ' + t : '';
+}
+async function usoIAMsg_(env) { let v = null; try { v = JSON.parse((await cfgGet(env, 'msg_ia_dia')) || 'null'); } catch (e) { v = null; } const hoje = diaFortaleza_(Date.now()); return v && v.dia === hoje ? v : { dia: hoje, n: 0 }; }
+async function limiteIAMsg_(env) { const n = Number(await cfgGet(env, 'msg_ia_limite')); return n > 0 ? Math.min(1000, Math.floor(n)) : MSG_IA_LIMITE_PADRAO_; }
+/** Monta o pedido para a IA a partir só de dados reais: mensagens, ficha, etiquetas, produtos marcados e respostas rápidas (como tom). */
+export function promptIAMsg_(tipo, x) {
+  const loja = 'Você ajuda as atendentes da TENKiTER Modas, uma loja de roupas de Crateús-CE. As atendentes são meninas de 18 a 22 anos e falam com as clientes por WhatsApp e Instagram.\n';
+  const regras = 'REGRAS QUE NÃO PODEM SER QUEBRADAS:\n- Use SOMENTE o que está nos dados abaixo. Nunca invente preço, estoque, cor disponível, tamanho disponível, prazo, taxa, endereço, horário, forma de pagamento ou política de troca.\n' +
+    '- Se precisar de algo que não está nos dados, escreva [confirmar] no lugar (ex.: "a entrega fica [confirmar]") ou faça uma pergunta para a cliente.\n- Responda em português do Brasil, sem markdown, sem asteriscos de negrito e sem títulos.\n';
+  const partes = [];
+  if (x.ficha && (x.ficha.tamanhos || x.ficha.preferencias || x.ficha.cidade)) partes.push('FICHA DA CLIENTE (anotada pela equipe):' + (x.ficha.tamanhos ? '\n- Tamanhos que usa: ' + x.ficha.tamanhos : '') + (x.ficha.preferencias ? '\n- Preferências: ' + x.ficha.preferencias : '') + (x.ficha.cidade ? '\n- Cidade/bairro: ' + x.ficha.cidade : ''));
+  if (x.etiquetas && x.etiquetas.length) partes.push('ETIQUETAS DA CONVERSA: ' + x.etiquetas.join(', '));
+  if (x.produtos && x.produtos.length) partes.push('PRODUTOS MARCADOS PELA ATENDENTE (dados do catálogo, podem ser usados):\n' + x.produtos.map((p) => '- ' + [p.nome, p.preco, p.tamanhos ? 'tamanhos ' + p.tamanhos : '', p.cores ? 'cores ' + p.cores : ''].filter(Boolean).join(' · ')).join('\n'));
+  if (tipo === 'sugestao' && x.respostas && x.respostas.length) partes.push('EXEMPLOS DE COMO A EQUIPE ESCREVE (use só como exemplo de TOM; não copie valores, taxas, endereços, horários nem chaves deles):\n' + x.respostas.map((r) => '- ' + r).join('\n'));
+  partes.push('CONVERSA (' + (x.canal || '') + ', da mais antiga para a mais recente; "Loja" = equipe, "Cliente" = cliente; mídia aparece como [foto], [vídeo], [áudio]):\n' + x.linhas.join('\n'));
+  const pedido = tipo === 'resumo'
+    ? 'TAREFA: faça um RESUMO para a atendente que vai assumir esta conversa. De 3 a 5 linhas curtas, cada uma começando com "• ", cobrindo: o que a cliente quer; o que já foi combinado (peça, tamanho, valor, entrega, pagamento — só se aparecer na conversa); e o próximo passo da loja. Não cumprimente, não repita a conversa inteira.'
+    : 'TAREFA: escreva UMA sugestão de próxima mensagem da LOJA para a cliente, que a atendente vai revisar antes de enviar. Tom: simples, próximo e natural, como uma menina jovem da loja falando no WhatsApp; nada de formalidade de call-center ("prezada", "estamos à disposição"), sem ser melosa nem seca. Curta (1 a 3 frases), no máximo 1 emoji, e termine com uma pergunta ou com o próximo passo. Responda direto o que a cliente perguntou por último. Devolva SOMENTE o texto da mensagem, sem aspas, sem "Loja:" e sem assinatura.';
+  return loja + regras + '\n' + partes.join('\n\n') + '\n\n' + pedido;
+}
+/** Limpa o que a IA devolveu (aspas, rótulos, markdown) e corta no tamanho de uso. */
+export function limparTextoIA_(tipo, t) {
+  let s = String(t || '').replace(/\r\n/g, '\n').replace(/\*\*/g, '').replace(/^#+\s*/gm, '').trim();
+  if (tipo === 'sugestao') { const tira = (x) => x.replace(/^["“']([\s\S]*)["”']$/, '$1').trim().replace(/^(loja|atendente|resposta|sugestão)\s*:\s*/i, '').trim(); s = tira(tira(s)); return s.slice(0, 700); }
+  const ls = s.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => '• ' + l.replace(/^([•\-*]|\d+[.)])\s*/, ''));
+  return ls.slice(0, 6).join('\n').slice(0, 1200);
+}
+/** POST /msg/ia {conversa, tipo, produtos?} → [status, corpo]. Nunca envia nada. */
+export async function iaAtendimento_(env, d) {
+  const tipo = d && d.tipo === 'resumo' ? 'resumo' : d && (d.tipo === 'sugestao' || d.tipo === 'sugestão') ? 'sugestao' : '';
+  if (!tipo) return [400, { ok: false, erro: 'Escolha "Resumo da conversa" ou "Sugerir resposta".' }];
+  const id = Number(d.conversa) || 0;
+  const conv = id ? await env.DB.prepare('SELECT id, canal, grupo, ' + MSG_IDENTIDADE_SQL_ + ' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first() : null;
+  if (!conv) return [404, { ok: false, erro: 'Conversa não encontrada.' }];
+  const chave = await cfgGet(env, 'gemini_key');
+  if (!chave) return [409, { ok: false, erro: 'IA ainda não configurada no servidor.', semChave: true }];
+  const msgs = ((await env.DB.prepare('SELECT id, direcao, tipo, texto, autor_nome FROM msg_mensagem WHERE conversa_id=? ORDER BY enviada_em DESC, id DESC LIMIT ' + MSG_IA_MAX_MSGS_).bind(id).all()).results || []).reverse();
+  const linhas = msgs.map(linhaIA_).filter(Boolean);
+  if (!linhas.length) return [400, { ok: false, erro: 'Ainda não há mensagens nesta conversa para a IA ler.' }];
+  const ultId = msgs[msgs.length - 1].id, chaveCache = 'msg_ia_resumo_' + id;
+  if (tipo === 'resumo') { try { const c = await env.CACHE.get(chaveCache, 'json'); if (c && c.ult === ultId && c.texto) return [200, { ok: true, texto: c.texto, cache: true }]; } catch (e) { /* sem cache: pergunta de novo */ } }
+  const uso = await usoIAMsg_(env), lim = await limiteIAMsg_(env);
+  if (uso.n >= lim) return [429, { ok: false, erro: 'A IA do atendimento já foi usada ' + lim + ' vezes hoje (limite do dia). Volta amanhã.', limite: true }];
+  const alvo = alvoDe_(conv); let ficha = null, etiquetas = [], respostas = [];
+  if (!conv.grupo) { try { ficha = await env.DB.prepare('SELECT tamanhos, preferencias, cidade FROM msg_ficha WHERE alvo=?').bind(alvo).first(); } catch (e) { ficha = null; } }
+  try { etiquetas = ((await etiquetasDosAlvos_(env, [alvo]))[alvo] || []).map((e) => e.nome).filter(Boolean); } catch (e) { etiquetas = []; }
+  if (tipo === 'sugestao') { try { respostas = ((await respostasRapidas_(env)) || []).map((r) => String((r && r.x) || '').replace(/\s+/g, ' ').trim().slice(0, 220)).filter(Boolean).slice(0, 8); } catch (e) { respostas = []; } }
+  const s = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+  const produtos = (Array.isArray(d.produtos) ? d.produtos : []).slice(0, 6).map((p) => ({ nome: s(p && p.nome, 80), preco: s(p && p.preco, 40), tamanhos: s(p && p.tamanhos, 60), cores: s(p && p.cores, 80) })).filter((p) => p.nome);
+  const prompt = promptIAMsg_(tipo, { canal: MSG_NOME_CANAL_[conv.canal] || conv.canal, linhas: linhas, ficha: ficha, etiquetas: etiquetas, produtos: produtos, respostas: respostas });
+  uso.n++; await cfgSet(env, 'msg_ia_dia', JSON.stringify(uso));   // conta ANTES de chamar: tentativa que falha também gasta a cota do Google
+  const ctl = typeof AbortController === 'function' ? new AbortController() : null; let estourou = false;
+  const relogio = setTimeout(() => { estourou = true; if (ctl) ctl.abort(); }, MSG_IA_TEMPO_MS_);
+  let g;
+  try { g = await chamarGemini(env, chave, { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: tipo === 'resumo' ? 0.2 : 0.6 } }, ctl ? ctl.signal : undefined); }
+  catch (e) { g = { ok: false }; }
+  finally { clearTimeout(relogio); }
+  if (estourou) return [504, { ok: false, erro: 'A IA demorou demais para responder. Tente de novo.' }];
+  if (!g || !g.ok) return [502, { ok: false, erro: g && g.espera ? 'A cota gratuita da IA acabou por agora. Volta sozinha em algumas horas.' : 'A IA não conseguiu responder agora. Tente de novo em instantes.' }];
+  const texto = limparTextoIA_(tipo, g.texto);
+  if (!texto) return [502, { ok: false, erro: 'A IA não conseguiu responder agora. Tente de novo em instantes.' }];
+  if (tipo === 'resumo') { try { await env.CACHE.put(chaveCache, JSON.stringify({ ult: ultId, texto: texto }), { expirationTtl: 600 }); } catch (e) { /* cache é conforto */ } }
+  return [200, { ok: true, texto: texto, restantes: Math.max(0, lim - uso.n) }];
+}
 /* ---- v7.40.13: mensagens agendadas (a atendente escreve agora e o texto sai sozinho na hora marcada) ---- */
 const AGENDA_COLS_ = 'id, conversa_id, texto, quando, autor, status, erro, criado_em, enviado_em';
 const AGENDA_MAX_DIAS_ = 60;
@@ -4024,6 +4100,10 @@ export default {
         const n = Object.assign({ tamanhos: atual.tamanhos || '', preferencias: atual.preferencias || '', cidade: atual.cidade || '' }, v), em = agora();
         await env.DB.prepare('INSERT INTO msg_ficha (alvo, tamanhos, preferencias, cidade, atualizado_em, autor) VALUES (?,?,?,?,?,?) ON CONFLICT(alvo) DO UPDATE SET tamanhos=excluded.tamanhos, preferencias=excluded.preferencias, cidade=excluded.cidade, atualizado_em=excluded.atualizado_em, autor=excluded.autor').bind(alvo, n.tamanhos, n.preferencias, n.cidade, em, await meuNomeAtendente_(env, req)).run();
         return J(Object.assign({ ok: true }, await fichaDaConversa_(env, conv)));
+      }
+      if (p === '/msg/ia' && req.method === 'POST') {   // v7.40.17: IA no atendimento (só lê; nunca envia)
+        const [st, corpo] = await iaAtendimento_(env, await req.json().catch(() => ({})));
+        return J(corpo, st);
       }
       if (p === '/msg/novidades' && req.method === 'GET') {
         const cursorConsulta=agora();
