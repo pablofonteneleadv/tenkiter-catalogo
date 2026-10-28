@@ -69,7 +69,7 @@ class ReceivedFiles(private val activity:Activity,private val scope:CoroutineSco
                     if(atual==null||atual.owner!=p.auth.owner||atual.session!=p.auth.session)throw Exception("A conta mudou. Baixe novamente pela conta atual.")
                     withContext(Dispatchers.IO){activity.contentResolver.openOutputStream(uri,"w")?.use{out->temp.inputStream().use{it.copyTo(out,16384)}}?:throw Exception("Não foi possível salvar neste local.")}
                     message("Arquivo salvo.")
-                }catch(e:Exception){if(e is CancellationException)throw e;message(e.message?:"Não foi possível baixar o arquivo.")}finally{temporario?.delete()}
+                }catch(e:Exception){if(e is CancellationException)throw e;message(when(e){is java.io.IOException->"Não foi possível baixar ou salvar. Confira a conexão e o espaço disponível.";is SecurityException->"Não foi possível salvar neste local. Escolha outro destino.";else->e.message?:"Não foi possível baixar o arquivo."})}finally{temporario?.delete()}
             }
         }
     }
