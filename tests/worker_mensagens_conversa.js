@@ -1105,5 +1105,61 @@ function d1() {
       chk('scheduled chama processarAgenda_ a cada minuto', /ctx\.waitUntil\(processarAgenda_\(env\)\.catch/.test(fs.readFileSync(path.join(__dirname, '..', 'instagram-worker', 'worker.js'), 'utf8')));
     } finally { globalThis.fetch = fAg; }
   }
+  // ======== v7.40.14: ficha do cliente ========
+  {
+    const pausa = () => new Promise((r) => setTimeout(r, 8));
+    const wa2P = (await DB.prepare("SELECT id FROM msg_conversa WHERE canal='whatsapp2' AND contato='5588989012345'").first()).id;
+    const f0 = await A('GET', '/msg/ficha?conversa=' + waPerson.id);
+    chk('ficha: vazia não inventa nada (campos em branco, sem compras)', f0.r.status === 200 && f0.j.ok && f0.j.ficha.tamanhos === '' && f0.j.ficha.preferencias === '' && f0.j.ficha.cidade === '' && f0.j.compras.length === 0, f0.j);
+    chk('ficha: canais vinculados (WhatsApp 1, WhatsApp 2 e Instagram) e a conversa atual marcada', ['whatsapp1', 'whatsapp2', 'instagram'].every((c) => f0.j.canais.some((x) => x.canal === c)) && f0.j.canais.filter((x) => x.atual).length === 1 && f0.j.canais.find((x) => x.atual).id === waPerson.id, f0.j.canais);
+    const s1 = await A('POST', '/msg/ficha', { conversa: waPerson.id, tamanhos: '  M ·  38 ', preferencias: 'Gosta de vestido longo, cores claras', cidade: 'Crateús — Centro' });
+    const quem = (await DB.prepare("SELECT valor FROM cfg WHERE chave='msg_atendente_88999990000'").first());
+    chk('ficha: salva (espaços limpos) e devolve a ficha com autor e data', s1.r.status === 200 && s1.j.ok && s1.j.ficha.tamanhos === 'M · 38' && s1.j.ficha.cidade === 'Crateús — Centro' && s1.j.ficha.atualizado_em && s1.j.ficha.autor === (quem ? quem.valor : 'Atendente 0000'), s1.j);
+    const igF = await A('GET', '/msg/ficha?conversa=' + igPerson.id), wa2F = await A('GET', '/msg/ficha?conversa=' + wa2P);
+    chk('ficha: a mesma pessoa vê a mesma ficha pelo Instagram e pelo WhatsApp 2', igF.j.ficha.tamanhos === 'M · 38' && igF.j.ficha.preferencias === 'Gosta de vestido longo, cores claras' && wa2F.j.ficha.cidade === 'Crateús — Centro', [igF.j.ficha, wa2F.j.ficha]);
+    const s2 = await A('POST', '/msg/ficha', { conversa: igPerson.id, cidade: 'Crateús — São Vicente' });
+    chk('ficha: salvar só um campo não apaga os outros', s2.j.ok && s2.j.ficha.cidade === 'Crateús — São Vicente' && s2.j.ficha.tamanhos === 'M · 38' && s2.j.ficha.preferencias.length > 0, s2.j.ficha);
+    chk('ficha: a conversa aberta traz os tamanhos (faixa "Veste …")', (await A('GET', '/msg/mensagens?conversa=' + wa2P)).j.conversa.tamanhos === 'M · 38');
+    const lt = await A('POST', '/msg/ficha', { conversa: waPerson.id, tamanhos: 'x'.repeat(61) });
+    chk('ficha: tamanhos acima de 60 letras é recusado em português, sem JSON', lt.r.status === 400 && /Tamanhos: no máximo 60/.test(lt.j.erro) && !lt.j.erro.includes('{'), lt.j);
+    chk('ficha: preferências acima de 300 letras é recusado', /Preferências: no máximo 300/.test((await A('POST', '/msg/ficha', { conversa: waPerson.id, preferencias: 'p'.repeat(301) })).j.erro || ''));
+    chk('ficha: cidade acima de 60 letras é recusada', /Cidade\/bairro: no máximo 60/.test((await A('POST', '/msg/ficha', { conversa: waPerson.id, cidade: 'c'.repeat(61) })).j.erro || ''));
+    chk('ficha: exatamente no limite é aceito', (await A('POST', '/msg/ficha', { conversa: waPerson.id, preferencias: 'p'.repeat(300) })).j.ok);
+    chk('ficha: recusa não muda o que estava salvo', (await A('GET', '/msg/ficha?conversa=' + waPerson.id)).j.ficha.tamanhos === 'M · 38');
+    chk('ficha: conversa inexistente dá 404 legível', (await A('GET', '/msg/ficha?conversa=987654')).r.status === 404 && (await A('POST', '/msg/ficha', { conversa: 987654, tamanhos: 'M' })).j.erro === 'Conversa não encontrada.');
+    const grp = await DB.prepare('SELECT id FROM msg_conversa WHERE grupo=1 LIMIT 1').first();
+    chk('ficha: grupo não tem ficha (erro em português)', grp && (await A('GET', '/msg/ficha?conversa=' + grp.id)).r.status === 400);
+    chk('ficha: exige Admin (sem sessão: 401)', (await w.fetch(ped('GET', '/msg/ficha?conversa=' + waPerson.id, ''), env, {})).status === 401);
+    // conversa sem identidade (Instagram solto): ficha própria, não vaza para a pessoa
+    await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em) VALUES('instagram','ig-solto-ficha','Outra',0,1,?)").bind(new Date().toISOString()).run();
+    const solto = (await DB.prepare("SELECT id FROM msg_conversa WHERE contato='ig-solto-ficha'").first()).id;
+    const fs0 = await A('GET', '/msg/ficha?conversa=' + solto);
+    chk('ficha: Instagram sem vínculo tem ficha própria e só o próprio canal', fs0.j.ficha.tamanhos === '' && fs0.j.canais.length === 1 && fs0.j.canais[0].id === solto, fs0.j);
+    await A('POST', '/msg/ficha', { conversa: solto, tamanhos: 'GG' });
+    chk('ficha: salvar no Instagram solto não mexe na ficha da outra pessoa', (await A('GET', '/msg/ficha?conversa=' + waPerson.id)).j.ficha.tamanhos === 'M · 38' && (await DB.prepare("SELECT tamanhos FROM msg_ficha WHERE alvo=?").bind('c:' + solto).first()).tamanhos === 'GG');
+    // etiquetas e notas recentes (as mesmas da pessoa)
+    await A('POST', '/msg/rotular', { conversa: wa2P, etiquetas: [eId('Pago')] });
+    for (let i = 1; i <= 6; i++) { await A('POST', '/msg/notas', { conversa: igPerson.id, texto: 'Nota da ficha ' + i }); await pausa(); }
+    const fn = await A('GET', '/msg/ficha?conversa=' + waPerson.id);
+    chk('ficha: etiquetas atuais da pessoa', fn.j.etiquetas.map((e) => e.nome).join() === 'Pago', fn.j.etiquetas);
+    chk('ficha: só as 5 notas mais recentes, da mais nova para a mais antiga', fn.j.notas.length === 5 && fn.j.notas[0].texto === 'Nota da ficha 6' && fn.j.notas[4].texto === 'Nota da ficha 2', fn.j.notas.map((n) => n.texto));
+    // compras: encerradas como "Vendeu" em qualquer canal da pessoa
+    await A('POST', '/msg/encerrar', { conversas: [igPerson.id], motivo: 'vendeu' }); await pausa();
+    let fc = await A('GET', '/msg/ficha?conversa=' + waPerson.id);
+    chk('ficha: venda encerrada no Instagram aparece na ficha aberta pelo WhatsApp 1, com data e canal', fc.j.compras.length === 1 && fc.j.compras[0].canal === 'instagram' && /^\d{4}-\d\d-\d\dT/.test(fc.j.compras[0].em), fc.j.compras);
+    await A('POST', '/msg/encerrar', { conversas: [wa2P], motivo: 'concluido' }); await pausa();
+    chk('ficha: encerrada como Concluído não conta como compra', (await A('GET', '/msg/ficha?conversa=' + waPerson.id)).j.compras.length === 1);
+    await A('POST', '/msg/encerrar', { conversas: [wa2P], reabrir: true }); await pausa();
+    await A('POST', '/msg/encerrar', { conversas: [wa2P], motivo: 'vendeu' }); await pausa();
+    await A('POST', '/msg/encerrar', { conversas: [wa2P], motivo: 'concluido' }); await pausa();
+    chk('ficha: "Vendeu" corrigido logo depois (sem mensagem no meio) não conta', (await A('GET', '/msg/ficha?conversa=' + waPerson.id)).j.compras.length === 1);
+    await A('POST', '/msg/encerrar', { conversas: [waPerson.id], motivo: 'vendeu' }); await pausa();
+    await wh('/wh/wafly/1/' + seg, msg('FICHA-VOLTOU', '5588989012345', 'Chegou, amei!', { momment: Date.now() })); await pausa();
+    await A('POST', '/msg/encerrar', { conversas: [waPerson.id], motivo: 'concluido' }); await pausa();
+    fc = await A('GET', '/msg/ficha?conversa=' + igPerson.id);
+    chk('ficha: venda seguida de nova conversa continua contando (2 compras, a mais nova primeiro)', fc.j.compras.length === 2 && fc.j.compras[0].canal === 'whatsapp1' && fc.j.compras[0].em > fc.j.compras[1].em, fc.j.compras);
+    chk('ficha: Instagram solto não herda compras da outra pessoa', (await A('GET', '/msg/ficha?conversa=' + solto)).j.compras.length === 0);
+    chk('ficha: validarFicha_ exportada e limites em código', typeof W.validarFicha_ === 'function' && W.validarFicha_({ tamanhos: 'M' })[1].tamanhos === 'M' && !!W.validarFicha_({ cidade: 'c'.repeat(61) })[0]);
+  }
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });

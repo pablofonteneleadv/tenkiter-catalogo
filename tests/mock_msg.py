@@ -110,6 +110,7 @@ def tratar(route, path, method, body, s):
         return J({"ok":True,"conversa":c,"pessoa":pessoa(c),"nome":c["nome"],"whatsapp":c["contato"] if c["canal"] != "instagram" else "","segundo":"","canais":[enfeitar(s,x) for x in s["convs"] if pessoa(x) == pessoa(c)]}) or True
     if path == "/msg/mensagens":
         cid = int(q["conversa"]); c = enfeitar(s, next(x for x in s["convs"] if x["id"] == cid))
+        if not c["grupo"]: c["tamanhos"] = (s.get("fichas", {}).get(pessoa(c) or "c:%d" % cid) or {}).get("tamanhos", "")
         return J({"ok": True, "conversa": c, "mensagens": sorted([x for x in s["msgs"] if x["conversa_id"] == cid], key=lambda x: (x["enviada_em"], x["id"])), "agendadas": agendas(s, cid)["pendentes"], "temMais": False, "cursor": agora()}) or True
     if path == "/msg/agendadas":   # v7.40.13: mensagens agendadas
         return J(dict({"ok": True}, **agendas(s, int(q["conversa"])))) or True
@@ -128,6 +129,37 @@ def tratar(route, path, method, body, s):
         if a["status"] != "pendente": return J({"ok": False, "erro": "Não dá mais para cancelar: a mensagem já foi enviada."}, 409) or True
         a["status"] = "cancelada"; s.setdefault("cancelados", []).append(a["id"])
         return J(dict({"ok": True}, **agendas(s, a["conversa_id"]))) or True
+    if path == "/msg/ficha":   # v7.40.14: ficha do cliente (mesmas regras do Worker: por pessoa, limites, só o que existe)
+        cid = int(q.get("conversa") or 0) if method == "GET" else int(body.get("conversa") or 0)
+        c = next((x for x in s["convs"] if x["id"] == cid), None)
+        if not c: return J({"ok": False, "erro": "Conversa não encontrada."}, 404) or True
+        if c["grupo"]: return J({"ok": False, "erro": "A ficha do cliente é só para conversas individuais, não para grupos."}, 400) or True
+        alvo = pessoa(c) or "c:%d" % cid
+        fichas = s.setdefault("fichas", {})
+        if method != "GET":
+            s.setdefault("ficha_posts", []).append(body)
+            if s.get("ficha_falha"): return J({"ok": False, "erro": s["ficha_falha"]}, 500) or True
+            lim = {"tamanhos": (60, "Tamanhos"), "preferencias": (300, "Preferências"), "cidade": (60, "Cidade/bairro")}
+            novo = dict(fichas.get(alvo) or {"tamanhos": "", "preferencias": "", "cidade": ""})
+            for k, (n, nome) in lim.items():
+                if body.get(k) is None: continue
+                t = " ".join(str(body[k]).split())
+                if len(t) > n: return J({"ok": False, "erro": "%s: no máximo %d letras (agora tem %d)." % (nome, n, len(t))}, 400) or True
+                novo[k] = t
+            novo.update({"atualizado_em": agora(), "autor": "Ana"}); fichas[alvo] = novo
+        canais = [x for x in s["convs"] if not x["grupo"] and (x["id"] == cid or (pessoa(c) and pessoa(x) == pessoa(c)))]
+        ids = [x["id"] for x in canais]
+        f = fichas.get(alvo) or {}
+        return J({"ok": True, "ficha": {"tamanhos": f.get("tamanhos", ""), "preferencias": f.get("preferencias", ""), "cidade": f.get("cidade", ""), "atualizado_em": f.get("atualizado_em", ""), "autor": f.get("autor", "")},
+                  "etiquetas": c.get("etiquetas", []), "notas": list(reversed(s.get("notas", {}).get(alvo, [])))[:5],
+                  "canais": [{"id": x["id"], "canal": x["canal"], "contato": x["contato"], "atual": x["id"] == cid} for x in canais],
+                  "compras": sorted([{"em": v["em"], "canal": next(x["canal"] for x in canais if x["id"] == v["conversa_id"])} for v in s.get("vendas", []) if v["conversa_id"] in ids], key=lambda v: v["em"], reverse=True)}) or True
+    if path == "/msg/etiquetas" and s.get("etq_mock"):   # só quando o teste pede (os outros testes contam os filtros sem etiquetas)
+        return J({"ok": True, "etiquetas": s["etq_mock"], "cores": ["cinza", "ambar", "azul", "verde", "roxo", "rosa"]}) or True
+    if path == "/msg/rotular" and s.get("etq_mock"):
+        c = next(x for x in s["convs"] if x["id"] == body.get("conversa"))
+        c["etiquetas"] = [e for e in s["etq_mock"] if e["id"] in body.get("etiquetas", [])]
+        return J({"ok": True, "etiquetas": c["etiquetas"]}) or True
     if path == "/msg/novidades":
         cid = int(q.get("conversa") or 0); dep = int(q.get("depois") or 0); desde = q.get("desde", "")
         # a "folga" de 3 s do servidor real: devolve o que mudou desde o cursor

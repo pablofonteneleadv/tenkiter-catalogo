@@ -382,6 +382,31 @@
       .ms-agenda-lista .ms-btn { flex: none; }
       .ms-faixa.ms-agenda-faixa { background: #fffaf2; }
       .ms-agenda-faixa span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      /* v7.40.14: ficha do cliente */
+      .ms-ficha { padding: 0 14px; }
+      .ms-ficha-quem { margin: 2px 0 4px; font-size: 0.85rem; color: #4a443b; overflow-wrap: anywhere; }
+      .ms-ficha-quem b { color: #2b261f; }
+      .ms-ficha-sec { padding: 10px 0 12px; border-bottom: 1px solid #f0ece5; }
+      .ms-ficha-sec:last-child { border-bottom: 0; }
+      .ms-ficha-rot { display: block; margin: 2px 0 6px; font-size: 0.85rem; font-weight: 700; color: #2b261f; }
+      .ms-ficha input[type=text], .ms-ficha textarea { width: 100%; min-height: 44px; font: inherit; font-size: 0.95rem; background: #fff; box-sizing: border-box; }
+      .ms-ficha textarea.ms-copia { line-height: 1.35; resize: vertical; min-height: 76px; }
+      .ms-ficha-tams { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; margin: 8px 0 0; }
+      .ms-ficha-tams .ms-btn { min-width: 44px; padding: 0 4px; font-weight: 600; background: #f3efe6; border: 1px solid transparent; }
+      .ms-ficha-tams .ms-btn[aria-pressed=true] { background: #fff4e8; border-color: var(--laranja, #E67E22); color: #5c2e00; }
+      .ms-ficha-vazio { margin: 0; font-size: 0.85rem; color: #625c53; }
+      .ms-ficha-etqs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+      .ms-ficha-lista { list-style: none; margin: 0; padding: 0; }
+      .ms-ficha-lista li { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #f0ece5; font-size: 0.88rem; color: #2b261f; }
+      .ms-ficha-lista li:last-child { border-bottom: 0; }
+      .ms-ficha-lista li > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+      .ms-ficha-lista small { display: block; font-size: 0.75rem; color: #625c53; margin-top: 2px; }
+      .ms-ficha-lista .ms-btn { flex: none; }
+      .ms-ficha-nota p { margin: 0; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+      .ms-ficha-acao { margin-top: 8px; }
+      .ms-ficha-pe { align-items: center; gap: 10px; }
+      .ms-ficha-pe small { flex: 1; min-width: 0; font-size: 0.75rem; color: #625c53; }
+      .ms-veste { font-size: 0.72rem; font-weight: 600; color: #3b352c; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .ms-resp-dica { margin: 8px 12px 0; font-size: 0.78rem; color: #4a443b; }
       .sheet-mensagens .ms-link-btn { min-height: 44px; padding: 0 6px; border: 0; background: none; color: #7a3a00; font: inherit; font-size: 0.78rem; font-weight: 700; text-decoration: underline; cursor: pointer; }
       .ms-atendente { color: #0f6b3f; }
@@ -554,7 +579,7 @@
     return resumo && resumo.canais[id] ? Object.assign({}, vazio, { conversas: resumo.canais[id].conversas, nao_lidas: resumo.canais[id].naoLidas || 0 }) : vazio;
   }
   /* v7.40.4: etiquetas */
-  let ETQ = null, etqFiltro = 0, etqCarregando = false;
+  let ETQ = null, etqFiltro = 0, etqCarregando = false, etqDaFicha_ = false;
   const COR_ETQ_ = { cinza: '#7d776d', ambar: '#c98a00', azul: '#3a6fd8', verde: '#2e8b57', roxo: '#7a4fd1', rosa: '#c2477a' };
   function pontoEtq_(e) { const d = el('span', 'ms-etq-ponto'); d.style.background = COR_ETQ_[e.cor] || COR_ETQ_.cinza; d.setAttribute('aria-hidden', 'true'); return d; }
   function tagEtq_(e) { const t = el('span', 'ms-etq'); t.append(pontoEtq_(e), document.createTextNode(e.nome)); return t; }
@@ -563,6 +588,7 @@
     const f = el('div', 'ms-etq-faixa'); f.id = 'ms-etq-faixa';
     if (c.dono) { f.appendChild(el('span', 'ms-dono-tag', 'Responsável: ' + c.dono)); f.appendChild(botao('ms-etq-mais', 'Liberar', 'liberar')); }   // v7.40.6
     else f.appendChild(botao('ms-etq-mais', 'Assumir', 'assumir'));
+    if (c.tamanhos) { const v = el('span', 'ms-veste', 'Veste ' + c.tamanhos); v.id = 'ms-veste'; v.title = 'Tamanhos da ficha do cliente'; f.appendChild(v); }   // v7.40.14
     (c.etiquetas || []).forEach((e) => f.appendChild(tagEtq_(e)));
     f.appendChild(botao('ms-etq-mais', (c.etiquetas || []).length ? 'Mudar etiquetas' : '+ Etiqueta', 'etiquetas'));
     return f;
@@ -584,7 +610,8 @@
     const c = aberta, r = await worker_('/msg/rotular', 'POST', { conversa: c.id, etiquetas: ids });
     if (!r.ok) { aviso_(r.erro || 'Não salvei as etiquetas. Tente de novo.'); return; }
     c.etiquetas = r.etiquetas; fecharGaveta_(); const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(c));
-    aviso_('Etiquetas salvas.'); ETQ = null; desenharFiltros(); await carregarLista(false);
+    aviso_('Etiquetas salvas.'); if (etqDaFicha_) { etqDaFicha_ = false; abrirFicha_(); }
+    ETQ = null; desenharFiltros(); await carregarLista(false);
   }
   function desenharFiltros() {
     const f = $('ms-filtros'); if (!f) return;
@@ -1568,11 +1595,108 @@
     agendadas_ = r.pendentes || []; desenharFaixaAgenda_(); desenharListaAgenda_(r); aviso_('Agendamento cancelado.');
     const prox = document.querySelector('#ms-gaveta [data-ms=agenda-cancelar]') || $('ms-ag-texto'); if (prox) prox.focus();
   }
+  /* ---- v7.40.14: ficha do cliente (por pessoa: vale para todos os canais vinculados). Só mostra o que existe no servidor. ---- */
+  const TAMS_FICHA_ = ['PP', 'P', 'M', 'G', 'GG', '36', '38', '40', '42', '44', '46'];
+  const SEP_TAM_ = '[\\s·,;/()]';   // "38 (calça 40)" também marca o 40
+  const temTam_ = (txt, t) => new RegExp('(^|' + SEP_TAM_ + ')' + t + '(?=$|' + SEP_TAM_ + ')', 'i').test(txt);
+  function alternarTam_(txt, t) {
+    txt = String(txt || '');
+    if (temTam_(txt, t)) return txt.replace(new RegExp('(^|' + SEP_TAM_ + '+)' + t + '(?=$|' + SEP_TAM_ + ')', 'i'), '').replace(/^[\s·,;/]+|[\s·,;/]+$/g, '').replace(/\s*·\s*(·\s*)+/g, ' · ');
+    const base = txt.replace(/[\s·,;/]+$/, '');
+    return base ? base + ' · ' + t : t;
+  }
+  function marcarTams_() {
+    const i = $('ms-fi-tam'); if (!i) return;
+    document.querySelectorAll('#ms-gaveta [data-ms=ficha-tam]').forEach((b) => b.setAttribute('aria-pressed', String(temTam_(i.value, b.dataset.t))));
+  }
+  const dataFicha_ = (iso) => { const d = new Date(iso); return !iso || isNaN(d) ? '' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }); };
+  let fichaOrig_ = null;
+  function fichaMudou_() {
+    if (!fichaOrig_ || !$('ms-fi-tam')) return false;
+    return ['tam', 'pref', 'cid'].some((k, n) => $('ms-fi-' + k).value.trim() !== [fichaOrig_.tamanhos, fichaOrig_.preferencias, fichaOrig_.cidade][n]);
+  }
+  async function abrirFicha_() {
+    if (!aberta || aberta.grupo) return;
+    const conv = aberta, corpo = gaveta_('Ficha do cliente'); if (!corpo) return;
+    const g = $('ms-gaveta'); g.dataset.tipo = 'ficha'; const gen = g.dataset.gen; fichaOrig_ = null;
+    const w = el('div', 'ms-ficha'); w.id = 'ms-ficha'; w.setAttribute('aria-busy', 'true');
+    w.appendChild(el('p', 'ms-auto-exp', 'Carregando a ficha…')); corpo.appendChild(w);
+    const r = await worker_('/msg/ficha?conversa=' + encodeURIComponent(conv.id), 'GET');
+    const g2 = $('ms-gaveta'); if (!g2 || g2.dataset.gen !== gen || !aberta || aberta.id !== conv.id) return;
+    w.removeAttribute('aria-busy'); w.textContent = '';
+    if (!r.ok) {
+      w.appendChild(el('p', 'ms-auto-exp', r.erro || 'Não foi possível abrir a ficha agora.'));
+      const l = el('div', 'ms-ficha-acao'); l.appendChild(botao('ms-btn', 'Tentar de novo', 'ficha')); w.appendChild(l); return;
+    }
+    desenharFicha_(w, conv, r);
+    const pe = el('div', 'ms-auto-pe ms-ficha-pe'), info = el('small'); info.id = 'ms-fi-info';
+    const bt = botao('ms-btn prim', 'Salvar', 'ficha-salvar'); bt.id = 'ms-fi-salvar'; pe.append(info, bt); g2.appendChild(pe);
+    infoFicha_(r.ficha);
+  }
+  function infoFicha_(f) { const i = $('ms-fi-info'); if (i) i.textContent = f && f.atualizado_em ? 'Atualizada' + (f.autor ? ' por ' + f.autor : '') + ' em ' + dataFicha_(f.atualizado_em) : ''; }
+  function desenharFicha_(w, conv, r) {
+    const f = r.ficha || {}; fichaOrig_ = { tamanhos: f.tamanhos || '', preferencias: f.preferencias || '', cidade: f.cidade || '' };
+    const sec = (titulo, id) => { const s = el('section', 'ms-ficha-sec'), h = el('h4', 'ms-ficha-rot', titulo); h.id = id; s.setAttribute('aria-labelledby', id); s.appendChild(h); w.appendChild(s); return s; };
+    const quem = el('p', 'ms-ficha-quem'); const nc = (r.canais || []).length; quem.append(el('b', '', rotuloContato(conv)), document.createTextNode(nc > 1 ? ' · vale para os ' + nc + ' canais desta pessoa' : '')); w.appendChild(quem);
+    // tamanhos
+    const s1 = el('section', 'ms-ficha-sec'), l1 = el('label', 'ms-ficha-rot', 'Tamanhos que usa'); l1.htmlFor = 'ms-fi-tam';
+    const it = el('input', 'ms-copia'); it.type = 'text'; it.id = 'ms-fi-tam'; it.maxLength = 60; it.autocomplete = 'off'; it.value = fichaOrig_.tamanhos; it.placeholder = 'Ex.: M · 38 (calça 40)';
+    it.addEventListener('input', marcarTams_);
+    const tams = el('div', 'ms-ficha-tams'); tams.setAttribute('role', 'group'); tams.setAttribute('aria-label', 'Tamanhos rápidos');
+    TAMS_FICHA_.forEach((t) => { const b = botao('ms-btn', t, 'ficha-tam', { t: t }); b.setAttribute('aria-pressed', 'false'); tams.appendChild(b); });
+    s1.append(l1, it, tams); w.appendChild(s1);
+    // preferências e cidade
+    const s2 = el('section', 'ms-ficha-sec'), l2 = el('label', 'ms-ficha-rot', 'Preferências'); l2.htmlFor = 'ms-fi-pref';
+    const tp = el('textarea', 'ms-copia'); tp.id = 'ms-fi-pref'; tp.rows = 3; tp.maxLength = 300; tp.value = fichaOrig_.preferencias; tp.placeholder = 'Ex.: gosta de vestido longo e cores claras';
+    s2.append(l2, tp); w.appendChild(s2);
+    const s3 = el('section', 'ms-ficha-sec'), l3 = el('label', 'ms-ficha-rot', 'Cidade / bairro'); l3.htmlFor = 'ms-fi-cid';
+    const ic = el('input', 'ms-copia'); ic.type = 'text'; ic.id = 'ms-fi-cid'; ic.maxLength = 60; ic.autocomplete = 'off'; ic.value = fichaOrig_.cidade; ic.placeholder = 'Ex.: Crateús — Centro';
+    s3.append(l3, ic); w.appendChild(s3);
+    // etiquetas
+    const s4 = sec('Etiquetas', 'ms-fi-h-etq'), etqs = r.etiquetas || [];
+    if (etqs.length) { const d = el('div', 'ms-ficha-etqs'); etqs.forEach((e) => d.appendChild(tagEtq_(e))); s4.appendChild(d); } else s4.appendChild(el('p', 'ms-ficha-vazio', 'Nenhuma etiqueta.'));
+    const ae = el('div', 'ms-ficha-acao'); ae.appendChild(botao('ms-btn', etqs.length ? 'Mudar etiquetas' : 'Pôr etiqueta', 'ficha-etiquetas')); s4.appendChild(ae);
+    // notas
+    const s5 = sec('Notas recentes', 'ms-fi-h-notas'), notas = r.notas || [];
+    if (notas.length) { const ul = el('ul', 'ms-ficha-lista'); notas.forEach((n) => { const li = el('li', 'ms-ficha-nota'), d = el('div'); d.append(el('p', '', n.texto), el('small', '', [n.autor, dataFicha_(n.em)].filter(Boolean).join(' · '))); li.appendChild(d); ul.appendChild(li); }); s5.appendChild(ul); }
+    else s5.appendChild(el('p', 'ms-ficha-vazio', 'Nenhuma nota interna ainda.'));
+    // compras
+    const s6 = sec('Compras', 'ms-fi-h-compras'), compras = r.compras || [];
+    if (compras.length) { const ul = el('ul', 'ms-ficha-lista'); compras.forEach((c) => { const li = el('li'), d = el('div'); d.append(document.createTextNode('Vendeu em ' + dataFicha_(c.em)), el('small', '', 'Pelo ' + (NOME_CANAL[c.canal] || c.canal))); li.appendChild(d); ul.appendChild(li); }); s6.appendChild(ul); }
+    else s6.appendChild(el('p', 'ms-ficha-vazio', 'Nenhuma compra registrada ainda.'));
+    // canais
+    const s7 = sec('Canais', 'ms-fi-h-canais'), ul7 = el('ul', 'ms-ficha-lista');
+    (r.canais || []).forEach((c) => {
+      const li = el('li'), d = el('div'), fone = c.canal !== 'instagram' && /^\d{10,15}$/.test(String(c.contato || '')) ? foneBonito_(c.contato) : '';
+      d.append(document.createTextNode(NOME_CANAL[c.canal] || c.canal), el('small', '', [fone, c.atual ? 'esta conversa' : ''].filter(Boolean).join(' · ')));
+      li.appendChild(d);
+      if (!c.atual) { const b = botao('ms-btn', 'Abrir', 'ficha-abrir', { id: String(c.id), canal: c.canal }); b.setAttribute('aria-label', 'Abrir a conversa do ' + (NOME_CANAL[c.canal] || c.canal)); li.appendChild(b); }
+      ul7.appendChild(li);
+    });
+    s7.appendChild(ul7);
+    const ac = el('div', 'ms-ficha-acao'); ac.appendChild(botao('ms-btn', 'Editar contato e canais', 'pessoa')); s7.appendChild(ac);
+    marcarTams_();
+  }
+  function sairFicha_() { return !fichaMudou_() || confirm('Você mudou a ficha e ainda não salvou. Sair sem salvar?'); }
+  async function salvarFicha_(b) {
+    if (!aberta || !$('ms-fi-tam')) return;
+    const conv = aberta.id, corpo = { conversa: conv, tamanhos: $('ms-fi-tam').value.trim(), preferencias: $('ms-fi-pref').value.trim(), cidade: $('ms-fi-cid').value.trim() };
+    b.disabled = true;
+    const r = await worker_('/msg/ficha', 'POST', corpo);
+    b.disabled = false;
+    if (!r.ok) { aviso_(r.erro || 'Não foi possível salvar a ficha agora. Tente de novo.'); b.focus(); return; }
+    if (!aberta || aberta.id !== conv) return;
+    aberta.tamanhos = r.ficha.tamanhos || '';
+    const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(aberta));
+    fichaOrig_ = null; fecharGaveta_(); aviso_('Ficha salva.');
+    const q = document.querySelector('#ms-conversa .ms-quem'); if (q) q.focus();
+  }
   function cabecalhoConversa(c) {
     const cab = el('div', 'ms-cab');
     const v = botao('ms-ico ms-voltar', '←', 'voltar'); v.setAttribute('aria-label', 'Voltar para as conversas');
     const av = el('span', 'ms-av', iniciais(c)); av.style.background = corAvatar(c); av.setAttribute('aria-hidden', 'true');
-    const q = botao('ms-quem', '', 'pessoa');q.setAttribute('aria-label','Configurar contato e canais vinculados');q.style.textAlign='left';q.style.background='transparent';q.appendChild(el('b', '', rotuloContato(c)));
+    if (!c.grupo) { av.dataset.ms = 'ficha'; av.style.cursor = 'pointer'; }   // v7.40.14: nome/avatar abrem a ficha do cliente (o teclado usa o botão do nome)
+    const q = botao('ms-quem', '', c.grupo ? 'pessoa' : 'ficha');q.setAttribute('aria-label',c.grupo?'Grupo '+rotuloContato(c):'Abrir a ficha do cliente '+rotuloContato(c));q.style.textAlign='left';q.style.background='transparent';q.appendChild(el('b', '', rotuloContato(c)));
     q.appendChild(el('span', '', NOME_CANAL[c.canal] + (c.grupo ? ' · grupo' : (/^\d{10,15}$/.test(c.contato) ? ' · ' + foneBonito_(c.contato) : ''))));
     const mais = botao('ms-ico', '⋯', 'menu-conversa'); mais.id = 'ms-mais-conv'; mais.setAttribute('aria-label', 'Opções da conversa'); mais.setAttribute('aria-haspopup', 'menu');
     cab.append(v, av, q, mais); return cab;
@@ -2006,7 +2130,12 @@
       fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true);
     }
     else if (a === 'etq') { const id = Number(b.dataset.id); etqFiltro = etqFiltro === id ? 0 : id; desenharFiltros(); await carregarLista(true); }
-    else if (a === 'etiquetas') abrirEtiquetas_();
+    else if (a === 'etiquetas') { etqDaFicha_ = false; abrirEtiquetas_(); }
+    else if (a === 'ficha') { fecharMenu(); abrirFicha_(); }   // v7.40.14
+    else if (a === 'ficha-tam') { const i = $('ms-fi-tam'); if (i) { i.value = alternarTam_(i.value, b.dataset.t).slice(0, 60); marcarTams_(); } }
+    else if (a === 'ficha-salvar') await salvarFicha_(b);
+    else if (a === 'ficha-etiquetas') { if (!sairFicha_()) return; etqDaFicha_ = true; if (!ETQ || !ETQ.length) await carregarEtiquetas_(); abrirEtiquetas_(); }
+    else if (a === 'ficha-abrir') { if (!sairFicha_()) return; fecharGaveta_(); if (canal !== 'todos') { canal = b.dataset.canal; filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); } abrirConversa(Number(b.dataset.id)); }
     else if (a === 'assumir' || a === 'liberar') { const c = aberta; if (!c) return; const r = await worker_('/msg/dono', 'POST', { conversa: c.id, assumir: a === 'assumir' }); if (!r.ok) { aviso_(r.erro || 'Não foi possível agora.'); return; } c.dono = r.dono; const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(c)); await carregarLista(false); }
     else if (a === 'etq-salvar') salvarEtiquetas_();
     else if (a === 'etq-sem-etapa') { const g = $('ms-gaveta'); if (g) g.querySelectorAll('input[name=ms-etq-venda]').forEach((i) => { i.checked = false; }); }
@@ -2090,7 +2219,7 @@
     else if (a === 'encerrar' && aberta) escolherMotivo_([aberta.id]);
     else if (a === 'reabrir' && aberta) { const id = aberta.id; await encerrar_([id], true); if (aberta && aberta.id === id) { montarConversa(aberta); pintarFio(true); } }
     else if (a === 'abrir-outro') { if (canal !== 'todos') { canal = b.dataset.canal; filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); } abrirConversa(Number(b.dataset.id)); }
-    else if (a === 'pessoa') { if(aberta&&!aberta.grupo)editarPessoa_(aberta.id); }
+    else if (a === 'pessoa') { if (aberta && !aberta.grupo && sairFicha_()) { if ($('ms-gaveta')) fecharGaveta_(); editarPessoa_(aberta.id); } }
     else if (a === 'espiar') abrirConversa(Number(b.dataset.id), true);
     else if (a === 'atender' && aberta) { espiando = false; aberta.nao_lidas = Math.max(1, aberta.nao_lidas || 0); montarConversa(aberta); pintarFio(true); marcarLida(); const t = $('ms-texto'); if (t) t.focus(); }
     else if (a === 'leitura-cfg') { painel = painel === 'leitura' ? '' : 'leitura'; if (painel === 'leitura') { cfgLeitura = null; contatosSit = null; } desenharEstado(); }
@@ -2114,7 +2243,7 @@
     else if (a === 'esquecer-conta') { guardarContas_(contasSalvas_().filter((x) => x.whatsapp !== b.dataset.w)); abrirTrocaUsuario_(); }
     else if (a === 'outra-conta') { lembrarSessao_(); limparSessao(); location.reload(); }
     else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Configurações (leitura e nome)…', 'leitura-cfg'], ['Respostas automáticas…', 'auto-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar'], '-', ['Trocar usuário…', 'trocar-usuario']]).concat(window.TKAndroid ? ['-', ['Atualizar app', 'app-atualizar'], ['Permissões do app', 'app-permissoes']] : []));
-    else if (a === 'menu-conversa' && aberta) abrirMenu(b, [['Agendar mensagem…', 'agenda-abrir'], '-', ['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
+    else if (a === 'menu-conversa' && aberta) abrirMenu(b, [...(aberta.grupo ? [] : [['Ficha do cliente…', 'ficha']]), ['Agendar mensagem…', 'agenda-abrir'], '-', ['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
     else if (a === 'exp') baixar(b.dataset.params, b.dataset.rotulo);
     else if (a === 'copiar-ia') copiarParaIA();
     else if (a === 'painel') abrirPainel(30);

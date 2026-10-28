@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.14 — 28/10/2026
+- Mensagens: **Ficha do cliente** — toque no nome/avatar da conversa (ou ⋯ → Ficha do cliente…). Num só lugar: tamanhos que a cliente usa (atalhos PP a GG e 36 a 46 + texto), preferências, cidade/bairro, etiquetas (com “Mudar etiquetas”), as 5 notas internas mais recentes, compras (conversas encerradas como “Vendeu”, com data e canal) e os canais vinculados (WhatsApp 1/2/Instagram, com “Abrir”).
+- A ficha é da pessoa: vale para todos os canais vinculados, como notas e etiquetas. Só mostra o que existe (“Nenhuma compra registrada ainda”). A faixa da conversa mostra discretamente “Veste M · 38”.
+- Servidor: tabela `msg_ficha`, `GET/POST /msg/ficha` (tamanhos até 60 letras, preferências até 300, cidade até 60; erros em português). Um “Vendeu” corrigido logo depois (sem mensagem no meio) não conta como compra.
+
 ## 7.40.13 — 28/10/2026
 - Mensagens: **Agendar mensagem** (menu ⋯ da conversa). Escreva agora e escolha “Daqui a 1 hora”, “Amanhã 8h”, “Amanhã 14h” ou o dia e a hora (horário de Fortaleza); o servidor envia sozinho na hora marcada, sem duplicar.
 - A conversa mostra uma faixa “1 mensagem agendada para amanhã 08:00 · Ver”; dá para cancelar antes de sair, e falhas ficam registradas com o motivo.
