@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.2 — Aviso quando as mensagens param de chegar — 2026-10-28
+
+- Mensagens: faixa vermelha no topo da lista ("Mensagens não estão chegando desde HH:MM") quando o servidor recusa os avisos do WhatsApp ou do Instagram, como no limite do banco em 27/10. Some sozinha quando uma mensagem volta a ser gravada.
+- Servidor: marca a falha no KV só quando um aviso falha (no máximo uma gravação a cada 20 s); a tela confere a cada ~40 s, junto com os contadores. Precisa de 2 falhas para avisar, para um erro isolado não acender a faixa.
+
 ## 7.40.1 — Conversa mais limpa — 2026-10-28
 
 - "Foi resposta a um story? Ver stories no ar" aparece só na última mensagem recebida sem contexto, e não mais embaixo de cada mensagem.
