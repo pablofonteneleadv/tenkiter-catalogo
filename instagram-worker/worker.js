@@ -121,6 +121,7 @@ async function iniciar(env) {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_agenda (id INTEGER PRIMARY KEY AUTOINCREMENT, conversa_id INTEGER NOT NULL, texto TEXT NOT NULL, quando TEXT NOT NULL, autor TEXT DEFAULT '', whats TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'pendente', erro TEXT DEFAULT '', criado_em TEXT NOT NULL, enviado_em TEXT DEFAULT '')").run();   // v7.40.13: mensagens agendadas
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msg_agenda_st ON msg_agenda (status, quando)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msg_agenda_conv ON msg_agenda (conversa_id, status)').run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_ficha (alvo TEXT PRIMARY KEY, tamanhos TEXT DEFAULT '', preferencias TEXT DEFAULT '', cidade TEXT DEFAULT '', atualizado_em TEXT, autor TEXT)").run();   // v7.40.14: ficha do cliente (por pessoa, como notas/etiquetas)
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_conv ON msg_encerramento (conversa_id, em)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_pessoa ON msg_encerramento (pessoa)').run();
   } catch (e) { /* tenta de novo na próxima vez */ }
@@ -3390,6 +3391,41 @@ async function responderMensagem_(env, whats, d) {
   await env.DB.prepare('UPDATE cfg SET valor=? WHERE chave=?').bind(t0 + '|' + JSON.stringify(corpo), chave).run();
   return [200, corpo];
 }
+/* ---- v7.40.14: ficha do cliente — tamanhos, preferências e cidade por PESSOA (alvo = identidade entre canais ou "c:<id>", igual a notas e etiquetas).
+ * O resto da ficha só junta o que já existe: etiquetas, últimas notas, canais vinculados e compras (encerramentos "Vendeu"). Nada é inventado. */
+const FICHA_LIM_ = { tamanhos: 60, preferencias: 300, cidade: 60 };
+const FICHA_NOME_ = { tamanhos: 'Tamanhos', preferencias: 'Preferências', cidade: 'Cidade/bairro' };
+/** Valida os campos enviados. Devolve [erro] ou [null, {campo: texto}] só com os campos que vieram. */
+export function validarFicha_(d) {
+  const v = {};
+  for (const k of Object.keys(FICHA_LIM_)) {
+    if (!d || d[k] == null) continue;
+    const t = String(d[k]).replace(/\s+/g, ' ').trim();
+    if (t.length > FICHA_LIM_[k]) return [FICHA_NOME_[k] + ': no máximo ' + FICHA_LIM_[k] + ' letras (agora tem ' + t.length + ').'];
+    v[k] = t;
+  }
+  return [null, v];
+}
+async function convFicha_(env, id) {
+  const conv = id ? await env.DB.prepare('SELECT id, canal, contato, grupo, ' + MSG_IDENTIDADE_SQL_ + ' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first() : null;
+  if (!conv) return [404, 'Conversa não encontrada.'];
+  if (conv.grupo) return [400, 'A ficha do cliente é só para conversas individuais, não para grupos.'];
+  return [0, conv];
+}
+export async function fichaDaConversa_(env, conv) {
+  const alvo = alvoDe_(conv);
+  const f = await env.DB.prepare('SELECT tamanhos, preferencias, cidade, atualizado_em, autor FROM msg_ficha WHERE alvo=?').bind(alvo).first();
+  const canais = conv.pessoa ? ((await env.DB.prepare('SELECT id, canal, contato FROM msg_conversa WHERE grupo=0 AND (' + MSG_IDENTIDADE_SQL_ + '=? OR id=?) ORDER BY ultima_em DESC LIMIT 20').bind(conv.pessoa, conv.id).all()).results || []) : [{ id: conv.id, canal: conv.canal, contato: conv.contato }];
+  const ids = canais.map((c) => c.id), marca = ids.map(() => '?').join(',');
+  /* compra = encerramento "Vendeu" que valeu: se a mesma conversa foi encerrada de novo sem mensagem nenhuma no meio, foi correção do motivo e vale o último */
+  const compras = (await env.DB.prepare("SELECT e.em, e.canal FROM msg_encerramento e WHERE e.motivo='vendeu' AND e.conversa_id IN (" + marca + ") AND NOT EXISTS (SELECT 1 FROM msg_encerramento x WHERE x.conversa_id=e.conversa_id AND (x.em>e.em OR (x.em=e.em AND x.id>e.id)) AND NOT EXISTS (SELECT 1 FROM msg_mensagem m WHERE m.conversa_id=e.conversa_id AND m.enviada_em>e.em AND m.enviada_em<x.em)) ORDER BY e.em DESC LIMIT 20").bind(...ids).all()).results || [];
+  const notas = (await env.DB.prepare('SELECT id, texto, autor, em FROM msg_nota WHERE alvo=? ORDER BY em DESC, id DESC LIMIT 5').bind(alvo).all()).results || [];
+  let etiquetas = []; try { etiquetas = (await etiquetasDosAlvos_(env, [alvo]))[alvo] || []; } catch (e) { /* etiqueta é conforto */ }
+  return {
+    ficha: { tamanhos: (f && f.tamanhos) || '', preferencias: (f && f.preferencias) || '', cidade: (f && f.cidade) || '', atualizado_em: (f && f.atualizado_em) || '', autor: (f && f.autor) || '' },
+    etiquetas: etiquetas, notas: notas, canais: canais.map((c) => ({ id: c.id, canal: c.canal, contato: c.contato, atual: c.id === conv.id })), compras: compras.map((c) => ({ em: c.em, canal: c.canal }))
+  };
+}
 /* ---- v7.40.13: mensagens agendadas (a atendente escreve agora e o texto sai sozinho na hora marcada) ---- */
 const AGENDA_COLS_ = 'id, conversa_id, texto, quando, autor, status, erro, criado_em, enviado_em';
 const AGENDA_MAX_DIAS_ = 60;
@@ -3898,6 +3934,7 @@ export default {
         const rs = await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=?' + where + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...args).all();
         const notas = antes ? [] : ((await env.DB.prepare('SELECT id, texto, autor, em FROM msg_nota WHERE alvo=? ORDER BY em LIMIT 200').bind(conv.pessoa ? String(conv.pessoa) : 'c:' + id).all()).results || []);
         try { conv.etiquetas = (await etiquetasDosAlvos_(env, [alvoDe_(conv)]))[alvoDe_(conv)] || []; } catch (e) { conv.etiquetas = []; }
+        if (!antes && !conv.grupo) { try { const fx = await env.DB.prepare('SELECT tamanhos FROM msg_ficha WHERE alvo=?').bind(alvoDe_(conv)).first(); conv.tamanhos = (fx && fx.tamanhos) || ''; } catch (e) { conv.tamanhos = ''; } }   // v7.40.14: "Veste M · 38" na faixa
         let agendadas; if (!antes) { try { agendadas = (await agendasDaConversa_(env, id)).pendentes; } catch (e) { agendadas = []; } }
         return J({ ok: true, conversa: conv, mensagens: rs.results.reverse(), notas: notas, agendadas: agendadas, temMais: rs.results.length === 100, cursor: agora() });
       }
@@ -3926,6 +3963,22 @@ export default {
         const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20), autor = (quem && (await cfgGet(env, 'msg_atendente_' + quem))) || 'Equipe', em = agora();
         const r = await env.DB.prepare('INSERT INTO msg_nota (alvo, texto, autor, em) VALUES (?,?,?,?)').bind(conv.pessoa ? String(conv.pessoa) : 'c:' + id, texto, String(autor).slice(0, 30), em).run();
         return J({ ok: true, nota: { id: r.meta && r.meta.last_row_id, texto: texto, autor: autor, em: em } });
+      }
+      if (p === '/msg/ficha' && req.method === 'GET') {   // v7.40.14: ficha do cliente
+        const [st, conv] = await convFicha_(env, Number(url.searchParams.get('conversa')) || 0);
+        if (st) return J({ ok: false, erro: conv }, st);
+        return J(Object.assign({ ok: true }, await fichaDaConversa_(env, conv)));
+      }
+      if (p === '/msg/ficha' && req.method === 'POST') {
+        const d = await req.json().catch(() => ({}));
+        const [st, conv] = await convFicha_(env, Number(d.conversa) || 0);
+        if (st) return J({ ok: false, erro: conv }, st);
+        const [erro, v] = validarFicha_(d);
+        if (erro) return J({ ok: false, erro: erro }, 400);
+        const alvo = alvoDe_(conv), atual = (await env.DB.prepare('SELECT tamanhos, preferencias, cidade FROM msg_ficha WHERE alvo=?').bind(alvo).first()) || {};
+        const n = Object.assign({ tamanhos: atual.tamanhos || '', preferencias: atual.preferencias || '', cidade: atual.cidade || '' }, v), em = agora();
+        await env.DB.prepare('INSERT INTO msg_ficha (alvo, tamanhos, preferencias, cidade, atualizado_em, autor) VALUES (?,?,?,?,?,?) ON CONFLICT(alvo) DO UPDATE SET tamanhos=excluded.tamanhos, preferencias=excluded.preferencias, cidade=excluded.cidade, atualizado_em=excluded.atualizado_em, autor=excluded.autor').bind(alvo, n.tamanhos, n.preferencias, n.cidade, em, await meuNomeAtendente_(env, req)).run();
+        return J(Object.assign({ ok: true }, await fichaDaConversa_(env, conv)));
       }
       if (p === '/msg/novidades' && req.method === 'GET') {
         const cursorConsulta=agora();
