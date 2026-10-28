@@ -68,15 +68,42 @@
     return null;
   }
   /* ---------- utilidades ---------- */
-  async function worker_(caminho, metodo, corpo) {
+  const contaSessao_ = s => s ? normalizarWhats(s.whatsapp) : '';
+  let contaAtual_ = contaSessao_(typeof getSessao==='function'&&getSessao()), epocaConta_ = 0;
+  function conferirContaAtual_(){
+    const nova=contaSessao_(getSessao());
+    if(nova!==contaAtual_){
+      contaAtual_=nova;epocaConta_++;
+      if(APP_RECENTES){limparRecentes_();cacheBloqueado=true;lista=[];msgs=[];mostrarLista_();const ul=$('ms-lista');if(ul)ul.textContent='';const extra=$('ms-extra');if(extra)extra.textContent='Atualizando acesso…';}
+    }
+    return nova;
+  }
+  async function renovarAcesso_(s,epoca){
+    const r=await apiPost({action:'sessao',whatsapp:s.whatsapp,sessao:s.sessao});
+    conferirContaAtual_();const atual=getSessao();
+    if(epoca!==epocaConta_||!atual||atual.sessao!==s.sessao||contaSessao_(atual)!==contaSessao_(s))return;
+    if(r&&r.ok&&r.usuario&&contaSessao_(r.usuario)===contaSessao_(s)&&r.sessao&&r.sessao!==s.sessao)salvarSessao(r.usuario.whatsapp,r.sessao);
+    else if(r&&(r.sessaoInvalida||r.inativa))limparSessao();
+  }
+  window.addEventListener('tk:sessao',conferirContaAtual_);
+  window.addEventListener('storage',e=>{if(e.key==='tm_session')conferirContaAtual_();});
+  window.addEventListener('tk:mensagens-sair',()=>{epocaConta_++;contaAtual_='';});
+  async function worker_(caminho, metodo, corpo, repetiu) {
     if(cacheConversa && metodo && metodo!=='GET') return {ok:false,erro:'Aguarde atualizar a conversa para continuar.'};
     const s = (typeof getSessao === 'function' && getSessao()) || null;
     if (!s || typeof INSTAGRAM_URL === 'undefined') return { ok: false, erro: 'Entre com o seu login (não vale só o PIN) para ver as mensagens.' };
+    conferirContaAtual_(); const epoca = epocaConta_, conta = contaSessao_(s);
     try {
       const r = await fetch(INSTAGRAM_URL + caminho, { method: metodo, headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao, 'Content-Type': 'application/json' }, body: corpo ? JSON.stringify(corpo) : undefined });
       const dados = await r.json();
-      const mesmaSessao=()=>{const atual=typeof getSessao==='function'&&getSessao();return atual&&atual.sessao===s.sessao&&atual.whatsapp===s.whatsapp;};
+      const mesmaSessao=()=>{conferirContaAtual_();return epoca===epocaConta_&&contaSessao_(getSessao())===conta;};
       if(APP_RECENTES&&!mesmaSessao())return {ok:false,erro:'A conta mudou. Abra novamente as mensagens.'};
+      if (APP_RECENTES && !repetiu && (r.status===401||r.status===403)) {
+        let atual=getSessao();
+        if(r.status===401 && atual && atual.sessao===s.sessao){await renovarAcesso_(s,epoca);atual=getSessao();}
+        if(!mesmaSessao())return {ok:false,erro:'Entre na sua conta para continuar.'};
+        if(atual && atual.sessao!==s.sessao)return worker_(caminho,metodo,corpo,true);
+      }
       if (APP_RECENTES && (r.status===401 || (r.status===403 && /^\/msg\/(conversas|mensagens|novidades|resumo|contagem)(\?|$)/.test(caminho)))) {
         cacheBloqueado=true;limparRecentes_(); lista=[];msgs=[];aberta=null;cacheConversa=false;
         if($('ms-lista')) pintarLista(); if($('ms-conversa')) $('ms-conversa').textContent='';
@@ -1824,6 +1851,7 @@
   function cabecalhoConversa(c) {
     const cab = el('div', 'ms-cab');
     const v = botao('ms-ico ms-voltar', '←', 'voltar'); v.setAttribute('aria-label', 'Voltar para as conversas');
+    v.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();voltarLista();});
     const av = el('span', 'ms-av', iniciais(c)); av.style.background = corAvatar(c); av.setAttribute('aria-hidden', 'true');
     if (!c.grupo) { av.dataset.ms = 'ficha'; av.style.cursor = 'pointer'; }   // v7.40.14: nome/avatar abrem a ficha do cliente (o teclado usa o botão do nome)
     const q = botao('ms-quem', '', c.grupo ? 'pessoa' : 'ficha');q.setAttribute('aria-label',c.grupo?'Grupo '+rotuloContato(c):'Abrir a ficha do cliente '+rotuloContato(c));q.style.textAlign='left';q.style.background='transparent';q.appendChild(el('b', '', rotuloContato(c)));
@@ -1868,12 +1896,15 @@
     prevL.append(prevC, el('span', '', 'Mostrar prévia do link'), el('small', '', '(miniatura)')); prev.appendChild(prevL); pai.appendChild(prev);
     const form = el('div', 'ms-compor');
     const clip = botao('ms-ico', '📎', 'anexar'); clip.id = 'ms-anexar'; clip.setAttribute('aria-label', 'Anexar foto, vídeo ou áudio');
-    const arq = el('input'); arq.type = 'file'; arq.id = 'ms-arquivo'; arq.hidden = true; arq.accept = 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime,audio/*';
-    arq.addEventListener('change', () => { const f = arq.files && arq.files[0]; arq.value = ''; if (f) escolherArquivo_(f); });
+    const arq = el('input'); arq.type = 'file'; arq.id = 'ms-arquivo'; arq.hidden = true; arq.accept = 'image/*,video/*';
+    const contaDoAnexo=contaSessao_(getSessao()),epocaDoAnexo=epocaConta_;
+    arq.addEventListener('change', () => { const f = arq.files && arq.files[0]; arq.value = ''; conferirContaAtual_();if(!f)return;if(aberta&&aberta.id===c.id&&contaSessao_(getSessao())===contaDoAnexo&&epocaConta_===epocaDoAnexo)escolherArquivo_(f);else aviso_('A conversa mudou. Escolha o arquivo novamente no atendimento correto.'); });
+    const audioArquivo=el('input');audioArquivo.type='file';audioArquivo.accept='audio/*';audioArquivo.id='ms-arquivo-audio';audioArquivo.hidden=true;
+    audioArquivo.addEventListener('change',()=>{const f=audioArquivo.files&&audioArquivo.files[0];audioArquivo.value='';conferirContaAtual_();if(f&&aberta&&aberta.id===c.id&&contaSessao_(getSessao())===contaDoAnexo&&epocaConta_===epocaDoAnexo)escolherArquivo_(f);});
     const ta = el('textarea'); ta.id = 'ms-texto'; ta.rows = 1; ta.placeholder = 'Mensagem'; if (c.canal !== 'instagram') ta.maxLength = limiteTexto(c); ta.setAttribute('aria-label', 'Mensagem para ' + rotuloContato(c)); ta.enterKeyHint = 'enter'; ta.value = rascunhoLer_(c.id);
-    const mic = botao('ms-ico', '🎤', 'gravar'); mic.id = 'ms-mic'; mic.setAttribute('aria-label', 'Gravar áudio'); if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)) mic.hidden = true;
+    const mic = botao('ms-ico', '🎤', 'gravar'); mic.id = 'ms-mic'; mic.setAttribute('aria-label', 'Gravar áudio'); if (!(window.TKAndroid && typeof TKAndroid.audioNativo==='function' && TKAndroid.audioNativo()) && !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)) mic.hidden = true;
     const bt = botao('ms-enviar', 'Enviar', 'enviar'); bt.id = 'ms-enviar'; bt.disabled = !ta.value.trim() && !anexoPend;
-    form.append(clip, arq, ta, mic, bt); pai.appendChild(form);
+    form.append(clip, arq, audioArquivo, ta, mic, bt); pai.appendChild(form);
     if (espiando || !podeFerramenta_('responder')) form.hidden = true;        // para responder, toque em Atender (aí marca como lida)
     const cresce = () => { if (expandirAtalho_(ta)) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); desenharPrevia_(); };
     ta.addEventListener('input', cresce);
@@ -1941,6 +1972,12 @@
   }
   async function gravarAudio_() {
     if (gravacao) { gravacao.rec.stop(); return; }
+    if(window.TKAndroid && typeof TKAndroid.audioNativo==='function' && TKAndroid.audioNativo()){
+      const id=aberta&&aberta.id,epoca=epocaConta_,nav=abrindo;
+      const input=el('input');input.type='file';input.accept='audio/mp4';input.setAttribute('capture','user');input.hidden=true;document.body.appendChild(input);
+      input.addEventListener('change',()=>{const f=input.files&&input.files[0];input.remove();conferirContaAtual_();if(f&&aberta&&aberta.id===id&&epoca===epocaConta_&&nav===abrindo)escolherArquivo_(f);},{once:true});
+      input.addEventListener('cancel',()=>input.remove(),{once:true});input.click();return;
+    }
     let stream; try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { aviso_('Não consegui usar o microfone. Libere a permissão do microfone neste site e tente de novo.'); return; }
     const tipos = ['audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'], mt = tipos.find((t) => window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
     const rec = new MediaRecorder(stream, mt ? { mimeType: mt } : undefined), partes = [];
@@ -1966,7 +2003,7 @@
     if(salvo){
       aberta=salvo.conversa;msgs=salvo.mensagens;montarConversa(aberta);pintarFio(true);
       vista='conversa';$('ms-app').dataset.vista='conversa';
-      if(!larga()&&window.TKCamadas&&!TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa',mostrarLista_);
+      if(!APP_RECENTES&&!larga()&&window.TKCamadas&&!TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa',mostrarLista_);
       document.querySelector('.ms-compor')?.setAttribute('inert','');
       document.querySelectorAll('.ms-compor textarea,.ms-compor input,.ms-compor button').forEach(e=>{e.disabled=true;});
       const info=el('p','','Salva no aparelho · atualizando para responder…');info.id='ms-cache-status';info.setAttribute('role','status');
@@ -1988,22 +2025,27 @@
     msgs = r.mensagens.concat((r.notas || []).map(notaMsg_)).concat(Array.from(pendentes.values()).filter((p) => p.conversa === id).map((p) => p.msg));
     montarConversa(c); pintarFio(true);
     vista = 'conversa'; const app = $('ms-app'); app.dataset.vista = 'conversa';
-    if (!larga() && window.TKCamadas && !TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa', mostrarLista_);
+    if (!APP_RECENTES && !larga() && window.TKCamadas && !TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa', mostrarLista_);
     pintarLista(); marcarLida();
     if (larga() && !espiando) { const t = $('ms-texto'); if (t) t.focus(); }
   }
   function mostrarLista_() {
     // Leaving a cached chat also cancels its pending open/retry. A late response must not navigate.
-    if (vista === 'lista' && !aberta && !cacheConversa) return;
     ++abrindo; cacheConversa = false; aberta = null; vista = 'lista';
     const a = $('ms-app'); if (a) a.dataset.vista = 'lista';
     const c = $('ms-conversa'); if (c) { c.textContent = ''; c.appendChild(vazioConversa_()); }
+    window.dispatchEvent(new Event('tk:mensagens-lista'));
   }
   function voltarLista() {
-    if (vista !== 'conversa') return;
     if ($('ms-gaveta')) fecharGaveta_();
     mostrarLista_();
-    if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) TKCamadas.desempilhar('ms-conversa');
+    if (!APP_RECENTES && window.TKCamadas && TKCamadas.aberta('ms-conversa')) TKCamadas.desempilhar('ms-conversa');
+  }
+  function voltarApp_(){
+    if($('ms-luz')){fecharLuz_();return true;}
+    if($('ms-gaveta')){fecharGaveta_();return true;}
+    if(vista==='conversa'||$('ms-app')?.dataset.vista==='conversa'){voltarLista();return true;}
+    return false;
   }
   async function marcarLida() {
     if (espiando || cacheConversa) return;                      // v7.21: espiando nunca marca como lida (nem aqui nem no celular)
@@ -2570,6 +2612,7 @@
     else if (a === 'enviar') enviar();
     else if (a === 'anexar') { const i = $('ms-arquivo'); if (i) i.click(); }
     else if (a === 'anexo-tirar') limparAnexo_(true);
+    else if (a === 'anexar-audio') {if(espiando||cacheConversa){aviso_('Toque em Atender e aguarde a conversa atualizar antes de anexar.');return;}const i=$('ms-arquivo-audio');if(i)i.click();}
     else if (a === 'gravar') gravarAudio_();
     else if (a === 'luz-fechar') fecharLuz_();
     else if (a === 'story-ver') { const mid = Number(b.dataset.id); try { abrirLuz_(b.dataset.video ? 'video' : 'imagem', await midiaBlob_(mid, true)); } catch (e) { aviso_('Não consegui abrir o story agora.'); } }
@@ -2585,7 +2628,7 @@
     else if (a === 'esquecer-conta') { guardarContas_(contasSalvas_().filter((x) => x.whatsapp !== b.dataset.w)); abrirTrocaUsuario_(); }
     else if (a === 'outra-conta') { lembrarSessao_(); limparSessao(); location.reload(); }
     else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Funil de vendas', 'funil'], ['Configurações (leitura e nome)…', 'leitura-cfg'], ['Respostas automáticas…', 'auto-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar'], '-', ['Trocar usuário…', 'trocar-usuario']]).concat(window.TKAndroid ? ['-', ['Atualizar app', 'app-atualizar'], ['Permissões do app', 'app-permissoes']] : []));
-    else if (a === 'menu-conversa' && aberta) abrirMenu(b, [...(aberta.grupo ? [] : [['Ficha do cliente…', 'ficha']]), ['Agendar mensagem…', 'agenda-abrir'], '-', ['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
+    else if (a === 'menu-conversa' && aberta) abrirMenu(b, [...(aberta.grupo ? [] : [['Ficha do cliente…', 'ficha']]), ['Agendar mensagem…', 'agenda-abrir'], ['Enviar áudio de arquivo', 'anexar-audio'], '-', ['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
     else if (a === 'exp') baixar(b.dataset.params, b.dataset.rotulo);
     else if (a === 'copiar-ia') copiarParaIA();
     else if (a === 'painel') abrirPainel(30);
@@ -2642,7 +2685,7 @@
   let atualizacaoImediata_ = false;
   async function atualizarAgora_(){if(atualizacaoImediata_||!podeGerir()||!$('overlay-mensagens')?.classList.contains('aberto'))return;atualizacaoImediata_=true;clearTimeout(timerLive);try{await carregarLista(false);await sondar();}finally{atualizacaoImediata_=false;}}
   window.addEventListener('focus',atualizarAgora_);document.addEventListener('visibilitychange',()=>{if(!document.hidden)atualizarAgora_();});
-  if(new URLSearchParams(location.search).get('app')==='mensagens')window.TKMensagensApp={atualizar:atualizarAgora_,abrirConversa:function(id,espiar){if(podeGerir()&&Number.isSafeInteger(id)&&id>0)return abrirConversa(id,espiar===true);}};
+  if(new URLSearchParams(location.search).get('app')==='mensagens')window.TKMensagensApp={atualizar:atualizarAgora_,voltar:voltarApp_,abrirConversa:function(id,espiar){if(podeGerir()&&Number.isSafeInteger(id)&&id>0)return abrirConversa(id,espiar===true);}};
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { const o = $('overlay-mensagens'); if (o && o.classList.contains('aberto')) { espera = ESPERA_MS; agendar(300); } else sondarSelo(); } });
   (function init() {
     const botao_ = $('btn-abrir-mensagens'); if (!botao_) return;
