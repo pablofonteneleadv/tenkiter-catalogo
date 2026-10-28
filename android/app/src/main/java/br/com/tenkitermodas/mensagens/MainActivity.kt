@@ -43,7 +43,7 @@ class MainActivity:Activity(),InboxView.Events {
     private val home=WebKeeper.HOME
     private val ticker=object:Runnable{override fun run(){if(nativeVisible&&repo.store.auth()!=null&&!sending)sync();handler.postDelayed(this,4000)}}
     private val changes=object:BroadcastReceiver(){override fun onReceive(c:Context?,i:Intent?){render()}}
-    private val clicks=object:INotificationClickListener{override fun onClick(event:INotificationClickEvent){runOnUiThread{pendingClick=event.notification.additionalData?.optLong("conversa",0)?:0;pendingPeek=event.result.actionId!="abrir";openGeneration++;if(::inbox.isInitialized){peeking=pendingPeek;conversation=pendingClick;pendingClick=0;full(conversation);sync()}}}}
+    private val clicks=object:INotificationClickListener{override fun onClick(event:INotificationClickEvent){runOnUiThread{pendingClick=event.notification.additionalData?.optLong("conversa",0)?:0;pendingPeek=event.result.actionId!="abrir";openGeneration++;if(::inbox.isInitialized){peeking=pendingPeek;conversation=pendingClick;pendingClick=0;if(setup==null)full(conversation);sync()}}}}
     private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
     private fun trusted(url:String?)=try{val u=Uri.parse(url);u.scheme=="https"&&u.host=="tenkitermodas.com.br"&&u.path=="/admin.html"}catch(_:Exception){false}
     override fun onCreate(state:Bundle?){
@@ -60,16 +60,19 @@ class MainActivity:Activity(),InboxView.Events {
         ContextCompat.registerReceiver(this,changes,IntentFilter(NativeRepository.CHANGED),ContextCompat.RECEIVER_NOT_EXPORTED)
         OneSignal.Notifications.addClickListener(clicks)
         if(pendingClick>0){peeking=pendingPeek;conversation=pendingClick;pendingClick=0}
-        render();full(conversation)
-        if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync();syncNames();askBattery()}
+        render();if(SetupGate.ok(this))full(conversation)else showSetup()
+        if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync();syncNames()}
     }
-    /** Pede uma vez para o Android não encerrar o app: assim as mensagens ficam prontas ao abrir. */
-    private fun askBattery(){
-        val pm=getSystemService(Context.POWER_SERVICE) as android.os.PowerManager;val prefs=getSharedPreferences("tk_app",Context.MODE_PRIVATE)
-        if(pm.isIgnoringBatteryOptimizations(packageName)||prefs.getBoolean("bateriaPerguntada",false))return
-        prefs.edit().putBoolean("bateriaPerguntada",true).apply()
-        AlertDialog.Builder(this).setTitle("Deixar as mensagens sempre prontas").setMessage("Permita que o app continue rodando em segundo plano. Assim, ao abrir ou tocar num aviso, as conversas já aparecem carregadas.")
-            .setPositiveButton("Permitir"){_,_->runCatching{startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,Uri.parse("package:"+packageName)))}}.setNegativeButton("Agora não",null).show()
+    private var setup:SetupGate?=null
+    /** Tela obrigatória de configuração: avisos e segundo plano antes de abrir as mensagens. */
+    private fun showSetup(){
+        if(setup!=null)return
+        val g=SetupGate(this){scope.launch{OneSignal.Notifications.requestPermission(true);OneSignal.User.pushSubscription.optIn();setup?.refresh()}}
+        setup=g;root.addView(g,FrameLayout.LayoutParams(-1,-1))
+    }
+    private fun checkSetup(){
+        val g=setup?:return
+        if(SetupGate.ok(this)){root.removeView(g);setup=null;full(conversation)}else g.refresh()
     }
     private fun syncNames(){if(namesChecked)return;namesChecked=true;scope.launch{try{withContext(Dispatchers.IO){repo.googleNames()};sync()}catch(_:Exception){namesChecked=false}}}
     private fun render(){
@@ -215,7 +218,7 @@ class MainActivity:Activity(),InboxView.Events {
     }
     private fun showNative(){nativeVisible=true;webPanel?.visibility=View.GONE;inbox.visibility=View.VISIBLE;render()}
     private fun external(address:String){val u=Uri.parse(address);if(u.scheme !in listOf("https","http","tel","mailto"))return;runCatching{startActivity(Intent(Intent.ACTION_VIEW,u))}}
-    override fun onResume(){super.onResume();activityVisible=true;WebKeeper.attach();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
+    override fun onResume(){super.onResume();activityVisible=true;WebKeeper.attach();checkSetup();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
     override fun onPause(){activityVisible=false;WebKeeper.detach();if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
     override fun onDestroy(){handler.removeCallbacks(ticker);runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it)};WebKeeper.context?.baseContext=applicationContext;super.onDestroy()}
     override fun onSaveInstanceState(out:Bundle){out.putLong("conversation",conversation);out.putBoolean("peeking",peeking);super.onSaveInstanceState(out)}

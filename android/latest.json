@@ -1,8 +1,8 @@
 {
   "versionCode": 9,
   "versionName": "2.4.2",
-  "bytes": 4574361,
-  "sha256": "ff0d64d27360548145118c2b185a85530efbe6f677e6c5953ab5db88324e5822",
+  "bytes": 4577577,
+  "sha256": "b839870faf8932c260016acf73ae352b6a554ae3528d5e09e1e9166786dd0aee",
   "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.2/TENKiTER-Mensagens-2.4.2.apk",
-  "notes": "Instale sobre a versão anterior. As mensagens ficam carregadas em segundo plano: ao tocar num aviso ou abrir o app, a tela já aparece pronta. Permita rodar em segundo plano quando o app pedir."
+  "notes": "Instale sobre a versão anterior. Na primeira abertura, ative os avisos e o funcionamento em segundo plano: assim as mensagens ficam carregadas e abrem prontas, inclusive ao tocar num aviso."
 }
