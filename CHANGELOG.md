@@ -6,6 +6,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.1 — Conversa mais limpa — 2026-10-28
+
+- "Foi resposta a um story? Ver stories no ar" aparece só na última mensagem recebida sem contexto, e não mais embaixo de cada mensagem.
+
 ## 7.40.0 — APK 2.3: pessoas, contatos e contexto real de stories — 2026-10-28
 
 - Não lidas e Falta responder usam a mesma base ativa: pendente inclui toda não lida mais leitura sem resposta; encerradas ficam fora. Contadores identificam pessoas, reunindo canais explicitamente vinculados. Grupos começam desligados e podem ser ligados manualmente.
