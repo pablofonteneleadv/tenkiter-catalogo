@@ -10,7 +10,14 @@ Código 7. A tela principal do app passa a ser a mesma tela **Mensagens** do sit
 - A sessão do app só é copiada para o site quando o site ainda não tem uma. Assim, **Menu → Trocar usuário…** (site 7.40.7) funciona também dentro do app.
 - Sem conexão, o app avisa e tenta abrir de novo sozinho.
 
-Publicação: instalar por cima exige o APK assinado com a mesma chave das versões anteriores. Veja `PUBLICAR-VERSAO.md`. O `android/latest.json` só muda depois que o APK assinado estiver no release `android-v2.4.0`.
+## Nova assinatura (28/10/2026)
+
+A chave das versões 1.0 a 2.3 se perdeu. A 2.4.0 é assinada com uma chave nova (alias `tenkiter`, certificado SHA-256 `09ed81d57207c72a9d49cc5065483a22f57a15528d8a626aa3a99467e1b59a76`).
+
+- **Só desta vez:** desinstale o app antigo e instale a 2.4.0 pelo link do release `android-v2.4.0`. Login e conversas voltam do servidor.
+- O botão "Atualizar app" das versões antigas recusa esta versão, porque a assinatura é diferente. Isso é esperado.
+- A partir da 2.4.0, as atualizações voltam a instalar por cima.
+- A chave e a senha ficam com o Pablo, fora do repositório. Ele cadastra os Secrets `ANDROID_KEYSTORE_B64` e `ANDROID_KEYSTORE_PASSWORD` para o workflow "APK Android" assinar sozinho.
 
 ## Versão de teste
 
