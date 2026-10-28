@@ -6,6 +6,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.8 — 28/10/2026
+- App Mensagens: a tela não fica mais em branco com a barra Catálogo/Gestão depois do Voltar; se a janela fechar, ela reabre sozinha.
+- App Android 2.4.1: a tela carregada fica guardada enquanto o app vive em segundo plano.
+
 ## 7.40.7 — Trocar usuário — 2026-10-28
 
 - Mensagens → ⋯ → **Trocar usuário…**: mostra as contas já usadas neste aparelho, com "Usar" para trocar com um toque, "Esquecer" para tirar da lista e "Entrar com outra conta". Trocar não apaga as conversas carregadas. Vale no site e no atendimento do app.

@@ -167,7 +167,9 @@ class MainActivity:Activity(),InboxView.Events {
     }
     private fun createWeb(){
         val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE)}
-        val w=WebView(this);web=w
+        val kept=WebKeeper.web
+        val w=if(kept!=null){WebKeeper.context?.baseContext=this;(kept.parent as? android.view.ViewGroup)?.removeView(kept);kept}else{val c=android.content.MutableContextWrapper(this);WebKeeper.context=c;WebView(c).also{WebKeeper.web=it}}
+        web=w
         w.settings.apply{javaScriptEnabled=true;domStorageEnabled=true;allowFileAccess=false;allowContentAccess=true;javaScriptCanOpenWindowsAutomatically=false;setSupportMultipleWindows(true);mediaPlaybackRequiresUserGesture=true;mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;userAgentString+=" TenkiterAndroid/2.1"}
         CookieManager.getInstance().setAcceptThirdPartyCookies(w,false)
         w.webViewClient=object:WebViewClient(){
@@ -207,7 +209,7 @@ class MainActivity:Activity(),InboxView.Events {
     private fun external(address:String){val u=Uri.parse(address);if(u.scheme !in listOf("https","http","tel","mailto"))return;runCatching{startActivity(Intent(Intent.ACTION_VIEW,u))}}
     override fun onResume(){super.onResume();activityVisible=true;if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
     override fun onPause(){activityVisible=false;if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
-    override fun onDestroy(){handler.removeCallbacks(ticker);runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.destroy();super.onDestroy()}
+    override fun onDestroy(){handler.removeCallbacks(ticker);runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it)};WebKeeper.context?.baseContext=applicationContext;super.onDestroy()}
     override fun onSaveInstanceState(out:Bundle){out.putLong("conversation",conversation);out.putBoolean("peeking",peeking);super.onSaveInstanceState(out)}
     @Deprecated("Legacy back API") override fun onBackPressed(){
         val w=web

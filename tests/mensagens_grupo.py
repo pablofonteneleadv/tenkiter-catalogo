@@ -38,7 +38,7 @@ with sync_playwright() as p:
     pg.go_back(); pg.wait_for_timeout(400)
     if pg.locator("[data-ms=abrir][data-id='1']").count() == 0: pg.click("[data-canal=whatsapp1]"); pg.wait_for_timeout(400)
     pg.click("[data-ms=abrir][data-id='1']"); pg.wait_for_selector("[data-id='3']", timeout=5000); pg.wait_for_timeout(300)
-    chk("conversa individual: sem rótulo de autor e com o botão de story", pg.locator("#ms-fio .ms-autor").count() == 0 and pg.locator("#ms-fio .ms-ver-stories").count() >= 1)
+    chk("conversa individual: sem rótulo de autor e sem o link de story (7.40.8)", pg.locator("#ms-fio .ms-autor").count() == 0 and pg.locator("#ms-fio .ms-ver-stories").count() == 0)
     chk("sem erro de JavaScript", not erros, erros)
     b.close()
 print("\nOK=%d FALHAS=%d %s" % (len(OK), len(BAD), BAD))

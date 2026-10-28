@@ -22,3 +22,8 @@ A chave das versões 1.0 a 2.3 se perdeu. A 2.4.0 é assinada com uma chave nova
 ## Versão de teste
 
 Cada PR do app gera no GitHub o artefato `TENKiTER-Mensagens-Android`, com o APK de depuração. Ele se chama **Mensagens TESTE** (pacote `br.com.tenkitermodas.mensagens.teste`) e instala **ao lado** do app oficial, sem substituí-lo. Os avisos (push) podem não funcionar nessa versão de teste.
+
+## 2.4.1 (código 8)
+
+- A tela carregada fica guardada (`WebKeeper`) enquanto o processo do app vive. Fechar e abrir de novo não recarrega tudo. Se o Android encerrar o app para liberar memória, a primeira abertura carrega de novo.
+- Site 7.40.8: no app, a janela Mensagens reabre sozinha se o Voltar a fechar. Antes ficava a tela bege com a barra Catálogo/Gestão.
