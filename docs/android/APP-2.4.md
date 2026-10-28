@@ -11,3 +11,7 @@ Código 7. A tela principal do app passa a ser a mesma tela **Mensagens** do sit
 - Sem conexão, o app avisa e tenta abrir de novo sozinho.
 
 Publicação: instalar por cima exige o APK assinado com a mesma chave das versões anteriores. Veja `PUBLICAR-VERSAO.md`. O `android/latest.json` só muda depois que o APK assinado estiver no release `android-v2.4.0`.
+
+## Versão de teste
+
+Cada PR do app gera no GitHub o artefato `TENKiTER-Mensagens-Android`, com o APK de depuração. Ele se chama **Mensagens TESTE** (pacote `br.com.tenkitermodas.mensagens.teste`) e instala **ao lado** do app oficial, sem substituí-lo. Os avisos (push) podem não funcionar nessa versão de teste.
