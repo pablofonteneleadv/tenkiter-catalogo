@@ -19,7 +19,7 @@ class NativeRepository internal constructor(private val context:Context,val stor
         fun get(c:Context):NativeRepository=instance?:synchronized(this){instance?:NativeRepository(c.applicationContext).also{instance=it}}
     }
     private fun changed(){context.sendBroadcast(Intent(CHANGED).setPackage(context.packageName))}
-    private fun allowed(j:JSONObject):Boolean {val p=j.optJSONArray("permissoes")?:return false;return (0 until p.length()).any{p.optString(it)=="gerir_acessos"}}
+    private fun allowed(j:JSONObject):Boolean {val p=j.optJSONArray("permissoes")?:return false;return (0 until p.length()).any{p.optString(it) in listOf("gerir_acessos","catalogo_admin")}}
     fun login(identifier:String,password:String){lock.withLock{
         val generation=store.generation
         val j=api.account(JSONObject().put("action","login").put("identificador",identifier.trim()).put("whatsapp",if(identifier.contains('@'))"" else identifier.filter{it.isDigit()}).put("senha",password))

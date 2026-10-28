@@ -91,9 +91,26 @@ const DDL = [
 ];
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
-let pronto = false;
+const inicializacoes_ = new WeakMap();
+const ESQUEMA_ = '20261028-notas-acessos-1';
 async function iniciar(env) {
-  if (pronto) return;
+  if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
+  const promessa = (async()=>{
+    let versao;
+    try { versao = await cfgGet(env,'schema_ig_version'); }
+    catch(e) { if (!/no such table/i.test(String(e))) throw e; }
+    if (versao === ESQUEMA_) return;
+    await migrarEsquema_(env);
+    for (const [t,cols] of [['msg_nota',['excluida_em','excluida_por']],['msg_conversa',['pessoa','atualizada_em','encerrada_em']],['msg_mensagem',['ctx_chave','autor_lid']]]) {
+      const existentes = new Set((await env.DB.prepare('PRAGMA table_info('+t+')').all()).results.map(c=>c.name));
+      if (!cols.every(c=>existentes.has(c))) throw new Error('Esquema de Mensagens incompleto. Tente novamente.');
+    }
+    await cfgSet(env,'schema_ig_version',ESQUEMA_);
+  })();
+  inicializacoes_.set(env.DB,promessa);
+  try { await promessa; } catch(e) { inicializacoes_.delete(env.DB); throw e; }
+}
+async function migrarEsquema_(env) {
   await env.DB.batch(DDL.map((s) => env.DB.prepare(s)));
   try { await env.DB.prepare("ALTER TABLE postagem ADD COLUMN canal TEXT DEFAULT ''").run(); } catch (e) { /* ja existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN seq INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
@@ -115,6 +132,7 @@ async function iniciar(env) {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_encerramento (id INTEGER PRIMARY KEY AUTOINCREMENT, conversa_id INTEGER NOT NULL, canal TEXT NOT NULL, pessoa TEXT DEFAULT '', contato TEXT DEFAULT '', motivo TEXT NOT NULL, em TEXT NOT NULL, por TEXT DEFAULT '')").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_nota (id INTEGER PRIMARY KEY AUTOINCREMENT, alvo TEXT NOT NULL, texto TEXT NOT NULL, autor TEXT DEFAULT '', em TEXT NOT NULL)").run();   // v7.40.3: notas internas (o cliente nunca vê)
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msg_nota_alvo ON msg_nota (alvo, em)').run();
+    for(const col of ["excluida_em TEXT NOT NULL DEFAULT ''","excluida_por TEXT NOT NULL DEFAULT ''"]){try{await env.DB.prepare('ALTER TABLE msg_nota ADD COLUMN '+col).run();}catch(e){if(!/duplicate column/i.test(String(e)))throw e;}}
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_etiqueta (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, cor TEXT NOT NULL DEFAULT 'cinza', ordem INTEGER NOT NULL DEFAULT 0, venda INTEGER NOT NULL DEFAULT 0, arquivada INTEGER NOT NULL DEFAULT 0)").run();   // v7.40.4: etiquetas
     await env.DB.prepare('CREATE TABLE IF NOT EXISTS msg_alvo_etiqueta (alvo TEXT NOT NULL, etiqueta_id INTEGER NOT NULL, em TEXT NOT NULL, PRIMARY KEY (alvo, etiqueta_id))').run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_auto_envio (conversa_id INTEGER NOT NULL, tipo TEXT NOT NULL, periodo TEXT NOT NULL, em TEXT NOT NULL, res TEXT DEFAULT '', PRIMARY KEY (conversa_id, tipo, periodo))").run();   // v7.40.9: respostas automáticas já enviadas (não repetir)
@@ -153,7 +171,6 @@ async function iniciar(env) {
       await cfgSet(env, 'mig_preco_v2', '1');
     }
   } catch (e) { /* tenta de novo na próxima vez */ }
-  pronto = true;
 }
 
 /* ---------- utilidades ---------- */
@@ -176,17 +193,65 @@ async function permissoes(env, req) {
   const whats = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
   const sessao = (req.headers.get('X-TK-Sessao') || '').slice(0, 400);
   if (!whats || !/^tk[123]\./.test(sessao)) return 'sem_sessao';
-  const chave = new Request('https://sessao.invalid/' + (await sha(whats + '|' + sessao)));
+  const chave = new Request('https://sessao.invalid/v3/' + (await sha(whats + '|' + sessao)));
   const cache = caches.default, g = await cache.match(chave);
-  if (g) return g.json();
-  let lista = null;
+  if (g) { const v = await g.json(); v.permissoes.msgPerfis = v.perfis; return v.permissoes; }
+  let lista = null, perfis = [];
   try {
     const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
     const j = await r.json();
-    if (j && j.ok && j.usuario && Array.isArray(j.usuario.permissoes)) lista = j.usuario.permissoes;
+    if (j && j.ok && j.usuario && Array.isArray(j.usuario.permissoes)) { lista = j.usuario.permissoes; perfis = Array.isArray(j.usuario.perfis) ? j.usuario.perfis : String(j.usuario.perfil || '').split(','); }
   } catch (e) { return 'indisponivel'; }         // backend fora do ar != "faca login"
-  if (lista) await cache.put(chave, new Response(JSON.stringify(lista), { headers: { 'Cache-Control': 'max-age=120' } }));
+  if (lista) await cache.put(chave, new Response(JSON.stringify({ permissoes: lista, perfis }), { headers: { 'Cache-Control': 'max-age=120' } }));
+  if (lista) lista.msgPerfis = perfis;
   return lista || 'sem_sessao';                  // sessao que o backend nao reconhece
+}
+
+// Acessos adicionais são privados no Worker; não alteram os perfis do cadastro.
+const MSG_FERRAMENTAS_ = { acessar:'Acessar Mensagens', responder:'Responder e encerrar atendimentos', produtos:'Selecionar produtos no atendimento', arquivos:'Baixar arquivos recebidos', contatos:'Editar cadastro e canais', etiquetas:'Mudar etiquetas', notas:'Ver e editar notas da equipe', agenda:'Agendar mensagens', respostas:'Usar e editar respostas rápidas', funil:'Ver e mover o funil', metricas:'Ver métricas', exportar:'Exportar e consultar exclusões', configuracoes:'Configurar conexões e automações' };
+const msgPerfil_ = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,100);
+const msgTelefone_ = s => foneNormal_(s).chave || String(s || '').replace(/\D/g,'').slice(0,20);
+async function msgRegras_(env) { const raw = await cfgGet(env,'msg_acessos_v1'); return raw ? JSON.parse(raw) : { perfis:{}, pessoas:{} }; }
+function msgDireitos_(perms, whats, regras) {
+  const admin = perms.includes('gerir_acessos');
+  const perfis = (perms.msgPerfis || []).map(msgPerfil_);
+  const cat1 = perfis.includes('equipecatalogo1') || (!perfis.filter(Boolean).length && perms.includes('catalogo_admin') && perms.includes('painel_simples'));
+  const pessoa = (regras.pessoas || {})[msgTelefone_(whats)] || {};
+  const direitos = {};
+  for (const k of Object.keys(MSG_FERRAMENTAS_)) {
+    let v = cat1 && !['funil','metricas','exportar','configuracoes'].includes(k);
+    const definidos = perfis.map(n => (regras.perfis || {})[n]).filter(r => r && typeof r[k] === 'boolean');
+    if (definidos.length) v = definidos.some(r => r[k]);
+    if (typeof pessoa[k] === 'boolean') v = pessoa[k];
+    direitos[k] = admin || v;
+  }
+  if (!direitos.acessar) for (const k of Object.keys(direitos)) direitos[k] = false;
+  return direitos;
+}
+function msgRecurso_(p, req, url) {
+  if (['/msg/enviar','/msg/anexo','/msg/dono','/msg/encerrar'].includes(p)) return 'responder';
+  if (p === '/msg/midia') return url.searchParams.get('baixar') === '1' ? 'arquivos' : 'acessar';
+  if (/^\/msg\/(pessoa|ficha)(\/|$)/.test(p)) return 'contatos';
+  if (/^\/msg\/(etiquetas|rotular)$/.test(p)) return 'etiquetas';
+  if (p === '/msg/notas/log') return 'exportar';
+  if (p === '/msg/notas') return 'notas';
+  if (/^\/msg\/agend/.test(p)) return 'agenda';
+  if (/^\/msg\/funil/.test(p)) return 'funil';
+  if (p === '/msg/metricas') return 'metricas';
+  if (p === '/msg/exportar') return 'exportar';
+  if (['/msg/resumo','/msg/conversas','/msg/mensagens','/msg/novidades','/msg/lida','/msg/contagem','/msg/stories','/msg/mobile/subscription','/msg/config'].includes(p)) return 'acessar';
+  return 'configuracoes';
+}
+function msgFiltrarDados_(dados, direitos) {
+  if (!dados || typeof dados !== 'object') return dados;
+  if (Array.isArray(dados)) return dados.map(x => msgFiltrarDados_(x,direitos));
+  const out = {};
+  for (const [k,v] of Object.entries(dados)) {
+    if ((!direitos.notas && ['notas','exclusoes'].includes(k)) || (!direitos.agenda && k === 'agendadas') || (!direitos.etiquetas && k === 'etiquetas') || (!direitos.respostas && k === 'respostas')) continue;
+    if (!direitos.configuracoes && ['ultimaLeitura','webhook','diagnostico','urlInstagram'].includes(k)) continue;
+    out[k] = msgFiltrarDados_(v,direitos);
+  }
+  return out;
 }
 
 /* ---------- sugestões a partir da legenda (sem IA) ---------- */
@@ -2525,7 +2590,7 @@ function formaInstagram_(b) {
 }
 /* ---- mídia das conversas (foto, vídeo, áudio, figurinha, documento): copiada para o nosso R2 (prefixo msg/) porque os links da Wafly/Meta expiram ---- */
 const MSG_MIDIA_MAX_ = 20 * 1048576;
-const MSG_MIME_EXT_ = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'video/mp4': 'mp4', 'video/3gpp': '3gp', 'video/quicktime': 'mov', 'video/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/webm': 'weba', 'audio/wav': 'wav', 'audio/amr': 'amr', 'application/pdf': 'pdf' };
+const MSG_MIME_EXT_ = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'video/mp4': 'mp4', 'video/3gpp': '3gp', 'video/quicktime': 'mov', 'video/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/webm': 'weba', 'audio/wav': 'wav', 'audio/amr': 'amr', 'application/pdf': 'pdf', 'application/vnd.android.package-archive':'apk', 'application/zip':'zip', 'application/x-zip-compressed':'zip', 'application/octet-stream':'bin', 'text/plain':'txt', 'text/csv':'csv', 'application/msword':'doc', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':'docx', 'application/vnd.ms-excel':'xls', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'xlsx' };
 const mimeLimpo_ = (m) => { const x = String(m || '').split(';')[0].trim().toLowerCase(); return x === 'image/jpg' ? 'image/jpeg' : x === 'audio/x-m4a' || x === 'audio/m4a' ? 'audio/mp4' : x === 'audio/mp3' ? 'audio/mpeg' : x; };
 async function guardarMidiaMsg_(env, bytes, mime, prefixo) {
   const b = crypto.getRandomValues(new Uint8Array(12)), hex = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
@@ -2534,7 +2599,7 @@ async function guardarMidiaMsg_(env, bytes, mime, prefixo) {
   return chave;
 }
 /** Baixa uma mídia de um endereço https e guarda no R2. Devolve { chave, mime, bytes } ou null (nunca derruba a gravação da mensagem). */
-async function copiarMidiaRemota_(env, url, dica) {
+async function copiarMidiaRemota_(env, url, dica, documento=false) {
   if (!/^https:\/\//i.test(String(url || ''))) return null;
   try {
     const r = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(12000), headers: { 'User-Agent': UA } });
@@ -2545,7 +2610,9 @@ async function copiarMidiaRemota_(env, url, dica) {
     try{for(;;){const x=await reader.read();if(x.done)break;length+=x.value.byteLength;if(length>MSG_MIDIA_MAX_){await reader.cancel();return null;}chunks.push(x.value);}}finally{reader.releaseLock();}
     if(!length)return null;const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}const buf=bytes.buffer;
     let mime = mimeLimpo_(r.headers.get('Content-Type'));
+    if (mime === 'application/octet-stream' && MSG_MIME_EXT_[mimeLimpo_(dica)]) mime = mimeLimpo_(dica);
     if (!MSG_MIME_EXT_[mime]) mime = mimeLimpo_(dica);
+    if (!MSG_MIME_EXT_[mime]&&documento)mime="application/octet-stream";
     if (!MSG_MIME_EXT_[mime]) return null;
     return { chave: await guardarMidiaMsg_(env, buf, mime), mime: mime, bytes: buf.byteLength };
   } catch (e) { return null; }
@@ -2555,7 +2622,7 @@ async function prepararMidia_(env, canal, m) {
   if (!m.midiaUrl && !m.ctxUrl) return;
   const ja = await env.DB.prepare('SELECT 1 AS x FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(canal, m.extId).first();
   if (ja) { m.midiaUrl = ''; m.ctxUrl = ''; return; }
-  if (m.midiaUrl) { const x = await copiarMidiaRemota_(env, m.midiaUrl, m.midiaMime); if (x) { m.midiaChave = x.chave; m.midiaMime = x.mime; m.midiaUrl = ''; } }
+  if (m.midiaUrl) { const x = await copiarMidiaRemota_(env, m.midiaUrl, m.midiaMime,m.tipo==='documento'); if (x) { m.midiaChave = x.chave; m.midiaMime = x.mime; m.midiaUrl = ''; } }
   if (m.ctxUrl) { const x = await copiarMidiaRemota_(env, m.ctxUrl, m.ctxMime || ''); if (x) m.ctxChave = x.chave; m.ctxUrl = ''; }
 }
 const STATUS_CANAIS_ = { whatsapp1: ['whatsapp', 'ambos'], whatsapp2: ['whatsapp2'] };
@@ -2664,11 +2731,11 @@ export async function processarPushMobile_(env, recentes = false) {
   const pushKey=await mobilePushKey_(env);if(!pushKey)return {ok:false,motivo:'sem_configuracao'};
   await mobileTables_(env);
   const fila=(await env.DB.prepare("SELECT * FROM msg_push_outbox WHERE estado='pendente' AND tentativas<5 ORDER BY mensagem "+(recentes?"DESC":"ASC")+" LIMIT 10").all()).results||[];
-  const devices=(await env.DB.prepare('SELECT subscription FROM msg_mobile ORDER BY atualizado DESC LIMIT 20').all()).results||[],ids=[];
+  const devices=(await env.DB.prepare('SELECT subscription FROM msg_mobile ORDER BY atualizado DESC LIMIT 20').all()).results||[],ids=[], regras = await msgRegras_(env);
   for(const dev of devices){
     const cred=await env.CACHE.get('mobile-session:'+dev.subscription,'json');if(!cred)continue;
     const perms=await permissoes(env,new Request('https://sessao.invalid',{headers:{'X-TK-Whats':cred.whats,'X-TK-Sessao':cred.sessao}}));
-    if(Array.isArray(perms)&&perms.includes('gerir_acessos'))ids.push(dev.subscription);
+    if(Array.isArray(perms)&&msgDireitos_(perms,cred.whats,regras).acessar)ids.push(dev.subscription);
   }
   let enviadas=0;
   for(const item of fila){
@@ -3044,7 +3111,9 @@ async function meuNomeAtendente_(env, req) {
 const alvoDe_ = (c) => (c && c.pessoa ? String(c.pessoa) : 'c:' + (c && c.id));
 const MSG_IDENTIDADE_SQL_ = "COALESCE((SELECT a.pessoa FROM msg_pessoa_alias a WHERE a.canal=msg_conversa.canal AND a.contato=msg_conversa.contato),(SELECT g.pessoa FROM msg_google_nome g WHERE g.chave=msg_conversa.pessoa),NULLIF(msg_conversa.pessoa,''),'')";
 const MSG_NOME_SQL_ = "COALESCE((SELECT p.nome FROM msg_pessoa p WHERE p.id="+MSG_IDENTIDADE_SQL_+"),(SELECT g.nome FROM msg_google_nome g WHERE g.chave=msg_conversa.pessoa),msg_conversa.nome)";
-const MSG_COLS_CONVERSA_ = "id, canal, contato, dono, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
+const MSG_NOTAS_ALVO_SQL_ = "(CASE WHEN "+MSG_IDENTIDADE_SQL_+"<>'' THEN "+MSG_IDENTIDADE_SQL_+" ELSE 'c:'||msg_conversa.id END)";
+const MSG_NOTAS_COUNT_SQL_ = "(SELECT COUNT(*) FROM msg_nota nn WHERE nn.alvo="+MSG_NOTAS_ALVO_SQL_+" AND nn.excluida_em='')";
+const MSG_COLS_CONVERSA_ = "id, canal, contato, dono, "+MSG_NOTAS_COUNT_SQL_+" AS notas, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
 const MSG_Q_ = (c) => "(SELECT q." + c + " FROM msg_mensagem q WHERE q.canal=msg_mensagem.canal AND q.ext_id=msg_mensagem.ctx_ref AND msg_mensagem.ctx_ref<>'' LIMIT 1)";
 const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, CASE WHEN ctx_chave LIKE '%.mp4' OR ctx_chave LIKE '%.mov' OR ctx_chave LIKE '%.webm' THEN 'video' ELSE (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) END AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + MSG_Q_('texto') + " AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir";
 async function msgContagens_(env, canal, tipo) {
@@ -3485,7 +3554,7 @@ export async function fichaDaConversa_(env, conv) {
   const ids = canais.map((c) => c.id), marca = ids.map(() => '?').join(',');
   /* compra = encerramento "Vendeu" que valeu: se a mesma conversa foi encerrada de novo sem mensagem nenhuma no meio, foi correção do motivo e vale o último */
   const compras = (await env.DB.prepare("SELECT e.em, e.canal FROM msg_encerramento e WHERE e.motivo='vendeu' AND e.conversa_id IN (" + marca + ") AND NOT EXISTS (SELECT 1 FROM msg_encerramento x WHERE x.conversa_id=e.conversa_id AND (x.em>e.em OR (x.em=e.em AND x.id>e.id)) AND NOT EXISTS (SELECT 1 FROM msg_mensagem m WHERE m.conversa_id=e.conversa_id AND m.enviada_em>e.em AND m.enviada_em<x.em)) ORDER BY e.em DESC LIMIT 20").bind(...ids).all()).results || [];
-  const notas = (await env.DB.prepare('SELECT id, texto, autor, em FROM msg_nota WHERE alvo=? ORDER BY em DESC, id DESC LIMIT 5').bind(alvo).all()).results || [];
+  const notas = (await env.DB.prepare('SELECT id, texto, autor, em FROM msg_nota WHERE alvo=? AND length(excluida_em)=0 ORDER BY em DESC, id DESC LIMIT 5').bind(alvo).all()).results || [];
   let etiquetas = []; try { etiquetas = (await etiquetasDosAlvos_(env, [alvo]))[alvo] || []; } catch (e) { /* etiqueta é conforto */ }
   return {
     ficha: { tamanhos: (f && f.tamanhos) || '', preferencias: (f && f.preferencias) || '', cidade: (f && f.cidade) || '', atualizado_em: (f && f.atualizado_em) || '', autor: (f && f.autor) || '' },
@@ -3854,7 +3923,7 @@ export default {
     ctx.waitUntil((async () => { await ciclo(env, 'cron'); try { await analisarPendentes(env, 5); } catch (e) { /* a IA é conforto: o ciclo não pode cair por causa dela */ } })());
   },
   async fetch(req, env, ctx) {
-    const url = new URL(req.url), h = cors(env, req), J = (c, s) => resp(c, s, h);
+    const url = new URL(req.url), h = cors(env, req); let direitos = null; const J = (c, s) => resp(direitos ? msgFiltrarDados_(c,direitos) : c, s, h);
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
     if (url.pathname.indexOf('/wh/zernio/') === 0 && req.method === 'POST') { try { const rz = await rotaZernio_(env, req, url, ctx); if (rz.status >= 500) await anotarFalha_(env, url.pathname, rz.status); return rz; } catch (e) { await anotarFalha_(env, url.pathname, 500); return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
@@ -3872,10 +3941,46 @@ export default {
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
     const ehPost = url.pathname === '/posts' || url.pathname.indexOf('/post') === 0 || url.pathname.indexOf('/fotos') === 0 || url.pathname.indexOf('/fotoia') === 0;
-    if (ehPost ? (perms.indexOf('gerir_acessos') === -1 && perms.indexOf('catalogo_cadastrar') === -1) : perms.indexOf('gerir_acessos') === -1) return J({ ok: false, erro: ehPost ? 'Você não tem permissão para postar no Instagram.' : 'Só o administrador total acessa o importador do Instagram.' }, 403);
+    const ehMsg = url.pathname.startsWith('/msg/');
+    if (!ehMsg && (ehPost ? (perms.indexOf('gerir_acessos') === -1 && perms.indexOf('catalogo_cadastrar') === -1) : perms.indexOf('gerir_acessos') === -1)) return J({ ok: false, erro: ehPost ? 'Você não tem permissão para postar no Instagram.' : 'Só o administrador total acessa o importador do Instagram.' }, 403);
     try {
       await iniciar(env);
       const p = url.pathname;
+      if (ehMsg) {
+        const regras = await msgRegras_(env);
+        const calculados = msgDireitos_(perms,req.headers.get('X-TK-Whats'),regras);
+        if (p === '/msg/acesso' && req.method === 'GET') return J({ok:true,permitido:calculados.acessar,direitos:calculados,ferramentas:MSG_FERRAMENTAS_});
+        if (p === '/msg/acessos' && ['GET','POST'].includes(req.method)) {
+          if (!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente a gestão altera os acessos.'},403);
+          if (req.method === 'POST') {
+            const d = await req.json().catch(() => ({}));
+            const tipo = d.tipo === 'perfil' ? 'perfis' : d.tipo === 'pessoa' ? 'pessoas' : '';
+            const alvo = tipo === 'perfis' ? msgPerfil_(d.alvo) : msgTelefone_(d.alvo);
+            if (!tipo || !alvo || ['constructor','prototype','__proto__'].includes(alvo) || !Object.hasOwn(MSG_FERRAMENTAS_, d.chave) || ![true,false,null].includes(d.valor)) return J({ok:false,erro:'Escolha o acesso e a pessoa ou perfil.'},400);
+            let salvo = false;
+            for (let i=0;i<4&&!salvo;i++) {
+              const antigo = await cfgGet(env,'msg_acessos_v1');
+              const novo = antigo ? JSON.parse(antigo) : {perfis:{},pessoas:{}};
+              novo[tipo] ||= {}; novo[tipo][alvo] ||= {};
+              if (d.valor === null) delete novo[tipo][alvo][d.chave]; else novo[tipo][alvo][d.chave] = d.valor;
+              if (!antigo) await env.DB.prepare("INSERT OR IGNORE INTO cfg(chave,valor) VALUES('msg_acessos_v1','{\"perfis\":{},\"pessoas\":{}}')").run();
+              const anterior = antigo || '{"perfis":{},"pessoas":{}}';
+              const r = await env.DB.prepare("UPDATE cfg SET valor=? WHERE chave='msg_acessos_v1' AND valor=?").bind(JSON.stringify(novo),anterior).run();
+              salvo = !!r.meta.changes;
+            }
+            if (!salvo) return J({ok:false,erro:'Outro acesso mudou ao mesmo tempo. Tente novamente.'},409);
+          }
+          return J({ok:true,regras:await msgRegras_(env),ferramentas:MSG_FERRAMENTAS_});
+        }
+        direitos = calculados;
+        if (!direitos.acessar || !direitos[msgRecurso_(p,req,url)]) return J({ok:false,erro:'Seu acesso não permite usar esta ferramenta de Mensagens.'},403);
+        if (p === '/msg/conversas' && url.searchParams.get('filtro') === 'com_notas' && !direitos.notas) return J({ok:false,erro:'Seu acesso não permite consultar notas.'},403);
+        if (p === '/msg/notas/log' && !direitos.notas) return J({ok:false,erro:'Seu acesso não permite consultar notas.'},403);
+        if (p === '/msg/config' && req.method === 'POST') {
+          const d = await req.clone().json().catch(()=>({}));
+          if ((('respostas' in d) && !direitos.respostas) || ((('lerCelular' in d)||('assinatura' in d)) && !direitos.configuracoes) || (('meuNome' in d)&&!direitos.responder)) return J({ok:false,erro:'Seu acesso não permite alterar esta configuração.'},403);
+        }
+      }
       if (p === '/post/freeconvert/config' && req.method === 'GET') {
         if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
         const chave=await cfgGet(env,'freeconvert_api_key');
@@ -3975,6 +4080,7 @@ export default {
         // v2.11: encerradas só aparecem no filtro "Encerradas" (ou numa busca); voltam sozinhas quando o cliente escreve de novo
         if (filtro === 'encerradas') sql += " AND encerrada_em<>''"; else if (!busca) sql += " AND encerrada_em=''";
         if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'lidas') sql += ' AND nao_lidas=0'; else if (filtro === 'sem_resposta') sql += " AND (nao_lidas>0 OR ult_dir='entrada')"; else if (filtro === 'grupos') sql += ' AND grupo=1'; else if (filtro === 'ambos') sql += " AND pessoa<>'' AND " + MSG_OUTRO_SQL_ + ' IS NOT NULL';
+        if(filtro==='com_notas')sql+=" AND encerrada_em='' AND "+MSG_NOTAS_COUNT_SQL_+'>0';
         if (tipo) sql += tipo === 'grupo' ? ' AND grupo=1' : ' AND grupo=0';
         if (filtro === 'minhas') { sql += ' AND dono=?'; args.push(await meuNomeAtendente_(env, req)); }
         if (filtro === 'retomar') {   // v7.40.12: quem parou de responder (última mensagem foi nossa) ou reservou e não pagou, parado há 1 a 30 dias
@@ -3999,7 +4105,7 @@ export default {
         const where=antes?(antesId>0?' AND (enviada_em<? OR (enviada_em=? AND id<?))':' AND enviada_em<?'):'';
         const args=antes?(antesId>0?[id,antes,antes,antesId]:[id,antes]):[id];
         const rs = await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=?' + where + ' ORDER BY enviada_em DESC, id DESC LIMIT 100').bind(...args).all();
-        const notas = antes ? [] : ((await env.DB.prepare('SELECT id, texto, autor, em FROM msg_nota WHERE alvo=? ORDER BY em LIMIT 200').bind(conv.pessoa ? String(conv.pessoa) : 'c:' + id).all()).results || []);
+        const notas = antes ? [] : ((await env.DB.prepare('SELECT id, texto, autor, em FROM msg_nota WHERE alvo=? AND length(excluida_em)=0 ORDER BY em LIMIT 200').bind(conv.pessoa ? String(conv.pessoa) : 'c:' + id).all()).results || []);
         try { conv.etiquetas = (await etiquetasDosAlvos_(env, [alvoDe_(conv)]))[alvoDe_(conv)] || []; } catch (e) { conv.etiquetas = []; }
         if (!antes && !conv.grupo) { try { const fx = await env.DB.prepare('SELECT tamanhos FROM msg_ficha WHERE alvo=?').bind(alvoDe_(conv)).first(); conv.tamanhos = (fx && fx.tamanhos) || ''; } catch (e) { conv.tamanhos = ''; } }   // v7.40.14: "Veste M · 38" na faixa
         let agendadas; if (!antes) { try { agendadas = (await agendasDaConversa_(env, id)).pendentes; } catch (e) { agendadas = []; } }
@@ -4028,6 +4134,22 @@ export default {
         const [st, r] = await moverNoFunil_(env, await req.json().catch(() => ({})));
         return st ? J({ ok: false, erro: r }, st) : J(Object.assign({ ok: true }, r));
       }
+      if((p==='/msg/notas'||p==='/msg/notas/log')&&(req.method==='GET'||req.method==='DELETE')){
+        const id=Number(url.searchParams.get('conversa'))||0;
+        const conv=await env.DB.prepare('SELECT id,'+MSG_IDENTIDADE_SQL_+' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first();
+        if(!conv)return J({ok:false,erro:'Conversa não encontrada.'},404);
+        const alvo=conv.pessoa?String(conv.pessoa):'c:'+id;
+        if(p==='/msg/notas/log'){
+          if(!direitos.exportar || !direitos.notas)return J({ok:false,erro:'Seu acesso não permite consultar o histórico de exclusões.'},403);
+          return J({ok:true,exclusoes:(await env.DB.prepare("SELECT id,texto,autor,em,excluida_em,excluida_por FROM msg_nota WHERE alvo=? AND excluida_em<>'' ORDER BY excluida_em DESC LIMIT 200").bind(alvo).all()).results});
+        }
+        if(req.method==='DELETE'){
+          const nota=Number(url.searchParams.get('id'))||0,quem=(await meuNomeAtendente_(env,req))+' · '+(req.headers.get('X-TK-Whats')||'').replace(/\D/g,''),em=agora();
+          const changed=await env.DB.prepare("UPDATE msg_nota SET excluida_em=?,excluida_por=? WHERE id=? AND alvo=? AND length(excluida_em)=0").bind(em,quem,nota,alvo).run();
+          if(changed.meta.changes)await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE '+MSG_NOTAS_ALVO_SQL_+'=?').bind(em,alvo).run();
+        }
+        return J({ok:true,notas:(await env.DB.prepare("SELECT id,texto,autor,em FROM msg_nota WHERE alvo=? AND length(excluida_em)=0 ORDER BY em,id LIMIT 200").bind(alvo).all()).results});
+      }
       if (p === '/msg/notas' && req.method === 'POST') {   // v7.40.3: nota interna, compartilhada entre os canais vinculados da pessoa
         const d = await req.json().catch(() => ({})), id = Number(d.conversa) || 0, texto = String(d.texto || '').trim().slice(0, 1000);
         if (!texto) return J({ ok: false, erro: 'Escreva a nota antes de salvar.' }, 400);
@@ -4035,6 +4157,7 @@ export default {
         if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
         const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20), autor = (quem && (await cfgGet(env, 'msg_atendente_' + quem))) || 'Equipe', em = agora();
         const r = await env.DB.prepare('INSERT INTO msg_nota (alvo, texto, autor, em) VALUES (?,?,?,?)').bind(conv.pessoa ? String(conv.pessoa) : 'c:' + id, texto, String(autor).slice(0, 30), em).run();
+        await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE '+MSG_NOTAS_ALVO_SQL_+'=?').bind(em,conv.pessoa?String(conv.pessoa):'c:'+id).run();
         return J({ ok: true, nota: { id: r.meta && r.meta.last_row_id, texto: texto, autor: autor, em: em } });
       }
       if (p === '/msg/ficha' && req.method === 'GET') {   // v7.40.14: ficha do cliente
@@ -4062,7 +4185,8 @@ export default {
         let mensagens = [];
         if (conv) mensagens = (await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=? AND (id>? OR status_em>=?) ORDER BY enviada_em, id LIMIT 200').bind(conv, depois, st).all()).results;
         const saude = url.searchParams.get('cont') === '1' ? await saudeAvisos_(env) : undefined;
-        return J({ ok: true, cursor: cursorConsulta, saude: saude, conversas: cs.results, mensagens: mensagens, contagens: (cs.results.length || url.searchParams.get('cont') === '1') ? await msgContagens_(env) : undefined });
+        let notas;if(conv){const c=await env.DB.prepare('SELECT id,'+MSG_IDENTIDADE_SQL_+' AS pessoa FROM msg_conversa WHERE id=?').bind(conv).first();if(c)notas=(await env.DB.prepare("SELECT id,texto,autor,em FROM msg_nota WHERE alvo=? AND length(excluida_em)=0 ORDER BY em,id LIMIT 200").bind(c.pessoa?String(c.pessoa):'c:'+conv).all()).results;}
+        return J({ ok: true, cursor: cursorConsulta, saude: saude, notas:notas, conversas: cs.results, mensagens: mensagens, contagens: (cs.results.length || url.searchParams.get('cont') === '1') ? await msgContagens_(env) : undefined });
       }
       if (p === '/msg/diagnostico' && req.method === 'GET') {
         const out = {}; for (const n of [1, 2]) { try { out['whatsapp' + n] = JSON.parse((await cfgGet(env, 'msg_ligar_diag_' + n)) || 'null'); } catch (e) { out['whatsapp' + n] = null; } }
@@ -4078,8 +4202,9 @@ export default {
       }
       if (p === '/msg/midia' && req.method === 'GET') {
         const id = Number(url.searchParams.get('id')), ctx = url.searchParams.get('ctx') === '1', post = Number(url.searchParams.get('post')) || 0;
-        const m = post ? { id: 0, midia_mime: '' } : (id ? await env.DB.prepare('SELECT id, canal, midia_chave, midia_mime, midia_url, ctx_post, ctx_chave FROM msg_mensagem WHERE id=?').bind(id).first() : null);
+        const m = post ? { id: 0, midia_mime: '' } : (id ? await env.DB.prepare('SELECT id, canal, tipo, texto, midia_chave, midia_mime, midia_url, ctx_post, ctx_chave FROM msg_mensagem WHERE id=?').bind(id).first() : null);
         if (!m) return J({ ok: false, erro: 'Mídia não encontrada.' }, 404);
+        if (m.tipo === 'documento' && !direitos.arquivos) return J({ok:false,erro:'Seu acesso não permite baixar arquivos.'},403);
         let chave = '';
         if (post) {
           const ok = await env.DB.prepare("SELECT 1 AS x FROM postagem WHERE id=? AND status='publicado' AND canal IN ('whatsapp','ambos','whatsapp2')").bind(post).first();
@@ -4092,7 +4217,7 @@ export default {
         } else {
           chave = m.midia_chave || '';
           if (!chave && m.midia_url) {
-            const x = await copiarMidiaRemota_(env, m.midia_url, m.midia_mime);
+            const x = await copiarMidiaRemota_(env, m.midia_url, m.midia_mime,m.tipo==='documento');
             if (x) { chave = x.chave; await env.DB.prepare("UPDATE msg_mensagem SET midia_chave=?, midia_mime=?, midia_url='' WHERE id=?").bind(x.chave, x.mime, m.id).run(); }
           }
         }
@@ -4100,7 +4225,13 @@ export default {
         const obj = await env.MIDIA.get(chave);
         if (!obj) return J({ ok: false, erro: 'A mídia não está mais disponível.' }, 404);
         const mime = mimeLimpo_((obj.httpMetadata && obj.httpMetadata.contentType) || m.midia_mime), seguro = /^(image\/(jpeg|png|webp|gif)|video\/(mp4|quicktime|webm|3gpp)|audio\/[a-z0-9.+-]+|application\/pdf)$/.test(mime);
-        const h2 = new Headers(h); h2.set('Content-Type', seguro ? mime : 'application/octet-stream'); h2.set('Cache-Control', 'private, max-age=86400'); h2.set('X-Content-Type-Options', 'nosniff'); h2.set('Content-Disposition', seguro ? 'inline' : 'attachment');
+        const baixar=url.searchParams.get('baixar')==='1'||m.tipo==='documento';
+        if (m.tipo === 'documento' && !direitos.arquivos) return J({ok:false,erro:'Seu acesso não permite baixar arquivos.'},403);
+        const nome=String(m.texto||'').split('\n').map(x=>x.trim()).find(x=>/\.[a-z0-9]{1,12}$/i.test(x))||('arquivo-'+m.id+'.'+(MSG_MIME_EXT_[mime]||'bin'));
+        const limpo=Array.from(nome.toWellFormed().replace(/[\x00-\x1f\x7f/\\]/g,'_')).slice(0,180).join('');
+        const ascii=limpo.normalize('NFD').replace(/[^a-zA-Z0-9._ -]/g,'_');
+        const h2=new Headers(h);h2.set('Content-Type',seguro?mime:'application/octet-stream');h2.set('Cache-Control','private, no-store');h2.set('X-Content-Type-Options','nosniff');
+        h2.set('Content-Disposition',baixar||!seguro?'attachment; filename="'+ascii+'"; filename*=UTF-8\'\''+encodeURIComponent(limpo).replace(/[!'()*]/g,c=>'%'+c.charCodeAt(0).toString(16).toUpperCase()):'inline');h2.set('Access-Control-Expose-Headers','Content-Disposition,Content-Length');
         return new Response(obj.body, { status: 200, headers: h2 });
       }
       if (p === '/msg/contagem' && req.method === 'GET') return J({ ok: true, contagens: await msgContagens_(env) });

@@ -16,7 +16,7 @@
   const NOME_CANAL = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2', instagram: 'Instagram' };
   // v7.22: "Nos 2 WhatsApp" (a mesma pessoa falando pelos dois números) e "Encerradas" (saem da lista e voltam quando o cliente escreve)
   // v7.24: "Mensagens" e "Grupos" ligam/desligam juntos ou separados (os dois = tudo); os demais filtros são de um em um e desligam com novo toque
-  const FILTROS = [['minhas', 'Minhas'], ['nao_lidas', 'Não lidas'], ['sem_resposta', 'Falta responder'], ['retomar', 'Retomar'], ['encerradas', 'Encerradas']];
+  const FILTROS = [['minhas', 'Minhas'], ['nao_lidas', 'Não lidas'], ['sem_resposta', 'Falta responder'], ['com_notas', 'Com notas'], ['retomar', 'Retomar'], ['encerradas', 'Encerradas']];
   // v7.21: aba mestre "Todas" (os três canais juntos) vem primeiro e é a que abre
   const ABAS = [['todos', 'Todas']].concat(CANAIS);
   const NOME_CANAL_ = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2', instagram: 'Instagram' };
@@ -77,7 +77,7 @@
       const dados = await r.json();
       const mesmaSessao=()=>{const atual=typeof getSessao==='function'&&getSessao();return atual&&atual.sessao===s.sessao&&atual.whatsapp===s.whatsapp;};
       if(APP_RECENTES&&!mesmaSessao())return {ok:false,erro:'A conta mudou. Abra novamente as mensagens.'};
-      if (APP_RECENTES && (r.status===401 || r.status===403)) {
+      if (APP_RECENTES && (r.status===401 || (r.status===403 && /^\/msg\/(conversas|mensagens|novidades|resumo|contagem)(\?|$)/.test(caminho)))) {
         cacheBloqueado=true;limparRecentes_(); lista=[];msgs=[];aberta=null;cacheConversa=false;
         if($('ms-lista')) pintarLista(); if($('ms-conversa')) $('ms-conversa').textContent='';
       }
@@ -87,10 +87,32 @@
     } catch (e) { return { ok: false, erro: 'Sem conexão agora. Tente de novo.', semRede: true }; }
   }
   function podeGerir() {
-    try { return typeof temPermissao === 'function' && typeof usuarioAdmin !== 'undefined' && !!usuarioAdmin && !!temPermissao(usuarioAdmin, 'gerir_acessos'); } catch (e) { return false; }
+    try { if(window.TKMensagensAcessos)return TKMensagensAcessos.pode('acessar'); return typeof temPermissao === 'function' && typeof usuarioAdmin !== 'undefined' && !!usuarioAdmin && !!temPermissao(usuarioAdmin, 'gerir_acessos'); } catch (e) { return false; }
   }
+  function podeFerramenta_(k) { return window.TKMensagensAcessos ? TKMensagensAcessos.pode(k) : podeGerir(); }
+  function recursoAcao_(a) {
+    if (/^(gaveta-produtos|prod-?|prodsel-)/.test(a)) return 'produtos';
+    if (/^(notas-|modo-nota)/.test(a)) return 'notas';
+    if (/^(ficha|pessoa|nome-)/.test(a)) return 'contatos';
+    if (/^(etq|etiquetas)/.test(a)) return 'etiquetas';
+    if (/^(funil)/.test(a)) return 'funil';
+    if (/^(agenda|agendar)/.test(a)) return 'agenda';
+    if (/^(exp|copiar)/.test(a)) return 'exportar';
+    if (/^(painel|metricas|met-)/.test(a)) return 'metricas';
+    if (/^(gaveta-respostas|resp-)/.test(a)) return 'respostas';
+    if (/^(leitura-cfg|ponte-|auto-|ligar|pausar|conexao|diagnostico)/.test(a)) return 'configuracoes';
+    if (/^(selecionar|enviar|anexar|gravar|assumir|liberar|encerrar|reabrir|atender|sel-encerrar|sel-reabrir)/.test(a)) return 'responder';
+    return '';
+  }
+  function filtrarFerramentas_() {
+    document.querySelectorAll('#overlay-mensagens [data-ms]').forEach(b=>{const k=recursoAcao_(b.dataset.ms);if(k&&!podeFerramenta_(k))b.hidden=true;});
+    document.querySelectorAll('#overlay-mensagens [data-filtro="com_notas"]').forEach(b=>{b.hidden=!podeFerramenta_('notas');});
+  }
+  const permissaoObserver_ = new MutationObserver(filtrarFerramentas_);
+  window.addEventListener('tk:mensagens-acessos',filtrarFerramentas_);
+  document.addEventListener('DOMContentLoaded',()=>{const o=$('overlay-mensagens');if(o)permissaoObserver_.observe(o,{childList:true,subtree:true});});
   function el(tag, cls, texto) { const e = document.createElement(tag); if (cls) e.className = cls; if (texto != null) e.textContent = texto; return e; }
-  function botao(cls, texto, acao, extra) { const b = el('button', cls, texto); b.type = 'button'; if (acao) b.dataset.ms = acao; if (extra) Object.keys(extra).forEach((k) => { b.dataset[k] = extra[k]; }); return b; }
+  function botao(cls, texto, acao, extra) { const b = el('button', cls, texto); b.type = 'button'; if (acao) { b.dataset.ms = acao; const k=recursoAcao_(acao); if(k&&!podeFerramenta_(k))b.hidden=true; } if (extra) Object.keys(extra).forEach((k) => { b.dataset[k] = extra[k]; }); return b; }
   const hm = (d) => d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const mesmoDia = (a, b) => a.toDateString() === b.toDateString();
   function hora(iso) {
@@ -222,7 +244,19 @@
       .ms-canal-tag.ms-canal-whatsapp1, .ms-canal-tag.ms-canal-whatsapp2 { background: #e8f3ec; color: #0f6b3f; }
       .ms-canal-tag.ms-canal-instagram { background: #fbe9f2; color: #8a1259; }
       .ms-espiando { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; background: #fff7e6; border-bottom: 1px solid #f0d9a8; color: #5c3a00; font-size: 0.85rem; font-weight: 600; }
-      .ms-espiando .ms-btn { flex: none; min-height: 40px; }
+      .ms-espiando { flex-wrap: wrap; }
+      .ms-espiar-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+      .ms-espiando .ms-btn { flex: none; min-height: 48px; }
+      .ms-gaveta-corpo.ms-notas-corpo { padding: 16px; }
+      .ms-notas-corpo > .ms-btn { min-height: 48px; }
+      .ms-nota-label { display: block; font-size: 1rem; font-weight: 600; margin: 0 0 8px; text-transform: none; }
+      .ms-nota-campo { box-sizing: border-box; width: 100%; min-height: 96px; padding: 12px; border: 1px solid #a9a397; border-radius: 12px; font: inherit; resize: vertical; margin-bottom: 8px; }
+      .ms-notas-lista { list-style: none; padding: 0; margin: 16px 0; }
+      .ms-nota-item { display: flex; align-items: flex-start; gap: 8px; border-top: 1px solid #dedbd3; padding: 12px 0; }
+      .ms-nota-item > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+      .ms-nota-item p { white-space: pre-wrap; margin: 0 0 8px; }
+      .ms-nota-item .ms-ico { min-width: 48px; min-height: 48px; flex: none; }
+      .ms-nota-estado { overflow-wrap: anywhere; }
       .ms-cfg-linha { display: flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; margin: 4px 0 0; }
       .ms-cfg-linha input { width: 20px; height: 20px; flex: none; accent-color: #141414; }
       .ms-cfg-res { margin: 0 0 4px 28px; font-size: 0.78rem; }
@@ -295,6 +329,14 @@
       .ms-gaveta-cab h3 { margin: 0; flex: 1; font-size: 1rem; }
       .ms-gaveta-corpo { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 10px 0 16px; }
       .sheet-mensagens .ms-busca-prod { margin-bottom: 4px; }
+      .ms-prod-filtros { margin: 8px 12px; border: 1px solid #dedbd3; border-radius: 12px; }
+      .ms-prod-filtros summary { min-height: 48px; padding: 12px; box-sizing: border-box; cursor: pointer; font-weight: 600; }
+      .ms-prod-opcoes { max-height: 240px; overflow-y: auto; padding: 0 12px 12px; overscroll-behavior: contain; }
+      .ms-prod-grupo-filtro h4 { margin: 12px 0 8px; font-size: 0.9rem; }
+      .ms-prod-chips, .ms-prod-refinos { display: flex; gap: 8px; flex-wrap: wrap; }
+      .ms-prod-chips .ms-btn, .ms-prod-refinos .ms-btn { min-height: 48px; overflow-wrap: anywhere; max-width: 100%; white-space: normal; }
+      .ms-prod-chips .ms-btn[aria-pressed="true"] { background: #171714; color: #fff; }
+      .ms-prod-refinos { padding: 0 12px; }
       .ms-prod-filtro { padding: 0 12px; font-weight: 500; font-size: 0.85rem; }
       .ms-prod-lista, .ms-resp-lista { list-style: none; margin: 0; padding: 0; }
       .ms-prod { display: flex; gap: 12px; padding: 10px 12px; border-bottom: 1px solid #f0ece2; }
@@ -546,6 +588,7 @@
     const conv = el('section', 'ms-conversa'); conv.id = 'ms-conversa'; conv.setAttribute('aria-label', 'Conversa');
     conv.appendChild(vazioConversa_());
     app.append(lat, conv); sheet.appendChild(app); sheet.appendChild(av); o.appendChild(sheet); document.body.appendChild(o);
+    permissaoObserver_.observe(o,{childList:true,subtree:true});
     o.addEventListener('click', clique);
     // v7.21: liga/desliga "marcar como lida no celular" de cada canal
     o.addEventListener('change', async (ev) => {
@@ -622,7 +665,7 @@
   const COR_ETQ_ = { cinza: '#7d776d', ambar: '#c98a00', azul: '#3a6fd8', verde: '#2e8b57', roxo: '#7a4fd1', rosa: '#c2477a' };
   function pontoEtq_(e) { const d = el('span', 'ms-etq-ponto'); d.style.background = COR_ETQ_[e.cor] || COR_ETQ_.cinza; d.setAttribute('aria-hidden', 'true'); return d; }
   function tagEtq_(e) { const t = el('span', 'ms-etq'); t.append(pontoEtq_(e), document.createTextNode(e.nome)); return t; }
-  async function carregarEtiquetas_() { if (etqCarregando) return; etqCarregando = true; const r = await worker_('/msg/etiquetas', 'GET'); etqCarregando = false; ETQ = r && r.ok ? r.etiquetas : []; desenharFiltros(); }
+  async function carregarEtiquetas_() { if(!podeFerramenta_('etiquetas')){ETQ=[];return;} if (etqCarregando) return; etqCarregando = true; const r = await worker_('/msg/etiquetas', 'GET'); etqCarregando = false; ETQ = r && r.ok ? r.etiquetas : []; desenharFiltros(); }
   function faixaEtq_(c) {
     const f = el('div', 'ms-etq-faixa'); f.id = 'ms-etq-faixa';
     if (c.dono) { f.appendChild(el('span', 'ms-dono-tag', 'Responsável: ' + c.dono)); f.appendChild(botao('ms-etq-mais', 'Liberar', 'liberar')); }   // v7.40.6
@@ -630,6 +673,8 @@
     if (c.tamanhos) { const v = el('span', 'ms-veste', 'Veste ' + c.tamanhos); v.id = 'ms-veste'; v.title = 'Tamanhos da ficha do cliente'; f.appendChild(v); }   // v7.40.14
     (c.etiquetas || []).forEach((e) => f.appendChild(tagEtq_(e)));
     f.appendChild(botao('ms-etq-mais', (c.etiquetas || []).length ? 'Mudar etiquetas' : '+ Etiqueta', 'etiquetas'));
+    const n = msgs.filter(m => m.direcao === 'nota').length;
+    if (aberta && aberta.id === c.id && n) f.appendChild(botao('ms-etq-mais', 'Notas · ' + n, 'notas-abrir'));
     return f;
   }
   function abrirEtiquetas_() {
@@ -665,6 +710,7 @@
     FILTROS.forEach(([id, nome]) => {
       if (id === 'ambos' && (canal === 'instagram' || !tipos.msg)) return;
       const n = id === 'nao_lidas' ? c.nao_lidas : id === 'sem_resposta' ? c.sem_resposta : id === 'ambos' ? c.ambos : id === 'encerradas' ? c.encerradas : 0;
+      if(id==='com_notas'&&!podeFerramenta_('notas'))return;
       const b = botao('ms-chip' + (id === 'ambos' && n > 0 ? ' alerta' : ''), nome + (n > 0 ? ' · ' + n : ''), 'filtro', { filtro: id }); b.setAttribute('aria-pressed', String(id === filtro)); f.appendChild(b);
     });
     if (!ETQ) { carregarEtiquetas_(); return; }
@@ -1029,7 +1075,34 @@
     const so = el('label', 'ms-cfg-linha ms-prod-filtro'), chk = el('input'); chk.type = 'checkbox'; chk.id = 'ms-prod-estoque'; chk.checked = true; so.append(chk, document.createTextNode(' Só com estoque'));
     const ul = el('ul', 'ms-prod-lista'); ul.id = 'ms-prod-lista'; ul.setAttribute('aria-live', 'polite');
     const dica = el('p', 'ms-prod-dica', 'Toque na foto para selecionar várias peças e mandar um link só.');
-    corpo.append(q, so, dica, ul);
+    const filtrosProd = el('details', 'ms-prod-filtros'); filtrosProd.id='ms-prod-filtros';
+    const tituloFiltros=el('summary','','Filtros · tamanho, categoria e cor');
+    const opcoesFiltros=el('div','ms-prod-opcoes');opcoesFiltros.id='ms-prod-opcoes';
+    filtrosProd.append(tituloFiltros,opcoesFiltros);
+    const resumoFiltros=el('div','ms-prod-refinos');resumoFiltros.id='ms-prod-refinos';
+    const resultado=el('p','ms-prod-dica');resultado.id='ms-prod-resultado';resultado.setAttribute('role','status');
+    corpo.append(q, so, filtrosProd, resumoFiltros, resultado, dica, ul);
+    const tamanhosCliente=p=>window.TKTamanhos ? TKTamanhos.cliente(String(p.Tamanhos||''),p.Genero).valores.filter(v=>!/consult/i.test(v)) : tamanhosDe_(p);
+    const campos=[{id:'tamanho',nome:'Tamanho',tags:tamanhosCliente},{id:'categoria',nome:'Categoria',tags:p=>String(p.Categoria||'').split(',').map(v=>v.trim()).filter(Boolean)},{id:'cor',nome:'Cor',tags:p=>String(p.Cores||'').split(',').map(v=>v.trim()).filter(Boolean)},{id:'genero',nome:'Para quem',tags:p=>String(p.Genero||'').split(',').map(v=>v.trim()).filter(Boolean)}];
+    const refinados=Object.fromEntries(campos.map(c=>[c.id,new Set()]));
+    const combina=(p,ignorar)=>campos.every(c=>c.id===ignorar||!refinados[c.id].size||c.tags(p).some(v=>refinados[c.id].has(v)));
+    function pintarFiltros(base){
+      opcoesFiltros.textContent='';resumoFiltros.textContent='';
+      campos.forEach(c=>{
+        const valores=new Set(produtosCatalogo_().filter(ativo_).flatMap(c.tags));
+        const sec=el('section','ms-prod-grupo-filtro'),cab=el('h4','',c.nome),chips=el('div','ms-prod-chips');chips.setAttribute('role','group');chips.setAttribute('aria-label','Filtrar por '+c.nome.toLowerCase());sec.append(cab,chips);
+        Array.from(valores).sort((a,b)=>a.localeCompare(b,'pt-BR',{numeric:true})).forEach(v=>{
+          const n=base.filter(p=>combina(p,c.id)&&c.tags(p).includes(v)).length,ativo=refinados[c.id].has(v);
+          if(!n&&!ativo)return;
+          const bt=botao('ms-btn',v+' · '+n,'');bt.dataset.prodFiltro=c.id;bt.dataset.valor=v;bt.setAttribute('aria-pressed',String(ativo));
+          bt.addEventListener('click',()=>{if(ativo)refinados[c.id].delete(v);else refinados[c.id].add(v);pintar();});chips.appendChild(bt);
+          if(ativo){const tirar=botao('ms-btn',c.nome+': '+v+' ×','');tirar.setAttribute('aria-label','Retirar filtro '+c.nome+' '+v);tirar.addEventListener('click',()=>{refinados[c.id].delete(v);pintar();});resumoFiltros.appendChild(tirar);}
+        });
+        if(chips.childElementCount)opcoesFiltros.appendChild(sec);
+      });
+      if(!opcoesFiltros.childElementCount)opcoesFiltros.appendChild(el('p','','Nenhuma opção para esta busca. Apague parte do texto ou limpe os filtros.'));
+      if(campos.some(c=>refinados[c.id].size)){const limpar=botao('ms-btn','Limpar filtros','');limpar.addEventListener('click',()=>{campos.forEach(c=>refinados[c.id].clear());pintar();});resumoFiltros.appendChild(limpar);}
+    }
     const bar = el('div', 'ms-prod-selbar'); bar.id = 'ms-prod-selbar'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Peças selecionadas'); bar.hidden = true;
     const conta = el('span', 'ms-prod-conta'); conta.id = 'ms-prod-conta'; conta.setAttribute('aria-live', 'polite');
     const env = el('div', 'ms-prod-env');
@@ -1041,9 +1114,11 @@
       let ps = produtosCatalogo_().filter(ativo_);
       if (chk.checked) ps = ps.filter((p) => !esgotado_(p));
       if (termos.length) ps = ps.filter((p) => { const t = semAcento_([p.Nome, p.Codigo, p.Categoria, p.Cores, p.Tamanhos, p.Genero].join(' ')); return termos.every((x) => t.indexOf(x) >= 0); });
+      pintarFiltros(ps);ps=ps.filter(p=>combina(p));
+      resultado.textContent=ps.length+' '+(ps.length===1?'peça encontrada':'peças encontradas');
       ul.textContent = '';
       if (!produtosCatalogo_().length) { ul.appendChild(el('li', 'ms-vazio', 'O catálogo ainda está carregando. Tente de novo em alguns segundos.')); return; }
-      if (!ps.length) { ul.appendChild(el('li', 'ms-vazio', termos.length ? 'Nenhum produto com “' + q.value.trim() + '”.' + (chk.checked ? ' Desmarque “Só com estoque” para ver os esgotados.' : '') : 'Nenhum produto ativo.')); return; }
+      if (!ps.length) { ul.appendChild(el('li', 'ms-vazio', termos.length ? 'Nenhum produto com “' + q.value.trim() + '”.' + (chk.checked ? ' Desmarque “Só com estoque” para ver os esgotados.' : '') : 'Nenhuma peça com os filtros escolhidos. Use Limpar filtros ou desmarque Só com estoque.')); return; }
       ps.slice(0, 40).forEach((p) => {
         const li = el('li', 'ms-prod');
         const img = el('img', 'ms-prod-foto'); img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
@@ -1065,7 +1140,7 @@
       });
       if (ps.length > 40) ul.appendChild(el('li', 'ms-vazio', 'Mostrando 40 de ' + ps.length + '. Escreva mais para achar mais rápido.'));
     };
-    q.addEventListener('input', pintar); chk.addEventListener('change', pintar); pintar(); desenharSelProd_();
+    q.addEventListener('input', ()=>{if(q.value.trim().length>=2)filtrosProd.open=true;pintar();}); chk.addEventListener('change', pintar); pintar(); desenharSelProd_();
     setTimeout(() => q.focus(), 0);
   }
   const produtoPorId_ = (id) => produtosCatalogo_().find((p) => String(p.ID) === String(id));
@@ -1289,7 +1364,7 @@
     await carregarLista(true);
   }
   let indexandoNomes = false, nomesConferidos = false;
-  async function nomesGoogle_(){if(indexandoNomes)return;indexandoNomes=true;try{for(let i=0;i<40;i++){const r=await worker_('/msg/pessoas/google','POST',{});if(!r.ok||r.fim)break;}await carregarLista(true);}finally{indexandoNomes=false;}}
+  async function nomesGoogle_(){if(!podeFerramenta_('configuracoes'))return;if(indexandoNomes)return;indexandoNomes=true;try{for(let i=0;i<40;i++){const r=await worker_('/msg/pessoas/google','POST',{});if(!r.ok||r.fim)break;}await carregarLista(true);}finally{indexandoNomes=false;}}
   function pintarLista() {
     const ul = $('ms-lista'), extra = $('ms-extra'); if (!ul || painel === 'metricas' || painel === 'funil') return;
     ul.hidden = false; extra.hidden = false;
@@ -1400,6 +1475,22 @@
     col.appendChild(el('span', 'ms-ctx-leg', m.ctx_texto || TIPO_ROTULO[m.ctx_qtipo] || '[' + (m.ctx_qtipo || 'mensagem') + ']'));
     q.appendChild(col); return q;
   }
+  function botaoBaixarArquivo_(m) {
+    if (!podeFerramenta_('arquivos') || typeof m.id !== 'number') return null;
+    const bt = botao('ms-play', 'Baixar arquivo', '');
+    bt.addEventListener('click', async()=>{
+      const nome = String(m.texto || '').split('\n').find(x=>/\.[a-z0-9]{1,12}$/i.test(x.trim())) || ('arquivo-' + m.id);
+      if(window.TKAndroid && typeof TKAndroid.baixarArquivo === 'function'){TKAndroid.baixarArquivo(m.id,nome);return;}
+      bt.disabled=true;
+      try {
+        const s = getSessao(), r=await fetch(INSTAGRAM_URL+'/msg/midia?id='+m.id+'&baixar=1',{headers:{'X-TK-Whats':s.whatsapp,'X-TK-Sessao':s.sessao},cache:'no-store'});
+        if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.erro||'Arquivo indisponível. A mídia pode ter expirado.');}
+        const blob=await r.blob(), u=URL.createObjectURL(blob),a=el('a');a.href=u;
+        const cd=r.headers.get('Content-Disposition')||'';const utf=/filename\*=UTF-8''([^;]+)/i.exec(cd);a.download=utf?decodeURIComponent(utf[1]):nome;
+        document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000);
+      }catch(e){aviso_(e.message||'Não foi possível baixar o arquivo.');}finally{bt.disabled=false;}
+    }); return bt;
+  }
   function blocoMidia_(m) {
     const tipo = m.tipo, local = m.localUrl || '';
     if (!local && !(m.midia && typeof m.id === 'number')) return null;
@@ -1408,19 +1499,17 @@
       const img = el('img', 'ms-img'); img.alt = tipo === 'figurinha' ? 'Figurinha' : 'Foto'; img.loading = 'lazy';
       if (local) img.src = local; else carregarImg_(img, m.id, false);
       img.addEventListener('click', () => { if (img.src && !img.dataset.erro) abrirLuz_('imagem', img.src); });
-      w.appendChild(img); return w;
+      w.appendChild(img); const baixar=botaoBaixarArquivo_(m);if(baixar)w.appendChild(baixar); return w;
     }
     if (tipo === 'vídeo' || tipo === 'áudio') {
       const video = tipo === 'vídeo';
-      const montarPlayer = (u, auto) => { const p = el(video ? 'video' : 'audio'); p.controls = true; p.preload = 'metadata'; if (video) p.playsInline = true; p.src = u; w.textContent = ''; w.appendChild(p); if (auto) { const r = p.play(); if (r && r.catch) r.catch(() => {}); } };
+      const montarPlayer = (u, auto) => { const p = el(video ? 'video' : 'audio'); p.controls = true; p.preload = 'metadata'; if (video) p.playsInline = true; p.src = u; w.textContent = ''; w.appendChild(p);const baixar=botaoBaixarArquivo_(m);if(baixar)w.appendChild(baixar); if (auto) { const r = p.play(); if (r && r.catch) r.catch(() => {}); } };
       if (local) { montarPlayer(local, false); return w; }
       const bt = botao('ms-play', '', 'x'); bt.removeAttribute('data-ms'); bt.textContent = (video ? '▶ Vídeo' : '▶ Áudio') + (m.midia_seg ? ' · ' + mmss(m.midia_seg) : '');
       bt.addEventListener('click', async () => { bt.disabled = true; bt.textContent = 'Carregando…'; try { montarPlayer(await midiaBlob_(m.id, false), true); } catch (e) { bt.disabled = false; bt.textContent = 'Não foi possível carregar. Tentar de novo'; } });
       w.appendChild(bt); return w;
     }
-    const bt = botao('ms-play', '📄 Baixar ' + (TIPO_ROTULO[tipo] ? tipo : 'arquivo'), 'x'); bt.removeAttribute('data-ms');
-    bt.addEventListener('click', async () => { bt.disabled = true; try { const u = await midiaBlob_(m.id, false), a = document.createElement('a'); a.href = u; a.download = 'arquivo'; document.body.appendChild(a); a.click(); a.remove(); } catch (e) { aviso_('Não foi possível baixar o arquivo.'); } bt.disabled = false; });
-    w.appendChild(bt); return w;
+    const bt=botaoBaixarArquivo_(m); if(bt)w.appendChild(bt);else w.appendChild(el('span','','Arquivo recebido · acesso ao download restrito'));return w;
   }
   /* v7.20: em grupo, quem mandou cada mensagem (nome do WhatsApp; sem nome, o número) com uma cor por pessoa, como no WhatsApp.
    * Menções "@número" viram "@Nome" quando a pessoa já falou na conversa. Mensagens gravadas antes desta versão não têm o autor. */
@@ -1546,6 +1635,7 @@
     timerAgenda_ = setTimeout(() => recarregarAgenda_(conv), Math.min(Math.max(falta, 15000), 2147000000));
   }
   async function recarregarAgenda_(conv) {
+    if(!podeFerramenta_('agenda'))return;
     if (!aberta || aberta.id !== conv) return;
     const r = await worker_('/msg/agendadas?conversa=' + encodeURIComponent(conv), 'GET');
     if (!aberta || aberta.id !== conv || !r.ok) return;
@@ -1763,7 +1853,7 @@
     if (espiando) {
       const e = el('div', 'ms-espiando'); e.setAttribute('role', 'status');
       e.appendChild(el('span', '', 'Espiando: não marca como lida aqui nem no celular.'));
-      e.appendChild(botao('ms-btn prim', 'Atender', 'atender')); pai.appendChild(e);
+      const a = el('div', 'ms-espiar-acoes'); a.append(botao('ms-btn', 'Nota para equipe', 'notas-abrir'), botao('ms-btn prim', 'Atender', 'atender')); e.appendChild(a); pai.appendChild(e);
     }
     const wrap = el('div', 'ms-fio-wrap'), fio = el('div', 'ms-fio'); fio.id = 'ms-fio'; fio.setAttribute('role', 'log'); fio.setAttribute('aria-live', 'polite'); fio.setAttribute('aria-label', 'Mensagens da conversa');
     const pill = botao('ms-nova', '', 'fim'); pill.id = 'ms-nova'; pill.hidden = true;
@@ -1784,7 +1874,7 @@
     const mic = botao('ms-ico', '🎤', 'gravar'); mic.id = 'ms-mic'; mic.setAttribute('aria-label', 'Gravar áudio'); if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder)) mic.hidden = true;
     const bt = botao('ms-enviar', 'Enviar', 'enviar'); bt.id = 'ms-enviar'; bt.disabled = !ta.value.trim() && !anexoPend;
     form.append(clip, arq, ta, mic, bt); pai.appendChild(form);
-    if (espiando) form.hidden = true;        // para responder, toque em Atender (aí marca como lida)
+    if (espiando || !podeFerramenta_('responder')) form.hidden = true;        // para responder, toque em Atender (aí marca como lida)
     const cresce = () => { if (expandirAtalho_(ta)) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); desenharPrevia_(); };
     ta.addEventListener('input', cresce);
     ta.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && window.matchMedia('(pointer: fine)').matches) { ev.preventDefault(); enviar(); } });
@@ -1951,7 +2041,65 @@
     const r = await worker_('/msg/notas', 'POST', { conversa: c.id, texto: texto });
     if (!r.ok) { aviso_(r.erro || 'Não consegui salvar a nota. Tente de novo.'); return; }
     ta.value = ''; if (aberta && aberta.id === c.id) { msgs.push(notaMsg_(r.nota)); pintarFio(true); }
-    alternarNota_(false); aviso_('Nota salva. Só a equipe vê.');
+    atualizarAtalhoNotas_(); alternarNota_(false); aviso_('Nota salva. Só a equipe vê.');
+  }
+  function atualizarAtalhoNotas_() {
+    if (!aberta) return;
+    aberta.notas = msgs.filter(m => m.direcao === 'nota').length;
+    const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(aberta));
+  }
+  function sincronizarNotas_(notas) {
+    const novas = notas.map(notaMsg_);
+    const anteriores = msgs.filter(m => m.direcao === 'nota');
+    if (JSON.stringify(anteriores) === JSON.stringify(novas)) return false;
+    msgs = msgs.filter(m => m.direcao !== 'nota').concat(novas);
+    atualizarAtalhoNotas_(); return true;
+  }
+  async function abrirNotas_() {
+    const c = aberta; if (!c) return;
+    const corpo = gaveta_('Notas da equipe'); if (!corpo) return;
+    corpo.classList.add('ms-notas-corpo');
+    const label = el('label', 'ms-nota-label', 'Nova nota · só a equipe vê');
+    const ta = el('textarea', 'ms-nota-campo'); ta.id = 'ms-nota-interna'; ta.rows = 3; ta.maxLength = 1000; label.htmlFor = ta.id;
+    const salvar = botao('ms-btn prim', 'Salvar nota', ''); salvar.disabled = true;
+    ta.addEventListener('input', () => { salvar.disabled = !ta.value.trim(); });
+    const estado = el('p', 'ms-nota-estado', 'Carregando notas…'); estado.setAttribute('role', 'status');
+    const ul = el('ul', 'ms-notas-lista');
+    corpo.append(label, ta, salvar, estado, ul);
+    function desenhar(notas) {
+      ul.textContent = ''; estado.textContent = notas.length ? '' : 'Nenhuma nota nesta conversa.';
+      notas.slice().reverse().forEach(n => {
+        const li = el('li', 'ms-nota-item'), texto = el('div');
+        texto.append(el('p', '', n.texto), el('small', '', [n.autor, dataFicha_(n.em)].filter(Boolean).join(' · ')));
+        const x = botao('ms-ico', '×', ''); x.title = 'Apagar nota'; x.setAttribute('aria-label', 'Apagar nota de ' + (n.autor || 'Equipe'));
+        x.addEventListener('click', async () => {
+          x.disabled = true; estado.textContent = 'Apagando nota…';
+          const r = await worker_('/msg/notas?conversa=' + c.id + '&id=' + n.id, 'DELETE');
+          if (!corpo.isConnected) return;
+          if (!r.ok) { x.disabled = false; estado.textContent = r.erro || 'Não foi possível apagar. Tente novamente.'; return; }
+          if (aberta && aberta.id === c.id) { sincronizarNotas_(r.notas || []); pintarFio(false); }
+          desenhar(r.notas || []); aviso_('Nota apagada. Exclusão registrada no histórico.');
+        });
+        li.append(texto, x); ul.appendChild(li);
+      });
+    }
+    salvar.addEventListener('click', async () => {
+      const texto = ta.value.trim(); if (!texto || salvar.disabled) return;
+      salvar.disabled = true; ta.disabled = true; estado.textContent = 'Salvando nota…';
+      const r = await worker_('/msg/notas', 'POST', { conversa: c.id, texto });
+      if (!corpo.isConnected) return;
+      ta.disabled = false; salvar.disabled = false;
+      if (!r.ok) { estado.textContent = r.erro || 'Não foi possível salvar. Tente novamente.'; return; }
+      ta.value = ''; salvar.disabled = true;
+      if (aberta && aberta.id === c.id) { msgs.push(notaMsg_(r.nota)); atualizarAtalhoNotas_(); pintarFio(false); }
+      const notas = msgs.filter(m => m.direcao === 'nota').map(m => ({ id: Number(String(m.id).slice(5)), texto: m.texto, autor: m.autor, em: m.enviada_em }));
+      desenhar(notas); estado.textContent = 'Nota salva. Só a equipe vê.'; ta.focus();
+    });
+    const r = await worker_('/msg/notas?conversa=' + c.id, 'GET');
+    if (!corpo.isConnected) return;
+    if (!r.ok) { estado.textContent = r.erro || 'Não foi possível carregar. Feche e tente novamente.'; return; }
+    if (aberta && aberta.id === c.id) { sincronizarNotas_(r.notas || []); pintarFio(false); }
+    desenhar(r.notas || []);
   }
   async function enviar(reenvio) {
     if (cacheConversa) { aviso_('Aguarde atualizar a conversa para responder.'); return; }
@@ -2040,7 +2188,9 @@
   function pararAoVivo() { clearTimeout(timerLive); timerLive = null; }
   function agendar(ms) { clearTimeout(timerLive); timerLive = setTimeout(sondar, ms == null ? espera : ms); }
   function atualizarVivo() { const v = $('ms-vivo'); if (!v) return; v.className = 'ms-ao-vivo' + (offline ? ' off' : ''); v.textContent = offline ? 'Sem conexão…' : '● ao vivo'; }
-  async function sondar() {
+  let sondaEmCurso_ = null;
+  function sondar(){if(sondaEmCurso_)return sondaEmCurso_;sondaEmCurso_=sondarDados_().finally(()=>{sondaEmCurso_=null;});return sondaEmCurso_;}
+  async function sondarDados_() {
     const o = $('overlay-mensagens');
     if (!o || !o.classList.contains('aberto')) { pararAoVivo(); return; }
     if (document.hidden) { agendar(ESPERA_MAX_MS); return; }
@@ -2060,6 +2210,7 @@
     if (r.conversas.some((c) => canal === 'todos' || c.canal === canal)) await carregarLista(false);
     if(aberturaDaSonda!==abrindo){agendar();return;}
     if (aberta) {
+      if (Array.isArray(r.notas) && sincronizarNotas_(r.notas)) pintarFio(false);
       const mudou = r.conversas.find((c) => c.id === aberta.id); if (mudou) aberta = Object.assign({}, aberta, mudou, { nao_lidas: aberta.nao_lidas });
       const fio = $('ms-fio'), novas = r.mensagens.filter((m) => !msgs.some((x) => x.id === m.id));
       const mudancas = r.mensagens.filter((m) => msgs.some((x) => x.id === m.id && (x.status !== m.status)));
@@ -2301,6 +2452,7 @@
     if (ev.target && ev.target.id === 'ms-luz') { fecharLuz_(); return; }
     const b = ev.target.closest('[data-ms]'); if (!b) return;
     const a = b.dataset.ms;
+    const recurso = recursoAcao_(a); if (recurso && !podeFerramenta_(recurso)) { aviso_('Seu acesso não permite usar esta ferramenta.'); return; }
     if (a !== 'menu-geral' && a !== 'menu-conversa') fecharMenu();
     if (painel === 'funil' && (a === 'leitura-cfg' || a === 'selecionar')) { largarFunil_(); chrome_(false); const ul0 = $('ms-lista'); if (ul0) ul0.hidden = false; pintarLista(); }
     if (painel === 'funil' && a === 'atualizar') { abrirFunil_(); return; }
@@ -2375,6 +2527,7 @@
     }
     else if (a === 'gaveta-produtos') abrirProdutos_();
     else if (a === 'gaveta-respostas') abrirRespostas_(false);
+    else if (a === 'notas-abrir') await abrirNotas_();
     else if (a === 'modo-nota') alternarNota_();
     else if (a === 'gaveta-fechar') { fecharGaveta_(); const t = $('ms-texto'); if (t) t.focus(); }
     else if (a === 'resp-editar') abrirRespostas_(true);
@@ -2486,12 +2639,15 @@
     await recarregar(); ligarAoVivo();
     const f = $('ms-fechar'); if (f && larga()) f.focus();
   }
-  if(new URLSearchParams(location.search).get('app')==='mensagens')window.TKMensagensApp={abrirConversa:function(id){if(podeGerir()&&Number.isSafeInteger(id)&&id>0)return abrirConversa(id);}};
+  let atualizacaoImediata_ = false;
+  async function atualizarAgora_(){if(atualizacaoImediata_||!podeGerir()||!$('overlay-mensagens')?.classList.contains('aberto'))return;atualizacaoImediata_=true;clearTimeout(timerLive);try{await carregarLista(false);await sondar();}finally{atualizacaoImediata_=false;}}
+  window.addEventListener('focus',atualizarAgora_);document.addEventListener('visibilitychange',()=>{if(!document.hidden)atualizarAgora_();});
+  if(new URLSearchParams(location.search).get('app')==='mensagens')window.TKMensagensApp={atualizar:atualizarAgora_,abrirConversa:function(id,espiar){if(podeGerir()&&Number.isSafeInteger(id)&&id>0)return abrirConversa(id,espiar===true);}};
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { const o = $('overlay-mensagens'); if (o && o.classList.contains('aberto')) { espera = ESPERA_MS; agendar(300); } else sondarSelo(); } });
   (function init() {
     const botao_ = $('btn-abrir-mensagens'); if (!botao_) return;
     botao_.hidden = false;
-    botao_.addEventListener('click', () => { if (!podeGerir()) { alert('Esta tela é só para o Admin total.'); return; } abrir(); });
+    botao_.addEventListener('click', () => { if (!podeGerir()) { alert('Sua conta não tem acesso a Mensagens.'); return; } abrir(); });
     timerSelo = setTimeout(sondarSelo, 4000);
     const obs = new MutationObserver(() => { const o = $('overlay-mensagens'); if (o && !o.classList.contains('aberto')) { pararAoVivo(); fecharMenu(); } });
     const espiar = () => { const o = $('overlay-mensagens'); if (o) obs.observe(o, { attributes: true, attributeFilter: ['class'] }); };

@@ -33,6 +33,7 @@ class MainActivity:Activity(),InboxView.Events {
     private lateinit var root:FrameLayout
     private var web:WebView?=null
     private var webPanel:LinearLayout?=null
+    private val receivedFiles by lazy { ReceivedFiles(this,scope,{web}) }
     private var chooser:ValueCallback<Array<Uri>>?=null
     private var audioRequest:PermissionRequest?=null
     private var history=emptyList<JSONObject>();private var historyConversation=0L;private var historyBusy=false
@@ -60,6 +61,7 @@ class MainActivity:Activity(),InboxView.Events {
         ContextCompat.registerReceiver(this,changes,IntentFilter(NativeRepository.CHANGED),ContextCompat.RECEIVER_NOT_EXPORTED)
         OneSignal.Notifications.addClickListener(clicks)
         if(pendingClick>0){peeking=pendingPeek;conversation=pendingClick;pendingClick=0}
+        WebKeeper.download={id,name->receivedFiles.choose(id,name)}
         WebKeeper.actions={a->if(a=="atualizar")updater.check() else if(a=="permissoes"){showSetup();setup?.reviewing=true;setup?.refresh()}}
         render();if(SetupGate.ok(this))full(conversation)else showSetup()
         if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync();syncNames()}
@@ -204,12 +206,12 @@ class MainActivity:Activity(),InboxView.Events {
             val json=JSONObject().put("whatsapp",a.owner).put("sessao",a.session).toString()
             w.evaluateJavascript("(function(){if(localStorage.getItem('tm_session'))return false;localStorage.setItem('tm_session',${JSONObject.quote(json)});location.reload();return true})()"){r->if(r!="true")deliverWeb()};return
         }
-        if(webTarget>0){val id=webTarget;w.evaluateJavascript("window.TKMobileOpenConversation && window.TKMobileOpenConversation($id)",null)}
+        if(webTarget>0){val id=webTarget;w.evaluateJavascript("(function(){if(!window.TKMobileOpenConversation)return false;window.TKMobileOpenConversation($id,$peeking);return true})()"){r->if(r=="true"&&webTarget==id)webTarget=0}}
         importWebSession()
     }
     private fun importWebSession(){
         val w=web?:return;if(!trusted(w.url))return
-        w.evaluateJavascript("(function(){try{if(typeof usuarioAdmin==='undefined'||!usuarioAdmin||typeof temPermissao!=='function'||!temPermissao(usuarioAdmin,'gerir_acessos'))return null;return JSON.stringify(getSessao());}catch(e){return null;}})()"){raw->
+        w.evaluateJavascript("(function(){try{if(typeof usuarioAdmin==='undefined'||!usuarioAdmin||typeof temPermissao!=='function'||!(window.TKMensagensAcessos?TKMensagensAcessos.pode('acessar'):temPermissao(usuarioAdmin,'gerir_acessos')))return null;return JSON.stringify(getSessao());}catch(e){return null;}})()"){raw->
             if(raw==null||raw=="null")return@evaluateJavascript
             runCatching{val decoded=org.json.JSONTokener(raw).nextValue() as? String?:return@runCatching;val j=JSONObject(decoded);val a=NativeAuth(j.getString("whatsapp"),j.getString("sessao"),"")
                 if(repo.store.auth()?.session==a.session)return@runCatching
@@ -221,13 +223,13 @@ class MainActivity:Activity(),InboxView.Events {
     private fun external(address:String){val u=Uri.parse(address);if(u.scheme !in listOf("https","http","tel","mailto"))return;runCatching{startActivity(Intent(Intent.ACTION_VIEW,u))}}
     override fun onResume(){super.onResume();activityVisible=true;WebKeeper.attach();checkSetup();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
     override fun onPause(){activityVisible=false;WebKeeper.detach();if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
-    override fun onDestroy(){handler.removeCallbacks(ticker);WebKeeper.actions=null;runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it)};WebKeeper.context?.baseContext=applicationContext;super.onDestroy()}
+    override fun onDestroy(){handler.removeCallbacks(ticker);WebKeeper.actions=null;WebKeeper.download=null;runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it)};WebKeeper.context?.baseContext=applicationContext;super.onDestroy()}
     override fun onSaveInstanceState(out:Bundle){out.putLong("conversation",conversation);out.putBoolean("peeking",peeking);super.onSaveInstanceState(out)}
     @Deprecated("Legacy back API") override fun onBackPressed(){
         val w=web
         if(webPanel?.visibility==View.VISIBLE&&w!=null&&trusted(w.url)){w.evaluateJavascript("window.TKMobileBack ? window.TKMobileBack() : false"){r->if(r!="true")moveTaskToBack(true)}}
         else if(conversation>0)back()else moveTaskToBack(true)
     }
-    @Deprecated("Activity result API") override fun onActivityResult(code:Int,result:Int,data:Intent?){super.onActivityResult(code,result,data);if(code==201&&result==RESULT_OK)data?.data?.let{tools.picked(it)};if(code==100){chooser?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result,data));chooser=null}}
+    @Deprecated("Activity result API") override fun onActivityResult(code:Int,result:Int,data:Intent?){super.onActivityResult(code,result,data);if(code==ReceivedFiles.REQUEST)receivedFiles.result(result,data?.data);if(code==201&&result==RESULT_OK)data?.data?.let{tools.picked(it)};if(code==100){chooser?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result,data));chooser=null}}
     override fun onRequestPermissionsResult(code:Int,p:Array<out String>,r:IntArray){super.onRequestPermissionsResult(code,p,r);if(code==202)tools.audioPermission(r.firstOrNull()==PackageManager.PERMISSION_GRANTED);if(code==101){val request=audioRequest;audioRequest=null;if(r.firstOrNull()==PackageManager.PERMISSION_GRANTED)request?.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))else request?.deny()}}
 }

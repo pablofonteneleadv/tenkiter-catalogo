@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.19] - 2026-10-28
+
+- Notas da equipe em Espiar, filtro Com notas, acessos por ferramenta, downloads e filtros de produtos no atendimento
+
+
 ## [7.40.18] - 2026-10-28
 
 - App Mensagens: Voltar após abrir por notificação permanece na lista e ignora respostas atrasadas; aba Instagram não herda filtros ocultos de grupos ou etiquetas do WhatsApp
