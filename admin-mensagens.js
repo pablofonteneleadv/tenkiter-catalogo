@@ -111,6 +111,7 @@
     if (mesmoDia(d, ontem)) return 'Ontem';
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   }
+  const META_RESPOSTA_MS = 15 * 60000;   // v7.40.12: meta de tempo de resposta; acima disso a linha fica em vermelho
   function espera_(iso) {
     const min = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
     if (isNaN(min)) return '';
@@ -236,6 +237,7 @@
       .ms-previa { color: #4a4a4a; font-size: 0.84rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
       .ms-badge { flex: none; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--laranja, #E67E22); color: #0d0d0d; font-size: 0.76rem; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
       .ms-aguarda { display: block; font-size: 0.74rem; color: #8a3b00; font-weight: 700; margin-top: 1px; }
+      .ms-aguarda.atrasada { color: #b42318; }   /* v7.40.12: passou da meta de resposta (15 min) */
       .ms-tique { font-size: 0.8rem; letter-spacing: -2px; color: #555; margin-right: 4px; } .ms-tique.lida { color: #0b57b0; } .ms-tique.incerta { color: #a33; letter-spacing: 0; }
       .ms-vazio { color: #555; padding: 18px 16px; font-size: 0.88rem; line-height: 1.4; }
       .ms-vazio-conversa { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; color: #666; padding: 24px; }
@@ -843,7 +845,7 @@
     const pr = /^\[(.+)\]$/.exec(c.previa || ''); pv.appendChild(document.createTextNode(pr ? (TIPO_ROTULO[pr[1]] || c.previa) : semFormatacao_(c.previa))); l2.appendChild(pv);
     if (nova) { const bd = el('span', 'ms-badge', c.nao_lidas > 99 ? '99+' : String(c.nao_lidas)); bd.setAttribute('aria-label', c.nao_lidas + ' não lidas'); l2.appendChild(bd); }
     corpo.append(l1, l2); if (l3.firstChild) corpo.appendChild(l3);
-    if (espera) corpo.appendChild(el('span', 'ms-aguarda', 'Falta responder · há ' + espera_(c.ult_entrada_em || c.ultima_em)));
+    if (espera) { const desde = c.ult_entrada_em || c.ultima_em, atrasou = Date.now() - Date.parse(desde) > META_RESPOSTA_MS; corpo.appendChild(el('span', 'ms-aguarda' + (atrasou ? ' atrasada' : ''), (atrasou ? '⚠ Esperando há ' : 'Falta responder · há ') + espera_(desde))); }
     if (c.outro_id) corpo.appendChild(el('span', 'ms-ambos-tag', 'Também no ' + NOME_CANAL[outroCanal_(c)]));
     b.append(av, corpo);
     return li;
