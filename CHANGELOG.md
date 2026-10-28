@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.4 — Etiquetas nas conversas — 2026-10-28
+
+- Conversa: faixa logo abaixo do cabeçalho com as etiquetas da pessoa e "+ Etiqueta". A gaveta tem a **etapa da venda** (uma por vez: Novo cliente, Reserva, Aguardando pagamento, Pago, Enviado) e **outras** (Troca), com Salvar.
+- Lista: até duas etiquetas em cada linha (ponto de cor + nome) e uma fileira de filtros por etiqueta, com a contagem de pessoas.
+- As etiquetas valem para a pessoa, somando os canais vinculados.
+- Servidor: tabelas `msg_etiqueta` e `msg_alvo_etiqueta`, `GET /msg/etiquetas` (cria as padrão na primeira vez), `POST /msg/rotular` e `etiqueta=` em `/msg/conversas`. Teste: `worker_mensagens_conversa` 275.
+
 ## 7.40.3 — Nota interna na conversa — 2026-10-28
 
 - Conversa: botão **Nota** na barra (ao lado de Produtos e Respostas). Com ele ligado, a caixa fica amarela e o texto vira nota interna, que só a equipe vê; nada é enviado ao cliente.

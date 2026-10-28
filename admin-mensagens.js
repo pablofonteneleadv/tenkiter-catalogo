@@ -240,6 +240,15 @@
       .ms-vazio { color: #555; padding: 18px 16px; font-size: 0.88rem; line-height: 1.4; }
       .ms-vazio-conversa { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; color: #666; padding: 24px; }
       /* v7.21: aviso flutuante (antes ficava na coluna da lista e, no celular, sumia com a conversa aberta) */
+      .ms-etq { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; color: #222; border: 1px solid #e3ddd3; background: #fff; border-radius: 10px; padding: 0 7px 0 5px; white-space: nowrap; }
+      .ms-etq-ponto { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+      .ms-chip-etq { display: inline-flex; align-items: center; gap: 6px; }
+      .ms-etq-faixa { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 12px; border-bottom: 1px solid #e3ddd3; background: #f9f7f2; }
+      .ms-etq-mais { background: transparent; border: 0; color: #A85200; font-weight: 600; font-size: 0.8rem; min-height: 32px; padding: 0 4px; cursor: pointer; }
+      .ms-etq-rot { margin: 10px 0 4px; font-size: 0.72rem; font-weight: 700; color: #625c53; text-transform: uppercase; letter-spacing: 0.04em; }
+      .ms-etq-op { display: flex; align-items: center; gap: 10px; min-height: 44px; border-bottom: 1px solid #f0ece5; font-size: 0.92rem; cursor: pointer; }
+      .ms-etq-op input { width: 20px; height: 20px; margin: 0; accent-color: #141414; }
+      .ms-etq-pe { display: flex; gap: 8px; justify-content: flex-end; padding-top: 12px; }
       .ms-bolha.ms-nota { align-self: stretch; max-width: none; background: #fff6d6; border: 1px dashed #e0c56e; color: #2b2410; }
       .ms-nota-rot { display: block; font-size: 0.72rem; font-weight: 700; color: #6b5000; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 2px; }
       .ms-modo-nota textarea, textarea.ms-modo-nota, .ms-modo-nota #ms-texto { background: #fff6d6 !important; border-color: #e0c56e !important; }
@@ -506,6 +515,37 @@
     if (id === 'todos') return CANAIS.reduce((t, [k]) => { const c = contagemDe_(k); Object.keys(vazio).forEach((q) => { t[q] += c[q] || 0; }); return t; }, Object.assign({}, vazio));
     return resumo && resumo.canais[id] ? Object.assign({}, vazio, { conversas: resumo.canais[id].conversas, nao_lidas: resumo.canais[id].naoLidas || 0 }) : vazio;
   }
+  /* v7.40.4: etiquetas */
+  let ETQ = null, etqFiltro = 0, etqCarregando = false;
+  const COR_ETQ_ = { cinza: '#7d776d', ambar: '#c98a00', azul: '#3a6fd8', verde: '#2e8b57', roxo: '#7a4fd1', rosa: '#c2477a' };
+  function pontoEtq_(e) { const d = el('span', 'ms-etq-ponto'); d.style.background = COR_ETQ_[e.cor] || COR_ETQ_.cinza; d.setAttribute('aria-hidden', 'true'); return d; }
+  function tagEtq_(e) { const t = el('span', 'ms-etq'); t.append(pontoEtq_(e), document.createTextNode(e.nome)); return t; }
+  async function carregarEtiquetas_() { if (etqCarregando) return; etqCarregando = true; const r = await worker_('/msg/etiquetas', 'GET'); etqCarregando = false; ETQ = r && r.ok ? r.etiquetas : []; desenharFiltros(); }
+  function faixaEtq_(c) {
+    const f = el('div', 'ms-etq-faixa'); f.id = 'ms-etq-faixa';
+    (c.etiquetas || []).forEach((e) => f.appendChild(tagEtq_(e)));
+    f.appendChild(botao('ms-etq-mais', (c.etiquetas || []).length ? 'Mudar etiquetas' : '+ Etiqueta', 'etiquetas'));
+    return f;
+  }
+  function abrirEtiquetas_() {
+    if (!aberta) return; const corpo = gaveta_('Etiquetas'); if (!corpo) return;
+    const tem = new Set((aberta.etiquetas || []).map((e) => e.id)), lista = ETQ || [];
+    const grupo = (titulo, itens, tipo) => {
+      if (!itens.length) return; corpo.appendChild(el('p', 'ms-etq-rot', titulo));
+      itens.forEach((e) => { const lb = el('label', 'ms-etq-op'), i = el('input'); i.type = tipo; i.name = tipo === 'radio' ? 'ms-etq-venda' : 'ms-etq-' + e.id; i.value = String(e.id); i.checked = tem.has(e.id); lb.append(i, pontoEtq_(e), document.createTextNode(e.nome)); corpo.appendChild(lb); });
+    };
+    grupo('Etapa da venda · uma por vez', lista.filter((e) => e.venda), 'radio');
+    grupo('Outras', lista.filter((e) => !e.venda), 'checkbox');
+    const pe = el('div', 'ms-etq-pe'); pe.append(botao('ms-btn', 'Tirar etapa', 'etq-sem-etapa'), botao('ms-btn prim', 'Salvar', 'etq-salvar')); corpo.appendChild(pe);
+  }
+  async function salvarEtiquetas_() {
+    const g = $('ms-gaveta'); if (!g || !aberta) return;
+    const ids = Array.from(g.querySelectorAll('.ms-etq-op input:checked')).map((i) => Number(i.value));
+    const c = aberta, r = await worker_('/msg/rotular', 'POST', { conversa: c.id, etiquetas: ids });
+    if (!r.ok) { aviso_(r.erro || 'Não salvei as etiquetas. Tente de novo.'); return; }
+    c.etiquetas = r.etiquetas; fecharGaveta_(); const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(c));
+    aviso_('Etiquetas salvas.'); ETQ = null; desenharFiltros(); await carregarLista(false);
+  }
   function desenharFiltros() {
     const f = $('ms-filtros'); if (!f) return;
     const c = contVista || contagemDe_(canal), t = contTipos || { individuais: Math.max(0, (c.conversas || 0) - (c.grupos || 0)), grupos: c.grupos || 0 };
@@ -521,6 +561,11 @@
       const n = id === 'nao_lidas' ? c.nao_lidas : id === 'sem_resposta' ? c.sem_resposta : id === 'ambos' ? c.ambos : id === 'encerradas' ? c.encerradas : 0;
       const b = botao('ms-chip' + (id === 'ambos' && n > 0 ? ' alerta' : ''), nome + (n > 0 ? ' · ' + n : ''), 'filtro', { filtro: id }); b.setAttribute('aria-pressed', String(id === filtro)); f.appendChild(b);
     });
+    if (!ETQ) { carregarEtiquetas_(); return; }
+    if (ETQ.length) {   // v7.40.4: filtro por etiqueta (pessoas)
+      f.appendChild(el('span', 'ms-chip-sep'));
+      ETQ.forEach((e) => { const b = botao('ms-chip ms-chip-etq', '', 'etq', { id: String(e.id) }); b.append(pontoEtq_(e), document.createTextNode(e.nome + (e.pessoas > 0 ? ' · ' + e.pessoas : ''))); b.setAttribute('aria-pressed', String(etqFiltro === e.id)); f.appendChild(b); });
+    }
   }
   function ligadoOuPronto() {
     if (canal === 'todos') return true;
@@ -760,7 +805,7 @@
     b.className = 'ms-conv' + (nova ? ' nova' : ''); if (aberta && aberta.id === c.id) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
     const marcada = !!(selecao && selecao.has(c.id));
     if (selecao) b.setAttribute('aria-pressed', String(marcada)); else b.removeAttribute('aria-pressed');
-    const assinatura = [canal === 'todos' ? c.canal : '', c.nome, c.ultima_em, c.previa, c.nao_lidas, c.ult_dir, c.ult_status, espera ? Math.floor(Date.now() / 60000) : '', aberta && aberta.id === c.id, c.outro_id || '', c.encerrada_motivo || '', selecao ? (marcada ? 'S' : 's') : ''].join('|');
+    const assinatura = [(c.etiquetas || []).map((e) => e.id + e.nome + e.cor).join('|'), canal === 'todos' ? c.canal : '', c.nome, c.ultima_em, c.previa, c.nao_lidas, c.ult_dir, c.ult_status, espera ? Math.floor(Date.now() / 60000) : '', aberta && aberta.id === c.id, c.outro_id || '', c.encerrada_motivo || '', selecao ? (marcada ? 'S' : 's') : ''].join('|');
     if (li.dataset.ass === assinatura) return li;
     li.dataset.ass = assinatura; b.textContent = '';
     let av;
@@ -774,6 +819,7 @@
     if (canal === 'todos' && NOME_CANAL_[c.canal]) l3.appendChild(el('span', 'ms-canal-tag ms-canal-' + c.canal, NOME_CANAL_[c.canal]));
     if (c.encerrada_em && NOME_MOTIVO_[c.encerrada_motivo]) l3.appendChild(el('span', 'ms-motivo-tag ms-motivo-' + c.encerrada_motivo, NOME_MOTIVO_[c.encerrada_motivo]));
     if (c.nome && !c.grupo && /^\d{10,15}$/.test(c.contato || '')) l3.appendChild(el('span', 'ms-fone', foneBonito_(c.contato)));
+    (c.etiquetas || []).slice(0, 2).forEach((e) => l3.appendChild(tagEtq_(e)));
     const l2 = el('span', 'ms-l2'); const pv = el('span', 'ms-previa');
     if (saiu) { pv.appendChild(selo(c.ult_status || 'enviada')); pv.appendChild(document.createTextNode('Você: ')); }
     const pr = /^\[(.+)\]$/.exec(c.previa || ''); pv.appendChild(document.createTextNode(pr ? (TIPO_ROTULO[pr[1]] || c.previa) : semFormatacao_(c.previa))); l2.appendChild(pv);
@@ -1086,7 +1132,7 @@
   async function carregarLista(reset) {
     if(!nomesConferidos){nomesConferidos=true;setTimeout(nomesGoogle_,1500);}
     const mine = ++seqLista, c0 = canal, f0 = filtro, b0 = busca.trim(), t0 = tipoParam_();
-    const path='/msg/conversas?canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : '');
+    const path='/msg/conversas?canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : '') + (etqFiltro ? '&etiqueta=' + etqFiltro : '');
     const salvo = APP_RECENTES && reset ? await recentes_(path) : null;
     if (salvo && mine===seqLista) { lista=salvo.conversas;contVista=salvo.contagens||null;contTipos=salvo.tipos||null;desenharFiltros();pintarLista();$('ms-extra').textContent='Conversas recentes · atualizando…'; }
     const r = await worker_(path, 'GET');
@@ -1309,6 +1355,7 @@
     if ($('ms-gaveta')) fecharGaveta_();
     const pai = $('ms-conversa'); pai.textContent = '';
     pai.appendChild(cabecalhoConversa(c));
+    if (!c.grupo) pai.appendChild(faixaEtq_(c));
     if (c.outro_id) {
       const f = el('div', 'ms-faixa ambos'); f.appendChild(el('span', '', 'Esta pessoa também está falando pelo ' + NOME_CANAL[outroCanal_(c)] + '.'));
       f.appendChild(botao('ms-btn', 'Abrir', 'abrir-outro', { id: String(c.outro_id), canal: outroCanal_(c) })); pai.appendChild(f);
@@ -1702,6 +1749,10 @@
       if (selecao) { selecao.clear(); desenharSelbar_(); }
       fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true);
     }
+    else if (a === 'etq') { const id = Number(b.dataset.id); etqFiltro = etqFiltro === id ? 0 : id; desenharFiltros(); await carregarLista(true); }
+    else if (a === 'etiquetas') abrirEtiquetas_();
+    else if (a === 'etq-salvar') salvarEtiquetas_();
+    else if (a === 'etq-sem-etapa') { const g = $('ms-gaveta'); if (g) g.querySelectorAll('input[name=ms-etq-venda]').forEach((i) => { i.checked = false; }); }
     else if (a === 'filtro') { filtro = filtro === b.dataset.filtro ? '' : b.dataset.filtro; if (selecao) { selecao.clear(); desenharSelbar_(); } fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true); }
     else if (a === 'abrir') { if (toqueLongo) { toqueLongo = false; return; } if (selecao) { const id = Number(b.dataset.id); if (selecao.has(id)) selecao.delete(id); else selecao.add(id); pintarLista(); desenharSelbar_(); } else abrirConversa(Number(b.dataset.id)); }
     else if (a === 'selecionar') iniciarSelecao_(0);

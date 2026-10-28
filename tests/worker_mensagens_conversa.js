@@ -818,6 +818,14 @@ function d1() {
   const nOk = await A('POST', '/msg/notas', { conversa: nConv, texto: 'Confirmar o Pix antes de separar' });
   const nLe = await A('GET', '/msg/mensagens?conversa=' + nConv);
   chk('nota salva volta junto com a conversa e nunca vira mensagem', nOk.j.ok && nLe.j.notas.some((n) => n.texto === 'Confirmar o Pix antes de separar') && !nLe.j.mensagens.some((m) => m.texto === 'Confirmar o Pix antes de separar'), [nOk.j, nLe.j.notas]);
+  // v7.40.4: etiquetas
+  const eL = await A('GET', '/msg/etiquetas'), eId = (n) => eL.j.etiquetas.find((e) => e.nome === n).id;
+  chk('etiquetas padrão criadas na primeira vez', eL.j.ok && eL.j.etiquetas.length === 6 && eL.j.etiquetas[0].nome === 'Novo cliente');
+  const eR = await A('POST', '/msg/rotular', { conversa: nConv, etiquetas: [eId('Novo cliente'), eId('Reserva'), eId('Troca')] });
+  chk('de venda fica uma só (a última) e as outras somam', eR.j.ok && eR.j.etiquetas.map((e) => e.nome).sort().join() === 'Reserva,Troca', eR.j);
+  const eF = await A('GET', '/msg/conversas?canal=todos&etiqueta=' + eId('Reserva'));
+  chk('filtro por etiqueta traz a conversa com as etiquetas', eF.j.ok && eF.j.conversas.some((c) => c.id === nConv && c.etiquetas.length === 2), eF.j.conversas.length);
+  chk('conversa aberta traz as etiquetas', (await A('GET', '/msg/mensagens?conversa=' + nConv)).j.conversa.etiquetas.length === 2);
   // Android: paginação estável para horários iguais, sem omitir conversas ou mensagens.
   const isoPag='2099-01-01T00:00:00.000Z';
   for(let i=0;i<55;i++)await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em) VALUES('whatsapp1',?,?,1,1,?)").bind('paginacao-'+i+'@g.us','Grupo simulado '+i,isoPag).run();
