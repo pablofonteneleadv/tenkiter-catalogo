@@ -68,7 +68,7 @@ open class NativeApi {
         repeat(4){
             require(url.protocol=="https")
             val c=(url.openConnection() as HttpURLConnection).apply{
-                connectTimeout=10000;readTimeout=when{address.contains("/msg/enviar")->75000;address.contains("/msg/contatos/")->110000;else->15000};instanceFollowRedirects=false
+                connectTimeout=10000;readTimeout=when{(address.contains("/msg/enviar")||address.contains("/msg/contexto"))->75000;(address.contains("/msg/contatos/")||address.contains("/msg/pessoas/google"))->110000;else->15000};instanceFollowRedirects=false
                 requestMethod=method?:if(payload==null)"GET" else "POST"
                 setRequestProperty("Accept","application/json");credentials.forEach{(k,v)->setRequestProperty(k,v)}
             }

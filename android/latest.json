@@ -1,8 +1,8 @@
 {
-  "versionCode": 5,
-  "versionName": "2.2.0",
-  "bytes": 4554309,
-  "sha256": "844da43301ae0a3452b2d3b41cb8cef1f84a9b59841f01f1839b6e9940d28cbd",
-  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.2.0/TENKiTER-Mensagens-2.2.0.apk",
-  "notes": "Seleção por toque longo ou Selecionar, Encerrar visível e ferramentas do atendimento no app: painel, exportações, produtos, respostas, anexos, leitura, conexões e Google Contatos com progresso. Prévia de links, histórico anterior e notificações preservadas."
+  "versionCode": 6,
+  "versionName": "2.3.0",
+  "bytes": 4567697,
+  "sha256": "7ec49fa962c931036805d007cdcbc01bda862237fceb55fb1acd204cb754d3fa",
+  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.3.0/TENKiTER-Mensagens-2.3.0.apk",
+  "notes": "Pessoas com canais em bloco, grupos desligados por padrão, contadores corrigidos e cadastro de nome/WhatsApp/Instagram. Conversa e produtos repaginados, nomes do Google e contexto de foto/vídeo de stories."
 }

@@ -41,7 +41,7 @@ class NativeInboxTest {
         val auth=NativeAuth("88999990000","fake-session","Pablo")
         for((w,h)in listOf(390 to 844,412 to 915,320 to 700,1440 to 900)){
             layout(v,w,h)
-            v.render(auth,true,(1L..30L).map{conv(it).put("nome",if(it==1L)"Maria · Cliente"else"Cliente de demonstração $it").put("nao_lidas",if(it%3L==0L)0 else 2)},0,emptyList(),emptyList(),true,"Atualizado às 05:46")
+            v.render(auth,true,(1L..30L).map{conv(it).put("contato","55889999"+it.toString().padStart(5,'0')).put("nome",if(it==1L)"Maria · Cliente"else"Cliente de demonstração $it").put("nao_lidas",if(it%3L==0L)0 else 2)},0,emptyList(),emptyList(),true,"Atualizado às 05:46")
             layout(v,w,h)
             val update=all(v).filterIsInstance<Button>().first{it.text=="Atualizar app"};assertTrue(update.height>=48);update.performClick()
             assertTrue(all(v).filterIsInstance<android.widget.TextView>().any{it.text=="Conversas"})
@@ -65,6 +65,27 @@ class NativeInboxTest {
         assertEquals(View.GONE,choice.visibility);input.setText(BuildConfig.SITE_URL+"/p/TK-1");assertEquals(View.VISIBLE,choice.visibility);assertFalse(choice.isChecked);choice.performClick();assertTrue(a.getSharedPreferences("link-preview",0).getBoolean("whatsapp1",false));assertFalse(a.getSharedPreferences("link-preview",0).getBoolean("whatsapp2",false));layout(v,390,844);snapshot(v,"conversation-link-preview",390,844)
         input.setText("sem link");assertEquals(View.GONE,choice.visibility)
         v.render(auth,true,listOf(conv().put("canal","instagram")),1,listOf(msg()),emptyList(),true,"Atualizado");v.insert("https://example.invalid");assertFalse(all(v).filterIsInstance<android.widget.CheckBox>().any{it.isShown&&it.text.toString().startsWith("Mostrar prévia")})
+    }
+    @Test fun linkedChannelsMoveTogetherAndGroupsStartHidden(){
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","test","Pablo")
+        val linked=(1L..3L).map{conv(it).put("pessoa","client-one").put("canal",listOf("whatsapp1","whatsapp2","instagram")[(it-1).toInt()]).put("ultima_em","2026-10-28T00:0${it}:00Z")}
+        val unrelated=conv(4).put("pessoa","client-two").put("ultima_em","2026-10-28T00:02:30Z");val group=conv(5).put("grupo",1)
+        v.render(auth,true,linked+unrelated+group,0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844)
+        fun ids()=all(v).filterIsInstance<android.widget.ListView>().first().adapter.let{ad->(0 until ad.count).map{ad.getItemId(it)}}
+        assertEquals(listOf(3L,2L,1L,4L),ids());assertFalse(all(v).filterIsInstance<Button>().any{it.tag=="Nos 2 WhatsApp"});assertTrue(all(v).filterIsInstance<Button>().first{it.tag=="Todas"}.text.startsWith("Todas · 2"));snapshot(v,"inbox-linked-channels",390,844)
+        val newest=JSONObject(linked[0].toString()).put("ultima_em","2026-10-28T00:04:00Z");v.render(auth,true,listOf(newest)+linked.drop(1)+unrelated+group,0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844);assertEquals(listOf(1L,3L,2L,4L),ids())
+        all(v).filterIsInstance<Button>().first{it.tag=="Grupos"}.performClick();assertTrue(ids().contains(5L))
+    }
+    @Test fun unreadIsAlwaysPartOfWaitingAndClosedNeverCounts(){
+        val a=conv(1).put("nao_lidas",3).put("ult_dir","saida");val b=conv(2).put("nao_lidas",0).put("ult_dir","entrada");val closed=conv(3).put("encerrada_em","2026-10-28").put("nao_lidas",2)
+        assertTrue(InboxRules.waiting(a));assertTrue(InboxRules.waiting(b));assertFalse(InboxRules.waiting(closed));assertFalse(InboxRules.matches(closed,"Não lidas","Todos"))
+        assertEquals(2,InboxRules.people(listOf(a,b).mapIndexed{i,c->c.put("pessoa","person-$i")}))
+    }
+    @Test fun conversationUsesContactHeaderAndRealContextWithoutNullText(){
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","test","Pablo")
+        val context=msg().put("ctx_tipo","story").put("ctx_midia",1).put("ctx_mtipo","video").put("ctx_texto",JSONObject.NULL)
+        v.render(auth,true,listOf(conv()),1,listOf(context),emptyList(),true,"Atualizado");layout(v,390,844)
+        assertFalse(all(v).filterIsInstance<android.widget.TextView>().any{it.isShown&&it.text.contains("null")});assertTrue(all(v).filterIsInstance<Button>().any{it.text=="▶ Ver vídeo do story"});assertTrue(all(v).filterIsInstance<android.widget.ImageView>().any{it.contentDescription=="Prévia do story respondido"});assertFalse(all(v).filterIsInstance<Button>().first{it.text=="Atualizar app"}.isShown);snapshot(v,"conversation-story-video",390,844)
     }
     @Test fun encryptedAuthAndDatabaseSurviveReopenAndLogout(){
         val c=activity;c.deleteDatabase("mensagens-local.db");c.getSharedPreferences("native-auth",0).edit().clear().commit()
@@ -161,7 +182,7 @@ class NativeInboxTest {
         layout(v,390,844)
         val list=all(v).filterIsInstance<android.widget.ListView>().first()
         assertEquals(2L,list.adapter.getItemId(0));assertEquals(3L,list.adapter.getItemId(1))
-        assertTrue(all(v).filterIsInstance<android.widget.TextView>().any{it.text.toString().contains("Mais recentes primeiro")})
+        assertTrue(all(v).filterIsInstance<android.widget.TextView>().any{it.text.toString().contains("mais recentes primeiro",true)})
         all(v).filterIsInstance<Button>().first{it.tag=="Não lidas"}.performClick()
         assertEquals(2,list.adapter.count);assertEquals(3L,list.adapter.getItemId(0));assertEquals(1L,list.adapter.getItemId(1))
         val first=list.adapter.getView(1,null,list)
@@ -206,7 +227,7 @@ class NativeInboxTest {
         val answered=conv(3).put("grupo",0).put("ult_dir","saida")
         v.render(auth,true,listOf(waiting,group,answered),0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844)
         val list=all(v).filterIsInstance<android.widget.ListView>().first()
-        all(v).filterIsInstance<Button>().first{it.tag=="Falta responder"}.performClick();assertEquals(1,list.adapter.count);assertEquals(1L,list.adapter.getItemId(0))
+        all(v).filterIsInstance<Button>().first{it.tag=="Falta responder"}.performClick();assertEquals(2,list.adapter.count);assertEquals(setOf(1L,3L),(0 until list.adapter.count).map{list.adapter.getItemId(it)}.toSet())
         all(v).filterIsInstance<Button>().first{it.tag=="Falta responder"}.performClick()
         layout(v,390,844)
         val child=list.getChildAt(0);assertNotNull(child)
@@ -220,7 +241,7 @@ class NativeInboxTest {
         assertEquals(1,events.bulkIds.size);assertEquals("encerrar",events.bulkAction)
         all(v).filterIsInstance<Button>().first{it.text=="Lidas"&&it.isShown}.performClick()
         assertEquals(1,events.bulkIds.size);assertEquals("lidas",events.bulkAction)
-        assertTrue(InboxRules.waiting(waiting));assertFalse(InboxRules.waiting(group));assertFalse(InboxRules.waiting(answered))
+        assertTrue(InboxRules.waiting(waiting));assertTrue(InboxRules.waiting(group));assertTrue(InboxRules.waiting(answered))
     }
     @Test fun readGuardAndBatchUseTheSameServerRoutesWithoutAutomaticReply(){
         val a=activity;a.deleteDatabase("mensagens-local.db");a.getSharedPreferences("native-auth",0).edit().clear().commit()

@@ -119,9 +119,16 @@ class NativeRepository internal constructor(private val context:Context,val stor
         }catch(e:AccessRevoked){logout();throw e}
     }
     fun administration(path:String,body:JSONObject?=null):JSONObject=lock.withLock{
-        require(path.substringBefore('?') in setOf("/msg/config","/msg/metricas","/msg/resumo","/msg/diagnostico","/msg/instagram/situacao","/msg/instagram/segredo","/msg/instagram/assinar","/msg/ligar","/msg/pausar","/msg/contatos/situacao","/msg/contatos/config","/msg/contatos/backup","/msg/contatos/relatorio","/msg/contatos/limpeza","/msg/contatos/auto","/msg/stories"))
+        require(path.substringBefore('?') in setOf("/msg/config","/msg/pessoa","/msg/contexto","/msg/pessoas/google","/msg/conversas","/msg/metricas","/msg/resumo","/msg/diagnostico","/msg/instagram/situacao","/msg/instagram/segredo","/msg/instagram/assinar","/msg/ligar","/msg/pausar","/msg/contatos/situacao","/msg/contatos/config","/msg/contatos/backup","/msg/contatos/relatorio","/msg/contatos/limpeza","/msg/contatos/auto","/msg/stories"))
         val a=store.auth()?:throw AccessRevoked()
         try{api.call(path,a,body).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
+    }
+    fun refreshPerson(result:JSONObject){lock.withLock{val a=store.auth()?:throw AccessRevoked();val rows=result.optJSONArray("canais")?:return@withLock;for(i in 0 until rows.length())store.putConversation(a,rows.getJSONObject(i));changed()}}
+    fun repairContext(id:Long){val stamp=store.stampedAuth();val a=stamp.first?:return;api.call("/msg/contexto",a,JSONObject().put("conversa",id));if(store.generation==stamp.second&&store.auth()?.owner==a.owner)changed()}
+    fun googleNames(){
+        val a=store.auth()?:throw AccessRevoked()
+        for(i in 0 until 40){val r=api.call("/msg/pessoas/google",a,JSONObject());if(!store.current(a))throw AccessRevoked();if(r.optBoolean("fim"))break}
+        lock.withLock{fullAt=0};changed()
     }
     fun export(query:String):NativeApi.Export=lock.withLock{
         val a=store.auth()?:throw AccessRevoked()

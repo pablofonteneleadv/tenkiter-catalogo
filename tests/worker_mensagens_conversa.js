@@ -109,7 +109,7 @@ function d1() {
   await A('POST', '/msg/lida', { conversa: c.id, naoLida: true });
   chk('marcar como não lida volta a 1', (await DB.prepare('SELECT nao_lidas FROM msg_conversa WHERE id=?').bind(c.id).first()).nao_lidas === 1);
   await wh('/wh/wafly/1/' + seg, msg('G9', '120363-group', 'oi grupo', { isGroup: true, chatName: 'Clientes TK', momment: em(9) }));
-  chk('grupo não entra em "falta responder"', (await A('GET', '/msg/conversas?canal=whatsapp1&filtro=sem_resposta')).j.contagens.sem_resposta === 1 && (await A('GET', '/msg/conversas?canal=whatsapp1&filtro=grupos')).j.conversas.length === 1);
+  chk('grupo não lido também precisa de resposta quando incluído', (await A('GET', '/msg/conversas?canal=whatsapp1&filtro=sem_resposta')).j.contagens.sem_resposta === 2 && (await A('GET', '/msg/conversas?canal=whatsapp1&filtro=grupos')).j.conversas.length === 1);
   chk('busca encontra por texto de qualquer mensagem da conversa', (await A('GET', '/msg/conversas?canal=whatsapp1&busca=entregam')).j.conversas.length === 1);
 
   // ---- entrega/leitura ----
@@ -457,14 +457,14 @@ function d1() {
   chk('mesma pessoa nos 2 WhatsApp (com e sem o 9): cada conversa aponta para a outra', jw1 && jw2 && jw1.outro_id === jw2.id && jw2.outro_id === jw1.id, [jw1 && jw1.outro_id, jw2 && jw2.id]);
   chk('quem só fala por um WhatsApp não aponta para nada', lw1.j.conversas.filter((x) => x.contato !== '5588911110001').every((x) => x.outro_id == null));
   const amb = await A('GET', '/msg/conversas?canal=todos&filtro=ambos');
-  chk('filtro "Nos 2 WhatsApp" traz as duas conversas da pessoa e a contagem bate', amb.j.conversas.length === 2 && amb.j.contagens.ambos === 2, [amb.j.conversas.map((x) => x.contato), amb.j.contagens]);
+  chk('filtro "Nos 2 WhatsApp" traz as duas conversas da pessoa e a contagem bate', amb.j.conversas.length === 2 && amb.j.contagens.ambos === 1, [amb.j.conversas.map((x) => x.contato), amb.j.contagens]);
   chk('grupo nunca entra na conta de "mesma pessoa"', amb.j.conversas.every((x) => !x.grupo));
   // encerrar / reabrir
   const antesE = (await A('GET', '/msg/conversas?canal=todos')).j;
   const enc = await A('POST', '/msg/encerrar', { conversas: [jw1.id, jw2.id] });
-  chk('encerrar várias de uma vez', enc.j.ok && enc.j.alteradas === 2 && enc.j.contagens.todos.encerradas >= 2, enc.j);
+  chk('encerrar várias de uma vez', enc.j.ok && enc.j.alteradas === 2 && enc.j.contagens.todos.encerradas >= 1, enc.j);
   const depoisE = (await A('GET', '/msg/conversas?canal=todos')).j;
-  chk('encerradas saem de Todas e da contagem de conversas', !depoisE.conversas.some((x) => x.id === jw1.id || x.id === jw2.id) && depoisE.contagens.conversas === antesE.contagens.conversas - 2, [antesE.contagens, depoisE.contagens]);
+  chk('encerradas saem de Todas e da contagem de conversas', !depoisE.conversas.some((x) => x.id === jw1.id || x.id === jw2.id) && depoisE.contagens.conversas === antesE.contagens.conversas - 1, [antesE.contagens, depoisE.contagens]);
   const ab = (await A('GET', '/msg/conversas?canal=todos&filtro=encerradas')).j;
   chk('filtro Encerradas mostra as duas', ab.conversas.length === 2 && ab.conversas.every((x) => x.encerrada_em));
   chk('busca acha também as encerradas', (await A('GET', '/msg/conversas?canal=todos&busca=Joana')).j.conversas.some((x) => x.id === jw1.id));
@@ -733,6 +733,15 @@ function d1() {
   await zPost(zEv({ id: 'z2', platformMessageId: 'mid_story', text: 'valor?' }));
   const zst = await DB.prepare("SELECT ctx_tipo, ctx_post FROM msg_mensagem WHERE ext_id='mid_story'").first();
   chk('resposta a story publicado pelo site: liga a mensagem à nossa postagem (foto e produto)', zst && zst.ctx_tipo === 'story' && zst.ctx_post === poId, zst);
+  await zPost(zEv({id:'z-video-context',platformMessageId:'mid_story_video',text:'Vídeo',metadata:{storyReply:{storyId:'EXTERNAL-VIDEO',storyUrl:'https://cdn.fake/context-video.mp4'}}}));
+  const zv=await DB.prepare("SELECT id,ctx_chave,ctx_tipo FROM msg_mensagem WHERE ext_id='mid_story_video'").first();
+  chk('Instagram copia vídeo do story vindo nos metadados do webhook',zv&&zv.ctx_tipo==='story'&&zv.ctx_chave.endsWith('.mp4'),zv);
+  const zvApi=(await A('GET','/msg/mensagens?conversa='+zc1.id)).j.mensagens.find(x=>x.id===zv.id);
+  chk('API informa tipo vídeo no contexto para o APK',zvApi.ctx_mtipo==='video'&&zvApi.ctx_midia===1,zvApi);
+  await DB.prepare("UPDATE msg_mensagem SET ctx_chave='',ctx_tipo='' WHERE id=?").bind(zv.id).run();
+  const repairFetch=globalThis.fetch;globalThis.fetch=async(u,init)=>/\/inbox\/conversations\/conv_9\/messages\?/.test(String(u))?Response.json({messages:[{id:'mid_story_video',storyReply:{storyId:'EXTERNAL-VIDEO',storyUrl:'https://cdn.fake/context-video.mp4'}}]}):repairFetch(u,init);
+  const repaired=await A('POST','/msg/contexto',{conversa:zc1.id});
+  chk('contexto de vídeo antigo pode ser recuperado sem responder ao cliente',repaired.j.ok&&repaired.j.atualizadas===1&&(await DB.prepare('SELECT ctx_chave FROM msg_mensagem WHERE id=?').bind(zv.id).first()).ctx_chave.endsWith('.mp4'),repaired.j);globalThis.fetch=repairFetch;
   await DB.prepare("UPDATE postagem SET ig_id='OUTRO' WHERE id=?").bind(poId).run();
   await zPost(zEv({ id: 'z3', platformMessageId: 'mid_story2', text: 'tem P?' }));
   const zst2 = await DB.prepare("SELECT ctx_tipo, ctx_post, ctx_chave FROM msg_mensagem WHERE ext_id='mid_story2'").first();
@@ -816,5 +825,53 @@ function d1() {
   const mp1=(await A('GET','/msg/mensagens?conversa='+cidPag)).j.mensagens;
   const oldestPg=mp1[0],mp2=(await A('GET','/msg/mensagens?conversa='+cidPag+'&antes='+encodeURIComponent(oldestPg.enviada_em)+'&antesId='+oldestPg.id)).j.mensagens;
   chk('paginação do histórico com mesmo horário não omite mensagens',mp1.length===100&&mp2.length===5&&new Set([...mp1,...mp2].map(m=>m.id)).size===105);
+  // Identidade, nomes Google e limites dos contadores: somente serviços falsos.
+  const beforePeopleFetch=globalThis.fetch;let googleCalls=0;
+  await cfg('contatos_url','https://script.google.com/macros/s/pessoas-index-test/exec');await cfg('contatos_chave','google-test-only');
+  globalThis.fetch=async(u,init)=>{
+    if(String(u).includes('/macros/s/pessoas-index-test/')){const b=JSON.parse(init.body);chk('índice Google apenas lê, nunca altera contatos',b.acao==='listar');googleCalls++;return Response.json({ok:true,contatos:[{r:'people/test',n:'Nome completo do Google',f:['+55 88 98901-2345','+55 88 98901-2346']}],total:1,proxima:''});}
+    return beforePeopleFetch(u,init);
+  };
+  await wh('/wh/wafly/1/'+seg,msg('PERSON-A','5588989012345','Oi',{momment:Date.now()}));
+  await wh('/wh/wafly/2/'+seg,msg('PERSON-B','5588989012345','Oi também',{momment:Date.now()}));
+  const waPerson=await DB.prepare("SELECT id FROM msg_conversa WHERE canal='whatsapp1' AND contato='5588989012345'").first();
+  let indexed=await A('POST','/msg/pessoas/google',{});chk('índice Google conclui só uma página',indexed.j.fim&&googleCalls===1,indexed.j);
+  let indexedConv=(await A('GET','/msg/mensagens?conversa='+waPerson.id)).j.conversa;
+  chk('nome do Google passa a aparecer no atendimento',indexedConv.nome==='Nome completo do Google',indexedConv);
+  let invalidPerson=await A('POST','/msg/pessoa',{conversa:waPerson.id,nome:'Manual',whatsapp:'abc'});chk('não permite cadastro de WhatsApp inválido',invalidPerson.r.status===400);
+  await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em,nao_lidas,ult_dir) VALUES('instagram','person-ig','Nome parecido',0,1,?,2,'entrada')").bind(new Date().toISOString()).run();
+  const igPerson=await DB.prepare("SELECT id FROM msg_conversa WHERE contato='person-ig'").first();
+  let linkedPerson=await A('POST','/msg/pessoa',{conversa:waPerson.id,nome:'Nome confirmado',whatsapp:'+55 88 98901-2345',segundo:'+55 88 98901-2346',vincular:[igPerson.id]});
+  chk('vínculo explícito reúne WhatsApp1, WhatsApp2 e Instagram',linkedPerson.j.ok&&linkedPerson.j.canais.length===3&&linkedPerson.j.canais.every(x=>x.pessoa===linkedPerson.j.pessoa&&x.nome==='Nome confirmado'),linkedPerson.j);
+  await wh('/wh/wafly/1/'+seg,msg('PERSON-C','5588989012346','Segundo número',{momment:Date.now()}));
+  const personAfter=(await A('GET','/msg/pessoa?conversa='+waPerson.id)).j;
+  chk('segundo número futuro entra no cadastro vinculado',personAfter.canais.length===4&&personAfter.canais.every(x=>x.nome==='Nome confirmado'),personAfter);
+  let unreadPerson=(await A('GET','/msg/conversas?canal=todos&busca=Nome%20confirmado')).j.conversas;
+  chk('busca encontra nome manual nos quatro canais',unreadPerson.length===4);
+  for(const canal of ['todos','whatsapp1','whatsapp2','instagram']){
+    const totals=(await A('GET','/msg/conversas?canal='+canal)).j.contagens;chk('não lidas é subconjunto de falta responder em '+canal,totals.nao_lidas<=totals.sem_resposta,totals);
+  }
+  const beforeRead=(await A('GET','/msg/conversas?canal=instagram')).j.contagens.sem_resposta;
+  await A('POST','/msg/lida',{conversa:igPerson.id});
+  chk('marcar lida sem resposta mantém atendimento pendente',(await A('GET','/msg/conversas?canal=instagram')).j.contagens.sem_resposta===beforeRead);
+  // Resposta a status com referência dentro de text e vídeo do contexto.
+  await wh('/wh/wafly/1/'+seg,msg('CTX-NESTED','5588989012345','',{isStatusReply:true,text:{message:'Vídeo',referenceMessageId:'STATUS-EXACT',referenceMessage:{video:{videoUrl:'https://cdn.fake/quoted-status.mp4',mimeType:'video/mp4'}}},momment:Date.now()}));
+  const exact=await DB.prepare("SELECT id,ctx_ref,ctx_chave FROM msg_mensagem WHERE ext_id='CTX-NESTED'").first();
+  chk('Wafly lê referência aninhada e preserva vídeo exato',exact.ctx_ref==='STATUS-EXACT'&&exact.ctx_chave.endsWith('.mp4'),exact);
+  const ctxResponse=await w.fetch(new Request('https://ig.test/msg/midia?id='+exact.id+'&ctx=1',{headers:{'X-TK-Whats':'88999990000','X-TK-Sessao':'tk2.admin'}}),env,{});
+  chk('vídeo do status é servido autenticado como vídeo',ctxResponse.status===200&&ctxResponse.headers.get('content-type')==='video/mp4');
+  await wh('/wh/wafly/1/'+seg,msg('OWN-STATUS-VIDEO','status@broadcast','',{fromMe:true,video:{videoUrl:'https://cdn.fake/own-status.mp4',mimeType:'video/mp4'},text:undefined,momment:Date.now()}));
+  await wh('/wh/wafly/1/'+seg,msg('STATUS-REF-REPLY','5588989012345','',{isStatusReply:true,text:{message:'Esse vídeo',referenceMessageId:'OWN-STATUS-VIDEO'},momment:Date.now()}));
+  const statusRef=await DB.prepare("SELECT ctx_chave,ctx_aprox FROM msg_mensagem WHERE ext_id='STATUS-REF-REPLY'").first();
+  chk('WhatsApp1 usa referência do status capturado sem escolher o mais recente',statusRef.ctx_chave.endsWith('.mp4')&&statusRef.ctx_aprox===0,statusRef);
+  await wh('/wh/wafly/1/'+seg,msg('STATUS-OBJECT','5588989012345','Esse',{isStatusReply:false,statusReply:{referenceMessageId:'STATUS-OBJECT-ID',mediaUrl:'https://cdn.fake/object-status.mp4',mimeType:'video/mp4'},momment:Date.now()}));
+  const objectStatus=await DB.prepare("SELECT ctx_tipo,ctx_chave FROM msg_mensagem WHERE ext_id='STATUS-OBJECT'").first();
+  chk('statusReply próprio também classifica e copia vídeo mesmo sem flag',objectStatus.ctx_tipo==='story'&&objectStatus.ctx_chave.endsWith('.mp4'),objectStatus);
+  globalThis.fetch=beforePeopleFetch;
+  await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em) VALUES('instagram','ig-without-wa','Sem número informado',0,1,?)").bind(new Date().toISOString()).run();
+  const noWa=(await DB.prepare("SELECT id FROM msg_conversa WHERE contato='ig-without-wa'").first()).id;
+  chk('Instagram sem número exige decisão explícita',(await A('POST','/msg/pessoa',{conversa:noWa,nome:'Sem número informado',whatsapp:''})).r.status===400);
+  chk('Instagram pode permanecer sem WhatsApp se cliente não informar',(await A('POST','/msg/pessoa',{conversa:noWa,nome:'Sem número informado',whatsapp:'',semWhatsApp:true})).j.ok);
+  chk('não apaga WhatsApp de cadastro já vinculado',(await A('POST','/msg/pessoa',{conversa:igPerson.id,nome:'Nome confirmado',whatsapp:'',semWhatsApp:true})).r.status===400);
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -31,7 +31,7 @@ class NativeToolsTest {
     private fun dialog(title:String):AlertDialog {waitFor{ShadowAlertDialog.getLatestAlertDialog()?.let{it.isShowing&&Shadows.shadowOf(it).title.toString()==title}==true};return ShadowAlertDialog.getLatestAlertDialog()}
     private fun click(d:AlertDialog,n:Int){d.listView.performItemClick(d.listView.adapter.getView(n,null,d.listView),n,n.toLong());Shadows.shadowOf(Looper.getMainLooper()).idle()}
     private fun snapshot(d:AlertDialog,name:String,height:Int=720){
-        val v=d.window!!.decorView;v.measure(View.MeasureSpec.makeMeasureSpec(390,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(height,View.MeasureSpec.AT_MOST));v.layout(0,0,v.measuredWidth,v.measuredHeight)
+        val v=d.window!!.decorView;repeat(2){v.measure(View.MeasureSpec.makeMeasureSpec(390,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(height,if(name.startsWith("products"))View.MeasureSpec.EXACTLY else View.MeasureSpec.AT_MOST));v.layout(0,0,v.measuredWidth,v.measuredHeight)}
         val bitmap=android.graphics.Bitmap.createBitmap(v.width,v.height,android.graphics.Bitmap.Config.ARGB_8888);v.draw(android.graphics.Canvas(bitmap))
         val out=java.io.File("build/reports/native-ui/$name.png");out.parentFile!!.mkdirs();out.outputStream().use{bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()
     }
@@ -48,7 +48,7 @@ class NativeToolsTest {
         val store=NativeStore(a,SecretKeySpec(ByteArray(32){1},"AES"));store.saveAuth(NativeAuth("88999990000","test","Pablo"))
         var config=JSONObject().put("ok",true).put("respostas",JSONArray().put(JSONObject().put("t","Saudação").put("x","Olá, como posso ajudar?")));var writes=0;var sends=0;var draft=""
         val api=object:NativeApi(){
-            override fun catalog()=JSONObject().put("produtos",JSONArray().put(JSONObject().put("ID","p1").put("Codigo","TK-0001").put("Nome","Vestido azul").put("Tamanhos","M,G").put("Status","ativo")))
+            override fun catalog()=JSONObject().put("produtos",JSONArray().put(JSONObject().put("ID","p1").put("Codigo","TK-0001").put("Nome","Vestido azul feminino adulto de tecido leve com caimento solto").put("Preco","59.90").put("Tamanhos","Etiqueta M, Veste 36, Veste 38, Veste 40, Veste 42").put("Status","ativo")))
             override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject{
                 if(path=="/msg/enviar")sends++
                 if(path=="/msg/config"&&body!=null){writes++;config=JSONObject(config.toString()).put("respostas",body.getJSONArray("respostas"))}
@@ -104,7 +104,7 @@ class NativeToolsTest {
         val list=all(d.window!!.decorView).filterIsInstance<ListView>().first();assertEquals(1,list.adapter.count);list.performItemClick(list.adapter.getView(0,null,list),0,0)
         all(d.window!!.decorView).filterIsInstance<android.widget.CheckBox>().first{it.text=="Só com estoque"}.performClick();assertEquals(2,list.adapter.count)
         all(d.window!!.decorView).filterIsInstance<EditText>().first().setText("víscose verde");assertEquals(1,list.adapter.count);list.performItemClick(list.adapter.getView(0,null,list),0,0)
-        all(d.window!!.decorView).filterIsInstance<android.widget.Button>().first{it.text=="Copiar link"}.performClick()
+        all(d.window!!.decorView).filterIsInstance<android.widget.Button>().first{it.text=="Copiar seleção"}.performClick()
         val clip=(a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).primaryClip!!.getItemAt(0).text.toString();assertTrue(clip.endsWith("?sel=TK1,TK2"))
         all(d.window!!.decorView).filterIsInstance<android.widget.Button>().first{it.text=="Limpar seleção"}.performClick();assertFalse(list.isItemChecked(0));tools.close();scope.cancel();store.close()
     }

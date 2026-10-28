@@ -37,6 +37,8 @@ class NativeAdministrationTest {
         override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject{
             if(revoked)throw AccessRevoked();if(body!=null){writes.add(path to JSONObject(body.toString()));if(path=="/msg/contatos/config")linked=true}else reads.add(path)
             return when{
+                path.startsWith("/msg/pessoa")->JSONObject().put("ok",true).put("nome","Contato do Google").put("whatsapp","5588989012345").put("segundo","").put("conversa",JSONObject().put("id",1).put("canal","whatsapp1")).put("canais",JSONArray().put(JSONObject().put("id",1).put("canal","whatsapp1").put("contato","5588989012345").put("nome","Contato do Google")))
+                path.startsWith("/msg/conversas")->JSONObject().put("ok",true).put("conversas",JSONArray().put(JSONObject().put("id",2).put("nome","Perfil de teste").put("canal","instagram").put("contato","ig-test")))
                 path=="/msg/config"->JSONObject().put("ok",true).put("meuNome","Clarice").put("config",JSONObject().put("assinatura",true).put("lerCelular",JSONObject().put("whatsapp1",true).put("whatsapp2",false).put("instagram",true)))
                 path.startsWith("/msg/metricas")->JSONObject().put("ok",true).put("dias",if(path.contains("dias=7"))7 else 30).put("entradas",24).put("saidas",20).put("conversas",5).put("medianaMin",JSONObject.NULL).put("ate5min",70).put("aguardando",JSONObject().put("total",2).put("maisAntigas",JSONArray().put(JSONObject().put("id",1).put("nome","Cliente teste").put("desde","2026-10-27T00:00:00Z")))).put("porHora",JSONArray((0..23).map{JSONObject().put("hora",it).put("entradas",it).put("medianaMin",5)}))
                 path.startsWith("/msg/contatos/situacao")->JSONObject().put("ok",true).put("ligada",linked).put("conta","teste@example.invalid").apply{if(backup){put("backup",JSONObject().put("em","2026-10-27T00:00:00Z").put("total",2));put("relatorio",JSONObject().put("total",2))}}
@@ -57,6 +59,12 @@ class NativeAdministrationTest {
         init{a.deleteDatabase("mensagens-local.db");a.getSharedPreferences("native-auth",0).edit().clear().commit();store=NativeStore(a,SecretKeySpec(ByteArray(32){7},"AES"));store.saveAuth(NativeAuth("88999990000","test-auth","Atendente"));repo=NativeRepository(a,store,fake);ui=NativeAdministration(a,scope,repo,{},{})}
         override fun close(){ui.close();scope.cancel();store.close()}
     }
+    @Test fun personEditorLinksOnlyTheExplicitlyChosenChannelAfterConfirmation(){Fixture().use{f->
+        f.ui.person(1);val d=dialog("Contato e canais");snapshot(d,"person-editor",390,780);val fields=all(d.window!!.decorView).filterIsInstance<EditText>();fields[0].setText("Nome confirmado")
+        button(d,"Vincular conversa do Instagram").performClick();val pick=dialog("Vincular canal existente");button(pick,"Buscar contatos").performClick();waitFor{all(pick.window!!.decorView).filterIsInstance<Button>().any{it.text.toString().startsWith("Perfil de teste")}};all(pick.window!!.decorView).filterIsInstance<Button>().first{it.text.toString().startsWith("Perfil de teste")}.performClick()
+        assertTrue(f.fake.writes.isEmpty());button(d,"Salvar nome e vínculos").performClick();val confirm=dialog("Salvar este cadastro?");assertTrue(f.fake.writes.isEmpty());confirm.getButton(AlertDialog.BUTTON_POSITIVE).performClick();waitFor{f.fake.writes.size==1}
+        val write=f.fake.writes.single();assertEquals("/msg/pessoa",write.first);assertEquals("Nome confirmado",write.second.getString("nome"));assertEquals(listOf(1L,2L),(0 until write.second.getJSONArray("vincular").length()).map{write.second.getJSONArray("vincular").getLong(it)})
+    }}
     @Test fun settingsSaveTheSameChannelAndSignatureConfigurationOnlyOnSave(){Fixture().use{f->
         f.ui.settings();val d=dialog("Leitura e assinatura");assertTrue(f.fake.writes.isEmpty())
         val check=all(d.window!!.decorView).filterIsInstance<CheckBox>().first{it.text.startsWith("WhatsApp 2")};assertFalse(check.isChecked);check.performClick()

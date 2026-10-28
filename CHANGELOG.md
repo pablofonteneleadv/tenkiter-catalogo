@@ -6,6 +6,18 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.0 — APK 2.3: pessoas, contatos e contexto real de stories — 2026-10-28
+
+- Não lidas e Falta responder usam a mesma base ativa: pendente inclui toda não lida mais leitura sem resposta; encerradas ficam fora. Contadores identificam pessoas, reunindo canais explicitamente vinculados. Grupos começam desligados e podem ser ligados manualmente.
+- Canais de uma pessoa ficam juntos, ordenados internamente pela última mensagem; o bloco sobe pela atividade mais recente. Canais secundários têm apresentação compacta. Aba Nos 2 WhatsApp removida.
+- Cabeçalho da conversa abre cadastro com nome, WhatsApp principal/segundo número e vínculo com conversas do Instagram/WhatsApp, sem juntar por nome parecido. Mensagens e histórico de cada canal são preservados.
+- Índice privado dos nomes do Google Contatos por telefone normalizado. A importação existente alimentava relatório/limpeza, sem indexar nomes no atendimento; novo fluxo apenas lê Google e resolve nomes no servidor. Nome confirmado manualmente tem prioridade.
+- Wafly: referências dentro de texto/contexto, mídia citada e correlação pelo ID de status/publicação. Captura de status próprio quando o provedor entrega o callback. Contexto disponível tem prioridade sobre candidato; aproximação é rotulada.
+- Instagram/Zernio: storyReply do webhook/metadados ou lista de mensagens, correspondência por IDs, MIME de vídeo salvo diretamente e recuperação limitada de contexto antigo disponível no provedor. Sem resposta enviada/confirmada como efeito de consulta.
+- APK com conversa sem cabeçalho duplicado, bolhas adaptáveis, datas, prévias autenticadas e vídeo interno. Produtos em janela ampla com linhas de altura variável, fotos maiores, ordenação por código recente e ações por peça/seleção.
+- APK 2.3.0/code6 mantém assinatura anterior e atualizador verificado. Testes simulados e revisão estética documentados; codecs/teclado/FCM/instalação ainda exigem conferência física.
+
+
 ## 7.39.0 — APK 2.2: seleção e ferramentas completas do atendimento — 2026-10-27
 
 - Corrige toque prolongado consumido pelos controles da linha. Texto, avatar e Espiar selecionam a conversa sem abri-la; botão Selecionar visível e barra com Encerrar/Lidas/Mais. Sincronização não interrompe gesto nem desloca a linha durante a seleção.
