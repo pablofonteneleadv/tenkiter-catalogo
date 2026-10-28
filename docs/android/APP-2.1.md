@@ -1,3 +1,5 @@
+> Atual: [APK 2.2 — seleção corrigida e funções administrativas nativas](APP-2.2.md). Este documento registra a versão 2.1.
+
 # TENKiTER Mensagens 2.1.0
 
 Instale pelo botão **Atualizar app**, sem desinstalar. A assinatura, conta e banco são preservados. O Android pede confirmação da instalação.

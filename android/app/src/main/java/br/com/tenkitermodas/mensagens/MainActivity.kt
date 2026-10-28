@@ -28,24 +28,26 @@ class MainActivity:Activity(),InboxView.Events {
     private lateinit var inbox:InboxView
     private lateinit var updater:AppUpdater
     private lateinit var tools:NativeTools
+    private lateinit var administration:NativeAdministration
     @Volatile private var peeking=false;@Volatile private var openGeneration=0;@Volatile private var activityVisible=false;@Volatile private var nativeVisible=true;private var pendingPeek=true;private var queryJob:Job?=null
     private lateinit var root:FrameLayout
     private var web:WebView?=null
     private var webPanel:LinearLayout?=null
     private var chooser:ValueCallback<Array<Uri>>?=null
     private var audioRequest:PermissionRequest?=null
+    private var history=emptyList<JSONObject>();private var historyConversation=0L;private var historyBusy=false
     private var conversation=0L;private var online=false;private var syncing=false;private var sending=false
     private var displayOwner="";private var webTarget=0L;private var seededSession="";private var refreshSeq=0;private var pendingClick=0L
     private val handler=Handler(Looper.getMainLooper())
     private val home="https://tenkitermodas.com.br/admin.html?app=mensagens"
-    private val ticker=object:Runnable{override fun run(){if(repo.store.auth()!=null&&!sending)sync();handler.postDelayed(this,8000)}}
+    private val ticker=object:Runnable{override fun run(){if(repo.store.auth()!=null&&!sending)sync();handler.postDelayed(this,4000)}}
     private val changes=object:BroadcastReceiver(){override fun onReceive(c:Context?,i:Intent?){render()}}
     private val clicks=object:INotificationClickListener{override fun onClick(event:INotificationClickEvent){runOnUiThread{pendingClick=event.notification.additionalData?.optLong("conversa",0)?:0;pendingPeek=event.result.actionId!="abrir";openGeneration++;if(::inbox.isInitialized){peeking=pendingPeek;conversation=pendingClick;pendingClick=0;showNative();render();sync()}}}}
     private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
     private fun trusted(url:String?)=try{val u=Uri.parse(url);u.scheme=="https"&&u.host=="tenkitermodas.com.br"&&u.path=="/admin.html"}catch(_:Exception){false}
     override fun onCreate(state:Bundle?){
         super.onCreate(state);repo=NativeRepository.get(this);conversation=state?.getLong("conversation",0)?:0;peeking=state?.getBoolean("peeking",false)?:false
-        java.io.File(cacheDir,"received").deleteRecursively();java.io.File(cacheDir,"outgoing").deleteRecursively()
+        java.io.File(cacheDir,"received").deleteRecursively();java.io.File(cacheDir,"outgoing").deleteRecursively();java.io.File(cacheDir,"exports").deleteRecursively()
         updater=AppUpdater(this,scope)
         root=FrameLayout(this).apply{setBackgroundColor(Color.WHITE)}
         WindowCompat.setDecorFitsSystemWindows(window,false)
@@ -53,7 +55,7 @@ class MainActivity:Activity(),InboxView.Events {
             val bars=i.getInsets(WindowInsetsCompat.Type.systemBars());val ime=i.getInsets(WindowInsetsCompat.Type.ime())
             v.setPadding(bars.left,bars.top,bars.right,maxOf(bars.bottom,ime.bottom));i
         }
-        inbox=InboxView(this,this);tools=NativeTools(this,scope,repo,{conversation},{online&&!peeking},{inbox.insert(it)},{render()},{select(it)},{full(it)},{ids,action->inbox.selectionDone();if(conversation in ids&&action in listOf("nao_lidas","encerrar"))back()});root.addView(inbox,FrameLayout.LayoutParams(-1,-1));setContentView(root)
+        inbox=InboxView(this,this);administration=NativeAdministration(this,scope,repo,{select(it)},{render()});tools=NativeTools(this,scope,repo,{conversation},{online&&!peeking},{inbox.insert(it)},{render()},{select(it)},{full(it)},{ids,action->inbox.selectionDone();if(conversation in ids&&action in listOf("nao_lidas","encerrar"))back()},{action,id->when(action){"settings"->administration.settings();"copy"->administration.copyConversation(id);"export"->administration.exportForm(id,inbox.channelCode())}});root.addView(inbox,FrameLayout.LayoutParams(-1,-1));setContentView(root)
         ContextCompat.registerReceiver(this,changes,IntentFilter(NativeRepository.CHANGED),ContextCompat.RECEIVER_NOT_EXPORTED)
         OneSignal.Notifications.addClickListener(clicks)
         if(pendingClick>0){peeking=pendingPeek;conversation=pendingClick;pendingClick=0}
@@ -61,15 +63,15 @@ class MainActivity:Activity(),InboxView.Events {
         if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync()}
     }
     private fun render(){
-        val seq=++refreshSeq;val id=conversation
+        val seq=++refreshSeq;val id=conversation;val extra=if(historyConversation==id)history else emptyList()
         scope.launch{
             val data=withContext(Dispatchers.IO){
                 val a=repo.store.auth();val canRead=repo.store.canReadLocal(a)
-                Snapshot(a,canRead,if(canRead)repo.store.conversations()else emptyList(),if(canRead&&id>0)repo.store.messages(id)else emptyList(),if(canRead&&id>0)repo.store.pending(id)else emptyList())
+                Snapshot(a,canRead,if(canRead)repo.store.conversations()else emptyList(),if(canRead&&id>0)(extra+repo.store.messages(id)).distinctBy{it.optLong("id")}.sortedWith(compareBy<JSONObject>{it.optString("enviada_em")}.thenBy{it.optLong("id")})else emptyList(),if(canRead&&id>0)repo.store.pending(id)else emptyList())
             }
             if(seq!=refreshSeq||id!=conversation)return@launch
-            if(displayOwner!=(data.a?.owner?:"")){val previous=displayOwner;tools.close();displayOwner=data.a?.owner?:"";if(previous.isNotBlank()&&data.a!=null){openGeneration++;conversation=0;peeking=false;render();return@launch}}
-            if(data.a==null){online=false;conversation=0}
+            if(displayOwner!=(data.a?.owner?:"")){val previous=displayOwner;tools.close();administration.close();displayOwner=data.a?.owner?:"";if(previous.isNotBlank()&&data.a!=null){history=emptyList();historyConversation=0;openGeneration++;conversation=0;peeking=false;render();return@launch}}
+            if(data.a==null){online=false;conversation=0;history=emptyList();historyConversation=0}
             inbox.render(data.a,data.read,data.chats,if(data.read)conversation else 0,data.messages,data.pending,online,repo.status.ifBlank{if(data.a==null)"Entre para sincronizar este aparelho"else "Conversas salvas · verificando conexão…"},peeking)
         }
     }
@@ -88,13 +90,13 @@ class MainActivity:Activity(),InboxView.Events {
         syncing=true;val focus=conversation;val generation=openGeneration;val sessionGeneration=repo.store.generation
         scope.launch{
             var again=false
-            try{val ok=withContext(Dispatchers.IO){repo.sync(focus)};again=focus!=conversation||generation!=openGeneration;online=ok&&!again;if(ok&&focus>0&&!again&&!peeking)withContext(Dispatchers.IO){repo.markRead(focus){openGeneration==generation&&repo.store.generation==sessionGeneration&&!peeking&&activityVisible&&nativeVisible}}}
+            try{val ok=withContext(Dispatchers.IO){repo.sync(focus)};again=focus!=conversation||generation!=openGeneration;online=ok&&!again;if(ok&&focus>0&&!again&&!peeking)withContext(Dispatchers.IO){repo.markRead(focus){openGeneration==generation&&repo.store.generation==sessionGeneration&&!peeking&&activityVisible&&nativeVisible&&!administration.active}}}
             finally{syncing=false;render();if(again)sync()}
         }
     }
-    override fun select(id:Long){openGeneration++;peeking=false;conversation=id;online=false;showNative();sync()}
-    override fun peek(id:Long){openGeneration++;peeking=true;conversation=id;online=false;showNative();sync()}
-    override fun back(){openGeneration++;peeking=false;conversation=0;render()}
+    override fun select(id:Long){if(id!=conversation){history=emptyList();historyConversation=id};openGeneration++;peeking=false;conversation=id;online=false;showNative();sync()}
+    override fun peek(id:Long){if(id!=conversation){history=emptyList();historyConversation=id};openGeneration++;peeking=true;conversation=id;online=false;showNative();sync()}
+    override fun back(){history=emptyList();historyConversation=0;openGeneration++;peeking=false;conversation=0;render()}
     override fun send(id:Long,text:String):Boolean{
         if(!online||peeking||sending||id!=conversation)return false
         sending=true
@@ -111,7 +113,13 @@ class MainActivity:Activity(),InboxView.Events {
     }
     override fun tool(id:Long,action:String){if(id==conversation)tools.show(id,action)}
     override fun bulk(ids:Set<Long>,action:String){tools.batch(ids,action)}
-    override fun older(id:Long){val generation=repo.store.generation;scope.launch{try{withContext(Dispatchers.IO){repo.older(id)};render()}catch(e:AccessRevoked){if(repo.store.generation==generation)repo.logout();render()}catch(e:Exception){inbox.status(e.message?:"Não foi possível buscar o histórico.")}}}
+    override fun older(id:Long){
+        if(historyBusy||id!=conversation)return;historyBusy=true
+        val generation=repo.store.generation;val earlier=if(historyConversation==id)history else emptyList()
+        scope.launch{try{val rows=withContext(Dispatchers.IO){val oldest=(earlier+repo.store.messages(id)).minWithOrNull(compareBy<JSONObject>{it.optString("enviada_em")}.thenBy{it.optLong("id")});repo.older(id,oldest)};if(id==conversation&&generation==repo.store.generation){historyConversation=id;history=(rows+history).distinctBy{it.optLong("id")};render()}}
+            catch(e:AccessRevoked){if(repo.store.generation==generation)repo.logout();render()}catch(e:Exception){inbox.status(e.message?:"Não foi possível buscar o histórico.")}
+            finally{historyBusy=false}}
+    }
     override fun media(id:Long){tools.media(id)}
     override fun context(id:Long){tools.media(id,true)}
     override fun search(query:String,closed:Boolean){
@@ -125,12 +133,13 @@ class MainActivity:Activity(),InboxView.Events {
             catch(_:Exception){inbox.status("Sem conexão para buscar no servidor · mostrando as conversas salvas")}
         }
     }
+    override fun discard(key:String){scope.launch{withContext(Dispatchers.IO){repo.discard(key)};render()}}
     override fun update(){updater.check()}
     override fun menu(anchor:View){
         PopupMenu(this,anchor).apply{
-            listOf("Selecionar conversas","Sincronizar conversas","Atualizar aplicativo","Site da loja","Avisos","Atendimento completo","Sair da conta").forEach{menu.add(it)}
+            listOf("Selecionar conversas","Painel de atendimento","Configurações de leitura e nome","Conexões e gravação","Google Contatos","Exportar conversas","Sincronizar conversas","Atualizar aplicativo","Site da loja","Avisos","Atendimento completo","Sair da conta").forEach{menu.add(it)}
             setOnMenuItemClickListener{when(it.title.toString()){
-                "Selecionar conversas"->{back();inbox.beginSelection()};"Sincronizar conversas"->sync();"Atualizar aplicativo"->updater.check();"Site da loja"->external("https://tenkitermodas.com.br/")
+                "Painel de atendimento"->administration.dashboard(inbox.channelCode());"Configurações de leitura e nome"->administration.settings();"Conexões e gravação"->administration.connections();"Google Contatos"->administration.contacts();"Exportar conversas"->administration.exportForm(conversation,inbox.channelCode());"Selecionar conversas"->{back();inbox.beginSelection()};"Sincronizar conversas"->sync();"Atualizar aplicativo"->updater.check();"Site da loja"->external("https://tenkitermodas.com.br/")
                 "Avisos"->notificationSettings();"Atendimento completo"->full(conversation);"Sair da conta"->confirmLogout()
             };true};show()
         }
@@ -139,7 +148,7 @@ class MainActivity:Activity(),InboxView.Events {
         OneSignal.User.pushSubscription.optOut()
         queryJob?.cancel()
         val a=repo.store.auth();val subscription=OneSignal.User.pushSubscription.id
-        tools.close();repo.logout();online=false;conversation=0;inbox.reset();web?.destroy();web=null;webPanel?.let{root.removeView(it)};webPanel=null;seededSession="";showNative();render()
+        tools.close();administration.close();repo.logout();online=false;conversation=0;inbox.reset();web?.destroy();web=null;webPanel?.let{root.removeView(it)};webPanel=null;seededSession="";showNative();render()
         if(a!=null&&subscription.isNotBlank())scope.launch(Dispatchers.IO){runCatching{NativeApi().removeSubscription(a,subscription)}}
         CookieManager.getInstance().removeAllCookies(null);WebStorage.getInstance().deleteAllData()
     }.setNegativeButton("Cancelar",null).show()}
@@ -198,7 +207,7 @@ class MainActivity:Activity(),InboxView.Events {
     private fun external(address:String){val u=Uri.parse(address);if(u.scheme !in listOf("https","http","tel","mailto"))return;runCatching{startActivity(Intent(Intent.ACTION_VIEW,u))}}
     override fun onResume(){super.onResume();activityVisible=true;if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
     override fun onPause(){activityVisible=false;if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
-    override fun onDestroy(){handler.removeCallbacks(ticker);runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();web?.destroy();super.onDestroy()}
+    override fun onDestroy(){handler.removeCallbacks(ticker);runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.destroy();super.onDestroy()}
     override fun onSaveInstanceState(out:Bundle){out.putLong("conversation",conversation);out.putBoolean("peeking",peeking);super.onSaveInstanceState(out)}
     @Deprecated("Legacy back API") override fun onBackPressed(){
         val w=web

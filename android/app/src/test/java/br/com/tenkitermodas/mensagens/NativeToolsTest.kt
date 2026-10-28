@@ -35,6 +35,13 @@ class NativeToolsTest {
         val bitmap=android.graphics.Bitmap.createBitmap(v.width,v.height,android.graphics.Bitmap.Config.ARGB_8888);v.draw(android.graphics.Canvas(bitmap))
         val out=java.io.File("build/reports/native-ui/$name.png");out.parentFile!!.mkdirs();out.outputStream().use{bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()
     }
+    @Test fun linkPreviewUsesOnlyTheFirstLinkAndCatalogMetadata(){
+        assertFalse(LinkPreview.fields("Olá",emptyList()).has("previa"))
+        val product=JSONObject().put("Codigo","TK-1").put("Nome","Vestido azul").put("Preco","50")
+        val card=LinkPreview.fields(BuildConfig.SITE_URL.trimEnd('/')+"/p/TK-1",listOf(product));assertTrue(card.getBoolean("previa"));assertEquals("Vestido azul",card.getString("previaTitulo"));assertTrue(card.getString("previaDescricao").contains("à vista"))
+        val selection=LinkPreview.fields(BuildConfig.SITE_URL.trimEnd('/')+"/?sel=A,B",emptyList());assertEquals("2 peças na TENKiTER Modas",selection.getString("previaDescricao"))
+        assertFalse(LinkPreview.fields("https://example.invalid/primeiro "+BuildConfig.SITE_URL,emptyList()).has("previaTitulo"))
+    }
     @Test fun productsAndQuickRepliesInsertDraftAndOnlySaveAfterExplicitAction(){
         val a=Robolectric.buildActivity(Activity::class.java).setup().get();a.setContentView(android.widget.FrameLayout(a))
         a.deleteDatabase("mensagens-local.db");a.getSharedPreferences("native-auth",0).edit().clear().commit()
@@ -62,6 +69,12 @@ class NativeToolsTest {
         assertEquals(0,writes);edit.getButton(AlertDialog.BUTTON_POSITIVE).performClick();waitFor{writes==1};assertEquals(2,config.getJSONArray("respostas").length());assertEquals(0,sends)
         tools.close();scope.cancel();store.close()
     }
+    @Test fun sendingRespectsPerChannelLinkPreviewChoiceAndNeverUsesItForAttachments(){
+        val a=Robolectric.buildActivity(Activity::class.java).setup().get();a.deleteDatabase("mensagens-local.db");a.getSharedPreferences("native-auth",0).edit().clear().commit();a.getSharedPreferences("link-preview",0).edit().clear().commit()
+        val store=NativeStore(a,SecretKeySpec(ByteArray(32){2},"AES"));val auth=NativeAuth("88999990000","test","Pablo");store.saveAuth(auth);store.putConversation(auth,JSONObject().put("id",1).put("canal","whatsapp1"));val sent=mutableListOf<JSONObject>()
+        val api=object:NativeApi(){override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject{if(path=="/msg/enviar"){sent.add(JSONObject(body.toString()));return JSONObject().put("mensagem",JSONObject().put("id",sent.size).put("enviada_em","2026-10-27T00:00:00Z"))};return JSONObject().put("ok",true).put("config",JSONObject().put("assinatura",false))}}
+        val repo=NativeRepository(a,store,api);val link=BuildConfig.SITE_URL.trimEnd('/')+"/?sel=A,B";repo.reply(1,link);assertFalse(sent.last().has("previa"));a.getSharedPreferences("link-preview",0).edit().putBoolean("whatsapp1",true).commit();repo.reply(1,link);assertTrue(sent.last().getBoolean("previa"));repo.reply(1,link,attachment="test",type="imagem");assertFalse(sent.last().has("previa"));store.close()
+    }
     @Test fun attachmentKeepsIdempotentKeyAndSyncDoesNotReplayIt(){
         val a=Robolectric.buildActivity(Activity::class.java).setup().get();a.deleteDatabase("mensagens-local.db");a.getSharedPreferences("native-auth",0).edit().clear().commit()
         val store=NativeStore(a,SecretKeySpec(ByteArray(32){2},"AES"));val auth=NativeAuth("88999990000","test","Pablo");store.saveAuth(auth)
@@ -82,6 +95,18 @@ class NativeToolsTest {
         val repo=NativeRepository(a,store,api);repo.attachment(1,byteArrayOf(1,2,3),"imagem","Legenda","android-media-test")
         assertEquals(1,uploads);assertEquals(1,sent.size);assertEquals("android-media-test",sent[0].getString("idLocal"));assertTrue(sent[0].getString("anexo").startsWith("out/"));assertEquals("Legenda",sent[0].getString("texto"))
         repo.sync(1);assertEquals(1,uploads);assertEquals(1,sent.size);assertTrue(store.pending(1).isEmpty());store.close()
+    }
+    @Test fun productStockSearchAndCopyPreserveSelectionAcrossQueries(){
+        val a=Robolectric.buildActivity(Activity::class.java).setup().get();a.setContentView(android.widget.FrameLayout(a));a.deleteDatabase("mensagens-local.db");a.getSharedPreferences("native-auth",0).edit().clear().commit()
+        val store=NativeStore(a,SecretKeySpec(ByteArray(32){4},"AES"));store.saveAuth(NativeAuth("88999990000","test","Pablo"));val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main)
+        val api=object:NativeApi(){override fun catalog()=JSONObject().put("produtos",JSONArray().put(JSONObject().put("ID","a").put("Nome","Vestido viscose azul").put("Codigo","TK1").put("Estoque",2)).put(JSONObject().put("ID","b").put("Nome","Vestido viscose verde").put("Codigo","TK2").put("Estoque",0)))}
+        val tools=NativeTools(a,scope,NativeRepository(a,store,api),{1},{true},{},{},{},{},{_,_->});tools.show(1,"produtos");val d=dialog("Produtos · selecionar peças")
+        val list=all(d.window!!.decorView).filterIsInstance<ListView>().first();assertEquals(1,list.adapter.count);list.performItemClick(list.adapter.getView(0,null,list),0,0)
+        all(d.window!!.decorView).filterIsInstance<android.widget.CheckBox>().first{it.text=="Só com estoque"}.performClick();assertEquals(2,list.adapter.count)
+        all(d.window!!.decorView).filterIsInstance<EditText>().first().setText("víscose verde");assertEquals(1,list.adapter.count);list.performItemClick(list.adapter.getView(0,null,list),0,0)
+        all(d.window!!.decorView).filterIsInstance<android.widget.Button>().first{it.text=="Copiar link"}.performClick()
+        val clip=(a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).primaryClip!!.getItemAt(0).text.toString();assertTrue(clip.endsWith("?sel=TK1,TK2"))
+        all(d.window!!.decorView).filterIsInstance<android.widget.Button>().first{it.text=="Limpar seleção"}.performClick();assertFalse(list.isItemChecked(0));tools.close();scope.cancel();store.close()
     }
     @Test fun nativeProductPricesMatchTheCatalogFixtures(){
         val fixtures=JSONArray(javaClass.classLoader!!.getResourceAsStream("precos-common.json")!!.bufferedReader().readText())

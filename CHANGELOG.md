@@ -6,6 +6,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.39.0 — APK 2.2: seleção e ferramentas completas do atendimento — 2026-10-27
+
+- Corrige toque prolongado consumido pelos controles da linha. Texto, avatar e Espiar selecionam a conversa sem abri-la; botão Selecionar visível e barra com Encerrar/Lidas/Mais. Sincronização não interrompe gesto nem desloca a linha durante a seleção.
+- Painel de atendimento e gráfico por hora, configurações de leitura/nome/assinatura, exportação TXT/CSV/JSON e cópia para IA passam a funcionar na tela nativa pelas rotas existentes.
+- Conexões WhatsApp/Instagram, diagnósticos, pausa e retomada, segredo/assinatura Meta e ponte Google Contatos (cópia, relatório somente leitura e desligamento) disponíveis no menu nativo. Alterações exigem ações explícitas.
+- Produtos com fotos, estoque, busca sem acentos, seleção persistente e links; contexto de stories publicados; histórico anterior além da janela local e botão de novas mensagens. Avisos locais podem ser descartados sem reenviar.
+- Integra as mudanças simultâneas até 7.38.2 sem perda: prévia de links no compositor e contatos por partes com progresso/parada/tela acesa.
+- APK 2.2.0/code5, mesma assinatura. 38 testes Android simulados; lint Release sem erros. Não envia mensagens ou muda conexões reais como teste.
 ## 7.38.2 — Conferir as entregas do Zernio — 2026-10-27
 
 - Conexões → Instagram Direct · Zernio: botões **"Conferir entregas"** e **"Testar aviso"**. O servidor pergunta ao próprio Zernio se o aviso de mensagens está ativo, se aponta para este servidor e para o Instagram da loja, e mostra as últimas 10 entregas com o resultado (ex.: "failed (HTTP 404)"). "Testar aviso" pede ao Zernio um aviso de teste e confere se ele chegou aqui.

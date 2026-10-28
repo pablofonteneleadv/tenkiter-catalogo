@@ -58,6 +58,14 @@ class NativeInboxTest {
         }
         assertEquals(4,events.updates)
     }
+    @Test fun linkPreviewChoiceAppearsOnlyForWhatsAppLinksAndIsRememberedPerChannel(){
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","test","Pablo");a.getSharedPreferences("link-preview",0).edit().clear().commit()
+        v.render(auth,true,listOf(conv()),1,listOf(msg()),emptyList(),true,"Atualizado");layout(v,390,844)
+        val input=all(v).filterIsInstance<EditText>().first{it.hint=="Mensagem"};val choice=all(v).filterIsInstance<android.widget.CheckBox>().first{it.text.toString().startsWith("Mostrar prévia")}
+        assertEquals(View.GONE,choice.visibility);input.setText(BuildConfig.SITE_URL+"/p/TK-1");assertEquals(View.VISIBLE,choice.visibility);assertFalse(choice.isChecked);choice.performClick();assertTrue(a.getSharedPreferences("link-preview",0).getBoolean("whatsapp1",false));assertFalse(a.getSharedPreferences("link-preview",0).getBoolean("whatsapp2",false));layout(v,390,844);snapshot(v,"conversation-link-preview",390,844)
+        input.setText("sem link");assertEquals(View.GONE,choice.visibility)
+        v.render(auth,true,listOf(conv().put("canal","instagram")),1,listOf(msg()),emptyList(),true,"Atualizado");v.insert("https://example.invalid");assertFalse(all(v).filterIsInstance<android.widget.CheckBox>().any{it.isShown&&it.text.toString().startsWith("Mostrar prévia")})
+    }
     @Test fun encryptedAuthAndDatabaseSurviveReopenAndLogout(){
         val c=activity;c.deleteDatabase("mensagens-local.db");c.getSharedPreferences("native-auth",0).edit().clear().commit()
         val key=SecretKeySpec(ByteArray(32){7},"AES");val a=NativeAuth("88999990000","tk-test-secret","Pablo")
@@ -200,11 +208,17 @@ class NativeInboxTest {
         val list=all(v).filterIsInstance<android.widget.ListView>().first()
         all(v).filterIsInstance<Button>().first{it.tag=="Falta responder"}.performClick();assertEquals(1,list.adapter.count);assertEquals(1L,list.adapter.getItemId(0))
         all(v).filterIsInstance<Button>().first{it.tag=="Falta responder"}.performClick()
-        list.onItemLongClickListener.onItemLongClick(list,list.adapter.getView(0,null,list),0,list.adapter.getItemId(0))
+        layout(v,390,844)
+        val child=list.getChildAt(0);assertNotNull(child)
+        val now=android.os.SystemClock.uptimeMillis()
+        list.dispatchTouchEvent(android.view.MotionEvent.obtain(now,now,android.view.MotionEvent.ACTION_DOWN,100f,child.top+20f,0))
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis((android.view.ViewConfiguration.getLongPressTimeout()+200).toLong()))
+        list.dispatchTouchEvent(android.view.MotionEvent.obtain(now,android.os.SystemClock.uptimeMillis(),android.view.MotionEvent.ACTION_UP,100f,child.top+20f,0))
         layout(v,390,844);snapshot(v,"selection-native",390,844)
-        all(v).filterIsInstance<Button>().first{it.text=="Ações ▾"}.performClick()
-        org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().menu.getItem(0).let{org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().menu.performIdentifierAction(it.itemId,0)}
-        // Popup IDs are unique; the action callback receives the actual selected row, never every row.
+        assertEquals(0L,events.selected);assertTrue(all(v).filterIsInstance<android.widget.CheckBox>().any{it.isChecked})
+        all(v).filterIsInstance<Button>().first{it.text=="Encerrar"&&it.isShown}.performClick()
+        assertEquals(1,events.bulkIds.size);assertEquals("encerrar",events.bulkAction)
+        all(v).filterIsInstance<Button>().first{it.text=="Lidas"&&it.isShown}.performClick()
         assertEquals(1,events.bulkIds.size);assertEquals("lidas",events.bulkAction)
         assertTrue(InboxRules.waiting(waiting));assertFalse(InboxRules.waiting(group));assertFalse(InboxRules.waiting(answered))
     }
@@ -247,6 +261,44 @@ class NativeInboxTest {
         val repo=NativeRepository(c,store,api);assertTrue(repo.sync());assertEquals(3,lists);assertEquals(100,store.conversations().count{!it.optBoolean("local_hidden")});assertTrue(store.conversation(999)!!.optBoolean("local_hidden"))
         assertTrue(repo.sync());assertEquals(1,deltas);assertEquals(3,lists);assertEquals(1,accounts)
         val received=File(c.cacheDir,"received/test").apply{parentFile!!.mkdirs();writeText("fake-media")};val outgoing=File(c.cacheDir,"outgoing/test").apply{parentFile!!.mkdirs();writeText("fake-audio")};store.logout();assertFalse(received.exists());assertFalse(outgoing.exists());store.close()
+    }
+    @Test fun longPressOnPeekAndVisibleSelectionButtonBothAllowClosing(){
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo")
+        v.render(auth,true,listOf(conv()),0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844)
+        val peek=all(v).filterIsInstance<Button>().first{it.text=="Espiar"}
+        val now=android.os.SystemClock.uptimeMillis();peek.dispatchTouchEvent(android.view.MotionEvent.obtain(now,now,android.view.MotionEvent.ACTION_DOWN,20f,20f,0))
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis((android.view.ViewConfiguration.getLongPressTimeout()+200).toLong()))
+        peek.dispatchTouchEvent(android.view.MotionEvent.obtain(now,android.os.SystemClock.uptimeMillis(),android.view.MotionEvent.ACTION_UP,20f,20f,0));layout(v,390,844)
+        assertEquals(0L,events.peeked);assertTrue(all(v).filterIsInstance<android.widget.CheckBox>().any{it.isChecked})
+        all(v).filterIsInstance<Button>().first{it.text=="Encerrar"&&it.isShown}.performClick();assertEquals(setOf(1L),events.bulkIds)
+        all(v).filterIsInstance<Button>().first{it.text=="Cancelar"&&it.isShown}.performClick();layout(v,390,844)
+        all(v).filterIsInstance<Button>().first{it.text=="Selecionar"&&it.isShown}.performClick();layout(v,390,844)
+        all(v).filterIsInstance<android.widget.CheckBox>().first().performClick();all(v).filterIsInstance<Button>().first{it.text=="Encerrar"&&it.isShown}.performClick();assertEquals(setOf(1L),events.bulkIds)
+    }
+    @Test fun olderHistoryCanContinuePastTheLocalCacheLimit(){
+        val a=activity;a.deleteDatabase("mensagens-local.db");a.getSharedPreferences("native-auth",0).edit().clear().commit()
+        val store=NativeStore(a,SecretKeySpec(ByteArray(32){6},"AES"));val auth=NativeAuth("88999990000","session","Pablo");store.saveAuth(auth);store.putConversation(auth,conv())
+        store.putMessages(auth,1,org.json.JSONArray((1001L..2000L).map{msg(it)}));var query=""
+        val api=object:NativeApi(){override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject{query=path;return JSONObject().put("ok",true).put("temMais",true).put("mensagens",org.json.JSONArray((901L..1000L).map{msg(it)}))}}
+        val page=NativeRepository(a,store,api).older(1,msg(1001));assertEquals(100,page.size);assertEquals(901L,page.first().getLong("id"));assertTrue(query.contains("antesId=1001"));assertEquals(1000,store.messages(1).size);store.close()
+    }
+    @Test fun synchronizationWhileHoldingDoesNotCancelSelection(){
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo");val c=conv()
+        v.render(auth,true,listOf(c),0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844)
+        val list=all(v).filterIsInstance<android.widget.ListView>().first();val now=android.os.SystemClock.uptimeMillis()
+        list.dispatchTouchEvent(android.view.MotionEvent.obtain(now,now,android.view.MotionEvent.ACTION_DOWN,100f,20f,0))
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(200))
+        v.render(auth,true,listOf(JSONObject(c.toString()).put("previa","Nova mensagem durante o gesto")),0,emptyList(),emptyList(),true,"Sincronizando…")
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(600))
+        list.dispatchTouchEvent(android.view.MotionEvent.obtain(now,android.os.SystemClock.uptimeMillis(),android.view.MotionEvent.ACTION_UP,100f,20f,0));layout(v,390,844)
+        assertEquals(0L,events.selected);assertTrue(all(v).filterIsInstance<android.widget.CheckBox>().any{it.isChecked});all(v).filterIsInstance<Button>().first{it.text=="Encerrar"&&it.isShown}.performClick();assertEquals(setOf(1L),events.bulkIds)
+    }
+    @Test fun incomingMessagesOfferAnExplicitWayToReturnToTheEnd(){
+        val a=activity;val v=InboxView(a,Events());a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo")
+        v.render(auth,true,listOf(conv()),1,(1L..30L).map{msg(it)},emptyList(),true,"Atualizado");layout(v,390,844);org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+        all(v).filterIsInstance<android.widget.ScrollView>().first().scrollTo(0,0)
+        v.render(auth,true,listOf(conv()),1,(1L..31L).map{msg(it)},emptyList(),true,"Atualizado");layout(v,390,844)
+        val jump=all(v).filterIsInstance<Button>().first{it.text=="1 nova mensagem ↓"};assertTrue(jump.isShown);jump.performClick();assertEquals(View.GONE,jump.visibility)
     }
     private fun snapshot(v:View,name:String,w:Int,h:Int){
         val bitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);v.draw(Canvas(bitmap))
