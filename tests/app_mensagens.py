@@ -31,6 +31,16 @@ with sync_playwright() as p:
   if w<600:
    pg.set_viewport_size({'width':w,'height':480});pg.wait_for_timeout(300)
    r=pg.locator('#ms-texto').bounding_box();assert r['y']+r['height']<=480,(w,r)
+  # 7.40.10: o Voltar do celular numa conversa volta para a lista (não manda o app para o fundo).
+  if w<600:
+   assert pg.evaluate('window.TKMobileBack()')==True;pg.wait_for_timeout(500)
+   assert pg.evaluate("document.getElementById('ms-app').dataset.vista")=='lista'
+   assert pg.evaluate('window.TKMobileBack()')==False
+  # 7.40.11: o app guarda o login no aparelho e reabre com ele, sem esperar o servidor de contas.
+  if w==390:
+   assert pg.evaluate("!!localStorage.getItem('tk_app_usuario')"),'login do app não foi guardado'
+   pg.reload();pg.wait_for_selector('.ms-conv',timeout=15000)
+   assert pg.evaluate("JSON.parse(localStorage.getItem('tk_app_usuario')).sessao===JSON.parse(localStorage.getItem('tm_session')).sessao")
   assert not errors,errors
   c.close()
  b.close()

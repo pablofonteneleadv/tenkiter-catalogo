@@ -16,7 +16,7 @@
   const NOME_CANAL = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2', instagram: 'Instagram' };
   // v7.22: "Nos 2 WhatsApp" (a mesma pessoa falando pelos dois números) e "Encerradas" (saem da lista e voltam quando o cliente escreve)
   // v7.24: "Mensagens" e "Grupos" ligam/desligam juntos ou separados (os dois = tudo); os demais filtros são de um em um e desligam com novo toque
-  const FILTROS = [['nao_lidas', 'Não lidas'], ['sem_resposta', 'Falta responder'], ['encerradas', 'Encerradas']];
+  const FILTROS = [['minhas', 'Minhas'], ['nao_lidas', 'Não lidas'], ['sem_resposta', 'Falta responder'], ['retomar', 'Retomar'], ['encerradas', 'Encerradas']];
   // v7.21: aba mestre "Todas" (os três canais juntos) vem primeiro e é a que abre
   const ABAS = [['todos', 'Todas']].concat(CANAIS);
   const NOME_CANAL_ = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2', instagram: 'Instagram' };
@@ -30,6 +30,7 @@
   const rascunhos = {}, elMsgs = new Map(), elConvs = new Map(), pendentes = new Map();
   const blobs = new Map();                     // mídia já baixada nesta conversa: "id" ou "id|c" (story) -> promessa do endereço local
   let anexoPend = null, gravacao = null, colarFimAte = 0;
+  let agendadas_ = [], timerAgenda_ = null, agendaQuando_ = 0, agendaAtalho_ = '';   // v7.40.13: mensagens agendadas da conversa aberta
 
   // Cache apenas do app, por conta + sessão. Nunca guarda tokens, anexos ou URLs de mídia.
   const APP_RECENTES = new URLSearchParams(location.search).get('app') === 'mensagens';
@@ -111,6 +112,7 @@
     if (mesmoDia(d, ontem)) return 'Ontem';
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
   }
+  const META_RESPOSTA_MS = 15 * 60000;   // v7.40.12: meta de tempo de resposta; acima disso a linha fica em vermelho
   function espera_(iso) {
     const min = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
     if (isNaN(min)) return '';
@@ -174,7 +176,7 @@
       @media (min-width: 860px) { #overlay-mensagens { align-items: center; } .sheet-mensagens { height: min(90dvh, 880px); max-height: min(90dvh, 880px); margin-top: 0; border-radius: 16px; } }
       .sheet-mensagens button { width: auto; margin: 0; font-family: inherit; }
       .sheet-mensagens textarea, .sheet-mensagens input[type=search] { font-family: inherit; }
-      .ms-app { display: grid; grid-template-columns: 1fr; height: 100%; min-height: 0; }
+      .ms-app { position: relative; display: grid; grid-template-columns: 1fr; height: 100%; min-height: 0; }
       @media (min-width: 860px) { .ms-app { grid-template-columns: minmax(310px, 380px) 1fr; } }
       .ms-lateral, .ms-conversa { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: #fff; }
       .ms-lateral { border-right: 1px solid #e6e1d6; }
@@ -236,10 +238,27 @@
       .ms-previa { color: #4a4a4a; font-size: 0.84rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
       .ms-badge { flex: none; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--laranja, #E67E22); color: #0d0d0d; font-size: 0.76rem; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
       .ms-aguarda { display: block; font-size: 0.74rem; color: #8a3b00; font-weight: 700; margin-top: 1px; }
+      .ms-aguarda.atrasada { color: #b42318; }   /* v7.40.12: passou da meta de resposta (15 min) */
       .ms-tique { font-size: 0.8rem; letter-spacing: -2px; color: #555; margin-right: 4px; } .ms-tique.lida { color: #0b57b0; } .ms-tique.incerta { color: #a33; letter-spacing: 0; }
       .ms-vazio { color: #555; padding: 18px 16px; font-size: 0.88rem; line-height: 1.4; }
       .ms-vazio-conversa { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; color: #666; padding: 24px; }
       /* v7.21: aviso flutuante (antes ficava na coluna da lista e, no celular, sumia com a conversa aberta) */
+      .ms-etq { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; color: #222; border: 1px solid #e3ddd3; background: #fff; border-radius: 10px; padding: 0 7px 0 5px; white-space: nowrap; }
+      .ms-dono-tag { font-size: 0.72rem; font-weight: 600; color: #3b352c; }
+      .ms-etq-ponto { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+      .ms-chip-etq { display: inline-flex; align-items: center; gap: 6px; }
+      .ms-etq-faixa { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 12px; border-bottom: 1px solid #e3ddd3; background: #f9f7f2; }
+      .ms-etq-mais { background: transparent; border: 0; color: #A85200; font-weight: 600; font-size: 0.8rem; min-height: 32px; padding: 0 4px; cursor: pointer; }
+      .ms-etq-rot { margin: 10px 0 4px; font-size: 0.72rem; font-weight: 700; color: #625c53; text-transform: uppercase; letter-spacing: 0.04em; }
+      .ms-etq-op { display: flex; align-items: center; gap: 10px; min-height: 44px; border-bottom: 1px solid #f0ece5; font-size: 0.92rem; cursor: pointer; }
+      .ms-etq-op input { width: 20px; height: 20px; margin: 0; accent-color: #141414; }
+      .ms-etq-pe { display: flex; gap: 8px; justify-content: flex-end; padding-top: 12px; }
+      .ms-bolha.ms-nota { align-self: stretch; max-width: none; background: #fff6d6; border: 1px dashed #e0c56e; color: #2b2410; }
+      .ms-nota-rot { display: block; font-size: 0.72rem; font-weight: 700; color: #6b5000; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 2px; }
+      .ms-modo-nota textarea, textarea.ms-modo-nota, .ms-modo-nota #ms-texto { background: #fff6d6 !important; border-color: #e0c56e !important; }
+      .ms-nota-btn[aria-pressed="true"] { background: #fff6d6; }
+      .ms-saude { margin: 0 12px 8px; padding: 10px 12px; border-radius: 8px; background: #fdecec; color: #8f1d1d; border: 1px solid #f3c7c7; font-size: 0.85rem; display: grid; gap: 2px; }
+      .ms-saude b { color: #c62828; }
       .ms-aviso { position: absolute; left: 12px; right: 12px; bottom: 88px; z-index: 7; margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff3cd; color: #5a4300; font-size: 0.85rem; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
       .ms-aviso[hidden] { display: none; }
       /* v7.22: número ao lado do nome, mesma pessoa nos 2 WhatsApp, seleção e encerradas */
@@ -330,6 +349,65 @@
       .ms-assina b { color: #141414; }
       .ms-assina input { flex: 1 1 auto; min-width: 0; min-height: 40px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 8px; font: inherit; font-size: 0.9rem; }
       .ms-assina .ms-btn { min-height: 40px; padding: 6px 12px; }
+      /* v7.40.9: respostas automáticas (gaveta) e selo "Automática" na bolha */
+      .ms-auto-tag { font-size: 0.68rem; font-weight: 700; color: #5c3a00; background: #fff1dc; border-radius: 4px; padding: 0 5px; margin-right: 4px; }
+      .ms-auto { padding: 0 14px; }
+      .ms-auto-agora { margin: 0 0 4px; padding: 8px 10px; border-radius: 8px; background: #f7f4ec; font-size: 0.85rem; font-weight: 600; color: #333; }
+      .ms-auto-sec { padding: 8px 0 12px; border-bottom: 1px solid #f0ece5; }
+      .ms-auto-sec .ms-cfg-linha { font-size: 0.95rem; }
+      .ms-auto-exp { margin: 2px 0 8px; font-size: 0.8rem; color: #4a443b; line-height: 1.4; }
+      .ms-auto textarea.ms-copia { font: inherit; font-size: 0.9rem; line-height: 1.35; resize: vertical; min-height: 96px; background: #fff; }
+      .ms-auto-feriados { list-style: none; margin: 0; padding: 0; }
+      .ms-auto-feriados li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; border-bottom: 1px solid #f0ece5; font-size: 0.9rem; }
+      .ms-auto .ms-linha input[type=date] { flex: 1 1 150px; width: auto; min-height: 44px; font-size: 0.9rem; background: #fff; }
+      .ms-auto-pe { display: flex; justify-content: flex-end; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid #e6e1d6; background: #fff; }
+      .ms-auto-pe .ms-btn { min-width: 120px; min-height: 48px; }
+      /* v7.40.13: agendar mensagem */
+      .ms-agenda { padding: 0 14px; }
+      .ms-agenda-rot { display: block; margin: 4px 0 6px; font-size: 0.85rem; font-weight: 700; color: #2b261f; }
+      .ms-agenda textarea.ms-copia { font: inherit; font-size: 0.95rem; line-height: 1.35; resize: vertical; min-height: 104px; background: #fff; }
+      .ms-agenda-atalhos { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 8px; }
+      .ms-agenda-atalhos .ms-btn { flex: 1 1 auto; font-weight: 600; background: #f3efe6; border: 1px solid transparent; }
+      .ms-agenda-atalhos .ms-btn[aria-pressed=true] { background: #fff4e8; border-color: var(--laranja, #E67E22); color: #5c2e00; }
+      .ms-agenda input[type=datetime-local] { width: 100%; min-height: 44px; font: inherit; font-size: 0.95rem; background: #fff; box-sizing: border-box; }
+      .ms-agenda-res { margin: 6px 0 4px; font-size: 0.85rem; color: #4a443b; min-height: 1.3em; }
+      .ms-agenda-sec { padding: 10px 0 12px; border-bottom: 1px solid #f0ece5; }
+      .ms-agenda-lista { list-style: none; margin: 0; padding: 0; }
+      .ms-agenda-lista li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f0ece5; }
+      .ms-agenda-lista li > div { flex: 1; min-width: 0; }
+      .ms-agenda-lista b { display: block; font-size: 0.85rem; color: #2b261f; }
+      .ms-agenda-lista p { margin: 2px 0 0; font-size: 0.85rem; color: #3d362c; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+      .ms-agenda-lista small { display: block; font-size: 0.75rem; color: #625c53; margin-top: 2px; }
+      .ms-agenda-lista small.falha { color: #8a2b2b; }
+      .ms-agenda-lista .ms-btn { flex: none; }
+      .ms-faixa.ms-agenda-faixa { background: #fffaf2; }
+      .ms-agenda-faixa span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      /* v7.40.14: ficha do cliente */
+      .ms-ficha { padding: 0 14px; }
+      .ms-ficha-quem { margin: 2px 0 4px; font-size: 0.85rem; color: #4a443b; overflow-wrap: anywhere; }
+      .ms-ficha-quem b { color: #2b261f; }
+      .ms-ficha-sec { padding: 10px 0 12px; border-bottom: 1px solid #f0ece5; }
+      .ms-ficha-sec:last-child { border-bottom: 0; }
+      .ms-ficha-rot { display: block; margin: 2px 0 6px; font-size: 0.85rem; font-weight: 700; color: #2b261f; }
+      .ms-ficha input[type=text], .ms-ficha textarea { width: 100%; min-height: 44px; font: inherit; font-size: 0.95rem; background: #fff; box-sizing: border-box; }
+      .ms-ficha textarea.ms-copia { line-height: 1.35; resize: vertical; min-height: 76px; }
+      .ms-ficha-tams { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 6px; margin: 8px 0 0; }
+      .ms-ficha-tams .ms-btn { min-width: 44px; padding: 0 4px; font-weight: 600; background: #f3efe6; border: 1px solid transparent; }
+      .ms-ficha-tams .ms-btn[aria-pressed=true] { background: #fff4e8; border-color: var(--laranja, #E67E22); color: #5c2e00; }
+      .ms-ficha-vazio { margin: 0; font-size: 0.85rem; color: #625c53; }
+      .ms-ficha-etqs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+      .ms-ficha-lista { list-style: none; margin: 0; padding: 0; }
+      .ms-ficha-lista li { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #f0ece5; font-size: 0.88rem; color: #2b261f; }
+      .ms-ficha-lista li:last-child { border-bottom: 0; }
+      .ms-ficha-lista li > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+      .ms-ficha-lista small { display: block; font-size: 0.75rem; color: #625c53; margin-top: 2px; }
+      .ms-ficha-lista .ms-btn { flex: none; }
+      .ms-ficha-nota p { margin: 0; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+      .ms-ficha-acao { margin-top: 8px; }
+      .ms-ficha-pe { align-items: center; gap: 10px; }
+      .ms-ficha-pe small { flex: 1; min-width: 0; font-size: 0.75rem; color: #625c53; }
+      .ms-veste { font-size: 0.72rem; font-weight: 600; color: #3b352c; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ms-resp-dica { margin: 8px 12px 0; font-size: 0.78rem; color: #4a443b; }
       .sheet-mensagens .ms-link-btn { min-height: 44px; padding: 0 6px; border: 0; background: none; color: #7a3a00; font: inherit; font-size: 0.78rem; font-weight: 700; text-decoration: underline; cursor: pointer; }
       .ms-atendente { color: #0f6b3f; }
       .ms-cfg-tit { margin: 12px 0 0; font-weight: 700; }
@@ -393,6 +471,45 @@
       .ms-stage .ms-stage-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .ms-compor .ms-ico { width: 44px; flex: none; } .ms-compor .ms-ico.gravando { background: #c62828; color: #fff; width: auto; padding: 0 12px; font-size: 0.85rem; }
       @media (prefers-reduced-motion: no-preference) { .ms-conv, .ms-chip, .ms-aba { transition: background-color .15s; } }
+      /* v7.40.15: funil de vendas. Celular: uma coluna por tela, rolagem lateral com encaixe só dentro do quadro. Computador: colunas lado a lado. */
+      .ms-funil { min-width: 0; padding: 4px 0 16px; font-size: 0.88rem; }
+      .ms-funil > .ms-linha, .ms-funil > h3, .ms-funil > .ms-fdica, .ms-funil > .ms-vazio { margin-left: 12px; margin-right: 12px; }
+      .ms-funil > h3 { margin-top: 4px; margin-bottom: 2px; font-size: 1rem; }
+      .ms-fdica { margin-top: 0; margin-bottom: 8px; font-size: 0.8rem; color: #555; }
+      .ms-fq { display: flex; gap: 8px; align-items: flex-start; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-padding: 0 12px; padding: 0 12px 8px; -webkit-overflow-scrolling: touch; }
+      .ms-fcol { flex: 0 0 calc(100% - 28px); min-width: 0; box-sizing: border-box; scroll-snap-align: start; background: #f6f3ec; border-radius: 12px; padding: 0 8px 8px; border: 2px solid transparent; }
+      .ms-fcol.alvo { border-color: #141414; background: #efe9dc; }
+      .ms-fcol-cab { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 0 2px; }
+      .ms-fcol-cab h4 { margin: 0; flex: 1; min-width: 0; font-size: 0.95rem; line-height: 1.2; overflow-wrap: anywhere; }
+      .ms-fcol-cab h4:focus-visible { outline: 3px solid #141414; outline-offset: 2px; border-radius: 4px; }
+      .ms-fcol-cab .ms-etq-ponto { width: 12px; height: 12px; }
+      .ms-ftot { flex: none; min-width: 28px; padding: 2px 8px; border-radius: 12px; background: #fff; border: 1px solid #e3ddd3; font-weight: 700; font-size: 0.8rem; text-align: center; box-sizing: border-box; }
+      .ms-fpos { flex: none; font-size: 0.74rem; color: #555; }
+      .sheet-mensagens .ms-fir { flex: none; width: 44px; min-height: 44px; border: 0; border-radius: 50%; background: #fff; color: #222; font-size: 1.1rem; font-weight: 700; cursor: pointer; padding: 0; }
+      .sheet-mensagens .ms-fir:disabled { opacity: 0.35; cursor: default; }
+      .ms-fcards { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+      .sheet-mensagens .ms-fcard { display: grid; gap: 3px; width: 100%; min-height: 64px; text-align: left; background: #fff; border: 1px solid #e3ddd3; border-radius: 10px; padding: 10px 12px; font: inherit; color: #111; cursor: pointer; box-sizing: border-box; }
+      .sheet-mensagens .ms-fcard:hover { border-color: #b9b0a2; } .sheet-mensagens .ms-fcard:focus-visible { outline: 3px solid #141414; outline-offset: 2px; }
+      .sheet-mensagens .ms-fcard[draggable=true] { cursor: grab; } .sheet-mensagens .ms-fcard.arrastando { opacity: 0.5; }
+      .ms-fcard-l1 { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+      .ms-fcard-nome { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .ms-fcard-l1 time { flex: none; font-size: 0.74rem; color: #555; }
+      .ms-fcard-prev { font-size: 0.82rem; color: #333; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+      .ms-fcard-meta { font-size: 0.74rem; color: #5f584e; overflow-wrap: anywhere; }
+      .ms-fcol-vazio, .ms-fcol-mais { margin: 4px 2px; font-size: 0.8rem; color: #555; }
+      .ms-fop-info { margin: 0 14px 4px; font-size: 0.82rem; color: #555; }
+      .ms-gaveta-corpo > .ms-etq-rot { margin-left: 14px; margin-right: 14px; }
+      .sheet-mensagens .ms-fop { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 14px; border: 0; border-bottom: 1px solid #f0ece5; background: #fff; font: inherit; font-size: 0.95rem; color: #111; text-align: left; cursor: pointer; }
+      .sheet-mensagens .ms-fop:hover, .sheet-mensagens .ms-fop:focus-visible { background: #f5f1e8; }
+      .sheet-mensagens .ms-fop[aria-current=true] { cursor: default; color: #555; background: #faf8f3; }
+      .sheet-mensagens .ms-fop .ms-etq-ponto { width: 12px; height: 12px; }
+      .ms-fop small { margin-left: auto; font-size: 0.76rem; color: #555; }
+      .ms-gaveta-corpo > .ms-fpe { display: flex; gap: 8px; flex-wrap: wrap; padding: 14px 14px 0; }
+      .ms-fpe .ms-btn { flex: 1 1 140px; }
+      @media (min-width: 860px) {
+        .ms-app[data-painel=funil] { grid-template-columns: 1fr; } .ms-app[data-painel=funil] .ms-conversa { display: none; } .ms-app[data-painel=funil] .ms-lateral { border-right: 0; }
+        .ms-fq { scroll-snap-type: none; } .ms-fcol { flex: 1 0 200px; } .ms-fpos, .sheet-mensagens .ms-fir { display: none; }
+      }
     `;
     document.head.appendChild(s);
   }
@@ -419,7 +536,8 @@
     const wrap = el('div', 'ms-lista-wrap'); wrap.id = 'ms-lista-wrap'; const ul = el('ul', 'ms-lista'); ul.id = 'ms-lista'; wrap.appendChild(ul);
     const extra = el('div'); extra.id = 'ms-extra'; wrap.appendChild(extra);
     const selbar = el('div', 'ms-selbar'); selbar.id = 'ms-selbar'; selbar.hidden = true; selbar.setAttribute('role', 'toolbar'); selbar.setAttribute('aria-label', 'Conversas selecionadas');
-    lat.append(topo, abas, filtros, busq, estado, wrap, selbar);
+    const saudeEl = el('div', 'ms-saude'); saudeEl.id = 'ms-saude'; saudeEl.hidden = true; saudeEl.setAttribute('role', 'alert');
+    lat.append(topo, saudeEl, abas, filtros, busq, estado, wrap, selbar);
     // v7.22: segurar o dedo numa conversa começa a seleção (como no WhatsApp)
     ul.addEventListener('pointerdown', (ev) => { const b = ev.target.closest('.ms-conv'); if (!b || selecao) return; clearTimeout(timerToque); toqueLongo = false; timerToque = setTimeout(() => { toqueLongo = true; iniciarSelecao_(Number(b.dataset.id)); if (navigator.vibrate) try { navigator.vibrate(20); } catch (e) { /* sem vibração */ } }, 550); });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => ul.addEventListener(t, () => clearTimeout(timerToque)));
@@ -499,6 +617,41 @@
     if (id === 'todos') return CANAIS.reduce((t, [k]) => { const c = contagemDe_(k); Object.keys(vazio).forEach((q) => { t[q] += c[q] || 0; }); return t; }, Object.assign({}, vazio));
     return resumo && resumo.canais[id] ? Object.assign({}, vazio, { conversas: resumo.canais[id].conversas, nao_lidas: resumo.canais[id].naoLidas || 0 }) : vazio;
   }
+  /* v7.40.4: etiquetas */
+  let ETQ = null, etqFiltro = 0, etqCarregando = false, etqDaFicha_ = false;
+  const COR_ETQ_ = { cinza: '#7d776d', ambar: '#c98a00', azul: '#3a6fd8', verde: '#2e8b57', roxo: '#7a4fd1', rosa: '#c2477a' };
+  function pontoEtq_(e) { const d = el('span', 'ms-etq-ponto'); d.style.background = COR_ETQ_[e.cor] || COR_ETQ_.cinza; d.setAttribute('aria-hidden', 'true'); return d; }
+  function tagEtq_(e) { const t = el('span', 'ms-etq'); t.append(pontoEtq_(e), document.createTextNode(e.nome)); return t; }
+  async function carregarEtiquetas_() { if (etqCarregando) return; etqCarregando = true; const r = await worker_('/msg/etiquetas', 'GET'); etqCarregando = false; ETQ = r && r.ok ? r.etiquetas : []; desenharFiltros(); }
+  function faixaEtq_(c) {
+    const f = el('div', 'ms-etq-faixa'); f.id = 'ms-etq-faixa';
+    if (c.dono) { f.appendChild(el('span', 'ms-dono-tag', 'Responsável: ' + c.dono)); f.appendChild(botao('ms-etq-mais', 'Liberar', 'liberar')); }   // v7.40.6
+    else f.appendChild(botao('ms-etq-mais', 'Assumir', 'assumir'));
+    if (c.tamanhos) { const v = el('span', 'ms-veste', 'Veste ' + c.tamanhos); v.id = 'ms-veste'; v.title = 'Tamanhos da ficha do cliente'; f.appendChild(v); }   // v7.40.14
+    (c.etiquetas || []).forEach((e) => f.appendChild(tagEtq_(e)));
+    f.appendChild(botao('ms-etq-mais', (c.etiquetas || []).length ? 'Mudar etiquetas' : '+ Etiqueta', 'etiquetas'));
+    return f;
+  }
+  function abrirEtiquetas_() {
+    if (!aberta) return; const corpo = gaveta_('Etiquetas'); if (!corpo) return;
+    const tem = new Set((aberta.etiquetas || []).map((e) => e.id)), lista = ETQ || [];
+    const grupo = (titulo, itens, tipo) => {
+      if (!itens.length) return; corpo.appendChild(el('p', 'ms-etq-rot', titulo));
+      itens.forEach((e) => { const lb = el('label', 'ms-etq-op'), i = el('input'); i.type = tipo; i.name = tipo === 'radio' ? 'ms-etq-venda' : 'ms-etq-' + e.id; i.value = String(e.id); i.checked = tem.has(e.id); lb.append(i, pontoEtq_(e), document.createTextNode(e.nome)); corpo.appendChild(lb); });
+    };
+    grupo('Etapa da venda · uma por vez', lista.filter((e) => e.venda), 'radio');
+    grupo('Outras', lista.filter((e) => !e.venda), 'checkbox');
+    const pe = el('div', 'ms-etq-pe'); pe.append(botao('ms-btn', 'Tirar etapa', 'etq-sem-etapa'), botao('ms-btn prim', 'Salvar', 'etq-salvar')); corpo.appendChild(pe);
+  }
+  async function salvarEtiquetas_() {
+    const g = $('ms-gaveta'); if (!g || !aberta) return;
+    const ids = Array.from(g.querySelectorAll('.ms-etq-op input:checked')).map((i) => Number(i.value));
+    const c = aberta, r = await worker_('/msg/rotular', 'POST', { conversa: c.id, etiquetas: ids });
+    if (!r.ok) { aviso_(r.erro || 'Não salvei as etiquetas. Tente de novo.'); return; }
+    c.etiquetas = r.etiquetas; fecharGaveta_(); const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(c));
+    aviso_('Etiquetas salvas.'); if (etqDaFicha_) { etqDaFicha_ = false; abrirFicha_(); }
+    ETQ = null; desenharFiltros(); await carregarLista(false);
+  }
   function desenharFiltros() {
     const f = $('ms-filtros'); if (!f) return;
     const c = contVista || contagemDe_(canal), t = contTipos || { individuais: Math.max(0, (c.conversas || 0) - (c.grupos || 0)), grupos: c.grupos || 0 };
@@ -514,6 +667,11 @@
       const n = id === 'nao_lidas' ? c.nao_lidas : id === 'sem_resposta' ? c.sem_resposta : id === 'ambos' ? c.ambos : id === 'encerradas' ? c.encerradas : 0;
       const b = botao('ms-chip' + (id === 'ambos' && n > 0 ? ' alerta' : ''), nome + (n > 0 ? ' · ' + n : ''), 'filtro', { filtro: id }); b.setAttribute('aria-pressed', String(id === filtro)); f.appendChild(b);
     });
+    if (!ETQ) { carregarEtiquetas_(); return; }
+    if (ETQ.length) {   // v7.40.4: filtro por etiqueta (pessoas)
+      f.appendChild(el('span', 'ms-chip-sep'));
+      ETQ.forEach((e) => { const b = botao('ms-chip ms-chip-etq', '', 'etq', { id: String(e.id) }); b.append(pontoEtq_(e), document.createTextNode(e.nome + (e.pessoas > 0 ? ' · ' + e.pessoas : ''))); b.setAttribute('aria-pressed', String(etqFiltro === e.id)); f.appendChild(b); });
+    }
   }
   function ligadoOuPronto() {
     if (canal === 'todos') return true;
@@ -688,7 +846,7 @@
     return b;
   }
   function mostrarRelatorio_(r) {
-    painel = 'metricas'; const ex = $('ms-extra'), ul = $('ms-lista'); ul.hidden = true; chrome_(true); ex.textContent = '';
+    largarFunil_(); painel = 'metricas'; const ex = $('ms-extra'), ul = $('ms-lista'); ul.hidden = true; chrome_(true); ex.textContent = '';
     const p = el('div', 'ms-painel ms-relatorio');
     const topo = el('div', 'ms-linha'); topo.appendChild(botao('ms-btn', '← Conversas', 'fechar-painel')); p.appendChild(topo);
     p.appendChild(el('h3', '', 'Relatório da primeira limpeza dos contatos'));
@@ -753,7 +911,7 @@
     b.className = 'ms-conv' + (nova ? ' nova' : ''); if (aberta && aberta.id === c.id) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
     const marcada = !!(selecao && selecao.has(c.id));
     if (selecao) b.setAttribute('aria-pressed', String(marcada)); else b.removeAttribute('aria-pressed');
-    const assinatura = [canal === 'todos' ? c.canal : '', c.nome, c.ultima_em, c.previa, c.nao_lidas, c.ult_dir, c.ult_status, espera ? Math.floor(Date.now() / 60000) : '', aberta && aberta.id === c.id, c.outro_id || '', c.encerrada_motivo || '', selecao ? (marcada ? 'S' : 's') : ''].join('|');
+    const assinatura = [c.dono || '', (c.etiquetas || []).map((e) => e.id + e.nome + e.cor).join('|'), canal === 'todos' ? c.canal : '', c.nome, c.ultima_em, c.previa, c.nao_lidas, c.ult_dir, c.ult_status, espera ? Math.floor(Date.now() / 60000) : '', aberta && aberta.id === c.id, c.outro_id || '', c.encerrada_motivo || '', selecao ? (marcada ? 'S' : 's') : ''].join('|');
     if (li.dataset.ass === assinatura) return li;
     li.dataset.ass = assinatura; b.textContent = '';
     let av;
@@ -767,12 +925,14 @@
     if (canal === 'todos' && NOME_CANAL_[c.canal]) l3.appendChild(el('span', 'ms-canal-tag ms-canal-' + c.canal, NOME_CANAL_[c.canal]));
     if (c.encerrada_em && NOME_MOTIVO_[c.encerrada_motivo]) l3.appendChild(el('span', 'ms-motivo-tag ms-motivo-' + c.encerrada_motivo, NOME_MOTIVO_[c.encerrada_motivo]));
     if (c.nome && !c.grupo && /^\d{10,15}$/.test(c.contato || '')) l3.appendChild(el('span', 'ms-fone', foneBonito_(c.contato)));
+    if (c.dono) l3.appendChild(el('span', 'ms-dono-tag', 'Resp.: ' + c.dono));
+    (c.etiquetas || []).slice(0, 2).forEach((e) => l3.appendChild(tagEtq_(e)));
     const l2 = el('span', 'ms-l2'); const pv = el('span', 'ms-previa');
     if (saiu) { pv.appendChild(selo(c.ult_status || 'enviada')); pv.appendChild(document.createTextNode('Você: ')); }
     const pr = /^\[(.+)\]$/.exec(c.previa || ''); pv.appendChild(document.createTextNode(pr ? (TIPO_ROTULO[pr[1]] || c.previa) : semFormatacao_(c.previa))); l2.appendChild(pv);
     if (nova) { const bd = el('span', 'ms-badge', c.nao_lidas > 99 ? '99+' : String(c.nao_lidas)); bd.setAttribute('aria-label', c.nao_lidas + ' não lidas'); l2.appendChild(bd); }
     corpo.append(l1, l2); if (l3.firstChild) corpo.appendChild(l3);
-    if (espera) corpo.appendChild(el('span', 'ms-aguarda', 'Falta responder · há ' + espera_(c.ult_entrada_em || c.ultima_em)));
+    if (espera) { const desde = c.ult_entrada_em || c.ultima_em, atrasou = Date.now() - Date.parse(desde) > META_RESPOSTA_MS; corpo.appendChild(el('span', 'ms-aguarda' + (atrasou ? ' atrasada' : ''), (atrasou ? '⚠ ' : '') + 'Falta responder · há ' + espera_(desde))); }
     if (c.outro_id) corpo.appendChild(el('span', 'ms-ambos-tag', 'Também no ' + NOME_CANAL[outroCanal_(c)]));
     b.append(av, corpo);
     return li;
@@ -793,6 +953,7 @@
   const RE_ASSINATURA_ = /^\*([^*\n]{1,30}):\*\n/;
   /* v7.24: barra acima da caixa de mensagem = ferramentas de atendimento (Produtos, Respostas rápidas) + a assinatura */
   const ICO_ = {
+    nota: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5"/></svg>',
     sacola: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
     raio: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3 5 14h6l-1 7 8-11h-6l1-7z"/></svg>',
     lapis: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/></svg>'
@@ -809,7 +970,7 @@
       if (editando) setTimeout(() => i.focus(), 0);
       return;
     }
-    w.append(botaoIco_('ms-ferr-btn', 'sacola', 'Produtos', 'gaveta-produtos'), botaoIco_('ms-ferr-btn', 'raio', 'Respostas', 'gaveta-respostas'));
+    w.append(botaoIco_('ms-ferr-btn', 'sacola', 'Produtos', 'gaveta-produtos'), botaoIco_('ms-ferr-btn', 'raio', 'Respostas', 'gaveta-respostas'), botaoIco_('ms-ferr-btn ms-nota-btn', 'nota', 'Nota', 'modo-nota'));
     if (lig) {
       const b = botao('ms-ferr-btn ms-assina-btn', '', 'nome-editar'); b.title = 'Respondendo como ' + n + ' · tocar para mudar o nome';
       b.append(el('span', 'ms-sr', 'Respondendo como '), el('b', '', n)); b.insertAdjacentHTML('beforeend', ICO_.lapis); b.setAttribute('aria-label', 'Respondendo como ' + n + '. Mudar nome');
@@ -847,7 +1008,8 @@
   });
   function fecharGaveta_() { const g = $('ms-gaveta'); if (!g) return; g.remove(); if (window.TKCamadas && TKCamadas.aberta('ms-gaveta')) TKCamadas.desempilhar('ms-gaveta'); }
   function gaveta_(titulo) {
-    fecharGaveta_(); const pai = $('ms-conversa'); if (!pai) return null;
+    // v7.40.9: no celular, com a lista à mostra (ex.: gavetas abertas pelo menu ⋯), a gaveta cobre o app inteiro em vez da conversa escondida
+    fecharGaveta_(); const cv = $('ms-conversa'), pai = cv && cv.getClientRects().length ? cv : $('ms-app'); if (!pai) return null;
     const g = el('div', 'ms-gaveta'); g.id = 'ms-gaveta'; g.setAttribute('role', 'dialog'); g.setAttribute('aria-label', titulo);
     const cab = el('div', 'ms-gaveta-cab'); cab.appendChild(el('h3', '', titulo));
     const x = botao('ms-ico', '✕', 'gaveta-fechar'); x.setAttribute('aria-label', 'Fechar ' + titulo); cab.appendChild(x);
@@ -953,6 +1115,24 @@
     ].filter(Boolean);
   }
   const respostas_ = () => (cfgLeitura && Array.isArray(cfgLeitura.respostas) ? cfgLeitura.respostas : respostasPadrao_());
+  /* v7.40.9: [nome] vira o nome da atendente (menos no Pix, onde [nome] é a titular da chave); o primeiro [lacuna] fica selecionado para completar */
+  const RE_LACUNA_ = /\[(nome|chave pix|valor[^\]\n]{0,20})\]/i;
+  function textoResposta_(x) { const n = nomeAtendente_(); return n && !/pix/i.test(x) ? String(x).replace(/\[nome\]/g, n) : String(x); }
+  function marcarLacuna_(desde) {
+    const ta = $('ms-texto'); if (!ta) return false;
+    const resto = ta.value.slice(desde || 0), mt = RE_LACUNA_.exec(resto); if (!mt) return false;
+    const i = (desde || 0) + mt.index; try { ta.focus(); ta.setSelectionRange(i, i + mt[0].length); } catch (e) { /* campo sem seleção */ }
+    aviso_('Complete o que está entre colchetes antes de enviar.'); return true;
+  }
+  function colocarResposta_(x) {
+    const ta = $('ms-texto'), txt = textoResposta_(x); colocarNaMensagem_(txt);
+    if (ta) marcarLacuna_(Math.max(0, ta.value.length - txt.length));
+  }
+  function expandirAtalho_(ta) {
+    const mt = /^\/([a-z0-9_-]{1,38})\s$/i.exec(ta.value); if (!mt) return false;
+    const r = respostas_().find((z) => String(z.t || '').toLowerCase() === '/' + mt[1].toLowerCase()); if (!r) return false;
+    ta.value = ''; colocarResposta_(r.x); return true;
+  }
   function abrirRespostas_(editando) {
     const corpo = gaveta_('Respostas rápidas'); if (!corpo) return;
     if (!editando) {
@@ -960,6 +1140,7 @@
       if (!lista.length) ul.appendChild(el('li', 'ms-vazio', 'Nenhuma resposta salva ainda.'));
       lista.forEach((r, i) => { const li = el('li'), b = botao('ms-resp', '', 'resp-usar', { i: String(i) }); b.append(el('b', '', r.t), el('span', '', r.x)); li.appendChild(b); ul.appendChild(li); });
       corpo.appendChild(ul);
+      if (lista.some((r) => /^\/\S/.test(r.t || ''))) corpo.appendChild(el('p', 'ms-resp-dica', 'Atalho: escreva /oi (ou outro título com /) e um espaço na mensagem.'));
       const l = el('div', 'ms-linha'); l.appendChild(botao('ms-btn', 'Editar respostas', 'resp-editar')); corpo.appendChild(l);
       if (!(cfgLeitura && Array.isArray(cfgLeitura.respostas))) corpo.appendChild(el('p', 'ms-cfg-res', 'Estas são as respostas iniciais, com o que o site já sabe da loja. Em “Editar respostas” dá para colocar horário, formas de pagamento, entrega e o que mais a equipe repete.'));
       return;
@@ -984,6 +1165,55 @@
       l.append(add, salvar); box.appendChild(l);
     };
     desenhar(); corpo.appendChild(box);
+  }
+  /* ---- v7.40.9: respostas automáticas (desligadas por padrão). Tudo é salvo junto, no botão Salvar fixo no pé da gaveta ---- */
+  let autoEdit_ = null, autoUlt_ = null;
+  const dataCurta_ = (iso) => String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7) + '/' + String(iso).slice(0, 4);
+  async function abrirAuto_() {
+    const corpo = gaveta_('Respostas automáticas'); if (!corpo) return;
+    const g = $('ms-gaveta'), gen = g.dataset.gen; corpo.appendChild(el('p', 'ms-vazio', 'Carregando…'));
+    const r = await worker_('/msg/auto', 'GET');
+    const g2 = $('ms-gaveta'); if (!g2 || g2.dataset.gen !== gen) return;      // a pessoa fechou ou abriu outra gaveta enquanto carregava
+    if (!r.ok) { corpo.textContent = ''; corpo.appendChild(el('p', 'ms-vazio', r.erro || 'Não foi possível carregar agora. Feche e abra de novo.')); return; }
+    autoEdit_ = JSON.parse(JSON.stringify(r.auto)); autoUlt_ = r; desenharAuto_();
+    const pe = el('div', 'ms-auto-pe'); pe.appendChild(botao('ms-btn prim', 'Salvar', 'auto-salvar')); g2.appendChild(pe);
+  }
+  function desenharAuto_() {
+    const g = $('ms-gaveta'), corpo = g && g.querySelector('.ms-gaveta-corpo'); if (!corpo || !autoEdit_) return;
+    const rolagem = corpo.scrollTop; corpo.textContent = '';
+    const w = el('div', 'ms-auto'), ag = (autoUlt_ && autoUlt_.agora) || {};
+    w.appendChild(el('p', 'ms-auto-agora', ag.aberta ? 'Agora a loja está aberta.' : 'Agora a loja está fechada · abre ' + (ag.abertura || 'em breve') + '.'));
+    const secao = (k, titulo, explica) => {
+      const s = el('section', 'ms-auto-sec'), lb = el('label', 'ms-cfg-linha'), c = el('input'); c.type = 'checkbox'; c.checked = !!autoEdit_[k].ligado;
+      c.addEventListener('change', () => { autoEdit_[k].ligado = c.checked; });
+      lb.append(c, document.createTextNode(titulo)); s.appendChild(lb); s.appendChild(el('p', 'ms-auto-exp', explica));
+      const ta = el('textarea', 'ms-copia'); ta.rows = 4; ta.maxLength = 1000; ta.value = autoEdit_[k].texto; ta.setAttribute('aria-label', 'Texto da mensagem de ' + titulo.toLowerCase());
+      ta.addEventListener('input', () => { autoEdit_[k].texto = ta.value; }); s.appendChild(ta); w.appendChild(s);
+    };
+    secao('boasVindas', 'Boas-vindas', 'Loja aberta: quando o cliente escreve e a conversa estava parada havia 12 h. Sai uma vez, na hora.');
+    secao('foraHorario', 'Fora do horário', 'Loja fechada: no máximo 1 vez por conversa até a loja abrir. {abertura} vira o dia e a hora, como “amanhã às 7h30”.');
+    const h = el('section', 'ms-auto-sec');
+    h.appendChild(el('p', 'ms-etq-rot', 'Horário da loja'));
+    h.appendChild(el('p', 'ms-auto-exp', 'Segunda a sexta, 7h30 às 18h · Sábado, 7h30 às 14h · Domingo fechado'));
+    h.appendChild(el('p', 'ms-etq-rot', 'Feriados com comércio aberto (8h às 13h)'));
+    const ul = el('ul', 'ms-auto-feriados');
+    if (!autoEdit_.feriados.length) ul.appendChild(el('li', '', 'Nenhum feriado cadastrado.'));
+    autoEdit_.feriados.forEach((d) => { const li = el('li'), x = botao('ms-link-btn', 'Remover', 'auto-feriado-tirar', { d: d }); x.setAttribute('aria-label', 'Remover o feriado de ' + dataCurta_(d)); li.append(el('span', '', dataCurta_(d)), x); ul.appendChild(li); });
+    h.appendChild(ul);
+    const ln = el('div', 'ms-linha'), di = el('input', 'ms-copia'); di.type = 'date'; di.id = 'ms-auto-data'; di.setAttribute('aria-label', 'Data do feriado');
+    ln.append(di, botao('ms-btn', 'Incluir feriado', 'auto-feriado-add')); h.appendChild(ln); w.appendChild(h);
+    w.appendChild(el('p', 'ms-auto-exp', 'Nunca vai para grupos, respostas a status sem texto nem mensagens da própria loja. A mensagem automática aparece na conversa com o selo “Automática” e a conversa continua em “Falta responder”.'));
+    const u = autoUlt_ && autoUlt_.ultimo;
+    if (u && u.em) { const d = new Date(u.em); w.appendChild(el('p', 'ms-auto-exp' + (u.ok ? '' : ' ms-pausa'), 'Último envio automático: ' + (isNaN(d) ? '' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })) + (u.ok ? ' · enviado' : ' · não confirmado: ' + (u.erro || 'sem resposta')))); }
+    corpo.appendChild(w); corpo.scrollTop = rolagem;
+  }
+  async function salvarAuto_(b) {
+    if (!autoEdit_) return;
+    b.disabled = true; const r = await worker_('/msg/auto', 'POST', autoEdit_); b.disabled = false;
+    if (!r.ok) { aviso_(r.erro || 'Não foi possível salvar agora. Tente de novo.'); return; }
+    autoEdit_ = JSON.parse(JSON.stringify(r.auto)); autoUlt_ = r; desenharAuto_();
+    const n = (r.auto.boasVindas.ligado ? 1 : 0) + (r.auto.foraHorario.ligado ? 1 : 0);
+    aviso_(n ? 'Salvo. ' + (n === 2 ? 'As duas respostas automáticas estão ligadas.' : (r.auto.boasVindas.ligado ? 'Boas-vindas ligada.' : 'Fora do horário ligada.')) : 'Salvo. As respostas automáticas estão desligadas.');
   }
   async function salvarNome_(v) {
     const r = await worker_('/msg/config', 'POST', { meuNome: String(v || '') });
@@ -1061,13 +1291,13 @@
   let indexandoNomes = false, nomesConferidos = false;
   async function nomesGoogle_(){if(indexandoNomes)return;indexandoNomes=true;try{for(let i=0;i<40;i++){const r=await worker_('/msg/pessoas/google','POST',{});if(!r.ok||r.fim)break;}await carregarLista(true);}finally{indexandoNomes=false;}}
   function pintarLista() {
-    const ul = $('ms-lista'), extra = $('ms-extra'); if (!ul || painel === 'metricas') return;
+    const ul = $('ms-lista'), extra = $('ms-extra'); if (!ul || painel === 'metricas' || painel === 'funil') return;
     const vivos = new Set(lista.map((c) => c.id));
     if (selecao) { selecao.forEach((id) => { if (!vivos.has(id)) selecao.delete(id); }); desenharSelbar_(); }
     elConvs.forEach((li, id) => { if (!vivos.has(id)) { li.remove(); elConvs.delete(id); } });
     let ref = ul.firstChild;
     const blocos = new Map();
-    lista.forEach(c=>{const key=c.grupo?'grupo:'+c.id:c.pessoa||'conversa:'+c.id;if(!blocos.has(key))blocos.set(key,[]);blocos.get(key).push(c);});
+    lista.forEach(c=>{const key=c.grupo?'grupo:'+c.id:c.pessoa||(c.outro_id?'par:'+Math.min(c.id,c.outro_id):'conversa:'+c.id);   /* v7.40.16: mesmo número nos dois WhatsApp fica junto, mesmo sem vínculo manual */if(!blocos.has(key))blocos.set(key,[]);blocos.get(key).push(c);});
     [...blocos.values()].map(b=>b.sort((a,c)=>String(c.ultima_em).localeCompare(String(a.ultima_em))||c.id-a.id)).sort((a,b)=>String(b[0].ultima_em).localeCompare(String(a[0].ultima_em))||b[0].id-a[0].id).forEach(b=>b.forEach((c,i)=>{const li=linhaConversa(c);li.classList.toggle('ms-vinculada',i>0);li.style.marginLeft=i?'24px':'';li.style.background=i?'#faf8f3':'';if(li!==ref)ul.insertBefore(li,ref);else ref=ref.nextSibling;}));
     extra.textContent = '';
     if (!lista.length) {
@@ -1078,7 +1308,7 @@
   async function carregarLista(reset) {
     if(!nomesConferidos){nomesConferidos=true;setTimeout(nomesGoogle_,1500);}
     const mine = ++seqLista, c0 = canal, f0 = filtro, b0 = busca.trim(), t0 = tipoParam_();
-    const path='/msg/conversas?canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : '');
+    const path='/msg/conversas?canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : '') + (etqFiltro ? '&etiqueta=' + etqFiltro : '');
     const salvo = APP_RECENTES && reset ? await recentes_(path) : null;
     if (salvo && mine===seqLista) { lista=salvo.conversas;contVista=salvo.contagens||null;contTipos=salvo.tipos||null;desenharFiltros();pintarLista();$('ms-extra').textContent='Conversas recentes · atualizando…'; }
     const r = await worker_(path, 'GET');
@@ -1215,12 +1445,19 @@
     if (m.autor_nome && m.autor_fone) a.appendChild(el('small', '', foneBonito_(m.autor_fone)));
     return a;
   }
+  /* v7.40.1–7.40.7: link de story em mensagens sem contexto (removido na 7.40.8) */
+
   function bolha(m) {
     let b = elMsgs.get(m.id);
-    const ass = [m.autor_nome || '', m.autor_fone || '', ehGrupo_() ? Object.keys(nomesDoGrupo_()).length : 0, m.texto, m.tipo, m.status, m.erro || '', m.midia, m.localUrl || '', m.ctx_tipo || '', m.ctx_midia, m.ctx_texto || '', m.ctx_legenda || '', m.ctx_aprox].join('|');
+    const ass = [m.autor_nome || '', m.autor_fone || '', ehGrupo_() ? Object.keys(nomesDoGrupo_()).length : 0, m.texto, m.tipo, m.status, m.erro || '', m.midia, m.localUrl || '', m.ctx_tipo || '', m.ctx_midia, m.ctx_texto || '', m.ctx_legenda || '', m.ctx_aprox, m.por || ''].join('|');
     if (b && b.dataset.ass === ass) return b;
     if (!b) { b = el('div'); elMsgs.set(m.id, b); }
     b.dataset.ass = ass; b.dataset.id = String(m.id); b.textContent = '';
+    if (m.direcao === 'nota') {   // nota interna: largura total, amarela, nunca parece mensagem enviada
+      b.className = 'ms-bolha ms-nota'; const d = new Date(m.enviada_em);
+      b.append(el('span', 'ms-nota-rot', 'Só a equipe vê · ' + (m.autor || 'Equipe') + (isNaN(d) ? '' : ' · ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))), el('div', 'ms-nota-tx', m.texto || ''));
+      return b;
+    }
     const falhou = m.status === 'falhou';
     b.className = 'ms-bolha ' + (m.direcao === 'saida' ? 'saida' : 'entrada') + (m.status === 'pendente' ? ' pendente' : '') + (falhou ? ' falhou' : '');
     const autor = autorEl_(m); if (autor) b.appendChild(autor);
@@ -1231,8 +1468,9 @@
     const corpoTxt = sig ? m.texto.slice(sig[0].length) : m.texto;
     if (corpoTxt) formatarWa_(b, trocarMencoes_(corpoTxt));
     if (m.tipo && m.tipo !== 'texto' && !mid) b.appendChild(el('span', 'ms-tipo', (m.texto ? ' ' : '') + (TIPO_ROTULO[m.tipo] || '[' + m.tipo + ']') + (m.midia === 0 && m.direcao === 'entrada' && ['imagem', 'vídeo', 'áudio'].indexOf(m.tipo) >= 0 ? ' (arquivo não disponível)' : '')));
-    if (m.direcao === 'entrada' && typeof m.id === 'number' && !m.ctx_tipo && m.tipo === 'texto' && m.texto && m.texto.length <= 80 && !ehGrupo_() && (canalDaConversa() === 'whatsapp1' || canalDaConversa() === 'whatsapp2')) b.appendChild(botao('ms-ver-stories', 'Foi resposta a um story? Ver stories no ar', 'stories-no-ar', { id: String(m.id) }));
-    const meta = el('span', 'ms-meta'); meta.appendChild(el('time', '', m.enviada_em ? hm(new Date(m.enviada_em)) : ''));
+    /* v7.40.8: link "Foi resposta a um story?" removido; o contexto do story vem da Wafly quando ela envia a referência */
+    const meta = el('span', 'ms-meta'); if (m.direcao === 'saida' && m.por === 'auto') meta.appendChild(el('span', 'ms-auto-tag', 'Automática'));
+    meta.appendChild(el('time', '', m.enviada_em ? hm(new Date(m.enviada_em)) : ''));
     if (m.direcao === 'saida') meta.appendChild(selo(m.status || 'enviada'));
     b.appendChild(meta);
     if (m.status === 'incerta') b.appendChild(el('span', 'ms-erro', 'Sem confirmação. Confira no ' + (canalDaConversa() === 'instagram' ? 'Instagram' : 'WhatsApp') + ' antes de enviar de novo.'));
@@ -1275,11 +1513,229 @@
     const save=el('button','prim','Salvar nome e vínculos');save.type='button';save.style.minHeight='48px';save.onclick=async()=>{if(!confirm('Salvar este nome e reunir os canais escolhidos, preservando o histórico?'))return;save.disabled=true;const out=await worker_('/msg/pessoa','POST',{conversa:id,nome:name.value,whatsapp:phone.value,segundo:second.value,semWhatsApp:without.checked,vincular:[...linked]});save.disabled=false;if(!out.ok){aviso_(out.erro||'Não foi possível salvar.');return;}finish();await carregarLista(true);if(aberta&&aberta.id===id){aberta=out.conversa;montarConversa(aberta);pintarFio(false);}};
     const close=el('button','','Cancelar');close.type='button';close.style.minHeight='48px';close.onclick=finish;form.append(save,close);overlay.appendChild(form);document.body.appendChild(overlay);if(window.TKCamadas)TKCamadas.empilhar('ms-pessoa',()=>overlay.remove());name.focus();
   }
+  /* ---- v7.40.13: agendar mensagem (horário de Fortaleza, UTC-3 sem horário de verão) ---- */
+  const FORT_MS_ = 3 * 3600000;
+  const fortIso_ = (ms) => new Date(ms - FORT_MS_).toISOString();                     // "relógio de Fortaleza" em formato ISO
+  const fortDia_ = (ms) => fortIso_(ms).slice(0, 10);
+  const fortParaMs_ = (diaHora) => Date.parse(diaHora + ':00-03:00');                  // "AAAA-MM-DDTHH:MM" de Fortaleza → instante
+  function quandoRotulo_(iso) {
+    const t = Date.parse(iso); if (isNaN(t)) return '';
+    const dia = fortDia_(t), hojeD = fortDia_(Date.now()), amanhaD = fortDia_(Date.now() + 86400000), h = fortIso_(t).slice(11, 16);
+    if (dia === hojeD) return 'hoje ' + h;
+    if (dia === amanhaD) return 'amanhã ' + h;
+    return dia.slice(8, 10) + '/' + dia.slice(5, 7) + ' ' + h;
+  }
+  function atalhoMs_(k) {
+    if (k === '1h') return Math.ceil((Date.now() + 3600000) / 60000) * 60000;
+    const amanha = fortDia_(Date.now() + 86400000);
+    return fortParaMs_(amanha + (k === 'am8' ? 'T08:00' : 'T14:00'));
+  }
+  function desenharFaixaAgenda_() {
+    const velha = $('ms-agenda-faixa'); if (velha) velha.remove();
+    clearTimeout(timerAgenda_); timerAgenda_ = null;
+    const pai = $('ms-conversa'), wrap = pai && pai.querySelector('.ms-fio-wrap'); if (!wrap || !aberta) return;
+    const pend = agendadas_.filter((x) => x.status === 'pendente' || x.status === 'enviando').sort((x, y) => Date.parse(x.quando) - Date.parse(y.quando));
+    if (!pend.length) return;
+    const f = el('div', 'ms-faixa ms-agenda-faixa'); f.id = 'ms-agenda-faixa'; f.setAttribute('role', 'status');
+    const t = pend.length === 1 ? '1 mensagem agendada para ' + quandoRotulo_(pend[0].quando) : pend.length + ' mensagens agendadas · a próxima sai ' + quandoRotulo_(pend[0].quando);
+    const sp = el('span', '', '🕓 ' + t); sp.title = t; f.appendChild(sp);
+    const ver = botao('ms-btn', 'Ver', 'agenda-abrir'); ver.setAttribute('aria-label', 'Ver mensagens agendadas'); f.appendChild(ver);
+    pai.insertBefore(f, wrap);
+    const conv = aberta.id, falta = Date.parse(pend[0].quando) - Date.now() + 75000;    // passou a hora: confere de novo (o servidor envia a cada minuto)
+    timerAgenda_ = setTimeout(() => recarregarAgenda_(conv), Math.min(Math.max(falta, 15000), 2147000000));
+  }
+  async function recarregarAgenda_(conv) {
+    if (!aberta || aberta.id !== conv) return;
+    const r = await worker_('/msg/agendadas?conversa=' + encodeURIComponent(conv), 'GET');
+    if (!aberta || aberta.id !== conv || !r.ok) return;
+    agendadas_ = r.pendentes || []; desenharFaixaAgenda_();
+    const g = $('ms-gaveta'); if (g && g.dataset.tipo === 'agenda') desenharListaAgenda_(r);
+  }
+  async function abrirAgenda_() {
+    if (!aberta) return;
+    const conv = aberta, ta0 = $('ms-texto'), rascunho = ta0 ? ta0.value.trim() : '';
+    const corpo = gaveta_('Agendar mensagem'); if (!corpo) return;
+    const g = $('ms-gaveta'); g.dataset.tipo = 'agenda'; const gen = g.dataset.gen;
+    agendaQuando_ = 0; agendaAtalho_ = '';
+    const w = el('div', 'ms-agenda');
+    const s1 = el('section', 'ms-agenda-sec'), lb = el('label', 'ms-agenda-rot', 'Mensagem'); lb.htmlFor = 'ms-ag-texto';
+    const ta = el('textarea', 'ms-copia'); ta.id = 'ms-ag-texto'; ta.rows = 4; ta.maxLength = 1000; ta.value = rascunho.slice(0, 1000); ta.placeholder = 'Ex.: Oi! A peça que você pediu chegou. Posso separar?';
+    s1.append(lb, ta);
+    if (conv.grupo) s1.appendChild(el('p', 'ms-auto-exp', 'Vai para todo o grupo.'));
+    const s2 = el('section', 'ms-agenda-sec'), lq = el('span', 'ms-agenda-rot', 'Quando enviar'); lq.id = 'ms-ag-rot-q';
+    const at = el('div', 'ms-agenda-atalhos'); at.setAttribute('role', 'group'); at.setAttribute('aria-labelledby', 'ms-ag-rot-q');
+    [['1h', 'Daqui a 1 hora'], ['am8', 'Amanhã 8h'], ['am14', 'Amanhã 14h']].forEach(([k, t]) => { const b = botao('ms-btn', t, 'agenda-atalho', { k: k }); b.setAttribute('aria-pressed', 'false'); at.appendChild(b); });
+    const ld = el('label', 'ms-agenda-rot', 'Ou escolha dia e hora (horário de Fortaleza)'); ld.htmlFor = 'ms-ag-quando';
+    const dq = el('input', 'ms-copia'); dq.type = 'datetime-local'; dq.id = 'ms-ag-quando'; dq.step = '60';
+    dq.min = fortIso_(Date.now() + 60000).slice(0, 16); dq.max = fortIso_(Date.now() + 60 * 86400000).slice(0, 16);
+    dq.addEventListener('input', () => { agendaAtalho_ = ''; agendaQuando_ = dq.value ? fortParaMs_(dq.value) : 0; marcarAgenda_(); });
+    const res = el('p', 'ms-agenda-res'); res.id = 'ms-ag-res'; res.setAttribute('aria-live', 'polite');
+    s2.append(lq, at, ld, dq, res);
+    const s3 = el('section', 'ms-agenda-sec'); s3.id = 'ms-ag-lista'; s3.appendChild(el('p', 'ms-auto-exp', 'Carregando as agendadas…'));
+    w.append(s1, s2, s3); corpo.appendChild(w);
+    const pe = el('div', 'ms-auto-pe'), bt = botao('ms-btn prim', 'Agendar', 'agenda-salvar'); bt.id = 'ms-ag-salvar'; pe.appendChild(bt); g.appendChild(pe);
+    marcarAgenda_();
+    if (!rascunho) setTimeout(() => { if ($('ms-ag-texto') && larga()) $('ms-ag-texto').focus(); }, 0);
+    const r = await worker_('/msg/agendadas?conversa=' + encodeURIComponent(conv.id), 'GET');
+    const g2 = $('ms-gaveta'); if (!g2 || g2.dataset.gen !== gen) return;
+    if (!r.ok) { s3.textContent = ''; s3.appendChild(el('p', 'ms-auto-exp', r.erro || 'Não foi possível carregar as agendadas agora.')); return; }
+    agendadas_ = r.pendentes || []; desenharFaixaAgenda_(); desenharListaAgenda_(r);
+  }
+  function marcarAgenda_() {
+    document.querySelectorAll('#ms-gaveta [data-ms=agenda-atalho]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === agendaAtalho_)));
+    const dq = $('ms-ag-quando'); if (dq && agendaAtalho_ && agendaQuando_) dq.value = fortIso_(agendaQuando_).slice(0, 16);
+    const res = $('ms-ag-res'); if (!res) return;
+    res.textContent = agendaQuando_ ? (agendaQuando_ <= Date.now() ? 'Esse horário já passou. Escolha outro.' : 'Sai ' + quandoRotulo_(new Date(agendaQuando_).toISOString()) + ', sozinha.') : 'Escolha um atalho ou o dia e a hora.';
+  }
+  function desenharListaAgenda_(r) {
+    const s3 = $('ms-ag-lista'); if (!s3) return; s3.textContent = '';
+    const pend = r.pendentes || [], hist = r.historico || [];
+    s3.appendChild(el('span', 'ms-agenda-rot', pend.length ? 'Agendadas nesta conversa' : 'Nenhuma mensagem agendada nesta conversa.'));
+    const item = (a, comCancelar) => {
+      const li = el('li'), d = el('div');
+      const st = a.status === 'enviada' ? 'Enviada ' + quandoRotulo_(a.enviado_em || a.quando) : a.status === 'falhou' ? 'Não enviada' : a.status === 'enviando' ? 'Saindo agora…' : quandoRotulo_(a.quando);
+      d.append(el('b', '', st), el('p', '', a.texto));
+      const sub = el('small', a.status === 'falhou' ? 'falha' : '', a.status === 'falhou' ? (a.erro || 'Não foi possível enviar.') : (a.autor ? 'Agendada por ' + a.autor : ''));
+      if (sub.textContent) d.appendChild(sub);
+      li.appendChild(d);
+      if (comCancelar && a.status === 'pendente') { const c = botao('ms-btn', 'Cancelar', 'agenda-cancelar', { id: String(a.id) }); c.setAttribute('aria-label', 'Cancelar a mensagem agendada para ' + quandoRotulo_(a.quando)); li.appendChild(c); }
+      return li;
+    };
+    if (pend.length) { const ul = el('ul', 'ms-agenda-lista'); pend.forEach((a) => ul.appendChild(item(a, true))); s3.appendChild(ul); }
+    if (hist.length) {
+      s3.appendChild(el('span', 'ms-agenda-rot', 'Últimas enviadas ou com falha'));
+      const ul = el('ul', 'ms-agenda-lista'); hist.forEach((a) => ul.appendChild(item(a, false))); s3.appendChild(ul);
+    }
+  }
+  async function salvarAgenda_(b) {
+    if (!aberta) return;
+    const ta = $('ms-ag-texto'), texto = ta ? ta.value.trim() : '';
+    if (!texto) { aviso_('Escreva a mensagem antes de agendar.'); if (ta) ta.focus(); return; }
+    if (!agendaQuando_) { aviso_('Escolha quando a mensagem deve sair.'); const a1 = document.querySelector('#ms-gaveta [data-ms=agenda-atalho]'); if (a1) a1.focus(); return; }
+    if (agendaQuando_ <= Date.now()) { aviso_('Esse horário já passou. Escolha um horário no futuro.'); return; }
+    const conv = aberta.id; b.disabled = true;
+    const r = await worker_('/msg/agendar', 'POST', { conversa: conv, texto: texto, quando: new Date(agendaQuando_).toISOString() });
+    b.disabled = false;
+    if (!r.ok) { aviso_(r.erro || 'Não foi possível agendar agora. Tente de novo.'); b.focus(); return; }
+    if (!aberta || aberta.id !== conv) return;
+    const comp = $('ms-texto');
+    if (comp && comp.value.trim() === texto) { comp.value = ''; comp.dispatchEvent(new Event('input', { bubbles: true })); }   // o texto do compositor foi agendado: não fica para enviar de novo
+    if (ta) ta.value = '';
+    agendaQuando_ = 0; agendaAtalho_ = ''; const dq = $('ms-ag-quando'); if (dq) dq.value = ''; marcarAgenda_();
+    agendadas_ = r.pendentes || []; desenharFaixaAgenda_(); desenharListaAgenda_(r);
+    aviso_('Mensagem agendada para ' + quandoRotulo_(r.agendada.quando) + '.'); { const f = larga() ? ta : document.querySelector('#ms-gaveta [data-ms=gaveta-fechar]'); if (f) f.focus(); }   // o botão ficou desligado durante o envio: o foco volta para dentro da gaveta (no celular sem abrir o teclado)
+  }
+  async function cancelarAgenda_(b) {
+    if (!aberta || !confirm('Cancelar esta mensagem agendada? Ela não será enviada.')) return;
+    const conv = aberta.id; b.disabled = true;
+    const r = await worker_('/msg/agendar/cancelar', 'POST', { id: Number(b.dataset.id) });
+    if (!r.ok) { b.disabled = false; aviso_(r.erro || 'Não foi possível cancelar agora.'); recarregarAgenda_(conv); return; }
+    if (!aberta || aberta.id !== conv) return;
+    agendadas_ = r.pendentes || []; desenharFaixaAgenda_(); desenharListaAgenda_(r); aviso_('Agendamento cancelado.');
+    const prox = document.querySelector('#ms-gaveta [data-ms=agenda-cancelar]') || $('ms-ag-texto'); if (prox) prox.focus();
+  }
+  /* ---- v7.40.14: ficha do cliente (por pessoa: vale para todos os canais vinculados). Só mostra o que existe no servidor. ---- */
+  const TAMS_FICHA_ = ['PP', 'P', 'M', 'G', 'GG', '36', '38', '40', '42', '44', '46'];
+  const SEP_TAM_ = '[\\s·,;/()]';   // "38 (calça 40)" também marca o 40
+  const temTam_ = (txt, t) => new RegExp('(^|' + SEP_TAM_ + ')' + t + '(?=$|' + SEP_TAM_ + ')', 'i').test(txt);
+  function alternarTam_(txt, t) {
+    txt = String(txt || '');
+    if (temTam_(txt, t)) return txt.replace(new RegExp('(^|' + SEP_TAM_ + '+)' + t + '(?=$|' + SEP_TAM_ + ')', 'i'), '').replace(/^[\s·,;/]+|[\s·,;/]+$/g, '').replace(/\s*·\s*(·\s*)+/g, ' · ');
+    const base = txt.replace(/[\s·,;/]+$/, '');
+    return base ? base + ' · ' + t : t;
+  }
+  function marcarTams_() {
+    const i = $('ms-fi-tam'); if (!i) return;
+    document.querySelectorAll('#ms-gaveta [data-ms=ficha-tam]').forEach((b) => b.setAttribute('aria-pressed', String(temTam_(i.value, b.dataset.t))));
+  }
+  const dataFicha_ = (iso) => { const d = new Date(iso); return !iso || isNaN(d) ? '' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }); };
+  let fichaOrig_ = null;
+  function fichaMudou_() {
+    if (!fichaOrig_ || !$('ms-fi-tam')) return false;
+    return ['tam', 'pref', 'cid'].some((k, n) => $('ms-fi-' + k).value.trim() !== [fichaOrig_.tamanhos, fichaOrig_.preferencias, fichaOrig_.cidade][n]);
+  }
+  async function abrirFicha_() {
+    if (!aberta || aberta.grupo) return;
+    const conv = aberta, corpo = gaveta_('Ficha do cliente'); if (!corpo) return;
+    const g = $('ms-gaveta'); g.dataset.tipo = 'ficha'; const gen = g.dataset.gen; fichaOrig_ = null;
+    const w = el('div', 'ms-ficha'); w.id = 'ms-ficha'; w.setAttribute('aria-busy', 'true');
+    w.appendChild(el('p', 'ms-auto-exp', 'Carregando a ficha…')); corpo.appendChild(w);
+    const r = await worker_('/msg/ficha?conversa=' + encodeURIComponent(conv.id), 'GET');
+    const g2 = $('ms-gaveta'); if (!g2 || g2.dataset.gen !== gen || !aberta || aberta.id !== conv.id) return;
+    w.removeAttribute('aria-busy'); w.textContent = '';
+    if (!r.ok) {
+      w.appendChild(el('p', 'ms-auto-exp', r.erro || 'Não foi possível abrir a ficha agora.'));
+      const l = el('div', 'ms-ficha-acao'); l.appendChild(botao('ms-btn', 'Tentar de novo', 'ficha')); w.appendChild(l); return;
+    }
+    desenharFicha_(w, conv, r);
+    const pe = el('div', 'ms-auto-pe ms-ficha-pe'), info = el('small'); info.id = 'ms-fi-info';
+    const bt = botao('ms-btn prim', 'Salvar', 'ficha-salvar'); bt.id = 'ms-fi-salvar'; pe.append(info, bt); g2.appendChild(pe);
+    infoFicha_(r.ficha);
+  }
+  function infoFicha_(f) { const i = $('ms-fi-info'); if (i) i.textContent = f && f.atualizado_em ? 'Atualizada' + (f.autor ? ' por ' + f.autor : '') + ' em ' + dataFicha_(f.atualizado_em) : ''; }
+  function desenharFicha_(w, conv, r) {
+    const f = r.ficha || {}; fichaOrig_ = { tamanhos: f.tamanhos || '', preferencias: f.preferencias || '', cidade: f.cidade || '' };
+    const sec = (titulo, id) => { const s = el('section', 'ms-ficha-sec'), h = el('h4', 'ms-ficha-rot', titulo); h.id = id; s.setAttribute('aria-labelledby', id); s.appendChild(h); w.appendChild(s); return s; };
+    const quem = el('p', 'ms-ficha-quem'); const nc = (r.canais || []).length; quem.append(el('b', '', rotuloContato(conv)), document.createTextNode(nc > 1 ? ' · vale para os ' + nc + ' canais desta pessoa' : '')); w.appendChild(quem);
+    // tamanhos
+    const s1 = el('section', 'ms-ficha-sec'), l1 = el('label', 'ms-ficha-rot', 'Tamanhos que usa'); l1.htmlFor = 'ms-fi-tam';
+    const it = el('input', 'ms-copia'); it.type = 'text'; it.id = 'ms-fi-tam'; it.maxLength = 60; it.autocomplete = 'off'; it.value = fichaOrig_.tamanhos; it.placeholder = 'Ex.: M · 38 (calça 40)';
+    it.addEventListener('input', marcarTams_);
+    const tams = el('div', 'ms-ficha-tams'); tams.setAttribute('role', 'group'); tams.setAttribute('aria-label', 'Tamanhos rápidos');
+    TAMS_FICHA_.forEach((t) => { const b = botao('ms-btn', t, 'ficha-tam', { t: t }); b.setAttribute('aria-pressed', 'false'); tams.appendChild(b); });
+    s1.append(l1, it, tams); w.appendChild(s1);
+    // preferências e cidade
+    const s2 = el('section', 'ms-ficha-sec'), l2 = el('label', 'ms-ficha-rot', 'Preferências'); l2.htmlFor = 'ms-fi-pref';
+    const tp = el('textarea', 'ms-copia'); tp.id = 'ms-fi-pref'; tp.rows = 3; tp.maxLength = 300; tp.value = fichaOrig_.preferencias; tp.placeholder = 'Ex.: gosta de vestido longo e cores claras';
+    s2.append(l2, tp); w.appendChild(s2);
+    const s3 = el('section', 'ms-ficha-sec'), l3 = el('label', 'ms-ficha-rot', 'Cidade / bairro'); l3.htmlFor = 'ms-fi-cid';
+    const ic = el('input', 'ms-copia'); ic.type = 'text'; ic.id = 'ms-fi-cid'; ic.maxLength = 60; ic.autocomplete = 'off'; ic.value = fichaOrig_.cidade; ic.placeholder = 'Ex.: Crateús — Centro';
+    s3.append(l3, ic); w.appendChild(s3);
+    // etiquetas
+    const s4 = sec('Etiquetas', 'ms-fi-h-etq'), etqs = r.etiquetas || [];
+    if (etqs.length) { const d = el('div', 'ms-ficha-etqs'); etqs.forEach((e) => d.appendChild(tagEtq_(e))); s4.appendChild(d); } else s4.appendChild(el('p', 'ms-ficha-vazio', 'Nenhuma etiqueta.'));
+    const ae = el('div', 'ms-ficha-acao'); ae.appendChild(botao('ms-btn', etqs.length ? 'Mudar etiquetas' : 'Pôr etiqueta', 'ficha-etiquetas')); s4.appendChild(ae);
+    // notas
+    const s5 = sec('Notas recentes', 'ms-fi-h-notas'), notas = r.notas || [];
+    if (notas.length) { const ul = el('ul', 'ms-ficha-lista'); notas.forEach((n) => { const li = el('li', 'ms-ficha-nota'), d = el('div'); d.append(el('p', '', n.texto), el('small', '', [n.autor, dataFicha_(n.em)].filter(Boolean).join(' · '))); li.appendChild(d); ul.appendChild(li); }); s5.appendChild(ul); }
+    else s5.appendChild(el('p', 'ms-ficha-vazio', 'Nenhuma nota interna ainda.'));
+    // compras
+    const s6 = sec('Compras', 'ms-fi-h-compras'), compras = r.compras || [];
+    if (compras.length) { const ul = el('ul', 'ms-ficha-lista'); compras.forEach((c) => { const li = el('li'), d = el('div'); d.append(document.createTextNode('Vendeu em ' + dataFicha_(c.em)), el('small', '', 'Pelo ' + (NOME_CANAL[c.canal] || c.canal))); li.appendChild(d); ul.appendChild(li); }); s6.appendChild(ul); }
+    else s6.appendChild(el('p', 'ms-ficha-vazio', 'Nenhuma compra registrada ainda.'));
+    // canais
+    const s7 = sec('Canais', 'ms-fi-h-canais'), ul7 = el('ul', 'ms-ficha-lista');
+    (r.canais || []).forEach((c) => {
+      const li = el('li'), d = el('div'), fone = c.canal !== 'instagram' && /^\d{10,15}$/.test(String(c.contato || '')) ? foneBonito_(c.contato) : '';
+      d.append(document.createTextNode(NOME_CANAL[c.canal] || c.canal), el('small', '', [fone, c.atual ? 'esta conversa' : ''].filter(Boolean).join(' · ')));
+      li.appendChild(d);
+      if (!c.atual) { const b = botao('ms-btn', 'Abrir', 'ficha-abrir', { id: String(c.id), canal: c.canal }); b.setAttribute('aria-label', 'Abrir a conversa do ' + (NOME_CANAL[c.canal] || c.canal)); li.appendChild(b); }
+      ul7.appendChild(li);
+    });
+    s7.appendChild(ul7);
+    const ac = el('div', 'ms-ficha-acao'); ac.appendChild(botao('ms-btn', 'Editar contato e canais', 'pessoa')); s7.appendChild(ac);
+    marcarTams_();
+  }
+  function sairFicha_() { return !fichaMudou_() || confirm('Você mudou a ficha e ainda não salvou. Sair sem salvar?'); }
+  async function salvarFicha_(b) {
+    if (!aberta || !$('ms-fi-tam')) return;
+    const conv = aberta.id, corpo = { conversa: conv, tamanhos: $('ms-fi-tam').value.trim(), preferencias: $('ms-fi-pref').value.trim(), cidade: $('ms-fi-cid').value.trim() };
+    b.disabled = true;
+    const r = await worker_('/msg/ficha', 'POST', corpo);
+    b.disabled = false;
+    if (!r.ok) { aviso_(r.erro || 'Não foi possível salvar a ficha agora. Tente de novo.'); b.focus(); return; }
+    if (!aberta || aberta.id !== conv) return;
+    aberta.tamanhos = r.ficha.tamanhos || '';
+    const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(aberta));
+    fichaOrig_ = null; fecharGaveta_(); aviso_('Ficha salva.');
+    const q = document.querySelector('#ms-conversa .ms-quem'); if (q) q.focus();
+  }
   function cabecalhoConversa(c) {
     const cab = el('div', 'ms-cab');
     const v = botao('ms-ico ms-voltar', '←', 'voltar'); v.setAttribute('aria-label', 'Voltar para as conversas');
     const av = el('span', 'ms-av', iniciais(c)); av.style.background = corAvatar(c); av.setAttribute('aria-hidden', 'true');
-    const q = botao('ms-quem', '', 'pessoa');q.setAttribute('aria-label','Configurar contato e canais vinculados');q.style.textAlign='left';q.style.background='transparent';q.appendChild(el('b', '', rotuloContato(c)));
+    if (!c.grupo) { av.dataset.ms = 'ficha'; av.style.cursor = 'pointer'; }   // v7.40.14: nome/avatar abrem a ficha do cliente (o teclado usa o botão do nome)
+    const q = botao('ms-quem', '', c.grupo ? 'pessoa' : 'ficha');q.setAttribute('aria-label',c.grupo?'Grupo '+rotuloContato(c):'Abrir a ficha do cliente '+rotuloContato(c));q.style.textAlign='left';q.style.background='transparent';q.appendChild(el('b', '', rotuloContato(c)));
     q.appendChild(el('span', '', NOME_CANAL[c.canal] + (c.grupo ? ' · grupo' : (/^\d{10,15}$/.test(c.contato) ? ' · ' + foneBonito_(c.contato) : ''))));
     const mais = botao('ms-ico', '⋯', 'menu-conversa'); mais.id = 'ms-mais-conv'; mais.setAttribute('aria-label', 'Opções da conversa'); mais.setAttribute('aria-haspopup', 'menu');
     cab.append(v, av, q, mais); return cab;
@@ -1294,6 +1750,7 @@
     if ($('ms-gaveta')) fecharGaveta_();
     const pai = $('ms-conversa'); pai.textContent = '';
     pai.appendChild(cabecalhoConversa(c));
+    if (!c.grupo) pai.appendChild(faixaEtq_(c));
     if (c.outro_id) {
       const f = el('div', 'ms-faixa ambos'); f.appendChild(el('span', '', 'Esta pessoa também está falando pelo ' + NOME_CANAL[outroCanal_(c)] + '.'));
       f.appendChild(botao('ms-btn', 'Abrir', 'abrir-outro', { id: String(c.outro_id), canal: outroCanal_(c) })); pai.appendChild(f);
@@ -1327,10 +1784,10 @@
     const bt = botao('ms-enviar', 'Enviar', 'enviar'); bt.id = 'ms-enviar'; bt.disabled = !ta.value.trim() && !anexoPend;
     form.append(clip, arq, ta, mic, bt); pai.appendChild(form);
     if (espiando) form.hidden = true;        // para responder, toque em Atender (aí marca como lida)
-    const cresce = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); desenharPrevia_(); };
+    const cresce = () => { if (expandirAtalho_(ta)) return; ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 132) + 'px'; bt.disabled = !ta.value.trim() && !anexoPend; rascunhoSalvar_(c.id, ta.value); desenharPrevia_(); };
     ta.addEventListener('input', cresce);
     ta.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && window.matchMedia('(pointer: fine)').matches) { ev.preventDefault(); enviar(); } });
-    cresce(); desenharStage_(); desenharAssina_(false);
+    cresce(); desenharStage_(); desenharAssina_(false); desenharFaixaAgenda_();
   }
   /* ---- v7.34: prévia do link (miniatura) escolhida em cada mensagem do WhatsApp; o último jeito usado em cada canal fica lembrado neste aparelho ---- */
   const LINK_RE_ = /https?:\/\/[^\s<>"']+/i;
@@ -1410,7 +1867,7 @@
     const w = ++abrindo;
     espiando = !!espiar;
     const jaNaTela = aberta && aberta.id === id;
-    if (!jaNaTela) { elMsgs.clear(); msgs = []; novasAbaixo = 0; limparBlobs_(); limparAnexo_(true); fecharLuz_(); }
+    if (!jaNaTela) { elMsgs.clear(); msgs = []; novasAbaixo = 0; limparBlobs_(); limparAnexo_(true); fecharLuz_(); agendadas_ = []; }
     const path='/msg/mensagens?conversa=' + encodeURIComponent(id);
     const salvo=APP_RECENTES ? await recentes_(path) : null;
     if(w!==abrindo)return;
@@ -1435,9 +1892,9 @@
     }
     cacheConversa=false;
     aviso_('');
-    const c = r.conversa; aberta = c;
+    const c = r.conversa; aberta = c; if (Array.isArray(r.agendadas)) agendadas_ = r.agendadas;
     ultIdSrv = r.mensagens.reduce((m, x) => (x.id > m ? x.id : m), 0);
-    msgs = r.mensagens.concat(Array.from(pendentes.values()).filter((p) => p.conversa === id).map((p) => p.msg));
+    msgs = r.mensagens.concat((r.notas || []).map(notaMsg_)).concat(Array.from(pendentes.values()).filter((p) => p.conversa === id).map((p) => p.msg));
     montarConversa(c); pintarFio(true);
     vista = 'conversa'; const app = $('ms-app'); app.dataset.vista = 'conversa';
     if (!larga() && window.TKCamadas && !TKCamadas.aberta('ms-conversa')) TKCamadas.empilhar('ms-conversa', () => { vista = 'lista'; const a = $('ms-app'); if (a) a.dataset.vista = 'lista'; });
@@ -1470,16 +1927,35 @@
       return await r.json();
     } catch (e) { return { ok: false, erro: 'Sem conexão para enviar o arquivo. Tente de novo.', semRede: true }; }
   }
+  /* v7.40.3: notas internas — mesmo campo de texto, salva em /msg/notas e nunca chama /msg/enviar */
+  let modoNota = false;
+  const notaMsg_ = (n) => ({ id: 'nota-' + n.id, direcao: 'nota', tipo: 'nota', texto: n.texto, autor: n.autor, enviada_em: n.em });
+  function alternarNota_(forcar) {
+    modoNota = forcar === undefined ? !modoNota : forcar;
+    const ta = $('ms-texto'), cx = ta && ta.parentElement; if (ta) ta.placeholder = modoNota ? 'Nota interna: só a equipe vê' : 'Mensagem';
+    if (cx) cx.classList.toggle('ms-modo-nota', modoNota);
+    document.querySelectorAll('.ms-nota-btn').forEach((b) => b.setAttribute('aria-pressed', String(modoNota)));
+    if (ta) ta.focus();
+  }
+  async function salvarNota_(c, ta) {
+    const texto = (ta.value || '').trim(); if (!texto) { aviso_('Escreva a nota antes de salvar.'); return; }
+    const r = await worker_('/msg/notas', 'POST', { conversa: c.id, texto: texto });
+    if (!r.ok) { aviso_(r.erro || 'Não consegui salvar a nota. Tente de novo.'); return; }
+    ta.value = ''; if (aberta && aberta.id === c.id) { msgs.push(notaMsg_(r.nota)); pintarFio(true); }
+    alternarNota_(false); aviso_('Nota salva. Só a equipe vê.');
+  }
   async function enviar(reenvio) {
     if (cacheConversa) { aviso_('Aguarde atualizar a conversa para responder.'); return; }
     if (!aberta) return;
     const c = aberta, ta = $('ms-texto'); if (!ta && !reenvio) return;
+    if (modoNota && !reenvio) { await salvarNota_(c, ta); return; }
     let tmp, texto, idLocal;
     if (reenvio) { const p = pendentes.get(reenvio); if (!p) return; tmp = p; texto = p.msg.texto; idLocal = p.idLocal; p.msg.status = 'pendente'; p.msg.erro = ''; }
     else {
       texto = ta.value.replace(/\r\n/g, '\n').trim(); const an = anexoPend;
       if (!texto && !an) return;
       if (an && c.canal === 'instagram' && texto) { aviso_('O Instagram não aceita texto junto com foto, vídeo ou áudio. Envie o anexo e depois o texto.'); return; }
+      if (RE_LACUNA_.test(texto)) { marcarLacuna_(0); return; }   // v7.40.9: [valor no Pix], [chave Pix]… ainda sem completar
       texto = assinar_(c, texto);
       if (!an && (c.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > limiteTexto(c))) { aviso_('Mensagem grande demais para este canal. Divida em duas.'); return; }
       idLocal = idLocal_();
@@ -1519,7 +1995,39 @@
   }
 
   /* ---------- ao vivo ---------- */
-  function ligarAoVivo() { pararAoVivo(); offline = false; espera = ESPERA_MS; atualizarVivo(); agendar(1200); }
+  /* v7.40.2: faixa vermelha quando o servidor está recusando os avisos (ex.: limite do banco) */
+  function pintarSaude_(sd) {
+    const e = $('ms-saude'); if (!e) return;
+    e.hidden = !sd.alerta; if (!sd.alerta) { e.textContent = ''; return; }
+    const hora = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+    const b = el('b', '', 'Mensagens não estão chegando desde ' + hora(sd.desde));
+    const t = el('span', '', 'O servidor recusou os avisos' + (NOME_CANAL_[sd.canal] ? ' do ' + NOME_CANAL_[sd.canal] : '') + (sd.cod ? ' (erro ' + sd.cod + ')' : '') + '. As mensagens continuam no celular; o site volta a mostrar sozinho quando o servidor aceitar de novo.');
+    e.replaceChildren(b, t);
+  }
+  /* v7.40.7: trocar de usuário sem sair do aparelho — as contas já usadas ficam guardadas aqui e as conversas carregadas continuam */
+  const CHAVE_CONTAS_ = 'tm_sessoes_v1';
+  function contasSalvas_() { try { const l = JSON.parse(localStorage.getItem(CHAVE_CONTAS_) || '[]'); return Array.isArray(l) ? l.filter((x) => x && x.whatsapp && x.sessao) : []; } catch (e) { return []; } }
+  function guardarContas_(l) { try { localStorage.setItem(CHAVE_CONTAS_, JSON.stringify(l.slice(0, 6))); } catch (e) { /* aparelho sem armazenamento */ } }
+  function lembrarSessao_() {
+    const s = typeof getSessao === 'function' ? getSessao() : null; if (!s) return;
+    let nome = ''; try { nome = typeof usuarioAdmin !== 'undefined' && usuarioAdmin ? String(usuarioAdmin.nome || '') : ''; } catch (e) { nome = ''; }
+    const l = contasSalvas_().filter((x) => x.whatsapp !== s.whatsapp); l.unshift({ whatsapp: s.whatsapp, sessao: s.sessao, nome: nome, em: new Date().toISOString() }); guardarContas_(l);
+  }
+  function abrirTrocaUsuario_() {
+    lembrarSessao_(); const corpo = gaveta_('Trocar usuário'); if (!corpo) return;
+    const atual = (typeof getSessao === 'function' && getSessao()) || {}, l = contasSalvas_();
+    corpo.appendChild(el('p', 'ms-etq-rot', 'Contas usadas neste aparelho'));
+    l.forEach((c) => {
+      const linha = el('div', 'ms-etq-op'), rot = (c.nome || 'Conta') + ' · final ' + String(c.whatsapp).slice(-4);
+      linha.appendChild(el('span', '', rot + (c.whatsapp === atual.whatsapp ? ' (em uso)' : '')));
+      if (c.whatsapp !== atual.whatsapp) { const u = botao('ms-btn prim', 'Usar', 'usar-conta', { w: c.whatsapp }); u.style.marginLeft = 'auto'; linha.appendChild(u); }
+      const x = botao('ms-btn', 'Esquecer', 'esquecer-conta', { w: c.whatsapp }); if (c.whatsapp === atual.whatsapp) x.style.marginLeft = 'auto'; linha.appendChild(x);
+      corpo.appendChild(linha);
+    });
+    const pe = el('div', 'ms-etq-pe'); pe.appendChild(botao('ms-btn', 'Entrar com outra conta', 'outra-conta')); corpo.appendChild(pe);
+    corpo.appendChild(el('p', 'ms-dica', 'Trocar não apaga as conversas já carregadas neste aparelho. "Esquecer" tira a conta da lista; para encerrar o acesso de vez, use Sair da conta no painel.'));
+  }
+  function ligarAoVivo() { lembrarSessao_(); pararAoVivo(); offline = false; espera = ESPERA_MS; atualizarVivo(); agendar(1200); }
   function pararAoVivo() { clearTimeout(timerLive); timerLive = null; }
   function agendar(ms) { clearTimeout(timerLive); timerLive = setTimeout(sondar, ms == null ? espera : ms); }
   function atualizarVivo() { const v = $('ms-vivo'); if (!v) return; v.className = 'ms-ao-vivo' + (offline ? ' off' : ''); v.textContent = offline ? 'Sem conexão…' : '● ao vivo'; }
@@ -1536,6 +2044,7 @@
     if (offline) { offline = false; atualizarVivo(); }
     espera = ESPERA_MS; cursor = r.cursor || cursor;
     r.mensagens.forEach((m) => { if (typeof m.id === 'number' && m.id > ultIdSrv) ultIdSrv = m.id; });
+    if (r.saude) pintarSaude_(r.saude);
     contagens = r.contagens || contagens; desenharAbas(); desenharFiltros(); selarBotao();
     if (r.conversas.some((c) => canal === 'todos' || c.canal === canal)) await carregarLista(false);
     if (aberta) {
@@ -1602,7 +2111,7 @@
   /* ---------- painel de atendimento ---------- */
   const fmtMin = (m) => m == null ? '—' : m < 60 ? m + ' min' : m < 1440 ? Math.round(m / 6) / 10 + ' h' : Math.round(m / 144) / 10 + ' dias';
   async function abrirPainel(dias) {
-    painel = 'metricas'; const ex = $('ms-extra'), ul = $('ms-lista'); ul.hidden = true; ex.textContent = 'Carregando…'; chrome_(true);
+    largarFunil_(); painel = 'metricas'; const ex = $('ms-extra'), ul = $('ms-lista'); ul.hidden = true; ex.textContent = 'Carregando…'; chrome_(true);
     const r = await worker_('/msg/metricas?canal=' + encodeURIComponent(canal) + '&dias=' + (dias || 30), 'GET');
     ex.textContent = '';
     const p = el('div', 'ms-painel');
@@ -1638,7 +2147,141 @@
   }
   /** No painel de atendimento, abas de filtro/busca/estado saem do caminho para dar espaço aos números. */
   function chrome_(esconder) { ['ms-filtros', 'ms-busca', 'ms-estado-wrap'].forEach((id) => { const e = $(id); if (e) e.hidden = esconder; }); }
-  function fecharPainel() { painel = ''; chrome_(false); const ul = $('ms-lista'); if (ul) ul.hidden = false; pintarLista(); }
+  function fecharPainel() { if (painel === 'funil') sairFunil_(); painel = ''; chrome_(false); const ul = $('ms-lista'); if (ul) ul.hidden = false; pintarLista(); }
+
+  /* ---------- v7.40.15: funil de vendas ----------
+   * Colunas = etiquetas de venda (as que a equipe mantém em Etiquetas, na mesma ordem); cartão = uma pessoa.
+   * Mover o cartão troca só a etapa da venda da pessoa (as outras etiquetas ficam). Celular: tocar no cartão abre "Mover para…" e "Abrir conversa".
+   * Computador: arrastar e soltar entre colunas, ou clicar/Enter no cartão para o mesmo menu (teclado). Dados entram só por textContent. */
+  let funil_ = [], funilSeq_ = 0;
+  const funilMapa_ = new Map();
+  const arrastavel_ = () => larga() && window.matchMedia('(pointer: fine)').matches;
+  const haQuanto_ = (iso) => { const e = espera_(iso); return !e ? '' : e === 'agora' ? 'agora' : 'há ' + e; };
+  function sairFunil_() { const b = $('ms-funil'); if (b) { b.hidden = true; b.textContent = ''; } const ex = $('ms-extra'); if (ex) ex.hidden = false; const app = $('ms-app'); if (app) delete app.dataset.painel; funilMapa_.clear(); funilSeq_++; }
+  /** Sai do funil sem esperar o "voltar" (outra tela do menu tomou o lugar). */
+  function largarFunil_() { if (painel !== 'funil') return; sairFunil_(); painel = ''; if (window.TKCamadas && TKCamadas.aberta('ms-funil')) TKCamadas.desempilhar('ms-funil'); }
+  function desempilharEsperando_(chave) {
+    return new Promise((res) => {
+      if (!(window.TKCamadas && TKCamadas.aberta(chave))) { res(); return; }
+      let feito = false; const fim = () => { if (feito) return; feito = true; document.removeEventListener('tk:camada-fechada', f); res(); };
+      const f = (e) => { if (e.detail && e.detail.chave === chave) fim(); };
+      document.addEventListener('tk:camada-fechada', f); TKCamadas.desempilhar(chave); setTimeout(fim, 700);
+    });
+  }
+  function caixaFunil_() {
+    let box = $('ms-funil'); if (box) return box;
+    box = el('div', 'ms-funil'); box.id = 'ms-funil'; box.hidden = true; $('ms-lista-wrap').appendChild(box);
+    box.addEventListener('dragstart', (ev) => { const c = ev.target.closest && ev.target.closest('.ms-fcard'); if (!c) return; ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', 'tk-funil:' + c.dataset.id); c.classList.add('arrastando'); });
+    box.addEventListener('dragend', () => { box.querySelectorAll('.arrastando, .alvo').forEach((x) => x.classList.remove('arrastando', 'alvo')); });
+    box.addEventListener('dragover', (ev) => { const col = ev.target.closest && ev.target.closest('.ms-fcol'); if (!col || !box.querySelector('.ms-fcard.arrastando')) return; ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; box.querySelectorAll('.ms-fcol.alvo').forEach((x) => { if (x !== col) x.classList.remove('alvo'); }); col.classList.add('alvo'); });
+    box.addEventListener('dragleave', (ev) => { const col = ev.target.closest && ev.target.closest('.ms-fcol'); if (col && !col.contains(ev.relatedTarget)) col.classList.remove('alvo'); });
+    box.addEventListener('drop', (ev) => {
+      const col = ev.target.closest && ev.target.closest('.ms-fcol'); if (!col) return; ev.preventDefault(); col.classList.remove('alvo');
+      const m = /^tk-funil:(\d+)$/.exec(ev.dataTransfer.getData('text/plain') || ''); if (m) moverFunil_(Number(m[1]), Number(col.dataset.etq));
+    });
+    box.addEventListener('scroll', () => posFunil_(), { passive: true, capture: true });
+    return box;
+  }
+  /** Celular: setas ‹ › ligadas conforme a coluna (a primeira não volta, a última não avança) e marca a coluna à mostra. */
+  function posFunil_() {
+    const q = $('ms-fq'); if (!q || !q.firstElementChild) return;
+    const w = q.firstElementChild.getBoundingClientRect().width + 8, i = Math.max(0, Math.min(funil_.length - 1, Math.round(q.scrollLeft / (w || 1))));
+    q.querySelectorAll('.ms-fcol').forEach((c, k) => { c.querySelectorAll('.ms-fir').forEach((b) => { b.disabled = b.dataset.dir === '-1' ? k === 0 : k === funil_.length - 1; }); c.toggleAttribute('data-visivel', k === i); });
+  }
+  function irColuna_(b) {
+    const q = $('ms-fq'), col = b.closest('.ms-fcol'), alvo = col && (b.dataset.dir === '1' ? col.nextElementSibling : col.previousElementSibling);
+    if (!q || !alvo) return;
+    q.scrollTo({ left: alvo.offsetLeft - q.firstElementChild.offsetLeft, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    const h4 = alvo.querySelector('h4'); if (h4) setTimeout(() => h4.focus({ preventScroll: true }), 260);
+  }
+  function cartaoFunil_(c, arr) {
+    const li = el('li'), b = botao('ms-fcard', '', 'funil-cartao', { id: String(c.conversa) }); b.setAttribute('aria-haspopup', 'dialog');
+    if (arr) b.draggable = true;
+    const l1 = el('span', 'ms-fcard-l1'); l1.appendChild(el('span', 'ms-fcard-nome', rotuloContato(c)));
+    const tm = el('time', '', haQuanto_(c.ultima_em)); if (c.ultima_em) tm.dateTime = c.ultima_em; l1.appendChild(tm); b.appendChild(l1);
+    if (c.previa) b.appendChild(el('span', 'ms-fcard-prev', c.previa));
+    b.appendChild(el('span', 'ms-fcard-meta', (NOME_CANAL[c.canal] || c.canal) + (c.dono ? ' · Responsável: ' + c.dono : ' · Sem responsável')));
+    li.appendChild(b); return li;
+  }
+  async function abrirFunil_(focoId) {
+    fecharMenu(); const g0 = $('ms-gaveta'); if (g0) { g0.remove(); await desempilharEsperando_('ms-gaveta'); }
+    if (painel === 'metricas') { const ex0 = $('ms-extra'); if (ex0) ex0.textContent = ''; }
+    const novo = painel !== 'funil'; painel = 'funil'; chrome_(true);
+    const ul = $('ms-lista'), ex = $('ms-extra'), app = $('ms-app'), box = caixaFunil_(); ul.hidden = true; ex.hidden = true; app.dataset.painel = 'funil'; box.hidden = false;
+    if (novo && window.TKCamadas && !TKCamadas.aberta('ms-funil')) TKCamadas.empilhar('ms-funil', () => { if (painel === 'funil') fecharPainel(); });
+    const q0 = $('ms-fq'), sx = q0 && !novo ? q0.scrollLeft : 0;
+    if (novo || !q0) { box.textContent = ''; const t = el('div', 'ms-linha'); t.appendChild(botao('ms-btn', '← Conversas', 'fechar-painel')); box.appendChild(t); box.appendChild(el('p', 'ms-vazio', 'Carregando o funil…')); }
+    const mine = ++funilSeq_, c0 = canal;
+    const r = await worker_('/msg/funil?canal=' + encodeURIComponent(canal), 'GET');
+    if (mine !== funilSeq_ || painel !== 'funil' || c0 !== canal) return;
+    box.textContent = ''; funilMapa_.clear();
+    const topo = el('div', 'ms-linha'); topo.appendChild(botao('ms-btn', '← Conversas', 'fechar-painel')); topo.appendChild(botao('ms-chip', 'Atualizar', 'funil-atualizar')); box.appendChild(topo);
+    const h = el('h3', '', 'Funil de vendas · ' + (canal === 'todos' ? 'Todas' : NOME_CANAL[canal])); h.id = 'ms-ftitulo'; box.appendChild(h);
+    if (!r.ok) { funil_ = []; box.appendChild(el('p', 'ms-vazio', r.erro || 'Não foi possível carregar o funil agora. Tente de novo.')); return; }
+    funil_ = r.colunas || [];
+    if (!funil_.length) { box.appendChild(el('p', 'ms-vazio', 'Nenhuma etiqueta de venda ativa. As etapas do funil são as etiquetas de venda (Novo cliente, Reserva…).')); return; }
+    const arr = arrastavel_();
+    box.appendChild(el('p', 'ms-fdica', arr ? 'Arraste o cartão para outra coluna, ou clique nele para mover ou abrir a conversa.' : 'Toque num cartão para mudar a etapa ou abrir a conversa. Deslize para o lado para ver as outras etapas.'));
+    const q = el('div', 'ms-fq'); q.id = 'ms-fq'; q.setAttribute('role', 'region'); q.setAttribute('aria-labelledby', 'ms-ftitulo');
+    funil_.forEach((col, k) => {
+      const e = col.etiqueta, sec = el('section', 'ms-fcol'); sec.dataset.etq = String(e.id); sec.setAttribute('aria-labelledby', 'ms-fcol-' + e.id);
+      const cab = el('div', 'ms-fcol-cab'); const h4 = el('h4', '', e.nome); h4.id = 'ms-fcol-' + e.id; h4.tabIndex = -1;
+      const tot = el('span', 'ms-ftot', String(col.total)); tot.title = col.total + (col.total === 1 ? ' pessoa' : ' pessoas');
+      const ant = botao('ms-fir', '‹', 'funil-ir', { dir: '-1' }); ant.setAttribute('aria-label', 'Etapa anterior');
+      const prox = botao('ms-fir', '›', 'funil-ir', { dir: '1' }); prox.setAttribute('aria-label', 'Próxima etapa');
+      const pos = el('span', 'ms-fpos', (k + 1) + ' de ' + funil_.length);
+      cab.append(pontoEtq_(e), h4, tot, pos, ant, prox); sec.appendChild(cab);
+      const ulc = el('ul', 'ms-fcards');
+      col.cartoes.forEach((c) => { funilMapa_.set(c.conversa, { c: c, etq: e.id }); ulc.appendChild(cartaoFunil_(c, arr)); });
+      if (col.cartoes.length) sec.appendChild(ulc);
+      else sec.appendChild(el('p', 'ms-fcol-vazio', 'Ninguém nesta etapa.'));
+      if (col.total > col.cartoes.length) sec.appendChild(el('p', 'ms-fcol-mais', 'Mostrando as ' + col.cartoes.length + ' mais recentes de ' + col.total + '.'));
+      q.appendChild(sec);
+    });
+    box.appendChild(q);
+    if (sx) q.scrollLeft = sx;
+    posFunil_();
+    if (focoId) { const f = q.querySelector('.ms-fcard[data-id="' + Number(focoId) + '"]'); if (f) f.focus({ preventScroll: true }); else { const v = q.querySelector('.ms-fcol[data-visivel] h4') || q.querySelector('h4'); if (v) v.focus({ preventScroll: true }); } }
+    else if (novo) { const b0 = box.querySelector('[data-ms=fechar-painel]'); if (b0 && larga()) b0.focus(); }
+  }
+  function opcoesFunil_(id) {
+    const k = funilMapa_.get(id); if (!k) return;
+    const nome = rotuloContato(k.c), atual = funil_.find((col) => col.etiqueta.id === k.etq);
+    const corpo = gaveta_(nome); if (!corpo) return;
+    corpo.appendChild(el('p', 'ms-fop-info', 'Agora em ' + (atual ? atual.etiqueta.nome : '—') + ' · ' + (NOME_CANAL[k.c.canal] || k.c.canal)));
+    corpo.appendChild(el('p', 'ms-etq-rot', 'Mover para'));
+    funil_.forEach((col) => {
+      const e = col.etiqueta, eu = e.id === k.etq;
+      const b = botao('ms-fop', '', eu ? '' : 'funil-mover', { id: String(id), etq: String(e.id) });
+      b.append(pontoEtq_(e), document.createTextNode(e.nome));
+      if (eu) { b.setAttribute('aria-current', 'true'); b.setAttribute('aria-disabled', 'true'); b.appendChild(el('small', '', 'etapa atual')); }
+      else b.setAttribute('aria-label', 'Mover para ' + e.nome);
+      corpo.appendChild(b);
+    });
+    const pe = el('div', 'ms-fpe');
+    pe.append(botao('ms-btn', 'Tirar do funil', 'funil-mover', { id: String(id), etq: '0' }), botao('ms-btn prim', 'Abrir conversa', 'funil-abrir', { id: String(id) }));
+    corpo.appendChild(pe);
+  }
+  async function moverFunil_(id, etq, botaoEl) {
+    const k = funilMapa_.get(id); if (!k || k.etq === etq) return;
+    if (botaoEl) botaoEl.disabled = true;
+    const r = await worker_('/msg/funil/mover', 'POST', { conversa: id, etiqueta: etq });
+    if (botaoEl) botaoEl.disabled = false;
+    if (!r.ok) { aviso_(r.erro || 'Não consegui mudar a etapa. Tente de novo.'); return; }
+    const nome = rotuloContato(k.c), dest = funil_.find((col) => col.etiqueta.id === etq);
+    if (aberta && aberta.id === id) { aberta.etiquetas = r.etiquetas || []; const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(aberta)); }
+    lista.forEach((c) => { if (c.id === id) c.etiquetas = r.etiquetas || []; });
+    ETQ = null;
+    const g = $('ms-gaveta'); if (g) { g.remove(); await desempilharEsperando_('ms-gaveta'); }
+    aviso_(etq ? nome + ' agora está em ' + (dest ? dest.etiqueta.nome : 'outra etapa') + '.' : nome + ' saiu do funil.');
+    if (painel === 'funil') await abrirFunil_(id);
+  }
+  async function abrirDoFunil_(id) {
+    const g = $('ms-gaveta'); if (g) { g.remove(); await desempilharEsperando_('ms-gaveta'); }
+    await desempilharEsperando_('ms-funil');
+    if (painel === 'funil') fecharPainel();
+    abrirConversa(id);
+  }
 
   /* ---------- cliques ---------- */
   async function clique(ev) {
@@ -1646,12 +2289,15 @@
     const b = ev.target.closest('[data-ms]'); if (!b) return;
     const a = b.dataset.ms;
     if (a !== 'menu-geral' && a !== 'menu-conversa') fecharMenu();
+    if (painel === 'funil' && (a === 'leitura-cfg' || a === 'selecionar')) { largarFunil_(); chrome_(false); const ul0 = $('ms-lista'); if (ul0) ul0.hidden = false; pintarLista(); }
+    if (painel === 'funil' && a === 'atualizar') { abrirFunil_(); return; }
     if (a === 'fechar') {
       if (trabalho && !confirm('A operação dos contatos ainda está em andamento. Se fechar agora, ela para e precisa recomeçar. Fechar mesmo assim?')) return;
+      if (painel === 'funil') { const g0 = $('ms-gaveta'); if (g0) { g0.remove(); await desempilharEsperando_('ms-gaveta'); } await desempilharEsperando_('ms-funil'); if (painel === 'funil') fecharPainel(); }   // v7.40.15
       if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { document.addEventListener('tk:camada-fechada', function f(e) { if (e.detail && e.detail.chave === 'ms-conversa') { document.removeEventListener('tk:camada-fechada', f); fecharComHistorico_('overlay-mensagens'); } }); TKCamadas.desempilhar('ms-conversa'); }
       else fecharComHistorico_('overlay-mensagens');
     }
-    else if (a === 'aba') { selecao = null; desenharSelbar_(); contVista = null; contTipos = null; canal = b.dataset.canal; filtro = ''; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); }
+    else if (a === 'aba') { const eraFunil = painel === 'funil'; selecao = null; desenharSelbar_(); contVista = null; contTipos = null; canal = b.dataset.canal; filtro = ''; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); if (eraFunil) { chrome_(true); abrirFunil_(); } await carregarLista(true); }
     else if (a === 'tipo') {
       const k = b.dataset.tipo, outro = k === 'msg' ? 'grp' : 'msg';
       if (tipos[k] && !tipos[outro]) { tipos[k] = false; tipos[outro] = true; } else tipos[k] = !tipos[k];       // desligar o único ligado = mostrar o outro (nunca fica tudo desligado)
@@ -1659,6 +2305,16 @@
       if (selecao) { selecao.clear(); desenharSelbar_(); }
       fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true);
     }
+    else if (a === 'etq') { const id = Number(b.dataset.id); etqFiltro = etqFiltro === id ? 0 : id; desenharFiltros(); await carregarLista(true); }
+    else if (a === 'etiquetas') { etqDaFicha_ = false; abrirEtiquetas_(); }
+    else if (a === 'ficha') { fecharMenu(); abrirFicha_(); }   // v7.40.14
+    else if (a === 'ficha-tam') { const i = $('ms-fi-tam'); if (i) { i.value = alternarTam_(i.value, b.dataset.t).slice(0, 60); marcarTams_(); } }
+    else if (a === 'ficha-salvar') await salvarFicha_(b);
+    else if (a === 'ficha-etiquetas') { if (!sairFicha_()) return; etqDaFicha_ = true; if (!ETQ || !ETQ.length) await carregarEtiquetas_(); abrirEtiquetas_(); }
+    else if (a === 'ficha-abrir') { if (!sairFicha_()) return; fecharGaveta_(); if (canal !== 'todos') { canal = b.dataset.canal; filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); } abrirConversa(Number(b.dataset.id)); }
+    else if (a === 'assumir' || a === 'liberar') { const c = aberta; if (!c) return; const r = await worker_('/msg/dono', 'POST', { conversa: c.id, assumir: a === 'assumir' }); if (!r.ok) { aviso_(r.erro || 'Não foi possível agora.'); return; } c.dono = r.dono; const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(c)); await carregarLista(false); }
+    else if (a === 'etq-salvar') salvarEtiquetas_();
+    else if (a === 'etq-sem-etapa') { const g = $('ms-gaveta'); if (g) g.querySelectorAll('input[name=ms-etq-venda]').forEach((i) => { i.checked = false; }); }
     else if (a === 'filtro') { filtro = filtro === b.dataset.filtro ? '' : b.dataset.filtro; if (selecao) { selecao.clear(); desenharSelbar_(); } fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true); }
     else if (a === 'abrir') { if (toqueLongo) { toqueLongo = false; return; } if (selecao) { const id = Number(b.dataset.id); if (selecao.has(id)) selecao.delete(id); else selecao.add(id); pintarLista(); desenharSelbar_(); } else abrirConversa(Number(b.dataset.id)); }
     else if (a === 'selecionar') iniciarSelecao_(0);
@@ -1706,9 +2362,18 @@
     }
     else if (a === 'gaveta-produtos') abrirProdutos_();
     else if (a === 'gaveta-respostas') abrirRespostas_(false);
+    else if (a === 'modo-nota') alternarNota_();
     else if (a === 'gaveta-fechar') { fecharGaveta_(); const t = $('ms-texto'); if (t) t.focus(); }
     else if (a === 'resp-editar') abrirRespostas_(true);
-    else if (a === 'resp-usar') { const r = respostas_()[Number(b.dataset.i)]; if (r) colocarNaMensagem_(r.x); }
+    else if (a === 'resp-usar') { const r = respostas_()[Number(b.dataset.i)]; if (r) colocarResposta_(r.x); }
+    else if (a === 'auto-cfg') abrirAuto_();
+    else if (a === 'agenda-abrir') { fecharMenu(); abrirAgenda_(); }
+    else if (a === 'agenda-atalho') { agendaAtalho_ = b.dataset.k; agendaQuando_ = atalhoMs_(agendaAtalho_); marcarAgenda_(); aviso_(''); }
+    else if (a === 'agenda-salvar') await salvarAgenda_(b);
+    else if (a === 'agenda-cancelar') await cancelarAgenda_(b);
+    else if (a === 'auto-salvar') await salvarAuto_(b);
+    else if (a === 'auto-feriado-add') { const di = $('ms-auto-data'), v = di ? di.value : ''; if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) { aviso_('Escolha a data do feriado.'); if (di) di.focus(); } else if (autoEdit_) { if (autoEdit_.feriados.indexOf(v) < 0) autoEdit_.feriados = autoEdit_.feriados.concat(v).sort(); desenharAuto_(); const d2 = $('ms-auto-data'); if (d2) d2.focus(); aviso_('Feriado incluído. Toque em Salvar para valer.'); } }
+    else if (a === 'auto-feriado-tirar' && autoEdit_) { autoEdit_.feriados = autoEdit_.feriados.filter((d) => d !== b.dataset.d); desenharAuto_(); const d2 = $('ms-auto-data'); if (d2) d2.focus(); aviso_('Feriado retirado. Toque em Salvar para valer.'); }
     else if (a === 'prod-marcar') marcarProduto_(b);
     else if (a === 'prodsel-limpar') { prodSel = []; Array.prototype.forEach.call(document.querySelectorAll('#ms-prod-lista .ms-prod-marca'), (m) => { m.setAttribute('aria-pressed', 'false'); m.querySelector('.ms-prod-caixa').textContent = ''; m.closest('.ms-prod').classList.remove('marcado'); }); desenharSelProd_(); const q = $('ms-prod-busca'); if (q) q.focus(); }
     else if (a === 'prodsel-usar') { const ps = produtosSelecionados_(); if (ps.length) { prodSel = []; colocarNaMensagem_(textoSelecao_(ps)); } }
@@ -1730,7 +2395,7 @@
     else if (a === 'encerrar' && aberta) escolherMotivo_([aberta.id]);
     else if (a === 'reabrir' && aberta) { const id = aberta.id; await encerrar_([id], true); if (aberta && aberta.id === id) { montarConversa(aberta); pintarFio(true); } }
     else if (a === 'abrir-outro') { if (canal !== 'todos') { canal = b.dataset.canal; filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); } abrirConversa(Number(b.dataset.id)); }
-    else if (a === 'pessoa') { if(aberta&&!aberta.grupo)editarPessoa_(aberta.id); }
+    else if (a === 'pessoa') { if (aberta && !aberta.grupo && sairFicha_()) { if ($('ms-gaveta')) fecharGaveta_(); editarPessoa_(aberta.id); } }
     else if (a === 'espiar') abrirConversa(Number(b.dataset.id), true);
     else if (a === 'atender' && aberta) { espiando = false; aberta.nao_lidas = Math.max(1, aberta.nao_lidas || 0); montarConversa(aberta); pintarFio(true); marcarLida(); const t = $('ms-texto'); if (t) t.focus(); }
     else if (a === 'leitura-cfg') { painel = painel === 'leitura' ? '' : 'leitura'; if (painel === 'leitura') { cfgLeitura = null; contatosSit = null; } desenharEstado(); }
@@ -1747,13 +2412,24 @@
     else if (a === 'descartar') { pendentes.delete(b.dataset.tmp); msgs = msgs.filter((m) => m.id !== b.dataset.tmp); pintarFio(false); }
     else if (a === 'fim') { const f = $('ms-fio'); if (f) { f.scrollTop = f.scrollHeight; novasAbaixo = 0; atualizarPill(); marcarLida(); } }
     else if (a === 'conexao') { painel = painel === 'conexao' ? '' : 'conexao'; desenharEstado(); }
-    else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Configurações (leitura e nome)…', 'leitura-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar']]));
-    else if (a === 'menu-conversa' && aberta) abrirMenu(b, [['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
+    else if (a === 'trocar-usuario') abrirTrocaUsuario_();
+    else if (a === 'app-atualizar') { try { window.TKAndroid.atualizar(); } catch (e) { alert('Atualize pelo instalador mais recente do app.'); } }
+    else if (a === 'app-permissoes') { try { window.TKAndroid.permissoes(); } catch (e) {} }
+    else if (a === 'usar-conta') { const l = contasSalvas_(), c = l.find((x) => x.whatsapp === b.dataset.w); if (!c) return; salvarSessao(c.whatsapp, c.sessao); location.reload(); }
+    else if (a === 'esquecer-conta') { guardarContas_(contasSalvas_().filter((x) => x.whatsapp !== b.dataset.w)); abrirTrocaUsuario_(); }
+    else if (a === 'outra-conta') { lembrarSessao_(); limparSessao(); location.reload(); }
+    else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Funil de vendas', 'funil'], ['Configurações (leitura e nome)…', 'leitura-cfg'], ['Respostas automáticas…', 'auto-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar'], '-', ['Trocar usuário…', 'trocar-usuario']]).concat(window.TKAndroid ? ['-', ['Atualizar app', 'app-atualizar'], ['Permissões do app', 'app-permissoes']] : []));
+    else if (a === 'menu-conversa' && aberta) abrirMenu(b, [...(aberta.grupo ? [] : [['Ficha do cliente…', 'ficha']]), ['Agendar mensagem…', 'agenda-abrir'], '-', ['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
     else if (a === 'exp') baixar(b.dataset.params, b.dataset.rotulo);
     else if (a === 'copiar-ia') copiarParaIA();
     else if (a === 'painel') abrirPainel(30);
     else if (a === 'painel-dias') abrirPainel(Number(b.dataset.dias));
-    else if (a === 'fechar-painel') fecharPainel();
+    else if (a === 'fechar-painel') { if (painel === 'funil' && window.TKCamadas && TKCamadas.aberta('ms-funil')) TKCamadas.desempilhar('ms-funil'); else fecharPainel(); }
+    else if (a === 'funil' || a === 'funil-atualizar') abrirFunil_();   // v7.40.15
+    else if (a === 'funil-cartao') opcoesFunil_(Number(b.dataset.id));
+    else if (a === 'funil-mover') await moverFunil_(Number(b.dataset.id), Number(b.dataset.etq), b);
+    else if (a === 'funil-abrir') await abrirDoFunil_(Number(b.dataset.id));
+    else if (a === 'funil-ir') irColuna_(b);
     else if (a === 'atualizar') { await recarregar(); }
     else if (a === 'nao-lida' && aberta) { await worker_('/msg/lida', 'POST', { conversa: aberta.id, naoLida: true }); aberta.nao_lidas = 1; voltarLista(); await carregarLista(false); }
     else if (a === 'segredo') {

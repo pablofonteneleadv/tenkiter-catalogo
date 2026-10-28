@@ -6,6 +6,82 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.16 — 28/10/2026
+- Mensagens: quem fala pelo WhatsApp 1 e pelo WhatsApp 2 com o mesmo número aparece agrupado na lista (como as pessoas vinculadas), sem precisar vincular à mão.
+
+## 7.40.15 — 28/10/2026
+- Mensagens: **Funil de vendas** (⋯ → Funil de vendas). Um quadro com uma coluna para cada etiqueta de venda (Novo cliente, Reserva, Aguardando pagamento, Pago, Enviado — as mesmas de Etiquetas; se a equipe renomear ou arquivar, o quadro acompanha). Cada cartão é uma pessoa: nome, canal, prévia, há quanto tempo e responsável. Respeita a aba de canal (Todas, WhatsApp 1, WhatsApp 2, Instagram).
+- Mover o cartão troca só a etapa da venda da pessoa; as outras etiquetas (ex.: Troca) ficam. No celular: uma coluna por tela (deslize ou use ‹ ›) e toque no cartão para “Mover para…”, “Tirar do funil” ou “Abrir conversa”. No computador: colunas lado a lado, arrastar e soltar, ou clicar/Enter no cartão para o mesmo menu.
+- Servidor: `GET /msg/funil?canal=` (só conversas individuais abertas; a pessoa com vários canais aparece uma vez, pela conversa mais recente; até 30 cartões por coluna, com o total) e `POST /msg/funil/mover` (`etiqueta: 0` tira a etapa). Erros em português.
+
+## 7.40.14 — 28/10/2026
+- Mensagens: **Ficha do cliente** — toque no nome/avatar da conversa (ou ⋯ → Ficha do cliente…). Num só lugar: tamanhos que a cliente usa (atalhos PP a GG e 36 a 46 + texto), preferências, cidade/bairro, etiquetas (com “Mudar etiquetas”), as 5 notas internas mais recentes, compras (conversas encerradas como “Vendeu”, com data e canal) e os canais vinculados (WhatsApp 1/2/Instagram, com “Abrir”).
+- A ficha é da pessoa: vale para todos os canais vinculados, como notas e etiquetas. Só mostra o que existe (“Nenhuma compra registrada ainda”). A faixa da conversa mostra discretamente “Veste M · 38”.
+- Servidor: tabela `msg_ficha`, `GET/POST /msg/ficha` (tamanhos até 60 letras, preferências até 300, cidade até 60; erros em português). Um “Vendeu” corrigido logo depois (sem mensagem no meio) não conta como compra.
+
+## 7.40.13 — 28/10/2026
+- Mensagens: **Agendar mensagem** (menu ⋯ da conversa). Escreva agora e escolha “Daqui a 1 hora”, “Amanhã 8h”, “Amanhã 14h” ou o dia e a hora (horário de Fortaleza); o servidor envia sozinho na hora marcada, sem duplicar.
+- A conversa mostra uma faixa “1 mensagem agendada para amanhã 08:00 · Ver”; dá para cancelar antes de sair, e falhas ficam registradas com o motivo.
+
+## 7.40.12 — 28/10/2026
+- Mensagens: filtro **Retomar** — clientes que pararam de responder (última mensagem foi da loja) ou com etiqueta Reserva/Aguardando pagamento, parados entre 1 e 30 dias. Use o atalho /retorno para chamar de volta.
+- Meta de resposta: cliente esperando há mais de 15 min aparece em vermelho na lista, com ⚠.
+
+## 7.40.11 — 28/10/2026
+- App Mensagens: abre na hora com o login guardado no aparelho (a conferência com o servidor de contas segue por trás) e mostra as conversas salvas enquanto atualiza.
+- Menu ⋯ no app Android 2.4.3: Atualizar app e Permissões do app.
+
+## 7.40.10 — 28/10/2026
+- App Mensagens: o Voltar do celular, numa conversa aberta pelo aviso, volta para a lista de conversas em vez de mandar o app para o fundo.
+
+## 7.40.9 — Respostas automáticas e atalhos — 2026-10-28
+
+- Mensagens → Respostas: 11 atalhos prontos (/oi, /preco, /foto, /tamanho, /entrega, /outracidade, /pix, /endereco, /retorno, /obrigado, /saiu), semeados uma vez sem apagar as respostas que a equipe já tinha. Escrever "/oi" e espaço na mensagem coloca o texto; [nome] vira o nome da atendente; o primeiro [colchete] fica selecionado e o envio é bloqueado enquanto houver [valor…], [chave Pix] ou [nome] sem completar. O /pix vem com [chave Pix] e [nome] para a loja completar no app (nada da chave fica no código).
+- Mensagens → ⋯ → **Respostas automáticas…** (desligadas por padrão): Boas-vindas (loja aberta, conversa parada havia 12 h, uma vez) e Fora do horário (loja fechada, no máximo 1 vez por período fechado, com {abertura} = "hoje às 7h30", "amanhã às 7h30", "segunda às 7h30", "amanhã às 8h"…). Horário de Fortaleza: seg–sex 7h30–18h, sáb 7h30–14h, domingo fechado; feriados com comércio aberto (8h–13h) editáveis no app. Fora do horário não sai se alguém da equipe respondeu nos últimos 30 min.
+- Nunca em grupos, respostas a status sem texto, reações ou mensagens da loja. Sai pela mesma função do "Enviar", com o selo "Automática" na conversa; não vira responsável, não tira a conversa de "Falta responder" e não conta nas métricas de demora. Falha de envio não derruba o webhook e aparece no diagnóstico da gaveta.
+- Servidor: `GET/POST /msg/auto`, tabela `msg_auto_envio` (não repetir), cfg `msg_auto`, `msg_auto_diag` e `msg_resp_semeada`. Testes: `worker_mensagens_conversa` 320, `worker_mobile_push` OK.
+
+## 7.40.8 — 28/10/2026
+- App Mensagens: a tela não fica mais em branco com a barra Catálogo/Gestão depois do Voltar; se a janela fechar, ela reabre sozinha.
+- App Android 2.4.1: a tela carregada fica guardada enquanto o app vive em segundo plano.
+
+## 7.40.7 — Trocar usuário — 2026-10-28
+
+- Mensagens → ⋯ → **Trocar usuário…**: mostra as contas já usadas neste aparelho, com "Usar" para trocar com um toque, "Esquecer" para tirar da lista e "Entrar com outra conta". Trocar não apaga as conversas carregadas. Vale no site e no atendimento do app.
+
+## 7.40.6 — Responsável pela conversa — 2026-10-28
+
+- Quem responde primeiro uma conversa sem responsável vira o responsável, automaticamente.
+- Conversa: "Responsável: Pablo" com Liberar, ou o botão Assumir, na faixa abaixo do cabeçalho.
+- Lista: "Resp.: Pablo" em cada linha e o filtro **Minhas**.
+- Servidor: coluna `dono` em `msg_conversa`, `POST /msg/dono` e `filtro=minhas`. O nome é o de "Respondendo como". Teste: `worker_mensagens_conversa` 277.
+
+## 7.40.5 — Diagnóstico de status no WhatsApp 1 — 2026-10-28
+
+- Servidor: guarda o formato (só nomes de campos e se veio sinal de resposta a status) do último texto comum de cada WhatsApp, para comparar o WhatsApp 1 (respostas a status chegando sem a referência) com o WhatsApp 2 (chegando certo).
+
+## 7.40.4 — Etiquetas nas conversas — 2026-10-28
+
+- Conversa: faixa logo abaixo do cabeçalho com as etiquetas da pessoa e "+ Etiqueta". A gaveta tem a **etapa da venda** (uma por vez: Novo cliente, Reserva, Aguardando pagamento, Pago, Enviado) e **outras** (Troca), com Salvar.
+- Lista: até duas etiquetas em cada linha (ponto de cor + nome) e uma fileira de filtros por etiqueta, com a contagem de pessoas.
+- As etiquetas valem para a pessoa, somando os canais vinculados.
+- Servidor: tabelas `msg_etiqueta` e `msg_alvo_etiqueta`, `GET /msg/etiquetas` (cria as padrão na primeira vez), `POST /msg/rotular` e `etiqueta=` em `/msg/conversas`. Teste: `worker_mensagens_conversa` 275.
+
+## 7.40.3 — Nota interna na conversa — 2026-10-28
+
+- Conversa: botão **Nota** na barra (ao lado de Produtos e Respostas). Com ele ligado, a caixa fica amarela e o texto vira nota interna, que só a equipe vê; nada é enviado ao cliente.
+- A nota aparece no fio como cartão amarelo de largura total, com "Só a equipe vê · autor · hora", e vale para todos os canais vinculados da pessoa.
+- Servidor: tabela `msg_nota`, `POST /msg/notas` e as notas junto com `/msg/mensagens`. Teste: `worker_mensagens_conversa` 271.
+
+## 7.40.2 — Aviso quando as mensagens param de chegar — 2026-10-28
+
+- Mensagens: faixa vermelha no topo da lista ("Mensagens não estão chegando desde HH:MM") quando o servidor recusa os avisos do WhatsApp ou do Instagram, como no limite do banco em 27/10. Some sozinha quando uma mensagem volta a ser gravada.
+- Servidor: marca a falha no KV só quando um aviso falha (no máximo uma gravação a cada 20 s); a tela confere a cada ~40 s, junto com os contadores. Precisa de 2 falhas para avisar, para um erro isolado não acender a faixa.
+
+## 7.40.1 — Conversa mais limpa — 2026-10-28
+
+- "Foi resposta a um story? Ver stories no ar" aparece só na última mensagem recebida sem contexto, e não mais embaixo de cada mensagem.
+
 ## 7.40.0 — APK 2.3: pessoas, contatos e contexto real de stories — 2026-10-28
 
 - Não lidas e Falta responder usam a mesma base ativa: pendente inclui toda não lida mais leitura sem resposta; encerradas ficam fora. Contadores identificam pessoas, reunindo canais explicitamente vinculados. Grupos começam desligados e podem ser ligados manualmente.

@@ -2,7 +2,7 @@ plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
 android {
     namespace 'br.com.tenkitermodas.mensagens'
     compileSdk 35
-    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 6; versionName '2.3.0' }
+    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 10; versionName '2.4.3' }
     buildFeatures { buildConfig true }
     def shared = new File(rootDir.parentFile, 'common.js').text
     def loginApi = (shared =~ /API_URL_PADRAO="([^"]+)"/)[0][1]
@@ -30,7 +30,11 @@ android {
             }
         }
     }
-    buildTypes { release { signingConfig signingConfigs.release; minifyEnabled false; vcsInfo.include = false } }
+    buildTypes {
+        release { signingConfig signingConfigs.release; minifyEnabled false; vcsInfo.include = false; manifestPlaceholders = [appLabel: 'TENKiTER Mensagens'] }
+        // Versão de teste: instala ao lado do app oficial, sem substituir nem apagar nada.
+        debug { applicationIdSuffix '.teste'; versionNameSuffix '-teste'; manifestPlaceholders = [appLabel: 'Mensagens TESTE'] }
+    }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = '17' }
 }

@@ -43,6 +43,8 @@ def novo_estado():
     s["anexos"] = []; s["midia_baixada"] = []
     return s
 
+ETQ_PADRAO = [{"id": i + 1, "nome": n, "cor": c, "venda": v, "ordem": i, "pessoas": 0} for i, (n, c, v) in enumerate([("Novo cliente", "cinza", 1), ("Reserva", "ambar", 1), ("Aguardando pagamento", "azul", 1), ("Pago", "verde", 1), ("Enviado", "roxo", 1), ("Troca", "rosa", 0)])]
+
 def pessoa(c):
     """v7.22: mesma regra do Worker (número sem o 9º dígito); grupo e Instagram não entram."""
     if c.get("pessoa"): return c["pessoa"]
@@ -64,6 +66,10 @@ def cont(s, canal, tipo=""):
     cs = [c for c in todas if not c["encerrada_em"]]
     return {"conversas": len(cs), "nao_lidas": sum(1 for c in cs if c["nao_lidas"] > 0), "sem_resposta": sum(1 for c in cs if not c["grupo"] and c["ult_dir"] == "entrada"), "grupos": sum(1 for c in cs if c["grupo"]),
             "encerradas": len(todas) - len(cs), "ambos": sum(1 for c in cs if c["outro_id"]), "individuais": sum(1 for c in cs if not c["grupo"])}
+
+def agendas(s, cid):
+    ag = [x for x in s.get("agenda", []) if x["conversa_id"] == cid]
+    return {"pendentes": sorted([x for x in ag if x["status"] in ("pendente", "enviando")], key=lambda x: x["quando"]), "historico": [x for x in ag if x["status"] in ("enviada", "falhou")][-10:]}
 
 def tratar(route, path, method, body, s):
     """Devolve True se tratou. Mutações feitas pelo teste em s ficam visíveis às próximas chamadas."""
@@ -106,7 +112,88 @@ def tratar(route, path, method, body, s):
         return J({"ok":True,"conversa":c,"pessoa":pessoa(c),"nome":c["nome"],"whatsapp":c["contato"] if c["canal"] != "instagram" else "","segundo":"","canais":[enfeitar(s,x) for x in s["convs"] if pessoa(x) == pessoa(c)]}) or True
     if path == "/msg/mensagens":
         cid = int(q["conversa"]); c = enfeitar(s, next(x for x in s["convs"] if x["id"] == cid))
-        return J({"ok": True, "conversa": c, "mensagens": sorted([x for x in s["msgs"] if x["conversa_id"] == cid], key=lambda x: (x["enviada_em"], x["id"])), "temMais": False, "cursor": agora()}) or True
+        if not c["grupo"]: c["tamanhos"] = (s.get("fichas", {}).get(pessoa(c) or "c:%d" % cid) or {}).get("tamanhos", "")
+        return J({"ok": True, "conversa": c, "mensagens": sorted([x for x in s["msgs"] if x["conversa_id"] == cid], key=lambda x: (x["enviada_em"], x["id"])), "agendadas": agendas(s, cid)["pendentes"], "temMais": False, "cursor": agora()}) or True
+    if path == "/msg/agendadas":   # v7.40.13: mensagens agendadas
+        return J(dict({"ok": True}, **agendas(s, int(q["conversa"])))) or True
+    if path == "/msg/agendar":
+        s.setdefault("agendar_posts", []).append(body)
+        texto = str(body.get("texto") or "").strip(); quando = str(body.get("quando") or "")
+        if not texto: return J({"ok": False, "erro": "Escreva a mensagem antes de agendar."}, 400) or True
+        if not quando or quando <= agora(): return J({"ok": False, "erro": "Esse horário já passou. Escolha um horário no futuro."}, 400) or True
+        s["seq"] += 1
+        a = {"id": s["seq"], "conversa_id": body["conversa"], "texto": texto, "quando": quando, "autor": "Ana", "status": "pendente", "erro": "", "criado_em": agora(), "enviado_em": ""}
+        s.setdefault("agenda", []).append(a)
+        return J(dict({"ok": True, "agendada": a}, **agendas(s, body["conversa"]))) or True
+    if path == "/msg/agendar/cancelar":
+        a = next((x for x in s.get("agenda", []) if x["id"] == body.get("id")), None)
+        if not a: return J({"ok": False, "erro": "Agendamento não encontrado."}, 404) or True
+        if a["status"] != "pendente": return J({"ok": False, "erro": "Não dá mais para cancelar: a mensagem já foi enviada."}, 409) or True
+        a["status"] = "cancelada"; s.setdefault("cancelados", []).append(a["id"])
+        return J(dict({"ok": True}, **agendas(s, a["conversa_id"]))) or True
+    if path == "/msg/ficha":   # v7.40.14: ficha do cliente (mesmas regras do Worker: por pessoa, limites, só o que existe)
+        cid = int(q.get("conversa") or 0) if method == "GET" else int(body.get("conversa") or 0)
+        c = next((x for x in s["convs"] if x["id"] == cid), None)
+        if not c: return J({"ok": False, "erro": "Conversa não encontrada."}, 404) or True
+        if c["grupo"]: return J({"ok": False, "erro": "A ficha do cliente é só para conversas individuais, não para grupos."}, 400) or True
+        alvo = pessoa(c) or "c:%d" % cid
+        fichas = s.setdefault("fichas", {})
+        if method != "GET":
+            s.setdefault("ficha_posts", []).append(body)
+            if s.get("ficha_falha"): return J({"ok": False, "erro": s["ficha_falha"]}, 500) or True
+            lim = {"tamanhos": (60, "Tamanhos"), "preferencias": (300, "Preferências"), "cidade": (60, "Cidade/bairro")}
+            novo = dict(fichas.get(alvo) or {"tamanhos": "", "preferencias": "", "cidade": ""})
+            for k, (n, nome) in lim.items():
+                if body.get(k) is None: continue
+                t = " ".join(str(body[k]).split())
+                if len(t) > n: return J({"ok": False, "erro": "%s: no máximo %d letras (agora tem %d)." % (nome, n, len(t))}, 400) or True
+                novo[k] = t
+            novo.update({"atualizado_em": agora(), "autor": "Ana"}); fichas[alvo] = novo
+        canais = [x for x in s["convs"] if not x["grupo"] and (x["id"] == cid or (pessoa(c) and pessoa(x) == pessoa(c)))]
+        ids = [x["id"] for x in canais]
+        f = fichas.get(alvo) or {}
+        return J({"ok": True, "ficha": {"tamanhos": f.get("tamanhos", ""), "preferencias": f.get("preferencias", ""), "cidade": f.get("cidade", ""), "atualizado_em": f.get("atualizado_em", ""), "autor": f.get("autor", "")},
+                  "etiquetas": c.get("etiquetas", []), "notas": list(reversed(s.get("notas", {}).get(alvo, [])))[:5],
+                  "canais": [{"id": x["id"], "canal": x["canal"], "contato": x["contato"], "atual": x["id"] == cid} for x in canais],
+                  "compras": sorted([{"em": v["em"], "canal": next(x["canal"] for x in canais if x["id"] == v["conversa_id"])} for v in s.get("vendas", []) if v["conversa_id"] in ids], key=lambda v: v["em"], reverse=True)}) or True
+    if path == "/msg/etiquetas" and s.get("etq_mock"):   # só quando o teste pede (os outros testes contam os filtros sem etiquetas)
+        return J({"ok": True, "etiquetas": s["etq_mock"], "cores": ["cinza", "ambar", "azul", "verde", "roxo", "rosa"]}) or True
+    if path == "/msg/rotular" and s.get("etq_mock"):
+        c = next(x for x in s["convs"] if x["id"] == body.get("conversa"))
+        c["etiquetas"] = [e for e in s["etq_mock"] if e["id"] in body.get("etiquetas", [])]
+        return J({"ok": True, "etiquetas": c["etiquetas"]}) or True
+    if path in ("/msg/funil", "/msg/funil/mover"):   # v7.40.15: funil de vendas (mesmas regras do Worker: colunas = etiquetas de venda; uma pessoa = um cartão)
+        etqs = s.get("etq_mock") or ETQ_PADRAO
+        venda = [e for e in sorted(etqs, key=lambda e: (e.get("ordem", 0), e["id"])) if e["venda"] and not e.get("arquivada")]
+        alvo = lambda c: pessoa(c) or "c:%d" % c["id"]
+        def etq_de(a):   # as etiquetas são da pessoa: vale a de qualquer conversa dela
+            for c in s["convs"]:
+                if alvo(c) == a and c.get("etiquetas") is not None: return c["etiquetas"]
+            return []
+        if path == "/msg/funil/mover":
+            s.setdefault("funil_posts", []).append(body)
+            if s.get("funil_falha"): return J({"ok": False, "erro": s["funil_falha"]}, 500) or True
+            c = next((x for x in s["convs"] if x["id"] == body.get("conversa")), None)
+            if not c: return J({"ok": False, "erro": "Conversa não encontrada."}, 404) or True
+            if c["grupo"]: return J({"ok": False, "erro": "O funil de vendas é só para conversas individuais, não para grupos."}, 400) or True
+            e_id = body.get("etiqueta")
+            if e_id and not any(e["id"] == e_id for e in venda): return J({"ok": False, "erro": "Essa etapa não existe mais. Atualize o funil e tente de novo."}, 400) or True
+            a = alvo(c); novas = [e for e in etq_de(a) if not e["venda"]] + [e for e in venda if e["id"] == e_id]
+            for x in s["convs"]:
+                if alvo(x) == a: x["etiquetas"] = novas; x["atualizada_em"] = agora()
+            return J({"ok": True, "etiquetas": novas}) or True
+        cf = q.get("canal") or "todos"
+        if cf not in ("todos", "whatsapp1", "whatsapp2", "instagram"): return J({"ok": False, "erro": "Escolha Todas, Instagram, WhatsApp 1 ou WhatsApp 2."}, 400) or True
+        s.setdefault("funil_consultas", []).append(cf)
+        if s.get("funil_erro"): return J({"ok": False, "erro": s["funil_erro"]}, 500) or True
+        melhor = {}
+        for c in sorted([x for x in s["convs"] if not x["grupo"] and not x.get("encerrada_em") and x["total"] > 0 and (cf == "todos" or x["canal"] == cf)], key=lambda x: (x["ultima_em"], x["id"]), reverse=True):
+            melhor.setdefault(alvo(c), c)
+        cols = []
+        for e in venda:
+            cs = [c for a, c in melhor.items() if any(x["id"] == e["id"] for x in etq_de(a))]
+            cols.append({"etiqueta": {"id": e["id"], "nome": e["nome"], "cor": e["cor"]}, "total": len(cs), "cartoes": [{"conversa": c["id"], "nome": c["nome"], "contato": c["contato"], "canal": c["canal"], "previa": c["previa"][:90], "ultima_em": c["ultima_em"], "dono": c.get("dono", "")} for c in cs[:30]]})
+        return J({"ok": True, "canal": cf, "colunas": cols}) or True
     if path == "/msg/novidades":
         cid = int(q.get("conversa") or 0); dep = int(q.get("depois") or 0); desde = q.get("desde", "")
         # a "folga" de 3 s do servidor real: devolve o que mudou desde o cursor
@@ -212,6 +299,16 @@ def tratar(route, path, method, body, s):
                 c["encerrada_motivo"] = "" if body.get("reabrir") else (body.get("motivo") if body.get("motivo") in ("concluido", "vendeu", "sem_resposta", "engano") else "concluido")
                 if not body.get("reabrir"): c["nao_lidas"] = 0
         return J({"ok": True, "alteradas": len(ids), "contagens": {k: cont(s, k) for k in ("whatsapp1", "whatsapp2", "instagram", "todos")}}) or True
+    if path == "/msg/auto":   # v7.40.8: respostas automáticas (desligadas por padrão)
+        au = s.setdefault("auto", {"boasVindas": {"ligado": False, "texto": "Oi! Que bom ter você aqui 😊 Já já uma das meninas te responde. Se já viu alguma peça, pode mandar o print ou o código que agiliza."}, "foraHorario": {"ligado": False, "texto": "Oi! A loja tá fechada agora, mas sua mensagem ficou guardada aqui. A gente volta {abertura} e te responde 😊 Se quiser, já deixa o print da peça e seu tamanho."}, "feriados": []})
+        if method == "POST":
+            for k in ("boasVindas", "foraHorario"):
+                d = body.get(k) or {}
+                if isinstance(d.get("ligado"), bool): au[k]["ligado"] = d["ligado"]
+                if isinstance(d.get("texto"), str) and d["texto"].strip(): au[k]["texto"] = d["texto"].strip()[:1000]
+            if isinstance(body.get("feriados"), list): au["feriados"] = sorted(set(x for x in body["feriados"] if isinstance(x, str) and len(x) == 10))
+            s.setdefault("auto_posts", []).append(body)
+        return J({"ok": True, "auto": au, "agora": {"aberta": False, "abertura": "amanhã às 7h30"}, "ultimo": s.get("auto_ultimo")}) or True
     if path == "/msg/config":
         cfg = s.setdefault("cfg_leitura", {"whatsapp1": True, "whatsapp2": True, "instagram": True})
         if method == "POST":
