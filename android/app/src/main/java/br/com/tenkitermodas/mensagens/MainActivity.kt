@@ -40,7 +40,7 @@ class MainActivity:Activity(),InboxView.Events {
     private var conversation=0L;private var online=false;private var syncing=false;private var sending=false
     private var displayOwner="";private var webTarget=0L;private var seededSession="";private var refreshSeq=0;private var pendingClick=0L
     private val handler=Handler(Looper.getMainLooper())
-    private val home="https://tenkitermodas.com.br/admin.html?app=mensagens"
+    private val home=WebKeeper.HOME
     private val ticker=object:Runnable{override fun run(){if(nativeVisible&&repo.store.auth()!=null&&!sending)sync();handler.postDelayed(this,4000)}}
     private val changes=object:BroadcastReceiver(){override fun onReceive(c:Context?,i:Intent?){render()}}
     private val clicks=object:INotificationClickListener{override fun onClick(event:INotificationClickEvent){runOnUiThread{pendingClick=event.notification.additionalData?.optLong("conversa",0)?:0;pendingPeek=event.result.actionId!="abrir";openGeneration++;if(::inbox.isInitialized){peeking=pendingPeek;conversation=pendingClick;pendingClick=0;full(conversation);sync()}}}}
@@ -61,7 +61,15 @@ class MainActivity:Activity(),InboxView.Events {
         OneSignal.Notifications.addClickListener(clicks)
         if(pendingClick>0){peeking=pendingPeek;conversation=pendingClick;pendingClick=0}
         render();full(conversation)
-        if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync();syncNames()}
+        if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync();syncNames();askBattery()}
+    }
+    /** Pede uma vez para o Android não encerrar o app: assim as mensagens ficam prontas ao abrir. */
+    private fun askBattery(){
+        val pm=getSystemService(Context.POWER_SERVICE) as android.os.PowerManager;val prefs=getSharedPreferences("tk_app",Context.MODE_PRIVATE)
+        if(pm.isIgnoringBatteryOptimizations(packageName)||prefs.getBoolean("bateriaPerguntada",false))return
+        prefs.edit().putBoolean("bateriaPerguntada",true).apply()
+        AlertDialog.Builder(this).setTitle("Deixar as mensagens sempre prontas").setMessage("Permita que o app continue rodando em segundo plano. Assim, ao abrir ou tocar num aviso, as conversas já aparecem carregadas.")
+            .setPositiveButton("Permitir"){_,_->runCatching{startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,Uri.parse("package:"+packageName)))}}.setNegativeButton("Agora não",null).show()
     }
     private fun syncNames(){if(namesChecked)return;namesChecked=true;scope.launch{try{withContext(Dispatchers.IO){repo.googleNames()};sync()}catch(_:Exception){namesChecked=false}}}
     private fun render(){
@@ -170,7 +178,7 @@ class MainActivity:Activity(),InboxView.Events {
         val kept=WebKeeper.web
         val w=if(kept!=null){WebKeeper.context?.baseContext=this;(kept.parent as? android.view.ViewGroup)?.removeView(kept);kept}else{val c=android.content.MutableContextWrapper(this);WebKeeper.context=c;WebView(c).also{WebKeeper.web=it}}
         web=w
-        w.settings.apply{javaScriptEnabled=true;domStorageEnabled=true;allowFileAccess=false;allowContentAccess=true;javaScriptCanOpenWindowsAutomatically=false;setSupportMultipleWindows(true);mediaPlaybackRequiresUserGesture=true;mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;userAgentString+=" TenkiterAndroid/2.1"}
+        WebKeeper.configure(w)
         CookieManager.getInstance().setAcceptThirdPartyCookies(w,false)
         w.webViewClient=object:WebViewClient(){
             override fun shouldOverrideUrlLoading(v:WebView,r:WebResourceRequest):Boolean{if(!r.isForMainFrame)return false;val u=r.url.toString();if(trusted(u))return false;if(r.hasGesture())external(u);return true}
@@ -207,8 +215,8 @@ class MainActivity:Activity(),InboxView.Events {
     }
     private fun showNative(){nativeVisible=true;webPanel?.visibility=View.GONE;inbox.visibility=View.VISIBLE;render()}
     private fun external(address:String){val u=Uri.parse(address);if(u.scheme !in listOf("https","http","tel","mailto"))return;runCatching{startActivity(Intent(Intent.ACTION_VIEW,u))}}
-    override fun onResume(){super.onResume();activityVisible=true;if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
-    override fun onPause(){activityVisible=false;if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
+    override fun onResume(){super.onResume();activityVisible=true;WebKeeper.attach();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
+    override fun onPause(){activityVisible=false;WebKeeper.detach();if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
     override fun onDestroy(){handler.removeCallbacks(ticker);runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it)};WebKeeper.context?.baseContext=applicationContext;super.onDestroy()}
     override fun onSaveInstanceState(out:Bundle){out.putLong("conversation",conversation);out.putBoolean("peeking",peeking);super.onSaveInstanceState(out)}
     @Deprecated("Legacy back API") override fun onBackPressed(){

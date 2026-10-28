@@ -1,8 +1,8 @@
 {
-  "versionCode": 8,
-  "versionName": "2.4.1",
-  "bytes": 4571985,
-  "sha256": "c2bf5be7abd51b2a232dac40fe65eeb6345ebf150e6f20f9624115f08e677670",
-  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.1/TENKiTER-Mensagens-2.4.1.apk",
-  "notes": "Instale sobre a 2.4.0. A tela Mensagens fica guardada: fechar e abrir de novo não recarrega tudo, e o Voltar não deixa mais a tela em branco."
+  "versionCode": 9,
+  "versionName": "2.4.2",
+  "bytes": 4574361,
+  "sha256": "ff0d64d27360548145118c2b185a85530efbe6f677e6c5953ab5db88324e5822",
+  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.2/TENKiTER-Mensagens-2.4.2.apk",
+  "notes": "Instale sobre a versão anterior. As mensagens ficam carregadas em segundo plano: ao tocar num aviso ou abrir o app, a tela já aparece pronta. Permita rodar em segundo plano quando o app pedir."
 }
