@@ -6,6 +6,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.12 — 28/10/2026
+- Mensagens: filtro **Retomar** — clientes que pararam de responder (última mensagem foi da loja) ou com etiqueta Reserva/Aguardando pagamento, parados entre 1 e 30 dias. Use o atalho /retorno para chamar de volta.
+- Meta de resposta: cliente esperando há mais de 15 min aparece em vermelho na lista, com ⚠.
+
 ## 7.40.11 — 28/10/2026
 - App Mensagens: abre na hora com o login guardado no aparelho (a conferência com o servidor de contas segue por trás) e mostra as conversas salvas enquanto atualiza.
 - Menu ⋯ no app Android 2.4.3: Atualizar app e Permissões do app.

@@ -831,6 +831,14 @@ function d1() {
   const dM = await A('GET', '/msg/conversas?canal=todos&filtro=minhas');
   chk('assumir grava o responsável e o filtro Minhas traz a conversa', dA.j.ok && !!dA.j.dono && dM.j.conversas.some((c) => c.id === nConv && c.dono === dA.j.dono), [dA.j, dM.j.conversas.length]);
   chk('liberar tira o responsável', (await A('POST', '/msg/dono', { conversa: nConv, assumir: false })).j.dono === '' && !(await A('GET', '/msg/conversas?canal=todos&filtro=minhas')).j.conversas.some((c) => c.id === nConv));
+  // v7.40.12: Retomar = última mensagem nossa ou etiqueta Reserva/Aguardando pagamento, parada entre 1 e 30 dias
+  const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const rIns = async (contato, dir, em) => (await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em,ult_dir) VALUES('whatsapp1',?,?,0,1,?,?)").bind(contato, 'Retomar ' + contato, em, dir).run()).meta.last_row_id;
+  const rSai = await rIns('retomar-teste-1', 'saida', dia(2)), rEnt = await rIns('retomar-teste-2', 'entrada', dia(2)), rNova = await rIns('retomar-teste-3', 'saida', dia(0.2)), rVelha = await rIns('retomar-teste-4', 'saida', dia(40)), rRes = await rIns('retomar-teste-5', 'entrada', dia(3));
+  await A('POST', '/msg/rotular', { conversa: rRes, etiquetas: [eId('Reserva')] });
+  const rL = (await A('GET', '/msg/conversas?canal=todos&filtro=retomar')).j.conversas.map((c) => c.id);
+  chk('Retomar traz quem ficou sem responder há 2 dias e quem reservou', rL.includes(rSai) && rL.includes(rRes), rL);
+  chk('Retomar não traz quem respondeu por último, conversa de hoje nem de mais de 30 dias', !rL.includes(rEnt) && !rL.includes(rNova) && !rL.includes(rVelha), rL);
   // Android: paginação estável para horários iguais, sem omitir conversas ou mensagens.
   const isoPag='2099-01-01T00:00:00.000Z';
   for(let i=0;i<55;i++)await DB.prepare("INSERT INTO msg_conversa(canal,contato,nome,grupo,total,ultima_em) VALUES('whatsapp1',?,?,1,1,?)").bind('paginacao-'+i+'@g.us','Grupo simulado '+i,isoPag).run();
