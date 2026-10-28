@@ -346,7 +346,7 @@
       .ms-assina b { color: #141414; }
       .ms-assina input { flex: 1 1 auto; min-width: 0; min-height: 40px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 8px; font: inherit; font-size: 0.9rem; }
       .ms-assina .ms-btn { min-height: 40px; padding: 6px 12px; }
-      /* v7.40.8: respostas automáticas (gaveta) e selo "Automática" na bolha */
+      /* v7.40.9: respostas automáticas (gaveta) e selo "Automática" na bolha */
       .ms-auto-tag { font-size: 0.68rem; font-weight: 700; color: #5c3a00; background: #fff1dc; border-radius: 4px; padding: 0 5px; margin-right: 4px; }
       .ms-auto { padding: 0 14px; }
       .ms-auto-agora { margin: 0 0 4px; padding: 8px 10px; border-radius: 8px; background: #f7f4ec; font-size: 0.85rem; font-weight: 600; color: #333; }
@@ -919,7 +919,7 @@
   });
   function fecharGaveta_() { const g = $('ms-gaveta'); if (!g) return; g.remove(); if (window.TKCamadas && TKCamadas.aberta('ms-gaveta')) TKCamadas.desempilhar('ms-gaveta'); }
   function gaveta_(titulo) {
-    // v7.40.8: no celular, com a lista à mostra (ex.: gavetas abertas pelo menu ⋯), a gaveta cobre o app inteiro em vez da conversa escondida
+    // v7.40.9: no celular, com a lista à mostra (ex.: gavetas abertas pelo menu ⋯), a gaveta cobre o app inteiro em vez da conversa escondida
     fecharGaveta_(); const cv = $('ms-conversa'), pai = cv && cv.getClientRects().length ? cv : $('ms-app'); if (!pai) return null;
     const g = el('div', 'ms-gaveta'); g.id = 'ms-gaveta'; g.setAttribute('role', 'dialog'); g.setAttribute('aria-label', titulo);
     const cab = el('div', 'ms-gaveta-cab'); cab.appendChild(el('h3', '', titulo));
@@ -1026,7 +1026,7 @@
     ].filter(Boolean);
   }
   const respostas_ = () => (cfgLeitura && Array.isArray(cfgLeitura.respostas) ? cfgLeitura.respostas : respostasPadrao_());
-  /* v7.40.8: [nome] vira o nome da atendente (menos no Pix, onde [nome] é a titular da chave); o primeiro [lacuna] fica selecionado para completar */
+  /* v7.40.9: [nome] vira o nome da atendente (menos no Pix, onde [nome] é a titular da chave); o primeiro [lacuna] fica selecionado para completar */
   const RE_LACUNA_ = /\[(nome|chave pix|valor[^\]\n]{0,20})\]/i;
   function textoResposta_(x) { const n = nomeAtendente_(); return n && !/pix/i.test(x) ? String(x).replace(/\[nome\]/g, n) : String(x); }
   function marcarLacuna_(desde) {
@@ -1077,7 +1077,7 @@
     };
     desenhar(); corpo.appendChild(box);
   }
-  /* ---- v7.40.8: respostas automáticas (desligadas por padrão). Tudo é salvo junto, no botão Salvar fixo no pé da gaveta ---- */
+  /* ---- v7.40.9: respostas automáticas (desligadas por padrão). Tudo é salvo junto, no botão Salvar fixo no pé da gaveta ---- */
   let autoEdit_ = null, autoUlt_ = null;
   const dataCurta_ = (iso) => String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7) + '/' + String(iso).slice(0, 4);
   async function abrirAuto_() {
@@ -1356,8 +1356,8 @@
     if (m.autor_nome && m.autor_fone) a.appendChild(el('small', '', foneBonito_(m.autor_fone)));
     return a;
   }
-  /* v7.40.1: "Foi resposta a um story?" só na última mensagem recebida sem contexto (antes repetia em todas) */
-  function ultEntradaSemCtx_() { for (let i = msgs.length - 1; i >= 0; i--) { const x = msgs[i]; if (x.direcao === 'entrada' && typeof x.id === 'number') return x.ctx_tipo ? -1 : x.id; } return -1; }
+  /* v7.40.1–7.40.7: link de story em mensagens sem contexto (removido na 7.40.8) */
+
   function bolha(m) {
     let b = elMsgs.get(m.id);
     const ass = [m.autor_nome || '', m.autor_fone || '', ehGrupo_() ? Object.keys(nomesDoGrupo_()).length : 0, m.texto, m.tipo, m.status, m.erro || '', m.midia, m.localUrl || '', m.ctx_tipo || '', m.ctx_midia, m.ctx_texto || '', m.ctx_legenda || '', m.ctx_aprox, m.por || ''].join('|');
@@ -1379,7 +1379,7 @@
     const corpoTxt = sig ? m.texto.slice(sig[0].length) : m.texto;
     if (corpoTxt) formatarWa_(b, trocarMencoes_(corpoTxt));
     if (m.tipo && m.tipo !== 'texto' && !mid) b.appendChild(el('span', 'ms-tipo', (m.texto ? ' ' : '') + (TIPO_ROTULO[m.tipo] || '[' + m.tipo + ']') + (m.midia === 0 && m.direcao === 'entrada' && ['imagem', 'vídeo', 'áudio'].indexOf(m.tipo) >= 0 ? ' (arquivo não disponível)' : '')));
-    if (m.id === ultEntradaSemCtx_() && m.direcao === 'entrada' && typeof m.id === 'number' && !m.ctx_tipo && m.tipo === 'texto' && m.texto && m.texto.length <= 80 && !ehGrupo_() && (canalDaConversa() === 'whatsapp1' || canalDaConversa() === 'whatsapp2')) b.appendChild(botao('ms-ver-stories', 'Foi resposta a um story? Ver stories no ar', 'stories-no-ar', { id: String(m.id) }));
+    /* v7.40.8: link "Foi resposta a um story?" removido; o contexto do story vem da Wafly quando ela envia a referência */
     const meta = el('span', 'ms-meta'); if (m.direcao === 'saida' && m.por === 'auto') meta.appendChild(el('span', 'ms-auto-tag', 'Automática'));
     meta.appendChild(el('time', '', m.enviada_em ? hm(new Date(m.enviada_em)) : ''));
     if (m.direcao === 'saida') meta.appendChild(selo(m.status || 'enviada'));
@@ -1648,7 +1648,7 @@
       texto = ta.value.replace(/\r\n/g, '\n').trim(); const an = anexoPend;
       if (!texto && !an) return;
       if (an && c.canal === 'instagram' && texto) { aviso_('O Instagram não aceita texto junto com foto, vídeo ou áudio. Envie o anexo e depois o texto.'); return; }
-      if (RE_LACUNA_.test(texto)) { marcarLacuna_(0); return; }   // v7.40.8: [valor no Pix], [chave Pix]… ainda sem completar
+      if (RE_LACUNA_.test(texto)) { marcarLacuna_(0); return; }   // v7.40.9: [valor no Pix], [chave Pix]… ainda sem completar
       texto = assinar_(c, texto);
       if (!an && (c.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > limiteTexto(c))) { aviso_('Mensagem grande demais para este canal. Divida em duas.'); return; }
       idLocal = idLocal_();

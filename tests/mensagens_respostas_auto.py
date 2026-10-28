@@ -1,4 +1,4 @@
-"""Mensagens v7.40.8: atalhos de resposta rápida (/oi, /preco, /pix…) e gaveta "Respostas automáticas" (desligadas por padrão).
+"""Mensagens v7.40.9: atalhos de resposta rápida (/oi, /preco, /pix…) e gaveta "Respostas automáticas" (desligadas por padrão).
 Serviços simulados (mock_msg.py). TK_EVID=<pasta> guarda as capturas de tela (celular 390 e 412, computador 1440, 320 px)."""
 import sys, os
 AQUI = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, AQUI)

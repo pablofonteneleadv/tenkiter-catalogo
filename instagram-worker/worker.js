@@ -117,7 +117,7 @@ async function iniciar(env) {
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msg_nota_alvo ON msg_nota (alvo, em)').run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_etiqueta (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, cor TEXT NOT NULL DEFAULT 'cinza', ordem INTEGER NOT NULL DEFAULT 0, venda INTEGER NOT NULL DEFAULT 0, arquivada INTEGER NOT NULL DEFAULT 0)").run();   // v7.40.4: etiquetas
     await env.DB.prepare('CREATE TABLE IF NOT EXISTS msg_alvo_etiqueta (alvo TEXT NOT NULL, etiqueta_id INTEGER NOT NULL, em TEXT NOT NULL, PRIMARY KEY (alvo, etiqueta_id))').run();
-    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_auto_envio (conversa_id INTEGER NOT NULL, tipo TEXT NOT NULL, periodo TEXT NOT NULL, em TEXT NOT NULL, res TEXT DEFAULT '', PRIMARY KEY (conversa_id, tipo, periodo))").run();   // v7.40.8: respostas automáticas já enviadas (não repetir)
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_auto_envio (conversa_id INTEGER NOT NULL, tipo TEXT NOT NULL, periodo TEXT NOT NULL, em TEXT NOT NULL, res TEXT DEFAULT '', PRIMARY KEY (conversa_id, tipo, periodo))").run();   // v7.40.9: respostas automáticas já enviadas (não repetir)
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_conv ON msg_encerramento (conversa_id, em)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_pessoa ON msg_encerramento (pessoa)').run();
   } catch (e) { /* tenta de novo na próxima vez */ }
@@ -2618,7 +2618,7 @@ async function gravarMensagem_(env, canal, m) {
   await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=?")
     .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, t, c.id).run();
   if (!saida && !m.grupo && canal !== 'instagram' && /^\d{10,15}$/.test(m.contato)) { try { if ((await cfgGet(env, 'contatos_auto')) === '1') await enfileirarContato_(env, canal, m.contato, m.nome); } catch (e) { /* o cadastro no Google é conforto: a mensagem já foi gravada */ } }
-  m._conversaId = c.id; m._msgId = Number(r.meta.last_row_id) || 0;      // v7.40.8: para a resposta automática
+  m._conversaId = c.id; m._msgId = Number(r.meta.last_row_id) || 0;      // v7.40.9: para a resposta automática
   if(!saida && !m.grupo && Date.parse(m.em)>Date.now()-300000){try{await mobileTables_(env);await env.DB.prepare('INSERT OR IGNORE INTO msg_push_outbox(mensagem,conversa,canal,chave,criado) VALUES(?,?,?,?,?)').bind(Number(r.meta.last_row_id),c.id,canal,crypto.randomUUID(),t).run();}catch(_){/* falha de aviso não interrompe o recebimento */}}
   return true;
 }
@@ -2912,7 +2912,7 @@ async function etiquetas_(env) {
   }
   return rs;
 }
-/* v7.40.8: atalhos de resposta rápida (semeados uma vez, sem apagar os que a equipe já salvou) e respostas automáticas (desligadas por padrão).
+/* v7.40.9: atalhos de resposta rápida (semeados uma vez, sem apagar os que a equipe já salvou) e respostas automáticas (desligadas por padrão).
  * Os dados da loja que mudam (chave Pix, nome da titular, valores) NUNCA ficam aqui: a semente traz [chave Pix], [nome] e [valor …] para a atendente completar no app. */
 const MSG_ATALHOS_PADRAO_ = [
   ['/oi', 'Oi, tudo bem? Aqui é a [nome], da TENKiTER 😊 Me diz o que você tá procurando que eu te mostro.'],
@@ -4040,7 +4040,7 @@ export default {
       if (p === '/msg/config' && req.method === 'GET') {
         const diag = {}; for (const c of MSG_CANAIS) { try { diag[c] = JSON.parse((await cfgGet(env, 'msg_leitura_diag_' + c)) || 'null'); } catch (e) { diag[c] = null; } }
         const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
-        const respostas = await respostasRapidas_(env);   // v7.40.8: semeia os atalhos uma vez
+        const respostas = await respostasRapidas_(env);   // v7.40.9: semeia os atalhos uma vez
         return J({ ok: true, config: await msgCfg_(env), ultimaLeitura: diag, meuNome: quem ? ((await cfgGet(env, 'msg_atendente_' + quem)) || '') : '', respostas: respostas });
       }
       if (p === '/msg/config' && req.method === 'POST') {
@@ -4061,7 +4061,7 @@ export default {
         } else respostas = await respostasRapidas_(env);
         return J({ ok: true, config: atual, meuNome: meuNome, respostas: respostas });
       }
-      if (p === '/msg/auto' && (req.method === 'GET' || req.method === 'POST')) {   // v7.40.8: respostas automáticas (desligadas por padrão)
+      if (p === '/msg/auto' && (req.method === 'GET' || req.method === 'POST')) {   // v7.40.9: respostas automáticas (desligadas por padrão)
         const auto = req.method === 'POST' ? await salvarMsgAuto_(env, await req.json().catch(() => ({}))) : await msgAuto_(env);
         let diag = null; try { diag = JSON.parse((await cfgGet(env, 'msg_auto_diag')) || 'null'); } catch (e) { diag = null; }
         return J({ ok: true, auto: auto, agora: horarioLoja_(Date.now(), auto.feriados), ultimo: diag });

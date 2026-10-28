@@ -34,7 +34,7 @@ with tempfile.TemporaryDirectory() as temp:
  b=apk.read_bytes()
  if len(b)!=size or hashlib.sha256(b).hexdigest()!=digest:raise SystemExit('APK preparado difere do manifesto')
  sha=folder/(filename[:-4]+'.sha256');sha.write_text(digest+'  '+filename+'\n')
- notes=folder/'notes.md';notes.write_text(r['notes']+'\n\nInstale sobre a versão anterior, sem desinstalar. A instalação pede confirmação do Android. Fonte: '+os.environ.get('GITHUB_SHA','main')+'\n')
+ notes=folder/'notes.md';notes.write_text(r['notes']+('' if 'desinstale' in r['notes'].lower() else '\n\nInstale sobre a versão anterior, sem desinstalar.')+' A instalação pede confirmação do Android. Fonte: '+os.environ.get('GITHUB_SHA','main')+'\n')
  if release:raise SystemExit('Existe um rascunho desta versão; confira antes de publicar')
  gh('release','create',tag,str(apk),str(sha),'--repo',repo,'--target',os.environ.get('GITHUB_SHA','main'),'--title','TENKiTER Mensagens '+version,'--notes-file',str(notes),'--draft')
  verify=folder/'verify';verify.mkdir()
