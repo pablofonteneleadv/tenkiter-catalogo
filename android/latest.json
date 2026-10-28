@@ -1,8 +1,8 @@
 {
-  "versionCode": 9,
-  "versionName": "2.4.2",
-  "bytes": 4577577,
-  "sha256": "b839870faf8932c260016acf73ae352b6a554ae3528d5e09e1e9166786dd0aee",
-  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.2/TENKiTER-Mensagens-2.4.2.apk",
-  "notes": "Instale sobre a versão anterior. Na primeira abertura, ative os avisos e o funcionamento em segundo plano: assim as mensagens ficam carregadas e abrem prontas, inclusive ao tocar num aviso."
+  "versionCode": 10,
+  "versionName": "2.4.3",
+  "bytes": 4578493,
+  "sha256": "78000c39cf3c5de31fdd373ad0e37fa207351b333afa362006ed6bb47195e635",
+  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.3/TENKiTER-Mensagens-2.4.3.apk",
+  "notes": "Instale sobre a versão anterior. No menu ⋯ das Mensagens agora há Atualizar app e Permissões do app."
 }

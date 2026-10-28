@@ -3,6 +3,7 @@ import android.content.Context
 import android.content.MutableContextWrapper
 import android.os.Handler
 import android.os.Looper
+import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -19,7 +20,15 @@ object WebKeeper {
     @Volatile var attached=false
     private val handler=Handler(Looper.getMainLooper())
     private val pause=Runnable{if(!attached)web?.pauseTimers()}
+    /** Ações pedidas pelo menu do site (Atualizar app, Permissões do app); a tela aberta no momento responde. */
+    @Volatile var actions:((String)->Unit)?=null
+    private val bridge=object{
+        @JavascriptInterface fun atualizar(){handler.post{actions?.invoke("atualizar")}}
+        @JavascriptInterface fun permissoes(){handler.post{actions?.invoke("permissoes")}}
+        @JavascriptInterface fun versao()=BuildConfig.VERSION_NAME
+    }
     fun configure(w:WebView){
+        w.addJavascriptInterface(bridge,"TKAndroid")
         w.settings.apply{javaScriptEnabled=true;domStorageEnabled=true;allowFileAccess=false;allowContentAccess=true;javaScriptCanOpenWindowsAutomatically=false;setSupportMultipleWindows(true);mediaPlaybackRequiresUserGesture=true;mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW;cacheMode=WebSettings.LOAD_DEFAULT
             if(!userAgentString.contains("TenkiterAndroid"))userAgentString+=" TenkiterAndroid/2.1"}
     }
