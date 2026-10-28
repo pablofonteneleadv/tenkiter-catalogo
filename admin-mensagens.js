@@ -1215,7 +1215,7 @@
     if (m.autor_nome && m.autor_fone) a.appendChild(el('small', '', foneBonito_(m.autor_fone)));
     return a;
   }
-  /* v7.38.3: "Foi resposta a um story?" só na última mensagem recebida sem contexto (antes repetia em todas) */
+  /* v7.40.1: "Foi resposta a um story?" só na última mensagem recebida sem contexto (antes repetia em todas) */
   function ultEntradaSemCtx_() { for (let i = msgs.length - 1; i >= 0; i--) { const x = msgs[i]; if (x.direcao === 'entrada' && typeof x.id === 'number') return x.ctx_tipo ? -1 : x.id; } return -1; }
   function bolha(m) {
     let b = elMsgs.get(m.id);

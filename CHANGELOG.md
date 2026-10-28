@@ -6,7 +6,7 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
-## 7.38.3 — Conversa mais limpa — 2026-10-28
+## 7.40.1 — Conversa mais limpa — 2026-10-28
 
 - "Foi resposta a um story? Ver stories no ar" aparece só na última mensagem recebida sem contexto, e não mais embaixo de cada mensagem.
 
