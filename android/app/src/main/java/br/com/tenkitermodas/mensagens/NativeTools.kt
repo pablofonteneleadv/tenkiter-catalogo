@@ -16,6 +16,7 @@ import java.util.UUID
 
 /** Ferramentas do atendimento usam as mesmas rotas e configurações do site. */
 class NativeTools(private val activity:Activity,private val scope:CoroutineScope,private val repo:NativeRepository,private val current:()->Long,private val canSend:()->Boolean,private val insert:(String)->Unit,private val refresh:()->Unit,private val open:(Long)->Unit,private val full:(Long)->Unit,private val batchDone:(Set<Long>,String)->Unit,private val advanced:(String,Long)->Unit={_,_->}){
+    private var productsDialog:AlertDialog?=null
     private var productConversation=0L;private val productSelection=linkedMapOf<String,JSONObject>()
     private val thumbs=android.util.LruCache<String,android.graphics.Bitmap>(20)
     private val loadingPhotos=mutableSetOf<String>()
@@ -96,23 +97,49 @@ class NativeTools(private val activity:Activity,private val scope:CoroutineScope
     }
     private fun productDraft(p:JSONObject)=listOf(p.optString("Nome"),ProductText.price(p),p.optString("Tamanhos").takeIf{it.isNotBlank()}?.let{"Tamanhos: $it"},p.optString("Cores").takeIf{it.isNotBlank()}?.let{"Cores: $it"},productLink(p)).filterNotNull().joinToString("\n")
     private fun products(id:Long){
-        toast("Buscando catálogo…")
-        work({repo.catalog()}){catalog->
-            val products=catalog.sortedByDescending{it.optString("Codigo").substringAfterLast('-').toLongOrNull()?:0L}
-            if(current()!=id)return@work
-            val box=form();val search=field("Nome, código, cor, tamanho ou categoria");box.addView(search)
+        if(productsDialog?.isShowing==true)return
+        val stamp=repo.store.stampedAuth();if(stamp.first==null||current()!=id)return
+        var products=emptyList<JSONObject>()
+        var loaded=false
+        var loading:Job?=null
+            val box=form();val search=field("Nome, código, cor, tamanho ou categoria")
+            val searchRow=LinearLayout(activity);searchRow.addView(search,LinearLayout.LayoutParams(0,-2,1f));val reload=button("↻"){};reload.contentDescription="Atualizar catálogo";searchRow.addView(reload,LinearLayout.LayoutParams(dp(48),dp(48)));box.addView(searchRow)
+            val status=TextView(activity).apply{text="Carregando catálogo…";textSize=13f;setPadding(0,dp(4),0,dp(4))};box.addView(status)
             val stocked=CheckBox(activity).apply{text="Só com estoque";minHeight=dp(48);isChecked=true};box.addView(stocked)
             val list=ListView(activity).apply{choiceMode=ListView.CHOICE_MODE_MULTIPLE}
-            box.addView(list,LinearLayout.LayoutParams(-1,0,1f))
+            val content=FrameLayout(activity);content.addView(list,FrameLayout.LayoutParams(-1,-1))
+            val refinements=LinearLayout(activity).apply{orientation=LinearLayout.VERTICAL};val filterScroll=ScrollView(activity).apply{visibility=View.GONE;addView(refinements)};content.addView(filterScroll,FrameLayout.LayoutParams(-1,-1));box.addView(content,LinearLayout.LayoutParams(-1,0,1f))
+            val filters=linkedMapOf("Categoria" to linkedSetOf<String>(),"Genero" to linkedSetOf<String>(),"Tamanhos" to linkedSetOf<String>(),"Cores" to linkedSetOf<String>())
+            var showFilters=false
+            val filterToggle=button("Refinar busca"){};box.addView(filterToggle,box.indexOfChild(content))
+            val tagCache=hashMapOf<Pair<JSONObject,String>,List<String>>();val wordsCache=hashMapOf<JSONObject,String>()
+            fun tags(p:JSONObject,key:String)=tagCache.getOrPut(p to key){p.optString(key).replace(Regex("<[^>]*>")," ").split(Regex("[,;|·\n]+" )).map{it.trim()}.filter{it.isNotEmpty()&&!it.contains("consult",true)}}
+
             if(productConversation!=id){productSelection.clear();productConversation=id}
-            val selected=productSelection;selected.keys.retainAll(products.map{it.optString("ID")}.toSet());for(p in products)if(selected.containsKey(p.optString("ID")))selected[p.optString("ID")]=p
+            val selected=productSelection;
             lateinit var productDialog:AlertDialog
             var visible=products
             fun norm(value:String)=java.text.Normalizer.normalize(value,java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"),"").lowercase(java.util.Locale("pt","BR"))
             fun draw(){
                 val terms=norm(search.text.toString()).split(Regex("\\s+")).filter{it.isNotBlank()}
-                visible=products.filter{p->val words=norm(listOf("Nome","Codigo","Categoria","Cores","Tamanhos","Genero").joinToString(" "){p.optString(it)})
+                val matching=products.filter{p->val words=wordsCache.getOrPut(p){norm(listOf("Nome","Codigo","Categoria","Cores","Tamanhos","Genero").joinToString(" "){p.optString(it)})}
                     (!stocked.isChecked||p.optString("Estoque").toDoubleOrNull()?.let{it>0}!=false)&&terms.all{words.contains(it)}}
+                visible=matching.filter{p->filters.all{(key,values)->values.isEmpty()||tags(p,key).any{tag->values.any{norm(it)==norm(tag)}}}}
+                filterToggle.visibility=if(search.text.toString().trim().length>=2||filters.values.any{it.isNotEmpty()})View.VISIBLE else View.GONE
+                list.visibility=if(showFilters)View.GONE else View.VISIBLE;filterScroll.visibility=if(showFilters)View.VISIBLE else View.GONE
+                filterToggle.text=if(showFilters)"Ver ${visible.size} peças · Fechar filtros"else"Refinar busca · ${visible.size} peças"
+                refinements.removeAllViews()
+                val heading=TextView(activity).apply{text="Refinar a busca";textSize=18f;setTypeface(typeface,android.graphics.Typeface.BOLD);setPadding(0,dp(8),0,dp(8))};refinements.addView(heading)
+                for((key,values)in filters){
+                    refinements.addView(TextView(activity).apply{text=when(key){"Genero"->"Para quem";"Tamanhos"->"Tamanho";"Cores"->"Cor";else->key};textSize=15f;setPadding(0,dp(8),0,dp(4))})
+                    val choices=matching.filter{p->filters.all{(other,chosen)->other==key||chosen.isEmpty()||tags(p,other).any{tag->chosen.any{norm(it)==norm(tag)}}}}.flatMap{tags(it,key)}.groupingBy{it}.eachCount()
+                    val row=GridLayout(activity).apply{columnCount=2}
+                    for(value in (choices.keys+values).sorted())row.addView(button((if(value in values)"✓ "else"")+value+" · "+(choices[value]?:0)){
+                        if(value in values)values.remove(value)else values.add(value);draw()
+                    }.apply{contentDescription="${if(key=="Genero")"Para quem"else key}: $value";isSelected=value in values;isFocusableInTouchMode=true;if(isSelected)(background as android.graphics.drawable.GradientDrawable).setColor(android.graphics.Color.rgb(255,231,204))},GridLayout.LayoutParams().apply{width=0;height=-2;columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);setMargins(dp(2),dp(2),dp(2),dp(2))})
+                    refinements.addView(row,LinearLayout.LayoutParams(-1,-2))
+                }
+                refinements.addView(button("Limpar filtros"){filters.values.forEach{it.clear()};draw()})
                 val labels=visible.map{it.optString("Nome")+"\n"+ProductText.price(it)+" · "+it.optString("Codigo")+"\n"+(if(it.optString("Tamanhos").isBlank())""else" · "+it.optString("Tamanhos"))+(if(it.optString("Estoque").toDoubleOrNull()?.let{x->x<=0}==true)" · Esgotado"else"")}
                 list.adapter=object:ArrayAdapter<String>(activity,android.R.layout.simple_list_item_multiple_choice,labels){
                     override fun getView(position:Int,convert:View?,parent:android.view.ViewGroup):View{
@@ -132,10 +159,12 @@ class NativeTools(private val activity:Activity,private val scope:CoroutineScope
             val links=LinearLayout(activity);links.addView(copy,LinearLayout.LayoutParams(0,dp(48),1f));links.addView(clear,LinearLayout.LayoutParams(0,dp(48),1f));box.addView(links)
             clear.setOnClickListener{selected.clear();draw()}
             stocked.setOnCheckedChangeListener{_,_->draw()}
+            filterToggle.setOnClickListener{showFilters=!showFilters;draw()}
             list.setOnItemClickListener{_,_,pos,_->val p=visible[pos];val key=p.optString("ID");if(list.isItemChecked(pos)){if(selected.size>=60){list.setItemChecked(pos,false);toast("Selecione até 60 peças.")}else selected[key]=p}else selected.remove(key)}
-            search.addTextChangedListener(object:android.text.TextWatcher{override fun beforeTextChanged(s:CharSequence?,st:Int,c:Int,a:Int){};override fun onTextChanged(s:CharSequence?,st:Int,b:Int,c:Int){draw()};override fun afterTextChanged(e:android.text.Editable?) {}});draw()
+            search.addTextChangedListener(object:android.text.TextWatcher{override fun beforeTextChanged(s:CharSequence?,st:Int,c:Int,a:Int){};override fun onTextChanged(s:CharSequence?,st:Int,b:Int,c:Int){showFilters=s.toString().trim().length>=2;draw()};override fun afterTextChanged(e:android.text.Editable?) {}});draw()
             val d=builder().setTitle("Produtos · selecionar peças").setView(box).setPositiveButton("Colocar na mensagem",null).setNegativeButton("Voltar",null).create()
-            productDialog=d
+            productDialog=d;productsDialog=d
+            d.setOnDismissListener{loading?.cancel();if(productsDialog===d)productsDialog=null}
             d.setOnShowListener{
                 copy.setOnClickListener{
                     if(selected.isEmpty()){toast("Selecione ao menos uma peça.");return@setOnClickListener}
@@ -156,7 +185,26 @@ class NativeTools(private val activity:Activity,private val scope:CoroutineScope
                 val target=(decor.height-top-bottom-decor.paddingTop-decor.paddingBottom).coerceAtLeast(0)
                 if(box.minimumHeight!=target)box.minimumHeight=target
             }
+        fun valid()=d.isShowing&&!activity.isFinishing&&current()==id&&repo.store.generation==stamp.second&&repo.store.auth()?.owner==stamp.first?.owner
+        fun display(rows:List<JSONObject>){
+            products=rows.sortedByDescending{it.optString("Codigo").substringAfterLast('-').toLongOrNull()?:0L};loaded=true
+            selected.keys.retainAll(products.map{it.optString("ID")}.toSet());for(p in products)if(selected.containsKey(p.optString("ID")))selected[p.optString("ID")]=p
+            draw()
         }
+        fun load(force:Boolean){
+            if(loading?.isActive==true)return
+            reload.isEnabled=false
+            loading=scope.launch{try{
+                val cached=withContext(Dispatchers.IO){repo.cachedCatalog()};if(!valid())return@launch
+                if(cached.isNotEmpty()){display(cached);status.text="Catálogo salvo · conferindo atualização…"}
+                val rows=withContext(Dispatchers.IO){repo.catalog(force)};if(!valid())return@launch
+                display(rows);status.text=if(rows.isEmpty())"Nenhum produto disponível."else"Catálogo atualizado · ${rows.size} peças"
+            }catch(e:CancellationException){throw e}
+            catch(e:AccessRevoked){if(valid()){repo.logout();d.dismiss();refresh()}}
+            catch(e:Exception){if(valid())status.text=if(loaded)"Sem conexão. Exibindo catálogo salvo; estoque pode mudar. Toque em ↻ para tentar novamente."else"Não foi possível carregar. Toque em ↻ para tentar novamente."}
+            finally{if(valid())reload.isEnabled=true}}
+        }
+        reload.setOnClickListener{load(true)};load(false)
     }
     private fun productLink(p:JSONObject)=BuildConfig.SITE_URL+(if(p.optString("Codigo").isNotBlank())"p/"+Uri.encode(p.optString("Codigo"))else"?id="+Uri.encode(p.optString("ID")))
     private fun responses(id:Long){work({repo.config()}){config->
