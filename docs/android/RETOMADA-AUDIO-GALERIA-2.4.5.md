@@ -29,3 +29,9 @@ A política declarada no Blueprint passa a permitir microfone somente à própri
 - Viewports web: 320×700, 390×844, 412×915 e 1440×900; fonte 130%, área reduzida a 470 px, toque e teclado. Gravador com botões de pelo menos 48 dp, diálogo rolável nativo, rótulos claros; prévia sem colisão com Enviar. Referência anterior: screenshots enviados pelo proprietário. Evidências usam somente dados sintéticos.
 
 **APROVADO COM LIMITAÇÃO:** testes de UI/integração simulados e intenção do seletor verificados; microfone físico, Bluetooth, galeria do fabricante e instalação no celular do proprietário ainda não foram homologados. Sem envio real de mensagem/push ou uso de conversas reais como teste. O instalador público só muda após gerar e conferir a assinatura pelo workflow oficial.
+
+## Instalador oficial conferido
+
+Workflow oficial APK40767005165, artefato12850721682, fonte6b4cfe222062450b566daad6de0d9ba48bdd4ac2. Pacote `br.com.tenkitermodas.mensagens`,2.4.5/c12,4.608.025bytes, assinatura v2 válida. Certificado09ed81d57207c72a9d49cc5065483a22f57a15528d8a626aa3a99467e1b59a76 preservado da2.4.4. SHA256doAPK `ce7e0212f978c1883154e93d778bd2436b99c160ecb166532cf7447313d677c5`. Cópia recuperável no ramo `android-installers/releases/2.4.5/`.
+
+O deploy do código40767005340 teve falha inicial da Cloudflare10500 (internal authentication error/internal server error) ao publicar o WorkerIG. Somente etapas falhas foram repetidas pelo workflow oficial; tentativa2 concluiu com success. Não foram trocados tokens, contornadas proteções ou feitas publicações manuais.

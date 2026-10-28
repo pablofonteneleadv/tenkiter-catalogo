@@ -1,8 +1,8 @@
 {
-  "versionCode": 11,
-  "versionName": "2.4.4",
-  "bytes": 4580785,
-  "sha256": "9f92bfbf517c05f1d440d4da381ef92cd6464f57bd8378acd5968e8d04e11158",
-  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.4/TENKiTER-Mensagens-2.4.4.apk",
-  "notes": "Notas da equipe no modo Espiar, filtro Com notas e exclusão com histórico. Produtos com filtros de tamanho, categoria, cor e público ao digitar. Acessos por ferramenta no RH, download de arquivos e atualização da lista ao voltar ao app ou receber aviso. Instale sobre a versão anterior, sem desinstalar; o Android pede confirmação."
+  "versionCode": 12,
+  "versionName": "2.4.5",
+  "bytes": 4608025,
+  "sha256": "ce7e0212f978c1883154e93d778bd2436b99c160ecb166532cf7447313d677c5",
+  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.5/TENKiTER-Mensagens-2.4.5.apk",
+  "notes": "Corrige a retomada da sessão e o retorno à lista ao abrir conversa pela notificação. Gravação de áudio nativa do Android, com permissão e prévia antes de enviar. O clipe abre o seletor de fotos/vídeos ou a galeria do aparelho. Instale sobre a versão anterior, sem desinstalar; o Android pede confirmação."
 }
