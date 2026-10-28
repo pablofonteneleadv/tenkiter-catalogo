@@ -1,8 +1,8 @@
 {
-  "versionCode": 6,
-  "versionName": "2.3.0",
-  "bytes": 4567697,
-  "sha256": "7ec49fa962c931036805d007cdcbc01bda862237fceb55fb1acd204cb754d3fa",
-  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.3.0/TENKiTER-Mensagens-2.3.0.apk",
-  "notes": "Pessoas com canais em bloco, grupos desligados por padrão, contadores corrigidos e cadastro de nome/WhatsApp/Instagram. Conversa e produtos repaginados, nomes do Google e contexto de foto/vídeo de stories."
+  "versionCode": 7,
+  "versionName": "2.4.0",
+  "bytes": 4571509,
+  "sha256": "8220e9fbfcd531ce6462444c83f2b8bcef33e62e2cff5282209a96ff3d65b38d",
+  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.0/TENKiTER-Mensagens-2.4.0.apk",
+  "notes": "Nova assinatura: desinstale a versão anterior uma única vez e instale esta. A tela principal agora é a mesma Mensagens do site, sempre atualizada, sem recarregar ao voltar. Inclui Trocar usuário no menu."
 }
