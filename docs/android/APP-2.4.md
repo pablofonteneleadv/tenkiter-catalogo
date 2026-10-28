@@ -27,3 +27,10 @@ Cada PR do app gera no GitHub o artefato `TENKiTER-Mensagens-Android`, com o APK
 
 - A tela carregada fica guardada (`WebKeeper`) enquanto o processo do app vive. Fechar e abrir de novo não recarrega tudo. Se o Android encerrar o app para liberar memória, a primeira abertura carrega de novo.
 - Site 7.40.8: no app, a janela Mensagens reabre sozinha se o Voltar a fechar. Antes ficava a tela bege com a barra Catálogo/Gestão.
+
+## 2.4.2 (código 9)
+
+- Quando o Android acorda o app sem tela (aviso chegando, sincronização em segundo plano), a tela Mensagens é aberta escondida (`WebKeeper.preload`). Tocar no aviso mostra a página já carregada.
+- Com o app fora da tela, a página para de consultar o servidor depois de 2 min (`pauseTimers`), para economizar bateria e leituras do D1. Ela continua carregada e volta a atualizar ao abrir.
+- Tela obrigatória de configuração (`SetupGate`): o app só abre as mensagens com os avisos e o segundo plano ativados (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`). Em Xiaomi/Redmi/POCO há um atalho recomendado para "Início automático", que o app não consegue conferir. A tela é verificada de novo sempre que o app volta.
+- Se o Android encerrar o processo por completo, a primeira abertura ainda carrega, mas usa o cache que o site guarda das conversas recentes.
