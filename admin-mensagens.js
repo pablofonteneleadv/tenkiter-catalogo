@@ -16,14 +16,14 @@
   const NOME_CANAL = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2', instagram: 'Instagram' };
   // v7.22: "Nos 2 WhatsApp" (a mesma pessoa falando pelos dois números) e "Encerradas" (saem da lista e voltam quando o cliente escreve)
   // v7.24: "Mensagens" e "Grupos" ligam/desligam juntos ou separados (os dois = tudo); os demais filtros são de um em um e desligam com novo toque
-  const FILTROS = [['nao_lidas', 'Não lidas'], ['sem_resposta', 'Falta responder'], ['ambos', 'Nos 2 WhatsApp'], ['encerradas', 'Encerradas']];
+  const FILTROS = [['nao_lidas', 'Não lidas'], ['sem_resposta', 'Falta responder'], ['encerradas', 'Encerradas']];
   // v7.21: aba mestre "Todas" (os três canais juntos) vem primeiro e é a que abre
   const ABAS = [['todos', 'Todas']].concat(CANAIS);
   const NOME_CANAL_ = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2', instagram: 'Instagram' };
   const ESPERA_MS = Number(window.TK_MENSAGENS_POLL_MS) || 4000, ESPERA_MAX_MS = Number(window.TK_MENSAGENS_POLL_MS) ? 3000 : 30000, ESPERA_SELO_MS = Number(window.TK_MENSAGENS_POLL_MS) ? 1500 : 60000;
   let espiando = false, cfgLeitura = null, avisouCelular = {};
   let selecao = null, timerToque = null, toqueLongo = false;      // v7.22: seleção de várias conversas (para encerrar/reabrir)
-  let tipos = { msg: true, grp: true }, contVista = null, contTipos = null;
+  let tipos = { msg: true, grp: false }, contVista = null, contTipos = null;
   const tipoParam_ = () => (tipos.msg && !tipos.grp ? 'individual' : tipos.grp && !tipos.msg ? 'grupo' : '');
   let canal = 'todos', filtro = '', busca = '', resumo = null, contagens = null, lista = [], cursor = '', aberta = null, msgs = [], vista = 'lista', painel = '';
   let seqLista = 0, ultIdSrv = 0, nPoll = 0, timerBusca = null, timerLive = null, timerSelo = null, espera = ESPERA_MS, offline = false, abrindo = 0, novasAbaixo = 0, menuAberto = null, aviso = '';
@@ -1058,13 +1058,17 @@
     selecao = null; desenharSelbar_(); desenharAbas(); desenharFiltros(); selarBotao();
     await carregarLista(true);
   }
+  let indexandoNomes = false, nomesConferidos = false;
+  async function nomesGoogle_(){if(indexandoNomes)return;indexandoNomes=true;try{for(let i=0;i<40;i++){const r=await worker_('/msg/pessoas/google','POST',{});if(!r.ok||r.fim)break;}await carregarLista(true);}finally{indexandoNomes=false;}}
   function pintarLista() {
     const ul = $('ms-lista'), extra = $('ms-extra'); if (!ul || painel === 'metricas') return;
     const vivos = new Set(lista.map((c) => c.id));
     if (selecao) { selecao.forEach((id) => { if (!vivos.has(id)) selecao.delete(id); }); desenharSelbar_(); }
     elConvs.forEach((li, id) => { if (!vivos.has(id)) { li.remove(); elConvs.delete(id); } });
     let ref = ul.firstChild;
-    lista.forEach((c) => { const li = linhaConversa(c); if (li !== ref) ul.insertBefore(li, ref); else ref = ref.nextSibling; });
+    const blocos = new Map();
+    lista.forEach(c=>{const key=c.grupo?'grupo:'+c.id:c.pessoa||'conversa:'+c.id;if(!blocos.has(key))blocos.set(key,[]);blocos.get(key).push(c);});
+    [...blocos.values()].map(b=>b.sort((a,c)=>String(c.ultima_em).localeCompare(String(a.ultima_em))||c.id-a.id)).sort((a,b)=>String(b[0].ultima_em).localeCompare(String(a[0].ultima_em))||b[0].id-a[0].id).forEach(b=>b.forEach((c,i)=>{const li=linhaConversa(c);li.classList.toggle('ms-vinculada',i>0);li.style.marginLeft=i?'24px':'';li.style.background=i?'#faf8f3':'';if(li!==ref)ul.insertBefore(li,ref);else ref=ref.nextSibling;}));
     extra.textContent = '';
     if (!lista.length) {
       const m = busca.trim() ? 'Nenhuma conversa encontrada.' : filtro === 'nao_lidas' ? 'Nenhuma conversa não lida. 🎉' : filtro === 'sem_resposta' ? 'Ninguém esperando resposta agora. 🎉' : tipoParam_() === 'grupo' && !filtro ? 'Nenhum grupo aqui.' : filtro === 'ambos' ? 'Ninguém está falando pelos dois WhatsApp agora.' : filtro === 'encerradas' ? 'Nenhuma conversa encerrada. Para encerrar, segure o dedo numa conversa (ou ⋯ → Selecionar conversas).' : 'Ainda não chegou nenhuma mensagem neste canal.';
@@ -1072,6 +1076,7 @@
     }
   }
   async function carregarLista(reset) {
+    if(!nomesConferidos){nomesConferidos=true;setTimeout(nomesGoogle_,1500);}
     const mine = ++seqLista, c0 = canal, f0 = filtro, b0 = busca.trim(), t0 = tipoParam_();
     const path='/msg/conversas?canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : '');
     const salvo = APP_RECENTES && reset ? await recentes_(path) : null;
@@ -1119,12 +1124,12 @@
     m.src = url; const x = botao('ms-luz-x', '✕', 'luz-fechar'); x.setAttribute('aria-label', 'Fechar');
     l.append(m, x); sheet.appendChild(l); x.focus();
   }
-  /* Wafly não informa qual story foi respondido: mostramos os stories no ar antes da mensagem para a equipe reconhecer. */
+  /* Quando o contexto exato não veio, mostrar candidatos sem afirmar que são o status respondido. */
   async function abrirStories_(m) {
     fecharLuz_(); const sheet = document.querySelector('.sheet-mensagens'); if (!sheet || !aberta) return;
     const l = el('div', 'ms-luz ms-stories'); l.id = 'ms-luz'; l.setAttribute('role', 'dialog'); l.setAttribute('aria-label', 'Stories no ar');
     const caixa = el('div', 'ms-st-caixa'); caixa.appendChild(el('b', '', 'Stories no ar antes desta mensagem'));
-    caixa.appendChild(el('span', 'ms-ctx-det', 'O WhatsApp não informa qual story foi respondido. Estes são os que estavam publicados nas 26 h anteriores.'));
+    caixa.appendChild(el('span', 'ms-ctx-det', 'O contexto exato desta mensagem não está disponível. Estes são candidatos publicados nas 26 h anteriores.'));
     const grade = el('div', 'ms-st-grade'); grade.appendChild(el('span', 'ms-vazio', 'Carregando…')); caixa.appendChild(grade);
     const x = botao('ms-luz-x', '✕', 'luz-fechar'); x.setAttribute('aria-label', 'Fechar');
     l.append(caixa, x); sheet.appendChild(l); x.focus();
@@ -1255,11 +1260,26 @@
     atualizarPill();
   }
   function atualizarPill() { const p = $('ms-nova'); if (!p) return; p.hidden = novasAbaixo <= 0; p.textContent = '↓ ' + novasAbaixo + (novasAbaixo === 1 ? ' nova mensagem' : ' novas mensagens'); }
+  async function editarPessoa_(id){
+    const r=await worker_('/msg/pessoa?conversa='+id,'GET');if(!r.ok){aviso_(r.erro||'Não foi possível abrir o contato.');return;}
+    const old=$('ms-pessoa-editor');if(old)old.remove();
+    const overlay=el('div');overlay.id='ms-pessoa-editor';Object.assign(overlay.style,{position:'fixed',inset:'0',zIndex:'10020',background:'rgba(0,0,0,.4)',display:'flex',alignItems:'center',justifyContent:'center',padding:'12px'});
+    const form=el('div');Object.assign(form.style,{background:'#fff',padding:'20px',borderRadius:'20px',width:'min(520px,100%)',maxHeight:'90dvh',overflowY:'auto'});form.setAttribute('role','dialog');form.setAttribute('aria-modal','true');form.setAttribute('aria-label','Contato e canais');form.appendChild(el('h2','','Contato e canais'));
+    const field=(label,value)=>{const l=el('label','',label),input=el('input');input.value=value||'';input.setAttribute('aria-label',label);input.style.minHeight='48px';input.style.width='100%';l.appendChild(input);form.appendChild(l);return input;};
+    const name=field('Nome',r.nome),phone=field('WhatsApp principal',r.whatsapp),second=field('Segundo WhatsApp (opcional)',r.segundo);phone.type=second.type='tel';
+    const without=el('input');without.type='checkbox';without.checked=false;const info=el('label','','Cliente do Instagram não informou WhatsApp');info.prepend(without);info.hidden=r.conversa.canal!=='instagram';form.appendChild(info);
+    const linked=new Set((r.canais||[]).map(x=>x.id));form.appendChild(el('p','',(r.canais||[]).map(x=>NOME_CANAL[x.canal]+' · '+rotuloContato(x)).join('\n')));
+    const search=field('Buscar outro canal para vincular',''),results=el('div');form.appendChild(results);
+    const find=el('button','','Buscar contato');find.type='button';find.style.minHeight='48px';find.onclick=async()=>{const found=await worker_('/msg/conversas?canal=todos&busca='+encodeURIComponent(search.value),'GET');results.textContent='';(found.conversas||[]).filter(c=>!c.grupo).forEach(c=>{const label=el('label'),check=el('input');check.type='checkbox';check.checked=linked.has(c.id);check.disabled=check.checked;check.onchange=()=>{if(check.checked){linked.add(c.id);if(c.canal!=='instagram'&&!phone.value){phone.value=c.contato;without.checked=false;}}else linked.delete(c.id);};label.append(check,document.createTextNode(rotuloContato(c)+' · '+NOME_CANAL[c.canal]));label.style.display='block';label.style.minHeight='48px';results.appendChild(label);});};form.appendChild(find);
+    const finish=()=>{if(window.TKCamadas)TKCamadas.desempilhar('ms-pessoa');else overlay.remove();};
+    const save=el('button','prim','Salvar nome e vínculos');save.type='button';save.style.minHeight='48px';save.onclick=async()=>{if(!confirm('Salvar este nome e reunir os canais escolhidos, preservando o histórico?'))return;save.disabled=true;const out=await worker_('/msg/pessoa','POST',{conversa:id,nome:name.value,whatsapp:phone.value,segundo:second.value,semWhatsApp:without.checked,vincular:[...linked]});save.disabled=false;if(!out.ok){aviso_(out.erro||'Não foi possível salvar.');return;}finish();await carregarLista(true);if(aberta&&aberta.id===id){aberta=out.conversa;montarConversa(aberta);pintarFio(false);}};
+    const close=el('button','','Cancelar');close.type='button';close.style.minHeight='48px';close.onclick=finish;form.append(save,close);overlay.appendChild(form);document.body.appendChild(overlay);if(window.TKCamadas)TKCamadas.empilhar('ms-pessoa',()=>overlay.remove());name.focus();
+  }
   function cabecalhoConversa(c) {
     const cab = el('div', 'ms-cab');
     const v = botao('ms-ico ms-voltar', '←', 'voltar'); v.setAttribute('aria-label', 'Voltar para as conversas');
     const av = el('span', 'ms-av', iniciais(c)); av.style.background = corAvatar(c); av.setAttribute('aria-hidden', 'true');
-    const q = el('span', 'ms-quem'); q.appendChild(el('b', '', rotuloContato(c)));
+    const q = botao('ms-quem', '', 'pessoa');q.setAttribute('aria-label','Configurar contato e canais vinculados');q.style.textAlign='left';q.style.background='transparent';q.appendChild(el('b', '', rotuloContato(c)));
     q.appendChild(el('span', '', NOME_CANAL[c.canal] + (c.grupo ? ' · grupo' : (/^\d{10,15}$/.test(c.contato) ? ' · ' + foneBonito_(c.contato) : ''))));
     const mais = botao('ms-ico', '⋯', 'menu-conversa'); mais.id = 'ms-mais-conv'; mais.setAttribute('aria-label', 'Opções da conversa'); mais.setAttribute('aria-haspopup', 'menu');
     cab.append(v, av, q, mais); return cab;
@@ -1710,6 +1730,7 @@
     else if (a === 'encerrar' && aberta) escolherMotivo_([aberta.id]);
     else if (a === 'reabrir' && aberta) { const id = aberta.id; await encerrar_([id], true); if (aberta && aberta.id === id) { montarConversa(aberta); pintarFio(true); } }
     else if (a === 'abrir-outro') { if (canal !== 'todos') { canal = b.dataset.canal; filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); } abrirConversa(Number(b.dataset.id)); }
+    else if (a === 'pessoa') { if(aberta&&!aberta.grupo)editarPessoa_(aberta.id); }
     else if (a === 'espiar') abrirConversa(Number(b.dataset.id), true);
     else if (a === 'atender' && aberta) { espiando = false; aberta.nao_lidas = Math.max(1, aberta.nao_lidas || 0); montarConversa(aberta); pintarFio(true); marcarLida(); const t = $('ms-texto'); if (t) t.focus(); }
     else if (a === 'leitura-cfg') { painel = painel === 'leitura' ? '' : 'leitura'; if (painel === 'leitura') { cfgLeitura = null; contatosSit = null; } desenharEstado(); }

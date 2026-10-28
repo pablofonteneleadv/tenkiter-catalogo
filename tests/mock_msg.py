@@ -45,6 +45,7 @@ def novo_estado():
 
 def pessoa(c):
     """v7.22: mesma regra do Worker (número sem o 9º dígito); grupo e Instagram não entram."""
+    if c.get("pessoa"): return c["pessoa"]
     n = c["contato"]
     if c["grupo"] or c["canal"] == "instagram" or not n.isdigit(): return ""
     return n[:4] + n[5:] if len(n) == 13 and n.startswith("55") and n[4] == "9" else n
@@ -53,6 +54,7 @@ def enfeitar(s, c):
     """Campos calculados pelo Worker: outro_id (a mesma pessoa no outro WhatsApp) e encerrada_em."""
     c.setdefault("encerrada_em", "")
     p = pessoa(c)
+    c["pessoa"] = p
     outro = next((o for o in s["convs"] if p and o["id"] != c["id"] and o["canal"] != c["canal"] and pessoa(o) == p and o["total"] > 0 and not o.get("encerrada_em")), None)
     c["outro_id"] = outro["id"] if outro else None
     return c
@@ -91,6 +93,17 @@ def tratar(route, path, method, body, s):
         rs = sorted(rs, key=lambda x: x["ultima_em"], reverse=True)
         g = cont(s, c)
         return J({"ok": True, "conversas": rs, "contagens": cont(s, c, tp), "tipos": {"individuais": g["individuais"], "grupos": g["grupos"]}, "cursor": agora()}) or True
+    if path == "/msg/pessoas/google": return J({"ok": True, "fim": True}) or True
+    if path == "/msg/contexto": return J({"ok": True, "atualizadas": 0}) or True
+    if path == "/msg/pessoa":
+        cid = int(q.get("conversa",0)) if method == "GET" else int(body.get("conversa", 0))
+        c = next((c for c in s["convs"] if c["id"] == cid), None)
+        if not c: return J({"ok": False, "erro": "Não encontrado"},404) or True
+        if method != "GET":
+            s.setdefault("pessoas_salvas",[]).append(body)
+            for item in s["convs"]:
+                if item["id"] in body.get("vincular",[]) or item["id"] == cid: item["nome"] = body["nome"]; item["pessoa"] = body.get("whatsapp") or "ig-test"
+        return J({"ok":True,"conversa":c,"pessoa":pessoa(c),"nome":c["nome"],"whatsapp":c["contato"] if c["canal"] != "instagram" else "","segundo":"","canais":[enfeitar(s,x) for x in s["convs"] if pessoa(x) == pessoa(c)]}) or True
     if path == "/msg/mensagens":
         cid = int(q["conversa"]); c = enfeitar(s, next(x for x in s["convs"] if x["id"] == cid))
         return J({"ok": True, "conversa": c, "mensagens": sorted([x for x in s["msgs"] if x["conversa_id"] == cid], key=lambda x: (x["enviada_em"], x["id"])), "temMais": False, "cursor": agora()}) or True

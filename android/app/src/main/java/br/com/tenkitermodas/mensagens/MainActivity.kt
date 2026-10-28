@@ -36,6 +36,7 @@ class MainActivity:Activity(),InboxView.Events {
     private var chooser:ValueCallback<Array<Uri>>?=null
     private var audioRequest:PermissionRequest?=null
     private var history=emptyList<JSONObject>();private var historyConversation=0L;private var historyBusy=false
+    private var contextChecked=0L;private var namesChecked=false
     private var conversation=0L;private var online=false;private var syncing=false;private var sending=false
     private var displayOwner="";private var webTarget=0L;private var seededSession="";private var refreshSeq=0;private var pendingClick=0L
     private val handler=Handler(Looper.getMainLooper())
@@ -55,13 +56,14 @@ class MainActivity:Activity(),InboxView.Events {
             val bars=i.getInsets(WindowInsetsCompat.Type.systemBars());val ime=i.getInsets(WindowInsetsCompat.Type.ime())
             v.setPadding(bars.left,bars.top,bars.right,maxOf(bars.bottom,ime.bottom));i
         }
-        inbox=InboxView(this,this);administration=NativeAdministration(this,scope,repo,{select(it)},{render()});tools=NativeTools(this,scope,repo,{conversation},{online&&!peeking},{inbox.insert(it)},{render()},{select(it)},{full(it)},{ids,action->inbox.selectionDone();if(conversation in ids&&action in listOf("nao_lidas","encerrar"))back()},{action,id->when(action){"settings"->administration.settings();"copy"->administration.copyConversation(id);"export"->administration.exportForm(id,inbox.channelCode())}});root.addView(inbox,FrameLayout.LayoutParams(-1,-1));setContentView(root)
+        inbox=InboxView(this,this);administration=NativeAdministration(this,scope,repo,{select(it)},{render()});tools=NativeTools(this,scope,repo,{conversation},{online&&!peeking},{inbox.insert(it)},{render()},{select(it)},{full(it)},{ids,action->inbox.selectionDone();if(conversation in ids&&action in listOf("nao_lidas","encerrar"))back()},{action,id->when(action){"pessoa"->administration.person(id);"settings"->administration.settings();"copy"->administration.copyConversation(id);"export"->administration.exportForm(id,inbox.channelCode())}});root.addView(inbox,FrameLayout.LayoutParams(-1,-1));setContentView(root)
         ContextCompat.registerReceiver(this,changes,IntentFilter(NativeRepository.CHANGED),ContextCompat.RECEIVER_NOT_EXPORTED)
         OneSignal.Notifications.addClickListener(clicks)
         if(pendingClick>0){peeking=pendingPeek;conversation=pendingClick;pendingClick=0}
         render()
-        if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync()}
+        if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync();syncNames()}
     }
+    private fun syncNames(){if(namesChecked)return;namesChecked=true;scope.launch{try{withContext(Dispatchers.IO){repo.googleNames()};sync()}catch(_:Exception){namesChecked=false}}}
     private fun render(){
         val seq=++refreshSeq;val id=conversation;val extra=if(historyConversation==id)history else emptyList()
         scope.launch{
@@ -82,7 +84,7 @@ class MainActivity:Activity(),InboxView.Events {
             try{withContext(Dispatchers.IO){repo.login(identifier,password)};OneSignal.User.pushSubscription.optIn();inbox.reset();BackgroundSync.periodic(this@MainActivity);online=false;render()}
             catch(e:Exception){inbox.status(e.message?.take(200)?:"Não foi possível entrar agora.")}
             finally{syncing=false;inbox.loginState(false)}
-            if(repo.store.auth()!=null)sync()
+            if(repo.store.auth()!=null){sync();syncNames()}
         }
     }
     override fun sync(){
@@ -94,7 +96,7 @@ class MainActivity:Activity(),InboxView.Events {
             finally{syncing=false;render();if(again)sync()}
         }
     }
-    override fun select(id:Long){if(id!=conversation){history=emptyList();historyConversation=id};openGeneration++;peeking=false;conversation=id;online=false;showNative();sync()}
+    override fun select(id:Long){if(contextChecked!=id){contextChecked=id;scope.launch{runCatching{withContext(Dispatchers.IO){repo.repairContext(id)}};sync()}};if(id!=conversation){history=emptyList();historyConversation=id};openGeneration++;peeking=false;conversation=id;online=false;showNative();sync()}
     override fun peek(id:Long){if(id!=conversation){history=emptyList();historyConversation=id};openGeneration++;peeking=true;conversation=id;online=false;showNative();sync()}
     override fun back(){history=emptyList();historyConversation=0;openGeneration++;peeking=false;conversation=0;render()}
     override fun send(id:Long,text:String):Boolean{
@@ -122,6 +124,7 @@ class MainActivity:Activity(),InboxView.Events {
     }
     override fun media(id:Long){tools.media(id)}
     override fun context(id:Long){tools.media(id,true)}
+    override fun preview(id:Long,context:Boolean,target:ImageView){tools.preview(id,context,target)}
     override fun search(query:String,closed:Boolean){
         queryJob?.cancel();if(query.isBlank()&&!closed){inbox.searchResults(null);return}
         val generation=repo.store.generation
