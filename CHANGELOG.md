@@ -6,6 +6,9 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.10 — 28/10/2026
+- App Mensagens: o Voltar do celular, numa conversa aberta pelo aviso, volta para a lista de conversas em vez de mandar o app para o fundo.
+
 ## 7.40.9 — Respostas automáticas e atalhos — 2026-10-28
 
 - Mensagens → Respostas: 11 atalhos prontos (/oi, /preco, /foto, /tamanho, /entrega, /outracidade, /pix, /endereco, /retorno, /obrigado, /saiu), semeados uma vez sem apagar as respostas que a equipe já tinha. Escrever "/oi" e espaço na mensagem coloca o texto; [nome] vira o nome da atendente; o primeiro [colchete] fica selecionado e o envio é bloqueado enquanto houver [valor…], [chave Pix] ou [nome] sem completar. O /pix vem com [chave Pix] e [nome] para a loja completar no app (nada da chave fica no código).
