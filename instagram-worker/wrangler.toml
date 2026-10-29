@@ -11,10 +11,19 @@
 # Publicar à mão (quando precisar):  npx wrangler deploy --config instagram-worker/wrangler.toml
 
 name = "tenkiter-ig"
-main = "worker.js"
+main = "worker-entry.js"
 compatibility_date = "2025-01-01"
+compatibility_flags = ["web_socket_auto_reply_to_close"]
 
 workers_dev = true
+
+[[durable_objects.bindings]]
+name = "MSG_EVENTOS"
+class_name = "MensagensAoVivo"
+
+[[migrations]]
+tag = "mensagens-eventos-v1"
+new_sqlite_classes = ["MensagensAoVivo"]
 
 # Banco próprio do Instagram (separado do `tenkiter-db` do catálogo).
 [[d1_databases]]

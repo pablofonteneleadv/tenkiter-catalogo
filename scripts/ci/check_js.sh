@@ -14,7 +14,7 @@ while IFS= read -r arq; do
     falhas=$((falhas + 1))
   fi
 done < <(find . -name '*.js' \
-  -not -path './node_modules/*' \
+  -not -path '*/node_modules/*' \
   -not -path './.git/*' \
   -not -name 'axe.min.js' \
   -not -name 'OneSignalSDKWorker.js' \

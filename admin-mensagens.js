@@ -1753,7 +1753,7 @@
 
   function bolha(m) {
     let b = elMsgs.get(m.id);
-    const ass = [m.autor_nome || '', m.autor_fone || '', ehGrupo_() ? Object.keys(nomesDoGrupo_()).length : 0, m.texto, m.tipo, m.status, m.erro || '', m.midia, m.localUrl || '', m.ctx_tipo || '', m.ctx_midia, m.ctx_texto || '', m.ctx_legenda || '', m.link_previa || '', m.ctx_aprox, m.por || ''].join('|');
+    const ass = [m.autor_nome || '', m.autor_fone || '', ehGrupo_() ? Object.keys(nomesDoGrupo_()).length : 0, m.texto, m.tipo, m.status, m.status_em, m.erro || '', m.midia, m.localUrl || '', m.ctx_tipo || '', m.ctx_midia, m.ctx_mtipo || '', m.ctx_em || '', m.ctx_qtipo || '', m.ctx_qdir || '', m.ctx_texto || '', m.ctx_legenda || '', m.link_previa || '', m.ctx_aprox, m.por || ''].join('|');
     if (b && b.dataset.ass === ass) return b;
     if (!b) { b = el('div'); elMsgs.set(m.id, b); }
     b.dataset.ass = ass; b.dataset.id = String(m.id); b.textContent = '';
@@ -2405,9 +2405,25 @@
     const pe = el('div', 'ms-etq-pe'); pe.appendChild(botao('ms-btn', 'Entrar com outra conta', 'outra-conta')); corpo.appendChild(pe);
     corpo.appendChild(el('p', 'ms-dica', 'Trocar não apaga as conversas já carregadas neste aparelho. "Esquecer" tira a conta da lista; para encerrar o acesso de vez, use Sair da conta no painel.'));
   }
-  function ligarAoVivo() { lembrarSessao_(); pararAoVivo(); offline = false; espera = ESPERA_MS; atualizarVivo(); agendar(1200); }
-  function pararAoVivo() { clearTimeout(timerLive); timerLive = null; }
-  function agendar(ms) { clearTimeout(timerLive); timerLive = setTimeout(sondar, ms == null ? espera : ms); }
+  let eventosAoVivo_=null;
+  function iniciarEventos_(){
+    if(!window.TKMensagensEventos)return;
+    if(!eventosAoVivo_)eventosAoVivo_=window.TKMensagensEventos.criar({
+      conta:()=>{const s=getSessao();return s?contaSessao_(s)+'|'+s.sessao:'';},
+      ativo:()=>podeGerir()&&!!$('overlay-mensagens')?.classList.contains('aberto'),
+      canais:()=>CANAIS.map(x=>x[0]),
+      pedirTickets:canais=>worker_('/msg/tempo-real/ticket','POST',{canais}),
+      atualizar:async contexto=>{if(sondaEmCurso_)await sondaEmCurso_;if(contexto.atual())await sondar();},
+      estado:()=>agendar()
+    });
+    eventosAoVivo_.iniciar();
+  }
+  function ligarAoVivo() { lembrarSessao_(); pararAoVivo(); offline = false; espera = ESPERA_MS; atualizarVivo(); iniciarEventos_(); agendar(1200); }
+  function pararAoVivo() { clearTimeout(timerLive); timerLive = null; if(eventosAoVivo_)eventosAoVivo_.parar(); }
+  window.addEventListener('tk:sessao',()=>{if(eventosAoVivo_)eventosAoVivo_.sincronizar();});
+  window.addEventListener('storage',e=>{if(e.key==='tm_session'&&eventosAoVivo_)eventosAoVivo_.sincronizar();});
+  window.addEventListener('tk:mensagens-sair',pararAoVivo);
+  function agendar(ms) { clearTimeout(timerLive); timerLive = setTimeout(sondar, ms == null ? (!offline&&eventosAoVivo_?.conectado()?30000:espera) : ms); }
   function atualizarVivo() { const v = $('ms-vivo'); if (!v) return; v.className = 'ms-ao-vivo' + (offline ? ' off' : ''); v.textContent = offline ? 'Sem conexão…' : '● ao vivo'; }
   let sondaEmCurso_ = null;
   function sondar(){if(sondaEmCurso_)return sondaEmCurso_;sondaEmCurso_=sondarDados_().finally(()=>{sondaEmCurso_=null;});return sondaEmCurso_;}
@@ -2434,10 +2450,10 @@
       if (Array.isArray(r.notas) && sincronizarNotas_(r.notas)) pintarFio(false);
       const mudou = r.conversas.find((c) => c.id === aberta.id); if (mudou) aberta = Object.assign({}, aberta, mudou, { nao_lidas: aberta.nao_lidas });
       const fio = $('ms-fio'), novas = r.mensagens.filter((m) => !msgs.some((x) => x.id === m.id));
-      const mudancas = r.mensagens.filter((m) => msgs.some((x) => x.id === m.id && (x.status !== m.status)));
+      const mudancas = r.mensagens.filter((m) => msgs.some((x) => x.id === m.id && Object.keys(m).some(k=>x[k]!==m[k])));
       if (novas.length || mudancas.length) {
         const noFim = !fio || perto_(fio, 90), entradas = novas.filter((m) => m.direcao === 'entrada').length;
-        mudancas.forEach((m) => { const x = msgs.find((y) => y.id === m.id); if (x) { x.status = m.status; x.status_em = m.status_em; } });
+        mudancas.forEach((m) => { const x = msgs.find((y) => y.id === m.id); if (x) Object.assign(x,m); });
         // uma mensagem nossa que acabou de voltar pelo servidor substitui a "enviando…" (mesmo texto) sem duplicar
         novas.forEach((m) => { if (m.direcao === 'saida') { const i = msgs.findIndex((x) => typeof x.id === 'string' && x.msg === undefined && x.texto === m.texto && x.tipo === m.tipo && x.status === 'pendente'); if (i >= 0) { pendentes.delete(msgs[i].id); msgs.splice(i, 1); } } });
         msgs = msgs.concat(novas);

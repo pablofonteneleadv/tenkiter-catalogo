@@ -245,7 +245,7 @@ function msgRecurso_(p, req, url) {
   if (/^\/msg\/funil/.test(p)) return 'funil';
   if (p === '/msg/metricas') return 'metricas';
   if (p === '/msg/exportar') return 'exportar';
-  if (['/msg/resumo','/msg/conversas','/msg/mensagens','/msg/novidades','/msg/lida','/msg/contagem','/msg/stories','/msg/mobile/subscription','/msg/config'].includes(p)) return 'acessar';
+  if (['/msg/resumo','/msg/conversas','/msg/mensagens','/msg/novidades','/msg/lida','/msg/contagem','/msg/stories','/msg/mobile/subscription','/msg/config','/msg/tempo-real/ticket'].includes(p)) return 'acessar';
   return 'configuracoes';
 }
 function msgFiltrarDados_(dados, direitos) {
@@ -2493,6 +2493,44 @@ function igualConst_(a, b) {
   for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
   return d === 0;
 }
+async function notificarNovidade_(env, canal) {
+  if(!env.MSG_EVENTOS)return;
+  const canais=MSG_CANAIS.includes(canal)?[canal]:MSG_CANAIS;
+  await Promise.all(canais.map(async c=>{try{await env.MSG_EVENTOS.get(env.MSG_EVENTOS.idFromName(c)).avisar();}catch(_){/* Consulta periódica continua sendo a reconciliação. */}}));
+}
+function origemEventos_(env,req){return cors(env,req).has('Access-Control-Allow-Origin');}
+async function ticketsEventos_(env,req){
+  if(!env.MSG_EVENTOS)return {ok:false,erro:'Atualização automática usa sincronização periódica.'};
+  if(!origemEventos_(env,req))return {ok:false,erro:'Abra as mensagens pelo site da loja.'};
+  const d=await req.json().catch(()=>null);
+  if(!d||!Array.isArray(d.canais)||!d.canais.length||d.canais.length>3||d.canais.some(c=>!MSG_CANAIS.includes(c)))return {ok:false,erro:'Escolha os canais de mensagens.'};
+  const segredo=await msgSegredo_(env), em=Date.now(), tickets=[];
+  for(const canal of new Set(d.canais)){
+    const corpo=btoa(JSON.stringify({canal,nonce:hex(24),conectar:em+30000,exp:em+300000})).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+    tickets.push({canal,token:corpo+'.'+await hmacHex_(segredo,'mensagens-eventos-v1:'+corpo)});
+  }
+  const url=new URL('/msg/tempo-real',req.url);url.protocol='wss:';
+  return {ok:true,tickets,socketUrl:url.href,renovarEm:240000};
+}
+async function conectarEventos_(env,req){
+  const negar=s=>new Response(null,{status:s,headers:{'Cache-Control':'no-store'}});
+  if(req.method!=='GET'||req.headers.get('Upgrade')?.toLowerCase()!=='websocket')return negar(426);
+  if(!env.MSG_EVENTOS)return negar(503);
+  if(!origemEventos_(env,req)||new URL(req.url).search)return negar(403);
+  const protocolos=(req.headers.get('Sec-WebSocket-Protocol')||'').split(',').map(s=>s.trim());
+  if(protocolos.length!==2||!protocolos.includes('tk-msg'))return negar(401);
+  const token=protocolos.find(p=>p.startsWith('tk-ticket.'))?.slice(10)||'';
+  const [corpo,assinatura,...resto]=token.split('.');
+  if(resto.length||!corpo||corpo.length>400||!/^[A-Za-z0-9_-]+$/.test(corpo)||!/^[a-f0-9]{64}$/.test(assinatura||''))return negar(401);
+  const segredo=await cfgGet(env,'msg_wh_segredo');
+  if(!segredo||!igualConst_(assinatura,await hmacHex_(segredo,'mensagens-eventos-v1:'+corpo)))return negar(401);
+  let d;try{d=JSON.parse(atob(corpo.replace(/-/g,'+').replace(/_/g,'/')));}catch(_){return negar(401);}
+  const now=Date.now();
+  if(!MSG_CANAIS.includes(d.canal)||!/^[a-f0-9]{48}$/.test(d.nonce)||!Number.isSafeInteger(d.conectar)||!Number.isSafeInteger(d.exp)||d.conectar<now||d.conectar>now+30000||d.exp<=now||d.exp>now+300000)return negar(401);
+  // Só estes cabeçalhos internos atravessam o binding. Credenciais e protocolo do navegador ficam fora.
+  const interno=new Request('https://eventos.internal/',{headers:{Upgrade:'websocket','X-TK-Evento-Nonce':d.nonce,'X-TK-Evento-Exp':String(d.exp)}});
+  return env.MSG_EVENTOS.get(env.MSG_EVENTOS.idFromName(d.canal)).fetch(interno);
+}
 /** Callback "ReceivedCallback" da Wafly -> linha pronta para gravar (ou null se não for conversa). */
 function normalizarWafly_(b) {
   if (!b || typeof b !== 'object' || b.type !== 'ReceivedCallback') return null;
@@ -2681,7 +2719,7 @@ async function gravarMensagem_(env, canal, m) {
     try {
       const desde = new Date(Date.parse(m.em) - 10 * 60000).toISOString();
       const pr = await env.DB.prepare("UPDATE msg_mensagem SET ext_id=?, status='enviada', status_em=? WHERE id=(SELECT id FROM msg_mensagem WHERE conversa_id=? AND direcao='saida' AND ext_id LIKE 'inc:%' AND texto=? AND tipo=? AND enviada_em>=? ORDER BY id LIMIT 1)").bind(m.extId, t, c.id, m.texto, m.tipo, desde).run();
-      if (pr.meta && pr.meta.changes === 1) { await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(t, c.id).run(); return false; }
+      if (pr.meta && pr.meta.changes === 1) { await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(t, c.id).run(); await notificarNovidade_(env,canal); return false; }
     } catch (e) { /* o eco já existe: segue o caminho normal */ }
   }
   if(m.ctxTipo==='story'&&m.ctxRef&&!m.ctxChave){const ref=await env.DB.prepare('SELECT chave FROM msg_status_ref WHERE canal=? AND ext_id=?').bind(canal,m.ctxRef).first();if(ref)m.ctxChave=ref.chave;}
@@ -2695,6 +2733,7 @@ async function gravarMensagem_(env, canal, m) {
     .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, t, c.id);
   const [r] = await env.DB.batch([inserir,atividade]);
   if (!r.meta || r.meta.changes !== 1) return false;
+  await notificarNovidade_(env,canal);
   if (!saida && !m.grupo && canal !== 'instagram' && /^\d{10,15}$/.test(m.contato)) { try { if ((await cfgGet(env, 'contatos_auto')) === '1') await enfileirarContato_(env, canal, m.contato, m.nome); } catch (e) { /* o cadastro no Google é conforto: a mensagem já foi gravada */ } }
   m._conversaId = c.id; m._msgId = Number(r.meta.last_row_id) || 0;      // v7.40.9: para a resposta automática
   if(!saida && !m.grupo && Date.parse(m.em)>Date.now()-300000){try{await mobileTables_(env);await env.DB.prepare('INSERT OR IGNORE INTO msg_push_outbox(mensagem,conversa,canal,chave,criado) VALUES(?,?,?,?,?)').bind(Number(r.meta.last_row_id),c.id,canal,crypto.randomUUID(),t).run();}catch(_){/* falha de aviso não interrompe o recebimento */}}
@@ -2757,7 +2796,7 @@ async function processarEntrada_(env,chave,forcar=false) {
       // Todas as mensagens básicas já aparecem na lista antes de qualquer rede de mídia.
       for(const m of j.dados.mensagens)if(m.midiaUrl||m.ctxUrl){const dados={...m};delete dados._conversaId;delete dados._msgId;await guardarEntrada_(env,'midia',j.canal,dados);}
       for(const m of novidades)await agendarAuto_(null,env,j.canal,m);
-      if(j.dados.leituras?.length)await aplicarLeiturasInstagram_(env,j.dados.leituras);
+      if(j.dados.leituras?.length){await aplicarLeiturasInstagram_(env,j.dados.leituras);await notificarNovidade_(env,j.canal);}
     }else if(j.tipo==='zernio'){
       const z=await zernioCfg_(env);if(!z||j.dados.account.accountId&&String(j.dados.account.accountId)!==String(z.conta.id))throw Error('Conexão Instagram alterada.');
       const nova=await processarEventoZernio_(env,j.dados,true);resultado={nova};await cfgSet(env,'msg_ult_zernio',JSON.stringify({em:agora(),res:'ok',evento:j.dados.event})).catch(()=>{});
@@ -2767,6 +2806,7 @@ async function processarEntrada_(env,chave,forcar=false) {
       let falta=false;for(const id of j.dados.ids)if(!await env.DB.prepare('SELECT id FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(j.canal,id).first()){falta=true;break;}
       if(falta){const backlog=await env.MIDIA.list({prefix:MSG_ENTRADA_PREFIXO_+'recebidas/',limit:1});if(backlog.objects.length||Date.now()-Date.parse(meta.em)<300000){const e=Error('Referência ainda não recebida.');e.esperaReferencia=true;throw e;}}
       resultado={atualizadas:await atualizarStatusWafly_(env,j.canal,j.dados)};
+      if(resultado.atualizadas)await notificarNovidade_(env,j.canal);
     }
     else if(j.tipo==='status-publicado'){
       const m=j.dados;await prepararMidia_(env,j.canal,m);
@@ -2799,16 +2839,14 @@ async function processarEntradas_(env,forcar=false) {
   await processarComplementos_(env,forcar);
 }
 async function completarMidiaEntrada_(env,canal,m) {
-  const atual=await env.DB.prepare('SELECT id,conversa_id,midia_chave,ctx_chave,ctx_post FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(canal,m.extId).first();
+  const atual=await env.DB.prepare('SELECT id,conversa_id,midia_chave,ctx_chave,ctx_post,ctx_tipo FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(canal,m.extId).first();
   if(!atual)return;
-  let mudou=false;
-  if(m.midiaUrl&&!atual.midia_chave){const x=m.midiaChave?{chave:m.midiaChave,mime:m.midiaMime}:await copiarMidiaRemota_(env,m.midiaUrl,m.midiaMime,m.tipo==='documento');if(!x)throw Error('Mídia aguardando cópia.');m.midiaChave=x.chave;m.midiaMime=x.mime;if(x){await env.DB.prepare("UPDATE msg_mensagem SET midia_chave=?,midia_mime=?,midia_url='' WHERE id=? AND midia_chave=''").bind(x.chave,x.mime,atual.id).run();mudou=true;}}
-  if(m.ctxUrl&&!atual.ctx_chave){const x=m.ctxChave?{chave:m.ctxChave}:await copiarMidiaRemota_(env,m.ctxUrl,m.ctxMime||'');if(!x)throw Error('Story aguardando cópia.');m.ctxChave=x.chave;if(x){await env.DB.prepare("UPDATE msg_mensagem SET ctx_chave=? WHERE id=? AND ctx_chave=''").bind(x.chave,atual.id).run();mudou=true;}}
-  if(m.ctxPost&&!atual.ctx_post){await env.DB.prepare('UPDATE msg_mensagem SET ctx_post=?,ctx_aprox=0 WHERE id=? AND ctx_post=0').bind(m.ctxPost,atual.id).run();mudou=true;}
-  if(m.ctxTipo==='story'){
-    await env.DB.prepare("UPDATE msg_mensagem SET ctx_tipo='story' WHERE id=? AND ctx_tipo<> 'story'").bind(atual.id).run();mudou=true;
-  }
-  if(mudou)await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(agora(),atual.conversa_id).run();
+  const alteracoes=[];
+  if(m.midiaUrl&&!atual.midia_chave){const x=m.midiaChave?{chave:m.midiaChave,mime:m.midiaMime}:await copiarMidiaRemota_(env,m.midiaUrl,m.midiaMime,m.tipo==='documento');if(!x)throw Error('Mídia aguardando cópia.');m.midiaChave=x.chave;m.midiaMime=x.mime;alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET midia_chave=?,midia_mime=?,midia_url='' WHERE id=? AND midia_chave=''").bind(x.chave,x.mime,atual.id));}
+  if(m.ctxUrl&&!atual.ctx_chave){const x=m.ctxChave?{chave:m.ctxChave}:await copiarMidiaRemota_(env,m.ctxUrl,m.ctxMime||'');if(!x)throw Error('Story aguardando cópia.');m.ctxChave=x.chave;alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET ctx_chave=? WHERE id=? AND ctx_chave=''").bind(x.chave,atual.id));}
+  if(m.ctxPost&&!atual.ctx_post)alteracoes.push(env.DB.prepare('UPDATE msg_mensagem SET ctx_post=?,ctx_aprox=0 WHERE id=? AND ctx_post=0').bind(m.ctxPost,atual.id));
+  if(m.ctxTipo==='story'&&atual.ctx_tipo!=='story')alteracoes.push(env.DB.prepare("UPDATE msg_mensagem SET ctx_tipo='story' WHERE id=? AND ctx_tipo<> 'story'").bind(atual.id));
+  if(alteracoes.length){const em=agora();alteracoes.push(env.DB.prepare('UPDATE msg_mensagem SET status_em=? WHERE id=?').bind(em,atual.id),env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(em,atual.conversa_id));await env.DB.batch(alteracoes);await notificarNovidade_(env,canal);}
 }
 
 /* Android: fila persistente e entrega pelo OneSignal. Nunca contém texto de conversa. */
@@ -4373,8 +4411,15 @@ export default {
     ctx.waitUntil((async () => { await ciclo(env, 'cron'); try { await analisarPendentes(env, 5); } catch (e) { /* a IA é conforto: o ciclo não pode cair por causa dela */ } })());
   },
   async fetch(req, env, ctx) {
-    const url = new URL(req.url), h = cors(env, req); let direitos = null; const J = (c, s) => resp(direitos ? msgFiltrarDados_(c,direitos) : c, s, h);
+    const url = new URL(req.url), h = cors(env, req); let direitos = null;
+    const J = (c, s) => {
+      if(c?.ok&&(!s||s<300)&&['POST','DELETE'].includes(req.method)&&/^\/msg\/(enviar|lida|dono|encerrar|rotular|etiquetas|notas|ficha|pessoa)(\/|$)/.test(url.pathname)){
+        const p=notificarNovidade_(env);if(ctx?.waitUntil)ctx.waitUntil(p);
+      }
+      return resp(direitos ? msgFiltrarDados_(c,direitos) : c, s, h);
+    };
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
+    if(url.pathname==='/msg/tempo-real'){try{return await conectarEventos_(env,req);}catch(_){return new Response(null,{status:503,headers:{'Cache-Control':'no-store'}});}}
     if(url.pathname==='/catalogo/tecidos'){try{return await rotaTecidos_(env,req,J);}catch(_){return J({ok:false,erro:'Não foi possível atualizar os tecidos. Tente de novo.'},503);}}
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
     if (url.pathname.indexOf('/wh/zernio/') === 0 && req.method === 'POST') { try { const rz = await rotaZernio_(env, req, url, ctx); if (rz.status >= 500) await anotarFalha_(env, url.pathname, rz.status); return rz; } catch (e) { await anotarFalha_(env, url.pathname, 500); return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
@@ -4433,6 +4478,7 @@ export default {
           if ((('respostas' in d) && !direitos.respostas) || (('lerCelular' in d) && !direitos.configuracoes) || (('meuNome' in d)&&!direitos.responder)) return J({ok:false,erro:'Seu acesso não permite alterar esta configuração.'},403);
         }
       }
+      if(p==='/msg/tempo-real/ticket'&&req.method==='POST')return J(await ticketsEventos_(env,req));
       if (p === '/post/freeconvert/config' && req.method === 'GET') {
         if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
         const chave=await cfgGet(env,'freeconvert_api_key');

@@ -1,0 +1,16 @@
+{
+  "name": "instagram-worker",
+  "version": "1.0.0",
+  "description": "Validação local do Worker e dos eventos de mensagens",
+  "main": "worker-entry.js",
+  "scripts": {
+    "test": "node ../tests/worker_eventos_runtime.cjs"
+  },
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "miniflare": "4.20260730.0",
+    "wrangler": "4.156.0"
+  },
+  "private": true
+}

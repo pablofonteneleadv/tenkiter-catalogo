@@ -158,6 +158,12 @@ jobs:
           node tests/worker_contatos_r2.js
           node tests/worker_mobile_push.js
 
+      - name: Eventos de mensagens no runtime Cloudflare local
+        run: |
+          npm ci --prefix instagram-worker --ignore-scripts
+          node tests/mensagens_eventos_cliente.js
+          node tests/worker_eventos_runtime.cjs
+
       # O teste do Worker do Instagram usa node:sqlite, disponível no Node 22+.
       - name: Node 22 para bateria completa
         if: needs.escopo.outputs.suite_completa == 'true'
@@ -192,6 +198,7 @@ jobs:
           python3 tests/mensagens_gavetas_proposta.py
           python3 tests/disponibilidade_rapida.py
           python3 tests/mensagens_saude_entrada.py
+          python3 tests/mensagens_eventos_ui.py
 
       - name: Screenshots da edição rápida
         if: always() && github.event_name == 'pull_request'
