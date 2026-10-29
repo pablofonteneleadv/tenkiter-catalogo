@@ -607,10 +607,25 @@
       .ms-mais-grupo{padding-bottom:12px;border-bottom:1px solid #e6e1d6;margin-bottom:16px}.ms-mais-grupo h4{margin:0 0 4px;font-size:.8rem;color:#645e55}.ms-mais-item{display:block;width:100%;text-align:left;padding:12px 0;min-height:48px;background:none;border:0;font:inherit;color:#171714;cursor:pointer}.ms-mais-item:focus-visible{outline:2px solid #a65300}
       .ms-espiar{width:48px;min-height:44px;align-self:center;padding:4px 0;border:0;margin:4px 8px 4px 0;font-size:.65rem}.ms-vinculada .ms-av{width:32px;height:32px;font-size:.7rem}.ms-vinculada .ms-conv{padding-top:8px;padding-bottom:8px}.ms-vinculada .ms-l1 strong{font-size:.86rem}
       .sheet-mensagens .ms-ficha select{min-height:48px;max-width:100%;background:#fff;font:inherit;color:#222}.ms-fi-faceta{border-bottom:1px solid #e6e1d6;padding:0 0 8px;margin:0 0 8px}.ms-fi-faceta summary{min-height:48px;display:list-item;align-content:center;font-weight:600;cursor:pointer;overflow-wrap:anywhere}.ms-fi-faceta-corpo{padding:8px 0}.ms-fi-faceta .ms-ficha-tams{display:flex;flex-wrap:wrap;gap:8px}.ms-fi-faceta .ms-ficha-tams .ms-btn{flex:0 1 auto;min-width:44px;max-width:100%;min-height:44px;white-space:normal;overflow-wrap:anywhere;padding:10px 12px}.ms-fi-faceta-corpo>.ms-btn{margin-top:12px}.ms-fi-adicionar{display:flex;gap:8px;margin-top:12px}.ms-fi-adicionar input{min-width:0;flex:1}.ms-fi-faceta summary:focus-visible{outline:2px solid #a65300}.ms-ficha [hidden]{display:none!important}
+
+      /* Ritmo e hierarquia da proposta HTML aprovada: superfícies leves, abas e ícones de linha. */
+      .sheet-mensagens{color:#20211e}.sheet-mensagens .ms-topo{min-height:68px;padding:12px 16px;border-bottom:1px solid #e7e7e0;box-sizing:border-box;gap:10px;flex:none}body .sheet-mensagens .ms-titulo{display:block;font-size:1.2rem;font-weight:750;line-height:1.25;letter-spacing:-.035em}.sheet-mensagens .ms-identidade{margin-top:3px;font-size:.8rem;font-weight:400;letter-spacing:0;color:#62675d}.sheet-mensagens #ms-mais{background:transparent;border-radius:12px;font-weight:400}.ms-linha-icone{display:inline-flex;align-items:center;justify-content:center;flex:none}.ms-linha-icone svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+      .sheet-mensagens .ms-abas{padding:0 8px;gap:0;border-bottom:1px solid #e7e7e0;flex:none}.sheet-mensagens .ms-aba{position:relative;border:0;border-radius:0;min-height:48px;padding:0 3px;font-size:.73rem;font-weight:650;color:#5c6455;background:#fff}#overlay-mensagens #ms-abas .ms-aba[aria-selected=true]{background:#fff!important;color:#23251f!important}#overlay-mensagens #ms-abas .ms-aba{border:0!important;border-radius:0!important}.sheet-mensagens .ms-aba[aria-selected=true]::after{content:'';position:absolute;bottom:0;left:9px;right:9px;height:3px;background:var(--laranja,#e97d1c);border-radius:3px 3px 0 0}
+      .sheet-mensagens .ms-pesquisa{position:relative;padding:12px 16px 10px;gap:8px;flex:none}.sheet-mensagens .ms-pesquisa>.ms-linha-icone{position:absolute;left:26px;top:24px;color:#656d5e;pointer-events:none}.sheet-mensagens .ms-pesquisa .ms-busca{background:#f7f6f2;border-color:#e0e1d8;border-radius:10px;font-size:.875rem;padding:10px 8px 10px 36px;min-height:44px}.sheet-mensagens .ms-pesquisa>.ms-btn{display:flex;align-items:center;justify-content:center;gap:6px;max-width:100px;min-width:76px;padding:8px;border-color:#e0e1d8;font-size:.75rem;font-weight:600}
+      .sheet-mensagens .ms-filtros{padding:0 16px 8px;gap:6px;grid-template-columns:1.4fr 1.12fr .8fr;flex:none}.sheet-mensagens .ms-filtros .ms-chip{display:flex;align-items:center;justify-content:center;gap:5px;min-height:44px;padding:7px 5px;border:0;border-radius:8px;background:#f4f4ef;font-size:.75rem;font-weight:500;color:#555d4f}.sheet-mensagens .ms-filtros .ms-chip[aria-pressed=true]{background:#292b25;color:#fff}.ms-fila-conta{font-weight:750;margin:0;font-size:.72rem;flex:none}
+      .ms-intro{padding:0 16px 4px;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px;flex:none;color:#62695a;font-size:.7rem}.ms-intro button{min-width:64px;min-height:44px;border:0;background:none;color:#805324;font:inherit;font-weight:600;padding:4px}
+      .sheet-mensagens .ms-lista{padding:0 12px 16px}.sheet-mensagens .ms-conv-li{border-bottom:1px solid #e7e7e0}.sheet-mensagens .ms-conv{gap:10px;padding:13px 4px 12px;min-height:104px;align-items:flex-start;background:transparent}.sheet-mensagens .ms-av{width:38px;height:38px;flex:0 0 38px;border-radius:50%;font-size:.75rem;margin-top:3px;background:#dce7e3!important;color:#345f54}.sheet-mensagens .ms-conv-li:nth-child(3n) .ms-av{background:#e8dfda!important;color:#6a4b3e}.sheet-mensagens .ms-conv-li:nth-child(3n+2) .ms-av{background:#e0e5d6!important;color:#4b553c}.sheet-mensagens .ms-nome{font-size:.91rem;font-weight:650;line-height:1.35}.sheet-mensagens .ms-l1 time{font-size:.69rem;color:#697060;font-weight:400;white-space:nowrap}.sheet-mensagens .ms-l2{font-size:.85rem;line-height:1.4;margin-top:3px;color:#5e6457}.sheet-mensagens .nova .ms-l2{color:#252a21}.sheet-mensagens .ms-l3{gap:6px;font-size:.67rem;margin-top:5px;color:#62695a}.sheet-mensagens .ms-canal-tag{font-size:.63rem;font-weight:600;border-radius:4px;padding:2px 5px}.sheet-mensagens .ms-aguarda{font-size:.69rem;font-weight:500;line-height:1.4;margin-top:4px}.sheet-mensagens .ms-espiar{width:44px;min-height:44px;margin:0 0 0 4px;border:0;background:none;font-size:.63rem;color:#645d50;align-self:center}.sheet-mensagens .ms-espiar .ms-olho{width:19px;height:19px}
+      .sheet-mensagens .ms-vinculo-principal{border:1px solid #e4e1d8;border-bottom:0;border-radius:12px 12px 0 0;background:#fcfbf7;margin-top:6px}.sheet-mensagens .ms-vinculada{background:#fcfbf7;border-left:1px solid #e4e1d8;border-right:1px solid #e4e1d8;margin:0;padding-left:44px}.sheet-mensagens .ms-vinculada .ms-conv{padding:8px 6px;min-height:60px}.sheet-mensagens .ms-vinculada .ms-av{display:none}.sheet-mensagens .ms-vinculada .ms-nome{font-size:.76rem;font-weight:500}.sheet-mensagens .ms-vinculada .ms-l2{font-size:.76rem}.sheet-mensagens .ms-vinculada .ms-fone,.sheet-mensagens .ms-vinculada .ms-dono-tag{display:none}.sheet-mensagens .ms-vinculo-fim{border:1px solid #e4e1d8;border-top:0;border-radius:0 0 12px 12px;margin-bottom:6px}
+      .sheet-mensagens .ms-nav{padding:5px 8px calc(6px + env(safe-area-inset-bottom));border-top:1px solid #e7e7e0;gap:0}.sheet-mensagens .ms-nav button{position:relative;display:flex;flex-direction:column;gap:5px;align-items:center;justify-content:center;min-height:52px;font-size:.7rem;font-weight:500;background:transparent;color:#62695a;padding:4px}.sheet-mensagens .ms-nav button[aria-current=page]{color:#99500d;background:transparent;border-radius:0;font-weight:700}.sheet-mensagens .ms-nav button[aria-current=page]::before{content:'';position:absolute;top:-5px;left:30%;right:30%;height:3px;background:var(--laranja,#e97d1c);border-radius:0 0 3px 3px}
+      @media(prefers-reduced-motion:no-preference){.sheet-mensagens .ms-aba,.sheet-mensagens .ms-chip,.sheet-mensagens .ms-nav button{transition:background-color 160ms,color 160ms}}
 `;
     document.head.appendChild(s);
   }
 
+  function iconeFluido_(nome){
+    const p={conversas:'M4 5h16v12H9l-5 4z',funil:'M3 4h18l-7 8v7l-4 2v-9z',notas:'M5 3h14v13l-5 5H5zM14 21v-5h5',mais:'M5 12h.01M12 12h.01M19 12h.01',busca:'M21 21l-5-5M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0',filtros:'M4 6h16M7 12h10M10 18h4M8 3v6M16 9v6M12 15v6'};
+    const n=el('span','ms-linha-icone');n.setAttribute('aria-hidden','true');n.innerHTML='<svg viewBox="0 0 24 24"><path d="'+p[nome]+'"/></svg>';return n;
+  }
   /* ---------- esqueleto ---------- */
   function montar() {
     if ($('overlay-mensagens')) return;
@@ -622,13 +637,13 @@
     const topo = el('div', 'ms-topo');
     const h = el('h2', 'ms-titulo', 'Mensagens'); h.id = 'ms-titulo';
     const live = el('span', 'ms-ao-vivo', ''); live.id = 'ms-vivo'; live.setAttribute('role', 'status');
-    const mais = botao('ms-ico', '⋯', 'menu-geral'); mais.setAttribute('aria-label', 'Mais opções'); mais.setAttribute('aria-haspopup', 'dialog'); mais.id = 'ms-mais';
+    const mais = botao('ms-ico', '⋯', 'menu-geral'); mais.setAttribute('aria-label', 'Mais opções'); mais.setAttribute('aria-haspopup', 'dialog'); mais.id = 'ms-mais';mais.textContent='';mais.appendChild(iconeFluido_('mais'));
     const x = botao('ms-ico', '✕', 'fechar'); x.id = 'ms-fechar'; x.setAttribute('aria-label', 'Fechar mensagens');
     topo.append(h, live, mais, x);
     const quem=el('small','ms-identidade');quem.id='ms-identidade';h.appendChild(quem);atualizarIdentidade_();
     const abas = el('div', 'ms-abas'); abas.id = 'ms-abas'; abas.setAttribute('role', 'tablist');
     const filtros = el('div', 'ms-filtros'); filtros.id = 'ms-filtros';
-    const busq = el('input', 'ms-busca'); busq.id = 'ms-busca'; busq.type = 'search'; busq.placeholder = 'Buscar por nome, número ou texto'; busq.setAttribute('aria-label', 'Buscar conversas');
+    const busq = el('input', 'ms-busca'); busq.id = 'ms-busca'; busq.type = 'search'; busq.placeholder = 'Buscar conversa'; busq.setAttribute('aria-label', 'Buscar conversas');
     const estado = el('div'); estado.id = 'ms-estado-wrap';
     const av = el('p', 'ms-aviso'); av.id = 'ms-aviso'; av.hidden = true; av.setAttribute('role', 'status');
     const wrap = el('div', 'ms-lista-wrap'); wrap.id = 'ms-lista-wrap'; const ul = el('ul', 'ms-lista'); ul.id = 'ms-lista'; wrap.appendChild(ul);
@@ -636,10 +651,11 @@
     const selbar = el('div', 'ms-selbar'); selbar.id = 'ms-selbar'; selbar.hidden = true; selbar.setAttribute('role', 'toolbar'); selbar.setAttribute('aria-label', 'Conversas selecionadas');
     const saudeEl = el('div', 'ms-saude'); saudeEl.id = 'ms-saude'; saudeEl.hidden = true; saudeEl.setAttribute('role', 'alert');
     const pesquisa = el('div','ms-pesquisa'); pesquisa.id='ms-pesquisa';
-    const bf=botao('ms-btn','Filtros','filtros-abrir');bf.id='ms-btn-filtros';bf.setAttribute('aria-haspopup','dialog');pesquisa.append(busq,bf);
+    const bf=botao('ms-btn','Filtros','filtros-abrir');bf.id='ms-btn-filtros';bf.setAttribute('aria-haspopup','dialog');bf.prepend(iconeFluido_('filtros'));pesquisa.append(iconeFluido_('busca'),busq,bf);
     const nav=el('nav','ms-nav');nav.id='ms-nav';nav.setAttribute('aria-label','Navegação das mensagens');
-    [['Conversas','inicio'],['Funil','funil'],['Com notas','inicio-notas'],['Mais','menu-geral']].forEach(([nome,acao])=>nav.appendChild(botao('',nome,acao)));
-    lat.append(topo, saudeEl, abas, pesquisa, filtros, estado, wrap, selbar, nav);
+    [['Conversas','inicio','conversas'],['Funil','funil','funil'],['Com notas','inicio-notas','notas'],['Mais','menu-geral','mais']].forEach(([nome,acao,ico])=>{const b=botao('',nome,acao);b.prepend(iconeFluido_(ico));nav.appendChild(b);});
+    const intro=el('div','ms-intro');intro.id='ms-intro';const resultados=el('span');resultados.id='ms-resultados';intro.append(resultados,botao('','Selecionar','selecionar'));
+    lat.append(topo, saudeEl, abas, pesquisa, filtros, estado, intro, wrap, selbar, nav);
     // v7.22: segurar o dedo numa conversa começa a seleção (como no WhatsApp)
     ul.addEventListener('pointerdown', (ev) => { const b = ev.target.closest('.ms-conv'); if (!b || selecao) return; clearTimeout(timerToque); toqueLongo = false; timerToque = setTimeout(() => { toqueLongo = true; iniciarSelecao_(Number(b.dataset.id)); if (navigator.vibrate) try { navigator.vibrate(20); } catch (e) { /* sem vibração */ } }, 550); });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => ul.addEventListener(t, () => clearTimeout(timerToque)));
@@ -763,9 +779,9 @@
     f.textContent = '';
     [['sem_resposta','Falta responder',c.sem_resposta],['nao_lidas','Não lidas',c.nao_lidas],['','Todas',c.conversas]].forEach(([id,nome,n])=>{
       const b=botao('ms-chip',nome,'fila',{filtro:id});b.setAttribute('aria-pressed',String(filtro===id));
-      if(n>0)b.appendChild(el('span','ms-fila-conta',String(n)));f.appendChild(b);
+      b.appendChild(el('span','ms-fila-conta',String(n||0)));f.appendChild(b);
     });
-    const bf=$('ms-btn-filtros');if(bf){const ativo=etqFiltro||!tipos.msg||tipos.grp||['minhas','retomar','encerradas'].includes(filtro);bf.textContent=ativo?'Filtros •':'Filtros';bf.setAttribute('aria-label',ativo?'Filtros, há filtros aplicados':'Filtros');}
+    const bf=$('ms-btn-filtros');if(bf){const ativo=etqFiltro||!tipos.msg||tipos.grp||['minhas','retomar','encerradas'].includes(filtro);bf.textContent=ativo?'Filtros •':'Filtros';bf.prepend(iconeFluido_('filtros'));bf.setAttribute('aria-label',ativo?'Filtros, há filtros aplicados':'Filtros');}
     const nav=$('ms-nav');if(nav)nav.querySelectorAll('button').forEach(b=>{const ativo=b.dataset.ms==='funil'?painel==='funil':b.dataset.ms==='inicio-notas'?filtro==='com_notas':b.dataset.ms==='inicio'?painel!=='funil'&&filtro!=='com_notas':false;b.setAttribute('aria-current',ativo?'page':'false');});
     if(!ETQ)carregarEtiquetas_();
   }
@@ -1187,19 +1203,19 @@
     }
     const idConv = aberta ? aberta.id : null; if (idConv !== prodSelConv) { prodSel = []; prodSelConv = idConv; }
     if (atualizarPickerAoEditar_) window.removeEventListener('storage', atualizarPickerAoEditar_);
-    const q = el('input', 'ms-busca ms-busca-prod'); q.id = 'ms-prod-busca'; q.type = 'search'; q.placeholder = 'Nome, código, cor ou tamanho'; q.setAttribute('aria-label', 'Buscar produto');
+    const q = el('input', 'ms-busca ms-busca-prod'); q.id = 'ms-prod-busca'; q.type = 'search'; q.placeholder = 'Nome, código, cor, tecido ou tamanho'; q.setAttribute('aria-label', 'Buscar produto');
     const so = el('label', 'ms-cfg-linha ms-prod-filtro'), chk = el('input'); chk.type = 'checkbox'; chk.id = 'ms-prod-estoque'; chk.checked = true; so.append(chk, document.createTextNode(' Só com estoque'));
     const ul = el('ul', 'ms-prod-lista'); ul.id = 'ms-prod-lista'; ul.setAttribute('aria-live', 'polite');
     const dica = el('p', 'ms-prod-dica', 'Toque na foto para selecionar várias peças e mandar um link só.');
     const filtrosProd = el('details', 'ms-prod-filtros'); filtrosProd.id='ms-prod-filtros';
-    const tituloFiltros=el('summary','','Filtros · tamanho, categoria e cor');
+    const tituloFiltros=el('summary','','Filtros · tamanho, categoria, cor e tecido');
     const opcoesFiltros=el('div','ms-prod-opcoes');opcoesFiltros.id='ms-prod-opcoes';
     filtrosProd.append(tituloFiltros,opcoesFiltros);
     const resumoFiltros=el('div','ms-prod-refinos');resumoFiltros.id='ms-prod-refinos';
     const resultado=el('p','ms-prod-dica');resultado.id='ms-prod-resultado';resultado.setAttribute('role','status');
     corpo.append(q, so, filtrosProd, resumoFiltros, resultado, dica, ul);
     const tamanhosCliente=p=>window.TKTamanhos ? TKTamanhos.cliente(String(p.Tamanhos||''),p.Genero).valores.filter(v=>!/consult/i.test(v)) : tamanhosDe_(p);
-    const campos=[{id:'tamanho',nome:'Tamanho',tags:tamanhosCliente},{id:'categoria',nome:'Categoria',tags:p=>String(p.Categoria||'').split(',').map(v=>v.trim()).filter(Boolean)},{id:'cor',nome:'Cor',tags:p=>String(p.Cores||'').split(',').map(v=>v.trim()).filter(Boolean)},{id:'genero',nome:'Para quem',tags:p=>String(p.Genero||'').split(',').map(v=>v.trim()).filter(Boolean)}];
+    const campos=[{id:'tamanho',nome:'Tamanho',tags:tamanhosCliente},{id:'categoria',nome:'Categoria',tags:p=>String(p.Categoria||'').split(',').map(v=>v.trim()).filter(Boolean)},{id:'cor',nome:'Cor',tags:p=>String(p.Cores||'').split(',').map(v=>v.trim()).filter(Boolean)},{id:'genero',nome:'Para quem',tags:p=>String(p.Genero||'').split(',').map(v=>v.trim()).filter(Boolean)},{id:'tecido',nome:'Tecido',tags:p=>{const t=window.TKTecido&&TKTecido.ler(p);return t?[t]:[]}}];
     const refinados=Object.fromEntries(campos.map(c=>[c.id,new Set()]));
     const combina=(p,ignorar)=>campos.every(c=>c.id===ignorar||!refinados[c.id].size||c.tags(p).some(v=>refinados[c.id].has(v)));
     function pintarFiltros(base){
@@ -1654,13 +1670,14 @@
   function pintarLista() {
     const ul = $('ms-lista'), extra = $('ms-extra'); if (!ul || painel === 'metricas' || painel === 'funil') return;
     ul.hidden = false; extra.hidden = false;
+    const resultados=$('ms-resultados');if(resultados){const n=new Set(lista.map(c=>c.pessoa||'c:'+c.id)).size;resultados.textContent=n+(n===1?' atendimento':' atendimentos')+(filtro==='encerradas'?' encerrados':' em aberto')+' · mais recentes';}const intro=$('ms-intro');if(intro){const b=intro.querySelector('button');b.textContent=selecao?'Cancelar':'Selecionar';b.dataset.ms=selecao?'sel-sair':'selecionar';}
     const vivos = new Set(lista.map((c) => c.id));
     if (selecao) { selecao.forEach((id) => { if (!vivos.has(id)) selecao.delete(id); }); desenharSelbar_(); }
     elConvs.forEach((li, id) => { if (!vivos.has(id)) { li.remove(); elConvs.delete(id); } });
     let ref = ul.firstChild;
     const blocos = new Map();
     lista.forEach(c=>{const key=c.grupo?'grupo:'+c.id:c.pessoa||(c.outro_id?'par:'+Math.min(c.id,c.outro_id):'conversa:'+c.id);   /* v7.40.16: mesmo número nos dois WhatsApp fica junto, mesmo sem vínculo manual */if(!blocos.has(key))blocos.set(key,[]);blocos.get(key).push(c);});
-    [...blocos.values()].map(b=>b.sort((a,c)=>String(c.ultima_em).localeCompare(String(a.ultima_em))||c.id-a.id)).sort((a,b)=>String(b[0].ultima_em).localeCompare(String(a[0].ultima_em))||b[0].id-a[0].id).forEach(b=>b.forEach((c,i)=>{const li=linhaConversa(c);li.classList.toggle('ms-vinculada',i>0);li.style.marginLeft=i?'24px':'';li.style.background=i?'#faf8f3':'';if(li!==ref)ul.insertBefore(li,ref);else ref=ref.nextSibling;}));
+    [...blocos.values()].map(b=>b.sort((a,c)=>String(c.ultima_em).localeCompare(String(a.ultima_em))||c.id-a.id)).sort((a,b)=>String(b[0].ultima_em).localeCompare(String(a[0].ultima_em))||b[0].id-a[0].id).forEach(b=>b.forEach((c,i)=>{const li=linhaConversa(c);li.classList.toggle('ms-vinculada',i>0);li.classList.toggle('ms-vinculo-principal',b.length>1&&i===0);li.classList.toggle('ms-vinculo-fim',b.length>1&&i===b.length-1);li.style.marginLeft='';li.style.background='';if(li!==ref)ul.insertBefore(li,ref);else ref=ref.nextSibling;}));
     extra.textContent = '';
     if (!lista.length) {
       const m = busca.trim() ? 'Nenhuma conversa encontrada.' : etqFiltro ? 'Nenhuma conversa nesta etapa de venda neste canal.' : filtro === 'nao_lidas' ? 'Nenhuma conversa não lida. 🎉' : filtro === 'sem_resposta' ? 'Ninguém esperando resposta agora. 🎉' : tipoParam_() === 'grupo' && !filtro ? 'Nenhum grupo aqui.' : filtro === 'ambos' ? 'Ninguém está falando pelos dois WhatsApp agora.' : filtro === 'encerradas' ? 'Nenhuma conversa encerrada. Para encerrar, segure o dedo numa conversa (ou ⋯ → Selecionar conversas).' : 'Ainda não chegou nenhuma mensagem neste canal.';
@@ -2600,7 +2617,7 @@
     ex.appendChild(p);
   }
   /** No painel de atendimento, abas de filtro/busca/estado saem do caminho para dar espaço aos números. */
-  function chrome_(esconder) { ['ms-filtros', 'ms-pesquisa', 'ms-estado-wrap'].forEach((id) => { const e = $(id); if (e) e.hidden = esconder; }); }
+  function chrome_(esconder) { ['ms-filtros', 'ms-pesquisa', 'ms-estado-wrap','ms-intro'].forEach((id) => { const e = $(id); if (e) e.hidden = esconder; }); }
   function fecharPainel() { if (painel === 'funil') sairFunil_(); painel = ''; chrome_(false); const ul = $('ms-lista'); if (ul) ul.hidden = false; pintarLista(); }
 
   /* ---------- v7.40.15: funil de vendas ----------

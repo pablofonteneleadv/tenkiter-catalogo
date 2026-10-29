@@ -3995,6 +3995,44 @@ async function saudeAvisos_(env) {
   try { const r = await env.DB.prepare('SELECT MAX(gravada_em) AS u FROM msg_mensagem').first(); const u = (r && r.u) || ''; return { alerta: a.em > u, desde: a.desde, em: a.em, canal: a.canal, cod: a.cod, ultimaOk: u }; }
   catch (e) { return { alerta: true, desde: a.desde, em: a.em, canal: a.canal, cod: a.cod, ultimaOk: '' }; }
 }
+/* Nomes de tecidos públicos; renomear exige Admin total e não regrava produtos. */
+const TECIDOS_CFG_='catalogo_tecidos_v1';
+const tecidoChave_=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').trim();
+export function renomearTecido_(config,d,autor){
+  if(!d||typeof d.nome!=='string'||(d.de!=null&&typeof d.de!=='string'))return ['Informe o nome do tecido.'];
+  const limpar=v=>String(v||'').replace(/[\u0000-\u001f\u007f-\u009f]/g,' ').replace(/\s+/g,' ').trim();
+  const nome=limpar(d.nome),de=limpar(d.de);
+  if(!nome||nome.length>80||de.length>100)return ['Use um nome de tecido com até 80 caracteres.'];
+  const c=config&&Array.isArray(config.itens)?config:{versao:0,itens:[],historico:[]};
+  const alvos=new Set([tecidoChave_(de),tecidoChave_(nome)].filter(Boolean)),aliases=new Set([de,nome].filter(Boolean));
+  const itens=[];
+  for(const it of c.itens){const nomes=[it.nome,...(it.apelidos||[])];if(nomes.some(v=>alvos.has(tecidoChave_(v))))nomes.forEach(v=>aliases.add(v));else itens.push(it);}
+  if(itens.length>=200||aliases.size>200)return ['Há muitos nomes associados. Revise os tecidos antes de continuar.'];
+  itens.push({nome,apelidos:[...aliases]});itens.sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+  const historico=(Array.isArray(c.historico)?c.historico:[]).slice(-99);historico.push({de,nome,por:String(autor||'').slice(0,30),em:agora()});
+  return [null,{versao:(Number(c.versao)||0)+1,itens,historico}];
+}
+async function rotaTecidos_(env,req,J){
+  if(!['GET','POST'].includes(req.method))return J({ok:false,erro:'Ação não disponível.'},405);
+  if(req.method==='POST'){
+    const perms=await permissoes(env,req);
+    if(perms==='sem_sessao')return J({ok:false,erro:'Entre na sua conta de administrador.'},401);
+    if(perms==='indisponivel')return J({ok:false,erro:'Não consegui confirmar seu acesso. Tente de novo.'},503);
+    if(!perms.includes('gerir_acessos'))return J({ok:false,erro:'Somente o administrador pode gerenciar nomes de tecidos.'},403);
+  }
+  await iniciar(env);
+  const raw=await cfgGet(env,TECIDOS_CFG_);let atual;try{atual=JSON.parse(raw||'null');}catch(_){return J({ok:false,erro:'Não foi possível ler os tecidos. Tente de novo.'},503);}
+  atual=atual||{versao:0,itens:[],historico:[]};
+  if(req.method==='GET')return J({ok:true,versao:atual.versao,itens:atual.itens});
+  const d=await req.json().catch(()=>null);
+  if(!d||d.versao!==atual.versao)return J({ok:false,erro:'Os tecidos foram atualizados por outra pessoa. Atualize a lista e tente de novo.'},409);
+  const [erro,novo]=renomearTecido_(atual,d,req.headers.get('X-TK-Whats'));if(erro)return J({ok:false,erro},400);
+  const valor=JSON.stringify(novo);
+  const r=raw===null?await env.DB.prepare('INSERT OR IGNORE INTO cfg (chave,valor) VALUES (?,?)').bind(TECIDOS_CFG_,valor).run():await env.DB.prepare('UPDATE cfg SET valor=? WHERE chave=? AND valor=?').bind(valor,TECIDOS_CFG_,raw).run();
+  if(!r.meta||r.meta.changes!==1)return J({ok:false,erro:'A lista mudou enquanto você editava. Atualize e tente novamente.'},409);
+  return J({ok:true,versao:novo.versao,itens:novo.itens});
+}
+
 export default {
   async scheduled(ev, env, ctx) {
     ctx.waitUntil(processarPushMobile_(env).catch(()=>{}));
@@ -4012,6 +4050,7 @@ export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url), h = cors(env, req); let direitos = null; const J = (c, s) => resp(direitos ? msgFiltrarDados_(c,direitos) : c, s, h);
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
+    if(url.pathname==='/catalogo/tecidos'){try{return await rotaTecidos_(env,req,J);}catch(_){return J({ok:false,erro:'Não foi possível atualizar os tecidos. Tente de novo.'},503);}}
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
     if (url.pathname.indexOf('/wh/zernio/') === 0 && req.method === 'POST') { try { const rz = await rotaZernio_(env, req, url, ctx); if (rz.status >= 500) await anotarFalha_(env, url.pathname, rz.status); return rz; } catch (e) { await anotarFalha_(env, url.pathname, 500); return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
     if (url.pathname.indexOf('/wh/') === 0) { try {

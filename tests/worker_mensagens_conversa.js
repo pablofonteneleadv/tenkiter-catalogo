@@ -80,6 +80,18 @@ function d1() {
   const O = 'https://tenkitermodas.com.br';
   const ped = (m, p, sess, corpo) => new Request('https://ig.test' + p, { method: m, headers: Object.assign({ Origin: O, 'X-TK-Whats': '88999990000', 'X-TK-Sessao': sess || '', 'Content-Type': 'application/json' }), body: corpo ? JSON.stringify(corpo) : undefined });
   const A = async (m, p, corpo) => { const r = await w.fetch(ped(m, p, 'tk2.admin', corpo), env, {}); return { r, j: await r.json() }; };
+  const publico=await w.fetch(ped('GET','/catalogo/tecidos',''),env,{});const vazioTec=await publico.json();
+  chk('tecidos: consulta pública permite filtrar sem sessão e não expõe histórico',publico.status===200&&vazioTec.ok&&vazioTec.itens.length===0&&!('historico' in vazioTec));
+  chk('tecidos: POST anônimo recusado',(await w.fetch(ped('POST','/catalogo/tecidos','',{nome:'Malha',versao:0}),env,{})).status===401);
+  chk('tecidos: cadastrar produtos não permite renomear tecidos',(await w.fetch(ped('POST','/catalogo/tecidos','tk2.gerente',{nome:'Malha',versao:0}),env,{})).status===403);
+  const tecidoCriado=await A('POST','/catalogo/tecidos',{nome:'Crepe Dior',versao:0});
+  chk('tecidos: administrador cadastra nome persistente',tecidoCriado.j.ok&&tecidoCriado.j.itens[0].nome==='Crepe Dior',tecidoCriado.j);
+  const tecidoNome=await A('POST','/catalogo/tecidos',{de:'Crepe Dior',nome:'Crepe Duna',versao:1});
+  chk('tecidos: renomear mantém alias para os produtos antigos',tecidoNome.j.ok&&tecidoNome.j.itens[0].apelidos.includes('Crepe Dior')&&!('historico' in tecidoNome.j),tecidoNome.j);
+  chk('tecidos: revisão antiga não sobrescreve outra alteração',(await A('POST','/catalogo/tecidos',{de:'Crepe Dior',nome:'Errado',versao:1})).r.status===409);
+  chk('tecidos: nome vazio é recusado',(await A('POST','/catalogo/tecidos',{nome:' ',versao:2})).r.status===400);
+  const tecidoLido=await A('GET','/catalogo/tecidos');
+  chk('tecidos: nova consulta conserva nome e não divulga autor',tecidoLido.j.itens[0].nome==='Crepe Duna'&&!JSON.stringify(tecidoLido.j).includes('88999990000'));
   const agoraIso = () => new Date().toISOString();
   const ts = (min) => new Date(Date.now() + min * 60000).toISOString();     // minutos a partir de agora (positivo = depois de conectar)
 

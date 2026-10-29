@@ -13,6 +13,7 @@ try { tkSelExpirar_(); } catch (e) {}
   let categoriasDisponiveis = new Set();
   let generosDisponiveis = new Set();
   let coresDisponiveis = new Set();
+  let tecidosDisponiveis = new Set(), filtroTecidos = new Set();
   let filtroCores = new Set();
   let filtroTamanhos = new Set(), tamanhosDisponiveis = new Set();   // v6.5
   let filtroCategorias = new Set();
@@ -66,7 +67,7 @@ try { tkSelExpirar_(); } catch (e) {}
   let modoLink_ = false;   // a pessoa entrou por um link de seleção (filtros/peças vindos do endereço)
   function lerFiltrosURL() {
     const params = new URLSearchParams(window.location.search);
-    modoLink_ = ['q', 'min', 'max', 'novidade', 'cat', 'gen', 'sel'].some((k) => params.has(k));
+    modoLink_ = ['q', 'min', 'max', 'novidade', 'cat', 'gen', 'sel', 'tec'].some((k) => params.has(k));
     if (params.has('q')) document.getElementById('busca').value = params.get('q');
     if (params.has('min')) document.getElementById('preco-min').value = params.get('min');
     if (params.has('max')) document.getElementById('preco-max').value = params.get('max');
@@ -76,6 +77,7 @@ try { tkSelExpirar_(); } catch (e) {}
     if (params.has('gen')) params.get('gen').split(',').forEach(g => filtroGeneros.add(g.trim()));
     if (params.has('cor')) params.get('cor').split(',').forEach(g => filtroCores.add(g.trim()));
     if (params.has('tam')) params.get('tam').split(',').forEach(g => filtroTamanhos.add(g.trim()));
+    if (params.has('tec')) params.get('tec').split(',').forEach(t => filtroTecidos.add(t.trim()));
     if (params.has('sel')) {
       const itens = Array.from(new Set(params.get('sel').split(',').map(s => s.trim().slice(0, 60)).filter(Boolean))).slice(0, 60);
       selecaoFixa = itens.length ? itens : null;
@@ -106,6 +108,7 @@ try { tkSelExpirar_(); } catch (e) {}
     if (filtroGeneros.size) url.searchParams.set('gen', Array.from(filtroGeneros).join(',')); else url.searchParams.delete('gen');
     if (filtroCores.size) url.searchParams.set('cor', Array.from(filtroCores).join(',')); else url.searchParams.delete('cor');
     if (filtroTamanhos.size) url.searchParams.set('tam', Array.from(filtroTamanhos).join(',')); else url.searchParams.delete('tam');
+    if (filtroTecidos.size) url.searchParams.set('tec', Array.from(filtroTecidos).join(',')); else url.searchParams.delete('tec');
     if (selecaoFixa) url.searchParams.set('sel', selecaoFixa.join(',')); else url.searchParams.delete('sel');
 
     window.history.replaceState((window.history.state && window.history.state.overlay) ? window.history.state : {}, '', url);   // não apaga a entrada de uma janela aberta (placa, foto…)
@@ -122,16 +125,18 @@ try { tkSelExpirar_(); } catch (e) {}
   }
 
   function aplicarProdutosRecebidos(lista) {
+    if(window.TKTecido)filtroTecidos=new Set([...filtroTecidos].map(t=>TKTecido.resolver(t)));
     produtos = lista;
     categoriasDisponiveis = new Set();
     generosDisponiveis = new Set();
-    coresDisponiveis = new Set(); tamanhosDisponiveis = new Set();
+    coresDisponiveis = new Set(); tamanhosDisponiveis = new Set(); tecidosDisponiveis = new Set();
     produtos.forEach(p => {
       if (estaEsgotado(p)) return;   // v6.6: o menu só oferece o que tem peça ativa
       tagsTamanhoCliente_(p).forEach(t => { if (!/consult/i.test(t)) tamanhosDisponiveis.add(t); });
       listaDeTags(textoPlano(p.Cores)).forEach(c => coresDisponiveis.add(c));
       listaDeTags(p.Categoria).forEach(c => categoriasDisponiveis.add(c));
       listaDeTags(p.Genero).forEach(g => generosDisponiveis.add(g));
+      const tecido = window.TKTecido && TKTecido.ler(p); if (tecido) tecidosDisponiveis.add(tecido);
     });
     renderizarChipExtra();
     renderizarPillsCategoria();
@@ -139,6 +144,7 @@ try { tkSelExpirar_(); } catch (e) {}
     renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
     renderizarChipsFiltro('chips-cor', coresDisponiveis, filtroCores, 'resumo-cor');
     renderizarChipsFiltro('chips-tamanho', tamanhosDisponiveis, filtroTamanhos, 'resumo-tamanho');
+    renderizarChipsFiltro('chips-tecido', tecidosDisponiveis, filtroTecidos, 'resumo-tecido');
     atualizarBadges();
     aplicarFiltros();
     if (typeof aoAtualizarProdutos === 'function') aoAtualizarProdutos();
@@ -336,13 +342,14 @@ try { tkSelExpirar_(); } catch (e) {}
     document.getElementById('busca').value = '';
     document.getElementById('preco-min').value = '';
     document.getElementById('preco-max').value = '';
-    filtroCategorias.clear(); filtroGeneros.clear(); filtroCores.clear(); filtroTamanhos.clear(); apenasNovidades = false; apenasFavoritos = false; selecaoFixa = null; soSelecao_ = false;
+    filtroCategorias.clear(); filtroGeneros.clear(); filtroCores.clear(); filtroTamanhos.clear(); filtroTecidos.clear(); apenasNovidades = false; apenasFavoritos = false; selecaoFixa = null; soSelecao_ = false;
     renderizarChipExtra();
     renderizarPillsCategoria();
     renderizarChipsFiltro('chips-categoria', categoriasDisponiveis, filtroCategorias, 'resumo-categoria');
     renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
     renderizarChipsFiltro('chips-cor', coresDisponiveis, filtroCores, 'resumo-cor');
     renderizarChipsFiltro('chips-tamanho', tamanhosDisponiveis, filtroTamanhos, 'resumo-tamanho');
+    renderizarChipsFiltro('chips-tecido', tecidosDisponiveis, filtroTecidos, 'resumo-tecido');
     aplicarFiltros();
   });
 
@@ -352,7 +359,7 @@ try { tkSelExpirar_(); } catch (e) {}
     const termos = termosDaBusca(busca);
     const min = parseFloat(document.getElementById('preco-min').value);
     const max = parseFloat(document.getElementById('preco-max').value);
-    const filtrosAtivos = !isNaN(min) || !isNaN(max) || apenasNovidades || apenasFavoritos || filtroCategorias.size > 0 || filtroGeneros.size > 0 || filtroCores.size > 0 || filtroTamanhos.size > 0 || !!selecaoFixa || soSelecao_;
+    const filtrosAtivos = !isNaN(min) || !isNaN(max) || apenasNovidades || apenasFavoritos || filtroCategorias.size > 0 || filtroGeneros.size > 0 || filtroCores.size > 0 || filtroTamanhos.size > 0 || filtroTecidos.size > 0 || !!selecaoFixa || soSelecao_;
 
     const passaFiltros = (p, sem) => {
       if (selecaoFixa && !naSelecaoFixa_(p)) return false;
@@ -365,6 +372,7 @@ try { tkSelExpirar_(); } catch (e) {}
       if (sem !== 'tam') if (filtroTamanhos.size) { const tt = tagsTamanhoCliente_(p); if (!tt.some(t => filtroTamanhos.has(t))) return false; }
       if (sem !== 'cor') if (filtroCores.size) { const tc = listaDeTags(textoPlano(p.Cores)); if (!tc.some(t => filtroCores.has(t))) return false; }
       if (sem !== 'gen') if (filtroGeneros.size) { const tags = listaDeTags(p.Genero); if (!tags.some(t => filtroGeneros.has(t))) return false; }
+      if (sem !== 'tec') if (filtroTecidos.size) { const tecido = window.TKTecido && TKTecido.ler(p); if (!tecido || !filtroTecidos.has(tecido)) return false; }
       return true;
     };
     let porBusca = termos.length ? produtos.filter(p => casaBusca(p, termos)) : produtos;
@@ -380,16 +388,17 @@ try { tkSelExpirar_(); } catch (e) {}
     listaFiltradaAtual = ordenarLista_(porBusca.filter(p => passaFiltros(p)));
     // v6.7: opções AO VIVO — cada menu só oferece o que existe (peça ativa) combinado com os OUTROS filtros marcados.
     try {
-      const F = { cat: ['chips-categoria', filtroCategorias, p => listaDeTags(p.Categoria), 'details-categoria'], gen: ['chips-genero', filtroGeneros, p => listaDeTags(p.Genero), 'details-genero'], cor: ['chips-cor', filtroCores, p => listaDeTags(textoPlano(p.Cores)), 'details-cor'], tam: ['chips-tamanho', filtroTamanhos, p => tagsTamanhoCliente_(p), 'details-tamanho'] };
+      const F = { cat: ['chips-categoria', filtroCategorias, p => listaDeTags(p.Categoria), 'details-categoria'], gen: ['chips-genero', filtroGeneros, p => listaDeTags(p.Genero), 'details-genero'], cor: ['chips-cor', filtroCores, p => listaDeTags(textoPlano(p.Cores)), 'details-cor'], tam: ['chips-tamanho', filtroTamanhos, p => tagsTamanhoCliente_(p), 'details-tamanho'], tec: ['chips-tecido', filtroTecidos, p => { const t=window.TKTecido&&TKTecido.ler(p);return t?[t]:[]; }, 'details-tecido'] };
       Object.keys(F).forEach(k => {
-        const [idc, conj, tagsDe, idd] = F[k], disp = new Set();
-        porBusca.forEach(p => { if (!estaEsgotado(p) && passaFiltros(p, k)) tagsDe(p).forEach(t => disp.add(t)); });
+        const [idc, conj, tagsDe, idd] = F[k], disp = new Set(), contagens = new Map();
+        porBusca.forEach(p => { if (!estaEsgotado(p) && passaFiltros(p, k)) tagsDe(p).forEach(t => { disp.add(t); contagens.set(t,(contagens.get(t)||0)+1); }); });
         const cont = document.getElementById(idc); if (!cont) return;
         let vis = 0;
         Array.from(cont.children).forEach(ch => {
           const valor = ch.dataset.filterValue || ch.textContent.trim();
           const ok = conj.has(valor) || disp.has(valor);
           ch.hidden = !ok;
+          if (k === 'tec') ch.textContent = valor + ' · ' + (contagens.get(valor) || 0);
           if (ok) vis++;
         });
         // Nunca ocultar o menu inteiro: a cliente precisa conseguir rever ou remover escolhas.
@@ -418,6 +427,7 @@ try { tkSelExpirar_(); } catch (e) {}
     filtroGeneros.forEach(g => itens.push([g, () => { filtroGeneros.delete(g); }]));
     filtroCores.forEach(g => itens.push([g, () => { filtroCores.delete(g); }]));
     filtroTamanhos.forEach(g => itens.push(['Tam. ' + g, () => { filtroTamanhos.delete(g); }]));
+    filtroTecidos.forEach(t => itens.push(['Tecido: ' + t, () => { filtroTecidos.delete(t); }]));
     if (min !== '' || max !== '') {
       const rot = min !== '' && max !== '' ? 'R$ ' + min + ' a ' + max : (min !== '' ? 'a partir de R$ ' + min : 'até R$ ' + max);
       itens.push(['Preço: ' + rot, () => { document.getElementById('preco-min').value = ''; document.getElementById('preco-max').value = ''; }]);
@@ -439,6 +449,7 @@ try { tkSelExpirar_(); } catch (e) {}
         renderizarChipsFiltro('chips-genero', generosDisponiveis, filtroGeneros, 'resumo-genero');
     renderizarChipsFiltro('chips-cor', coresDisponiveis, filtroCores, 'resumo-cor');
     renderizarChipsFiltro('chips-tamanho', tamanhosDisponiveis, filtroTamanhos, 'resumo-tamanho');
+    renderizarChipsFiltro('chips-tecido', tecidosDisponiveis, filtroTecidos, 'resumo-tecido');
         aplicarFiltros();
       });
       box.appendChild(b);
@@ -448,6 +459,13 @@ try { tkSelExpirar_(); } catch (e) {}
     l.addEventListener('click', () => document.getElementById('btn-limpar').click());
     box.appendChild(l);
   }
+
+  window.addEventListener('tk:tecidos-atualizados', () => {
+    const resolvidos = new Set();
+    filtroTecidos.forEach(t => resolvidos.add(window.TKTecido && typeof TKTecido.resolver === 'function' ? TKTecido.resolver(t) : t));
+    filtroTecidos = resolvidos;
+    aplicarProdutosRecebidos(produtos);
+  });
 
   /* ---- busca tolerante: sem acento, vários termos, nome + categoria + gênero + cor + descrição, e 1 letra errada ---- */
   let buscaIgnorouFiltros = false;
@@ -534,7 +552,7 @@ try { tkSelExpirar_(); } catch (e) {}
     {
       const jaTem = new Set(getSacola().map(String)), lf = listaFiltradaAtual || [];
       const faltam = lf.filter(p => !estaEsgotado(p) && !jaTem.has(String(p.ID))).length;
-      const nReal = filtroCategorias.size + filtroGeneros.size + filtroCores.size + filtroTamanhos.size + (document.getElementById('preco-min').value ? 1 : 0) + (document.getElementById('preco-max').value ? 1 : 0);
+      const nReal = filtroCategorias.size + filtroGeneros.size + filtroCores.size + filtroTamanhos.size + filtroTecidos.size + (document.getElementById('preco-min').value ? 1 : 0) + (document.getElementById('preco-max').value ? 1 : 0);
       const mostrar = (nReal > 0 || nFiltros > 0 || !!q || apenasNovidades) && lf.length > 0 && !selecaoFixa;
       document.querySelectorAll('.btn-add-resultados').forEach(bt => {
         bt.hidden = !mostrar; bt.disabled = faltam === 0;
@@ -1739,7 +1757,8 @@ try { tkSelExpirar_(); } catch (e) {}
     { id: 'cat', rot: 'Categoria', conj: () => filtroCategorias, tags: (p) => listaDeTags(p.Categoria), box: 'chips-categoria', disp: () => categoriasDisponiveis, res: 'resumo-categoria' },
     { id: 'gen', rot: 'Para quem', conj: () => filtroGeneros, tags: (p) => listaDeTags(p.Genero), box: 'chips-genero', disp: () => generosDisponiveis, res: 'resumo-genero' },
     { id: 'tam', rot: 'Tamanho', conj: () => filtroTamanhos, tags: (p) => tagsTamanhoCliente_(p).filter((t) => !/consult/i.test(t)), box: 'chips-tamanho', disp: () => tamanhosDisponiveis, res: 'resumo-tamanho' },
-    { id: 'cor', rot: 'Cor', conj: () => filtroCores, tags: (p) => listaDeTags(textoPlano(p.Cores)), box: 'chips-cor', disp: () => coresDisponiveis, res: 'resumo-cor' }
+    { id: 'cor', rot: 'Cor', conj: () => filtroCores, tags: (p) => listaDeTags(textoPlano(p.Cores)), box: 'chips-cor', disp: () => coresDisponiveis, res: 'resumo-cor' },
+    { id: 'tec', rot: 'Tecido', conj: () => filtroTecidos, tags: (p) => { const t=window.TKTecido&&TKTecido.ler(p);return t?[t]:[]; }, box: 'chips-tecido', disp: () => tecidosDisponiveis, res: 'resumo-tecido' }
   ];
   const novoEl_ = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   function pecasDaBusca_(txt) {

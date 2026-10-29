@@ -12,10 +12,10 @@ with sync_playwright() as p:
  pg.fill('#tecido','Crepe Dior');pg.fill('#descricao','Descrição nova.')
  pg.evaluate('document.getElementById("form-produto").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}))')
  pg.wait_for_function('envios.length>0');payload=pg.evaluate('envios[envios.length-1].dados');assert payload['descricao']=='Descrição nova.\nTecido: Crepe Dior',payload
- pg.evaluate('cancelarDuplicacao();abrirCadastro_()');assert pg.input_value('#tecido')==''
- pg.fill('#tecido','Linho');pg.evaluate('(id)=>usarPeca_(id)',prod['ID']);assert pg.input_value('#tecido')=='Alfaiataria'
+ pg.wait_for_function('(id)=>tkProdutosLista().find(p=>p.ID===id).Descricao.includes("Tecido: Crepe Dior")',arg=prod['ID']);pg.evaluate('cancelarDuplicacao();abrirCadastro_()');assert pg.input_value('#tecido')==''
+ pg.fill('#tecido','Linho');pg.evaluate('(id)=>usarPeca_(id)',prod['ID']);assert pg.input_value('#tecido')=='Crepe Dior'
  pg.evaluate('desfazerCopia()');assert pg.input_value('#tecido')=='Linho'
- pg.goto(BASE+'index.html');pg.wait_for_selector('#grid .tecido-card');row=pg.locator('#grid .codigo-tecido').filter(has_text='TK-0778');assert 'Alfaiataria' in row.inner_text() and 'TK-0778' in row.inner_text()
+ pg.goto(BASE+'index.html');pg.wait_for_selector('#grid .tecido-card');row=pg.locator('#grid .codigo-tecido').filter(has_text='TK-0778');assert 'Crepe Dior' in row.inner_text() and 'TK-0778' in row.inner_text()
  assert not err,err
  ctx.close();b.close()
 print('Tecido: edição/cópia/desfazer/reset, payload persistível e card aprovados.')

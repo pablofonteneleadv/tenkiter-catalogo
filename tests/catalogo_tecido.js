@@ -10,7 +10,7 @@ const context = { window: {} };
 vm.runInNewContext(source, context, { filename: 'catalogo-tecido.js' });
 const TKTecido = context.window.TKTecido;
 
-assert.deepEqual(Object.keys(TKTecido).sort(), ['ler', 'semDescricao', 'serializar']);
+assert.deepEqual(Object.keys(TKTecido).sort(), ['aplicar','carregar','ler','opcoes','resolver','salvar','semDescricao','serializar'].sort());
 
 // Ida e volta pelo campo Descricao que o backend atual já persiste.
 const descricao = 'Conjunto leve.\n\nCaimento reto.';
@@ -49,3 +49,8 @@ assert.equal(TKTecido.ler({ Tecido: 'a'.repeat(110) }).length, 100);
 assert.equal(TKTecido.serializar('X', 'a'.repeat(110)).split('\n')[1].length, 108);
 
 console.log('catalogo_tecido: verificações aprovadas');
+
+TKTecido.aplicar({versao:1,itens:[{nome:'Crepe Dior',apelidos:['Dior','Crepe Diór']}]});
+assert.equal(TKTecido.ler({Descricao:'Tecido: Dior'}),'Crepe Dior');
+assert.equal(TKTecido.serializar('Peça','Dior'),'Peça\nTecido: Crepe Dior');
+assert.deepEqual(Array.from(TKTecido.opcoes([{Descricao:'Tecido: Dior'}])),['Crepe Dior']);
