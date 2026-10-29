@@ -10,7 +10,7 @@ sys.path.insert(0, str(ROOT / 'tests'))
 from mock import install, SESSION, PERMS_ALL
 import mock_msg
 
-BASE = os.getenv('TK_BASE', 'http://127.0.0.1:8765/')
+BASE = os.getenv('TK_BASE', 'http://localhost:8765/')
 EVID = ROOT / 'tests' / 'evidencias_edicao'
 EVID.mkdir(exist_ok=True)
 server = None
