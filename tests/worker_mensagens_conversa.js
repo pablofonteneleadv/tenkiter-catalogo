@@ -169,7 +169,7 @@ function d1() {
   // v2.13: prévia do link escolhida na mensagem
   const pv1 = await A('POST', '/msg/enviar', { conversa: c.id, texto: '*Ana:*\nBlusa\nhttps://tenkitermodas.com.br/p/TK-0754.', idLocal: 'idlocal-pv01', previa: true, previaTitulo: 'Térmica UV\ninfantil P', previaDescricao: 'R$ 24,99 à vista' });
   const ePv = envios[envios.length - 1];
-  chk('com prévia: vai pelo /send-link com o primeiro link (sem o ponto final), título e descrição', pv1.j.ok && ePv.u.endsWith('/send-link') && ePv.b.linkUrl === 'https://tenkitermodas.com.br/p/TK-0754' && ePv.b.message.startsWith('*Ana:*') && ePv.b.title === 'Térmica UV infantil P' && ePv.b.linkDescription === 'R$ 24,99 à vista' && ePv.b.phone === '5588999990000', ePv);
+  chk('prévia da loja: /send-link lê o cartão completo da página, sem metadados parciais', pv1.j.ok && ePv.u.endsWith('/send-link') && ePv.b.linkUrl === 'https://tenkitermodas.com.br/p/TK-0754' && ePv.b.message.startsWith('*Ana:*') && !('title' in ePv.b) && !('linkDescription' in ePv.b) && ePv.b.phone === '5588999990000', ePv);
   const pv2 = await A('POST', '/msg/enviar', { conversa: c.id, texto: 'sem link aqui', idLocal: 'idlocal-pv02', previa: true });
   chk('com prévia mas sem link: vai como texto simples', pv2.j.ok && envios[envios.length - 1].u.endsWith('/send-text'));
   const pv3 = await A('POST', '/msg/enviar', { conversa: c.id, texto: 'veja https://tenkitermodas.com.br/?sel=TK-0001,TK-0002', idLocal: 'idlocal-pv03' });
@@ -177,6 +177,16 @@ function d1() {
   const pv4 = await A('POST', '/msg/enviar', { conversa: c.id, texto: 'https://x.com/a', idLocal: 'idlocal-pv04', previa: true, previaTitulo: 'x'.repeat(300) });
   chk('cartão: título cortado em 100 letras e sem descrição vazia', pv4.j.ok && envios[envios.length - 1].b.title.length === 100 && !('linkDescription' in envios[envios.length - 1].b));
 
+  const imagemPv='https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202610/12345678901234567890.jpg';
+  const snap=await A('POST','/msg/enviar',{conversa:c.id,texto:'Foto https://tenkitermodas.com.br/p/TK-0754',idLocal:'previa-snapshot01',previa:true,previaTitulo:'Produto com foto',previaDescricao:'Descrição',previaImagem:imagemPv});
+  let sp;try{sp=JSON.parse(snap.j.mensagem.link_previa)}catch(_){}
+  chk('prévia tem snapshot persistente da imagem para a bolha do app',snap.j.ok&&sp&&sp.imagem===imagemPv&&sp.titulo==='Produto com foto',snap.j);
+  const lPv=(await A('GET','/msg/mensagens?conversa='+c.id)).j.mensagens.find(m=>m.id===snap.j.mensagem.id);
+  chk('reabrir conversa conserva a miniatura (sem novo envio)',lPv&&typeof lPv.link_previa==='string'&&lPv.link_previa.length>0&&lPv.link_previa===snap.j.mensagem.link_previa);
+  const badPv=await A('POST','/msg/enviar',{conversa:c.id,texto:'https://tenkitermodas.com.br/p/TK-0754',idLocal:'previa-unsafe001',previa:true,previaImagem:'https://127.0.0.1/admin'});
+  chk('imagem não autorizada é descartada e nunca buscada pelo servidor',badPv.j.ok&&!badPv.j.mensagem.link_previa);
+  const offPv=await A('POST','/msg/enviar',{conversa:c.id,texto:'https://tenkitermodas.com.br/p/TK-0754',idLocal:'previa-off001',previaImagem:imagemPv});
+  chk('prévia desmarcada não guarda nem renderiza miniatura',offPv.j.ok&&!offPv.j.mensagem.link_previa);
   // ---- responder pelo Instagram ----
   await cfg('ig_token', TOKEN);
   const corpoIg = JSON.stringify({ object: 'instagram', entry: [{ id: 'DONO', messaging: [{ sender: { id: 'CLI9' }, recipient: { id: 'DONO' }, timestamp: Date.now(), message: { mid: 'IGM9', text: 'Tem P?' } }] }] });

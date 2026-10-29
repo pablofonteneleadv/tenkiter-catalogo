@@ -3134,7 +3134,7 @@ const MSG_NOTAS_ALVO_SQL_ = "(CASE WHEN "+MSG_IDENTIDADE_SQL_+"<>'' THEN "+MSG_I
 const MSG_NOTAS_COUNT_SQL_ = "(SELECT COUNT(*) FROM msg_nota nn WHERE nn.alvo="+MSG_NOTAS_ALVO_SQL_+" AND nn.excluida_em='')";
 const MSG_COLS_CONVERSA_ = "id, canal, contato, dono, "+MSG_NOTAS_COUNT_SQL_+" AS notas, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
 const MSG_Q_ = (c) => "(SELECT q." + c + " FROM msg_mensagem q WHERE q.canal=msg_mensagem.canal AND q.ext_id=msg_mensagem.ctx_ref AND msg_mensagem.ctx_ref<>'' LIMIT 1)";
-const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, CASE WHEN ctx_chave LIKE '%.mp4' OR ctx_chave LIKE '%.mov' OR ctx_chave LIKE '%.webm' THEN 'video' ELSE (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) END AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + MSG_Q_('texto') + " AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir";
+const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, CASE WHEN ctx_tipo='link' THEN ctx_ref ELSE '' END AS link_previa, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, CASE WHEN ctx_chave LIKE '%.mp4' OR ctx_chave LIKE '%.mov' OR ctx_chave LIKE '%.webm' THEN 'video' ELSE (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) END AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + MSG_Q_('texto') + " AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir";
 async function msgContagens_(env, canal, tipo) {
   const fields={conversas:"encerrada_em=''",nao_lidas:"encerrada_em='' AND nao_lidas>0",sem_resposta:"encerrada_em='' AND (nao_lidas>0 OR ult_dir='entrada')",grupos:"encerrada_em='' AND grupo=1",individuais:"encerrada_em='' AND grupo=0",encerradas:"encerrada_em<>''",ambos:"encerrada_em='' AND pessoa<>'' AND "+MSG_OUTRO_SQL_+" IS NOT NULL"};
   const key="CASE WHEN grupo=1 THEN 'grupo:'||id ELSE COALESCE(NULLIF("+MSG_IDENTIDADE_SQL_+",''),'conversa:'||id) END";
@@ -3223,12 +3223,28 @@ async function enviarTextoWhats_(env, conv, texto) { return enviarWaflyGenerico_
 /* v2.13: "Prévia do link" marcada na mensagem: sai pelo /send-link da Wafly (cartão com título e descrição) usando o primeiro link do texto. Sem link, vai como texto simples. */
 const MSG_LINK_RE_ = /https?:\/\/[^\s<>"']+/i;
 const textoCartao_ = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
+function linkLoja_(link) {
+  try {const u=new URL(link);return u.protocol==='https:'&&!u.username&&!u.password&&u.origin==='https://tenkitermodas.com.br' ? u : null;}catch(_){return null;}
+}
+function imagemCartao_(valor){
+  try{const u=new URL(String(valor||''));return u.protocol==='https:'&&!u.username&&!u.password&&!u.port&&u.href.length<=2048&&['tenkiter-midia.distkrpconfeccoes.workers.dev','midia.tenkitermodas.com.br','res.cloudinary.com','lh3.googleusercontent.com'].includes(u.hostname)?u.href:'';}catch(_){return '';}
+}
+function snapshotPrevia_(texto,d){
+  const m=texto.match(MSG_LINK_RE_),url=m?m[0].replace(/[).,;:!?*_~]+$/,''):'';
+  if(!linkLoja_(url))return '';
+  const imagem=imagemCartao_(d.previaImagem);if(!imagem)return '';
+  return JSON.stringify({url,imagem,titulo:textoCartao_(d.previaTitulo,100),descricao:textoCartao_(d.previaDescricao,200)});
+}
 async function enviarTextoComPrevia_(env, conv, texto, d) {
   const m = texto.match(MSG_LINK_RE_), link = m ? m[0].replace(/[).,;:!?*_~]+$/, '') : '';
   if (!link) return enviarTextoWhats_(env, conv, texto);
-  const corpo = { message: texto, linkUrl: link }, titulo = textoCartao_(d.previaTitulo, 100), desc = textoCartao_(d.previaDescricao, 200);
-  if (titulo) corpo.title = titulo;
-  if (desc) corpo.linkDescription = desc;
+  const corpo = { message: texto, linkUrl: link };
+  // Links da loja têm OG próprio com foto. Não substituir seus metadados por
+  // um cartão parcial só de texto. A imagem não é um parâmetro do /send-link.
+  if(!linkLoja_(link)){
+    const titulo=textoCartao_(d.previaTitulo,100),desc=textoCartao_(d.previaDescricao,200);
+    if(titulo)corpo.title=titulo;if(desc)corpo.linkDescription=desc;
+  }
   return enviarWaflyGenerico_(env, conv, '/send-link', corpo);
 }
 const WHATS_ROTAS_MIDIA_ = { 'imagem': ['/send-image', 'image'], 'vídeo': ['/send-video', 'video'], 'áudio': ['/send-audio', 'audio'] };
@@ -3501,6 +3517,8 @@ async function responderMensagem_(env, whats, d) {
   const extId = res.ok ? res.extId : 'inc:' + idLocal, em = agora();
   await gravarMensagem_(env, conv.canal, { extId: extId, contato: conv.contato, nome: '', grupo: conv.grupo, direcao: 'saida', tipo: anexo ? anexo.tipo : 'texto', texto: texto, em: em, midiaChave: anexo ? anexo.chave : '', midiaMime: anexo ? anexo.mime : '', midiaSeg: Math.max(0, Math.min(86400, Number(d.seg) || 0)) });
   await env.DB.prepare('UPDATE msg_mensagem SET por=?, status=CASE WHEN ? THEN status ELSE ? END WHERE canal=? AND ext_id=?').bind(String(whats || '').slice(-4), res.ok ? 1 : 0, 'incerta', conv.canal, extId).run();
+  // Contexto próprio do link: snapshot acompanha a mensagem e sua retenção, sem tabela nova. Não substitui story/citação.
+  if(!anexo&&conv.canal!=='instagram'&&d.previa===true){const snapshot=snapshotPrevia_(texto,d);if(snapshot)await env.DB.prepare("UPDATE msg_mensagem SET ctx_tipo='link',ctx_ref=? WHERE canal=? AND ext_id=? AND ctx_tipo IN ('','link')").bind(snapshot,conv.canal,extId).run();}
   const linha = await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(conv.canal, extId).first();
   const corpo = res.ok ? { ok: true, mensagem: linha } : { ok: false, incerto: true, erro: res.erro, mensagem: linha };
   await env.DB.prepare('UPDATE cfg SET valor=? WHERE chave=?').bind(t0 + '|' + JSON.stringify(corpo), chave).run();

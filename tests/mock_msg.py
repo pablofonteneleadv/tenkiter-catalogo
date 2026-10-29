@@ -347,6 +347,10 @@ def tratar(route, path, method, body, s):
         s["seq"] += 1; c = next(x for x in s["convs"] if x["id"] == body["conversa"])
         anexo = body.get("anexo"); tipo_a = {"imagem": "imagem"}.get("imagem") if anexo else "texto"
         msg = {"id": s["seq"], "conversa_id": c["id"], "direcao": "saida", "tipo": tipo_a, "midia": 1 if anexo else 0, "texto": body.get("texto", ""), "enviada_em": agora(), "status": "incerta" if s["envio"] == "incerto" else "enviada", "por": "9999", "status_em": agora()}
+        if body.get("previa") and body.get("previaImagem"):
+            import re
+            link = re.search(r"https?://[^\s<>]+", body.get("texto", ""))
+            msg["link_previa"] = json.dumps({"imagem":body["previaImagem"],"titulo":body.get("previaTitulo", ""),"descricao":body.get("previaDescricao", ""),"url":link.group(0) if link else ""})
         s["msgs"].append(msg); c.update({"ult_dir": "saida", "nao_lidas": 0, "previa": body.get("texto", "") or "[imagem]", "ultima_em": msg["enviada_em"], "atualizada_em": msg["enviada_em"], "ult_status": msg["status"], "total": c["total"] + 1})
         r = {"ok": s["envio"] != "incerto", "mensagem": msg}
         if s["envio"] == "incerto": r["incerto"] = True; r["erro"] = "Sem confirmação da Wafly. Confira no WhatsApp antes de tentar de novo."

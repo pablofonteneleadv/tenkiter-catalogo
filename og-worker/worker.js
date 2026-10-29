@@ -120,7 +120,7 @@ function pagina(p, cod, f, semPoster) {
     '<link rel="canonical" href="' + esc(canonico) + '">' +
     '<meta property="og:type" content="product"><meta property="og:site_name" content="TENKiTER Modas"><meta property="og:locale" content="pt_BR">' +
     '<meta property="og:title" content="' + esc(titulo) + '"><meta property="og:description" content="' + esc(desc) + '">' +
-    '<meta property="og:image" content="' + esc(img) + '"><meta property="og:url" content="' + esc(urlCompartilhada) + '">' +
+    '<meta property="og:image" content="' + esc(img) + '"><meta property="og:image:secure_url" content="' + esc(img) + '"><meta property="og:image:alt" content="' + esc(p.Nome || 'Produto TENKiTER') + '"><meta property="og:url" content="' + esc(urlCompartilhada) + '">' +
     (semPreco ? '' : '<meta property="product:price:amount" content="' + esc(cheio.toFixed(2)) + '"><meta property="product:price:currency" content="BRL">') +
     '<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="' + esc(titulo) + '">' +
     '<meta name="twitter:description" content="' + esc(desc) + '"><meta name="twitter:image" content="' + esc(img) + '">' +
