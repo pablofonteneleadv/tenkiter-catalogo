@@ -127,4 +127,3 @@ Após concluir o lote de eventos já em andamento, executar **antes de retomar a
 5. Menu do gestor: presença com prazo de validade (aplicativo aberto/ativo, sem confundir conexão com produtividade), atividade auditada e análises por atendente, em tempo real e histórico. Permissões no servidor, sem registrar rascunhos ou conteúdo digitado.
 
 Só então retomar busca por imagem e demais itens originais. A autorização de implementação, testes, merge e deploy permanece vigente. Não executar envios reais ou alterações de clientes como teste.
-
