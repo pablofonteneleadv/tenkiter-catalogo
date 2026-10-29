@@ -941,7 +941,16 @@ body.edicao-rapida-atendimento #card-form .cad-corpo { padding: 16px; }
 body.edicao-rapida-atendimento #titulo-form { font-size: clamp(1rem, 4vw, 1.3rem); margin: 8px 0; }
 body.edicao-rapida-atendimento #form-produto .passo[data-passo='tamanhos'] { margin-top: 12px; }
 body.edicao-rapida-atendimento #form-produto .passo[data-passo='tamanhos'] .num { display:none; }
-body.edicao-rapida-atendimento #btn-salvar { width:100%; min-height:52px; }
+body.edicao-rapida-atendimento #btn-salvar {
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:calc(70px + env(safe-area-inset-bottom, 0px));
+  width:min(690px, calc(100vw - 28px)) !important; min-height:52px;
+  z-index:70; margin:0 !important; border-radius:12px;
+  box-shadow:0 6px 18px rgba(0,0,0,.12);
+}
+body.edicao-rapida-atendimento #form-produto { padding-bottom:110px; }
+body.edicao-rapida-atendimento #cad-faixas button { scroll-margin-bottom:130px; }
+body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; }
 #cad-atendimento-voltar { min-height:44px; border:0; background:transparent; color:var(--laranja-txt,#a65b13); font-size:.9rem; font-family:inherit; font-weight:700; cursor:pointer; padding:8px 0; text-decoration:underline; text-underline-offset:3px; }
 #cad-atendimento-voltar:focus-visible { outline:3px solid #e98a20; outline-offset:2px; }
 </style>
