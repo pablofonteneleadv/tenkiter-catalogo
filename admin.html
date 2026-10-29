@@ -953,6 +953,15 @@ body.edicao-rapida-atendimento #cad-faixas button { scroll-margin-bottom:130px; 
 body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; }
 #cad-atendimento-voltar { min-height:44px; border:0; background:transparent; color:var(--laranja-txt,#a65b13); font-size:.9rem; font-family:inherit; font-weight:700; cursor:pointer; padding:8px 0; text-decoration:underline; text-underline-offset:3px; }
 #cad-atendimento-voltar:focus-visible { outline:3px solid #e98a20; outline-offset:2px; }
+@media (max-width: 359px) {
+  body.edicao-rapida-atendimento #cad-etiquetas button {
+    font-size: 10px !important;
+    letter-spacing: -.2px;
+    padding-inline: 1px !important;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+}
 </style>
 </head>
 <body>
