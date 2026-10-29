@@ -464,6 +464,7 @@ try { tkSelExpirar_(); } catch (e) {}
     const resolvidos = new Set();
     filtroTecidos.forEach(t => resolvidos.add(window.TKTecido && typeof TKTecido.resolver === 'function' ? TKTecido.resolver(t) : t));
     filtroTecidos = resolvidos;
+    indiceBusca.clear();
     aplicarProdutosRecebidos(produtos);
   });
 
@@ -486,7 +487,7 @@ try { tkSelExpirar_(); } catch (e) {}
   function indiceDe(p) {
     let i = indiceBusca.get(p.ID);
     if (!i) {
-      const texto = semAcentoBusca([p.Nome, p.Codigo, p.Categoria, p.Genero, p.Cores, p.Descricao].join(' '));
+      const texto = semAcentoBusca([p.Nome, p.Codigo, p.Categoria, p.Genero, p.Cores, p.Descricao,window.TKTecido&&TKTecido.ler(p)].join(' '));
       i = { texto, palavras: texto.split(/[^a-z0-9]+/).filter(Boolean) };
       indiceBusca.set(p.ID, i);
     }

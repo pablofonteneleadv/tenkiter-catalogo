@@ -10,6 +10,6 @@ A interface de Mensagens segue o HTML/MHTML anexado pelo proprietário: cabeçal
 
 Revisão visual: 320/390/412/1440, texto 100/130%, teclado/altura470, gaveta, filtros, vazio, envio/salvamento simulados e retorno por Escape. Alvos de ação de pelo menos44px, navegação52px e botão Salvar48px. O rodapé de salvar é separado da região rolável para não encobrir campos. Sem rolagem lateral ou falhas sérias/críticas de axe nas jornadas testadas. Referência de antes: 7.40.25 e screenshots enviados pelo proprietário; depois e capturas de cadastro/gestão arquivados no Cofre.
 
-Testes dirigidos: Worker436, filtros57, gestão de tecidos com aliases/persistência/ACL em cinco viewports, caixa compacta em quatro viewports, ficha30, assinatura22 e editor interno de tamanhos em quatro viewports. Nada enviado a clientes, nenhuma IA paga, sem alterações em produtos reais.
+Testes dirigidos: Worker436, filtros58, gestão de tecidos com aliases/persistência/ACL em cinco viewports, caixa compacta em quatro viewports, ficha30, assinatura22 e editor interno de tamanhos em quatro viewports. Nada enviado a clientes, nenhuma IA paga, sem alterações em produtos reais.
 
 Resultado: APROVADO COM LIMITAÇÃO — testes Chromium com serviços simulados; Android físico e fluidez percebida no aparelho permanecem dependentes de validação humana. A implantação é web/Workers; não exige novo instalador ou publicação manual do Apps Script.

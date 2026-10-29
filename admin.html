@@ -4369,7 +4369,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const pMin = parseFloat(String((document.getElementById('fa-preco-min') || {}).value || '').replace(',', '.'));
     const pMax = parseFloat(String((document.getElementById('fa-preco-max') || {}).value || '').replace(',', '.'));
     const ordem = (document.getElementById('fa-ordem') || {}).value || 'recentes';
-    let lista = produtos.filter(p => (!busca || semAcento_(p.Nome).includes(busca) || semAcento_(p.Codigo).includes(busca)) && (ignorarStatus || passaStatus_(p)));
+    let lista = produtos.filter(p => (!busca || semAcento_(p.Nome).includes(busca) || semAcento_(p.Codigo).includes(busca) || semAcento_(TKTecido.ler(p)).includes(busca)) && (ignorarStatus || passaStatus_(p)));
     // v4.10 (FE-08): filtros extras da busca do admin
     if(fTecido)lista=lista.filter(p=>TKTecido.ler(p)===fTecido);
     if (fCat) lista = lista.filter(p => semAcento_(p.Categoria).includes(fCat));

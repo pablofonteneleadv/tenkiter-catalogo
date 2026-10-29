@@ -69,6 +69,8 @@ with sync_playwright() as p:
  pg.evaluate("window.TKTecido.aplicar({versao:99,itens:[{nome:'Linho Novo',apelidos:['Linho']}]})");pg.wait_for_timeout(300)
  chk('renomear tecido mantém a faceta marcada e canonicaliza URL',pg.locator('#chips-tecido .chip.selecionado').get_attribute('data-filter-value')=='Linho Novo' and 'Linho+Novo' in pg.evaluate('location.search').replace('%20','+'),pg.evaluate('location.search'))
  chk('renomear tecido continua filtrando produtos antigos pelo alias',pg.locator('#grid .card').count()==2 and 'Vestido Linho' in pg.inner_text('#grid'),pg.locator('#grid .card').count())
+ pg.click('#fx-ver');pg.fill('#busca','Novo');pg.wait_for_timeout(600)
+ chk('busca encontra o nome canônico do tecido após renomear',pg.locator('#grid .card').count()==2,pg.locator('#grid .card').count())
  foto=OUT/'vitrine-tecido-renomeado.png';pg.screenshot(path=str(foto),full_page=True);ctx.close()
  # Vitrine em viewports/texto 130%, incluindo largura mínima.
  for w,h,label in [(320,700,'320'),(390,844,'390'),(412,915,'412'),(1440,900,'1440')]:
