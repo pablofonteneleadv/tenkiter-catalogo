@@ -164,11 +164,15 @@ def tratar(route, path, method, body, s):
                 t = " ".join(str(body[k]).split())
                 if len(t) > n: return J({"ok": False, "erro": "%s: no máximo %d letras (agora tem %d)." % (nome, n, len(t))}, 400) or True
                 novo[k] = t
+            if "nome" in body:
+                if not str(body["nome"]).strip(): return J({"ok":False,"erro":"Informe o nome do cliente."},400) or True
+                for item in s["convs"]:
+                    if item["id"] == cid or (pessoa(c) and pessoa(item) == pessoa(c)): item["nome"] = body["nome"]
             novo.update({"atualizado_em": agora(), "autor": "Ana"}); fichas[alvo] = novo
         canais = [x for x in s["convs"] if not x["grupo"] and (x["id"] == cid or (pessoa(c) and pessoa(x) == pessoa(c)))]
         ids = [x["id"] for x in canais]
         f = fichas.get(alvo) or {}
-        return J({"ok": True, "ficha": {"tamanhos": f.get("tamanhos", ""), "preferencias": f.get("preferencias", ""), "cidade": f.get("cidade", ""), "atualizado_em": f.get("atualizado_em", ""), "autor": f.get("autor", "")},
+        return J({"ok": True, "nome": c.get("nome", ""), "ficha": {"tamanhos": f.get("tamanhos", ""), "preferencias": f.get("preferencias", ""), "cidade": f.get("cidade", ""), "atualizado_em": f.get("atualizado_em", ""), "autor": f.get("autor", "")},
                   "etiquetas": c.get("etiquetas", []), "notas": list(reversed(s.get("notas", {}).get(alvo, [])))[:5],
                   "canais": [{"id": x["id"], "canal": x["canal"], "contato": x["contato"], "atual": x["id"] == cid} for x in canais],
                   "compras": sorted([{"em": v["em"], "canal": next(x["canal"] for x in canais if x["id"] == v["conversa_id"])} for v in s.get("vendas", []) if v["conversa_id"] in ids], key=lambda v: v["em"], reverse=True)}) or True
@@ -326,6 +330,7 @@ def tratar(route, path, method, body, s):
             s.setdefault("auto_posts", []).append(body)
         return J({"ok": True, "auto": au, "agora": {"aberta": False, "abertura": "amanhã às 7h30"}, "ultimo": s.get("auto_ultimo")}) or True
     if path == "/msg/config":
+        if method == "GET" and s.get("perfil_erro"): return J({"ok":False,"erro":"Sem conexão agora."},503) or True
         cfg = s.setdefault("cfg_leitura", {"whatsapp1": True, "whatsapp2": True, "instagram": True})
         if method == "POST":
             for k, v in (body.get("lerCelular") or {}).items():
@@ -334,7 +339,7 @@ def tratar(route, path, method, body, s):
             if isinstance(body.get("meuNome"), str): s["meu_nome"] = " ".join(body["meuNome"].replace("*", " ").split())[:30]
             if isinstance(body.get("respostas"), list): s["respostas"] = [r for r in body["respostas"] if r.get("t") and r.get("x")][:30]
             s.setdefault("cfg_posts", []).append(body)
-        return J({"ok": True, "config": {"lerCelular": dict(cfg), "assinatura": s.get("assinatura", ASSINATURA_PADRAO)}, "meuNome": s.get("meu_nome", ""), "respostas": s.get("respostas"), "ultimaLeitura": {"whatsapp1": {"em": agora(), "ok": True, "rota": "/modify-chat"}, "whatsapp2": None, "instagram": None}}) or True
+        return J({"ok": True, "config": {"lerCelular": dict(cfg), "assinatura": s.get("assinatura", ASSINATURA_PADRAO)}, "nomeCadastro": s.get("nome_cadastro", "Ana Lojista"), "nomePadrao": s.get("nome_padrao", "Ana"), "meuNome": s.get("meu_nome", ""), "respostas": s.get("respostas"), "ultimaLeitura": {"whatsapp1": {"em": agora(), "ok": True, "rota": "/modify-chat"}, "whatsapp2": None, "instagram": None}}) or True
     if path == "/msg/enviar":
         s["envios"].append(body)
         if body.get("idLocal") in s["idem"]: return J(s["idem"][body["idLocal"]]) or True

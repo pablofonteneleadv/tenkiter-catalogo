@@ -193,17 +193,17 @@ async function permissoes(env, req) {
   const whats = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
   const sessao = (req.headers.get('X-TK-Sessao') || '').slice(0, 400);
   if (!whats || !/^tk[123]\./.test(sessao)) return 'sem_sessao';
-  const chave = new Request('https://sessao.invalid/v3/' + (await sha(whats + '|' + sessao)));
+  const chave = new Request('https://sessao.invalid/v4/' + (await sha(whats + '|' + sessao)));
   const cache = caches.default, g = await cache.match(chave);
-  if (g) { const v = await g.json(); v.permissoes.msgPerfis = v.perfis; return v.permissoes; }
-  let lista = null, perfis = [];
+  if (g) { const v = await g.json(); v.permissoes.msgPerfis = v.perfis; v.permissoes.msgNome = v.nome || ''; return v.permissoes; }
+  let lista = null, perfis = [], nome = '';
   try {
     const r = await fetch(env.API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'sessao', whatsapp: whats, sessao: sessao }) });
     const j = await r.json();
-    if (j && j.ok && j.usuario && Array.isArray(j.usuario.permissoes)) { lista = j.usuario.permissoes; perfis = Array.isArray(j.usuario.perfis) ? j.usuario.perfis : String(j.usuario.perfil || '').split(','); }
+    if (j && j.ok && j.usuario && Array.isArray(j.usuario.permissoes)) { lista = j.usuario.permissoes; nome = String(j.usuario.nome || j.usuario.name || '').trim().slice(0,120); perfis = Array.isArray(j.usuario.perfis) ? j.usuario.perfis : String(j.usuario.perfil || '').split(','); }
   } catch (e) { return 'indisponivel'; }         // backend fora do ar != "faca login"
-  if (lista) await cache.put(chave, new Response(JSON.stringify({ permissoes: lista, perfis }), { headers: { 'Cache-Control': 'max-age=120' } }));
-  if (lista) lista.msgPerfis = perfis;
+  if (lista) await cache.put(chave, new Response(JSON.stringify({ permissoes: lista, perfis, nome }), { headers: { 'Cache-Control': 'max-age=120' } }));
+  if (lista) { lista.msgPerfis = perfis; lista.msgNome = nome; }
   return lista || 'sem_sessao';                  // sessao que o backend nao reconhece
 }
 
@@ -3104,9 +3104,28 @@ async function etiquetasDosAlvos_(env, alvos) {
   rs.forEach((r) => { (mapa[r.alvo] = mapa[r.alvo] || []).push({ id: r.id, nome: r.nome, cor: r.cor, venda: r.venda }); });
   return mapa;
 }
+// Preferência no cadastro de atendimento: mesma chave com/sem +55 e nono dígito.
+async function perfilAtendente_(env, req, perms) {
+  const raw = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0,20), f = pessoaTelefone_(raw);
+  const chave = msgTelefone_(raw), nomes = [...new Set([chave, raw, f && f.d, f && f.d.slice(2), f && f.chave, f && f.chave.slice(2)].filter(Boolean))];
+  let escolhido = '';
+  for (const k of nomes) { escolhido = (await cfgGet(env, 'msg_atendente_' + k)) || ''; if (escolhido) break; }
+  const ps = perms || await permissoes(env, req), admin = Array.isArray(ps) && ps.includes('gerir_acessos');
+  const cadastro = Array.isArray(ps) ? String(ps.msgNome || '').trim() : '';
+  let padrao = nomeAtendenteLimpo_(cadastro.split(/\s+/)[0] || '');
+  if (padrao && padrao === padrao.toUpperCase()) padrao = padrao[0] + padrao.slice(1).toLowerCase();
+  return { chave, meuNome: escolhido, nomePadrao: padrao, nomeCadastro: cadastro, podeOcultar: admin,
+    mostrarNome: !admin || (await cfgGet(env, 'msg_assinatura_' + chave)) !== '0' };
+}
 async function meuNomeAtendente_(env, req) {
-  const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
-  return String((quem && (await cfgGet(env, 'msg_atendente_' + quem))) || (quem ? 'Atendente ' + quem.slice(-4) : 'Equipe')).slice(0, 30);
+  const p = await perfilAtendente_(env, req);
+  return p.meuNome || p.nomePadrao || 'Equipe';
+}
+async function textoAssinadoEquipe_(env,req,canal,texto){
+  const p=await perfilAtendente_(env,req),nome=p.meuNome||p.nomePadrao||'Equipe';
+  const t=String(texto||'').trim();if(!t)return '';
+  const prefixo=canal==='instagram'?nome+':\n':'*'+nome+':*\n';
+  return t.startsWith(prefixo)?t:prefixo+t;
 }
 const alvoDe_ = (c) => (c && c.pessoa ? String(c.pessoa) : 'c:' + (c && c.id));
 const MSG_IDENTIDADE_SQL_ = "COALESCE((SELECT a.pessoa FROM msg_pessoa_alias a WHERE a.canal=msg_conversa.canal AND a.contato=msg_conversa.contato),(SELECT g.pessoa FROM msg_google_nome g WHERE g.chave=msg_conversa.pessoa),NULLIF(msg_conversa.pessoa,''),'')";
@@ -3542,7 +3561,7 @@ export async function moverNoFunil_(env, d) {
   return [0, { etiquetas: await gravarEtiquetas_(env, conv, outras.concat(etq ? [etq] : [])) }];
 }
 async function convFicha_(env, id) {
-  const conv = id ? await env.DB.prepare('SELECT id, canal, contato, grupo, ' + MSG_IDENTIDADE_SQL_ + ' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first() : null;
+  const conv = id ? await env.DB.prepare('SELECT id, canal, contato, grupo, ' + MSG_NOME_SQL_ + ' AS nome, ' + MSG_IDENTIDADE_SQL_ + ' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first() : null;
   if (!conv) return [404, 'Conversa não encontrada.'];
   if (conv.grupo) return [400, 'A ficha do cliente é só para conversas individuais, não para grupos.'];
   return [0, conv];
@@ -3557,6 +3576,7 @@ export async function fichaDaConversa_(env, conv) {
   const notas = (await env.DB.prepare('SELECT id, texto, autor, em FROM msg_nota WHERE alvo=? AND length(excluida_em)=0 ORDER BY em DESC, id DESC LIMIT 5').bind(alvo).all()).results || [];
   let etiquetas = []; try { etiquetas = (await etiquetasDosAlvos_(env, [alvo]))[alvo] || []; } catch (e) { /* etiqueta é conforto */ }
   return {
+    nome: conv.nome || '',
     ficha: { tamanhos: (f && f.tamanhos) || '', preferencias: (f && f.preferencias) || '', cidade: (f && f.cidade) || '', atualizado_em: (f && f.atualizado_em) || '', autor: (f && f.autor) || '' },
     etiquetas: etiquetas, notas: notas, canais: canais.map((c) => ({ id: c.id, canal: c.canal, contato: c.contato, atual: c.id === conv.id })), compras: compras.map((c) => ({ em: c.em, canal: c.canal }))
   };
@@ -3978,7 +3998,8 @@ export default {
         if (p === '/msg/notas/log' && !direitos.notas) return J({ok:false,erro:'Seu acesso não permite consultar notas.'},403);
         if (p === '/msg/config' && req.method === 'POST') {
           const d = await req.clone().json().catch(()=>({}));
-          if ((('respostas' in d) && !direitos.respostas) || ((('lerCelular' in d)||('assinatura' in d)) && !direitos.configuracoes) || (('meuNome' in d)&&!direitos.responder)) return J({ok:false,erro:'Seu acesso não permite alterar esta configuração.'},403);
+          if ('assinatura' in d && !perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente o administrador pode ocultar o próprio nome.'},403);
+          if ((('respostas' in d) && !direitos.respostas) || (('lerCelular' in d) && !direitos.configuracoes) || (('meuNome' in d)&&!direitos.responder)) return J({ok:false,erro:'Seu acesso não permite alterar esta configuração.'},403);
         }
       }
       if (p === '/post/freeconvert/config' && req.method === 'GET') {
@@ -4090,8 +4111,18 @@ export default {
         const etqF = Number(url.searchParams.get('etiqueta')) || 0;
         if (etqF) { sql += " AND (CASE WHEN " + MSG_IDENTIDADE_SQL_ + "<>'' THEN " + MSG_IDENTIDADE_SQL_ + " ELSE 'c:'||msg_conversa.id END) IN (SELECT alvo FROM msg_alvo_etiqueta WHERE etiqueta_id=?)"; args.push(etqF); }
         if (busca) { sql += ' AND ('+MSG_NOME_SQL_+' LIKE ? OR contato LIKE ? OR previa LIKE ? ' + (busca.length >= 3 ? ' OR EXISTS (SELECT 1 FROM msg_mensagem mm WHERE mm.conversa_id=msg_conversa.id AND mm.texto LIKE ?)' : '') + ')'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q); if (busca.length >= 3) args.push(q); }
-        if (antes) { const antesId=Number(url.searchParams.get('antesId'))||0; if(antesId>0){sql+=' AND (ultima_em<? OR (ultima_em=? AND id<?))';args.push(antes,antes,antesId);}else{sql += ' AND ultima_em<?'; args.push(antes);} }
-        const rs = await env.DB.prepare(sql + ' ORDER BY ultima_em DESC, id DESC LIMIT 50').bind(...args).all();
+        // A página seleciona PESSOAS; só depois traz seus canais. Uma conversa antiga
+        // não pode desaparecer do bloco porque outras 50 conversas são mais recentes.
+        let rs;
+        if(url.searchParams.get('blocos')==='1'){
+        const key = "CASE WHEN grupo=1 THEN 'grupo:'||id ELSE COALESCE(NULLIF("+MSG_IDENTIDADE_SQL_+",''),'conversa:'||id) END";
+        let pagina = 'SELECT bloco, MAX(ultima_em) AS em, MAX(id) AS ancora FROM base GROUP BY bloco';
+        if (antes) {const id=Number(url.searchParams.get('antesId'))||0;pagina += id?' HAVING (MAX(ultima_em)<? OR (MAX(ultima_em)=? AND MAX(id)<?))':' HAVING MAX(ultima_em)<?';args.push(...(id?[antes,antes,id]:[antes]));}
+        rs = await env.DB.prepare('WITH base AS (' + sql.replace('SELECT '+MSG_COLS_CONVERSA_, 'SELECT '+MSG_COLS_CONVERSA_+', '+key+' AS bloco') + '), pagina AS ('+pagina+' ORDER BY em DESC, ancora DESC LIMIT 50) SELECT base.* FROM base JOIN pagina USING(bloco) ORDER BY pagina.em DESC, pagina.ancora DESC, base.ultima_em DESC, base.id DESC').bind(...args).all();
+        }else{
+          if(antes){const id=Number(url.searchParams.get('antesId'))||0;sql+=id?' AND (ultima_em<? OR (ultima_em=? AND id<?))':' AND ultima_em<?';args.push(...(id?[antes,antes,id]:[antes]));}
+          rs=await env.DB.prepare(sql+' ORDER BY ultima_em DESC,id DESC LIMIT 50').bind(...args).all();
+        }
         try { const mp = await etiquetasDosAlvos_(env, rs.results.map(alvoDe_)); rs.results.forEach((r) => { r.etiquetas = mp[alvoDe_(r)] || []; }); } catch (e) { /* etiqueta é conforto */ }
         const geral = (await msgContagens_(env, todos ? '' : canal))[canal];
         return J({ ok: true, conversas: rs.results, contagens: tipo ? (await msgContagens_(env, todos ? '' : canal, tipo))[canal] : geral, tipos: { individuais: geral.individuais, grupos: geral.grupos }, cursor: cursorConsulta });
@@ -4169,11 +4200,21 @@ export default {
         const d = await req.json().catch(() => ({}));
         const [st, conv] = await convFicha_(env, Number(d.conversa) || 0);
         if (st) return J({ ok: false, erro: conv }, st);
+        const nome = 'nome' in d ? String(d.nome || '').trim() : null;
+        if (nome !== null && (!nome || nome.length > 120)) return J({ok:false,erro:'Informe o nome do cliente com até 120 letras.'},400);
         const [erro, v] = validarFicha_(d);
         if (erro) return J({ ok: false, erro: erro }, 400);
         const alvo = alvoDe_(conv), atual = (await env.DB.prepare('SELECT tamanhos, preferencias, cidade FROM msg_ficha WHERE alvo=?').bind(alvo).first()) || {};
         const n = Object.assign({ tamanhos: atual.tamanhos || '', preferencias: atual.preferencias || '', cidade: atual.cidade || '' }, v), em = agora();
-        await env.DB.prepare('INSERT INTO msg_ficha (alvo, tamanhos, preferencias, cidade, atualizado_em, autor) VALUES (?,?,?,?,?,?) ON CONFLICT(alvo) DO UPDATE SET tamanhos=excluded.tamanhos, preferencias=excluded.preferencias, cidade=excluded.cidade, atualizado_em=excluded.atualizado_em, autor=excluded.autor').bind(alvo, n.tamanhos, n.preferencias, n.cidade, em, await meuNomeAtendente_(env, req)).run();
+        const gravacoes = [env.DB.prepare('INSERT INTO msg_ficha (alvo, tamanhos, preferencias, cidade, atualizado_em, autor) VALUES (?,?,?,?,?,?) ON CONFLICT(alvo) DO UPDATE SET tamanhos=excluded.tamanhos, preferencias=excluded.preferencias, cidade=excluded.cidade, atualizado_em=excluded.atualizado_em, autor=excluded.autor').bind(alvo, n.tamanhos, n.preferencias, n.cidade, em, await meuNomeAtendente_(env, req))];
+        if (nome !== null) {
+          const key = conv.pessoa || 'c:' + conv.id;
+          gravacoes.push(env.DB.prepare("INSERT INTO msg_pessoa (id,nome,whatsapp,segundo,em) VALUES (?,?,?,'',?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome,em=excluded.em").bind(key,nome,conv.canal==='instagram'?'':conv.contato,em));
+          if (!conv.pessoa) gravacoes.push(env.DB.prepare('UPDATE msg_conversa SET pessoa=? WHERE id=?').bind(key,conv.id));
+          gravacoes.push(env.DB.prepare('UPDATE msg_conversa SET nome=?,atualizada_em=? WHERE id=? OR '+MSG_IDENTIDADE_SQL_+'=?').bind(nome,em,conv.id,key));
+          conv.nome = nome; conv.pessoa = key;
+        }
+        await env.DB.batch(gravacoes);
         return J(Object.assign({ ok: true }, await fichaDaConversa_(env, conv)));
       }
       if (p === '/msg/novidades' && req.method === 'GET') {
@@ -4237,6 +4278,7 @@ export default {
       if (p === '/msg/contagem' && req.method === 'GET') return J({ ok: true, contagens: await msgContagens_(env) });
       if (p === '/msg/enviar' && req.method === 'POST') {
         const d = await req.json().catch(() => ({}));
+        if(!perms.includes('gerir_acessos') && String(d.texto||'').trim()){const c=await env.DB.prepare('SELECT canal FROM msg_conversa WHERE id=?').bind(Number(d.conversa)||0).first();if(c)d.texto=await textoAssinadoEquipe_(env,req,c.canal,d.texto);}
         const [cod, corpo] = await responderMensagem_(env, req.headers.get('X-TK-Whats') || '', d);
         if (cod === 200 && corpo && corpo.ok && Number(d.conversa)) { try { await env.DB.prepare("UPDATE msg_conversa SET dono=? WHERE id=? AND (dono IS NULL OR dono='')").bind(await meuNomeAtendente_(env, req), Number(d.conversa)).run(); } catch (e) { /* dono é conforto */ } }   // v7.40.6: quem responde primeiro vira o responsável
         return J(corpo, cod);
@@ -4245,6 +4287,7 @@ export default {
         const d = await req.json().catch(() => ({})), id = Number(d.conversa) || 0;
         const conv = id ? await env.DB.prepare('SELECT id FROM msg_conversa WHERE id=?').bind(id).first() : null;
         if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
+        if(!perms.includes('gerir_acessos')){const c=await env.DB.prepare('SELECT canal FROM msg_conversa WHERE id=?').bind(id).first();if(c)d.texto=await textoAssinadoEquipe_(env,req,c.canal,d.texto);}
         const [erro, v] = validarAgenda_(d);
         if (erro) return J({ ok: false, erro: erro }, 400);
         const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM msg_agenda WHERE conversa_id=? AND status='pendente'").bind(id).first();
@@ -4372,27 +4415,30 @@ export default {
       }
       if (p === '/msg/config' && req.method === 'GET') {
         const diag = {}; for (const c of MSG_CANAIS) { try { diag[c] = JSON.parse((await cfgGet(env, 'msg_leitura_diag_' + c)) || 'null'); } catch (e) { diag[c] = null; } }
-        const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
-        const respostas = await respostasRapidas_(env);   // v7.40.9: semeia os atalhos uma vez
-        return J({ ok: true, config: await msgCfg_(env), ultimaLeitura: diag, meuNome: quem ? ((await cfgGet(env, 'msg_atendente_' + quem)) || '') : '', respostas: respostas });
+        const perfil = await perfilAtendente_(env, req, perms), config = await msgCfg_(env);
+        config.assinatura = perfil.mostrarNome;
+        return J(Object.assign({ok:true,config,ultimaLeitura:diag,respostas:await respostasRapidas_(env)},perfil));
       }
       if (p === '/msg/config' && req.method === 'POST') {
-        const d = await req.json().catch(() => ({})), atual = await msgCfg_(env);
-        if (d && d.lerCelular && typeof d.lerCelular === 'object') for (const c of MSG_CANAIS) if (typeof d.lerCelular[c] === 'boolean') atual.lerCelular[c] = d.lerCelular[c];
-        if (d && typeof d.assinatura === 'boolean') atual.assinatura = d.assinatura;
-        await cfgSet(env, 'msg_cfg', JSON.stringify(atual));
-        // cada atendente guarda o próprio nome (vazio = volta ao primeiro nome do cadastro)
-        const quem = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20);
-        let meuNome;
-        if (d && typeof d.meuNome === 'string' && quem) { meuNome = nomeAtendenteLimpo_(d.meuNome); await cfgSet(env, 'msg_atendente_' + quem, meuNome || null); }
-        else meuNome = quem ? ((await cfgGet(env, 'msg_atendente_' + quem)) || '') : '';
-        // v2.12: respostas rápidas da loja (iguais para toda a equipe): até 30, título até 40 letras e texto até 1000
+        const d = await req.json().catch(() => ({})), atual = await msgCfg_(env), perfil = await perfilAtendente_(env, req, perms);
+        if (d && d.lerCelular && typeof d.lerCelular === 'object') {
+          for (const c of MSG_CANAIS) if (typeof d.lerCelular[c] === 'boolean') atual.lerCelular[c] = d.lerCelular[c];
+          await cfgSet(env, 'msg_cfg', JSON.stringify(atual));
+        }
+        if (typeof d.assinatura === 'boolean') await cfgSet(env,'msg_assinatura_'+perfil.chave,d.assinatura?'1':'0');
+        if (typeof d.meuNome === 'string') {
+          const nome = nomeAtendenteLimpo_(d.meuNome);
+          // Sobrescreve também aliases legados para o nome apagado não reaparecer.
+          const raw=(req.headers.get('X-TK-Whats')||'').replace(/\D/g,''), f=pessoaTelefone_(raw);
+          for (const k of [...new Set([perfil.chave,raw,f&&f.d,f&&f.d.slice(2),f&&f.chave,f&&f.chave.slice(2)].filter(Boolean))]) await cfgSet(env,'msg_atendente_'+k,nome||null);
+        }
         let respostas;
-        if (d && Array.isArray(d.respostas)) {
-          respostas = d.respostas.map((r) => ({ t: String((r && r.t) || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40), x: String((r && r.x) || '').replace(/\r\n/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, 1000) })).filter((r) => r.t && r.x).slice(0, 30);
-          await cfgSet(env, 'msg_respostas', JSON.stringify(respostas)); await cfgSet(env, 'msg_resp_semeada', '1');
+        if (Array.isArray(d.respostas)) {
+          respostas = d.respostas.map(r=>({t:String(r&&r.t||'').replace(/[\u0000-\u001f]/g,' ').trim().slice(0,40),x:String(r&&r.x||'').replace(/\r\n/g,'\n').replace(/[\u0000-\u0009\u000b-\u001f]/g,' ').trim().slice(0,1000)})).filter(r=>r.t&&r.x).slice(0,30);
+          await cfgSet(env,'msg_respostas',JSON.stringify(respostas)); await cfgSet(env,'msg_resp_semeada','1');
         } else respostas = await respostasRapidas_(env);
-        return J({ ok: true, config: atual, meuNome: meuNome, respostas: respostas });
+        const novo=await perfilAtendente_(env,req,perms); atual.assinatura=novo.mostrarNome;
+        return J(Object.assign({ok:true,config:atual,respostas},novo));
       }
       if (p === '/msg/auto' && (req.method === 'GET' || req.method === 'POST')) {   // v7.40.9: respostas automáticas (desligadas por padrão)
         const auto = req.method === 'POST' ? await salvarMsgAuto_(env, await req.json().catch(() => ({}))) : await msgAuto_(env);

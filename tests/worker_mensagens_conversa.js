@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), os = require('os');
 const { DatabaseSync } = require('node:sqlite');
 const tmp = path.join(os.tmpdir(), 'tk_ig_msg_conversa.mjs');
-fs.writeFileSync(tmp, fs.readFileSync(path.join(__dirname, '..', 'instagram-worker', 'worker.js'))+'\nexport {processarFilaZernio_};');
+fs.writeFileSync(tmp, fs.readFileSync(process.env.TK_WORKER_SOURCE || path.join(__dirname, '..', 'instagram-worker', 'worker.js'))+'\nexport {processarFilaZernio_};');
 let ok = 0, falhas = [];
 const chk = (n, c, d) => { if (c) { ok++; console.log('  ✔ ' + n); } else { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? ' — ' + JSON.stringify(d).slice(0, 300) : '')); } };
 
@@ -41,7 +41,7 @@ function d1() {
       if (gemModo === 'lixo') return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: 'não é json' }] } }] }));
       return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: gemTexto }] } }] }));
     }
-    if (u.startsWith('https://api.fake')) { const b = JSON.parse(init.body); if (b.action === 'contaPorWhats') { contaChamadas.push(b); return new Response(JSON.stringify(b.sessao === 'tk2.cliente' ? { ok: false } : contaFora ? { ok: false, erro: 'x' } : String(b.alvo) === '88977776666' ? { ok: true, existe: true, nome: 'Joana Cadastrada' } : { ok: true, existe: false })); } return new Response(JSON.stringify(b.sessao === 'tk2.admin' ? { ok: true, usuario: { permissoes: ['gerir_acessos', 'catalogo_cadastrar'] } } : b.sessao === 'tk2.gerente' ? { ok: true, usuario: { permissoes: ['catalogo_cadastrar'], nome: 'Gerente' } } : b.sessao === 'tk2.cliente' ? { ok: true, usuario: { permissoes: [], nome: 'Maria Cliente', whatsapp: '88988887777' } } : { ok: false })); }
+    if (u.startsWith('https://api.fake')) { const b = JSON.parse(init.body); if (b.action === 'contaPorWhats') { contaChamadas.push(b); return new Response(JSON.stringify(b.sessao === 'tk2.cliente' ? { ok: false } : contaFora ? { ok: false, erro: 'x' } : String(b.alvo) === '88977776666' ? { ok: true, existe: true, nome: 'Joana Cadastrada' } : { ok: true, existe: false })); } return new Response(JSON.stringify(b.sessao === 'tk2.admin' ? { ok: true, usuario: { nome:'Ana Lojista', permissoes: ['gerir_acessos', 'catalogo_cadastrar'] } } : b.sessao === 'tk2.gerente' ? { ok: true, usuario: { permissoes: ['catalogo_cadastrar'], nome: 'Gerente' } } : b.sessao === 'tk2.cliente' ? { ok: true, usuario: { permissoes: [], nome: 'Maria Cliente', whatsapp: '88988887777' } } : { ok: false })); }
     if (u.startsWith('https://ig.fake/') && u.includes('/me/subscribed_apps')) {
       subChamadas.push({ u, m: (init && init.method) || 'GET', auth: new Headers((init && init.headers) || {}).get('Authorization') });
       if (init && init.method === 'POST') return new Response(JSON.stringify({ success: true }));
@@ -484,7 +484,7 @@ function d1() {
   chk('nome do atendente é limpo (sem símbolos do WhatsApp) e limitado a 30 letras', ca1.j.ok && ca1.j.meuNome.length <= 30 && !/[*_~`]/.test(ca1.j.meuNome) && ca1.j.meuNome.startsWith('Pa blo'), ca1.j.meuNome);
   chk('o nome fica guardado para quem está logado', (await A('GET', '/msg/config')).j.meuNome === ca1.j.meuNome);
   const ca2 = await A('POST', '/msg/config', { assinatura: false });
-  chk('Admin desliga a assinatura para todos (sem apagar o nome)', ca2.j.config.assinatura === false && ca2.j.meuNome === ca1.j.meuNome && ca2.j.config.lerCelular.whatsapp1 === true);
+  chk('Admin desliga somente a própria assinatura (sem apagar o nome)', ca2.j.config.assinatura === false && ca2.j.meuNome === ca1.j.meuNome && ca2.j.config.lerCelular.whatsapp1 === true);
   await A('POST', '/msg/config', { assinatura: true });
   const ca3 = await A('POST', '/msg/config', { meuNome: '' });
   chk('nome vazio volta ao padrão (primeiro nome do cadastro)', ca3.j.meuNome === '' && ca3.j.config.assinatura === true);
@@ -1141,7 +1141,7 @@ function d1() {
     chk('ficha: canais vinculados (WhatsApp 1, WhatsApp 2 e Instagram) e a conversa atual marcada', ['whatsapp1', 'whatsapp2', 'instagram'].every((c) => f0.j.canais.some((x) => x.canal === c)) && f0.j.canais.filter((x) => x.atual).length === 1 && f0.j.canais.find((x) => x.atual).id === waPerson.id, f0.j.canais);
     const s1 = await A('POST', '/msg/ficha', { conversa: waPerson.id, tamanhos: '  M ·  38 ', preferencias: 'Gosta de vestido longo, cores claras', cidade: 'Crateús — Centro' });
     const quem = (await DB.prepare("SELECT valor FROM cfg WHERE chave='msg_atendente_88999990000'").first());
-    chk('ficha: salva (espaços limpos) e devolve a ficha com autor e data', s1.r.status === 200 && s1.j.ok && s1.j.ficha.tamanhos === 'M · 38' && s1.j.ficha.cidade === 'Crateús — Centro' && s1.j.ficha.atualizado_em && s1.j.ficha.autor === (quem ? quem.valor : 'Atendente 0000'), s1.j);
+    chk('ficha: salva (espaços limpos) e devolve a ficha com autor e data', s1.r.status === 200 && s1.j.ok && s1.j.ficha.tamanhos === 'M · 38' && s1.j.ficha.cidade === 'Crateús — Centro' && s1.j.ficha.atualizado_em && s1.j.ficha.autor === (quem ? quem.valor : 'Ana'), s1.j);
     const igF = await A('GET', '/msg/ficha?conversa=' + igPerson.id), wa2F = await A('GET', '/msg/ficha?conversa=' + wa2P);
     chk('ficha: a mesma pessoa vê a mesma ficha pelo Instagram e pelo WhatsApp 2', igF.j.ficha.tamanhos === 'M · 38' && igF.j.ficha.preferencias === 'Gosta de vestido longo, cores claras' && wa2F.j.ficha.cidade === 'Crateús — Centro', [igF.j.ficha, wa2F.j.ficha]);
     const s2 = await A('POST', '/msg/ficha', { conversa: igPerson.id, cidade: 'Crateús — São Vicente' });
@@ -1271,5 +1271,43 @@ function d1() {
   const remoteApk=await w.fetch(ped('GET','/msg/midia?id='+arquivo.meta.last_row_id+'&baixar=1','tk2.admin'),env,{});
   chk('APK remoto antes recusado é copiado e baixado',remoteApk.status===200&&Buffer.from(await remoteApk.arrayBuffer()).equals(Buffer.from(apkBytes)));
   globalThis.fetch=remoteFetch;
+
+  // Perfil persistente, autoridade do servidor e blocos completos além da página.
+  const fetchPerfil=globalThis.fetch;
+  globalThis.fetch=async(u,o)=>String(u).startsWith('https://api.fake')&&JSON.parse(o.body).action==='sessao'
+    ?new Response(JSON.stringify({ok:true,usuario:{nome:new Headers(o.headers).get('ignored')||'IARA ALVES',permissoes:JSON.parse(o.body).sessao==='tk2.perfil-admin'?['gerir_acessos']:['catalogo_admin'],perfis:['Equipe catálogo 1']}}))
+    :fetchPerfil(u,o);
+  const perfilReq=async(m,path,phone,token,body)=>{const r=await w.fetch(new Request('https://ig.test'+path,{method:m,headers:{'X-TK-Whats':phone,'X-TK-Sessao':token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}),env,{});return {status:r.status,j:await r.json()};};
+  await cfg('msg_cfg',JSON.stringify({assinatura:false}));
+  let pr=await perfilReq('GET','/msg/config','88981234567','tk2.perfil-admin');
+  chk('primeiro nome vem do cadastro autenticado, mesmo sem nome local',pr.j.nomePadrao==='Iara'&&pr.j.nomeCadastro==='IARA ALVES'&&pr.j.config.assinatura===true,pr);
+  await perfilReq('POST','/msg/config','88981234567','tk2.perfil-admin',{meuNome:'Iara TK',assinatura:false});
+  pr=await perfilReq('GET','/msg/config','5588981234567','tk2.perfil-admin');
+  chk('preferência sobrevive token novo, outro aparelho e telefone com +55',pr.j.meuNome==='Iara TK'&&!pr.j.config.assinatura&&pr.j.podeOcultar,pr);
+  let eq=await perfilReq('GET','/msg/config','88981234568','tk2.perfil-equipe');
+  chk('equipe usa o primeiro nome e assinatura obrigatória apesar da configuração legada',eq.j.nomePadrao==='Iara'&&eq.j.config.assinatura&&!eq.j.podeOcultar,eq);
+  chk('servidor recusa ocultar nome mesmo com permissão de configurações', (await perfilReq('POST','/msg/config','88981234568','tk2.perfil-equipe',{assinatura:false})).status===403);
+  await perfilReq('POST','/msg/config','88981234568','tk2.perfil-equipe',{meuNome:'Iarinha'});
+  eq=await perfilReq('GET','/msg/config','5588981234568','tk2.perfil-equipe-novo');
+  chk('equipe edita o próprio nome sem acesso à edição de clientes',eq.j.meuNome==='Iarinha'&&eq.j.config.assinatura);
+  const rename=await A('POST','/msg/ficha',{conversa:waPerson.id,nome:'Cliente nome corrigido',cidade:'Centro'});
+  const irename=await A('GET','/msg/ficha?conversa='+igPerson.id);
+  chk('renomear pela ficha atualiza todos os canais já vinculados sem mudar a identidade',rename.j.nome==='Cliente nome corrigido'&&irename.j.nome==='Cliente nome corrigido'&&rename.j.canais.length>=2,[rename.j.nome,irename.j.nome]);
+  chk('nome vazio é recusado sem apagar a ficha', (await A('POST','/msg/ficha',{conversa:waPerson.id,nome:''})).r.status===400);
+  const prefix='teste-bloco-',stamp=n=>new Date(Date.parse('2100-01-01T00:00:00Z')+n*60000).toISOString();
+  for(let n=0;n<60;n++)await DB.prepare("INSERT INTO msg_conversa(canal,contato,pessoa,nome,total,ultima_em,grupo) VALUES ('whatsapp1',?,?,?,1,?,0)").bind(prefix+n,prefix+n,'Nome igual',stamp(-n)).run();
+  const head=await DB.prepare("INSERT INTO msg_conversa(canal,contato,pessoa,nome,total,ultima_em,grupo) VALUES ('whatsapp1','bloco-wa1','bloco-pessoa','Pessoa completa',1,?,0)").bind(stamp(10)).run();
+  const tail=await DB.prepare("INSERT INTO msg_conversa(canal,contato,pessoa,nome,total,ultima_em,grupo) VALUES ('whatsapp2','bloco-wa2','bloco-pessoa','Pessoa completa',1,?,0)").bind(stamp(-5000)).run();
+  await DB.prepare("INSERT INTO msg_conversa(canal,contato,pessoa,nome,total,ultima_em,grupo) VALUES ('instagram','bloco-ig','bloco-pessoa','Pessoa completa',1,?,0)").bind(stamp(-4000)).run();
+  let all=(await A('GET','/msg/conversas?blocos=1&canal=todos')).j.conversas;
+  const block=all.filter(c=>c.pessoa==='bloco-pessoa');
+  chk('três canais juntos sem pesquisar mesmo com 60 conversas entre eles',block.length===3&&all[0].id===head.meta.last_row_id,block.map(c=>c.id));
+  chk('nome igual não vincula pessoas distintas',all.filter(c=>c.nome==='Nome igual').every(c=>all.filter(x=>x.pessoa===c.pessoa).length===1));
+  await DB.prepare('UPDATE msg_conversa SET ultima_em=? WHERE id=?').bind(stamp(20),tail.meta.last_row_id).run();
+  all=(await A('GET','/msg/conversas?blocos=1&canal=todos')).j.conversas;
+  chk('canal antigo atualizado sobe levando todo o bloco e muda a ordem interna',all[0].id===tail.meta.last_row_id&&all.slice(0,3).every(c=>c.pessoa==='bloco-pessoa'));
+  const only=(await A('GET','/msg/conversas?canal=instagram')).j.conversas;
+  chk('filtro de Instagram preservado sem vazar canais WhatsApp',only.every(c=>c.canal==='instagram'));
+  globalThis.fetch=fetchPerfil;
   console.log('\n' + ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) { console.log(falhas.join('\n')); process.exit(1); }
 })().catch((e) => { console.error(e); process.exit(1); });
