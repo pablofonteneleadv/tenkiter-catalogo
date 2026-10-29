@@ -2479,7 +2479,7 @@ async function freeconvertRota_(env, req, url, J, h) {
  *  tipo, source_id único para não duplicar, última atividade na conversa), enxuto para o D1:
  *    msg_conversa (canal+contato únicos) e msg_mensagem (canal+ext_id únicos = INSERT OR IGNORE, webhook repetido não duplica).
  *  Webhooks públicos protegidos por segredo no caminho (gerado aqui, nunca devolvido ao navegador, exceto na hora de ligar o webhook na Wafly).
- *  Guardamos o texto (até 4000 caracteres), o TIPO e, para foto/vídeo/áudio, uma cópia da mídia no R2 (prefixo msg/, servida só a quem está logado); o conteúdo bruto do webhook nunca é salvo.
+ *  Guardamos o texto (até 4000 caracteres), o TIPO e, para foto/vídeo/áudio, uma cópia da mídia no R2 (prefixo msg/, servida só a quem está logado); o conteúdo bruto do webhook nunca é salvo; eventos normalizados aguardam confirmação em um prefixo privado do R2.
  * ========================================================================== */
 const MSG_CANAIS = ['instagram', 'whatsapp1', 'whatsapp2'];
 const MSG_TEXTO_MAX = 4000;
@@ -2687,18 +2687,130 @@ async function gravarMensagem_(env, canal, m) {
   if(m.ctxTipo==='story'&&m.ctxRef&&!m.ctxChave){const ref=await env.DB.prepare('SELECT chave FROM msg_status_ref WHERE canal=? AND ext_id=?').bind(canal,m.ctxRef).first();if(ref)m.ctxChave=ref.chave;}
   let story = { post: 0, aprox: 0 };
   if (m.ctxTipo === 'story' && !saida && !m.ctxChave) { if (m.ctxPost) story = { post: Number(m.ctxPost) || 0, aprox: 0 }; else { try { const exato=m.ctxRef?await env.DB.prepare("SELECT p.id FROM postagem p LEFT JOIN postagem_grupo_recibo r ON r.postagem_id=p.id WHERE p.status='publicado' AND p.canal IN ("+(STATUS_CANAIS_[canal]||[]).map(()=>'?').join(',')+") AND (p.ig_id=? OR r.mensagem_id=?) LIMIT 1").bind(...(STATUS_CANAIS_[canal]||[]),m.ctxRef,m.ctxRef).first():null;story=exato?{post:Number(exato.id),aprox:0}:await resolverStory_(env, canal, m.em); } catch (e) { /* sem a imagem do story: a tela mostra só o aviso */ } } }
-  const r = await env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em, midia_chave, midia_mime, midia_seg, midia_url, ctx_tipo, ctx_ref, ctx_post, ctx_aprox, ctx_chave, autor_nome, autor_fone, autor_lid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t, m.midiaChave || '', String(m.midiaMime || '').slice(0, 80), Number(m.midiaSeg) || 0, m.midiaUrl || '', m.ctxTipo || '', m.ctxRef || '', story.post, story.aprox, m.ctxChave || '', m.autorNome || '', m.autorFone || '', m.autorLid || '').run();
-  if (!r.meta || r.meta.changes !== 1) return false;
+  const inserir = env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em, midia_chave, midia_mime, midia_seg, midia_url, ctx_tipo, ctx_ref, ctx_post, ctx_aprox, ctx_chave, autor_nome, autor_fone, autor_lid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t, m.midiaChave || '', String(m.midiaMime || '').slice(0, 80), Number(m.midiaSeg) || 0, m.midiaUrl || '', m.ctxTipo || '', m.ctxRef || '', story.post, story.aprox, m.ctxChave || '', m.autorNome || '', m.autorFone || '', m.autorLid || '');
   const quem = m.grupo && m.direcao === 'entrada' ? (m.autorNome || (m.autorFone ? '+' + m.autorFone : '')) : '';
   const previa = ((quem ? quem + ': ' : '') + (m.texto || ('[' + m.tipo + ']'))).replace(/\s+/g, ' ').slice(0, 140);
   /* Em SQLite o lado direito do SET usa os valores ANTIGOS da linha: por isso a comparação com ultima_em/ult_entrada_em vale como "antes desta mensagem". */
-  await env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=?")
-    .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, t, c.id).run();
+  const atividade = env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=? AND changes()=1")
+    .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, t, c.id);
+  const [r] = await env.DB.batch([inserir,atividade]);
+  if (!r.meta || r.meta.changes !== 1) return false;
   if (!saida && !m.grupo && canal !== 'instagram' && /^\d{10,15}$/.test(m.contato)) { try { if ((await cfgGet(env, 'contatos_auto')) === '1') await enfileirarContato_(env, canal, m.contato, m.nome); } catch (e) { /* o cadastro no Google é conforto: a mensagem já foi gravada */ } }
   m._conversaId = c.id; m._msgId = Number(r.meta.last_row_id) || 0;      // v7.40.9: para a resposta automática
   if(!saida && !m.grupo && Date.parse(m.em)>Date.now()-300000){try{await mobileTables_(env);await env.DB.prepare('INSERT OR IGNORE INTO msg_push_outbox(mensagem,conversa,canal,chave,criado) VALUES(?,?,?,?,?)').bind(Number(r.meta.last_row_id),c.id,canal,crypto.randomUUID(),t).run();}catch(_){/* falha de aviso não interrompe o recebimento */}}
   return true;
 }
+/* Entrada durável independente das gravações D1. Prefixo privado, recusado pelo
+ * Worker público de mídia. Guarda apenas eventos autenticados e normalizados;
+ * não inclui cabeçalhos, segredos ou o endereço secreto do webhook.
+ * R2 conditional puts: lease entre execuções e at-least-once; D1 deduplica IDs.
+ */
+const MSG_ENTRADA_PREFIXO_='privado/mensagens/entrada/';
+async function corpoWebhook_(req,maximo) {
+  if(Number(req.headers.get('Content-Length')||0)>maximo)return null;
+  if(!req.body)return '';
+  const reader=req.body.getReader(),partes=[];let total=0;
+  try{for(;;){const r=await reader.read();if(r.done)break;total+=r.value.byteLength;if(total>maximo){await reader.cancel();return null;}partes.push(r.value);}}
+  finally{reader.releaseLock();}
+  const bytes=new Uint8Array(total);let p=0;for(const x of partes){bytes.set(x,p);p+=x.byteLength;}return new TextDecoder().decode(bytes);
+}
+async function guardarEntrada_(env,tipo,canal,dados) {
+  const corpo=JSON.stringify({v:1,tipo,canal,dados});
+  if(new TextEncoder().encode(corpo).byteLength>1100000)throw Error('Evento grande demais.');
+  const classe=['midia','zernio-contexto','status-publicado'].includes(tipo)?'complementos/':tipo==='status-wafly'?'atualizacoes/':'recebidas/';
+  const chave=MSG_ENTRADA_PREFIXO_+classe+await sha(corpo)+'.json';
+  await env.MIDIA.put(chave,corpo,{onlyIf:{etagDoesNotMatch:'*'},httpMetadata:{contentType:'application/json'},customMetadata:{em:agora(),tentativas:'0',proxima:'0',trava:'0'}});
+  return chave;
+}
+async function aceitarEntrada_(env,ctx,tipo,canal,dados) {
+  const chave=await guardarEntrada_(env,tipo,canal,dados);
+  const tarefa=(async()=>{
+    const r=await processarEntrada_(env,chave);
+    // A fila de avisos é independente; indisponibilidade do push não devolve eventos à entrada.
+    await processarPushMobile_(env,true).catch(()=>{});
+    await processarComplementos_(env).catch(()=>{});
+    return r;
+  })().catch(()=>({pendente:true}));
+  if(typeof ctx?.waitUntil==='function'){ctx.waitUntil(tarefa);return {ok:true,recebido:true};}
+  return {...await tarefa,ok:true,recebido:true};
+}
+
+async function processarEntrada_(env,chave,forcar=false) {
+  const obj=await env.MIDIA.get(chave);if(!obj)return {ok:true};
+  const meta=obj.customMetadata||{},now=Date.now();
+  if(Number(meta.trava)>now||(!forcar&&Number(meta.proxima)>now))return {ocupada:true};
+  if(obj.size>1100000)throw Error('Registro de entrada inválido.');
+  const corpo=await new Response(obj.body).text();
+  const md={...meta,trava:String(now+120000)};
+  const lock=await env.MIDIA.put(chave,corpo,{onlyIf:{etagMatches:obj.etag},httpMetadata:{contentType:'application/json'},customMetadata:md});
+  if(!lock)return {ocupada:true};
+  let j;
+  try {
+    j=JSON.parse(corpo);if(await msgPausado_(env,j.canal))throw Error('Canal pausado.');await iniciar(env);
+    let resultado={};
+    if(j.tipo==='mensagens'){
+      let novas=0;const novidades=[];
+      for(const m of j.dados.mensagens){if(await gravarMensagem_(env,j.canal,m)){novas++;novidades.push(m);}}
+      resultado={novas,nova:novas>0};
+      if(j.dados.diagnostico){const d=j.dados.diagnostico;await cfgSet(env,'msg_ult_forma'+(d.tipo==='texto'&&!d.ctx?'_txt':'')+'_'+j.canal,JSON.stringify(d)).catch(()=>{});}
+      if(j.canal==='instagram')await cfgSet(env,'msg_ult_instagram',JSON.stringify({em:agora(),res:'ok',itens:j.dados.mensagens.length,novas,forma:j.dados.forma||''})).catch(()=>{});
+      // Todas as mensagens básicas já aparecem na lista antes de qualquer rede de mídia.
+      for(const m of j.dados.mensagens)if(m.midiaUrl||m.ctxUrl){const dados={...m};delete dados._conversaId;delete dados._msgId;await guardarEntrada_(env,'midia',j.canal,dados);}
+      for(const m of novidades)await agendarAuto_(null,env,j.canal,m);
+      if(j.dados.leituras?.length)await aplicarLeiturasInstagram_(env,j.dados.leituras);
+    }else if(j.tipo==='zernio'){
+      const z=await zernioCfg_(env);if(!z||j.dados.account.accountId&&String(j.dados.account.accountId)!==String(z.conta.id))throw Error('Conexão Instagram alterada.');
+      const nova=await processarEventoZernio_(env,j.dados,true);resultado={nova};await cfgSet(env,'msg_ult_zernio',JSON.stringify({em:agora(),res:'ok',evento:j.dados.event})).catch(()=>{});
+    }else if(j.tipo==='midia'){await completarMidiaEntrada_(env,j.canal,j.dados);
+    }else if(j.tipo==='zernio-contexto'){await processarEventoZernio_(env,j.dados);
+    }else if(j.tipo==='status-wafly'){
+      let falta=false;for(const id of j.dados.ids)if(!await env.DB.prepare('SELECT id FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(j.canal,id).first()){falta=true;break;}
+      if(falta){const backlog=await env.MIDIA.list({prefix:MSG_ENTRADA_PREFIXO_+'recebidas/',limit:1});if(backlog.objects.length||Date.now()-Date.parse(meta.em)<300000){const e=Error('Referência ainda não recebida.');e.esperaReferencia=true;throw e;}}
+      resultado={atualizadas:await atualizarStatusWafly_(env,j.canal,j.dados)};
+    }
+    else if(j.tipo==='status-publicado'){
+      const m=j.dados;await prepararMidia_(env,j.canal,m);
+      if(m.midiaChave)await env.DB.prepare('INSERT OR REPLACE INTO msg_status_ref(canal,ext_id,chave,mime,em) VALUES (?,?,?,?,?)').bind(j.canal,m.extId,m.midiaChave,m.midiaMime,m.em).run();
+      resultado={status:true};
+    }else throw Error('Tipo de entrada inválido.');
+    await env.MIDIA.delete(chave);
+    return {ok:true,...resultado};
+  }catch(erro){
+    const tentativas=Number(meta.tentativas||0)+1;
+    const motivo=erro.esperaReferencia?'referencia':/quota|cota|exceeded.*daily|daily.*limit/i.test(String(erro.message||''))?'cota':/Mídia aguardando|Story aguardando/i.test(String(erro.message||''))?'midia':/pausado/i.test(String(erro.message||''))?'pausa':'armazenamento';
+    // Não descarta eventos em erro. Recuo evita insistir quando há cota/serviço indisponível.
+    await env.MIDIA.put(chave,j?JSON.stringify(j):corpo,{onlyIf:{etagMatches:lock.etag},httpMetadata:{contentType:'application/json'},customMetadata:{...md,motivo,tentativas:String(tentativas),proxima:String(Date.now()+Math.min(1800000,15000*2**Math.min(tentativas,7))),trava:'0'}});
+    if(!erro.esperaReferencia){console.warn(JSON.stringify({evento:'entrada_pendente',canal:j?.canal||'',motivo,tentativas}));}
+    if(!erro.esperaReferencia)await anotarFalha_(env,'/wh/'+(j?.canal||''),503);
+    return {ok:false,pendente:true};
+  }
+}
+async function processarLoteEntrada_(env,classe,limite,forcar=false) {
+  const ck='msg_entrada_cursor:'+classe,cursor=await env.CACHE.get(ck).catch(()=>null);
+  const lote=await env.MIDIA.list({prefix:MSG_ENTRADA_PREFIXO_+classe+'/',limit:limite,cursor:cursor||undefined,include:['customMetadata']});
+  for(const obj of lote.objects)await processarEntrada_(env,obj.key,forcar);
+  if(lote.truncated)await env.CACHE.put(ck,lote.cursor,{expirationTtl:3600});else await env.CACHE.delete(ck);
+}
+const processarComplementos_=(env,forcar=false)=>processarLoteEntrada_(env,'complementos',4,forcar);
+async function processarEntradas_(env,forcar=false) {
+  await processarLoteEntrada_(env,'recebidas',20,forcar);
+  await processarLoteEntrada_(env,'atualizacoes',20,forcar);
+  await processarPushMobile_(env,true).catch(()=>{});
+  await processarComplementos_(env,forcar);
+}
+async function completarMidiaEntrada_(env,canal,m) {
+  const atual=await env.DB.prepare('SELECT id,conversa_id,midia_chave,ctx_chave,ctx_post FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(canal,m.extId).first();
+  if(!atual)return;
+  let mudou=false;
+  if(m.midiaUrl&&!atual.midia_chave){const x=m.midiaChave?{chave:m.midiaChave,mime:m.midiaMime}:await copiarMidiaRemota_(env,m.midiaUrl,m.midiaMime,m.tipo==='documento');if(!x)throw Error('Mídia aguardando cópia.');m.midiaChave=x.chave;m.midiaMime=x.mime;if(x){await env.DB.prepare("UPDATE msg_mensagem SET midia_chave=?,midia_mime=?,midia_url='' WHERE id=? AND midia_chave=''").bind(x.chave,x.mime,atual.id).run();mudou=true;}}
+  if(m.ctxUrl&&!atual.ctx_chave){const x=m.ctxChave?{chave:m.ctxChave}:await copiarMidiaRemota_(env,m.ctxUrl,m.ctxMime||'');if(!x)throw Error('Story aguardando cópia.');m.ctxChave=x.chave;if(x){await env.DB.prepare("UPDATE msg_mensagem SET ctx_chave=? WHERE id=? AND ctx_chave=''").bind(x.chave,atual.id).run();mudou=true;}}
+  if(m.ctxPost&&!atual.ctx_post){await env.DB.prepare('UPDATE msg_mensagem SET ctx_post=?,ctx_aprox=0 WHERE id=? AND ctx_post=0').bind(m.ctxPost,atual.id).run();mudou=true;}
+  if(m.ctxTipo==='story'){
+    await env.DB.prepare("UPDATE msg_mensagem SET ctx_tipo='story' WHERE id=? AND ctx_tipo<> 'story'").bind(atual.id).run();mudou=true;
+  }
+  if(mudou)await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(agora(),atual.conversa_id).run();
+}
+
 /* Android: fila persistente e entrega pelo OneSignal. Nunca contém texto de conversa. */
 async function mobilePushKey_(env){try{return String((await cfgGet(env,'mobile_onesignal_key'))||env.MOBILE_ONESIGNAL_KEY||'');}catch(_){return String(env.MOBILE_ONESIGNAL_KEY||'');}}
 async function mobileTables_(env) {
@@ -2772,8 +2884,7 @@ async function msgPausado_(env, canal) { try { return (await cfgGet(env, 'msg_pa
 async function rotaWebhookMensagens_(env, req, url, ctx) {
   const ok = (c, o) => new Response(JSON.stringify(o), { status: c, headers: { 'Content-Type': 'application/json' } });
   const partes = url.pathname.split('/').filter(Boolean);                      // ['wh','wafly','1','<segredo>'] | ['wh','instagram','<segredo>']
-  await iniciar(env);
-  const segredo = await msgSegredo_(env);
+  let segredo;try{segredo=await msgSegredo_(env);}catch(e){if(!/no such table/i.test(String(e)))throw e;await iniciar(env);segredo=await msgSegredo_(env);}
   if (partes[1] === 'instagram') {
     if (!igualConst_(partes[2] || '', segredo)) return ok(404, { ok: false });
     if (req.method === 'GET') {                                                // verificação do webhook pela Meta
@@ -2783,44 +2894,38 @@ async function rotaWebhookMensagens_(env, req, url, ctx) {
     if (req.method !== 'POST') return ok(405, { ok: false });
     const segApp = await igAppSecret_(env);
     if (!segApp) return ok(503, { ok: false, erro: 'Segredo do app da Meta não configurado.' });
-    const bruto = await req.text();
-    if (bruto.length > 262144) return ok(413, { ok: false });
+    const bruto = await corpoWebhook_(req,262144);
+    if (bruto === null) return ok(413, { ok: false });
     const assin = (req.headers.get('X-Hub-Signature-256') || '').replace(/^sha256=/, '');
     const chave = await crypto.subtle.importKey('raw', new TextEncoder().encode(segApp), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     const esperado = Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', chave, new TextEncoder().encode(bruto))), (x) => x.toString(16).padStart(2, '0')).join('');
-    if (!assin || !igualConst_(assin, esperado)) { await cfgSet(env, 'msg_ult_instagram', JSON.stringify({ em: agora(), res: 'assinatura', tem: !!assin })); return ok(401, { ok: false }); }
+    if (!assin || !igualConst_(assin, esperado)) { await cfgSet(env, 'msg_ult_instagram', JSON.stringify({ em: agora(), res: 'assinatura', tem: !!assin })).catch(()=>{}); return ok(401, { ok: false }); }
     if (await msgPausado_(env, 'instagram')) return ok(200, { ok: true, pausado: true });
     let b = null; try { b = JSON.parse(bruto); } catch (e) { return ok(400, { ok: false }); }
-    const lista = normalizarInstagram_(b); let novas = 0; for (const m of lista) { try { await prepararMidia_(env, 'instagram', m); } catch (e) { /* a mídia é conforto */ } if (await gravarMensagem_(env, 'instagram', m)) { novas++; await agendarAuto_(ctx, env, 'instagram', m); } }
-    try { await aplicarLeiturasInstagram_(env, leiturasInstagram_(b)); } catch (e) { /* a leitura é conforto: nunca derruba a gravação */ }
-    await cfgSet(env, 'msg_ult_instagram', JSON.stringify({ em: agora(), res: 'ok', itens: lista.length, novas: novas, forma: lista.length ? '' : formaInstagram_(b) }));
-    return ok(200, { ok: true, novas: novas });
+    const lista=normalizarInstagram_(b),leituras=leiturasInstagram_(b);
+    if(!lista.length&&!leituras.length){await cfgSet(env,'msg_ult_instagram',JSON.stringify({em:agora(),res:'ok',itens:0,novas:0,forma:formaInstagram_(b)})).catch(()=>{});return ok(200,{ok:true,novas:0});}
+    return ok(200,await aceitarEntrada_(env,ctx,'mensagens','instagram',{mensagens:lista,leituras,forma:lista.length?'':formaInstagram_(b)}));
   }
   if (partes[1] === 'wafly' && (partes[2] === '1' || partes[2] === '2')) {
     if (!igualConst_(partes[3] || '', segredo)) return ok(404, { ok: false });
     if (req.method !== 'POST') return ok(405, { ok: false });
     const canal = 'whatsapp' + partes[2];
-    const bruto = await req.text();
-    if (bruto.length > 262144) return ok(413, { ok: false });
+    const bruto = await corpoWebhook_(req,262144);
+    if (bruto === null) return ok(413, { ok: false });
     let b = null; try { b = JSON.parse(bruto); } catch (e) { return ok(400, { ok: false }); }
     if (await msgPausado_(env, canal)) return ok(200, { ok: true, pausado: true });
     const cfg = await cfgWafly_(env, Number(partes[2]));
     if (cfg && b && b.instanceId && String(b.instanceId) !== cfg.instance) return ok(200, { ok: true, ignorado: 'outra instância' });
-    if (b && b.type === 'MessageStatusCallback') return ok(200, { ok: true, atualizadas: await atualizarStatusWafly_(env, canal, b) });
+    if (b && b.type === 'MessageStatusCallback') return ok(200,await aceitarEntrada_(env,ctx,'status-wafly',canal,{status:String(b.status||''),ids:(Array.isArray(b.ids)?b.ids:[]).slice(0,50).map(String)}));
     if(b&&b.type==='ReceivedCallback'&&b.fromMe===true&&(b.phone==='status@broadcast'||b.isStatus===true)){
       const status=normalizarWafly_(Object.assign({},b,{phone:'0000000000',isGroup:false}));
-      if(status&&status.midiaUrl){await prepararMidia_(env,canal,status);if(status.midiaChave)await env.DB.prepare('INSERT OR REPLACE INTO msg_status_ref(canal,ext_id,chave,mime,em) VALUES (?,?,?,?,?)').bind(canal,status.extId,status.midiaChave,status.midiaMime,status.em).run();}
-      return ok(200,{ok:true,status:true});
+      return ok(200,status&&status.midiaUrl?await aceitarEntrada_(env,ctx,'status-publicado',canal,status):{ok:true,status:true});
     }
     const m = normalizarWafly_(b);
     if (!m) return ok(200, { ok: true, ignorado: true });
-    try { await prepararMidia_(env, canal, m); } catch (e) { /* a mídia é conforto: a mensagem é gravada de qualquer jeito */ }
-    // v7.40.5: diagnóstico do texto comum (só nomes de campos e sinais de status, sem conteúdo) para comparar WhatsApp 1 e 2
-    if (m.tipo === 'texto' && !m.ctxTipo) { try { await cfgSet(env, 'msg_ult_forma_txt_' + canal, JSON.stringify({ em: agora(), campos: Object.keys(b).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 40), isStatusReply: b.isStatusReply === true, temRef: !!b.referenceMessageId, temStatusReply: !!b.statusReply, interno: Object.keys((b && b.text) || {}).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 20) })); } catch (e) { /* diagnóstico */ } }
-    if (m.tipo !== 'texto' || m.ctxTipo) { try { await cfgSet(env, 'msg_ult_forma_' + canal, JSON.stringify({ em: agora(), tipo: m.tipo, ctx: m.ctxTipo, copiada: !!m.midiaChave, contexto: Object.keys((b.statusReply && typeof b.statusReply==='object')?b.statusReply:{}).filter(k=>/^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0,30), campos: Object.keys(b).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 40), interno: Object.keys((b && b[({ imagem: 'image', 'vídeo': 'video', 'áudio': 'audio', documento: 'document', figurinha: 'sticker', texto:'text' })[m.tipo]]) || {}).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0, 20) })); } catch (e) { /* diagnóstico é conforto */ } }
-    const nova = await gravarMensagem_(env, canal, m);
-    if (nova) await agendarAuto_(ctx, env, canal, m);
-    return ok(200, { ok: true, nova: nova });
+    const campos=o=>Object.keys(o||{}).filter(k=>/^[a-zA-Z][a-zA-Z0-9_]{0,35}$/.test(k)).slice(0,40);
+    const diagnostico={em:agora(),campos:campos(b),tipo:m.tipo,ctx:m.ctxTipo,isStatusReply:b.isStatusReply===true,temRef:!!b.referenceMessageId,temStatusReply:!!b.statusReply,interno:campos(b[({imagem:'image','vídeo':'video','áudio':'audio',documento:'document',figurinha:'sticker',texto:'text'})[m.tipo]])};
+    return ok(200,await aceitarEntrada_(env,ctx,'mensagens',canal,{mensagens:[m],diagnostico}));
   }
   return ok(404, { ok: false });
 }
@@ -2888,7 +2993,7 @@ async function atualizarStatusWafly_(env, canal, b) {
   for (const id of ids) {
     const m = await env.DB.prepare('SELECT id, conversa_id, direcao, enviada_em FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(canal, id).first();
     if (!m) continue;
-    if (st === 'READ_BY_ME') { await env.DB.prepare('UPDATE msg_conversa SET nao_lidas=0, atualizada_em=? WHERE id=? AND nao_lidas<>0').bind(t, m.conversa_id).run(); n++; continue; }
+    if (st === 'READ_BY_ME') { await env.DB.prepare("UPDATE msg_conversa SET nao_lidas=MIN(nao_lidas,(SELECT COUNT(*) FROM msg_mensagem WHERE conversa_id=? AND direcao='entrada' AND (enviada_em>? OR (enviada_em=? AND id>?)))),atualizada_em=? WHERE id=? AND nao_lidas<>0").bind(m.conversa_id,m.enviada_em,m.enviada_em,m.id,t,m.conversa_id).run(); n++; continue; }
     if (m.direcao !== 'saida') continue;
     const r = await env.DB.prepare("UPDATE msg_mensagem SET status=?, status_em=? WHERE conversa_id=? AND direcao='saida' AND status<>'incerta' AND enviada_em<=? AND " + MSG_RANK_ + ' < ?').bind(novo, t, m.conversa_id, m.enviada_em, MSG_RANK_NOVO_[novo]).run();
     if (r.meta && r.meta.changes > 0) { await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(t, m.conversa_id).run(); n++; }
@@ -3381,22 +3486,29 @@ async function hmacHex_(segredo, texto) {
 async function rotaZernio_(env, req, url, ctx) {
   const resp = (s, o) => new Response(JSON.stringify(o), { status: s, headers: { 'Content-Type': 'application/json' } });
   if (!igualConst_(url.pathname.split('/')[3] || '', await msgSegredo_(env))) return resp(404, { ok: false });
-  const seg = await cfgGet(env, 'zernio_wh_segredo'), corpo = await req.text();
+  const seg = await cfgGet(env, 'zernio_wh_segredo'), corpo = await corpoWebhook_(req,1048576);
+  if(corpo===null)return resp(413,{ok:false});
   if (!seg) return resp(503, { ok: false });
   const assin = String(req.headers.get('X-Zernio-Signature') || req.headers.get('X-Late-Signature') || '').toLowerCase();
-  if (!assin || !igualConst_(assin, await hmacHex_(seg, corpo))) { await cfgSet(env, 'msg_ult_zernio', JSON.stringify({ em: agora(), res: 'assinatura' })); return resp(401, { ok: false }); }
+  if (!assin || !igualConst_(assin, await hmacHex_(seg, corpo))) { await cfgSet(env, 'msg_ult_zernio', JSON.stringify({ em: agora(), res: 'assinatura' })).catch(()=>{}); return resp(401, { ok: false }); }
   let b = null; try { b = JSON.parse(corpo); } catch (e) { return resp(400, { ok: false }); }
-  await cfgSet(env, 'msg_ult_zernio', JSON.stringify({ em: agora(), res: 'ok', evento: String((b && b.event) || '').slice(0, 40) }));
-  // Persist first, acknowledge promptly; DDL/media/vendor calls run after durable acceptance.
   if(b&&(b.event==='message.received'||b.event==='message.sent')){
-    if(corpo.length>1048576)return resp(413,{ok:false});
-    await criarFilaZernio_(env);
-    const id=String(b.id||assin).slice(0,200);
-    await env.DB.prepare('INSERT OR IGNORE INTO msg_zernio_fila(id,payload,em,prox,trava,tentativas) VALUES(?,?,?,0,0,0)').bind(id,corpo,agora()).run();
-    const t=processarFilaZernio_(env).catch(()=>{});if(ctx&&ctx.waitUntil)ctx.waitUntil(t);else await t;
+    const m=b.message||{};
+    if(m.platform!=='instagram'||!m.platformMessageId&&!m.id)return resp(200,{ok:true,ignorado:true});
+    if(await msgPausado_(env,'instagram'))return resp(200,{ok:true,pausado:true});
+    const z=await zernioCfg_(env),conta=b.account?.accountId||b.account?.id;
+    if(z&&conta&&String(conta)!==String(z.conta.id))return resp(200,{ok:true,ignorado:true});
+    const dados={event:b.event,account:{accountId:b.account?.accountId||b.account?.id||''},message:{}};
+    for(const k of ['platform','platformMessageId','id','conversationId','direction','text','sentAt'])if(k in m)dados.message[k]=String(m[k]||'');
+    dados.message.sender=Object.fromEntries(['id','name','username'].filter(k=>m.sender?.[k]!=null).map(k=>[k,String(m.sender[k])]));
+    dados.message.attachments=(Array.isArray(m.attachments)?m.attachments:[]).slice(0,20).map(a=>Object.fromEntries(['type','originalType','url'].filter(k=>a?.[k]!=null).map(k=>[k,String(a[k])])));
+    const sr=m.storyReply||m.metadata?.storyReply;
+    if(sr)dados.message.storyReply=Object.fromEntries(['storyUrl','storyId'].filter(k=>sr[k]!=null).map(k=>[k,String(sr[k])]));
+    return resp(200,await aceitarEntrada_(env,ctx,'zernio','instagram',dados));
   }
-  return resp(200, { ok: true });
+  return resp(200,{ok:true});
 }
+
 async function criarFilaZernio_(env){
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_zernio_fila(id TEXT PRIMARY KEY,payload TEXT NOT NULL,em TEXT NOT NULL,prox INTEGER NOT NULL DEFAULT 0,trava INTEGER NOT NULL DEFAULT 0,tentativas INTEGER NOT NULL DEFAULT 0)").run();
 }
@@ -3420,7 +3532,7 @@ async function processarFilaZernio_(env){
   }
 }
 const ZERNIO_TIPO_ = { image: 'imagem', video: 'vídeo', audio: 'áudio', file: 'documento', sticker: 'figurinha', share: 'compartilhamento' };
-async function processarEventoZernio_(env, b) {
+async function processarEventoZernio_(env, b, basico=false) {
   const z = await zernioCfg_(env), msg = (b && b.message) || {}; if (!z || msg.platform !== 'instagram') return false;
   const contaEv = b.account && (b.account.accountId || b.account.id); if (contaEv && String(contaEv) !== z.conta.id) return false;
   if (await msgPausado_(env, 'instagram')) return false;
@@ -3437,6 +3549,12 @@ async function processarEventoZernio_(env, b) {
     direcao: entrada ? 'entrada' : 'saida', tipo: tipo, texto: String(msg.text || '').slice(0, MSG_TEXTO_MAX), em: msg.sentAt && !isNaN(Date.parse(msg.sentAt)) ? new Date(msg.sentAt).toISOString() : agora(),
     midiaUrl: mime && a0 && /^https:\/\//i.test(String(a0.url || '')) ? String(a0.url) : '', midiaMime: mime, midiaSeg: 0, ctxTipo: '', ctxRef: '', ctxUrl: '', ctxPost: 0 };
   if (!m.extId) return false;
+  const nova = await gravarMensagem_(env, 'instagram', m);
+  if(basico){
+    await guardarEntrada_(env,'zernio-contexto','instagram',b);
+    if(nova)await agendarAuto_(null,env,'instagram',m);
+    return nova;
+  }
   if (entrada && cid) {      // resposta a story: o aviso não traz, a lista de mensagens traz storyReply (link vence ~24 h: a mídia é copiada agora)
     const r = await zernioApi_(z.chave, 'GET', '/inbox/conversations/' + encodeURIComponent(cid) + '/messages?accountId=' + encodeURIComponent(z.conta.id) + '&limit=10&sortOrder=desc', null, 8000);
     const lista = r.ok && r.j && Array.isArray(r.j.messages) ? r.j.messages : [];
@@ -3447,8 +3565,8 @@ async function processarEventoZernio_(env, b) {
       if (sr.storyId) { const po = await env.DB.prepare("SELECT id FROM postagem WHERE ig_id=? AND status='publicado' LIMIT 1").bind(String(sr.storyId)).first(); if (po) { m.ctxPost = Number(po.id) || 0; m.ctxUrl = ''; } }
     }
   }
-  try { await prepararMidia_(env, 'instagram', m); } catch (e) { /* a mídia é conforto */ }
-  const nova = await gravarMensagem_(env, 'instagram', m);
+  Object.assign(m,b._midiaSalva||{});
+  try{await completarMidiaEntrada_(env,'instagram',m);}finally{b._midiaSalva={midiaChave:m.midiaChave||'',midiaMime:m.midiaMime||'',ctxChave:m.ctxChave||''};}
   if (nova) { try { await respostaAutomatica_(env, 'instagram', m); } catch (e) { /* resposta automática nunca derruba o recebimento */ } }
   return nova;
 }
@@ -3808,6 +3926,7 @@ function foneNormal_(bruto) {
   return { ok: false, motivo: 'inválido', d: d };
 }
 async function relatorioContatos_(env) {
+  const atual=await contatosR2Atual_(env);if(atual){if(atual.m.status==='pronto'&&atual.m.relatorio)return {ok:true,...atual.m.relatorio};return {ok:false,erro:'Já existe um relatório em andamento. Continue a leitura por etapas ou faça uma nova cópia de segurança antes de reiniciar.'};}
   const contatos = []; let pagina = '', voltas = 0, conta = '';
   do {
     const r = await ponte_(env, { acao: 'listar', pagina: pagina || undefined });
@@ -3819,25 +3938,212 @@ async function relatorioContatos_(env) {
 }
 /* v2.15: relatório em etapas para contas grandes (15 mil+ contatos): cada chamada lê UMA página da ponte e guarda
  * só nome/telefones/e-mails em msg_contatos_tmp; a etapa "fim" monta o relatório e limpa a tabela. */
+/* Staging de contatos em R2 privado. Manter `msg_contatos_tmp` e `msg_contatos_plano`
+ * para leituras de operações iniciadas antes deste deploy; nenhuma migração apaga essas linhas. */
+const CONTATOS_R2_PREFIX_ = 'privado/contatos/staging/';
+const CONTATOS_R2_PTR_ = 'contatos_r2_ativo';
+const CONTATOS_R2_CHUNK_ = 100;
+function contatosR2IdValido_(id) { return /^[a-f0-9-]{20,64}$/.test(String(id || '')); }
+function contatosR2ManifestValido_(m,id) {
+  if(!m||m.v!==1||m.id!==id||!['lendo','pronto'].includes(m.status)||typeof m.backup!=='string'||typeof m.cursor!=='string'||typeof m.completo!=='boolean'||!Number.isSafeInteger(m.paginas)||m.paginas<0||!Number.isSafeInteger(m.lidos)||m.lidos<0||!Number.isSafeInteger(m.total)||m.total<0||!m.plano||typeof m.plano.pronto!=='boolean'||!Number.isSafeInteger(m.plano.dup)||m.plano.dup<0||!Number.isSafeInteger(m.plano.novos)||m.plano.novos<0||!Number.isSafeInteger(m.plano.dupPaginas)||!Number.isSafeInteger(m.plano.novoPaginas)||!m.limpeza||typeof m.limpeza!=='object')return false;
+  if(m.plano.dupPaginas!==Math.ceil(m.plano.dup/CONTATOS_R2_CHUNK_)||m.plano.novoPaginas!==Math.ceil(m.plano.novos/CONTATOS_R2_CHUNK_))return false;
+  if((m.status==='pronto')!==m.plano.pronto||m.completo&&(!m.paginas||m.cursor!==''))return false;
+  if(m.paginas===0?m.ultima!==null:!m.ultima||typeof m.ultima.entrada!=='string'||typeof m.ultima.saida!=='string')return false;
+  return true;
+}
+function contatosR2Base_(id) { return CONTATOS_R2_PREFIX_ + id + '/'; }
+function contatosR2ManifestKey_(id) { return contatosR2Base_(id) + 'manifest.json'; }
+function contatosR2ChunkKey_(id, area, tipo, n) { return contatosR2Base_(id) + area + '/' + (tipo ? tipo + '/' : '') + String(n).padStart(8, '0') + '.json'; }
+async function contatosR2GetJson_(env, key) {
+  const o = await env.MIDIA.get(key); if (!o) return null;
+  if(o.size>4*1024*1024)throw Error('Uma parte do relatório excedeu o tamanho permitido. Refaça o relatório em partes menores.');
+  try { return { obj: o, value: JSON.parse(new TextDecoder().decode(await o.arrayBuffer())) }; } catch (_) { throw new Error('Dados temporários de contatos inválidos.'); }
+}
+async function contatosR2PutNewJson_(env, key, value) {
+  const body = JSON.stringify(value);
+  const put = await env.MIDIA.put(key, body, { onlyIf: { etagDoesNotMatch: '*' }, httpMetadata: { contentType: 'application/json', cacheControl: 'private, no-store' } });
+  if (put) return true;
+  const old = await contatosR2GetJson_(env, key);
+  if (!old || JSON.stringify(old.value) !== JSON.stringify(value)) throw new Error('Não foi possível gravar os dados temporários de contatos.');
+  return false;
+}
+async function contatosR2CasJson_(env, key, value, etag) {
+  const o = await env.MIDIA.put(key, JSON.stringify(value), { onlyIf: etag ? { etagMatches: etag } : { etagDoesNotMatch: '*' }, httpMetadata: { contentType: 'application/json', cacheControl: 'private, no-store' } });
+  return !!o;
+}
+async function contatosR2Atual_(env) {
+  const raw=await cfgGet(env,CONTATOS_R2_PTR_);if(raw===null||raw===undefined)return null;
+  let p;try{p=JSON.parse(raw);}catch(_){throw new Error('Não consegui retomar o relatório salvo. Peça ao administrador para verificar.');}
+  if(!p||!contatosR2IdValido_(p.id))throw new Error('Não consegui retomar o relatório salvo. Peça ao administrador para verificar.');
+  const got=await contatosR2GetJson_(env,contatosR2ManifestKey_(p.id));
+  if(!got||!contatosR2ManifestValido_(got.value,p.id))throw new Error('Não consegui abrir o relatório salvo. Tente novamente ou peça ao administrador para verificar.');
+  return {id:p.id,obj:got.obj,m:got.value};
+}
+async function contatosR2Novo_(env) {
+  const anterior=await cfgGet(env,CONTATOS_R2_PTR_);let existente=null;
+  if(anterior!==null&&anterior!==undefined) { try { const p=JSON.parse(anterior); if(!p||!contatosR2IdValido_(p.id))throw 0; existente=await contatosR2Atual_(env); } catch(_) { throw new Error('Não consegui retomar o relatório salvo. Peça ao administrador para verificar.'); } }
+  const id=crypto.randomUUID().toLowerCase(),bk=JSON.parse((await cfgGet(env,'contatos_backup'))||'null');
+  if(existente&&existente.m.status==='lendo'&&existente.m.backup===(bk&&bk.em||''))throw new Error('Já existe um relatório em andamento para este backup. Conclua-o ou faça um backup novo antes de reiniciar.');
+  const m={v:1,id:id,status:'lendo',criado:agora(),backup:bk&&bk.em||'',cursor:'',completo:false,paginas:0,lidos:0,total:0,ultima:null,plano:{pronto:false,dup:0,novos:0,dupPaginas:0,novoPaginas:0},limpeza:{}};
+  if(!await contatosR2CasJson_(env,contatosR2ManifestKey_(id),m,''))throw new Error('Não foi possível guardar o início do relatório. Tente novamente.');
+  const valor=JSON.stringify({id:id}),sql=anterior===null||anterior===undefined||anterior===''?'INSERT OR IGNORE INTO cfg (chave,valor) VALUES (?,?)':'UPDATE cfg SET valor=? WHERE chave=? AND valor=?';
+  const r=anterior===null||anterior===undefined?await env.DB.prepare(sql).bind(CONTATOS_R2_PTR_,valor).run():await env.DB.prepare(sql).bind(valor,CONTATOS_R2_PTR_,anterior).run();
+  if(!(r.meta&&r.meta.changes===1))throw new Error('Outro relatório de contatos começou ao mesmo tempo. Recarregue a etapa antes de continuar.');
+  return await contatosR2Atual_(env);
+}
+async function contatosR2Salvar_(env, atual, m) {
+  if (!await contatosR2CasJson_(env, contatosR2ManifestKey_(atual.id), m, atual.obj.etag)) return false;
+  return true;
+}
+async function contatosR2LimparPtr_(env,id) {
+  const raw=await cfgGet(env,CONTATOS_R2_PTR_);if(raw===null||raw===undefined)return true;
+  let p;try{p=JSON.parse(raw);}catch(_){throw new Error('Ponteiro privado de contatos inválido; não será limpo.');}
+  if(!p||p.id!==id)return false;
+  const r=await env.DB.prepare('DELETE FROM cfg WHERE chave=? AND valor=?').bind(CONTATOS_R2_PTR_,raw).run();
+  return !!(r.meta&&r.meta.changes===1);
+}
+async function contatosR2Parte_(env, atual, cursor) {
+  const m=atual.m;
+  if(m.ultima&&cursor===m.ultima.entrada)return {ok:true,lidos:m.lidos,total:m.total,proxima:m.ultima.saida};
+  if(m.completo||m.status!=='lendo')return {conflito:true};
+  if(cursor!==m.cursor)return {conflito:true};
+  const key=contatosR2ChunkKey_(atual.id,'relatorio','',m.paginas);let page=await contatosR2GetJson_(env,key);
+  if(!page){const r=await ponte_(env,{acao:'listar',pagina:cursor||undefined});if(!r.ok)return r;
+    const contatos=(Array.isArray(r.contatos)?r.contatos:[]).filter(c=>c&&c.r).map(c=>({r:String(c.r).slice(0,80),n:String(c.n||'').slice(0,120),f:(Array.isArray(c.f)?c.f:[]).slice(0,10),m:(Array.isArray(c.m)?c.m:[]).slice(0,5)}));
+    page={value:{entrada:cursor,saida:String(r.proxima||''),total:Number(r.total)||0,contatos:contatos}};await contatosR2PutNewJson_(env,key,page.value);
+  }
+  if(page.value.entrada!==cursor||!Array.isArray(page.value.contatos))throw new Error('Cursor ou conteúdo da página de contatos inválido.');
+  const saida=String(page.value.saida||''),next=Object.assign({},m,{cursor:saida,completo:!saida,paginas:m.paginas+1,lidos:m.lidos+page.value.contatos.length,total:Number(page.value.total)||m.total,ultima:{entrada:cursor,saida:saida}});
+  if(!await contatosR2Salvar_(env,atual,next)){const latest=await contatosR2Atual_(env);if(latest&&latest.m.ultima&&latest.m.ultima.entrada===cursor)return {ok:true,lidos:latest.m.lidos,total:latest.m.total,proxima:latest.m.ultima.saida};throw new Error('O relatório foi atualizado em outra tela. Repita esta etapa.');}
+  return {ok:true,lidos:next.lidos,total:next.total,proxima:next.cursor};
+}
+async function contatosR2LerRelatorio_(env, atual) {
+  const out = [], vistos = new Map();
+  for (let i=0; i<atual.m.paginas; i++) {
+    const got = await contatosR2GetJson_(env, contatosR2ChunkKey_(atual.id, 'relatorio', '', i));
+    if (!got) throw new Error('Falta uma parte do relatório temporário.');
+    for (const c of got.value.contatos || []) vistos.set(c.r, c);
+  }
+  out.push(...vistos.values()); return out;
+}
+async function contatosR2PlanSlice_(env, atual, tipo, desde, limite) {
+  if(!['dup','novo'].includes(tipo))throw new Error('Tipo de plano inválido.');
+  const count=Number(tipo==='dup'?atual.m.plano.dup:atual.m.plano.novos);
+  if(!Number.isSafeInteger(count)||count<0)throw new Error('Contagem do plano inválida.');
+  const nDesde=Number(desde)||0;if(!Number.isSafeInteger(nDesde)||nDesde<0)throw new Error('Cursor do plano inválido.');const inicio=nDesde,fim=Math.min(count,inicio+(limite||100)),out=[];
+  for(let n=inicio;n<fim;){
+    const seq=Math.floor(n/CONTATOS_R2_CHUNK_),off=n%CONTATOS_R2_CHUNK_,esperado=Math.min(CONTATOS_R2_CHUNK_,count-seq*CONTATOS_R2_CHUNK_);
+    const got=await contatosR2GetJson_(env,contatosR2ChunkKey_(atual.id,'plano',tipo,seq));
+    if(!got||got.value.tipo!==tipo||!Array.isArray(got.value.dados)||got.value.dados.length!==esperado)throw new Error('Parte ausente ou inconsistente no plano de contatos.');
+    const dados=got.value.dados;for(let i=off;i<dados.length&&n<fim;i++,n++)out.push(dados[i]);
+  }
+  if(out.length!==fim-inicio)throw new Error('Plano de contatos incompleto; cursor não avançado.');
+  return {itens:out,total:count,proximo:fim<count?String(fim):''};
+}
+async function contatosR2CriarPlano_(env, atual, duplicados, semCadastro, relatorio) {
+  const listas={ dup: duplicados, novo: semCadastro };
+  for (const tipo of ['dup','novo']) {
+    const a=listas[tipo];
+    for(let i=0;i<a.length;i+=CONTATOS_R2_CHUNK_) await contatosR2PutNewJson_(env,contatosR2ChunkKey_(atual.id,'plano',tipo,Math.floor(i/CONTATOS_R2_CHUNK_)),{tipo:tipo,dados:a.slice(i,i+CONTATOS_R2_CHUNK_)});
+  }
+  const m=Object.assign({},atual.m,{plano:{pronto:true,dup:duplicados.length,novos:semCadastro.length,dupPaginas:Math.ceil(duplicados.length/CONTATOS_R2_CHUNK_),novoPaginas:Math.ceil(semCadastro.length/CONTATOS_R2_CHUNK_)},status:'pronto',relatorio:relatorio||atual.m.relatorio||null});
+  if(!await contatosR2Salvar_(env,atual,m)) throw new Error('O relatório foi atualizado em outra tela. Reabra o relatório para continuar.');
+}
+async function contatosR2TemPlano_(env) { const a=await contatosR2Atual_(env); return a && a.m.plano && a.m.plano.pronto ? a : null; }
+async function contatosR2ApagarJob_(env, id) {
+  const prefix=contatosR2Base_(id); let cursor,voltas=0;
+  do { const l=await env.MIDIA.list({prefix,cursor,limit:500}); const keys=(l.objects||[]).map(x=>x.key); if(keys.length) await env.MIDIA.delete(keys); cursor=l.truncated?l.cursor:null; if(++voltas>100) throw new Error('Limpeza do staging de contatos excedeu o limite.'); } while(cursor);
+}
+async function contatosR2ExpurgarOrfaos_(env, agoraMs, cursor) {
+  // Se o ponteiro existe mas não pode ser lido/validado, falha fechado: não apagar nenhum objeto.
+  const ativo=await contatosR2Atual_(env), corte=(agoraMs||Date.now())-7*86400000;
+  const l=await env.MIDIA.list({prefix:CONTATOS_R2_PREFIX_,cursor:cursor||undefined,limit:200}),apagar=[];
+  for(const o of l.objects||[]){const m=/^privado\/contatos\/staging\/([a-f0-9-]{20,64})\//.exec(o.key);if(!m||ativo&&m[1]===ativo.id)continue;const t=Date.parse(o.uploaded);if(Number.isFinite(t)&&t<corte)apagar.push(o.key);}
+  if(apagar.length)await env.MIDIA.delete(apagar);
+  return {apagados:apagar.length,cursor:l.truncated?String(l.cursor||''):''};
+}
+async function contatosR2Limpeza_(env, d, atual, acc, salvar) {
+  const pendente=atual.m.limpeza&&atual.m.limpeza.joinPendente;
+  if (d.etapa === 'juntar') {
+    const lc=atual.m.limpeza||{},pgTotal=atual.m.plano.dup,rawDesde=Math.max(0,Number(d.desde)||0);
+    if(lc.lastJoin&&Number(lc.lastJoin.entrada)===rawDesde){acc.juntados=Number(lc.juntados)||0;acc.apagados=Number(lc.apagados)||0;await salvar();return {ok:true,feito:lc.lastJoin.feito,total:pgTotal,proximo:lc.lastJoin.proximo};}
+    if(pendente)return {ok:false,cod:409,erro:'O estado do lote externo é incerto. Faça novo backup e relatório para conferir o que já foi aplicado.'};
+    let desde=rawDesde;if(!desde&&Number(lc.joinCursor)>0)desde=Number(lc.joinCursor);
+    if(desde!==Number(lc.joinCursor||0))return {ok:false,cod:409,erro:'O cursor de junção mudou. Reabra a limpeza para retomar.'};
+    acc.juntados=Number(lc.juntados)||0;acc.apagados=Number(lc.apagados)||0;acc._r2Job=atual.id;
+    const pg=await contatosR2PlanSlice_(env,atual,'dup',desde,100),rs=pg.itens;
+    if(!rs.length){await salvar();return {ok:true,feito:pgTotal,total:pgTotal,proximo:''};}
+    const intento=crypto.randomUUID(),marcado=Object.assign({},atual.m,{limpeza:Object.assign({},lc,{joinPendente:{intento,entrada:desde,quantidade:rs.length,em:agora()}})});
+    let reservado=false;try{reservado=await contatosR2Salvar_(env,atual,marcado);}catch(e){return {ok:false,cod:503,erro:'Não foi possível reservar o lote; nenhuma chamada à ponte foi feita.'};}if(!reservado){const latest=await contatosR2Atual_(env);if(latest&&latest.m.limpeza&&latest.m.limpeza.joinPendente)return {ok:false,cod:409,erro:'O estado do lote externo é incerto. Faça novo backup e relatório para conferir o que já foi aplicado.'};return {ok:false,cod:503,erro:'Não foi possível reservar o lote; nenhuma chamada à ponte foi feita.'};}
+    let r;try{r=await ponte_(env,{acao:'juntar_lote',confirmar:true,grupos:rs.map(g=>({manter:g.manter,apagar:g.apagar}))});}catch(e){return {ok:false,cod:502,erro:'A resposta da ponte é incerta. Faça novo backup e relatório para conferir o que já foi aplicado.'};}
+    if(!r.ok)return {ok:false,cod:502,erro:'A resposta da ponte é incerta. Faça novo backup e relatório para conferir o que já foi aplicado.'};
+    let posterior;try{posterior=await contatosR2Atual_(env);}catch(e){return {ok:false,cod:503,erro:'A ponte respondeu, mas não consegui conferir a confirmação salva do lote. Faça novo backup e relatório para conferir o que já foi aplicado.'};}
+    if(!posterior||!posterior.m.limpeza||!posterior.m.limpeza.joinPendente||posterior.m.limpeza.joinPendente.intento!==intento)return {ok:false,cod:409,erro:'O estado do lote externo é incerto. Faça novo backup e relatório para conferir o que já foi aplicado.'};
+    const feito=desde+rs.length,proximo=feito<pgTotal?String(feito):'',jq=Number(r.feitos)||0,ap=Number(r.apagados)||0,base=posterior.m.limpeza;
+    const {joinPendente,...semPendente}=base;
+    const next=Object.assign({},posterior.m,{limpeza:Object.assign({},semPendente,{joinCursor:feito,juntados:(Number(base.juntados)||0)+jq,apagados:(Number(base.apagados)||0)+ap,lastJoin:{entrada:desde,feito,proximo,feitos:jq,apagados:ap}})});
+    let salvo=false;try{salvo=await contatosR2Salvar_(env,posterior,next);}catch(e){return {ok:false,cod:503,erro:'A ponte respondeu, mas não consegui guardar a confirmação do lote. Faça novo backup e relatório para conferir o que já foi aplicado.'};}if(!salvo)return {ok:false,cod:503,erro:'A ponte respondeu, mas não consegui guardar a confirmação do lote. Faça novo backup e relatório para conferir o que já foi aplicado.'};
+    acc.juntados=Number(next.limpeza.juntados)||0;acc.apagados=Number(next.limpeza.apagados)||0;await salvar();
+    return {ok:true,feito,total:pgTotal,proximo};
+  }
+  if(pendente)return {ok:false,cod:409,erro:'O estado do lote externo é incerto. Faça novo backup e relatório para conferir o que já foi aplicado.'};
+  if (d.etapa === 'padronizar') {
+    const r=await ponte_(env,{acao:'padronizar_parte',pagina:typeof d.pagina==='string'&&d.pagina?d.pagina.slice(0,500):undefined});
+    if(!r.ok)return {ok:false,cod:502,erro:r.erro==='Ação desconhecida.'?'A ponte precisa da versão 1.2 (contatos-ponte-1.2) para a limpeza.':r.erro};
+    acc.padronizados=(acc.padronizados||0)+(Number(r.mudados)||0);acc.lidosPad=(d.pagina?(acc.lidosPad||0):0)+(Number(r.lidos)||0);await salvar();
+    return {ok:true,feito:acc.lidosPad,total:Number(r.totalPessoas)||acc.lidosPad,proxima:String(r.proxima||'')};
+  }
+  if (d.etapa === 'criar') {
+    if(!d.continuar){acc.criarTotal=0;let off=0;while(off<atual.m.plano.novos){const pg=await contatosR2PlanSlice_(env,atual,'novo',off,100);for(const n of pg.itens){await enfileirarContato_(env,n.canal,n.fone,n.nome);acc.criarTotal++;}off+=pg.itens.length;}}
+    acc._r2Job=atual.id;const r=await processarFilaContatos_(env,15);if(!r.ok)return {ok:false,cod:502,erro:r.erro};
+    const rest=(await env.DB.prepare("SELECT COUNT(*) n FROM msg_contatos_fila WHERE estado='pendente' AND tentativas<5").first()).n,total=Math.max(acc.criarTotal||0,rest);await salvar();
+    return {ok:true,feito:total-rest,total:total,restantes:rest};
+  }
+  if(d.etapa==='fim'){
+    const criados=(await env.DB.prepare("SELECT COUNT(*) n FROM msg_contatos_fila WHERE estado='feito'").first()).n;
+    const res={em:agora(),juntados:acc.juntados||0,apagados:acc.apagados||0,padronizados:acc.padronizados||0,criados:criados};
+    await cfgSet(env,'contatos_limpeza',JSON.stringify(res));await cfgSet(env,'contatos_limpeza_and',null);await cfgSet(env,'contatos_auto','1');
+    // A limpeza concluída remove também eventual plano D1 legado; nenhuma linha é apagada na migração.
+    await env.DB.prepare('DELETE FROM msg_contatos_plano').run();
+    // Resumo/auto persistem antes de remover os dados pessoais temporários.
+    const limpo=await contatosR2LimparPtr_(env,atual.id);if(limpo)try{await contatosR2ApagarJob_(env,atual.id);}catch(e){/* órfão privado será removido pelo expurgo limitado */}
+    return Object.assign({ok:true,auto:true},res);
+  }
+  return {ok:false,cod:400,erro:'Etapa da limpeza inválida.'};
+}
+
 async function relatorioContatosEtapa_(env, d) {
-  if (d.etapa === 'inicio') { await env.DB.prepare('DELETE FROM msg_contatos_tmp').run(); return { ok: true }; }
+  if (d.etapa === 'inicio') {
+    try { await contatosR2Novo_(env); return {ok:true}; }
+    catch(e){return {ok:false,erro:String(e.message||'Não foi possível iniciar o relatório.')};}
+  }
   if (d.etapa === 'parte') {
-    const pagina = typeof d.pagina === 'string' ? d.pagina.slice(0, 500) : '';
-    const r = await ponte_(env, { acao: 'listar', pagina: pagina || undefined });
-    if (!r.ok) return r;
-    const lista = Array.isArray(r.contatos) ? r.contatos : [], SQL_INS = 'INSERT OR REPLACE INTO msg_contatos_tmp (r, n, f, m) VALUES (?, ?, ?, ?)';
-    for (let i = 0; i < lista.length; i += 100) await env.DB.batch(lista.slice(i, i + 100).filter((c) => c && c.r).map((c) => env.DB.prepare(SQL_INS).bind(String(c.r).slice(0, 80), String(c.n || '').slice(0, 120), JSON.stringify((Array.isArray(c.f) ? c.f : []).slice(0, 10)), JSON.stringify((Array.isArray(c.m) ? c.m : []).slice(0, 5)))));
-    const lidos = (await env.DB.prepare('SELECT COUNT(*) n FROM msg_contatos_tmp').first()).n;
-    return { ok: true, lidos: lidos, total: Number(r.total) || 0, proxima: r.proxima || '' };
+    const cursor=typeof d.pagina==='string'?d.pagina.slice(0,500):'', a=await contatosR2Atual_(env);
+    if(a) { try { const r=await contatosR2Parte_(env,a,cursor); return r.conflito?{ok:false,erro:'O cursor do relatório mudou. Reabra a etapa do relatório.'}:r; } catch(e) { return {ok:false,erro:String(e.message||'Falha ao gravar a etapa do relatório.')}; } }
+    // Fallback para sessão começada antes deste deploy; conserva o cursor e as linhas D1 existentes.
+    const r=await ponte_(env,{acao:'listar',pagina:cursor||undefined});if(!r.ok)return r;
+    const lista=Array.isArray(r.contatos)?r.contatos:[],SQL_INS='INSERT OR REPLACE INTO msg_contatos_tmp (r,n,f,m) VALUES (?,?,?,?)';
+    for(let i=0;i<lista.length;i+=100)await env.DB.batch(lista.slice(i,i+100).filter(c=>c&&c.r).map(c=>env.DB.prepare(SQL_INS).bind(String(c.r).slice(0,80),String(c.n||'').slice(0,120),JSON.stringify((Array.isArray(c.f)?c.f:[]).slice(0,10)),JSON.stringify((Array.isArray(c.m)?c.m:[]).slice(0,5)))));
+    const lidos=(await env.DB.prepare('SELECT COUNT(*) n FROM msg_contatos_tmp').first()).n;return {ok:true,lidos:lidos,total:Number(r.total)||0,proxima:r.proxima||''};
   }
   if (d.etapa === 'fim') {
-    const rs = (await env.DB.prepare('SELECT r, n, f, m FROM msg_contatos_tmp').all()).results;
-    const contatos = rs.map((x) => ({ r: x.r, n: x.n, f: JSON.parse(x.f || '[]'), m: JSON.parse(x.m || '[]') }));
-    const rel = await montarRelatorioContatos_(env, contatos);
-    await env.DB.prepare('DELETE FROM msg_contatos_tmp').run();
-    return rel;
+    const a=await contatosR2Atual_(env);
+    if(a&&['lendo','pronto'].includes(a.m.status)) {
+      if(a.m.status==='pronto'&&a.m.relatorio){try{await cfgSet(env,'contatos_relatorio',JSON.stringify(a.m.relatorio));}catch(e){/* snapshot R2 é fonte de recuperação */}return Object.assign({ok:true},a.m.relatorio);}
+      if(!a.m.paginas||!a.m.completo||a.m.cursor) return {ok:false,erro:'O relatório ainda tem páginas pendentes.'};
+      try {
+        const contatos=await contatosR2LerRelatorio_(env,a),rel=await montarRelatorioContatos_(env,contatos);
+        if(!rel.ok)return rel;
+        const atual=await contatosR2Atual_(env);if(!atual||atual.m.status!=='pronto'||!atual.m.relatorio)throw new Error('Não consegui concluir o relatório com segurança. Tente concluir novamente.');
+        return rel;
+      } catch(e){return {ok:false,erro:String(e.message||'Não foi possível montar o relatório.')};}
+    }
+    // Fallback para relatório/plano D1 que já estavam em andamento antes do deploy.
+    const rs=(await env.DB.prepare('SELECT r,n,f,m FROM msg_contatos_tmp').all()).results;
+    const contatos=rs.map(x=>({r:x.r,n:x.n,f:JSON.parse(x.f||'[]'),m:JSON.parse(x.m||'[]')}));
+    const rel=await montarRelatorioContatos_(env,contatos);if(rel.ok)await env.DB.prepare('DELETE FROM msg_contatos_tmp').run();return rel;
   }
-  return { ok: false, erro: 'Etapa do relatório inválida.' };
+  return {ok:false,erro:'Etapa do relatório inválida.'};
 }
 async function montarRelatorioContatos_(env, contatos) {
   const porChave = new Map(), invalidos = [], corrigir = []; let semFone = 0;
@@ -3859,31 +4165,30 @@ async function montarRelatorioContatos_(env, contatos) {
     const n = foneNormal_('+' + c.contato); if (!n.ok || porChave.has(n.chave) || vistos.has(n.chave)) continue;
     vistos.add(n.chave); semCadastro.push({ conversa: c.id, canal: c.canal, nome: c.nome || '', fone: '+' + n.d, ultima: c.ultima_em });
   }
-  await salvarPlanoContatos_(env, duplicados, semCadastro);
   const corta = (a) => a.slice(0, 500);
   const rel = { em: agora(), total: contatos.length, comFone: contatos.length - semFone, semFone: semFone,
     duplicados: { total: duplicados.length, contatosEnvolvidos: duplicados.reduce((t, g) => t + g.contatos.length, 0), lista: corta(duplicados) },
     corrigir: { total: corrigir.length, lista: corta(corrigir) }, invalidos: { total: invalidos.length, lista: corta(invalidos) },
     semCadastro: { total: semCadastro.length, lista: corta(semCadastro) } };
-  try { await cfgSet(env, 'contatos_relatorio', JSON.stringify(rel)); } catch (e) { /* grande demais para guardar: só devolve */ }
+  await salvarPlanoContatos_(env, duplicados, semCadastro, rel);
+  try { await cfgSet(env, 'contatos_relatorio', JSON.stringify(rel)); } catch (e) { const salvo=await contatosR2TemPlano_(env);if(!salvo?.m.relatorio)throw e; /* só o novo snapshot R2 permite retomar sem esta cópia */ }
   return Object.assign({ ok: true }, rel);
 }
 /* v2.16: plano completo da limpeza aprovada (o relatório guarda só 500 de cada lista).
  * Repetidos ligados entre si (um contato com dois números em dois grupos) viram um grupo só; fica o nome mais completo. */
-async function salvarPlanoContatos_(env, duplicados, semCadastro) {
-  const pai = new Map(), dados = new Map();
-  const raiz = (x) => { while (pai.get(x) !== x) { pai.set(x, pai.get(pai.get(x))); x = pai.get(x); } return x; };
-  for (const g of duplicados) for (const c of g.contatos) { if (!pai.has(c.r)) { pai.set(c.r, c.r); dados.set(c.r, c); } }
-  for (const g of duplicados) for (let i = 1; i < g.contatos.length; i++) { const a = raiz(g.contatos[0].r), b = raiz(g.contatos[i].r); if (a !== b) pai.set(b, a); }
-  const comp = new Map(); for (const r of pai.keys()) { const k = raiz(r); if (!comp.has(k)) comp.set(k, []); comp.get(k).push(dados.get(r)); }
-  const peso = (c) => [String(c.n || '').trim().length, (c.f || []).length + (c.m || []).length];
-  const grupos = [...comp.values()].filter((g) => g.length > 1 && g.length <= 11).map((g) => {
-    const ord = g.slice().sort((a, b) => { const pa = peso(a), pb = peso(b); return pb[0] - pa[0] || pb[1] - pa[1]; });
-    return { manter: ord[0].r, nome: ord[0].n || '', apagar: ord.slice(1).map((c) => c.r) };
-  });
+async function salvarPlanoContatos_(env, duplicados, semCadastro, relatorio) {
+  const pai=new Map(),dados=new Map(),raiz=x=>{while(pai.get(x)!==x){pai.set(x,pai.get(pai.get(x)));x=pai.get(x);}return x;};
+  for(const g of duplicados)for(const c of g.contatos)if(!pai.has(c.r)){pai.set(c.r,c.r);dados.set(c.r,c);}
+  for(const g of duplicados)for(let i=1;i<g.contatos.length;i++){const a=raiz(g.contatos[0].r),b=raiz(g.contatos[i].r);if(a!==b)pai.set(b,a);}
+  const comp=new Map();for(const r of pai.keys()){const k=raiz(r);if(!comp.has(k))comp.set(k,[]);comp.get(k).push(dados.get(r));}
+  const peso=c=>[String(c.n||'').trim().length,(c.f||[]).length+(c.m||[]).length];
+  const grupos=[...comp.values()].filter(g=>g.length>1&&g.length<=11).map(g=>{const ord=g.slice().sort((a,b)=>{const pa=peso(a),pb=peso(b);return pb[0]-pa[0]||pb[1]-pa[1];});return {manter:ord[0].r,nome:ord[0].n||'',apagar:ord.slice(1).map(c=>c.r)};});
+  const a=await contatosR2Atual_(env);
+  if(a){if(a.m.status==='lendo'||a.m.status==='pronto'&&!a.m.relatorio){await contatosR2CriarPlano_(env,a,grupos,semCadastro,relatorio);return;}throw Error('O relatório já está pronto. Faça uma nova cópia de segurança para começar outro.');}
+  // Chamada síncrona antiga ou leitura em andamento anterior ao deploy: preservar comportamento D1.
   await env.DB.prepare('DELETE FROM msg_contatos_plano').run();
-  const SQL = 'INSERT INTO msg_contatos_plano (tipo, dados) VALUES (?, ?)', linhas = grupos.map((g) => ['dup', g]).concat(semCadastro.map((x) => ['novo', x]));
-  for (let i = 0; i < linhas.length; i += 100) await env.DB.batch(linhas.slice(i, i + 100).map(([t, d]) => env.DB.prepare(SQL).bind(t, JSON.stringify(d))));
+  const SQL='INSERT INTO msg_contatos_plano (tipo,dados) VALUES (?,?)',linhas=grupos.map(g=>['dup',g]).concat(semCadastro.map(x=>['novo',x]));
+  for(let i=0;i<linhas.length;i+=100)await env.DB.batch(linhas.slice(i,i+100).map(([t,d])=>env.DB.prepare(SQL).bind(t,JSON.stringify(d))));
 }
 const nomeTM_ = (nome, d) => {
   const n = String(nome || '').replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -3916,6 +4221,7 @@ async function limpezaContatos_(env, d) {
   const b = JSON.parse((await cfgGet(env, 'contatos_backup')) || 'null');
   if (!b || Date.now() - Date.parse(b.em) > 6 * 3600000) return { ok: false, cod: 409, erro: 'Faça uma cópia de segurança nova (menos de 6 horas) antes da limpeza.' };
   const acc = JSON.parse((await cfgGet(env, 'contatos_limpeza_and')) || '{}'), salvar = () => cfgSet(env, 'contatos_limpeza_and', JSON.stringify(acc));
+  const planoR2=await contatosR2TemPlano_(env); if(planoR2) { if(planoR2.m.backup!==b.em)return {ok:false,cod:409,erro:'O backup mudou desde o relatório. Faça novo relatório antes da limpeza.'}; return await contatosR2Limpeza_(env,d,planoR2,acc,salvar); }
   if (d.etapa === 'juntar') {
     const desde = Math.max(0, Number(d.desde) || 0), total = (await env.DB.prepare("SELECT COUNT(*) n FROM msg_contatos_plano WHERE tipo='dup'").first()).n;
     const rs = (await env.DB.prepare("SELECT id, dados FROM msg_contatos_plano WHERE tipo='dup' AND id>? ORDER BY id LIMIT 100").bind(desde).all()).results;
@@ -3989,12 +4295,30 @@ async function anotarFalha_(env, pathname, cod) {
     await env.CACHE.put(k, JSON.stringify({ desde: junto ? a.desde : new Date(t).toISOString(), em: new Date(t).toISOString(), n: junto ? (a.n || 1) + 1 : 1, canal: canal.slice(0, 20), cod: Number(cod) || 0 }), { expirationTtl: 172800 });
   } catch (e) { /* conforto */ }
 }
-async function saudeAvisos_(env) {
-  let a = null; try { a = await env.CACHE.get('saude:falha', 'json'); } catch (e) { return { alerta: false }; }
-  if (!a || (a.n || 1) < 2) return { alerta: false };
-  try { const r = await env.DB.prepare('SELECT MAX(gravada_em) AS u FROM msg_mensagem').first(); const u = (r && r.u) || ''; return { alerta: a.em > u, desde: a.desde, em: a.em, canal: a.canal, cod: a.cod, ultimaOk: u }; }
-  catch (e) { return { alerta: true, desde: a.desde, em: a.em, canal: a.canal, cod: a.cod, ultimaOk: '' }; }
+/** Contagem limitada, sem conteúdo/IDs de clientes. Cache de borda evita listar R2 por aparelho. */
+async function resumoEntradas_(env) {
+  const ck=new Request('https://saude.invalid/entrada-v1');
+  try{const cache=await caches.default.match(ck);if(cache){const r=await cache.json();if(Date.now()-r.em<20000)return r;}}catch(_){}
+  const r={em:Date.now(),recebidas:0,anexos:0,maisRecebidas:false,maisAnexos:false,desde:'',erro:false,motivo:''};
+  for(const [classe,campo,mais] of [['recebidas','recebidas','maisRecebidas'],['complementos','anexos','maisAnexos']]){
+    const l=await env.MIDIA.list({prefix:MSG_ENTRADA_PREFIXO_+classe+'/',limit:50,include:['customMetadata']});
+    r[campo]=l.objects.length;r[mais]=l.truncated;
+    for(const o of l.objects){const m=o.customMetadata||{};if(m.em&&(!r.desde||m.em<r.desde))r.desde=m.em;if(Number(m.tentativas)>0)r.erro=true;if(m.motivo==='cota')r.motivo='cota';}
+  }
+  try{await caches.default.put(ck,new Response(JSON.stringify(r),{headers:{'Cache-Control':'max-age=20','Content-Type':'application/json'}}));}catch(_){}
+  return r;
 }
+async function saudeAvisos_(env) {
+  let fila;
+  try{fila=await resumoEntradas_(env);}catch(_){fila=null;}
+  if(fila&&(fila.recebidas||fila.anexos)&&(fila.erro||fila.maisRecebidas||fila.maisAnexos||Date.now()-Date.parse(fila.desde)>20000))
+    return {alerta:true,tipo:fila.recebidas?'entrada':'anexos',desde:fila.desde,pendentes:fila.recebidas,anexos:fila.anexos,mais:fila.maisRecebidas||fila.maisAnexos,motivo:fila.motivo};
+  let a=null;try{a=await env.CACHE.get('saude:falha','json');}catch(_){return {alerta:false};}
+  if(!a||(a.n||1)<2)return {alerta:false};
+  try{const where=MSG_CANAIS.includes(a.canal)?' WHERE canal=?':'';const q=env.DB.prepare('SELECT MAX(gravada_em) AS u FROM msg_mensagem'+where);const r=await (where?q.bind(a.canal):q).first();const u=r?.u||'';return {alerta:a.em>u,desde:a.desde,em:a.em,canal:a.canal,cod:a.cod,ultimaOk:u};}
+  catch(_){return {alerta:true,desde:a.desde,em:a.em,canal:a.canal,cod:a.cod,ultimaOk:''};}
+}
+
 /* Nomes de tecidos públicos; renomear exige Admin total e não regrava produtos. */
 const TECIDOS_CFG_='catalogo_tecidos_v1';
 const tecidoChave_=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').trim();
@@ -4037,12 +4361,13 @@ export default {
   async scheduled(ev, env, ctx) {
     ctx.waitUntil(processarPushMobile_(env).catch(()=>{}));
     ctx.waitUntil(processarFilaZernio_(env).catch(()=>{}));
+    ctx.waitUntil(processarEntradas_(env).catch(()=>{}));
     ctx.waitUntil(processarAgenda_(env).catch(()=>{}));                      // a cada minuto: mensagens agendadas que chegaram na hora
     ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
     ctx.waitUntil(processarFotoIA(env));                                      // a cada minuto: 1 imagem da fila de Fotos com IA (se já puder: cota/limite do dia)
     ctx.waitUntil(filaContatosAuto_(env));                                    // a cada minuto: até 5 números novos viram "TM Cliente …" no Google (se ligado)
     const min = ev && ev.scheduledTime ? new Date(ev.scheduledTime).getUTCMinutes() : 0;
-    if (min === 7) ctx.waitUntil(limparTemporarios(env).catch(() => {}));      // 1x por dia: apaga do R2 o que é temporário (t/) com mais de 5 dias
+    if (min === 7) {ctx.waitUntil(limparTemporarios(env).catch(() => {}));ctx.waitUntil((async()=>{const c=await env.CACHE.get('contatos_staging_cursor');const r=await contatosR2ExpurgarOrfaos_(env,Date.now(),c||undefined);if(r.cursor)await env.CACHE.put('contatos_staging_cursor',r.cursor,{expirationTtl:86400});else await env.CACHE.delete('contatos_staging_cursor');})().catch(()=>{}));}      // 1x por dia: apaga do R2 o que é temporário (t/) com mais de 5 dias
     if (min % 30 !== 0) return;                                                // importar do Instagram só a cada 30 min (como antes)
     if (await env.CACHE.get('ig_hist_trava')) return;
     ctx.waitUntil((async () => { await ciclo(env, 'cron'); try { await analisarPendentes(env, 5); } catch (e) { /* a IA é conforto: o ciclo não pode cair por causa dela */ } })());
@@ -4122,6 +4447,12 @@ export default {
           return J({ok:false,erro:'Formato de chave FreeConvert inválido.'},400);
         await cfgSet(env,'freeconvert_api_key',chave);
         return J({ok:true,configurada:true});
+      }
+      if(p==='/msg/entrada/reprocessar'&&req.method==='POST'){
+        const tarefa=processarEntradas_(env,true).catch(()=>{});
+        if(typeof ctx?.waitUntil==='function')ctx.waitUntil(tarefa);else await tarefa;
+        try{await caches.default.delete(new Request('https://saude.invalid/entrada-v1'));}catch(_){}
+        return J({ok:true,iniciado:true});
       }
       if (p === '/msg/instagram/segredo' && req.method === 'POST') {
         const d = await req.json().catch(() => ({}));
@@ -4473,7 +4804,7 @@ export default {
         let backup = null, relatorio = null; try { backup = JSON.parse((await cfgGet(env, 'contatos_backup')) || 'null'); } catch (e) { backup = null; }
         if (url.searchParams.get('relatorio') === '1') { try { relatorio = JSON.parse((await cfgGet(env, 'contatos_relatorio')) || 'null'); } catch (e) { relatorio = null; } }
         let limpeza = null; try { limpeza = JSON.parse((await cfgGet(env, 'contatos_limpeza')) || 'null'); } catch (e) { limpeza = null; }
-        const plano = (await env.DB.prepare('SELECT COUNT(*) n FROM msg_contatos_plano').first()).n;
+        const planoR2=await contatosR2TemPlano_(env); const plano=planoR2 ? planoR2.m.plano.dup+planoR2.m.plano.novos : (await env.DB.prepare('SELECT COUNT(*) n FROM msg_contatos_plano').first()).n;
         const fila = (await env.DB.prepare("SELECT SUM(estado='feito') feitos, SUM(estado='pendente' AND tentativas<5) pendentes, SUM(estado='pendente' AND tentativas>=5) falhas FROM msg_contatos_fila").first()) || {};
         return J({ ok: true, ligada: ligada, conta: (await cfgGet(env, 'contatos_conta')) || '', marcador: 'Tenkiter Clientes G', backup: backup, relatorio: relatorio, limpeza: limpeza, planoPronto: plano > 0, auto: (await cfgGet(env, 'contatos_auto')) === '1', fila: { feitos: fila.feitos || 0, pendentes: fila.pendentes || 0, falhas: fila.falhas || 0 } });
       }

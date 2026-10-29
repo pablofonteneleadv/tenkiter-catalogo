@@ -124,6 +124,7 @@
     if (/^(ficha|pessoa)/.test(a)) return 'contatos';
     if (/^(etq|etiquetas)/.test(a)) return 'etiquetas';
     if (/^(funil)/.test(a)) return 'funil';
+    if(a==='entrada-reprocessar')return 'configuracoes';
     if (/^(agenda|agendar)/.test(a)) return 'agenda';
     if (/^(exp|copiar)/.test(a)) return 'exportar';
     if (/^(painel|metricas|met-)/.test(a)) return 'metricas';
@@ -320,7 +321,8 @@
       .ms-nota-rot { display: block; font-size: 0.72rem; font-weight: 700; color: #6b5000; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 2px; }
       .ms-modo-nota textarea, textarea.ms-modo-nota, .ms-modo-nota #ms-texto { background: #fff6d6 !important; border-color: #e0c56e !important; }
       .ms-nota-btn[aria-pressed="true"] { background: #fff6d6; }
-      .ms-saude { margin: 0 12px 8px; padding: 10px 12px; border-radius: 8px; background: #fdecec; color: #8f1d1d; border: 1px solid #f3c7c7; font-size: 0.85rem; display: grid; gap: 2px; }
+      .ms-saude { margin: 0 12px 8px; padding: 10px 12px; border-radius: 8px; background: #fdecec; color: #8f1d1d; border: 1px solid #f3c7c7; font-size: 0.85rem; display: flex; align-items:center; gap:8px; }
+      .ms-saude>div{min-width:0;flex:1}.ms-saude>button{flex:none;min-height:44px}.ms-saude b,.ms-saude span{display:block}
       .ms-saude b { color: #c62828; }
       .ms-aviso { position: absolute; left: 12px; right: 12px; bottom: 88px; z-index: 7; margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff3cd; color: #5a4300; font-size: 0.85rem; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
       .ms-aviso[hidden] { display: none; }
@@ -2373,9 +2375,12 @@
     const e = $('ms-saude'); if (!e) return;
     e.hidden = !sd.alerta; if (!sd.alerta) { e.textContent = ''; return; }
     const hora = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
-    const b = el('b', '', 'Mensagens não estão chegando desde ' + hora(sd.desde));
-    const t = el('span', '', 'O servidor recusou os avisos' + (NOME_CANAL_[sd.canal] ? ' do ' + NOME_CANAL_[sd.canal] : '') + (sd.cod ? ' (erro ' + sd.cod + ')' : '') + '. As mensagens continuam no celular; o site volta a mostrar sozinho quando o servidor aceitar de novo.');
-    e.replaceChildren(b, t);
+    const guardada=sd.tipo==='entrada'||sd.tipo==='anexos';
+    const b=el('b','',guardada?(sd.tipo==='entrada'?'Mensagens guardadas':'Anexos aguardando'):'Falha no recebimento');
+    const t=el('span','',guardada?'Processamento será tentado novamente.':(hora(sd.desde)?'Desde '+hora(sd.desde)+'. ':'')+'Confira o canal no celular.');
+    const texto=el('div');texto.append(b,t);e.replaceChildren(texto);
+    if(guardada&&podeFerramenta_('configuracoes')){const bt=botao('ms-btn','Tentar','entrada-reprocessar');bt.setAttribute('aria-label','Tentar processar mensagens pendentes');e.append(bt);}
+
   }
   /* v7.40.7: trocar de usuário sem sair do aparelho — as contas já usadas ficam guardadas aqui e as conversas carregadas continuam */
   const CHAVE_CONTAS_ = 'tm_sessoes_v1';
@@ -2752,6 +2757,11 @@
     else if (a === 'ponte-desligar') {
       if (!confirm('Desligar a ponte do Google Contatos? O endereço e a chave saem do servidor da loja. Nenhum contato é apagado.')) return;
       const r = await worker_('/msg/contatos/config', 'POST', { desligar: true }); if (r.ok) { aviso_('Ponte desligada.'); contatosSit = null; desenharEstado(); }
+    }
+    else if(a==='entrada-reprocessar'){
+      b.disabled=true;
+      try{const r=await worker_('/msg/entrada/reprocessar','POST',{});const texto=$('ms-saude')?.querySelector('span');if(texto)texto.textContent=r.ok?'Nova tentativa iniciada.':r.erro||'Não consegui iniciar. Tente novamente.';}
+      finally{if(b.isConnected)b.disabled=false;}
     }
     else if (a === 'gaveta-produtos') abrirProdutos_();
     else if (a === 'gaveta-respostas') abrirRespostas_(false);

@@ -110,3 +110,9 @@ Referências referentes à base 7.40.27; linhas podem mudar nos próximos lotes.
 - `docs/ux/gavetas-proposta-20261029.md`, `docs/ux/tecidos-fluidez-20261029.md`: acabamento e tecido já entregues.
 
 Ausência de rota/fluxo na busca de código foi usada junto com inspeção das APIs e telas, não como prova sobre serviços externos ou configuração de faturamento.
+
+## Avanço do roteiro — lote 7.40.29
+
+A primeira entrega de confiabilidade implementa preservação de entrada autenticada em R2 privado antes do aceite, transação de mensagem/lista, complementos de mídia depois do texto, nova tentativa e aviso compacto. Relatórios/planos novos de contatos saem do staging em linhas D1 e usam páginas privadas, mantendo legado, fila operacional e backup Drive. Detalhes, testes e limites em `CONFIABILIDADE-7.40.29.md`; publicação precisa ser confirmada pelo workflow/commit público.
+
+Ainda não encerram a frente inteira: recuperação histórica Wafly sem endpoint confirmado, medição preventiva de cota/plano e conexão realmente orientada a eventos permanecem distintas das correções deste lote. Busca por imagem continua próxima na ordem, sem inferência ou indexação ativada por esta publicação.

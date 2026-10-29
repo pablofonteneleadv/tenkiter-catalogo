@@ -17,7 +17,15 @@ function d1() {
   const cacheMem = new Map();
   globalThis.caches = { default: { async match(r) { const v = cacheMem.get(r.url); return v ? new Response(v) : undefined; }, async put(r, x) { cacheMem.set(r.url, await x.text()); } } };
   const objs = new Map(); const kv = new Map();
-  const R2 = { async get(k) { const v = objs.get(k); return v ? { size:v.length, async arrayBuffer() { return v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength); } } : null; }, async put(k, b) { objs.set(k, Buffer.from(b instanceof ReadableStream ? await new Response(b).arrayBuffer() : b)); }, async delete(k) { objs.delete(k); }, async list(o) { const pr = (o && o.prefix) || ''; return { objects: [...objs.keys()].filter((k) => k.startsWith(pr)).map((k) => ({ key: k, size: objs.get(k).length, uploaded: (tempDatas.get(k) || new Date()) })), truncated: false }; } };
+  const meta=new Map();
+  let seqR2=0;const r2meta=new Map();
+  const R2 = {
+    async get(k){const v=objs.get(k),m=r2meta.get(k)||{};return v?{size:v.length,etag:m.etag,customMetadata:m.customMetadata||{},httpMetadata:(meta.get(k)||{}),body:new Response(v).body,async arrayBuffer(){return v.buffer.slice(v.byteOffset,v.byteOffset+v.byteLength)}}:null;},
+    async head(k){const v=objs.get(k),m=r2meta.get(k)||{};return v?{size:v.length,etag:m.etag,customMetadata:m.customMetadata||{},httpMetadata:meta.get(k)||{}}:null;},
+    async put(k,b,o={}){const atual=r2meta.get(k);if(o.onlyIf?.etagDoesNotMatch==='*'&&objs.has(k))return null;if(o.onlyIf?.etagMatches&&o.onlyIf.etagMatches!==atual?.etag)return null;objs.set(k,Buffer.from(b instanceof ReadableStream?await new Response(b).arrayBuffer():b));meta.set(k,o.httpMetadata||{});const m={etag:String(++seqR2),customMetadata:o.customMetadata||{}};r2meta.set(k,m);return m;},
+    async delete(k){objs.delete(k);r2meta.delete(k);},
+    async list(o={}){const keys=[...objs.keys()].filter(k=>k.startsWith(o.prefix||'')).sort(),lim=o.limit||1000;const from=o.cursor?keys.findIndex(k=>k>o.cursor):0;const chosen=keys.slice(Math.max(0,from),Math.max(0,from)+lim);return {objects:chosen.map(k=>({key:k,size:objs.get(k).length,uploaded:tempDatas.get(k)||new Date(),customMetadata:r2meta.get(k)?.customMetadata||{}})),truncated:keys.length>Math.max(0,from)+lim,cursor:chosen.at(-1)};}
+  };
   const tempDatas = new Map();
   const KV = { async get(k, t) { const v = kv.get(k); return v === undefined ? null : (t === 'json' ? JSON.parse(v) : v); }, async put(k, v) { kv.set(k, String(v)); }, async delete(k) { kv.delete(k); } };
   const TOKEN = 'IGQVJ_TOKEN_INVENTADO_PARA_TESTE_1234567890';
