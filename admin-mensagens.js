@@ -377,6 +377,8 @@
       .ms-prod-preco { font-weight: 700; font-size: 0.85rem; color: #141414; }
       .ms-prod-det { font-size: 0.78rem; color: #4a443b; overflow-wrap: anywhere; }
       .ms-prod-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+      .ms-prod-editar { align-self: flex-start; border: 0; padding: 8px 2px; background: transparent; color: var(--laranja-txt,#9c530e); font: 700 .83rem/1.4 system-ui, sans-serif; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; min-height: 44px; }
+      .ms-prod-editar:focus-visible { outline: 3px solid #e88a25; outline-offset: 3px; border-radius: 5px; }
       .ms-prod-acoes .ms-btn { min-height: 40px; padding: 6px 10px; font-size: 0.8rem; }
       .ms-previa { display: flex; align-items: center; padding: 0 8px; background: #fff; box-shadow: inset 0 1px 0 #f0ece2; }
       .ms-previa[hidden] { display: none; }
@@ -1142,6 +1144,7 @@
     x.focus();                    // o foco entra na gaveta (Esc e leitor de tela); Produtos depois leva o foco para a busca
     return corpo;
   }
+  let atualizarPickerAoEditar_ = null;
   async function abrirProdutos_() {
     const corpo = gaveta_('Produtos'); if (!corpo) return;
     if(APP_RECENTES&&!produtosCatalogo_().length&&typeof carregarProdutos==='function'){
@@ -1149,6 +1152,7 @@
       if(!corpo.isConnected)return;corpo.textContent='';
     }
     const idConv = aberta ? aberta.id : null; if (idConv !== prodSelConv) { prodSel = []; prodSelConv = idConv; }
+    if (atualizarPickerAoEditar_) window.removeEventListener('storage', atualizarPickerAoEditar_);
     const q = el('input', 'ms-busca ms-busca-prod'); q.id = 'ms-prod-busca'; q.type = 'search'; q.placeholder = 'Nome, código, cor ou tamanho'; q.setAttribute('aria-label', 'Buscar produto');
     const so = el('label', 'ms-cfg-linha ms-prod-filtro'), chk = el('input'); chk.type = 'checkbox'; chk.id = 'ms-prod-estoque'; chk.checked = true; so.append(chk, document.createTextNode(' Só com estoque'));
     const ul = el('ul', 'ms-prod-lista'); ul.id = 'ms-prod-lista'; ul.setAttribute('aria-live', 'polite');
@@ -1213,13 +1217,39 @@
         const acoes = el('div', 'ms-prod-acoes');
         acoes.appendChild(botao('ms-btn prim', 'Colocar na mensagem', 'prod-usar', { id: String(p.ID) }));
         if (linkDe_(p)) acoes.appendChild(botao('ms-btn', 'Copiar link', 'prod-link', { id: String(p.ID) }));
+        const editar = botao('ms-prod-editar', '✎ Editar tamanhos', 'prod-editar', { id: String(p.ID) });
+        editar.setAttribute('aria-label', 'Editar tamanhos e disponibilidade de ' + (p.Nome || 'produto'));
+        info.appendChild(editar);
         info.appendChild(acoes);
         li.append(marca, info); ul.appendChild(li);
       });
       if (ps.length > 40) ul.appendChild(el('li', 'ms-vazio', 'Mostrando 40 de ' + ps.length + '. Escreva mais para achar mais rápido.'));
     };
+    atualizarPickerAoEditar_ = (ev) => {
+      if (ev.key !== 'tk_produto_atendimento_atualizado' || !ul.isConnected) return;
+      if (typeof carregarProdutos === 'function') {
+        Promise.resolve(carregarProdutos()).then(() => {
+          if (ul.isConnected) pintar(); // mantém busca, filtros e seleção da conversa
+        }).catch(() => aviso_('Não consegui atualizar os produtos. Feche e abra Produtos novamente.'));
+      }
+    };
+    window.addEventListener('storage', atualizarPickerAoEditar_);
     q.addEventListener('input', ()=>{if(q.value.trim().length>=2)filtrosProd.open=true;pintar();}); chk.addEventListener('change', pintar); pintar(); desenharSelProd_();
     setTimeout(() => q.focus(), 0);
+  }
+  function abrirEdicaoRapidaProduto_(p) {
+    // Reutiliza a edição autenticada da Gestão, em vez de gravar diretamente no backend
+    // ou permitir alterações sem as validações de permissões e auditoria existentes.
+    const id = String(p.ID);
+    if (!id || !/^[A-Za-z0-9_-]{1,90}$/.test(id)) { aviso_('Não foi possível identificar a peça.'); return; }
+    const destino = new URL('admin.html', location.href);
+    destino.searchParams.set('editarProduto', id);
+    destino.searchParams.set('edicaoRapida', 'tamanhos');
+    // Mesma origem: abrir com o vínculo inicial permite ao navegador copiar
+    // a sessão desta aba; depois retirar o vínculo para não expor a conversa.
+    const novaAba = window.open(destino.href, '_blank');
+    if (novaAba) { try { novaAba.opener = null; } catch (_) {} }
+    else aviso_('Permita abrir uma nova aba para editar sem perder a conversa.');
   }
   const produtoPorId_ = (id) => produtosCatalogo_().find((p) => String(p.ID) === String(id));
   /* v7.29: seleção de produtos (igual ao "Selecionar" da loja): várias peças numa mensagem só, com o link ?sel= do site.
@@ -2662,6 +2692,7 @@
     else if (a === 'prodsel-limpar') { prodSel = []; Array.prototype.forEach.call(document.querySelectorAll('#ms-prod-lista .ms-prod-marca'), (m) => { m.setAttribute('aria-pressed', 'false'); m.querySelector('.ms-prod-caixa').textContent = ''; m.closest('.ms-prod').classList.remove('marcado'); }); desenharSelProd_(); const q = $('ms-prod-busca'); if (q) q.focus(); }
     else if (a === 'prodsel-usar') { const ps = produtosSelecionados_(); if (ps.length) { prodSel = []; colocarNaMensagem_(textoSelecao_(ps)); } }
     else if (a === 'prodsel-link') { const ps = produtosSelecionados_(); if (ps.length) { try { await navigator.clipboard.writeText(linkSelecao_(ps)); aviso_('Link da seleção copiado.'); } catch (e) { aviso_('Não consegui copiar. Use “Enviar seleção”.'); } } }
+    else if (a === 'prod-editar') { const p = produtoPorId_(b.dataset.id); if (p) abrirEdicaoRapidaProduto_(p); }
     else if (a === 'prod-usar') { const p = produtoPorId_(b.dataset.id); if (p) colocarNaMensagem_(textoProduto_(p)); }
     else if (a === 'prod-link') { const p = produtoPorId_(b.dataset.id); if (p) { try { await navigator.clipboard.writeText(linkDe_(p)); aviso_('Link copiado.'); } catch (e) { aviso_('Não consegui copiar. Use “Colocar na mensagem”.'); } } }
     else if (a === 'nome-salvar') { const i = $('ms-meu-nome-rapido'); await salvarNome_(i ? i.value : ''); const t = $('ms-texto'); if (t) t.focus(); }

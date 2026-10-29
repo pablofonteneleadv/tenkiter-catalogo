@@ -929,6 +929,40 @@
 
 </style>
 <link rel="stylesheet" href="acabamento-admin.css?v=7.23.0">
+<style id="atendimento-edicao-rapida">
+/* Mostra só as escolhas necessárias. Campos originais permanecem no DOM para
+   a atualização usar validações, mídias, auditoria e permissão já existentes. */
+body.edicao-rapida-atendimento #form-produto .passo:not([data-passo='tamanhos']),
+body.edicao-rapida-atendimento #form-produto #details-mais,
+body.edicao-rapida-atendimento #btn-cancelar-duplicar,
+body.edicao-rapida-atendimento #audit-form { display: none !important; }
+body.edicao-rapida-atendimento #card-form { max-width: 720px; margin-inline: auto; }
+body.edicao-rapida-atendimento #card-form .cad-corpo { padding: 16px; }
+body.edicao-rapida-atendimento #titulo-form { font-size: clamp(1rem, 4vw, 1.3rem); margin: 8px 0; }
+body.edicao-rapida-atendimento #form-produto .passo[data-passo='tamanhos'] { margin-top: 12px; }
+body.edicao-rapida-atendimento #form-produto .passo[data-passo='tamanhos'] .num { display:none; }
+body.edicao-rapida-atendimento #btn-salvar {
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:calc(70px + env(safe-area-inset-bottom, 0px));
+  width:min(690px, calc(100vw - 28px)) !important; min-height:52px;
+  z-index:70; margin:0 !important; border-radius:12px;
+  box-shadow:0 6px 18px rgba(0,0,0,.12);
+}
+body.edicao-rapida-atendimento #form-produto { padding-bottom:110px; }
+body.edicao-rapida-atendimento #cad-faixas button { scroll-margin-bottom:130px; }
+body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; }
+#cad-atendimento-voltar { min-height:44px; border:0; background:transparent; color:var(--laranja-txt,#a65b13); font-size:.9rem; font-family:inherit; font-weight:700; cursor:pointer; padding:8px 0; text-decoration:underline; text-underline-offset:3px; }
+#cad-atendimento-voltar:focus-visible { outline:3px solid #e98a20; outline-offset:2px; }
+@media (max-width: 359px) {
+  body.edicao-rapida-atendimento #cad-etiquetas button {
+    font-size: 10px !important;
+    letter-spacing: -.2px;
+    padding-inline: 1px !important;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+}
+</style>
 </head>
 <body>
 
@@ -3185,6 +3219,45 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     abrirCadastro_();
   }
 
+  // Vindo da gaveta Produtos, usa a edição já autenticada da Gestão.
+  // A conversa original permanece aberta na outra aba.
+  let edicaoAtendimentoAberta_ = false;
+  function tentarAbrirEdicaoDoAtendimento_() {
+    if (edicaoAtendimentoAberta_) return;
+    const params = new URLSearchParams(location.search);
+    const id = params.get('editarProduto');
+    if (!id || !/^[A-Za-z0-9_-]{1,90}$/.test(id)) return;
+    const p = produtos.find(x => String(x.ID) === id);
+    if (!p || !usuarioAdmin) return;
+    edicaoAtendimentoAberta_ = true;
+    editarProduto(id);
+    if (params.get('edicaoRapida') !== 'tamanhos') return;
+    document.body.classList.add('edicao-rapida-atendimento');
+    const corpo = document.querySelector('#card-form .cad-corpo');
+    const titulo = document.getElementById('titulo-form');
+    const sum = document.getElementById('cad-sum-txt');
+    const desc = corpo && corpo.querySelector('.cad-sub');
+    if (titulo) titulo.textContent = 'Corrigir tamanhos · ' + (p.Codigo || p.Nome || 'peça');
+    if (sum) sum.textContent = 'Editar tamanhos e idades';
+    if (desc) desc.textContent = 'Desmarque o que acabou ou marque as opções disponíveis. Salve para atualizar a loja.';
+    const salvar = document.getElementById('btn-salvar');
+    if (salvar) salvar.textContent = 'Salvar tamanhos';
+    document.getElementById('status')?.setAttribute('role', 'status');
+    if (corpo && !document.getElementById('cad-atendimento-voltar')) {
+      const voltar = document.createElement('button');
+      voltar.type = 'button';
+      voltar.id = 'cad-atendimento-voltar';
+      voltar.textContent = '← Voltar à conversa';
+      voltar.addEventListener('click', () => {
+        window.close();
+        if (!window.closed && history.length > 1) history.back();
+      });
+      corpo.insertBefore(voltar, titulo || corpo.firstChild);
+    }
+    const faixa = document.getElementById('cad-etiquetas');
+    if (faixa) requestAnimationFrame(() => faixa.querySelector('button')?.focus({ preventScroll: true }));
+    document.getElementById('card-form')?.scrollIntoView({ behavior: 'auto', block: 'start' });
+  }
   function editarProduto(id) {
     const p = produtos.find(x => String(x.ID) === String(id));
     if (!p) return;
@@ -4000,6 +4073,13 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       it.estado = 'enviando'; desenharEnvios();
       try { await enviarItem(it); } catch (err) { it.estado = 'erro'; it.msg = 'erro inesperado'; window.logDebug_('════ "' + it.titulo + '": erro inesperado no JS -- ' + ((err && err.stack) || err) + ' ════'); }
       if (it.estado === 'ok' || it.estado === 'aviso' || it.estado === 'offline') apagarEnvio_(it); else { it.etapa = 'fila'; guardarEnvio_(it); }
+      if (it.ehEdicao && document.body.classList.contains('edicao-rapida-atendimento') && it.estado === 'erro') {
+        document.getElementById('status').textContent = 'Não foi possível salvar. Confira o aviso de envio e tente novamente.';
+        const salvar = document.getElementById('btn-salvar');
+        const voltar = document.getElementById('cad-atendimento-voltar');
+        if (salvar) { salvar.disabled = false; salvar.textContent = 'Salvar tamanhos'; }
+        if (voltar) voltar.disabled = false;
+      }
       desenharEnvios();
     }
   }
@@ -4011,6 +4091,21 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const aviso = conferirSalvo(it, it.respSalvo);
       if (aviso) { it.estado = 'aviso'; it.msg = aviso; window.logDebug_('════ "' + it.titulo + '": conferência com aviso -- ' + aviso + ' ════'); }
       else sumirDepois(it, 6000);
+      if (it.ehEdicao && it.estado === 'ok') {
+        try {
+          localStorage.setItem('tk_produto_atendimento_atualizado',
+            JSON.stringify({ id: String(it.dados.id), em: Date.now() }));
+        } catch (_) {}
+      }
+      if (it.ehEdicao && document.body.classList.contains('edicao-rapida-atendimento')) {
+        const salvar = document.getElementById('btn-salvar');
+        const voltar = document.getElementById('cad-atendimento-voltar');
+        if (salvar) { salvar.disabled = false; salvar.textContent = it.estado === 'ok' ? 'Salvar outra correção' : 'Salvar tamanhos'; }
+        if (voltar) { voltar.disabled = false; voltar.textContent = it.estado === 'ok' ? '✓ Salvo! Voltar à conversa' : '← Voltar à conversa'; }
+        document.getElementById('status').textContent = it.estado === 'ok'
+          ? 'Tamanhos atualizados na loja. Pode voltar à conversa.'
+          : 'O servidor salvou, mas a conferência pediu atenção. Confira o aviso antes de voltar.';
+      }
     });
     desenharEnvios();
     const formulario = document.getElementById('card-form');
@@ -4137,9 +4232,18 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         guardarEnvio_(envios[envios.length - 1]);
       });
     }
-    cancelarDuplicacao(); // libera o formulário já
-    document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima peça.';
-    sairDoCadastro_();
+    if (document.body.classList.contains('edicao-rapida-atendimento') && ehEdicao) {
+      // No atendimento, não esconder o formulário até o servidor confirmar a alteração.
+      const salvar = document.getElementById('btn-salvar');
+      const voltar = document.getElementById('cad-atendimento-voltar');
+      if (salvar) { salvar.disabled = true; salvar.textContent = 'Salvando tamanhos…'; }
+      if (voltar) voltar.disabled = true;
+      document.getElementById('status').textContent = 'Salvando a correção da peça. Não feche esta aba ainda.';
+    } else {
+      cancelarDuplicacao(); // libera o formulário já
+      document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima peça.';
+      sairDoCadastro_();
+    }
     desenharEnvios(); processarEnvios();
   });
 
@@ -4166,6 +4270,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     }
     avisoCache_('');
     renderizarProdutos();
+    tentarAbrirEdicaoDoAtendimento_();
     carregarAuditoria_();
   }
 
