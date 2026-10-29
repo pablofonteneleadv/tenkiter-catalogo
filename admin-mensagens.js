@@ -377,6 +377,8 @@
       .ms-prod-preco { font-weight: 700; font-size: 0.85rem; color: #141414; }
       .ms-prod-det { font-size: 0.78rem; color: #4a443b; overflow-wrap: anywhere; }
       .ms-prod-acoes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+      .ms-prod-editar { align-self: flex-start; border: 0; padding: 5px 3px; background: transparent; color: #a55a12; font: 600 0.8rem inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; min-height: 36px; }
+      .ms-prod-editar:focus-visible { outline: 3px solid #e88a25; outline-offset: 3px; border-radius: 5px; }
       .ms-prod-acoes .ms-btn { min-height: 40px; padding: 6px 10px; font-size: 0.8rem; }
       .ms-previa { display: flex; align-items: center; padding: 0 8px; background: #fff; box-shadow: inset 0 1px 0 #f0ece2; }
       .ms-previa[hidden] { display: none; }
@@ -1213,6 +1215,9 @@
         const acoes = el('div', 'ms-prod-acoes');
         acoes.appendChild(botao('ms-btn prim', 'Colocar na mensagem', 'prod-usar', { id: String(p.ID) }));
         if (linkDe_(p)) acoes.appendChild(botao('ms-btn', 'Copiar link', 'prod-link', { id: String(p.ID) }));
+        const editar = botao('ms-prod-editar', '✎ Editar tamanhos', 'prod-editar', { id: String(p.ID) });
+        editar.setAttribute('aria-label', 'Editar tamanhos e disponibilidade de ' + (p.Nome || 'produto'));
+        info.appendChild(editar);
         info.appendChild(acoes);
         li.append(marca, info); ul.appendChild(li);
       });
@@ -1220,6 +1225,16 @@
     };
     q.addEventListener('input', ()=>{if(q.value.trim().length>=2)filtrosProd.open=true;pintar();}); chk.addEventListener('change', pintar); pintar(); desenharSelProd_();
     setTimeout(() => q.focus(), 0);
+  }
+  function abrirEdicaoRapidaProduto_(p) {
+    // Reutiliza a edição autenticada da Gestão, em vez de gravar diretamente no backend
+    // ou permitir alterações sem as validações de permissões e auditoria existentes.
+    const id = String(p.ID);
+    if (!id || !/^[\\w-]{1,90}$/.test(id)) { aviso_('Não foi possível identificar a peça.'); return; }
+    const destino = new URL('admin.html', location.href);
+    destino.searchParams.set('editarProduto', id);
+    destino.searchParams.set('edicaoRapida', 'tamanhos');
+    window.open(destino.href, '_blank', 'noopener');
   }
   const produtoPorId_ = (id) => produtosCatalogo_().find((p) => String(p.ID) === String(id));
   /* v7.29: seleção de produtos (igual ao "Selecionar" da loja): várias peças numa mensagem só, com o link ?sel= do site.
@@ -2662,6 +2677,7 @@
     else if (a === 'prodsel-limpar') { prodSel = []; Array.prototype.forEach.call(document.querySelectorAll('#ms-prod-lista .ms-prod-marca'), (m) => { m.setAttribute('aria-pressed', 'false'); m.querySelector('.ms-prod-caixa').textContent = ''; m.closest('.ms-prod').classList.remove('marcado'); }); desenharSelProd_(); const q = $('ms-prod-busca'); if (q) q.focus(); }
     else if (a === 'prodsel-usar') { const ps = produtosSelecionados_(); if (ps.length) { prodSel = []; colocarNaMensagem_(textoSelecao_(ps)); } }
     else if (a === 'prodsel-link') { const ps = produtosSelecionados_(); if (ps.length) { try { await navigator.clipboard.writeText(linkSelecao_(ps)); aviso_('Link da seleção copiado.'); } catch (e) { aviso_('Não consegui copiar. Use “Enviar seleção”.'); } } }
+    else if (a === 'prod-editar') { const p = produtoPorId_(b.dataset.id); if (p) abrirEdicaoRapidaProduto_(p); }
     else if (a === 'prod-usar') { const p = produtoPorId_(b.dataset.id); if (p) colocarNaMensagem_(textoProduto_(p)); }
     else if (a === 'prod-link') { const p = produtoPorId_(b.dataset.id); if (p) { try { await navigator.clipboard.writeText(linkDe_(p)); aviso_('Link copiado.'); } catch (e) { aviso_('Não consegui copiar. Use “Colocar na mensagem”.'); } } }
     else if (a === 'nome-salvar') { const i = $('ms-meu-nome-rapido'); await salvarNome_(i ? i.value : ''); const t = $('ms-texto'); if (t) t.focus(); }
