@@ -1,4 +1,4 @@
-"""Jornada isolada: atendimento -> editar idades em aba compacta -> salvar.
+"""Jornada isolada: atendimento -> editar tamanhos em modal interno -> salvar.
 Serviços simulados; não envia WhatsApp nem altera o catálogo real.
 """
 import os, sys, time, socket, subprocess
@@ -64,7 +64,7 @@ def run_case(browser, width, height, mobile):
     check(antes != depois, 'Toque alterna a seleção da etiqueta')
     original = campo.input_value()
     check(bool(original), 'Tamanhos atuais carregados')
-    campo.fill(original + ', Idade: 15 anos')
+    campo.fill(original + ', Veste: 54')
     check(len(ctx.pages) == 1, 'Seleção não navega para fora do aplicativo')
     salvar = modal.get_by_role('button', name='Salvar tamanhos')
     rect = salvar.bounding_box()
@@ -76,8 +76,12 @@ def run_case(browser, width, height, mobile):
     pg.wait_for_timeout(1200)
     updates = [x for x in envios_mock if x.get('action') == 'update']
     check(bool(updates), 'Atualização enviada pelo backend autenticado')
-    check(updates[-1].get('tamanhos') == original + ', Idade: 15 anos',
+    check(updates[-1].get('tamanhos') == original + ', Veste: 54',
           'Atualiza tamanhos sem descartar o valor original')
+    check(updates[-1].get('id'), 'Mantém o identificador do produto')
+    check(updates[-1].get('nome'), 'Preserva o nome do produto no payload')
+    check('fotoUrlExistente' in updates[-1] and 'fotosGaleriaExistentes' in updates[-1],
+          'Preserva referências de fotos existentes')
     check(not modal.is_visible(), 'Modal fecha após salvar')
     check(pg.locator('#ms-texto').input_value() == 'Não perder este rascunho',
           'Rascunho continua intacto após salvar')
