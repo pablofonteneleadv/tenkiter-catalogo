@@ -55,9 +55,17 @@ def run_case(browser, width, height, mobile):
           'Busca preservada durante a edição')
     check(len(ctx.pages) == 1, 'Não abre nova aba nem sai de Mensagens')
     campo = modal.locator('#ms-edicao-valor')
+    chips = modal.locator('.ms-edicao-chip')
+    check(chips.count() > 0, 'Etiquetas e faixas selecionáveis na janela interna')
+    primeira = chips.first
+    antes = primeira.get_attribute('aria-pressed')
+    primeira.click()
+    depois = modal.locator('.ms-edicao-chip').first.get_attribute('aria-pressed')
+    check(antes != depois, 'Toque alterna a seleção da etiqueta')
     original = campo.input_value()
     check(bool(original), 'Tamanhos atuais carregados')
     campo.fill(original + ', Idade: 15 anos')
+    check(len(ctx.pages) == 1, 'Seleção não navega para fora do aplicativo')
     salvar = modal.get_by_role('button', name='Salvar tamanhos')
     rect = salvar.bounding_box()
     check(rect is not None and rect['x'] >= 0 and rect['x'] + rect['width'] <= width
