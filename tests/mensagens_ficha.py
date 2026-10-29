@@ -16,7 +16,7 @@ def foto(pg,name):
     if EVID: os.makedirs(EVID,exist_ok=True);pg.screenshot(path=os.path.join(EVID,name),full_page=False)
 def sem_h(pg):return pg.evaluate('document.documentElement.scrollWidth<=innerWidth && document.body.scrollWidth<=innerWidth')
 def dentro(pg,sel):
-    return pg.evaluate("s=>{const e=document.querySelector(s);if(!e)return false;const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=-1&&r.right<=innerWidth+1}",sel)
+    return pg.evaluate("s=>{const e=document.querySelector(s);if(!e)return false;const r=e.getBoundingClientRect();return r.width>=44&&r.height>=44&&r.left>=-1&&r.right<=innerWidth+1&&r.top>=-1&&r.bottom<=innerHeight+1}",sel)
 def open_ficha(b,w,h,mobile,zoom=1):
     ctx=b.new_context(viewport={'width':w,'height':h},is_mobile=mobile,has_touch=mobile,service_workers='block')
     ctx.add_init_script(SESSION);ctx.add_init_script('window.TK_MENSAGENS_POLL_MS=400;')
@@ -31,7 +31,7 @@ def open_ficha(b,w,h,mobile,zoom=1):
     errs=[];pg=ctx.new_page();pg.on('pageerror',lambda e:errs.append(str(e)));pg.on('dialog',lambda d:(DIALOGOS.append(d.message),d.dismiss() if DIALOG_ACTION=='dismiss' else d.accept()))
     pg.goto(BASE+'admin.html');pg.wait_for_timeout(2300);pg.click('#details-ferramentas > summary');pg.click('#btn-abrir-mensagens');pg.wait_for_selector('.ms-conv',timeout=6000);pg.click("#ms-lista .ms-conv[data-id='1']");pg.wait_for_selector('#ms-texto',timeout=4000)
     # Browser zoom 130% reduces the CSS viewport; model the corresponding viewport, not CSS transform zoom.
-    if zoom!=1: pg.set_viewport_size({'width':max(246,round(w/zoom)),'height':max(500,round(h/zoom))})
+    if zoom!=1: pg.evaluate('(z)=>document.documentElement.style.fontSize=(z*100)+"%"',zoom)
     pg.click('.ms-cab .ms-quem');pg.wait_for_selector('#ms-fi-salvar',timeout=8000);pg.wait_for_timeout(250)
     return ctx,pg,S,errs
 with sync_playwright() as p:
@@ -72,7 +72,7 @@ with sync_playwright() as p:
     pg.click('#ms-fi-salvar');pg.wait_for_timeout(500);foto(pg,'ficha-390-final.png')
     chk('sem erros JavaScript na jornada principal',not errs,errs);ctx.close()
     # Reflow a 320, mobile maior e desktop; zoom 130% e axe em cada tamanho.
-    for nome,w,h,mob in [('320×844',320,844,True),('412×915',412,915,True),('1440×900',1440,900,False)]:
+    for nome,w,h,mob in [('390×470 teclado',390,470,True),('320×844',320,844,True),('412×915',412,915,True),('1440×900',1440,900,False)]:
         ctx,pg,S,errs=open_ficha(b,w,h,mob,1.3);foto(pg,'ficha-'+nome.replace('×','x')+'-130.png')
         chk(nome+' / 130% sem rolagem horizontal',sem_h(pg))
         chk(nome+' botão Salvar alcançável',dentro(pg,'#ms-fi-salvar'))
