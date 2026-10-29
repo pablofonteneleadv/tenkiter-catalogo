@@ -136,6 +136,18 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             return {"ok":True,"pessoas":pes,"perfis":[{"nome":n,"desc":"","permissoes":v} for n,v in PF.items()],"permissoes":[{"chave":k,"rotulo":k,"grupo":"Geral"} for k in ["cliente","portal","catalogo_admin","catalogo_cadastrar","gerir_acessos"]],"totalClientes":1,"eu":"88999999999","truncado":False}
         if a in("sessao","login"): return {"ok":True,"sessao":"tk2.x.y","usuario":{"whatsapp":"88999999999","name":"Ana Lojista","nome":"Ana Lojista","level":3,"permissoes":perms,"perfil":"Admin"}}
         if a=="curriculos_listar": return {"ok":True,"curriculos":[],"status":["Novo","Entrevista"],"motivos":[]}
+        if a=="update":
+            alvo=next((p for p in P if str(p.get("ID"))==str(b.get("id"))),None)
+            if not alvo: return {"ok":False,"erro":"Produto não encontrado"}
+            # Simulação de edição: registra o payload e altera apenas os campos informados.
+            mapa={"nome":"Nome","categoria":"Categoria","genero":"Genero","preco":"Preco",
+                  "estoque":"Estoque","tamanhos":"Tamanhos","cores":"Cores",
+                  "descricao":"Descricao","novidade":"Novidade",
+                  "fotoUrlExistente":"Foto_URL","fotosGaleriaExistentes":"Fotos_Galeria"}
+            for origem,destino in mapa.items():
+                if origem in b: alvo[destino]=b[origem]
+            st.setdefault("atualizados",[]).append(dict(b))
+            return {"ok":True,"id":str(alvo["ID"])}
         if a=="create":
             op=b.get("opId"); cr_=st.setdefault("creates",{})
             if op and versao>="4.19" and op in cr_: return dict(cr_[op],repetido=True)
