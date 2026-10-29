@@ -56,7 +56,7 @@
       const txt = String(v).trim();
       const ano = txt.match(/^(\d+)\s+anos?$/i);
       if (tipo === 'idade') return ano ? Number(ano[1]) : null;
-      return /^\\d+$/.test(txt) ? Number(txt) : null;
+      return /^\d+$/.test(txt) ? Number(txt) : null;
     });
     if (!nums.length || nums.some(n => n === null)) return unico(valores).join('/');
     const ordenados = [...new Set(nums)].sort((a,b)=>a-b);
