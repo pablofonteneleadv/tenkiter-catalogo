@@ -188,6 +188,7 @@ jobs:
           python3 tests/tecidos_gestao.py
           python3 tests/mensagens_clareza.py
           python3 tests/mensagens_gavetas_proposta.py
+          python3 tests/disponibilidade_rapida.py
 
       - name: Screenshots da edição rápida
         if: always() && github.event_name == 'pull_request'

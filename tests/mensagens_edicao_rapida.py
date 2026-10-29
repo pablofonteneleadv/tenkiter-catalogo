@@ -23,11 +23,11 @@ def run_case(browser, width, height, mobile):
                               is_mobile=mobile, has_touch=mobile, service_workers='block')
     ctx.add_init_script(SESSION)
     envios_mock = []
-    state = install(ctx, perms=PERMS_ALL, log=envios_mock, versao='3.4')
+    state = install(ctx, perms=PERMS_ALL, log=envios_mock, versao='4.28')
     state['ig'].setdefault('msg', mock_msg.novo_estado())
     pg = ctx.new_page()
     errors = []
-    pg.on('pageerror', lambda e: errors.append(str(e)))
+    pg.on('pageerror', lambda e: (errors.append(str(e)),print('JS:',e,flush=True)))
     pg.on('dialog', lambda d: d.accept())
     pg.goto(BASE + 'admin.html')
     pg.wait_for_timeout(2200)
@@ -41,7 +41,7 @@ def run_case(browser, width, height, mobile):
     pg.fill('#ms-prod-busca', 'vestido liso')
     pg.wait_for_timeout(250)
     editor = pg.locator('#ms-prod-lista [data-ms="prod-editar"]').first
-    check(editor.count() == 1, 'Editar tamanhos aparece no seletor de produtos')
+    check(editor.count() == 1, 'Disponibilidade aparece no seletor de produtos')
     medida = editor.evaluate('(x)=>{const r=x.getBoundingClientRect();return {w:r.width,h:r.height}}')
     check(medida['h']>=44, 'Alvo de toque com pelo menos 44px', medida)
     check(pg.locator('#ms-prod-lista [data-ms="prod-usar"]').count()>=1, 'Enviar produto preservado')
@@ -64,35 +64,31 @@ def run_case(browser, width, height, mobile):
     check(pg.locator('#ms-prod-busca').input_value() == 'vestido liso',
           'Busca preservada durante a edição')
     check(len(ctx.pages) == 1, 'Não abre nova aba nem sai de Mensagens')
-    campo = modal.locator('#ms-edicao-valor')
-    chips = modal.locator('.ms-edicao-chip')
-    check(chips.count() > 0, 'Etiquetas e faixas selecionáveis na janela interna')
-    primeira = chips.first
-    antes = primeira.get_attribute('aria-pressed')
-    primeira.click()
-    depois = modal.locator('.ms-edicao-chip').first.get_attribute('aria-pressed')
-    check(antes != depois, 'Toque alterna a seleção da etiqueta')
-    original = campo.input_value()
-    check(bool(original), 'Tamanhos atuais carregados')
-    modal.locator('.ms-edicao-avancado summary').click()
-    campo.fill(original + ', Veste: 54')
-    check(len(ctx.pages) == 1, 'Seleção não navega para fora do aplicativo')
-    salvar = modal.get_by_role('button', name='Salvar tamanhos')
+    check(modal.locator('textarea').count()==0, 'Edição rápida não oferece inclusão livre')
+    check(modal.get_by_role('button', name='Retirar P', exact=True).count()==1, 'Só tamanhos cadastrados aparecem')
+    check(modal.get_by_role('button', name='Retirar GG', exact=True).count()==0, 'Tamanho ausente não pode ser acrescentado')
+    modal.get_by_role('button', name='Retirar P', exact=True).click()
+    modal.get_by_role('button', name='Retirar Preto', exact=True).click()
+    salvar = modal.get_by_role('button', name='Salvar alterações')
     rect = salvar.bounding_box()
     check(rect is not None and rect['x'] >= 0 and rect['x'] + rect['width'] <= width
           and rect['y'] >= 0 and rect['y'] + rect['height'] <= height,
           'Salvar visível na viewport', rect)
+    check(modal.locator('.tk-disp-fechar').bounding_box()['width']==44, 'Fechar compacto de 44px')
+    check(modal.evaluate('(x)=>x.scrollWidth <= innerWidth'), 'Sem rolagem horizontal')
+    if (ROOT/'tests/axe.min.js').exists():
+        pg.add_script_tag(path=str(ROOT/'tests/axe.min.js'))
+        violations=pg.evaluate("async()=> (await axe.run(document.querySelector('.tk-disp-painel'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations")
+        check(not violations, 'Editor sem violações axe WCAG AA',violations)
     pg.screenshot(path=str(EVID / f'correcao-{width}.png'), full_page=False)
     salvar.click()
     pg.wait_for_timeout(1200)
     updates = [x for x in envios_mock if x.get('action') == 'update']
     check(bool(updates), 'Atualização enviada pelo backend autenticado')
-    check(updates[-1].get('tamanhos') == original + ', Veste: 54',
-          'Atualiza tamanhos sem descartar o valor original')
+    check(updates[-1].get('tamanhos') == 'M, G', 'Retira somente o tamanho esgotado')
+    check(updates[-1].get('cores') == 'Bege', 'Retira somente a cor esgotada')
     check(updates[-1].get('id'), 'Mantém o identificador do produto')
-    check(updates[-1].get('nome'), 'Preserva o nome do produto no payload')
-    check('fotoUrlExistente' in updates[-1] and 'fotosGaleriaExistentes' in updates[-1],
-          'Preserva referências de fotos existentes')
+    check(not any(k in updates[-1] for k in ('nome','preco','descricao','fotoUrlExistente','fotosGaleriaExistentes','videos')), 'Atualização parcial preserva nome, preço, tecido e mídias no servidor')
     check(not modal.is_visible(), 'Modal fecha após salvar')
     check(pg.locator('#ms-texto').input_value() == 'Não perder este rascunho',
           'Rascunho continua intacto após salvar')
