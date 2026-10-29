@@ -2592,9 +2592,11 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
   /* Tamanhos da peça na lista da gestão (para conferir de relance sem abrir a edição). */
   function tamanhosLinha_(p) {
-    const t = String(p.Tamanhos || '').split(',').map(x => x.trim()).filter(Boolean);
-    if (!t.length) return '<div class="tam-linha tam-vazio">Tamanhos: <i>não informado</i></div>';
-    return '<div class="tam-linha" aria-label="Tamanhos: ' + escaparHtml(t.join(', ')) + '">' + t.slice(0, 8).map(x => '<span>' + escaparHtml(x) + '</span>').join('') + (t.length > 8 ? '<span class="mais-n">+' + (t.length - 8) + '</span>' : '') + '</div>';
+    const dados = TKTamanhos.cliente(textoPlano(p.Tamanhos), p.Genero);
+    const resumo = TKTamanhos.resumir(dados.valores, dados.tipo);
+    return resumo
+      ? '<div class="tam-linha" aria-label="' + escaparHtml(dados.titulo + ': ' + resumo) + '"><span>' + escaparHtml(resumo) + '</span></div>'
+      : '<div class="tam-linha tam-vazio">Tamanhos: <i>não informado</i></div>';
   }
   function listaDoCampo_(id) { return document.getElementById(id).value.split(',').map(s => s.trim()).filter(Boolean); }
   function sincRapidos_() {
