@@ -92,7 +92,7 @@ const DDL = [
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
-const ESQUEMA_ = '20261029-ficha-perfil-json-1';
+const ESQUEMA_ = '20261029-atendimento-agenda-2';
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -107,6 +107,14 @@ async function iniciar(env) {
       try { await env.DB.prepare("ALTER TABLE msg_ficha ADD COLUMN perfil_json TEXT NOT NULL DEFAULT '{}'").run(); }
       catch (e) { if (!/duplicate column/i.test(String(e))) throw e; }
     }
+    const agendaCols=new Set((await env.DB.prepare('PRAGMA table_info(msg_agenda)').all()).results.map(c=>c.name));
+    for(const [nome,tipo] of [['anexo',"TEXT NOT NULL DEFAULT ''"],['anexo_nome',"TEXT NOT NULL DEFAULT ''"],['anexo_mime',"TEXT NOT NULL DEFAULT ''"],['tipo',"TEXT NOT NULL DEFAULT 'manual'"],['acompanhamento','INTEGER NOT NULL DEFAULT 0'],['auth_ref',"TEXT NOT NULL DEFAULT ''"],['processando_em',"TEXT NOT NULL DEFAULT ''"]]){
+      if(!agendaCols.has(nome)){try{await env.DB.prepare('ALTER TABLE msg_agenda ADD COLUMN '+nome+' '+tipo).run();}catch(e){if(!/duplicate column/i.test(String(e)))throw e;}}
+    }
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_acompanhamento (id INTEGER PRIMARY KEY AUTOINCREMENT, chave TEXT NOT NULL UNIQUE, conversa_id INTEGER NOT NULL, alvo TEXT NOT NULL, entrada_ref INTEGER NOT NULL, etapa TEXT NOT NULL DEFAULT 'lembrete', status TEXT NOT NULL DEFAULT 'ativo', quando TEXT NOT NULL, autor TEXT NOT NULL, whats TEXT NOT NULL, auth_ref TEXT NOT NULL, texto_lembrete TEXT NOT NULL, texto_final TEXT NOT NULL DEFAULT '', lembrete_em TEXT NOT NULL DEFAULT '', criado_em TEXT NOT NULL, atualizado_em TEXT NOT NULL, erro TEXT NOT NULL DEFAULT '')").run();
+    await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS ix_acomp_ativo ON msg_acompanhamento(conversa_id) WHERE status='ativo'").run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_acomp_alvo ON msg_acompanhamento(alvo,status)').run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_agenda_acomp ON msg_agenda(acompanhamento,status)').run();
     for (const [t,cols] of [['msg_ficha',['perfil_json']],['msg_nota',['excluida_em','excluida_por']],['msg_conversa',['pessoa','atualizada_em','encerrada_em']],['msg_mensagem',['ctx_chave','autor_lid']]]) {
       const existentes = new Set((await env.DB.prepare('PRAGMA table_info('+t+')').all()).results.map(c=>c.name));
       if (!cols.every(c=>existentes.has(c))) throw new Error('Esquema de Mensagens incompleto. Tente novamente.');
@@ -3161,27 +3169,68 @@ async function respostasRapidas_(env) {
 const HORARIO_LOJA_ = { 1: [450, 1080], 2: [450, 1080], 3: [450, 1080], 4: [450, 1080], 5: [450, 1080], 6: [450, 840] }, HORARIO_FERIADO_ = [480, 780];
 const DIAS_SEMANA_ = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 const FUSO_MS_ = 3 * 3600000, DIA_MS_ = 86400000;
+const EXPEDIENTE_PADRAO_ = {semana:{0:[],1:[[450,1080]],2:[[450,1080]],3:[[450,1080]],4:[[450,1080]],5:[[450,1080]],6:[[450,840]]},excecoes:{}};
+const dataValidaExpediente_ = d => /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(d)&&new Date(d+'T12:00:00Z').toISOString().slice(0,10)===d;
+/** Faixas em minutos locais (Fortaleza). Dias fechados são arrays vazios. */
+export function validarExpediente_(d){
+  if(!d||typeof d!=='object'||Array.isArray(d)||!d.semana||typeof d.semana!=='object'||!d.excecoes||typeof d.excecoes!=='object'||Array.isArray(d.excecoes))return ['Confira o horário semanal e as exceções.'];
+  const out={semana:{},excecoes:{}};
+  const faixas=v=>{
+    if(!Array.isArray(v)||v.length>3)return null;
+    let anterior=-1;
+    for(const par of v){if(!Array.isArray(par)||par.length!==2||!par.every(Number.isInteger)||par[0]<0||par[1]>1440||par[0]>=par[1]||par[0]<anterior)return null;anterior=par[1];}
+    return v.map(x=>x.slice());
+  };
+  for(let dia=0;dia<7;dia++){const f=faixas(d.semana[dia]);if(!f)return ['Confira a abertura e o fechamento de '+DIAS_SEMANA_[dia]+'.'];out.semana[dia]=f;}
+  const excecoes=Object.entries(d.excecoes);if(excecoes.length>366)return ['Use até 366 exceções de horário.'];
+  for(const [data,v] of excecoes){if(!dataValidaExpediente_(data))return ['Confira a data da exceção de horário.'];const f=faixas(v);if(!f)return ['Confira o horário de '+data+'.'];out.excecoes[data]=f;}
+  return [null,out];
+}
+function faixasExpediente_(dia,expediente,feriados){
+  const data=new Date(dia*DIA_MS_),iso=data.toISOString().slice(0,10),cfg=expediente||EXPEDIENTE_PADRAO_;
+  if(Object.hasOwn(cfg.excecoes,iso))return cfg.excecoes[iso];
+  if(Array.isArray(feriados)&&feriados.includes(iso))return [HORARIO_FERIADO_];
+  return cfg.semana[data.getUTCDay()];
+}
+/** Conta somente minutos de atendimento, atravessando noites, domingos e exceções.
+ * No fim exato de uma faixa a ação fica para a abertura seguinte. */
+export function somarMinutosUteis_(ms,minutos,expediente,feriados){
+  if(!Number.isFinite(ms)||!Number.isFinite(minutos)||minutos<0||minutos>86400)throw Error('Prazo de acompanhamento inválido.');
+  const [erro,cfg]=validarExpediente_(expediente||EXPEDIENTE_PADRAO_);if(erro)throw Error(erro);
+  const dia0=Math.floor((ms-FUSO_MS_)/DIA_MS_);let restante=minutos*60000;
+  for(let d=dia0;d<dia0+370;d++)for(const [abre,fecha] of faixasExpediente_(d,cfg,feriados)){
+    const inicio=d*DIA_MS_+abre*60000+FUSO_MS_,fim=d*DIA_MS_+fecha*60000+FUSO_MS_,de=Math.max(ms,inicio);
+    if(de>=fim)continue;
+    if(restante<fim-de)return new Date(de+restante).toISOString();
+    restante-=fim-de;
+  }
+  throw Error('Não há horário de atendimento disponível para esse prazo. Confira as configurações.');
+}
 export function textoAbertura_(dias, diaSemana, minutos, dataIso) {
   const hora = Math.floor(minutos / 60) + 'h' + (minutos % 60 ? String(minutos % 60).padStart(2, '0') : '');
   const quando = dias === 0 ? 'hoje' : dias === 1 ? 'amanhã' : dias < 7 ? DIAS_SEMANA_[diaSemana] : 'dia ' + String(dataIso).slice(8, 10) + '/' + String(dataIso).slice(5, 7);
   return quando + ' às ' + hora;
 }
 /** Situação da loja no instante ms: { aberta, feriado } ou { aberta:false, abreEm (ISO, UTC), abertura: "amanhã às 7h30" }. */
-export function horarioLoja_(ms, feriados) {
-  const F = new Set(Array.isArray(feriados) ? feriados : []), L = ms - FUSO_MS_, dia0 = Math.floor(L / DIA_MS_), min = (L - dia0 * DIA_MS_) / 60000;
-  const faixa = (dia) => { const d = new Date(dia * DIA_MS_), iso = d.toISOString().slice(0, 10); if (F.has(iso)) return { f: HORARIO_FERIADO_, feriado: true, iso: iso, dow: d.getUTCDay() }; const f = HORARIO_LOJA_[d.getUTCDay()]; return f ? { f: f, feriado: false, iso: iso, dow: d.getUTCDay() } : null; };
-  const hoje = faixa(dia0);
-  if (hoje && min >= hoje.f[0] && min < hoje.f[1]) return { aberta: true, feriado: hoje.feriado };
-  for (let k = 0; k <= 21; k++) {
-    const x = faixa(dia0 + k); if (!x || (k === 0 && min >= x.f[0])) continue;
-    return { aberta: false, feriado: x.feriado, abreEm: new Date((dia0 + k) * DIA_MS_ + x.f[0] * 60000 + FUSO_MS_).toISOString(), abertura: textoAbertura_(k, x.dow, x.f[0], x.iso) };
+export function horarioLoja_(ms, feriados, expediente) {
+  const [erro,cfg]=validarExpediente_(expediente||EXPEDIENTE_PADRAO_);if(erro)throw Error(erro);
+  const dia0=Math.floor((ms-FUSO_MS_)/DIA_MS_);
+  for(let k=0;k<370;k++){
+    const dia=dia0+k,data=new Date(dia*DIA_MS_),iso=data.toISOString().slice(0,10),feriado=!Object.hasOwn(cfg.excecoes,iso)&&Array.isArray(feriados)&&feriados.includes(iso);
+    for(const [abre,fecha] of faixasExpediente_(dia,cfg,feriados)){
+      const inicio=dia*DIA_MS_+abre*60000+FUSO_MS_,fim=dia*DIA_MS_+fecha*60000+FUSO_MS_;
+      if(ms>=inicio&&ms<fim)return {aberta:true,feriado:!!feriado};
+      if(inicio>ms)return {aberta:false,feriado:!!feriado,abreEm:new Date(inicio).toISOString(),abertura:textoAbertura_(k,data.getUTCDay(),abre,iso)};
+    }
   }
-  return { aberta: false, feriado: false, abreEm: '', abertura: 'em breve' };
+  return {aberta:false,feriado:false,abreEm:'',abertura:'sem horário cadastrado'};
 }
+
 const MSG_AUTO_PADRAO_ = {
   boasVindas: { ligado: false, texto: 'Oi! Que bom ter você aqui 😊 Já já uma das meninas te responde. Se já viu alguma peça, pode mandar o print ou o código que agiliza.' },
   foraHorario: { ligado: false, texto: 'Oi! A loja tá fechada agora, mas sua mensagem ficou guardada aqui. A gente volta {abertura} e te responde 😊 Se quiser, já deixa o print da peça e seu tamanho.' },
-  feriados: []
+  feriados: [],
+  expediente: EXPEDIENTE_PADRAO_
 };
 const textoAuto_ = (v) => String(v == null ? '' : v).replace(/\r\n/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, 1000);
 const feriadosLimpos_ = (l) => Array.from(new Set((Array.isArray(l) ? l : []).map(String).filter((x) => /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(x) && new Date(x + 'T12:00:00Z').toISOString().slice(0, 10) === x))).sort().slice(-60);
@@ -3191,12 +3240,14 @@ async function msgAuto_(env) {
   const out = JSON.parse(JSON.stringify(MSG_AUTO_PADRAO_));
   for (const k of ['boasVindas', 'foraHorario']) if (c && c[k] && typeof c[k] === 'object') { if (typeof c[k].ligado === 'boolean') out[k].ligado = c[k].ligado; const t = textoAuto_(c[k].texto); if (t) out[k].texto = t; }
   if (c && Array.isArray(c.feriados)) out.feriados = feriadosLimpos_(c.feriados);
+  if(c&&c.expediente){const [erro,expediente]=validarExpediente_(c.expediente);if(erro)throw Error('Confira o horário de atendimento nas configurações.');out.expediente=expediente;}
   return out;
 }
 async function salvarMsgAuto_(env, d) {
   const atual = await msgAuto_(env);
   for (const k of ['boasVindas', 'foraHorario']) if (d && d[k] && typeof d[k] === 'object') { if (typeof d[k].ligado === 'boolean') atual[k].ligado = d[k].ligado; if (typeof d[k].texto === 'string') atual[k].texto = textoAuto_(d[k].texto) || MSG_AUTO_PADRAO_[k].texto; }
   if (d && Array.isArray(d.feriados)) atual.feriados = feriadosLimpos_(d.feriados);
+  if(d&&d.expediente){const [erro,expediente]=validarExpediente_(d.expediente);if(erro)throw Error(erro);atual.expediente=expediente;}
   await cfgSet(env, 'msg_auto', JSON.stringify(atual));
   return atual;
 }
@@ -3216,7 +3267,7 @@ async function respostaAutomatica_(env, canal, m, cfgPronta) {
   if (!autoElegivel_(canal, m)) return null;
   const t = Date.parse(m.em); if (isNaN(t) || Math.abs(Date.now() - t) > 10 * 60000) return null;      // só mensagem que acabou de chegar (nada de histórico reenviado)
   const cfg = cfgPronta || (await msgAuto_(env)); if (!cfg.boasVindas.ligado && !cfg.foraHorario.ligado) return null;
-  const conv = m._conversaId, h = horarioLoja_(t, cfg.feriados);
+  const conv = m._conversaId, h = horarioLoja_(t, cfg.feriados, cfg.expediente);
   let tipo, periodo, texto;
   if (h.aberta) {
     if (!cfg.boasVindas.ligado) return null;
@@ -4942,7 +4993,7 @@ export default {
       if (p === '/msg/auto' && (req.method === 'GET' || req.method === 'POST')) {   // v7.40.9: respostas automáticas (desligadas por padrão)
         const auto = req.method === 'POST' ? await salvarMsgAuto_(env, await req.json().catch(() => ({}))) : await msgAuto_(env);
         let diag = null; try { diag = JSON.parse((await cfgGet(env, 'msg_auto_diag')) || 'null'); } catch (e) { diag = null; }
-        return J({ ok: true, auto: auto, agora: horarioLoja_(Date.now(), auto.feriados), ultimo: diag });
+        return J({ ok: true, auto: auto, agora: horarioLoja_(Date.now(), auto.feriados, auto.expediente), ultimo: diag });
       }
       if (p === '/msg/exportar' && req.method === 'GET') {
         const q = {}; for (const k of ['canal', 'conversa', 'formato', 'de', 'ate']) q[k] = url.searchParams.get(k) || '';
