@@ -54,7 +54,7 @@
   function resumir(valores, tipo) {
     const nums = unico(valores).map(v => {
       const txt = String(v).trim();
-      const ano = txt.match(/^(\\d+)\\s+anos?$/i);
+      const ano = txt.match(/^(\d+)\s+anos?$/i);
       if (tipo === 'idade') return ano ? Number(ano[1]) : null;
       return /^\\d+$/.test(txt) ? Number(txt) : null;
     });
