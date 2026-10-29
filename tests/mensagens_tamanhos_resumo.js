@@ -12,5 +12,6 @@ const cases=[
 cases.forEach(([txt,g,expected])=>{const d=api.cliente(txt,g);assert.equal(d.titulo+': '+api.resumir(d.valores,d.tipo),expected);});
 assert.ok(js.includes("tam.titulo + ': ' + tam.texto"),'tamanho da lista e da mensagem devem ser formatados');
 assert.ok(js.includes("function resumoTamanhosProduto_(p)"),'a mesma função é usada no picker e no texto');
-assert.ok(admin.includes('admin-mensagens.js?v=7.40.25'),'cache deve ser atualizado');
+const versaoMensagens=(admin.match(/admin-mensagens\.js\?v=([0-9.]+)/)||[])[1];
+assert.ok(versaoMensagens&&versaoMensagens.localeCompare('7.40.25','en',{numeric:true})>=0,'cache deve incluir a correção de tamanhos ou versão posterior');
 console.log('Resumo dos tamanhos no atendimento: 7 verificações aprovadas.');
