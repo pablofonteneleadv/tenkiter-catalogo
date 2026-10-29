@@ -46,46 +46,36 @@ def run_case(browser, width, height, mobile):
     check(medida['h']>=44, 'Alvo de toque com pelo menos 44px', medida)
     check(pg.locator('#ms-prod-lista [data-ms="prod-usar"]').count()>=1, 'Enviar produto preservado')
     pg.screenshot(path=str(EVID / f'escolha-{width}.png'), full_page=False)
-    with ctx.expect_page() as popup:
-        editor.click()
-    ed = popup.value
-    ed.on('pageerror', lambda e: errors.append('edição: '+str(e)))
-    ed.wait_for_load_state('domcontentloaded')
-    ed.wait_for_timeout(2300)
-    query = parse_qs(urlparse(ed.url).query)
-    check(query.get('edicaoRapida') == ['tamanhos'] and bool(query.get('editarProduto')),
-          'Abre a edição da peça exata em outra aba',ed.url)
-    ed.wait_for_selector('body.edicao-rapida-atendimento',timeout=8000)
-    check(ed.locator('#card-form').evaluate('(x)=>x.open'), 'Formulário autenticado está aberto')
-    check(ed.locator('#form-produto [data-passo="tamanhos"]').is_visible(), 'Opções de idades estão visíveis')
-    check(not ed.locator('#form-produto [data-passo="fotos"]').is_visible(), 'Fotos não atrasam a correção')
-    check(not ed.locator('#form-produto [data-passo="preco"]').is_visible(), 'Preço continua armazenado, mas oculto')
-    check(ed.locator('#produto-id').input_value() == query['editarProduto'][0], 'ID selecionado confere')
-    check(pg.locator('#ms-texto').input_value() == 'Não perder este rascunho', 'Conversa original preservada')
-    ed.locator('#cad-etiquetas').get_by_role('button',name='M',exact=True).click()
-    idade = ed.locator('#cad-faixas').get_by_role('button',name='3 anos',exact=True)
-    estava_marcada = idade.get_attribute('aria-pressed') == 'true'
-    idade.click()
-    t = ed.locator('#tamanhos').input_value()
-    check(('Idade: 3 anos' in t) != estava_marcada,
-          'Um toque alterna a disponibilidade conforme estado real do botão', [estava_marcada,t])
-    check('Etiqueta: M' in t, 'Etiqueta permanece vinculada após editar uma idade',t)
-    check(ed.locator('#btn-salvar').is_visible(), 'Salvar acessível na edição compacta')
-    rect = ed.locator('#btn-salvar').bounding_box()
-    check(rect is not None and rect['y'] > 0 and rect['y'] + rect['height'] <= height - 55
-          and rect['x'] >= 0 and rect['x'] + rect['width'] <= width,
-          'Salvar está visível acima da navegação inferior sem sair da tela',rect)
-    dimensoes = ed.evaluate('({tela:innerWidth,rolagem:document.documentElement.scrollWidth})')
-    check(dimensoes['rolagem'] <= dimensoes['tela'] + 2, 'Sem rolagem horizontal acidental na edição',dimensoes)
-    ed.screenshot(path=str(EVID / f'correcao-{width}.png'),full_page=False)
-    ed.locator('#btn-salvar').click()
-    ed.wait_for_timeout(1500)
-    updates = [x for x in envios_mock if x.get('action') == 'update' and str(x.get('id')) == query['editarProduto'][0]]
-    check(bool(updates), 'Correção enviada ao backend autenticado da peça exata', envios_mock[-2:])
-    check(updates[-1].get('tamanhos') == t, 'Grava somente os tamanhos escolhidos',updates[-1].get('tamanhos'))
-    check(ed.locator('#status').count()==1, 'Status do salvamento exibido')
+    editor.click()
+    modal = pg.locator('#ms-edicao-tamanhos')
+    modal.wait_for(state='visible')
+    check(pg.locator('#ms-texto').input_value() == 'Não perder este rascunho',
+          'Rascunho preservado com editor interno aberto')
+    check(pg.locator('#ms-prod-busca').input_value() == 'vestido liso',
+          'Busca preservada durante a edição')
+    check(len(ctx.pages) == 1, 'Não abre nova aba nem sai de Mensagens')
+    campo = modal.locator('#ms-edicao-valor')
+    original = campo.input_value()
+    check(bool(original), 'Tamanhos atuais carregados')
+    campo.fill(original + ', Idade: 15 anos')
+    salvar = modal.get_by_role('button', name='Salvar tamanhos')
+    rect = salvar.bounding_box()
+    check(rect is not None and rect['x'] >= 0 and rect['x'] + rect['width'] <= width
+          and rect['y'] >= 0 and rect['y'] + rect['height'] <= height,
+          'Salvar visível na viewport', rect)
+    pg.screenshot(path=str(EVID / f'correcao-{width}.png'), full_page=False)
+    salvar.click()
+    pg.wait_for_timeout(1200)
+    updates = [x for x in envios_mock if x.get('action') == 'update']
+    check(bool(updates), 'Atualização enviada pelo backend autenticado')
+    check(updates[-1].get('tamanhos') == original + ', Idade: 15 anos',
+          'Atualiza tamanhos sem descartar o valor original')
+    check(not modal.is_visible(), 'Modal fecha após salvar')
+    check(pg.locator('#ms-texto').input_value() == 'Não perder este rascunho',
+          'Rascunho continua intacto após salvar')
+    check(len(ctx.pages) == 1, 'Permanência na mesma aba após salvar')
     check(not errors, 'Sem erros JavaScript', errors)
-    ed.close(); ctx.close()
+    ctx.close()
 
 try:
     if 'TK_BASE' not in os.environ:
