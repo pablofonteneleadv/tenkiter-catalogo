@@ -1100,11 +1100,22 @@
     const f = typeof precoTerminacao === 'function' ? precoTerminacao(p.Preco) : null, v = f && f.valido ? f.avista : Number(p.Preco);
     return (typeof formatarReal === 'function' ? formatarReal(v) : 'R$ ' + v.toFixed(2).replace('.', ',')) + ' à vista';
   }
-  const tamanhosDe_ = (p) => String(p.Tamanhos || '').split(',').map((x) => x.trim()).filter(Boolean);
+  // Mesmo resumo usado no cartão da Gestão: nunca expor "Etiqueta:" ou "Idade:" brutos.
+  function resumoTamanhosProduto_(p) {
+    if (typeof TKTamanhos !== 'undefined' && TKTamanhos && typeof TKTamanhos.cliente === 'function') {
+      const dados = TKTamanhos.cliente(String(p.Tamanhos || ''), p.Genero);
+      const resumo = TKTamanhos.resumir(dados.valores, dados.tipo);
+      return { titulo: dados.titulo, texto: resumo, valores: dados.valores };
+    }
+    // Compatibilidade com carregamento antigo sem o módulo de tamanhos.
+    const antigos = String(p.Tamanhos || '').split(',').map(x => x.trim()).filter(x => x && !/^(Etiqueta|Idade|Veste):/i.test(x));
+    return { titulo: 'Tamanhos', texto: antigos.join('/'), valores: antigos };
+  }
+  const tamanhosDe_ = (p) => resumoTamanhosProduto_(p).valores;
   function linkDe_(p) { try { return typeof linkProduto === 'function' ? linkProduto(p) : ''; } catch (e) { return ''; } }
   function textoProduto_(p) {
-    const tam = tamanhosDe_(p), wa = !aberta || aberta.canal !== 'instagram';
-    return [(wa ? '*' + p.Nome + '*' : p.Nome), precoTexto_(p), tam.length ? 'Tamanhos: ' + tam.join(', ') : '', p.Cores ? 'Cores: ' + p.Cores : '', linkDe_(p)].filter(Boolean).join('\n');
+    const tam = resumoTamanhosProduto_(p), wa = !aberta || aberta.canal !== 'instagram';
+    return [(wa ? '*' + p.Nome + '*' : p.Nome), precoTexto_(p), tam.texto ? tam.titulo + ': ' + tam.texto : '', p.Cores ? 'Cores: ' + p.Cores : '', linkDe_(p)].filter(Boolean).join('\n');
   }
   function colocarNaMensagem_(txt) {
     const ta = $('ms-texto'); if (!ta) return;
@@ -1197,8 +1208,8 @@
         const info = el('div', 'ms-prod-info');
         info.appendChild(el('b', '', p.Nome || 'Sem nome'));
         info.appendChild(el('span', 'ms-prod-preco', precoTexto_(p) + (p.Codigo ? ' · ' + p.Codigo : '')));
-        const tam = tamanhosDe_(p);
-        info.appendChild(el('span', 'ms-prod-det', (tam.length ? tam.join(' · ') : 'Tamanho não informado') + (esgotado_(p) ? ' · Esgotado' : p.Estoque !== '' && p.Estoque != null ? ' · ' + p.Estoque + ' em estoque' : '')));
+        const tam = resumoTamanhosProduto_(p);
+        info.appendChild(el('span', 'ms-prod-det', (tam.texto ? tam.titulo + ': ' + tam.texto : 'Tamanho não informado') + (esgotado_(p) ? ' · Esgotado' : p.Estoque !== '' && p.Estoque != null ? ' · ' + p.Estoque + ' em estoque' : '')));
         const acoes = el('div', 'ms-prod-acoes');
         acoes.appendChild(botao('ms-btn prim', 'Colocar na mensagem', 'prod-usar', { id: String(p.ID) }));
         if (linkDe_(p)) acoes.appendChild(botao('ms-btn', 'Copiar link', 'prod-link', { id: String(p.ID) }));
