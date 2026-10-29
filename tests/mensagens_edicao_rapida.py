@@ -60,12 +60,13 @@ def run_case(browser, width, height, mobile):
     check(not ed.locator('#form-produto [data-passo="preco"]').is_visible(), 'Preço continua armazenado, mas oculto')
     check(ed.locator('#produto-id').input_value() == query['editarProduto'][0], 'ID selecionado confere')
     check(pg.locator('#ms-texto').input_value() == 'Não perder este rascunho', 'Conversa original preservada')
-    original = ed.locator('#tamanhos').input_value()
     ed.locator('#cad-etiquetas').get_by_role('button',name='M',exact=True).click()
-    ed.locator('#cad-faixas').get_by_role('button',name='3 anos',exact=True).click()
+    idade = ed.locator('#cad-faixas').get_by_role('button',name='3 anos',exact=True)
+    estava_marcada = idade.get_attribute('aria-pressed') == 'true'
+    idade.click()
     t = ed.locator('#tamanhos').input_value()
-    check(('Idade: 3 anos' in t) != ('Idade: 3 anos' in original),
-          'Um toque altera a disponibilidade da idade selecionada', [original,t])
+    check(('Idade: 3 anos' in t) != estava_marcada,
+          'Um toque alterna a disponibilidade conforme estado real do botão', [estava_marcada,t])
     check('Etiqueta: M' in t, 'Etiqueta permanece vinculada após editar uma idade',t)
     check(ed.locator('#btn-salvar').is_visible(), 'Salvar acessível na edição compacta')
     ed.screenshot(path=str(EVID / f'correcao-{width}.png'),full_page=False)
