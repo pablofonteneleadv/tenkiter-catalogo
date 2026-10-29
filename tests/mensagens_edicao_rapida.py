@@ -45,6 +45,7 @@ def run_case(browser, width, height, mobile):
     medida = editor.evaluate('(x)=>{const r=x.getBoundingClientRect();return {w:r.width,h:r.height}}')
     check(medida['h']>=44, 'Alvo de toque com pelo menos 44px', medida)
     check(pg.locator('#ms-prod-lista [data-ms="prod-usar"]').count()>=1, 'Enviar produto preservado')
+    pg.screenshot(path=str(EVID / f'escolha-{width}.png'), full_page=False)
     with ctx.expect_page() as popup:
         editor.click()
     ed = popup.value
@@ -70,6 +71,10 @@ def run_case(browser, width, height, mobile):
           'Um toque alterna a disponibilidade conforme estado real do botão', [estava_marcada,t])
     check('Etiqueta: M' in t, 'Etiqueta permanece vinculada após editar uma idade',t)
     check(ed.locator('#btn-salvar').is_visible(), 'Salvar acessível na edição compacta')
+    rect = ed.locator('#btn-salvar').bounding_box()
+    check(rect is not None and rect['y'] > 0 and rect['y'] + rect['height'] <= height - 55
+          and rect['x'] >= 0 and rect['x'] + rect['width'] <= width,
+          'Salvar está visível acima da navegação inferior sem sair da tela',rect)
     dimensoes = ed.evaluate('({tela:innerWidth,rolagem:document.documentElement.scrollWidth})')
     check(dimensoes['rolagem'] <= dimensoes['tela'] + 2, 'Sem rolagem horizontal acidental na edição',dimensoes)
     ed.screenshot(path=str(EVID / f'correcao-{width}.png'),full_page=False)
