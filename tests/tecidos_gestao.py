@@ -9,8 +9,9 @@ with sync_playwright() as p:
  for w,h in [(320,700),(390,844),(412,915),(1440,900),(390,470)]:
   ctx=b.new_context(viewport={'width':w,'height':h},is_mobile=w<600,has_touch=w<600,service_workers='block');ctx.add_init_script(SESSION)
   st=install(ctx,versao='4.28',perms=PERMS_ALL);st['produtos'][0]['Descricao']='Leve.\nTecido: Dior';st['produtos'][1]['Descricao']='Tecido: Linho'
-  cfg={'ok':True,'versao':0,'itens':[]};posts=[]
+  cfg={'ok':True,'versao':0,'itens':[]};posts=[];adiar=[False];pendentes=[]
   def api(route):
+   if route.request.method=='GET' and adiar[0]:pendentes.append(route);return
    if route.request.method=='POST':
     d=route.request.post_data_json;posts.append(d);cfg['versao']+=1;cfg['itens']=[{'nome':d['nome'],'apelidos':[d['de'],d['nome']]}]
    route.fulfill(json=cfg)
@@ -22,8 +23,12 @@ with sync_playwright() as p:
   if w==390 and h==844:
    pg.locator('[data-passo=nome]').scroll_into_view_if_needed();pg.screenshot(path=str(OUT/'cadastro-tecido.png'))
   assert pg.input_value('#tecido')=='Dior';assert pg.locator('#tecidos-rapidos button',has_text='Dior').count()==1
-  pg.click('#tecidos-gerenciar');pg.wait_for_selector('#overlay-tecidos.aberto');pg.select_option('#tecidos-antigo','Dior');pg.fill('#tecidos-novo','Crepe Dior');pg.click('#tecidos-salvar');pg.wait_for_function('document.getElementById("tecidos-status").textContent.includes("Nome salvo")')
-  assert posts[-1]['de']=='Dior' and posts[-1]['nome']=='Crepe Dior'
+  adiar[0]=w==390 and h==844
+  pg.click('#tecidos-gerenciar');pg.wait_for_selector('#overlay-tecidos.aberto');pg.select_option('#tecidos-antigo','Dior');pg.fill('#tecidos-novo','Crepe Dior');
+  if adiar[0]:
+   pg.wait_for_timeout(100);assert pendentes;[r.fulfill(json=cfg) for r in pendentes];adiar[0]=False;pg.wait_for_timeout(100);assert pg.input_value('#tecidos-novo')=='Crepe Dior','Resposta atrasada não deve apagar texto digitado'
+  pg.click('#tecidos-salvar');pg.wait_for_function('document.getElementById("tecidos-status").textContent.includes("Nome salvo")')
+  assert posts[-1]['de']=='Dior' and posts[-1]['nome']=='Crepe Dior',posts[-1]
   assert pg.input_value('#tecido')=='Crepe Dior'
   assert pg.locator('#tecidos-antigo option',has_text='Crepe Dior').count()==1
   assert pg.evaluate('(id)=>TKTecido.ler(tkProdutosLista().find(p=>p.ID===id))',st['produtos'][0]['ID'])=='Crepe Dior'
