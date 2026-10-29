@@ -3195,6 +3195,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     selecionadosGeneros = new Set(String(p.Genero || '').split(',').map(s => s.trim()).filter(Boolean));
     renderizarChips('chips-categoria', categorias, selecionadasCategorias);
     renderizarChips('chips-genero', generos, selecionadosGeneros);
+    // Edição aberta no mesmo aplicativo: reidratar e redesenhar imediatamente
+    // os controles, sem depender de reload, troca de aba ou reabertura.
+    cadLerVinculos_();
+    cadDesenharVinculos_();
   }
 
   function duplicarProduto(id) {
