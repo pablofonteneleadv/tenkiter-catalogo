@@ -2307,7 +2307,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const b=document.createElement('button');b.type='button';b.className='chip'+(cadPublico_===rotulo?' selecionado':'');b.textContent=rotulo;
       b.addEventListener('click',()=>{
         const antesInfantil=cadInfantil_(), antesBaby=cadBaby_();cadPublico_=rotulo;
-        if(antesInfantil!==cadInfantil_() || antesBaby!==cadBaby_())cadFaixas_=new Set(cadPredefinirFaixas_(cadEtiqueta_));
+        if(antesInfantil!==cadInfantil_() || antesBaby!==cadBaby_())cadFaixas_=new Set([...cadEtiquetas_].flatMap(cadPredefinirFaixas_));
         cadSincronizarPublicos_();cadGravarVinculos_();cadDesenharPublicos_();cadDesenharVinculos_();atualizarFaltas_();
       });box.appendChild(b);
     });
