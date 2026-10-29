@@ -159,6 +159,26 @@ jobs:
         with:
           node-version: '22'
 
+      # A mudança no seletor de peças é visual; testar a tarefa inteira em
+      # Chromium sem tocar nos serviços reais.
+      - name: Preparar Chromium para edição rápida no PR
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 -m pip install playwright
+          python3 -m playwright install chromium
+
+      - name: Jornada de edição de tamanhos no atendimento
+        if: github.event_name == 'pull_request'
+        run: python3 tests/mensagens_edicao_rapida.py
+
+      - name: Screenshots da edição rápida
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencias-edicao-rapida
+          path: tests/evidencias_edicao/
+          if-no-files-found: ignore
+
       # Modo completo: só em execução agendada ou disparada manualmente.
       # O executor já inclui os testes de Workers; não os roda de novo em passos separados.
       - name: Preparar navegador para bateria completa
