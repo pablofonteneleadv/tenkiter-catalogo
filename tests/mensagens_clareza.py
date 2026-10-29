@@ -15,6 +15,8 @@ with sync_playwright() as p:
   pg.goto(BASE+'admin.html');pg.wait_for_timeout(2600);pg.click('#details-ferramentas > summary');pg.click('#btn-abrir-mensagens');pg.wait_for_selector('#ms-lista .ms-conv')
   assert pg.locator('#ms-abas small').count()==0
   assert pg.locator('#ms-filtros button').count()==3
+  assert pg.locator('#ms-abas .ms-aba[aria-selected=true]').evaluate("e=>{const c=getComputedStyle(e,'::after').backgroundColor.match(/[0-9.]+/g).slice(0,3).map(x=>{const v=Number(x)/255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4});return 1.05/(c[0]*.2126+c[1]*.7152+c[2]*.0722+.05)>=3}")  # Indicador selecionado distinguível no fundo branco.
+
   for zoom in [100,130]:
    pg.evaluate('(s)=>document.documentElement.style.fontSize=s+"%"',zoom)
    assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth')

@@ -62,7 +62,7 @@
       preferencias: {
         tamanhos: unicos(tamanhos),
         generos: unicos(Array.isArray(pref.generos) ? pref.generos : []),
-        tecidos: unicos(Array.isArray(pref.tecidos) ? pref.tecidos : []),
+        tecidos: unicos((Array.isArray(pref.tecidos) ? pref.tecidos : []).map(v=>root.TKTecido?root.TKTecido.resolver(v):v)),
         cores: unicos(Array.isArray(pref.cores) ? pref.cores : [])
       }
     };

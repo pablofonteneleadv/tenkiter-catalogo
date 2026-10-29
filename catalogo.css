@@ -66,6 +66,7 @@
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
   .chip { min-height: 36px; padding: 6px 12px; border-radius: 16px; border: 1px solid #ddd; background: var(--branco); font-size: 0.75rem; cursor: pointer; transition: all 0.2s; }
   .chip.selecionado { background: var(--laranja); color: var(--preto); border-color: var(--laranja); font-weight: 700; }
+  #chips-tecido .chip { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: center; }
   .chip.novidade-chip.selecionado { background: var(--preto); color: var(--laranja); border-color: var(--preto); }
   .chip.favoritos-chip.selecionado { background: #c62828; color: #fff; border-color: #c62828; }
 

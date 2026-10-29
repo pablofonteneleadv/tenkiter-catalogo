@@ -661,6 +661,7 @@
 
 /* Código e tecido abaixo da foto, sem disputar espaço com o nome. */
 .codigo-tecido{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;flex-wrap:wrap}.codigo-tecido .codigo{margin:0}.tecido-card{font-size:12px;font-weight:600;color:#53534d;overflow-wrap:anywhere;max-width:100%;margin-left:auto;text-align:right}
+.passo-tecido{border-left:3px solid var(--laranja,#e67e22)!important}.passo-tecido .passo-tit label{font:inherit;margin:0}.passo-tecido input{font-weight:600}.passo-tecido #tecidos-rapidos{margin-top:12px}.passo-tecido #tecidos-rapidos button{min-height:44px}.tk-tecido-gestao{padding:16px;overflow-y:auto;min-height:0;flex:1}.sheet-topo #tecidos-titulo{font-size:1.05rem;margin:0}.passo-tecido #tecidos-rapidos .chip{white-space:normal;overflow-wrap:anywhere;max-width:100%}#tecidos-gerenciar[hidden]{display:none!important}.sheet-tecidos{padding:0!important}.sheet-tecidos .sheet-topo{padding:12px 16px}.tk-tecido-gestao>p:first-child{margin:0 0 12px;font-size:.875rem;color:#53594d}.tk-tecido-rodape{padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid #e7e7e0;background:#fff;flex:none}.tk-tecido-rodape #tecidos-salvar{min-height:48px;width:100%;background:var(--laranja,#e67e22);color:#141414}.tk-tecido-gestao label{display:block;margin:12px 0 6px}.tk-tecido-gestao input,.tk-tecido-gestao select{width:100%;min-height:48px}.tk-tecido-gestao button{min-height:48px}.tk-tecido-gestao p{line-height:1.5;overflow-wrap:anywhere}
 </style>
 <style id="cad-reformulacao-20261024">
 #form-produto .passo{border-radius:18px}
@@ -1221,8 +1222,16 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
         <div class="passo-msg">Escreva o nome da peça.</div>
       </section>
 
+      <section class="passo passo-tecido" data-passo="tecido" aria-labelledby="tecido-rotulo">
+        <div class="passo-tit" id="tecido-rotulo"><span class="num">4</span><label for="tecido">Tecido</label> <span class="opc">(se souber)</span></div>
+        <input id="tecido" type="text" maxlength="80" list="tecidos-opcoes" placeholder="Escolha ou escreva o tecido" autocomplete="off">
+        <datalist id="tecidos-opcoes"></datalist>
+        <div id="tecidos-rapidos" class="chips" role="group" aria-label="Tecidos cadastrados"></div>
+        <button type="button" class="btn-escolher" id="tecidos-gerenciar" hidden>Gerenciar nomes de tecidos</button>
+      </section>
+
       <section class="passo" data-passo="preco">
-        <div class="passo-tit"><span class="num">4</span>Preço e quantidade</div>
+        <div class="passo-tit"><span class="num">5</span>Preço e quantidade</div>
         <div class="form-linha">
           <div>
             <label for="preco">Preço (R$) <i class="obg" style="color:var(--vermelho);font-style:normal">*</i></label>
@@ -1239,7 +1248,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
       </section>
 
       <section class="passo" data-passo="categoria">
-        <div class="passo-tit"><span class="num">5</span>Categoria <i class="obg">*</i></div>
+        <div class="passo-tit"><span class="num">6</span>Categoria <i class="obg">*</i></div>
         <div class="tags" id="tags-categoria" hidden></div>
         <div class="chips chips-rapidos" id="chips-categorias" role="group" aria-label="Categorias"></div>
         <button type="button" class="btn-escolher" id="btn-abrir-categorias">＋ Procurar / gerir categorias</button>
@@ -1247,14 +1256,14 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
       </section>
 
       <section class="passo" data-passo="genero">
-        <div class="passo-tit"><span class="num">6</span>Para quem é? <i class="obg">*</i></div>
+        <div class="passo-tit"><span class="num">7</span>Para quem é? <i class="obg">*</i></div>
         <div class="chips chips-grandes publico-seis" id="chips-genero"></div>
         <label class="cad-unissex"><input type="checkbox" id="cad-unissex"> Também é unissex <small>Exibir para ambos os públicos da mesma faixa etária</small></label>
         <div class="passo-msg">Escolha para quem é a peça.</div>
       </section>
 
       <section class="passo" data-passo="tamanhos">
-        <div class="passo-tit"><span class="num">7</span>Tamanhos <span class="opc">(se souber)</span></div>
+        <div class="passo-tit"><span class="num">8</span>Tamanhos <span class="opc">(se souber)</span></div>
         <div class="cad-vinculos" id="cad-vinculos" aria-live="polite">
           <div class="cad-vinculos-titulo">Tamanhos da etiqueta <small>(selecione mais de um +)</small></div>
           <div class="cad-etiquetas" id="cad-etiquetas"></div>
@@ -1271,7 +1280,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
       </section>
 
       <section class="passo" data-passo="cores">
-        <div class="passo-tit"><span class="num">8</span>Cores e estampas <span class="opc">(se souber)</span></div>
+        <div class="passo-tit"><span class="num">9</span>Cores e estampas <span class="opc">(se souber)</span></div>
         <div class="chips chips-rapidos" id="chips-cores"></div>
         <input type="text" id="cores" placeholder="Ou escreva: Preto, Off-white, Estampado" autocomplete="off" class="so-admin-cores">
         <button type="button" class="btn-escolher so-admin-cores" id="btn-abrir-cores">＋ Escolher cores e estampas</button>
@@ -1279,8 +1288,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
 
       <div class="extra" id="details-mais">
-        <div class="passo-tit"><span class="num">9</span>Descrição e destaque <span class="opc">(opcional)</span></div>
-        <div class="campo"><label for="tecido">Tecido</label><input id="tecido" type="text" maxlength="100" placeholder="Ex.: Crepe Dior, Alfaiataria"></div>
+        <div class="passo-tit"><span class="num">10</span>Descrição e destaque <span class="opc">(opcional)</span></div>
       <label for="descricao">Descrição</label>
         <textarea id="descricao" rows="2" placeholder="Tecido viscose, caimento leve..."></textarea>
 
@@ -1520,6 +1528,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
     <select id="fa-categoria" aria-label="Filtrar por categoria"><option value="">Categoria: todas</option></select>
     <select id="fa-genero" aria-label="Filtrar por gênero"><option value="">Gênero: todos</option></select>
     <select id="fa-cor" aria-label="Filtrar por cor ou estampa"><option value="">Cor: todas</option></select>
+    <select id="fa-tecido" aria-label="Filtrar por tecido"><option value="">Tecido: todos</option></select>
     <select id="fa-tam" aria-label="Filtrar por tamanho"><option value="">Tamanho: todos</option></select>
     <select id="fa-ordem" aria-label="Ordenar a lista">
       <option value="recentes">Mais recentes</option>
@@ -1546,7 +1555,8 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
 
 <script src="common.js"></script>
-<script src="catalogo-tecido.js"></script>
+<script src="catalogo-tecido.js?v=7.40.26"></script>
+<script src="admin-tecidos.js?v=7.40.26" defer></script>
 <script src="icones.js?v=7.17.0"></script>
 <script>/* ícones de linha nos botões fixos do painel (o emoji fica como reserva se icones.js falhar) */
 document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.TKIcone && TKIcone(el.dataset.ico); if (s) el.innerHTML = s; });</script>
@@ -3192,7 +3202,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     cadLerVinculos_();
     document.getElementById('cores').value = textoPlano(p.Cores);
     document.getElementById('descricao').value = TKTecido.semDescricao(p.Descricao);
-    document.getElementById('tecido').value = TKTecido.ler(p);
+    document.getElementById('tecido').value = TKTecido.ler(p);document.dispatchEvent(new Event('tk:tecido-form'));
     document.getElementById('novidade').checked = ehNovidade(p);
     document.getElementById('arquivar-depois').checked = false;
     document.getElementById('linha-notificar-push').style.display = ehNovidade(p) ? 'flex' : 'none';
@@ -4354,12 +4364,14 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const fCat = semAcento_((document.getElementById('fa-categoria') || {}).value || '');
     const fGen = semAcento_((document.getElementById('fa-genero') || {}).value || '');
     const fCor = semAcento_((document.getElementById('fa-cor') || {}).value || '');
+    const fTecido=TKTecido.resolver((document.getElementById('fa-tecido')||{}).value||'');
     const fTam = semAcento_((document.getElementById('fa-tam') || {}).value || '');
     const pMin = parseFloat(String((document.getElementById('fa-preco-min') || {}).value || '').replace(',', '.'));
     const pMax = parseFloat(String((document.getElementById('fa-preco-max') || {}).value || '').replace(',', '.'));
     const ordem = (document.getElementById('fa-ordem') || {}).value || 'recentes';
-    let lista = produtos.filter(p => (!busca || semAcento_(p.Nome).includes(busca) || semAcento_(p.Codigo).includes(busca)) && (ignorarStatus || passaStatus_(p)));
+    let lista = produtos.filter(p => (!busca || semAcento_(p.Nome).includes(busca) || semAcento_(p.Codigo).includes(busca) || semAcento_(TKTecido.ler(p)).includes(busca)) && (ignorarStatus || passaStatus_(p)));
     // v4.10 (FE-08): filtros extras da busca do admin
+    if(fTecido)lista=lista.filter(p=>TKTecido.ler(p)===fTecido);
     if (fCat) lista = lista.filter(p => semAcento_(p.Categoria).includes(fCat));
     if (fGen) lista = lista.filter(p => semAcento_(p.Genero).includes(fGen));
     if (fTam) lista = lista.filter(p => semAcento_(textoPlano(p.Tamanhos)).split(',').map(x => x.trim()).includes(fTam));
@@ -4374,6 +4386,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 
   /** v4.10 (FE-08): preenche os selects de categoria/gênero com o que existe na loja. */
   function renderizarFiltrosAdmin_() {
+    const tec=document.getElementById('fa-tecido');if(tec){const atual=TKTecido.resolver(tec.value),nomes=[...new Set(produtos.map(p=>TKTecido.ler(p)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));tec.innerHTML='<option value="">Tecido: todos</option>'+nomes.map(t=>'<option value="'+escaparHtml(t)+'">'+escaparHtml(t)+'</option>').join('');tec.value=atual;}
     const selC = document.getElementById('fa-categoria'), selG = document.getElementById('fa-genero'), selR = document.getElementById('fa-cor'), selT = document.getElementById('fa-tam');
     if (selT) { const tams = new Set(); produtos.forEach(p => { textoPlano(p.Tamanhos).split(',').map(s => s.trim()).filter(Boolean).forEach(t => tams.add(t)); }); const atualT = selT.value; selT.innerHTML = '<option value="">Tamanho: todos</option>' + Array.from(tams).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true })).map(t => '<option value="' + escaparHtml(t) + '">' + escaparHtml(t) + '</option>').join(''); selT.value = atualT; }
     if (!selC || !selG) return;
@@ -4390,7 +4403,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const box = document.getElementById('filtros-admin'); if (!box) return;
     const busca = document.getElementById('busca-admin'), tog = document.getElementById('fa-toggle'), badge = document.getElementById('fa-n');
     function contar() {
-      let n = ['fa-categoria', 'fa-genero', 'fa-cor', 'fa-tam', 'fa-preco-min', 'fa-preco-max'].filter(id => { const el = document.getElementById(id); return el && el.value; }).length;
+      let n = ['fa-categoria', 'fa-genero', 'fa-cor', 'fa-tecido', 'fa-tam', 'fa-preco-min', 'fa-preco-max'].filter(id => { const el = document.getElementById(id); return el && el.value; }).length;
       const o = document.getElementById('fa-ordem'); if (o && o.value && o.value !== 'recentes') n++;
       if (badge) { badge.hidden = !n; badge.textContent = n; }
     }
@@ -4416,7 +4429,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     box.addEventListener('input', (e) => { if (e.target && /fa-preco/.test(e.target.id)) { contar(); renderizarProdutos(); } });
     const limpar = document.getElementById('fa-limpar');
     if (limpar) limpar.addEventListener('click', () => {
-      ['fa-categoria', 'fa-genero', 'fa-cor', 'fa-tam', 'fa-preco-min', 'fa-preco-max'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      ['fa-categoria', 'fa-genero', 'fa-cor', 'fa-tecido', 'fa-tam', 'fa-preco-min', 'fa-preco-max'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
       const o = document.getElementById('fa-ordem'); if (o) o.value = 'recentes';
       contar(); renderizarProdutos();
     });
@@ -6137,7 +6150,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="admin-push.js?v=7.19.0"></script>
 <script src="admin-conexoes.js?v=7.38.2"></script>
 <script src="mensagens-acessos.js?v=7.40.19"></script>
-<script src="admin-mensagens.js?v=7.40.25"></script>
+<script src="admin-mensagens.js?v=7.40.26"></script>
 <script src="admin-instagram.js?v=7.17.0"></script>
 <script src="video-validation.js"></script>
 <script src="admin-postagens.js?v=7.30.2"></script>
