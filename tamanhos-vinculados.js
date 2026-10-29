@@ -33,19 +33,38 @@
     dados.antigos = unico(dados.antigos);
     return dados;
   }
-  function gravar(anterior, etiqueta, faixas, infantil) {
+  function etiquetasDaEntrada(etiquetas) {
+    return unico(Array.isArray(etiquetas) || etiquetas instanceof Set ? Array.from(etiquetas) : String(etiquetas || '').split('/').map(v => v.trim()));
+  }
+  function gravar(anterior, etiquetas, faixas, infantil) {
     const d = ler(anterior);
-    const letra = String(etiqueta || '').trim();
-    const vinculando = Boolean(letra || d.etiqueta);
+    const letras = etiquetasDaEntrada(etiquetas);
+    const vinculando = Boolean(letras.length || d.etiqueta);
     const antigos = vinculando
-      ? d.antigos.filter(t => !ETIQUETAS.has(t.toLocaleUpperCase('pt-BR')))
+      ? d.antigos.filter(t => !ETIQUETAS.has(t.toLocaleUpperCase('pt-BR')) && !/^Juv\\d+$/i.test(t))
       : d.antigos;
     const prefixo = infantil ? 'Idade: ' : 'Veste: ';
     return unico([
       ...antigos,
-      ...(letra ? [letra, 'Etiqueta: ' + letra] : []),
+      ...letras,
+      ...(letras.length ? ['Etiqueta: ' + letras.join('/')] : []),
       ...unico(Array.from(faixas || [])).map(v => prefixo + v)
     ]).join(', ');
+  }
+  function resumir(valores, tipo) {
+    const nums = unico(valores).map(v => {
+      const txt = String(v).trim();
+      const ano = txt.match(/^(\\d+)\\s+anos?$/i);
+      if (tipo === 'idade') return ano ? Number(ano[1]) : null;
+      return /^\\d+$/.test(txt) ? Number(txt) : null;
+    });
+    if (!nums.length || nums.some(n => n === null)) return unico(valores).join('/');
+    const ordenados = [...new Set(nums)].sort((a,b)=>a-b);
+    const incremento = tipo === 'idade' ? 1 : 2;
+    const continuo = ordenados.every((n,i)=> i===0 || n-ordenados[i-1]===incremento);
+    return continuo && ordenados.length>1
+      ? ordenados[0] + (tipo==='idade'?' a ':' ao ') + ordenados.at(-1) + (tipo==='idade'?' anos':'')
+      : ordenados.join('/') + (tipo==='idade'?' anos':'');
   }
   function cliente(valor, genero) {
     const d = ler(valor);
@@ -56,5 +75,5 @@
       .filter(t => !publicoInfantil || !ETIQUETAS.has(t.toLocaleUpperCase('pt-BR')));
     return { tipo: 'legado', titulo: 'Tamanhos', valores };
   }
-  return Object.freeze({ ler, gravar, cliente });
+  return Object.freeze({ ler, gravar, cliente, resumir, etiquetasDaEntrada });
 });
