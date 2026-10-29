@@ -81,8 +81,12 @@ const r2=require('./helpers/r2_condicional.js');
  const k=await crypto.subtle.importKey('raw',new TextEncoder().encode('assinatura-de-teste'),{name:'HMAC',hash:'SHA-256'},false,['sign']);const ass=Buffer.from(await crypto.subtle.sign('HMAC',k,new TextEncoder().encode(ev))).toString('hex');
  redeLenta=new Promise(r=>liberar=r);const zj=[];const r=await W.default.fetch(new Request('https://worker.test/wh/zernio/'+seg,{method:'POST',headers:{'X-Zernio-Signature':ass},body:ev}),env,{waitUntil(p){zj.push(p)}});assert.equal(r.status,200);
  await esperar(()=>get("SELECT m.id FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE m.ext_id='ig-lento' AND c.total=1"));
- assert(fila('complementos').length>0,'Story lento aguarda separado da mensagem básica');liberar();await Promise.all(zj);redeLenta=null;
+ assert(fila('complementos').length>0,'Story lento aguarda separado da mensagem básica');
+ const inicial=get("SELECT id,conversa_id FROM msg_mensagem WHERE ext_id='ig-lento'");b.sqlite.prepare("UPDATE msg_mensagem SET status_em='2020-01-01T00:00:00.000Z' WHERE id=?").run(inicial.id);
+ liberar();await Promise.all(zj);redeLenta=null;
  assert(get("SELECT ctx_chave FROM msg_mensagem WHERE ext_id='ig-lento'").ctx_chave.endsWith('.jpg'));
+ const tardias=await(await api('/msg/novidades?conversa='+inicial.conversa_id+'&depois='+inicial.id+'&st='+encodeURIComponent(new Date(Date.now()-2000).toISOString()))).json();
+ assert(tardias.mensagens.some(x=>x.id===inicial.id&&x.ctx_midia===1),'Mensagem antiga enriquecida reaparece nas novidades');
  // Falha de D1 após cópia: o endereço já copiado deve sobreviver na fila e ser reutilizado.
  const mk=await W.guardarEntrada_(env,'midia','instagram',{extId:'ig-lento',midiaUrl:'https://cdn.test/foto.jpg',midiaMime:'image/jpeg'});
  b.sqlite.exec("CREATE TRIGGER falha_midia BEFORE UPDATE OF midia_chave ON msg_mensagem BEGIN SELECT RAISE(ABORT,'falha depois da copia'); END;");

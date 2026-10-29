@@ -116,3 +116,15 @@ Ausência de rota/fluxo na busca de código foi usada junto com inspeção das A
 A primeira entrega de confiabilidade implementa preservação de entrada autenticada em R2 privado antes do aceite, transação de mensagem/lista, complementos de mídia depois do texto, nova tentativa e aviso compacto. Relatórios/planos novos de contatos saem do staging em linhas D1 e usam páginas privadas, mantendo legado, fila operacional e backup Drive. Detalhes, testes e limites em `CONFIABILIDADE-7.40.29.md`; publicação precisa ser confirmada pelo workflow/commit público.
 
 Ainda não encerram a frente inteira: recuperação histórica Wafly sem endpoint confirmado, medição preventiva de cota/plano e conexão realmente orientada a eventos permanecem distintas das correções deste lote. Busca por imagem continua próxima na ordem, sem inferência ou indexação ativada por esta publicação.
+# Prioridade atualizada pelo proprietário em 29/10
+
+Após concluir o lote de eventos já em andamento, executar **antes de retomar a lista abaixo**:
+
+1. Filas **Esperando atendimento** e **Em atendimento**: primeira interação humana inicia atendimento; resposta automática, nota, Espiar ou apenas abrir não iniciam. Conversa já atendida/encerrada que recebe resposta volta a Em atendimento. Todos/Meus em Em atendimento, padrão Todos em cada recarga.
+2. Iniciar conversa por número WhatsApp; Instagram por @ dentro das possibilidades reais da API oficial (não prometer mensagem fria sem elegibilidade). Escolha de canal, validação e permissão no servidor.
+3. Botão Agendar dentro da conversa: data, hora, mensagem e anexos; painel pesquisável com filtros, status e cancelamento. Reaproveitar a fila de agendamento existente, sem duplicar mecanismos de envio.
+4. **Acompanhar**: adesão por conversa. Somar 2 horas úteis até a mensagem “(Bom dia/Boa tarde/boa noite) amiga, passando aqui pra saber se já deu certo o seu, fiquei aguardando sua resposta 🧡”; somar mais 2 horas úteis sem resposta até encerrar por “Cliente parou de responder”. Configuração permite alterar/desligar a mensagem. Qualquer resposta recebida do cliente cancela as etapas pendentes, inclusive entre execução/encerramento. Exemplo solicitado: ativar às 17h com fechamento às 18h consome 1h e termina às 8h30 do próximo dia de atendimento, se abre às 7h30. Respeitar dias fechados/exceções/fuso da loja; jobs persistidos e idempotentes, sem criar uma configuração cron por cliente. Definir horário configurável como parte desta entrega.
+5. Menu do gestor: presença com prazo de validade (aplicativo aberto/ativo, sem confundir conexão com produtividade), atividade auditada e análises por atendente, em tempo real e histórico. Permissões no servidor, sem registrar rascunhos ou conteúdo digitado.
+
+Só então retomar busca por imagem e demais itens originais. A autorização de implementação, testes, merge e deploy permanece vigente. Não executar envios reais ou alterações de clientes como teste.
+
