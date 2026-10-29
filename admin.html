@@ -929,6 +929,22 @@
 
 </style>
 <link rel="stylesheet" href="acabamento-admin.css?v=7.23.0">
+<style id="atendimento-edicao-rapida">
+/* Mostra só as escolhas necessárias. Campos originais permanecem no DOM para
+   a atualização usar validações, mídias, auditoria e permissão já existentes. */
+body.edicao-rapida-atendimento #form-produto .passo:not([data-passo="tamanhos"]),
+body.edicao-rapida-atendimento #form-produto #details-mais,
+body.edicao-rapida-atendimento #btn-cancelar-duplicar,
+body.edicao-rapida-atendimento #audit-form { display: none !important; }
+body.edicao-rapida-atendimento #card-form { max-width: 720px; margin-inline: auto; }
+body.edicao-rapida-atendimento #card-form .cad-corpo { padding: 16px; }
+body.edicao-rapida-atendimento #titulo-form { font-size: clamp(1rem, 4vw, 1.3rem); margin: 8px 0; }
+body.edicao-rapida-atendimento #form-produto .passo[data-passo="tamanhos"] { margin-top: 12px; }
+body.edicao-rapida-atendimento #form-produto .passo[data-passo="tamanhos"] .num { display:none; }
+body.edicao-rapida-atendimento #btn-salvar { width:100%; min-height:52px; }
+#cad-atendimento-voltar { min-height:44px; border:0; background:transparent; color:var(--laranja-txt,#a65b13); font-size:.9rem; font-family:inherit; font-weight:700; cursor:pointer; padding:8px 0; text-decoration:underline; text-underline-offset:3px; }
+#cad-atendimento-voltar:focus-visible { outline:3px solid #e98a20; outline-offset:2px; }
+</style>
 </head>
 <body>
 
@@ -3185,6 +3201,44 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     abrirCadastro_();
   }
 
+  // Vindo da gaveta Produtos, usa a edição já autenticada da Gestão.
+  // A conversa original permanece aberta na outra aba.
+  let edicaoAtendimentoAberta_ = false;
+  function tentarAbrirEdicaoDoAtendimento_() {
+    if (edicaoAtendimentoAberta_) return;
+    const params = new URLSearchParams(location.search);
+    const id = params.get('editarProduto');
+    if (!id || !/^[A-Za-z0-9_-]{1,90}$/.test(id)) return;
+    const p = produtos.find(x => String(x.ID) === id);
+    if (!p || !usuarioAdmin) return;
+    edicaoAtendimentoAberta_ = true;
+    editarProduto(id);
+    if (params.get('edicaoRapida') !== 'tamanhos') return;
+    document.body.classList.add('edicao-rapida-atendimento');
+    const corpo = document.querySelector('#card-form .cad-corpo');
+    const titulo = document.getElementById('titulo-form');
+    const sum = document.getElementById('cad-sum-txt');
+    const desc = corpo && corpo.querySelector('.cad-sub');
+    if (titulo) titulo.textContent = 'Corrigir tamanhos · ' + (p.Codigo || p.Nome || 'peça');
+    if (sum) sum.textContent = 'Editar tamanhos e idades';
+    if (desc) desc.textContent = 'Desmarque o que acabou ou marque as opções disponíveis. Salve para atualizar a loja.';
+    const salvar = document.getElementById('btn-salvar');
+    if (salvar) salvar.textContent = 'Salvar tamanhos';
+    if (corpo && !document.getElementById('cad-atendimento-voltar')) {
+      const voltar = document.createElement('button');
+      voltar.type = 'button';
+      voltar.id = 'cad-atendimento-voltar';
+      voltar.textContent = '← Voltar à conversa';
+      voltar.addEventListener('click', () => {
+        window.close();
+        if (!window.closed && history.length > 1) history.back();
+      });
+      corpo.insertBefore(voltar, titulo || corpo.firstChild);
+    }
+    const faixa = document.getElementById('cad-etiquetas');
+    if (faixa) requestAnimationFrame(() => faixa.querySelector('button')?.focus({ preventScroll: true }));
+    document.getElementById('card-form')?.scrollIntoView({ behavior: 'auto', block: 'start' });
+  }
   function editarProduto(id) {
     const p = produtos.find(x => String(x.ID) === String(id));
     if (!p) return;
@@ -4166,6 +4220,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     }
     avisoCache_('');
     renderizarProdutos();
+    tentarAbrirEdicaoDoAtendimento_();
     carregarAuditoria_();
   }
 
