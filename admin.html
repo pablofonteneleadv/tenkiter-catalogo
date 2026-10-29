@@ -3224,6 +3224,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (desc) desc.textContent = 'Desmarque o que acabou ou marque as opções disponíveis. Salve para atualizar a loja.';
     const salvar = document.getElementById('btn-salvar');
     if (salvar) salvar.textContent = 'Salvar tamanhos';
+    document.getElementById('status')?.setAttribute('role', 'status');
     if (corpo && !document.getElementById('cad-atendimento-voltar')) {
       const voltar = document.createElement('button');
       voltar.type = 'button';
@@ -4054,6 +4055,13 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       it.estado = 'enviando'; desenharEnvios();
       try { await enviarItem(it); } catch (err) { it.estado = 'erro'; it.msg = 'erro inesperado'; window.logDebug_('════ "' + it.titulo + '": erro inesperado no JS -- ' + ((err && err.stack) || err) + ' ════'); }
       if (it.estado === 'ok' || it.estado === 'aviso' || it.estado === 'offline') apagarEnvio_(it); else { it.etapa = 'fila'; guardarEnvio_(it); }
+      if (it.ehEdicao && document.body.classList.contains('edicao-rapida-atendimento') && it.estado === 'erro') {
+        document.getElementById('status').textContent = 'Não foi possível salvar. Confira o aviso de envio e tente novamente.';
+        const salvar = document.getElementById('btn-salvar');
+        const voltar = document.getElementById('cad-atendimento-voltar');
+        if (salvar) { salvar.disabled = false; salvar.textContent = 'Salvar tamanhos'; }
+        if (voltar) voltar.disabled = false;
+      }
       desenharEnvios();
     }
   }
@@ -4065,6 +4073,21 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const aviso = conferirSalvo(it, it.respSalvo);
       if (aviso) { it.estado = 'aviso'; it.msg = aviso; window.logDebug_('════ "' + it.titulo + '": conferência com aviso -- ' + aviso + ' ════'); }
       else sumirDepois(it, 6000);
+      if (it.ehEdicao && it.estado === 'ok') {
+        try {
+          localStorage.setItem('tk_produto_atendimento_atualizado',
+            JSON.stringify({ id: String(it.dados.id), em: Date.now() }));
+        } catch (_) {}
+      }
+      if (it.ehEdicao && document.body.classList.contains('edicao-rapida-atendimento')) {
+        const salvar = document.getElementById('btn-salvar');
+        const voltar = document.getElementById('cad-atendimento-voltar');
+        if (salvar) { salvar.disabled = false; salvar.textContent = it.estado === 'ok' ? 'Salvar outra correção' : 'Salvar tamanhos'; }
+        if (voltar) { voltar.disabled = false; voltar.textContent = it.estado === 'ok' ? '✓ Salvo! Voltar à conversa' : '← Voltar à conversa'; }
+        document.getElementById('status').textContent = it.estado === 'ok'
+          ? 'Tamanhos atualizados na loja. Pode voltar à conversa.'
+          : 'O servidor salvou, mas a conferência pediu atenção. Confira o aviso antes de voltar.';
+      }
     });
     desenharEnvios();
     const formulario = document.getElementById('card-form');
@@ -4191,9 +4214,18 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         guardarEnvio_(envios[envios.length - 1]);
       });
     }
-    cancelarDuplicacao(); // libera o formulário já
-    document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima peça.';
-    sairDoCadastro_();
+    if (document.body.classList.contains('edicao-rapida-atendimento') && ehEdicao) {
+      // No atendimento, não esconder o formulário até o servidor confirmar a alteração.
+      const salvar = document.getElementById('btn-salvar');
+      const voltar = document.getElementById('cad-atendimento-voltar');
+      if (salvar) { salvar.disabled = true; salvar.textContent = 'Salvando tamanhos…'; }
+      if (voltar) voltar.disabled = true;
+      document.getElementById('status').textContent = 'Salvando a correção da peça. Não feche esta aba ainda.';
+    } else {
+      cancelarDuplicacao(); // libera o formulário já
+      document.getElementById('status').textContent = 'Enviando em segundo plano. Pode cadastrar a próxima peça.';
+      sairDoCadastro_();
+    }
     desenharEnvios(); processarEnvios();
   });
 
