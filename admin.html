@@ -1219,11 +1219,11 @@
       <section class="passo" data-passo="tamanhos">
         <div class="passo-tit"><span class="num">7</span>Tamanhos <span class="opc">(se souber)</span></div>
         <div class="cad-vinculos" id="cad-vinculos" aria-live="polite">
-          <div class="cad-vinculos-titulo">Tamanho da etiqueta</div>
+          <div class="cad-vinculos-titulo">Tamanhos da etiqueta <small>(selecione mais de um +)</small></div>
           <div class="cad-etiquetas" id="cad-etiquetas"></div>
           <div class="cad-vinculos-titulo" id="cad-faixa-titulo">Numeração ou idade que veste</div>
           <div class="cad-faixas" id="cad-faixas"></div>
-          <p class="cad-vinculos-ajuda">Escolha o tamanho escrito na etiqueta e as numerações ou idades correspondentes. No infantil, a cliente verá somente a idade.</p>
+          <p class="cad-vinculos-ajuda">Você pode marcar várias etiquetas. Idades e numerações são sugeridas e podem ser ajustadas. No infantil, a cliente verá somente a idade.</p>
         </div>
         <details id="cad-tamanhos-legados" class="cad-tamanhos-legados" hidden>
           <summary>Editar tamanhos do cadastro antigo</summary>
@@ -2243,18 +2243,23 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     ['Mulher','Feminino Adulto'],['Menina','Infantil Menina'],['Baby Menina','Baby Menina'],
     ['Homem','Masculino Adulto'],['Menino','Infantil Menino'],['Baby Menino','Baby Menino']
   ];
-  const CAD_ETIQUETAS_ = ['PP','P','M','G','GG','G1','G2','G3','Único'];
+  const CAD_ETIQUETAS_ = ['PP','P','M','G','GG','G1','G2','G3','Juv10','Juv12','Juv14','Juv16','Único'];
   const CAD_NUMEROS_ = ['34','36','38','40','42','44','46','48','50','52','54','56'];
-  const CAD_IDADES_CRIANCA_ = Array.from({length:16},(_,i)=>(i+2)+' anos');
+  const CAD_IDADES_CRIANCA_ = Array.from({length:16},(_,i)=>(i+1)+' ano'+(i?'s':''));
   const CAD_IDADES_BABY_ = ['RN','0-3 meses','3-6 meses','6-9 meses','9-12 meses','12-18 meses','18-24 meses'];
-  const CAD_PREDEFINIDOS_ADULTO_ = Object.freeze({PP:['34'],P:['36'],M:['38','40'],G:['42','44'],GG:['46']});
+  const CAD_PREDEFINIDOS_ADULTO_ = Object.freeze({PP:['34'],M:['36','38'],G:['40','42'],GG:['44','46']});
+  const CAD_PREDEFINIDOS_INFANTIL_ = Object.freeze({
+    P:['1 ano','2 anos'],M:['3 anos','4 anos'],G:['5 anos','6 anos'],GG:['7 anos','8 anos'],
+    Juv10:['9 anos','10 anos'],Juv12:['11 anos','12 anos'],
+    Juv14:['13 anos','14 anos'],Juv16:['15 anos','16 anos']
+  });
   function cadBaby_() { return /^Baby /.test(cadPublico_); }
   function cadFaixasDisponiveis_() { return cadBaby_()?CAD_IDADES_BABY_:(cadInfantil_()?CAD_IDADES_CRIANCA_:CAD_NUMEROS_); }
   function cadPredefinirFaixas_(etiqueta) {
     // Adulto tem correspondencia de loja; infantil e baby nao possuem tamanho padrao confiavel.
-    return cadInfantil_() ? [] : (CAD_PREDEFINIDOS_ADULTO_[etiqueta] || []);
+    return cadInfantil_() ? (CAD_PREDEFINIDOS_INFANTIL_[etiqueta] || []) : (CAD_PREDEFINIDOS_ADULTO_[etiqueta] || []);
   }
-  let cadEtiqueta_ = '', cadFaixas_ = new Set(), cadPublico_ = '';
+  let cadEtiquetas_ = new Set(), cadFaixas_ = new Set(), cadPublico_ = '';
   function cadInfantil_() { return /Menina|Menino/.test(cadPublico_); }
   function cadExibirLegados_() {
     const campo = document.getElementById('tamanhos');
@@ -2268,13 +2273,13 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   }
   function cadLerVinculos_() {
     const dados = TKTamanhos.ler(document.getElementById('tamanhos').value);
-    cadEtiqueta_ = dados.etiqueta || (dados.antigos.length === 1 && CAD_ETIQUETAS_.includes(dados.antigos[0]) ? dados.antigos[0] : '');
+    cadEtiquetas_ = new Set(TKTamanhos.etiquetasDaEntrada(dados.etiqueta || (dados.antigos.length === 1 && CAD_ETIQUETAS_.includes(dados.antigos[0]) ? dados.antigos[0] : '')));
     cadFaixas_ = new Set([...dados.idades, ...dados.numeros]);
     cadExibirLegados_();
   }
   function cadGravarVinculos_() {
     const campo = document.getElementById('tamanhos');
-    campo.value = TKTamanhos.gravar(campo.value, cadEtiqueta_, cadFaixas_, cadInfantil_());
+    campo.value = TKTamanhos.gravar(campo.value, cadEtiquetas_, cadFaixas_, cadInfantil_());
     campo.dispatchEvent(new Event('input', { bubbles: true }));
     cadExibirLegados_();
     sincRapidos_();
@@ -2288,7 +2293,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       box.replaceChildren();
       itens.forEach(v=>{const b=document.createElement('button');b.type='button';b.textContent=v;b.className=marcado(v)?'ativo':'';b.setAttribute('aria-pressed',String(marcado(v)));b.addEventListener('click',()=>{clique(v);cadGravarVinculos_();cadDesenharVinculos_()});box.appendChild(b)});
     }
-    montar(boxE,CAD_ETIQUETAS_,v=>v===cadEtiqueta_,v=>{cadEtiqueta_=cadEtiqueta_===v?'':v;cadFaixas_=new Set(cadPredefinirFaixas_(cadEtiqueta_));});
+    montar(boxE,CAD_ETIQUETAS_,v=>cadEtiquetas_.has(v),v=>{
+      if(cadEtiquetas_.has(v))cadEtiquetas_.delete(v);else cadEtiquetas_.add(v);
+      cadFaixas_=new Set([...cadEtiquetas_].flatMap(cadPredefinirFaixas_));
+    });
     montar(boxF,cadFaixasDisponiveis_(),v=>cadFaixas_.has(v),v=>{if(cadFaixas_.has(v))cadFaixas_.delete(v);else cadFaixas_.add(v)});
   }
   function cadDesenharPublicos_() {
@@ -2331,7 +2339,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   }
   document.getElementById('cad-unissex')?.addEventListener('change',()=>{cadSincronizarPublicos_();atualizarFaltas_()});
   document.getElementById('form-produto')?.addEventListener('reset',()=>setTimeout(()=>{
-    cadEtiqueta_=''; cadFaixas_.clear(); cadPublico_='Mulher';
+    cadEtiquetas_.clear(); cadFaixas_.clear(); cadPublico_='Mulher';
     const antigo=document.getElementById('cad-tamanhos-legados');
     if (antigo) { antigo.hidden=true; antigo.open=false; }
     cadRestaurarPublicos_();
