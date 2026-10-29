@@ -220,12 +220,17 @@ def tratar(route, path, method, body, s):
             cs = [c for a, c in melhor.items() if any(x["id"] == e["id"] for x in etq_de(a))]
             cols.append({"etiqueta": {"id": e["id"], "nome": e["nome"], "cor": e["cor"]}, "total": len(cs), "cartoes": [{"conversa": c["id"], "nome": c["nome"], "contato": c["contato"], "canal": c["canal"], "previa": c["previa"][:90], "ultima_em": c["ultima_em"], "dono": c.get("dono", "")} for c in cs[:30]]})
         return J({"ok": True, "canal": cf, "colunas": cols}) or True
+    if path == "/msg/entrada/reprocessar" and method == "POST":
+        s.setdefault("reprocessamentos", []).append(True)
+        if s.get("reprocessar_erro"): return J({"ok":False,"erro":"Sem conexão agora. Tente novamente."},503) or True
+        s["saude"] = {"alerta": False}
+        return J({"ok": True, "iniciado": True}) or True
     if path == "/msg/novidades":
         cid = int(q.get("conversa") or 0); dep = int(q.get("depois") or 0); desde = q.get("desde", "")
         # a "folga" de 3 s do servidor real: devolve o que mudou desde o cursor
         cs = [enfeitar(s, x) for x in s["convs"] if x["atualizada_em"] >= desde[:-1] and x["total"] > 0]
         ms = [x for x in s["msgs"] if cid and x["conversa_id"] == cid and (x["id"] > dep or x["status_em"] >= q.get("st", "z")[:-1])] if cid else []
-        return J({"ok": True, "cursor": agora(), "conversas": cs, "mensagens": ms, "notas": s.get("notas", {}).get(pessoa(next(x for x in s["convs"] if x["id"] == cid)) or "c:%d" % cid, []) if cid else [], "contagens": {c: cont(s, c) for c in ("whatsapp1", "whatsapp2", "instagram", "todos")}}) or True
+        return J({"ok": True, "cursor": agora(), "conversas": cs, "mensagens": ms, "notas": s.get("notas", {}).get(pessoa(next(x for x in s["convs"] if x["id"] == cid)) or "c:%d" % cid, []) if cid else [], "contagens": {c: cont(s, c) for c in ("whatsapp1", "whatsapp2", "instagram", "todos")}, "saude": s.get("saude", {"alerta":False})}) or True
     if path == "/msg/contagem":
         return J({"ok": True, "contagens": {c: cont(s, c) for c in ("whatsapp1", "whatsapp2", "instagram", "todos")}}) or True
     if path == "/msg/lida" and isinstance(body.get("conversas"), list):

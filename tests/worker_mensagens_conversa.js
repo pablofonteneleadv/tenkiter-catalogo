@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), os = require('os');
 const { DatabaseSync } = require('node:sqlite');
 const tmp = path.join(os.tmpdir(), 'tk_ig_msg_conversa.mjs');
-fs.writeFileSync(tmp, fs.readFileSync(process.env.TK_WORKER_SOURCE || path.join(__dirname, '..', 'instagram-worker', 'worker.js'))+'\nexport {processarFilaZernio_};');
+fs.writeFileSync(tmp, fs.readFileSync(process.env.TK_WORKER_SOURCE || path.join(__dirname, '..', 'instagram-worker', 'worker.js'))+'\nexport {processarFilaZernio_,processarEntradas_,processarEntrada_,guardarEntrada_,corpoWebhook_,contatosR2Atual_,contatosR2PlanSlice_};');
 let ok = 0, falhas = [];
 const chk = (n, c, d) => { if (c) { ok++; console.log('  ✔ ' + n); } else { falhas.push(n); console.log('  ✘ ' + n + (d !== undefined ? ' — ' + JSON.stringify(d).slice(0, 300) : '')); } };
 
@@ -18,7 +18,14 @@ function d1() {
   globalThis.caches = { default: { async match(r) { const v = cacheMem.get(r.url); return v ? new Response(v) : undefined; }, async put(r, x) { cacheMem.set(r.url, await x.text()); } } };
   const objs = new Map(); const kv = new Map();
   const meta = new Map();
-  const R2 = { async get(k) { const v = objs.get(k); return v ? { size: v.length, httpMetadata: { contentType: (meta.get(k) || {}).contentType }, body: new Response(v).body, async arrayBuffer() { return v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength); } } : null; }, async head(k) { const v = objs.get(k); return v ? { size: v.length, httpMetadata: { contentType: (meta.get(k) || {}).contentType } } : null; }, async put(k, b, o) { objs.set(k, Buffer.from(b instanceof ReadableStream ? await new Response(b).arrayBuffer() : b)); meta.set(k, (o && o.httpMetadata) || {}); }, async delete(k) { objs.delete(k); }, async list(o) { const pr = (o && o.prefix) || ''; return { objects: [...objs.keys()].filter((k) => k.startsWith(pr)).map((k) => ({ key: k, size: objs.get(k).length, uploaded: (tempDatas.get(k) || new Date()) })), truncated: false }; } };
+  let seqR2=0;const r2meta=new Map();
+  const R2 = {
+    async get(k){const v=objs.get(k),m=r2meta.get(k)||{};return v?{size:v.length,etag:m.etag,customMetadata:m.customMetadata||{},httpMetadata:(meta.get(k)||{}),body:new Response(v).body,async arrayBuffer(){return v.buffer.slice(v.byteOffset,v.byteOffset+v.byteLength)}}:null;},
+    async head(k){const v=objs.get(k),m=r2meta.get(k)||{};return v?{size:v.length,etag:m.etag,customMetadata:m.customMetadata||{},httpMetadata:meta.get(k)||{}}:null;},
+    async put(k,b,o={}){const atual=r2meta.get(k);if(o.onlyIf?.etagDoesNotMatch==='*'&&objs.has(k))return null;if(o.onlyIf?.etagMatches&&o.onlyIf.etagMatches!==atual?.etag)return null;objs.set(k,Buffer.from(b instanceof ReadableStream?await new Response(b).arrayBuffer():b));meta.set(k,o.httpMetadata||{});const m={etag:String(++seqR2),customMetadata:o.customMetadata||{}};r2meta.set(k,m);return m;},
+    async delete(keys){for(const k of Array.isArray(keys)?keys:[keys]){objs.delete(k);r2meta.delete(k);}},
+    async list(o={}){const keys=[...objs.keys()].filter(k=>k.startsWith(o.prefix||'')).sort(),lim=o.limit||1000;const from=o.cursor?keys.findIndex(k=>k>o.cursor):0;const chosen=keys.slice(Math.max(0,from),Math.max(0,from)+lim);return {objects:chosen.map(k=>({key:k,size:objs.get(k).length,uploaded:tempDatas.get(k)||new Date(),customMetadata:r2meta.get(k)?.customMetadata||{}})),truncated:keys.length>Math.max(0,from)+lim,cursor:chosen.at(-1)};}
+  };
   const tempDatas = new Map();
   const KV = { async get(k, t) { const v = kv.get(k); return v === undefined ? null : (t === 'json' ? JSON.parse(v) : v); }, async put(k, v) { kv.set(k, String(v)); }, async delete(k) { kv.delete(k); } };
   const TOKEN = 'IGQVJ_TOKEN_INVENTADO_PARA_TESTE_1234567890';
@@ -646,9 +653,9 @@ function d1() {
   chk('etapa final: mesmo resultado do relatório de uma vez só', rf.j.ok && rf.j.total === 5 && rf.j.duplicados.total === relP.j.duplicados.total && rf.j.invalidos.total === relP.j.invalidos.total && rf.j.semFone === relP.j.semFone && rf.j.corrigir.total === relP.j.corrigir.total, rf.j);
   chk('etapa final limpa a tabela temporária (sem dados pessoais sobrando)', (await DB.prepare('SELECT COUNT(*) n FROM msg_contatos_tmp').first()).n === 0);
   // v2.16: limpeza aprovada (juntar, padronizar, criar) e cadastro automático "TM Cliente …"
-  const planoN = await DB.prepare("SELECT tipo, COUNT(*) n FROM msg_contatos_plano GROUP BY tipo").all();
-  const planoDup = JSON.parse((await DB.prepare("SELECT dados FROM msg_contatos_plano WHERE tipo='dup'").first()).dados);
-  chk('relatório guarda o plano completo (repetidos e novos)', planoN.results.some((x) => x.tipo === 'dup' && x.n === 1) && planoN.results.some((x) => x.tipo === 'novo' && x.n >= 1), planoN.results);
+  const planoR2Atual=await W.contatosR2Atual_(env);
+  const planoDup=(await W.contatosR2PlanSlice_(env,planoR2Atual,'dup',0,100)).itens[0];
+  chk('relatório guarda o plano completo no R2 privado (repetidos e novos)',planoR2Atual.m.plano.dup===1&&planoR2Atual.m.plano.novos>=1);
   chk('no plano, fica o contato de nome mais completo', planoDup.manter === 'people/c1' && planoDup.apagar.join() === 'people/c2', planoDup);
   chk('situação avisa que o plano está pronto', (await A('GET', '/msg/contatos/situacao')).j.planoPronto === true);
   const bkGuard = await DB.prepare("SELECT valor FROM cfg WHERE chave='contatos_backup'").first();
@@ -662,7 +669,7 @@ function d1() {
   let lp = await A('POST', '/msg/contatos/limpeza', { etapa: 'padronizar' }), vp = 1;
   while (lp.j.proxima && vp < 10) { lp = await A('POST', '/msg/contatos/limpeza', { etapa: 'padronizar', pagina: lp.j.proxima }); vp++; }
   chk('padronizar: repete as páginas até o fim', lp.j.ok && vp === 2 && lp.j.feito === 5 && lp.j.total === 5, lp.j);
-  const nNovos = planoN.results.find((x) => x.tipo === 'novo').n;
+  const nNovos = planoR2Atual.m.plano.novos;
   let lc = await A('POST', '/msg/contatos/limpeza', { etapa: 'criar' }), vc = 1;
   while (lc.j.restantes && vc < 10) { lc = await A('POST', '/msg/contatos/limpeza', { etapa: 'criar', continuar: true }); vc++; }
   chk('criar: quem conversou e não está no Google vira "TM Cliente …"', lc.j.ok && lc.j.restantes === 0 && criadosG.length === nNovos && criadosG.every((c) => /^TM Cliente /.test(c.nome) && /^55\d{10,11}$/.test(c.fone)), [lc.j, criadosG.slice(0, 3)]);
@@ -945,9 +952,9 @@ function d1() {
   env.DB={...originalDb,prepare(sql){if(queueFail&&/INSERT.*msg_mensagem/i.test(sql))throw new Error('falha simulada de armazenamento');return originalDb.prepare(sql);}};
   const queuedEvent=zEv({platformMessageId:'durable-ig-message',sender:{id:'IG-DURABLE',name:'Contato de teste',username:'durable.teste'}});
   const queuedReply=await zPost(queuedEvent);
-  chk('Instagram aceita só depois de preservar evento e mantém em fila se gravação falhar',queuedReply.r.status===200&&(await DB.prepare('SELECT COUNT(*) n FROM msg_zernio_fila').first()).n===1&&!(await DB.prepare("SELECT id FROM msg_mensagem WHERE ext_id='durable-ig-message'").first()));
-  queueFail=false;env.DB=originalDb;await DB.prepare('UPDATE msg_zernio_fila SET prox=0,trava=0').run();await W.processarFilaZernio_(env);
-  chk('nova tentativa recupera a mensagem e remove payload da fila',(await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE ext_id='durable-ig-message'").first()).n===1&&(await DB.prepare('SELECT COUNT(*) n FROM msg_zernio_fila').first()).n===0);
+  chk('Instagram aceita só depois de preservar evento e mantém em fila se gravação falhar',queuedReply.r.status===200&&[...objs.keys()].some(k=>k.startsWith('privado/mensagens/entrada/recebidas/'))&&!(await DB.prepare("SELECT id FROM msg_mensagem WHERE ext_id='durable-ig-message'").first()));
+  queueFail=false;env.DB=originalDb;await W.processarEntradas_(env,true);
+  chk('nova tentativa recupera a mensagem e remove payload da fila',(await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE ext_id='durable-ig-message'").first()).n===1&&![...objs.keys()].some(k=>k.startsWith('privado/mensagens/entrada/recebidas/')));
   await zPost(queuedEvent);chk('reentrega do mesmo evento não duplica mensagens',(await DB.prepare("SELECT COUNT(*) n FROM msg_mensagem WHERE ext_id='durable-ig-message'").first()).n===1);
   // ======== v7.40.8: atalhos de resposta rápida e respostas automáticas ========
   {

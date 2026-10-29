@@ -154,6 +154,8 @@ jobs:
           node tests/mensagens_ficha_ui.js
           node tests/worker_mensagens.js
           node tests/worker_mensagens_conversa.js
+          node tests/worker_entrada_duravel.js
+          node tests/worker_contatos_r2.js
           node tests/worker_mobile_push.js
 
       # O teste do Worker do Instagram usa node:sqlite, disponível no Node 22+.
@@ -189,6 +191,7 @@ jobs:
           python3 tests/mensagens_clareza.py
           python3 tests/mensagens_gavetas_proposta.py
           python3 tests/disponibilidade_rapida.py
+          python3 tests/mensagens_saude_entrada.py
 
       - name: Screenshots da edição rápida
         if: always() && github.event_name == 'pull_request'
