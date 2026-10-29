@@ -817,6 +817,7 @@
   function propostaGaveta_(tipo,anterior){
     const g=$('ms-gaveta');if(!g)return null;
     g.classList.add('ms-gaveta-proposta');g.dataset.tipo=tipo;
+    const app=$('ms-app');if(app&&g.parentElement!==app)app.appendChild(g);
     const titulo=g.getAttribute('aria-label');g.removeAttribute('aria-label');g.setAttribute('role','presentation');
     const painel=el('div','ms-gaveta-painel');painel.setAttribute('role','dialog');painel.setAttribute('aria-modal','true');painel.setAttribute('aria-label',titulo);
     while(g.firstChild)painel.appendChild(g.firstChild);g.appendChild(painel);

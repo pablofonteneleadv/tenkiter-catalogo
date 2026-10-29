@@ -16,6 +16,7 @@ with sync_playwright() as p:
    pg.click('#ms-btn-filtros');pg.wait_for_selector('.ms-gaveta-proposta');pg.wait_for_timeout(200)
    assert pg.locator('[name=ms-ft-fila]').evaluate('e=>e.tagName')=='SELECT'
    assert pg.locator('[name=ms-ft-etapa]').evaluate('e=>e.tagName')=='SELECT'
+   assert pg.locator('#ms-gaveta').evaluate("e=>{const r=e.getBoundingClientRect(),a=document.getElementById('ms-app').getBoundingClientRect();return r.left<=a.left+1&&r.right>=a.right-1}")
    assert pg.locator('.ms-gaveta-painel').evaluate("e=>getComputedStyle(e).borderTopLeftRadius==='20px'")
    assert pg.locator('.ms-gaveta-corpo').evaluate("e=>{const r=e.firstElementChild.getBoundingClientRect(),b=e.getBoundingClientRect(),p=e.parentElement.getBoundingClientRect();return r.left>=p.left+17&&r.right<=p.right-17&&b.bottom<=document.querySelector('.ms-filtros-pe').getBoundingClientRect().top+1}")
    assert pg.locator('.ms-filtros-pe [data-ms=filtros-aplicar]').evaluate('(e)=>{const r=e.getBoundingClientRect();return r.height>=48&&r.bottom<=innerHeight+1}')
