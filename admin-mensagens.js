@@ -1251,7 +1251,7 @@
     // Editor na própria conversa: sem navegação, popup ou recarregamento do painel.
     const id = String(p.ID || '');
     if (!/^[A-Za-z0-9_-]{1,90}$/.test(id)) { aviso_('Não foi possível identificar a peça.'); return; }
-    document.getElementById('ms-edicao-tamanhos')?.remove();
+    if (document.getElementById('ms-edicao-tamanhos')) return;
     const anterior = document.activeElement;
     const fundo = el('div', 'ms-edicao-fundo');
     fundo.id = 'ms-edicao-tamanhos';
@@ -1283,7 +1283,7 @@
     const suporte = typeof TKTamanhos !== 'undefined' && typeof TKTamanhos.ler === 'function' && typeof TKTamanhos.gravar === 'function';
     if (suporte) {
       const dados = TKTamanhos.ler(campo.value);
-      const marcadas = new Set(TKTamanhos.etiquetasDaEntrada(dados.etiqueta || ''));
+      const marcadas = new Set(TKTamanhos.etiquetasDaEntrada(dados.etiqueta || (dados.antigos.length === 1 && etiquetas.includes(dados.antigos[0]) ? dados.antigos[0] : '')));
       const selecionadas = new Set([...dados.idades,...dados.numeros]);
       const rotulo = el('p', '', 'Etiquetas (pode selecionar mais de uma)');
       const botoesE = el('div', 'ms-edicao-chips');
@@ -1309,7 +1309,8 @@
       desenhar();
       corpo.append(rotulo, botoesE, rotuloF, botoesF);
     }
-    corpo.append(label, campo);
+    if (suporte) { const detalhes = el('details', 'ms-edicao-avancado'); const resumo = el('summary', '', 'Editar texto dos tamanhos'); detalhes.append(resumo, label, campo); corpo.appendChild(detalhes); }
+    else corpo.append(label, campo);
     const status = el('p', 'ms-edicao-status'); status.setAttribute('role', 'status');
     const rodape = el('div', 'ms-edicao-rodape');
     const cancelar = botao('ms-btn', 'Cancelar', '');
@@ -1327,7 +1328,7 @@
         .ms-edicao-corpo{overflow:auto;min-height:0;padding:16px;display:flex;flex-direction:column;gap:12px}
         .ms-edicao-corpo p{margin:0}.ms-edicao-corpo label{font-weight:700}
         .ms-edicao-valor{box-sizing:border-box;width:100%;min-height:130px;border:1px solid #8c8579;border-radius:8px;padding:12px;font:16px/1.5 system-ui;resize:vertical}
-        .ms-edicao-chips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.ms-edicao-chip{min-height:44px;border:1px solid #bbb;border-radius:20px;background:white;font-weight:650}.ms-edicao-chip[aria-pressed=true]{background:#ed861d;border-color:#ed861d;color:#171714}.ms-edicao-status{margin:0;min-height:1.4em;color:#8d3b15}
+        .ms-edicao-chips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.ms-edicao-chip{min-height:44px;border:1px solid #bbb;border-radius:20px;background:white;font-weight:650}.ms-edicao-chip[aria-pressed=true]{background:#ed861d;border-color:#ed861d;color:#171714}.ms-edicao-avancado{border-top:1px solid #ddd;padding-top:12px}.ms-edicao-avancado summary{min-height:44px;cursor:pointer;font-weight:650}.ms-edicao-avancado label{display:block;margin:8px 0}.ms-edicao-status{margin:0;min-height:1.4em;color:#8d3b15}
         .ms-edicao-rodape{border-top:1px solid #eee;flex-wrap:wrap}.ms-edicao-rodape button{min-height:48px;flex:1}
         .ms-edicao-fundo :focus-visible{outline:3px solid #e88a25;outline-offset:2px}
         @media(max-width:520px){.ms-edicao-fundo{padding:0;align-items:flex-end}.ms-edicao-painel{border-radius:16px 16px 0 0;max-height:calc(100dvh - env(safe-area-inset-top) - 12px)}.ms-edicao-rodape{padding-bottom:max(16px,env(safe-area-inset-bottom))}}
@@ -1347,7 +1348,7 @@
     fundo.addEventListener('click', e => { if (e.target === fundo) encerrar(); });
     fundo.addEventListener('keydown', e => {
       if (e.key !== 'Tab') return;
-      const focos = [fechar, campo, cancelar, salvar];
+      const focos = [fechar, ...Array.from(fundo.querySelectorAll('button,summary,textarea')).filter(x => x !== fechar && !x.disabled && x.getClientRects().length)];
       const i = focos.indexOf(document.activeElement);
       if (e.shiftKey && i === 0) { e.preventDefault(); salvar.focus(); }
       else if (!e.shiftKey && i === focos.length - 1) { e.preventDefault(); fechar.focus(); }
@@ -1394,7 +1395,7 @@
         salvar.textContent = 'Tentar novamente';
       }
     });
-    campo.focus({ preventScroll: true });
+    fechar.focus({ preventScroll: true });
   }
   const produtoPorId_ = (id) => produtosCatalogo_().find((p) => String(p.ID) === String(id));
   /* v7.29: seleção de produtos (igual ao "Selecionar" da loja): várias peças numa mensagem só, com o link ?sel= do site.
