@@ -1248,18 +1248,156 @@
     setTimeout(() => q.focus(), 0);
   }
   function abrirEdicaoRapidaProduto_(p) {
-    // Reutiliza a edição autenticada da Gestão, em vez de gravar diretamente no backend
-    // ou permitir alterações sem as validações de permissões e auditoria existentes.
-    const id = String(p.ID);
-    if (!id || !/^[A-Za-z0-9_-]{1,90}$/.test(id)) { aviso_('Não foi possível identificar a peça.'); return; }
-    const destino = new URL('admin.html', location.href);
-    destino.searchParams.set('editarProduto', id);
-    destino.searchParams.set('edicaoRapida', 'tamanhos');
-    // Mesma origem: abrir com o vínculo inicial permite ao navegador copiar
-    // a sessão desta aba; depois retirar o vínculo para não expor a conversa.
-    const novaAba = window.open(destino.href, '_blank');
-    if (novaAba) { try { novaAba.opener = null; } catch (_) {} }
-    else aviso_('Permita abrir uma nova aba para editar sem perder a conversa.');
+    // Editor na própria conversa: sem navegação, popup ou recarregamento do painel.
+    const id = String(p.ID || '');
+    if (!/^[A-Za-z0-9_-]{1,90}$/.test(id)) { aviso_('Não foi possível identificar a peça.'); return; }
+    if (document.getElementById('ms-edicao-tamanhos')) return;
+    const anterior = document.activeElement;
+    const fundo = el('div', 'ms-edicao-fundo');
+    fundo.id = 'ms-edicao-tamanhos';
+    fundo.setAttribute('role', 'dialog');
+    fundo.setAttribute('aria-modal', 'true');
+    fundo.setAttribute('aria-label', 'Editar tamanhos e idades');
+    const painel = el('div', 'ms-edicao-painel');
+    const cab = el('div', 'ms-edicao-cab');
+    const titulo = el('h3', '', 'Editar tamanhos e idades');
+    const fechar = botao('ms-edicao-fechar', '✕', '');
+    fechar.type = 'button'; fechar.setAttribute('aria-label', 'Fechar sem salvar');
+    cab.append(titulo, fechar);
+    const corpo = el('div', 'ms-edicao-corpo');
+    corpo.append(el('strong', '', p.Nome || 'Peça'), el('p', '', p.Codigo || ''));
+    corpo.append(el('p', '', 'Altere apenas as opções disponíveis. As demais informações da peça serão preservadas.'));
+    const label = el('label', '', 'Tamanhos e idades disponíveis');
+    label.setAttribute('for', 'ms-edicao-valor');
+    const campo = el('textarea', 'ms-edicao-valor');
+    campo.id = 'ms-edicao-valor'; campo.rows = 3; campo.value = String(p.Tamanhos || '');
+    const generos = String(p.Genero || '');
+    const infantil = /Infantil|Menina|Menino/i.test(generos) && !/Baby/i.test(generos);
+    const baby = /Baby/i.test(generos);
+    const etiquetas = ['PP','P','M','G','GG','G1','G2','G3','Juv10','Juv12','Juv14','Juv16','Único'];
+    const faixas = baby ? ['RN','0-3 meses','3-6 meses','6-9 meses','9-12 meses','12-18 meses','18-24 meses']
+      : infantil ? Array.from({length:16},(_,i)=>(i+1)+' ano'+(i?'s':''))
+      : ['34','36','38','40','42','44','46','48','50','52','54','56'];
+    const padraoInfantil = {P:['1 ano','2 anos'],M:['3 anos','4 anos'],G:['5 anos','6 anos'],GG:['7 anos','8 anos'],Juv10:['9 anos','10 anos'],Juv12:['11 anos','12 anos'],Juv14:['13 anos','14 anos'],Juv16:['15 anos','16 anos']};
+    const padraoAdulto = {PP:['34'],P:['36'],M:['38','40'],G:['42','44'],GG:['46'],G1:['48'],G2:['50'],G3:['52']};
+    const suporte = typeof TKTamanhos !== 'undefined' && typeof TKTamanhos.ler === 'function' && typeof TKTamanhos.gravar === 'function';
+    if (suporte) {
+      const dados = TKTamanhos.ler(campo.value);
+      const marcadas = new Set(TKTamanhos.etiquetasDaEntrada(dados.etiqueta || (dados.antigos.length === 1 && etiquetas.includes(dados.antigos[0]) ? dados.antigos[0] : '')));
+      const selecionadas = new Set([...dados.idades,...dados.numeros]);
+      const rotulo = el('p', '', 'Etiquetas (pode selecionar mais de uma)');
+      const botoesE = el('div', 'ms-edicao-chips');
+      const rotuloF = el('p', '', baby ? 'Medidas baby' : infantil ? 'Idades disponíveis' : 'Numerações disponíveis');
+      const botoesF = el('div', 'ms-edicao-chips');
+      const desenhar = () => {
+        const montar = (box, itens, ativos, clique) => {
+          box.replaceChildren();
+          itens.forEach(v => {
+            const btn = botao('ms-edicao-chip', v, '');
+            btn.type = 'button'; btn.setAttribute('aria-pressed', String(ativos.has(v)));
+            btn.addEventListener('click', () => { clique(v); campo.value = TKTamanhos.gravar(campo.value, marcadas, selecionadas, infantil || baby); desenhar(); });
+            box.appendChild(btn);
+          });
+        };
+        montar(botoesE, etiquetas, marcadas, v => {
+          if (marcadas.has(v)) marcadas.delete(v); else marcadas.add(v);
+          selecionadas.clear();
+          [...marcadas].flatMap(x => infantil ? (padraoInfantil[x] || []) : baby ? [] : (padraoAdulto[x] || [])).forEach(x => selecionadas.add(x));
+        });
+        montar(botoesF, faixas, selecionadas, v => { if (selecionadas.has(v)) selecionadas.delete(v); else selecionadas.add(v); });
+      };
+      desenhar();
+      corpo.append(rotulo, botoesE, rotuloF, botoesF);
+    }
+    if (suporte) { const detalhes = el('details', 'ms-edicao-avancado'); const resumo = el('summary', '', 'Editar texto dos tamanhos'); detalhes.append(resumo, label, campo); corpo.appendChild(detalhes); }
+    else corpo.append(label, campo);
+    const status = el('p', 'ms-edicao-status'); status.setAttribute('role', 'status');
+    const rodape = el('div', 'ms-edicao-rodape');
+    const cancelar = botao('ms-btn', 'Cancelar', '');
+    const salvar = botao('ms-btn prim', 'Salvar tamanhos', '');
+    cancelar.type = salvar.type = 'button';
+    rodape.append(cancelar, salvar); painel.append(cab, corpo, status, rodape); fundo.appendChild(painel);
+    const estiloId = 'ms-edicao-estilo';
+    if (!document.getElementById(estiloId)) {
+      const style = document.createElement('style'); style.id = estiloId;
+      style.textContent = `
+        .ms-edicao-fundo{position:fixed;inset:0;z-index:2147483000;background:#0009;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
+        .ms-edicao-painel{background:#faf8f4;color:#191714;width:min(100%,520px);max-height:calc(100dvh - 32px);display:flex;flex-direction:column;border-radius:16px;overflow:hidden;box-shadow:0 12px 40px #0003}
+        .ms-edicao-cab,.ms-edicao-rodape{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px;background:#fff}
+        .ms-edicao-cab h3{margin:0;font-size:1.1rem}.ms-edicao-fechar{min-width:48px;min-height:48px;border:1px solid #ddd;border-radius:50%;background:#f7f4ed;font-size:1.4rem}
+        .ms-edicao-corpo{overflow:auto;min-height:0;padding:16px;display:flex;flex-direction:column;gap:12px}
+        .ms-edicao-corpo p{margin:0}.ms-edicao-corpo label{font-weight:700}
+        .ms-edicao-valor{box-sizing:border-box;width:100%;min-height:130px;border:1px solid #8c8579;border-radius:8px;padding:12px;font:16px/1.5 system-ui;resize:vertical}
+        .ms-edicao-chips{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.ms-edicao-chip{min-height:44px;border:1px solid #bbb;border-radius:20px;background:white;font-weight:650}.ms-edicao-chip[aria-pressed=true]{background:#ed861d;border-color:#ed861d;color:#171714}.ms-edicao-avancado{border-top:1px solid #ddd;padding-top:12px}.ms-edicao-avancado summary{min-height:44px;cursor:pointer;font-weight:650}.ms-edicao-avancado label{display:block;margin:8px 0}.ms-edicao-status{margin:0;min-height:1.4em;color:#8d3b15}
+        .ms-edicao-rodape{border-top:1px solid #eee;flex-wrap:wrap}.ms-edicao-rodape button{min-height:48px;flex:1}
+        .ms-edicao-fundo :focus-visible{outline:3px solid #e88a25;outline-offset:2px}
+        @media(max-width:520px){.ms-edicao-fundo{padding:0;align-items:flex-end}.ms-edicao-painel{border-radius:16px 16px 0 0;max-height:calc(100dvh - env(safe-area-inset-top) - 12px)}.ms-edicao-rodape{padding-bottom:max(16px,env(safe-area-inset-bottom))}}
+      `;
+      document.head.appendChild(style);
+    }
+    document.body.appendChild(fundo);
+    let ocupado = false;
+    const encerrar = () => {
+      if (ocupado) return;
+      fundo.remove();
+      if (window.TKCamadas && TKCamadas.aberta('ms-edicao-tamanhos')) TKCamadas.desempilhar('ms-edicao-tamanhos');
+      if (anterior && anterior.isConnected) anterior.focus({ preventScroll: true });
+    };
+    if (window.TKCamadas) TKCamadas.empilhar('ms-edicao-tamanhos', encerrar);
+    fechar.addEventListener('click', encerrar); cancelar.addEventListener('click', encerrar);
+    fundo.addEventListener('click', e => { if (e.target === fundo) encerrar(); });
+    fundo.addEventListener('keydown', e => {
+      if (e.key !== 'Tab') return;
+      const focos = [fechar, ...Array.from(fundo.querySelectorAll('button,summary,textarea')).filter(x => x !== fechar && !x.disabled && x.getClientRects().length)];
+      const i = focos.indexOf(document.activeElement);
+      if (e.shiftKey && i === 0) { e.preventDefault(); salvar.focus(); }
+      else if (!e.shiftKey && i === focos.length - 1) { e.preventDefault(); fechar.focus(); }
+    });
+    salvar.addEventListener('click', async () => {
+      if (ocupado) return;
+      const tamanhos = campo.value.trim();
+      if (!tamanhos) { status.textContent = 'Informe pelo menos um tamanho ou idade disponível.'; campo.focus(); return; }
+      if (suporte) { const dados = TKTamanhos.ler(tamanhos); if (!dados.idades.length && !dados.numeros.length && !dados.etiqueta && !dados.antigos.length) { status.textContent = 'Selecione os tamanhos disponíveis.'; return; } }
+      if (tamanhos === String(p.Tamanhos || '').trim()) { encerrar(); return; }
+      if (typeof chamarAdmin_ !== 'function') { status.textContent = 'Edição indisponível. Atualize o aplicativo e tente novamente.'; return; }
+      ocupado = true; salvar.disabled = cancelar.disabled = fechar.disabled = true;
+      salvar.textContent = 'Salvando…'; status.textContent = 'Atualizando a peça…';
+      try {
+        const dados = {
+          action: 'update', id,
+          nome: p.Nome || '', categoria: p.Categoria || '', genero: p.Genero || '',
+          preco: p.Preco == null ? '' : String(p.Preco),
+          estoque: p.Estoque == null ? '' : String(p.Estoque),
+          tamanhos, cores: p.Cores || '', descricao: p.Descricao || '',
+          novidade: typeof ehNovidade === 'function' ? ehNovidade(p) : !!p.Novidade,
+          fotoUrlExistente: String(p.Foto_URL || ''),
+          fotosGaleriaExistentes: String(p.Fotos_Galeria || ''),
+        };
+        if (typeof ehConsulta === 'function' && ehConsulta(p)) dados.consultarValor = true;
+        // Preserve existing video metadata; never intentionally remove media in a size-only edit.
+        if (p.Video_URL) dados.videoUrlExistente = String(p.Video_URL);
+        if (Array.isArray(p.Videos) && p.Videos.length) dados.videos = p.Videos;
+        // Keep the existing media fields unchanged; a size edit must never request deletion.
+        const resposta = await chamarAdmin_(dados);
+        if (!resposta || !resposta.ok) throw Error(resposta?.erro || 'Não foi possível salvar. Confira sua permissão e tente novamente.');
+        p.Tamanhos = tamanhos;
+        status.textContent = 'Tamanhos atualizados.';
+        ocupado = false;
+        encerrar();
+        if (typeof carregarProdutos === 'function') {
+          Promise.resolve(carregarProdutos()).then(() => {
+            const busca = document.getElementById('ms-prod-busca');
+            if (busca) busca.dispatchEvent(new Event('input', { bubbles: true }));
+          }).catch(() => aviso_('Salvo, mas não consegui atualizar a lista. Reabra Produtos.'));
+        }
+        aviso_('Tamanhos atualizados com sucesso.');
+      } catch (erro) {
+        status.textContent = erro?.message || 'Não foi possível salvar os tamanhos.';
+        ocupado = false; salvar.disabled = cancelar.disabled = fechar.disabled = false;
+        salvar.textContent = 'Tentar novamente';
+      }
+    });
+    fechar.focus({ preventScroll: true });
   }
   const produtoPorId_ = (id) => produtosCatalogo_().find((p) => String(p.ID) === String(id));
   /* v7.29: seleção de produtos (igual ao "Selecionar" da loja): várias peças numa mensagem só, com o link ?sel= do site.
