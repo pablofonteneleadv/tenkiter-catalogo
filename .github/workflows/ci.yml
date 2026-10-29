@@ -123,6 +123,8 @@ jobs:
 
       - name: Cadastro de públicos e tamanhos vinculados
         run: node tests/cadastro_vinculos.js
+      - name: Formatação de tamanhos no atendimento
+        run: node tests/mensagens_tamanhos_resumo.js
 
       - name: Registro e fila de avisos Android
         uses: actions/setup-node@v4
