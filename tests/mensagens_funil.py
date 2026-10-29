@@ -42,8 +42,7 @@ def tela(b, w, h, mob):
     pg.click("#btn-abrir-mensagens"); pg.wait_for_selector(".ms-conv", timeout=6000); pg.wait_for_timeout(600)
     return ctx, pg, S, erros
 def abrir_funil(pg):
-    pg.click("#ms-mais"); pg.wait_for_timeout(250)
-    pg.click(".ms-menu [data-ms=funil]"); pg.wait_for_selector(".ms-fcol", timeout=4000); pg.wait_for_timeout(300)
+    pg.click("#ms-nav [data-ms=funil]"); pg.wait_for_selector(".ms-fcol", timeout=4000); pg.wait_for_timeout(300)
 def colunas(pg): return pg.eval_on_selector_all(".ms-fcol h4", "es=>es.map(e=>e.textContent)")
 def cartoes(pg, etq): return pg.eval_on_selector_all(".ms-fcol[data-etq='%d'] .ms-fcard" % etq, "es=>es.map(e=>e.dataset.id)")
 SEM_ROLAGEM = """(()=>{if(document.documentElement.scrollWidth>innerWidth||document.body.scrollWidth>innerWidth)return 'documento '+document.documentElement.scrollWidth;
@@ -56,10 +55,9 @@ with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
     # ===================== celular 390×844 =====================
     ctx, pg, S, erros = tela(b, 390, 844, True)
-    pg.click("#ms-mais"); pg.wait_for_timeout(250)
-    itens = pg.eval_on_selector_all(".ms-menu button", "es=>es.map(e=>e.textContent)")
-    chk("menu ⋯ geral tem 'Funil de vendas' logo depois de 'Painel de atendimento'", "Funil de vendas" in itens and itens.index("Funil de vendas") == itens.index("Painel de atendimento") + 1, itens)
-    pg.click(".ms-menu [data-ms=funil]"); pg.wait_for_selector(".ms-fcol", timeout=4000); pg.wait_for_timeout(300)
+    itens = pg.eval_on_selector_all("#ms-nav button", "es=>es.map(e=>e.textContent)")
+    chk("Funil tem acesso direto na navegação inferior", itens == ["Conversas", "Funil", "Com notas", "Mais"], itens)
+    pg.click("#ms-nav [data-ms=funil]"); pg.wait_for_selector(".ms-fcol", timeout=4000); pg.wait_for_timeout(300)
     chk("colunas = etiquetas de venda, na ordem (Troca fica fora)", colunas(pg) == ["Novo cliente", "Reserva", "Aguardando pagamento", "Pago", "Enviado"], colunas(pg))
     chk("pede o funil do canal atual (Todas)", (S.get("funil_consultas") or [""])[-1] == "todos")
     chk("filtros e busca saem do caminho, título 'Funil de vendas · Todas'", not pg.locator("#ms-busca").is_visible() and "Funil de vendas · Todas" in pg.inner_text("#ms-ftitulo"))

@@ -92,7 +92,7 @@ const DDL = [
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
-const ESQUEMA_ = '20261028-notas-acessos-1';
+const ESQUEMA_ = '20261029-ficha-perfil-json-1';
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -101,7 +101,13 @@ async function iniciar(env) {
     catch(e) { if (!/no such table/i.test(String(e))) throw e; }
     if (versao === ESQUEMA_) return;
     await migrarEsquema_(env);
-    for (const [t,cols] of [['msg_nota',['excluida_em','excluida_por']],['msg_conversa',['pessoa','atualizada_em','encerrada_em']],['msg_mensagem',['ctx_chave','autor_lid']]]) {
+    // Acrescenta a ficha estruturada sem regravar nem apagar os campos antigos.
+    const fichaCols = new Set((await env.DB.prepare('PRAGMA table_info(msg_ficha)').all()).results.map(c => c.name));
+    if (!fichaCols.has('perfil_json')) {
+      try { await env.DB.prepare("ALTER TABLE msg_ficha ADD COLUMN perfil_json TEXT NOT NULL DEFAULT '{}'").run(); }
+      catch (e) { if (!/duplicate column/i.test(String(e))) throw e; }
+    }
+    for (const [t,cols] of [['msg_ficha',['perfil_json']],['msg_nota',['excluida_em','excluida_por']],['msg_conversa',['pessoa','atualizada_em','encerrada_em']],['msg_mensagem',['ctx_chave','autor_lid']]]) {
       const existentes = new Set((await env.DB.prepare('PRAGMA table_info('+t+')').all()).results.map(c=>c.name));
       if (!cols.every(c=>existentes.has(c))) throw new Error('Esquema de Mensagens incompleto. Tente novamente.');
     }
@@ -139,7 +145,7 @@ async function migrarEsquema_(env) {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_agenda (id INTEGER PRIMARY KEY AUTOINCREMENT, conversa_id INTEGER NOT NULL, texto TEXT NOT NULL, quando TEXT NOT NULL, autor TEXT DEFAULT '', whats TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'pendente', erro TEXT DEFAULT '', criado_em TEXT NOT NULL, enviado_em TEXT DEFAULT '')").run();   // v7.40.13: mensagens agendadas
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msg_agenda_st ON msg_agenda (status, quando)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msg_agenda_conv ON msg_agenda (conversa_id, status)').run();
-    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_ficha (alvo TEXT PRIMARY KEY, tamanhos TEXT DEFAULT '', preferencias TEXT DEFAULT '', cidade TEXT DEFAULT '', atualizado_em TEXT, autor TEXT)").run();   // v7.40.14: ficha do cliente (por pessoa, como notas/etiquetas)
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_ficha (alvo TEXT PRIMARY KEY, tamanhos TEXT DEFAULT '', preferencias TEXT DEFAULT '', cidade TEXT DEFAULT '', atualizado_em TEXT, autor TEXT, perfil_json TEXT NOT NULL DEFAULT '{}')").run();   // ficha estruturada; campos legados preservados
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_conv ON msg_encerramento (conversa_id, em)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_msgenc_pessoa ON msg_encerramento (pessoa)').run();
   } catch (e) { /* tenta de novo na próxima vez */ }
@@ -208,7 +214,7 @@ async function permissoes(env, req) {
 }
 
 // Acessos adicionais são privados no Worker; não alteram os perfis do cadastro.
-const MSG_FERRAMENTAS_ = { acessar:'Acessar Mensagens', responder:'Responder e encerrar atendimentos', produtos:'Selecionar produtos no atendimento', arquivos:'Baixar arquivos recebidos', contatos:'Editar cadastro e canais', etiquetas:'Mudar etiquetas', notas:'Ver e editar notas da equipe', agenda:'Agendar mensagens', respostas:'Usar e editar respostas rápidas', funil:'Ver e mover o funil', metricas:'Ver métricas', exportar:'Exportar e consultar exclusões', configuracoes:'Configurar conexões e automações' };
+const MSG_FERRAMENTAS_ = { acessar:'Acessar Mensagens', responder:'Responder e encerrar atendimentos', produtos:'Selecionar produtos no atendimento', arquivos:'Baixar arquivos recebidos', contatos:'Editar cadastro e canais', etiquetas:'Alterar etapa da venda', notas:'Ver e editar notas da equipe', agenda:'Agendar mensagens', respostas:'Usar e editar respostas rápidas', funil:'Ver e mover o funil', metricas:'Ver métricas', exportar:'Exportar e consultar exclusões', configuracoes:'Configurar conexões e automações' };
 const msgPerfil_ = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,100);
 const msgTelefone_ = s => foneNormal_(s).chave || String(s || '').replace(/\D/g,'').slice(0,20);
 async function msgRegras_(env) { const raw = await cfgGet(env,'msg_acessos_v1'); return raw ? JSON.parse(raw) : { perfis:{}, pessoas:{} }; }
@@ -3528,6 +3534,41 @@ async function responderMensagem_(env, whats, d) {
  * O resto da ficha só junta o que já existe: etiquetas, últimas notas, canais vinculados e compras (encerramentos "Vendeu"). Nada é inventado. */
 const FICHA_LIM_ = { tamanhos: 60, preferencias: 300, cidade: 60 };
 const FICHA_NOME_ = { tamanhos: 'Tamanhos', preferencias: 'Preferências', cidade: 'Cidade/bairro' };
+const FICHA_GRUPOS_ = ['tamanhos', 'generos', 'tecidos', 'cores'];
+function perfilFichaJson_(valor) {
+  try { const p = JSON.parse(String(valor || '{}')); return p && typeof p === 'object' && !Array.isArray(p) ? p : {}; }
+  catch (e) { return {}; }
+}
+function validarPerfilFicha_(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return ['As preferências estruturadas estão inválidas.'];
+  const out = { cidade: '', municipio: '', bairro: '', localidade: '', preferencias: {} };
+  for (const [k, rotulo] of [['cidade', 'Cidade'], ['municipio', 'Município'], ['bairro', 'Bairro'], ['localidade', 'Localidade']]) {
+    if (raw[k] != null && typeof raw[k] !== 'string') return [rotulo + ': valor inválido.'];
+    const texto = String(raw[k] == null ? '' : raw[k]).replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (texto.length > 100) return [rotulo + ': no máximo 100 letras.'];
+    out[k] = texto;
+  }
+  const prefs = raw.preferencias && typeof raw.preferencias === 'object' && !Array.isArray(raw.preferencias) ? raw.preferencias : {};
+  let total = 0;
+  for (const grupo of FICHA_GRUPOS_) {
+    if (prefs[grupo] != null && !Array.isArray(prefs[grupo])) return ['As opções de ' + grupo + ' estão inválidas.'];
+    const valores = Array.isArray(prefs[grupo]) ? prefs[grupo] : [];
+    if (valores.length > 40) return ['Escolha até 40 opções em cada grupo de preferências.'];
+    const vistos = new Set(), limpos = [];
+    for (const valor of valores) {
+      if (valor != null && typeof valor !== 'string') return ['Cada opção de preferência deve ser texto.'];
+      const texto = String(valor == null ? '' : valor).replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!texto) continue;
+      if (texto.length > 100) return ['Cada opção de preferência aceita até 100 letras.'];
+      total += texto.length;
+      const chave = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+      if (!vistos.has(chave)) { vistos.add(chave); limpos.push(texto); }
+    }
+    out.preferencias[grupo] = limpos;
+  }
+  if (total > 6000) return ['As preferências estão grandes demais.'];
+  return [null, out];
+}
 /** Valida os campos enviados. Devolve [erro] ou [null, {campo: texto}] só com os campos que vieram. */
 export function validarFicha_(d) {
   const v = {};
@@ -3536,6 +3577,11 @@ export function validarFicha_(d) {
     const t = String(d[k]).replace(/\s+/g, ' ').trim();
     if (t.length > FICHA_LIM_[k]) return [FICHA_NOME_[k] + ': no máximo ' + FICHA_LIM_[k] + ' letras (agora tem ' + t.length + ').'];
     v[k] = t;
+  }
+  if (d && Object.prototype.hasOwnProperty.call(d, 'perfil')) {
+    const [erro, perfil] = validarPerfilFicha_(d.perfil);
+    if (erro) return [erro];
+    v.perfil = perfil;
   }
   return [null, v];
 }
@@ -3586,7 +3632,10 @@ async function convFicha_(env, id) {
 }
 export async function fichaDaConversa_(env, conv) {
   const alvo = alvoDe_(conv);
-  const f = await env.DB.prepare('SELECT tamanhos, preferencias, cidade, atualizado_em, autor FROM msg_ficha WHERE alvo=?').bind(alvo).first();
+  const f = await env.DB.prepare('SELECT tamanhos, preferencias, cidade, atualizado_em, autor, perfil_json FROM msg_ficha WHERE alvo=?').bind(alvo).first();
+  const perfil = perfilFichaJson_(f && f.perfil_json);
+  const temTamanhosPerfil=!!(perfil&&perfil.preferencias&&Array.isArray(perfil.preferencias.tamanhos));
+  const tamanhosPerfil = temTamanhosPerfil ? perfil.preferencias.tamanhos.join(' · ') : '';
   const canais = conv.pessoa ? ((await env.DB.prepare('SELECT id, canal, contato FROM msg_conversa WHERE grupo=0 AND (' + MSG_IDENTIDADE_SQL_ + '=? OR id=?) ORDER BY ultima_em DESC LIMIT 20').bind(conv.pessoa, conv.id).all()).results || []) : [{ id: conv.id, canal: conv.canal, contato: conv.contato }];
   const ids = canais.map((c) => c.id), marca = ids.map(() => '?').join(',');
   /* compra = encerramento "Vendeu" que valeu: se a mesma conversa foi encerrada de novo sem mensagem nenhuma no meio, foi correção do motivo e vale o último */
@@ -3595,7 +3644,7 @@ export async function fichaDaConversa_(env, conv) {
   let etiquetas = []; try { etiquetas = (await etiquetasDosAlvos_(env, [alvo]))[alvo] || []; } catch (e) { /* etiqueta é conforto */ }
   return {
     nome: conv.nome || '',
-    ficha: { tamanhos: (f && f.tamanhos) || '', preferencias: (f && f.preferencias) || '', cidade: (f && f.cidade) || '', atualizado_em: (f && f.atualizado_em) || '', autor: (f && f.autor) || '' },
+    ficha: { tamanhos: temTamanhosPerfil ? tamanhosPerfil : (f && f.tamanhos) || '', preferencias: (f && f.preferencias) || '', cidade: (f && f.cidade) || '', perfil: perfil, atualizado_em: (f && f.atualizado_em) || '', autor: (f && f.autor) || '' },
     etiquetas: etiquetas, notas: notas, canais: canais.map((c) => ({ id: c.id, canal: c.canal, contato: c.contato, atual: c.id === conv.id })), compras: compras.map((c) => ({ em: c.em, canal: c.canal }))
   };
 }
@@ -4222,9 +4271,25 @@ export default {
         if (nome !== null && (!nome || nome.length > 120)) return J({ok:false,erro:'Informe o nome do cliente com até 120 letras.'},400);
         const [erro, v] = validarFicha_(d);
         if (erro) return J({ ok: false, erro: erro }, 400);
-        const alvo = alvoDe_(conv), atual = (await env.DB.prepare('SELECT tamanhos, preferencias, cidade FROM msg_ficha WHERE alvo=?').bind(alvo).first()) || {};
+        const alvo = alvoDe_(conv), atual = (await env.DB.prepare('SELECT tamanhos, preferencias, cidade, perfil_json FROM msg_ficha WHERE alvo=?').bind(alvo).first()) || {};
         const n = Object.assign({ tamanhos: atual.tamanhos || '', preferencias: atual.preferencias || '', cidade: atual.cidade || '' }, v), em = agora();
-        const gravacoes = [env.DB.prepare('INSERT INTO msg_ficha (alvo, tamanhos, preferencias, cidade, atualizado_em, autor) VALUES (?,?,?,?,?,?) ON CONFLICT(alvo) DO UPDATE SET tamanhos=excluded.tamanhos, preferencias=excluded.preferencias, cidade=excluded.cidade, atualizado_em=excluded.atualizado_em, autor=excluded.autor').bind(alvo, n.tamanhos, n.preferencias, n.cidade, em, await meuNomeAtendente_(env, req))];
+        let perfil = perfilFichaJson_(atual.perfil_json);
+        if (v.perfil) {
+          const bruto = d.perfil || {};
+          for (const k of ['cidade','municipio','bairro','localidade']) if (Object.prototype.hasOwnProperty.call(bruto,k)) perfil[k] = v.perfil[k];
+          perfil.preferencias = perfil.preferencias && typeof perfil.preferencias === 'object' ? perfil.preferencias : {};
+          const brutoPref = bruto.preferencias && typeof bruto.preferencias === 'object' ? bruto.preferencias : {};
+          for (const grupo of FICHA_GRUPOS_) if (Object.prototype.hasOwnProperty.call(brutoPref,grupo)) perfil.preferencias[grupo] = v.perfil.preferencias[grupo];
+          if(Object.prototype.hasOwnProperty.call(brutoPref,'tamanhos'))n.tamanhos=perfil.preferencias.tamanhos.join(' · ').slice(0,60);
+          if(Object.prototype.hasOwnProperty.call(bruto,'cidade'))n.cidade=perfil.cidade.slice(0,60);
+        }
+        else if (Object.keys(perfil).length) {
+          // Clientes antigos ainda podem editar os três campos legados; reflita só esses valores.
+          if ('cidade' in v) perfil.cidade = v.cidade;
+          if ('tamanhos' in v) { perfil.preferencias = perfil.preferencias || {}; perfil.preferencias.tamanhos = v.tamanhos ? v.tamanhos.split(/[·,;|]/).map(x=>x.trim()).filter(Boolean) : []; }
+        }
+        const pjson = JSON.stringify(perfil);
+        const gravacoes = [env.DB.prepare('INSERT INTO msg_ficha (alvo, tamanhos, preferencias, cidade, atualizado_em, autor, perfil_json) VALUES (?,?,?,?,?,?,?) ON CONFLICT(alvo) DO UPDATE SET tamanhos=excluded.tamanhos, preferencias=excluded.preferencias, cidade=excluded.cidade, atualizado_em=excluded.atualizado_em, autor=excluded.autor, perfil_json=excluded.perfil_json').bind(alvo, n.tamanhos, n.preferencias, n.cidade, em, await meuNomeAtendente_(env, req), pjson)];
         if (nome !== null) {
           const key = conv.pessoa || 'c:' + conv.id;
           gravacoes.push(env.DB.prepare("INSERT INTO msg_pessoa (id,nome,whatsapp,segundo,em) VALUES (?,?,?,'',?) ON CONFLICT(id) DO UPDATE SET nome=excluded.nome,em=excluded.em").bind(key,nome,conv.canal==='instagram'?'':conv.contato,em));

@@ -12,6 +12,7 @@ with sync_playwright() as p:
         st=install(ctx,versao='3.7');st['produtos'][:]=st['produtos'][:6]
         for i,prod in enumerate(st['produtos']):
             prod.update(Status='Ativo',Estoque=3,Codigo=f'TK-{9999-i}',Genero='Feminino Adulto',Tamanhos='36, 38, 40, 42' if i%2 else 'M',Nome='Conjunto feminino adulto short saia balonê com nome comprido' if i%2 else 'Body rosa')
+            prod['Descricao']='Descrição da peça.\nTecido: '+('Alfaiataria' if i%2 else 'Crepe Dior')
             prod['Fotos_Galeria']=','.join(f'https://res.cloudinary.com/z/image/upload/v1/extra-{i}-{j}.jpg' for j in range(5)) if i%3!=1 else ''
         before=os.environ.get('TK_BEFORE_CSS')
         if before:ctx.route('**/catalogo.css*',lambda r:r.fulfill(path=before,content_type='text/css'))
@@ -23,13 +24,15 @@ with sync_playwright() as p:
             pg.screenshot(path=str(OUT/f'cards-{width}-{scale}.png'),full_page=True)
             measured=pg.locator('#grid .card').evaluate_all('''cards=>cards.map(c=>{
                 const rect=s=>{const n=s===':scope'?c:c.querySelector(s);if(!n)return null;const r=n.getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right}};
-                return {card:rect(':scope'),img:rect('.img-wrap'),thumbs:rect('.thumbs-card'),info:rect('.card-info'),price:rect('.preco'),actions:rect('.acoes-card')};
+                return {card:rect(':scope'),img:rect('.img-wrap'),thumbs:rect('.thumbs-card'),info:rect('.card-info'),price:rect('.preco'),code:rect('.codigo-tecido'),name:rect('.nome'),fabric:rect('.tecido-card'),actions:rect('.acoes-card')};
             })''')
             assert measured,(width,scale)
             for m in measured:
                 if m['thumbs']:
                     assert m['thumbs']['top']>=m['img']['bottom']-1,('foto/miniaturas',width,scale,m)
                     assert m['info']['top']>=m['thumbs']['bottom']-1,('miniaturas/info',width,scale,m)
+                assert m['fabric'] and m['code']['top']>=m['img']['bottom']-1 and m['code']['bottom']<=m['name']['top']+1,('tecido abaixo da foto, antes do nome',width,scale,m)
+                assert m['fabric']['right']<=m['info']['right']+1,('tecido dentro do card',width,scale,m)
                 assert m['actions']['top']>=m['price']['bottom']-1,('preço/ações',width,scale,m)
                 assert m['actions']['bottom']<=m['card']['bottom']+1,('ações/cartão',width,scale,m)
             for m in measured:

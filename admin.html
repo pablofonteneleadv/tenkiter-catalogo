@@ -658,6 +658,9 @@
   .busca-admin-x { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 50%; background: #e9e4d8; color: #222; font-weight: 800; cursor: pointer; }
   .busca-admin-x[hidden] { display: none; }
 .cad-resumo-envios{margin:12px 0;padding:14px;border:1px solid #d8d8d8;border-radius:12px;background:#fff;color:#222}.cad-resumo-envios[hidden]{display:none}.cad-resumo-envios p{margin:6px 0}.cad-resumo-envios ul{padding-left:20px;max-height:180px;overflow:auto}.cad-resumo-envios li{margin:5px 0;overflow-wrap:anywhere}.cad-resumo-envios button{background:#222;color:#fff;max-width:100%;margin-top:8px}
+
+/* Código e tecido abaixo da foto, sem disputar espaço com o nome. */
+.codigo-tecido{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;flex-wrap:wrap}.codigo-tecido .codigo{margin:0}.tecido-card{font-size:12px;font-weight:600;color:#53534d;overflow-wrap:anywhere;max-width:100%;margin-left:auto;text-align:right}
 </style>
 <style id="cad-reformulacao-20261024">
 #form-produto .passo{border-radius:18px}
@@ -1277,7 +1280,8 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
       <div class="extra" id="details-mais">
         <div class="passo-tit"><span class="num">9</span>Descrição e destaque <span class="opc">(opcional)</span></div>
-        <label for="descricao">Descrição</label>
+        <div class="campo"><label for="tecido">Tecido</label><input id="tecido" type="text" maxlength="100" placeholder="Ex.: Crepe Dior, Alfaiataria"></div>
+      <label for="descricao">Descrição</label>
         <textarea id="descricao" rows="2" placeholder="Tecido viscose, caimento leve..."></textarea>
 
         <button type="button" class="btn-seo-ia" id="btn-seo-ia">✨ Gerar Título/Descrição com IA</button>
@@ -1542,6 +1546,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
 
 <script src="common.js"></script>
+<script src="catalogo-tecido.js"></script>
 <script src="icones.js?v=7.17.0"></script>
 <script>/* ícones de linha nos botões fixos do painel (o emoji fica como reserva se icones.js falhar) */
 document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.TKIcone && TKIcone(el.dataset.ico); if (s) el.innerHTML = s; });</script>
@@ -2861,7 +2866,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   function usarPeca_(id) {
     const p = produtos.find(x => String(x.ID) === String(id)); if (!p) return;
     const v = (i) => document.getElementById(i).value, c = (i) => { const e = document.getElementById(i); return !!(e && e.checked); };
-    desfazerCopia_ = { nome: v('nome'), preco: v('preco'), consultar: c('consultar-valor'), estoque: v('estoque'), tamanhos: v('tamanhos'), cores: v('cores'), descricao: v('descricao'), novidade: c('novidade'), cats: new Set(selecionadasCategorias), gens: new Set(selecionadosGeneros) };
+    desfazerCopia_ = { nome: v('nome'), preco: v('preco'), consultar: c('consultar-valor'), estoque: v('estoque'), tamanhos: v('tamanhos'), cores: v('cores'), descricao: v('descricao'), tecido: v('tecido'), novidade: c('novidade'), cats: new Set(selecionadasCategorias), gens: new Set(selecionadosGeneros) };
     const campo = document.getElementById('nome');
     if (modoFormulario !== 'editando') preencherFormComProduto(p);
     campo.value = String(p.Nome).slice(0, 80); nomeSugCopiado_ = campo.value;
@@ -2878,7 +2883,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   function desfazerCopia() {
     const d = desfazerCopia_; if (!d) return; desfazerCopia_ = null;
     const put = (i, x) => { document.getElementById(i).value = x; };
-    put('nome', d.nome); put('preco', d.preco); put('estoque', d.estoque); put('tamanhos', d.tamanhos); put('cores', d.cores); put('descricao', d.descricao);
+    put('nome', d.nome); put('preco', d.preco); put('estoque', d.estoque); put('tamanhos', d.tamanhos); put('cores', d.cores); put('descricao', d.descricao); put('tecido',d.tecido || '');
     const cv = document.getElementById('consultar-valor'); if (cv) cv.checked = d.consultar;
     document.getElementById('novidade').checked = d.novidade; document.getElementById('linha-notificar-push').style.display = d.novidade ? 'flex' : 'none';
     selecionadasCategorias = d.cats; selecionadosGeneros = d.gens;
@@ -3186,7 +3191,8 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     document.getElementById('tamanhos').value = textoPlano(p.Tamanhos);
     cadLerVinculos_();
     document.getElementById('cores').value = textoPlano(p.Cores);
-    document.getElementById('descricao').value = p.Descricao || '';
+    document.getElementById('descricao').value = TKTecido.semDescricao(p.Descricao);
+    document.getElementById('tecido').value = TKTecido.ler(p);
     document.getElementById('novidade').checked = ehNovidade(p);
     document.getElementById('arquivar-depois').checked = false;
     document.getElementById('linha-notificar-push').style.display = ehNovidade(p) ? 'flex' : 'none';
@@ -4165,7 +4171,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         estoque: document.getElementById('estoque').value,
         tamanhos: document.getElementById('tamanhos').value.trim(),
         cores: document.getElementById('cores').value.trim(),
-        descricao: document.getElementById('descricao').value.trim(),
+        descricao: TKTecido.serializar(document.getElementById('descricao').value, document.getElementById('tecido').value),
         novidade: document.getElementById('novidade').checked,
         notificarPush: document.getElementById('novidade').checked ? document.getElementById('notificarPush').checked : false
       };
@@ -4197,7 +4203,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       estoque: document.getElementById('estoque').value,
       tamanhos: document.getElementById('tamanhos').value.trim(),
       cores: document.getElementById('cores').value.trim(),
-      descricao: document.getElementById('descricao').value.trim(),
+      descricao: TKTecido.serializar(document.getElementById('descricao').value, document.getElementById('tecido').value),
       novidade: document.getElementById('novidade').checked,
       // capa/galeria: manda só a URL de quem já existia (ex.: o usuário trocou a capa por uma
       // foto da galeria sem subir nada novo). Foto NOVA não entra aqui -- sobe direto pro
@@ -4445,7 +4451,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         <input type="checkbox" class="produto-chk" data-id="${idE}" aria-label="Selecionar ${escaparHtml(p.Nome)}" ${selecionadosBulk.has(String(p.ID)) ? 'checked' : ''}>
         <button type="button" class="foto-ampliar" data-ampliar-id="${idE}" aria-label="Ampliar a foto de ${escaparHtml(p.Nome)}"><img ${atribSrc(fotoMini(p.Foto_URL, 200))} alt="" loading="lazy" decoding="async" width="64" height="80"></button>
         <div class="produto-info">
-          <div class="codigo">${p.Codigo ? escaparHtml(p.Codigo) : '<span class="selo-inativo" style="background:#fff3e0;color:#7a4a00;margin-left:0">SEM CÓDIGO</span>'}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}${esg ? '<span class="sel-esg">ESGOTADO</span>' : ''}</div>
+          <div class="codigo-tecido"><div class="codigo">${p.Codigo ? escaparHtml(p.Codigo) : '<span class="selo-inativo" style="background:#fff3e0;color:#7a4a00;margin-left:0">SEM CÓDIGO</span>'}${inativo ? '<span class="selo-inativo">ARQUIVADO</span>' : ''}${esg ? '<span class="sel-esg">ESGOTADO</span>' : ''}</div>${TKTecido.ler(p) ? `<span class="tecido-card" title="Tecido">${escaparHtml(TKTecido.ler(p))}</span>` : ''}</div>
           <div class="nome">${escaparHtml(p.Nome)}</div>
           <div class="preco">${ehConsulta(p) ? icA_('conversa', '💬') + ' <strong>Consulte valor</strong> <small>(sem preço)</small>' : formatarReal(p.Preco) + ' · à vista <span>' + formatarReal(p.Preco * (1 - DESCONTO_AVISTA)) + '</span>'}</div>
           ${tamanhosLinha_(p)}
@@ -4817,7 +4823,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
         else if (ehConsulta(p) && consultarLiberado_) { dados.consultarValor = true; dados.preco = ''; }   // v7.14.3: continua "Consultar valor"
         if (pct != null && Number(p.Preco) > 0) { const base = Number(p.Preco) * (1 + pct / 100), r = typeof precoTerminacao === 'function' ? precoTerminacao(base) : null; dados.preco = String((r && r.valido ? r.cheio : Math.round(base * 100) / 100).toFixed(2)); }
         if (estTxt !== '') { const atual = Number(p.Estoque) || 0, q = Number(estTxt); dados.estoque = String(modoEst === 'mais' ? atual + q : modoEst === 'menos' ? Math.max(0, atual - q) : q); }
-        if (descNova) dados.descricao = modoDesc === 'fim' && p.Descricao ? (p.Descricao + ' ' + descNova).trim() : descNova;
+        if (descNova) dados.descricao = TKTecido.serializar(modoDesc === 'fim' ? (TKTecido.semDescricao(p.Descricao) + ' ' + descNova).trim() : descNova, TKTecido.ler(p));
         if (novidadeEsc) dados.novidade = novidadeEsc === 'sim';
         const L = loteLista_;
         const L2 = { categoria: 'Categoria', genero: 'Genero', tamanhos: 'Tamanhos', cores: 'Cores' };

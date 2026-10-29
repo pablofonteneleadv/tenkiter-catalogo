@@ -56,7 +56,7 @@ with sync_playwright() as p:
     chk("Instagram: nome sem asteriscos (o Instagram não tem negrito)", S["envios"][-1]["texto"] == "Pablo TK:\nTem sim", S["envios"][-1]["texto"])
     pg.click(".ms-cab [data-ms=voltar]"); pg.wait_for_timeout(300)
     # Admin desliga para todos
-    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click(".ms-menu [data-ms=leitura-cfg]"); pg.wait_for_timeout(600)
+    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click("#ms-gaveta [data-ms=leitura-cfg]"); pg.wait_for_timeout(600)
     cx = pg.locator("[data-cfg-assinatura]")
     chk("configuração mostra 'Mostrar o nome de quem responde' marcada por padrão", cx.count() == 1 and cx.is_checked())
     axe(pg, "configurações com o nome do atendente")
@@ -69,7 +69,7 @@ with sync_playwright() as p:
     escrever_e_enviar(pg, "Boa tarde!")
     chk("desligada: a resposta sai sem nome", S["envios"][-1]["texto"] == "Boa tarde!", S["envios"][-1]["texto"])
     pg.click(".ms-cab [data-ms=voltar]"); pg.wait_for_timeout(300)
-    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click(".ms-menu [data-ms=leitura-cfg]"); pg.wait_for_timeout(500)
+    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click("#ms-gaveta [data-ms=leitura-cfg]"); pg.wait_for_timeout(500)
     pg.locator("[data-cfg-assinatura]").check(); pg.wait_for_timeout(500)
     pg.fill("#ms-meu-nome", ""); pg.click("[data-ms=nome-salvar-cfg]"); pg.wait_for_timeout(500)
     chk("remarcar liga de novo; nome vazio volta ao primeiro nome", S.get("assinatura") is True and S.get("meu_nome") == "")
@@ -78,7 +78,7 @@ with sync_playwright() as p:
     chk("de volta ao padrão: 'Respondendo como Ana'", "Ana" in (pg.locator("#ms-assina").text_content() or ""))
     # espiando: sem caixa de resposta e sem a linha
     pg.click(".ms-cab [data-ms=voltar]"); pg.wait_for_timeout(300)
-    S["convs"][0]["nao_lidas"] = 2; pg.click("#ms-mais"); pg.wait_for_timeout(150); pg.click(".ms-menu [data-ms=atualizar]"); pg.wait_for_timeout(800)
+    S["convs"][0]["nao_lidas"] = 2; pg.click("#ms-mais"); pg.wait_for_timeout(150); pg.click("#ms-gaveta [data-ms=atualizar]"); pg.wait_for_timeout(800)
     pg.click("#ms-lista .ms-espiar[data-id='1']"); pg.wait_for_timeout(600)
     chk("espiando: a linha da assinatura fica escondida junto com a resposta", not pg.locator("#ms-assina").is_visible())
     pg.click("[data-ms=atender]"); pg.wait_for_timeout(400)

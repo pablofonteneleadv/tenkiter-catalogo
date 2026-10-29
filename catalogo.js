@@ -663,7 +663,7 @@ try { tkSelExpirar_(); } catch (e) {}
             ${ultimas ? '<span class="selo-ultimas" aria-hidden="true">' + (Number(p.Estoque) === 1 ? 'Última!' : 'Últimas ' + Number(p.Estoque)) + '</span>' : ''}
           </div>
           <div class="card-info">
-            ${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}
+            <div class="codigo-tecido">${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}${TKTecido.ler(p) ? `<span class="tecido-card" title="Tecido">${escaparHtml(TKTecido.ler(p))}</span>` : ''}</div>
             <div class="nome"><button type="button" class="abrir-peca" aria-label="Ver detalhes: ${escaparHtml(p.Nome)}">${escaparHtml(p.Nome)}</button></div>
             <div class="preco">${ehConsulta(p) ? '<strong class="consulta">' + TEXTO_CONSULTA + '</strong>' : '<span class="avista-n">' + formatarReal(avista) + '</span> <span class="avista-rot">à vista</span> <span class="cheio">Normal ' + formatarReal(p.Preco) + '</span>'}</div>
             <div class="tags">${escaparHtml(p.Categoria)}</div>
@@ -967,7 +967,7 @@ try { tkSelExpirar_(); } catch (e) {}
         </div>
       ` : ''}
       <div class="modal-conteudo">
-        ${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}
+        <div class="codigo-tecido">${p.Codigo ? `<div class="codigo">${escaparHtml(p.Codigo)}</div>` : ''}${TKTecido.ler(p) ? `<span class="tecido-card" title="Tecido">${escaparHtml(TKTecido.ler(p))}</span>` : ''}</div>
         <div class="nome">${escaparHtml(p.Nome)}</div>
         <div class="preco-linha">
           ${ehConsulta(p) ? '<span class="consulta">' + TEXTO_CONSULTA + '</span>' : '<span class="avista">' + formatarReal(avista) + ' <small>à vista</small></span>\n          <span class="cheio">Normal ' + formatarReal(p.Preco) + '</span>'}
@@ -975,7 +975,7 @@ try { tkSelExpirar_(); } catch (e) {}
         <div class="tags">${escaparHtml(p.Categoria)} · ${escaparHtml(p.Genero)}</div>
         ${linhaTamanhoCliente_(p)}
         ${p.Cores ? `<div class="extra"><strong>Cores:</strong> ${escaparHtml(textoPlano(p.Cores))}</div>` : ''}
-        ${p.Descricao ? `<div class="desc">${escaparHtml(p.Descricao)}</div>` : ''}
+        ${TKTecido.semDescricao(p.Descricao) ? `<div class="desc">${escaparHtml(TKTecido.semDescricao(p.Descricao))}</div>` : ''}
         ${disp ? `<div class="disponibilidade ${disp.classe}" style="margin-top:10px;font-size:0.8rem;">${disp.texto}</div>` : ''}
       </div>
       <div class="barra-compra">
