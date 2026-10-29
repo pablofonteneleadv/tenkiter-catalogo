@@ -932,15 +932,15 @@
 <style id="atendimento-edicao-rapida">
 /* Mostra só as escolhas necessárias. Campos originais permanecem no DOM para
    a atualização usar validações, mídias, auditoria e permissão já existentes. */
-body.edicao-rapida-atendimento #form-produto .passo:not([data-passo="tamanhos"]),
+body.edicao-rapida-atendimento #form-produto .passo:not([data-passo='tamanhos']),
 body.edicao-rapida-atendimento #form-produto #details-mais,
 body.edicao-rapida-atendimento #btn-cancelar-duplicar,
 body.edicao-rapida-atendimento #audit-form { display: none !important; }
 body.edicao-rapida-atendimento #card-form { max-width: 720px; margin-inline: auto; }
 body.edicao-rapida-atendimento #card-form .cad-corpo { padding: 16px; }
 body.edicao-rapida-atendimento #titulo-form { font-size: clamp(1rem, 4vw, 1.3rem); margin: 8px 0; }
-body.edicao-rapida-atendimento #form-produto .passo[data-passo="tamanhos"] { margin-top: 12px; }
-body.edicao-rapida-atendimento #form-produto .passo[data-passo="tamanhos"] .num { display:none; }
+body.edicao-rapida-atendimento #form-produto .passo[data-passo='tamanhos'] { margin-top: 12px; }
+body.edicao-rapida-atendimento #form-produto .passo[data-passo='tamanhos'] .num { display:none; }
 body.edicao-rapida-atendimento #btn-salvar { width:100%; min-height:52px; }
 #cad-atendimento-voltar { min-height:44px; border:0; background:transparent; color:var(--laranja-txt,#a65b13); font-size:.9rem; font-family:inherit; font-weight:700; cursor:pointer; padding:8px 0; text-decoration:underline; text-underline-offset:3px; }
 #cad-atendimento-voltar:focus-visible { outline:3px solid #e98a20; outline-offset:2px; }
