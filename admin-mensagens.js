@@ -1110,7 +1110,17 @@
       return { titulo: dados.titulo, texto: resumo, valores: dados.valores };
     }
     // Compatibilidade com carregamento antigo sem o módulo de tamanhos.
-    const antigos = String(p.Tamanhos || '').split(',').map(x => x.trim()).filter(x => x && !/^(Etiqueta|Idade|Veste):/i.test(x));
+    const raw = String(p.Tamanhos || '');
+    const idades = [...raw.matchAll(/(?:^|,)\s*Idade:\s*([^,]+)/gi)].map(m=>m[1].trim());
+    const numeros = [...raw.matchAll(/(?:^|,)\s*Veste:\s*([^,]+)/gi)].map(m=>m[1].trim());
+    const dados = idades.length ? { titulo: 'Idades', valores: idades, tipo: 'idade' } : numeros.length ? { titulo: 'Numerações', valores: numeros, tipo: 'numero' } : null;
+    if (dados) {
+      const nums = [...new Set(dados.valores.map(v => parseInt(v, 10)))].filter(Number.isFinite).sort((a,b)=>a-b);
+      const passo = dados.tipo === 'idade' ? 1 : 2;
+      dados.texto = nums.length === dados.valores.length && nums.every((v,i)=>!i||v-nums[i-1]===passo) && nums.length>1 ? nums[0]+(dados.tipo==='idade'?' a ':' ao ')+nums.at(-1)+(dados.tipo==='idade'?' anos':'') : nums.join('/')+(dados.tipo==='idade'?' anos':'');
+      return dados;
+    }
+    const antigos = raw.split(',').map(x => x.trim()).filter(x => x && !/^(Etiqueta|Idade|Veste):/i.test(x));
     return { titulo: 'Tamanhos', texto: antigos.join('/'), valores: antigos };
   }
   const tamanhosDe_ = (p) => resumoTamanhosProduto_(p).valores;
