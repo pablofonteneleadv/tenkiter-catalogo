@@ -73,7 +73,7 @@
   function conferirContaAtual_(){
     const nova=contaSessao_(getSessao());
     if(nova!==contaAtual_){
-      contaAtual_=nova;epocaConta_++;
+      contaAtual_=nova;epocaConta_++;cfgLeitura=null;atualizarIdentidade_();
       if(APP_RECENTES){limparRecentes_();cacheBloqueado=true;lista=[];msgs=[];mostrarLista_();const ul=$('ms-lista');if(ul)ul.textContent='';const extra=$('ms-extra');if(extra)extra.textContent='Atualizando acesso…';}
     }
     return nova;
@@ -120,7 +120,8 @@
   function recursoAcao_(a) {
     if (/^(gaveta-produtos|prod-?|prodsel-)/.test(a)) return 'produtos';
     if (/^(notas-|modo-nota)/.test(a)) return 'notas';
-    if (/^(ficha|pessoa|nome-)/.test(a)) return 'contatos';
+    if (/^nome-/.test(a)) return 'responder';
+    if (/^(ficha|pessoa)/.test(a)) return 'contatos';
     if (/^(etq|etiquetas)/.test(a)) return 'etiquetas';
     if (/^(funil)/.test(a)) return 'funil';
     if (/^(agenda|agendar)/.test(a)) return 'agenda';
@@ -231,6 +232,7 @@
       .ms-lateral { border-right: 1px solid #e6e1d6; }
       @media (max-width: 859px) { .ms-app[data-vista=lista] .ms-conversa, .ms-app[data-vista=conversa] .ms-lateral { display: none; } }
       .ms-topo { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; }
+      .ms-identidade { display: block; font: 500 0.78rem/1.35 Roboto,sans-serif; color: #4a443b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .ms-titulo { margin: 0; font-family: "Poppins", sans-serif; font-size: 1.05rem; font-weight: 700; flex: 1; min-width: 0; }
       .ms-ao-vivo { font-size: 0.72rem; color: #146c43; font-weight: 700; white-space: nowrap; } .ms-ao-vivo.off { color: #8a2b2b; }
       .ms-ico { min-width: 44px; min-height: 44px; border: 0; border-radius: 50%; background: #f1ede3; color: #222; font-size: 1.1rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; width: 44px; }
@@ -473,6 +475,7 @@
       .ms-ficha-lista .ms-btn { flex: none; }
       .ms-ficha-nota p { margin: 0; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
       .ms-ficha-acao { margin-top: 8px; }
+      details.ms-ficha-acao > summary { min-height: 48px; padding: 12px 0; box-sizing: border-box; cursor: pointer; }
       .ms-ficha-pe { align-items: center; gap: 10px; }
       .ms-ficha-pe small { flex: 1; min-width: 0; font-size: 0.75rem; color: #625c53; }
       .ms-veste { font-size: 0.72rem; font-weight: 600; color: #3b352c; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -597,6 +600,7 @@
     const mais = botao('ms-ico', '⋯', 'menu-geral'); mais.setAttribute('aria-label', 'Mais opções'); mais.setAttribute('aria-haspopup', 'menu'); mais.id = 'ms-mais';
     const x = botao('ms-ico', '✕', 'fechar'); x.id = 'ms-fechar'; x.setAttribute('aria-label', 'Fechar mensagens');
     topo.append(h, live, mais, x);
+    const quem=el('small','ms-identidade');quem.id='ms-identidade';h.appendChild(quem);atualizarIdentidade_();
     const abas = el('div', 'ms-abas'); abas.id = 'ms-abas'; abas.setAttribute('role', 'tablist');
     const filtros = el('div', 'ms-filtros'); filtros.id = 'ms-filtros';
     const busq = el('input', 'ms-busca'); busq.id = 'ms-busca'; busq.type = 'search'; busq.placeholder = 'Buscar por nome, número ou texto'; busq.setAttribute('aria-label', 'Buscar conversas');
@@ -622,7 +626,7 @@
       const ass = ev.target && ev.target.dataset && ev.target.dataset.cfgAssinatura ? ev.target : null;
       if (ass && cfgLeitura) {
         ass.disabled = true; const r = await worker_('/msg/config', 'POST', { assinatura: ass.checked }); ass.disabled = false;
-        if (r.ok) { cfgLeitura.config = r.config; aviso_(r.config.assinatura ? 'O nome do atendente vai antes das respostas.' : 'As respostas saem sem o nome do atendente.'); desenharAssina_(false); } else { ass.checked = !ass.checked; aviso_(r.erro || 'Não foi possível salvar agora.'); }
+        if (r.ok) { versaoPerfil_++;cfgLeitura=Object.assign({},cfgLeitura,r);guardarPerfil_(); aviso_(r.config.assinatura ? 'O nome do atendente vai antes das respostas.' : 'Suas respostas saem sem assinatura.'); desenharAssina_(false); } else { ass.checked = !ass.checked; aviso_(r.erro || 'Não foi possível salvar agora.'); }
         return;
       }
       const chk = ev.target && ev.target.dataset && ev.target.dataset.cfgCanal ? ev.target : null; if (!chk || !cfgLeitura) return;
@@ -817,8 +821,9 @@
     });
     // v7.22: nome do atendente antes da resposta
     caixa.appendChild(el('p', 'ms-cfg-tit', 'Nome do atendente nas respostas'));
+    if(adminAssinatura_()){
     const la = el('label', 'ms-cfg-linha'), ca = el('input'); ca.type = 'checkbox'; ca.checked = cfgLeitura.config.assinatura !== false; ca.dataset.cfgAssinatura = '1';
-    la.append(ca, document.createTextNode(' Mostrar o nome de quem responde antes da mensagem')); caixa.appendChild(la);
+    la.append(ca, document.createTextNode(' Mostrar meu nome nas respostas antes da mensagem')); caixa.appendChild(la);}
     caixa.appendChild(el('p', 'ms-cfg-res', 'Sai assim: “' + (nomeAtendente_() || 'Pablo') + ': Temos sim!” (no WhatsApp, o nome vai em negrito).'));
     const ln = el('div', 'ms-linha'), inp = el('input', 'ms-copia'); inp.id = 'ms-meu-nome'; inp.type = 'text'; inp.maxLength = 30; inp.autocomplete = 'off'; inp.value = cfgLeitura.meuNome || ''; inp.placeholder = nomePadrao_() ? 'Seu nome (padrão: ' + nomePadrao_() + ')' : 'Seu nome nas respostas'; inp.setAttribute('aria-label', 'Seu nome nas respostas');
     inp.style.flex = '1 1 160px'; inp.style.width = 'auto'; ln.append(inp, botao('ms-btn', 'Salvar nome', 'nome-salvar-cfg')); caixa.appendChild(ln);
@@ -951,9 +956,27 @@
     p.appendChild(ap);
     ex.appendChild(p);
   }
+  let versaoPerfil_ = 0;
+  function perfilGuardado_() {
+    try { const c=JSON.parse(localStorage.getItem('tk_msg_perfil_v1')||'null');return c&&c.conta===contaSessao_(getSessao())?c.perfil:null; } catch(_){return null;}
+  }
+  function guardarPerfil_() { try {localStorage.setItem('tk_msg_perfil_v1',JSON.stringify({conta:contaSessao_(getSessao()),perfil:cfgLeitura}));}catch(_){} }
+  function atualizarIdentidade_() {
+    const e=$('ms-identidade');if(!e)return;
+    const u=typeof usuarioAdmin!=='undefined'&&usuarioAdmin;
+    const p=cfgLeitura||perfilGuardado_();
+    e.textContent=(p&&p.nomeCadastro)||(u&&(u.nome||u.name))||'';
+    e.title=e.textContent;
+  }
   async function carregarCfgLeitura_() {
+    const conta=contaSessao_(getSessao()), versao=versaoPerfil_;
+    if(!cfgLeitura)cfgLeitura=perfilGuardado_();
+    atualizarIdentidade_();desenharAssina_();
     const r = await worker_('/msg/config', 'GET');
-    cfgLeitura = r.ok ? r : { config: { lerCelular: { whatsapp1: true, whatsapp2: true, instagram: true }, assinatura: true }, ultimaLeitura: {}, meuNome: '' };
+    if(conta!==contaSessao_(getSessao())||versao!==versaoPerfil_)return;
+    if(r.ok){cfgLeitura=r;guardarPerfil_();}
+    else if(!cfgLeitura)cfgLeitura={config:{assinatura:true,lerCelular:{}},meuNome:'',erroPerfil:r.erro};
+    atualizarIdentidade_();
     if (painel === 'leitura') desenharEstado();
     desenharAssina_();
   }
@@ -1013,12 +1036,13 @@
   const outroCanal_ = (c) => (c.canal === 'whatsapp1' ? 'whatsapp2' : 'whatsapp1');
   /* ---- v7.22: nome do atendente antes da resposta ("*Pablo:*" no WhatsApp, em negrito; "Pablo:" no Instagram) ---- */
   function nomePadrao_() {
-    let n = ''; try { n = typeof usuarioAdmin !== 'undefined' && usuarioAdmin ? String(usuarioAdmin.nome || '') : ''; } catch (e) { n = ''; }
+    let n = ''; try { n = typeof usuarioAdmin !== 'undefined' && usuarioAdmin ? String(usuarioAdmin.nome || usuarioAdmin.name || '') : ''; } catch (e) { n = ''; }
     n = n.trim().split(/\s+/)[0] || '';
     return n && n === n.toUpperCase() ? n.charAt(0) + n.slice(1).toLowerCase() : n;
   }
-  const nomeAtendente_ = () => (cfgLeitura && cfgLeitura.meuNome) || nomePadrao_();
-  const assinaturaLigada_ = () => !(cfgLeitura && cfgLeitura.config && cfgLeitura.config.assinatura === false);
+  const nomeAtendente_ = () => {const p=cfgLeitura||perfilGuardado_();return (p&&(p.meuNome||p.nomePadrao))||nomePadrao_();};
+  const adminAssinatura_ = () => { try{return typeof usuarioAdmin!=='undefined'&&usuarioAdmin&&temPermissao(usuarioAdmin,'gerir_acessos');}catch(_){return false;} };
+  const assinaturaLigada_ = () => !adminAssinatura_() || !(cfgLeitura && cfgLeitura.config && cfgLeitura.config.assinatura === false);
   function assinar_(c, texto) {
     const n = nomeAtendente_(); if (!texto || !n || !assinaturaLigada_()) return texto;
     return c.canal === 'instagram' ? n + ':\n' + texto : '*' + n + ':*\n' + texto;
@@ -1036,19 +1060,21 @@
     const w = $('ms-assina'); if (!w) return;
     w.textContent = ''; w.hidden = espiando; if (w.hidden) return;
     const n = nomeAtendente_(), lig = assinaturaLigada_();
-    if (lig && (editando || !n)) {
-      const i = el('input'); i.id = 'ms-meu-nome-rapido'; i.type = 'text'; i.maxLength = 30; i.autocomplete = 'off'; i.value = n; i.placeholder = 'Seu nome nas respostas'; i.setAttribute('aria-label', 'Seu nome nas respostas');
-      i.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); salvarNome_(i.value); } else if (ev.key === 'Escape' && n) { ev.stopPropagation(); desenharAssina_(false); } });
-      w.append(el('span', '', 'Assinar como'), i, botao('ms-btn', 'Salvar', 'nome-salvar'));
-      if (editando) setTimeout(() => i.focus(), 0);
-      return;
-    }
     w.append(botaoIco_('ms-ferr-btn', 'sacola', 'Produtos', 'gaveta-produtos'), botaoIco_('ms-ferr-btn', 'raio', 'Respostas', 'gaveta-respostas'), botaoIco_('ms-ferr-btn ms-nota-btn', 'nota', 'Nota', 'modo-nota'));
-    if (lig) {
-      const b = botao('ms-ferr-btn ms-assina-btn', '', 'nome-editar'); b.title = 'Respondendo como ' + n + ' · tocar para mudar o nome';
-      b.append(el('span', 'ms-sr', 'Respondendo como '), el('b', '', n)); b.insertAdjacentHTML('beforeend', ICO_.lapis); b.setAttribute('aria-label', 'Respondendo como ' + n + '. Mudar nome');
-      w.appendChild(b);
+    const b=botao('ms-ferr-btn ms-assina-btn','','nome-editar');b.title='Editar nome nas respostas';
+    b.append(el('b','',lig?(n||'Meu nome'):'Sem assinatura'));b.insertAdjacentHTML('beforeend',ICO_.lapis);b.setAttribute('aria-label','Editar nome nas respostas'+(n?': '+n:''));w.appendChild(b);
+  }
+  function editarAssinatura_(){
+    const corpo=gaveta_('Nome nas respostas');if(!corpo)return;
+    corpo.style.padding='14px';
+    const l=el('label','ms-etq-rot','Como quer ser chamado?');l.htmlFor='ms-meu-nome-rapido';
+    const i=el('input','ms-copia');i.id='ms-meu-nome-rapido';i.type='text';i.maxLength=30;i.value=nomeAtendente_();i.autocomplete='given-name';i.style.minHeight='48px';i.style.font='inherit';
+    corpo.append(l,i);
+    if(adminAssinatura_()){
+      const la=el('label','ms-cfg-linha'),ch=el('input');ch.type='checkbox';ch.id='ms-mostrar-nome';ch.checked=assinaturaLigada_();la.append(ch,el('span','','Mostrar meu nome nas respostas'));corpo.appendChild(la);
     }
+    const pe=el('div','ms-auto-pe');pe.appendChild(botao('ms-btn prim','Salvar','nome-salvar'));$('ms-gaveta').appendChild(pe);
+    i.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();salvarNome_(i.value);}});i.focus();
   }
   /* ---- v7.24: gaveta da conversa (Produtos do catálogo e Respostas rápidas): por cima da conversa, sem perder o que foi digitado ---- */
   const semAcento_ = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -1318,10 +1344,14 @@
     aviso_(n ? 'Salvo. ' + (n === 2 ? 'As duas respostas automáticas estão ligadas.' : (r.auto.boasVindas.ligado ? 'Boas-vindas ligada.' : 'Fora do horário ligada.')) : 'Salvo. As respostas automáticas estão desligadas.');
   }
   async function salvarNome_(v) {
-    const r = await worker_('/msg/config', 'POST', { meuNome: String(v || '') });
+    const conta=contaSessao_(getSessao());versaoPerfil_++;
+    const b=$('ms-gaveta')?.querySelector('[data-ms=nome-salvar]');if(b){if(b.disabled)return;b.disabled=true;}
+    const r = await worker_('/msg/config', 'POST', Object.assign({ meuNome: String(v || '') },$('ms-mostrar-nome')?{assinatura:$('ms-mostrar-nome').checked}:{}));
+    if(b)b.disabled=false;if(conta!==contaSessao_(getSessao()))return;
     if (!r.ok) { aviso_(r.erro || 'Não foi possível salvar agora.'); return; }
-    cfgLeitura = Object.assign({}, cfgLeitura || {}, { config: r.config, meuNome: r.meuNome || '' });
-    aviso_('Nome salvo: as próximas respostas saem como “' + nomeAtendente_() + '”.');
+    cfgLeitura = Object.assign({},cfgLeitura||{},r);guardarPerfil_();atualizarIdentidade_();
+    if($('ms-meu-nome-rapido'))fecharGaveta_();
+    aviso_(assinaturaLigada_()?'Nome salvo: as próximas respostas saem como “'+nomeAtendente_()+'”.':'Preferência salva: suas respostas saem sem assinatura.');
     desenharAssina_(false); if (painel === 'leitura') desenharEstado();
   }
   /* ---- v7.22: seleção de várias conversas para encerrar (ou reabrir, no filtro Encerradas) ---- */
@@ -1411,7 +1441,7 @@
   async function carregarLista(reset) {
     if(!nomesConferidos){nomesConferidos=true;setTimeout(nomesGoogle_,1500);}
     const mine = ++seqLista, c0 = canal, f0 = filtro, b0 = busca.trim(), t0 = tipoParam_();
-    const path='/msg/conversas?canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : '') + (etqFiltro ? '&etiqueta=' + etqFiltro : '');
+    const path='/msg/conversas?blocos=1&canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : '') + (etqFiltro ? '&etiqueta=' + etqFiltro : '');
     const salvo = APP_RECENTES && reset ? await recentes_(path) : null;
     if (salvo && mine===seqLista) { lista=salvo.conversas;contVista=salvo.contagens||null;contTipos=salvo.tipos||null;desenharFiltros();pintarLista();$('ms-extra').textContent='Conversas recentes · atualizando…'; }
     const r = await worker_(path, 'GET');
@@ -1615,20 +1645,20 @@
     atualizarPill();
   }
   function atualizarPill() { const p = $('ms-nova'); if (!p) return; p.hidden = novasAbaixo <= 0; p.textContent = '↓ ' + novasAbaixo + (novasAbaixo === 1 ? ' nova mensagem' : ' novas mensagens'); }
-  async function editarPessoa_(id){
+  async function editarPessoa_(id, destino){
+    if(!destino){abrirFicha_();return;}
     const r=await worker_('/msg/pessoa?conversa='+id,'GET');if(!r.ok){aviso_(r.erro||'Não foi possível abrir o contato.');return;}
-    const old=$('ms-pessoa-editor');if(old)old.remove();
-    const overlay=el('div');overlay.id='ms-pessoa-editor';Object.assign(overlay.style,{position:'fixed',inset:'0',zIndex:'10020',background:'rgba(0,0,0,.4)',display:'flex',alignItems:'center',justifyContent:'center',padding:'12px'});
-    const form=el('div');Object.assign(form.style,{background:'#fff',padding:'20px',borderRadius:'20px',width:'min(520px,100%)',maxHeight:'90dvh',overflowY:'auto'});form.setAttribute('role','dialog');form.setAttribute('aria-modal','true');form.setAttribute('aria-label','Contato e canais');form.appendChild(el('h2','','Contato e canais'));
+    if(!destino.isConnected)return;
+    const form=el('div','ms-ficha-sec');destino.appendChild(form);
     const field=(label,value)=>{const l=el('label','',label),input=el('input');input.value=value||'';input.setAttribute('aria-label',label);input.style.minHeight='48px';input.style.width='100%';l.appendChild(input);form.appendChild(l);return input;};
-    const name=field('Nome',r.nome),phone=field('WhatsApp principal',r.whatsapp),second=field('Segundo WhatsApp (opcional)',r.segundo);phone.type=second.type='tel';
+    const name=$('ms-fi-nome'),phone=field('WhatsApp principal',r.whatsapp),second=field('Segundo WhatsApp (opcional)',r.segundo);phone.type=second.type='tel';
     const without=el('input');without.type='checkbox';without.checked=false;const info=el('label','','Cliente do Instagram não informou WhatsApp');info.prepend(without);info.hidden=r.conversa.canal!=='instagram';form.appendChild(info);
     const linked=new Set((r.canais||[]).map(x=>x.id));form.appendChild(el('p','',(r.canais||[]).map(x=>NOME_CANAL[x.canal]+' · '+rotuloContato(x)).join('\n')));
     const search=field('Buscar outro canal para vincular',''),results=el('div');form.appendChild(results);
     const find=el('button','','Buscar contato');find.type='button';find.style.minHeight='48px';find.onclick=async()=>{const found=await worker_('/msg/conversas?canal=todos&busca='+encodeURIComponent(search.value),'GET');results.textContent='';(found.conversas||[]).filter(c=>!c.grupo).forEach(c=>{const label=el('label'),check=el('input');check.type='checkbox';check.checked=linked.has(c.id);check.disabled=check.checked;check.onchange=()=>{if(check.checked){linked.add(c.id);if(c.canal!=='instagram'&&!phone.value){phone.value=c.contato;without.checked=false;}}else linked.delete(c.id);};label.append(check,document.createTextNode(rotuloContato(c)+' · '+NOME_CANAL[c.canal]));label.style.display='block';label.style.minHeight='48px';results.appendChild(label);});};form.appendChild(find);
-    const finish=()=>{if(window.TKCamadas)TKCamadas.desempilhar('ms-pessoa');else overlay.remove();};
-    const save=el('button','prim','Salvar nome e vínculos');save.type='button';save.style.minHeight='48px';save.onclick=async()=>{if(!confirm('Salvar este nome e reunir os canais escolhidos, preservando o histórico?'))return;save.disabled=true;const out=await worker_('/msg/pessoa','POST',{conversa:id,nome:name.value,whatsapp:phone.value,segundo:second.value,semWhatsApp:without.checked,vincular:[...linked]});save.disabled=false;if(!out.ok){aviso_(out.erro||'Não foi possível salvar.');return;}finish();await carregarLista(true);if(aberta&&aberta.id===id){aberta=out.conversa;montarConversa(aberta);pintarFio(false);}};
-    const close=el('button','','Cancelar');close.type='button';close.style.minHeight='48px';close.onclick=finish;form.append(save,close);overlay.appendChild(form);document.body.appendChild(overlay);if(window.TKCamadas)TKCamadas.empilhar('ms-pessoa',()=>overlay.remove());name.focus();
+    const finish=()=>{destino.open=false;form.remove();delete destino.dataset.carregado;};
+    const save=el('button','prim','Salvar nome e vínculos');save.type='button';save.style.minHeight='48px';save.onclick=async()=>{if(!confirm('Salvar este nome e reunir os canais escolhidos, preservando o histórico?'))return;save.disabled=true;const out=await worker_('/msg/pessoa','POST',{conversa:id,nome:name.value,whatsapp:phone.value,segundo:second.value,semWhatsApp:without.checked,vincular:[...linked]});save.disabled=false;if(!out.ok){aviso_(out.erro||'Não foi possível salvar.');return;}finish();await carregarLista(true);if(aberta&&aberta.id===id){aberta=out.conversa;abrirFicha_();}};
+    const close=el('button','','Cancelar');close.type='button';close.style.minHeight='48px';close.onclick=finish;save.textContent='Salvar telefones e canais';form.append(save,close);
   }
   /* ---- v7.40.13: agendar mensagem (horário de Fortaleza, UTC-3 sem horário de verão) ---- */
   const FORT_MS_ = 3 * 3600000;
@@ -1770,7 +1800,7 @@
   let fichaOrig_ = null;
   function fichaMudou_() {
     if (!fichaOrig_ || !$('ms-fi-tam')) return false;
-    return ['tam', 'pref', 'cid'].some((k, n) => $('ms-fi-' + k).value.trim() !== [fichaOrig_.tamanhos, fichaOrig_.preferencias, fichaOrig_.cidade][n]);
+    return ['nome', 'tam', 'pref', 'cid'].some((k, n) => $('ms-fi-' + k).value.trim() !== [fichaOrig_.nome, fichaOrig_.tamanhos, fichaOrig_.preferencias, fichaOrig_.cidade][n]);
   }
   async function abrirFicha_() {
     if (!aberta || aberta.grupo) return;
@@ -1792,9 +1822,10 @@
   }
   function infoFicha_(f) { const i = $('ms-fi-info'); if (i) i.textContent = f && f.atualizado_em ? 'Atualizada' + (f.autor ? ' por ' + f.autor : '') + ' em ' + dataFicha_(f.atualizado_em) : ''; }
   function desenharFicha_(w, conv, r) {
-    const f = r.ficha || {}; fichaOrig_ = { tamanhos: f.tamanhos || '', preferencias: f.preferencias || '', cidade: f.cidade || '' };
+    const f = r.ficha || {}; fichaOrig_ = { nome: r.nome || rotuloContato(conv), tamanhos: f.tamanhos || '', preferencias: f.preferencias || '', cidade: f.cidade || '' };
     const sec = (titulo, id) => { const s = el('section', 'ms-ficha-sec'), h = el('h4', 'ms-ficha-rot', titulo); h.id = id; s.setAttribute('aria-labelledby', id); s.appendChild(h); w.appendChild(s); return s; };
     const quem = el('p', 'ms-ficha-quem'); const nc = (r.canais || []).length; quem.append(el('b', '', rotuloContato(conv)), document.createTextNode(nc > 1 ? ' · vale para os ' + nc + ' canais desta pessoa' : '')); w.appendChild(quem);
+    const sn=el('section','ms-ficha-sec'),ln=el('label','ms-ficha-rot','Nome do cliente'),inn=el('input','ms-copia');ln.htmlFor='ms-fi-nome';inn.id='ms-fi-nome';inn.type='text';inn.maxLength=120;inn.value=fichaOrig_.nome;inn.autocomplete='off';sn.append(ln,inn);w.appendChild(sn);
     // tamanhos
     const s1 = el('section', 'ms-ficha-sec'), l1 = el('label', 'ms-ficha-rot', 'Tamanhos que usa'); l1.htmlFor = 'ms-fi-tam';
     const it = el('input', 'ms-copia'); it.type = 'text'; it.id = 'ms-fi-tam'; it.maxLength = 60; it.autocomplete = 'off'; it.value = fichaOrig_.tamanhos; it.placeholder = 'Ex.: M · 38 (calça 40)';
@@ -1831,19 +1862,20 @@
       ul7.appendChild(li);
     });
     s7.appendChild(ul7);
-    const ac = el('div', 'ms-ficha-acao'); ac.appendChild(botao('ms-btn', 'Editar contato e canais', 'pessoa')); s7.appendChild(ac);
+    const ac=el('details','ms-ficha-acao');ac.appendChild(el('summary','','Editar telefones e canais'));ac.addEventListener('toggle',()=>{if(ac.open&&!ac.dataset.carregado){ac.dataset.carregado='1';editarPessoa_(conv.id,ac);}});s7.appendChild(ac);
     marcarTams_();
   }
   function sairFicha_() { return !fichaMudou_() || confirm('Você mudou a ficha e ainda não salvou. Sair sem salvar?'); }
   async function salvarFicha_(b) {
     if (!aberta || !$('ms-fi-tam')) return;
-    const conv = aberta.id, corpo = { conversa: conv, tamanhos: $('ms-fi-tam').value.trim(), preferencias: $('ms-fi-pref').value.trim(), cidade: $('ms-fi-cid').value.trim() };
+    const conv = aberta.id, corpo = { conversa: conv, nome: $('ms-fi-nome').value.trim(), tamanhos: $('ms-fi-tam').value.trim(), preferencias: $('ms-fi-pref').value.trim(), cidade: $('ms-fi-cid').value.trim() };
     b.disabled = true;
     const r = await worker_('/msg/ficha', 'POST', corpo);
     b.disabled = false;
     if (!r.ok) { aviso_(r.erro || 'Não foi possível salvar a ficha agora. Tente de novo.'); b.focus(); return; }
     if (!aberta || aberta.id !== conv) return;
     aberta.tamanhos = r.ficha.tamanhos || '';
+    if(r.nome){aberta.nome=r.nome;const q=$('ms-conversa').querySelector('.ms-quem b');if(q)q.textContent=r.nome;await carregarLista(true);}
     const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(aberta));
     fichaOrig_ = null; fecharGaveta_(); aviso_('Ficha salva.');
     const q = document.querySelector('#ms-conversa .ms-quem'); if (q) q.focus();
@@ -2148,6 +2180,7 @@
     if (!aberta) return;
     const c = aberta, ta = $('ms-texto'); if (!ta && !reenvio) return;
     if (modoNota && !reenvio) { await salvarNota_(c, ta); return; }
+    if(!reenvio&&assinaturaLigada_()&&!nomeAtendente_()){aviso_('Atualizando seu nome do cadastro. Tente enviar novamente em instantes.');carregarCfgLeitura_();return;}
     let tmp, texto, idLocal;
     if (reenvio) { const p = pendentes.get(reenvio); if (!p) return; tmp = p; texto = p.msg.texto; idLocal = p.idLocal; p.msg.status = 'pendente'; p.msg.erro = ''; }
     else {
@@ -2209,7 +2242,7 @@
   function guardarContas_(l) { try { localStorage.setItem(CHAVE_CONTAS_, JSON.stringify(l.slice(0, 6))); } catch (e) { /* aparelho sem armazenamento */ } }
   function lembrarSessao_() {
     const s = typeof getSessao === 'function' ? getSessao() : null; if (!s) return;
-    let nome = ''; try { nome = typeof usuarioAdmin !== 'undefined' && usuarioAdmin ? String(usuarioAdmin.nome || '') : ''; } catch (e) { nome = ''; }
+    let nome = ''; try { nome = typeof usuarioAdmin !== 'undefined' && usuarioAdmin ? String(usuarioAdmin.nome || usuarioAdmin.name || '') : ''; } catch (e) { nome = ''; }
     const l = contasSalvas_().filter((x) => x.whatsapp !== s.whatsapp); l.unshift({ whatsapp: s.whatsapp, sessao: s.sessao, nome: nome, em: new Date().toISOString() }); guardarContas_(l);
   }
   function abrirTrocaUsuario_() {
@@ -2525,7 +2558,7 @@
     else if (a === 'filtro') { filtro = filtro === b.dataset.filtro ? '' : b.dataset.filtro; if (selecao) { selecao.clear(); desenharSelbar_(); } fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true); }
     else if (a === 'abrir') { if (toqueLongo) { toqueLongo = false; return; } if (selecao) { const id = Number(b.dataset.id); if (selecao.has(id)) selecao.delete(id); else selecao.add(id); pintarLista(); desenharSelbar_(); } else abrirConversa(Number(b.dataset.id)); }
     else if (a === 'selecionar') iniciarSelecao_(0);
-    else if (a === 'nome-editar') desenharAssina_(true);
+    else if (a === 'nome-editar') editarAssinatura_();
     else if (a === 'ponte-ligar') {
       b.disabled = true; pontesStatus_('Conferindo a ponte…'); const r = await worker_('/msg/contatos/config', 'POST', { url: ($('ms-ponte-url') || {}).value || '', chave: ($('ms-ponte-chave') || {}).value || '' }); b.disabled = false;
       if (!r.ok) { pontesStatus_(r.erro || 'Não foi possível ligar agora.'); return; }
@@ -2668,9 +2701,10 @@
   /* ---------- abrir / fechar ---------- */
   async function recarregar() {
     const listaEmCurso=APP_RECENTES ? carregarLista(true) : null;
+    carregarCfgLeitura_();
     resumo = await worker_('/msg/resumo', 'GET');
     if (!resumo.ok) { const ex = $('ms-extra'); ex.textContent = ''; ex.appendChild(el('p', 'ms-vazio', resumo.erro || 'Não foi possível carregar agora.')); return; }
-    if (!cfgLeitura) carregarCfgLeitura_();      // v7.22: traz também a assinatura do atendente
+    // perfil carregado em paralelo com o resumo
     if (!contagens) contagens = {};
     CANAIS.forEach(([id]) => { const c = resumo.canais[id]; contagens[id] = Object.assign({ grupos: 0, sem_resposta: c.semResposta || 0 }, contagens[id] || {}, { conversas: c.conversas, nao_lidas: c.naoLidas || 0, sem_resposta: c.semResposta || 0 }); });
     desenharAbas(); desenharFiltros(); desenharEstado(); selarBotao(); if(listaEmCurso) await listaEmCurso;else await carregarLista(true);
