@@ -26,6 +26,7 @@ with sync_playwright() as p:
    assert not pg.locator('#ms-assina input').count()
    assert 'Ana' in pg.locator('#ms-assina').inner_text()
    pg.locator('[data-ms=nome-editar]').click();pg.wait_for_selector('#ms-meu-nome-rapido')
+   assert pg.locator('#ms-meu-nome-rapido').bounding_box()['height']>=48
    assert pg.locator('#ms-mostrar-nome').count()==(1 if admin else 0)
    pg.fill('#ms-meu-nome-rapido','Aninha');pg.keyboard.press('Enter');pg.wait_for_function("!document.getElementById('ms-gaveta')")
    assert s['meu_nome']=='Aninha'

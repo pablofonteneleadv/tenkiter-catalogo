@@ -1068,7 +1068,7 @@
     const corpo=gaveta_('Nome nas respostas');if(!corpo)return;
     corpo.style.padding='14px';
     const l=el('label','ms-etq-rot','Como quer ser chamado?');l.htmlFor='ms-meu-nome-rapido';
-    const i=el('input','ms-copia');i.id='ms-meu-nome-rapido';i.type='text';i.maxLength=30;i.value=nomeAtendente_();i.autocomplete='given-name';
+    const i=el('input','ms-copia');i.id='ms-meu-nome-rapido';i.type='text';i.maxLength=30;i.value=nomeAtendente_();i.autocomplete='given-name';i.style.minHeight='48px';i.style.font='inherit';
     corpo.append(l,i);
     if(adminAssinatura_()){
       const la=el('label','ms-cfg-linha'),ch=el('input');ch.type='checkbox';ch.id='ms-mostrar-nome';ch.checked=assinaturaLigada_();la.append(ch,el('span','','Mostrar meu nome nas respostas'));corpo.appendChild(la);
@@ -1351,7 +1351,7 @@
     if (!r.ok) { aviso_(r.erro || 'Não foi possível salvar agora.'); return; }
     cfgLeitura = Object.assign({},cfgLeitura||{},r);guardarPerfil_();atualizarIdentidade_();
     if($('ms-meu-nome-rapido'))fecharGaveta_();
-    aviso_('Nome salvo: as próximas respostas saem como “' + nomeAtendente_() + '”.');
+    aviso_(assinaturaLigada_()?'Nome salvo: as próximas respostas saem como “'+nomeAtendente_()+'”.':'Preferência salva: suas respostas saem sem assinatura.');
     desenharAssina_(false); if (painel === 'leitura') desenharEstado();
   }
   /* ---- v7.22: seleção de várias conversas para encerrar (ou reabrir, no filtro Encerradas) ---- */
