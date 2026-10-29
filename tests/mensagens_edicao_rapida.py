@@ -22,7 +22,8 @@ def run_case(browser, width, height, mobile):
     ctx = browser.new_context(viewport={'width':width,'height':height},
                               is_mobile=mobile, has_touch=mobile, service_workers='block')
     ctx.add_init_script(SESSION)
-    state = install(ctx, perms=PERMS_ALL, versao='3.4')
+    envios_mock = []
+    state = install(ctx, perms=PERMS_ALL, log=envios_mock, versao='3.4')
     state['ig'].setdefault('msg', mock_msg.novo_estado())
     pg = ctx.new_page()
     errors = []
@@ -69,9 +70,14 @@ def run_case(browser, width, height, mobile):
           'Um toque alterna a disponibilidade conforme estado real do botão', [estava_marcada,t])
     check('Etiqueta: M' in t, 'Etiqueta permanece vinculada após editar uma idade',t)
     check(ed.locator('#btn-salvar').is_visible(), 'Salvar acessível na edição compacta')
+    dimensoes = ed.evaluate('({tela:innerWidth,rolagem:document.documentElement.scrollWidth})')
+    check(dimensoes['rolagem'] <= dimensoes['tela'] + 2, 'Sem rolagem horizontal acidental na edição',dimensoes)
     ed.screenshot(path=str(EVID / f'correcao-{width}.png'),full_page=False)
     ed.locator('#btn-salvar').click()
     ed.wait_for_timeout(1500)
+    updates = [x for x in envios_mock if x.get('action') == 'update' and str(x.get('id')) == query['editarProduto'][0]]
+    check(bool(updates), 'Correção enviada ao backend autenticado da peça exata', envios_mock[-2:])
+    check(updates[-1].get('tamanhos') == t, 'Grava somente os tamanhos escolhidos',updates[-1].get('tamanhos'))
     check(ed.locator('#status').count()==1, 'Status do salvamento exibido')
     check(not errors, 'Sem erros JavaScript', errors)
     ed.close(); ctx.close()
@@ -83,9 +89,9 @@ try:
         time.sleep(1)
     with sync_playwright() as pw:
         browser=pw.chromium.launch(args=['--no-sandbox'])
-        for w,h,mob in ((390,844,True),(412,915,True),(1440,900,False)):
+        for w,h,mob in ((320,700,True),(390,844,True),(412,915,True),(1440,900,False)):
             run_case(browser,w,h,mob)
         browser.close()
-    print('Jornada de edição rápida concluída em 390×844, 412×915, 1440×900.')
+    print('Jornada de edição rápida concluída em 320×700, 390×844, 412×915, 1440×900.')
 finally:
     if server: server.terminate()
