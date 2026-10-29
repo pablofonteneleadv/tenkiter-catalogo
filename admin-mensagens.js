@@ -2760,7 +2760,7 @@
     }
     else if(a==='entrada-reprocessar'){
       b.disabled=true;
-      try{const r=await worker_('/msg/entrada/reprocessar','POST',{});aviso_(r.ok?'Nova tentativa iniciada. A lista será atualizada automaticamente.':r.erro||'Não consegui iniciar agora. Tente novamente.');}
+      try{const r=await worker_('/msg/entrada/reprocessar','POST',{});const texto=$('ms-saude')?.querySelector('span');if(texto)texto.textContent=r.ok?'Nova tentativa iniciada.':r.erro||'Não consegui iniciar. Tente novamente.';}
       finally{if(b.isConnected)b.disabled=false;}
     }
     else if (a === 'gaveta-produtos') abrirProdutos_();

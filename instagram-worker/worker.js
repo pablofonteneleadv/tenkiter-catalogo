@@ -3499,7 +3499,11 @@ async function rotaZernio_(env, req, url, ctx) {
     const z=await zernioCfg_(env),conta=b.account?.accountId||b.account?.id;
     if(z&&conta&&String(conta)!==String(z.conta.id))return resp(200,{ok:true,ignorado:true});
     const dados={event:b.event,account:{accountId:b.account?.accountId||b.account?.id||''},message:{}};
-    for(const k of ['platform','platformMessageId','id','conversationId','sender','direction','attachments','text','sentAt','storyReply','metadata'])if(k in m)dados.message[k]=m[k];
+    for(const k of ['platform','platformMessageId','id','conversationId','direction','text','sentAt'])if(k in m)dados.message[k]=String(m[k]||'');
+    dados.message.sender=Object.fromEntries(['id','name','username'].filter(k=>m.sender?.[k]!=null).map(k=>[k,String(m.sender[k])]));
+    dados.message.attachments=(Array.isArray(m.attachments)?m.attachments:[]).slice(0,20).map(a=>Object.fromEntries(['type','originalType','url'].filter(k=>a?.[k]!=null).map(k=>[k,String(a[k])])));
+    const sr=m.storyReply||m.metadata?.storyReply;
+    if(sr)dados.message.storyReply=Object.fromEntries(['storyUrl','storyId'].filter(k=>sr[k]!=null).map(k=>[k,String(sr[k])]));
     return resp(200,await aceitarEntrada_(env,ctx,'zernio','instagram',dados));
   }
   return resp(200,{ok:true});

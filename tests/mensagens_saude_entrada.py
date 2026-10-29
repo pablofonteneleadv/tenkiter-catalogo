@@ -27,10 +27,11 @@ with sync_playwright() as pw:
   assert not vio,vio
   s['reprocessar_erro']=True;pg.click('[data-ms=entrada-reprocessar]');pg.wait_for_timeout(200)
   assert pg.locator('[data-ms=entrada-reprocessar]').is_enabled()
-  assert 'Tente novamente' in pg.locator('#ms-aviso').inner_text()
+  assert 'Tente novamente' in pg.locator('#ms-saude').inner_text()
   s['reprocessar_erro']=False;pg.click('[data-ms=entrada-reprocessar]');pg.wait_for_timeout(200)
   assert len(s.get('reprocessamentos',[]))==2
-  assert 'Nova tentativa iniciada' in pg.locator('#ms-aviso').inner_text()
+  assert 'Nova tentativa iniciada' in pg.locator('#ms-saude').inner_text()
+  assert pg.locator('#ms-aviso').is_hidden(), 'Feedback de retry não cobre a lista'
   pg.locator('#ms-busca').fill('Maria');pg.wait_for_timeout(400);assert pg.locator('#ms-lista .ms-conv').count()==1
   for tipo,titulo in [('anexos','Anexos aguardando'),('webhook','Falha no recebimento')]:
    s['saude']={'alerta':True,'tipo':tipo,'desde':mock_msg.iso(3),'canal':'whatsapp1','cod':503}

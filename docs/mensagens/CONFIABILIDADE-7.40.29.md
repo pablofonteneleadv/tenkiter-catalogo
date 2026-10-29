@@ -31,7 +31,7 @@ Logs de erro contêm somente evento, canal, motivo categorizado e tentativa. Nã
 - Baseline:436 testes de conversa aprovados antes da alteração.
 - Regressões:436 de conversa;49 de recebimento; push móvel; Worker de mídia41; Worker de Instagram406; novos testes de cota/transação/concorrência/ordem de recibos/story lento/reuso de mídia/privacidade; contatos R2 com25 verificações de falha e retomada.
 - Nenhum teste usa WhatsApp, Instagram, IA paga ou contatos reais. Testes da ponte usam respostas simuladas.
-- Interface em320×700,390×844,412×915,1440×900 e390×470, texto100/130%; controles44px, aviso compacto, sem excesso horizontal ou colisão com a navegação. Retry/erro/busca e axe WCAG AA. Corrigido o aviso de falha não aceita que ultrapassava110px com texto ampliado.
+- Interface em320×700,390×844,412×915,1440×900 e390×470, texto100/130%; controles44px, aviso compacto, sem excesso horizontal ou colisão com a navegação. Retry/erro/busca e axe WCAG AA; feedback da tentativa fica na própria faixa e não cobre a lista com toast. Corrigido o aviso de falha não aceita que ultrapassava110px com texto ampliado.
 - Skill estética TENKiTER, referências/checklist e boas práticas Workers aplicadas. Evidências sintéticas em backup privado/artefatos do CI.
 
 **APROVADO COM LIMITAÇÃO:** testes simulados e metadados de privacidade conferidos; sem Android físico nem envio real. O código não prova o plano financeiro vigente: a conexão OAuth atual não tem leitura de faturamento. Alertas preventivos percentuais de cota ainda requerem fonte de uso e plano confirmados, sem inferir que a conta é gratuita ou paga.
