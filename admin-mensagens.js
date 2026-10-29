@@ -618,12 +618,41 @@
       .sheet-mensagens .ms-vinculo-principal{border:1px solid #e4e1d8;border-bottom:0;border-radius:12px 12px 0 0;background:#fcfbf7;margin-top:6px}.sheet-mensagens .ms-vinculada{background:#fcfbf7;border-left:1px solid #e4e1d8;border-right:1px solid #e4e1d8;margin:0;padding-left:44px}.sheet-mensagens .ms-vinculada .ms-conv{padding:8px 6px;min-height:60px}.sheet-mensagens .ms-vinculada .ms-av{display:none}.sheet-mensagens .ms-vinculada .ms-nome{font-size:.76rem;font-weight:500}.sheet-mensagens .ms-vinculada .ms-l2{font-size:.76rem}.sheet-mensagens .ms-vinculada .ms-fone,.sheet-mensagens .ms-vinculada .ms-dono-tag{display:none}.sheet-mensagens .ms-vinculo-fim{border:1px solid #e4e1d8;border-top:0;border-radius:0 0 12px 12px;margin-bottom:6px}
       .sheet-mensagens .ms-nav{padding:5px 8px calc(6px + env(safe-area-inset-bottom));border-top:1px solid #e7e7e0;gap:0}.sheet-mensagens .ms-nav button{position:relative;display:flex;flex-direction:column;gap:5px;align-items:center;justify-content:center;min-height:52px;font-size:.7rem;font-weight:500;background:transparent;color:#62695a;padding:4px}.sheet-mensagens .ms-nav button[aria-current=page]{color:#99500d;background:transparent;border-radius:0;font-weight:700}.sheet-mensagens .ms-nav button[aria-current=page]::before{content:'';position:absolute;top:-5px;left:30%;right:30%;height:3px;background:#d97116;border-radius:0 0 3px 3px}
       @media(prefers-reduced-motion:no-preference){.sheet-mensagens .ms-aba,.sheet-mensagens .ms-chip,.sheet-mensagens .ms-nav button{transition:background-color 160ms,color 160ms}}
+
+      .ms-gaveta-proposta [hidden]{display:none!important}
+      /* Filtros/Mais reproduzem os painéis da proposta, sem alterar as outras gavetas. */
+      .sheet-mensagens .ms-gaveta.ms-gaveta-proposta{inset:0;width:auto;padding-top:24px;box-sizing:border-box;background:rgba(27,33,30,.4);justify-content:flex-end;border:0;box-shadow:none}
+      .ms-gaveta-proposta .ms-gaveta-painel{background:#fff;border-radius:20px 20px 0 0;width:100%;max-height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -8px 60px rgba(29,33,28,.07)}
+      .sheet-mensagens .ms-gaveta-proposta .ms-gaveta-cab{padding:13px 16px 9px;gap:8px;border-bottom:1px solid #e7e7e0;flex:none}
+      .sheet-mensagens .ms-gaveta-proposta .ms-gaveta-cab h3{font:700 1rem/1.3 Inter,Arial,sans-serif;letter-spacing:-.03em;margin:0;color:#20211e}
+      .sheet-mensagens .ms-gaveta-proposta .ms-gaveta-cab .ms-ico{background:transparent;border-radius:12px;font-size:1.1rem;font-weight:400;min-height:44px;min-width:44px}
+      .sheet-mensagens .ms-gaveta-proposta .ms-gaveta-corpo{padding:4px 18px 16px;flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+      .sheet-mensagens .ms-gaveta-proposta .ms-filtro-grupo{margin:0;padding:16px 0;border:0;border-bottom:1px solid #e7e7e0;min-width:0}
+      .sheet-mensagens .ms-gaveta-proposta .ms-filtro-grupo legend{font:600 .68rem/1.4 Inter,Arial,sans-serif;text-transform:uppercase;letter-spacing:.09em;color:#62695a;margin:0 0 8px;padding:0;float:left;width:100%}
+      .sheet-mensagens .ms-gaveta-proposta .ms-filtro-grupo legend+*{clear:both}
+      .sheet-mensagens .ms-gaveta-proposta .ms-filtro-op{display:flex;align-items:center;gap:10px;min-height:44px;padding:0;margin:0;font:400 .85rem/1.4 Inter,Arial,sans-serif;color:#20211e;cursor:pointer}
+      .sheet-mensagens .ms-gaveta-proposta .ms-filtro-op input{width:18px;height:18px;margin:0;flex:none;accent-color:#a76a25}
+      .sheet-mensagens .ms-gaveta-proposta .ms-filtro-select{width:100%;max-width:100%;min-width:0;min-height:46px;margin:0;padding:11px 12px;border:1px solid #8b9481;border-radius:9px;background:#fff;color:#20211e;font:400 .9rem/1.4 Inter,Arial,sans-serif;box-sizing:border-box}
+      .sheet-mensagens .ms-gaveta-proposta .ms-filtros-pe{position:static;padding:12px 18px max(16px,env(safe-area-inset-bottom));border-top:1px solid #e7e7e0;background:#fff;display:flex;gap:8px;align-items:center;flex:none}
+      .sheet-mensagens .ms-gaveta-proposta .ms-filtros-pe .ms-btn{min-height:48px;margin:0;padding:10px 14px;border-radius:9px;font:600 .85rem/1.4 Inter,Arial,sans-serif;background:transparent;color:#6c4523}
+      .sheet-mensagens .ms-gaveta-proposta .ms-filtros-pe .prim{flex:1;background:var(--laranja,#e97d1c);color:#171714}
+      .sheet-mensagens .ms-gaveta-proposta .ms-mais-grupo{margin:0;padding:14px 0 8px;border-bottom:1px solid #e7e7e0}
+      .sheet-mensagens .ms-gaveta-proposta .ms-mais-grupo h4{font:600 .68rem/1.4 Inter,Arial,sans-serif;text-transform:uppercase;letter-spacing:.09em;color:#62695a;margin:0 0 8px}
+      .sheet-mensagens .ms-gaveta-proposta .ms-mais-item{display:flex;gap:12px;align-items:center;min-height:48px;width:100%;margin:0;padding:8px 0;border:0;border-radius:4px;background:transparent;color:#20211e;font:400 .86rem/1.4 Inter,Arial,sans-serif;text-align:left;cursor:pointer}
+      .sheet-mensagens .ms-gaveta-proposta .ms-mais-texto{flex:1;min-width:0;overflow-wrap:anywhere}
+      .sheet-mensagens .ms-gaveta-proposta .ms-mais-item>.ms-linha-icone{color:#62695a}
+      .sheet-mensagens .ms-gaveta-proposta .ms-mais-item>.ms-linha-icone:first-child svg{width:18px;height:18px}
+      .sheet-mensagens .ms-gaveta-proposta .ms-mais-item>.ms-linha-icone:last-child svg{width:15px;height:15px}
+      .sheet-mensagens .ms-gaveta-proposta .ms-mais-item:hover{background:#f7f6f2}
+      .sheet-mensagens .ms-gaveta-proposta button:focus-visible,.sheet-mensagens .ms-gaveta-proposta select:focus-visible{outline:2px solid #99500d;outline-offset:-2px}
+      @media(min-width:860px){.ms-gaveta-proposta .ms-gaveta-painel{max-width:480px;align-self:flex-end}}
+      @media(prefers-reduced-motion:no-preference){.ms-gaveta-proposta .ms-gaveta-painel{animation:ms-painel-proposta 160ms ease-out}@keyframes ms-painel-proposta{from{transform:translateY(12px);opacity:.7}to{transform:translateY(0);opacity:1}}}
 `;
     document.head.appendChild(s);
   }
 
   function iconeFluido_(nome){
-    const p={conversas:'M4 5h16v12H9l-5 4z',funil:'M3 4h18l-7 8v7l-4 2v-9z',notas:'M5 3h14v13l-5 5H5zM14 21v-5h5',mais:'M5 12h.01M12 12h.01M19 12h.01',busca:'M21 21l-5-5M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0',filtros:'M4 6h16M7 12h10M10 18h4M8 3v6M16 9v6M12 15v6'};
+    const p={conversas:'M4 5h16v12H9l-5 4z',funil:'M3 4h18l-7 8v7l-4 2v-9z',notas:'M5 3h14v13l-5 5H5zM14 21v-5h5',mais:'M5 12h.01M12 12h.01M19 12h.01',chevron:'m9 5 7 7-7 7',selecao:'M9 11l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2',painel:'M4 20V10M10 20V4M16 20v-7M22 20H2',auto:'m13 2-9 12h7l-1 8 10-13h-7z',atualizar:'M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 13 3M18 18A8 8 0 0 1 5 15',config:'M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6',usuario:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M17 8h5m-2-2 2 2-2 2',baixar:'M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5',permissoes:'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',conexao:'m8 3 3 3-5 5-3-3M16 21l-3-3 5-5 3 3M8 16l8-8',busca:'M21 21l-5-5M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0',filtros:'M4 6h16M7 12h10M10 18h4M8 3v6M16 9v6M12 15v6'};
     const n=el('span','ms-linha-icone');n.setAttribute('aria-hidden','true');n.innerHTML='<svg viewBox="0 0 24 24"><path d="'+p[nome]+'"/></svg>';return n;
   }
   /* ---------- esqueleto ---------- */
@@ -785,21 +814,35 @@
     const nav=$('ms-nav');if(nav)nav.querySelectorAll('button').forEach(b=>{const ativo=b.dataset.ms==='funil'?painel==='funil':b.dataset.ms==='inicio-notas'?filtro==='com_notas':b.dataset.ms==='inicio'?painel!=='funil'&&filtro!=='com_notas':false;b.setAttribute('aria-current',ativo?'page':'false');});
     if(!ETQ)carregarEtiquetas_();
   }
+  function propostaGaveta_(tipo,anterior){
+    const g=$('ms-gaveta');if(!g)return null;
+    g.classList.add('ms-gaveta-proposta');g.dataset.tipo=tipo;
+    const titulo=g.getAttribute('aria-label');g.removeAttribute('aria-label');g.setAttribute('role','presentation');
+    const painel=el('div','ms-gaveta-painel');painel.setAttribute('role','dialog');painel.setAttribute('aria-modal','true');painel.setAttribute('aria-label',titulo);
+    while(g.firstChild)painel.appendChild(g.firstChild);g.appendChild(painel);
+    g.addEventListener('click',ev=>{if(ev.target===g)fecharGaveta_();});
+    g.addEventListener('keydown',ev=>{if(ev.key!=='Tab')return;const alvos=[...painel.querySelectorAll('button,input,select,summary,[tabindex="0"]')].filter(n=>!n.disabled&&n.getClientRects().length),primeiro=alvos[0],ultimo=alvos.at(-1);if(ev.shiftKey&&document.activeElement===primeiro){ev.preventDefault();ultimo.focus();}else if(!ev.shiftKey&&document.activeElement===ultimo){ev.preventDefault();primeiro.focus();}});
+    document.addEventListener('tk:camada-fechada',function foco(ev){if(ev.detail?.chave!=='ms-gaveta')return;document.removeEventListener('tk:camada-fechada',foco);setTimeout(()=>{if(!g.isConnected&&!$('ms-gaveta')&&document.activeElement===document.body&&anterior?.isConnected)anterior.focus();},0);});
+    painel.querySelector('.ms-gaveta-cab button')?.focus();return painel;
+  }
   function abrirFiltros_(){
-    const corpo=gaveta_('Filtros');if(!corpo)return;
+    const anterior=document.activeElement,corpo=gaveta_('Filtros');if(!corpo)return;const painel=propostaGaveta_('filtros',anterior);
     const sec=(titulo)=>{const fs=el('fieldset','ms-filtro-grupo');fs.appendChild(el('legend','',titulo));corpo.appendChild(fs);return fs;};
     const opc=(pai,tipo,nome,valor,texto,checked)=>{const lb=el('label','ms-filtro-op'),i=el('input');i.type=tipo;i.name=nome;i.value=valor;i.checked=checked;lb.append(i,document.createTextNode(texto));pai.appendChild(lb);};
-    if(canal!=='instagram'){const g=sec('Tipo de conversa');opc(g,'checkbox','ms-ft-tipo','msg','Mensagens individuais',tipos.msg);opc(g,'checkbox','ms-ft-tipo','grp','Grupos',tipos.grp);}
+    const selecao=(pai,nome,rotulo,itens,valor)=>{const sel=el('select','ms-filtro-select');sel.name=nome;sel.setAttribute('aria-label',rotulo);itens.forEach(([v,t])=>{const op=el('option','',t);op.value=v;sel.appendChild(op);});sel.value=String(valor);pai.appendChild(sel);return sel;};
+    if(canal!=='instagram'){const g=sec('O que mostrar');opc(g,'checkbox','ms-ft-tipo','msg','Atendimentos individuais',tipos.msg);opc(g,'checkbox','ms-ft-tipo','grp','Grupos',tipos.grp);}
     const g=sec('Mostrar');
-    [['','Todas as conversas abertas'],...FILTROS.filter(([id])=>!['nao_lidas','sem_resposta','com_notas'].includes(id))].forEach(([id,n])=>opc(g,'radio','ms-ft-fila',id,n,filtro===id));
-    if(['nao_lidas','sem_resposta','com_notas'].includes(filtro))opc(g,'radio','ms-ft-fila',filtro,FILTROS.find(x=>x[0]===filtro)[1],true);
-    const etapas=(ETQ||[]).filter(e=>e.venda);if(etapas.length){const e=sec('Etapa da venda');opc(e,'radio','ms-ft-etapa','0','Qualquer etapa',!etqFiltro);etapas.forEach(x=>opc(e,'radio','ms-ft-etapa',String(x.id),x.nome,etqFiltro===x.id));}
-    const pe=el('div','ms-filtros-pe');pe.append(botao('ms-btn','Limpar','filtros-limpar'),botao('ms-btn prim','Aplicar filtros','filtros-aplicar'));corpo.appendChild(pe);
+    const filas=[['','Todas as conversas abertas'],...FILTROS.filter(([id])=>!['nao_lidas','sem_resposta','com_notas'].includes(id))];
+    if(['nao_lidas','sem_resposta','com_notas'].includes(filtro))filas.push([filtro,FILTROS.find(x=>x[0]===filtro)[1]]);
+    selecao(g,'ms-ft-fila','Mostrar conversas',filas,filtro);
+    const etapas=(ETQ||[]).filter(e=>e.venda);if(etapas.length){const e=sec('Etapa da venda');selecao(e,'ms-ft-etapa','Etapa da venda',[['0','Todas as etapas'],...etapas.map(x=>[String(x.id),x.nome])],etqFiltro);}
+    const pe=el('div','ms-filtros-pe');pe.append(botao('ms-btn','Limpar','filtros-limpar'),botao('ms-btn prim','Aplicar filtros','filtros-aplicar'));painel.appendChild(pe);
   }
   function abrirMais_(){
-    const corpo=gaveta_('Mais');if(!corpo)return;const g=$('ms-gaveta');g.dataset.tipo='mais';
-    const grupo=(titulo,itens)=>{const sec=el('section','ms-mais-grupo');sec.appendChild(el('h4','',titulo));itens.forEach(([nome,acao,dados])=>sec.appendChild(botao('ms-mais-item',nome,acao,dados)));corpo.appendChild(sec);};
-    grupo('Atendimento',[['Selecionar conversas','selecionar'],['Painel de atendimento','painel'],['Respostas automáticas','auto-cfg'],['Atualizar agora','atualizar']]);
+    const anterior=document.activeElement,corpo=gaveta_('Mais');if(!corpo)return;propostaGaveta_('mais',anterior);
+    const mapa={selecionar:'selecao',painel:'painel',funil:'funil','auto-cfg':'auto',atualizar:'atualizar','leitura-cfg':'config','trocar-usuario':'usuario','app-atualizar':'baixar','app-permissoes':'permissoes',conexao:'conexao',exp:'baixar'};
+    const grupo=(titulo,itens)=>{const sec=el('section','ms-mais-grupo');sec.appendChild(el('h4','',titulo));itens.forEach(([nome,acao,dados])=>{const b=botao('ms-mais-item','',acao,dados);b.append(iconeFluido_(mapa[acao]),el('span','ms-mais-texto',nome),iconeFluido_('chevron'));sec.appendChild(b);});corpo.appendChild(sec);};
+    grupo('Atendimento',[['Selecionar conversas','selecionar'],['Painel de atendimento','painel'],['Etapas da venda','funil'],['Respostas automáticas','auto-cfg'],['Atualizar agora','atualizar']]);
     grupo('Conta e aplicativo',[['Configurações de leitura e nome','leitura-cfg'],['Trocar usuário','trocar-usuario'],...(window.TKAndroid?[['Atualizar app','app-atualizar'],['Permissões do app','app-permissoes']]:[]),...(canal!=='todos'?[['Conexão deste canal','conexao']]:[])]);
     grupo('Exportar',[...(canal!=='todos'?[['Este canal (CSV)','exp',{params:'formato=csv&canal='+canal,rotulo:'o canal'}],['Este canal (TXT para IA)','exp',{params:'formato=txt&canal='+canal,rotulo:'o canal'}]]:[]),['Tudo (CSV, três canais)','exp',{params:'formato=csv',rotulo:'tudo'}],['Tudo (JSON)','exp',{params:'formato=json',rotulo:'tudo'}]]);
     corpo.querySelectorAll('.ms-mais-grupo').forEach(sec=>{if(![...sec.querySelectorAll('button')].some(b=>!b.hidden))sec.hidden=true;});
@@ -2760,7 +2803,7 @@
     const b = ev.target.closest('[data-ms]'); if (!b) return;
     const a = b.dataset.ms;
     if($('ms-gaveta')?.dataset.tipo==='ficha'&&!b.closest('#ms-gaveta')&&fichaMudou_()){if(!sairFicha_())return;fichaOrig_=null;}
-    if($('ms-gaveta')?.dataset.tipo==='mais'&&a!=='gaveta-fechar')fecharGaveta_();
+    if($('ms-gaveta')?.dataset.tipo==='mais'&&a!=='gaveta-fechar'){$('ms-gaveta').remove();await desempilharEsperando_('ms-gaveta');}
     const recurso = recursoAcao_(a); if (recurso && !podeFerramenta_(recurso)) { aviso_('Seu acesso não permite usar esta ferramenta.'); return; }
     if (a !== 'menu-geral' && a !== 'menu-conversa') fecharMenu();
     if (painel === 'funil' && (a === 'leitura-cfg' || a === 'selecionar')) { largarFunil_(); chrome_(false); const ul0 = $('ms-lista'); if (ul0) ul0.hidden = false; pintarLista(); }
@@ -2776,7 +2819,7 @@
     else if(a==='filtros-aplicar'||a==='filtros-limpar'){
       const g=$('ms-gaveta');if(!g)return;
       if(a==='filtros-limpar'){tipos={msg:true,grp:false};filtro='';etqFiltro=0;}
-      else{if(canal!=='instagram'){const ts=[...g.querySelectorAll('[name=ms-ft-tipo]:checked')].map(x=>x.value);if(!ts.length){aviso_('Escolha mensagens individuais ou grupos.');return;}tipos={msg:ts.includes('msg'),grp:ts.includes('grp')};}filtro=g.querySelector('[name=ms-ft-fila]:checked')?.value||'';etqFiltro=Number(g.querySelector('[name=ms-ft-etapa]:checked')?.value||0);}
+      else{if(canal!=='instagram'){const ts=[...g.querySelectorAll('[name=ms-ft-tipo]:checked')].map(x=>x.value);if(!ts.length){aviso_('Escolha mensagens individuais ou grupos.');return;}tipos={msg:ts.includes('msg'),grp:ts.includes('grp')};}filtro=g.querySelector('[name=ms-ft-fila]')?.value||'';etqFiltro=Number(g.querySelector('[name=ms-ft-etapa]')?.value||0);}
       fecharGaveta_();fecharPainel();desenharFiltros();await carregarLista(true);
     }
     else if(a==='fila'||a==='inicio'||a==='inicio-notas'){
