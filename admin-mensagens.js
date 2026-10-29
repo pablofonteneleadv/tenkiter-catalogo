@@ -1295,7 +1295,7 @@
           itens.forEach(v => {
             const btn = botao('ms-edicao-chip', v, '');
             btn.type = 'button'; btn.setAttribute('aria-pressed', String(ativos.has(v)));
-            btn.addEventListener('click', () => { clique(v); campo.value = TKTamanhos.gravar(campo.value, marcadas, selecionadas, infantil); desenhar(); });
+            btn.addEventListener('click', () => { clique(v); campo.value = TKTamanhos.gravar(campo.value, marcadas, selecionadas, infantil || baby); desenhar(); });
             box.appendChild(btn);
           });
         };
@@ -1357,6 +1357,7 @@
       if (ocupado) return;
       const tamanhos = campo.value.trim();
       if (!tamanhos) { status.textContent = 'Informe pelo menos um tamanho ou idade disponível.'; campo.focus(); return; }
+      if (suporte) { const dados = TKTamanhos.ler(tamanhos); if (!dados.idades.length && !dados.numeros.length && !dados.etiqueta && !dados.antigos.length) { status.textContent = 'Selecione os tamanhos disponíveis.'; return; } }
       if (tamanhos === String(p.Tamanhos || '').trim()) { encerrar(); return; }
       if (typeof chamarAdmin_ !== 'function') { status.textContent = 'Edição indisponível. Atualize o aplicativo e tente novamente.'; return; }
       ocupado = true; salvar.disabled = cancelar.disabled = fechar.disabled = true;
@@ -1375,7 +1376,8 @@
         if (typeof ehConsulta === 'function' && ehConsulta(p)) dados.consultarValor = true;
         // Preserve existing video metadata; never intentionally remove media in a size-only edit.
         if (p.Video_URL) dados.videoUrlExistente = String(p.Video_URL);
-        if (p.Videos) dados.videos = p.Videos;
+        if (Array.isArray(p.Videos) && p.Videos.length) dados.videos = p.Videos;
+        // Keep the existing media fields unchanged; a size edit must never request deletion.
         const resposta = await chamarAdmin_(dados);
         if (!resposta || !resposta.ok) throw Error(resposta?.erro || 'Não foi possível salvar. Confira sua permissão e tente novamente.');
         p.Tamanhos = tamanhos;
