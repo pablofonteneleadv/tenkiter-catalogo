@@ -64,6 +64,7 @@ def run_case(browser, width, height, mobile):
     check(antes != depois, 'Toque alterna a seleção da etiqueta')
     original = campo.input_value()
     check(bool(original), 'Tamanhos atuais carregados')
+    modal.locator('.ms-edicao-avancado summary').click()
     campo.fill(original + ', Veste: 54')
     check(len(ctx.pages) == 1, 'Seleção não navega para fora do aplicativo')
     salvar = modal.get_by_role('button', name='Salvar tamanhos')
