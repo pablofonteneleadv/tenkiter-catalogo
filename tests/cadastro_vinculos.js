@@ -12,34 +12,26 @@ const index = fs.readFileSync(path.join(raiz, 'index.html'), 'utf8');
 const catalogo = fs.readFileSync(path.join(raiz, 'catalogo.js'), 'utf8');
 const vitrine = fs.readFileSync(path.join(raiz, 'vitrine.js'), 'utf8');
 
-const infantil3 = T.gravar('', 'M', ['3 anos', '4 anos'], true);
-const infantil13 = T.gravar('', 'M', ['13 anos', '14 anos'], true);
+const infantil3 = T.gravar('', ['M'], ['3 anos', '4 anos'], true);
 assert.equal(infantil3, 'M, Etiqueta: M, Idade: 3 anos, Idade: 4 anos');
-assert.equal(infantil13, 'M, Etiqueta: M, Idade: 13 anos, Idade: 14 anos');
-assert.deepEqual(T.cliente(infantil3), { tipo: 'idade', titulo: 'Idades', valores: ['3 anos', '4 anos'] });
-assert.deepEqual(T.cliente(infantil13).valores, ['13 anos', '14 anos']);
-assert.ok(!T.cliente(infantil3).valores.includes('M'), 'etiqueta não pode aparecer no filtro infantil');
-assert.ok(!T.cliente(infantil13).valores.includes('3 anos'), 'mesma etiqueta infantil pode vestir outras idades');
-
-const adulto = T.gravar('', 'G', ['42', '44', '44'], false);
-assert.equal(adulto, 'G, Etiqueta: G, Veste: 42, Veste: 44');
-assert.deepEqual(T.cliente(adulto), { tipo: 'numero', titulo: 'Numerações', valores: ['42', '44'] });
-assert.deepEqual(T.ler(adulto), { etiqueta: 'G', idades: [], numeros: ['42', '44'], antigos: ['G'] });
-
-const trocouPublico = T.gravar(adulto, 'G', ['5 anos'], true);
-assert.deepEqual(T.cliente(trocouPublico).valores, ['5 anos']);
-assert.ok(!trocouPublico.includes('Veste:'));
-const desligouLetra = T.gravar(adulto, '', [], false);
-assert.equal(desligouLetra, '', 'ao desmarcar a etiqueta, ela deixa de aparecer como tamanho legado');
-
-assert.deepEqual(T.cliente('PP, P, M, G'), { tipo: 'legado', titulo: 'Tamanhos', valores: ['PP', 'P', 'M', 'G'] });
-assert.deepEqual(T.cliente('Consultar tamanhos disponíveis').valores, []);
-assert.deepEqual(T.cliente('Único').valores, ['Único']);
-assert.deepEqual(T.cliente('P, M, G', 'Infantil Menina').valores, [], 'letras legadas não devem aparecer no infantil');
-assert.deepEqual(T.cliente('M, Etiqueta: M, Idade: 3 anos', 'Infantil Menina').valores, ['3 anos']);
-assert.deepEqual(T.cliente('Idade: 3 anos, Idade: 3 anos').valores, ['3 anos']);
-assert.equal(T.gravar('P, M, G', '', [], false), 'P, M, G', 'editar outros campos não pode apagar tamanhos antigos');
-assert.equal(T.gravar('P, M, G', 'M', ['38'], false), 'M, Etiqueta: M, Veste: 38');
+assert.deepEqual(T.cliente(infantil3).valores, ['3 anos','4 anos']);
+const diversas = T.gravar('', ['P','M'], ['1 ano','2 anos','3 anos','4 anos'], true);
+assert.equal(T.ler(diversas).etiqueta, 'P/M');
+assert.deepEqual(T.cliente(diversas).valores, ['1 ano','2 anos','3 anos','4 anos']);
+assert.deepEqual(T.cliente(T.gravar(diversas, ['M'], ['3 anos','4 anos'], true)).valores, ['3 anos','4 anos']);
+const adulto = T.gravar('', ['G','GG'], ['40','42','44','46'], false);
+assert.equal(T.ler(adulto).etiqueta,'G/GG');
+assert.deepEqual(T.cliente(adulto).valores, ['40','42','44','46']);
+assert.equal(T.resumir(['2 anos','3 anos','4 anos','5 anos','6 anos','7 anos','8 anos','9 anos','10 anos','11 anos','12 anos'],'idade'),'2 a 12 anos');
+assert.equal(T.resumir(['2 anos','4 anos','10 anos','12 anos'],'idade'),'2/4/10/12 anos');
+assert.equal(T.resumir(['38','40','42','44'],'numero'),'38 ao 44');
+assert.equal(T.resumir(['38','40','44'],'numero'),'38/40/44');
+assert.equal(T.resumir(['2 anos'],'idade'),'2 anos');
+assert.equal(T.resumir(['36'],'numero'),'36');
+assert.deepEqual(T.cliente('P, M, G'), {tipo:'legado',titulo:'Tamanhos',valores:['P','M','G']});
+assert.deepEqual(T.cliente('P, M, G','Infantil Menina').valores,[]);
+assert.equal(T.gravar('P, M, G', '', [], false),'P, M, G');
+assert.equal(T.gravar('P, M, G', ['M'], ['38'], false),'M, Etiqueta: M, Veste: 38');
 
 for (const pagina of [admin, index]) {
   assert.ok(pagina.includes('tamanhos-vinculados.js?v=1'), 'script de tamanhos compartilhado deve ser carregado');
@@ -59,13 +51,13 @@ assert.ok(catalogo.includes('linhaTamanhoCliente_(p)'), 'detalhes do produto dev
 assert.ok(index.includes('Tamanho ou idade'), 'filtro deve comunicar idades infantis');
 assert.ok(vitrine.includes('TKTamanhos.cliente('), 'cards e modal devem usar idades/numerações reais');
 assert.ok(!vitrine.includes("listaDeTags(textoPlano(p.Tamanhos || '')).filter"), 'interface não pode expor metadados internos');
-// Predefinicoes do cadastro: adulto automatico, infantil sem chute de etiqueta.
-for (const [etiqueta, numeros] of Object.entries({PP:['34'],P:['36'],M:['38','40'],G:['42','44'],GG:['46']})) {
-  assert.ok(admin.includes(etiqueta + ":[" + numeros.map(n=>"'"+n+"'").join(',') + "]"), 'predefinicao adulta ausente: '+etiqueta);
+// As referencias sugeridas podem ser alteradas manualmente.
+for(const [etiqueta,numeros] of Object.entries({PP:['34'],M:['36','38'],G:['40','42'],GG:['44','46']})) {
+ assert.ok(admin.includes(etiqueta+":["+numeros.map(n=>"'"+n+"'").join(',')+"]"),'referencia adulta: '+etiqueta);
 }
-assert.ok(admin.includes('cadFaixas_=new Set(cadPredefinirFaixas_(cadEtiqueta_))'), 'clique na etiqueta deve preselecionar numeros');
-assert.ok(admin.includes("cadInfantil_() ? []"), 'etiquetas infantis nao devem presumir idade');
-assert.ok(admin.includes("CAD_IDADES_CRIANCA_ = Array.from({length:16},(_,i)=>(i+2)+' anos')"), 'crianca inicia aos 2 anos');
-assert.ok(admin.includes("'18-24 meses'"), 'baby termina em 24 meses');
-assert.ok(!admin.includes("const CAD_IDADES_ = ['RN'"), 'nao misturar meses de baby com anos de crianca');
-console.log('Cadastro vinculado: 19 cenários/assertivas essenciais aprovados.');
+for(const [etiqueta,inicio] of Object.entries({P:1,M:3,G:5,GG:7,Juv10:9,Juv12:11,Juv14:13,Juv16:15})) {
+ assert.ok(admin.includes(etiqueta+":['"+inicio+" ano"+(inicio>1?'s':'')+"','"+(inicio+1)+" anos']"),'referencia infantil: '+etiqueta);
+}
+assert.ok(admin.includes('cadEtiquetas_.has(v)'), 'multisselecao das letras');
+assert.ok(admin.includes('TKTamanhos.resumir('),'card da gestao resumido');
+console.log('Cadastro vinculado: testes de multi-etiquetas, referencia e faixas aprovados.');
