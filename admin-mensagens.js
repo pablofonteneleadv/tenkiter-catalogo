@@ -1120,7 +1120,7 @@
       dados.texto = nums.length === dados.valores.length && nums.every((v,i)=>!i||v-nums[i-1]===passo) && nums.length>1 ? nums[0]+(dados.tipo==='idade'?' a ':' ao ')+nums.at(-1)+(dados.tipo==='idade'?' anos':'') : nums.join('/')+(dados.tipo==='idade'?' anos':'');
       return dados;
     }
-    const antigos = raw.split(',').map(x => x.trim()).filter(x => x && !/^(Etiqueta|Idade|Veste):/i.test(x));
+    const antigos = raw.split(',').map(x => x.trim()).filter(x => x && !/^(Etiqueta|Idade|Veste):/i.test(x) && !/^Consultar tamanhos disponíveis$/i.test(x));
     return { titulo: 'Tamanhos', texto: antigos.join('/'), valores: antigos };
   }
   const tamanhosDe_ = (p) => resumoTamanhosProduto_(p).valores;
