@@ -46,6 +46,16 @@ def run_case(browser, width, height, mobile):
     check(medida['h']>=44, 'Alvo de toque com pelo menos 44px', medida)
     check(pg.locator('#ms-prod-lista [data-ms="prod-usar"]').count()>=1, 'Enviar produto preservado')
     pg.screenshot(path=str(EVID / f'escolha-{width}.png'), full_page=False)
+    # Cancelar não deve gravar, abrir outra aba ou apagar o rascunho.
+    editor.click()
+    modal = pg.locator('#ms-edicao-tamanhos')
+    modal.wait_for(state='visible')
+    modal.get_by_role('button', name='Cancelar').click()
+    check(not modal.is_visible(), 'Cancelar fecha a janela sem navegar')
+    check(not [x for x in envios_mock if x.get('action') == 'update'],
+          'Cancelar não envia alteração ao backend')
+    check(pg.locator('#ms-texto').input_value() == 'Não perder este rascunho',
+          'Cancelar preserva o rascunho')
     editor.click()
     modal = pg.locator('#ms-edicao-tamanhos')
     modal.wait_for(state='visible')
