@@ -164,6 +164,12 @@ def tratar(route, path, method, body, s):
                 t = " ".join(str(body[k]).split())
                 if len(t) > n: return J({"ok": False, "erro": "%s: no máximo %d letras (agora tem %d)." % (nome, n, len(t))}, 400) or True
                 novo[k] = t
+            if "perfil" in body:
+                novo["perfil"] = body["perfil"]
+                novo["tamanhos"] = " · ".join(body["perfil"].get("preferencias", {}).get("tamanhos", []))
+            elif "perfil" in novo:
+                if "cidade" in body: novo["perfil"]["cidade"] = novo["cidade"]
+                if "tamanhos" in body: novo["perfil"].setdefault("preferencias", {})["tamanhos"] = [x.strip() for x in novo["tamanhos"].split("·") if x.strip()]
             if "nome" in body:
                 if not str(body["nome"]).strip(): return J({"ok":False,"erro":"Informe o nome do cliente."},400) or True
                 for item in s["convs"]:
@@ -172,7 +178,7 @@ def tratar(route, path, method, body, s):
         canais = [x for x in s["convs"] if not x["grupo"] and (x["id"] == cid or (pessoa(c) and pessoa(x) == pessoa(c)))]
         ids = [x["id"] for x in canais]
         f = fichas.get(alvo) or {}
-        return J({"ok": True, "nome": c.get("nome", ""), "ficha": {"tamanhos": f.get("tamanhos", ""), "preferencias": f.get("preferencias", ""), "cidade": f.get("cidade", ""), "atualizado_em": f.get("atualizado_em", ""), "autor": f.get("autor", "")},
+        return J({"ok": True, "nome": c.get("nome", ""), "ficha": {"tamanhos": " · ".join(f.get("perfil", {}).get("preferencias", {}).get("tamanhos", [])) or f.get("tamanhos", ""), "preferencias": f.get("preferencias", ""), "cidade": f.get("cidade", ""), "perfil": f.get("perfil", {}), "atualizado_em": f.get("atualizado_em", ""), "autor": f.get("autor", "")},
                   "etiquetas": c.get("etiquetas", []), "notas": list(reversed(s.get("notas", {}).get(alvo, [])))[:5],
                   "canais": [{"id": x["id"], "canal": x["canal"], "contato": x["contato"], "atual": x["id"] == cid} for x in canais],
                   "compras": sorted([{"em": v["em"], "canal": next(x["canal"] for x in canais if x["id"] == v["conversa_id"])} for v in s.get("vendas", []) if v["conversa_id"] in ids], key=lambda v: v["em"], reverse=True)}) or True

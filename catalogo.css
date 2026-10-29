@@ -774,7 +774,7 @@ header { padding: 8px 12px 8px; }
     align-content: start;
   }
   .grid .card .card-info > * { grid-column: 1; grid-row: 6; order: 0; margin-top: 0; }
-  .grid .card .card-info > .codigo { grid-row: 1; }
+  .grid .card .card-info > .codigo, .grid .card .card-info > .codigo-tecido { grid-row: 1; }
   .grid .card .card-info > .nome { grid-row: 2; }
   .grid .card .card-info > .tam-card { grid-row: 3; margin: 0 0 6px; align-self: start; }
   .grid .card .card-info > .preco { grid-row: 4; }
@@ -783,3 +783,6 @@ header { padding: 8px 12px 8px; }
   .grid .card .card-info > .prova-social { grid-row: 7; }
   .grid .card .card-info > .acoes-card { grid-row: 8; margin-top: 0; padding-top: 8px; align-self: end; }
 }
+
+/* Código e tecido abaixo da foto, sem disputar espaço com o nome. */
+.codigo-tecido{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;flex-wrap:wrap}.codigo-tecido .codigo{margin:0}.tecido-card{font-size:12px;font-weight:600;color:#53534d;overflow-wrap:anywhere;max-width:100%;margin-left:auto;text-align:right}

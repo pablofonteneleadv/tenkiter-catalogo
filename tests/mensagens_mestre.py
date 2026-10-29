@@ -59,7 +59,7 @@ with sync_playwright() as p:
     pg.go_back(); pg.wait_for_timeout(400)
 
     print("== Configuração 'Leitura no celular'")
-    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click(".ms-menu [data-ms=leitura-cfg]"); pg.wait_for_timeout(700)
+    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click("#ms-gaveta [data-ms=leitura-cfg]"); pg.wait_for_timeout(700)
     chk("configuração mostra os 3 canais ligados e a última confirmação", pg.locator("[data-cfg-canal]").count() == 3 and pg.locator("[data-cfg-canal]:checked").count() == 3 and "Última confirmação" in pg.inner_text("#ms-estado-wrap"))
     pg.click("[data-cfg-canal=instagram]"); pg.wait_for_timeout(600)
     chk("desligar o Instagram salva no servidor", S["cfg_leitura"]["instagram"] is False)

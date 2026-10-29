@@ -1174,6 +1174,18 @@ function d1() {
     chk('ficha: Instagram sem vínculo tem ficha própria e só o próprio canal', fs0.j.ficha.tamanhos === '' && fs0.j.canais.length === 1 && fs0.j.canais[0].id === solto, fs0.j);
     await A('POST', '/msg/ficha', { conversa: solto, tamanhos: 'GG' });
     chk('ficha: salvar no Instagram solto não mexe na ficha da outra pessoa', (await A('GET', '/msg/ficha?conversa=' + waPerson.id)).j.ficha.tamanhos === 'M · 38' && (await DB.prepare("SELECT tamanhos FROM msg_ficha WHERE alvo=?").bind('c:' + solto).first()).tamanhos === 'GG');
+    const perfilSolto={cidade:'Crateús',bairro:'Centro',municipio:'',localidade:'',preferencias:{tamanhos:['G','40'],generos:['Feminino'],tecidos:['Linho'],cores:['Azul']}};
+    const ps=await A('POST','/msg/ficha',{conversa:solto,perfil:perfilSolto,cidade:'Crateús',tamanhos:'G · 40'});
+    chk('ficha: perfil estruturado persiste os quatro grupos e a localização',ps.j.ficha.perfil.cidade==='Crateús'&&ps.j.ficha.perfil.bairro==='Centro'&&ps.j.ficha.perfil.preferencias.tecidos[0]==='Linho'&&ps.j.ficha.tamanhos==='G · 40',ps.j.ficha);
+    await A('POST','/msg/ficha',{conversa:solto,perfil:{preferencias:{cores:[]}}});
+    const parcial=await A('GET','/msg/ficha?conversa='+solto);
+    chk('ficha: atualização parcial não apaga localização nem grupos omitidos',parcial.j.ficha.perfil.cidade==='Crateús'&&parcial.j.ficha.perfil.bairro==='Centro'&&parcial.j.ficha.perfil.preferencias.tecidos[0]==='Linho'&&parcial.j.ficha.perfil.preferencias.cores.length===0,parcial.j.ficha.perfil);
+    await A('POST','/msg/ficha',{conversa:solto,cidade:'Interior'});
+    const ps2=await A('GET','/msg/ficha?conversa='+solto);
+    chk('ficha: atualização legada de cidade não apaga grupos estruturados restantes',ps2.j.ficha.perfil.cidade==='Interior'&&ps2.j.ficha.perfil.preferencias.tecidos[0]==='Linho'&&ps2.j.ficha.perfil.preferencias.cores.length===0,ps2.j.ficha.perfil);
+    await A('POST','/msg/ficha',{conversa:solto,perfil:{preferencias:{tamanhos:[]}}});
+    const zerada=await A('GET','/msg/ficha?conversa='+solto);
+    chk('ficha: limpar todos os tamanhos não ressuscita valores legados',zerada.j.ficha.tamanhos===''&&zerada.j.ficha.perfil.preferencias.tamanhos.length===0&&zerada.j.ficha.perfil.preferencias.tecidos[0]==='Linho');
     // etiquetas e notas recentes (as mesmas da pessoa)
     await A('POST', '/msg/rotular', { conversa: wa2P, etiquetas: [eId('Pago')] });
     for (let i = 1; i <= 6; i++) { await A('POST', '/msg/notas', { conversa: igPerson.id, texto: 'Nota da ficha ' + i }); await pausa(); }
@@ -1196,7 +1208,7 @@ function d1() {
     fc = await A('GET', '/msg/ficha?conversa=' + igPerson.id);
     chk('ficha: venda seguida de nova conversa continua contando (2 compras, a mais nova primeiro)', fc.j.compras.length === 2 && fc.j.compras[0].canal === 'whatsapp1' && fc.j.compras[0].em > fc.j.compras[1].em, fc.j.compras);
     chk('ficha: Instagram solto não herda compras da outra pessoa', (await A('GET', '/msg/ficha?conversa=' + solto)).j.compras.length === 0);
-    chk('ficha: validarFicha_ exportada e limites em código', typeof W.validarFicha_ === 'function' && W.validarFicha_({ tamanhos: 'M' })[1].tamanhos === 'M' && !!W.validarFicha_({ cidade: 'c'.repeat(61) })[0]);
+    chk('ficha: validarFicha_ exportada e limites em código', typeof W.validarFicha_ === 'function' && W.validarFicha_({ tamanhos: 'M' })[1].tamanhos === 'M' && !!W.validarFicha_({ cidade: 'c'.repeat(61) })[0] && !!W.validarFicha_({perfil:{preferencias:{cores:'azul'}}})[0] && !!W.validarFicha_({perfil:{preferencias:{tecidos:[{}]}}})[0] && !!W.validarFicha_({perfil:{bairro:{}}})[0]);
   }
   // ======== v7.40.15: funil de vendas ========
   {

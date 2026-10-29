@@ -33,7 +33,7 @@ def tela(b, w, h, mob):
     return ctx, pg, S, erros
 def abrir_auto(pg):
     pg.click("#ms-mais"); pg.wait_for_timeout(300)
-    pg.click(".ms-menu [data-ms=auto-cfg]"); pg.wait_for_selector(".ms-auto", timeout=4000); pg.wait_for_timeout(200)
+    pg.click("#ms-gaveta [data-ms=auto-cfg]"); pg.wait_for_selector(".ms-auto", timeout=4000); pg.wait_for_timeout(200)
 def sem_rolagem_h(pg):
     return pg.evaluate("document.documentElement.scrollWidth<=innerWidth && [...document.querySelectorAll('#ms-gaveta *')].every(e=>{const r=e.getBoundingClientRect();return r.width===0||(r.left>=-1&&r.right<=innerWidth+1)})")
 def dentro(pg, sel):

@@ -73,7 +73,7 @@ with sync_playwright() as p:
 
     # ---- encerrar várias pelo menu ----
     pg.click("#ms-mais"); pg.wait_for_timeout(200)
-    pg.click(".ms-menu [data-ms=selecionar]"); pg.wait_for_timeout(300)
+    pg.click("#ms-gaveta [data-ms=selecionar]"); pg.wait_for_timeout(300)
     chk("'Selecionar conversas' mostra a barra de seleção", pg.locator("#ms-selbar").is_visible() and "Toque nas conversas" in (pg.locator("#ms-selbar").text_content() or ""))
     chk("na seleção, 'Espiar' sai do caminho", pg.locator("#ms-lista .ms-espiar").count() == 0)
     pg.click("#ms-lista .ms-conv[data-id='2']"); pg.click("#ms-lista .ms-conv[data-id='4']"); pg.wait_for_timeout(200)
@@ -111,7 +111,7 @@ with sync_playwright() as p:
     pg.click("[data-ms=filtro][data-filtro=encerradas]"); pg.wait_for_timeout(500)
     chk("filtro 'Encerradas' mostra as duas", sorted(pg.evaluate(IDS)) == [2, 4], pg.evaluate(IDS))
     chk("encerradas mostram o motivo", pg.locator("#ms-lista .ms-motivo-tag", has_text="Cliente parou de responder").count() == 2)
-    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click(".ms-menu [data-ms=selecionar]"); pg.wait_for_timeout(200)
+    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click("#ms-gaveta [data-ms=selecionar]"); pg.wait_for_timeout(200)
     pg.click("[data-ms=sel-todas]"); pg.wait_for_timeout(150)
     chk("'Todas' marca todas e o botão vira 'Reabrir'", "2 selecionadas" in (pg.locator("#ms-selbar").text_content() or "") and (pg.locator("[data-ms=sel-encerrar]").text_content() or "") == "Reabrir 2")
     foto(pg, "04-encerradas-reabrir.png")
@@ -135,7 +135,7 @@ with sync_playwright() as p:
     c6.update({"encerrada_em": "", "nao_lidas": 1, "atualizada_em": agora(), "previa": "Ainda tem?"})     # o cliente escreveu de novo
     pg.wait_for_timeout(1500)
     chk("quando o cliente escreve, a conversa volta sozinha para a lista", 6 in pg.evaluate(IDS), pg.evaluate(IDS))
-    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click(".ms-menu [data-ms=selecionar]"); pg.wait_for_timeout(200)
+    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click("#ms-gaveta [data-ms=selecionar]"); pg.wait_for_timeout(200)
     pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
     chk("Esc sai da seleção", not pg.locator("#ms-selbar").is_visible())
     chk("sem erros de JavaScript (celular)", not erros, erros)
@@ -147,7 +147,7 @@ with sync_playwright() as p:
     st = install(ctx, perms=PERMS_ALL, versao="3.4"); S = preparar(st)
     pg, erros = abrir_tela(ctx)
     pg.click("#ms-lista .ms-conv[data-id='7']"); pg.wait_for_timeout(700)
-    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click(".ms-menu [data-ms=selecionar]"); pg.wait_for_timeout(200)
+    pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click("#ms-gaveta [data-ms=selecionar]"); pg.wait_for_timeout(200)
     pg.click("#ms-lista .ms-conv[data-id='1']"); pg.wait_for_timeout(200)
     bar = pg.locator("#ms-selbar").bounding_box(); lat = pg.locator(".ms-lateral").bounding_box()
     chk("computador: barra de seleção fica no pé da coluna das conversas", bar and lat and abs((bar["y"] + bar["height"]) - (lat["y"] + lat["height"])) < 2 and bar["width"] <= lat["width"] + 1, [bar, lat])

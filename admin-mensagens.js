@@ -119,7 +119,7 @@
   function podeFerramenta_(k) { return window.TKMensagensAcessos ? TKMensagensAcessos.pode(k) : podeGerir(); }
   function recursoAcao_(a) {
     if (/^(gaveta-produtos|prod-?|prodsel-)/.test(a)) return 'produtos';
-    if (/^(notas-|modo-nota)/.test(a)) return 'notas';
+    if (/^(inicio-notas|notas-|modo-nota)/.test(a)) return 'notas';
     if (/^nome-/.test(a)) return 'responder';
     if (/^(ficha|pessoa)/.test(a)) return 'contatos';
     if (/^(etq|etiquetas)/.test(a)) return 'etiquetas';
@@ -598,7 +598,16 @@
         .ms-app[data-painel=funil] { grid-template-columns: 1fr; } .ms-app[data-painel=funil] .ms-conversa { display: none; } .ms-app[data-painel=funil] .ms-lateral { border-right: 0; }
         .ms-fq { scroll-snap-type: none; } .ms-fcol { flex: 1 0 200px; } .ms-fpos, .sheet-mensagens .ms-fir { display: none; }
       }
-    `;
+
+      .ms-pesquisa{display:flex;gap:8px;padding:0 12px 8px;align-items:stretch}.sheet-mensagens .ms-pesquisa .ms-busca{flex:1;min-width:0;width:0;margin:0}.ms-pesquisa>.ms-btn{flex:none;border:1px solid #d5d5d5;background:#fff;padding:8px 10px}
+      .ms-abas{gap:4px}.ms-aba{font-size:.72rem;padding:6px 3px;min-height:44px;border-radius:6px}.ms-aba .ms-pt{display:none}
+      .ms-filtros{display:grid;grid-template-columns:1.35fr 1fr .8fr;overflow:visible;gap:4px}.ms-filtros .ms-chip{min-width:0;padding:6px 3px;white-space:normal;border-radius:6px;font-size:.74rem;line-height:1.3}.ms-fila-conta{display:inline-block;margin-left:4px;font-size:.7rem}
+      .ms-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:4px 4px calc(4px + env(safe-area-inset-bottom));border-top:1px solid #e6e1d6;flex:none;background:#fff}.ms-nav button{min-width:0;min-height:48px;border:0;background:#fff;font:600 .74rem/1.3 Inter,Arial,sans-serif;padding:4px;color:#555}.ms-nav button[aria-current=page]{color:#854200;background:#fff2e4;border-radius:6px}.ms-nav button:focus-visible,.ms-filtro-op:focus-within{outline:2px solid #9b4a00;outline-offset:-2px}
+      .ms-filtro-grupo{border:0;border-bottom:1px solid #e6e1d6;margin:0 0 16px;padding:0 0 12px;min-width:0}.ms-filtro-grupo legend{font-weight:700;padding:0 0 8px}.ms-filtro-op{display:flex;gap:12px;align-items:center;min-height:48px;font-size:.9rem}.sheet-mensagens .ms-filtro-op input{width:20px;height:20px;flex:none;accent-color:#a65300;margin:0}.ms-filtros-pe{position:sticky;bottom:0;background:#fff;display:flex;gap:8px;justify-content:space-between;padding:12px 0}
+      .ms-mais-grupo{padding-bottom:12px;border-bottom:1px solid #e6e1d6;margin-bottom:16px}.ms-mais-grupo h4{margin:0 0 4px;font-size:.8rem;color:#645e55}.ms-mais-item{display:block;width:100%;text-align:left;padding:12px 0;min-height:48px;background:none;border:0;font:inherit;color:#171714;cursor:pointer}.ms-mais-item:focus-visible{outline:2px solid #a65300}
+      .ms-espiar{width:48px;min-height:44px;align-self:center;padding:4px 0;border:0;margin:4px 8px 4px 0;font-size:.65rem}.ms-vinculada .ms-av{width:32px;height:32px;font-size:.7rem}.ms-vinculada .ms-conv{padding-top:8px;padding-bottom:8px}.ms-vinculada .ms-l1 strong{font-size:.86rem}
+      .sheet-mensagens .ms-ficha select{min-height:48px;max-width:100%;background:#fff;font:inherit;color:#222}.ms-fi-faceta{border-bottom:1px solid #e6e1d6;padding:0 0 8px;margin:0 0 8px}.ms-fi-faceta summary{min-height:48px;display:list-item;align-content:center;font-weight:600;cursor:pointer;overflow-wrap:anywhere}.ms-fi-faceta-corpo{padding:8px 0}.ms-fi-faceta-corpo>.ms-btn{margin-top:12px}.ms-fi-adicionar{display:flex;gap:8px;margin-top:12px}.ms-fi-adicionar input{min-width:0;flex:1}.ms-fi-faceta summary:focus-visible{outline:2px solid #a65300}.ms-ficha [hidden]{display:none!important}
+`;
     document.head.appendChild(s);
   }
 
@@ -611,9 +620,9 @@
     const app = el('div', 'ms-app'); app.id = 'ms-app'; app.dataset.vista = 'lista';
     const lat = el('section', 'ms-lateral'); lat.setAttribute('aria-label', 'Conversas');
     const topo = el('div', 'ms-topo');
-    const h = el('h2', 'ms-titulo', '💬 Mensagens'); h.id = 'ms-titulo';
+    const h = el('h2', 'ms-titulo', 'Mensagens'); h.id = 'ms-titulo';
     const live = el('span', 'ms-ao-vivo', ''); live.id = 'ms-vivo'; live.setAttribute('role', 'status');
-    const mais = botao('ms-ico', '⋯', 'menu-geral'); mais.setAttribute('aria-label', 'Mais opções'); mais.setAttribute('aria-haspopup', 'menu'); mais.id = 'ms-mais';
+    const mais = botao('ms-ico', '⋯', 'menu-geral'); mais.setAttribute('aria-label', 'Mais opções'); mais.setAttribute('aria-haspopup', 'dialog'); mais.id = 'ms-mais';
     const x = botao('ms-ico', '✕', 'fechar'); x.id = 'ms-fechar'; x.setAttribute('aria-label', 'Fechar mensagens');
     topo.append(h, live, mais, x);
     const quem=el('small','ms-identidade');quem.id='ms-identidade';h.appendChild(quem);atualizarIdentidade_();
@@ -626,7 +635,11 @@
     const extra = el('div'); extra.id = 'ms-extra'; wrap.appendChild(extra);
     const selbar = el('div', 'ms-selbar'); selbar.id = 'ms-selbar'; selbar.hidden = true; selbar.setAttribute('role', 'toolbar'); selbar.setAttribute('aria-label', 'Conversas selecionadas');
     const saudeEl = el('div', 'ms-saude'); saudeEl.id = 'ms-saude'; saudeEl.hidden = true; saudeEl.setAttribute('role', 'alert');
-    lat.append(topo, saudeEl, abas, filtros, busq, estado, wrap, selbar);
+    const pesquisa = el('div','ms-pesquisa'); pesquisa.id='ms-pesquisa';
+    const bf=botao('ms-btn','Filtros','filtros-abrir');bf.id='ms-btn-filtros';bf.setAttribute('aria-haspopup','dialog');pesquisa.append(busq,bf);
+    const nav=el('nav','ms-nav');nav.id='ms-nav';nav.setAttribute('aria-label','Navegação das mensagens');
+    [['Conversas','inicio'],['Funil','funil'],['Com notas','inicio-notas'],['Mais','menu-geral']].forEach(([nome,acao])=>nav.appendChild(botao('',nome,acao)));
+    lat.append(topo, saudeEl, abas, pesquisa, filtros, estado, wrap, selbar, nav);
     // v7.22: segurar o dedo numa conversa começa a seleção (como no WhatsApp)
     ul.addEventListener('pointerdown', (ev) => { const b = ev.target.closest('.ms-conv'); if (!b || selecao) return; clearTimeout(timerToque); toqueLongo = false; timerToque = setTimeout(() => { toqueLongo = true; iniciarSelecao_(Number(b.dataset.id)); if (navigator.vibrate) try { navigator.vibrate(20); } catch (e) { /* sem vibração */ } }, 550); });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => ul.addEventListener(t, () => clearTimeout(timerToque)));
@@ -684,7 +697,7 @@
   function teclado(ev) {
     if (ev.key === 'Escape' && $('ms-luz')) { fecharLuz_(); ev.stopPropagation(); return; }
     if (ev.key === 'Escape' && $('ms-motivos')) { fecharMotivos_(); ev.stopPropagation(); return; }
-    if (ev.key === 'Escape' && $('ms-gaveta')) { fecharGaveta_(); const t = $('ms-texto'); if (t) t.focus(); ev.stopPropagation(); return; }
+    if (ev.key === 'Escape' && $('ms-gaveta')) { if(!sairFicha_())return;fichaOrig_=null;fecharGaveta_(); const t = $('ms-texto'); if (t) t.focus(); ev.stopPropagation(); return; }
     if (ev.key === 'Escape' && selecao && !menuAberto) { sairSelecao_(); ev.stopPropagation(); return; }
     if (ev.key === 'Escape' && menuAberto) { const d = menuAberto.dataset.dono, a = $(d); fecharMenu(); if (a) a.focus(); ev.stopPropagation(); }
   }
@@ -696,7 +709,7 @@
     ABAS.forEach(([id, nome]) => {
       const c = contagemDe_(id);
       const b = botao('ms-aba', '', 'aba', { canal: id }); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(id === canal));
-      b.appendChild(document.createTextNode(nome)); b.appendChild(el('small', '', c.conversas + (c.conversas === 1 ? ' conversa' : ' conversas')));
+      b.appendChild(document.createTextNode(nome)); b.title=c.conversas+' conversas';
       if (c.nao_lidas > 0) { const p = el('span', 'ms-pt', c.nao_lidas > 99 ? '99+' : String(c.nao_lidas)); p.setAttribute('aria-label', c.nao_lidas + ' não lidas'); b.appendChild(p); }
       abas.appendChild(b);
     });
@@ -719,53 +732,63 @@
     else f.appendChild(botao('ms-etq-mais', 'Assumir', 'assumir'));
     if (c.tamanhos) { const v = el('span', 'ms-veste', 'Veste ' + c.tamanhos); v.id = 'ms-veste'; v.title = 'Tamanhos da ficha do cliente'; f.appendChild(v); }   // v7.40.14
     (c.etiquetas || []).forEach((e) => f.appendChild(tagEtq_(e)));
-    f.appendChild(botao('ms-etq-mais', (c.etiquetas || []).length ? 'Mudar etiquetas' : '+ Etiqueta', 'etiquetas'));
+    f.appendChild(botao('ms-etq-mais', (c.etiquetas || []).some(e=>e.venda) ? 'Mudar etapa' : '+ Etapa da venda', 'etiquetas'));
     const n = msgs.filter(m => m.direcao === 'nota').length;
     if (aberta && aberta.id === c.id && n) f.appendChild(botao('ms-etq-mais', 'Notas · ' + n, 'notas-abrir'));
     return f;
   }
   function abrirEtiquetas_() {
-    if (!aberta) return; const corpo = gaveta_('Etiquetas'); if (!corpo) return;
+    if (!aberta) return; const corpo = gaveta_('Etapa da venda'); if (!corpo) return;
     const tem = new Set((aberta.etiquetas || []).map((e) => e.id)), lista = ETQ || [];
     const grupo = (titulo, itens, tipo) => {
       if (!itens.length) return; corpo.appendChild(el('p', 'ms-etq-rot', titulo));
       itens.forEach((e) => { const lb = el('label', 'ms-etq-op'), i = el('input'); i.type = tipo; i.name = tipo === 'radio' ? 'ms-etq-venda' : 'ms-etq-' + e.id; i.value = String(e.id); i.checked = tem.has(e.id); lb.append(i, pontoEtq_(e), document.createTextNode(e.nome)); corpo.appendChild(lb); });
     };
     grupo('Etapa da venda · uma por vez', lista.filter((e) => e.venda), 'radio');
-    grupo('Outras', lista.filter((e) => !e.venda), 'checkbox');
+
     const pe = el('div', 'ms-etq-pe'); pe.append(botao('ms-btn', 'Tirar etapa', 'etq-sem-etapa'), botao('ms-btn prim', 'Salvar', 'etq-salvar')); corpo.appendChild(pe);
   }
   async function salvarEtiquetas_() {
     const g = $('ms-gaveta'); if (!g || !aberta) return;
-    const ids = Array.from(g.querySelectorAll('.ms-etq-op input:checked')).map((i) => Number(i.value));
+    const ids = [...new Set(Array.from(g.querySelectorAll('.ms-etq-op input:checked')).map((i) => Number(i.value)).concat((aberta.etiquetas||[]).filter(e=>!e.venda).map(e=>e.id)))];
     const c = aberta, r = await worker_('/msg/rotular', 'POST', { conversa: c.id, etiquetas: ids });
-    if (!r.ok) { aviso_(r.erro || 'Não salvei as etiquetas. Tente de novo.'); return; }
+    if (!r.ok) { aviso_(r.erro || 'Não salvei a etapa da venda. Tente de novo.'); return; }
     c.etiquetas = r.etiquetas; fecharGaveta_(); const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(c));
-    aviso_('Etiquetas salvas.'); if (etqDaFicha_) { etqDaFicha_ = false; abrirFicha_(); }
+    aviso_('Etapa da venda salva.'); if (etqDaFicha_) { etqDaFicha_ = false; abrirFicha_(); }
     ETQ = null; desenharFiltros(); await carregarLista(false);
   }
   function desenharFiltros() {
     const f = $('ms-filtros'); if (!f) return;
     const c = contVista || contagemDe_(canal), t = contTipos || { individuais: Math.max(0, (c.conversas || 0) - (c.grupos || 0)), grupos: c.grupos || 0 };
     f.textContent = '';
-    if (canal !== 'instagram') {
-      [['msg', 'Mensagens', t.individuais], ['grp', 'Grupos', t.grupos]].forEach(([id, nome, n]) => {
-        const b = botao('ms-chip ms-chip-tipo', nome + (n > 0 ? ' · ' + n : ''), 'tipo', { tipo: id }); b.setAttribute('aria-pressed', String(!!tipos[id])); f.appendChild(b);
-      });
-      f.appendChild(el('span', 'ms-chip-sep'));
-    }
-    FILTROS.forEach(([id, nome]) => {
-      if (id === 'ambos' && (canal === 'instagram' || !tipos.msg)) return;
-      const n = id === 'nao_lidas' ? c.nao_lidas : id === 'sem_resposta' ? c.sem_resposta : id === 'ambos' ? c.ambos : id === 'encerradas' ? c.encerradas : 0;
-      if(id==='com_notas'&&!podeFerramenta_('notas'))return;
-      const b = botao('ms-chip' + (id === 'ambos' && n > 0 ? ' alerta' : ''), nome + (n > 0 ? ' · ' + n : ''), 'filtro', { filtro: id }); b.setAttribute('aria-pressed', String(id === filtro)); f.appendChild(b);
+    [['sem_resposta','Falta responder',c.sem_resposta],['nao_lidas','Não lidas',c.nao_lidas],['','Todas',c.conversas]].forEach(([id,nome,n])=>{
+      const b=botao('ms-chip',nome,'fila',{filtro:id});b.setAttribute('aria-pressed',String(filtro===id));
+      if(n>0)b.appendChild(el('span','ms-fila-conta',String(n)));f.appendChild(b);
     });
-    if (!ETQ) { carregarEtiquetas_(); return; }
-    if (ETQ.length) {   // v7.40.4: filtro por etiqueta (pessoas)
-      f.appendChild(el('span', 'ms-chip-sep'));
-      ETQ.forEach((e) => { const b = botao('ms-chip ms-chip-etq', '', 'etq', { id: String(e.id) }); b.append(pontoEtq_(e), document.createTextNode(e.nome + (e.pessoas > 0 ? ' · ' + e.pessoas : ''))); b.setAttribute('aria-pressed', String(etqFiltro === e.id)); f.appendChild(b); });
-    }
+    const bf=$('ms-btn-filtros');if(bf){const ativo=etqFiltro||!tipos.msg||tipos.grp||['minhas','retomar','encerradas'].includes(filtro);bf.textContent=ativo?'Filtros •':'Filtros';bf.setAttribute('aria-label',ativo?'Filtros, há filtros aplicados':'Filtros');}
+    const nav=$('ms-nav');if(nav)nav.querySelectorAll('button').forEach(b=>{const ativo=b.dataset.ms==='funil'?painel==='funil':b.dataset.ms==='inicio-notas'?filtro==='com_notas':b.dataset.ms==='inicio'?painel!=='funil'&&filtro!=='com_notas':false;b.setAttribute('aria-current',ativo?'page':'false');});
+    if(!ETQ)carregarEtiquetas_();
   }
+  function abrirFiltros_(){
+    const corpo=gaveta_('Filtros');if(!corpo)return;
+    const sec=(titulo)=>{const fs=el('fieldset','ms-filtro-grupo');fs.appendChild(el('legend','',titulo));corpo.appendChild(fs);return fs;};
+    const opc=(pai,tipo,nome,valor,texto,checked)=>{const lb=el('label','ms-filtro-op'),i=el('input');i.type=tipo;i.name=nome;i.value=valor;i.checked=checked;lb.append(i,document.createTextNode(texto));pai.appendChild(lb);};
+    if(canal!=='instagram'){const g=sec('Tipo de conversa');opc(g,'checkbox','ms-ft-tipo','msg','Mensagens individuais',tipos.msg);opc(g,'checkbox','ms-ft-tipo','grp','Grupos',tipos.grp);}
+    const g=sec('Mostrar');
+    [['','Todas as conversas abertas'],...FILTROS.filter(([id])=>!['nao_lidas','sem_resposta','com_notas'].includes(id))].forEach(([id,n])=>opc(g,'radio','ms-ft-fila',id,n,filtro===id));
+    if(['nao_lidas','sem_resposta','com_notas'].includes(filtro))opc(g,'radio','ms-ft-fila',filtro,FILTROS.find(x=>x[0]===filtro)[1],true);
+    const etapas=(ETQ||[]).filter(e=>e.venda);if(etapas.length){const e=sec('Etapa da venda');opc(e,'radio','ms-ft-etapa','0','Qualquer etapa',!etqFiltro);etapas.forEach(x=>opc(e,'radio','ms-ft-etapa',String(x.id),x.nome,etqFiltro===x.id));}
+    const pe=el('div','ms-filtros-pe');pe.append(botao('ms-btn','Limpar','filtros-limpar'),botao('ms-btn prim','Aplicar filtros','filtros-aplicar'));corpo.appendChild(pe);
+  }
+  function abrirMais_(){
+    const corpo=gaveta_('Mais');if(!corpo)return;const g=$('ms-gaveta');g.dataset.tipo='mais';
+    const grupo=(titulo,itens)=>{const sec=el('section','ms-mais-grupo');sec.appendChild(el('h4','',titulo));itens.forEach(([nome,acao,dados])=>sec.appendChild(botao('ms-mais-item',nome,acao,dados)));corpo.appendChild(sec);};
+    grupo('Atendimento',[['Selecionar conversas','selecionar'],['Painel de atendimento','painel'],['Respostas automáticas','auto-cfg'],['Atualizar agora','atualizar']]);
+    grupo('Conta e aplicativo',[['Configurações de leitura e nome','leitura-cfg'],['Trocar usuário','trocar-usuario'],...(window.TKAndroid?[['Atualizar app','app-atualizar'],['Permissões do app','app-permissoes']]:[]),...(canal!=='todos'?[['Conexão deste canal','conexao']]:[])]);
+    grupo('Exportar',[...(canal!=='todos'?[['Este canal (CSV)','exp',{params:'formato=csv&canal='+canal,rotulo:'o canal'}],['Este canal (TXT para IA)','exp',{params:'formato=txt&canal='+canal,rotulo:'o canal'}]]:[]),['Tudo (CSV, três canais)','exp',{params:'formato=csv',rotulo:'tudo'}],['Tudo (JSON)','exp',{params:'formato=json',rotulo:'tudo'}]]);
+    corpo.querySelectorAll('.ms-mais-grupo').forEach(sec=>{if(![...sec.querySelectorAll('button')].some(b=>!b.hidden))sec.hidden=true;});
+  }
+
   function ligadoOuPronto() {
     if (canal === 'todos') return true;
     const c = resumo && resumo.canais[canal]; if (!c) return false;
@@ -778,6 +801,7 @@
     const c = resumo && resumo.canais[canal]; if (!c) return;
     const aberto = painel === 'conexao' || !ligadoOuPronto();
     if (aberto) { w.appendChild(caixaEstado()); return; }
+    if(!c.pausado && (canal==='instagram'||c.v2))return;
     const e = el('div', 'ms-estado');
     if (canal !== 'instagram' && !c.v2 && !c.pausado) {
       e.appendChild(el('span', 'ms-pausa', 'Falta ativar: mensagens que você envia e entregue/lida'));
@@ -1137,7 +1161,7 @@
   }
   /* o "voltar" do celular fecha a gaveta; cada gaveta tem um número para o "voltar" atrasado de uma gaveta anterior não fechar a nova */
   let genGaveta = 0;
-  const removerAte_ = (n) => () => { const e = $('ms-gaveta'); if (e && Number(e.dataset.gen) <= n) e.remove(); };
+  const removerAte_ = (n) => () => { const e = $('ms-gaveta'); if (e && Number(e.dataset.gen) <= n) { if(e.dataset.tipo==='ficha'&&!sairFicha_())return;fichaOrig_=null;e.remove(); } };
   document.addEventListener('tk:camada-fechada', (ev) => {
     if (!ev.detail || ev.detail.chave !== 'ms-gaveta') return;
     setTimeout(() => { const e = $('ms-gaveta'); if (e && window.TKCamadas && !TKCamadas.aberta('ms-gaveta')) TKCamadas.empilhar('ms-gaveta', removerAte_(Number(e.dataset.gen))); }, 0);
@@ -1205,7 +1229,7 @@
       const termos = semAcento_(q.value).split(/\s+/).filter(Boolean);
       let ps = produtosCatalogo_().filter(ativo_);
       if (chk.checked) ps = ps.filter((p) => !esgotado_(p));
-      if (termos.length) ps = ps.filter((p) => { const t = semAcento_([p.Nome, p.Codigo, p.Categoria, p.Cores, p.Tamanhos, p.Genero].join(' ')); return termos.every((x) => t.indexOf(x) >= 0); });
+      if (termos.length) ps = ps.filter((p) => { const t = semAcento_([p.Nome, p.Codigo, p.Categoria, p.Cores, p.Tamanhos, p.Genero,window.TKTecido&&TKTecido.ler(p)].join(' ')); return termos.every((x) => t.indexOf(x) >= 0); });
       pintarFiltros(ps);ps=ps.filter(p=>combina(p));
       resultado.textContent=ps.length+' '+(ps.length===1?'peça encontrada':'peças encontradas');
       ul.textContent = '';
@@ -1222,8 +1246,10 @@
         const info = el('div', 'ms-prod-info');
         info.appendChild(el('b', '', p.Nome || 'Sem nome'));
         info.appendChild(el('span', 'ms-prod-preco', precoTexto_(p) + (p.Codigo ? ' · ' + p.Codigo : '')));
+        const tecido=window.TKTecido&&TKTecido.ler(p);if(tecido)info.appendChild(el('span','ms-prod-det','Tecido: '+tecido));
         const tam = resumoTamanhosProduto_(p);
         info.appendChild(el('span', 'ms-prod-det', (tam.texto ? tam.titulo + ': ' + tam.texto : 'Tamanho não informado') + (esgotado_(p) ? ' · Esgotado' : p.Estoque !== '' && p.Estoque != null ? ' · ' + p.Estoque + ' em estoque' : '')));
+
         const acoes = el('div', 'ms-prod-acoes');
         acoes.appendChild(botao('ms-btn prim', 'Colocar na mensagem', 'prod-usar', { id: String(p.ID) }));
         if (linkDe_(p)) acoes.appendChild(botao('ms-btn', 'Copiar link', 'prod-link', { id: String(p.ID) }));
@@ -1637,7 +1663,7 @@
     [...blocos.values()].map(b=>b.sort((a,c)=>String(c.ultima_em).localeCompare(String(a.ultima_em))||c.id-a.id)).sort((a,b)=>String(b[0].ultima_em).localeCompare(String(a[0].ultima_em))||b[0].id-a[0].id).forEach(b=>b.forEach((c,i)=>{const li=linhaConversa(c);li.classList.toggle('ms-vinculada',i>0);li.style.marginLeft=i?'24px':'';li.style.background=i?'#faf8f3':'';if(li!==ref)ul.insertBefore(li,ref);else ref=ref.nextSibling;}));
     extra.textContent = '';
     if (!lista.length) {
-      const m = busca.trim() ? 'Nenhuma conversa encontrada.' : etqFiltro ? 'Nenhuma conversa com esta etiqueta neste canal.' : filtro === 'nao_lidas' ? 'Nenhuma conversa não lida. 🎉' : filtro === 'sem_resposta' ? 'Ninguém esperando resposta agora. 🎉' : tipoParam_() === 'grupo' && !filtro ? 'Nenhum grupo aqui.' : filtro === 'ambos' ? 'Ninguém está falando pelos dois WhatsApp agora.' : filtro === 'encerradas' ? 'Nenhuma conversa encerrada. Para encerrar, segure o dedo numa conversa (ou ⋯ → Selecionar conversas).' : 'Ainda não chegou nenhuma mensagem neste canal.';
+      const m = busca.trim() ? 'Nenhuma conversa encontrada.' : etqFiltro ? 'Nenhuma conversa nesta etapa de venda neste canal.' : filtro === 'nao_lidas' ? 'Nenhuma conversa não lida. 🎉' : filtro === 'sem_resposta' ? 'Ninguém esperando resposta agora. 🎉' : tipoParam_() === 'grupo' && !filtro ? 'Nenhum grupo aqui.' : filtro === 'ambos' ? 'Ninguém está falando pelos dois WhatsApp agora.' : filtro === 'encerradas' ? 'Nenhuma conversa encerrada. Para encerrar, segure o dedo numa conversa (ou ⋯ → Selecionar conversas).' : 'Ainda não chegou nenhuma mensagem neste canal.';
       extra.appendChild(el('p', 'ms-vazio', m));
     }
   }
@@ -1986,104 +2012,72 @@
     agendadas_ = r.pendentes || []; desenharFaixaAgenda_(); desenharListaAgenda_(r); aviso_('Agendamento cancelado.');
     const prox = document.querySelector('#ms-gaveta [data-ms=agenda-cancelar]') || $('ms-ag-texto'); if (prox) prox.focus();
   }
-  /* ---- v7.40.14: ficha do cliente (por pessoa: vale para todos os canais vinculados). Só mostra o que existe no servidor. ---- */
-  const TAMS_FICHA_ = ['PP', 'P', 'M', 'G', 'GG', '36', '38', '40', '42', '44', '46'];
-  const SEP_TAM_ = '[\\s·,;/()]';   // "38 (calça 40)" também marca o 40
-  const temTam_ = (txt, t) => new RegExp('(^|' + SEP_TAM_ + ')' + t + '(?=$|' + SEP_TAM_ + ')', 'i').test(txt);
-  function alternarTam_(txt, t) {
-    txt = String(txt || '');
-    if (temTam_(txt, t)) return txt.replace(new RegExp('(^|' + SEP_TAM_ + '+)' + t + '(?=$|' + SEP_TAM_ + ')', 'i'), '').replace(/^[\s·,;/]+|[\s·,;/]+$/g, '').replace(/\s*·\s*(·\s*)+/g, ' · ');
-    const base = txt.replace(/[\s·,;/]+$/, '');
-    return base ? base + ' · ' + t : t;
-  }
-  function marcarTams_() {
-    const i = $('ms-fi-tam'); if (!i) return;
-    document.querySelectorAll('#ms-gaveta [data-ms=ficha-tam]').forEach((b) => b.setAttribute('aria-pressed', String(temTam_(i.value, b.dataset.t))));
+  let fichaOrig_ = null, fichaAtual_ = null, fichaApiPromise_;
+  function carregarFichaApi_() {
+    if (window.TKMensagensFicha) return Promise.resolve(window.TKMensagensFicha);
+    if (!fichaApiPromise_) fichaApiPromise_ = new Promise((resolve,reject)=>{const s=document.createElement('script');const origem=document.querySelector('script[src*="admin-mensagens.js"]');const ver=origem?new URL(origem.src).search:'';s.src=new URL('mensagens-ficha.js'+ver,document.baseURI).href;s.onload=()=>window.TKMensagensFicha?resolve(window.TKMensagensFicha):reject(new Error('Módulo de ficha indisponível.'));s.onerror=()=>reject(new Error('Não foi possível carregar os dados da ficha.'));document.head.appendChild(s);});
+    return fichaApiPromise_.catch(e=>{fichaApiPromise_=null;throw e;});
   }
   const dataFicha_ = (iso) => { const d = new Date(iso); return !iso || isNaN(d) ? '' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }); };
-  let fichaOrig_ = null;
-  function fichaMudou_() {
-    if (!fichaOrig_ || !$('ms-fi-tam')) return false;
-    return ['nome', 'tam', 'pref', 'cid'].some((k, n) => $('ms-fi-' + k).value.trim() !== [fichaOrig_.nome, fichaOrig_.tamanhos, fichaOrig_.preferencias, fichaOrig_.cidade][n]);
-  }
+  function capturarFicha_(){const val=id=>String($(id)?.value||'').trim();return {nome:val('ms-fi-nome'),cidade:val('ms-fi-cid')==='__outra'?val('ms-fi-outra-cid'):val('ms-fi-cid'),municipio:val('ms-fi-municipio'),bairro:val('ms-fi-bairro'),localidade:val('ms-fi-localidade'),preferencias:{texto:val('ms-fi-pref'),tamanhos:[...(fichaAtual_?.preferencias.tamanhos||[])],generos:[...(fichaAtual_?.preferencias.generos||[])],tecidos:[...(fichaAtual_?.preferencias.tecidos||[])],cores:[...(fichaAtual_?.preferencias.cores||[])]}}}
+  function fichaMudou_(){if(!fichaOrig_||!$('ms-fi-nome'))return false;return JSON.stringify(capturarFicha_())!==fichaOrig_;}
   async function abrirFicha_() {
     if (!aberta || aberta.grupo) return;
-    const conv = aberta, corpo = gaveta_('Ficha do cliente'); if (!corpo) return;
-    const g = $('ms-gaveta'); g.dataset.tipo = 'ficha'; const gen = g.dataset.gen; fichaOrig_ = null;
-    const w = el('div', 'ms-ficha'); w.id = 'ms-ficha'; w.setAttribute('aria-busy', 'true');
-    w.appendChild(el('p', 'ms-auto-exp', 'Carregando a ficha…')); corpo.appendChild(w);
-    const r = await worker_('/msg/ficha?conversa=' + encodeURIComponent(conv.id), 'GET');
-    const g2 = $('ms-gaveta'); if (!g2 || g2.dataset.gen !== gen || !aberta || aberta.id !== conv.id) return;
-    w.removeAttribute('aria-busy'); w.textContent = '';
-    if (!r.ok) {
-      w.appendChild(el('p', 'ms-auto-exp', r.erro || 'Não foi possível abrir a ficha agora.'));
-      const l = el('div', 'ms-ficha-acao'); l.appendChild(botao('ms-btn', 'Tentar de novo', 'ficha')); w.appendChild(l); return;
-    }
-    desenharFicha_(w, conv, r);
-    const pe = el('div', 'ms-auto-pe ms-ficha-pe'), info = el('small'); info.id = 'ms-fi-info';
-    const bt = botao('ms-btn prim', 'Salvar', 'ficha-salvar'); bt.id = 'ms-fi-salvar'; pe.append(info, bt); g2.appendChild(pe);
-    infoFicha_(r.ficha);
+    const conv=aberta,corpo=gaveta_('Ficha do cliente');if(!corpo)return;
+    const g=$('ms-gaveta');g.dataset.tipo='ficha';const gen=g.dataset.gen;fichaOrig_=null;
+    const w=el('div','ms-ficha');w.id='ms-ficha';w.setAttribute('aria-busy','true');w.appendChild(el('p','ms-auto-exp','Carregando a ficha…'));corpo.appendChild(w);
+    let api;try{api=await carregarFichaApi_()}catch(e){w.removeAttribute('aria-busy');w.textContent=e.message;return}
+    const r=await worker_('/msg/ficha?conversa='+encodeURIComponent(conv.id),'GET');
+    if(r.ok&&typeof tkProdutosLista==='function'&&!tkProdutosLista().length&&typeof carregarProdutos==='function'){try{await carregarProdutos();}catch(_){/* ficha continua editável sem catálogo; não inventar opções */}}
+    const g2=$('ms-gaveta');if(!g2||g2.dataset.gen!==gen||!aberta||aberta.id!==conv.id)return;
+    w.removeAttribute('aria-busy');w.textContent='';if(!r.ok){w.appendChild(el('p','ms-auto-exp',r.erro||'Não foi possível abrir a ficha agora.'));const l=el('div','ms-ficha-acao');l.appendChild(botao('ms-btn','Tentar de novo','ficha'));w.appendChild(l);return}
+    desenharFicha_(w,conv,r,api);const pe=el('div','ms-auto-pe ms-ficha-pe'),info=el('small');info.id='ms-fi-info';const bt=botao('ms-btn prim','Salvar','ficha-salvar');bt.id='ms-fi-salvar';pe.append(info,bt);g2.appendChild(pe);infoFicha_(r.ficha);
   }
-  function infoFicha_(f) { const i = $('ms-fi-info'); if (i) i.textContent = f && f.atualizado_em ? 'Atualizada' + (f.autor ? ' por ' + f.autor : '') + ' em ' + dataFicha_(f.atualizado_em) : ''; }
-  function desenharFicha_(w, conv, r) {
-    const f = r.ficha || {}; fichaOrig_ = { nome: r.nome || rotuloContato(conv), tamanhos: f.tamanhos || '', preferencias: f.preferencias || '', cidade: f.cidade || '' };
-    const sec = (titulo, id) => { const s = el('section', 'ms-ficha-sec'), h = el('h4', 'ms-ficha-rot', titulo); h.id = id; s.setAttribute('aria-labelledby', id); s.appendChild(h); w.appendChild(s); return s; };
-    const quem = el('p', 'ms-ficha-quem'); const nc = (r.canais || []).length; quem.append(el('b', '', rotuloContato(conv)), document.createTextNode(nc > 1 ? ' · vale para os ' + nc + ' canais desta pessoa' : '')); w.appendChild(quem);
-    const sn=el('section','ms-ficha-sec'),ln=el('label','ms-ficha-rot','Nome do cliente'),inn=el('input','ms-copia');ln.htmlFor='ms-fi-nome';inn.id='ms-fi-nome';inn.type='text';inn.maxLength=120;inn.value=fichaOrig_.nome;inn.autocomplete='off';sn.append(ln,inn);w.appendChild(sn);
-    // tamanhos
-    const s1 = el('section', 'ms-ficha-sec'), l1 = el('label', 'ms-ficha-rot', 'Tamanhos que usa'); l1.htmlFor = 'ms-fi-tam';
-    const it = el('input', 'ms-copia'); it.type = 'text'; it.id = 'ms-fi-tam'; it.maxLength = 60; it.autocomplete = 'off'; it.value = fichaOrig_.tamanhos; it.placeholder = 'Ex.: M · 38 (calça 40)';
-    it.addEventListener('input', marcarTams_);
-    const tams = el('div', 'ms-ficha-tams'); tams.setAttribute('role', 'group'); tams.setAttribute('aria-label', 'Tamanhos rápidos');
-    TAMS_FICHA_.forEach((t) => { const b = botao('ms-btn', t, 'ficha-tam', { t: t }); b.setAttribute('aria-pressed', 'false'); tams.appendChild(b); });
-    s1.append(l1, it, tams); w.appendChild(s1);
-    // preferências e cidade
-    const s2 = el('section', 'ms-ficha-sec'), l2 = el('label', 'ms-ficha-rot', 'Preferências'); l2.htmlFor = 'ms-fi-pref';
-    const tp = el('textarea', 'ms-copia'); tp.id = 'ms-fi-pref'; tp.rows = 3; tp.maxLength = 300; tp.value = fichaOrig_.preferencias; tp.placeholder = 'Ex.: gosta de vestido longo e cores claras';
-    s2.append(l2, tp); w.appendChild(s2);
-    const s3 = el('section', 'ms-ficha-sec'), l3 = el('label', 'ms-ficha-rot', 'Cidade / bairro'); l3.htmlFor = 'ms-fi-cid';
-    const ic = el('input', 'ms-copia'); ic.type = 'text'; ic.id = 'ms-fi-cid'; ic.maxLength = 60; ic.autocomplete = 'off'; ic.value = fichaOrig_.cidade; ic.placeholder = 'Ex.: Crateús — Centro';
-    s3.append(l3, ic); w.appendChild(s3);
-    // etiquetas
-    const s4 = sec('Etiquetas', 'ms-fi-h-etq'), etqs = r.etiquetas || [];
-    if (etqs.length) { const d = el('div', 'ms-ficha-etqs'); etqs.forEach((e) => d.appendChild(tagEtq_(e))); s4.appendChild(d); } else s4.appendChild(el('p', 'ms-ficha-vazio', 'Nenhuma etiqueta.'));
-    const ae = el('div', 'ms-ficha-acao'); ae.appendChild(botao('ms-btn', etqs.length ? 'Mudar etiquetas' : 'Pôr etiqueta', 'ficha-etiquetas')); s4.appendChild(ae);
-    // notas
-    const s5 = sec('Notas recentes', 'ms-fi-h-notas'), notas = r.notas || [];
-    if (notas.length) { const ul = el('ul', 'ms-ficha-lista'); notas.forEach((n) => { const li = el('li', 'ms-ficha-nota'), d = el('div'); d.append(el('p', '', n.texto), el('small', '', [n.autor, dataFicha_(n.em)].filter(Boolean).join(' · '))); li.appendChild(d); ul.appendChild(li); }); s5.appendChild(ul); }
-    else s5.appendChild(el('p', 'ms-ficha-vazio', 'Nenhuma nota interna ainda.'));
-    // compras
-    const s6 = sec('Compras', 'ms-fi-h-compras'), compras = r.compras || [];
-    if (compras.length) { const ul = el('ul', 'ms-ficha-lista'); compras.forEach((c) => { const li = el('li'), d = el('div'); d.append(document.createTextNode('Vendeu em ' + dataFicha_(c.em)), el('small', '', 'Pelo ' + (NOME_CANAL[c.canal] || c.canal))); li.appendChild(d); ul.appendChild(li); }); s6.appendChild(ul); }
-    else s6.appendChild(el('p', 'ms-ficha-vazio', 'Nenhuma compra registrada ainda.'));
-    // canais
-    const s7 = sec('Canais', 'ms-fi-h-canais'), ul7 = el('ul', 'ms-ficha-lista');
-    (r.canais || []).forEach((c) => {
-      const li = el('li'), d = el('div'), fone = c.canal !== 'instagram' && /^\d{10,15}$/.test(String(c.contato || '')) ? foneBonito_(c.contato) : '';
-      d.append(document.createTextNode(NOME_CANAL[c.canal] || c.canal), el('small', '', [fone, c.atual ? 'esta conversa' : ''].filter(Boolean).join(' · ')));
-      li.appendChild(d);
-      if (!c.atual) { const b = botao('ms-btn', 'Abrir', 'ficha-abrir', { id: String(c.id), canal: c.canal }); b.setAttribute('aria-label', 'Abrir a conversa do ' + (NOME_CANAL[c.canal] || c.canal)); li.appendChild(b); }
-      ul7.appendChild(li);
-    });
-    s7.appendChild(ul7);
-    const ac=el('details','ms-ficha-acao');ac.appendChild(el('summary','','Editar telefones e canais'));ac.addEventListener('toggle',()=>{if(ac.open&&!ac.dataset.carregado){ac.dataset.carregado='1';editarPessoa_(conv.id,ac);}});s7.appendChild(ac);
-    marcarTams_();
+  function infoFicha_(f){const i=$('ms-fi-info');if(i)i.textContent=f&&f.atualizado_em?'Atualizada'+(f.autor?' por '+f.autor:'')+' em '+dataFicha_(f.atualizado_em):''}
+  function desenharFicha_(w,conv,r,api){
+    const f=r.ficha||{},p=api.comoPerfil(f,api.cidades);fichaAtual_=p;
+
+    const sec=(titulo,id)=>{const s=el('section','ms-ficha-sec'),h=el('h4','ms-ficha-rot',titulo);h.id=id;s.setAttribute('aria-labelledby',id);s.appendChild(h);w.appendChild(s);return s};
+    const quem=el('p','ms-ficha-quem'),nc=(r.canais||[]).length;quem.append(el('b','',rotuloContato(conv)),document.createTextNode(nc>1?' · vale para os '+nc+' canais desta pessoa':''));w.appendChild(quem);
+    const sn=el('section','ms-ficha-sec'),ln=el('label','ms-ficha-rot','Nome do cliente'),inn=el('input','ms-copia');ln.htmlFor='ms-fi-nome';inn.id='ms-fi-nome';inn.type='text';inn.maxLength=120;inn.value=r.nome||rotuloContato(conv);inn.autocomplete='off';sn.append(ln,inn);w.appendChild(sn);
+    const loc=sec('Cidade e localização','ms-fi-h-loc');
+    const field=(parent,label,id,value)=>{const l=el('label','ms-ficha-rot',label),i=el('input','ms-copia');l.htmlFor=id;i.id=id;i.value=value||'';i.maxLength=100;i.autocomplete='off';parent.append(l,i);return i;};
+    const select=(parent,label,id,items,value)=>{const lb=el('label','ms-ficha-rot',label),sel=el('select','ms-copia');lb.htmlFor=id;sel.id=id;items.forEach(([v,t])=>{const op=el('option','',t);op.value=v;sel.appendChild(op)});sel.value=value;parent.append(lb,sel);return sel;};
+    const conhecida=api.cidades.includes(p.cidade),cidade=select(loc,'Cidade','ms-fi-cid',[['','Escolher cidade'],...api.cidades.map(v=>[v,v]),['__outra','Outra cidade']],p.cidade?(conhecida?p.cidade:'__outra'):'');
+    const outra=field(loc,'Nome da cidade','ms-fi-outra-cid',conhecida?'':p.cidade);outra.hidden=cidade.value!=='__outra';outra.previousSibling.hidden=outra.hidden;
+    const sub=el('div');sub.id='ms-fi-sub-loc';
+    const livre=(parent,label,id,atual,opcoes)=>{const tem=opcoes.includes(atual),sel=select(parent,label,id+'-opcao',[['__livre','Escrever outro / preencher livremente'],...opcoes.map(v=>[v,v])],tem?atual:'__livre');const inp=field(parent,'Escrever '+label.toLowerCase(),id,atual);const sync=()=>{const texto=sel.value==='__livre';inp.hidden=!texto;inp.previousSibling.hidden=!texto;if(!texto)inp.value=sel.value;};sel.addEventListener('change',()=>{if(sel.value==='__livre'){inp.value='';inp.hidden=false;inp.previousSibling.hidden=false;inp.focus();}else sync();});sync();return inp;};
+    const blocoCr=el('div');blocoCr.id='ms-fi-bloco-cr';livre(blocoCr,'Bairro','ms-fi-bairro',p.bairro,api.sugestoesBairrosCrateus);sub.appendChild(blocoCr);
+    const blocoIn=el('div');blocoIn.id='ms-fi-bloco-in';livre(blocoIn,'Localidade','ms-fi-localidade',p.localidade,api.sugestoesDistritosCrateus);const municipio=field(blocoIn,'Município da região (opcional)','ms-fi-municipio',p.municipio);municipio.parentNode.querySelector('label[for=ms-fi-municipio]').hidden=true;municipio.hidden=true;sub.appendChild(blocoIn);
+    sub.appendChild(el('p','ms-ficha-vazio','Não encontrou? Escolha preencher livremente. As sugestões de bairros e localidades são parciais.'));loc.appendChild(sub);
+    const atualizarLocal=()=>{const v=cidade.value;sub.hidden=!['Crateús','Interior'].includes(v);blocoCr.hidden=v!=='Crateús';blocoIn.hidden=v!=='Interior';outra.hidden=v!=='__outra';outra.previousSibling.hidden=outra.hidden;};cidade.addEventListener('change',atualizarLocal);atualizarLocal();
+    const pref=sec('Preferências','ms-fi-h-pref'),lp=el('label','ms-ficha-rot','Observações'),tp=el('textarea','ms-copia');lp.htmlFor='ms-fi-pref';tp.id='ms-fi-pref';tp.rows=2;tp.maxLength=300;tp.value=f.preferencias||'';tp.placeholder='Ex.: gosta de vestido longo e cores claras';pref.append(lp,tp);
+    const gostos=sec('Tamanhos e peças de interesse','ms-fi-h-gostos');
+    const grupos=[['tamanhos','Tamanhos'],['generos','Gêneros'],['tecidos','Tecidos'],['cores','Cores']], paineis=[];
+    const produtos=typeof tkProdutosLista==='function'?tkProdutosLista():[];
+    const norm=x=>semAcento_(String(x)).trim(), tokens=x=>String(x||'').split(/[,;|]/).map(v=>v.trim()).filter(Boolean);
+    const vals=(prod,key)=>key==='tamanhos'?(window.TKTamanhos?TKTamanhos.cliente(String(prod.Tamanhos||''),prod.Genero).valores:tokens(prod.Tamanhos)).filter(v=>!/consult/i.test(v)):key==='tecidos'?[window.TKTecido&&TKTecido.ler(prod)].filter(Boolean):tokens(prod[key==='generos'?'Genero':'Cores']);
+    const compativeis=indice=>produtos.filter(prod=>prod&&(!prod.Status||prod.Status==='Ativo')&&grupos.slice(0,indice).every(([key])=>!p.preferencias[key].length||p.preferencias[key].some(v=>vals(prod,key).some(x=>norm(x)===norm(v)))));
+    const pintarGostos=()=>{grupos.forEach(([key,title],idx)=>{const {d,sum,body}=paineis[idx], escolhidos=p.preferencias[key],disponiveis=api.unicos(compativeis(idx).flatMap(prod=>vals(prod,key))), todas=api.unicos(disponiveis.concat(escolhidos));sum.textContent=title+(escolhidos.length?' · '+escolhidos.join(', '):' · escolher');body.textContent='';
+      const pronto=idx===0||p.preferencias[grupos[idx-1][0]].length>0;
+      if(!pronto&&!escolhidos.length){body.appendChild(el('p','ms-ficha-vazio','Escolha '+grupos[idx-1][1].toLowerCase()+' primeiro.'));return;}
+      const chips=el('div','ms-ficha-tams');chips.setAttribute('role','group');chips.setAttribute('aria-label',title);
+      todas.forEach(v=>{const ativo=escolhidos.includes(v),fora=!disponiveis.includes(v),b=botao('ms-btn',v+(fora?' · salvo':''));b.dataset.fichaGrupo=key;b.dataset.valor=v;b.setAttribute('aria-pressed',String(ativo));b.addEventListener('click',()=>{const ix=escolhidos.indexOf(v);if(ix<0)escolhidos.push(v);else escolhidos.splice(ix,1);pintarGostos();const mesmo=body.querySelector('button[data-valor="'+CSS.escape(v)+'"]');if(mesmo)mesmo.focus();});chips.appendChild(b);});body.appendChild(chips);
+      if(!todas.length)body.appendChild(el('p','ms-ficha-vazio','Nenhuma opção compatível cadastrada no catálogo.'));
+      if(idx===0){const ad=el('div','ms-fi-adicionar'),i=el('input','ms-copia');i.setAttribute('aria-label','Outro tamanho');i.placeholder='Outro tamanho';i.maxLength=60;const bt=botao('ms-btn','Adicionar');bt.addEventListener('click',()=>{const v=i.value.trim();if(v&&!escolhidos.includes(v)){escolhidos.push(v);pintarGostos();}});ad.append(i,bt);body.appendChild(ad);}
+      if(idx<3){const bt=botao('ms-btn','Escolher '+grupos[idx+1][1].toLowerCase());bt.disabled=!escolhidos.length;bt.addEventListener('click',()=>{d.open=false;paineis[idx+1].d.open=true;paineis[idx+1].sum.focus();});body.appendChild(bt);}
+    });};
+    grupos.forEach(([key,title],idx)=>{const d=el('details','ms-fi-faceta'),sum=el('summary','',title),body=el('div','ms-fi-faceta-corpo');d.open=idx===0;d.append(sum,body);gostos.appendChild(d);paineis.push({d,sum,body});});pintarGostos();
+    const etiquetas=r.etiquetas||[],etapas=etiquetas.filter(e=>e.venda),outras=etiquetas.filter(e=>!e.venda),drawTags=(title,id,items,button)=>{const s=sec(title,id);if(items.length){const d=el('div','ms-ficha-etqs');items.forEach(e=>d.appendChild(tagEtq_(e)));s.appendChild(d)}else s.appendChild(el('p','ms-ficha-vazio',title==='Etapa da venda'?'Sem etapa definida.':'Nenhuma outra etiqueta.'));const a=el('div','ms-ficha-acao');a.appendChild(botao('ms-btn',button,'ficha-etiquetas'));s.appendChild(a)};
+    drawTags('Etapa da venda','ms-fi-h-etapa',etapas,etapas.length?'Mudar etapa':'Definir etapa');if(outras.length){const legado=sec('Outras informações','ms-fi-h-etq');outras.forEach(e=>legado.appendChild(tagEtq_(e)));}
+    const s5=sec('Notas recentes','ms-fi-h-notas'),notas=r.notas||[];if(notas.length){const ul=el('ul','ms-ficha-lista');notas.forEach(n=>{const li=el('li','ms-ficha-nota'),d=el('div');d.append(el('p','',n.texto),el('small','',[n.autor,dataFicha_(n.em)].filter(Boolean).join(' · ')));li.appendChild(d);ul.appendChild(li)});s5.appendChild(ul)}else s5.appendChild(el('p','ms-ficha-vazio','Nenhuma nota interna ainda.'));
+    const s6=sec('Compras','ms-fi-h-compras'),compras=r.compras||[];if(compras.length){const ul=el('ul','ms-ficha-lista');compras.forEach(c=>{const li=el('li'),d=el('div');d.append(document.createTextNode('Vendeu em '+dataFicha_(c.em)),el('small','','Pelo '+(NOME_CANAL[c.canal]||c.canal)));li.appendChild(d);ul.appendChild(li)});s6.appendChild(ul)}else s6.appendChild(el('p','ms-ficha-vazio','Nenhuma compra registrada ainda.'));
+    const s7=sec('Canais','ms-fi-h-canais'),ul7=el('ul','ms-ficha-lista');(r.canais||[]).forEach(c=>{const li=el('li'),d=el('div'),fone=c.canal!=='instagram'&&/^\\d{10,15}$/.test(String(c.contato||''))?foneBonito_(c.contato):'';d.append(document.createTextNode(NOME_CANAL[c.canal]||c.canal),el('small','',[fone,c.atual?'esta conversa':''].filter(Boolean).join(' · ')));li.appendChild(d);if(!c.atual){const b=botao('ms-btn','Abrir','ficha-abrir',{id:String(c.id),canal:c.canal});b.setAttribute('aria-label','Abrir a conversa do '+(NOME_CANAL[c.canal]||c.canal));li.appendChild(b)}ul7.appendChild(li)});s7.appendChild(ul7);const ac=el('details','ms-ficha-acao');ac.appendChild(el('summary','','Editar telefones e canais'));ac.addEventListener('toggle',()=>{if(ac.open&&!ac.dataset.carregado){ac.dataset.carregado='1';editarPessoa_(conv.id,ac)}});s7.appendChild(ac);
+    fichaOrig_=JSON.stringify(capturarFicha_());
   }
-  function sairFicha_() { return !fichaMudou_() || confirm('Você mudou a ficha e ainda não salvou. Sair sem salvar?'); }
-  async function salvarFicha_(b) {
-    if (!aberta || !$('ms-fi-tam')) return;
-    const conv = aberta.id, corpo = { conversa: conv, nome: $('ms-fi-nome').value.trim(), tamanhos: $('ms-fi-tam').value.trim(), preferencias: $('ms-fi-pref').value.trim(), cidade: $('ms-fi-cid').value.trim() };
-    b.disabled = true;
-    const r = await worker_('/msg/ficha', 'POST', corpo);
-    b.disabled = false;
-    if (!r.ok) { aviso_(r.erro || 'Não foi possível salvar a ficha agora. Tente de novo.'); b.focus(); return; }
-    if (!aberta || aberta.id !== conv) return;
-    aberta.tamanhos = r.ficha.tamanhos || '';
-    if(r.nome){aberta.nome=r.nome;const q=$('ms-conversa').querySelector('.ms-quem b');if(q)q.textContent=r.nome;await carregarLista(true);}
-    const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(aberta));
-    fichaOrig_ = null; fecharGaveta_(); aviso_('Ficha salva.');
-    const q = document.querySelector('#ms-conversa .ms-quem'); if (q) q.focus();
-  }
+  function sairFicha_(){return !fichaMudou_()||confirm('Você mudou a ficha e ainda não salvou. Sair sem salvar?')}
+  async function salvarFicha_(b){if(!aberta||!$('ms-fi-nome'))return;const gen=$('ms-gaveta')?.dataset.gen,conv=aberta.id,perfil=capturarFicha_(),corpo={conversa:conv,nome:perfil.nome,cidade:perfil.cidade,preferencias:perfil.preferencias.texto,perfil};corpo.tamanhos=perfil.preferencias.tamanhos.join(' · ').slice(0,60);b.disabled=true;const r=await worker_('/msg/ficha','POST',corpo);b.disabled=false;if(!r.ok){aviso_(r.erro||'Não foi possível salvar a ficha agora. Tente de novo.');b.focus();return}if(!aberta||aberta.id!==conv||$('ms-gaveta')?.dataset.gen!==gen)return;aberta.tamanhos=r.ficha.tamanhos||'';if(r.nome){aberta.nome=r.nome;const q=$('ms-conversa').querySelector('.ms-quem b');if(q)q.textContent=r.nome;await carregarLista(true)}const fx=$('ms-etq-faixa');if(fx)fx.replaceWith(faixaEtq_(aberta));fichaOrig_=null;fecharGaveta_();aviso_('Ficha salva.');const q=document.querySelector('#ms-conversa .ms-quem');if(q)q.focus()}
+
   function cabecalhoConversa(c) {
     const cab = el('div', 'ms-cab');
     const v = botao('ms-ico ms-voltar', '←', 'voltar'); v.setAttribute('aria-label', 'Voltar para as conversas');
@@ -2092,7 +2086,7 @@
     if (!c.grupo) { av.dataset.ms = 'ficha'; av.style.cursor = 'pointer'; }   // v7.40.14: nome/avatar abrem a ficha do cliente (o teclado usa o botão do nome)
     const q = botao('ms-quem', '', c.grupo ? 'pessoa' : 'ficha');q.setAttribute('aria-label',c.grupo?'Grupo '+rotuloContato(c):'Abrir a ficha do cliente '+rotuloContato(c));q.style.textAlign='left';q.style.background='transparent';q.appendChild(el('b', '', rotuloContato(c)));
     q.appendChild(el('span', '', NOME_CANAL[c.canal] + (c.grupo ? ' · grupo' : (/^\d{10,15}$/.test(c.contato) ? ' · ' + foneBonito_(c.contato) : ''))));
-    const mais = botao('ms-ico', '⋯', 'menu-conversa'); mais.id = 'ms-mais-conv'; mais.setAttribute('aria-label', 'Opções da conversa'); mais.setAttribute('aria-haspopup', 'menu');
+    const mais = botao('ms-ico', '⋯', 'menu-conversa'); mais.id = 'ms-mais-conv'; mais.setAttribute('aria-label', 'Opções da conversa'); mais.setAttribute('aria-haspopup', 'dialog');
     cab.append(v, av, q, mais); return cab;
   }
   function limiteTexto(c) { return c.canal === 'instagram' ? 1000 : 4000; }
@@ -2295,7 +2289,7 @@
   }
   function voltarApp_(){
     if($('ms-luz')){fecharLuz_();return true;}
-    if($('ms-gaveta')){fecharGaveta_();return true;}
+    if($('ms-gaveta')){if(!sairFicha_())return true;fichaOrig_=null;fecharGaveta_();return true;}
     if(vista==='conversa'||$('ms-app')?.dataset.vista==='conversa'){voltarLista();return true;}
     return false;
   }
@@ -2606,7 +2600,7 @@
     ex.appendChild(p);
   }
   /** No painel de atendimento, abas de filtro/busca/estado saem do caminho para dar espaço aos números. */
-  function chrome_(esconder) { ['ms-filtros', 'ms-busca', 'ms-estado-wrap'].forEach((id) => { const e = $(id); if (e) e.hidden = esconder; }); }
+  function chrome_(esconder) { ['ms-filtros', 'ms-pesquisa', 'ms-estado-wrap'].forEach((id) => { const e = $(id); if (e) e.hidden = esconder; }); }
   function fecharPainel() { if (painel === 'funil') sairFunil_(); painel = ''; chrome_(false); const ul = $('ms-lista'); if (ul) ul.hidden = false; pintarLista(); }
 
   /* ---------- v7.40.15: funil de vendas ----------
@@ -2748,6 +2742,8 @@
     if (ev.target && ev.target.id === 'ms-luz') { fecharLuz_(); return; }
     const b = ev.target.closest('[data-ms]'); if (!b) return;
     const a = b.dataset.ms;
+    if($('ms-gaveta')?.dataset.tipo==='ficha'&&!b.closest('#ms-gaveta')&&fichaMudou_()){if(!sairFicha_())return;fichaOrig_=null;}
+    if($('ms-gaveta')?.dataset.tipo==='mais'&&a!=='gaveta-fechar')fecharGaveta_();
     const recurso = recursoAcao_(a); if (recurso && !podeFerramenta_(recurso)) { aviso_('Seu acesso não permite usar esta ferramenta.'); return; }
     if (a !== 'menu-geral' && a !== 'menu-conversa') fecharMenu();
     if (painel === 'funil' && (a === 'leitura-cfg' || a === 'selecionar')) { largarFunil_(); chrome_(false); const ul0 = $('ms-lista'); if (ul0) ul0.hidden = false; pintarLista(); }
@@ -2759,6 +2755,17 @@
       else fecharComHistorico_('overlay-mensagens');
     }
     else if (a === 'aba') { const eraFunil = painel === 'funil'; selecao = null; desenharSelbar_(); contVista = null; contTipos = null; canal = b.dataset.canal; filtro = ''; etqFiltro = 0; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); if (eraFunil) { chrome_(true); abrirFunil_(); } else { $('ms-extra').textContent = 'Carregando conversas…'; } await carregarLista(true); }
+    else if(a==='filtros-abrir')abrirFiltros_();
+    else if(a==='filtros-aplicar'||a==='filtros-limpar'){
+      const g=$('ms-gaveta');if(!g)return;
+      if(a==='filtros-limpar'){tipos={msg:true,grp:false};filtro='';etqFiltro=0;}
+      else{if(canal!=='instagram'){const ts=[...g.querySelectorAll('[name=ms-ft-tipo]:checked')].map(x=>x.value);if(!ts.length){aviso_('Escolha mensagens individuais ou grupos.');return;}tipos={msg:ts.includes('msg'),grp:ts.includes('grp')};}filtro=g.querySelector('[name=ms-ft-fila]:checked')?.value||'';etqFiltro=Number(g.querySelector('[name=ms-ft-etapa]:checked')?.value||0);}
+      fecharGaveta_();fecharPainel();desenharFiltros();await carregarLista(true);
+    }
+    else if(a==='fila'||a==='inicio'||a==='inicio-notas'){
+      if($('ms-gaveta'))fecharGaveta_();if(painel==='funil'){await desempilharEsperando_('ms-funil');if(painel==='funil')fecharPainel();}else fecharPainel();
+      filtro=a==='inicio-notas'?'com_notas':a==='inicio'?'':b.dataset.filtro;selecao=null;desenharSelbar_();desenharFiltros();await carregarLista(true);
+    }
     else if (a === 'tipo') {
       const k = b.dataset.tipo, outro = k === 'msg' ? 'grp' : 'msg';
       if (tipos[k] && !tipos[outro]) { tipos[k] = false; tipos[outro] = true; } else tipos[k] = !tipos[k];       // desligar o único ligado = mostrar o outro (nunca fica tudo desligado)
@@ -2767,9 +2774,8 @@
       fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true);
     }
     else if (a === 'etq') { const id = Number(b.dataset.id); etqFiltro = etqFiltro === id ? 0 : id; desenharFiltros(); await carregarLista(true); }
-    else if (a === 'etiquetas') { etqDaFicha_ = false; abrirEtiquetas_(); }
+    else if (a === 'etiquetas') { etqDaFicha_ = false; if(!ETQ)await carregarEtiquetas_(); abrirEtiquetas_(); }
     else if (a === 'ficha') { fecharMenu(); abrirFicha_(); }   // v7.40.14
-    else if (a === 'ficha-tam') { const i = $('ms-fi-tam'); if (i) { i.value = alternarTam_(i.value, b.dataset.t).slice(0, 60); marcarTams_(); } }
     else if (a === 'ficha-salvar') await salvarFicha_(b);
     else if (a === 'ficha-etiquetas') { if (!sairFicha_()) return; etqDaFicha_ = true; if (!ETQ || !ETQ.length) await carregarEtiquetas_(); abrirEtiquetas_(); }
     else if (a === 'ficha-abrir') { if (!sairFicha_()) return; fecharGaveta_(); if (canal !== 'todos') { canal = b.dataset.canal; filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); } abrirConversa(Number(b.dataset.id)); }
@@ -2825,7 +2831,7 @@
     else if (a === 'gaveta-respostas') abrirRespostas_(false);
     else if (a === 'notas-abrir') await abrirNotas_();
     else if (a === 'modo-nota') alternarNota_();
-    else if (a === 'gaveta-fechar') { fecharGaveta_(); const t = $('ms-texto'); if (t) t.focus(); }
+    else if (a === 'gaveta-fechar') { if(!sairFicha_())return;fichaOrig_=null;fecharGaveta_(); const t = $('ms-texto'); if (t) t.focus(); }
     else if (a === 'resp-editar') abrirRespostas_(true);
     else if (a === 'resp-usar') { const r = respostas_()[Number(b.dataset.i)]; if (r) colocarResposta_(r.x); }
     else if (a === 'auto-cfg') abrirAuto_();
@@ -2882,14 +2888,14 @@
     else if (a === 'usar-conta') { const l = contasSalvas_(), c = l.find((x) => x.whatsapp === b.dataset.w); if (!c) return; salvarSessao(c.whatsapp, c.sessao); location.reload(); }
     else if (a === 'esquecer-conta') { guardarContas_(contasSalvas_().filter((x) => x.whatsapp !== b.dataset.w)); abrirTrocaUsuario_(); }
     else if (a === 'outra-conta') { lembrarSessao_(); limparSessao(); location.reload(); }
-    else if (a === 'menu-geral') abrirMenu(b, [['Selecionar conversas', 'selecionar'], ['Painel de atendimento', 'painel'], ['Funil de vendas', 'funil'], ['Configurações (leitura e nome)…', 'leitura-cfg'], ['Respostas automáticas…', 'auto-cfg'], '-'].concat(canal === 'todos' ? [] : [['Exportar este canal (CSV)', 'exp', { params: 'formato=csv&canal=' + canal, rotulo: 'o canal' }], ['Exportar este canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'o canal' }]]).concat([ ['Exportar tudo (CSV, 3 canais)', 'exp', { params: 'formato=csv', rotulo: 'tudo' }], ['Exportar tudo (JSON)', 'exp', { params: 'formato=json', rotulo: 'tudo' }], '-', ['Atualizar agora', 'atualizar'], '-', ['Trocar usuário…', 'trocar-usuario']]).concat(window.TKAndroid ? ['-', ['Atualizar app', 'app-atualizar'], ['Permissões do app', 'app-permissoes']] : []));
+    else if (a === 'menu-geral') abrirMais_();
     else if (a === 'menu-conversa' && aberta) abrirMenu(b, [...(aberta.grupo ? [] : [['Ficha do cliente…', 'ficha']]), ['Agendar mensagem…', 'agenda-abrir'], ['Enviar áudio de arquivo', 'anexar-audio'], '-', ['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
     else if (a === 'exp') baixar(b.dataset.params, b.dataset.rotulo);
     else if (a === 'copiar-ia') copiarParaIA();
     else if (a === 'painel') abrirPainel(30);
     else if (a === 'painel-dias') abrirPainel(Number(b.dataset.dias));
     else if (a === 'fechar-painel') { if (painel === 'funil' && window.TKCamadas && TKCamadas.aberta('ms-funil')) TKCamadas.desempilhar('ms-funil'); else fecharPainel(); }
-    else if (a === 'funil' || a === 'funil-atualizar') abrirFunil_();   // v7.40.15
+    else if (a === 'funil' || a === 'funil-atualizar') { await abrirFunil_();desenharFiltros(); }   // v7.40.15
     else if (a === 'funil-cartao') opcoesFunil_(Number(b.dataset.id));
     else if (a === 'funil-mover') await moverFunil_(Number(b.dataset.id), Number(b.dataset.etq), b);
     else if (a === 'funil-abrir') await abrirDoFunil_(Number(b.dataset.id));
