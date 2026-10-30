@@ -62,19 +62,21 @@ jobs:
         if: steps.estado.outputs.pendente == 'true'
         run: |
           set -euo pipefail
-          printf '%s  %s\n' \
-            'af6b693dbfdeffdfbcadeae07547f38f instagram-worker/worker.js' \
-            '09138da3fc3a4c6f8cc1b557cba6d7ff admin-mensagens.js' \
-            '781afd638fdda93c176afa55fdfd24ba admin.html' \
-            '3028b383b26a364acac567c549a709ef version.json' \
-            '8ad5abc8f9afe7cdffa4fcced1d50978 VERSION' \
-            '0b1c0618c3d2ffea400a671534e91fbd CHANGELOG.md' \
-            '5e7b44182e41b9f637a2ef2477d56ba1 .github/workflows/ci.yml' \
-            '14c546860fb7165958b49b4023195780 tests/mock_msg.py' \
-            'cda25ea2c8696b8cc3f1ad3bdc504a22 tests/worker_equipe_inicio.js' \
-            '80c51d1cf454662c9ed40b1af16c2ee8 tests/mensagens_equipe_inicio_ui.py' \
-            '1c109b60bc7340c808048b94e4c55a71 documentacao/continuidade/RETOMADA-305-7.40.33.md' \
-            | md5sum -c -
+          cat > /tmp/esperado.md5 <<'HASHES'
+          af6b693dbfdeffdfbcadeae07547f38f  instagram-worker/worker.js
+          09138da3fc3a4c6f8cc1b557cba6d7ff  admin-mensagens.js
+          781afd638fdda93c176afa55fdfd24ba  admin.html
+          3028b383b26a364acac567c549a709ef  version.json
+          8ad5abc8f9afe7cdffa4fcced1d50978  VERSION
+          0b1c0618c3d2ffea400a671534e91fbd  CHANGELOG.md
+          5e7b44182e41b9f637a2ef2477d56ba1  .github/workflows/ci.yml
+          14c546860fb7165958b49b4023195780  tests/mock_msg.py
+          cda25ea2c8696b8cc3f1ad3bdc504a22  tests/worker_equipe_inicio.js
+          80c51d1cf454662c9ed40b1af16c2ee8  tests/mensagens_equipe_inicio_ui.py
+          1c109b60bc7340c808048b94e4c55a71  documentacao/continuidade/RETOMADA-305-7.40.33.md
+          HASHES
+          sed -i 's/^ *//' /tmp/esperado.md5
+          md5sum -c /tmp/esperado.md5
       - name: Sintaxe e portao de estetica
         if: steps.estado.outputs.pendente == 'true'
         run: |
