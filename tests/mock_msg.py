@@ -30,6 +30,15 @@ def novo_estado():
     ]
     # conversa só de mídia (WhatsApp 2), usada nos testes de foto/vídeo/áudio/story
     s["convs"].append(conv(6, "whatsapp2", "5588900001111", "Ana Mídia", 0, "entrada", "[imagem]", 5, 0))
+    # v7.40.35: as abas são o fluxo de atendimento e quem manda é `atendido_em` (o gesto
+    # "Atender"), não o `dono`. As conversas individuais do mock já foram atendidas (Em
+    # atendimento, aba inicial); o grupo fica sem atendimento e cai em Pendentes.
+    for _c in s["convs"]:
+        if not _c["grupo"]:
+            _c["dono"] = "Pablo" if _c["canal"] != "instagram" else "Ana"
+            _c.setdefault("atendido_em", "2026-10-30T09:00:00.000Z")
+            _c["atendido_em"] = "2026-10-30T09:00:00.000Z"
+
     def mm(id, dir, texto, min_atras, tipo, extra=None):
         x = m(id, 6, dir, texto, min_atras, "", tipo); x.update({"midia": 0, "ctx_tipo": "", "ctx_midia": 0, "ctx_aprox": 0}); x.update(extra or {}); return x
     s["msgs"] += [
@@ -53,8 +62,15 @@ def pessoa(c):
     return n[:4] + n[5:] if len(n) == 13 and n.startswith("55") and n[4] == "9" else n
 
 def enfeitar(s, c):
-    """Campos calculados pelo Worker: outro_id (a mesma pessoa no outro WhatsApp) e encerrada_em."""
+    """Campos calculados pelo Worker: outro_id (a mesma pessoa no outro WhatsApp), encerrada_em
+    e em_atendimento (v7.40.35: responsável preenchido = em atendimento)."""
     c.setdefault("encerrada_em", "")
+    c.setdefault("dono", "")
+    c.setdefault("atendido_em", "")
+    # v7.40.35: quem manda para Em atendimento e o gesto "Atender" (atendido_em),
+    # nao o campo dono — assumir sozinho nao tira a conversa da fila.
+    c["em_atendimento"] = 1 if c["atendido_em"] else 0
+    c["reaberta_em"] = c.get("reaberta_em", "")
     p = pessoa(c)
     c["pessoa"] = p
     outro = next((o for o in s["convs"] if p and o["id"] != c["id"] and o["canal"] != c["canal"] and pessoa(o) == p and o["total"] > 0 and not o.get("encerrada_em")), None)
@@ -64,8 +80,11 @@ def enfeitar(s, c):
 def cont(s, canal, tipo=""):
     todas = [enfeitar(s, c) for c in s["convs"] if (canal == "todos" or c["canal"] == canal) and c["total"] > 0 and (tipo != "grupo" or c["grupo"]) and (tipo != "individual" or not c["grupo"])]
     cs = [c for c in todas if not c["encerrada_em"]]
+    indiv = [c for c in cs if not c["grupo"]]
     return {"conversas": len(cs), "nao_lidas": sum(1 for c in cs if c["nao_lidas"] > 0), "sem_resposta": sum(1 for c in cs if not c["grupo"] and c["ult_dir"] == "entrada"), "grupos": sum(1 for c in cs if c["grupo"]),
-            "encerradas": len(todas) - len(cs), "ambos": sum(1 for c in cs if c["outro_id"]), "individuais": sum(1 for c in cs if not c["grupo"])}
+            "encerradas": len(todas) - len(cs), "ambos": sum(1 for c in cs if c["outro_id"]), "individuais": len(indiv),
+            # v7.40.35: abas do fluxo
+            "em_atendimento": sum(1 for c in indiv if c.get("em_atendimento")), "esperando": sum(1 for c in indiv if not c.get("em_atendimento"))}
 
 def agendas(s, cid):
     ag = [x for x in s.get("agenda", []) if x["conversa_id"] == cid]
@@ -78,6 +97,22 @@ def tratar(route, path, method, body, s):
     J = lambda o, st=200, h=None: route.fulfill(status=st, json=o, headers=h or {})
     if path == "/msg/presenca":      # v7.40.33: presença aproximada da equipe
         return J({"ok": True}) or True
+    if path == "/msg/dono" and method == "POST":
+        # v7.40.35: Atender — grava o responsável (é o que move a conversa de Pendentes
+        # para Em atendimento). assumir:false limpa.
+        cid = int(body.get("conversa", 0))
+        c = next((c for c in s["convs"] if c["id"] == cid), None)
+        if not c:
+            return J({"ok": False, "erro": "Conversa não encontrada."}, 404) or True
+        if body.get("assumir") is False:
+            c["dono"] = ""
+            c["atendido_em"] = ""
+        else:
+            c["dono"] = "Pablo"
+            if body.get("atender") is True:
+                c["atendido_em"] = agora()
+        enfeitar(s, c)
+        return J({"ok": True, "dono": c["dono"]}) or True
     if path == "/msg/equipe":        # v7.40.33: presença, totais por pessoa e trilha de ações
         now = agora()
         pres = s.setdefault("presencas", [{"usuario": "5588999999999", "nome": "Ana", "em": now, "conversa_id": 1, "online": True},

@@ -52,16 +52,21 @@ with sync_playwright() as p:
     chk("grupo não ganha número ao lado", pg.locator("#ms-lista .ms-conv[data-id='3'] .ms-fone").count() == 0)
 
     # ---- mesma pessoa nos 2 WhatsApp ----
-    chip = pg.locator("[data-ms=filtro][data-filtro=ambos]")
-    chk("filtro 'Nos 2 WhatsApp · 2' aparece em destaque", (chip.text_content() or "").strip() == "Nos 2 WhatsApp · 2" and "alerta" in (chip.get_attribute("class") or ""), chip.text_content())
+    # v7.40.35: o canal deixou de ser aba e virou o select #ms-filtro-canal (filtro).
+    chip = pg.locator("#ms-filtro-canal")
+    opcoes = pg.evaluate("(s)=>[...document.querySelectorAll(s+' option')].map(o=>o.value)", "#ms-filtro-canal")
+    chk("o filtro de canal oferece todos os canais", opcoes == ["todos", "whatsapp1", "whatsapp2", "instagram"], opcoes)
     t1 = pg.locator("#ms-lista .ms-conv[data-id='1'] .ms-ambos-tag").text_content() or ""
     t7 = pg.locator("#ms-lista .ms-conv[data-id='7'] .ms-ambos-tag").text_content() or ""
     chk("cada conversa da pessoa avisa o outro número", t1 == "Também no WhatsApp 2" and t7 == "Também no WhatsApp 1", [t1, t7])
     chk("quem fala só por um número não tem o aviso", pg.locator("#ms-lista .ms-ambos-tag").count() == 2)
     foto(pg, "01-lista-numero-e-ambos.png")
-    chip.click(); pg.wait_for_timeout(500)
-    chk("filtro 'Nos 2 WhatsApp' traz só as duas conversas da Maria", sorted(pg.evaluate(IDS)) == [1, 7], pg.evaluate(IDS))
-    chip.click(); pg.wait_for_timeout(500)
+    # "Todos os canais" mostra as duas conversas da Maria (1 e 7) juntas
+    pg.select_option("#ms-filtro-canal", "todos"); pg.wait_for_timeout(600)
+    chk("em Todos os canais, as duas conversas da Maria aparecem", {1, 7} <= set(pg.evaluate(IDS)), pg.evaluate(IDS))
+    pg.select_option("#ms-filtro-canal", "whatsapp1"); pg.wait_for_timeout(600)
+    chk("filtrando WhatsApp 1, a conversa 7 (WhatsApp 2) sai", 7 not in pg.evaluate(IDS), pg.evaluate(IDS))
+    pg.select_option("#ms-filtro-canal", "todos"); pg.wait_for_timeout(600)
     pg.click("#ms-lista .ms-conv[data-id='1']"); pg.wait_for_selector(".ms-faixa.ambos", timeout=4000); pg.wait_for_timeout(300)
     chk("na conversa, faixa avisa que a pessoa também fala pelo outro número", "também está falando pelo WhatsApp 2" in (pg.locator(".ms-faixa.ambos").text_content() or ""))
     axe(pg, "conversa com a faixa 'nos 2 WhatsApp'")
@@ -95,7 +100,9 @@ with sync_playwright() as p:
     ids = pg.evaluate(IDS)
     chk("encerradas saem da lista e a barra some", 2 not in ids and 4 not in ids and not pg.locator("#ms-selbar").is_visible(), ids)
     chk("aviso explica que voltam sozinhas", "voltam sozinhas se o cliente escrever" in (pg.locator("#ms-aviso").text_content() or ""))
-    chk("filtro 'Encerradas · 2'", (pg.locator("[data-ms=filtro][data-filtro=encerradas]").text_content() or "").strip() == "Encerradas · 2")
+    # v7.40.35: Encerrados é uma ABA (a contagem fica no aria-label)
+    rot = pg.locator('#ms-abas .ms-aba[data-aba="encerrados"]').get_attribute("aria-label") or ""
+    chk("aba Encerrados mostra a contagem", "2 conversas" in rot, rot)
 
     # ---- segurar o dedo começa a seleção; Esc/Cancelar sai ----
     bx = pg.locator("#ms-lista .ms-conv[data-id='5']").bounding_box()
@@ -108,7 +115,7 @@ with sync_playwright() as p:
     pg.click(".ms-cab [data-ms=voltar]"); pg.wait_for_timeout(300)
 
     # ---- filtro Encerradas: reabrir ----
-    pg.click("[data-ms=filtro][data-filtro=encerradas]"); pg.wait_for_timeout(500)
+    pg.click('#ms-abas .ms-aba[data-aba="encerrados"]'); pg.wait_for_timeout(800)
     chk("filtro 'Encerradas' mostra as duas", sorted(pg.evaluate(IDS)) == [2, 4], pg.evaluate(IDS))
     chk("encerradas mostram o motivo", pg.locator("#ms-lista .ms-motivo-tag", has_text="Cliente parou de responder").count() == 2)
     pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click("#ms-gaveta [data-ms=selecionar]"); pg.wait_for_timeout(200)
@@ -119,7 +126,9 @@ with sync_playwright() as p:
     ult = S["encerrar"][-1]
     chk("'Reabrir' devolve as conversas", sorted(ult["ids"]) == [2, 4] and ult["reabrir"] is True and pg.evaluate(IDS) == [], ult)
     chk("lista de encerradas vazia explica como encerrar", "segure o dedo" in (pg.locator("#ms-extra").text_content() or ""))
-    pg.click("[data-ms=filtro][data-filtro=encerradas]"); pg.wait_for_timeout(500)
+    # v7.40.35: o antigo clique repetido no chip "Encerradas" desligava o filtro. Agora a
+    # aba não é toggle — para voltar às conversas não encerradas, toca em "Todos".
+    pg.click('#ms-abas .ms-aba[data-aba="todos"]'); pg.wait_for_timeout(800)
 
     # ---- encerrar pela conversa e volta automática ----
     pg.click("#ms-lista .ms-conv[data-id='6']"); pg.wait_for_timeout(700)
@@ -146,6 +155,9 @@ with sync_playwright() as p:
     ctx.add_init_script(SESSION); ctx.add_init_script("window.TK_MENSAGENS_POLL_MS=400;")
     st = install(ctx, perms=PERMS_ALL, versao="3.4"); S = preparar(st)
     pg, erros = abrir_tela(ctx)
+    # v7.40.35: a aba inicial é Em atendimento; o roteiro usa conversas de estados variados,
+    # então vai para "Todos" (não encerradas) como antes.
+    pg.click('#ms-abas .ms-aba[data-aba="todos"]'); pg.wait_for_timeout(900)
     pg.click("#ms-lista .ms-conv[data-id='7']"); pg.wait_for_timeout(700)
     pg.click("#ms-mais"); pg.wait_for_timeout(200); pg.click("#ms-gaveta [data-ms=selecionar]"); pg.wait_for_timeout(200)
     pg.click("#ms-lista .ms-conv[data-id='1']"); pg.wait_for_timeout(200)

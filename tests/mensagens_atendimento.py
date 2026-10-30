@@ -30,13 +30,24 @@ def tela(b, w, h, mob):
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2800)
     pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250)
     pg.click("#btn-abrir-mensagens"); pg.wait_for_selector(".ms-conv", timeout=6000); pg.wait_for_timeout(600)
+    # v7.40.35: a aba inicial é Em atendimento. O roteiro deste teste percorre o painel
+    # inteiro (conversa 1 do WhatsApp 1, 2, 4 do WhatsApp 2, 7 e 9), então usa "Todos",
+    # como antes — só as conversas ENCERRADAS ficam de fora.
+    pg.click('#ms-abas .ms-aba[data-aba="todos"]'); pg.wait_for_timeout(900)
     return ctx, pg, S, erros
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
     ctx, pg, S, erros = tela(b, 390, 844, True)
     print("== Filtros ==")
-    chips = pg.evaluate("[...document.querySelectorAll('#ms-filtros button')].map(x=>x.textContent)")
-    chk("três filas compactas",len(chips)==3 and chips[0].startswith("Esperando") and chips[1].startswith("Em atendimento"),chips)
+    # v7.40.35: a fila virou ABA (4 abas); a linha de filtros guarda canal + Todos/Só meus
+    # + o atalho "Só não respondidos" — mesma fileira, mesma altura do cabeçalho.
+    abas = pg.evaluate("[...document.querySelectorAll('#ms-abas .ms-aba')].map(x=>(x.firstChild&&x.firstChild.nodeValue||x.textContent).trim())")
+    chk("quatro abas do fluxo", abas == ["Em atendimento", "Pendentes", "Todos", "Encerrados"], abas)
+    celulas = pg.evaluate("[...document.querySelectorAll('#ms-filtros > *')].length")
+    chk("linha de filtros com 3 células (canal, escopo, atalho)", celulas == 3, celulas)
+    # o atalho existe na aba Em atendimento (checado lá; aqui o roteiro já está em "Todos")
+    chk("atalho 'Só não respondidos' só aparece em Em atendimento",
+        pg.locator("#ms-so-nao-respondidos").count() == 0)
     chk("começa com individuais, sem grupos",3 not in pg.evaluate(IDS) and len(pg.evaluate(IDS))==6)
     def tipos(msg,grp):
         pg.click('[data-ms=filtros-abrir]')

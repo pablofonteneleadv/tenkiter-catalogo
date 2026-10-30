@@ -14,7 +14,11 @@ with sync_playwright() as p:
   pg=ctx.new_page();errs=[];pg.on('pageerror',lambda e:errs.append(str(e)))
   pg.goto(BASE+'admin.html');pg.wait_for_timeout(2600);pg.click('#details-ferramentas > summary');pg.click('#btn-abrir-mensagens');pg.wait_for_selector('#ms-lista .ms-conv')
   assert pg.locator('#ms-abas small').count()==0
-  assert pg.locator('#ms-filtros button').count()==3
+  # v7.40.35: as filas viraram ABAS (4) e o canal virou filtro; na barra de filtros
+  # sobra o atalho "So nao respondidos" ao lado dos dois seletores.
+  assert pg.locator('#ms-abas .ms-aba').count()==4
+  assert pg.locator('#ms-filtros button').count()==1
+  assert pg.locator('#ms-filtros select').count()==2
   assert pg.locator('#ms-abas .ms-aba[aria-selected=true]').evaluate("e=>{const c=getComputedStyle(e,'::after').backgroundColor.match(/[0-9.]+/g).slice(0,3).map(x=>{const v=Number(x)/255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4});return 1.05/(c[0]*.2126+c[1]*.7152+c[2]*.0722+.05)>=3}")  # Indicador selecionado distinguível no fundo branco.
 
   for zoom in [100,130]:
