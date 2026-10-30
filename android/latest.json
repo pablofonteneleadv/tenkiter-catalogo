@@ -1,8 +1,8 @@
 {
-  "versionCode": 12,
-  "versionName": "2.4.5",
-  "bytes": 4608025,
-  "sha256": "ce7e0212f978c1883154e93d778bd2436b99c160ecb166532cf7447313d677c5",
-  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.5/TENKiTER-Mensagens-2.4.5.apk",
-  "notes": "Corrige a retomada da sessão e o retorno à lista ao abrir conversa pela notificação. Gravação de áudio nativa do Android, com permissão e prévia antes de enviar. O clipe abre o seletor de fotos/vídeos ou a galeria do aparelho. Instale sobre a versão anterior, sem desinstalar; o Android pede confirmação."
+  "versionCode": 13,
+  "versionName": "2.4.6",
+  "bytes": 4606237,
+  "sha256": "5f477d2f6b65acb23851168a766caa0f444408d68923f891e8217d080cdb9281",
+  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.6/TENKiTER-Mensagens-2.4.6.apk",
+  "notes": "Nova atualização disponível. Instale por cima da versão atual para preservar seus dados."
 }
