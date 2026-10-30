@@ -132,6 +132,9 @@ SUITES = [  # (arquivo, como saber que passou)
     ("worker_canal.js", lambda o: "FALHAS=0" in o),        # Worker: canal Instagram/WhatsApp/Ambos
     ("backend_v316.js", lambda o: "FALHAS=0" in o),        # RH 3.16: manual só-gestor, prática validada, certificado (precisa do .gs.txt do RH)
     ("backend_manual_rico.js", lambda o: "FALHAS=0" in o), # RH 3.17: cor/marca-texto/links, foto ao lado, vídeo, tabela, guia e prova-modelo no manual novo (precisa do .gs.txt do RH)
+    # --- #305 (retomado em 7.40.34): equipe, presença, atividade e Nova conversa ---
+    ("worker_equipe_inicio.js", lambda o: not o.strip()),  # Worker: presença, equipe, trilha e envio pelo WhatsApp na Nova conversa
+    ("mensagens_equipe_inicio_ui.py", lambda o: "axe aprovados" in o),  # gavetas, heartbeat, envio, Instagram sem envio e axe
 ]
 
 # Testes que LEEM o .gs.txt do backend. O .gs.txt não fica no repositório público (fica no cofre privado), então no GitHub
