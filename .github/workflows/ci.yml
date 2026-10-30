@@ -162,6 +162,9 @@ jobs:
           node tests/worker_acompanhamento.js
           node tests/worker_contatos_r2.js
           node tests/worker_mobile_push.js
+          # v7.40.36: responder mensagem especifica (citacao) — WhatsApp usa messageId,
+          # Instagram vai por texto, e o historico guarda o vinculo.
+          node tests/worker_citar_mensagem.js
 
       - name: Eventos de mensagens no runtime Cloudflare local
         run: |
@@ -208,6 +211,7 @@ jobs:
           python3 tests/agendar_acompanhar_ui.py
           python3 tests/expediente_config_ui.py
           python3 tests/agendamentos_painel_ui.py
+          python3 tests/mensagens_citacao_ui.py
 
       - name: Screenshots da edição rápida
         if: always() && github.event_name == 'pull_request'
