@@ -1,8 +1,0 @@
-          set -euo pipefail
-          cp patches/retomada-305-74033/mensagem.txt /tmp/mensagem.txt
-          git rm -q -r patches/retomada-305-74033
-          git config user.name "Tenkitermodas"
-          git config user.email "distkrpconfeccoes@gmail.com"
-          git add -A
-          git commit -q -F /tmp/mensagem.txt
-          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
