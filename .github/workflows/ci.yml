@@ -155,6 +155,8 @@ jobs:
           node tests/worker_mensagens.js
           node tests/worker_mensagens_conversa.js
           node tests/worker_entrada_duravel.js
+          node tests/expediente_acompanhamento.js
+          node tests/worker_acompanhamento.js
           node tests/worker_contatos_r2.js
           node tests/worker_mobile_push.js
 
@@ -199,6 +201,9 @@ jobs:
           python3 tests/disponibilidade_rapida.py
           python3 tests/mensagens_saude_entrada.py
           python3 tests/mensagens_eventos_ui.py
+          python3 tests/agendar_acompanhar_ui.py
+          python3 tests/expediente_config_ui.py
+          python3 tests/agendamentos_painel_ui.py
 
       - name: Screenshots da edição rápida
         if: always() && github.event_name == 'pull_request'

@@ -81,6 +81,7 @@ const r2=require('./helpers/r2_condicional.js');
  const k=await crypto.subtle.importKey('raw',new TextEncoder().encode('assinatura-de-teste'),{name:'HMAC',hash:'SHA-256'},false,['sign']);const ass=Buffer.from(await crypto.subtle.sign('HMAC',k,new TextEncoder().encode(ev))).toString('hex');
  redeLenta=new Promise(r=>liberar=r);const zj=[];const r=await W.default.fetch(new Request('https://worker.test/wh/zernio/'+seg,{method:'POST',headers:{'X-Zernio-Signature':ass},body:ev}),env,{waitUntil(p){zj.push(p)}});assert.equal(r.status,200);
  await esperar(()=>get("SELECT m.id FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE m.ext_id='ig-lento' AND c.total=1"));
+ await esperar(()=>fila('complementos').length>0);
  assert(fila('complementos').length>0,'Story lento aguarda separado da mensagem básica');
  const inicial=get("SELECT id,conversa_id FROM msg_mensagem WHERE ext_id='ig-lento'");b.sqlite.prepare("UPDATE msg_mensagem SET status_em='2020-01-01T00:00:00.000Z' WHERE id=?").run(inicial.id);
  liberar();await Promise.all(zj);redeLenta=null;

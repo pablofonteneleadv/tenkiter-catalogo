@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.31] - 2026-10-30
+
+- Agendar com anexos, Acompanhar em horas úteis e painel de agendamentos
+
+
 ## [7.40.22] - 2026-10-28
 
 - Disponibiliza Android 2.4.5 assinado: retomada, Voltar, áudio nativo e seletor visual

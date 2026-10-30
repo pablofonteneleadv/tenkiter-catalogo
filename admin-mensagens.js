@@ -31,6 +31,9 @@
   const blobs = new Map();                     // mídia já baixada nesta conversa: "id" ou "id|c" (story) -> promessa do endereço local
   let anexoPend = null, gravacao = null, colarFimAte = 0;
   let agendadas_ = [], timerAgenda_ = null, agendaQuando_ = 0, agendaAtalho_ = '';   // v7.40.13: mensagens agendadas da conversa aberta
+  let acompanhamento_=null;
+  let agendaAnexo_=null,agendaPedido_=null;
+  let agendaPainelFiltros_={busca:'',status:'pendentes',canal:'todos',tipo:'todos',minhas:false,de:'',ate:''};
 
   // Cache apenas do app, por conta + sessão. Nunca guarda tokens, anexos ou URLs de mídia.
   const APP_RECENTES = new URLSearchParams(location.search).get('app') === 'mensagens';
@@ -73,7 +76,7 @@
   function conferirContaAtual_(){
     const nova=contaSessao_(getSessao());
     if(nova!==contaAtual_){
-      contaAtual_=nova;epocaConta_++;cfgLeitura=null;atualizarIdentidade_();
+      contaAtual_=nova;epocaConta_++;cfgLeitura=null;acompanhamento_=null;agendaAnexo_=null;agendaPedido_=null;agendaPainelFiltros_={busca:'',status:'pendentes',canal:'todos',tipo:'todos',minhas:false,de:'',ate:''};fecharGaveta_();atualizarIdentidade_();
       if(APP_RECENTES){limparRecentes_();cacheBloqueado=true;lista=[];msgs=[];mostrarLista_();const ul=$('ms-lista');if(ul)ul.textContent='';const extra=$('ms-extra');if(extra)extra.textContent='Atualizando acesso…';}
     }
     return nova;
@@ -120,20 +123,22 @@
   function recursoAcao_(a) {
     if (/^(gaveta-produtos|prod-?|prodsel-)/.test(a)) return 'produtos';
     if (/^(inicio-notas|notas-|modo-nota)/.test(a)) return 'notas';
-    if (/^nome-/.test(a)) return 'responder';
+    if (/^(nome-|nova-)/.test(a)) return 'responder';
     if (/^(ficha|pessoa)/.test(a)) return 'contatos';
     if (/^(etq|etiquetas)/.test(a)) return 'etiquetas';
     if (/^(funil)/.test(a)) return 'funil';
     if(a==='entrada-reprocessar')return 'configuracoes';
     if (/^(agenda|agendar)/.test(a)) return 'agenda';
     if (/^(exp|copiar)/.test(a)) return 'exportar';
-    if (/^(painel|metricas|met-)/.test(a)) return 'metricas';
+    if (/^(painel|metricas|met-|equipe-)/.test(a)) return 'metricas';
     if (/^(gaveta-respostas|resp-)/.test(a)) return 'respostas';
     if (/^(leitura-cfg|ponte-|auto-|ligar|pausar|conexao|diagnostico)/.test(a)) return 'configuracoes';
     if (/^(selecionar|enviar|anexar|gravar|assumir|liberar|encerrar|reabrir|atender|sel-encerrar|sel-reabrir)/.test(a)) return 'responder';
     return '';
   }
   function filtrarFerramentas_() {
+    const gaveta=$('ms-gaveta'),tipo=gaveta?.dataset.tipo||'';
+    if((['agenda','agenda-painel','agendar-opcoes'].includes(tipo)&&!podeFerramenta_('agenda'))||(tipo==='automacoes'&&!podeFerramenta_('configuracoes')))fecharGaveta_();
     document.querySelectorAll('#overlay-mensagens [data-ms]').forEach(b=>{const k=recursoAcao_(b.dataset.ms);if(k&&!podeFerramenta_(k))b.hidden=true;});
     document.querySelectorAll('#overlay-mensagens [data-filtro="com_notas"]').forEach(b=>{b.hidden=!podeFerramenta_('notas');});
   }
@@ -649,12 +654,58 @@
       .sheet-mensagens .ms-gaveta-proposta button:focus-visible,.sheet-mensagens .ms-gaveta-proposta select:focus-visible{outline:2px solid #99500d;outline-offset:-2px}
       @media(min-width:860px){.ms-gaveta-proposta .ms-gaveta-painel{max-width:480px;align-self:flex-end}}
       @media(prefers-reduced-motion:no-preference){.ms-gaveta-proposta .ms-gaveta-painel{animation:ms-painel-proposta 160ms ease-out}@keyframes ms-painel-proposta{from{transform:translateY(12px);opacity:.7}to{transform:translateY(0);opacity:1}}}
+      .sheet-mensagens .ms-agendar-item{display:flex;align-items:center;gap:12px;width:100%;max-width:none;min-height:64px;margin:0;padding:12px 0;border:0;border-radius:0;border-bottom:1px solid #e7e7e0;box-shadow:none;background:transparent;color:#20211e;font:600 .95rem/1.4 Inter,Arial,sans-serif;text-align:left;cursor:pointer}
+      .ms-agendar-item svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;flex:none}
+      .ms-acomp-opcao{padding:12px 0;border-bottom:1px solid #e7e7e0}
+      .ms-acomp-linha{display:flex;align-items:center;gap:12px;min-height:48px;cursor:pointer}
+      .ms-acomp-linha input{width:22px;height:22px;margin:0;accent-color:#99500d}
+      .ms-acomp-opcao p,.ms-acomp-feedback{font-size:.85rem;line-height:1.5;color:#515749;margin:4px 0 8px;overflow-wrap:anywhere}
+      .ms-acomp-feedback{min-height:24px;padding:8px 0;color:#724618}
+      .ms-ag-anexo{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+      .ms-ag-anexo-nome{font-size:.85rem;overflow-wrap:anywhere;min-width:0;max-width:100%}
+      .ms-ag-anexo [hidden]{display:none!important}
+      .ms-agenda .ms-btn{min-height:44px}
+      .ms-gaveta-proposta .ms-agenda,.ms-gaveta-proposta .ms-auto{padding:0}
+      .ms-expediente details{border-bottom:1px solid #e7e7e0}
+      .ms-expediente summary{min-height:48px;display:list-item;align-content:center;font-weight:600;cursor:pointer}
+      .ms-exp-dia{min-inline-size:0;margin:8px 0;padding:8px 0;border:0;border-bottom:1px solid #e7e7e0}
+      .ms-exp-dia legend{font-size:.9rem;font-weight:600;padding:0}
+      .ms-exp-par{display:flex;gap:8px;align-items:flex-end;min-width:0;flex-wrap:wrap;margin-bottom:8px}
+      .ms-exp-hora{flex:1;min-width:90px;font-size:.8rem}
+      .ms-exp-hora span{display:block;min-height:24px}
+      .ms-exp-hora input{width:100%;min-width:0;max-width:100%;box-sizing:border-box;min-height:44px;padding:8px}
+      .ms-exp-par>.ms-btn{width:44px;min-width:44px;padding:0;font-size:1.2rem}
+      .ms-exp-excecao{display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:.85rem;border-bottom:1px solid #e7e7e0}
+      .ms-expediente [hidden],#ms-gaveta textarea[hidden]{display:none!important}
+      .ms-auto-status{flex:1;min-width:0;align-self:center;padding-right:8px;color:#515749;font-size:.8rem;line-height:1.4;overflow-wrap:anywhere}
+      .ms-ag-pesquisa{display:flex;align-items:center;gap:8px;padding:8px 0}
+      .ms-ag-pesquisa input{flex:1;min-width:0}
+      .ms-ag-pesquisa .ms-btn{min-width:80px;min-height:44px}
+      .ms-ag-filtros{border-bottom:1px solid #e7e7e0}
+      .ms-ag-filtros summary{min-height:44px;align-content:center;cursor:pointer;font-weight:600}
+      .ms-ag-filtros-grade{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 8px;padding-bottom:12px}
+      .ms-ag-filtro{min-width:0;font-size:.8rem}
+      .ms-ag-filtro span{display:block;line-height:1.5;margin-bottom:4px}
+      .ms-ag-filtro .ms-copia{min-width:0;width:100%;max-width:100%;box-sizing:border-box;min-height:44px;padding:8px}
+      .ms-ag-painel-status{font-size:.8rem;color:#515749;min-height:24px;margin:8px 0 0;line-height:1.5}
+      .ms-ag-painel-lista{list-style:none;margin:0;padding:0}
+      .ms-ag-painel-lista>li{display:flex;gap:12px;align-items:center;border-bottom:1px solid #e7e7e0;padding:8px 0}
+      .ms-ag-painel-item{flex:1;min-width:0;overflow-wrap:anywhere}
+      .sheet-mensagens .ms-ag-cliente{width:100%;max-width:none;min-height:44px;margin:0;padding:4px 0;border:0;border-radius:0;box-shadow:none;background:transparent;color:#20211e;font:600 .95rem/1.4 Inter,Arial,sans-serif;text-align:left;cursor:pointer}
+      .ms-ag-painel-item p{margin:4px 0;font-size:.85rem;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+      .ms-ag-data{display:block;font-size:.8rem;line-height:1.5;color:#3e493d}
+      .ms-ag-painel-item small{display:block;font-size:.76rem;line-height:1.5;color:#515749}
+      .ms-ag-painel-item .ms-ag-painel-erro{color:#8b3c11}
+      .ms-ag-painel-lista .ms-btn{min-height:44px;min-width:72px;font-size:.8rem;padding:8px}
+      .ms-auto-pe[hidden]{display:none!important}
+      @media(max-width:650px){.sheet-mensagens .ms-assina{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:0;padding:0 4px}.sheet-mensagens .ms-assina .ms-ferr-btn{display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0;min-height:52px;max-width:none;margin:0;padding:4px 2px;font-size:.72rem}.sheet-mensagens .ms-assina-btn b{max-width:100%;order:2}.sheet-mensagens .ms-assina-btn svg{order:1}}
 `;
     document.head.appendChild(s);
   }
 
   function iconeFluido_(nome){
     const p={conversas:'M4 5h16v12H9l-5 4z',funil:'M3 4h18l-7 8v7l-4 2v-9z',notas:'M5 3h14v13l-5 5H5zM14 21v-5h5',mais:'M5 12h.01M12 12h.01M19 12h.01',chevron:'m9 5 7 7-7 7',selecao:'M9 11l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2',painel:'M4 20V10M10 20V4M16 20v-7M22 20H2',auto:'m13 2-9 12h7l-1 8 10-13h-7z',atualizar:'M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 13 3M18 18A8 8 0 0 1 5 15',config:'M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6',usuario:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M17 8h5m-2-2 2 2-2 2',baixar:'M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5',permissoes:'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',conexao:'m8 3 3 3-5 5-3-3M16 21l-3-3 5-5 3 3M8 16l8-8',busca:'M21 21l-5-5M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0',filtros:'M4 6h16M7 12h10M10 18h4M8 3v6M16 9v6M12 15v6'};
+    p.agenda='M5 5h14v16H5zM5 9h14M8 3v4M16 3v4M8 13h3M8 17h6';
     const n=el('span','ms-linha-icone');n.setAttribute('aria-hidden','true');n.innerHTML='<svg viewBox="0 0 24 24"><path d="'+p[nome]+'"/></svg>';return n;
   }
   /* ---------- esqueleto ---------- */
@@ -824,7 +875,7 @@
     const painel=el('div','ms-gaveta-painel');painel.setAttribute('role','dialog');painel.setAttribute('aria-modal','true');painel.setAttribute('aria-label',titulo);
     while(g.firstChild)painel.appendChild(g.firstChild);g.appendChild(painel);
     g.addEventListener('click',ev=>{if(ev.target===g)fecharGaveta_();});
-    g.addEventListener('keydown',ev=>{if(ev.key!=='Tab')return;const alvos=[...painel.querySelectorAll('button,input,select,summary,[tabindex="0"]')].filter(n=>!n.disabled&&n.getClientRects().length),primeiro=alvos[0],ultimo=alvos.at(-1);if(ev.shiftKey&&document.activeElement===primeiro){ev.preventDefault();ultimo.focus();}else if(!ev.shiftKey&&document.activeElement===ultimo){ev.preventDefault();primeiro.focus();}});
+    g.addEventListener('keydown',ev=>{if(ev.key!=='Tab')return;const alvos=[...painel.querySelectorAll('button,input,textarea,select,summary,[tabindex="0"]')].filter(n=>!n.disabled&&n.getClientRects().length),primeiro=alvos[0],ultimo=alvos.at(-1);if(ev.shiftKey&&document.activeElement===primeiro){ev.preventDefault();ultimo.focus();}else if(!ev.shiftKey&&document.activeElement===ultimo){ev.preventDefault();primeiro.focus();}});
     document.addEventListener('tk:camada-fechada',function foco(ev){if(ev.detail?.chave!=='ms-gaveta')return;document.removeEventListener('tk:camada-fechada',foco);setTimeout(()=>{if(!g.isConnected&&!$('ms-gaveta')&&document.activeElement===document.body&&anterior?.isConnected)anterior.focus();},0);});
     painel.querySelector('.ms-gaveta-cab button')?.focus();return painel;
   }
@@ -843,9 +894,9 @@
   }
   function abrirMais_(){
     const anterior=document.activeElement,corpo=gaveta_('Mais');if(!corpo)return;propostaGaveta_('mais',anterior);
-    const mapa={selecionar:'selecao',painel:'painel',funil:'funil','auto-cfg':'auto',atualizar:'atualizar','leitura-cfg':'config','trocar-usuario':'usuario','app-atualizar':'baixar','app-permissoes':'permissoes',conexao:'conexao',exp:'baixar'};
+    const mapa={selecionar:'selecao',painel:'painel',funil:'funil','auto-cfg':'auto','agenda-painel':'agenda',atualizar:'atualizar','leitura-cfg':'config','trocar-usuario':'usuario','app-atualizar':'baixar','app-permissoes':'permissoes',conexao:'conexao',exp:'baixar'};
     const grupo=(titulo,itens)=>{const sec=el('section','ms-mais-grupo');sec.appendChild(el('h4','',titulo));itens.forEach(([nome,acao,dados])=>{const b=botao('ms-mais-item','',acao,dados);b.append(iconeFluido_(mapa[acao]),el('span','ms-mais-texto',nome),iconeFluido_('chevron'));sec.appendChild(b);});corpo.appendChild(sec);};
-    grupo('Atendimento',[['Selecionar conversas','selecionar'],['Painel de atendimento','painel'],['Etapas da venda','funil'],['Respostas automáticas','auto-cfg'],['Atualizar agora','atualizar']]);
+    grupo('Atendimento',[['Selecionar conversas','selecionar'],['Painel de atendimento','painel'],['Agendamentos','agenda-painel'],['Etapas da venda','funil'],['Respostas automáticas','auto-cfg'],['Atualizar agora','atualizar']]);
     grupo('Conta e aplicativo',[['Configurações de leitura e nome','leitura-cfg'],['Trocar usuário','trocar-usuario'],...(window.TKAndroid?[['Atualizar app','app-atualizar'],['Permissões do app','app-permissoes']]:[]),...(canal!=='todos'?[['Conexão deste canal','conexao']]:[])]);
     grupo('Exportar',[...(canal!=='todos'?[['Este canal (CSV)','exp',{params:'formato=csv&canal='+canal,rotulo:'o canal'}],['Este canal (TXT para IA)','exp',{params:'formato=txt&canal='+canal,rotulo:'o canal'}]]:[]),['Tudo (CSV, três canais)','exp',{params:'formato=csv',rotulo:'tudo'}],['Tudo (JSON)','exp',{params:'formato=json',rotulo:'tudo'}]]);
     corpo.querySelectorAll('.ms-mais-grupo').forEach(sec=>{if(![...sec.querySelectorAll('button')].some(b=>!b.hidden))sec.hidden=true;});
@@ -1152,6 +1203,7 @@
   const RE_ASSINATURA_ = /^\*([^*\n]{1,30}):\*\n/;
   /* v7.24: barra acima da caixa de mensagem = ferramentas de atendimento (Produtos, Respostas rápidas) + a assinatura */
   const ICO_ = {
+    calendario: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v16H5zM5 9h14M8 3v4M16 3v4M8 13h3M8 17h6"/></svg>',
     nota: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5"/></svg>',
     sacola: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
     raio: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3 5 14h6l-1 7 8-11h-6l1-7z"/></svg>',
@@ -1163,6 +1215,7 @@
     w.textContent = ''; w.hidden = espiando; if (w.hidden) return;
     const n = nomeAtendente_(), lig = assinaturaLigada_();
     w.append(botaoIco_('ms-ferr-btn', 'sacola', 'Produtos', 'gaveta-produtos'), botaoIco_('ms-ferr-btn', 'raio', 'Respostas', 'gaveta-respostas'), botaoIco_('ms-ferr-btn ms-nota-btn', 'nota', 'Nota', 'modo-nota'));
+    if(podeFerramenta_('agenda'))w.appendChild(botaoIco_('ms-ferr-btn','calendario','Agendar','agenda-opcoes'));
     const b=botao('ms-ferr-btn ms-assina-btn','','nome-editar');b.title='Editar nome nas respostas';
     b.append(el('b','',lig?(n||'Meu nome'):'Sem assinatura'));b.insertAdjacentHTML('beforeend',ICO_.lapis);b.setAttribute('aria-label','Editar nome nas respostas'+(n?': '+n:''));w.appendChild(b);
   }
@@ -1454,13 +1507,14 @@
   let autoEdit_ = null, autoUlt_ = null;
   const dataCurta_ = (iso) => String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7) + '/' + String(iso).slice(0, 4);
   async function abrirAuto_() {
-    const corpo = gaveta_('Respostas automáticas'); if (!corpo) return;
+    const anterior=document.activeElement,corpo = gaveta_('Respostas automáticas'); if (!corpo) return;
+    const painel=propostaGaveta_('automacoes',anterior);
     const g = $('ms-gaveta'), gen = g.dataset.gen; corpo.appendChild(el('p', 'ms-vazio', 'Carregando…'));
     const r = await worker_('/msg/auto', 'GET');
     const g2 = $('ms-gaveta'); if (!g2 || g2.dataset.gen !== gen) return;      // a pessoa fechou ou abriu outra gaveta enquanto carregava
     if (!r.ok) { corpo.textContent = ''; corpo.appendChild(el('p', 'ms-vazio', r.erro || 'Não foi possível carregar agora. Feche e abra de novo.')); return; }
     autoEdit_ = JSON.parse(JSON.stringify(r.auto)); autoUlt_ = r; desenharAuto_();
-    const pe = el('div', 'ms-auto-pe'); pe.appendChild(botao('ms-btn prim', 'Salvar', 'auto-salvar')); g2.appendChild(pe);
+    const pe = el('div', 'ms-auto-pe'),status=el('span','ms-auto-status');status.id='ms-auto-status';status.setAttribute('role','status');pe.append(status,botao('ms-btn prim', 'Salvar', 'auto-salvar')); painel.appendChild(pe);
   }
   function desenharAuto_() {
     const g = $('ms-gaveta'), corpo = g && g.querySelector('.ms-gaveta-corpo'); if (!corpo || !autoEdit_) return;
@@ -1478,7 +1532,8 @@
     secao('foraHorario', 'Fora do horário', 'Loja fechada: no máximo 1 vez por conversa até a loja abrir. {abertura} vira o dia e a hora, como “amanhã às 7h30”.');
     const h = el('section', 'ms-auto-sec');
     h.appendChild(el('p', 'ms-etq-rot', 'Horário da loja'));
-    h.appendChild(el('p', 'ms-auto-exp', 'Segunda a sexta, 7h30 às 18h · Sábado, 7h30 às 14h · Domingo fechado'));
+    if(autoEdit_.expediente)h.appendChild(editorExpediente_());
+    else h.appendChild(el('p', 'ms-auto-exp', 'Segunda a sexta, 7h30 às 18h · Sábado, 7h30 às 14h · Domingo fechado'));
     h.appendChild(el('p', 'ms-etq-rot', 'Feriados com comércio aberto (8h às 13h)'));
     const ul = el('ul', 'ms-auto-feriados');
     if (!autoEdit_.feriados.length) ul.appendChild(el('li', '', 'Nenhum feriado cadastrado.'));
@@ -1486,18 +1541,63 @@
     h.appendChild(ul);
     const ln = el('div', 'ms-linha'), di = el('input', 'ms-copia'); di.type = 'date'; di.id = 'ms-auto-data'; di.setAttribute('aria-label', 'Data do feriado');
     ln.append(di, botao('ms-btn', 'Incluir feriado', 'auto-feriado-add')); h.appendChild(ln); w.appendChild(h);
+    if(autoEdit_.acompanhamento){
+      const s=el('section','ms-auto-sec'),titulo=el('h4','','Acompanhamento');s.appendChild(titulo);
+      const lb=el('label','ms-agenda-rot','Mensagem após 2 horas úteis');lb.htmlFor='ms-acomp-texto-config';
+      const ta=el('textarea','ms-copia');ta.id='ms-acomp-texto-config';ta.rows=4;ta.maxLength=900;ta.value=autoEdit_.acompanhamento.textoLembrete;ta.addEventListener('input',()=>autoEdit_.acompanhamento.textoLembrete=ta.value);
+      s.append(lb,ta,el('p','ms-auto-exp','{saudacao} vira Bom dia, Boa tarde ou Boa noite na hora do envio.'));
+      const l=el('label','ms-cfg-linha'),ch=el('input');ch.type='checkbox';ch.id='ms-acomp-final-config';ch.checked=autoEdit_.acompanhamento.mensagemFinal;l.append(ch,el('span','','Enviar mensagem ao encerrar automaticamente'));s.appendChild(l);
+      const final=el('textarea','ms-copia');final.rows=3;final.maxLength=900;final.value=autoEdit_.acompanhamento.textoFinal;final.setAttribute('aria-label','Mensagem ao encerrar o acompanhamento');final.hidden=!ch.checked;final.addEventListener('input',()=>autoEdit_.acompanhamento.textoFinal=final.value);
+      ch.addEventListener('change',()=>{autoEdit_.acompanhamento.mensagemFinal=ch.checked;final.hidden=!ch.checked;});s.appendChild(final);
+      s.appendChild(el('p','ms-auto-exp','Acompanhar é ativado em cada conversa. Qualquer resposta do cliente cancela os próximos passos.'));w.appendChild(s);
+    }
     w.appendChild(el('p', 'ms-auto-exp', 'Nunca vai para grupos, respostas a status sem texto nem mensagens da própria loja. A mensagem automática aparece na conversa com o selo “Automática” e a conversa continua em “Falta responder”.'));
     const u = autoUlt_ && autoUlt_.ultimo;
     if (u && u.em) { const d = new Date(u.em); w.appendChild(el('p', 'ms-auto-exp' + (u.ok ? '' : ' ms-pausa'), 'Último envio automático: ' + (isNaN(d) ? '' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })) + (u.ok ? ' · enviado' : ' · não confirmado: ' + (u.erro || 'sem resposta')))); }
     corpo.appendChild(w); corpo.scrollTop = rolagem;
   }
+  function editorExpediente_(){
+    const cfg=autoEdit_.expediente,w=el('div','ms-expediente'),semana=el('details');semana.appendChild(el('summary','','Horário semanal'));
+    const hora=n=>String(Math.floor((n===1440?0:n)/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
+    const minutos=v=>{const m=/^(\d{2}):([0-5]\d)$/.exec(v);return m?Number(m[1])*60+Number(m[2]):NaN;};
+    const nomes=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+    const campo=(valor,rotulo,mudar)=>{const lb=el('label','ms-exp-hora'),i=el('input','ms-copia');i.type='time';i.step='60';i.value=hora(valor);i.setAttribute('aria-label',rotulo);i.addEventListener('input',()=>mudar(minutos(i.value)));lb.append(el('span','',rotulo.split(' · ')[0]),i);return lb;};
+    nomes.forEach((nome,dia)=>{
+      const grupo=el('fieldset','ms-exp-dia');grupo.appendChild(el('legend','',nome));
+      const op=el('label','ms-cfg-linha'),ch=el('input');ch.type='checkbox';ch.id='ms-exp-dia-'+dia;ch.checked=cfg.semana[dia].length>0;op.append(ch,el('span','','Aberto'));grupo.appendChild(op);
+      const pares=el('div');grupo.appendChild(pares);
+      const pintar=()=>{
+        pares.textContent='';cfg.semana[dia].forEach((par,k)=>{
+          const linha=el('div','ms-exp-par');linha.append(campo(par[0],'Abre · '+nome+' '+(k+1),v=>par[0]=v),campo(par[1],'Fecha · '+nome+' '+(k+1),v=>par[1]=v===0?1440:v));
+          const tirar=el('button','ms-btn','×');tirar.type='button';tirar.setAttribute('aria-label','Remover intervalo '+(k+1)+' de '+nome);tirar.addEventListener('click',()=>{cfg.semana[dia].splice(k,1);ch.checked=cfg.semana[dia].length>0;pintar();ch.focus();});linha.appendChild(tirar);pares.appendChild(linha);
+        });
+        if(ch.checked&&cfg.semana[dia].length<3){const add=el('button','ms-btn','Adicionar intervalo');add.type='button';add.addEventListener('click',()=>{const fim=cfg.semana[dia].at(-1)?.[1]||450;cfg.semana[dia].push([Math.min(fim+60,1320),Math.min(fim+120,1440)]);pintar();pares.querySelectorAll('input').item(pares.querySelectorAll('input').length-2)?.focus();});pares.appendChild(add);}
+      };
+      ch.addEventListener('change',()=>{cfg.semana[dia]=ch.checked?[[450,dia===6?840:1080]]:[];pintar();});pintar();semana.appendChild(grupo);
+    });
+    const excecoes=el('details');excecoes.appendChild(el('summary','','Exceções por data'));excecoes.appendChild(el('p','ms-auto-exp','A exceção tem prioridade sobre a semana e os feriados.'));
+    const lista=el('div'),pintarLista=()=>{
+      lista.textContent='';Object.entries(cfg.excecoes).sort(([a],[b])=>a.localeCompare(b)).forEach(([data,faixas])=>{
+        const li=el('div','ms-exp-excecao'),x=el('button','ms-btn','Remover');x.type='button';x.setAttribute('aria-label','Remover exceção de '+dataCurta_(data));x.addEventListener('click',()=>{delete cfg.excecoes[data];pintarLista();});li.append(el('span','',dataCurta_(data)+' · '+(faixas.length?faixas.map(p=>hora(p[0])+'–'+hora(p[1])).join(', '):'Fechado')),x);lista.appendChild(li);
+      });
+    };excecoes.appendChild(lista);pintarLista();
+    const d=el('input','ms-copia');d.type='date';d.id='ms-exp-data';d.setAttribute('aria-label','Data da exceção');
+    const fechado=el('input'),lf=el('label','ms-cfg-linha');fechado.type='checkbox';fechado.checked=true;lf.append(fechado,el('span','','Fechado nessa data'));
+    let abre=450,fecha=1080;const par=el('div','ms-exp-par');par.append(campo(abre,'Abertura da exceção',v=>abre=v),campo(fecha,'Fechamento da exceção',v=>fecha=v===0?1440:v));par.hidden=true;fechado.addEventListener('change',()=>par.hidden=fechado.checked);
+    const bt=el('button','ms-btn','Adicionar exceção'),feedback=el('p','ms-auto-exp');bt.type='button';feedback.setAttribute('role','status');
+    bt.addEventListener('click',()=>{if(!d.value||!d.checkValidity()){feedback.textContent='Escolha a data da exceção.';d.focus();return;}if(!fechado.checked&&(!Number.isFinite(abre)||!Number.isFinite(fecha)||abre>=fecha)){feedback.textContent='Confira a abertura e o fechamento.';return;}cfg.excecoes[d.value]=fechado.checked?[]:[[abre,fecha]];pintarLista();d.value='';feedback.textContent='Exceção adicionada. Use Salvar para confirmar.';});
+    excecoes.append(d,lf,par,bt,feedback);w.append(semana,excecoes);return w;
+  }
   async function salvarAuto_(b) {
     if (!autoEdit_) return;
-    b.disabled = true; const r = await worker_('/msg/auto', 'POST', autoEdit_); b.disabled = false;
-    if (!r.ok) { aviso_(r.erro || 'Não foi possível salvar agora. Tente de novo.'); return; }
-    autoEdit_ = JSON.parse(JSON.stringify(r.auto)); autoUlt_ = r; desenharAuto_();
-    const n = (r.auto.boasVindas.ligado ? 1 : 0) + (r.auto.foraHorario.ligado ? 1 : 0);
-    aviso_(n ? 'Salvo. ' + (n === 2 ? 'As duas respostas automáticas estão ligadas.' : (r.auto.boasVindas.ligado ? 'Boas-vindas ligada.' : 'Fora do horário ligada.')) : 'Salvo. As respostas automáticas estão desligadas.');
+    const enviado=JSON.parse(JSON.stringify(autoEdit_)),epoca=epocaConta_,gen=$('ms-gaveta')?.dataset.gen,status=$('ms-auto-status');
+    b.disabled = true;if(status)status.textContent='Salvando…'; const r = await worker_('/msg/auto', 'POST', enviado); b.disabled = false;
+    if(epoca!==epocaConta_||$('ms-gaveta')?.dataset.gen!==gen)return;
+    if (!r.ok) { if(status)status.textContent=r.erro||'Não foi possível salvar. Tente novamente.';b.focus();return; }
+    autoUlt_=r;
+    if(JSON.stringify(autoEdit_)!==JSON.stringify(enviado)){if(status)status.textContent='Salvo. Há novas alterações na tela para salvar.';return;}
+    autoEdit_ = JSON.parse(JSON.stringify(r.auto)); desenharAuto_();if(status)status.textContent='Configurações salvas.';b.focus();
+    if(status)status.textContent='Salvo.';
   }
   async function salvarNome_(v) {
     const conta=contaSessao_(getSessao());versaoPerfil_++;
@@ -1842,7 +1942,8 @@
     const pend = agendadas_.filter((x) => x.status === 'pendente' || x.status === 'enviando').sort((x, y) => Date.parse(x.quando) - Date.parse(y.quando));
     if (!pend.length) return;
     const f = el('div', 'ms-faixa ms-agenda-faixa'); f.id = 'ms-agenda-faixa'; f.setAttribute('role', 'status');
-    const t = pend.length === 1 ? '1 mensagem agendada para ' + quandoRotulo_(pend[0].quando) : pend.length + ' mensagens agendadas · a próxima sai ' + quandoRotulo_(pend[0].quando);
+    const manuais=pend.filter(x=>!x.acompanhamento),acomp=pend.find(x=>x.acompanhamento);
+    const t = acomp ? (manuais.length?manuais.length+' agendada'+(manuais.length>1?'s':'')+' · ':'')+(acomp.tipo==='encerrar'?'Encerrar: ':'Lembrete: ')+quandoRotulo_(acomp.quando) : pend.length===1?'1 mensagem agendada para '+quandoRotulo_(pend[0].quando):pend.length+' mensagens agendadas · a próxima sai '+quandoRotulo_(pend[0].quando);
     const sp = el('span', '', '🕓 ' + t); sp.title = t; f.appendChild(sp);
     const ver = botao('ms-btn', 'Ver', 'agenda-abrir'); ver.setAttribute('aria-label', 'Ver mensagens agendadas'); f.appendChild(ver);
     pai.insertBefore(f, wrap);
@@ -1857,16 +1958,115 @@
     agendadas_ = r.pendentes || []; desenharFaixaAgenda_();
     const g = $('ms-gaveta'); if (g && g.dataset.tipo === 'agenda') desenharListaAgenda_(r);
   }
+  function pintarAcompanhamento_(){
+    const ch=$('ms-acompanhar'),status=$('ms-acomp-status');if(!ch||!status)return;
+    if(ch.dataset.salvando!=='1')ch.checked=acompanhamento_?.status==='ativo';
+    const a=acompanhamento_;status.textContent=!a||a.status==='cancelada'?'Se o cliente responder, os próximos passos serão cancelados.':a.status==='ativo'?(a.etapa==='encerrar'?'Encerramento previsto: ':'Lembrete previsto: ')+quandoRotulo_(a.quando)+'.':a.status==='falhou'?'Não confirmado. Confira a conversa antes de ativar novamente.':'Acompanhamento concluído.';
+  }
+  async function abrirPainelAgenda_(){
+    const anterior=$('ms-nav')?.querySelector('[data-ms=menu-geral]'),corpo=gaveta_('Agendamentos');if(!corpo)return;
+    const painelAgenda=propostaGaveta_('agenda-painel',anterior),g=$('ms-gaveta'),epoca=epocaConta_,f=agendaPainelFiltros_;
+    let versao=0,cursor='',itens=[],timer=0;
+    const atual=()=>g.isConnected&&epoca===epocaConta_;
+    const pesquisa=el('div','ms-ag-pesquisa'),bus=el('input','ms-copia');bus.type='search';bus.placeholder='Cliente, número ou mensagem';bus.setAttribute('aria-label','Pesquisar agendamentos');bus.value=f.busca;
+    const atualizar=el('button','ms-btn','Atualizar');atualizar.type='button';pesquisa.append(bus,atualizar);corpo.appendChild(pesquisa);
+    const filtros=el('details','ms-ag-filtros');filtros.appendChild(el('summary','','Filtros'));
+    const grade=el('div','ms-ag-filtros-grade');
+    const seletor=(chave,rotulo,opcoes)=>{const lb=el('label','ms-ag-filtro'),s=el('select','ms-copia');s.setAttribute('aria-label',rotulo);opcoes.forEach(([v,t])=>{const o=el('option','',t);o.value=v;s.appendChild(o);});s.value=f[chave];s.addEventListener('change',()=>{f[chave]=s.value;carregar(true);});lb.append(el('span','',rotulo),s);grade.appendChild(lb);};
+    seletor('status','Situação',[['pendentes','Pendentes'],['enviada','Concluídos'],['falhou','Com falha'],['cancelada','Cancelados'],['todas','Todas']]);
+    seletor('canal','Canal',[['todos','Todos os canais'],...CANAIS]);
+    seletor('tipo','Tipo',[['todos','Todos os tipos'],['manual','Mensagem agendada'],['lembrete','Lembrete'],['encerrar','Encerramento']]);
+    const minhas=el('label','ms-cfg-linha'),ch=el('input');ch.type='checkbox';ch.checked=f.minhas;ch.addEventListener('change',()=>{f.minhas=ch.checked;carregar(true);});minhas.append(ch,el('span','','Somente os que agendei'));grade.appendChild(minhas);
+    for(const [chave,rotulo] of [['de','De'],['ate','Até']]){const lb=el('label','ms-ag-filtro'),i=el('input','ms-copia');i.type='date';i.value=f[chave];i.setAttribute('aria-label',rotulo+' — data do agendamento');i.addEventListener('change',()=>{f[chave]=i.value;carregar(true);});lb.append(el('span','',rotulo),i);grade.appendChild(lb);}
+    filtros.appendChild(grade);corpo.appendChild(filtros);
+    const status=el('p','ms-ag-painel-status');status.setAttribute('role','status');status.tabIndex=-1;
+    const lista=el('ul','ms-ag-painel-lista');lista.id='ms-ag-painel-lista';corpo.append(status,lista);
+    const pe=el('div','ms-auto-pe'),mais=el('button','ms-btn','Carregar mais');mais.type='button';pe.hidden=true;pe.appendChild(mais);painelAgenda.appendChild(pe);
+    const pintar=()=>{
+      lista.textContent='';for(const a of itens){
+        const li=el('li'),conteudo=el('div','ms-ag-painel-item'),nome=botao('ms-ag-cliente',a.nome||foneBonito_(a.contato)||'Cliente','agenda-conversa',{id:String(a.conversa_id)});
+        const tipo=a.tipo==='encerrar'?'Encerramento':a.tipo==='lembrete'?'Lembrete':'Mensagem';
+        const situacao=a.status==='pendente'?quandoRotulo_(a.quando):a.status==='enviando'?'Enviando…':a.status==='falhou'?'Falhou':a.status==='cancelada'?'Cancelado':'Concluído';
+        conteudo.append(nome,el('b','ms-ag-data',tipo+' · '+situacao));
+        if(a.texto)conteudo.appendChild(el('p','',semFormatacao_(a.texto).slice(0,180)));
+        if(a.tem_anexo)conteudo.appendChild(el('p','ms-ag-arquivo-nome','Anexo: '+(a.anexo_nome||'Foto, vídeo ou áudio')));
+        conteudo.appendChild(el('small','',(NOME_CANAL[a.canal]||a.canal)+(a.autor?' · '+a.autor:'')));
+        if(a.erro)conteudo.appendChild(el('small','ms-ag-painel-erro',a.erro));li.appendChild(conteudo);
+        if(a.status==='pendente'){
+          const cancelar=el('button','ms-btn','Cancelar');cancelar.type='button';cancelar.setAttribute('aria-label','Cancelar '+tipo.toLowerCase()+' de '+(a.nome||a.contato));
+          cancelar.addEventListener('click',async()=>{cancelar.disabled=true;const r=await worker_('/msg/agendar/cancelar','POST',{id:a.id});if(!atual())return;await carregar(true);if(atual()){status.textContent=r.ok?'Agendamento cancelado.':r.erro||'Não consegui confirmar. Atualize para conferir.';status.focus({preventScroll:true});}});li.appendChild(cancelar);
+        }
+        lista.appendChild(li);
+      }
+      if(!itens.length)lista.appendChild(el('li','ms-vazio','Nenhum agendamento com esses filtros.'));
+    };
+    async function carregar(reset){
+      clearTimeout(timer);
+      const consulta=++versao,proximo=reset?'':cursor;if(reset){cursor='';itens=[];lista.textContent='';}
+      status.textContent='Carregando…';lista.setAttribute('aria-busy','true');mais.disabled=true;
+      const q=new URLSearchParams({status:f.status,canal:f.canal,tipo:f.tipo,busca:f.busca,minhas:f.minhas?'1':'0',de:f.de,ate:f.ate,cursor:proximo});
+      const r=await worker_('/msg/agendadas?'+q,'GET');if(!atual()||consulta!==versao)return;
+      lista.removeAttribute('aria-busy');mais.disabled=false;
+      if(!r.ok){status.textContent=r.erro||'Não foi possível carregar. Use Atualizar para tentar novamente.';pe.hidden=true;return;}
+      itens=reset?r.agendamentos||[]:itens.concat(r.agendamentos||[]);cursor=r.proximo||'';pe.hidden=!r.temMais;pintar();status.textContent=itens.length+(itens.length===1?' agendamento':' agendamentos')+(r.temMais?' · há mais resultados':'');
+    }
+    bus.addEventListener('input',()=>{f.busca=bus.value;clearTimeout(timer);timer=setTimeout(()=>{if(atual())carregar(true);},350);});
+    atualizar.addEventListener('click',()=>{clearTimeout(timer);carregar(true);});mais.addEventListener('click',()=>carregar(false));await carregar(true);
+  }
+  async function abrirAgendarOpcoes_(){
+    if(!aberta)return;const anterior=document.activeElement,id=aberta.id,corpo=gaveta_('Agendar');if(!corpo)return;
+    propostaGaveta_('agendar-opcoes',anterior);
+    const gen=$('ms-gaveta').dataset.gen;corpo.classList.add('ms-agendar-escolhas');
+    const manual=botaoIco_('ms-agendar-item','calendario','Agendar mensagem','agenda-abrir');manual.title='Escolher data, hora, mensagem e anexos';corpo.appendChild(manual);
+    if(!aberta.grupo){
+      const w=el('section','ms-acomp-opcao'),lb=el('label','ms-acomp-linha'),ch=el('input');ch.type='checkbox';ch.id='ms-acompanhar';ch.disabled=true;
+      lb.append(ch,el('b','','Acompanhar'));w.append(lb,el('p','','Lembrete após 2 horas úteis. Mais 2 horas sem resposta: encerrar o atendimento.'));
+      const status=el('p','ms-acomp-status','Conferindo acompanhamento…');status.id='ms-acomp-status';status.setAttribute('role','status');w.appendChild(status);corpo.appendChild(w);
+      const feedback=el('p','ms-acomp-feedback');feedback.id='ms-acomp-feedback';feedback.setAttribute('role','status');corpo.appendChild(feedback);
+      ch.addEventListener('change',async()=>{
+        const ligado=ch.checked,focado=document.activeElement===ch;ch.disabled=true;ch.dataset.salvando='1';feedback.textContent='Salvando…';
+        const r=await worker_('/msg/acompanhamento','POST',{conversa:id,ligado,idLocal:idLocal_()});
+        delete ch.dataset.salvando;if(!aberta||aberta.id!==id||$('ms-gaveta')?.dataset.gen!==gen)return;
+        ch.disabled=false;if(focado)ch.focus();
+        if(!r.ok){ch.checked=acompanhamento_?.status==='ativo';feedback.textContent=r.erro||'Não consegui confirmar. Feche e abra Agendar para conferir.';return;}
+        acompanhamento_=r.acompanhamento;pintarAcompanhamento_();feedback.textContent=acompanhamento_?.status==='ativo'?'Acompanhamento ativado.':acompanhamento_?.erro||'Acompanhamento desativado.';await recarregarAgenda_(id);
+      });
+      const r=await worker_('/msg/acompanhamento?conversa='+id,'GET');if(!aberta||aberta.id!==id||$('ms-gaveta')?.dataset.gen!==gen)return;
+      if(!r.ok){status.textContent=r.erro||'Não foi possível conferir. Feche e abra Agendar novamente.';return;}
+      acompanhamento_=r.acompanhamento;ch.disabled=!!aberta.encerrada_em||!podeFerramenta_('responder');pintarAcompanhamento_();
+      if(aberta.encerrada_em)status.textContent='Reabra o atendimento para acompanhar.';
+    }
+  }
   async function abrirAgenda_() {
     if (!aberta) return;
-    const conv = aberta, ta0 = $('ms-texto'), rascunho = ta0 ? ta0.value.trim() : '';
+    const anterior=document.activeElement,conv = aberta, ta0 = $('ms-texto'), rascunho = ta0 ? ta0.value.trim() : '';
     const corpo = gaveta_('Agendar mensagem'); if (!corpo) return;
-    const g = $('ms-gaveta'); g.dataset.tipo = 'agenda'; const gen = g.dataset.gen;
+    const g = $('ms-gaveta'),painelAgenda=propostaGaveta_('agenda',anterior); const gen = g.dataset.gen,epoca=epocaConta_;
+    agendaAnexo_=anexoPend?{blob:anexoPend.blob,tipo:anexoPend.tipo,nome:anexoPend.nome||'Anexo'}:null;agendaPedido_=null;
     agendaQuando_ = 0; agendaAtalho_ = '';
     const w = el('div', 'ms-agenda');
     const s1 = el('section', 'ms-agenda-sec'), lb = el('label', 'ms-agenda-rot', 'Mensagem'); lb.htmlFor = 'ms-ag-texto';
     const ta = el('textarea', 'ms-copia'); ta.id = 'ms-ag-texto'; ta.rows = 4; ta.maxLength = 1000; ta.value = rascunho.slice(0, 1000); ta.placeholder = 'Ex.: Oi! A peça que você pediu chegou. Posso separar?';
     s1.append(lb, ta);
+    const anexo=el('div','ms-ag-anexo'),seletor=el('input');seletor.type='file';seletor.accept='image/*,video/*';seletor.hidden=true;seletor.id='ms-ag-arquivo';
+    const seletorAudio=el('input');seletorAudio.type='file';seletorAudio.accept='audio/*';seletorAudio.hidden=true;seletorAudio.id='ms-ag-arquivo-audio';
+    const anexarAudio=botao('ms-btn','Áudio','agenda-anexar-audio');anexarAudio.addEventListener('click',()=>seletorAudio.click());
+    const anexar=botao('ms-btn','Foto ou vídeo','agenda-anexar');anexar.id='ms-ag-anexar';anexar.addEventListener('click',()=>seletor.click());
+    const nomeAnexo=el('span','ms-ag-anexo-nome'),remover=botao('ms-btn','Remover anexo','agenda-remover-anexo');remover.id='ms-ag-remover-anexo';
+    const pintar=()=>{nomeAnexo.textContent=agendaAnexo_?agendaAnexo_.nome+' · '+(agendaAnexo_.blob.size/1048576).toFixed(1).replace('.',',')+' MB':'';remover.hidden=!agendaAnexo_;};
+    remover.addEventListener('click',()=>{agendaAnexo_=null;agendaPedido_=null;pintar();});
+    [seletor,seletorAudio].forEach(input=>input.addEventListener('change',async()=>{
+      const f=input.files?.[0];input.value='';if(!f)return;
+      const tipo=/^image\//.test(f.type)?'imagem':/^video\//.test(f.type)?'vídeo':/^audio\//.test(f.type)?'áudio':'';
+      const feedback=$('ms-ag-form-status');if(!tipo){feedback.textContent='Escolha foto, vídeo ou áudio.';return;}
+      anexar.disabled=true;feedback.textContent='Preparando anexo…';
+      const blob=tipo==='imagem'?await reduzirImagem_(f):f;
+      if(!aberta||aberta.id!==conv.id||$('ms-gaveta')?.dataset.gen!==gen||epoca!==epocaConta_)return;
+      anexar.disabled=false;
+      if(!blob||blob.size>(tipo==='imagem'?8:16)*1048576){feedback.textContent='Arquivo muito grande ou em formato não aceito. Use foto até 8 MB ou vídeo/áudio até 16 MB.';return;}
+      agendaAnexo_={blob,tipo,nome:f.name||'Anexo'};agendaPedido_=null;feedback.textContent='';pintar();
+    }));
+    anexo.append(anexar,anexarAudio,seletor,seletorAudio,nomeAnexo,remover);s1.appendChild(anexo);pintar();
     if (conv.grupo) s1.appendChild(el('p', 'ms-auto-exp', 'Vai para todo o grupo.'));
     const s2 = el('section', 'ms-agenda-sec'), lq = el('span', 'ms-agenda-rot', 'Quando enviar'); lq.id = 'ms-ag-rot-q';
     const at = el('div', 'ms-agenda-atalhos'); at.setAttribute('role', 'group'); at.setAttribute('aria-labelledby', 'ms-ag-rot-q');
@@ -1878,8 +2078,9 @@
     const res = el('p', 'ms-agenda-res'); res.id = 'ms-ag-res'; res.setAttribute('aria-live', 'polite');
     s2.append(lq, at, ld, dq, res);
     const s3 = el('section', 'ms-agenda-sec'); s3.id = 'ms-ag-lista'; s3.appendChild(el('p', 'ms-auto-exp', 'Carregando as agendadas…'));
-    w.append(s1, s2, s3); corpo.appendChild(w);
-    const pe = el('div', 'ms-auto-pe'), bt = botao('ms-btn prim', 'Agendar', 'agenda-salvar'); bt.id = 'ms-ag-salvar'; pe.appendChild(bt); g.appendChild(pe);
+    const feedback=el('p','ms-agenda-res');feedback.id='ms-ag-form-status';feedback.setAttribute('role','status');
+    w.append(s1, s2, feedback, s3); corpo.appendChild(w);
+    const pe = el('div', 'ms-auto-pe'), bt = botao('ms-btn prim', 'Agendar', 'agenda-salvar'); bt.id = 'ms-ag-salvar'; pe.appendChild(bt); painelAgenda.appendChild(pe);
     marcarAgenda_();
     if (!rascunho) setTimeout(() => { if ($('ms-ag-texto') && larga()) $('ms-ag-texto').focus(); }, 0);
     const r = await worker_('/msg/agendadas?conversa=' + encodeURIComponent(conv.id), 'GET');
@@ -1900,7 +2101,9 @@
     const item = (a, comCancelar) => {
       const li = el('li'), d = el('div');
       const st = a.status === 'enviada' ? 'Enviada ' + quandoRotulo_(a.enviado_em || a.quando) : a.status === 'falhou' ? 'Não enviada' : a.status === 'enviando' ? 'Saindo agora…' : quandoRotulo_(a.quando);
-      d.append(el('b', '', st), el('p', '', a.texto));
+      d.append(el('b', '', a.tipo==='encerrar'&&a.status==='enviada'&&!a.erro?'Atendimento encerrado':a.status==='cancelada'?'Cancelado':st), el('p', '', a.texto));
+      if(a.tem_anexo)d.appendChild(el('small','','Anexo: '+(a.anexo_nome||'Foto, vídeo ou áudio')));
+      if(a.erro&&a.status!=='falhou')d.appendChild(el('small','',a.erro));
       const sub = el('small', a.status === 'falhou' ? 'falha' : '', a.status === 'falhou' ? (a.erro || 'Não foi possível enviar.') : (a.autor ? 'Agendada por ' + a.autor : ''));
       if (sub.textContent) d.appendChild(sub);
       li.appendChild(d);
@@ -1914,23 +2117,34 @@
     }
   }
   async function salvarAgenda_(b) {
-    if (!aberta) return;
-    const ta = $('ms-ag-texto'), texto = ta ? ta.value.trim() : '';
-    if (!texto) { aviso_('Escreva a mensagem antes de agendar.'); if (ta) ta.focus(); return; }
-    if (!agendaQuando_) { aviso_('Escolha quando a mensagem deve sair.'); const a1 = document.querySelector('#ms-gaveta [data-ms=agenda-atalho]'); if (a1) a1.focus(); return; }
-    if (agendaQuando_ <= Date.now()) { aviso_('Esse horário já passou. Escolha um horário no futuro.'); return; }
-    const conv = aberta.id; b.disabled = true;
-    const r = await worker_('/msg/agendar', 'POST', { conversa: conv, texto: texto, quando: new Date(agendaQuando_).toISOString() });
-    b.disabled = false;
-    if (!r.ok) { aviso_(r.erro || 'Não foi possível agendar agora. Tente de novo.'); b.focus(); return; }
-    if (!aberta || aberta.id !== conv) return;
-    const comp = $('ms-texto');
-    if (comp && comp.value.trim() === texto) { comp.value = ''; comp.dispatchEvent(new Event('input', { bubbles: true })); }   // o texto do compositor foi agendado: não fica para enviar de novo
-    if (ta) ta.value = '';
-    agendaQuando_ = 0; agendaAtalho_ = ''; const dq = $('ms-ag-quando'); if (dq) dq.value = ''; marcarAgenda_();
-    agendadas_ = r.pendentes || []; desenharFaixaAgenda_(); desenharListaAgenda_(r);
-    aviso_('Mensagem agendada para ' + quandoRotulo_(r.agendada.quando) + '.'); { const f = larga() ? ta : document.querySelector('#ms-gaveta [data-ms=gaveta-fechar]'); if (f) f.focus(); }   // o botão ficou desligado durante o envio: o foco volta para dentro da gaveta (no celular sem abrir o teclado)
+    if(!aberta)return;
+    const c=aberta,conv=c.id,gen=$('ms-gaveta')?.dataset.gen,epoca=epocaConta_,ta=$('ms-ag-texto'),texto=ta?.value.trim()||'',feedback=$('ms-ag-form-status'),arquivo=agendaAnexo_;
+    const informar=t=>{if(feedback)feedback.textContent=t;};
+    if(!texto&&!arquivo){informar('Escreva a mensagem ou escolha um anexo.');ta?.focus();return;}
+    if(!agendaQuando_||agendaQuando_<=Date.now()){informar('Escolha um dia e horário no futuro.');$('ms-ag-quando')?.focus();return;}
+    if(c.canal==='instagram'&&arquivo&&texto){informar('No Instagram, agende o arquivo e o texto em mensagens separadas.');return;}
+    const quando=new Date(agendaQuando_).toISOString(),assinado=texto?(adminAssinatura_()?assinar_(c,texto):texto):'',assinatura=JSON.stringify([conv,quando,assinado,arquivo?.nome,arquivo?.blob.size]);
+    if(!agendaPedido_||agendaPedido_.assinatura!==assinatura)agendaPedido_={assinatura,idLocal:idLocal_()};
+    const idLocal=agendaPedido_.idLocal,campos=[...$('ms-gaveta').querySelectorAll('.ms-agenda input,.ms-agenda textarea,.ms-agenda button,#ms-ag-salvar')].map(e=>[e,e.disabled]);campos.forEach(([e])=>e.disabled=true);informar(arquivo?'Preparando envio do anexo…':'Salvando…');
+    const atual=()=>aberta?.id===conv&&$('ms-gaveta')?.dataset.gen===gen&&epoca===epocaConta_;
+    try{
+      if(arquivo&&!arquivo.chave){
+        const r=await subirAnexo_(arquivo);if(!atual())return;
+        if(!r.ok){informar(r.erro||'Não foi possível preparar o anexo. Tente novamente.');return;}
+        arquivo.chave=r.anexo;
+      }
+      if(!atual())return;
+      const r=await worker_('/msg/agendar','POST',{conversa:conv,texto:assinado,quando,anexo:arquivo?.chave||'',anexoNome:arquivo?.nome||'',idLocal});
+      if(!atual())return;
+      if(!r.ok){informar(r.erro||'Não consegui confirmar. Tente novamente para conferir o mesmo pedido.');return;}
+      const comp=$('ms-texto');if(comp&&comp.value.trim()===texto){comp.value='';comp.dispatchEvent(new Event('input',{bubbles:true}));}
+      if(arquivo&&anexoPend?.blob===arquivo.blob)limparAnexo_(true);
+      ta.value='';agendaAnexo_=null;agendaPedido_=null;agendaQuando_=0;agendaAtalho_='';$('ms-ag-quando').value='';marcarAgenda_();
+      $('ms-ag-remover-anexo').hidden=true;$('ms-ag-anexar').parentElement.querySelector('.ms-ag-anexo-nome').textContent='';
+      agendadas_=r.pendentes||[];desenharFaixaAgenda_();desenharListaAgenda_(r);informar('Agendada para '+quandoRotulo_(r.agendada.quando)+'.');
+    }finally{campos.forEach(([e,disabled])=>{if(e.isConnected)e.disabled=disabled;});if(atual())b.focus();}
   }
+
   async function cancelarAgenda_(b) {
     if (!aberta || !confirm('Cancelar esta mensagem agendada? Ela não será enviada.')) return;
     const conv = aberta.id; b.disabled = true;
@@ -2136,7 +2350,7 @@
     else if (blob.size > 16 * 1048576) { aviso_('Arquivo grande demais (limite 16 MB).'); return; }
     if (tipo === 'vídeo' && !/^video\/(mp4|quicktime)$/.test(f.type)) { aviso_('Use um vídeo MP4.'); return; }
     limparAnexo_(true);
-    anexoPend = { blob: blob, tipo: tipo, seg: Math.round(Number(seg) || 0), urlLocal: URL.createObjectURL(blob) };
+    anexoPend = { blob: blob, tipo: tipo, nome:f.name||'Anexo', seg: Math.round(Number(seg) || 0), urlLocal: URL.createObjectURL(blob) };
     desenharStage_(); const ta = $('ms-texto'); if (ta && larga()) ta.focus();
   }
   function atualizarMic_() {
@@ -2169,7 +2383,7 @@
     const w = ++abrindo;
     espiando = !!espiar;
     const jaNaTela = aberta && aberta.id === id;
-    if (!jaNaTela) { elMsgs.clear(); msgs = []; novasAbaixo = 0; limparBlobs_(); limparAnexo_(true); fecharLuz_(); agendadas_ = []; }
+    if (!jaNaTela) { elMsgs.clear(); msgs = []; novasAbaixo = 0; limparBlobs_(); limparAnexo_(true); fecharLuz_(); agendadas_ = []; acompanhamento_=null; }
     const path='/msg/mensagens?conversa=' + encodeURIComponent(id);
     const salvo=APP_RECENTES ? await recentes_(path) : null;
     if(w!==abrindo)return;
@@ -2194,7 +2408,7 @@
     }
     cacheConversa=false;
     aviso_('');
-    const c = r.conversa; aberta = c; if (Array.isArray(r.agendadas)) agendadas_ = r.agendadas;
+    const c = r.conversa; aberta = c; if (Array.isArray(r.agendadas)) agendadas_ = r.agendadas;if(Object.hasOwn(r,'acompanhamento'))acompanhamento_=r.acompanhamento;
     ultIdSrv = r.mensagens.reduce((m, x) => (x.id > m ? x.id : m), 0);
     msgs = r.mensagens.concat((r.notas || []).map(notaMsg_)).concat(Array.from(pendentes.values()).filter((p) => p.conversa === id).map((p) => p.msg));
     montarConversa(c); pintarFio(true);
@@ -2447,6 +2661,13 @@
     if (r.conversas.some((c) => canal === 'todos' || c.canal === canal)) await carregarLista(false);
     if(aberturaDaSonda!==abrindo){agendar();return;}
     if (aberta) {
+      if(Array.isArray(r.agendadas)){agendadas_=r.agendadas;desenharFaixaAgenda_();}
+      if(Object.hasOwn(r,'acompanhamento')){
+        const mudouAcompanhamento=JSON.stringify(acompanhamento_)!==JSON.stringify(r.acompanhamento);
+        acompanhamento_=r.acompanhamento;pintarAcompanhamento_();
+        if(mudouAcompanhamento)await recarregarAgenda_(aberta.id);
+        if(aberturaDaSonda!==abrindo){agendar();return;}
+      }
       if (Array.isArray(r.notas) && sincronizarNotas_(r.notas)) pintarFio(false);
       const mudou = r.conversas.find((c) => c.id === aberta.id); if (mudou) aberta = Object.assign({}, aberta, mudou, { nao_lidas: aberta.nao_lidas });
       const fio = $('ms-fio'), novas = r.mensagens.filter((m) => !msgs.some((x) => x.id === m.id));
@@ -2787,6 +3008,9 @@
     else if (a === 'resp-editar') abrirRespostas_(true);
     else if (a === 'resp-usar') { const r = respostas_()[Number(b.dataset.i)]; if (r) colocarResposta_(r.x); }
     else if (a === 'auto-cfg') abrirAuto_();
+    else if (a === 'agenda-painel') { fecharMenu(); abrirPainelAgenda_(); }
+    else if (a === 'agenda-conversa') { const id=Number(b.dataset.id);$('ms-gaveta')?.remove();await desempilharEsperando_('ms-gaveta');await abrirConversa(id); }
+    else if (a === 'agenda-opcoes') { fecharMenu(); abrirAgendarOpcoes_(); }
     else if (a === 'agenda-abrir') { fecharMenu(); abrirAgenda_(); }
     else if (a === 'agenda-atalho') { agendaAtalho_ = b.dataset.k; agendaQuando_ = atalhoMs_(agendaAtalho_); marcarAgenda_(); aviso_(''); }
     else if (a === 'agenda-salvar') await salvarAgenda_(b);

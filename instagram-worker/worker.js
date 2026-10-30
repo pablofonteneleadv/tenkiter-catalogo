@@ -92,7 +92,7 @@ const DDL = [
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
-const ESQUEMA_ = '20261029-ficha-perfil-json-1';
+const ESQUEMA_ = '20261029-atendimento-agenda-3';
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -107,6 +107,19 @@ async function iniciar(env) {
       try { await env.DB.prepare("ALTER TABLE msg_ficha ADD COLUMN perfil_json TEXT NOT NULL DEFAULT '{}'").run(); }
       catch (e) { if (!/duplicate column/i.test(String(e))) throw e; }
     }
+    const agendaCols=new Set((await env.DB.prepare('PRAGMA table_info(msg_agenda)').all()).results.map(c=>c.name));
+    for(const [nome,tipo] of [['anexo',"TEXT NOT NULL DEFAULT ''"],['anexo_nome',"TEXT NOT NULL DEFAULT ''"],['anexo_mime',"TEXT NOT NULL DEFAULT ''"],['tipo',"TEXT NOT NULL DEFAULT 'manual'"],['acompanhamento','INTEGER NOT NULL DEFAULT 0'],['auth_ref',"TEXT NOT NULL DEFAULT ''"],['processando_em',"TEXT NOT NULL DEFAULT ''"],['tentativas','INTEGER NOT NULL DEFAULT 0'],['chave',"TEXT NOT NULL DEFAULT ''"]]){
+      if(!agendaCols.has(nome)){try{await env.DB.prepare('ALTER TABLE msg_agenda ADD COLUMN '+nome+' '+tipo).run();}catch(e){if(!/duplicate column/i.test(String(e)))throw e;}}
+    }
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_acompanhamento (id INTEGER PRIMARY KEY AUTOINCREMENT, chave TEXT NOT NULL UNIQUE, conversa_id INTEGER NOT NULL, alvo TEXT NOT NULL, entrada_ref INTEGER NOT NULL, etapa TEXT NOT NULL DEFAULT 'lembrete', status TEXT NOT NULL DEFAULT 'ativo', quando TEXT NOT NULL, autor TEXT NOT NULL, whats TEXT NOT NULL, auth_ref TEXT NOT NULL, texto_lembrete TEXT NOT NULL, texto_final TEXT NOT NULL DEFAULT '', lembrete_em TEXT NOT NULL DEFAULT '', criado_em TEXT NOT NULL, atualizado_em TEXT NOT NULL, erro TEXT NOT NULL DEFAULT '')").run();
+    await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS ix_acomp_ativo ON msg_acompanhamento(conversa_id) WHERE status='ativo'").run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_acomp_alvo ON msg_acompanhamento(alvo,status)').run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_agenda_acomp ON msg_agenda(acompanhamento,status)').run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_agenda_quando ON msg_agenda(quando,id)').run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_agenda_autorizacao(ref TEXT PRIMARY KEY,proxima TEXT NOT NULL,limite TEXT NOT NULL,criado_em TEXT NOT NULL,estado TEXT NOT NULL DEFAULT 'ativo')").run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_agenda_auth_proxima ON msg_agenda_autorizacao(estado,proxima)').run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_agenda_auth_ref ON msg_agenda(auth_ref,status)').run();
+    await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS ix_agenda_chave ON msg_agenda(chave) WHERE chave<>''").run();
     for (const [t,cols] of [['msg_ficha',['perfil_json']],['msg_nota',['excluida_em','excluida_por']],['msg_conversa',['pessoa','atualizada_em','encerrada_em']],['msg_mensagem',['ctx_chave','autor_lid']]]) {
       const existentes = new Set((await env.DB.prepare('PRAGMA table_info('+t+')').all()).results.map(c=>c.name));
       if (!cols.every(c=>existentes.has(c))) throw new Error('Esquema de Mensagens incompleto. Tente novamente.');
@@ -242,6 +255,7 @@ function msgRecurso_(p, req, url) {
   if (p === '/msg/notas/log') return 'exportar';
   if (p === '/msg/notas') return 'notas';
   if (/^\/msg\/agend/.test(p)) return 'agenda';
+  if (p === '/msg/acompanhamento') return 'agenda';
   if (/^\/msg\/funil/.test(p)) return 'funil';
   if (p === '/msg/metricas') return 'metricas';
   if (p === '/msg/exportar') return 'exportar';
@@ -253,7 +267,7 @@ function msgFiltrarDados_(dados, direitos) {
   if (Array.isArray(dados)) return dados.map(x => msgFiltrarDados_(x,direitos));
   const out = {};
   for (const [k,v] of Object.entries(dados)) {
-    if ((!direitos.notas && ['notas','exclusoes'].includes(k)) || (!direitos.agenda && k === 'agendadas') || (!direitos.etiquetas && k === 'etiquetas') || (!direitos.respostas && k === 'respostas')) continue;
+    if ((!direitos.notas && ['notas','exclusoes'].includes(k)) || (!direitos.agenda && ['agendadas','acompanhamento'].includes(k)) || (!direitos.etiquetas && k === 'etiquetas') || (!direitos.respostas && k === 'respostas')) continue;
     if (!direitos.configuracoes && ['ultimaLeitura','webhook','diagnostico','urlInstagram'].includes(k)) continue;
     out[k] = msgFiltrarDados_(v,direitos);
   }
@@ -2725,13 +2739,20 @@ async function gravarMensagem_(env, canal, m) {
   if(m.ctxTipo==='story'&&m.ctxRef&&!m.ctxChave){const ref=await env.DB.prepare('SELECT chave FROM msg_status_ref WHERE canal=? AND ext_id=?').bind(canal,m.ctxRef).first();if(ref)m.ctxChave=ref.chave;}
   let story = { post: 0, aprox: 0 };
   if (m.ctxTipo === 'story' && !saida && !m.ctxChave) { if (m.ctxPost) story = { post: Number(m.ctxPost) || 0, aprox: 0 }; else { try { const exato=m.ctxRef?await env.DB.prepare("SELECT p.id FROM postagem p LEFT JOIN postagem_grupo_recibo r ON r.postagem_id=p.id WHERE p.status='publicado' AND p.canal IN ("+(STATUS_CANAIS_[canal]||[]).map(()=>'?').join(',')+") AND (p.ig_id=? OR r.mensagem_id=?) LIMIT 1").bind(...(STATUS_CANAIS_[canal]||[]),m.ctxRef,m.ctxRef).first():null;story=exato?{post:Number(exato.id),aprox:0}:await resolverStory_(env, canal, m.em); } catch (e) { /* sem a imagem do story: a tela mostra só o aviso */ } } }
-  const inserir = env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em, midia_chave, midia_mime, midia_seg, midia_url, ctx_tipo, ctx_ref, ctx_post, ctx_aprox, ctx_chave, autor_nome, autor_fone, autor_lid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t, m.midiaChave || '', String(m.midiaMime || '').slice(0, 80), Number(m.midiaSeg) || 0, m.midiaUrl || '', m.ctxTipo || '', m.ctxRef || '', story.post, story.aprox, m.ctxChave || '', m.autorNome || '', m.autorFone || '', m.autorLid || '');
+  const inserir = env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em, midia_chave, midia_mime, midia_seg, midia_url, ctx_tipo, ctx_ref, ctx_post, ctx_aprox, ctx_chave, autor_nome, autor_fone, autor_lid,por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t, m.midiaChave || '', String(m.midiaMime || '').slice(0, 80), Number(m.midiaSeg) || 0, m.midiaUrl || '', m.ctxTipo || '', m.ctxRef || '', story.post, story.aprox, m.ctxChave || '', m.autorNome || '', m.autorFone || '', m.autorLid || '',String(m.por||'').slice(-4));
   const quem = m.grupo && m.direcao === 'entrada' ? (m.autorNome || (m.autorFone ? '+' + m.autorFone : '')) : '';
   const previa = ((quem ? quem + ': ' : '') + (m.texto || ('[' + m.tipo + ']'))).replace(/\s+/g, ' ').slice(0, 140);
   /* Em SQLite o lado direito do SET usa os valores ANTIGOS da linha: por isso a comparação com ultima_em/ult_entrada_em vale como "antes desta mensagem". */
   const atividade = env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=? AND changes()=1")
     .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, t, c.id);
-  const [r] = await env.DB.batch([inserir,atividade]);
+  const transacao=[inserir,atividade];
+  if(!saida&&!m.grupo){
+    // A resposta e o cancelamento dos próximos passos entram na mesma transação.
+    const alvo="(SELECT CASE WHEN "+MSG_IDENTIDADE_SQL_+"<>'' THEN "+MSG_IDENTIDADE_SQL_+" ELSE 'c:'||id END FROM msg_conversa WHERE id=?)";
+    transacao.push(env.DB.prepare("UPDATE msg_acompanhamento SET status='cancelada',atualizado_em=?,erro='Cliente respondeu.' WHERE status='ativo' AND (conversa_id=? OR alvo="+alvo+") AND entrada_ref<(SELECT id FROM msg_mensagem WHERE canal=? AND ext_id=?)").bind(t,c.id,c.id,canal,m.extId));
+    transacao.push(env.DB.prepare("UPDATE msg_agenda SET status='cancelada',erro='Cliente respondeu.' WHERE status='pendente' AND acompanhamento IN (SELECT id FROM msg_acompanhamento WHERE status='cancelada' AND (conversa_id=? OR alvo="+alvo+"))").bind(c.id,c.id));
+  }
+  const [r] = await env.DB.batch(transacao);
   if (!r.meta || r.meta.changes !== 1) return false;
   await notificarNovidade_(env,canal);
   if (!saida && !m.grupo && canal !== 'instagram' && /^\d{10,15}$/.test(m.contato)) { try { if ((await cfgGet(env, 'contatos_auto')) === '1') await enfileirarContato_(env, canal, m.contato, m.nome); } catch (e) { /* o cadastro no Google é conforto: a mensagem já foi gravada */ } }
@@ -3161,27 +3182,69 @@ async function respostasRapidas_(env) {
 const HORARIO_LOJA_ = { 1: [450, 1080], 2: [450, 1080], 3: [450, 1080], 4: [450, 1080], 5: [450, 1080], 6: [450, 840] }, HORARIO_FERIADO_ = [480, 780];
 const DIAS_SEMANA_ = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 const FUSO_MS_ = 3 * 3600000, DIA_MS_ = 86400000;
+const EXPEDIENTE_PADRAO_ = {semana:{0:[],1:[[450,1080]],2:[[450,1080]],3:[[450,1080]],4:[[450,1080]],5:[[450,1080]],6:[[450,840]]},excecoes:{}};
+const dataValidaExpediente_ = d => /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(d)&&new Date(d+'T12:00:00Z').toISOString().slice(0,10)===d;
+/** Faixas em minutos locais (Fortaleza). Dias fechados são arrays vazios. */
+export function validarExpediente_(d){
+  if(!d||typeof d!=='object'||Array.isArray(d)||!d.semana||typeof d.semana!=='object'||!d.excecoes||typeof d.excecoes!=='object'||Array.isArray(d.excecoes))return ['Confira o horário semanal e as exceções.'];
+  const out={semana:{},excecoes:{}};
+  const faixas=v=>{
+    if(!Array.isArray(v)||v.length>3)return null;
+    let anterior=-1;
+    for(const par of v){if(!Array.isArray(par)||par.length!==2||!par.every(Number.isInteger)||par[0]<0||par[1]>1440||par[0]>=par[1]||par[0]<anterior)return null;anterior=par[1];}
+    return v.map(x=>x.slice());
+  };
+  for(let dia=0;dia<7;dia++){const f=faixas(d.semana[dia]);if(!f)return ['Confira a abertura e o fechamento de '+DIAS_SEMANA_[dia]+'.'];out.semana[dia]=f;}
+  const excecoes=Object.entries(d.excecoes);if(excecoes.length>366)return ['Use até 366 exceções de horário.'];
+  for(const [data,v] of excecoes){if(!dataValidaExpediente_(data))return ['Confira a data da exceção de horário.'];const f=faixas(v);if(!f)return ['Confira o horário de '+data+'.'];out.excecoes[data]=f;}
+  return [null,out];
+}
+function faixasExpediente_(dia,expediente,feriados){
+  const data=new Date(dia*DIA_MS_),iso=data.toISOString().slice(0,10),cfg=expediente||EXPEDIENTE_PADRAO_;
+  if(Object.hasOwn(cfg.excecoes,iso))return cfg.excecoes[iso];
+  if(Array.isArray(feriados)&&feriados.includes(iso))return [HORARIO_FERIADO_];
+  return cfg.semana[data.getUTCDay()];
+}
+/** Conta somente minutos de atendimento, atravessando noites, domingos e exceções.
+ * No fim exato de uma faixa a ação fica para a abertura seguinte. */
+export function somarMinutosUteis_(ms,minutos,expediente,feriados){
+  if(!Number.isFinite(ms)||!Number.isFinite(minutos)||minutos<0||minutos>86400)throw Error('Prazo de acompanhamento inválido.');
+  const [erro,cfg]=validarExpediente_(expediente||EXPEDIENTE_PADRAO_);if(erro)throw Error(erro);
+  const dia0=Math.floor((ms-FUSO_MS_)/DIA_MS_);let restante=minutos*60000;
+  for(let d=dia0;d<dia0+370;d++)for(const [abre,fecha] of faixasExpediente_(d,cfg,feriados)){
+    const inicio=d*DIA_MS_+abre*60000+FUSO_MS_,fim=d*DIA_MS_+fecha*60000+FUSO_MS_,de=Math.max(ms,inicio);
+    if(de>=fim)continue;
+    if(restante<fim-de)return new Date(de+restante).toISOString();
+    restante-=fim-de;
+  }
+  throw Error('Não há horário de atendimento disponível para esse prazo. Confira as configurações.');
+}
 export function textoAbertura_(dias, diaSemana, minutos, dataIso) {
   const hora = Math.floor(minutos / 60) + 'h' + (minutos % 60 ? String(minutos % 60).padStart(2, '0') : '');
   const quando = dias === 0 ? 'hoje' : dias === 1 ? 'amanhã' : dias < 7 ? DIAS_SEMANA_[diaSemana] : 'dia ' + String(dataIso).slice(8, 10) + '/' + String(dataIso).slice(5, 7);
   return quando + ' às ' + hora;
 }
 /** Situação da loja no instante ms: { aberta, feriado } ou { aberta:false, abreEm (ISO, UTC), abertura: "amanhã às 7h30" }. */
-export function horarioLoja_(ms, feriados) {
-  const F = new Set(Array.isArray(feriados) ? feriados : []), L = ms - FUSO_MS_, dia0 = Math.floor(L / DIA_MS_), min = (L - dia0 * DIA_MS_) / 60000;
-  const faixa = (dia) => { const d = new Date(dia * DIA_MS_), iso = d.toISOString().slice(0, 10); if (F.has(iso)) return { f: HORARIO_FERIADO_, feriado: true, iso: iso, dow: d.getUTCDay() }; const f = HORARIO_LOJA_[d.getUTCDay()]; return f ? { f: f, feriado: false, iso: iso, dow: d.getUTCDay() } : null; };
-  const hoje = faixa(dia0);
-  if (hoje && min >= hoje.f[0] && min < hoje.f[1]) return { aberta: true, feriado: hoje.feriado };
-  for (let k = 0; k <= 21; k++) {
-    const x = faixa(dia0 + k); if (!x || (k === 0 && min >= x.f[0])) continue;
-    return { aberta: false, feriado: x.feriado, abreEm: new Date((dia0 + k) * DIA_MS_ + x.f[0] * 60000 + FUSO_MS_).toISOString(), abertura: textoAbertura_(k, x.dow, x.f[0], x.iso) };
+export function horarioLoja_(ms, feriados, expediente) {
+  const [erro,cfg]=validarExpediente_(expediente||EXPEDIENTE_PADRAO_);if(erro)throw Error(erro);
+  const dia0=Math.floor((ms-FUSO_MS_)/DIA_MS_);
+  for(let k=0;k<370;k++){
+    const dia=dia0+k,data=new Date(dia*DIA_MS_),iso=data.toISOString().slice(0,10),feriado=!Object.hasOwn(cfg.excecoes,iso)&&Array.isArray(feriados)&&feriados.includes(iso);
+    for(const [abre,fecha] of faixasExpediente_(dia,cfg,feriados)){
+      const inicio=dia*DIA_MS_+abre*60000+FUSO_MS_,fim=dia*DIA_MS_+fecha*60000+FUSO_MS_;
+      if(ms>=inicio&&ms<fim)return {aberta:true,feriado:!!feriado};
+      if(inicio>ms)return {aberta:false,feriado:!!feriado,abreEm:new Date(inicio).toISOString(),abertura:textoAbertura_(k,data.getUTCDay(),abre,iso)};
+    }
   }
-  return { aberta: false, feriado: false, abreEm: '', abertura: 'em breve' };
+  return {aberta:false,feriado:false,abreEm:'',abertura:'sem horário cadastrado'};
 }
+
 const MSG_AUTO_PADRAO_ = {
   boasVindas: { ligado: false, texto: 'Oi! Que bom ter você aqui 😊 Já já uma das meninas te responde. Se já viu alguma peça, pode mandar o print ou o código que agiliza.' },
   foraHorario: { ligado: false, texto: 'Oi! A loja tá fechada agora, mas sua mensagem ficou guardada aqui. A gente volta {abertura} e te responde 😊 Se quiser, já deixa o print da peça e seu tamanho.' },
-  feriados: []
+  feriados: [],
+  expediente: EXPEDIENTE_PADRAO_,
+  acompanhamento: {textoLembrete:'{saudacao} amiga, passando aqui pra saber se já deu certo o seu, fiquei aguardando sua resposta 🧡',mensagemFinal:false,textoFinal:''}
 };
 const textoAuto_ = (v) => String(v == null ? '' : v).replace(/\r\n/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, 1000);
 const feriadosLimpos_ = (l) => Array.from(new Set((Array.isArray(l) ? l : []).map(String).filter((x) => /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(x) && new Date(x + 'T12:00:00Z').toISOString().slice(0, 10) === x))).sort().slice(-60);
@@ -3191,12 +3254,16 @@ async function msgAuto_(env) {
   const out = JSON.parse(JSON.stringify(MSG_AUTO_PADRAO_));
   for (const k of ['boasVindas', 'foraHorario']) if (c && c[k] && typeof c[k] === 'object') { if (typeof c[k].ligado === 'boolean') out[k].ligado = c[k].ligado; const t = textoAuto_(c[k].texto); if (t) out[k].texto = t; }
   if (c && Array.isArray(c.feriados)) out.feriados = feriadosLimpos_(c.feriados);
+  if(c&&c.expediente){const [erro,expediente]=validarExpediente_(c.expediente);if(erro)throw Error('Confira o horário de atendimento nas configurações.');out.expediente=expediente;}
+  if(c&&c.acompanhamento){const a=c.acompanhamento;out.acompanhamento={textoLembrete:textoAuto_(a.textoLembrete)||MSG_AUTO_PADRAO_.acompanhamento.textoLembrete,mensagemFinal:a.mensagemFinal===true,textoFinal:textoAuto_(a.textoFinal)};}
   return out;
 }
 async function salvarMsgAuto_(env, d) {
   const atual = await msgAuto_(env);
   for (const k of ['boasVindas', 'foraHorario']) if (d && d[k] && typeof d[k] === 'object') { if (typeof d[k].ligado === 'boolean') atual[k].ligado = d[k].ligado; if (typeof d[k].texto === 'string') atual[k].texto = textoAuto_(d[k].texto) || MSG_AUTO_PADRAO_[k].texto; }
   if (d && Array.isArray(d.feriados)) atual.feriados = feriadosLimpos_(d.feriados);
+  if(d&&d.expediente){const [erro,expediente]=validarExpediente_(d.expediente);if(erro)throw Object.assign(Error(erro),{codigo:400});atual.expediente=expediente;}
+  if(d&&d.acompanhamento){const a=d.acompanhamento;atual.acompanhamento={textoLembrete:textoAuto_(a.textoLembrete)||MSG_AUTO_PADRAO_.acompanhamento.textoLembrete,mensagemFinal:a.mensagemFinal===true,textoFinal:textoAuto_(a.textoFinal)};if(atual.acompanhamento.mensagemFinal&&!atual.acompanhamento.textoFinal)throw Object.assign(Error('Escreva a mensagem de encerramento ou desmarque o envio dela.'),{codigo:400});}
   await cfgSet(env, 'msg_auto', JSON.stringify(atual));
   return atual;
 }
@@ -3216,7 +3283,7 @@ async function respostaAutomatica_(env, canal, m, cfgPronta) {
   if (!autoElegivel_(canal, m)) return null;
   const t = Date.parse(m.em); if (isNaN(t) || Math.abs(Date.now() - t) > 10 * 60000) return null;      // só mensagem que acabou de chegar (nada de histórico reenviado)
   const cfg = cfgPronta || (await msgAuto_(env)); if (!cfg.boasVindas.ligado && !cfg.foraHorario.ligado) return null;
-  const conv = m._conversaId, h = horarioLoja_(t, cfg.feriados);
+  const conv = m._conversaId, h = horarioLoja_(t, cfg.feriados, cfg.expediente);
   let tipo, periodo, texto;
   if (h.aberta) {
     if (!cfg.boasVindas.ligado) return null;
@@ -3418,10 +3485,10 @@ async function enviarInstagram_(env, conv, mensagem) {
     return { ok: false, erro: 'O Instagram recusou a mensagem agora. Tente de novo em instantes.' };
   } catch (e) { return { ok: false, incerto: true, erro: 'Sem confirmação do Instagram. Confira no app antes de tentar de novo.' }; }
 }
-async function enviarTextoInstagram_(env, conv, texto) { const z = await zernioCfg_(env); if (z) return enviarZernio_(env, z, conv, { message: texto }); return enviarInstagram_(env, conv, { text: texto }); }
-async function enviarMidiaInstagram_(env, conv, anexo) {
+async function enviarTextoInstagram_(env, conv, texto, automatico=false) { const z = await zernioCfg_(env); if (z) return enviarZernio_(env, z, conv, { message: texto }, !automatico); return enviarInstagram_(env, conv, { text: texto }); }
+async function enviarMidiaInstagram_(env, conv, anexo, automatico=false) {
   const tipo = ({ 'imagem': 'image', 'vídeo': 'video', 'áudio': 'audio' })[anexo.tipo], z = await zernioCfg_(env);
-  if (z) return enviarZernio_(env, z, conv, { attachmentUrl: anexo.url, attachmentType: tipo });
+  if (z) return enviarZernio_(env, z, conv, { attachmentUrl: anexo.url, attachmentType: tipo }, !automatico);
   return enviarInstagram_(env, conv, { attachment: { type: tipo, payload: { url: anexo.url } } });
 }
 /* ---- v2.18: Instagram Direct pelo Zernio (API oficial da Meta pelo app aprovado deles) ----
@@ -3628,13 +3695,13 @@ async function repararContextoInstagram_(env,id){
   return {ok:true,atualizadas:count};
 }
 
-async function enviarZernio_(env, z, conv, corpo) {
+async function enviarZernio_(env, z, conv, corpo, podeHumano=true) {
   const x = await env.DB.prepare('SELECT conversa FROM msg_zernio_conv WHERE contato=?').bind(conv.contato).first();
   if (!x) return { ok: false, erro: 'Esta conversa ainda não chegou pelo Zernio. Responda pelo app do Instagram; quando o cliente escrever de novo, ela passa a sair por aqui.' };
   const caminho = '/inbox/conversations/' + encodeURIComponent(x.conversa) + '/messages', base = Object.assign({ accountId: z.conta.id }, corpo);
   let r = await zernioApi_(z.chave, 'POST', caminho, base, 40000);
   const texto = JSON.stringify(r.j || {});
-  if (!r.ok && r.status >= 400 && r.status < 500 && /24|window|outside|janela/i.test(texto)) r = await zernioApi_(z.chave, 'POST', caminho, Object.assign({ messagingType: 'MESSAGE_TAG', messageTag: 'HUMAN_AGENT' }, base), 40000);
+  if (podeHumano && !r.ok && r.status >= 400 && r.status < 500 && /24|window|outside|janela/i.test(texto)) r = await zernioApi_(z.chave, 'POST', caminho, Object.assign({ messagingType: 'MESSAGE_TAG', messageTag: 'HUMAN_AGENT' }, base), 40000);
   const id = r.j && r.j.data && (r.j.data.messageId || (Array.isArray(r.j.data.messageIds) && r.j.data.messageIds[0]));
   if (r.ok && id) return { ok: true, extId: String(id) };
   if (r.ok) return { ok: false, incerto: true, erro: 'O Zernio respondeu sem confirmar o envio. Confira no Instagram antes de tentar de novo.' };
@@ -3673,11 +3740,14 @@ async function responderMensagem_(env, whats, d) {
     return [200, { ok: false, incerto: true, erro: 'Esta mensagem já foi tentada e ficou sem confirmação. Confira no ' + (conv.canal === 'instagram' ? 'Instagram' : 'WhatsApp') + ' antes de enviar de novo.' }];
   }
   try { await env.DB.prepare("DELETE FROM cfg WHERE chave LIKE 'msgenv:%' AND substr(valor,1,24)<?").bind(new Date(Date.now() - 3 * 86400000).toISOString()).run(); } catch (e) { /* limpeza é conforto */ }
-  const res = anexo ? (conv.canal === 'instagram' ? await enviarMidiaInstagram_(env, conv, anexo) : await enviarMidiaWhats_(env, conv, anexo, texto))
-    : (conv.canal === 'instagram' ? await enviarTextoInstagram_(env, conv, texto) : d.previa === true ? await enviarTextoComPrevia_(env, conv, texto, d) : await enviarTextoWhats_(env, conv, texto));
+  const automatico=whats==='auto'||d._janelaAutomatica===true;
+  if(d._acompanhamento&&!await conferirAcompanhamento_(env,Number(d._acompanhamento))){await cfgSet(env,chave,null);return [409,{ok:false,cancelado:true,erro:'Cliente respondeu; acompanhamento cancelado.'}];}
+  if(automatico&&conv.canal==='instagram'){const c=await env.DB.prepare('SELECT ult_entrada_em FROM msg_conversa WHERE id=?').bind(id).first();if(!c?.ult_entrada_em||Date.now()-Date.parse(c.ult_entrada_em)>=24*3600000){await cfgSet(env,chave,null);return [409,{ok:false,erro:'O prazo de 24 horas do Instagram terminou. Confira a conversa antes de enviar.'}];}}
+  const res = anexo ? (conv.canal === 'instagram' ? await enviarMidiaInstagram_(env, conv, anexo, automatico) : await enviarMidiaWhats_(env, conv, anexo, texto))
+    : (conv.canal === 'instagram' ? await enviarTextoInstagram_(env, conv, texto, automatico) : d.previa === true ? await enviarTextoComPrevia_(env, conv, texto, d) : await enviarTextoWhats_(env, conv, texto));
   if (!res.ok && !res.incerto) { await env.DB.prepare('DELETE FROM cfg WHERE chave=?').bind(chave).run(); return [409, { ok: false, erro: res.erro }]; }
   const extId = res.ok ? res.extId : 'inc:' + idLocal, em = agora();
-  await gravarMensagem_(env, conv.canal, { extId: extId, contato: conv.contato, nome: '', grupo: conv.grupo, direcao: 'saida', tipo: anexo ? anexo.tipo : 'texto', texto: texto, em: em, midiaChave: anexo ? anexo.chave : '', midiaMime: anexo ? anexo.mime : '', midiaSeg: Math.max(0, Math.min(86400, Number(d.seg) || 0)) });
+  await gravarMensagem_(env, conv.canal, { extId: extId, contato: conv.contato, nome: '', grupo: conv.grupo, direcao: 'saida', tipo: anexo ? anexo.tipo : 'texto', texto: texto, em: em, por:String(whats||'').slice(-4), midiaChave: anexo ? anexo.chave : '', midiaMime: anexo ? anexo.mime : '', midiaSeg: Math.max(0, Math.min(86400, Number(d.seg) || 0)) });
   await env.DB.prepare('UPDATE msg_mensagem SET por=?, status=CASE WHEN ? THEN status ELSE ? END WHERE canal=? AND ext_id=?').bind(String(whats || '').slice(-4), res.ok ? 1 : 0, 'incerta', conv.canal, extId).run();
   // Contexto próprio do link: snapshot acompanha a mensagem e sua retenção, sem tabela nova. Não substitui story/citação.
   if(!anexo&&conv.canal!=='instagram'&&d.previa===true){const snapshot=snapshotPrevia_(texto,d);if(snapshot)await env.DB.prepare("UPDATE msg_mensagem SET ctx_tipo='link',ctx_ref=? WHERE canal=? AND ext_id=? AND ctx_tipo IN ('','link')").bind(snapshot,conv.canal,extId).run();}
@@ -3805,46 +3875,235 @@ export async function fichaDaConversa_(env, conv) {
   };
 }
 /* ---- v7.40.13: mensagens agendadas (a atendente escreve agora e o texto sai sozinho na hora marcada) ---- */
-const AGENDA_COLS_ = 'id, conversa_id, texto, quando, autor, status, erro, criado_em, enviado_em';
+const AGENDA_COLS_ = "id, conversa_id, texto, quando, autor, status, erro, criado_em, enviado_em, tipo, acompanhamento, anexo_nome, anexo_mime, CASE WHEN anexo<>'' THEN 1 ELSE 0 END AS tem_anexo";
 const AGENDA_MAX_DIAS_ = 60;
+export function saudacaoAtendimento_(ms){const h=new Date(ms-FUSO_MS_).getUTCHours();return h>=5&&h<12?'Bom dia':h>=12&&h<18?'Boa tarde':'Boa noite';}
+async function contextoAcompanhamento_(env,id){
+  const c=await env.DB.prepare('SELECT id,canal,contato,grupo,encerrada_em,ult_entrada_em,'+MSG_IDENTIDADE_SQL_+' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first();
+  if(!c)return null;
+  const alvo=alvoDe_(c);
+  const r=await env.DB.prepare("SELECT COALESCE(MAX(m.id),0) AS ref FROM msg_mensagem m WHERE m.direcao='entrada' AND m.conversa_id IN (SELECT id FROM msg_conversa WHERE id=? OR (grupo=0 AND "+MSG_IDENTIDADE_SQL_+"<>'' AND "+MSG_IDENTIDADE_SQL_+"=?))").bind(id,c.pessoa||'').first();
+  return {...c,alvo,entradaRef:Number(r?.ref)||0};
+}
+const ACOMP_COLS_='id,conversa_id,etapa,status,quando,autor,texto_lembrete,texto_final,lembrete_em,criado_em,atualizado_em,erro';
+async function acompanhamentoDaConversa_(env,id){
+  const r=await env.DB.prepare('SELECT '+ACOMP_COLS_+" FROM msg_acompanhamento WHERE conversa_id=? ORDER BY CASE WHEN status='ativo' THEN 0 ELSE 1 END,id DESC LIMIT 1").bind(id).first();
+  return r||null;
+}
+async function guardarAutorizacaoAgenda_(env,req){
+  const whats=(req.headers.get('X-TK-Whats')||'').replace(/\D/g,'').slice(0,20),sessao=req.headers.get('X-TK-Sessao')||'';
+  if(!whats||!/^tk[123]\./.test(sessao))throw Error('Entre novamente para agendar.');
+  const ref=hex(24),ms=Date.now(),partes=sessao.split('.'),exp=partes[0]==='tk3'&&/^\d{10}$/.test(partes[2]||'')?Number(partes[2])*1000:ms+30*DIA_MS_;
+  await env.CACHE.put('agenda-auth:'+ref,JSON.stringify({whats,sessao}),{expirationTtl:61*86400});
+  await env.DB.prepare('INSERT INTO msg_agenda_autorizacao(ref,proxima,limite,criado_em) VALUES(?,?,?,?)').bind(ref,new Date(Math.max(ms,Math.min(ms+7*DIA_MS_,exp-DIA_MS_))).toISOString(),new Date(ms+61*DIA_MS_).toISOString(),new Date(ms).toISOString()).run();return ref;
+}
+async function autorizacaoAgenda_(env,ref,acompanhamento){
+  const meta=await env.DB.prepare('SELECT estado,limite FROM msg_agenda_autorizacao WHERE ref=?').bind(ref).first();
+  if(meta&&(meta.estado!=='ativo'||Date.parse(meta.limite)<=Date.now()))return {ok:false,erro:'O acesso de quem agendou não está mais ativo.'};
+  const raw=await env.CACHE.get('agenda-auth:'+ref);if(!raw)return {ok:false,temporario:true,erro:'Aguardando autorização do agendamento.'};
+  let cred;try{cred=JSON.parse(raw);}catch(_){return {ok:false,erro:'Entre e faça um novo agendamento.'};}
+  const req=new Request('https://agenda.internal',{headers:{'X-TK-Whats':cred.whats,'X-TK-Sessao':cred.sessao}}),ps=await permissoes(env,req);
+  if(ps==='indisponivel')return {ok:false,temporario:true,erro:'Não foi possível confirmar o acesso agora.'};
+  if(!Array.isArray(ps))return {ok:false,erro:'O acesso de quem agendou não está mais ativo.'};
+  const direitos=msgDireitos_(ps,cred.whats,await msgRegras_(env));
+  if(!direitos.acessar||!direitos.responder||!direitos.agenda)return {ok:false,erro:'Quem agendou não tem mais permissão para enviar mensagens.'};
+  return {ok:true,whats:cred.whats,req};
+}
+async function renovarAutorizacoesAgenda_(env,ms){
+  const t=new Date(ms).toISOString();
+  // Encerradas/orfãs deixam a seleção de renovação; a tolerância cobre o INSERT do agendamento em curso.
+  await env.DB.prepare("UPDATE msg_agenda_autorizacao SET estado='concluida' WHERE ref IN (SELECT u.ref FROM msg_agenda_autorizacao u WHERE estado='ativo' AND proxima<=? AND criado_em<? AND NOT EXISTS(SELECT 1 FROM msg_agenda a WHERE a.auth_ref=u.ref AND a.status IN ('pendente','enviando')) LIMIT 100)").bind(t,new Date(ms-10*60000).toISOString()).run();
+  const refs=(await env.DB.prepare("SELECT ref,limite FROM msg_agenda_autorizacao u WHERE estado='ativo' AND proxima<=? AND EXISTS(SELECT 1 FROM msg_agenda a WHERE a.auth_ref=u.ref AND a.status IN ('pendente','enviando')) ORDER BY proxima LIMIT 5").bind(t).all()).results||[];
+  for(const u of refs){
+    let revogada=Date.parse(u.limite)<=ms;
+    try{
+      const raw=await env.CACHE.get('agenda-auth:'+u.ref);if(!raw)throw Error('Aguardando credencial.');const cred=JSON.parse(raw);
+      const r=await fetch(env.API_URL,{method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8','User-Agent':UA},body:JSON.stringify({action:'sessao',whatsapp:cred.whats,sessao:cred.sessao}),signal:AbortSignal.timeout(15000)});
+      const j=await r.json();if(r.status>=500)throw Error('Sessão indisponível.');
+      if(j.inativa||j.sessaoInvalida||[401,403].includes(r.status))revogada=true;
+      if(j.ok&&j.usuario&&Array.isArray(j.usuario.permissoes)){
+        const ps=j.usuario.permissoes;ps.msgPerfis=Array.isArray(j.usuario.perfis)?j.usuario.perfis:String(j.usuario.perfil||'').split(',');const d=msgDireitos_(ps,cred.whats,await msgRegras_(env));if(!d.acessar||!d.responder||!d.agenda)revogada=true;
+        if(!revogada&&/^tk[123]\./.test(String(j.sessao||''))){await env.CACHE.put('agenda-auth:'+u.ref,JSON.stringify({whats:cred.whats,sessao:j.sessao}),{expirationTtl:Math.max(60,Math.ceil((Date.parse(u.limite)-ms)/1000))});await env.DB.prepare('UPDATE msg_agenda_autorizacao SET proxima=? WHERE ref=?').bind(new Date(ms+7*DIA_MS_).toISOString(),u.ref).run();continue;}
+      }
+      if(!revogada)throw Error('Renovação não confirmada.');
+    }catch(_){if(!revogada){await env.DB.prepare('UPDATE msg_agenda_autorizacao SET proxima=? WHERE ref=?').bind(new Date(ms+10*60000).toISOString(),u.ref).run();continue;}}
+    if(revogada){
+      await env.DB.batch([env.DB.prepare("UPDATE msg_agenda_autorizacao SET estado='revogada' WHERE ref=?").bind(u.ref),env.DB.prepare("UPDATE msg_agenda SET status='falhou',erro='O acesso de quem agendou não está mais ativo.' WHERE auth_ref=? AND status='pendente'").bind(u.ref),env.DB.prepare("UPDATE msg_acompanhamento SET status='falhou',erro='O acesso de quem agendou não está mais ativo.',atualizado_em=? WHERE auth_ref=? AND status='ativo'").bind(t,u.ref)]);await env.CACHE.delete('agenda-auth:'+u.ref);
+    }
+  }
+}
+async function alterarAcompanhamento_(env,req,d){
+  const id=Number(d.conversa)||0,c=await contextoAcompanhamento_(env,id);
+  if(!c||c.grupo)return {ok:false,cod:404,erro:'Escolha uma conversa individual.'};
+  const em=agora();
+  if(d.ligado===false){
+    await env.DB.batch([env.DB.prepare("UPDATE msg_acompanhamento SET status='cancelada',atualizado_em=?,erro='Cancelado pela equipe.' WHERE conversa_id=? AND status='ativo'").bind(em,id),env.DB.prepare("UPDATE msg_agenda SET status='cancelada',erro='Cancelado pela equipe.' WHERE status='pendente' AND acompanhamento IN (SELECT id FROM msg_acompanhamento WHERE conversa_id=? AND status='cancelada')").bind(id),env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(em,id)]);
+    await notificarNovidade_(env,c.canal);return {ok:true,acompanhamento:await acompanhamentoDaConversa_(env,id)};
+  }
+  if(d.ligado!==true||!/^[A-Za-z0-9_-]{8,64}$/.test(String(d.idLocal||'')))return {ok:false,cod:400,erro:'Atualize a conversa e tente de novo.'};
+  if(c.encerrada_em)return {ok:false,cod:409,erro:'Reabra o atendimento antes de acompanhar.'};
+  const atual=await acompanhamentoDaConversa_(env,id);if(atual?.status==='ativo')return {ok:true,acompanhamento:atual};
+  const config=await msgAuto_(env);let quando;
+  try{quando=somarMinutosUteis_(Date.now(),120,config.expediente,config.feriados);const fim=somarMinutosUteis_(Date.parse(quando),120,config.expediente,config.feriados);if(Date.parse(fim)>Date.now()+60*DIA_MS_)throw Error('Confira o expediente: o acompanhamento precisa terminar nos próximos 60 dias.');}catch(e){return {ok:false,cod:400,erro:e.message};}
+  if(c.canal==='instagram'&&(!c.ult_entrada_em||Date.parse(quando)>=Date.parse(c.ult_entrada_em)+24*3600000))return {ok:false,cod:400,erro:'Esse lembrete ficará fora das 24 horas permitidas pelo Instagram. Aguarde uma nova mensagem do cliente.'};
+  const whats=(req.headers.get('X-TK-Whats')||'').replace(/\D/g,'').slice(0,20),chave=await sha(whats+'|'+d.idLocal);
+  const repetido=await env.DB.prepare('SELECT '+ACOMP_COLS_+' FROM msg_acompanhamento WHERE chave=?').bind(chave).first();
+  if(repetido)return {ok:true,acompanhamento:repetido};
+  const perfil=await perfilAtendente_(env,req),autor=perfil.meuNome||perfil.nomePadrao||'Equipe';
+  const prefixo=perfil.mostrarNome?(c.canal==='instagram'?autor+':\n':'*'+autor+':*\n'):'';
+  const lembrete=prefixo+config.acompanhamento.textoLembrete,final=config.acompanhamento.mensagemFinal?prefixo+config.acompanhamento.textoFinal:'';
+  const auth=await guardarAutorizacaoAgenda_(env,req);
+  try{await env.DB.batch([
+    env.DB.prepare("INSERT INTO msg_acompanhamento(chave,conversa_id,alvo,entrada_ref,quando,autor,whats,auth_ref,texto_lembrete,texto_final,criado_em,atualizado_em) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)").bind(chave,id,c.alvo,c.entradaRef,quando,autor,whats,auth,lembrete,final,em,em),
+    env.DB.prepare("INSERT INTO msg_agenda(conversa_id,texto,quando,autor,whats,criado_em,tipo,acompanhamento,auth_ref) SELECT conversa_id,texto_lembrete,quando,autor,whats,criado_em,'lembrete',id,auth_ref FROM msg_acompanhamento WHERE chave=?").bind(chave),
+    env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(em,id)
+  ]);}catch(e){
+    const outro=await acompanhamentoDaConversa_(env,id);if(outro?.status==='ativo')return {ok:true,acompanhamento:outro};throw e;
+  }
+  // Uma resposta que entrou entre o snapshot e o INSERT também cancela os passos.
+  if(!await conferirAcompanhamento_(env,(await env.DB.prepare('SELECT id FROM msg_acompanhamento WHERE chave=?').bind(chave).first()).id))return {ok:true,acompanhamento:await acompanhamentoDaConversa_(env,id)};
+  await notificarNovidade_(env,c.canal);return {ok:true,acompanhamento:await acompanhamentoDaConversa_(env,id)};
+}
+async function conferirAcompanhamento_(env,id){
+  const a=await env.DB.prepare("SELECT id,conversa_id,entrada_ref,status FROM msg_acompanhamento WHERE id=?").bind(id).first();
+  if(!a||a.status!=='ativo')return false;
+  const c=await contextoAcompanhamento_(env,a.conversa_id);
+  if(!c||c.encerrada_em||c.entradaRef>a.entrada_ref){const em=agora();await env.DB.batch([env.DB.prepare("UPDATE msg_acompanhamento SET status='cancelada',atualizado_em=?,erro=? WHERE id=? AND status='ativo'").bind(em,c?.encerrada_em?'Atendimento encerrado.':'Cliente respondeu.',id),env.DB.prepare("UPDATE msg_agenda SET status='cancelada',erro='Acompanhamento cancelado.' WHERE acompanhamento=? AND status='pendente'").bind(id)]);return false;}
+  return true;
+}
+async function finalizarAcompanhamento_(env,a,em){
+  const alvo="(SELECT CASE WHEN "+MSG_IDENTIDADE_SQL_+"<>'' THEN "+MSG_IDENTIDADE_SQL_+" ELSE 'c:'||id END FROM msg_conversa WHERE id=?)";
+  const [r]=await env.DB.batch([
+    env.DB.prepare("UPDATE msg_conversa SET encerrada_em=?,encerrada_motivo='sem_resposta',nao_lidas=0,atualizada_em=? WHERE id=? AND encerrada_em='' AND EXISTS(SELECT 1 FROM msg_acompanhamento WHERE id=? AND status='ativo') AND NOT EXISTS(SELECT 1 FROM msg_mensagem m WHERE m.direcao='entrada' AND m.id>? AND m.conversa_id IN (SELECT id FROM msg_conversa WHERE id=? OR (grupo=0 AND (CASE WHEN "+MSG_IDENTIDADE_SQL_+"<>'' THEN "+MSG_IDENTIDADE_SQL_+" ELSE 'c:'||id END)="+alvo+")))").bind(em,em,a.conversa_id,a.acompanhamento,a.entrada_ref,a.conversa_id,a.conversa_id),
+    env.DB.prepare("INSERT INTO msg_encerramento(conversa_id,canal,pessoa,contato,motivo,em,por) SELECT id,canal,pessoa,contato,'sem_resposta',?,? FROM msg_conversa WHERE id=? AND changes()=1").bind(em,a.autor,a.conversa_id),
+    env.DB.prepare("UPDATE msg_acompanhamento SET status='concluida',atualizado_em=?,erro=? WHERE id=? AND status='ativo' AND EXISTS(SELECT 1 FROM msg_conversa WHERE id=? AND encerrada_em=?)").bind(em,a.erroFinal||'',a.acompanhamento,a.conversa_id,em)
+  ]);
+  return Number(r.meta?.changes)===1;
+}
+async function processarEtapaAcompanhamento_(env,a,ms){
+  const id=a.acompanhamento;
+  if(!await conferirAcompanhamento_(env,id))return {status:'cancelada',erro:'Acompanhamento cancelado.'};
+  const plano=await env.DB.prepare('SELECT * FROM msg_acompanhamento WHERE id=?').bind(id).first();
+  const canal=(await env.DB.prepare('SELECT canal FROM msg_conversa WHERE id=?').bind(a.conversa_id).first())?.canal;
+  if(canal&&await msgPausado_(env,canal))return {status:'pendente',quando:new Date(ms+5*60000).toISOString(),erro:'Canal pausado; acompanhamento aguardando.'};
+  const cfg=await msgAuto_(env),abertura=horarioLoja_(ms,cfg.feriados,cfg.expediente);
+  if(!abertura.aberta){
+    if(!abertura.abreEm)return {status:'falhou',erro:'Confira o horário de atendimento nas configurações.'};
+    await env.DB.prepare("UPDATE msg_acompanhamento SET quando=?,atualizado_em=? WHERE id=? AND status='ativo'").bind(abertura.abreEm,agora(),id).run();
+    return {status:'pendente',quando:abertura.abreEm,erro:''};
+  }
+  let corpo={ok:true},enviouMensagem=false,textoEnviado='',avisoFinal='';
+  if(a.tipo==='lembrete'||plano.texto_final){
+    textoEnviado=(a.tipo==='lembrete'?plano.texto_lembrete:plano.texto_final).replace(/\{saudacao\}/g,saudacaoAtendimento_(ms));
+    const [,r]=await responderMensagem_(env,'auto',{conversa:a.conversa_id,texto:textoEnviado,idLocal:'acomp-'+id+'-'+a.tipo,_acompanhamento:id,_janelaAutomatica:true});corpo=r;
+    if(!corpo?.ok){
+      if(a.tipo==='lembrete'||corpo?.cancelado)return {status:corpo?.cancelado?'cancelada':'falhou',erro:corpo?.erro||'Não foi possível confirmar o lembrete.',texto:textoEnviado};
+      avisoFinal='Atendimento encerrado; mensagem final '+(corpo?.incerto?'sem confirmação. ':'não enviada. ')+String(corpo?.erro||'Confira a conversa.').slice(0,160);
+    }
+    enviouMensagem=!!corpo?.ok;
+  }
+  // A resposta pode ter entrado durante a chamada ao provedor. Nunca arma o próximo passo nesse caso.
+  if(!await conferirAcompanhamento_(env,id))return {status:enviouMensagem?'enviada':'cancelada',erro:'Cliente respondeu; próximos passos cancelados.',texto:textoEnviado||undefined};
+  const em=new Date(Math.max(ms,Date.now())).toISOString();
+  if(a.tipo==='lembrete'){
+    let quando;try{quando=somarMinutosUteis_(Math.max(ms,Date.parse(em)),120,cfg.expediente,cfg.feriados);if(Date.parse(quando)>Date.parse(plano.criado_em)+60*DIA_MS_)throw Error('Prazo muito longo.');}catch(_){return {status:'falhou',erro:'Lembrete enviado. Confira o expediente para definir o encerramento.',texto:textoEnviado};}
+    await env.DB.batch([
+      env.DB.prepare("UPDATE msg_agenda SET status='enviada',erro='',enviado_em=?,texto=? WHERE id=? AND status='enviando'").bind(em,textoEnviado,a.id),
+      env.DB.prepare("INSERT INTO msg_agenda(conversa_id,texto,quando,autor,whats,criado_em,tipo,acompanhamento,auth_ref) SELECT conversa_id,texto_final,?,autor,whats,?,'encerrar',id,auth_ref FROM msg_acompanhamento WHERE id=? AND status='ativo' AND etapa='lembrete'").bind(quando,em,id),
+      env.DB.prepare("UPDATE msg_acompanhamento SET etapa='encerrar',quando=?,lembrete_em=?,atualizado_em=? WHERE id=? AND status='ativo' AND etapa='lembrete'").bind(quando,em,em,id)
+    ]);
+    return {status:'enviada',erro:'',texto:textoEnviado};
+  }
+  const encerrou=await finalizarAcompanhamento_(env,{...a,entrada_ref:plano.entrada_ref,erroFinal:avisoFinal},em);
+  return {status:encerrou?(avisoFinal?'falhou':'enviada'):'cancelada',erro:encerrou?avisoFinal:'Cliente respondeu ou atendimento já encerrado.',texto:textoEnviado||undefined};
+}
 /** Valida o pedido de agendamento. Devolve [erro] ou [null, {texto, quando}]. */
 export function validarAgenda_(d, agoraMs) {
   const texto = String(d && d.texto != null ? d.texto : '').replace(/\r\n/g, '\n').trim();
-  if (!texto) return ['Escreva a mensagem antes de agendar.'];
+  const anexo=String(d?.anexo||'');
+  if(anexo&&!MSG_ANEXO_RE_.test(anexo))return ['Anexo inválido. Escolha o arquivo novamente.'];
+  if (!texto&&!anexo) return ['Escreva a mensagem ou escolha um anexo antes de agendar.'];
   if (texto.length > 1000) return ['A mensagem agendada aceita até 1000 letras. Divida em duas.'];
   const t = Date.parse(String((d && d.quando) || '')), n = agoraMs || Date.now();
   if (!d || !d.quando || isNaN(t)) return ['Escolha o dia e a hora do envio.'];
   if (t <= n + 30000) return ['Esse horário já passou. Escolha um horário no futuro.'];
   if (t > n + AGENDA_MAX_DIAS_ * 86400000) return ['Dá para agendar no máximo ' + AGENDA_MAX_DIAS_ + ' dias à frente.'];
-  return [null, { texto: texto, quando: new Date(t).toISOString() }];
+  return [null, { texto: texto, quando: new Date(t).toISOString(),anexo }];
 }
 export async function agendasDaConversa_(env, conversa) {
   const pendentes = (await env.DB.prepare("SELECT " + AGENDA_COLS_ + " FROM msg_agenda WHERE conversa_id=? AND status IN ('pendente','enviando') ORDER BY quando, id LIMIT 50").bind(conversa).all()).results || [];
-  const historico = (await env.DB.prepare("SELECT " + AGENDA_COLS_ + " FROM msg_agenda WHERE conversa_id=? AND status IN ('enviada','falhou') ORDER BY COALESCE(NULLIF(enviado_em,''),quando) DESC, id DESC LIMIT 10").bind(conversa).all()).results || [];
+  const historico = (await env.DB.prepare("SELECT " + AGENDA_COLS_ + " FROM msg_agenda WHERE conversa_id=? AND status IN ('enviada','falhou','cancelada') ORDER BY COALESCE(NULLIF(enviado_em,''),quando) DESC, id DESC LIMIT 10").bind(conversa).all()).results || [];
   return { pendentes: pendentes, historico: historico };
+}
+async function painelAgenda_(env,req,url){
+  const q=url.searchParams,estado=q.get('status')||'pendentes',canal=q.get('canal')||'todos',tipo=q.get('tipo')||'todos';
+  if(!['pendentes','enviada','falhou','cancelada','todas'].includes(estado)||!['todos',...MSG_CANAIS].includes(canal)||!['todos','manual','lembrete','encerrar'].includes(tipo))throw Object.assign(Error('Confira os filtros dos agendamentos.'),{codigo:400});
+  const partes=['1=1'],args=[],asc=estado==='pendentes';
+  if(estado==='pendentes')partes.push("a.status IN ('pendente','enviando')");else if(estado!=='todas'){partes.push('a.status=?');args.push(estado);}
+  if(canal!=='todos'){partes.push('msg_conversa.canal=?');args.push(canal);}
+  if(tipo!=='todos'){partes.push('a.tipo=?');args.push(tipo);}
+  if(q.get('minhas')==='1'){
+    const d=(req.headers.get('X-TK-Whats')||'').replace(/\D/g,'');
+    partes.push("(CASE WHEN length(a.whats)>=12 AND substr(a.whats,1,2)='55' THEN substr(a.whats,3) ELSE a.whats END)=?");args.push(d.length>=12&&d.startsWith('55')?d.slice(2):d);
+  }
+  const busca=String(q.get('busca')||'').trim().slice(0,120);
+  if(busca){partes.push('('+MSG_NOME_SQL_+" LIKE ? OR msg_conversa.contato LIKE ? OR a.texto LIKE ? OR a.anexo_nome LIKE ? OR a.autor LIKE ?)");args.push(...Array(5).fill('%'+busca+'%'));}
+  for(const [campo,sinal] of [['de','>='],['ate','<=']]){
+    const v=q.get(campo);if(!v)continue;
+    if(!dataValidaExpediente_(v))throw Object.assign(Error('Confira o período dos agendamentos.'),{codigo:400});
+    partes.push('a.quando'+sinal+'?');args.push(new Date(v+(campo==='de'?'T00:00:00.000-03:00':'T23:59:59.999-03:00')).toISOString());
+  }
+  // Datas são armazenadas em UTC; o fim do dia de Fortaleza vira 02:59:59Z do dia seguinte.
+  const ate=q.get('ate');
+  if(q.get('de')&&ate&&q.get('de')>ate)throw Object.assign(Error('A data inicial precisa vir antes da final.'),{codigo:400});
+  const cursor=q.get('cursor');
+  if(cursor){let c;try{c=JSON.parse(atob(cursor));}catch(_){throw Object.assign(Error('Atualize a lista de agendamentos.'),{codigo:400});}
+    if(!Number.isSafeInteger(c.id)||c.id<1||typeof c.quando!=='string'||!/^\d{4}-\d\d-\d\dT/.test(c.quando)||!Number.isFinite(Date.parse(c.quando)))throw Object.assign(Error('Atualize a lista de agendamentos.'),{codigo:400});
+    const sinal=asc?'>':'<';partes.push('(a.quando'+sinal+'? OR (a.quando=? AND a.id'+sinal+'?))');args.push(c.quando,c.quando,c.id);
+  }
+  const ordem=asc?'ASC':'DESC',rs=(await env.DB.prepare("SELECT a.id,a.conversa_id,a.texto,a.quando,a.autor,a.status,a.erro,a.criado_em,a.enviado_em,a.tipo,a.acompanhamento,a.anexo_nome,a.anexo_mime,CASE WHEN a.anexo<>'' THEN 1 ELSE 0 END AS tem_anexo,msg_conversa.canal,msg_conversa.contato,"+MSG_NOME_SQL_+' AS nome FROM msg_agenda a JOIN msg_conversa ON msg_conversa.id=a.conversa_id WHERE '+partes.join(' AND ')+' ORDER BY a.quando '+ordem+',a.id '+ordem+' LIMIT 31').bind(...args).all()).results||[];
+  const mais=rs.length>30,itens=rs.slice(0,30),ultimo=itens.at(-1);
+  return {ok:true,agendamentos:itens,temMais:mais,proximo:mais?btoa(JSON.stringify({id:ultimo.id,quando:ultimo.quando})):''};
 }
 /** Roda a cada minuto: envia até 5 agendadas vencidas. Marca "enviando" antes (nunca sai duas vezes) e usa o mesmo envio do POST /msg/enviar. */
 export async function processarAgenda_(env, agoraMs) {
   await iniciar(env);
-  const t = new Date(agoraMs || Date.now()).toISOString();
-  /* "enviando" há mais de 10 min = o Worker caiu no meio: não reenvia sozinho (pode ter saído); avisa para conferir */
-  await env.DB.prepare("UPDATE msg_agenda SET status='falhou', erro=? WHERE status='enviando' AND quando<?").bind('Ficou sem confirmação. Confira na conversa antes de mandar de novo.', new Date(Date.parse(t) - 10 * 60000).toISOString()).run();
-  const rs = (await env.DB.prepare("SELECT id, conversa_id, texto, whats, autor FROM msg_agenda WHERE status='pendente' AND quando<=? ORDER BY quando, id LIMIT 5").bind(t).all()).results || [];
-  let enviadas = 0;
-  for (const a of rs) {
-    const trava = await env.DB.prepare("UPDATE msg_agenda SET status='enviando' WHERE id=? AND status='pendente'").bind(a.id).run();
-    if (!trava.meta || trava.meta.changes !== 1) continue;          // outra execução já pegou
-    let status = 'falhou', erro = '';
-    try {
-      const [, corpo] = await responderMensagem_(env, a.whats || '', { conversa: a.conversa_id, texto: a.texto, idLocal: 'agenda-' + String(a.id).padStart(6, '0') });
-      if (corpo && corpo.ok) { status = 'enviada'; enviadas++; }
-      else erro = String((corpo && corpo.erro) || 'Não foi possível enviar.').slice(0, 200);
-    } catch (e) { erro = 'Erro inesperado ao enviar. Agende de novo.'; }
-    await env.DB.prepare('UPDATE msg_agenda SET status=?, erro=?, enviado_em=? WHERE id=?').bind(status, erro, agora(), a.id).run();
-    if (status === 'enviada' && a.autor) { try { await env.DB.prepare("UPDATE msg_conversa SET dono=? WHERE id=? AND (dono IS NULL OR dono='')").bind(a.autor, a.conversa_id).run(); } catch (e) { /* dono é conforto */ } }
+  const ms=agoraMs||Date.now(),t=new Date(ms).toISOString();
+  await renovarAutorizacoesAgenda_(env,ms);
+  await env.DB.prepare("UPDATE msg_agenda SET status='falhou',erro=? WHERE status='enviando' AND COALESCE(NULLIF(processando_em,''),quando)<?").bind('Ficou sem confirmação. Confira na conversa antes de mandar de novo.',new Date(ms-10*60000).toISOString()).run();
+  await env.DB.prepare("UPDATE msg_acompanhamento SET status='falhou',atualizado_em=?,erro='Uma etapa ficou sem confirmação. Confira a conversa.' WHERE status='ativo' AND EXISTS(SELECT 1 FROM msg_agenda WHERE acompanhamento=msg_acompanhamento.id AND status='falhou')").bind(t).run();
+  const rs=(await env.DB.prepare("SELECT * FROM msg_agenda WHERE status='pendente' AND quando<=? ORDER BY quando,id LIMIT 5").bind(t).all()).results||[];
+  const entradaPendente=rs.some(a=>a.acompanhamento)&&!!(await env.MIDIA.list({prefix:MSG_ENTRADA_PREFIXO_+'recebidas/',limit:1})).objects.length;
+  let enviadas=0;
+  for(const a of rs){
+    const trava=await env.DB.prepare("UPDATE msg_agenda SET status='enviando',processando_em=?,tentativas=tentativas+1 WHERE id=? AND status='pendente'").bind(t,a.id).run();
+    if(Number(trava.meta?.changes)!==1)continue;
+    let resultado={status:'falhou',erro:'Não foi possível confirmar o envio.'};
+    try{
+      let autorizacao={ok:true};
+      if(a.auth_ref)autorizacao=await autorizacaoAgenda_(env,a.auth_ref,!!a.acompanhamento);
+      if(a.acompanhamento&&entradaPendente){resultado={status:'pendente',quando:new Date(ms+60000).toISOString(),erro:'Aguardando mensagens já recebidas antes de acompanhar.'};
+      }else if(!autorizacao.ok){
+        resultado=autorizacao.temporario&&Number(a.tentativas)<11?{status:'pendente',quando:new Date(ms+5*60000).toISOString(),erro:autorizacao.erro}:{status:'falhou',erro:autorizacao.erro};
+      }else if(a.acompanhamento){resultado=await processarEtapaAcompanhamento_(env,a,ms);
+      }else{
+        const [,corpo]=await responderMensagem_(env,a.whats||'',{conversa:a.conversa_id,texto:a.texto,anexo:a.anexo||'',idLocal:'agenda-'+String(a.id).padStart(6,'0'),_janelaAutomatica:!!a.auth_ref});
+        resultado=corpo?.ok?{status:'enviada',erro:''}:{status:'falhou',erro:String(corpo?.erro||'Não foi possível enviar.').slice(0,200)};
+      }
+    }catch(_){resultado={status:'falhou',erro:'Uma etapa ficou sem confirmação. Confira a conversa antes de tentar novamente.'};}
+    const em=new Date(Math.max(ms,Date.now())).toISOString();
+    await env.DB.prepare("UPDATE msg_agenda SET status=?,erro=?,enviado_em=?,quando=COALESCE(?,quando),texto=COALESCE(?,texto) WHERE id=? AND status='enviando'").bind(resultado.status,resultado.erro||'',resultado.status==='enviada'?em:'',resultado.quando||null,resultado.texto??null,a.id).run();
+    if(resultado.status==='enviada'&&(a.tipo!=='encerrar'||resultado.texto&&!resultado.erro))enviadas++;
+    if(a.acompanhamento){
+      if(resultado.status==='falhou')await env.DB.prepare("UPDATE msg_acompanhamento SET status='falhou',erro=?,atualizado_em=? WHERE id=? AND status='ativo'").bind(resultado.erro,em,a.acompanhamento).run();
+      else if(resultado.quando)await env.DB.prepare("UPDATE msg_acompanhamento SET quando=?,atualizado_em=? WHERE id=? AND status='ativo'").bind(resultado.quando,em,a.acompanhamento).run();
+    }else if(resultado.status==='enviada'&&a.autor){await env.DB.prepare("UPDATE msg_conversa SET dono=? WHERE id=? AND (dono IS NULL OR dono='')").bind(a.autor,a.conversa_id).run();}
+    await env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=?').bind(em,a.conversa_id).run();
+    await notificarNovidade_(env);
   }
-  return { vistas: rs.length, enviadas: enviadas };
+  return {vistas:rs.length,enviadas};
 }
+
 /** Detecta o tipo real do arquivo pelos primeiros bytes (nunca confia no nome nem no tipo declarado). */
 function detectarAnexo_(buf, tipoPedido) {
   const u = new Uint8Array(buf, 0, Math.min(buf.byteLength, 32)), eq = (i, t) => t.split('').every((c, k) => u[i + k] === c.charCodeAt(0));
@@ -4413,7 +4672,7 @@ export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url), h = cors(env, req); let direitos = null;
     const J = (c, s) => {
-      if(c?.ok&&(!s||s<300)&&['POST','DELETE'].includes(req.method)&&/^\/msg\/(enviar|lida|dono|encerrar|rotular|etiquetas|notas|ficha|pessoa)(\/|$)/.test(url.pathname)){
+      if(c?.ok&&(!s||s<300)&&['POST','DELETE'].includes(req.method)&&/^\/msg\/(enviar|lida|dono|encerrar|rotular|etiquetas|notas|ficha|pessoa|agendar|acompanhamento)(\/|$)/.test(url.pathname)){
         const p=notificarNovidade_(env);if(ctx?.waitUntil)ctx.waitUntil(p);
       }
       return resp(direitos ? msgFiltrarDados_(c,direitos) : c, s, h);
@@ -4623,7 +4882,7 @@ export default {
         try { conv.etiquetas = (await etiquetasDosAlvos_(env, [alvoDe_(conv)]))[alvoDe_(conv)] || []; } catch (e) { conv.etiquetas = []; }
         if (!antes && !conv.grupo) { try { const fx = await env.DB.prepare('SELECT tamanhos FROM msg_ficha WHERE alvo=?').bind(alvoDe_(conv)).first(); conv.tamanhos = (fx && fx.tamanhos) || ''; } catch (e) { conv.tamanhos = ''; } }   // v7.40.14: "Veste M · 38" na faixa
         let agendadas; if (!antes) { try { agendadas = (await agendasDaConversa_(env, id)).pendentes; } catch (e) { agendadas = []; } }
-        return J({ ok: true, conversa: conv, mensagens: rs.results.reverse(), notas: notas, agendadas: agendadas, temMais: rs.results.length === 100, cursor: agora() });
+        return J({ ok: true, conversa: conv, mensagens: rs.results.reverse(), notas: notas, agendadas: agendadas, acompanhamento:direitos.agenda?await acompanhamentoDaConversa_(env,id):undefined, temMais: rs.results.length === 100, cursor: agora() });
       }
       if (p === '/msg/etiquetas' && req.method === 'GET') {
         const lista = await etiquetas_(env);
@@ -4726,7 +4985,8 @@ export default {
         if (conv) mensagens = (await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=? AND (id>? OR status_em>=?) ORDER BY enviada_em, id LIMIT 200').bind(conv, depois, st).all()).results;
         const saude = url.searchParams.get('cont') === '1' ? await saudeAvisos_(env) : undefined;
         let notas;if(conv){const c=await env.DB.prepare('SELECT id,'+MSG_IDENTIDADE_SQL_+' AS pessoa FROM msg_conversa WHERE id=?').bind(conv).first();if(c)notas=(await env.DB.prepare("SELECT id,texto,autor,em FROM msg_nota WHERE alvo=? AND length(excluida_em)=0 ORDER BY em,id LIMIT 200").bind(c.pessoa?String(c.pessoa):'c:'+conv).all()).results;}
-        return J({ ok: true, cursor: cursorConsulta, saude: saude, notas:notas, conversas: cs.results, mensagens: mensagens, contagens: (cs.results.length || url.searchParams.get('cont') === '1') ? await msgContagens_(env) : undefined });
+        const agendadas=conv&&direitos.agenda&&(cs.results.some(c=>c.id===conv)||url.searchParams.get('cont')==='1')?(await agendasDaConversa_(env,conv)).pendentes:undefined;
+        return J({ ok: true, cursor: cursorConsulta, saude: saude, notas:notas,agendadas, acompanhamento:conv&&direitos.agenda?await acompanhamentoDaConversa_(env,conv):undefined, conversas: cs.results, mensagens: mensagens, contagens: (cs.results.length || url.searchParams.get('cont') === '1') ? await msgContagens_(env) : undefined });
       }
       if (p === '/msg/diagnostico' && req.method === 'GET') {
         const out = {}; for (const n of [1, 2]) { try { out['whatsapp' + n] = JSON.parse((await cfgGet(env, 'msg_ligar_diag_' + n)) || 'null'); } catch (e) { out['whatsapp' + n] = null; } }
@@ -4776,36 +5036,61 @@ export default {
       }
       if (p === '/msg/contagem' && req.method === 'GET') return J({ ok: true, contagens: await msgContagens_(env) });
       if (p === '/msg/enviar' && req.method === 'POST') {
-        const d = await req.json().catch(() => ({}));
+        const d = await req.json().catch(() => ({}));delete d._acompanhamento;delete d._janelaAutomatica;
         if(!perms.includes('gerir_acessos') && String(d.texto||'').trim()){const c=await env.DB.prepare('SELECT canal FROM msg_conversa WHERE id=?').bind(Number(d.conversa)||0).first();if(c)d.texto=await textoAssinadoEquipe_(env,req,c.canal,d.texto);}
         const [cod, corpo] = await responderMensagem_(env, req.headers.get('X-TK-Whats') || '', d);
         if (cod === 200 && corpo && corpo.ok && Number(d.conversa)) { try { await env.DB.prepare("UPDATE msg_conversa SET dono=? WHERE id=? AND (dono IS NULL OR dono='')").bind(await meuNomeAtendente_(env, req), Number(d.conversa)).run(); } catch (e) { /* dono é conforto */ } }   // v7.40.6: quem responde primeiro vira o responsável
         return J(corpo, cod);
       }
-      if (p === '/msg/agendar' && req.method === 'POST') {   // v7.40.13: agendar mensagem
-        const d = await req.json().catch(() => ({})), id = Number(d.conversa) || 0;
-        const conv = id ? await env.DB.prepare('SELECT id FROM msg_conversa WHERE id=?').bind(id).first() : null;
-        if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
-        if(!perms.includes('gerir_acessos')){const c=await env.DB.prepare('SELECT canal FROM msg_conversa WHERE id=?').bind(id).first();if(c)d.texto=await textoAssinadoEquipe_(env,req,c.canal,d.texto);}
-        const [erro, v] = validarAgenda_(d);
-        if (erro) return J({ ok: false, erro: erro }, 400);
-        const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM msg_agenda WHERE conversa_id=? AND status='pendente'").bind(id).first();
-        if (n && n.n >= 20) return J({ ok: false, erro: 'Esta conversa já tem 20 mensagens agendadas. Cancele alguma antes.' }, 409);
-        const whats = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(0, 20), autor = await meuNomeAtendente_(env, req), em = agora();
-        const r = await env.DB.prepare('INSERT INTO msg_agenda (conversa_id, texto, quando, autor, whats, status, criado_em) VALUES (?,?,?,?,?,?,?)').bind(id, v.texto, v.quando, autor, whats, 'pendente', em).run();
-        const nova = await env.DB.prepare('SELECT ' + AGENDA_COLS_ + ' FROM msg_agenda WHERE id=?').bind(r.meta && r.meta.last_row_id).first();
-        return J(Object.assign({ ok: true, agendada: nova }, await agendasDaConversa_(env, id)));
+      if(p==='/msg/acompanhamento'&&req.method==='GET'){
+        const id=Number(url.searchParams.get('conversa'))||0;
+        if(!id)return J({ok:false,erro:'Escolha uma conversa.'},400);
+        return J({ok:true,acompanhamento:await acompanhamentoDaConversa_(env,id)});
+      }
+      if(p==='/msg/acompanhamento'&&req.method==='POST'){
+        const d=await req.json().catch(()=>({}));
+        if(d.ligado===true&&!direitos.responder)return J({ok:false,erro:'Seu acesso não permite enviar mensagens.'},403);
+        const r=await alterarAcompanhamento_(env,req,d),cod=r.cod||200;delete r.cod;return J(r,cod);
+      }
+      if (p === '/msg/agendar' && req.method === 'POST') {
+        if(!direitos.responder)return J({ok:false,erro:'Seu acesso não permite enviar mensagens.'},403);
+        const d=await req.json().catch(()=>({})),id=Number(d.conversa)||0;
+        const conv=id?await env.DB.prepare('SELECT id,canal,ult_entrada_em FROM msg_conversa WHERE id=?').bind(id).first():null;
+        if(!conv)return J({ok:false,erro:'Conversa não encontrada.'},404);
+        if(!perms.includes('gerir_acessos')&&String(d.texto||'').trim())d.texto=await textoAssinadoEquipe_(env,req,conv.canal,d.texto);
+        const [erro,v]=validarAgenda_(d);if(erro)return J({ok:false,erro},400);
+        if(conv.canal==='instagram'&&(!conv.ult_entrada_em||Date.parse(v.quando)>=Date.parse(conv.ult_entrada_em)+24*3600000))return J({ok:false,erro:'Escolha um horário dentro das 24 horas da última mensagem recebida no Instagram.'},400);
+        let mime='',nome='';
+        if(v.anexo){
+          const head=await env.MIDIA.head(v.anexo);mime=mimeLimpo_(head?.httpMetadata?.contentType||'');
+          if(!head||!MSG_TIPO_DE_MIME_(mime))return J({ok:false,erro:'O anexo não está disponível. Escolha de novo.'},400);
+          if(conv.canal==='instagram'&&v.texto)return J({ok:false,erro:'No Instagram, agende o arquivo e o texto em mensagens separadas.'},400);
+          nome=String(d.anexoNome||'Anexo').replace(/[\/\\\r\n\u0000-\u001f]/g,' ').trim().slice(0,120)||'Anexo';
+        }
+        const whats=(req.headers.get('X-TK-Whats')||'').replace(/\D/g,'').slice(0,20),autor=await meuNomeAtendente_(env,req),em=agora();
+        const nonce=d.idLocal==null?hex(16):String(d.idLocal);
+        if(!/^[A-Za-z0-9_-]{8,64}$/.test(nonce))return J({ok:false,erro:'Atualize a conversa e tente novamente.'},400);
+        const chave=await sha(whats+'|agenda|'+nonce);
+        let nova=await env.DB.prepare('SELECT '+AGENDA_COLS_+' FROM msg_agenda WHERE chave=?').bind(chave).first();
+        if(nova)return J({ok:true,agendada:nova,...await agendasDaConversa_(env,id)});
+        const n=await env.DB.prepare("SELECT COUNT(*) n FROM msg_agenda WHERE conversa_id=? AND status='pendente'").bind(id).first();
+        if(Number(n?.n)>=20)return J({ok:false,erro:'Esta conversa já tem 20 mensagens agendadas. Cancele alguma antes.'},409);
+        const auth=await guardarAutorizacaoAgenda_(env,req);
+        await env.DB.batch([env.DB.prepare("INSERT OR IGNORE INTO msg_agenda(conversa_id,texto,quando,autor,whats,status,criado_em,anexo,anexo_nome,anexo_mime,auth_ref,chave) VALUES(?,?,?,?,?,'pendente',?,?,?,?,?,?)").bind(id,v.texto,v.quando,autor,whats,em,v.anexo,nome,mime,auth,chave),env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=? AND changes()=1').bind(em,id)]);
+        nova=await env.DB.prepare('SELECT '+AGENDA_COLS_+' FROM msg_agenda WHERE chave=?').bind(chave).first();
+        return J({ok:true,agendada:nova,...await agendasDaConversa_(env,id)});
       }
       if (p === '/msg/agendadas' && req.method === 'GET') {
         const id = Number(url.searchParams.get('conversa')) || 0;
-        if (!id) return J({ ok: false, erro: 'Escolha uma conversa.' }, 400);
+        if (!id) return J(await painelAgenda_(env,req,url));
         return J(Object.assign({ ok: true }, await agendasDaConversa_(env, id)));
       }
       if (p === '/msg/agendar/cancelar' && req.method === 'POST') {
         const d = await req.json().catch(() => ({})), id = Number(d.id) || 0;
-        const a = id ? await env.DB.prepare('SELECT conversa_id, status FROM msg_agenda WHERE id=?').bind(id).first() : null;
+        const a = id ? await env.DB.prepare('SELECT conversa_id, status,acompanhamento FROM msg_agenda WHERE id=?').bind(id).first() : null;
         if (!a) return J({ ok: false, erro: 'Agendamento não encontrado.' }, 404);
-        const r = await env.DB.prepare("UPDATE msg_agenda SET status='cancelada' WHERE id=? AND status='pendente'").bind(id).run();
+        if(a.acompanhamento){const r=await alterarAcompanhamento_(env,req,{conversa:a.conversa_id,ligado:false});return J({...r,...await agendasDaConversa_(env,a.conversa_id)});}
+        const [r] = await env.DB.batch([env.DB.prepare("UPDATE msg_agenda SET status='cancelada' WHERE id=? AND status='pendente'").bind(id),env.DB.prepare('UPDATE msg_conversa SET atualizada_em=? WHERE id=? AND changes()=1').bind(agora(),a.conversa_id)]);
         if (!r.meta || r.meta.changes !== 1) return J({ ok: false, erro: a.status === 'cancelada' ? 'Este agendamento já estava cancelado.' : 'Não dá mais para cancelar: a mensagem já ' + (a.status === 'enviando' ? 'está saindo' : a.status === 'enviada' ? 'foi enviada' : 'foi processada') + '.' }, 409);
         return J(Object.assign({ ok: true }, await agendasDaConversa_(env, a.conversa_id)));
       }
@@ -4942,7 +5227,7 @@ export default {
       if (p === '/msg/auto' && (req.method === 'GET' || req.method === 'POST')) {   // v7.40.9: respostas automáticas (desligadas por padrão)
         const auto = req.method === 'POST' ? await salvarMsgAuto_(env, await req.json().catch(() => ({}))) : await msgAuto_(env);
         let diag = null; try { diag = JSON.parse((await cfgGet(env, 'msg_auto_diag')) || 'null'); } catch (e) { diag = null; }
-        return J({ ok: true, auto: auto, agora: horarioLoja_(Date.now(), auto.feriados), ultimo: diag });
+        return J({ ok: true, auto: auto, agora: horarioLoja_(Date.now(), auto.feriados, auto.expediente), ultimo: diag });
       }
       if (p === '/msg/exportar' && req.method === 'GET') {
         const q = {}; for (const k of ['canal', 'conversa', 'formato', 'de', 'ate']) q[k] = url.searchParams.get(k) || '';

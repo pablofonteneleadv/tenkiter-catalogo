@@ -130,22 +130,59 @@ def tratar(route, path, method, body, s):
         cid = int(q["conversa"]); c = enfeitar(s, next(x for x in s["convs"] if x["id"] == cid))
         if not c["grupo"]: c["tamanhos"] = (s.get("fichas", {}).get(pessoa(c) or "c:%d" % cid) or {}).get("tamanhos", "")
         return J({"ok": True, "conversa": c, "mensagens": sorted([x for x in s["msgs"] if x["conversa_id"] == cid], key=lambda x: (x["enviada_em"], x["id"])), "notas": s.get("notas", {}).get(pessoa(c) or "c:%d" % cid, []), "agendadas": agendas(s, cid)["pendentes"], "temMais": False, "cursor": agora()}) or True
+    if path == "/msg/acompanhamento":
+        cid = int(q.get("conversa") or 0) if method == "GET" else int(body.get("conversa") or 0)
+        itens = s.setdefault("acompanhamentos", {})
+        if method == "POST":
+            s.setdefault("acompanhamento_posts", []).append(body)
+            if s.get("acompanhamento_falha"): return J({"ok":False,"erro":"Não foi possível confirmar. Tente novamente."},503) or True
+            if body.get("ligado"):
+                if not itens.get(cid) or itens[cid]["status"] != "ativo":
+                    s["seq"] += 1
+                    itens[cid] = {"id":s["seq"],"conversa_id":cid,"status":"ativo","etapa":"lembrete","quando":iso(-120),"autor":"Ana","erro":""}
+                    s.setdefault("agenda", []).append({"id":s["seq"],"conversa_id":cid,"tipo":"lembrete","acompanhamento":s["seq"],"status":"pendente","quando":iso(-120),"texto":"Lembrete de acompanhamento","autor":"Ana"})
+            elif cid in itens:
+                itens[cid]["status"] = "cancelada"
+                for a in s.get("agenda", []):
+                    if a.get("acompanhamento") == itens[cid]["id"]: a["status"] = "cancelada"
+        return J({"ok":True,"acompanhamento":itens.get(cid)}) or True
     if path == "/msg/agendadas":   # v7.40.13: mensagens agendadas
+        if not q.get("conversa"):
+            s.setdefault("agenda_consultas",[]).append(q)
+            itens=[]
+            for a in s.get("agenda",[]):
+                c=next(x for x in s["convs"] if x["id"]==a["conversa_id"])
+                itens.append(dict(a,nome=c["nome"],canal=c["canal"],contato=c["contato"]))
+            estado=q.get("status","pendentes")
+            if estado=="pendentes": itens=[a for a in itens if a["status"] in ("pendente","enviando")]
+            elif estado!="todas": itens=[a for a in itens if a["status"]==estado]
+            if q.get("canal") not in (None,"todos"): itens=[a for a in itens if a["canal"]==q["canal"]]
+            if q.get("tipo") not in (None,"todos"): itens=[a for a in itens if a.get("tipo","manual")==q["tipo"]]
+            if q.get("busca"): itens=[a for a in itens if q["busca"].casefold() in " ".join(str(a.get(k,"")) for k in ("nome","contato","texto","anexo_nome","autor")).casefold()]
+            itens.sort(key=lambda a:(a["quando"],a["id"]),reverse=estado!="pendentes");offset=int(q.get("cursor") or 0);mais=len(itens)>offset+30
+            return J({"ok":True,"agendamentos":itens[offset:offset+30],"temMais":mais,"proximo":str(offset+30) if mais else ""}) or True
         return J(dict({"ok": True}, **agendas(s, int(q["conversa"])))) or True
     if path == "/msg/agendar":
         s.setdefault("agendar_posts", []).append(body)
         texto = str(body.get("texto") or "").strip(); quando = str(body.get("quando") or "")
-        if not texto: return J({"ok": False, "erro": "Escreva a mensagem antes de agendar."}, 400) or True
+        if not texto and not body.get("anexo"): return J({"ok": False, "erro": "Escreva a mensagem antes de agendar."}, 400) or True
         if not quando or quando <= agora(): return J({"ok": False, "erro": "Esse horário já passou. Escolha um horário no futuro."}, 400) or True
-        s["seq"] += 1
-        a = {"id": s["seq"], "conversa_id": body["conversa"], "texto": texto, "quando": quando, "autor": "Ana", "status": "pendente", "erro": "", "criado_em": agora(), "enviado_em": ""}
-        s.setdefault("agenda", []).append(a)
+        a = next((x for x in s.get("agenda", []) if body.get("idLocal") and x.get("idLocal")==body["idLocal"]),None)
+        if not a:
+            s["seq"] += 1
+            a = {"id": s["seq"], "conversa_id": body["conversa"], "texto": texto, "quando": quando, "autor": "Ana", "status": "pendente", "erro": "", "criado_em": agora(), "enviado_em": "", "idLocal":body.get("idLocal"),"tem_anexo":bool(body.get("anexo")),"anexo_nome":body.get("anexoNome","")}
+            s.setdefault("agenda", []).append(a)
+        if s.pop("agendar_falha_apos_gravar",False): return J({"ok":False,"erro":"Não foi possível confirmar. Tente novamente."},503) or True
         return J(dict({"ok": True, "agendada": a}, **agendas(s, body["conversa"]))) or True
     if path == "/msg/agendar/cancelar":
         a = next((x for x in s.get("agenda", []) if x["id"] == body.get("id")), None)
         if not a: return J({"ok": False, "erro": "Agendamento não encontrado."}, 404) or True
         if a["status"] != "pendente": return J({"ok": False, "erro": "Não dá mais para cancelar: a mensagem já foi enviada."}, 409) or True
         a["status"] = "cancelada"; s.setdefault("cancelados", []).append(a["id"])
+        if a.get("acompanhamento"):
+            if a["conversa_id"] in s.get("acompanhamentos",{}): s["acompanhamentos"][a["conversa_id"]]["status"]="cancelada"
+            for outro in s.get("agenda",[]):
+                if outro.get("acompanhamento")==a["acompanhamento"]: outro["status"]="cancelada"
         return J(dict({"ok": True}, **agendas(s, a["conversa_id"]))) or True
     if path == "/msg/ficha":   # v7.40.14: ficha do cliente (mesmas regras do Worker: por pessoa, limites, só o que existe)
         cid = int(q.get("conversa") or 0) if method == "GET" else int(body.get("conversa") or 0)
@@ -230,7 +267,7 @@ def tratar(route, path, method, body, s):
         # a "folga" de 3 s do servidor real: devolve o que mudou desde o cursor
         cs = [enfeitar(s, x) for x in s["convs"] if x["atualizada_em"] >= desde[:-1] and x["total"] > 0]
         ms = [x for x in s["msgs"] if cid and x["conversa_id"] == cid and (x["id"] > dep or x["status_em"] >= q.get("st", "z")[:-1])] if cid else []
-        return J({"ok": True, "cursor": agora(), "conversas": cs, "mensagens": ms, "notas": s.get("notas", {}).get(pessoa(next(x for x in s["convs"] if x["id"] == cid)) or "c:%d" % cid, []) if cid else [], "contagens": {c: cont(s, c) for c in ("whatsapp1", "whatsapp2", "instagram", "todos")}, "saude": s.get("saude", {"alerta":False})}) or True
+        return J({"ok": True, "cursor": agora(), "conversas": cs, "mensagens": ms, "notas": s.get("notas", {}).get(pessoa(next(x for x in s["convs"] if x["id"] == cid)) or "c:%d" % cid, []) if cid else [], "contagens": {c: cont(s, c) for c in ("whatsapp1", "whatsapp2", "instagram", "todos")}, "saude": s.get("saude", {"alerta":False}), "acompanhamento":s.get("acompanhamentos",{}).get(cid)}) or True
     if path == "/msg/contagem":
         return J({"ok": True, "contagens": {c: cont(s, c) for c in ("whatsapp1", "whatsapp2", "instagram", "todos")}}) or True
     if path == "/msg/lida" and isinstance(body.get("conversas"), list):
@@ -338,6 +375,8 @@ def tratar(route, path, method, body, s):
                 if isinstance(d.get("ligado"), bool): au[k]["ligado"] = d["ligado"]
                 if isinstance(d.get("texto"), str) and d["texto"].strip(): au[k]["texto"] = d["texto"].strip()[:1000]
             if isinstance(body.get("feriados"), list): au["feriados"] = sorted(set(x for x in body["feriados"] if isinstance(x, str) and len(x) == 10))
+            for k in ("expediente", "acompanhamento"):
+                if isinstance(body.get(k),dict): au[k] = body[k]
             s.setdefault("auto_posts", []).append(body)
         return J({"ok": True, "auto": au, "agora": {"aberta": False, "abertura": "amanhã às 7h30"}, "ultimo": s.get("auto_ultimo")}) or True
     if path == "/msg/config":
