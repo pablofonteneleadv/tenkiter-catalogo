@@ -29,7 +29,7 @@ with sync_playwright() as p:
   pg.check('[name=ms-ft-tipo][value=grp]');pg.uncheck('[name=ms-ft-tipo][value=msg]');pg.click('[data-ms=filtros-aplicar]');pg.wait_for_selector('#ms-lista .ms-conv[data-id="3"]')
   assert pg.locator('#ms-lista .ms-conv').count()==1
   pg.click('[data-ms=filtros-abrir]');pg.click('[data-ms=filtros-limpar]');pg.wait_for_selector('#ms-lista .ms-conv[data-id="1"]');assert not pg.locator('#ms-lista .ms-conv[data-id="3"]').count()
-  pg.click('#ms-filtros [data-filtro=nao_lidas]');pg.wait_for_timeout(500);assert not pg.locator('#ms-lista .ms-conv[data-id="2"]').count()
+  pg.click('[data-ms=filtros-abrir]');pg.select_option('[name=ms-ft-fila]','nao_lidas');pg.click('[data-ms=filtros-aplicar]');pg.wait_for_timeout(500);assert not pg.locator('#ms-lista .ms-conv[data-id="2"]').count()
   pg.click('#ms-nav [data-ms=inicio]');pg.wait_for_selector('#ms-lista .ms-conv[data-id="2"]')
   pg.click('#ms-nav [data-ms=menu-geral]');pg.wait_for_selector('.ms-mais-grupo');pg.screenshot(path=str(OUT/f'mais-{w}.png'))
   pg.keyboard.press('Escape');pg.wait_for_timeout(250);assert not pg.locator('#ms-gaveta').count()

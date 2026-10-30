@@ -196,6 +196,7 @@ jobs:
           trap 'kill "$tecido_server_pid"' EXIT
           python3 tests/filtros_tecido.py
           python3 tests/tecidos_gestao.py
+          python3 tests/filas_atendimento_ui.py
           python3 tests/mensagens_clareza.py
           python3 tests/mensagens_gavetas_proposta.py
           python3 tests/disponibilidade_rapida.py
