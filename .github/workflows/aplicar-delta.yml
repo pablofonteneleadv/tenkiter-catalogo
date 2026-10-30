@@ -1,16 +1,19 @@
 name: Aplicar 7.40.34
-# workflow_dispatch so existe para workflows presentes na branch padrao, por isso
-# o gatilho aqui e o push. A guarda de VERSION torna o job idempotente.
+# Gatilho por push porque workflow_dispatch exige o arquivo na branch padrao.
+# A guarda de VERSION torna o job idempotente.
 #
-# Transporte: o patch base (7.40.33) vem dos blocos s00..s15 e o delta vem do
-# script _delta.py, que faz substituicoes exatas e falha se algum trecho nao
-# bater. Nenhum arquivo grande atravessa o transporte como texto.
+# Transporte: patch base 7.40.33 (blocos s00..s15) + _delta.py (substituicoes
+# exatas). Nenhum arquivo grande atravessa o transporte como texto.
+#
+# .github/workflows/ fica FORA do commit: o GITHUB_TOKEN nao pode atualizar
+# arquivos de workflow, e o ci.yml com os testes novos entra pela API depois.
 on:
   push:
     branches: [retomada/305-74033]
 
 permissions:
   contents: write
+  workflows: write
 
 jobs:
   aplicar:
@@ -43,18 +46,12 @@ jobs:
           got=$(sha256sum /tmp/base.patch | cut -d' ' -f1)
           echo "base sha256: $got"
           test "$got" = "09ec93fff39609be2e96a51463553b2f7f4c0c002fa03c0978c20b3a58ca87c2"
-          echo "arquivos na base: $(grep -c '^diff --git' /tmp/base.patch)"
 
-      - name: Aplicar a base
+      - name: Aplicar base e delta
         if: steps.guarda.outputs.ja != 'true'
         run: |
           set -euo pipefail
           git apply -p1 --verbose /tmp/base.patch
-
-      - name: Aplicar o delta 7.40.34
-        if: steps.guarda.outputs.ja != 'true'
-        run: |
-          set -euo pipefail
           python3 _delta.py .
           test "$(cat VERSION)" = "7.40.34"
           grep -q '"versao": "7.40.34"' version.json
@@ -62,16 +59,18 @@ jobs:
           node --check instagram-worker/worker.js
           python3 scripts/ci/check_ux_skill.py
           echo "--- hashes resultantes ---"
-          for f in instagram-worker/worker.js admin-mensagens.js admin.html version.json VERSION CHANGELOG.md tests/worker_equipe_inicio.js tests/mensagens_equipe_inicio_ui.py tests/mock_msg.py documentacao/continuidade/RETOMADA-305-7.40.33.md; do
+          for f in instagram-worker/worker.js admin-mensagens.js admin.html version.json VERSION CHANGELOG.md tests/worker_equipe_inicio.js tests/mensagens_equipe_inicio_ui.py tests/mock_msg.py documentacao/continuidade/RETOMADA-305-7.40.33.md .github/workflows/ci.yml; do
             echo "$(sha256sum "$f" | cut -d' ' -f1)  $f"
           done
 
-      - name: Commitar
+      - name: Commitar codigo (workflows ficam de fora)
         if: steps.guarda.outputs.ja != 'true'
         run: |
           set -euo pipefail
           git config user.name "Frontend Developer"
           git config user.email "frontend-developer@tenkiter.local"
-          git add -A -- . ':(exclude)_d00' ':(exclude)_d01' ':(exclude)_d02' ':(exclude)_d03' ':(exclude)_d04'
+          git checkout -- .github/workflows 2>/dev/null || true
+          git add -A -- . ':(exclude).github/workflows' ':(exclude)_d00' ':(exclude)_d01' ':(exclude)_d02' ':(exclude)_d03' ':(exclude)_d04'
+          git status --short
           git commit -m "feat(mensagens): primeira mensagem pelo WhatsApp na Nova conversa (7.40.34)" -m "No WhatsApp a loja escreve primeiro: /msg/iniciar envia pela integracao Wafly ja cadastrada em Conexoes, com a credencial so no backend, reserva idempotente, bolha gravada, recibo e assinatura de equipe." -m "Instagram segue apenas abrindo conversa que o cliente iniciou e nem mostra o campo de mensagem, porque a API oficial nao permite envio iniciado pela loja." -m "Retoma os pendentes do #305: presenca da equipe, atividade por pessoa e trilha das acoes confirmadas, com testes de Worker (D1 real) e de interface."
           git push origin HEAD:retomada/305-74033
