@@ -1,0 +1,94 @@
+name: aplicar retomada 305
+
+# Temporario: reconstroi o patch de 7.40.33 + o delta 7.40.34 a partir das fatias ja
+# versionadas, confere o sha256 de cada um e so entao aplica sobre a main e commita
+# apenas os arquivos reais na branch alvo.
+on:
+  workflow_dispatch:
+    inputs:
+      alvo:
+        description: branch de destino do commit
+        required: true
+        default: entregue/305-74034
+
+permissions:
+  contents: write
+
+jobs:
+  aplicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruir e conferir os patches
+        run: |
+          set -euo pipefail
+          git fetch origin retomada/305-74033 --depth=1
+          mkdir -p /tmp/w
+
+          base=""
+          for i in 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16; do
+            base="${base}$(git show origin/retomada/305-74033:patches/retomada-final/p${i} | tr -d '\n')"
+          done
+          printf '%s' "$base" | base64 -d | gunzip > /tmp/w/base.patch
+          got=$(sha256sum /tmp/w/base.patch | cut -d' ' -f1)
+          echo "base sha256: $got"
+          [ "$got" = "8bee7cc3f318fc4c6536b7ff12889e9464f71b6abae7035a73400dd03fc6af93" ] \
+            || { echo "::error::patch base corrompido"; exit 1; }
+
+          delta=""
+          for s in 00 01; do
+            delta="${delta}$(git show HEAD:patches/delta34/s${s} | tr -d '\n')"
+          done
+          printf '%s' "$delta" | base64 -d | gunzip > /tmp/w/delta.patch
+          got=$(sha256sum /tmp/w/delta.patch | cut -d' ' -f1)
+          echo "delta sha256: $got"
+          [ "$got" = "dac06d1b4e44fe6aa3fd2cad95e0e954b46cca03ce29c1597a5b0edf1507068f" ] \
+            || { echo "::error::patch delta corrompido"; exit 1; }
+
+      - name: Aplicar sobre a main e conferir md5
+        run: |
+          set -euo pipefail
+          git checkout -B entregue origin/main
+          git apply /tmp/w/base.patch
+          git apply /tmp/w/delta.patch
+
+          cat > /tmp/esperado <<'EOF'
+          61f6f9971ad084aa6bf908a6876c9f08  CHANGELOG.md
+          606c5b1a4fb87c6632e97589794665e4  VERSION
+          ddd0ff7212c2a96edb5ce8908415a85a  admin-mensagens.js
+          28e0eb9d99ca0fcd4f31605bfcce4f9d  admin.html
+          edc46a99562d0d1ed151cf1c51cfba07  documentacao/continuidade/RETOMADA-305-7.40.33.md
+          75e816f3f92bd1dc6782212d474b73f7  instagram-worker/worker.js
+          4ac6785e8cb3536ef77f6b86a028aafa  tests/mensagens_equipe_inicio_ui.py
+          c9c6a63560e9bfa305fb8fbe0bd734ec  tests/mock_msg.py
+          dc2e1c21d70de0a58ab465e17cb40839  tests/rodar_tudo.py
+          4919921b91b8758f8b568561d00dd902  tests/worker_equipe_inicio.js
+          2ed1c12b6a654931969ee2dc5a2ce9ce  version.json
+          EOF
+
+          faltou=0
+          while read -r soma arq; do
+            atual=$(md5sum "$arq" | cut -d' ' -f1)
+            if [ "$atual" = "$soma" ]; then echo "OK   $arq"; else echo "::error::$arq md5 $atual != $soma"; faltou=1; fi
+          done < /tmp/esperado
+          [ "$faltou" -eq 0 ] || exit 1
+
+      - name: Commitar e publicar na branch alvo
+        run: |
+          set -euo pipefail
+          git config user.name "retomada-bot"
+          git config user.email "retomada@tenkiter.local"
+          git add -- CHANGELOG.md VERSION admin-mensagens.js admin.html \
+            documentacao/continuidade/RETOMADA-305-7.40.33.md instagram-worker/worker.js \
+            tests/mensagens_equipe_inicio_ui.py tests/mock_msg.py tests/rodar_tudo.py \
+            tests/worker_equipe_inicio.js version.json
+          git commit -m "feat(mensagens): equipe, presenca, atividade e Nova conversa com envio pelo WhatsApp (7.40.34)"
+          git push origin HEAD:refs/heads/${{ inputs.alvo }} --force
+
+      - name: Resumo
+        run: |
+          { echo "### Aplicado"; cat VERSION;
+            md5sum admin-mensagens.js instagram-worker/worker.js; } >> "$GITHUB_STEP_SUMMARY"
