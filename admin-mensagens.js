@@ -2571,11 +2571,11 @@
     const resultados = el('div','ms-encaminhar-resultados');resultados.style.cssText='overflow:auto;min-height:80px;max-height:55dvh';
     painel.append(topo,campo,el('small','','Escolha uma conversa. O envio só acontecerá após tocar em Enviar.'),resultados);
     fundo.appendChild(painel);document.body.appendChild(fundo);
-    fundo.addEventListener('click',e=>{if(e.target===fundo)fecharEncaminhar_();});
+    fundo.addEventListener('click',e=>{\n      if(e.target===fundo){fecharEncaminhar_();return;}\n      const acao=e.target.closest('[data-ms]');\n      if(!acao||!fundo.contains(acao))return;\n      if(acao.dataset.ms==='encaminhar-fechar')fecharEncaminhar_();\n      else if(acao.dataset.ms==='encaminhar-destino'){\n        const id=Number(acao.dataset.id);\n        const destino=encaminharDestinos_.find(c=>Number(c.id)===id);\n        if(destino&&encaminharPendente_&&id!==encaminharPendente_.origem)encaminharPreparar_(destino);\n      }\n    });
     const desenhar = () => {
       resultados.textContent='';
       const q=campo.value.trim().toLocaleLowerCase('pt-BR');
-      const encontrados=encaminharDestinos_.filter(c=>c.id!==encaminharPendente_?.origem && [c.nome,c.telefone,c.numero,c.contato,c.canal,c.id].some(v=>String(v||'').toLocaleLowerCase('pt-BR').includes(q))).slice(0,80);
+      const encontrados=encaminharDestinos_.filter(c=>Number(c.id)!==encaminharPendente_?.origem && [c.nome,c.telefone,c.numero,c.contato,c.canal,c.id].some(v=>String(v||'').toLocaleLowerCase('pt-BR').includes(q))).slice(0,80);
       if(!encontrados.length){resultados.appendChild(el('p','','Nenhuma conversa encontrada.'));return;}
       encontrados.forEach(c=>{
         const nome=String(c.nome||c.contato||c.telefone||c.numero||('Conversa '+c.id));
@@ -2607,7 +2607,7 @@
     if(m.tipo!=='texto') {
       aviso_('Preparando mídia para encaminhar…');
       try {
-        const url=await midiaBlob_(m.id);
+        if(!m.midia || typeof m.id!=='number')throw Error('Mídia sem identificador disponível');\n        const url=await midiaBlob_(m.id);
         const res=await fetch(url);if(!res.ok)throw Error('Mídia indisponível');
         const blob=await res.blob();
         const mime=blob.type||({'imagem':'image/jpeg','vídeo':'video/mp4','áudio':'audio/ogg'})[m.tipo];
@@ -2617,7 +2617,7 @@
     }
     fecharEncaminhar_();
     await abrirConversa(destino.id);
-    if(!aberta||aberta.id!==destino.id||cacheConversa||espiando||modoNota){aviso_('Não foi possível preparar esta conversa. Nada foi enviado.');return;}
+    if(!aberta||Number(aberta.id)!==Number(destino.id)||cacheConversa||espiando||modoNota){aviso_('Não foi possível preparar esta conversa. Nada foi enviado.');return;}
     if(arquivo) {
       await escolherArquivo_(arquivo);
       if(!anexoPend){aviso_('A mídia não atende aos limites do canal de destino. Nada foi enviado.');return;}
@@ -3469,7 +3469,7 @@
       const id = Number(b.dataset.id);
       const pend = encaminharPendente_;
       if (pend && Number.isSafeInteger(id) && id > 0 && id !== pend.origem) {
-        const destino = encaminharDestinos_.find(c => c.id === id);
+        const destino = encaminharDestinos_.find(c => Number(c.id) === id);
         if (destino) await encaminharPreparar_(destino);
       }
     }
