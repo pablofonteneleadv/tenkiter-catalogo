@@ -2090,6 +2090,12 @@
       rp.setAttribute('aria-label', 'Responder a mensagem de ' + (m.direcao === 'saida' ? 'você' : 'o cliente') + (m.texto ? ': ' + String(m.texto).slice(0, 60) : ''));
       rp.title = 'Responder';
       meta.appendChild(rp);
+      if (m.tipo === 'texto' && String(m.texto || '').trim()) {
+        const fw = botao('ms-reply', '↪', 'encaminhar', { id: String(m.id) });
+        fw.setAttribute('aria-label', 'Encaminhar mensagem para outra conversa');
+        fw.title = 'Encaminhar';
+        meta.appendChild(fw);
+      }
     }
     meta.appendChild(el('time', '', m.enviada_em ? hm(new Date(m.enviada_em)) : ''));
     if (m.direcao === 'saida') meta.appendChild(selo(m.status || 'enviada'));
@@ -3374,6 +3380,26 @@
     else if (a === 'ficha-etiquetas') { if (!sairFicha_()) return; etqDaFicha_ = true; if (!ETQ || !ETQ.length) await carregarEtiquetas_(); abrirEtiquetas_(); }
     else if (a === 'ficha-abrir') { if (!sairFicha_()) return; fecharGaveta_(); if (canal !== 'todos') { canal = b.dataset.canal; filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); } abrirConversa(Number(b.dataset.id)); }
     else if (a === 'citar') { const id = Number(b.dataset.id); const m = msgs.find((x) => x.id === id || String(x.id) === String(b.dataset.id)); citar_(m); }
+    else if (a === 'encaminhar') {
+      const m = msgs.find((x) => String(x.id) === String(b.dataset.id));
+      if (!m || m.tipo !== 'texto' || !String(m.texto || '').trim()) return;
+      const origem = aberta && aberta.id;
+      const destino = window.prompt('Encaminhar para qual conversa? Digite o ID da conversa de destino:');
+      if (destino === null) return;
+      const id = Number(destino.trim());
+      if (!Number.isSafeInteger(id) || id <= 0 || id === origem) { aviso_('Escolha o ID válido de outra conversa.'); return; }
+      const texto = String(m.texto).trim();
+      if (!window.confirm('Abrir a conversa ' + id + ' e preparar esta mensagem para encaminhar? O envio só ocorrerá após sua confirmação.')) return;
+      await abrirConversa(id);
+      if (!aberta || aberta.id !== id) { aviso_('Conversa de destino não encontrada. Nada foi enviado.'); return; }
+      const ta = $('ms-texto');
+      if (!ta || modoNota) { aviso_('Não foi possível preparar o encaminhamento.'); return; }
+      if (ta.value.trim() && !window.confirm('Substituir o texto já digitado nesta conversa?')) return;
+      ta.value = texto;
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      aviso_('Mensagem preparada. Confira o destinatário e toque em Enviar para confirmar.');
+      ta.focus();
+    }
     else if (a === 'citar-cancelar') limparCitacao_();
     else if (a === 'assumir' || a === 'liberar') { const c = aberta; if (!c) return; const r = await worker_('/msg/dono', 'POST', { conversa: c.id, assumir: a === 'assumir' }); if (!r.ok) { aviso_(r.erro || 'Não foi possível agora.'); return; } c.dono = r.dono; const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(c)); await carregarLista(false); }
     else if (a === 'etq-salvar') salvarEtiquetas_();
