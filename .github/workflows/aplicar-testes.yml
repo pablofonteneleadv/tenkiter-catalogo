@@ -1,0 +1,51 @@
+name: Aplicar testes 7.40.34
+# Roda depois do aplicador principal. O _delta2.py ajusta os tres testes e a
+# nota de continuidade; a guarda impede reaplicar por cima.
+on:
+  push:
+    branches: [retomada/305-74033]
+
+permissions:
+  contents: write
+
+jobs:
+  testes:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: retomada/305-74033
+          fetch-depth: 0
+
+      - name: Pular se ja ajustado
+        id: guarda
+        run: |
+          if grep -q "primeira mensagem pelo WhatsApp" tests/worker_equipe_inicio.js 2>/dev/null; then
+            echo "ja=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ja=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ajustar testes e nota
+        if: steps.guarda.outputs.ja != 'true'
+        run: |
+          set -euo pipefail
+          test "$(cat VERSION)" = "7.40.34"
+          python3 _delta2.py .
+          node --check tests/worker_equipe_inicio.js
+          python3 -c "import ast; [ast.parse(open(f,encoding='utf-8').read()) for f in ['tests/mensagens_equipe_inicio_ui.py','tests/mock_msg.py']]; print('python ok')"
+          grep -q "primeira mensagem pelo WhatsApp" tests/worker_equipe_inicio.js
+          echo "--- hashes ---"
+          for f in tests/worker_equipe_inicio.js tests/mensagens_equipe_inicio_ui.py tests/mock_msg.py; do
+            echo "$(md5sum "$f" | cut -d' ' -f1)  $f"
+          done
+
+      - name: Commitar
+        if: steps.guarda.outputs.ja != 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "Frontend Developer"
+          git config user.email "frontend-developer@tenkiter.local"
+          git add -A -- . ':(exclude).github/workflows'
+          git commit -m "test(mensagens): testes acompanham o envio pelo WhatsApp no Nova conversa" -m "Worker: primeira mensagem sai pela Wafly, bolha gravada, mesmo idLocal nao reenvia e Instagram segue sem envio. Interface: campo de texto so no WhatsApp, botao muda para Abrir conversa no Instagram." 
+          git push origin HEAD:retomada/305-74033
