@@ -139,7 +139,7 @@
     if (/^(painel|metricas|met-|equipe-)/.test(a)) return 'metricas';
     if (/^(gaveta-respostas|resp-)/.test(a)) return 'respostas';
     if (/^(leitura-cfg|ponte-|auto-|ligar|pausar|conexao|diagnostico)/.test(a)) return 'configuracoes';
-    if (/^(selecionar|enviar|anexar|gravar|assumir|liberar|encerrar|reabrir|atender|sel-encerrar|sel-reabrir)/.test(a)) return 'responder';
+    if (/^(encaminhar|selecionar|enviar|anexar|gravar|assumir|liberar|encerrar|reabrir|atender|sel-encerrar|sel-reabrir)/.test(a)) return 'responder';
     return '';
   }
   function filtrarFerramentas_() {
@@ -2575,10 +2575,10 @@
     const desenhar = () => {
       resultados.textContent='';
       const q=campo.value.trim().toLocaleLowerCase('pt-BR');
-      const encontrados=encaminharDestinos_.filter(c=>Number(c.id)!==encaminharPendente_?.origem && [c.nome,c.telefone,c.numero,c.contato,c.canal,c.id].some(v=>String(v||'').toLocaleLowerCase('pt-BR').includes(q))).slice(0,80);
+      const encontrados=encaminharDestinos_.filter(c=>Number(c.id)!==encaminharPendente_?.origem && [c.nome,c.nome_contato,c.nome_cliente,c.telefone,c.numero,c.contato,c.canal,c.id].some(v=>String(v||'').toLocaleLowerCase('pt-BR').includes(q))).slice(0,80);
       if(!encontrados.length){resultados.appendChild(el('p','','Nenhuma conversa encontrada.'));return;}
       encontrados.forEach(c=>{
-        const nome=String(c.nome||c.contato||c.telefone||c.numero||('Conversa '+c.id));
+        const nome=String(c.nome||c.nome_contato||c.nome_cliente||c.contato||c.telefone||c.numero||('Conversa '+c.id));
         const btn=botao('ms-btn','', 'encaminhar-destino',{id:String(c.id)});
         btn.style.cssText='display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;min-height:48px;margin:3px 0;text-align:left';
         btn.append(el('strong','',nome),el('small','',(NOME_CANAL_[c.canal]||c.canal||'')+' · '+String(c.telefone||c.numero||'')));
@@ -2610,7 +2610,7 @@
         if(!m.midia || typeof m.id!=='number')throw Error('Mídia sem identificador disponível');\n        const url=await midiaBlob_(m.id);
         const res=await fetch(url);if(!res.ok)throw Error('Mídia indisponível');
         const blob=await res.blob();
-        const mime=blob.type||({'imagem':'image/jpeg','vídeo':'video/mp4','áudio':'audio/ogg'})[m.tipo];
+        const mime=blob.type||({'imagem':'image/jpeg','vídeo':'video/mp4','áudio':'audio/ogg'})[m.tipo];\n        if(m.tipo==='vídeo' && mime!=='video/mp4')throw Error('Vídeo original não está em MP4');
         const ext=({'imagem':'jpg','vídeo':'mp4','áudio':'ogg'})[m.tipo];
         arquivo=new File([blob],'encaminhado.'+ext,{type:mime});
       }catch(e){aviso_('Não foi possível recuperar a mídia original. Nada foi enviado.');return;}
