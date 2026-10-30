@@ -2090,7 +2090,7 @@
       rp.setAttribute('aria-label', 'Responder a mensagem de ' + (m.direcao === 'saida' ? 'você' : 'o cliente') + (m.texto ? ': ' + String(m.texto).slice(0, 60) : ''));
       rp.title = 'Responder';
       meta.appendChild(rp);
-      if (m.tipo === 'texto' && String(m.texto || '').trim()) {
+      if ((m.tipo === 'texto' && String(m.texto || '').trim()) || ['imagem', 'vídeo', 'áudio'].includes(m.tipo)) {
         const fw = botao('ms-reply', '↪', 'encaminhar', { id: String(m.id) });
         fw.setAttribute('aria-label', 'Encaminhar mensagem para outra conversa');
         fw.title = 'Encaminhar';
@@ -2547,6 +2547,87 @@
     let u;try{u=new URL(p.url);if(u.origin!==new URL(SITE_URL).origin||u.protocol!=='https:'||u.username||u.password)return null;}catch(_){return null;}
     const a=el('a','ms-link-cartao'),d=el('span');a.href=u.href;a.target='_blank';a.rel='noopener noreferrer';a.setAttribute('aria-label','Abrir produto: '+String(p.titulo||''));
     d.append(el('b','',String(p.titulo||'Produto')),el('small','',String(p.descricao||'')),el('small','ms-link-dominio',u.hostname));a.append(imgCartao_(p),d);return a;
+  }
+  /* Encaminhamento: seletor de contatos, mídia autenticada e envio manual. */
+  let encaminharPendente_ = null, encaminharDestinos_ = [];
+  function fecharEncaminhar_() {
+    encaminharPendente_ = null;
+    const modal = $('ms-encaminhar-modal');
+    if (modal) modal.remove();
+  }
+  async function encaminharEscolher_(m) {
+    fecharEncaminhar_();
+    if (!aberta || cacheConversa || espiando || modoNota) return;
+    if (!['texto','imagem','vídeo','áudio'].includes(m.tipo)) { aviso_('Este tipo de mensagem não pode ser encaminhado.'); return; }
+    encaminharPendente_ = { mensagem: m, origem: aberta.id };
+    const fundo = el('div', 'ms-encaminhar-fundo'); fundo.id = 'ms-encaminhar-modal';
+    fundo.style.cssText = 'position:fixed;inset:0;z-index:10020;background:#0008;display:flex;align-items:center;justify-content:center;padding:12px';
+    const painel = el('section','ms-encaminhar-painel');
+    painel.style.cssText = 'background:var(--ms-fundo,#fff);color:inherit;width:min(100%,480px);max-height:85dvh;display:flex;flex-direction:column;border-radius:14px;padding:16px;gap:10px';
+    const topo = el('div','ms-linha');
+    topo.append(el('strong','','Encaminhar para…'),botao('ms-btn','✕','encaminhar-fechar'));
+    const campo = el('input','ms-input');campo.type='search';campo.placeholder='Buscar cliente ou telefone';campo.setAttribute('aria-label','Buscar conversa de destino');
+    campo.style.cssText='width:100%;min-height:44px';
+    const resultados = el('div','ms-encaminhar-resultados');resultados.style.cssText='overflow:auto;min-height:80px;max-height:55dvh';
+    painel.append(topo,campo,el('small','','Escolha uma conversa. O envio só acontecerá após tocar em Enviar.'),resultados);
+    fundo.appendChild(painel);document.body.appendChild(fundo);
+    fundo.addEventListener('click',e=>{if(e.target===fundo)fecharEncaminhar_();});
+    const desenhar = () => {
+      resultados.textContent='';
+      const q=campo.value.trim().toLocaleLowerCase('pt-BR');
+      const encontrados=encaminharDestinos_.filter(c=>c.id!==encaminharPendente_?.origem && [c.nome,c.telefone,c.numero,c.contato,c.canal,c.id].some(v=>String(v||'').toLocaleLowerCase('pt-BR').includes(q))).slice(0,80);
+      if(!encontrados.length){resultados.appendChild(el('p','','Nenhuma conversa encontrada.'));return;}
+      encontrados.forEach(c=>{
+        const nome=String(c.nome||c.contato||c.telefone||c.numero||('Conversa '+c.id));
+        const btn=botao('ms-btn','', 'encaminhar-destino',{id:String(c.id)});
+        btn.style.cssText='display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;min-height:48px;margin:3px 0;text-align:left';
+        btn.append(el('strong','',nome),el('small','',(NOME_CANAL_[c.canal]||c.canal||'')+' · '+String(c.telefone||c.numero||'')));
+        resultados.appendChild(btn);
+      });
+    };
+    campo.addEventListener('input',desenhar);
+    resultados.appendChild(el('p','','Carregando conversas…'));
+    const resposta=await worker_('/msg/conversas?blocos=1&fila=todos&escopo=todos&canal=todos&filtro=', 'GET');
+    if (!encaminharPendente_ || !fundo.isConnected) return;
+    if (!resposta.ok || !Array.isArray(resposta.conversas)) {
+      encaminharDestinos_=lista.slice();
+      aviso_('Não foi possível buscar todas as conversas. Mostrando a lista carregada.');
+    } else encaminharDestinos_=resposta.conversas;
+    desenhar();campo.focus();
+  }
+  async function encaminharPreparar_(destino) {
+    const pend=encaminharPendente_;if(!pend)return;
+    const m=pend.mensagem, texto=String(m.texto||'').trim();
+    const taAntes=$('ms-texto');
+    if ((taAntes&&taAntes.value.trim())||anexoPend||anexosFila_.length) {
+      if(!window.confirm('Há uma mensagem em preparação. Continuar sem enviá-la?'))return;
+    }
+    if(!window.confirm('Preparar encaminhamento para '+String(destino.nome||destino.contato||destino.telefone||destino.id)+' ('+(NOME_CANAL_[destino.canal]||destino.canal)+')?'))return;
+    let arquivo=null;
+    if(m.tipo!=='texto') {
+      aviso_('Preparando mídia para encaminhar…');
+      try {
+        const url=await midiaBlob_(m.id);
+        const res=await fetch(url);if(!res.ok)throw Error('Mídia indisponível');
+        const blob=await res.blob();
+        const mime=blob.type||({'imagem':'image/jpeg','vídeo':'video/mp4','áudio':'audio/ogg'})[m.tipo];
+        const ext=({'imagem':'jpg','vídeo':'mp4','áudio':'ogg'})[m.tipo];
+        arquivo=new File([blob],'encaminhado.'+ext,{type:mime});
+      }catch(e){aviso_('Não foi possível recuperar a mídia original. Nada foi enviado.');return;}
+    }
+    fecharEncaminhar_();
+    await abrirConversa(destino.id);
+    if(!aberta||aberta.id!==destino.id||cacheConversa||espiando||modoNota){aviso_('Não foi possível preparar esta conversa. Nada foi enviado.');return;}
+    if(arquivo) {
+      await escolherArquivo_(arquivo);
+      if(!anexoPend){aviso_('A mídia não atende aos limites do canal de destino. Nada foi enviado.');return;}
+    }
+    const ta=$('ms-texto');
+    if(ta && (m.tipo==='texto'||destino.canal!=='instagram')) {
+      ta.value=texto;ta.dispatchEvent(new Event('input',{bubbles:true}));
+    }
+    aviso_('Encaminhamento pronto. Confira o destinatário e toque em Enviar.');
+    if(ta)ta.focus();
   }
   /* ---- anexos: foto (reduzida no aparelho), vídeo, áudio e gravação ---- */
   /* ---- v7.40.36: faixa de previa da citacao, acima do compositor ---- */
@@ -3382,24 +3463,17 @@
     else if (a === 'citar') { const id = Number(b.dataset.id); const m = msgs.find((x) => x.id === id || String(x.id) === String(b.dataset.id)); citar_(m); }
     else if (a === 'encaminhar') {
       const m = msgs.find((x) => String(x.id) === String(b.dataset.id));
-      if (!m || m.tipo !== 'texto' || !String(m.texto || '').trim()) return;
-      const origem = aberta && aberta.id;
-      const destino = window.prompt('Encaminhar para qual conversa? Digite o ID da conversa de destino:');
-      if (destino === null) return;
-      const id = Number(destino.trim());
-      if (!Number.isSafeInteger(id) || id <= 0 || id === origem) { aviso_('Escolha o ID válido de outra conversa.'); return; }
-      const texto = String(m.texto).trim();
-      if (!window.confirm('Abrir a conversa ' + id + ' e preparar esta mensagem para encaminhar? O envio só ocorrerá após sua confirmação.')) return;
-      await abrirConversa(id);
-      if (!aberta || aberta.id !== id) { aviso_('Conversa de destino não encontrada. Nada foi enviado.'); return; }
-      const ta = $('ms-texto');
-      if (!ta || modoNota) { aviso_('Não foi possível preparar o encaminhamento.'); return; }
-      if (ta.value.trim() && !window.confirm('Substituir o texto já digitado nesta conversa?')) return;
-      ta.value = texto;
-      ta.dispatchEvent(new Event('input', { bubbles: true }));
-      aviso_('Mensagem preparada. Confira o destinatário e toque em Enviar para confirmar.');
-      ta.focus();
+      if (m) encaminharEscolher_(m);
     }
+    else if (a === 'encaminhar-destino') {
+      const id = Number(b.dataset.id);
+      const pend = encaminharPendente_;
+      if (pend && Number.isSafeInteger(id) && id > 0 && id !== pend.origem) {
+        const destino = encaminharDestinos_.find(c => c.id === id);
+        if (destino) await encaminharPreparar_(destino);
+      }
+    }
+    else if (a === 'encaminhar-fechar') fecharEncaminhar_();
     else if (a === 'citar-cancelar') limparCitacao_();
     else if (a === 'assumir' || a === 'liberar') { const c = aberta; if (!c) return; const r = await worker_('/msg/dono', 'POST', { conversa: c.id, assumir: a === 'assumir' }); if (!r.ok) { aviso_(r.erro || 'Não foi possível agora.'); return; } c.dono = r.dono; const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(c)); await carregarLista(false); }
     else if (a === 'etq-salvar') salvarEtiquetas_();
