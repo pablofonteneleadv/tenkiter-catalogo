@@ -335,6 +335,7 @@
       /* v7.22: número ao lado do nome, mesma pessoa nos 2 WhatsApp, seleção e encerradas */
       .ms-conv .ms-l3 { display: flex; align-items: center; gap: 8px; margin-top: 3px; min-width: 0; }
       .ms-conv .ms-fone { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: #625c53; font-size: 0.76rem; }
+      .ms-agenda-indicador { display:inline-flex; align-items:center; flex:none; padding:2px 7px; border-radius:8px; border:1px solid #e6cf99; background:#fff5dc; color:#76500a; font-size:.76rem; font-weight:750; white-space:nowrap; }
       .ms-ambos-tag { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 0.72rem; font-weight: 700; color: #7a3a00; }
       .ms-ambos-tag::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--laranja, #E67E22); }
       .ms-chip.alerta { border-color: var(--laranja, #E67E22); color: #7a3a00; }
@@ -1179,7 +1180,7 @@
     b.className = 'ms-conv' + (nova ? ' nova' : ''); if (aberta && aberta.id === c.id) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
     const marcada = !!(selecao && selecao.has(c.id));
     if (selecao) b.setAttribute('aria-pressed', String(marcada)); else b.removeAttribute('aria-pressed');
-    const assinatura = [c.dono || '', (c.etiquetas || []).map((e) => e.id + e.nome + e.cor).join('|'), canal === 'todos' ? c.canal : '', c.nome, c.ultima_em, c.previa, c.nao_lidas, c.ult_dir, c.ult_status, espera ? Math.floor(Date.now() / 60000) : '', aberta && aberta.id === c.id, c.outro_id || '', c.encerrada_motivo || '', selecao ? (marcada ? 'S' : 's') : ''].join('|');
+    const assinatura = [c.dono || '', (c.etiquetas || []).map((e) => e.id + e.nome + e.cor).join('|'), canal === 'todos' ? c.canal : '', c.nome, c.ultima_em, c.previa, c.nao_lidas, c.ult_dir, c.ult_status, espera ? Math.floor(Date.now() / 60000) : '', aberta && aberta.id === c.id, c.outro_id || '', c.encerrada_motivo || '', c.agenda_pendente || 0, c.agenda_proxima || '', selecao ? (marcada ? 'S' : 's') : ''].join('|');
     if (li.dataset.ass === assinatura) return li;
     li.dataset.ass = assinatura; b.textContent = '';
     let av;
@@ -1194,6 +1195,14 @@
     if (c.encerrada_em && NOME_MOTIVO_[c.encerrada_motivo]) l3.appendChild(el('span', 'ms-motivo-tag ms-motivo-' + c.encerrada_motivo, NOME_MOTIVO_[c.encerrada_motivo]));
     if (c.nome && !c.grupo && /^\d{10,15}$/.test(c.contato || '')) l3.appendChild(el('span', 'ms-fone', foneBonito_(c.contato)));
     if (c.dono) l3.appendChild(el('span', 'ms-dono-tag', 'Resp.: ' + c.dono));
+    if (Number(c.agenda_pendente) > 0) {
+      const quantidade = Number(c.agenda_pendente);
+      const agenda = el('span', 'ms-agenda-indicador', '🕒' + (quantidade > 1 ? ' ' + quantidade : ''));
+      const horario = c.agenda_proxima ? ' · Próxima: ' + hora(c.agenda_proxima) : '';
+      agenda.title = quantidade + (quantidade === 1 ? ' agendamento ativo' : ' agendamentos ativos') + horario;
+      agenda.setAttribute('aria-label', agenda.title);
+      l3.appendChild(agenda);
+    }
     (c.etiquetas || []).slice(0, 2).forEach((e) => l3.appendChild(tagEtq_(e)));
     const l2 = el('span', 'ms-l2'); const pv = el('span', 'ms-previa');
     if (saiu) { pv.appendChild(selo(c.ult_status || 'enviada')); pv.appendChild(document.createTextNode('Você: ')); }
