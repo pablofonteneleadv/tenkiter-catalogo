@@ -87,13 +87,17 @@ def tratar(route, path, method, body, s):
                                               {"id": 1, "usuario": "5588999999999", "nome": "Ana", "acao": "espiar", "conversa_id": 2, "em": now, "cliente": ""}])
         return J({"ok": True, "de": q.get("de", ""), "ate": q.get("ate", ""), "agora": now, "presencas": pres, "totais": tots,
                   "atividades": acts, "temMais": False, "proximo": 0}) or True
-    if path == "/msg/iniciar" and method == "POST":   # v7.40.33: abrir conversa sem enviar nada
+    if path == "/msg/iniciar" and method == "POST":   # v7.40.34: WhatsApp envia; Instagram só abre
         destino = str(body.get("destino", ""))
-        if body.get("canal") != "instagram" and len("".join(ch for ch in destino if ch.isdigit())) < 10:
+        canal = body.get("canal")
+        if canal != "instagram" and len("".join(ch for ch in destino if ch.isdigit())) < 10:
             return J({"ok": False, "erro": "Digite um WhatsApp com DDD, como (88) 99999-9999."}, 400) or True
         c = next((x for x in s["convs"] if x["id"] == 1), None)
-        s.setdefault("iniciadas", []).append(body)
-        return J({"ok": True, "conversa": c["id"] if c else 1}) or True
+        texto = "" if canal == "instagram" else str(body.get("texto", "")).strip()
+        s.setdefault("iniciadas", []).append(dict(body, enviada=bool(texto)))
+        if texto:
+            s.setdefault("enviadas", []).append({"conversa": c["id"] if c else 1, "texto": texto})
+        return J({"ok": True, "conversa": c["id"] if c else 1, "enviada": bool(texto)}) or True
     if path == "/msg/notas":
         cid = int(q.get("conversa", 0)) if method != "POST" else int(body.get("conversa", 0))
         c = next(x for x in s["convs"] if x["id"] == cid)

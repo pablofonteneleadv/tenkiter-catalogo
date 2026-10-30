@@ -37,22 +37,32 @@ with sync_playwright() as p:
 
         # --- Nova conversa: nada é enviado, valida antes de abrir ---
         pg.click('.ms-mais-item[data-ms=nova-conversa]'); pg.wait_for_selector('#ms-nova-destino')
-        assert 'nada agora' in pg.inner_text('.ms-gaveta-corpo'), 'Falta o aviso de que o cliente não recebe nada'
+        assert 'sai na hora' in pg.inner_text('.ms-gaveta-corpo'), 'Falta o aviso de que o WhatsApp envia na hora'
         assert pg.input_value('#ms-nova-canal') == 'whatsapp1'
+        assert pg.locator('#ms-nova-texto').count() == 1, 'WhatsApp precisa do campo da primeira mensagem'
         pg.fill('#ms-nova-destino', '123'); pg.click('[data-ms="nova-conversa-ir"]'); pg.wait_for_timeout(250)
         assert not st["ig"]["msg"].get('iniciadas'), 'Número incompleto não deveria abrir conversa'
         assert pg.locator('#ms-nova-destino').count() == 1, 'Gaveta deveria continuar aberta no erro'
-        # Instagram troca o rótulo e explica por que não escreve primeiro.
+        # Número bom sem texto também não sai: o WhatsApp não manda mensagem vazia.
+        pg.fill('#ms-nova-destino', '(88) 99123-4567'); pg.click('[data-ms="nova-conversa-ir"]'); pg.wait_for_timeout(250)
+        assert not st["ig"]["msg"].get('iniciadas'), 'Sem texto não deveria abrir conversa'
+        # Instagram troca o rótulo, esconde o texto e explica por que não escreve primeiro.
         pg.select_option('#ms-nova-canal', 'instagram'); pg.wait_for_timeout(120)
         assert 'Instagram' in pg.inner_text('.ms-gaveta-corpo')
         assert 'não deixa escrever primeiro' in pg.inner_text('.ms-gaveta-corpo')
         assert pg.get_attribute('#ms-nova-destino', 'placeholder') == '@loja.cliente'
-        pg.select_option('#ms-nova-canal', 'whatsapp1')
+        assert pg.locator('#ms-nova-texto').is_hidden(), 'Instagram não pode oferecer campo de mensagem'
+        assert 'Abrir conversa' in pg.inner_text('[data-ms="nova-conversa-ir"]'), 'Instagram só abre conversa'
+        pg.select_option('#ms-nova-canal', 'whatsapp1'); pg.wait_for_timeout(120)
+        assert 'Enviar pelo WhatsApp' in pg.inner_text('[data-ms="nova-conversa-ir"]')
         pg.fill('#ms-nova-destino', '(88) 99123-4567')
+        pg.fill('#ms-nova-texto', 'Oi! Chegou a peça que você pediu.')
         ax = pg.evaluate("document.documentElement.scrollWidth<=innerWidth"); assert ax, 'Rolagem horizontal em Nova conversa'
         pg.screenshot(path=str(OUT / f'nova-conversa-{w}-{h}.png'))
         pg.click('[data-ms="nova-conversa-ir"]'); pg.wait_for_timeout(700)
         assert st["ig"]["msg"].get('iniciadas'), 'Abrir conversa deveria chamar /msg/iniciar'
+        assert st["ig"]["msg"]["iniciadas"][-1]["texto"] == 'Oi! Chegou a peça que você pediu.', 'O texto digitado vai junto'
+        assert st["ig"]["msg"].get('enviadas'), 'A primeira mensagem deveria sair pelo WhatsApp'
         assert st["ig"]["msg"]["iniciadas"][-1]["canal"] == 'whatsapp1'
         assert not [e for e in errors], errors
 

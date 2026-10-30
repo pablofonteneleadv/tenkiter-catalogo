@@ -70,18 +70,44 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   assert.equal(sqlite.prepare('SELECT conversa_id FROM msg_presenca WHERE usuario=?').get(dono).conversa_id, nova.j.conversa);
   assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM msg_atividade WHERE acao='visualizar'").get().n, 2);
 
-  // ---- trilha das ações confirmadas ----
+  // ---- primeira mensagem pelo WhatsApp (v7.40.34) ----
   sqlite.prepare('INSERT OR REPLACE INTO cfg(chave,valor) VALUES(?,?)').run('wafly_1', JSON.stringify({ instance: 'teste-01', token: 'simulado', clientToken: 'simulado' }));
+  sqlite.prepare('INSERT OR REPLACE INTO cfg(chave,valor) VALUES(?,?)').run('wafly_2', JSON.stringify({ instance: 'teste-02', token: 'simulado', clientToken: 'simulado' }));
+  // Sem texto continua apenas abrindo (o Instagram e o "só abrir" dependem disso).
+  const soAbre = await chamar('/msg/iniciar', 'POST', { canal: 'whatsapp1', destino: '(88) 99123-4567' });
+  assert.equal(soAbre.status, 200); assert.equal(soAbre.j.enviada, false);
+  assert.equal(envios.length, 0, 'Sem texto não envia nada');
+  // Com texto: sai pela Wafly e a bolha fica gravada na conversa.
+  const primeira = await chamar('/msg/iniciar', 'POST', { canal: 'whatsapp2', destino: '88 98888-7777', texto: 'Oi! Chegou a peça que você pediu.', idLocal: 'iniciar-conversa-0001' });
+  assert.equal(primeira.status, 200, JSON.stringify(primeira.j));
+  assert.equal(primeira.j.enviada, true, 'WhatsApp com texto envia a primeira mensagem');
+  assert.equal(primeira.j.conversa, nova.j.conversa, 'Envia na conversa que a gaveta abriu');
+  assert.equal(envios.length, 1, 'Uma mensagem, um envio');
+  assert.equal(envios[0].message, 'Oi! Chegou a peça que você pediu.', 'O texto sai inteiro, sem assinatura para administrador');
+  const bolha = sqlite.prepare("SELECT * FROM msg_mensagem WHERE conversa_id=? AND direcao='saida'").get(primeira.j.conversa);
+  assert(bolha, 'A mensagem enviada é gravada na conversa'); assert.equal(bolha.texto, 'Oi! Chegou a peça que você pediu.');
+  assert.equal(sqlite.prepare('SELECT total FROM msg_conversa WHERE id=?').get(primeira.j.conversa).total, 1, 'A conversa deixa de nascer vazia');
+  assert.equal(sqlite.prepare('SELECT dono FROM msg_conversa WHERE id=?').get(primeira.j.conversa).dono.startsWith('Ana'), true, 'Quem fala primeiro vira responsável');
+  await new Promise(r => setTimeout(r, 120));
+  assert(sqlite.prepare("SELECT * FROM msg_atividade WHERE acao='responder' AND conversa_id=?").get(primeira.j.conversa), 'A resposta confirmada entra na trilha');
+  // Repetir o mesmo idLocal não manda a mensagem duas vezes.
+  const repetido = await chamar('/msg/iniciar', 'POST', { canal: 'whatsapp2', destino: '88 98888-7777', texto: 'Oi! Chegou a peça que você pediu.', idLocal: 'iniciar-conversa-0001' });
+  assert.equal(repetido.status, 200); assert.equal(envios.length, 1, 'Mesmo idLocal não reenvia');
+  // Instagram nunca envia, mesmo que chegue texto.
+  assert.equal((await chamar('/msg/iniciar', 'POST', { canal: 'instagram', destino: '@naoexiste', texto: 'Oi' })).status, 409, 'Instagram segue só abrindo conversa existente');
+  assert.equal(envios.length, 1, 'Instagram nunca envia');
+
+  // ---- trilha das ações confirmadas ----
   const envio = await chamar('/msg/enviar', 'POST', { conversa: conv, texto: 'Olá, tudo bem?', idLocal: 'envio-equipe-0001' });
   assert.equal(envio.status, 200);
   await new Promise(r => setTimeout(r, 120));
-  const linha = sqlite.prepare("SELECT * FROM msg_atividade WHERE acao='responder'").get();
+  const linha = sqlite.prepare("SELECT * FROM msg_atividade WHERE acao='responder' AND conversa_id=?").get(conv);
   assert(linha, 'Envio confirmado entra na trilha'); assert.equal(linha.conversa_id, conv);
   assert(!JSON.stringify(linha).includes('tudo bem'), 'A trilha guarda a ação, nunca o texto da mensagem');
   // Mesmo idLocal não duplica a ação.
   await chamar('/msg/enviar', 'POST', { conversa: conv, texto: 'Olá, tudo bem?', idLocal: 'envio-equipe-0001' });
   await new Promise(r => setTimeout(r, 120));
-  assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM msg_atividade WHERE acao='responder'").get().n, 1, 'Reenvio do mesmo idLocal não duplica');
+  assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM msg_atividade WHERE acao='responder' AND conversa_id=?").get(conv).n, 1, 'Reenvio do mesmo idLocal não duplica');
   // Ação que falha não vira trilha.
   const tentativas = sqlite.prepare('SELECT COUNT(*) n FROM msg_atividade').get().n;
   assert.equal((await chamar('/msg/enviar', 'POST', { conversa: 999999, texto: 'x' })).status >= 400, true);
@@ -94,7 +120,7 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   assert.equal(eq.status, 200); assert(eq.j.ok);
   assert(eq.j.presencas.some(p => p.usuario === dono && p.online === true), 'Presença recente aparece online');
   const total = eq.j.totais.find(t => t.usuario === dono);
-  assert(total && total.respostas === 1, 'Totais contam a resposta confirmada');
+  assert(total && total.respostas === 2, 'Totais contam as duas respostas confirmadas (primeira mensagem + envio)');
   assert.equal(eq.j.atividades[0].acao, 'responder', 'Histórico vem do mais recente');
   assert(eq.j.atividades[0].nome.startsWith('Ana'), 'Histórico mostra o nome de quem agiu');
   assert(!JSON.stringify(eq.j).includes('tudo bem'), 'Equipe não expõe conteúdo de mensagem');
