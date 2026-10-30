@@ -534,6 +534,32 @@
       .ms-bolha { max-width: min(82%, 520px); padding: 7px 10px 5px; border-radius: 12px; font-size: 0.92rem; overflow-wrap: anywhere; white-space: pre-wrap; box-shadow: 0 1px 1px rgba(0,0,0,0.08); }
       .ms-bolha.entrada { align-self: flex-start; background: #fff; color: #111; border-top-left-radius: 4px; }
       .ms-bolha.saida { align-self: flex-end; background: #d8f3e3; color: #0d3b24; border-top-right-radius: 4px; }
+      /* v7.40.36: responder. A acao so aparece no hover/focus (desktop) e o alvo tem 44px
+         no celular, onde nao existe hover. Nenhuma cor nova: usa o laranja da casa. */
+      .ms-bolha { position: relative; }
+      .ms-bolha .ms-meta .ms-reply { display: inline-flex; align-items: center; justify-content: center;
+        width: 44px; height: 44px; margin: -15px -8px -15px 0; padding: 0; border: 0; background: transparent;
+        color: inherit; font-size: 0.95rem; line-height: 1; cursor: pointer; border-radius: 22px;
+        opacity: 0; transition: opacity 0.12s ease, background-color 0.12s ease; }
+      .ms-bolha:hover .ms-meta .ms-reply, .ms-bolha:focus-within .ms-meta .ms-reply,
+      .ms-bolha .ms-meta .ms-reply:focus-visible { opacity: 1; }
+      .ms-bolha .ms-meta .ms-reply:hover { background: rgba(0, 0, 0, 0.07); }
+      .ms-bolha .ms-meta .ms-reply:focus-visible { outline: 2px solid var(--laranja, #E67E22); outline-offset: 1px; }
+      @media (hover: none), (pointer: coarse) {
+        /* no celular nao existe hover: a acao fica sempre visivel */
+        .ms-bolha .ms-meta .ms-reply { opacity: 1; }
+      }
+      /* faixa de citacao acima do compositor */
+      .ms-citar { display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 8px 6px 10px;
+        border-left: 3px solid var(--laranja, #E67E22); background: #f4f1ea; color: #2b2410; border-radius: 6px; }
+      .ms-citar[hidden] { display: none; }
+      .ms-citar-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+      .ms-citar-txt b { font-size: 0.78rem; }
+      .ms-citar-txt span { font-size: 0.82rem; color: #4a4436; overflow: hidden; text-overflow: ellipsis;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; }
+      .ms-citar-x { flex: none; min-width: 44px; min-height: 44px; border: 0; background: transparent;
+        color: #4a4436; font-size: 1.1rem; cursor: pointer; border-radius: 22px; }
+      .ms-citar-x:hover { background: #e7e2d6; }
       .ms-bolha.saida.pendente { opacity: 0.75; } .ms-bolha.falhou { background: #fde8e8; color: #5b1111; outline: 1px solid #d99; }
       .ms-bolha .ms-meta { display: flex; justify-content: flex-end; align-items: center; gap: 2px; font-size: 0.7rem; color: #555; margin-top: 2px; white-space: normal; }
       .ms-bolha .ms-erro { display: block; font-size: 0.78rem; margin-top: 4px; white-space: normal; }
@@ -1399,7 +1425,9 @@
       return dados;
     }
     const antigos = raw.split(',').map(x => x.trim()).filter(x => x && !/^(Etiqueta|Idade|Veste):/i.test(x) && !/^Consultar tamanhos disponíveis$/i.test(x));
-    return { titulo: 'Tamanhos', texto: antigos.join('/'), valores: antigos };
+    // v7.40.36: `texto` vai para a MENSAGEM (o cliente lê "P, M, G") e `bonito` para a
+    // gaveta ("P · M · G"), que é onde a equipe bate o olho. Antes era "P/M/G" nos dois.
+    return { titulo: 'Tamanhos', texto: antigos.join(', '), bonito: antigos.join(' · '), valores: antigos };
   }
   const tamanhosDe_ = (p) => resumoTamanhosProduto_(p).valores;
   function linkDe_(p) { try { return typeof linkProduto === 'function' ? linkProduto(p) : ''; } catch (e) { return ''; } }
@@ -1505,7 +1533,7 @@
         info.appendChild(el('span', 'ms-prod-preco', precoTexto_(p) + (p.Codigo ? ' · ' + p.Codigo : '')));
         const tecido=window.TKTecido&&TKTecido.ler(p);if(tecido)info.appendChild(el('span','ms-prod-det','Tecido: '+tecido));
         const tam = resumoTamanhosProduto_(p);
-        info.appendChild(el('span', 'ms-prod-det', (tam.texto ? tam.titulo + ': ' + tam.texto : 'Tamanho não informado') + (esgotado_(p) ? ' · Esgotado' : p.Estoque !== '' && p.Estoque != null ? ' · ' + p.Estoque + ' em estoque' : '')));
+        info.appendChild(el('span', 'ms-prod-det', (tam.texto ? tam.titulo + ': ' + (tam.bonito || tam.texto) : 'Tamanho não informado') + (esgotado_(p) ? ' · Esgotado' : p.Estoque !== '' && p.Estoque != null ? ' · ' + p.Estoque + ' em estoque' : '')));
 
         const acoes = el('div', 'ms-prod-acoes');
         acoes.appendChild(botao('ms-btn prim', 'Colocar na mensagem', 'prod-usar', { id: String(p.ID) }));
@@ -2052,6 +2080,14 @@
     if (m.tipo && m.tipo !== 'texto' && !mid) b.appendChild(el('span', 'ms-tipo', (m.texto ? ' ' : '') + (TIPO_ROTULO[m.tipo] || '[' + m.tipo + ']') + (m.midia === 0 && m.direcao === 'entrada' && ['imagem', 'vídeo', 'áudio'].indexOf(m.tipo) >= 0 ? ' (arquivo não disponível)' : '')));
     /* v7.40.8: link "Foi resposta a um story?" removido; o contexto do story vem da Wafly quando ela envia a referência */
     const meta = el('span', 'ms-meta'); if (m.direcao === 'saida' && m.por === 'auto') meta.appendChild(el('span', 'ms-auto-tag', 'Automática'));
+    /* v7.40.36: responder esta mensagem (do cliente ou minha). Vive na linha da meta,
+       que e a unica faixa da bolha sem conteudo clicavel — nada fica coberto. */
+    if (typeof m.id === 'number' && !espiando && !modoNota && podeFerramenta_('responder')) {
+      const rp = botao('ms-reply', '↩', 'citar', { id: String(m.id) });
+      rp.setAttribute('aria-label', 'Responder a mensagem de ' + (m.direcao === 'saida' ? 'você' : 'o cliente') + (m.texto ? ': ' + String(m.texto).slice(0, 60) : ''));
+      rp.title = 'Responder';
+      meta.appendChild(rp);
+    }
     meta.appendChild(el('time', '', m.enviada_em ? hm(new Date(m.enviada_em)) : ''));
     if (m.direcao === 'saida') meta.appendChild(selo(m.status || 'enviada'));
     b.appendChild(meta);
@@ -2444,6 +2480,7 @@
     const dica = dicaComposer(c); if (dica) { const d = el('div', 'ms-dica', dica); d.id = 'ms-dica'; pai.appendChild(d); }
     const stage = el('div', 'ms-stage'); stage.id = 'ms-stage'; stage.hidden = !anexoPend; pai.appendChild(stage);
     const assina = el('div', 'ms-assina'); assina.id = 'ms-assina'; pai.appendChild(assina);
+    const citBox = el('div', 'ms-citar'); citBox.id = 'ms-citar'; citBox.hidden = true; citBox.setAttribute('role', 'status'); citBox.setAttribute('aria-live', 'polite'); pai.appendChild(citBox);
     const prev = el('div', 'ms-previa'); prev.id = 'ms-previa'; prev.hidden = true;
     const prevL = el('label'), prevC = el('input'); prevC.type = 'checkbox'; prevC.id = 'ms-previa-chk'; prevC.checked = previaPreferida_(c.canal);
     prevC.addEventListener('change', () => {guardarPrevia_(c.canal, prevC.checked);desenharPrevia_();});
@@ -2503,8 +2540,39 @@
     d.append(el('b','',String(p.titulo||'Produto')),el('small','',String(p.descricao||'')),el('small','ms-link-dominio',u.hostname));a.append(imgCartao_(p),d);return a;
   }
   /* ---- anexos: foto (reduzida no aparelho), vídeo, áudio e gravação ---- */
+  /* ---- v7.40.36: faixa de previa da citacao, acima do compositor ---- */
+  function citar_(m) {
+    if (!m || typeof m.id !== 'number') return;
+    if (m.id === (citacaoPend_ && citacaoPend_.id)) return;   // ja esta citando esta
+    const bruto = String(m.texto || '').replace(/\s+/g, ' ').trim();
+    const rotulo = ({ 'imagem': '[foto]', 'vídeo': '[vídeo]', 'áudio': '[áudio]', 'documento': '[documento]', 'figurinha': '[figurinha]' })[m.tipo] || '';
+    citacaoPend_ = { id: m.id, direcao: m.direcao, tipo: m.tipo || 'texto',
+      autor: m.direcao === 'saida' ? 'Você' : 'Cliente',
+      trecho: (bruto || rotulo || '[mensagem]').slice(0, 160) };
+    desenharCitacao_();
+    const ta = $('ms-texto'); if (ta && larga()) ta.focus();
+  }
+  function limparCitacao_() {
+    if (!citacaoPend_) return;
+    const tinha = citacaoPend_; citacaoPend_ = null; desenharCitacao_();
+    const volta = document.querySelector('#ms-fio .ms-bolha[data-id="' + CSS.escape(String(tinha.id)) + '"] .ms-reply');
+    if (volta) volta.focus({ preventScroll: true });
+  }
+  function desenharCitacao_() {
+    const w = $('ms-citar'); if (!w) return;
+    const c = citacaoPend_; w.hidden = !c;
+    if (!c) { w.textContent = ''; return; }
+    w.textContent = '';
+    const txt = el('span', 'ms-citar-txt');
+    txt.appendChild(el('b', '', c.autor === 'Você' ? 'Respondendo à sua mensagem' : 'Respondendo ao cliente'));
+    txt.appendChild(el('span', '', c.trecho));
+    const x = botao('ms-citar-x', '✕', 'citar-cancelar');
+    x.setAttribute('aria-label', 'Cancelar a resposta a esta mensagem');
+    w.append(txt, x);
+  }
   function desenharStage_() {
     const st = $('ms-stage'), bt = $('ms-enviar'), ta = $('ms-texto'); if (!st) return;
+    desenharCitacao_();
     desenharPrevia_();
     st.textContent = ''; st.hidden = !anexoPend;
     if (bt) bt.disabled = !anexoPend && !(ta && ta.value.trim());
@@ -2563,6 +2631,7 @@
     g.timer = setInterval(() => { atualizarMic_(); if (Date.now() - g.t0 > 300000) rec.stop(); }, 500);
   }
   async function abrirConversa(id, espiar) {
+    citacaoPend_ = null;   // a citacao nunca atravessa para outra conversa
     const w = ++abrindo;
     espiando = !!espiar;
     const jaNaTela = aberta && aberta.id === id;
@@ -2640,6 +2709,9 @@
     } catch (e) { return { ok: false, erro: 'Sem conexão para enviar o arquivo. Tente de novo.', semRede: true }; }
   }
   /* v7.40.3: notas internas — mesmo campo de texto, salva em /msg/notas e nunca chama /msg/enviar */
+  /* v7.40.36: responder uma mensagem especifica. Guarda o que a faixa mostra e o id
+   * que vai no envio; vive so nesta tela e some ao trocar de conversa. */
+  let citacaoPend_ = null;
   let modoNota = false;
   const notaMsg_ = (n) => ({ id: 'nota-' + n.id, direcao: 'nota', tipo: 'nota', texto: n.texto, autor: n.autor, enviada_em: n.em });
   function alternarNota_(forcar) {
@@ -2726,7 +2798,7 @@
     if (modoNota && !reenvio) { await salvarNota_(c, ta); return; }
     if(!reenvio&&assinaturaLigada_()&&!nomeAtendente_()){aviso_('Atualizando seu nome do cadastro. Tente enviar novamente em instantes.');carregarCfgLeitura_();return;}
     let tmp, texto, idLocal;
-    if (reenvio) { const p = pendentes.get(reenvio); if (!p) return; tmp = p; texto = p.msg.texto; idLocal = p.idLocal; p.msg.status = 'pendente'; p.msg.erro = ''; }
+    if (reenvio) { const p = pendentes.get(reenvio); if (!p) return; tmp = p; texto = p.msg.texto; idLocal = p.idLocal; p.msg.status = 'pendente'; p.msg.erro = ''; if (tmp.citacao) citacaoPend_ = tmp.citacao; }
     else {
       texto = ta.value.replace(/\r\n/g, '\n').trim(); const an = anexoPend;
       if (!texto && !an) return;
@@ -2737,10 +2809,12 @@
       idLocal = idLocal_();
       const idTmp = 'tmp-' + idLocal;
       const pc = $('ms-previa-chk'), comPrevia = !an && c.canal !== 'instagram' && !!pc && pc.checked && LINK_RE_.test(texto);
-      tmp = { idLocal: idLocal, conversa: c.id, previa: comPrevia ? cartaoDoLink_(texto) : null, anexo: an ? { blob: an.blob, tipo: an.tipo, seg: an.seg, chave: '' } : null, msg: { id: idTmp, direcao: 'saida', tipo: an ? an.tipo : 'texto', texto: texto, enviada_em: new Date().toISOString(), status: 'pendente', midia: an ? 1 : 0, localUrl: an ? an.urlLocal : '' } };
+      const cit = citacaoPend_;   // o Worker monta a citacao: messageId no WhatsApp, "> trecho" no Instagram
+      tmp = { idLocal: idLocal, conversa: c.id, previa: comPrevia ? cartaoDoLink_(texto) : null, anexo: an ? { blob: an.blob, tipo: an.tipo, seg: an.seg, chave: '' } : null, citacao: cit, msg: { id: idTmp, direcao: 'saida', tipo: an ? an.tipo : 'texto', texto: texto, enviada_em: new Date().toISOString(), status: 'pendente', midia: an ? 1 : 0, localUrl: an ? an.urlLocal : '' } };
+      if (cit) { tmp.msg.ctx_tipo = 'resposta'; tmp.msg.ctx_qdir = cit.direcao; tmp.msg.ctx_qtipo = cit.tipo; tmp.msg.ctx_texto = cit.trecho; tmp.msg.ctx_autor = cit.autor; }
       if(tmp.previa&&tmp.previa.imagem)tmp.msg.link_previa=JSON.stringify(tmp.previa);
       pendentes.set(idTmp, tmp); msgs.push(tmp.msg);
-      ta.value = ''; ta.style.height = 'auto'; rascunhoSalvar_(c.id, ''); anexoPend = null; desenharStage_(); $('ms-enviar').disabled = true; ta.focus();
+      ta.value = ''; ta.style.height = 'auto'; rascunhoSalvar_(c.id, ''); anexoPend = null; citacaoPend_ = null; desenharStage_(); $('ms-enviar').disabled = true; ta.focus();
     }
     pintarFio(true);
     const idTmp = tmp.msg.id;
@@ -2750,7 +2824,7 @@
       if (!up.ok) r = { ok: false, erro: up.erro || 'Não foi possível enviar o arquivo.', semRede: up.semRede, semEnvio: true };
       else tmp.anexo.chave = up.anexo;
     }
-    if (!r) r = await worker_('/msg/enviar', 'POST', Object.assign({ conversa: c.id, texto: texto, idLocal: idLocal, anexo: tmp.anexo ? tmp.anexo.chave : undefined, seg: tmp.anexo ? tmp.anexo.seg : undefined },
+    if (!r) r = await worker_('/msg/enviar', 'POST', Object.assign({ conversa: c.id, texto: texto, idLocal: idLocal, anexo: tmp.anexo ? tmp.anexo.chave : undefined, seg: tmp.anexo ? tmp.anexo.seg : undefined, citada: tmp.citacao ? tmp.citacao.id : undefined },
       tmp.previa ? { previa: true, previaTitulo: tmp.previa.titulo || '', previaDescricao: tmp.previa.descricao || '', previaImagem:tmp.previa.imagem||'' } : {}));
     if (r.ok || (r.incerto && r.mensagem)) {
       pendentes.delete(idTmp);
@@ -3265,7 +3339,7 @@
     }
     else if(a==='fila-atendimento'){abaAtiva_=b.dataset.fila==='esperando'?'pendentes':(b.dataset.fila==='em_atendimento'?'atendimento':'todos');filaAtendimento_=ABA_POR_FILA_[abaAtiva_]||'';filtro='';tipos={msg:true,grp:false};selecao=null;desenharSelbar_();desenharFiltros();await carregarLista(true);}
     else if(a==='so-nao-respondidos'){soNaoRespondidos_=!soNaoRespondidos_;b.setAttribute('aria-pressed',String(soNaoRespondidos_));desenharFiltros();await carregarLista(true);}
-    else if (a === 'aba') { const eraFunil = painel === 'funil'; selecao = null; desenharSelbar_(); contVista = null; contTipos = null; abaAtiva_ = b.dataset.aba || 'atendimento'; filaAtendimento_ = ABA_POR_FILA_[abaAtiva_] || ''; filtro = ''; etqFiltro = 0; soNaoRespondidos_ = false; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); if (eraFunil) { chrome_(true); abrirFunil_(); } else { $('ms-extra').textContent = 'Carregando conversas…'; } await carregarLista(true); }
+    else if (a === 'aba') { const eraFunil = painel === 'funil'; selecao = null; desenharSelbar_(); contVista = null; contTipos = null; citacaoPend_ = null; abaAtiva_ = b.dataset.aba || 'atendimento'; filaAtendimento_ = ABA_POR_FILA_[abaAtiva_] || ''; filtro = ''; etqFiltro = 0; soNaoRespondidos_ = false; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); if (eraFunil) { chrome_(true); abrirFunil_(); } else { $('ms-extra').textContent = 'Carregando conversas…'; } await carregarLista(true); }
     else if(a==='filtros-abrir')abrirFiltros_();
     else if(a==='filtros-aplicar'||a==='filtros-limpar'){
       const g=$('ms-gaveta');if(!g)return;
@@ -3290,6 +3364,8 @@
     else if (a === 'ficha-salvar') await salvarFicha_(b);
     else if (a === 'ficha-etiquetas') { if (!sairFicha_()) return; etqDaFicha_ = true; if (!ETQ || !ETQ.length) await carregarEtiquetas_(); abrirEtiquetas_(); }
     else if (a === 'ficha-abrir') { if (!sairFicha_()) return; fecharGaveta_(); if (canal !== 'todos') { canal = b.dataset.canal; filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); } abrirConversa(Number(b.dataset.id)); }
+    else if (a === 'citar') { const id = Number(b.dataset.id); const m = msgs.find((x) => x.id === id || String(x.id) === String(b.dataset.id)); citar_(m); }
+    else if (a === 'citar-cancelar') limparCitacao_();
     else if (a === 'assumir' || a === 'liberar') { const c = aberta; if (!c) return; const r = await worker_('/msg/dono', 'POST', { conversa: c.id, assumir: a === 'assumir' }); if (!r.ok) { aviso_(r.erro || 'Não foi possível agora.'); return; } c.dono = r.dono; const fx = $('ms-etq-faixa'); if (fx) fx.replaceWith(faixaEtq_(c)); await carregarLista(false); }
     else if (a === 'etq-salvar') salvarEtiquetas_();
     else if (a === 'etq-sem-etapa') { const g = $('ms-gaveta'); if (g) g.querySelectorAll('input[name=ms-etq-venda]').forEach((i) => { i.checked = false; }); }

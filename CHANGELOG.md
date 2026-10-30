@@ -6,6 +6,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.36] - 2026-10-30
+
+- **Responder uma mensagem específica** na conversa: cada bolha (do cliente e sua) tem a ação **Responder**, que abre uma faixa de prévia acima do compositor com **autor + trecho citado** e um **X** para cancelar
+- No **WhatsApp** a resposta sai como **citação nativa**: a mensagem vai com o id da citada (`messageId` no `/send-text` da Wafly), então o cliente vê no app dele exatamente a que mensagem você respondeu
+- No **Instagram** a citação vai **dentro do texto**, como `> trecho citado` — a API não tem citação nativa. Se houver foto/vídeo junto, o painel avisa: o Instagram não aceita texto com mídia, então mande a citação numa mensagem só de texto
+- A citação aparece **também no histórico do painel**, na bolha enviada, ao recarregar a página — o vínculo (id citado, autor e trecho) é gravado na própria mensagem
+- Só dá para citar mensagem **da mesma conversa**: citar mensagem de outra conversa é recusado com aviso, e um envio sem id real (incerto) não inventa `messageId`
+- Cabeçalho e as **quatro abas** intactos; a ação fica na linha da hora e respeita alvo de toque de 44px no celular, onde não existe hover
+- A **gaveta de Produtos** passou a escrever os tamanhos como a equipe fala: `P · M · G` no cartão e `P, M, G` na mensagem
+- `ESQUEMA_` em `20261030-citar-6`; testes novos `tests/worker_citar_mensagem.js` e `tests/mensagens_citacao_ui.py` (320/390/1440 com axe) rodando no CI
+
 ## [7.40.35] - 2026-10-30
 
 - Painel de Mensagens reorganizado em **quatro abas de fluxo**: Em atendimento, Pendentes, Todos e Encerrados
