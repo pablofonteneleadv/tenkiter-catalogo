@@ -1,0 +1,125 @@
+name: Android APK automático
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/app/**'
+      - 'android/build.gradle'
+      - 'android/settings.gradle'
+      - 'android/gradle.properties'
+      - 'common.js'
+      - '.github/workflows/android-auto-release.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+jobs:
+  publicar:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-35 build-tools;35.0.0
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Verificar chave de assinatura original
+        env:
+          KEY_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$KEY_B64" || { echo "::error::Chave de assinatura ausente"; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "::error::Senha da chave ausente"; exit 1; }
+          umask 077
+          printf '%s' "$KEY_B64" | base64 -d > "$RUNNER_TEMP/tenkiter.jks"
+          echo "TK_ANDROID_KEYSTORE=$RUNNER_TEMP/tenkiter.jks" >> "$GITHUB_ENV"
+          echo "TK_ANDROID_STORE_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+      - name: Calcular próxima versão
+        id: versao
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,re
+          from pathlib import Path
+          p=Path("android/app/build.gradle")
+          s=p.read_text()
+          m=re.search(r"versionCode\s+(\d+);\s*versionName\s+'([^']+)'",s)
+          if not m: raise SystemExit("Versão Android não localizada")
+          old=json.loads(Path("android/latest.json").read_text())
+          code=max(int(m[1]),int(old["versionCode"])+1)
+          def semver(v): return tuple(map(int,v.split(".")))
+          version=semver(m[2]); prev=semver(old["versionName"])
+          if version<=prev: version=(prev[0],prev[1],prev[2]+1)
+          name=".".join(map(str,version))
+          p.write_text(s[:m.start()]+f"versionCode {code}; versionName '{name}'"+s[m.end():])
+          with open(os.environ["GITHUB_OUTPUT"],"a") as o:
+              print(f"code={code}",file=o)
+              print(f"name={name}",file=o)
+          PY
+      - name: Testar e compilar APK assinado
+        run: gradle -p android :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --console plain
+      - name: Preparar artefato
+        id: apk
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.versao.outputs.name }}"
+          APK=$(find android/app/build/outputs/apk/release -maxdepth 1 -name '*.apk' -type f | head -n 1)
+          test -s "$APK"
+          mkdir -p dist
+          cp "$APK" "dist/TENKiTER-Mensagens-$VERSION.apk"
+          (cd dist && sha256sum "TENKiTER-Mensagens-$VERSION.apk" > "TENKiTER-Mensagens-$VERSION.sha256")
+          echo "bytes=$(stat -c%s "dist/TENKiTER-Mensagens-$VERSION.apk")" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "dist/TENKiTER-Mensagens-$VERSION.apk" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: Publicar APK na página de versões
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.versao.outputs.name }}"
+          TAG="android-v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::Versão já publicada: $TAG"
+            exit 1
+          fi
+          gh release create "$TAG" "dist/TENKiTER-Mensagens-$VERSION.apk" "dist/TENKiTER-Mensagens-$VERSION.sha256" --target "${{ github.sha }}" --title "TENKiTER Android $VERSION" --notes "Atualização automática assinada. Instale sobre a versão anterior sem desinstalar."
+      - name: Atualizar aviso de versão para o aplicativo
+        env:
+          VERSION: ${{ steps.versao.outputs.name }}
+          CODE: ${{ steps.versao.outputs.code }}
+          BYTES: ${{ steps.apk.outputs.bytes }}
+          SHA256: ${{ steps.apk.outputs.sha256 }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          v=os.environ["VERSION"]
+          data={"versionCode":int(os.environ["CODE"]),"versionName":v,"bytes":int(os.environ["BYTES"]),"sha256":os.environ["SHA256"],"url":f"https://github.com/{os.environ['REPO']}/releases/download/android-v{v}/TENKiTER-Mensagens-{v}.apk","notes":"Nova atualização disponível. Instale por cima da versão atual para preservar seus dados."}
+          Path("android/latest.json").write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android/latest.json
+          git commit -m "chore(android): atualizar manifesto v$VERSION [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TENKiTER-Android-APK
+          path: dist/
+          if-no-files-found: ignore
+          retention-days: 90
