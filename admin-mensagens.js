@@ -2395,7 +2395,7 @@
     if (tipo === 'imagem') { aviso_('Preparando a foto…'); blob = await reduzirImagem_(f); aviso_(''); if (!blob) { aviso_('Não consegui ler esta foto. Use JPG, PNG ou WebP.'); return; } if (blob.size > 8 * 1048576) { aviso_('A foto ficou grande demais (limite 8 MB). Escolha outra.'); return; } }
     else if (blob.size > 16 * 1048576) { aviso_('Arquivo grande demais (limite 16 MB).'); return; }
     if (tipo === 'vídeo' && !/^video\/(mp4|quicktime)$/.test(f.type)) { aviso_('Use um vídeo MP4.'); return; }
-    limparAnexo_(true);
+    if (anexoPend) URL.revokeObjectURL(anexoPend.urlLocal);
     anexoPend = { blob: blob, tipo: tipo, nome:f.name||'Anexo', seg: Math.round(Number(seg) || 0), urlLocal: URL.createObjectURL(blob) };
     desenharStage_(); const ta = $('ms-texto'); if (ta && larga()) ta.focus();
   }
