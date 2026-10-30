@@ -45,6 +45,16 @@ class WebMediaTest {
   val single=VisualMediaPicker.galleryIntent(false)
   assertFalse(single.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE,false))
  }
+ @Test fun gallerySupportsMultiplePhotosEvenWhenWebViewRequestsSingleFile(){
+  // O catálogo web seleciona várias imagens, mas WebChromeClient pode informar MODE_OPEN.
+  // A galeria nativa precisa permitir ClipData com todas as imagens.
+  assertTrue(VisualMediaPicker.galleryIntent(true).getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE,false))
+  val selected=Intent().apply {
+   clipData=android.content.ClipData.newUri(activity().contentResolver,"foto 1",android.net.Uri.parse("content://test/photo1"))
+   clipData!!.addItem(android.content.ClipData.Item(android.net.Uri.parse("content://test/photo2")))
+  }
+  assertEquals(2,selected.clipData!!.itemCount)
+ }
  @Test fun videoCaptureUsesNativeCamera(){
   val camera=VisualMediaPicker.cameraIntent()
   assertEquals(MediaStore.ACTION_VIDEO_CAPTURE,camera.action)
