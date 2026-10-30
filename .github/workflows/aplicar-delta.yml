@@ -1,12 +1,10 @@
 name: Aplicar 7.40.34
 # workflow_dispatch so existe para workflows presentes na branch padrao, por isso
-# o gatilho aqui e o push que toca _d00 (arquivo de transporte).
-# Guarda de idempotencia: se VERSION ja e 7.40.34, nao faz nada.
+# o gatilho aqui e o push. A guarda de VERSION torna o job idempotente: depois de
+# aplicado ele nao faz nada, entao nao ha risco de reaplicar patch por cima.
 on:
   push:
     branches: [retomada/305-74033]
-    paths:
-      - _d00
 
 permissions:
   contents: write
@@ -27,7 +25,6 @@ jobs:
           echo "VERSION no branch: $v"
           if [ "$v" = "7.40.34" ]; then
             echo "ja=true" >> "$GITHUB_OUTPUT"
-            echo "Ja esta na 7.40.34: nada a aplicar."
           else
             echo "ja=false" >> "$GITHUB_OUTPUT"
           fi
@@ -37,8 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           cd patches/retomada-305-74033
-          cat s00 s01 s02 s03 s04 s05 s06 s07 s08 s09 s10 s11 s12 s13 s14 s15 \
-            | tr -d ' \n\r\t' | base64 -d > /tmp/base.gz
+          cat s00 s01 s02 s03 s04 s05 s06 s07 s08 s09 s10 s11 s12 s13 s14 s15 | tr -d ' \n\r\t' | base64 -d > /tmp/base.gz
           cd "$GITHUB_WORKSPACE"
           gunzip -c /tmp/base.gz > /tmp/base.patch
           got=$(sha256sum /tmp/base.patch | cut -d' ' -f1)
@@ -73,7 +69,6 @@ jobs:
           node --check admin-mensagens.js
           node --check instagram-worker/worker.js
           python3 scripts/ci/check_ux_skill.py
-          echo "--- hashes resultantes ---"
           for f in instagram-worker/worker.js admin-mensagens.js admin.html version.json VERSION CHANGELOG.md tests/worker_equipe_inicio.js tests/mensagens_equipe_inicio_ui.py tests/mock_msg.py documentacao/continuidade/RETOMADA-305-7.40.33.md; do
             echo "$(sha256sum "$f" | cut -d' ' -f1)  $f"
           done
@@ -84,19 +79,6 @@ jobs:
           set -euo pipefail
           git config user.name "Frontend Developer"
           git config user.email "frontend-developer@tenkiter.local"
-          printf '%s\n' \
-            'feat(mensagens): primeira mensagem pelo WhatsApp na Nova conversa (7.40.34)' \
-            '' \
-            'No WhatsApp a loja escreve primeiro: /msg/iniciar passa a enviar pela integracao' \
-            'Wafly ja cadastrada em Conexoes (credencial so no backend), com reserva' \
-            'idempotente, bolha gravada, recibo e assinatura de equipe.' \
-            '' \
-            'Instagram segue apenas abrindo conversa que o cliente iniciou: o campo de' \
-            'mensagem nem aparece, porque a API oficial nao permite envio iniciado pela loja.' \
-            '' \
-            'Retoma os pendentes do #305: presenca da equipe, atividade por pessoa e trilha' \
-            'das acoes confirmadas, com testes de Worker (D1 real) e de interface.' \
-            > /tmp/msg.txt
           git add -A -- . ':(exclude)_d00' ':(exclude)_d01' ':(exclude)_d02' ':(exclude)_d03' ':(exclude)_d04'
-          git commit -F /tmp/msg.txt
+          git commit -m "feat(mensagens): primeira mensagem pelo WhatsApp na Nova conversa (7.40.34)" -m "No WhatsApp a loja escreve primeiro: /msg/iniciar envia pela integracao Wafly ja cadastrada em Conexoes, com a credencial so no backend, reserva idempotente, bolha gravada, recibo e assinatura de equipe." -m "Instagram segue apenas abrindo conversa que o cliente iniciou e nem mostra o campo de mensagem, porque a API oficial nao permite envio iniciado pela loja." -m "Retoma os pendentes do #305: presenca da equipe, atividade por pessoa e trilha das acoes confirmadas, com testes de Worker (D1 real) e de interface."
           git push origin HEAD:retomada/305-74033
