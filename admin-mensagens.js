@@ -2315,7 +2315,7 @@
     const clip = botao('ms-ico', '📎', 'anexar'); clip.id = 'ms-anexar'; clip.setAttribute('aria-label', 'Anexar foto, vídeo ou áudio');
     const arq = el('input'); arq.type = 'file'; arq.id = 'ms-arquivo'; arq.hidden = true; arq.accept = 'image/*,video/*'; arq.multiple = true;
     const contaDoAnexo=contaSessao_(getSessao()),epocaDoAnexo=epocaConta_;
-    arq.addEventListener('change', () => { const arquivos = Array.from(arq.files || []), f = arquivos.shift(); arq.value = ''; anexosFila_ = arquivos; conferirContaAtual_();if(!f)return;if(aberta&&aberta.id===c.id&&contaSessao_(getSessao())===contaDoAnexo&&epocaConta_===epocaDoAnexo)escolherArquivo_(f);else aviso_('A conversa mudou. Escolha o arquivo novamente no atendimento correto.'); });
+    arq.addEventListener('change', () => { const arquivos = Array.from(arq.files || []), f = arquivos.shift(); arq.value = ''; conferirContaAtual_();if(!f)return;if(aberta&&aberta.id===c.id&&contaSessao_(getSessao())===contaDoAnexo&&epocaConta_===epocaDoAnexo){ escolherArquivo_(f).then(()=>{ anexosFila_ = arquivos; desenharStage_(); }); }else aviso_('A conversa mudou. Escolha o arquivo novamente no atendimento correto.'); });
     const audioArquivo=el('input');audioArquivo.type='file';audioArquivo.accept='audio/*';audioArquivo.id='ms-arquivo-audio';audioArquivo.hidden=true;
     audioArquivo.addEventListener('change',()=>{const f=audioArquivo.files&&audioArquivo.files[0];audioArquivo.value='';conferirContaAtual_();if(f&&aberta&&aberta.id===c.id&&contaSessao_(getSessao())===contaDoAnexo&&epocaConta_===epocaDoAnexo)escolherArquivo_(f);});
     const ta = el('textarea'); ta.id = 'ms-texto'; ta.rows = 1; ta.placeholder = 'Mensagem'; if (c.canal !== 'instagram') ta.maxLength = limiteTexto(c); ta.setAttribute('aria-label', 'Mensagem para ' + rotuloContato(c)); ta.enterKeyHint = 'enter'; ta.value = rascunhoLer_(c.id);
@@ -2372,6 +2372,7 @@
     st.textContent = ''; st.hidden = !anexoPend;
     if (bt) bt.disabled = !anexoPend && !(ta && ta.value.trim());
     if (!anexoPend) return;
+    if (anexosFila_.length) st.appendChild(el('span','ms-stage-nome','Mais '+anexosFila_.length+' mídia(s) para enviar'));
     const a = anexoPend, m = el(a.tipo === 'imagem' ? 'img' : a.tipo === 'vídeo' ? 'video' : 'audio');
     if (a.tipo === 'áudio') m.controls = true; else if (a.tipo === 'vídeo') { m.muted = true; m.preload = 'metadata'; } else m.alt = 'Prévia da foto';
     m.src = a.urlLocal; st.appendChild(m);
@@ -2626,6 +2627,11 @@
       if (r.semRede && !r.semEnvio) tmp.msg.erro = 'Sem resposta do servidor. A mensagem pode ter saído: confira antes de tentar de novo (tentar de novo não duplica).';
     }
     if (aberta && aberta.id === c.id) pintarFio(true);
+    if (!reenvio && r.ok && anexosFila_.length && aberta && aberta.id === c.id) {
+      const proximo = anexosFila_.shift();
+      await escolherArquivo_(proximo);
+      if (anexoPend) await enviar();
+    }
   }
 
   /* ---------- ao vivo ---------- */
