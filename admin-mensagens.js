@@ -864,11 +864,11 @@
     const grupo=tipoParam_()==='grupo'||tipos.grp;
     const filaVisivel=['encerradas','retomar','minhas','com_notas'].includes(filtro)||grupo?'':filaAtendimento_;
     [['esperando','Esperando',c.esperando],['em_atendimento','Em atendimento',c.em_atendimento]].forEach(([id,nome,n])=>{
-      const b=botao('ms-chip',nome,'fila-atendimento',{fila:id});b.setAttribute('aria-pressed',String(filaVisivel===id));if(Number.isFinite(n))b.appendChild(el('span','ms-fila-conta',String(n)));f.appendChild(b);
+      const b=botao('ms-chip',nome,'fila-atendimento',{fila:id});b.setAttribute('aria-pressed',String(filaVisivel===id));f.appendChild(b);
     });
     if(filaVisivel==='em_atendimento'){
       const sel=el('select','ms-chip');sel.id='ms-atendimento-escopo';sel.setAttribute('aria-label','Atendimentos de');[['todos','Todos'],['meus','Meus']].forEach(([v,t])=>{const o=el('option','',t);o.value=v;sel.appendChild(o);});sel.value=escopoAtendimento_;sel.addEventListener('change',()=>{escopoAtendimento_=sel.value;carregarLista(true);});f.appendChild(sel);
-    }else{const b=botao('ms-chip','Todas','fila-atendimento',{fila:''});b.setAttribute('aria-pressed',String(filaVisivel===''));b.appendChild(el('span','ms-fila-conta',String(c.conversas||0)));f.appendChild(b);}
+    }else{const b=botao('ms-chip','Todas','fila-atendimento',{fila:''});b.setAttribute('aria-pressed',String(filaVisivel===''));f.appendChild(b);}
     const bf=$('ms-btn-filtros');if(bf){const ativo=etqFiltro||!tipos.msg||tipos.grp||!!filtro;bf.textContent=ativo?'Filtros •':'Filtros';bf.prepend(iconeFluido_('filtros'));bf.setAttribute('aria-label',ativo?'Filtros, há filtros aplicados':'Filtros');}
     const nav=$('ms-nav');if(nav)nav.querySelectorAll('button').forEach(b=>{const ativo=b.dataset.ms==='funil'?painel==='funil':b.dataset.ms==='inicio-notas'?filtro==='com_notas':b.dataset.ms==='inicio'?painel!=='funil'&&filtro!=='com_notas':false;b.setAttribute('aria-current',ativo?'page':'false');});
     if(!ETQ)carregarEtiquetas_();
