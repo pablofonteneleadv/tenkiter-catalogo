@@ -41,7 +41,7 @@
     const letras = etiquetasDaEntrada(etiquetas);
     const vinculando = Boolean(letras.length || d.etiqueta);
     const antigos = vinculando
-      ? d.antigos.filter(t => !ETIQUETAS.has(t.toLocaleUpperCase('pt-BR')) && !/^Juv\\d+$/i.test(t))
+      ? d.antigos.filter(t => !ETIQUETAS.has(t.toLocaleUpperCase('pt-BR')) && !/^Juv\d+$/i.test(t))
       : d.antigos;
     const prefixo = infantil ? 'Idade: ' : 'Veste: ';
     return unico([
