@@ -1,0 +1,24 @@
+name: ci305
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  aplicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Aplicar
+        run: |
+          python3 scripts/ci_tmp/aplicar_ci.py
+          python3 -c "import yaml;yaml.safe_load(open('.github/workflows/ci.yml'));print('yaml ok')"
+          git config user.name "retomada-bot"
+          git config user.email "retomada@tenkiter.local"
+          git checkout -B ci/305-suite2
+          git add -- .github/workflows/ci.yml
+          git commit -m "ci: testes de equipe/Nova conversa na suite rapida (7.40.34)"
+          git push --force origin HEAD:refs/heads/ci/305-suite2
