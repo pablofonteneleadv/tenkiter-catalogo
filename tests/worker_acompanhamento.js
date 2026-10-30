@@ -87,17 +87,6 @@ assert.equal((await painel('?status=pendentes&busca=Pesquisa&canal=instagram')).
 for(const quando of ['2026-11-03T02:30:00.000Z','2026-11-04T02:30:00.000Z'])sqlite.prepare("INSERT INTO msg_agenda(conversa_id,texto,quando,autor,whats,criado_em) VALUES(?,?,?,?,?,?)").run(conv,'Limite do dia',quando,'Ana','5588999999999',new Date(clock).toISOString());
 const data=await painel('?status=pendentes&busca=Limite&de=2026-11-03&ate=2026-11-03');assert.equal(data.j.agendamentos.length,1);assert.equal(data.j.agendamentos[0].quando,'2026-11-04T02:30:00.000Z','Período considera Fortaleza');
 assert.equal((await painel('?status=inventado')).status,400);assert.equal((await painel('?cursor=invalido')).status,400);assert.equal((await painel('?de=2026-02-31')).status,400);
-// Fila: só resposta humana confirmada inicia; leitura e bot não movem; reaberta volta em atendimento.
-sqlite.exec("INSERT INTO msg_conversa(id,canal,contato,nome,total,grupo,ultima_em) VALUES(600,'whatsapp1','5588991230011','Fila nova',1,0,'2026-11-03T12:00:00Z')");
-const fila=async(q)=>{const r=await W.default.fetch(new Request('https://worker.test/msg/conversas?canal=todos&busca=Fila%20nova&'+q,{headers}),env,{});return {status:r.status,j:await r.json()}};
-assert.equal((await fila('fila=esperando')).j.conversas.length,1);assert.equal((await fila('fila=em_atendimento')).j.conversas.length,0);
-sqlite.exec("INSERT INTO msg_mensagem(conversa_id,canal,ext_id,direcao,tipo,texto,por,status,enviada_em) VALUES(600,'whatsapp1','bot-fila','saida','texto','Olá','auto','enviada','2026-11-03T12:01:00Z')");
-assert.equal((await fila('fila=esperando')).j.conversas.length,1,'Bot não inicia atendimento');
-sqlite.exec("UPDATE msg_conversa SET nao_lidas=0,dono='Ana' WHERE id=600");assert.equal((await fila('fila=esperando')).j.conversas.length,1,'Ler e assumir não são resposta');
-sqlite.exec("INSERT INTO msg_mensagem(conversa_id,canal,ext_id,direcao,tipo,texto,por,status,enviada_em) VALUES(600,'whatsapp1','humana-fila','saida','texto','Posso ajudar?','9999','incerta','2026-11-03T12:02:00Z')");
-assert.equal((await fila('fila=esperando')).j.conversas.length,1,'Envio incerto não tira da espera');sqlite.exec("UPDATE msg_mensagem SET status='enviada' WHERE ext_id='humana-fila'");assert.equal((await fila('fila=em_atendimento')).j.conversas.length,1);
-sqlite.exec("UPDATE msg_conversa SET dono='Ana' WHERE id=600");assert.equal((await fila('fila=em_atendimento&escopo=meus')).j.conversas.length,1);sqlite.exec("UPDATE msg_conversa SET dono='Outra pessoa' WHERE id=600");assert.equal((await fila('fila=em_atendimento&escopo=meus')).j.conversas.length,0);
-sqlite.exec("DELETE FROM msg_mensagem WHERE ext_id='humana-fila';INSERT INTO msg_encerramento(conversa_id,canal,motivo,em) VALUES(600,'whatsapp1','concluido','2026-11-03T13:00:00Z')");assert.equal((await fila('fila=em_atendimento')).j.conversas.length,1,'Histórico de encerramento mantém reaberta em atendimento');assert.equal((await fila('fila=inventada')).status,400);
 // Sessão do cadastro dura30dias: autorização de um pedido de45dias é renovada, limitada ao pedido.
 const convOutra=sqlite.prepare("SELECT id FROM msg_conversa WHERE canal='whatsapp2' LIMIT 1").get().id;
 const longa=await agendar({conversa:convOutra,texto:'Agendamento futuro',quando:new Date(clock+45*86400000).toISOString(),idLocal:'agenda-longa-0001'});assert(longa.j.ok);

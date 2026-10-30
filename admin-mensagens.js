@@ -25,7 +25,6 @@
   let selecao = null, timerToque = null, toqueLongo = false;      // v7.22: seleção de várias conversas (para encerrar/reabrir)
   let tipos = { msg: true, grp: false }, contVista = null, contTipos = null;
   const tipoParam_ = () => canal === 'instagram' ? 'individual' : (tipos.msg && !tipos.grp ? 'individual' : tipos.grp && !tipos.msg ? 'grupo' : '');
-  let filaAtendimento_='esperando',escopoAtendimento_='todos';
   let canal = 'todos', filtro = '', busca = '', resumo = null, contagens = null, lista = [], cursor = '', aberta = null, msgs = [], vista = 'lista', painel = '';
   let seqLista = 0, ultIdSrv = 0, nPoll = 0, timerBusca = null, timerLive = null, timerSelo = null, espera = ESPERA_MS, offline = false, abrindo = 0, novasAbaixo = 0, menuAberto = null, aviso = '';
   const rascunhos = {}, elMsgs = new Map(), elConvs = new Map(), pendentes = new Map();
@@ -77,7 +76,7 @@
   function conferirContaAtual_(){
     const nova=contaSessao_(getSessao());
     if(nova!==contaAtual_){
-      contaAtual_=nova;epocaConta_++;filaAtendimento_='esperando';escopoAtendimento_='todos';cfgLeitura=null;acompanhamento_=null;agendaAnexo_=null;agendaPedido_=null;agendaPainelFiltros_={busca:'',status:'pendentes',canal:'todos',tipo:'todos',minhas:false,de:'',ate:''};fecharGaveta_();atualizarIdentidade_();
+      contaAtual_=nova;epocaConta_++;cfgLeitura=null;acompanhamento_=null;agendaAnexo_=null;agendaPedido_=null;agendaPainelFiltros_={busca:'',status:'pendentes',canal:'todos',tipo:'todos',minhas:false,de:'',ate:''};fecharGaveta_();atualizarIdentidade_();
       if(APP_RECENTES){limparRecentes_();cacheBloqueado=true;lista=[];msgs=[];mostrarLista_();const ul=$('ms-lista');if(ul)ul.textContent='';const extra=$('ms-extra');if(extra)extra.textContent='Atualizando acesso…';}
     }
     return nova;
@@ -682,8 +681,6 @@
       .ms-ag-pesquisa{display:flex;align-items:center;gap:8px;padding:8px 0}
       .ms-ag-pesquisa input{flex:1;min-width:0}
       .ms-ag-pesquisa .ms-btn{min-width:80px;min-height:44px}
-      .sheet-mensagens .ms-filas-atendimento{display:flex;gap:4px;padding:0 16px 8px;flex:none}.sheet-mensagens .ms-filas-atendimento[hidden]{display:none}.sheet-mensagens .ms-filas-atendimento .ms-chip{flex:1;min-width:0;min-height:44px;padding:6px;font-size:.8rem;white-space:normal;border:0;border-radius:8px;background:#f4f4ef;color:#555d4f}.sheet-mensagens .ms-filas-atendimento .ms-chip[aria-pressed=true]{background:#292b25;color:#fff}.ms-filas-atendimento select{min-height:44px;max-width:84px;border:1px solid #8b9481;background:#fff;border-radius:8px;font:inherit;font-size:.8rem}
-      .ms-eq-atividade{display:flex;flex-direction:column;gap:4px;padding:12px 0;border-bottom:1px solid #e7e7e0}.ms-eq-atividade .ms-auto-exp{margin:0}
       .ms-ag-filtros{border-bottom:1px solid #e7e7e0}
       .ms-ag-filtros summary{min-height:44px;align-content:center;cursor:pointer;font-weight:600}
       .ms-ag-filtros-grade{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 8px;padding-bottom:12px}
@@ -708,7 +705,6 @@
 
   function iconeFluido_(nome){
     const p={conversas:'M4 5h16v12H9l-5 4z',funil:'M3 4h18l-7 8v7l-4 2v-9z',notas:'M5 3h14v13l-5 5H5zM14 21v-5h5',mais:'M5 12h.01M12 12h.01M19 12h.01',chevron:'m9 5 7 7-7 7',selecao:'M9 11l2 2 4-4M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2',painel:'M4 20V10M10 20V4M16 20v-7M22 20H2',auto:'m13 2-9 12h7l-1 8 10-13h-7z',atualizar:'M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 13 3M18 18A8 8 0 0 1 5 15',config:'M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6',usuario:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M17 8h5m-2-2 2 2-2 2',baixar:'M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5',permissoes:'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',conexao:'m8 3 3 3-5 5-3-3M16 21l-3-3 5-5 3 3M8 16l8-8',busca:'M21 21l-5-5M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0',filtros:'M4 6h16M7 12h10M10 18h4M8 3v6M16 9v6M12 15v6'};
-    p['nova-conversa']=p.conversas;p['equipe-painel']=p.painel;
     p.agenda='M5 5h14v16H5zM5 9h14M8 3v4M16 3v4M8 13h3M8 17h6';
     const n=el('span','ms-linha-icone');n.setAttribute('aria-hidden','true');n.innerHTML='<svg viewBox="0 0 24 24"><path d="'+p[nome]+'"/></svg>';return n;
   }
@@ -741,8 +737,7 @@
     const nav=el('nav','ms-nav');nav.id='ms-nav';nav.setAttribute('aria-label','Navegação das mensagens');
     [['Conversas','inicio','conversas'],['Funil','funil','funil'],['Com notas','inicio-notas','notas'],['Mais','menu-geral','mais']].forEach(([nome,acao,ico])=>{const b=botao('',nome,acao);b.prepend(iconeFluido_(ico));nav.appendChild(b);});
     const intro=el('div','ms-intro');intro.id='ms-intro';const resultados=el('span');resultados.id='ms-resultados';intro.append(resultados,botao('','Selecionar','selecionar'));
-    const filas=el('div','ms-filas-atendimento');filas.id='ms-filas-atendimento';filas.setAttribute('aria-label','Fila de atendimento');
-    lat.append(topo, saudeEl, abas, pesquisa, filas, filtros, estado, intro, wrap, selbar, nav);
+    lat.append(topo, saudeEl, abas, pesquisa, filtros, estado, intro, wrap, selbar, nav);
     // v7.22: segurar o dedo numa conversa começa a seleção (como no WhatsApp)
     ul.addEventListener('pointerdown', (ev) => { const b = ev.target.closest('.ms-conv'); if (!b || selecao) return; clearTimeout(timerToque); toqueLongo = false; timerToque = setTimeout(() => { toqueLongo = true; iniciarSelecao_(Number(b.dataset.id)); if (navigator.vibrate) try { navigator.vibrate(20); } catch (e) { /* sem vibração */ } }, 550); });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => ul.addEventListener(t, () => clearTimeout(timerToque)));
@@ -860,14 +855,8 @@
     aviso_('Etapa da venda salva.'); if (etqDaFicha_) { etqDaFicha_ = false; abrirFicha_(); }
     ETQ = null; desenharFiltros(); await carregarLista(false);
   }
-  function desenharFilasAtendimento_(){
-    const f=$('ms-filas-atendimento');if(!f)return;f.textContent='';f.hidden=tipoParam_()==='grupo'||filtro==='encerradas';
-    [['esperando','Esperando'],['em_atendimento','Em atendimento']].forEach(([id,nome])=>{const b=botao('ms-chip',nome,'fila-atendimento',{fila:id});b.setAttribute('aria-pressed',String(filaAtendimento_===id));f.appendChild(b);});
-    if(filaAtendimento_==='em_atendimento'){const sel=el('select');sel.id='ms-atendimento-escopo';sel.setAttribute('aria-label','Atendimentos de');[['todos','Todos'],['meus','Meus']].forEach(([v,t])=>{const o=el('option','',t);o.value=v;sel.appendChild(o);});sel.value=escopoAtendimento_;sel.addEventListener('change',()=>{escopoAtendimento_=sel.value;carregarLista(true);});f.appendChild(sel);}
-  }
   function desenharFiltros() {
     const f = $('ms-filtros'); if (!f) return;
-    desenharFilasAtendimento_();
     const c = contVista || contagemDe_(canal), t = contTipos || { individuais: Math.max(0, (c.conversas || 0) - (c.grupos || 0)), grupos: c.grupos || 0 };
     f.textContent = '';
     [['sem_resposta','Falta responder',c.sem_resposta],['nao_lidas','Não lidas',c.nao_lidas],['','Todas',c.conversas]].forEach(([id,nome,n])=>{
@@ -903,40 +892,11 @@
     const etapas=(ETQ||[]).filter(e=>e.venda);if(etapas.length){const e=sec('Etapa da venda');selecao(e,'ms-ft-etapa','Etapa da venda',[['0','Todas as etapas'],...etapas.map(x=>[String(x.id),x.nome])],etqFiltro);}
     const pe=el('div','ms-filtros-pe');pe.append(botao('ms-btn','Limpar','filtros-limpar'),botao('ms-btn prim','Aplicar filtros','filtros-aplicar'));painel.appendChild(pe);
   }
-  let atualizarEquipe_=null,presencaEm_=0,presencaId_=-1;
-  function presenca_(){
-    const id=vista==='conversa'&&aberta?aberta.id:0;
-    if(Date.now()-presencaEm_<45000&&id===presencaId_)return;presencaEm_=Date.now();presencaId_=id;
-    worker_('/msg/presenca','POST',{conversa:id,espiar:espiando}).catch(()=>{});
-  }
-  function abrirEquipe_(){
-    if(!podeFerramenta_('metricas'))return;const corpo=gaveta_('Equipe e atividade');if(!corpo)return;propostaGaveta_('equipe',document.activeElement);const gen=$('ms-gaveta').dataset.gen,epoca=epocaConta_;
-    const filtros=el('div','ms-ag-filtros-grade'),hoje=fortIso_(Date.now()).slice(0,10),de=el('input','ms-copia'),ate=el('input','ms-copia'),quem=el('select','ms-copia');de.type=ate.type='date';de.id='ms-eq-de';ate.id='ms-eq-ate';quem.id='ms-eq-quem';de.value=fortIso_(Date.now()-6*86400000).slice(0,10);ate.value=hoje;
-    [[de,'De'],[ate,'Até'],[quem,'Atendente']].forEach(([e,t])=>{const l=el('label','ms-ag-filtro');l.append(el('span','',t),e);filtros.appendChild(l);});const todos=el('option','','Todos');todos.value='';quem.appendChild(todos);
-    const status=el('p','ms-auto-exp');status.setAttribute('role','status');const online=el('div'),totais=el('div'),historico=el('div'),mais=botao('ms-btn','Carregar mais','equipe-mais');mais.hidden=true;
-    const atualizar=botao('ms-btn','Atualizar','equipe-atualizar');corpo.append(filtros,atualizar,status,online,totais,historico,mais);let ocupado=false,ultimo=0,antes=0;
-    const carregar=async(adicionar=false)=>{if(ocupado||epoca!==epocaConta_||$('ms-gaveta')?.dataset.gen!==gen)return;ocupado=true;status.textContent='Atualizando…';const r=await worker_('/msg/equipe?de='+de.value+'&ate='+ate.value+'&usuario='+encodeURIComponent(quem.value)+(adicionar?'&antes='+antes:''),'GET');ocupado=false;if(epoca!==epocaConta_||$('ms-gaveta')?.dataset.gen!==gen)return;ultimo=Date.now();if(!r.ok){status.textContent=r.erro||'Não foi possível atualizar. Tente novamente.';return;}
-      const nomes=new Map([...(r.presencas||[]),...(r.totais||[])].map(p=>[p.usuario,p.nome]));nomes.forEach((nome,id)=>{if(![...quem.options].some(o=>o.value===id)){const o=el('option','',nome);o.value=id;quem.appendChild(o);}});
-      if(!adicionar){online.textContent='';online.appendChild(el('h4','','Agora'));const ativos=(r.presencas||[]).filter(p=>p.online);online.appendChild(el('p','ms-auto-exp',ativos.length?ativos.map(p=>p.nome+(p.conversa_id?' · em uma conversa':' · na lista')).join(' • '):'Nenhum atendente ativo nos últimos 2 minutos.'));totais.textContent='';totais.appendChild(el('h4','','No período'));(r.totais||[]).forEach(p=>totais.appendChild(el('p','ms-auto-exp',p.nome+' · '+p.respostas+' respostas · '+p.encerramentos+' encerramentos · '+p.notas+' ações em notas')));if(!r.totais?.length)totais.appendChild(el('p','ms-auto-exp','Sem atividade registrada neste período.'));historico.textContent='';historico.appendChild(el('h4','','Atividade registrada'));}
-      const rotulos={responder:'Respondeu',encerrar:'Alterou encerramento',responsavel:'Alterou responsável',notas:'Alterou nota',etapa:'Alterou etapa',ficha:'Editou ficha',agendar:'Agendou mensagem',acompanhar:'Alterou acompanhamento',espiar:'Espiou conversa',visualizar:'Abriu conversa',online:'Ficou ativo'};
-      (r.atividades||[]).forEach(a=>{const linha=el('div','ms-eq-atividade');linha.append(el('strong','',a.nome),el('span','ms-auto-exp',(rotulos[a.acao]||'Atividade')+(a.cliente?' · '+a.cliente:'')+' · '+new Date(a.em).toLocaleString('pt-BR',{timeZone:'America/Fortaleza'})));historico.appendChild(linha);});antes=r.proximo;mais.hidden=!r.temMais;status.textContent='Atualizado às '+new Date(r.agora).toLocaleTimeString('pt-BR',{timeZone:'America/Fortaleza',hour:'2-digit',minute:'2-digit'})+' · presença aproximada; histórico a partir desta atualização.';
-    };
-    atualizar.addEventListener('click',()=>carregar());mais.addEventListener('click',()=>carregar(true));[de,ate,quem].forEach(e=>e.addEventListener('change',()=>carregar()));atualizarEquipe_=()=>{if(Date.now()-ultimo>15000)carregar();};carregar();
-  }
-  function abrirNovaConversa_(){
-    if(!podeFerramenta_('responder'))return;const corpo=gaveta_('Nova conversa');if(!corpo)return;propostaGaveta_('nova-conversa',document.activeElement);const gen=$('ms-gaveta').dataset.gen,epoca=epocaConta_;
-    const rot=el('label','ms-ag-filtro'),sel=el('select','ms-copia');sel.id='ms-nova-canal';rot.append(el('span','','Canal'),sel);CANAIS.forEach(([v,t])=>{const o=el('option','',t);o.value=v;sel.appendChild(o);});sel.value=canal==='todos'?'whatsapp1':canal;
-    const ld=el('label','ms-ag-filtro'),dest=el('input','ms-copia');dest.id='ms-nova-destino';dest.type='tel';ld.append(el('span','','Número ou @ do cliente'),dest);
-    const info=el('p','ms-auto-exp'),status=el('p','ms-auto-exp');status.setAttribute('role','status');
-    const ajustar=()=>{const ig=sel.value==='instagram';dest.type=ig?'text':'tel';dest.placeholder=ig?'@usuario':'(88) 99999-9999';info.textContent=ig?'Abre uma conversa já recebida deste @. Para um novo contato, o cliente precisa escrever à loja primeiro.':'Escolha o WhatsApp da loja e digite o número do cliente com DDD.';};sel.addEventListener('change',ajustar);ajustar();
-    const b=botao('ms-btn prim','Abrir conversa','nova-confirmar');b.id='ms-nova-confirmar';b.addEventListener('click',async()=>{if(!dest.value.trim()){status.textContent='Preencha o número ou @ do cliente.';dest.focus();return;}b.disabled=true;status.textContent='Abrindo…';const r=await worker_('/msg/iniciar','POST',{canal:sel.value,destino:dest.value.trim()});if(epoca!==epocaConta_||$('ms-gaveta')?.dataset.gen!==gen)return;b.disabled=false;if(!r.ok){status.textContent=r.erro||'Não foi possível abrir agora. Tente novamente.';return;}fecharGaveta_();await desempilharEsperando_();if(epoca===epocaConta_)await abrirConversa(r.conversa,false);});
-    corpo.append(rot,ld,info,status,b);dest.focus();
-  }
   function abrirMais_(){
     const anterior=document.activeElement,corpo=gaveta_('Mais');if(!corpo)return;propostaGaveta_('mais',anterior);
     const mapa={selecionar:'selecao',painel:'painel',funil:'funil','auto-cfg':'auto','agenda-painel':'agenda',atualizar:'atualizar','leitura-cfg':'config','trocar-usuario':'usuario','app-atualizar':'baixar','app-permissoes':'permissoes',conexao:'conexao',exp:'baixar'};
     const grupo=(titulo,itens)=>{const sec=el('section','ms-mais-grupo');sec.appendChild(el('h4','',titulo));itens.forEach(([nome,acao,dados])=>{const b=botao('ms-mais-item','',acao,dados);b.append(iconeFluido_(mapa[acao]),el('span','ms-mais-texto',nome),iconeFluido_('chevron'));sec.appendChild(b);});corpo.appendChild(sec);};
-    grupo('Atendimento',[['Nova conversa','nova-conversa'],['Selecionar conversas','selecionar'],['Painel de atendimento','painel'],['Agendamentos','agenda-painel'],['Equipe e atividade','equipe-painel'],['Etapas da venda','funil'],['Respostas automáticas','auto-cfg'],['Atualizar agora','atualizar']]);
+    grupo('Atendimento',[['Selecionar conversas','selecionar'],['Painel de atendimento','painel'],['Agendamentos','agenda-painel'],['Etapas da venda','funil'],['Respostas automáticas','auto-cfg'],['Atualizar agora','atualizar']]);
     grupo('Conta e aplicativo',[['Configurações de leitura e nome','leitura-cfg'],['Trocar usuário','trocar-usuario'],...(window.TKAndroid?[['Atualizar app','app-atualizar'],['Permissões do app','app-permissoes']]:[]),...(canal!=='todos'?[['Conexão deste canal','conexao']]:[])]);
     grupo('Exportar',[...(canal!=='todos'?[['Este canal (CSV)','exp',{params:'formato=csv&canal='+canal,rotulo:'o canal'}],['Este canal (TXT para IA)','exp',{params:'formato=txt&canal='+canal,rotulo:'o canal'}]]:[]),['Tudo (CSV, três canais)','exp',{params:'formato=csv',rotulo:'tudo'}],['Tudo (JSON)','exp',{params:'formato=json',rotulo:'tudo'}]]);
     corpo.querySelectorAll('.ms-mais-grupo').forEach(sec=>{if(![...sec.querySelectorAll('button')].some(b=>!b.hidden))sec.hidden=true;});
@@ -1738,7 +1698,7 @@
   async function carregarLista(reset) {
     if(!nomesConferidos){nomesConferidos=true;setTimeout(nomesGoogle_,1500);}
     const mine = ++seqLista, c0 = canal, f0 = filtro, b0 = busca.trim(), t0 = tipoParam_();
-    const path='/msg/conversas?blocos=1&fila='+filaAtendimento_+'&escopo='+escopoAtendimento_+'&canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : '') + (etqFiltro ? '&etiqueta=' + etqFiltro : '');
+    const path='/msg/conversas?blocos=1&canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : '') + (etqFiltro ? '&etiqueta=' + etqFiltro : '');
     const salvo = APP_RECENTES && reset ? await recentes_(path) : null;
     if (salvo && mine===seqLista) { lista=salvo.conversas;contVista=salvo.contagens||null;contTipos=salvo.tipos||null;desenharFiltros();pintarLista();$('ms-extra').textContent='Conversas recentes · atualizando…'; }
     const r = await worker_(path, 'GET');
@@ -2685,7 +2645,6 @@
     const o = $('overlay-mensagens');
     if (!o || !o.classList.contains('aberto')) { pararAoVivo(); return; }
     if (document.hidden) { agendar(ESPERA_MAX_MS); return; }
-    presenca_();if($('ms-gaveta')?.dataset.tipo==='equipe'&&podeFerramenta_('metricas'))atualizarEquipe_?.();
     const aberturaDaSonda = abrindo;
     const ultId = ultIdSrv;
     const st = msgs.reduce((m, x) => (x.status_em && x.status_em > m ? x.status_em : m), '') || cursor;
@@ -2809,7 +2768,7 @@
     ex.appendChild(p);
   }
   /** No painel de atendimento, abas de filtro/busca/estado saem do caminho para dar espaço aos números. */
-  function chrome_(esconder) { ['ms-filas-atendimento','ms-filtros', 'ms-pesquisa', 'ms-estado-wrap','ms-intro'].forEach((id) => { const e = $(id); if (e) e.hidden = esconder; }); }
+  function chrome_(esconder) { ['ms-filtros', 'ms-pesquisa', 'ms-estado-wrap','ms-intro'].forEach((id) => { const e = $(id); if (e) e.hidden = esconder; }); }
   function fecharPainel() { if (painel === 'funil') sairFunil_(); painel = ''; chrome_(false); const ul = $('ms-lista'); if (ul) ul.hidden = false; pintarLista(); }
 
   /* ---------- v7.40.15: funil de vendas ----------
@@ -2963,7 +2922,6 @@
       if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { document.addEventListener('tk:camada-fechada', function f(e) { if (e.detail && e.detail.chave === 'ms-conversa') { document.removeEventListener('tk:camada-fechada', f); fecharComHistorico_('overlay-mensagens'); } }); TKCamadas.desempilhar('ms-conversa'); }
       else fecharComHistorico_('overlay-mensagens');
     }
-    else if(a==='fila-atendimento'){filaAtendimento_=b.dataset.fila;escopoAtendimento_='todos';selecao=null;desenharSelbar_();desenharFiltros();await carregarLista(true);}
     else if (a === 'aba') { const eraFunil = painel === 'funil'; selecao = null; desenharSelbar_(); contVista = null; contTipos = null; canal = b.dataset.canal; filtro = ''; etqFiltro = 0; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); if (eraFunil) { chrome_(true); abrirFunil_(); } else { $('ms-extra').textContent = 'Carregando conversas…'; } await carregarLista(true); }
     else if(a==='filtros-abrir')abrirFiltros_();
     else if(a==='filtros-aplicar'||a==='filtros-limpar'){
@@ -3050,8 +3008,6 @@
     else if (a === 'resp-editar') abrirRespostas_(true);
     else if (a === 'resp-usar') { const r = respostas_()[Number(b.dataset.i)]; if (r) colocarResposta_(r.x); }
     else if (a === 'auto-cfg') abrirAuto_();
-    else if(a==='equipe-painel')abrirEquipe_();
-    else if(a==='nova-conversa')abrirNovaConversa_();
     else if (a === 'agenda-painel') { fecharMenu(); abrirPainelAgenda_(); }
     else if (a === 'agenda-conversa') { const id=Number(b.dataset.id);$('ms-gaveta')?.remove();await desempilharEsperando_('ms-gaveta');await abrirConversa(id); }
     else if (a === 'agenda-opcoes') { fecharMenu(); abrirAgendarOpcoes_(); }
@@ -3159,7 +3115,7 @@
   }
   async function abrir() {
     montar(); abrirComHistorico_('overlay-mensagens');
-    escopoAtendimento_='todos';vista = 'lista'; $('ms-app').dataset.vista = 'lista'; ajustarViewport();
+    vista = 'lista'; $('ms-app').dataset.vista = 'lista'; ajustarViewport();
     $('ms-extra').textContent = 'Carregando…';
     await recarregar(); ligarAoVivo();
     const f = $('ms-fechar'); if (f && larga()) f.focus();
@@ -3167,17 +3123,7 @@
   let atualizacaoImediata_ = false;
   async function atualizarAgora_(){if(atualizacaoImediata_||!podeGerir()||!$('overlay-mensagens')?.classList.contains('aberto'))return;atualizacaoImediata_=true;clearTimeout(timerLive);try{await carregarLista(false);await sondar();}finally{atualizacaoImediata_=false;}}
   window.addEventListener('focus',atualizarAgora_);document.addEventListener('visibilitychange',()=>{if(!document.hidden)atualizarAgora_();});
-  let pedidoFerramentaApp_='';
-  function ferramentaApp_(acao,id,espiar,pedido){
-    if(!podeGerir()||!['agendar','agendamentos','nova-conversa','equipe'].includes(acao)||!podeFerramenta_(acao==='equipe'?'metricas':acao==='nova-conversa'?'responder':'agenda')||typeof pedido!=='string'||!pedido||pedido.length>80)return false;
-    if(acao==='agendar'&&(!Number.isSafeInteger(id)||id<1))return false;
-    if(pedidoFerramentaApp_===pedido)return true;
-    pedidoFerramentaApp_=pedido;const epoca=epocaConta_;
-    (async()=>{if(!$('overlay-mensagens')?.classList.contains('aberto'))await abrir();if(epoca!==epocaConta_)return;
-      if(acao==='agendar'){await abrirConversa(id,espiar===true);if(epoca!==epocaConta_||aberta?.id!==id)return;abrirAgendarOpcoes_();}else if(acao==='equipe')abrirEquipe_();else if(acao==='nova-conversa')abrirNovaConversa_();else abrirPainelAgenda_();
-    })().catch(()=>{if(epoca===epocaConta_)aviso_('Não foi possível abrir o agendamento. Tente novamente.');});return true;
-  }
-  if(new URLSearchParams(location.search).get('app')==='mensagens')window.TKMensagensApp={ferramenta:ferramentaApp_,atualizar:atualizarAgora_,voltar:voltarApp_,abrirConversa:function(id,espiar){if(podeGerir()&&Number.isSafeInteger(id)&&id>0)return abrirConversa(id,espiar===true);}};
+  if(new URLSearchParams(location.search).get('app')==='mensagens')window.TKMensagensApp={atualizar:atualizarAgora_,voltar:voltarApp_,abrirConversa:function(id,espiar){if(podeGerir()&&Number.isSafeInteger(id)&&id>0)return abrirConversa(id,espiar===true);}};
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { const o = $('overlay-mensagens'); if (o && o.classList.contains('aberto')) { espera = ESPERA_MS; agendar(300); } else sondarSelo(); } });
   (function init() {
     const botao_ = $('btn-abrir-mensagens'); if (!botao_) return;

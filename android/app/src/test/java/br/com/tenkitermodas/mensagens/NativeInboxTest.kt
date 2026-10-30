@@ -115,7 +115,6 @@ class NativeInboxTest {
         val api=object:NativeApi(){
             override fun account(body:JSONObject)=JSONObject().put("ok",true).put("sessao","fresh-session").put("usuario",JSONObject().put("whatsapp",a.owner).put("name","Pablo").put("permissoes",org.json.JSONArray().put("gerir_acessos")))
             override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject {
-                if(path=="/msg/acesso")return JSONObject().put("ok",true).put("permitido",true).put("direitos",JSONObject().put("acessar",true).put("agenda",true).put("responder",true))
                 assertEquals("fresh-session",a.session)
                 if(path.startsWith("/msg/conversas"))return JSONObject().put("ok",true).put("conversas",org.json.JSONArray().put(conv()))
                 if(path.startsWith("/msg/mensagens")){
@@ -138,7 +137,6 @@ class NativeInboxTest {
         val api=object:NativeApi(){
             override fun account(body:JSONObject)=JSONObject().put("ok",true).put("usuario",JSONObject().put("permissoes",org.json.JSONArray().put("gerir_acessos")))
             override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject {
-                if(path=="/msg/acesso")return JSONObject().put("ok",true).put("permitido",true).put("direitos",JSONObject().put("acessar",true).put("agenda",true).put("responder",true))
                 if(path=="/msg/enviar"){
                     keys.add(body!!.getString("idLocal"))
                     if(fail)throw ApiFailure(JSONObject().put("erro","Tente mais tarde."),409)
@@ -272,7 +270,6 @@ class NativeInboxTest {
         val api=object:NativeApi(){
             override fun account(body:JSONObject):JSONObject{accounts++;return JSONObject().put("ok",true).put("usuario",JSONObject().put("permissoes",org.json.JSONArray().put("gerir_acessos")))}
             override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject{
-                if(path=="/msg/acesso")return JSONObject().put("ok",true).put("permitido",true).put("direitos",JSONObject().put("acessar",true).put("agenda",true).put("responder",true))
                 if(path.startsWith("/msg/conversas")){
                     lists++;val ids=when{!path.contains("antesId")->(51L..100L).reversed();path.contains("antesId=51")->(1L..50L).reversed();else->emptyList()}
                     return JSONObject().put("ok",true).put("cursor",if(lists==1)"2026-10-27T01:00:01Z"else"2026-10-27T01:00:09Z").put("conversas",org.json.JSONArray(ids.map{conv(it)}))
