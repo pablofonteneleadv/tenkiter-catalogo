@@ -88,7 +88,21 @@ jobs:
       # entao uma falha secundaria escondia o estado real de producao — nos runs
       # 38833465713, 38837548442 e 38840046234 ninguem chegou a conferir o ar.
       - name: Conferir a versão oferecida pelo atualizador Android
-        run: python3 scripts/deploy/verificar_android_manifesto.py
+        id: android_manifesto
+        continue-on-error: true
+        run: python3 scripts/deploy/verificar_android_manifesto.py --attempts 6 --delay 5
+
+      # Se a borda ainda oferecer uma versão antiga, limpa só o manifesto,
+      # confere novamente e falha de verdade caso continue desatualizado.
+      - name: Recuperar publicação do manifesto Android na borda
+        if: steps.android_manifesto.outcome == 'failure'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          PURGE_ALVO: https://tenkitermodas.com.br/android/latest.json
+        run: |
+          bash scripts/deploy/cloudflare_purge.sh
+          python3 scripts/deploy/verificar_android_manifesto.py --attempts 12 --delay 5
 
       - name: Verificação final no ar
         if: always()
