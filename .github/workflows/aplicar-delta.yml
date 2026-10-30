@@ -1,7 +1,10 @@
 name: Aplicar 7.40.34
 # workflow_dispatch so existe para workflows presentes na branch padrao, por isso
-# o gatilho aqui e o push. A guarda de VERSION torna o job idempotente: depois de
-# aplicado ele nao faz nada, entao nao ha risco de reaplicar patch por cima.
+# o gatilho aqui e o push. A guarda de VERSION torna o job idempotente.
+#
+# Transporte: o patch base (7.40.33) vem dos blocos s00..s15 e o delta vem do
+# script _delta.py, que faz substituicoes exatas e falha se algum trecho nao
+# bater. Nenhum arquivo grande atravessa o transporte como texto.
 on:
   push:
     branches: [retomada/305-74033]
@@ -42,33 +45,23 @@ jobs:
           test "$got" = "09ec93fff39609be2e96a51463553b2f7f4c0c002fa03c0978c20b3a58ca87c2"
           echo "arquivos na base: $(grep -c '^diff --git' /tmp/base.patch)"
 
-      - name: Montar e conferir o delta 7.40.34
-        if: steps.guarda.outputs.ja != 'true'
-        run: |
-          set -euo pipefail
-          cat _d00 _d01 _d02 _d03 _d04 | tr -d ' \n\r\t' | base64 -d > /tmp/delta.gz
-          gunzip -c /tmp/delta.gz > /tmp/delta.patch
-          got=$(sha256sum /tmp/delta.patch | cut -d' ' -f1)
-          echo "delta sha256: $got"
-          test "$got" = "baa9d292152f9cb1a9dbbcdddb50ec8123ceac5d96cacbb4784bb5207321e301"
-          echo "arquivos no delta: $(grep -c '^diff --git' /tmp/delta.patch)"
-
-      - name: Aplicar base e delta
+      - name: Aplicar a base
         if: steps.guarda.outputs.ja != 'true'
         run: |
           set -euo pipefail
           git apply -p1 --verbose /tmp/base.patch
-          git apply -p1 --verbose /tmp/delta.patch
 
-      - name: Conferir o resultado
+      - name: Aplicar o delta 7.40.34
         if: steps.guarda.outputs.ja != 'true'
         run: |
           set -euo pipefail
+          python3 _delta.py .
           test "$(cat VERSION)" = "7.40.34"
           grep -q '"versao": "7.40.34"' version.json
           node --check admin-mensagens.js
           node --check instagram-worker/worker.js
           python3 scripts/ci/check_ux_skill.py
+          echo "--- hashes resultantes ---"
           for f in instagram-worker/worker.js admin-mensagens.js admin.html version.json VERSION CHANGELOG.md tests/worker_equipe_inicio.js tests/mensagens_equipe_inicio_ui.py tests/mock_msg.py documentacao/continuidade/RETOMADA-305-7.40.33.md; do
             echo "$(sha256sum "$f" | cut -d' ' -f1)  $f"
           done
