@@ -199,7 +199,7 @@ class MainActivity:Activity(),InboxView.Events {
                 webAudio.cancel();chooser?.onReceiveValue(null);chooser=cb
                 val cancel={if(chooser===cb){cb.onReceiveValue(null);chooser=null};Unit}
                 if(VisualMediaPicker.recording(p.acceptTypes,p.isCaptureEnabled)){webAudio.begin{uri->if(chooser===cb){cb.onReceiveValue(uri?.let{arrayOf(it)});chooser=null}};return true}
-                if(VisualMediaPicker.visual(p.acceptTypes)){VisualMediaPicker.open(this@MainActivity,p,100,cancel);return true}
+                if(VisualMediaPicker.visual(p.acceptTypes) || p.acceptTypes.isEmpty() || p.acceptTypes.all { it.isBlank() || it == "*/*" }){VisualMediaPicker.open(this@MainActivity,p,100,cancel);return true}
                 return try{startActivityForResult(p.createIntent().apply{addCategory(Intent.CATEGORY_OPENABLE)},100);true}catch(_:Exception){cancel();false}
             }
             override fun onPermissionRequest(r:PermissionRequest){runOnUiThread{val origin=Uri.parse(r.origin.toString());if(origin.scheme!="https"||origin.host!="tenkitermodas.com.br"||!r.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)){r.deny();return@runOnUiThread};if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)r.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))else{audioRequest=r;requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),101)}}}
