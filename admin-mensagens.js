@@ -2571,7 +2571,17 @@
     const resultados = el('div','ms-encaminhar-resultados');resultados.style.cssText='overflow:auto;min-height:80px;max-height:55dvh';
     painel.append(topo,campo,el('small','','Escolha uma conversa. O envio só acontecerá após tocar em Enviar.'),resultados);
     fundo.appendChild(painel);document.body.appendChild(fundo);
-    fundo.addEventListener('click',e=>{\n      if(e.target===fundo){fecharEncaminhar_();return;}\n      const acao=e.target.closest('[data-ms]');\n      if(!acao||!fundo.contains(acao))return;\n      if(acao.dataset.ms==='encaminhar-fechar')fecharEncaminhar_();\n      else if(acao.dataset.ms==='encaminhar-destino'){\n        const id=Number(acao.dataset.id);\n        const destino=encaminharDestinos_.find(c=>Number(c.id)===id);\n        if(destino&&encaminharPendente_&&id!==encaminharPendente_.origem)encaminharPreparar_(destino);\n      }\n    });
+    fundo.addEventListener('click',e=>{
+      if(e.target===fundo){fecharEncaminhar_();return;}
+      const acao=e.target.closest('[data-ms]');
+      if(!acao||!fundo.contains(acao))return;
+      if(acao.dataset.ms==='encaminhar-fechar')fecharEncaminhar_();
+      else if(acao.dataset.ms==='encaminhar-destino'){
+        const id=Number(acao.dataset.id);
+        const destino=encaminharDestinos_.find(c=>Number(c.id)===id);
+        if(destino&&encaminharPendente_&&id!==encaminharPendente_.origem)encaminharPreparar_(destino);
+      }
+    });
     const desenhar = () => {
       resultados.textContent='';
       const q=campo.value.trim().toLocaleLowerCase('pt-BR');
@@ -2607,10 +2617,12 @@
     if(m.tipo!=='texto') {
       aviso_('Preparando mídia para encaminhar…');
       try {
-        if(!m.midia || typeof m.id!=='number')throw Error('Mídia sem identificador disponível');\n        const url=await midiaBlob_(m.id);
+        if(!m.midia || typeof m.id!=='number')throw Error('Mídia sem identificador disponível');
+        const url=await midiaBlob_(m.id);
         const res=await fetch(url);if(!res.ok)throw Error('Mídia indisponível');
         const blob=await res.blob();
-        const mime=blob.type||({'imagem':'image/jpeg','vídeo':'video/mp4','áudio':'audio/ogg'})[m.tipo];\n        if(m.tipo==='vídeo' && mime!=='video/mp4')throw Error('Vídeo original não está em MP4');
+        const mime=blob.type||({'imagem':'image/jpeg','vídeo':'video/mp4','áudio':'audio/ogg'})[m.tipo];
+        if(m.tipo==='vídeo' && mime!=='video/mp4')throw Error('Vídeo original não está em MP4');
         const ext=({'imagem':'jpg','vídeo':'mp4','áudio':'ogg'})[m.tipo];
         arquivo=new File([blob],'encaminhado.'+ext,{type:mime});
       }catch(e){aviso_('Não foi possível recuperar a mídia original. Nada foi enviado.');return;}
