@@ -159,7 +159,47 @@ def main():
     ui.write_text(u2, encoding='utf-8')
     print(f"worker.js: {len(w)} -> {len(w2)} bytes")
     print(f"admin-mensagens.js: {len(u)} -> {len(u2)} bytes")
-    print("delta aplicado")
+
+    # Versao, cache-busting e changelog andam juntos: e o que o Render publica e
+    # o que faz o navegador pegar o admin-mensagens.js certo.
+    (raiz / 'VERSION').write_text('7.40.34\n', encoding='utf-8')
+    (raiz / 'version.json').write_text(
+        '{\n'
+        '  "versao": "7.40.34",\n'
+        '  "commit": "",\n'
+        '  "branch": "main",\n'
+        '  "publicado_em": "2026-10-30T11:10:00Z",\n'
+        '  "servico": "tenkiter-catalogo"\n'
+        '}\n', encoding='utf-8')
+    html = raiz / 'admin.html'
+    h = html.read_text(encoding='utf-8')
+    h2 = troca(h, 'admin-mensagens.js?v=7.40.33', 'admin-mensagens.js?v=7.40.34', 'admin.html cache-busting')
+    html.write_text(h2, encoding='utf-8')
+
+    nota = (
+        "<!-- novas vers\u00f5es entram logo abaixo desta linha -->\n"
+        "\n"
+        "## [7.40.34] - 2026-10-30\n"
+        "\n"
+        "- Nova conversa: no WhatsApp a loja escreve primeiro \u2014 a mensagem sai na hora pela "
+        "integra\u00e7\u00e3o Wafly j\u00e1 cadastrada em Conex\u00f5es (credenciais continuam s\u00f3 no backend, "
+        "nunca no navegador)\n"
+        "- A primeira mensagem segue o mesmo caminho do /msg/enviar: reserva idempotente (o mesmo "
+        "toque n\u00e3o envia duas vezes), bolha gravada na conversa, recibo e assinatura de equipe "
+        "para quem n\u00e3o \u00e9 administrador\n"
+        "- Quem abre a conversa e fala primeiro vira respons\u00e1vel, e a resposta confirmada entra "
+        "na trilha da equipe\n"
+        "- Instagram continua apenas abrindo conversa que o cliente j\u00e1 iniciou: o campo de "
+        "mensagem nem aparece, porque a API oficial n\u00e3o permite envio iniciado pela loja\n"
+        "\n"
+    )
+    cl = raiz / 'CHANGELOG.md'
+    c = cl.read_text(encoding='utf-8')
+    marcador = "<!-- novas vers\u00f5es entram logo abaixo desta linha -->\n"
+    c2 = troca(c, marcador, nota, 'CHANGELOG.md entrada')
+    cl.write_text(c2, encoding='utf-8')
+
+    print("delta aplicado (versao, cache-busting e changelog inclusos)")
 
 
 if __name__ == '__main__':
