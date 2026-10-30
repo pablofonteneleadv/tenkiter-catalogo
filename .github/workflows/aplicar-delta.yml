@@ -1,8 +1,7 @@
 name: Aplicar 7.40.34
-# workflow_dispatch so existe para workflows presentes na branch padrao, por isso o
-# gatilho aqui e o push que toca _d00 (arquivo de transporte).
-# Guarda de idempotencia: se VERSION ja e 7.40.34, nao faz nada — evita reaplicar
-# patch ja aplicado e evita loop (push feito com GITHUB_TOKEN nao redispara workflow).
+# workflow_dispatch so existe para workflows presentes na branch padrao, por isso
+# o gatilho aqui e o push que toca _d00 (arquivo de transporte).
+# Guarda de idempotencia: se VERSION ja e 7.40.34, nao faz nada.
 on:
   push:
     branches: [retomada/305-74033]
@@ -85,14 +84,19 @@ jobs:
           set -euo pipefail
           git config user.name "Frontend Developer"
           git config user.email "frontend-developer@tenkiter.local"
+          printf '%s\n' \
+            'feat(mensagens): primeira mensagem pelo WhatsApp na Nova conversa (7.40.34)' \
+            '' \
+            'No WhatsApp a loja escreve primeiro: /msg/iniciar passa a enviar pela integracao' \
+            'Wafly ja cadastrada em Conexoes (credencial so no backend), com reserva' \
+            'idempotente, bolha gravada, recibo e assinatura de equipe.' \
+            '' \
+            'Instagram segue apenas abrindo conversa que o cliente iniciou: o campo de' \
+            'mensagem nem aparece, porque a API oficial nao permite envio iniciado pela loja.' \
+            '' \
+            'Retoma os pendentes do #305: presenca da equipe, atividade por pessoa e trilha' \
+            'das acoes confirmadas, com testes de Worker (D1 real) e de interface.' \
+            > /tmp/msg.txt
           git add -A -- . ':(exclude)_d00' ':(exclude)_d01' ':(exclude)_d02' ':(exclude)_d03' ':(exclude)_d04'
-          git commit -m "feat(mensagens): primeira mensagem pelo WhatsApp na Nova conversa (7.40.34)
-
-No WhatsApp a loja escreve primeiro: /msg/iniciar passa a enviar pela integracao Wafly
-ja cadastrada em Conexoes (credencial so no backend), com reserva idempotente, bolha
-gravada, recibo e assinatura de equipe. Instagram segue apenas abrindo conversa que o
-cliente iniciou e nem mostra o campo de mensagem.
-
-Retoma os pendentes do #305: presenca da equipe, atividade por pessoa e trilha das
-acoes confirmadas, com testes de Worker (D1 real) e de interface (Playwright + axe)."
+          git commit -F /tmp/msg.txt
           git push origin HEAD:retomada/305-74033
