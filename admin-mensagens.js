@@ -2315,7 +2315,7 @@
     const clip = botao('ms-ico', '📎', 'anexar'); clip.id = 'ms-anexar'; clip.setAttribute('aria-label', 'Anexar foto, vídeo ou áudio');
     const arq = el('input'); arq.type = 'file'; arq.id = 'ms-arquivo'; arq.hidden = true; arq.accept = 'image/*,video/*'; arq.multiple = true;
     const contaDoAnexo=contaSessao_(getSessao()),epocaDoAnexo=epocaConta_;
-    arq.addEventListener('change', () => { const arquivos = Array.from(arq.files || []), f = arquivos.shift(); arq.value = ''; conferirContaAtual_();if(!f)return;if(aberta&&aberta.id===c.id&&contaSessao_(getSessao())===contaDoAnexo&&epocaConta_===epocaDoAnexo){ escolherArquivo_(f).then(()=>{ anexosFila_ = arquivos; desenharStage_(); }); }else aviso_('A conversa mudou. Escolha o arquivo novamente no atendimento correto.'); });
+    arq.addEventListener('change', async () => { const arquivos = Array.from(arq.files || []), f = arquivos.shift(); arq.value = ''; conferirContaAtual_(); if (!f) return; if (!aberta || aberta.id!==c.id || contaSessao_(getSessao())!==contaDoAnexo || epocaConta_!==epocaDoAnexo) { aviso_('A conversa mudou. Escolha o arquivo novamente no atendimento correto.'); return; } anexosFila_ = []; await escolherArquivo_(f); if (!aberta || aberta.id!==c.id || contaSessao_(getSessao())!==contaDoAnexo || epocaConta_!==epocaDoAnexo) { limparAnexo_(true); return; } if (anexoPend) { anexosFila_ = arquivos; desenharStage_(); } });
     const audioArquivo=el('input');audioArquivo.type='file';audioArquivo.accept='audio/*';audioArquivo.id='ms-arquivo-audio';audioArquivo.hidden=true;
     audioArquivo.addEventListener('change',()=>{const f=audioArquivo.files&&audioArquivo.files[0];audioArquivo.value='';conferirContaAtual_();if(f&&aberta&&aberta.id===c.id&&contaSessao_(getSessao())===contaDoAnexo&&epocaConta_===epocaDoAnexo)escolherArquivo_(f);});
     const ta = el('textarea'); ta.id = 'ms-texto'; ta.rows = 1; ta.placeholder = 'Mensagem'; if (c.canal !== 'instagram') ta.maxLength = limiteTexto(c); ta.setAttribute('aria-label', 'Mensagem para ' + rotuloContato(c)); ta.enterKeyHint = 'enter'; ta.value = rascunhoLer_(c.id);
@@ -2577,7 +2577,12 @@
     if (aberta && aberta.id === c.id) { sincronizarNotas_(r.notas || []); pintarFio(false); }
     desenhar(r.notas || []);
   }
-  async function enviar(reenvio) {
+  let envioMultimidiaEmCurso_ = false;
+  async function enviar(reenvio, daFila) {
+    if (!reenvio && !daFila && envioMultimidiaEmCurso_) return;
+    const donoDaFila = !reenvio && !daFila;
+    if (donoDaFila) envioMultimidiaEmCurso_ = true;
+    try {
     if (cacheConversa) { aviso_('Aguarde atualizar a conversa para responder.'); return; }
     if (!aberta) return;
     const c = aberta, ta = $('ms-texto'); if (!ta && !reenvio) return;
@@ -2627,11 +2632,12 @@
       if (r.semRede && !r.semEnvio) tmp.msg.erro = 'Sem resposta do servidor. A mensagem pode ter saído: confira antes de tentar de novo (tentar de novo não duplica).';
     }
     if (aberta && aberta.id === c.id) pintarFio(true);
-    if (!reenvio && r.ok && anexosFila_.length && aberta && aberta.id === c.id) {
+    if (!reenvio && r.ok && anexosFila_.length && aberta && aberta.id === c.id && !cacheConversa) {
       const proximo = anexosFila_.shift();
       await escolherArquivo_(proximo);
-      if (anexoPend) await enviar();
+      if (anexoPend && aberta && aberta.id === c.id) await enviar(null, true);
     }
+    } finally { if (donoDaFila) envioMultimidiaEmCurso_ = false; }
   }
 
   /* ---------- ao vivo ---------- */
