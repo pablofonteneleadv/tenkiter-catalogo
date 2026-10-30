@@ -118,6 +118,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Pendentes devem abrir em modo Espiar
+        run: node tests/mensagens_pendentes_espiar.js
+
       - name: Resumo de tamanhos no mensageiro
         run: node tests/mensagens_tamanhos.js
 

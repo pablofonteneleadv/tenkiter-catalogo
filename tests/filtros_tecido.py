@@ -2,6 +2,7 @@
 import os,sys
 sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 from mock import install,PERMS_ALL,SESSION
+from atendimento import abrir_atendimento
 import mock_msg
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -36,7 +37,7 @@ def vitrine(b,w,h,scale=1):
 def admin_picker(b,w,h,scale=1):
     ctx=b.new_context(viewport={'width':w,'height':h},is_mobile=w<600,has_touch=w<600,service_workers='block');ctx.add_init_script(SESSION);ctx.add_init_script('window.TK_MENSAGENS_POLL_MS=400;')
     st=install(ctx,perms=PERMS_ALL,versao='4.28');catalogo(st);st['ig'].setdefault('msg',mock_msg.novo_estado())
-    pg=ctx.new_page();errs=[];pg.on('pageerror',lambda e:errs.append(str(e)));pg.goto(BASE+'admin.html');pg.wait_for_timeout(2200);pg.click('#details-ferramentas > summary');pg.click('#btn-abrir-mensagens');pg.wait_for_selector('.ms-conv',timeout=7000);pg.wait_for_timeout(500);pg.click("#ms-lista .ms-conv[data-id='1']");pg.wait_for_selector('#ms-texto');
+    pg=ctx.new_page();errs=[];pg.on('pageerror',lambda e:errs.append(str(e)));pg.goto(BASE+'admin.html');pg.wait_for_timeout(2200);pg.click('#details-ferramentas > summary');pg.click('#btn-abrir-mensagens');pg.wait_for_selector('.ms-conv',timeout=7000);pg.wait_for_timeout(500);abrir_atendimento(pg,1);
     if scale==1.3:pg.evaluate("document.documentElement.style.fontSize='130%'")
     pg.locator('#ms-conversa [data-ms=gaveta-produtos]').click();pg.wait_for_selector('#ms-prod-filtros');return ctx,pg,st,errs
 

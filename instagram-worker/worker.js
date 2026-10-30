@@ -4874,6 +4874,25 @@ export default {
           rs=await env.DB.prepare(sql+' ORDER BY ultima_em DESC,id DESC LIMIT 50').bind(...args).all();
         }
         try { const mp = await etiquetasDosAlvos_(env, rs.results.map(alvoDe_)); rs.results.forEach((r) => { r.etiquetas = mp[alvoDe_(r)] || []; }); } catch (e) { /* etiqueta é conforto */ }
+        // Indicador de agenda na fila: consulta em lote, sem N requisições por cliente.
+        // Somente agendamentos realmente pendentes; não mostrar cancelados, enviados ou falhos.
+        if (direitos.agenda && rs.results.length) {
+          try {
+            const ids = [...new Set(rs.results.map(c => Number(c.id)).filter(Number.isSafeInteger))];
+            if (ids.length) {
+              const marcadores = await env.DB.prepare(
+                'SELECT conversa_id, COUNT(*) AS total, MIN(quando) AS proxima FROM msg_agenda WHERE status IN (\'pendente\',\'enviando\') AND conversa_id IN (' +
+                ids.map(() => '?').join(',') + ') GROUP BY conversa_id'
+              ).bind(...ids).all();
+              const porConversa = new Map((marcadores.results || []).map(a => [Number(a.conversa_id), a]));
+              rs.results.forEach(c => {
+                const agenda = porConversa.get(Number(c.id));
+                c.agenda_pendente = agenda ? Number(agenda.total) : 0;
+                c.agenda_proxima = agenda ? agenda.proxima : '';
+              });
+            }
+          } catch (e) { /* Agenda não disponível: não inventar indicador. */ }
+        }
         const geral = (await msgContagens_(env, todos ? '' : canal))[canal];
         return J({ ok: true, conversas: rs.results, contagens: tipo ? (await msgContagens_(env, todos ? '' : canal, tipo))[canal] : geral, tipos: { individuais: geral.individuais, grupos: geral.grupos }, cursor: cursorConsulta });
       }

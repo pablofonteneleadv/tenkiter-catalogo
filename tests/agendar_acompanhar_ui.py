@@ -3,6 +3,7 @@ import os, base64, datetime
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 from mock import install, SESSION, PERMS_ALL
+from atendimento import abrir_atendimento
 import mock_msg
 BASE=os.getenv('TK_BASE','http://localhost:8783/')
 OUT=Path(os.getenv('TK_EVID',str(Path(__file__).parent/'evidencias_edicao'/'agendar')));OUT.mkdir(parents=True,exist_ok=True)
@@ -17,7 +18,7 @@ with sync_playwright() as pw:
  for w,h in [(320,700),(390,844),(412,915),(1440,900),(390,470)]:
   ctx=b.new_context(viewport={'width':w,'height':h},is_mobile=w<600,has_touch=w<600,service_workers='block');ctx.add_init_script(SESSION)
   st=install(ctx,perms=PERMS_ALL,versao='4.28');s=st['ig']['msg']=mock_msg.novo_estado()
-  pg=ctx.new_page();errors=[];pg.on('pageerror',lambda e:errors.append(str(e)));pg.goto(BASE+'admin.html?app=mensagens');pg.wait_for_selector('#ms-lista .ms-conv');pg.locator('.ms-conv[data-id="1"]').click();pg.wait_for_selector('#ms-texto');pg.locator('#ms-texto').fill('Rascunho da conversa')
+  pg=ctx.new_page();errors=[];pg.on('pageerror',lambda e:errors.append(str(e)));pg.goto(BASE+'admin.html?app=mensagens');pg.wait_for_selector('#ms-lista .ms-conv');abrir_atendimento(pg,1,'.ms-conv');pg.locator('#ms-texto').fill('Rascunho da conversa')
   agenda=pg.locator('#ms-assina [data-ms=agenda-opcoes]');r=agenda.bounding_box();assert r['width']>=44 and r['height']>=44
   agenda.click();pg.wait_for_selector('#ms-acompanhar:enabled');pg.locator('#ms-acompanhar').check();pg.wait_for_function('document.getElementById("ms-acomp-status").textContent.includes("Lembrete previsto")')
   assert len(s['acompanhamento_posts'])==1
