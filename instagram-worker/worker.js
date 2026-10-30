@@ -92,7 +92,7 @@ const DDL = [
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
-const ESQUEMA_ = '20261029-atendimento-agenda-3';
+const ESQUEMA_ = '20261030-equipe-inicio-4';
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -120,6 +120,12 @@ async function iniciar(env) {
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_agenda_auth_proxima ON msg_agenda_autorizacao(estado,proxima)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_agenda_auth_ref ON msg_agenda(auth_ref,status)').run();
     await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS ix_agenda_chave ON msg_agenda(chave) WHERE chave<>''").run();
+    /* v7.40.33 — presença aproximada e atividade registrada (retomado do checkpoint #305).
+       Tabelas aditivas: não alteram nem apagam mensagens, conversas ou tarefas existentes. */
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_presenca(usuario TEXT PRIMARY KEY,nome TEXT NOT NULL,em TEXT NOT NULL,conversa_id INTEGER NOT NULL DEFAULT 0)").run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_atividade(id INTEGER PRIMARY KEY AUTOINCREMENT,chave TEXT NOT NULL UNIQUE,usuario TEXT NOT NULL,nome TEXT NOT NULL,acao TEXT NOT NULL,conversa_id INTEGER NOT NULL DEFAULT 0,em TEXT NOT NULL)").run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_atividade_em ON msg_atividade(em,id)').run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_atividade_usuario ON msg_atividade(usuario,em)').run();
     for (const [t,cols] of [['msg_ficha',['perfil_json']],['msg_nota',['excluida_em','excluida_por']],['msg_conversa',['pessoa','atualizada_em','encerrada_em']],['msg_mensagem',['ctx_chave','autor_lid']]]) {
       const existentes = new Set((await env.DB.prepare('PRAGMA table_info('+t+')').all()).results.map(c=>c.name));
       if (!cols.every(c=>existentes.has(c))) throw new Error('Esquema de Mensagens incompleto. Tente novamente.');
@@ -256,6 +262,9 @@ function msgRecurso_(p, req, url) {
   if (p === '/msg/notas') return 'notas';
   if (/^\/msg\/agend/.test(p)) return 'agenda';
   if (p === '/msg/acompanhamento') return 'agenda';
+  if (p === '/msg/iniciar') return 'responder';
+  if (p === '/msg/equipe') return 'metricas';
+  if (p === '/msg/presenca') return 'acessar';
   if (/^\/msg\/funil/.test(p)) return 'funil';
   if (p === '/msg/metricas') return 'metricas';
   if (p === '/msg/exportar') return 'exportar';
@@ -4656,6 +4665,79 @@ async function rotaTecidos_(env,req,J){
   return J({ok:true,versao:novo.versao,itens:novo.itens});
 }
 
+/* v7.40.33 — presença aproximada e atividade registrada (retomado do checkpoint #305).
+   Presença vale 2 minutos e atividade é registro de ação confirmada: nenhuma das duas
+   prova trabalho efetivo nem cobre todo ato. Nada aqui envia mensagem, marca como lida
+   ou assume responsável. */
+async function registrarAtividade_(env, req, d, acao) {
+  const usuario = msgTelefone_(req.headers.get('X-TK-Whats'));
+  const nome = await meuNomeAtendente_(env, req);
+  const id = Number.isSafeInteger(Number(d && d.conversa)) ? Math.max(0, Number(d.conversa)) : 0;
+  const chave = d && d.idLocal && acao === 'responder' ? await sha('atividade:' + usuario + ':' + d.idLocal) : crypto.randomUUID();
+  await env.DB.prepare('INSERT OR IGNORE INTO msg_atividade(chave,usuario,nome,acao,conversa_id,em) VALUES(?,?,?,?,?,?)').bind(chave, usuario, nome, acao, id, agora()).run();
+}
+
+async function equipeAtendimento_(env, url) {
+  const dia = (ms) => new Date(ms - FUSO_MS_).toISOString().slice(0, 10);
+  const de = url.searchParams.get('de') || dia(Date.now() - 6 * 86400000);
+  const ate = url.searchParams.get('ate') || dia(Date.now());
+  const inicio = Date.parse(de + 'T00:00:00-03:00'), fim = Date.parse(ate + 'T23:59:59.999-03:00');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(de) || !/^\d{4}-\d{2}-\d{2}$/.test(ate) || !Number.isFinite(inicio) || !Number.isFinite(fim) || dia(inicio) !== de || dia(fim) !== ate || fim < inicio || fim - inicio > 31 * 86400000)
+    return { ok: false, cod: 400, erro: 'Escolha um período de até 31 dias.' };
+  const usuario = String(url.searchParams.get('usuario') || '').replace(/\D/g, '').slice(0, 20);
+  const antes = Number(url.searchParams.get('antes')) || 0;
+  const onde = ' FROM msg_atividade a WHERE em>=? AND em<=?' + (usuario ? ' AND usuario=?' : '');
+  const args = [new Date(inicio).toISOString(), new Date(fim).toISOString(), ...(usuario ? [usuario] : [])];
+  const presencas = (await env.DB.prepare('SELECT usuario,nome,em,conversa_id FROM msg_presenca ORDER BY em DESC LIMIT 200').all()).results;
+  const totais = (await env.DB.prepare("SELECT usuario,MAX(nome) AS nome,COUNT(*) AS acoes,SUM(acao='responder') AS respostas,SUM(acao='encerrar') AS encerramentos,SUM(acao='notas') AS notas" + onde + ' GROUP BY usuario ORDER BY respostas DESC,acoes DESC').bind(...args).all()).results;
+  const historico = (await env.DB.prepare('SELECT a.id,a.usuario,a.nome,a.acao,a.conversa_id,a.em,(SELECT nome FROM msg_conversa c WHERE c.id=a.conversa_id) AS cliente' + onde + (antes ? ' AND a.id<?' : '') + ' ORDER BY a.id DESC LIMIT 51').bind(...args, ...(antes ? [antes] : [])).all()).results;
+  return { ok: true, de, ate, agora: agora(),
+    presencas: presencas.map(p => ({ ...p, online: Date.now() - Date.parse(p.em) < 120000 })),
+    totais, atividades: historico.slice(0, 50), temMais: historico.length > 50, proximo: historico[49] ? historico[49].id : 0 };
+}
+
+/* v7.40.34 — "Nova conversa" envia pelo WhatsApp e só abre pelo Instagram.
+   A api-bridge-whats (Wafly) deixa a loja escrever primeiro; a API oficial do Instagram
+   não deixa, por isso lá a conversa apenas é aberta/registrada, sem envio iniciado.
+   As credenciais ficam guardadas no servidor (tabela cfg: wafly_1 / wafly_2, gravadas
+   pela gaveta Conexões) e nunca descem para o navegador nem viajam nesta requisição. */
+async function iniciarConversa_(env, req, d) {
+  const canal = String((d && d.canal) || '');
+  if (!MSG_CANAIS.includes(canal)) return { ok: false, cod: 400, erro: 'Escolha WhatsApp 1, WhatsApp 2 ou Instagram.' };
+  const texto = String((d && d.texto) == null ? '' : d.texto).replace(/\r\n/g, '\n').trim();
+  let conversa = null;
+  if (canal === 'instagram') {
+    // Instagram: abrir/registrar apenas. Envio iniciado pelo sistema é recusado pela Meta.
+    if (texto) return { ok: false, cod: 400, erro: 'O Instagram não permite que a loja escreva primeiro. Abra a conversa e responda quando o cliente escrever.' };
+    const usuario = String((d && d.destino) || '').trim().replace(/^@/, '').toLowerCase();
+    if (!/^[a-z0-9._]{1,30}$/.test(usuario)) return { ok: false, cod: 400, erro: 'Digite o @ do Instagram, como @loja.cliente.' };
+    const achados = (await env.DB.prepare("SELECT id FROM msg_conversa WHERE canal='instagram' AND grupo=0 AND (lower(nome)=? OR lower(nome)=?) LIMIT 2").bind(usuario, '@' + usuario).all()).results;
+    if (achados.length !== 1) return { ok: false, cod: 409, erro: 'Não encontrei uma conversa única com esse @. O Instagram exige que o cliente escreva para a loja primeiro.' };
+    conversa = achados[0];
+  } else {
+    const fone = pessoaTelefone_(String((d && d.destino) || '').replace(/\D/g, ''));
+    if (!fone || !/^55[1-9][0-9]{9,10}$/.test(fone.d)) return { ok: false, cod: 400, erro: 'Digite um WhatsApp com DDD, como (88) 99999-9999.' };
+    conversa = await env.DB.prepare('SELECT id FROM msg_conversa WHERE canal=? AND grupo=0 AND (contato=? OR contato=?) ORDER BY total DESC,id LIMIT 1').bind(canal, fone.d, fone.chave).first();
+    if (!conversa) {
+      const em = agora();
+      // total fica 0 até a primeira mensagem: a lista mostra só conversa com mensagem.
+      await env.DB.prepare("INSERT OR IGNORE INTO msg_conversa(canal,contato,nome,grupo,ultima_em,criado_em,atualizada_em,pessoa) VALUES(?,?,'',0,?,?,?,?)").bind(canal, fone.d, em, em, em, fone.chave).run();
+      conversa = await env.DB.prepare('SELECT id FROM msg_conversa WHERE canal=? AND contato=?').bind(canal, fone.d).first();
+    }
+  }
+  if (!conversa) return { ok: false, cod: 409, erro: 'Não foi possível abrir a conversa agora. Tente de novo.' };
+  if (!texto) return { ok: true, conversa: conversa.id, enviada: false };
+  /* Envio: mesmo caminho de /msg/enviar (reserva atômica por idLocal, recibo da Wafly e
+     gravação da bolha). Nunca sai duas vezes, mesmo com toque duplo ou nova tentativa. */
+  if (texto.length > MSG_TEXTO_MAX) return { ok: false, cod: 400, erro: 'Mensagem grande demais. Divida em duas.' };
+  const idLocal = String((d && d.idLocal) || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || ('nc' + crypto.randomUUID().replace(/-/g, ''));
+  const [cod, corpo] = await responderMensagem_(env, req.headers.get('X-TK-Whats') || '', { conversa: conversa.id, texto: texto, idLocal: idLocal });
+  if (cod !== 200 || !corpo) return { ok: false, cod: cod || 409, conversa: conversa.id, erro: (corpo && corpo.erro) || 'Não foi possível enviar agora. Tente de novo.' };
+  if (!corpo.ok) return { ok: false, cod: 409, conversa: conversa.id, incerto: !!corpo.incerto, erro: corpo.erro };
+  try { await env.DB.prepare("UPDATE msg_conversa SET dono=? WHERE id=? AND (dono IS NULL OR dono='')").bind(await meuNomeAtendente_(env, req), conversa.id).run(); } catch (e) { /* dono é conforto */ }
+  return { ok: true, conversa: conversa.id, enviada: true, mensagem: corpo.mensagem };
+}
+
 export default {
   async scheduled(ev, env, ctx) {
     ctx.waitUntil(processarPushMobile_(env).catch(()=>{}));
@@ -4673,7 +4755,16 @@ export default {
   },
   async fetch(req, env, ctx) {
     const url = new URL(req.url), h = cors(env, req); let direitos = null;
+    const acoesAuditadas={'/msg/enviar':'responder','/msg/encerrar':'encerrar','/msg/dono':'responsavel','/msg/notas':'notas','/msg/rotular':'etapa','/msg/ficha':'ficha','/msg/agendar':'agendar','/msg/acompanhamento':'acompanhar','/msg/iniciar':'criar'};
+    let auditarAtividade_=req.method==='POST'&&acoesAuditadas[url.pathname]?req.clone().json().catch(()=>({})):null;
     const J = (c, s) => {
+      // v7.40.33: trilha da equipe — só ação confirmada, nunca o texto da mensagem.
+      // Best effort: se o D1 falhar na trilha, a ação do atendente não é desfeita.
+      if(c?.ok&&(!s||s<300)&&auditarAtividade_){
+        const lida=auditarAtividade_;auditarAtividade_=null;
+        const trilha=(async()=>{const d=await lida;if(d)await registrarAtividade_(env,req,d,acoesAuditadas[url.pathname]);})().catch(()=>{});
+        if(ctx?.waitUntil)ctx.waitUntil(trilha);
+      }
       if(c?.ok&&(!s||s<300)&&['POST','DELETE'].includes(req.method)&&/^\/msg\/(enviar|lida|dono|encerrar|rotular|etiquetas|notas|ficha|pessoa|agendar|acompanhamento)(\/|$)/.test(url.pathname)){
         const p=notificarNovidade_(env);if(ctx?.waitUntil)ctx.waitUntil(p);
       }
@@ -4834,6 +4925,25 @@ export default {
       if(p==='/msg/pessoas/google'&&req.method==='POST')return J(await indexarNomesGoogle_(env));
       if(p==='/msg/pessoa'&&req.method==='GET'){const r=await pessoaAtendimento_(env,Number(url.searchParams.get('conversa')));return r?J(r):J({ok:false,erro:'Conversa não encontrada.'},404);}
       if(p==='/msg/pessoa'&&req.method==='POST'){const r=await salvarPessoaAtendimento_(env,await req.json().catch(()=>({})));return J(r,r.ok?200:400);}
+      if (p === '/msg/presenca' && req.method === 'POST') {
+        if(!direitos.acessar) return J({ok:false,erro:'Seu acesso não permite usar esta ferramenta de Mensagens.'},403);
+        const d=await req.json().catch(()=>({})),usuario=msgTelefone_(req.headers.get('X-TK-Whats')),nome=await meuNomeAtendente_(env,req),em=agora();
+        const id=Number.isSafeInteger(Number(d.conversa))?Math.max(0,Number(d.conversa)):0;
+        if(id&&!await env.DB.prepare('SELECT id FROM msg_conversa WHERE id=?').bind(id).first())return J({ok:false,erro:'Conversa não encontrada.'},404);
+        const antiga=await env.DB.prepare('SELECT em,conversa_id FROM msg_presenca WHERE usuario=?').bind(usuario).first();
+        await env.DB.prepare('INSERT INTO msg_presenca(usuario,nome,em,conversa_id) VALUES(?,?,?,?) ON CONFLICT(usuario) DO UPDATE SET nome=excluded.nome,em=excluded.em,conversa_id=excluded.conversa_id').bind(usuario,nome,em,id).run();
+        // Só registra mudança de estado: primeira sessão, volta depois de 2 minutos ou troca de conversa.
+        if(!antiga||Date.now()-Date.parse(antiga.em)>120000||id!==antiga.conversa_id)await registrarAtividade_(env,req,{conversa:id},id?(d.espiar===true?'espiar':'visualizar'):'online');
+        return J({ok:true});
+      }
+      if (p === '/msg/equipe' && req.method === 'GET') {
+        const r=await equipeAtendimento_(env,url),cod=r.cod||200;delete r.cod;return J(r,cod);
+      }
+      if (p === '/msg/iniciar' && req.method === 'POST') {
+        const d=await req.json().catch(()=>({}));
+        auditarAtividade_=Promise.resolve(d);
+        const r=await iniciarConversa_(env,req,d),cod=r.cod||200;delete r.cod;return J(r,cod);
+      }
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {
         const cursorConsulta=agora();

@@ -6,6 +6,21 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.34] - 2026-10-30
+
+- Nova conversa **envia pelo WhatsApp**: a loja escreve primeiro pelo WhatsApp 1 ou 2 (número com DDD) usando a integração já existente, com as credenciais só no servidor (Conexões)
+- O envio usa o mesmo caminho de uma resposta normal: reserva por idLocal, recibo do provedor e bolha gravada — toque duplo não manda duas vezes
+- Instagram continua **apenas abrindo** a conversa: a API oficial não permite que a loja escreva primeiro, e o campo de mensagem nem aparece nesse canal
+- Campos da gaveta empilhados (rótulo em cima, campo embaixo): "WhatsApp com DDD" e "Mensagem" deixam de ser cortados em tela estreita
+- Totais da equipe com plural correto ("1 encerramento", "3 respostas")
+
+## [7.40.33] - 2026-10-30
+
+- Equipe e atividade: presença aproximada (2 minutos), totais por pessoa e trilha das ações confirmadas — retomado do #305
+- Nova conversa: abre conversa por WhatsApp (número com DDD) ou por @ do Instagram que já escreveu para a loja, sem enviar nada
+- A trilha guarda a ação e o cliente, nunca o texto da mensagem; ação que falha não entra na trilha
+
+
 ## [7.40.32] - 2026-10-30
 
 - Filas de espera e atendimento com Todos/Meus sem aumentar o cabeçalho
