@@ -1,0 +1,67 @@
+name: Aplicar delta 7.40.34
+# Aplica o delta da 7.40.34 sobre os arquivos da 7.40.33 no branch da PR.
+# Confere md5 de cada bloco e o sha256 do patch: se qualquer byte divergir,
+# falha sem commitar. O patch e ASCII puro (base64 de gzip), entao nao ha
+# texto acentuado atravessando o transporte.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  aplicar:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: retomada/305-74033
+          fetch-depth: 0
+
+      - name: Conferir blocos e montar o patch
+        run: |
+          set -euo pipefail
+          for i in 00 01 02 03 04; do
+            got=$(md5sum "_d$i" | cut -d' ' -f1)
+            echo "_d$i md5=$got"
+          done
+          cat _d00 _d01 _d02 _d03 _d04 | tr -d ' \n\r\t' | base64 -d > /tmp/delta.gz
+          gunzip -c /tmp/delta.gz > /tmp/delta.patch
+          echo "patch sha256: $(sha256sum /tmp/delta.patch | cut -d' ' -f1)"
+          echo "esperado:       baa9d292152f9cb1a9dbbcdddb50ec8123ceac5d96cacbb4784bb5207321e301"
+          test "$(sha256sum /tmp/delta.patch | cut -d' ' -f1)" = "baa9d292152f9cb1a9dbbcdddb50ec8123ceac5d96cacbb4784bb5207321e301"
+          grep -c '^diff --git' /tmp/delta.patch
+
+      - name: Aplicar nos arquivos
+        run: |
+          set -euo pipefail
+          git apply -p1 --verbose /tmp/delta.patch
+
+      - name: Conferir resultado
+        run: |
+          set -euo pipefail
+          test "$(cat VERSION)" = "7.40.34"
+          grep -q '"versao": "7.40.34"' version.json
+          node --check admin-mensagens.js
+          node --check instagram-worker/worker.js
+          python3 scripts/ci/check_ux_skill.py
+          echo "--- hashes dos arquivos ---"
+          for f in instagram-worker/worker.js admin-mensagens.js admin.html version.json VERSION CHANGELOG.md tests/worker_equipe_inicio.js tests/mensagens_equipe_inicio_ui.py tests/mock_msg.py documentacao/continuidade/RETOMADA-305-7.40.33.md; do
+            echo "$(sha256sum "$f" | cut -d' ' -f1)  $f"
+          done
+
+      - name: Commit
+        run: |
+          set -euo pipefail
+          git config user.name "Frontend Developer"
+          git config user.email "frontend-developer@tenkiter.local"
+          git add -A -- . ':(exclude)_d00' ':(exclude)_d01' ':(exclude)_d02' ':(exclude)_d03' ':(exclude)_d04'
+          git commit -m "feat(mensagens): primeira mensagem pelo WhatsApp na Nova conversa (7.40.34)
+
+No WhatsApp a loja escreve primeiro: /msg/iniciar passa a enviar pela integracao
+Wafly ja cadastrada em Conexoes (credencial so no backend), com reserva idempotente,
+bolha gravada, recibo e assinatura de equipe. Instagram segue so abrindo conversa que
+o cliente iniciou e nem mostra o campo de mensagem.
+
+Retoma tambem os pendentes do #305: presenca, atividade por pessoa e trilha de acoes."
+          git push origin HEAD:retomada/305-74033
