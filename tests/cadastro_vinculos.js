@@ -60,4 +60,7 @@ for(const [etiqueta,inicio] of Object.entries({P:1,M:3,G:5,GG:7,Juv10:9,Juv12:11
 }
 assert.ok(admin.includes('cadEtiquetas_.has(v)'), 'multisselecao das letras');
 assert.ok(admin.includes('TKTamanhos.resumir('),'card da gestao resumido');
+assert.equal(T.gravar('Juv10, M, Etiqueta: Juv10/M, Idade: 9 anos', ['Juv12'], ['11 anos','12 anos'], true), 'Juv12, Etiqueta: Juv12, Idade: 11 anos, Idade: 12 anos');
+assert.equal(T.resumir(['38','40','44'],'numero'), '38/40/44');
+assert.equal(T.resumir(['2 anos','3 anos','4 anos'],'idade'), '2 a 4 anos');
 console.log('Cadastro vinculado: testes de multi-etiquetas, referencia e faixas aprovados.');
