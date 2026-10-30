@@ -23,7 +23,7 @@ ffmpeg -nostdin -hide_banner -loglevel error -i "$entrada" -t 29 \\
 bytes="$(stat -c%s "$saida")"
 [ "$bytes" -le 9961472 ] || { echo "Saida acima de 9,5 MiB" >&2; exit 1; }
 segundos="$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$saida")"
-awk -v d="$segundos" 'BEGIN { exit !(d > 0 && d <= 29.2) }' || { echo "Saida acima de 29 segundos" >&2; exit 1; }
+awk -v d="$segundos" 'BEGIN { exit !(d > 0 && d <= 29.0) }' || { echo "Saida acima de 29 segundos" >&2; exit 1; }
 novo="$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1:nk=1 "$saida")"
 [ "$novo" = h264 ] || { echo "Saida nao e H264" >&2; exit 1; }
 test -s "$saida"
