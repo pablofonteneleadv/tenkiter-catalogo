@@ -12,6 +12,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  pull-requests: write
 concurrency:
   group: android-release
   cancel-in-progress: false
@@ -123,6 +124,10 @@ jobs:
           if ! gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number' | grep -q '[0-9]'; then
             gh pr create --repo "$REPO" --base main --head "$BRANCH" --title "chore(android): anunciar atualização $VERSION" --body "Atualiza o manifesto público após a publicação do APK assinado. Respeita a proteção da branch main."
           fi
+          PR_NUMBER=$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq '.[0].number')
+          test -n "$PR_NUMBER" || { echo "::error::PR do manifesto não encontrado"; exit 1; }
+          gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --squash || { echo "::error::Não foi possível ativar merge automático do manifesto"; exit 1; }
+          echo "::notice::Manifesto $VERSION aguardando checks e merge automático no PR #$PR_NUMBER"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
