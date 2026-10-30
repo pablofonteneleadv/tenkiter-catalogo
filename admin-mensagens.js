@@ -618,6 +618,20 @@
 
       /* Ritmo e hierarquia da proposta HTML aprovada: superfícies leves, abas e ícones de linha. */
       .sheet-mensagens{color:#20211e}.sheet-mensagens .ms-topo{min-height:68px;padding:12px 16px;border-bottom:1px solid #e7e7e0;box-sizing:border-box;gap:10px;flex:none}body .sheet-mensagens .ms-titulo{display:block;font-size:1.2rem;font-weight:750;line-height:1.25;letter-spacing:-.035em}.sheet-mensagens .ms-identidade{margin-top:3px;font-size:.8rem;font-weight:400;letter-spacing:0;color:#62675d}.sheet-mensagens #ms-mais{background:transparent;border-radius:12px;font-weight:400}.ms-linha-icone{display:inline-flex;align-items:center;justify-content:center;flex:none}.ms-linha-icone svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+      /* Cabeçalho de Mensagens: nunca sobrepor título, identidade nem ferramentas no celular.
+         Rolagem horizontal nas ações conserva todos os botões e suas áreas de toque. */
+      .sheet-mensagens .ms-topo{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;min-width:0;height:auto}
+      .sheet-mensagens .ms-topo>.ms-titulo{min-width:0;overflow:hidden;overflow-wrap:anywhere}
+      .sheet-mensagens .ms-topo>.ms-ao-vivo{min-width:0}
+      .sheet-mensagens .ms-topo>.ms-ico{flex:0 0 44px}
+      @media(max-width:650px){
+        .sheet-mensagens .ms-topo{grid-template-columns:minmax(0,1fr) 44px 44px;gap:8px;padding:12px 14px;min-height:72px}
+        .sheet-mensagens .ms-topo>.ms-titulo{font-size:1.16rem;line-height:1.25}
+        .sheet-mensagens .ms-topo .ms-identidade{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .sheet-mensagens .ms-topo>.ms-ao-vivo{grid-row:2;grid-column:1 / -1;justify-self:start;font-size:.73rem}
+        .sheet-mensagens .ms-topo>#ms-fechar{grid-column:2;grid-row:1}
+        .sheet-mensagens .ms-topo>#ms-mais{grid-column:3;grid-row:1}
+      }
       .sheet-mensagens .ms-abas{padding:0 8px;gap:0;border-bottom:1px solid #e7e7e0;flex:none}.sheet-mensagens .ms-aba{position:relative;border:0;border-radius:0;min-height:48px;padding:0 3px;font-size:.73rem;font-weight:650;color:#5c6455;background:#fff}#overlay-mensagens #ms-abas .ms-aba[aria-selected=true]{background:#fff!important;color:#23251f!important}#overlay-mensagens #ms-abas .ms-aba{border:0!important;border-radius:0!important}.sheet-mensagens .ms-aba[aria-selected=true]::after{content:'';position:absolute;bottom:0;left:9px;right:9px;height:3px;background:#d97116;border-radius:3px 3px 0 0}
       .sheet-mensagens .ms-pesquisa{position:relative;padding:12px 16px 10px;gap:8px;flex:none}.sheet-mensagens .ms-pesquisa>.ms-linha-icone{position:absolute;left:26px;top:24px;color:#656d5e;pointer-events:none}.sheet-mensagens .ms-pesquisa .ms-busca{background:#f7f6f2;border-color:#e0e1d8;border-radius:10px;font-size:.875rem;padding:10px 8px 10px 36px;min-height:44px}.sheet-mensagens .ms-pesquisa>.ms-btn{display:flex;align-items:center;justify-content:center;gap:6px;max-width:100px;min-width:76px;padding:8px;border-color:#e0e1d8;font-size:.75rem;font-weight:600}
       .sheet-mensagens .ms-filtros{padding:0 16px 8px;gap:6px;grid-template-columns:1.4fr 1.12fr .8fr;flex:none}.sheet-mensagens .ms-filtros .ms-chip{display:flex;align-items:center;justify-content:center;gap:5px;min-height:44px;padding:7px 5px;border:0;border-radius:8px;background:#f4f4ef;font-size:.75rem;font-weight:500;color:#555d4f}.sheet-mensagens .ms-filtros .ms-chip[aria-pressed=true]{background:#292b25;color:#fff}.ms-fila-conta{font-weight:750;margin:0;font-size:.72rem;flex:none}
