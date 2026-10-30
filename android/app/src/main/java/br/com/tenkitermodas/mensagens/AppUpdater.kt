@@ -21,6 +21,7 @@ class AppUpdater(private val activity:Activity,private val scope:CoroutineScope)
     private val prefs=activity.getSharedPreferences("apk-update",0)
     private var busy=false
     private val manifestUrl="https://tenkitermodas.com.br/android/latest.json"
+    private val githubManifestUrl="https://raw.githubusercontent.com/pablofonteneleadv/tenkiter-catalogo/main/android/latest.json"
     data class Release(val code:Long,val name:String,val url:String,val sha:String,val size:Long,val notes:String){
         fun json()=JSONObject().put("versionCode",code).put("versionName",name).put("url",url).put("sha256",sha).put("bytes",size).put("notes",notes)
         companion object{
@@ -38,8 +39,20 @@ class AppUpdater(private val activity:Activity,private val scope:CoroutineScope)
         scope.launch {
             try{
                 val release=withContext(Dispatchers.IO){
-                    val c=(URL(manifestUrl).openConnection() as HttpURLConnection).apply{connectTimeout=10000;readTimeout=10000;instanceFollowRedirects=false;setRequestProperty("Cache-Control","no-cache")}
-                    try{if(c.responseCode!=200)throw Exception("Não foi possível consultar a versão.");val bytes=limited(c.inputStream,32768);Release.parse(JSONObject(String(bytes,Charsets.UTF_8)))}finally{c.disconnect()}
+                    fun fetch(source:String):Release {
+                        val c=(URL(source).openConnection() as HttpURLConnection).apply{
+                            connectTimeout=10000;readTimeout=10000
+                            setRequestProperty("Cache-Control","no-cache, no-store")
+                            setRequestProperty("Pragma","no-cache")
+                            useCaches=false
+                        }
+                        try {
+                            if(c.responseCode!=200)throw Exception("Manifesto indisponível")
+                            return Release.parse(JSONObject(String(limited(c.inputStream,32768),Charsets.UTF_8)))
+                        } finally { c.disconnect() }
+                    }
+                    val candidates=listOf(manifestUrl,githubManifestUrl).mapNotNull{url->runCatching{fetch(url)}.getOrNull()}
+                    candidates.maxByOrNull{it.code}?:throw Exception("Não foi possível consultar a versão.")
                 }
                 if(release.code<=BuildConfig.VERSION_CODE){dialog("Aplicativo atualizado","Você está usando a versão ${BuildConfig.VERSION_NAME}.");return@launch}
                 AlertDialog.Builder(activity).setTitle("Nova versão ${release.name}")
