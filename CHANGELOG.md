@@ -6,6 +6,21 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.34] - 2026-10-30
+
+- Nova conversa: no WhatsApp a loja escreve primeiro — a mensagem sai na hora pela integração Wafly já cadastrada em Conexões (credenciais continuam só no backend, nunca no navegador)
+- A primeira mensagem segue o mesmo caminho do /msg/enviar: reserva idempotente (o mesmo toque não envia duas vezes), bolha gravada na conversa, recibo e assinatura de equipe para quem não é administrador
+- Quem abre a conversa e fala primeiro vira responsável, e a resposta confirmada entra na trilha da equipe
+- Instagram continua apenas abrindo conversa que o cliente já iniciou: o campo de mensagem nem aparece, porque a API oficial não permite envio iniciado pela loja
+
+
+## [7.40.33] - 2026-10-30
+
+- Equipe e atividade: presença aproximada (2 minutos), totais por pessoa e trilha das ações confirmadas — retomado do #305
+- Nova conversa: abre conversa por WhatsApp (número com DDD) ou por @ do Instagram que já escreveu para a loja, sem enviar nada
+- A trilha guarda a ação e o cliente, nunca o texto da mensagem; ação que falha não entra na trilha
+
+
 ## [7.40.32] - 2026-10-30
 
 - Filas de espera e atendimento com Todos/Meus sem aumentar o cabeçalho

@@ -76,6 +76,24 @@ def tratar(route, path, method, body, s):
     s["calls"].append(path)
     url = urlparse(route.request.url); q = {k: v[0] for k, v in parse_qs(url.query).items()}
     J = lambda o, st=200, h=None: route.fulfill(status=st, json=o, headers=h or {})
+    if path == "/msg/presenca":      # v7.40.33: presença aproximada da equipe
+        return J({"ok": True}) or True
+    if path == "/msg/equipe":        # v7.40.33: presença, totais por pessoa e trilha de ações
+        now = agora()
+        pres = s.setdefault("presencas", [{"usuario": "5588999999999", "nome": "Ana", "em": now, "conversa_id": 1, "online": True},
+                                           {"usuario": "5588977776666", "nome": "Bruno", "em": now, "conversa_id": 0, "online": False}])
+        tots = s.setdefault("equipe_totais", [{"usuario": "5588999999999", "nome": "Ana", "acoes": 4, "respostas": 3, "encerramentos": 1, "notas": 0}])
+        acts = s.setdefault("equipe_acoes", [{"id": 2, "usuario": "5588999999999", "nome": "Ana", "acao": "responder", "conversa_id": 1, "em": now, "cliente": "Cliente simulado"},
+                                              {"id": 1, "usuario": "5588999999999", "nome": "Ana", "acao": "espiar", "conversa_id": 2, "em": now, "cliente": ""}])
+        return J({"ok": True, "de": q.get("de", ""), "ate": q.get("ate", ""), "agora": now, "presencas": pres, "totais": tots,
+                  "atividades": acts, "temMais": False, "proximo": 0}) or True
+    if path == "/msg/iniciar" and method == "POST":   # v7.40.33: abrir conversa sem enviar nada
+        destino = str(body.get("destino", ""))
+        if body.get("canal") != "instagram" and len("".join(ch for ch in destino if ch.isdigit())) < 10:
+            return J({"ok": False, "erro": "Digite um WhatsApp com DDD, como (88) 99999-9999."}, 400) or True
+        c = next((x for x in s["convs"] if x["id"] == 1), None)
+        s.setdefault("iniciadas", []).append(body)
+        return J({"ok": True, "conversa": c["id"] if c else 1}) or True
     if path == "/msg/notas":
         cid = int(q.get("conversa", 0)) if method != "POST" else int(body.get("conversa", 0))
         c = next(x for x in s["convs"] if x["id"] == cid)
