@@ -90,6 +90,18 @@ jobs:
       - name: Conferir a versão oferecida pelo atualizador Android
         run: python3 scripts/deploy/verificar_android_manifesto.py
 
+      # O site pode ter sido atualizado no Render, mas a borda ainda entregar
+      # o manifesto antigo. Repete o purge direcionado e falha se persistir.
+      - name: Recuperar publicação do manifesto Android na borda
+        if: failure()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          PURGE_ALVO: https://tenkitermodas.com.br/android/latest.json
+        run: |
+          bash scripts/deploy/cloudflare_purge.sh
+          python3 scripts/deploy/verificar_android_manifesto.py --attempts 6 --delay 5
+
       - name: Verificação final no ar
         if: always()
         env:
