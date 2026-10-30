@@ -37,7 +37,7 @@ class WebMediaTest {
  @Test fun recordedAudioAndExistingAudioFilesUseDifferentFlows(){assertTrue(VisualMediaPicker.recording(arrayOf("audio/mp4"),false));assertTrue(VisualMediaPicker.recording(arrayOf("audio/*"),true));assertFalse(VisualMediaPicker.recording(arrayOf("audio/*"),false));assertFalse(VisualMediaPicker.recording(arrayOf("image/*","video/*"),true))}
  @Test @Config(sdk=[33]) fun galleryAllowsMultiplePhotosAndVideos(){
   val multiple=VisualMediaPicker.galleryIntent(true)
-  assertEquals(Intent.ACTION_OPEN_DOCUMENT,multiple.action)
+  assertEquals(Intent.ACTION_GET_CONTENT,multiple.action)
   assertTrue(multiple.hasCategory(Intent.CATEGORY_OPENABLE))
   assertEquals("*/*",multiple.type)
   assertTrue(multiple.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE,false))
@@ -58,7 +58,9 @@ class WebMediaTest {
  @Test fun videoCaptureUsesNativeCamera(){
   val camera=VisualMediaPicker.cameraIntent()
   assertEquals(MediaStore.ACTION_VIDEO_CAPTURE,camera.action)
-  assertEquals(120,camera.getIntExtra(MediaStore.EXTRA_DURATION_LIMIT,0))
+  assertEquals(60,camera.getIntExtra(MediaStore.EXTRA_DURATION_LIMIT,0))
+  assertEquals(0,camera.getIntExtra(MediaStore.EXTRA_VIDEO_QUALITY,-1))
+  assertEquals(12L*1024*1024,camera.getLongExtra(MediaStore.EXTRA_SIZE_LIMIT,0))
  }
  @Test fun approvedAudioBecomesReadablePreviewOnly(){
   val a=activity();grant(a);var now=100L;lateinit var rec:Fake;var result:android.net.Uri?=null;var calls=0
