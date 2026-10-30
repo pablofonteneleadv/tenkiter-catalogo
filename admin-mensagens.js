@@ -941,10 +941,13 @@
       const b = botao('ms-aba', '', 'aba', { aba: id }); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(id === abaAtiva_));
       b.appendChild(document.createTextNode(nome)); b.title = c[id] + ' conversas';
       b.setAttribute('aria-label', nome + (DICA_ABA_[id] ? ' — ' + DICA_ABA_[id] : '') + ' (' + c[id] + ' conversas)');
-      if (id === 'pendentes' && c.pendentes > 0) { const p = el('span', 'ms-pt', c.pendentes > 99 ? '99+' : String(c.pendentes)); p.setAttribute('aria-label', c.pendentes + ' pendentes'); b.appendChild(p); }
-      else if (id === 'atendimento' && c.nao_lidas > 0) {   // v7.40.35: 'c' já é a contagem da aba
-        const p = el('span', 'ms-pt', c.nao_lidas > 99 ? '99+' : String(c.nao_lidas)); p.setAttribute('aria-label', c.nao_lidas + ' não lidas'); b.appendChild(p);
-      }
+      // Total de pessoas da aba (não confundir com número de mensagens não lidas).
+      const qtd = Math.max(0, Number(c[id]) || 0);
+      const p = el('span', 'ms-pt ms-aba-total', qtd > 999 ? '999+' : String(qtd));
+      p.setAttribute('aria-hidden', 'true');
+      p.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-width:18px;padding:2px 5px;margin-left:5px;border-radius:12px;background:#f1eee8;color:#504b45;font-size:11px;font-weight:700;line-height:1.2;vertical-align:middle';
+      if (id === abaAtiva_) { p.style.background = '#f9e7d1'; p.style.color = '#995400'; }
+      b.appendChild(p);
       abas.appendChild(b);
     });
     const conta = $('ms-abas-contagem'); if (conta) conta.textContent = c[abaAtiva_] + (c[abaAtiva_] === 1 ? ' conversa' : ' conversas');
