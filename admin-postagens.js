@@ -1761,7 +1761,7 @@ async function validarVideosStatus_(n, midias) {
       if (!r.ok) throw new Error("Não consegui conferir o vídeo para o Status. Tente novamente; seu rascunho foi mantido.");
       arquivo = new File([await r.blob()], m.nome || "video.mp4", {type:"video/mp4"});
     }
-    const v = await window.TKVideoValidation.validar(arquivo, {maxMB:10,maxDurationSeconds:30});
+    const v = await window.TKVideoValidation.validar(arquivo, {maxMB:9.5,maxDurationSeconds:29});
     if (!v.ok) throw new Error((m.nome || "Vídeo") + ": " + v.erros.join(" "));
   }
 }
