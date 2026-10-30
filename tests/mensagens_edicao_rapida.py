@@ -35,6 +35,10 @@ def run_case(browser, width, height, mobile):
     pg.click('#btn-abrir-mensagens')
     pg.wait_for_selector('.ms-conv', timeout=8000)
     pg.locator('#ms-lista .ms-conv[data-id="4"]').click()
+    # Pendentes abrem em modo Espiar: liberar o atendimento antes de testar edição.
+    atender = pg.locator('#ms-conversa [data-ms="atender"]')
+    if atender.is_visible():
+        atender.click()
     pg.wait_for_selector('[data-ms="gaveta-produtos"]')
     pg.fill('#ms-texto', 'Não perder este rascunho')
     pg.click('[data-ms="gaveta-produtos"]')
