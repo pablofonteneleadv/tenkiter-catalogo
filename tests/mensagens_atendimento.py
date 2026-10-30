@@ -36,7 +36,7 @@ with sync_playwright() as p:
     ctx, pg, S, erros = tela(b, 390, 844, True)
     print("== Filtros ==")
     chips = pg.evaluate("[...document.querySelectorAll('#ms-filtros button')].map(x=>x.textContent)")
-    chk("três filas compactas",len(chips)==3 and chips[0].startswith("Falta responder") and chips[1].startswith("Não lidas"),chips)
+    chk("três filas compactas",len(chips)==3 and chips[0].startswith("Esperando") and chips[1].startswith("Em atendimento"),chips)
     chk("começa com individuais, sem grupos",3 not in pg.evaluate(IDS) and len(pg.evaluate(IDS))==6)
     def tipos(msg,grp):
         pg.click('[data-ms=filtros-abrir]')

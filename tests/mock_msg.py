@@ -99,7 +99,7 @@ def tratar(route, path, method, body, s):
         return J({"ok": True, "canais": canais, "urlInstagram": "https://tenkiter-ig.example/wh/instagram/SEGREDO" if s["ig_pronto"] else ""}) or True
     if path == "/msg/conversas":
         c = q.get("canal"); f = q.get("filtro", ""); b = (q.get("busca") or "").lower(); tp = q.get("tipo", "")
-        s.setdefault("consultas", []).append({"canal": c, "filtro": f, "tipo": tp, "etiqueta": q.get("etiqueta", "")})
+        s.setdefault("consultas", []).append({"canal": c, "filtro": f, "tipo": tp, "etiqueta": q.get("etiqueta", ""),"fila":q.get("fila",""),"escopo":q.get("escopo","todos")})
         rs = [enfeitar(s, x) for x in s["convs"] if (c == "todos" or x["canal"] == c) and x["total"] > 0]
         if f == "encerradas": rs = [x for x in rs if x["encerrada_em"]]
         elif not b: rs = [x for x in rs if not x["encerrada_em"]]
@@ -110,6 +110,9 @@ def tratar(route, path, method, body, s):
         if f == "sem_resposta": rs = [x for x in rs if not x["grupo"] and x["ult_dir"] == "entrada"]
         if f == "grupos" or tp == "grupo": rs = [x for x in rs if x["grupo"]]
         if tp == "individual": rs = [x for x in rs if not x["grupo"]]
+        if q.get("fila") and all("em_atendimento" in x for x in s["convs"]) and tp!="grupo" and f!="encerradas":
+            rs=[x for x in rs if not x["grupo"] and not x["encerrada_em"] and bool(x["em_atendimento"])==(q["fila"]=="em_atendimento")]
+            if q["fila"]=="em_atendimento" and q.get("escopo")=="meus":rs=[x for x in rs if x.get("dono")=="Pablo"]
         if q.get("etiqueta"): rs = [x for x in rs if any(str(e["id"]) == q["etiqueta"] for e in x.get("etiquetas", []))]
         if b: rs = [x for x in rs if b in (x["nome"] + x["contato"] + x["previa"]).lower() or any(b in mm["texto"].lower() for mm in s["msgs"] if mm["conversa_id"] == x["id"])]
         rs = sorted(rs, key=lambda x: x["ultima_em"], reverse=True)

@@ -25,6 +25,7 @@
   let selecao = null, timerToque = null, toqueLongo = false;      // v7.22: seleção de várias conversas (para encerrar/reabrir)
   let tipos = { msg: true, grp: false }, contVista = null, contTipos = null;
   const tipoParam_ = () => canal === 'instagram' ? 'individual' : (tipos.msg && !tipos.grp ? 'individual' : tipos.grp && !tipos.msg ? 'grupo' : '');
+  let filaAtendimento_='esperando',escopoAtendimento_='todos';
   let canal = 'todos', filtro = '', busca = '', resumo = null, contagens = null, lista = [], cursor = '', aberta = null, msgs = [], vista = 'lista', painel = '';
   let seqLista = 0, ultIdSrv = 0, nPoll = 0, timerBusca = null, timerLive = null, timerSelo = null, espera = ESPERA_MS, offline = false, abrindo = 0, novasAbaixo = 0, menuAberto = null, aviso = '';
   const rascunhos = {}, elMsgs = new Map(), elConvs = new Map(), pendentes = new Map();
@@ -76,7 +77,7 @@
   function conferirContaAtual_(){
     const nova=contaSessao_(getSessao());
     if(nova!==contaAtual_){
-      contaAtual_=nova;epocaConta_++;cfgLeitura=null;acompanhamento_=null;agendaAnexo_=null;agendaPedido_=null;agendaPainelFiltros_={busca:'',status:'pendentes',canal:'todos',tipo:'todos',minhas:false,de:'',ate:''};fecharGaveta_();atualizarIdentidade_();
+      contaAtual_=nova;epocaConta_++;filaAtendimento_='esperando';escopoAtendimento_='todos';cfgLeitura=null;acompanhamento_=null;agendaAnexo_=null;agendaPedido_=null;agendaPainelFiltros_={busca:'',status:'pendentes',canal:'todos',tipo:'todos',minhas:false,de:'',ate:''};fecharGaveta_();atualizarIdentidade_();
       if(APP_RECENTES){limparRecentes_();cacheBloqueado=true;lista=[];msgs=[];mostrarLista_();const ul=$('ms-lista');if(ul)ul.textContent='';const extra=$('ms-extra');if(extra)extra.textContent='Atualizando acesso…';}
     }
     return nova;
@@ -681,6 +682,7 @@
       .ms-ag-pesquisa{display:flex;align-items:center;gap:8px;padding:8px 0}
       .ms-ag-pesquisa input{flex:1;min-width:0}
       .ms-ag-pesquisa .ms-btn{min-width:80px;min-height:44px}
+      .sheet-mensagens .ms-filtros{grid-template-columns:1.05fr 1.35fr .85fr}.sheet-mensagens .ms-filtros select.ms-chip{width:100%;font:600 .8rem Inter,Arial,sans-serif;border:1px solid #8b9481;background:#fff;color:#20211e}
       .ms-ag-filtros{border-bottom:1px solid #e7e7e0}
       .ms-ag-filtros summary{min-height:44px;align-content:center;cursor:pointer;font-weight:600}
       .ms-ag-filtros-grade{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 8px;padding-bottom:12px}
@@ -859,11 +861,15 @@
     const f = $('ms-filtros'); if (!f) return;
     const c = contVista || contagemDe_(canal), t = contTipos || { individuais: Math.max(0, (c.conversas || 0) - (c.grupos || 0)), grupos: c.grupos || 0 };
     f.textContent = '';
-    [['sem_resposta','Falta responder',c.sem_resposta],['nao_lidas','Não lidas',c.nao_lidas],['','Todas',c.conversas]].forEach(([id,nome,n])=>{
-      const b=botao('ms-chip',nome,'fila',{filtro:id});b.setAttribute('aria-pressed',String(filtro===id));
-      b.appendChild(el('span','ms-fila-conta',String(n||0)));f.appendChild(b);
+    const grupo=tipoParam_()==='grupo'||tipos.grp;
+    const filaVisivel=['encerradas','retomar','minhas','com_notas'].includes(filtro)||grupo?'':filaAtendimento_;
+    [['esperando','Esperando',c.esperando],['em_atendimento','Em atendimento',c.em_atendimento]].forEach(([id,nome,n])=>{
+      const b=botao('ms-chip',nome,'fila-atendimento',{fila:id});b.setAttribute('aria-pressed',String(filaVisivel===id));f.appendChild(b);
     });
-    const bf=$('ms-btn-filtros');if(bf){const ativo=etqFiltro||!tipos.msg||tipos.grp||['minhas','retomar','encerradas'].includes(filtro);bf.textContent=ativo?'Filtros •':'Filtros';bf.prepend(iconeFluido_('filtros'));bf.setAttribute('aria-label',ativo?'Filtros, há filtros aplicados':'Filtros');}
+    if(filaVisivel==='em_atendimento'){
+      const sel=el('select','ms-chip');sel.id='ms-atendimento-escopo';sel.setAttribute('aria-label','Atendimentos de');[['todos','Todos'],['meus','Meus']].forEach(([v,t])=>{const o=el('option','',t);o.value=v;sel.appendChild(o);});sel.value=escopoAtendimento_;sel.addEventListener('change',()=>{escopoAtendimento_=sel.value;carregarLista(true);});f.appendChild(sel);
+    }else{const b=botao('ms-chip','Todas','fila-atendimento',{fila:''});b.setAttribute('aria-pressed',String(filaVisivel===''));f.appendChild(b);}
+    const bf=$('ms-btn-filtros');if(bf){const ativo=etqFiltro||!tipos.msg||tipos.grp||!!filtro;bf.textContent=ativo?'Filtros •':'Filtros';bf.prepend(iconeFluido_('filtros'));bf.setAttribute('aria-label',ativo?'Filtros, há filtros aplicados':'Filtros');}
     const nav=$('ms-nav');if(nav)nav.querySelectorAll('button').forEach(b=>{const ativo=b.dataset.ms==='funil'?painel==='funil':b.dataset.ms==='inicio-notas'?filtro==='com_notas':b.dataset.ms==='inicio'?painel!=='funil'&&filtro!=='com_notas':false;b.setAttribute('aria-current',ativo?'page':'false');});
     if(!ETQ)carregarEtiquetas_();
   }
@@ -886,8 +892,7 @@
     const selecao=(pai,nome,rotulo,itens,valor)=>{const sel=el('select','ms-filtro-select');sel.name=nome;sel.setAttribute('aria-label',rotulo);itens.forEach(([v,t])=>{const op=el('option','',t);op.value=v;sel.appendChild(op);});sel.value=String(valor);pai.appendChild(sel);return sel;};
     if(canal!=='instagram'){const g=sec('O que mostrar');opc(g,'checkbox','ms-ft-tipo','msg','Atendimentos individuais',tipos.msg);opc(g,'checkbox','ms-ft-tipo','grp','Grupos',tipos.grp);}
     const g=sec('Mostrar');
-    const filas=[['','Todas as conversas abertas'],...FILTROS.filter(([id])=>!['nao_lidas','sem_resposta','com_notas'].includes(id))];
-    if(['nao_lidas','sem_resposta','com_notas'].includes(filtro))filas.push([filtro,FILTROS.find(x=>x[0]===filtro)[1]]);
+    const filas=[['','Todas as conversas abertas'],...FILTROS];
     selecao(g,'ms-ft-fila','Mostrar conversas',filas,filtro);
     const etapas=(ETQ||[]).filter(e=>e.venda);if(etapas.length){const e=sec('Etapa da venda');selecao(e,'ms-ft-etapa','Etapa da venda',[['0','Todas as etapas'],...etapas.map(x=>[String(x.id),x.nome])],etqFiltro);}
     const pe=el('div','ms-filtros-pe');pe.append(botao('ms-btn','Limpar','filtros-limpar'),botao('ms-btn prim','Aplicar filtros','filtros-aplicar'));painel.appendChild(pe);
@@ -1698,7 +1703,8 @@
   async function carregarLista(reset) {
     if(!nomesConferidos){nomesConferidos=true;setTimeout(nomesGoogle_,1500);}
     const mine = ++seqLista, c0 = canal, f0 = filtro, b0 = busca.trim(), t0 = tipoParam_();
-    const path='/msg/conversas?blocos=1&canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : '') + (etqFiltro ? '&etiqueta=' + etqFiltro : '');
+    const filaConsulta=tipos.grp||['encerradas','retomar','minhas','com_notas'].includes(filtro)?'':filaAtendimento_;
+    const path='/msg/conversas?blocos=1&fila='+filaConsulta+'&escopo='+escopoAtendimento_+'&canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : '') + (etqFiltro ? '&etiqueta=' + etqFiltro : '');
     const salvo = APP_RECENTES && reset ? await recentes_(path) : null;
     if (salvo && mine===seqLista) { lista=salvo.conversas;contVista=salvo.contagens||null;contTipos=salvo.tipos||null;desenharFiltros();pintarLista();$('ms-extra').textContent='Conversas recentes · atualizando…'; }
     const r = await worker_(path, 'GET');
@@ -2922,6 +2928,7 @@
       if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { document.addEventListener('tk:camada-fechada', function f(e) { if (e.detail && e.detail.chave === 'ms-conversa') { document.removeEventListener('tk:camada-fechada', f); fecharComHistorico_('overlay-mensagens'); } }); TKCamadas.desempilhar('ms-conversa'); }
       else fecharComHistorico_('overlay-mensagens');
     }
+    else if(a==='fila-atendimento'){filaAtendimento_=b.dataset.fila;escopoAtendimento_='todos';filtro='';tipos={msg:true,grp:false};selecao=null;desenharSelbar_();desenharFiltros();await carregarLista(true);}
     else if (a === 'aba') { const eraFunil = painel === 'funil'; selecao = null; desenharSelbar_(); contVista = null; contTipos = null; canal = b.dataset.canal; filtro = ''; etqFiltro = 0; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); if (eraFunil) { chrome_(true); abrirFunil_(); } else { $('ms-extra').textContent = 'Carregando conversas…'; } await carregarLista(true); }
     else if(a==='filtros-abrir')abrirFiltros_();
     else if(a==='filtros-aplicar'||a==='filtros-limpar'){
@@ -3115,7 +3122,7 @@
   }
   async function abrir() {
     montar(); abrirComHistorico_('overlay-mensagens');
-    vista = 'lista'; $('ms-app').dataset.vista = 'lista'; ajustarViewport();
+    escopoAtendimento_='todos';vista = 'lista'; $('ms-app').dataset.vista = 'lista'; ajustarViewport();
     $('ms-extra').textContent = 'Carregando…';
     await recarregar(); ligarAoVivo();
     const f = $('ms-fechar'); if (f && larga()) f.focus();

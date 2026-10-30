@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.32] - 2026-10-30
+
+- Filas de espera e atendimento com Todos/Meus sem aumentar o cabeçalho
+
+
 ## [7.40.31] - 2026-10-30
 
 - Agendar com anexos, Acompanhar em horas úteis e painel de agendamentos
