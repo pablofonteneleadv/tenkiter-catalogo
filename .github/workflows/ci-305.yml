@@ -1,0 +1,42 @@
+name: ci testes rapidos
+# Temporario: inclui os testes do #305 na suite rapida do CI e publica numa branch.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  aplicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Editar ci.yml
+        run: |
+          python3 - <<'PY'
+          import io, sys
+          p = '.github/workflows/ci.yml'
+          s = io.open(p, encoding='utf-8').read()
+          alvo1 = "          node tests/worker_mobile_push.js\n"
+          novo1 = alvo1 + "          node tests/worker_equipe_inicio.js\n"
+          alvo2 = "          python3 tests/agendamentos_painel_ui.py\n"
+          novo2 = alvo2 + "          python3 tests/mensagens_equipe_inicio_ui.py\n"
+          for a in (alvo1, alvo2):
+              if s.count(a) != 1:
+                  sys.exit("ancora ambigua/ausente: %r -> %d" % (a, s.count(a)))
+          s = s.replace(alvo1, novo1, 1)
+          s = s.replace(alvo2, novo2, 1)
+          io.open(p, 'w', encoding='utf-8').write(s)
+          PY
+          python3 -c "import yaml;yaml.safe_load(open('.github/workflows/ci.yml'));print('yaml ok')"
+          grep -c "worker_equipe_inicio.js\|mensagens_equipe_inicio_ui.py" .github/workflows/ci.yml
+      - name: Commitar na branch
+        run: |
+          git config user.name "retomada-bot"
+          git config user.email "retomada@tenkiter.local"
+          git checkout -B ci/305-testes-rapidos2
+          git add -- .github/workflows/ci.yml
+          git commit -m "ci: testes de equipe/Nova conversa na suite rapida (7.40.34)"
+          git push --force origin HEAD:refs/heads/ci/305-testes-rapidos2
