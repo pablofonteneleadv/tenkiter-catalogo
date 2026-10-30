@@ -92,7 +92,7 @@ const DDL = [
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
-const ESQUEMA_ = '20261030-equipe-inicio-4';
+const ESQUEMA_ = '20261030-abas-fluxo-5';
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -142,7 +142,7 @@ async function migrarEsquema_(env) {
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN repostado_de INTEGER').run(); } catch (e) { /* já existe */ }
   /* Mensagens v2: lidas/não lidas, quem falta responder, estado de entrega e quem enviou pelo painel. */
-  for (const [t, col] of [['msg_conversa', "dono TEXT DEFAULT ''"], ['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"], ['msg_conversa', "encerrada_motivo TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  for (const [t, col] of [['msg_conversa', "dono TEXT DEFAULT ''"], ['msg_conversa', "reaberta_em TEXT DEFAULT ''"], ['msg_conversa', "atendido_em TEXT DEFAULT ''"], ['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"], ['msg_conversa', "encerrada_motivo TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   /* v2.13: histórico de encerramentos (motivo, quando e por quem): base das métricas e, depois, do termômetro de cada cliente */
   try {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_status_ref (canal TEXT NOT NULL,ext_id TEXT NOT NULL,chave TEXT NOT NULL,mime TEXT NOT NULL,em TEXT NOT NULL,PRIMARY KEY(canal,ext_id))").run();
@@ -2752,8 +2752,8 @@ async function gravarMensagem_(env, canal, m) {
   const quem = m.grupo && m.direcao === 'entrada' ? (m.autorNome || (m.autorFone ? '+' + m.autorFone : '')) : '';
   const previa = ((quem ? quem + ': ' : '') + (m.texto || ('[' + m.tipo + ']'))).replace(/\s+/g, ' ').slice(0, 140);
   /* Em SQLite o lado direito do SET usa os valores ANTIGOS da linha: por isso a comparação com ultima_em/ult_entrada_em vale como "antes desta mensagem". */
-  const atividade = env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=? AND changes()=1")
-    .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, t, c.id);
+  const atividade = env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, dono=CASE WHEN ?='entrada' AND encerrada_em<>'' THEN '' ELSE dono END, atendido_em=CASE WHEN ?='entrada' AND encerrada_em<>'' THEN '' ELSE atendido_em END, reaberta_em=CASE WHEN ?='entrada' AND encerrada_em<>'' THEN ? ELSE reaberta_em END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=? AND changes()=1")
+    .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, m.em, m.direcao, m.direcao, m.direcao, t, c.id);
   const transacao=[inserir,atividade];
   if(!saida&&!m.grupo){
     // A resposta e o cancelamento dos próximos passos entram na mesma transação.
@@ -3357,9 +3357,17 @@ const MSG_IDENTIDADE_SQL_ = "COALESCE((SELECT a.pessoa FROM msg_pessoa_alias a W
 const MSG_NOME_SQL_ = "COALESCE((SELECT p.nome FROM msg_pessoa p WHERE p.id="+MSG_IDENTIDADE_SQL_+"),(SELECT g.nome FROM msg_google_nome g WHERE g.chave=msg_conversa.pessoa),msg_conversa.nome)";
 const MSG_NOTAS_ALVO_SQL_ = "(CASE WHEN "+MSG_IDENTIDADE_SQL_+"<>'' THEN "+MSG_IDENTIDADE_SQL_+" ELSE 'c:'||msg_conversa.id END)";
 const MSG_NOTAS_COUNT_SQL_ = "(SELECT COUNT(*) FROM msg_nota nn WHERE nn.alvo="+MSG_NOTAS_ALVO_SQL_+" AND nn.excluida_em='')";
-// Leitura, espiar, assumir e automações não iniciam atendimento; resposta humana confirmada ou encerramento anterior iniciam.
-const MSG_ATENDIDO_SQL_ = "(EXISTS(SELECT 1 FROM msg_mensagem humana WHERE humana.conversa_id=msg_conversa.id AND humana.direcao='saida' AND COALESCE(humana.por,'')<>'auto' AND COALESCE(humana.status,'') NOT IN ('incerta','falhou','enviando')) OR EXISTS(SELECT 1 FROM msg_encerramento fim WHERE fim.conversa_id=msg_conversa.id))";
-const MSG_COLS_CONVERSA_ = "id, canal, contato, dono, "+MSG_ATENDIDO_SQL_+" AS em_atendimento, "+MSG_NOTAS_COUNT_SQL_+" AS notas, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
+// Leitura, espiar, "assumir" e automações NÃO iniciam atendimento (regra do #305, que continua
+// valendo: assumir não é responder). v7.40.35 acrescenta `atendido_em`, gravado quando o
+// atendente toca em "Atender" — é esse gesto explícito, não o campo `dono`, que move a
+// conversa de Pendentes para Em atendimento.
+// Uma conversa ENCERRADA conta como atendida (histórico do #305): ela nunca cai em Pendentes
+// enquanto o cliente não escrever de novo.
+// E o encerramento NÃO vale mais para sempre: se o cliente voltar, a conversa volta para a fila
+// em Pendentes (o encerramento é apagado), e só uma resposta posterior a traz de volta.
+const MSG_ULT_ENC_ = "(SELECT MAX(e.em) FROM msg_encerramento e WHERE e.conversa_id=msg_conversa.id)";
+const MSG_ATENDIDO_SQL_ = "(msg_conversa.atendido_em<>'' OR EXISTS(SELECT 1 FROM msg_mensagem humana WHERE humana.conversa_id=msg_conversa.id AND humana.direcao='saida' AND COALESCE(humana.por,'')<>'auto' AND COALESCE(humana.status,'') NOT IN ('incerta','falhou','enviando') AND humana.enviada_em>COALESCE("+MSG_ULT_ENC_+",'')) OR EXISTS(SELECT 1 FROM msg_encerramento fim WHERE fim.conversa_id=msg_conversa.id AND NOT EXISTS(SELECT 1 FROM msg_mensagem depois WHERE depois.conversa_id=msg_conversa.id AND depois.direcao='entrada' AND depois.enviada_em>fim.em)))";
+const MSG_COLS_CONVERSA_ = "id, canal, contato, dono, reaberta_em, "+MSG_ATENDIDO_SQL_+" AS em_atendimento, "+MSG_NOTAS_COUNT_SQL_+" AS notas, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
 const MSG_Q_ = (c) => "(SELECT q." + c + " FROM msg_mensagem q WHERE q.canal=msg_mensagem.canal AND q.ext_id=msg_mensagem.ctx_ref AND msg_mensagem.ctx_ref<>'' LIMIT 1)";
 const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, CASE WHEN ctx_tipo='link' THEN ctx_ref ELSE '' END AS link_previa, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, CASE WHEN ctx_chave LIKE '%.mp4' OR ctx_chave LIKE '%.mov' OR ctx_chave LIKE '%.webm' THEN 'video' ELSE (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) END AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + MSG_Q_('texto') + " AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir";
 async function msgContagens_(env, canal, tipo) {
@@ -5233,7 +5241,11 @@ export default {
       }
       if (p === '/msg/dono' && req.method === 'POST') {
         const d = await req.json().catch(() => ({})), id = Number(d.conversa) || 0, nome = d.assumir === false ? '' : await meuNomeAtendente_(env, req);
-        const r = await env.DB.prepare('UPDATE msg_conversa SET dono=?, atualizada_em=? WHERE id=?').bind(nome, agora(), id).run();
+        /* v7.40.35: `atender: true` marca atendido_em — é o gesto "Atender" que tira a conversa de
+           Pendentes. Sem ele (só assumir), a conversa continua na fila, como manda a regra do #305.
+           Liberar (assumir:false) limpa os dois. */
+        const atendeu = d.atender === true && d.assumir !== false;
+        const r = await env.DB.prepare(atendeu ? 'UPDATE msg_conversa SET dono=?, atendido_em=?, atualizada_em=? WHERE id=?' : 'UPDATE msg_conversa SET dono=?, atualizada_em=? WHERE id=?').bind(...(atendeu ? [nome, agora(), agora(), id] : [nome, agora(), id])).run();
         if (!r.meta || !r.meta.changes) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
         return J({ ok: true, dono: nome });
       }
@@ -5330,7 +5342,7 @@ export default {
         const t = agora(), reabrir = d.reabrir === true, marca = ids.map(() => '?').join(',');
         // v2.13: motivo do encerramento (padrão "concluido"); cada encerramento fica no histórico
         const motivo = MSG_MOTIVOS_.includes(d.motivo) ? d.motivo : 'concluido', por = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(-4);
-        const r = await env.DB.prepare(reabrir ? "UPDATE msg_conversa SET encerrada_em='', encerrada_motivo='', atualizada_em=? WHERE id IN (" + marca + ")" : 'UPDATE msg_conversa SET encerrada_em=?, encerrada_motivo=?, nao_lidas=0, atualizada_em=? WHERE id IN (' + marca + ')').bind(...(reabrir ? [t] : [t, motivo, t]), ...ids).run();
+        const r = await env.DB.prepare(reabrir ? "UPDATE msg_conversa SET encerrada_em='', encerrada_motivo='', reaberta_em='', atualizada_em=? WHERE id IN (" + marca + ")" : "UPDATE msg_conversa SET encerrada_em=?, encerrada_motivo=?, nao_lidas=0, reaberta_em='', atualizada_em=? WHERE id IN (" + marca + ')').bind(...(reabrir ? [t] : [t, motivo, t]), ...ids).run();
         if (!reabrir) await env.DB.prepare('INSERT INTO msg_encerramento (conversa_id, canal, pessoa, contato, motivo, em, por) SELECT id, canal, pessoa, contato, ?, ?, ? FROM msg_conversa WHERE id IN (' + marca + ')').bind(motivo, t, por, ...ids).run();
         return J({ ok: true, alteradas: Number(r.meta && r.meta.changes) || 0, contagens: await msgContagens_(env) });
       }

@@ -6,6 +6,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.35] - 2026-10-30
+
+- Painel de Mensagens reorganizado em **quatro abas de fluxo**: Em atendimento, Pendentes, Todos e Encerrados
+- **Pendentes é só leitura**: a conversa abre em modo espiar e o compositor só libera depois de tocar em **Atender**, que move a conversa para Em atendimento já com o responsável
+- **Encerrados voltam sozinhos**: se o cliente escrever numa conversa encerrada, ela volta para Pendentes com todo o histórico, **sem** responsável atribuído automaticamente e com um aviso explicando a reabertura
+- **Em atendimento** tem filtro **Todos / Só meus** e o atalho **Só não respondidos**
+- **Todos** mostra o que não está encerrado; **Encerrados** é o histórico
+- O canal (WhatsApp 1, WhatsApp 2, Instagram) deixou de ser aba e virou **filtro** na mesma linha — os filtros antigos (grupos, notas, não lidas, retomada) continuam no painel Filtros
+- Nada indicado desapareceu: não lidas, tempo sem resposta, canal de origem, responsável, espiar e assumir continuam visíveis
+- Cabeçalho com a mesma altura no Android; as quatro abas não quebram palavra nem cortam texto, mesmo com fonte em 200%
+
 ## [7.40.34] - 2026-10-30
 
 - Nova conversa **envia pelo WhatsApp**: a loja escreve primeiro pelo WhatsApp 1 ou 2 (número com DDD) usando a integração já existente, com as credenciais só no servidor (Conexões)

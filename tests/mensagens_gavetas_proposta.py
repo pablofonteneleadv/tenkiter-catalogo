@@ -28,7 +28,9 @@ with sync_playwright() as p:
    pg.select_option('[name=ms-ft-etapa]','2');pg.click('[data-ms=filtros-aplicar]');pg.wait_for_selector('#ms-lista .ms-conv[data-id="1"]');assert pg.locator('#ms-lista .ms-conv').count()==1
    pg.click('#ms-btn-filtros');assert pg.input_value('[name=ms-ft-etapa]')=='2';pg.click('[data-ms=filtros-limpar]');pg.wait_for_selector('#ms-lista .ms-conv[data-id="2"]')
    if w==390 and h==844 and zoom==100:
-    pg.click('#ms-btn-filtros');pg.select_option('[name=ms-ft-fila]','encerradas');pg.click('[data-ms=filtros-aplicar]');pg.wait_for_timeout(350);assert s['consultas'][-1]['filtro']=='encerradas';pg.click('#ms-btn-filtros');assert pg.input_value('[name=ms-ft-fila]')=='encerradas';pg.click('[data-ms=filtros-limpar]');pg.wait_for_selector('#ms-lista .ms-conv')
+    # v7.40.35: "encerradas" deixou de ser filtro e virou a ABA Encerrados.
+    pg.click('#ms-abas .ms-aba[data-aba="encerrados"]');pg.wait_for_timeout(400);assert s['consultas'][-1]['filtro']=='encerradas',s['consultas'][-1]
+    pg.click('#ms-abas .ms-aba[data-aba="todos"]');pg.wait_for_selector('#ms-lista .ms-conv')
    pg.click('#ms-nav [data-ms=menu-geral]');pg.wait_for_selector('.ms-mais-item');pg.wait_for_timeout(180)
    assert pg.locator('.ms-mais-item').evaluate_all("es=>es.filter(e=>!e.hidden).every(e=>e.querySelectorAll('svg').length===2&&e.getBoundingClientRect().height>=48)")
    assert pg.locator('.ms-gaveta-corpo').evaluate("e=>{const r=e.firstElementChild.getBoundingClientRect(),p=e.parentElement.getBoundingClientRect();return r.left>=p.left+17&&r.right<=p.right-17}")

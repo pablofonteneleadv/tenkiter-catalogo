@@ -17,15 +17,20 @@
   // v7.22: "Nos 2 WhatsApp" (a mesma pessoa falando pelos dois números) e "Encerradas" (saem da lista e voltam quando o cliente escreve)
   // v7.24: "Mensagens" e "Grupos" ligam/desligam juntos ou separados (os dois = tudo); os demais filtros são de um em um e desligam com novo toque
   const FILTROS = [['minhas', 'Minhas'], ['nao_lidas', 'Não lidas'], ['sem_resposta', 'Falta responder'], ['com_notas', 'Com notas'], ['retomar', 'Retomar'], ['encerradas', 'Encerradas']];
-  // v7.21: aba mestre "Todas" (os três canais juntos) vem primeiro e é a que abre
-  const ABAS = [['todos', 'Todas']].concat(CANAIS);
+  // v7.40.35: as abas passaram a ser o FLUXO de atendimento (e não mais o canal).
+  // O canal continua sendo filtro (seletor na linha de filtros), para os indicadores e para a Conexão.
+  const ABAS = [['atendimento', 'Em atendimento'], ['pendentes', 'Pendentes'], ['todos', 'Todos'], ['encerrados', 'Encerrados']];
+  const ABA_POR_FILA_ = { atendimento: 'em_atendimento', pendentes: 'esperando' };
+  /* v7.40.35: o que cada aba significa — no aria-label e no estado vazio da lista. */
+  const DICA_ABA_ = { atendimento: 'conversas que já são de alguém da equipe', pendentes: 'abrir para espiar, Atender para responder', todos: 'conversas que não estão encerradas', encerrados: 'histórico; volta a Pendentes se o cliente escrever' };
   const NOME_CANAL_ = { whatsapp1: 'WhatsApp 1', whatsapp2: 'WhatsApp 2', instagram: 'Instagram' };
   const ESPERA_MS = Number(window.TK_MENSAGENS_POLL_MS) || 4000, ESPERA_MAX_MS = Number(window.TK_MENSAGENS_POLL_MS) ? 3000 : 30000, ESPERA_SELO_MS = Number(window.TK_MENSAGENS_POLL_MS) ? 1500 : 60000;
   let espiando = false, cfgLeitura = null, avisouCelular = {};
   let selecao = null, timerToque = null, toqueLongo = false;      // v7.22: seleção de várias conversas (para encerrar/reabrir)
   let tipos = { msg: true, grp: false }, contVista = null, contTipos = null;
   const tipoParam_ = () => canal === 'instagram' ? 'individual' : (tipos.msg && !tipos.grp ? 'individual' : tipos.grp && !tipos.msg ? 'grupo' : '');
-  let filaAtendimento_='esperando',escopoAtendimento_='todos';
+  let filaAtendimento_='em_atendimento',escopoAtendimento_='todos';
+  let abaAtiva_='atendimento', soNaoRespondidos_=false;   // v7.40.35: fluxo por abas
   let canal = 'todos', filtro = '', busca = '', resumo = null, contagens = null, lista = [], cursor = '', aberta = null, msgs = [], vista = 'lista', painel = '';
   let seqLista = 0, ultIdSrv = 0, nPoll = 0, timerBusca = null, timerLive = null, timerSelo = null, espera = ESPERA_MS, offline = false, abrindo = 0, novasAbaixo = 0, menuAberto = null, aviso = '';
   const rascunhos = {}, elMsgs = new Map(), elConvs = new Map(), pendentes = new Map();
@@ -235,6 +240,9 @@
       .sheet-mensagens textarea, .sheet-mensagens input[type=search] { font-family: inherit; }
       .ms-app { position: relative; display: grid; grid-template-columns: 1fr; height: 100%; min-height: 0; }
       @media (min-width: 860px) { .ms-app { grid-template-columns: minmax(310px, 380px) 1fr; } }
+      /* v7.40.35: no computador a barra de seleção é o RODAPÉ da coluna das conversas —
+         no celular ela ocupa o lugar do compositor, aqui assenta no pé do painel. */
+      @media (min-width: 860px) { .ms-lateral { position: relative; } .ms-lateral .ms-selbar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; box-shadow: 0 -6px 16px rgba(0,0,0,0.06); } }
       .ms-lateral, .ms-conversa { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: #fff; }
       .ms-lateral { border-right: 1px solid #e6e1d6; }
       @media (max-width: 859px) { .ms-app[data-vista=lista] .ms-conversa, .ms-app[data-vista=conversa] .ms-lateral { display: none; } }
@@ -327,7 +335,7 @@
       .ms-nota-rot { display: block; font-size: 0.72rem; font-weight: 700; color: #6b5000; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 2px; }
       .ms-modo-nota textarea, textarea.ms-modo-nota, .ms-modo-nota #ms-texto { background: #fff6d6 !important; border-color: #e0c56e !important; }
       .ms-nota-btn[aria-pressed="true"] { background: #fff6d6; }
-      .ms-saude { margin: 0 12px 8px; padding: 10px 12px; border-radius: 8px; background: #fdecec; color: #8f1d1d; border: 1px solid #f3c7c7; font-size: 0.85rem; display: flex; align-items:center; gap:8px; }
+      .ms-saude { margin: 0 12px 4px; padding: 8px 12px; border-radius: 8px; background: #fdecec; color: #8f1d1d; border: 1px solid #f3c7c7; font-size: 0.85rem; display: flex; align-items:center; gap:8px; }
       .ms-saude>div{min-width:0;flex:1}.ms-saude>button{flex:none;min-height:44px}.ms-saude b,.ms-saude span{display:block}
       .ms-saude b { color: #c62828; }
       .ms-aviso { position: absolute; left: 12px; right: 12px; bottom: 88px; z-index: 7; margin: 0; padding: 10px 12px; border-radius: 8px; background: #fff3cd; color: #5a4300; font-size: 0.85rem; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
@@ -648,7 +656,33 @@
         .sheet-mensagens .ms-topo>#ms-fechar{grid-column:2;grid-row:1}
         .sheet-mensagens .ms-topo>#ms-mais{grid-column:3;grid-row:1}
       }
-      .sheet-mensagens .ms-abas{padding:0 8px;gap:0;border-bottom:1px solid #e7e7e0;flex:none}.sheet-mensagens .ms-aba{position:relative;border:0;border-radius:0;min-height:48px;padding:0 3px;font-size:.73rem;font-weight:650;color:#5c6455;background:#fff}#overlay-mensagens #ms-abas .ms-aba[aria-selected=true]{background:#fff!important;color:#23251f!important}#overlay-mensagens #ms-abas .ms-aba{border:0!important;border-radius:0!important}.sheet-mensagens .ms-aba[aria-selected=true]::after{content:'';position:absolute;bottom:0;left:9px;right:9px;height:3px;background:#d97116;border-radius:3px 3px 0 0}
+      /* v7.40.35: em zoom alto o texto fica maior do que os 44px da aba. Em vez de
+         cortar a palavra, a barra passa a rolar na horizontal (a altura não muda). */
+      .sheet-mensagens .ms-abas{padding:0 8px;gap:0;border-bottom:1px solid #e7e7e0;flex:none;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}.sheet-mensagens .ms-aba{position:relative;border:0;border-radius:0;min-height:48px;padding:0 3px;font-size:.73rem;font-weight:650;color:#5c6455;background:#fff}#overlay-mensagens #ms-abas .ms-aba[aria-selected=true]{background:#fff!important;color:#23251f!important}#overlay-mensagens #ms-abas .ms-aba{border:0!important;border-radius:0!important}.sheet-mensagens .ms-aba[aria-selected=true]::after{content:'';position:absolute;bottom:0;left:9px;right:9px;height:3px;background:#d97116;border-radius:3px 3px 0 0}
+      /* v7.40.35 — fluxo por abas. Quatro rótulos longos em 320px: a aba quebra em no
+         máximo 2 linhas e a barra mantém os 48px, então o cabeçalho NÃO cresce. */
+      /* v7.40.35: texto centralizado com folga de 6px no pé, para o indicador laranja
+         nunca encostar na última linha (acontecia em 320px com texto em 130%). */
+      /* A aba nunca encolhe abaixo de 3.4em (a palavra mais longa cabe em 2 linhas em
+         qualquer zoom); se o conjunto passar da largura, a barra rola na horizontal. */
+      .sheet-mensagens .ms-abas .ms-aba{flex:1 0 auto;min-width:3.4em;white-space:normal;line-height:1.15;font-size:.71rem;padding:3px 2px 7px;overflow-wrap:break-word;display:flex;align-items:center;justify-content:center;text-align:center}
+      /* Em 320px os quatro rótulos não cabem com 10px por aba: a fonte desce um passo
+         (nunca abaixo de 10px, que ainda é legível) para nenhuma palavra quebrar no meio. */
+      @media(max-width:400px){.sheet-mensagens .ms-abas .ms-aba{font-size:.62rem;letter-spacing:-.015em;padding:0 1px}}
+      /* Alvo de toque: 44px é o piso do projeto para qualquer controle. Uma regra global
+         (acabamento) baixava a aba para 40px; aqui o piso é reafirmado para a barra. */
+      .sheet-mensagens .ms-abas .ms-aba[role=tab]{min-height:44px!important;height:44px;box-sizing:border-box;border:0;position:relative}
+      /* v7.40.35: o badge não entra no fluxo do texto — sobreposto no canto, o rótulo
+         ganha a largura inteira da aba e não quebra por causa do número. */
+      .sheet-mensagens .ms-abas .ms-pt{position:absolute;top:3px;right:4px;min-width:15px;height:15px;line-height:15px;padding:0 3px;font-size:.6rem}
+      /* Canal virou filtro (select) na linha de chips: três células, a mesma altura de antes. */
+      .sheet-mensagens .ms-filtros .ms-chip.ms-canal-sel{appearance:none;-webkit-appearance:none;text-align:center;text-align-last:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#555d4f;font-weight:600}
+      .ms-aba-dica-lista{margin:0 0 10px;color:#5c6455;font-size:.86rem;line-height:1.4}
+      .ms-aba-dica{grid-column:2 / -1;align-self:center;min-width:0;color:#62695a;font-size:.71rem;line-height:1.3;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      /* Pendentes e reabertura: faixa de leitura, sem cor nova (o âmbar já é o do projeto). */
+      .ms-pendente-aviso{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;background:#fff7e6;border-bottom:1px solid #f0d9a8;color:#5c3a00;font-size:.85rem;font-weight:600}
+      .ms-pendente-aviso .ms-btn{min-height:44px;flex:none}
+      .ms-reaberta-tag{font-size:.63rem;font-weight:700;border-radius:4px;padding:2px 5px;background:#fdecea;color:#8a2b1e;border:1px solid #f3c9c2}
       .sheet-mensagens .ms-pesquisa{position:relative;padding:12px 16px 10px;gap:8px;flex:none}.sheet-mensagens .ms-pesquisa>.ms-linha-icone{position:absolute;left:26px;top:24px;color:#656d5e;pointer-events:none}.sheet-mensagens .ms-pesquisa .ms-busca{background:#f7f6f2;border-color:#e0e1d8;border-radius:10px;font-size:.875rem;padding:10px 8px 10px 36px;min-height:44px}.sheet-mensagens .ms-pesquisa>.ms-btn{display:flex;align-items:center;justify-content:center;gap:6px;max-width:100px;min-width:76px;padding:8px;border-color:#e0e1d8;font-size:.75rem;font-weight:600}
       .sheet-mensagens .ms-filtros{padding:0 16px 8px;gap:6px;grid-template-columns:1.4fr 1.12fr .8fr;flex:none}.sheet-mensagens .ms-filtros .ms-chip{display:flex;align-items:center;justify-content:center;gap:5px;min-height:44px;padding:7px 5px;border:0;border-radius:8px;background:#f4f4ef;font-size:.75rem;font-weight:500;color:#555d4f}.sheet-mensagens .ms-filtros .ms-chip[aria-pressed=true]{background:#292b25;color:#fff}.ms-fila-conta{font-weight:750;margin:0;font-size:.72rem;flex:none}
       .ms-intro{padding:0 16px 4px;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px;flex:none;color:#62695a;font-size:.7rem}.ms-intro button{min-width:64px;min-height:44px;border:0;background:none;color:#805324;font:inherit;font-weight:600;padding:4px}
@@ -712,7 +746,18 @@
       .ms-ag-pesquisa{display:flex;align-items:center;gap:8px;padding:8px 0}
       .ms-ag-pesquisa input{flex:1;min-width:0}
       .ms-ag-pesquisa .ms-btn{min-width:80px;min-height:44px}
-      .sheet-mensagens .ms-filtros{grid-template-columns:1.05fr 1.35fr .85fr}.sheet-mensagens .ms-filtros select.ms-chip{width:100%;font:600 .8rem Inter,Arial,sans-serif;border:1px solid #8b9481;background:#fff;color:#20211e}
+      .sheet-mensagens .ms-filtros{grid-template-columns:1fr .82fr 1.18fr}
+      /* v7.40.35: o <select> de canal segue a fonte do próprio controle (como os chips),
+         para a linha de filtros manter UMA fileira também com texto a 130%. */
+      .sheet-mensagens .ms-filtros select.ms-chip{width:100%;font-family:Inter,Arial,sans-serif;font-size:.74rem;font-weight:600;line-height:1.2;border:1px solid #8b9481;background:#fff;color:#20211e;padding:6px 3px}
+      /* v7.40.35: as 3 células da linha de filtros ficam numa linha só, com reticências.
+         Quebrar em duas linhas cresceria o cabeçalho no Android (e no texto a 130%). */
+      .sheet-mensagens .ms-filtros>.ms-chip{white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;min-height:44px!important;height:44px;padding:0 4px!important;line-height:1.1!important}
+      /* v7.40.35: o botão rápido tem o rótulo mais longo da linha. Ele quebra em duas
+         linhas (em vez de virar "Só não respondido") mantendo os 44px de alvo. */
+      .sheet-mensagens .ms-filtros>#ms-so-nao-respondidos{white-space:normal!important;text-overflow:clip;overflow:visible;font-size:.7rem!important;line-height:1.15!important;padding:0 3px!important;text-align:center}
+      @media(max-width:400px){.sheet-mensagens .ms-filtros>#ms-so-nao-respondidos{font-size:.63rem!important}}
+      @media(max-width:400px){.sheet-mensagens .ms-filtros .ms-chip{font-size:.67rem!important}}
       .ms-ag-filtros{border-bottom:1px solid #e7e7e0}
       .ms-ag-filtros summary{min-height:44px;align-content:center;cursor:pointer;font-weight:600}
       .ms-ag-filtros-grade{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 8px;padding-bottom:12px}
@@ -730,7 +775,7 @@
       .ms-ag-painel-item .ms-ag-painel-erro{color:#8b3c11}
       .ms-ag-painel-lista .ms-btn{min-height:44px;min-width:72px;font-size:.8rem;padding:8px}
       .ms-auto-pe[hidden]{display:none!important}
-      @media(max-width:650px){.sheet-mensagens .ms-assina{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:0;padding:0 4px}.sheet-mensagens .ms-assina .ms-ferr-btn{display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0;min-height:52px;max-width:none;margin:0;padding:4px 2px;font-size:.72rem}.sheet-mensagens .ms-assina-btn b{max-width:100%;order:2}.sheet-mensagens .ms-assina-btn svg{order:1}}
+      @media(max-width:650px){.sheet-mensagens .ms-assina{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:0;padding:0 4px}.sheet-mensagens .ms-assina .ms-ferr-btn{display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0;min-height:44px;max-width:none;margin:0;padding:2px;font-size:.72rem;line-height:1.1}.sheet-mensagens .ms-assina-btn b{max-width:100%;order:2}.sheet-mensagens .ms-assina-btn svg{order:1}}
 `;
     document.head.appendChild(s);
   }
@@ -846,10 +891,37 @@
     });
   }
   function contagemDe_(id) {
-    const vazio = { conversas: 0, nao_lidas: 0, sem_resposta: 0, grupos: 0, ambos: 0, encerradas: 0 };
+    const vazio = { conversas: 0, nao_lidas: 0, sem_resposta: 0, grupos: 0, ambos: 0, encerradas: 0, esperando: 0, em_atendimento: 0 };
     if (contagens && contagens[id]) return Object.assign({}, vazio, contagens[id]);
     if (id === 'todos') return CANAIS.reduce((t, [k]) => { const c = contagemDe_(k); Object.keys(vazio).forEach((q) => { t[q] += c[q] || 0; }); return t; }, Object.assign({}, vazio));
     return resumo && resumo.canais[id] ? Object.assign({}, vazio, { conversas: resumo.canais[id].conversas, nao_lidas: resumo.canais[id].naoLidas || 0 }) : vazio;
+  }
+  /* v7.40.35: quantas conversas cada ABA do fluxo mostra (uma por pessoa, como na lista) */
+  function contagemAba_(aba) {
+    const qtd = {};
+    if (contagens) Object.keys(contagens).forEach((k) => { qtd[k] = contagens[k]; });
+    if (!Object.keys(qtd).length) qtd.todos = contagemDe_('todos');
+    const porCanal = (c) => canal === 'todos' || c === canal;
+    // As contagens da API já são DISTINTAS por pessoa dentro do canal; entre canais a mesma pessoa pode repetir.
+    const total = (f) => CANAIS.reduce((t, [k]) => t + (porCanal(k) ? Number((qtd[k] || {})[f] || 0) : 0), 0);
+    const naoLidas = CANAIS.reduce((t, [k]) => t + (porCanal(k) ? Number((qtd[k] || {}).nao_lidas || 0) : 0), 0);
+    return { atendimento: total('em_atendimento'), pendentes: total('esperando'), todos: total('conversas'), encerrados: total('encerradas'), nao_lidas: naoLidas };
+  }
+  function desenharAbas() {
+    const abas = $('ms-abas'); if (!abas) return;
+    const c = contagemAba_(abaAtiva_);
+    abas.textContent = '';
+    ABAS.forEach(([id, nome]) => {
+      const b = botao('ms-aba', '', 'aba', { aba: id }); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(id === abaAtiva_));
+      b.appendChild(document.createTextNode(nome)); b.title = c[id] + ' conversas';
+      b.setAttribute('aria-label', nome + (DICA_ABA_[id] ? ' — ' + DICA_ABA_[id] : '') + ' (' + c[id] + ' conversas)');
+      if (id === 'pendentes' && c.pendentes > 0) { const p = el('span', 'ms-pt', c.pendentes > 99 ? '99+' : String(c.pendentes)); p.setAttribute('aria-label', c.pendentes + ' pendentes'); b.appendChild(p); }
+      else if (id === 'atendimento' && c.nao_lidas > 0) {   // v7.40.35: 'c' já é a contagem da aba
+        const p = el('span', 'ms-pt', c.nao_lidas > 99 ? '99+' : String(c.nao_lidas)); p.setAttribute('aria-label', c.nao_lidas + ' não lidas'); b.appendChild(p);
+      }
+      abas.appendChild(b);
+    });
+    const conta = $('ms-abas-contagem'); if (conta) conta.textContent = c[abaAtiva_] + (c[abaAtiva_] === 1 ? ' conversa' : ' conversas');
   }
   /* v7.40.4: etiquetas */
   let ETQ = null, etqFiltro = 0, etqCarregando = false, etqDaFicha_ = false;
@@ -888,18 +960,39 @@
     aviso_('Etapa da venda salva.'); if (etqDaFicha_) { etqDaFicha_ = false; abrirFicha_(); }
     ETQ = null; desenharFiltros(); await carregarLista(false);
   }
+  /* v7.40.35: seletor de canal — o que antes eram as abas hoje é filtro, na mesma linha de chips. */
+  function chipCanal_(f) {
+    const sel = el('select', 'ms-chip ms-canal-sel'); sel.id = 'ms-filtro-canal'; sel.setAttribute('aria-label', 'Canal das conversas');
+    [['todos', 'Todos os canais']].concat(CANAIS.map(([k, n]) => [k, n])).forEach(([v, t2]) => { const o = el('option', '', t2); o.value = v; sel.appendChild(o); });
+    sel.value = canal;
+    sel.addEventListener('change', () => { canal = sel.value; desenharFiltros(); desenharAbas(); desenharEstado(); carregarLista(true); });
+    f.appendChild(sel);
+    return sel;
+  }
   function desenharFiltros() {
     const f = $('ms-filtros'); if (!f) return;
-    const c = contVista || contagemDe_(canal), t = contTipos || { individuais: Math.max(0, (c.conversas || 0) - (c.grupos || 0)), grupos: c.grupos || 0 };
     f.textContent = '';
-    const grupo=tipoParam_()==='grupo'||tipos.grp;
-    const filaVisivel=['encerradas','retomar','minhas','com_notas'].includes(filtro)||grupo?'':filaAtendimento_;
-    [['esperando','Esperando',c.esperando],['em_atendimento','Em atendimento',c.em_atendimento]].forEach(([id,nome,n])=>{
-      const b=botao('ms-chip',nome,'fila-atendimento',{fila:id});b.setAttribute('aria-pressed',String(filaVisivel===id));f.appendChild(b);
-    });
-    if(filaVisivel==='em_atendimento'){
-      const sel=el('select','ms-chip');sel.id='ms-atendimento-escopo';sel.setAttribute('aria-label','Atendimentos de');[['todos','Todos'],['meus','Meus']].forEach(([v,t])=>{const o=el('option','',t);o.value=v;sel.appendChild(o);});sel.value=escopoAtendimento_;sel.addEventListener('change',()=>{escopoAtendimento_=sel.value;carregarLista(true);});f.appendChild(sel);
-    }else{const b=botao('ms-chip','Todas','fila-atendimento',{fila:''});b.setAttribute('aria-pressed',String(filaVisivel===''));f.appendChild(b);}
+    const aba = abaAtiva_;
+    /* v7.40.35: a MESMA linha de chips serve às quatro abas (três células), então o cabeçalho
+       não cresce no Android. Canal continua em todas; o resto muda por aba. */
+    if (aba === 'atendimento') {
+      chipCanal_(f);
+      const esc = el('select', 'ms-chip'); esc.id = 'ms-atendimento-escopo'; esc.setAttribute('aria-label', 'Atendimentos de');
+      [['todos', 'Todos'], ['meus', 'Só meus']].forEach(([v, t2]) => { const o = el('option', '', t2); o.value = v; esc.appendChild(o); });
+      esc.value = escopoAtendimento_; esc.addEventListener('change', () => { escopoAtendimento_ = esc.value; carregarLista(true); });
+      f.appendChild(esc);
+      const b = botao('ms-chip', 'Só não respondidos', 'so-nao-respondidos'); b.id = 'ms-so-nao-respondidos'; b.setAttribute('aria-pressed', String(soNaoRespondidos_));
+      f.appendChild(b);
+    } else if (aba === 'pendentes' || aba === 'encerrados') {
+      /* v7.40.35: a explicação da aba NÃO entra aqui — a linha de filtros tem de manter
+         uma fileira só (senão o cabeçalho cresce no Android). Ela vai no estado vazio da
+         lista e no aria-label da aba. */
+      chipCanal_(f);
+      const bf2 = $('ms-btn-filtros'); void bf2;
+    } else {
+      chipCanal_(f);
+      ['msg', 'grp'].forEach((k) => { const b = botao('ms-chip', k === 'msg' ? 'Mensagens' : 'Grupos', 'tipo', { tipo: k }); b.setAttribute('aria-pressed', String(!!tipos[k])); f.appendChild(b); });
+    }
     const bf=$('ms-btn-filtros');if(bf){const ativo=etqFiltro||!tipos.msg||tipos.grp||!!filtro;bf.textContent=ativo?'Filtros •':'Filtros';bf.prepend(iconeFluido_('filtros'));bf.setAttribute('aria-label',ativo?'Filtros, há filtros aplicados':'Filtros');}
     const nav=$('ms-nav');if(nav)nav.querySelectorAll('button').forEach(b=>{const ativo=b.dataset.ms==='funil'?painel==='funil':b.dataset.ms==='inicio-notas'?filtro==='com_notas':b.dataset.ms==='inicio'?painel!=='funil'&&filtro!=='com_notas':false;b.setAttribute('aria-current',ativo?'page':'false');});
     if(!ETQ)carregarEtiquetas_();
@@ -1289,8 +1382,10 @@
   function resumoTamanhosProduto_(p) {
     if (typeof TKTamanhos !== 'undefined' && TKTamanhos && typeof TKTamanhos.cliente === 'function') {
       const dados = TKTamanhos.cliente(String(p.Tamanhos || ''), p.Genero);
-      const resumo = TKTamanhos.resumir(dados.valores, dados.tipo);
-      return { titulo: dados.titulo, texto: resumo, valores: dados.valores };
+      // v7.40.35: em peça infantil o módulo descarta P/M/G/PP/GG (lá são série escolar), mas quando
+      // a peça SÓ tem tamanho de letra o filtro zerava tudo e o card dizia "Tamanho não informado".
+      // Sem etiqueta para mostrar, vale a leitura crua — nunca esconder o tamanho que a loja informou.
+      if (dados.valores.length) return { titulo: dados.titulo, texto: TKTamanhos.resumir(dados.valores, dados.tipo), valores: dados.valores };
     }
     // Compatibilidade com carregamento antigo sem o módulo de tamanhos.
     const raw = String(p.Tamanhos || '');
@@ -1663,7 +1758,8 @@
   function desenharSelbar_() {
     const bar = $('ms-selbar'); if (!bar) return;
     bar.textContent = ''; bar.hidden = !selecao; if (!selecao) return;
-    const n = selecao.size, reabrir = filtro === 'encerradas';
+    // v7.40.35: "encerradas" virou ABA, então a barra precisa olhar a aba (e não o filtro).
+    const n = selecao.size, reabrir = filtro === 'encerradas' || abaAtiva_ === 'encerrados';
     const topo = el('div', 'ms-sel-topo');
     topo.appendChild(el('span', n ? 'ms-sel-n' : 'ms-sel-n dica', n ? n + (n === 1 ? ' selecionada' : ' selecionadas') : 'Toque nas conversas'));
     topo.appendChild(botao('ms-btn', lista.length && lista.every((c) => selecao.has(c.id)) ? 'Nenhuma' : 'Todas', 'sel-todas'));
@@ -1735,24 +1831,60 @@
     [...blocos.values()].map(b=>b.sort((a,c)=>String(c.ultima_em).localeCompare(String(a.ultima_em))||c.id-a.id)).sort((a,b)=>String(b[0].ultima_em).localeCompare(String(a[0].ultima_em))||b[0].id-a[0].id).forEach(b=>b.forEach((c,i)=>{const li=linhaConversa(c);li.classList.toggle('ms-vinculada',i>0);li.classList.toggle('ms-vinculo-principal',b.length>1&&i===0);li.classList.toggle('ms-vinculo-fim',b.length>1&&i===b.length-1);li.style.marginLeft='';li.style.background='';if(li!==ref)ul.insertBefore(li,ref);else ref=ref.nextSibling;}));
     extra.textContent = '';
     if (!lista.length) {
-      const m = busca.trim() ? 'Nenhuma conversa encontrada.' : etqFiltro ? 'Nenhuma conversa nesta etapa de venda neste canal.' : filtro === 'nao_lidas' ? 'Nenhuma conversa não lida. 🎉' : filtro === 'sem_resposta' ? 'Ninguém esperando resposta agora. 🎉' : tipoParam_() === 'grupo' && !filtro ? 'Nenhum grupo aqui.' : filtro === 'ambos' ? 'Ninguém está falando pelos dois WhatsApp agora.' : filtro === 'encerradas' ? 'Nenhuma conversa encerrada. Para encerrar, segure o dedo numa conversa (ou ⋯ → Selecionar conversas).' : 'Ainda não chegou nenhuma mensagem neste canal.';
+      /* v7.40.35: a explicação de cada aba aparece quando a lista está vazia — não na
+         linha de filtros, que precisa continuar com uma fileira só no Android. */
+      const dica = { pendentes: 'Nada esperando. Conversa nova aparece aqui para você espiar e Atender.',
+                     encerrados: 'Nenhum atendimento encerrado no período. Se o cliente escrever, a conversa volta para Pendentes.',
+                     atendimento: 'Nenhum atendimento em aberto. Veja Pendentes para as conversas novas.' }[abaAtiva_];
+      if (dica && !busca.trim() && !filtro) extra.appendChild(el('p', 'ms-aba-dica-lista', dica));
+      const m = busca.trim() ? 'Nenhuma conversa encontrada.' : etqFiltro ? 'Nenhuma conversa nesta etapa de venda neste canal.' : filtro === 'nao_lidas' ? 'Nenhuma conversa não lida. 🎉' : filtro === 'sem_resposta' ? 'Ninguém esperando resposta agora. 🎉' : tipoParam_() === 'grupo' && !filtro ? 'Nenhum grupo aqui.' : filtro === 'ambos' ? 'Ninguém está falando pelos dois WhatsApp agora.' : (filtro === 'encerradas' || abaAtiva_ === 'encerrados') ? 'Nenhuma conversa encerrada. Para encerrar, segure o dedo numa conversa (ou ⋯ → Selecionar conversas).' : 'Ainda não chegou nenhuma mensagem neste canal.';
       extra.appendChild(el('p', 'ms-vazio', m));
     }
   }
+  /* v7.40.35: monta os parâmetros da consulta a partir da ABA do fluxo (+ filtros antigos).
+     A aba define a fila: Em atendimento = em_atendimento, Pendentes = esperando,
+     Todos = não encerradas, Encerrados = encerrada_em<>''. */
+  function consultaAba_() {
+    const q = { fila: '', escopo: 'todos', filtro: '', extra: '' };
+    if (abaAtiva_ === 'atendimento') { q.fila = 'em_atendimento'; q.escopo = escopoAtendimento_; if (soNaoRespondidos_) q.filtro = 'sem_resposta'; }
+    else if (abaAtiva_ === 'pendentes') { q.fila = 'esperando'; }
+    else if (abaAtiva_ === 'encerrados') { q.filtro = 'encerradas'; }
+    else { q.filtro = filtro === 'encerradas' ? '' : filtro; }
+    // filtros antigos continuam valendo (Filtros → Mostrar): na aba Todos eles entram como estão;
+    // nas demais, só os que não conflitam com a fila (encerradas/retomar/minhas/com_notas).
+    if (abaAtiva_ !== 'todos' && filtro && ['minhas', 'com_notas', 'retomar', 'nao_lidas', 'sem_resposta'].includes(filtro)) q.filtro = filtro;
+    if (abaAtiva_ === 'encerrados') q.filtro = 'encerradas';
+    return q;
+  }
+  function pathLista_() {
+    const q = consultaAba_();
+    const t0 = tipoParam_(), b0 = busca.trim();
+    return '/msg/conversas?blocos=1&fila=' + q.fila + '&escopo=' + q.escopo + '&canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(q.filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : '') + (etqFiltro ? '&etiqueta=' + etqFiltro : '');
+  }
   async function carregarLista(reset) {
     if(!nomesConferidos){nomesConferidos=true;setTimeout(nomesGoogle_,1500);}
-    const mine = ++seqLista, c0 = canal, f0 = filtro, b0 = busca.trim(), t0 = tipoParam_();
-    const filaConsulta=tipos.grp||['encerradas','retomar','minhas','com_notas'].includes(filtro)?'':filaAtendimento_;
-    const path='/msg/conversas?blocos=1&fila='+filaConsulta+'&escopo='+escopoAtendimento_+'&canal=' + encodeURIComponent(canal) + '&filtro=' + encodeURIComponent(filtro) + (t0 ? '&tipo=' + t0 : '') + (b0 ? '&busca=' + encodeURIComponent(b0) : '') + (etqFiltro ? '&etiqueta=' + etqFiltro : '');
+    const mine = ++seqLista, c0 = canal, f0 = filtro, b0 = busca.trim(), t0 = tipoParam_(), a0 = abaAtiva_, s0 = soNaoRespondidos_;
+    const path = pathLista_();
     const salvo = APP_RECENTES && reset ? await recentes_(path) : null;
     if (salvo && mine===seqLista) { lista=salvo.conversas;contVista=salvo.contagens||null;contTipos=salvo.tipos||null;desenharFiltros();pintarLista();$('ms-extra').textContent='Conversas recentes · atualizando…'; }
     const r = await worker_(path, 'GET');
-    if (mine !== seqLista || c0 !== canal || f0 !== filtro || b0 !== busca.trim() || t0 !== tipoParam_()) return;       // resposta velha de outra aba/filtro/busca: ignora
+    if (mine !== seqLista || c0 !== canal || f0 !== filtro || b0 !== busca.trim() || t0 !== tipoParam_() || a0 !== abaAtiva_ || s0 !== soNaoRespondidos_) return;       // resposta velha de outra aba/filtro/busca: ignora
     if (!r.ok && salvo && r.semRede) { $('ms-extra').textContent='Sem conexão · conversas salvas neste aparelho';return; }
     if (!r.ok) { if (reset || !lista.length) { lista = []; pintarLista(); $('ms-extra').textContent = ''; $('ms-extra').appendChild(el('p', 'ms-vazio', r.erro || 'Não foi possível carregar agora.')); } return; }
     lista = r.conversas; contVista = r.contagens || null; contTipos = r.tipos || null; cursor = r.cursor || cursor;
     if (!t0) contagens = Object.assign({}, contagens || {}, { [canal]: r.contagens });      // as abas mostram sempre o total do canal
     desenharFiltros(); desenharAbas(); pintarLista();
+  }
+  /** v7.40.35: Atender = a conversa sai de Pendentes e entra em Em atendimento, já com o responsável. */
+  async function atenderConversa_(id) {
+    const c = lista.find((x) => x.id === Number(id)) || (aberta && aberta.id === Number(id) ? aberta : null);
+    const r = await worker_('/msg/dono', 'POST', { conversa: Number(id), assumir: true, atender: true });
+    if (!r.ok) { aviso_(r.erro || 'Não foi possível atender agora.'); return false; }
+    if (c) c.dono = r.dono;
+    espiando = false;
+    aviso_('Em atendimento' + (r.dono ? ' · ' + r.dono : '') + '.');
+    await carregarLista(true);
+    return true;
   }
 
   /* ---------- conversa ---------- */
@@ -2297,8 +2429,13 @@
     }
     if (espiando) {
       const e = el('div', 'ms-espiando'); e.setAttribute('role', 'status');
-      e.appendChild(el('span', '', 'Espiando: não marca como lida aqui nem no celular.'));
+      e.appendChild(el('span', '', abaAtiva_ === 'pendentes' ? 'Pendente: você está só espiando. Para responder, toque em Atender.' : 'Espiando: não marca como lida aqui nem no celular.'));
       const a = el('div', 'ms-espiar-acoes'); a.append(botao('ms-btn', 'Nota para equipe', 'notas-abrir'), botao('ms-btn prim', 'Atender', 'atender')); e.appendChild(a); pai.appendChild(e);
+    }
+    /* v7.40.35: conversa que voltou de Encerrados por mensagem nova — o histórico fica, o aviso explica. */
+    if (c.reaberta_em) {
+      const f = el('div', 'ms-pendente-aviso'); f.appendChild(el('span', '', 'O cliente escreveu depois do encerramento. Esta conversa voltou para Pendentes com todo o histórico.'));
+      pai.appendChild(f);
     }
     const wrap = el('div', 'ms-fio-wrap'), fio = el('div', 'ms-fio'); fio.id = 'ms-fio'; fio.tabIndex=0; fio.setAttribute('role', 'log'); fio.setAttribute('aria-live', 'polite'); fio.setAttribute('aria-label', 'Mensagens da conversa');
     const pill = botao('ms-nova', '', 'fim'); pill.id = 'ms-nova'; pill.hidden = true;
@@ -2743,7 +2880,7 @@
     if (!r.ok) { aviso_(r.erro || 'Não foi possível abrir a conversa.'); return; }
     const id = Number(r.conversa);
     fecharGaveta_();
-    if (canal !== 'todos' && canal !== self.canal) { document.querySelectorAll('#ms-abas .ms-aba').forEach((ab) => { if (ab.dataset.canal === canal) ab.click(); }); await new Promise((ok) => setTimeout(ok, 250)); }
+    if (canal !== 'todos' && canal !== self.canal) { canal = self.canal; desenharFiltros(); desenharAbas(); desenharEstado(); await carregarLista(true); await new Promise((ok) => setTimeout(ok, 250)); }
     await carregarLista(true);
     if (id) { await desempilharEsperando_('ms-gaveta'); await abrirConversa(id); }
   }
@@ -3126,8 +3263,9 @@
       if (window.TKCamadas && TKCamadas.aberta('ms-conversa')) { document.addEventListener('tk:camada-fechada', function f(e) { if (e.detail && e.detail.chave === 'ms-conversa') { document.removeEventListener('tk:camada-fechada', f); fecharComHistorico_('overlay-mensagens'); } }); TKCamadas.desempilhar('ms-conversa'); }
       else fecharComHistorico_('overlay-mensagens');
     }
-    else if(a==='fila-atendimento'){filaAtendimento_=b.dataset.fila;escopoAtendimento_='todos';filtro='';tipos={msg:true,grp:false};selecao=null;desenharSelbar_();desenharFiltros();await carregarLista(true);}
-    else if (a === 'aba') { const eraFunil = painel === 'funil'; selecao = null; desenharSelbar_(); contVista = null; contTipos = null; canal = b.dataset.canal; filtro = ''; etqFiltro = 0; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); if (eraFunil) { chrome_(true); abrirFunil_(); } else { $('ms-extra').textContent = 'Carregando conversas…'; } await carregarLista(true); }
+    else if(a==='fila-atendimento'){abaAtiva_=b.dataset.fila==='esperando'?'pendentes':(b.dataset.fila==='em_atendimento'?'atendimento':'todos');filaAtendimento_=ABA_POR_FILA_[abaAtiva_]||'';filtro='';tipos={msg:true,grp:false};selecao=null;desenharSelbar_();desenharFiltros();await carregarLista(true);}
+    else if(a==='so-nao-respondidos'){soNaoRespondidos_=!soNaoRespondidos_;b.setAttribute('aria-pressed',String(soNaoRespondidos_));desenharFiltros();await carregarLista(true);}
+    else if (a === 'aba') { const eraFunil = painel === 'funil'; selecao = null; desenharSelbar_(); contVista = null; contTipos = null; abaAtiva_ = b.dataset.aba || 'atendimento'; filaAtendimento_ = ABA_POR_FILA_[abaAtiva_] || ''; filtro = ''; etqFiltro = 0; soNaoRespondidos_ = false; busca = ''; $('ms-busca').value = ''; aberta = null; msgs = []; elMsgs.clear(); limparBlobs_(); limparAnexo_(true); $('ms-conversa').textContent = ''; $('ms-conversa').appendChild(vazioConversa_()); fecharPainelSilencioso(); lista = []; elConvs.forEach((li) => li.remove()); elConvs.clear(); desenharAbas(); desenharFiltros(); desenharEstado(); if (eraFunil) { chrome_(true); abrirFunil_(); } else { $('ms-extra').textContent = 'Carregando conversas…'; } await carregarLista(true); }
     else if(a==='filtros-abrir')abrirFiltros_();
     else if(a==='filtros-aplicar'||a==='filtros-limpar'){
       const g=$('ms-gaveta');if(!g)return;
@@ -3156,7 +3294,9 @@
     else if (a === 'etq-salvar') salvarEtiquetas_();
     else if (a === 'etq-sem-etapa') { const g = $('ms-gaveta'); if (g) g.querySelectorAll('input[name=ms-etq-venda]').forEach((i) => { i.checked = false; }); }
     else if (a === 'filtro') { filtro = filtro === b.dataset.filtro ? '' : b.dataset.filtro; if (selecao) { selecao.clear(); desenharSelbar_(); } fecharPainelSilencioso(); desenharFiltros(); await carregarLista(true); }
-    else if (a === 'abrir') { if (toqueLongo) { toqueLongo = false; return; } if (selecao) { const id = Number(b.dataset.id); if (selecao.has(id)) selecao.delete(id); else selecao.add(id); pintarLista(); desenharSelbar_(); } else abrirConversa(Number(b.dataset.id), filaAtendimento_ === 'esperando'); }
+    // v7.40.35: em Pendentes a conversa abre SEMPRE em modo espiar (só leitura) até tocar em Atender.
+    // Nas demais abas o espiar automático é da não lida, como antes.
+    else if (a === 'abrir') { if (toqueLongo) { toqueLongo = false; return; } if (selecao) { const id = Number(b.dataset.id); if (selecao.has(id)) selecao.delete(id); else selecao.add(id); pintarLista(); desenharSelbar_(); } else abrirConversa(Number(b.dataset.id), abaAtiva_ === 'pendentes' || filaAtendimento_ === 'esperando'); }
     else if (a === 'selecionar') iniciarSelecao_(0);
     else if (a === 'nome-editar') editarAssinatura_();
     else if (a === 'ponte-ligar') {
@@ -3240,7 +3380,7 @@
     else if (a === 'nome-salvar-cfg') { const i = $('ms-meu-nome'); await salvarNome_(i ? i.value : ''); }
     else if (a === 'sel-sair') sairSelecao_();
     else if (a === 'sel-todas' && selecao) { const todas = lista.length && lista.every((c) => selecao.has(c.id)); selecao = new Set(todas ? [] : lista.map((c) => c.id)); pintarLista(); desenharSelbar_(); }
-    else if (a === 'sel-encerrar' && selecao) { if (filtro === 'encerradas') await encerrar_(Array.from(selecao), true); else escolherMotivo_(Array.from(selecao)); }
+    else if (a === 'sel-encerrar' && selecao) { if (filtro === 'encerradas' || abaAtiva_ === 'encerrados') await encerrar_(Array.from(selecao), true); else escolherMotivo_(Array.from(selecao)); }
     else if (a === 'motivo' && idsMotivo_) {
       const ids = idsMotivo_, m = b.dataset.m, eraAberta = aberta && ids.indexOf(aberta.id) >= 0; fecharMotivos_();
       await encerrar_(ids, false, m);
@@ -3253,7 +3393,17 @@
     else if (a === 'abrir-outro') { if (canal !== 'todos') { canal = b.dataset.canal; filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); } abrirConversa(Number(b.dataset.id)); }
     else if (a === 'pessoa') { if (aberta && !aberta.grupo && sairFicha_()) { if ($('ms-gaveta')) fecharGaveta_(); editarPessoa_(aberta.id); } }
     else if (a === 'espiar') abrirConversa(Number(b.dataset.id), true);
-    else if (a === 'atender' && aberta) { espiando = false; aberta.nao_lidas = Math.max(1, aberta.nao_lidas || 0); montarConversa(aberta); pintarFio(true); marcarLida(); const t = $('ms-texto'); if (t) t.focus(); }
+    else if (a === 'atender' && aberta) {
+      /* v7.40.35: Atender tira a conversa de Pendentes e a coloca em Em atendimento.
+         Antes ele só liberava o compositor aqui (o registro só acontecia na primeira resposta);
+         agora a passagem de aba é o próprio gesto, e quem atende fica como responsável. */
+      const c = aberta;
+      const ok = await atenderConversa_(c.id);
+      if (!ok) return;
+      c.nao_lidas = Math.max(1, c.nao_lidas || 0);
+      espiando = false; montarConversa(c); pintarFio(true); marcarLida();
+      const t = $('ms-texto'); if (t) t.focus();
+    }
     else if (a === 'leitura-cfg') { painel = painel === 'leitura' ? '' : 'leitura'; if (painel === 'leitura') { cfgLeitura = null; contatosSit = null; } desenharEstado(); }
     else if (a === 'abrir-canal') { canal = b.dataset.canal; fecharPainelSilencioso(); filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); abrirConversa(Number(b.dataset.id)); }
     else if (a === 'voltar') voltarLista();
