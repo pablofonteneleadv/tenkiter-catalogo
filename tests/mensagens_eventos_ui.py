@@ -2,6 +2,7 @@
 import os, copy
 from pathlib import Path
 from mock import install, SESSION, PERMS_ALL
+from atendimento import abrir_atendimento
 import mock_msg
 from playwright.sync_api import sync_playwright
 BASE=os.getenv('TK_BASE','http://localhost:8782/')
@@ -27,7 +28,7 @@ with sync_playwright() as pw:
   before=copy.deepcopy(s['convs'][0]);s['convs'][0]['previa']='Novidade imediata';s['convs'][0]['atualizada_em']=mock_msg.agora()
   pg.evaluate('window.__sinal(1)');pg.wait_for_function('document.querySelector("#ms-lista").textContent.includes("Novidade imediata")',timeout=1800)
   assert pg.locator('#ms-busca').input_value()=='Maria'
-  pg.locator('#ms-lista .ms-conv[data-id="1"]').click();pg.wait_for_selector('#ms-texto');pg.locator('#ms-texto').fill('Rascunho preservado');pg.locator('#ms-texto').focus()
+  abrir_atendimento(pg,1);pg.locator('#ms-texto').fill('Rascunho preservado');pg.locator('#ms-texto').focus()
   # Story antigo enriquecido deve atualizar sem mensagem duplicada nem perder o rascunho.
   antigo=s['msgs'][0];antigo.update(ctx_tipo='story',ctx_midia=0,status_em=mock_msg.agora())
   pg.evaluate('window.__sinal(2)');pg.wait_for_function('document.querySelector("#ms-fio").textContent.includes("story")',timeout=1800)
