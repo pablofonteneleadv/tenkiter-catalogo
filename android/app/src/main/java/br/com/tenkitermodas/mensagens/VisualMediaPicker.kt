@@ -12,14 +12,16 @@ object VisualMediaPicker {
     fun recording(types:Array<String>,capture:Boolean)=accepts(types).let{it.isNotEmpty()&&it.all{v->v.startsWith("audio/")}&&(capture||it==listOf("audio/mp4"))}
     fun visual(types:Array<String>):Boolean=accepts(types).let{it.isNotEmpty()&&it.all{v->v.startsWith("image/")||v.startsWith("video/")}}
     /** A seleção múltipla precisa preservar ClipData, inclusive para foto + vídeo. */
-    fun galleryIntent(multiple:Boolean):Intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+    fun galleryIntent(multiple:Boolean):Intent = Intent(Intent.ACTION_GET_CONTENT).apply {
         addCategory(Intent.CATEGORY_OPENABLE)
         type = "*/*"
         putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("image/*", "video/*"))
         putExtra(Intent.EXTRA_ALLOW_MULTIPLE, multiple)
     }
     fun cameraIntent():Intent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).apply {
-        putExtra(MediaStore.EXTRA_DURATION_LIMIT, 120)
+        putExtra(MediaStore.EXTRA_DURATION_LIMIT, 60)
+        putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 0)
+        putExtra(MediaStore.EXTRA_SIZE_LIMIT, 12L * 1024 * 1024)
     }
     fun open(activity:Activity,params:WebChromeClient.FileChooserParams,request:Int,cancel:()->Unit) {
         // A WebView pode informar MODE_OPEN mesmo quando o site permite várias fotos.
@@ -34,13 +36,7 @@ object VisualMediaPicker {
                     .setOnCancelListener{cancel()}.show()
             }
         }
-        AlertDialog.Builder(activity)
-            .setTitle("Anexar foto ou vídeo")
-            .setItems(arrayOf("Galeria — selecionar várias fotos ou vídeos", "Gravar vídeo com a câmera")){_,n->
-                if(n==0) iniciar(galleryIntent(multi)) else iniciar(cameraIntent())
-            }
-            .setNegativeButton("Cancelar"){_,_->cancel()}
-            .setOnCancelListener{cancel()}
-            .show()
+        // O clipe deve abrir imediatamente a galeria. A câmera fica disponível pelo próprio seletor ou ação dedicada.
+        iniciar(galleryIntent(multi))
     }
 }
