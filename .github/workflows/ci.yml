@@ -51,7 +51,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             files=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
-            if [ -n "$files" ] && ! echo "$files" | grep -qv '\\.md$'; then
+            if [ -n "$files" ] && ! echo "$files" | grep -qv '\.md$'; then
               echo "so_docs=true" >> "$GITHUB_OUTPUT"
               echo "PR só com Markdown: testes de código dispensados."
             else
@@ -160,6 +160,7 @@ jobs:
           node tests/worker_entrada_duravel.js
           node tests/expediente_acompanhamento.js
           node tests/worker_acompanhamento.js
+          node tests/worker_equipe_inicio.js
           node tests/worker_contatos_r2.js
           node tests/worker_mobile_push.js
 
@@ -208,6 +209,7 @@ jobs:
           python3 tests/agendar_acompanhar_ui.py
           python3 tests/expediente_config_ui.py
           python3 tests/agendamentos_painel_ui.py
+          python3 tests/mensagens_equipe_inicio_ui.py
 
       - name: Screenshots da edição rápida
         if: always() && github.event_name == 'pull_request'
