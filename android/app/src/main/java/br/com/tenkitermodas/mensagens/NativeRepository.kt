@@ -13,39 +13,54 @@ class NativeRepository internal constructor(private val context:Context,val stor
     private var catalogCache=emptyList<JSONObject>()
     private var cursor="";private var fullAt=0L;private var accountAt=0L
     @Volatile var status="";private set
+    @Volatile private var access=JSONObject()
+    @Volatile private var accessGeneration=-1
+    fun rights():JSONObject=if(accessGeneration==store.generation)JSONObject(access.toString())else JSONObject()
+    fun can(key:String)=accessGeneration==store.generation&&access.optBoolean(key,false)
+    private fun accessFor(a:NativeAuth):JSONObject{
+        val r=api.call("/msg/acesso",a)
+        if(!r.optBoolean("permitido"))throw AccessRevoked()
+        return r.optJSONObject("direitos")?:JSONObject()
+    }
     companion object {
         const val CHANGED="br.com.tenkitermodas.mensagens.INBOX_CHANGED"
         @Volatile private var instance:NativeRepository?=null
         fun get(c:Context):NativeRepository=instance?:synchronized(this){instance?:NativeRepository(c.applicationContext).also{instance=it}}
     }
     private fun changed(){context.sendBroadcast(Intent(CHANGED).setPackage(context.packageName))}
-    private fun allowed(j:JSONObject):Boolean {val p=j.optJSONArray("permissoes")?:return false;return (0 until p.length()).any{p.optString(it) in listOf("gerir_acessos","catalogo_admin")}}
     fun login(identifier:String,password:String){lock.withLock{
         val generation=store.generation
         val j=api.account(JSONObject().put("action","login").put("identificador",identifier.trim()).put("whatsapp",if(identifier.contains('@'))"" else identifier.filter{it.isDigit()}).put("senha",password))
         val user=j.getJSONObject("usuario")
-        if(!allowed(user))throw Exception("Sua conta não tem acesso ao atendimento.")
         val a=NativeAuth(user.getString("whatsapp"),j.getString("sessao"),user.optString("name",user.optString("nome","Atendente")))
+        val rights=try{accessFor(a)}catch(_:AccessRevoked){throw Exception("Sua conta não tem acesso ao atendimento.")}
         api.call("/msg/conversas?canal=todos&filtro=",a)
         if(!store.saveIfGeneration(generation,a))throw Exception("O acesso foi cancelado.")
+        access=rights;accessGeneration=store.generation
         status="Atualizando conversas…";changed()
     }}
     fun importSession(a:NativeAuth){lock.withLock{
         val generation=store.generation;val r=api.account(JSONObject().put("action","sessao").put("whatsapp",a.owner).put("sessao",a.session))
-        val user=r.getJSONObject("usuario");if(!allowed(user))throw AccessRevoked()
+        val user=r.getJSONObject("usuario")
         val fresh=NativeAuth(a.owner,r.optString("sessao",a.session),user.optString("name",user.optString("nome",a.name)))
+        val rights=accessFor(fresh)
         api.call("/msg/conversas?canal=todos&filtro=",fresh)
         if(!store.saveIfGeneration(generation,fresh))throw Exception("O acesso foi cancelado.")
+        access=rights;accessGeneration=store.generation
     }}
-    fun logout(){catalogCache=emptyList();cursor="";fullAt=0;accountAt=0;java.io.File(context.cacheDir,"received").deleteRecursively();runCatching{OneSignal.User.pushSubscription.optOut()};store.logout();status="";runCatching{BackgroundSync.cancel(context)};changed()}
+    fun logout(){access=JSONObject();accessGeneration=-1;catalogCache=emptyList();cursor="";fullAt=0;accountAt=0;java.io.File(context.cacheDir,"received").deleteRecursively();runCatching{OneSignal.User.pushSubscription.optOut()};store.logout();status="";runCatching{BackgroundSync.cancel(context)};changed()}
     private fun freshSession():NativeAuth {
         val old=store.auth()?:throw AccessRevoked()
         val j=api.account(JSONObject().put("action","sessao").put("whatsapp",old.owner).put("sessao",old.session))
-        val user=j.getJSONObject("usuario");if(!allowed(user))throw AccessRevoked()
+        val user=j.getJSONObject("usuario")
         val next=NativeAuth(old.owner,j.optString("sessao",old.session),user.optString("name",user.optString("nome",old.name)))
+        val rights=accessFor(next)
         if(!store.updateAuth(old,next))throw Exception("A conta mudou.")
+        access=rights;accessGeneration=store.generation
         return next
     }
+    private var presenceAt=0L;private var presenceId=-1L
+    fun presence(id:Long,peek:Boolean){lock.withLock{val a=store.auth()?:return;if(System.currentTimeMillis()-presenceAt<45000&&id==presenceId)return;api.call("/msg/presenca",a,JSONObject().put("conversa",id).put("espiar",peek));presenceAt=System.currentTimeMillis();presenceId=id}}
     private fun register(a:NativeAuth){
         runCatching{
             val id=OneSignal.User.pushSubscription.id

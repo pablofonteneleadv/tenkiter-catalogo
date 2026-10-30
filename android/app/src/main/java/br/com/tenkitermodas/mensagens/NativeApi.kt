@@ -22,7 +22,7 @@ open class NativeApi {
             c.connectTimeout=10000;c.readTimeout=65000;c.instanceFollowRedirects=false;c.requestMethod="POST";c.doOutput=true
             c.setRequestProperty("X-TK-Whats",a.owner);c.setRequestProperty("X-TK-Sessao",a.session);c.setRequestProperty("Content-Type","application/octet-stream");c.setFixedLengthStreamingMode(bytes.size)
             c.outputStream.use{it.write(bytes)}
-            if(c.responseCode in listOf(401,403))throw AccessRevoked()
+            checkAccess(c)
             val body=(if(c.responseCode in 200..299)c.inputStream else c.errorStream)?:throw Exception("Sem resposta do envio.")
             val j=JSONObject(String(AppUpdater.limited(body,65536),Charsets.UTF_8))
             if(!j.optBoolean("ok"))throw ApiFailure(j,c.responseCode)
@@ -35,7 +35,7 @@ open class NativeApi {
         try{
             c.connectTimeout=10000;c.readTimeout=30000;c.instanceFollowRedirects=false
             c.setRequestProperty("X-TK-Whats",a.owner);c.setRequestProperty("X-TK-Sessao",a.session)
-            if(c.responseCode in listOf(401,403))throw AccessRevoked()
+            checkAccess(c)
             if(c.responseCode!=200)throw Exception("Não foi possível abrir esta mídia. Ela pode ter expirado.")
             val bytes=AppUpdater.limited(c.inputStream,32*1048576)
             return bytes to (c.contentType?:"application/octet-stream").substringBefore(';')
@@ -56,12 +56,19 @@ open class NativeApi {
         try{
             c.connectTimeout=10000;c.readTimeout=65000;c.instanceFollowRedirects=false
             c.setRequestProperty("X-TK-Whats",a.owner);c.setRequestProperty("X-TK-Sessao",a.session)
-            if(c.responseCode in listOf(401,403))throw AccessRevoked()
+            checkAccess(c)
             if(c.responseCode!=200)throw Exception("Não foi possível exportar agora. Confira o período e a conexão.")
             val bytes=AppUpdater.limited(c.inputStream,32*1048576)
             val name=c.getHeaderField("Content-Disposition")?.substringAfter("filename=","")?.substringBefore(';')?.trim()?.trim('"')?.replace(Regex("[^A-Za-z0-9._-]"),"_")?.take(120).orEmpty().ifBlank{"conversas.txt"}
             return Export(bytes,c.contentType?.substringBefore(';')?:"text/plain",name,c.getHeaderField("X-TK-Total")?.toIntOrNull()?:0,c.getHeaderField("X-TK-Cortado")=="1")
         }finally{c.disconnect()}
+    }
+    private fun checkAccess(c:HttpURLConnection){
+        if(c.responseCode==401)throw AccessRevoked()
+        if(c.responseCode==403){
+            val j=runCatching{JSONObject(String(c.errorStream?.let{AppUpdater.limited(it,65536)}?:byteArrayOf(),Charsets.UTF_8))}.getOrElse{JSONObject().put("erro","Seu acesso não permite usar esta ferramenta.")}
+            throw ApiFailure(j,403)
+        }
     }
     private fun request(address:String,body:JSONObject?,headers:Map<String,String>,google:Boolean,method:String?=null,acceptCatalog:Boolean=false):JSONObject {
         var url=URL(address);var payload=body;var credentials=headers
@@ -80,12 +87,13 @@ open class NativeApi {
                     if(!google||next.protocol!="https"||next.host !in setOf("script.google.com","script.googleusercontent.com"))throw Exception("Redirecionamento recusado.")
                     url=next;payload=null;credentials=emptyMap()
                 }else{
-                    if(code==401||code==403)throw AccessRevoked()
+                    if(code==401)throw AccessRevoked()
                     val stream=if(code in 200..299)c.inputStream else c.errorStream
                     val bytes=stream?.let{AppUpdater.limited(it,4*1024*1024)}?:byteArrayOf()
                     if(bytes.size>4*1024*1024)throw Exception("Resposta grande demais.")
                     val j=runCatching{JSONObject(String(bytes,Charsets.UTF_8))}.getOrElse{throw Exception("Não foi possível ler a resposta do servidor.")}
-                    if(j.optBoolean("sessaoInvalida")||j.optBoolean("inativa")||j.optBoolean("exigeLogin")||j.optBoolean("semPermissao"))throw AccessRevoked()
+                    if(j.optBoolean("sessaoInvalida")||j.optBoolean("inativa")||j.optBoolean("exigeLogin"))throw AccessRevoked()
+                    if(code==403||j.optBoolean("semPermissao"))throw ApiFailure(j,403)
                     if(!j.optBoolean("ok")&&!(acceptCatalog&&code in 200..299&&j.optJSONArray("produtos")!=null))throw ApiFailure(j,code)
                     return j
                 }

@@ -7,6 +7,11 @@ import mock_msg
 BASE=os.getenv('TK_BASE','http://localhost:8783/')
 OUT=Path(os.getenv('TK_EVID',str(Path(__file__).parent/'evidencias_edicao'/'agendar')));OUT.mkdir(parents=True,exist_ok=True)
 PNG=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aJ1sAAAAASUVORK5CYII=')
+def validar_axe(pg):
+ if not pg.evaluate('!!window.axe'): pg.add_script_tag(path=str(Path(__file__).with_name('axe.min.js')))
+ assert pg.locator('.ms-gaveta-painel').count()==1
+ violacoes=pg.evaluate("async()=> (await axe.run(document.querySelector('.ms-gaveta-painel'),{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}})).violations")
+ assert not violacoes,violacoes
 with sync_playwright() as pw:
  b=pw.chromium.launch(args=['--no-sandbox'])
  for w,h in [(320,700),(390,844),(412,915),(1440,900),(390,470)]:
@@ -21,6 +26,7 @@ with sync_playwright() as pw:
    assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth')
    assert pg.locator('#ms-gaveta .ms-gaveta-cab button').evaluate('(e)=>{const r=e.getBoundingClientRect();return r.top>=0&&r.right<=innerWidth&&r.height>=44}')
    pg.screenshot(path=str(OUT/f'acompanhar-{w}-{h}-{scale}.png'))
+  validar_axe(pg)
   pg.evaluate('document.documentElement.style.fontSize="100%"')
   pg.locator('#ms-acompanhar').uncheck();pg.wait_for_function('document.getElementById("ms-acomp-feedback").textContent.includes("desativado")')
   pg.keyboard.press('Escape');pg.wait_for_selector('#ms-gaveta',state='detached');assert pg.locator('#ms-texto').input_value()=='Rascunho da conversa'
@@ -37,6 +43,7 @@ with sync_playwright() as pw:
    assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth')
    assert pg.locator('#ms-ag-salvar').evaluate('(e)=>{const r=e.getBoundingClientRect();return r.height>=44&&r.bottom<=innerHeight+1}')
    pg.screenshot(path=str(OUT/f'agendar-{w}-{h}-{scale}.png'))
+  validar_axe(pg)
   assert not errors,errors;ctx.close()
  b.close()
 print('Agendar/Acompanhar: cinco telas, texto100/130, toque44, anexo, retry idempotente, rascunho e navegação aprovados.')

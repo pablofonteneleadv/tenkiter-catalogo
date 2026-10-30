@@ -41,6 +41,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
     private var lastOwner="";private var auth:NativeAuth?=null
     private var chats=emptyList<JSONObject>();private var focus=0L;private var messages=emptyList<JSONObject>();private var pending=emptyList<JSONObject>()
     private var online=false;private var query="";private var channel="Todos";private var list:ListView?=null
+    private var queue="esperando";private var mine=false;private var extraFilters=false;
     private var unreadOnly=false;private var mode="Todas";private var includeMessages=true;private var includeGroups=false;private var peeking=false
     private val selected=mutableSetOf<Long>();private var selecting=false;private var selectionBar:LinearLayout?=null;private var selectionLabel:Button?=null;private var closeSelection:Button?=null
     private var serverMatches:Set<Long>?=null;private val filterButtons=mutableListOf<Pair<Button,String>>();private val filterStrips=mutableListOf<View>()
@@ -48,7 +49,8 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
     private var chatInput:EditText?=null;private var loginPassword:EditText?=null
     private val drafts=mutableMapOf<Long,String>()
     private var listDataKey=0;private var listTouching=false;private var deferList=false;private var newBelow=0
-    private var viewKey="";private var loginBusy=false
+    private var viewKey="";private var loginBusy=false;private var rights:JSONObject?=null
+    private fun can(key:String)=rights?.optBoolean(key,false)?:true
     init{
         orientation=VERTICAL;setBackgroundColor(Color.WHITE)
         val bar=LinearLayout(activity).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(12),0,dp(4),0);setBackgroundColor(Color.rgb(16,16,14))}
@@ -67,8 +69,8 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
     fun insert(text:String){chatInput?.let{val old=it.text.toString();it.setText(if(old.isBlank())text else old.trimEnd()+"\n\n"+text);it.requestFocus();it.setSelection(it.length())}}
     fun status(t:String){info.text=(t.ifBlank{"Suas conversas neste aparelho"})+" · v"+BuildConfig.VERSION_NAME}
     fun loginState(busy:Boolean){loginBusy=busy;loginPassword?.isEnabled=!busy;body.findViewWithTag<Button>("login")?.isEnabled=!busy}
-    fun reset(){drafts.clear();selected.clear();selecting=false;serverMatches=null;newBelow=0;listDataKey=0;lastOwner="";auth=null;focus=0;viewKey="";chatInput=null;loginPassword=null;body.removeAllViews()}
-    fun render(a:NativeAuth?,canRead:Boolean,conversations:List<JSONObject>,id:Long,msgs:List<JSONObject>,outgoing:List<JSONObject>,connected:Boolean,state:String,peek:Boolean=false){
+    fun reset(){queue="esperando";mine=false;extraFilters=false;drafts.clear();selected.clear();selecting=false;serverMatches=null;newBelow=0;listDataKey=0;lastOwner="";auth=null;focus=0;viewKey="";chatInput=null;loginPassword=null;body.removeAllViews()}
+    fun render(a:NativeAuth?,canRead:Boolean,conversations:List<JSONObject>,id:Long,msgs:List<JSONObject>,outgoing:List<JSONObject>,connected:Boolean,state:String,peek:Boolean=false,capabilities:JSONObject?=null){
         if(a?.owner!=lastOwner){reset();lastOwner=a?.owner?:""}
         val oldIds=messages.map{it.optLong("id")}.toSet()
         if(id!=focus)newBelow=0
@@ -76,10 +78,10 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         if(!prepended&&id==focus&&messages.isNotEmpty()&&chatScroll?.let{(it.getChildAt(0)?.height?:0)-it.scrollY-it.height>80}==true)newBelow+=msgs.count{it.optLong("id") !in oldIds}
         prependHeight=if(prepended)chatScroll?.getChildAt(0)?.height else null
         appBar.visibility=if(id>0&&a!=null&&canRead)View.GONE else View.VISIBLE;info.visibility=if(id>0&&connected)View.GONE else View.VISIBLE
-        auth=a;peeking=peek;chats=conversations;focus=id;messages=msgs;pending=outgoing;online=connected
+        rights=capabilities;auth=a;peeking=peek;chats=conversations;focus=id;messages=msgs;pending=outgoing;online=connected
         status(state)
         if(a==null||!canRead){if(viewKey!="login"){viewKey="login";showLogin(a!=null)};return}
-        val key=if(id>0)"chat:$id:${conversations.firstOrNull{it.optLong("id")==id}?.optString("canal")}:${conversations.firstOrNull{it.optLong("id")==id}?.optString("nome")}:${msgs.joinToString("|"){it.toString()}.hashCode()}:${outgoing.joinToString("|"){it.toString()}.hashCode()}:$connected:$peek:${conversations.firstOrNull{it.optLong("id")==id}?.optBoolean("local_has_more")}" else "list"
+        val key=(if(id>0)"chat:$id:${conversations.firstOrNull{it.optLong("id")==id}?.optString("canal")}:${conversations.firstOrNull{it.optLong("id")==id}?.optString("nome")}:${msgs.joinToString("|"){it.toString()}.hashCode()}:${outgoing.joinToString("|"){it.toString()}.hashCode()}:$connected:$peek:${conversations.firstOrNull{it.optLong("id")==id}?.optBoolean("local_has_more")}" else "list")+":"+(rights?.toString()?:"legacy")
         if(viewKey!=key){
             val sameChat=viewKey.startsWith("chat:$id:")
             val keepFocus=chatInput?.hasFocus()==true&&sameChat
@@ -110,9 +112,19 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         fun chips(labels:List<String>,click:(String)->Unit){
             val strip=LinearLayout(activity).apply{setPadding(dp(12),dp(2),dp(12),dp(2))}
             labels.forEach{label->val b=button(label){click(label)};b.tag=label;filterButtons.add(b to label);strip.addView(b,LayoutParams(-2,dp(48)).apply{rightMargin=dp(6)})}
-            val scroll=HorizontalScrollView(activity).apply{isHorizontalScrollBarEnabled=false;addView(strip)};filterStrips.add(scroll);body.addView(scroll,LayoutParams(-1,dp(52)))
+            val container=LinearLayout(activity).apply{orientation=VERTICAL}
+            if(labels.size==4){while(strip.childCount>0){val v=strip.getChildAt(0);strip.removeViewAt(0);container.addView(v,LayoutParams(0,dp(48),1f))};container.orientation=HORIZONTAL}
+            else{container.tag="extra-filtros";while(strip.childCount>0){val row=LinearLayout(activity);repeat(minOf(3,strip.childCount)){val v=strip.getChildAt(0);strip.removeViewAt(0);row.addView(v,LayoutParams(0,dp(48),1f))};container.addView(row)}}
+            filterStrips.add(container);body.addView(container,LayoutParams(-1,-2))
         }
         chips(listOf("Todas","WhatsApp 1","WhatsApp 2","Instagram")){channel=if(it=="Todas")"Todos"else it;refreshList()}
+        val queues=LinearLayout(activity).apply{setPadding(dp(12),dp(4),dp(12),dp(4))}
+        val waiting=button("Esperando"){queue="esperando";mine=false;viewKey="";render(auth,true,chats,0,messages,pending,online,info.text.toString(),false,rights)}.apply{tag="fila-esperando";isSelected=queue=="esperando";if(isSelected){background=rounded(ink,8);setTextColor(Color.WHITE)}}
+        val serving=button("Em atendimento"){queue="em_atendimento";mine=false;viewKey="";render(auth,true,chats,0,messages,pending,online,info.text.toString(),false,rights)}.apply{tag="fila-em-atendimento";isSelected=queue=="em_atendimento";if(isSelected){background=rounded(ink,8);setTextColor(Color.WHITE)}}
+        queues.addView(waiting,LayoutParams(0,dp(48),1f));queues.addView(serving,LayoutParams(0,dp(48),1f))
+        if(queue=="em_atendimento"){val scope=Spinner(activity);scope.contentDescription="Atendimentos de";scope.adapter=ArrayAdapter(activity,android.R.layout.simple_spinner_dropdown_item,listOf("Todos","Meus"));scope.setSelection(if(mine)1 else 0);scope.onItemSelectedListener=object:AdapterView.OnItemSelectedListener{override fun onNothingSelected(p:AdapterView<*>?){};override fun onItemSelected(p:AdapterView<*>?,v:View?,pos:Int,id:Long){mine=pos==1;refreshList()}};queues.addView(scope,LayoutParams(dp(88),dp(48)))}
+        filterStrips.add(queues);body.addView(queues)
+        body.addView(button("Filtros"){extraFilters=!extraFilters;refreshList()}.apply{tag="abrir-filtros"},LayoutParams(-1,dp(44)))
         chips(listOf("Mensagens","Grupos","Não lidas","Falta responder","Encerradas")){label->
             when(label){"Mensagens"->includeMessages=!includeMessages;"Grupos"->includeGroups=!includeGroups;else->{mode=if(mode==label)"Todas"else label;unreadOnly=mode=="Não lidas";serverMatches=null;events.search(query,mode=="Encerradas")}}
             refreshList()
@@ -146,11 +158,16 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         if(query.isBlank()&&mode!="Encerradas"&&(c.optBoolean("local_hidden")||c.optString("encerrada_em").isNotBlank()))return false
         if(!InboxRules.matches(c,mode,if(includeMessages&&includeGroups)"Todos"else if(includeMessages)"Mensagens"else if(includeGroups)"Grupos"else"Nenhum"))return false
         if(!includeMessages&&!includeGroups)return false
+        if(rights!=null&&mode!="Encerradas"&&!InboxRules.group(c)&&c.has("em_atendimento")){
+            val serving=c.optInt("em_atendimento")==1||c.optBoolean("em_atendimento")
+            if(serving!=(queue=="em_atendimento"))return false
+            if(serving&&mine&&c.optString("dono")!=auth?.name?.substringBefore(' '))return false
+        }
         val name=when(c.optString("canal")){"whatsapp1"->"WhatsApp 1";"whatsapp2"->"WhatsApp 2";else->"Instagram"}
         return (!unreadOnly||c.optInt("nao_lidas")>0)&&(channel=="Todos"||channel==name)&&(query.isBlank()||((c.optString("nome")+" "+c.optString("contato")+" "+c.optString("previa")).contains(query,true)||serverMatches?.contains(c.optLong("id"))==true))
     }
     private fun refreshList(){
-        filterStrips.forEach{it.visibility=if(selecting)View.GONE else View.VISIBLE}
+        filterStrips.forEach{it.visibility=if(selecting||it.tag=="extra-filtros"&&!extraFilters)View.GONE else View.VISIBLE}
         selectionBar?.visibility=if(selecting)View.VISIBLE else View.GONE;closeSelection?.text=if(mode=="Encerradas")"Reabrir"else"Encerrar";closeSelection?.isEnabled=selected.isNotEmpty();closeSelection?.setTextColor(if(selected.isEmpty())Color.GRAY else orange);selectionLabel?.text="${selected.size} "+(if(selected.size==1)"selecionada"else"selecionadas")+" · até 50"
         filterButtons.forEach{(b,label)->
             val base=chats.filter{!it.optBoolean("local_hidden")&&it.optString("encerrada_em").isBlank()}
@@ -160,7 +177,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
             val counts=when(label){"Todas"->base;"WhatsApp 1","WhatsApp 2","Instagram"->base.filter{InboxRules.channel(it)==label};else->emptyList()}.filter{if(InboxRules.group(it))includeGroups else includeMessages}
             val count=when(label){"Todas","WhatsApp 1","WhatsApp 2","Instagram"->InboxRules.people(counts);"Mensagens"->InboxRules.people(byChannel.filter{!InboxRules.group(it)});"Grupos"->InboxRules.people(byChannel.filter{InboxRules.group(it)});"Encerradas"->chats.count{it.optString("encerrada_em").isNotBlank()&&(channel=="Todos"||InboxRules.channel(it)==channel)};else->InboxRules.people(byType.filter{InboxRules.matches(it,label,"Todos")})}
             val unread=InboxRules.people(counts.filter{it.optInt("nao_lidas")>0})
-            b.text=label+" · $count"+(if(label in listOf("Todas","WhatsApp 1","WhatsApp 2","Instagram"))"\n"+(if(unread==1)"1 não lida"else"$unread não lidas")else"");b.isSelected=picked
+            b.text=if(label in listOf("Todas","WhatsApp 1","WhatsApp 2","Instagram"))label else label+" · $count";b.textSize=12f;b.setPadding(dp(4),0,dp(4),0);b.isSelected=picked
             b.setTextColor(if(picked)Color.WHITE else ink);b.background=rounded(if(picked)ink else cream,18)
             b.contentDescription=label+", $count atendimentos salvos"+if(picked)", selecionado"else""
         }
@@ -279,10 +296,10 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         }
         if(!peeking){
             val tools=LinearLayout(activity).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),0,dp(8),0)}
-            listOf("Produtos" to "produtos","Respostas" to "respostas","Anexar" to "anexo").forEach{(label,action)->tools.addView(button(label){events.tool(focus,action)}.apply{isEnabled=online},LayoutParams(0,dp(48),1f))}
+            listOf("Produtos" to "produtos","Respostas" to "respostas","Anexar" to "anexo","Agendar" to "agenda").filter{(_,a)->can(when(a){"anexo"->"responder";else->a})}.forEach{(label,action)->tools.addView(button(label){events.tool(focus,action)}.apply{isEnabled=online;textSize=12f;setPadding(dp(4),0,dp(4),0)},LayoutParams(0,dp(48),1f))}
             body.addView(tools)
         }
-        if(peeking)return
+        if(peeking||!can("responder"))return
         val compose=LinearLayout(activity).apply{gravity=Gravity.BOTTOM;setPadding(dp(8),dp(6),dp(8),dp(8))}
         val input=EditText(activity).apply{hint=if(online)"Mensagem"else"Mensagem · envie após sincronizar";contentDescription="Mensagem para a conversa";setText(drafts[focus]?:"");minHeight=dp(48);setPadding(dp(16),dp(10),dp(16),dp(10));background=rounded(Color.WHITE,24).apply{setStroke(dp(1),Color.rgb(210,207,199))};maxLines=4;inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES;tag=focus}
         input.isEnabled=!peeking;chatInput=input;compose.addView(input,LayoutParams(0,-2,1f))

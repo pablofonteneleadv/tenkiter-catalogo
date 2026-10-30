@@ -4,9 +4,9 @@ const {DatabaseSync}=require('node:sqlite');
 const sqlite=new DatabaseSync(':memory:');let falhar=false;
 const DB={prepare(sql){let args=[];const st={bind(...x){args=x;return st},async first(){return sqlite.prepare(sql).get(...args)||null},async all(){return {results:sqlite.prepare(sql).all(...args)}},async run(){return st._run()},_run(){if(falhar&&!/^SELECT|^PRAGMA/.test(sql))throw Error('falha simulada');const r=sqlite.prepare(sql).run(...args);return {meta:{changes:r.changes,last_row_id:Number(r.lastInsertRowid)}}}};return st},async batch(xs){sqlite.exec('BEGIN');try{const r=xs.map(x=>x._run());sqlite.exec('COMMIT');return r}catch(e){sqlite.exec('ROLLBACK');throw e}}};
 (async()=>{
-const tmp=path.join(os.tmpdir(),'tk-acompanhamento.mjs');fs.writeFileSync(tmp,fs.readFileSync(path.join(__dirname,'../instagram-worker/worker.js'))+'\nexport {alterarAcompanhamento_,conferirAcompanhamento_,contextoAcompanhamento_,processarEntradas_};');const W=await import(tmp);
+const tmp=path.join(os.tmpdir(),'tk-acompanhamento.mjs');fs.writeFileSync(tmp,fs.readFileSync(path.join(__dirname,'../instagram-worker/worker.js'))+'\nexport {alterarAcompanhamento_,conferirAcompanhamento_,contextoAcompanhamento_,processarEntradas_,renovarAutorizacoesAgenda_};');const W=await import(tmp);
 const cache=new Map(),kv=new Map();global.caches={default:{async match(r){return cache.has(r.url)?Response.json(cache.get(r.url)):undefined},async put(r,v){cache.set(r.url,await v.json())}}};
-let envios=[],modo='ok',aoEnviar=null,pode=true;global.fetch=async(u,opt)=>{if(String(u)==='https://backend.test')return Response.json({ok:true,usuario:{nome:'Ana Teste',permissoes:pode?['gerir_acessos']:[]}});assert(/\/send-(text|image)$/.test(String(u)),'Serviço não simulado');envios.push(JSON.parse(opt.body));if(aoEnviar){const fn=aoEnviar;aoEnviar=null;await fn();}return modo==='incerto'?Response.json({}, {status:500}):Response.json({messageId:'enviado-simulado-'+envios.length})};
+let envios=[],modo='ok',aoEnviar=null,pode=true;global.fetch=async(u,opt)=>{if(String(u)==='https://backend.test')return Response.json({ok:true,sessao:'tk3.5588999999999.'+Math.floor(Date.now()/1000+30*86400)+'.renovada-simulada',usuario:{nome:'Ana Teste',permissoes:pode?['gerir_acessos']:[]}});assert(/\/send-(text|image)$/.test(String(u)),'Serviço não simulado');envios.push(JSON.parse(opt.body));if(aoEnviar){const fn=aoEnviar;aoEnviar=null;await fn();}return modo==='incerto'?Response.json({}, {status:500}):Response.json({messageId:'enviado-simulado-'+envios.length})};
 const CACHE={async get(k){return kv.get(k)||null},async put(k,v){kv.set(k,String(v))},async delete(k){kv.delete(k)}};
 const env={DB,CACHE,MIDIA:require('./helpers/r2_condicional')(),API_URL:'https://backend.test',MIDIA_URL:'https://midia.test'};
 const headers={'X-TK-Whats':'5588999999999','X-TK-Sessao':'tk3.teste'},req=new Request('https://worker.test',{headers});
@@ -66,6 +66,18 @@ const revogado=await agendar({...dados,texto:'Teste de autorização',anexo:'',q
 pode=false;cache.clear();clock+=120000;const antesRev=envios.length;await W.processarAgenda_(env,clock);assert.equal(envios.length,antesRev);assert.equal(sqlite.prepare('SELECT status FROM msg_agenda WHERE id=?').get(revogado.j.agendada.id).status,'falhou');
 const negado=await W.default.fetch(new Request('https://worker.test/msg/acompanhamento',{method:'POST',headers,body:JSON.stringify({conversa:conv,ligado:true,idLocal:'acompanhar-negado'})}),env,{});assert.equal(negado.status,403,'Acesso ao acompanhamento é validado no servidor');
 pode=true;cache.clear();
+// Mensagem final é opcional e respeita o modelo configurado no servidor.
+sqlite.prepare('INSERT OR REPLACE INTO cfg(chave,valor) VALUES(?,?)').run('msg_auto',JSON.stringify({acompanhamento:{textoLembrete:'{saudacao} amiga, ficou alguma dúvida?',mensagemFinal:true,textoFinal:'{saudacao}, vamos encerrar por enquanto.'}}));
+a=await ligar('acompanhar-final');assert(a.ok);clock=Date.parse(a.acompanhamento.quando);const antesFinal=envios.length;await W.processarAgenda_(env,clock);let fim=sqlite.prepare('SELECT quando FROM msg_acompanhamento WHERE id=?').get(a.acompanhamento.id);clock=Date.parse(fim.quando);await W.processarAgenda_(env,clock);assert.equal(envios.length,antesFinal+2);assert(envios.at(-1).message.includes('vamos encerrar por enquanto.'));assert(!envios.at(-1).message.includes('{saudacao}'));
+assert.equal(sqlite.prepare('SELECT status FROM msg_acompanhamento WHERE id=?').get(a.acompanhamento.id).status,'concluida');
+// Falha na mensagem final opcional não impede o encerramento após o lembrete confirmado.
+await wh('reabre-final-incerto');a=await ligar('acompanhar-final-incerto');clock=Date.parse(a.acompanhamento.quando);await W.processarAgenda_(env,clock);
+fim=sqlite.prepare('SELECT quando FROM msg_acompanhamento WHERE id=?').get(a.acompanhamento.id);clock=Date.parse(fim.quando);modo='incerto';const antesFimIncerto=envios.length;await W.processarAgenda_(env,clock);
+const planoFinal=sqlite.prepare('SELECT * FROM msg_acompanhamento WHERE id=?').get(a.acompanhamento.id);assert.equal(planoFinal.status,'concluida');assert(planoFinal.erro);assert.equal(sqlite.prepare("SELECT status FROM msg_agenda WHERE acompanhamento=? AND tipo='encerrar'").get(a.acompanhamento.id).status,'falhou');
+assert.equal(sqlite.prepare('SELECT encerrada_motivo FROM msg_conversa WHERE id=?').get(conv).encerrada_motivo,'sem_resposta');await W.processarAgenda_(env,clock);assert.equal(envios.length,antesFimIncerto+1,'Não repete a mensagem final incerta');modo='ok';
+// Limite oficial: não arma automação que já cairá fora das24h no Instagram.
+sqlite.prepare("INSERT INTO msg_conversa(id,canal,contato,nome,total,ult_entrada_em) VALUES(500,'instagram','17841400000099','Instagram simulado',1,?)").run(new Date(clock-25*3600000).toISOString());
+const expirado=await W.alterarAcompanhamento_(env,req,{conversa:500,ligado:true,idLocal:'ig-expirado-0001'});assert.equal(expirado.cod,400);assert(/24 horas/.test(expirado.erro));
 // Painel: paginação sem repetição e filtros combinados no servidor.
 for(let i=0;i<35;i++)sqlite.prepare("INSERT INTO msg_agenda(conversa_id,texto,quando,autor,whats,criado_em) VALUES(?,?,?,?,?,?)").run(conv,'Pesquisa painel '+i,'2026-11-03T12:00:00.000Z','Ana','5588999999999',new Date(clock).toISOString());
 const painel=async q=>{const r=await W.default.fetch(new Request('https://worker.test/msg/agendadas'+q,{headers}),env,{});return {status:r.status,j:await r.json()}};
@@ -75,6 +87,23 @@ assert.equal((await painel('?status=pendentes&busca=Pesquisa&canal=instagram')).
 for(const quando of ['2026-11-03T02:30:00.000Z','2026-11-04T02:30:00.000Z'])sqlite.prepare("INSERT INTO msg_agenda(conversa_id,texto,quando,autor,whats,criado_em) VALUES(?,?,?,?,?,?)").run(conv,'Limite do dia',quando,'Ana','5588999999999',new Date(clock).toISOString());
 const data=await painel('?status=pendentes&busca=Limite&de=2026-11-03&ate=2026-11-03');assert.equal(data.j.agendamentos.length,1);assert.equal(data.j.agendamentos[0].quando,'2026-11-04T02:30:00.000Z','Período considera Fortaleza');
 assert.equal((await painel('?status=inventado')).status,400);assert.equal((await painel('?cursor=invalido')).status,400);assert.equal((await painel('?de=2026-02-31')).status,400);
+// Fila: só resposta humana confirmada inicia; leitura e bot não movem; reaberta volta em atendimento.
+sqlite.exec("INSERT INTO msg_conversa(id,canal,contato,nome,total,grupo,ultima_em) VALUES(600,'whatsapp1','5588991230011','Fila nova',1,0,'2026-11-03T12:00:00Z')");
+const fila=async(q)=>{const r=await W.default.fetch(new Request('https://worker.test/msg/conversas?canal=todos&busca=Fila%20nova&'+q,{headers}),env,{});return {status:r.status,j:await r.json()}};
+assert.equal((await fila('fila=esperando')).j.conversas.length,1);assert.equal((await fila('fila=em_atendimento')).j.conversas.length,0);
+sqlite.exec("INSERT INTO msg_mensagem(conversa_id,canal,ext_id,direcao,tipo,texto,por,status,enviada_em) VALUES(600,'whatsapp1','bot-fila','saida','texto','Olá','auto','enviada','2026-11-03T12:01:00Z')");
+assert.equal((await fila('fila=esperando')).j.conversas.length,1,'Bot não inicia atendimento');
+sqlite.exec("UPDATE msg_conversa SET nao_lidas=0,dono='Ana' WHERE id=600");assert.equal((await fila('fila=esperando')).j.conversas.length,1,'Ler e assumir não são resposta');
+sqlite.exec("INSERT INTO msg_mensagem(conversa_id,canal,ext_id,direcao,tipo,texto,por,status,enviada_em) VALUES(600,'whatsapp1','humana-fila','saida','texto','Posso ajudar?','9999','incerta','2026-11-03T12:02:00Z')");
+assert.equal((await fila('fila=esperando')).j.conversas.length,1,'Envio incerto não tira da espera');sqlite.exec("UPDATE msg_mensagem SET status='enviada' WHERE ext_id='humana-fila'");assert.equal((await fila('fila=em_atendimento')).j.conversas.length,1);
+sqlite.exec("UPDATE msg_conversa SET dono='Ana' WHERE id=600");assert.equal((await fila('fila=em_atendimento&escopo=meus')).j.conversas.length,1);sqlite.exec("UPDATE msg_conversa SET dono='Outra pessoa' WHERE id=600");assert.equal((await fila('fila=em_atendimento&escopo=meus')).j.conversas.length,0);
+sqlite.exec("DELETE FROM msg_mensagem WHERE ext_id='humana-fila';INSERT INTO msg_encerramento(conversa_id,canal,motivo,em) VALUES(600,'whatsapp1','concluido','2026-11-03T13:00:00Z')");assert.equal((await fila('fila=em_atendimento')).j.conversas.length,1,'Histórico de encerramento mantém reaberta em atendimento');assert.equal((await fila('fila=inventada')).status,400);
+// Sessão do cadastro dura30dias: autorização de um pedido de45dias é renovada, limitada ao pedido.
+const convOutra=sqlite.prepare("SELECT id FROM msg_conversa WHERE canal='whatsapp2' LIMIT 1").get().id;
+const longa=await agendar({conversa:convOutra,texto:'Agendamento futuro',quando:new Date(clock+45*86400000).toISOString(),idLocal:'agenda-longa-0001'});assert(longa.j.ok);
+const ref=sqlite.prepare('SELECT auth_ref FROM msg_agenda WHERE id=?').get(longa.j.agendada.id).auth_ref;
+clock+=7*86400000;await W.renovarAutorizacoesAgenda_(env,clock);const renovada=kv.get('agenda-auth:'+ref);assert(JSON.parse(renovada).sessao.includes('renovada-simulada'));
+sqlite.prepare("UPDATE msg_agenda SET status='cancelada' WHERE id=?").run(longa.j.agendada.id);clock+=8*86400000;await W.renovarAutorizacoesAgenda_(env,clock);assert.equal(kv.get('agenda-auth:'+ref),renovada,'Não renova autorização sem pedido pendente');assert.equal(sqlite.prepare('SELECT estado FROM msg_agenda_autorizacao WHERE ref=?').get(ref).estado,'concluida');
 global.Date=RealDate;
 console.log('Acompanhar: fila real simulada, horas úteis, envio único, encerramento auditado, resposta concorrente e envio incerto aprovados.');
 

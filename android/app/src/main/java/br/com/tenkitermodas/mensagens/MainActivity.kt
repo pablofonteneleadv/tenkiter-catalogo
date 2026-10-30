@@ -40,7 +40,7 @@ class MainActivity:Activity(),InboxView.Events {
     private var history=emptyList<JSONObject>();private var historyConversation=0L;private var historyBusy=false
     private var contextChecked=0L;private var namesChecked=false
     private var conversation=0L;private var online=false;private var syncing=false;private var sending=false
-    private var displayOwner="";private var webTarget=0L;private var webRequest="";private var seededSession="";private var refreshSeq=0;private var pendingClick=0L
+    private var displayOwner="";private var webTarget=0L;private var webRequest="";private var webTool="";private var webAttempts=0;private var seededSession="";private var refreshSeq=0;private var pendingClick=0L
     private val handler=Handler(Looper.getMainLooper())
     private val home=WebKeeper.HOME
     private val ticker=object:Runnable{override fun run(){if(nativeVisible&&repo.store.auth()!=null&&!sending)sync();handler.postDelayed(this,4000)}}
@@ -63,7 +63,7 @@ class MainActivity:Activity(),InboxView.Events {
         OneSignal.Notifications.addClickListener(clicks)
         if(pendingClick>0){peeking=pendingPeek;conversation=pendingClick;pendingClick=0}
         WebKeeper.download={id,name->receivedFiles.choose(id,name)}
-        WebKeeper.actions={a->if(a=="lista"){webAudio.cancel();chooser?.onReceiveValue(null);chooser=null;webTarget=0;webRequest="";conversation=0;pendingClick=0;peeking=false;openGeneration++}else if(a=="atualizar")updater.check() else if(a=="permissoes"){showSetup();setup?.reviewing=true;setup?.refresh()}}
+        WebKeeper.actions={a->if(a=="lista"){webAudio.cancel();chooser?.onReceiveValue(null);chooser=null;webTarget=0;webRequest="";webTool="";conversation=0;pendingClick=0;peeking=false;openGeneration++}else if(a=="atualizar")updater.check() else if(a=="permissoes"){showSetup();setup?.reviewing=true;setup?.refresh()}}
         render();if(SetupGate.ok(this))full(conversation)else showSetup()
         if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync();syncNames()}
     }
@@ -89,7 +89,7 @@ class MainActivity:Activity(),InboxView.Events {
             if(seq!=refreshSeq||id!=conversation)return@launch
             if(displayOwner!=(data.a?.owner?:"")){val previous=displayOwner;tools.close();administration.close();displayOwner=data.a?.owner?:"";if(previous.isNotBlank()&&data.a!=null){history=emptyList();historyConversation=0;openGeneration++;conversation=0;peeking=false;render();return@launch}}
             if(data.a==null){online=false;conversation=0;history=emptyList();historyConversation=0}
-            inbox.render(data.a,data.read,data.chats,if(data.read)conversation else 0,data.messages,data.pending,online,repo.status.ifBlank{if(data.a==null)"Entre para sincronizar este aparelho"else "Conversas salvas · verificando conexão…"},peeking)
+            inbox.render(data.a,data.read,data.chats,if(data.read)conversation else 0,data.messages,data.pending,online,repo.status.ifBlank{if(data.a==null)"Entre para sincronizar este aparelho"else "Conversas salvas · verificando conexão…"},peeking,repo.rights())
         }
     }
     private data class Snapshot(val a:NativeAuth?,val read:Boolean,val chats:List<JSONObject>,val messages:List<JSONObject>,val pending:List<JSONObject>)
@@ -107,7 +107,7 @@ class MainActivity:Activity(),InboxView.Events {
         syncing=true;val focus=conversation;val generation=openGeneration;val sessionGeneration=repo.store.generation
         scope.launch{
             var again=false
-            try{val ok=withContext(Dispatchers.IO){repo.sync(focus)};again=focus!=conversation||generation!=openGeneration;online=ok&&!again;if(ok&&focus>0&&!again&&!peeking)withContext(Dispatchers.IO){repo.markRead(focus){openGeneration==generation&&repo.store.generation==sessionGeneration&&!peeking&&activityVisible&&nativeVisible&&!administration.active}}}
+            try{val ok=withContext(Dispatchers.IO){repo.sync(focus).also{if(it&&activityVisible&&nativeVisible)runCatching{repo.presence(focus,peeking)}}};again=focus!=conversation||generation!=openGeneration;online=ok&&!again;if(ok&&focus>0&&!again&&!peeking)withContext(Dispatchers.IO){repo.markRead(focus){openGeneration==generation&&repo.store.generation==sessionGeneration&&!peeking&&activityVisible&&nativeVisible&&!administration.active}}}
             finally{syncing=false;render();if(again)sync()}
         }
     }
@@ -128,7 +128,7 @@ class MainActivity:Activity(),InboxView.Events {
         if(peeking||sending||id!=conversation||repo.store.auth()==null)return;sending=true
         scope.launch{try{withContext(Dispatchers.IO){repo.reply(id,text,key)}}catch(_:Exception){}finally{sending=false;render()}}
     }
-    override fun tool(id:Long,action:String){if(id==conversation)tools.show(id,action)}
+    override fun tool(id:Long,action:String){if(id!=conversation)return;if(action=="agenda"){if(repo.can("agenda"))openWeb(id,"agendar")}else tools.show(id,action)}
     override fun bulk(ids:Set<Long>,action:String){tools.batch(ids,action)}
     override fun older(id:Long){
         if(historyBusy||id!=conversation)return;historyBusy=true
@@ -155,9 +155,9 @@ class MainActivity:Activity(),InboxView.Events {
     override fun update(){updater.check()}
     override fun menu(anchor:View){
         PopupMenu(this,anchor).apply{
-            listOf("Selecionar conversas","Painel de atendimento","Configurações de leitura e nome","Conexões e gravação","Google Contatos","Exportar conversas","Sincronizar conversas","Atualizar aplicativo","Site da loja","Avisos","Atendimento completo","Sair da conta").forEach{menu.add(it)}
+            listOf("Nova conversa","Equipe e atividade","Agendamentos","Selecionar conversas","Painel de atendimento","Configurações de leitura e nome","Conexões e gravação","Google Contatos","Exportar conversas","Sincronizar conversas","Atualizar aplicativo","Site da loja","Avisos","Atendimento completo","Sair da conta").filter{label->when(label){"Nova conversa"->repo.can("responder");"Equipe e atividade"->repo.can("metricas");"Agendamentos"->repo.can("agenda");"Selecionar conversas"->repo.can("responder");"Painel de atendimento"->repo.can("metricas");"Conexões e gravação","Google Contatos"->repo.can("configuracoes");"Exportar conversas"->repo.can("exportar");else->true}}.forEach{menu.add(it)}
             setOnMenuItemClickListener{when(it.title.toString()){
-                "Painel de atendimento"->administration.dashboard(inbox.channelCode());"Configurações de leitura e nome"->administration.settings();"Conexões e gravação"->administration.connections();"Google Contatos"->administration.contacts();"Exportar conversas"->administration.exportForm(conversation,inbox.channelCode());"Selecionar conversas"->{back();inbox.beginSelection()};"Sincronizar conversas"->sync();"Atualizar aplicativo"->updater.check();"Site da loja"->external("https://tenkitermodas.com.br/")
+                "Nova conversa"->openWeb(0,"nova-conversa");"Equipe e atividade"->openWeb(0,"equipe");"Agendamentos"->openWeb(0,"agendamentos");"Painel de atendimento"->administration.dashboard(inbox.channelCode());"Configurações de leitura e nome"->administration.settings();"Conexões e gravação"->administration.connections();"Google Contatos"->administration.contacts();"Exportar conversas"->administration.exportForm(conversation,inbox.channelCode());"Selecionar conversas"->{back();inbox.beginSelection()};"Sincronizar conversas"->sync();"Atualizar aplicativo"->updater.check();"Site da loja"->external("https://tenkitermodas.com.br/")
                 "Avisos"->notificationSettings();"Atendimento completo"->full(conversation);"Sair da conta"->confirmLogout()
             };true};show()
         }
@@ -173,8 +173,9 @@ class MainActivity:Activity(),InboxView.Events {
     private fun notificationSettings(){AlertDialog.Builder(this).setTitle("Avisos de mensagens").setMessage("Receba avisos com o aplicativo fechado. O Android também agenda a sincronização em segundo plano conforme a conexão e a bateria.")
         .setPositiveButton("Ativar"){_,_->scope.launch{OneSignal.Notifications.requestPermission(true);OneSignal.User.pushSubscription.optIn();sync()}}
         .setNeutralButton("Configurações"){_,_->startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName))}.setNegativeButton("Voltar",null).show()}
-    override fun full(id:Long){
-        nativeVisible=false;webTarget=id;webRequest=java.util.UUID.randomUUID().toString()
+    override fun full(id:Long){openWeb(id,"")}
+    private fun openWeb(id:Long,tool:String){
+        nativeVisible=false;webTarget=id;webTool=tool;webAttempts=0;webRequest=java.util.UUID.randomUUID().toString()
         if(web==null)createWeb()
         inbox.visibility=View.GONE;webPanel?.visibility=View.VISIBLE
         val w=web?:return
@@ -215,6 +216,12 @@ class MainActivity:Activity(),InboxView.Events {
             val json=JSONObject().put("whatsapp",a.owner).put("sessao",a.session).toString()
             w.evaluateJavascript("(function(){if(localStorage.getItem('tm_session'))return false;localStorage.setItem('tm_session',${JSONObject.quote(json)});location.reload();return true})()"){r->if(r!="true")deliverWeb()};return
         }
+        if(webTool.isNotBlank()){
+            val id=webTarget;val request=webRequest;val tool=webTool;val generation=repo.store.generation
+            w.evaluateJavascript("(function(){return !!(window.TKMensagensApp&&TKMensagensApp.ferramenta&&TKMensagensApp.ferramenta(${JSONObject.quote(tool)},$id,$peeking,${JSONObject.quote(request)}));})()"){r->
+                if(webRequest==request&&generation==repo.store.generation&&!nativeVisible){if(r=="true"){webTarget=0;webTool=""}else if(++webAttempts<30)handler.postDelayed({if(webRequest==request&&generation==repo.store.generation&&!nativeVisible)deliverWeb()},500)}
+            };return
+        }
         if(webTarget>0){val id=webTarget;val request=webRequest;w.evaluateJavascript("(function(){if(!window.TKMobileOpenConversation)return false;window.TKMobileOpenConversation($id,$peeking,${JSONObject.quote(request)});return true})()"){r->if(r=="true"&&webTarget==id&&webRequest==request)webTarget=0}}
         importWebSession()
     }
@@ -228,7 +235,7 @@ class MainActivity:Activity(),InboxView.Events {
             }
         }
     }
-    private fun showNative(){nativeVisible=true;webPanel?.visibility=View.GONE;inbox.visibility=View.VISIBLE;render()}
+    private fun showNative(){webTool="";webTarget=0;webRequest="";nativeVisible=true;webPanel?.visibility=View.GONE;inbox.visibility=View.VISIBLE;render()}
     private fun external(address:String){val u=Uri.parse(address);if(u.scheme !in listOf("https","http","tel","mailto"))return;runCatching{startActivity(Intent(Intent.ACTION_VIEW,u))}}
     override fun onResume(){super.onResume();activityVisible=true;WebKeeper.attach();checkSetup();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
     override fun onPause(){activityVisible=false;WebKeeper.detach();webAudio.pause();if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
