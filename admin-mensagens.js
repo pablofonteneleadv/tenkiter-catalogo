@@ -931,7 +931,7 @@
     // As contagens da API já são DISTINTAS por pessoa dentro do canal; entre canais a mesma pessoa pode repetir.
     const total = (f) => CANAIS.reduce((t, [k]) => t + (porCanal(k) ? Number((qtd[k] || {})[f] || 0) : 0), 0);
     const naoLidas = CANAIS.reduce((t, [k]) => t + (porCanal(k) ? Number((qtd[k] || {}).nao_lidas || 0) : 0), 0);
-    return { atendimento: total('em_atendimento'), pendentes: total('esperando'), todos: total('conversas'), encerrados: total('encerradas'), nao_lidas: naoLidas };
+    return { atendimento: total('em_atendimento'), pendentes: total('esperando'), todos: total('em_atendimento') + total('esperando'), encerrados: total('encerradas'), nao_lidas: naoLidas };
   }
   function desenharAbas() {
     const abas = $('ms-abas'); if (!abas) return;
