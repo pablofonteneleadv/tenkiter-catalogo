@@ -50,7 +50,7 @@ def process(row):
             inp.write_bytes(source)
             subprocess.run(["bash","scripts/wafly/transcode.sh",str(inp),str(out)],check=True,timeout=240)
             result=out.read_bytes()
-        if len(result)>12*1024*1024: raise ValueError("Vídeo convertido acima de 12 MiB")
+        if len(result)>9961472: raise ValueError("Vídeo convertido acima de 9,5 MiB")
         newkey=f"wafly-convertidos/{ident}-h264.mp4"
         api(f"/r2/buckets/{BUCKET}/objects/{newkey}","PUT",result)
         medias[0]["url"]=MEDIA+newkey

@@ -1743,7 +1743,7 @@ async function adicionarLivres(arqs){
   for(const f of arqs){
     const video=/^video\//.test(f.type)||/\.(mp4|mov|webm)$/i.test(f.name),foto=/^image\/(jpeg|png|webp)$/.test(f.type);
     if(!video&&!foto){erros.push(f.name+": formato não aceito (use JPG, PNG, WEBP, MP4, MOV ou WEBM)");continue}
-    if(video){try{await validarVideosStatus_(nova,[{file:f,tipo:"video",nome:f.name}])}catch(e){erros.push(e.message);continue}const resultado=await window.TKVideoValidation.validar(f,{maxMB:40});if(!resultado.ok){erros.push(f.name+": "+resultado.erros.join(" "));continue}}if(video){try{await checarCodecGrupo_(f)}catch(e){if(/H\.265\/HEVC/.test(e.message)){fcPendente=f;fcMensagem='O vídeo H.265/HEVC não pode ser enviado ao Grupo clientes sem conversão.';}else{erros.push(f.name+": "+e.message);}continue}}
+    if(video){try{await validarVideosStatus_(nova,[{file:f,tipo:"video",nome:f.name}])}catch(e){fcPendente=f;fcMensagem='Vídeo acima dos limites do WhatsApp. Iniciando conversão automática…';await converterPendenteFreeConvert_();continue}const resultado=await window.TKVideoValidation.validar(f,{maxMB:40});if(!resultado.ok){erros.push(f.name+": "+resultado.erros.join(" "));continue}}if(video){try{await checarCodecGrupo_(f)}catch(e){if(/H\.265\/HEVC/.test(e.message)){fcPendente=f;fcMensagem='O vídeo H.265/HEVC não pode ser enviado ao Grupo clientes sem conversão.';}else{erros.push(f.name+": "+e.message);}continue}}
     if(nova.livre.length>=30){erros.push("No máximo 30 mídias por vez");continue}
     nova.livre.push({file:f,tipo:video?"video":"imagem",url:URL.createObjectURL(f),nome:f.name,hora:"",videoValidado:video});
   }
@@ -1761,7 +1761,7 @@ async function validarVideosStatus_(n, midias) {
       if (!r.ok) throw new Error("Não consegui conferir o vídeo para o Status. Tente novamente; seu rascunho foi mantido.");
       arquivo = new File([await r.blob()], m.nome || "video.mp4", {type:"video/mp4"});
     }
-    const v = await window.TKVideoValidation.validar(arquivo, {maxMB:10,maxDurationSeconds:30});
+    const v = await window.TKVideoValidation.validar(arquivo, {maxMB:9.5,maxDurationSeconds:29});
     if (!v.ok) throw new Error((m.nome || "Vídeo") + ": " + v.erros.join(" "));
   }
 }

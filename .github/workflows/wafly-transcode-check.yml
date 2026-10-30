@@ -25,4 +25,11 @@ jobs:
           bash scripts/wafly/transcode.sh /tmp/entrada.mp4 /tmp/saida.mp4
           codec="$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1:nk=1 /tmp/saida.mp4)"
           test "$codec" = h264
+          # Arquivo de 35 s deve ser recortado e caber no orçamento de grupo.
+          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=640x360:rate=30 -t 35 -c:v libx264 -preset ultrafast -an -y /tmp/longo.mp4
+          bash scripts/wafly/transcode.sh /tmp/longo.mp4 /tmp/curto.mp4
+          bytes="$(stat -c%s /tmp/curto.mp4)"
+          test "$bytes" -le 9961472
+          duracao="$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 /tmp/curto.mp4)"
+          awk -v d="$duracao" 'BEGIN { exit !(d > 0 && d <= 29) }'
           echo "Transcodificacao HEVC -> H264 validada (sem acessar dados reais)." >> "$GITHUB_STEP_SUMMARY"
