@@ -35,8 +35,21 @@ class WebMediaTest {
  }
  @Test fun onlyVisualFilesUseTheGallery(){assertTrue(VisualMediaPicker.visual(arrayOf("image/*,video/*")));assertTrue(VisualMediaPicker.visual(arrayOf("image/jpeg")));assertFalse(VisualMediaPicker.visual(arrayOf("audio/mp4")));assertFalse(VisualMediaPicker.visual(arrayOf("*/*")))}
  @Test fun recordedAudioAndExistingAudioFilesUseDifferentFlows(){assertTrue(VisualMediaPicker.recording(arrayOf("audio/mp4"),false));assertTrue(VisualMediaPicker.recording(arrayOf("audio/*"),true));assertFalse(VisualMediaPicker.recording(arrayOf("audio/*"),false));assertFalse(VisualMediaPicker.recording(arrayOf("image/*","video/*"),true))}
- @Test @Config(sdk=[33]) fun modernPickerIsPhotoPickerWithImageAndVideo(){val a=activity();val both=VisualMediaPicker.modernIntent(a,arrayOf("image/*","video/*"));assertEquals(MediaStore.ACTION_PICK_IMAGES,both.action);assertEquals("image/*",VisualMediaPicker.modernIntent(a,arrayOf("image/*")).type);assertEquals("video/*",VisualMediaPicker.modernIntent(a,arrayOf("video/*")).type)}
- @Test fun legacyFallbackUsesGalleryNotDocumentExplorer(){assertEquals(Intent.ACTION_PICK,VisualMediaPicker.galleryIntent(false).action);assertEquals("image/*",VisualMediaPicker.galleryIntent(false).type);assertEquals("video/*",VisualMediaPicker.galleryIntent(true).type);assertEquals(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,VisualMediaPicker.galleryIntent(true).data)}
+ @Test @Config(sdk=[33]) fun galleryAllowsMultiplePhotosAndVideos(){
+  val multiple=VisualMediaPicker.galleryIntent(true)
+  assertEquals(Intent.ACTION_OPEN_DOCUMENT,multiple.action)
+  assertTrue(multiple.hasCategory(Intent.CATEGORY_OPENABLE))
+  assertEquals("*/*",multiple.type)
+  assertTrue(multiple.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE,false))
+  assertArrayEquals(arrayOf("image/*","video/*"),multiple.getStringArrayExtra(Intent.EXTRA_MIME_TYPES))
+  val single=VisualMediaPicker.galleryIntent(false)
+  assertFalse(single.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE,false))
+ }
+ @Test fun videoCaptureUsesNativeCamera(){
+  val camera=VisualMediaPicker.cameraIntent()
+  assertEquals(MediaStore.ACTION_VIDEO_CAPTURE,camera.action)
+  assertEquals(120,camera.getIntExtra(MediaStore.EXTRA_DURATION_LIMIT,0))
+ }
  @Test fun approvedAudioBecomesReadablePreviewOnly(){
   val a=activity();grant(a);var now=100L;lateinit var rec:Fake;var result:android.net.Uri?=null;var calls=0
   val capture=WebAudioCapture(a,{f->Fake(f).also{rec=it}},{now});capture.begin{result=it;calls++};assertTrue(rec.started);assertEquals(0,calls)

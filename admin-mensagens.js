@@ -30,7 +30,7 @@
   let seqLista = 0, ultIdSrv = 0, nPoll = 0, timerBusca = null, timerLive = null, timerSelo = null, espera = ESPERA_MS, offline = false, abrindo = 0, novasAbaixo = 0, menuAberto = null, aviso = '';
   const rascunhos = {}, elMsgs = new Map(), elConvs = new Map(), pendentes = new Map();
   const blobs = new Map();                     // mídia já baixada nesta conversa: "id" ou "id|c" (story) -> promessa do endereço local
-  let anexoPend = null, gravacao = null, colarFimAte = 0;
+  let anexoPend = null, anexosFila_ = [], gravacao = null, colarFimAte = 0;
   let agendadas_ = [], timerAgenda_ = null, agendaQuando_ = 0, agendaAtalho_ = '';   // v7.40.13: mensagens agendadas da conversa aberta
   let acompanhamento_=null;
   let agendaAnexo_=null,agendaPedido_=null;
@@ -2313,9 +2313,9 @@
     prevL.append(prevC, el('span', '', 'Mostrar prévia do link'), el('small', '', '(miniatura)')); prev.appendChild(prevL);const mini=el('div','ms-link-mini');mini.id='ms-link-mini';mini.hidden=true;prev.appendChild(mini);pai.appendChild(prev);
     const form = el('div', 'ms-compor');
     const clip = botao('ms-ico', '📎', 'anexar'); clip.id = 'ms-anexar'; clip.setAttribute('aria-label', 'Anexar foto, vídeo ou áudio');
-    const arq = el('input'); arq.type = 'file'; arq.id = 'ms-arquivo'; arq.hidden = true; arq.accept = 'image/*,video/*';
+    const arq = el('input'); arq.type = 'file'; arq.id = 'ms-arquivo'; arq.hidden = true; arq.accept = 'image/*,video/*'; arq.multiple = true;
     const contaDoAnexo=contaSessao_(getSessao()),epocaDoAnexo=epocaConta_;
-    arq.addEventListener('change', () => { const f = arq.files && arq.files[0]; arq.value = ''; conferirContaAtual_();if(!f)return;if(aberta&&aberta.id===c.id&&contaSessao_(getSessao())===contaDoAnexo&&epocaConta_===epocaDoAnexo)escolherArquivo_(f);else aviso_('A conversa mudou. Escolha o arquivo novamente no atendimento correto.'); });
+    arq.addEventListener('change', async () => { const arquivos = Array.from(arq.files || []), f = arquivos.shift(); arq.value = ''; conferirContaAtual_(); if (!f) return; if (!aberta || aberta.id!==c.id || contaSessao_(getSessao())!==contaDoAnexo || epocaConta_!==epocaDoAnexo) { aviso_('A conversa mudou. Escolha o arquivo novamente no atendimento correto.'); return; } anexosFila_ = []; await escolherArquivo_(f); if (!aberta || aberta.id!==c.id || contaSessao_(getSessao())!==contaDoAnexo || epocaConta_!==epocaDoAnexo) { limparAnexo_(true); return; } if (anexoPend) { anexosFila_ = arquivos; desenharStage_(); } });
     const audioArquivo=el('input');audioArquivo.type='file';audioArquivo.accept='audio/*';audioArquivo.id='ms-arquivo-audio';audioArquivo.hidden=true;
     audioArquivo.addEventListener('change',()=>{const f=audioArquivo.files&&audioArquivo.files[0];audioArquivo.value='';conferirContaAtual_();if(f&&aberta&&aberta.id===c.id&&contaSessao_(getSessao())===contaDoAnexo&&epocaConta_===epocaDoAnexo)escolherArquivo_(f);});
     const ta = el('textarea'); ta.id = 'ms-texto'; ta.rows = 1; ta.placeholder = 'Mensagem'; if (c.canal !== 'instagram') ta.maxLength = limiteTexto(c); ta.setAttribute('aria-label', 'Mensagem para ' + rotuloContato(c)); ta.enterKeyHint = 'enter'; ta.value = rascunhoLer_(c.id);
@@ -2372,13 +2372,14 @@
     st.textContent = ''; st.hidden = !anexoPend;
     if (bt) bt.disabled = !anexoPend && !(ta && ta.value.trim());
     if (!anexoPend) return;
+    if (anexosFila_.length) st.appendChild(el('span','ms-stage-nome','Mais '+anexosFila_.length+' mídia(s) para enviar'));
     const a = anexoPend, m = el(a.tipo === 'imagem' ? 'img' : a.tipo === 'vídeo' ? 'video' : 'audio');
     if (a.tipo === 'áudio') m.controls = true; else if (a.tipo === 'vídeo') { m.muted = true; m.preload = 'metadata'; } else m.alt = 'Prévia da foto';
     m.src = a.urlLocal; st.appendChild(m);
     if (a.tipo !== 'áudio') st.appendChild(el('span', 'ms-stage-nome', (a.tipo === 'imagem' ? 'Foto' : 'Vídeo') + ' · ' + (a.blob.size / 1048576).toFixed(1).replace('.', ',') + ' MB' + (aberta && aberta.canal !== 'instagram' ? ' · o texto vai como legenda' : '')));
     const x = botao('ms-ico', '✕', 'anexo-tirar'); x.setAttribute('aria-label', 'Remover o anexo'); st.appendChild(x);
   }
-  function limparAnexo_(soltarUrl) { if (anexoPend && soltarUrl) URL.revokeObjectURL(anexoPend.urlLocal); anexoPend = null; desenharStage_(); }
+  function limparAnexo_(soltarUrl) { if (anexoPend && soltarUrl) URL.revokeObjectURL(anexoPend.urlLocal); anexoPend = null; if (soltarUrl) anexosFila_ = []; desenharStage_(); }
   async function reduzirImagem_(f) {
     try {
       const bmp = await createImageBitmap(f), k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height)), c = document.createElement('canvas');
@@ -2394,7 +2395,7 @@
     if (tipo === 'imagem') { aviso_('Preparando a foto…'); blob = await reduzirImagem_(f); aviso_(''); if (!blob) { aviso_('Não consegui ler esta foto. Use JPG, PNG ou WebP.'); return; } if (blob.size > 8 * 1048576) { aviso_('A foto ficou grande demais (limite 8 MB). Escolha outra.'); return; } }
     else if (blob.size > 16 * 1048576) { aviso_('Arquivo grande demais (limite 16 MB).'); return; }
     if (tipo === 'vídeo' && !/^video\/(mp4|quicktime)$/.test(f.type)) { aviso_('Use um vídeo MP4.'); return; }
-    limparAnexo_(true);
+    if (anexoPend) URL.revokeObjectURL(anexoPend.urlLocal);
     anexoPend = { blob: blob, tipo: tipo, nome:f.name||'Anexo', seg: Math.round(Number(seg) || 0), urlLocal: URL.createObjectURL(blob) };
     desenharStage_(); const ta = $('ms-texto'); if (ta && larga()) ta.focus();
   }
@@ -2576,7 +2577,12 @@
     if (aberta && aberta.id === c.id) { sincronizarNotas_(r.notas || []); pintarFio(false); }
     desenhar(r.notas || []);
   }
-  async function enviar(reenvio) {
+  let envioMultimidiaEmCurso_ = false;
+  async function enviar(reenvio, daFila) {
+    if (!reenvio && !daFila && envioMultimidiaEmCurso_) return;
+    const donoDaFila = !reenvio && !daFila;
+    if (donoDaFila) envioMultimidiaEmCurso_ = true;
+    try {
     if (cacheConversa) { aviso_('Aguarde atualizar a conversa para responder.'); return; }
     if (!aberta) return;
     const c = aberta, ta = $('ms-texto'); if (!ta && !reenvio) return;
@@ -2626,6 +2632,12 @@
       if (r.semRede && !r.semEnvio) tmp.msg.erro = 'Sem resposta do servidor. A mensagem pode ter saído: confira antes de tentar de novo (tentar de novo não duplica).';
     }
     if (aberta && aberta.id === c.id) pintarFio(true);
+    if (!reenvio && r.ok && anexosFila_.length && aberta && aberta.id === c.id && !cacheConversa) {
+      const proximo = anexosFila_.shift();
+      await escolherArquivo_(proximo);
+      if (anexoPend && aberta && aberta.id === c.id) await enviar(null, true);
+    }
+    } finally { if (donoDaFila) envioMultimidiaEmCurso_ = false; }
   }
 
   /* ---------- ao vivo ---------- */
