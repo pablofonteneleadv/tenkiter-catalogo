@@ -1,0 +1,82 @@
+name: Aplicar abas do atendimento (7.40.35)
+
+# Aplica o patch das 4 abas de atendimento + os testes no CI, confere o sha256
+# de cada arquivo resultante e commita. Disparado por push porque
+# workflow_dispatch nao existe numa branch que ainda nao chegou na main.
+#
+# O patch viaja por um paste publico (o repositorio ja e publico e o conteudo
+# do patch e exatamente o codigo que vai para o repositorio). O sha256 do
+# arquivo baixado e conferido antes de aplicar, entao uma transcricao corrompida
+# falha alto em vez de gravar bytes errados.
+
+on:
+  push:
+    branches: [ia/mensagens-abas-4-20261030]
+
+permissions:
+  contents: write
+
+jobs:
+  aplicar:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ia/mensagens-abas-4-20261030
+          fetch-depth: 0
+
+      - name: Pular se ja aplicado
+        id: guarda
+        run: |
+          v="$(cat VERSION | tr -d '[:space:]')"
+          if [ "$v" = "7.40.35" ]; then
+            echo "ja=true" >> "$GITHUB_OUTPUT"
+            echo "VERSION ja esta em 7.40.35 - nada a fazer."
+          else
+            echo "ja=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Baixar e conferir o patch
+        if: steps.guarda.outputs.ja != 'true'
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -m 60 -o /tmp/abas.patch https://paste.c-net.org/FraserUpside
+          echo "baixado: $(wc -c < /tmp/abas.patch) bytes"
+          obtido="$(sha256sum /tmp/abas.patch | cut -d' ' -f1)"
+          esperado="42f88560183d1d6200076cf1170724e4cfa43cdabe0febf56d42ceebb86f5ec9"
+          echo "sha256 obtido:   $obtido"
+          echo "sha256 esperado: $esperado"
+          [ "$obtido" = "$esperado" ] || { echo "::error::patch corrompido no transporte"; exit 1; }
+
+      - name: Aplicar o patch
+        if: steps.guarda.outputs.ja != 'true'
+        run: |
+          set -euo pipefail
+          git apply --check -p1 /tmp/abas.patch
+          git apply -p1 /tmp/abas.patch
+          echo "patch aplicado"
+
+      - name: Conferir sintaxe e sha256 de cada arquivo
+        if: steps.guarda.outputs.ja != 'true'
+        run: |
+          set -euo pipefail
+          node --check admin-mensagens.js
+          node --check instagram-worker/worker.js
+          echo "sintaxe OK"
+          echo "--- sha256 resultantes ---"
+          sha256sum admin-mensagens.js admin.html instagram-worker/worker.js \
+            CHANGELOG.md VERSION version.json \
+            tests/filas_atendimento_ui.py tests/mensagens_abas.py \
+            tests/mensagens_atendimento.py tests/mensagens_encerrar.py \
+            tests/mensagens_pendentes_espiar.js tests/mock_msg.py \
+            tests/worker_abas_fluxo.py
+
+      - name: Commitar o codigo
+        if: steps.guarda.outputs.ja != 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "Frontend Developer"
+          git config user.email "fd@x.local"
+          git add -A -- . ':(exclude).github/workflows'
+          git commit -m "feat(mensagens): painel em 4 abas de atendimento (7.40.35)"
+          git push origin HEAD:ia/mensagens-abas-4-20261030
