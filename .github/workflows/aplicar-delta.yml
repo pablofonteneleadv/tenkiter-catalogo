@@ -1,10 +1,13 @@
 name: Aplicar 7.40.34
-# Monta o patch da 7.40.33 (blocos s00..s15 ja versionados neste branch) e o delta
-# da 7.40.34 (_d00.._d04), confere o sha256 de cada patch e aplica os dois.
-# Se qualquer byte divergir o job falha sem commitar: e melhor nao commitar do
-# que commitar um arquivo corrompido.
+# workflow_dispatch so existe para workflows presentes na branch padrao, por isso o
+# gatilho aqui e o push que toca _d00 (arquivo de transporte).
+# Guarda de idempotencia: se VERSION ja e 7.40.34, nao faz nada — evita reaplicar
+# patch ja aplicado e evita loop (push feito com GITHUB_TOKEN nao redispara workflow).
 on:
-  workflow_dispatch:
+  push:
+    branches: [retomada/305-74033]
+    paths:
+      - _d00
 
 permissions:
   contents: write
@@ -18,7 +21,20 @@ jobs:
           ref: retomada/305-74033
           fetch-depth: 0
 
+      - name: Pular se ja aplicado
+        id: guarda
+        run: |
+          v="$(cat VERSION 2>/dev/null | tr -d '[:space:]')"
+          echo "VERSION no branch: $v"
+          if [ "$v" = "7.40.34" ]; then
+            echo "ja=true" >> "$GITHUB_OUTPUT"
+            echo "Ja esta na 7.40.34: nada a aplicar."
+          else
+            echo "ja=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Montar e conferir a base 7.40.33
+        if: steps.guarda.outputs.ja != 'true'
         run: |
           set -euo pipefail
           cd patches/retomada-305-74033
@@ -32,6 +48,7 @@ jobs:
           echo "arquivos na base: $(grep -c '^diff --git' /tmp/base.patch)"
 
       - name: Montar e conferir o delta 7.40.34
+        if: steps.guarda.outputs.ja != 'true'
         run: |
           set -euo pipefail
           cat _d00 _d01 _d02 _d03 _d04 | tr -d ' \n\r\t' | base64 -d > /tmp/delta.gz
@@ -42,12 +59,14 @@ jobs:
           echo "arquivos no delta: $(grep -c '^diff --git' /tmp/delta.patch)"
 
       - name: Aplicar base e delta
+        if: steps.guarda.outputs.ja != 'true'
         run: |
           set -euo pipefail
           git apply -p1 --verbose /tmp/base.patch
           git apply -p1 --verbose /tmp/delta.patch
 
       - name: Conferir o resultado
+        if: steps.guarda.outputs.ja != 'true'
         run: |
           set -euo pipefail
           test "$(cat VERSION)" = "7.40.34"
@@ -55,12 +74,13 @@ jobs:
           node --check admin-mensagens.js
           node --check instagram-worker/worker.js
           python3 scripts/ci/check_ux_skill.py
-          echo "--- hashes esperados ---"
+          echo "--- hashes resultantes ---"
           for f in instagram-worker/worker.js admin-mensagens.js admin.html version.json VERSION CHANGELOG.md tests/worker_equipe_inicio.js tests/mensagens_equipe_inicio_ui.py tests/mock_msg.py documentacao/continuidade/RETOMADA-305-7.40.33.md; do
             echo "$(sha256sum "$f" | cut -d' ' -f1)  $f"
           done
 
       - name: Commitar
+        if: steps.guarda.outputs.ja != 'true'
         run: |
           set -euo pipefail
           git config user.name "Frontend Developer"
