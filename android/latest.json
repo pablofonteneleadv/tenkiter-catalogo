@@ -1,8 +1,8 @@
 {
-  "versionCode": 15,
-  "versionName": "2.4.8",
-  "bytes": 4605673,
-  "sha256": "7920c42552a4750bcd993a129e27798520799cc211d2bf57dcbb94169e9e7572",
-  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.8/TENKiTER-Mensagens-2.4.8.apk",
+  "versionCode": 16,
+  "versionName": "2.4.9",
+  "bytes": 4605617,
+  "sha256": "f0a1ba70df09ff2a9f6698aecd88318a7f6127c5d8954416d9d6c9f1f2019f4b",
+  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.9/TENKiTER-Mensagens-2.4.9.apk",
   "notes": "Nova atualização disponível. Instale por cima da versão atual para preservar seus dados."
 }
