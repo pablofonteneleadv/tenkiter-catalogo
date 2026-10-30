@@ -22,7 +22,9 @@ object VisualMediaPicker {
         putExtra(MediaStore.EXTRA_DURATION_LIMIT, 120)
     }
     fun open(activity:Activity,params:WebChromeClient.FileChooserParams,request:Int,cancel:()->Unit) {
-        val multi=params.mode==WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE
+        // A WebView pode informar MODE_OPEN mesmo quando o site permite várias fotos.
+        // Sempre disponibilizar seleção múltipla na galeria; o site recebe ClipData completo.
+        val multi=true
         fun iniciar(intent:Intent) {
             try { activity.startActivityForResult(intent,request) }
             catch(_:Exception) {
