@@ -92,7 +92,7 @@ const DDL = [
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
-const ESQUEMA_ = '20261030-abas-fluxo-5';
+const ESQUEMA_ = '20261030-citar-6';
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -142,7 +142,7 @@ async function migrarEsquema_(env) {
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN repostado_de INTEGER').run(); } catch (e) { /* já existe */ }
   /* Mensagens v2: lidas/não lidas, quem falta responder, estado de entrega e quem enviou pelo painel. */
-  for (const [t, col] of [['msg_conversa', "dono TEXT DEFAULT ''"], ['msg_conversa', "reaberta_em TEXT DEFAULT ''"], ['msg_conversa', "atendido_em TEXT DEFAULT ''"], ['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"], ['msg_conversa', "encerrada_motivo TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  for (const [t, col] of [['msg_conversa', "dono TEXT DEFAULT ''"], ['msg_conversa', "reaberta_em TEXT DEFAULT ''"], ['msg_conversa', "atendido_em TEXT DEFAULT ''"], ['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "ctx_autor TEXT DEFAULT ''"], ['msg_mensagem', "ctx_trecho TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"], ['msg_conversa', "encerrada_motivo TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   /* v2.13: histórico de encerramentos (motivo, quando e por quem): base das métricas e, depois, do termômetro de cada cliente */
   try {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_status_ref (canal TEXT NOT NULL,ext_id TEXT NOT NULL,chave TEXT NOT NULL,mime TEXT NOT NULL,em TEXT NOT NULL,PRIMARY KEY(canal,ext_id))").run();
@@ -3369,7 +3369,7 @@ const MSG_ULT_ENC_ = "(SELECT MAX(e.em) FROM msg_encerramento e WHERE e.conversa
 const MSG_ATENDIDO_SQL_ = "(msg_conversa.atendido_em<>'' OR EXISTS(SELECT 1 FROM msg_mensagem humana WHERE humana.conversa_id=msg_conversa.id AND humana.direcao='saida' AND COALESCE(humana.por,'')<>'auto' AND COALESCE(humana.status,'') NOT IN ('incerta','falhou','enviando') AND humana.enviada_em>COALESCE("+MSG_ULT_ENC_+",'')) OR EXISTS(SELECT 1 FROM msg_encerramento fim WHERE fim.conversa_id=msg_conversa.id AND NOT EXISTS(SELECT 1 FROM msg_mensagem depois WHERE depois.conversa_id=msg_conversa.id AND depois.direcao='entrada' AND depois.enviada_em>fim.em)))";
 const MSG_COLS_CONVERSA_ = "id, canal, contato, dono, reaberta_em, "+MSG_ATENDIDO_SQL_+" AS em_atendimento, "+MSG_NOTAS_COUNT_SQL_+" AS notas, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
 const MSG_Q_ = (c) => "(SELECT q." + c + " FROM msg_mensagem q WHERE q.canal=msg_mensagem.canal AND q.ext_id=msg_mensagem.ctx_ref AND msg_mensagem.ctx_ref<>'' LIMIT 1)";
-const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, CASE WHEN ctx_tipo='link' THEN ctx_ref ELSE '' END AS link_previa, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, CASE WHEN ctx_chave LIKE '%.mp4' OR ctx_chave LIKE '%.mov' OR ctx_chave LIKE '%.webm' THEN 'video' ELSE (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) END AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + MSG_Q_('texto') + " AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir";
+const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, CASE WHEN ctx_tipo='link' THEN ctx_ref ELSE '' END AS link_previa, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, CASE WHEN ctx_chave LIKE '%.mp4' OR ctx_chave LIKE '%.mov' OR ctx_chave LIKE '%.webm' THEN 'video' ELSE (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) END AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + "COALESCE(NULLIF(ctx_trecho,'')," + MSG_Q_('texto') + ") AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir, " + "COALESCE(NULLIF(ctx_autor,''),'')" + " AS ctx_autor";
 async function msgContagens_(env, canal, tipo) {
   const fields={esperando:"encerrada_em='' AND grupo=0 AND NOT "+MSG_ATENDIDO_SQL_,em_atendimento:"encerrada_em='' AND grupo=0 AND "+MSG_ATENDIDO_SQL_,conversas:"encerrada_em=''",nao_lidas:"encerrada_em='' AND nao_lidas>0",sem_resposta:"encerrada_em='' AND (nao_lidas>0 OR ult_dir='entrada')",grupos:"encerrada_em='' AND grupo=1",individuais:"encerrada_em='' AND grupo=0",encerradas:"encerrada_em<>''",ambos:"encerrada_em='' AND pessoa<>'' AND "+MSG_OUTRO_SQL_+" IS NOT NULL"};
   const key="CASE WHEN grupo=1 THEN 'grupo:'||id ELSE COALESCE(NULLIF("+MSG_IDENTIDADE_SQL_+",''),'conversa:'||id) END";
@@ -3454,7 +3454,13 @@ async function zernioContas_(chave) {
     return { ok: true, contas: j.accounts };
   } catch (e) { return { ok: false, cod: 502, erro: 'Sem resposta do Zernio agora. Tente de novo.' }; }
 }
-async function enviarTextoWhats_(env, conv, texto) { return enviarWaflyGenerico_(env, conv, '/send-text', { message: texto }); }
+async function enviarTextoWhats_(env, conv, texto, cit) {
+  // v7.40.36: `messageId` no /send-text da Wafly = resposta citando aquela mensagem no app do cliente.
+  // Só vale com o id real do WhatsApp; um envio "incerta" (inc:...) não tem id para citar.
+  const corpo = { message: texto };
+  if (cit && cit.extId && !String(cit.extId).startsWith('inc:')) corpo.messageId = String(cit.extId).slice(0, 200);
+  return enviarWaflyGenerico_(env, conv, '/send-text', corpo);
+}
 /* v2.13: "Prévia do link" marcada na mensagem: sai pelo /send-link da Wafly (cartão com título e descrição) usando o primeiro link do texto. Sem link, vai como texto simples. */
 const MSG_LINK_RE_ = /https?:\/\/[^\s<>"']+/i;
 const textoCartao_ = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -3483,9 +3489,10 @@ async function enviarTextoComPrevia_(env, conv, texto, d) {
   return enviarWaflyGenerico_(env, conv, '/send-link', corpo);
 }
 const WHATS_ROTAS_MIDIA_ = { 'imagem': ['/send-image', 'image'], 'vídeo': ['/send-video', 'video'], 'áudio': ['/send-audio', 'audio'] };
-async function enviarMidiaWhats_(env, conv, anexo, legenda) {
+async function enviarMidiaWhats_(env, conv, anexo, legenda, cit) {
   const rota = WHATS_ROTAS_MIDIA_[anexo.tipo], corpo = {}; corpo[rota[1]] = anexo.url;
   if (legenda && anexo.tipo !== 'áudio') corpo.caption = legenda;
+  if (cit && cit.extId && !String(cit.extId).startsWith('inc:')) corpo.messageId = String(cit.extId).slice(0, 200);   // v7.40.36: citação também na mídia
   return enviarWaflyGenerico_(env, conv, rota[0], corpo, 60000);
 }
 async function enviarInstagram_(env, conv, mensagem) {
@@ -3751,6 +3758,24 @@ async function responderMensagem_(env, whats, d) {
     anexo = { chave: chaveAnexo, mime: mime, tipo: tipo, url: urlMidia(env, chaveAnexo) };
   } else if (conv.canal === 'instagram' ? new TextEncoder().encode(texto).length > 1000 : texto.length > MSG_TEXTO_MAX) return [400, { ok: false, erro: conv.canal === 'instagram' ? 'O Instagram aceita até 1000 letras por mensagem. Divida em duas.' : 'Mensagem grande demais. Divida em duas.' }];
   /* Reserva atômica no D1 (chave única): sobrevive a queda do Worker e nunca deixa a mesma tentativa sair duas vezes. */
+  /* v7.40.36: responder uma mensagem especifica. A citada tem de ser DESTA conversa
+   * (nada de citar mensagem de outra pessoa) e o vínculo fica gravado na linha enviada. */
+  let cit = null, textoEnvio = texto;
+  if (String(d.citada == null ? '' : d.citada).trim()) {
+    const alvoId = Number(d.citada);
+    const q = alvoId ? await env.DB.prepare('SELECT id, ext_id, direcao, tipo, texto, autor_nome FROM msg_mensagem WHERE id=? AND conversa_id=?').bind(alvoId, id).first() : null;
+    if (!q) return [400, { ok: false, erro: 'A mensagem citada não está nesta conversa. Atualize a conversa e tente de novo.' }];
+    const rotulo = ({ 'imagem': '[foto]', 'vídeo': '[vídeo]', 'áudio': '[áudio]', 'documento': '[documento]', 'figurinha': '[figurinha]' })[q.tipo] || '';
+    const bruto = String(q.texto || '').replace(/\s+/g, ' ').trim();
+    cit = { id: q.id, extId: String(q.ext_id || ''), qdir: q.direcao, qtipo: q.tipo,
+      autor: String(q.direcao === 'saida' ? 'Você' : (q.autor_nome || 'Cliente')).slice(0, 60),
+      trecho: (bruto || rotulo || '[mensagem]').slice(0, 160) };
+    if (conv.canal === 'instagram') {
+      if (anexo) return [400, { ok: false, erro: 'No Instagram a citação vai dentro do texto, e o Instagram não aceita texto junto com foto, vídeo ou áudio. Envie a citação em uma mensagem só de texto.' }];
+      textoEnvio = cit.trecho.split('\n').map((l) => '> ' + l).join('\n') + '\n\n' + texto;
+      if (new TextEncoder().encode(textoEnvio).length > 1000) return [400, { ok: false, erro: 'Com a citação a mensagem passa de 1000 letras do Instagram. Encurte o texto.' }];
+    }
+  }
   const chave = 'msgenv:' + idLocal, t0 = agora();
   const reserva = await env.DB.prepare('INSERT OR IGNORE INTO cfg (chave, valor) VALUES (?, ?)').bind(chave, t0 + '|enviando').run();
   if (!reserva.meta || reserva.meta.changes !== 1) {
@@ -3762,12 +3787,14 @@ async function responderMensagem_(env, whats, d) {
   const automatico=whats==='auto'||d._janelaAutomatica===true;
   if(d._acompanhamento&&!await conferirAcompanhamento_(env,Number(d._acompanhamento))){await cfgSet(env,chave,null);return [409,{ok:false,cancelado:true,erro:'Cliente respondeu; acompanhamento cancelado.'}];}
   if(automatico&&conv.canal==='instagram'){const c=await env.DB.prepare('SELECT ult_entrada_em FROM msg_conversa WHERE id=?').bind(id).first();if(!c?.ult_entrada_em||Date.now()-Date.parse(c.ult_entrada_em)>=24*3600000){await cfgSet(env,chave,null);return [409,{ok:false,erro:'O prazo de 24 horas do Instagram terminou. Confira a conversa antes de enviar.'}];}}
-  const res = anexo ? (conv.canal === 'instagram' ? await enviarMidiaInstagram_(env, conv, anexo, automatico) : await enviarMidiaWhats_(env, conv, anexo, texto))
-    : (conv.canal === 'instagram' ? await enviarTextoInstagram_(env, conv, texto, automatico) : d.previa === true ? await enviarTextoComPrevia_(env, conv, texto, d) : await enviarTextoWhats_(env, conv, texto));
+  const res = anexo ? (conv.canal === 'instagram' ? await enviarMidiaInstagram_(env, conv, anexo, automatico) : await enviarMidiaWhats_(env, conv, anexo, texto, cit))
+    : (conv.canal === 'instagram' ? await enviarTextoInstagram_(env, conv, textoEnvio, automatico) : (d.previa === true && !cit) ? await enviarTextoComPrevia_(env, conv, textoEnvio, d) : await enviarTextoWhats_(env, conv, textoEnvio, cit));
   if (!res.ok && !res.incerto) { await env.DB.prepare('DELETE FROM cfg WHERE chave=?').bind(chave).run(); return [409, { ok: false, erro: res.erro }]; }
   const extId = res.ok ? res.extId : 'inc:' + idLocal, em = agora();
-  await gravarMensagem_(env, conv.canal, { extId: extId, contato: conv.contato, nome: '', grupo: conv.grupo, direcao: 'saida', tipo: anexo ? anexo.tipo : 'texto', texto: texto, em: em, por:String(whats||'').slice(-4), midiaChave: anexo ? anexo.chave : '', midiaMime: anexo ? anexo.mime : '', midiaSeg: Math.max(0, Math.min(86400, Number(d.seg) || 0)) });
+  await gravarMensagem_(env, conv.canal, { extId: extId, contato: conv.contato, nome: '', grupo: conv.grupo, direcao: 'saida', tipo: anexo ? anexo.tipo : 'texto', texto: textoEnvio, em: em, por:String(whats||'').slice(-4), midiaChave: anexo ? anexo.chave : '', midiaMime: anexo ? anexo.mime : '', midiaSeg: Math.max(0, Math.min(86400, Number(d.seg) || 0)) });
   await env.DB.prepare('UPDATE msg_mensagem SET por=?, status=CASE WHEN ? THEN status ELSE ? END WHERE canal=? AND ext_id=?').bind(String(whats || '').slice(-4), res.ok ? 1 : 0, 'incerta', conv.canal, extId).run();
+  // v7.40.36: o vínculo da citação acompanha a mensagem (a bolha enviada mostra o que foi citado).
+  if (cit) { try { await env.DB.prepare("UPDATE msg_mensagem SET ctx_tipo='resposta', ctx_ref=?, ctx_autor=?, ctx_trecho=?, ctx_aprox=0 WHERE canal=? AND ext_id=? AND ctx_tipo IN ('','link')").bind(cit.extId || '', cit.autor, cit.trecho, conv.canal, extId).run(); } catch (e) { /* a mensagem já saiu: só a citação no histórico fica sem o vínculo */ } }
   // Contexto próprio do link: snapshot acompanha a mensagem e sua retenção, sem tabela nova. Não substitui story/citação.
   if(!anexo&&conv.canal!=='instagram'&&d.previa===true){const snapshot=snapshotPrevia_(texto,d);if(snapshot)await env.DB.prepare("UPDATE msg_mensagem SET ctx_tipo='link',ctx_ref=? WHERE canal=? AND ext_id=? AND ctx_tipo IN ('','link')").bind(snapshot,conv.canal,extId).run();}
   const linha = await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(conv.canal, extId).first();

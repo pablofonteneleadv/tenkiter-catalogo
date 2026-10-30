@@ -458,6 +458,20 @@ def tratar(route, path, method, body, s):
         s["seq"] += 1; c = next(x for x in s["convs"] if x["id"] == body["conversa"])
         anexo = body.get("anexo"); tipo_a = {"imagem": "imagem"}.get("imagem") if anexo else "texto"
         msg = {"id": s["seq"], "conversa_id": c["id"], "direcao": "saida", "tipo": tipo_a, "midia": 1 if anexo else 0, "texto": body.get("texto", ""), "enviada_em": agora(), "status": "incerta" if s["envio"] == "incerto" else "enviada", "por": "9999", "status_em": agora()}
+        # v7.40.36: responder mensagem especifica — o mock devolve o vinculo gravado,
+        # igual ao Worker (ctx_tipo='resposta' + autor/trecho citados), para o
+        # historico renderizar a citacao ao recarregar.
+        citada = body.get("citada")
+        if citada:
+            alvo = next((x for x in s["msgs"] if str(x.get("id")) == str(citada) and x.get("conversa_id") == c["id"]), None)
+            if alvo:
+                trecho = " ".join(str(alvo.get("texto") or "").split())[:160] or "[%s]" % alvo.get("tipo", "mensagem")
+                msg.update({"ctx_tipo": "resposta", "ctx_qdir": alvo.get("direcao", "entrada"),
+                            "ctx_qtipo": alvo.get("tipo", "texto"), "ctx_texto": trecho,
+                            "ctx_autor": "Você" if alvo.get("direcao") == "saida" else "Cliente"})
+                s.setdefault("citacoes", []).append({"conversa": c["id"], "citada": alvo.get("id"), "resposta": msg["id"]})
+            else:
+                return J({"ok": False, "erro": "A mensagem citada não está nesta conversa. Atualize a conversa e tente de novo."}, 400) or True
         if body.get("previa") and body.get("previaImagem"):
             import re
             link = re.search(r"https?://[^\s<>]+", body.get("texto", ""))
