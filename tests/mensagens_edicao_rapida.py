@@ -35,11 +35,27 @@ def run_case(browser, width, height, mobile):
     pg.click('#btn-abrir-mensagens')
     pg.wait_for_selector('.ms-conv', timeout=8000)
     pg.locator('#ms-lista .ms-conv[data-id="4"]').click()
-    # Pendentes abrem em modo Espiar: liberar o atendimento antes de testar edição.
+    # A conversa é carregada assincronamente. Não consultar is_visible()
+    # antes de terminar a abertura: isso deixava a tela em modo Espiar.
+    pg.wait_for_selector('#ms-conversa #ms-texto', state='attached', timeout=12000)
     atender = pg.locator('#ms-conversa [data-ms="atender"]')
-    if atender.is_visible():
+    if atender.count():
+        atender.wait_for(state='visible', timeout=8000)
         atender.click()
-    pg.wait_for_selector('[data-ms="gaveta-produtos"]')
+    # O compositor só é exibido após Atender; diagnosticar o estado
+    # real antes de aguardar o botão de produtos.
+    try:
+        pg.locator('#ms-conversa .ms-compor').wait_for(state='visible', timeout=12000)
+        pg.locator('#ms-conversa [data-ms="gaveta-produtos"]').wait_for(state='visible', timeout=12000)
+    except Exception:
+        print('DIAGNOSTICO:', pg.evaluate("""() => ({
+          vista: document.querySelector('#ms-app')?.dataset.vista,
+          espiar: !!document.querySelector('#ms-conversa [data-ms="atender"]'),
+          compositor: [...document.querySelectorAll('#ms-conversa .ms-compor')].map(e=>({hidden:e.hidden,display:getComputedStyle(e).display})),
+          botoes: [...document.querySelectorAll('#ms-conversa [data-ms]')].map(e=>e.dataset.ms).slice(0,35)
+        })"""), flush=True)
+        pg.screenshot(path=str(EVID / f'erro-abertura-{width}.png'), full_page=False)
+        raise
     pg.fill('#ms-texto', 'Não perder este rascunho')
     pg.click('[data-ms="gaveta-produtos"]')
     pg.fill('#ms-prod-busca', 'vestido liso')
