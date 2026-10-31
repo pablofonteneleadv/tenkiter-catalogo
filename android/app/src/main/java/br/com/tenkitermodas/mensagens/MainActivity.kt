@@ -45,6 +45,7 @@ class MainActivity:Activity(),InboxView.Events {
     private val home=WebKeeper.HOME
     private var lastInteraction=0L
     override fun onUserInteraction(){super.onUserInteraction();lastInteraction=SystemClock.elapsedRealtime()}
+    override fun interaction(){if(activityVisible&&nativeVisible)lastInteraction=SystemClock.elapsedRealtime()}
     private var presenceAt=0L
     private val ticker=object:Runnable{override fun run(){if(nativeVisible&&activityVisible&&repo.store.auth()!=null&&!sending){sync();if(SystemClock.elapsedRealtime()-presenceAt>=45000){presenceAt=SystemClock.elapsedRealtime();val generation=repo.store.generation;val sequence=repo.nextPresenceSequence();val id=conversation;val peek=peeking;val since=SystemClock.elapsedRealtime()-lastInteraction
                     val state=if(!hasWindowFocus())"oculto" else if(since>=120000)"ausente" else if(id>0&&!administration.active){if(since<30000&&currentFocus is EditText&&(currentFocus as EditText).text.isNotBlank())"redigindo" else "lendo"}else "navegando"
@@ -240,7 +241,7 @@ class MainActivity:Activity(),InboxView.Events {
     private fun external(address:String){val u=Uri.parse(address);if(u.scheme !in listOf("https","http","tel","mailto"))return;runCatching{startActivity(Intent(Intent.ACTION_VIEW,u))}}
     private fun closeNativePresence(){if(!::repo.isInitialized)return;val generation=repo.store.generation;val sequence=repo.nextPresenceSequence();scope.launch(Dispatchers.IO){runCatching{repo.presence(0,"oculto",false,sequence){repo.store.generation==generation}}}}
     override fun onResume(){super.onResume();activityVisible=true;WebKeeper.attach();checkSetup();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
-    override fun onPause(){if(nativeVisible)closeNativePresence();activityVisible=false;web?.evaluateJavascript("window.dispatchEvent(new Event('tk:app-visibilidade'))",null);WebKeeper.detach();webAudio.pause();if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
+    override fun onPause(){if(nativeVisible)closeNativePresence();activityVisible=false;WebKeeper.detach();web?.evaluateJavascript("window.dispatchEvent(new Event('tk:app-visibilidade'))",null);webAudio.pause();if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
     override fun onDestroy(){handler.removeCallbacks(ticker);webAudio.cancel();WebKeeper.actions=null;WebKeeper.download=null;runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it)};WebKeeper.context?.baseContext=applicationContext;super.onDestroy()}
     override fun onSaveInstanceState(out:Bundle){out.putLong("conversation",conversation);out.putBoolean("peeking",peeking);super.onSaveInstanceState(out)}
     @Deprecated("Legacy back API") override fun onBackPressed(){

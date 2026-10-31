@@ -29,6 +29,7 @@ class NativeInboxTest {
     private fun conv(id:Long=1)=JSONObject().put("id",id).put("nome","Maria · Cliente").put("contato","5588999990000").put("previa","Tem esse vestido no tamanho M?").put("canal","whatsapp1").put("nao_lidas",2).put("ultima_em","2026-10-27T03:00:00Z").put("encerrada_em","")
     private fun msg(id:Long=1)=JSONObject().put("id",id).put("texto","Olá! Tem esse vestido no tamanho M?").put("direcao","entrada").put("tipo","texto").put("enviada_em","2026-10-27T03:00:00Z")
     private class Events:InboxView.Events{
+        var interactions=0;override fun interaction(){interactions++}
         var updates=0;var selected=0L;var sent="";var full=0L;var media=0L;var peeked=0L;var bulkIds=emptySet<Long>();var bulkAction="";var syncs=0
         override fun peek(id:Long){peeked=id};override fun media(id:Long){media=id};override fun bulk(ids:Set<Long>,action:String){bulkIds=ids;bulkAction=action}
         override fun login(identifier:String,password:String){};override fun sync(){syncs++};override fun select(id:Long){selected=id};override fun back(){}
@@ -46,6 +47,12 @@ class NativeInboxTest {
         val repo=NativeRepository(c,store,api);repo.presence(1)
         repo.presence(1,"lendo",true){false};assertEquals(listOf("/msg/presenca"),paths);assertEquals(2,store.conversation(1)!!.getInt("nao_lidas"))
         store.logout();repo.presence(1);assertEquals(1,paths.size);store.close()
+    }
+    @Test fun typingWithSoftKeyboardSignalsInteractionWithoutPassingTheText(){
+        val a=activity;val e=Events();val v=InboxView(a,e);a.setContentView(v)
+        v.render(NativeAuth("88999990000","test","Ana"),true,listOf(conv()),1,listOf(msg()),emptyList(),true,"Atualizado");layout(v,390,844)
+        val input=all(v).filterIsInstance<EditText>().first{it.hint=="Mensagem"};input.requestFocus();input.setText("Rascunho não transmitido")
+        assertTrue(e.interactions>0);assertEquals("",e.sent)
     }
     @Test fun nativeScreensAndControls(){
         val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v)

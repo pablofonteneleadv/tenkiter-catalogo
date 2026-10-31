@@ -16,6 +16,7 @@ import org.json.JSONObject
 class InboxView(private val activity:Activity,private val events:Events):LinearLayout(activity){
     interface Events {
         fun login(identifier:String,password:String)
+        fun interaction() {}
         fun sync()
         fun select(id:Long)
         fun back()
@@ -290,7 +291,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         val preferences=activity.getSharedPreferences("link-preview",0)
         val preview=CheckBox(activity).apply{text="Mostrar prévia do link (miniatura)";minHeight=dp(48);textSize=14f;isChecked=preferences.getBoolean(channel,false);setOnCheckedChangeListener{_,checked->preferences.edit().putBoolean(channel,checked).apply()}}
         fun updatePreview(){preview.visibility=if(channel.startsWith("whatsapp")&&Regex("https?://[^\\s<>\"']+",RegexOption.IGNORE_CASE).containsMatchIn(input.text))View.VISIBLE else View.GONE}
-        input.addTextChangedListener(object:TextWatcher{override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){};override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){updatePreview()};override fun afterTextChanged(e:Editable?) {}})
+        input.addTextChangedListener(object:TextWatcher{override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){};override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){updatePreview();if(input.hasFocus()&&input.isShown)events.interaction()};override fun afterTextChanged(e:Editable?) {}})
         updatePreview();body.addView(preview,LayoutParams(-1,-2))
         compose.addView(ImageButton(activity).apply{setImageResource(android.R.drawable.ic_btn_speak_now);contentDescription="Gravar áudio";background=rounded(cream,24);isEnabled=online;setOnClickListener{events.tool(focus,"gravar")}},LayoutParams(dp(48),dp(48)))
         compose.addView(button("Enviar"){val t=input.text.toString().trim();if(t.isNotBlank()&&online&&!peeking){if(events.send(focus,t)){drafts[focus]="";input.text.clear()}}}.apply{isEnabled=online&&!peeking;setTextColor(if(online)Color.WHITE else Color.GRAY);background=rounded(if(online)orange else cream,24)},LayoutParams(-2,dp(48)));body.addView(compose)
