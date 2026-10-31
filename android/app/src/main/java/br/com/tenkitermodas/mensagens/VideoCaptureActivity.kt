@@ -13,6 +13,8 @@ import android.os.Handler
 import android.os.Looper
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.View
+import android.view.Gravity
 import android.view.WindowManager
 import android.widget.*
 import androidx.core.content.FileProvider
@@ -40,17 +42,21 @@ class VideoCaptureActivity : Activity(), SurfaceHolder.Callback {
     private var recording=false
     private var started=0L
     private var surfaceReady=false
+    private var previewRatio=16.0/9
+    private fun dp(value:Int)=(value*resources.displayMetrics.density+.5f).toInt()
     private val handler=Handler(Looper.getMainLooper())
     private val tick=object:Runnable { override fun run(){if(recording){val s=(android.os.SystemClock.elapsedRealtime()-started)/1000;status.text="Gravando · ${s/60}:${(s%60).toString().padStart(2,'0')}\nMP4 H.264 · até 720p · áudio AAC";handler.postDelayed(this,500)}} }
     override fun onCreate(state:Bundle?){
         super.onCreate(state);setResult(RESULT_CANCELED)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(16,16,16,24)}
+        val root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(16),dp(16),dp(16),dp(24))}
         status=TextView(this).apply{text="Grave até pelo menos 1min30s. O arquivo será limitado para caber no envio. Você confere antes de usar.";textSize=16f;setTextColor(0xff24261f.toInt())};root.addView(status)
-        surface=SurfaceView(this);root.addView(surface,LinearLayout.LayoutParams(-1,0,1f));surface.holder.addCallback(this)
-        action=Button(this).apply{text="Começar gravação";minHeight=56;setOnClickListener{if(recording)stopCapture()else startCapture()}};root.addView(action)
-        use=Button(this).apply{text="Usar este vídeo";minHeight=56;isEnabled=false;setOnClickListener{accept()}};root.addView(use)
-        root.addView(Button(this).apply{text="Cancelar";minHeight=48;setOnClickListener{finish()}});setContentView(root)
+        val frame=FrameLayout(this).apply{setBackgroundColor(0xff000000.toInt())};root.addView(frame,LinearLayout.LayoutParams(-1,0,1f))
+        surface=object:SurfaceView(this){override fun onMeasure(widthSpec:Int,heightSpec:Int){val w=View.MeasureSpec.getSize(widthSpec);val h=View.MeasureSpec.getSize(heightSpec);val width=minOf(w,(h/previewRatio).toInt());setMeasuredDimension(width,(width*previewRatio).toInt())}}
+        frame.addView(surface,FrameLayout.LayoutParams(-1,-1,Gravity.CENTER));surface.holder.addCallback(this)
+        action=Button(this).apply{text="Começar gravação";minHeight=dp(56);setOnClickListener{if(recording)stopCapture()else startCapture()}};root.addView(action)
+        use=Button(this).apply{text="Usar este vídeo";minHeight=dp(56);isEnabled=false;setOnClickListener{accept()}};root.addView(use)
+        root.addView(Button(this).apply{text="Cancelar";minHeight=dp(48);setOnClickListener{finish()}});setContentView(root)
         File(cacheDir,"webcapture").listFiles()?.filter{it.name.startsWith("video-")&&it.lastModified()<System.currentTimeMillis()-86400000L}?.forEach{it.delete()}
         if(!permitted())requestPermissions(arrayOf(Manifest.permission.CAMERA,Manifest.permission.RECORD_AUDIO),301)
     }
@@ -62,7 +68,12 @@ class VideoCaptureActivity : Activity(), SurfaceHolder.Callback {
     @android.annotation.SuppressLint("MissingPermission")
     private fun openCamera(){
         if(camera!=null)return
-        try{cameraId=(0 until Camera.getNumberOfCameras()).firstOrNull{val info=Camera.CameraInfo();Camera.getCameraInfo(it,info);info.facing==Camera.CameraInfo.CAMERA_FACING_BACK}?:0;camera=Camera.open(cameraId).also{val info=Camera.CameraInfo();Camera.getCameraInfo(cameraId,info);it.setDisplayOrientation(info.orientation);it.setPreviewDisplay(surface.holder);it.startPreview()};action.isEnabled=true}
+        try{cameraId=(0 until Camera.getNumberOfCameras()).firstOrNull{val info=Camera.CameraInfo();Camera.getCameraInfo(it,info);info.facing==Camera.CameraInfo.CAMERA_FACING_BACK}?:0;camera=Camera.open(cameraId).also{val info=Camera.CameraInfo();Camera.getCameraInfo(cameraId,info);it.setDisplayOrientation(info.orientation);
+            val profile=CamcorderProfile.get(cameraId,if(CamcorderProfile.hasProfile(cameraId,CamcorderProfile.QUALITY_720P))CamcorderProfile.QUALITY_720P else CamcorderProfile.QUALITY_480P)
+            val desired=profile.videoFrameWidth.toDouble()/profile.videoFrameHeight
+            val params=it.parameters;val size=params.supportedPreviewSizes.filter{p->p.width<=1280&&p.height<=720}.minByOrNull{p->kotlin.math.abs(p.width.toDouble()/p.height-desired)*10000-p.width*p.height/1_000_000.0}?:throw IllegalStateException("Prévia incompatível")
+            params.setPreviewSize(size.width,size.height);it.parameters=params;previewRatio=if(info.orientation%180==0)size.height.toDouble()/size.width else size.width.toDouble()/size.height;surface.requestLayout()
+            it.setPreviewDisplay(surface.holder);it.startPreview()};action.isEnabled=true}
         catch(_:Exception){releaseCamera();status.text="Não consegui abrir a câmera. Feche outros aplicativos que usam a câmera e tente novamente.";action.isEnabled=false}
     }
     @android.annotation.SuppressLint("MissingPermission")
@@ -74,7 +85,7 @@ class VideoCaptureActivity : Activity(), SurfaceHolder.Callback {
             val quality=if(CamcorderProfile.hasProfile(cameraId,CamcorderProfile.QUALITY_720P))CamcorderProfile.QUALITY_720P else CamcorderProfile.QUALITY_480P
             val profile=CamcorderProfile.get(cameraId,quality)
             val sizes=c.parameters.supportedVideoSizes?:c.parameters.supportedPreviewSizes
-            val size=sizes.filter{it.width<=1280&&it.height<=720}.maxByOrNull{it.width*it.height}?:throw IllegalStateException("Câmera sem resolução compatível")
+            val size=sizes.firstOrNull{it.width==profile.videoFrameWidth&&it.height==profile.videoFrameHeight&&it.width<=1280&&it.height<=720}?:throw IllegalStateException("Câmera sem resolução compatível")
             file?.delete();file=File(cacheDir,"webcapture/video-${UUID.randomUUID()}.mp4").apply{parentFile?.mkdirs()}
             c.unlock()
             recorder=MediaRecorder().apply{

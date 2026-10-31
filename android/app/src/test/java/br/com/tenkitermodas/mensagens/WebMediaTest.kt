@@ -80,13 +80,13 @@ class WebMediaTest {
   assertTrue(VideoCaptureActivity.MAX_BYTES<15_000_000)
   assertEquals(90,VideoCaptureActivity.MIN_RECORDING_CAPACITY_SECONDS)
  }
- @Test fun cameraDoesNotReturnOrSendOnOpening(){
+ @Test @Config(qualifiers="w390dp-h844dp-xxhdpi") fun cameraDoesNotReturnOrSendOnOpening(){
   val a=Robolectric.buildActivity(VideoCaptureActivity::class.java).create().get()
   assertEquals(Activity.RESULT_CANCELED,shadowOf(a).resultCode)
   assertTrue(shadowOf(a).lastRequestedPermission.requestedPermissions.contains(Manifest.permission.CAMERA))
   val buttons=mutableListOf<android.widget.Button>()
   fun scan(v:android.view.View){if(v is android.widget.Button)buttons.add(v);if(v is android.view.ViewGroup)for(i in 0 until v.childCount)scan(v.getChildAt(i))}
-  scan(a.window.decorView);assertFalse(buttons.first{it.text=="Usar este vídeo"}.isEnabled)
+  scan(a.window.decorView);assertTrue(buttons.all{it.minimumHeight/a.resources.displayMetrics.density>=48});assertFalse(buttons.first{it.text=="Usar este vídeo"}.isEnabled)
   a.finish()
  }
  @Test fun approvedAudioBecomesReadablePreviewOnly(){
