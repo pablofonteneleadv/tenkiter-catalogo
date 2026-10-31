@@ -28,3 +28,8 @@ echo "version.json gerado: versao=$VERSAO commit=$COMMIT branch=$BRANCH"
 # version.json para o ?v= ser sempre o VERSION deste commit. Sem isso o
 # navegador serve o JS antigo e o deploy nao chega em quem ja visitou o site.
 python3 scripts/deploy/cache_bust.py
+
+# O APK é publicado/verificado antes deste build pelo workflow oficial.
+if [ -n "${RENDER_GIT_COMMIT:-}" ]; then
+  python3 scripts/deploy/resolver_android_manifesto.py
+fi

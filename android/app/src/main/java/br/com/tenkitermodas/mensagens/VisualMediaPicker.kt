@@ -36,7 +36,8 @@ object VisualMediaPicker {
                     .setOnCancelListener{cancel()}.show()
             }
         }
-        // O clipe deve abrir imediatamente a galeria. A câmera fica disponível pelo próprio seletor ou ação dedicada.
-        iniciar(galleryIntent(multi))
+        // O clipe deve abrir imediatamente a galeria. A ação Gravar vídeo usa capture; o clipe continua abrindo a galeria.
+        if(params.isCaptureEnabled && accepts(params.acceptTypes).any { it.startsWith("video/") }) iniciar(cameraIntent())
+        else iniciar(galleryIntent(multi))
     }
 }

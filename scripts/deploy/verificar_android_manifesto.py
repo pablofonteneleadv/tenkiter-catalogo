@@ -3,7 +3,10 @@ import argparse,json,pathlib,time,urllib.request
 FIELDS=('versionCode','versionName','bytes','sha256','url')
 def main():
  p=argparse.ArgumentParser();p.add_argument('--manifest',type=pathlib.Path,default=pathlib.Path('android/latest.json'));p.add_argument('--site',default='https://tenkitermodas.com.br');p.add_argument('--attempts',type=int,default=24);p.add_argument('--delay',type=float,default=10);a=p.parse_args()
- expected=json.loads(a.manifest.read_text())
+ from resolver_android_manifesto import latest
+ expected=latest()
+ local=json.loads(a.manifest.read_text())
+ if local.get('versionCode',0)>expected['versionCode']:raise ValueError('Manifesto local aponta para release ainda não publicada')
  for n in range(max(1,a.attempts)):
   try:
    req=urllib.request.Request(a.site.rstrip('/')+'/android/latest.json',headers={'Cache-Control':'no-cache','Accept':'application/json'})
