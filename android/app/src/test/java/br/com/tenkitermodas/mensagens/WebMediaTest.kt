@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.provider.MediaStore
+import android.webkit.WebChromeClient
 import android.os.Looper
 import org.junit.Assert.*
 import org.junit.Test
@@ -55,12 +56,28 @@ class WebMediaTest {
   }
   assertEquals(2,selected.clipData!!.itemCount)
  }
+ @Test fun captureActionReachesCameraAndClipStillReachesMultipleGallery(){
+  fun params(capture:Boolean)=object:WebChromeClient.FileChooserParams(){
+   override fun getMode()=MODE_OPEN
+   override fun getAcceptTypes()=arrayOf("video/*")
+   override fun isCaptureEnabled()=capture
+   override fun getTitle():CharSequence?=null
+   override fun getFilenameHint():String?=null
+   override fun createIntent()=Intent()
+  }
+  val camera=activity();VisualMediaPicker.open(camera,params(true),100){fail("Não abriu câmera")}
+  assertEquals(MediaStore.ACTION_VIDEO_CAPTURE,shadowOf(camera).nextStartedActivityForResult.intent.action)
+  val gallery=activity();VisualMediaPicker.open(gallery,params(false),100){fail("Não abriu galeria")}
+  val intent=shadowOf(gallery).nextStartedActivityForResult.intent
+  assertEquals(Intent.ACTION_GET_CONTENT,intent.action)
+  assertTrue(intent.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE,false))
+ }
  @Test fun videoCaptureUsesNativeCamera(){
   val camera=VisualMediaPicker.cameraIntent()
   assertEquals(MediaStore.ACTION_VIDEO_CAPTURE,camera.action)
-  assertEquals(60,camera.getIntExtra(MediaStore.EXTRA_DURATION_LIMIT,0))
-  assertEquals(0,camera.getIntExtra(MediaStore.EXTRA_VIDEO_QUALITY,-1))
-  assertEquals(12L*1024*1024,camera.getLongExtra(MediaStore.EXTRA_SIZE_LIMIT,0))
+  assertFalse(camera.hasExtra(MediaStore.EXTRA_DURATION_LIMIT))
+  assertEquals(1,camera.getIntExtra(MediaStore.EXTRA_VIDEO_QUALITY,-1))
+  assertFalse(camera.hasExtra(MediaStore.EXTRA_SIZE_LIMIT))
  }
  @Test fun approvedAudioBecomesReadablePreviewOnly(){
   val a=activity();grant(a);var now=100L;lateinit var rec:Fake;var result:android.net.Uri?=null;var calls=0

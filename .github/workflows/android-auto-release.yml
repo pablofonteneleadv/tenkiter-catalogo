@@ -1,13 +1,12 @@
 name: Android APK automático
 on:
   push:
-    branches: [ia/reparos-integrados-20261031]
+    branches: ['ia/**']
     paths: ['android/**', 'common.js', 'scripts/android/**', '.github/workflows/android-auto-release.yml']
   workflow_dispatch:
   workflow_call:
 permissions:
   contents: write
-  pull-requests: write
 concurrency:
   group: android-release
   cancel-in-progress: false

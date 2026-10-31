@@ -6,7 +6,7 @@ def gh(*args):return subprocess.check_output(['gh',*args],cwd=ROOT,text=True)
 def version(v):return tuple(map(int,v.split('.')))
 def fingerprint():
  paths=['android/app','android/build.gradle','android/settings.gradle','android/gradle.properties','common.js']
- return hashlib.sha256(gh('api',f'repos/{REPO}/git/trees/'+os.environ['GITHUB_SHA']+'?recursive=1').encode()).hexdigest() if False else hashlib.sha256(subprocess.check_output(['git','ls-tree','-r','HEAD','--',*paths],cwd=ROOT)).hexdigest()
+ return hashlib.sha256(subprocess.check_output(['git','ls-tree','-r','HEAD','--',*paths],cwd=ROOT)).hexdigest()
 def main():
  source=fingerprint();s=(ROOT/'android/app/build.gradle').read_text();m=re.search(r"versionCode\s+(\d+);\s*versionName\s+'([^']+)'",s);code=int(m[1]);name=m[2];tag='android-v'+name;filename=f'TENKiTER-Mensagens-{name}.apk'
  releases=json.loads(gh('api',f'repos/{REPO}/releases?per_page=100'))
@@ -36,6 +36,8 @@ def main():
   prevname=f"TENKiTER-Mensagens-{previous['tag_name'][9:]}.apk"
   gh('release','download',previous['tag_name'],'--repo',REPO,'--pattern',prevname,'--dir',tmp)
   if cert(Path(tmp)/prevname)!=current_cert:raise SystemExit('Certificado diverge da release anterior')
+  old_badging=subprocess.check_output([str(Path(os.environ['ANDROID_HOME'])/'build-tools/35.0.0/aapt'),'dump','badging',str(Path(tmp)/prevname)],text=True)
+  if code<=int(re.search(r"versionCode='(\d+)'",old_badging)[1]):raise SystemExit('versionCode não supera o APK anterior')
  analyzer=Path(os.environ['ANDROID_HOME'])/'build-tools/35.0.0/aapt'
  badging=subprocess.check_output([str(analyzer),'dump','badging',str(apk)],text=True)
  if f"name='br.com.tenkitermodas.mensagens' versionCode='{code}' versionName='{name}'" not in badging:raise SystemExit('Package/versão do APK divergente')
@@ -49,6 +51,6 @@ def main():
   notes=folder/'notes.md';notes.write_text('APK assinado e certificado comparado à versão anterior. Instale sem desinstalar.\n\n'+marker+'\n\nTeste em Android físico não executado nesta automação.\n')
   gh('release','create',tag,str(apk),str(folder/(filename[:-4]+'.sha256')),str(folder/'manifest.json'),'--repo',REPO,'--target',os.environ['GITHUB_SHA'],'--title','TENKiTER Android '+name,'--notes-file',str(notes),'--draft')
  # Somente a main aprovada publica o candidato; rerun reutiliza bytes, versão e assinatura.
- if os.environ['GITHUB_REF']=='refs/heads/main':gh('release','edit',tag,'--repo',REPO,'--draft=false')
+ if os.environ['GITHUB_REF']=='refs/heads/main':gh('release','edit',tag,'--repo',REPO,'--draft=false','--latest')
  print('Release '+name+' verificada. Certificado SHA-256: '+current_cert)
 if __name__=='__main__':main()
