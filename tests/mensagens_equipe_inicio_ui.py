@@ -33,7 +33,7 @@ with sync_playwright() as p:
         pg.click('#ms-nav [data-ms=menu-geral]'); pg.wait_for_selector('.ms-mais-item')
         assert pg.locator('.ms-mais-item[data-ms=nova-conversa]').count() == 1, 'Menu Mais sem "Nova conversa"'
         assert pg.locator('.ms-mais-item[data-ms=equipe-atividade]').count() == 1, 'Menu Mais sem "Equipe e atividade"'
-        nomes = pg.locator('.ms-mais-grupo:first-child .ms-mais-texto').all_inner_texts()
+        nomes = pg.locator('.ms-mais-grupo').filter(has=pg.get_by_role('heading', name='Atendimento', exact=True)).locator('.ms-mais-texto').all_inner_texts()
         assert nomes[:2] == ['Nova conversa', 'Equipe e atividade'], nomes
 
         # --- Nova conversa: WhatsApp envia, Instagram não inicia envio ---

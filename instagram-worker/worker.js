@@ -92,7 +92,7 @@ const DDL = [
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
-const ESQUEMA_ = '20261031-video-partes-1';
+const ESQUEMA_ = '20261031-fila-gestor-1';
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -102,8 +102,9 @@ async function iniciar(env) {
     if (versao === ESQUEMA_) return;
     await migrarEsquema_(env);
     const postCols=new Set((await env.DB.prepare('PRAGMA table_info(postagem)').all()).results.map(c=>c.name));
-    for(const [nome,tipo] of [['serie',"TEXT NOT NULL DEFAULT ''"],['parte','INTEGER NOT NULL DEFAULT 0'],['partes','INTEGER NOT NULL DEFAULT 0']])if(!postCols.has(nome))await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();
+    for(const [nome,tipo] of [['serie',"TEXT NOT NULL DEFAULT ''"],['parte','INTEGER NOT NULL DEFAULT 0'],['partes','INTEGER NOT NULL DEFAULT 0'],['origem_midia',"TEXT NOT NULL DEFAULT ''"],['intervalo_ms','INTEGER NOT NULL DEFAULT 0']])if(!postCols.has(nome))await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_post_serie ON postagem(serie,parte)').run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_post_publicado ON postagem(status,publicado_em)').run();
     // Acrescenta a ficha estruturada sem regravar nem apagar os campos antigos.
     const fichaCols = new Set((await env.DB.prepare('PRAGMA table_info(msg_ficha)').all()).results.map(c => c.name));
     if (!fichaCols.has('perfil_json')) {
@@ -127,6 +128,7 @@ async function iniciar(env) {
        Tabelas aditivas: não alteram nem apagam mensagens, conversas ou tarefas existentes. */
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_presenca(usuario TEXT PRIMARY KEY,nome TEXT NOT NULL,em TEXT NOT NULL,conversa_id INTEGER NOT NULL DEFAULT 0)").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_atividade(id INTEGER PRIMARY KEY AUTOINCREMENT,chave TEXT NOT NULL UNIQUE,usuario TEXT NOT NULL,nome TEXT NOT NULL,acao TEXT NOT NULL,conversa_id INTEGER NOT NULL DEFAULT 0,em TEXT NOT NULL)").run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_gestor_log(id INTEGER PRIMARY KEY AUTOINCREMENT,usuario TEXT NOT NULL,nome TEXT NOT NULL,acao TEXT NOT NULL,alvo TEXT NOT NULL,antes TEXT NOT NULL DEFAULT '',depois TEXT NOT NULL DEFAULT '',em TEXT NOT NULL)").run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_atividade_em ON msg_atividade(em,id)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_atividade_usuario ON msg_atividade(usuario,em)').run();
     for (const [t,cols] of [['msg_ficha',['perfil_json']],['msg_nota',['excluida_em','excluida_por']],['msg_conversa',['pessoa','atualizada_em','encerrada_em']],['msg_mensagem',['ctx_chave','autor_lid']]]) {
@@ -145,7 +147,7 @@ async function migrarEsquema_(env) {
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN repostado_de INTEGER').run(); } catch (e) { /* já existe */ }
   /* Mensagens v2: lidas/não lidas, quem falta responder, estado de entrega e quem enviou pelo painel. */
-  for (const [t, col] of [['msg_conversa', "dono TEXT DEFAULT ''"], ['msg_conversa', "reaberta_em TEXT DEFAULT ''"], ['msg_conversa', "atendido_em TEXT DEFAULT ''"], ['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "ctx_autor TEXT DEFAULT ''"], ['msg_mensagem', "ctx_trecho TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"], ['msg_conversa', "encerrada_motivo TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  for (const [t, col] of [['msg_conversa', "dono TEXT DEFAULT ''"], ['msg_conversa', "dono_id TEXT NOT NULL DEFAULT ''"], ['msg_mensagem', "atendente_id TEXT NOT NULL DEFAULT ''"], ['msg_mensagem', 'automatica INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "reaberta_em TEXT DEFAULT ''"], ['msg_conversa', "atendido_em TEXT DEFAULT ''"], ['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "ctx_autor TEXT DEFAULT ''"], ['msg_mensagem', "ctx_trecho TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"], ['msg_conversa', "encerrada_motivo TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   /* v2.13: histórico de encerramentos (motivo, quando e por quem): base das métricas e, depois, do termômetro de cada cliente */
   try {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_status_ref (canal TEXT NOT NULL,ext_id TEXT NOT NULL,chave TEXT NOT NULL,mime TEXT NOT NULL,em TEXT NOT NULL,PRIMARY KEY(canal,ext_id))").run();
@@ -1391,7 +1393,7 @@ export async function processarPostagens(env) {
     /* v1.6: além do teto do Instagram, cada canal (Story, Status do WhatsApp, Reels, Carrossel, Feed) tem o SEU limite nas últimas 24 h. "Ambos" conta nos dois. */
     const porCanal = {}; for (const b of CANAIS_FILA) porCanal[b] = await contarUsados24h_(env, b, desde);
     const ativas=(await env.DB.prepare("SELECT s.serie,s.tipo,s.canal FROM postagem s WHERE s.serie<>'' AND s.parte=1 AND s.status IN ('publicado','processando','manual_feito','erro') AND EXISTS(SELECT 1 FROM postagem q WHERE q.serie=s.serie AND q.status IN ('agendado','processando','erro','manual_pendente')) ORDER BY s.agendado_em,s.id").all()).results||[];
-    const recentes=(await env.DB.prepare("SELECT serie,tipo,canal,publicado_em FROM postagem WHERE serie<>'' AND status='publicado' AND publicado_em>? ORDER BY publicado_em DESC LIMIT 60").bind(new Date(Date.now()-7200000).toISOString()).all()).results||[];
+    const recentes=(await env.DB.prepare("SELECT id,serie,origem_midia,tipo,canal,publicado_em FROM postagem WHERE status IN ('publicado','manual_feito') AND publicado_em>? ORDER BY publicado_em DESC LIMIT 1000").bind(new Date(Date.now()-86400000).toISOString()).all()).results||[];
     const estados=new Map(lin.filter(p=>p.serie).map(p=>[p.serie+':'+p.parte,p])),anteriores=lin.filter(p=>p.serie&&p.parte>1);
     if(anteriores.length){const rs=(await env.DB.prepare('SELECT serie,parte,status,publicado_em FROM postagem WHERE '+anteriores.map(()=>'(serie=? AND parte=?)').join(' OR ')).bind(...anteriores.flatMap(p=>[p.serie,p.parte-1])).all()).results||[];for(const r of rs)estados.set(r.serie+':'+r.parte,r);}
     let feitas = 0, novas = usados, tentadas = 0;
@@ -1410,7 +1412,7 @@ export async function processarPostagens(env) {
         continue;
       }
       if(p.status==='agendado'&&!(anterior&&cfgP.partesRapidas)&&!(p.urgente&&cfgP.agoraIgnora)){
-        let liberar=0;for(const r of recentes)if(r.serie!==p.serie)for(const b of bucketsDoPost(p.tipo,p.canal))if(bucketsDoPost(r.tipo,r.canal).includes(b))liberar=Math.max(liberar,Date.parse(r.publicado_em)+gapDoTipoMs(cfgP,b));
+        let liberar=0;for(const r of recentes)if((p.serie||r.serie)&&r.id!==p.id&&!(p.serie&&r.serie===p.serie)&&!(p.origem_midia&&r.origem_midia===p.origem_midia))for(const b of bucketsDoPost(p.tipo,p.canal))if(bucketsDoPost(r.tipo,r.canal).includes(b))liberar=Math.max(liberar,Date.parse(r.publicado_em)+Math.max(gapDoTipoMs(cfgP,b),Number(p.intervalo_ms)||0));
         if(liberar>Date.now()){tentadas++;await env.DB.prepare('UPDATE postagem SET agendado_em=?,atualizado_em=? WHERE id=?').bind(new Date(foraDaPausa(cfgP,liberar)).toISOString(),agora(),p.id).run();continue;}
       }
       const usaIg = canalUsaInstagram_(p.canal);
@@ -1424,9 +1426,10 @@ export async function processarPostagens(env) {
       }
       tentadas++;
       try { await avancarPostagem(env, token, p); feitas++; } catch (e) { try { await falhaPostagem(env, p, e); } catch (e2) { /* próximo minuto tenta de novo */ } }
+      const atual=await env.DB.prepare('SELECT status,publicado_em FROM postagem WHERE id=?').bind(p.id).first();
+      if(atual?.status==='publicado')recentes.push({...p,...atual});
       if(p.serie){
-        const atual=await env.DB.prepare('SELECT status,publicado_em FROM postagem WHERE id=?').bind(p.id).first();
-        if(atual){estados.set(p.serie+':'+p.parte,atual);if(p.parte===1&&!ativas.some(s=>s.serie===p.serie))ativas.push({serie:p.serie,tipo:p.tipo,canal:p.canal});if(atual.status==='publicado'){recentes.push({...p,...atual});if(p.parte===p.partes){const i=ativas.findIndex(s=>s.serie===p.serie);if(i>=0)ativas.splice(i,1);}}}
+        if(atual){estados.set(p.serie+':'+p.parte,atual);if(p.parte===1&&!ativas.some(s=>s.serie===p.serie))ativas.push({serie:p.serie,tipo:p.tipo,canal:p.canal});if(atual.status==='publicado'){if(p.parte===p.partes){const i=ativas.findIndex(s=>s.serie===p.serie);if(i>=0)ativas.splice(i,1);}}}
       }
     }
     const rapidas=cfgP.partesRapidas&&(await env.DB.prepare("SELECT 1 FROM postagem p WHERE p.serie<>'' AND p.status IN ('agendado','processando') AND p.agendado_em<=? AND NOT EXISTS(SELECT 1 FROM postagem e WHERE e.serie=p.serie AND e.status IN ('erro','cancelado','manual_pendente')) LIMIT 1").bind(agora()).first());
@@ -1573,6 +1576,9 @@ export function proximoLivreMulti(cfg, buckets, ocupMap, desdeMs, sorteio) {
   return a;
 }
 /** v1.7 (18/10/2026): intervalo ESCOLHIDO pela pessoa entre as postagens de uma série ("de 10 em 10 minutos"), em ms; 0 = usar o sorteio do gestor. Vale de 1 min a 24 h. */
+export function intervaloEditorialMs_(cfg,buckets,pedido,sorteio=Math.random){
+  return Math.max(0,...buckets.map(b=>pedido?Math.max(pedido,gapDoTipoMs(cfg,b)):gapDoTipoMs(cfg,b)+Math.round(sorteio()*(gapMaxDoTipoMs(cfg,b)-gapDoTipoMs(cfg,b)))));
+}
 export function intervaloPedidoMs_(v) { const n = Math.round(Number(v)); return isFinite(n) && n >= 1 ? Math.min(1440, n) * 60000 : 0; }
 /** Próximo horário da série: anterior + o intervalo escolhido (nunca menos que o mínimo de nenhum canal do post), respeitando pausa e o que já está na fila. */
 export function intervaloEscolhido_(cfg, buckets, ocupMap, anteriorMs, intervaloMs) {
@@ -1582,11 +1588,11 @@ export function intervaloEscolhido_(cfg, buckets, ocupMap, anteriorMs, intervalo
 export function proximoLivre(cfg, tipo, ocupadosMs, desdeMs, sorteio) { return proximoLivreMulti(cfg, [tipo], { [tipo]: ocupadosMs }, desdeMs, sorteio); }
 async function lerCfgPost(env) { let j = null; try { j = JSON.parse((await cfgGet(env, 'po_cfg')) || 'null'); } catch (e) { j = null; } return normalizarCfgPost(j); }
 /** Horários já ocupados num canal de contagem (Story, Feed…, ou "status" do WhatsApp). `janelaMs` = quanto tempo para trás ainda importa. */
-async function ocupadosDoTipo_(env, bucket, excluirId, janelaMs, semAgendadas) {
+async function ocupadosDoTipo_(env, bucket, excluirId, janelaMs, semAgendadas, excluirSerie) {
   const desde = new Date(Date.now() - janelaMs - 60000).toISOString();
   const doCanal = bucket === 'grupo' ? "canal='grupo'" : bucket === 'status2' ? "canal='whatsapp2'" : bucket === 'status' ? "canal IN ('whatsapp','ambos')" : "tipo=? AND (canal IS NULL OR canal='' OR canal IN ('instagram','ambos'))";
   const bind = bucket === 'status' || bucket === 'grupo' || bucket === 'status2' ? [excluirId || 0, desde] : [bucket, excluirId || 0, desde];
-  const q = (await env.DB.prepare('SELECT agendado_em, publicado_em, status FROM postagem WHERE ' + doCanal + " AND id!=? AND (status IN ('processando','manual_pendente'" + (semAgendadas ? '' : ",'agendado'") + ") OR (status IN ('publicado','manual_feito') AND publicado_em>=?))").bind(...bind).all()).results || [];
+  const q = (await env.DB.prepare('SELECT agendado_em, publicado_em, status FROM postagem WHERE ' + doCanal + " AND id!=?"+(excluirSerie?" AND COALESCE(serie,'')<>?":'')+" AND (status IN ('processando','manual_pendente'" + (semAgendadas ? '' : ",'agendado'") + ") OR (status IN ('publicado','manual_feito') AND publicado_em>=?))").bind(...(excluirSerie?[...bind.slice(0,-1),excluirSerie,bind.at(-1)]:bind)).all()).results || [];
   return q.map((r) => Date.parse(r.status === 'publicado' || r.status === 'manual_feito' ? r.publicado_em : r.agendado_em)).filter((x) => isFinite(x));
 }
 /** Ocupados de VÁRIOS canais de uma vez: { story: [...], status: [...] }. */
@@ -1631,7 +1637,7 @@ function progressoPostagem_(r) {
 }
 function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
-  return { id: r.id, serie:r.serie?{id:r.serie,ordem:r.parte,total:r.partes}:null, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, grupoEnvioIncerto: !!r.grupo_envio_incerto, grupoMidiaIncompativel: normalizarCanal_(r.canal) === 'grupo' && /H\.265\/HEVC/.test(String(r.erro || '')), permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
+  return { id: r.id, origemMidia:r.origem_midia||'', intervaloMs:Number(r.intervalo_ms)||0, serie:r.serie?{id:r.serie,ordem:r.parte,total:r.partes}:null, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, grupoEnvioIncerto: !!r.grupo_envio_incerto, grupoMidiaIncompativel: normalizarCanal_(r.canal) === 'grupo' && /H\.265\/HEVC/.test(String(r.erro || '')), permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
 }
 
 /* ====================================================================
@@ -1782,10 +1788,27 @@ async function validarSeriesPost_(env,req,lista,vs){
   }
   for(const g of grupos.values())if(g.refs.length!==g.total||g.refs[0].parte!==1)throw Error('Inclua todas as partes do mesmo vídeo, na ordem original.');
 }
+async function reagendarVideoOriginal_(env,ctx,linha,quando,J){
+  const ps=(await env.DB.prepare('SELECT * FROM postagem WHERE serie=? ORDER BY parte').bind(linha.serie).all()).results||[];
+  if(linha.parte!==1||ps.length!==linha.partes||ps.some((x,i)=>x.parte!==i+1||!['agendado','erro'].includes(x.status)))return J({ok:false,erro:'Este vídeo já começou ou contém partes indisponíveis. As partes confirmadas não serão repetidas; consulte ou tente novamente apenas a parte com erro.'},409);
+  if(ps.some(x=>String(x.ig_id||'').startsWith('zapq:'))||await env.DB.prepare("SELECT 1 FROM postagem_grupo_recibo r JOIN postagem p ON p.id=r.postagem_id WHERE p.serie=? AND r.estado='enviando'").bind(linha.serie).first())return J({ok:false,erro:'Há envio aguardando confirmação. Consulte o resultado antes de alterar o vídeo.'},409);
+  const v=validarPostagem({...linhaPostagem(linha),quando});if(v.erro)return J({ok:false,erro:v.erro},400);
+  const cfg=await lerCfgPost(env),bs=bucketsDoPost(linha.tipo,linha.canal),ocup={};
+  for(const b of bs)ocup[b]=await ocupadosDoTipo_(env,b,0,gapMaxDoTipoMs(cfg,b),false,linha.serie);
+  const urgente=v.v.urgente;let ajuste;
+  if(urgente&&cfg.agoraIgnora)ajuste={t:Date.now(),ajustado:false};
+  else if(v.v.sequencia)ajuste=proximoLivreMulti(cfg,bs,ocup,Date.now()+60000);
+  else ajuste=ajustarHorarioMulti(cfg,bs,Math.max(Date.parse(v.v.quando),Date.now()),ocup);
+  const em=new Date(ajuste.t).toISOString();
+  const r=await env.DB.prepare("UPDATE postagem SET status='agendado',agendado_em=?,tentativas=0,erro='',containers='',urgente=?,atualizado_em=? WHERE serie=? AND status IN ('agendado','erro') AND NOT EXISTS(SELECT 1 FROM postagem q WHERE q.serie=? AND q.status NOT IN ('agendado','erro'))").bind(em,urgente?1:0,agora(),linha.serie,linha.serie).run();
+  if(r.meta?.changes!==ps.length)return J({ok:false,erro:'O vídeo mudou enquanto você ajustava. Atualize a fila para conferir.'},409);
+  if(ajuste.t<=Date.now()+1000&&ctx?.waitUntil)ctx.waitUntil(dispararPostagens_(env));
+  return J({ok:true,quando:em,partes:ps.length,ajustado:!!ajuste.ajustado,motivo:ajuste.motivo||''});
+}
 async function rotasPostagem(env, ctx, req, url, J, perms) {
   const p = url.pathname;
   if (p === '/posts' && req.method === 'GET') {
-    const lim = Math.min(100, Number(url.searchParams.get('limite')) || 60);
+    const lim = Math.min(250, Number(url.searchParams.get('limite')) || 60);
     const q = (await env.DB.prepare("SELECT postagem.*, EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id=postagem.id AND g.estado='enviando') AS grupo_envio_incerto FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
     const c = (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM postagem GROUP BY status").all()).results || [];
     const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
@@ -1797,7 +1820,10 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     if (!originais.length || originais.length > 60 || originais.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) return J({ ok: false, erro: 'Envie de uma a sessenta postagens por vez.' }, 400);
     if (originais.some((x) => x.grupoClientes === true || x.canal === 'grupo') && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado. Avise o gestor.' }, 409);
     if (originais.some((x) => x.status2 === true || x.canal === 'whatsapp2') && !(await cfgWafly_(env, 2)) && !(await cfgWameStatus_(env))) return J({ ok: false, erro: 'O WhatsApp Status 2 ainda não está configurado. Avise o gestor.' }, 409);
-    const lista = originais.flatMap((x) => {
+    const fontes=new Map();
+    const lista = originais.flatMap((x,indice) => {
+      const chave=x.serie?'video:'+String(x.serie.preparo):'midia:'+indice;
+      if(!fontes.has(chave))fontes.set(chave,crypto.randomUUID());
       // Story com figurinha de link exige Instagram manual. O Status continua
       // automático e precisa de um recibo próprio para nunca ser reenviado
       // quando alguém concluir a etapa manual do Instagram.
@@ -1807,7 +1833,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
         : [x];
       if (x.grupoClientes === true && x.canal !== 'grupo') destinos.push(Object.assign({}, x, { canal: 'grupo', modo: 'auto', link: '', grupoClientes: false, status2: false }));
       if (x.status2 === true && x.canal !== 'whatsapp2') destinos.push(Object.assign({}, x, { canal: 'whatsapp2', modo: 'auto', link: '', grupoClientes: false, status2: false }));
-      return destinos;
+      return destinos.map(d=>Object.assign({},d,{origemMidia:fontes.get(chave)}));
     });
     const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
     if (pend + lista.length > 200) return J({ ok: false, erro: 'Há postagens demais na fila (200). Espere algumas saírem.' }, 429);
@@ -1821,11 +1847,13 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     try{await validarSeriesPost_(env,req,lista,vs);}catch(e){return J({ok:false,erro:e.message},400);}
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], bs = bucketsDoPost(v.tipo, v.canal), ck = bs.join('+');
+      const continuacao=!!(v.serie&&v.parte>1);
+      const editorial=continuacao?0:intervaloEditorialMs_(cfg,bs,intervaloMs);
       for (const b of bs) if (!ocup[b]) ocup[b] = await ocupadosDoTipo_(env, b, 0, gapMaxDoTipoMs(cfg, b));
       let t;
       if(v.serie&&v.parte>1)t=inicioSeries[v.serie];
       else if (v.urgente && cfg.agoraIgnora) t = Date.now();                                  // urgência: sai já, sem pausa nem intervalo
-      else if (v.sequencia && intervaloMs && cursores[ck] != null) t = intervaloEscolhido_(cfg, bs, ocup, cursores[ck], intervaloMs);   // v1.7: a pessoa escolheu "de X em X minutos" (nunca abaixo do mínimo do canal)
+      else if (v.sequencia && cursores[ck] != null) t = intervaloEscolhido_(cfg, bs, ocup, cursores[ck], editorial);   // v1.7: a pessoa escolheu "de X em X minutos" (nunca abaixo do mínimo do canal)
       else if (v.sequencia) t = proximoLivreMulti(cfg, bs, ocup, cursores[ck] == null ? Date.now() + 60000 : cursores[ck]).t;       // intervalo SORTEADO entre o mín. e o máx. do canal
       else {
         const pedido = Math.max(Date.parse(v.quando), Date.now()), aj = ajustarHorarioMulti(cfg, bs, pedido, ocup);
@@ -1836,7 +1864,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       quandos.push(v.quando);
 
 
-      inserts.push(env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal, urgente, serie, parte, partes) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal, v.urgente ? 1 : 0,v.serie||'',v.parte||0,v.partes||0));
+      inserts.push(env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal, urgente, serie, parte, partes, origem_midia, intervalo_ms) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?,?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal, v.urgente ? 1 : 0,v.serie||'',v.parte||0,v.partes||0,lista[i].origemMidia,editorial));
     }
     // Todos os destinos entram juntos ou nenhum: uma falha não deixa metade do pedido na fila.
     const criadas = await env.DB.batch(inserts);
@@ -1870,7 +1898,8 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
   const linha = id ? await env.DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first() : null;
   if (p.indexOf('/post/') === 0 && req.method === 'POST') {
     if (!linha) return J({ ok: false, erro: 'Postagem não encontrada.' }, 404);
-    if(linha.serie&&['/post/proximo','/post/mover','/post/repostar'].includes(p))return J({ok:false,erro:'Para mudar o horário de uma sequência, descarte as partes pendentes e agende novamente o vídeo completo. Partes publicadas não serão repetidas.'},409);
+    if(linha.serie&&(p==='/post/proximo'||p==='/post/reagendar'&&linha.parte===1))return reagendarVideoOriginal_(env,ctx,linha,p==='/post/proximo'?'sequencia':b.quando,J);
+    if(linha.serie&&['/post/mover','/post/repostar'].includes(p))return J({ok:false,erro:'Para mudar o horário de uma sequência, descarte as partes pendentes e agende novamente o vídeo completo. Partes publicadas não serão repetidas.'},409);
 
     if (p === '/post/repostar') {
       // Uma cópia por origem: duplo toque/repetição de rede retorna a mesma postagem.
@@ -2788,7 +2817,7 @@ async function gravarMensagem_(env, canal, m) {
   const quem = m.grupo && m.direcao === 'entrada' ? (m.autorNome || (m.autorFone ? '+' + m.autorFone : '')) : '';
   const previa = ((quem ? quem + ': ' : '') + (m.texto || ('[' + m.tipo + ']'))).replace(/\s+/g, ' ').slice(0, 140);
   /* Em SQLite o lado direito do SET usa os valores ANTIGOS da linha: por isso a comparação com ultima_em/ult_entrada_em vale como "antes desta mensagem". */
-  const atividade = env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, dono=CASE WHEN ?='entrada' AND encerrada_em<>'' THEN '' ELSE dono END, atendido_em=CASE WHEN ?='entrada' AND encerrada_em<>'' THEN '' ELSE atendido_em END, reaberta_em=CASE WHEN ?='entrada' AND encerrada_em<>'' THEN ? ELSE reaberta_em END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=? AND changes()=1")
+  const atividade = env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, dono=CASE WHEN ?='entrada' AND encerrada_em<>'' THEN '' ELSE dono END, dono_id=CASE WHEN "+(!saida?1:0)+"=1 AND encerrada_em<>'' THEN '' ELSE dono_id END, atendido_em=CASE WHEN ?='entrada' AND encerrada_em<>'' THEN '' ELSE atendido_em END, reaberta_em=CASE WHEN ?='entrada' AND encerrada_em<>'' THEN ? ELSE reaberta_em END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=? AND changes()=1")
     .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, m.em, m.direcao, m.direcao, m.direcao, t, c.id);
   const transacao=[inserir,atividade];
   if(!saida&&!m.grupo){
@@ -3828,7 +3857,7 @@ async function responderMensagem_(env, whats, d) {
   if (!res.ok && !res.incerto) { await env.DB.prepare('DELETE FROM cfg WHERE chave=?').bind(chave).run(); return [409, { ok: false, erro: res.erro }]; }
   const extId = res.ok ? res.extId : 'inc:' + idLocal, em = agora();
   await gravarMensagem_(env, conv.canal, { extId: extId, contato: conv.contato, nome: '', grupo: conv.grupo, direcao: 'saida', tipo: anexo ? anexo.tipo : 'texto', texto: textoEnvio, em: em, por:String(whats||'').slice(-4), midiaChave: anexo ? anexo.chave : '', midiaMime: anexo ? anexo.mime : '', midiaSeg: Math.max(0, Math.min(86400, Number(d.seg) || 0)) });
-  await env.DB.prepare('UPDATE msg_mensagem SET por=?, status=CASE WHEN ? THEN status ELSE ? END WHERE canal=? AND ext_id=?').bind(String(whats || '').slice(-4), res.ok ? 1 : 0, 'incerta', conv.canal, extId).run();
+  await env.DB.prepare('UPDATE msg_mensagem SET por=?,atendente_id=?,automatica=?,status=CASE WHEN ? THEN status ELSE ? END WHERE canal=? AND ext_id=?').bind(String(whats || '').slice(-4),whats==='auto'||d._acompanhamento?'':msgTelefone_(whats),whats==='auto'||d._acompanhamento?1:0,res.ok ? 1 : 0, 'incerta', conv.canal, extId).run();
   // v7.40.36: o vínculo da citação acompanha a mensagem (a bolha enviada mostra o que foi citado).
   if (cit) { try { await env.DB.prepare("UPDATE msg_mensagem SET ctx_tipo='resposta', ctx_ref=?, ctx_autor=?, ctx_trecho=?, ctx_aprox=0 WHERE canal=? AND ext_id=? AND ctx_tipo IN ('','link')").bind(cit.extId || '', cit.autor, cit.trecho, conv.canal, extId).run(); } catch (e) { /* a mensagem já saiu: só a citação no histórico fica sem o vínculo */ } }
   // Contexto próprio do link: snapshot acompanha a mensagem e sua retenção, sem tabela nova. Não substitui story/citação.
@@ -4640,6 +4669,104 @@ async function esperaMetricas_(env,canal){
   const totEspera = await env.DB.prepare("SELECT COUNT(*) AS n FROM msg_conversa WHERE grupo=0 AND ult_dir='entrada' AND encerrada_em='' AND total>0" + (canal ? ' AND canal=?' : '')).bind(...(canal ? [canal] : [])).first();
   return {total:Number((totEspera||{}).n)||0,maisAntigas:espera.results.map(x=>({id:x.id,canal:x.canal,nome:rotuloContato_(x),desde:x.ult_entrada_em}))};
 }
+/* Gestão: somente Admin total. Consultas não leem texto nem enviam mensagens. */
+const GESTOR_CFG_='msg_gestor_v1';
+function gestorPadrao_(){return {versao:0,metas:{whatsapp1:10,whatsapp2:10,instagram:10}};}
+async function gestorCfg_(env){const raw=await cfgGet(env,GESTOR_CFG_);if(!raw)return gestorPadrao_();const j=JSON.parse(raw);return {...gestorPadrao_(),...j,metas:{...gestorPadrao_().metas,...j.metas}};}
+/** Calendário cumulativo: cada espera custa O(1), inclusive cruzando dias fechados. */
+export function calendarioGestor_(inicio,fim,expediente,feriados){
+  const dia0=Math.floor((inicio-FUSO_MS_)/DIA_MS_)-1,dia1=Math.floor((fim-FUSO_MS_)/DIA_MS_)+1,cache=new Map();let soma=0;
+  for(let d=dia0;d<=dia1;d++){const faixas=faixasExpediente_(d,expediente,feriados)||[];cache.set(d,{antes:soma,faixas});for(const [a,b] of faixas)soma+=(b-a)*60000;}
+  const acumulado=ms=>{const dia=Math.floor((ms-FUSO_MS_)/DIA_MS_),p=cache.get(dia);if(!p)return ms<inicio?0:soma;const minuto=ms-(dia*DIA_MS_+FUSO_MS_);return p.antes+p.faixas.reduce((n,[a,b])=>n+Math.max(0,Math.min(minuto,b*60000)-a*60000),0);};
+  return (a,b)=>Math.max(0,acumulado(b)-acumulado(a))/60000;
+}
+const gestorResumoTempos_=valores=>{const s=valores.filter(Number.isFinite).sort((a,b)=>a-b),n=s.length;return {amostra:n,medianaMin:n?Math.round((n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2)*10)/10:null,p90Min:n?Math.round(s[Math.ceil(n*.9)-1]*10)/10:null};};
+export function historicoGestor_(mensagens,encerramentos,op){
+  const eventos=mensagens.map(m=>({...m,tipoEvento:'mensagem',em:m.enviada_em})).concat(encerramentos.map(e=>({...e,tipoEvento:'encerrar'}))).sort((a,b)=>a.conversa_id-b.conversa_id||String(a.em).localeCompare(String(b.em))||(a.tipoEvento==='encerrar'?1:b.tipoEvento==='encerrar'?-1:a.id-b.id));
+  const ciclos=[],primeiras=[],pessoas=new Map(),horas=Array.from({length:24},(_,hora)=>({hora,entradas:0})),conversas=new Set();
+  const motivos={concluido:0,vendeu:0,sem_resposta:0,engano:0};let c=null,pergunta=null,inicio=null,primeiro=false,completo=false,marco=0,marcoPrimeira=0,recebidas=0,saidas=0,semAutor=0,comAutor=0;
+  for(const e of eventos){
+    if(c!==e.conversa_id){c=e.conversa_id;pergunta=null;inicio=null;primeiro=false;completo=Date.parse(e.conversa_criada||'')>=op.desde;marco=ciclos.length;marcoPrimeira=primeiras.length;}
+    const em=Date.parse(e.em);if(!Number.isFinite(em))continue;
+    if(e.tipoEvento==='encerrar'){
+      if(Object.hasOwn(motivos,e.motivo))motivos[e.motivo]++;
+      if(e.motivo==='engano'){ciclos.splice(marco);primeiras.splice(marcoPrimeira);}
+      pergunta=null;inicio=null;primeiro=false;completo=true;marco=ciclos.length;marcoPrimeira=primeiras.length;continue;
+    }
+    conversas.add(c);
+    if(e.direcao==='entrada'){recebidas++;if(pergunta===null){pergunta=em;if(inicio===null)inicio=em;horas[new Date(em-FUSO_MS_).getUTCHours()].entradas++;}continue;}
+    if(e.por==='auto'||e.automatica||!['enviada','entregue','lida'].includes(e.status))continue;
+    saidas++;e.atendente_id?comAutor++:semAutor++;
+    if(pergunta===null)continue;
+    const minutos=op.tempo(pergunta,em),r={minutos,canal:e.canal,autor:e.atendente_id||'',em:e.em};ciclos.push(r);
+    if(!primeiro){if(completo)primeiras.push({...r,minutos:op.tempo(inicio,em)});primeiro=true;}
+    pergunta=null;
+  }
+  for(const r of ciclos){if(!r.autor)continue;if(!pessoas.has(r.autor))pessoas.set(r.autor,{usuario:r.autor,valores:[],primeiras:[]});pessoas.get(r.autor).valores.push(r.minutos);}
+  for(const r of primeiras)if(r.autor&&pessoas.has(r.autor))pessoas.get(r.autor).primeiras.push(r.minutos);
+  const dentro=ciclos.filter(r=>r.minutos<=(op.metas[r.canal]||10)).length;
+  return {conversas:conversas.size,recebidas,saidas,autoria:{identificadas:comAutor,semIdentificacao:semAutor},resposta:gestorResumoTempos_(ciclos.map(r=>r.minutos)),primeiraResposta:gestorResumoTempos_(primeiras.map(r=>r.minutos)),meta:{dentro,total:ciclos.length,percentual:ciclos.length?Math.round(100*dentro/ciclos.length):null},encerramentos:motivos,porHora:horas,porPessoa:[...pessoas.values()].map(p=>({usuario:p.usuario,resposta:gestorResumoTempos_(p.valores),primeiraResposta:gestorResumoTempos_(p.primeiras)}))};
+}
+async function gestorCobertura_(env,canal){
+  const ck=new Request('https://gestor.invalid/cobertura-v1/'+(canal||'todos'));
+  try{const hit=await caches.default.match(ck);if(hit)return await hit.json();}catch(_){}
+  const args=canal?[canal]:[],filtro=canal?' AND c.canal=?':'';
+  const fonte=await env.DB.prepare("SELECT MIN(m.enviada_em) AS mensagensDesde,MIN(CASE WHEN m.atendente_id<>'' THEN m.enviada_em END) AS autoriaDesde FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0"+filtro).bind(...args).first();
+  const atividade=await env.DB.prepare('SELECT MIN(em) AS desde FROM msg_atividade').first();const r={...fonte,atividadeDesde:atividade?.desde||null};
+  try{await caches.default.put(ck,new Response(JSON.stringify(r),{headers:{'Cache-Control':'max-age=300','Content-Type':'application/json'}}));}catch(_){}
+  return r;
+}
+async function gestorDados_(env,url){
+  const dias=Number(url.searchParams.get('dias')||7),canal=url.searchParams.get('canal')||'',modo=url.searchParams.get('tempo')==='corrido'?'corrido':'util';
+  if(![1,7,30,90].includes(dias)||canal&&!MSG_CANAIS.includes(canal))return {ok:false,cod:400,erro:'Escolha um período e um canal válidos.'};
+  const cfg=await gestorCfg_(env),auto=await msgAuto_(env),agoraMs=Date.now(),localDia=Math.floor((agoraMs-FUSO_MS_)/DIA_MS_),desdeMs=(localDia-dias+1)*DIA_MS_+FUSO_MS_,desde=new Date(desdeMs).toISOString();
+  const fonte=await gestorCobertura_(env,canal);
+  const inicioCalendario=Math.max(agoraMs-3660*DIA_MS_,Math.min(desdeMs,Date.parse(fonte.mensagensDesde||'')||desdeMs));
+  const tempo=modo==='util'?calendarioGestor_(inicioCalendario,agoraMs,auto.expediente,auto.feriados):(a,b)=>Math.max(0,b-a)/60000;
+  const filtro=canal?' AND c.canal=?':'',args=canal?[canal]:[];
+  const abertas=(await env.DB.prepare("SELECT c.id,c.canal,c.contato,c.nome,c.dono,c.dono_id,c.atendido_em,c.atualizada_em,c.ult_dir,c.ult_entrada_em,c.ult_saida_em,(SELECT MIN(m.enviada_em) FROM msg_mensagem m WHERE m.conversa_id=c.id AND m.direcao='entrada' AND m.enviada_em>COALESCE((SELECT MAX(e.em) FROM msg_encerramento e WHERE e.conversa_id=c.id),'') AND m.enviada_em>COALESCE((SELECT MAX(s.enviada_em) FROM msg_mensagem s WHERE s.conversa_id=c.id AND s.direcao='saida' AND COALESCE(s.por,'')<>'auto' AND COALESCE(s.automatica,0)=0 AND s.status IN ('enviada','entregue','lida')),'')) AS desde FROM msg_conversa c WHERE c.grupo=0 AND c.encerrada_em='' AND c.total>0"+filtro+" ORDER BY c.ult_entrada_em LIMIT 5001").bind(...args).all()).results||[];
+  const parcialFila=abertas.length>5000;abertas.splice(5000);
+  const equipes=new Map();const pessoa=(id,nome)=>{if(!equipes.has(id))equipes.set(id,{usuario:id,nome:nome||'Atendente',carteira:0,esperandoLoja:0,esperandoCliente:0,vencidas:0,legado:id.startsWith('legado:')});return equipes.get(id);};
+  let esperandoLoja=0,esperandoCliente=0,semResponsavel=0,vencidas=0;
+  const fila=abertas.map(c=>{
+    const espera=!!c.desde||c.ult_dir==='entrada',inicio=Date.parse(c.desde||c.ult_entrada_em),minutos=espera&&Number.isFinite(inicio)?(inicio<inicioCalendario?null:tempo(inicio,agoraMs)):0,meta=cfg.metas[c.canal],vencida=espera&&minutos>meta;
+    if(espera)esperandoLoja++;else esperandoCliente++;if(!c.dono)semResponsavel++;if(vencida)vencidas++;
+    if(c.dono){const p=pessoa(c.dono_id||'legado:'+c.dono,c.dono);p.carteira++;p[espera?'esperandoLoja':'esperandoCliente']++;if(vencida)p.vencidas++;}
+    return {id:c.id,canal:c.canal,nome:rotuloContato_(c),dono:c.dono||'',donoId:c.dono_id||'',atualizadaEm:c.atualizada_em||'',esperandoLoja:espera,desde:c.desde||c.ult_entrada_em,minutos:minutos===null?null:Math.round(minutos),meta,vencida,emAtendimento:!!c.atendido_em};
+  }).sort((a,b)=>(b.esperandoLoja-a.esperandoLoja)||String(a.desde).localeCompare(String(b.desde))||a.id-b.id);
+  const equipe=await equipeAtendimento_(env,new URL('https://gestor.invalid/?de='+new Date(Math.max(desdeMs,agoraMs-30*DIA_MS_)-FUSO_MS_).toISOString().slice(0,10)+'&ate='+new Date(agoraMs-FUSO_MS_).toISOString().slice(0,10)));
+  for(const p of equipe.presencas||[]){const e=pessoa(p.usuario,p.nome);e.online=p.online;e.presencaEm=p.em;}
+  for(const p of equipe.totais||[]){const e=pessoa(p.usuario,p.nome);e.acoes=p.acoes;e.respostasRegistradas=p.respostas;e.encerramentosRegistrados=p.encerramentos;}
+  const ck=new Request('https://gestor.invalid/historico-v1/'+dias+'/'+(canal||'todos')+'/'+modo+'/'+cfg.versao);let historico=null;
+  try{const cached=await caches.default.match(ck);if(cached)historico=await cached.json();}catch(_){}
+  if(!historico){
+    const msgs=(await env.DB.prepare("SELECT m.id,m.conversa_id,m.canal,m.direcao,m.enviada_em,m.status,m.por,m.atendente_id,m.automatica,c.criado_em AS conversa_criada FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0 AND m.enviada_em>=?"+filtro+" ORDER BY m.conversa_id,m.enviada_em,m.id LIMIT 30001").bind(desde,...args).all()).results||[];
+    const enc=(await env.DB.prepare("SELECT e.id,e.conversa_id,e.canal,e.em,e.motivo,c.criado_em AS conversa_criada FROM msg_encerramento e JOIN msg_conversa c ON c.id=e.conversa_id WHERE c.grupo=0 AND e.em>=?"+filtro+" ORDER BY e.em,e.id LIMIT 20001").bind(desde,...args).all()).results||[];
+    const parcial=msgs.length>30000||enc.length>20000;msgs.splice(30000);enc.splice(20000);
+    historico={...historicoGestor_(msgs,enc,{desde:desdeMs,tempo,metas:cfg.metas}),calculadoEm:agora(),cobertura:{parcial,limiteMensagens:30000,limiteEncerramentos:20000}};
+    try{await caches.default.put(ck,new Response(JSON.stringify(historico),{headers:{'Cache-Control':'max-age=300','Content-Type':'application/json'}}));}catch(_){}
+  }
+  for(const p of historico.porPessoa||[])Object.assign(pessoa(p.usuario,''),{resposta:p.resposta,primeiraResposta:p.primeiraResposta});
+  const logs=(await env.DB.prepare('SELECT usuario,nome,acao,alvo,em FROM msg_gestor_log ORDER BY id DESC LIMIT 50').all()).results||[];
+  const etapas=(await env.DB.prepare('SELECT e.id,e.nome,e.venda,COUNT(DISTINCT a.alvo) AS total FROM msg_etiqueta e LEFT JOIN msg_alvo_etiqueta a ON a.etiqueta_id=e.id WHERE e.arquivada=0 GROUP BY e.id ORDER BY e.ordem,e.id LIMIT 100').all()).results||[];
+  return {ok:true,dias,canal:canal||'todos',tempo:modo,calculadoEm:agora(),config:cfg,agora:{esperandoLoja,esperandoCliente,semResponsavel,vencidas,total:abertas.length,parcial:parcialFila},fila: fila.slice(0,250),maisFila:fila.length>250,equipe:[...equipes.values()],historico,atividades:equipe.atividades||[],atividadesDias:Math.min(31,dias),cobertura:{...fonte,presenca:'aproximada_2min',fuso:'America/Fortaleza'},saude:await saudeAvisos_(env),logs,etapas};
+}
+async function rotasGestor_(env,req,url,J,perms){
+  if(!perms.includes('gerir_acessos'))return J({ok:false,cod:403,erro:'Esta área é exclusiva do gestor total.'},403);
+  if(req.method==='GET'&&url.pathname==='/msg/gestor') {const r=await gestorDados_(env,url);return J(r,r.cod||200);}
+  if(url.pathname!=='/msg/gestor/config')return J({ok:false,erro:'Ação de gestão não disponível.'},404);
+  if(req.method==='GET')return J({ok:true,config:await gestorCfg_(env)});
+  if(req.method!=='POST')return J({ok:false,erro:'Ação não permitida.'},405);
+  const d=await req.json().catch(()=>null),raw=await cfgGet(env,GESTOR_CFG_),atual=raw?JSON.parse(raw):gestorPadrao_();
+  if(!d||d.versao!==atual.versao)return J({ok:false,erro:'As metas mudaram em outra sessão. Reabra os ajustes e confira antes de salvar.'},409);
+  const metas={};for(const canal of MSG_CANAIS){const n=Number(d.metas?.[canal]);if(!Number.isInteger(n)||n<1||n>240)return J({ok:false,erro:'Defina metas inteiras de 1 a 240 minutos para os três canais.'},400);metas[canal]=n;}
+  const novo={versao:atual.versao+1,metas},usuario=msgTelefone_(req.headers.get('X-TK-Whats')),nome=await meuNomeAtendente_(env,req);
+  const stmt=raw===null?env.DB.prepare('INSERT OR IGNORE INTO cfg(chave,valor) VALUES(?,?)').bind(GESTOR_CFG_,JSON.stringify(novo)):env.DB.prepare('UPDATE cfg SET valor=? WHERE chave=? AND valor=?').bind(JSON.stringify(novo),GESTOR_CFG_,raw);
+  const r=await env.DB.batch([stmt,env.DB.prepare("INSERT INTO msg_gestor_log(usuario,nome,acao,alvo,antes,depois,em) SELECT ?,?,'metas','canais',?,?,? WHERE changes()=1").bind(usuario,nome,JSON.stringify(atual.metas),JSON.stringify(metas),agora())]);
+  if(r[0].meta?.changes!==1)return J({ok:false,erro:'As metas mudaram durante o salvamento. Atualize os ajustes.'},409);
+  return J({ok:true,config:novo});
+}
+
 async function metricasMensagens_(env, canal, dias, usarCache) {
   dias = [7, 30, 90].includes(Number(dias)) ? Number(dias) : 30;
   const desde = new Date(Date.now() - dias * 86400000).toISOString();
@@ -4813,7 +4940,7 @@ async function iniciarConversa_(env, req, d) {
   const [cod, corpo] = await responderMensagem_(env, req.headers.get('X-TK-Whats') || '', { conversa: conversa.id, texto: texto, idLocal: idLocal });
   if (cod !== 200 || !corpo) return { ok: false, cod: cod || 409, conversa: conversa.id, erro: (corpo && corpo.erro) || 'Não foi possível enviar agora. Tente de novo.' };
   if (!corpo.ok) return { ok: false, cod: 409, conversa: conversa.id, incerto: !!corpo.incerto, erro: corpo.erro };
-  try { await env.DB.prepare("UPDATE msg_conversa SET dono=? WHERE id=? AND (dono IS NULL OR dono='')").bind(await meuNomeAtendente_(env, req), conversa.id).run(); } catch (e) { /* dono é conforto */ }
+  try { await env.DB.prepare("UPDATE msg_conversa SET dono=?,dono_id=? WHERE id=? AND (dono IS NULL OR dono='')").bind(await meuNomeAtendente_(env, req),msgTelefone_(req.headers.get('X-TK-Whats')), conversa.id).run(); } catch (e) { /* dono é conforto */ }
   return { ok: true, conversa: conversa.id, enviada: true, mensagem: corpo.mensagem };
 }
 
@@ -5028,7 +5155,8 @@ export default {
             }
             if (!salvo) return J({ok:false,erro:'Outro acesso mudou ao mesmo tempo. Tente novamente.'},409);
           }
-          return J({ok:true,regras:await msgRegras_(env),ferramentas:MSG_FERRAMENTAS_});
+          const tipoAlvo=url.searchParams.get('tipo'),alvoConsulta=url.searchParams.get('alvo');
+          return J({ok:true,regras:await msgRegras_(env),ferramentas:MSG_FERRAMENTAS_,alvo:alvoConsulta?(tipoAlvo==='perfil'?msgPerfil_(alvoConsulta):msgTelefone_(alvoConsulta)):undefined});
         }
         direitos = calculados;
         if (!direitos.acessar || !direitos[msgRecurso_(p,req,url)]) return J({ok:false,erro:'Seu acesso não permite usar esta ferramenta de Mensagens.'},403);
@@ -5040,6 +5168,7 @@ export default {
           if ((('respostas' in d) && !direitos.respostas) || (('lerCelular' in d) && !direitos.configuracoes) || (('meuNome' in d)&&!direitos.responder)) return J({ok:false,erro:'Seu acesso não permite alterar esta configuração.'},403);
         }
       }
+      if(p==='/msg/gestor'||p.startsWith('/msg/gestor/'))return await rotasGestor_(env,req,url,J,perms);
       if(['/msg/video-preparar','/post/video-preparar'].includes(p)&&['GET','POST'].includes(req.method))return await videoUsuario_(env,req,url,J);
       if(p==='/msg/tempo-real/ticket'&&req.method==='POST')return J(await ticketsEventos_(env,req));
       if (p === '/post/freeconvert/config' && req.method === 'GET') {
@@ -5387,7 +5516,7 @@ export default {
         const d = await req.json().catch(() => ({}));delete d._acompanhamento;delete d._janelaAutomatica;
         if(!perms.includes('gerir_acessos') && String(d.texto||'').trim()){const c=await env.DB.prepare('SELECT canal FROM msg_conversa WHERE id=?').bind(Number(d.conversa)||0).first();if(c)d.texto=await textoAssinadoEquipe_(env,req,c.canal,d.texto);}
         const [cod, corpo] = await responderMensagem_(env, req.headers.get('X-TK-Whats') || '', d);
-        if (cod === 200 && corpo && corpo.ok && Number(d.conversa)) { try { await env.DB.prepare("UPDATE msg_conversa SET dono=? WHERE id=? AND (dono IS NULL OR dono='')").bind(await meuNomeAtendente_(env, req), Number(d.conversa)).run(); } catch (e) { /* dono é conforto */ } }   // v7.40.6: quem responde primeiro vira o responsável
+        if (cod === 200 && corpo && corpo.ok && Number(d.conversa)) { try { await env.DB.prepare("UPDATE msg_conversa SET dono=?,dono_id=? WHERE id=? AND (dono IS NULL OR dono='')").bind(await meuNomeAtendente_(env, req),msgTelefone_(req.headers.get('X-TK-Whats')), Number(d.conversa)).run(); } catch (e) { /* dono é conforto */ } }   // v7.40.6: quem responde primeiro vira o responsável
         return J(corpo, cod);
       }
       if(p==='/msg/acompanhamento'&&req.method==='GET'){
@@ -5448,7 +5577,7 @@ export default {
            Pendentes. Sem ele (só assumir), a conversa continua na fila, como manda a regra do #305.
            Liberar (assumir:false) limpa os dois. */
         const atendeu = d.atender === true && d.assumir !== false;
-        const r = await env.DB.prepare(atendeu ? 'UPDATE msg_conversa SET dono=?, atendido_em=?, atualizada_em=? WHERE id=?' : 'UPDATE msg_conversa SET dono=?, atualizada_em=? WHERE id=?').bind(...(atendeu ? [nome, agora(), agora(), id] : [nome, agora(), id])).run();
+        const r = await env.DB.prepare(atendeu ? 'UPDATE msg_conversa SET dono=?,dono_id=?, atendido_em=?, atualizada_em=? WHERE id=?' : 'UPDATE msg_conversa SET dono=?,dono_id=?, atualizada_em=? WHERE id=?').bind(...(atendeu ? [nome,d.assumir===false?'':msgTelefone_(req.headers.get('X-TK-Whats')), agora(), agora(), id] : [nome,d.assumir===false?'':msgTelefone_(req.headers.get('X-TK-Whats')), agora(), id])).run();
         if (!r.meta || !r.meta.changes) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
         return J({ ok: true, dono: nome });
       }

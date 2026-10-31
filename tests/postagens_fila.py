@@ -28,7 +28,9 @@ def abrir(b, perms=PERMS_ALL, gestor=True, extras=None):
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2400)
     pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250); pg.click("#btn-abrir-postagens"); pg.wait_for_timeout(800)
     return ctx, pg, st, g, erros, msgs
-def aba(pg, n): pg.click("#po-abas [data-aba=%s]" % n); pg.wait_for_timeout(500)
+def aba(pg, n):
+    pg.click("#po-abas [data-aba=%s]" % n); pg.wait_for_timeout(500)
+    if n == "fila" and pg.locator("[data-fila-modo=canal]").count(): pg.locator("[data-fila-modo=canal]").click()
 def chamadas(g, path): return [c for c in g["post_chamadas"] if c["path"] == path]
 
 with sync_playwright() as p:
@@ -186,7 +188,7 @@ with sync_playwright() as p:
     pg.click("[data-a=enviar]"); pg.wait_for_timeout(3500)
     c = chamadas(g, "/post"); cp = c[-1]["corpo"] if c else {}
     ts = [__import__("datetime").datetime.fromisoformat(x["quando"].replace("Z", "+00:00")).timestamp() for x in cp.get("posts", [])]
-    chk("Dia e hora: 3 horários de 30 em 30 minutos (ISO), a partir do escolhido", len(ts) == 3 and abs((ts[1] - ts[0]) - 1800) < 1 and abs((ts[2] - ts[1]) - 1800) < 1 and cp.get("intervalo") is None, ts)
+    chk("Dia e hora: 3 horários de 30 em 30 minutos (ISO), a partir do escolhido", len(ts) == 3 and abs((ts[1] - ts[0]) - 1800) < 1 and abs((ts[2] - ts[1]) - 1800) < 1 and cp.get("intervalo") == 30, ts)
     chk("sem erro de JavaScript", not erros, erros)
     ctx.close()
 

@@ -135,6 +135,11 @@ class NativeRepository internal constructor(private val context:Context,val stor
         try{api.export(a,query).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
     }
     fun discard(key:String){store.removePending(key);changed()}
+    /** Sinal de presença apenas com a tela nativa em primeiro plano; não abre nem lê conversas. */
+    fun presence(conversation:Long)=lock.withLock{
+        val a=store.auth()?:return@withLock
+        api.call("/msg/presenca",a,JSONObject().put("conversa",conversation))
+    }
     fun config(body:JSONObject?=null):JSONObject=lock.withLock{
         val a=store.auth()?:throw AccessRevoked();try{api.call("/msg/config",a,body).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
     }

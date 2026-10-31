@@ -125,6 +125,32 @@
   function podeGerir() {
     try { if(window.TKMensagensAcessos)return TKMensagensAcessos.pode('acessar'); return typeof temPermissao === 'function' && typeof usuarioAdmin !== 'undefined' && !!usuarioAdmin && !!temPermissao(usuarioAdmin, 'gerir_acessos'); } catch (e) { return false; }
   }
+  function podeGestorTotal_(){try{return !!getSessao()&&typeof usuarioAdmin!=='undefined'&&!!usuarioAdmin&&temPermissao(usuarioAdmin,'gerir_acessos');}catch(_){return false;}}
+  async function abrirGestao_(){
+    if(!podeGestorTotal_()){aviso_('Esta área é exclusiva do gestor total.');return;}
+    if(!globalThis.TKMensagensGestor){aviso_('A gestão ainda está carregando. Reabra Mensagens.');return;}
+    if(window.TKCamadas?.aberta('ms-gaveta'))await new Promise(resolve=>{const h=e=>{if(e.detail?.chave!=='ms-gaveta')return;document.removeEventListener('tk:camada-fechada',h);resolve();};document.addEventListener('tk:camada-fechada',h);fecharGaveta_();});else fecharGaveta_();
+    if(!podeGestorTotal_())return;$('ms-voltar-gestor')?.remove();
+    TKMensagensGestor.abrir({api:worker_,ehAdmin:podeGestorTotal_,espiar:async(id,destino)=>{if(canal!=='todos'&&canal!==destino){canal=destino;desenharFiltros();desenharAbas();await carregarLista(true);}await abrirConversa(id,true);voltarGestao_();},acao:gestorAcao_});
+  }
+  function voltarGestao_(){
+    if($('ms-voltar-gestor'))return;const b=botao('ms-btn','← Voltar à gestão','gestor');b.id='ms-voltar-gestor';const antes=$('ms-estado-wrap');if(antes?.parentNode)antes.parentNode.insertBefore(b,antes);else $('ms-app')?.prepend(b);
+  }
+  function abrirExportacaoGestor_(){
+    const corpo=gaveta_('Exportar conversas');if(!corpo)return;
+    const f=el('form','ms-auto');f.innerHTML='<label>Canal<select name="canal" class="ms-copia"><option value="">Todos os canais</option><option value="whatsapp1">WhatsApp 1</option><option value="whatsapp2">WhatsApp 2</option><option value="instagram">Instagram</option></select></label><label>Formato<select name="formato" class="ms-copia"><option value="csv">CSV</option><option value="txt">TXT para análise</option><option value="json">JSON</option></select></label><label>De<input type="date" name="de" class="ms-copia"></label><label>Até<input type="date" name="ate" class="ms-copia"></label><button type="submit" class="ms-btn prim">Gerar arquivo</button><p class="ms-dica" role="status"></p>';
+    f.addEventListener('submit',async ev=>{ev.preventDefault();const d=new FormData(f),de=d.get('de'),ate=d.get('ate');if(de&&ate&&de>ate){f.querySelector('[role=status]').textContent='Confira a ordem das datas.';return;}const b=f.querySelector('button');b.disabled=true;try{const q=new URLSearchParams();for(const [k,v]of d)if(v)q.set(k,v);await baixar(q.toString(),'as conversas');}finally{if(b.isConnected)b.disabled=false;}});corpo.appendChild(f);
+  }
+  async function gestorAcao_(acao){
+    if(!podeGestorTotal_())return;
+    const simples={leitura:'leitura-cfg',respostas:'resp-editar',automacoes:'auto-cfg',etapas:'funil',agenda:'agenda-painel',sincronizar:'atualizar',conversas:'inicio',permissoes:'app-permissoes','atualizar-app':'app-atualizar'};
+    if(acao==='conexoes'){TKConexoes.abrir();voltarGestao_();return;}
+    if(acao==='postagens'){if(typeof tkPostarPecas==='function')$('btn-abrir-postagens')?.click();voltarGestao_();return;}
+    if(acao==='avisos'){if(typeof globalThis.TKAndroid?.avisos==='function')TKAndroid.avisos();else if(globalThis.TKAndroid?.permissoes)TKAndroid.permissoes();voltarGestao_();return;}
+    if(acao==='exportar'){abrirExportacaoGestor_();voltarGestao_();return;}
+    const a=simples[acao];if(!a){aviso_('Esse ajuste não está disponível nesta versão.');voltarGestao_();return;}
+    if(acao==='leitura')painel='';await clique({target:botao('ms-btn','Abrir ajuste',a)});voltarGestao_();
+  }
   function podeFerramenta_(k) { return window.TKMensagensAcessos ? TKMensagensAcessos.pode(k) : podeGerir(); }
   function recursoAcao_(a) {
     if (/^(gaveta-produtos|prod-?|prodsel-)/.test(a)) return 'produtos';
@@ -1058,6 +1084,7 @@
     const anterior=document.activeElement,corpo=gaveta_('Mais');if(!corpo)return;propostaGaveta_('mais',anterior);
     const mapa={selecionar:'selecao',painel:'painel',funil:'funil','auto-cfg':'auto','agenda-painel':'agenda',atualizar:'atualizar','leitura-cfg':'config','trocar-usuario':'usuario','app-atualizar':'baixar','app-permissoes':'permissoes',conexao:'conexao',exp:'baixar','nova-conversa':'selecao','equipe-atividade':'equipe'};
     const grupo=(titulo,itens)=>{const sec=el('section','ms-mais-grupo');sec.appendChild(el('h4','',titulo));itens.forEach(([nome,acao,dados])=>{const b=botao('ms-mais-item','',acao,dados);b.append(iconeFluido_(mapa[acao]),el('span','ms-mais-texto',nome),iconeFluido_('chevron'));sec.appendChild(b);});corpo.appendChild(sec);};
+    if(podeGestorTotal_())grupo('Gestão',[['Gestão e configurações','gestor']]);
     grupo('Atendimento',[['Nova conversa','nova-conversa'],['Equipe e atividade','equipe-atividade'],['Selecionar conversas','selecionar'],['Painel de atendimento','painel'],['Agendamentos','agenda-painel'],['Etapas da venda','funil'],['Respostas automáticas','auto-cfg'],['Atualizar agora','atualizar']]);
     grupo('Conta e aplicativo',[['Configurações de leitura e nome','leitura-cfg'],['Trocar usuário','trocar-usuario'],...(window.TKAndroid?[['Atualizar app','app-atualizar'],['Permissões do app','app-permissoes']]:[]),...(canal!=='todos'?[['Conexão deste canal','conexao']]:[])]);
     grupo('Exportar',[...(canal!=='todos'?[['Este canal (CSV)','exp',{params:'formato=csv&canal='+canal,rotulo:'o canal'}],['Este canal (TXT para IA)','exp',{params:'formato=txt&canal='+canal,rotulo:'o canal'}]]:[]),['Tudo (CSV, três canais)','exp',{params:'formato=csv',rotulo:'tudo'}],['Tudo (JSON)','exp',{params:'formato=json',rotulo:'tudo'}]]);
@@ -3479,6 +3506,7 @@
     if (ev.target && ev.target.id === 'ms-luz') { fecharLuz_(); return; }
     const b = ev.target.closest('[data-ms]'); if (!b) return;
     const a = b.dataset.ms;
+    if(a==='gestor'){await abrirGestao_();return;}
     if($('ms-gaveta')?.dataset.tipo==='ficha'&&!b.closest('#ms-gaveta')&&fichaMudou_()){if(!sairFicha_())return;fichaOrig_=null;}
     if($('ms-gaveta')?.dataset.tipo==='mais'&&a!=='gaveta-fechar'){$('ms-gaveta').remove();await desempilharEsperando_('ms-gaveta');}
     const recurso = recursoAcao_(a); if (recurso && !podeFerramenta_(recurso)) { aviso_('Seu acesso não permite usar esta ferramenta.'); return; }
@@ -3740,4 +3768,5 @@
     const espiar = () => { const o = $('overlay-mensagens'); if (o) obs.observe(o, { attributes: true, attributeFilter: ['class'] }); };
     botao_.addEventListener('click', () => setTimeout(espiar, 50));
   })();
+  window.TKMobileOpenGestor=async function(){if(!podeGestorTotal_())return false;await abrir();await abrirGestao_();return true;};
 })();

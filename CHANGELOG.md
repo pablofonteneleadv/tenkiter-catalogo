@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.42] - 2026-10-31
+
+- Central do gestor do Mensageiro com dados reais e configurações; fila por mídia e intervalo entre vídeos originais.
+
+
 ## [7.40.41] - 2026-10-31
 
 - Vídeos selecionados juntos são preparados em segundo plano, com progresso por original, retomada automática do rascunho e inclusão das partes em ordem. A configuração da postagem continua livre durante o preparo.
