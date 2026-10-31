@@ -196,7 +196,7 @@ jobs:
       - name: Preparar Chromium para edição rápida no PR
         if: github.event_name == 'pull_request'
         run: |
-          python3 -m pip install playwright
+          python3 -m pip install playwright pillow
           python3 -m playwright install chromium
 
       - name: Jornada de edição de tamanhos no atendimento
