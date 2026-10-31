@@ -36,6 +36,17 @@ class NativeInboxTest {
     }
     private fun all(v:View):List<View> = listOf(v)+if(v is ViewGroup)(0 until v.childCount).flatMap{all(v.getChildAt(it))}else emptyList()
     private fun layout(v:View,w:Int,h:Int){v.measure(View.MeasureSpec.makeMeasureSpec(w,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(h,View.MeasureSpec.EXACTLY));v.layout(0,0,w,h)}
+    @Test fun presenceDoesNotReadMessagesOrChangeLocalConversation(){
+        val c=activity;c.deleteDatabase("mensagens-local.db");c.getSharedPreferences("native-auth",0).edit().clear().commit()
+        val store=NativeStore(c,SecretKeySpec(ByteArray(32){4},"AES"));val a=NativeAuth("88999990000","test","Ana");store.saveAuth(a);store.putConversation(a,conv())
+        val paths=mutableListOf<String>()
+        val api=object:NativeApi(){override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject {
+            paths.add(path);assertEquals(1L,body!!.getLong("conversa"));return JSONObject().put("ok",true)
+        }}
+        val repo=NativeRepository(c,store,api);repo.presence(1)
+        assertEquals(listOf("/msg/presenca"),paths);assertEquals(2,store.conversation(1)!!.getInt("nao_lidas"))
+        store.logout();repo.presence(1);assertEquals(1,paths.size);store.close()
+    }
     @Test fun nativeScreensAndControls(){
         val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v)
         val auth=NativeAuth("88999990000","fake-session","Pablo")

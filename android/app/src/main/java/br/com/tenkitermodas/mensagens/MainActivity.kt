@@ -43,7 +43,8 @@ class MainActivity:Activity(),InboxView.Events {
     private var displayOwner="";private var webTarget=0L;private var webRequest="";private var seededSession="";private var refreshSeq=0;private var pendingClick=0L
     private val handler=Handler(Looper.getMainLooper())
     private val home=WebKeeper.HOME
-    private val ticker=object:Runnable{override fun run(){if(nativeVisible&&repo.store.auth()!=null&&!sending)sync();handler.postDelayed(this,4000)}}
+    private var presenceAt=0L
+    private val ticker=object:Runnable{override fun run(){if(nativeVisible&&activityVisible&&repo.store.auth()!=null&&!sending){sync();if(SystemClock.elapsedRealtime()-presenceAt>=45000){presenceAt=SystemClock.elapsedRealtime();scope.launch(Dispatchers.IO){runCatching{repo.presence(conversation)}}}};handler.postDelayed(this,4000)}}
     private val changes=object:BroadcastReceiver(){override fun onReceive(c:Context?,i:Intent?){render()}}
     private val clicks=object:INotificationClickListener{override fun onClick(event:INotificationClickEvent){runOnUiThread{pendingClick=event.notification.additionalData?.optLong("conversa",0)?:0;pendingPeek=event.result.actionId!="abrir";openGeneration++;if(::inbox.isInitialized){peeking=pendingPeek;conversation=pendingClick;pendingClick=0;if(setup==null)full(conversation);sync()}}}}
     private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
@@ -63,7 +64,7 @@ class MainActivity:Activity(),InboxView.Events {
         OneSignal.Notifications.addClickListener(clicks)
         if(pendingClick>0){peeking=pendingPeek;conversation=pendingClick;pendingClick=0}
         WebKeeper.download={id,name->receivedFiles.choose(id,name)}
-        WebKeeper.actions={a->if(a=="lista"){webAudio.cancel();chooser?.onReceiveValue(null);chooser=null;webTarget=0;webRequest="";conversation=0;pendingClick=0;peeking=false;openGeneration++}else if(a=="atualizar")updater.check() else if(a=="permissoes"){showSetup();setup?.reviewing=true;setup?.refresh()}}
+        WebKeeper.actions={a->if(a=="lista"){webAudio.cancel();chooser?.onReceiveValue(null);chooser=null;webTarget=0;webRequest="";conversation=0;pendingClick=0;peeking=false;openGeneration++}else if(a=="avisos")notificationSettings() else if(a=="atualizar")updater.check() else if(a=="permissoes"){showSetup();setup?.reviewing=true;setup?.refresh()}}
         render();if(SetupGate.ok(this))full(conversation)else showSetup()
         if(repo.store.auth()!=null){BackgroundSync.periodic(this);sync();syncNames()}
     }

@@ -29,6 +29,14 @@ object WebKeeper {
         @JavascriptInterface fun lista(){handler.post{if(ReceivedFiles.trusted(web?.url))actions?.invoke("lista")}}
         @JavascriptInterface fun atualizar(){handler.post{actions?.invoke("atualizar")}}
         @JavascriptInterface fun permissoes(){handler.post{actions?.invoke("permissoes")}}
+        @JavascriptInterface fun avisos(){handler.post{if(ReceivedFiles.trusted(web?.url))actions?.invoke("avisos")}}
+        @JavascriptInterface fun diagnostico():String {
+            val c=context?.applicationContext?:return "{}"
+            return JSONObject().put("versao",BuildConfig.VERSION_NAME)
+                .put("notificacoes",SetupGate.notificationsOk(c)).put("bateria",SetupGate.batteryOk(c))
+                .put("camera",c.checkSelfPermission(android.Manifest.permission.CAMERA)==android.content.pm.PackageManager.PERMISSION_GRANTED)
+                .put("microfone",c.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED).toString()
+        }
         @JavascriptInterface fun versao()=BuildConfig.VERSION_NAME
     }
     fun configure(w:WebView){
