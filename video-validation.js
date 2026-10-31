@@ -69,7 +69,7 @@
       go.onclick=async()=>{
         const inicio=dividir?Number(dur.value):0,seg=op.perfil==='postagens'?(meta.ok?meta.duration:0):0;
         if(!Number.isFinite(inicio)||inicio<0||(op.perfil==='postagens'&&(!Number.isFinite(seg)||((meta.ok||!dividir)&&seg<3)||(!dividir&&seg>30)||(dividir&&(!Number.isFinite(inicio)||inicio<3||inicio>30))||(!dividir&&meta.ok&&inicio+seg>meta.duration+.01)))){status.textContent='Escolha uma duração máxima de 3 a 30 segundos para cada parte.';return;}
-        go.disabled=true;dur.disabled=true;iniciado=true;fechar.textContent='Fechar e recuperar depois';
+        urlsPartes.splice(0).forEach(u=>URL.revokeObjectURL(u));go.disabled=true;dur.disabled=true;iniciado=true;fechar.textContent='Fechar e recuperar depois';
         const key=(dividir?'tk-video-partes-v1:':'tk-video-v1:')+op.conta+':'+op.perfil+':'+hash+':'+inicio+':'+seg;
         const rota=op.base.replace(/\/$/,'')+(op.perfil==='mensageiro'?'/msg/video-preparar':'/post/video-preparar')+(dividir?'?partes=1':'');
         const query=dividir?'&':'?';
@@ -92,6 +92,7 @@
                   const res=await fetch(rota+query+'arquivo=1&id='+encodeURIComponent(id)+'&parte='+pt.ordem,{headers:op.headers,signal:AbortSignal.timeout(60000)});if(!res.ok)throw Error('Não consegui recuperar todas as partes. Selecione novamente o original.');
                   const f=new File([await res.blob()],file.name.replace(/\.[^.]+$/,'')+'-parte-'+String(pt.ordem).padStart(2,'0')+'-de-'+n+'.mp4',{type:'video/mp4'});
                   const v=await global.TKVideoValidation.validar(f,{maxBytes:perfil.bytes,maxDurationSeconds:30,minDurationSeconds:3});if(!v.ok||Math.abs(v.metadata.duration-pt.duracao)>.15)throw Error('Uma das partes não passou na conferência.');
+                  if(!ativo)return;
                   if(n>1)f.tkParte={preparo:id,ordem:pt.ordem,total:n};arquivos.push(f);urlsPartes.push(URL.createObjectURL(f));
                 }
                 const nav=document.createElement('div');nav.style.cssText='display:flex;gap:8px;flex-wrap:wrap';nav.setAttribute('aria-label','Prévia das partes');
@@ -103,6 +104,7 @@
               const blob=await resposta.blob(),saida=new File([blob],file.name.replace(/\.[^.]+$/,'')+'-preparado.mp4',{type:'video/mp4'});
               const v=await global.TKVideoValidation.validar(saida,{maxBytes:perfil.bytes,maxDurationSeconds:perfil.max,minDurationSeconds:perfil.min});
               if(!v.ok)throw Error(v.erros.join(' '));if(op.perfil==='postagens'&&Math.abs(v.metadata.duration-seg)>.15)throw Error('O resultado não corresponde ao trecho escolhido.');if(op.perfil==='mensageiro'&&meta.ok&&Math.abs(v.metadata.duration-meta.duration)>.15)throw Error('A duração mudou. O vídeo preparado não será usado.');
+              if(!ativo)return;
               urlPreparado=URL.createObjectURL(saida);video.src=urlPreparado;video.load();title.textContent='Vídeo pronto';info.textContent='Confira a imagem e o som antes de usar. '+v.metadata.duration.toFixed(1).replace('.',',')+' s · '+(saida.size/1048576).toFixed(1).replace('.',',')+' MiB.';status.textContent='Nada foi enviado. O original está preservado.';tempo.hidden=true;go.textContent='Usar este vídeo';go.disabled=false;go.onclick=()=>fim(null,saida);fechar.textContent='Descartar resultado';iniciado=false;go.focus();return;
             }
             status.textContent=r.estado==='processando'?'Comprimindo o vídeo…':'Na fila de preparação. Pode levar alguns minutos; você pode fechar e recuperar depois.';

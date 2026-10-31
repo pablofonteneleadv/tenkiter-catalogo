@@ -4896,7 +4896,7 @@ async function videoRunner_(env,req,url,J){
 }
 async function limparVideoPreparo_(env){
   try{const rows=(await env.DB.prepare('SELECT id,origem,resultado FROM video_preparo WHERE criado<? LIMIT 10').bind(Date.now()-86400000).all()).results;
-    for(const row of rows){if(!/^[a-f0-9-]{36}$/.test(row.id))continue;const l=await env.MIDIA.list({prefix:'video-preparo/'+row.id+'/',limit:100});for(const o of l.objects)await env.MIDIA.delete(o.key);await env.DB.prepare('DELETE FROM video_parte WHERE preparo=?').bind(row.id).run();await env.DB.prepare('DELETE FROM video_preparo WHERE id=? AND criado<?').bind(row.id,Date.now()-86400000).run();}
+    for(const row of rows){if(!/^[a-f0-9-]{36}$/.test(row.id))continue;const l=await env.MIDIA.list({prefix:'video-preparo/'+row.id+'/',limit:100});for(const o of l.objects)await env.MIDIA.delete(o.key);if(l.truncated)continue;await env.DB.prepare('DELETE FROM video_parte WHERE preparo=?').bind(row.id).run();await env.DB.prepare('DELETE FROM video_preparo WHERE id=? AND criado<?').bind(row.id,Date.now()-86400000).run();}
   }catch(e){if(!/no such table/.test(String(e)))throw e;}
 }
 async function videoUsuario_(env,req,url,J){
@@ -4914,7 +4914,7 @@ async function videoUsuario_(env,req,url,J){
     const id=hash.slice(0,8)+'-'+hash.slice(8,12)+'-'+hash.slice(12,16)+'-'+hash.slice(16,20)+'-'+hash.slice(20,32);
     const existente=await env.DB.prepare('SELECT estado FROM video_preparo WHERE id=? AND dono=?').bind(id,dono).first();
     if(existente&&existente.estado!=='erro')return J({ok:true,id,estado:existente.estado});
-    if(existente){await env.DB.prepare('DELETE FROM video_parte WHERE preparo=?').bind(id).run();await env.DB.prepare("UPDATE video_preparo SET estado='fila',erro='',lease='',ate=0 WHERE id=? AND estado='erro'").bind(id).run();return J({ok:true,id,estado:'fila'});}
+    if(existente){const antigos=await env.MIDIA.list({prefix:'video-preparo/'+id+'/',limit:100});for(const o of antigos.objects)if(o.key!=='video-preparo/'+id+'/original')await env.MIDIA.delete(o.key);if(antigos.truncated)return J({ok:false,erro:'Limpando resultados da tentativa anterior. Tente novamente em instantes; o original foi preservado.'},409);await env.DB.prepare('DELETE FROM video_parte WHERE preparo=?').bind(id).run();await env.DB.prepare("UPDATE video_preparo SET estado='fila',erro='',lease='',ate=0 WHERE id=? AND estado='erro'").bind(id).run();return J({ok:true,id,estado:'fila'});}
     // Reserva atômica: limita temporários e respeita o orçamento de armazenamento existente.
     const uso=await lerUso(env),reserva=buf.byteLength+(perfil==='postagens-partes'?(duracao>0?Math.min(256*1048576,planoPartes(duracao,inicio).length*9961472):256*1048576):VIDEO_PERFIS_[perfil].bytes);
     const teto=Math.min(512*1048576,Math.max(0,limite(env)-uso.bytes));

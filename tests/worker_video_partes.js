@@ -108,6 +108,10 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   const probeJob=(await(await call('/internal/video?acao=proximo','POST',undefined,auth)).json()).job;assert.equal(probeJob.id,unknown.id);assert.equal(probeJob.partes,null);
   const probeAuth={...auth,'X-Video-Lease':probeJob.lease};
   const defined=await(await call('/internal/video?acao=plano&id='+unknown.id,'POST',JSON.stringify({duracao:75}),probeAuth)).json();assert.deepEqual(defined.partes.map(p=>p.duracao),[30,30,15],'Servidor define plano quando o navegador não lê a duração');
+  await call('/internal/video?acao=resultado&id='+unknown.id+'&parte=1','POST',thirty,probeAuth);await call('/internal/video?acao=falha&id='+unknown.id,'POST',undefined,probeAuth);
+  assert.equal((await(await call(route+'&inicio=30&duracao=0','POST',full)).json()).id,unknown.id);
+  assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM video_parte WHERE preparo=?').get(unknown.id).n,0,'Retry limpa resultados incompletos');
+  const remaining=(await env.MIDIA.list({prefix:'video-preparo/'+unknown.id+'/'})).objects;assert.equal(remaining.length,1);assert(remaining[0].key.endsWith('/original'),'Retry preserva original e evita acumular saídas antigas');
   fs.rmSync(folder,{recursive:true,force:true});
   console.log('OK: partes integrais, hashes, dono, cadastro atômico, agendamento, confirmação, ordem, erro e cancelamento.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
