@@ -92,7 +92,7 @@ const DDL = [
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
-const ESQUEMA_ = '20261030-citar-6';
+const ESQUEMA_ = '20261031-video-partes-1';
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -101,6 +101,8 @@ async function iniciar(env) {
     catch(e) { if (!/no such table/i.test(String(e))) throw e; }
     if (versao === ESQUEMA_) return;
     await migrarEsquema_(env);
+    const postCols=new Set((await env.DB.prepare('PRAGMA table_info(postagem)').all()).results.map(c=>c.name));
+    for(const [nome,tipo] of [['serie',"TEXT NOT NULL DEFAULT ''"],['parte','INTEGER NOT NULL DEFAULT 0'],['partes','INTEGER NOT NULL DEFAULT 0']])if(!postCols.has(nome))await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();
     // Acrescenta a ficha estruturada sem regravar nem apagar os campos antigos.
     const fichaCols = new Set((await env.DB.prepare('PRAGMA table_info(msg_ficha)').all()).results.map(c => c.name));
     if (!fichaCols.has('perfil_json')) {
@@ -1353,6 +1355,10 @@ async function falhaPostagem(env, p, e) {
   await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, tentativas=?, containers='', erro=?, atualizado_em=? WHERE id=?").bind(new Date(Date.now() + 5 * 60000).toISOString(), tent, f.frase, agora(), p.id).run();
 }
 /** Chamado a cada minuto pelo cron (e logo ao criar "agora"). Nunca lança. */
+async function dispararPostagens_(env){
+  if(env.POSTAGENS_SEQUENCIA)return env.POSTAGENS_SEQUENCIA.get(env.POSTAGENS_SEQUENCIA.idFromName('loja')).acordar();
+  return processarPostagens(env); // ambiente de testes/versão anterior, cron continua disponível
+}
 export async function processarPostagens(env) {
   try {
     await iniciar(env);
@@ -1386,7 +1392,15 @@ export async function processarPostagens(env) {
     let feitas = 0, novas = usados, tentadas = 0;
     for (const p of lin) {
       if (tentadas >= 4) break;                                       // no máximo 4 por minuto; as que esperam o limite do canal não ocupam essas vagas
-      if (p.status === 'agendado' && !p.urgente && cfgP.pausaAtiva && foraDaPausa(cfgP, Date.now()) > Date.now()) {          // agendada antes da regra: não sai na pausa, vai para o primeiro horário livre depois dela
+      let anterior=null;
+      if(p.serie&&p.parte>1){
+        anterior=await env.DB.prepare('SELECT status,publicado_em FROM postagem WHERE serie=? AND parte=?').bind(p.serie,p.parte-1).first();
+        if(!anterior||!['publicado','manual_feito'].includes(anterior.status))continue;
+        if(!cfgP.partesRapidas&&Date.parse(anterior.publicado_em)+Math.max(...bucketsDoPost(p.tipo,p.canal).map(b=>gapDoTipoMs(cfgP,b)))>Date.now())continue;
+      }
+      const ativas=(await env.DB.prepare("SELECT s.serie,s.tipo,s.canal FROM postagem s WHERE s.serie<>'' AND s.parte=1 AND s.status IN ('publicado','processando','manual_feito') AND EXISTS(SELECT 1 FROM postagem q WHERE q.serie=s.serie AND q.status IN ('agendado','processando','erro','manual_pendente'))").all()).results||[];
+      if(ativas.some(s=>s.serie!==p.serie&&bucketsDoPost(s.tipo,s.canal).some(b=>bucketsDoPost(p.tipo,p.canal).includes(b))))continue;
+      if (p.status === 'agendado' && !(anterior&&cfgP.partesRapidas) && !p.urgente && cfgP.pausaAtiva && foraDaPausa(cfgP, Date.now()) > Date.now()) {          // agendada antes da regra: não sai na pausa, vai para o primeiro horário livre depois dela
         try { const r = ajustarHorario(cfgP, p.tipo, Date.now(), await ocupadosDoTipo_(env, p.tipo, p.id, gapDoTipoMs(cfgP, p.tipo))); await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(new Date(r.t).toISOString(), agora(), p.id).run(); } catch (e) { /* tenta de novo no próximo minuto */ }
         continue;
       }
@@ -1402,7 +1416,8 @@ export async function processarPostagens(env) {
       tentadas++;
       try { await avancarPostagem(env, token, p); feitas++; } catch (e) { try { await falhaPostagem(env, p, e); } catch (e2) { /* próximo minuto tenta de novo */ } }
     }
-    return { feitas: feitas };
+    const rapidas=cfgP.partesRapidas&&(await env.DB.prepare("SELECT 1 FROM postagem p WHERE p.serie<>'' AND p.status IN ('agendado','processando') AND p.agendado_em<=? AND NOT EXISTS(SELECT 1 FROM postagem e WHERE e.serie=p.serie AND e.status IN ('erro','cancelado','manual_pendente')) LIMIT 1").bind(agora()).first());
+    return { feitas: feitas,continuar:!!rapidas };
   } catch (e) { return { feitas: 0, erro: true }; }
 }
 /** Quantas postagens deste canal já saíram nas últimas 24 h (Story, Feed… do Instagram; ou "status" do WhatsApp). */
@@ -1446,7 +1461,7 @@ export const CANAL_FILA_PADRAO = {
   carrossel: { max24h: 20, gapMin: 300, gapMax: 600 },
   reels: { max24h: 10, gapMin: 600, gapMax: 1200 },
 };
-export const CFG_POST_PADRAO = { pausaAtiva: true, pausaDe: '22:00', pausaAte: '06:30', max24h: 90, agoraIgnora: true, canais: CANAL_FILA_PADRAO };
+export const CFG_POST_PADRAO = { pausaAtiva: true, pausaDe: '22:00', pausaAte: '06:30', max24h: 90, agoraIgnora: true, partesRapidas: true, canais: CANAL_FILA_PADRAO };
 /** Em quais "canais de contagem" uma postagem entra: o tipo dela (se vai ao Instagram) e/ou "status" (se vai ao WhatsApp). */
 export function bucketsDoPost(tipo, canal) {
   const out = [];
@@ -1474,7 +1489,7 @@ export function normalizarCfgPost(c) {
   });
   return {
     pausaAtiva: x.pausaAtiva === undefined ? d.pausaAtiva : !!x.pausaAtiva, pausaDe: hm(x.pausaDe, d.pausaDe), pausaAte: hm(x.pausaAte, d.pausaAte),
-    max24h: num(x.max24h, 1, 100, d.max24h), agoraIgnora: x.agoraIgnora === undefined ? d.agoraIgnora : !!x.agoraIgnora, canais: canais,
+    max24h: num(x.max24h, 1, 100, d.max24h), agoraIgnora: x.agoraIgnora === undefined ? d.agoraIgnora : !!x.agoraIgnora, canais: canais, partesRapidas:x.partesRapidas===undefined?true:!!x.partesRapidas,
   };
 }
 /** Junta o que o gestor mandou (pode ser só um canal) com o que já estava salvo, canal por canal. */
@@ -1603,7 +1618,7 @@ function progressoPostagem_(r) {
 }
 function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
-  return { id: r.id, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, grupoEnvioIncerto: !!r.grupo_envio_incerto, grupoMidiaIncompativel: normalizarCanal_(r.canal) === 'grupo' && /H\.265\/HEVC/.test(String(r.erro || '')), permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
+  return { id: r.id, serie:r.serie?{id:r.serie,ordem:r.parte,total:r.partes}:null, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, grupoEnvioIncerto: !!r.grupo_envio_incerto, grupoMidiaIncompativel: normalizarCanal_(r.canal) === 'grupo' && /H\.265\/HEVC/.test(String(r.erro || '')), permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
 }
 
 /* ====================================================================
@@ -1734,6 +1749,26 @@ async function uso24hPorCanal_(env) {
   try { for (const b of CANAIS_FILA) o[b] = await contarUsados24h_(env, b, desde); } catch (e) { /* o painel só deixa de mostrar o uso */ }
   return o;
 }
+async function validarSeriesPost_(env,req,lista,vs){
+  const dono=await sha(req.headers.get('X-TK-Whats')||''),grupos=new Map(),jobs=new Map();
+  for(let i=0;i<lista.length;i++){
+    const x=lista[i],v=vs[i],ref=x.serie;if(!ref)continue;
+    if(v.tipo!=='story'||v.midias.length!==1||v.midias[0].tipo!=='video'||!Number.isSafeInteger(ref.ordem)||!Number.isSafeInteger(ref.total))throw Error('Partes de vídeo exigem Stories completos e em ordem.');
+    let job=jobs.get(ref.preparo);
+    if(!job){job=await env.DB.prepare("SELECT * FROM video_preparo WHERE id=? AND dono=? AND perfil='postagens-partes' AND estado='pronto'").bind(String(ref.preparo||''),dono).first();if(!job||job.criado<Date.now()-86400000)throw Error('Prepare novamente o original para usar todas as partes.');jobs.set(ref.preparo,job);}
+    const plano=planoPartes(job.duracao,job.inicio),pt=await env.DB.prepare('SELECT * FROM video_parte WHERE preparo=? AND ordem=?').bind(job.id,ref.ordem).first();
+    if(!pt||ref.total!==plano.length||pt.total!==ref.total)throw Error('A sequência não corresponde ao vídeo preparado.');
+    const u=new URL(v.midias[0].url),base=new URL(env.MIDIA_URL),chave=u.pathname.startsWith('/m/')?decodeURIComponent(u.pathname.slice(3)):'';
+    if(u.origin!==base.origin||!/^((t\/)?[0-9]{6}\/)[a-f0-9]{20}\.mp4$/.test(chave))throw Error('Uma parte não tem mídia válida da preparação.');
+    const obj=await env.MIDIA.get(chave);if(!obj||obj.size>9961472)throw Error('Uma parte não está disponível.');
+    const bytes=await corpoLimitadoVideo_(new Response(obj.body),9961472),hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
+    if(hash!==pt.hash)throw Error('Uma parte mudou. Prepare novamente o vídeo original.');
+    const k=job.id+':'+v.canal;let g=grupos.get(k);if(!g){g={id:crypto.randomUUID(),refs:[],total:ref.total};grupos.set(k,g);}
+    if(g.refs.length&&ref.ordem!==g.refs.at(-1).parte+1)throw Error('Mantenha todas as partes na ordem original.');
+    v.serie=g.id;v.parte=ref.ordem;v.partes=ref.total;g.refs.push(v);
+  }
+  for(const g of grupos.values())if(g.refs.length!==g.total||g.refs[0].parte!==1)throw Error('Inclua todas as partes do mesmo vídeo, na ordem original.');
+}
 async function rotasPostagem(env, ctx, req, url, J, perms) {
   const p = url.pathname;
   if (p === '/posts' && req.method === 'GET') {
@@ -1746,7 +1781,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
   let b = {}; if (req.method === 'POST') { try { b = await req.json(); } catch (e) { return J({ ok: false, erro: 'Pedido inválido.' }, 400); } }
   if (p === '/post' && req.method === 'POST') {
     const originais = Array.isArray(b.posts) ? b.posts : [b];
-    if (!originais.length || originais.length > 12 || originais.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) return J({ ok: false, erro: 'Envie de uma a doze postagens por vez.' }, 400);
+    if (!originais.length || originais.length > 60 || originais.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) return J({ ok: false, erro: 'Envie de uma a sessenta postagens por vez.' }, 400);
     if (originais.some((x) => x.grupoClientes === true || x.canal === 'grupo') && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado. Avise o gestor.' }, 409);
     if (originais.some((x) => x.status2 === true || x.canal === 'whatsapp2') && !(await cfgWafly_(env, 2)) && !(await cfgWameStatus_(env))) return J({ ok: false, erro: 'O WhatsApp Status 2 ainda não está configurado. Avise o gestor.' }, 409);
     const lista = originais.flatMap((x) => {
@@ -1769,28 +1804,31 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     for (const v of vs) if (v.canal === 'grupo') { const erro = await erroVideoGrupo_(env, v.midias); if (erro) return J({ ok: false, erro }, 400); }
     if (!(await cfgGet(env, 'ig_token')) && vs.some((v) => v.modo === 'auto' && canalUsaInstagram_(v.canal))) return J({ ok: false, erro: 'O Instagram ainda não está conectado (Produtos para aceitar → Conectar).' }, 409);
     const ids = [], inserts = [], quandos = [], por = String(b.por || '').slice(0, 60);
-    const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [], intervaloMs = intervaloPedidoMs_(b.intervalo);
+    const cfg = await lerCfgPost(env), ocup = {}, cursores = {}, ajustes = [], inicioSeries={}, intervaloMs = intervaloPedidoMs_(b.intervalo);
+    try{await validarSeriesPost_(env,req,lista,vs);}catch(e){return J({ok:false,erro:e.message},400);}
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], bs = bucketsDoPost(v.tipo, v.canal), ck = bs.join('+');
       for (const b of bs) if (!ocup[b]) ocup[b] = await ocupadosDoTipo_(env, b, 0, gapMaxDoTipoMs(cfg, b));
       let t;
-      if (v.urgente && cfg.agoraIgnora) t = Date.now();                                  // urgência: sai já, sem pausa nem intervalo
+      if(v.serie&&v.parte>1)t=inicioSeries[v.serie];
+      else if (v.urgente && cfg.agoraIgnora) t = Date.now();                                  // urgência: sai já, sem pausa nem intervalo
       else if (v.sequencia && intervaloMs && cursores[ck] != null) t = intervaloEscolhido_(cfg, bs, ocup, cursores[ck], intervaloMs);   // v1.7: a pessoa escolheu "de X em X minutos" (nunca abaixo do mínimo do canal)
       else if (v.sequencia) t = proximoLivreMulti(cfg, bs, ocup, cursores[ck] == null ? Date.now() + 60000 : cursores[ck]).t;       // intervalo SORTEADO entre o mín. e o máx. do canal
       else {
         const pedido = Math.max(Date.parse(v.quando), Date.now()), aj = ajustarHorarioMulti(cfg, bs, pedido, ocup);
         t = aj.t; if (aj.ajustado) ajustes.push({ i: i, tipo: v.tipo, de: new Date(pedido).toISOString(), para: new Date(t).toISOString(), motivo: aj.motivo });
       }
+      if(v.serie&&v.parte===1)inicioSeries[v.serie]=t;
       cursores[ck] = t; bs.forEach((b) => ocup[b].push(t)); v.quando = new Date(t).toISOString(); v.agora = t <= Date.now() + 1000;
       quandos.push(v.quando);
 
 
-      inserts.push(env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal, urgente) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal, v.urgente ? 1 : 0));
+      inserts.push(env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal, urgente, serie, parte, partes) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal, v.urgente ? 1 : 0,v.serie||'',v.parte||0,v.partes||0));
     }
     // Todos os destinos entram juntos ou nenhum: uma falha não deixa metade do pedido na fila.
     const criadas = await env.DB.batch(inserts);
     criadas.forEach((r) => ids.push(r.meta && r.meta.last_row_id));
-    if (vs.some((v) => v.agora) && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
+    if (vs.some((v) => v.agora) && ctx && ctx.waitUntil) ctx.waitUntil(dispararPostagens_(env));
     return J({ ok: true, ids: ids, quandos: quandos, ajustes: ajustes, postagensOriginais: originais.length, gruposClientes: originais.filter((x) => x.grupoClientes === true && x.canal !== 'grupo').length, status2: originais.filter((x) => x.status2 === true && x.canal !== 'whatsapp2').length });
   }
   if (p === '/post/config' && req.method === 'GET') return J({ ok: true, config: await lerCfgPost(env), padrao: CFG_POST_PADRAO, podeEditar: (perms || []).indexOf('gerir_acessos') !== -1 });
@@ -1846,11 +1884,12 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     if (p === '/post/consultar') {                                       // v1.9: só consulta o resultado do WhatsApp (nunca reenvia)
       if (String(linha.ig_id || '').indexOf('zapq:') !== 0 || ['processando', 'erro'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não está aguardando confirmação do WhatsApp.' }, 409);
       const rz = await resolverZapPendente_(env, linha, true);
-      if (rz === 'aceito' && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
+      if (rz === 'aceito' && ctx && ctx.waitUntil) ctx.waitUntil(dispararPostagens_(env));
       return J({ ok: true, resultado: rz });
     }
     if (p === '/post/cancelar') {
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem já está sendo enviada ou foi publicada; não dá mais para cancelar.' }, 409);
+      if(linha.serie){await env.DB.prepare("UPDATE postagem SET status='cancelado',atualizado_em=? WHERE serie=? AND status IN ('agendado','erro','manual_pendente')").bind(agora(),linha.serie).run();return J({ok:true});}
       const cancelou = await env.DB.prepare("UPDATE postagem SET status='cancelado', atualizado_em=? WHERE id=? AND status IN ('agendado','erro','manual_pendente')").bind(agora(), id).run();
       if (!cancelou.meta || cancelou.meta.changes !== 1) return J({ ok: false, erro: 'A postagem mudou durante a operação. Atualize a fila.' }, 409);
       return J({ ok: true });
@@ -1858,7 +1897,9 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     if (p === '/post/converter-grupo') {
       return J({ok:false,erro:'Abra o original em Nova postagem e use Preparar vídeo. A preparação agora preserva a fila e nunca libera envio sozinha.'},409);
     }
+    if(linha.serie&&['/post/proximo','/post/mover','/post/repostar'].includes(p))return J({ok:false,erro:'Para mudar o horário de uma sequência, descarte as partes pendentes e agende novamente o vídeo completo. Partes publicadas não serão repetidas.'},409);
     if (p === '/post/reagendar') {
+      if(linha.serie&&linha.status!=='erro')return J({ok:false,erro:'A sequência já está agendada. Para trocar o horário, descarte as partes pendentes e prepare novamente o original.'},409);
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
       if (canalComRecibo_(linha.canal) && await env.DB.prepare("SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=? AND estado='enviando'").bind(id).first()) return J({ ok: false, erro: 'O envio ao ' + (linha.canal === 'whatsapp2' ? 'WhatsApp Status 2' : 'grupo') + ' ficou sem confirmação. Confira no WhatsApp; depois use “Repostar com novo ID” ou “Descartar”.' }, 409);
       const r = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: b.quando }));
@@ -1870,7 +1911,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       if (r.v.urgente && cfg.agoraIgnora) t = Date.now();
       else { aj = ajustarHorarioMulti(cfg, bs, Math.max(t, Date.now()), await ocupadosMulti_(env, cfg, bs, id)); t = aj.t; }
       await env.DB.prepare("UPDATE postagem SET status='agendado', agendado_em=?, tentativas=0, erro='', containers='', urgente=?, atualizado_em=? WHERE id=?").bind(new Date(t).toISOString(), r.v.urgente ? 1 : 0, agora(), id).run();
-      if (t <= Date.now() + 1000 && ctx && ctx.waitUntil) ctx.waitUntil(processarPostagens(env));
+      if (t <= Date.now() + 1000 && ctx && ctx.waitUntil) ctx.waitUntil(dispararPostagens_(env));
       return J({ ok: true, quando: new Date(t).toISOString(), ajustado: aj.ajustado, motivo: aj.motivo });
     }
     if (p === '/post/proximo') {
@@ -4762,8 +4803,17 @@ async function iniciarConversa_(env, req, d) {
 
 /* Preparação privada de vídeo. Somente gera arquivos; nunca envia mensagens/postagens.
  * O runner recebe identidade OIDC curta, restrita ao workflow da main, sem acesso SQL genérico. */
-const VIDEO_PERFIS_ = Object.freeze({mensageiro:{bytes:15000000,max:0,min:0},postagens:{bytes:9961472,max:30,min:3}});
+const VIDEO_PERFIS_ = Object.freeze({'postagens-partes':{bytes:9961472,max:30,min:3},mensageiro:{bytes:15000000,max:0,min:0},postagens:{bytes:9961472,max:30,min:3}});
 const VIDEO_TABELA_ = `CREATE TABLE IF NOT EXISTS video_preparo(id TEXT PRIMARY KEY,dono TEXT NOT NULL,perfil TEXT NOT NULL,estado TEXT NOT NULL,origem TEXT NOT NULL,resultado TEXT NOT NULL DEFAULT '',inicio REAL NOT NULL DEFAULT 0,duracao REAL NOT NULL DEFAULT 0,lease TEXT NOT NULL DEFAULT '',ate INTEGER NOT NULL DEFAULT 0,criado INTEGER NOT NULL,reservado INTEGER NOT NULL DEFAULT 0,erro TEXT NOT NULL DEFAULT '')`;
+const VIDEO_PARTES_TABELA_ = `CREATE TABLE IF NOT EXISTS video_parte(preparo TEXT NOT NULL,ordem INTEGER NOT NULL,total INTEGER NOT NULL,inicio REAL NOT NULL,duracao REAL NOT NULL,chave TEXT NOT NULL,hash TEXT NOT NULL,PRIMARY KEY(preparo,ordem))`;
+export function planoPartes(duracao,maximo=30){
+  if(!Number.isFinite(duracao)||duracao<3||duracao>1800||!Number.isFinite(maximo)||maximo<3||maximo>30)throw Error('Use um vídeo entre 3 segundos e 30 minutos, com partes de 3 a 30 segundos.');
+  const n=Math.ceil(duracao/maximo),ds=Array.from({length:n},(_,i)=>Math.min(maximo,duracao-i*maximo));
+  if(n>1&&ds[n-1]<3){ds[n-2]-=3-ds[n-1];ds[n-1]=3;}
+  if(ds.some(x=>x<3))throw Error('A duração escolhida deixa uma parte menor que 3 segundos. Escolha partes maiores.');
+  let inicio=0;return ds.map((d,i)=>{const r={ordem:i+1,total:n,inicio,duracao:d};inicio+=d;return r;});
+}
+async function iniciarPartesVideo_(env){await env.DB.prepare(VIDEO_PARTES_TABELA_).run();}
 async function corpoLimitadoVideo_(req,max){
   if(Number(req.headers.get('Content-Length'))>max)throw Error('Arquivo acima do limite de entrada (40 MiB).');
   const reader=req.body?.getReader();if(!reader)throw Error('Arquivo vazio.');const partes=[];let total=0;
@@ -4790,7 +4840,7 @@ async function autorizarVideoRunner_(req){
 }
 async function videoRunner_(env,req,url,J){
   if(!await autorizarVideoRunner_(req))return J({ok:false,erro:'Identidade do processador não autorizada.'},401);
-  await env.DB.prepare(VIDEO_TABELA_).run();
+  await env.DB.prepare(VIDEO_TABELA_).run();await iniciarPartesVideo_(env);
   const id=url.searchParams.get('id')||'',acao=url.searchParams.get('acao')||'';
   if(acao==='saude'){await env.MIDIA.list({prefix:'video-preparo/',limit:1});return J({ok:true,processador:'video-v1',armazenamento:true,envio:false});}
   if(acao==='proximo'&&req.method==='POST'){
@@ -4798,8 +4848,8 @@ async function videoRunner_(env,req,url,J){
     await env.DB.prepare("UPDATE video_preparo SET estado='erro',erro='O processamento foi interrompido. Selecione novamente o original.' WHERE estado='processando' AND ate<?").bind(Date.now()).run();
     const job=await env.DB.prepare("SELECT * FROM video_preparo WHERE estado='fila' AND criado>? ORDER BY criado LIMIT 1").bind(Date.now()-86400000).first();
     if(!job)return J({ok:true,job:null});const lease=crypto.randomUUID();
-    const r=await env.DB.prepare("UPDATE video_preparo SET estado='processando',lease=?,ate=? WHERE id=? AND estado='fila'").bind(lease,Date.now()+600000,job.id).run();
-    return J({ok:true,job:r.meta.changes?{id:job.id,perfil:job.perfil,inicio:job.inicio,duracao:job.duracao,lease}:null});
+    const r=await env.DB.prepare("UPDATE video_preparo SET estado='processando',lease=?,ate=? WHERE id=? AND estado='fila'").bind(lease,Date.now()+2100000,job.id).run();
+    return J({ok:true,job:r.meta.changes?{id:job.id,perfil:job.perfil,inicio:job.inicio,duracao:job.duracao,lease,partes:job.perfil==='postagens-partes'?planoPartes(job.duracao,job.inicio):null}:null});
   }
   const job=await env.DB.prepare('SELECT * FROM video_preparo WHERE id=?').bind(id).first();
   if(!job||job.estado!=='processando'||job.lease!==req.headers.get('X-Video-Lease')||job.ate<Date.now())return J({ok:false,erro:'Trabalho indisponível.'},409);
@@ -4810,7 +4860,20 @@ async function videoRunner_(env,req,url,J){
     await env.DB.prepare("UPDATE video_preparo SET estado='erro',erro='Não foi possível preparar este vídeo. O original foi preservado; tente outro arquivo ou envie um link.' WHERE id=? AND lease=?").bind(id,job.lease).run();return J({ok:true});
   }
   if(acao==='resultado'&&req.method==='POST'){
-    const bytes=await corpoLimitadoVideo_(req,VIDEO_PERFIS_[job.perfil].bytes);
+    const max=job.perfil==='postagens-partes'?Math.min(9961472,Math.floor(256*1048576/planoPartes(job.duracao,job.inicio).length)):VIDEO_PERFIS_[job.perfil].bytes;
+    const bytes=await corpoLimitadoVideo_(req,max);
+    if(job.perfil==='postagens-partes'){
+      const plano=planoPartes(job.duracao,job.inicio),ordem=Number(url.searchParams.get('parte')),parte=plano[ordem-1];
+      if(!parte)return J({ok:false,erro:'Parte inválida.'},400);
+      const segundos=duracaoMp4Status_(bytes.buffer);
+      if(!segundos||segundos<3||segundos>30||Math.abs(segundos-parte.duracao)>.15||detectarAnexo_(bytes.buffer,'vídeo')!=='video/mp4'||/hvc1|hev1/.test(new TextDecoder('latin1').decode(bytes)))return J({ok:false,erro:'Parte fora do formato ou duração esperados.'},415);
+      const chave='video-preparo/'+id+'/'+job.lease+'-'+ordem+'.mp4',hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');
+      await env.MIDIA.put(chave,bytes,{httpMetadata:{contentType:'video/mp4'}});
+      await env.DB.prepare('INSERT OR REPLACE INTO video_parte(preparo,ordem,total,inicio,duracao,chave,hash) VALUES(?,?,?,?,?,?,?)').bind(id,ordem,plano.length,parte.inicio,parte.duracao,chave,hash).run();
+      const n=await env.DB.prepare('SELECT COUNT(*) n FROM video_parte WHERE preparo=?').bind(id).first();
+      if(n.n===plano.length)await env.DB.prepare("UPDATE video_preparo SET estado='pronto',resultado=? WHERE id=? AND lease=? AND estado='processando' AND ate>?").bind('partes',id,job.lease,Date.now()).run();
+      return J({ok:true});
+    }
     const segundos=duracaoMp4Status_(bytes.buffer);if(!segundos||(job.perfil==='postagens'&&(segundos<3||segundos>30)))return J({ok:false,erro:'Duração final inválida.'},415);
     if(detectarAnexo_(bytes.buffer,'vídeo')!=='video/mp4'||/hvc1|hev1/.test(new TextDecoder('latin1').decode(bytes)))return J({ok:false,erro:'Saída inválida.'},415);
     const chave='video-preparo/'+id+'/'+job.lease+'.mp4';await env.MIDIA.put(chave,bytes,{httpMetadata:{contentType:'video/mp4'}});
@@ -4820,26 +4883,27 @@ async function videoRunner_(env,req,url,J){
 }
 async function limparVideoPreparo_(env){
   try{const rows=(await env.DB.prepare('SELECT id,origem,resultado FROM video_preparo WHERE criado<? LIMIT 10').bind(Date.now()-86400000).all()).results;
-    for(const row of rows){if(!/^[a-f0-9-]{36}$/.test(row.id))continue;const l=await env.MIDIA.list({prefix:'video-preparo/'+row.id+'/',limit:10});for(const o of l.objects)await env.MIDIA.delete(o.key);await env.DB.prepare('DELETE FROM video_preparo WHERE id=? AND criado<?').bind(row.id,Date.now()-86400000).run();}
+    for(const row of rows){if(!/^[a-f0-9-]{36}$/.test(row.id))continue;const l=await env.MIDIA.list({prefix:'video-preparo/'+row.id+'/',limit:100});for(const o of l.objects)await env.MIDIA.delete(o.key);await env.DB.prepare('DELETE FROM video_parte WHERE preparo=?').bind(row.id).run();await env.DB.prepare('DELETE FROM video_preparo WHERE id=? AND criado<?').bind(row.id,Date.now()-86400000).run();}
   }catch(e){if(!/no such table/.test(String(e)))throw e;}
 }
 async function videoUsuario_(env,req,url,J){
-  await env.DB.prepare(VIDEO_TABELA_).run();
-  const dono=await sha(req.headers.get('X-TK-Whats')||''),perfil=url.pathname.startsWith('/msg/')?'mensageiro':'postagens';
+  await env.DB.prepare(VIDEO_TABELA_).run();await iniciarPartesVideo_(env);
+  const dono=await sha(req.headers.get('X-TK-Whats')||''),perfil=url.pathname.startsWith('/msg/')?'mensageiro':url.searchParams.get('partes')==='1'?'postagens-partes':'postagens';
   if(req.method==='POST'){
     const fila=await env.DB.prepare("SELECT COUNT(*) n FROM video_preparo WHERE dono=? AND criado>? AND estado IN ('recebendo','fila','processando')").bind(dono,Date.now()-86400000).first();
     if(fila.n>=3)return J({ok:false,erro:'Há três vídeos em preparação. Aguarde antes de adicionar outro.'},429);
     const inicio=Number(url.searchParams.get('inicio')||0),duracao=Number(url.searchParams.get('duracao')||0);
     if(!Number.isFinite(inicio)||inicio<0||!Number.isFinite(duracao)||(perfil==='postagens'&&(duracao<3||duracao>30))||(perfil==='mensageiro'&&(inicio!==0||duracao!==0)))return J({ok:false,erro:'Escolha um trecho de 3 a 30 segundos para Postagens.'},400);
+    if(perfil==='postagens-partes'){try{planoPartes(duracao,inicio);}catch(e){return J({ok:false,erro:e.message},400);}}
     const buf=await corpoLimitadoVideo_(req,40*1048576);
     const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',buf))].map(x=>x.toString(16).padStart(2,'0')).join('');
     const hash=await sha('video-v1:'+dono+':'+perfil+':'+inicio+':'+duracao+':'+Math.floor(Date.now()/86400000)+':'+digest);
     const id=hash.slice(0,8)+'-'+hash.slice(8,12)+'-'+hash.slice(12,16)+'-'+hash.slice(16,20)+'-'+hash.slice(20,32);
     const existente=await env.DB.prepare('SELECT estado FROM video_preparo WHERE id=? AND dono=?').bind(id,dono).first();
     if(existente&&existente.estado!=='erro')return J({ok:true,id,estado:existente.estado});
-    if(existente){await env.DB.prepare("UPDATE video_preparo SET estado='fila',erro='',lease='',ate=0 WHERE id=? AND estado='erro'").bind(id).run();return J({ok:true,id,estado:'fila'});}
+    if(existente){await env.DB.prepare('DELETE FROM video_parte WHERE preparo=?').bind(id).run();await env.DB.prepare("UPDATE video_preparo SET estado='fila',erro='',lease='',ate=0 WHERE id=? AND estado='erro'").bind(id).run();return J({ok:true,id,estado:'fila'});}
     // Reserva atômica: limita temporários e respeita o orçamento de armazenamento existente.
-    const uso=await lerUso(env),reserva=buf.byteLength+VIDEO_PERFIS_[perfil].bytes;
+    const uso=await lerUso(env),reserva=buf.byteLength+(perfil==='postagens-partes'?Math.min(256*1048576,planoPartes(duracao,inicio).length*9961472):VIDEO_PERFIS_[perfil].bytes);
     const teto=Math.min(512*1048576,Math.max(0,limite(env)-uso.bytes));
     const origem='video-preparo/'+id+'/original';
     const reservado=await env.DB.prepare("INSERT OR IGNORE INTO video_preparo(id,dono,perfil,estado,origem,inicio,duracao,criado,reservado) SELECT ?,?,?,'recebendo',?,?,?,?,? WHERE (SELECT COALESCE(SUM(reservado),0) FROM video_preparo)+?<=? AND (SELECT COUNT(*) FROM video_preparo WHERE dono=? AND criado>?)<20 AND (SELECT COUNT(*) FROM video_preparo WHERE dono=? AND estado IN ('recebendo','fila','processando') AND criado>?)<3").bind(id,dono,perfil,origem,inicio,duracao,Date.now(),reserva,reserva,teto,dono,Date.now()-86400000,dono,Date.now()-86400000).run();
@@ -4856,9 +4920,10 @@ async function videoUsuario_(env,req,url,J){
   if(!job||job.criado<Date.now()-86400000)return J({ok:false,erro:'Preparação expirada. Selecione novamente o original.'},404);
   if(url.searchParams.get('arquivo')==='1'){
     if(job.estado!=='pronto')return J({ok:false,erro:'Vídeo ainda não está pronto.'},409);
-    const obj=await env.MIDIA.get(job.resultado);return obj?new Response(obj.body,{headers:{'Content-Type':'video/mp4','Cache-Control':'no-store',...Object.fromEntries(cors(env,req))}}):J({ok:false},404);
+    let chave=job.resultado;if(job.perfil==='postagens-partes'){const pt=await env.DB.prepare('SELECT chave FROM video_parte WHERE preparo=? AND ordem=?').bind(id,Number(url.searchParams.get('parte'))).first();if(!pt)return J({ok:false},404);chave=pt.chave;}
+    const obj=await env.MIDIA.get(chave);return obj?new Response(obj.body,{headers:{'Content-Type':'video/mp4','Cache-Control':'no-store',...Object.fromEntries(cors(env,req))}}):J({ok:false},404);
   }
-  return J({ok:true,id,estado:job.estado,erro:job.erro});
+  return J({ok:true,id,estado:job.estado,erro:job.erro,partes:job.perfil==='postagens-partes'?(await env.DB.prepare('SELECT ordem,total,inicio,duracao FROM video_parte WHERE preparo=? ORDER BY ordem').bind(id).all()).results:undefined});
 }
 
 export default {
@@ -4867,7 +4932,7 @@ export default {
     ctx.waitUntil(processarFilaZernio_(env).catch(()=>{}));
     ctx.waitUntil(processarEntradas_(env).catch(()=>{}));
     ctx.waitUntil(processarAgenda_(env).catch(()=>{}));                      // a cada minuto: mensagens agendadas que chegaram na hora
-    ctx.waitUntil(processarPostagens(env));                                   // a cada minuto: publica o que está na hora
+    ctx.waitUntil(dispararPostagens_(env));                                   // a cada minuto: publica o que está na hora
     ctx.waitUntil(processarFotoIA(env));                                      // a cada minuto: 1 imagem da fila de Fotos com IA (se já puder: cota/limite do dia)
     ctx.waitUntil(filaContatosAuto_(env));                                    // a cada minuto: até 5 números novos viram "TM Cliente …" no Google (se ligado)
     const min = ev && ev.scheduledTime ? new Date(ev.scheduledTime).getUTCMinutes() : 0;

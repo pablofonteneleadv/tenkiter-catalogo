@@ -184,7 +184,7 @@ class NativeTools(private val activity:Activity,private val scope:CoroutineScope
     private fun saveResponses(id:Long,rows:JSONArray){work({repo.config(JSONObject().put("respostas",rows))}){toast("Respostas salvas para toda a equipe.");if(current()==id)responses(id)}}
     private fun choose(id:Long){
         if(!canSend()||attachmentBusy)return
-        builder().setTitle("Anexar à conversa").setItems(arrayOf("Foto, vídeo ou áudio do aparelho","Gravar áudio")){_,i->if(i==0)chooseFile(id)else record(id)}.setNegativeButton("Cancelar",null).show()
+        builder().setTitle("Anexar à conversa").setItems(arrayOf("Escolher da galeria","Gravar vídeo","Gravar áudio")){_,i->when(i){0->chooseFile(id);1->{pickedConversation=id;try{activity.startActivityForResult(VisualMediaPicker.cameraIntent(activity),201)}catch(_:Exception){pickedConversation=0;toast("Não foi possível abrir a câmera.")}};else->record(id)}}.setNegativeButton("Cancelar",null).show()
     }
     private fun chooseFile(id:Long){
         if(!canSend()||attachmentBusy){toast("Aguarde a conexão e abra a conversa para enviar.");return}
@@ -195,7 +195,7 @@ class NativeTools(private val activity:Activity,private val scope:CoroutineScope
         val id=pickedConversation;pickedConversation=0
         if(id==0L||id!=current()||!canSend()||uri.scheme!="content")return
         val mime=activity.contentResolver.getType(uri)?:"";val type=when{mime.startsWith("image/")->"imagem";mime.startsWith("video/")->"vídeo";mime.startsWith("audio/")->"áudio";else->{toast("Escolha foto, vídeo ou áudio.");return}}
-        work({activity.contentResolver.openInputStream(uri)?.let{AppUpdater.limited(it,if(type=="imagem")8*1048576 else 16*1048576)}?:throw Exception("Não foi possível ler o arquivo.")}){bytes->confirmAttachment(id,bytes,type)}
+        work({activity.contentResolver.openInputStream(uri)?.let{AppUpdater.limited(it,if(type=="imagem")8*1048576 else if(type=="vídeo")15_000_000 else 16*1048576)}?:throw Exception("Não foi possível ler o arquivo.")}){bytes->confirmAttachment(id,bytes,type)}
     }
     private fun confirmAttachment(id:Long,bytes:ByteArray,type:String){
         if(id!=current()||!canSend())return

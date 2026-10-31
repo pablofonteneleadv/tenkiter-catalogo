@@ -5,7 +5,16 @@ from pathlib import Path
 PROFILES={'postagens':(9961472,3,30),'mensageiro':(15000000,0,1800)}
 def probe(path):
  return json.loads(subprocess.check_output(['ffprobe','-v','error','-protocol_whitelist','file,pipe','-format_whitelist','mov,matroska,webm','-show_format','-show_streams','-of','json',str(path)],timeout=20,stderr=subprocess.PIPE))
-def convert(source,target,profile='postagens',start=0,duration=0):
+def plan_parts(duration,maximum=30):
+ if not math.isfinite(duration) or not 3<=duration<=1800 or not 3<=maximum<=30:raise ValueError('Duração fora do limite')
+ n=math.ceil(duration/maximum);ds=[min(maximum,duration-i*maximum) for i in range(n)]
+ if n>1 and ds[-1]<3:ds[-2]-=3-ds[-1];ds[-1]=3
+ if any(d<3 for d in ds):raise ValueError('Parte menor que 3 segundos')
+ start=0;parts=[]
+ for i,d in enumerate(ds):parts.append({'ordem':i+1,'total':n,'inicio':start,'duracao':d});start+=d
+ return parts
+
+def convert(source,target,profile='postagens',start=0,duration=0,max_bytes=0):
  source,target=Path(source),Path(target)
  if source.resolve()==target.resolve() or not 0<source.stat().st_size<=40*1048576:raise ValueError('Entrada inválida ou acima de 40 MiB')
  meta=probe(source);original=float(meta['format']['duration']);limit,minsec,maxsec=PROFILES[profile]
@@ -16,6 +25,7 @@ def convert(source,target,profile='postagens',start=0,duration=0):
  if not minsec<=seconds<=maxsec:raise ValueError('Postagens exige escolha explícita de trecho entre 3 e 30 segundos')
  video=next((s for s in meta['streams'] if s['codec_type']=='video'),None)
  if not video or video.get('width',0)>8192 or video.get('height',0)>8192:raise ValueError('Resolução de entrada fora do limite de preparação')
+ if max_bytes:limit=min(limit,max_bytes)
  audio=any(s['codec_type']=='audio' for s in meta['streams']);abps=96000 if audio else 0
  bitrate=math.floor(limit*8*.94/seconds)-abps
  if bitrate<150000:raise ValueError('Não cabe com qualidade mínima. Use um link para preservar o vídeo')
@@ -41,6 +51,6 @@ def convert(source,target,profile='postagens',start=0,duration=0):
   target.write_bytes(out.read_bytes())
  return {'bytes':target.stat().st_size,'duration':length,'profile':profile}
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('source');p.add_argument('target');p.add_argument('--profile',choices=PROFILES,default='postagens');p.add_argument('--start',type=float,default=0);p.add_argument('--duration',type=float,default=0);a=p.parse_args()
- try:print(json.dumps(convert(a.source,a.target,a.profile,a.start,a.duration)))
+ p=argparse.ArgumentParser();p.add_argument('source');p.add_argument('target');p.add_argument('--max-bytes',type=int,default=0);p.add_argument('--profile',choices=PROFILES,default='postagens');p.add_argument('--start',type=float,default=0);p.add_argument('--duration',type=float,default=0);a=p.parse_args()
+ try:print(json.dumps(convert(a.source,a.target,a.profile,a.start,a.duration,a.max_bytes)))
  except Exception as e:p.exit(1,'Não foi possível preparar o vídeo: '+str(e)+'\n')

@@ -3648,7 +3648,8 @@
     else if (a === 'voltar') voltarLista();
     else if (a === 'enviar') enviar();
     else if (a === 'gravar-video') { if(espiando||cacheConversa){aviso_('Toque em Atender e aguarde a conversa atualizar antes de gravar.');return;} $('ms-camera-video')?.click(); }
-    else if (a === 'anexar') { const i = $('ms-arquivo'); if (i) i.click(); }
+    else if (a === 'anexar') { abrirMenu(b, [['Gravar vídeo', 'gravar-video'], ['Escolher fotos ou vídeos da galeria', 'anexar-galeria'], ['Enviar áudio de arquivo', 'anexar-audio']]); }
+    else if(a==='anexar-galeria') { const i=$('ms-arquivo');if(i)i.click(); }
     else if (a === 'anexo-tirar') limparAnexo_(true);
     else if (a === 'anexar-audio') {if(espiando||cacheConversa){aviso_('Toque em Atender e aguarde a conversa atualizar antes de anexar.');return;}const i=$('ms-arquivo-audio');if(i)i.click();}
     else if (a === 'gravar') gravarAudio_();

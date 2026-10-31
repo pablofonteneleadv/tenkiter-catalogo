@@ -66,18 +66,28 @@ class WebMediaTest {
    override fun createIntent()=Intent()
   }
   val camera=activity();VisualMediaPicker.open(camera,params(true),100){fail("Não abriu câmera")}
-  assertEquals(MediaStore.ACTION_VIDEO_CAPTURE,shadowOf(camera).nextStartedActivityForResult.intent.action)
+  assertEquals(VideoCaptureActivity::class.java.name,shadowOf(camera).nextStartedActivityForResult.intent.component?.className)
   val gallery=activity();VisualMediaPicker.open(gallery,params(false),100){fail("Não abriu galeria")}
   val intent=shadowOf(gallery).nextStartedActivityForResult.intent
   assertEquals(Intent.ACTION_GET_CONTENT,intent.action)
   assertTrue(intent.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE,false))
  }
- @Test fun videoCaptureUsesNativeCamera(){
-  val camera=VisualMediaPicker.cameraIntent()
-  assertEquals(MediaStore.ACTION_VIDEO_CAPTURE,camera.action)
+ @Test fun videoCaptureUsesControlledNativeCamera(){
+  val camera=VisualMediaPicker.cameraIntent(activity())
+  assertEquals(VideoCaptureActivity::class.java.name,camera.component?.className)
   assertFalse(camera.hasExtra(MediaStore.EXTRA_DURATION_LIMIT))
-  assertEquals(1,camera.getIntExtra(MediaStore.EXTRA_VIDEO_QUALITY,-1))
-  assertFalse(camera.hasExtra(MediaStore.EXTRA_SIZE_LIMIT))
+  assertTrue(VideoCaptureActivity.estimatedBytes(90)<VideoCaptureActivity.MAX_BYTES)
+  assertTrue(VideoCaptureActivity.MAX_BYTES<15_000_000)
+  assertEquals(90,VideoCaptureActivity.MIN_RECORDING_CAPACITY_SECONDS)
+ }
+ @Test fun cameraDoesNotReturnOrSendOnOpening(){
+  val a=Robolectric.buildActivity(VideoCaptureActivity::class.java).create().get()
+  assertEquals(Activity.RESULT_CANCELED,shadowOf(a).resultCode)
+  assertTrue(shadowOf(a).lastRequestedPermission.requestedPermissions.contains(Manifest.permission.CAMERA))
+  val buttons=mutableListOf<android.widget.Button>()
+  fun scan(v:android.view.View){if(v is android.widget.Button)buttons.add(v);if(v is android.view.ViewGroup)for(i in 0 until v.childCount)scan(v.getChildAt(i))}
+  scan(a.window.decorView);assertFalse(buttons.first{it.text=="Usar este vídeo"}.isEnabled)
+  a.finish()
  }
  @Test fun approvedAudioBecomesReadablePreviewOnly(){
   val a=activity();grant(a);var now=100L;lateinit var rec:Fake;var result:android.net.Uri?=null;var calls=0
