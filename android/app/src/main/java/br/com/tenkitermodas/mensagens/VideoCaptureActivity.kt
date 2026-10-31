@@ -82,7 +82,7 @@ class VideoCaptureActivity : Activity(), SurfaceHolder.Callback {
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);setVideoEncoder(MediaRecorder.VideoEncoder.H264);setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
                 setVideoSize(size.width,size.height);setVideoFrameRate(minOf(30,profile.videoFrameRate));setVideoEncodingBitRate(VIDEO_BITRATE)
                 setAudioEncodingBitRate(AUDIO_BITRATE);setAudioSamplingRate(44100);setAudioChannels(1);val info=Camera.CameraInfo();Camera.getCameraInfo(cameraId,info);setOrientationHint(info.orientation)
-                setMaxFileSize(MAX_BYTES);setOutputFile(file!!.absolutePath);setPreviewDisplay(surface.holder.surface)
+                setMaxFileSize(MAX_BYTES);setOutputFile(file!!.absolutePath);setPreviewDisplay(this@VideoCaptureActivity.surface.holder.surface)
                 setOnInfoListener{_,what,_->if(what==MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED)stopCapture()}
                 setOnErrorListener{_,_,_->stopCapture()};prepare();start()
             }
