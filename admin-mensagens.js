@@ -886,15 +886,19 @@
   const perto_ = (e, px) => e.scrollHeight - e.scrollTop - e.clientHeight < (px || 80);
 
   /* ---------- menus ---------- */
-  function fecharMenu() { if (menuAberto) { menuAberto.remove(); menuAberto = null; } }
+  function fecharMenu() { if (menuAberto) { $(menuAberto.dataset.dono)?.setAttribute('aria-expanded','false');menuAberto.remove(); menuAberto = null; } }
   function abrirMenu(ancora, itens) {
     const ja = menuAberto && menuAberto.dataset.dono === ancora.id; fecharMenu(); if (ja) return;
     const m = el('div', 'ms-menu'); m.setAttribute('role', 'menu'); m.dataset.dono = ancora.id;
     itens.forEach((it) => { if (it === '-') { m.appendChild(el('hr')); return; } const b = botao('', it[0], it[1], it[2]); b.setAttribute('role', 'menuitem'); m.appendChild(b); });
     const alvo = ancora.closest('.sheet-mensagens'); alvo.appendChild(m);
     const r = ancora.getBoundingClientRect(), s = alvo.getBoundingClientRect();
-    m.style.top = Math.round(r.bottom - s.top + 4) + 'px'; m.style.right = Math.max(8, Math.round(s.right - r.right)) + 'px';
-    menuAberto = m; const p = m.querySelector('button'); if (p) p.focus();
+    const area=Math.min(alvo.clientHeight,(window.visualViewport?.height||innerHeight)-Math.max(0,s.top));
+    m.style.maxHeight=Math.max(44,area-16)+'px';m.style.overflowY='auto';
+    const mw=m.offsetWidth,mh=m.offsetHeight,y=r.bottom-s.top+4;
+    m.style.top=Math.max(8,Math.min(area-mh-8,y+mh>area-8?r.top-s.top-mh-4:y))+'px';
+    m.style.left=Math.max(8,Math.min(r.left-s.left,alvo.clientWidth-mw-8))+'px';m.style.right='auto';
+    ancora.setAttribute('aria-haspopup','menu');ancora.setAttribute('aria-expanded','true');menuAberto = m; const p = m.querySelector('button'); if (p) p.focus();
   }
   function teclado(ev) {
     if (ev.key === 'Escape' && $('ms-luz')) { fecharLuz_(); ev.stopPropagation(); return; }
@@ -3647,8 +3651,9 @@
     else if (a === 'abrir-canal') { canal = b.dataset.canal; fecharPainelSilencioso(); filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); abrirConversa(Number(b.dataset.id)); }
     else if (a === 'voltar') voltarLista();
     else if (a === 'enviar') enviar();
-    else if (a === 'gravar-video') { if(espiando||cacheConversa){aviso_('Toque em Atender e aguarde a conversa atualizar antes de gravar.');return;} $('ms-camera-video')?.click(); }
-    else if (a === 'anexar') { const i = $('ms-arquivo'); if (i) i.click(); }
+    else if (a === 'gravar-video') { if(espiando||cacheConversa){aviso_('Toque em Atender e aguarde a conversa atualizar antes de gravar.');return;} if(window.TKAndroid?.versao){const v=String(TKAndroid.versao()).split('.').map(x=>parseInt(x,10)||0);if(v[0]<2||(v[0]===2&&(v[1]<4||(v[1]===4&&v[2]<14)))){aviso_('Atualize o aplicativo para gravar com tamanho ajustado para envio.');TKAndroid.atualizar?.();return;}} $('ms-camera-video')?.click(); }
+    else if (a === 'anexar') { abrirMenu(b, [['Gravar vídeo', 'gravar-video'], ['Escolher fotos ou vídeos da galeria', 'anexar-galeria'], ['Enviar áudio de arquivo', 'anexar-audio']]); }
+    else if(a==='anexar-galeria') { const i=$('ms-arquivo');if(i)i.click(); }
     else if (a === 'anexo-tirar') limparAnexo_(true);
     else if (a === 'anexar-audio') {if(espiando||cacheConversa){aviso_('Toque em Atender e aguarde a conversa atualizar antes de anexar.');return;}const i=$('ms-arquivo-audio');if(i)i.click();}
     else if (a === 'gravar') gravarAudio_();

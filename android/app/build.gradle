@@ -2,7 +2,7 @@ plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
 android {
     namespace 'br.com.tenkitermodas.mensagens'
     compileSdk 35
-    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 20; versionName '2.4.13' }
+    defaultConfig { applicationId 'br.com.tenkitermodas.mensagens'; minSdk 26; targetSdk 35; versionCode 22; versionName '2.4.15' }
     buildFeatures { buildConfig true }
     def shared = new File(rootDir.parentFile, 'common.js').text
     def loginApi = (shared =~ /API_URL_PADRAO="([^"]+)"/)[0][1]

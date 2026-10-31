@@ -72,3 +72,11 @@ crons = ["* * * * *"]
 
 [observability]
 enabled = true
+
+[[durable_objects.bindings]]
+name = "POSTAGENS_SEQUENCIA"
+class_name = "PostagensSequenciais"
+
+[[migrations]]
+tag = "postagens-sequenciais-v1"
+new_sqlite_classes = ["PostagensSequenciais"]

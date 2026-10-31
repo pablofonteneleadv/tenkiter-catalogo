@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.39] - 2026-10-31
+
+- Vídeos completos divididos em partes ordenadas; regra exclusiva para continuidade sem intervalo e câmera Android com tamanho controlado.
+
+
 ## [7.40.38] - 2026-10-31
 
 - Processador de vídeo com identificação HTTP explícita; ações de gestão ocultas para atendentes e campos de regras com alvo de 48 px.
