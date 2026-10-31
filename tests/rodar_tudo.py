@@ -31,6 +31,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("jornada_cliente.py", lambda o: "FALHAS=0" in o),
     ("jornada_lojista.py", lambda o: "FALHAS=0" in o),
     ("jornada_funcionaria.py", lambda o: "FALHAS=1 ['progresso foi enviado ao servidor']" in o or "FALHAS=0" in o),  # manuais-semente não têm id de capítulo: não sincronizam
+    ("mensagens_acesso_equipe.py", lambda o: "ferramentas administrativas ocultas" in o),
     ("mensagens_dashboard.py", lambda o: "FALHAS=0" in o),
     ("teclado.py", lambda o: "FALHAS=0" in o),
     ("busca.py", lambda o: "FALHAS=0" in o),
@@ -133,9 +134,10 @@ SUITES = [  # (arquivo, como saber que passou)
     ("backend_v316.js", lambda o: "FALHAS=0" in o),        # RH 3.16: manual só-gestor, prática validada, certificado (precisa do .gs.txt do RH)
     ("backend_manual_rico.js", lambda o: "FALHAS=0" in o), # RH 3.17: cor/marca-texto/links, foto ao lado, vídeo, tabela, guia e prova-modelo no manual novo (precisa do .gs.txt do RH)
     # --- #305 (retomado em 7.40.34): equipe, presença, atividade e Nova conversa ---
-    ("worker_equipe_inicio.js", lambda o: not o.strip()),  # Worker: presença, equipe, trilha e envio pelo WhatsApp na Nova conversa
+    ("worker_equipe_inicio.js", lambda o: "Equipe/início:" in o and "aprovados." in o),  # Worker: presença, equipe, trilha e envio pelo WhatsApp na Nova conversa
     ("mensagens_equipe_inicio_ui.py", lambda o: "axe aprovados" in o),  # gavetas, heartbeat, envio, Instagram sem envio e axe
     ("worker_video_preparo.js", lambda o: "OK: ACL/isolamento" in o),
+    ("video_processor_http.py", lambda o: "OK: identificação HTTP" in o),
     ("android_manifest_release.py", lambda o: "OK: release estável" in o),
     ("transcode_profiles.py", lambda o: "OK: HEVC" in o),
     ("reparos_integrados_ui.py", lambda o: "OK 1440" in o),

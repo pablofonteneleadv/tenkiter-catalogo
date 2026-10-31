@@ -8,7 +8,8 @@ import tempfile
 from PIL import Image
 PASTA = tempfile.mkdtemp(prefix="tk_avulsas_") + "/"      # arquivos de teste gerados na hora (nada fica no repositório)
 for _i, _c in enumerate([(200, 40, 40), (40, 120, 200), (40, 180, 90)]): Image.new("RGB", (600, 800), _c).save(PASTA + "avulsa%d.jpg" % (_i + 1), "JPEG", quality=85)
-criar_mp4(PASTA + "curto.mp4")
+criar_mp4(PASTA + "curto.mp4", segundos=4)
+criar_mp4(PASTA + "compativel.mp4", segundos=4, codec="libx264")
 open(PASTA + "texto.txt", "w").write("não é imagem")
 BAD = []
 def chk(n, c, e=""):
@@ -49,9 +50,11 @@ with sync_playwright() as p:
     chk("Feed + avulsa nova: a nova vira a escolhida (só 1)", pg.locator(".po-m[aria-pressed=true]").count() == 1 and pg.locator(".po-m").last.get_attribute("aria-pressed") == "true")
     pg.click("[data-tipo=story]"); pg.wait_for_timeout(500)
     pg.set_input_files("#po-avulsa-arq", [PASTA + "curto.mp4"]); pg.wait_for_timeout(600)
-    chk("vídeo sem H.264 é bloqueado quando Grupo clientes está selecionado", "Não foi possível confirmar H.264" in pg.inner_text("#po-corpo") and pg.locator(".po-ordem :text('Vídeo')").count() == 0)
-    pg.click('[data-destino=grupo]'); pg.set_input_files("#po-avulsa-arq", [PASTA + "curto.mp4"]); pg.wait_for_timeout(600)
-    chk("vídeo avulso entra no Story sem destino Grupo clientes", any("avulsa" in x for x in ordem(pg)) and pg.locator(".po-ordem :text('Vídeo')").count() >= 1)
+    pg.wait_for_selector('#tk-video-preparo')
+    chk("vídeo sem H.264 oferece preparação sem entrar silenciosamente",pg.locator('#tk-video-preparo').is_visible() and pg.locator(".po-ordem :text('Vídeo')").count()==0)
+    pg.keyboard.press('Escape');pg.wait_for_timeout(300)
+    pg.click('[data-destino=grupo]'); pg.set_input_files("#po-avulsa-arq", [PASTA + "compativel.mp4"]);pg.wait_for_timeout(700)
+    chk("vídeo H.264 do perfil comum entra no Story sem reconversão", pg.locator(".po-ordem :text('Vídeo')").count()>=1 and not pg.locator('#tk-video-preparo').count())
     pg.set_input_files("#po-avulsa-arq", [PASTA + "texto.txt"]); pg.wait_for_timeout(400)
     chk("formato não aceito → aviso, nada entra", "formato não aceito" in pg.inner_text("#po-corpo"))
     # Story com as avulsas: sai na ordem escolhida

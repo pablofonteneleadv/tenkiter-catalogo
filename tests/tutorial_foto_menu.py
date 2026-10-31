@@ -1,16 +1,20 @@
+import os, tempfile
+from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-BASE = "http://127.0.0.1:8766/"
+BASE = os.environ.get("TK_BASE", "http://127.0.0.1:8766/")
 TELA = """<div data-acao='menu' onclick="document.getElementById('submenu').hidden=false"><span>Cadastrar</span></div>
 <section id='submenu' hidden><button data-acao='novo' onclick="document.getElementById('form').hidden=false;window.novoClicks=(window.novoClicks||0)+1;if(location.search.includes('tutorial_teste')&&window.novoClicks===1){document.getElementById('form').outerHTML=document.getElementById('form').outerHTML;setTimeout(()=>{document.getElementById('form').hidden=true;document.getElementById('submenu').hidden=true},80)}"><span>Cadastrar nova peça</span></button></section>
 <section id='form' hidden><label id='foto-label' for='foto'>📷 Tirar foto ou escolher da galeria</label>
 <input id='foto' type='file' accept='image/*'></section>"""
 
-with sync_playwright() as p:
+with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
+    foto=Path(tmp)/"foto.jpg";foto.write_bytes(b"imagem sintetica")
     browser = p.chromium.launch(headless=True)
     page = browser.new_page(viewport={"width": 390, "height": 844})
     for q in ("tutorial_editor=1", "tutorial_teste=1"):
         page.route(f"**/index.html?{q}", lambda r: r.fulfill(status=200, content_type="text/html", body=TELA))
+    page.route("**/u", lambda r: r.fulfill(json={"ok":True,"url":"https://midia.test/foto.jpg"}))
     page.goto(BASE + "404.html")
     page.evaluate("document.body.innerHTML='<div id=\"tut-editor-slot\"></div>';window.TMV={init:function(){}}")
     page.add_script_tag(url=BASE + "tutorial-app.js")
@@ -26,7 +30,8 @@ with sync_playwright() as p:
     frame.locator("[data-acao=novo] span").click()
     with page.expect_file_chooser() as escolha:
         frame.locator("#foto-label").click()
-    escolha.value.set_files({"name": "foto.jpg", "mimeType": "image/jpeg", "buffer": b"imagem"})
+    escolha.value.set_files(str(foto))
+    page.wait_for_function("document.querySelectorAll('#tut-etapas tbody tr').length === 3")
     page.get_by_role("button", name="Encerrar").click()
     assert page.locator("#tut-etapas tbody tr").count() == 3, "foto deve virar uma etapa, sem clique duplicado no rótulo"
     assert page.locator('[data-campo="instrucao"][data-i="0"]').input_value() == "Toque em Cadastrar"
@@ -47,12 +52,16 @@ with sync_playwright() as p:
     teste.locator("[data-acao=novo].tk-tut-alvo").wait_for()
     teste.locator("[data-acao=novo]").click()
     page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Etapa 3 de 3')")
+    page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Abra o menu indicado')")
+    assert teste.locator('#submenu').is_hidden(), 'o tutorial não deve agir no lugar do aluno'
+    teste.locator('[data-acao=menu]').click()
+    teste.locator('[data-acao=novo]').click()
     teste.locator("#foto-label.tk-tut-alvo").wait_for()
     assert "7px" in teste.locator("#foto-label").evaluate("el => getComputedStyle(el).outlineWidth")
     assert teste.locator("#foto-label").evaluate("el => { const r=el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight }")
     with page.expect_file_chooser() as escolha_teste:
         teste.locator("#foto-label").click()
-    escolha_teste.value.set_files({"name": "outra.jpg", "mimeType": "image/jpeg", "buffer": b"outra"})
+    escolha_teste.value.set_files(str(foto))
     page.wait_for_function("document.querySelector('#tt-guia').innerText.includes('Tutorial concluído corretamente')")
     browser.close()
 

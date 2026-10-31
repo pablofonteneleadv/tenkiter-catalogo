@@ -1,6 +1,7 @@
+import os
 from playwright.sync_api import sync_playwright
 
-BASE = "http://127.0.0.1:8766/"
+BASE = os.environ.get("TK_BASE", "http://127.0.0.1:8766/")
 TELA = """<button id='menu' onclick="document.querySelector('#dentro').hidden=false">Abrir menu</button>
 <div id='dentro' hidden><button id='opcao'>Opção interna</button><input id='codigo' aria-label='Código'></div>"""
 

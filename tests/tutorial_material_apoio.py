@@ -1,6 +1,7 @@
+import os
 """Material de apoio da etapa: o editor lista/adiciona/remove arquivos e o aluno vê um único botão discreto que baixa todos de uma vez."""
 from playwright.sync_api import sync_playwright
-BASE = 'http://127.0.0.1:8766/'
+BASE = os.environ.get('TK_BASE', 'http://127.0.0.1:8766/')
 PAGINA = "<input type='file' id='f' multiple><button id='ok'>Salvar</button>"
 A = lambda n: {"url": f"https://midia.test/{n}.jpg", "nome": f"{n}.jpg", "tipo": "image/jpeg", "tamanho": 10}
 TUT = {"id": "ma", "titulo": "Material", "pagina": "index.html", "tipo": "independente", "descricao": "", "status": "publicado", "versao": 1, "preparacao": [],

@@ -1,6 +1,7 @@
+import os
 """Editor visual do tutorial: reproduz a tela da etapa (cliques anteriores), deixa rolar e TRAVAR o enquadramento; o teste do aluno respeita o que foi travado."""
 from playwright.sync_api import sync_playwright
-BASE = 'http://127.0.0.1:8766/'
+BASE = os.environ.get('TK_BASE', 'http://127.0.0.1:8766/')
 PAGINA = """<style>body{font:16px Arial}#sheet{display:none;position:fixed;inset:60px 10px 10px;background:#fff;border:2px solid #333;overflow:auto}#sheet.on{display:block}#fim{margin:40px 0}</style>
 <button id='abrir' onclick="document.getElementById('sheet').classList.add('on')">Abrir enquadrar</button>
 <div id='sheet'><div style='height:1100px'>conteúdo longo</div><button id='fim'>✔ Usar esta foto</button><div style='height:400px'></div></div>"""

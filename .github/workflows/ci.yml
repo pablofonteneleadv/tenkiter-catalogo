@@ -126,6 +126,7 @@ jobs:
           sudo apt-get install -y ffmpeg
           python3 tests/transcode_profiles.py
           python3 tests/android_manifest_release.py
+          python3 tests/video_processor_http.py
 
       - name: Pendentes devem abrir em modo Espiar
         run: node tests/mensagens_pendentes_espiar.js
@@ -225,6 +226,9 @@ jobs:
           TK_EVID=tests/saida/reparos/citacao python3 tests/mensagens_citacao_ui.py
           TK_EVID=tests/saida/reparos/equipe python3 tests/mensagens_equipe_inicio_ui.py
           python3 tests/reparos_integrados_ui.py
+          python3 tests/equipe_catalogo1.py
+          python3 tests/mensagens_acesso_equipe.py
+          python3 tests/postagens_fila.py
           python3 tests/postagens_video_status.py
           python3 tests/video_validacao.py
 

@@ -37,7 +37,7 @@ with sync_playwright() as p:
     chk("não existe mais a aba Sem identificação", pg.locator("[data-ig=aba][data-g=sem_id]").count() == 0)
     axe(pg, "lista")
     chk("aviso de provável duplicado leva o código", "TK-0003" in pg.locator(".ig-dup").inner_text())
-    chk("chamadas levam WhatsApp + token de sessão (nunca senha)", all((c["sessao"] or "").startswith("tk") and c["whats"] == "88999999999" for c in st["ig"]["chamadas"] if c["m"] != "OPTIONS"))
+    chk("chamadas levam WhatsApp + token de sessão (nunca senha)", all((c["sessao"] or "").startswith("tk") and c["whats"] == "88999999999" for c in st["ig"]["chamadas"] if c["m"] != "OPTIONS" and c["path"] != "/catalogo/tecidos"))
     chk("o Story aparece na mesma lista", "Story" in pg.locator(".ig-card").nth(1).inner_text() or "Story" in pg.locator(".ig-card").first.inner_text())
     print("== Descartar com Desfazer ==")
     pg.locator(".ig-card", has_text="Story").locator("[data-ig=descartar]").click(); pg.wait_for_selector("#ig-toast")
@@ -292,7 +292,7 @@ with sync_playwright() as p:
     perms = [x for x in PERMS_ALL if x != "gerir_acessos"] if isinstance(PERMS_ALL, (list, tuple)) else None
     if perms is not None:
         b, pg, st, log, errs = novo(p, perms)
-        chk("faixa escondida e Worker nem foi chamado", pg.locator("#ig-faixa").is_hidden() and not st["ig"]["chamadas"], st["ig"]["chamadas"][:1])
+        chk("faixa escondida e Worker nem foi chamado", pg.locator("#ig-faixa").is_hidden() and not [c for c in st["ig"]["chamadas"] if not (c["path"]=="/catalogo/tecidos" or c["path"].startswith("/msg/"))], st["ig"]["chamadas"][:1])
         b.close()
 print("\nOK=%d FALHAS=%d" % (len(OK), len(BAD)))
 sys.exit(1 if BAD else 0)

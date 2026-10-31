@@ -1,5 +1,6 @@
+import os
 from playwright.sync_api import sync_playwright
-BASE='http://127.0.0.1:8766/'
+BASE=os.environ.get('TK_BASE','http://127.0.0.1:8766/')
 with sync_playwright() as p:
  b=p.chromium.launch(headless=True)
  for w,h in [(390,844),(412,915),(1440,900)]:
