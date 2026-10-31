@@ -36,7 +36,7 @@ def abrir(b, abertos=None):
     pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: (msgs.append(d.message), d.accept()))
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2400)
     pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250); pg.click("#btn-abrir-postagens"); pg.wait_for_timeout(800)
-    pg.click("#po-abas [data-aba=fila]"); pg.wait_for_timeout(500)
+    pg.click("#po-abas [data-aba=fila]"); pg.wait_for_timeout(500); pg.locator("[data-fila-modo=canal]").click()
     return ctx, pg, st, g, erros, msgs
 def chamadas(g, path): return [c for c in g["post_chamadas"] if c["path"] == path]
 def cab(pg, k): return pg.locator('[data-fg="%s"]' % k)

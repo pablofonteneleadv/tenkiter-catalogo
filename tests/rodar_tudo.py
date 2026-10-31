@@ -139,6 +139,8 @@ SUITES = [  # (arquivo, como saber que passou)
     ("worker_video_preparo.js", lambda o: "OK: ACL/isolamento" in o),
     ("worker_postagens_runtime.cjs", lambda o: "OK: Durable Object" in o),
     ("worker_video_partes.js", lambda o: "OK: partes integrais" in o),
+    ("worker_fila_originais.js", lambda o: "OK: três originais" in o),
+    ("postagens_fila_midia.py", lambda o: "OK 320" in o),
     ("mensagens_camera_menu.py", lambda o: "OK 1440" in o),
     ("video_camera_90s.py", lambda o: "OK: 90 s completos" in o),
     ("video_partes_encoder.py", lambda o: "OK: partes 59/75/90s" in o),

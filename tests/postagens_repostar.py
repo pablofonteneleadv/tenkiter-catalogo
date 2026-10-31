@@ -35,7 +35,9 @@ def garantir(pg):
 def marca(pg, dia, h, m=0):
     """Escolhe dia (0 = hoje), hora e minuto no seletor rápido (tocar, sem campo nativo)."""
     pg.click("[data-pkc=nova][data-pk='d:%d']" % dia); pg.click("[data-pkc=nova][data-pk='h:%d']" % h); pg.click("[data-pkc=nova][data-pk='m:%d']" % m); pg.wait_for_timeout(150)
-def aba(pg, nome): pg.click("#po-abas [data-aba=%s]" % nome); pg.wait_for_timeout(500)
+def aba(pg, nome):
+    pg.click("#po-abas [data-aba=%s]" % nome); pg.wait_for_timeout(500)
+    if nome == "fila" and pg.locator("[data-fila-modo=canal]").count(): pg.locator("[data-fila-modo=canal]").click()
 
 
 with sync_playwright() as p:

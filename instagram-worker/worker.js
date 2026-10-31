@@ -92,7 +92,7 @@ const DDL = [
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
-const ESQUEMA_ = '20261031-video-partes-1';
+const ESQUEMA_ = '20261031-fila-midia-1';
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -102,8 +102,9 @@ async function iniciar(env) {
     if (versao === ESQUEMA_) return;
     await migrarEsquema_(env);
     const postCols=new Set((await env.DB.prepare('PRAGMA table_info(postagem)').all()).results.map(c=>c.name));
-    for(const [nome,tipo] of [['serie',"TEXT NOT NULL DEFAULT ''"],['parte','INTEGER NOT NULL DEFAULT 0'],['partes','INTEGER NOT NULL DEFAULT 0']])if(!postCols.has(nome))await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();
+    for(const [nome,tipo] of [['serie',"TEXT NOT NULL DEFAULT ''"],['parte','INTEGER NOT NULL DEFAULT 0'],['partes','INTEGER NOT NULL DEFAULT 0'],['origem_midia',"TEXT NOT NULL DEFAULT ''"],['intervalo_ms','INTEGER NOT NULL DEFAULT 0']])if(!postCols.has(nome))await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_post_serie ON postagem(serie,parte)').run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_post_publicado ON postagem(status,publicado_em)').run();
     // Acrescenta a ficha estruturada sem regravar nem apagar os campos antigos.
     const fichaCols = new Set((await env.DB.prepare('PRAGMA table_info(msg_ficha)').all()).results.map(c => c.name));
     if (!fichaCols.has('perfil_json')) {
@@ -1391,7 +1392,7 @@ export async function processarPostagens(env) {
     /* v1.6: além do teto do Instagram, cada canal (Story, Status do WhatsApp, Reels, Carrossel, Feed) tem o SEU limite nas últimas 24 h. "Ambos" conta nos dois. */
     const porCanal = {}; for (const b of CANAIS_FILA) porCanal[b] = await contarUsados24h_(env, b, desde);
     const ativas=(await env.DB.prepare("SELECT s.serie,s.tipo,s.canal FROM postagem s WHERE s.serie<>'' AND s.parte=1 AND s.status IN ('publicado','processando','manual_feito','erro') AND EXISTS(SELECT 1 FROM postagem q WHERE q.serie=s.serie AND q.status IN ('agendado','processando','erro','manual_pendente')) ORDER BY s.agendado_em,s.id").all()).results||[];
-    const recentes=(await env.DB.prepare("SELECT serie,tipo,canal,publicado_em FROM postagem WHERE serie<>'' AND status='publicado' AND publicado_em>? ORDER BY publicado_em DESC LIMIT 60").bind(new Date(Date.now()-7200000).toISOString()).all()).results||[];
+    const recentes=(await env.DB.prepare("SELECT id,serie,origem_midia,tipo,canal,publicado_em FROM postagem WHERE status IN ('publicado','manual_feito') AND publicado_em>? ORDER BY publicado_em DESC LIMIT 1000").bind(new Date(Date.now()-86400000).toISOString()).all()).results||[];
     const estados=new Map(lin.filter(p=>p.serie).map(p=>[p.serie+':'+p.parte,p])),anteriores=lin.filter(p=>p.serie&&p.parte>1);
     if(anteriores.length){const rs=(await env.DB.prepare('SELECT serie,parte,status,publicado_em FROM postagem WHERE '+anteriores.map(()=>'(serie=? AND parte=?)').join(' OR ')).bind(...anteriores.flatMap(p=>[p.serie,p.parte-1])).all()).results||[];for(const r of rs)estados.set(r.serie+':'+r.parte,r);}
     let feitas = 0, novas = usados, tentadas = 0;
@@ -1410,7 +1411,7 @@ export async function processarPostagens(env) {
         continue;
       }
       if(p.status==='agendado'&&!(anterior&&cfgP.partesRapidas)&&!(p.urgente&&cfgP.agoraIgnora)){
-        let liberar=0;for(const r of recentes)if(r.serie!==p.serie)for(const b of bucketsDoPost(p.tipo,p.canal))if(bucketsDoPost(r.tipo,r.canal).includes(b))liberar=Math.max(liberar,Date.parse(r.publicado_em)+gapDoTipoMs(cfgP,b));
+        let liberar=0;for(const r of recentes)if((p.serie||r.serie)&&r.id!==p.id&&!(p.serie&&r.serie===p.serie)&&!(p.origem_midia&&r.origem_midia===p.origem_midia))for(const b of bucketsDoPost(p.tipo,p.canal))if(bucketsDoPost(r.tipo,r.canal).includes(b))liberar=Math.max(liberar,Date.parse(r.publicado_em)+Math.max(gapDoTipoMs(cfgP,b),Number(p.intervalo_ms)||0));
         if(liberar>Date.now()){tentadas++;await env.DB.prepare('UPDATE postagem SET agendado_em=?,atualizado_em=? WHERE id=?').bind(new Date(foraDaPausa(cfgP,liberar)).toISOString(),agora(),p.id).run();continue;}
       }
       const usaIg = canalUsaInstagram_(p.canal);
@@ -1424,9 +1425,10 @@ export async function processarPostagens(env) {
       }
       tentadas++;
       try { await avancarPostagem(env, token, p); feitas++; } catch (e) { try { await falhaPostagem(env, p, e); } catch (e2) { /* próximo minuto tenta de novo */ } }
+      const atual=await env.DB.prepare('SELECT status,publicado_em FROM postagem WHERE id=?').bind(p.id).first();
+      if(atual?.status==='publicado')recentes.push({...p,...atual});
       if(p.serie){
-        const atual=await env.DB.prepare('SELECT status,publicado_em FROM postagem WHERE id=?').bind(p.id).first();
-        if(atual){estados.set(p.serie+':'+p.parte,atual);if(p.parte===1&&!ativas.some(s=>s.serie===p.serie))ativas.push({serie:p.serie,tipo:p.tipo,canal:p.canal});if(atual.status==='publicado'){recentes.push({...p,...atual});if(p.parte===p.partes){const i=ativas.findIndex(s=>s.serie===p.serie);if(i>=0)ativas.splice(i,1);}}}
+        if(atual){estados.set(p.serie+':'+p.parte,atual);if(p.parte===1&&!ativas.some(s=>s.serie===p.serie))ativas.push({serie:p.serie,tipo:p.tipo,canal:p.canal});if(atual.status==='publicado'){if(p.parte===p.partes){const i=ativas.findIndex(s=>s.serie===p.serie);if(i>=0)ativas.splice(i,1);}}}
       }
     }
     const rapidas=cfgP.partesRapidas&&(await env.DB.prepare("SELECT 1 FROM postagem p WHERE p.serie<>'' AND p.status IN ('agendado','processando') AND p.agendado_em<=? AND NOT EXISTS(SELECT 1 FROM postagem e WHERE e.serie=p.serie AND e.status IN ('erro','cancelado','manual_pendente')) LIMIT 1").bind(agora()).first());
@@ -1573,6 +1575,9 @@ export function proximoLivreMulti(cfg, buckets, ocupMap, desdeMs, sorteio) {
   return a;
 }
 /** v1.7 (18/10/2026): intervalo ESCOLHIDO pela pessoa entre as postagens de uma série ("de 10 em 10 minutos"), em ms; 0 = usar o sorteio do gestor. Vale de 1 min a 24 h. */
+export function intervaloEditorialMs_(cfg,buckets,pedido,sorteio=Math.random){
+  return Math.max(0,...buckets.map(b=>pedido?Math.max(pedido,gapDoTipoMs(cfg,b)):gapDoTipoMs(cfg,b)+Math.round(sorteio()*(gapMaxDoTipoMs(cfg,b)-gapDoTipoMs(cfg,b)))));
+}
 export function intervaloPedidoMs_(v) { const n = Math.round(Number(v)); return isFinite(n) && n >= 1 ? Math.min(1440, n) * 60000 : 0; }
 /** Próximo horário da série: anterior + o intervalo escolhido (nunca menos que o mínimo de nenhum canal do post), respeitando pausa e o que já está na fila. */
 export function intervaloEscolhido_(cfg, buckets, ocupMap, anteriorMs, intervaloMs) {
@@ -1582,11 +1587,11 @@ export function intervaloEscolhido_(cfg, buckets, ocupMap, anteriorMs, intervalo
 export function proximoLivre(cfg, tipo, ocupadosMs, desdeMs, sorteio) { return proximoLivreMulti(cfg, [tipo], { [tipo]: ocupadosMs }, desdeMs, sorteio); }
 async function lerCfgPost(env) { let j = null; try { j = JSON.parse((await cfgGet(env, 'po_cfg')) || 'null'); } catch (e) { j = null; } return normalizarCfgPost(j); }
 /** Horários já ocupados num canal de contagem (Story, Feed…, ou "status" do WhatsApp). `janelaMs` = quanto tempo para trás ainda importa. */
-async function ocupadosDoTipo_(env, bucket, excluirId, janelaMs, semAgendadas) {
+async function ocupadosDoTipo_(env, bucket, excluirId, janelaMs, semAgendadas, excluirSerie) {
   const desde = new Date(Date.now() - janelaMs - 60000).toISOString();
   const doCanal = bucket === 'grupo' ? "canal='grupo'" : bucket === 'status2' ? "canal='whatsapp2'" : bucket === 'status' ? "canal IN ('whatsapp','ambos')" : "tipo=? AND (canal IS NULL OR canal='' OR canal IN ('instagram','ambos'))";
   const bind = bucket === 'status' || bucket === 'grupo' || bucket === 'status2' ? [excluirId || 0, desde] : [bucket, excluirId || 0, desde];
-  const q = (await env.DB.prepare('SELECT agendado_em, publicado_em, status FROM postagem WHERE ' + doCanal + " AND id!=? AND (status IN ('processando','manual_pendente'" + (semAgendadas ? '' : ",'agendado'") + ") OR (status IN ('publicado','manual_feito') AND publicado_em>=?))").bind(...bind).all()).results || [];
+  const q = (await env.DB.prepare('SELECT agendado_em, publicado_em, status FROM postagem WHERE ' + doCanal + " AND id!=?"+(excluirSerie?" AND COALESCE(serie,'')<>?":'')+" AND (status IN ('processando','manual_pendente'" + (semAgendadas ? '' : ",'agendado'") + ") OR (status IN ('publicado','manual_feito') AND publicado_em>=?))").bind(...(excluirSerie?[...bind.slice(0,-1),excluirSerie,bind.at(-1)]:bind)).all()).results || [];
   return q.map((r) => Date.parse(r.status === 'publicado' || r.status === 'manual_feito' ? r.publicado_em : r.agendado_em)).filter((x) => isFinite(x));
 }
 /** Ocupados de VÁRIOS canais de uma vez: { story: [...], status: [...] }. */
@@ -1631,7 +1636,7 @@ function progressoPostagem_(r) {
 }
 function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
-  return { id: r.id, serie:r.serie?{id:r.serie,ordem:r.parte,total:r.partes}:null, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, grupoEnvioIncerto: !!r.grupo_envio_incerto, grupoMidiaIncompativel: normalizarCanal_(r.canal) === 'grupo' && /H\.265\/HEVC/.test(String(r.erro || '')), permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
+  return { id: r.id, origemMidia:r.origem_midia||'', intervaloMs:Number(r.intervalo_ms)||0, serie:r.serie?{id:r.serie,ordem:r.parte,total:r.partes}:null, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, grupoEnvioIncerto: !!r.grupo_envio_incerto, grupoMidiaIncompativel: normalizarCanal_(r.canal) === 'grupo' && /H\.265\/HEVC/.test(String(r.erro || '')), permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
 }
 
 /* ====================================================================
@@ -1782,10 +1787,27 @@ async function validarSeriesPost_(env,req,lista,vs){
   }
   for(const g of grupos.values())if(g.refs.length!==g.total||g.refs[0].parte!==1)throw Error('Inclua todas as partes do mesmo vídeo, na ordem original.');
 }
+async function reagendarVideoOriginal_(env,ctx,linha,quando,J){
+  const ps=(await env.DB.prepare('SELECT * FROM postagem WHERE serie=? ORDER BY parte').bind(linha.serie).all()).results||[];
+  if(linha.parte!==1||ps.length!==linha.partes||ps.some((x,i)=>x.parte!==i+1||!['agendado','erro'].includes(x.status)))return J({ok:false,erro:'Este vídeo já começou ou contém partes indisponíveis. As partes confirmadas não serão repetidas; consulte ou tente novamente apenas a parte com erro.'},409);
+  if(ps.some(x=>String(x.ig_id||'').startsWith('zapq:'))||await env.DB.prepare("SELECT 1 FROM postagem_grupo_recibo r JOIN postagem p ON p.id=r.postagem_id WHERE p.serie=? AND r.estado='enviando'").bind(linha.serie).first())return J({ok:false,erro:'Há envio aguardando confirmação. Consulte o resultado antes de alterar o vídeo.'},409);
+  const v=validarPostagem({...linhaPostagem(linha),quando});if(v.erro)return J({ok:false,erro:v.erro},400);
+  const cfg=await lerCfgPost(env),bs=bucketsDoPost(linha.tipo,linha.canal),ocup={};
+  for(const b of bs)ocup[b]=await ocupadosDoTipo_(env,b,0,gapMaxDoTipoMs(cfg,b),false,linha.serie);
+  const urgente=v.v.urgente;let ajuste;
+  if(urgente&&cfg.agoraIgnora)ajuste={t:Date.now(),ajustado:false};
+  else if(v.v.sequencia)ajuste=proximoLivreMulti(cfg,bs,ocup,Date.now()+60000);
+  else ajuste=ajustarHorarioMulti(cfg,bs,Math.max(Date.parse(v.v.quando),Date.now()),ocup);
+  const em=new Date(ajuste.t).toISOString();
+  const r=await env.DB.prepare("UPDATE postagem SET status='agendado',agendado_em=?,tentativas=0,erro='',containers='',urgente=?,atualizado_em=? WHERE serie=? AND status IN ('agendado','erro') AND NOT EXISTS(SELECT 1 FROM postagem q WHERE q.serie=? AND q.status NOT IN ('agendado','erro'))").bind(em,urgente?1:0,agora(),linha.serie,linha.serie).run();
+  if(r.meta?.changes!==ps.length)return J({ok:false,erro:'O vídeo mudou enquanto você ajustava. Atualize a fila para conferir.'},409);
+  if(ajuste.t<=Date.now()+1000&&ctx?.waitUntil)ctx.waitUntil(dispararPostagens_(env));
+  return J({ok:true,quando:em,partes:ps.length,ajustado:!!ajuste.ajustado,motivo:ajuste.motivo||''});
+}
 async function rotasPostagem(env, ctx, req, url, J, perms) {
   const p = url.pathname;
   if (p === '/posts' && req.method === 'GET') {
-    const lim = Math.min(100, Number(url.searchParams.get('limite')) || 60);
+    const lim = Math.min(250, Number(url.searchParams.get('limite')) || 60);
     const q = (await env.DB.prepare("SELECT postagem.*, EXISTS(SELECT 1 FROM postagem_grupo_recibo g WHERE g.postagem_id=postagem.id AND g.estado='enviando') AS grupo_envio_incerto FROM postagem WHERE status!='cancelado' ORDER BY CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN 0 ELSE 1 END, CASE WHEN status IN ('agendado','processando','manual_pendente','erro','convertendo','transcodificando') THEN agendado_em END ASC, publicado_em DESC, id DESC LIMIT ?").bind(lim).all()).results || [];
     const c = (await env.DB.prepare("SELECT status, COUNT(*) AS n FROM postagem GROUP BY status").all()).results || [];
     const conta = {}; c.forEach((x) => { conta[x.status] = x.n; });
@@ -1797,7 +1819,10 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     if (!originais.length || originais.length > 60 || originais.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) return J({ ok: false, erro: 'Envie de uma a sessenta postagens por vez.' }, 400);
     if (originais.some((x) => x.grupoClientes === true || x.canal === 'grupo') && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado. Avise o gestor.' }, 409);
     if (originais.some((x) => x.status2 === true || x.canal === 'whatsapp2') && !(await cfgWafly_(env, 2)) && !(await cfgWameStatus_(env))) return J({ ok: false, erro: 'O WhatsApp Status 2 ainda não está configurado. Avise o gestor.' }, 409);
-    const lista = originais.flatMap((x) => {
+    const fontes=new Map();
+    const lista = originais.flatMap((x,indice) => {
+      const chave=x.serie?'video:'+String(x.serie.preparo):'midia:'+indice;
+      if(!fontes.has(chave))fontes.set(chave,crypto.randomUUID());
       // Story com figurinha de link exige Instagram manual. O Status continua
       // automático e precisa de um recibo próprio para nunca ser reenviado
       // quando alguém concluir a etapa manual do Instagram.
@@ -1807,7 +1832,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
         : [x];
       if (x.grupoClientes === true && x.canal !== 'grupo') destinos.push(Object.assign({}, x, { canal: 'grupo', modo: 'auto', link: '', grupoClientes: false, status2: false }));
       if (x.status2 === true && x.canal !== 'whatsapp2') destinos.push(Object.assign({}, x, { canal: 'whatsapp2', modo: 'auto', link: '', grupoClientes: false, status2: false }));
-      return destinos;
+      return destinos.map(d=>Object.assign({},d,{origemMidia:fontes.get(chave)}));
     });
     const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
     if (pend + lista.length > 200) return J({ ok: false, erro: 'Há postagens demais na fila (200). Espere algumas saírem.' }, 429);
@@ -1821,11 +1846,13 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     try{await validarSeriesPost_(env,req,lista,vs);}catch(e){return J({ok:false,erro:e.message},400);}
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], bs = bucketsDoPost(v.tipo, v.canal), ck = bs.join('+');
+      const continuacao=!!(v.serie&&v.parte>1);
+      const editorial=continuacao?0:intervaloEditorialMs_(cfg,bs,intervaloMs);
       for (const b of bs) if (!ocup[b]) ocup[b] = await ocupadosDoTipo_(env, b, 0, gapMaxDoTipoMs(cfg, b));
       let t;
       if(v.serie&&v.parte>1)t=inicioSeries[v.serie];
       else if (v.urgente && cfg.agoraIgnora) t = Date.now();                                  // urgência: sai já, sem pausa nem intervalo
-      else if (v.sequencia && intervaloMs && cursores[ck] != null) t = intervaloEscolhido_(cfg, bs, ocup, cursores[ck], intervaloMs);   // v1.7: a pessoa escolheu "de X em X minutos" (nunca abaixo do mínimo do canal)
+      else if (v.sequencia && cursores[ck] != null) t = intervaloEscolhido_(cfg, bs, ocup, cursores[ck], editorial);   // v1.7: a pessoa escolheu "de X em X minutos" (nunca abaixo do mínimo do canal)
       else if (v.sequencia) t = proximoLivreMulti(cfg, bs, ocup, cursores[ck] == null ? Date.now() + 60000 : cursores[ck]).t;       // intervalo SORTEADO entre o mín. e o máx. do canal
       else {
         const pedido = Math.max(Date.parse(v.quando), Date.now()), aj = ajustarHorarioMulti(cfg, bs, pedido, ocup);
@@ -1836,7 +1863,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       quandos.push(v.quando);
 
 
-      inserts.push(env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal, urgente, serie, parte, partes) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal, v.urgente ? 1 : 0,v.serie||'',v.parte||0,v.partes||0));
+      inserts.push(env.DB.prepare("INSERT INTO postagem (tipo, modo, legenda, midias, produto, template, link, agendado_em, status, criado_por, criado_em, atualizado_em, grupo, seq, canal, urgente, serie, parte, partes, origem_midia, intervalo_ms) VALUES (?,?,?,?,?,?,?,?, 'agendado', ?,?,?,?,?,?,?,?,?,?,?,?)").bind(v.tipo, v.modo, v.legenda, JSON.stringify(v.midias), v.produto, v.template, v.link, v.quando, por, agora(), agora(), v.grupo, v.sequencia ? 1 : 0, v.canal, v.urgente ? 1 : 0,v.serie||'',v.parte||0,v.partes||0,lista[i].origemMidia,editorial));
     }
     // Todos os destinos entram juntos ou nenhum: uma falha não deixa metade do pedido na fila.
     const criadas = await env.DB.batch(inserts);
@@ -1870,7 +1897,8 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
   const linha = id ? await env.DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first() : null;
   if (p.indexOf('/post/') === 0 && req.method === 'POST') {
     if (!linha) return J({ ok: false, erro: 'Postagem não encontrada.' }, 404);
-    if(linha.serie&&['/post/proximo','/post/mover','/post/repostar'].includes(p))return J({ok:false,erro:'Para mudar o horário de uma sequência, descarte as partes pendentes e agende novamente o vídeo completo. Partes publicadas não serão repetidas.'},409);
+    if(linha.serie&&(p==='/post/proximo'||p==='/post/reagendar'&&linha.parte===1))return reagendarVideoOriginal_(env,ctx,linha,p==='/post/proximo'?'sequencia':b.quando,J);
+    if(linha.serie&&['/post/mover','/post/repostar'].includes(p))return J({ok:false,erro:'Para mudar o horário de uma sequência, descarte as partes pendentes e agende novamente o vídeo completo. Partes publicadas não serão repetidas.'},409);
 
     if (p === '/post/repostar') {
       // Uma cópia por origem: duplo toque/repetição de rede retorna a mesma postagem.
