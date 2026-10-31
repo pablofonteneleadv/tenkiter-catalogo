@@ -60,30 +60,54 @@
       const go=document.createElement('button');go.type='button';go.textContent=dividir?'Preparar todas as partes':'Preparar vídeo';go.style.cssText='min-height:48px;background:#292b25;color:#fff;border:0;border-radius:8px;font:inherit;font-weight:700';
       const fechar=document.createElement('button');fechar.type='button';fechar.textContent='Cancelar';fechar.style.cssText='min-height:44px;background:#fff;color:#292b25;border:1px solid #ccc;border-radius:8px;font:inherit';
       box.append(title,info,video,tempo,status,go,fechar);fundo.appendChild(box);document.body.appendChild(fundo);
-      let ativo=true,iniciado=false,urlPreparado=null;const urlsPartes=[];const anterior=document.activeElement;
-      const fim=(erro,resultado)=>{if(!ativo)return;ativo=false;fundo.remove();video.pause();video.removeAttribute('src');video.load();URL.revokeObjectURL(local);if(urlPreparado)URL.revokeObjectURL(urlPreparado);urlsPartes.forEach(u=>URL.revokeObjectURL(u));if(global.TKCamadas?.aberta('tk-video-preparo'))TKCamadas.desempilhar('tk-video-preparo');anterior?.focus?.({preventScroll:true});erro?reject(erro):resolve(resultado);};
-      if(global.TKCamadas)TKCamadas.empilhar('tk-video-preparo',()=>fim(Error(iniciado?'Preparação continua no servidor. Selecione o mesmo original para recuperar; nada foi enviado.':'Preparação cancelada. O original foi preservado.')));
-      fechar.onclick=()=>fim(Error(iniciado?'Preparação continua no servidor. Selecione o mesmo original para recuperar; nada foi enviado.':'Preparação cancelada.'));
+      let ativo=true,iniciado=false,executando=false,recebido=false,xhrAtivo=null,urlPreparado=null;const urlsPartes=[];const anterior=document.activeElement;
+      const progresso=document.createElement('progress');progresso.max=100;progresso.value=0;progresso.hidden=true;progresso.setAttribute('aria-label','Envio do vídeo');progresso.style.cssText='width:100%;height:16px';box.insertBefore(progresso,status);
+      const ocupado=texto=>{const tinhaFoco=document.activeElement===go;go.disabled=true;go.setAttribute('aria-disabled','true');go.setAttribute('aria-busy','true');go.style.opacity='.65';go.style.cursor='wait';go.textContent=texto;if(tinhaFoco)fechar.focus({preventScroll:true});};
+      const liberar=texto=>{executando=false;go.disabled=false;go.setAttribute('aria-disabled','false');go.removeAttribute('aria-busy');go.style.opacity='1';go.style.cursor='pointer';go.textContent=texto;};
+      const fim=(erro,resultado)=>{if(!ativo)return;ativo=false;xhrAtivo?.abort();fundo.remove();video.pause();video.removeAttribute('src');video.load();URL.revokeObjectURL(local);if(urlPreparado)URL.revokeObjectURL(urlPreparado);urlsPartes.forEach(u=>URL.revokeObjectURL(u));if(global.TKCamadas?.aberta('tk-video-preparo'))TKCamadas.desempilhar('tk-video-preparo');anterior?.focus?.({preventScroll:true});erro?reject(erro):resolve(resultado);};
+      if(global.TKCamadas)TKCamadas.empilhar('tk-video-preparo',()=>fim(Error(recebido?'O original foi recebido. Selecione o mesmo vídeo para recuperar ou tentar novamente; nada foi publicado.':iniciado?'Envio interrompido ou sem confirmação. Selecione o mesmo original para conferir; nada foi publicado.':'Preparação cancelada. O original foi preservado.')));
+      fechar.onclick=()=>fim(Error(recebido?'O original foi recebido. Selecione o mesmo vídeo para recuperar ou tentar novamente; nada foi publicado.':iniciado?'Envio interrompido ou sem confirmação. Selecione o mesmo original para conferir; nada foi publicado.':'Preparação cancelada.'));
       box.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();fechar.click();return;}if(e.key!=='Tab')return;const alvos=[...box.querySelectorAll('button,input,video')].filter(x=>!x.disabled&&x.getClientRects().length);if(e.shiftKey&&document.activeElement===alvos[0]){e.preventDefault();alvos.at(-1).focus();}else if(!e.shiftKey&&document.activeElement===alvos.at(-1)){e.preventDefault();alvos[0].focus();}});
       go.focus();
       go.onclick=async()=>{
+        if(!ativo||executando)return;
+        let falhaPreparo=false;
         const inicio=dividir?Number(dur.value):0,seg=op.perfil==='postagens'?(meta.ok?meta.duration:0):0;
         if(!Number.isFinite(inicio)||inicio<0||(op.perfil==='postagens'&&(!Number.isFinite(seg)||((meta.ok||!dividir)&&seg<3)||(!dividir&&seg>30)||(dividir&&(!Number.isFinite(inicio)||inicio<3||inicio>30))||(!dividir&&meta.ok&&inicio+seg>meta.duration+.01)))){status.textContent='Escolha uma duração máxima de 3 a 30 segundos para cada parte.';return;}
-        urlsPartes.splice(0).forEach(u=>URL.revokeObjectURL(u));go.disabled=true;dur.disabled=true;iniciado=true;fechar.textContent='Fechar e recuperar depois';
+        executando=true;urlsPartes.splice(0).forEach(u=>URL.revokeObjectURL(u));ocupado('Consultando preparação…');dur.disabled=true;iniciado=true;fechar.textContent='Cancelar envio';
         const key=(dividir?'tk-video-partes-v1:':'tk-video-v1:')+op.conta+':'+op.perfil+':'+hash+':'+inicio+':'+seg;
         const rota=op.base.replace(/\/$/,'')+(op.perfil==='mensageiro'?'/msg/video-preparar':'/post/video-preparar')+(dividir?'?partes=1':'');
         const query=dividir?'&':'?';
-        const chamar=async(url,body)=>{const r=await fetch(url,{method:body?'POST':'GET',headers:op.headers,body,signal:AbortSignal.timeout(body?120000:30000)});const j=await r.json();if(!r.ok||!j.ok)throw Error(j.erro||'Não foi possível preparar agora.');return j;};
+        const chamar=async(url,body)=>{const r=await fetch(url,{method:body?'POST':'GET',headers:op.headers,body,signal:AbortSignal.timeout(body?120000:30000)});const j=await r.json();if(!r.ok||!j.ok){const e=Error(j.erro||'Não foi possível preparar agora.');e.status=r.status;throw e;}return j;};
         try{
           let id;try{id=sessionStorage.getItem(key);}catch(_){}
-          if(id){try{await chamar(rota+query+'id='+encodeURIComponent(id));}catch(_){id=null;}}
-          if(!id){status.textContent='Enviando o original para preparação privada…';const r=await chamar(rota+query+'inicio='+inicio+'&duracao='+seg,file);id=r.id;try{sessionStorage.setItem(key,id);}catch(_){}}
+          if(id){recebido=true;try{await chamar(rota+query+'id='+encodeURIComponent(id));}catch(e){if(e.status===404){id=null;recebido=false;}else throw e;}}
+          if(!id){
+            ocupado('Enviando vídeo…');progresso.hidden=false;progresso.value=0;status.textContent='Enviando o original: 0%. Aguarde a confirmação do recebimento.';
+            const r=await new Promise((ok,erro)=>{
+              const xhr=new XMLHttpRequest();xhrAtivo=xhr;let parado=null,terminou=false;
+              const fim=(e,j)=>{if(terminou)return;terminou=true;clearTimeout(parado);xhrAtivo=null;e?erro(e):ok(j);};
+              const vigiar=()=>{clearTimeout(parado);parado=setTimeout(()=>{fim(Error('O envio ficou sem resposta. Confira a conexão e tente novamente; o original está preservado.'));xhr.abort();},60000);};
+              xhr.open('POST',rota+query+'inicio='+inicio+'&duracao='+seg);xhr.timeout=8*60000;
+              Object.entries(op.headers||{}).forEach(([k,v])=>xhr.setRequestHeader(k,v));
+              xhr.upload.onprogress=e=>{if(!ativo)return;vigiar();if(e.lengthComputable){const pct=Math.min(100,Math.floor(e.loaded/e.total*100));progresso.value=pct;status.textContent=pct===100?'Original enviado. Confirmando o recebimento…':'Enviando o original: '+pct+'%.';if(pct===100)ocupado('Confirmando recebimento…');}};
+              xhr.onload=()=>{try{const j=JSON.parse(xhr.responseText);if(xhr.status<200||xhr.status>=300||!j.ok)throw Error(j.erro||'O servidor não confirmou o envio. Tente novamente.');fim(null,j);}catch(e){fim(Error(e instanceof SyntaxError?'A resposta do servidor veio incompleta. Tente novamente; o original está preservado.':e.message));}};
+              xhr.onerror=()=>fim(Error('Não consegui enviar o vídeo. Confira a conexão e tente novamente.'));
+              xhr.ontimeout=()=>fim(Error('O envio demorou demais. Confira a conexão e tente novamente.'));
+              xhr.onabort=()=>fim(Error('Envio interrompido. O original está preservado.'));
+              // Usa os bytes já lidos para conferir o arquivo: não reabre o URI da galeria/Google Fotos.
+              vigiar();xhr.send(new Blob([buf],{type:file.type||'application/octet-stream'}));
+            });
+            id=r.id;if(!id)throw Error('O servidor não confirmou a preparação. Tente novamente.');try{sessionStorage.setItem(key,id);}catch(_){}
+          }
+          if(!ativo)return;recebido=true;progresso.hidden=true;fechar.textContent='Fechar e recuperar depois';ocupado('Aguardando preparação…');
           const limite=Date.now()+15*60000;
           while(ativo&&Date.now()<limite){
             const r=await chamar(rota+query+'id='+encodeURIComponent(id));
             if(!ativo)return;
-            if(r.estado==='erro'){try{sessionStorage.removeItem(key);}catch(_){}throw Error(r.erro||'Conversão não concluída.');}
+            if(r.estado==='erro'){falhaPreparo=true;try{sessionStorage.removeItem(key);}catch(_){}throw Error(r.erro||'Conversão não concluída.');}
             if(r.estado==='pronto'){
+              ocupado('Conferindo vídeos…');
               if(dividir){
                 const ps=r.partes||[],n=meta.ok?Math.ceil(meta.duration/inicio):ps[0]?.total;if(!Number.isSafeInteger(n)||n<1||n>60||ps.length!==n)throw Error('A preparação não contém todas as partes do original.');
                 const arquivos=[];
@@ -98,20 +122,20 @@
                 const nav=document.createElement('div');nav.style.cssText='display:flex;gap:8px;flex-wrap:wrap';nav.setAttribute('aria-label','Prévia das partes');
                 arquivos.forEach((f,i)=>{const b=document.createElement('button');b.type='button';b.textContent='Parte '+(i+1)+'/'+n;b.style.cssText='min-height:44px;min-width:44px;font:inherit';b.onclick=()=>{video.src=urlsPartes[i];video.load();};nav.appendChild(b);});
                 video.src=urlsPartes[0];video.load();box.insertBefore(nav,status);title.textContent='Partes prontas';info.textContent=n+' vídeos em ordem. Confira a imagem e o som. A primeira parte respeita o agendamento; as seguintes aguardam a confirmação da anterior.';
-                status.textContent='Nada foi enviado. O original foi preservado.';tempo.hidden=true;go.textContent=n===1?'Usar este vídeo':'Usar as '+n+' partes';go.disabled=false;go.onclick=()=>fim(null,n===1?arquivos[0]:arquivos);fechar.textContent='Descartar resultados';iniciado=false;go.focus();return;
+                status.textContent='Nada foi enviado. O original foi preservado.';tempo.hidden=true;liberar(n===1?'Usar este vídeo':'Usar as '+n+' partes');go.onclick=()=>fim(null,n===1?arquivos[0]:arquivos);fechar.textContent='Descartar resultados';iniciado=false;go.focus();return;
               }
               status.textContent='Conferindo o resultado…';const resposta=await fetch(rota+query+'arquivo=1&id='+encodeURIComponent(id),{headers:op.headers,signal:AbortSignal.timeout(60000)});if(!resposta.ok)throw Error('Não foi possível recuperar o vídeo pronto. Selecione o mesmo original para tentar de novo.');
               const blob=await resposta.blob(),saida=new File([blob],file.name.replace(/\.[^.]+$/,'')+'-preparado.mp4',{type:'video/mp4'});
               const v=await global.TKVideoValidation.validar(saida,{maxBytes:perfil.bytes,maxDurationSeconds:perfil.max,minDurationSeconds:perfil.min});
               if(!v.ok)throw Error(v.erros.join(' '));if(op.perfil==='postagens'&&Math.abs(v.metadata.duration-seg)>.15)throw Error('O resultado não corresponde ao trecho escolhido.');if(op.perfil==='mensageiro'&&meta.ok&&Math.abs(v.metadata.duration-meta.duration)>.15)throw Error('A duração mudou. O vídeo preparado não será usado.');
               if(!ativo)return;
-              urlPreparado=URL.createObjectURL(saida);video.src=urlPreparado;video.load();title.textContent='Vídeo pronto';info.textContent='Confira a imagem e o som antes de usar. '+v.metadata.duration.toFixed(1).replace('.',',')+' s · '+(saida.size/1048576).toFixed(1).replace('.',',')+' MiB.';status.textContent='Nada foi enviado. O original está preservado.';tempo.hidden=true;go.textContent='Usar este vídeo';go.disabled=false;go.onclick=()=>fim(null,saida);fechar.textContent='Descartar resultado';iniciado=false;go.focus();return;
+              urlPreparado=URL.createObjectURL(saida);video.src=urlPreparado;video.load();title.textContent='Vídeo pronto';info.textContent='Confira a imagem e o som antes de usar. '+v.metadata.duration.toFixed(1).replace('.',',')+' s · '+(saida.size/1048576).toFixed(1).replace('.',',')+' MiB.';status.textContent='Nada foi enviado. O original está preservado.';tempo.hidden=true;liberar('Usar este vídeo');go.onclick=()=>fim(null,saida);fechar.textContent='Descartar resultado';iniciado=false;go.focus();return;
             }
-            status.textContent=r.estado==='processando'?'Comprimindo o vídeo…':'Na fila de preparação. Pode levar alguns minutos; você pode fechar e recuperar depois.';
+            ocupado(r.estado==='processando'?'Preparando vídeos…':'Aguardando o processador…');status.textContent=r.estado==='processando'?'Original recebido. Preparando os vídeos'+(r.partes?.length?' · '+r.partes.length+' parte(s) concluída(s)':'')+'…':'Original recebido. Está na fila, aguardando o processador iniciar. Essa espera pode levar alguns minutos; você pode fechar e recuperar depois.';
             await new Promise(ok=>setTimeout(ok,5000));
           }
           if(ativo)throw Error('Ainda não terminou. Selecione o mesmo original para recuperar depois; nada foi enviado.');
-        }catch(e){if(ativo){status.textContent=e.message||'Não foi possível preparar agora.';go.disabled=false;go.textContent='Tentar novamente';dur.disabled=false;}}
+        }catch(e){if(ativo){status.textContent=e.message||'Não foi possível preparar agora.';progresso.hidden=true;liberar(recebido&&!falhaPreparo?'Consultar andamento':'Tentar novamente');dur.disabled=recebido&&!falhaPreparo;fechar.textContent=recebido?'Fechar e recuperar depois':'Cancelar';}}
       };
     });
   }
