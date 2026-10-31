@@ -6,6 +6,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.41] - 2026-10-31
+
+- Vídeos selecionados juntos são preparados em segundo plano, com progresso por original, retomada automática do rascunho e inclusão das partes em ordem. A configuração da postagem continua livre durante o preparo.
+
 ## [7.40.40] - 2026-10-31
 
 - Preparação de vídeo com progresso de envio, estados claros, bloqueio de repetição e recuperação sem reenviar o original.

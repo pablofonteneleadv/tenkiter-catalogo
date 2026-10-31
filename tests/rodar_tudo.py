@@ -147,6 +147,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("transcode_profiles.py", lambda o: "OK: HEVC" in o),
     ("reparos_integrados_ui.py", lambda o: "OK 1440" in o),
     ("video_upload_feedback.py", lambda o: "OK 1440" in o),
+    ("video_lote_limites.py", lambda o: "OK vagas" in o),
     ("postagens_video_status.py", lambda o: "OK 320" in o),
 ]
 
