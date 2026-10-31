@@ -103,6 +103,7 @@ async function iniciar(env) {
     await migrarEsquema_(env);
     const postCols=new Set((await env.DB.prepare('PRAGMA table_info(postagem)').all()).results.map(c=>c.name));
     for(const [nome,tipo] of [['serie',"TEXT NOT NULL DEFAULT ''"],['parte','INTEGER NOT NULL DEFAULT 0'],['partes','INTEGER NOT NULL DEFAULT 0']])if(!postCols.has(nome))await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_post_serie ON postagem(serie,parte)').run();
     // Acrescenta a ficha estruturada sem regravar nem apagar os campos antigos.
     const fichaCols = new Set((await env.DB.prepare('PRAGMA table_info(msg_ficha)').all()).results.map(c => c.name));
     if (!fichaCols.has('perfil_json')) {
@@ -1376,7 +1377,7 @@ export async function processarPostagens(env) {
     }
     const t = agora();
     await env.DB.prepare("UPDATE postagem SET status='manual_pendente', atualizado_em=? WHERE modo='manual' AND status='agendado' AND agendado_em<=?").bind(t, t).run();
-    const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY agendado_em, id LIMIT 40").bind(t).all()).results || [];
+    const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY CASE WHEN serie<>'' AND (status='processando' OR (parte>1 AND EXISTS(SELECT 1 FROM postagem ant WHERE ant.serie=postagem.serie AND ant.parte=postagem.parte-1 AND ant.status IN ('publicado','manual_feito')))) THEN 0 WHEN serie<>'' AND parte>1 THEN 2 ELSE 1 END, agendado_em, id LIMIT 40").bind(t).all()).results || [];
     if (!lin.length) return { feitas: 0 };
     const cfgP = await lerCfgPost(env);
     /* v1.2: o token do Instagram só é exigido quando ALGUMA postagem vencida vai para o Instagram.
@@ -1389,25 +1390,28 @@ export async function processarPostagens(env) {
     const usados = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status='publicado' AND COALESCE(canal,'instagram') IN ('instagram','ambos') AND publicado_em>=?").bind(desde).first()) || {}).n) || 0;
     /* v1.6: além do teto do Instagram, cada canal (Story, Status do WhatsApp, Reels, Carrossel, Feed) tem o SEU limite nas últimas 24 h. "Ambos" conta nos dois. */
     const porCanal = {}; for (const b of CANAIS_FILA) porCanal[b] = await contarUsados24h_(env, b, desde);
+    const ativas=(await env.DB.prepare("SELECT s.serie,s.tipo,s.canal FROM postagem s WHERE s.serie<>'' AND s.parte=1 AND s.status IN ('publicado','processando','manual_feito','erro') AND EXISTS(SELECT 1 FROM postagem q WHERE q.serie=s.serie AND q.status IN ('agendado','processando','erro','manual_pendente')) ORDER BY s.agendado_em,s.id").all()).results||[];
+    const recentes=(await env.DB.prepare("SELECT serie,tipo,canal,publicado_em FROM postagem WHERE serie<>'' AND status='publicado' AND publicado_em>? ORDER BY publicado_em DESC LIMIT 60").bind(new Date(Date.now()-7200000).toISOString()).all()).results||[];
+    const estados=new Map(lin.filter(p=>p.serie).map(p=>[p.serie+':'+p.parte,p])),anteriores=lin.filter(p=>p.serie&&p.parte>1);
+    if(anteriores.length){const rs=(await env.DB.prepare('SELECT serie,parte,status,publicado_em FROM postagem WHERE '+anteriores.map(()=>'(serie=? AND parte=?)').join(' OR ')).bind(...anteriores.flatMap(p=>[p.serie,p.parte-1])).all()).results||[];for(const r of rs)estados.set(r.serie+':'+r.parte,r);}
     let feitas = 0, novas = usados, tentadas = 0;
     for (const p of lin) {
       if (tentadas >= 4) break;                                       // no máximo 4 por minuto; as que esperam o limite do canal não ocupam essas vagas
       let anterior=null;
       if(p.serie&&p.parte>1){
-        anterior=await env.DB.prepare('SELECT status,publicado_em FROM postagem WHERE serie=? AND parte=?').bind(p.serie,p.parte-1).first();
+        anterior=estados.get(p.serie+':'+(p.parte-1));
         if(!anterior||!['publicado','manual_feito'].includes(anterior.status))continue;
         if(!cfgP.partesRapidas&&Date.parse(anterior.publicado_em)+Math.max(...bucketsDoPost(p.tipo,p.canal).map(b=>gapDoTipoMs(cfgP,b)))>Date.now())continue;
       }
-      const ativas=(await env.DB.prepare("SELECT s.serie,s.tipo,s.canal FROM postagem s WHERE s.serie<>'' AND s.parte=1 AND s.status IN ('publicado','processando','manual_feito') AND EXISTS(SELECT 1 FROM postagem q WHERE q.serie=s.serie AND q.status IN ('agendado','processando','erro','manual_pendente'))").all()).results||[];
-      if(ativas.some(s=>s.serie!==p.serie&&bucketsDoPost(s.tipo,s.canal).some(b=>bucketsDoPost(p.tipo,p.canal).includes(b))))continue;
+      const minha=ativas.findIndex(s=>s.serie===p.serie);
+      if(ativas.some((s,i)=>s.serie!==p.serie&&(minha<0||i<minha)&&bucketsDoPost(s.tipo,s.canal).some(b=>bucketsDoPost(p.tipo,p.canal).includes(b))))continue;
       if (p.status === 'agendado' && !(anterior&&cfgP.partesRapidas) && !p.urgente && cfgP.pausaAtiva && foraDaPausa(cfgP, Date.now()) > Date.now()) {          // agendada antes da regra: não sai na pausa, vai para o primeiro horário livre depois dela
-        try { const r = ajustarHorario(cfgP, p.tipo, Date.now(), await ocupadosDoTipo_(env, p.tipo, p.id, gapDoTipoMs(cfgP, p.tipo))); await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(new Date(r.t).toISOString(), agora(), p.id).run(); } catch (e) { /* tenta de novo no próximo minuto */ }
+        tentadas++;try { const r = ajustarHorario(cfgP, p.tipo, Date.now(), await ocupadosDoTipo_(env, p.tipo, p.id, gapDoTipoMs(cfgP, p.tipo))); await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(new Date(r.t).toISOString(), agora(), p.id).run(); } catch (e) { /* tenta de novo no próximo minuto */ }
         continue;
       }
       if(p.status==='agendado'&&!(anterior&&cfgP.partesRapidas)&&!(p.urgente&&cfgP.agoraIgnora)){
-        const recentes=(await env.DB.prepare("SELECT serie,tipo,canal,publicado_em FROM postagem WHERE serie<>'' AND serie<>? AND status='publicado' AND publicado_em>? ORDER BY publicado_em DESC LIMIT 60").bind(p.serie||'',new Date(Date.now()-7200000).toISOString()).all()).results||[];
-        let liberar=0;for(const r of recentes)for(const b of bucketsDoPost(p.tipo,p.canal))if(bucketsDoPost(r.tipo,r.canal).includes(b))liberar=Math.max(liberar,Date.parse(r.publicado_em)+gapDoTipoMs(cfgP,b));
-        if(liberar>Date.now()){await env.DB.prepare('UPDATE postagem SET agendado_em=?,atualizado_em=? WHERE id=?').bind(new Date(foraDaPausa(cfgP,liberar)).toISOString(),agora(),p.id).run();continue;}
+        let liberar=0;for(const r of recentes)if(r.serie!==p.serie)for(const b of bucketsDoPost(p.tipo,p.canal))if(bucketsDoPost(r.tipo,r.canal).includes(b))liberar=Math.max(liberar,Date.parse(r.publicado_em)+gapDoTipoMs(cfgP,b));
+        if(liberar>Date.now()){tentadas++;await env.DB.prepare('UPDATE postagem SET agendado_em=?,atualizado_em=? WHERE id=?').bind(new Date(foraDaPausa(cfgP,liberar)).toISOString(),agora(),p.id).run();continue;}
       }
       const usaIg = canalUsaInstagram_(p.canal);
       if (usaIg && !token) { await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('O Instagram não está conectado. Conecte o token e use "Tentar de novo".', agora(), p.id).run(); continue; }
@@ -1420,6 +1424,10 @@ export async function processarPostagens(env) {
       }
       tentadas++;
       try { await avancarPostagem(env, token, p); feitas++; } catch (e) { try { await falhaPostagem(env, p, e); } catch (e2) { /* próximo minuto tenta de novo */ } }
+      if(p.serie){
+        const atual=await env.DB.prepare('SELECT status,publicado_em FROM postagem WHERE id=?').bind(p.id).first();
+        if(atual){estados.set(p.serie+':'+p.parte,atual);if(p.parte===1&&!ativas.some(s=>s.serie===p.serie))ativas.push({serie:p.serie,tipo:p.tipo,canal:p.canal});if(atual.status==='publicado'){recentes.push({...p,...atual});if(p.parte===p.partes){const i=ativas.findIndex(s=>s.serie===p.serie);if(i>=0)ativas.splice(i,1);}}}
+      }
     }
     const rapidas=cfgP.partesRapidas&&(await env.DB.prepare("SELECT 1 FROM postagem p WHERE p.serie<>'' AND p.status IN ('agendado','processando') AND p.agendado_em<=? AND NOT EXISTS(SELECT 1 FROM postagem e WHERE e.serie=p.serie AND e.status IN ('erro','cancelado','manual_pendente')) LIMIT 1").bind(agora()).first());
     return { feitas: feitas,continuar:tentadas>0&&!!rapidas };

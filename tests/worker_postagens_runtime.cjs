@@ -21,6 +21,14 @@ const {Miniflare}=require('../instagram-worker/node_modules/miniflare');
   assert.equal((await db.prepare("SELECT COUNT(*) n FROM postagem WHERE status='publicado'").first()).n,6);
   assert.deepEqual(sent,Array.from({length:6},(_,i)=>'tkpost-'+String(i+1).padStart(12,'0')));
   await new Promise(r=>setTimeout(r,1500));assert.equal(sent.length,6,'Alarme não repete envios confirmados');
+  // Uma sequência iniciada não fica presa atrás das 40 primeiras linhas atrasadas.
+  await db.prepare("UPDATE postagem SET status='agendado',publicado_em='' WHERE serie='serie-runtime' AND parte>1").run();sent.length=0;
+  for(let i=0;i<45;i++)await db.prepare("INSERT INTO postagem(tipo,modo,midias,agendado_em,status,canal) VALUES('story','auto','[]',?,'agendado','whatsapp')").bind(new Date(Date.now()-3600000).toISOString()).run();
+  await mf.getDurableObjectNamespace('POSTAGENS_SEQUENCIA').then(ns=>ns.get(ns.idFromName('loja')).acordar());
+  const again=Date.now()+25000;
+  while(Date.now()<again){const n=await db.prepare("SELECT COUNT(*) n FROM postagem WHERE serie='serie-runtime' AND status='publicado'").first();if(n.n===6)break;await new Promise(r=>setTimeout(r,250));}
+  assert.equal((await db.prepare("SELECT COUNT(*) n FROM postagem WHERE serie='serie-runtime' AND status='publicado'").first()).n,6,'Partes continuam com fila acumulada');
+  assert.deepEqual(sent,Array.from({length:5},(_,i)=>'tkpost-'+String(i+2).padStart(12,'0')));
   console.log('OK: Durable Object, alarmes e seis partes em ordem, sem intervalo editorial ou repetição.');
  }finally{await mf.dispose();}
 })().catch(e=>{console.error(e);process.exitCode=1});

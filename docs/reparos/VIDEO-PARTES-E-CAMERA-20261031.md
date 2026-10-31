@@ -28,7 +28,7 @@ Migração aditiva: três colunas em postagem, tabela video_parte e namespace Du
 
 ## Validação
 
-Testes: encoder real com áudio e cores diferentes por trecho (ordem temporal); 59/75/90 s e cauda curta; 90 s sintéticos 720p/H.264/AAC aceitos inteiros no Mensageiro; D1 real com hashes/ACL/atomicidade/agendamento/confirmação/erro/cancelamento; seis partes no runtime Cloudflare com alarmes e provedor simulado; interface 320/390/412/1440 com prévia, cancelamento e seleção; menu do clipe/câmera/galeria múltipla/atualização de app antigo. Regressões de fila, canais, importador e atendimento também verificadas. Nenhuma mensagem/publicação real ou conversão paga usada em teste.
+Testes: encoder real com áudio e cores diferentes por trecho (ordem temporal); 59/75/90 s e cauda curta; 90 s sintéticos 720p/H.264/AAC aceitos inteiros no Mensageiro; D1 real com hashes/ACL/atomicidade/agendamento/confirmação/erro/cancelamento; seis partes no runtime Cloudflare com alarmes e provedor simulado, inclusive atrás de 45 outras postagens atrasadas; interface 320/390/412/1440 com prévia, cancelamento e seleção; menu do clipe/câmera/galeria múltipla/atualização de app antigo. Regressões de fila, canais, importador e atendimento também verificadas. Nenhuma mensagem/publicação real ou conversão paga usada em teste.
 
 Skill de estética humana aplicada: tarefa é preparar o vídeo inteiro, conferir as partes e publicar em ordem, e escolher câmera/galeria no atendimento. Campos e ações principais de 44–48 px; retorno/Escape/foco e reflow a 320 px preservados. Evidências em tests/saida/reparos e nos artefatos do CI. Resultado: APROVADO COM LIMITAÇÃO — interação e câmera simuladas; sem aparelho físico.
 
