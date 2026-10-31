@@ -1,0 +1,32 @@
+/* Central de gestão do Mensageiro. Todo estilo fica restrito à própria janela. */
+#tk-gestor{position:fixed;inset:0;z-index:10900;background:#0009;display:flex;align-items:center;justify-content:center;padding:12px;color:#292b25;font-family:Arial,Helvetica,sans-serif}
+#tk-gestor *{box-sizing:border-box}#tk-gestor [hidden]{display:none!important}
+#tk-gestor .tg-sheet{background:#f8f6f1;width:min(1240px,100%);height:94dvh;max-height:100%;border-radius:16px;display:flex;flex-direction:column;overflow:hidden}
+#tk-gestor .tg-top{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px;background:white;border-bottom:1px solid #ded9cf;flex:none}
+#tk-gestor .tg-top>div{flex:1;min-width:0;text-align:left}#tk-gestor .tg-top>button{flex:none;width:48px;height:48px;padding:0;font-size:24px}
+#tk-gestor h2{font-size:22px;margin:0;color:#292b25}#tk-gestor h3{font-size:18px;margin:0 0 12px;color:#292b25}#tk-gestor h4{font-size:16px;margin:0 0 8px;color:#292b25}
+#tk-gestor p{line-height:1.5;margin:8px 0}#tk-gestor small,#tk-gestor .tg-help{color:#59594f;font-size:13px;line-height:1.5}
+#tk-gestor button,#tk-gestor input,#tk-gestor select{font:inherit;color:#292b25}#tk-gestor button{width:auto;min-height:48px;min-width:48px;border:1px solid #c9c7bd;border-radius:8px;background:white;padding:10px 14px;cursor:pointer;font-size:14px}
+#tk-gestor button:disabled{opacity:.6;cursor:wait}#tk-gestor button:hover{background:#f0ede4}#tk-gestor button:focus-visible,#tk-gestor input:focus-visible,#tk-gestor select:focus-visible,#tk-gestor summary:focus-visible{outline:3px solid #895016;outline-offset:3px}
+#tk-gestor button.tg-primary,#tk-gestor button[aria-selected=true],#tk-gestor button[aria-pressed=true]{background:#292b25;color:white;border-color:#292b25}
+#tk-gestor .tg-tabs{display:flex;gap:8px;overflow-x:auto;padding:12px 20px;border-bottom:1px solid #ded9cf;background:white;flex:none}#tk-gestor .tg-tabs button{flex:none;white-space:nowrap}
+#tk-gestor .tg-scroll{overflow:auto;flex:1;min-height:0;padding:20px;padding-bottom:max(24px,env(safe-area-inset-bottom))}
+#tk-gestor .tg-tools{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin-bottom:16px}#tk-gestor label{font-size:14px;display:grid;gap:6px;min-width:0}
+#tk-gestor input,#tk-gestor select{min-height:48px;max-width:100%;border:1px solid #aaa99d;border-radius:8px;background:white;padding:10px;font-size:16px}
+#tk-gestor .tg-config-tools label{flex:1;min-width:min(220px,100%)}#tk-gestor input[type=search]{width:100%}#tk-gestor .tg-body{min-width:0}
+#tk-gestor .tg-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0 24px}
+#tk-gestor .tg-card{display:block;text-align:left;background:white;border:1px solid #ded9cf;border-radius:12px;padding:18px;min-width:0}
+#tk-gestor .tg-card b{display:block;font-size:32px;font-weight:600;margin:10px 0}#tk-gestor .tg-card span{display:block;font-size:14px;line-height:1.4}#tk-gestor .tg-card small{display:block}
+#tk-gestor .tg-alert b{color:#9b3a27}#tk-gestor .tg-alert{border-top:3px solid #a7462d}
+#tk-gestor .tg-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:20px}#tk-gestor .tg-panel{background:white;border:1px solid #ded9cf;border-radius:12px;padding:20px;min-width:0;margin-bottom:20px}
+#tk-gestor .tg-row{display:flex;gap:12px;align-items:center;border-bottom:1px solid #e7e4db;padding:14px 0;overflow-wrap:anywhere}#tk-gestor .tg-row:last-child{border:0}#tk-gestor .tg-grow{flex:1;min-width:0}
+#tk-gestor .tg-badge{font-size:12px;display:inline-block;border-radius:4px;padding:4px 6px;background:#efede5;color:#4c4e40}#tk-gestor .tg-badge.alert{background:#f9e7e0;color:#913925}
+#tk-gestor .tg-notice{border-left:3px solid #a76b29;padding:12px;background:#fff8e9;font-size:14px;margin:12px 0;line-height:1.5}
+#tk-gestor .tg-table{width:100%;border-collapse:collapse}#tk-gestor th,#tk-gestor td{padding:12px 8px;text-align:left;border-bottom:1px solid #e0ddd3;font-size:14px;vertical-align:top}#tk-gestor th{font-size:12px;color:#59594f}
+#tk-gestor .tg-catalog{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}#tk-gestor .tg-config{display:flex;flex-direction:column;align-items:flex-start}#tk-gestor .tg-config p{font-size:14px}#tk-gestor .tg-config button{margin-top:auto}
+#tk-gestor .tg-detail{max-width:780px}#tk-gestor .tg-detail input[type=number]{width:120px}#tk-gestor .tg-detail label{margin:12px 0}
+#tk-gestor .tg-bar{display:grid;grid-template-columns:46px minmax(0,1fr) 40px;gap:12px;align-items:center;font-size:13px;margin:10px 0}#tk-gestor .tg-bar i{display:block;height:12px;background:#d28743;border-radius:2px}
+#tk-gestor .tg-error{color:#8f3029}#tk-gestor .tg-status{min-height:24px}#ms-voltar-gestor{display:block;min-height:44px;margin:8px 12px;padding:8px 12px;font:inherit;background:white;color:#292b25;border:1px solid #aaa99d;border-radius:8px}
+@media(max-width:850px){#tk-gestor .tg-catalog{grid-template-columns:repeat(2,minmax(0,1fr))}#tk-gestor .tg-grid{grid-template-columns:1fr}}
+@media(max-width:580px){#tk-gestor{padding:0}#tk-gestor .tg-sheet{height:100dvh;border-radius:0}#tk-gestor .tg-top{padding:12px 16px}#tk-gestor .tg-top>div{flex:1;min-width:0;text-align:left}#tk-gestor .tg-top>button{flex:none;width:48px;height:48px;padding:0;font-size:24px}
+#tk-gestor h2{font-size:20px}#tk-gestor .tg-tabs{padding:8px 16px}#tk-gestor .tg-scroll{padding:16px}#tk-gestor .tg-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}#tk-gestor .tg-card{padding:14px}#tk-gestor .tg-card b{font-size:28px}#tk-gestor .tg-row{flex-wrap:wrap}#tk-gestor .tg-row button{margin-left:auto}#tk-gestor .tg-catalog{grid-template-columns:1fr}#tk-gestor .tg-panel{padding:16px}#tk-gestor .tg-tools label{flex:1;min-width:120px}#tk-gestor .tg-tools select{width:100%;font-size:14px}#tk-gestor .tg-table,#tk-gestor tbody,#tk-gestor tr,#tk-gestor td{display:block}#tk-gestor thead{display:none}#tk-gestor tr{border-bottom:1px solid #ded9cf;padding:10px 0}#tk-gestor td{border:0;padding:6px 0}#tk-gestor td[data-label]:before{content:attr(data-label)' · ';color:#59594f;font-size:12px}}
