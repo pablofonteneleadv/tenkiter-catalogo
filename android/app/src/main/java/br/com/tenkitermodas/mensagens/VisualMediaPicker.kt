@@ -19,9 +19,7 @@ object VisualMediaPicker {
         putExtra(Intent.EXTRA_ALLOW_MULTIPLE, multiple)
     }
     fun cameraIntent():Intent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).apply {
-        putExtra(MediaStore.EXTRA_DURATION_LIMIT, 60)
-        putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 0)
-        putExtra(MediaStore.EXTRA_SIZE_LIMIT, 12L * 1024 * 1024)
+        putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1)
     }
     fun open(activity:Activity,params:WebChromeClient.FileChooserParams,request:Int,cancel:()->Unit) {
         // A WebView pode informar MODE_OPEN mesmo quando o site permite várias fotos.
@@ -36,7 +34,8 @@ object VisualMediaPicker {
                     .setOnCancelListener{cancel()}.show()
             }
         }
-        // O clipe deve abrir imediatamente a galeria. A câmera fica disponível pelo próprio seletor ou ação dedicada.
-        iniciar(galleryIntent(multi))
+        // O clipe deve abrir imediatamente a galeria. A ação Gravar vídeo usa capture; o clipe continua abrindo a galeria.
+        if(params.isCaptureEnabled && accepts(params.acceptTypes).any { it.startsWith("video/") }) iniciar(cameraIntent())
+        else iniciar(galleryIntent(multi))
     }
 }

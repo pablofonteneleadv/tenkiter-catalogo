@@ -6,6 +6,16 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.37] - 2026-10-31
+
+- Encaminhamento com busca completa, paginação, voltar/Escape e preservação do rascunho; retry não reutiliza citação na próxima mensagem.
+- Seleção múltipla preserva fotos válidas mesmo quando um vídeo é recusado ou cancelado.
+- Vídeos do Mensageiro usam a mesma regra no WhatsApp e Instagram, preservando a duração; Postagens prepara uma mídia comum de 3–30 s para Status, Grupo e Story, com escolha explícita do trecho e prévia antes de usar.
+- Preparação privada sem conversor pago automático; é possível fechar e recuperar o resultado selecionando o mesmo original.
+- Equipe/fila atualizam sem recarga manual; painel aceita Todos, separa encerramento de resposta e informa horários/cobertura dos indicadores.
+- Android 2.4.13/code 20: câmera acessível por Gravar vídeo, galeria múltipla preservada e atualizador/manifesto vinculados à release assinada. Homologação em aparelho físico permanece pendente.
+
+
 ## [7.40.36] - 2026-10-30
 
 - **Responder uma mensagem específica** na conversa: cada bolha (do cliente e sua) tem a ação **Responder**, que abre uma faixa de prévia acima do compositor com **autor + trecho citado** e um **X** para cancelar

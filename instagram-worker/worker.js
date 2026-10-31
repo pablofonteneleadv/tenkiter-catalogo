@@ -254,7 +254,7 @@ function msgDireitos_(perms, whats, regras) {
   return direitos;
 }
 function msgRecurso_(p, req, url) {
-  if (['/msg/enviar','/msg/anexo','/msg/dono','/msg/encerrar'].includes(p)) return 'responder';
+  if (['/msg/video-preparar','/msg/enviar','/msg/anexo','/msg/dono','/msg/encerrar'].includes(p)) return 'responder';
   if (p === '/msg/midia') return url.searchParams.get('baixar') === '1' ? 'arquivos' : 'acessar';
   if (/^\/msg\/(pessoa|ficha)(\/|$)/.test(p)) return 'contatos';
   if (/^\/msg\/(etiquetas|rotular)$/.test(p)) return 'etiquetas';
@@ -1856,29 +1856,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       return J({ ok: true });
     }
     if (p === '/post/converter-grupo') {
-      // O runner do GitHub Actions busca apenas trabalhos solicitados pelo atendente.
-      // Nunca converter se algum recibo foi aberto: um envio pode ter ocorrido.
-      if (linha.canal !== 'grupo' || linha.status !== 'erro' ||
-          !String(linha.erro || '').includes('H.265/HEVC'))
-        return J({ ok: false, erro: 'Somente postagens do grupo recusadas por HEVC podem ser convertidas.' }, 409);
-      const recibo = await env.DB.prepare('SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=?').bind(id).first();
-      if (recibo) return J({ ok: false, erro: 'Existe registro de tentativa de envio; verifique antes de repetir.' }, 409);
-      const midias = JSON.parse(linha.midias || '[]');
-      if (midias.length !== 1 || midias[0].tipo !== 'video')
-        return J({ ok: false, erro: 'Conversão automática disponível para postagem com um vídeo.' }, 400);
-      const prefixo = String(env.MIDIA_URL || '').replace(/\/$/, '') + '/m/';
-      if (!String(midias[0].url || '').startsWith(prefixo))
-        return J({ ok: false, erro: 'Vídeo fora do armazenamento TENKiTER.' }, 400);
-      const chave = midias[0].url.slice(prefixo.length);
-      if (!/^[a-z0-9/_-]+\.mp4$/.test(chave) || chave.includes('..'))
-        return J({ ok: false, erro: 'Chave de vídeo inválida.' }, 400);
-      const obj = await env.MIDIA.head(chave);
-      if (!obj || obj.size > 12 * 1024 * 1024)
-        return J({ ok: false, erro: 'Vídeo ausente ou acima de 12 MiB.' }, 400);
-      const r = await env.DB.prepare("UPDATE postagem SET status='convertendo', erro='Conversão H.264 solicitada. Aguarde o processamento no servidor.', atualizado_em=? WHERE id=? AND status='erro' AND NOT EXISTS (SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=?)")
-        .bind(agora(), id, id).run();
-      if (!r.meta || r.meta.changes !== 1) return J({ ok: false, erro: 'Postagem alterada; atualize a fila.' }, 409);
-      return J({ ok: true, convertendo: true, mensagem: 'Conversão solicitada. O GitHub Actions verificará a fila.' });
+      return J({ok:false,erro:'Abra o original em Nova postagem e use Preparar vídeo. A preparação agora preserva a fila e nunca libera envio sozinha.'},409);
     }
     if (p === '/post/reagendar') {
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
@@ -2443,6 +2421,7 @@ async function freeconvertRota_(env, req, url, J, h) {
   try {
     if(url.pathname==='/post/freeconvert/iniciar' && req.method==='POST') {
       const b=await req.json();
+      if(b.confirmarCusto!==true)return J({ok:false,erro:'Conversão externa exige confirmação explícita de uso de cota/créditos. Use Preparar vídeo para a fila da loja.'},400);
       const u=new URL(String(b.url||''));
       if(u.protocol!=='https:' || u.hostname!=='tenkiter-midia.distkrpconfeccoes.workers.dev' || !u.pathname.startsWith('/m/'))
         return J({ok:false,erro:'A conversão aceita apenas mídias previamente enviadas à TENKiTER.'},400);
@@ -4170,15 +4149,15 @@ function detectarAnexo_(buf, tipoPedido) {
   }
   return '';
 }
-const MSG_ANEXO_MAX_ = { 'imagem': 8 * 1048576, 'vídeo': 16 * 1048576, 'áudio': 16 * 1048576 };
+const MSG_ANEXO_MAX_ = { 'imagem': 8 * 1048576, 'vídeo': 15000000, 'áudio': 16 * 1048576 };
 async function receberAnexo_(env, req, url) {
   const tipo = String(url.searchParams.get('tipo') || '');
   if (!MSG_ANEXO_MAX_[tipo]) return [400, { ok: false, erro: 'Escolha foto, vídeo ou áudio.' }];
   const declarado = Number(req.headers.get('Content-Length') || 0);
-  if (declarado > MSG_ANEXO_MAX_[tipo]) return [413, { ok: false, erro: 'Arquivo grande demais (' + (tipo === 'imagem' ? 'foto: até 8 MB' : 'até 16 MB') + ').' }];
+  if (declarado > MSG_ANEXO_MAX_[tipo]) return [413, { ok: false, erro: 'Arquivo grande demais (' + (tipo === 'imagem' ? 'foto: até 8 MiB' : tipo==='vídeo'?'vídeo: até 15 MB':'áudio: até 16 MiB') + ').' }];
   const buf = await req.arrayBuffer();
   if (!buf.byteLength) return [400, { ok: false, erro: 'O arquivo veio vazio. Escolha de novo.' }];
-  if (buf.byteLength > MSG_ANEXO_MAX_[tipo]) return [413, { ok: false, erro: 'Arquivo grande demais (' + (tipo === 'imagem' ? 'foto: até 8 MB' : 'até 16 MB') + ').' }];
+  if (buf.byteLength > MSG_ANEXO_MAX_[tipo]) return [413, { ok: false, erro: 'Arquivo grande demais (' + (tipo === 'imagem' ? 'foto: até 8 MiB' : tipo==='vídeo'?'vídeo: até 15 MB':'áudio: até 16 MiB') + ').' }];
   const mime = detectarAnexo_(buf, tipo);
   if (!mime) return [415, { ok: false, erro: tipo === 'imagem' ? 'Use uma foto JPG, PNG ou WebP.' : tipo === 'vídeo' ? 'Use um vídeo MP4.' : 'Este áudio não é de um formato aceito (use MP3, OGG, M4A ou gravação do celular).' }];
   if (tipo === 'vídeo' && /hvc1|hev1/.test(new TextDecoder('latin1').decode(buf))) return [415, { ok: false, erro: 'Este vídeo está em H.265/HEVC e o WhatsApp pode recusar. Grave ou converta em MP4 H.264.' }];
@@ -4599,33 +4578,41 @@ async function limpezaContatos_(env, d) {
   }
   return { ok: false, cod: 400, erro: 'Etapa da limpeza inválida.' };
 }
-async function metricasMensagens_(env, canal, dias) {
+async function esperaMetricas_(env,canal){
+  const espera = await env.DB.prepare("SELECT id, canal, contato, nome, ult_entrada_em FROM msg_conversa WHERE grupo=0 AND ult_dir='entrada' AND encerrada_em='' AND total>0" + (canal ? ' AND canal=?' : '') + ' ORDER BY ult_entrada_em ASC LIMIT 8').bind(...(canal ? [canal] : [])).all();
+  const totEspera = await env.DB.prepare("SELECT COUNT(*) AS n FROM msg_conversa WHERE grupo=0 AND ult_dir='entrada' AND encerrada_em='' AND total>0" + (canal ? ' AND canal=?' : '')).bind(...(canal ? [canal] : [])).first();
+  return {total:Number((totEspera||{}).n)||0,maisAntigas:espera.results.map(x=>({id:x.id,canal:x.canal,nome:rotuloContato_(x),desde:x.ult_entrada_em}))};
+}
+async function metricasMensagens_(env, canal, dias, usarCache) {
   dias = [7, 30, 90].includes(Number(dias)) ? Number(dias) : 30;
   const desde = new Date(Date.now() - dias * 86400000).toISOString();
-  const rs = await env.DB.prepare("SELECT m.conversa_id, m.direcao, m.enviada_em FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0 AND COALESCE(m.por,'')<>'auto' AND m.enviada_em>=?" + (canal ? ' AND c.canal=?' : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT 30000').bind(...(canal ? [desde, canal] : [desde])).all();
-  /* v2.13: encerramentos entram na linha do tempo: Concluído/Vendeu/Parou de responder valem como atendimento resolvido naquela hora
-   * (sem mensagem da loja não é demora); conversa marcada como Engano ou spam fica fora das métricas. */
-  const enc = (await env.DB.prepare('SELECT e.conversa_id, e.motivo, e.em AS enviada_em FROM msg_encerramento e JOIN msg_conversa c ON c.id=e.conversa_id WHERE c.grupo=0 AND e.em>=?' + (canal ? ' AND c.canal=?' : '') + ' LIMIT 20000').bind(...(canal ? [desde, canal] : [desde])).all()).results;
+  const ck=new Request('https://metricas.invalid/tenkiter-ig-v2/'+(canal||'todos')+'/'+dias);
+  if(usarCache){try{const hit=await caches.default.match(ck);if(hit){const salvo=await hit.json();if(Date.now()-Date.parse(salvo.calculadoEm)<300000)return {...salvo,aguardando:await esperaMetricas_(env,canal)};}}catch(_){}}
+  const rs = await env.DB.prepare("SELECT m.conversa_id, m.direcao, m.enviada_em FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0 AND COALESCE(m.por,'')<>'auto' AND m.enviada_em>=?" + (canal ? ' AND c.canal=?' : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT 30001').bind(...(canal ? [desde, canal] : [desde])).all();
+  /* Encerramento resolve um ciclo, mas não é resposta enviada. Engano/spam fica fora. */
+  const enc = (await env.DB.prepare('SELECT e.conversa_id, e.motivo, e.em AS enviada_em FROM msg_encerramento e JOIN msg_conversa c ON c.id=e.conversa_id WHERE c.grupo=0 AND e.em>=?' + (canal ? ' AND c.canal=?' : '') + ' ORDER BY e.em,e.id LIMIT 20001').bind(...(canal ? [desde, canal] : [desde])).all()).results;
+  const parcial=rs.results.length>30000||enc.length>20000;rs.results=rs.results.slice(0,30000);enc.splice(20000);
   const engano = new Set(enc.filter((e) => e.motivo === 'engano').map((e) => e.conversa_id)), encerramentos = { concluido: 0, vendeu: 0, sem_resposta: 0, engano: 0 };
   enc.forEach((e) => { if (encerramentos[e.motivo] != null) encerramentos[e.motivo]++; });
   const linha = rs.results.filter((m) => !engano.has(m.conversa_id)).concat(enc.filter((e) => !engano.has(e.conversa_id)).map((e) => ({ conversa_id: e.conversa_id, direcao: 'encerrou', enviada_em: e.enviada_em })))
     .sort((a, b) => a.conversa_id - b.conversa_id || String(a.enviada_em).localeCompare(String(b.enviada_em)));
-  let conv = null, aberto = null, entradas = 0, saidas = 0; const demoras = [], porHora = Array.from({ length: 24 }, () => ({ entradas: 0, demoras: [] })), convs = new Set(); let semResposta = 0, horaAberta = 0;
+  let conv = null, aberto = null, entradas = 0, saidas = 0; const demoras = [], porHora = Array.from({ length: 24 }, () => ({ entradas: 0, demoras: [] })), convs = new Set(); let semResposta = 0, horaAberta = 0, resolvidosSemResposta=0;
   const fechar = () => { if (aberto !== null) semResposta++; aberto = null; };
   for (const m of linha) {
     if (m.conversa_id !== conv) { fechar(); conv = m.conversa_id; convs.add(conv); }
-    if (m.direcao === 'encerrou') { if (aberto !== null) { const min = Math.max(0, (Date.parse(m.enviada_em) - aberto) / 60000); demoras.push(min); porHora[horaAberta].demoras.push(min); aberto = null; } continue; }
+    if (m.direcao === 'encerrou') { if(aberto!==null)resolvidosSemResposta++;aberto=null;continue; }
     if (m.direcao === 'entrada') { entradas++; if (aberto === null) { aberto = Date.parse(m.enviada_em); horaAberta = new Date(aberto - 3 * 3600000).getUTCHours(); porHora[horaAberta].entradas++; } }
     else { saidas++; if (aberto !== null) { const min = Math.max(0, (Date.parse(m.enviada_em) - aberto) / 60000); demoras.push(min); porHora[horaAberta].demoras.push(min); aberto = null; } }
   }
   fechar();
   const med = (a) => { if (!a.length) return null; const s = a.slice().sort((x, y) => x - y), k = Math.floor(s.length / 2); return Math.round(s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2); };
   const pct = (a, f) => a.length ? Math.round(100 * a.filter(f).length / a.length) : null;
-  const espera = await env.DB.prepare("SELECT id, canal, contato, nome, ult_entrada_em FROM msg_conversa WHERE grupo=0 AND ult_dir='entrada' AND encerrada_em='' AND total>0" + (canal ? ' AND canal=?' : '') + ' ORDER BY ult_entrada_em ASC LIMIT 8').bind(...(canal ? [canal] : [])).all();
-  const totEspera = await env.DB.prepare("SELECT COUNT(*) AS n FROM msg_conversa WHERE grupo=0 AND ult_dir='entrada' AND encerrada_em='' AND total>0" + (canal ? ' AND canal=?' : '')).bind(...(canal ? [canal] : [])).first();
-  return { ok: true, dias: dias, canal: canal || 'todos', encerramentos: encerramentos, conversas: convs.size, entradas: entradas, saidas: saidas, perguntasRespondidas: demoras.length, perguntasSemResposta: semResposta, medianaMin: med(demoras), mediaMin: demoras.length ? Math.round(demoras.reduce((a, b) => a + b, 0) / demoras.length) : null, ate5min: pct(demoras, (x) => x <= 5), ate60min: pct(demoras, (x) => x <= 60), acima24h: pct(demoras, (x) => x > 1440),
-    aguardando: { total: Number((totEspera || {}).n) || 0, maisAntigas: espera.results.map((x) => ({ id: x.id, canal: x.canal, nome: rotuloContato_(x), desde: x.ult_entrada_em })) },
+  const aguardando=await esperaMetricas_(env,canal);
+  const resultado={ ok: true, calculadoEm:agora(), cobertura:{parcial,limiteMensagens:30000,limiteEncerramentos:20000}, resolvidosSemResposta, dias: dias, canal: canal || 'todos', encerramentos: encerramentos, conversas: convs.size, entradas: entradas, saidas: saidas, perguntasRespondidas: demoras.length, perguntasSemResposta: semResposta, medianaMin: med(demoras), mediaMin: demoras.length ? Math.round(demoras.reduce((a, b) => a + b, 0) / demoras.length) : null, ate5min: pct(demoras, (x) => x <= 5), ate60min: pct(demoras, (x) => x <= 60), acima24h: pct(demoras, (x) => x > 1440),
+    aguardando,
     porHora: porHora.map((h, i) => ({ hora: i, entradas: h.entradas, medianaMin: med(h.demoras) })) };
+  try{await caches.default.put(ck,new Response(JSON.stringify(resultado),{headers:{'Cache-Control':'max-age=300','Content-Type':'application/json'}}));}catch(_){}
+  return resultado;
 }
 /* v7.40.2: saúde dos avisos. Só grava no KV quando um aviso FALHA (raro); a tela lê a cada ~40 s.
    O alerta some sozinho quando uma mensagem volta a ser gravada depois da falha. */
@@ -4773,6 +4760,107 @@ async function iniciarConversa_(env, req, d) {
   return { ok: true, conversa: conversa.id, enviada: true, mensagem: corpo.mensagem };
 }
 
+/* Preparação privada de vídeo. Somente gera arquivos; nunca envia mensagens/postagens.
+ * O runner recebe identidade OIDC curta, restrita ao workflow da main, sem acesso SQL genérico. */
+const VIDEO_PERFIS_ = Object.freeze({mensageiro:{bytes:15000000,max:0,min:0},postagens:{bytes:9961472,max:30,min:3}});
+const VIDEO_TABELA_ = `CREATE TABLE IF NOT EXISTS video_preparo(id TEXT PRIMARY KEY,dono TEXT NOT NULL,perfil TEXT NOT NULL,estado TEXT NOT NULL,origem TEXT NOT NULL,resultado TEXT NOT NULL DEFAULT '',inicio REAL NOT NULL DEFAULT 0,duracao REAL NOT NULL DEFAULT 0,lease TEXT NOT NULL DEFAULT '',ate INTEGER NOT NULL DEFAULT 0,criado INTEGER NOT NULL,reservado INTEGER NOT NULL DEFAULT 0,erro TEXT NOT NULL DEFAULT '')`;
+async function corpoLimitadoVideo_(req,max){
+  if(Number(req.headers.get('Content-Length'))>max)throw Error('Arquivo acima do limite de entrada (40 MiB).');
+  const reader=req.body?.getReader();if(!reader)throw Error('Arquivo vazio.');const partes=[];let total=0;
+  try{while(true){const {done,value}=await reader.read();if(done)break;total+=value.length;if(total>max){await reader.cancel();throw Error('Arquivo acima do limite de entrada.');}partes.push(value);}}finally{reader.releaseLock();}
+  if(!total)throw Error('Arquivo vazio.');const out=new Uint8Array(total);let i=0;for(const b of partes){out.set(b,i);i+=b.length;}return out;
+}
+function videoClaims_(c){
+  const n=Date.now()/1000,repo='pablofonteneleadv/tenkiter-catalogo';
+  return c.iss==='https://token.actions.githubusercontent.com'&&c.aud==='tenkiter-video'&&c.repository===repo&&c.repository_id==='1366921721'&&c.repository_owner_id==='207932006'&&c.repository_owner==='pablofonteneleadv'&&c.ref==='refs/heads/main'&&c.workflow_ref===repo+'/.github/workflows/wafly-transcode.yml@refs/heads/main'&&typeof c.sub==='string'&&c.sub.length>0&&['schedule','push','workflow_dispatch'].includes(c.event_name)&&Number.isFinite(c.exp)&&c.exp>n&&c.exp<n+900&&Number.isFinite(c.nbf)&&c.nbf<=n+30;
+}
+async function autorizarVideoRunner_(req){
+  try{
+    const token=(req.headers.get('Authorization')||'').replace(/^Bearer /,'');if(token.length>16000)return false;
+    const partes=token.split('.');if(partes.length!==3)return false;
+    const dec=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),x=>x.charCodeAt(0));
+    const cab=JSON.parse(new TextDecoder().decode(dec(partes[0]))),claims=JSON.parse(new TextDecoder().decode(dec(partes[1])));
+    if(cab.alg!=='RS256'||typeof cab.kid!=='string'||!videoClaims_(claims))return false;
+    const r=await fetch('https://token.actions.githubusercontent.com/.well-known/jwks',{signal:AbortSignal.timeout(10000),cf:{cacheTtl:3600,cacheEverything:true}});
+    if(!r.ok)return false;const buf=await corpoLimitadoVideo_(r,65536);const jwks=JSON.parse(new TextDecoder().decode(buf));
+    const jwk=jwks.keys?.find(k=>k.kid===cab.kid&&k.kty==='RSA'&&k.use==='sig');if(!jwk)return false;
+    const key=await crypto.subtle.importKey('jwk',jwk,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['verify']);
+    return await crypto.subtle.verify('RSASSA-PKCS1-v1_5',key,dec(partes[2]),new TextEncoder().encode(partes[0]+'.'+partes[1]));
+  }catch(_){return false;}
+}
+async function videoRunner_(env,req,url,J){
+  if(!await autorizarVideoRunner_(req))return J({ok:false,erro:'Identidade do processador não autorizada.'},401);
+  await env.DB.prepare(VIDEO_TABELA_).run();
+  const id=url.searchParams.get('id')||'',acao=url.searchParams.get('acao')||'';
+  if(acao==='saude'){await env.MIDIA.list({prefix:'video-preparo/',limit:1});return J({ok:true,processador:'video-v1',armazenamento:true,envio:false});}
+  if(acao==='proximo'&&req.method==='POST'){
+    // Recupera lease abandonado sem liberar qualquer envio.
+    await env.DB.prepare("UPDATE video_preparo SET estado='erro',erro='O processamento foi interrompido. Selecione novamente o original.' WHERE estado='processando' AND ate<?").bind(Date.now()).run();
+    const job=await env.DB.prepare("SELECT * FROM video_preparo WHERE estado='fila' AND criado>? ORDER BY criado LIMIT 1").bind(Date.now()-86400000).first();
+    if(!job)return J({ok:true,job:null});const lease=crypto.randomUUID();
+    const r=await env.DB.prepare("UPDATE video_preparo SET estado='processando',lease=?,ate=? WHERE id=? AND estado='fila'").bind(lease,Date.now()+600000,job.id).run();
+    return J({ok:true,job:r.meta.changes?{id:job.id,perfil:job.perfil,inicio:job.inicio,duracao:job.duracao,lease}:null});
+  }
+  const job=await env.DB.prepare('SELECT * FROM video_preparo WHERE id=?').bind(id).first();
+  if(!job||job.estado!=='processando'||job.lease!==req.headers.get('X-Video-Lease')||job.ate<Date.now())return J({ok:false,erro:'Trabalho indisponível.'},409);
+  if(acao==='origem'&&req.method==='GET'){
+    const obj=await env.MIDIA.get(job.origem);return obj?new Response(obj.body,{headers:{'Content-Type':'application/octet-stream','Cache-Control':'no-store'}}):J({ok:false},404);
+  }
+  if(acao==='falha'&&req.method==='POST'){
+    await env.DB.prepare("UPDATE video_preparo SET estado='erro',erro='Não foi possível preparar este vídeo. O original foi preservado; tente outro arquivo ou envie um link.' WHERE id=? AND lease=?").bind(id,job.lease).run();return J({ok:true});
+  }
+  if(acao==='resultado'&&req.method==='POST'){
+    const bytes=await corpoLimitadoVideo_(req,VIDEO_PERFIS_[job.perfil].bytes);
+    const segundos=duracaoMp4Status_(bytes.buffer);if(!segundos||(job.perfil==='postagens'&&(segundos<3||segundos>30)))return J({ok:false,erro:'Duração final inválida.'},415);
+    if(detectarAnexo_(bytes.buffer,'vídeo')!=='video/mp4'||/hvc1|hev1/.test(new TextDecoder('latin1').decode(bytes)))return J({ok:false,erro:'Saída inválida.'},415);
+    const chave='video-preparo/'+id+'/'+job.lease+'.mp4';await env.MIDIA.put(chave,bytes,{httpMetadata:{contentType:'video/mp4'}});
+    const r=await env.DB.prepare("UPDATE video_preparo SET estado='pronto',resultado=? WHERE id=? AND lease=? AND estado='processando' AND ate>?").bind(chave,id,job.lease,Date.now()).run();if(!r.meta.changes)await env.MIDIA.delete(chave);return J({ok:!!r.meta.changes});
+  }
+  return J({ok:false},404);
+}
+async function limparVideoPreparo_(env){
+  try{const rows=(await env.DB.prepare('SELECT id,origem,resultado FROM video_preparo WHERE criado<? LIMIT 10').bind(Date.now()-86400000).all()).results;
+    for(const row of rows){if(!/^[a-f0-9-]{36}$/.test(row.id))continue;const l=await env.MIDIA.list({prefix:'video-preparo/'+row.id+'/',limit:10});for(const o of l.objects)await env.MIDIA.delete(o.key);await env.DB.prepare('DELETE FROM video_preparo WHERE id=? AND criado<?').bind(row.id,Date.now()-86400000).run();}
+  }catch(e){if(!/no such table/.test(String(e)))throw e;}
+}
+async function videoUsuario_(env,req,url,J){
+  await env.DB.prepare(VIDEO_TABELA_).run();
+  const dono=await sha(req.headers.get('X-TK-Whats')||''),perfil=url.pathname.startsWith('/msg/')?'mensageiro':'postagens';
+  if(req.method==='POST'){
+    const fila=await env.DB.prepare("SELECT COUNT(*) n FROM video_preparo WHERE dono=? AND criado>? AND estado IN ('recebendo','fila','processando')").bind(dono,Date.now()-86400000).first();
+    if(fila.n>=3)return J({ok:false,erro:'Há três vídeos em preparação. Aguarde antes de adicionar outro.'},429);
+    const inicio=Number(url.searchParams.get('inicio')||0),duracao=Number(url.searchParams.get('duracao')||0);
+    if(!Number.isFinite(inicio)||inicio<0||!Number.isFinite(duracao)||(perfil==='postagens'&&(duracao<3||duracao>30))||(perfil==='mensageiro'&&(inicio!==0||duracao!==0)))return J({ok:false,erro:'Escolha um trecho de 3 a 30 segundos para Postagens.'},400);
+    const buf=await corpoLimitadoVideo_(req,40*1048576);
+    const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',buf))].map(x=>x.toString(16).padStart(2,'0')).join('');
+    const hash=await sha('video-v1:'+dono+':'+perfil+':'+inicio+':'+duracao+':'+Math.floor(Date.now()/86400000)+':'+digest);
+    const id=hash.slice(0,8)+'-'+hash.slice(8,12)+'-'+hash.slice(12,16)+'-'+hash.slice(16,20)+'-'+hash.slice(20,32);
+    const existente=await env.DB.prepare('SELECT estado FROM video_preparo WHERE id=? AND dono=?').bind(id,dono).first();
+    if(existente&&existente.estado!=='erro')return J({ok:true,id,estado:existente.estado});
+    if(existente){await env.DB.prepare("UPDATE video_preparo SET estado='fila',erro='',lease='',ate=0 WHERE id=? AND estado='erro'").bind(id).run();return J({ok:true,id,estado:'fila'});}
+    // Reserva atômica: limita temporários e respeita o orçamento de armazenamento existente.
+    const uso=await lerUso(env),reserva=buf.byteLength+VIDEO_PERFIS_[perfil].bytes;
+    const teto=Math.min(512*1048576,Math.max(0,limite(env)-uso.bytes));
+    const origem='video-preparo/'+id+'/original';
+    const reservado=await env.DB.prepare("INSERT OR IGNORE INTO video_preparo(id,dono,perfil,estado,origem,inicio,duracao,criado,reservado) SELECT ?,?,?,'recebendo',?,?,?,?,? WHERE (SELECT COALESCE(SUM(reservado),0) FROM video_preparo)+?<=? AND (SELECT COUNT(*) FROM video_preparo WHERE dono=? AND criado>?)<20 AND (SELECT COUNT(*) FROM video_preparo WHERE dono=? AND estado IN ('recebendo','fila','processando') AND criado>?)<3").bind(id,dono,perfil,origem,inicio,duracao,Date.now(),reserva,reserva,teto,dono,Date.now()-86400000,dono,Date.now()-86400000).run();
+    if(!reservado.meta.changes){const atual=await env.DB.prepare('SELECT estado FROM video_preparo WHERE id=? AND dono=?').bind(id,dono).first();return atual?J({ok:true,id,estado:atual.estado}):J({ok:false,erro:'Limite de preparação ou espaço temporário atingido. Aguarde a limpeza dos temporários ou use um link para o original.'},429);}
+    // Prefixo não aceito pelas rotas públicas /m/ ou /msg/midia.
+    try{
+      await env.MIDIA.put(origem,buf,{httpMetadata:{contentType:'application/octet-stream'}});
+      await env.DB.prepare("UPDATE video_preparo SET estado='fila' WHERE id=? AND estado='recebendo'").bind(id).run();
+    }catch(e){await env.MIDIA.delete(origem);await env.DB.prepare("DELETE FROM video_preparo WHERE id=? AND estado='recebendo'").bind(id).run();throw e;}
+    return J({ok:true,id,estado:'fila'});
+  }
+  const id=url.searchParams.get('id')||'';
+  const job=await env.DB.prepare('SELECT * FROM video_preparo WHERE id=? AND dono=? AND perfil=?').bind(id,dono,perfil).first();
+  if(!job||job.criado<Date.now()-86400000)return J({ok:false,erro:'Preparação expirada. Selecione novamente o original.'},404);
+  if(url.searchParams.get('arquivo')==='1'){
+    if(job.estado!=='pronto')return J({ok:false,erro:'Vídeo ainda não está pronto.'},409);
+    const obj=await env.MIDIA.get(job.resultado);return obj?new Response(obj.body,{headers:{'Content-Type':'video/mp4','Cache-Control':'no-store',...Object.fromEntries(cors(env,req))}}):J({ok:false},404);
+  }
+  return J({ok:true,id,estado:job.estado,erro:job.erro});
+}
+
 export default {
   async scheduled(ev, env, ctx) {
     ctx.waitUntil(processarPushMobile_(env).catch(()=>{}));
@@ -4783,7 +4871,7 @@ export default {
     ctx.waitUntil(processarFotoIA(env));                                      // a cada minuto: 1 imagem da fila de Fotos com IA (se já puder: cota/limite do dia)
     ctx.waitUntil(filaContatosAuto_(env));                                    // a cada minuto: até 5 números novos viram "TM Cliente …" no Google (se ligado)
     const min = ev && ev.scheduledTime ? new Date(ev.scheduledTime).getUTCMinutes() : 0;
-    if (min === 7) {ctx.waitUntil(limparTemporarios(env).catch(() => {}));ctx.waitUntil((async()=>{const c=await env.CACHE.get('contatos_staging_cursor');const r=await contatosR2ExpurgarOrfaos_(env,Date.now(),c||undefined);if(r.cursor)await env.CACHE.put('contatos_staging_cursor',r.cursor,{expirationTtl:86400});else await env.CACHE.delete('contatos_staging_cursor');})().catch(()=>{}));}      // 1x por dia: apaga do R2 o que é temporário (t/) com mais de 5 dias
+    if (min === 7) {ctx.waitUntil(limparVideoPreparo_(env));ctx.waitUntil(limparTemporarios(env).catch(() => {}));ctx.waitUntil((async()=>{const c=await env.CACHE.get('contatos_staging_cursor');const r=await contatosR2ExpurgarOrfaos_(env,Date.now(),c||undefined);if(r.cursor)await env.CACHE.put('contatos_staging_cursor',r.cursor,{expirationTtl:86400});else await env.CACHE.delete('contatos_staging_cursor');})().catch(()=>{}));}      // 1x por dia: apaga do R2 o que é temporário (t/) com mais de 5 dias
     if (min % 30 !== 0) return;                                                // importar do Instagram só a cada 30 min (como antes)
     if (await env.CACHE.get('ig_hist_trava')) return;
     ctx.waitUntil((async () => { await ciclo(env, 'cron'); try { await analisarPendentes(env, 5); } catch (e) { /* a IA é conforto: o ciclo não pode cair por causa dela */ } })());
@@ -4806,6 +4894,7 @@ export default {
       return resp(direitos ? msgFiltrarDados_(c,direitos) : c, s, h);
     };
     if (req.method === 'OPTIONS') { h.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS'); h.set('Access-Control-Allow-Headers', 'Content-Type, X-TK-Whats, X-TK-Sessao'); h.set('Access-Control-Max-Age', '86400'); return new Response(null, { status: 204, headers: h }); }
+    if(url.pathname==='/internal/video'){try{return await videoRunner_(env,req,url,J);}catch(_){return J({ok:false,erro:'Processador indisponível.'},503);}}
     if(url.pathname==='/msg/tempo-real'){try{return await conectarEventos_(env,req);}catch(_){return new Response(null,{status:503,headers:{'Cache-Control':'no-store'}});}}
     if(url.pathname==='/catalogo/tecidos'){try{return await rotaTecidos_(env,req,J);}catch(_){return J({ok:false,erro:'Não foi possível atualizar os tecidos. Tente de novo.'},503);}}
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
@@ -4865,6 +4954,7 @@ export default {
           if ((('respostas' in d) && !direitos.respostas) || (('lerCelular' in d) && !direitos.configuracoes) || (('meuNome' in d)&&!direitos.responder)) return J({ok:false,erro:'Seu acesso não permite alterar esta configuração.'},403);
         }
       }
+      if(['/msg/video-preparar','/post/video-preparar'].includes(p)&&['GET','POST'].includes(req.method))return await videoUsuario_(env,req,url,J);
       if(p==='/msg/tempo-real/ticket'&&req.method==='POST')return J(await ticketsEventos_(env,req));
       if (p === '/post/freeconvert/config' && req.method === 'GET') {
         if(!perms.includes('gerir_acessos')) return J({ok:false,erro:'Somente administrador total.'},403);
@@ -5413,9 +5503,9 @@ export default {
         return new Response(x.corpo, { status: 200, headers: h2 });
       }
       if (p === '/msg/metricas' && req.method === 'GET') {
-        const canal = url.searchParams.get('canal') || '';
+        const canal = url.searchParams.get('canal') === 'todos' ? '' : (url.searchParams.get('canal') || '');
         if (canal && !MSG_CANAIS.includes(canal)) return J({ ok: false, erro: 'Escolha Instagram, WhatsApp 1 ou WhatsApp 2.' }, 400);
-        return J(await metricasMensagens_(env, canal, url.searchParams.get('dias')));
+        return J(await metricasMensagens_(env, canal, url.searchParams.get('dias'),url.searchParams.get('cache')==='1'));
       }
       if (p === '/msg/ligar' && req.method === 'POST') {
         const d = await req.json().catch(() => ({})), slot = Number(d.slot);

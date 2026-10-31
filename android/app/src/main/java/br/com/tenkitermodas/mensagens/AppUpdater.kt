@@ -21,7 +21,7 @@ class AppUpdater(private val activity:Activity,private val scope:CoroutineScope)
     private val prefs=activity.getSharedPreferences("apk-update",0)
     private var busy=false
     private val manifestUrl="https://tenkitermodas.com.br/android/latest.json"
-    private val githubManifestUrl="https://raw.githubusercontent.com/pablofonteneleadv/tenkiter-catalogo/main/android/latest.json"
+    private val githubManifestUrl="https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/latest/download/manifest.json"
     data class Release(val code:Long,val name:String,val url:String,val sha:String,val size:Long,val notes:String){
         fun json()=JSONObject().put("versionCode",code).put("versionName",name).put("url",url).put("sha256",sha).put("bytes",size).put("notes",notes)
         companion object{

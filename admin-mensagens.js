@@ -1241,6 +1241,8 @@
     p.appendChild(el('h3', '', 'Relatório da primeira limpeza dos contatos'));
     if (!r) { p.appendChild(el('p', 'ms-vazio', 'Ainda não há relatório. Gere em ⋯ → Configurações → Google Contatos.')); ex.appendChild(p); return; }
     p.appendChild(el('p', 'ms-rel-quando', 'Gerado ' + hora(r.em) + '. Nada foi mudado no Google.'));
+    const status=el('p','ms-dica','Fila às '+new Date().toLocaleTimeString('pt-BR')+' · indicadores do período às '+new Date(r.calculadoEm||Date.now()).toLocaleTimeString('pt-BR')+' (atualização em até 5 min). Tempos corridos, sem descontar expediente.');status.id='ms-painel-atualizado';status.setAttribute('role','status');p.appendChild(status);
+    if(r.cobertura?.parcial)p.appendChild(el('p','ms-vazio','Amostra parcial: limite de consulta atingido. Escolha um período menor; estes números não representam todo o período.'));
     const cards = el('div', 'ms-cards');
     const card = (v, t, alerta) => { const c = el('div', 'ms-card' + (alerta ? ' alerta' : '')); c.appendChild(el('b', '', String(v))); c.appendChild(el('span', '', t)); cards.appendChild(c); };
     card(r.total, 'contatos no Google');
@@ -1249,6 +1251,7 @@
     card(r.invalidos.total, 'números inválidos', r.invalidos.total > 0);
     card(r.semFone, 'contatos sem número');
     card(r.semCadastro.total, 'conversaram no WhatsApp e não estão no Google', r.semCadastro.total > 0);
+    if(r.resolvidosSemResposta!=null)card(r.resolvidosSemResposta,'encerrados sem resposta enviada');
     p.appendChild(cards);
     const secao = (titulo, lista, total, linha) => {
       const d = el('details', 'ms-rel-sec'); d.appendChild(el('summary', '', titulo + ' (' + total + ')'));
@@ -2282,10 +2285,10 @@
       const tipo=/^image\//.test(f.type)?'imagem':/^video\//.test(f.type)?'vídeo':/^audio\//.test(f.type)?'áudio':'';
       const feedback=$('ms-ag-form-status');if(!tipo){feedback.textContent='Escolha foto, vídeo ou áudio.';return;}
       anexar.disabled=true;feedback.textContent='Preparando anexo…';
-      const blob=tipo==='imagem'?await reduzirImagem_(f):f;
+      let blob;try{const ss=getSessao();blob=tipo==='imagem'?await reduzirImagem_(f):tipo==='vídeo'?await TKVideoPreparation.preparar(f,{perfil:'mensageiro',base:INSTAGRAM_URL,conta:contaSessao_(ss),headers:{'X-TK-Whats':ss.whatsapp,'X-TK-Sessao':ss.sessao}}):f;}catch(e){anexar.disabled=false;feedback.textContent=e.message;return;}
       if(!aberta||aberta.id!==conv.id||$('ms-gaveta')?.dataset.gen!==gen||epoca!==epocaConta_)return;
       anexar.disabled=false;
-      if(!blob||blob.size>(tipo==='imagem'?8:16)*1048576){feedback.textContent='Arquivo muito grande ou em formato não aceito. Use foto até 8 MB ou vídeo/áudio até 16 MB.';return;}
+      if(!blob||blob.size>(tipo==='vídeo'?15000000:(tipo==='imagem'?8:16)*1048576)){feedback.textContent='Arquivo muito grande ou em formato não aceito. Use foto até 8 MiB, vídeo até 15 MB ou áudio até 16 MiB.';return;}
       agendaAnexo_={blob,tipo,nome:f.name||'Anexo'};agendaPedido_=null;feedback.textContent='';pintar();
     }));
     anexo.append(anexar,anexarAudio,seletor,seletorAudio,nomeAnexo,remover);s1.appendChild(anexo);pintar();
@@ -2498,7 +2501,9 @@
     const clip = botao('ms-ico', '📎', 'anexar'); clip.id = 'ms-anexar'; clip.setAttribute('aria-label', 'Anexar foto, vídeo ou áudio');
     const arq = el('input'); arq.type = 'file'; arq.id = 'ms-arquivo'; arq.hidden = true; arq.accept = 'image/*,video/*'; arq.multiple = true;
     const contaDoAnexo=contaSessao_(getSessao()),epocaDoAnexo=epocaConta_;
-    arq.addEventListener('change', async () => { const arquivos = Array.from(arq.files || []), f = arquivos.shift(); arq.value = ''; conferirContaAtual_(); if (!f) return; if (!aberta || aberta.id!==c.id || contaSessao_(getSessao())!==contaDoAnexo || epocaConta_!==epocaDoAnexo) { aviso_('A conversa mudou. Escolha o arquivo novamente no atendimento correto.'); return; } anexosFila_ = []; await escolherArquivo_(f); if (!aberta || aberta.id!==c.id || contaSessao_(getSessao())!==contaDoAnexo || epocaConta_!==epocaDoAnexo) { limparAnexo_(true); return; } if (anexoPend) { anexosFila_ = arquivos; desenharStage_(); } });
+    arq.addEventListener('change', async () => { const arquivos = Array.from(arq.files || []), f = arquivos.shift(); arq.value = ''; conferirContaAtual_(); if (!f) return; if (!aberta || aberta.id!==c.id || contaSessao_(getSessao())!==contaDoAnexo || epocaConta_!==epocaDoAnexo) { aviso_('A conversa mudou. Escolha o arquivo novamente no atendimento correto.'); return; } anexosFila_ = []; const lote=[f,...arquivos]; let aceito=false; while(lote.length&&!aceito){aceito=!!(await escolherArquivo_(lote.shift())); if(!aberta||aberta.id!==c.id||epocaConta_!==epocaDoAnexo)break;} arquivos.splice(0,arquivos.length,...lote); if (!aberta || aberta.id!==c.id || contaSessao_(getSessao())!==contaDoAnexo || epocaConta_!==epocaDoAnexo) { limparAnexo_(true); return; } if (aceito && anexoPend) { anexosFila_ = arquivos; desenharStage_(); } });
+    const camera=el('input');camera.type='file';camera.accept='video/*';camera.setAttribute('capture','environment');camera.hidden=true;camera.id='ms-camera-video';camera.addEventListener('change',()=>{const f=camera.files?.[0];camera.value='';if(f&&aberta?.id===c.id&&epocaConta_===epocaDoAnexo)escolherArquivo_(f);});
+    pai.appendChild(camera);
     const audioArquivo=el('input');audioArquivo.type='file';audioArquivo.accept='audio/*';audioArquivo.id='ms-arquivo-audio';audioArquivo.hidden=true;
     audioArquivo.addEventListener('change',()=>{const f=audioArquivo.files&&audioArquivo.files[0];audioArquivo.value='';conferirContaAtual_();if(f&&aberta&&aberta.id===c.id&&contaSessao_(getSessao())===contaDoAnexo&&epocaConta_===epocaDoAnexo)escolherArquivo_(f);});
     const ta = el('textarea'); ta.id = 'ms-texto'; ta.rows = 1; ta.placeholder = 'Mensagem'; if (c.canal !== 'instagram') ta.maxLength = limiteTexto(c); ta.setAttribute('aria-label', 'Mensagem para ' + rotuloContato(c)); ta.enterKeyHint = 'enter'; ta.value = rascunhoLer_(c.id);
@@ -2549,28 +2554,35 @@
     d.append(el('b','',String(p.titulo||'Produto')),el('small','',String(p.descricao||'')),el('small','ms-link-dominio',u.hostname));a.append(imgCartao_(p),d);return a;
   }
   /* Encaminhamento: seletor de contatos, mídia autenticada e envio manual. */
-  let encaminharPendente_ = null, encaminharDestinos_ = [];
+  let encaminharPendente_ = null, encaminharDestinos_ = [], encaminharSeq_ = 0, encaminharFoco_=null;
   function fecharEncaminhar_() {
-    encaminharPendente_ = null;
+    encaminharPendente_ = null; encaminharSeq_++;
+    if (window.TKCamadas && TKCamadas.aberta('ms-encaminhar')) TKCamadas.desempilhar('ms-encaminhar');
     const modal = $('ms-encaminhar-modal');
     if (modal) modal.remove();
+    if(encaminharFoco_?.isConnected)encaminharFoco_.focus({preventScroll:true});encaminharFoco_=null;
   }
   async function encaminharEscolher_(m) {
     fecharEncaminhar_();
     if (!aberta || cacheConversa || espiando || modoNota) return;
     if (!['texto','imagem','vídeo','áudio'].includes(m.tipo)) { aviso_('Este tipo de mensagem não pode ser encaminhado.'); return; }
+    encaminharFoco_=document.activeElement;
     encaminharPendente_ = { mensagem: m, origem: aberta.id };
     const fundo = el('div', 'ms-encaminhar-fundo'); fundo.id = 'ms-encaminhar-modal';
     fundo.style.cssText = 'position:fixed;inset:0;z-index:10020;background:#0008;display:flex;align-items:center;justify-content:center;padding:12px';
     const painel = el('section','ms-encaminhar-painel');
     painel.style.cssText = 'background:var(--ms-fundo,#fff);color:inherit;width:min(100%,480px);max-height:85dvh;display:flex;flex-direction:column;border-radius:14px;padding:16px;gap:10px';
     const topo = el('div','ms-linha');
-    topo.append(el('strong','','Encaminhar para…'),botao('ms-btn','✕','encaminhar-fechar'));
+    const fechar = botao('ms-btn','✕','encaminhar-fechar'); fechar.setAttribute('aria-label','Fechar encaminhamento');fechar.style.minWidth='44px';
+    topo.append(el('strong','','Encaminhar para…'),fechar);
+    painel.setAttribute('role','dialog'); painel.setAttribute('aria-modal','true'); painel.setAttribute('aria-label','Encaminhar mensagem');
     const campo = el('input','ms-input');campo.type='search';campo.placeholder='Buscar cliente ou telefone';campo.setAttribute('aria-label','Buscar conversa de destino');
     campo.style.cssText='width:100%;min-height:44px';
     const resultados = el('div','ms-encaminhar-resultados');resultados.style.cssText='overflow:auto;min-height:80px;max-height:55dvh';
     painel.append(topo,campo,el('small','','Escolha uma conversa. O envio só acontecerá após tocar em Enviar.'),resultados);
     fundo.appendChild(painel);document.body.appendChild(fundo);
+    if(window.TKCamadas) TKCamadas.empilhar('ms-encaminhar',()=>{encaminharPendente_=null;encaminharSeq_++;fundo.remove();if(encaminharFoco_?.isConnected)encaminharFoco_.focus({preventScroll:true});encaminharFoco_=null;});
+    fundo.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();fecharEncaminhar_();return;}if(e.key==='Tab'){const alvos=[...painel.querySelectorAll('button,input')].filter(x=>!x.disabled&&!x.hidden);const i=alvos.indexOf(document.activeElement);if(e.shiftKey&&i<=0){e.preventDefault();alvos.at(-1)?.focus();}else if(!e.shiftKey&&i===alvos.length-1){e.preventDefault();alvos[0]?.focus();}}});
     fundo.addEventListener('click',e=>{
       if(e.target===fundo){fecharEncaminhar_();return;}
       const acao=e.target.closest('[data-ms]');
@@ -2585,7 +2597,7 @@
     const desenhar = () => {
       resultados.textContent='';
       const q=campo.value.trim().toLocaleLowerCase('pt-BR');
-      const encontrados=encaminharDestinos_.filter(c=>Number(c.id)!==encaminharPendente_?.origem && [c.nome,c.nome_contato,c.nome_cliente,c.telefone,c.numero,c.contato,c.canal,c.id].some(v=>String(v||'').toLocaleLowerCase('pt-BR').includes(q))).slice(0,80);
+      const encontrados=encaminharDestinos_.filter(c=>Number(c.id)!==encaminharPendente_?.origem && [c.nome,c.nome_contato,c.nome_cliente,c.telefone,c.numero,c.contato,c.canal,c.id].some(v=>String(v||'').toLocaleLowerCase('pt-BR').includes(q)));
       if(!encontrados.length){resultados.appendChild(el('p','','Nenhuma conversa encontrada.'));return;}
       encontrados.forEach(c=>{
         const nome=String(c.nome||c.nome_contato||c.nome_cliente||c.contato||c.telefone||c.numero||('Conversa '+c.id));
@@ -2595,15 +2607,24 @@
         resultados.appendChild(btn);
       });
     };
-    campo.addEventListener('input',desenhar);
-    resultados.appendChild(el('p','','Carregando conversas…'));
-    const resposta=await worker_('/msg/conversas?blocos=1&fila=todos&escopo=todos&canal=todos&filtro=', 'GET');
-    if (!encaminharPendente_ || !fundo.isConnected) return;
-    if (!resposta.ok || !Array.isArray(resposta.conversas)) {
-      encaminharDestinos_=lista.slice();
-      aviso_('Não foi possível buscar todas as conversas. Mostrando a lista carregada.');
-    } else encaminharDestinos_=resposta.conversas;
-    desenhar();campo.focus();
+    const mais = botao('ms-btn','Ver mais conversas','encaminhar-mais'); mais.hidden=true;
+    painel.appendChild(mais);
+    let antes='', antesId=0, buscaTimer=0;
+    const carregar = async (continuar) => {
+      const seq=++encaminharSeq_, q=campo.value.trim(); mais.disabled=true;
+      if(!continuar){encaminharDestinos_=[];resultados.textContent='Buscando conversas…';antes='';antesId=0;}
+      const resposta=await worker_('/msg/conversas?canal=todos&escopo=todos&fila=&busca='+encodeURIComponent(q)+(continuar?'&antes='+encodeURIComponent(antes)+'&antesId='+antesId:''),'GET');
+      if(seq!==encaminharSeq_||!encaminharPendente_||!fundo.isConnected)return;
+      mais.disabled=false;
+      if(!resposta.ok||!Array.isArray(resposta.conversas)){resultados.textContent=resposta.erro||'Não foi possível buscar. Digite novamente para tentar.';mais.hidden=true;return;}
+      const itens=resposta.conversas;
+      encaminharDestinos_=continuar?encaminharDestinos_.concat(itens.filter(c=>!encaminharDestinos_.some(x=>x.id===c.id))):itens;
+      const ultimo=itens.at(-1);antes=ultimo?.ultima_em||'';antesId=Number(ultimo?.id)||0;
+      mais.hidden=itens.length<50;desenhar();
+    };
+    campo.addEventListener('input',()=>{clearTimeout(buscaTimer);encaminharSeq_++;buscaTimer=setTimeout(()=>carregar(false),250);});
+    mais.addEventListener('click',()=>carregar(true));
+    campo.focus();await carregar(false);
   }
   async function encaminharPreparar_(destino) {
     const pend=encaminharPendente_;if(!pend)return;
@@ -2627,16 +2648,18 @@
         arquivo=new File([blob],'encaminhado.'+ext,{type:mime});
       }catch(e){aviso_('Não foi possível recuperar a mídia original. Nada foi enviado.');return;}
     }
+    await desempilharEsperando_('ms-encaminhar');
     fecharEncaminhar_();
     await abrirConversa(destino.id);
     if(!aberta||Number(aberta.id)!==Number(destino.id)||cacheConversa||espiando||modoNota){aviso_('Não foi possível preparar esta conversa. Nada foi enviado.');return;}
+    if(arquivo && destino.canal==='instagram' && $('ms-texto')?.value.trim()){aviso_('O rascunho do destino foi preservado. Envie ou guarde o texto antes de encaminhar a mídia.');return;}
     if(arquivo) {
       await escolherArquivo_(arquivo);
       if(!anexoPend){aviso_('A mídia não atende aos limites do canal de destino. Nada foi enviado.');return;}
     }
     const ta=$('ms-texto');
     if(ta && (m.tipo==='texto'||destino.canal!=='instagram')) {
-      ta.value=texto;ta.dispatchEvent(new Event('input',{bubbles:true}));
+      ta.value=ta.value.trim() ? ta.value.replace(/\s+$/,'')+'\n\n'+texto : texto;ta.dispatchEvent(new Event('input',{bubbles:true}));
     }
     aviso_('Encaminhamento pronto. Confira o destinatário e toque em Enviar.');
     if(ta)ta.focus();
@@ -2700,17 +2723,17 @@
     if (!tipo) { aviso_('Escolha uma foto, um vídeo ou um áudio.'); return; }
     let blob = f;
     if (tipo === 'imagem') { aviso_('Preparando a foto…'); blob = await reduzirImagem_(f); aviso_(''); if (!blob) { aviso_('Não consegui ler esta foto. Use JPG, PNG ou WebP.'); return; } if (blob.size > 8 * 1048576) { aviso_('A foto ficou grande demais (limite 8 MB). Escolha outra.'); return; } }
-    else if (blob.size > 16 * 1048576) { aviso_('Arquivo grande demais (limite 16 MB).'); return; }
-    if (tipo === 'vídeo' && !/^video\/(mp4|quicktime)$/.test(f.type)) { aviso_('Use um vídeo MP4.'); return; }
+    else if (tipo!=='vídeo' && blob.size > 16 * 1048576) { aviso_('Arquivo grande demais (limite 16 MiB).'); return; }
     if (tipo === 'vídeo') {
-      const validador = window.TKVideoValidation;
-      if (!validador || typeof validador.validar !== 'function') { aviso_('Validação de vídeo indisponível. Tente novamente.'); return; }
-      const resultado = await validador.validar(f, {maxMB:9.5,maxDurationSeconds:29});
-      if (!resultado.ok) { aviso_('Este vídeo precisa de conversão para WhatsApp (até 29 s e 9,5 MB). O envio foi bloqueado para evitar falha: '+resultado.erros.join(' ')); return; }
+      const sessao=getSessao(),id=aberta?.id,epoca=epocaConta_;
+      if(!window.TKVideoPreparation){aviso_('Preparação de vídeo indisponível. Recarregue a página.');return;}
+      try{blob=await TKVideoPreparation.preparar(f,{perfil:'mensageiro',base:INSTAGRAM_URL,conta:contaSessao_(sessao),headers:{'X-TK-Whats':sessao.whatsapp,'X-TK-Sessao':sessao.sessao}});}
+      catch(e){aviso_(e.message||'Não foi possível preparar o vídeo.');return;}
+      if(aberta?.id!==id||epoca!==epocaConta_){aviso_('A conversa mudou. Selecione o original novamente no destino correto.');return;}
     }
     if (anexoPend) URL.revokeObjectURL(anexoPend.urlLocal);
     anexoPend = { blob: blob, tipo: tipo, nome:f.name||'Anexo', seg: Math.round(Number(seg) || 0), urlLocal: URL.createObjectURL(blob) };
-    desenharStage_(); const ta = $('ms-texto'); if (ta && larga()) ta.focus();
+    desenharStage_(); const ta = $('ms-texto'); if (ta && larga()) ta.focus(); return true;
   }
   function atualizarMic_() {
     const m = $('ms-mic'); if (!m) return;
@@ -2906,7 +2929,7 @@
     if (modoNota && !reenvio) { await salvarNota_(c, ta); return; }
     if(!reenvio&&assinaturaLigada_()&&!nomeAtendente_()){aviso_('Atualizando seu nome do cadastro. Tente enviar novamente em instantes.');carregarCfgLeitura_();return;}
     let tmp, texto, idLocal;
-    if (reenvio) { const p = pendentes.get(reenvio); if (!p) return; tmp = p; texto = p.msg.texto; idLocal = p.idLocal; p.msg.status = 'pendente'; p.msg.erro = ''; if (tmp.citacao) citacaoPend_ = tmp.citacao; }
+    if (reenvio) { const p = pendentes.get(reenvio); if (!p) return; tmp = p; texto = p.msg.texto; idLocal = p.idLocal; p.msg.status = 'pendente'; p.msg.erro = ''; /* A citação do retry pertence somente ao envio pendente. */ }
     else {
       texto = ta.value.replace(/\r\n/g, '\n').trim(); const an = anexoPend;
       if (!texto && !an) return;
@@ -2952,9 +2975,9 @@
     }
     if (aberta && aberta.id === c.id) pintarFio(true);
     if (!reenvio && r.ok && anexosFila_.length && aberta && aberta.id === c.id && !cacheConversa) {
-      const proximo = anexosFila_.shift();
-      await escolherArquivo_(proximo);
-      if (anexoPend && aberta && aberta.id === c.id) await enviar(null, true);
+      let aceito=false;
+      while(anexosFila_.length&&!aceito&&aberta?.id===c.id)aceito=!!(await escolherArquivo_(anexosFila_.shift()));
+      if (aceito && anexoPend && aberta && aberta.id === c.id) await enviar(null, true);
     }
     } finally { if (donoDaFila) envioMultimidiaEmCurso_ = false; }
   }
@@ -3051,18 +3074,18 @@
     setTimeout(() => destino.focus(), 60);
   }
   async function irParaConversa_(b) {
-    const canal = $('ms-nova-canal')?.value, destino = ($('ms-nova-destino')?.value || '').trim();
-    const ig = canal === 'instagram';
+    const canalDestino = $('ms-nova-canal')?.value, destino = ($('ms-nova-destino')?.value || '').trim();
+    const ig = canalDestino === 'instagram';
     const texto = ig ? '' : ($('ms-nova-texto')?.value || '').trim();
     if (!destino) { aviso_(ig ? 'Digite o @ do Instagram.' : 'Digite o WhatsApp com DDD.'); return; }
     if (!ig && !texto) { aviso_('Escreva a mensagem antes de enviar.'); return; }
     b.disabled = true;
-    const r = await worker_('/msg/iniciar', 'POST', { canal, destino, texto, idLocal: 'nc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) });
+    const r = await worker_('/msg/iniciar', 'POST', { canal:canalDestino, destino, texto, idLocal: 'nc' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8) });
     b.disabled = false;
     if (!r.ok) { aviso_(r.erro || 'Não foi possível abrir a conversa.'); return; }
     const id = Number(r.conversa);
     fecharGaveta_();
-    if (canal !== 'todos' && canal !== self.canal) { canal = self.canal; desenharFiltros(); desenharAbas(); desenharEstado(); await carregarLista(true); await new Promise((ok) => setTimeout(ok, 250)); }
+    if (canal !== 'todos' && canal !== canalDestino) { canal = canalDestino; desenharFiltros(); desenharAbas(); desenharEstado(); await carregarLista(true); await new Promise((ok) => setTimeout(ok, 250)); }
     await carregarLista(true);
     if (id) { await desempilharEsperando_('ms-gaveta'); await abrirConversa(id); }
   }
@@ -3083,11 +3106,14 @@
     const hist = el('section', 'ms-mais-grupo'); hist.appendChild(el('h4', '', 'Ações'));
     const lista = el('div', 'ms-eq-hist'); lista.id = 'ms-eq-hist'; hist.appendChild(lista);
     const mais = botao('ms-btn', 'Ver mais', 'equipe-mais'); mais.id = 'ms-eq-mais'; hist.appendChild(mais); corpo.appendChild(hist);
+    const status=el('p','ms-dica','Carregando…');status.id='ms-eq-atualizado';status.setAttribute('role','status');corpo.appendChild(status);corpo.appendChild(el('p','ms-dica','Ações registradas pelo sistema; atividades externas ou falhas de registro podem não aparecer.'));
     carregarEquipe_(false);
   }
-  async function carregarEquipe_(mais) {
+  async function carregarEquipe_(mais, aoVivo) {
     if (equipeCarregando_) return;
     equipeCarregando_ = true;
+    const foco=document.activeElement,usuarioFoco=foco?.dataset?.ms==='equipe-usuario'?foco.dataset.usuario:null,rolagem=$('ms-gaveta')?.querySelector('.ms-gaveta-corpo'),posicao=rolagem?.scrollTop||0;
+    const alvo=$('ms-eq-hist'), filtroPedido=JSON.stringify(equipeFiltros_);
     const dias = Number(equipeFiltros_.dias) || 7;
     const fim = new Date(), ini = new Date(Date.now() - (dias - 1) * 86400000);
     const iso = (d) => new Date(d.getTime() - 3 * 3600000).toISOString().slice(0, 10);
@@ -3095,12 +3121,17 @@
     if (mais && equipeProximo_) q += '&antes=' + equipeProximo_;
     const r = await worker_(q, 'GET');
     equipeCarregando_ = false;
+    if(alvo!==$('ms-eq-hist')||filtroPedido!==JSON.stringify(equipeFiltros_)){if($('ms-eq-hist'))carregarEquipe_(false);return;}
     if (!r.ok) {
       const onde = $('ms-eq-hist'); if (onde) onde.textContent = r.erro || 'Não consegui carregar agora. Tente de novo.';
       return;
     }
-    if (mais) equipeItens_ = equipeItens_.concat(r.atividades || []); else equipeItens_ = r.atividades || [];
-    equipeProximo_ = r.proximo || 0;
+    ultimaGestao_=Date.now(); const atualizado=$('ms-eq-atualizado');if(atualizado)atualizado.textContent='Atualizado às '+new Date().toLocaleTimeString('pt-BR')+' · presença aproximada, não mede produtividade.';
+    const novas=r.atividades||[];
+    if(mais)equipeItens_=equipeItens_.concat(novas);
+    else if(aoVivo&&equipeItens_.length>50){const ids=new Set(novas.map(x=>x.id));equipeItens_=novas.concat(equipeItens_.filter(x=>!ids.has(x.id)));}
+    else equipeItens_=novas;
+    if(!aoVivo||equipeItens_.length<=50)equipeProximo_=r.proximo||0;
     const on = $('ms-eq-online');
     if (on) {
       on.textContent = '';
@@ -3137,7 +3168,8 @@
         l.appendChild(el('span', 'ms-eq-quando', quandoRotulo_(a.em)));
         hist.appendChild(l);
       });
-      const maisBt = $('ms-eq-mais'); if (maisBt) maisBt.hidden = !r.temMais;
+      const maisBt = $('ms-eq-mais'); if (maisBt) maisBt.hidden = !equipeProximo_;
+      if(aoVivo){if(usuarioFoco)tt?.querySelector('[data-usuario="'+CSS.escape(usuarioFoco)+'"]')?.focus({preventScroll:true});if(rolagem)rolagem.scrollTop=posicao;}
     }
   }
   /* Presença: enquanto a pessoa está com Mensagens aberta, avisa o servidor a cada 45 s.
@@ -3178,6 +3210,7 @@
     if(cacheConversa&&aberta){await abrirConversa(aberta.id,espiando);agendar();return;}
     if (offline) { offline = false; atualizarVivo(); }
     espera = ESPERA_MS; cursor = r.cursor || cursor;
+    await atualizarGestao_();
     r.mensagens.forEach((m) => { if (typeof m.id === 'number' && m.id > ultIdSrv) ultIdSrv = m.id; });
     if (r.saude) pintarSaude_(r.saude);
     contagens = r.contagens || contagens; desenharAbas(); desenharFiltros(); selarBotao();
@@ -3254,10 +3287,15 @@
   }
 
   /* ---------- painel de atendimento ---------- */
+  let ultimaGestao_=0, painelDias_=30, painelPedido_=0;
+  async function atualizarGestao_(){if(Date.now()-ultimaGestao_<30000)return;if($('ms-eq-hist'))await carregarEquipe_(false,true);else if(painel==='metricas'&&$('ms-painel-atualizado'))await abrirPainel(painelDias_,true);}
   const fmtMin = (m) => m == null ? '—' : m < 60 ? m + ' min' : m < 1440 ? Math.round(m / 6) / 10 + ' h' : Math.round(m / 144) / 10 + ' dias';
-  async function abrirPainel(dias) {
-    largarFunil_(); painel = 'metricas'; const ex = $('ms-extra'), ul = $('ms-lista'); ul.hidden = true; ex.textContent = 'Carregando…'; chrome_(true);
-    const r = await worker_('/msg/metricas?canal=' + encodeURIComponent(canal) + '&dias=' + (dias || 30), 'GET');
+  async function abrirPainel(dias, silencioso) {
+    const pedido=++painelPedido_;painelDias_=dias||30;const foco=document.activeElement,scroll=$('ms-lista-wrap')?.scrollTop||0;
+    largarFunil_(); painel = 'metricas'; const ex = $('ms-extra'), ul = $('ms-lista'); ul.hidden = true; if(!silencioso)ex.textContent = 'Carregando…'; chrome_(true);
+    const r = await worker_('/msg/metricas?cache='+(silencioso?'1':'0')+'&canal=' + encodeURIComponent(canal) + '&dias=' + (dias || 30), 'GET');
+    if(pedido!==painelPedido_||painel!=='metricas')return;
+    ultimaGestao_=Date.now();if(silencioso&&!r.ok){const st=$('ms-painel-atualizado');if(st)st.textContent='Não foi possível atualizar agora. Exibindo a consulta anterior.';return;}
     ex.textContent = '';
     const p = el('div', 'ms-painel');
     const topo = el('div', 'ms-linha'); topo.appendChild(botao('ms-btn', '← Conversas', 'fechar-painel'));
@@ -3265,14 +3303,17 @@
     p.appendChild(topo);
     if (!r.ok) { p.appendChild(el('p', 'ms-vazio', r.erro || 'Não foi possível calcular agora.')); ex.appendChild(p); return; }
     p.appendChild(el('h3', '', 'Atendimento · ' + NOME_CANAL[canal]));
+    const status=el('p','ms-dica','Fila às '+new Date().toLocaleTimeString('pt-BR')+' · indicadores do período às '+new Date(r.calculadoEm||Date.now()).toLocaleTimeString('pt-BR')+' (atualização em até 5 min). Tempos corridos, sem descontar expediente.');status.id='ms-painel-atualizado';status.setAttribute('role','status');p.appendChild(status);
+    if(r.cobertura?.parcial)p.appendChild(el('p','ms-vazio','Amostra parcial: limite de consulta atingido. Escolha um período menor; estes números não representam todo o período.'));
     const cards = el('div', 'ms-cards');
     const card = (v, t, alerta) => { const c = el('div', 'ms-card' + (alerta ? ' alerta' : '')); c.appendChild(el('b', '', String(v))); c.appendChild(el('span', '', t)); cards.appendChild(c); };
     card(r.aguardando.total, 'esperando resposta agora', r.aguardando.total > 0);
-    card(fmtMin(r.medianaMin), 'tempo típico da 1ª resposta');
+    card(fmtMin(r.medianaMin), 'tempo típico até responder (por ciclo)');
     card(r.ate5min == null ? '—' : r.ate5min + '%', 'respondidas em até 5 min');
     card(r.ate60min == null ? '—' : r.ate60min + '%', 'respondidas em até 1 h');
-    card(r.perguntasSemResposta, 'perguntas sem nenhuma resposta', r.perguntasSemResposta > 0);
+    card(r.perguntasSemResposta, 'ciclos sem resposta enviada', r.perguntasSemResposta > 0);
     card(r.acima24h == null ? '—' : r.acima24h + '%', 'respostas depois de 24 h');
+    if(r.resolvidosSemResposta!=null)card(r.resolvidosSemResposta,'encerrados sem resposta enviada');
     p.appendChild(cards);
     p.appendChild(el('p', 'ms-vazio', r.conversas + ' conversas com mensagens · ' + r.entradas + ' recebidas · ' + r.saidas + ' enviadas (grupos ficam de fora).'));
     if (r.encerramentos) { const e = r.encerramentos; p.appendChild(el('p', 'ms-vazio', 'Encerramentos no período: ' + e.concluido + ' concluídos · ' + e.vendeu + ' com venda · ' + e.sem_resposta + ' sem resposta do cliente · ' + e.engano + ' engano ou spam (fora das métricas).')); }
@@ -3287,8 +3328,9 @@
     const g = el('div', 'ms-horas'); g.setAttribute('role', 'img'); g.setAttribute('aria-label', 'Perguntas por hora do dia: ' + r.porHora.filter((h) => h.entradas).map((h) => h.hora + 'h: ' + h.entradas).join(', '));
     r.porHora.forEach((h) => { const i = el('i'); i.style.height = Math.max(2, Math.round(80 * h.entradas / max)) + 'px'; i.title = h.hora + 'h: ' + h.entradas + ' perguntas' + (h.medianaMin != null ? ', resposta típica ' + fmtMin(h.medianaMin) : ''); g.appendChild(i); });
     p.appendChild(g); const leg = el('div', 'ms-horas-leg'); ['0h', '6h', '12h', '18h', '23h'].forEach((t) => leg.appendChild(el('span', '', t))); p.appendChild(leg);
-    const l = el('div', 'ms-linha'); l.appendChild(botao('ms-btn prim', 'Exportar tudo deste canal (TXT para IA)', 'exp', { params: 'formato=txt&canal=' + canal, rotulo: 'as conversas' })); p.appendChild(l);
+    const l = el('div', 'ms-linha'); l.appendChild(botao('ms-btn prim', 'Exportar tudo deste canal (TXT para IA)', 'exp', { params: 'formato=txt' + (canal==='todos'?'':'&canal='+canal), rotulo: 'as conversas' })); p.appendChild(l);
     ex.appendChild(p);
+    if(silencioso){const novo=foco?.dataset?.dias&&p.querySelector('[data-dias="'+CSS.escape(foco.dataset.dias)+'"]');novo?.focus({preventScroll:true});const w=$('ms-lista-wrap');if(w)w.scrollTop=scroll;}
   }
   /** No painel de atendimento, abas de filtro/busca/estado saem do caminho para dar espaço aos números. */
   function chrome_(esconder) { ['ms-filtros', 'ms-pesquisa', 'ms-estado-wrap','ms-intro'].forEach((id) => { const e = $(id); if (e) e.hidden = esconder; }); }
@@ -3605,6 +3647,7 @@
     else if (a === 'abrir-canal') { canal = b.dataset.canal; fecharPainelSilencioso(); filtro = ''; desenharAbas(); desenharFiltros(); desenharEstado(); await carregarLista(true); abrirConversa(Number(b.dataset.id)); }
     else if (a === 'voltar') voltarLista();
     else if (a === 'enviar') enviar();
+    else if (a === 'gravar-video') { if(espiando||cacheConversa){aviso_('Toque em Atender e aguarde a conversa atualizar antes de gravar.');return;} $('ms-camera-video')?.click(); }
     else if (a === 'anexar') { const i = $('ms-arquivo'); if (i) i.click(); }
     else if (a === 'anexo-tirar') limparAnexo_(true);
     else if (a === 'anexar-audio') {if(espiando||cacheConversa){aviso_('Toque em Atender e aguarde a conversa atualizar antes de anexar.');return;}const i=$('ms-arquivo-audio');if(i)i.click();}
@@ -3623,7 +3666,7 @@
     else if (a === 'esquecer-conta') { guardarContas_(contasSalvas_().filter((x) => x.whatsapp !== b.dataset.w)); abrirTrocaUsuario_(); }
     else if (a === 'outra-conta') { lembrarSessao_(); limparSessao(); location.reload(); }
     else if (a === 'menu-geral') abrirMais_();
-    else if (a === 'menu-conversa' && aberta) abrirMenu(b, [...(aberta.grupo ? [] : [['Ficha do cliente…', 'ficha']]), ['Agendar mensagem…', 'agenda-abrir'], ['Enviar áudio de arquivo', 'anexar-audio'], '-', ['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
+    else if (a === 'menu-conversa' && aberta) abrirMenu(b, [...(aberta.grupo ? [] : [['Ficha do cliente…', 'ficha']]), ['Agendar mensagem…', 'agenda-abrir'], ['Enviar áudio de arquivo', 'anexar-audio'], ['Gravar vídeo', 'gravar-video'], '-', ['Copiar conversa para IA', 'copiar-ia'], ['Exportar esta conversa (TXT)', 'exp', { params: 'formato=txt&conversa=' + aberta.id, rotulo: 'a conversa' }], ['Exportar esta conversa (CSV)', 'exp', { params: 'formato=csv&conversa=' + aberta.id, rotulo: 'a conversa' }], '-', ['Marcar como não lida', 'nao-lida'], aberta.encerrada_em ? ['Reabrir conversa', 'reabrir'] : ['Encerrar conversa', 'encerrar']]);
     else if (a === 'exp') baixar(b.dataset.params, b.dataset.rotulo);
     else if (a === 'copiar-ia') copiarParaIA();
     else if (a === 'painel') abrirPainel(30);
