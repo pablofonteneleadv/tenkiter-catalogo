@@ -13,7 +13,7 @@ def abre(b, perms):
     ctx.add_init_script(SESSION); st = install(ctx, perms=perms, versao="4.3"); st["midia"]["modo"] = "ok"
     pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2800); return ctx, pg, erros
-def vis(pg, sel): return pg.evaluate("(s)=>{const e=document.querySelector(s);return !!e&&getComputedStyle(e).display!=='none'&&!e.closest('[hidden]')}", sel)
+def vis(pg, sel): return pg.locator(sel).first.is_visible() if pg.locator(sel).count() else False
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--no-sandbox"])
     print("== Equipe catálogo 1 ==")
@@ -25,7 +25,7 @@ with sync_playwright() as p:
     chk("vê a lista (Estoque) e a busca", vis(pg, "#busca-admin") and vis(pg, "#lista-produtos"))
     chk("vê Postagens no 'O que fazer agora'", vis(pg, "#atalho-postagens"))
     chk("NÃO vê Pedidos nem Números", not vis(pg, "#atalho-pedidos") and not vis(pg, "#atalho-numeros") and not vis(pg, "#card-pedidos"))
-    chk("NÃO vê 'Ferramentas do gestor' (números, avisos, auditoria, configurações, conexões)", not vis(pg, "#details-ferramentas") and not vis(pg, "[data-atalho=ferramentas]"))
+    chk("Mensagens pode aparecer; ferramentas protegidas do gestor continuam ocultas", not vis(pg, "[data-atalho=ferramentas]") and pg.evaluate("[...document.querySelectorAll('#details-ferramentas .ferr-tile:not(#btn-abrir-mensagens)')].every(e=>!e.getClientRects().length)"))
     chk("NÃO vê o importador do Instagram", not vis(pg, "#ig-faixa"))
     pg.locator("#card-form > summary").click()
     pg.locator(".produto-chk").first.check(); pg.wait_for_timeout(300)

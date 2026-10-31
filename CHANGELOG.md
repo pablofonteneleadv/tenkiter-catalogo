@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.38] - 2026-10-31
+
+- Processador de vídeo com identificação HTTP explícita; ações de gestão ocultas para atendentes e campos de regras com alvo de 48 px.
+
+
 ## [7.40.37] - 2026-10-31
 
 - Encaminhamento com busca completa, paginação, voltar/Escape e preservação do rascunho; retry não reutiliza citação na próxima mensagem.

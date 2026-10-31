@@ -1,6 +1,7 @@
+import os
 from playwright.sync_api import sync_playwright
 
-BASE = "http://127.0.0.1:8766/"
+BASE = os.environ.get("TK_BASE", "http://127.0.0.1:8766/")
 TELA = "<h1>Catálogo</h1><script src='nav.js' data-ativo='catalogo'></script>"
 TUTORIAL = {
     "id": "nav", "titulo": "Barra", "descricao": "", "pagina": "index.html",

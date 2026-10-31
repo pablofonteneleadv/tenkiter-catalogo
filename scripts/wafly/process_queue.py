@@ -2,15 +2,16 @@
 """Processador privado: OIDC do workflow/main. Não envia nem agenda publicações."""
 import json,os,subprocess,tempfile,time,urllib.request,urllib.parse,urllib.error
 from pathlib import Path
+USER_AGENT='TENKiTER-Video-Processor/1.0 (+https://github.com/pablofonteneleadv/tenkiter-catalogo)'
 BASE='https://tenkiter-ig.distkrpconfeccoes.workers.dev/internal/video'
 def token():
  url=os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']+'&audience=tenkiter-video'
- req=urllib.request.Request(url,headers={'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+ req=urllib.request.Request(url,headers={'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN'],'User-Agent':USER_AGENT})
  with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)['value']
 def api(acao,job=None,body=None,method='GET',binary=False):
  query={'acao':acao}
  if job:query['id']=job['id']
- headers={'Authorization':'Bearer '+token()}
+ headers={'Authorization':'Bearer '+token(),'User-Agent':USER_AGENT}
  if job:headers['X-Video-Lease']=job['lease']
  if body is not None:headers['Content-Type']='application/octet-stream'
  req=urllib.request.Request(BASE+'?'+urllib.parse.urlencode(query),data=body,method=method,headers=headers)

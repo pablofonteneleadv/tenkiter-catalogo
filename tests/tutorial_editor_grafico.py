@@ -1,6 +1,7 @@
+import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
-BASE='http://127.0.0.1:8766/'
+BASE=os.environ.get('TK_BASE','http://127.0.0.1:8766/')
 OUT=Path(__file__).parent/'saida';OUT.mkdir(exist_ok=True)
 with sync_playwright() as p:
  b=p.chromium.launch(headless=True)

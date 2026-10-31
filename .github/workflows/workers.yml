@@ -118,7 +118,7 @@ jobs:
         run: python3 scripts/ci/check_workers.py
 
       - name: Publicar ${{ matrix.script }} (wrangler deploy)
-        if: github.event_name == 'push' || github.event_name == 'workflow_call' || github.event.inputs.worker == 'todos' || github.event.inputs.worker == '${{ matrix.pasta }}'
+        if: github.event_name == 'push' || github.event_name == 'workflow_call' || github.event.inputs.worker == 'todos' || github.event.inputs.worker == matrix.pasta
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -130,7 +130,7 @@ jobs:
       # deploy que publica codigo quebrado passa em silencio — o wrangler sai com
       # codigo 0 mesmo quando o Worker publicado nao atende.
       - name: Provar que ${{ matrix.script }} respondeu
-        if: github.event_name == 'push' || github.event_name == 'workflow_call' || github.event.inputs.worker == 'todos' || github.event.inputs.worker == '${{ matrix.pasta }}'
+        if: github.event_name == 'push' || github.event_name == 'workflow_call' || github.event.inputs.worker == 'todos' || github.event.inputs.worker == matrix.pasta
         run: |
           set -e
           ALVO="${{ matrix.alvo }}"

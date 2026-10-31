@@ -224,9 +224,10 @@ const $=id=>document.getElementById(id),esc=v=>escaparHtml(v),TIPOS=[["feed","ðŸ
       .po-rg-n input { width: 120px; min-height: 44px; }
       .po-rg-c { border: 1px solid #d8d8d8; border-radius: 12px; margin: 12px 0; padding: 8px 12px 12px; }
       .po-rg-c legend { font-weight: 800; padding: 0 6px; }
-      .po-rg-par { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin: 8px 0; }
+      .po-rg-par { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; margin: 8px 0; }
+      @media (max-width: 600px) { .po-rg-par { display: grid; grid-template-columns: minmax(0, 1fr) 96px; } .po-rg-par > span { grid-column: 1 / -1; } }
       .po-rg-par label { font-weight: 700; font-size: .85rem; }
-      .po-rg-par input { width: 96px; min-height: 48px; font-size: 1rem; }
+      #overlay-postagens .po-rg-par input { width: 96px; min-height: 48px; font-size: 1rem; }
       .po-rg-lbl { margin: 2px 0 6px; font-size: .85rem; color: #444; }
       .po-rg-uso { font-size: .85rem; color: #444; }
       .po-previa { display: flex; gap: 10px; flex-wrap: wrap; padding: 4px 0; }

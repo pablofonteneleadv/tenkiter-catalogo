@@ -1,6 +1,7 @@
+import os
 """Etapa de foto: o app lê as fotos e LIMPA o campo de arquivo antes do teste conferir — a etapa deve contar como feita (antes pedia a mesma coisa para sempre)."""
 from playwright.sync_api import sync_playwright
-BASE = 'http://127.0.0.1:8766/'
+BASE = os.environ.get('TK_BASE', 'http://127.0.0.1:8766/')
 PAGINA = """<label id='l' for='f'>📷 Escolher fotos</label><input type='file' id='f' multiple style='display:none'><button id='ok'>Seguir</button><div id='lista'></div>
 <script>document.addEventListener('change',function(e){if(e.target.id!=='f')return;var n=e.target.files.length;document.getElementById('lista').textContent=n+' fotos';e.target.value='';},true);</script>"""
 TUT = {"id": "al", "titulo": "Fotos", "pagina": "index.html", "tipo": "independente", "descricao": "", "status": "publicado", "versao": 1, "preparacao": [], "visao": "admin_total",

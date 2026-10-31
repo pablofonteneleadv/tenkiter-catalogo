@@ -1,7 +1,8 @@
+import os
 """Tutorial: gesto na imagem (Enquadrar a foto). A gravação registra UMA etapa 'mexer na imagem'; no teste basta mexer (não repete o zoom gravado)."""
 from playwright.sync_api import sync_playwright
 
-BASE = "http://127.0.0.1:8766/"
+BASE = os.environ.get("TK_BASE", "http://127.0.0.1:8766/")
 TELA = """<canvas id='enq-cv' data-tut-interagir='Foto da peça' width=200 height=250 style='width:200px;height:250px;border:1px solid #000;touch-action:none'></canvas>
 <button id='usar' onclick="window.usou=1">✔ Usar esta foto</button>"""
 

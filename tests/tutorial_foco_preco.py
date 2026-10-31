@@ -1,5 +1,6 @@
+import os
 from playwright.sync_api import sync_playwright
-BASE='http://127.0.0.1:8766/'
+BASE=os.environ.get('TK_BASE','http://127.0.0.1:8766/')
 with sync_playwright() as p:
  b=p.chromium.launch();pg=b.new_page(viewport={'width':390,'height':844});pg.set_default_timeout(7000)
  pg.route('**/index.html?tutorial_teste=1',lambda r:r.fulfill(content_type='text/html',body='''<input id="nome"><input id="preco"><button id="fim">Fim</button><script>document.querySelector('#preco').addEventListener('change',function(){this.value='89.99'})</script>'''))

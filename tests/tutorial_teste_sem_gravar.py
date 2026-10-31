@@ -1,7 +1,8 @@
+import os
 """Tutorial: o TESTE nunca grava de verdade (servidor nem fila local) — o clique no passo continua valendo."""
 from playwright.sync_api import sync_playwright
 
-BASE = "http://127.0.0.1:8766/"
+BASE = os.environ.get("TK_BASE", "http://127.0.0.1:8766/")
 TELA = """<script src='common.js'></script><script>window.fetchGuardado=window.fetch.bind(window)</script><button id='salvar' onclick="window.rodou=1">Cadastrar</button>"""
 TUT = {"id": "sg", "titulo": "Salvar", "descricao": "", "pagina": "index.html", "status": "publicado", "versao": 1, "preparacao": [],
        "etapas": [{"selector": "#salvar", "alvoNome": "Cadastrar", "acao": "click", "regra": "acao", "valor": "",
