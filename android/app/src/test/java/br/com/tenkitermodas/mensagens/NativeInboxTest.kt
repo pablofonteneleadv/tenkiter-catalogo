@@ -41,10 +41,10 @@ class NativeInboxTest {
         val store=NativeStore(c,SecretKeySpec(ByteArray(32){4},"AES"));val a=NativeAuth("88999990000","test","Ana");store.saveAuth(a);store.putConversation(a,conv())
         val paths=mutableListOf<String>()
         val api=object:NativeApi(){override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject {
-            paths.add(path);assertEquals(1L,body!!.getLong("conversa"));return JSONObject().put("ok",true)
+            paths.add(path);assertEquals(1L,body!!.getLong("conversa"));assertTrue(body.getString("fonte").startsWith("apk_"));assertTrue(body.getLong("seq")>0);assertEquals("sem_detalhe",body.getString("estado"));return JSONObject().put("ok",true)
         }}
         val repo=NativeRepository(c,store,api);repo.presence(1)
-        assertEquals(listOf("/msg/presenca"),paths);assertEquals(2,store.conversation(1)!!.getInt("nao_lidas"))
+        repo.presence(1,"lendo",true){false};assertEquals(listOf("/msg/presenca"),paths);assertEquals(2,store.conversation(1)!!.getInt("nao_lidas"))
         store.logout();repo.presence(1);assertEquals(1,paths.size);store.close()
     }
     @Test fun nativeScreensAndControls(){
