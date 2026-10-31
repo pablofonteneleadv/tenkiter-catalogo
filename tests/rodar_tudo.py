@@ -146,6 +146,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("android_manifest_release.py", lambda o: "OK: release estável" in o),
     ("transcode_profiles.py", lambda o: "OK: HEVC" in o),
     ("reparos_integrados_ui.py", lambda o: "OK 1440" in o),
+    ("video_upload_feedback.py", lambda o: "OK 1440" in o),
     ("postagens_video_status.py", lambda o: "OK 320" in o),
 ]
 

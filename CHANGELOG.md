@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.40] - 2026-10-31
+
+- Preparação de vídeo com progresso de envio, estados claros, bloqueio de repetição e recuperação sem reenviar o original.
+
+
 ## [7.40.39] - 2026-10-31
 
 - Vídeos completos divididos em partes ordenadas; regra exclusiva para continuidade sem intervalo e câmera Android com tamanho controlado.
