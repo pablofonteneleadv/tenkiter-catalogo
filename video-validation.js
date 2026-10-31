@@ -139,5 +139,94 @@
       };
     });
   }
-  global.TKVideoPreparation=Object.freeze({preparar,perfis});
+  // Postagens não prende a pessoa em um modal: estado e original pertencem ao rascunho.
+  // O servidor aceita três originais ativos por conta; o restante permanece no rascunho.
+  let envios=0;const vagas=[];
+  async function vaga(signal){
+    if(signal.aborted)throw new DOMException('Preparação removida.','AbortError');
+    if(envios>=3)await new Promise((ok,erro)=>{
+      const iniciar=()=>{signal.removeEventListener('abort',cancelar);ok();};
+      const cancelar=()=>{const i=vagas.indexOf(iniciar);if(i>=0)vagas.splice(i,1);signal.removeEventListener('abort',cancelar);erro(new DOMException('Preparação removida.','AbortError'));};
+      vagas.push(iniciar);signal.addEventListener('abort',cancelar,{once:true});
+    });else envios++;
+    return()=>{const proximo=vagas.shift();if(proximo)proximo();else envios--;};
+  }
+  async function prepararEmFundo(file,op){
+    const liberar=await vaga(op.signal);
+    try{return await executarEmFundo(file,op);}finally{liberar();}
+  }
+  async function executarEmFundo(file,op){
+    const estado=op.estado,signal=op.signal,maxParte=Number(estado.maxParte)||30;
+    if(maxParte<3||maxParte>30)throw Error('Escolha partes de 3 a 30 segundos.');
+    const conferir=()=>{if(signal.aborted)throw new DOMException('Preparação removida.','AbortError');};
+    const informar=(fase,texto,pct)=>{conferir();Object.assign(estado,{fase,texto,pct:pct??null});op.progresso();};
+    const pausa=ms=>new Promise((ok,erro)=>{const fim=()=>{signal.removeEventListener('abort',cancelar);ok();},timer=setTimeout(fim,ms),cancelar=()=>{clearTimeout(timer);signal.removeEventListener('abort',cancelar);erro(new DOMException('Preparação removida.','AbortError'));};signal.addEventListener('abort',cancelar,{once:true});if(signal.aborted)cancelar();});
+    const rota=op.base.replace(/\/$/,'')+'/post/video-preparar?partes=1';
+    const chamar=async sufixo=>{const r=await fetch(rota+sufixo,{headers:op.headers,signal:AbortSignal.any([signal,AbortSignal.timeout(30000)])});let j;try{j=await r.json();}catch(_){throw Error('Resposta incompleta. Reconectando…');}if(!r.ok||!j.ok){const e=Error(j.erro||'Não foi possível consultar a preparação.');e.status=r.status;throw e;}return j;};
+    conferir();
+    if(!estado.id){
+      informar('enviando','Preparando o envio…',0);
+        conferir();
+        if(!file.size||file.size>40*1048576)throw Error('Escolha um vídeo de até 40 MiB. O original está preservado.');
+        const meta=await global.TKVideoValidation.inspecionar(file);conferir();
+        estado.duracao=meta.ok?meta.duration:0;
+        if(meta.ok&&meta.duration<3)throw Error('O vídeo precisa ter pelo menos 3 segundos.');
+        let buf=await file.arrayBuffer();conferir();
+        const ascii=new TextDecoder('latin1').decode(buf);
+        if(meta.ok&&meta.duration<=maxParte&&file.type==='video/mp4'&&file.size<=perfis.postagens.bytes&&/avc1|avc3/.test(ascii)&&!/hvc1|hev1/.test(ascii))return [file];
+        const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buf)),x=>x.toString(16).padStart(2,'0')).join('');
+        const key='tk-video-partes-v1:'+op.conta+':postagens:'+hash+':'+maxParte+':'+estado.duracao;
+        if(!estado.consultouCache){try{estado.id=sessionStorage.getItem(key)||null;}catch(_){}estado.consultouCache=true;}
+        if(!estado.id){
+          informar('enviando','Enviando original: 0%',0);
+          let r;
+          while(!r){try{r=await new Promise((ok,erro)=>{
+            const xhr=new XMLHttpRequest();let parado,terminou=false;
+            const cancelar=()=>xhr.abort();
+            const fim=(e,j)=>{if(terminou)return;terminou=true;clearTimeout(parado);signal.removeEventListener('abort',cancelar);e?erro(e):ok(j);};
+            const vigiar=()=>{clearTimeout(parado);parado=setTimeout(()=>{fim(Error('O envio parou. Confira a conexão e toque em Tentar novamente.'));xhr.abort();},60000);};
+            xhr.open('POST',rota+'&inicio='+maxParte+'&duracao='+estado.duracao);xhr.timeout=8*60000;
+            Object.entries(op.headers||{}).forEach(([k,v])=>xhr.setRequestHeader(k,v));
+            xhr.upload.onprogress=e=>{vigiar();if(!signal.aborted&&e.lengthComputable){const pct=Math.min(100,Math.floor(e.loaded/e.total*100));informar('enviando',pct===100?'Confirmando recebimento…':'Enviando original: '+pct+'%',pct);}};
+            xhr.onload=()=>{try{const j=JSON.parse(xhr.responseText);if(xhr.status<200||xhr.status>=300||!j.ok||!j.id){const e=Error(j.erro||'O servidor não confirmou o envio. Tente novamente.');e.status=xhr.status;throw e;}fim(null,j);}catch(e){fim(e instanceof SyntaxError?Error('Resposta incompleta. Tente novamente.'):e);}};
+            xhr.onerror=()=>fim(Error('Não consegui enviar. Confira a conexão e toque em Tentar novamente.'));
+            xhr.ontimeout=()=>fim(Error('O envio demorou demais. Toque em Tentar novamente.'));
+            xhr.onabort=()=>fim(new DOMException('Envio interrompido.','AbortError'));
+            signal.addEventListener('abort',cancelar,{once:true});conferir();vigiar();xhr.send(new Blob([buf],{type:file.type||'application/octet-stream'}));
+          });}catch(e){if(e.status!==429)throw e;informar('aguardando','Aguardando vaga no servidor · o envio retomará automaticamente');await pausa(30000);}}
+          estado.id=r.id;try{sessionStorage.setItem(key,r.id);}catch(_){}
+        }
+        buf=null;informar('fila','Original recebido · aguardando processamento');await op.salvar();
+    }
+    while(true){
+      conferir();
+      try{
+        const r=await chamar('&id='+encodeURIComponent(estado.id));
+        if(r.estado==='erro'){estado.id=null;const e=Error(r.erro||'Não foi possível preparar. Toque em Tentar novamente.');e.definitivo=true;throw e;}
+        if(r.estado==='pronto'){
+          const ps=r.partes||[],n=ps[0]?.total;
+          if(!Number.isSafeInteger(n)||n<1||n>60||ps.length!==n||ps.some((pt,i)=>pt.ordem!==i+1||pt.total!==n)||estado.duracao&&Math.abs(ps.reduce((s,p)=>s+p.duracao,0)-estado.duracao)>.15){const e=Error('A preparação não contém todas as partes. Tente novamente.');e.definitivo=true;throw e;}
+          const arquivos=[];
+          for(const pt of ps){
+            informar('conferindo','Conferindo parte '+pt.ordem+' de '+n);
+            const res=await fetch(rota+'&arquivo=1&id='+encodeURIComponent(estado.id)+'&parte='+pt.ordem,{headers:op.headers,signal:AbortSignal.any([signal,AbortSignal.timeout(60000)])});
+            if(!res.ok)throw Error('Reconectando para receber as partes…');
+            const f=new File([await res.blob()],file.name.replace(/\.[^.]+$/,'')+'-parte-'+String(pt.ordem).padStart(2,'0')+'-de-'+n+'.mp4',{type:'video/mp4'});
+            const v=await global.TKVideoValidation.validar(f,{maxBytes:perfis.postagens.bytes,maxDurationSeconds:maxParte,minDurationSeconds:3});
+            if(!v.ok||Math.abs(v.metadata.duration-pt.duracao)>.15){const e=Error('Uma parte não passou na conferência. Tente novamente.');e.definitivo=true;throw e;}
+            if(n>1)f.tkParte={preparo:estado.id,ordem:pt.ordem,total:n};arquivos.push(f);
+          }
+          conferir();return arquivos;
+        }
+        informar(r.estado==='processando'?'processando':'fila',r.estado==='processando'?'Preparando partes'+(r.partes?.length?' · '+r.partes.length+' pronta(s)':''):'Original recebido · aguardando processamento');
+      }catch(e){
+        conferir();
+        if(e.definitivo||[400,401,403].includes(e.status))throw e;
+        if(e.status===404){estado.id=null;await op.salvar();return executarEmFundo(file,op);}
+        informar('reconectando','Conexão interrompida · tentando novamente automaticamente');
+      }
+      await pausa(5000);
+    }
+  }
+  global.TKVideoPreparation=Object.freeze({preparar,prepararEmFundo,perfis});
 })(window);

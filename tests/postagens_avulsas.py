@@ -23,6 +23,10 @@ with sync_playwright() as p:
     ctx.add_init_script(SESSION); ctx.add_init_script("window.TK_POSTAGENS_POLL_MS=400;")
     st = install(ctx, perms=PERMS_ALL, versao="4.3"); st["midia"]["modo"] = "ok"; g = st["ig"]
     for _p in st["produtos"]: _p["Fotos_Galeria"] = GAL
+    def preparar_video(route):
+        if route.request.method=='POST':route.fulfill(json={'ok':True,'id':'avulsa-simulada','estado':'fila'})
+        else:route.fulfill(json={'ok':True,'id':'avulsa-simulada','estado':'fila','partes':[]})
+    ctx.route('**/post/video-preparar*',preparar_video)
     pg = ctx.new_page(); pg.on("pageerror", lambda e: erros.append(str(e))); pg.on("dialog", lambda d: d.accept())
     pg.goto(BASE + "admin.html"); pg.wait_for_timeout(2600)
     pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250); pg.click("#btn-abrir-postagens"); pg.wait_for_timeout(800)
@@ -50,9 +54,9 @@ with sync_playwright() as p:
     chk("Feed + avulsa nova: a nova vira a escolhida (só 1)", pg.locator(".po-m[aria-pressed=true]").count() == 1 and pg.locator(".po-m").last.get_attribute("aria-pressed") == "true")
     pg.click("[data-tipo=story]"); pg.wait_for_timeout(500)
     pg.set_input_files("#po-avulsa-arq", [PASTA + "curto.mp4"]); pg.wait_for_timeout(600)
-    pg.wait_for_selector('#tk-video-preparo')
-    chk("vídeo sem H.264 oferece preparação sem entrar silenciosamente",pg.locator('#tk-video-preparo').is_visible() and pg.locator(".po-ordem :text('Vídeo')").count()==0)
-    pg.keyboard.press('Escape');pg.wait_for_timeout(300)
+    pg.wait_for_selector('[data-preparo]')
+    chk("vídeo sem H.264 prepara em segundo plano sem liberar publicação",pg.locator('[data-preparo]').is_visible() and pg.locator('[data-a=enviar]').is_disabled() and not pg.locator('#tk-video-preparo').count())
+    pg.locator('[data-preparo] [data-pm=x]').click();pg.wait_for_timeout(300)
     pg.click('[data-destino=grupo]'); pg.set_input_files("#po-avulsa-arq", [PASTA + "compativel.mp4"]);pg.wait_for_timeout(700)
     chk("vídeo H.264 do perfil comum entra no Story sem reconversão", pg.locator(".po-ordem :text('Vídeo')").count()>=1 and not pg.locator('#tk-video-preparo').count())
     pg.set_input_files("#po-avulsa-arq", [PASTA + "texto.txt"]); pg.wait_for_timeout(400)
