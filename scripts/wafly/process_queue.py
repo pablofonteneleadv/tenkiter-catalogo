@@ -35,9 +35,11 @@ def main():
   try:
    with tempfile.TemporaryDirectory() as d:
     inp=Path(d)/'original';out=Path(d)/'final.mp4';inp.write_bytes(api('origem',job,binary=True))
-    if job.get('partes'):
+    if job['perfil']=='postagens-partes':
      from transcode import probe,plan_parts
      actual=float(probe(inp)['format']['duration'])
+     if not job['duracao']:
+      defined=api('plano',job,json.dumps({'duracao':actual}).encode(),'POST');job['duracao']=actual;job['partes']=defined['partes']
      if abs(actual-job['duracao'])>.15 or plan_parts(job['duracao'],job['inicio'])!=job['partes']:raise ValueError('Plano não corresponde ao original')
      budget=min(9961472,256*1048576//len(job['partes']))
      for part in job['partes']:

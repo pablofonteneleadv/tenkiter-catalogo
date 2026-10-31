@@ -137,6 +137,11 @@ SUITES = [  # (arquivo, como saber que passou)
     ("worker_equipe_inicio.js", lambda o: "Equipe/início:" in o and "aprovados." in o),  # Worker: presença, equipe, trilha e envio pelo WhatsApp na Nova conversa
     ("mensagens_equipe_inicio_ui.py", lambda o: "axe aprovados" in o),  # gavetas, heartbeat, envio, Instagram sem envio e axe
     ("worker_video_preparo.js", lambda o: "OK: ACL/isolamento" in o),
+    ("worker_postagens_runtime.cjs", lambda o: "OK: Durable Object" in o),
+    ("worker_video_partes.js", lambda o: "OK: partes integrais" in o),
+    ("mensagens_camera_menu.py", lambda o: "OK 1440" in o),
+    ("video_camera_90s.py", lambda o: "OK: 90 s completos" in o),
+    ("video_partes_encoder.py", lambda o: "OK: partes 59/75/90s" in o),
     ("video_processor_http.py", lambda o: "OK: identificação HTTP" in o),
     ("android_manifest_release.py", lambda o: "OK: release estável" in o),
     ("transcode_profiles.py", lambda o: "OK: HEVC" in o),
@@ -174,7 +179,7 @@ for arq, passou in SUITES:
         print("↷ " + arq + "  (pulado: sem o .gs.txt do backend '" + PRECISA_GS[arq][0] + "' (versão mínima %d.%d) neste ambiente)" % PRECISA_GS[arq][1])
         continue
     if arq in PROPRIO_SERVIDOR and not BASE: env.pop("TK_BASE", None)
-    cmd = ["node", os.path.join(AQUI, arq)] if arq.endswith(".js") else [sys.executable, os.path.join(AQUI, arq)]
+    cmd = ["node", os.path.join(AQUI, arq)] if arq.endswith((".js", ".cjs")) else [sys.executable, os.path.join(AQUI, arq)]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=900, env=env)
         out = r.stdout + r.stderr

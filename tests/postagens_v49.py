@@ -199,7 +199,7 @@ with sync_playwright() as p:
     print("== Postagem livre usa os mesmos visuais ==")
     pg.click("[data-modo=livre]"); pg.wait_for_timeout(300)
     chk("Livre oferece Clássico, Promoção e os demais visuais", all(pg.locator("[data-tpl=%s]" % t).count() == 1 for t in ("original", "classico", "promo", "minimal", "rodape", "elausa")))
-    chk("perfil comum de vídeo: 3 a 30 s e 9,5 MiB", "3 a 30 s" in corpo(pg) and "9,5 MiB" in corpo(pg))
+    chk("perfil comum de vídeo: 3 a 30 s e 9,5 MiB", "partes automáticas de até 30 s" in corpo(pg) and "9,5 MiB" in corpo(pg))
     chk("nenhum erro de JavaScript", not erros, erros[:3])
     b.close()
 print("\nOK=%d FALHAS=%d" % (len(OK), len(BAD)), BAD); sys.exit(1 if BAD else 0)

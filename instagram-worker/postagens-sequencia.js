@@ -4,6 +4,7 @@ import { processarPostagens } from './worker.js';
 // Um coordenador da fila desta loja: serializa recibos e continua partes sem o
 // intervalo editorial. Não atende interface, uploads nem mensagens de clientes.
 export class PostagensSequenciais extends DurableObject {
+  async saude(){return {ok:true,versao:'partes-v1',alarme:await this.ctx.storage.getAlarm()};}
   async acordar() {
     const atual=await this.ctx.storage.getAlarm();
     if(atual===null||atual>Date.now()+1000)await this.ctx.storage.setAlarm(Date.now()+1000);

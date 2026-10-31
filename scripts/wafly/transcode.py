@@ -7,7 +7,9 @@ def probe(path):
  return json.loads(subprocess.check_output(['ffprobe','-v','error','-protocol_whitelist','file,pipe','-format_whitelist','mov,matroska,webm','-show_format','-show_streams','-of','json',str(path)],timeout=20,stderr=subprocess.PIPE))
 def plan_parts(duration,maximum=30):
  if not math.isfinite(duration) or not 3<=duration<=1800 or not 3<=maximum<=30:raise ValueError('Duração fora do limite')
- n=math.ceil(duration/maximum);ds=[min(maximum,duration-i*maximum) for i in range(n)]
+ n=math.ceil(duration/maximum)
+ if n>60:raise ValueError('Limite de 60 partes por vídeo')
+ ds=[min(maximum,duration-i*maximum) for i in range(n)]
  if n>1 and ds[-1]<3:ds[-2]-=3-ds[-1];ds[-1]=3
  if any(d<3 for d in ds):raise ValueError('Parte menor que 3 segundos')
  start=0;parts=[]

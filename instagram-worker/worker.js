@@ -1404,6 +1404,11 @@ export async function processarPostagens(env) {
         try { const r = ajustarHorario(cfgP, p.tipo, Date.now(), await ocupadosDoTipo_(env, p.tipo, p.id, gapDoTipoMs(cfgP, p.tipo))); await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(new Date(r.t).toISOString(), agora(), p.id).run(); } catch (e) { /* tenta de novo no próximo minuto */ }
         continue;
       }
+      if(p.status==='agendado'&&!(anterior&&cfgP.partesRapidas)&&!(p.urgente&&cfgP.agoraIgnora)){
+        const recentes=(await env.DB.prepare("SELECT serie,tipo,canal,publicado_em FROM postagem WHERE serie<>'' AND serie<>? AND status='publicado' AND publicado_em>? ORDER BY publicado_em DESC LIMIT 60").bind(p.serie||'',new Date(Date.now()-7200000).toISOString()).all()).results||[];
+        let liberar=0;for(const r of recentes)for(const b of bucketsDoPost(p.tipo,p.canal))if(bucketsDoPost(r.tipo,r.canal).includes(b))liberar=Math.max(liberar,Date.parse(r.publicado_em)+gapDoTipoMs(cfgP,b));
+        if(liberar>Date.now()){await env.DB.prepare('UPDATE postagem SET agendado_em=?,atualizado_em=? WHERE id=?').bind(new Date(foraDaPausa(cfgP,liberar)).toISOString(),agora(),p.id).run();continue;}
+      }
       const usaIg = canalUsaInstagram_(p.canal);
       if (usaIg && !token) { await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=?").bind('O Instagram não está conectado. Conecte o token e use "Tentar de novo".', agora(), p.id).run(); continue; }
       if (p.status === 'agendado') {
@@ -1417,7 +1422,7 @@ export async function processarPostagens(env) {
       try { await avancarPostagem(env, token, p); feitas++; } catch (e) { try { await falhaPostagem(env, p, e); } catch (e2) { /* próximo minuto tenta de novo */ } }
     }
     const rapidas=cfgP.partesRapidas&&(await env.DB.prepare("SELECT 1 FROM postagem p WHERE p.serie<>'' AND p.status IN ('agendado','processando') AND p.agendado_em<=? AND NOT EXISTS(SELECT 1 FROM postagem e WHERE e.serie=p.serie AND e.status IN ('erro','cancelado','manual_pendente')) LIMIT 1").bind(agora()).first());
-    return { feitas: feitas,continuar:!!rapidas };
+    return { feitas: feitas,continuar:tentadas>0&&!!rapidas };
   } catch (e) { return { feitas: 0, erro: true }; }
 }
 /** Quantas postagens deste canal já saíram nas últimas 24 h (Story, Feed… do Instagram; ou "status" do WhatsApp). */
@@ -1844,7 +1849,7 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     const cfg = await lerCfgPost(env), limite = Date.now() + 60000;
     let mudaram = 0; const detalhes = [], ocup = {};
     for (const b of CANAIS_FILA) ocup[b] = await ocupadosDoTipo_(env, b, 0, gapMaxDoTipoMs(cfg, b), true);
-    const lst = (await env.DB.prepare("SELECT id, tipo, canal, agendado_em FROM postagem WHERE status='agendado' AND urgente=0 ORDER BY agendado_em, id").all()).results || [];
+    const lst = (await env.DB.prepare("SELECT id, tipo, canal, agendado_em FROM postagem WHERE status='agendado' AND urgente=0 AND serie='' ORDER BY agendado_em, id").all()).results || [];
     for (const x of lst) {                                                   // em ordem de horário; uma postagem "ambos" é ajustada para servir aos dois canais de uma vez
       const bs = bucketsDoPost(x.tipo, x.canal), atual = Date.parse(x.agendado_em);
       if (!isFinite(atual) || atual <= limite) { if (isFinite(atual)) bs.forEach((b) => ocup[b].push(atual)); continue; }     // o que já vai sair em instantes não se mexe
@@ -1857,6 +1862,8 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
   const linha = id ? await env.DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first() : null;
   if (p.indexOf('/post/') === 0 && req.method === 'POST') {
     if (!linha) return J({ ok: false, erro: 'Postagem não encontrada.' }, 404);
+    if(linha.serie&&['/post/proximo','/post/mover','/post/repostar'].includes(p))return J({ok:false,erro:'Para mudar o horário de uma sequência, descarte as partes pendentes e agende novamente o vídeo completo. Partes publicadas não serão repetidas.'},409);
+
     if (p === '/post/repostar') {
       // Uma cópia por origem: duplo toque/repetição de rede retorna a mesma postagem.
       const existente = await env.DB.prepare('SELECT id,agendado_em FROM postagem WHERE repostado_de=?').bind(id).first();
@@ -1897,7 +1904,6 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
     if (p === '/post/converter-grupo') {
       return J({ok:false,erro:'Abra o original em Nova postagem e use Preparar vídeo. A preparação agora preserva a fila e nunca libera envio sozinha.'},409);
     }
-    if(linha.serie&&['/post/proximo','/post/mover','/post/repostar'].includes(p))return J({ok:false,erro:'Para mudar o horário de uma sequência, descarte as partes pendentes e agende novamente o vídeo completo. Partes publicadas não serão repetidas.'},409);
     if (p === '/post/reagendar') {
       if(linha.serie&&linha.status!=='erro')return J({ok:false,erro:'A sequência já está agendada. Para trocar o horário, descarte as partes pendentes e prepare novamente o original.'},409);
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não pode ser reagendada.' }, 409);
@@ -1940,11 +1946,13 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       const i = lst.findIndex((x) => x.id === id), n = lst.length, alvo = { subir: i - 1, descer: i + 1, primeiro: 0, ultimo: n - 1 }[String(b.dir || '')];
       if (alvo === undefined) return J({ ok: false, erro: 'Direção inválida.' }, 400);
       if (i < 0 || alvo < 0 || alvo >= n || alvo === i) return J({ ok: false, erro: 'Já está na ponta da fila.' }, 409);
+      if((await env.DB.prepare("SELECT 1 FROM postagem WHERE serie<>'' AND canal=? AND status='agendado' AND agendado_em BETWEEN ? AND ? LIMIT 1").bind(linha.canal,lst[Math.min(i,alvo)].agendado_em,lst[Math.max(i,alvo)].agendado_em).first()))return J({ok:false,erro:'Uma sequência de vídeo ocupa este trecho da fila. Escolha outro horário para esta postagem.'},409);
       const tempos = lst.map((x) => x.agendado_em), ordem = lst.map((x) => x.id); ordem.splice(i, 1); ordem.splice(alvo, 0, id);
       for (let k = 0; k < ordem.length; k++) if (lst[k].id !== ordem[k]) await env.DB.prepare('UPDATE postagem SET agendado_em=?, atualizado_em=? WHERE id=?').bind(tempos[k], agora(), ordem[k]).run();
       return J({ ok: true, ordem: ordem });
     }
     if (p === '/post/feito') {
+      if(linha.serie&&linha.parte>1){const ant=await env.DB.prepare('SELECT status FROM postagem WHERE serie=? AND parte=?').bind(linha.serie,linha.parte-1).first();if(!ant||!['publicado','manual_feito'].includes(ant.status))return J({ok:false,erro:'Conclua a parte anterior primeiro.'},409);}
       if (linha.status !== 'manual_pendente') return J({ ok: false, erro: 'Essa postagem não está esperando você.' }, 409);
       await env.DB.prepare("UPDATE postagem SET status='manual_feito', publicado_em=?, atualizado_em=? WHERE id=?").bind(agora(), agora(), id).run(); return J({ ok: true });
     }
@@ -4808,7 +4816,7 @@ const VIDEO_TABELA_ = `CREATE TABLE IF NOT EXISTS video_preparo(id TEXT PRIMARY 
 const VIDEO_PARTES_TABELA_ = `CREATE TABLE IF NOT EXISTS video_parte(preparo TEXT NOT NULL,ordem INTEGER NOT NULL,total INTEGER NOT NULL,inicio REAL NOT NULL,duracao REAL NOT NULL,chave TEXT NOT NULL,hash TEXT NOT NULL,PRIMARY KEY(preparo,ordem))`;
 export function planoPartes(duracao,maximo=30){
   if(!Number.isFinite(duracao)||duracao<3||duracao>1800||!Number.isFinite(maximo)||maximo<3||maximo>30)throw Error('Use um vídeo entre 3 segundos e 30 minutos, com partes de 3 a 30 segundos.');
-  const n=Math.ceil(duracao/maximo),ds=Array.from({length:n},(_,i)=>Math.min(maximo,duracao-i*maximo));
+  const n=Math.ceil(duracao/maximo);if(n>60)throw Error('Use no máximo 60 partes por vídeo. Aumente a duração de cada parte.');const ds=Array.from({length:n},(_,i)=>Math.min(maximo,duracao-i*maximo));
   if(n>1&&ds[n-1]<3){ds[n-2]-=3-ds[n-1];ds[n-1]=3;}
   if(ds.some(x=>x<3))throw Error('A duração escolhida deixa uma parte menor que 3 segundos. Escolha partes maiores.');
   let inicio=0;return ds.map((d,i)=>{const r={ordem:i+1,total:n,inicio,duracao:d};inicio+=d;return r;});
@@ -4842,14 +4850,14 @@ async function videoRunner_(env,req,url,J){
   if(!await autorizarVideoRunner_(req))return J({ok:false,erro:'Identidade do processador não autorizada.'},401);
   await env.DB.prepare(VIDEO_TABELA_).run();await iniciarPartesVideo_(env);
   const id=url.searchParams.get('id')||'',acao=url.searchParams.get('acao')||'';
-  if(acao==='saude'){await env.MIDIA.list({prefix:'video-preparo/',limit:1});return J({ok:true,processador:'video-v1',armazenamento:true,envio:false});}
+  if(acao==='saude'){await env.MIDIA.list({prefix:'video-preparo/',limit:1});return J({ok:true,processador:'video-v1',armazenamento:true,envio:false,sequencias:env.POSTAGENS_SEQUENCIA?await env.POSTAGENS_SEQUENCIA.get(env.POSTAGENS_SEQUENCIA.idFromName('loja')).saude():null});}
   if(acao==='proximo'&&req.method==='POST'){
     // Recupera lease abandonado sem liberar qualquer envio.
     await env.DB.prepare("UPDATE video_preparo SET estado='erro',erro='O processamento foi interrompido. Selecione novamente o original.' WHERE estado='processando' AND ate<?").bind(Date.now()).run();
     const job=await env.DB.prepare("SELECT * FROM video_preparo WHERE estado='fila' AND criado>? ORDER BY criado LIMIT 1").bind(Date.now()-86400000).first();
     if(!job)return J({ok:true,job:null});const lease=crypto.randomUUID();
     const r=await env.DB.prepare("UPDATE video_preparo SET estado='processando',lease=?,ate=? WHERE id=? AND estado='fila'").bind(lease,Date.now()+2100000,job.id).run();
-    return J({ok:true,job:r.meta.changes?{id:job.id,perfil:job.perfil,inicio:job.inicio,duracao:job.duracao,lease,partes:job.perfil==='postagens-partes'?planoPartes(job.duracao,job.inicio):null}:null});
+    return J({ok:true,job:r.meta.changes?{id:job.id,perfil:job.perfil,inicio:job.inicio,duracao:job.duracao,lease,partes:job.perfil==='postagens-partes'&&job.duracao>0?planoPartes(job.duracao,job.inicio):null}:null});
   }
   const job=await env.DB.prepare('SELECT * FROM video_preparo WHERE id=?').bind(id).first();
   if(!job||job.estado!=='processando'||job.lease!==req.headers.get('X-Video-Lease')||job.ate<Date.now())return J({ok:false,erro:'Trabalho indisponível.'},409);
@@ -4858,6 +4866,11 @@ async function videoRunner_(env,req,url,J){
   }
   if(acao==='falha'&&req.method==='POST'){
     await env.DB.prepare("UPDATE video_preparo SET estado='erro',erro='Não foi possível preparar este vídeo. O original foi preservado; tente outro arquivo ou envie um link.' WHERE id=? AND lease=?").bind(id,job.lease).run();return J({ok:true});
+  }
+  if(acao==='plano'&&req.method==='POST'&&job.perfil==='postagens-partes'&&job.duracao===0){
+    const d=JSON.parse(new TextDecoder().decode(await corpoLimitadoVideo_(req,1024))),partes=planoPartes(Number(d.duracao),job.inicio);
+    await env.DB.prepare("UPDATE video_preparo SET duracao=? WHERE id=? AND lease=? AND estado='processando' AND duracao=0 AND ate>?").bind(Number(d.duracao),id,job.lease,Date.now()).run();
+    return J({ok:true,partes});
   }
   if(acao==='resultado'&&req.method==='POST'){
     const max=job.perfil==='postagens-partes'?Math.min(9961472,Math.floor(256*1048576/planoPartes(job.duracao,job.inicio).length)):VIDEO_PERFIS_[job.perfil].bytes;
@@ -4894,7 +4907,7 @@ async function videoUsuario_(env,req,url,J){
     if(fila.n>=3)return J({ok:false,erro:'Há três vídeos em preparação. Aguarde antes de adicionar outro.'},429);
     const inicio=Number(url.searchParams.get('inicio')||0),duracao=Number(url.searchParams.get('duracao')||0);
     if(!Number.isFinite(inicio)||inicio<0||!Number.isFinite(duracao)||(perfil==='postagens'&&(duracao<3||duracao>30))||(perfil==='mensageiro'&&(inicio!==0||duracao!==0)))return J({ok:false,erro:'Escolha um trecho de 3 a 30 segundos para Postagens.'},400);
-    if(perfil==='postagens-partes'){try{planoPartes(duracao,inicio);}catch(e){return J({ok:false,erro:e.message},400);}}
+    if(perfil==='postagens-partes'){try{if(inicio<3||inicio>30||duracao<0)throw Error('Escolha partes de 3 a 30 segundos.');if(duracao>0)planoPartes(duracao,inicio);}catch(e){return J({ok:false,erro:e.message},400);}}
     const buf=await corpoLimitadoVideo_(req,40*1048576);
     const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',buf))].map(x=>x.toString(16).padStart(2,'0')).join('');
     const hash=await sha('video-v1:'+dono+':'+perfil+':'+inicio+':'+duracao+':'+Math.floor(Date.now()/86400000)+':'+digest);
@@ -4903,7 +4916,7 @@ async function videoUsuario_(env,req,url,J){
     if(existente&&existente.estado!=='erro')return J({ok:true,id,estado:existente.estado});
     if(existente){await env.DB.prepare('DELETE FROM video_parte WHERE preparo=?').bind(id).run();await env.DB.prepare("UPDATE video_preparo SET estado='fila',erro='',lease='',ate=0 WHERE id=? AND estado='erro'").bind(id).run();return J({ok:true,id,estado:'fila'});}
     // Reserva atômica: limita temporários e respeita o orçamento de armazenamento existente.
-    const uso=await lerUso(env),reserva=buf.byteLength+(perfil==='postagens-partes'?Math.min(256*1048576,planoPartes(duracao,inicio).length*9961472):VIDEO_PERFIS_[perfil].bytes);
+    const uso=await lerUso(env),reserva=buf.byteLength+(perfil==='postagens-partes'?(duracao>0?Math.min(256*1048576,planoPartes(duracao,inicio).length*9961472):256*1048576):VIDEO_PERFIS_[perfil].bytes);
     const teto=Math.min(512*1048576,Math.max(0,limite(env)-uso.bytes));
     const origem='video-preparo/'+id+'/original';
     const reservado=await env.DB.prepare("INSERT OR IGNORE INTO video_preparo(id,dono,perfil,estado,origem,inicio,duracao,criado,reservado) SELECT ?,?,?,'recebendo',?,?,?,?,? WHERE (SELECT COALESCE(SUM(reservado),0) FROM video_preparo)+?<=? AND (SELECT COUNT(*) FROM video_preparo WHERE dono=? AND criado>?)<20 AND (SELECT COUNT(*) FROM video_preparo WHERE dono=? AND estado IN ('recebendo','fila','processando') AND criado>?)<3").bind(id,dono,perfil,origem,inicio,duracao,Date.now(),reserva,reserva,teto,dono,Date.now()-86400000,dono,Date.now()-86400000).run();
