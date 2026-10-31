@@ -1,33 +1,31 @@
-name: Converter vídeos HEVC da fila Wafly
+name: Preparar vídeos privados (sem envio)
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/wafly-transcode.yml'
-      - 'scripts/wafly/**'
+    paths: ['scripts/wafly/**', '.github/workflows/wafly-transcode.yml']
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
+    inputs:
+      somente_saude:
+        type: boolean
+        default: false
+        description: 'Conferir identidade/bindings sem processar vídeos'
 permissions:
   contents: read
+  id-token: write
 concurrency:
   group: wafly-transcode-r2
   cancel-in-progress: false
 jobs:
   converter:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-      - name: Conferir credenciais existentes
+      - name: Instalar encoder
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Preparar arquivos solicitados (nunca enviar)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          test -n "$CLOUDFLARE_API_TOKEN"
-          test -n "$CLOUDFLARE_ACCOUNT_ID"
-      - name: Converter solicitações pendentes
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VIDEO_HEALTH_ONLY: ${{ inputs.somente_saude && '1' || '0' }}
         run: python3 scripts/wafly/process_queue.py

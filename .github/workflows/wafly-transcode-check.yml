@@ -1,11 +1,6 @@
-name: Verificar transcodificacao Wafly (sem envio)
+name: Verificar preparação de vídeo (sem envio)
 on:
   workflow_dispatch:
-  push:
-    branches: [ia/wafly-transcodificacao-20261022]
-    paths:
-      - '.github/workflows/wafly-transcode-check.yml'
-      - 'scripts/wafly/transcode.sh'
 permissions:
   contents: read
 jobs:
@@ -14,22 +9,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Validar sintaxe do processador e shell
+      - name: Instalar FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Validar encoder e contratos com vídeo real sintético
         run: |
-          python3 -m py_compile scripts/wafly/process_queue.py
+          python3 -m py_compile scripts/wafly/process_queue.py scripts/wafly/transcode.py
           bash -n scripts/wafly/transcode.sh
-      - name: Testar conversao real HEVC para H264
-        run: |
-          set -euo pipefail
-          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=320x240:rate=15 -t 2 -c:v libx265 -preset ultrafast -pix_fmt yuv420p -an -y /tmp/entrada.mp4
-          bash scripts/wafly/transcode.sh /tmp/entrada.mp4 /tmp/saida.mp4
-          codec="$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1:nk=1 /tmp/saida.mp4)"
-          test "$codec" = h264
-          # Arquivo de 35 s deve ser recortado e caber no orçamento de grupo.
-          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=640x360:rate=30 -t 35 -c:v libx264 -preset ultrafast -an -y /tmp/longo.mp4
-          bash scripts/wafly/transcode.sh /tmp/longo.mp4 /tmp/curto.mp4
-          bytes="$(stat -c%s /tmp/curto.mp4)"
-          test "$bytes" -le 9961472
-          duracao="$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 /tmp/curto.mp4)"
-          awk -v d="$duracao" 'BEGIN { exit !(d > 0 && d <= 29) }'
-          echo "Transcodificacao HEVC -> H264 validada (sem acessar dados reais)." >> "$GITHUB_STEP_SUMMARY"
+          python3 tests/transcode_profiles.py

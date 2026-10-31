@@ -16,16 +16,17 @@ OUT = Path(os.environ.get('TK_EVID', '/tmp/equipe-inicio')); OUT.mkdir(parents=T
 
 with sync_playwright() as p:
     b = p.chromium.launch(args=['--no-sandbox'])
-    for w, h in [(320, 700), (390, 844), (1440, 900)]:
+    for w, h in [(320, 700), (390, 844), (412, 915), (1440, 900)]:
         c = b.new_context(viewport={'width': w, 'height': h}, is_mobile=w < 600, has_touch=w < 600, service_workers='block')
         c.add_init_script(SESSION)
+        c.add_init_script('window.TK_MENSAGENS_POLL_MS=400;')
         c.add_init_script('window.TKAndroid={atualizar(){},permissoes(){}}')
         st = install(c, versao='4.28', perms=PERMS_ALL)
         st['ig'].setdefault('msg', mock_msg.novo_estado())
         pg = c.new_page(); errors = []
         pg.on('pageerror', lambda e: errors.append(str(e)))
         pg.goto(BASE + 'admin.html'); pg.wait_for_timeout(2300)
-        pg.click('#details-ferramentas > summary'); pg.click('#btn-abrir-mensagens')
+        pg.click('#details-ferramentas > summary'); pg.locator('#btn-abrir-mensagens').evaluate("e=>e.scrollIntoView({block:'center'})"); pg.click('#btn-abrir-mensagens')
         pg.wait_for_selector('#ms-lista .ms-conv'); pg.wait_for_timeout(900)   # deixa a animação de abertura terminar
 
         # --- menu Mais traz as duas entradas novas ---
@@ -68,7 +69,7 @@ with sync_playwright() as p:
 
         # --- Equipe e atividade (recarrega: a conversa aberta troca a tela no celular) ---
         pg.goto(BASE + 'admin.html'); pg.wait_for_timeout(2300)
-        pg.click('#details-ferramentas > summary'); pg.click('#btn-abrir-mensagens')
+        pg.click('#details-ferramentas > summary'); pg.locator('#btn-abrir-mensagens').evaluate("e=>e.scrollIntoView({block:'center'})"); pg.click('#btn-abrir-mensagens')
         pg.wait_for_selector('#ms-lista .ms-conv'); pg.wait_for_timeout(900)
         pg.click('#ms-nav [data-ms=menu-geral]'); pg.wait_for_selector('.ms-mais-item')
         pg.click('.ms-mais-item[data-ms=equipe-atividade]'); pg.wait_for_selector('#ms-eq-online')
@@ -84,6 +85,10 @@ with sync_playwright() as p:
         assert 'sem responder' in hist, hist
         assert pg.locator('#ms-eq-online .ms-eq-linha.on').count() == 1, 'Só quem está online fica destacado'
         assert pg.locator('[data-ms="equipe-periodo"]').count() == 3
+        st['ig']['msg']['equipe_totais'][0]['respostas']=987
+        pg.evaluate('window._agoraOriginal=Date.now;Date.now=()=>window._agoraOriginal()+31000')
+        pg.wait_for_function("document.querySelector('#ms-eq-totais').textContent.includes('987 respostas')",timeout=10000)
+        assert 'não mede produtividade' in pg.inner_text('#ms-eq-atualizado')
         assert pg.evaluate("document.documentElement.scrollWidth<=innerWidth"), 'Rolagem horizontal em Equipe'
         # Cada alvo com área de toque confortável e teclado alcançável.
         for sel in ['[data-ms="equipe-periodo"]', '.ms-eq-pessoa']:

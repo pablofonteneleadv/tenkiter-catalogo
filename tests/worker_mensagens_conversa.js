@@ -569,7 +569,7 @@ function d1() {
   const c1x = await conv('whatsapp1', '5588966660001'), h1 = await DB.prepare('SELECT * FROM msg_encerramento WHERE conversa_id=?').bind(cm1).all();
   chk('sem motivo = "concluido"; vai para o histórico com quem encerrou', e1.j.ok && c1x.encerrada_motivo === 'concluido' && h1.results.length === 1 && h1.results[0].motivo === 'concluido' && h1.results[0].por === '0000' && h1.results[0].pessoa === c1x.pessoa, h1.results);
   const m1 = (await A('GET', '/msg/metricas?canal=whatsapp1&dias=7')).j;
-  chk('"Concluído" conta como atendimento resolvido na hora (sai de esperando e entra no tempo de resposta)', !m1.aguardando.maisAntigas.some((x) => x.id === cm1) && m1.perguntasRespondidas === m0.perguntasRespondidas + 1 && m1.encerramentos.concluido >= 1, [m0.perguntasRespondidas, m1.perguntasRespondidas, m1.encerramentos]);
+  chk('"Concluído" resolve sem inventar uma resposta enviada', !m1.aguardando.maisAntigas.some((x) => x.id === cm1) && m1.perguntasRespondidas === m0.perguntasRespondidas && m1.resolvidosSemResposta === m0.resolvidosSemResposta + 1 && m1.encerramentos.concluido >= 1, [m0.perguntasRespondidas, m1.perguntasRespondidas, m1.encerramentos]);
   chk('lista mostra o motivo da encerrada', (await A('GET', '/msg/conversas?canal=whatsapp1&filtro=encerradas')).j.conversas.find((x) => x.id === cm1).encerrada_motivo === 'concluido');
   await wh('/wh/wafly/1/' + seg, msg('MT2', '5588966660001', 'Voltei, e o rosa?', { senderName: 'Bia', momment: Date.now() - 3600000 }));
   chk('cliente escreve de novo: reabre e o motivo sai (o histórico fica)', (await conv('whatsapp1', '5588966660001')).encerrada_motivo === '' && (await DB.prepare('SELECT COUNT(*) n FROM msg_encerramento WHERE conversa_id=?').bind(cm1).first()).n === 1);

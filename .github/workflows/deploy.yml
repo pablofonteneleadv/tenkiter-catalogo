@@ -83,6 +83,8 @@ jobs:
       # 38833465713, 38837548442 e 38840046234 ninguem chegou a conferir o ar.
       - name: Conferir a versão oferecida pelo atualizador Android
         id: android_manifesto
+        env:
+          GH_TOKEN: ${{ github.token }}
         continue-on-error: true
         run: python3 scripts/deploy/verificar_android_manifesto.py --attempts 6 --delay 5
 
@@ -91,6 +93,7 @@ jobs:
       - name: Recuperar publicação do manifesto Android na borda
         if: steps.android_manifesto.outcome == 'failure'
         env:
+          GH_TOKEN: ${{ github.token }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           PURGE_ALVO: https://tenkitermodas.com.br/android/latest.json

@@ -188,6 +188,15 @@ with sync_playwright() as p:
     ultimo = st['ig']['msg']['envios'][-1]
     chk('depois de cancelar, o envio seguinte NAO leva citacao', not ultimo.get('citada'), ultimo)
 
+    # Retry mantém sua própria citação; não altera a próxima composição.
+    citador_da(pg, 'entrada').first.click()
+    st['ig']['msg']['envio']='erro'
+    pg.fill('#ms-texto','resposta citada com falha');pg.click('#ms-enviar');pg.wait_for_selector('[data-ms=reenviar]')
+    st['ig']['msg']['envio']='ok';pg.click('[data-ms=reenviar]');pg.wait_for_timeout(800)
+    chk('retry não restaura citação invisível no compositor',pg.locator('#ms-citar').is_hidden())
+    pg.fill('#ms-texto','mensagem nova após retry');pg.click('#ms-enviar');pg.wait_for_timeout(800)
+    chk('mensagem nova após retry não leva a citação anterior',not st['ig']['msg']['envios'][-1].get('citada'))
+
     chk('1440px sem erro JS', not erros, erros[:2])
     viol = axe(pg, '#ms-conversa')
     chk('1440px axe sem criticos/severos na conversa', not viol, viol)

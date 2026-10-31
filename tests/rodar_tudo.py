@@ -135,6 +135,11 @@ SUITES = [  # (arquivo, como saber que passou)
     # --- #305 (retomado em 7.40.34): equipe, presença, atividade e Nova conversa ---
     ("worker_equipe_inicio.js", lambda o: not o.strip()),  # Worker: presença, equipe, trilha e envio pelo WhatsApp na Nova conversa
     ("mensagens_equipe_inicio_ui.py", lambda o: "axe aprovados" in o),  # gavetas, heartbeat, envio, Instagram sem envio e axe
+    ("worker_video_preparo.js", lambda o: "OK: ACL/isolamento" in o),
+    ("android_manifest_release.py", lambda o: "OK: release estável" in o),
+    ("transcode_profiles.py", lambda o: "OK: HEVC" in o),
+    ("reparos_integrados_ui.py", lambda o: "OK 1440" in o),
+    ("postagens_video_status.py", lambda o: "OK 320" in o),
 ]
 
 # Testes que LEEM o .gs.txt do backend. O .gs.txt não fica no repositório público (fica no cofre privado), então no GitHub
