@@ -6,6 +6,9 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.40.46 — 01/11/2026
+- Janelas do site (TKCamadas): fecham mesmo quando o navegador pula o passo do histórico — no app Android, o ← do topo não respondia na conversa aberta pelo aviso.
+
 ## [7.40.45] - 2026-11-01
 
 - Mensageiro com topo e seções compactos, filtros sob demanda e indicação dos filtros ativos; responsável e histórico deixam de disputar espaço com o telefone.
