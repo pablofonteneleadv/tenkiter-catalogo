@@ -3226,6 +3226,7 @@ async function pessoaAtendimento_(env, id) {
   const key = c.pessoa || 'ig:'+c.contato;
   const pessoa = await env.DB.prepare('SELECT nome,whatsapp,segundo FROM msg_pessoa WHERE id=?').bind(key).first();
   const canais = (await env.DB.prepare('SELECT '+MSG_COLS_CONVERSA_+' FROM msg_conversa WHERE grupo=0 AND ('+MSG_IDENTIDADE_SQL_+'=? OR id=?) ORDER BY ultima_em DESC LIMIT 50').bind(key,id).all()).results;
+  try{await relacionamentosAtendimento_(env,[c,...canais]);}catch(_){/* Histórico não impede editar o contato. */}
   return { ok:true, conversa:c, pessoa:key, nome:(pessoa && pessoa.nome)||c.nome||'', whatsapp:(pessoa && pessoa.whatsapp)||(c.canal!=='instagram'?c.contato:''), segundo:(pessoa && pessoa.segundo)||'', canais:canais };
 }
 async function salvarPessoaAtendimento_(env, d) {
@@ -4781,7 +4782,8 @@ export function resumirRelacionamento_(linhas,cfg,calculadoEm){
   const pontos=Math.max(0,Math.min(100,bruto));return {pontos,faixa:pontos>=70?'Alta':pontos<40?'Baixa':'Normal',base:cfg.base,totalEventos,historico,motivos,semHistorico:!motivos.length,calculadoEm};
 }
 async function relacionamentosAtendimento_(env,conversas){
-  const individuais=conversas.filter(c=>!c.grupo),alvos=[...new Set(individuais.map(c=>c.pessoa||'conversa:'+c.id))].sort();if(!alvos.length)return;
+  const individuais=conversas.filter(c=>!c.grupo);if(individuais.length>50){for(let i=0;i<individuais.length;i+=50)await relacionamentosAtendimento_(env,individuais.slice(i,i+50));return;}
+  const alvos=[...new Set(individuais.map(c=>c.pessoa||'conversa:'+c.id))].sort();if(!alvos.length)return;
   const cfg=await prioridadeCfg_(env),ck=new Request('https://gestor.invalid/relacionamento-v1/'+cfg.versao+'/'+await sha(JSON.stringify(alvos)));let mapa;
   try{const r=await caches.default.match(ck);if(r)mapa=await r.json();}catch(_){}
   if(!mapa){const ms=Date.now(),t=new Date(ms).toISOString(),args=[];
@@ -5645,6 +5647,7 @@ export default {
         const d0 = Date.parse(url.searchParams.get('desde') || ''), desde = new Date((isNaN(d0) ? Date.now() - 60000 : d0) - 3000).toISOString();
         const conv = Number(url.searchParams.get('conversa')) || 0, depois = Number(url.searchParams.get('depois')) || 0, st0 = Date.parse(url.searchParams.get('st') || ''), st = new Date((isNaN(st0) ? Date.now() - 60000 : st0) - 3000).toISOString();
         const cs = await env.DB.prepare('SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE atualizada_em>=? AND total>0 ORDER BY atualizada_em DESC LIMIT 100').bind(desde).all();
+        try{await relacionamentosAtendimento_(env,cs.results);}catch(_){/* Campo opcional, sem impedir recebimento. */}
         let mensagens = [];
         if (conv) mensagens = (await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=? AND (id>? OR status_em>=?) ORDER BY enviada_em, id LIMIT 200').bind(conv, depois, st).all()).results;
         const saude = url.searchParams.get('cont') === '1' ? await saudeAvisos_(env) : undefined;

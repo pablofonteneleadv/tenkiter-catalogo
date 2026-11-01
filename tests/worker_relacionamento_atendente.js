@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict'), fs = require('fs'), path = require('path'), os = require('os');
 const { DatabaseSync } = require('node:sqlite');
 const sqlite = new DatabaseSync(':memory:');
-const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; return st; }, async first() { return sqlite.prepare(sql).get(...args) || null; }, async all() { return { results: sqlite.prepare(sql).all(...args) }; }, async run() { return st._run(); }, _run() { const r = sqlite.prepare(sql).run(...args); return { meta: { changes: r.changes, last_row_id: Number(r.lastInsertRowid) } }; } }; return st; }, async batch(xs) { sqlite.exec('BEGIN'); try { const r = xs.map(x => x._run()); sqlite.exec('COMMIT'); return r; } catch (e) { sqlite.exec('ROLLBACK'); throw e; } } };
+const DB = { prepare(sql) { let args = []; const st = { bind(...x) { assert(x.length<=100,'Limite de parâmetros D1');args = x; return st; }, async first() { return sqlite.prepare(sql).get(...args) || null; }, async all() { return { results: sqlite.prepare(sql).all(...args) }; }, async run() { return st._run(); }, _run() { const r = sqlite.prepare(sql).run(...args); return { meta: { changes: r.changes, last_row_id: Number(r.lastInsertRowid) } }; } }; return st; }, async batch(xs) { sqlite.exec('BEGIN'); try { const r = xs.map(x => x._run()); sqlite.exec('COMMIT'); return r; } catch (e) { sqlite.exec('ROLLBACK'); throw e; } } };
 
 (async () => {
   const tmp = path.join(os.tmpdir(), 'tk-relacionamento-teste.mjs');
@@ -24,11 +24,12 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
 
   await chamar('/msg/config');
   const now=Date.now(),at=ms=>new Date(now-ms).toISOString();
-  const criar=(canal,contato,pessoa,grupo=0)=>Number(sqlite.prepare("INSERT INTO msg_conversa(canal,contato,pessoa,nome,grupo,total,ultima_em,ult_dir,ult_entrada_em,nao_lidas) VALUES(?,?,?,'Cliente simulado',?,1,?,'entrada',?,2)").run(canal,contato,pessoa,grupo,at(1000),at(1000)).lastInsertRowid);
+  const criar=(canal,contato,pessoa,grupo=0)=>Number(sqlite.prepare("INSERT INTO msg_conversa(canal,contato,pessoa,nome,grupo,total,ultima_em,ult_dir,ult_entrada_em,atualizada_em,nao_lidas) VALUES(?,?,?,'Cliente simulado',?,1,?,'entrada',?,?,2)").run(canal,contato,pessoa,grupo,at(1000),at(1000),at(1000)).lastInsertRowid);
   const a=criar('whatsapp1','5588999000011','cliente-1'),b=criar('whatsapp2','5588999000012','cliente-1'),outro=criar('whatsapp1','5588999000013','cliente-2'),grupo=criar('whatsapp1','123-group','',1);
   const enc=(id,motivo,em)=>sqlite.prepare("INSERT INTO msg_encerramento(conversa_id,canal,pessoa,motivo,em) SELECT id,canal,pessoa,?,? FROM msg_conversa WHERE id=?").run(motivo,em,id);
   for(let i=0;i<15;i++){enc(a,'sem_resposta',at(86400000+i*1000));enc(b,'sem_resposta',at(86400000+i*1000));}
   enc(a,'vendeu',at(120*86400000));enc(outro,'vendeu',at(10000));
+  const pessoa=(await chamar('/msg/pessoa?conversa='+a)).j;assert.equal(pessoa.conversa.relacionamento.pontos,35);assert(pessoa.canais.every(c=>c.relacionamento.pontos===35),'Editar vínculo não perde resumo no cache nativo');
   // Conta comum, sem métricas ou gestão, pode consultar o contexto do cliente.
   cache.clear();kv.clear();global.fetch=async()=>Response.json({ok:true,usuario:{nome:'Equipe',permissoes:['catalogo_admin','painel_simples']}});
   const r=await chamar('/msg/relacionamento?conversa='+a);assert.equal(r.status,200);const h=r.j.relacionamento;
@@ -41,6 +42,8 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   assert.equal((await chamar('/msg/mensagens?conversa='+a)).j.conversa.relacionamento.pontos,35);assert.equal(sqlite.prepare('SELECT nao_lidas FROM msg_conversa WHERE id=?').get(a).nao_lidas,2,'Consultar histórico não marca leitura');
   assert.equal((await chamar('/msg/gestor/prioridade')).status,403,'Consultar cliente não concede gestão');assert.equal((await chamar('/msg/relacionamento?conversa='+grupo)).status,404);assert.equal((await chamar('/msg/relacionamento?conversa=-1')).status,400);assert.equal((await chamar('/msg/relacionamento?conversa=99999')).status,404);
   const sem=criar('instagram','17840000','');assert.equal((await chamar('/msg/relacionamento?conversa='+sem)).j.relacionamento.totalEventos,0);
+  for(let i=0;i<80;i++)criar('whatsapp2','5588999'+String(1000+i),'pessoa-'+i);
+  const delta=(await chamar('/msg/novidades?desde='+encodeURIComponent(at(60000)))).j;assert(delta.conversas.length>50);assert.equal(delta.conversas.find(c=>c.id===a).relacionamento.pontos,35);assert(delta.conversas.filter(c=>!c.grupo).every(c=>Number.isInteger(c.relacionamento?.pontos)),'Incremental preserva resumo para mais de50 clientes sem exceder parâmetros');
   // O vínculo atual resolve também aliases, sem reunir clientes pelo nome.
   cache.clear();sqlite.prepare("INSERT INTO msg_pessoa_alias(canal,contato,pessoa) VALUES('whatsapp1','5588999000011','cliente-alias')").run();assert.equal((await chamar('/msg/relacionamento?conversa='+a)).j.relacionamento.historico.find(x=>x.motivo==='sem_resposta').total,15);
   const semSessao=await W.default.fetch(new Request('https://worker.test/msg/relacionamento?conversa='+a),env,{});assert.equal(semSessao.status,401);

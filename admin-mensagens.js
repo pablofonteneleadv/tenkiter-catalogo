@@ -3295,6 +3295,7 @@
       }
       if (Array.isArray(r.notas) && sincronizarNotas_(r.notas)) pintarFio(false);
       const mudou = r.conversas.find((c) => c.id === aberta.id); if (mudou) aberta = Object.assign({}, aberta, mudou, { nao_lidas: aberta.nao_lidas });
+      const rel=$('ms-conversa')?.querySelector('.ms-relacionamento-abrir');if(rel)rel.textContent=rotuloRelacionamento_(aberta.relacionamento);
       const fio = $('ms-fio'), novas = r.mensagens.filter((m) => !msgs.some((x) => x.id === m.id));
       const mudancas = r.mensagens.filter((m) => msgs.some((x) => x.id === m.id && Object.keys(m).some(k=>x[k]!==m[k])));
       if (novas.length || mudancas.length) {

@@ -11,12 +11,12 @@ H={'pontos':35,'faixa':'Baixa','base':50,'totalEventos':15,'historico':[{'motivo
 with sync_playwright() as p:
  b=p.chromium.launch(args=['--no-sandbox'])
  for w,h in [(320,700),(390,844),(412,915),(1440,900)]:
-  ctx=b.new_context(viewport={'width':w,'height':h},service_workers='block');ctx.add_init_script(SESSION)
-  st=install(ctx,perms=PERMS_ALL);s=mock_msg.novo_estado();st['ig']['msg']=s;s['convs'][0]['relacionamento']=H;calls=[];falhar=[False];vazio=[False]
+  ctx=b.new_context(viewport={'width':w,'height':h},service_workers='block');ctx.add_init_script(SESSION);ctx.add_init_script('window.TK_MENSAGENS_POLL_MS=400;')
+  st=install(ctx,perms=PERMS_ALL);s=mock_msg.novo_estado();st['ig']['msg']=s;s['convs'][0]['relacionamento']=H;calls=[];falhar=[False];vazio=[False];resumo=[dict(H)]
   def api(route):
    if urlparse(route.request.url).path=='/msg/relacionamento':
     calls.append(route.request.method);assert route.request.method=='GET'
-    route.fulfill(json={'ok':False,'erro':'Falha simulada'} if falhar[0] else {'ok':True,'relacionamento':{**H,'totalEventos':0,'historico':[],'motivos':[]} if vazio[0] else H});return
+    route.fulfill(json={'ok':False,'erro':'Falha simulada'} if falhar[0] else {'ok':True,'relacionamento':{**resumo[0],'pontos':resumo[0]['base'],'totalEventos':0,'historico':[],'motivos':[]} if vazio[0] else resumo[0]});return
    route.fallback()
   ctx.route('**/*',api)
   pg=ctx.new_page();errors=[];pg.on('pageerror',lambda e:errors.append(str(e)));pg.goto(BASE+'admin.html');pg.wait_for_timeout(1700);pg.click('#details-ferramentas > summary');pg.click('#btn-abrir-mensagens');pg.wait_for_selector('#ms-lista .ms-conv');pg.wait_for_timeout(650)
@@ -36,6 +36,8 @@ with sync_playwright() as p:
    pg.screenshot(path=str(OUT/f'detalhe-{w}-{zoom}.png'))
   pg.get_by_text('Como a nota foi calculada',exact=True).click();assert '15 ocorrência(s)' in pg.inner_text('#ms-gaveta');assert '5 conta(m)' in pg.inner_text('#ms-gaveta')
   pg.keyboard.press('Escape');pg.wait_for_selector('#ms-gaveta',state='detached');assert pg.locator('.ms-relacionamento-abrir').evaluate('e=>e===document.activeElement');assert s['lidas']==lidas;assert not s['envios']
+  if w==390:
+   resumo[0]={**H,'pontos':36,'base':51};s['convs'][0]['relacionamento']=resumo[0];s['convs'][0]['atualizada_em']=mock_msg.iso(-1);pg.wait_for_function("document.querySelector('.ms-relacionamento-abrir').textContent==='Hist. 36'",timeout=10000);assert s['lidas']==lidas
   # Falha e vazio continuam distinguíveis da nota e oferecem saída/retry.
   falhar[0]=True;target.click();pg.wait_for_selector('#ms-gaveta [data-ms=relacionamento]',state='visible');assert 'Não consegui' in pg.inner_text('#ms-gaveta');falhar[0]=False;vazio[0]=True;pg.locator('#ms-gaveta [data-ms=relacionamento]').click();pg.wait_for_function("document.querySelector('#ms-gaveta').textContent.includes('Nenhum encerramento')");assert not errors,errors
   if w==320:
