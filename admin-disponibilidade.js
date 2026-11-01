@@ -53,6 +53,7 @@
               const jaRetirada=op.action==='arquivarMidia'&&/^(Essa foto|Esse vídeo) já não está no produto/.test(r?.erro||'');
               if(!r?.ok&&!jaRetirada)throw Error(r?.erro||'Não foi possível confirmar o salvamento.');
               job.indice++;
+              if(op.action!=='arquivarRapido'&&typeof window.tkEsteiraToque==='function')window.tkEsteiraToque(job.id); // v7.41.0: tamanho, cor ou mídia retirados contam como conferência
               localStorage.setItem(job.chave,JSON.stringify(job));
             }
             localStorage.removeItem(job.chave);

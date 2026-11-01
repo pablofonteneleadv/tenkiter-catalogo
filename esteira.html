@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0d0d">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap">
+<title>Esteira — TENKiTER Modas</title>
+<style>
+  /* v7.41.0 — Esteira de Produtos: celular primeiro, mesma identidade do painel (preto, laranja, areia) */
+  :root { --preto:#0d0d0d; --laranja:#E67E22; --laranja-txt:#A85200; --areia:#F5F1E8; --branco:#fff; --linha:#e5dfd3; --suave:#5c5650; --verde:#198754; --verde-fundo:#e6f4ec; --alerta:#8a4b00; --alerta-fundo:#fdf0dc; --vermelho:#c62828; --vermelho-fundo:#fdecea; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  html, body { margin:0; }
+  body { font-family:"Inter",-apple-system,Roboto,Arial,sans-serif; background:var(--areia); color:var(--preto); line-height:1.45; padding-bottom:calc(32px + env(safe-area-inset-bottom,0px)); }
+  header { position:sticky; top:0; z-index:20; background:var(--preto); color:#fff; padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px)); border-bottom:2px solid var(--laranja); }
+  .cab { display:flex; align-items:center; gap:10px; min-height:44px; }
+  .cab h1 { font-family:"Poppins",sans-serif; font-size:1.25rem; margin:0; color:var(--laranja); flex:1; }
+  .cab .quem { font-size:.85rem; color:#d9d2c5; }
+  nav.abas { display:flex; gap:4px; overflow-x:auto; padding:8px 0 0; }
+  nav.abas button { flex:none; min-height:44px; padding:0 14px; border:0; border-radius:10px 10px 0 0; background:transparent; color:#d9d2c5; font:600 .95rem "Inter",sans-serif; cursor:pointer; }
+  nav.abas button[aria-selected="true"] { background:var(--areia); color:var(--preto); }
+  main { max-width:760px; margin:0 auto; padding:16px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px)); display:grid; gap:14px; }
+  .card { background:var(--branco); border:1px solid var(--linha); border-radius:14px; padding:14px; display:grid; gap:10px; min-width:0; }
+  .card h2, .card h3 { margin:0; font-size:1.05rem; }
+  .muted { color:var(--suave); font-size:.88rem; }
+  .barra { height:9px; background:var(--linha); border-radius:99px; overflow:hidden; }
+  .barra i { display:block; height:100%; background:var(--laranja); border-radius:99px; transition:width .3s; }
+  .progresso { display:flex; align-items:baseline; gap:10px; }
+  .progresso b { font-size:1.6rem; font-variant-numeric:tabular-nums; }
+  .grupo-tit { font-size:.75rem; letter-spacing:.07em; text-transform:uppercase; font-weight:700; color:var(--suave); margin:6px 2px -4px; }
+  .peca { display:flex; align-items:center; gap:12px; width:100%; text-align:left; background:var(--branco); border:1px solid var(--linha); border-radius:12px; padding:10px; min-height:72px; cursor:pointer; font:inherit; color:inherit; }
+  .peca:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline:3px solid var(--laranja); outline-offset:2px; }
+  .peca img, .peca .semfoto { width:52px; height:64px; border-radius:8px; object-fit:cover; flex:none; background:var(--linha); }
+  .peca .t { flex:1; min-width:0; }
+  .peca .t b { display:block; overflow-wrap:anywhere; }
+  .peca.feita { opacity:.62; }
+  .chip { display:inline-flex; align-items:center; border-radius:999px; padding:3px 10px; font-size:.78rem; font-weight:600; white-space:nowrap; border:1px solid var(--linha); background:var(--areia); }
+  .chip.ok { background:var(--verde-fundo); color:var(--verde); border-color:transparent; }
+  .chip.al { background:var(--alerta-fundo); color:var(--alerta); border-color:transparent; }
+  .chip.er { background:var(--vermelho-fundo); color:var(--vermelho); border-color:transparent; }
+  .funcao { border-left:4px solid var(--laranja); }
+  .funcao p { margin:0; white-space:pre-wrap; }
+  button.bt, a.bt { min-height:48px; border-radius:999px; border:1px solid var(--linha); background:var(--areia); color:var(--preto); font:700 .95rem "Inter",sans-serif; padding:0 18px; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
+  button.bt.prim { background:var(--preto); color:#fff; border-color:var(--preto); }
+  button.bt.laranja { background:var(--laranja); color:var(--preto); border-color:var(--laranja); }
+  button.bt[aria-pressed="true"] { background:var(--preto); color:#fff; border-color:var(--preto); }
+  button.bt:disabled { opacity:.55; cursor:default; }
+  .dois { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  label.campo { display:grid; gap:4px; font-size:.88rem; font-weight:600; }
+  input[type=text], input[type=tel], input[type=number], input[type=password], select, textarea { min-height:46px; border:1px solid #cfc6b6; border-radius:10px; padding:8px 12px; font:inherit; background:#fff; color:var(--preto); width:100%; }
+  textarea { min-height:90px; resize:vertical; }
+  .erro { color:var(--vermelho); font-size:.9rem; }
+  .ok { color:var(--verde); font-size:.9rem; }
+  .vazio { text-align:center; padding:24px 12px; color:var(--suave); }
+  /* folha de conferência */
+  .fundo { position:fixed; inset:0; z-index:50; background:rgba(13,13,13,.45); display:flex; align-items:flex-end; justify-content:center; }
+  .folha { background:var(--areia); width:100%; max-width:560px; max-height:92dvh; border-radius:18px 18px 0 0; display:flex; flex-direction:column; }
+  .folha .topo { display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--linha); }
+  .folha .topo b { flex:1; font-size:1rem; overflow-wrap:anywhere; }
+  .folha .corpo { overflow:auto; padding:14px; display:grid; gap:12px; }
+  .folha .pe { padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px)); border-top:1px solid var(--linha); background:var(--branco); border-radius:0; }
+  .folha .pe button { width:100%; }
+  .folha h3, .folha p { margin:0; }
+  .fechar { min-width:44px; min-height:44px; border:0; border-radius:50%; background:var(--branco); font-size:1.2rem; cursor:pointer; }
+  .datas { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; font-size:.78rem; }
+  .datas div { background:var(--branco); border:1px solid var(--linha); border-radius:10px; padding:6px 8px; }
+  .datas b { display:block; font-size:.9rem; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chips button { min-height:44px; min-width:52px; border-radius:999px; border:1px solid #cfc6b6; background:#fff; font:600 .92rem "Inter",sans-serif; padding:0 14px; cursor:pointer; }
+  .chips button[aria-pressed="false"] { background:var(--areia); color:#8a8178; text-decoration:line-through; }
+  .aviso { border-radius:10px; padding:10px 12px; font-size:.9rem; }
+  .aviso.al { background:var(--alerta-fundo); color:var(--alerta); }
+  .foto-grande { width:96px; height:120px; border-radius:10px; object-fit:cover; background:var(--linha); flex:none; }
+  /* configurações */
+  .linha-eq { display:grid; gap:8px; border-top:1px solid var(--linha); padding-top:10px; }
+  .linha-eq:first-of-type { border-top:0; padding-top:0; }
+  .marcas { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:.9rem; }
+  .marcas label { display:inline-flex; align-items:center; gap:6px; min-height:44px; }
+  .marcas input { width:22px; height:22px; }
+  .tabela { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; min-width:520px; font-size:.88rem; }
+  th, td { border-bottom:1px solid var(--linha); padding:6px; text-align:left; }
+  td select { min-height:40px; padding:4px 6px; }
+  .num { font-variant-numeric:tabular-nums; }
+  .pesos { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  @media (min-width:700px) { .fundo { align-items:center; } .folha { border-radius:18px; } }
+  @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="cab"><h1>Esteira</h1><span class="quem" id="quem"></span></div>
+  <nav class="abas" id="abas" role="tablist" aria-label="Áreas da Esteira" hidden></nav>
+</header>
+<main id="app" aria-live="polite"><div class="card">Carregando…</div></main>
+
+<script src="common.js?v=7.41.0"></script>
+<script src="conta.js"></script>
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const app = $('app');
+  let EU = null, ABA = 'hoje', HOJE = null, CATALOGO = null, usuario = null;
+
+  async function srv(rota, corpo) {
+    const s = getSessao(); if (!s) return { ok: false, erro: 'Entre na sua conta para continuar.', exigeLogin: true };
+    try {
+      const r = await fetch(INSTAGRAM_URL + rota, { method: corpo ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: corpo ? JSON.stringify(corpo) : undefined });
+      const j = await r.json().catch(() => ({ ok: false, erro: 'O servidor respondeu de um jeito inesperado. Tente de novo.' }));
+      if (r.status === 401) j.exigeLogin = true;
+      return j;
+    } catch (e) { return { ok: false, erro: 'Sem conexão. Verifique a internet e tente de novo.', semRede: true }; }
+  }
+  const dataBR = (iso) => { const t = Date.parse(iso || ''); if (!Number.isFinite(t)) return '—'; const d = new Date(t); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getFullYear()).slice(2); };
+  const haDias = (iso) => { const t = Date.parse(iso || ''); if (!Number.isFinite(t)) return null; return Math.floor((Date.now() - t) / 864e5); };
+  const lista = (v) => String(v || '').split(',').map((x) => x.trim()).filter(Boolean);
+  function foto(url, cls) { if (!url) return el('div', cls || 'semfoto'); const i = el('img', cls); i.alt = ''; i.loading = 'lazy'; i.decoding = 'async'; i.src = typeof fotoMini === 'function' ? fotoMini(url, 160) : url; i.onerror = () => { i.replaceWith(el('div', cls || 'semfoto')); }; return i; }
+
+  /* ---------- login ---------- */
+  function telaLogin(msg) {
+    $('abas').hidden = true; $('quem').textContent = '';
+    app.replaceChildren();
+    const c = el('div', 'card'); c.append(el('h2', '', 'Entrar'), el('p', 'muted', 'Use o mesmo e-mail, WhatsApp ou CPF e a mesma senha do painel e do Mensageiro.'));
+    const w = el('input'); w.type = 'text'; w.id = 'login-w'; w.placeholder = 'E-mail, WhatsApp ou CPF'; w.autocomplete = 'username'; w.setAttribute('autocapitalize', 'none');
+    const s = el('input'); s.type = 'password'; s.id = 'login-s'; s.placeholder = 'Senha'; s.autocomplete = 'current-password';
+    const er = el('p', 'erro', msg || ''); er.hidden = !msg;
+    const go = el('button', 'bt prim', 'Entrar'); go.type = 'button';
+    const esq = el('button', 'bt', 'Esqueci a senha'); esq.type = 'button';
+    go.onclick = async () => { go.disabled = true; const r = await entrarComSenha(w.value, s.value); go.disabled = false; if (!r || !r.ok) { er.textContent = (r && r.erro) || 'Não foi possível entrar.'; er.hidden = false; return; } iniciar(); };
+    s.onkeydown = (e) => { if (e.key === 'Enter') go.click(); };
+    esq.onclick = () => { if (window.TKConta) TKConta.abrirRecuperar({ identificador: w.value, chamar: (d) => apiPost(d), aoEntrar: (r) => { salvarSessao(r.usuario.whatsapp, r.sessao); iniciar(); } }); };
+    c.append(w, s, er, go, esq); app.append(c); w.focus();
+  }
+  function falha(msg, tentar) {
+    app.replaceChildren(); const c = el('div', 'card'); c.append(el('h2', '', 'Não foi possível abrir'), el('p', '', msg || 'Tente de novo.'));
+    const b = el('button', 'bt prim', 'Tentar de novo'); b.type = 'button'; b.onclick = tentar || iniciar; c.append(b); app.append(c);
+  }
+
+  /* ---------- abas ---------- */
+  function desenharAbas() {
+    const nav = $('abas'); nav.replaceChildren();
+    const abas = [['hoje', 'Hoje']].concat(EU && EU.admin ? [['painel', 'Painel'], ['config', 'Configurações']] : []);
+    nav.hidden = abas.length < 2;
+    abas.forEach(([id, rot]) => { const b = el('button', '', rot); b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(ABA === id)); b.onclick = () => { ABA = id; desenharAbas(); abrirAba(); }; nav.append(b); });
+  }
+  function abrirAba() { if (ABA === 'painel') return telaPainel(); if (ABA === 'config') return telaConfig(); return telaHoje(); }
+
+  /* ---------- Hoje ---------- */
+  async function telaHoje(recarregar) {
+    if (!HOJE || recarregar !== false) { app.replaceChildren(el('div', 'card', 'Montando a sua lista de hoje…')); const r = await srv('/esteira/hoje'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaHoje()); HOJE = r; EU = r.eu; $('quem').textContent = EU.nome || ''; desenharAbas(); }
+    app.replaceChildren();
+    const r = HOJE;
+    const prog = el('div', 'card'); prog.append(el('h2', '', 'Minha conferência'));
+    if (!r.total) prog.append(el('p', 'muted', EU.confere ? 'Nenhuma peça para conferir hoje: tudo foi conferido ou atualizado nos últimos dias.' : 'Você não está marcada para conferir peças. O administrador muda isso em Configurações.'));
+    else {
+      const pl = el('div', 'progresso'); pl.append(el('b', 'num', r.feitas + '/' + r.total), el('span', 'muted', r.feitas >= r.total ? 'Tudo conferido hoje. Obrigada!' : 'peças ao longo do dia, em qualquer ordem'));
+      const bar = el('div', 'barra'); const i = el('i'); i.style.width = Math.round((r.feitas / r.total) * 100) + '%'; bar.append(i);
+      const grupos = [...new Set(r.lista.map((x) => String(x.grupo || '').split(' · ')[0]).filter(Boolean))].slice(0, 3);
+      prog.append(pl, bar); if (grupos.length) prog.append(el('p', 'muted', 'Hoje: ' + grupos.join(' · ')));
+    }
+    app.append(prog);
+    r.funcoes.forEach((f) => { const c = el('div', 'card funcao'); c.append(el('h3', '', 'Sua função hoje: ' + f.funcao)); c.append(el('p', f.instrucoes ? '' : 'muted', f.instrucoes || 'Sem instruções cadastradas para esta função.')); app.append(c); });
+    if (!r.funcoes.length && r.escala.some((e) => e.whats)) { const c = el('div', 'card'); c.append(el('h3', '', 'Escala de hoje')); c.append(el('p', 'muted', r.escala.filter((e) => e.whats).map((e) => e.funcao + ': ' + (e.nome || '—')).join(' · '))); app.append(c); }
+    let grupoAtual = null;
+    r.lista.forEach((p) => {
+      if (p.grupo && p.grupo !== grupoAtual) { grupoAtual = p.grupo; app.append(el('p', 'grupo-tit', p.grupo)); }
+      const b = el('button', 'peca' + (p.feito ? ' feita' : '')); b.type = 'button';
+      const t = el('div', 't'); t.append(el('b', '', p.nome));
+      const dCad = haDias(p.cadastro), dConf = haDias(p.conferido_em);
+      t.append(el('small', 'muted', [p.codigo, dCad != null ? 'cadastrada há ' + dCad + ' dias' : '', p.estoque !== '' && p.estoque != null ? p.estoque + ' un.' : ''].filter(Boolean).join(' · ')));
+      const chip = p.feito ? el('span', 'chip ok', '✓ conferida') : p.sumiu ? el('span', 'chip er', 'fora do site') : dConf == null ? el('span', 'chip er', 'nunca conferida') : el('span', 'chip al', 'conferir');
+      b.append(foto(p.foto), t, chip);
+      b.setAttribute('aria-label', p.nome + (p.feito ? ', já conferida' : ', abrir conferência'));
+      if (!p.sumiu) b.onclick = () => abrirConferencia(p); else b.disabled = true;
+      app.append(b);
+    });
+  }
+
+  /* ---------- conferência ---------- */
+  async function catalogoCompleto() {
+    if (CATALOGO) return CATALOGO;
+    const r = await fetch(API_URL + '?action=list&todos=true').then((x) => x.json()).catch(() => null);
+    if (!r || !Array.isArray(r.produtos)) throw new Error('Não consegui ler o catálogo agora. Tente de novo.');
+    CATALOGO = new Map(r.produtos.map((p) => [String(p.ID), p])); return CATALOGO;
+  }
+  function abrirConferencia(p) {
+    const ant = document.activeElement;
+    const fundo = el('div', 'fundo'), folha = el('div', 'folha'); folha.setAttribute('role', 'dialog'); folha.setAttribute('aria-modal', 'true'); folha.setAttribute('aria-label', 'Conferir ' + p.nome);
+    const topo = el('div', 'topo'), fechar = el('button', 'fechar', '×'); fechar.type = 'button'; fechar.setAttribute('aria-label', 'Fechar');
+    topo.append(el('b', '', 'Conferir peça'), fechar);
+    const corpo = el('div', 'corpo'), pe = el('div', 'pe');
+    const id = el('div'); id.style.cssText = 'display:flex;gap:12px;align-items:center';
+    const tid = el('div'); tid.append(el('b', '', p.nome), el('div', 'muted', p.codigo || ''));
+    id.append(foto(p.foto, 'foto-grande'), tid);
+    const datas = el('div', 'datas');
+    [['Cadastro', p.cadastro], ['Última atualização', p.atualizado_em], ['Última conferência', p.conferido_em]].forEach(([k, v]) => { const d = el('div'); d.append(el('b', '', dataBR(v)), document.createTextNode(k)); datas.append(d); });
+    const estado = { achou: true, estoque: '', tamanhos: lista(p.tamanhos), cores: lista(p.cores), fotoNova: false };
+    const tamOn = new Set(estado.tamanhos), corOn = new Set(estado.cores);
+    const tAchou = el('h3', '', 'Está na loja?'), achou = el('div', 'dois');
+    const bSim = el('button', 'bt', 'Sim, achei'), bNao = el('button', 'bt', 'Não achei'); bSim.type = bNao.type = 'button';
+    const marcarAchou = (v) => { estado.achou = v; bSim.setAttribute('aria-pressed', String(v)); bNao.setAttribute('aria-pressed', String(!v)); detalhes.hidden = !v; };
+    bSim.onclick = () => marcarAchou(true); bNao.onclick = () => marcarAchou(false); achou.append(bSim, bNao);
+    const detalhes = el('div'); detalhes.style.cssText = 'display:grid;gap:12px';
+    const lEst = el('label', 'campo'); lEst.append(document.createTextNode('Quantas peças você contou?'));
+    const iEst = el('input'); iEst.type = 'number'; iEst.min = '0'; iEst.inputMode = 'numeric'; iEst.id = 'conf-estoque'; iEst.placeholder = 'Digite o que contou';
+    const avisoEst = el('div', 'aviso al'); avisoEst.hidden = true;
+    iEst.oninput = () => { estado.estoque = iEst.value; const site = p.estoque === '' || p.estoque == null ? null : Number(p.estoque); if (iEst.value !== '' && site != null && Number(iEst.value) !== site) { avisoEst.textContent = 'O site diz ' + site + '. Se você confirmar, o estoque no site passa a ser ' + Number(iEst.value) + '.'; avisoEst.hidden = false; } else avisoEst.hidden = true; };
+    lEst.append(iEst);
+    const blocoChips = (titulo, itens, on) => { const box = el('div'); box.style.cssText = 'display:grid;gap:6px'; if (!itens.length) return box; box.append(el('h3', '', titulo), el('p', 'muted', 'Toque para tirar o que acabou.')); const ch = el('div', 'chips'); itens.forEach((t) => { const b = el('button', '', t); b.type = 'button'; b.setAttribute('aria-pressed', 'true'); b.onclick = () => { if (on.has(t)) on.delete(t); else on.add(t); b.setAttribute('aria-pressed', String(on.has(t))); }; ch.append(b); }); box.append(ch); return box; };
+    const tFoto = el('h3', '', 'As fotos estão boas?'), fotos = el('div', 'dois');
+    const fOk = el('button', 'bt', 'Sim'), fNova = el('button', 'bt', 'Pedir foto nova'); fOk.type = fNova.type = 'button';
+    const marcarFoto = (v) => { estado.fotoNova = v; fOk.setAttribute('aria-pressed', String(!v)); fNova.setAttribute('aria-pressed', String(v)); };
+    fOk.onclick = () => marcarFoto(false); fNova.onclick = () => marcarFoto(true); fotos.append(fOk, fNova); marcarFoto(false);
+    detalhes.append(lEst, avisoEst, blocoChips('Tamanhos disponíveis', estado.tamanhos, tamOn), blocoChips('Cores disponíveis', estado.cores, corOn), tFoto, fotos);
+    const status = el('p', '', ''); status.setAttribute('role', 'status');
+    const salvar = el('button', 'bt laranja', 'Salvar conferência'); salvar.type = 'button';
+    corpo.append(id, datas, tAchou, achou, detalhes, status); pe.append(salvar);
+    folha.append(topo, corpo, pe); fundo.append(folha); marcarAchou(true);
+    const fecharTudo = () => { fundo.remove(); if (window.TKCamadas && TKCamadas.aberta('esteira-conferir')) TKCamadas.desempilhar('esteira-conferir'); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
+    fechar.onclick = fecharTudo; fundo.onclick = (e) => { if (e.target === fundo) fecharTudo(); };
+    fundo.onkeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); fecharTudo(); } };
+    salvar.onclick = async () => {
+      if (estado.achou && iEst.value === '') { status.className = 'erro'; status.textContent = 'Digite quantas peças você contou (pode ser 0).'; iEst.focus(); return; }
+      salvar.disabled = true; status.className = 'muted'; status.textContent = 'Salvando…';
+      const novoTam = estado.tamanhos.filter((t) => tamOn.has(t)), novaCor = estado.cores.filter((c) => corOn.has(c));
+      const mudouEst = estado.achou && String(Number(iEst.value)) !== String(p.estoque === '' ? '' : Number(p.estoque));
+      const mudouTam = estado.achou && novoTam.length !== estado.tamanhos.length, mudouCor = estado.achou && novaCor.length !== estado.cores.length;
+      try {
+        if (mudouEst || mudouTam || mudouCor) {
+          const cat = await catalogoCompleto(), x = cat.get(String(p.id));
+          if (!x) throw new Error('Esta peça não está mais no catálogo. Avise o administrador.');
+          const preco = x.Preco != null ? String(x.Preco) : '';
+          const dados = { action: 'update', id: x.ID, nome: x.Nome || '', categoria: x.Categoria || '', genero: x.Genero || '', preco, estoque: mudouEst ? String(Number(iEst.value)) : (x.Estoque != null ? String(x.Estoque) : ''), tamanhos: mudouTam ? novoTam.join(', ') : (x.Tamanhos || ''), cores: mudouCor ? novaCor.join(', ') : (x.Cores || ''), descricao: x.Descricao || '', novidade: typeof ehNovidade === 'function' ? ehNovidade(x) : false, fotoUrlExistente: String(x.Foto_URL || '').trim(), fotosGaleriaExistentes: String(x.Fotos_Galeria || '').split(',').map((s) => s.trim()).filter(Boolean).join(',') };
+          if (!(Number(String(preco).replace(',', '.')) > 0)) dados.consultarValor = true;
+          const s = getSessao(); const r = await apiPost(Object.assign({ pin: s.sessao, sessao: s.sessao, whatsapp: s.whatsapp, funcionario: EU.nome || '' }, dados));
+          if (!r || !r.ok) throw new Error((r && r.erro) || 'O catálogo não aceitou a mudança. Tente de novo.');
+          Object.assign(x, { Estoque: dados.estoque, Tamanhos: dados.tamanhos, Cores: dados.cores });
+        }
+        const rc = await srv('/esteira/conferir', { id: p.id, achou: estado.achou, estoqueAntes: p.estoque, estoqueDepois: estado.achou ? iEst.value : '', mudouTamanhos: mudouTam, mudouCores: mudouCor, fotoNova: estado.fotoNova });
+        if (!rc.ok) throw new Error(rc.erro || 'Não consegui registrar a conferência.');
+        p.feito = true; if (mudouEst) p.estoque = String(Number(iEst.value));
+        HOJE.feitas = HOJE.lista.filter((y) => y.feito).length;
+        fecharTudo(); telaHoje(false);
+      } catch (e) { salvar.disabled = false; status.className = 'erro'; status.textContent = e.message || 'Não consegui salvar. Tente de novo.'; }
+    };
+    document.body.append(fundo); if (window.TKCamadas) TKCamadas.empilhar('esteira-conferir', () => fundo.remove()); bSim.focus({ preventScroll: true });
+  }
+
+  /* ---------- Painel (Admin total) ---------- */
+  async function telaPainel() {
+    app.replaceChildren(el('div', 'card', 'Carregando o painel…'));
+    const r = await srv('/esteira/painel'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPainel);
+    app.replaceChildren();
+    const c1 = el('div', 'card'); c1.append(el('h2', '', 'Conferência de hoje'));
+    if (!r.progresso.length) c1.append(el('p', 'muted', 'Ninguém da equipe está marcado para conferir. Use Configurações → Equipe.'));
+    r.progresso.forEach((x) => { const l = el('div', 'progresso'); l.append(el('span', '', x.nome || x.whats), el('b', 'num', x.feitas + '/' + x.total)); l.style.justifyContent = 'space-between'; const bar = el('div', 'barra'); const i = el('i'); i.style.width = (x.total ? Math.round(x.feitas / x.total * 100) : 0) + '%'; bar.append(i); c1.append(l, bar); });
+    const c2 = el('div', 'card'); c2.append(el('h2', '', 'Diferença entre site e loja'));
+    const n = r.divergencia30.conferencias, d = r.divergencia30.divergentes;
+    c2.append(el('p', '', n ? d + ' de ' + n + ' conferências dos últimos 30 dias encontraram diferença (' + Math.round(d / n * 100) + '%).' : 'Ainda não há conferências registradas.'));
+    const c3 = el('div', 'card'); c3.append(el('h2', '', 'Idade das peças no site'));
+    if (r.idade) [['0 a 30 dias', r.idade.ate30], ['31 a 60 dias', r.idade.ate60], ['61 a 90 dias', r.idade.ate90], ['mais de 90 dias', r.idade.mais90]].forEach(([k, v]) => { const l = el('div', 'progresso'); l.style.justifyContent = 'space-between'; l.append(el('span', '', k), el('b', 'num', String(v))); c3.append(l); });
+    else c3.append(el('p', 'muted', 'O catálogo não respondeu agora.'));
+    app.append(c1, c2, c3);
+  }
+
+  /* ---------- Configurações (Admin total) ---------- */
+  const DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+  async function telaConfig() {
+    app.replaceChildren(el('div', 'card', 'Carregando as configurações…'));
+    const r = await srv('/esteira/config'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaConfig);
+    app.replaceChildren();
+    const aviso = (box, txt, ok) => { let p = box.querySelector('.retorno'); if (!p) { p = el('p', 'retorno'); p.setAttribute('role', 'status'); box.append(p); } p.className = 'retorno ' + (ok ? 'ok' : 'erro'); p.textContent = txt; };
+    // Equipe
+    const cEq = el('div', 'card'); cEq.append(el('h2', '', 'Equipe'), el('p', 'muted', 'Marque à mão quem confere peças, quem entra no rodízio, quem é atendente e quem pode aceitar produto para o site. O WhatsApp é o mesmo do login da pessoa.'));
+    const salvarPessoa = async (dados, box) => { const x = await srv('/esteira/equipe', dados); if (!x.ok) return aviso(box, x.erro); telaConfig(); };
+    r.equipe.filter((e) => e.ativo).forEach((e) => {
+      const linha = el('div', 'linha-eq'); linha.append(el('b', '', e.nome + ' · ' + e.whats));
+      const marcas = el('div', 'marcas'); const caixas = {};
+      [['confere', 'Confere peças'], ['rodizio', 'Rodízio'], ['atendente', 'Atendente'], ['aceitar', 'Aceita para o site']].forEach(([k, rot]) => { const lb = el('label'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!e[k]; caixas[k] = cb; cb.onchange = () => salvarPessoa({ whats: e.whats, nome: e.nome, confere: caixas.confere.checked, rodizio: caixas.rodizio.checked, atendente: caixas.atendente.checked, aceitar: caixas.aceitar.checked }, linha); lb.append(cb, document.createTextNode(rot)); marcas.append(lb); });
+      const rem = el('button', 'bt', 'Tirar da equipe'); rem.type = 'button'; rem.onclick = () => { if (rem.dataset.confirma) return salvarPessoa({ whats: e.whats, remover: true }, linha); rem.dataset.confirma = '1'; rem.textContent = 'Toque de novo para confirmar'; };
+      linha.append(marcas, rem); cEq.append(linha);
+    });
+    const novo = el('div', 'linha-eq'); novo.append(el('h3', '', 'Incluir pessoa'));
+    const iN = el('input'); iN.type = 'text'; iN.id = 'eq-nome'; iN.placeholder = 'Nome (como aparece para a equipe)';
+    const iW = el('input'); iW.type = 'tel'; iW.id = 'eq-whats'; iW.placeholder = 'WhatsApp com DDD';
+    const bAdd = el('button', 'bt prim', 'Incluir na equipe'); bAdd.type = 'button'; bAdd.onclick = () => salvarPessoa({ whats: iW.value, nome: iN.value, confere: true, rodizio: true }, novo);
+    novo.append(iN, iW, bAdd); cEq.append(novo);
+    const rodizio = r.equipe.filter((e) => e.ativo && e.rodizio);
+    const sel = (valor, aoMudar) => { const s = el('select'); const o0 = el('option', '', '—'); o0.value = ''; s.append(o0); rodizio.forEach((e) => { const o = el('option', '', e.nome); o.value = e.whats; if (e.whats === valor) o.selected = true; s.append(o); }); s.onchange = () => aoMudar(s.value); return s; };
+    // Escala de hoje
+    const cHoje = el('div', 'card'); cHoje.append(el('h2', '', 'Escala de hoje (' + DIAS[new Date(r.hoje + 'T12:00:00').getDay()] + ')'), el('p', 'muted', 'Mude só hoje sem alterar o padrão da semana.'));
+    r.config.funcoes.forEach((f) => { const x = r.escalaHoje[f] || { whats: '' }; const lb = el('label', 'campo'); lb.append(document.createTextNode(f + (x.alterado ? ' · alterado hoje' : ''))); lb.append(sel(x.whats, async (w) => { const y = await srv('/esteira/escala', { tipo: 'dia', data: r.hoje, funcao: f, whats: w }); aviso(cHoje, y.ok ? 'Escala de hoje salva.' : y.erro, y.ok); })); cHoje.append(lb); if (x.alterado) { const v = el('button', 'bt', 'Voltar ao padrão em ' + f); v.type = 'button'; v.onclick = async () => { const y = await srv('/esteira/escala', { tipo: 'dia', data: r.hoje, funcao: f, voltarPadrao: true }); if (y.ok) telaConfig(); else aviso(cHoje, y.erro); }; cHoje.append(v); } });
+    // Padrão semanal
+    const cPad = el('div', 'card'); cPad.append(el('h2', '', 'Padrão da semana'), el('p', 'muted', 'Repete toda semana. Só pessoas marcadas para o rodízio aparecem.'));
+    const tb = el('div', 'tabela'), t = el('table'), th = el('tr'); th.append(el('th', '', 'Dia')); r.config.funcoes.forEach((f) => th.append(el('th', '', f))); t.append(th);
+    DIAS.forEach((nome, dia) => { const tr = el('tr'); tr.append(el('td', '', nome)); r.config.funcoes.forEach((f) => { const atual = (r.escalaPadrao.find((x) => x.dia === dia && x.funcao === f) || {}).whats || ''; const td = el('td'); const s = sel(atual, async (w) => { const y = await srv('/esteira/escala', { tipo: 'padrao', dia, funcao: f, whats: w }); aviso(cPad, y.ok ? 'Padrão salvo.' : y.erro, y.ok); }); s.setAttribute('aria-label', f + ' na ' + nome); td.append(s); tr.append(td); }); t.append(tr); });
+    tb.append(t); cPad.append(tb);
+    // Funções e instruções + regras
+    const cReg = el('div', 'card'); cReg.append(el('h2', '', 'Funções e regras da conferência'));
+    const lF = el('label', 'campo'); lF.append(document.createTextNode('Funções do rodízio (separe por vírgula)')); const iF = el('input'); iF.type = 'text'; iF.id = 'cfg-funcoes'; iF.value = r.config.funcoes.join(', '); lF.append(iF);
+    const instr = {}; const boxI = el('div'); boxI.style.cssText = 'display:grid;gap:10px';
+    r.config.funcoes.forEach((f) => { const lb = el('label', 'campo'); lb.append(document.createTextNode('Instruções de ' + f)); const ta = el('textarea'); ta.id = 'cfg-instr-' + f.replace(/\W+/g, '-'); ta.value = r.config.instrucoes[f] || ''; ta.placeholder = 'O que quem estiver em ' + f + ' precisa cumprir no dia'; instr[f] = ta; lb.append(ta); boxI.append(lb); });
+    const num = (rot, id, v, min, max) => { const lb = el('label', 'campo'); lb.append(document.createTextNode(rot)); const i = el('input'); i.type = 'number'; i.id = id; i.min = String(min); i.max = String(max); i.value = String(v); lb.append(i); return [lb, i]; };
+    const [lPP, iPP] = num('Peças por pessoa por dia', 'cfg-pp', r.config.porPessoa, 1, 60), [lDS, iDS] = num('Não repetir peça conferida ou atualizada há menos de (dias)', 'cfg-ds', r.config.diasSemRepetir, 0, 120);
+    const pesosBox = el('div', 'pesos'), PESOS = { nunca: 'Nunca conferida', diaConf: 'Por dia sem conferência', diaCadastro: 'Por dia desde o cadastro', diaSemEdicao: 'Por dia sem atualização', estoqueBaixo: 'Estoque baixo (1–2 un.)', divergiu: 'Deu diferença antes' }, iPesos = {};
+    Object.keys(PESOS).forEach((k) => { const [lb, i] = num(PESOS[k], 'cfg-peso-' + k, r.config.pesos[k], 0, 500); i.step = 'any'; iPesos[k] = i; pesosBox.append(lb); });
+    const bSal = el('button', 'bt prim', 'Salvar funções e regras'); bSal.type = 'button';
+    bSal.onclick = async () => { const pesos = {}; Object.keys(iPesos).forEach((k) => { pesos[k] = Number(iPesos[k].value); }); const instrucoes = {}; Object.keys(instr).forEach((f) => { instrucoes[f] = instr[f].value; }); const y = await srv('/esteira/config', { config: { porPessoa: Number(iPP.value), diasSemRepetir: Number(iDS.value), funcoes: iF.value.split(',').map((x) => x.trim()).filter(Boolean), instrucoes, pesos } }); if (!y.ok) return aviso(cReg, y.erro); aviso(cReg, 'Salvo. As novas regras valem para as próximas listas.', true); };
+    const bRef = el('button', 'bt', 'Refazer as listas de hoje (só as não começadas)'); bRef.type = 'button';
+    bRef.onclick = async () => { const y = await srv('/esteira/refazer-hoje', {}); aviso(cReg, y.ok ? 'Listas refeitas: ' + y.refeitas + '. Mantidas (já começadas): ' + y.mantidas + '.' : y.erro, y.ok); HOJE = null; };
+    cReg.append(lF, boxI, lPP, lDS, el('h3', '', 'Pesos da escolha das peças'), pesosBox, bSal, bRef);
+    app.append(cEq, cHoje, cPad, cReg);
+  }
+
+  /* ---------- início ---------- */
+  async function iniciar() {
+    if (!getSessao()) return telaLogin('');
+    usuario = null; HOJE = null;
+    await telaHoje();
+  }
+  window.addEventListener('pageshow', () => {});
+  iniciar();
+})();
+</script>
+</body>
+</html>
