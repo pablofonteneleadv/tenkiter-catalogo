@@ -6,6 +6,25 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.43.0 — Esteira de Produtos (entrega 3: Pedidos, chegada com contagem cega e aprovação) — 01/11/2026
+- Nova aba **Pedidos** na esteira.html. Admin total monta o pedido ao fornecedor: fornecedor, previsão de chegada, fotos do pedido (só ela vê) e itens. Cada item é **reposição** de peça do catálogo (busca por nome ou código) ou **produto novo** (nome, categoria, público, preço de venda, tamanhos, cores e fotos do fornecedor), com quantidade e **custo unitário**. O editor soma as peças e o custo. "Salvar e marcar como enviado" deixa o pedido "a caminho".
+- **Chegada (equipe):** "Chegou mercadoria" lista os pedidos a caminho. Na **contagem cega**, a pessoa não vê nem a quantidade pedida nem o custo. Ela digita o que contou e o sistema responde na hora "Bateu com o pedido" ou "Não bateu com o pedido", com "Recontar" ou "Confirmar". Também há "Não veio" e "+ Veio um modelo que não está aqui" (nome, quantidade e foto pela câmera ou galeria, pelo mesmo envio da entrega 2). O botão "Enviar para a Karla aprovar" só funciona com tudo contado e as diferenças confirmadas.
+- **Aprovação (Admin total):** mostra só as diferenças (faltou, sobrou, não veio, veio a mais) e "N itens vieram certos". A decisão é por item:
+  - faltou ou não veio: aceitar o que veio ou cobrar o fornecedor;
+  - sobrou: ficar com tudo ou devolver a sobra;
+  - veio a mais: incluir no estoque (com custo, categoria e público) ou devolver.
+- **"Aprovar e liberar para preparação":**
+  - **Reposição:** a quantidade aceita é somada ao estoque, pelo update completo do catálogo.
+  - **Produto novo:** é criado com a mesma ação `create` do painel (a foto do fornecedor vira a capa; o custo nunca vai à planilha), arquivado logo em seguida (`bulkUpdate` arquivar) e colocado em **Preparação**. Só aparece no site depois de "Aceitar para o site".
+  - Cada passo fica registrado por item no servidor (`/esteira/pedidos/aplicado`). Se algo falhar, a tela diz o que foi feito e o que falta, e oferece "Tentar de novo" item a item, sem duplicar: o produto criado fica guardado, o create leva um `opId` por item, e a soma de estoque guarda o valor de partida.
+  - No fim, a tela mostra o resumo do que cobrar e do que devolver ao fornecedor.
+- **Aba Hoje:** a equipe vê o aviso "Chegou pedido para conferir". O Admin vê "Chegada esperando aprovação" e o aviso de itens aprovados que ainda não foram ao catálogo.
+- **Servidor (instagram-worker, bloco Esteira):**
+  - tabelas `est_pedido` e `est_pedido_item` (com as colunas extras `fotos` no pedido e `aplic` no item);
+  - rotas `/esteira/pedidos*`;
+  - as respostas para quem não é Admin total são montadas por lista branca, sem `custo` nem `qtd_pedida`. O teste comprova isso.
+- No celular do Admin, as 5 abas usam nomes curtos ("Preparo", "Ajustes"); o nome completo continua no leitor de tela.
+
 ## 7.42.0 — Esteira de Produtos (entrega 2: Preparação) — 01/11/2026
 - Nova aba **Preparação** na esteira.html (toda a equipe vê): cada peça em preparação mostra foto, nome, progresso e o checklist de tarefas com "Feito", observação curta e "Desfazer".
 - Tarefas padrão (editáveis em Configurações → Tarefas da preparação): Cadastro conferido, 1ª foto, Fotos de detalhe, Foto no manequim, Conferir cores e tamanhos — cada uma com a função que faz. Quem está na função do dia marca; Admin total e quem tem "Aceita para o site" marcam qualquer uma.

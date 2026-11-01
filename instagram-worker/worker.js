@@ -6038,7 +6038,7 @@ export default {
   }
 };
 
-/* ==================== v7.41.0: Esteira de Produtos (entrega 1: Hoje, conferência diária, escala, configurações; 7.42.0: preparação) ====================
+/* ==================== v7.41.0: Esteira de Produtos (entrega 1: Hoje, conferência diária, escala, configurações; 7.42.0: preparação; 7.43.0: pedidos ao fornecedor) ====================
  * Produtos continuam na planilha do catálogo (lista pública action=list). Aqui ficam só equipe, escala, datas de conferência/atualização
  * e a lista diária de cada funcionária. Configurações: só Admin total (gerir_acessos). */
 const EST_FUNCOES_PADRAO_ = ['Limpeza', 'Caixa', 'Fotos', 'Atendimento online'];
@@ -6074,6 +6074,10 @@ async function estIniciar_(env) {
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_lista (data TEXT NOT NULL, whats TEXT NOT NULL, produto TEXT NOT NULL, pos INTEGER NOT NULL, grupo TEXT DEFAULT '', feito_em TEXT, PRIMARY KEY (data, whats, produto))"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_tarefa (id INTEGER PRIMARY KEY AUTOINCREMENT, produto TEXT NOT NULL, tipo TEXT NOT NULL DEFAULT 'outro', titulo TEXT NOT NULL, instrucao TEXT DEFAULT '', funcao TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'pendente', origem TEXT DEFAULT '', criada_em TEXT, criada_por TEXT, feita_em TEXT, feita_por TEXT, obs TEXT DEFAULT '')"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_tarefa_prod ON est_tarefa (produto, status)"),
+    // v7.43.0 (entrega 3): pedido ao fornecedor, chegada com contagem cega e aprovação. `custo` e `qtd_pedida` só saem para o Admin total.
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS est_pedido (id INTEGER PRIMARY KEY AUTOINCREMENT, fornecedor TEXT NOT NULL DEFAULT '', previsao TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'rascunho', obs TEXT DEFAULT '', fotos TEXT DEFAULT '[]', criado_em TEXT, criado_por TEXT, enviado_em TEXT, conferido_em TEXT, conferido_por TEXT, aprovado_em TEXT, aprovado_por TEXT)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS est_pedido_item (id INTEGER PRIMARY KEY AUTOINCREMENT, pedido INTEGER NOT NULL, tipo TEXT NOT NULL DEFAULT 'reposicao', produto TEXT DEFAULT '', nome TEXT DEFAULT '', categoria TEXT DEFAULT '', genero TEXT DEFAULT '', preco TEXT DEFAULT '', tamanhos TEXT DEFAULT '', cores TEXT DEFAULT '', fotos TEXT DEFAULT '[]', qtd_pedida INTEGER NOT NULL DEFAULT 0, custo REAL, qtd_contada INTEGER, contagens INTEGER NOT NULL DEFAULT 0, nao_veio INTEGER NOT NULL DEFAULT 0, decisao TEXT DEFAULT '', qtd_aceita INTEGER, produto_criado TEXT DEFAULT '', aplicado_em TEXT, obs TEXT DEFAULT '', aplic TEXT DEFAULT '', criado_por TEXT DEFAULT '')"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_pedido_item ON est_pedido_item (pedido)"),
   ]);
   // v7.42.0: colunas novas da preparação. ALTER falha quando a coluna já existe — por isso um por um, sem derrubar nada.
   for (const col of ["etapa TEXT DEFAULT ''", 'aceito_em TEXT', 'aceito_por TEXT', 'preparado_em TEXT', 'preparado_por TEXT', "ref_nome TEXT DEFAULT ''", "ref_codigo TEXT DEFAULT ''", "ref_foto TEXT DEFAULT ''"]) {
@@ -6169,6 +6173,25 @@ async function estTarefasPendentes_(env, funcoes, porId) {
   const rows = (await env.DB.prepare("SELECT t.*, p.ref_nome, p.ref_codigo, p.ref_foto, p.etapa FROM est_tarefa t LEFT JOIN est_produto p ON p.id=t.produto WHERE t.status='pendente' AND t.funcao IN (" + marcas + ') ORDER BY t.id LIMIT 60').bind(...funcoes).all()).results || [];
   return rows.map((t) => { const c = porId.get(t.produto) || {}; return { id: t.id, produto: t.produto, tipo: t.tipo, titulo: t.titulo, instrucao: t.instrucao || '', funcao: t.funcao, status: t.status, origem: t.origem || '', obs: t.obs || '', posso: true, produtoNome: c.nome || t.ref_nome || 'Peça ' + t.produto, produtoCodigo: c.codigo || t.ref_codigo || '', produtoFoto: c.foto || t.ref_foto || '', emPreparacao: t.etapa === 'preparacao' }; });
 }
+/* ---- v7.43.0 (entrega 3): pedido ao fornecedor → chegada (contagem cega) → aprovação ----
+ * Custo e quantidade pedida ficam só aqui no D1 e só saem para o Admin total: nunca vão para a planilha nem para o navegador da equipe. */
+const estInt_ = (v, max) => { const n = Math.floor(Number(String(v == null ? '' : v).replace(',', '.'))); return Number.isFinite(n) && n >= 0 ? Math.min(n, max || 99999) : null; };
+const estCusto_ = (v) => { if (v === '' || v == null) return null; const n = Number(String(v).replace(/\s/g, '').replace(',', '.')); return Number.isFinite(n) && n >= 0 && n < 1e6 ? Math.round(n * 100) / 100 : undefined; };
+const estFotos_ = (v) => { let l = v; if (typeof l === 'string') { try { l = JSON.parse(l); } catch (e) { l = []; } } return (Array.isArray(l) ? l : []).map((u) => String(u || '').trim()).filter((u) => /^https:\/\/[^\s"'<>]+$/.test(u)).map((u) => u.slice(0, 500)).slice(0, 8); };
+/** Situação de um item depois da contagem (só o servidor e o Admin total sabem a quantidade pedida). */
+function estSituacao_(it) {
+  if (it.tipo === 'extra') return 'extra';
+  if (it.nao_veio) return 'nao_veio';
+  if (it.qtd_contada == null) return 'sem_contagem';
+  const c = Number(it.qtd_contada), q = Number(it.qtd_pedida);
+  if (c === q) return 'bateu';
+  if (c === 0) return 'nao_veio';
+  return c < q ? 'faltou' : 'sobrou';
+}
+/** Item como o Admin total vê (tudo) e como a equipe vê (sem custo e sem quantidade pedida: contagem cega). Lista branca, nunca lista negra. */
+function estItemAdmin_(it) { return { id: it.id, tipo: it.tipo, produto: it.produto || '', nome: it.nome || '', categoria: it.categoria || '', genero: it.genero || '', preco: it.preco || '', tamanhos: it.tamanhos || '', cores: it.cores || '', fotos: estFotos_(it.fotos), qtd_pedida: Number(it.qtd_pedida) || 0, custo: it.custo == null ? null : Number(it.custo), qtd_contada: it.qtd_contada == null ? null : Number(it.qtd_contada), contagens: Number(it.contagens) || 0, nao_veio: !!it.nao_veio, situacao: estSituacao_(it), decisao: it.decisao || '', qtd_aceita: it.qtd_aceita == null ? null : Number(it.qtd_aceita), produto_criado: it.produto_criado || '', aplicado_em: it.aplicado_em || '', obs: it.obs || '' }; }
+function estItemEquipe_(it) { return { id: it.id, tipo: it.tipo, nome: it.nome || '', tamanhos: it.tamanhos || '', cores: it.cores || '', fotos: estFotos_(it.fotos), qtd_contada: it.qtd_contada == null ? null : Number(it.qtd_contada), contagens: Number(it.contagens) || 0, nao_veio: !!it.nao_veio, contado: it.qtd_contada != null || !!it.nao_veio, bateu: it.tipo === 'extra' || it.qtd_contada == null || it.nao_veio ? null : estSituacao_(it) === 'bateu' }; }
+function estPedidoBase_(p, nomeDe) { return { id: p.id, fornecedor: p.fornecedor || '', previsao: p.previsao || '', status: p.status, enviado_em: p.enviado_em || '', conferido_em: p.conferido_em || '', conferido_por: nomeDe(p.conferido_por || '') || '' }; }
 async function rotasEsteira_(env, req, url, J, perms) {
   await iniciar(env); await estIniciar_(env);
   const p = url.pathname, admin = perms.includes('gerir_acessos'), eu = estFone_(req.headers.get('X-TK-Whats')), agora = new Date().toISOString(), data = estHoje_();
@@ -6188,7 +6211,9 @@ async function rotasEsteira_(env, req, url, J, perms) {
     const escala = await estEscalaDoDia_(env, data, cfg);
     const minhas = Object.keys(escala).filter((f) => estFone_(escala[f].whats) === eu).map((f) => ({ funcao: f, instrucoes: String(cfg.instrucoes[f] || '') }));
     const tarefas = await estTarefasPendentes_(env, minhas.map((f) => f.funcao), porId);
-    return J({ ok: true, data, eu: quemSou(), lista, feitas: lista.filter((x) => x.feito).length, total: lista.length, funcoes: minhas, tarefas, escala: Object.keys(escala).map((f) => ({ funcao: f, whats: escala[f].whats, nome: nomeDe(escala[f].whats), alterado: escala[f].alterado })) });
+    const pc = await env.DB.prepare("SELECT SUM(CASE WHEN status='a_caminho' AND (previsao IS NULL OR previsao='' OR previsao<=?) THEN 1 ELSE 0 END) AS conferir, SUM(CASE WHEN status='conferido' THEN 1 ELSE 0 END) AS aprovar, SUM(CASE WHEN status='aprovado' AND EXISTS (SELECT 1 FROM est_pedido_item i WHERE i.pedido=est_pedido.id AND i.qtd_aceita>0 AND i.aplicado_em IS NULL) THEN 1 ELSE 0 END) AS aplicar FROM est_pedido").bind(data).first() || {};
+    const pedidos = admin ? { conferir: pc.conferir || 0, aprovar: pc.aprovar || 0, aplicar: pc.aplicar || 0 } : { conferir: pc.conferir || 0 };   // v7.43.0: avisos de pedido (só contagens)
+    return J({ ok: true, data, eu: quemSou(), pedidos, lista, feitas: lista.filter((x) => x.feito).length, total: lista.length, funcoes: minhas, tarefas, escala: Object.keys(escala).map((f) => ({ funcao: f, whats: escala[f].whats, nome: nomeDe(escala[f].whats), alterado: escala[f].alterado })) });
   }
   if (p === '/esteira/conferir' && req.method === 'POST') {
     const d = await req.json().catch(() => ({})), id = String(d.id || '').slice(0, 40);
@@ -6277,6 +6302,193 @@ async function rotasEsteira_(env, req, url, J, perms) {
     ]);
     try { await env.CACHE.delete('est:catalogo:v1'); } catch (e) { /* a lista se renova em 10 min */ }   // a peça reativada passa a contar já
     return J({ ok: true, dispensadas: (r[1] && r[1].meta && r[1].meta.changes) || 0, aceito_em: agora });
+  }
+  // ---- v7.43.0: pedidos ao fornecedor (Admin total monta e aprova; equipe confere a chegada às cegas) ----
+  if (p === '/esteira/pedidos' || p.startsWith('/esteira/pedidos/')) {
+    const d = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
+    const pid = Number(req.method === 'POST' ? d.id : url.searchParams.get('id')) || 0;
+    const ped = pid > 0 ? await env.DB.prepare('SELECT * FROM est_pedido WHERE id=?').bind(pid).first() : null;
+    const itensDe = async (id) => (await env.DB.prepare('SELECT * FROM est_pedido_item WHERE pedido=? ORDER BY id').bind(id).all()).results || [];
+    const semPedido = () => J({ ok: false, erro: 'Este pedido não existe mais. Atualize a tela.' }, 404);
+    const completo = async (x) => Object.assign(estPedidoBase_(x, nomeDe), { obs: x.obs || '', fotos: estFotos_(x.fotos), criado_em: x.criado_em || '', aprovado_em: x.aprovado_em || '', aprovado_por: nomeDe(x.aprovado_por || '') || '', itens: (await itensDe(x.id)).map(estItemAdmin_) });
+    const paraEquipe = async (x) => Object.assign(estPedidoBase_(x, nomeDe), { itens: (await itensDe(x.id)).map(estItemEquipe_) });
+    const umItem = (cond) => env.DB.prepare('SELECT * FROM est_pedido_item WHERE id=? AND pedido=?' + (cond || '')).bind(Number(d.item) || 0, pid).first();
+    const semItem = () => J({ ok: false, erro: 'Este item não está no pedido. Atualize a tela.' }, 404);
+    if (p === '/esteira/pedidos' && req.method === 'GET') {
+      if (!admin) {
+        const rows = (await env.DB.prepare("SELECT p.*, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra') AS n, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra' AND (i.qtd_contada IS NOT NULL OR i.nao_veio=1)) AS contados FROM est_pedido p WHERE p.status='a_caminho' ORDER BY p.previsao, p.id").all()).results || [];
+        return J({ ok: true, admin: false, pedidos: rows.map((x) => Object.assign(estPedidoBase_(x, nomeDe), { itens: x.n, contados: x.contados })) });
+      }
+      const rows = (await env.DB.prepare("SELECT p.*, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra') AS n, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra' AND (i.qtd_contada IS NOT NULL OR i.nao_veio=1)) AS contados, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.qtd_aceita>0 AND i.aplicado_em IS NULL) AS falta_aplicar FROM est_pedido p WHERE p.status<>'cancelado' OR p.criado_em>=? ORDER BY p.id DESC LIMIT 80").bind(new Date(Date.now() - 30 * 864e5).toISOString()).all()).results || [];
+      return J({ ok: true, admin: true, pedidos: rows.map((x) => Object.assign(estPedidoBase_(x, nomeDe), { itens: x.n, contados: x.contados, faltaAplicar: x.falta_aplicar || 0, criado_em: x.criado_em || '' })) });
+    }
+    if (p === '/esteira/pedidos/abrir' && req.method === 'GET') {
+      if (!ped) return semPedido();
+      if (admin) return J({ ok: true, admin: true, pedido: await completo(ped) });
+      if (ped.status !== 'a_caminho') return J({ ok: false, erro: 'Este pedido já foi conferido e está com o administrador.' }, 403);
+      return J({ ok: true, admin: false, pedido: await paraEquipe(ped) });
+    }
+    // ---- equipe (e Admin total): chegada com contagem cega. As respostas dizem só "bateu" ou "não bateu". ----
+    const chegando = () => (!ped ? semPedido() : ped.status !== 'a_caminho' ? J({ ok: false, erro: ped.status === 'rascunho' ? 'Este pedido ainda não foi enviado ao fornecedor.' : 'A chegada deste pedido já foi enviada para aprovação.' }, 400) : null);
+    if (p === '/esteira/pedidos/contar' && req.method === 'POST') {
+      const bloq = chegando(); if (bloq) return bloq;
+      const it = await umItem(); if (!it) return semItem();
+      const q = estInt_(d.qtd, 9999); if (q == null || String(d.qtd).trim() === '') return J({ ok: false, erro: 'Digite quantas peças você contou (pode ser 0).' }, 400);
+      if (it.tipo === 'extra' && q < 1) return J({ ok: false, erro: 'Modelo que veio a mais precisa de pelo menos 1 peça. Para tirar, use “Tirar”.' }, 400);
+      await env.DB.prepare('UPDATE est_pedido_item SET qtd_contada=?, contagens=contagens+1, nao_veio=0 WHERE id=?').bind(q, it.id).run();
+      const novo = Object.assign({}, it, { qtd_contada: q, nao_veio: 0, contagens: (Number(it.contagens) || 0) + 1 });
+      return J({ ok: true, item: it.id, bateu: it.tipo === 'extra' ? null : estSituacao_(novo) === 'bateu', contagens: novo.contagens });
+    }
+    if (p === '/esteira/pedidos/nao-veio' && req.method === 'POST') {
+      const bloq = chegando(); if (bloq) return bloq;
+      const it = await umItem(" AND tipo<>'extra'"); if (!it) return semItem();
+      if (d.naoVeio === false) await env.DB.prepare('UPDATE est_pedido_item SET nao_veio=0, qtd_contada=NULL WHERE id=?').bind(it.id).run();
+      else await env.DB.prepare('UPDATE est_pedido_item SET nao_veio=1, qtd_contada=0, contagens=contagens+1 WHERE id=?').bind(it.id).run();
+      return J({ ok: true, item: it.id, naoVeio: d.naoVeio !== false });
+    }
+    if (p === '/esteira/pedidos/extra' && req.method === 'POST') {
+      const bloq = chegando(); if (bloq) return bloq;
+      const nome = String(d.nome || '').trim().slice(0, 120), q = estInt_(d.qtd, 9999);
+      if (!nome) return J({ ok: false, erro: 'Escreva o nome ou uma descrição curta do modelo que veio.' }, 400);
+      if (!(q >= 1)) return J({ ok: false, erro: 'Digite quantas peças deste modelo vieram.' }, 400);
+      const r = await env.DB.prepare("INSERT INTO est_pedido_item (pedido, tipo, nome, tamanhos, cores, fotos, qtd_pedida, qtd_contada, contagens, obs, criado_por) VALUES (?, 'extra', ?, ?, ?, ?, 0, ?, 1, ?, ?)").bind(pid, nome, String(d.tamanhos || '').trim().slice(0, 200), String(d.cores || '').trim().slice(0, 200), JSON.stringify(estFotos_(d.fotos)), q, String(d.obs || '').trim().slice(0, 300), eu).run();
+      return J({ ok: true, item: r.meta.last_row_id });
+    }
+    if (p === '/esteira/pedidos/extra-remover' && req.method === 'POST') {
+      const bloq = chegando(); if (bloq) return bloq;
+      const r = await env.DB.prepare("DELETE FROM est_pedido_item WHERE id=? AND pedido=? AND tipo='extra'").bind(Number(d.item) || 0, pid).run();
+      return r.meta.changes ? J({ ok: true }) : J({ ok: false, erro: 'Este modelo não está mais na chegada.' }, 404);
+    }
+    if (p === '/esteira/pedidos/concluir' && req.method === 'POST') {
+      const bloq = chegando(); if (bloq) return bloq;
+      const falta = (await itensDe(pid)).filter((x) => x.tipo !== 'extra' && x.qtd_contada == null && !x.nao_veio).length;
+      if (falta) return J({ ok: false, erro: falta === 1 ? 'Falta contar 1 item (ou marcar “Não veio”).' : 'Faltam contar ' + falta + ' itens (ou marcar “Não veio”).', faltam: falta }, 400);
+      const r = await env.DB.prepare("UPDATE est_pedido SET status='conferido', conferido_em=?, conferido_por=? WHERE id=? AND status='a_caminho'").bind(agora, eu, pid).run();
+      if (!r.meta.changes) return J({ ok: false, erro: 'A chegada deste pedido já foi enviada.' }, 400);
+      return J({ ok: true, status: 'conferido' });
+    }
+    // ---- daqui para baixo: só Admin total (custo, quantidade pedida, decisões) ----
+    if (!admin) return J({ ok: false, erro: 'Só o administrador total cuida do pedido, dos custos e da aprovação.' }, 403);
+    if (p === '/esteira/pedidos/salvar' && req.method === 'POST') {          // cria ou edita (rascunho ou a caminho); item com id é atualizado, sem id é novo
+      if (pid && !ped) return semPedido();
+      if (ped && !['rascunho', 'a_caminho'].includes(ped.status)) return J({ ok: false, erro: 'Pedido já conferido não muda mais. Veja a aprovação.' }, 400);
+      const fornecedor = String(d.fornecedor || '').trim().slice(0, 80), previsao = /^\d{4}-\d{2}-\d{2}$/.test(String(d.previsao || '')) ? d.previsao : '';
+      const obsP = String(d.obs || '').trim().slice(0, 500), fotosP = JSON.stringify(estFotos_(d.fotos));
+      if (!fornecedor) return J({ ok: false, erro: 'Informe o fornecedor.' }, 400);
+      const lista = Array.isArray(d.itens) ? d.itens.slice(0, 200) : [], limpos = [];
+      for (let k = 0; k < lista.length; k++) {
+        const x = lista[k] || {}, tipo = x.tipo === 'novo' ? 'novo' : 'reposicao', n = k + 1;
+        const qtd = estInt_(x.qtd_pedida, 9999), custo = estCusto_(x.custo);
+        const it = { id: Number(x.id) || 0, tipo, produto: tipo === 'reposicao' ? String(x.produto || '').trim().slice(0, 40) : '', nome: String(x.nome || '').trim().slice(0, 120), categoria: String(x.categoria || '').trim().slice(0, 120), genero: String(x.genero || '').trim().slice(0, 80), preco: String(x.preco == null ? '' : x.preco).trim().replace(',', '.').slice(0, 12), tamanhos: String(x.tamanhos || '').trim().slice(0, 200), cores: String(x.cores || '').trim().slice(0, 200), fotos: JSON.stringify(estFotos_(x.fotos)), qtd, custo };
+        if (tipo === 'reposicao' && !it.produto) return J({ ok: false, erro: 'Item ' + n + ': escolha a peça do catálogo.' }, 400);
+        if (!it.nome) return J({ ok: false, erro: 'Item ' + n + ': informe o nome.' }, 400);
+        if (!(qtd >= 1)) return J({ ok: false, erro: 'Item ' + n + ' (' + it.nome + '): a quantidade pedida precisa ser 1 ou mais.' }, 400);
+        if (custo === undefined) return J({ ok: false, erro: 'Item ' + n + ' (' + it.nome + '): custo inválido. Use só números, como 45,90.' }, 400);
+        if (it.preco && !(Number(it.preco) > 0)) return J({ ok: false, erro: 'Item ' + n + ' (' + it.nome + '): preço de venda inválido.' }, 400);
+        limpos.push(it);
+      }
+      const antigos = ped ? await itensDe(pid) : [], porIdA = new Map(antigos.map((x) => [x.id, x])), ficam = new Set(limpos.map((x) => x.id).filter(Boolean));
+      const contadoSai = antigos.find((x) => x.tipo !== 'extra' && !ficam.has(x.id) && (x.qtd_contada != null || x.nao_veio));
+      if (contadoSai) return J({ ok: false, erro: '“' + contadoSai.nome + '” já foi contado na chegada e não pode sair do pedido.' }, 400);
+      let id = pid;
+      if (!ped) id = (await env.DB.prepare("INSERT INTO est_pedido (fornecedor, previsao, status, obs, fotos, criado_em, criado_por) VALUES (?, ?, 'rascunho', ?, ?, ?, ?)").bind(fornecedor, previsao, obsP, fotosP, agora, eu).run()).meta.last_row_id;
+      const ops = [];
+      if (ped) ops.push(env.DB.prepare('UPDATE est_pedido SET fornecedor=?, previsao=?, obs=?, fotos=? WHERE id=?').bind(fornecedor, previsao, obsP, fotosP, id));
+      antigos.filter((x) => x.tipo !== 'extra' && !ficam.has(x.id)).forEach((x) => ops.push(env.DB.prepare('DELETE FROM est_pedido_item WHERE id=?').bind(x.id)));
+      limpos.forEach((it) => {
+        if (it.id && porIdA.has(it.id) && porIdA.get(it.id).tipo !== 'extra') ops.push(env.DB.prepare('UPDATE est_pedido_item SET tipo=?, produto=?, nome=?, categoria=?, genero=?, preco=?, tamanhos=?, cores=?, fotos=?, qtd_pedida=?, custo=? WHERE id=?').bind(it.tipo, it.produto, it.nome, it.categoria, it.genero, it.preco, it.tamanhos, it.cores, it.fotos, it.qtd, it.custo, it.id));
+        else ops.push(env.DB.prepare('INSERT INTO est_pedido_item (pedido, tipo, produto, nome, categoria, genero, preco, tamanhos, cores, fotos, qtd_pedida, custo, criado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, it.tipo, it.produto, it.nome, it.categoria, it.genero, it.preco, it.tamanhos, it.cores, it.fotos, it.qtd, it.custo, eu));
+      });
+      if (ops.length) await env.DB.batch(ops);
+      return J({ ok: true, pedido: await completo(await env.DB.prepare('SELECT * FROM est_pedido WHERE id=?').bind(id).first()) });
+    }
+    if (p === '/esteira/pedidos/enviar' && req.method === 'POST') {
+      if (!ped) return semPedido();
+      if (ped.status !== 'rascunho') return J({ ok: false, erro: 'Este pedido já foi enviado.' }, 400);
+      const its = await itensDe(pid);
+      if (!its.length) return J({ ok: false, erro: 'Inclua pelo menos um item antes de enviar.' }, 400);
+      const semDados = its.find((x) => x.tipo === 'novo' && (!x.categoria || !x.genero));
+      if (semDados) return J({ ok: false, erro: '“' + semDados.nome + '”: informe a categoria e o público do produto novo antes de enviar.' }, 400);
+      await env.DB.prepare("UPDATE est_pedido SET status='a_caminho', enviado_em=? WHERE id=?").bind(agora, pid).run();
+      return J({ ok: true, status: 'a_caminho' });
+    }
+    if (p === '/esteira/pedidos/cancelar' && req.method === 'POST') {
+      if (!ped) return semPedido();
+      if (ped.status === 'aprovado' || ped.status === 'cancelado') return J({ ok: false, erro: ped.status === 'aprovado' ? 'Pedido aprovado não pode ser cancelado.' : 'Este pedido já está cancelado.' }, 400);
+      await env.DB.prepare("UPDATE est_pedido SET status='cancelado' WHERE id=?").bind(pid).run();
+      return J({ ok: true, status: 'cancelado' });
+    }
+    if (p === '/esteira/pedidos/decidir' && req.method === 'POST') {       // {id, item, decisao, custo?, nome?, categoria?, genero?, preco?, tamanhos?, cores?, obs?}
+      if (!ped) return semPedido();
+      if (ped.status !== 'conferido') return J({ ok: false, erro: 'Só dá para decidir depois que a equipe envia a chegada (e antes de aprovar).' }, 400);
+      const it = await umItem(); if (!it) return semItem();
+      const s = estSituacao_(it), dec = String(d.decisao || '');
+      const validas = s === 'extra' ? ['incluir', 'devolver'] : s === 'sobrou' ? ['aceitar', 'devolver'] : ['aceitar', 'cobrar'];
+      if (!validas.includes(dec)) return J({ ok: false, erro: 'Escolha uma das opções para este item.' }, 400);
+      const obs = d.obs == null ? String(it.obs || '') : String(d.obs).trim().slice(0, 300);
+      if (s === 'extra') {
+        const custo = estCusto_(d.custo === undefined ? it.custo : d.custo);
+        if (custo === undefined) return J({ ok: false, erro: 'Custo inválido. Use só números, como 45,90.' }, 400);
+        const v = (k, max) => String(d[k] == null ? (it[k] || '') : d[k]).trim().slice(0, max);
+        const c = { nome: v('nome', 120) || it.nome, categoria: v('categoria', 120), genero: v('genero', 80), preco: v('preco', 12).replace(',', '.'), tamanhos: v('tamanhos', 200), cores: v('cores', 200) };
+        if (c.preco && !(Number(c.preco) > 0)) return J({ ok: false, erro: 'Preço de venda inválido.' }, 400);
+        await env.DB.prepare('UPDATE est_pedido_item SET decisao=?, custo=?, nome=?, categoria=?, genero=?, preco=?, tamanhos=?, cores=?, obs=? WHERE id=?').bind(dec, custo, c.nome, c.categoria, c.genero, c.preco, c.tamanhos, c.cores, obs, it.id).run();
+      } else await env.DB.prepare('UPDATE est_pedido_item SET decisao=?, obs=? WHERE id=?').bind(dec, obs, it.id).run();
+      return J({ ok: true, item: estItemAdmin_(await env.DB.prepare('SELECT * FROM est_pedido_item WHERE id=?').bind(it.id).first()) });
+    }
+    if (p === '/esteira/pedidos/aprovar' && req.method === 'POST') {
+      if (!ped) return semPedido();
+      if (ped.status !== 'conferido') return J({ ok: false, erro: ped.status === 'aprovado' ? 'Este pedido já foi aprovado.' : 'A equipe ainda não enviou a chegada deste pedido.' }, 400);
+      const its = await itensDe(pid);
+      const pendentes = its.filter((x) => estSituacao_(x) !== 'bateu' && !x.decisao);
+      if (pendentes.length) return J({ ok: false, erro: pendentes.length === 1 ? 'Decida o item com diferença: “' + pendentes[0].nome + '”.' : 'Decida os ' + pendentes.length + ' itens com diferença antes de aprovar.', pendentes: pendentes.map((x) => x.id) }, 400);
+      const semCad = its.find((x) => x.tipo === 'extra' && x.decisao === 'incluir' && (!x.categoria || !x.genero || x.custo == null));
+      if (semCad) return J({ ok: false, erro: '“' + semCad.nome + '” veio a mais: para incluir, informe custo, categoria e público.' }, 400);
+      const ops = its.map((x) => {
+        const s = estSituacao_(x), c = Number(x.qtd_contada) || 0, dec = x.decisao || 'aceitar';
+        const aceita = x.nao_veio ? 0 : dec === 'devolver' ? (s === 'extra' ? 0 : Math.min(c, Number(x.qtd_pedida) || 0)) : c;
+        return env.DB.prepare('UPDATE est_pedido_item SET decisao=?, qtd_aceita=?, aplicado_em=CASE WHEN ?=0 THEN ? ELSE aplicado_em END WHERE id=?').bind(dec, aceita, aceita, agora, x.id);
+      });
+      ops.push(env.DB.prepare("UPDATE est_pedido SET status='aprovado', aprovado_em=?, aprovado_por=? WHERE id=? AND status='conferido'").bind(agora, eu, pid));
+      await env.DB.batch(ops);
+      return J({ ok: true, pedido: await completo(await env.DB.prepare('SELECT * FROM est_pedido WHERE id=?').bind(pid).first()) });
+    }
+    if (p === '/esteira/pedidos/aplicado' && req.method === 'POST') {       // o navegador conta o que já levou ao catálogo, item a item (idempotente)
+      if (!ped) return semPedido();
+      if (ped.status !== 'aprovado') return J({ ok: false, erro: 'Aprove o pedido antes de levar os itens ao catálogo.' }, 400);
+      const it = await umItem(); if (!it) return semItem();
+      let aplic = {}; try { aplic = JSON.parse(it.aplic || '{}') || {}; } catch (e) { aplic = {}; }
+      if (it.aplicado_em) return J({ ok: true, jaAplicado: true, item: estItemAdmin_(it), aplic, produtoCriado: it.produto_criado || '' });
+      if (!(Number(it.qtd_aceita) > 0)) return J({ ok: false, erro: 'Este item não tem quantidade aceita para levar ao catálogo.' }, 400);
+      const fase = String(d.fase || 'fim');
+      if (fase === 'inicio') {                                               // reposição: guarda o estoque de partida antes de somar (uma vez só, salvo "refazer")
+        if (it.tipo !== 'reposicao') return J({ ok: false, erro: 'Só reposição soma estoque.' }, 400);
+        const antes = estInt_(d.antes, 999999);
+        if (aplic.antes == null || d.refazer === true) {
+          if (antes == null) return J({ ok: false, erro: 'Estoque atual inválido.' }, 400);
+          aplic = { antes, depois: antes + Number(it.qtd_aceita) };
+          await env.DB.prepare('UPDATE est_pedido_item SET aplic=? WHERE id=?').bind(JSON.stringify(aplic), it.id).run();
+        }
+        return J({ ok: true, aplic });
+      }
+      if (fase === 'criado') {                                               // produto novo criado no catálogo: guarda o ID logo (tentar de novo não cria outro)
+        if (it.tipo === 'reposicao') return J({ ok: false, erro: 'Reposição não cria produto.' }, 400);
+        const novo = String(d.produtoCriado || '').trim().slice(0, 40);
+        if (!novo) return J({ ok: false, erro: 'Falta o código do produto criado.' }, 400);
+        if (it.produto_criado) return J({ ok: true, produtoCriado: it.produto_criado, jaTinha: true, aplic });
+        aplic.codigo = String(d.codigo || '').slice(0, 40);
+        await env.DB.prepare("UPDATE est_pedido_item SET produto_criado=?, aplic=? WHERE id=? AND (produto_criado IS NULL OR produto_criado='')").bind(novo, JSON.stringify(aplic), it.id).run();
+        const atual = await env.DB.prepare('SELECT produto_criado FROM est_pedido_item WHERE id=?').bind(it.id).first();
+        return J({ ok: true, produtoCriado: atual.produto_criado, aplic });
+      }
+      if (it.tipo !== 'reposicao' && !it.produto_criado) return J({ ok: false, erro: 'O produto ainda não foi criado no catálogo.' }, 400);
+      if (it.tipo === 'reposicao' && aplic.antes == null) return J({ ok: false, erro: 'Falta registrar o estoque de partida desta reposição.' }, 400);
+      aplic.fim = agora;
+      await env.DB.prepare('UPDATE est_pedido_item SET aplicado_em=?, aplic=? WHERE id=? AND aplicado_em IS NULL').bind(agora, JSON.stringify(aplic), it.id).run();
+      const resta = await env.DB.prepare('SELECT COUNT(*) AS n FROM est_pedido_item WHERE pedido=? AND qtd_aceita>0 AND aplicado_em IS NULL').bind(pid).first();
+      return J({ ok: true, item: estItemAdmin_(await env.DB.prepare('SELECT * FROM est_pedido_item WHERE id=?').bind(it.id).first()), faltam: resta ? resta.n : 0 });
+    }
+    return J({ ok: false, erro: 'Esta ação de pedidos não existe.' }, 404);
   }
   // ---- daqui para baixo: só Admin total ----
   if (!admin) return J({ ok: false, erro: 'Só o administrador total acessa esta parte da Esteira.' }, 403);
