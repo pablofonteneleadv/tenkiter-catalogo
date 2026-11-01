@@ -3,7 +3,7 @@ import os,json
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 from mock import install,SESSION,PERMS_ALL
-from mensagens_filtros import aplicar,valor
+from mensagens_filtros import aplicar,valor,tipos
 import mock_msg
 BASE=os.environ.get('TK_BASE','http://localhost:8773/')
 OUT=Path('tests/saida/reparos/layout');OUT.mkdir(parents=True,exist_ok=True)
@@ -27,7 +27,7 @@ with sync_playwright() as p:
   assert pg.locator('#ms-filtros').is_hidden()
   assert pg.locator('.ms-homonimo .ms-fone').count()==2
   assert pg.locator('.ms-homonimo .ms-fone').evaluate_all('es=>es.every(e=>e.getBoundingClientRect().height>0)')
-  assert pg.locator('#ms-lista-wrap').bounding_box()['y']<=230 if w<600 else True
+  assert pg.locator('#ms-lista-wrap').bounding_box()['y']<=285 if w<600 else True
   for zoom in [100,130]:
    pg.evaluate('(n)=>document.documentElement.style.fontSize=n+"%"',zoom)
    assert pg.evaluate('document.documentElement.scrollWidth<=innerWidth')
@@ -50,8 +50,8 @@ with sync_playwright() as p:
   assert pg.locator('#ms-filtros button').last.inner_text().startswith('+')
   pg.click('#ms-btn-filtros');pg.click('[data-ms=filtros-limpar]')
   if w==390 and h==844:
-   pg.click('#ms-btn-filtros');pg.uncheck('[name=ms-ft-tipo][value=msg]');pg.uncheck('[name=ms-ft-tipo][value=grp]');pg.click('[data-ms=filtros-aplicar]');assert pg.locator('#ms-gaveta').is_visible();assert 'Escolha mensagens individuais ou grupos' in pg.inner_text('#ms-aviso');pg.keyboard.press('Escape');pg.wait_for_selector('#ms-gaveta',state='detached')
-   pg.click('#ms-btn-filtros');pg.check('[name=ms-ft-tipo][value=grp]');pg.uncheck('[name=ms-ft-tipo][value=msg]');pg.click('[data-ms=filtros-aplicar]')
+   pg.click('#ms-tipos [data-tipo=msg]');assert pg.locator('#ms-tipos [data-tipo=msg]').get_attribute('aria-pressed')=='true'
+   tipos(pg,False,True)
    aplicar(pg,canal='instagram');assert 'Grupos' not in pg.inner_text('#ms-filtros');assert s['consultas'][-1]['tipo']=='individual'
    pg.click('#ms-btn-filtros');pg.click('[data-ms=filtros-limpar]')
   pg.click('#ms-nav [data-ms=menu-geral]');pg.click('[data-ms=lista-continua]');assert not pg.locator('.ms-lista-secao').count()
