@@ -1,3 +1,4 @@
+from mensagens_filtros import tipos
 """Jornada da caixa compacta, filtros verticais e navegação; serviços simulados."""
 import os
 from pathlib import Path
@@ -29,9 +30,8 @@ with sync_playwright() as p:
    assert pg.locator('#ms-nav').evaluate('(e)=>{const r=e.getBoundingClientRect();return r.bottom<=innerHeight+1&&r.top>=0}')
    pg.screenshot(path=str(OUT/f'home-{w}-{zoom}.png'))
   pg.evaluate('document.documentElement.style.fontSize="100%"')
-  pg.click('[data-ms=filtros-abrir]');pg.wait_for_selector('#ms-gaveta')
-  pg.check('[name=ms-ft-tipo][value=grp]');pg.uncheck('[name=ms-ft-tipo][value=msg]');pg.click('[data-ms=filtros-aplicar]');pg.wait_for_selector('#ms-lista .ms-conv[data-id="3"]')
-  assert pg.locator('#ms-lista .ms-conv').count()==1
+  tipos(pg,False,True);pg.wait_for_selector('#ms-lista .ms-conv[data-id="3"]')
+  pg.wait_for_function('document.querySelectorAll("#ms-lista .ms-conv").length===1')
   pg.click('[data-ms=filtros-abrir]');pg.click('[data-ms=filtros-limpar]');pg.wait_for_selector('#ms-lista .ms-conv[data-id="1"]');assert not pg.locator('#ms-lista .ms-conv[data-id="3"]').count()
   pg.click('[data-ms=filtros-abrir]');pg.select_option('[name=ms-ft-fila]','nao_lidas');pg.click('[data-ms=filtros-aplicar]');pg.wait_for_timeout(500);assert not pg.locator('#ms-lista .ms-conv[data-id="2"]').count()
   pg.click('#ms-nav [data-ms=inicio]');pg.wait_for_selector('#ms-lista .ms-conv[data-id="2"]')

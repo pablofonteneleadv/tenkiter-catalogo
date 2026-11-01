@@ -3473,19 +3473,22 @@ const MSG_NOTAS_COUNT_SQL_ = "(SELECT COUNT(*) FROM msg_nota nn WHERE nn.alvo="+
 // E o encerramento NÃO vale mais para sempre: se o cliente voltar, a conversa volta para a fila
 // em Pendentes (o encerramento é apagado), e só uma resposta posterior a traz de volta.
 const MSG_ULT_ENC_ = "(SELECT MAX(e.em) FROM msg_encerramento e WHERE e.conversa_id=msg_conversa.id)";
-const MSG_ATENDIDO_SQL_ = "(msg_conversa.atendido_em<>'' OR EXISTS(SELECT 1 FROM msg_mensagem humana WHERE humana.conversa_id=msg_conversa.id AND humana.direcao='saida' AND COALESCE(humana.por,'')<>'auto' AND COALESCE(humana.status,'') NOT IN ('incerta','falhou','enviando') AND humana.enviada_em>COALESCE("+MSG_ULT_ENC_+",'')) OR EXISTS(SELECT 1 FROM msg_encerramento fim WHERE fim.conversa_id=msg_conversa.id AND NOT EXISTS(SELECT 1 FROM msg_mensagem depois WHERE depois.conversa_id=msg_conversa.id AND depois.direcao='entrada' AND depois.enviada_em>fim.em)))";
-const MSG_ESPERA_SQL_="(msg_conversa.encerrada_em='' AND (msg_conversa.nao_lidas>0 OR msg_conversa.ult_dir='entrada' OR EXISTS(SELECT 1 FROM msg_mensagem entrada WHERE entrada.conversa_id=msg_conversa.id AND entrada.direcao='entrada' AND entrada.cortesia=0 AND entrada.enviada_em>COALESCE((SELECT MAX(h.enviada_em) FROM msg_mensagem h WHERE h.conversa_id=msg_conversa.id AND h.direcao='saida' AND COALESCE(h.por,'')<>'auto' AND COALESCE(h.automatica,0)=0 AND COALESCE(h.status,'') NOT IN ('incerta','falhou','enviando','pendente')),'') AND entrada.enviada_em>COALESCE((SELECT MAX(f.em) FROM msg_encerramento f WHERE f.conversa_id=msg_conversa.id),''))))";
-const MSG_COLS_CONVERSA_ = "id, canal, contato, dono, reaberta_em, retorno_em, "+MSG_ATENDIDO_SQL_+" AS em_atendimento, "+MSG_ESPERA_SQL_+" AS aguarda_resposta, "+MSG_NOTAS_COUNT_SQL_+" AS notas, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
+const MSG_ATENDIDO_SQL_ = "(msg_conversa.grupo=1 OR msg_conversa.atendido_em<>'' OR EXISTS(SELECT 1 FROM msg_mensagem humana WHERE humana.conversa_id=msg_conversa.id AND humana.direcao='saida' AND COALESCE(humana.por,'')<>'auto' AND COALESCE(humana.status,'') NOT IN ('incerta','falhou','enviando') AND humana.enviada_em>COALESCE("+MSG_ULT_ENC_+",'')) OR EXISTS(SELECT 1 FROM msg_encerramento fim WHERE fim.conversa_id=msg_conversa.id AND NOT EXISTS(SELECT 1 FROM msg_mensagem depois WHERE depois.conversa_id=msg_conversa.id AND depois.direcao='entrada' AND depois.enviada_em>fim.em)))";
+const MSG_ESPERA_SQL_="(msg_conversa.grupo=0 AND msg_conversa.encerrada_em='' AND (msg_conversa.nao_lidas>0 OR msg_conversa.ult_dir='entrada' OR EXISTS(SELECT 1 FROM msg_mensagem entrada WHERE entrada.conversa_id=msg_conversa.id AND entrada.direcao='entrada' AND entrada.cortesia=0 AND entrada.enviada_em>COALESCE((SELECT MAX(h.enviada_em) FROM msg_mensagem h WHERE h.conversa_id=msg_conversa.id AND h.direcao='saida' AND COALESCE(h.por,'')<>'auto' AND COALESCE(h.automatica,0)=0 AND COALESCE(h.status,'') NOT IN ('incerta','falhou','enviando','pendente')),'') AND entrada.enviada_em>COALESCE((SELECT MAX(f.em) FROM msg_encerramento f WHERE f.conversa_id=msg_conversa.id),''))))";
+const MSG_COLS_CONVERSA_ = "id, canal, contato, dono, reaberta_em, retorno_em, "+MSG_ATENDIDO_SQL_+" AS em_atendimento, "+MSG_ESPERA_SQL_+" AS aguarda_resposta, "+MSG_NOTAS_COUNT_SQL_+" AS notas, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, CASE WHEN grupo=1 THEN '' ELSE encerrada_em END AS encerrada_em, CASE WHEN grupo=1 THEN '' ELSE encerrada_motivo END AS encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
 const MSG_Q_ = (c) => "(SELECT q." + c + " FROM msg_mensagem q WHERE q.canal=msg_mensagem.canal AND q.ext_id=msg_mensagem.ctx_ref AND msg_mensagem.ctx_ref<>'' LIMIT 1)";
 const MSG_COLS_MSG_ = "cortesia,retorno,id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, CASE WHEN ctx_tipo='link' THEN ctx_ref ELSE '' END AS link_previa, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, CASE WHEN ctx_chave LIKE '%.mp4' OR ctx_chave LIKE '%.mov' OR ctx_chave LIKE '%.webm' THEN 'video' ELSE (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) END AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + "COALESCE(NULLIF(ctx_trecho,'')," + MSG_Q_('texto') + ") AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir, " + "COALESCE(NULLIF(ctx_autor,''),'')" + " AS ctx_autor";
 async function msgContagens_(env, canal, tipo) {
-  const fields={esperando:"encerrada_em='' AND grupo=0 AND NOT "+MSG_ATENDIDO_SQL_,em_atendimento:"encerrada_em='' AND grupo=0 AND "+MSG_ATENDIDO_SQL_,conversas:"encerrada_em=''",nao_lidas:"encerrada_em='' AND nao_lidas>0",sem_resposta:MSG_ESPERA_SQL_,grupos:"encerrada_em='' AND grupo=1",individuais:"encerrada_em='' AND grupo=0",encerradas:"encerrada_em<>''",ambos:"encerrada_em='' AND pessoa<>'' AND "+MSG_OUTRO_SQL_+" IS NOT NULL"};
+  const fields={esperando:"encerrada_em='' AND grupo=0 AND NOT "+MSG_ATENDIDO_SQL_,em_atendimento:"encerrada_em='' AND grupo=0 AND "+MSG_ATENDIDO_SQL_,conversas:"(grupo=1 OR encerrada_em='')",nao_lidas:"encerrada_em='' AND nao_lidas>0",sem_resposta:MSG_ESPERA_SQL_,grupos:"grupo=1",individuais:"encerrada_em='' AND grupo=0",encerradas:"grupo=0 AND encerrada_em<>''",ambos:"encerrada_em='' AND pessoa<>'' AND "+MSG_OUTRO_SQL_+" IS NOT NULL"};
   const key="CASE WHEN grupo=1 THEN 'grupo:'||id ELSE COALESCE(NULLIF("+MSG_IDENTIDADE_SQL_+",''),'conversa:'||id) END";
-  const cols=Object.entries(fields).map(([name,condition])=>"COUNT(DISTINCT CASE WHEN "+condition+" THEN "+key+" END) AS "+name).join(',');
+  const pendenteDesde="COALESCE((SELECT MIN(p.enviada_em) FROM msg_mensagem p WHERE p.conversa_id=msg_conversa.id AND p.direcao='entrada' AND COALESCE(p.cortesia,0)=0 AND p.enviada_em>COALESCE("+MSG_ULT_ENC_+",'')),NULLIF(ult_entrada_em,''),NULLIF(criado_em,''))";
+  const cols=Object.entries(fields).map(([name,condition])=>"COUNT(DISTINCT CASE WHEN "+condition+" THEN "+key+" END) AS "+name).join(',')+",MIN(CASE WHEN "+fields.esperando+" THEN "+pendenteDesde+" END) AS esperando_desde";
   const where=' FROM msg_conversa WHERE total>0'+(canal?' AND canal=?':'')+(tipo==='grupo'?' AND grupo=1':tipo==='individual'?' AND grupo=0':'');
   const rows=(await env.DB.prepare('SELECT canal,'+cols+where+' GROUP BY canal').bind(...(canal?[canal]:[])).all()).results;
   const zero=()=>Object.fromEntries(Object.keys(fields).map(k=>[k,0])),out={};for(const c of MSG_CANAIS)out[c]=zero();
   for(const row of rows)for(const k of Object.keys(fields))out[row.canal][k]=Number(row[k])||0;
+  const metas=(await gestorCfg_(env)).metas;
+  for(const c of MSG_CANAIS){out[c].esperando_desde=rows.find(x=>x.canal===c)?.esperando_desde||'';out[c].meta_resposta_min=metas[c];}
   out.todos=Object.assign(zero(),await env.DB.prepare('SELECT '+cols+where).bind(...(canal?[canal]:[])).first());
   return out;
 }
@@ -4720,7 +4723,8 @@ async function sinalTempo_(env,usuario,nome,d,id){
   if(!fonte)return {pausa,medido:false};
   const agoraMs=Date.now(),estado=d.estado==='oculto'?'oculto':pausa?'pausa':TEMPO_ESTADOS_.includes(d.estado)?d.estado:'sem_detalhe';
   const seq=Number.isSafeInteger(d.seq)&&d.seq>0?d.seq:0;
-  const estadoValido=!id&&['lendo','redigindo'].includes(estado)?'navegando':estado;
+  const interno=id&&await env.DB.prepare('SELECT id FROM msg_conversa WHERE id=? AND grupo=1').bind(id).first();
+  const estadoValido=(!id||interno)&&['lendo','redigindo'].includes(estado)?'navegando':estado;
   const anterior=await env.DB.prepare('SELECT em,seq,estado,conversa_id FROM msg_tempo_sinal WHERE usuario=? AND fonte=?').bind(usuario,fonte).first();
   if(anterior?.seq>0&&seq<=anterior.seq)return {pausa,medido:true};
   if(anterior&&agoraMs-anterior.em<10000&&estado!=='oculto'&&anterior.estado!=='oculto')return {pausa,medido:true};
@@ -4745,7 +4749,7 @@ export function resumirTempos_(linhas,inicio,fim){
   }return out;
 }
 async function temposGestor_(env,inicio,fim){
-  const rs=(await env.DB.prepare('SELECT usuario,inicio,fim,estado FROM msg_tempo_intervalo WHERE fim>? AND inicio<? ORDER BY inicio DESC LIMIT 50001').bind(inicio,fim).all()).results||[];
+  const rs=(await env.DB.prepare('SELECT t.usuario,t.inicio,t.fim,CASE WHEN c.grupo=1 AND t.estado IN (\'lendo\',\'redigindo\') THEN \'navegando\' ELSE t.estado END AS estado FROM msg_tempo_intervalo t LEFT JOIN msg_conversa c ON c.id=t.conversa_id WHERE t.fim>? AND t.inicio<? ORDER BY t.inicio DESC LIMIT 50001').bind(inicio,fim).all()).results||[];
   const parcial=rs.length>50000;rs.splice(50000);
   const atuais=(await env.DB.prepare('SELECT s.usuario,s.nome,s.em,s.estado,s.conversa_id,COALESCE(d.pausa,0) AS pausa FROM msg_tempo_sinal s LEFT JOIN msg_disponibilidade d ON d.usuario=s.usuario WHERE s.em>? ORDER BY s.em DESC LIMIT 1000').bind(Date.now()-120000).all()).results||[];
   const desde=(await env.DB.prepare('SELECT MIN(inicio) AS em FROM msg_tempo_intervalo').first())?.em||null;
@@ -5042,6 +5046,7 @@ async function registrarAtividade_(env, req, d, acao) {
   const usuario = msgTelefone_(req.headers.get('X-TK-Whats'));
   const nome = await meuNomeAtendente_(env, req);
   const id = Number.isSafeInteger(Number(d && d.conversa)) ? Math.max(0, Number(d.conversa)) : 0;
+  if(id&&await env.DB.prepare('SELECT id FROM msg_conversa WHERE id=? AND grupo=1').bind(id).first())return;
   if(acao==='encerrar'&&d?.reabrir===true)acao='reabrir';
   const chave = d && d.idLocal && acao === 'responder' ? await sha('atividade:' + usuario + ':' + d.idLocal) : crypto.randomUUID();
   await env.DB.prepare('INSERT OR IGNORE INTO msg_atividade(chave,usuario,nome,acao,conversa_id,em) VALUES(?,?,?,?,?,?)').bind(chave, usuario, nome, acao, id, agora()).run();
@@ -5056,7 +5061,7 @@ async function equipeAtendimento_(env, url) {
     return { ok: false, cod: 400, erro: 'Escolha um período de até 31 dias.' };
   const usuario = String(url.searchParams.get('usuario') || '').replace(/\D/g, '').slice(0, 20);
   const antes = Number(url.searchParams.get('antes')) || 0;
-  const onde = " FROM msg_atividade a WHERE acao NOT IN ('online','visualizar','espiar') AND em>=? AND em<=?" + (usuario ? ' AND usuario=?' : '');
+  const onde = " FROM msg_atividade a WHERE NOT EXISTS(SELECT 1 FROM msg_conversa g WHERE g.id=a.conversa_id AND g.grupo=1) AND acao NOT IN ('online','visualizar','espiar') AND em>=? AND em<=?" + (usuario ? ' AND usuario=?' : '');
   const args = [new Date(inicio).toISOString(), new Date(fim).toISOString(), ...(usuario ? [usuario] : [])];
   const presencas = (await env.DB.prepare('SELECT usuario,nome,em,conversa_id FROM msg_presenca ORDER BY em DESC LIMIT 200').all()).results;
   const totais = (await env.DB.prepare("SELECT usuario,MAX(nome) AS nome,COUNT(*) AS acoes,SUM(acao='responder') AS respostas,SUM(acao='encerrar') AS encerramentos,SUM(acao='notas') AS notas" + onde + ' GROUP BY usuario ORDER BY respostas DESC,acoes DESC').bind(...args).all()).results;
@@ -5468,20 +5473,25 @@ export default {
       if (p === '/msg/resumo' && req.method === 'GET') return J(await resumoMensagens_(env, url.origin));
       if (p === '/msg/conversas' && req.method === 'GET') {
         const cursorConsulta=agora();
-        const canal = url.searchParams.get('canal') || '', busca = String(url.searchParams.get('busca') || '').trim().slice(0, 60), antes = url.searchParams.get('antes') || '', filtro = url.searchParams.get('filtro') || '';
-        const tipo = ['individual', 'grupo'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : '';   // v2.12: só conversas, só grupos ou os dois
+        const buscaCanal = url.searchParams.get('canal') || '', busca = String(url.searchParams.get('busca') || '').trim().slice(0, 60), antes = url.searchParams.get('antes') || '', filtro = busca?'':url.searchParams.get('filtro') || '';
+        const canal=busca?'todos':buscaCanal;
+        const tipo = !busca&& ['individual', 'grupo'].includes(url.searchParams.get('tipo')) ? url.searchParams.get('tipo') : '';   // v2.12: só conversas, só grupos ou os dois
         const todos = canal === 'todos';   // v2.10: aba "Todas" = os três canais juntos
         if (!todos && !MSG_CANAIS.includes(canal)) return J({ ok: false, erro: 'Escolha Todas, Instagram, WhatsApp 1 ou WhatsApp 2.' }, 400);
         let sql = 'SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE ' + (todos ? '' : 'canal=? AND ') + 'total>0', args = todos ? [] : [canal];
         // v2.11: encerradas só aparecem no filtro "Encerradas" (ou numa busca); voltam sozinhas quando o cliente escreve de novo
-        if (filtro === 'encerradas') sql += " AND encerrada_em<>''"; else if (!busca) sql += " AND encerrada_em=''";
+        if(filtro==='encerradas')sql+=" AND grupo=0 AND encerrada_em<>''";else if(!busca)sql+=" AND (grupo=1 OR encerrada_em='')";
         if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'lidas') sql += ' AND nao_lidas=0'; else if (filtro === 'sem_resposta') sql += ' AND '+MSG_ESPERA_SQL_; else if (filtro === 'grupos') sql += ' AND grupo=1'; else if (filtro === 'ambos') sql += " AND pessoa<>'' AND " + MSG_OUTRO_SQL_ + ' IS NOT NULL';
         if(filtro==='com_notas')sql+=" AND encerrada_em='' AND "+MSG_NOTAS_COUNT_SQL_+'>0';
-        const fila=url.searchParams.get('fila')||'',escopo=url.searchParams.get('escopo')||'todos';
+        const fila=busca?'':url.searchParams.get('fila')||'',escopo=busca?'todos':url.searchParams.get('escopo')||'todos';
         if(!['','esperando','em_atendimento'].includes(fila)||!['todos','meus'].includes(escopo))return J({ok:false,erro:'Escolha uma fila e Todos ou Meus.'},400);
-        if(fila&&tipo!=='grupo'&&filtro!=='encerradas'){
-          sql+=" AND encerrada_em='' AND grupo=0 AND "+(fila==='esperando'?'NOT ':'')+MSG_ATENDIDO_SQL_;
-          if(fila==='em_atendimento'&&escopo==='meus'){sql+=' AND dono=?';args.push(await meuNomeAtendente_(env,req));}
+        if(fila&&filtro!=='encerradas'){
+          if(fila==='esperando')sql+=" AND grupo=0 AND encerrada_em='' AND NOT "+MSG_ATENDIDO_SQL_;
+          else{
+            let individual="grupo=0 AND encerrada_em='' AND "+MSG_ATENDIDO_SQL_;
+            if(escopo==='meus'){individual+=' AND dono=?';args.push(await meuNomeAtendente_(env,req));}
+            sql+=' AND (grupo=1 OR ('+individual+'))';
+          }
         }
         if (tipo) sql += tipo === 'grupo' ? ' AND grupo=1' : ' AND grupo=0';
         if (filtro === 'minhas') { sql += ' AND dono=?'; args.push(await meuNomeAtendente_(env, req)); }
@@ -5489,20 +5499,27 @@ export default {
           sql += " AND grupo=0 AND ultima_em<? AND ultima_em>? AND (ult_dir='saida' OR (CASE WHEN " + MSG_IDENTIDADE_SQL_ + "<>'' THEN " + MSG_IDENTIDADE_SQL_ + " ELSE 'c:'||msg_conversa.id END) IN (SELECT a.alvo FROM msg_alvo_etiqueta a JOIN msg_etiqueta e ON e.id=a.etiqueta_id WHERE e.arquivada=0 AND e.nome IN ('Reserva','Aguardando pagamento')))";
           args.push(new Date(Date.now() - 864e5).toISOString(), new Date(Date.now() - 30 * 864e5).toISOString());
         }
-        const etqF = Number(url.searchParams.get('etiqueta')) || 0;
+        const etqF = busca?0:Number(url.searchParams.get('etiqueta')) || 0;
         if (etqF) { sql += " AND (CASE WHEN " + MSG_IDENTIDADE_SQL_ + "<>'' THEN " + MSG_IDENTIDADE_SQL_ + " ELSE 'c:'||msg_conversa.id END) IN (SELECT alvo FROM msg_alvo_etiqueta WHERE etiqueta_id=?)"; args.push(etqF); }
-        if (busca) { sql += ' AND ('+MSG_NOME_SQL_+' LIKE ? OR contato LIKE ? OR previa LIKE ? ' + (busca.length >= 3 ? ' OR EXISTS (SELECT 1 FROM msg_mensagem mm WHERE mm.conversa_id=msg_conversa.id AND mm.texto LIKE ?)' : '') + ')'; const q = '%' + busca.replace(/[%_]/g, '') + '%'; args.push(q, q, q); if (busca.length >= 3) args.push(q); }
+        const buscaSql='('+MSG_NOME_SQL_+' LIKE ? OR nome LIKE ? OR contato LIKE ? OR previa LIKE ?'+(busca.length>=3?' OR EXISTS(SELECT 1 FROM msg_mensagem mm WHERE mm.conversa_id=msg_conversa.id AND mm.texto LIKE ?)':'')+')';
+        const termo='%'+busca.replace(/[%_]/g,'')+'%',buscaArgs=Array(busca.length>=3?5:4).fill(termo);
         // A página seleciona PESSOAS; só depois traz seus canais. Uma conversa antiga
         // não pode desaparecer do bloco porque outras 50 conversas são mais recentes.
-        let rs;
-        if(url.searchParams.get('blocos')==='1'){
+        let rs,paginacao={temMais:false,proximo:null};
+        if(busca||url.searchParams.get('blocos')==='1'){
         const key = "CASE WHEN grupo=1 THEN 'grupo:'||id ELSE COALESCE(NULLIF("+MSG_IDENTIDADE_SQL_+",''),'conversa:'||id) END";
-        let pagina = 'SELECT bloco, MAX(ultima_em) AS em, MAX(id) AS ancora FROM base GROUP BY bloco';
+        let pagina = 'SELECT bloco, MAX(ultima_em) AS em, MAX(id) AS ancora FROM base'+(busca?' WHERE bloco IN (SELECT bloco FROM achados)':'')+' GROUP BY bloco';
+        const achados=busca?', achados AS (SELECT '+key+' AS bloco FROM msg_conversa WHERE total>0 AND '+(busca.replace(/[%_]/g,'')?'1=1':'0=1')+' AND '+buscaSql+')':'';
+        if(busca)args.push(...buscaArgs);
         if (antes) {const id=Number(url.searchParams.get('antesId'))||0;pagina += id?' HAVING (MAX(ultima_em)<? OR (MAX(ultima_em)=? AND MAX(id)<?))':' HAVING MAX(ultima_em)<?';args.push(...(id?[antes,antes,id]:[antes]));}
-        rs = await env.DB.prepare('WITH base AS (' + sql.replace('SELECT '+MSG_COLS_CONVERSA_, 'SELECT '+MSG_COLS_CONVERSA_+', '+key+' AS bloco') + '), pagina AS ('+pagina+' ORDER BY em DESC, ancora DESC LIMIT 50) SELECT base.* FROM base JOIN pagina USING(bloco) ORDER BY pagina.em DESC, pagina.ancora DESC, base.ultima_em DESC, base.id DESC').bind(...args).all();
+        rs = await env.DB.prepare('WITH base AS (' + sql.replace('SELECT '+MSG_COLS_CONVERSA_, 'SELECT '+MSG_COLS_CONVERSA_+', '+key+' AS bloco') + ')'+achados+', pagina AS ('+pagina+' ORDER BY em DESC, ancora DESC LIMIT 51) SELECT base.* FROM base JOIN pagina USING(bloco) ORDER BY pagina.em DESC, pagina.ancora DESC, base.ultima_em DESC, base.id DESC').bind(...args).all();
         }else{
           if(antes){const id=Number(url.searchParams.get('antesId'))||0;sql+=id?' AND (ultima_em<? OR (ultima_em=? AND id<?))':' AND ultima_em<?';args.push(...(id?[antes,antes,id]:[antes]));}
           rs=await env.DB.prepare(sql+' ORDER BY ultima_em DESC,id DESC LIMIT 50').bind(...args).all();
+        }
+        if(busca||url.searchParams.get('blocos')==='1'){
+          const blocos=[...new Set(rs.results.map(c=>c.bloco))],permitidos=new Set(blocos.slice(0,50));paginacao.temMais=blocos.length>50;rs.results=rs.results.filter(c=>permitidos.has(c.bloco));
+          if(paginacao.temMais){const ultimo=rs.results.filter(c=>c.bloco===blocos[49]);paginacao.proximo={em:ultimo.map(c=>c.ultima_em).sort().at(-1),id:Math.max(...ultimo.map(c=>c.id))};}
         }
         try { const mp = await etiquetasDosAlvos_(env, rs.results.map(alvoDe_)); rs.results.forEach((r) => { r.etiquetas = mp[alvoDe_(r)] || []; }); } catch (e) { /* etiqueta é conforto */ }
         // Indicador de agenda na fila: consulta em lote, sem N requisições por cliente.
@@ -5526,7 +5543,7 @@ export default {
         }
         try{await relacionamentosAtendimento_(env,rs.results);}catch(_){/* Histórico indisponível não impede atendimento. */}
         const geral = (await msgContagens_(env, todos ? '' : canal))[canal];
-        return J({ ok: true, conversas: rs.results, contagens: tipo ? (await msgContagens_(env, todos ? '' : canal, tipo))[canal] : geral, tipos: { individuais: geral.individuais, grupos: geral.grupos }, cursor: cursorConsulta });
+        return J({ ok: true,...paginacao, conversas: rs.results, contagens: tipo ? (await msgContagens_(env, todos ? '' : canal, tipo))[canal] : geral, tipos: { individuais: geral.individuais, grupos: geral.grupos }, cursor: cursorConsulta });
       }
       if(p==='/msg/relacionamento'&&req.method==='GET'){
         const id=Number(url.searchParams.get('conversa'));if(!Number.isSafeInteger(id)||id<1)return J({ok:false,erro:'Escolha uma conversa individual.'},400);
@@ -5861,6 +5878,7 @@ export default {
         /* v2.11: encerrar (uma ou várias) / reabrir. Encerrar zera o "não lida" só no painel; o celular não é tocado. */
         const d = await req.json().catch(() => ({})), ids = [...new Set((Array.isArray(d.conversas) ? d.conversas : [d.conversa]).map(Number).filter((x) => Number.isInteger(x) && x > 0))].slice(0, 200);
         if (!ids.length) return J({ ok: false, erro: 'Escolha ao menos uma conversa.' }, 400);
+        if(await env.DB.prepare('SELECT id FROM msg_conversa WHERE grupo=1 AND id IN ('+ids.map(()=>'?').join(',')+') LIMIT 1').bind(...ids).first())return J({ok:false,erro:'Grupos internos ficam em atendimento e não são encerrados.'},409);
         const t = agora(), reabrir = d.reabrir === true, marca = ids.map(() => '?').join(',');
         // v2.13: motivo do encerramento (padrão "concluido"); cada encerramento fica no histórico
         const motivo = MSG_MOTIVOS_.includes(d.motivo) ? d.motivo : 'concluido', por = (req.headers.get('X-TK-Whats') || '').replace(/\D/g, '').slice(-4);

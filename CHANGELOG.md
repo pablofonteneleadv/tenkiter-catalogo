@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.46] - 2026-11-01
+
+- Individuais/Grupos fixos em Em atendimento e Todos; grupos internos entram direto em atendimento e não são encerrados nem contam nas regras de clientes.
+- Pendentes destacados por quantidade e espera, usando a meta do canal e animação breve com movimento reduzido respeitado.
+- Busca geral inclui encerrados, ignora os filtros da lista e agrupa todos os canais pela identidade, preservando homônimos separados e situação por conversa. Resultados adicionais têm paginação explícita.
+
 ## [7.40.45] - 2026-11-01
 
 - Mensageiro com topo e seções compactos, filtros sob demanda e indicação dos filtros ativos; responsável e histórico deixam de disputar espaço com o telefone.
