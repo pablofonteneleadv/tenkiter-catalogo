@@ -92,7 +92,7 @@ const DDL = [
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
-const ESQUEMA_ = '20261031-fila-gestor-1';
+const ESQUEMA_ = '20261031-gestao-regras-1';
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -126,6 +126,10 @@ async function iniciar(env) {
     await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS ix_agenda_chave ON msg_agenda(chave) WHERE chave<>''").run();
     /* v7.40.33 — presença aproximada e atividade registrada (retomado do checkpoint #305).
        Tabelas aditivas: não alteram nem apagam mensagens, conversas ou tarefas existentes. */
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_tempo_sinal(usuario TEXT NOT NULL,fonte TEXT NOT NULL,nome TEXT NOT NULL,em INTEGER NOT NULL,seq INTEGER NOT NULL DEFAULT 0,estado TEXT NOT NULL,conversa_id INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(usuario,fonte))").run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_tempo_intervalo(usuario TEXT NOT NULL,fonte TEXT NOT NULL,inicio INTEGER NOT NULL,fim INTEGER NOT NULL,estado TEXT NOT NULL,conversa_id INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(usuario,fonte,inicio))").run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_tempo_fim ON msg_tempo_intervalo(fim)').run();
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_disponibilidade(usuario TEXT PRIMARY KEY,pausa INTEGER NOT NULL DEFAULT 0,em TEXT NOT NULL)").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_presenca(usuario TEXT PRIMARY KEY,nome TEXT NOT NULL,em TEXT NOT NULL,conversa_id INTEGER NOT NULL DEFAULT 0)").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_atividade(id INTEGER PRIMARY KEY AUTOINCREMENT,chave TEXT NOT NULL UNIQUE,usuario TEXT NOT NULL,nome TEXT NOT NULL,acao TEXT NOT NULL,conversa_id INTEGER NOT NULL DEFAULT 0,em TEXT NOT NULL)").run();
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_gestor_log(id INTEGER PRIMARY KEY AUTOINCREMENT,usuario TEXT NOT NULL,nome TEXT NOT NULL,acao TEXT NOT NULL,alvo TEXT NOT NULL,antes TEXT NOT NULL DEFAULT '',depois TEXT NOT NULL DEFAULT '',em TEXT NOT NULL)").run();
@@ -147,7 +151,7 @@ async function migrarEsquema_(env) {
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN urgente INTEGER NOT NULL DEFAULT 0').run(); } catch (e) { /* já existe */ }
   try { await env.DB.prepare('ALTER TABLE postagem ADD COLUMN repostado_de INTEGER').run(); } catch (e) { /* já existe */ }
   /* Mensagens v2: lidas/não lidas, quem falta responder, estado de entrega e quem enviou pelo painel. */
-  for (const [t, col] of [['msg_conversa', "dono TEXT DEFAULT ''"], ['msg_conversa', "dono_id TEXT NOT NULL DEFAULT ''"], ['msg_mensagem', "atendente_id TEXT NOT NULL DEFAULT ''"], ['msg_mensagem', 'automatica INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "reaberta_em TEXT DEFAULT ''"], ['msg_conversa', "atendido_em TEXT DEFAULT ''"], ['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "ctx_autor TEXT DEFAULT ''"], ['msg_mensagem', "ctx_trecho TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"], ['msg_conversa', "encerrada_motivo TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
+  for (const [t, col] of [['msg_conversa', "retorno_em TEXT NOT NULL DEFAULT ''"], ['msg_mensagem', 'cortesia INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'retorno INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "dono TEXT DEFAULT ''"], ['msg_conversa', "dono_id TEXT NOT NULL DEFAULT ''"], ['msg_mensagem', "atendente_id TEXT NOT NULL DEFAULT ''"], ['msg_mensagem', 'automatica INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "reaberta_em TEXT DEFAULT ''"], ['msg_conversa', "atendido_em TEXT DEFAULT ''"], ['msg_conversa', 'nao_lidas INTEGER NOT NULL DEFAULT 0'], ['msg_conversa', "ult_dir TEXT DEFAULT ''"], ['msg_conversa', "ult_entrada_em TEXT DEFAULT ''"], ['msg_conversa', "ult_saida_em TEXT DEFAULT ''"], ['msg_conversa', "atualizada_em TEXT DEFAULT ''"], ['msg_mensagem', "status TEXT DEFAULT ''"], ['msg_mensagem', "status_em TEXT DEFAULT ''"], ['msg_mensagem', "por TEXT DEFAULT ''"], ['msg_mensagem', "midia_chave TEXT DEFAULT ''"], ['msg_mensagem', "midia_mime TEXT DEFAULT ''"], ['msg_mensagem', 'midia_seg INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "midia_url TEXT DEFAULT ''"], ['msg_mensagem', "ctx_tipo TEXT DEFAULT ''"], ['msg_mensagem', "ctx_ref TEXT DEFAULT ''"], ['msg_mensagem', 'ctx_post INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', 'ctx_aprox INTEGER NOT NULL DEFAULT 0'], ['msg_mensagem', "ctx_chave TEXT DEFAULT ''"], ['msg_mensagem', "ctx_autor TEXT DEFAULT ''"], ['msg_mensagem', "ctx_trecho TEXT DEFAULT ''"], ['msg_mensagem', "autor_nome TEXT DEFAULT ''"], ['msg_mensagem', "autor_fone TEXT DEFAULT ''"], ['msg_mensagem', "autor_lid TEXT DEFAULT ''"], ['msg_conversa', "pessoa TEXT DEFAULT ''"], ['msg_conversa', "encerrada_em TEXT DEFAULT ''"], ['msg_conversa', "encerrada_motivo TEXT DEFAULT ''"]]) { try { await env.DB.prepare('ALTER TABLE ' + t + ' ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ } }
   /* v2.13: histórico de encerramentos (motivo, quando e por quem): base das métricas e, depois, do termômetro de cada cliente */
   try {
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS msg_status_ref (canal TEXT NOT NULL,ext_id TEXT NOT NULL,chave TEXT NOT NULL,mime TEXT NOT NULL,em TEXT NOT NULL,PRIMARY KEY(canal,ext_id))").run();
@@ -269,7 +273,8 @@ function msgRecurso_(p, req, url) {
   if (p === '/msg/acompanhamento') return 'agenda';
   if (p === '/msg/iniciar') return 'responder';
   if (p === '/msg/equipe') return 'metricas';
-  if (p === '/msg/presenca') return 'acessar';
+  if(p==='/msg/cortesia/rever')return 'responder';
+  if (p === '/msg/presenca'||p==='/msg/disponibilidade') return 'acessar';
   if (/^\/msg\/funil/.test(p)) return 'funil';
   if (p === '/msg/metricas') return 'metricas';
   if (p === '/msg/exportar') return 'exportar';
@@ -2793,15 +2798,47 @@ async function aprenderNomeProprio_(env, canal, nome, contato, t) {
     await env.DB.prepare("UPDATE msg_conversa SET nome='', atualizada_em=? WHERE canal=? AND grupo=0 AND lower(nome)=lower(?)").bind(t, canal, nome).run();
   } else if (!cand || cand.nome !== nome) await cfgSet(env, 'msg_nome_proprio_cand_' + canal, JSON.stringify({ nome: nome, contato: contato }));
 }
+const ENCERRAMENTO_CFG_='msg_encerramento_regras_v1';
+function encerramentoPadrao_(){return {versao:0,cortesiaLigada:true,cortesiaMinutos:120,motivosCortesia:['concluido','vendeu'],expressoes:['ok','okay','obrigada','obrigado','muito obrigada','muito obrigado','beijos','bjs','boa noite','bom descanso','até mais','tchau','valeu','de nada','👍','🙏','😘'],notificarCortesia:false,retomarLigado:true,retornoHoras:24,manterResponsavel:true,automacoesRetorno:false};}
+async function encerramentoCfg_(env){const r=await cfgGet(env,ENCERRAMENTO_CFG_);return r?JSON.parse(r):encerramentoPadrao_();}
+const normalizarCortesia_=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,'').replace(/\s+/g,' ').trim();
+export function classificarRetorno_(c,m,cfg,agoraMs){
+  if(!c?.encerrada_em||m.direcao!=='entrada'||m.grupo)return {cortesia:false,retomar:false};
+  const fim=Date.parse(c.encerrada_em),mensagem=Date.parse(m.em),decorrido=agoraMs-fim;
+  if(!Number.isFinite(fim)||!Number.isFinite(mensagem)||mensagem<fim||decorrido<0)return {cortesia:false,retomar:false};
+  const texto=String(m.texto||'').trim(),n=normalizarCortesia_(texto);
+  const simples=m.tipo==='texto'&&!m.midiaChave&&!m.midiaUrl&&!m.ctxTipo&&texto.length>0&&texto.length<=180&&!/[?？]/.test(texto);
+  const combina=simples&&cfg.expressoes.some(x=>n?normalizarCortesia_(x)===n:String(x).trim()===texto);
+  const cortesia=cfg.cortesiaLigada&&cfg.cortesiaMinutos>0&&decorrido<=cfg.cortesiaMinutos*60000&&cfg.motivosCortesia.includes(c.encerrada_motivo)&&combina;
+  return {cortesia:!!cortesia,retomar:!cortesia&&cfg.retomarLigado&&cfg.retornoHoras>0&&decorrido<=cfg.retornoHoras*3600000};
+}
+async function salvarEncerramento_(env,req,J){
+  const d=await req.json().catch(()=>null),raw=await cfgGet(env,ENCERRAMENTO_CFG_),atual=raw?JSON.parse(raw):encerramentoPadrao_();
+  if(!d||d.versao!==atual.versao)return J({ok:false,erro:'As regras mudaram em outra sessão. Reabra os ajustes.'},409);
+  const bools=['cortesiaLigada','notificarCortesia','retomarLigado','manterResponsavel','automacoesRetorno'];
+  if(bools.some(k=>typeof d[k]!=='boolean')||!Number.isInteger(d.cortesiaMinutos)||d.cortesiaMinutos<0||d.cortesiaMinutos>1440||!Number.isInteger(d.retornoHoras)||d.retornoHoras<0||d.retornoHoras>168)return J({ok:false,erro:'Confira as opções e os prazos: cortesia até 1.440 minutos e retorno até 168 horas corridas.'},400);
+  if(!Array.isArray(d.expressoes)||d.expressoes.length>60||d.expressoes.some(x=>typeof x!=='string'||!x.trim()||x.length>80)||!Array.isArray(d.motivosCortesia)||d.motivosCortesia.some(x=>!MSG_MOTIVOS_.includes(x)))return J({ok:false,erro:'Use até 60 expressões inteiras de no máximo 80 caracteres e escolha os motivos.'},400);
+  const cfg={versao:atual.versao+1,cortesiaMinutos:d.cortesiaMinutos,retornoHoras:d.retornoHoras,expressoes:[...new Set(d.expressoes.map(x=>x.trim()))],motivosCortesia:[...new Set(d.motivosCortesia)]};for(const k of bools)cfg[k]=d[k];
+  const stmt=raw===null?env.DB.prepare('INSERT OR IGNORE INTO cfg(chave,valor) VALUES(?,?)').bind(ENCERRAMENTO_CFG_,JSON.stringify(cfg)):env.DB.prepare('UPDATE cfg SET valor=? WHERE chave=? AND valor=?').bind(JSON.stringify(cfg),ENCERRAMENTO_CFG_,raw);
+  const rs=await env.DB.batch([stmt,env.DB.prepare("INSERT INTO msg_gestor_log(usuario,nome,acao,alvo,antes,depois,em) SELECT ?,?,'encerramento','regras',?,?,? WHERE changes()=1").bind(msgTelefone_(req.headers.get('X-TK-Whats')),await meuNomeAtendente_(env,req),JSON.stringify(atual),JSON.stringify(cfg),agora())]);
+  if(rs[0].meta?.changes!==1)return J({ok:false,erro:'Outra sessão alterou as regras. Atualize antes de salvar.'},409);return J({ok:true,config:cfg});
+}
+
 /** Grava uma mensagem (idempotente por canal+ext_id). Devolve true se era nova. */
 async function gravarMensagem_(env, canal, m) {
   if (!MSG_CANAIS.includes(canal)) return false;
   const t = agora();
   if (m.nomeProprio && canal !== 'instagram') { try { await aprenderNomeProprio_(env, canal, m.nomeProprio, m.contato, t); } catch (e) { /* conserto do nome é conforto */ } }
   await env.DB.prepare('INSERT OR IGNORE INTO msg_conversa (canal, contato, nome, grupo, ultima_em, criado_em, atualizada_em) VALUES (?,?,?,?,?,?,?)').bind(canal, m.contato, m.nome, m.grupo, '', t, t).run();
-  const c = await env.DB.prepare('SELECT id, pessoa FROM msg_conversa WHERE canal=? AND contato=?').bind(canal, m.contato).first();
+  const c = await env.DB.prepare('SELECT id,pessoa,encerrada_em,encerrada_motivo,dono,dono_id,atendido_em FROM msg_conversa WHERE canal=? AND contato=?').bind(canal, m.contato).first();
   if (!c) return false;
   const saida = m.direcao === 'saida';
+  let regras=null,retorno={cortesia:false,retomar:false},inicioAnterior='';
+  if(!saida&&!m.grupo&&c.encerrada_em){regras=await encerramentoCfg_(env);retorno=classificarRetorno_(c,m,regras,Date.now());
+    if(retorno.retomar){inicioAnterior=c.atendido_em||'';if(!inicioAnterior){const h=await env.DB.prepare("SELECT MIN(enviada_em) AS em FROM msg_mensagem WHERE conversa_id=? AND direcao='saida' AND COALESCE(por,'')<>'auto' AND COALESCE(automatica,0)=0 AND status IN ('enviada','entregue','lida') AND enviada_em<=? AND enviada_em>COALESCE((SELECT MAX(em) FROM msg_encerramento WHERE conversa_id=? AND em<?),'')").bind(c.id,c.encerrada_em,c.id,c.encerrada_em).first();inicioAnterior=h?.em||'';}}
+  }
+  m._cortesia=retorno.cortesia;m._bloquearAuto=retorno.cortesia||(retorno.retomar&&!regras.automacoesRetorno);
+
   if (!c.pessoa && !m.grupo && canal !== 'instagram' && /^\d{8,20}$/.test(m.contato)) { try { await env.DB.prepare('UPDATE msg_conversa SET pessoa=' + MSG_PESSOA_SQL_ + ' WHERE id=?').bind(c.id).run(); } catch (e) { /* o aviso de "nos 2 WhatsApp" é conforto */ } }
   if (saida && !String(m.extId).startsWith('inc:')) {      // o eco de uma resposta que ficou "sem confirmação" promove aquela linha (não cria uma segunda bolha)
     try {
@@ -2813,12 +2850,14 @@ async function gravarMensagem_(env, canal, m) {
   if(m.ctxTipo==='story'&&m.ctxRef&&!m.ctxChave){const ref=await env.DB.prepare('SELECT chave FROM msg_status_ref WHERE canal=? AND ext_id=?').bind(canal,m.ctxRef).first();if(ref)m.ctxChave=ref.chave;}
   let story = { post: 0, aprox: 0 };
   if (m.ctxTipo === 'story' && !saida && !m.ctxChave) { if (m.ctxPost) story = { post: Number(m.ctxPost) || 0, aprox: 0 }; else { try { const exato=m.ctxRef?await env.DB.prepare("SELECT p.id FROM postagem p LEFT JOIN postagem_grupo_recibo r ON r.postagem_id=p.id WHERE p.status='publicado' AND p.canal IN ("+(STATUS_CANAIS_[canal]||[]).map(()=>'?').join(',')+") AND (p.ig_id=? OR r.mensagem_id=?) LIMIT 1").bind(...(STATUS_CANAIS_[canal]||[]),m.ctxRef,m.ctxRef).first():null;story=exato?{post:Number(exato.id),aprox:0}:await resolverStory_(env, canal, m.em); } catch (e) { /* sem a imagem do story: a tela mostra só o aviso */ } } }
-  const inserir = env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em, midia_chave, midia_mime, midia_seg, midia_url, ctx_tipo, ctx_ref, ctx_post, ctx_aprox, ctx_chave, autor_nome, autor_fone, autor_lid,por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t, m.midiaChave || '', String(m.midiaMime || '').slice(0, 80), Number(m.midiaSeg) || 0, m.midiaUrl || '', m.ctxTipo || '', m.ctxRef || '', story.post, story.aprox, m.ctxChave || '', m.autorNome || '', m.autorFone || '', m.autorLid || '',String(m.por||'').slice(-4));
+  const inserir = env.DB.prepare('INSERT OR IGNORE INTO msg_mensagem (conversa_id, canal, ext_id, direcao, tipo, texto, enviada_em, gravada_em, status, status_em, midia_chave, midia_mime, midia_seg, midia_url, ctx_tipo, ctx_ref, ctx_post, ctx_aprox, ctx_chave, autor_nome, autor_fone, autor_lid,por,cortesia,retorno) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,(SELECT CASE WHEN encerrada_em=? AND encerrada_motivo=? THEN ? ELSE 0 END FROM msg_conversa WHERE id=?),(SELECT CASE WHEN encerrada_em=? AND encerrada_motivo=? THEN ? ELSE 0 END FROM msg_conversa WHERE id=?))').bind(c.id, canal, m.extId, m.direcao, m.tipo, m.texto, m.em, t, saida ? 'enviada' : '', t, m.midiaChave || '', String(m.midiaMime || '').slice(0, 80), Number(m.midiaSeg) || 0, m.midiaUrl || '', m.ctxTipo || '', m.ctxRef || '', story.post, story.aprox, m.ctxChave || '', m.autorNome || '', m.autorFone || '', m.autorLid || '',String(m.por||'').slice(-4),c.encerrada_em||'',c.encerrada_motivo||'',retorno.cortesia?1:0,c.id,c.encerrada_em||'',c.encerrada_motivo||'',retorno.retomar&&!!inicioAnterior?1:0,c.id);
   const quem = m.grupo && m.direcao === 'entrada' ? (m.autorNome || (m.autorFone ? '+' + m.autorFone : '')) : '';
   const previa = ((quem ? quem + ': ' : '') + (m.texto || ('[' + m.tipo + ']'))).replace(/\s+/g, ' ').slice(0, 140);
   /* Em SQLite o lado direito do SET usa os valores ANTIGOS da linha: por isso a comparação com ultima_em/ult_entrada_em vale como "antes desta mensagem". */
-  const atividade = env.DB.prepare("UPDATE msg_conversa SET total=total+1, nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END, ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END, previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END, ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END, ult_entrada_em=CASE WHEN ?='entrada' AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END, ult_saida_em=CASE WHEN ?='saida' AND ?>ult_saida_em THEN ? ELSE ult_saida_em END, nao_lidas=CASE WHEN ?='entrada' THEN nao_lidas+1 WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END, dono=CASE WHEN ?='entrada' AND encerrada_em<>'' THEN '' ELSE dono END, dono_id=CASE WHEN "+(!saida?1:0)+"=1 AND encerrada_em<>'' THEN '' ELSE dono_id END, atendido_em=CASE WHEN ?='entrada' AND encerrada_em<>'' THEN '' ELSE atendido_em END, reaberta_em=CASE WHEN ?='entrada' AND encerrada_em<>'' THEN ? ELSE reaberta_em END, encerrada_em=CASE WHEN ?='entrada' THEN '' ELSE encerrada_em END, encerrada_motivo=CASE WHEN ?='entrada' THEN '' ELSE encerrada_motivo END, atualizada_em=? WHERE id=? AND changes()=1")
-    .bind(m.nome, m.direcao === 'entrada' ? 1 : 0, m.nome, m.em, m.em, m.em, previa, m.em, m.direcao, m.direcao, m.em, m.em, m.direcao, m.em, m.em, m.direcao, m.em, m.direcao, m.direcao, m.em, m.direcao, m.direcao, m.direcao, t, c.id);
+  const entrada=m.direcao==='entrada'?1:0,saidaSql=saida?1:0;
+  const corteSql='COALESCE((SELECT cortesia FROM recebida),0)=1',retornoSql='COALESCE((SELECT retorno FROM recebida),0)=1';
+  const atividade=env.DB.prepare("WITH recebida AS (SELECT cortesia,retorno FROM msg_mensagem WHERE canal=? AND ext_id=?) UPDATE msg_conversa SET total=total+1,nome=CASE WHEN ?<>'' AND (nome='' OR ?=1) THEN ? ELSE nome END,ultima_em=CASE WHEN ?>ultima_em THEN ? ELSE ultima_em END,previa=CASE WHEN ?>=ultima_em THEN ? ELSE previa END,ult_dir=CASE WHEN ?>=ultima_em THEN ? ELSE ult_dir END,ult_entrada_em=CASE WHEN "+entrada+"=1 AND ?>ult_entrada_em THEN ? ELSE ult_entrada_em END,ult_saida_em=CASE WHEN "+saidaSql+"=1 AND ?>ult_saida_em THEN ? ELSE ult_saida_em END,nao_lidas=CASE WHEN "+entrada+"=1 THEN nao_lidas+CASE WHEN "+corteSql+" THEN 0 ELSE 1 END WHEN ?>=ult_entrada_em THEN 0 ELSE nao_lidas END,dono=CASE WHEN "+entrada+"=1 AND encerrada_em<>'' AND NOT("+corteSql+" OR ("+retornoSql+" AND ?=1)) THEN '' ELSE dono END,dono_id=CASE WHEN "+entrada+"=1 AND encerrada_em<>'' AND NOT("+corteSql+" OR ("+retornoSql+" AND ?=1)) THEN '' ELSE dono_id END,atendido_em=CASE WHEN "+entrada+"=1 AND encerrada_em<>'' THEN CASE WHEN "+corteSql+" THEN atendido_em WHEN "+retornoSql+" THEN COALESCE(NULLIF(atendido_em,''),?) ELSE '' END ELSE atendido_em END,reaberta_em=CASE WHEN "+entrada+"=1 AND encerrada_em<>'' AND NOT("+corteSql+") THEN ? ELSE reaberta_em END,encerrada_em=CASE WHEN "+entrada+"=1 AND NOT("+corteSql+") THEN '' ELSE encerrada_em END,encerrada_motivo=CASE WHEN "+entrada+"=1 AND NOT("+corteSql+") THEN '' ELSE encerrada_motivo END,retorno_em=CASE WHEN "+entrada+"=1 AND encerrada_em<>'' AND "+retornoSql+" THEN ? WHEN "+entrada+"=1 AND encerrada_em<>'' AND NOT("+corteSql+") THEN '' ELSE retorno_em END,atualizada_em=? WHERE id=? AND changes()=1")
+    .bind(canal,m.extId,m.nome,entrada,m.nome,m.em,m.em,m.em,previa,m.em,m.direcao,m.em,m.em,m.em,m.em,m.em,regras?.manterResponsavel?1:0,regras?.manterResponsavel?1:0,inicioAnterior,t,t,t,c.id);
   const transacao=[inserir,atividade];
   if(!saida&&!m.grupo){
     // A resposta e o cancelamento dos próximos passos entram na mesma transação.
@@ -2828,10 +2867,11 @@ async function gravarMensagem_(env, canal, m) {
   }
   const [r] = await env.DB.batch(transacao);
   if (!r.meta || r.meta.changes !== 1) return false;
+  if(retorno.cortesia||retorno.retomar){const flags=await env.DB.prepare('SELECT cortesia,retorno FROM msg_mensagem WHERE canal=? AND ext_id=?').bind(canal,m.extId).first();retorno.cortesia=!!flags?.cortesia;retorno.retomar=!!flags?.retorno;m._cortesia=retorno.cortesia;m._bloquearAuto=retorno.cortesia||(retorno.retomar&&!regras.automacoesRetorno);}
   await notificarNovidade_(env,canal);
   if (!saida && !m.grupo && canal !== 'instagram' && /^\d{10,15}$/.test(m.contato)) { try { if ((await cfgGet(env, 'contatos_auto')) === '1') await enfileirarContato_(env, canal, m.contato, m.nome); } catch (e) { /* o cadastro no Google é conforto: a mensagem já foi gravada */ } }
   m._conversaId = c.id; m._msgId = Number(r.meta.last_row_id) || 0;      // v7.40.9: para a resposta automática
-  if(!saida && !m.grupo && Date.parse(m.em)>Date.now()-300000){try{await mobileTables_(env);await env.DB.prepare('INSERT OR IGNORE INTO msg_push_outbox(mensagem,conversa,canal,chave,criado) VALUES(?,?,?,?,?)').bind(Number(r.meta.last_row_id),c.id,canal,crypto.randomUUID(),t).run();}catch(_){/* falha de aviso não interrompe o recebimento */}}
+  if(!saida && !m.grupo && (!retorno.cortesia||regras.notificarCortesia) && Date.parse(m.em)>Date.now()-300000){try{await mobileTables_(env);await env.DB.prepare('INSERT OR IGNORE INTO msg_push_outbox(mensagem,conversa,canal,chave,criado) VALUES(?,?,?,?,?)').bind(Number(r.meta.last_row_id),c.id,canal,crypto.randomUUID(),t).run();}catch(_){/* falha de aviso não interrompe o recebimento */}}
   return true;
 }
 /* Entrada durável independente das gravações D1. Prefixo privado, recusado pelo
@@ -2993,8 +3033,9 @@ export async function processarPushMobile_(env, recentes = false) {
     if(Date.parse(item.criado)<Date.now()-3600000){await env.DB.prepare("UPDATE msg_push_outbox SET estado='expirada' WHERE mensagem=?").bind(item.mensagem).run();continue;}
     if(!ids.length)continue;
     try{
-      const mensagem=await env.DB.prepare("SELECT c.nome,c.contato,c.grupo,c.canal,c.nao_lidas,c.encerrada_em,m.texto,m.tipo,m.autor_nome FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.id=? AND EXISTS(SELECT 1 FROM msg_mensagem original WHERE original.id=? AND original.conversa_id=c.id AND original.direcao='entrada') AND m.id=(SELECT recente.id FROM msg_mensagem recente WHERE recente.conversa_id=c.id AND recente.direcao='entrada' ORDER BY recente.enviada_em DESC,recente.id DESC LIMIT 1)").bind(item.conversa,item.mensagem).first();
-      if(!mensagem||Number(mensagem.nao_lidas)<=0||mensagem.encerrada_em){await env.DB.prepare("UPDATE msg_push_outbox SET estado='expirada' WHERE mensagem=?").bind(item.mensagem).run();continue;}
+      const mensagem=await env.DB.prepare("SELECT c.nome,c.contato,c.grupo,c.canal,c.nao_lidas,c.encerrada_em,m.texto,m.tipo,m.autor_nome,m.cortesia FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.id=? AND EXISTS(SELECT 1 FROM msg_mensagem original WHERE original.id=? AND original.conversa_id=c.id AND original.direcao='entrada') AND m.id=(SELECT recente.id FROM msg_mensagem recente WHERE recente.conversa_id=c.id AND recente.direcao='entrada' ORDER BY recente.enviada_em DESC,recente.id DESC LIMIT 1)").bind(item.conversa,item.mensagem).first();
+      const avisarCortesia=mensagem?.cortesia&&(await encerramentoCfg_(env)).notificarCortesia;
+      if(!mensagem||(!avisarCortesia&&(Number(mensagem.nao_lidas)<=0||mensagem.encerrada_em))){await env.DB.prepare("UPDATE msg_push_outbox SET estado='expirada' WHERE mensagem=?").bind(item.mensagem).run();continue;}
       const contatoAtual=await env.DB.prepare('SELECT '+MSG_COLS_CONVERSA_+' FROM msg_conversa WHERE id=?').bind(item.conversa).first();if(contatoAtual)mensagem.nome=contatoAtual.nome;
       const previa=previaPushMobile_(mensagem);
       const r=await fetch('https://api.onesignal.com/notifications',{method:'POST',signal:AbortSignal.timeout(10000),headers:{'Content-Type':'application/json','Authorization':'Key '+pushKey},body:JSON.stringify({app_id:'535f6b0d-c866-43c2-b241-43bd7ab62fae',target_channel:'push',include_subscription_ids:ids,idempotency_key:item.chave,headings:{en:previa.titulo,pt:previa.titulo},contents:{en:previa.texto,pt:previa.texto},priority:10,small_icon:'ic_stat_message',buttons:[{id:'espiar',text:'Espiar'},{id:'abrir',text:'Abrir conversa'}],android_visibility:0,data:{conversa:item.conversa,canal:item.canal,modo:'espiar'},collapse_id:'conversa-'+item.conversa,ttl:3600})});
@@ -3344,7 +3385,7 @@ async function salvarMsgAuto_(env, d) {
 /** Webhook: agenda a resposta automática sem atrasar o aceite (ctx.waitUntil); sem ctx (testes), roda na hora. Nunca derruba o webhook. */
 const autoElegivel_ = (canal, m) => !!(m && m._conversaId && m.direcao === 'entrada' && !m.grupo && MSG_CANAIS.includes(canal) && m.tipo !== 'reação' && !(m.ctxTipo === 'story' && !String(m.texto || '').trim()));
 async function agendarAuto_(ctx, env, canal, m) {
-  if (!autoElegivel_(canal, m)) return;
+  if (m._bloquearAuto||!autoElegivel_(canal, m)) return;
   let cfg; try { cfg = await msgAuto_(env); } catch (e) { return; }
   if (!cfg.boasVindas.ligado && !cfg.foraHorario.ligado) return;            // desligadas: nada é agendado
   const p = respostaAutomatica_(env, canal, m, cfg).catch(() => null);
@@ -3354,7 +3395,7 @@ async function agendarAuto_(ctx, env, canal, m) {
  *  Nunca em grupo, nunca para mensagem da loja, nunca para resposta a status sem texto nem para reação. Sai pela mesma função do /msg/enviar,
  *  marcada como automática (por='auto'): aparece na conversa, não vira "dono" e não tira a conversa de "falta responder". */
 async function respostaAutomatica_(env, canal, m, cfgPronta) {
-  if (!autoElegivel_(canal, m)) return null;
+  if (m._bloquearAuto||!autoElegivel_(canal, m)) return null;
   const t = Date.parse(m.em); if (isNaN(t) || Math.abs(Date.now() - t) > 10 * 60000) return null;      // só mensagem que acabou de chegar (nada de histórico reenviado)
   const cfg = cfgPronta || (await msgAuto_(env)); if (!cfg.boasVindas.ligado && !cfg.foraHorario.ligado) return null;
   const conv = m._conversaId, h = horarioLoja_(t, cfg.feriados, cfg.expediente);
@@ -3432,11 +3473,12 @@ const MSG_NOTAS_COUNT_SQL_ = "(SELECT COUNT(*) FROM msg_nota nn WHERE nn.alvo="+
 // em Pendentes (o encerramento é apagado), e só uma resposta posterior a traz de volta.
 const MSG_ULT_ENC_ = "(SELECT MAX(e.em) FROM msg_encerramento e WHERE e.conversa_id=msg_conversa.id)";
 const MSG_ATENDIDO_SQL_ = "(msg_conversa.atendido_em<>'' OR EXISTS(SELECT 1 FROM msg_mensagem humana WHERE humana.conversa_id=msg_conversa.id AND humana.direcao='saida' AND COALESCE(humana.por,'')<>'auto' AND COALESCE(humana.status,'') NOT IN ('incerta','falhou','enviando') AND humana.enviada_em>COALESCE("+MSG_ULT_ENC_+",'')) OR EXISTS(SELECT 1 FROM msg_encerramento fim WHERE fim.conversa_id=msg_conversa.id AND NOT EXISTS(SELECT 1 FROM msg_mensagem depois WHERE depois.conversa_id=msg_conversa.id AND depois.direcao='entrada' AND depois.enviada_em>fim.em)))";
-const MSG_COLS_CONVERSA_ = "id, canal, contato, dono, reaberta_em, "+MSG_ATENDIDO_SQL_+" AS em_atendimento, "+MSG_NOTAS_COUNT_SQL_+" AS notas, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
+const MSG_ESPERA_SQL_="(msg_conversa.encerrada_em='' AND (msg_conversa.nao_lidas>0 OR msg_conversa.ult_dir='entrada' OR EXISTS(SELECT 1 FROM msg_mensagem entrada WHERE entrada.conversa_id=msg_conversa.id AND entrada.direcao='entrada' AND entrada.cortesia=0 AND entrada.enviada_em>COALESCE((SELECT MAX(h.enviada_em) FROM msg_mensagem h WHERE h.conversa_id=msg_conversa.id AND h.direcao='saida' AND COALESCE(h.por,'')<>'auto' AND COALESCE(h.automatica,0)=0 AND COALESCE(h.status,'') NOT IN ('incerta','falhou','enviando','pendente')),'') AND entrada.enviada_em>COALESCE((SELECT MAX(f.em) FROM msg_encerramento f WHERE f.conversa_id=msg_conversa.id),''))))";
+const MSG_COLS_CONVERSA_ = "id, canal, contato, dono, reaberta_em, retorno_em, "+MSG_ATENDIDO_SQL_+" AS em_atendimento, "+MSG_ESPERA_SQL_+" AS aguarda_resposta, "+MSG_NOTAS_COUNT_SQL_+" AS notas, "+MSG_NOME_SQL_+" AS nome, "+MSG_IDENTIDADE_SQL_+" AS pessoa, grupo, ultima_em, previa, total, nao_lidas, ult_dir, ult_entrada_em, ult_saida_em, atualizada_em, encerrada_em, encerrada_motivo, " + MSG_OUTRO_SQL_ + " AS outro_id, (SELECT m.status FROM msg_mensagem m WHERE m.conversa_id=msg_conversa.id ORDER BY m.enviada_em DESC, m.id DESC LIMIT 1) AS ult_status";
 const MSG_Q_ = (c) => "(SELECT q." + c + " FROM msg_mensagem q WHERE q.canal=msg_mensagem.canal AND q.ext_id=msg_mensagem.ctx_ref AND msg_mensagem.ctx_ref<>'' LIMIT 1)";
-const MSG_COLS_MSG_ = "id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, CASE WHEN ctx_tipo='link' THEN ctx_ref ELSE '' END AS link_previa, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, CASE WHEN ctx_chave LIKE '%.mp4' OR ctx_chave LIKE '%.mov' OR ctx_chave LIKE '%.webm' THEN 'video' ELSE (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) END AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + "COALESCE(NULLIF(ctx_trecho,'')," + MSG_Q_('texto') + ") AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir, " + "COALESCE(NULLIF(ctx_autor,''),'')" + " AS ctx_autor";
+const MSG_COLS_MSG_ = "cortesia,retorno,id, direcao, tipo, texto, enviada_em, status, por, status_em, autor_nome, autor_fone, autor_lid, midia_mime, midia_seg, (CASE WHEN midia_chave<>'' OR midia_url<>'' THEN 1 ELSE 0 END) AS midia, ctx_tipo, CASE WHEN ctx_tipo='link' THEN ctx_ref ELSE '' END AS link_previa, ctx_aprox, (CASE WHEN ctx_post>0 OR ctx_chave<>'' THEN 1 ELSE 0 END) AS ctx_midia, CASE WHEN ctx_chave LIKE '%.mp4' OR ctx_chave LIKE '%.mov' OR ctx_chave LIKE '%.webm' THEN 'video' ELSE (SELECT json_extract(p.midias,'$[0].tipo') FROM postagem p WHERE p.id=msg_mensagem.ctx_post) END AS ctx_mtipo, (SELECT p.publicado_em FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_em, (SELECT substr(p.legenda,1,120) FROM postagem p WHERE p.id=msg_mensagem.ctx_post) AS ctx_legenda, " + "COALESCE(NULLIF(ctx_trecho,'')," + MSG_Q_('texto') + ") AS ctx_texto, " + MSG_Q_('tipo') + " AS ctx_qtipo, " + MSG_Q_('direcao') + " AS ctx_qdir, " + "COALESCE(NULLIF(ctx_autor,''),'')" + " AS ctx_autor";
 async function msgContagens_(env, canal, tipo) {
-  const fields={esperando:"encerrada_em='' AND grupo=0 AND NOT "+MSG_ATENDIDO_SQL_,em_atendimento:"encerrada_em='' AND grupo=0 AND "+MSG_ATENDIDO_SQL_,conversas:"encerrada_em=''",nao_lidas:"encerrada_em='' AND nao_lidas>0",sem_resposta:"encerrada_em='' AND (nao_lidas>0 OR ult_dir='entrada')",grupos:"encerrada_em='' AND grupo=1",individuais:"encerrada_em='' AND grupo=0",encerradas:"encerrada_em<>''",ambos:"encerrada_em='' AND pessoa<>'' AND "+MSG_OUTRO_SQL_+" IS NOT NULL"};
+  const fields={esperando:"encerrada_em='' AND grupo=0 AND NOT "+MSG_ATENDIDO_SQL_,em_atendimento:"encerrada_em='' AND grupo=0 AND "+MSG_ATENDIDO_SQL_,conversas:"encerrada_em=''",nao_lidas:"encerrada_em='' AND nao_lidas>0",sem_resposta:MSG_ESPERA_SQL_,grupos:"encerrada_em='' AND grupo=1",individuais:"encerrada_em='' AND grupo=0",encerradas:"encerrada_em<>''",ambos:"encerrada_em='' AND pessoa<>'' AND "+MSG_OUTRO_SQL_+" IS NOT NULL"};
   const key="CASE WHEN grupo=1 THEN 'grupo:'||id ELSE COALESCE(NULLIF("+MSG_IDENTIDADE_SQL_+",''),'conversa:'||id) END";
   const cols=Object.entries(fields).map(([name,condition])=>"COUNT(DISTINCT CASE WHEN "+condition+" THEN "+key+" END) AS "+name).join(',');
   const where=' FROM msg_conversa WHERE total>0'+(canal?' AND canal=?':'')+(tipo==='grupo'?' AND grupo=1':tipo==='individual'?' AND grupo=0':'');
@@ -4669,6 +4711,81 @@ async function esperaMetricas_(env,canal){
   const totEspera = await env.DB.prepare("SELECT COUNT(*) AS n FROM msg_conversa WHERE grupo=0 AND ult_dir='entrada' AND encerrada_em='' AND total>0" + (canal ? ' AND canal=?' : '')).bind(...(canal ? [canal] : [])).first();
   return {total:Number((totEspera||{}).n)||0,maisAntigas:espera.results.map(x=>({id:x.id,canal:x.canal,nome:rotuloContato_(x),desde:x.ult_entrada_em}))};
 }
+/* Tempos observados por sinais autenticados; sem texto, teclas ou duração informada pelo cliente. */
+const TEMPO_ESTADOS_=['navegando','lendo','redigindo','ausente','sem_detalhe'];
+async function sinalTempo_(env,usuario,nome,d,id){
+  const fonte=typeof d.fonte==='string'&&/^[a-zA-Z0-9_-]{8,80}$/.test(d.fonte)?d.fonte:'';
+  const pausa=!!(await env.DB.prepare('SELECT pausa FROM msg_disponibilidade WHERE usuario=?').bind(usuario).first())?.pausa;
+  if(!fonte)return {pausa,medido:false};
+  const agoraMs=Date.now(),estado=d.estado==='oculto'?'oculto':pausa?'pausa':TEMPO_ESTADOS_.includes(d.estado)?d.estado:'sem_detalhe';
+  const seq=Number.isSafeInteger(d.seq)&&d.seq>0?d.seq:0;
+  const estadoValido=!id&&['lendo','redigindo'].includes(estado)?'navegando':estado;
+  const anterior=await env.DB.prepare('SELECT em,seq,estado,conversa_id FROM msg_tempo_sinal WHERE usuario=? AND fonte=?').bind(usuario,fonte).first();
+  if(anterior?.seq>0&&seq<=anterior.seq)return {pausa,medido:true};
+  if(anterior&&agoraMs-anterior.em<10000&&estado!=='oculto'&&anterior.estado!=='oculto')return {pausa,medido:true};
+  if(!anterior){const n=await env.DB.prepare('SELECT COUNT(*) AS n FROM msg_tempo_sinal WHERE usuario=? AND em>?').bind(usuario,agoraMs-120000).first();if(n?.n>=12)return {pausa,medido:false,motivo:'Muitas telas simultâneas para medir com confiança.'};}
+  const q=[];
+  if(anterior&&agoraMs>anterior.em&&agoraMs-anterior.em<=75000&&anterior.estado!=='oculto'&&estado!=='oculto'){
+    const est=anterior.estado===estadoValido?anterior.estado:'sem_detalhe',existe='EXISTS(SELECT 1 FROM msg_tempo_sinal WHERE usuario=? AND fonte=? AND em=?)';
+    q.push(env.DB.prepare('UPDATE msg_tempo_intervalo SET fim=? WHERE usuario=? AND fonte=? AND fim=? AND estado=? AND conversa_id=? AND '+existe).bind(agoraMs,usuario,fonte,anterior.em,est,anterior.conversa_id,usuario,fonte,anterior.em));
+    q.push(env.DB.prepare('INSERT OR IGNORE INTO msg_tempo_intervalo(usuario,fonte,inicio,fim,estado,conversa_id) SELECT ?,?,?,?,?,? WHERE changes()=0 AND '+existe).bind(usuario,fonte,anterior.em,agoraMs,est,anterior.conversa_id,usuario,fonte,anterior.em));
+  }
+  q.push(env.DB.prepare('INSERT INTO msg_tempo_sinal(usuario,fonte,nome,em,seq,estado,conversa_id) VALUES(?,?,?,?,?,?,?) ON CONFLICT(usuario,fonte) DO UPDATE SET nome=excluded.nome,em=excluded.em,seq=excluded.seq,estado=excluded.estado,conversa_id=excluded.conversa_id WHERE excluded.em>=msg_tempo_sinal.em AND (msg_tempo_sinal.seq=0 OR excluded.seq>msg_tempo_sinal.seq)').bind(usuario,fonte,nome,agoraMs,seq,estadoValido,id));
+  await env.DB.batch(q);return {pausa,medido:true};
+}
+/** União de fontes concorrentes. Cada segundo entra em um só estado, inclusive em dois celulares/abas. */
+export function resumirTempos_(linhas,inicio,fim){
+  const pessoas=new Map(),ordem=['pausa','redigindo','lendo','navegando','ausente','sem_detalhe'];
+  for(const r of linhas){const a=Math.max(inicio,Number(r.inicio)),b=Math.min(fim,Number(r.fim));if(!(b>a)||!ordem.includes(r.estado))continue;if(!pessoas.has(r.usuario))pessoas.set(r.usuario,[]);pessoas.get(r.usuario).push({em:a,estado:r.estado,delta:1},{em:b,estado:r.estado,delta:-1});}
+  const out=[];
+  for(const [usuario,eventos]of pessoas){eventos.sort((a,b)=>a.em-b.em);let anterior=null;const ativos={},segundos=Object.fromEntries(ordem.map(x=>[x,0])),periodos=[];
+    for(let i=0;i<eventos.length;){const em=eventos[i].em,estado=ordem.find(x=>ativos[x]>0);if(anterior!==null&&em>anterior&&estado){segundos[estado]+=(em-anterior)/1000;const p=periodos.at(-1);if(p&&p.estado===estado&&p.fim===anterior)p.fim=em;else periodos.push({inicio:anterior,fim:em,estado});}while(i<eventos.length&&eventos[i].em===em){const e=eventos[i++];ativos[e.estado]=(ativos[e.estado]||0)+e.delta;}anterior=em;}
+    out.push({usuario,segundos,online:Object.values(segundos).reduce((a,b)=>a+b,0),ativo:segundos.navegando+segundos.lendo+segundos.redigindo,atendimento:segundos.lendo+segundos.redigindo,periodos:periodos.slice(-40)});
+  }return out;
+}
+async function temposGestor_(env,inicio,fim){
+  const rs=(await env.DB.prepare('SELECT usuario,inicio,fim,estado FROM msg_tempo_intervalo WHERE fim>? AND inicio<? ORDER BY inicio DESC LIMIT 50001').bind(inicio,fim).all()).results||[];
+  const parcial=rs.length>50000;rs.splice(50000);
+  const atuais=(await env.DB.prepare('SELECT s.usuario,s.nome,s.em,s.estado,s.conversa_id,COALESCE(d.pausa,0) AS pausa FROM msg_tempo_sinal s LEFT JOIN msg_disponibilidade d ON d.usuario=s.usuario WHERE s.em>? ORDER BY s.em DESC LIMIT 1000').bind(Date.now()-120000).all()).results||[];
+  const desde=(await env.DB.prepare('SELECT MIN(inicio) AS em FROM msg_tempo_intervalo').first())?.em||null;
+  return {desde,inicio,fim,parcial,pessoas:resumirTempos_(rs,inicio,fim),atuais};
+}
+
+const PRIORIDADE_CFG_='msg_prioridade_v1';
+function prioridadePadrao_(){return {versao:0,base:50,limiteEventos:5,regras:{vendeu:{pontos:10,dias:90},concluido:{pontos:2,dias:30},sem_resposta:{pontos:-3,dias:14},engano:{pontos:0,dias:14}}};}
+async function prioridadeCfg_(env){const r=await cfgGet(env,PRIORIDADE_CFG_);return r?JSON.parse(r):prioridadePadrao_();}
+export function pontuarCliente_(eventos,cfg,agoraMs){
+  const vistos=new Set(),motivos=[],validos=eventos.filter(e=>{const r=cfg.regras[e.motivo],t=Date.parse(e.em),k=e.motivo+':'+e.em;if(!r||!Number.isFinite(t)||t>agoraMs||agoraMs-t>=r.dias*86400000||vistos.has(k))return false;vistos.add(k);return true;}).sort((a,b)=>String(b.em).localeCompare(String(a.em)));
+  let bruto=cfg.base;
+  for(const [motivo,regra]of Object.entries(cfg.regras)){const xs=validos.filter(e=>e.motivo===motivo).slice(0,cfg.limiteEventos),pontos=xs.length*regra.pontos;bruto+=pontos;if(xs.length)motivos.push({motivo,eventos:xs.length,pontos,validadeDias:regra.dias,ultimo:xs[0].em});}
+  const pontos=Math.max(0,Math.min(100,bruto));return {pontos,faixa:pontos>=70?'Alta':pontos<40?'Baixa':'Normal',base:cfg.base,motivos,semHistorico:!validos.length};
+}
+async function prioridadeBase_(env){
+  const cfg=await prioridadeCfg_(env),ck=new Request('https://gestor.invalid/prioridade-v1/'+cfg.versao);let dados;
+  try{const r=await caches.default.match(ck);if(r)dados=await r.json();}catch(_){}
+  if(!dados){const desde=new Date(Date.now()-Math.max(...Object.values(cfg.regras).map(r=>r.dias))*86400000).toISOString();
+    const linhas=(await env.DB.prepare("SELECT COALESCE(NULLIF(c.pessoa,''),NULLIF(e.pessoa,''),'conversa:'||c.id) AS alvo,e.motivo,e.em FROM msg_encerramento e JOIN msg_conversa c ON c.id=e.conversa_id WHERE c.grupo=0 AND e.em>=? GROUP BY alvo,e.motivo,e.em ORDER BY e.em DESC LIMIT 20001").bind(desde).all()).results||[];
+    const parcial=linhas.length>20000;linhas.splice(20000);const agrupadas=new Map();for(const x of linhas){if(!agrupadas.has(x.alvo))agrupadas.set(x.alvo,[]);agrupadas.get(x.alvo).push(x);}
+    const clientes=Object.create(null);for(const [alvo,xs]of agrupadas)clientes[alvo]=pontuarCliente_(xs,cfg,Date.now());dados={clientes,parcial,calculadoEm:agora()};
+    try{await caches.default.put(ck,new Response(JSON.stringify(dados),{headers:{'Cache-Control':'max-age=300','Content-Type':'application/json'}}));}catch(_){}
+  }return {...dados,config:cfg};
+}
+async function prioridadesGestor_(env,base,canal){
+  const linhas=(await env.DB.prepare("SELECT c.id,c.pessoa,c.canal,c.nome,c.contato,MAX(c.encerrada_em) AS encerradaEm FROM msg_conversa c WHERE c.grupo=0 AND c.encerrada_motivo='sem_resposta' AND c.encerrada_em<>'' AND NOT EXISTS(SELECT 1 FROM msg_conversa x WHERE x.grupo=0 AND x.encerrada_em='' AND x.total>0 AND (x.id=c.id OR(c.pessoa<>'' AND x.pessoa=c.pessoa)))"+(canal?' AND c.canal=?':'')+" GROUP BY CASE WHEN c.pessoa<>'' THEN c.pessoa ELSE 'conversa:'||c.id END ORDER BY encerradaEm DESC LIMIT 501").bind(...(canal?[canal]:[])).all()).results||[];
+  const parcial=base.parcial||linhas.length>500;linhas.splice(500);
+  const neutra=pontuarCliente_([],base.config,Date.now());return {config:base.config,calculadoEm:base.calculadoEm,parcial,retomadas:linhas.map(c=>({id:c.id,canal:c.canal,nome:rotuloContato_(c),encerradaEm:c.encerradaEm,pontuacao:(Object.hasOwn(base.clientes,c.pessoa||'conversa:'+c.id)?base.clientes[c.pessoa||'conversa:'+c.id]:neutra)})).sort((a,b)=>b.pontuacao.pontos-a.pontuacao.pontos||String(a.encerradaEm).localeCompare(String(b.encerradaEm)))};
+}
+async function salvarPrioridade_(env,req,J){
+  const d=await req.json().catch(()=>null),raw=await cfgGet(env,PRIORIDADE_CFG_),atual=raw?JSON.parse(raw):prioridadePadrao_();
+  if(!d||d.versao!==atual.versao)return J({ok:false,erro:'As regras mudaram em outra sessão. Reabra os ajustes.'},409);
+  if(!Number.isInteger(d.base)||d.base<0||d.base>100||!Number.isInteger(d.limiteEventos)||d.limiteEventos<1||d.limiteEventos>10)return J({ok:false,erro:'Use base de 0 a 100 e limite de 1 a 10 eventos por motivo.'},400);
+  const regras={};for(const k of MSG_MOTIVOS_){const r=d.regras?.[k];if(!r||!Number.isInteger(r.pontos)||r.pontos< -30||r.pontos>30||!Number.isInteger(r.dias)||r.dias<1||r.dias>365)return J({ok:false,erro:'Use pontos de −30 a 30 e validade de 1 a 365 dias em cada motivo.'},400);regras[k]={pontos:r.pontos,dias:r.dias};}
+  const cfg={versao:atual.versao+1,base:d.base,limiteEventos:d.limiteEventos,regras};
+  const stmt=raw===null?env.DB.prepare('INSERT OR IGNORE INTO cfg(chave,valor) VALUES(?,?)').bind(PRIORIDADE_CFG_,JSON.stringify(cfg)):env.DB.prepare('UPDATE cfg SET valor=? WHERE chave=? AND valor=?').bind(JSON.stringify(cfg),PRIORIDADE_CFG_,raw);
+  const rs=await env.DB.batch([stmt,env.DB.prepare("INSERT INTO msg_gestor_log(usuario,nome,acao,alvo,antes,depois,em) SELECT ?,?,'prioridade','clientes',?,?,? WHERE changes()=1").bind(msgTelefone_(req.headers.get('X-TK-Whats')),await meuNomeAtendente_(env,req),JSON.stringify(atual),JSON.stringify(cfg),agora())]);
+  if(rs[0].meta?.changes!==1)return J({ok:false,erro:'Outra sessão alterou as regras. Atualize antes de salvar.'},409);return J({ok:true,config:cfg});
+}
+
 /* Gestão: somente Admin total. Consultas não leem texto nem enviam mensagens. */
 const GESTOR_CFG_='msg_gestor_v1';
 function gestorPadrao_(){return {versao:0,metas:{whatsapp1:10,whatsapp2:10,instagram:10}};}
@@ -4693,8 +4810,9 @@ export function historicoGestor_(mensagens,encerramentos,op){
       if(e.motivo==='engano'){ciclos.splice(marco);primeiras.splice(marcoPrimeira);}
       pergunta=null;inicio=null;primeiro=false;completo=true;marco=ciclos.length;marcoPrimeira=primeiras.length;continue;
     }
+    if(e.cortesia)continue;
     conversas.add(c);
-    if(e.direcao==='entrada'){recebidas++;if(pergunta===null){pergunta=em;if(inicio===null)inicio=em;horas[new Date(em-FUSO_MS_).getUTCHours()].entradas++;}continue;}
+    if(e.direcao==='entrada'){if(e.retorno){primeiro=true;completo=false;}recebidas++;if(pergunta===null){pergunta=em;if(inicio===null)inicio=em;horas[new Date(em-FUSO_MS_).getUTCHours()].entradas++;}continue;}
     if(e.por==='auto'||e.automatica||!['enviada','entregue','lida'].includes(e.status))continue;
     saidas++;e.atendente_id?comAutor++:semAutor++;
     if(pergunta===null)continue;
@@ -4724,7 +4842,7 @@ async function gestorDados_(env,url){
   const inicioCalendario=Math.max(agoraMs-3660*DIA_MS_,Math.min(desdeMs,Date.parse(fonte.mensagensDesde||'')||desdeMs));
   const tempo=modo==='util'?calendarioGestor_(inicioCalendario,agoraMs,auto.expediente,auto.feriados):(a,b)=>Math.max(0,b-a)/60000;
   const filtro=canal?' AND c.canal=?':'',args=canal?[canal]:[];
-  const abertas=(await env.DB.prepare("SELECT c.id,c.canal,c.contato,c.nome,c.dono,c.dono_id,c.atendido_em,c.atualizada_em,c.ult_dir,c.ult_entrada_em,c.ult_saida_em,(SELECT MIN(m.enviada_em) FROM msg_mensagem m WHERE m.conversa_id=c.id AND m.direcao='entrada' AND m.enviada_em>COALESCE((SELECT MAX(e.em) FROM msg_encerramento e WHERE e.conversa_id=c.id),'') AND m.enviada_em>COALESCE((SELECT MAX(s.enviada_em) FROM msg_mensagem s WHERE s.conversa_id=c.id AND s.direcao='saida' AND COALESCE(s.por,'')<>'auto' AND COALESCE(s.automatica,0)=0 AND s.status IN ('enviada','entregue','lida')),'')) AS desde FROM msg_conversa c WHERE c.grupo=0 AND c.encerrada_em='' AND c.total>0"+filtro+" ORDER BY c.ult_entrada_em LIMIT 5001").bind(...args).all()).results||[];
+  const abertas=(await env.DB.prepare("SELECT c.id,c.pessoa,c.canal,c.contato,c.nome,c.dono,c.dono_id,c.atendido_em,c.atualizada_em,c.ult_dir,c.ult_entrada_em,c.ult_saida_em,(SELECT MIN(m.enviada_em) FROM msg_mensagem m WHERE m.conversa_id=c.id AND m.direcao='entrada' AND m.enviada_em>COALESCE((SELECT MAX(e.em) FROM msg_encerramento e WHERE e.conversa_id=c.id),'') AND m.enviada_em>COALESCE((SELECT MAX(s.enviada_em) FROM msg_mensagem s WHERE s.conversa_id=c.id AND s.direcao='saida' AND COALESCE(s.por,'')<>'auto' AND COALESCE(s.automatica,0)=0 AND s.status IN ('enviada','entregue','lida')),'')) AS desde FROM msg_conversa c WHERE c.grupo=0 AND c.encerrada_em='' AND c.total>0"+filtro+" ORDER BY c.ult_entrada_em LIMIT 5001").bind(...args).all()).results||[];
   const parcialFila=abertas.length>5000;abertas.splice(5000);
   const equipes=new Map();const pessoa=(id,nome)=>{if(!equipes.has(id))equipes.set(id,{usuario:id,nome:nome||'Atendente',carteira:0,esperandoLoja:0,esperandoCliente:0,vencidas:0,legado:id.startsWith('legado:')});return equipes.get(id);};
   let esperandoLoja=0,esperandoCliente=0,semResponsavel=0,vencidas=0;
@@ -4732,7 +4850,7 @@ async function gestorDados_(env,url){
     const espera=!!c.desde||c.ult_dir==='entrada',inicio=Date.parse(c.desde||c.ult_entrada_em),minutos=espera&&Number.isFinite(inicio)?(inicio<inicioCalendario?null:tempo(inicio,agoraMs)):0,meta=cfg.metas[c.canal],vencida=espera&&minutos>meta;
     if(espera)esperandoLoja++;else esperandoCliente++;if(!c.dono)semResponsavel++;if(vencida)vencidas++;
     if(c.dono){const p=pessoa(c.dono_id||'legado:'+c.dono,c.dono);p.carteira++;p[espera?'esperandoLoja':'esperandoCliente']++;if(vencida)p.vencidas++;}
-    return {id:c.id,canal:c.canal,nome:rotuloContato_(c),dono:c.dono||'',donoId:c.dono_id||'',atualizadaEm:c.atualizada_em||'',esperandoLoja:espera,desde:c.desde||c.ult_entrada_em,minutos:minutos===null?null:Math.round(minutos),meta,vencida,emAtendimento:!!c.atendido_em};
+    return {id:c.id,alvo:c.pessoa||'conversa:'+c.id,canal:c.canal,nome:rotuloContato_(c),dono:c.dono||'',donoId:c.dono_id||'',atualizadaEm:c.atualizada_em||'',esperandoLoja:espera,desde:c.desde||c.ult_entrada_em,minutos:minutos===null?null:Math.round(minutos),meta,vencida,emAtendimento:!!c.atendido_em};
   }).sort((a,b)=>(b.esperandoLoja-a.esperandoLoja)||String(a.desde).localeCompare(String(b.desde))||a.id-b.id);
   const equipe=await equipeAtendimento_(env,new URL('https://gestor.invalid/?de='+new Date(Math.max(desdeMs,agoraMs-30*DIA_MS_)-FUSO_MS_).toISOString().slice(0,10)+'&ate='+new Date(agoraMs-FUSO_MS_).toISOString().slice(0,10)));
   for(const p of equipe.presencas||[]){const e=pessoa(p.usuario,p.nome);e.online=p.online;e.presencaEm=p.em;}
@@ -4740,7 +4858,7 @@ async function gestorDados_(env,url){
   const ck=new Request('https://gestor.invalid/historico-v1/'+dias+'/'+(canal||'todos')+'/'+modo+'/'+cfg.versao);let historico=null;
   try{const cached=await caches.default.match(ck);if(cached)historico=await cached.json();}catch(_){}
   if(!historico){
-    const msgs=(await env.DB.prepare("SELECT m.id,m.conversa_id,m.canal,m.direcao,m.enviada_em,m.status,m.por,m.atendente_id,m.automatica,c.criado_em AS conversa_criada FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0 AND m.enviada_em>=?"+filtro+" ORDER BY m.conversa_id,m.enviada_em,m.id LIMIT 30001").bind(desde,...args).all()).results||[];
+    const msgs=(await env.DB.prepare("SELECT m.id,m.conversa_id,m.canal,m.direcao,m.enviada_em,m.status,m.por,m.atendente_id,m.automatica,m.cortesia,m.retorno,c.criado_em AS conversa_criada FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0 AND m.enviada_em>=?"+filtro+" ORDER BY m.conversa_id,m.enviada_em,m.id LIMIT 30001").bind(desde,...args).all()).results||[];
     const enc=(await env.DB.prepare("SELECT e.id,e.conversa_id,e.canal,e.em,e.motivo,c.criado_em AS conversa_criada FROM msg_encerramento e JOIN msg_conversa c ON c.id=e.conversa_id WHERE c.grupo=0 AND e.em>=?"+filtro+" ORDER BY e.em,e.id LIMIT 20001").bind(desde,...args).all()).results||[];
     const parcial=msgs.length>30000||enc.length>20000;msgs.splice(30000);enc.splice(20000);
     historico={...historicoGestor_(msgs,enc,{desde:desdeMs,tempo,metas:cfg.metas}),calculadoEm:agora(),cobertura:{parcial,limiteMensagens:30000,limiteEncerramentos:20000}};
@@ -4749,10 +4867,27 @@ async function gestorDados_(env,url){
   for(const p of historico.porPessoa||[])Object.assign(pessoa(p.usuario,''),{resposta:p.resposta,primeiraResposta:p.primeiraResposta});
   const logs=(await env.DB.prepare('SELECT usuario,nome,acao,alvo,em FROM msg_gestor_log ORDER BY id DESC LIMIT 50').all()).results||[];
   const etapas=(await env.DB.prepare('SELECT e.id,e.nome,e.venda,COUNT(DISTINCT a.alvo) AS total FROM msg_etiqueta e LEFT JOIN msg_alvo_etiqueta a ON a.etiqueta_id=e.id WHERE e.arquivada=0 GROUP BY e.id ORDER BY e.ordem,e.id LIMIT 100').all()).results||[];
-  return {ok:true,dias,canal:canal||'todos',tempo:modo,calculadoEm:agora(),config:cfg,agora:{esperandoLoja,esperandoCliente,semResponsavel,vencidas,total:abertas.length,parcial:parcialFila},fila: fila.slice(0,250),maisFila:fila.length>250,equipe:[...equipes.values()],historico,atividades:equipe.atividades||[],atividadesDias:Math.min(31,dias),cobertura:{...fonte,presenca:'aproximada_2min',fuso:'America/Fortaleza'},saude:await saudeAvisos_(env),logs,etapas};
+  const envelhecimento={ate5:0,ate15:0,ate60:0,mais60:0,semTempo:0};for(const f of fila)if(f.esperandoLoja)envelhecimento[f.minutos===null?'semTempo':f.minutos<=5?'ate5':f.minutos<=15?'ate15':f.minutos<=60?'ate60':'mais60']++;
+  const prioridadeBase=await prioridadeBase_(env),prioridades=await prioridadesGestor_(env,prioridadeBase,canal),neutra=pontuarCliente_([],prioridadeBase.config,agoraMs);
+  for(const x of fila)x.pontuacao=Object.hasOwn(prioridadeBase.clientes,x.alvo)?prioridadeBase.clientes[x.alvo]:neutra;
+  const f=url.searchParams.get('fila')||'';
+  const selecionadas=fila.filter(x=>f==='loja'?x.esperandoLoja:f==='cliente'?!x.esperandoLoja:f==='sem'?!x.dono:f==='vencidas'?x.vencida:f.startsWith('pessoa:')?(x.donoId||'legado:'+x.dono)===f.slice(7):f.startsWith('faixa:')?x.esperandoLoja&&x.minutos!==null&&(f==='faixa:ate5'?x.minutos<=5:f==='faixa:ate15'?x.minutos>5&&x.minutos<=15:f==='faixa:ate60'?x.minutos>15&&x.minutos<=60:x.minutos>60):true);
+  const tempos=await temposGestor_(env,Math.max(desdeMs,agoraMs-31*DIA_MS_),agoraMs);
+  const encerramento=await encerramentoCfg_(env);
+  return {ok:true,encerramento,prioridades,tempos,envelhecimento,dias,canal:canal||'todos',tempo:modo,calculadoEm:agora(),config:cfg,agora:{esperandoLoja,esperandoCliente,semResponsavel,vencidas,total:abertas.length,parcial:parcialFila},fila: selecionadas.slice(0,250),maisFila:selecionadas.length>250,equipe:[...equipes.values()],historico,atividades:equipe.atividades||[],atividadesDias:Math.min(31,dias),cobertura:{...fonte,presenca:'aproximada_2min',fuso:'America/Fortaleza'},saude:await saudeAvisos_(env),logs,etapas};
 }
 async function rotasGestor_(env,req,url,J,perms){
   if(!perms.includes('gerir_acessos'))return J({ok:false,cod:403,erro:'Esta área é exclusiva do gestor total.'},403);
+  if(url.pathname==='/msg/gestor/encerramento'){
+    if(req.method==='GET')return J({ok:true,config:await encerramentoCfg_(env)});
+    if(req.method==='POST')return salvarEncerramento_(env,req,J);
+    return J({ok:false,erro:'Ação não permitida.'},405);
+  }
+  if(url.pathname==='/msg/gestor/prioridade'){
+    if(req.method==='GET')return J({ok:true,config:await prioridadeCfg_(env)});
+    if(req.method==='POST')return salvarPrioridade_(env,req,J);
+    return J({ok:false,erro:'Ação não permitida.'},405);
+  }
   if(req.method==='GET'&&url.pathname==='/msg/gestor') {const r=await gestorDados_(env,url);return J(r,r.cod||200);}
   if(url.pathname!=='/msg/gestor/config')return J({ok:false,erro:'Ação de gestão não disponível.'},404);
   if(req.method==='GET')return J({ok:true,config:await gestorCfg_(env)});
@@ -4772,7 +4907,7 @@ async function metricasMensagens_(env, canal, dias, usarCache) {
   const desde = new Date(Date.now() - dias * 86400000).toISOString();
   const ck=new Request('https://metricas.invalid/tenkiter-ig-v2/'+(canal||'todos')+'/'+dias);
   if(usarCache){try{const hit=await caches.default.match(ck);if(hit){const salvo=await hit.json();if(Date.now()-Date.parse(salvo.calculadoEm)<300000)return {...salvo,aguardando:await esperaMetricas_(env,canal)};}}catch(_){}}
-  const rs = await env.DB.prepare("SELECT m.conversa_id, m.direcao, m.enviada_em FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0 AND COALESCE(m.por,'')<>'auto' AND m.enviada_em>=?" + (canal ? ' AND c.canal=?' : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT 30001').bind(...(canal ? [desde, canal] : [desde])).all();
+  const rs = await env.DB.prepare("SELECT m.conversa_id, m.direcao, m.enviada_em FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE c.grupo=0 AND COALESCE(m.por,'')<>'auto' AND COALESCE(m.cortesia,0)=0 AND m.enviada_em>=?" + (canal ? ' AND c.canal=?' : '') + ' ORDER BY m.conversa_id, m.enviada_em, m.id LIMIT 30001').bind(...(canal ? [desde, canal] : [desde])).all();
   /* Encerramento resolve um ciclo, mas não é resposta enviada. Engano/spam fica fora. */
   const enc = (await env.DB.prepare('SELECT e.conversa_id, e.motivo, e.em AS enviada_em FROM msg_encerramento e JOIN msg_conversa c ON c.id=e.conversa_id WHERE c.grupo=0 AND e.em>=?' + (canal ? ' AND c.canal=?' : '') + ' ORDER BY e.em,e.id LIMIT 20001').bind(...(canal ? [desde, canal] : [desde])).all()).results;
   const parcial=rs.results.length>30000||enc.length>20000;rs.results=rs.results.slice(0,30000);enc.splice(20000);
@@ -4879,6 +5014,7 @@ async function registrarAtividade_(env, req, d, acao) {
   const usuario = msgTelefone_(req.headers.get('X-TK-Whats'));
   const nome = await meuNomeAtendente_(env, req);
   const id = Number.isSafeInteger(Number(d && d.conversa)) ? Math.max(0, Number(d.conversa)) : 0;
+  if(acao==='encerrar'&&d?.reabrir===true)acao='reabrir';
   const chave = d && d.idLocal && acao === 'responder' ? await sha('atividade:' + usuario + ':' + d.idLocal) : crypto.randomUUID();
   await env.DB.prepare('INSERT OR IGNORE INTO msg_atividade(chave,usuario,nome,acao,conversa_id,em) VALUES(?,?,?,?,?,?)').bind(chave, usuario, nome, acao, id, agora()).run();
 }
@@ -4892,7 +5028,7 @@ async function equipeAtendimento_(env, url) {
     return { ok: false, cod: 400, erro: 'Escolha um período de até 31 dias.' };
   const usuario = String(url.searchParams.get('usuario') || '').replace(/\D/g, '').slice(0, 20);
   const antes = Number(url.searchParams.get('antes')) || 0;
-  const onde = ' FROM msg_atividade a WHERE em>=? AND em<=?' + (usuario ? ' AND usuario=?' : '');
+  const onde = " FROM msg_atividade a WHERE acao NOT IN ('online','visualizar','espiar') AND em>=? AND em<=?" + (usuario ? ' AND usuario=?' : '');
   const args = [new Date(inicio).toISOString(), new Date(fim).toISOString(), ...(usuario ? [usuario] : [])];
   const presencas = (await env.DB.prepare('SELECT usuario,nome,em,conversa_id FROM msg_presenca ORDER BY em DESC LIMIT 200').all()).results;
   const totais = (await env.DB.prepare("SELECT usuario,MAX(nome) AS nome,COUNT(*) AS acoes,SUM(acao='responder') AS respostas,SUM(acao='encerrar') AS encerramentos,SUM(acao='notas') AS notas" + onde + ' GROUP BY usuario ORDER BY respostas DESC,acoes DESC').bind(...args).all()).results;
@@ -5265,16 +5401,33 @@ export default {
       if(p==='/msg/pessoas/google'&&req.method==='POST')return J(await indexarNomesGoogle_(env));
       if(p==='/msg/pessoa'&&req.method==='GET'){const r=await pessoaAtendimento_(env,Number(url.searchParams.get('conversa')));return r?J(r):J({ok:false,erro:'Conversa não encontrada.'},404);}
       if(p==='/msg/pessoa'&&req.method==='POST'){const r=await salvarPessoaAtendimento_(env,await req.json().catch(()=>({})));return J(r,r.ok?200:400);}
+      if(p==='/msg/cortesia/rever'&&req.method==='POST'){
+        const d=await req.json().catch(()=>({})),id=Number(d.mensagem);if(!Number.isSafeInteger(id)||id<1)return J({ok:false,erro:'Escolha a mensagem de cortesia.'},400);
+        const m=await env.DB.prepare("SELECT m.id,m.conversa_id,m.cortesia,m.enviada_em,c.encerrada_em FROM msg_mensagem m JOIN msg_conversa c ON c.id=m.conversa_id WHERE m.id=? AND m.direcao='entrada' AND c.grupo=0").bind(id).first();
+        if(!m)return J({ok:false,erro:'Mensagem não encontrada.'},404);
+        if(!m.cortesia)return J({ok:true,jaRevisada:true});
+        if(m.encerrada_em&&m.enviada_em<m.encerrada_em)return J({ok:false,erro:'Houve outro encerramento depois dessa mensagem. Revise o atendimento atual antes de reabrir.'},409);
+        const t=agora();const rs=await env.DB.batch([env.DB.prepare("UPDATE msg_mensagem SET cortesia=0,status_em=? WHERE id=? AND cortesia=1 AND EXISTS(SELECT 1 FROM msg_conversa c WHERE c.id=msg_mensagem.conversa_id AND (c.encerrada_em='' OR c.encerrada_em<=msg_mensagem.enviada_em))").bind(t,id),env.DB.prepare("UPDATE msg_conversa SET encerrada_em='',encerrada_motivo='',reaberta_em=?,retorno_em=?,nao_lidas=MAX(1,nao_lidas),atualizada_em=? WHERE id=? AND changes()=1").bind(t,t,t,m.conversa_id)]);
+        if(rs[0].meta?.changes!==1)return J({ok:false,erro:'O atendimento mudou enquanto você revisava. Atualize a conversa.'},409);
+        if(rs[0].meta?.changes===1){try{await registrarAtividade_(env,req,{conversa:m.conversa_id},'cortesia_revisada');}catch(_){}await notificarNovidade_(env,(await env.DB.prepare('SELECT canal FROM msg_conversa WHERE id=?').bind(m.conversa_id).first()).canal);}
+        return J({ok:true,conversa:m.conversa_id});
+      }
+      if(p==='/msg/disponibilidade'&&['GET','POST'].includes(req.method)){
+        if(!direitos.acessar)return J({ok:false,erro:'Sem acesso ao Mensageiro.'},403);
+        const usuario=msgTelefone_(req.headers.get('X-TK-Whats'));
+        if(req.method==='POST'){const d=await req.json().catch(()=>({}));if(typeof d.pausa!=='boolean')return J({ok:false,erro:'Escolha Disponível ou Em pausa.'},400);await env.DB.prepare('INSERT INTO msg_disponibilidade(usuario,pausa,em) VALUES(?,?,?) ON CONFLICT(usuario) DO UPDATE SET pausa=excluded.pausa,em=excluded.em').bind(usuario,d.pausa?1:0,agora()).run();}
+        const r=await env.DB.prepare('SELECT pausa,em FROM msg_disponibilidade WHERE usuario=?').bind(usuario).first();return J({ok:true,pausa:!!r?.pausa,em:r?.em||null});
+      }
       if (p === '/msg/presenca' && req.method === 'POST') {
         if(!direitos.acessar) return J({ok:false,erro:'Seu acesso não permite usar esta ferramenta de Mensagens.'},403);
         const d=await req.json().catch(()=>({})),usuario=msgTelefone_(req.headers.get('X-TK-Whats')),nome=await meuNomeAtendente_(env,req),em=agora();
         const id=Number.isSafeInteger(Number(d.conversa))?Math.max(0,Number(d.conversa)):0;
         if(id&&!await env.DB.prepare('SELECT id FROM msg_conversa WHERE id=?').bind(id).first())return J({ok:false,erro:'Conversa não encontrada.'},404);
-        const antiga=await env.DB.prepare('SELECT em,conversa_id FROM msg_presenca WHERE usuario=?').bind(usuario).first();
-        await env.DB.prepare('INSERT INTO msg_presenca(usuario,nome,em,conversa_id) VALUES(?,?,?,?) ON CONFLICT(usuario) DO UPDATE SET nome=excluded.nome,em=excluded.em,conversa_id=excluded.conversa_id').bind(usuario,nome,em,id).run();
+        if(d.estado!=='oculto')await env.DB.prepare('INSERT INTO msg_presenca(usuario,nome,em,conversa_id) VALUES(?,?,?,?) ON CONFLICT(usuario) DO UPDATE SET nome=excluded.nome,em=excluded.em,conversa_id=excluded.conversa_id').bind(usuario,nome,em,id).run();
         // Só registra mudança de estado: primeira sessão, volta depois de 2 minutos ou troca de conversa.
-        if(!antiga||Date.now()-Date.parse(antiga.em)>120000||id!==antiga.conversa_id)await registrarAtividade_(env,req,{conversa:id},id?(d.espiar===true?'espiar':'visualizar'):'online');
-        return J({ok:true});
+        // Entrada e navegação são presença, nunca ações de atendimento.
+        const tempo=await sinalTempo_(env,usuario,nome,d,id);
+        return J({ok:true,...tempo});
       }
       if (p === '/msg/equipe' && req.method === 'GET') {
         const r=await equipeAtendimento_(env,url),cod=r.cod||200;delete r.cod;return J(r,cod);
@@ -5294,7 +5447,7 @@ export default {
         let sql = 'SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE ' + (todos ? '' : 'canal=? AND ') + 'total>0', args = todos ? [] : [canal];
         // v2.11: encerradas só aparecem no filtro "Encerradas" (ou numa busca); voltam sozinhas quando o cliente escreve de novo
         if (filtro === 'encerradas') sql += " AND encerrada_em<>''"; else if (!busca) sql += " AND encerrada_em=''";
-        if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'lidas') sql += ' AND nao_lidas=0'; else if (filtro === 'sem_resposta') sql += " AND (nao_lidas>0 OR ult_dir='entrada')"; else if (filtro === 'grupos') sql += ' AND grupo=1'; else if (filtro === 'ambos') sql += " AND pessoa<>'' AND " + MSG_OUTRO_SQL_ + ' IS NOT NULL';
+        if (filtro === 'nao_lidas') sql += ' AND nao_lidas>0'; else if (filtro === 'lidas') sql += ' AND nao_lidas=0'; else if (filtro === 'sem_resposta') sql += ' AND '+MSG_ESPERA_SQL_; else if (filtro === 'grupos') sql += ' AND grupo=1'; else if (filtro === 'ambos') sql += " AND pessoa<>'' AND " + MSG_OUTRO_SQL_ + ' IS NOT NULL';
         if(filtro==='com_notas')sql+=" AND encerrada_em='' AND "+MSG_NOTAS_COUNT_SQL_+'>0';
         const fila=url.searchParams.get('fila')||'',escopo=url.searchParams.get('escopo')||'todos';
         if(!['','esperando','em_atendimento'].includes(fila)||!['todos','meus'].includes(escopo))return J({ok:false,erro:'Escolha uma fila e Todos ou Meus.'},400);

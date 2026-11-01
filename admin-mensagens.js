@@ -134,7 +134,9 @@
     TKMensagensGestor.abrir({api:worker_,ehAdmin:podeGestorTotal_,espiar:async(id,destino)=>{if(canal!=='todos'&&canal!==destino){canal=destino;desenharFiltros();desenharAbas();await carregarLista(true);}await abrirConversa(id,true);voltarGestao_();},acao:gestorAcao_});
   }
   function voltarGestao_(){
-    if($('ms-voltar-gestor'))return;const b=botao('ms-btn','← Voltar à gestão','gestor');b.id='ms-voltar-gestor';const antes=$('ms-estado-wrap');if(antes?.parentNode)antes.parentNode.insertBefore(b,antes);else $('ms-app')?.prepend(b);
+    const b=$('ms-voltar-gestor')||botao('ms-btn','← Voltar à gestão','gestor');b.id='ms-voltar-gestor';
+    if(vista==='conversa'&&!larga()){$('ms-conversa')?.prepend(b);return;}
+    const antes=$('ms-estado-wrap');if(antes?.parentNode)antes.parentNode.insertBefore(b,antes);else $('ms-app')?.prepend(b);
   }
   function abrirExportacaoGestor_(){
     const corpo=gaveta_('Exportar conversas');if(!corpo)return;
@@ -1085,6 +1087,9 @@
     const mapa={selecionar:'selecao',painel:'painel',funil:'funil','auto-cfg':'auto','agenda-painel':'agenda',atualizar:'atualizar','leitura-cfg':'config','trocar-usuario':'usuario','app-atualizar':'baixar','app-permissoes':'permissoes',conexao:'conexao',exp:'baixar','nova-conversa':'selecao','equipe-atividade':'equipe'};
     const grupo=(titulo,itens)=>{const sec=el('section','ms-mais-grupo');sec.appendChild(el('h4','',titulo));itens.forEach(([nome,acao,dados])=>{const b=botao('ms-mais-item','',acao,dados);b.append(iconeFluido_(mapa[acao]),el('span','ms-mais-texto',nome),iconeFluido_('chevron'));sec.appendChild(b);});corpo.appendChild(sec);};
     if(podeGestorTotal_())grupo('Gestão',[['Gestão e configurações','gestor']]);
+    grupo('Visual da lista',[['Não respondidos primeiro','lista-dividida'],['Lista contínua (ordem atual)','lista-continua']]);
+    corpo.querySelectorAll('[data-ms=lista-dividida],[data-ms=lista-continua]').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.ms==='lista-dividida'?'dividida':'continua')===visualLista_())));
+    grupo('Disponibilidade',[['Meu status: disponível ou em pausa','disponibilidade']]);
     grupo('Atendimento',[['Nova conversa','nova-conversa'],['Equipe e atividade','equipe-atividade'],['Selecionar conversas','selecionar'],['Painel de atendimento','painel'],['Agendamentos','agenda-painel'],['Etapas da venda','funil'],['Respostas automáticas','auto-cfg'],['Atualizar agora','atualizar']]);
     grupo('Conta e aplicativo',[['Configurações de leitura e nome','leitura-cfg'],['Trocar usuário','trocar-usuario'],...(window.TKAndroid?[['Atualizar app','app-atualizar'],['Permissões do app','app-permissoes']]:[]),...(canal!=='todos'?[['Conexão deste canal','conexao']]:[])]);
     grupo('Exportar',[...(canal!=='todos'?[['Este canal (CSV)','exp',{params:'formato=csv&canal='+canal,rotulo:'o canal'}],['Este canal (TXT para IA)','exp',{params:'formato=txt&canal='+canal,rotulo:'o canal'}]]:[]),['Tudo (CSV, três canais)','exp',{params:'formato=csv',rotulo:'tudo'}],['Tudo (JSON)','exp',{params:'formato=json',rotulo:'tudo'}]]);
@@ -1186,6 +1191,7 @@
   const numBR_ = (n) => Number(n || 0).toLocaleString('pt-BR');
   async function segurarTela_() { try { if (trabalho && navigator.wakeLock && document.visibilityState === 'visible') travaTela = await navigator.wakeLock.request('screen'); } catch (e) { travaTela = null; } }
   function soltarTela_() { try { if (travaTela) travaTela.release(); } catch (e) { /* já solta */ } travaTela = null; }
+  window.addEventListener('tk:app-visibilidade',()=>{if(presencaTimer_)baterPresenca_(true);});
   document.addEventListener('visibilitychange', () => { if (trabalho && document.visibilityState === 'visible') segurarTela_(); });
   function avisoSaida_(ev) { if (!trabalho) return undefined; ev.preventDefault(); ev.returnValue = ''; return ''; }
   function desenharTrabalho_() {
@@ -1348,7 +1354,7 @@
     let esp = li.querySelector('.ms-espiar');
     if (c.nao_lidas > 0 && !esp && !selecao) { esp = botao('ms-espiar', '', 'espiar', { id: String(c.id) }); esp.innerHTML = '<svg class="ms-olho" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Espiar</span>'; esp.setAttribute('aria-label', 'Espiar ' + rotuloContato(c) + ' sem marcar como lida'); li.appendChild(esp); }
     else if ((!(c.nao_lidas > 0) || selecao) && esp) esp.remove();
-    const b = li.firstChild, nova = c.nao_lidas > 0, saiu = c.ult_dir === 'saida', espera = c.ult_dir === 'entrada' && !c.grupo;
+    const b = li.firstChild, nova = c.nao_lidas > 0, saiu = c.ult_dir === 'saida', espera = aguardaResposta_(c) && !c.grupo;
     b.className = 'ms-conv' + (nova ? ' nova' : ''); if (aberta && aberta.id === c.id) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
     const marcada = !!(selecao && selecao.has(c.id));
     if (selecao) b.setAttribute('aria-pressed', String(marcada)); else b.removeAttribute('aria-pressed');
@@ -1876,30 +1882,38 @@
     if (!r.ok) { aviso_(r.erro || 'Não foi possível agora. Tente de novo.'); return; }
     if (r.contagens) contagens = Object.assign({}, contagens || {}, r.contagens);
     const n = ids.length;
-    aviso_(reabrir ? (n === 1 ? 'Conversa reaberta.' : n + ' conversas reabertas.') : (n === 1 ? 'Conversa encerrada' : n + ' conversas encerradas') + ' como “' + (NOME_MOTIVO_[motivo] || 'Concluído') + '”. ' + (n === 1 ? 'Ela volta sozinha' : 'Elas voltam sozinhas') + ' se o cliente escrever.');
+    aviso_(reabrir ? (n === 1 ? 'Conversa reaberta.' : n + ' conversas reabertas.') : (n === 1 ? 'Conversa encerrada' : n + ' conversas encerradas') + ' como “' + (NOME_MOTIVO_[motivo] || 'Concluído') + '”. ' + (n === 1 ? 'Ela volta sozinha' : 'Elas voltam sozinhas') + ' conforme as regras de retorno e cortesia da loja.');
     if (aberta && ids.indexOf(aberta.id) >= 0) { aberta.encerrada_em = reabrir ? '' : new Date().toISOString(); aberta.encerrada_motivo = reabrir ? '' : (motivo || 'concluido'); }
     selecao = null; desenharSelbar_(); desenharAbas(); desenharFiltros(); selarBotao();
     await carregarLista(true);
   }
   let indexandoNomes = false, nomesConferidos = false;
   async function nomesGoogle_(){if(!podeFerramenta_('configuracoes'))return;if(indexandoNomes)return;indexandoNomes=true;try{for(let i=0;i<40;i++){const r=await worker_('/msg/pessoas/google','POST',{});if(!r.ok||r.fim)break;}await carregarLista(true);}finally{indexandoNomes=false;}}
+  function visualLista_(){const conta=getSessao()?.whatsapp||'';try{const n=globalThis.TKAndroid?.visualLista?.(conta);if(['dividida','continua'].includes(n))return n;}catch(_){}try{return localStorage.getItem('tk_ms_visual_v1:'+conta)==='continua'?'continua':'dividida';}catch(_){return 'dividida';}}
+  function salvarVisualLista_(visual){const conta=getSessao()?.whatsapp||'';try{localStorage.setItem('tk_ms_visual_v1:'+conta,visual);globalThis.TKAndroid?.salvarVisualLista?.(conta,visual);}catch(_){}pintarLista();}
+  function aguardaResposta_(c){return !c.encerrada_em&&(c.aguarda_resposta!==undefined?!!Number(c.aguarda_resposta):Number(c.nao_lidas)>0||c.ult_dir==='entrada');}
   function pintarLista() {
     const ul = $('ms-lista'), extra = $('ms-extra'); if (!ul || painel === 'metricas' || painel === 'funil') return;
     ul.hidden = false; extra.hidden = false;
-    const resultados=$('ms-resultados');if(resultados){const n=new Set(lista.map(c=>c.pessoa||'c:'+c.id)).size;resultados.textContent=n+(n===1?' atendimento':' atendimentos')+(filtro==='encerradas'?' encerrados':' em aberto')+' · mais recentes';}const intro=$('ms-intro');if(intro){const b=intro.querySelector('button');b.textContent=selecao?'Cancelar':'Selecionar';b.dataset.ms=selecao?'sel-sair':'selecionar';}
+    const resultados=$('ms-resultados');if(resultados){const n=new Set(lista.map(c=>c.pessoa||'c:'+c.id)).size;resultados.textContent=n+(n===1?' atendimento':' atendimentos')+(filtro==='encerradas'?' encerrados':' em aberto')+(visualLista_()==='dividida'?' · mais recentes em cada seção':' · mais recentes');}const intro=$('ms-intro');if(intro){const b=intro.querySelector('button');b.textContent=selecao?'Cancelar':'Selecionar';b.dataset.ms=selecao?'sel-sair':'selecionar';}
     const vivos = new Set(lista.map((c) => c.id));
     if (selecao) { selecao.forEach((id) => { if (!vivos.has(id)) selecao.delete(id); }); desenharSelbar_(); }
     elConvs.forEach((li, id) => { if (!vivos.has(id)) { li.remove(); elConvs.delete(id); } });
-    let ref = ul.firstChild;
-    const blocos = new Map();
-    lista.forEach(c=>{const key=c.grupo?'grupo:'+c.id:c.pessoa||(c.outro_id?'par:'+Math.min(c.id,c.outro_id):'conversa:'+c.id);   /* v7.40.16: mesmo número nos dois WhatsApp fica junto, mesmo sem vínculo manual */if(!blocos.has(key))blocos.set(key,[]);blocos.get(key).push(c);});
-    [...blocos.values()].map(b=>b.sort((a,c)=>String(c.ultima_em).localeCompare(String(a.ultima_em))||c.id-a.id)).sort((a,b)=>String(b[0].ultima_em).localeCompare(String(a[0].ultima_em))||b[0].id-a[0].id).forEach(b=>b.forEach((c,i)=>{const li=linhaConversa(c);li.classList.toggle('ms-vinculada',i>0);li.classList.toggle('ms-vinculo-principal',b.length>1&&i===0);li.classList.toggle('ms-vinculo-fim',b.length>1&&i===b.length-1);li.style.marginLeft='';li.style.background='';if(li!==ref)ul.insertBefore(li,ref);else ref=ref.nextSibling;}));
+    ul.querySelectorAll(':scope > .ms-lista-secao').forEach(x=>x.remove());let ref=ul.firstChild;
+    const blocos=new Map();lista.forEach(c=>{const key=c.grupo?'grupo:'+c.id:c.pessoa||(c.outro_id?'par:'+Math.min(c.id,c.outro_id):'conversa:'+c.id);if(!blocos.has(key))blocos.set(key,[]);blocos.get(key).push(c);});
+    const ordenados=[...blocos.values()].map(b=>b.sort((a,c)=>String(c.ultima_em).localeCompare(String(a.ultima_em))||c.id-a.id)).sort((a,b)=>String(b[0].ultima_em).localeCompare(String(a[0].ultima_em))||b[0].id-a[0].id);
+    const dividida=visualLista_()==='dividida'&&filtro!=='encerradas'&&abaAtiva_!=='encerrados';
+    const secoes=dividida?[['Aguardando resposta da loja',ordenados.filter(b=>b.some(aguardaResposta_))],['Demais conversas',ordenados.filter(b=>!b.some(aguardaResposta_))]]:[['',ordenados]];
+    for(const [titulo,bs]of secoes){
+      if(titulo&&bs.length){const li=el('li','ms-lista-secao'),h=el('h3','',titulo);h.appendChild(el('small','',bs.length+(bs.length===1?' cliente exibido':' clientes exibidos')));li.appendChild(h);ul.insertBefore(li,ref);}
+      bs.forEach(b=>b.forEach((c,i)=>{const li=linhaConversa(c);li.classList.toggle('ms-vinculada',i>0);li.classList.toggle('ms-vinculo-principal',b.length>1&&i===0);li.classList.toggle('ms-vinculo-fim',b.length>1&&i===b.length-1);li.style.marginLeft='';li.style.background='';if(li!==ref)ul.insertBefore(li,ref);else ref=ref.nextSibling;}));
+    }
     extra.textContent = '';
     if (!lista.length) {
       /* v7.40.35: a explicação de cada aba aparece quando a lista está vazia — não na
          linha de filtros, que precisa continuar com uma fileira só no Android. */
       const dica = { pendentes: 'Nada esperando. Conversa nova aparece aqui para você espiar e Atender.',
-                     encerrados: 'Nenhum atendimento encerrado no período. Se o cliente escrever, a conversa volta para Pendentes.',
+                     encerrados: 'Nenhum atendimento encerrado no período. Retornos seguem as regras configuradas pela gestão.',
                      atendimento: 'Nenhum atendimento em aberto. Veja Pendentes para as conversas novas.' }[abaAtiva_];
       if (dica && !busca.trim() && !filtro) extra.appendChild(el('p', 'ms-aba-dica-lista', dica));
       const m = busca.trim() ? 'Nenhuma conversa encontrada.' : etqFiltro ? 'Nenhuma conversa nesta etapa de venda neste canal.' : filtro === 'nao_lidas' ? 'Nenhuma conversa não lida. 🎉' : filtro === 'sem_resposta' ? 'Ninguém esperando resposta agora. 🎉' : tipoParam_() === 'grupo' && !filtro ? 'Nenhum grupo aqui.' : filtro === 'ambos' ? 'Ninguém está falando pelos dois WhatsApp agora.' : (filtro === 'encerradas' || abaAtiva_ === 'encerrados') ? 'Nenhuma conversa encerrada. Para encerrar, segure o dedo numa conversa (ou ⋯ → Selecionar conversas).' : 'Ainda não chegou nenhuma mensagem neste canal.';
@@ -2095,7 +2109,7 @@
 
   function bolha(m) {
     let b = elMsgs.get(m.id);
-    const ass = [m.autor_nome || '', m.autor_fone || '', ehGrupo_() ? Object.keys(nomesDoGrupo_()).length : 0, m.texto, m.tipo, m.status, m.status_em, m.erro || '', m.midia, m.localUrl || '', m.ctx_tipo || '', m.ctx_midia, m.ctx_mtipo || '', m.ctx_em || '', m.ctx_qtipo || '', m.ctx_qdir || '', m.ctx_texto || '', m.ctx_legenda || '', m.link_previa || '', m.ctx_aprox, m.por || ''].join('|');
+    const ass = [m.autor_nome || '', m.autor_fone || '', ehGrupo_() ? Object.keys(nomesDoGrupo_()).length : 0, m.texto, m.tipo, m.status, m.status_em, m.erro || '', m.midia, m.localUrl || '', m.ctx_tipo || '', m.ctx_midia, m.ctx_mtipo || '', m.ctx_em || '', m.ctx_qtipo || '', m.ctx_qdir || '', m.ctx_texto || '', m.ctx_legenda || '', m.link_previa || '', m.ctx_aprox, m.por || '',m.cortesia||0,m.retorno||0].join('|');
     if (b && b.dataset.ass === ass) return b;
     if (!b) { b = el('div'); elMsgs.set(m.id, b); }
     b.dataset.ass = ass; b.dataset.id = String(m.id); b.textContent = '';
@@ -2106,6 +2120,7 @@
     }
     const falhou = m.status === 'falhou';
     b.className = 'ms-bolha ' + (m.direcao === 'saida' ? 'saida' : 'entrada') + (m.status === 'pendente' ? ' pendente' : '') + (falhou ? ' falhou' : '');
+    if(m.cortesia){b.appendChild(el('small','ms-cortesia-info','Cortesia · atendimento mantido encerrado'));if(podeFerramenta_('responder'))b.appendChild(botao('ms-btn','Tratar como solicitação','cortesia-rever',{id:String(m.id)}));}else if(m.retorno)b.appendChild(el('small','ms-cortesia-info','Retorno ao atendimento anterior'));
     const autor = autorEl_(m); if (autor) b.appendChild(autor);
     if (m.ctx_tipo === 'story') b.appendChild(blocoStory_(m)); else if (m.ctx_tipo === 'resposta' && (m.ctx_texto || m.ctx_qtipo)) b.appendChild(blocoCitacao_(m));
     const card=blocoLink_(m);if(card)b.appendChild(card);
@@ -2836,6 +2851,7 @@
     ++abrindo; cacheConversa = false; aberta = null; vista = 'lista';
     const a = $('ms-app'); if (a) a.dataset.vista = 'lista';
     const c = $('ms-conversa'); if (c) { c.textContent = ''; c.appendChild(vazioConversa_()); }
+    if($('ms-voltar-gestor'))voltarGestao_();
     window.dispatchEvent(new Event('tk:mensagens-lista'));
   }
   function voltarLista() {
@@ -3191,7 +3207,7 @@
     if (hist) {
       hist.textContent = '';
       if (!equipeItens_.length) hist.appendChild(el('p', 'ms-dica', 'Nenhuma ação no período escolhido.'));
-      const nomes = { responder: 'respondeu', encerrar: 'encerrou', responsavel: 'dividiu atendimento', notas: 'anotou', etapa: 'mudou a etapa', ficha: 'atualizou a ficha', agendar: 'agendou', acompanhar: 'acompanhou', criar: 'abriu conversa', visualizar: 'abriu conversa', espiar: 'acompanhou sem responder', online: 'entrou em Mensagens' };
+      const nomes = { responder: 'respondeu', encerrar: 'encerrou', responsavel: 'dividiu atendimento', notas: 'anotou', etapa: 'mudou a etapa', ficha: 'atualizou a ficha', agendar: 'agendou', acompanhar: 'acompanhou', criar: 'abriu conversa', visualizar: 'abriu conversa', espiar: 'acompanhou sem responder', online: 'entrou em Mensagens',reabrir:'reabriu atendimento',cortesia_revisada:'revisou uma cortesia' };
       equipeItens_.forEach((a) => {
         const l = el('div', 'ms-eq-linha');
         l.appendChild(el('b', '', a.nome || a.usuario));
@@ -3206,11 +3222,15 @@
   /* Presença: enquanto a pessoa está com Mensagens aberta, avisa o servidor a cada 45 s.
      É aproximada (2 minutos de validade) e existe só para a equipe se localizar. */
   let presencaTimer_ = 0;
-  async function baterPresenca_() {
-    if (!document.querySelector('#overlay-mensagens.aberto') || document.hidden) return;
-    const r = await worker_('/msg/presenca', 'POST', { conversa: aberta ? aberta.id : 0, espiar: !!espiando }).catch(() => null);
+  async function baterPresenca_(fechando=false) {
+    if ((!document.querySelector('#overlay-mensagens.aberto')||document.hidden)&&!fechando) return;
+    const r = await worker_('/msg/presenca', 'POST', globalThis.TKPresenca?TKPresenca.sinal(aberta?.id,espiando):{conversa:aberta?.id||0,espiar:!!espiando}).catch(() => null);
     return r;
   }
+  document.addEventListener('visibilitychange',()=>{if(presencaTimer_)baterPresenca_(true);});
+  document.addEventListener('tk:camada-fechada',e=>{if(e.detail?.chave==='overlay-mensagens')baterPresenca_(true);});
+  window.addEventListener('blur',()=>{if(presencaTimer_)baterPresenca_();});
+  window.addEventListener('focus',()=>{if(presencaTimer_)baterPresenca_();});
   function ligarPresenca_() {
     if (presencaTimer_) return;
     baterPresenca_();
@@ -3506,6 +3526,15 @@
     if (ev.target && ev.target.id === 'ms-luz') { fecharLuz_(); return; }
     const b = ev.target.closest('[data-ms]'); if (!b) return;
     const a = b.dataset.ms;
+    if(a==='disponibilidade'){
+      if($('ms-gaveta')){$('ms-gaveta').remove();await desempilharEsperando_('ms-gaveta');}
+      const corpo=gaveta_('Minha disponibilidade'),r=await worker_('/msg/disponibilidade');if(!corpo?.isConnected)return;
+      if(!r.ok){corpo.textContent=r.erro||'Não consegui consultar seu status.';return;}
+      corpo.append(el('p','',r.pausa?'Você indicou Em pausa.':'Você indicou Disponível.'),el('p','ms-dica','Esse status vale para sua conta em todos os aparelhos. Pausar não bloqueia mensagens, notificações ou clientes.'));
+      const b=botao('ms-btn',r.pausa?'Voltar a disponível':'Entrar em pausa','');b.addEventListener('click',async()=>{b.disabled=true;const x=await worker_('/msg/disponibilidade','POST',{pausa:!r.pausa});if(!corpo.isConnected)return;if(x.ok){corpo.textContent=x.pausa?'Status alterado: Em pausa.':'Status alterado: Disponível.';baterPresenca_();}else{aviso_(x.erro||'Não consegui alterar o status.');b.disabled=false;}});corpo.appendChild(b);return;
+    }
+    if(a==='cortesia-rever'){b.disabled=true;const r=await worker_('/msg/cortesia/rever','POST',{mensagem:Number(b.dataset.id)});if(!r.ok){aviso_(r.erro||'Não consegui revisar a mensagem.');if(b.isConnected)b.disabled=false;return;}aviso_('Mensagem tratada como solicitação. Nenhuma resposta foi enviada.');if(aberta)await abrirConversa(aberta.id,espiando);await carregarLista(true);return;}
+    if(a==='lista-dividida'||a==='lista-continua'){if($('ms-gaveta')){$('ms-gaveta').remove();await desempilharEsperando_('ms-gaveta');}salvarVisualLista_(a==='lista-dividida'?'dividida':'continua');$('ms-nav')?.querySelector('[data-ms=menu-geral]')?.focus();return;}
     if(a==='gestor'){await abrirGestao_();return;}
     if($('ms-gaveta')?.dataset.tipo==='ficha'&&!b.closest('#ms-gaveta')&&fichaMudou_()){if(!sairFicha_())return;fichaOrig_=null;}
     if($('ms-gaveta')?.dataset.tipo==='mais'&&a!=='gaveta-fechar'){$('ms-gaveta').remove();await desempilharEsperando_('ms-gaveta');}
