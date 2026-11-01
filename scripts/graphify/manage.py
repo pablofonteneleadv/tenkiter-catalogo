@@ -148,11 +148,12 @@ def ensure(root):
             old = {}
         if old.get('fingerprint') == fingerprint and graph.exists() and old.get('graph_sha256') == digest(graph):
             return python, old, False
-        # --force honra exclusões/refatorações que diminuem o grafo; o cache AST é local.
+        # O índice local pode diminuir após remoção/refatoração; não preservar símbolos obsoletos.
+        # A opção afeta somente a saída gerada do extrator code-only, nunca fontes ou dados.
         log = out / 'build.log'
         with log.open('w', encoding='utf-8') as output:
             run([python, '-m', 'graphify', 'extract', root, '--code-only',
-                 '--max-workers', '2', '--force'], root, stdout=output,
+                 '--max-workers', '2', '--force', '--allow-dedup-shrink'], root, stdout=output,
                 stderr=subprocess.STDOUT, timeout=180)
         if inputs(python, root)[0] != fingerprint:
             raise RuntimeError('O código mudou durante a indexação. Execute novamente antes de consultar.')

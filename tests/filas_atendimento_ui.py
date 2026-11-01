@@ -1,3 +1,4 @@
+from mensagens_filtros import aplicar, valor
 """Abas do painel de Mensagens, escopo Todos/Meus, reload, filtros antigos e axe.
 
 Reescrito na v7.40.35: a fila deixou de ser um par de chips em #ms-filtros e virou
@@ -59,10 +60,10 @@ with sync_playwright() as p:
             pg.screenshot(path=str(OUT / f'atendimento-{w}-{h}-{scale}.png'))
 
         # escopo Todos -> Meus
-        pg.select_option('#ms-atendimento-escopo', 'todos')
+        aplicar(pg,escopo='todos')
         pg.wait_for_function('document.querySelectorAll("#ms-lista .ms-conv").length>=2')
         n_todos = pg.locator('#ms-lista .ms-conv').count()
-        pg.select_option('#ms-atendimento-escopo', 'meus')
+        aplicar(pg,escopo='meus')
         pg.wait_for_function('document.querySelectorAll("#ms-lista .ms-conv").length<%d' % n_todos)
         assert pg.locator('#ms-lista .ms-conv[data-id="1"]').count() == 1, 'Só meus deve manter a minha'
         assert pg.locator('#ms-lista .ms-conv[data-id="2"]').count() == 0, 'Só meus deve esconder a de outra pessoa'
@@ -71,8 +72,10 @@ with sync_playwright() as p:
             pg.evaluate('(x)=>document.documentElement.style.fontSize=x+"%"', scale)
             assert pg.locator('#ms-nav').evaluate('e=>e.getBoundingClientRect().bottom<=innerHeight+1'), 'nav vazando (meus)'
             # o seletor de escopo cabe na tela e é alvo de toque
-            assert pg.locator('#ms-atendimento-escopo').evaluate(
+            pg.click('#ms-btn-filtros')
+            assert pg.locator('[name=ms-ft-escopo]').evaluate(
                 'e=>{const r=e.getBoundingClientRect();return r.height>=44&&r.right<=innerWidth}'), 'escopo fora'
+            pg.keyboard.press('Escape');pg.wait_for_selector('#ms-gaveta',state='detached')
             pg.screenshot(path=str(OUT / f'meus-{w}-{h}-{scale}.png'))
 
         # Pendentes: a conversa que não foi atendida está aqui
@@ -89,7 +92,7 @@ with sync_playwright() as p:
         pg.wait_for_selector('#ms-abas .ms-aba[data-aba="atendimento"]')
         assert pg.locator('#ms-abas .ms-aba[data-aba="atendimento"]').get_attribute('aria-selected') == 'true', \
             'ao reabrir, começa em Em atendimento'
-        assert pg.locator('#ms-atendimento-escopo').input_value() == 'todos', 'escopo volta a Todos'
+        assert valor(pg,'escopo') == 'todos', 'escopo volta a Todos'
 
         # filtro antigo continua funcionando (Não lidas)
         pg.click('[data-ms=filtros-abrir]')

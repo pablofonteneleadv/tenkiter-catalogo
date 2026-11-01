@@ -699,14 +699,15 @@
       /* Cabeçalho de Mensagens: nunca sobrepor título, identidade nem ferramentas no celular.
          Rolagem horizontal nas ações conserva todos os botões e suas áreas de toque. */
       .sheet-mensagens .ms-topo{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;min-width:0;height:auto}
+      .sheet-mensagens .ms-identidade-linha{display:flex;align-items:center;gap:12px;min-width:0}.sheet-mensagens .ms-identidade-linha .ms-identidade{min-width:0;margin:0}.sheet-mensagens .ms-identidade-linha .ms-ao-vivo{flex:none;font-size:.73rem}
       .sheet-mensagens .ms-topo>.ms-titulo{min-width:0;overflow:hidden;overflow-wrap:anywhere}
       .sheet-mensagens .ms-topo>.ms-ao-vivo{min-width:0}
       .sheet-mensagens .ms-topo>.ms-ico{flex:0 0 44px}
       @media(max-width:650px){
-        .sheet-mensagens .ms-topo{grid-template-columns:minmax(0,1fr) 44px 44px;gap:8px;padding:12px 14px;min-height:72px}
+        .sheet-mensagens .ms-topo{grid-template-columns:minmax(0,1fr) auto auto;gap:8px;padding:8px 14px;min-height:64px}
         .sheet-mensagens .ms-topo>.ms-titulo{font-size:1.16rem;line-height:1.25}
         .sheet-mensagens .ms-topo .ms-identidade{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .sheet-mensagens .ms-topo>.ms-ao-vivo{grid-row:2;grid-column:1 / -1;justify-self:start;font-size:.73rem}
+
         .sheet-mensagens .ms-topo>#ms-fechar{grid-column:2;grid-row:1}
         .sheet-mensagens .ms-topo>#ms-mais{grid-column:3;grid-row:1}
       }
@@ -738,11 +739,11 @@
       .ms-pendente-aviso .ms-btn{min-height:44px;flex:none}
       .ms-reaberta-tag{font-size:.63rem;font-weight:700;border-radius:4px;padding:2px 5px;background:#fdecea;color:#8a2b1e;border:1px solid #f3c9c2}
       .sheet-mensagens .ms-pesquisa{position:relative;padding:12px 16px 10px;gap:8px;flex:none}.sheet-mensagens .ms-pesquisa>.ms-linha-icone{position:absolute;left:26px;top:24px;color:#656d5e;pointer-events:none}.sheet-mensagens .ms-pesquisa .ms-busca{background:#f7f6f2;border-color:#e0e1d8;border-radius:10px;font-size:.875rem;padding:10px 8px 10px 36px;min-height:44px}.sheet-mensagens .ms-pesquisa>.ms-btn{display:flex;align-items:center;justify-content:center;gap:6px;max-width:100px;min-width:76px;padding:8px;border-color:#e0e1d8;font-size:.75rem;font-weight:600}
-      .sheet-mensagens .ms-filtros{padding:0 16px 8px;gap:6px;grid-template-columns:1.4fr 1.12fr .8fr;flex:none}.sheet-mensagens .ms-filtros .ms-chip{display:flex;align-items:center;justify-content:center;gap:5px;min-height:44px;padding:7px 5px;border:0;border-radius:8px;background:#f4f4ef;font-size:.75rem;font-weight:500;color:#555d4f}.sheet-mensagens .ms-filtros .ms-chip[aria-pressed=true]{background:#292b25;color:#fff}.ms-fila-conta{font-weight:750;margin:0;font-size:.72rem;flex:none}
+      .sheet-mensagens .ms-filtros{display:flex;flex-wrap:wrap;padding:0 16px 4px;gap:4px;flex:none}.sheet-mensagens .ms-filtros[hidden]{display:none}.sheet-mensagens .ms-filtros .ms-chip{display:flex;align-items:center;justify-content:center;gap:5px;min-height:44px;padding:7px 5px;border:0;border-radius:8px;background:#f4f4ef;font-size:.75rem;font-weight:500;color:#555d4f}.sheet-mensagens .ms-filtros .ms-chip[aria-pressed=true]{background:#292b25;color:#fff}.ms-fila-conta{font-weight:750;margin:0;font-size:.72rem;flex:none}
       .ms-intro{padding:0 16px 4px;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px;flex:none;color:#62695a;font-size:.7rem}.ms-intro button{min-width:64px;min-height:44px;border:0;background:none;color:#805324;font:inherit;font-weight:600;padding:4px}
-      .sheet-mensagens .ms-lista{padding:0 12px 16px}.sheet-mensagens .ms-conv-li{border-bottom:1px solid #e7e7e0}.sheet-mensagens .ms-conv{gap:10px;padding:13px 4px 12px;min-height:104px;align-items:flex-start;background:transparent}.sheet-mensagens .ms-av{width:38px;height:38px;flex:0 0 38px;border-radius:50%;font-size:.75rem;margin-top:3px;background:#dce7e3!important;color:#345f54}.sheet-mensagens .ms-conv-li:nth-child(3n) .ms-av{background:#e8dfda!important;color:#6a4b3e}.sheet-mensagens .ms-conv-li:nth-child(3n+2) .ms-av{background:#e0e5d6!important;color:#4b553c}.sheet-mensagens .ms-nome{font-size:.91rem;font-weight:650;line-height:1.35}.sheet-mensagens .ms-l1 time{font-size:.69rem;color:#697060;font-weight:400;white-space:nowrap}.sheet-mensagens .ms-l2{font-size:.85rem;line-height:1.4;margin-top:3px;color:#5e6457}.sheet-mensagens .nova .ms-l2{color:#252a21}.sheet-mensagens .ms-l3{gap:6px;font-size:.67rem;margin-top:5px;color:#62695a}.sheet-mensagens .ms-canal-tag{font-size:.63rem;font-weight:600;border-radius:4px;padding:2px 5px}.sheet-mensagens .ms-aguarda{font-size:.69rem;font-weight:500;line-height:1.4;margin-top:4px}.sheet-mensagens .ms-espiar{width:44px;min-height:44px;margin:0 0 0 4px;border:0;background:none;font-size:.63rem;color:#645d50;align-self:center}.sheet-mensagens .ms-espiar .ms-olho{width:19px;height:19px}
+      .sheet-mensagens .ms-lista{padding:0 12px 16px}.sheet-mensagens .ms-conv-li{border-bottom:1px solid #e7e7e0}.sheet-mensagens .ms-conv{gap:10px;padding:10px 4px;min-height:92px;align-items:flex-start;background:transparent}.sheet-mensagens .ms-av{width:38px;height:38px;flex:0 0 38px;border-radius:50%;font-size:.75rem;margin-top:3px;background:#dce7e3!important;color:#345f54}.sheet-mensagens .ms-conv-li:nth-child(3n) .ms-av{background:#e8dfda!important;color:#6a4b3e}.sheet-mensagens .ms-conv-li:nth-child(3n+2) .ms-av{background:#e0e5d6!important;color:#4b553c}.sheet-mensagens .ms-nome{font-size:.91rem;font-weight:650;line-height:1.35}.sheet-mensagens .ms-l1 time{font-size:.69rem;color:#697060;font-weight:400;white-space:nowrap}.sheet-mensagens .ms-l2{font-size:.85rem;line-height:1.4;margin-top:3px;color:#5e6457}.sheet-mensagens .nova .ms-l2{color:#252a21}.sheet-mensagens .ms-l3{display:flex;flex-wrap:wrap;gap:4px 8px;font-size:.67rem;margin-top:5px;color:#62695a}.sheet-mensagens .ms-l3>span{flex:none;max-width:100%;overflow-wrap:anywhere}.sheet-mensagens .ms-l3 .ms-fone{display:none}.sheet-mensagens .ms-homonimo .ms-l3 .ms-fone{display:inline-block}.sheet-mensagens .ms-dono-tag{white-space:normal}.sheet-mensagens .ms-canal-tag{font-size:.63rem;font-weight:600;border-radius:4px;padding:2px 5px}.sheet-mensagens .ms-aguarda{font-size:.69rem;font-weight:500;line-height:1.4;margin-top:4px}.sheet-mensagens .ms-espiar{width:44px;min-height:44px;margin:0 0 0 4px;border:0;background:none;font-size:.63rem;color:#645d50;align-self:center}.sheet-mensagens .ms-espiar .ms-olho{width:19px;height:19px}
       .sheet-mensagens .ms-vinculo-principal{border:1px solid #e4e1d8;border-bottom:0;border-radius:12px 12px 0 0;background:#fcfbf7;margin-top:6px}.sheet-mensagens .ms-vinculada{background:#fcfbf7;border-left:1px solid #e4e1d8;border-right:1px solid #e4e1d8;margin:0;padding-left:44px}.sheet-mensagens .ms-vinculada .ms-conv{padding:8px 6px;min-height:60px}.sheet-mensagens .ms-vinculada .ms-av{display:none}.sheet-mensagens .ms-vinculada .ms-nome{font-size:.76rem;font-weight:500}.sheet-mensagens .ms-vinculada .ms-l2{font-size:.76rem}.sheet-mensagens .ms-vinculada .ms-fone,.sheet-mensagens .ms-vinculada .ms-dono-tag{display:none}.sheet-mensagens .ms-vinculo-fim{border:1px solid #e4e1d8;border-top:0;border-radius:0 0 12px 12px;margin-bottom:6px}
-      .sheet-mensagens .ms-nav{padding:5px 8px calc(6px + env(safe-area-inset-bottom));border-top:1px solid #e7e7e0;gap:0}.sheet-mensagens .ms-nav button{position:relative;display:flex;flex-direction:column;gap:5px;align-items:center;justify-content:center;min-height:52px;font-size:.7rem;font-weight:500;background:transparent;color:#62695a;padding:4px}.sheet-mensagens .ms-nav button[aria-current=page]{color:#99500d;background:transparent;border-radius:0;font-weight:700}.sheet-mensagens .ms-nav button[aria-current=page]::before{content:'';position:absolute;top:-5px;left:30%;right:30%;height:3px;background:#d97116;border-radius:0 0 3px 3px}
+      .sheet-mensagens .ms-nav{padding:5px 8px calc(6px + var(--ms-safe-bottom, env(safe-area-inset-bottom)));border-top:1px solid #e7e7e0;gap:0}.sheet-mensagens .ms-nav button{position:relative;display:flex;flex-direction:column;gap:5px;align-items:center;justify-content:center;min-height:52px;font-size:.7rem;font-weight:500;background:transparent;color:#62695a;padding:4px}.sheet-mensagens .ms-nav button[aria-current=page]{color:#99500d;background:transparent;border-radius:0;font-weight:700}.sheet-mensagens .ms-nav button[aria-current=page]::before{content:'';position:absolute;top:-5px;left:30%;right:30%;height:3px;background:#d97116;border-radius:0 0 3px 3px}
       @media(prefers-reduced-motion:no-preference){.sheet-mensagens .ms-aba,.sheet-mensagens .ms-chip,.sheet-mensagens .ms-nav button{transition:background-color 160ms,color 160ms}}
 
       .ms-gaveta-proposta [hidden]{display:none!important}
@@ -800,18 +801,6 @@
       .ms-ag-pesquisa{display:flex;align-items:center;gap:8px;padding:8px 0}
       .ms-ag-pesquisa input{flex:1;min-width:0}
       .ms-ag-pesquisa .ms-btn{min-width:80px;min-height:44px}
-      .sheet-mensagens .ms-filtros{grid-template-columns:1fr .82fr 1.18fr}
-      /* v7.40.35: o <select> de canal segue a fonte do próprio controle (como os chips),
-         para a linha de filtros manter UMA fileira também com texto a 130%. */
-      .sheet-mensagens .ms-filtros select.ms-chip{width:100%;font-family:Inter,Arial,sans-serif;font-size:.74rem;font-weight:600;line-height:1.2;border:1px solid #8b9481;background:#fff;color:#20211e;padding:6px 3px}
-      /* v7.40.35: as 3 células da linha de filtros ficam numa linha só, com reticências.
-         Quebrar em duas linhas cresceria o cabeçalho no Android (e no texto a 130%). */
-      .sheet-mensagens .ms-filtros>.ms-chip{white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;min-height:44px!important;height:44px;padding:0 4px!important;line-height:1.1!important}
-      /* v7.40.35: o botão rápido tem o rótulo mais longo da linha. Ele quebra em duas
-         linhas (em vez de virar "Só não respondido") mantendo os 44px de alvo. */
-      .sheet-mensagens .ms-filtros>#ms-so-nao-respondidos{white-space:normal!important;text-overflow:clip;overflow:visible;font-size:.7rem!important;line-height:1.15!important;padding:0 3px!important;text-align:center}
-      @media(max-width:400px){.sheet-mensagens .ms-filtros>#ms-so-nao-respondidos{font-size:.63rem!important}}
-      @media(max-width:400px){.sheet-mensagens .ms-filtros .ms-chip{font-size:.67rem!important}}
       .ms-ag-filtros{border-bottom:1px solid #e7e7e0}
       .ms-ag-filtros summary{min-height:44px;align-content:center;cursor:pointer;font-weight:600}
       .ms-ag-filtros-grade{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 8px;padding-bottom:12px}
@@ -853,8 +842,8 @@
     const live = el('span', 'ms-ao-vivo', ''); live.id = 'ms-vivo'; live.setAttribute('role', 'status');
     const mais = botao('ms-ico', '⋯', 'menu-geral'); mais.setAttribute('aria-label', 'Mais opções'); mais.setAttribute('aria-haspopup', 'dialog'); mais.id = 'ms-mais';mais.textContent='';mais.appendChild(iconeFluido_('mais'));
     const x = botao('ms-ico', '✕', 'fechar'); x.id = 'ms-fechar'; x.setAttribute('aria-label', 'Fechar mensagens');
-    topo.append(h, live, mais, x);
-    const quem=el('small','ms-identidade');quem.id='ms-identidade';h.appendChild(quem);atualizarIdentidade_();
+    topo.append(h, mais, x);
+    const quem=el('small','ms-identidade');quem.id='ms-identidade';const identidade=el('span','ms-identidade-linha');identidade.append(quem,live);h.appendChild(identidade);atualizarIdentidade_();
     const abas = el('div', 'ms-abas'); abas.id = 'ms-abas'; abas.setAttribute('role', 'tablist');
     const filtros = el('div', 'ms-filtros'); filtros.id = 'ms-filtros';
     const busq = el('input', 'ms-busca'); busq.id = 'ms-busca'; busq.type = 'search'; busq.placeholder = 'Buscar conversa'; busq.setAttribute('aria-label', 'Buscar conversas');
@@ -1021,40 +1010,19 @@
     aviso_('Etapa da venda salva.'); if (etqDaFicha_) { etqDaFicha_ = false; abrirFicha_(); }
     ETQ = null; desenharFiltros(); await carregarLista(false);
   }
-  /* v7.40.35: seletor de canal — o que antes eram as abas hoje é filtro, na mesma linha de chips. */
-  function chipCanal_(f) {
-    const sel = el('select', 'ms-chip ms-canal-sel'); sel.id = 'ms-filtro-canal'; sel.setAttribute('aria-label', 'Canal das conversas');
-    [['todos', 'Todos os canais']].concat(CANAIS.map(([k, n]) => [k, n])).forEach(([v, t2]) => { const o = el('option', '', t2); o.value = v; sel.appendChild(o); });
-    sel.value = canal;
-    sel.addEventListener('change', () => { canal = sel.value; desenharFiltros(); desenharAbas(); desenharEstado(); carregarLista(true); });
-    f.appendChild(sel);
-    return sel;
-  }
   function desenharFiltros() {
-    const f = $('ms-filtros'); if (!f) return;
-    f.textContent = '';
-    const aba = abaAtiva_;
-    /* v7.40.35: a MESMA linha de chips serve às quatro abas (três células), então o cabeçalho
-       não cresce no Android. Canal continua em todas; o resto muda por aba. */
-    if (aba === 'atendimento') {
-      chipCanal_(f);
-      const esc = el('select', 'ms-chip'); esc.id = 'ms-atendimento-escopo'; esc.setAttribute('aria-label', 'Atendimentos de');
-      [['todos', 'Todos'], ['meus', 'Só meus']].forEach(([v, t2]) => { const o = el('option', '', t2); o.value = v; esc.appendChild(o); });
-      esc.value = escopoAtendimento_; esc.addEventListener('change', () => { escopoAtendimento_ = esc.value; carregarLista(true); });
-      f.appendChild(esc);
-      const b = botao('ms-chip', 'Só não respondidos', 'so-nao-respondidos'); b.id = 'ms-so-nao-respondidos'; b.setAttribute('aria-pressed', String(soNaoRespondidos_));
-      f.appendChild(b);
-    } else if (aba === 'pendentes' || aba === 'encerrados') {
-      /* v7.40.35: a explicação da aba NÃO entra aqui — a linha de filtros tem de manter
-         uma fileira só (senão o cabeçalho cresce no Android). Ela vai no estado vazio da
-         lista e no aria-label da aba. */
-      chipCanal_(f);
-      const bf2 = $('ms-btn-filtros'); void bf2;
-    } else {
-      chipCanal_(f);
-      ['msg', 'grp'].forEach((k) => { const b = botao('ms-chip', k === 'msg' ? 'Mensagens' : 'Grupos', 'tipo', { tipo: k }); b.setAttribute('aria-pressed', String(!!tipos[k])); f.appendChild(b); });
-    }
-    const bf=$('ms-btn-filtros');if(bf){const ativo=etqFiltro||!tipos.msg||tipos.grp||!!filtro;bf.textContent=ativo?'Filtros •':'Filtros';bf.prepend(iconeFluido_('filtros'));bf.setAttribute('aria-label',ativo?'Filtros, há filtros aplicados':'Filtros');}
+    const f=$('ms-filtros');if(!f)return;f.textContent='';
+    const ativos=[];
+    if(canal!=='todos')ativos.push(NOME_CANAL_[canal]||canal);
+    if(abaAtiva_==='atendimento'&&escopoAtendimento_==='meus')ativos.push('Só meus');
+    if(abaAtiva_==='atendimento'&&soNaoRespondidos_)ativos.push('Não respondidos');
+    if(canal!=='instagram'&&(!tipos.msg||tipos.grp))ativos.push(tipos.msg?'Individuais e grupos':'Grupos');
+    if(filtro)ativos.push((FILTROS.find(x=>x[0]===filtro)||[])[1]||'Situação filtrada');
+    if(etqFiltro)ativos.push((ETQ||[]).find(e=>e.id===etqFiltro)?.nome||'Etapa filtrada');
+    f.hidden=!ativos.length;
+    ativos.slice(0,2).forEach(nome=>{const b=botao('ms-chip',nome,'filtros-abrir');b.setAttribute('aria-label','Alterar filtro: '+nome);f.appendChild(b);});
+    if(ativos.length>2){const mais=botao('ms-chip','+'+(ativos.length-2),'filtros-abrir');mais.setAttribute('aria-label','Ver todos os filtros aplicados: '+ativos.join(', '));f.appendChild(mais);}
+    const bf=$('ms-btn-filtros');if(bf){bf.textContent=ativos.length?'Filtros '+ativos.length:'Filtros';bf.prepend(iconeFluido_('filtros'));bf.setAttribute('aria-label',ativos.length?'Filtros, '+ativos.length+' aplicados':'Filtros');}
     const nav=$('ms-nav');if(nav)nav.querySelectorAll('button').forEach(b=>{const ativo=b.dataset.ms==='funil'?painel==='funil':b.dataset.ms==='inicio-notas'?filtro==='com_notas':b.dataset.ms==='inicio'?painel!=='funil'&&filtro!=='com_notas':false;b.setAttribute('aria-current',ativo?'page':'false');});
     if(!ETQ)carregarEtiquetas_();
   }
@@ -1075,7 +1043,14 @@
     const sec=(titulo)=>{const fs=el('fieldset','ms-filtro-grupo');fs.appendChild(el('legend','',titulo));corpo.appendChild(fs);return fs;};
     const opc=(pai,tipo,nome,valor,texto,checked)=>{const lb=el('label','ms-filtro-op'),i=el('input');i.type=tipo;i.name=nome;i.value=valor;i.checked=checked;lb.append(i,document.createTextNode(texto));pai.appendChild(lb);};
     const selecao=(pai,nome,rotulo,itens,valor)=>{const sel=el('select','ms-filtro-select');sel.name=nome;sel.setAttribute('aria-label',rotulo);itens.forEach(([v,t])=>{const op=el('option','',t);op.value=v;sel.appendChild(op);});sel.value=String(valor);pai.appendChild(sel);return sel;};
-    if(canal!=='instagram'){const g=sec('O que mostrar');opc(g,'checkbox','ms-ft-tipo','msg','Atendimentos individuais',tipos.msg);opc(g,'checkbox','ms-ft-tipo','grp','Grupos',tipos.grp);}
+    const canais=sec('Canal');selecao(canais,'ms-ft-canal','Canal das conversas',[['todos','Todos os canais'],...CANAIS],canal);
+    if(abaAtiva_==='atendimento'){
+      const equipe=sec('Atendimentos de');selecao(equipe,'ms-ft-escopo','Atendimentos de',[['todos','Toda a equipe'],['meus','Só meus']],escopoAtendimento_);
+      opc(equipe,'checkbox','ms-ft-resposta','sim','Só não respondidos',soNaoRespondidos_);
+    }
+    const tiposEl=sec('O que mostrar');opc(tiposEl,'checkbox','ms-ft-tipo','msg','Atendimentos individuais',tipos.msg);opc(tiposEl,'checkbox','ms-ft-tipo','grp','Grupos',tipos.grp);
+    const canalEl=corpo.querySelector('[name=ms-ft-canal]');
+    const ajustarTipos=()=>{tiposEl.hidden=canalEl.value==='instagram';};canalEl.addEventListener('change',ajustarTipos);ajustarTipos();
     const g=sec('Mostrar');
     const filas=[['','Todas as conversas abertas'],...FILTROS];
     selecao(g,'ms-ft-fila','Mostrar conversas',filas,filtro);
@@ -1355,7 +1330,7 @@
     if (c.nao_lidas > 0 && !esp && !selecao) { esp = botao('ms-espiar', '', 'espiar', { id: String(c.id) }); esp.innerHTML = '<svg class="ms-olho" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><span>Espiar</span>'; esp.setAttribute('aria-label', 'Espiar ' + rotuloContato(c) + ' sem marcar como lida'); li.appendChild(esp); }
     else if ((!(c.nao_lidas > 0) || selecao) && esp) esp.remove();
     const b = li.firstChild, nova = c.nao_lidas > 0, saiu = c.ult_dir === 'saida', espera = aguardaResposta_(c) && !c.grupo;
-    b.className = 'ms-conv' + (nova ? ' nova' : ''); if (aberta && aberta.id === c.id) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
+    b.className = 'ms-conv' + (nova ? ' nova' : '')+(c.nome&&lista.some(x=>x.id!==c.id&&x.nome===c.nome&&x.contato!==c.contato)?' ms-homonimo':''); if (aberta && aberta.id === c.id) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
     const marcada = !!(selecao && selecao.has(c.id));
     if (selecao) b.setAttribute('aria-pressed', String(marcada)); else b.removeAttribute('aria-pressed');
     const assinatura = [c.dono || '', JSON.stringify(c.relacionamento||null), (c.etiquetas || []).map((e) => e.id + e.nome + e.cor).join('|'), canal === 'todos' ? c.canal : '', c.nome, c.ultima_em, c.previa, c.nao_lidas, c.ult_dir, c.ult_status, espera ? Math.floor(Date.now() / 60000) : '', aberta && aberta.id === c.id, c.outro_id || '', c.encerrada_motivo || '', c.agenda_pendente || 0, c.agenda_proxima || '', selecao ? (marcada ? 'S' : 's') : ''].join('|');
@@ -1372,7 +1347,7 @@
     if (canal === 'todos' && NOME_CANAL_[c.canal]) l3.appendChild(el('span', 'ms-canal-tag ms-canal-' + c.canal, NOME_CANAL_[c.canal]));
     if (c.encerrada_em && NOME_MOTIVO_[c.encerrada_motivo]) l3.appendChild(el('span', 'ms-motivo-tag ms-motivo-' + c.encerrada_motivo, NOME_MOTIVO_[c.encerrada_motivo]));
     if (c.nome && !c.grupo && /^\d{10,15}$/.test(c.contato || '')) l3.appendChild(el('span', 'ms-fone', foneBonito_(c.contato)));
-    if (c.dono) l3.appendChild(el('span', 'ms-dono-tag', 'Resp.: ' + c.dono));
+    if(c.dono){const dono=el('span','ms-dono-tag',c.dono);dono.setAttribute('aria-label','Responsável: '+c.dono);l3.appendChild(dono);}
     if(!c.grupo&&c.relacionamento?.totalEventos>0){const h=el('span','ms-relacionamento-mini',rotuloRelacionamento_(c.relacionamento));h.title='Pontuação de relacionamento de 0 a 100. Veja os motivos dentro da conversa.';l3.appendChild(h);}
     if (Number(c.agenda_pendente) > 0) {
       const quantidade = Number(c.agenda_pendente);
@@ -1896,7 +1871,7 @@
   function pintarLista() {
     const ul = $('ms-lista'), extra = $('ms-extra'); if (!ul || painel === 'metricas' || painel === 'funil') return;
     ul.hidden = false; extra.hidden = false;
-    const resultados=$('ms-resultados');if(resultados){const n=new Set(lista.map(c=>c.pessoa||'c:'+c.id)).size;resultados.textContent=n+(n===1?' atendimento':' atendimentos')+(filtro==='encerradas'?' encerrados':' em aberto')+(visualLista_()==='dividida'?' · mais recentes em cada seção':' · mais recentes');}const intro=$('ms-intro');if(intro){const b=intro.querySelector('button');b.textContent=selecao?'Cancelar':'Selecionar';b.dataset.ms=selecao?'sel-sair':'selecionar';}
+    const resultados=$('ms-resultados');if(resultados){const n=new Set(lista.map(c=>c.pessoa||'c:'+c.id)).size;resultados.textContent=n+(n===1?' atendimento':' atendimentos')+(filtro==='encerradas'||abaAtiva_==='encerrados'?' encerrados':' em aberto');}const intro=$('ms-intro');if(intro){const b=intro.querySelector('button');b.textContent=selecao?'Cancelar':'Selecionar';b.dataset.ms=selecao?'sel-sair':'selecionar';}
     const vivos = new Set(lista.map((c) => c.id));
     if (selecao) { selecao.forEach((id) => { if (!vivos.has(id)) selecao.delete(id); }); desenharSelbar_(); }
     elConvs.forEach((li, id) => { if (!vivos.has(id)) { li.remove(); elConvs.delete(id); } });
@@ -1904,9 +1879,9 @@
     const blocos=new Map();lista.forEach(c=>{const key=c.grupo?'grupo:'+c.id:c.pessoa||(c.outro_id?'par:'+Math.min(c.id,c.outro_id):'conversa:'+c.id);if(!blocos.has(key))blocos.set(key,[]);blocos.get(key).push(c);});
     const ordenados=[...blocos.values()].map(b=>b.sort((a,c)=>String(c.ultima_em).localeCompare(String(a.ultima_em))||c.id-a.id)).sort((a,b)=>String(b[0].ultima_em).localeCompare(String(a[0].ultima_em))||b[0].id-a[0].id);
     const dividida=visualLista_()==='dividida'&&filtro!=='encerradas'&&abaAtiva_!=='encerrados';
-    const secoes=dividida?[['Aguardando resposta da loja',ordenados.filter(b=>b.some(aguardaResposta_))],['Demais conversas',ordenados.filter(b=>!b.some(aguardaResposta_))]]:[['',ordenados]];
+    const secoes=dividida?[['Aguardando equipe',ordenados.filter(b=>b.some(aguardaResposta_))],['Demais conversas',ordenados.filter(b=>!b.some(aguardaResposta_))]]:[['',ordenados]];
     for(const [titulo,bs]of secoes){
-      if(titulo&&bs.length){const li=el('li','ms-lista-secao'),h=el('h3','',titulo);h.appendChild(el('small','',bs.length+(bs.length===1?' cliente exibido':' clientes exibidos')));li.appendChild(h);ul.insertBefore(li,ref);}
+      if(titulo&&bs.length){const li=el('li','ms-lista-secao'),h=el('h3','',titulo);h.appendChild(el('small','',' · '+bs.length));li.appendChild(h);ul.insertBefore(li,ref);}
       bs.forEach(b=>b.forEach((c,i)=>{const li=linhaConversa(c);li.classList.toggle('ms-vinculada',i>0);li.classList.toggle('ms-vinculo-principal',b.length>1&&i===0);li.classList.toggle('ms-vinculo-fim',b.length>1&&i===b.length-1);li.style.marginLeft='';li.style.background='';if(li!==ref)ul.insertBefore(li,ref);else ref=ref.nextSibling;}));
     }
     extra.textContent = '';
@@ -3574,9 +3549,9 @@
     else if(a==='filtros-abrir')abrirFiltros_();
     else if(a==='filtros-aplicar'||a==='filtros-limpar'){
       const g=$('ms-gaveta');if(!g)return;
-      if(a==='filtros-limpar'){tipos={msg:true,grp:false};filtro='';etqFiltro=0;}
-      else{if(canal!=='instagram'){const ts=[...g.querySelectorAll('[name=ms-ft-tipo]:checked')].map(x=>x.value);if(!ts.length){aviso_('Escolha mensagens individuais ou grupos.');return;}tipos={msg:ts.includes('msg'),grp:ts.includes('grp')};}filtro=g.querySelector('[name=ms-ft-fila]')?.value||'';etqFiltro=Number(g.querySelector('[name=ms-ft-etapa]')?.value||0);}
-      fecharGaveta_();fecharPainel();desenharFiltros();await carregarLista(true);
+      if(a==='filtros-limpar'){canal='todos';escopoAtendimento_='todos';soNaoRespondidos_=false;tipos={msg:true,grp:false};filtro='';etqFiltro=0;}
+      else{const novoCanal=g.querySelector('[name=ms-ft-canal]')?.value||canal;if(novoCanal!=='instagram'){const ts=[...g.querySelectorAll('[name=ms-ft-tipo]:checked')].map(x=>x.value);if(!ts.length){aviso_('Escolha mensagens individuais ou grupos.');return;}tipos={msg:ts.includes('msg'),grp:ts.includes('grp')};}canal=novoCanal;if(abaAtiva_==='atendimento'){escopoAtendimento_=g.querySelector('[name=ms-ft-escopo]')?.value||'todos';soNaoRespondidos_=!!g.querySelector('[name=ms-ft-resposta]:checked');}filtro=g.querySelector('[name=ms-ft-fila]')?.value||'';etqFiltro=Number(g.querySelector('[name=ms-ft-etapa]')?.value||0);}
+      fecharGaveta_();fecharPainel();desenharAbas();desenharFiltros();desenharEstado();await carregarLista(true);
     }
     else if(a==='fila'||a==='inicio'||a==='inicio-notas'){
       if($('ms-gaveta'))fecharGaveta_();if(painel==='funil'){await desempilharEsperando_('ms-funil');if(painel==='funil')fecharPainel();}else fecharPainel();

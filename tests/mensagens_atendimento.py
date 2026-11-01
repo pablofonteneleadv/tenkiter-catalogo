@@ -44,7 +44,7 @@ with sync_playwright() as p:
     abas = pg.evaluate("[...document.querySelectorAll('#ms-abas .ms-aba')].map(x=>(x.firstChild&&x.firstChild.nodeValue||x.textContent).trim())")
     chk("quatro abas do fluxo", abas == ["Em atendimento", "Pendentes", "Todos", "Encerrados"], abas)
     celulas = pg.evaluate("[...document.querySelectorAll('#ms-filtros > *')].length")
-    chk("linha de filtros com 3 células (canal, escopo, atalho)", celulas == 3, celulas)
+    chk("filtros padrão recolhidos, sem ocupar a lista", celulas == 0 and pg.locator("#ms-filtros").is_hidden(), celulas)
     # o atalho existe na aba Em atendimento (checado lá; aqui o roteiro já está em "Todos")
     chk("atalho 'Só não respondidos' só aparece em Em atendimento",
         pg.locator("#ms-so-nao-respondidos").count() == 0)
