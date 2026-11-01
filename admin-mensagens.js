@@ -1035,7 +1035,7 @@
     while(g.firstChild)painel.appendChild(g.firstChild);g.appendChild(painel);
     g.addEventListener('click',ev=>{if(ev.target===g)fecharGaveta_();});
     g.addEventListener('keydown',ev=>{if(ev.key!=='Tab')return;const alvos=[...painel.querySelectorAll('button,input,textarea,select,summary,[tabindex="0"]')].filter(n=>!n.disabled&&n.getClientRects().length),primeiro=alvos[0],ultimo=alvos.at(-1);if(ev.shiftKey&&document.activeElement===primeiro){ev.preventDefault();ultimo.focus();}else if(!ev.shiftKey&&document.activeElement===ultimo){ev.preventDefault();primeiro.focus();}});
-    document.addEventListener('tk:camada-fechada',function foco(ev){if(ev.detail?.chave!=='ms-gaveta')return;document.removeEventListener('tk:camada-fechada',foco);setTimeout(()=>{if(!g.isConnected&&!$('ms-gaveta')&&document.activeElement===document.body&&anterior?.isConnected)anterior.focus();},0);});
+    document.addEventListener('tk:camada-fechada',function foco(ev){if(ev.detail?.chave!=='ms-gaveta')return;document.removeEventListener('tk:camada-fechada',foco);setTimeout(()=>{const destino=anterior?.isConnected?anterior:tipo==='filtros'?$('ms-btn-filtros'):null;if(!g.isConnected&&!$('ms-gaveta')&&document.activeElement===document.body&&destino?.getClientRects().length)destino.focus();},0);});
     painel.querySelector('.ms-gaveta-cab button')?.focus();return painel;
   }
   function abrirFiltros_(){

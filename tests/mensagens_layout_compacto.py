@@ -41,6 +41,8 @@ with sync_playwright() as p:
   aplicar(pg,escopo='meus');assert valor(pg,'escopo')=='meus';assert 'Só meus' in pg.inner_text('#ms-filtros')
   pg.click('#ms-btn-filtros');pg.click('[data-ms=filtros-limpar]');pg.wait_for_selector('#ms-filtros',state='hidden')
   aplicar(pg,canal='whatsapp1');assert valor(pg,'canal')=='whatsapp1';assert 'WhatsApp 1' in pg.inner_text('#ms-filtros')
+  if w==390 and h==844:
+   pg.locator('#ms-filtros button').first.focus();pg.keyboard.press('Enter');pg.wait_for_selector('#ms-gaveta');pg.click('[data-ms=filtros-limpar]');pg.wait_for_selector('#ms-gaveta',state='detached');pg.wait_for_function('document.activeElement.id==="ms-btn-filtros"');aplicar(pg,canal='whatsapp1')
   pg.click('#ms-btn-filtros');pg.check('[name=ms-ft-resposta]');pg.screenshot(path=str(OUT/f'filtros-{w}-{h}.png'));pg.keyboard.press('Escape');pg.wait_for_selector('#ms-gaveta',state='detached')
   pg.click('#ms-btn-filtros');pg.click('[data-ms=filtros-limpar]')
   aplicar(pg,canal='whatsapp1',escopo='meus',resposta=True,fila='nao_lidas',etapa='1')
