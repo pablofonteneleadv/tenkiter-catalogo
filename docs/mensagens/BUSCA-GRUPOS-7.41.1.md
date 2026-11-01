@@ -1,4 +1,4 @@
-# Mensageiro 7.40.46 — tipos, pendentes e busca geral
+# Mensageiro 7.41.1 — tipos, pendentes e busca geral
 
 Individuais e Grupos são seletores fixos em Em atendimento e Todos. Individuais é o padrão; uma ou ambas as opções podem ficar selecionadas, nunca nenhuma. Pendentes e Encerrados mostram clientes individuais. Instagram não possui grupos; durante a busca os seletores permanecem visíveis nas abas correspondentes, porém pausados, pois a pesquisa inclui tudo.
 
@@ -12,6 +12,6 @@ Os resultados agrupam por identidade canônica, nunca pelo nome. Se um canal cor
 
 Validação: SQLite real com grupos legados, bloqueio atômico,3homônimos/6canais, busca em mensagem antiga, filtros ignorados somente durante pesquisa, parâmetros seguros e58pessoas paginadas sem perda/duplicação. Navegador320/390/412/1440 e altura470, texto100/130%, zoom/foco, seleção, filtros, estados e axe. Screenshots simuladas em tests/saida/reparos/grupos-busca. Skill estética TENKiTER aplicada; sem bibliotecas/fontes novas. APROVADO COM LIMITAÇÃO após os testes registrados no lote: sem aparelho Android físico ou envios reais.
 
-O APK abre a interface remota pelo WebKeeper/MainActivity; não há mudança nativa, ponte ou arquivo incorporado ao build. Mantido APK2.4.21/code28. Novo HTML referencia admin-mensagens.js?v=7.40.46; backend é publicado pelo workflow oficial dos três Workers. Sem migração ou limpeza de dados reais. Backup anterior: backup/pre-mensageiro-busca-grupos-20261101 emdb6f07bd4b06b00e85bb6a9cac1125a8ed974a6d.
+O APK abre a interface remota pelo WebKeeper/MainActivity; não há mudança nativa, ponte ou arquivo incorporado ao build. Mantido APK2.4.21/code28. Novo HTML referencia admin-mensagens.js?v=7.41.1; backend é publicado pelo workflow oficial dos três Workers. Sem migração ou limpeza de dados reais. Backup anterior: backup/pre-mensageiro-busca-grupos-20261101 emdb6f07bd4b06b00e85bb6a9cac1125a8ed974a6d.
 
 Em altura reduzida, a identificação secundária, o resumo e o painel de conexão deixam espaço para lista/teclado; seleção e conexões continuam no menu. Os tipos permanecem fixos nas abas definidas e filtros ativos podem rolar na própria faixa, mantendo alvos de44px e a navegação inferior acessível.
