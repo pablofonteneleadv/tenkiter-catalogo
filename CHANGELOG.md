@@ -6,6 +6,14 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.41.0 — Esteira de Produtos (entrega 1) — 01/11/2026
+- Nova página independente **esteira.html** (mesmo login do site e do Mensageiro): tela **Hoje** com 20 peças por funcionária para conferir ao longo do dia, função do rodízio com instruções e escala do dia.
+- Escolha das peças por pontuação (nunca conferida, dias sem conferência, antiguidade, dias sem atualização, estoque baixo, diferença anterior), agrupando categoria/público para facilitar achar na arara; peça conferida ou atualizada à mão nos últimos 21 dias fica de fora; listas não se repetem entre as funcionárias.
+- Conferir peça: mostra cadastro, última atualização e última conferência; contagem com aviso quando difere do site; tirar tamanhos/cores que acabaram; pedir foto nova. O que mudar é salvo no produto pelo mesmo caminho da edição em lote.
+- Painel (Admin total): progresso de cada uma, diferença site × loja em 30 dias e idade das peças. Configurações (só Admin total): equipe marcada à mão (confere, rodízio, atendente, aceita para o site), escala padrão da semana + troca manual do dia, funções e instruções, peças por pessoa, dias sem repetir e pesos.
+- Gestão e Disponibilidade rápida avisam a Esteira quando fotos, tamanhos, cores ou estoque mudam à mão (preço e descrição não contam).
+- Servidor: rotas `/esteira/*` e tabelas `est_*` no D1; catálogo lido da lista pública (cache 10 min). Testes: `tests/worker_esteira.js`, `tests/esteira_ui.py`.
+
 ## [7.40.45] - 2026-11-01
 
 - Mensageiro com topo e seções compactos, filtros sob demanda e indicação dos filtros ativos; responsável e histórico deixam de disputar espaço com o telefone.

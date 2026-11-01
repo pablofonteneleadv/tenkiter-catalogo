@@ -2427,6 +2427,24 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
   function podeGerirCategorias_() { return catGestaoNoServidor_ && modoLogin && temPermissao(usuarioAdmin, 'gerir_acessos'); }
   /** Mesma regra do servidor: vírgula vira espaço (vírgula separa as categorias da peça), espaços repetidos viram um, no máximo 60 letras. */
   function limparNomeCategoria_(s) { return String(s == null ? '' : s).replace(/,/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim(); }
+  /* v7.41.0 — Esteira: foto, tamanho, cor ou estoque mudados à mão contam como conferência (a peça sai das listas por alguns dias).
+     Preço e descrição não contam. Falha aqui nunca atrapalha o salvamento. */
+  window.tkEsteiraToque = function (ids) {
+    try {
+      const s = getSessao(); const lista = (Array.isArray(ids) ? ids : [ids]).map(String).filter(Boolean);
+      if (!s || !lista.length || typeof INSTAGRAM_URL === 'undefined') return;
+      fetch(INSTAGRAM_URL + '/esteira/toque', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: JSON.stringify({ ids: lista }) }).catch(() => {});
+    } catch (e) { /* conforto */ }
+  };
+  function esteiraMudouNaLoja_(it) {
+    if (!it || !it.ehEdicao || !it.dados) return false;
+    if (it.capaNovaB64 || (it.galeriaNovaB64 || []).length || it.videoArquivo || (it.videosRemover || []).length) return true;
+    const p = (typeof produtos !== 'undefined' && Array.isArray(produtos)) ? produtos.find((x) => String(x.ID) === String(it.dados.id)) : null;
+    if (!p) return false;
+    const n = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+    return n(it.dados.estoque) !== n(p.Estoque) || n(it.dados.tamanhos) !== n(p.Tamanhos) || n(it.dados.cores) !== n(p.Cores)
+      || n(it.dados.fotoUrlExistente) !== n(p.Foto_URL) || n(it.dados.fotosGaleriaExistentes) !== n(String(p.Fotos_Galeria || '').split(',').map((x) => x.trim()).filter(Boolean).join(','));
+  }
   function chamarAdmin_(extra) {
     const sess = (typeof getSessao === 'function' && getSessao()) || null;
     return apiPost(Object.assign({ pin: adminPin, sessao: adminPin, whatsapp: sess ? sess.whatsapp : '', funcionario: funcionarioNome }, extra));
@@ -4039,6 +4057,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       }
       // A conferência (recarregar a lista e ver se fotos/vídeos voltaram) acontece UMA vez no fim da fila, não a cada peça.
       it.estado = 'ok'; it.respSalvo = resultado.resp; if (!it.arquivadaDepois) conferir_.push(it);
+      if (esteiraMudouNaLoja_(it)) window.tkEsteiraToque(it.dados.id);
       if (it.rascunhoId) { try { window.dispatchEvent(new CustomEvent('tk:peca-salva', { detail: { rascunhoId: it.rascunhoId, id: resultado.resp.id, codigo: resultado.resp.codigo } })); } catch (e) {} }   // o importador marca o rascunho como aceito
       window.logDebug_('════ "' + it.titulo + '": salvo ════');
     } else if (!resultado.ok && resultado.enfileirado) {
@@ -4076,7 +4095,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const porId = {}; resp.resultados.forEach((x) => { if (x && x.id !== undefined) porId[String(x.id)] = x; });
     grupo.forEach((it) => {
       const x = porId[String(it.dados.id)];
-      if (x && x.ok) { it.estado = 'ok'; it.respSalvo = { ok: true, id: it.dados.id }; conferir_.push(it); apagarEnvio_(it); }
+      if (x && x.ok) { if (esteiraMudouNaLoja_(it)) window.tkEsteiraToque(it.dados.id); it.estado = 'ok'; it.respSalvo = { ok: true, id: it.dados.id }; conferir_.push(it); apagarEnvio_(it); }
       else { it.estado = 'erro'; it.msg = (x && x.erro) || 'o servidor não confirmou esta peça. Toque em Tentar de novo.'; it.semLote = true; it.etapa = 'fila'; guardarEnvio_(it); }
     });
     window.logDebug_('════ grupo salvo: ' + grupo.filter(it => it.estado === 'ok').length + ' de ' + grupo.length + ' ════');
@@ -6151,7 +6170,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="admin-conexoes.js?v=7.38.2"></script>
 <script src="mensagens-acessos.js?v=7.40.19"></script>
 <link rel="stylesheet" href="admin-disponibilidade.css?v=7.40.28">
-<script src="admin-disponibilidade.js?v=7.40.28"></script>
+<script src="admin-disponibilidade.js?v=7.41.0"></script>
 <script src="mensagens-eventos.js?v=7.40.30"></script>
 <link rel="stylesheet" href="mensagens-gestor.css?v=7.40.45">
 <script src="mensagens-presenca.js?v=7.40.43"></script>
