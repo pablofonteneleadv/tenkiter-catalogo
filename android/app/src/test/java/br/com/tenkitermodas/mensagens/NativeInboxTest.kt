@@ -358,7 +358,7 @@ class NativeInboxTest {
             v.render(auth,true,listOf(c),0,emptyList(),emptyList(),true,"Atualizado");layout(v,w,844)
             assertTrue(all(v).filterIsInstance<android.widget.TextView>().any{it.text=="Hist. 35"});snapshot(v,"relacionamento-lista-$w",w,844)
             v.render(auth,true,listOf(c),1,listOf(msg()),emptyList(),true,"Atualizado");layout(v,w,844)
-            val badge=all(v).filterIsInstance<Button>().first{it.contentDescription=="Ver histórico de relacionamento"};assertEquals(v.dp(44),badge.height);assertEquals(v.dp(76),badge.width);badge.performClick()
+            val badge=all(v).filterIsInstance<Button>().first{it.contentDescription=="Ver histórico de relacionamento"};assertEquals(v.dp(48),badge.height);assertEquals(v.dp(76),badge.width);badge.performClick()
             val d=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();assertTrue(d.isShowing);val texts=all(d.window!!.decorView).filterIsInstance<android.widget.TextView>();assertTrue(texts.any{it.text.contains("15 vezes")});assertEquals(0L,events.selected);d.dismiss();snapshot(v,"relacionamento-conversa-$w",w,844)
         }
         v.render(auth,true,listOf(conv()),1,listOf(msg()),emptyList(),true,"Atualizado");layout(v,390,844);all(v).filterIsInstance<Button>().first{it.contentDescription=="Ver histórico de relacionamento"}.performClick();assertTrue(all(org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog().window!!.decorView).filterIsInstance<android.widget.TextView>().any{it.text.contains("ainda não disponível")})

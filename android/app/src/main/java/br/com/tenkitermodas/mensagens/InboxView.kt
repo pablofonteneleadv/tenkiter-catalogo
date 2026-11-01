@@ -248,7 +248,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
             column.addView(button("Como a nota foi calculada"){detail.visibility=if(detail.visibility==View.GONE)View.VISIBLE else View.GONE},LayoutParams(-1,dp(48)));column.addView(detail,LayoutParams(-1,-2))
             paragraph("Motivos registrados; não comprovam pagamento nem explicam por que o cliente deixou de responder. Canais vinculados contam o evento uma vez.")
             val stamp=runCatching{java.time.format.DateTimeFormatter.ofPattern("dd/MM HH:mm").withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.parse(r.optString("calculadoEm")))}.getOrDefault("sem horário")
-            paragraph("Dados consultados em $stamp · até 1 minuto de cache. Sem conexão, esta é a cópia salva.")
+            paragraph("Dados consultados em $stamp · pode levar até 1 minuto para atualizar. Sem conexão, esta é a cópia salva.")
         }
         android.app.AlertDialog.Builder(activity).setTitle("Histórico de relacionamento").setView(ScrollView(activity).apply{addView(column)}).setPositiveButton("Fechar",null).show()
     }
@@ -256,7 +256,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         val c=chats.firstOrNull{it.optLong("id")==focus};val row=LinearLayout(activity).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(4),0,dp(8),0)}
         row.addView(button("←"){events.back()}.apply{contentDescription="Voltar às conversas"},LayoutParams(dp(48),dp(52)))
         row.addView(text(c?.optString("nome")?.ifBlank{c.optString("contato")}?:"Conversa",17,true).apply{maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END;setOnClickListener{events.tool(focus,"pessoa")};contentDescription="Configurar contato e canais vinculados"},LayoutParams(0,dp(52),1f))
-        if(c!=null&&!InboxRules.group(c))row.addView(button(InboxRules.relationshipLabel(c)){relationshipDialog(c)}.apply{contentDescription="Ver histórico de relacionamento";textSize=11f;setTextColor(Color.rgb(98,92,83));background=rounded(cream,8)},LayoutParams(dp(76),dp(44)))
+        if(c!=null&&!InboxRules.group(c))row.addView(button(InboxRules.relationshipLabel(c)){relationshipDialog(c)}.apply{contentDescription="Ver histórico de relacionamento";textSize=11f;setTextColor(Color.rgb(98,92,83));background=rounded(cream,8)},LayoutParams(dp(76),dp(48)))
         row.addView(button("⋮"){events.tool(focus,"conversa")}.apply{contentDescription="Opções da conversa";textSize=24f;background=rounded(Color.TRANSPARENT,0)},LayoutParams(dp(48),dp(48)));body.addView(row)
         val detail=LinearLayout(activity).apply{orientation=VERTICAL;setPadding(dp(12),0,dp(12),dp(4))}
         detail.addView(text((c?.let{InboxRules.channel(it)}?:"")+" · "+(c?.let{InboxRules.contact(it)}?:""),12))
