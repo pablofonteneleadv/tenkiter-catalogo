@@ -223,7 +223,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
             row.addView(content,LayoutParams(0,-2,1f))
             if(!selecting){
                 val side=LinearLayout(activity).apply{orientation=VERTICAL;gravity=Gravity.CENTER;setPadding(dp(6),0,0,0)}
-                if(!InboxRules.group(c)&&(c.optJSONObject("relacionamento")?.optInt("totalEventos")?:0)>0)side.addView(text(InboxRules.relationshipLabel(c),11,false,Color.rgb(98,92,83)).apply{contentDescription="Histórico de relacionamento: "+c.optJSONObject("relacionamento")?.optInt("pontos")+" de 100. Veja os motivos na conversa."},LayoutParams(dp(68),dp(16)))
+                if(!InboxRules.group(c)&&(c.optJSONObject("relacionamento")?.optInt("totalEventos")?:0)>0)side.addView(text(InboxRules.relationshipLabel(c),11,false,Color.rgb(98,92,83)).apply{contentDescription="Histórico de relacionamento: "+c.optJSONObject("relacionamento")?.optInt("pontos")+" de 100. Veja os motivos na conversa."},LayoutParams(dp(68),-2))
                 if(unread>0)side.addView(text(if(unread==1)"1 não lida"else"$unread não lidas",11,true,Color.rgb(18,104,67)))
                 side.setOnLongClickListener{hold()}
                 side.addView(button("Espiar"){events.peek(id)}.apply{setOnLongClickListener{hold()};setTextColor(orange);background=rounded(Color.TRANSPARENT,0);contentDescription="Espiar $label sem marcar como lida"},LayoutParams(dp(68),dp(48)))
@@ -256,7 +256,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         val c=chats.firstOrNull{it.optLong("id")==focus};val row=LinearLayout(activity).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(4),0,dp(8),0)}
         row.addView(button("←"){events.back()}.apply{contentDescription="Voltar às conversas"},LayoutParams(dp(48),dp(52)))
         row.addView(text(c?.optString("nome")?.ifBlank{c.optString("contato")}?:"Conversa",17,true).apply{maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END;setOnClickListener{events.tool(focus,"pessoa")};contentDescription="Configurar contato e canais vinculados"},LayoutParams(0,dp(52),1f))
-        if(c!=null&&!InboxRules.group(c))row.addView(button(InboxRules.relationshipLabel(c)){relationshipDialog(c)}.apply{contentDescription="Ver histórico de relacionamento";textSize=11f;setTextColor(Color.rgb(98,92,83));background=rounded(cream,8)},LayoutParams(dp(76),dp(48)))
+        if(c!=null&&!InboxRules.group(c))row.addView(button(InboxRules.relationshipLabel(c)){relationshipDialog(c)}.apply{contentDescription="Ver histórico de relacionamento";textSize=11f;setPadding(dp(6),0,dp(6),0);setTextColor(Color.rgb(98,92,83));background=rounded(cream,8)},LayoutParams(dp(76),dp(48)))
         row.addView(button("⋮"){events.tool(focus,"conversa")}.apply{contentDescription="Opções da conversa";textSize=24f;background=rounded(Color.TRANSPARENT,0)},LayoutParams(dp(48),dp(48)));body.addView(row)
         val detail=LinearLayout(activity).apply{orientation=VERTICAL;setPadding(dp(12),0,dp(12),dp(4))}
         detail.addView(text((c?.let{InboxRules.channel(it)}?:"")+" · "+(c?.let{InboxRules.contact(it)}?:""),12))

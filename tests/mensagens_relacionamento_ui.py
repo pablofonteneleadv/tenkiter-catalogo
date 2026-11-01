@@ -21,12 +21,12 @@ with sync_playwright() as p:
   ctx.route('**/*',api)
   pg=ctx.new_page();errors=[];pg.on('pageerror',lambda e:errors.append(str(e)));pg.goto(BASE+'admin.html');pg.wait_for_timeout(1700);pg.click('#details-ferramentas > summary');pg.click('#btn-abrir-mensagens');pg.wait_for_selector('#ms-lista .ms-conv');pg.wait_for_timeout(650)
   ids=pg.locator('#ms-lista .ms-conv').evaluate_all('xs=>xs.map(x=>x.dataset.id)');card=pg.locator('#ms-lista .ms-conv[data-id="1"]');assert 'Hist. 35' in card.inner_text()
-  height=card.bounding_box()['height'];badge=card.locator('.ms-relacionamento-mini');badge.evaluate('e=>e.hidden=true');base=card.bounding_box()['height'];badge.evaluate('e=>e.hidden=false');assert height<=base+18,(w,height,base)
+  height=card.bounding_box()['height'];badge=card.locator('.ms-relacionamento-mini');badge.evaluate('e=>e.style.display="none"');base=card.bounding_box()['height'];badge.evaluate('e=>e.style.display=""');assert height<=base+18,(w,height,base)
   assert pg.locator('#ms-lista .ms-conv').evaluate_all('xs=>xs.map(x=>x.dataset.id)')==ids
   pg.screenshot(path=str(OUT/f'card-{w}.png'))
   # Espiar mantém leitura; abrir apenas o histórico tampouco marca como lida.
   pg.locator('#ms-lista .ms-espiar[data-id="1"]').click();pg.wait_for_selector('#ms-conversa .ms-relacionamento-abrir');pg.wait_for_timeout(250);lidas=list(s['lidas'])
-  header=pg.locator('#ms-conversa .ms-cab');before=header.bounding_box()['height'];target=pg.locator('.ms-relacionamento-abrir');target.evaluate('e=>e.hidden=true');assert header.bounding_box()['height']>=before-1;target.evaluate('e=>e.hidden=false');assert target.bounding_box()['height']>=44;assert pg.locator('.ms-cab .ms-quem').bounding_box()['width']>=90
+  header=pg.locator('#ms-conversa .ms-cab');before=header.bounding_box()['height'];target=pg.locator('.ms-relacionamento-abrir');target.evaluate('e=>e.style.display="none"');assert header.bounding_box()['height']>=before-1;target.evaluate('e=>e.style.display=""');assert target.bounding_box()['height']>=44;assert pg.locator('.ms-cab .ms-quem').bounding_box()['width']>=90
   target.click();pg.wait_for_selector('.ms-relacionamento-evento');assert '15 vezes' in pg.inner_text('#ms-gaveta');assert not pg.locator('#ms-gaveta details').get_attribute('open')
   pg.add_script_tag(path=str(Path(__file__).with_name('axe.min.js')))
   for zoom in [100,130]:

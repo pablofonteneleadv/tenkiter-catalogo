@@ -363,6 +363,12 @@ class NativeInboxTest {
         }
         v.render(auth,true,listOf(conv()),1,listOf(msg()),emptyList(),true,"Atualizado");layout(v,390,844);all(v).filterIsInstance<Button>().first{it.contentDescription=="Ver histórico de relacionamento"}.performClick();assertTrue(all(org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog().window!!.decorView).filterIsInstance<android.widget.TextView>().any{it.text.contains("ainda não disponível")})
     }
+    @Test fun relationshipBadgeFollowsSystemFontScaleWithoutClipping(){
+        val a=activity;val cfg=android.content.res.Configuration(a.resources.configuration).apply{fontScale=1.3f};a.resources.updateConfiguration(cfg,a.resources.displayMetrics)
+        val v=InboxView(a,Events());a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo");val c=conv().put("relacionamento",JSONObject().put("pontos",100).put("totalEventos",15))
+        v.render(auth,true,listOf(c),0,emptyList(),emptyList(),true,"Atualizado");layout(v,320,480)
+        val badge=all(v).filterIsInstance<android.widget.TextView>().first{it.text=="Hist. 100"};assertNotNull(badge.layout);assertTrue("Nota cortada com texto ampliado",badge.height-badge.totalPaddingTop-badge.totalPaddingBottom>=badge.layout.height);snapshot(v,"relacionamento-texto130-320",320,480)
+    }
     private fun snapshot(v:View,name:String,w:Int,h:Int){
         val bitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);v.draw(Canvas(bitmap))
         val out=File("build/reports/native-ui/$name.png");out.parentFile!!.mkdirs();out.outputStream().use{bitmap.compress(Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()
