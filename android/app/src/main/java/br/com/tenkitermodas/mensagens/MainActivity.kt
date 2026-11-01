@@ -161,9 +161,9 @@ class MainActivity:Activity(),InboxView.Events {
     override fun update(){updater.check()}
     override fun menu(anchor:View){
         PopupMenu(this,anchor).apply{
-            listOf("Selecionar conversas","Painel de atendimento","Configurações de leitura e nome","Conexões e gravação","Google Contatos","Exportar conversas","Sincronizar conversas","Atualizar aplicativo","Site da loja","Disponibilidade","Avisos","Atendimento completo","Sair da conta").forEach{menu.add(it)}
+            listOf("Selecionar conversas",inbox.layoutMenu(),"Painel de atendimento","Configurações de leitura e nome","Conexões e gravação","Google Contatos","Exportar conversas","Sincronizar conversas","Atualizar aplicativo","Site da loja","Disponibilidade","Avisos","Atendimento completo","Sair da conta").forEach{menu.add(it)}
             setOnMenuItemClickListener{when(it.title.toString()){
-                "Painel de atendimento"->administration.dashboard(inbox.channelCode());"Configurações de leitura e nome"->administration.settings();"Conexões e gravação"->administration.connections();"Google Contatos"->administration.contacts();"Exportar conversas"->administration.exportForm(conversation,inbox.channelCode());"Selecionar conversas"->{back();inbox.beginSelection()};"Sincronizar conversas"->sync();"Atualizar aplicativo"->updater.check();"Site da loja"->external("https://tenkitermodas.com.br/")
+                "Não respondidos primeiro","Lista contínua (ordem atual)"->inbox.toggleLayout();"Painel de atendimento"->administration.dashboard(inbox.channelCode());"Configurações de leitura e nome"->administration.settings();"Conexões e gravação"->administration.connections();"Google Contatos"->administration.contacts();"Exportar conversas"->administration.exportForm(conversation,inbox.channelCode());"Selecionar conversas"->{back();inbox.beginSelection()};"Sincronizar conversas"->sync();"Atualizar aplicativo"->updater.check();"Site da loja"->external("https://tenkitermodas.com.br/")
                 "Disponibilidade"->availability();"Avisos"->notificationSettings();"Atendimento completo"->full(conversation);"Sair da conta"->confirmLogout()
             };true};show()
         }

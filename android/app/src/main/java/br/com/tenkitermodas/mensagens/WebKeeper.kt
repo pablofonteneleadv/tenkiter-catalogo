@@ -38,6 +38,8 @@ object WebKeeper {
                 .put("camera",c.checkSelfPermission(android.Manifest.permission.CAMERA)==android.content.pm.PackageManager.PERMISSION_GRANTED)
                 .put("microfone",c.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED).toString()
         }
+        @JavascriptInterface fun visualLista(conta:String):String=runCatching{val c=context?.applicationContext?:return "";if(NativeRepository.get(c).store.auth()?.owner!=conta)return "";c.getSharedPreferences("mensagens-visual",0).getString("visual_"+conta,"dividida")?:"dividida"}.getOrDefault("")
+        @JavascriptInterface fun salvarVisualLista(conta:String,visual:String){if(visual !in listOf("dividida","continua"))return;val c=context?.applicationContext?:return;runCatching{if(ReceivedFiles.trusted(web?.url)&&NativeRepository.get(c).store.auth()?.owner==conta)c.getSharedPreferences("mensagens-visual",0).edit().putString("visual_"+conta,visual).apply()}}
         @JavascriptInterface fun telaMensagensVisivel()=attached&&remoteVisible
         @JavascriptInterface fun versao()=BuildConfig.VERSION_NAME
     }

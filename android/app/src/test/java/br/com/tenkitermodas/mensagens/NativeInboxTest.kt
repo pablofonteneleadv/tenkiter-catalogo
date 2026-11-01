@@ -54,6 +54,17 @@ class NativeInboxTest {
         val input=all(v).filterIsInstance<EditText>().first{it.hint=="Mensagem"};input.requestFocus();input.setText("Rascunho não transmitido")
         assertTrue(e.interactions>0);assertEquals("",e.sent)
     }
+    @Test fun listSectionsKeepLinkedChannelsTogetherAndAllowTheOriginalLayout(){
+        val a=activity;val e=Events();val v=InboxView(a,e);a.setContentView(v);val auth=NativeAuth("88999990000","test","Ana")
+        val replied=conv(1).put("pessoa","answered").put("aguarda_resposta",0).put("nao_lidas",0).put("ult_dir","saida").put("ultima_em","2026-10-31T15:00:00Z")
+        val waiting=conv(2).put("pessoa","pending").put("aguarda_resposta",1).put("ultima_em","2026-10-31T14:00:00Z")
+        val linked=conv(3).put("pessoa","pending").put("aguarda_resposta",0).put("ultima_em","2026-10-31T13:00:00Z")
+        v.render(auth,true,listOf(replied,waiting,linked),0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844)
+        fun ids()=all(v).filterIsInstance<android.widget.ListView>().first().adapter.let{ad->(0 until ad.count).map{ad.getItemId(it)}}
+        assertEquals(listOf(-1L,2L,3L,-2L,1L),ids());assertFalse(all(v).filterIsInstance<android.widget.ListView>().first().adapter.isEnabled(0))
+        v.toggleLayout();assertEquals(listOf(1L,2L,3L),ids());v.render(auth,true,listOf(replied,waiting,linked),0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844);assertEquals(listOf(1L,2L,3L),ids())
+        v.toggleLayout();assertEquals(listOf(-1L,2L,3L,-2L,1L),ids())
+    }
     @Test fun nativeScreensAndControls(){
         val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v)
         val auth=NativeAuth("88999990000","fake-session","Pablo")
@@ -89,7 +100,7 @@ class NativeInboxTest {
         val linked=(1L..3L).map{conv(it).put("pessoa","client-one").put("canal",listOf("whatsapp1","whatsapp2","instagram")[(it-1).toInt()]).put("ultima_em","2026-10-28T00:0${it}:00Z")}
         val unrelated=conv(4).put("pessoa","client-two").put("ultima_em","2026-10-28T00:02:30Z");val group=conv(5).put("grupo",1)
         v.render(auth,true,linked+unrelated+group,0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844)
-        fun ids()=all(v).filterIsInstance<android.widget.ListView>().first().adapter.let{ad->(0 until ad.count).map{ad.getItemId(it)}}
+        fun ids()=all(v).filterIsInstance<android.widget.ListView>().first().adapter.let{ad->(0 until ad.count).map{ad.getItemId(it)}.filter{it>0}}
         assertEquals(listOf(3L,2L,1L,4L),ids());assertFalse(all(v).filterIsInstance<Button>().any{it.tag=="Nos 2 WhatsApp"});assertTrue(all(v).filterIsInstance<Button>().first{it.tag=="Todas"}.text.startsWith("Todas · 2"));snapshot(v,"inbox-linked-channels",390,844)
         val newest=JSONObject(linked[0].toString()).put("ultima_em","2026-10-28T00:04:00Z");v.render(auth,true,listOf(newest)+linked.drop(1)+unrelated+group,0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844);assertEquals(listOf(1L,3L,2L,4L),ids())
         all(v).filterIsInstance<Button>().first{it.tag=="Grupos"}.performClick();assertTrue(ids().contains(5L))
