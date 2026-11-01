@@ -274,7 +274,7 @@ function msgRecurso_(p, req, url) {
   if (p === '/msg/iniciar') return 'responder';
   if (p === '/msg/equipe') return 'metricas';
   if(p==='/msg/cortesia/rever')return 'responder';
-  if (p === '/msg/presenca'||p==='/msg/disponibilidade') return 'acessar';
+  if (p === '/msg/presenca'||p==='/msg/disponibilidade'||p==='/msg/relacionamento') return 'acessar';
   if (/^\/msg\/funil/.test(p)) return 'funil';
   if (p === '/msg/metricas') return 'metricas';
   if (p === '/msg/exportar') return 'exportar';
@@ -3226,6 +3226,7 @@ async function pessoaAtendimento_(env, id) {
   const key = c.pessoa || 'ig:'+c.contato;
   const pessoa = await env.DB.prepare('SELECT nome,whatsapp,segundo FROM msg_pessoa WHERE id=?').bind(key).first();
   const canais = (await env.DB.prepare('SELECT '+MSG_COLS_CONVERSA_+' FROM msg_conversa WHERE grupo=0 AND ('+MSG_IDENTIDADE_SQL_+'=? OR id=?) ORDER BY ultima_em DESC LIMIT 50').bind(key,id).all()).results;
+  try{await relacionamentosAtendimento_(env,[c,...canais]);}catch(_){/* Histórico não impede editar o contato. */}
   return { ok:true, conversa:c, pessoa:key, nome:(pessoa && pessoa.nome)||c.nome||'', whatsapp:(pessoa && pessoa.whatsapp)||(c.canal!=='instagram'?c.contato:''), segundo:(pessoa && pessoa.segundo)||'', canais:canais };
 }
 async function salvarPessoaAtendimento_(env, d) {
@@ -4770,6 +4771,33 @@ async function prioridadeBase_(env){
     try{await caches.default.put(ck,new Response(JSON.stringify(dados),{headers:{'Cache-Control':'max-age=300','Content-Type':'application/json'}}));}catch(_){}
   }return {...dados,config:cfg};
 }
+/* Informação de relacionamento por cliente; leitura para o atendente, sem alterar filas. */
+export function resumirRelacionamento_(linhas,cfg,calculadoEm){
+  const historico=[],motivos=[];let bruto=cfg.base,totalEventos=0;
+  for(const [motivo,regra]of Object.entries(cfg.regras)){
+    const r=linhas.find(x=>x.motivo===motivo),total=Number(r?.total)||0,ocorrencias=Number(r?.validos)||0,eventos=Math.min(cfg.limiteEventos,ocorrencias),pontos=eventos*regra.pontos;
+    totalEventos+=total;bruto+=pontos;if(total)historico.push({motivo,total,ultimo:r.ultimo});
+    if(ocorrencias)motivos.push({motivo,ocorrencias,eventos,pontos,validadeDias:regra.dias});
+  }
+  const pontos=Math.max(0,Math.min(100,bruto));return {pontos,faixa:pontos>=70?'Alta':pontos<40?'Baixa':'Normal',base:cfg.base,totalEventos,historico,motivos,semHistorico:!motivos.length,calculadoEm};
+}
+async function relacionamentosAtendimento_(env,conversas){
+  const individuais=conversas.filter(c=>!c.grupo);if(individuais.length>50){for(let i=0;i<individuais.length;i+=50)await relacionamentosAtendimento_(env,individuais.slice(i,i+50));return;}
+  const alvos=[...new Set(individuais.map(c=>c.pessoa||'conversa:'+c.id))].sort();if(!alvos.length)return;
+  const cfg=await prioridadeCfg_(env),ck=new Request('https://gestor.invalid/relacionamento-v1/'+cfg.versao+'/'+await sha(JSON.stringify(alvos)));let mapa;
+  try{const r=await caches.default.match(ck);if(r)mapa=await r.json();}catch(_){}
+  if(!mapa){const ms=Date.now(),t=new Date(ms).toISOString(),args=[];
+    const prazos=Object.entries(cfg.regras).map(([motivo,r])=>{args.push(motivo,new Date(ms-r.dias*86400000).toISOString());return 'WHEN ? THEN ?';}).join(' ');
+    // Agregado de eventos únicos: o mesmo encerramento em canais vinculados conta uma vez.
+    const identidade=MSG_IDENTIDADE_SQL_.replaceAll('msg_conversa.','c.');
+    const sql="WITH eventos AS (SELECT DISTINCT COALESCE(NULLIF("+identidade+",''),'conversa:'||c.id) AS alvo,e.motivo,e.em FROM msg_encerramento e JOIN msg_conversa c ON c.id=e.conversa_id WHERE c.grupo=0 AND julianday(e.em)<=julianday(?)) SELECT alvo,motivo,COUNT(*) AS total,MAX(em) AS ultimo,SUM(CASE WHEN julianday(em)>julianday(CASE motivo "+prazos+" ELSE NULL END) THEN 1 ELSE 0 END) AS validos FROM eventos WHERE alvo IN ("+alvos.map(()=>'?').join(',')+") GROUP BY alvo,motivo";
+    const rs=(await env.DB.prepare(sql).bind(t,...args,...alvos).all()).results||[];mapa=Object.create(null);
+    for(const alvo of alvos)mapa[alvo]=resumirRelacionamento_(rs.filter(x=>x.alvo===alvo),cfg,t);
+    try{await caches.default.put(ck,new Response(JSON.stringify(mapa),{headers:{'Cache-Control':'max-age=60','Content-Type':'application/json'}}));}catch(_){}
+  }
+  for(const c of individuais){const alvo=c.pessoa||'conversa:'+c.id;if(Object.hasOwn(mapa,alvo))c.relacionamento=mapa[alvo];}
+}
+
 async function prioridadesGestor_(env,base,canal){
   const linhas=(await env.DB.prepare("SELECT c.id,c.pessoa,c.canal,c.nome,c.contato,MAX(c.encerrada_em) AS encerradaEm FROM msg_conversa c WHERE c.grupo=0 AND c.encerrada_motivo='sem_resposta' AND c.encerrada_em<>'' AND NOT EXISTS(SELECT 1 FROM msg_conversa x WHERE x.grupo=0 AND x.encerrada_em='' AND x.total>0 AND (x.id=c.id OR(c.pessoa<>'' AND x.pessoa=c.pessoa)))"+(canal?' AND c.canal=?':'')+" GROUP BY CASE WHEN c.pessoa<>'' THEN c.pessoa ELSE 'conversa:'||c.id END ORDER BY encerradaEm DESC LIMIT 501").bind(...(canal?[canal]:[])).all()).results||[];
   const parcial=base.parcial||linhas.length>500;linhas.splice(500);
@@ -5496,14 +5524,22 @@ export default {
             }
           } catch (e) { /* Agenda não disponível: não inventar indicador. */ }
         }
+        try{await relacionamentosAtendimento_(env,rs.results);}catch(_){/* Histórico indisponível não impede atendimento. */}
         const geral = (await msgContagens_(env, todos ? '' : canal))[canal];
         return J({ ok: true, conversas: rs.results, contagens: tipo ? (await msgContagens_(env, todos ? '' : canal, tipo))[canal] : geral, tipos: { individuais: geral.individuais, grupos: geral.grupos }, cursor: cursorConsulta });
+      }
+      if(p==='/msg/relacionamento'&&req.method==='GET'){
+        const id=Number(url.searchParams.get('conversa'));if(!Number.isSafeInteger(id)||id<1)return J({ok:false,erro:'Escolha uma conversa individual.'},400);
+        const c=await env.DB.prepare('SELECT id,grupo,'+MSG_IDENTIDADE_SQL_+' AS pessoa FROM msg_conversa WHERE id=?').bind(id).first();
+        if(!c||c.grupo)return J({ok:false,erro:'Escolha uma conversa individual.'},404);
+        await relacionamentosAtendimento_(env,[c]);return J({ok:true,relacionamento:c.relacionamento});
       }
       if (p === '/msg/mensagens' && req.method === 'GET') {
         const id = Number(url.searchParams.get('conversa')), antes = url.searchParams.get('antes') || '';
         if (!id) return J({ ok: false, erro: 'Escolha uma conversa.' }, 400);
         const conv = await env.DB.prepare('SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE id=?').bind(id).first();
         if (!conv) return J({ ok: false, erro: 'Conversa não encontrada.' }, 404);
+        try{await relacionamentosAtendimento_(env,[conv]);}catch(_){/* sem inventar nota */}
         const antesId=Number(url.searchParams.get('antesId'))||0;
         const where=antes?(antesId>0?' AND (enviada_em<? OR (enviada_em=? AND id<?))':' AND enviada_em<?'):'';
         const args=antes?(antesId>0?[id,antes,antes,antesId]:[id,antes]):[id];
@@ -5611,6 +5647,7 @@ export default {
         const d0 = Date.parse(url.searchParams.get('desde') || ''), desde = new Date((isNaN(d0) ? Date.now() - 60000 : d0) - 3000).toISOString();
         const conv = Number(url.searchParams.get('conversa')) || 0, depois = Number(url.searchParams.get('depois')) || 0, st0 = Date.parse(url.searchParams.get('st') || ''), st = new Date((isNaN(st0) ? Date.now() - 60000 : st0) - 3000).toISOString();
         const cs = await env.DB.prepare('SELECT ' + MSG_COLS_CONVERSA_ + ' FROM msg_conversa WHERE atualizada_em>=? AND total>0 ORDER BY atualizada_em DESC LIMIT 100').bind(desde).all();
+        try{await relacionamentosAtendimento_(env,cs.results);}catch(_){/* Campo opcional, sem impedir recebimento. */}
         let mensagens = [];
         if (conv) mensagens = (await env.DB.prepare('SELECT ' + MSG_COLS_MSG_ + ' FROM msg_mensagem WHERE conversa_id=? AND (id>? OR status_em>=?) ORDER BY enviada_em, id LIMIT 200').bind(conv, depois, st).all()).results;
         const saude = url.searchParams.get('cont') === '1' ? await saudeAvisos_(env) : undefined;

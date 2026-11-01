@@ -1358,7 +1358,7 @@
     b.className = 'ms-conv' + (nova ? ' nova' : ''); if (aberta && aberta.id === c.id) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
     const marcada = !!(selecao && selecao.has(c.id));
     if (selecao) b.setAttribute('aria-pressed', String(marcada)); else b.removeAttribute('aria-pressed');
-    const assinatura = [c.dono || '', (c.etiquetas || []).map((e) => e.id + e.nome + e.cor).join('|'), canal === 'todos' ? c.canal : '', c.nome, c.ultima_em, c.previa, c.nao_lidas, c.ult_dir, c.ult_status, espera ? Math.floor(Date.now() / 60000) : '', aberta && aberta.id === c.id, c.outro_id || '', c.encerrada_motivo || '', c.agenda_pendente || 0, c.agenda_proxima || '', selecao ? (marcada ? 'S' : 's') : ''].join('|');
+    const assinatura = [c.dono || '', JSON.stringify(c.relacionamento||null), (c.etiquetas || []).map((e) => e.id + e.nome + e.cor).join('|'), canal === 'todos' ? c.canal : '', c.nome, c.ultima_em, c.previa, c.nao_lidas, c.ult_dir, c.ult_status, espera ? Math.floor(Date.now() / 60000) : '', aberta && aberta.id === c.id, c.outro_id || '', c.encerrada_motivo || '', c.agenda_pendente || 0, c.agenda_proxima || '', selecao ? (marcada ? 'S' : 's') : ''].join('|');
     if (li.dataset.ass === assinatura) return li;
     li.dataset.ass = assinatura; b.textContent = '';
     let av;
@@ -1373,6 +1373,7 @@
     if (c.encerrada_em && NOME_MOTIVO_[c.encerrada_motivo]) l3.appendChild(el('span', 'ms-motivo-tag ms-motivo-' + c.encerrada_motivo, NOME_MOTIVO_[c.encerrada_motivo]));
     if (c.nome && !c.grupo && /^\d{10,15}$/.test(c.contato || '')) l3.appendChild(el('span', 'ms-fone', foneBonito_(c.contato)));
     if (c.dono) l3.appendChild(el('span', 'ms-dono-tag', 'Resp.: ' + c.dono));
+    if(!c.grupo&&c.relacionamento?.totalEventos>0){const h=el('span','ms-relacionamento-mini',rotuloRelacionamento_(c.relacionamento));h.title='Pontuação de relacionamento de 0 a 100. Veja os motivos dentro da conversa.';l3.appendChild(h);}
     if (Number(c.agenda_pendente) > 0) {
       const quantidade = Number(c.agenda_pendente);
       const agenda = el('span', 'ms-agenda-indicador', '🕒' + (quantidade > 1 ? ' ' + quantidade : ''));
@@ -2492,7 +2493,7 @@
   async function salvarFicha_(b){if(!aberta||!$('ms-fi-nome'))return;const gen=$('ms-gaveta')?.dataset.gen,conv=aberta.id,perfil=capturarFicha_(),corpo={conversa:conv,nome:perfil.nome,cidade:perfil.cidade,preferencias:perfil.preferencias.texto,perfil};corpo.tamanhos=perfil.preferencias.tamanhos.join(' · ').slice(0,60);b.disabled=true;const r=await worker_('/msg/ficha','POST',corpo);b.disabled=false;if(!r.ok){aviso_(r.erro||'Não foi possível salvar a ficha agora. Tente de novo.');b.focus();return}if(!aberta||aberta.id!==conv||$('ms-gaveta')?.dataset.gen!==gen)return;aberta.tamanhos=r.ficha.tamanhos||'';if(r.nome){aberta.nome=r.nome;const q=$('ms-conversa').querySelector('.ms-quem b');if(q)q.textContent=r.nome;await carregarLista(true)}const fx=$('ms-etq-faixa');if(fx)fx.replaceWith(faixaEtq_(aberta));fichaOrig_=null;fecharGaveta_();aviso_('Ficha salva.');const q=document.querySelector('#ms-conversa .ms-quem');if(q)q.focus()}
 
   function cabecalhoConversa(c) {
-    const cab = el('div', 'ms-cab');
+    const cab = el('div', 'ms-cab'+(!c.grupo?' ms-com-relacionamento':''));
     const v = botao('ms-ico ms-voltar', '←', 'voltar'); v.setAttribute('aria-label', 'Voltar para as conversas');
     v.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();voltarLista();});
     const av = el('span', 'ms-av', iniciais(c)); av.style.background = corAvatar(c); av.setAttribute('aria-hidden', 'true');
@@ -2500,7 +2501,24 @@
     const q = botao('ms-quem', '', c.grupo ? 'pessoa' : 'ficha');q.setAttribute('aria-label',c.grupo?'Grupo '+rotuloContato(c):'Abrir a ficha do cliente '+rotuloContato(c));q.style.textAlign='left';q.style.background='transparent';q.appendChild(el('b', '', rotuloContato(c)));
     q.appendChild(el('span', '', NOME_CANAL[c.canal] + (c.grupo ? ' · grupo' : (/^\d{10,15}$/.test(c.contato) ? ' · ' + foneBonito_(c.contato) : ''))));
     const mais = botao('ms-ico', '⋯', 'menu-conversa'); mais.id = 'ms-mais-conv'; mais.setAttribute('aria-label', 'Opções da conversa'); mais.setAttribute('aria-haspopup', 'dialog');
-    cab.append(v, av, q, mais); return cab;
+    cab.append(v,av,q);if(!c.grupo){const h=botao('ms-relacionamento-abrir',rotuloRelacionamento_(c.relacionamento),'relacionamento',{id:String(c.id)});h.setAttribute('aria-label','Ver histórico de relacionamento de '+rotuloContato(c));h.setAttribute('aria-haspopup','dialog');cab.appendChild(h);}cab.appendChild(mais);return cab;
+  }
+  function rotuloRelacionamento_(r){return r&&Number.isInteger(r.pontos)?'Hist. '+r.pontos:'Histórico';}
+  async function abrirRelacionamento_(id){
+    const anterior=$('ms-conversa')?.querySelector('.ms-relacionamento-abrir')||document.activeElement,corpo=gaveta_('Histórico de relacionamento');if(!corpo)return;propostaGaveta_('relacionamento',anterior);
+    const p=el('p','','Carregando histórico…');p.setAttribute('role','status');corpo.appendChild(p);
+    const r=await worker_('/msg/relacionamento?conversa='+encodeURIComponent(id),'GET');if(!corpo.isConnected)return;corpo.textContent='';
+    if(!r.ok||!r.relacionamento){corpo.appendChild(el('p','','Não consegui consultar o histórico agora.'));corpo.appendChild(botao('ms-btn','Tentar novamente','relacionamento',{id:String(id)}));return;}
+    const h=r.relacionamento;if(aberta?.id===id){aberta.relacionamento=h;const b=$('ms-conversa')?.querySelector('.ms-relacionamento-abrir');if(b)b.textContent=rotuloRelacionamento_(h);}const c=lista.find(x=>x.id===id);if(c){c.relacionamento=h;pintarLista();}corpo.appendChild(el('h3','',h.pontos+' de 100 · relacionamento'));
+    corpo.appendChild(el('p','ms-relacionamento-ajuda','Informação para orientar seu atendimento. A ordem da fila permanece igual.'));
+    if(!h.totalEventos)corpo.appendChild(el('p','','Nenhum encerramento registrado para este cliente. Isso não significa ausência de compras.'));
+    else for(const x of h.historico){const n=NOME_MOTIVO_[x.motivo]||x.motivo;corpo.appendChild(el('p','ms-relacionamento-evento',x.total+(x.total===1?' vez · ':' vezes · ')+n));}
+    const d=el('details');d.appendChild(el('summary','','Como a nota foi calculada'));d.appendChild(el('p','','Base: '+h.base+' pontos.'));
+    for(const x of h.motivos)d.appendChild(el('p','',(NOME_MOTIVO_[x.motivo]||x.motivo)+': '+x.ocorrencias+' ocorrência(s) nos últimos '+x.validadeDias+' dias; '+x.eventos+' conta(m), '+(x.pontos>=0?'+':'')+x.pontos+' pontos.'));
+    if(!h.motivos.length)d.appendChild(el('p','','Sem eventos válidos nos prazos atuais. A nota fica na base.'));
+    d.appendChild(el('p','','A nota é limitada de 0 a 100. As regras são definidas pelo gestor.'));corpo.appendChild(d);
+    corpo.appendChild(el('p','ms-relacionamento-ajuda','Motivos de encerramento registrados; não comprovam pagamento nem explicam por que o cliente deixou de responder. Canais vinculados contam o mesmo evento uma vez.'));
+    corpo.appendChild(el('p','ms-relacionamento-ajuda','Atualizado em '+hora(h.calculadoEm)+' · pode levar até 1 minuto para refletir mudanças.'));
   }
   function limiteTexto(c) { return c.canal === 'instagram' ? 1000 : 4000; }
   function dicaComposer(c) {
@@ -3277,6 +3295,7 @@
       }
       if (Array.isArray(r.notas) && sincronizarNotas_(r.notas)) pintarFio(false);
       const mudou = r.conversas.find((c) => c.id === aberta.id); if (mudou) aberta = Object.assign({}, aberta, mudou, { nao_lidas: aberta.nao_lidas });
+      const rel=$('ms-conversa')?.querySelector('.ms-relacionamento-abrir');if(rel)rel.textContent=rotuloRelacionamento_(aberta.relacionamento);
       const fio = $('ms-fio'), novas = r.mensagens.filter((m) => !msgs.some((x) => x.id === m.id));
       const mudancas = r.mensagens.filter((m) => msgs.some((x) => x.id === m.id && Object.keys(m).some(k=>x[k]!==m[k])));
       if (novas.length || mudancas.length) {
@@ -3533,6 +3552,7 @@
       corpo.append(el('p','',r.pausa?'Você indicou Em pausa.':'Você indicou Disponível.'),el('p','ms-dica','Esse status vale para sua conta em todos os aparelhos. Pausar não bloqueia mensagens, notificações ou clientes.'));
       const b=botao('ms-btn',r.pausa?'Voltar a disponível':'Entrar em pausa','');b.addEventListener('click',async()=>{b.disabled=true;const x=await worker_('/msg/disponibilidade','POST',{pausa:!r.pausa});if(!corpo.isConnected)return;if(x.ok){corpo.textContent=x.pausa?'Status alterado: Em pausa.':'Status alterado: Disponível.';baterPresenca_();}else{aviso_(x.erro||'Não consegui alterar o status.');b.disabled=false;}});corpo.appendChild(b);return;
     }
+    if(a==='relacionamento'){const id=Number(b.dataset.id);if($('ms-gaveta')){$('ms-gaveta').remove();await desempilharEsperando_('ms-gaveta');}await abrirRelacionamento_(id);return;}
     if(a==='cortesia-rever'){b.disabled=true;const r=await worker_('/msg/cortesia/rever','POST',{mensagem:Number(b.dataset.id)});if(!r.ok){aviso_(r.erro||'Não consegui revisar a mensagem.');if(b.isConnected)b.disabled=false;return;}aviso_('Mensagem tratada como solicitação. Nenhuma resposta foi enviada.');if(aberta)await abrirConversa(aberta.id,espiando);await carregarLista(true);return;}
     if(a==='lista-dividida'||a==='lista-continua'){if($('ms-gaveta')){$('ms-gaveta').remove();await desempilharEsperando_('ms-gaveta');}salvarVisualLista_(a==='lista-dividida'?'dividida':'continua');$('ms-nav')?.querySelector('[data-ms=menu-geral]')?.focus();return;}
     if(a==='gestor'){await abrirGestao_();return;}
