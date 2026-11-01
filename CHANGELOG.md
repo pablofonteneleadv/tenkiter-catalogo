@@ -6,6 +6,26 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.44.0 — Família de produtos (Esteira, entrega 4) — 01/11/2026
+- **Família de produtos:** a loja cadastra o mesmo modelo uma vez por tamanho ou idade ("Sunga infantil masculino P", "... M", "... G"). Cada tamanho continua um produto separado, com fotos, estoque e link próprios. Agora esses produtos ficam ligados numa família. A planilha e o Apps Script não mudam: a ligação fica no D1 do instagram-worker (`fam_familia`, `fam_membro`).
+- **Servidor (instagram-worker):**
+  - `GET /familias` é pública (sem sessão, com CORS das demais rotas). Devolve só id, nome e membros (produto, rótulo, ordem), com cache de 5 min no KV e 60 s no navegador/borda. O cache é limpo a cada mudança.
+  - Rotas para `catalogo_cadastrar` ou `gerir_acessos`: `POST /familias/ligar`, `/familias/membro`, `/familias/desligar` (família com uma peça só é desfeita), `/familias/ignorar` e `GET /familias/sugestoes`.
+  - As sugestões agrupam peças do catálogo com o mesmo nome depois de tirar o tamanho/idade do fim (PP…EXG, G1–G4, U/Único, 1–16, 34–56, "N anos", "N meses", RN, "Tam N", "Nº N"), ignorando acento e caixa. Só entram grupos de 2 ou mais que ainda não são família.
+- **Gestão (admin.html + admin-familias.js):**
+  - Na edição da peça aparece a família, com **"+ Novo tamanho desta família"** e **"Tirar da família"** (com segundo toque para confirmar).
+  - "+ Novo tamanho" abre o cadastro já preenchido a partir da peça, pelo fluxo de duplicar: nome sem o tamanho e o campo **"Tamanho/idade desta peça"**, que completa o nome final. Fotos, tamanhos, cores e quantidade ficam vazios. Se a peça original ainda não tem família, o formulário também confirma o tamanho dela.
+  - Quando o cadastro dá certo, a peça nova entra na família. Se o servidor das famílias estiver fora, a ligação fica guardada no aparelho e é refeita na próxima abertura da Gestão.
+  - Seleção em lote: **"Ligar como família"**. A janela sugere o nome da família e o tamanho/idade de cada peça para conferir.
+  - **"Sugestões de famílias"** (botão no topo da lista): grupos com fotos e tamanhos, com "Ligar" ou "Ignorar". Ignorar vale para toda a equipe.
+- **Vitrine (catalogo.js):** continua um card por tamanho, mas os cards da mesma família ficam sempre lado a lado, na ordem da família. O bloco entra na posição do primeiro membro na ordenação atual. Filtros e busca valem por produto: se só parte dos tamanhos passa, aparecem só esses, ainda juntos.
+  - Na peça aberta, **"Outros tamanhos: P · M · G"** leva aos irmãos.
+  - `/familias` tem limite de 2,5 s e cache local de 10 min. Se falhar ou demorar, a vitrine fica como antes. A primeira pintura nunca espera essa resposta. Quando a lista chega depois, a grade só é reorganizada se a pessoa ainda está no topo e sem janela aberta; nos outros casos, isso fica para a próxima renderização.
+- **Esteira:**
+  - Na lista diária, a família conta como 1 dos 20 itens e vai inteira para a mesma pessoa. A pontuação da família é a do membro mais urgente. Tamanho conferido ou atualizado à mão há pouco continua fora; os outros vêm juntos.
+  - Na aba Hoje, a família aparece num cartão com os tamanhos dentro. A conferência continua por tamanho, e a família só conta como feita quando todos os tamanhos dela foram conferidos.
+  - O progresso "X/20" e o Painel contam a família como 1 (`est_lista.familia`).
+
 ## 7.43.0 — Esteira de Produtos (entrega 3: Pedidos, chegada com contagem cega e aprovação) — 01/11/2026
 - Nova aba **Pedidos** na esteira.html. Admin total monta o pedido ao fornecedor: fornecedor, previsão de chegada, fotos do pedido (só ela vê) e itens. Cada item é **reposição** de peça do catálogo (busca por nome ou código) ou **produto novo** (nome, categoria, público, preço de venda, tamanhos, cores e fotos do fornecedor), com quantidade e **custo unitário**. O editor soma as peças e o custo. "Salvar e marcar como enviado" deixa o pedido "a caminho".
 - **Chegada (equipe):** "Chegou mercadoria" lista os pedidos a caminho. Na **contagem cega**, a pessoa não vê nem a quantidade pedida nem o custo. Ela digita o que contou e o sistema responde na hora "Bateu com o pedido" ou "Não bateu com o pedido", com "Recontar" ou "Confirmar". Também há "Não veio" e "+ Veio um modelo que não está aqui" (nome, quantidade e foto pela câmera ou galeria, pelo mesmo envio da entrega 2). O botão "Enviar para a Karla aprovar" só funciona com tudo contado e as diferenças confirmadas.

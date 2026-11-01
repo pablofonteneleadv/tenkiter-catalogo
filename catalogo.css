@@ -159,6 +159,13 @@
   .modal-conteudo .preco-linha .avista { color: #1a7a1a; font-weight: 800; font-size: 1.25rem; }
   .modal-conteudo .tags { font-size: 0.78rem; color: #666; margin-bottom: 8px; }
   .modal-conteudo .extra { font-size: 0.84rem; color: #333; margin-bottom: 5px; }
+  /* v7.44.0: família de tamanhos na peça aberta */
+  .outros-tamanhos { display: grid; gap: 6px; margin: 4px 0 10px; font-size: 0.84rem; color: #333; }
+  .outros-tamanhos .ot-lista { display: flex; flex-wrap: wrap; gap: 8px; }
+  .outros-tamanhos .ot-tam { min-width: 48px; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid #d8d1c4; background: #fff; color: #0d0d0d; font-weight: 700; font-size: 0.9rem; font-family: inherit; cursor: pointer; }
+  .outros-tamanhos .ot-tam[aria-current="true"] { background: #0d0d0d; color: #fff; border-color: #0d0d0d; cursor: default; opacity: 1; }
+  .outros-tamanhos .ot-tam.esgotado { color: #6b6b6b; text-decoration: line-through; }
+  .outros-tamanhos .ot-tam:focus-visible { outline: 3px solid #E67E22; outline-offset: 2px; }
   .modal-conteudo .desc { font-size: 0.88rem; color: #444; line-height: 1.45; margin-top: 10px; background: #f9f9f9; padding: 10px; border-radius: 8px; }
 
   .btn-principal-cta { display: block; width: calc(100% - 32px); margin: 12px 16px 8px; background: var(--verde); color: #fff; border: none; border-radius: 12px; padding: 16px; font-weight: 800; font-size: 1.05rem; cursor: pointer; text-align: center; }

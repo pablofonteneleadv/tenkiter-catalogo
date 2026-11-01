@@ -5274,6 +5274,7 @@ export default {
     if(url.pathname==='/internal/video'){try{return await videoRunner_(env,req,url,J);}catch(_){return J({ok:false,erro:'Processador indisponível.'},503);}}
     if(url.pathname==='/msg/tempo-real'){try{return await conectarEventos_(env,req);}catch(_){return new Response(null,{status:503,headers:{'Cache-Control':'no-store'}});}}
     if(url.pathname==='/catalogo/tecidos'){try{return await rotaTecidos_(env,req,J);}catch(_){return J({ok:false,erro:'Não foi possível atualizar os tecidos. Tente de novo.'},503);}}
+    if (url.pathname === '/familias') { try { return await rotaFamiliasPublica_(env, req, h); } catch (e) { return J({ ok: false, erro: 'As famílias de peças não responderam agora.' }, 503); } }   // v7.44.0: pública, sem sessão
     if (url.pathname === '/cliente/foto') { try { const rc = await rotasFotosCliente(env, req, url, J); if (rc) return rc; } catch (e) { return J({ ok: false, erro: 'Não foi possível enviar agora. Tente de novo.' }, 500); } }
     if (url.pathname.indexOf('/wh/zernio/') === 0 && req.method === 'POST') { try { const rz = await rotaZernio_(env, req, url, ctx); if (rz.status >= 500) await anotarFalha_(env, url.pathname, rz.status); return rz; } catch (e) { await anotarFalha_(env, url.pathname, 500); return new Response('{"ok":false}', { status: 500, headers: { 'Content-Type': 'application/json' } }); } }
     if (url.pathname.indexOf('/wh/') === 0) { try {
@@ -5289,6 +5290,7 @@ export default {
     const perms = await permissoes(env, req);
     if (perms === 'sem_sessao') return J({ ok: false, erro: 'Entre na sua conta de administrador.' }, 401);
     if (perms === 'indisponivel') return J({ ok: false, erro: 'Nao consegui confirmar sua sessao agora. Tente de novo.' }, 503);
+    if (url.pathname.startsWith('/familias/')) { try { return await rotasFamilias_(env, req, url, J, perms); } catch (e) { return J({ ok: false, erro: 'Não consegui salvar a família agora. Tente de novo.' }, 500); } }   // v7.44.0
     if (url.pathname.startsWith('/esteira/')) { try { return await rotasEsteira_(env, req, url, J, perms); } catch (e) { return J({ ok: false, erro: 'A Esteira não respondeu agora. Tente de novo em instantes.' }, 500); } }   // v7.41.0
     const ehPost = url.pathname === '/posts' || url.pathname.indexOf('/post') === 0 || url.pathname.indexOf('/fotos') === 0 || url.pathname.indexOf('/fotoia') === 0;
     const ehMsg = url.pathname.startsWith('/msg/');
@@ -6083,6 +6085,8 @@ async function estIniciar_(env) {
   for (const col of ["etapa TEXT DEFAULT ''", 'aceito_em TEXT', 'aceito_por TEXT', 'preparado_em TEXT', 'preparado_por TEXT', "ref_nome TEXT DEFAULT ''", "ref_codigo TEXT DEFAULT ''", "ref_foto TEXT DEFAULT ''"]) {
     try { await env.DB.prepare('ALTER TABLE est_produto ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ }
   }
+  try { await env.DB.prepare("ALTER TABLE est_lista ADD COLUMN familia TEXT DEFAULT ''").run(); } catch (e) { /* v7.44.0: já existe */ }
+  await famIniciar_(env);
   estIniciado_ = env.DB;
 }
 async function estCfg_(env) {
@@ -6115,9 +6119,11 @@ async function estEscalaDoDia_(env, data, cfg) {
   alt.forEach((r) => { if (m[r.funcao]) m[r.funcao] = { whats: r.whats, alterado: true }; });
   return m;
 }
-/** Pontua as peças e monta 20 por pessoa, tentando agrupar pela mesma categoria/público sem passar na frente das mais urgentes. */
-function estMontarListas_(produtos, info, cfg, pessoas, jaUsados, agoraMs) {
-  const P = cfg.pesos, limite = cfg.diasSemRepetir, usados = new Set(jaUsados || []);
+/** Pontua as peças e monta 20 por pessoa, tentando agrupar pela mesma categoria/público sem passar na frente das mais urgentes.
+ * v7.44.0: `familias` (produto → {familia, ordem}) junta os tamanhos da mesma família num item só: conta 1 das 20, vai inteira para a
+ * mesma pessoa e pontua pelo membro mais urgente. Membro conferido/atualizado há pouco continua fora. */
+function estMontarListas_(produtos, info, cfg, pessoas, jaUsados, agoraMs, familias) {
+  const P = cfg.pesos, limite = cfg.diasSemRepetir, usados = new Set(jaUsados || []), fam = familias || {};
   const pont = [];
   for (const p of produtos) {
     if (usados.has(p.id)) continue;
@@ -6131,20 +6137,37 @@ function estMontarListas_(produtos, info, cfg, pessoas, jaUsados, agoraMs) {
     s += (dAtu == null ? (dCad || 0) : dAtu) * P.diaSemEdicao;
     const est = Number(p.estoque); if (p.estoque !== '' && est >= 1 && est <= 2) s += P.estoqueBaixo;
     if (i.divergiu) s += P.divergiu;
-    pont.push({ p, s, grupo: (p.categoria || 'Outros') + (p.genero ? ' · ' + p.genero : '') });
+    const f = fam[p.id];
+    pont.push({ p, s, grupo: (p.categoria || 'Outros') + (p.genero ? ' · ' + p.genero : ''), familia: f ? String(f.familia) : '', ordem: f ? Number(f.ordem) || 0 : 0 });
   }
-  pont.sort((a, b) => b.s - a.s || a.p.id.localeCompare(b.p.id));
+  // unidades: peça solta ou família inteira (membros elegíveis na ordem da família)
+  const unidades = [], porFam = new Map();
+  for (const x of pont) {
+    if (!x.familia) { unidades.push({ s: x.s, grupo: x.grupo, id: x.p.id, itens: [x] }); continue; }
+    let u = porFam.get(x.familia);
+    if (!u) { u = { s: x.s, grupo: x.grupo, id: x.p.id, itens: [] }; porFam.set(x.familia, u); unidades.push(u); }
+    u.itens.push(x); if (x.s > u.s) { u.s = x.s; u.grupo = x.grupo; } if (x.p.id < u.id) u.id = x.p.id;
+  }
+  porFam.forEach((u) => u.itens.sort((a, b) => a.ordem - b.ordem || a.p.id.localeCompare(b.p.id)));
+  unidades.sort((a, b) => b.s - a.s || a.id.localeCompare(b.id));
   const listas = {}, n = cfg.porPessoa, janela = Math.max(n * pessoas.length * 2, n * 3);
-  const urgentes = pont.slice(0, janela);                                   // só agrupa entre as mais urgentes
+  const urgentes = unidades.slice(0, janela);                               // só agrupa entre as mais urgentes
   for (const w of pessoas) {
     const lista = [];
     while (lista.length < n && urgentes.length) {
       const ancora = urgentes.shift(); lista.push(ancora);
       for (let k = 0; k < urgentes.length && lista.length < n;) { if (urgentes[k].grupo === ancora.grupo) lista.push(urgentes.splice(k, 1)[0]); else k++; }
     }
-    listas[w] = lista;
+    listas[w] = [].concat(...lista.map((u) => u.itens.map((x) => Object.assign(x, { grupo: u.grupo }))));
   }
   return listas;
+}
+/** Progresso por item: peça solta conta 1; família conta 1 e só fica feita quando todos os tamanhos dela na lista foram conferidos. */
+function estProgresso_(linhas) {
+  const u = new Map();
+  linhas.forEach((l) => { const k = l.familia ? 'f:' + l.familia : 'p:' + l.produto; const v = u.get(k); u.set(k, v === undefined ? !!l.feito : v && !!l.feito); });
+  let feitas = 0; u.forEach((v) => { if (v) feitas++; });
+  return { total: u.size, feitas };
 }
 async function estInfo_(env) { const m = {}; ((await env.DB.prepare('SELECT * FROM est_produto').all()).results || []).forEach((r) => { m[r.id] = r; }); return m; }
 async function estGarantirListas_(env, data, cfg) {
@@ -6154,9 +6177,10 @@ async function estGarantirListas_(env, data, cfg) {
   if (!faltam.length) return;
   const trava = 'est:montando:' + data; if (await env.CACHE.get(trava)) return; await env.CACHE.put(trava, '1', { expirationTtl: 60 });
   try {
-    const listas = estMontarListas_(await estCatalogo_(env), await estInfo_(env), cfg, faltam, existentes.map((r) => r.produto), Date.now());
+    let familias = {}; try { familias = await famMapa_(env); } catch (e) { familias = {}; }   // v7.44.0: sem famílias, a lista sai como antes
+    const listas = estMontarListas_(await estCatalogo_(env), await estInfo_(env), cfg, faltam, existentes.map((r) => r.produto), Date.now(), familias);
     const ins = [];
-    for (const w of faltam) (listas[w] || []).forEach((x, pos) => ins.push(env.DB.prepare('INSERT OR IGNORE INTO est_lista (data, whats, produto, pos, grupo) VALUES (?, ?, ?, ?, ?)').bind(data, w, x.p.id, pos, x.grupo)));
+    for (const w of faltam) (listas[w] || []).forEach((x, pos) => ins.push(env.DB.prepare('INSERT OR IGNORE INTO est_lista (data, whats, produto, pos, grupo, familia) VALUES (?, ?, ?, ?, ?, ?)').bind(data, w, x.p.id, pos, x.grupo, x.familia || '')));
     for (let k = 0; k < ins.length; k += 50) await env.DB.batch(ins.slice(k, k + 50));
   } finally { await env.CACHE.delete(trava); }
 }
@@ -6207,13 +6231,15 @@ async function rotasEsteira_(env, req, url, J, perms) {
     let catalogo = []; try { catalogo = await estCatalogo_(env); } catch (e) { return J({ ok: false, erro: e.message }, 503); }
     const porId = new Map(catalogo.map((x) => [x.id, x])), info = await estInfo_(env);
     const linhas = (await env.DB.prepare('SELECT * FROM est_lista WHERE data=? AND whats=? ORDER BY pos').bind(data, eu).all()).results || [];
-    const lista = linhas.map((l) => { const x = porId.get(l.produto); const i = info[l.produto] || {}; return x ? Object.assign({}, x, { grupo: l.grupo, feito: !!l.feito_em, feito_em: l.feito_em || '', atualizado_em: i.atualizado_em || '', conferido_em: i.conferido_em || '' }) : { id: l.produto, nome: 'Peça arquivada ou fora do site', grupo: l.grupo, feito: !!l.feito_em, sumiu: true }; });
+    let famNomes = {}, famRot = {}; try { const fm = await famPublico_(env); fm.forEach((f) => { famNomes[f.id] = f.nome; f.membros.forEach((m) => { famRot[m.produto] = m.rotulo; }); }); } catch (e) { /* sem família: cartões soltos */ }
+    const lista = linhas.map((l) => { const x = porId.get(l.produto); const i = info[l.produto] || {}; const fam = l.familia ? { familia: l.familia, familiaNome: famNomes[l.familia] || '', rotulo: famRot[l.produto] || '' } : { familia: '' }; return x ? Object.assign({}, x, { grupo: l.grupo, feito: !!l.feito_em, feito_em: l.feito_em || '', atualizado_em: i.atualizado_em || '', conferido_em: i.conferido_em || '' }, fam) : Object.assign({ id: l.produto, nome: 'Peça arquivada ou fora do site', grupo: l.grupo, feito: !!l.feito_em, sumiu: true }, fam); });
+    const prog = estProgresso_(lista.map((x) => ({ produto: x.id, familia: x.familia, feito: x.feito })));
     const escala = await estEscalaDoDia_(env, data, cfg);
     const minhas = Object.keys(escala).filter((f) => estFone_(escala[f].whats) === eu).map((f) => ({ funcao: f, instrucoes: String(cfg.instrucoes[f] || '') }));
     const tarefas = await estTarefasPendentes_(env, minhas.map((f) => f.funcao), porId);
     const pc = await env.DB.prepare("SELECT SUM(CASE WHEN status='a_caminho' AND (previsao IS NULL OR previsao='' OR previsao<=?) THEN 1 ELSE 0 END) AS conferir, SUM(CASE WHEN status='conferido' THEN 1 ELSE 0 END) AS aprovar, SUM(CASE WHEN status='aprovado' AND EXISTS (SELECT 1 FROM est_pedido_item i WHERE i.pedido=est_pedido.id AND i.qtd_aceita>0 AND i.aplicado_em IS NULL) THEN 1 ELSE 0 END) AS aplicar FROM est_pedido").bind(data).first() || {};
     const pedidos = admin ? { conferir: pc.conferir || 0, aprovar: pc.aprovar || 0, aplicar: pc.aplicar || 0 } : { conferir: pc.conferir || 0 };   // v7.43.0: avisos de pedido (só contagens)
-    return J({ ok: true, data, eu: quemSou(), pedidos, lista, feitas: lista.filter((x) => x.feito).length, total: lista.length, funcoes: minhas, tarefas, escala: Object.keys(escala).map((f) => ({ funcao: f, whats: escala[f].whats, nome: nomeDe(escala[f].whats), alterado: escala[f].alterado })) });
+    return J({ ok: true, data, eu: quemSou(), pedidos, lista, feitas: prog.feitas, total: prog.total, pecas: lista.length, pecasFeitas: lista.filter((x) => x.feito).length, funcoes: minhas, tarefas, escala: Object.keys(escala).map((f) => ({ funcao: f, whats: escala[f].whats, nome: nomeDe(escala[f].whats), alterado: escala[f].alterado })) });
   }
   if (p === '/esteira/conferir' && req.method === 'POST') {
     const d = await req.json().catch(() => ({})), id = String(d.id || '').slice(0, 40);
@@ -6530,7 +6556,9 @@ async function rotasEsteira_(env, req, url, J, perms) {
   }
   if (p === '/esteira/painel' && req.method === 'GET') {
     try { await estGarantirListas_(env, data, cfg); } catch (e) { /* painel mostra o que houver */ }
-    const prog = (await env.DB.prepare('SELECT whats, COUNT(*) AS total, SUM(CASE WHEN feito_em IS NOT NULL THEN 1 ELSE 0 END) AS feitas FROM est_lista WHERE data=? GROUP BY whats').bind(data).all()).results || [];
+    const linhasP = (await env.DB.prepare('SELECT whats, produto, familia, feito_em FROM est_lista WHERE data=?').bind(data).all()).results || [], porW = {};
+    linhasP.forEach((r) => { (porW[r.whats] = porW[r.whats] || []).push({ produto: r.produto, familia: r.familia || '', feito: !!r.feito_em }); });
+    const prog = Object.keys(porW).map((w) => Object.assign({ whats: w }, estProgresso_(porW[w])));   // v7.44.0: família conta como 1
     const desde = estHoje_(Date.now() - 30 * 864e5), div = await env.DB.prepare('SELECT COUNT(*) AS n, SUM(divergiu) AS d FROM est_conf WHERE data>=?').bind(desde).first();
     let faixas = null; try { const ag = Date.now(); faixas = { ate30: 0, ate60: 0, ate90: 0, mais90: 0, semData: 0 }; (await estCatalogo_(env)).forEach((x) => { const dd = estDias_(x.cadastro, ag); if (dd == null) faixas.semData++; else if (dd <= 30) faixas.ate30++; else if (dd <= 60) faixas.ate60++; else if (dd <= 90) faixas.ate90++; else faixas.mais90++; }); } catch (e) { faixas = null; }
     return J({ ok: true, data, progresso: prog.map((r) => ({ whats: r.whats, nome: nomeDe(r.whats), total: r.total, feitas: r.feitas || 0 })), divergencia30: { conferencias: div ? div.n : 0, divergentes: div ? (div.d || 0) : 0 }, idade: faixas });
@@ -6543,4 +6571,184 @@ async function rotasEsteira_(env, req, url, J, perms) {
     return J({ ok: true, refeitas: todas.length, mantidas: comecadas.size });
   }
   return J({ ok: false, erro: 'Esta ação da Esteira não existe.' }, 404);
+}
+
+/* ==================== v7.44.0: Família de produtos ====================
+ * A loja cadastra o mesmo modelo uma vez por tamanho/idade ("Sunga infantil P", "... M"). Cada tamanho continua um produto da planilha
+ * (estoque, fotos e link próprios); aqui no D1 fica só a ligação entre eles. Nada muda na planilha nem no Apps Script.
+ * GET /familias é pública (só ids, nome e rótulos — nada de quem criou). O resto exige catalogo_cadastrar ou gerir_acessos. */
+let famIniciado_ = null;
+async function famIniciar_(env) {
+  if (famIniciado_ === env.DB) return;
+  await env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS fam_familia (id TEXT PRIMARY KEY, nome TEXT NOT NULL DEFAULT '', criada_em TEXT, criada_por TEXT)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS fam_membro (produto TEXT PRIMARY KEY, familia TEXT NOT NULL, ordem INTEGER NOT NULL DEFAULT 0, rotulo TEXT NOT NULL DEFAULT '')"),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_fam_membro_fam ON fam_membro (familia, ordem)'),
+  ]);
+  famIniciado_ = env.DB;
+}
+const FAM_CACHE_ = 'fam:publico:v1';
+const famSemAcento_ = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const FAM_LETRAS_ = ['pp', 'p', 'm', 'g', 'gg', 'xg', 'eg', 'exg', 'g1', 'g2', 'g3', 'g4', 'u', 'unico'];
+const FAM_SEP_ = /[\s\-–—/(,|]+$/;
+/** Separa o nome em base + tamanho/idade do fim ("Sunga infantil masculino P" → base "sunga infantil masculino", rótulo "P").
+ * Reconhece PP…EXG, G1–G4, U/Único, 1–16 e 34–56, "N anos", "N meses", RN, "Tam N", "Nº N". Sem tamanho reconhecido: rótulo vazio. */
+function famSepararNome_(nome) {
+  const orig = String(nome || '').trim().replace(/\s+/g, ' ');
+  const n = famSemAcento_(orig);
+  const nada = { base: n.trim(), rotulo: '', baseOriginal: orig };
+  const m = n.match(/([\s\-–—/(,|]+)((?:tam(?:anho)?\.?\s*|n[º°o]\.?\s*)?)(pp|p|m|g|gg|xg|eg|exg|g[1-4]|u|unico|rn|\d{1,2}\s*(?:anos?|meses?)|\d{1,2})\)?\s*$/);
+  if (!m) return nada;
+  const val = m[3], prefixo = !!m[2];
+  if (/^\d{1,2}$/.test(val) && !prefixo) { const k = Number(val); if (!((k >= 1 && k <= 16) || (k >= 34 && k <= 56))) return nada; }
+  const corte = m.index;
+  const base = n.slice(0, corte).replace(FAM_SEP_, '').trim();
+  if (!base) return nada;
+  // o NFD não muda o comprimento de letras sem acento; para achar o rótulo no nome original contamos a partir do fim
+  const tam = n.length - corte - m[1].length;
+  let rotulo = orig.slice(orig.length - tam).replace(/\)\s*$/, '').trim();
+  rotulo = rotulo.replace(/^(tam(anho)?\.?|n[º°o]\.?)\s*/i, '').trim();
+  const r0 = famSemAcento_(rotulo);
+  if (r0 === 'unico') rotulo = 'Único';
+  else if (/^(pp|p|m|g|gg|xg|eg|exg|g[1-4]|u|rn)$/.test(r0)) rotulo = r0.toUpperCase();
+  else { const a = r0.match(/^(\d{1,2})\s*(anos?|meses?)$/); if (a) rotulo = a[1] + ' ' + a[2]; }
+  const baseOriginal = orig.slice(0, orig.length - tam - m[1].length).replace(FAM_SEP_, '').trim() || orig;
+  return { base, rotulo, baseOriginal };
+}
+/** Peso para ordenar rótulos: RN, meses, anos, números, letras (PP…G4), Único. */
+function famPesoRotulo_(r) {
+  const s = famSemAcento_(r).trim();
+  if (!s) return 9000;
+  if (s === 'rn') return 0;
+  let m = s.match(/^(\d{1,2})\s*meses?$/); if (m) return 100 + Number(m[1]);
+  m = s.match(/^(\d{1,2})\s*anos?$/); if (m) return 200 + Number(m[1]);
+  m = s.match(/^(\d{1,2})$/); if (m) return 300 + Number(m[1]);
+  const k = FAM_LETRAS_.indexOf(s); if (k !== -1) return 1000 + k;
+  return 5000;
+}
+async function famPublico_(env) {
+  await famIniciar_(env);
+  const fams = (await env.DB.prepare('SELECT id, nome FROM fam_familia ORDER BY id').all()).results || [];
+  const membros = (await env.DB.prepare('SELECT produto, familia, ordem, rotulo FROM fam_membro ORDER BY familia, ordem, produto').all()).results || [];
+  const por = new Map(fams.map((f) => [f.id, { id: f.id, nome: f.nome || '', membros: [] }]));
+  membros.forEach((m) => { const f = por.get(m.familia); if (f) f.membros.push({ produto: String(m.produto), rotulo: m.rotulo || '', ordem: Number(m.ordem) || 0 }); });
+  return [...por.values()].filter((f) => f.membros.length);
+}
+async function famMapa_(env) { const m = {}; (await famPublico_(env)).forEach((f) => f.membros.forEach((x) => { m[x.produto] = { familia: f.id, ordem: x.ordem }; })); return m; }
+async function famLimparCache_(env) { try { await env.CACHE.delete(FAM_CACHE_); } catch (e) { /* expira sozinho em 5 min */ } }
+/** Rota pública: chamada antes da checagem de sessão. Resposta pequena, cache curto no KV e no navegador/borda. */
+async function rotaFamiliasPublica_(env, req, h) {
+  const x = new Headers(h || {}); x.set('Content-Type', 'application/json; charset=utf-8');
+  if (req.method !== 'GET') { x.set('Cache-Control', 'no-store'); return new Response(JSON.stringify({ ok: false, erro: 'Ação não disponível.' }), { status: 405, headers: x }); }
+  let corpo = null;
+  try { corpo = await env.CACHE.get(FAM_CACHE_); } catch (e) { corpo = null; }
+  if (!corpo) {
+    corpo = JSON.stringify({ ok: true, familias: await famPublico_(env) });
+    try { await env.CACHE.put(FAM_CACHE_, corpo, { expirationTtl: 300 }); } catch (e) { /* cache é conforto */ }
+  }
+  x.set('Cache-Control', 'public, max-age=60');
+  return new Response(corpo, { status: 200, headers: x });
+}
+const FAM_UPSERT_ = 'INSERT INTO fam_membro (produto, familia, ordem, rotulo) VALUES (?, ?, ?, ?) ON CONFLICT(produto) DO UPDATE SET familia=excluded.familia, ordem=excluded.ordem, rotulo=excluded.rotulo';
+async function rotasFamilias_(env, req, url, J, perms) {
+  if (!perms.includes('gerir_acessos') && !perms.includes('catalogo_cadastrar')) return J({ ok: false, erro: 'Você não tem permissão para organizar famílias de peças.' }, 403);
+  await iniciar(env); await famIniciar_(env);
+  const p = url.pathname, eu = estFone_(req.headers.get('X-TK-Whats')), agora = new Date().toISOString();
+  const idOk = (v) => String(v == null ? '' : v).trim().slice(0, 40);
+  const membrosDe = async (fid) => (await env.DB.prepare('SELECT produto, ordem, rotulo FROM fam_membro WHERE familia=? ORDER BY ordem, produto').bind(fid).all()).results || [];
+  const familiaCompleta = async (fid) => { const f = await env.DB.prepare('SELECT id, nome FROM fam_familia WHERE id=?').bind(fid).first(); return f ? { id: f.id, nome: f.nome || '', membros: (await membrosDe(fid)).map((m) => ({ produto: String(m.produto), rotulo: m.rotulo || '', ordem: Number(m.ordem) || 0 })) } : null; };
+  const catalogo = async () => { try { return await estCatalogo_(env); } catch (e) { return []; } };
+  if (p === '/familias/ligar' && req.method === 'POST') {
+    const d = await req.json().catch(() => ({}));
+    const ids = [...new Set((Array.isArray(d.produtos) ? d.produtos : []).map(idOk).filter(Boolean))].slice(0, 40);
+    if (ids.length < 2) return J({ ok: false, erro: 'Escolha pelo menos duas peças para formar a família.' }, 400);
+    const marcas = ids.map(() => '?').join(',');
+    const ja = (await env.DB.prepare('SELECT produto, familia FROM fam_membro WHERE produto IN (' + marcas + ')').bind(...ids).all()).results || [];
+    const outras = [...new Set(ja.map((r) => r.familia))];
+    if (outras.length > 1) return J({ ok: false, erro: 'Algumas dessas peças já estão em famílias diferentes. Tire da família antes de juntar.' }, 409);
+    const rotIn = d.rotulos && typeof d.rotulos === 'object' ? d.rotulos : {};
+    const precisaCatalogo = !outras.length || ids.some((id) => rotIn[id] == null || String(rotIn[id]).trim() === '');
+    const cat = precisaCatalogo ? await catalogo() : [], porId = new Map(cat.map((x) => [x.id, x]));
+    let fid = outras[0] || '';
+    const nome = String(d.nome || '').trim().slice(0, 80);
+    const ops = [];
+    const nova = !fid; if (nova) fid = 'f' + hex(6);
+    const atuais = nova ? [] : await membrosDe(fid);
+    const rotDe = new Map(atuais.map((m) => [String(m.produto), m.rotulo || '']));
+    const todos = [...new Set(atuais.map((m) => String(m.produto)).concat(ids))].map((id) => {
+      let r = rotIn[id] != null && String(rotIn[id]).trim() !== '' ? String(rotIn[id]).trim().slice(0, 20) : rotDe.get(id);
+      if (r == null || r === '') { const c = porId.get(id); r = c ? famSepararNome_(c.nome).rotulo : ''; }
+      return { id, rotulo: r || '' };
+    });
+    todos.sort((a, b) => famPesoRotulo_(a.rotulo) - famPesoRotulo_(b.rotulo) || a.id.localeCompare(b.id));
+    if (nova) {                                                           // nome: o escolhido, ou o nome do menor tamanho sem o tamanho
+      const primeiro = porId.get(todos[0].id) || porId.get(ids[0]);
+      const nomeAuto = nome || (primeiro ? famSepararNome_(primeiro.nome).baseOriginal : '') || 'Família';
+      ops.push(env.DB.prepare('INSERT INTO fam_familia (id, nome, criada_em, criada_por) VALUES (?, ?, ?, ?)').bind(fid, nomeAuto.slice(0, 80), agora, eu));
+    } else if (nome) ops.push(env.DB.prepare('UPDATE fam_familia SET nome=? WHERE id=?').bind(nome, fid));
+    todos.forEach((m, k) => ops.push(env.DB.prepare(FAM_UPSERT_).bind(m.id, fid, k, m.rotulo)));
+    await env.DB.batch(ops);
+    await famLimparCache_(env);
+    return J({ ok: true, criada: !outras.length, familia: await familiaCompleta(fid) });
+  }
+  if (p === '/familias/membro' && req.method === 'POST') {
+    const d = await req.json().catch(() => ({})), produto = idOk(d.produto), fid = idOk(d.familia);
+    if (!produto || !fid) return J({ ok: false, erro: 'Informe a peça e a família.' }, 400);
+    const f = await env.DB.prepare('SELECT id FROM fam_familia WHERE id=?').bind(fid).first();
+    if (!f) return J({ ok: false, erro: 'Esta família não existe mais. Atualize a tela.' }, 404);
+    const atual = await env.DB.prepare('SELECT familia FROM fam_membro WHERE produto=?').bind(produto).first();
+    if (atual && atual.familia !== fid) return J({ ok: false, erro: 'Esta peça já está em outra família. Tire da família antes.' }, 409);
+    const rotulo = String(d.rotulo == null ? '' : d.rotulo).trim().slice(0, 20);
+    const temOrdem = d.ordem !== '' && d.ordem != null && Number.isFinite(Number(d.ordem));
+    if (!temOrdem) {                                                      // sem ordem: entra no lugar do tamanho (P antes de M…)
+      const lista = (await membrosDe(fid)).filter((m) => String(m.produto) !== produto).map((m) => ({ id: String(m.produto), rotulo: m.rotulo || '' })).concat([{ id: produto, rotulo }]);
+      lista.sort((a, b) => famPesoRotulo_(a.rotulo) - famPesoRotulo_(b.rotulo) || a.id.localeCompare(b.id));
+      await env.DB.batch(lista.map((m, k) => env.DB.prepare(FAM_UPSERT_).bind(m.id, fid, k, m.rotulo)));
+    } else await env.DB.prepare(FAM_UPSERT_).bind(produto, fid, Math.max(0, Math.min(999, Math.floor(Number(d.ordem)))), rotulo).run();
+    await famLimparCache_(env);
+    return J({ ok: true, familia: await familiaCompleta(fid) });
+  }
+  if (p === '/familias/desligar' && req.method === 'POST') {
+    const d = await req.json().catch(() => ({})), produto = idOk(d.produto);
+    if (!produto) return J({ ok: false, erro: 'Informe a peça.' }, 400);
+    const atual = await env.DB.prepare('SELECT familia FROM fam_membro WHERE produto=?').bind(produto).first();
+    if (!atual) return J({ ok: true, jaEstava: true, dissolvida: false, familia: null });
+    await env.DB.prepare('DELETE FROM fam_membro WHERE produto=?').bind(produto).run();
+    const resto = await membrosDe(atual.familia);
+    let dissolvida = false;
+    if (resto.length < 2) {                                               // família de uma peça só não faz sentido: desfaz
+      await env.DB.batch([env.DB.prepare('DELETE FROM fam_membro WHERE familia=?').bind(atual.familia), env.DB.prepare('DELETE FROM fam_familia WHERE id=?').bind(atual.familia)]);
+      dissolvida = true;
+    } else await env.DB.batch(resto.map((m, k) => env.DB.prepare('UPDATE fam_membro SET ordem=? WHERE produto=?').bind(k, m.produto)));
+    await famLimparCache_(env);
+    return J({ ok: true, dissolvida, familia: dissolvida ? null : await familiaCompleta(atual.familia) });
+  }
+  if (p === '/familias/ignorar' && req.method === 'POST') {             // "Ignorar" uma sugestão vale para toda a equipe
+    const d = await req.json().catch(() => ({})), chave = String(d.chave || '').trim().slice(0, 120);
+    if (!chave) return J({ ok: false, erro: 'Sugestão inválida.' }, 400);
+    let ign = []; try { ign = JSON.parse((await cfgGet(env, 'fam_ignoradas')) || '[]'); } catch (e) { ign = []; }
+    if (!Array.isArray(ign)) ign = [];
+    if (!ign.includes(chave)) ign.push(chave);
+    await cfgSet(env, 'fam_ignoradas', JSON.stringify(ign.slice(-500)));
+    return J({ ok: true });
+  }
+  if (p === '/familias/sugestoes' && req.method === 'GET') {
+    let cat; try { cat = await estCatalogo_(env); } catch (e) { return J({ ok: false, erro: 'O catálogo não respondeu agora. Tente de novo em instantes.' }, 503); }
+    const ligados = new Set(Object.keys(await famMapa_(env)));
+    let ign = []; try { ign = JSON.parse((await cfgGet(env, 'fam_ignoradas')) || '[]'); } catch (e) { ign = []; }
+    if (!Array.isArray(ign)) ign = [];
+    const grupos = new Map();
+    cat.forEach((x) => {
+      if (ligados.has(x.id)) return;
+      const s = famSepararNome_(x.nome); if (!s.rotulo || !s.base) return;
+      const g = grupos.get(s.base) || { chave: s.base, nome: s.baseOriginal, membros: [] };
+      g.membros.push({ produto: x.id, nome: x.nome, rotulo: s.rotulo, foto: x.foto || '', codigo: x.codigo || '' });
+      grupos.set(s.base, g);
+    });
+    const sugestoes = [...grupos.values()].filter((g) => g.membros.length >= 2 && !ign.includes(g.chave))
+      .map((g) => { g.membros.sort((a, b) => famPesoRotulo_(a.rotulo) - famPesoRotulo_(b.rotulo) || a.produto.localeCompare(b.produto)); return g; })
+      .sort((a, b) => b.membros.length - a.membros.length || a.nome.localeCompare(b.nome)).slice(0, 200);
+    return J({ ok: true, sugestoes });
+  }
+  return J({ ok: false, erro: 'Esta ação de famílias não existe.' }, 404);
 }

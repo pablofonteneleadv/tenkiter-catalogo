@@ -17,6 +17,8 @@ PRODUTOS = [
     {"ID": "1002", "Nome": "Vestido Longo Floral", "Codigo": "TK-1002", "Categoria": "Vestidos", "Genero": "Feminino Adulto", "Preco": "149.9", "Estoque": "2", "Tamanhos": "M, G", "Cores": "Azul", "Descricao": "", "Novidade": "", "Foto_URL": "", "Fotos_Galeria": "", "Status": "Ativo", "Data_Cadastro": "2026-07-01T12:00:00Z"},
     {"ID": "1003", "Nome": "Saia Plissada Midi", "Codigo": "TK-1003", "Categoria": "Saias", "Genero": "Feminino Adulto", "Preco": "89.9", "Estoque": "6", "Tamanhos": "P, M", "Cores": "Verde", "Descricao": "", "Novidade": "", "Foto_URL": "", "Fotos_Galeria": "", "Status": "Ativo", "Data_Cadastro": "2026-09-10T12:00:00Z"},
 ]
+# v7.44.0: família de tamanhos (cada tamanho é um produto; no Hoje vira um cartão só)
+FAMILIA = [{"ID": str(3001 + k), "Nome": "Sunga infantil masculino " + t, "Codigo": "SU-" + t, "Categoria": "Moda praia", "Genero": "Masculino Infantil", "Preco": "49.9", "Estoque": "3", "Tamanhos": t, "Cores": "Azul, Verde", "Descricao": "", "Novidade": "", "Foto_URL": "", "Fotos_Galeria": "", "Status": "Ativo", "Data_Cadastro": "2026-06-01T12:00:00Z", "_rot": t} for k, t in enumerate(["P", "M", "G"])]
 # v7.42.0: peça arquivada (fora do site) que está em preparação
 ARQUIVADA = {"ID": "2001", "Nome": "Blusa Nova Tricô", "Codigo": "TK-2001", "Categoria": "Blusas", "Genero": "Feminino Adulto", "Preco": "99.9", "Estoque": "5", "Tamanhos": "P, M", "Cores": "Creme", "Descricao": "Tricô macio", "Novidade": "", "Foto_URL": "", "Fotos_Galeria": "", "Status": "Inativo", "Data_Cadastro": "2026-10-30T12:00:00Z"}
 URL_FOTO = "https://tenkiter-midia.distkrpconfeccoes.workers.dev/m/202611/abcdef0123456789abcd.jpg"
@@ -27,12 +29,12 @@ def _png(w=40, h=50):                                  # foto PNG válida gerada
     return b"\x89PNG\r\n\x1a\n" + bloco(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + bloco(b"IDAT", zlib.compress(linhas)) + bloco(b"IEND", b"")
 PNG = _png()
 
-def instalar(ctx, admin=True):
+def instalar(ctx, admin=True, familia=False):
     st = {"updates": [], "conferidas": [], "equipe": [{"whats": "88999999999", "nome": "Iara", "confere": 1, "rodizio": 1, "atendente": 1, "aceitar": 0, "ativo": 1}], "logou": False,
           "uploads": 0, "bulks": [], "bulk_falha": False, "pedidos": {}, "seq_ped": 0, "seq_item": 0, "salvos": [], "ped_corpos": [], "creates": [], "ops": {}, "estoques": {}, "arquivar_falha": False, "aceitos": [], "preparados": [], "feitas": [], "cfgs": [],
           "prep": {"2001": [dict(id=11, tipo="cadastro", titulo="Cadastro conferido", funcao="Fotos"), dict(id=12, tipo="foto", titulo="1ª foto", funcao="Fotos"), dict(id=13, tipo="foto", titulo="Fotos de detalhe", funcao="Fotos"), dict(id=14, tipo="foto", titulo="Foto no manequim", funcao="Fotos"), dict(id=15, tipo="cores_tamanhos", titulo="Conferir cores e tamanhos", funcao="Fotos"), dict(id=16, tipo="outro", titulo="Passar etiqueta", funcao="Caixa")]},
           "outras": [dict(id=21, produto="1002", tipo="foto", titulo="Foto nova", funcao="Fotos", origem="conferencia", instrucao="Pedida na conferência por Iara.", produtoNome="Vestido Longo Floral", produtoCodigo="TK-1002", produtoFoto="")]}
-    todos = PRODUTOS + [dict(ARQUIVADA)]
+    todos = PRODUTOS + [dict(ARQUIVADA)] + ([{k: v for k, v in x.items() if k != "_rot"} for x in FAMILIA] if familia else [])
     def tarefa(t, pid):
         feita = t["id"] in st["feitas"]
         return dict({"produto": pid, "instrucao": "", "origem": "preparacao", "obs": "", "feita_em": "2026-11-01T12:00:00Z" if feita else "", "feita_por": "Iara" if feita else "", "quem": "Iara" if t["funcao"] == "Fotos" else ""}, **t, status="feita" if feita else "pendente", posso=admin or t["funcao"] == "Fotos")
@@ -175,9 +177,12 @@ def instalar(ctx, admin=True):
             if path.startswith("/esteira/pedidos"): return pedidos_rota(route, req, path)
             if path == "/esteira/hoje":
                 lista = [item(p, p["ID"] in st["conferidas"]) for p in PRODUTOS]
+                if familia: lista = lista[:1] + [dict(item(x, x["ID"] in st["conferidas"]), familia="fsunga", familiaNome="Sunga infantil masculino", rotulo=x["_rot"]) for x in FAMILIA]
+                unid = {}
+                for x in lista: k = x.get("familia") or x["id"]; unid[k] = unid.get(k, True) and x["feito"]
                 return route.fulfill(json={"ok": True, "data": "2026-11-01", "eu": {"whats": "88999999999", "nome": "Iara", "admin": admin, "membro": True, "confere": True, "aceitar": admin},
                     "pedidos": ({"conferir": 0, "aprovar": sum(1 for x in st["pedidos"].values() if x["status"] == "conferido"), "aplicar": sum(1 for x in st["pedidos"].values() if x["status"] == "aprovado" and any((i.get("qtd_aceita") or 0) > 0 and not i.get("aplicado_em") for i in x["itens"]))} if admin else {"conferir": sum(1 for x in st["pedidos"].values() if x["status"] == "a_caminho")}),
-                    "lista": lista, "feitas": sum(1 for x in lista if x["feito"]), "total": len(lista),
+                    "lista": lista, "feitas": sum(1 for v in unid.values() if v), "total": len(unid), "pecas": len(lista),
                     "funcoes": [{"funcao": "Fotos", "instrucoes": "Fotografar as peças novas no manequim.\nConferir as fotos de detalhe."}], "tarefas": tarefas_hoje(),
                     "escala": [{"funcao": "Fotos", "whats": "88999999999", "nome": "Iara", "alterado": False}, {"funcao": "Caixa", "whats": "", "nome": "", "alterado": False}]})
             if path == "/esteira/conferir":
@@ -451,6 +456,27 @@ with sync_playwright() as p:
     chk("equipe: chegada enviada para a Karla", st["pedidos"][7]["status"] == "conferido" and "A Karla vai ver as diferenças" in pg.inner_text("main"))
     chk("equipe: sem erro de JavaScript", not erros, erros)
     ctx.close()
+    # ---- v7.44.0: família de tamanhos no Hoje (cartão único, conferência por tamanho, progresso conta 1) ----
+    for w, h in [(390, 844), (1440, 900)]:
+        ctx = b.new_context(viewport={"width": w, "height": h}, is_mobile=w < 600, has_touch=w < 600)
+        st = instalar(ctx, admin=False, familia=True); ctx.add_init_script("localStorage.setItem('tm_session', JSON.stringify({whatsapp:'88999999999',sessao:'tk3.teste.sessao'}));")
+        pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
+        pg.goto(BASE + "esteira.html"); pg.wait_for_selector(".fam", timeout=8000)
+        fam = pg.locator('.fam[data-familia="fsunga"]')
+        chk(f"{w} família: um cartão com os 3 tamanhos dentro, na ordem P, M, G", pg.locator(".fam").count() == 1 and fam.locator(".peca.tam .rot").all_inner_texts() == ["P", "M", "G"], fam.inner_text() if fam.count() else "")
+        chk(f"{w} família: progresso conta a família como 1 (0/2)", "0/2" in pg.inner_text("main") and "família de tamanhos conta como 1" in pg.inner_text("main"), pg.inner_text("main")[:200])
+        pg.screenshot(path=str(OUT / f"esteira_familia_{w}.png"), full_page=True)
+        for k, t in enumerate(["P", "M"]):
+            fam.locator(".peca.tam").nth(k).click(); pg.wait_for_selector(".folha", timeout=4000)
+            chk(f"{w} família: conferir abre o tamanho {t} com contagem, tamanhos e cores", f"Sunga infantil masculino {t}" in pg.inner_text(".folha") and pg.locator("#conf-estoque").count() == 1 and "Cores disponíveis" in pg.inner_text(".folha"))
+            pg.fill("#conf-estoque", "3"); pg.click("text=Salvar conferência"); pg.wait_for_selector(".folha", state="detached", timeout=6000)
+        chk(f"{w} família: 2 de 3 tamanhos conferidos ainda não conta como feita", "0/2" in pg.inner_text("main") and "2 de 3 conferidos" in fam.inner_text() and st["conferidas"] == ["3001", "3002"], [pg.inner_text("main")[:120], st["conferidas"]])
+        fam.locator(".peca.tam").nth(2).click(); pg.wait_for_selector(".folha", timeout=4000); pg.fill("#conf-estoque", "3"); pg.click("text=Salvar conferência"); pg.wait_for_selector(".folha", state="detached", timeout=6000)
+        chk(f"{w} família: com todos os tamanhos conferidos a família conta 1 (1/2)", "1/2" in pg.inner_text("main") and "família feita" in fam.inner_text())
+        chk(f"{w} família: sem rolagem horizontal e botões ≥ 44 px", pg.evaluate("document.documentElement.scrollWidth <= innerWidth") and all(x >= 43.5 for x in pg.evaluate("[...document.querySelectorAll('main button')].filter(b=>b.getClientRects().length).map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")))
+        pg.screenshot(path=str(OUT / f"esteira_familia_feita_{w}.png"), full_page=True)
+        chk(f"{w} família: sem erro de JavaScript", not erros, erros)
+        ctx.close()
     b.close()
 print(f"OK={ok} FALHAS={len(falhas)} {falhas}")
 sys.exit(1 if falhas else 0)
