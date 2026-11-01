@@ -1,8 +1,8 @@
 {
-  "versionCode": 27,
-  "versionName": "2.4.20",
-  "bytes": 4624477,
-  "sha256": "6e8588655a226104fe49a861f3405d8357d6df435eb48814b85690414e17fa32",
-  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.20/TENKiTER-Mensagens-2.4.20.apk",
+  "versionCode": 28,
+  "versionName": "2.4.21",
+  "bytes": 4624245,
+  "sha256": "7c504a0ef66a12e42e28afeea6e4d331ce531860c96190c9fa94c85efd8b1a72",
+  "url": "https://github.com/pablofonteneleadv/tenkiter-catalogo/releases/download/android-v2.4.21/TENKiTER-Mensagens-2.4.21.apk",
   "notes": "Melhorias de mídia, câmera e confiabilidade. Instale sobre a versão anterior para preservar seus dados."
 }
