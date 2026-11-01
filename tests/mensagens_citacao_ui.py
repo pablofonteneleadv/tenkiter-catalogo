@@ -172,7 +172,8 @@ with sync_playwright() as p:
     # ---- recarregar a conversa: a citacao vem do servidor (nao so do otimista)
     pg.click('#ms-abas .ms-aba[data-aba="todos"]')
     pg.wait_for_timeout(700)
-    pg.locator('#ms-lista .ms-conv').first.click()
+    # A resposta muda a seção; reabra o mesmo atendimento, não outra primeira linha.
+    pg.locator('#ms-lista .ms-conv[data-id="%s"]' % ultimo['conversa']).click()
     pg.wait_for_timeout(1200)
     ctxs = pg.locator('#ms-fio .ms-bolha.saida .ms-ctx')
     chk('depois de recarregar, a citacao continua no historico', ctxs.count() >= 1, ctxs.count())
