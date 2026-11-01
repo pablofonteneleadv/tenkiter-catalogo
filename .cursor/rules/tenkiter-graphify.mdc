@@ -1,0 +1,5 @@
+---
+description: Contexto local de relações e impacto com Graphify em toda tarefa técnica TENKiTER.
+alwaysApply: true
+---
+Leia `AGENTS.md` e `.agents/skills/graphify/SKILL.md`. No início, execute `python3 scripts/graphify/manage.py start` e consulte `python3 scripts/graphify/manage.py query "assunto da tarefa"`. Depois de alterar código, use `ensure` e confira impacto. O índice se atualiza por conteúdo; só AST local, sem LLM. Confirme fontes e regras do Cofre. Em falha/cobertura parcial, use fontes/testes e registre o limite. Veja `docs/ia/graphify.md`.

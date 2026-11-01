@@ -10,3 +10,6 @@ __pycache__/
 .dev.vars
 .dev.vars.*
 node_modules/
+
+# Índice de código e diagnósticos do Graphify: cache local, nunca publicado.
+graphify-out/

@@ -1,5 +1,12 @@
 # Checklist de revisão visual
 
+## Coerência e escopo
+
+- [ ] Tela atual e vizinha foram inspecionadas; tokens/componentes ativos identificados.
+- [ ] Mudança tem critérios de sucesso, diferenças justificadas e preserva o contexto do trabalho.
+- [ ] Não há tema genérico, biblioteca desnecessária, CSS duplicado ou regressão nos consumidores compartilhados.
+- [ ] Critérios específicos de catálogo, mensageiro, postagens, gestão e APK foram aplicados conforme o escopo.
+
 ## Tarefa e hierarquia
 
 - [ ] A ação principal é identificável em até dois segundos.
@@ -29,6 +36,14 @@
 - [ ] Jornada completa por teclado.
 - [ ] Zoom/texto ampliado e movimento reduzido.
 - [ ] Cor e ícone não são o único meio de comunicar.
+
+## Dados e continuidade
+
+- [ ] Indicadores têm período, unidade, definição, atualização e ação útil; zero difere de indisponível.
+- [ ] Filtros têm escopo claro e gráficos oferecem acesso textual aos valores.
+- [ ] Submissão duplicada é impedida; progresso é verdadeiro e falha parcial tem recuperação.
+- [ ] Fechar, alternar layout ou receber atualização preserva rascunho, foco e posição.
+- [ ] Ações estão conectadas ao fluxo real, com permissões e confirmação coerentes.
 
 ## Evidência
 

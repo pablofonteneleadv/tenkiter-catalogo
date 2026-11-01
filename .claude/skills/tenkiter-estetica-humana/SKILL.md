@@ -11,14 +11,22 @@ Esta skill é um portão de qualidade. Uma interface só está pronta quando fun
 
 Preserve primeiro a tarefa principal. Controles administrativos, explicações, badges, tutoriais, chats e barras nunca podem roubar a área necessária para ver ou manipular o conteúdo. Beleza deve aumentar compreensão e confiança; não pode esconder defeitos de uso.
 
+## Coerência com o produto existente
+
+Antes de desenhar, leia [contrato-visual.md](references/contrato-visual.md). Inspecione a tela atual, uma tela vizinha do mesmo fluxo e os estilos/componentes realmente carregados. Identifique tokens, hierarquia, densidade, ícones e comportamento; não escolha um tema novo por preferência da IA.
+
+Reutilize o componente existente quando ele atende à tarefa. Quando não atende, corrija a origem compartilhada ou justifique a exceção local, verificando consumidores afetados. Não copie um componente para criar uma variante quase igual, não empilhe overrides CSS e não faça uma refatoração visual global como efeito colateral de uma melhoria local.
+
+Referências externas, incluindo UI/UX Pro Max, são repertório: não estão instaladas por esta skill e não prevalecem sobre as instruções do proprietário, a identidade TENKiTER, acessibilidade ou o comportamento validado. Não adicionar biblioteca, fonte, tema ou serviço externo apenas para imitar uma referência.
+
 ## Processo obrigatório
 
-1. Defina em uma frase a tarefa humana principal da tela e o elemento que precisa receber atenção primeiro.
+1. Defina em uma frase a tarefa humana principal da tela e o elemento que precisa receber atenção primeiro. Registre quem usa, decisão/ação esperada, o que preservar e critérios observáveis de sucesso. Para telas novas ou mudanças estruturais, faça um esboço com conteúdo realista antes de implementar; peça escolha somente quando houver uma decisão de produto realmente pendente.
 2. Observe a interface anterior e a alterada em 390×844, 412×915 e 1440×900. Use conteúdo realista, teclado aberto quando houver escrita, listas longas, texto ampliado e estados de erro/carregamento/vazio.
 3. Faça a tarefa inteira por toque e por teclado. Não aprove apenas por inspeção do HTML.
 4. Meça a área útil. Cabeçalhos, ferramentas e avisos devem usar o menor espaço compatível com clareza. Se a pessoa precisa manipular o conteúdo, ofereça recolher/minimizar sem perder o estado.
 5. Confira colisões em todos os quatro limites da viewport, especialmente navegação inferior, teclado, safe areas, modais, widgets fixos e textos flutuantes.
-6. Revise hierarquia, ritmo, tipografia, contraste, nomes e feedback usando os critérios abaixo.
+6. Revise hierarquia, ritmo, tipografia, contraste, nomes e feedback usando os critérios abaixo. Compare lado a lado com a tela vizinha e revise os consumidores dos componentes compartilhados alterados. Inspecione o resultado renderizado: passar no teste de DOM ou tirar screenshot sem examiná-lo não comprova qualidade.
 7. Registre evidência: screenshots antes/depois, dimensões relevantes, jornada automatizada e resultado do checklist. Corrija falhas antes de merge.
 
 ## Portões que reprovam a mudança
@@ -33,6 +41,12 @@ Preserve primeiro a tarefa principal. Controles administrativos, explicações, 
 - A interface usa texto genérico, excesso de caixas, sombras, cores, emojis ou explicações que competem com a tarefa.
 - O estado vazio, erro, espera ou sucesso deixa a pessoa sem próxima ação clara.
 - O resultado parece um conjunto de componentes prontos sem relação com a linguagem visual TENKiTER.
+
+## Critério contra resultado genérico
+
+Reprove a solução se ela poderia pertencer a qualquer SaaS trocando apenas o logotipo. Todo bloco deve servir uma tarefa concreta: identificar uma peça, responder alguém, acompanhar uma preparação ou decidir uma intervenção. Remova elementos sem função ou agrupe informações que repetem a mesma ideia.
+
+Não adote hero, mosaico de cartões, gradiente, vidro, sombra, gráfico ou animação por hábito. Não transforme cada informação em um cartão. Preserve a linguagem visual das telas vizinhas e demonstre por que qualquer diferença é necessária. Elegância é hierarquia legível, espaçamento consistente e comportamento previsível; diminuir tudo até ficar ilegível reprova tanto quanto desperdiçar a tela.
 
 ## Linguagem visual TENKiTER
 
@@ -63,15 +77,28 @@ Preserve primeiro a tarefa principal. Controles administrativos, explicações, 
 - WhatsApp deve levar contexto do produto, sem cobrir navegação ou ação de compra.
 - Evite poluição semelhante a marketplaces: prova social e badges só entram quando verdadeiros e úteis.
 
+## Requisitos por área
+
+- **Catálogo:** produto, foto, preço e tamanho orientam a decisão; preservar descoberta, filtros, contexto da seleção e acesso à conversa.
+- **Mensageiro:** leitura e resposta têm prioridade. Informações de histórico/pontuação ficam discretas no card e na conversa, com explicação sob demanda; não mudam a ordenação por conta própria. Alternar layouts preserva conversa, busca, rolagem e rascunho. Diferencie aguardando equipe de aguardando cliente com texto e sinal visual, sem duplicar atendimentos.
+- **Postagens e mídia:** agrupe pelo original, mostre partes na ordem e destinos/horários abaixo. Partes consecutivas respeitam a sequência; o intervalo configurado se aplica entre originais. Diferencie envio do arquivo, fila de processamento, processamento e disponibilidade. Progresso deve ser verdadeiro, bloquear cliques duplicados e permitir continuar o trabalho; não exigir recuperação manual como fluxo normal. Não prometer continuidade com aplicativo fechado sem suporte real.
+- **Gestão:** cada indicador deve levar a uma decisão ou investigação. Informe período, escopo/filtros, unidade, fonte, atualização e definição sob demanda. Diferencie zero, sem dados, parcial e falha. Não confunda site aberto, presença observada, leitura e atendimento efetivo; não invente precisão de tempo ou desempenho. Não classifique pessoas apenas por volume bruto. Configurações devem ter busca/agrupamento, valor atual, efeito, validação, permissão e confirmação de salvamento.
+- **Web e APK:** preservar vocabulário, significado, ordem e estados equivalentes, respeitando padrões nativos e unidades da plataforma. Validar teclado, voltar e retomada nos dois quando afetados; navegador ou emulador não comprovam aparelho físico.
+
+Esses critérios orientam o escopo autorizado; não autorizam implementar funcionalidades extras ou inventar dados para preencher a tela.
+
 ## Entrega da revisão
 
 Relate sempre:
 
-- tarefa humana avaliada;
+- tarefa humana avaliada e critérios de sucesso;
+- tela de referência, componentes/tokens reutilizados e diferenças justificadas;
 - viewports e estados testados;
 - problemas encontrados e correções feitas;
 - medições de áreas fixas, alvos e sobreposições;
 - resultado: `APROVADO`, `APROVADO COM LIMITAÇÃO` ou `REPROVADO`;
 - limitações materiais que dependem de aparelho ou validação humana real.
+
+`APROVADO COM LIMITAÇÃO` exige ausência de defeitos conhecidos nos critérios aplicáveis; não serve para aceitar colisão, fluxo quebrado ou falta de teste disponível. Se não foi possível executar a jornada ou observar o resultado, marque `NÃO VALIDADO` e descreva o bloqueio; não declare aprovação ou completude visual. Mudanças apenas nesta documentação/skill não exigem capturas do produto, pois não alteram a interface; valide links, espelhos e o portão de CI.
 
 Leia [fontes-e-criterios.md](references/fontes-e-criterios.md) para a origem dos critérios e [checklist.md](references/checklist.md) antes da aprovação.

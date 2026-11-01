@@ -31,3 +31,11 @@ Uma cópia textual normalizada do relatório fica em `docs/ux/relatorio-vitrine-
 - Baymard — pesquisas de listagem, filtros, cards, PDP e acessibilidade citadas no relatório. https://baymard.com/research-articles/current-state-product-list-and-filtering
 
 Os números promocionais ou de conversão do relatório não viram regra automática. Decisões do TENKiTER exigem evidência no produto, dados verdadeiros e ausência de prejuízo à tarefa principal.
+
+## Complemento de 01/11/2026
+
+- Diretrizes atuais do proprietário: coerência com telas vizinhas, informações discretas no mensageiro, gestão orientada a decisões e continuidade do preparo/envio de mídia. São requisitos do produto, não alegações de pesquisa.
+- UI/UX Pro Max — README consultado como repertório para sistemas visuais, gráficos, texto resiliente e estados. Não foi instalado ou incorporado como dependência; suas recomendações genéricas não substituem o padrão TENKiTER. https://github.com/nextlevelbuilder/ui-ux-pro-max-skill
+- W3C — Status Messages, critério 4.1.3: comunicar estado sem exigir mudança de foco. Referência para feedback assíncrono e anúncios proporcionais. https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html
+
+As novas regras são uma síntese própria para o projeto. Não implicam auditoria integral do legado nem validação física de aparelhos.

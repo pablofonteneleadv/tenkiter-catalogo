@@ -1,5 +1,7 @@
 # TENKiTER — guia de trabalho
 
+**Graphify em toda tarefa técnica:** siga `AGENTS.md` e `.claude/skills/graphify/SKILL.md`. Execute `python3 scripts/graphify/manage.py start` e consulte o assunto antes de explorar relações/impacto. O hook SessionStart prepara o índice quando suportado; se não executar, a instrução continua obrigatória. Fontes e regras do Cofre prevalecem. Detalhes: `docs/ia/graphify.md`.
+
 O estado atual e as instruções por setor ficam no Cofre privado:
 
 [Fonte operacional](https://github.com/pablofonteneleadv/Tenkiter-cofre/blob/main/documentacao/operacao/INDEX.md) · [Regras](https://github.com/pablofonteneleadv/Tenkiter-cofre/blob/main/documentacao/operacao/REGRAS.md)

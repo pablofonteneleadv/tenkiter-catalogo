@@ -1,0 +1,26 @@
+# Perfil local de código TENKiTER: não indexar dados, dependências e saídas geradas.
+.git/
+node_modules/
+.wrangler/
+graphify-out/
+**/build/
+dist/
+backups/
+review/
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+*.gs.txt
+*.sql.gz
+*.sqlite
+*.sqlite3
+*.db
+*.apk
+*.jks
+*.keystore
+*.pem
+*.key
+*.min.js
+tests/saida/
+tests/evidencias_edicao/
