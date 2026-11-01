@@ -136,10 +136,15 @@ class NativeRepository internal constructor(private val context:Context,val stor
     }
     fun discard(key:String){store.removePending(key);changed()}
     /** Sinal de presença apenas com a tela nativa em primeiro plano; não abre nem lê conversas. */
-    fun presence(conversation:Long)=lock.withLock{
+    private val presenceSequence=java.util.concurrent.atomic.AtomicLong()
+    fun nextPresenceSequence()=presenceSequence.incrementAndGet()
+    private val presenceSource="apk_"+UUID.randomUUID().toString()
+    fun presence(conversation:Long,estado:String="sem_detalhe",espiar:Boolean=false,sequencia:Long=nextPresenceSequence(),permitido:()->Boolean={true})=lock.withLock{
+        if(!permitido())return@withLock
         val a=store.auth()?:return@withLock
-        api.call("/msg/presenca",a,JSONObject().put("conversa",conversation))
+        api.call("/msg/presenca",a,JSONObject().put("conversa",conversation).put("fonte",presenceSource).put("seq",sequencia).put("estado",estado).put("espiar",espiar))
     }
+    fun availability(pausa:Boolean?=null,permitido:()->Boolean={true}):JSONObject=lock.withLock{if(!permitido())throw AccessRevoked();val a=store.auth()?:throw AccessRevoked();api.call("/msg/disponibilidade",a,pausa?.let{JSONObject().put("pausa",it)})}
     fun config(body:JSONObject?=null):JSONObject=lock.withLock{
         val a=store.auth()?:throw AccessRevoked();try{api.call("/msg/config",a,body).also{if(!store.current(a))throw AccessRevoked()}}catch(e:AccessRevoked){logout();throw e}
     }

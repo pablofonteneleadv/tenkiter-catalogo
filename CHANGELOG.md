@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.43] - 2026-11-01
+
+- Gestão com tempos observados, disponibilidade, filtros de espera e ações sem contar entradas no aplicativo.
+- Pontuação explicável para retomadas; regras configuráveis de cortesia e retorno ao atendimento anterior.
+- Lista com não respondidos acima, canais vinculados juntos e visual contínuo opcional no site e APK.
+
+
 ## [7.40.42] - 2026-10-31
 
 - Central do gestor do Mensageiro com dados reais e configurações; fila por mídia e intervalo entre vídeos originais.

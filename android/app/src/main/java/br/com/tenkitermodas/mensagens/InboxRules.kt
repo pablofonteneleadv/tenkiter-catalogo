@@ -6,7 +6,7 @@ import java.time.Instant
 /** Contadores medem pessoas; não lidas são subconjunto das que faltam responder. */
 object InboxRules {
     fun group(c:JSONObject)=c.optInt("grupo")==1
-    fun waiting(c:JSONObject)=c.optString("encerrada_em").isBlank()&&(c.optInt("nao_lidas")>0||c.optString("ult_dir")=="entrada")
+    fun waiting(c:JSONObject)=c.optString("encerrada_em").isBlank()&&(if(c.has("aguarda_resposta"))c.optBoolean("aguarda_resposta",c.optInt("aguarda_resposta")==1)else c.optInt("nao_lidas")>0||c.optString("ult_dir")=="entrada")
     fun clean(c:JSONObject,key:String)=if(c.isNull(key))""else c.optString(key).takeUnless{it=="null"}.orEmpty()
     fun person(c:JSONObject)=if(group(c))"group:${c.optLong("id")}"else clean(c,"pessoa").ifBlank{if(c.optString("canal").startsWith("whatsapp"))c.optString("contato").filter(Char::isDigit).let{if(it.length==13&&it.startsWith("55")&&it[4]=='9')it.removeRange(4,5)else it}else"conversation:${c.optLong("id")}"}
     fun people(rows:List<JSONObject>)=rows.distinctBy(::person).size

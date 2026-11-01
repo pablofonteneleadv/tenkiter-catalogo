@@ -100,7 +100,7 @@ const DB = { prepare(sql) { let args = []; const st = { bind(...x) { args = x; r
   // Trocar de conversa muda o estado e registra.
   await chamar('/msg/presenca', 'POST', { conversa: nova.j.conversa });
   assert.equal(sqlite.prepare('SELECT conversa_id FROM msg_presenca WHERE usuario=?').get(dono).conversa_id, nova.j.conversa);
-  assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM msg_atividade WHERE acao='visualizar'").get().n, 2);
+  assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM msg_atividade WHERE acao='visualizar'").get().n, 0);
 
   // ---- trilha das ações confirmadas ----
   sqlite.prepare('INSERT OR REPLACE INTO cfg(chave,valor) VALUES(?,?)').run('wafly_1', JSON.stringify({ instance: 'teste-01', token: 'simulado', clientToken: 'simulado' }));

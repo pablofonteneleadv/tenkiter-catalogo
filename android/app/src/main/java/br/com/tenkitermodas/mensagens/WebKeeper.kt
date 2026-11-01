@@ -18,6 +18,7 @@ object WebKeeper {
     var web:WebView?=null
     var context:MutableContextWrapper?=null
     @Volatile var attached=false
+    @Volatile var remoteVisible=false
     private val handler=Handler(Looper.getMainLooper())
     private val pause=Runnable{if(!attached)web?.pauseTimers()}
     /** Ações pedidas pelo menu do site (Atualizar app, Permissões do app); a tela aberta no momento responde. */
@@ -37,6 +38,9 @@ object WebKeeper {
                 .put("camera",c.checkSelfPermission(android.Manifest.permission.CAMERA)==android.content.pm.PackageManager.PERMISSION_GRANTED)
                 .put("microfone",c.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED).toString()
         }
+        @JavascriptInterface fun visualLista(conta:String):String=runCatching{val c=context?.applicationContext?:return "";if(NativeRepository.get(c).store.auth()?.owner!=conta)return "";c.getSharedPreferences("mensagens-visual",0).getString("visual_"+conta,"dividida")?:"dividida"}.getOrDefault("")
+        @JavascriptInterface fun salvarVisualLista(conta:String,visual:String){if(visual !in listOf("dividida","continua"))return;val c=context?.applicationContext?:return;runCatching{if(ReceivedFiles.trusted(web?.url)&&NativeRepository.get(c).store.auth()?.owner==conta)c.getSharedPreferences("mensagens-visual",0).edit().putString("visual_"+conta,visual).apply()}}
+        @JavascriptInterface fun telaMensagensVisivel()=attached&&remoteVisible
         @JavascriptInterface fun versao()=BuildConfig.VERSION_NAME
     }
     fun configure(w:WebView){
@@ -62,7 +66,7 @@ object WebKeeper {
     }
     /** A tela do app voltou: a página volta a atualizar sozinha. */
     fun refresh(){handler.post{if(attached)web?.evaluateJavascript("window.TKMensagensApp && window.TKMensagensApp.atualizar()",null)}}
-    fun attach(){attached=true;handler.removeCallbacks(pause);web?.resumeTimers();refresh()}
+    fun attach(){attached=true;handler.removeCallbacks(pause);web?.resumeTimers();web?.evaluateJavascript("window.dispatchEvent(new Event('tk:app-visibilidade'))",null);refresh()}
     /** O app saiu da tela: depois de um tempo a página para de consultar o servidor, mas continua carregada. */
     fun detach(){attached=false;handler.removeCallbacks(pause);handler.postDelayed(pause,120000)}
 }

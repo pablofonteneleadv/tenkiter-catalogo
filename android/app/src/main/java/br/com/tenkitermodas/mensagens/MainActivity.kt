@@ -43,8 +43,13 @@ class MainActivity:Activity(),InboxView.Events {
     private var displayOwner="";private var webTarget=0L;private var webRequest="";private var seededSession="";private var refreshSeq=0;private var pendingClick=0L
     private val handler=Handler(Looper.getMainLooper())
     private val home=WebKeeper.HOME
+    private var lastInteraction=0L
+    override fun onUserInteraction(){super.onUserInteraction();lastInteraction=SystemClock.elapsedRealtime()}
+    override fun interaction(){if(activityVisible&&nativeVisible)lastInteraction=SystemClock.elapsedRealtime()}
     private var presenceAt=0L
-    private val ticker=object:Runnable{override fun run(){if(nativeVisible&&activityVisible&&repo.store.auth()!=null&&!sending){sync();if(SystemClock.elapsedRealtime()-presenceAt>=45000){presenceAt=SystemClock.elapsedRealtime();scope.launch(Dispatchers.IO){runCatching{repo.presence(conversation)}}}};handler.postDelayed(this,4000)}}
+    private val ticker=object:Runnable{override fun run(){if(nativeVisible&&activityVisible&&repo.store.auth()!=null&&!sending){sync();if(SystemClock.elapsedRealtime()-presenceAt>=45000){presenceAt=SystemClock.elapsedRealtime();val generation=repo.store.generation;val sequence=repo.nextPresenceSequence();val id=conversation;val peek=peeking;val since=SystemClock.elapsedRealtime()-lastInteraction
+                    val state=if(!hasWindowFocus())"oculto" else if(since>=120000)"ausente" else if(id>0&&!administration.active){if(since<30000&&currentFocus is EditText&&(currentFocus as EditText).text.isNotBlank())"redigindo" else "lendo"}else "navegando"
+                    scope.launch(Dispatchers.IO){runCatching{repo.presence(id,state,peek,sequence){activityVisible&&nativeVisible&&repo.store.generation==generation}}}}};handler.postDelayed(this,4000)}}
     private val changes=object:BroadcastReceiver(){override fun onReceive(c:Context?,i:Intent?){render()}}
     private val clicks=object:INotificationClickListener{override fun onClick(event:INotificationClickEvent){runOnUiThread{pendingClick=event.notification.additionalData?.optLong("conversa",0)?:0;pendingPeek=event.result.actionId!="abrir";openGeneration++;if(::inbox.isInitialized){peeking=pendingPeek;conversation=pendingClick;pendingClick=0;if(setup==null)full(conversation);sync()}}}}
     private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
@@ -156,10 +161,10 @@ class MainActivity:Activity(),InboxView.Events {
     override fun update(){updater.check()}
     override fun menu(anchor:View){
         PopupMenu(this,anchor).apply{
-            listOf("Selecionar conversas","Painel de atendimento","Configurações de leitura e nome","Conexões e gravação","Google Contatos","Exportar conversas","Sincronizar conversas","Atualizar aplicativo","Site da loja","Avisos","Atendimento completo","Sair da conta").forEach{menu.add(it)}
+            listOf("Selecionar conversas",inbox.layoutMenu(),"Painel de atendimento","Configurações de leitura e nome","Conexões e gravação","Google Contatos","Exportar conversas","Sincronizar conversas","Atualizar aplicativo","Site da loja","Disponibilidade","Avisos","Atendimento completo","Sair da conta").forEach{menu.add(it)}
             setOnMenuItemClickListener{when(it.title.toString()){
-                "Painel de atendimento"->administration.dashboard(inbox.channelCode());"Configurações de leitura e nome"->administration.settings();"Conexões e gravação"->administration.connections();"Google Contatos"->administration.contacts();"Exportar conversas"->administration.exportForm(conversation,inbox.channelCode());"Selecionar conversas"->{back();inbox.beginSelection()};"Sincronizar conversas"->sync();"Atualizar aplicativo"->updater.check();"Site da loja"->external("https://tenkitermodas.com.br/")
-                "Avisos"->notificationSettings();"Atendimento completo"->full(conversation);"Sair da conta"->confirmLogout()
+                "Não respondidos primeiro","Lista contínua (ordem atual)"->inbox.toggleLayout();"Painel de atendimento"->administration.dashboard(inbox.channelCode());"Configurações de leitura e nome"->administration.settings();"Conexões e gravação"->administration.connections();"Google Contatos"->administration.contacts();"Exportar conversas"->administration.exportForm(conversation,inbox.channelCode());"Selecionar conversas"->{back();inbox.beginSelection()};"Sincronizar conversas"->sync();"Atualizar aplicativo"->updater.check();"Site da loja"->external("https://tenkitermodas.com.br/")
+                "Disponibilidade"->availability();"Avisos"->notificationSettings();"Atendimento completo"->full(conversation);"Sair da conta"->confirmLogout()
             };true};show()
         }
     }
@@ -171,11 +176,14 @@ class MainActivity:Activity(),InboxView.Events {
         if(a!=null&&subscription.isNotBlank())scope.launch(Dispatchers.IO){runCatching{NativeApi().removeSubscription(a,subscription)}}
         CookieManager.getInstance().removeAllCookies(null);WebStorage.getInstance().deleteAllData()
     }.setNegativeButton("Cancelar",null).show()}
+    private fun availability(){val generation=repo.store.generation;scope.launch{try{val j=withContext(Dispatchers.IO){repo.availability()};if(generation!=repo.store.generation)return@launch;val paused=j.optBoolean("pausa")
+        AlertDialog.Builder(this@MainActivity).setTitle(if(paused)"Você está em pausa"else"Você está disponível").setMessage("Vale para sua conta em todos os aparelhos. Não bloqueia mensagens nem notificações.").setPositiveButton(if(paused)"Voltar a disponível"else"Entrar em pausa"){_,_->scope.launch{try{withContext(Dispatchers.IO){repo.availability(!paused){generation==repo.store.generation}};Toast.makeText(this@MainActivity,"Status atualizado",Toast.LENGTH_SHORT).show()}catch(_:Exception){Toast.makeText(this@MainActivity,"Não consegui alterar seu status",Toast.LENGTH_LONG).show()}}}.setNegativeButton("Voltar",null).show()
+    }catch(_:Exception){Toast.makeText(this@MainActivity,"Não consegui consultar seu status",Toast.LENGTH_LONG).show()}}}
     private fun notificationSettings(){AlertDialog.Builder(this).setTitle("Avisos de mensagens").setMessage("Receba avisos com o aplicativo fechado. O Android também agenda a sincronização em segundo plano conforme a conexão e a bateria.")
         .setPositiveButton("Ativar"){_,_->scope.launch{OneSignal.Notifications.requestPermission(true);OneSignal.User.pushSubscription.optIn();sync()}}
         .setNeutralButton("Configurações"){_,_->startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName))}.setNegativeButton("Voltar",null).show()}
     override fun full(id:Long){
-        nativeVisible=false;webTarget=id;webRequest=java.util.UUID.randomUUID().toString()
+        if(nativeVisible)closeNativePresence();nativeVisible=false;WebKeeper.remoteVisible=true;webTarget=id;webRequest=java.util.UUID.randomUUID().toString()
         if(web==null)createWeb()
         inbox.visibility=View.GONE;webPanel?.visibility=View.VISIBLE
         val w=web?:return
@@ -229,10 +237,11 @@ class MainActivity:Activity(),InboxView.Events {
             }
         }
     }
-    private fun showNative(){nativeVisible=true;webPanel?.visibility=View.GONE;inbox.visibility=View.VISIBLE;render()}
+    private fun showNative(){nativeVisible=true;WebKeeper.remoteVisible=false;web?.evaluateJavascript("window.dispatchEvent(new Event('tk:app-visibilidade'))",null);webPanel?.visibility=View.GONE;inbox.visibility=View.VISIBLE;render()}
     private fun external(address:String){val u=Uri.parse(address);if(u.scheme !in listOf("https","http","tel","mailto"))return;runCatching{startActivity(Intent(Intent.ACTION_VIEW,u))}}
+    private fun closeNativePresence(){if(!::repo.isInitialized)return;val generation=repo.store.generation;val sequence=repo.nextPresenceSequence();scope.launch(Dispatchers.IO){runCatching{repo.presence(0,"oculto",false,sequence){repo.store.generation==generation}}}}
     override fun onResume(){super.onResume();activityVisible=true;WebKeeper.attach();checkSetup();if(::updater.isInitialized)updater.onResume();if(::repo.isInitialized){handler.removeCallbacks(ticker);handler.post(ticker)}}
-    override fun onPause(){activityVisible=false;WebKeeper.detach();webAudio.pause();if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
+    override fun onPause(){if(nativeVisible)closeNativePresence();activityVisible=false;WebKeeper.detach();web?.evaluateJavascript("window.dispatchEvent(new Event('tk:app-visibilidade'))",null);webAudio.pause();if(::tools.isInitialized)tools.pauseRecording();handler.removeCallbacks(ticker);super.onPause()}
     override fun onDestroy(){handler.removeCallbacks(ticker);webAudio.cancel();WebKeeper.actions=null;WebKeeper.download=null;runCatching{unregisterReceiver(changes)};OneSignal.Notifications.removeClickListener(clicks);scope.cancel();chooser?.onReceiveValue(null);audioRequest?.deny();tools.close();administration.close();web?.let{(it.parent as? android.view.ViewGroup)?.removeView(it)};WebKeeper.context?.baseContext=applicationContext;super.onDestroy()}
     override fun onSaveInstanceState(out:Bundle){out.putLong("conversation",conversation);out.putBoolean("peeking",peeking);super.onSaveInstanceState(out)}
     @Deprecated("Legacy back API") override fun onBackPressed(){

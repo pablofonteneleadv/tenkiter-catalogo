@@ -29,6 +29,7 @@ class NativeInboxTest {
     private fun conv(id:Long=1)=JSONObject().put("id",id).put("nome","Maria · Cliente").put("contato","5588999990000").put("previa","Tem esse vestido no tamanho M?").put("canal","whatsapp1").put("nao_lidas",2).put("ultima_em","2026-10-27T03:00:00Z").put("encerrada_em","")
     private fun msg(id:Long=1)=JSONObject().put("id",id).put("texto","Olá! Tem esse vestido no tamanho M?").put("direcao","entrada").put("tipo","texto").put("enviada_em","2026-10-27T03:00:00Z")
     private class Events:InboxView.Events{
+        var interactions=0;override fun interaction(){interactions++}
         var updates=0;var selected=0L;var sent="";var full=0L;var media=0L;var peeked=0L;var bulkIds=emptySet<Long>();var bulkAction="";var syncs=0
         override fun peek(id:Long){peeked=id};override fun media(id:Long){media=id};override fun bulk(ids:Set<Long>,action:String){bulkIds=ids;bulkAction=action}
         override fun login(identifier:String,password:String){};override fun sync(){syncs++};override fun select(id:Long){selected=id};override fun back(){}
@@ -41,11 +42,28 @@ class NativeInboxTest {
         val store=NativeStore(c,SecretKeySpec(ByteArray(32){4},"AES"));val a=NativeAuth("88999990000","test","Ana");store.saveAuth(a);store.putConversation(a,conv())
         val paths=mutableListOf<String>()
         val api=object:NativeApi(){override fun call(path:String,a:NativeAuth,body:JSONObject?,method:String?):JSONObject {
-            paths.add(path);assertEquals(1L,body!!.getLong("conversa"));return JSONObject().put("ok",true)
+            paths.add(path);assertEquals(1L,body!!.getLong("conversa"));assertTrue(body.getString("fonte").startsWith("apk_"));assertTrue(body.getLong("seq")>0);assertEquals("sem_detalhe",body.getString("estado"));return JSONObject().put("ok",true)
         }}
         val repo=NativeRepository(c,store,api);repo.presence(1)
-        assertEquals(listOf("/msg/presenca"),paths);assertEquals(2,store.conversation(1)!!.getInt("nao_lidas"))
+        repo.presence(1,"lendo",true){false};assertEquals(listOf("/msg/presenca"),paths);assertEquals(2,store.conversation(1)!!.getInt("nao_lidas"))
         store.logout();repo.presence(1);assertEquals(1,paths.size);store.close()
+    }
+    @Test fun typingWithSoftKeyboardSignalsInteractionWithoutPassingTheText(){
+        val a=activity;val e=Events();val v=InboxView(a,e);a.setContentView(v)
+        v.render(NativeAuth("88999990000","test","Ana"),true,listOf(conv()),1,listOf(msg()),emptyList(),true,"Atualizado");layout(v,390,844)
+        val input=all(v).filterIsInstance<EditText>().first{it.hint=="Mensagem"};input.requestFocus();input.setText("Rascunho não transmitido")
+        assertTrue(e.interactions>0);assertEquals("",e.sent)
+    }
+    @Test fun listSectionsKeepLinkedChannelsTogetherAndAllowTheOriginalLayout(){
+        val a=activity;val e=Events();val v=InboxView(a,e);a.setContentView(v);val auth=NativeAuth("88999990000","test","Ana")
+        val replied=conv(1).put("pessoa","answered").put("aguarda_resposta",0).put("nao_lidas",0).put("ult_dir","saida").put("ultima_em","2026-10-31T15:00:00Z")
+        val waiting=conv(2).put("pessoa","pending").put("aguarda_resposta",1).put("ultima_em","2026-10-31T14:00:00Z")
+        val linked=conv(3).put("pessoa","pending").put("aguarda_resposta",0).put("ultima_em","2026-10-31T13:00:00Z")
+        v.render(auth,true,listOf(replied,waiting,linked),0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844)
+        fun ids()=all(v).filterIsInstance<android.widget.ListView>().first().adapter.let{ad->(0 until ad.count).map{ad.getItemId(it)}}
+        assertEquals(listOf(-1L,2L,3L,-2L,1L),ids());assertFalse(all(v).filterIsInstance<android.widget.ListView>().first().adapter.isEnabled(0))
+        v.toggleLayout();assertEquals(listOf(1L,2L,3L),ids());v.render(auth,true,listOf(replied,waiting,linked),0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844);assertEquals(listOf(1L,2L,3L),ids())
+        v.toggleLayout();assertEquals(listOf(-1L,2L,3L,-2L,1L),ids())
     }
     @Test fun nativeScreensAndControls(){
         val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v)
@@ -82,7 +100,7 @@ class NativeInboxTest {
         val linked=(1L..3L).map{conv(it).put("pessoa","client-one").put("canal",listOf("whatsapp1","whatsapp2","instagram")[(it-1).toInt()]).put("ultima_em","2026-10-28T00:0${it}:00Z")}
         val unrelated=conv(4).put("pessoa","client-two").put("ultima_em","2026-10-28T00:02:30Z");val group=conv(5).put("grupo",1)
         v.render(auth,true,linked+unrelated+group,0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844)
-        fun ids()=all(v).filterIsInstance<android.widget.ListView>().first().adapter.let{ad->(0 until ad.count).map{ad.getItemId(it)}}
+        fun ids()=all(v).filterIsInstance<android.widget.ListView>().first().adapter.let{ad->(0 until ad.count).map{ad.getItemId(it)}.filter{it>0}}
         assertEquals(listOf(3L,2L,1L,4L),ids());assertFalse(all(v).filterIsInstance<Button>().any{it.tag=="Nos 2 WhatsApp"});assertTrue(all(v).filterIsInstance<Button>().first{it.tag=="Todas"}.text.startsWith("Todas · 2"));snapshot(v,"inbox-linked-channels",390,844)
         val newest=JSONObject(linked[0].toString()).put("ultima_em","2026-10-28T00:04:00Z");v.render(auth,true,listOf(newest)+linked.drop(1)+unrelated+group,0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844);assertEquals(listOf(1L,3L,2L,4L),ids())
         all(v).filterIsInstance<Button>().first{it.tag=="Grupos"}.performClick();assertTrue(ids().contains(5L))
@@ -185,7 +203,7 @@ class NativeInboxTest {
     }
     @Test fun inboxExplainsOrderAndUnreadFilterPreservesChronology(){
         val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v)
-        val auth=NativeAuth("88999990000","session","Pablo")
+        val auth=NativeAuth("88999990000","session","Pablo");a.getSharedPreferences("mensagens-visual",0).edit().putString("visual_"+auth.owner,"continua").commit()
         val old=conv(1).put("ultima_em","2026-10-26T03:00:00Z").put("nao_lidas",1)
         val recent=conv(2).put("ultima_em","2026-10-27T04:00:00Z").put("nao_lidas",0)
         val middle=conv(3).put("ultima_em","2026-10-27T03:00:00Z").put("nao_lidas",2).put("canal","whatsapp2")
@@ -232,7 +250,7 @@ class NativeInboxTest {
         assertTrue(all(v).filterIsInstance<Button>().first{it.text=="Enviar"}.isEnabled)
     }
     @Test fun selectionAndWaitingGroupFiltersRemainDistinct(){
-        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo")
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo");a.getSharedPreferences("mensagens-visual",0).edit().putString("visual_"+auth.owner,"continua").commit()
         val waiting=conv(1).put("grupo",0).put("ult_dir","entrada").put("nao_lidas",0)
         val group=conv(2).put("grupo",1).put("ult_dir","entrada")
         val answered=conv(3).put("grupo",0).put("ult_dir","saida")
@@ -315,7 +333,7 @@ class NativeInboxTest {
         val page=NativeRepository(a,store,api).older(1,msg(1001));assertEquals(100,page.size);assertEquals(901L,page.first().getLong("id"));assertTrue(query.contains("antesId=1001"));assertEquals(1000,store.messages(1).size);store.close()
     }
     @Test fun synchronizationWhileHoldingDoesNotCancelSelection(){
-        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo");val c=conv()
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo");a.getSharedPreferences("mensagens-visual",0).edit().putString("visual_"+auth.owner,"continua").commit();val c=conv()
         v.render(auth,true,listOf(c),0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844)
         val list=all(v).filterIsInstance<android.widget.ListView>().first();val now=android.os.SystemClock.uptimeMillis()
         list.dispatchTouchEvent(android.view.MotionEvent.obtain(now,now,android.view.MotionEvent.ACTION_DOWN,100f,20f,0))

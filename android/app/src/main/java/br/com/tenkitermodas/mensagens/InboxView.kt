@@ -16,6 +16,7 @@ import org.json.JSONObject
 class InboxView(private val activity:Activity,private val events:Events):LinearLayout(activity){
     interface Events {
         fun login(identifier:String,password:String)
+        fun interaction() {}
         fun sync()
         fun select(id:Long)
         fun back()
@@ -79,7 +80,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         auth=a;peeking=peek;chats=conversations;focus=id;messages=msgs;pending=outgoing;online=connected
         status(state)
         if(a==null||!canRead){if(viewKey!="login"){viewKey="login";showLogin(a!=null)};return}
-        val key=if(id>0)"chat:$id:${conversations.firstOrNull{it.optLong("id")==id}?.optString("canal")}:${conversations.firstOrNull{it.optLong("id")==id}?.optString("nome")}:${msgs.joinToString("|"){it.toString()}.hashCode()}:${outgoing.joinToString("|"){it.toString()}.hashCode()}:$connected:$peek:${conversations.firstOrNull{it.optLong("id")==id}?.optBoolean("local_has_more")}" else "list"
+        val key=if(id>0)"chat:$id:${conversations.firstOrNull{it.optLong("id")==id}?.optString("canal")}:${conversations.firstOrNull{it.optLong("id")==id}?.optString("nome")}:${msgs.joinToString("|"){it.toString()}.hashCode()}:${outgoing.joinToString("|"){it.toString()}.hashCode()}:$connected:$peek:${conversations.firstOrNull{it.optLong("id")==id}?.optBoolean("local_has_more")}" else "list:"+visualLista()
         if(viewKey!=key){
             val sameChat=viewKey.startsWith("chat:$id:")
             val keepFocus=chatInput?.hasFocus()==true&&sameChat
@@ -137,7 +138,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
             val handled=super.dispatchTouchEvent(e)
             if(e.actionMasked in listOf(android.view.MotionEvent.ACTION_UP,android.view.MotionEvent.ACTION_CANCEL)){listTouching=false;if(deferList){deferList=false;post{refreshList()}}}
             return handled
-        }}.apply{setOnItemLongClickListener{_,_,pos,_->selecting=true;toggle((adapter as ChatAdapter).items[pos].optLong("id"));true};dividerHeight=dp(1);adapter=adapter();setOnItemClickListener{_,_,pos,_->val c=(adapter as ChatAdapter).items[pos];if(selecting){toggle(c.optLong("id"))}else events.select(c.optLong("id"))}}
+        }}.apply{setOnItemLongClickListener{_,_,pos,_->val id=(adapter as ChatAdapter).conversationAt(pos)?.optLong("id")?:return@setOnItemLongClickListener false;selecting=true;toggle(id);true};dividerHeight=dp(1);adapter=adapter();setOnItemClickListener{_,_,pos,_->val c=(adapter as ChatAdapter).conversationAt(pos)?:return@setOnItemClickListener;if(selecting){toggle(c.optLong("id"))}else events.select(c.optLong("id"))}}
         val empty=text("Nenhuma conversa nesta seleção.\nTroque o filtro ou toque em ↻ para sincronizar.",15).apply{gravity=Gravity.CENTER;setPadding(dp(24),dp(24),dp(24),dp(24))}
         val frame=FrameLayout(activity);frame.addView(list,FrameLayout.LayoutParams(-1,-1));frame.addView(empty,FrameLayout.LayoutParams(-1,-1));list?.emptyView=empty
         body.addView(frame,LayoutParams(-1,0,1f));refreshList()
@@ -186,10 +187,22 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
     fun channelCode()=when(channel){"WhatsApp 1"->"whatsapp1";"WhatsApp 2"->"whatsapp2";"Instagram"->"instagram";else->""}
     fun beginSelection(){selecting=true;refreshList()}
     fun selectionDone(){selected.clear();selecting=false;refreshList()}
+    private fun visualLista()=activity.getSharedPreferences("mensagens-visual",0).getString("visual_"+(auth?.owner?:""),"dividida")?:"dividida"
+    fun layoutMenu()=if(visualLista()=="dividida")"Lista contínua (ordem atual)"else"Não respondidos primeiro"
+    fun toggleLayout(){val owner=auth?.owner?:return;val visual=if(visualLista()=="dividida")"continua"else"dividida";activity.getSharedPreferences("mensagens-visual",0).edit().putString("visual_"+owner,visual).apply();if(list?.isShown==true){refreshList();list?.setSelection(0)};WebKeeper.refresh()}
     private inner class ChatAdapter(val items:List<JSONObject>):BaseAdapter(){
-        override fun getCount()=items.size;override fun getItem(position:Int)=items[position];override fun getItemId(position:Int)=items[position].optLong("id")
+        private val rows:List<JSONObject> = if(visualLista()=="dividida"&&mode!="Encerradas"){
+            val blocks=InboxRules.blocks(items);val out=mutableListOf<JSONObject>();listOf(true,false).forEach{waiting->val selected=blocks.filter{block->block.any{InboxRules.waiting(it)}==waiting};if(selected.isNotEmpty()){out.add(JSONObject().put("id",if(waiting)-1 else -2).put("__section",(if(waiting)"Aguardando resposta da loja"else"Demais conversas")+" · "+selected.size+" clientes"));out.addAll(selected.flatten())}};out
+        }else items
+        fun conversationAt(position:Int)=rows.getOrNull(position)?.takeUnless{it.has("__section")}
+        override fun getCount()=rows.size;override fun getItem(position:Int)=rows[position];override fun getItemId(position:Int)=rows[position].optLong("id")
+        override fun areAllItemsEnabled()=false
+        override fun isEnabled(position:Int)=!rows[position].has("__section")
+        override fun getViewTypeCount()=2
+        override fun getItemViewType(position:Int)=if(rows[position].has("__section"))1 else 0
         override fun getView(position:Int,convert:View?,parent:android.view.ViewGroup?):View {
-            val c=items[position];val id=c.optLong("id");val unread=c.optInt("nao_lidas");val compact=c.optBoolean("_child")
+            val c=rows[position];if(c.has("__section"))return text(c.getString("__section"),13,true,Color.rgb(54,58,48)).apply{minHeight=dp(44);setPadding(dp(12),dp(8),dp(12),dp(8));setBackgroundColor(cream);androidx.core.view.ViewCompat.setAccessibilityHeading(this,true)}
+            val id=c.optLong("id");val unread=c.optInt("nao_lidas");val compact=c.optBoolean("_child")
             fun choose(){if(selecting)toggle(id)else events.select(id)}
             fun hold():Boolean{selecting=true;toggle(id);return true}
             val row=LinearLayout(activity).apply{tag="conversation-$id";setOnClickListener{choose()};setOnLongClickListener{hold()};gravity=Gravity.CENTER_VERTICAL;minimumHeight=dp(if(compact)72 else 104);setPadding(dp(if(compact)40 else 12),dp(8),dp(8),dp(8));background=rounded(if(id in selected)cream else if(compact)Color.rgb(249,247,242)else Color.WHITE,0)}
@@ -242,6 +255,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         fun bubble(msg:JSONObject,state:String?=null){
             val outgoing=state!=null||msg.optString("direcao")=="saida"
             val box=LinearLayout(activity).apply{orientation=VERTICAL;background=rounded(if(outgoing)Color.rgb(216,243,227)else Color.WHITE,12);setPadding(dp(12),dp(8),dp(12),dp(8))}
+            if(msg.optInt("cortesia")==1){box.addView(text("Cortesia · atendimento mantido encerrado",12,false,Color.rgb(91,87,80)));box.addView(button("Revisar no atendimento completo"){events.full(focus)},LayoutParams(-1,dp(48)))}else if(msg.optInt("retorno")==1)box.addView(text("Retorno ao atendimento anterior",12,false,Color.rgb(91,87,80)))
             var value=InboxRules.clean(msg,"texto");val type=msg.optString("tipo","texto");val media=msg.optInt("midia")>0||type in listOf("imagem","vídeo","áudio","video","audio","figurinha","documento")
             if(media)value="[${type}] · toque para abrir o anexo"+(if(value.isBlank())""else"\n$value")
             if(!outgoing&&c!=null&&InboxRules.group(c))box.addView(text(msg.optString("autor_nome").ifBlank{msg.optString("autor_fone","Participante")},12,true,orange))
@@ -290,7 +304,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         val preferences=activity.getSharedPreferences("link-preview",0)
         val preview=CheckBox(activity).apply{text="Mostrar prévia do link (miniatura)";minHeight=dp(48);textSize=14f;isChecked=preferences.getBoolean(channel,false);setOnCheckedChangeListener{_,checked->preferences.edit().putBoolean(channel,checked).apply()}}
         fun updatePreview(){preview.visibility=if(channel.startsWith("whatsapp")&&Regex("https?://[^\\s<>\"']+",RegexOption.IGNORE_CASE).containsMatchIn(input.text))View.VISIBLE else View.GONE}
-        input.addTextChangedListener(object:TextWatcher{override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){};override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){updatePreview()};override fun afterTextChanged(e:Editable?) {}})
+        input.addTextChangedListener(object:TextWatcher{override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){};override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){updatePreview();if(input.hasFocus()&&input.isShown)events.interaction()};override fun afterTextChanged(e:Editable?) {}})
         updatePreview();body.addView(preview,LayoutParams(-1,-2))
         compose.addView(ImageButton(activity).apply{setImageResource(android.R.drawable.ic_btn_speak_now);contentDescription="Gravar áudio";background=rounded(cream,24);isEnabled=online;setOnClickListener{events.tool(focus,"gravar")}},LayoutParams(dp(48),dp(48)))
         compose.addView(button("Enviar"){val t=input.text.toString().trim();if(t.isNotBlank()&&online&&!peeking){if(events.send(focus,t)){drafts[focus]="";input.text.clear()}}}.apply{isEnabled=online&&!peeking;setTextColor(if(online)Color.WHITE else Color.GRAY);background=rounded(if(online)orange else cream,24)},LayoutParams(-2,dp(48)));body.addView(compose)
