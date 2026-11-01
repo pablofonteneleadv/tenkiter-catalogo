@@ -6,6 +6,12 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.45] - 2026-11-01
+
+- Mensageiro com topo e seções compactos, filtros sob demanda e indicação dos filtros ativos; responsável e histórico deixam de disputar espaço com o telefone.
+- Homônimos mantêm o telefone visível para identificação; detalhes completos seguem na conversa. A ordem da fila e a alternância de layouts permanecem iguais.
+- No APK, a navegação web respeita a área já reservada pela Activity, evitando uma segunda reserva inferior. Conteúdo remoto, sem novo APK.
+
 ## [7.40.44] - 2026-11-01
 
 - Histórico de relacionamento discreto nos cards e conversas para o atendente, no site e APK; detalhes distinguem ocorrências registradas dos eventos que contam para a nota.

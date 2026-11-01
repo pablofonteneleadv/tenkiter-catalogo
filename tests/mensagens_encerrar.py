@@ -1,3 +1,4 @@
+from mensagens_filtros import aplicar, valor
 """Mensagens v7.22: número ao lado do nome, a mesma pessoa nos 2 WhatsApp (etiqueta, faixa e filtro "Nos 2 WhatsApp"),
 encerrar uma ou várias conversas (seleção pelo menu ou segurando o dedo), filtro Encerradas, reabrir e volta automática.
 Serviços simulados (mock_msg.py)."""
@@ -53,20 +54,22 @@ with sync_playwright() as p:
 
     # ---- mesma pessoa nos 2 WhatsApp ----
     # v7.40.35: o canal deixou de ser aba e virou o select #ms-filtro-canal (filtro).
-    chip = pg.locator("#ms-filtro-canal")
-    opcoes = pg.evaluate("(s)=>[...document.querySelectorAll(s+' option')].map(o=>o.value)", "#ms-filtro-canal")
+    pg.click("#ms-btn-filtros")
+    chip = pg.locator("[name=ms-ft-canal]")
+    opcoes = pg.evaluate("(s)=>[...document.querySelectorAll(s+' option')].map(o=>o.value)", "[name=ms-ft-canal]")
     chk("o filtro de canal oferece todos os canais", opcoes == ["todos", "whatsapp1", "whatsapp2", "instagram"], opcoes)
+    pg.keyboard.press("Escape");pg.wait_for_selector("#ms-gaveta",state="detached")
     t1 = pg.locator("#ms-lista .ms-conv[data-id='1'] .ms-ambos-tag").text_content() or ""
     t7 = pg.locator("#ms-lista .ms-conv[data-id='7'] .ms-ambos-tag").text_content() or ""
     chk("cada conversa da pessoa avisa o outro número", t1 == "Também no WhatsApp 2" and t7 == "Também no WhatsApp 1", [t1, t7])
     chk("quem fala só por um número não tem o aviso", pg.locator("#ms-lista .ms-ambos-tag").count() == 2)
     foto(pg, "01-lista-numero-e-ambos.png")
     # "Todos os canais" mostra as duas conversas da Maria (1 e 7) juntas
-    pg.select_option("#ms-filtro-canal", "todos"); pg.wait_for_timeout(600)
+    aplicar(pg,canal='todos'); pg.wait_for_timeout(600)
     chk("em Todos os canais, as duas conversas da Maria aparecem", {1, 7} <= set(pg.evaluate(IDS)), pg.evaluate(IDS))
-    pg.select_option("#ms-filtro-canal", "whatsapp1"); pg.wait_for_timeout(600)
+    aplicar(pg,canal='whatsapp1'); pg.wait_for_timeout(600)
     chk("filtrando WhatsApp 1, a conversa 7 (WhatsApp 2) sai", 7 not in pg.evaluate(IDS), pg.evaluate(IDS))
-    pg.select_option("#ms-filtro-canal", "todos"); pg.wait_for_timeout(600)
+    aplicar(pg,canal='todos'); pg.wait_for_timeout(600)
     pg.click("#ms-lista .ms-conv[data-id='1']"); pg.wait_for_selector(".ms-faixa.ambos", timeout=4000); pg.wait_for_timeout(300)
     chk("na conversa, faixa avisa que a pessoa também fala pelo outro número", "também está falando pelo WhatsApp 2" in (pg.locator(".ms-faixa.ambos").text_content() or ""))
     axe(pg, "conversa com a faixa 'nos 2 WhatsApp'")
@@ -99,7 +102,7 @@ with sync_playwright() as p:
     chk("'Encerrar' manda as selecionadas de uma vez", sorted(ult.get("ids", [])) == [2, 4] and ult.get("reabrir") is False, ult)
     ids = pg.evaluate(IDS)
     chk("encerradas saem da lista e a barra some", 2 not in ids and 4 not in ids and not pg.locator("#ms-selbar").is_visible(), ids)
-    chk("aviso explica que voltam sozinhas", "voltam sozinhas se o cliente escrever" in (pg.locator("#ms-aviso").text_content() or ""))
+    chk("aviso respeita retorno e cortesia configurados", "conforme as regras de retorno e cortesia da loja" in (pg.locator("#ms-aviso").text_content() or ""))
     # v7.40.35: Encerrados é uma ABA (a contagem fica no aria-label)
     rot = pg.locator('#ms-abas .ms-aba[data-aba="encerrados"]').get_attribute("aria-label") or ""
     chk("aba Encerrados mostra a contagem", "2 conversas" in rot, rot)

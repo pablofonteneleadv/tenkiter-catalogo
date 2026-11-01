@@ -1,3 +1,4 @@
+from mensagens_filtros import aplicar, valor
 """Jornada do painel de Mensagens em ABAS (v7.40.35).
 
 Cobre o fluxo pedido, em 320/390/1440 com axe:
@@ -128,22 +129,24 @@ with sync_playwright() as p:
     chk('aba tem papel de tablist/tab', pg.locator('#ms-abas').get_attribute('role') == 'tablist' and pg.locator('#ms-abas .ms-aba').first.get_attribute('role') == 'tab')
 
     # ---------- 2. Em atendimento: Todos / Só meus + Só não respondidos ----------
-    chk('Em atendimento tem filtro de escopo', pg.locator('#ms-atendimento-escopo').count() == 1)
-    chk('Em atendimento tem o atalho "Só não respondidos"', pg.locator('#ms-so-nao-respondidos').count() == 1)
+    pg.click('#ms-btn-filtros')
+    chk('Em atendimento tem filtro de escopo', pg.locator('[name=ms-ft-escopo]').count() == 1)
+    chk('Em atendimento tem o atalho "Só não respondidos"', pg.locator('[name=ms-ft-resposta]').count() == 1)
+    pg.keyboard.press('Escape');pg.wait_for_selector('#ms-gaveta',state='detached')
     n_todos = pg.locator('#ms-lista .ms-conv').count()
-    pg.select_option('#ms-atendimento-escopo', 'meus')
+    aplicar(pg,escopo='meus')
     pg.wait_for_timeout(700)
     n_meus = pg.locator('#ms-lista .ms-conv').count()
     chk('Só meus devolve o que é do atendente', n_meus >= 1 and n_meus <= n_todos, '%s/%s' % (n_meus, n_todos))
     consultas = st['ig']['msg'].get('consultas', [])
     chk('escopo=meus chegou ao Worker', any(c.get('escopo') == 'meus' for c in consultas), consultas[-1:] if consultas else '')
-    pg.select_option('#ms-atendimento-escopo', 'todos')
+    aplicar(pg,escopo='todos')
     pg.wait_for_timeout(600)
-    pg.click('#ms-so-nao-respondidos')
+    aplicar(pg,resposta=True)
     pg.wait_for_timeout(700)
-    chk('atalho "Só não respondidos" fica pressionado', pg.locator('#ms-so-nao-respondidos').get_attribute('aria-pressed') == 'true')
+    chk('atalho "Só não respondidos" fica pressionado', 'Não respondidos' in pg.inner_text('#ms-filtros'))
     chk('atalho manda filtro=resultado ao Worker', any(c.get('filtro') == 'sem_resposta' for c in st['ig']['msg'].get('consultas', [])))
-    pg.click('#ms-so-nao-respondidos')
+    aplicar(pg,resposta=False)
     pg.wait_for_timeout(600)
 
     # ---------- 3. Pendentes: espiar e Atender ----------
@@ -190,7 +193,7 @@ with sync_playwright() as p:
     ir(pg, 'todos')
     consultas = st['ig']['msg'].get('consultas', [])
     chk('Todos não pede fila (mostra não encerradas)', consultas and consultas[-1].get('fila') == '', consultas[-1:] if consultas else '')
-    chk('Todos tem o seletor de canal (filtro antigo preservado)', pg.locator('#ms-filtro-canal').count() == 1)
+    chk('Todos tem o seletor de canal (filtro antigo preservado)', valor(pg,'canal') == 'todos')
 
     # ---------- 5. Encerrados: histórico ----------
     ir(pg, 'encerrados')

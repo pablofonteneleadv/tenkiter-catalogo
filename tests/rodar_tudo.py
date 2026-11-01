@@ -146,6 +146,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("worker_gestor.js", lambda o: "OK: gestor Admin total" in o),
     ("worker_fila_originais.js", lambda o: "OK: três originais" in o),
     ("mensagens_relacionamento_ui.py", lambda o: "OK 1440" in o),
+    ("mensagens_layout_compacto.py", lambda o: "OK 1440" in o),
     ("mensagens_lista_secoes_ui.py", lambda o: "OK 1440" in o),
     ("tempo_presenca_ui.py", lambda o: "OK: interação" in o),
     ("mensagens_gestor_ui.py", lambda o: "OK 1440" in o),

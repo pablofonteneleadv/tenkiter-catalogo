@@ -37,11 +37,11 @@
 
 .ms-cortesia-info{display:block;font-size:12px;line-height:1.4;color:#625c53;margin:4px 0}.ms-bolha .ms-btn[data-ms=cortesia-rever]{min-height:48px;white-space:normal}
 
-#ms-lista>.ms-lista-secao{list-style:none;padding:10px 16px;background:#f4f2ec;border-bottom:1px solid #ded9cf}#ms-lista>.ms-lista-secao h3{font:600 13px/1.4 Inter,Arial,sans-serif;color:#363a30;margin:0}#ms-lista>.ms-lista-secao small{display:block;font-size:12px;font-weight:400;color:#59594f;margin-top:2px}.ms-mais-item[aria-pressed=true]{font-weight:600}
+#ms-lista>.ms-lista-secao{list-style:none;padding:8px 4px;background:#faf9f5;border-bottom:1px solid #ded9cf}#ms-lista>.ms-lista-secao h3{font:600 13px/1.4 Inter,Arial,sans-serif;color:#363a30;margin:0}#ms-lista>.ms-lista-secao small{display:inline;font-size:12px;font-weight:400;color:#59594f;margin:0}.ms-mais-item[aria-pressed=true]{font-weight:600}
 
 #tk-gestor textarea{font:inherit;color:#292b25;width:100%;max-width:100%;min-height:120px;border:1px solid #aaa99d;border-radius:8px;padding:12px;resize:vertical}#tk-gestor .tg-check{display:flex;align-items:center;gap:12px;min-height:48px;line-height:1.4}#tk-gestor .tg-check input{flex:none;width:24px;height:24px;min-height:24px;accent-color:#292b25}
 
 /* Indicador de relacionamento ocupa a linha existente; detalhes só sob demanda. */
-.ms-relacionamento-mini{display:inline-block;font-size:11px;font-weight:600;color:#625c53;white-space:nowrap}.ms-cab>.ms-relacionamento-abrir{flex:none;min-height:44px;min-width:64px;max-width:84px;padding:4px;font:500 11px/1.3 Inter,Arial,sans-serif;color:#625c53;background:transparent;border:1px solid #d7d2c7;border-radius:8px;white-space:nowrap}.ms-relacionamento-abrir:focus-visible{outline:2px solid #292b25;outline-offset:2px}.ms-relacionamento-ajuda{font-size:13px;line-height:1.5;color:#625c53}.ms-relacionamento-evento{font-weight:600}.ms-gaveta[data-tipo=relacionamento] summary{min-height:48px;padding:12px 0;cursor:pointer;list-style-position:inside}
+.ms-relacionamento-mini{display:inline-block;font-size:.6875rem;font-weight:600;color:#625c53;white-space:nowrap}.ms-cab>.ms-relacionamento-abrir{flex:none;min-height:44px;min-width:64px;max-width:84px;padding:4px;font:500 11px/1.3 Inter,Arial,sans-serif;color:#625c53;background:transparent;border:1px solid #d7d2c7;border-radius:8px;white-space:nowrap}.ms-relacionamento-abrir:focus-visible{outline:2px solid #292b25;outline-offset:2px}.ms-relacionamento-ajuda{font-size:13px;line-height:1.5;color:#625c53}.ms-relacionamento-evento{font-weight:600}.ms-gaveta[data-tipo=relacionamento] summary{min-height:48px;padding:12px 0;cursor:pointer;list-style-position:inside}
 
 @media(max-width:580px){.ms-cab.ms-com-relacionamento>.ms-av{display:none}}

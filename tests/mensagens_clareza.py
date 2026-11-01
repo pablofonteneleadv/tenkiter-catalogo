@@ -17,8 +17,8 @@ with sync_playwright() as p:
   # v7.40.35: as filas viraram ABAS (4) e o canal virou filtro; na barra de filtros
   # sobra o atalho "So nao respondidos" ao lado dos dois seletores.
   assert pg.locator('#ms-abas .ms-aba').count()==4
-  assert pg.locator('#ms-filtros button').count()==1
-  assert pg.locator('#ms-filtros select').count()==2
+  assert pg.locator('#ms-filtros').is_hidden()
+  pg.click('#ms-btn-filtros');assert pg.locator('[name=ms-ft-canal]').count()==1;assert pg.locator('[name=ms-ft-escopo]').count()==1;pg.keyboard.press('Escape');pg.wait_for_selector('#ms-gaveta',state='detached')
   assert pg.locator('#ms-abas .ms-aba[aria-selected=true]').evaluate("e=>{const c=getComputedStyle(e,'::after').backgroundColor.match(/[0-9.]+/g).slice(0,3).map(x=>{const v=Number(x)/255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4});return 1.05/(c[0]*.2126+c[1]*.7152+c[2]*.0722+.05)>=3}")  # Indicador selecionado distinguível no fundo branco.
 
   for zoom in [100,130]:
