@@ -2,6 +2,12 @@
 
 <!-- Descreva a mudança em 1-3 frases. Se resolve um item do plano de ação, cite o ID (ex.: INFRA-02). -->
 
+## Graphify
+
+<!-- Registre uma consulta curta útil, o fluxo/impacto encontrado e eventuais limites. Não cole o grafo completo. -->
+
+- [ ] Preparei/atualizei o grafo local e consultei o assunto; confirmei os trechos nas fontes (ou registrei por que o Graphify estava indisponível)
+
 ## Checklist
 
 - [ ] Rodei `bash scripts/ci/check_secrets.sh` e não há credencial em texto plano

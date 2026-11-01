@@ -42,6 +42,7 @@ jobs:
     name: Escopo do PR
     runs-on: ubuntu-24.04
     outputs:
+      graphify_alterado: ${{ steps.calc.outputs.graphify_alterado }}
       so_docs: ${{ steps.calc.outputs.so_docs }}
       suite_completa: ${{ steps.calc.outputs.suite_completa }}
     steps:
@@ -62,6 +63,20 @@ jobs:
           else
             echo "so_docs=false" >> "$GITHUB_OUTPUT"
           fi
+
+          # Teste real do indexador só quando seu contrato muda ou na suíte completa.
+          # Não cria dependência de instalação do Graphify para todo reparo do produto.
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            files=$(git diff --name-only HEAD^ HEAD)
+          fi
+          graphify_alterado=false
+          if echo "$files" | grep -Eq '^(scripts/graphify/|scripts/ci/check_graphify\.py$|tests/graphify_automatico\.py$|\.graphifyignore$|\.gitignore$|AGENTS\.md$|CLAUDE\.md$|GEMINI\.md$|docs/ia/|\.(agents|claude|codex)/skills/graphify/|\.claude/(hooks/graphify-session\.sh|settings\.json)$|\.cursor/|\.github/(copilot-instructions\.md|workflows/(ci|copilot-setup-steps)\.yml)$)'; then
+            graphify_alterado=true
+          fi
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.suite }}" = "completo" ]; then
+            graphify_alterado=true
+          fi
+          echo "graphify_alterado=$graphify_alterado" >> "$GITHUB_OUTPUT"
 
           suite="rapido"
           if [ "${{ github.event_name }}" = "schedule" ]; then
@@ -96,6 +111,8 @@ jobs:
         run: python3 scripts/ci/check_html.py
       - name: Skill obrigatória de estética humana
         run: python3 scripts/ci/check_ux_skill.py
+      - name: Contrato de onboarding Graphify
+        run: python3 scripts/ci/check_graphify.py
       - name: Variáveis dos Workers declaradas (wrangler.toml)
         run: python3 scripts/ci/check_workers.py
       - name: Sintaxe dos scripts de deploy e CI
@@ -282,10 +299,30 @@ jobs:
         if: needs.escopo.outputs.suite_completa == 'true'
         run: python3 tests/rodar_tudo.py
 
+
+  graphify:
+    name: Graphify local e onboarding das IAs
+    needs: escopo
+    if: needs.escopo.outputs.graphify_alterado == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Conferir instruções e preservar segurança
+        run: python3 scripts/ci/check_graphify.py
+      - name: Testar cache, atualização e privacidade com Graphify real
+        run: python3 tests/graphify_automatico.py
+      - name: Preparar e consultar o mapa do projeto sem LLM
+        run: |
+          python3 scripts/graphify/manage.py start
+          python3 scripts/graphify/manage.py query "common.js" --budget 600
+
   portao:
     name: Portão de qualidade
     runs-on: ubuntu-24.04
-    needs: [escopo, segredos, estatico, testes]
+    needs: [escopo, segredos, estatico, testes, graphify]
     if: always()
     steps:
       - name: Conferir resultado
@@ -300,6 +337,16 @@ jobs:
             echo "::error::Validação estática falhou."
             falhou=1
           fi
+          if [ "${{ needs.escopo.result }}" != "success" ]; then
+            echo "::error::Cálculo de escopo falhou."
+            falhou=1
+          fi
+          if [ "${{ needs.escopo.outputs.graphify_alterado }}" = "false" ] && [ "${{ needs.graphify.result }}" = "skipped" ]; then
+            echo "Indexador sem mudanças: teste dinâmico dispensado; contrato estático conferido."
+          elif [ "${{ needs.graphify.result }}" != "success" ]; then
+            echo "::error::Graphify/onboarding falhou."
+            falhou=1
+          fi
           if [ "${{ needs.escopo.outputs.so_docs }}" = "true" ] && [ "${{ needs.testes.result }}" = "skipped" ]; then
             echo "PR só com Markdown: testes de código dispensados."
           elif [ "${{ needs.testes.result }}" != "success" ]; then
@@ -307,4 +354,4 @@ jobs:
             falhou=1
           fi
           if [ "$falhou" != "0" ]; then exit 1; fi
-          echo "Portão aprovado: segredos, validação estática e suíte aplicável."
+          echo "Portão aprovado: segredos, validação estática, Graphify e suíte aplicável."
