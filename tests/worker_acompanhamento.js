@@ -89,7 +89,7 @@ const data=await painel('?status=pendentes&busca=Limite&de=2026-11-03&ate=2026-1
 assert.equal((await painel('?status=inventado')).status,400);assert.equal((await painel('?cursor=invalido')).status,400);assert.equal((await painel('?de=2026-02-31')).status,400);
 // Fila: só resposta humana confirmada inicia; leitura e bot não movem; reaberta volta em atendimento.
 sqlite.exec("INSERT INTO msg_conversa(id,canal,contato,nome,total,grupo,ultima_em) VALUES(600,'whatsapp1','5588991230011','Fila nova',1,0,'2026-11-03T12:00:00Z')");
-const fila=async(q)=>{const r=await W.default.fetch(new Request('https://worker.test/msg/conversas?canal=todos&busca=Fila%20nova&'+q,{headers}),env,{});return {status:r.status,j:await r.json()}};
+const fila=async(q)=>{const r=await W.default.fetch(new Request('https://worker.test/msg/conversas?canal=todos&'+q,{headers}),env,{});const j=await r.json();if(Array.isArray(j.conversas))j.conversas=j.conversas.filter(c=>c.id===600);return {status:r.status,j}};
 assert.equal((await fila('fila=esperando')).j.conversas.length,1);assert.equal((await fila('fila=em_atendimento')).j.conversas.length,0);
 sqlite.exec("INSERT INTO msg_mensagem(conversa_id,canal,ext_id,direcao,tipo,texto,por,status,enviada_em) VALUES(600,'whatsapp1','bot-fila','saida','texto','Olá','auto','enviada','2026-11-03T12:01:00Z')");
 assert.equal((await fila('fila=esperando')).j.conversas.length,1,'Bot não inicia atendimento');

@@ -57,6 +57,7 @@ ETQ_PADRAO = [{"id": i + 1, "nome": n, "cor": c, "venda": v, "ordem": i, "pessoa
 def pessoa(c):
     """v7.22: mesma regra do Worker (número sem o 9º dígito); grupo e Instagram não entram."""
     if c.get("pessoa"): return c["pessoa"]
+    if c.get("pessoa_teste"): return c["pessoa_teste"]
     n = c["contato"]
     if c["grupo"] or c["canal"] == "instagram" or not n.isdigit(): return ""
     return n[:4] + n[5:] if len(n) == 13 and n.startswith("55") and n[4] == "9" else n
@@ -69,7 +70,8 @@ def enfeitar(s, c):
     c.setdefault("atendido_em", "")
     # v7.40.35: quem manda para Em atendimento e o gesto "Atender" (atendido_em),
     # nao o campo dono — assumir sozinho nao tira a conversa da fila.
-    c["em_atendimento"] = 1 if c["atendido_em"] else 0
+    c["em_atendimento"] = 1 if c["grupo"] or c["atendido_em"] else 0
+    if c["grupo"]: c["encerrada_em"]=""
     c["reaberta_em"] = c.get("reaberta_em", "")
     p = pessoa(c)
     c["pessoa"] = p
@@ -84,7 +86,7 @@ def cont(s, canal, tipo=""):
     return {"conversas": len(cs), "nao_lidas": sum(1 for c in cs if c["nao_lidas"] > 0), "sem_resposta": sum(1 for c in cs if not c["grupo"] and c["ult_dir"] == "entrada"), "grupos": sum(1 for c in cs if c["grupo"]),
             "encerradas": len(todas) - len(cs), "ambos": sum(1 for c in cs if c["outro_id"]), "individuais": len(indiv),
             # v7.40.35: abas do fluxo
-            "em_atendimento": sum(1 for c in indiv if c.get("em_atendimento")), "esperando": sum(1 for c in indiv if not c.get("em_atendimento"))}
+            "em_atendimento": sum(1 for c in indiv if c.get("em_atendimento")), "esperando": sum(1 for c in indiv if not c.get("em_atendimento")),"esperando_desde":min([c.get("ult_entrada_em") or c.get("ultima_em","") for c in indiv if not c.get("em_atendimento")],default=""),"meta_resposta_min":15}
 
 def agendas(s, cid):
     ag = [x for x in s.get("agenda", []) if x["conversa_id"] == cid]
@@ -157,6 +159,7 @@ def tratar(route, path, method, body, s):
         return J({"ok": True, "canais": canais, "urlInstagram": "https://tenkiter-ig.example/wh/instagram/SEGREDO" if s["ig_pronto"] else ""}) or True
     if path == "/msg/conversas":
         c = q.get("canal"); f = q.get("filtro", ""); b = (q.get("busca") or "").lower(); tp = q.get("tipo", "")
+        if b: c="todos";f="";tp=""
         s.setdefault("consultas", []).append({"canal": c, "filtro": f, "tipo": tp, "etiqueta": q.get("etiqueta", ""),"fila":q.get("fila",""),"escopo":q.get("escopo","todos")})
         rs = [enfeitar(s, x) for x in s["convs"] if (c == "todos" or x["canal"] == c) and x["total"] > 0]
         if f == "encerradas": rs = [x for x in rs if x["encerrada_em"]]
@@ -168,11 +171,14 @@ def tratar(route, path, method, body, s):
         if f == "sem_resposta": rs = [x for x in rs if not x["grupo"] and x["ult_dir"] == "entrada"]
         if f == "grupos" or tp == "grupo": rs = [x for x in rs if x["grupo"]]
         if tp == "individual": rs = [x for x in rs if not x["grupo"]]
-        if q.get("fila") and all("em_atendimento" in x for x in s["convs"]) and tp!="grupo" and f!="encerradas":
-            rs=[x for x in rs if not x["grupo"] and not x["encerrada_em"] and bool(x["em_atendimento"])==(q["fila"]=="em_atendimento")]
-            if q["fila"]=="em_atendimento" and q.get("escopo")=="meus":rs=[x for x in rs if x.get("dono")=="Pablo"]
-        if q.get("etiqueta"): rs = [x for x in rs if any(str(e["id"]) == q["etiqueta"] for e in x.get("etiquetas", []))]
-        if b: rs = [x for x in rs if b in (x["nome"] + x["contato"] + x["previa"]).lower() or any(b in mm["texto"].lower() for mm in s["msgs"] if mm["conversa_id"] == x["id"])]
+        if not b and q.get("fila") and all("em_atendimento" in x for x in s["convs"]) and tp!="grupo" and f!="encerradas":
+            rs=[x for x in rs if (x["grupo"] and q["fila"]=="em_atendimento") or (not x["grupo"] and not x["encerrada_em"] and bool(x["em_atendimento"])==(q["fila"]=="em_atendimento"))]
+            if q["fila"]=="em_atendimento" and q.get("escopo")=="meus":rs=[x for x in rs if x["grupo"] or x.get("dono")=="Pablo"]
+        if not b and q.get("etiqueta"): rs = [x for x in rs if any(str(e["id"]) == q["etiqueta"] for e in x.get("etiquetas", []))]
+        if b:
+            hits=[x for x in rs if b in (x["nome"]+x["contato"]+x["previa"]).lower() or any(b in mm["texto"].lower() for mm in s["msgs"] if mm["conversa_id"]==x["id"])]
+            keys={pessoa(x) or 'c:'+str(x['id']) for x in hits}
+            rs=[x for x in rs if (pessoa(x) or 'c:'+str(x['id'])) in keys]
         rs = sorted(rs, key=lambda x: x["ultima_em"], reverse=True)
         g = cont(s, c)
         return J({"ok": True, "conversas": rs, "contagens": cont(s, c, tp), "tipos": {"individuais": g["individuais"], "grupos": g["grupos"]}, "cursor": agora()}) or True
