@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## [7.40.44] - 2026-11-01
+
+- Histórico de relacionamento discreto nos cards e conversas para o atendente, no site e APK; detalhes distinguem ocorrências registradas dos eventos que contam para a nota.
+- A ordem da fila e as regras de pontuação permanecem iguais.
+
 ## [7.40.43] - 2026-11-01
 
 - Gestão com tempos observados, disponibilidade, filtros de espera e ações sem contar entradas no aplicativo.

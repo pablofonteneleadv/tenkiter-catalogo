@@ -183,6 +183,7 @@ jobs:
           node tests/worker_gestor.js
           node tests/worker_tempo_atendimento.js
           node tests/worker_prioridade_clientes.js
+          node tests/worker_relacionamento_atendente.js
           node tests/worker_encerramento_regras.js
 
       - name: Eventos de mensagens no runtime Cloudflare local
@@ -241,6 +242,7 @@ jobs:
           python3 tests/mensagens_gestor_ui.py
           python3 tests/tempo_presenca_ui.py
           python3 tests/mensagens_lista_secoes_ui.py
+          python3 tests/mensagens_relacionamento_ui.py
           python3 tests/postagens_video_status.py
           python3 tests/video_upload_feedback.py
           python3 tests/video_lote_limites.py
