@@ -203,7 +203,7 @@ class NativeInboxTest {
     }
     @Test fun inboxExplainsOrderAndUnreadFilterPreservesChronology(){
         val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v)
-        val auth=NativeAuth("88999990000","session","Pablo")
+        val auth=NativeAuth("88999990000","session","Pablo");a.getSharedPreferences("mensagens-visual",0).edit().putString("visual_"+auth.owner,"continua").commit()
         val old=conv(1).put("ultima_em","2026-10-26T03:00:00Z").put("nao_lidas",1)
         val recent=conv(2).put("ultima_em","2026-10-27T04:00:00Z").put("nao_lidas",0)
         val middle=conv(3).put("ultima_em","2026-10-27T03:00:00Z").put("nao_lidas",2).put("canal","whatsapp2")
@@ -250,7 +250,7 @@ class NativeInboxTest {
         assertTrue(all(v).filterIsInstance<Button>().first{it.text=="Enviar"}.isEnabled)
     }
     @Test fun selectionAndWaitingGroupFiltersRemainDistinct(){
-        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo")
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo");a.getSharedPreferences("mensagens-visual",0).edit().putString("visual_"+auth.owner,"continua").commit()
         val waiting=conv(1).put("grupo",0).put("ult_dir","entrada").put("nao_lidas",0)
         val group=conv(2).put("grupo",1).put("ult_dir","entrada")
         val answered=conv(3).put("grupo",0).put("ult_dir","saida")
@@ -333,7 +333,7 @@ class NativeInboxTest {
         val page=NativeRepository(a,store,api).older(1,msg(1001));assertEquals(100,page.size);assertEquals(901L,page.first().getLong("id"));assertTrue(query.contains("antesId=1001"));assertEquals(1000,store.messages(1).size);store.close()
     }
     @Test fun synchronizationWhileHoldingDoesNotCancelSelection(){
-        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo");val c=conv()
+        val a=activity;val events=Events();val v=InboxView(a,events);a.setContentView(v);val auth=NativeAuth("88999990000","session","Pablo");a.getSharedPreferences("mensagens-visual",0).edit().putString("visual_"+auth.owner,"continua").commit();val c=conv()
         v.render(auth,true,listOf(c),0,emptyList(),emptyList(),true,"Atualizado");layout(v,390,844)
         val list=all(v).filterIsInstance<android.widget.ListView>().first();val now=android.os.SystemClock.uptimeMillis()
         list.dispatchTouchEvent(android.view.MotionEvent.obtain(now,now,android.view.MotionEvent.ACTION_DOWN,100f,20f,0))
