@@ -37,6 +37,8 @@ object InboxRules {
             else->true
         }
     }
+    fun relationshipLabel(c:JSONObject):String {val r=c.optJSONObject("relacionamento");return if(r!=null&&r.has("pontos"))"Hist. ${r.optInt("pontos")}"else"Histórico"}
+    fun closureLabel(reason:String)=when(reason){"vendeu"->"Vendeu no atendimento";"concluido"->"Concluído";"sem_resposta"->"Cliente parou de responder";"engano"->"Engano ou spam";else->"Encerramento registrado"}
     fun signature(a:NativeAuth,c:JSONObject?,config:JSONObject,text:String):String {
         if(text.isBlank()||config.optJSONObject("config")?.optBoolean("assinatura",true)==false)return text
         val name=config.optString("meuNome").ifBlank{a.name.trim().substringBefore(' ').let{if(it==it.uppercase())it.lowercase().replaceFirstChar(Char::uppercaseChar)else it}}

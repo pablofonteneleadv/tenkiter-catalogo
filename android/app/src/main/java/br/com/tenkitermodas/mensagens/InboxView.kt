@@ -80,7 +80,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
         auth=a;peeking=peek;chats=conversations;focus=id;messages=msgs;pending=outgoing;online=connected
         status(state)
         if(a==null||!canRead){if(viewKey!="login"){viewKey="login";showLogin(a!=null)};return}
-        val key=if(id>0)"chat:$id:${conversations.firstOrNull{it.optLong("id")==id}?.optString("canal")}:${conversations.firstOrNull{it.optLong("id")==id}?.optString("nome")}:${msgs.joinToString("|"){it.toString()}.hashCode()}:${outgoing.joinToString("|"){it.toString()}.hashCode()}:$connected:$peek:${conversations.firstOrNull{it.optLong("id")==id}?.optBoolean("local_has_more")}" else "list:"+visualLista()
+        val key=if(id>0)"chat:$id:${conversations.firstOrNull{it.optLong("id")==id}?.optString("canal")}:${conversations.firstOrNull{it.optLong("id")==id}?.optString("nome")}:${msgs.joinToString("|"){it.toString()}.hashCode()}:${outgoing.joinToString("|"){it.toString()}.hashCode()}:$connected:$peek:${conversations.firstOrNull{it.optLong("id")==id}?.optJSONObject("relacionamento")?.toString()?.hashCode()}:${conversations.firstOrNull{it.optLong("id")==id}?.optBoolean("local_has_more")}" else "list:"+visualLista()
         if(viewKey!=key){
             val sameChat=viewKey.startsWith("chat:$id:")
             val keepFocus=chatInput?.hasFocus()==true&&sameChat
@@ -223,6 +223,7 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
             row.addView(content,LayoutParams(0,-2,1f))
             if(!selecting){
                 val side=LinearLayout(activity).apply{orientation=VERTICAL;gravity=Gravity.CENTER;setPadding(dp(6),0,0,0)}
+                if(!InboxRules.group(c)&&(c.optJSONObject("relacionamento")?.optInt("totalEventos")?:0)>0)side.addView(text(InboxRules.relationshipLabel(c),11,false,Color.rgb(98,92,83)).apply{contentDescription="Histórico de relacionamento: "+c.optJSONObject("relacionamento")?.optInt("pontos")+" de 100. Veja os motivos na conversa."},LayoutParams(dp(68),dp(16)))
                 if(unread>0)side.addView(text(if(unread==1)"1 não lida"else"$unread não lidas",11,true,Color.rgb(18,104,67)))
                 side.setOnLongClickListener{hold()}
                 side.addView(button("Espiar"){events.peek(id)}.apply{setOnLongClickListener{hold()};setTextColor(orange);background=rounded(Color.TRANSPARENT,0);contentDescription="Espiar $label sem marcar como lida"},LayoutParams(dp(68),dp(48)))
@@ -232,10 +233,30 @@ class InboxView(private val activity:Activity,private val events:Events):LinearL
             return row
         }
     }
+    private fun relationshipDialog(c:JSONObject){
+        val r=c.optJSONObject("relacionamento")
+        val column=LinearLayout(activity).apply{orientation=VERTICAL;setPadding(dp(20),dp(8),dp(20),dp(8))}
+        fun paragraph(value:String,bold:Boolean=false){column.addView(text(value,14,bold).apply{setPadding(0,dp(6),0,dp(6))},LayoutParams(-1,-2))}
+        if(r==null)paragraph("Histórico ainda não disponível. Sincronize as conversas quando estiver conectado.")
+        else {
+            paragraph("${r.optInt("pontos")} de 100 · relacionamento",true)
+            paragraph("Informação para orientar seu atendimento. A ordem da fila permanece igual.")
+            val history=r.optJSONArray("historico")
+            if(history==null||history.length()==0)paragraph("Nenhum encerramento registrado. Isso não significa ausência de compras.")
+            else for(i in 0 until history.length()){val h=history.optJSONObject(i)?:continue;val n=h.optInt("total");paragraph("$n ${if(n==1)"vez"else"vezes"} · ${InboxRules.closureLabel(h.optString("motivo"))}",true)}
+            val detail=text("Base: ${r.optInt("base")} pontos.\n"+(r.optJSONArray("motivos")?.let{xs->(0 until xs.length()).joinToString("\n"){i->val h=xs.getJSONObject(i);"${InboxRules.closureLabel(h.optString("motivo"))}: ${h.optInt("ocorrencias")} ocorrência(s) nos últimos ${h.optInt("validadeDias")} dias; ${h.optInt("eventos")} conta(m), ${h.optInt("pontos")} pontos."}}?:"")+"\nNota limitada de 0 a 100. Regras definidas pelo gestor.",13).apply{visibility=View.GONE;setPadding(0,dp(8),0,dp(8))}
+            column.addView(button("Como a nota foi calculada"){detail.visibility=if(detail.visibility==View.GONE)View.VISIBLE else View.GONE},LayoutParams(-1,dp(48)));column.addView(detail,LayoutParams(-1,-2))
+            paragraph("Motivos registrados; não comprovam pagamento nem explicam por que o cliente deixou de responder. Canais vinculados contam o evento uma vez.")
+            val stamp=runCatching{java.time.format.DateTimeFormatter.ofPattern("dd/MM HH:mm").withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.parse(r.optString("calculadoEm")))}.getOrDefault("sem horário")
+            paragraph("Dados consultados em $stamp · até 1 minuto de cache. Sem conexão, esta é a cópia salva.")
+        }
+        android.app.AlertDialog.Builder(activity).setTitle("Histórico de relacionamento").setView(ScrollView(activity).apply{addView(column)}).setPositiveButton("Fechar",null).show()
+    }
     private fun showConversation(){
         val c=chats.firstOrNull{it.optLong("id")==focus};val row=LinearLayout(activity).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(4),0,dp(8),0)}
         row.addView(button("←"){events.back()}.apply{contentDescription="Voltar às conversas"},LayoutParams(dp(48),dp(52)))
         row.addView(text(c?.optString("nome")?.ifBlank{c.optString("contato")}?:"Conversa",17,true).apply{maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END;setOnClickListener{events.tool(focus,"pessoa")};contentDescription="Configurar contato e canais vinculados"},LayoutParams(0,dp(52),1f))
+        if(c!=null&&!InboxRules.group(c))row.addView(button(InboxRules.relationshipLabel(c)){relationshipDialog(c)}.apply{contentDescription="Ver histórico de relacionamento";textSize=11f;setTextColor(Color.rgb(98,92,83));background=rounded(cream,8)},LayoutParams(dp(76),dp(44)))
         row.addView(button("⋮"){events.tool(focus,"conversa")}.apply{contentDescription="Opções da conversa";textSize=24f;background=rounded(Color.TRANSPARENT,0)},LayoutParams(dp(48),dp(48)));body.addView(row)
         val detail=LinearLayout(activity).apply{orientation=VERTICAL;setPadding(dp(12),0,dp(12),dp(4))}
         detail.addView(text((c?.let{InboxRules.channel(it)}?:"")+" · "+(c?.let{InboxRules.contact(it)}?:""),12))
