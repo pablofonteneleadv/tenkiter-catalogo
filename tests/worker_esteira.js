@@ -103,5 +103,73 @@ const dia = (n) => new Date(Date.now() - n * 864e5).toISOString();
   const rf = await A(PABLO, 'POST', '/esteira/refazer-hoje');
   chk('refazer hoje mantém a lista já começada', rf.j.ok && rf.j.mantidas === 1, rf.j);
 
+  // ---- v7.42.0: preparação ----
+  // hoje: Fotos = Iara (troca do dia); Clarice tem a marca "aceita"; Visitante entra na equipe sem função nem marca
+  await A(PABLO, 'POST', '/esteira/equipe', { whats: VISITA, nome: 'Visitante', confere: false, rodizio: false });
+  const cfgP = await A(PABLO, 'GET', '/esteira/config');
+  chk('modelos padrão da preparação: 5 tarefas, fotos com a função Fotos', cfgP.j.config.modelosPreparacao.length === 5 && cfgP.j.config.modelosPreparacao.filter((m) => m.tipo === 'foto').every((m) => m.funcao === 'Fotos') && cfgP.j.config.modelosPreparacao[0].titulo === 'Cadastro conferido', cfgP.j.config.modelosPreparacao);
+  const prI = await A(IARA, 'POST', '/esteira/preparar', { id: '9999' });
+  chk('quem não aceita não coloca peça em preparação', prI.r.status === 403 && /aceita/.test(prI.j.erro), prI.j);
+  const pr1 = await A(CLARICE, 'POST', '/esteira/preparar', { id: '9999', nome: 'Inativa', codigo: 'TK-9999', foto: 'javascript:alert(1)' });
+  chk('quem aceita coloca peça (arquivada) em preparação com as 5 tarefas', pr1.j.ok && pr1.j.criadas === 5, pr1.j);
+  chk('colocar de novo não duplica tarefas', (await A(CLARICE, 'POST', '/esteira/preparar', { id: '9999' })).j.jaEstava === true);
+  let pp = await A(IARA, 'GET', '/esteira/preparacao');
+  const prod = (pp.j.produtos || [])[0] || {};
+  chk('preparação lista a peça com nome guardado, tarefas e progresso 0/5', pp.j.ok && pp.j.produtos.length === 1 && prod.nome === 'Inativa' && prod.foto === '' && prod.total === 5 && prod.feitas === 0 && prod.noSite === false, pp.j);
+  chk('quem está em Fotos hoje pode marcar as tarefas; não pode aceitar', prod.tarefas.every((t) => t.posso && t.quem === 'Iara') && pp.j.podeAceitar === false);
+  let hI = await A(IARA, 'GET', '/esteira/hoje');
+  chk('aba Hoje traz as tarefas da função do dia', hI.j.tarefas.length === 5 && hI.j.tarefas.every((t) => t.produtoNome === 'Inativa' && t.funcao === 'Fotos'), hI.j.tarefas);
+  chk('quem não está na função não recebe as tarefas no Hoje', (await A(CLARICE, 'GET', '/esteira/hoje')).j.tarefas.length === 0);
+  const t1 = prod.tarefas[0], t2 = prod.tarefas[1];
+  const tv = await A(VISITA, 'POST', '/esteira/tarefa', { id: t1.id, feita: true });
+  chk('fora da função do dia: recusa explicando de quem é', tv.r.status === 403 && /Fotos hoje \(Iara\)/.test(tv.j.erro), tv.j);
+  const tf = await A(IARA, 'POST', '/esteira/tarefa', { id: t1.id, feita: true, obs: 'Conferi com a etiqueta' });
+  chk('quem está na função marca Feito com observação', tf.j.ok && tf.j.tarefa.status === 'feita' && tf.j.tarefa.feita_por === 'Iara' && tf.j.tarefa.obs === 'Conferi com a etiqueta', tf.j);
+  const td = await A(IARA, 'POST', '/esteira/tarefa', { id: t1.id, feita: false });
+  chk('desfazer volta a tarefa para pendente', td.j.ok && td.j.tarefa.status === 'pendente' && td.j.tarefa.feita_em === '', td.j);
+  await A(IARA, 'POST', '/esteira/tarefa', { id: t1.id, feita: true });
+  chk('quem aceita também marca tarefa de outra função', (await A(CLARICE, 'POST', '/esteira/tarefa', { id: t2.id, feita: true })).j.ok === true);
+  chk('tarefa inexistente: aviso legível', (await A(IARA, 'POST', '/esteira/tarefa', { id: 99999, feita: true })).r.status === 404);
+  chk('tarefa avulsa: só quem aceita cria', (await A(IARA, 'POST', '/esteira/tarefa-nova', { produto: '9999', titulo: 'X', funcao: 'Caixa' })).r.status === 403);
+  chk('tarefa avulsa com função fora do rodízio é recusada', (await A(CLARICE, 'POST', '/esteira/tarefa-nova', { produto: '9999', titulo: 'X', funcao: 'Vitrine' })).r.status === 400);
+  const tn = await A(CLARICE, 'POST', '/esteira/tarefa-nova', { produto: '9999', titulo: 'Passar etiqueta', funcao: 'Caixa' });
+  chk('tarefa avulsa criada', tn.j.ok && tn.j.id > 0, tn.j);
+  pp = await A(IARA, 'GET', '/esteira/preparacao');
+  chk('progresso 2/6 e a avulsa de Caixa não é da Iara', pp.j.produtos[0].feitas === 2 && pp.j.produtos[0].total === 6 && pp.j.produtos[0].tarefas.find((t) => t.titulo === 'Passar etiqueta').posso === false, pp.j.produtos[0]);
+
+  // conferência com "Pedir foto nova" → tarefa para Fotos
+  const pecaFoto = h1.j.lista[1].id;
+  const cfN = await A(IARA, 'POST', '/esteira/conferir', { id: pecaFoto, achou: true, estoqueAntes: '1', estoqueDepois: '1', fotoNova: true });
+  const cfN2 = await A(IARA, 'POST', '/esteira/conferir', { id: pecaFoto, achou: true, estoqueAntes: '1', estoqueDepois: '1', fotoNova: true });
+  chk('pedir foto nova cria tarefa (sem duplicar)', cfN.j.tarefaFoto > 0 && cfN2.j.tarefaFoto === cfN.j.tarefaFoto, [cfN.j, cfN2.j]);
+  pp = await A(IARA, 'GET', '/esteira/preparacao');
+  const fn = pp.j.outras.find((t) => t.produto === pecaFoto) || {};
+  chk('foto nova aparece em Preparação (outras) para a função Fotos, com nome da peça', fn.titulo === 'Foto nova' && fn.funcao === 'Fotos' && fn.origem === 'conferencia' && fn.tipo === 'foto' && /^Peça /.test(fn.produtoNome) && /Iara/.test(fn.instrucao), fn);
+  hI = await A(IARA, 'GET', '/esteira/hoje');
+  chk('foto nova entra nas tarefas do Hoje de quem está em Fotos', hI.j.tarefas.some((t) => t.id === cfN.j.tarefaFoto));
+
+  // aceitar para o site
+  chk('quem não aceita não aceita peça', (await A(IARA, 'POST', '/esteira/aceitar', { id: '9999' })).r.status === 403);
+  const ac = await A(CLARICE, 'POST', '/esteira/aceitar', { id: '9999' });
+  chk('aceitar marca no_site e dispensa o que faltava (3 do modelo + 1 avulsa)', ac.j.ok && ac.j.dispensadas === 4, ac.j);
+  const linhaP = await env.DB.prepare('SELECT etapa, aceito_por, aceito_em FROM est_produto WHERE id=?').bind('9999').first();
+  chk('produto gravado com etapa, quem e quando aceitou', linhaP.etapa === 'no_site' && linhaP.aceito_por === CLARICE && !!linhaP.aceito_em, linhaP);
+  pp = await A(IARA, 'GET', '/esteira/preparacao');
+  chk('peça aceita sai da preparação; a foto nova continua', pp.j.produtos.length === 0 && pp.j.outras.length === 1);
+  chk('aceitar de novo: aviso de que não está em preparação', (await A(CLARICE, 'POST', '/esteira/aceitar', { id: '9999' })).r.status === 400);
+  const disp = await A(IARA, 'POST', '/esteira/tarefa', { id: prod.tarefas[2].id, feita: true });
+  chk('tarefa dispensada não é marcada', disp.r.status === 400 && /dispensada/.test(disp.j.erro), disp.j);
+  chk('Hoje sem as tarefas dispensadas', (await A(IARA, 'GET', '/esteira/hoje')).j.tarefas.length === 1);
+
+  // modelos editáveis (salvamento parcial não mexe nas regras)
+  chk('modelos vazios são recusados', (await A(PABLO, 'POST', '/esteira/config', { config: { modelosPreparacao: [{ titulo: '  ' }] } })).r.status === 400);
+  chk('funcionária não muda os modelos', (await A(IARA, 'POST', '/esteira/config', { config: { modelosPreparacao: [{ titulo: 'X' }] } })).r.status === 403);
+  const cm = await A(PABLO, 'POST', '/esteira/config', { config: { modelosPreparacao: [{ tipo: 'foto', titulo: 'Foto de capa', instrucao: 'Fundo claro', funcao: 'Fotos' }, { tipo: 'xx', titulo: 'Etiqueta', funcao: 'Caixa' }] } });
+  chk('modelos salvos sem mexer nas outras regras', cm.j.ok && cm.j.config.modelosPreparacao.length === 2 && cm.j.config.modelosPreparacao[1].tipo === 'outro' && cm.j.config.porPessoa === 20 && cm.j.config.instrucoes.Fotos === 'Fotografar as peças novas no manequim.', cm.j.config);
+  const pr2 = await A(PABLO, 'POST', '/esteira/preparar', { id: '1005', nome: 'Peça 5' });
+  chk('nova preparação usa os modelos editados', pr2.j.criadas === 2);
+  pp = await A(PABLO, 'GET', '/esteira/preparacao');
+  chk('peça ativa em preparação mostra dados do catálogo', pp.j.produtos[0].noSite === true && pp.j.produtos[0].codigo === 'TK-5' && pp.j.podeAceitar === true, pp.j.produtos[0]);
+
   console.log(ok + ' ok, ' + falhas.length + ' falhas'); if (falhas.length) process.exit(1);
 })().catch((e) => { console.error(e); process.exit(1); });

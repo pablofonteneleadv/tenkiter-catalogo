@@ -6,6 +6,15 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.42.0 — Esteira de Produtos (entrega 2: Preparação) — 01/11/2026
+- Nova aba **Preparação** na esteira.html (toda a equipe vê): cada peça em preparação mostra foto, nome, progresso e o checklist de tarefas com "Feito", observação curta e "Desfazer".
+- Tarefas padrão (editáveis em Configurações → Tarefas da preparação): Cadastro conferido, 1ª foto, Fotos de detalhe, Foto no manequim, Conferir cores e tamanhos — cada uma com a função que faz. Quem está na função do dia marca; Admin total e quem tem "Aceita para o site" marcam qualquer uma.
+- Tarefa de foto: "Adicionar fotos" (câmera ou galeria) sobe pelo mesmo servidor de fotos do painel (`tenkiter-midia` /u) e acrescenta à galeria da peça pelo pacote completo do `update` (peça sem foto: a primeira vira capa).
+- **Aceitar para o site** (Admin total ou marca "aceita"), com confirmação no próprio botão: peça arquivada é reativada no catálogo (`bulkUpdate` reativar) antes de registrar; peça já ativa só é marcada. O que faltava fica dispensado.
+- "Colocar peça em preparação" com busca por nome/código no catálogo; tarefa avulsa por peça.
+- Aba **Hoje** ganha "Tarefas da sua função". "Pedir foto nova" na conferência cria a tarefa "Foto nova" para quem está em Fotos.
+- Servidor: tabela `est_tarefa`, colunas novas em `est_produto` (`etapa`, `aceito_em`, `aceito_por` e referência do nome/foto) por ALTER seguro; rotas `/esteira/preparacao`, `/preparar`, `/tarefa`, `/tarefa-nova`, `/aceitar`; Configurações aceitam salvamento parcial (`modelosPreparacao`).
+
 ## 7.41.0 — Esteira de Produtos (entrega 1) — 01/11/2026
 - Nova página independente **esteira.html** (mesmo login do site e do Mensageiro): tela **Hoje** com 20 peças por funcionária para conferir ao longo do dia, função do rodízio com instruções e escala do dia.
 - Escolha das peças por pontuação (nunca conferida, dias sem conferência, antiguidade, dias sem atualização, estoque baixo, diferença anterior), agrupando categoria/público para facilitar achar na arara; peça conferida ou atualizada à mão nos últimos 21 dias fica de fora; listas não se repetem entre as funcionárias.

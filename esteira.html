@@ -23,7 +23,7 @@
   .cab h1 { font-family:"Poppins",sans-serif; font-size:1.25rem; margin:0; color:var(--laranja); flex:1; }
   .cab .quem { font-size:.85rem; color:#d9d2c5; }
   nav.abas { display:flex; gap:4px; overflow-x:auto; padding:8px 0 0; }
-  nav.abas button { flex:none; min-height:44px; padding:0 14px; border:0; border-radius:10px 10px 0 0; background:transparent; color:#d9d2c5; font:600 .95rem "Inter",sans-serif; cursor:pointer; }
+  nav.abas button { flex:none; min-height:44px; padding:0 11px; border:0; border-radius:10px 10px 0 0; background:transparent; color:#d9d2c5; font:600 .95rem "Inter",sans-serif; cursor:pointer; }
   nav.abas button[aria-selected="true"] { background:var(--areia); color:var(--preto); }
   main { max-width:760px; margin:0 auto; padding:16px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px)); display:grid; gap:14px; }
   .card { background:var(--branco); border:1px solid var(--linha); border-radius:14px; padding:14px; display:grid; gap:10px; min-width:0; }
@@ -89,7 +89,26 @@
   td select { min-height:40px; padding:4px 6px; }
   .num { font-variant-numeric:tabular-nums; }
   .pesos { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
-  @media (min-width:700px) { .fundo { align-items:center; } .folha { border-radius:18px; } }
+  /* v7.42.0 — preparação: lista de tarefas por peça */
+  .prep-topo { display:flex; gap:12px; align-items:center; }
+  .prep-topo img, .prep-topo .semfoto { width:56px; height:70px; border-radius:8px; object-fit:cover; flex:none; background:var(--linha); }
+  .prep-topo .t { flex:1; min-width:0; }
+  .prep-topo h3 { overflow-wrap:anywhere; }
+  .tarefa { display:grid; gap:8px; border-top:1px solid var(--linha); padding-top:10px; }
+  .tarefa .cab-t { display:flex; gap:10px; align-items:flex-start; }
+  .tarefa .tt { flex:1; min-width:0; display:grid; gap:2px; }
+  .tarefa .tt b { overflow-wrap:anywhere; }
+  .tarefa .tt p { margin:0; white-space:pre-wrap; }
+  .tarefa.feita .tt b { color:var(--suave); }
+  .marca { width:26px; height:26px; margin-top:1px; border-radius:50%; border:2px solid #cfc6b6; flex:none; display:inline-flex; align-items:center; justify-content:center; font-size:.85rem; font-weight:700; background:#fff; }
+  .marca.ok { background:var(--verde); border-color:var(--verde); color:#fff; }
+  .acoes-t { display:flex; flex-wrap:wrap; gap:8px; }
+  .acoes-t .bt { flex:1 1 140px; }
+  .acoes-t .bt.discreto { flex:none; min-height:44px; background:transparent; border-color:transparent; text-decoration:underline; padding:0 8px; font-weight:600; color:var(--suave); }
+  p[role=status]:empty { display:none; }
+  .busca-res { display:grid; gap:8px; }
+  .nova-t { display:grid; gap:8px; background:var(--areia); border-radius:12px; padding:10px; }
+  @media (min-width:700px) { .fundo { align-items:center; } .folha { border-radius:18px; } .acoes-t { justify-content:flex-end; } .acoes-t .bt:not(.discreto) { flex:0 0 200px; } .tarefa .acoes-t:has(.discreto) { justify-content:flex-start; } }
   @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
 </style>
 </head>
@@ -122,6 +141,10 @@
   const dataBR = (iso) => { const t = Date.parse(iso || ''); if (!Number.isFinite(t)) return '—'; const d = new Date(t); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getFullYear()).slice(2); };
   const haDias = (iso) => { const t = Date.parse(iso || ''); if (!Number.isFinite(t)) return null; return Math.floor((Date.now() - t) / 864e5); };
   const lista = (v) => String(v || '').split(',').map((x) => x.trim()).filter(Boolean);
+  const legivel = (t, padrao) => { const x = String(t || '').trim(); return !x || /^[[{<]/.test(x) ? padrao : x; };   // nunca mostra JSON cru
+  const semAcento = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const ehInativo = (x) => !!x.Status && String(x.Status).trim().toLowerCase() !== 'ativo';   // mesmo critério do painel (arquivada)
+  const autenticacao = () => { const s = getSessao() || {}; return { pin: s.sessao, sessao: s.sessao, whatsapp: s.whatsapp, funcionario: (EU && EU.nome) || '' }; };
   function foto(url, cls) { if (!url) return el('div', cls || 'semfoto'); const i = el('img', cls); i.alt = ''; i.loading = 'lazy'; i.decoding = 'async'; i.src = typeof fotoMini === 'function' ? fotoMini(url, 160) : url; i.onerror = () => { i.replaceWith(el('div', cls || 'semfoto')); }; return i; }
 
   /* ---------- login ---------- */
@@ -147,11 +170,11 @@
   /* ---------- abas ---------- */
   function desenharAbas() {
     const nav = $('abas'); nav.replaceChildren();
-    const abas = [['hoje', 'Hoje']].concat(EU && EU.admin ? [['painel', 'Painel'], ['config', 'Configurações']] : []);
+    const abas = [['hoje', 'Hoje'], ['prep', 'Preparação']].concat(EU && EU.admin ? [['painel', 'Painel'], ['config', 'Configurações']] : []);
     nav.hidden = abas.length < 2;
     abas.forEach(([id, rot]) => { const b = el('button', '', rot); b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(ABA === id)); b.onclick = () => { ABA = id; desenharAbas(); abrirAba(); }; nav.append(b); });
   }
-  function abrirAba() { if (ABA === 'painel') return telaPainel(); if (ABA === 'config') return telaConfig(); return telaHoje(); }
+  function abrirAba() { if (ABA === 'prep') return telaPrep(); if (ABA === 'painel') return telaPainel(); if (ABA === 'config') return telaConfig(); return telaHoje(); }
 
   /* ---------- Hoje ---------- */
   async function telaHoje(recarregar) {
@@ -168,6 +191,11 @@
     }
     app.append(prog);
     r.funcoes.forEach((f) => { const c = el('div', 'card funcao'); c.append(el('h3', '', 'Sua função hoje: ' + f.funcao)); c.append(el('p', f.instrucoes ? '' : 'muted', f.instrucoes || 'Sem instruções cadastradas para esta função.')); app.append(c); });
+    if (Array.isArray(r.tarefas) && r.tarefas.length) {                  // v7.42.0: tarefas da função do dia (preparação e fotos novas pedidas)
+      const c = el('div', 'card'); c.id = 'tarefas-hoje'; c.append(el('h2', '', 'Tarefas da sua função'), el('p', 'muted', r.tarefas.length === 1 ? '1 tarefa esperando.' : r.tarefas.length + ' tarefas esperando.'));
+      r.tarefas.forEach((t) => c.append(linhaTarefa(t, () => telaHoje(), true)));
+      app.append(c);
+    }
     if (!r.funcoes.length && r.escala.some((e) => e.whats)) { const c = el('div', 'card'); c.append(el('h3', '', 'Escala de hoje')); c.append(el('p', 'muted', r.escala.filter((e) => e.whats).map((e) => e.funcao + ': ' + (e.nome || '—')).join(' · '))); app.append(c); }
     let grupoAtual = null;
     r.lista.forEach((p) => {
@@ -190,6 +218,13 @@
     const r = await fetch(API_URL + '?action=list&todos=true').then((x) => x.json()).catch(() => null);
     if (!r || !Array.isArray(r.produtos)) throw new Error('Não consegui ler o catálogo agora. Tente de novo.');
     CATALOGO = new Map(r.produtos.map((p) => [String(p.ID), p])); return CATALOGO;
+  }
+  /** Pacote COMPLETO do update do catálogo (o Apps Script regrava a linha inteira): parte do produto como está e troca só o que veio em `mud`. */
+  function pacoteUpdate(x, mud) {
+    const preco = x.Preco != null ? String(x.Preco) : '';
+    const dados = Object.assign({ action: 'update', id: x.ID, nome: x.Nome || '', categoria: x.Categoria || '', genero: x.Genero || '', preco, estoque: x.Estoque != null ? String(x.Estoque) : '', tamanhos: x.Tamanhos || '', cores: x.Cores || '', descricao: x.Descricao || '', novidade: typeof ehNovidade === 'function' ? ehNovidade(x) : false, fotoUrlExistente: String(x.Foto_URL || '').trim(), fotosGaleriaExistentes: lista(x.Fotos_Galeria).join(',') }, mud || {});
+    if (!(Number(String(preco).replace(',', '.')) > 0)) dados.consultarValor = true;
+    return Object.assign(autenticacao(), dados);
   }
   function abrirConferencia(p) {
     const ant = document.activeElement;
@@ -237,11 +272,9 @@
         if (mudouEst || mudouTam || mudouCor) {
           const cat = await catalogoCompleto(), x = cat.get(String(p.id));
           if (!x) throw new Error('Esta peça não está mais no catálogo. Avise o administrador.');
-          const preco = x.Preco != null ? String(x.Preco) : '';
-          const dados = { action: 'update', id: x.ID, nome: x.Nome || '', categoria: x.Categoria || '', genero: x.Genero || '', preco, estoque: mudouEst ? String(Number(iEst.value)) : (x.Estoque != null ? String(x.Estoque) : ''), tamanhos: mudouTam ? novoTam.join(', ') : (x.Tamanhos || ''), cores: mudouCor ? novaCor.join(', ') : (x.Cores || ''), descricao: x.Descricao || '', novidade: typeof ehNovidade === 'function' ? ehNovidade(x) : false, fotoUrlExistente: String(x.Foto_URL || '').trim(), fotosGaleriaExistentes: String(x.Fotos_Galeria || '').split(',').map((s) => s.trim()).filter(Boolean).join(',') };
-          if (!(Number(String(preco).replace(',', '.')) > 0)) dados.consultarValor = true;
-          const s = getSessao(); const r = await apiPost(Object.assign({ pin: s.sessao, sessao: s.sessao, whatsapp: s.whatsapp, funcionario: EU.nome || '' }, dados));
-          if (!r || !r.ok) throw new Error((r && r.erro) || 'O catálogo não aceitou a mudança. Tente de novo.');
+          const dados = pacoteUpdate(x, { estoque: mudouEst ? String(Number(iEst.value)) : (x.Estoque != null ? String(x.Estoque) : ''), tamanhos: mudouTam ? novoTam.join(', ') : (x.Tamanhos || ''), cores: mudouCor ? novaCor.join(', ') : (x.Cores || '') });
+          const r = await apiPost(dados);
+          if (!r || !r.ok) throw new Error(legivel(r && r.erro, 'O catálogo não aceitou a mudança. Tente de novo.'));
           Object.assign(x, { Estoque: dados.estoque, Tamanhos: dados.tamanhos, Cores: dados.cores });
         }
         const rc = await srv('/esteira/conferir', { id: p.id, achou: estado.achou, estoqueAntes: p.estoque, estoqueDepois: estado.achou ? iEst.value : '', mudouTamanhos: mudouTam, mudouCores: mudouCor, fotoNova: estado.fotoNova });
@@ -252,6 +285,177 @@
       } catch (e) { salvar.disabled = false; status.className = 'erro'; status.textContent = e.message || 'Não consegui salvar. Tente de novo.'; }
     };
     document.body.append(fundo); if (window.TKCamadas) TKCamadas.empilhar('esteira-conferir', () => fundo.remove()); bSim.focus({ preventScroll: true });
+  }
+
+  /* ---------- v7.42.0: fotos da tarefa (mesmo caminho do painel: Worker tenkiter-midia /u com a sessão) ---------- */
+  function reduzirFoto(file) {                       // igual ao painel: lado maior até 1200 px, JPG 85% (cabe nos 2,5 MB do servidor de fotos)
+    return new Promise((ok, falhou) => {
+      const u = URL.createObjectURL(file), img = new Image();
+      img.onerror = () => { URL.revokeObjectURL(u); falhou(new Error('Não consegui abrir esta foto. Use uma foto JPG ou PNG.')); };
+      img.onload = () => {
+        const esc = Math.min(1, 1200 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * esc)); c.height = Math.max(1, Math.round(img.height * esc));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+        c.toBlob((b) => (b ? ok(b) : falhou(new Error('Não consegui preparar a foto. Tente outra.'))), 'image/jpeg', 0.85);
+      };
+      img.src = u;
+    });
+  }
+  async function enviarFoto(blob) {
+    const s = getSessao();
+    if (!s || !/^tk[123]\./.test(String(s.sessao))) throw new Error('Para enviar fotos, saia e entre de novo com a sua senha.');
+    let r; try { r = await fetch(MIDIA_URL + '/u', { method: 'POST', headers: { 'X-TK-Whats': s.whatsapp, 'X-TK-Sessao': s.sessao }, body: blob }); } catch (e) { throw new Error('Sem conexão. A foto não foi enviada; tente de novo.'); }
+    const j = await r.json().catch(() => null);
+    if (r.status === 401 || r.status === 403) throw new Error('Seu acesso não permite enviar fotos. Peça ao administrador a permissão de cadastrar peças, ou fotografe pelo painel.');
+    if (!r.ok || !j || !j.ok || !j.url) throw new Error(legivel(j && j.erro, 'O servidor de fotos não aceitou a foto. Tente de novo.'));
+    return j.url;
+  }
+  /** Sobe as fotos e acrescenta à galeria da peça (sem foto ainda: a primeira vira a capa), pelo mesmo pacote completo do update. */
+  async function adicionarFotos(produtoId, arquivos, aviso) {
+    CATALOGO = null;                                 // lê de novo: não pode apagar foto que outra pessoa pôs há pouco
+    const x = (await catalogoCompleto()).get(String(produtoId));
+    if (!x) throw new Error('Esta peça não está no catálogo. Avise o administrador.');
+    const novas = [];
+    for (let k = 0; k < arquivos.length; k++) { aviso('Enviando foto ' + (k + 1) + ' de ' + arquivos.length + '…'); novas.push(await enviarFoto(await reduzirFoto(arquivos[k]))); }
+    aviso('Salvando no produto…');
+    let capa = String(x.Foto_URL || '').trim(); const resto = novas.slice(); if (!capa) capa = resto.shift();
+    const galeria = lista(x.Fotos_Galeria).concat(resto).join(',');
+    const r = await apiPost(pacoteUpdate(x, { fotoUrlExistente: capa, fotosGaleriaExistentes: galeria }));
+    if (!r || !r.ok) throw new Error(legivel(r && r.erro, 'As fotos subiram, mas o catálogo não aceitou a mudança. Tente de novo.'));
+    x.Foto_URL = capa; x.Fotos_Galeria = galeria;
+    srv('/esteira/toque', { ids: [String(x.ID)] });  // conta como atualização à mão (sai da conferência por uns dias)
+    return novas.length;
+  }
+
+  /* ---------- v7.42.0: uma tarefa (checklist) ---------- */
+  function linhaTarefa(t, aoMudar, comPeca) {
+    const feita = t.status === 'feita', li = el('div', 'tarefa' + (feita ? ' feita' : '')); li.dataset.tarefa = String(t.id);
+    const topo = el('div', 'cab-t'), marca = el('span', 'marca' + (feita ? ' ok' : ''), feita ? '✓' : ''); marca.setAttribute('aria-hidden', 'true');
+    const tx = el('div', 'tt');
+    if (comPeca) tx.append(el('small', 'muted', [t.produtoNome, t.produtoCodigo].filter(Boolean).join(' · ')));
+    tx.append(el('b', '', t.titulo + (feita ? ' — feita' : '')));
+    if (t.instrucao) tx.append(el('p', 'muted', t.instrucao));
+    tx.append(el('small', feita ? 'ok' : 'muted', feita ? 'Feita' + (t.feita_por ? ' por ' + t.feita_por : '') + (t.feita_em ? ' em ' + dataBR(t.feita_em) : '') : t.funcao ? 'Função: ' + t.funcao + (t.quem ? ' · hoje: ' + t.quem : comPeca ? '' : ' · ninguém na escala hoje') : 'Qualquer pessoa da equipe'));
+    if (feita && t.obs) tx.append(el('small', 'muted', 'Obs.: ' + t.obs));
+    topo.append(marca, tx); li.append(topo);
+    if (!t.posso) return li;
+    const st = el('p', 'muted'); st.setAttribute('role', 'status'); st.hidden = true;
+    const msg = (txt, cls) => { st.className = cls || 'muted'; st.textContent = txt; st.hidden = !txt; };
+    const acoes = el('div', 'acoes-t'); let obs = null;
+    const marcar = async (v, botao) => {
+      botao.disabled = true; msg('Salvando…');
+      const r = await srv('/esteira/tarefa', { id: t.id, feita: v, obs: obs ? obs.value : undefined });
+      if (!r.ok) { botao.disabled = false; return msg(r.erro || 'Não consegui salvar. Tente de novo.', 'erro'); }
+      aoMudar();
+    };
+    if (feita) { const d = el('button', 'bt discreto', 'Desfazer'); d.type = 'button'; d.setAttribute('aria-label', 'Desfazer ' + t.titulo); d.onclick = () => marcar(false, d); acoes.append(d); li.append(acoes, st); return li; }
+    obs = el('input'); obs.type = 'text'; obs.maxLength = 300; obs.placeholder = 'Observação (opcional)'; obs.value = t.obs || ''; obs.setAttribute('aria-label', 'Observação: ' + t.titulo);
+    if (t.tipo === 'foto') {
+      const arq = el('input'); arq.type = 'file'; arq.accept = 'image/*'; arq.multiple = true; arq.hidden = true; arq.className = 'arq-foto';
+      const bF = el('button', 'bt', 'Adicionar fotos'); bF.type = 'button'; bF.title = 'Câmera ou galeria'; bF.onclick = () => arq.click();
+      arq.onchange = async () => {
+        const fs = [...arq.files].slice(0, 8); arq.value = ''; if (!fs.length) return;
+        bF.disabled = true;
+        try { const n = await adicionarFotos(t.produto, fs, (m) => msg(m)); msg((n === 1 ? '1 foto adicionada' : n + ' fotos adicionadas') + ' ao produto. Toque em Feito quando terminar.', 'ok'); if (!obs.value) obs.value = (n === 1 ? '1 foto enviada' : n + ' fotos enviadas') + ' pela Esteira'; }
+        catch (e) { msg(e.message || 'Não consegui enviar as fotos. Tente de novo.', 'erro'); }
+        bF.disabled = false;
+      };
+      acoes.append(bF, arq);
+    }
+    const bOk = el('button', 'bt prim', 'Feito'); bOk.type = 'button'; bOk.setAttribute('aria-label', 'Feito: ' + t.titulo); bOk.onclick = () => marcar(true, bOk);
+    acoes.append(bOk); li.append(obs, acoes, st);
+    return li;
+  }
+
+  /* ---------- v7.42.0: Preparação (todos da equipe; colocar, criar tarefa e aceitar: Admin total ou marca "aceita") ---------- */
+  async function telaPrep() {
+    app.replaceChildren(el('div', 'card', 'Carregando a preparação…'));
+    const r = await srv('/esteira/preparacao'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPrep);
+    if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
+    app.replaceChildren();
+    const topo = el('div', 'card'); topo.append(el('h2', '', 'Preparação'), el('p', 'muted', 'Peça nova passa por estas tarefas e só aparece no site depois de “Aceitar para o site”.'));
+    if (r.podeAceitar) topo.append(...blocoColocar(r));
+    app.append(topo);
+    if (!r.produtos.length) app.append(el('div', 'card vazio', 'Nenhuma peça em preparação agora.'));
+    r.produtos.forEach((pr) => app.append(cartaoPrep(pr, r)));
+    if (r.outras.length) { const c = el('div', 'card'); c.append(el('h2', '', 'Outras tarefas'), el('p', 'muted', 'Fotos novas pedidas na conferência e tarefas de peças que já estão no site.')); r.outras.forEach((t) => c.append(linhaTarefa(t, telaPrep, true))); app.append(c); }
+  }
+  function blocoColocar(r) {
+    const b = el('button', 'bt prim', 'Colocar peça em preparação'); b.type = 'button'; b.setAttribute('aria-expanded', 'false');
+    const caixa = el('div'); caixa.hidden = true; caixa.style.cssText = 'display:grid;gap:8px';
+    const lb = el('label', 'campo'); lb.append(document.createTextNode('Buscar no catálogo'));
+    const inp = el('input'); inp.type = 'text'; inp.id = 'prep-busca'; inp.placeholder = 'Nome ou código da peça'; inp.autocomplete = 'off'; lb.append(inp);
+    const res = el('div', 'busca-res'), st = el('p', 'muted'); st.setAttribute('role', 'status');
+    caixa.append(lb, st, res);
+    b.onclick = () => { caixa.hidden = !caixa.hidden; b.setAttribute('aria-expanded', String(!caixa.hidden)); if (!caixa.hidden) inp.focus(); };
+    const ja = new Set(r.produtos.map((x) => x.id)); let espera = null;
+    const buscar = async () => {
+      const q = semAcento(inp.value.trim()); res.replaceChildren(); st.className = 'muted'; st.textContent = '';
+      if (q.length < 2) { st.textContent = q ? 'Digite pelo menos 2 letras.' : ''; return; }
+      let cat; try { st.textContent = 'Buscando…'; cat = await catalogoCompleto(); } catch (e) { st.className = 'erro'; st.textContent = e.message; return; }
+      if (semAcento(inp.value.trim()) !== q) return;
+      const achados = [...cat.values()].filter((x) => !ja.has(String(x.ID)) && (semAcento(x.Nome).includes(q) || semAcento(x.Codigo).includes(q) || String(x.ID) === q)).slice(0, 12);
+      st.textContent = achados.length ? '' : 'Nenhuma peça com esse nome ou código.';
+      achados.forEach((x) => {
+        const it = el('button', 'peca'); it.type = 'button';
+        const t = el('div', 't'); t.append(el('b', '', x.Nome || 'Peça ' + x.ID), el('small', 'muted', [x.Codigo, ehInativo(x) ? 'arquivada (fora do site)' : 'já está no site'].filter(Boolean).join(' · ')));
+        it.append(foto(x.Foto_URL), t, el('span', 'chip al', 'Preparar')); it.setAttribute('aria-label', 'Colocar ' + (x.Nome || 'peça') + ' em preparação');
+        it.onclick = async () => {
+          it.disabled = true; st.className = 'muted'; st.textContent = 'Criando as tarefas…';
+          const y = await srv('/esteira/preparar', { id: String(x.ID), nome: x.Nome || '', codigo: x.Codigo || '', foto: String(x.Foto_URL || '') });
+          if (!y.ok) { it.disabled = false; st.className = 'erro'; st.textContent = y.erro || 'Não consegui colocar a peça em preparação.'; return; }
+          telaPrep();
+        };
+        res.append(it);
+      });
+    };
+    inp.oninput = () => { clearTimeout(espera); espera = setTimeout(buscar, 250); };
+    return [b, caixa];
+  }
+  function cartaoPrep(pr, r) {
+    const c = el('div', 'card'); c.dataset.produto = pr.id;
+    const topo = el('div', 'prep-topo'), t = el('div', 't');
+    t.append(el('h3', '', pr.nome), el('small', 'muted', [pr.codigo, pr.noSite ? 'já aparece no site' : 'fora do site até ser aceita', pr.preparado_em ? 'desde ' + dataBR(pr.preparado_em) : ''].filter(Boolean).join(' · ')));
+    topo.append(foto(pr.foto), t);
+    const pl = el('div', 'progresso'); pl.append(el('b', 'num', pr.feitas + '/' + pr.total), el('span', 'muted', pr.total && pr.feitas >= pr.total ? 'tudo feito' : 'tarefas feitas'));
+    const bar = el('div', 'barra'), i = el('i'); i.style.width = (pr.total ? Math.round(pr.feitas / pr.total * 100) : 0) + '%'; bar.append(i);
+    c.append(topo, pl, bar);
+    pr.tarefas.forEach((x) => c.append(linhaTarefa(x, telaPrep)));
+    if (!r.podeAceitar) return c;
+    // tarefa avulsa
+    const bNova = el('button', 'bt', 'Nova tarefa para esta peça'); bNova.type = 'button'; bNova.setAttribute('aria-expanded', 'false');
+    const nova = el('div', 'nova-t'); nova.hidden = true;
+    const iT = el('input'); iT.type = 'text'; iT.maxLength = 60; iT.placeholder = 'O que precisa ser feito'; iT.setAttribute('aria-label', 'Nova tarefa');
+    const sF = el('select'); sF.setAttribute('aria-label', 'Função da nova tarefa'); [['', 'Qualquer pessoa da equipe']].concat(r.funcoes.map((f) => [f, f])).forEach(([v, rot]) => { const o = el('option', '', rot); o.value = v; if (v === 'Fotos') o.selected = true; sF.append(o); });
+    const bCriar = el('button', 'bt prim', 'Criar tarefa'); bCriar.type = 'button';
+    const stN = el('p', 'muted'); stN.setAttribute('role', 'status');
+    bCriar.onclick = async () => { bCriar.disabled = true; const y = await srv('/esteira/tarefa-nova', { produto: pr.id, titulo: iT.value, funcao: sF.value }); if (!y.ok) { bCriar.disabled = false; stN.className = 'erro'; stN.textContent = y.erro || 'Não consegui criar a tarefa.'; return; } telaPrep(); };
+    nova.append(iT, sF, bCriar, stN);
+    bNova.onclick = () => { nova.hidden = !nova.hidden; bNova.setAttribute('aria-expanded', String(!nova.hidden)); if (!nova.hidden) iT.focus(); };
+    // aceitar (confirmação no próprio botão: confirm() não existe em alguns aparelhos)
+    const bAc = el('button', 'bt laranja', 'Aceitar para o site'); bAc.type = 'button'; bAc.className = 'bt laranja aceitar';
+    const stA = el('p', 'muted'); stA.setAttribute('role', 'status');
+    const voltar = (erro) => { bAc.disabled = false; delete bAc.dataset.confirma; bAc.textContent = 'Aceitar para o site'; stA.className = 'erro'; stA.textContent = erro; };
+    bAc.onclick = async () => {
+      if (!bAc.dataset.confirma) { const falta = pr.total - pr.feitas; bAc.dataset.confirma = '1'; bAc.textContent = falta > 0 ? 'Faltam ' + falta + (falta === 1 ? ' tarefa' : ' tarefas') + '. Toque de novo para aceitar' : 'Toque de novo para mostrar no site'; stA.className = 'muted'; stA.textContent = falta > 0 ? 'Se aceitar agora, as tarefas que faltam ficam dispensadas.' : ''; return; }
+      bAc.disabled = true; stA.className = 'muted'; stA.textContent = 'Conferindo a peça no catálogo…';
+      let reativou = false;
+      try {
+        CATALOGO = null; const x = (await catalogoCompleto()).get(String(pr.id));
+        if (!x) return voltar('Esta peça não está no catálogo (pode ter sido excluída). Avise o administrador.');
+        if (ehInativo(x)) {
+          stA.textContent = 'Colocando a peça no site…';
+          const y = await apiPost(Object.assign(autenticacao(), { action: 'bulkUpdate', ids: [x.ID], tipoAcao: 'reativar', valor: true }));
+          if (!y || !y.ok) return voltar(legivel(y && y.erro, 'O catálogo não aceitou colocar a peça no site. Nada foi mudado; tente de novo.'));
+          x.Status = 'Ativo'; reativou = true;
+        }
+        const z = await srv('/esteira/aceitar', { id: pr.id });
+        if (!z.ok) return voltar((reativou ? 'A peça já está no site, mas não consegui registrar o aceite: ' : '') + (z.erro || 'Não consegui registrar o aceite. Tente de novo.'));
+        telaPrep();
+      } catch (e) { voltar(e.message || 'Não consegui aceitar agora. Tente de novo.'); }
+    };
+    c.append(bNova, nova, bAc, stA);
+    return c;
   }
 
   /* ---------- Painel (Admin total) ---------- */
@@ -317,7 +521,35 @@
     const bRef = el('button', 'bt', 'Refazer as listas de hoje (só as não começadas)'); bRef.type = 'button';
     bRef.onclick = async () => { const y = await srv('/esteira/refazer-hoje', {}); aviso(cReg, y.ok ? 'Listas refeitas: ' + y.refeitas + '. Mantidas (já começadas): ' + y.mantidas + '.' : y.erro, y.ok); HOJE = null; };
     cReg.append(lF, boxI, lPP, lDS, el('h3', '', 'Pesos da escolha das peças'), pesosBox, bSal, bRef);
-    app.append(cEq, cHoje, cPad, cReg);
+    // v7.42.0: tarefas da preparação (modelo) e quem aceita para o site
+    const cMod = el('div', 'card'); cMod.id = 'cfg-preparacao'; cMod.append(el('h2', '', 'Tarefas da preparação'), el('p', 'muted', 'Criadas para cada peça colocada em preparação. Quem está na função do dia faz a tarefa.'));
+    const aceitam = r.equipe.filter((e) => e.ativo && e.aceitar).map((e) => e.nome);
+    cMod.append(el('p', '', 'Aceitam para o site: administrador total' + (aceitam.length ? ', ' + aceitam.join(', ') : '') + '.'), el('p', 'muted', 'Para mudar, use a marca “Aceita para o site” em Equipe.'));
+    const modelos = (r.config.modelosPreparacao || []).map((m) => Object.assign({ orig: m.tipo }, m));
+    const boxM = el('div'); boxM.style.cssText = 'display:grid;gap:10px';
+    const desenharModelos = () => {
+      boxM.replaceChildren();
+      modelos.forEach((m, k) => {
+        const l = el('div', 'linha-eq');
+        const lT = el('label', 'campo'); lT.append(document.createTextNode('Tarefa ' + (k + 1)));
+        const iT = el('input'); iT.type = 'text'; iT.id = 'mod-titulo-' + k; iT.maxLength = 60; iT.value = m.titulo; iT.placeholder = 'Ex.: Foto no manequim'; iT.oninput = () => { m.titulo = iT.value; }; lT.append(iT);
+        const lI = el('label', 'campo'); lI.append(document.createTextNode('Como fazer'));
+        const ta = el('textarea'); ta.id = 'mod-instr-' + k; ta.maxLength = 500; ta.value = m.instrucao || ''; ta.style.minHeight = '70px'; ta.oninput = () => { m.instrucao = ta.value; }; lI.append(ta);
+        const lF = el('label', 'campo'); lF.append(document.createTextNode('Função que faz'));
+        const sF = el('select'); sF.id = 'mod-funcao-' + k; const opc = [['', 'Qualquer pessoa da equipe']].concat(r.config.funcoes.map((f) => [f, f])); if (m.funcao && !r.config.funcoes.includes(m.funcao)) opc.push([m.funcao, m.funcao + ' (fora do rodízio)']);
+        opc.forEach(([v, rot]) => { const o = el('option', '', rot); o.value = v; if (v === (m.funcao || '')) o.selected = true; sF.append(o); }); sF.onchange = () => { m.funcao = sF.value; }; lF.append(sF);
+        const marcas = el('div', 'marcas'), lb = el('label'), cb = el('input'); cb.type = 'checkbox'; cb.checked = m.tipo === 'foto'; cb.onchange = () => { m.tipo = cb.checked ? 'foto' : (m.orig && m.orig !== 'foto' ? m.orig : 'outro'); }; lb.append(cb, document.createTextNode('Pede fotos (abre câmera e galeria)')); marcas.append(lb);
+        const rem = el('button', 'bt', 'Tirar do modelo'); rem.type = 'button'; rem.onclick = () => { modelos.splice(k, 1); desenharModelos(); };
+        l.append(lT, lI, lF, marcas, rem); boxM.append(l);
+      });
+    };
+    desenharModelos();
+    const bAddM = el('button', 'bt', 'Acrescentar tarefa'); bAddM.type = 'button';
+    bAddM.onclick = () => { if (modelos.length >= 12) return aviso(cMod, 'O modelo aceita até 12 tarefas.'); modelos.push({ tipo: 'outro', orig: 'outro', titulo: '', instrucao: '', funcao: r.config.funcoes.includes('Fotos') ? 'Fotos' : '' }); desenharModelos(); const i = $('mod-titulo-' + (modelos.length - 1)); if (i) i.focus(); };
+    const bSalM = el('button', 'bt prim', 'Salvar tarefas da preparação'); bSalM.type = 'button';
+    bSalM.onclick = async () => { const y = await srv('/esteira/config', { config: { modelosPreparacao: modelos.map((m) => ({ tipo: m.tipo, titulo: m.titulo, instrucao: m.instrucao, funcao: m.funcao })) } }); if (!y.ok) return aviso(cMod, y.erro || 'Não consegui salvar.'); aviso(cMod, 'Salvo. Vale para as próximas peças colocadas em preparação.', true); };
+    cMod.append(boxM, bAddM, bSalM);
+    app.append(cEq, cHoje, cPad, cReg, cMod);
   }
 
   /* ---------- início ---------- */
