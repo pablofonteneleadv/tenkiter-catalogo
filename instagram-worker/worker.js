@@ -5247,6 +5247,7 @@ export default {
     ctx.waitUntil(dispararPostagens_(env));                                   // a cada minuto: publica o que está na hora
     ctx.waitUntil(processarFotoIA(env));                                      // a cada minuto: 1 imagem da fila de Fotos com IA (se já puder: cota/limite do dia)
     ctx.waitUntil(filaContatosAuto_(env));                                    // a cada minuto: até 5 números novos viram "TM Cliente …" no Google (se ligado)
+    ctx.waitUntil(estRetratoCron_(env, ev && ev.scheduledTime ? Number(ev.scheduledTime) : Date.now()).catch(() => {}));   // v7.45.0: 1 leitura de KV; retrato do estoque 1x por dia
     const min = ev && ev.scheduledTime ? new Date(ev.scheduledTime).getUTCMinutes() : 0;
     if (min === 7) {ctx.waitUntil(limparVideoPreparo_(env));ctx.waitUntil(limparTemporarios(env).catch(() => {}));ctx.waitUntil((async()=>{const c=await env.CACHE.get('contatos_staging_cursor');const r=await contatosR2ExpurgarOrfaos_(env,Date.now(),c||undefined);if(r.cursor)await env.CACHE.put('contatos_staging_cursor',r.cursor,{expirationTtl:86400});else await env.CACHE.delete('contatos_staging_cursor');})().catch(()=>{}));}      // 1x por dia: apaga do R2 o que é temporário (t/) com mais de 5 dias
     if (min % 30 !== 0) return;                                                // importar do Instagram só a cada 30 min (como antes)
@@ -6053,7 +6054,22 @@ const EST_MODELOS_PADRAO_ = [
   { tipo: 'foto', titulo: 'Foto no manequim', instrucao: 'Peça vestida no manequim.', funcao: 'Fotos' },
   { tipo: 'cores_tamanhos', titulo: 'Conferir cores e tamanhos', instrucao: 'Confira na peça se as cores e os tamanhos do cadastro estão certos.', funcao: 'Fotos' },
 ];
-const EST_CFG_PADRAO_ = { porPessoa: 20, diasSemRepetir: 21, pesos: { nunca: 40, diaConf: 1, diaCadastro: 0.5, diaSemEdicao: 0.3, estoqueBaixo: 15, divergiu: 20 }, funcoes: EST_FUNCOES_PADRAO_, instrucoes: {}, modelosPreparacao: EST_MODELOS_PADRAO_ };
+const EST_CFG_PADRAO_ = { porPessoa: 20, diasSemRepetir: 21, pesos: { nunca: 40, diaConf: 1, diaCadastro: 0.5, diaSemEdicao: 0.3, estoqueBaixo: 15, divergiu: 20 }, funcoes: EST_FUNCOES_PADRAO_, instrucoes: {}, modelosPreparacao: EST_MODELOS_PADRAO_,
+  // v7.45.0 (entrega 5): lista focada por categoria (com rodízio entre dias e categoria fixa opcional por pessoa) e reativação de peça parada
+  focoCategoria: true, categoriasFixas: {}, reativacao: [30, 60, 90], retratoHora: 6 };
+const estCatNorm_ = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+/** Degraus da reativação: 3 números crescentes de 1 a 365 (dias sem vender). Inválido → null. */
+function estDegraus_(v) {
+  if (!Array.isArray(v) || v.length !== 3) return null;
+  const d = v.map((x) => Math.floor(Number(x)));
+  if (d.some((x) => !(x >= 1 && x <= 365)) || !(d[0] < d[1] && d[1] < d[2])) return null;
+  return d;
+}
+function estFixas_(v) {                                                // { whats: categoria } limpo (WhatsApp só dígitos, sem 55; categoria até 60)
+  const out = {}; if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+  for (const [w, c] of Object.entries(v)) { const k = estFone_(w), cat = String(c || '').trim().slice(0, 60); if (k.length >= 10 && cat) out[k] = cat; }
+  return out;
+}
 function estModelos_(lista) {                                          // limpa a lista de modelos; inválida ou vazia → null
   if (!Array.isArray(lista)) return null;
   const out = lista.map((m) => ({ tipo: EST_TIPOS_TAREFA_.includes(m && m.tipo) ? m.tipo : 'outro', titulo: String((m && m.titulo) || '').trim().slice(0, 60), instrucao: String((m && m.instrucao) || '').trim().slice(0, 500), funcao: String((m && m.funcao) || '').trim().slice(0, 40) })).filter((m) => m.titulo).slice(0, 12);
@@ -6080,12 +6096,20 @@ async function estIniciar_(env) {
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_pedido (id INTEGER PRIMARY KEY AUTOINCREMENT, fornecedor TEXT NOT NULL DEFAULT '', previsao TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'rascunho', obs TEXT DEFAULT '', fotos TEXT DEFAULT '[]', criado_em TEXT, criado_por TEXT, enviado_em TEXT, conferido_em TEXT, conferido_por TEXT, aprovado_em TEXT, aprovado_por TEXT)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_pedido_item (id INTEGER PRIMARY KEY AUTOINCREMENT, pedido INTEGER NOT NULL, tipo TEXT NOT NULL DEFAULT 'reposicao', produto TEXT DEFAULT '', nome TEXT DEFAULT '', categoria TEXT DEFAULT '', genero TEXT DEFAULT '', preco TEXT DEFAULT '', tamanhos TEXT DEFAULT '', cores TEXT DEFAULT '', fotos TEXT DEFAULT '[]', qtd_pedida INTEGER NOT NULL DEFAULT 0, custo REAL, qtd_contada INTEGER, contagens INTEGER NOT NULL DEFAULT 0, nao_veio INTEGER NOT NULL DEFAULT 0, decisao TEXT DEFAULT '', qtd_aceita INTEGER, produto_criado TEXT DEFAULT '', aplicado_em TEXT, obs TEXT DEFAULT '', aplic TEXT DEFAULT '', criado_por TEXT DEFAULT '')"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_pedido_item ON est_pedido_item (pedido)"),
+    // v7.45.0 (entrega 5): categoria do dia de cada pessoa (rodízio entre dias) e retrato diário do estoque (só quando muda; 120 dias)
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS est_foco (data TEXT NOT NULL, whats TEXT NOT NULL, categoria TEXT NOT NULL DEFAULT '', por TEXT DEFAULT '', em TEXT, PRIMARY KEY (data, whats))"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS est_estoque (produto TEXT NOT NULL, data TEXT NOT NULL, estoque INTEGER NOT NULL, PRIMARY KEY (produto, data))"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_estoque_data ON est_estoque (data)"),
   ]);
   // v7.42.0: colunas novas da preparação. ALTER falha quando a coluna já existe — por isso um por um, sem derrubar nada.
   for (const col of ["etapa TEXT DEFAULT ''", 'aceito_em TEXT', 'aceito_por TEXT', 'preparado_em TEXT', 'preparado_por TEXT', "ref_nome TEXT DEFAULT ''", "ref_codigo TEXT DEFAULT ''", "ref_foto TEXT DEFAULT ''"]) {
     try { await env.DB.prepare('ALTER TABLE est_produto ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ }
   }
   try { await env.DB.prepare("ALTER TABLE est_lista ADD COLUMN familia TEXT DEFAULT ''").run(); } catch (e) { /* v7.44.0: já existe */ }
+  // v7.45.0: último estoque visto no retrato, última queda (venda) e controle dos degraus da reativação
+  for (const col of ['ult_estoque INTEGER', 'ult_estoque_em TEXT', 'ult_queda_em TEXT', "reat_base TEXT DEFAULT ''", 'reat_degrau INTEGER NOT NULL DEFAULT 0', 'reat_dispensa_ate TEXT']) {
+    try { await env.DB.prepare('ALTER TABLE est_produto ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ }
+  }
   await famIniciar_(env);
   estIniciado_ = env.DB;
 }
@@ -6096,11 +6120,14 @@ async function estCfg_(env) {
   out.instrucoes = c.instrucoes && typeof c.instrucoes === 'object' ? c.instrucoes : {};
   out.porPessoa = Math.min(60, Math.max(1, Number(out.porPessoa) || 20)); out.diasSemRepetir = Math.min(120, Math.max(0, Number(out.diasSemRepetir) || 0));
   out.modelosPreparacao = estModelos_(c.modelosPreparacao) || EST_MODELOS_PADRAO_.map((m) => Object.assign({}, m));
+  out.focoCategoria = c.focoCategoria !== false; out.categoriasFixas = estFixas_(c.categoriasFixas);
+  out.reativacao = estDegraus_(c.reativacao) || EST_CFG_PADRAO_.reativacao.slice();
+  const hr = Number(c.retratoHora); out.retratoHora = c.retratoHora != null && Number.isInteger(hr) && hr >= 0 && hr <= 23 ? hr : EST_CFG_PADRAO_.retratoHora;
   return out;
 }
-async function estCatalogo_(env) {                                     // lista pública do catálogo (cache 10 min no KV)
+async function estCatalogo_(env, fresco) {                             // lista pública do catálogo (cache 10 min no KV); fresco: ignora o cache (retrato diário)
   const chave = 'est:catalogo:v1';
-  try { const c = await env.CACHE.get(chave); if (c) return JSON.parse(c); } catch (e) { /* segue */ }
+  if (!fresco) { try { const c = await env.CACHE.get(chave); if (c) return JSON.parse(c); } catch (e) { /* segue */ } }
   const base = String(env.API_URL || '').trim(); if (!base) throw new Error('Falta o endereço do catálogo no servidor.');
   const r = await fetch(base + (base.includes('?') ? '&' : '?') + 'action=list&todos=true', { redirect: 'follow', headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(25000) });
   const j = await r.json();
@@ -6121,8 +6148,16 @@ async function estEscalaDoDia_(env, data, cfg) {
 }
 /** Pontua as peças e monta 20 por pessoa, tentando agrupar pela mesma categoria/público sem passar na frente das mais urgentes.
  * v7.44.0: `familias` (produto → {familia, ordem}) junta os tamanhos da mesma família num item só: conta 1 das 20, vai inteira para a
- * mesma pessoa e pontua pelo membro mais urgente. Membro conferido/atualizado há pouco continua fora. */
-function estMontarListas_(produtos, info, cfg, pessoas, jaUsados, agoraMs, familias) {
+ * mesma pessoa e pontua pelo membro mais urgente. Membro conferido/atualizado há pouco continua fora.
+ * v7.45.0: com `cfg.focoCategoria` (padrão), cada pessoa recebe as peças concentradas numa categoria principal do dia:
+ *  - as categorias são ranqueadas pela soma das pontuações dos `porPessoa` itens mais urgentes delas;
+ *  - quem tem categoria fixa (`cfg.categoriasFixas`) fica com ela; as outras pessoas pegam categorias diferentes entre si e das já
+ *    tomadas hoje (`foco.tomadas`), com rodízio: a categoria que a pessoa teve nos últimos dias (`foco.historico[w][cat] = dias atrás`)
+ *    perde força (ontem ×0,2; anteontem ×0,45; até 6 dias ×0,75);
+ *  - dentro da categoria, as mais urgentes primeiro; só quando faltam itens, completa com a próxima categoria mais urgente (agrupada),
+ *    preferindo as que não são o foco de ninguém.
+ * O objeto devolvido tem a propriedade não enumerável `_foco` ({ whats: categoria }). */
+function estMontarListas_(produtos, info, cfg, pessoas, jaUsados, agoraMs, familias, foco) {
   const P = cfg.pesos, limite = cfg.diasSemRepetir, usados = new Set(jaUsados || []), fam = familias || {};
   const pont = [];
   for (const p of produtos) {
@@ -6138,27 +6173,73 @@ function estMontarListas_(produtos, info, cfg, pessoas, jaUsados, agoraMs, famil
     const est = Number(p.estoque); if (p.estoque !== '' && est >= 1 && est <= 2) s += P.estoqueBaixo;
     if (i.divergiu) s += P.divergiu;
     const f = fam[p.id];
-    pont.push({ p, s, grupo: (p.categoria || 'Outros') + (p.genero ? ' · ' + p.genero : ''), familia: f ? String(f.familia) : '', ordem: f ? Number(f.ordem) || 0 : 0 });
+    pont.push({ p, s, grupo: (p.categoria || 'Outros') + (p.genero ? ' · ' + p.genero : ''), cat: p.categoria || 'Outros', familia: f ? String(f.familia) : '', ordem: f ? Number(f.ordem) || 0 : 0 });
   }
   // unidades: peça solta ou família inteira (membros elegíveis na ordem da família)
   const unidades = [], porFam = new Map();
   for (const x of pont) {
-    if (!x.familia) { unidades.push({ s: x.s, grupo: x.grupo, id: x.p.id, itens: [x] }); continue; }
+    if (!x.familia) { unidades.push({ s: x.s, grupo: x.grupo, cat: x.cat, id: x.p.id, itens: [x] }); continue; }
     let u = porFam.get(x.familia);
-    if (!u) { u = { s: x.s, grupo: x.grupo, id: x.p.id, itens: [] }; porFam.set(x.familia, u); unidades.push(u); }
-    u.itens.push(x); if (x.s > u.s) { u.s = x.s; u.grupo = x.grupo; } if (x.p.id < u.id) u.id = x.p.id;
+    if (!u) { u = { s: x.s, grupo: x.grupo, cat: x.cat, id: x.p.id, itens: [] }; porFam.set(x.familia, u); unidades.push(u); }
+    u.itens.push(x); if (x.s > u.s) { u.s = x.s; u.grupo = x.grupo; u.cat = x.cat; } if (x.p.id < u.id) u.id = x.p.id;
   }
   porFam.forEach((u) => u.itens.sort((a, b) => a.ordem - b.ordem || a.p.id.localeCompare(b.p.id)));
   unidades.sort((a, b) => b.s - a.s || a.id.localeCompare(b.id));
-  const listas = {}, n = cfg.porPessoa, janela = Math.max(n * pessoas.length * 2, n * 3);
-  const urgentes = unidades.slice(0, janela);                               // só agrupa entre as mais urgentes
-  for (const w of pessoas) {
-    const lista = [];
-    while (lista.length < n && urgentes.length) {
-      const ancora = urgentes.shift(); lista.push(ancora);
-      for (let k = 0; k < urgentes.length && lista.length < n;) { if (urgentes[k].grupo === ancora.grupo) lista.push(urgentes.splice(k, 1)[0]); else k++; }
+  const listas = {}, n = Math.max(0, Number(cfg.porPessoa) || 0);
+  const achatar = (lista) => [].concat(...lista.map((u) => u.itens.map((x) => Object.assign(x, { grupo: u.grupo }))));
+  const escolha = {};
+  Object.defineProperty(listas, '_foco', { value: escolha, enumerable: false });
+  if (cfg.focoCategoria === false) {
+    const janela = Math.max(n * pessoas.length * 2, n * 3);
+    const urgentes = unidades.slice(0, janela);                             // só agrupa entre as mais urgentes
+    for (const w of pessoas) {
+      const lista = [];
+      while (lista.length < n && urgentes.length) {
+        const ancora = urgentes.shift(); lista.push(ancora);
+        for (let k = 0; k < urgentes.length && lista.length < n;) { if (urgentes[k].grupo === ancora.grupo) lista.push(urgentes.splice(k, 1)[0]); else k++; }
+      }
+      listas[w] = achatar(lista);
     }
-    listas[w] = [].concat(...lista.map((u) => u.itens.map((x) => Object.assign(x, { grupo: u.grupo }))));
+    return listas;
+  }
+  // ---- foco por categoria ----
+  const fo = foco || {}, fixas = cfg.categoriasFixas || {}, hist = fo.historico || {};
+  const porCat = new Map(); unidades.forEach((u) => { if (!porCat.has(u.cat)) porCat.set(u.cat, []); porCat.get(u.cat).push(u); });
+  const forcaDe = (lista) => lista.slice(0, Math.max(1, n)).reduce((t, u) => t + u.s, 0);
+  const forca = new Map([...porCat].map(([c, l]) => [c, forcaDe(l)]));
+  const nomeCat = (txt) => { const k = estCatNorm_(txt); return [...porCat.keys()].find((c) => estCatNorm_(c) === k) || String(txt || ''); };
+  const tomadas = new Set((fo.tomadas || []).map(nomeCat));
+  const ordem = pessoas.filter((w) => fixas[w]).concat(pessoas.filter((w) => !fixas[w]));
+  for (const w of ordem) {
+    if (fixas[w]) { escolha[w] = nomeCat(fixas[w]); tomadas.add(escolha[w]); continue; }
+    const h = hist[w] || {};
+    let melhor = '', mv = null;
+    for (const [c, f] of forca) {
+      const d = h[c]; const v = f * (d == null ? 1 : d <= 1 ? 0.2 : d <= 2 ? 0.45 : 0.75);
+      const chave = [tomadas.has(c) ? 0 : 1, v];                              // categoria livre sempre antes de repetir uma já tomada
+      if (!mv || chave[0] > mv[0] || (chave[0] === mv[0] && (chave[1] > mv[1] || (chave[1] === mv[1] && c.localeCompare(melhor) < 0)))) { mv = chave; melhor = c; }
+    }
+    escolha[w] = melhor; if (melhor) tomadas.add(melhor);
+  }
+  const usadosU = new Set(), focos = new Set(Object.values(escolha));
+  const pegar = (lista, cat) => { for (const u of porCat.get(cat) || []) { if (lista.length >= n) break; if (!usadosU.has(u)) { usadosU.add(u); lista.push(u); } } };
+  const lU = {};
+  for (const w of ordem) { lU[w] = []; pegar(lU[w], escolha[w]); }                  // 1º: cada uma na sua categoria
+  for (const w of ordem) {                                                            // 2º: completa com a próxima categoria mais urgente
+    const l = lU[w];
+    while (l.length < n) {
+      const resto = new Map(); for (const [c, lst] of porCat) { const r = lst.filter((u) => !usadosU.has(u)); if (r.length) resto.set(c, r); }
+      if (!resto.size) break;
+      const prox = [...resto.keys()].sort((a, b) => (focos.has(a) ? 1 : 0) - (focos.has(b) ? 1 : 0) || forcaDe(resto.get(b)) - forcaDe(resto.get(a)) || a.localeCompare(b))[0];
+      pegar(l, prox);
+    }
+  }
+  // dentro de cada categoria, o público mais urgente primeiro e os iguais juntos (a tela mostra um título por grupo)
+  for (const w of pessoas) {
+    const l = lU[w] || [], posCat = new Map(), posGr = new Map();
+    l.forEach((u, k) => { if (!posCat.has(u.cat)) posCat.set(u.cat, k); if (!posGr.has(u.grupo)) posGr.set(u.grupo, k); });
+    const ord = l.map((u, k) => ({ u, k })).sort((a, b) => posCat.get(a.u.cat) - posCat.get(b.u.cat) || posGr.get(a.u.grupo) - posGr.get(b.u.grupo) || a.k - b.k).map((x) => x.u);
+    listas[w] = achatar(ord);
   }
   return listas;
 }
@@ -6170,6 +6251,19 @@ function estProgresso_(linhas) {
   return { total: u.size, feitas };
 }
 async function estInfo_(env) { const m = {}; ((await env.DB.prepare('SELECT * FROM est_produto').all()).results || []).forEach((r) => { m[r.id] = r; }); return m; }
+/** v7.45.0: categorias tomadas hoje e histórico dos últimos 6 dias ({ whats: { categoria: dias atrás } }) para o rodízio. */
+async function estFocoContexto_(env, data, excluir) {
+  const desde = estHoje_(Date.parse(data + 'T15:00:00Z') - 6 * 864e5);
+  const rows = (await env.DB.prepare('SELECT data, whats, categoria FROM est_foco WHERE data>=? AND data<=?').bind(desde, data).all()).results || [];
+  const tomadas = [], historico = {}, hojeMs = Date.parse(data + 'T12:00:00Z');
+  rows.forEach((r) => {
+    if (!r.categoria) return;
+    if (r.data === data) { if (!(excluir || []).includes(r.whats)) tomadas.push(r.categoria); return; }
+    const d = Math.round((hojeMs - Date.parse(r.data + 'T12:00:00Z')) / 864e5), h = (historico[r.whats] = historico[r.whats] || {});
+    if (h[r.categoria] == null || d < h[r.categoria]) h[r.categoria] = d;
+  });
+  return { tomadas, historico };
+}
 async function estGarantirListas_(env, data, cfg) {
   const equipe = (await estEquipe_(env)).filter((e) => e.confere);
   const existentes = (await env.DB.prepare('SELECT whats, produto FROM est_lista WHERE data=?').bind(data).all()).results || [];
@@ -6178,11 +6272,127 @@ async function estGarantirListas_(env, data, cfg) {
   const trava = 'est:montando:' + data; if (await env.CACHE.get(trava)) return; await env.CACHE.put(trava, '1', { expirationTtl: 60 });
   try {
     let familias = {}; try { familias = await famMapa_(env); } catch (e) { familias = {}; }   // v7.44.0: sem famílias, a lista sai como antes
-    const listas = estMontarListas_(await estCatalogo_(env), await estInfo_(env), cfg, faltam, existentes.map((r) => r.produto), Date.now(), familias);
-    const ins = [];
-    for (const w of faltam) (listas[w] || []).forEach((x, pos) => ins.push(env.DB.prepare('INSERT OR IGNORE INTO est_lista (data, whats, produto, pos, grupo, familia) VALUES (?, ?, ?, ?, ?, ?)').bind(data, w, x.p.id, pos, x.grupo, x.familia || '')));
+    const foco = await estFocoContexto_(env, data, faltam);
+    const listas = estMontarListas_(await estCatalogo_(env), await estInfo_(env), cfg, faltam, existentes.map((r) => r.produto), Date.now(), familias, foco);
+    const ins = [], agora = new Date().toISOString();
+    for (const w of faltam) {
+      (listas[w] || []).forEach((x, pos) => ins.push(env.DB.prepare('INSERT OR IGNORE INTO est_lista (data, whats, produto, pos, grupo, familia) VALUES (?, ?, ?, ?, ?, ?)').bind(data, w, x.p.id, pos, x.grupo, x.familia || '')));
+      if (cfg.focoCategoria !== false) ins.push(env.DB.prepare("INSERT INTO est_foco (data, whats, categoria, por, em) VALUES (?, ?, ?, 'sistema', ?) ON CONFLICT(data, whats) DO UPDATE SET categoria=excluded.categoria, por=excluded.por, em=excluded.em").bind(data, w, listas._foco[w] || '', agora));
+    }
     for (let k = 0; k < ins.length; k += 50) await env.DB.batch(ins.slice(k, k + 50));
   } finally { await env.CACHE.delete(trava); }
+}
+/** v7.45.0 (gestor): monta de novo só os itens NÃO feitos de uma pessoa. `categoria` vazia = escolhe pelo rodízio (respeita a fixa).
+ * Itens já conferidos ficam; a pessoa recebe o que falta para chegar a `porPessoa` itens. */
+async function estRefazerPessoa_(env, data, cfg, w, categoria, eu) {
+  const minhas = (await env.DB.prepare('SELECT produto, pos, familia, feito_em FROM est_lista WHERE data=? AND whats=?').bind(data, w).all()).results || [];
+  const feitas = minhas.filter((r) => r.feito_em), feitasU = new Set(feitas.map((r) => (r.familia ? 'f:' + r.familia : 'p:' + r.produto)));
+  await env.DB.prepare('DELETE FROM est_lista WHERE data=? AND whats=? AND feito_em IS NULL').bind(data, w).run();
+  const usados = ((await env.DB.prepare('SELECT produto FROM est_lista WHERE data=?').bind(data).all()).results || []).map((r) => r.produto);
+  let familias = {}; try { familias = await famMapa_(env); } catch (e) { familias = {}; }
+  const foco = await estFocoContexto_(env, data, [w]);
+  const fixa = categoria || cfg.categoriasFixas[w] || '';
+  const c2 = Object.assign({}, cfg, { porPessoa: Math.max(0, cfg.porPessoa - feitasU.size), categoriasFixas: fixa ? { [w]: fixa } : {}, focoCategoria: categoria ? true : cfg.focoCategoria });   // trocar a categoria vale mesmo com o foco desligado
+  const listas = estMontarListas_(await estCatalogo_(env), await estInfo_(env), c2, [w], usados, Date.now(), familias, foco);
+  const base = feitas.reduce((m, r) => Math.max(m, Number(r.pos) + 1), 0), ins = [];
+  (listas[w] || []).forEach((x, k) => ins.push(env.DB.prepare('INSERT OR IGNORE INTO est_lista (data, whats, produto, pos, grupo, familia) VALUES (?, ?, ?, ?, ?, ?)').bind(data, w, x.p.id, base + k, x.grupo, x.familia || '')));
+  const cat = c2.focoCategoria === false ? '' : (listas._foco[w] || categoria || '');
+  ins.push(env.DB.prepare('INSERT INTO est_foco (data, whats, categoria, por, em) VALUES (?, ?, ?, ?, ?) ON CONFLICT(data, whats) DO UPDATE SET categoria=excluded.categoria, por=excluded.por, em=excluded.em').bind(data, w, cat, eu || 'sistema', new Date().toISOString()));
+  for (let k = 0; k < ins.length; k += 50) await env.DB.batch(ins.slice(k, k + 50));
+  return { categoria: cat, mantidas: feitas.length, novas: (listas[w] || []).length };
+}
+/* ---- v7.45.0: reativação de peça parada ----
+ * "Sem vender" = o estoque não caiu e a peça não foi arquivada no período. Sem mexer no Apps Script: o cron tira 1 retrato por dia do catálogo
+ * público (est_estoque, só quando o estoque muda) e grava est_produto.ult_queda_em quando o estoque diminui. Conferência que baixou a contagem
+ * não conta como venda. Dias parado = hoje − max(última queda, cadastro, aceite, início da observação). Família: a data mais recente entre os
+ * tamanhos (se um tamanho vendeu, a família não está parada). Peça em preparação, sem estoque informado ou com estoque 0 não entra. */
+function estParadas_(catalogo, info, familias, agoraMs, inicioIso, degraus, famNomes) {
+  const fam = familias || {}, nomes = famNomes || {}, [d1, d2, d3] = degraus, inicio = Date.parse(inicioIso || '');
+  const unid = new Map();
+  for (const p of catalogo) {
+    const f = fam[p.id], chave = f ? 'f:' + f.familia : 'p:' + p.id, i = info[p.id] || {};
+    let u = unid.get(chave); if (!u) { u = { chave, familia: f ? String(f.familia) : '', base: Number.isFinite(inicio) ? inicio : 0, membros: [] }; unid.set(chave, u); }
+    for (const dt of [i.ult_queda_em, p.cadastro, i.aceito_em]) { const t = Date.parse(dt || ''); if (Number.isFinite(t) && t > u.base) u.base = t; }
+    const est = Number(p.estoque);
+    if (i.etapa !== 'preparacao' && p.estoque !== '' && Number.isFinite(est) && est > 0) u.membros.push({ p, ordem: f ? Number(f.ordem) || 0 : 0, est });
+  }
+  const out = [];
+  unid.forEach((u) => {
+    if (!u.membros.length || !u.base) return;
+    const dias = Math.floor((agoraMs - u.base) / 864e5), degrau = dias >= d3 ? 3 : dias >= d2 ? 2 : dias >= d1 ? 1 : 0;
+    if (!degrau) return;
+    u.membros.sort((a, b) => a.ordem - b.ordem || a.p.id.localeCompare(b.p.id));
+    const r = u.membros[0].p;
+    out.push({ chave: u.chave, produto: r.id, ids: u.membros.map((m) => m.p.id), familia: u.familia, nome: (u.familia && nomes[u.familia]) || r.nome, codigo: r.codigo, foto: (u.membros.find((m) => m.p.foto) || u.membros[0]).p.foto, categoria: r.categoria || '', estoque: u.membros.reduce((t, m) => t + m.est, 0), dias, degrau, base: new Date(u.base).toISOString() });
+  });
+  return out.sort((a, b) => b.dias - a.dias || a.produto.localeCompare(b.produto));
+}
+/** Cria as tarefas dos degraus 1 (Foto nova) e 2 (Vídeo curto) uma vez por "período parado" (reat_base) e sem duplicar tarefa aberta. */
+async function estReativar_(env, paradas, cfg, agoraIso) {
+  if (!paradas.length) return { criadas: 0 };
+  const info = await estInfo_(env);
+  const abertas = new Set(((await env.DB.prepare("SELECT produto, titulo FROM est_tarefa WHERE status='pendente' AND titulo IN ('Foto nova', 'Vídeo curto')").all()).results || []).map((t) => t.produto + '|' + t.titulo));
+  const funcao = cfg.funcoes.includes('Fotos') ? 'Fotos' : ((cfg.modelosPreparacao.find((m) => m.tipo === 'foto') || {}).funcao || '');
+  const ops = []; let criadas = 0;
+  for (const x of paradas) {
+    const i = info[x.produto] || {}, feito = i.reat_base === x.base ? Number(i.reat_degrau) || 0 : 0;
+    const fam = x.familia ? ' Vale para a família inteira (' + x.ids.length + ' tamanhos).' : '';
+    const nova = (titulo, tipo, instr) => { if (abertas.has(x.produto + '|' + titulo)) return; abertas.add(x.produto + '|' + titulo); criadas++; ops.push(env.DB.prepare("INSERT INTO est_tarefa (produto, tipo, titulo, instrucao, funcao, status, origem, criada_em, criada_por) VALUES (?, ?, ?, ?, ?, 'pendente', 'reativacao', ?, 'sistema')").bind(x.produto, tipo, titulo, instr + fam, funcao, agoraIso)); };
+    if (x.degrau >= 1 && feito < 1) nova('Foto nova', 'foto', 'Peça sem venda há ' + x.dias + ' dias. Faça uma foto nova (outro ângulo, vestida ou com combinação) para dar vida a ela.');
+    if (x.degrau >= 2 && feito < 2) nova('Vídeo curto', 'outro', 'Peça sem venda há ' + x.dias + ' dias. Grave um vídeo curto (até 15 segundos) mostrando caimento e detalhes.');
+    if (feito < x.degrau || i.reat_base !== x.base) ops.push(env.DB.prepare('INSERT INTO est_produto (id, reat_base, reat_degrau) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET reat_base=excluded.reat_base, reat_degrau=excluded.reat_degrau').bind(x.produto, x.base, Math.max(feito, x.degrau)));
+  }
+  for (let k = 0; k < ops.length; k += 50) await env.DB.batch(ops.slice(k, k + 50));
+  return { criadas };
+}
+/** Retrato diário do estoque (chamado pelo cron já com a trava). Grava só o que mudou e atualiza ult_queda_em quando o estoque caiu. */
+async function estRetrato_(env, agoraMs) {
+  await iniciar(env); await estIniciar_(env);
+  const cfg = await estCfg_(env), agora = new Date(agoraMs).toISOString(), hoje = estHoje_(agoraMs);
+  const catalogo = await estCatalogo_(env, true), info = await estInfo_(env);
+  let ult = {}; try { ult = JSON.parse((await cfgGet(env, 'est_retrato_ult')) || '{}') || {}; } catch (e) { ult = {}; }
+  const explicada = {};                                                    // conferência que baixou a contagem não é venda
+  ((await env.DB.prepare('SELECT produto, estoque_antes, estoque_depois FROM est_conf WHERE em>?').bind(ult.em || '').all()).results || []).forEach((c) => {
+    const a = Number(c.estoque_antes), d = Number(c.estoque_depois);
+    if (c.estoque_antes !== '' && c.estoque_depois !== '' && Number.isFinite(a) && Number.isFinite(d) && d < a) explicada[c.produto] = (explicada[c.produto] || 0) + (a - d);
+  });
+  const ops = []; let mudaram = 0, quedas = 0;
+  for (const p of catalogo) {
+    if (p.estoque === '' || !Number.isFinite(Number(p.estoque))) continue;
+    const est = Math.floor(Number(p.estoque)), i = info[p.id] || {}, ant = i.ult_estoque == null ? null : Number(i.ult_estoque);
+    if (ant === est) continue;
+    mudaram++;
+    ops.push(env.DB.prepare('INSERT OR REPLACE INTO est_estoque (produto, data, estoque) VALUES (?, ?, ?)').bind(p.id, hoje, est));
+    const vendeu = ant != null && ant - est - (explicada[p.id] || 0) > 0;
+    if (vendeu) quedas++;
+    ops.push(env.DB.prepare('INSERT INTO est_produto (id, ult_estoque, ult_estoque_em, ult_queda_em) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET ult_estoque=excluded.ult_estoque, ult_estoque_em=excluded.ult_estoque_em, ult_queda_em=COALESCE(excluded.ult_queda_em, est_produto.ult_queda_em)').bind(p.id, est, agora, vendeu ? agora : null));
+  }
+  ops.push(env.DB.prepare('DELETE FROM est_estoque WHERE data<?').bind(estHoje_(agoraMs - 120 * 864e5)));
+  for (let k = 0; k < ops.length; k += 50) await env.DB.batch(ops.slice(k, k + 50));
+  let inicio = await cfgGet(env, 'est_retrato_inicio'); if (!inicio) { inicio = agora; await cfgSet(env, 'est_retrato_inicio', inicio); }
+  let familias = {}; try { familias = await famMapa_(env); } catch (e) { familias = {}; }
+  const paradas = estParadas_(catalogo, await estInfo_(env), familias, agoraMs, inicio, cfg.reativacao);
+  const r = await estReativar_(env, paradas, cfg, agora);
+  const res = { data: hoje, em: agora, produtos: catalogo.length, mudaram, quedas, paradas: paradas.length, tarefas: r.criadas };
+  await cfgSet(env, 'est_retrato_ult', JSON.stringify(res));
+  return res;
+}
+/** Cron (a cada minuto): só a checagem barata no KV. O retrato roda 1 vez por dia, depois da hora configurada (Fortaleza), com trava. */
+async function estRetratoCron_(env, agoraMs) {
+  const hoje = estHoje_(agoraMs);
+  if ((await env.CACHE.get('est:retrato:dia')) === hoje) return { pulou: 'feito' };
+  const hc = await env.CACHE.get('est:retrato:hora'), hora = hc != null && /^\d{1,2}$/.test(hc) ? Number(hc) : EST_CFG_PADRAO_.retratoHora;
+  if (new Date(agoraMs - 3 * 3600e3).getUTCHours() < hora) return { pulou: 'cedo' };
+  if (await env.CACHE.get('est:retrato:trava')) return { pulou: 'trava' };
+  await env.CACHE.put('est:retrato:trava', '1', { expirationTtl: 900 });
+  try {
+    await iniciar(env);
+    let ult = {}; try { ult = JSON.parse((await cfgGet(env, 'est_retrato_ult')) || '{}') || {}; } catch (e) { ult = {}; }
+    if (ult.data === hoje) { await env.CACHE.put('est:retrato:dia', hoje, { expirationTtl: 3 * 86400 }); return { pulou: 'feito' }; }   // o KV perdeu a marca; o D1 lembra
+    const r = await estRetrato_(env, agoraMs);
+    await env.CACHE.put('est:retrato:dia', hoje, { expirationTtl: 3 * 86400 });
+    return r;
+  } finally { await env.CACHE.delete('est:retrato:trava'); }
 }
 /** Acrescenta à tarefa quem está na função hoje e se esta pessoa pode marcá-la (função do dia, ou quem aceita/Admin total; sem função: qualquer um da equipe). */
 function estVestirTarefa_(t, escala, eu, podeAceitar, nomeDe) {
@@ -6216,6 +6426,30 @@ function estSituacao_(it) {
 function estItemAdmin_(it) { return { id: it.id, tipo: it.tipo, produto: it.produto || '', nome: it.nome || '', categoria: it.categoria || '', genero: it.genero || '', preco: it.preco || '', tamanhos: it.tamanhos || '', cores: it.cores || '', fotos: estFotos_(it.fotos), qtd_pedida: Number(it.qtd_pedida) || 0, custo: it.custo == null ? null : Number(it.custo), qtd_contada: it.qtd_contada == null ? null : Number(it.qtd_contada), contagens: Number(it.contagens) || 0, nao_veio: !!it.nao_veio, situacao: estSituacao_(it), decisao: it.decisao || '', qtd_aceita: it.qtd_aceita == null ? null : Number(it.qtd_aceita), produto_criado: it.produto_criado || '', aplicado_em: it.aplicado_em || '', obs: it.obs || '' }; }
 function estItemEquipe_(it) { return { id: it.id, tipo: it.tipo, nome: it.nome || '', tamanhos: it.tamanhos || '', cores: it.cores || '', fotos: estFotos_(it.fotos), qtd_contada: it.qtd_contada == null ? null : Number(it.qtd_contada), contagens: Number(it.contagens) || 0, nao_veio: !!it.nao_veio, contado: it.qtd_contada != null || !!it.nao_veio, bateu: it.tipo === 'extra' || it.qtd_contada == null || it.nao_veio ? null : estSituacao_(it) === 'bateu' }; }
 function estPedidoBase_(p, nomeDe) { return { id: p.id, fornecedor: p.fornecedor || '', previsao: p.previsao || '', status: p.status, enviado_em: p.enviado_em || '', conferido_em: p.conferido_em || '', conferido_por: nomeDe(p.conferido_por || '') || '' }; }
+/* ---- v7.45.0 (entrega 5): painel completo e listas do gestor ---- */
+/** Categorias que existem no catálogo (nada inventado), com quantas peças ativas cada uma tem. */
+function estCategorias_(catalogo) {
+  const m = new Map(); catalogo.forEach((x) => { const c = x.categoria || 'Outros'; m.set(c, (m.get(c) || 0) + 1); });
+  return [...m].map(([nome, pecas]) => ({ nome, pecas })).sort((a, b) => b.pecas - a.pecas || a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+/** Famílias: mapa produto → {familia, ordem}, nomes por família e rótulo por produto. Sem famílias: tudo vazio. */
+async function estFamInfo_(env) {
+  const out = { mapa: {}, nomes: {}, rotulos: {} };
+  try { (await famPublico_(env)).forEach((f) => { out.nomes[f.id] = f.nome; f.membros.forEach((m) => { out.mapa[m.produto] = { familia: f.id, ordem: m.ordem }; out.rotulos[m.produto] = m.rotulo; }); }); } catch (e) { /* sem família */ }
+  return out;
+}
+/** Lista do dia de cada pessoa que confere, como o gestor vê no Painel. */
+async function estListasPainel_(env, data, equipe, porId, fi) {
+  const rows = (await env.DB.prepare('SELECT whats, produto, pos, grupo, familia, feito_em FROM est_lista WHERE data=? ORDER BY whats, pos').bind(data).all()).results || [];
+  const focos = {}; ((await env.DB.prepare('SELECT whats, categoria, por FROM est_foco WHERE data=?').bind(data).all()).results || []).forEach((r) => { focos[r.whats] = r; });
+  return equipe.filter((e) => e.confere).map((e) => {
+    const minhas = rows.filter((r) => r.whats === e.whats);
+    const itens = minhas.map((r) => { const x = porId.get(r.produto); return { id: r.produto, nome: x ? x.nome : 'Peça arquivada ou fora do site', codigo: x ? x.codigo : '', foto: x ? x.foto : '', categoria: x ? x.categoria : '', grupo: r.grupo || '', familia: r.familia || '', familiaNome: r.familia ? fi.nomes[r.familia] || '' : '', rotulo: fi.rotulos[r.produto] || '', feito: !!r.feito_em, sumiu: !x }; });
+    const pr = estProgresso_(itens.map((x) => ({ produto: x.id, familia: x.familia, feito: x.feito })));
+    const f = focos[e.whats] || {};
+    return { whats: e.whats, nome: e.nome, categoria: f.categoria || '', categoriaPor: f.por && f.por !== 'sistema' ? 'gestor' : 'sistema', total: pr.total, feitas: pr.feitas, pecas: itens.length, itens };
+  });
+}
 async function rotasEsteira_(env, req, url, J, perms) {
   await iniciar(env); await estIniciar_(env);
   const p = url.pathname, admin = perms.includes('gerir_acessos'), eu = estFone_(req.headers.get('X-TK-Whats')), agora = new Date().toISOString(), data = estHoje_();
@@ -6239,7 +6473,8 @@ async function rotasEsteira_(env, req, url, J, perms) {
     const tarefas = await estTarefasPendentes_(env, minhas.map((f) => f.funcao), porId);
     const pc = await env.DB.prepare("SELECT SUM(CASE WHEN status='a_caminho' AND (previsao IS NULL OR previsao='' OR previsao<=?) THEN 1 ELSE 0 END) AS conferir, SUM(CASE WHEN status='conferido' THEN 1 ELSE 0 END) AS aprovar, SUM(CASE WHEN status='aprovado' AND EXISTS (SELECT 1 FROM est_pedido_item i WHERE i.pedido=est_pedido.id AND i.qtd_aceita>0 AND i.aplicado_em IS NULL) THEN 1 ELSE 0 END) AS aplicar FROM est_pedido").bind(data).first() || {};
     const pedidos = admin ? { conferir: pc.conferir || 0, aprovar: pc.aprovar || 0, aplicar: pc.aplicar || 0 } : { conferir: pc.conferir || 0 };   // v7.43.0: avisos de pedido (só contagens)
-    return J({ ok: true, data, eu: quemSou(), pedidos, lista, feitas: prog.feitas, total: prog.total, pecas: lista.length, pecasFeitas: lista.filter((x) => x.feito).length, funcoes: minhas, tarefas, escala: Object.keys(escala).map((f) => ({ funcao: f, whats: escala[f].whats, nome: nomeDe(escala[f].whats), alterado: escala[f].alterado })) });
+    const fc = await env.DB.prepare('SELECT categoria FROM est_foco WHERE data=? AND whats=?').bind(data, eu).first();   // v7.45.0: categoria do dia
+    return J({ ok: true, data, eu: quemSou(), pedidos, categoria: (fc && fc.categoria) || '', lista, feitas: prog.feitas, total: prog.total, pecas: lista.length, pecasFeitas: lista.filter((x) => x.feito).length, funcoes: minhas, tarefas, escala: Object.keys(escala).map((f) => ({ funcao: f, whats: escala[f].whats, nome: nomeDe(escala[f].whats), alterado: escala[f].alterado })) });
   }
   if (p === '/esteira/conferir' && req.method === 'POST') {
     const d = await req.json().catch(() => ({})), id = String(d.id || '').slice(0, 40);
@@ -6520,7 +6755,8 @@ async function rotasEsteira_(env, req, url, J, perms) {
   if (!admin) return J({ ok: false, erro: 'Só o administrador total acessa esta parte da Esteira.' }, 403);
   if (p === '/esteira/config' && req.method === 'GET') {
     const padrao = (await env.DB.prepare('SELECT dia, funcao, whats FROM est_escala_padrao').all()).results || [];
-    return J({ ok: true, config: cfg, padrao: EST_CFG_PADRAO_, equipe: (await env.DB.prepare('SELECT * FROM est_equipe ORDER BY ativo DESC, nome').all()).results || [], escalaPadrao: padrao, hoje: data, escalaHoje: await estEscalaDoDia_(env, data, cfg) });
+    let categorias = []; try { categorias = estCategorias_(await estCatalogo_(env)); } catch (e) { categorias = []; }   // v7.45.0: para a categoria fixa
+    return J({ ok: true, config: cfg, padrao: EST_CFG_PADRAO_, equipe: (await env.DB.prepare('SELECT * FROM est_equipe ORDER BY ativo DESC, nome').all()).results || [], escalaPadrao: padrao, hoje: data, escalaHoje: await estEscalaDoDia_(env, data, cfg), categorias });
   }
   if (p === '/esteira/config' && req.method === 'POST') {
     const d = await req.json().catch(() => ({})), c = d.config || {};
@@ -6529,11 +6765,17 @@ async function rotasEsteira_(env, req, url, J, perms) {
     for (const k of Object.keys(EST_CFG_PADRAO_.pesos)) { const v = Number((c.pesos || cfg.pesos)[k]); novo.pesos[k] = Number.isFinite(v) ? Math.max(0, Math.min(500, v)) : EST_CFG_PADRAO_.pesos[k]; }
     for (const [f, t] of Object.entries(c.instrucoes || cfg.instrucoes || {})) novo.instrucoes[String(f).slice(0, 40)] = String(t || '').slice(0, 1500);
     if (c.modelosPreparacao !== undefined) { const m = estModelos_(c.modelosPreparacao); if (!m) return J({ ok: false, erro: 'Deixe pelo menos uma tarefa de preparação com título.' }, 400); novo.modelosPreparacao = m; }
+    // v7.45.0: foco por categoria, categorias fixas, degraus da reativação e hora do retrato (o que não veio fica como estava)
+    novo.focoCategoria = c.focoCategoria === undefined ? cfg.focoCategoria : c.focoCategoria !== false;
+    novo.categoriasFixas = c.categoriasFixas === undefined ? cfg.categoriasFixas : estFixas_(c.categoriasFixas);
+    if (c.reativacao !== undefined) { const dg = estDegraus_(c.reativacao); if (!dg) return J({ ok: false, erro: 'Degraus da reativação: use 3 números de dias, crescentes, entre 1 e 365 (ex.: 30, 60, 90).' }, 400); novo.reativacao = dg; } else novo.reativacao = cfg.reativacao;
+    if (c.retratoHora !== undefined) { const hr = Number(c.retratoHora); if (!(Number.isInteger(hr) && hr >= 0 && hr <= 23)) return J({ ok: false, erro: 'Horário do retrato do estoque: escolha uma hora cheia de 0 a 23.' }, 400); novo.retratoHora = hr; } else novo.retratoHora = cfg.retratoHora;
     if (!(novo.porPessoa >= 1 && novo.porPessoa <= 60)) return J({ ok: false, erro: 'Peças por pessoa: escolha de 1 a 60.' }, 400);
     if (!(novo.diasSemRepetir >= 0 && novo.diasSemRepetir <= 120)) return J({ ok: false, erro: 'Dias sem repetir: escolha de 0 a 120.' }, 400);
     novo.funcoes = novo.funcoes.map((f) => String(f || '').trim().slice(0, 40)).filter(Boolean).slice(0, 12);
     if (!novo.funcoes.length) return J({ ok: false, erro: 'Deixe pelo menos uma função no rodízio.' }, 400);
     await cfgSet(env, 'est_cfg_v1', JSON.stringify(novo));
+    try { await env.CACHE.put('est:retrato:hora', String(novo.retratoHora)); } catch (e) { /* o cron usa 6h até o KV responder */ }
     return J({ ok: true, config: await estCfg_(env) });
   }
   if (p === '/esteira/equipe' && req.method === 'POST') {
@@ -6560,8 +6802,90 @@ async function rotasEsteira_(env, req, url, J, perms) {
     linhasP.forEach((r) => { (porW[r.whats] = porW[r.whats] || []).push({ produto: r.produto, familia: r.familia || '', feito: !!r.feito_em }); });
     const prog = Object.keys(porW).map((w) => Object.assign({ whats: w }, estProgresso_(porW[w])));   // v7.44.0: família conta como 1
     const desde = estHoje_(Date.now() - 30 * 864e5), div = await env.DB.prepare('SELECT COUNT(*) AS n, SUM(divergiu) AS d FROM est_conf WHERE data>=?').bind(desde).first();
-    let faixas = null; try { const ag = Date.now(); faixas = { ate30: 0, ate60: 0, ate90: 0, mais90: 0, semData: 0 }; (await estCatalogo_(env)).forEach((x) => { const dd = estDias_(x.cadastro, ag); if (dd == null) faixas.semData++; else if (dd <= 30) faixas.ate30++; else if (dd <= 60) faixas.ate60++; else if (dd <= 90) faixas.ate90++; else faixas.mais90++; }); } catch (e) { faixas = null; }
-    return J({ ok: true, data, progresso: prog.map((r) => ({ whats: r.whats, nome: nomeDe(r.whats), total: r.total, feitas: r.feitas || 0 })), divergencia30: { conferencias: div ? div.n : 0, divergentes: div ? (div.d || 0) : 0 }, idade: faixas });
+    const ag = Date.now();
+    let catalogo = null; try { catalogo = await estCatalogo_(env); } catch (e) { catalogo = null; }
+    let faixas = null; if (catalogo) { faixas = { ate30: 0, ate60: 0, ate90: 0, mais90: 0, semData: 0 }; catalogo.forEach((x) => { const dd = estDias_(x.cadastro, ag); if (dd == null) faixas.semData++; else if (dd <= 30) faixas.ate30++; else if (dd <= 60) faixas.ate60++; else if (dd <= 90) faixas.ate90++; else faixas.mais90++; }); }
+    // v7.45.0: listas por pessoa (gestor vê e altera)
+    const porId = new Map((catalogo || []).map((x) => [x.id, x])), fi = await estFamInfo_(env), info = await estInfo_(env);
+    const listas = await estListasPainel_(env, data, equipe, porId, fi);
+    // chegaram e não foram para o site / esperando "Aceitar"
+    const prep = (await env.DB.prepare("SELECT id, preparado_em, ref_nome, ref_codigo, ref_foto FROM est_produto WHERE etapa='preparacao' ORDER BY preparado_em, id").all()).results || [];
+    const contT = {}; ((await env.DB.prepare("SELECT t.produto, COUNT(*) AS total, SUM(CASE WHEN t.status='feita' THEN 1 ELSE 0 END) AS feitas FROM est_tarefa t JOIN est_produto p ON p.id=t.produto WHERE p.etapa='preparacao' AND t.status IN ('pendente', 'feita') GROUP BY t.produto").all()).results || []).forEach((r) => { contT[r.produto] = r; });
+    const vestirPrep = (x) => { const c = porId.get(x.id) || {}, t = contT[x.id] || {}; const dd = estDias_(x.preparado_em, ag); return { id: x.id, nome: c.nome || x.ref_nome || 'Peça ' + x.id, codigo: c.codigo || x.ref_codigo || '', foto: c.foto || x.ref_foto || '', dias: dd == null ? null : Math.floor(dd), total: Number(t.total) || 0, feitas: Number(t.feitas) || 0 }; };
+    const prepV = prep.map(vestirPrep);
+    const semSite = prepV.filter((x) => x.dias != null && x.dias > 3), esperandoAceitar = prepV.filter((x) => x.total > 0 && x.feitas >= x.total);
+    // pedidos a caminho / esperando aprovação
+    const peds = (await env.DB.prepare("SELECT p.id, p.fornecedor, p.previsao, p.status, p.conferido_em, p.conferido_por, (SELECT COUNT(*) FROM est_pedido_item i WHERE i.pedido=p.id AND i.tipo<>'extra') AS itens FROM est_pedido p WHERE p.status IN ('a_caminho', 'conferido') ORDER BY p.previsao, p.id").all()).results || [];
+    const pedidos = { aCaminho: peds.filter((x) => x.status === 'a_caminho').map((x) => ({ id: x.id, fornecedor: x.fornecedor, previsao: x.previsao || '', itens: x.itens, atrasado: !!x.previsao && x.previsao < data })), aprovar: peds.filter((x) => x.status === 'conferido').map((x) => ({ id: x.id, fornecedor: x.fornecedor, conferido_em: x.conferido_em || '', conferido_por: nomeDe(x.conferido_por || ''), itens: x.itens })) };
+    // divergência por fornecedor (chegadas conferidas nos últimos 180 dias)
+    const fornecedores = ((await env.DB.prepare("SELECT p.fornecedor, COUNT(DISTINCT p.id) AS pedidos, SUM(CASE WHEN i.tipo<>'extra' THEN 1 ELSE 0 END) AS itens, SUM(CASE WHEN i.tipo<>'extra' AND (i.nao_veio=1 OR i.qtd_contada<>i.qtd_pedida) THEN 1 ELSE 0 END) AS diferentes, SUM(CASE WHEN i.tipo<>'extra' THEN i.qtd_pedida ELSE 0 END) AS pedidas, SUM(CASE WHEN i.tipo<>'extra' THEN COALESCE(i.qtd_contada, 0) ELSE 0 END) AS chegaram, SUM(CASE WHEN i.tipo='extra' THEN 1 ELSE 0 END) AS extras FROM est_pedido p JOIN est_pedido_item i ON i.pedido=p.id WHERE p.status IN ('conferido', 'aprovado') AND p.conferido_em>=? GROUP BY p.fornecedor ORDER BY diferentes DESC, p.fornecedor").bind(new Date(ag - 180 * 864e5).toISOString()).all()).results || []).map((r) => ({ fornecedor: r.fornecedor, pedidos: r.pedidos || 0, itens: r.itens || 0, diferentes: r.diferentes || 0, pedidas: r.pedidas || 0, chegaram: r.chegaram || 0, extras: r.extras || 0 }));
+    // reativação: peças paradas por degrau, sugestões e tarefas abertas
+    let reativacao = null;
+    if (catalogo) {
+      const inicio = await cfgGet(env, 'est_retrato_inicio'); let ult = null; try { ult = JSON.parse((await cfgGet(env, 'est_retrato_ult')) || 'null'); } catch (e) { ult = null; }
+      const paradas = inicio ? estParadas_(catalogo, info, fi.mapa, ag, inicio, cfg.reativacao, fi.nomes) : [];
+      const agIso = new Date(ag).toISOString(), dispensada = (x) => x.ids.some((id) => (info[id] || {}).reat_dispensa_ate > agIso);
+      const enxuto = (x) => ({ produto: x.produto, ids: x.ids, familia: x.familia, nome: x.nome, codigo: x.codigo, foto: x.foto, categoria: x.categoria, estoque: x.estoque, dias: x.dias, degrau: x.degrau });
+      const tarefasR = ((await env.DB.prepare("SELECT id, produto, titulo, criada_em FROM est_tarefa WHERE status='pendente' AND origem='reativacao' ORDER BY id LIMIT 60").all()).results || []).map((t) => { const c = porId.get(t.produto) || {}; return { id: t.id, produto: t.produto, titulo: t.titulo, criada_em: t.criada_em || '', produtoNome: c.nome || 'Peça ' + t.produto }; });
+      reativacao = {
+        degraus: cfg.reativacao, inicio: inicio || '', retrato: ult ? { data: ult.data, quedas: ult.quedas || 0, mudaram: ult.mudaram || 0 } : null,
+        contagem: { d1: paradas.filter((x) => x.degrau === 1).length, d2: paradas.filter((x) => x.degrau === 2).length, d3: paradas.filter((x) => x.degrau === 3).length },
+        paradas: paradas.slice(0, 40).map(enxuto),
+        postagens: paradas.filter((x) => x.degrau >= 2 && !dispensada(x)).slice(0, 20).map(enxuto),
+        promocao: paradas.filter((x) => x.degrau === 3 && !dispensada(x)).slice(0, 20).map(enxuto),
+        dispensadas: paradas.filter(dispensada).length, tarefas: tarefasR,
+      };
+    }
+    return J({ ok: true, data, progresso: prog.map((r) => ({ whats: r.whats, nome: nomeDe(r.whats), total: r.total, feitas: r.feitas || 0 })), divergencia30: { conferencias: div ? div.n : 0, divergentes: div ? (div.d || 0) : 0 }, idade: faixas,
+      focoCategoria: cfg.focoCategoria, listas, categorias: catalogo ? estCategorias_(catalogo) : [], semSite, esperandoAceitar, pedidos, fornecedores, reativacao });
+  }
+  // ---- v7.45.0: o gestor altera a lista do dia de uma pessoa (item já conferido não sai) ----
+  if (p.startsWith('/esteira/lista/') && req.method === 'POST') {
+    const d = await req.json().catch(() => ({})), acao = p.slice('/esteira/lista/'.length), w = estFone_(d.whats);
+    const pessoa = equipe.find((e) => e.confere && estFone_(e.whats) === w);
+    if (!pessoa) return J({ ok: false, erro: 'Escolha uma pessoa da equipe que confere peças.' }, 400);
+    const W = pessoa.whats, produto = String(d.produto || '').trim().slice(0, 40);
+    const linhas = (await env.DB.prepare('SELECT whats, produto, pos, familia, feito_em FROM est_lista WHERE data=? AND whats=?').bind(data, W).all()).results || [];
+    const unidade = () => { const l = linhas.find((r) => r.produto === produto); if (!l) return null; return l.familia ? linhas.filter((r) => r.familia === l.familia) : [l]; };
+    const maxPos = async (quem) => { const r = await env.DB.prepare('SELECT MAX(pos) AS m FROM est_lista WHERE data=? AND whats=?').bind(data, quem).first(); return r && r.m != null ? Number(r.m) + 1 : 0; };
+    const travada = (u) => (u.some((r) => r.feito_em) ? (u.length > 1 ? 'Esta família já tem tamanho conferido hoje e não pode sair da lista.' : 'Esta peça já foi conferida hoje e não pode sair da lista.') : '');
+    if (acao === 'tirar' || acao === 'mover') {
+      const u = unidade(); if (!u) return J({ ok: false, erro: 'Esta peça não está na lista de ' + pessoa.nome + ' hoje. Atualize o painel.' }, 404);
+      const tr = travada(u); if (tr) return J({ ok: false, erro: tr }, 400);
+      if (acao === 'tirar') { await env.DB.batch(u.map((r) => env.DB.prepare('DELETE FROM est_lista WHERE data=? AND whats=? AND produto=? AND feito_em IS NULL').bind(data, W, r.produto))); return J({ ok: true, tiradas: u.length }); }
+      const destino = equipe.find((e) => e.confere && estFone_(e.whats) === estFone_(d.para));
+      if (!destino) return J({ ok: false, erro: 'Escolha para quem a peça vai (alguém da equipe que confere).' }, 400);
+      if (destino.whats === W) return J({ ok: false, erro: 'A peça já está com ' + pessoa.nome + '. Escolha outra pessoa.' }, 400);
+      const base = await maxPos(destino.whats);
+      await env.DB.batch(u.map((r, k) => env.DB.prepare('UPDATE est_lista SET whats=?, pos=? WHERE data=? AND whats=? AND produto=? AND feito_em IS NULL').bind(destino.whats, base + k, data, W, r.produto)));
+      return J({ ok: true, movidas: u.length, para: destino.nome });
+    }
+    if (acao === 'colocar') {
+      if (!produto) return J({ ok: false, erro: 'Escolha a peça que vai entrar na lista.' }, 400);
+      let catalogo; try { catalogo = await estCatalogo_(env); } catch (e) { return J({ ok: false, erro: e.message }, 503); }
+      const porId = new Map(catalogo.map((x) => [x.id, x])), x = porId.get(produto);
+      if (!x) return J({ ok: false, erro: 'Esta peça não está ativa no site. Só peças do site entram na conferência.' }, 400);
+      const fi = await estFamInfo_(env), f = fi.mapa[produto];
+      const ids = f ? Object.keys(fi.mapa).filter((id) => fi.mapa[id].familia === f.familia && porId.has(id)).sort((a, b) => fi.mapa[a].ordem - fi.mapa[b].ordem || a.localeCompare(b)) : [produto];
+      const ja = (await env.DB.prepare('SELECT whats, produto FROM est_lista WHERE data=? AND produto IN (' + ids.map(() => '?').join(',') + ')').bind(data, ...ids).all()).results || [];
+      if (ja.length) { const quem = ja[0].whats === W ? 'dela' : 'de ' + (nomeDe(ja[0].whats) || 'outra pessoa'); return J({ ok: false, erro: (ids.length > 1 ? 'Um tamanho desta família já está na lista ' : 'Esta peça já está na lista ') + quem + ' hoje.' + (ja[0].whats === W ? '' : ' Use “Mover” na lista dessa pessoa.') }, 400); }
+      const base = await maxPos(W);
+      await env.DB.batch(ids.map((id, k) => { const y = porId.get(id); return env.DB.prepare('INSERT OR IGNORE INTO est_lista (data, whats, produto, pos, grupo, familia) VALUES (?, ?, ?, ?, ?, ?)').bind(data, W, id, base + k, (y.categoria || 'Outros') + (y.genero ? ' · ' + y.genero : ''), f ? String(f.familia) : ''); }));
+      return J({ ok: true, colocadas: ids.length });
+    }
+    if (acao === 'categoria' || acao === 'refazer') {
+      const cat = acao === 'categoria' ? String(d.categoria || '').trim().slice(0, 60) : '';
+      if (acao === 'categoria' && !cat) return J({ ok: false, erro: 'Escolha a categoria do dia.' }, 400);
+      try { return J(Object.assign({ ok: true }, await estRefazerPessoa_(env, data, cfg, W, cat, eu))); } catch (e) { return J({ ok: false, erro: e.message || 'Não consegui montar a lista agora. Tente de novo.' }, 503); }
+    }
+    return J({ ok: false, erro: 'Esta ação da lista não existe.' }, 404);
+  }
+  if (p === '/esteira/reativacao/dispensar' && req.method === 'POST') {   // tira das sugestões por 30 dias (nada muda no preço nem no site)
+    const d = await req.json().catch(() => ({})), ids = [...new Set((Array.isArray(d.ids) ? d.ids : [d.produto]).map((x) => String(x || '').trim().slice(0, 40)).filter(Boolean))].slice(0, 30);
+    if (!ids.length) return J({ ok: false, erro: 'Escolha a peça que vai sair das sugestões.' }, 400);
+    const ate = new Date(Date.now() + 30 * 864e5).toISOString();
+    await env.DB.batch(ids.map((id) => env.DB.prepare('INSERT INTO est_produto (id, reat_dispensa_ate) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET reat_dispensa_ate=excluded.reat_dispensa_ate').bind(id, ate)));
+    return J({ ok: true, ate });
   }
   if (p === '/esteira/refazer-hoje' && req.method === 'POST') {          // depois de mudar a equipe: monta de novo as listas ainda não começadas
     const comecadas = new Set(((await env.DB.prepare('SELECT DISTINCT whats FROM est_lista WHERE data=? AND feito_em IS NOT NULL').bind(data).all()).results || []).map((r) => r.whats));

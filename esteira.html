@@ -97,7 +97,7 @@
   th, td { border-bottom:1px solid var(--linha); padding:6px; text-align:left; }
   td select { min-height:40px; padding:4px 6px; }
   .num { font-variant-numeric:tabular-nums; }
-  .pesos { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  .pesos { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; align-items:end; }
   /* v7.42.0 — preparação: lista de tarefas por peça */
   .prep-topo { display:flex; gap:12px; align-items:center; }
   .prep-topo img, .prep-topo .semfoto { width:56px; height:70px; border-radius:8px; object-fit:cover; flex:none; background:var(--linha); }
@@ -136,6 +136,25 @@
   .aviso-ped .bt { justify-self:start; }
   .prep-topo .t > b, .prep-topo .t > small { display:block; overflow-wrap:anywhere; }
   main[data-tela=pedidos] .card p { margin:0; }
+  /* v7.45.0 — painel completo: listas por pessoa, mercadoria, peças paradas e sugestões */
+  .pessoa { display:grid; gap:8px; border-top:1px solid var(--linha); padding-top:12px; }
+  .pessoa:first-of-type, h2 + .pessoa, p + .pessoa { border-top:0; padding-top:0; }
+  .pessoa-cab { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .pessoa-cab > b:first-child { flex:1; min-width:0; overflow-wrap:anywhere; }
+  .pessoa .ver-lista { justify-self:start; }
+  .item-g { display:grid; gap:8px; border-top:1px solid var(--linha); padding-top:10px; }
+  .item-g .linha { display:flex; gap:10px; align-items:center; }
+  .item-g .t { flex:1; min-width:0; } .item-g .t b { display:block; overflow-wrap:anywhere; } .item-g .t small { display:block; }
+  .item-g img, .item-g .semfoto { width:44px; height:55px; border-radius:6px; object-fit:cover; flex:none; background:var(--linha); }
+  .item-g.feita .t b { color:var(--suave); }
+  .item-g p { margin:0; }
+  .acoes-lista { display:flex; flex-wrap:wrap; gap:8px; }
+  .acoes-lista select { flex:1 1 150px; width:auto; min-height:48px; }
+  .acoes-lista .bt { flex:0 0 auto; }
+  .contagens { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .contagens div { background:var(--areia); border-radius:10px; padding:8px 6px; text-align:center; display:grid; }
+  .contagens b { font-size:1.4rem; }
+  #painel-mercadoria h3, #painel-paradas h3 { margin-top:6px; }
   @media (min-width:700px) { .fundo { align-items:center; } .folha { border-radius:18px; } .acoes-t { justify-content:flex-end; } .acoes-t .bt:not(.discreto) { flex:0 0 200px; } .tarefa .acoes-t:has(.discreto) { justify-content:flex-start; } }
   @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
 </style>
@@ -147,7 +166,7 @@
 </header>
 <main id="app" aria-live="polite"><div class="card">Carregando…</div></main>
 
-<script src="common.js?v=7.43.0"></script>
+<script src="common.js?v=7.45.0"></script>
 <script src="conta.js"></script>
 <script>
 (function () {
@@ -223,7 +242,9 @@
       const pl = el('div', 'progresso'); pl.append(el('b', 'num', r.feitas + '/' + r.total), el('span', 'muted', r.feitas >= r.total ? 'Tudo conferido hoje. Obrigada!' : (r.pecas && r.pecas > r.total ? 'itens ao longo do dia · família de tamanhos conta como 1' : 'peças ao longo do dia, em qualquer ordem')));
       const bar = el('div', 'barra'); const i = el('i'); i.style.width = Math.round((r.feitas / r.total) * 100) + '%'; bar.append(i);
       const grupos = [...new Set(r.lista.map((x) => String(x.grupo || '').split(' · ')[0]).filter(Boolean))].slice(0, 3);
-      prog.append(pl, bar); if (grupos.length) prog.append(el('p', 'muted', 'Hoje: ' + grupos.join(' · ')));
+      prog.append(pl, bar);
+      if (r.categoria) prog.append(el('p', 'muted', 'Categoria do dia: ' + r.categoria + (grupos.length > 1 ? ' (e um pouco de ' + grupos.filter((g) => g !== r.categoria).join(', ') + ')' : '')));   // v7.45.0
+      else if (grupos.length) prog.append(el('p', 'muted', 'Hoje: ' + grupos.join(' · ')));
     }
     app.append(prog);
     r.funcoes.forEach((f) => { const c = el('div', 'card funcao'); c.append(el('h3', '', 'Sua função hoje: ' + f.funcao)); c.append(el('p', f.instrucoes ? '' : 'muted', f.instrucoes || 'Sem instruções cadastradas para esta função.')); app.append(c); });
@@ -984,21 +1005,146 @@
     if (auto && levar.some((x) => !x.aplicado_em)) levarTudo();
   }
 
-  /* ---------- Painel (Admin total) ---------- */
-  async function telaPainel() {
-    app.replaceChildren(el('div', 'card', 'Carregando o painel…'));
-    const r = await srv('/esteira/painel'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPainel);
+  /* ---------- Painel (Admin total) — v7.45.0: completo (listas por pessoa, pendências, reativação, fornecedor) ---------- */
+  const plural = (n, um, varios) => n + ' ' + (Number(n) === 1 ? um : varios);
+  const irAba = (aba) => { ABA = aba; desenharAbas(); abrirAba(); };
+  function linhaPeca(x, extra, acoesEl) {                 // linha compacta: foto, nome e detalhe; ações embaixo
+    const it = el('div', 'item-g'), l = el('div', 'linha'), t = el('div', 't');
+    t.append(el('b', '', x.nome || 'Peça'), el('small', 'muted', extra || ''));
+    l.append(foto(x.foto), t); it.append(l); if (acoesEl) it.append(acoesEl);
+    return it;
+  }
+  async function telaPainel(pre) {
+    if (!pre || !pre.ok) app.replaceChildren(el('div', 'card', 'Carregando o painel…'));
+    const r = pre && pre.ok ? pre : await srv('/esteira/painel'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPainel);
     app.replaceChildren();
-    const c1 = el('div', 'card'); c1.append(el('h2', '', 'Conferência de hoje'));
-    if (!r.progresso.length) c1.append(el('p', 'muted', 'Ninguém da equipe está marcado para conferir. Use Configurações → Equipe.'));
-    r.progresso.forEach((x) => { const l = el('div', 'progresso'); l.append(el('span', '', x.nome || x.whats), el('b', 'num', x.feitas + '/' + x.total)); l.style.justifyContent = 'space-between'; const bar = el('div', 'barra'); const i = el('i'); i.style.width = (x.total ? Math.round(x.feitas / x.total * 100) : 0) + '%'; bar.append(i); c1.append(l, bar); });
-    const c2 = el('div', 'card'); c2.append(el('h2', '', 'Diferença entre site e loja'));
+    // 1) conferência de hoje: lista de cada pessoa (o gestor vê e altera)
+    const c1 = el('div', 'card'); c1.id = 'painel-listas'; c1.append(el('h2', '', 'Conferência de hoje'));
+    const listas = Array.isArray(r.listas) ? r.listas : r.progresso.map((x) => Object.assign({ itens: [], categoria: '' }, x));
+    if (!listas.length) c1.append(el('p', 'muted', 'Ninguém da equipe está marcado para conferir. Use Configurações → Equipe.'));
+    else if (r.focoCategoria !== false) c1.append(el('p', 'muted', 'Cada pessoa confere uma categoria principal por dia, com rodízio entre os dias.'));
+    listas.forEach((x) => {
+      const bl = el('div', 'pessoa'); bl.dataset.whats = x.whats;
+      const cab = el('div', 'pessoa-cab'); cab.append(el('b', '', x.nome || x.whats));
+      if (x.categoria) cab.append(el('span', 'chip', x.categoria + (x.categoriaPor === 'gestor' ? ' · trocada' : '')));
+      cab.append(el('b', 'num', x.feitas + '/' + x.total));
+      const bar = el('div', 'barra'), i = el('i'); i.style.width = (x.total ? Math.round(x.feitas / x.total * 100) : 0) + '%'; bar.append(i);
+      bl.append(cab, bar);
+      if (Array.isArray(r.listas)) { const b = bt('Ver e alterar a lista', '', () => abrirListaPessoa(x, r)); b.classList.add('ver-lista'); b.setAttribute('aria-label', 'Ver e alterar a lista de ' + (x.nome || x.whats)); bl.append(b); }
+      c1.append(bl);
+    });
+    app.append(c1);
+    // 2) pendências da mercadoria: chegou e não foi para o site, esperando aceitar, pedidos
+    const semSite = r.semSite || [], espera = r.esperandoAceitar || [], ped = r.pedidos || { aCaminho: [], aprovar: [] };
+    const c2 = el('div', 'card'); c2.id = 'painel-mercadoria'; c2.append(el('h2', '', 'Mercadoria'));
+    const sub = (tit, itens, vazio, linha) => { c2.append(el('h3', '', tit)); if (!itens.length) c2.append(el('p', 'muted', vazio)); itens.slice(0, 8).forEach((x) => c2.append(linha(x))); if (itens.length > 8) c2.append(el('p', 'muted', 'e mais ' + (itens.length - 8) + '.')); };
+    sub('Chegaram e não foram para o site', semSite, 'Nenhuma peça em preparação há mais de 3 dias.', (x) => linhaPeca(x, [x.codigo, 'em preparação há ' + plural(x.dias, 'dia', 'dias'), x.total ? x.feitas + ' de ' + x.total + ' tarefas' : ''].filter(Boolean).join(' · ')));
+    sub('Esperando “Aceitar para o site”', espera, 'Nenhuma peça com todas as tarefas feitas esperando aceite.', (x) => linhaPeca(x, [x.codigo, 'tarefas feitas', x.dias != null ? 'há ' + plural(x.dias, 'dia', 'dias') + ' em preparação' : ''].filter(Boolean).join(' · ')));
+    if (semSite.length || espera.length) c2.append(acoes(bt('Abrir Preparação', 'prim', () => irAba('prep'))));
+    const pedLinha = (x, txt) => { const d = el('div', 'item-g'), l = el('div', 'linha'), t = el('div', 't'); t.append(el('b', '', x.fornecedor || 'Fornecedor'), el('small', 'muted', txt)); l.append(t); if (x.atrasado) l.append(el('span', 'chip al', 'atrasado')); d.append(l); return d; };
+    c2.append(el('h3', '', 'Pedidos'));
+    if (!ped.aCaminho.length && !ped.aprovar.length) c2.append(el('p', 'muted', 'Nenhum pedido a caminho nem esperando aprovação.'));
+    ped.aCaminho.forEach((x) => c2.append(pedLinha(x, ['a caminho', x.previsao ? 'previsão ' + diaBR(x.previsao) : 'sem previsão', plural(x.itens, 'item', 'itens')].join(' · '))));
+    ped.aprovar.forEach((x) => c2.append(pedLinha(x, ['esperando sua aprovação', x.conferido_por ? 'conferido por ' + x.conferido_por : '', plural(x.itens, 'item', 'itens')].filter(Boolean).join(' · '))));
+    if (ped.aCaminho.length || ped.aprovar.length) c2.append(acoes(bt('Ver pedidos', 'prim', () => irAba('pedidos'))));
+    app.append(c2);
+    // 3) reativação de peças paradas
+    const ra = r.reativacao;
+    const c3 = el('div', 'card'); c3.id = 'painel-paradas'; c3.append(el('h2', '', 'Peças paradas'));
+    const c4 = el('div', 'card'); c4.id = 'painel-postagens'; c4.append(el('h2', '', 'Sugerir para Postagens'));
+    const c5 = el('div', 'card'); c5.id = 'painel-promocao'; c5.append(el('h2', '', 'Sugestões de promoção ou combinação'));
+    if (!ra) c3.append(el('p', 'muted', 'O catálogo não respondeu agora. Tente de novo em instantes.'));
+    else if (!ra.inicio) c3.append(el('p', 'muted', 'A observação das vendas começa no primeiro retrato diário do estoque. Depois disso, as peças sem venda aparecem aqui por ' + ra.degraus.join(', ') + ' dias.'));
+    else {
+      c3.append(el('p', 'muted', 'Sem venda = estoque não caiu no retrato diário (conferência não conta). Observando desde ' + dataBR(ra.inicio) + (ra.retrato ? ' · último retrato ' + diaBR(ra.retrato.data) : '') + '.'));
+      const cont = el('div', 'contagens'); [['d1', 0], ['d2', 1], ['d3', 2]].forEach(([k, n]) => { const d = el('div'); d.append(el('b', 'num', String(ra.contagem[k])), el('span', 'muted', n === 2 ? ra.degraus[2] + ' dias ou mais' : ra.degraus[n] + ' a ' + (ra.degraus[n + 1] - 1) + ' dias')); cont.append(d); }); c3.append(cont);
+      c3.append(el('p', 'muted', ra.degraus[0] + ' dias: foto nova · ' + ra.degraus[1] + ' dias: vídeo curto e Postagens · ' + ra.degraus[2] + ' dias: promoção ou combinação.'));
+      c3.append(el('h3', '', 'Tarefas de reativação abertas'));
+      if (!ra.tarefas.length) c3.append(el('p', 'muted', 'Nenhuma tarefa de reativação esperando.'));
+      ra.tarefas.slice(0, 8).forEach((t) => c3.append(linhaPeca({ nome: t.produtoNome }, t.titulo + ' · para Fotos')));
+      if (ra.tarefas.length > 8) c3.append(el('p', 'muted', 'e mais ' + (ra.tarefas.length - 8) + ' na aba Preparação (Outras tarefas).'));
+      const dispensar = (x, lugar) => { const b = bt('Dispensar por 30 dias', 'discreto', async () => { b.disabled = true; const y = await srv('/esteira/reativacao/dispensar', { ids: x.ids }); if (!y.ok) { b.disabled = false; lugar.diga(y.erro || 'Não consegui dispensar agora.', 'erro'); return; } telaPainel(); }); b.setAttribute('aria-label', 'Dispensar ' + x.nome + ' das sugestões por 30 dias'); return b; };
+      const sugestoes = (card, itens, vazio) => { const st = linhaStatus(); if (!itens.length) card.append(el('p', 'muted', vazio)); itens.forEach((x) => card.append(linhaPeca(x, [x.codigo, 'sem venda há ' + x.dias + ' dias', x.estoque + ' un.', x.familia ? x.ids.length + ' tamanhos' : ''].filter(Boolean).join(' · '), acoes(dispensar(x, st))))); card.append(st); };
+      c4.append(el('p', 'muted', 'Mais de ' + ra.degraus[1] + ' dias sem venda. Use a foto ou o vídeo novo e agende pelo painel, em Postagens. A Esteira não posta sozinha.'));
+      sugestoes(c4, ra.postagens, 'Nenhuma peça para sugerir agora.');
+      c5.append(el('p', 'muted', 'Mais de ' + ra.degraus[2] + ' dias sem venda. O sistema nunca muda preço: decida uma promoção, um combo ou um look com outra peça.'));
+      sugestoes(c5, ra.promocao, 'Nenhuma peça parada há tanto tempo.');
+      if (ra.dispensadas) c5.append(el('p', 'muted', plural(ra.dispensadas, 'peça dispensada', 'peças dispensadas') + ' por 30 dias (continuam contadas acima).'));
+    }
+    app.append(c3); if (ra && ra.inicio) app.append(c4, c5);
+    // 4) diferença site × loja e por fornecedor
+    const c6 = el('div', 'card'); c6.append(el('h2', '', 'Diferença entre site e loja'));
     const n = r.divergencia30.conferencias, d = r.divergencia30.divergentes;
-    c2.append(el('p', '', n ? d + ' de ' + n + ' conferências dos últimos 30 dias encontraram diferença (' + Math.round(d / n * 100) + '%).' : 'Ainda não há conferências registradas.'));
-    const c3 = el('div', 'card'); c3.append(el('h2', '', 'Idade das peças no site'));
-    if (r.idade) [['0 a 30 dias', r.idade.ate30], ['31 a 60 dias', r.idade.ate60], ['61 a 90 dias', r.idade.ate90], ['mais de 90 dias', r.idade.mais90]].forEach(([k, v]) => { const l = el('div', 'progresso'); l.style.justifyContent = 'space-between'; l.append(el('span', '', k), el('b', 'num', String(v))); c3.append(l); });
-    else c3.append(el('p', 'muted', 'O catálogo não respondeu agora.'));
-    app.append(c1, c2, c3);
+    c6.append(el('p', '', n ? d + ' de ' + n + ' conferências dos últimos 30 dias encontraram diferença (' + Math.round(d / n * 100) + '%).' : 'Ainda não há conferências registradas.'));
+    const forn = r.fornecedores || [];
+    if (forn.length) {
+      c6.append(el('h3', '', 'Por fornecedor (chegadas dos últimos 180 dias)'));
+      const tb = el('div', 'tabela'), t = el('table'), th = el('tr'); ['Fornecedor', 'Pedidos', 'Itens com diferença', 'Peças pedidas', 'Chegaram', 'Modelos a mais'].forEach((k) => th.append(el('th', '', k))); t.append(th);
+      forn.forEach((x) => { const tr = el('tr'); [x.fornecedor, x.pedidos, x.diferentes + ' de ' + x.itens, x.pedidas, x.chegaram, x.extras].forEach((v, k) => tr.append(el('td', k ? 'num' : '', String(v)))); t.append(tr); });
+      tb.append(t); c6.append(tb);
+    }
+    const c7 = el('div', 'card'); c7.append(el('h2', '', 'Idade das peças no site'));
+    if (r.idade) [['0 a 30 dias', r.idade.ate30], ['31 a 60 dias', r.idade.ate60], ['61 a 90 dias', r.idade.ate90], ['mais de 90 dias', r.idade.mais90]].forEach(([k, v]) => { const l = el('div', 'progresso'); l.style.justifyContent = 'space-between'; l.append(el('span', '', k), el('b', 'num', String(v))); c7.append(l); });
+    else c7.append(el('p', 'muted', 'O catálogo não respondeu agora.'));
+    app.append(c6, c7);
+  }
+  /** Lista do dia de uma pessoa numa folha: tirar, mover, colocar (busca no catálogo), trocar a categoria e refazer. Item conferido não sai. */
+  function abrirListaPessoa(x, r) {
+    const fechar = abrirFolha('esteira-lista', 'Lista de ' + (x.nome || x.whats), ({ corpo, pe }) => {
+      const st = linhaStatus();
+      const acao = async (rota, dados, botao) => { if (botao) botao.disabled = true; st.diga('Salvando…'); const y = await srv('/esteira/lista/' + rota, Object.assign({ whats: x.whats }, dados)); if (!y.ok) { if (botao) botao.disabled = false; st.diga(y.erro || 'Não consegui alterar a lista agora.', 'erro'); return null; } return y; };
+      const recarregar = async (msg) => { const y = await srv('/esteira/painel'); if (y.ok) { const nx = (y.listas || []).find((p) => p.whats === x.whats); if (nx) Object.assign(x, nx); r = y; HOJE = null; telaPainel(y); } desenhar(); st.diga(msg, 'ok'); st.tabIndex = -1; st.focus({ preventScroll: true }); };   // o foco fica na folha (Esc continua fechando)   // o painel atrás da folha já mostra o novo
+      const desenhar = () => {
+        corpo.replaceChildren();
+        const resumo = el('p', 'muted', (x.categoria ? 'Categoria do dia: ' + x.categoria + ' · ' : '') + x.feitas + ' de ' + x.total + ' itens conferidos' + (x.pecas > x.total ? ' (' + x.pecas + ' peças)' : '') + '.');
+        corpo.append(resumo);
+        // trocar a categoria do dia
+        const lc = el('label', 'campo'); lc.append(document.createTextNode('Trocar a categoria do dia (refaz só o que não foi conferido)'));
+        const sc = el('select'); sc.id = 'lista-categoria'; const o0 = el('option', '', 'Escolha a categoria'); o0.value = ''; sc.append(o0);
+        (r.categorias || []).forEach((c) => { const o = el('option', '', c.nome + ' (' + c.pecas + ')'); o.value = c.nome; if (c.nome === x.categoria) o.selected = true; sc.append(o); }); lc.append(sc);
+        const bCat = bt('Trocar categoria', 'prim', async () => { if (!sc.value) return st.diga('Escolha a categoria do dia.', 'erro'); const y = await acao('categoria', { categoria: sc.value }, bCat); if (y) recarregar('Lista refeita em ' + y.categoria + ': ' + plural(y.novas, 'peça nova', 'peças novas') + ', ' + plural(y.mantidas, 'conferida mantida', 'conferidas mantidas') + '.'); });
+        const bRef = bt('Refazer a lista', '', async () => { if (!bRef.dataset.confirma) { bRef.dataset.confirma = '1'; bRef.textContent = 'Toque de novo para refazer'; st.diga('As peças não conferidas saem e o sistema monta de novo (peças tiradas podem voltar).'); return; } const y = await acao('refazer', {}, bRef); if (y) recarregar('Lista refeita: ' + plural(y.novas, 'peça', 'peças') + (y.categoria ? ' em ' + y.categoria : '') + '.'); });
+        bRef.classList.add('refazer-lista'); corpo.append(lc, acoes(bCat, bRef));
+        // colocar peça (busca no catálogo; família entra inteira)
+        const lb = el('label', 'campo'); lb.append(document.createTextNode('Colocar peça na lista'));
+        const inp = el('input'); inp.type = 'text'; inp.id = 'lista-busca'; inp.placeholder = 'Nome ou código da peça'; inp.autocomplete = 'off'; lb.append(inp);
+        const res = el('div', 'busca-res'); let espera = null;
+        inp.oninput = () => { clearTimeout(espera); espera = setTimeout(async () => {
+          const q = semAcento(inp.value.trim()); res.replaceChildren(); if (q.length < 2) return;
+          let cat; try { cat = await catalogoCompleto(); } catch (e) { st.diga(e.message, 'erro'); return; }
+          if (semAcento(inp.value.trim()) !== q) return;
+          const achados = [...cat.values()].filter((p) => !ehInativo(p) && (semAcento(p.Nome).includes(q) || semAcento(p.Codigo).includes(q) || String(p.ID) === q)).slice(0, 8);
+          if (!achados.length) res.append(el('p', 'muted', 'Nenhuma peça do site com esse nome ou código.'));
+          achados.forEach((p) => { const b = el('button', 'peca'); b.type = 'button'; const t = el('div', 't'); t.append(el('b', '', p.Nome || 'Peça ' + p.ID), el('small', 'muted', [p.Codigo, p.Categoria].filter(Boolean).join(' · '))); b.append(foto(p.Foto_URL), t, el('span', 'chip al', 'Colocar')); b.setAttribute('aria-label', 'Colocar ' + (p.Nome || 'peça') + ' na lista');
+            b.onclick = async () => { const y = await acao('colocar', { produto: String(p.ID) }, b); if (y) { inp.value = ''; recarregar(y.colocadas > 1 ? 'Família colocada: ' + y.colocadas + ' tamanhos.' : 'Peça colocada no fim da lista.'); } }; res.append(b); });
+        }, 250); };
+        corpo.append(lb, res, st);
+        // itens (família = um item)
+        const outros = (r.listas || []).filter((p) => p.whats !== x.whats);
+        const blocos = []; x.itens.forEach((it) => { const u = blocos[blocos.length - 1]; if (it.familia && u && u.familia === it.familia) u.itens.push(it); else blocos.push({ familia: it.familia || '', itens: [it] }); });
+        blocos.sort((a, b) => (a.itens.some((i) => i.feito) ? 1 : 0) - (b.itens.some((i) => i.feito) ? 1 : 0));   // pendentes primeiro: é neles que o gestor mexe
+        if (!blocos.length) corpo.append(el('p', 'vazio', 'Lista vazia hoje.'));
+        blocos.forEach((u) => {
+          const p0 = u.itens[0], feito = u.itens.some((i) => i.feito), tudo = u.itens.every((i) => i.feito), fam = u.familia && u.itens.length > 1;
+          const nome = fam ? (p0.familiaNome || p0.nome) : p0.nome + (p0.rotulo && !String(p0.nome).endsWith(p0.rotulo) ? ' · ' + p0.rotulo : '');
+          const det = [fam ? u.itens.map((i) => i.rotulo || i.codigo).join(', ') : p0.codigo, p0.categoria, tudo ? 'conferida' : feito ? 'parte conferida' : 'pendente'].filter(Boolean).join(' · ');
+          let ac = null;
+          if (feito) ac = el('p', 'muted', tudo ? '✓ Já conferida: não sai da lista.' : 'Um tamanho já foi conferido: a família não sai da lista.');
+          else {
+            const bTirar = bt('Tirar', '', async () => { if (!bTirar.dataset.confirma) { bTirar.dataset.confirma = '1'; bTirar.textContent = 'Toque de novo para tirar'; return; } const y = await acao('tirar', { produto: p0.id }, bTirar); if (y) recarregar(fam ? 'Família tirada da lista.' : 'Peça tirada da lista.'); });
+            bTirar.setAttribute('aria-label', 'Tirar ' + nome + ' da lista');
+            const sm = el('select'); sm.setAttribute('aria-label', 'Mover ' + nome + ' para'); const om = el('option', '', 'Mover para…'); om.value = ''; sm.append(om); outros.forEach((p) => { const o = el('option', '', p.nome || p.whats); o.value = p.whats; sm.append(o); });
+            const bMov = bt('Mover', '', async () => { if (!sm.value) return st.diga('Escolha para quem a peça vai.', 'erro'); const para = sm.options[sm.selectedIndex].textContent; const y = await acao('mover', { produto: p0.id, para: sm.value }, bMov); if (y) recarregar('Movida para ' + (y.para || para) + '.'); });
+            bMov.setAttribute('aria-label', 'Mover ' + nome);
+            ac = el('div', 'acoes-lista'); if (outros.length) ac.append(sm, bMov); ac.append(bTirar);
+          }
+          const linha = linhaPeca({ nome, foto: (u.itens.find((i) => i.foto) || p0).foto }, det, ac); linha.dataset.produto = p0.id; if (tudo) linha.classList.add('feita');
+          corpo.append(linha);
+        });
+      };
+      desenhar();
+      pe.append(bt('Fechar', '', () => fechar()));
+    });
   }
 
   /* ---------- Configurações (Admin total) ---------- */
@@ -1075,7 +1221,29 @@
     const bSalM = el('button', 'bt prim', 'Salvar tarefas da preparação'); bSalM.type = 'button';
     bSalM.onclick = async () => { const y = await srv('/esteira/config', { config: { modelosPreparacao: modelos.map((m) => ({ tipo: m.tipo, titulo: m.titulo, instrucao: m.instrucao, funcao: m.funcao })) } }); if (!y.ok) return aviso(cMod, y.erro || 'Não consegui salvar.'); aviso(cMod, 'Salvo. Vale para as próximas peças colocadas em preparação.', true); };
     cMod.append(boxM, bAddM, bSalM);
-    app.append(cEq, cHoje, cPad, cReg, cMod);
+    // v7.45.0: foco por categoria (com categoria fixa por pessoa) e reativação de peças paradas
+    const cFoco = el('div', 'card'); cFoco.id = 'cfg-foco'; cFoco.append(el('h2', '', 'Foco por categoria e reativação'));
+    const mFoco = el('div', 'marcas'), lbF = el('label'), cbF = el('input'); cbF.type = 'checkbox'; cbF.id = 'cfg-foco-liga'; cbF.checked = r.config.focoCategoria !== false; lbF.append(cbF, document.createTextNode('Foco por categoria: cada pessoa confere uma categoria principal por dia')); mFoco.append(lbF);
+    cFoco.append(mFoco, el('p', 'muted', 'As categorias mudam de um dia para o outro (rodízio). Fixe uma categoria só para quem deve ficar sempre nela.'));
+    const fixas = Object.assign({}, r.config.categoriasFixas || {}), cats = (r.categorias || []).map((c) => c.nome);
+    const boxFx = el('div'); boxFx.style.cssText = 'display:grid;gap:10px';
+    r.equipe.filter((e) => e.ativo && e.confere).forEach((e) => {
+      const lb = el('label', 'campo'); lb.append(document.createTextNode('Categoria de ' + e.nome));
+      const sx = el('select'); sx.dataset.whats = e.whats; const o0 = el('option', '', 'Rodízio automático'); o0.value = ''; sx.append(o0);
+      const opc = cats.slice(); if (fixas[e.whats] && !opc.includes(fixas[e.whats])) opc.push(fixas[e.whats]);
+      opc.forEach((c) => { const o = el('option', '', c); o.value = c; if (fixas[e.whats] === c) o.selected = true; sx.append(o); });
+      sx.onchange = () => { if (sx.value) fixas[e.whats] = sx.value; else delete fixas[e.whats]; };
+      lb.append(sx); boxFx.append(lb);
+    });
+    if (!boxFx.childNodes.length) boxFx.append(el('p', 'muted', 'Ninguém está marcado para conferir peças.'));
+    const deg = r.config.reativacao || [30, 60, 90], boxD = el('div', 'pesos');
+    const [lD1, iD1] = num('Foto nova depois de (dias sem venda)', 'cfg-reat-1', deg[0], 1, 365), [lD2, iD2] = num('Vídeo curto e Postagens depois de (dias)', 'cfg-reat-2', deg[1], 1, 365), [lD3, iD3] = num('Promoção ou combinação depois de (dias)', 'cfg-reat-3', deg[2], 1, 365);
+    const [lHr, iHr] = num('Retrato diário do estoque às (hora, Fortaleza)', 'cfg-retrato-hora', r.config.retratoHora == null ? 6 : r.config.retratoHora, 0, 23);
+    boxD.append(lD1, lD2, lD3, lHr);
+    const bFoco = el('button', 'bt prim', 'Salvar foco e reativação'); bFoco.type = 'button';
+    bFoco.onclick = async () => { const y = await srv('/esteira/config', { config: { focoCategoria: cbF.checked, categoriasFixas: fixas, reativacao: [Number(iD1.value), Number(iD2.value), Number(iD3.value)], retratoHora: Number(iHr.value) } }); if (!y.ok) return aviso(cFoco, y.erro || 'Não consegui salvar.'); aviso(cFoco, 'Salvo. O foco vale para as próximas listas; os degraus valem no próximo retrato.', true); };
+    cFoco.append(el('h3', '', 'Categoria fixa por pessoa'), boxFx, el('h3', '', 'Reativação de peças paradas'), el('p', 'muted', 'Sem venda = o estoque não caiu no retrato diário. O sistema cria as tarefas para Fotos e mostra as sugestões no Painel; nunca muda preço.'), boxD, bFoco);
+    app.append(cEq, cHoje, cPad, cReg, cMod, cFoco);
   }
 
   /* ---------- início ---------- */

@@ -1,4 +1,4 @@
-"""Esteira de Produtos (v7.41.0; preparação 7.42.0; pedidos 7.43.0): jornada da página esteira.html com catálogo, login e servidor da Esteira SIMULADOS.
+"""Esteira de Produtos (v7.41.0; preparação 7.42.0; pedidos 7.43.0; painel completo e reativação 7.45.0): jornada da página esteira.html com catálogo, login e servidor da Esteira SIMULADOS.
 Nada vai ao Google nem à Cloudflare. Celular (390) e computador (1440)."""
 import json, os, re, sys
 from pathlib import Path
@@ -34,6 +34,50 @@ def instalar(ctx, admin=True, familia=False):
           "uploads": 0, "bulks": [], "bulk_falha": False, "pedidos": {}, "seq_ped": 0, "seq_item": 0, "salvos": [], "ped_corpos": [], "creates": [], "ops": {}, "estoques": {}, "arquivar_falha": False, "aceitos": [], "preparados": [], "feitas": [], "cfgs": [],
           "prep": {"2001": [dict(id=11, tipo="cadastro", titulo="Cadastro conferido", funcao="Fotos"), dict(id=12, tipo="foto", titulo="1ª foto", funcao="Fotos"), dict(id=13, tipo="foto", titulo="Fotos de detalhe", funcao="Fotos"), dict(id=14, tipo="foto", titulo="Foto no manequim", funcao="Fotos"), dict(id=15, tipo="cores_tamanhos", titulo="Conferir cores e tamanhos", funcao="Fotos"), dict(id=16, tipo="outro", titulo="Passar etiqueta", funcao="Caixa")]},
           "outras": [dict(id=21, produto="1002", tipo="foto", titulo="Foto nova", funcao="Fotos", origem="conferencia", instrucao="Pedida na conferência por Iara.", produtoNome="Vestido Longo Floral", produtoCodigo="TK-1002", produtoFoto="")]}
+    # ---- v7.45.0: listas por pessoa (o gestor altera), paradas e sugestões ----
+    def gerar(cat, n, base, feitos=0):
+        return [{"id": str(base + k), "nome": f"{cat[:-1]} {k + 1}", "codigo": f"TK-{base + k}", "foto": "", "categoria": cat, "grupo": cat + " · Feminino Adulto", "familia": "", "familiaNome": "", "rotulo": "", "feito": k < feitos, "sumiu": False} for k in range(n)]
+    st["listas5"] = {"88999999999": gerar("Blusas", 20, 5000, 12), "88999990003": gerar("Vestidos", 18, 5100) + [{"id": "5190", "nome": "Saia família P", "codigo": "SF-P", "foto": "", "categoria": "Saias", "grupo": "Saias · Feminino Adulto", "familia": "fsaia", "familiaNome": "Saia família", "rotulo": "P", "feito": False, "sumiu": False}, {"id": "5191", "nome": "Saia família M", "codigo": "SF-M", "foto": "", "categoria": "Saias", "grupo": "Saias · Feminino Adulto", "familia": "fsaia", "familiaNome": "Saia família", "rotulo": "M", "feito": False, "sumiu": False}]}
+    st["focos"] = {"88999999999": "Blusas", "88999990003": "Vestidos"}; st["nomes5"] = {"88999999999": "Iara", "88999990003": "Clarice"}
+    st["lista_corpos"] = []; st["dispensados"] = []; st["seq5"] = 6000
+    def parada(k, dias, degrau): return {"produto": str(8000 + k), "ids": [str(8000 + k)], "familia": "", "nome": f"Vestido parado {k}", "codigo": f"TK-{8000 + k}", "foto": "", "categoria": "Vestidos", "estoque": 2, "dias": dias, "degrau": degrau}
+    PARADAS = [parada(1, 112, 3), parada(2, 95, 3), parada(3, 71, 2), parada(4, 64, 2)]
+    def painel5():
+        listas = []
+        for w, its in st["listas5"].items():
+            un = {}
+            for x in its: k = x["familia"] or x["id"]; un[k] = un.get(k, True) and x["feito"]
+            listas.append({"whats": w, "nome": st["nomes5"][w], "categoria": st["focos"].get(w, ""), "categoriaPor": "sistema", "total": len(un), "feitas": sum(1 for v in un.values() if v), "pecas": len(its), "itens": its})
+        vivas = [x for x in PARADAS if x["produto"] not in st["dispensados"]]
+        return {"ok": True, "data": "2026-11-01", "progresso": [{"whats": x["whats"], "nome": x["nome"], "total": x["total"], "feitas": x["feitas"]} for x in listas], "divergencia30": {"conferencias": 40, "divergentes": 3}, "idade": {"ate30": 182, "ate60": 96, "ate90": 41, "mais90": 63, "semData": 0},
+                "focoCategoria": True, "listas": listas, "categorias": [{"nome": "Blusas", "pecas": 120}, {"nome": "Vestidos", "pecas": 96}, {"nome": "Shorts", "pecas": 40}, {"nome": "Saias", "pecas": 33}],
+                "semSite": [{"id": "2001", "nome": "Blusa Nova Tricô", "codigo": "TK-2001", "foto": "", "dias": 5, "total": 6, "feitas": 2}], "esperandoAceitar": [{"id": "2002", "nome": "Cropped Linho Areia", "codigo": "TK-2002", "foto": "", "dias": 2, "total": 5, "feitas": 5}],
+                "pedidos": {"aCaminho": [{"id": 3, "fornecedor": "Malharia Sol", "previsao": "2026-10-28", "itens": 4, "atrasado": True}], "aprovar": [{"id": 4, "fornecedor": "Confecção Aurora", "conferido_em": "2026-11-01T10:00:00Z", "conferido_por": "Iara", "itens": 6}]},
+                "fornecedores": [{"fornecedor": "Confecção Aurora", "pedidos": 3, "itens": 14, "diferentes": 4, "pedidas": 120, "chegaram": 113, "extras": 1}, {"fornecedor": "Malharia Sol", "pedidos": 1, "itens": 5, "diferentes": 0, "pedidas": 30, "chegaram": 30, "extras": 0}],
+                "reativacao": {"degraus": [30, 60, 90], "inicio": "2026-07-01T09:00:00Z", "retrato": {"data": "2026-11-01", "quedas": 9, "mudaram": 14}, "contagem": {"d1": 7, "d2": 4, "d3": 2},
+                    "paradas": PARADAS, "postagens": vivas, "promocao": [x for x in vivas if x["degrau"] == 3], "dispensadas": len(st["dispensados"]),
+                    "tarefas": [{"id": 91, "produto": "8001", "titulo": "Foto nova", "criada_em": "2026-10-02T09:00:00Z", "produtoNome": "Vestido parado 1"}, {"id": 92, "produto": "8001", "titulo": "Vídeo curto", "criada_em": "2026-10-31T09:00:00Z", "produtoNome": "Vestido parado 1"}]}}
+    def lista5(req, path):
+        b = json.loads(req.post_data or "{}"); st["lista_corpos"].append((path, b)); w = b.get("whats"); its = st["listas5"].get(w)
+        J = lambda d, s_=200: (s_, d)
+        if its is None: return J({"ok": False, "erro": "Escolha uma pessoa da equipe que confere peças."}, 400)
+        un = lambda pid: [x for x in its if x["id"] == pid or (x["familia"] and x["familia"] == next((y["familia"] for y in its if y["id"] == pid), None))]
+        acao = path.rsplit("/", 1)[1]
+        if acao in ("tirar", "mover"):
+            u = un(b.get("produto"))
+            if not u: return J({"ok": False, "erro": "Esta peça não está na lista hoje. Atualize o painel."}, 404)
+            if any(x["feito"] for x in u): return J({"ok": False, "erro": "Esta peça já foi conferida hoje e não pode sair da lista."}, 400)
+            for x in u: its.remove(x)
+            if acao == "mover": st["listas5"][b["para"]].extend(u); return J({"ok": True, "movidas": len(u), "para": st["nomes5"][b["para"]]})
+            return J({"ok": True, "tiradas": len(u)})
+        if acao == "colocar":
+            x = next(p for p in todos if p["ID"] == b["produto"]); its.append({"id": x["ID"], "nome": x["Nome"], "codigo": x["Codigo"], "foto": "", "categoria": x["Categoria"], "grupo": x["Categoria"], "familia": "", "familiaNome": "", "rotulo": "", "feito": False, "sumiu": False})
+            return J({"ok": True, "colocadas": 1})
+        if acao in ("categoria", "refazer"):
+            cat = b.get("categoria") or st["focos"].get(w, "Blusas"); feitos = [x for x in its if x["feito"]]
+            st["seq5"] += 100; its[:] = feitos + gerar(cat, 20 - len(feitos), st["seq5"]); st["focos"][w] = cat
+            return J({"ok": True, "categoria": cat, "mantidas": len(feitos), "novas": 20 - len(feitos)})
+        return J({"ok": False, "erro": "Ação não simulada."}, 404)
     todos = PRODUTOS + [dict(ARQUIVADA)] + ([{k: v for k, v in x.items() if k != "_rot"} for x in FAMILIA] if familia else [])
     def tarefa(t, pid):
         feita = t["id"] in st["feitas"]
@@ -180,7 +224,7 @@ def instalar(ctx, admin=True, familia=False):
                 if familia: lista = lista[:1] + [dict(item(x, x["ID"] in st["conferidas"]), familia="fsunga", familiaNome="Sunga infantil masculino", rotulo=x["_rot"]) for x in FAMILIA]
                 unid = {}
                 for x in lista: k = x.get("familia") or x["id"]; unid[k] = unid.get(k, True) and x["feito"]
-                return route.fulfill(json={"ok": True, "data": "2026-11-01", "eu": {"whats": "88999999999", "nome": "Iara", "admin": admin, "membro": True, "confere": True, "aceitar": admin},
+                return route.fulfill(json={"ok": True, "data": "2026-11-01", "eu": {"whats": "88999999999", "nome": "Iara", "admin": admin, "membro": True, "confere": True, "aceitar": admin}, "categoria": "" if familia else "Vestidos",
                     "pedidos": ({"conferir": 0, "aprovar": sum(1 for x in st["pedidos"].values() if x["status"] == "conferido"), "aplicar": sum(1 for x in st["pedidos"].values() if x["status"] == "aprovado" and any((i.get("qtd_aceita") or 0) > 0 and not i.get("aplicado_em") for i in x["itens"]))} if admin else {"conferir": sum(1 for x in st["pedidos"].values() if x["status"] == "a_caminho")}),
                     "lista": lista, "feitas": sum(1 for v in unid.values() if v), "total": len(unid), "pecas": len(lista),
                     "funcoes": [{"funcao": "Fotos", "instrucoes": "Fotografar as peças novas no manequim.\nConferir as fotos de detalhe."}], "tarefas": tarefas_hoje(),
@@ -204,17 +248,21 @@ def instalar(ctx, admin=True, familia=False):
                 b = json.loads(req.post_data or "{}"); st["aceitos"].append(b["id"]); st["prep"].pop(b["id"], None)
                 return route.fulfill(json={"ok": True, "dispensadas": 3})
             if not admin: return route.fulfill(status=403, json={"ok": False, "erro": "Só o administrador total acessa esta parte da Esteira."})
-            if path == "/esteira/painel":
-                return route.fulfill(json={"ok": True, "data": "2026-11-01", "progresso": [{"whats": "88999999999", "nome": "Iara", "total": 20, "feitas": 12}], "divergencia30": {"conferencias": 40, "divergentes": 3}, "idade": {"ate30": 182, "ate60": 96, "ate90": 41, "mais90": 63, "semData": 0}})
+            if path == "/esteira/painel": return route.fulfill(json=painel5())
+            if path.startswith("/esteira/lista/"): s_, d = lista5(req, path); return route.fulfill(status=s_, json=d)
+            if path == "/esteira/reativacao/dispensar": b = json.loads(req.post_data or "{}"); st["dispensados"] += b.get("ids", []); return route.fulfill(json={"ok": True, "ate": "2026-12-01T12:00:00Z"})
             if path == "/esteira/config" and req.method == "GET":
-                return route.fulfill(json={"ok": True, "config": {"porPessoa": 20, "diasSemRepetir": 21, "pesos": {"nunca": 40, "diaConf": 1, "diaCadastro": 0.5, "diaSemEdicao": 0.3, "estoqueBaixo": 15, "divergiu": 20}, "funcoes": ["Limpeza", "Caixa", "Fotos", "Atendimento online"], "instrucoes": {"Fotos": "Fotografar no manequim."}, "modelosPreparacao": [{"tipo": "cadastro", "titulo": "Cadastro conferido", "instrucao": "Confira nome e preço.", "funcao": "Fotos"}, {"tipo": "foto", "titulo": "1ª foto", "instrucao": "", "funcao": "Fotos"}]},
+                return route.fulfill(json={"ok": True, "config": {"porPessoa": 20, "diasSemRepetir": 21, "pesos": {"nunca": 40, "diaConf": 1, "diaCadastro": 0.5, "diaSemEdicao": 0.3, "estoqueBaixo": 15, "divergiu": 20}, "funcoes": ["Limpeza", "Caixa", "Fotos", "Atendimento online"], "instrucoes": {"Fotos": "Fotografar no manequim."}, "modelosPreparacao": [{"tipo": "cadastro", "titulo": "Cadastro conferido", "instrucao": "Confira nome e preço.", "funcao": "Fotos"}, {"tipo": "foto", "titulo": "1ª foto", "instrucao": "", "funcao": "Fotos"}], "focoCategoria": True, "categoriasFixas": {}, "reativacao": [30, 60, 90], "retratoHora": 6}, "categorias": [{"nome": "Blusas", "pecas": 120}, {"nome": "Vestidos", "pecas": 96}, {"nome": "Shorts", "pecas": 40}],
                     "equipe": st["equipe"], "escalaPadrao": [{"dia": 1, "funcao": "Fotos", "whats": "88999999999"}], "hoje": "2026-11-01", "escalaHoje": {"Limpeza": {"whats": "", "alterado": False}, "Caixa": {"whats": "", "alterado": False}, "Fotos": {"whats": "88999999999", "alterado": False}, "Atendimento online": {"whats": "", "alterado": False}}})
             if path == "/esteira/equipe":
                 b = json.loads(req.post_data or "{}")
                 if len(re.sub(r"\D", "", b.get("whats", ""))) < 10: return route.fulfill(status=400, json={"ok": False, "erro": "Informe o WhatsApp da pessoa com DDD (é o mesmo do login dela)."})
                 st["equipe"].append({"whats": re.sub(r"\D", "", b["whats"]), "nome": b["nome"], "confere": 1, "rodizio": 1, "atendente": 0, "aceitar": 0, "ativo": 1})
                 return route.fulfill(json={"ok": True, "equipe": st["equipe"]})
-            if path == "/esteira/config" and req.method == "POST": st["cfg"] = json.loads(req.post_data or "{}"); st["cfgs"].append(st["cfg"]); return route.fulfill(json={"ok": True})
+            if path == "/esteira/config" and req.method == "POST":
+                st["cfg"] = json.loads(req.post_data or "{}"); st["cfgs"].append(st["cfg"]); dg = st["cfg"].get("config", {}).get("reativacao")
+                if dg and not (dg[0] < dg[1] < dg[2]): return route.fulfill(status=400, json={"ok": False, "erro": "Degraus da reativação: use 3 números de dias, crescentes, entre 1 e 365 (ex.: 30, 60, 90)."})
+                return route.fulfill(json={"ok": True})
             return route.fulfill(json={"ok": True})
         if u.startswith(BASE.rstrip("/")): return route.continue_()
         return route.abort()
@@ -476,6 +524,77 @@ with sync_playwright() as p:
         chk(f"{w} família: sem rolagem horizontal e botões ≥ 44 px", pg.evaluate("document.documentElement.scrollWidth <= innerWidth") and all(x >= 43.5 for x in pg.evaluate("[...document.querySelectorAll('main button')].filter(b=>b.getClientRects().length).map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")))
         pg.screenshot(path=str(OUT / f"esteira_familia_feita_{w}.png"), full_page=True)
         chk(f"{w} família: sem erro de JavaScript", not erros, erros)
+        ctx.close()
+    # ---- v7.45.0: Painel completo (listas do gestor, mercadoria, paradas, sugestões, fornecedor) e configurações novas ----
+    for w, h in [(390, 844), (1440, 900)]:
+        ctx = b.new_context(viewport={"width": w, "height": h}, is_mobile=w < 600, has_touch=w < 600)
+        st = instalar(ctx); ctx.add_init_script("localStorage.setItem('tm_session', JSON.stringify({whatsapp:'88999999999',sessao:'tk3.teste.sessao'}));")
+        pg = ctx.new_page(); erros = []; pg.on("pageerror", lambda e: erros.append(str(e)))
+        pg.goto(BASE + "esteira.html"); pg.wait_for_selector(".peca", timeout=8000)
+        chk(f"{w} 7.45: Hoje mostra a categoria do dia", "Categoria do dia: Vestidos" in pg.inner_text("main"), pg.inner_text("main")[:200])
+        pg.click("nav.abas button[data-aba=painel]"); pg.wait_for_selector("#painel-listas .pessoa", timeout=6000)
+        txt = pg.inner_text("main")
+        chk(f"{w} 7.45: Painel mostra a lista de cada pessoa com a categoria do dia e o progresso", pg.locator("#painel-listas .pessoa").count() == 2 and "Blusas" in pg.inner_text('#painel-listas .pessoa[data-whats="88999999999"]') and "12/20" in txt and "Vestidos" in pg.inner_text('#painel-listas .pessoa[data-whats="88999990003"]'))
+        chk(f"{w} 7.45: chegaram e não foram para o site (com dias) e esperando aceitar", "Chegaram e não foram para o site" in txt and "em preparação há 5 dias" in txt and "Cropped Linho Areia" in txt and pg.locator("#painel-mercadoria >> text=Abrir Preparação").count() == 1)
+        chk(f"{w} 7.45: pedidos a caminho (com atraso) e esperando aprovação", "Malharia Sol" in txt and "atrasado" in txt and "esperando sua aprovação" in txt and "conferido por Iara" in txt)
+        chk(f"{w} 7.45: peças paradas por degrau, tarefas de reativação abertas", all(x in pg.inner_text("#painel-paradas") for x in ["7", "4", "2", "30 a 59 dias", "60 a 89 dias", "90 dias ou mais", "Tarefas de reativação abertas", "Vídeo curto"]), pg.inner_text("#painel-paradas")[:300])
+        chk(f"{w} 7.45: sugestões para Postagens e de promoção, sem mudar preço", pg.locator("#painel-postagens .item-g").count() == 4 and pg.locator("#painel-promocao .item-g").count() == 2 and "nunca muda preço" in pg.inner_text("#painel-promocao") and "A Esteira não posta sozinha" in pg.inner_text("#painel-postagens"))
+        chk(f"{w} 7.45: diferença por fornecedor numa tabela que rola só dentro do quadro", "Por fornecedor" in txt and pg.locator(".tabela table >> text=Confecção Aurora").count() == 1 and "4 de 14" in txt)
+        chk(f"{w} 7.45: Painel sem rolagem horizontal e botões ≥ 44 px", pg.evaluate("document.documentElement.scrollWidth <= innerWidth") and all(x >= 43.5 for x in pg.evaluate("[...document.querySelectorAll('main button, main select')].filter(b=>b.getClientRects().length).map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")))
+        pg.screenshot(path=str(OUT / f"esteira_painel5_{w}.png"), full_page=True)
+        # dispensar sugestão por 30 dias
+        pg.locator("#painel-promocao .item-g").first.locator("button", has_text="Dispensar por 30 dias").click()
+        pg.wait_for_function("document.querySelectorAll('#painel-promocao .item-g').length === 1", timeout=6000)
+        chk(f"{w} 7.45: 'Dispensar por 30 dias' tira a peça das sugestões", st["dispensados"] == ["8001"] and "1 peça dispensada" in pg.inner_text("#painel-promocao"))
+        # lista da Iara: o gestor altera
+        pg.locator('#painel-listas .pessoa[data-whats="88999999999"] button.ver-lista').click(); pg.wait_for_selector(".folha", timeout=4000)
+        folha = pg.locator(".folha")
+        chk(f"{w} 7.45: lista da pessoa abre numa folha (TKCamadas) com itens feitos e pendentes", pg.evaluate("TKCamadas.aberta('esteira-lista')") and "Categoria do dia: Blusas" in folha.inner_text() and folha.locator(".item-g").count() == 20)
+        feito = folha.locator('.item-g[data-produto="5000"]')
+        chk(f"{w} 7.45: item já conferido não tem 'Tirar' nem 'Mover'", feito.locator("button").count() == 0 and "não sai da lista" in feito.inner_text())
+        pend = folha.locator('.item-g[data-produto="5019"]'); bt_ = pend.locator("button", has_text="Tirar"); bt_.click()
+        chk(f"{w} 7.45: tirar pede confirmação no próprio botão", "Toque de novo" in bt_.inner_text() and not st["lista_corpos"])
+        bt_.click(); pg.wait_for_selector(".folha >> text=Peça tirada da lista.", timeout=6000)
+        chk(f"{w} 7.45: tirar remove o item e o painel atrás já atualiza", st["lista_corpos"][-1] == ("/esteira/lista/tirar", {"whats": "88999999999", "produto": "5019"}) and folha.locator(".item-g").count() == 19 and "12/19" in pg.inner_text("#painel-listas"))
+        p18 = folha.locator('.item-g[data-produto="5018"]'); p18.locator("button", has_text="Mover").click()
+        chk(f"{w} 7.45: mover sem escolher a pessoa: aviso em português", "Escolha para quem a peça vai." in folha.inner_text())
+        p18.locator("select").select_option("88999990003"); p18.locator("button", has_text="Mover").click(); pg.wait_for_selector(".folha >> text=Movida para Clarice.", timeout=6000)
+        chk(f"{w} 7.45: mover leva o item para a outra pessoa", any(x["id"] == "5018" for x in st["listas5"]["88999990003"]) and folha.locator('.item-g[data-produto="5018"]').count() == 0)
+        pg.fill("#lista-busca", "Saia"); pg.wait_for_selector(".folha .busca-res >> text=Saia Plissada Midi", timeout=6000)
+        chk(f"{w} 7.45: busca para colocar mostra só peças do site (arquivada fora)", pg.locator(".folha .busca-res >> text=Blusa Nova Tricô").count() == 0)
+        pg.click(".folha .busca-res >> text=Saia Plissada Midi"); pg.wait_for_selector(".folha >> text=Peça colocada no fim da lista.", timeout=6000)
+        chk(f"{w} 7.45: colocar peça do catálogo", st["lista_corpos"][-1] == ("/esteira/lista/colocar", {"whats": "88999999999", "produto": "1003"}) and folha.locator('.item-g[data-produto="1003"]').count() == 1)
+        pg.screenshot(path=str(OUT / f"esteira_lista_pessoa_{w}.png"))
+        pg.select_option("#lista-categoria", "Shorts"); folha.locator("button", has_text="Trocar categoria").click(); pg.wait_for_selector(".folha >> text=Lista refeita em Shorts", timeout=6000)
+        chk(f"{w} 7.45: trocar a categoria do dia refaz só os não conferidos", st["focos"]["88999999999"] == "Shorts" and "12 conferidas mantidas" in folha.inner_text() and "Categoria do dia: Shorts" in folha.inner_text() and folha.locator('.item-g[data-produto="5000"]').count() == 1)
+        rf = folha.locator("button.refazer-lista"); rf.click()
+        chk(f"{w} 7.45: refazer pede confirmação e explica", "Toque de novo para refazer" in rf.inner_text() and "peças tiradas podem voltar" in folha.inner_text())
+        rf.click(); pg.wait_for_selector(".folha >> text=Lista refeita:", timeout=6000)
+        chk(f"{w} 7.45: refazer a lista da pessoa", st["lista_corpos"][-1] == ("/esteira/lista/refazer", {"whats": "88999999999"}))
+        chk(f"{w} 7.45: folha sem rolagem horizontal e botões ≥ 44 px", pg.evaluate("document.documentElement.scrollWidth <= innerWidth") and all(x >= 43.5 for x in pg.evaluate("[...document.querySelectorAll('.folha button, .folha select')].filter(b=>b.getClientRects().length).map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")))
+        pg.keyboard.press("Escape"); pg.wait_for_selector(".folha", state="detached", timeout=4000)
+        chk(f"{w} 7.45: Esc fecha a folha", not pg.evaluate("TKCamadas.aberta('esteira-lista')"))
+        # família na lista da Clarice: um item só
+        pg.locator('#painel-listas .pessoa[data-whats="88999990003"] button.ver-lista').click(); pg.wait_for_selector(".folha", timeout=4000)
+        chk(f"{w} 7.45: família aparece como um item na lista do gestor", pg.locator('.folha .item-g[data-produto="5190"]').count() == 1 and "Saia família" in pg.inner_text(".folha") and "P, M" in pg.inner_text('.folha .item-g[data-produto="5190"]') and pg.locator('.folha .item-g[data-produto="5191"]').count() == 0)
+        pg.locator(".folha .pe button", has_text="Fechar").click(); pg.wait_for_selector(".folha", state="detached", timeout=4000)
+        # 320 px: sem rolagem horizontal
+        pg.set_viewport_size({"width": 320, "height": 700}); pg.wait_for_timeout(200)
+        chk(f"{w} 7.45: Painel a 320 px sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+        pg.set_viewport_size({"width": w, "height": h}); pg.wait_for_timeout(200)
+        # configurações novas
+        pg.click("nav.abas button[data-aba=config]"); pg.wait_for_selector("#cfg-foco", timeout=6000)
+        cf = pg.locator("#cfg-foco")
+        chk(f"{w} 7.45: configurações com foco por categoria, categoria fixa, degraus e horário do retrato", pg.locator("#cfg-foco-liga").is_checked() and "Categoria de Iara" in cf.inner_text() and pg.input_value("#cfg-reat-1") == "30" and pg.input_value("#cfg-reat-3") == "90" and pg.input_value("#cfg-retrato-hora") == "6")
+        cf.locator("select").first.select_option("Blusas"); pg.fill("#cfg-reat-1", "70"); cf.locator("button", has_text="Salvar foco e reativação").click(); pg.wait_for_timeout(300)
+        chk(f"{w} 7.45: degraus fora de ordem: erro em português", "Degraus da reativação" in cf.inner_text())
+        pg.fill("#cfg-reat-1", "20"); pg.fill("#cfg-reat-2", "40"); pg.fill("#cfg-reat-3", "80"); pg.fill("#cfg-retrato-hora", "7"); pg.locator("#cfg-foco-liga").uncheck()
+        cf.locator("button", has_text="Salvar foco e reativação").click(); pg.wait_for_selector("#cfg-foco >> text=Salvo.", timeout=4000)
+        cc = st["cfgs"][-1].get("config", {})
+        chk(f"{w} 7.45: salva foco, categoria fixa, degraus e hora (sem mexer nas outras regras)", cc == {"focoCategoria": False, "categoriasFixas": {"88999999999": "Blusas"}, "reativacao": [20, 40, 80], "retratoHora": 7}, cc)
+        chk(f"{w} 7.45: configurações sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))
+        cf.scroll_into_view_if_needed(); pg.screenshot(path=str(OUT / f"esteira_config_foco_{w}.png"))
+        chk(f"{w} 7.45: sem erro de JavaScript", not erros, erros)
         ctx.close()
     b.close()
 print(f"OK={ok} FALHAS={len(falhas)} {falhas}")

@@ -6,6 +6,22 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.45.0 — Esteira: lista focada por categoria, gestor altera as listas, reativação de peça parada e painel completo (entrega 5) — 02/11/2026
+- **Lista focada por categoria** (`estMontarListas_`, padrão ligado): cada funcionária recebe os 20 itens concentrados numa categoria principal do dia.
+  - Categorias ranqueadas pela soma das pontuações dos 20 itens mais urgentes de cada uma (família = 1 item; exclusões de sempre).
+  - Pessoas diferentes ficam com categorias diferentes; rodízio entre dias pela tabela nova `est_foco (data, whats, categoria)`: a categoria de ontem pesa ×0,2, anteontem ×0,45, até 6 dias ×0,75.
+  - Categoria fixa por pessoa (Configurações) é respeitada. Faltando itens, completa com a próxima categoria mais urgente, agrupada, evitando o foco das outras.
+  - Desligado, a montagem é a de antes. A aba Hoje mostra "Categoria do dia".
+- **Gestor altera as listas** (Admin total, Painel → "Ver e alterar a lista"): tirar, colocar (busca no catálogo; família entra inteira), mover para outra pessoa, trocar a categoria do dia (refaz só os não conferidos) e refazer a lista. Item já conferido não sai. Rotas `POST /esteira/lista/tirar|colocar|mover|categoria|refazer`.
+- **Reativação de peça parada:**
+  - O cron (a cada minuto) faz só uma leitura no KV; uma vez por dia, depois da hora configurada (padrão 6h de Fortaleza, com trava e data no KV e no D1), tira um retrato do catálogo público: `est_estoque (produto, data, estoque)` só quando o estoque muda, retratos com mais de 120 dias apagados.
+  - `est_produto.ult_queda_em` muda quando o estoque cai; queda explicada por conferência não conta como venda.
+  - Dias parado = hoje − maior data entre última queda, cadastro, aceite e início da observação (1º retrato). Família avaliada junta. Fora: peça em preparação, sem estoque informado ou com estoque 0.
+  - Degraus configuráveis (padrão 30/60/90): tarefa "Foto nova" (30) e "Vídeo curto" (60) para Fotos, origem `reativacao`, uma vez por período parado e sem duplicar tarefa aberta. 60+: "Sugerir para Postagens" (só aviso). 90+: "Sugestões de promoção/combinação". O sistema nunca muda preço; "Dispensar por 30 dias" (`POST /esteira/reativacao/dispensar`).
+- **Painel completo:** listas por pessoa; "Chegaram e não foram para o site" (preparação há mais de 3 dias); "Esperando Aceitar para o site"; pedidos a caminho (com atraso) e esperando aprovação; peças paradas por degrau e tarefas de reativação abertas; diferença por fornecedor (chegadas de 180 dias, tabela com rolagem própria).
+- **Configurações:** foco por categoria, categoria fixa por pessoa, degraus da reativação e hora do retrato (salvamento parcial preserva o resto).
+- Testes: `worker_esteira.js` 183 ok; `esteira_ui.py` 221 ok.
+
 ## 7.44.0 — Família de produtos (Esteira, entrega 4) — 01/11/2026
 - **Família de produtos:** a loja cadastra o mesmo modelo uma vez por tamanho ou idade ("Sunga infantil masculino P", "... M", "... G"). Cada tamanho continua um produto separado, com fotos, estoque e link próprios. Agora esses produtos ficam ligados numa família. A planilha e o Apps Script não mudam: a ligação fica no D1 do instagram-worker (`fam_familia`, `fam_membro`).
 - **Servidor (instagram-worker):**
