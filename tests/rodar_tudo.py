@@ -154,6 +154,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("tempo_presenca_ui.py", lambda o: "OK: interação" in o),
     ("mensagens_gestor_ui.py", lambda o: "OK 1440" in o),
     ("postagens_fila_midia.py", lambda o: "OK 320" in o),
+    ("postagens_fila_midia_cards.py", lambda o: "FALHAS=0" in o),   # v7.48.2: Por mídia em cards recolhidos, miniatura real/placeholder, estado preservado
     ("mensagens_camera_menu.py", lambda o: "OK 1440" in o),
     ("video_camera_90s.py", lambda o: "OK: 90 s completos" in o),
     ("video_partes_encoder.py", lambda o: "OK: partes 59/75/90s" in o),
