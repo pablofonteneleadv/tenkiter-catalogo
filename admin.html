@@ -696,6 +696,8 @@
   .atalhos-linha button[hidden] { display:none; }
   /* v4.18: cores/estampas com texto livre só para Admin total (lista fica com o admin) */
   body.sem-gerir .so-admin-cores { display: none !important; }
+  .tecido-ajuda { margin: 4px 0 0; font-size: .82rem; color: #5c5650; }
+  #tecido[readonly] { background: #faf7f2; cursor: default; }
   /* v4.18: tamanhos e cores aparecem só como chips; o campo de texto continua existindo (guarda a escolha) mas não aparece */
   input#tamanhos, input#cores { display: none !important; }
   .busca-admin-wrap { position: relative; flex: 1; min-width: 0; display: block; }
@@ -1269,7 +1271,8 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
       <section class="passo passo-tecido" data-passo="tecido" aria-labelledby="tecido-rotulo">
         <div class="passo-tit" id="tecido-rotulo"><span class="num">4</span><label for="tecido">Tecido</label> <span class="opc">(se souber)</span></div>
-        <input id="tecido" type="text" maxlength="80" list="tecidos-opcoes" placeholder="Escolha ou escreva o tecido" autocomplete="off">
+        <input id="tecido" type="text" maxlength="80" list="tecidos-opcoes" placeholder="Escolha ou escreva o tecido" autocomplete="off" aria-describedby="tecido-ajuda">
+        <p id="tecido-ajuda" class="tecido-ajuda" hidden>Toque num tecido abaixo (toque de novo para tirar). Só o Admin total cria tecidos novos.</p>
         <datalist id="tecidos-opcoes"></datalist>
         <div id="tecidos-rapidos" class="chips" role="group" aria-label="Tecidos cadastrados"></div>
         <button type="button" class="btn-escolher" id="tecidos-gerenciar" hidden>Gerenciar nomes de tecidos</button>
@@ -1399,7 +1402,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
         <div id="novo-tam-sugestoes"></div>
         <button type="button" class="nova-cat-voltar" id="novo-tam-voltar">← Voltar para a lista</button>
       </div>
-      <button type="button" class="cat-criar" id="btn-criar-tamanho">＋ Não achei: criar tamanho novo</button>
+      <button type="button" class="cat-criar so-admin-cores" id="btn-criar-tamanho">＋ Não achei: criar tamanho novo</button>
       <button type="button" class="btn-primario" id="tam-pronto" style="margin-top:0;">Pronto</button>
     </div>
   </div>
@@ -1419,7 +1422,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
         <div id="nova-cor-sugestoes"></div>
         <button type="button" class="nova-cat-voltar" id="novo-cor-voltar">← Voltar para a lista</button>
       </div>
-      <button type="button" class="cat-criar" id="btn-criar-cor">＋ Não achei: criar cor/estampa nova</button>
+      <button type="button" class="cat-criar so-admin-cores" id="btn-criar-cor">＋ Não achei: criar cor/estampa nova</button>
       <button type="button" class="btn-primario" id="cor-pronto" style="margin-top:0;">Pronto</button>
     </div>
   </div>
@@ -1601,7 +1604,7 @@ body.edicao-rapida-atendimento #btn-salvar:disabled { opacity:.75; cursor:wait; 
 
 <script src="common.js"></script>
 <script src="catalogo-tecido.js?v=7.40.26"></script>
-<script src="admin-tecidos.js?v=7.40.27" defer></script>
+<script src="admin-tecidos.js?v=7.48.1" defer></script>
 <script src="icones.js?v=7.17.0"></script>
 <script>/* ícones de linha nos botões fixos do painel (o emoji fica como reserva se icones.js falhar) */
 document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.TKIcone && TKIcone(el.dataset.ico); if (s) el.innerHTML = s; });</script>
@@ -3122,7 +3125,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const criarCom = bruto && !opcoesEscolha_(chave).some((o) => semAcento_(o) === semAcento_(bruto))
       ? '<button type="button" class="cat-criar-linha so-admin-cores" data-esc-criar="' + escaparHtml(bruto) + '">＋ Criar “' + escaparHtml(bruto) + '”</button>' : '';
     box.innerHTML = lista.length ? lista.map(linha).join('') + criarCom
-      : '<div class="cat-vazio">' + (termo ? 'Nada com esse nome.' : 'Ainda não há opções.') + '<br>Use o botão abaixo para criar.</div>' + criarCom;
+      : '<div class="cat-vazio">' + (termo ? 'Nada com esse nome.' : 'Ainda não há opções.') + '<br>' + (listasSoAdmin_() ? 'Só o Admin total cria nomes novos: peça a ele.' : 'Use o botão abaixo para criar.') + '</div>' + criarCom;
     const n = escolhaSel_[chave].size;
     document.getElementById(cfg.pronto).textContent = n ? 'Pronto (' + n + (n === 1 ? ' escolhido)' : ' escolhidos)') : 'Pronto';
   }
@@ -3131,7 +3134,10 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     return '<div class="cat-linha"><div class="cat-edit"><input type="text" class="cat-edit-input" data-esc-antigo="' + e + '" value="' + e + '" maxlength="60" dir="ltr" lang="pt-BR" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Novo nome de ' + e + '">'
       + '<button type="button" class="cat-salvar" data-esc-salvar>Salvar</button><button type="button" class="cat-cancelar" data-esc-cancelar aria-label="Cancelar">✕</button></div></div>';
   }
+  /** v7.48.1: categorias, tamanhos, cores e tecidos só o Admin total cria ou edita (mesma regra visual de .so-admin-cores). */
+  function listasSoAdmin_() { return document.body.classList.contains('sem-gerir'); }
   function abrirCriacaoEscolha_(chave, texto) {
+    if (listasSoAdmin_()) return;
     const cfg = CAMPOS_ESCOLHA_[chave];
     escolhaEditando_[chave] = null;
     document.getElementById(cfg.nova).classList.add('aberto');
@@ -3183,6 +3189,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       if (bt) { bt.disabled = true; bt.textContent = 'Adicionando...'; }
       try {
         if (!(await garantirOpcoesServidor_())) { alert('Não consegui falar com o servidor para guardar esta opção para todos. Confira a internet e tente de novo (nada foi criado).'); return; }
+        if (listasSoAdmin_()) throw new Error('Só o Admin total cria tamanhos e cores novos.');
         const resp = await chamarAdmin_({ action: chave === 'cores' ? 'addCor' : 'addTamanho', nome: nome });
         if (!resp || !resp.ok) { const t = textoErroCat_(resp, (resp && resp.semRede) ? 'Sem conexão: a opção NÃO foi criada. Tente de novo.' : 'Não consegui guardar. Só o Admin total cria opções novas.'); if (t) alert(t); return; }
         alvo = resp.nome || nome;
@@ -4740,7 +4747,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const est = { itens: [], novos: new Set(), modo: 'somar', termo: '' };
     loteLista_[chave] = est;
     raiz.innerHTML = '<div class="lote-chips" data-chips></div>' +
-      '<input type="text" class="lote-input" data-entrada autocomplete="off" autocapitalize="sentences" lang="pt-BR" maxlength="60" aria-label="Escreva ou escolha ' + cfg.rotulo + '" placeholder="' + (cfg.criar ? 'Escreva ou toque para escolher…' : 'Toque para escolher…') + '">' +
+      '<input type="text" class="lote-input" data-entrada autocomplete="off" autocapitalize="sentences" lang="pt-BR" maxlength="60" aria-label="Escreva ou escolha ' + cfg.rotulo + '" placeholder="' + (cfg.criar && !listasSoAdmin_() ? 'Escreva ou toque para escolher…' : 'Busque ou toque para escolher…') + '">' +
       '<div class="lote-sug" data-sug></div>';
     const modoBox = document.querySelector('[data-modo-de="' + chave + '"]');
     modoBox.innerHTML = '<button type="button" data-modo="somar" aria-pressed="true">Acrescentar</button><button type="button" data-modo="tirar" aria-pressed="false">Retirar</button><button type="button" data-modo="trocar" aria-pressed="false">Trocar tudo</button>';
@@ -4748,7 +4755,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     const inp = raiz.querySelector('[data-entrada]');
     const igual = (a, b) => semAcento_(a) === semAcento_(b);
     const jaTem = (n) => est.itens.some(i => igual(i, n));
-    const podeCriar = () => !!cfg.criar && est.modo !== 'tirar';
+    const podeCriar = () => !!cfg.criar && est.modo !== 'tirar' && !listasSoAdmin_();   // v7.48.1: só o Admin total cria
     const campoDaPeca = { categoria: 'Categoria', genero: 'Genero', tamanhos: 'Tamanhos', cores: 'Cores' }[chave];
     const opcoesAtuais = () => {
       if (est.modo !== 'tirar') return cfg.opcoes();
@@ -4771,7 +4778,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       const bruto = loteLimpa_(est.termo);
       const existe = bruto && opcoesAtuais().some(o => igual(o, bruto));
       let h = lista.map(o => '<button type="button" data-pega="' + escaparHtml(o) + '">' + escaparHtml(o) + '</button>').join('');
-      if (bruto && !existe && !jaTem(bruto)) h += podeCriar() ? '<button type="button" class="criar" data-cria="' + escaparHtml(bruto) + '">＋ Criar “' + escaparHtml(bruto) + '”</button>' : '<span class="lote-nada">' + (est.modo === 'tirar' ? 'Nenhuma peça marcada tem esse ' + cfg.rotulo + '.' : 'Não existe esse ' + cfg.rotulo + '.') + '</span>';
+      if (bruto && !existe && !jaTem(bruto)) h += podeCriar() ? '<button type="button" class="criar" data-cria="' + escaparHtml(bruto) + '">＋ Criar “' + escaparHtml(bruto) + '”</button>' : '<span class="lote-nada">' + (est.modo === 'tirar' ? 'Nenhuma peça marcada tem ' + (/^(categoria|cor)$/.test(cfg.rotulo) ? 'essa ' : 'esse ') + cfg.rotulo + '.' : 'Não existe ' + (/^(categoria|cor)$/.test(cfg.rotulo) ? 'essa ' : 'esse ') + cfg.rotulo + '.' + (cfg.criar && listasSoAdmin_() ? ' Só o Admin total cria nomes novos.' : '')) + '</span>';
       raiz.querySelector('[data-sug]').innerHTML = h || (t ? '' : '<span class="lote-nada">Nada mais para escolher.</span>');
     }
     est.redesenhar = desenhar; est.adicionar = adicionar;

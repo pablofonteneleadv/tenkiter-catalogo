@@ -6,6 +6,13 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.48.1 — 02/11/2026
+- **Só o Admin total cria ou escreve nomes de categorias, tamanhos, cores e tecidos** (pedido do Pablo). Quem cadastra sem ser Admin total só escolhe o que já existe:
+  - **Tecido (cadastro):** o campo não aceita escrever; toca-se num tecido cadastrado (toque de novo tira). O Admin total continua escrevendo e gerenciando nomes.
+  - **"Não achei: criar tamanho novo" e "criar cor/estampa nova":** só aparecem para o Admin total (a criação também é recusada se chamada por fora).
+  - **Edição em lote:** sem "Criar" para tamanho, cor ou categoria nova; avisa "Só o Admin total cria nomes novos".
+- Teste novo `tests/listas_so_admin.py` (funcionária e Admin, 390 e 1440).
+
 ## 7.48.0 — 02/11/2026
 - **Esteira — conferência sem quantidade obrigatória:** "Quantas peças você contou?" virou opcional. Em branco, a conferência é registrada e o estoque do site fica como está. O servidor recusa quantidade que não seja número inteiro, com aviso em português.
 - **Fotos em tela cheia:** tocar na foto da peça (conferência, Hoje, cartão de família, Preparação, Outras tarefas, Painel e itens de pedido) abre todas as fotos e o vídeo da peça no visualizador do site, com **"Ver no site"** (peça ativa, outra aba). A galeria vem do catálogo público que a Esteira já lê.

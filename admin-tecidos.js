@@ -5,10 +5,13 @@
  if(!api||!$('tecido'))return;
  const admin=()=>{try{return typeof usuarioAdmin!=='undefined'&&usuarioAdmin&&temPermissao(usuarioAdmin,'gerir_acessos');}catch(_){return false;}};
  const produtos=()=>typeof tkProdutosLista==='function'?tkProdutosLista():[];
+ // v7.48.1: só o Admin total escreve/cria tecido; os outros escolhem um tecido cadastrado (toque de novo tira).
+ function travar(){const t=$('tecido'),ad=admin(),aj=$('tecido-ajuda');t.readOnly=!ad;t.placeholder=ad?'Escolha ou escreva o tecido':'Toque num tecido abaixo';if(ad)t.setAttribute('list','tecidos-opcoes');else t.removeAttribute('list');if(aj){aj.hidden=ad;aj.textContent=api.opcoes(produtos()).length?'Toque num tecido abaixo (toque de novo para tirar). Só o Admin total cria tecidos novos.':'Ainda não há tecidos cadastrados. Só o Admin total cria tecidos novos.';}}
  function desenhar(){
+  travar();
   const nomes=api.opcoes(produtos()),valor=$('tecido').value,dl=$('tecidos-opcoes'),chips=$('tecidos-rapidos');
   const assinatura=JSON.stringify(nomes);if(ultimo===assinatura){chips.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(api.resolver(valor)===b.textContent)));$('tecidos-gerenciar').hidden=!admin();return;}ultimo=assinatura;dl.replaceChildren();chips.replaceChildren();
-  nomes.forEach(nome=>{const o=document.createElement('option');o.value=nome;dl.appendChild(o);const b=document.createElement('button');b.type='button';b.className='chip';b.textContent=nome;b.setAttribute('aria-pressed',String(api.resolver(valor)===nome));b.addEventListener('click',()=>{$('tecido').value=nome;$('tecido').dispatchEvent(new Event('input',{bubbles:true}));});chips.appendChild(b);});
+  nomes.forEach(nome=>{const o=document.createElement('option');o.value=nome;dl.appendChild(o);const b=document.createElement('button');b.type='button';b.className='chip';b.textContent=nome;b.setAttribute('aria-pressed',String(api.resolver(valor)===nome));b.addEventListener('click',()=>{const t=$('tecido');t.value=(!admin()&&api.resolver(t.value)===nome)?'':nome;t.dispatchEvent(new Event('input',{bubbles:true}));});chips.appendChild(b);});
   $('tecidos-gerenciar').hidden=!admin();
  }
  let overlay,anterior;

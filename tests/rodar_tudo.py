@@ -29,6 +29,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("axe_telas_a.py", lambda o: o.strip() == "" or "[critical]" not in o and "[serious]" not in o and "[moderate]" not in o),
     ("axe_telas_b.py", lambda o: "TOTAL com problema: 0" in o),
     ("jornada_cliente.py", lambda o: "FALHAS=0" in o),
+    ("listas_so_admin.py", lambda o: "FALHAS=0" in o),
     ("jornada_lojista.py", lambda o: "FALHAS=0" in o),
     ("jornada_funcionaria.py", lambda o: "FALHAS=1 ['progresso foi enviado ao servidor']" in o or "FALHAS=0" in o),  # manuais-semente não têm id de capítulo: não sincronizam
     ("mensagens_acesso_equipe.py", lambda o: "ferramentas administrativas ocultas" in o),
