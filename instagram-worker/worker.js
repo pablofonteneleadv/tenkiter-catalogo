@@ -6133,6 +6133,10 @@ async function estIniciar_(env) {
   for (const col of ['ult_estoque INTEGER', 'ult_estoque_em TEXT', 'ult_queda_em TEXT', "reat_base TEXT DEFAULT ''", 'reat_degrau INTEGER NOT NULL DEFAULT 0', 'reat_dispensa_ate TEXT']) {
     try { await env.DB.prepare('ALTER TABLE est_produto ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ }
   }
+  // v7.48.0: cadastro de fornecedores (o pedido guarda o id e continua com o nome; pedido antigo em texto livre segue igual) e tecido do produto novo
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS est_fornecedor (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, endereco TEXT DEFAULT '', fone1 TEXT DEFAULT '', fone2 TEXT DEFAULT '', fone3 TEXT DEFAULT '', ativo INTEGER NOT NULL DEFAULT 1, criado_em TEXT, criado_por TEXT, atualizado_em TEXT)").run();
+  try { await env.DB.prepare('ALTER TABLE est_pedido ADD COLUMN fornecedor_id INTEGER').run(); } catch (e) { /* já existe */ }
+  try { await env.DB.prepare("ALTER TABLE est_pedido_item ADD COLUMN tecido TEXT DEFAULT ''").run(); } catch (e) { /* já existe */ }
   await famIniciar_(env);
   estIniciado_ = env.DB;
 }
@@ -6447,9 +6451,59 @@ function estSituacao_(it) {
   return c < q ? 'faltou' : 'sobrou';
 }
 /** Item como o Admin total vê (tudo) e como a equipe vê (sem custo e sem quantidade pedida: contagem cega). Lista branca, nunca lista negra. */
-function estItemAdmin_(it) { return { id: it.id, tipo: it.tipo, produto: it.produto || '', nome: it.nome || '', categoria: it.categoria || '', genero: it.genero || '', preco: it.preco || '', tamanhos: it.tamanhos || '', cores: it.cores || '', fotos: estFotos_(it.fotos), qtd_pedida: Number(it.qtd_pedida) || 0, custo: it.custo == null ? null : Number(it.custo), qtd_contada: it.qtd_contada == null ? null : Number(it.qtd_contada), contagens: Number(it.contagens) || 0, nao_veio: !!it.nao_veio, situacao: estSituacao_(it), decisao: it.decisao || '', qtd_aceita: it.qtd_aceita == null ? null : Number(it.qtd_aceita), produto_criado: it.produto_criado || '', aplicado_em: it.aplicado_em || '', obs: it.obs || '' }; }
+function estItemAdmin_(it) { return { id: it.id, tipo: it.tipo, produto: it.produto || '', nome: it.nome || '', categoria: it.categoria || '', genero: it.genero || '', preco: it.preco || '', tamanhos: it.tamanhos || '', cores: it.cores || '', tecido: it.tecido || '', fotos: estFotos_(it.fotos), qtd_pedida: Number(it.qtd_pedida) || 0, custo: it.custo == null ? null : Number(it.custo), qtd_contada: it.qtd_contada == null ? null : Number(it.qtd_contada), contagens: Number(it.contagens) || 0, nao_veio: !!it.nao_veio, situacao: estSituacao_(it), decisao: it.decisao || '', qtd_aceita: it.qtd_aceita == null ? null : Number(it.qtd_aceita), produto_criado: it.produto_criado || '', aplicado_em: it.aplicado_em || '', obs: it.obs || '' }; }
 function estItemEquipe_(it) { return { id: it.id, tipo: it.tipo, nome: it.nome || '', tamanhos: it.tamanhos || '', cores: it.cores || '', fotos: estFotos_(it.fotos), qtd_contada: it.qtd_contada == null ? null : Number(it.qtd_contada), contagens: Number(it.contagens) || 0, nao_veio: !!it.nao_veio, contado: it.qtd_contada != null || !!it.nao_veio, bateu: it.tipo === 'extra' || it.qtd_contada == null || it.nao_veio ? null : estSituacao_(it) === 'bateu' }; }
 function estPedidoBase_(p, nomeDe) { return { id: p.id, fornecedor: p.fornecedor || '', previsao: p.previsao || '', status: p.status, enviado_em: p.enviado_em || '', conferido_em: p.conferido_em || '', conferido_por: nomeDe(p.conferido_por || '') || '' }; }
+/* ---- v7.48.0: listas da Gestão (categorias, públicos, tamanhos, cores e tecidos). A Esteira nunca cria nomes: só escolhe destas listas. ----
+ * Mesmas fontes da Gestão: action=categorias, action=generos e action=opcoes do catálogo; tecidos do cadastro de tecidos deste servidor.
+ * Lista que não respondeu volta null (a tela usa os nomes que já existem nas peças e o servidor não bloqueia por ela). */
+async function estListasCadastro_(env) {
+  const chave = 'est:listas:v1';
+  try { const c = await env.CACHE.get(chave); if (c) return JSON.parse(c); } catch (e) { /* segue */ }
+  const base = String(env.API_URL || '').trim(), sep = base.includes('?') ? '&' : '?';
+  const limpa = (l) => (Array.isArray(l) ? [...new Set(l.map((x) => String(x == null ? '' : x).trim()).filter(Boolean))].slice(0, 500) : null);
+  const ler = async (acao) => { if (!base) return null; try { const r = await fetch(base + sep + 'action=' + acao, { redirect: 'follow', headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(12000) }); if (!r.ok) return null; return await r.json(); } catch (e) { return null; } };
+  const [rc, rg, ro] = await Promise.all([ler('categorias'), ler('generos'), ler('opcoes')]);
+  let tecidos = null; try { const t = JSON.parse((await cfgGet(env, TECIDOS_CFG_)) || 'null'); tecidos = limpa(((t && t.itens) || []).map((x) => x && x.nome)); } catch (e) { tecidos = null; }
+  const out = { categorias: limpa(rc && rc.categorias), generos: limpa(rg && rg.generos), tamanhos: limpa(ro && ro.ok !== false && ro.tamanhos), cores: limpa(ro && ro.ok !== false && ro.cores), tecidos };
+  ['categorias', 'generos', 'tamanhos', 'cores'].forEach((k) => { if (out[k] && !out[k].length) out[k] = null; });
+  if (out.categorias || out.generos || out.tamanhos || out.cores) { try { await env.CACHE.put(chave, JSON.stringify(out), { expirationTtl: 600 }); } catch (e) { /* cache é conforto */ } }
+  return out;
+}
+/** Confere categoria, público, tamanhos e cores contra as listas (sem acento/maiúscula) e devolve os nomes como estão na lista.
+ *  Lista indisponível: aceita como veio. Valor fora da lista: erro em português (nada é criado). */
+function estValidarCampos_(listas, x, prefixo) {
+  const ROT = { categoria: ['A categoria', 'categorias', 'cadastrada'], genero: ['O público', 'públicos', 'cadastrado'], tamanhos: ['O tamanho', 'tamanhos', 'cadastrado'], cores: ['A cor', 'cores', 'cadastrada'] };
+  const LISTA = { categoria: 'categorias', genero: 'generos', tamanhos: 'tamanhos', cores: 'cores' };
+  const out = {};
+  for (const k of Object.keys(LISTA)) {
+    const bruto = String(x[k] == null ? '' : x[k]), lista = listas && listas[LISTA[k]];
+    const partes = bruto.split(',').map((t) => t.trim()).filter(Boolean);
+    if (!lista || !partes.length) { out[k] = partes.join(', '); continue; }
+    const mapa = new Map(lista.map((v) => [estCatNorm_(v), v])), certos = [];
+    for (const t of partes) {
+      const v = mapa.get(estCatNorm_(t));
+      if (!v) return { erro: (prefixo || '') + ROT[k][0] + ' “' + t.slice(0, 40) + '” não está ' + ROT[k][2] + ' na Gestão. Escolha uma opção da lista de ' + ROT[k][1] + '.' };
+      if (!certos.includes(v)) certos.push(v);
+    }
+    out[k] = certos.join(', ');
+  }
+  return { valores: out };
+}
+const estFoneForn_ = (s) => String(s || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+/** Fornecedor limpo: nome obrigatório (até 80), endereço (até 200) e até 3 telefones com DDD (10 ou 11 dígitos). */
+function estFornecedorLimpo_(d) {
+  const nome = String(d.nome || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (!nome) return { erro: 'Informe o nome do fornecedor.' };
+  const f = { nome, endereco: String(d.endereco || '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200) };
+  for (const n of [1, 2, 3]) {
+    const bruto = String(d['fone' + n] || '').trim(), dig = estFoneForn_(bruto);
+    if (bruto && !(dig.length === 10 || dig.length === 11)) return { erro: 'Telefone ' + n + ': use o DDD e o número, com 10 ou 11 dígitos (ex.: (88) 99999-0000).' };
+    f['fone' + n] = dig;
+  }
+  return { fornecedor: f };
+}
+const estFornecedorSaida_ = (x) => ({ id: x.id, nome: x.nome || '', endereco: x.endereco || '', fone1: x.fone1 || '', fone2: x.fone2 || '', fone3: x.fone3 || '', ativo: !!x.ativo });
 /* ---- v7.45.0 (entrega 5): painel completo e listas do gestor ---- */
 /** Categorias que existem no catálogo (nada inventado), com quantas peças ativas cada uma tem. */
 function estCategorias_(catalogo) {
@@ -6503,7 +6557,11 @@ async function rotasEsteira_(env, req, url, J, perms) {
   if (p === '/esteira/conferir' && req.method === 'POST') {
     const d = await req.json().catch(() => ({})), id = String(d.id || '').slice(0, 40);
     if (!id) return J({ ok: false, erro: 'Escolha a peça que você conferiu.' }, 400);
-    const achou = d.achou === false ? 0 : 1, antes = d.estoqueAntes == null ? '' : String(d.estoqueAntes).slice(0, 10), depois = d.estoqueDepois == null ? '' : String(d.estoqueDepois).slice(0, 10);
+    const achou = d.achou === false ? 0 : 1, antes = d.estoqueAntes == null ? '' : String(d.estoqueAntes).slice(0, 10);
+    // v7.48.0: a quantidade contada é opcional. Sem número: registra a conferência e o estoque do site fica como está.
+    const depoisBruto = achou && d.estoqueDepois != null ? String(d.estoqueDepois).trim() : '';
+    if (depoisBruto !== '' && (!/^\d+$/.test(depoisBruto) || estInt_(depoisBruto, 99999) == null)) return J({ ok: false, erro: 'A quantidade contada precisa ser um número inteiro (pode ser 0). Ou deixe em branco para não mudar o estoque.' }, 400);
+    const depois = depoisBruto === '' ? '' : String(estInt_(depoisBruto, 99999));
     const divergiu = (!achou || (antes !== '' && depois !== '' && Number(antes) !== Number(depois)) || d.mudouTamanhos === true || d.mudouCores === true) ? 1 : 0;
     await env.DB.batch([
       env.DB.prepare('INSERT INTO est_conf (produto, data, por, achou, estoque_antes, estoque_depois, divergiu, foto_nova, obs, em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, data, eu, achou, antes, depois, divergiu, d.fotoNova === true ? 1 : 0, String(d.obs || '').slice(0, 300), agora),
@@ -6521,13 +6579,16 @@ async function rotasEsteira_(env, req, url, J, perms) {
         tarefaFoto = r.meta.last_row_id;
       }
     }
-    return J({ ok: true, divergiu: !!divergiu, tarefaFoto });
+    return J({ ok: true, divergiu: !!divergiu, tarefaFoto, contou: depois !== '' });
   }
   if (p === '/esteira/toque' && req.method === 'POST') {                  // Gestão/Disponibilidade: fotos, tamanhos, cores ou estoque mudados à mão
     const d = await req.json().catch(() => ({})), ids = [...new Set((Array.isArray(d.ids) ? d.ids : [d.id]).map((x) => String(x || '').slice(0, 40)).filter(Boolean))].slice(0, 100);
     if (!ids.length) return J({ ok: false, erro: 'Nenhuma peça informada.' }, 400);
     await env.DB.batch(ids.map((id) => env.DB.prepare('INSERT INTO est_produto (id, atualizado_em, atualizado_por) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET atualizado_em=excluded.atualizado_em, atualizado_por=excluded.atualizado_por').bind(id, agora, eu)));
     return J({ ok: true, registradas: ids.length });
+  }
+  if (p === '/esteira/listas' && req.method === 'GET') {                 // v7.48.0: as listas da Gestão para os seletores da Esteira
+    return J(Object.assign({ ok: true }, await estListasCadastro_(env)));
   }
   // ---- v7.42.0: preparação (tarefas e "Aceitar para o site") ----
   if (p === '/esteira/preparacao' && req.method === 'GET') {
@@ -6595,7 +6656,7 @@ async function rotasEsteira_(env, req, url, J, perms) {
     const ped = pid > 0 ? await env.DB.prepare('SELECT * FROM est_pedido WHERE id=?').bind(pid).first() : null;
     const itensDe = async (id) => (await env.DB.prepare('SELECT * FROM est_pedido_item WHERE pedido=? ORDER BY id').bind(id).all()).results || [];
     const semPedido = () => J({ ok: false, erro: 'Este pedido não existe mais. Atualize a tela.' }, 404);
-    const completo = async (x) => Object.assign(estPedidoBase_(x, nomeDe), { obs: x.obs || '', fotos: estFotos_(x.fotos), criado_em: x.criado_em || '', aprovado_em: x.aprovado_em || '', aprovado_por: nomeDe(x.aprovado_por || '') || '', itens: (await itensDe(x.id)).map(estItemAdmin_) });
+    const completo = async (x) => Object.assign(estPedidoBase_(x, nomeDe), { fornecedorId: Number(x.fornecedor_id) || 0, obs: x.obs || '', fotos: estFotos_(x.fotos), criado_em: x.criado_em || '', aprovado_em: x.aprovado_em || '', aprovado_por: nomeDe(x.aprovado_por || '') || '', itens: (await itensDe(x.id)).map(estItemAdmin_) });
     const paraEquipe = async (x) => Object.assign(estPedidoBase_(x, nomeDe), { itens: (await itensDe(x.id)).map(estItemEquipe_) });
     const umItem = (cond) => env.DB.prepare('SELECT * FROM est_pedido_item WHERE id=? AND pedido=?' + (cond || '')).bind(Number(d.item) || 0, pid).first();
     const semItem = () => J({ ok: false, erro: 'Este item não está no pedido. Atualize a tela.' }, 404);
@@ -6636,7 +6697,9 @@ async function rotasEsteira_(env, req, url, J, perms) {
       const nome = String(d.nome || '').trim().slice(0, 120), q = estInt_(d.qtd, 9999);
       if (!nome) return J({ ok: false, erro: 'Escreva o nome ou uma descrição curta do modelo que veio.' }, 400);
       if (!(q >= 1)) return J({ ok: false, erro: 'Digite quantas peças deste modelo vieram.' }, 400);
-      const r = await env.DB.prepare("INSERT INTO est_pedido_item (pedido, tipo, nome, tamanhos, cores, fotos, qtd_pedida, qtd_contada, contagens, obs, criado_por) VALUES (?, 'extra', ?, ?, ?, ?, 0, ?, 1, ?, ?)").bind(pid, nome, String(d.tamanhos || '').trim().slice(0, 200), String(d.cores || '').trim().slice(0, 200), JSON.stringify(estFotos_(d.fotos)), q, String(d.obs || '').trim().slice(0, 300), eu).run();
+      let tc = { tamanhos: String(d.tamanhos || '').trim().slice(0, 200), cores: String(d.cores || '').trim().slice(0, 200) };
+      if (tc.tamanhos || tc.cores) { const vl = estValidarCampos_(await estListasCadastro_(env), tc, ''); if (vl.erro) return J({ ok: false, erro: vl.erro }, 400); tc = { tamanhos: vl.valores.tamanhos, cores: vl.valores.cores }; }   // v7.48.0
+      const r = await env.DB.prepare("INSERT INTO est_pedido_item (pedido, tipo, nome, tamanhos, cores, fotos, qtd_pedida, qtd_contada, contagens, obs, criado_por) VALUES (?, 'extra', ?, ?, ?, ?, 0, ?, 1, ?, ?)").bind(pid, nome, tc.tamanhos, tc.cores, JSON.stringify(estFotos_(d.fotos)), q, String(d.obs || '').trim().slice(0, 300), eu).run();
       return J({ ok: true, item: r.meta.last_row_id });
     }
     if (p === '/esteira/pedidos/extra-remover' && req.method === 'POST') {
@@ -6657,32 +6720,40 @@ async function rotasEsteira_(env, req, url, J, perms) {
     if (p === '/esteira/pedidos/salvar' && req.method === 'POST') {          // cria ou edita (rascunho ou a caminho); item com id é atualizado, sem id é novo
       if (pid && !ped) return semPedido();
       if (ped && !['rascunho', 'a_caminho'].includes(ped.status)) return J({ ok: false, erro: 'Pedido já conferido não muda mais. Veja a aprovação.' }, 400);
-      const fornecedor = String(d.fornecedor || '').trim().slice(0, 80), previsao = /^\d{4}-\d{2}-\d{2}$/.test(String(d.previsao || '')) ? d.previsao : '';
+      let fornecedor = String(d.fornecedor || '').trim().slice(0, 80), fornecedorId = Number(d.fornecedorId) || 0;
+      if (fornecedorId) {                                                    // v7.48.0: fornecedor do cadastro (o nome vem de lá)
+        const fx = await env.DB.prepare('SELECT * FROM est_fornecedor WHERE id=?').bind(fornecedorId).first();
+        if (!fx) return J({ ok: false, erro: 'Este fornecedor não está mais no cadastro. Escolha outro ou cadastre de novo.' }, 400);
+        fornecedor = fx.nome;
+      } else if (ped && ped.fornecedor_id && fornecedor === ped.fornecedor) fornecedorId = Number(ped.fornecedor_id);
+      const previsao = /^\d{4}-\d{2}-\d{2}$/.test(String(d.previsao || '')) ? d.previsao : '';
       const obsP = String(d.obs || '').trim().slice(0, 500), fotosP = JSON.stringify(estFotos_(d.fotos));
-      if (!fornecedor) return J({ ok: false, erro: 'Informe o fornecedor.' }, 400);
+      if (!fornecedor) return J({ ok: false, erro: 'Escolha o fornecedor.' }, 400);
       const lista = Array.isArray(d.itens) ? d.itens.slice(0, 200) : [], limpos = [];
+      const listas = lista.some((x) => x && x.tipo === 'novo') ? await estListasCadastro_(env) : null;   // v7.48.0: nada de nome inventado
       for (let k = 0; k < lista.length; k++) {
         const x = lista[k] || {}, tipo = x.tipo === 'novo' ? 'novo' : 'reposicao', n = k + 1;
         const qtd = estInt_(x.qtd_pedida, 9999), custo = estCusto_(x.custo);
-        const it = { id: Number(x.id) || 0, tipo, produto: tipo === 'reposicao' ? String(x.produto || '').trim().slice(0, 40) : '', nome: String(x.nome || '').trim().slice(0, 120), categoria: String(x.categoria || '').trim().slice(0, 120), genero: String(x.genero || '').trim().slice(0, 80), preco: String(x.preco == null ? '' : x.preco).trim().replace(',', '.').slice(0, 12), tamanhos: String(x.tamanhos || '').trim().slice(0, 200), cores: String(x.cores || '').trim().slice(0, 200), fotos: JSON.stringify(estFotos_(x.fotos)), qtd, custo };
+        const it = { id: Number(x.id) || 0, tipo, produto: tipo === 'reposicao' ? String(x.produto || '').trim().slice(0, 40) : '', nome: String(x.nome || '').trim().slice(0, 120), categoria: String(x.categoria || '').trim().slice(0, 120), genero: String(x.genero || '').trim().slice(0, 80), preco: String(x.preco == null ? '' : x.preco).trim().replace(',', '.').slice(0, 12), tamanhos: String(x.tamanhos || '').trim().slice(0, 200), cores: String(x.cores || '').trim().slice(0, 200), tecido: tipo === 'novo' ? String(x.tecido || '').replace(/\s+/g, ' ').trim().slice(0, 80) : '', fotos: JSON.stringify(estFotos_(x.fotos)), qtd, custo };
         if (tipo === 'reposicao' && !it.produto) return J({ ok: false, erro: 'Item ' + n + ': escolha a peça do catálogo.' }, 400);
         if (!it.nome) return J({ ok: false, erro: 'Item ' + n + ': informe o nome.' }, 400);
         if (!(qtd >= 1)) return J({ ok: false, erro: 'Item ' + n + ' (' + it.nome + '): a quantidade pedida precisa ser 1 ou mais.' }, 400);
         if (custo === undefined) return J({ ok: false, erro: 'Item ' + n + ' (' + it.nome + '): custo inválido. Use só números, como 45,90.' }, 400);
         if (it.preco && !(Number(it.preco) > 0)) return J({ ok: false, erro: 'Item ' + n + ' (' + it.nome + '): preço de venda inválido.' }, 400);
+        if (tipo === 'novo') { const vl = estValidarCampos_(listas, it, 'Item ' + n + ' (' + it.nome + '): '); if (vl.erro) return J({ ok: false, erro: vl.erro }, 400); Object.assign(it, vl.valores); }
         limpos.push(it);
       }
       const antigos = ped ? await itensDe(pid) : [], porIdA = new Map(antigos.map((x) => [x.id, x])), ficam = new Set(limpos.map((x) => x.id).filter(Boolean));
       const contadoSai = antigos.find((x) => x.tipo !== 'extra' && !ficam.has(x.id) && (x.qtd_contada != null || x.nao_veio));
       if (contadoSai) return J({ ok: false, erro: '“' + contadoSai.nome + '” já foi contado na chegada e não pode sair do pedido.' }, 400);
       let id = pid;
-      if (!ped) id = (await env.DB.prepare("INSERT INTO est_pedido (fornecedor, previsao, status, obs, fotos, criado_em, criado_por) VALUES (?, ?, 'rascunho', ?, ?, ?, ?)").bind(fornecedor, previsao, obsP, fotosP, agora, eu).run()).meta.last_row_id;
+      if (!ped) id = (await env.DB.prepare("INSERT INTO est_pedido (fornecedor, fornecedor_id, previsao, status, obs, fotos, criado_em, criado_por) VALUES (?, ?, ?, 'rascunho', ?, ?, ?, ?)").bind(fornecedor, fornecedorId || null, previsao, obsP, fotosP, agora, eu).run()).meta.last_row_id;
       const ops = [];
-      if (ped) ops.push(env.DB.prepare('UPDATE est_pedido SET fornecedor=?, previsao=?, obs=?, fotos=? WHERE id=?').bind(fornecedor, previsao, obsP, fotosP, id));
+      if (ped) ops.push(env.DB.prepare('UPDATE est_pedido SET fornecedor=?, fornecedor_id=?, previsao=?, obs=?, fotos=? WHERE id=?').bind(fornecedor, fornecedorId || null, previsao, obsP, fotosP, id));
       antigos.filter((x) => x.tipo !== 'extra' && !ficam.has(x.id)).forEach((x) => ops.push(env.DB.prepare('DELETE FROM est_pedido_item WHERE id=?').bind(x.id)));
       limpos.forEach((it) => {
-        if (it.id && porIdA.has(it.id) && porIdA.get(it.id).tipo !== 'extra') ops.push(env.DB.prepare('UPDATE est_pedido_item SET tipo=?, produto=?, nome=?, categoria=?, genero=?, preco=?, tamanhos=?, cores=?, fotos=?, qtd_pedida=?, custo=? WHERE id=?').bind(it.tipo, it.produto, it.nome, it.categoria, it.genero, it.preco, it.tamanhos, it.cores, it.fotos, it.qtd, it.custo, it.id));
-        else ops.push(env.DB.prepare('INSERT INTO est_pedido_item (pedido, tipo, produto, nome, categoria, genero, preco, tamanhos, cores, fotos, qtd_pedida, custo, criado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, it.tipo, it.produto, it.nome, it.categoria, it.genero, it.preco, it.tamanhos, it.cores, it.fotos, it.qtd, it.custo, eu));
+        if (it.id && porIdA.has(it.id) && porIdA.get(it.id).tipo !== 'extra') ops.push(env.DB.prepare('UPDATE est_pedido_item SET tipo=?, produto=?, nome=?, categoria=?, genero=?, preco=?, tamanhos=?, cores=?, tecido=?, fotos=?, qtd_pedida=?, custo=? WHERE id=?').bind(it.tipo, it.produto, it.nome, it.categoria, it.genero, it.preco, it.tamanhos, it.cores, it.tecido, it.fotos, it.qtd, it.custo, it.id));
+        else ops.push(env.DB.prepare('INSERT INTO est_pedido_item (pedido, tipo, produto, nome, categoria, genero, preco, tamanhos, cores, tecido, fotos, qtd_pedida, custo, criado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, it.tipo, it.produto, it.nome, it.categoria, it.genero, it.preco, it.tamanhos, it.cores, it.tecido, it.fotos, it.qtd, it.custo, eu));
       });
       if (ops.length) await env.DB.batch(ops);
       return J({ ok: true, pedido: await completo(await env.DB.prepare('SELECT * FROM est_pedido WHERE id=?').bind(id).first()) });
@@ -6715,9 +6786,10 @@ async function rotasEsteira_(env, req, url, J, perms) {
         const custo = estCusto_(d.custo === undefined ? it.custo : d.custo);
         if (custo === undefined) return J({ ok: false, erro: 'Custo inválido. Use só números, como 45,90.' }, 400);
         const v = (k, max) => String(d[k] == null ? (it[k] || '') : d[k]).trim().slice(0, max);
-        const c = { nome: v('nome', 120) || it.nome, categoria: v('categoria', 120), genero: v('genero', 80), preco: v('preco', 12).replace(',', '.'), tamanhos: v('tamanhos', 200), cores: v('cores', 200) };
+        const c = { nome: v('nome', 120) || it.nome, categoria: v('categoria', 120), genero: v('genero', 80), preco: v('preco', 12).replace(',', '.'), tamanhos: v('tamanhos', 200), cores: v('cores', 200), tecido: v('tecido', 80) };
         if (c.preco && !(Number(c.preco) > 0)) return J({ ok: false, erro: 'Preço de venda inválido.' }, 400);
-        await env.DB.prepare('UPDATE est_pedido_item SET decisao=?, custo=?, nome=?, categoria=?, genero=?, preco=?, tamanhos=?, cores=?, obs=? WHERE id=?').bind(dec, custo, c.nome, c.categoria, c.genero, c.preco, c.tamanhos, c.cores, obs, it.id).run();
+        if (dec === 'incluir') { const vl = estValidarCampos_(await estListasCadastro_(env), c, ''); if (vl.erro) return J({ ok: false, erro: vl.erro }, 400); Object.assign(c, vl.valores); }   // v7.48.0
+        await env.DB.prepare('UPDATE est_pedido_item SET decisao=?, custo=?, nome=?, categoria=?, genero=?, preco=?, tamanhos=?, cores=?, tecido=?, obs=? WHERE id=?').bind(dec, custo, c.nome, c.categoria, c.genero, c.preco, c.tamanhos, c.cores, c.tecido, obs, it.id).run();
       } else await env.DB.prepare('UPDATE est_pedido_item SET decisao=?, obs=? WHERE id=?').bind(dec, obs, it.id).run();
       return J({ ok: true, item: estItemAdmin_(await env.DB.prepare('SELECT * FROM est_pedido_item WHERE id=?').bind(it.id).first()) });
     }
@@ -6776,7 +6848,29 @@ async function rotasEsteira_(env, req, url, J, perms) {
     return J({ ok: false, erro: 'Esta ação de pedidos não existe.' }, 404);
   }
   // ---- daqui para baixo: só Admin total ----
-  if (!admin) return J({ ok: false, erro: 'Só o administrador total acessa esta parte da Esteira.' }, 403);
+  if (!admin) return J({ ok: false, erro: p.startsWith('/esteira/fornecedores') ? 'Só o administrador total cuida do cadastro de fornecedores.' : 'Só o administrador total acessa esta parte da Esteira.' }, 403);
+  // ---- v7.48.0: cadastro de fornecedores (mesma permissão de quem monta os pedidos: Admin total) ----
+  if (p === '/esteira/fornecedores' && req.method === 'GET') {
+    const rows = (await env.DB.prepare('SELECT f.*, (SELECT COUNT(*) FROM est_pedido p WHERE p.fornecedor_id=f.id) AS pedidos FROM est_fornecedor f WHERE f.ativo=1 ORDER BY f.nome COLLATE NOCASE').all()).results || [];
+    return J({ ok: true, fornecedores: rows.map((x) => Object.assign(estFornecedorSaida_(x), { pedidos: Number(x.pedidos) || 0 })) });
+  }
+  if (p === '/esteira/fornecedores/salvar' && req.method === 'POST') {    // {id?, nome, endereco?, fone1?, fone2?, fone3?}: sem id cria, com id edita
+    const d = await req.json().catch(() => ({})), id = Number(d.id) || 0;
+    const lf = estFornecedorLimpo_(d); if (lf.erro) return J({ ok: false, erro: lf.erro }, 400);
+    const f = lf.fornecedor;
+    const atual = id ? await env.DB.prepare('SELECT * FROM est_fornecedor WHERE id=?').bind(id).first() : null;
+    if (id && !atual) return J({ ok: false, erro: 'Este fornecedor não está mais no cadastro. Atualize a tela.' }, 404);
+    const igual = ((await env.DB.prepare('SELECT id, nome FROM est_fornecedor WHERE ativo=1').all()).results || []).find((x) => x.id !== id && estCatNorm_(x.nome) === estCatNorm_(f.nome));
+    if (igual) return J({ ok: false, erro: 'Já existe um fornecedor com o nome “' + igual.nome + '”. Escolha ele na lista ou use outro nome.', existente: igual.id }, 400);
+    let novoId = id;
+    if (atual) {
+      await env.DB.batch([
+        env.DB.prepare('UPDATE est_fornecedor SET nome=?, endereco=?, fone1=?, fone2=?, fone3=?, atualizado_em=? WHERE id=?').bind(f.nome, f.endereco, f.fone1, f.fone2, f.fone3, agora, id),
+        env.DB.prepare('UPDATE est_pedido SET fornecedor=? WHERE fornecedor_id=?').bind(f.nome, id),   // pedidos ligados a este cadastro acompanham o nome novo
+      ]);
+    } else novoId = (await env.DB.prepare('INSERT INTO est_fornecedor (nome, endereco, fone1, fone2, fone3, ativo, criado_em, criado_por, atualizado_em) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)').bind(f.nome, f.endereco, f.fone1, f.fone2, f.fone3, agora, eu, agora).run()).meta.last_row_id;
+    return J({ ok: true, fornecedor: estFornecedorSaida_(await env.DB.prepare('SELECT * FROM est_fornecedor WHERE id=?').bind(novoId).first()) });
+  }
   if (p === '/esteira/config' && req.method === 'GET') {
     const padrao = (await env.DB.prepare('SELECT dia, funcao, whats FROM est_escala_padrao').all()).results || [];
     let categorias = []; try { categorias = estCategorias_(await estCatalogo_(env)); } catch (e) { categorias = []; }   // v7.45.0: para a categoria fixa

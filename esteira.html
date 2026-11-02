@@ -62,8 +62,8 @@
   button.bt[aria-pressed="true"] { background:var(--preto); color:#fff; border-color:var(--preto); }
   button.bt:disabled { opacity:.55; cursor:default; }
   .dois { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-  label.campo { display:grid; gap:4px; font-size:.88rem; font-weight:600; }
-  input[type=text], input[type=tel], input[type=number], input[type=password], input[type=date], select, textarea { min-height:46px; border:1px solid #cfc6b6; border-radius:10px; padding:8px 12px; font:inherit; background:#fff; color:var(--preto); width:100%; }
+  label.campo, div.campo { display:grid; gap:4px; font-size:.88rem; font-weight:600; }
+  input[type=text], input[type=search], input[type=tel], input[type=number], input[type=password], input[type=date], select, textarea { min-height:46px; border:1px solid #cfc6b6; border-radius:10px; padding:8px 12px; font:inherit; background:#fff; color:var(--preto); width:100%; }
   textarea { min-height:90px; resize:vertical; }
   .erro { color:var(--vermelho); font-size:.9rem; }
   .ok { color:var(--verde); font-size:.9rem; }
@@ -156,6 +156,69 @@
   .contagens div { background:var(--areia); border-radius:10px; padding:8px 6px; text-align:center; display:grid; }
   .contagens b { font-size:1.4rem; }
   #painel-mercadoria h3, #painel-paradas h3 { margin-top:6px; }
+  /* v7.48.0 — foto que abre a galeria em tela cheia, dados do cadastro da peça, filtros discretos da busca, seletores das listas da Gestão e fornecedor */
+  .peca-linha { display:flex; align-items:center; background:var(--branco); border:1px solid var(--linha); border-radius:12px; min-width:0; }
+  .peca-linha > .peca { border:0; background:transparent; flex:1; min-width:0; }
+  .peca-linha > .foto-bt, .peca-linha > .semfoto { margin-left:10px; }
+  .peca-linha.feita { opacity:.62; }
+  .fam .peca-linha.tam { background:var(--areia); border-color:transparent; }
+  .fam .peca-linha.tam > .peca { min-height:56px; padding:8px 10px; background:transparent; }
+  .fam .peca-linha.tam > .foto-bt img, .fam .peca-linha.tam > .semfoto { width:40px; height:50px; border-radius:6px; object-fit:cover; background:var(--linha); display:block; }
+  .fam .peca-linha.tam > .semfoto { flex:none; }
+  .foto-bt { position:relative; flex:none; border:0; background:none; padding:0; margin:0; border-radius:8px; cursor:zoom-in; line-height:0; min-width:44px; min-height:44px; color:inherit; }
+  .foto-bt img, .foto-bt .semfoto { display:block; width:52px; height:64px; border-radius:8px; object-fit:cover; background:var(--linha); }
+  .foto-bt::after { content:"⤢"; position:absolute; right:3px; bottom:3px; width:20px; height:20px; border-radius:50%; background:rgba(13,13,13,.72); color:#fff; font-size:.75rem; line-height:20px; text-align:center; }
+  .foto-bt .qtd-fotos { position:absolute; left:3px; top:3px; background:rgba(13,13,13,.72); color:#fff; font-size:.68rem; font-weight:700; border-radius:6px; padding:2px 5px; line-height:1.2; }
+  .foto-bt.grande img, .foto-bt.grande .semfoto { width:96px; height:120px; border-radius:10px; }
+  .foto-bt.media img, .foto-bt.media .semfoto { width:56px; height:70px; }
+  .foto-bt.mini img, .foto-bt.mini .semfoto { width:44px; height:55px; border-radius:6px; }
+  .foto-bt.mini::after { width:16px; height:16px; line-height:16px; font-size:.65rem; }
+  .ficha { display:grid; gap:10px; min-width:0; }
+  .ficha-fotos { display:flex; gap:8px; overflow-x:auto; padding:2px 2px 4px; }
+  .ficha-fotos .foto-bt img, .ficha-fotos .foto-bt .semfoto, .ficha-fotos .video-mini { width:64px; height:80px; }
+  .video-mini { display:flex; align-items:center; justify-content:center; border-radius:8px; background:var(--preto); color:#fff; font-size:.8rem; font-weight:700; line-height:1.2; }
+  .ficha dl { display:grid; grid-template-columns:max-content 1fr; gap:4px 12px; margin:0; font-size:.9rem; }
+  .ficha dt { color:var(--suave); font-weight:600; }
+  .ficha dd { margin:0; overflow-wrap:anywhere; min-width:0; }
+  .ficha dd.desc { white-space:pre-wrap; }
+  .ficha-curta { display:flex; gap:12px; align-items:flex-start; }
+  .ficha-curta .t { flex:1; min-width:0; display:grid; gap:2px; }
+  .ficha-curta .t b { overflow-wrap:anywhere; }
+  .ficha-acoes { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  a.bt.leve, button.bt.leve { min-height:44px; padding:0 14px; font-weight:600; font-size:.9rem; background:var(--branco); }
+  .ficha-acoes .bt.leve { flex:1 1 140px; }
+  .ficha .dica { font-size:.82rem; margin:0; } .ficha p { margin:0; }
+  @media (min-width:700px) { .ficha-acoes .bt.leve { flex:0 0 auto; min-width:200px; } }
+  details.dados { border-top:1px solid var(--linha); padding-top:4px; }
+  details.dados > summary { min-height:44px; display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700; list-style:none; }
+  details.dados > summary::-webkit-details-marker { display:none; }
+  details.dados > summary::after { content:"▾"; margin-left:auto; color:var(--suave); transition:transform .15s; }
+  details.dados[open] > summary::after { transform:rotate(180deg); }
+  details.dados > summary:focus-visible { outline:3px solid var(--laranja); outline-offset:2px; border-radius:6px; }
+  details.dados > .ficha { padding:4px 0 8px; }
+  .peca-tarefas { display:grid; gap:4px; border-top:1px solid var(--linha); padding-top:12px; }
+  .peca-tarefas:first-of-type { border-top:0; padding-top:0; }
+  .peca-tarefas > .tarefa:first-of-type { border-top:0; }
+  ol.passos { margin:0; padding-left:22px; display:grid; gap:2px; color:var(--suave); font-size:.9rem; }
+  .filtros { display:grid; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:6px; }
+  .filtros select { min-height:44px; font-size:.86rem; padding:6px 8px; border-color:var(--linha); color:var(--suave); background:var(--areia); }
+  .filtros select.ligado { color:var(--preto); border-color:var(--laranja); background:var(--branco); font-weight:600; }
+  .escolha { display:grid; gap:6px; }
+  .escolha > .rot { font-size:.88rem; font-weight:600; }
+  .escolha .abrir { justify-content:space-between; text-align:left; min-height:46px; border-radius:10px; background:#fff; border:1px solid #cfc6b6; font-weight:500; padding:8px 12px; }
+  .escolha .abrir span { overflow-wrap:anywhere; }
+  .escolha .abrir .vazio-esc { color:var(--suave); }
+  .escolha .painel { display:grid; gap:8px; background:var(--areia); border-radius:10px; padding:10px; }
+  .escolha .chips button[aria-pressed="false"] { text-decoration:none; color:var(--preto); background:#fff; }
+  .escolha .chips button[aria-pressed="true"] { background:var(--preto); color:#fff; border-color:var(--preto); }
+  .escolha .chips button.fora { border-color:var(--vermelho); color:var(--vermelho); background:var(--vermelho-fundo); }
+  .forn-linha { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .forn-linha select { flex:1 1 200px; width:100%; min-width:0; }
+  select { max-width:100%; } .dois > * { min-width:0; }
+  .forn-dados { font-size:.86rem; font-weight:400; margin:0; }
+  .peca-linha > .semfoto, .ficha-curta > .semfoto { width:52px; height:64px; border-radius:8px; background:var(--linha); flex:none; }
+  .semfoto.ph-media { width:56px; height:70px; } .semfoto.ph-grande { width:96px; height:120px; border-radius:10px; } .semfoto.ph-mini { width:44px; height:55px; border-radius:6px; }
+  .semfoto[class*="ph-"] { flex:none; background:var(--linha); border-radius:8px; }
   @media (min-width:700px) { .fundo { align-items:center; } .folha { border-radius:18px; } .acoes-t { justify-content:flex-end; } .acoes-t .bt:not(.discreto) { flex:0 0 200px; } .tarefa .acoes-t:has(.discreto) { justify-content:flex-start; } }
   @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
 </style>
@@ -167,7 +230,8 @@
 </header>
 <main id="app" aria-live="polite"><div class="card">Carregando…</div></main>
 
-<script src="common.js?v=7.45.0"></script>
+<script src="common.js?v=7.48.0"></script>
+<script src="catalogo-tecido.js?v=7.40.26"></script>
 <script src="conta.js"></script>
 <script>
 (function () {
@@ -194,6 +258,92 @@
   const ehInativo = (x) => !!x.Status && String(x.Status).trim().toLowerCase() !== 'ativo';   // mesmo critério do painel (arquivada)
   const autenticacao = () => { const s = getSessao() || {}; return { pin: s.sessao, sessao: s.sessao, whatsapp: s.whatsapp, funcionario: (EU && EU.nome) || '' }; };
   function foto(url, cls) { if (!url) return el('div', cls || 'semfoto'); const i = el('img', cls); i.alt = ''; i.loading = 'lazy'; i.decoding = 'async'; i.src = typeof fotoMini === 'function' ? fotoMini(url, 160) : url; i.onerror = () => { i.replaceWith(el('div', cls || 'semfoto')); }; return i; }
+
+  /* ---------- v7.48.0: fotos em tela cheia (TKFotoGrande), "Ver no site" e "Editar no cadastro" ----------
+   * Galeria e vídeo vêm do mesmo catálogo público que a Esteira já lê (action=list&todos=true); ele é buscado em segundo plano. */
+  let catPromessa = null;
+  function catalogoFundo() {                          // nunca derruba a tela: sem catálogo, devolve null
+    if (CATALOGO) return Promise.resolve(CATALOGO);
+    if (!catPromessa) catPromessa = catalogoCompleto().catch(() => null).finally(() => { catPromessa = null; });
+    return catPromessa;
+  }
+  const naHora = (pr, ms) => Promise.race([pr, new Promise((ok) => setTimeout(() => ok(null), ms))]);
+  const urlOk = (u) => /^https:\/\/[^\s"'<>]+$/.test(String(u || '').trim());
+  function midiasDoProduto(x) {                       // capa + galeria (sem repetir) + vídeo direto, no formato do TKFotoGrande
+    const fotos = [...new Set([x.Foto_URL].concat(lista(x.Fotos_Galeria)).map((u) => String(u || '').trim()).filter(urlOk))].map((url) => ({ url, tipo: 'foto' }));
+    const v = String(x.Video_URL || '').trim();
+    if (urlOk(v) && typeof ehVideoDireto === 'function' && ehVideoDireto(v)) fotos.push({ url: v, tipo: 'video', poster: typeof posterDoVideo === 'function' ? posterDoVideo(v) : '' });
+    return fotos;
+  }
+  const linkSite = (x) => (typeof linkProduto === 'function' ? linkProduto(x) : SITE_URL + '?id=' + encodeURIComponent(x.ID != null ? x.ID : x.id));
+  const linkCadastro = (id) => 'admin.html?editar=' + encodeURIComponent(String(id));
+  const verNoSite = (x) => (x && !ehInativo(x) ? { url: linkSite(x), rotulo: 'Ver no site' } : null);
+  function abrirGaleria(itens, indice, link) { if (window.TKFotoGrande && itens.length) TKFotoGrande.abrir({ itens, indice: indice || 0, link: link || null }); }
+  /** Abre todas as fotos da peça. Sem catálogo em 4 s, abre ao menos a foto que a tela já tem. */
+  async function abrirFotos(id, reserva, noSite) {
+    let x = CATALOGO && CATALOGO.get(String(id));
+    if (!x) { const c = await naHora(catalogoFundo(), 4000); x = c && c.get(String(id)); }
+    const itens = x ? midiasDoProduto(x) : [];
+    if (!itens.length && urlOk(reserva)) itens.push({ url: String(reserva).trim(), tipo: 'foto' });
+    abrirGaleria(itens, 0, x ? verNoSite(x) : (noSite && id ? { url: linkSite({ id }), rotulo: 'Ver no site' } : null));
+  }
+  /** Foto que é botão: toque abre a galeria. Sem foto, só o espaço (nada para ampliar). */
+  function fotoBt(url, tam, nome, abrir) {
+    if (!urlOk(url)) { const d = el('div', 'semfoto'); if (tam) d.classList.add('ph-' + tam); return d; }
+    const b = el('button', 'foto-bt' + (tam ? ' ' + tam : '')); b.type = 'button'; b.title = 'Ver as fotos';
+    b.setAttribute('aria-label', 'Ver as fotos de ' + (nome || 'peça') + ' em tela cheia');
+    b.append(foto(url)); b.onclick = (e) => { e.stopPropagation(); abrir(); };
+    return b;
+  }
+  const fotoPeca = (id, url, nome, tam, noSite) => fotoBt(url, tam, nome, () => abrirFotos(id, url, noSite));
+  const fotoLista = (urls, nome, tam) => { const us = (urls || []).filter(urlOk); return fotoBt(us[0], tam, nome, () => abrirGaleria(us.map((url) => ({ url, tipo: 'foto' })), 0)); };
+  function acoesCadastro(x, id) {                     // "Ver no site" (peça ativa) e "Editar no cadastro" (Gestão, outra aba)
+    const ac = el('div', 'ficha-acoes');
+    if (x && !ehInativo(x)) { const a = el('a', 'bt leve ver-site', 'Ver no site'); a.href = linkSite(x); a.target = '_blank'; a.rel = 'noopener'; a.setAttribute('aria-label', 'Ver ' + (x.Nome || 'a peça') + ' no site (abre outra aba)'); ac.append(a); }
+    const e = el('a', 'bt leve editar-cadastro', 'Editar no cadastro'); e.href = linkCadastro(id); e.target = '_blank'; e.rel = 'noopener'; e.setAttribute('aria-label', 'Editar ' + ((x && x.Nome) || 'a peça') + ' no cadastro da Gestão (abre outra aba)'); ac.append(e);
+    return ac;
+  }
+  const precoTxt = (x) => (Number(String(x.Preco == null ? '' : x.Preco).replace(',', '.')) > 0 ? 'R$ ' + Number(String(x.Preco).replace(',', '.')).toFixed(2).replace('.', ',') : 'Consultar valor');
+  const estoqueCat = (x) => (x.Estoque === '' || x.Estoque == null ? 'não informado' : x.Estoque + (Number(x.Estoque) === 1 ? ' peça' : ' peças'));
+  const tecidoDe = (x) => (window.TKTecido ? TKTecido.ler(x) : '');
+  const descricaoDe = (x) => String(window.TKTecido ? TKTecido.semDescricao(x.Descricao) : (x.Descricao || '')).trim();
+  /** Dados do cadastro da peça. completa: fotos, nome, código, preço, categoria, público, tamanhos, cores, tecido, estoque e descrição.
+   *  curta (outras tarefas e tarefas do Hoje): capa com a quantidade de fotos, nome, código e uma linha com categoria, cores, tamanhos e estoque.
+   *  reserva: o que a tela já sabe (nome, código, foto) enquanto o catálogo carrega. */
+  function fichaPeca(id, o) {
+    o = o || {}; const r = o.reserva || {};
+    const box = el('div', 'ficha' + (o.curta ? ' curta' : '')); box.dataset.ficha = String(id);
+    const pintar = (x, falhou) => {
+      box.replaceChildren();
+      if (o.curta) {
+        const linha = el('div', 'ficha-curta'), t = el('div', 't'), mids = x ? midiasDoProduto(x) : [];
+        const capa = fotoBt((mids.find((m) => m.tipo === 'foto') || {}).url || r.foto, 'media', (x && x.Nome) || r.nome, () => (x ? abrirGaleria(mids, 0, verNoSite(x)) : abrirFotos(id, r.foto)));
+        if (mids.length > 1 && capa.classList.contains('foto-bt')) capa.append(el('span', 'qtd-fotos', mids.length + (mids.some((m) => m.tipo === 'video') ? ' itens' : ' fotos')));
+        t.append(el('b', '', (x && x.Nome) || r.nome || 'Peça ' + id), el('small', 'muted', [(x && x.Codigo) || r.codigo, x && ehInativo(x) ? 'fora do site' : ''].filter(Boolean).join(' · ')));
+        if (x) t.append(el('small', '', [x.Categoria, x.Cores ? 'Cores: ' + x.Cores : '', x.Tamanhos ? 'Tamanhos: ' + x.Tamanhos : '', 'Estoque: ' + estoqueCat(x)].filter(Boolean).join(' · ')));
+        else if (falhou) t.append(el('small', 'muted', falhou));
+        else t.append(el('small', 'muted', 'Carregando os dados do cadastro…'));
+        linha.append(capa, t); box.append(linha, acoesCadastro(x, id));
+        return;
+      }
+      if (!x) { box.append(el('p', 'muted', falhou || 'Carregando os dados do cadastro…')); if (falhou) box.append(acoesCadastro(null, id)); return; }
+      const mids = midiasDoProduto(x), tira = el('div', 'ficha-fotos');
+      if (!mids.length) tira.append(el('p', 'muted', 'Ainda sem foto.'));
+      mids.forEach((m, k) => {
+        const b = el('button', 'foto-bt'); b.type = 'button'; b.title = m.tipo === 'video' ? 'Ver o vídeo' : 'Ver a foto ' + (k + 1);
+        b.setAttribute('aria-label', (m.tipo === 'video' ? 'Ver o vídeo de ' : 'Ver a foto ' + (k + 1) + ' de ') + (x.Nome || 'peça') + ' em tela cheia');
+        b.append(m.tipo === 'video' ? (m.poster ? foto(m.poster) : el('span', 'video-mini', '▶ vídeo')) : foto(m.url)); b.onclick = () => abrirGaleria(mids, k, verNoSite(x)); tira.append(b);
+      });
+      const dl = el('dl'), item = (k, v, cls) => { const dd = el('dd', cls || '', v); dl.append(el('dt', '', k), dd); };
+      item('Nome', x.Nome || '—'); item('Código', x.Codigo || 'sem código'); item('Preço', precoTxt(x)); item('Categoria', x.Categoria || '—'); item('Público', x.Genero || '—');
+      item('Tamanhos', x.Tamanhos || '—'); item('Cores', x.Cores || '—'); if (tecidoDe(x)) item('Tecido', tecidoDe(x)); item('Estoque', estoqueCat(x)); item('No site', ehInativo(x) ? 'não (arquivada)' : 'sim');
+      const desc = descricaoDe(x); item('Descrição', desc || 'sem descrição', 'desc' + (desc ? '' : ' muted'));
+      box.append(tira, dl, acoesCadastro(x, id), el('p', 'muted dica', 'Não deu para fazer tudo aqui? Edite pelo cadastro.'));
+    };
+    const achar = (c) => { const x = c && c.get(String(id)); pintar(x || null, !c ? 'Os dados do cadastro não carregaram agora. Toque em “Editar no cadastro” para ver tudo.' : (!x ? 'Esta peça não está no catálogo (pode ter sido excluída).' : '')); };
+    if (CATALOGO) achar(CATALOGO); else { pintar(null); catalogoFundo().then(achar); }
+    return box;
+  }
 
   /* ---------- login ---------- */
   function telaLogin(msg) {
@@ -251,7 +401,7 @@
     r.funcoes.forEach((f) => { const c = el('div', 'card funcao'); c.append(el('h3', '', 'Sua função hoje: ' + f.funcao)); c.append(el('p', f.instrucoes ? '' : 'muted', f.instrucoes || 'Sem instruções cadastradas para esta função.')); app.append(c); });
     if (Array.isArray(r.tarefas) && r.tarefas.length) {                  // v7.42.0: tarefas da função do dia (preparação e fotos novas pedidas)
       const c = el('div', 'card'); c.id = 'tarefas-hoje'; c.append(el('h2', '', 'Tarefas da sua função'), el('p', 'muted', r.tarefas.length === 1 ? '1 tarefa esperando.' : r.tarefas.length + ' tarefas esperando.'));
-      r.tarefas.forEach((t) => c.append(linhaTarefa(t, () => telaHoje(), true)));
+      c.append(...tarefasPorPeca(r.tarefas, () => telaHoje()));   // v7.48.0: uma vez a peça (fotos, dados, editar), depois as tarefas dela
       app.append(c);
     }
     if (!r.funcoes.length && r.escala.some((e) => e.whats)) { const c = el('div', 'card'); c.append(el('h3', '', 'Escala de hoje')); c.append(el('p', 'muted', r.escala.filter((e) => e.whats).map((e) => e.funcao + ': ' + (e.nome || '—')).join(' · '))); app.append(c); }
@@ -268,29 +418,35 @@
         const c = el('section', 'fam' + (feitos === n ? ' feita' : '')); c.dataset.familia = bl.familia; c.setAttribute('aria-label', 'Família ' + nome + ', ' + n + ' peças');
         const cab = el('div', 'fam-cab'), t = el('div', 't');
         t.append(el('b', '', nome), el('small', 'muted', n + ' peças · ' + (feitos === n ? 'todas conferidas' : feitos + ' de ' + n + ' conferidas')));
-        cab.append(foto((bl.itens.find((x) => x.foto) || p0).foto), t); if (feitos === n) cab.append(el('span', 'chip ok', '✓ família feita'));
+        const comFoto = bl.itens.filter((x) => urlOk(x.foto));   // v7.48.0: a foto da família abre as fotos de todas as peças dela
+        cab.append(fotoBt((comFoto[0] || p0).foto, '', nome, () => abrirGaleria(comFoto.map((x) => ({ url: x.foto, tipo: 'foto' })), 0)), t); if (feitos === n) cab.append(el('span', 'chip ok', '✓ família feita'));
         c.append(cab);
         bl.itens.forEach((p) => {
-          const b = el('button', 'peca tam' + (p.feito ? ' feita' : '')); b.type = 'button'; b.dataset.produto = p.id;
+          const linha = el('div', 'peca-linha tam' + (p.feito ? ' feita' : ''));
+          const b = el('button', 'peca tam'); b.type = 'button'; b.dataset.produto = p.id;
           const t2 = el('div', 't'); t2.append(el('small', 'muted', [p.codigo, estoqueTxt(p)].filter(Boolean).join(' · ') || p.nome));
-          const vf = el('span', 'vfoto'); vf.append(foto(p.foto)); if (p.rotulo) vf.append(el('span', 'rot', p.rotulo));   // v7.47.0: a foto mostra a estampa; o tamanho só se o nome trouxer
-          b.append(vf, t2, chipDe(p));
+          if (p.rotulo) b.append(el('span', 'rot', p.rotulo));   // v7.47.0: a foto mostra a estampa; o tamanho só se o nome trouxer
+          b.append(t2, chipDe(p));
           b.setAttribute('aria-label', 'Peça ' + [p.rotulo, p.codigo].filter(Boolean).join(' ') + (p.feito ? ', já conferida' : ', abrir conferência'));
           if (!p.sumiu) b.onclick = () => abrirConferencia(p); else b.disabled = true;
-          c.append(b);
+          linha.append(p.sumiu ? el('div', 'semfoto') : fotoPeca(p.id, p.foto, [p.nome, p.rotulo].filter(Boolean).join(' '), 'mini', true), b);
+          c.append(linha);
         });
         app.append(c); return;
       }
       const p = p0;
-      const b = el('button', 'peca' + (p.feito ? ' feita' : '')); b.type = 'button';
+      const linha = el('div', 'peca-linha' + (p.feito ? ' feita' : ''));   // v7.48.0: a foto é um botão à parte (abre as fotos); o resto da linha abre a conferência
+      const b = el('button', 'peca'); b.type = 'button'; b.dataset.produto = p.id;
       const t = el('div', 't'); t.append(el('b', '', p.nome + (p.familia && p.rotulo && !String(p.nome).endsWith(p.rotulo) ? ' · ' + p.rotulo : '')));
       const dCad = haDias(p.cadastro);
       t.append(el('small', 'muted', [p.codigo, dCad != null ? 'cadastrada há ' + dCad + ' dias' : '', estoqueTxt(p)].filter(Boolean).join(' · ')));
-      b.append(foto(p.foto), t, chipDe(p));
+      b.append(t, chipDe(p));
       b.setAttribute('aria-label', p.nome + (p.feito ? ', já conferida' : ', abrir conferência'));
       if (!p.sumiu) b.onclick = () => abrirConferencia(p); else b.disabled = true;
-      app.append(b);
+      linha.append(p.sumiu ? el('div', 'semfoto') : fotoPeca(p.id, p.foto, p.nome, '', true), b);
+      app.append(linha);
     });
+    catalogoFundo();                                   // v7.48.0: galeria pronta quando a pessoa tocar numa foto
   }
   /** v7.44.0: progresso por item — peça solta conta 1; família conta 1 e só fica feita com todas as peças conferidas (igual ao servidor). */
   function progressoHoje(lista) {
@@ -321,8 +477,12 @@
     topo.append(el('b', '', 'Conferir peça'), fechar);
     const corpo = el('div', 'corpo'), pe = el('div', 'pe');
     const id = el('div'); id.style.cssText = 'display:flex;gap:12px;align-items:center';
-    const tid = el('div'); tid.append(el('b', '', p.nome), el('div', 'muted', p.codigo || ''));
-    id.append(foto(p.foto, 'foto-grande'), tid);
+    const tid = el('div'); tid.style.cssText = 'display:grid;gap:2px;min-width:0'; tid.append(el('b', '', p.nome), el('div', 'muted', p.codigo || ''));
+    if (urlOk(p.foto)) tid.append(el('small', 'muted', 'Toque na foto para ver todas.'));
+    id.append(fotoPeca(p.id, p.foto, p.nome, 'grande', true), tid);
+    const atalhos = el('div'); atalhos.style.cssText = 'display:grid;gap:6px';   // v7.48.0: ver como está no site e corrigir pelo cadastro
+    const acs = acoesCadastro((CATALOGO && CATALOGO.get(String(p.id))) || { ID: p.id, Codigo: p.codigo, Nome: p.nome, Status: 'Ativo' }, p.id);
+    atalhos.append(acs, el('p', 'muted dica', 'Não deu para fazer tudo aqui? Edite pelo cadastro.'));
     const datas = el('div', 'datas');
     [['Cadastro', p.cadastro], ['Última atualização', p.atualizado_em], ['Última conferência', p.conferido_em]].forEach(([k, v]) => { const d = el('div'); d.append(el('b', '', dataBR(v)), document.createTextNode(k)); datas.append(d); });
     const estado = { achou: true, estoque: '', tamanhos: lista(p.tamanhos), cores: lista(p.cores), fotoNova: false };
@@ -332,29 +492,32 @@
     const marcarAchou = (v) => { estado.achou = v; bSim.setAttribute('aria-pressed', String(v)); bNao.setAttribute('aria-pressed', String(!v)); detalhes.hidden = !v; };
     bSim.onclick = () => marcarAchou(true); bNao.onclick = () => marcarAchou(false); achou.append(bSim, bNao);
     const detalhes = el('div'); detalhes.style.cssText = 'display:grid;gap:12px';
-    const lEst = el('label', 'campo'); lEst.append(document.createTextNode('Quantas peças você contou?'));
-    const iEst = el('input'); iEst.type = 'number'; iEst.min = '0'; iEst.inputMode = 'numeric'; iEst.id = 'conf-estoque'; iEst.placeholder = 'Digite o que contou';
+    const lEst = el('label', 'campo'); lEst.append(document.createTextNode('Quantas peças você contou? (opcional)'));
+    const iEst = el('input'); iEst.type = 'number'; iEst.min = '0'; iEst.step = '1'; iEst.inputMode = 'numeric'; iEst.id = 'conf-estoque'; iEst.placeholder = 'Em branco: o estoque do site fica como está';
     const avisoEst = el('div', 'aviso al'); avisoEst.hidden = true;
     iEst.oninput = () => { estado.estoque = iEst.value; const site = p.estoque === '' || p.estoque == null ? null : Number(p.estoque); if (iEst.value !== '' && site != null && Number(iEst.value) !== site) { avisoEst.textContent = 'O site diz ' + site + '. Se você confirmar, o estoque no site passa a ser ' + Number(iEst.value) + '.'; avisoEst.hidden = false; } else avisoEst.hidden = true; };
-    lEst.append(iEst);
+    lEst.append(iEst, el('small', 'muted', p.estoque !== '' && p.estoque != null ? 'No site: ' + p.estoque + (Number(p.estoque) === 1 ? ' peça.' : ' peças.') + ' Só mude se contou.' : 'O site não tem estoque informado.'));
     const blocoChips = (titulo, itens, on) => { const box = el('div'); box.style.cssText = 'display:grid;gap:6px'; if (!itens.length) return box; box.append(el('h3', '', titulo), el('p', 'muted', 'Toque para tirar o que acabou.')); const ch = el('div', 'chips'); itens.forEach((t) => { const b = el('button', '', t); b.type = 'button'; b.setAttribute('aria-pressed', 'true'); b.onclick = () => { if (on.has(t)) on.delete(t); else on.add(t); b.setAttribute('aria-pressed', String(on.has(t))); }; ch.append(b); }); box.append(ch); return box; };
     const tFoto = el('h3', '', 'As fotos estão boas?'), fotos = el('div', 'dois');
+    const dFoto = el('p', 'muted', urlOk(p.foto) ? 'Toque na foto lá em cima para ver todas e, se quiser, “Ver no site”.' : 'Esta peça ainda não tem foto.');
     const fOk = el('button', 'bt', 'Sim'), fNova = el('button', 'bt', 'Pedir foto nova'); fOk.type = fNova.type = 'button';
     const marcarFoto = (v) => { estado.fotoNova = v; fOk.setAttribute('aria-pressed', String(!v)); fNova.setAttribute('aria-pressed', String(v)); };
     fOk.onclick = () => marcarFoto(false); fNova.onclick = () => marcarFoto(true); fotos.append(fOk, fNova); marcarFoto(false);
-    detalhes.append(lEst, avisoEst, blocoChips('Tamanhos disponíveis', estado.tamanhos, tamOn), blocoChips('Cores disponíveis', estado.cores, corOn), tFoto, fotos);
+    detalhes.append(lEst, avisoEst, blocoChips('Tamanhos disponíveis', estado.tamanhos, tamOn), blocoChips('Cores disponíveis', estado.cores, corOn), tFoto, dFoto, fotos);
     const status = el('p', '', ''); status.setAttribute('role', 'status');
     const salvar = el('button', 'bt laranja', 'Salvar conferência'); salvar.type = 'button';
-    corpo.append(id, datas, tAchou, achou, detalhes, status); pe.append(salvar);
+    corpo.append(id, atalhos, datas, tAchou, achou, detalhes, status); pe.append(salvar);
     folha.append(topo, corpo, pe); fundo.append(folha); marcarAchou(true);
     const fecharTudo = () => { fundo.remove(); if (window.TKCamadas && TKCamadas.aberta('esteira-conferir')) TKCamadas.desempilhar('esteira-conferir'); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
     fechar.onclick = fecharTudo; fundo.onclick = (e) => { if (e.target === fundo) fecharTudo(); };
     fundo.onkeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); fecharTudo(); } };
     salvar.onclick = async () => {
-      if (estado.achou && iEst.value === '') { status.className = 'erro'; status.textContent = 'Digite quantas peças você contou (pode ser 0).'; iEst.focus(); return; }
+      // v7.48.0: a contagem é opcional. Em branco: registra a conferência sem mexer no estoque do site.
+      const contou = estado.achou && String(iEst.value).trim() !== '';
+      if (contou && !(Number.isInteger(Number(iEst.value)) && Number(iEst.value) >= 0)) { status.className = 'erro'; status.textContent = 'Use só números inteiros (pode ser 0) ou deixe em branco para não mudar o estoque.'; iEst.focus(); return; }
       salvar.disabled = true; status.className = 'muted'; status.textContent = 'Salvando…';
       const novoTam = estado.tamanhos.filter((t) => tamOn.has(t)), novaCor = estado.cores.filter((c) => corOn.has(c));
-      const mudouEst = estado.achou && String(Number(iEst.value)) !== String(p.estoque === '' ? '' : Number(p.estoque));
+      const mudouEst = contou && String(Number(iEst.value)) !== String(p.estoque === '' || p.estoque == null ? '' : Number(p.estoque));
       const mudouTam = estado.achou && novoTam.length !== estado.tamanhos.length, mudouCor = estado.achou && novaCor.length !== estado.cores.length;
       try {
         if (mudouEst || mudouTam || mudouCor) {
@@ -365,7 +528,7 @@
           if (!r || !r.ok) throw new Error(legivel(r && r.erro, 'O catálogo não aceitou a mudança. Tente de novo.'));
           Object.assign(x, { Estoque: dados.estoque, Tamanhos: dados.tamanhos, Cores: dados.cores });
         }
-        const rc = await srv('/esteira/conferir', { id: p.id, achou: estado.achou, estoqueAntes: p.estoque, estoqueDepois: estado.achou ? iEst.value : '', mudouTamanhos: mudouTam, mudouCores: mudouCor, fotoNova: estado.fotoNova });
+        const rc = await srv('/esteira/conferir', { id: p.id, achou: estado.achou, estoqueAntes: p.estoque, estoqueDepois: contou ? String(Number(iEst.value)) : '', mudouTamanhos: mudouTam, mudouCores: mudouCor, fotoNova: estado.fotoNova });
         if (!rc.ok) throw new Error(rc.erro || 'Não consegui registrar a conferência.');
         p.feito = true; if (mudouEst) p.estoque = String(Number(iEst.value));
         const pg = progressoHoje(HOJE.lista); HOJE.feitas = pg.feitas; HOJE.total = pg.total;
@@ -420,9 +583,9 @@
     const feita = t.status === 'feita', li = el('div', 'tarefa' + (feita ? ' feita' : '')); li.dataset.tarefa = String(t.id);
     const topo = el('div', 'cab-t'), marca = el('span', 'marca' + (feita ? ' ok' : ''), feita ? '✓' : ''); marca.setAttribute('aria-hidden', 'true');
     const tx = el('div', 'tt');
-    if (comPeca) tx.append(el('small', 'muted', [t.produtoNome, t.produtoCodigo].filter(Boolean).join(' · ')));
     tx.append(el('b', '', t.titulo + (feita ? ' — feita' : '')));
-    if (t.instrucao) tx.append(el('p', 'muted', t.instrucao));
+    if (t.instrucao) tx.append(el('p', 'muted', t.origem === 'conferencia' ? t.instrucao.replace(/^Pedida na conferência por ([^:]+?)(?:: ([\s\S]*)|\.)$/, (m, quem, obs) => 'Pedida por ' + quem + ' na conferência' + (obs ? ': “' + obs + '”' : '.')) : t.instrucao));
+    if (!feita && (t.tipo === 'cadastro' || t.tipo === 'cores_tamanhos')) tx.append(el('p', 'muted', comPeca ? 'Algo errado no cadastro? Corrija em “Editar no cadastro”, acima, e depois toque em Feito.' : 'Os dados estão em “Dados do cadastro”, acima. Algo errado? Corrija em “Editar no cadastro” e depois toque em Feito.'));   // v7.48.0
     tx.append(el('small', feita ? 'ok' : 'muted', feita ? 'Feita' + (t.feita_por ? ' por ' + t.feita_por : '') + (t.feita_em ? ' em ' + dataBR(t.feita_em) : '') : t.funcao ? 'Função: ' + t.funcao + (t.quem ? ' · hoje: ' + t.quem : comPeca ? '' : ' · ninguém na escala hoje') : 'Qualquer pessoa da equipe'));
     if (feita && t.obs) tx.append(el('small', 'muted', 'Obs.: ' + t.obs));
     topo.append(marca, tx); li.append(topo);
@@ -456,58 +619,109 @@
   }
 
   /* ---------- v7.42.0: Preparação (todos da equipe; colocar, criar tarefa e aceitar: Admin total ou marca "aceita") ---------- */
+  /** v7.48.0: tarefas agrupadas por peça — a peça aparece uma vez (fotos que abrem em tela cheia, dados, "Editar no cadastro") e as tarefas dela embaixo. */
+  function tarefasPorPeca(tarefas, aoMudar) {
+    const grupos = new Map();
+    tarefas.forEach((t) => { const k = String(t.produto); if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(t); });
+    return [...grupos].map(([id, ts]) => {
+      const g = el('div', 'peca-tarefas'); g.dataset.produto = id;
+      g.append(fichaPeca(id, { curta: true, reserva: { nome: ts[0].produtoNome, codigo: ts[0].produtoCodigo, foto: ts[0].produtoFoto } }));
+      ts.forEach((t) => g.append(linhaTarefa(t, aoMudar, true)));
+      return g;
+    });
+  }
   async function telaPrep() {
     app.replaceChildren(el('div', 'card', 'Carregando a preparação…'));
     const r = await srv('/esteira/preparacao'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPrep);
     if (r.eu) EU = Object.assign({}, EU || {}, r.eu);
     app.replaceChildren();
-    const topo = el('div', 'card'); topo.append(el('h2', '', 'Preparação'), el('p', 'muted', 'Peça nova passa por estas tarefas e só aparece no site depois de “Aceitar para o site”.'));
+    catalogoFundo();                                  // dados e fotos de cada peça chegam logo depois
+    const topo = el('div', 'card'); topo.append(el('h2', '', 'Preparação'), el('p', 'muted', 'Peça nova passa por aqui antes de aparecer no site:'));
+    const passos = el('ol', 'passos');
+    ['Confira os dados do cadastro no quadro da peça (nome, preço, categoria, público e descrição).', 'Faça as fotos e as outras tarefas e toque em “Feito” em cada uma.', 'Quem aceita toca em “Aceitar para o site”: só então a peça aparece no site.'].forEach((x) => passos.append(el('li', '', x)));
+    topo.append(passos);
     if (r.podeAceitar) topo.append(...blocoColocar(r));
     app.append(topo);
     if (!r.produtos.length) app.append(el('div', 'card vazio', 'Nenhuma peça em preparação agora.'));
     r.produtos.forEach((pr) => app.append(cartaoPrep(pr, r)));
-    if (r.outras.length) { const c = el('div', 'card'); c.append(el('h2', '', 'Outras tarefas'), el('p', 'muted', 'Fotos novas pedidas na conferência e tarefas de peças que já estão no site.')); r.outras.forEach((t) => c.append(linhaTarefa(t, telaPrep, true))); app.append(c); }
+    if (r.outras.length) { const c = el('div', 'card'); c.id = 'outras-tarefas'; c.append(el('h2', '', 'Outras tarefas'), el('p', 'muted', 'Fotos novas pedidas na conferência e tarefas de peças que já estão no site. Toque na foto para ver como a peça está hoje.'), ...tarefasPorPeca(r.outras, telaPrep)); app.append(c); }
   }
+  const SITUACOES = { ativas: 'Ativas (no site)', esgotadas: 'Esgotadas', arquivadas: 'Arquivadas', todas: 'Todas as situações' };
+  const naSituacao = (x, s) => (s === 'todas' ? true : s === 'arquivadas' ? ehInativo(x) : s === 'esgotadas' ? !ehInativo(x) && typeof estaEsgotado === 'function' && estaEsgotado(x) : !ehInativo(x));   // mesmo critério da lista da Gestão
+  /** v7.48.0: busca no catálogo com filtros discretos (situação, categoria e público). Com categoria escolhida, lista sem precisar digitar.
+   *  o: {id, rotulo, situacoes, padrao, fora(x), linha(x, st) → botão, max} */
+  function buscaCatalogo(o) {
+    const box = el('div', 'busca-cat'); box.style.cssText = 'display:grid;gap:8px';
+    const [lb, inp] = campoTexto(o.rotulo || 'Buscar no catálogo', '', { id: o.id, ph: 'Nome ou código da peça' }); inp.autocomplete = 'off'; inp.type = 'search';
+    const filtros = el('div', 'filtros'); filtros.setAttribute('role', 'group'); filtros.setAttribute('aria-label', 'Filtros da busca');
+    const sel = (cls, rot, opcoes, valor) => { const s = el('select', cls); s.setAttribute('aria-label', rot); opcoes.forEach(([v, t]) => { const op = el('option', '', t); op.value = v; s.append(op); }); s.value = valor; return s; };
+    const sits = o.situacoes || ['ativas', 'esgotadas', 'arquivadas', 'todas'], padrao = o.padrao || 'ativas';
+    const sSit = sel('f-situacao', 'Situação da peça', sits.map((k) => [k, SITUACOES[k]]), padrao);
+    const sCat = sel('f-categoria', 'Categoria', [['', 'Todas as categorias']], ''), sGen = sel('f-genero', 'Público', [['', 'Todos os públicos']], '');
+    filtros.append(sSit, sCat, sGen);
+    const st = linhaStatus(), res = el('div', 'busca-res'); box.append(lb, filtros, st, res);
+    const marcar = () => { sSit.classList.toggle('ligado', sSit.value !== padrao); sCat.classList.toggle('ligado', !!sCat.value); sGen.classList.toggle('ligado', !!sGen.value); };
+    const encher = (cat) => {                          // categorias e públicos que existem nas peças (só para filtrar; nada é criado aqui)
+      const vals = (k) => [...new Set([...cat.values()].flatMap((x) => String(x[k] || '').split(',').map((t) => t.trim()).filter(Boolean)))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      if (sCat.options.length === 1) vals('Categoria').forEach((v) => { const op = el('option', '', v); op.value = v; sCat.append(op); });
+      if (sGen.options.length === 1) vals('Genero').forEach((v) => { const op = el('option', '', v); op.value = v; sGen.append(op); });
+    };
+    catalogoFundo().then((c) => { if (c) encher(c); });
+    const temCat = (x, v) => !v || String(x.Categoria || '').split(',').map((t) => t.trim()).includes(v), temGen = (x, v) => !v || String(x.Genero || '').split(',').map((t) => t.trim()).includes(v);
+    let espera = null, vez = 0;
+    const buscar = async () => {
+      const minha = ++vez, q = semAcento(inp.value.trim()); marcar(); res.replaceChildren(); st.diga('');
+      if (q.length < 2 && !sCat.value && !sGen.value) return st.diga(q ? 'Digite pelo menos 2 letras (ou escolha uma categoria).' : '');
+      let cat = CATALOGO; if (!cat) { st.diga('Buscando…'); try { cat = await catalogoCompleto(); } catch (e) { return st.diga(e.message, 'erro'); } encher(cat); }
+      if (minha !== vez) return;
+      const casa = (x) => (q.length < 2 || semAcento(x.Nome).includes(q) || semAcento(x.Codigo).includes(q) || String(x.ID) === q) && temCat(x, sCat.value) && temGen(x, sGen.value) && !(o.fora && o.fora(x));
+      const todos = [...cat.values()].filter(casa), achados = todos.filter((x) => naSituacao(x, sSit.value)), max = o.max || 12;
+      if (!achados.length) {
+        const outras = todos.length;
+        st.diga(outras ? (outras === 1 ? '1 peça combina, mas está em outra situação. Troque o filtro “' + SITUACOES[sSit.value].replace(/ \(.*/, '') + '”.' : outras + ' peças combinam, mas estão em outra situação. Troque o filtro “' + SITUACOES[sSit.value].replace(/ \(.*/, '') + '”.') : 'Nenhuma peça com esse nome ou código' + (sCat.value || sGen.value ? ' nos filtros escolhidos.' : '.'));
+        return;
+      }
+      if (achados.length > max) st.diga('Mostrando ' + max + ' de ' + achados.length + '. Escreva mais do nome ou use os filtros.');
+      achados.slice(0, max).forEach((x) => res.append(o.linha(x, st)));
+    };
+    inp.oninput = () => { clearTimeout(espera); espera = setTimeout(buscar, 250); };
+    [sSit, sCat, sGen].forEach((s) => { s.onchange = buscar; });
+    box.focar = () => inp.focus();
+    return box;
+  }
+  const situacaoTxt = (x) => (ehInativo(x) ? 'arquivada (fora do site)' : typeof estaEsgotado === 'function' && estaEsgotado(x) ? 'esgotada' : 'no site');
   function blocoColocar(r) {
     const b = el('button', 'bt prim', 'Colocar peça em preparação'); b.type = 'button'; b.setAttribute('aria-expanded', 'false');
     const caixa = el('div'); caixa.hidden = true; caixa.style.cssText = 'display:grid;gap:8px';
-    const lb = el('label', 'campo'); lb.append(document.createTextNode('Buscar no catálogo'));
-    const inp = el('input'); inp.type = 'text'; inp.id = 'prep-busca'; inp.placeholder = 'Nome ou código da peça'; inp.autocomplete = 'off'; lb.append(inp);
-    const res = el('div', 'busca-res'), st = el('p', 'muted'); st.setAttribute('role', 'status');
-    caixa.append(lb, st, res);
-    b.onclick = () => { caixa.hidden = !caixa.hidden; b.setAttribute('aria-expanded', String(!caixa.hidden)); if (!caixa.hidden) inp.focus(); };
-    const ja = new Set(r.produtos.map((x) => x.id)); let espera = null;
-    const buscar = async () => {
-      const q = semAcento(inp.value.trim()); res.replaceChildren(); st.className = 'muted'; st.textContent = '';
-      if (q.length < 2) { st.textContent = q ? 'Digite pelo menos 2 letras.' : ''; return; }
-      let cat; try { st.textContent = 'Buscando…'; cat = await catalogoCompleto(); } catch (e) { st.className = 'erro'; st.textContent = e.message; return; }
-      if (semAcento(inp.value.trim()) !== q) return;
-      const achados = [...cat.values()].filter((x) => !ja.has(String(x.ID)) && (semAcento(x.Nome).includes(q) || semAcento(x.Codigo).includes(q) || String(x.ID) === q)).slice(0, 12);
-      st.textContent = achados.length ? '' : 'Nenhuma peça com esse nome ou código.';
-      achados.forEach((x) => {
-        const it = el('button', 'peca'); it.type = 'button';
-        const t = el('div', 't'); t.append(el('b', '', x.Nome || 'Peça ' + x.ID), el('small', 'muted', [x.Codigo, ehInativo(x) ? 'arquivada (fora do site)' : 'já está no site'].filter(Boolean).join(' · ')));
-        it.append(foto(x.Foto_URL), t, el('span', 'chip al', 'Preparar')); it.setAttribute('aria-label', 'Colocar ' + (x.Nome || 'peça') + ' em preparação');
-        it.onclick = async () => {
-          it.disabled = true; st.className = 'muted'; st.textContent = 'Criando as tarefas…';
-          const y = await srv('/esteira/preparar', { id: String(x.ID), nome: x.Nome || '', codigo: x.Codigo || '', foto: String(x.Foto_URL || '') });
-          if (!y.ok) { it.disabled = false; st.className = 'erro'; st.textContent = y.erro || 'Não consegui colocar a peça em preparação.'; return; }
-          telaPrep();
-        };
-        res.append(it);
-      });
-    };
-    inp.oninput = () => { clearTimeout(espera); espera = setTimeout(buscar, 250); };
+    const ja = new Set(r.produtos.map((x) => x.id));
+    const busca = buscaCatalogo({ id: 'prep-busca', rotulo: 'Qual peça vai ser preparada?', padrao: 'todas', fora: (x) => ja.has(String(x.ID)), linha: (x, st) => {
+      const it = el('button', 'peca'); it.type = 'button';
+      const t = el('div', 't'); t.append(el('b', '', x.Nome || 'Peça ' + x.ID), el('small', 'muted', [x.Codigo, x.Categoria, situacaoTxt(x)].filter(Boolean).join(' · ')));
+      it.append(foto(x.Foto_URL), t, el('span', 'chip al', 'Preparar')); it.setAttribute('aria-label', 'Colocar ' + (x.Nome || 'peça') + ' em preparação');
+      it.onclick = async () => {
+        it.disabled = true; st.diga('Criando as tarefas…');
+        const y = await srv('/esteira/preparar', { id: String(x.ID), nome: x.Nome || '', codigo: x.Codigo || '', foto: String(x.Foto_URL || '') });
+        if (!y.ok) { it.disabled = false; st.diga(y.erro || 'Não consegui colocar a peça em preparação.', 'erro'); return; }
+        telaPrep();
+      };
+      return it;
+    } });
+    caixa.append(el('p', 'muted', 'A peça recebe as tarefas do modelo (Configurações → Tarefas da preparação). Arquivada continua fora do site até ser aceita.'), busca);
+    b.onclick = () => { caixa.hidden = !caixa.hidden; b.setAttribute('aria-expanded', String(!caixa.hidden)); if (!caixa.hidden) busca.focar(); };
     return [b, caixa];
   }
   function cartaoPrep(pr, r) {
     const c = el('div', 'card'); c.dataset.produto = pr.id;
     const topo = el('div', 'prep-topo'), t = el('div', 't');
     t.append(el('h3', '', pr.nome), el('small', 'muted', [pr.codigo, pr.noSite ? 'já aparece no site' : 'fora do site até ser aceita', pr.preparado_em ? 'desde ' + dataBR(pr.preparado_em) : ''].filter(Boolean).join(' · ')));
-    topo.append(foto(pr.foto), t);
+    topo.append(fotoPeca(pr.id, pr.foto, pr.nome, 'media', pr.noSite), t);
+    // v7.48.0: os dados do cadastro ficam aqui (a tarefa "Cadastro conferido" pede para conferir o que está neste quadro)
+    const dados = el('details', 'dados'), sm = el('summary', '', 'Dados do cadastro');
+    dados.append(sm, fichaPeca(pr.id, { reserva: { nome: pr.nome, codigo: pr.codigo, foto: pr.foto } }));
+    dados.open = pr.tarefas.some((x) => (x.tipo === 'cadastro' || x.tipo === 'cores_tamanhos') && x.status !== 'feita');
     const pl = el('div', 'progresso'); pl.append(el('b', 'num', pr.feitas + '/' + pr.total), el('span', 'muted', pr.total && pr.feitas >= pr.total ? 'tudo feito' : 'tarefas feitas'));
     const bar = el('div', 'barra'), i = el('i'); i.style.width = (pr.total ? Math.round(pr.feitas / pr.total * 100) : 0) + '%'; bar.append(i);
-    c.append(topo, pl, bar);
+    c.append(topo, dados, pl, bar);
     pr.tarefas.forEach((x) => c.append(linhaTarefa(x, telaPrep)));
     if (!r.podeAceitar) return c;
     // tarefa avulsa
@@ -557,10 +771,75 @@
   const linhaStatus = () => { const p = el('p', 'muted'); p.setAttribute('role', 'status'); p.diga = (t, c) => { p.className = c || 'muted'; p.textContent = t || ''; }; return p; };
   const voltar = () => bt('← Pedidos', 'discreto voltar', () => telaPedidos());
   const campoTexto = (rot, valor, o) => { o = o || {}; const lb = el('label', 'campo'); lb.append(document.createTextNode(rot)); const i = el(o.area ? 'textarea' : 'input'); if (!o.area) i.type = o.tipo || 'text'; if (o.id) i.id = o.id; if (o.max) i.maxLength = o.max; if (o.ph) i.placeholder = o.ph; if (o.modo) i.inputMode = o.modo; if (o.lista) i.setAttribute('list', o.lista); if (o.min != null) i.min = String(o.min); i.value = valor == null ? '' : String(valor); lb.append(i); return [lb, i]; };
-  function listasDoCatalogo(cat) {                     // categorias e públicos que já existem no catálogo (nada inventado)
-    const frag = document.createDocumentFragment();
-    [['dl-cat', 'Categoria'], ['dl-gen', 'Genero']].forEach(([id, k]) => { const dl = el('datalist'); dl.id = id; const vs = new Set(); if (cat) cat.forEach((p) => String(p[k] || '').split(',').map((x) => x.trim()).filter(Boolean).forEach((x) => vs.add(x))); [...vs].sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach((v) => { const o = el('option'); o.value = v; dl.append(o); }); frag.append(dl); });
-    return frag;
+  /* ---- v7.48.0: categoria, público, tamanhos, cores e tecido NUNCA são digitados na Esteira: só se escolhe das listas da Gestão. ----
+   * Fonte: /esteira/listas (as mesmas listas da Gestão: action=categorias, generos e opcoes, e o cadastro de tecidos). Lista que não respondeu:
+   * usa os nomes que já existem nas peças do catálogo (todos criados pela Gestão). Tecidos: cadastro + nomes já usados (TKTecido, como na Gestão). */
+  let LISTAS = null;
+  const alfa = (l) => l.slice().sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+  async function listasCadastro() {
+    if (LISTAS) return LISTAS;
+    const [r, cat] = await Promise.all([srv('/esteira/listas'), naHora(catalogoFundo(), 8000)]);
+    const pecas = cat ? [...cat.values()] : [];
+    const doCat = (k) => alfa([...new Set(pecas.flatMap((p) => String(p[k] || '').split(',').map((x) => x.trim()).filter((x) => x && !/:/.test(x) && !/^consult/i.test(x))))]);
+    const ok = r && r.ok, temL = (k) => ok && Array.isArray(r[k]) && r[k].length;
+    const L = { categorias: temL('categorias') ? alfa(r.categorias) : doCat('Categoria'), generos: temL('generos') ? r.generos.slice() : doCat('Genero'), tamanhos: temL('tamanhos') ? r.tamanhos.slice() : doCat('Tamanhos'), cores: temL('cores') ? alfa(r.cores) : doCat('Cores') };
+    if (window.TKTecido) { try { await naHora(TKTecido.carregar(), 4000); } catch (e) { /* segue com os nomes das peças */ } }
+    L.tecidos = alfa([...new Set((ok && Array.isArray(r.tecidos) ? r.tecidos : []).concat(window.TKTecido ? TKTecido.opcoes(pecas) : []))]);
+    if (ok && temL('categorias') && temL('generos')) LISTAS = L;   // guarda só quando veio da Gestão
+    return L;
+  }
+  const sem = (t) => semAcento(String(t || '').trim());
+  /** Seleção de uma opção (categoria, público, tecido). Valor antigo fora da lista aparece marcado como "fora da lista" e precisa ser trocado. */
+  function campoEscolha(rot, opcoes, valor, o) {
+    o = o || {}; const lb = el('label', 'campo'); lb.append(document.createTextNode(rot));
+    const s = el('select'); if (o.id) s.id = o.id; if (o.cls) s.className = o.cls;
+    const o0 = el('option', '', o.vazio || 'Escolha'); o0.value = ''; s.append(o0);
+    const atual = String(valor || '').trim(), igual = opcoes.find((v) => sem(v) === sem(atual));
+    opcoes.forEach((v) => { const op = el('option', '', v); op.value = v; s.append(op); });
+    if (atual && !igual) { const op = el('option', '', atual + ' (fora da lista: escolha outra)'); op.value = atual; op.dataset.fora = '1'; s.append(op); }
+    s.value = igual || atual || '';
+    if (!opcoes.length) lb.append(el('small', 'muted', 'A lista da Gestão não carregou agora. Tente de novo em instantes.'));
+    lb.append(s);
+    s.foraDaLista = () => !!(s.value && !opcoes.includes(s.value));
+    return [lb, s];
+  }
+  /** Múltipla escolha (tamanhos, cores): botão que abre as opções como chips; com busca quando a lista é grande. Nada é digitado como nome. */
+  function campoChips(rot, opcoes, valores, o) {
+    o = o || {}; const box = el('div', 'escolha'); if (o.id) box.id = o.id;
+    const marcados = []; lista(valores).forEach((v) => { const igual = opcoes.find((x) => sem(x) === sem(v)); const k = igual || v; if (!marcados.includes(k)) marcados.push(k); });
+    const idRot = (o.id || 'esc') + '-rot', rt = el('span', 'rot', rot); rt.id = idRot;
+    const abrir = el('button', 'bt abrir'); abrir.type = 'button'; abrir.setAttribute('aria-expanded', 'false'); abrir.setAttribute('aria-labelledby', idRot + ' ' + (o.id || 'esc') + '-resumo');
+    const resumo = el('span'); resumo.id = (o.id || 'esc') + '-resumo';
+    abrir.append(resumo, el('span', 'muted', '▾'));
+    const painel = el('div', 'painel'); painel.hidden = true;
+    const chips = el('div', 'chips'); chips.setAttribute('role', 'group'); chips.setAttribute('aria-labelledby', idRot);
+    let filtro = null;
+    if (opcoes.length > 14) { filtro = el('input'); filtro.type = 'search'; filtro.placeholder = 'Procurar na lista'; filtro.setAttribute('aria-label', 'Procurar ' + rot.toLowerCase() + ' na lista'); filtro.oninput = () => pintar(); }
+    const fora = () => marcados.filter((v) => !opcoes.includes(v));
+    const ordem = () => opcoes.filter((v) => marcados.includes(v)).concat(fora());
+    const pintar = () => {
+      const q = filtro ? sem(filtro.value) : '';
+      chips.replaceChildren();
+      opcoes.filter((v) => !q || sem(v).includes(q)).concat(fora()).forEach((v) => {
+        const ehFora = !opcoes.includes(v), b = el('button', ehFora ? 'fora' : '', ehFora ? v + ' (fora da lista) ×' : v); b.type = 'button'; b.dataset.valor = v;
+        b.setAttribute('aria-pressed', String(marcados.includes(v))); if (ehFora) b.title = 'Não está na lista da Gestão: toque para tirar';
+        b.onclick = () => { const k = marcados.indexOf(v); if (k >= 0) marcados.splice(k, 1); else marcados.push(v); pintar(); };
+        chips.append(b);
+      });
+      if (!opcoes.length) chips.append(el('p', 'muted', 'A lista da Gestão não carregou agora. Tente de novo em instantes.'));
+      const r = ordem(); resumo.textContent = r.length ? r.join(', ') : (o.vazio || 'Nenhum escolhido'); resumo.className = r.length ? '' : 'vazio-esc';
+    };
+    const pronto = bt('Pronto', 'leve', () => { painel.hidden = true; abrir.setAttribute('aria-expanded', 'false'); abrir.focus(); });
+    abrir.onclick = () => { painel.hidden = !painel.hidden; abrir.setAttribute('aria-expanded', String(!painel.hidden)); if (!painel.hidden) (filtro || chips.querySelector('button') || pronto).focus(); };
+    painel.append(...(filtro ? [filtro] : []), chips, pronto);
+    box.append(rt, abrir, painel); pintar();
+    box.valor = () => ordem().join(', '); box.foraDaLista = () => fora().length > 0;
+    return box;
+  }
+  /** Confere no navegador antes de mandar: nada fora das listas (o servidor confere de novo quando as listas respondem). */
+  function foraDasListas(campos) {
+    const nomes = campos.filter(([, c]) => c && c.foraDaLista && c.foraDaLista()).map(([n]) => n);
+    return nomes.length ? 'Escolha ' + nomes.join(', ') + ' da lista da Gestão (o que está marcado “fora da lista” não pode ser salvo).' : '';
   }
   function abrirFolha(chave, titulo, montar) {
     const ant = document.activeElement;
@@ -578,7 +857,7 @@
   }
   function miniFotos(urls, aoTirar) {
     const box = el('div', 'minis');
-    urls.forEach((u, k) => { const m = el('div', 'mini'); m.append(foto(u, 'mini-img')); if (aoTirar) { const t = el('button', 'tirar'); t.type = 'button'; t.setAttribute('aria-label', 'Tirar a foto ' + (k + 1)); t.append(el('span', '', '×')); t.onclick = () => aoTirar(k); m.append(t); } box.append(m); });
+    urls.forEach((u, k) => { const m = el('div', 'mini'); const fb = fotoBt(u, '', 'foto ' + (k + 1), () => abrirGaleria(urls.filter(urlOk).map((url) => ({ url, tipo: 'foto' })), Math.max(0, urls.filter(urlOk).indexOf(u)))); if (fb.firstChild) fb.firstChild.classList.add('mini-img'); fb.setAttribute('aria-label', 'Ver a foto ' + (k + 1) + ' em tela cheia'); m.append(fb); if (aoTirar) { const t = el('button', 'tirar'); t.type = 'button'; t.setAttribute('aria-label', 'Tirar a foto ' + (k + 1)); t.append(el('span', '', '×')); t.onclick = () => aoTirar(k); m.append(t); } box.append(m); });
     return box;
   }
   /** Fotos pela câmera ou galeria: mesmo envio da preparação (reduz e sobe ao servidor de fotos); o endereço entra em `urls`. */
@@ -645,7 +924,7 @@
       const c = cartoes.get(it.id); c.replaceChildren();
       const topo = el('div', 'prep-topo'), t = el('div', 't');
       t.append(el('h3', '', it.nome), el('small', 'muted', [it.tipo === 'novo' ? 'Peça nova' : 'Reposição', it.tamanhos, it.cores].filter(Boolean).join(' · ')));
-      topo.append(foto(it.fotos[0]), t); c.append(topo);
+      topo.append(fotoLista(it.fotos, it.nome), t); c.append(topo);
       if (it.fotos.length > 1) c.append(miniFotos(it.fotos.slice(1)));
       const st = linhaStatus(), contado = (it.qtd != null || it.naoVeio) && !it.recontar;
       if (contado && it.naoVeio) c.append(el('div', 'aviso al', 'Marcado: não veio.'), acoes(bt('Desfazer “não veio”', 'discreto', () => naoVeio(it, false, st))));
@@ -690,7 +969,7 @@
           if (!y.ok) { tirar.disabled = false; return stE.diga(y.erro || 'Não consegui tirar. Tente de novo.', 'erro'); }
           itens.splice(itens.indexOf(it), 1); pintarExtras();
         });
-        l.append(foto(it.fotos[0]), t, tirar); cEx.append(l);
+        l.append(fotoLista(it.fotos, it.nome), t, tirar); cEx.append(l);
       });
       cEx.append(bt('+ Veio um modelo que não está aqui', '', folhaExtra), stE);
     };
@@ -735,14 +1014,70 @@
     if (ped.status === 'conferido') return telaAprovacao(ped.id);
     if (ped.status === 'aprovado') return telaAplicacao(ped.id);
     let cat = null; try { cat = await catalogoCompleto(); } catch (e) { cat = null; }
+    const fr = await srv('/esteira/fornecedores');   // v7.48.0: cadastro de fornecedores
+    FORNECEDORES = fr.ok ? fr.fornecedores : null;
     desenharEditor(ped, cat);
+  }
+  let FORNECEDORES = null;
+  const foneBR = (d) => { const s = String(d || '').replace(/\D/g, ''); return s.length === 11 ? '(' + s.slice(0, 2) + ') ' + s.slice(2, 7) + '-' + s.slice(7) : s.length === 10 ? '(' + s.slice(0, 2) + ') ' + s.slice(2, 6) + '-' + s.slice(6) : s; };
+  const foneValido = (v) => { const s = String(v || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, ''); return !String(v || '').trim() || s.length === 10 || s.length === 11; };
+  /** Cadastrar ou editar fornecedor: nome (obrigatório), endereço e até 3 telefones. aoSalvar(fornecedor) recebe o que o servidor gravou. */
+  function folhaFornecedor(f, aoSalvar) {
+    abrirFolha('esteira-fornecedor', f ? 'Editar fornecedor' : 'Cadastrar fornecedor', ({ corpo, pe, fechar }) => {
+      const [lN, iN] = campoTexto('Nome do fornecedor', f ? f.nome : '', { id: 'forn-nome', max: 80, ph: 'Como a loja chama o fornecedor' });
+      const [lE, iE] = campoTexto('Endereço (opcional)', f ? f.endereco : '', { id: 'forn-endereco', area: true, max: 200, ph: 'Rua, número, bairro, cidade' }); iE.style.minHeight = '64px';
+      const fones = [1, 2, 3].map((n) => campoTexto('Telefone ' + n + ' (opcional)', f ? foneBR(f['fone' + n]) : '', { id: 'forn-fone' + n, tipo: 'tel', modo: 'tel', max: 20, ph: '(88) 99999-0000' }));
+      fones.forEach(([, i]) => { i.autocomplete = 'off'; i.onblur = () => { if (foneValido(i.value)) i.value = foneBR(String(i.value).replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '')); }; });
+      const dois = el('div', 'dois'); dois.append(fones[0][0], fones[1][0]);
+      const st = linhaStatus();
+      corpo.append(lN, lE, dois, fones[2][0], st);
+      const salvar = bt(f ? 'Salvar fornecedor' : 'Cadastrar e escolher', 'laranja', async () => {
+        if (!iN.value.trim()) { st.diga('Informe o nome do fornecedor.', 'erro'); return iN.focus(); }
+        const ruim = fones.findIndex(([, i]) => !foneValido(i.value));
+        if (ruim >= 0) { st.diga('Telefone ' + (ruim + 1) + ': use o DDD e o número, com 10 ou 11 dígitos (ex.: (88) 99999-0000).', 'erro'); return fones[ruim][1].focus(); }
+        salvar.disabled = true; st.diga('Salvando…');
+        const y = await srv('/esteira/fornecedores/salvar', { id: f ? f.id : undefined, nome: iN.value, endereco: iE.value, fone1: fones[0][1].value, fone2: fones[1][1].value, fone3: fones[2][1].value });
+        if (!y.ok) {
+          salvar.disabled = false; st.diga(y.erro || 'Não consegui salvar o fornecedor. Tente de novo.', 'erro');
+          const ex = y.existente && (FORNECEDORES || []).find((x) => x.id === y.existente);
+          if (ex && !f) { const usar = bt('Usar “' + ex.nome + '”', '', () => { fechar(); aoSalvar(ex); }); usar.classList.add('usar-existente'); st.after(usar); }
+          return;
+        }
+        fechar(); aoSalvar(y.fornecedor);
+      });
+      pe.append(salvar);
+    });
   }
   function desenharEditor(ped, cat, aviso) {
     const itens = ped.itens.filter((x) => x.tipo !== 'extra').map((x) => Object.assign({}, x, { fotos: (x.fotos || []).slice(), custo: x.custo == null ? '' : String(x.custo).replace('.', ','), qtd_pedida: x.qtd_pedida || '' }));
     const fotosPed = (ped.fotos || []).slice();
-    app.replaceChildren(listasDoCatalogo(cat));
+    app.replaceChildren();
     const c1 = el('div', 'card'); c1.id = 'ped-editor';
-    const [lF, iF] = campoTexto('Fornecedor', ped.fornecedor, { id: 'ped-fornecedor', max: 80, ph: 'Nome do fornecedor' });
+    // v7.48.0: fornecedor vem do cadastro (seleção); pedido antigo com nome digitado continua com esse nome até trocar
+    const lF = el('div', 'campo'), rotF = el('label', '', 'Fornecedor'); rotF.htmlFor = 'ped-fornecedor'; lF.append(rotF);
+    const iF = el('select'); iF.id = 'ped-fornecedor';
+    const legado = ped.fornecedor && !ped.fornecedorId ? ped.fornecedor : '';
+    const dadosF = el('p', 'muted forn-dados'); dadosF.hidden = true;
+    let buscaF = null;
+    const pintarForn = (escolher) => {
+      const q = buscaF ? sem(buscaF.value) : '', atual = escolher != null ? String(escolher) : iF.value;
+      iF.replaceChildren(); const o0 = el('option', '', (FORNECEDORES || []).length ? 'Escolha o fornecedor' : 'Nenhum fornecedor cadastrado: cadastre um'); o0.value = ''; iF.append(o0);
+      if (legado) { const ol = el('option', '', legado + ' (sem cadastro)'); ol.value = 'texto'; iF.append(ol); }
+      (FORNECEDORES || []).filter((x) => !q || sem(x.nome).includes(q) || String(x.id) === atual).forEach((x) => { const op = el('option', '', x.nome); op.value = String(x.id); iF.append(op); });
+      iF.value = [...iF.options].some((op) => op.value === atual) ? atual : '';
+      const f = (FORNECEDORES || []).find((x) => String(x.id) === iF.value);
+      dadosF.textContent = f ? [f.endereco, [f.fone1, f.fone2, f.fone3].filter(Boolean).map(foneBR).join(' · ')].filter(Boolean).join(' — ') || 'Sem endereço nem telefone no cadastro.' : '';
+      dadosF.hidden = !f; bEdF.hidden = !f;
+    };
+    const escolhido = (f) => { if (!FORNECEDORES) FORNECEDORES = []; const k = FORNECEDORES.findIndex((x) => x.id === f.id); if (k >= 0) FORNECEDORES[k] = Object.assign({}, FORNECEDORES[k], f); else FORNECEDORES.push(f); FORNECEDORES.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')); if (buscaF) buscaF.value = ''; pintarForn(f.id); iF.focus(); };
+    const bNovoF = bt('Cadastrar fornecedor', 'leve', () => folhaFornecedor(null, escolhido)); bNovoF.id = 'ped-forn-novo';
+    const bEdF = bt('Editar dados', 'discreto', () => { const f = (FORNECEDORES || []).find((x) => String(x.id) === iF.value); if (f) folhaFornecedor(f, escolhido); }); bEdF.id = 'ped-forn-editar';
+    if ((FORNECEDORES || []).length > 8) { buscaF = el('input'); buscaF.type = 'search'; buscaF.id = 'ped-forn-busca'; buscaF.placeholder = 'Procurar fornecedor'; buscaF.setAttribute('aria-label', 'Procurar fornecedor na lista'); buscaF.oninput = () => pintarForn(); lF.append(buscaF); }
+    const linhaF = el('div', 'forn-linha'); linhaF.append(iF, bNovoF, bEdF);
+    lF.append(linhaF, dadosF);
+    iF.onchange = () => pintarForn();
+    if (FORNECEDORES === null) lF.append(el('p', 'erro', 'Não consegui carregar os fornecedores agora. Saia e entre de novo nesta tela.'));
+    pintarForn(ped.fornecedorId ? ped.fornecedorId : legado ? 'texto' : '');
     const [lP, iP] = campoTexto('Previsão de chegada', ped.previsao, { id: 'ped-previsao', tipo: 'date' });
     const [lO, iO] = campoTexto('Observação (opcional)', ped.obs, { id: 'ped-obs', area: true, max: 500 }); iO.style.minHeight = '64px';
     c1.append(voltar(), el('h2', '', ped.id ? 'Pedido nº ' + ped.id : 'Novo pedido'));
@@ -755,8 +1090,8 @@
     const linhaItem = (it) => {
       const l = el('div', 'item-ped'); if (it.id) l.dataset.item = String(it.id);
       const topo = el('div', 'prep-topo'), t = el('div', 't'), ref = it.tipo === 'reposicao' && cat ? cat.get(String(it.produto)) : null;
-      t.append(el('b', '', it.nome || 'Sem nome'), el('small', 'muted', it.tipo === 'novo' ? ['Produto novo', it.categoria, it.genero, Number.isFinite(numBR(it.preco)) ? reais(numBR(it.preco)) : 'consultar valor', it.tamanhos].filter(Boolean).join(' · ') : ['Reposição', ref && ref.Codigo, ref && ref.Estoque !== '' && ref.Estoque != null ? 'estoque hoje: ' + ref.Estoque : ''].filter(Boolean).join(' · ')));
-      topo.append(foto(it.fotos[0]), t); l.append(topo);
+      t.append(el('b', '', it.nome || 'Sem nome'), el('small', 'muted', it.tipo === 'novo' ? ['Produto novo', it.categoria, it.genero, Number.isFinite(numBR(it.preco)) ? reais(numBR(it.preco)) : 'consultar valor', it.tamanhos, it.cores, it.tecido].filter(Boolean).join(' · ') : ['Reposição', ref && ref.Codigo, ref && ref.Estoque !== '' && ref.Estoque != null ? 'estoque hoje: ' + ref.Estoque : ''].filter(Boolean).join(' · ')));
+      topo.append(it.tipo === 'reposicao' && it.produto ? fotoPeca(it.produto, it.fotos[0], it.nome) : fotoLista(it.fotos, it.nome), t); l.append(topo);
       const d = el('div', 'dois');
       const [lQ, iQ] = campoTexto('Quantidade', it.qtd_pedida, { tipo: 'number', modo: 'numeric', min: 1 }); iQ.className = 'qtd-ped'; iQ.oninput = () => { it.qtd_pedida = iQ.value; somar(); };
       const [lC, iC] = campoTexto('Custo unitário (R$)', it.custo, { modo: 'decimal', ph: '0,00', max: 12 }); iC.className = 'custo-ped'; iC.oninput = () => { it.custo = iC.value; somar(); };
@@ -768,54 +1103,53 @@
       return l;
     };
     const desenharItens = () => { caixa.replaceChildren(...itens.map(linhaItem)); somar(); };
+    // v7.48.0: busca com filtros discretos (situação, categoria e público); padrão: peças ativas
     const folhaCatalogo = () => abrirFolha('esteira-busca-catalogo', 'Peça do catálogo (reposição)', ({ corpo, fechar }) => {
-      const [lb, inp] = campoTexto('Buscar no catálogo', '', { id: 'ped-busca', ph: 'Nome ou código da peça' }); inp.autocomplete = 'off';
-      const st = linhaStatus(), res = el('div', 'busca-res'); corpo.append(lb, st, res);
-      let espera = null;
-      const buscar = async () => {
-        const q = semAcento(inp.value.trim()); res.replaceChildren(); st.diga('');
-        if (q.length < 2) return st.diga(q ? 'Digite pelo menos 2 letras.' : '');
-        if (!cat) { try { st.diga('Buscando…'); cat = await catalogoCompleto(); } catch (e) { return st.diga(e.message, 'erro'); } }
-        if (semAcento(inp.value.trim()) !== q) return;
-        const ja = new Set(itens.filter((y) => y.tipo === 'reposicao').map((y) => String(y.produto)));
-        const achados = [...cat.values()].filter((y) => semAcento(y.Nome).includes(q) || semAcento(y.Codigo).includes(q) || String(y.ID) === q).slice(0, 12);
-        st.diga(achados.length ? '' : 'Nenhuma peça com esse nome ou código.');
-        achados.forEach((y) => {
-          const b = el('button', 'peca'); b.type = 'button'; const t = el('div', 't'), tem = ja.has(String(y.ID));
-          t.append(el('b', '', y.Nome || 'Peça ' + y.ID), el('small', 'muted', [y.Codigo, y.Estoque !== '' && y.Estoque != null ? 'estoque ' + y.Estoque : '', ehInativo(y) ? 'arquivada' : ''].filter(Boolean).join(' · ')));
-          b.append(foto(y.Foto_URL), t, el('span', 'chip ' + (tem ? 'ok' : 'al'), tem ? 'já no pedido' : 'Incluir'));
-          b.onclick = () => { if (tem) return st.diga('Esta peça já está no pedido: mude a quantidade nela.'); itens.push({ tipo: 'reposicao', produto: String(y.ID), nome: y.Nome || 'Peça ' + y.ID, fotos: y.Foto_URL ? [String(y.Foto_URL)] : [], qtd_pedida: '', custo: '' }); fechar(); desenharItens(); focarQtd(itens.length - 1); };
-          res.append(b);
-        });
-      };
-      inp.oninput = () => { clearTimeout(espera); espera = setTimeout(buscar, 250); };
+      const ja = () => new Set(itens.filter((y) => y.tipo === 'reposicao').map((y) => String(y.produto)));
+      corpo.append(buscaCatalogo({ id: 'ped-busca', rotulo: 'Buscar no catálogo', padrao: 'ativas', linha: (y, st) => {
+        const b = el('button', 'peca'); b.type = 'button'; const t = el('div', 't'), tem = ja().has(String(y.ID));
+        t.append(el('b', '', y.Nome || 'Peça ' + y.ID), el('small', 'muted', [y.Codigo, y.Categoria, y.Estoque !== '' && y.Estoque != null ? 'estoque ' + y.Estoque : '', ehInativo(y) ? 'arquivada' : ''].filter(Boolean).join(' · ')));
+        b.append(foto(y.Foto_URL), t, el('span', 'chip ' + (tem ? 'ok' : 'al'), tem ? 'já no pedido' : 'Incluir'));
+        b.onclick = () => { if (tem) return st.diga('Esta peça já está no pedido: mude a quantidade nela.'); itens.push({ tipo: 'reposicao', produto: String(y.ID), nome: y.Nome || 'Peça ' + y.ID, fotos: y.Foto_URL ? [String(y.Foto_URL)] : [], qtd_pedida: '', custo: '' }); fechar(); desenharItens(); focarQtd(itens.length - 1); };
+        return b;
+      } }));
     });
-    const folhaNovo = (it) => abrirFolha('esteira-produto-novo', it ? 'Editar produto novo' : 'Produto novo', ({ corpo, pe, fechar }) => {
-      const x = it ? Object.assign({}, it, { fotos: it.fotos.slice() }) : { tipo: 'novo', nome: '', categoria: '', genero: '', preco: '', tamanhos: '', cores: '', fotos: [], qtd_pedida: '', custo: '' };
+    const folhaNovo = async (it, botao) => {
+      if (botao) botao.disabled = true;
+      const L = await listasCadastro();                // v7.48.0: categoria, público, tamanhos, cores e tecido só das listas da Gestão
+      if (botao) botao.disabled = false;
+      abrirFolha('esteira-produto-novo', it ? 'Editar produto novo' : 'Produto novo', ({ corpo, pe, fechar }) => {
+      const x = it ? Object.assign({}, it, { fotos: it.fotos.slice() }) : { tipo: 'novo', nome: '', categoria: '', genero: '', preco: '', tamanhos: '', cores: '', tecido: '', fotos: [], qtd_pedida: '', custo: '' };
       const [lN, iN] = campoTexto('Nome', x.nome, { id: 'novo-nome', max: 120, ph: 'Como vai aparecer no site' });
-      const [lC, iC] = campoTexto('Categoria', x.categoria, { id: 'novo-categoria', max: 120, lista: 'dl-cat', ph: 'Ex.: Vestidos' });
-      const [lG, iG] = campoTexto('Público / gênero', x.genero, { id: 'novo-genero', max: 80, lista: 'dl-gen', ph: 'Ex.: Feminino Adulto' });
+      const [lC, iC] = campoEscolha('Categoria', L.categorias, x.categoria, { id: 'novo-categoria', vazio: 'Escolha a categoria' });
+      const [lG, iG] = campoEscolha('Público / gênero', L.generos, x.genero, { id: 'novo-genero', vazio: 'Escolha o público' });
       const [lP, iP] = campoTexto('Preço de venda (R$)', x.preco ? String(x.preco).replace('.', ',') : '', { id: 'novo-preco', modo: 'decimal', max: 12, ph: 'Vazio = consultar valor' });
-      const [lT, iT] = campoTexto('Tamanhos', x.tamanhos, { id: 'novo-tamanhos', max: 200, ph: 'Ex.: P, M, G' });
-      const [lK, iK] = campoTexto('Cores', x.cores, { id: 'novo-cores', max: 200, ph: 'Ex.: Preto, Areia' });
-      const st = linhaStatus(), dois = el('div', 'dois'); dois.append(lT, lK);
-      corpo.append(lN, lC, lG, lP, dois, el('h3', '', 'Fotos do fornecedor'), el('p', 'muted', 'A primeira vira a capa no catálogo. A equipe usa as fotos para reconhecer a peça na chegada.'), campoFotos(x.fotos, 'Adicionar fotos do fornecedor', 8), st);
+      const cT = campoChips('Tamanhos', L.tamanhos, x.tamanhos, { id: 'novo-tamanhos', vazio: 'Escolher tamanhos' });
+      const cK = campoChips('Cores', L.cores, x.cores, { id: 'novo-cores', vazio: 'Escolher cores' });
+      const [lX, iX] = campoEscolha('Tecido (opcional)', L.tecidos, x.tecido, { id: 'novo-tecido', vazio: 'Sem tecido informado' });
+      const st = linhaStatus();
+      corpo.append(lN, lC, lG, lP, cT, cK, lX, el('p', 'muted', 'Falta uma opção? Ela é criada na Gestão pelo administrador; aqui só se escolhe.'), el('h3', '', 'Fotos do fornecedor'), el('p', 'muted', 'A primeira vira a capa no catálogo. A equipe usa as fotos para reconhecer a peça na chegada.'), campoFotos(x.fotos, 'Adicionar fotos do fornecedor', 8), st);
       const ok = bt(it ? 'Salvar produto' : 'Incluir no pedido', 'laranja', () => {
-        Object.assign(x, { nome: iN.value.trim(), categoria: iC.value.trim(), genero: iG.value.trim(), preco: iP.value.trim(), tamanhos: iT.value.trim(), cores: iK.value.trim() });
+        Object.assign(x, { nome: iN.value.trim(), categoria: iC.value, genero: iG.value, preco: iP.value.trim(), tamanhos: cT.valor(), cores: cK.valor(), tecido: iX.value });
         if (!x.nome) { st.diga('Informe o nome do produto.', 'erro'); return iN.focus(); }
-        if (!x.categoria || !x.genero) { st.diga('Informe a categoria e o público: são necessários para criar a peça no catálogo.', 'erro'); return (x.categoria ? iG : iC).focus(); }
+        if (!x.categoria || !x.genero) { st.diga('Escolha a categoria e o público: são necessários para criar a peça no catálogo.', 'erro'); return (x.categoria ? iG : iC).focus(); }
+        const fora = foraDasListas([['a categoria', iC], ['o público', iG], ['os tamanhos', cT], ['as cores', cK], ['o tecido', iX]]); if (fora) return st.diga(fora, 'erro');
         if (x.preco && !(numBR(x.preco) > 0)) { st.diga('Preço de venda inválido. Use só números, como 159,90 (ou deixe vazio para “consultar valor”).', 'erro'); return iP.focus(); }
         if (enviandoFoto(corpo)) return st.diga('Espere as fotos terminarem de enviar.', 'erro');
         if (it) Object.assign(it, x); else itens.push(x);
         fechar(); desenharItens(); focarQtd(itens.indexOf(it || x));
       });
       pe.append(ok);
-    });
-    const novos = el('div', 'dois'); novos.append(bt('+ Peça do catálogo', '', folhaCatalogo), bt('+ Produto novo', '', () => folhaNovo(null)));
+      });
+    };
+    const bNovoP = bt('+ Produto novo', '', () => folhaNovo(null, bNovoP));
+    const novos = el('div', 'dois'); novos.append(bt('+ Peça do catálogo', '', folhaCatalogo), bNovoP);
     c2.append(novos);
     const c3 = el('div', 'card'), stF = linhaStatus();
-    const pacote = () => ({ id: ped.id || undefined, fornecedor: iF.value, previsao: iP.value, obs: iO.value, fotos: fotosPed, itens: itens.map((x) => ({ id: x.id || undefined, tipo: x.tipo, produto: x.produto || '', nome: x.nome, categoria: x.categoria || '', genero: x.genero || '', preco: x.preco || '', tamanhos: x.tamanhos || '', cores: x.cores || '', fotos: x.fotos, qtd_pedida: x.qtd_pedida, custo: x.custo })) });
+    const fornEscolhido = () => (iF.value === 'texto' ? { fornecedorId: 0, fornecedor: legado } : { fornecedorId: Number(iF.value) || 0, fornecedor: ((FORNECEDORES || []).find((x) => String(x.id) === iF.value) || {}).nome || '' });
+    const pacote = () => Object.assign({ id: ped.id || undefined }, fornEscolhido(), { previsao: iP.value, obs: iO.value, fotos: fotosPed, itens: itens.map((x) => ({ id: x.id || undefined, tipo: x.tipo, produto: x.produto || '', nome: x.nome, categoria: x.categoria || '', genero: x.genero || '', preco: x.preco || '', tamanhos: x.tamanhos || '', cores: x.cores || '', tecido: x.tecido || '', fotos: x.fotos, qtd_pedida: x.qtd_pedida, custo: x.custo })) });
     const salvar = async () => {
+      if (!iF.value) { stF.diga('Escolha o fornecedor (ou toque em “Cadastrar fornecedor”).', 'erro'); iF.focus(); return null; }
       if (enviandoFoto(app)) { stF.diga('Espere as fotos terminarem de enviar.', 'erro'); return null; }
       stF.diga('Salvando…'); const y = await srv('/esteira/pedidos/salvar', pacote());
       if (!y.ok) { stF.diga(y.erro || 'Não consegui salvar. Tente de novo.', 'erro'); return null; }
@@ -853,9 +1187,9 @@
     app.replaceChildren(el('div', 'card', 'Abrindo a chegada…'));
     const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
     const ped = r.pedido; if (ped.status === 'aprovado') return telaAplicacao(id); if (ped.status !== 'conferido') return telaEditor(id);
-    let cat = null; try { cat = await catalogoCompleto(); } catch (e) { cat = null; }
+    const L = ped.itens.some((x) => x.tipo === 'extra') ? await listasCadastro() : null;   // v7.48.0: o que veio a mais só entra com opções das listas da Gestão
     const certos = ped.itens.filter((x) => x.situacao === 'bateu'), difs = ped.itens.filter((x) => x.situacao !== 'bateu'), cartoes = new Map();
-    app.replaceChildren(listasDoCatalogo(cat));
+    app.replaceChildren();
     const cab = el('div', 'card'); cab.id = 'aprovar-cab';
     cab.append(voltar(), el('h2', '', 'Aprovar chegada'), el('p', 'muted', [ped.fornecedor, 'pedido nº ' + ped.id, ped.conferido_por ? 'conferido por ' + ped.conferido_por : '', ped.conferido_em ? 'em ' + dataBR(ped.conferido_em) : ''].filter(Boolean).join(' · ')));
     cab.append(el('div', 'aviso ok', certos.length ? (certos.length === 1 ? '✓ 1 item veio certo.' : '✓ ' + certos.length + ' itens vieram certos.') : 'Nenhum item bateu exatamente com o pedido.'));
@@ -873,23 +1207,24 @@
       const box = el('div', 'nova-t');
       const [lCu, iCu] = campoTexto('Custo unitário (R$)', x.custo == null ? '' : String(x.custo).replace('.', ','), { modo: 'decimal', max: 12, ph: '0,00' }); iCu.className = 'custo-extra';
       const [lN, iN] = campoTexto('Nome no catálogo', x.nome, { max: 120 });
-      const [lC, iC] = campoTexto('Categoria', x.categoria, { max: 120, lista: 'dl-cat' }); iC.className = 'cat-extra';
-      const [lG, iG] = campoTexto('Público / gênero', x.genero, { max: 80, lista: 'dl-gen' }); iG.className = 'gen-extra';
+      const [lC, iC] = campoEscolha('Categoria', L.categorias, x.categoria, { cls: 'cat-extra', vazio: 'Escolha a categoria' });
+      const [lG, iG] = campoEscolha('Público / gênero', L.generos, x.genero, { cls: 'gen-extra', vazio: 'Escolha o público' });
       const [lP, iP] = campoTexto('Preço de venda (R$)', x.preco ? String(x.preco).replace('.', ',') : '', { modo: 'decimal', max: 12, ph: 'Vazio = consultar valor' });
-      const [lT, iT] = campoTexto('Tamanhos', x.tamanhos, { max: 200 }), [lK, iK] = campoTexto('Cores', x.cores, { max: 200 });
+      const cT = campoChips('Tamanhos', L.tamanhos, x.tamanhos, { id: 'extra-tam-' + x.id, vazio: 'Escolher tamanhos' }), cK = campoChips('Cores', L.cores, x.cores, { id: 'extra-cor-' + x.id, vazio: 'Escolher cores' });
+      const [lX, iX] = campoEscolha('Tecido (opcional)', L.tecidos, x.tecido, { cls: 'tec-extra', vazio: 'Sem tecido informado' });
       const b = bt(x.decisao === 'incluir' ? 'Salvar dados' : 'Incluir com estes dados', 'prim', () => {
         if (!Number.isFinite(numBR(iCu.value))) { st.diga('Informe o custo unitário do que veio a mais.', 'erro'); return iCu.focus(); }
-        if (!iC.value.trim() || !iG.value.trim()) { st.diga('Informe categoria e público: a peça vai ser criada no catálogo.', 'erro'); return (iC.value.trim() ? iG : iC).focus(); }
-        decidir(x, { decisao: 'incluir', custo: iCu.value, nome: iN.value, categoria: iC.value, genero: iG.value, preco: iP.value, tamanhos: iT.value, cores: iK.value }, st, b);
+        if (!iC.value || !iG.value) { st.diga('Escolha categoria e público: a peça vai ser criada no catálogo.', 'erro'); return (iC.value ? iG : iC).focus(); }
+        const fora = foraDasListas([['a categoria', iC], ['o público', iG], ['os tamanhos', cT], ['as cores', cK], ['o tecido', iX]]); if (fora) return st.diga(fora, 'erro');
+        decidir(x, { decisao: 'incluir', custo: iCu.value, nome: iN.value, categoria: iC.value, genero: iG.value, preco: iP.value, tamanhos: cT.valor(), cores: cK.valor(), tecido: iX.value }, st, b);
       });
-      const dois = el('div', 'dois'); dois.append(lT, lK);
-      box.append(lCu, lN, lC, lG, lP, dois, b); return box;
+      box.append(lCu, lN, lC, lG, lP, cT, cK, lX, b); return box;
     };
     const pintar = (x, msg) => {
       const c = cartoes.get(x.id); c.replaceChildren();
       const topo = el('div', 'prep-topo'), t = el('div', 't');
       t.append(el('h3', '', x.nome), el('small', 'muted', x.tipo === 'extra' ? 'Contado: ' + x.qtd_contada + ' · não estava no pedido' : 'Pedido: ' + x.qtd_pedida + ' · Contado: ' + (x.nao_veio ? 0 : x.qtd_contada) + (x.custo != null ? ' · custo ' + reais(x.custo) : '')));
-      topo.append(foto(x.fotos[0]), t, el('span', 'chip ' + (x.situacao === 'extra' ? 'al' : 'er'), ROT[x.situacao](x))); c.append(topo);
+      topo.append(x.tipo === 'reposicao' && x.produto ? fotoPeca(x.produto, x.fotos[0], x.nome) : fotoLista(x.fotos, x.nome), t, el('span', 'chip ' + (x.situacao === 'extra' ? 'al' : 'er'), ROT[x.situacao](x))); c.append(topo);
       if (x.fotos.length > 1) c.append(miniFotos(x.fotos.slice(1)));
       const st = linhaStatus(), grupo = el('div', 'dois'); grupo.setAttribute('role', 'group'); grupo.setAttribute('aria-label', 'Decisão para ' + x.nome);
       OPC[x.situacao].forEach(([v, rot]) => {
@@ -919,7 +1254,7 @@
   /* ----- Admin total: levar ao catálogo, item a item (cada passo registrado no servidor: tentar de novo nunca duplica) ----- */
   function pacoteNovo(ped, x) {
     const preco = numBR(x.preco), temPreco = preco > 0;
-    const d = { action: 'create', nome: x.nome, categoria: x.categoria, genero: x.genero, preco: temPreco ? preco.toFixed(2) : '', estoque: String(x.qtd_aceita), tamanhos: x.tamanhos || '', cores: x.cores || '', descricao: '', novidade: false, fotoUrlExistente: (x.fotos || [])[0] || '', fotosGaleriaExistentes: (x.fotos || []).slice(1).join(','), opId: 'est' + ped.id + 'x' + x.id };
+    const d = { action: 'create', nome: x.nome, categoria: x.categoria, genero: x.genero, preco: temPreco ? preco.toFixed(2) : '', estoque: String(x.qtd_aceita), tamanhos: x.tamanhos || '', cores: x.cores || '', descricao: x.tecido && window.TKTecido ? TKTecido.serializar('', x.tecido) : '', novidade: false, fotoUrlExistente: (x.fotos || [])[0] || '', fotosGaleriaExistentes: (x.fotos || []).slice(1).join(','), opId: 'est' + ped.id + 'x' + x.id };
     if (!temPreco) d.consultarValor = true;
     return Object.assign(autenticacao(), d);           // o custo NUNCA vai para o catálogo
   }
@@ -981,7 +1316,7 @@
       const c = cartoes.get(x.id); c.replaceChildren();
       const topo = el('div', 'prep-topo'), t = el('div', 't');
       t.append(el('h3', '', x.nome), el('small', 'muted', x.tipo === 'reposicao' ? 'Somar ' + x.qtd_aceita + ' ao estoque da peça' : 'Criar com ' + pecas(x.qtd_aceita) + ', fora do site, e pôr em Preparação'));
-      topo.append(foto(x.fotos[0]), t, x.aplicado_em ? el('span', 'chip ok', '✓ feito') : el('span', 'chip al', 'falta')); c.append(topo);
+      topo.append(x.tipo === 'reposicao' && x.produto ? fotoPeca(x.produto, x.fotos[0], x.nome) : fotoLista(x.fotos, x.nome), t, x.aplicado_em ? el('span', 'chip ok', '✓ feito') : el('span', 'chip al', 'falta')); c.append(topo);
       if (x.aplicado_em) c.append(el('p', 'muted', x.tipo === 'reposicao' ? 'Estoque somado no catálogo.' : 'Criado no catálogo (ID ' + x.produto_criado + '), arquivado e em Preparação.'));
       else if (x.produto_criado) c.append(el('p', 'muted', 'Já criado no catálogo (ID ' + x.produto_criado + '). Falta terminar.'));
       const st = linhaStatus(); c.append(st); if (erro) st.diga(erro.message || 'Não consegui agora. Tente de novo.', 'erro');
@@ -1013,7 +1348,8 @@
   function linhaPeca(x, extra, acoesEl) {                 // linha compacta: foto, nome e detalhe; ações embaixo
     const it = el('div', 'item-g'), l = el('div', 'linha'), t = el('div', 't');
     t.append(el('b', '', x.nome || 'Peça'), el('small', 'muted', extra || ''));
-    l.append(foto(x.foto), t); it.append(l); if (acoesEl) it.append(acoesEl);
+    const pid = x.id || x.produto;                         // v7.48.0: a foto abre as fotos da peça
+    l.append(pid ? fotoPeca(pid, x.foto, x.nome, 'mini') : foto(x.foto), t); it.append(l); if (acoesEl) it.append(acoesEl);
     return it;
   }
   async function telaPainel(pre) {
@@ -1107,20 +1443,12 @@
         const bCat = bt('Trocar categoria', 'prim', async () => { if (!sc.value) return st.diga('Escolha a categoria do dia.', 'erro'); const y = await acao('categoria', { categoria: sc.value }, bCat); if (y) recarregar('Lista refeita em ' + y.categoria + ': ' + plural(y.novas, 'peça nova', 'peças novas') + ', ' + plural(y.mantidas, 'conferida mantida', 'conferidas mantidas') + '.'); });
         const bRef = bt('Refazer a lista', '', async () => { if (!bRef.dataset.confirma) { bRef.dataset.confirma = '1'; bRef.textContent = 'Toque de novo para refazer'; st.diga('As peças não conferidas saem e o sistema monta de novo (peças tiradas podem voltar).'); return; } const y = await acao('refazer', {}, bRef); if (y) recarregar('Lista refeita: ' + plural(y.novas, 'peça', 'peças') + (y.categoria ? ' em ' + y.categoria : '') + '.'); });
         bRef.classList.add('refazer-lista'); corpo.append(lc, acoes(bCat, bRef));
-        // colocar peça (busca no catálogo; família entra inteira)
-        const lb = el('label', 'campo'); lb.append(document.createTextNode('Colocar peça na lista'));
-        const inp = el('input'); inp.type = 'text'; inp.id = 'lista-busca'; inp.placeholder = 'Nome ou código da peça'; inp.autocomplete = 'off'; lb.append(inp);
-        const res = el('div', 'busca-res'); let espera = null;
-        inp.oninput = () => { clearTimeout(espera); espera = setTimeout(async () => {
-          const q = semAcento(inp.value.trim()); res.replaceChildren(); if (q.length < 2) return;
-          let cat; try { cat = await catalogoCompleto(); } catch (e) { st.diga(e.message, 'erro'); return; }
-          if (semAcento(inp.value.trim()) !== q) return;
-          const achados = [...cat.values()].filter((p) => !ehInativo(p) && (semAcento(p.Nome).includes(q) || semAcento(p.Codigo).includes(q) || String(p.ID) === q)).slice(0, 8);
-          if (!achados.length) res.append(el('p', 'muted', 'Nenhuma peça do site com esse nome ou código.'));
-          achados.forEach((p) => { const b = el('button', 'peca'); b.type = 'button'; const t = el('div', 't'); t.append(el('b', '', p.Nome || 'Peça ' + p.ID), el('small', 'muted', [p.Codigo, p.Categoria].filter(Boolean).join(' · '))); b.append(foto(p.Foto_URL), t, el('span', 'chip al', 'Colocar')); b.setAttribute('aria-label', 'Colocar ' + (p.Nome || 'peça') + ' na lista');
-            b.onclick = async () => { const y = await acao('colocar', { produto: String(p.ID) }, b); if (y) { inp.value = ''; recarregar(y.colocadas > 1 ? 'Família colocada: ' + y.colocadas + ' peças.' : 'Peça colocada no fim da lista.'); } }; res.append(b); });
-        }, 250); };
-        corpo.append(lb, res, st);
+        // colocar peça (busca no catálogo com filtros discretos; só peças do site; família entra inteira)
+        const busca = buscaCatalogo({ id: 'lista-busca', rotulo: 'Colocar peça na lista', situacoes: ['ativas', 'esgotadas'], padrao: 'ativas', max: 8, linha: (p) => {
+          const b = el('button', 'peca'); b.type = 'button'; const t = el('div', 't'); t.append(el('b', '', p.Nome || 'Peça ' + p.ID), el('small', 'muted', [p.Codigo, p.Categoria, typeof estaEsgotado === 'function' && estaEsgotado(p) ? 'esgotada' : ''].filter(Boolean).join(' · '))); b.append(foto(p.Foto_URL), t, el('span', 'chip al', 'Colocar')); b.setAttribute('aria-label', 'Colocar ' + (p.Nome || 'peça') + ' na lista');
+          b.onclick = async () => { const y = await acao('colocar', { produto: String(p.ID) }, b); if (y) recarregar(y.colocadas > 1 ? 'Família colocada: ' + y.colocadas + ' peças.' : 'Peça colocada no fim da lista.'); }; return b;
+        } });
+        corpo.append(busca, st);
         // itens (família = um item)
         const outros = (r.listas || []).filter((p) => p.whats !== x.whats);
         const blocos = []; x.itens.forEach((it) => { const u = blocos[blocos.length - 1]; if (it.familia && u && u.familia === it.familia) u.itens.push(it); else blocos.push({ familia: it.familia || '', itens: [it] }); });
@@ -1140,7 +1468,7 @@
             bMov.setAttribute('aria-label', 'Mover ' + nome);
             ac = el('div', 'acoes-lista'); if (outros.length) ac.append(sm, bMov); ac.append(bTirar);
           }
-          const linha = linhaPeca({ nome, foto: (u.itens.find((i) => i.foto) || p0).foto }, det, ac); linha.dataset.produto = p0.id; if (tudo) linha.classList.add('feita');
+          const linha = linhaPeca({ id: (u.itens.find((i) => i.foto) || p0).id, nome, foto: (u.itens.find((i) => i.foto) || p0).foto }, det, ac); linha.dataset.produto = p0.id; if (tudo) linha.classList.add('feita');
           corpo.append(linha);
         });
       };
