@@ -7017,6 +7017,11 @@ async function rotasFamilias_(env, req, url, J, perms) {
     const ja = (await env.DB.prepare('SELECT produto, familia FROM fam_membro WHERE produto IN (' + marcas + ')').bind(...ids).all()).results || [];
     const outras = [...new Set(ja.map((r) => r.familia))];
     if (outras.length > 1) return J({ ok: false, erro: 'Algumas dessas peças já estão em famílias diferentes. Tire da família antes de juntar.' }, 409);
+    if (outras.length === 1 && d.juntar !== true) {                       // v7.47.1: peça que já tem família só entra numa ligação se a pessoa escolheu juntar
+      const fx = await env.DB.prepare('SELECT nome FROM fam_familia WHERE id=?').bind(outras[0]).first();
+      const nj = ja.length;
+      return J({ ok: false, precisaEscolher: true, familia: outras[0], erro: (nj === 1 ? '1 dessas peças já está' : nj + ' dessas peças já estão') + ' na família “' + ((fx && fx.nome) || 'sem nome') + '”. Escolha juntar tudo nela ou tire essas peças antes.' }, 409);
+    }
     const rotIn = d.rotulos && typeof d.rotulos === 'object' ? d.rotulos : {};
     const precisaCatalogo = !outras.length || ids.some((id) => rotIn[id] == null || String(rotIn[id]).trim() === '');
     const cat = precisaCatalogo ? await catalogo() : [], porId = new Map(cat.map((x) => [x.id, x]));

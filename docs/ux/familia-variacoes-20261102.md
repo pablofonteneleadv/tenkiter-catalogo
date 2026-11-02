@@ -76,3 +76,19 @@
   - OK: `lote_editar`, `lote_rapido`, `cadastro_tipos`, `admin_lista_v424`, `catalogo_cards_fotos`, `busca`, `filtros_facetas`, `axe_telas_a/b`, `arquivar_apos_cadastrar`;
   - OK: `check_js`, `check_html`, `check_workers`, `check_secrets`, `check_ux_skill`, `check_graphify`.
   - `service_worker.py` tem um caso intermitente (link curto `/p/` offline) que falha também na `main` sem esta mudança.
+
+## 7.47.1 — ajustes pedidos depois do teste no celular
+- **Edição:** a foto de outra peça da família é um botão ("Abrir TK-… nome") que abre a edição dela. A peça atual continua marcada e não é botão. Uma peça que não está na lista carregada aparece só como foto.
+- **Lista:** selo "Família · N peças" logo abaixo do nome, no tom laranja claro das tarefas. Ele é atualizado quando as famílias chegam e quando alguém liga ou desliga peças.
+- **Ligar com conflito:** nada é ligado até a pessoa resolver.
+  - Cada peça que já tem família aparece destacada, com "Já está na família “X” · N peças" e dois botões: "Tirar desta seleção" e "Tirar da família “X”" (pede um segundo toque).
+  - O botão principal vira "Juntar todas na família “X” (N peças)" quando só uma família está envolvida; com famílias diferentes, ele fica desativado até resolver.
+  - Se todas já estão juntas, aparece só "Fechar".
+  - O Worker exige `juntar: true` quando alguma peça já tem família (409 `precisaEscolher` sem isso); a "+ Nova variação" e as ligações pendentes mandam `juntar`.
+- **Esc:** a janela não repassa mais o Esc ao `a11y.js`. Antes, ele fechava duas vezes e voltava duas páginas.
+- **Evidência:** `familia-variacoes-20261102/gestao_conflito_390.jpg`, `gestao_conflito_1440.jpg` e `gestao_lista_selo_390.jpg`.
+- **Testes:**
+  - `familia_gestao.py`: 93 ok (selo, conflito, tirar da seleção, juntar, todas já juntas, tirar da família e criar nova, Esc, foto abre a peça);
+  - `worker_familias.js`: 56 ok (409 sem escolher juntar, sem gravar);
+  - regressão `lote_editar`, `lote_rapido`, `admin_lista_v424`, `lote_falhas`, `axe_telas_a` e `familia_vitrine` OK.
+- **Resultado:** APROVADO COM LIMITAÇÃO (fotos simuladas; falta ver com dados reais).

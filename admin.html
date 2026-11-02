@@ -455,6 +455,14 @@
   .fam-tam.atual img, .fam-tam.atual .fam-semfoto { border-color: var(--preto); }
   .fam-tam.atual { color: var(--preto); }
   .fam-info { display: block; color: #5c5650; font-size: .82rem; margin-top: 2px; }
+  /* v7.47.1: foto da família vira botão (abre aquela peça); selo de família na lista; conflitos ao ligar */
+  button.fam-tam { padding: 0; border: 0; background: none; cursor: pointer; font: inherit; font-weight: 700; font-size: .78rem; color: #5c5650; min-height: 44px; }
+  button.fam-tam:focus-visible { outline: 3px solid var(--laranja); outline-offset: 2px; border-radius: 8px; }
+  .fam-selo { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; padding: 2px 8px; border-radius: 999px; background: #fff3e6; color: #8a4b0f; border: 1px solid #f1d2ad; font-size: .78rem; font-weight: 700; width: fit-content; }
+  .fam-membro.tem-fam { border-color: #f1d2ad; background: #fffaf4; flex-wrap: wrap; }
+  .fam-ja { display: block; color: #8a4b0f; font-weight: 700; font-size: .82rem; margin-top: 4px; }
+  .fam-res { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+  .fam-res button { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid #d8d1c4; background: #fff; font-weight: 700; font-size: .88rem; cursor: pointer; }
   .fam-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
   .fam-acoes button, .fam-pe button, .fam-sugs > button { width: auto; min-height: 44px; padding: 0 16px; border-radius: 999px; font-weight: 700; font-size: .9rem; }
   .fam-novo, .fam-prim { background: var(--laranja); color: #141414; border: 0; }
@@ -4552,6 +4560,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       </div>
     `; }).join('');
 
+    if (window.tkFamiliaMarcarLista) window.tkFamiliaMarcarLista(container);   // v7.47.1: selo "Família · N peças" nos cards
     container.querySelectorAll('.produto-chk').forEach(chk => {
       chk.addEventListener('change', (e) => {
         if (e.target.checked) selecionadosBulk.add(e.target.dataset.id);
@@ -6215,7 +6224,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="mensagens-acessos.js?v=7.40.19"></script>
 <link rel="stylesheet" href="admin-disponibilidade.css?v=7.40.28">
 <script src="admin-disponibilidade.js?v=7.41.0"></script>
-<script src="admin-familias.js?v=7.47.0"></script>
+<script src="admin-familias.js?v=7.47.1"></script>
 <script src="mensagens-eventos.js?v=7.40.30"></script>
 <link rel="stylesheet" href="mensagens-gestor.css?v=7.40.45">
 <script src="mensagens-presenca.js?v=7.40.43"></script>

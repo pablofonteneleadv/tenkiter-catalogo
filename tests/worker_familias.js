@@ -118,7 +118,9 @@ function d1() {
   chk('juntar peças de famílias diferentes é recusado (409) com aviso claro', conflito.r.status === 409 && /famílias diferentes/.test(conflito.j.erro), conflito.j);
 
   // "+ Novo tamanho": a peça nova (GG) entra na família da original com o rótulo informado
-  const novo = await A(IARA, 'POST', '/familias/ligar', { produtos: ['11', '99'], rotulos: { 99: 'GG' } });
+  const semEscolha = await A(IARA, 'POST', '/familias/ligar', { produtos: ['11', '99'], rotulos: { 99: 'GG' } });
+  chk('v7.47.1: peça que já tem família não entra sem a escolha de juntar (409, sem gravar)', semEscolha.r.status === 409 && semEscolha.j.precisaEscolher === true && /já está na família “Sunga infantil masculino”/.test(semEscolha.j.erro) && (await PUB()).j.familias.find((f) => f.id === fid).membros.length === 3, semEscolha.j);
+  const novo = await A(IARA, 'POST', '/familias/ligar', { produtos: ['11', '99'], rotulos: { 99: 'GG' }, juntar: true });
   chk('ligar peça nova a uma peça que já tem família usa a mesma família', novo.j.ok && novo.j.criada === false && novo.j.familia.id === fid && novo.j.familia.membros.map((m) => m.rotulo).join() === 'P,M,G,GG', novo.j);
 
   // ---- membro ----

@@ -46,16 +46,29 @@
     } catch (e) { return { ok: false, erro: 'Sem conexão com o servidor das famílias. Verifique a internet e tente de novo.' }; }
   }
   let familias = [], carregou = false, carregando = null;
+  /** v7.47.1: selo "Família · N peças" nos cards da lista (depois de cada desenho da lista e quando as famílias chegam). */
+  function marcarLista(container) {
+    const c = container || $('lista-produtos'); if (!c) return;
+    c.querySelectorAll('.produto-chk[data-id]').forEach((chk) => {
+      const card = chk.closest('.produto'); if (!card) return;
+      const velho = card.querySelector('.fam-selo'); if (velho) velho.remove();
+      const f = familiaDe(chk.dataset.id); if (!f) return;
+      const s = el('span', 'fam-selo', 'Família · ' + f.membros.length + ' peças'); s.title = 'Família “' + (f.nome || '') + '”';
+      const nome = card.querySelector('.produto-info .nome'); if (nome) nome.after(s); else card.querySelector('.produto-info')?.append(s);
+    });
+  }
+  window.tkFamiliaMarcarLista = marcarLista;
   const familiaDe = (id) => familias.find((f) => f.membros.some((m) => String(m.produto) === String(id))) || null;
   function carregar() {
     if (carregando) return carregando;
-    carregando = srv('/familias').then((j) => { if (j && j.ok && Array.isArray(j.familias)) { familias = j.familias; carregou = true; } carregando = null; pintarForm(); return familias; });
+    carregando = srv('/familias').then((j) => { if (j && j.ok && Array.isArray(j.familias)) { familias = j.familias; carregou = true; } carregando = null; pintarForm(); marcarLista(); return familias; });
     return carregando;
   }
   function usarFamilia(f, tirarProduto) {
     familias = familias.filter((x) => x.id !== (f && f.id) && !(tirarProduto && x.membros.some((m) => String(m.produto) === String(tirarProduto))));
     if (f) familias.push(f);
     try { localStorage.removeItem('tk_familias_v1'); } catch (e) {}   // a vitrine deste aparelho busca a lista nova
+    marcarLista();
   }
   const aviso = (txt) => { const s = $('status'); if (s) s.textContent = txt; };
 
@@ -84,13 +97,16 @@
     if (!carregou) box.append(el('p', 'fam-sub', 'Conferindo a família desta peça…'));
     else if (f) {
       box.append(el('b', 'fam-tit', 'Família: ' + (f.nome || 'peças ligadas') + ' · ' + f.membros.length + ' peças'));
-      const tams = el('div', 'fam-tams'); tams.setAttribute('role', 'list');
+      const tams = el('div', 'fam-tams'); tams.setAttribute('role', 'group'); tams.setAttribute('aria-label', 'Peças desta família');
       f.membros.forEach((m, k) => {
         const q = peca_(m.produto), atual = String(m.produto) === String(p.ID);
-        const t = el('figure', 'fam-tam' + (atual ? ' atual' : '')); t.setAttribute('role', 'listitem');
-        t.setAttribute('aria-label', (atual ? 'Esta peça: ' : '') + (q ? q.Nome : 'peça ' + m.produto) + (m.rotulo ? ', ' + m.rotulo : ''));
-        if (atual) t.setAttribute('aria-current', 'true');
-        t.append(foto(q && q.Foto_URL), el('figcaption', '', m.rotulo || (atual ? 'esta' : String(k + 1))));
+        const desc = (q ? (q.Codigo ? q.Codigo + ' ' : '') + q.Nome : 'peça ' + m.produto) + (m.rotulo ? ', ' + m.rotulo : '');
+        // v7.47.1: tocar na foto de outra peça abre a edição dela
+        const t = el(atual || !q ? 'figure' : 'button', 'fam-tam' + (atual ? ' atual' : ''));
+        if (atual) { t.setAttribute('aria-current', 'true'); t.setAttribute('aria-label', 'Esta peça: ' + desc); }
+        else if (q) { t.type = 'button'; t.setAttribute('aria-label', 'Abrir ' + desc); t.title = 'Abrir esta peça'; t.addEventListener('click', () => abrirOutra(m.produto)); }
+        else t.setAttribute('aria-label', desc + ' (fora desta lista)');
+        t.append(foto(q && q.Foto_URL), el(atual || !q ? 'figcaption' : 'span', '', m.rotulo || (atual ? 'esta' : String(k + 1))));
         tams.append(t);
       });
       box.append(tams);
@@ -111,6 +127,11 @@
     }
     const st = el('p', 'fam-st'); st.setAttribute('role', 'status');
     box.append(acoes, st);
+  }
+  function abrirOutra(id) {
+    if (typeof editarProduto !== 'function') return;
+    editarProduto(String(id));
+    setTimeout(() => { const box = $('fam-form'); if (box) { try { box.scrollIntoView({ block: 'nearest' }); } catch (e) {} const a = box.querySelector('.fam-tam.atual'); if (a) { a.tabIndex = -1; a.focus({ preventScroll: true }); } } }, 60);
   }
   window.tkFamiliaForm = function (p) {
     pecaForm = p ? p.ID : null;
@@ -154,7 +175,7 @@
   const gravarPend = (l) => { try { localStorage.setItem(PEND, JSON.stringify(l.slice(-30))); } catch (e) {} };
   async function ligarNova(x) {
     const rotulos = {}; if (x.rotulo) rotulos[x.novo] = x.rotulo; if (x.rotuloOrigem) rotulos[x.origem] = x.rotuloOrigem;   // rótulos tirados do nome, nunca digitados
-    const r = await srv('/familias/ligar', { produtos: [x.origem, x.novo], rotulos, nome: x.familia ? undefined : x.base });
+    const r = await srv('/familias/ligar', { produtos: [x.origem, x.novo], rotulos, nome: x.familia ? undefined : x.base, juntar: true });   // a variação nova entra na família da original
     if (r.ok) usarFamilia(r.familia);
     return r;
   }
@@ -187,7 +208,7 @@
       const pe = el('div', 'fam-pe'); pe.id = 'fam-pe';
       sh.append(topo, corpo, pe); ov.append(sh); document.body.append(ov);
       ov.addEventListener('click', (e) => { if (e.target === ov) fecharJanela(); });
-      ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); fecharJanela(); } });
+      ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fecharJanela(); } });   // v7.47.1: sem repassar ao a11y.js (fechava duas vezes e voltava duas páginas)
     }
     $('fam-titulo').textContent = titulo; $('fam-corpo').replaceChildren(); $('fam-pe').replaceChildren();
     janelaVolta = document.activeElement;
@@ -216,30 +237,82 @@
   const estoqueInfo_ = (p) => (p.Estoque !== '' && p.Estoque != null ? p.Estoque + ' un.' : '');
   const rotulosAuto_ = (ps) => { const o = {}; ps.forEach((p) => { const r = separarNome(p.Nome).rotulo; if (r) o[String(p.ID)] = r; }); return o; };
 
-  /** Seleção em lote: "Ligar como família". Só confirma as peças; o nome da família sai do nome delas. */
+  /** Seleção em lote: "Ligar como família". Só confirma as peças; o nome da família sai do nome delas.
+   * v7.47.1: se alguma peça já tem família, nada é ligado até a pessoa resolver: tirar a peça desta seleção, tirar a peça
+   * da família onde ela está, ou (quando é uma família só) juntar todas nela. */
   function ligarSelecionadas() {
     const ids = typeof selecionadosBulk !== 'undefined' ? Array.from(selecionadosBulk).map(String) : [];
     if (ids.length < 2) { aviso('Marque pelo menos duas peças do mesmo produto para ligar como família.'); return; }
-    const ps = ids.map(peca_).filter(Boolean);
-    const bases = [...new Set(ps.map((p) => semAcento(separarNome(p.Nome).base)))];
     const { corpo, pe } = janela('Ligar como família');
+    desenharLigar(corpo, pe);
+  }
+  function desenharLigar(corpo, pe, msg) {
+    corpo.replaceChildren(); pe.replaceChildren();
+    const ids = typeof selecionadosBulk !== 'undefined' ? Array.from(selecionadosBulk).map(String) : [];
+    const ps = ids.map(peca_).filter(Boolean);
+    const st = el('p', 'fam-st'); st.setAttribute('role', 'status'); if (msg) st.textContent = msg;
+    const redesenhar = (m) => { try { atualizarBarraBulk(); renderizarProdutos(); } catch (e) {} desenharLigar(corpo, pe, m); };
+    if (ps.length < 2) {
+      corpo.append(el('p', 'fam-sub', 'Sobrou menos de duas peças marcadas. Marque pelo menos duas peças do mesmo produto para ligar como família.'));
+      pe.append(st, botao('Fechar', 'fam-sec', fecharJanela)); return;
+    }
+    const famIds = [...new Set(ps.map((p) => familiaDe(p.ID)).filter(Boolean).map((f) => f.id))];
+    const livres = ps.filter((p) => !familiaDe(p.ID));
+    const famUnica = famIds.length === 1 ? familias.find((f) => f.id === famIds[0]) : null;
     corpo.append(el('p', 'fam-sub', 'Estas peças são o mesmo produto (mudando estampa ou tamanho). Nada nelas muda: cada uma continua com as próprias fotos, estoque e link. No site elas aparecem juntas.'));
+    const bases = [...new Set(ps.map((p) => semAcento(separarNome(p.Nome).base)))];
     if (bases.length > 1) corpo.append(el('p', 'fam-alerta', 'Atenção: os nomes dessas peças são diferentes. Confira se são mesmo o mesmo produto.'));
-    const jaOutra = ps.filter((p) => familiaDe(p.ID)); const fams = [...new Set(jaOutra.map((p) => familiaDe(p.ID).id))];
-    if (fams.length > 1) corpo.append(el('p', 'fam-alerta', 'Algumas peças já estão em famílias diferentes. Tire da família antes de juntar.'));
-    else if (fams.length === 1) corpo.append(el('p', 'fam-sub', 'Parte dessas peças já está na família “' + familiaDe(jaOutra[0].ID).nome + '”: as outras entram nela.'));
-    ps.forEach((p) => corpo.append(linhaMembro(p)));
-    const st = el('p', 'fam-st'); st.setAttribute('role', 'status');
-    const ok = botao('Ligar ' + ps.length + ' peças como família', 'fam-prim', async () => {
+    if (famUnica && !livres.length) {
+      corpo.append(el('p', 'fam-alerta', 'Todas essas peças já estão juntas na família “' + famUnica.nome + '” (' + famUnica.membros.length + ' peças). Não há nada para ligar.'));
+      ps.forEach((p) => corpo.append(linhaMembro(p)));
+      pe.append(st, botao('Fechar', 'fam-sec', fecharJanela)); return;
+    }
+    if (famIds.length) {
+      const nj = ps.length - livres.length;
+      corpo.append(el('p', 'fam-alerta', famUnica
+        ? (nj === 1 ? '1 peça já está' : nj + ' peças já estão') + ' na família “' + famUnica.nome + '” (' + famUnica.membros.length + ' peças). Para continuar, escolha: juntar todas nessa família, ou tirar desta seleção / tirar da família as peças que já têm família.'
+        : 'Há peças em famílias diferentes. Tire da seleção ou tire da família as peças marcadas até sobrar no máximo uma família.'));
+    }
+    ps.forEach((p) => {
+      const li = linhaMembro(p), f = familiaDe(p.ID);
+      if (f) {
+        li.classList.add('tem-fam');
+        li.querySelector('.fam-mt').append(el('span', 'fam-ja', 'Já está na família “' + f.nome + '” · ' + f.membros.length + ' peças'));
+        const res = el('div', 'fam-res');
+        const sair = botao('Tirar desta seleção', '', () => { selecionadosBulk.delete(String(p.ID)); redesenhar((p.Codigo || p.Nome) + ' saiu desta seleção.'); });
+        const tirar = botao('Tirar da família “' + f.nome + '”', '');
+        let conf = false;
+        tirar.addEventListener('click', async () => {
+          if (!conf) { conf = true; tirar.textContent = 'Toque de novo para tirar da família'; st.className = 'fam-st'; st.textContent = 'A peça continua no site; só sai da família “' + f.nome + '”.'; return; }
+          tirar.disabled = sair.disabled = true; st.className = 'fam-st'; st.textContent = 'Tirando da família…';
+          const r = await srv('/familias/desligar', { produto: String(p.ID) });
+          if (!r.ok) { tirar.disabled = sair.disabled = false; st.className = 'fam-st erro'; st.textContent = r.erro; return; }
+          usarFamilia(r.familia, p.ID);
+          redesenhar((p.Codigo || p.Nome) + ' saiu da família “' + f.nome + '”' + (r.dissolvida ? ' (a família foi desfeita, pois sobrou uma peça só).' : '.'));
+        });
+        res.append(sair, tirar); li.append(res);
+      }
+      corpo.append(li);
+    });
+    const ligar = async (juntar) => {
       ok.disabled = true; st.className = 'fam-st'; st.textContent = 'Ligando…';
-      const r = await srv('/familias/ligar', { produtos: ps.map((p) => String(p.ID)), rotulos: rotulosAuto_(ps) });
-      if (!r.ok) { ok.disabled = false; st.className = 'fam-st erro'; st.textContent = r.erro; return; }
+      const r = await srv('/familias/ligar', Object.assign({ produtos: ps.map((p) => String(p.ID)), rotulos: rotulosAuto_(ps) }, juntar ? { juntar: true } : {}));
+      if (!r.ok) {
+        ok.disabled = false; st.className = 'fam-st erro'; st.textContent = r.erro;
+        if (r.precisaEscolher) carregar().then(() => desenharLigar(corpo, pe, r.erro));   // a lista de famílias deste aparelho estava velha
+        return;
+      }
       usarFamilia(r.familia);
       if (typeof selecionadosBulk !== 'undefined') selecionadosBulk.clear();
       try { atualizarBarraBulk(); renderizarProdutos(); } catch (e) {}
-      fecharJanela(); aviso('Família “' + r.familia.nome + '” ligada com ' + r.familia.membros.length + ' peças.');
-    });
-    if (fams.length > 1) ok.disabled = true;
+      fecharJanela(); aviso('Família “' + r.familia.nome + '” ' + (juntar ? 'agora tem ' : 'ligada com ') + r.familia.membros.length + ' peças.');
+    };
+    let ok;
+    if (!famIds.length) ok = botao('Ligar ' + ps.length + ' peças como família', 'fam-prim', () => ligar(false));
+    else if (famUnica) {
+      const total = new Set(famUnica.membros.map((m) => String(m.produto)).concat(ps.map((p) => String(p.ID)))).size;
+      ok = botao('Juntar todas na família “' + famUnica.nome + '” (' + total + ' peças)', 'fam-prim', () => ligar(true));
+    } else { ok = botao('Resolva as peças com família para continuar', 'fam-prim'); ok.disabled = true; }
     pe.append(st, ok);
   }
 
