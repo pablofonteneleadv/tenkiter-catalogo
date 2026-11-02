@@ -133,6 +133,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("foto_ia.py", lambda o: "FALHAS=0" in o),             # v4.27: painel 🎨 Fotos com IA (fila, instrução editável, aviso de plano sem imagens)
     ("worker_grupo.js", lambda o: "FALHAS=0" in o),
     ("worker_canal.js", lambda o: "FALHAS=0" in o),        # Worker: canal Instagram/WhatsApp/Ambos
+    ("worker_zap_proativo.js", lambda o: "FALHAS=0" in o), # v7.48.3: Wafly proativa (consulta 1 min/10 min, reenvio único, ambos em paralelo)
     ("backend_v316.js", lambda o: "FALHAS=0" in o),        # RH 3.16: manual só-gestor, prática validada, certificado (precisa do .gs.txt do RH)
     ("backend_manual_rico.js", lambda o: "FALHAS=0" in o), # RH 3.17: cor/marca-texto/links, foto ao lado, vídeo, tabela, guia e prova-modelo no manual novo (precisa do .gs.txt do RH)
     # --- #305 (retomado em 7.40.34): equipe, presença, atividade e Nova conversa ---
@@ -155,6 +156,7 @@ SUITES = [  # (arquivo, como saber que passou)
     ("mensagens_gestor_ui.py", lambda o: "OK 1440" in o),
     ("postagens_fila_midia.py", lambda o: "OK 320" in o),
     ("postagens_fila_midia_cards.py", lambda o: "FALHAS=0" in o),   # v7.48.2: Por mídia em cards recolhidos, miniatura real/placeholder, estado preservado
+    ("postagens_zap_proativo_ui.py", lambda o: "FALHAS=0" in o),    # v7.48.3: Por canal por perna, barra de ações da mídia, sem confirmação, Já postadas com filtros
     ("mensagens_camera_menu.py", lambda o: "OK 1440" in o),
     ("video_camera_90s.py", lambda o: "OK: 90 s completos" in o),
     ("video_partes_encoder.py", lambda o: "OK: partes 59/75/90s" in o),

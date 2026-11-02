@@ -181,6 +181,8 @@ jobs:
           node tests/worker_grupo.js
           node tests/worker_wame.js
           node tests/worker_wafly.js
+          # v7.48.3: WhatsApp proativo (10 min, sem confirmação, reenvio único, ambos em paralelo, Repostar sem furar a ordem)
+          node tests/worker_zap_proativo.js
           node tests/catalogo_tecido.js
           node tests/mensagens_ficha_ui.js
           node tests/worker_mensagens.js

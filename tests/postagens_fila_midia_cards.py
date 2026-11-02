@@ -158,20 +158,19 @@ with tempfile.TemporaryDirectory() as temp:
             botoes.nth(0).click()
             chk(botoes.nth(0).get_attribute('aria-expanded') == 'true', 'toque abre o card')
             chk(cards.first.locator('.po-midia-canal').count() == 3, 'card aberto lista os 3 destinos')
-            chk(cards.first.locator('[data-fila-detalhe]').count() == 3, 'opções do canal continuam disponíveis')
+            chk(cards.first.locator('[data-fila-detalhe]').count() == 0 and cards.first.locator('.po-mc-bar').count() == 1, '7.48.3: sem “Opções do canal”; ações da mídia ficam na barra do card')
             chk(pg.evaluate("document.activeElement&&document.activeElement.classList.contains('po-midia-topo')"), 'foco continua no botão do card')
             # Teclado: Enter abre o segundo, Espaço recolhe.
             botoes.nth(1).focus(); pg.keyboard.press('Enter')
             chk(botoes.nth(1).get_attribute('aria-expanded') == 'true', 'Enter abre pelo teclado')
-            chk(cards.nth(1).locator('[data-a=hora]').count() >= 1, 'ações do vídeo em partes (Horário do vídeo) no card aberto')
+            chk(cards.nth(1).locator('[data-a=mh-hora]').count() == 1, 'ações do vídeo em partes (Horário) na barra do card aberto')
             pg.keyboard.press('Space')
             chk(botoes.nth(1).get_attribute('aria-expanded') == 'false', 'Espaço recolhe pelo teclado')
-            # Abrir opções do canal e reagendar continua funcionando.
-            canal = cards.first.locator('[data-midia-canal=status2]')
-            canal.locator('summary').click()
+            # 7.48.3: reagendar pela barra do card (vale para todos os destinos da mídia).
+            canal = cards.first.locator('.po-mc-bar')
             canal.get_by_role('button', name='🕐 Horário').click()
-            chk('Novo horário' in canal.inner_text(), 'reagendar por destino continua funcionando')
-            canal.get_by_role('button', name='Voltar').first.click() if canal.get_by_role('button', name='Voltar').count() else None
+            chk('Novo horário para todos os destinos' in cards.first.inner_text(), 'reagendar pela barra do card continua funcionando')
+            cards.first.get_by_role('button', name='Voltar').first.click() if cards.first.get_by_role('button', name='Voltar').count() else None
             # Polling: muda a fila no servidor; o card aberto continua aberto e a rolagem não pula.
             botoes.nth(4).click()
             corpo = pg.locator('#po-corpo')
@@ -180,7 +179,7 @@ with tempfile.TemporaryDirectory() as temp:
             g['posts'][0]['status'] = 'publicado'
             pg.wait_for_function("document.querySelector('.po-midia-grupo')&&/Publicado/.test(document.querySelector('.po-midia-grupo').innerText)", timeout=6000)
             chk(botoes.nth(0).get_attribute('aria-expanded') == 'true' and botoes.nth(4).get_attribute('aria-expanded') == 'true', 'atualização da fila preserva cards abertos')
-            chk(canal.locator('details').get_attribute('open') is not None, 'atualização preserva opções do canal abertas')
+            chk(cards.first.locator('.po-mc-bar').count() == 1, 'atualização preserva a barra de ações do card aberto')
             depois = pg.evaluate("document.getElementById('po-corpo').scrollTop")
             chk(abs(depois - antes) <= 2, 'atualização não pula a rolagem (%s → %s)' % (antes, depois))
             # Por canal intacto e volta preservando.

@@ -63,7 +63,7 @@ with sync_playwright() as p:
     pg.keyboard.press("Enter"); pg.wait_for_timeout(250)
     chk("Enter no cabeçalho fecha de novo", cab(pg, "story").get_attribute("aria-expanded") == "false" and itens(pg) == 0)
     cab(pg, "status2").click(); pg.wait_for_timeout(250)
-    chk("o cartão com erro aparece com o motivo do plano", "plano atual do Wame" in pg.inner_text("#po-corpo") and "Tentar de novo" in pg.inner_text("#po-corpo"))
+    chk("o cartão com erro aparece com o motivo do plano", "plano atual do Wame" in pg.inner_text("#po-corpo") and "Postar agora mesmo assim" in pg.inner_text("#po-corpo"))
     pg.reload(); pg.wait_for_timeout(2400); pg.click("#details-ferramentas > summary"); pg.wait_for_timeout(250); pg.click("#btn-abrir-postagens"); pg.wait_for_timeout(800); pg.click("#po-abas [data-aba=fila]"); pg.wait_for_timeout(500)
     chk("o que ficou aberto continua aberto depois de recarregar", cab(pg, "status2").get_attribute("aria-expanded") == "true" and cab(pg, "story").get_attribute("aria-expanded") == "false")
     cab(pg, "status2").click(); pg.wait_for_timeout(200)
