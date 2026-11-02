@@ -19,6 +19,7 @@ def preparar(st):
     for x in P: x["Status"] = "Ativo"
     P[0].update(Nome="Conjunto longo Farm", Tamanhos="P, M", Cores="Azul", Estoque=4, Categoria="Short", Genero="Infantil Menino", Codigo="CF-AZ")
     P[1].update(Nome="Vestido festa 2 anos", Codigo="VF-2"); P[2].update(Nome="Vestido festa 4 anos", Codigo="VF-4")
+    P[9].update(Nome="Vestido festa 6 anos", Codigo="VF-6"); P[10].update(Nome="Vestido festa 8 anos", Codigo="VF-8")
     st["fam_sugestoes"] = [
         {"chave": "calca jeans", "nome": "Calça jeans", "membros": [{"produto": P[3]["ID"], "nome": "Calça jeans 38", "rotulo": "38", "foto": P[3]["Foto_URL"], "codigo": "CJ-38"}, {"produto": P[4]["ID"], "nome": "Calça jeans 40", "rotulo": "40", "foto": P[4]["Foto_URL"], "codigo": "CJ-40"}]},
         {"chave": "short tactel", "nome": "Short tactel", "membros": [{"produto": P[5]["ID"], "nome": "Short tactel 10", "rotulo": "10", "foto": "", "codigo": ""}, {"produto": P[6]["ID"], "nome": "Short tactel 12", "rotulo": "12", "foto": "", "codigo": ""}]},
@@ -75,6 +76,66 @@ with sync_playwright() as p:
         chk(f"{w}: ligar em lote manda só as peças (rótulos tirados do nome, sem nome digitado)", lg["produtos"] == [P[1]["ID"], P[2]["ID"]] and lg["rotulos"] == {P[1]["ID"]: "2 anos", P[2]["ID"]: "4 anos"} and "nome" not in lg, lg)
         chk(f"{w}: depois de ligar a janela fecha, a seleção limpa e o aviso aparece", pg.locator("#overlay-familias.aberto").count() == 0 and not pg.locator("#bulk-bar.ativa").count() and "ligada com 2 peças" in pg.inner_text("#status"), pg.inner_text("#status"))
 
+        # ---- v7.47.1: selo de família nos cards da lista ----
+        pg.wait_for_timeout(300)
+        selo = pg.locator('#lista-produtos .produto:has-text("Vestido festa 2 anos") .fam-selo')
+        chk(f"{w}: card da lista mostra o selo 'Família · 2 peças'", selo.count() == 1 and selo.inner_text().strip() == "Família · 2 peças", selo.all_inner_texts())
+        chk(f"{w}: peça sem família não tem selo", pg.locator('#lista-produtos .produto:has-text("Vestido festa 6 anos") .fam-selo').count() == 0)
+        pg.locator('#lista-produtos .produto:has-text("Vestido festa 2 anos")').first.scroll_into_view_if_needed(); pg.screenshot(path=str(OUT / f"gestao_lista_selo_{w}.png"))
+
+        # ---- v7.47.1: peça que já tem família não é ligada de novo sem a pessoa resolver ----
+        def marcar(*nomes):
+            pg.wait_for_function("!document.querySelector('#overlay-familias.aberto') && TKCamadas.total() === 0", timeout=4000)
+            pg.evaluate("selecionadosBulk.clear(); atualizarBarraBulk(); renderizarProdutos()"); pg.wait_for_timeout(150)
+            for nome in nomes: pg.locator(f'#lista-produtos .produto:has-text("{nome}") input[type=checkbox]').first.check()
+            pg.click("#btn-bulk-familia"); pg.wait_for_selector("#overlay-familias.aberto", timeout=4000)
+        n_lig = len(chamadas(st, "/familias/ligar"))
+        marcar("Vestido festa 2 anos", "Vestido festa 6 anos", "Vestido festa 8 anos")
+        tf = pg.locator("#fam-corpo .fam-membro.tem-fam")
+        chk(f"{w}: conflito: indica qual peça já tem família e em qual", tf.count() == 1 and "VF-2" in tf.inner_text() and "Já está na família “Vestido festa 2 anos” · 2 peças" in tf.inner_text(), tf.all_inner_texts())
+        chk(f"{w}: conflito: não oferece criar família nova; oferece juntar todas (4 peças)", pg.inner_text("#fam-pe .fam-prim") == "Juntar todas na família “Vestido festa 2 anos” (4 peças)" and "Ligar 3" not in pg.inner_text("#fam-pe"), pg.inner_text("#fam-pe"))
+        chk(f"{w}: conflito: cada peça com família tem 'Tirar desta seleção' e 'Tirar da família'", tf.locator("button").all_inner_texts() == ["Tirar desta seleção", "Tirar da família “Vestido festa 2 anos”"], tf.locator("button").all_inner_texts())
+        alv = pg.evaluate("[...document.querySelectorAll('#overlay-familias button')].filter(b=>b.getClientRects().length).map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")
+        chk(f"{w}: conflito: botões com pelo menos 44 px", all(x >= 43.5 for x in alv), alv)
+        pg.screenshot(path=str(OUT / f"gestao_conflito_{w}.png"))
+        tf.locator("button", has_text="Tirar desta seleção").click(); pg.wait_for_timeout(300)
+        chk(f"{w}: 'Tirar desta seleção' tira a peça e libera criar a família nova com as outras", pg.locator("#fam-corpo .fam-membro").count() == 2 and pg.locator("#fam-corpo .tem-fam").count() == 0 and pg.inner_text("#fam-pe .fam-prim") == "Ligar 2 peças como família" and "VF-2 saiu desta seleção" in pg.inner_text("#fam-pe"), pg.inner_text("#fam-pe"))
+        chk(f"{w}: 'Tirar desta seleção' desmarca também na lista", pg.evaluate("[...selecionadosBulk].length") == 2)
+        chk(f"{w}: nada foi ligado enquanto havia conflito", len(chamadas(st, "/familias/ligar")) == n_lig)
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+        # juntar todas na família que já existe
+        marcar("Vestido festa 2 anos", "Vestido festa 6 anos")
+        pg.click("#fam-pe .fam-prim"); pg.wait_for_timeout(700)
+        lg = chamadas(st, "/familias/ligar")[-1]["corpo"]
+        chk(f"{w}: 'Juntar todas' manda juntar e a família passa a ter 3 peças", lg.get("juntar") is True and lg["produtos"] == [P[1]["ID"], P[9]["ID"]] and "agora tem 3 peças" in pg.inner_text("#status"), [lg, pg.inner_text("#status")])
+        # todas já na mesma família: nada a ligar
+        marcar("Vestido festa 2 anos", "Vestido festa 6 anos")
+        chk(f"{w}: todas já na mesma família: avisa e não deixa ligar de novo", "Não há nada para ligar" in pg.inner_text("#fam-corpo") and pg.locator("#fam-pe .fam-prim").count() == 0 and pg.locator("#fam-pe button", has_text="Fechar").count() == 1)
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(500)
+        chk(f"{w}: Esc fecha só a janela (não sai da Gestão)", pg.url.endswith("admin.html") and pg.locator("#overlay-familias.aberto").count() == 0, pg.url)
+        # tirar da família onde está para colocar na nova
+        marcar("Vestido festa 4 anos", "Vestido festa 8 anos")
+        btf = pg.locator("#fam-corpo .tem-fam button", has_text="Tirar da família")
+        btf.click()
+        chk(f"{w}: 'Tirar da família' pede um segundo toque", btf.inner_text() == "Toque de novo para tirar da família" and not any(c["corpo"].get("produto") == P[2]["ID"] for c in chamadas(st, "/familias/desligar")))
+        btf.click(); pg.wait_for_timeout(600)
+        chk(f"{w}: depois de tirar da família, a peça fica livre e dá para ligar a família nova", any(c["corpo"].get("produto") == P[2]["ID"] for c in chamadas(st, "/familias/desligar")) and pg.locator("#fam-corpo .tem-fam").count() == 0 and pg.inner_text("#fam-pe .fam-prim") == "Ligar 2 peças como família" and "saiu da família" in pg.inner_text("#fam-pe"), pg.inner_text("#fam-pe"))
+        pg.click("#fam-pe .fam-prim"); pg.wait_for_timeout(700)
+        lg = chamadas(st, "/familias/ligar")[-1]["corpo"]
+        chk(f"{w}: família nova criada sem 'juntar'", lg["produtos"] == [P[2]["ID"], P[10]["ID"]] and "juntar" not in lg and "ligada com 2 peças" in pg.inner_text("#status"), [lg, pg.inner_text("#status")])
+        pg.wait_for_function("!document.querySelector('#overlay-familias.aberto') && TKCamadas.total() === 0", timeout=4000)
+
+        # ---- v7.47.1: na edição, tocar na foto de outra peça da família abre a edição dela ----
+        pg.evaluate("selecionadosBulk.clear(); atualizarBarraBulk(); renderizarProdutos()")
+        pg.evaluate(f"editarProduto('{P[1]['ID']}')"); pg.wait_for_selector("#fam-form .fam-tam.atual", timeout=6000)
+        outra = pg.locator("#fam-form button.fam-tam")
+        chk(f"{w}: a outra peça da família é um botão com nome acessível", outra.count() == 1 and (outra.get_attribute("aria-label") or "") == "Abrir VF-6 Vestido festa 6 anos, 6 anos", outra.get_attribute("aria-label") if outra.count() else None)
+        outra.click(); pg.wait_for_timeout(500)
+        chk(f"{w}: tocar na foto abre a edição daquela peça", pg.input_value("#produto-id") == P[9]["ID"] and pg.locator("#fam-form .fam-tam.atual").count() == 1 and "Vestido festa 6 anos" in pg.inner_text("#titulo-form"), [pg.input_value("#produto-id"), pg.inner_text("#titulo-form")])
+        pg.locator("#fam-form button.fam-tam").click(); pg.wait_for_timeout(500)
+        chk(f"{w}: e volta para a outra pela foto dela", pg.input_value("#produto-id") == P[1]["ID"])
+        pg.evaluate("document.getElementById('btn-cancelar-duplicar').click()")
+
         # ---- sugestões ----
         pg.click("#btn-fam-sugestoes"); pg.wait_for_selector("#overlay-familias.aberto .fam-sug", timeout=4000)
         chk(f"{w}: sugestões listam os grupos com fotos e tamanhos", pg.locator(".fam-sug").count() == 3 and "38 · 40" in pg.inner_text(".fam-sug >> nth=0") and pg.locator(".fam-sug >> nth=0").locator("img").count() == 2)
@@ -102,7 +163,7 @@ with sync_playwright() as p:
         alv = pg.evaluate("[...document.querySelectorAll('#fam-form button')].map(b=>{const r=b.getBoundingClientRect();return Math.min(r.width,r.height)})")
         chk(f"{w}: botões da caixa Família com pelo menos 44 px", all(x >= 43.5 for x in alv), alv)
         pg.click("#fam-form .fam-tirar")
-        chk(f"{w}: 'Tirar da família' pede um segundo toque antes", pg.locator("#fam-form .fam-tirar").inner_text() == "Toque de novo para tirar" and not chamadas(st, "/familias/desligar"))
+        chk(f"{w}: 'Tirar da família' pede um segundo toque antes", pg.locator("#fam-form .fam-tirar").inner_text() == "Toque de novo para tirar" and not any(c["corpo"].get("produto") == orig for c in chamadas(st, "/familias/desligar")))
         pg.click("#fam-form .fam-tirar"); pg.wait_for_timeout(600)
         chk(f"{w}: tirar da família chama o servidor e atualiza a caixa", chamadas(st, "/familias/desligar")[-1]["corpo"] == {"produto": orig} and "ainda não está ligada" in pg.inner_text("#fam-form") and "família foi desfeita" in pg.inner_text("#status"), pg.inner_text("#status"))
         chk(f"{w}: sem rolagem horizontal", pg.evaluate("document.documentElement.scrollWidth <= innerWidth"))

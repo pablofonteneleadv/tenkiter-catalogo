@@ -6,6 +6,17 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.47.1 — 02/11/2026
+- **Família na edição:** tocar na foto de outra peça da família abre a edição daquela peça.
+- **Lista da Gestão:** cards de peças com família mostram o selo "Família · N peças".
+- **Ligar como família não liga de novo o que já tem família.** Se alguma peça marcada já está numa família, a janela mostra qual e em qual família, e só deixa continuar depois de escolher:
+  - "Tirar desta seleção" (a peça fica onde está);
+  - "Tirar da família" (com segundo toque; a peça fica livre para a família nova);
+  - ou "Juntar todas na família …" (quando é uma família só).
+  - Se todas já estão juntas, avisa que não há nada para ligar.
+  - O servidor também recusa a ligação sem essa escolha.
+- Corrigido: Esc na janela de famílias fechava duas vezes e podia sair da Gestão.
+
 ## 7.47.0 — 02/11/2026
 - **Família de produtos reformulada:** família = o mesmo produto cadastrado em várias peças, que podem mudar por **estampa** ou por tamanho (não só tamanho).
 - **Ligar como família só reconhece as peças:** a janela não pede nada (sem nome da família, sem "Tamanho/idade" digitado) e não muda nada nas peças. Mostra foto, nome, código e estoque de cada uma e um botão "Ligar N peças como família". O nome da família vem do nome das peças.

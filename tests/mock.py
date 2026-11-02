@@ -489,6 +489,8 @@ def install(ctx, perms=PERMS_ALL, log=None, delay=0, versao="3.2", pixel="", sem
             fams={id(f):f for f in [de(i) for i in ids] if f}
             if len(fams)>1: return route.fulfill(status=409,json={"ok":False,"erro":"Algumas dessas peças já estão em famílias diferentes. Tire da família antes de juntar."})
             f=list(fams.values())[0] if fams else None; criada=not f
+            if f and corpo.get("juntar") is not True:   # v7.47.1: igual ao Worker — peça com família só entra se a pessoa escolheu juntar
+                return route.fulfill(status=409,json={"ok":False,"precisaEscolher":True,"familia":f["id"],"erro":"Algumas dessas peças já estão na família “%s”. Escolha juntar tudo nela ou tire essas peças antes." % f["nome"]})
             if not f:
                 st["fam_seq"]+=1; nome_auto=next((str(y.get("Nome") or "") for y in st.get("produtos",[]) if str(y.get("ID"))==ids[0]),"") or "Família"   # v7.47.0: sem nome, vem do nome da peça (o Worker real tira o tamanho do fim)
                 f={"id":"f%d"%st["fam_seq"],"nome":corpo.get("nome") or nome_auto,"membros":[]}; st["familias"].append(f)
