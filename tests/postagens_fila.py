@@ -70,7 +70,9 @@ with sync_playwright() as p:
     chk("3 grupos na ordem Story, WhatsApp Status 1, Feed", len(gr) == 3 and "Story" in gr[0] and gr[1].startswith("WhatsApp Status 1") and "Feed" in gr[2], gr)
     chk("o grupo do Status mostra o intervalo próprio (2 min a 5 min)", "2 min a 5 min" in pg.inner_text("[data-fg-sec=status]"), pg.inner_text("[data-fg-sec=status]"))
     chk("o 'ambos' fica no grupo do Story (4 itens: 1, 2, 3 e o 'ambos')", pg.locator("[data-fg=story] .po-fg-c").inner_text().strip() == "4", gr[0])
-    chk("'ambos' não tem ▲▼ (usar Horário/Próximo livre) e diz Instagram + WhatsApp", pg.locator(".po-item[data-id='6'] [data-a=subir]").count() == 0 and pg.locator(".po-item[data-id='6'] [data-a=hora]").count() == 1 and "Instagram + WhatsApp" in pg.inner_text(".po-item[data-id='6']"), pg.inner_text(".po-item[data-id='6']")[:200])
+    am = "[data-fg-sec=story] .po-item[data-id='6']"
+    chk("'ambos' não tem ▲▼ (usar Horário/Próximo livre) e diz que também vai ao WhatsApp Status 1", pg.locator(am + " [data-a=subir]").count() == 0 and pg.locator(am + " [data-a=hora]").count() == 1 and "Story + Status 1" in pg.inner_text(am) and "também em WhatsApp Status 1" in pg.inner_text(am), pg.inner_text(am)[:300])
+    chk("7.48.3: o 'ambos' também aparece no grupo WhatsApp Status 1, como perna do WhatsApp", pg.locator("[data-fg-sec=status] .po-item[data-id='6'][data-perna=zap]").count() == 1 and pg.locator("[data-fg=status] .po-fg-c").inner_text().strip() == "2")
     chk("o Status mostra 'WhatsApp Status 1' e não tem ▲▼ (é o único do grupo)", "WhatsApp Status 1" in pg.inner_text(".po-item[data-id='5']") and pg.is_disabled(".po-item[data-id='5'] [data-a=subir]") and pg.is_disabled(".po-item[data-id='5'] [data-a=descer]"))
     chk("sem o 'ambos' na conta, a ordem do Story continua 1, 2, 3 (o 3 desce desabilitado)", pg.is_disabled(".po-item[data-id='3'] [data-a=descer]") and pg.is_enabled(".po-item[data-id='2'] [data-a=descer]"))
     chk("sem erro de JavaScript", not erros, erros)
@@ -206,7 +208,7 @@ with sync_playwright() as p:
     ctx, pg, st, g, erros, msgs = abrir(b)
     g["posts"][0].update({"status":"processando", "aguardaZap":True, "progresso":{"fase":"confirmacao", "desde":"2026-10-21T10:00:00Z", "proximaConsultaEm":"2026-10-21T10:02:00Z", "limiteEm":"2026-10-21T10:30:00Z"}})
     aba(pg, "fila"); pg.wait_for_timeout(900)
-    chk("a fila mostra próxima consulta e limite de 30 min informados pelo servidor", pg.locator(".po-progresso").count() > 0 and "Próxima consulta prevista" in pg.inner_text("#po-corpo") and "30 min" in pg.inner_text("#po-corpo"))
+    chk("a fila mostra próxima consulta e limite de 10 min informados pelo servidor", pg.locator(".po-progresso").count() > 0 and "Próxima consulta prevista" in pg.inner_text("#po-corpo") and "10 min" in pg.inner_text("#po-corpo") and "Publicado sem confirmação" in pg.inner_text("#po-corpo"))
     chk("a confirmação oferece consultar sem reenviar", pg.locator("[data-a=consultar]").count() > 0)
     ctx.close(); b.close()
 

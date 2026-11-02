@@ -698,36 +698,41 @@ function d1() {
     x = await G('POST', '/post', { tipo: 'story', canal: 'whatsapp', midias: [IMG(32)], quando: 'sequencia' }); const idW = x.j.ids[0];
     await venc([idP, idW]); await W.processarPostagens(env);
     let LP = await linha(idP), LW = await linha(idW);
-    chk('409 NÃO vira erro: fica aguardando confirmação, com o requestId guardado', LP.status === 'processando' && LW.status === 'processando' && LP.ig_id === 'zapq:tkpost-' + String(idP).padStart(12, '0') && !/^erro$/.test(LP.status), [LP.status, LP.ig_id, LP.erro]);
-    chk('o Instagram do "ambos" NÃO foi publicado enquanto o WhatsApp não confirma', publicados.length === 0);
-    x = await G('GET', '/posts'); const fp = x.j.posts.find((v) => v.id === idP);
-    chk('/posts avisa aguardaZap para o painel', fp && fp.aguardaZap === true && fp.status === 'processando');
-    chk('/posts informa fase e horários reais da confirmação', fp.progresso.fase === 'confirmacao' && Date.parse(fp.progresso.proximaConsultaEm) - Date.parse(LP.atualizado_em) === 120000 && Date.parse(fp.progresso.limiteEm) - Date.parse(LP.inicio_proc) === 1800000);
-    chk('progresso não expõe requestId ou credenciais', !JSON.stringify(fp.progresso).includes('tkpost-'));
+    chk('409 NÃO vira erro: só WhatsApp fica aguardando confirmação, com o requestId guardado', LW.status === 'processando' && LW.ig_id === 'zapq:tkpost-' + String(idW).padStart(12, '0') && LW.zap_estado === 'aguardando', [LW.status, LW.ig_id, LW.erro]);
+    chk('7.48.3: no "ambos" o WhatsApp pendente NÃO segura o Instagram (publica no horário, perna do WhatsApp à parte)', LP.status === 'publicado' && publicados.length === 1 && LP.zap_estado === 'aguardando' && LP.zap_req === 'tkpost-' + String(idP).padStart(12, '0') && !String(LP.ig_id).startsWith('zap'), [LP.status, LP.ig_id, LP.zap_estado]);
+    x = await G('GET', '/posts'); const fp = x.j.posts.find((v) => v.id === idW), fa = x.j.posts.find((v) => v.id === idP);
+    chk('/posts avisa aguardaZap para o painel', fp && fp.aguardaZap === true && fp.status === 'processando' && fp.zap.estado === 'aguardando');
+    chk('/posts informa fase e horários reais da confirmação (1 min, até 10 min)', fp.progresso.fase === 'confirmacao' && Date.parse(fp.progresso.proximaConsultaEm) - Date.parse(LW.zap_consulta) === 50000 && Date.parse(fp.progresso.limiteEm) - Date.parse(LW.inicio_proc) === 600000, fp.progresso);
+    chk('/posts mostra a perna do WhatsApp do "ambos" separada do Instagram', fa && fa.status === 'publicado' && fa.zap.estado === 'aguardando' && Date.parse(fa.zap.limiteEm) - Date.parse(LP.zap_desde) === 600000);
+    chk('progresso/estado não expõem requestId ou credenciais', !JSON.stringify(fp.progresso).includes('tkpost-') && !JSON.stringify(fa.zap).includes('tkpost-'));
     let n0 = zapChamadas.length; await W.processarPostagens(env);
-    chk('antes de 2 min o cron não consulta de novo (nem reenvia)', zapChamadas.length === n0);
-    const atras = (ms) => DB.prepare("UPDATE postagem SET atualizado_em=? WHERE ig_id LIKE 'zapq:%'").bind(new Date(Date.now() - ms).toISOString()).run();
-    await atras(3 * 60000); n0 = zapChamadas.length; await W.processarPostagens(env);
-    chk('depois de 2 min só CONSULTA (consultar:true, sem mídia/url) e state unknown continua esperando', zapChamadas.length === n0 + 2 && zapChamadas.slice(n0).every((c) => c.consultar === true && !c.url) && (await linha(idP)).status === 'processando');
-    zapConsulta = 'aceito'; await atras(3 * 60000); await W.processarPostagens(env);
+    chk('antes de ~1 min o cron não consulta de novo (nem reenvia)', zapChamadas.length === n0);
+    const atras = (ms) => DB.prepare("UPDATE postagem SET atualizado_em=?, zap_consulta=? WHERE zap_estado='aguardando'").bind(new Date(Date.now() - ms).toISOString(), new Date(Date.now() - ms).toISOString()).run();
+    await atras(61000); n0 = zapChamadas.length; await W.processarPostagens(env);
+    chk('depois de 1 min só CONSULTA (consultar:true, sem mídia/url) e state unknown continua esperando', zapChamadas.length === n0 + 2 && zapChamadas.slice(n0).every((c) => c.consultar === true && !c.url) && (await linha(idW)).status === 'processando' && (await linha(idP)).zap_estado === 'aguardando');
+    zapConsulta = 'aceito'; await atras(61000); await W.processarPostagens(env);
     LP = await linha(idP); LW = await linha(idW);
-    chk('accepted + serverAcknowledged: só WhatsApp vira publicado e o erro some', LW.status === 'publicado' && LW.erro === '' && LW.ig_id === 'tkpost-' + String(idW).padStart(12, '0'), LW);
-    chk('"ambos": WhatsApp confirmado → o Instagram segue e publica (WhatsApp não é reenviado)', LP.status === 'publicado' && LP.ig_id !== '' && !String(LP.ig_id).startsWith('zapq') && publicados.length === 1 && zapChamadas.filter((c) => !c.consultar).length === 2, [LP.status, LP.ig_id, publicados.length]);
-    // desiste de esperar depois de 30 min, mas o botão Consultar resultado continua valendo
+    chk('accepted + serverAcknowledged: só WhatsApp vira publicado e o erro some', LW.status === 'publicado' && LW.erro === '' && LW.ig_id === 'tkpost-' + String(idW).padStart(12, '0') && LW.zap_estado === 'confirmado', LW);
+    chk('"ambos": WhatsApp confirmado depois, Instagram não é republicado e o WhatsApp não é reenviado', LP.status === 'publicado' && LP.zap_estado === 'confirmado' && publicados.length === 1 && zapChamadas.filter((c) => !c.consultar).length === 2, [LP.status, LP.zap_estado, publicados.length]);
+    // 10 min sem resposta definitiva: "Publicado sem confirmação" e a fila segue
     zapConsulta = 'desconhecido'; x = await G('POST', '/post', { tipo: 'story', canal: 'whatsapp', midias: [IMG(33)], quando: 'sequencia' }); const idT = x.j.ids[0];
     await venc([idT]); await W.processarPostagens(env);
-    await DB.prepare("UPDATE postagem SET inicio_proc=?, atualizado_em=? WHERE id=?").bind(new Date(Date.now() - 31 * 60000).toISOString(), new Date(Date.now() - 5 * 60000).toISOString(), idT).run();
+    await DB.prepare("UPDATE postagem SET inicio_proc=?, zap_desde=?, zap_consulta=?, atualizado_em=? WHERE id=?").bind(new Date(Date.now() - 11 * 60000).toISOString(), new Date(Date.now() - 11 * 60000).toISOString(), new Date(Date.now() - 2 * 60000).toISOString(), new Date(Date.now() - 2 * 60000).toISOString(), idT).run();
     await W.processarPostagens(env);
     let LT = await linha(idT);
-    chk('30 min sem confirmar: vira aviso (erro) mas continua com o marcador para consultar', LT.status === 'erro' && LT.ig_id.startsWith('zapq:') && /Consultar resultado/.test(LT.erro), [LT.status, LT.erro]);
+    chk('10 min sem confirmar: vira "Publicado sem confirmação" (status publicado + marcador), sem reenviar', LT.status === 'publicado' && LT.zap_estado === 'sem_confirmacao' && LT.erro === '' && zapChamadas.filter((c) => !c.consultar && c.requestId.startsWith('tkpost-' + String(idT).padStart(12, '0'))).length === 1, [LT.status, LT.zap_estado, LT.erro]);
     n0 = zapChamadas.length; x = await G('POST', '/post/consultar', { id: idT });
-    chk('botão Consultar resultado: só consulta, ainda sem confirmação', x.j.ok && x.j.resultado === 'esperando' || x.j.resultado === 'falhou', x.j);
-    zapConsulta = 'aceito'; x = await G('POST', '/post/consultar', { id: idT }); LT = await linha(idT);
-    chk('Consultar resultado com accepted: marca publicada, nada foi reenviado', x.j.resultado === 'aceito' && zapChamadas.slice(n0).every((c) => c.consultar === true), [x.j, LT.status]);
+    chk('Consultar depois da janela: resposta legível (409) e nenhuma chamada nova', x.r.status === 409 && /Publicado sem confirmação/.test(x.j.erro) && zapChamadas.length === n0, x.j);
+    // antigo (antes da 7.48.3): erro com marcador zapq: — Consultar dá retorno e não reenvia
+    const idV = (await G('POST', '/post', { tipo: 'story', canal: 'whatsapp', midias: [IMG(34)], quando: ts(600) })).j.ids[0];
+    await DB.prepare("UPDATE postagem SET status='erro', ig_id=?, inicio_proc=?, atualizado_em=?, erro='WhatsApp: a Wafly ainda não confirmou depois de 30 min.' WHERE id=?").bind('zapq:tkpost-' + String(idV).padStart(12, '0'), new Date(Date.now() - 3 * 3600000).toISOString(), new Date(Date.now() - 2 * 3600000).toISOString(), idV).run();
     await W.processarPostagens(env);
-    chk('depois de confirmado o WhatsApp-só fica publicado', (await linha(idT)).status === 'publicado' && (await linha(idT)).erro === '');
+    chk('antigo em erro não é consultado nem publicado sozinho pelo cron', (await linha(idV)).status === 'erro');
+    n0 = zapChamadas.length; x = await G('POST', '/post/consultar', { id: idV });
+    chk('Consultar no antigo: mensagem com o que a Wafly respondeu e vira "Publicado sem confirmação"', x.j.ok && x.j.resultado === 'sem_confirmacao' && /consultado às \d\d:\d\d/.test(x.j.mensagem) && (await linha(idV)).zap_estado === 'sem_confirmacao' && zapChamadas.slice(n0).every((c) => c.consultar === true), x.j);
+    zapConsulta = 'aceito';
     x = await G('POST', '/post/consultar', { id: idP });
-    chk('/post/consultar recusa postagem que não está aguardando', x.r.status === 409);
+    chk('/post/consultar recusa com frase legível o que não está aguardando', x.r.status === 409 && /já foi confirmado/.test(x.j.erro), x.j);
     zapModo = 'ok'; zapConsulta = 'desconhecido';
 
     // ---- "ambos" não troca de lugar com ▲▼ (serviria a um canal e quebraria o outro)

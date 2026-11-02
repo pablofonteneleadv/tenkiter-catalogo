@@ -134,7 +134,7 @@ function d1() {
   id = await novaPostagem('ambos');
   await W.processarPostagens(env);
   p = await lerPost(id);
-  chk('ambos: falha no WhatsApp = erro, sem publicar no Instagram', p.status === 'erro' && publicados.length === 0 && /WhatsApp/.test(p.erro), p.status + ' ' + p.erro);
+  chk('ambos (7.48.3): falha no WhatsApp não segura o Instagram; a perna do WhatsApp fica em erro à parte', p.status === 'publicado' && publicados.length === 1 && p.zap_estado === 'erro' && /WhatsApp/.test(p.zap_erro), p.status + ' ' + p.zap_estado + ' ' + p.zap_erro);
 
   // Ambos: nova tentativa depois que o WhatsApp voltou NÃO reenvia se já foi enviado.
   zapPedidos = []; zapModo = 'ok'; publicados = []; containers = {};

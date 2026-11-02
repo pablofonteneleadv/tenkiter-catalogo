@@ -92,7 +92,7 @@ const DDL = [
 /* colunas acrescentadas depois (v3.7: leitura das fotos por IA) */
 const COLUNAS_NOVAS = ["ia_status TEXT DEFAULT ''", "ia_json TEXT DEFAULT ''", "ia_tent INTEGER DEFAULT 0", "ia_em TEXT DEFAULT ''", "preco_foto TEXT DEFAULT ''"];
 const inicializacoes_ = new WeakMap();
-const ESQUEMA_ = '20261031-gestao-regras-1';
+const ESQUEMA_ = '20261102-zap-proativo-1';
 async function iniciar(env) {
   if (inicializacoes_.has(env.DB)) return inicializacoes_.get(env.DB);
   const promessa = (async()=>{
@@ -103,6 +103,9 @@ async function iniciar(env) {
     await migrarEsquema_(env);
     const postCols=new Set((await env.DB.prepare('PRAGMA table_info(postagem)').all()).results.map(c=>c.name));
     for(const [nome,tipo] of [['serie',"TEXT NOT NULL DEFAULT ''"],['parte','INTEGER NOT NULL DEFAULT 0'],['partes','INTEGER NOT NULL DEFAULT 0'],['origem_midia',"TEXT NOT NULL DEFAULT ''"],['intervalo_ms','INTEGER NOT NULL DEFAULT 0']])if(!postCols.has(nome))await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();
+    /* v7.48.3: estado da perna do WhatsApp (Status 1/2) guardado à parte — no canal "ambos" o Instagram não espera por ela.
+       Colunas aditivas (nada é migrado nem apagado): zap_estado = ''|aguardando|confirmado|sem_confirmacao|erro. */
+    for(const [nome,tipo] of [['zap_estado',"TEXT NOT NULL DEFAULT ''"],['zap_req',"TEXT NOT NULL DEFAULT ''"],['zap_desde',"TEXT NOT NULL DEFAULT ''"],['zap_tent','INTEGER NOT NULL DEFAULT 0'],['zap_erro',"TEXT NOT NULL DEFAULT ''"],['zap_consulta',"TEXT NOT NULL DEFAULT ''"]])if(!postCols.has(nome)){try{await env.DB.prepare('ALTER TABLE postagem ADD COLUMN '+nome+' '+tipo).run();}catch(e){if(!/duplicate column/i.test(String(e)))throw e;}}
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_post_serie ON postagem(serie,parte)').run();
     await env.DB.prepare('CREATE INDEX IF NOT EXISTS ix_post_publicado ON postagem(status,publicado_em)').run();
     // Acrescenta a ficha estruturada sem regravar nem apagar os campos antigos.
@@ -782,16 +785,16 @@ async function gravarContainers(env, id, c) { await env.DB.prepare('UPDATE posta
  * Idempotente: o `requestId` e estavel (deriva do id da postagem), entao repetir NAO republica.
  */
 /* v1.3: envio ao Status do WhatsApp SEM gravar o desfecho da postagem (usado também no canal "ambos"). */
-async function enviarWhatsAppSo_(env, p, slot) {
+async function enviarWhatsAppSo_(env, p, slot, tent) {
   slot = slot === 2 ? 2 : 1;
   const direto = await cfgWafly_(env, slot);
-  if (direto) return await enviarWaflyDireto_(env, p, slot, direto);          // v2.1: credenciais cadastradas na Gestão (D1)
+  if (direto) return await enviarWaflyDireto_(env, p, slot, direto, tent);          // v2.1: credenciais cadastradas na Gestão (D1)
   if (slot === 2) return { ok: false, erro: 'O Wafly 2 ainda não está cadastrado em Conexões.' };
   const base = String(env.API_URL || '').trim();           // Wafly 1 sem cadastro na Gestão: ponte do Apps Script (caminho de sempre)
   if (!base) return { ok: false, erro: 'Falta o endereco do backend (API_URL) para enviar ao WhatsApp.' };
   let m = []; try { m = JSON.parse(p.midias || '[]'); } catch (e) { m = []; }
   const primeira = m[0] || {};
-  const requestId = 'tkpost-' + String(p.id).padStart(12, '0');
+  const requestId = requestIdZap_(1, p.id, tent);
   let j = null;
   try {
     const r = await fetch(base, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'waflyStatusRemoto', token: String(env.WORKER_TOKEN || ''), requestId: requestId, tipo: primeira.tipo === 'video' ? 'video' : 'image', url: String(primeira.url || ''), legenda: String(p.legenda || '') }) });
@@ -803,56 +806,127 @@ async function enviarWhatsAppSo_(env, p, slot) {
   if (j && j.pendente) return { ok: false, pendente: true, requestId: String(j.requestId || requestId), erro: String(j.erro || '') };
   return { ok: false, erro: String((j && j.erro) || 'O WhatsApp recusou o envio.') };
 }
-const ZAP_ESPERA_MAX_MS = 30 * 60000;       // depois disso vira "não confirmou" (continua dando para Consultar resultado)
-const ZAP_CONSULTA_GAP_MS = 2 * 60000;      // o cron consulta a Wafly a cada ~2 min (nunca passa de 10)
-const FRASE_AGUARDA_ZAP = 'Aguardando a confirmação do WhatsApp. Não precisa fazer nada: o sistema confere sozinho a cada poucos minutos, sem reenviar.';
-/** Só CONSULTA o recibo daquele requestId pelo backend (não baixa nem envia mídia). { estado:'aceito'|'desconhecido'|'falha' } */
+/* v7.48.3 (decisão do Pablo, 02/11/2026): esperar para sempre não é solução.
+ *  - Sem confirmação: consulta a Wafly a cada ~1 min por até 10 min (nunca reenvia com o MESMO requestId).
+ *  - Falha definitiva (estado failed/rejected/error/expired… ou recibo 404 = a Wafly não tem o pedido): reenvia UMA vez, logo em
+ *    seguida e só dentro da janela de 10 min, com requestId NOVO (sufixo -r1). Falhou de novo: erro claro e sai do fluxo automático.
+ *  - Sem resposta definitiva em 10 min: "Publicado sem confirmação" (status publicado + zap_estado='sem_confirmacao') e a fila segue.
+ *  - Nada atrasado é publicado sozinho fora da vez: "Repostar" agenda no próximo horário livre do mesmo canal. */
+const ZAP_ESPERA_MAX_MS = 10 * 60000;       // janela da confirmação automática
+const ZAP_CONSULTA_GAP_MS = 50000;          // o cron roda a cada minuto: consulta ~1x por minuto
+const FRASE_AGUARDA_ZAP = 'Aguardando a confirmação do WhatsApp. O sistema consulta a Wafly a cada minuto por até 10 min, sem reenviar; a fila segue na ordem.';
+const FRASE_REENVIO_ZAP = 'A Wafly informou que o primeiro envio não saiu: reenviado uma vez com novo ID. Aguardando a confirmação (até 10 min).';
+const FRASE_IG_PRESO_ = 'Instagram: não saiu no horário porque esperava a confirmação do WhatsApp (regra anterior à 7.48.3). Nada é publicado fora da vez: toque em “Repostar” para colocar no próximo horário livre.';
+const ZAP_FALHA_ESTADOS_ = ['failed', 'failure', 'rejected', 'error', 'expired', 'cancelled', 'canceled', 'not_found', 'notfound'];
+function requestIdZap_(slot, id, tent) { return (slot === 2 ? 'tkpost2-' : 'tkpost-') + String(id).padStart(12, '0') + (Number(tent) > 0 ? '-r' + Number(tent) : ''); }
+function nomeZapRid_(rid) { return slotDoRequestId_(rid) === 2 ? 'WhatsApp Status 2' : 'WhatsApp Status 1'; }
+function horaLocal_(v) { const n = typeof v === 'number' ? v : Date.parse(v); const d = new Date((isFinite(n) ? n : Date.now()) - 180 * 60000); return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0'); }
+function estadoZapLimpo_(v) { return String(v || '').toLowerCase().replace(/[^a-z_]/g, '').slice(0, 30); }
+/** Só CONSULTA o recibo daquele requestId (não baixa nem envia mídia). { estado:'aceito'|'falhou'|'desconhecido', nota } */
 async function consultarWhatsApp_(env, requestId) {
   const direto = await cfgWafly_(env, slotDoRequestId_(requestId));
   if (direto) return await consultarWaflyDireto_(direto, requestId);
   const base = String(env.API_URL || '').trim();
-  if (!base) return { estado: 'falha', erro: 'Falta o endereco do backend (API_URL).' };
+  if (!base) return { estado: 'desconhecido', nota: 'falta o endereço do backend (API_URL)' };
   try {
     const r = await fetch(base, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8', 'User-Agent': UA }, body: JSON.stringify({ action: 'waflyStatusRemoto', token: String(env.WORKER_TOKEN || ''), requestId: requestId, consultar: true }) });
     const j = await r.json();
-    if (j && j.ok && String(j.estado || '').toLowerCase() === 'accepted' && j.confirmado) return { estado: 'aceito' };
-    if (j && j.ok) return { estado: 'desconhecido' };
-    return { estado: 'falha', erro: String((j && j.erro) || '') };
-  } catch (e) { return { estado: 'falha', erro: 'Sem conexao com o servidor agora.' }; }
+    const st = estadoZapLimpo_(j && j.estado);
+    if (j && j.ok && st === 'accepted' && j.confirmado) return { estado: 'aceito', nota: '' };
+    if (j && (Number(j.http) === 404 || Number(j.status) === 404 || j.naoEncontrado === true)) return { estado: 'falhou', nota: 'a Wafly não encontrou este pedido (HTTP 404)' };
+    if (j && j.ok && ZAP_FALHA_ESTADOS_.indexOf(st) !== -1) return { estado: 'falhou', nota: 'a Wafly marcou o pedido como “' + st + '”' };
+    if (j && j.ok) return { estado: 'desconhecido', nota: st && st !== 'unknown' ? 'pedido em “' + st + '”' : 'sem resultado ainda' };
+    return { estado: 'desconhecido', nota: 'o servidor do WhatsApp não respondeu a consulta' };
+  } catch (e) { return { estado: 'desconhecido', nota: 'sem conexão com o servidor agora' }; }
 }
-/** Deixa a postagem "aguardando confirmação" (status 'processando' + marcador zapq:). */
+/** Deixa a postagem só-WhatsApp "aguardando confirmação" (status 'processando' + marcador zapq:). */
 async function marcarAguardaZap_(env, p, requestId) {
-  await env.DB.prepare("UPDATE postagem SET status='processando', ig_id=?, inicio_proc=?, erro=?, atualizado_em=? WHERE id=?").bind('zapq:' + requestId, agora(), FRASE_AGUARDA_ZAP, agora(), p.id).run();
+  const em = agora();
+  await env.DB.prepare("UPDATE postagem SET status='processando', ig_id=?, inicio_proc=?, erro=?, zap_estado='aguardando', zap_req=?, zap_desde=?, zap_consulta=?, atualizado_em=? WHERE id=?").bind('zapq:' + requestId, em, FRASE_AGUARDA_ZAP, requestId, em, em, em, p.id).run();
   return { ok: true, aguardando: true };
 }
-/** Resolve uma postagem com marcador zapq:. Devolve 'aceito' (segue o fluxo), 'esperando' ou 'falhou'. `forcar` ignora o intervalo entre consultas (botão). */
+/** Consulta a Wafly e decide o próximo passo de UMA perna do WhatsApp (pode reenviar uma vez). Não grava a postagem. */
+async function decidirZap_(env, p, rid, desdeMs, tent) {
+  const c = await consultarWhatsApp_(env, rid), em = agora(), hora = horaLocal_(em), nome = nomeZapRid_(rid);
+  const dentro = Date.now() - desdeMs <= ZAP_ESPERA_MAX_MS, base = { em: em, rid: rid, tent: tent };
+  if (c.estado === 'aceito') return Object.assign(base, { acao: 'confirmado', msg: 'Confirmado: a Wafly publicou no ' + nome + ' (consultado às ' + hora + ').' });
+  if (c.estado === 'falhou') {
+    if (!dentro || tent >= 1) {
+      const frase = nome + ': a Wafly informou que não publicou' + (tent >= 1 ? ', nem na nova tentativa automática' : '') + ' (' + c.nota + '). Toque em “Repostar” para colocar no próximo horário livre do canal.';
+      return Object.assign(base, { acao: 'erro', frase: frase, msg: 'A Wafly diz que não publicou (consultado às ' + hora + '). ' + (tent >= 1 ? 'A nova tentativa automática também não saiu.' : 'O horário já passou, então nada foi reenviado sozinho.') + ' Use “Repostar” para o próximo horário livre do canal.' });
+    }
+    const r2 = await enviarWhatsAppSo_(env, p, slotDoRequestId_(rid), 1), novo = r2.requestId || requestIdZap_(slotDoRequestId_(rid), p.id, 1);
+    if (r2.ok) return Object.assign(base, { acao: 'confirmado', rid: novo, tent: 1, reenviado: true, msg: 'A Wafly diz que o primeiro envio não saiu: reenviei agora com novo ID e a Wafly confirmou (' + hora + ').' });
+    if (r2.pendente) return Object.assign(base, { acao: 'reenviado', rid: novo, tent: 1, msg: 'A Wafly diz que não publicou: reenviando agora com novo ID (' + hora + '). Aguardando a confirmação por até 10 min.' });
+    const frase = nome + ': a Wafly informou que não publicou e a nova tentativa automática falhou (' + String(r2.erro || 'sem detalhe').slice(0, 160) + '). Toque em “Repostar” para colocar no próximo horário livre do canal.';
+    return Object.assign(base, { acao: 'erro', rid: novo, tent: 1, frase: frase, msg: 'A Wafly diz que não publicou e a nova tentativa automática também falhou. Use “Repostar” para o próximo horário livre do canal.' });
+  }
+  if (!dentro) return Object.assign(base, { acao: 'sem_confirmacao', msg: 'A Wafly não confirmou em 10 min (consultado às ' + hora + '). Ficou como “Publicado sem confirmação” e a fila seguiu na ordem. Se não aparecer no WhatsApp, use “Repostar”.' });
+  return Object.assign(base, { acao: 'esperar', msg: 'A Wafly ainda não confirmou (consultado às ' + hora + (c.nota ? '; ' + c.nota : '') + '). O sistema consulta de novo a cada minuto até ' + horaLocal_(desdeMs + ZAP_ESPERA_MAX_MS) + '.' });
+}
+const RESULTADO_ZAP_ = { confirmado: 'aceito', sem_confirmacao: 'sem_confirmacao', reenviado: 'reenviado', erro: 'falhou', esperar: 'esperando' };
+/** Postagem SÓ WhatsApp (Status 1 ou 2) com marcador zapq:. Devolve { r:'aceito'|'esperando'|'sem_confirmacao'|'reenviado'|'falhou'|'encerrado', msg }. `forcar` ignora o intervalo entre consultas (botão). */
 async function resolverZapPendente_(env, p, forcar) {
-  const requestId = String(p.ig_id || '').slice(5);
-  const desde = Date.parse(p.inicio_proc || p.atualizado_em || agora()) || Date.now();
-  if (!forcar && Date.now() - (Date.parse(p.atualizado_em || '') || 0) < ZAP_CONSULTA_GAP_MS) return 'esperando';
-  const c = await consultarWhatsApp_(env, requestId);
-  if (c.estado === 'aceito') {
-    p.ig_id = 'zap:' + requestId;
-    const gravou = await env.DB.prepare("UPDATE postagem SET ig_id=?, erro='', atualizado_em=? WHERE id=? AND status IN ('erro','processando')").bind(p.ig_id, agora(), p.id).run();
-    if (!gravou.meta || gravou.meta.changes !== 1) return 'encerrado';
-    if (!canalUsaInstagram_(p.canal)) {                                  // só WhatsApp: confirmado = publicado (nada é reenviado)
-      await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', publicado_em=?, atualizado_em=? WHERE id=? AND status IN ('erro','processando')").bind(requestId, agora(), agora(), p.id).run();
-      p.status = 'publicado';
-    } else if (p.status === 'erro') { await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=? WHERE id=? AND status IN ('erro','processando')").bind(agora(), p.id).run(); p.status = 'processando'; }
-    return 'aceito';
+  const marcador = String(p.ig_id || ''), rid = marcador.slice(5);
+  const desde = Date.parse(p.zap_desde || p.inicio_proc || p.atualizado_em || '') || Date.now();
+  const ultima = Date.parse(p.zap_consulta || p.atualizado_em || '') || 0;
+  if (!forcar && Date.now() - ultima < ZAP_CONSULTA_GAP_MS) return { r: 'esperando', msg: '' };
+  const d = await decidirZap_(env, p, rid, desde, Number(p.zap_tent) || 0);
+  const onde = " WHERE id=? AND status IN ('erro','processando') AND ig_id=?";
+  let g;
+  if (d.acao === 'confirmado' || d.acao === 'sem_confirmacao') {
+    const pub = new Date(d.reenviado ? Date.now() : desde).toISOString();
+    g = await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', zap_estado=?, zap_req=?, zap_tent=?, zap_erro='', zap_consulta=?, publicado_em=?, atualizado_em=?" + onde).bind(d.rid, d.acao, d.rid, d.tent, d.em, pub, d.em, p.id, marcador).run();
+  } else if (d.acao === 'reenviado') {
+    g = await env.DB.prepare("UPDATE postagem SET status='processando', ig_id=?, inicio_proc=?, erro=?, zap_estado='aguardando', zap_req=?, zap_desde=?, zap_tent=1, zap_consulta=?, atualizado_em=?" + onde).bind('zapq:' + d.rid, d.em, FRASE_REENVIO_ZAP, d.rid, d.em, d.em, d.em, p.id, marcador).run();
+  } else if (d.acao === 'erro') {
+    g = await env.DB.prepare("UPDATE postagem SET status='erro', ig_id=?, erro=?, zap_estado='erro', zap_req=?, zap_tent=?, zap_erro=?, zap_consulta=?, atualizado_em=?" + onde).bind('zapx:' + d.rid, d.frase, d.rid, d.tent, d.frase, d.em, d.em, p.id, marcador).run();
+  } else {
+    g = await env.DB.prepare("UPDATE postagem SET zap_estado='aguardando', zap_req=?, zap_consulta=?, atualizado_em=?" + onde).bind(rid, d.em, d.em, p.id, marcador).run();
   }
-  if (Date.now() - desde > ZAP_ESPERA_MAX_MS) {
-    await env.DB.prepare("UPDATE postagem SET status='erro', erro=?, atualizado_em=? WHERE id=? AND status IN ('erro','processando')").bind('WhatsApp: a Wafly ainda não confirmou depois de 30 min. Toque em “Consultar resultado” (não reenvia).', agora(), p.id).run();
-    return 'falhou';
-  }
-  await env.DB.prepare("UPDATE postagem SET atualizado_em=? WHERE id=? AND status IN ('erro','processando')").bind(agora(), p.id).run();
-  return 'esperando';
+  if (!g.meta || g.meta.changes !== 1) return { r: 'encerrado', msg: 'Essa postagem mudou enquanto a Wafly era consultada. A fila foi atualizada.' };
+  if (d.acao === 'confirmado' || d.acao === 'sem_confirmacao') p.status = 'publicado';
+  return { r: RESULTADO_ZAP_[d.acao], msg: d.msg };
+}
+/** Perna do WhatsApp do canal "ambos" (zap_estado='aguardando'): acompanhada à parte, sem segurar o Instagram. */
+async function resolverPernaZap_(env, p, forcar) {
+  const rid = String(p.zap_req || ''), desde = Date.parse(p.zap_desde || '') || Date.now(), ultima = Date.parse(p.zap_consulta || '') || 0;
+  if (!rid) return { r: 'encerrado', msg: 'Não há envio do WhatsApp para consultar nesta postagem.' };
+  if (!forcar && Date.now() - ultima < ZAP_CONSULTA_GAP_MS) return { r: 'esperando', msg: '' };
+  const d = await decidirZap_(env, p, rid, desde, Number(p.zap_tent) || 0);
+  const onde = " WHERE id=? AND zap_estado='aguardando' AND zap_req=? AND status!='cancelado'";
+  let g;
+  if (d.acao === 'confirmado' || d.acao === 'sem_confirmacao') g = await env.DB.prepare("UPDATE postagem SET zap_estado=?, zap_req=?, zap_tent=?, zap_erro='', zap_consulta=?, atualizado_em=?" + onde).bind(d.acao, d.rid, d.tent, d.em, d.em, p.id, rid).run();
+  else if (d.acao === 'reenviado') g = await env.DB.prepare("UPDATE postagem SET zap_req=?, zap_desde=?, zap_tent=1, zap_consulta=?, atualizado_em=?" + onde).bind(d.rid, d.em, d.em, d.em, p.id, rid).run();
+  else if (d.acao === 'erro') g = await env.DB.prepare("UPDATE postagem SET zap_estado='erro', zap_req=?, zap_tent=?, zap_erro=?, zap_consulta=?, atualizado_em=?" + onde).bind(d.rid, d.tent, d.frase, d.em, d.em, p.id, rid).run();
+  else g = await env.DB.prepare("UPDATE postagem SET zap_consulta=?" + onde).bind(d.em, p.id, rid).run();
+  if (!g.meta || g.meta.changes !== 1) return { r: 'encerrado', msg: 'Essa postagem mudou enquanto a Wafly era consultada. A fila foi atualizada.' };
+  return { r: RESULTADO_ZAP_[d.acao], msg: d.msg };
+}
+/** "ambos" no formato anterior à 7.48.3 (marcador zapq: no ig_id segurando o Instagram): passa a perna do WhatsApp para as colunas
+ *  zap_*. Se ainda está dentro da janela de 10 min, o Instagram segue (devolve true); se já passou, NÃO publica fora da vez:
+ *  fica em erro com "Repostar" para o próximo horário livre. */
+async function migrarAmbosLegado_(env, p) {
+  const marcador = String(p.ig_id || ''), rid = marcador.slice(5), desde = p.inicio_proc || p.atualizado_em || agora();
+  const dentro = p.status === 'processando' && Date.now() - (Date.parse(desde) || 0) <= ZAP_ESPERA_MAX_MS;
+  const g = await env.DB.prepare("UPDATE postagem SET ig_id='', zap_estado='aguardando', zap_req=?, zap_desde=?, zap_consulta=?, zap_tent=0, zap_erro='', status=?, erro=?, atualizado_em=? WHERE id=? AND ig_id=? AND status IN ('processando','erro')")
+    .bind(rid, desde, p.zap_consulta || p.atualizado_em || '', dentro ? 'processando' : 'erro', dentro ? '' : FRASE_IG_PRESO_, agora(), p.id, marcador).run();
+  if (!g.meta || g.meta.changes !== 1) return false;
+  Object.assign(p, { ig_id: '', zap_estado: 'aguardando', zap_req: rid, zap_desde: desde, zap_consulta: p.zap_consulta || p.atualizado_em || '', zap_tent: 0, status: dentro ? 'processando' : 'erro', erro: dentro ? '' : FRASE_IG_PRESO_ });
+  return dentro;
+}
+/** Chamado pelo cron: acompanha as pernas do WhatsApp do "ambos" em paralelo (no máximo 6 por minuto). Nunca lança. */
+async function acompanharPernasZap_(env) {
+  try {
+    const l = (await env.DB.prepare("SELECT * FROM postagem WHERE canal='ambos' AND zap_estado='aguardando' AND zap_req<>'' AND status!='cancelado' AND zap_consulta<=? ORDER BY zap_desde, id LIMIT 6").bind(new Date(Date.now() - ZAP_CONSULTA_GAP_MS).toISOString()).all()).results || [];
+    for (const p of l) { try { await resolverPernaZap_(env, p, false); } catch (e) { /* próximo minuto */ } }
+  } catch (e) { /* esquema antigo: nada a acompanhar */ }
 }
 async function enviarWhatsApp_(env, p) {
   const r = await enviarWhatsAppSo_(env, p);
   if (r.pendente) return await marcarAguardaZap_(env, p, r.requestId);
   if (!r.ok) return marcarErroPost_(env, p, r.erro);
-  await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', publicado_em=?, atualizado_em=? WHERE id=?").bind(r.requestId, agora(), agora(), p.id).run();
+  await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', zap_estado='confirmado', zap_req=?, publicado_em=?, atualizado_em=? WHERE id=?").bind(r.requestId, r.requestId, agora(), agora(), p.id).run();
   return { ok: true, canal: 'whatsapp' };
 }
 
@@ -908,11 +982,11 @@ export function duracaoMp4Status_(buf) {
   }
   return caixas(0, buf.byteLength, 0);
 }
-async function enviarWaflyDireto_(env, p, slot, cfg) {
+async function enviarWaflyDireto_(env, p, slot, cfg, tent) {
   const info = WAFLY_SLOTS_[slot];
   let m = []; try { m = JSON.parse(p.midias || '[]'); } catch (e) { m = []; }
   const primeira = m[0] || {};
-  const requestId = info.prefixo + String(p.id).padStart(12, '0');
+  const requestId = requestIdZap_(slot, p.id, tent);              // tentativa automática única = sufixo -r1 (o prefixo continua dizendo a instância)
   const url = String(primeira.url || '');
   if (!/^https:\/\//i.test(url)) return { ok: false, erro: 'Mídia inválida para o ' + info.nome + ' (precisa ser https).' };
   let conteudo;
@@ -955,10 +1029,13 @@ async function consultarWaflyDireto_(cfg, requestId) {
   try {
     const r = await fetch(waflyUrl_(cfg, '/status-publication/requests/' + encodeURIComponent(requestId)), { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { 'Client-Token': cfg.clientToken } });
     const j = await r.json().catch(() => null);
-    if (r.ok && j && String(j.state || '').toLowerCase() === 'accepted' && j.serverAcknowledged) return { estado: 'aceito' };
-    if (r.ok) return { estado: 'desconhecido' };
-    return { estado: 'falha', erro: 'A Wafly respondeu HTTP ' + r.status + '.' };
-  } catch (e) { return { estado: 'falha', erro: 'Sem conexao com a Wafly agora.' }; }
+    const st = estadoZapLimpo_(j && (typeof j.state === 'string' ? j.state : typeof j.status === 'string' ? j.status : ''));
+    if (r.ok && st === 'accepted' && j.serverAcknowledged) return { estado: 'aceito', nota: '' };
+    if (r.status === 404) return { estado: 'falhou', nota: 'a Wafly não encontrou este pedido (HTTP 404)' };
+    if (r.ok && ZAP_FALHA_ESTADOS_.indexOf(st) !== -1) return { estado: 'falhou', nota: 'a Wafly marcou o pedido como “' + st + '”' };
+    if (r.ok) return { estado: 'desconhecido', nota: st ? 'pedido em “' + st + '”' : 'sem resultado ainda' };
+    return { estado: 'desconhecido', nota: 'a Wafly respondeu HTTP ' + r.status };
+  } catch (e) { return { estado: 'desconhecido', nota: 'sem conexão com a Wafly agora' }; }
 }
 /** Teste somente de leitura: sessão e capacidade de Status. Nunca envia nada. */
 async function testarWafly_(env, slot) {
@@ -993,12 +1070,12 @@ async function enviarStatusWafly2_(env, p) {
   if (await env.DB.prepare('SELECT 1 FROM postagem_grupo_recibo WHERE postagem_id=?').bind(p.id).first()) return enviarStatusWame_(env, p);
   if (String(p.ig_id || '').indexOf('zapq:') === 0) {
     const rz = await resolverZapPendente_(env, p, false);
-    return rz === 'aceito' ? { ok: true, canal: 'whatsapp2' } : undefined;
+    return rz.r === 'aceito' ? { ok: true, canal: 'whatsapp2' } : undefined;
   }
   const r = await enviarWhatsAppSo_(env, p, 2);
   if (r.pendente) return await marcarAguardaZap_(env, p, r.requestId);
   if (!r.ok) return marcarErroPost_(env, p, r.erro);
-  await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', publicado_em=?, atualizado_em=? WHERE id=?").bind(r.requestId, agora(), agora(), p.id).run();
+  await env.DB.prepare("UPDATE postagem SET status='publicado', ig_id=?, permalink='', erro='', zap_estado='confirmado', zap_req=?, publicado_em=?, atualizado_em=? WHERE id=?").bind(r.requestId, r.requestId, agora(), agora(), p.id).run();
   return { ok: true, canal: 'whatsapp2' };
 }
 /** Marca a postagem com a frase do erro (o painel mostra e oferece "Tentar de novo"). Nunca lanca. */
@@ -1308,25 +1385,26 @@ async function avancarPostagem(env, token, p) {
   if (p.canal === 'grupo') return enviarGrupoClientes_(env, p);
   if (p.canal === 'whatsapp2') return (String(p.ig_id || '').indexOf('zapq:') === 0 || await cfgWafly_(env, 2)) ? enviarStatusWafly2_(env, p) : enviarStatusWame_(env, p);
   const m = JSON.parse(p.midias || '[]');
-  /* v1.9: aguardando a confirmação da Wafly (409/timeout). Só consulta; "aceito" publica (WhatsApp) ou segue para o Instagram (ambos). */
+  /* v1.9/v7.48.3: aguardando a confirmação da Wafly (409/timeout). Só WhatsApp: consulta (1 min, até 10 min).
+   * "ambos" no formato antigo: a perna do WhatsApp passa para zap_* e o Instagram só segue se ainda estiver na janela. */
   if (String(p.ig_id || '').indexOf('zapq:') === 0) {
-    const rz = await resolverZapPendente_(env, p, false);
-    if (rz !== 'aceito') return;
-    if (!canalUsaInstagram_(p.canal)) return { ok: true, canal: 'whatsapp' };
+    if (canalUsaInstagram_(p.canal)) { if (!(await migrarAmbosLegado_(env, p))) return; }
+    else { const rz = await resolverZapPendente_(env, p, false); return rz.r === 'aceito' ? { ok: true, canal: 'whatsapp' } : undefined; }
   }
   /* v1.2: O CANAL MANDA. Quando o canal nao inclui o Instagram, as chamadas ao Graph nem sao feitas
    * -- a peca vai para o Status do WhatsApp pelo backend. Antes o campo era ignorado por completo e
    * tudo caia no caminho do Instagram. */
   if (!canalUsaInstagram_(p.canal)) return await enviarWhatsApp_(env, p);
-  /* v1.3 (canal "ambos"): o WhatsApp vai ANTES do Instagram. Se o WhatsApp falhar, a peça fica em erro
-   * e o Instagram não é publicado (o lojista tenta de novo). Se já foi enviado ao WhatsApp numa tentativa
-   * anterior, não reenvia: o requestId é estável, então a Wafly não republica. */
-  const zapJaEnviado = String(p.ig_id || '').indexOf('zap:') === 0;
+  /* v1.3/v7.48.3 (canal "ambos"): o WhatsApp é enviado primeiro, mas NÃO segura o Instagram. O estado da perna do WhatsApp
+   * fica em zap_* (confirmado | aguardando | erro) e é acompanhado em paralelo pelo cron; o Instagram publica no horário.
+   * Se já foi enviado ao WhatsApp numa tentativa anterior, não reenvia (requestId estável). */
+  const zapJaEnviado = String(p.ig_id || '').indexOf('zap:') === 0 || !!p.zap_estado;
   if (canalUsaWhatsApp_(p.canal) && !zapJaEnviado) {
-    const z = await enviarWhatsAppSo_(env, p);
-    if (z.pendente) return await marcarAguardaZap_(env, p, z.requestId);
-    if (!z.ok) return await marcarErroPost_(env, p, 'WhatsApp: ' + z.erro);
-    await env.DB.prepare("UPDATE postagem SET ig_id=?, atualizado_em=? WHERE id=?").bind('zap:' + z.requestId, agora(), p.id).run();
+    const z = await enviarWhatsAppSo_(env, p), em = agora(), rid = z.requestId || requestIdZap_(1, p.id, 0);
+    if (z.ok) await env.DB.prepare("UPDATE postagem SET ig_id=?, zap_estado='confirmado', zap_req=?, zap_desde=?, zap_consulta=?, zap_erro='', atualizado_em=? WHERE id=?").bind('zap:' + rid, rid, em, em, em, p.id).run();
+    else if (z.pendente) await env.DB.prepare("UPDATE postagem SET zap_estado='aguardando', zap_req=?, zap_desde=?, zap_consulta=?, zap_tent=0, zap_erro='', atualizado_em=? WHERE id=?").bind(rid, em, em, em, p.id).run();
+    else await env.DB.prepare("UPDATE postagem SET zap_estado='erro', zap_req=?, zap_erro=?, atualizado_em=? WHERE id=?").bind(rid, ('WhatsApp Status 1: ' + String(z.erro || 'o envio falhou') + ' Toque em “Repostar só o WhatsApp” para o próximo horário livre do Status 1.').slice(0, 300), em, p.id).run();
+    p.zap_estado = z.ok ? 'confirmado' : z.pendente ? 'aguardando' : 'erro';
   }
   if (p.status === 'agendado') {
     const r = await env.DB.prepare("UPDATE postagem SET status='processando', inicio_proc=?, atualizado_em=? WHERE id=? AND status='agendado'").bind(agora(), agora(), p.id).run();
@@ -1382,6 +1460,7 @@ export async function processarPostagens(env) {
         }
       }
     }
+    await acompanharPernasZap_(env);                                   // v7.48.3: WhatsApp do "ambos" em paralelo, sem segurar a fila
     const t = agora();
     await env.DB.prepare("UPDATE postagem SET status='manual_pendente', atualizado_em=? WHERE modo='manual' AND status='agendado' AND agendado_em<=?").bind(t, t).run();
     const lin = (await env.DB.prepare("SELECT * FROM postagem WHERE modo='auto' AND ((status='agendado' AND agendado_em<=?) OR status='processando') ORDER BY CASE WHEN serie<>'' AND (status='processando' OR (parte>1 AND EXISTS(SELECT 1 FROM postagem ant WHERE ant.serie=postagem.serie AND ant.parte=postagem.parte-1 AND ant.status IN ('publicado','manual_feito')))) THEN 0 WHEN serie<>'' AND parte>1 THEN 2 ELSE 1 END, agendado_em, id LIMIT 40").bind(t).all()).results || [];
@@ -1590,6 +1669,16 @@ export function intervaloEscolhido_(cfg, buckets, ocupMap, anteriorMs, intervalo
   let gap = intervaloMs; (buckets || []).forEach((b) => { gap = Math.max(gap, gapDoTipoMs(cfg, b)); });
   return ajustarHorarioMulti(cfg, buckets, anteriorMs + gap, ocupMap).t;
 }
+/** v7.48.3: fim da sequência já agendada nos canais `buckets` a partir de `desdeMs` (horários encadeados com folga de até
+ *  2× o intervalo máximo, mínimo 30 min). Repostagem entra DEPOIS dela — nunca no meio de uma leva agendada. Postagens
+ *  isoladas muito à frente (ex.: agendadas para outro dia) não empurram a repostagem. */
+export function fimDaSequencia_(cfg, buckets, ocupMap, desdeMs) {
+  const todos = [].concat(...(buckets || []).map((b) => (ocupMap && ocupMap[b]) || [])).filter((x) => isFinite(x)).sort((a, b) => a - b);
+  const folga = Math.max(30 * 60000, ...(buckets || []).map((b) => 2 * gapMaxDoTipoMs(cfg, b)));
+  let t = desdeMs;
+  for (const x of todos) { if (x < t) continue; if (x - t <= folga) t = x; else break; }
+  return t;
+}
 export function proximoLivre(cfg, tipo, ocupadosMs, desdeMs, sorteio) { return proximoLivreMulti(cfg, [tipo], { [tipo]: ocupadosMs }, desdeMs, sorteio); }
 async function lerCfgPost(env) { let j = null; try { j = JSON.parse((await cfgGet(env, 'po_cfg')) || 'null'); } catch (e) { j = null; } return normalizarCfgPost(j); }
 /** Horários já ocupados num canal de contagem (Story, Feed…, ou "status" do WhatsApp). `janelaMs` = quanto tempo para trás ainda importa. */
@@ -1634,15 +1723,28 @@ function progressoPostagem_(r) {
   const fase = aguardando && r.status === 'processando' ? 'confirmacao' : ({agendado:'fila', processando:'processando', publicado:'confirmado', erro:'falha', manual_pendente:'manual', manual_feito:'confirmado'})[r.status];
   const p = { fase: fase || '', desde: r.inicio_proc || r.atualizado_em || r.criado_em || '' };
   if (aguardando && r.status === 'processando') {
-    const inicio = Date.parse(r.inicio_proc || ''), ultima = Date.parse(r.atualizado_em || '');
+    const inicio = Date.parse(r.zap_desde || r.inicio_proc || ''), ultima = Date.parse(r.zap_consulta || r.atualizado_em || '');
     if (Number.isFinite(inicio)) p.limiteEm = new Date(inicio + ZAP_ESPERA_MAX_MS).toISOString();
     if (Number.isFinite(ultima) && (!Number.isFinite(inicio) || ultima + ZAP_CONSULTA_GAP_MS <= inicio + ZAP_ESPERA_MAX_MS)) p.proximaConsultaEm = new Date(ultima + ZAP_CONSULTA_GAP_MS).toISOString();
   }
   return p;
 }
+/** v7.48.3: estado da perna do WhatsApp para a tela (sem requestId nem credenciais). null quando o canal não usa WhatsApp Status. */
+function estadoZapCli_(r) {
+  const c = normalizarCanal_(r.canal);
+  if (c !== 'whatsapp' && c !== 'whatsapp2' && c !== 'ambos') return null;
+  const legado = String(r.ig_id || '').indexOf('zapq:') === 0;
+  let e = String(r.zap_estado || '');
+  if (legado) e = r.status === 'erro' ? 'antigo' : 'aguardando';           // marcador anterior à 7.48.3 (ex.: postagens 916/927)
+  if (!e && c === 'ambos' && String(r.ig_id || '').indexOf('zap:') === 0) e = 'confirmado';
+  if (!e && c !== 'ambos' && r.status === 'publicado') e = 'confirmado';   // erro de envio comum (sem recibo da Wafly) não vira "erro da Wafly": continua podendo tentar de novo
+  const desde = Date.parse(r.zap_desde || r.inicio_proc || ''), ultima = Date.parse(r.zap_consulta || '');
+  return { estado: e, erro: c === 'ambos' ? String(r.zap_erro || '') : '', tentativas: Number(r.zap_tent) || 0,
+    consultadoEm: isFinite(ultima) ? new Date(ultima).toISOString() : '', limiteEm: e === 'aguardando' && isFinite(desde) ? new Date(desde + ZAP_ESPERA_MAX_MS).toISOString() : '' };
+}
 function linhaPostagem(r) {
   let m = []; try { m = JSON.parse(r.midias || '[]'); } catch (e) { m = []; }
-  return { id: r.id, origemMidia:r.origem_midia||'', intervaloMs:Number(r.intervalo_ms)||0, serie:r.serie?{id:r.serie,ordem:r.parte,total:r.partes}:null, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, grupoEnvioIncerto: !!r.grupo_envio_incerto, grupoMidiaIncompativel: normalizarCanal_(r.canal) === 'grupo' && /H\.265\/HEVC/.test(String(r.erro || '')), permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
+  return { id: r.id, origemMidia:r.origem_midia||'', intervaloMs:Number(r.intervalo_ms)||0, serie:r.serie?{id:r.serie,ordem:r.parte,total:r.partes}:null, repostadoDe: r.repostado_de || null, tipo: r.tipo, modo: r.modo, legenda: r.legenda, midias: m, produto: r.produto, template: r.template, link: r.link, agendadoEm: r.agendado_em, status: r.status, tentativas: r.tentativas, erro: r.erro, progresso: progressoPostagem_(r), aguardaZap: String(r.ig_id || '').indexOf('zapq:') === 0, zap: estadoZapCli_(r), grupoEnvioIncerto: !!r.grupo_envio_incerto, grupoMidiaIncompativel: normalizarCanal_(r.canal) === 'grupo' && /H\.265\/HEVC/.test(String(r.erro || '')), permalink: r.permalink, criadoPor: r.criado_por, criadoEm: r.criado_em, publicadoEm: r.publicado_em, grupo: r.grupo, canal: normalizarCanal_(r.canal) };
 }
 
 /* ====================================================================
@@ -1910,33 +2012,64 @@ async function rotasPostagem(env, ctx, req, url, J, perms) {
       // Uma cópia por origem: duplo toque/repetição de rede retorna a mesma postagem.
       const existente = await env.DB.prepare('SELECT id,agendado_em FROM postagem WHERE repostado_de=?').bind(id).first();
       if (existente) return J({ ok: true, id: existente.id, quando: existente.agendado_em, existente: true });
-      if (linha.status !== 'erro') return J({ ok: false, erro: 'Só postagens com erro podem ser repostadas.' }, 409);
+      /* v7.48.3: dá para repostar o que deu erro e o que ficou "Publicado sem confirmação". No "ambos", só a perna que não saiu
+       * (uma cópia por origem): Instagram com erro + WhatsApp ok = só Instagram; Instagram ok + WhatsApp ruim = só WhatsApp. */
+      const canalO = normalizarCanal_(linha.canal), ze = String(linha.zap_estado || ''), principalRuim = linha.status === 'erro';
+      const zapRuim = ze === 'erro' || ze === 'sem_confirmacao' || (String(linha.ig_id || '').indexOf('zapq:') === 0 && linha.status === 'erro');
+      let canalNovo = '';
+      if (canalO === 'ambos') {
+        const perna = String(b.perna || '');
+        if (perna === 'whatsapp' && principalRuim) return J({ ok: false, erro: 'O Instagram desta postagem também não saiu: use “Repostar Story e WhatsApp”.' }, 409);
+        if (perna === 'whatsapp' && !zapRuim) return J({ ok: false, erro: 'O WhatsApp desta postagem já foi confirmado; não precisa repostar.' }, 409);
+        if (perna === 'instagram' && !principalRuim) return J({ ok: false, erro: 'O Instagram desta postagem já foi publicado.' }, 409);
+        canalNovo = perna === 'instagram' ? 'instagram' : perna === 'whatsapp' ? 'whatsapp' : principalRuim && zapRuim ? 'ambos' : principalRuim ? 'instagram' : zapRuim ? 'whatsapp' : '';
+      } else if (principalRuim || (linha.status === 'publicado' && (ze === 'sem_confirmacao' || ze === 'erro'))) canalNovo = linha.canal || '';
+      else canalNovo = null;
+      if (canalNovo === null || (canalO === 'ambos' && !canalNovo) || (linha.status !== 'erro' && linha.status !== 'publicado')) return J({ ok: false, erro: 'Só postagens com erro ou publicadas sem confirmação podem ser repostadas.' }, 409);
       if (b.confirmarRisco !== true) return J({ ok: false, erro: 'Confirme que o envio antigo pode já ter sido publicado antes de repostar.' }, 409);
-      const v = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: 'sequencia' }));
+      const v = validarPostagem(Object.assign({}, linhaPostagem(linha), { quando: 'sequencia', canal: canalNovo }));
       if (v.erro) return J({ ok: false, erro: v.erro }, 400);
       if (linha.canal === 'grupo' && !cfgGrupoClientes_(env)) return J({ ok: false, erro: 'O Grupo clientes ainda não está configurado.' }, 409);
       if (linha.canal === 'whatsapp2' && !(await cfgWafly_(env, 2)) && !(await cfgWameStatus_(env))) return J({ ok: false, erro: 'O WhatsApp Status 2 ainda não está configurado.' }, 409);
       if (linha.canal === 'grupo') { const erro = await erroVideoGrupo_(env, v.v.midias); if (erro) return J({ ok: false, erro }, 400); }
       const pend = Number(((await env.DB.prepare("SELECT COUNT(*) AS n FROM postagem WHERE status IN ('agendado','processando','manual_pendente')").first()) || {}).n) || 0;
       if (pend >= 200) return J({ ok: false, erro: 'A fila está cheia. Espere algumas postagens saírem.' }, 429);
-      const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, linha.canal);
-      const ajuste = proximoLivreMulti(cfg, bs, await ocupadosMulti_(env, cfg, bs, id), Date.now() + 60000);
+      /* Próximo horário livre do MESMO canal, depois da sequência já agendada (não fura a ordem), respeitando intervalo e pausa. */
+      const cfg = await lerCfgPost(env), bs = bucketsDoPost(linha.tipo, canalNovo), ocup = await ocupadosMulti_(env, cfg, bs, id);
+      const ajuste = proximoLivreMulti(cfg, bs, ocup, fimDaSequencia_(cfg, bs, ocup, Date.now() + 60000));
       const quando = new Date(ajuste.t).toISOString(), em = agora();
       await env.DB.batch([
-        env.DB.prepare("INSERT OR IGNORE INTO postagem (tipo,modo,legenda,midias,produto,template,link,agendado_em,status,criado_por,criado_em,atualizado_em,grupo,seq,canal,urgente,repostado_de) SELECT tipo,modo,legenda,midias,produto,template,link,?,'agendado',?,?,?,grupo,1,canal,0,id FROM postagem WHERE id=? AND status='erro'").bind(quando, String(b.por || 'Repostagem').slice(0,60), em, em, id),
-        env.DB.prepare("UPDATE postagem SET status='cancelado',atualizado_em=? WHERE id=? AND status='erro' AND EXISTS (SELECT 1 FROM postagem WHERE repostado_de=?)").bind(em,id,id)
+        env.DB.prepare("INSERT OR IGNORE INTO postagem (tipo,modo,legenda,midias,produto,template,link,agendado_em,status,criado_por,criado_em,atualizado_em,grupo,seq,canal,urgente,repostado_de) SELECT tipo,modo,legenda,midias,produto,template,link,?,'agendado',?,?,?,grupo,1,?,0,id FROM postagem WHERE id=? AND status IN ('erro','publicado')").bind(quando, String(b.por || 'Repostagem').slice(0,60), em, em, canalNovo, id),
+        env.DB.prepare("UPDATE postagem SET status='cancelado',atualizado_em=? WHERE id=? AND status='erro' AND EXISTS (SELECT 1 FROM postagem WHERE repostado_de=?)").bind(em,id,id),
+        env.DB.prepare("UPDATE postagem SET zap_estado='repostado',atualizado_em=? WHERE id=? AND status='publicado' AND zap_estado='erro' AND EXISTS (SELECT 1 FROM postagem WHERE repostado_de=?)").bind(em,id,id)
       ]);
-      const nova = await env.DB.prepare('SELECT id,agendado_em FROM postagem WHERE repostado_de=?').bind(id).first();
+      const nova = await env.DB.prepare('SELECT id,agendado_em,canal FROM postagem WHERE repostado_de=?').bind(id).first();
       if (!nova) return J({ ok: false, erro: 'Essa postagem mudou durante a operação. Atualize a fila.' }, 409);
-      return J({ ok: true, id: nova.id, quando: nova.agendado_em });
+      return J({ ok: true, id: nova.id, quando: nova.agendado_em, canal: normalizarCanal_(nova.canal), canais: bs });
     }
-    if (p === '/post/consultar') {                                       // v1.9: só consulta o resultado do WhatsApp (nunca reenvia)
-      if (String(linha.ig_id || '').indexOf('zapq:') !== 0 || ['processando', 'erro'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem não está aguardando confirmação do WhatsApp.' }, 409);
-      const rz = await resolverZapPendente_(env, linha, true);
-      if (rz === 'aceito' && ctx && ctx.waitUntil) ctx.waitUntil(dispararPostagens_(env));
-      return J({ ok: true, resultado: rz });
+    if (p === '/post/consultar') {                                       // só consulta a Wafly; reenvio só no caso de falha definitiva dentro da janela
+      const marcador = String(linha.ig_id || '');
+      let rz, extra = '';
+      if (marcador.indexOf('zapq:') === 0 && ['processando', 'erro'].indexOf(linha.status) !== -1) {
+        if (canalUsaInstagram_(linha.canal)) {                           // "ambos" antigo: o WhatsApp segurava o Instagram
+          await migrarAmbosLegado_(env, linha);
+          const atual = await env.DB.prepare('SELECT * FROM postagem WHERE id=?').bind(id).first();
+          rz = await resolverPernaZap_(env, atual || linha, true);
+          if (atual && atual.status === 'erro') extra = ' O Instagram desta postagem não saiu (esperava o WhatsApp): use “Repostar” para colocá-lo no próximo horário livre; nada é publicado fora da vez.';
+        } else rz = await resolverZapPendente_(env, linha, true);
+      } else if (String(linha.zap_estado || '') === 'aguardando' && linha.zap_req && linha.status !== 'cancelado') rz = await resolverPernaZap_(env, linha, true);
+      else {
+        const ze = String(linha.zap_estado || '');
+        return J({ ok: false, erro: ze === 'sem_confirmacao' ? 'Esta postagem já está como “Publicado sem confirmação”: a janela de 10 min acabou. Se não apareceu no WhatsApp, use “Repostar”.' : ze === 'confirmado' ? 'O WhatsApp desta postagem já foi confirmado pela Wafly.' : ze === 'erro' ? 'A Wafly já informou que esta postagem não saiu. Use “Repostar” para o próximo horário livre do canal.' : 'Essa postagem não está aguardando confirmação do WhatsApp.' }, 409);
+      }
+      if (rz.r === 'aceito' && ctx && ctx.waitUntil) ctx.waitUntil(dispararPostagens_(env));
+      return J({ ok: true, resultado: rz.r, mensagem: (rz.msg || 'Consulta feita.') + extra, consultadoEm: agora() });
     }
     if (p === '/post/cancelar') {
+      if (linha.status === 'publicado' && String(linha.zap_estado || '') === 'erro') {   // "ambos": o Instagram saiu; só tira o aviso do WhatsApp da fila
+        await env.DB.prepare("UPDATE postagem SET zap_estado='dispensado', atualizado_em=? WHERE id=? AND zap_estado='erro'").bind(agora(), id).run();
+        return J({ ok: true, perna: 'whatsapp' });
+      }
       if (['agendado', 'erro', 'manual_pendente'].indexOf(linha.status) === -1) return J({ ok: false, erro: 'Essa postagem já está sendo enviada ou foi publicada; não dá mais para cancelar.' }, 409);
       if(linha.serie){await env.DB.prepare("UPDATE postagem SET status='cancelado',atualizado_em=? WHERE serie=? AND status IN ('agendado','erro','manual_pendente')").bind(agora(),linha.serie).run();return J({ok:true});}
       const cancelou = await env.DB.prepare("UPDATE postagem SET status='cancelado', atualizado_em=? WHERE id=? AND status IN ('agendado','erro','manual_pendente')").bind(agora(), id).run();

@@ -41,12 +41,12 @@ with tempfile.TemporaryDirectory() as temp:
    assert pg.locator('.po-midia-grupo').first.locator('.po-midia-canal').count()==4
    assert '2 partes' in pg.locator('.po-midia-topo').first.inner_text()
    # Opções manuais e de cada canal continuam vinculadas ao ID correto.
-   manual=pg.locator('.po-midia-grupo').first.locator('[data-midia-canal=story]');manual.locator('summary').click();assert manual.locator('[data-a=feito]').count()==2;assert manual.locator('[data-a=copiar-link]').count()==2
+   manual=pg.locator('.po-midia-grupo').first.locator('[data-midia-canal=story]');assert manual.locator('[data-a=feito]').count()==2;assert manual.locator('[data-a=copiar-link]').count()==2
    pg.locator('.po-midia-grupo').nth(1).locator('.po-midia-topo').click()
-   canal=pg.locator('.po-midia-grupo').nth(1).locator('[data-midia-canal=status]');canal.locator('summary').click();canal.get_by_role('button',name='Horário do vídeo',exact=True).click();assert 'Novo horário' in canal.inner_text();assert canal.locator('[data-a=hora-ok]').get_attribute('data-id')=='11'
+   canal=pg.locator('.po-midia-grupo').nth(1);assert canal.locator('[data-fila-detalhe]').count()==0;canal.locator('.po-mc-bar').get_by_role('button',name='🕐 Horário',exact=True).click();assert 'Novo horário para todos os destinos' in canal.inner_text();assert canal.locator('[data-a=mh-hora-ok]').count()==1
    pg.locator('[data-fila-modo=canal]').click();assert pg.locator('.po-fg-h').count()==4
    pg.locator('[data-fg=status]').click();assert pg.locator('[data-fg-sec=status] .po-item').count()==7
-   pg.locator('[data-fila-modo=midia]').click();assert pg.locator('.po-midia-grupo').count()==4;assert canal.locator('details').get_attribute('open') is not None
+   pg.locator('[data-fila-modo=midia]').click();assert pg.locator('.po-midia-grupo').count()==4;assert 'Novo horário para todos os destinos' in canal.inner_text()
    assert not [x for x in g['post_chamadas'] if x['path']=='/post'],'Alternar a fila não publica nem cria cópias'
    pg.locator('.po-midia-grupo').first.scroll_into_view_if_needed();pg.screenshot(path=str(OUT/f'fila-midia-{width}.png'))
    pg.add_script_tag(path=str(Path(__file__).with_name('axe.min.js')))
