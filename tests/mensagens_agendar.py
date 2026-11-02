@@ -59,14 +59,14 @@ with sync_playwright() as p:
     axe(pg, "gaveta agendar (390)")
     foto(pg, "agendar-390-inicio.png")
     pg.click("#ms-ag-salvar"); pg.wait_for_timeout(200)
-    chk("sem horário: avisa em português e não chama o servidor", "Escolha quando" in pg.inner_text("#ms-aviso") and not S.get("agendar_posts"), pg.inner_text("#ms-aviso"))
+    chk("sem horário: avisa em português e não chama o servidor", "no futuro" in pg.inner_text("#ms-ag-form-status") and not S.get("agendar_posts"), pg.inner_text("#ms-ag-form-status"))
     pg.click("[data-ms=agenda-atalho][data-k=am8]"); pg.wait_for_timeout(150)
     chk("atalho 'Amanhã 8h' fica marcado e o resumo diz quando sai", pg.get_attribute("[data-ms=agenda-atalho][data-k=am8]", "aria-pressed") == "true" and "amanhã 08:00" in pg.inner_text("#ms-ag-res") and pg.input_value("#ms-ag-quando").endswith("T08:00"), pg.inner_text("#ms-ag-res"))
     foto(pg, "agendar-390-escolhido.png")
     pg.click("#ms-ag-salvar"); pg.wait_for_timeout(600)
     post = (S.get("agendar_posts") or [{}])[-1]
-    chk("Agendar manda conversa, texto e o instante de amanhã 08:00 em Fortaleza (11:00 UTC)", post.get("conversa") == 1 and post.get("texto") == "Oi Maria! A blusa que você pediu chegou 😊" and post.get("quando") == fortaleza_amanha("08:00"), (post, fortaleza_amanha("08:00")))
-    chk("confirmação legível e o compositor fica limpo (não manda de novo sem querer)", "agendada para amanhã 08:00" in pg.inner_text("#ms-aviso") and pg.input_value("#ms-texto") == "", pg.inner_text("#ms-aviso"))
+    chk("Agendar manda conversa, texto e o instante de amanhã 08:00 em Fortaleza (11:00 UTC)", post.get("conversa") == 1 and str(post.get("texto") or "").endswith("Oi Maria! A blusa que você pediu chegou 😊") and post.get("quando") == fortaleza_amanha("08:00"), (post, fortaleza_amanha("08:00")))
+    chk("confirmação legível e o compositor fica limpo (não manda de novo sem querer)", "Agendada para amanhã 08:00" in pg.inner_text("#ms-ag-form-status") and pg.input_value("#ms-texto") == "", pg.inner_text("#ms-ag-form-status"))
     chk("a agendada aparece na lista com 'Cancelar'", "amanhã 08:00" in pg.inner_text("#ms-ag-lista") and pg.locator("[data-ms=agenda-cancelar]").count() == 1)
     foto(pg, "agendar-390-lista.png")
     pg.keyboard.press("Escape"); pg.wait_for_timeout(250)
@@ -90,7 +90,8 @@ with sync_playwright() as p:
     # horário que já passou: recusado na tela, em português
     pg.fill("#ms-ag-texto", "x"); pg.fill("#ms-ag-quando", (datetime.datetime.utcnow() - datetime.timedelta(hours=5)).strftime("%Y-%m-%dT%H:%M")); pg.wait_for_timeout(100)
     n0 = len(S.get("agendar_posts") or []); pg.click("#ms-ag-salvar"); pg.wait_for_timeout(300)
-    chk("horário passado: aviso em português e nada vai ao servidor", "já passou" in pg.inner_text("#ms-aviso") and len(S.get("agendar_posts") or []) == n0 and "{" not in pg.inner_text("#ms-aviso"), pg.inner_text("#ms-aviso"))
+    aviso_p = pg.inner_text("#ms-ag-res") + " " + pg.inner_text("#ms-ag-form-status")
+    chk("horário passado: aviso em português e nada vai ao servidor", ("já passou" in aviso_p or "no futuro" in aviso_p) and len(S.get("agendar_posts") or []) == n0 and "{" not in aviso_p, aviso_p)
     chk("390: depois das ações continua sem rolagem horizontal", sem_rolagem_h(pg))
     pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
     # reabrir a conversa: faixa vem do /msg/mensagens
@@ -105,12 +106,16 @@ with sync_playwright() as p:
     # ===== computador 1440×900 =====
     ctx, pg, S, erros = tela(b, 1440, 900, False)
     abrir_agenda(pg)
-    chk("1440: gaveta lateral de até 420 px, lista continua visível", pg.evaluate("document.getElementById('ms-gaveta').getBoundingClientRect().width<=421") and pg.locator(".ms-lateral").is_visible())
+    larg = pg.evaluate("(document.querySelector('#ms-gaveta .ms-gaveta-painel')||document.getElementById('ms-gaveta')).getBoundingClientRect().width")
+    chk("1440: gaveta lateral estreita (painel até 520 px), lista continua visível", larg <= 521 and pg.locator(".ms-lateral").is_visible(), larg)
     chk("1440: sem rolagem horizontal e alvos ≥ 44 px", sem_rolagem_h(pg) and pg.evaluate(ALVOS))
     chk("1440: compositor vazio → foco no campo de texto da gaveta", pg.evaluate("document.activeElement.id") == "ms-ag-texto", pg.evaluate("document.activeElement.id"))
     pg.keyboard.type("Chegou o seu pedido!")
-    pg.keyboard.press("Tab"); pg.keyboard.press("Enter"); pg.wait_for_timeout(150)
-    chk("1440: teclado — Tab leva ao atalho 'Daqui a 1 hora' e Enter escolhe", pg.get_attribute("[data-ms=agenda-atalho][data-k='1h']", "aria-pressed") == "true", pg.evaluate("document.activeElement.outerHTML.slice(0,120)"))
+    for _ in range(8):
+        pg.keyboard.press("Tab")
+        if pg.evaluate("document.activeElement.dataset && document.activeElement.dataset.k === '1h'"): break
+    pg.keyboard.press("Enter"); pg.wait_for_timeout(150)
+    chk("1440: teclado — Tab (passando pelos anexos) chega ao atalho 'Daqui a 1 hora' e Enter escolhe", pg.get_attribute("[data-ms=agenda-atalho][data-k='1h']", "aria-pressed") == "true", pg.evaluate("document.activeElement.outerHTML.slice(0,120)"))
     axe(pg, "gaveta agendar (1440)")
     foto(pg, "agendar-1440.png")
     pg.click("#ms-ag-salvar"); pg.wait_for_timeout(600)

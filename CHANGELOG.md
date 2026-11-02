@@ -6,6 +6,10 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.46.1 — 02/11/2026
+- Esteira: Limpeza, Caixa, Fotos e Atendimento online já vêm com instruções iniciais (editáveis em Configurações; campo vazio volta ao texto inicial).
+- Testes atualizados ao comportamento atual: agendamento (aviso dentro da gaveta, assinatura no texto, anexos antes dos atalhos) e retomada do app (clipe abre a gaveta nativa 2.4.22).
+
 ## 7.46.0 — Mensageiro: clipe do app abre a gaveta de anexos estilo WhatsApp (Android 2.4.22) — 02/11/2026
 - **No app (2.4.22 / code 29)**, tocar no clipe abre direto uma gaveta nativa, sem o menu intermediário de 3 opções:
   - primeiro quadrado "Câmera" + grade das fotos e vídeos recentes do aparelho, com seleção múltipla numerada na ordem do toque (até 30), duração nos vídeos e botão "Enviar (N)";

@@ -6070,6 +6070,13 @@ const EST_MODELOS_PADRAO_ = [
   { tipo: 'foto', titulo: 'Foto no manequim', instrucao: 'Peça vestida no manequim.', funcao: 'Fotos' },
   { tipo: 'cores_tamanhos', titulo: 'Conferir cores e tamanhos', instrucao: 'Confira na peça se as cores e os tamanhos do cadastro estão certos.', funcao: 'Fotos' },
 ];
+// v7.46.1: textos iniciais de cada função (editáveis em Configurações; campo vazio volta a este texto)
+const EST_INSTRUCOES_PADRAO_ = {
+  'Limpeza': 'Comece pela vitrine e pela entrada da loja. Tire o pó das araras e prateleiras, organize os cabides por tamanho e cor e devolva ao lugar as peças deixadas nos provadores ao longo do dia. Antes de fechar, deixe o salão pronto para o dia seguinte.',
+  'Caixa': 'Confira o troco ao abrir e ao fechar. Quando uma peça vendida acabar, atualize o estoque no site na hora (Gestão), para ninguém oferecer o que não tem mais. Anote qualquer diferença no fechamento.',
+  'Fotos': 'Faça primeiro as tarefas da aba Preparação (peças novas esperando foto) e depois as de Foto nova e Vídeo curto das peças paradas. Fotografe com boa luz e fundo limpo: peça inteira, detalhes (tecido, estampa, etiqueta) e no manequim quando houver. Ao terminar, marque Feito na tarefa.',
+  'Atendimento online': 'Abra o Mensageiro no início do turno. Responda primeiro quem está em Falta responder (vermelho = esperando há mais de 15 minutos). Ao longo do dia, use o filtro Retomar para chamar de volta quem parou de responder ou reservou e não pagou, e mantenha as etiquetas de venda atualizadas.'
+};
 const EST_CFG_PADRAO_ = { porPessoa: 20, diasSemRepetir: 21, pesos: { nunca: 40, diaConf: 1, diaCadastro: 0.5, diaSemEdicao: 0.3, estoqueBaixo: 15, divergiu: 20 }, funcoes: EST_FUNCOES_PADRAO_, instrucoes: {}, modelosPreparacao: EST_MODELOS_PADRAO_,
   // v7.45.0 (entrega 5): lista focada por categoria (com rodízio entre dias e categoria fixa opcional por pessoa) e reativação de peça parada
   focoCategoria: true, categoriasFixas: {}, reativacao: [30, 60, 90], retratoHora: 6 };
@@ -6133,7 +6140,8 @@ async function estCfg_(env) {
   let c = {}; try { c = JSON.parse((await cfgGet(env, 'est_cfg_v1')) || '{}') || {}; } catch (e) { c = {}; }
   const out = Object.assign({}, EST_CFG_PADRAO_, c); out.pesos = Object.assign({}, EST_CFG_PADRAO_.pesos, c.pesos || {});
   out.funcoes = Array.isArray(c.funcoes) && c.funcoes.length ? c.funcoes.map((f) => String(f).trim().slice(0, 40)).filter(Boolean).slice(0, 12) : EST_FUNCOES_PADRAO_.slice();
-  out.instrucoes = c.instrucoes && typeof c.instrucoes === 'object' ? c.instrucoes : {};
+  out.instrucoes = c.instrucoes && typeof c.instrucoes === 'object' ? Object.assign({}, c.instrucoes) : {};
+  for (const f of out.funcoes) if (!String(out.instrucoes[f] || '').trim() && EST_INSTRUCOES_PADRAO_[f]) out.instrucoes[f] = EST_INSTRUCOES_PADRAO_[f];   // v7.46.1
   out.porPessoa = Math.min(60, Math.max(1, Number(out.porPessoa) || 20)); out.diasSemRepetir = Math.min(120, Math.max(0, Number(out.diasSemRepetir) || 0));
   out.modelosPreparacao = estModelos_(c.modelosPreparacao) || EST_MODELOS_PADRAO_.map((m) => Object.assign({}, m));
   out.focoCategoria = c.focoCategoria !== false; out.categoriasFixas = estFixas_(c.categoriasFixas);
