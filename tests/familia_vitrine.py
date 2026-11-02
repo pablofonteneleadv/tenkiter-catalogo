@@ -1,5 +1,5 @@
 """Família de produtos na vitrine (v7.44.0): um card por tamanho, cards da mesma família sempre juntos e na ordem da família,
-filtro parcial, "Outros tamanhos" na peça aberta, e /familias com erro ou lento = vitrine como antes. Apps Script e Worker SIMULADOS."""
+filtro parcial, "Outras opções" na peça aberta, e /familias com erro ou lento = vitrine como antes. Apps Script e Worker SIMULADOS."""
 import os, sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -15,8 +15,9 @@ def chk(nome, cond, det=None):
     else: falhas.append(nome); print('  ✘ ' + nome + ('' if det is None else ' — ' + str(det)[:400]))
 
 SUNGA = {'P': None, 'M': None, 'G': None}
+ESTAMPA = []
 def preparar(st, familias=True):
-    P = st['produtos']
+    P = st['produtos']; ESTAMPA.clear()
     for x in P: x['Status'] = 'Ativo'; x['Estoque'] = 3
     # os tamanhos foram cadastrados em dias diferentes: no servidor ficam espalhados (posições 3, 10 e 16), com outras peças no meio
     for pos, (t, preco) in zip([3, 10, 16], [('G', 59.9), ('P', 39.9), ('M', 44.9)]):
@@ -25,6 +26,10 @@ def preparar(st, familias=True):
     P[12].update(Preco=41.9, Nome='Short barato')   # peça barata entre os tamanhos: não pode entrar no meio da família
     if familias:
         st['familias'] = [{'id': 'fsunga', 'nome': 'Sunga infantil masculino', 'membros': [{'produto': SUNGA['P'], 'rotulo': 'P', 'ordem': 0}, {'produto': SUNGA['M'], 'rotulo': 'M', 'ordem': 1}, {'produto': SUNGA['G'], 'rotulo': 'G', 'ordem': 2}]}]
+    # v7.47.0: família de estampas — mesmo nome, sem tamanho no fim, rótulo vazio
+    for pos, cod in [(6, 'CF-AZ'), (8, 'CF-RS')]: P[pos].update(Nome='Conjunto longo Farm', Codigo=cod); ESTAMPA.append(P[pos]['ID'])
+    if familias:
+        st['familias'].append({'id': 'ffarm', 'nome': 'Conjunto longo Farm', 'membros': [{'produto': ESTAMPA[0], 'rotulo': '', 'ordem': 0}, {'produto': ESTAMPA[1], 'rotulo': '', 'ordem': 1}]})
 
 def ids_na_grade(pg):
     return pg.eval_on_selector_all('#grid .card[data-id]', 'cs => cs.map(c => c.dataset.id)')
@@ -68,13 +73,23 @@ with sync_playwright() as p:
         # peça aberta: "Outros tamanhos"
         pg.locator(f'#grid .card[data-id="{SUNGA["M"]}"] .abrir-peca').click(); pg.wait_for_selector('#outros-tamanhos:not([hidden])', timeout=5000)
         ot = pg.locator('#outros-tamanhos')
-        chk(f'{w}: peça aberta mostra "Outros tamanhos: P · M · G" com o M marcado', 'Outros tamanhos' in ot.inner_text() and ot.locator('button').all_inner_texts() == ['P', 'M', 'G'] and ot.locator('button[aria-current="true"]').inner_text() == 'M', ot.inner_text())
+        chk(f'{w}: peça aberta mostra "Outras opções" com foto e tamanho (P · M · G) e o M marcado', 'Outras opções' in ot.inner_text() and ot.locator('button').all_inner_texts() == ['P', 'M', 'G'] and ot.locator('button img').count() == 3 and ot.locator('button[aria-current="true"]').inner_text() == 'M', ot.inner_text())
         alvos = ot.locator('button').evaluate_all('bs => bs.map(b => { const r = b.getBoundingClientRect(); return Math.min(r.width, r.height); })')
         chk(f'{w}: botões de tamanho com pelo menos 44 px', all(x >= 43.5 for x in alvos), alvos)
         pg.wait_for_timeout(450); ot.evaluate("e => e.scrollIntoView({block: 'center'})"); pg.wait_for_timeout(150)
         pg.screenshot(path=str(OUT / f'vitrine_outros_tamanhos_{w}.png'))
         ot.locator('button', has_text='G').click(); pg.wait_for_timeout(300)
         chk(f'{w}: tocar em G abre o tamanho G (nome e endereço)', 'Sunga infantil masculino G' in pg.inner_text('#modal-conteudo .nome') and 'SU-G' in pg.url and pg.locator('#outros-tamanhos button[aria-current="true"]').inner_text() == 'G', pg.url)
+        pg.keyboard.press('Escape'); pg.wait_for_timeout(200)
+        # v7.47.0: estampas da mesma família (sem tamanho no nome): opções só pela foto
+        pg.goto(BASE + 'index.html'); pg.wait_for_selector('#grid .card[data-id]')
+        ids = ids_na_grade(pg)
+        chk(f'{w}: estampas da mesma família ficam lado a lado', abs(ids.index(ESTAMPA[0]) - ids.index(ESTAMPA[1])) == 1, [ids.index(x) for x in ESTAMPA])
+        pg.locator(f'#grid .card[data-id="{ESTAMPA[0]}"] .abrir-peca').click(); pg.wait_for_selector('#outros-tamanhos:not([hidden])', timeout=5000)
+        bt = ot.locator('button')
+        chk(f'{w}: estampas: "Outras opções" com 2 fotos, sem texto inventado', bt.count() == 2 and ot.locator('button img').count() == 2 and [x.strip() for x in bt.all_inner_texts()] == ['', ''] and bt.nth(0).get_attribute('aria-label') == 'opção 1: aberta agora' and bt.nth(1).get_attribute('aria-label') == 'Ver opção 2', [bt.nth(i).get_attribute('aria-label') for i in range(bt.count())])
+        bt.nth(1).click(); pg.wait_for_timeout(300)
+        chk(f'{w}: tocar na outra estampa abre a peça dela', 'CF-RS' in pg.url, pg.url)
         pg.keyboard.press('Escape'); pg.wait_for_timeout(200)
         pg.goto(BASE + 'index.html'); pg.wait_for_selector('#grid .card[data-id]')
         outra = next(x['ID'] for x in st['produtos'] if x['Nome'] == 'Short barato')

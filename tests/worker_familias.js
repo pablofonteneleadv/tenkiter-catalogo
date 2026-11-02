@@ -59,6 +59,8 @@ function d1() {
     { ID: '50', Nome: 'Blusa única peça', Status: 'Ativo' },
     { ID: '60', Nome: 'Short tactel Nº 10', Status: 'Ativo' },
     { ID: '61', Nome: 'Short tactel nº 12', Status: 'Ativo' },
+    { ID: '71', Nome: 'Conjunto longo Farm', Codigo: 'CF-RS', Status: 'Ativo' },   // v7.47.0: estampas (mesmo nome, sem tamanho)
+    { ID: '70', Nome: 'Conjunto Longo Farm ', Codigo: 'CF-AZ', Status: 'Ativo' },
   ];
   const usuarios = { '88999990001': { nome: 'Pablo', permissoes: ['gerir_acessos'] }, '88999990002': { nome: 'Iara', permissoes: ['catalogo_cadastrar'] }, '88999990004': { nome: 'Visitante', permissoes: ['catalogo_ver'] } };
   globalThis.fetch = async (u, init) => {
@@ -144,6 +146,12 @@ function d1() {
   await A(IARA, 'POST', '/familias/ignorar', { chave: 'calca jeans' });
   sg = await A(IARA, 'GET', '/familias/sugestoes');
   chk('"Ignorar" tira a sugestão para toda a equipe', !(sg.j.sugestoes || []).some((g) => g.chave === 'calca jeans') && (sg.j.sugestoes || []).some((g) => g.chave === 'short tactel'), sg.j.sugestoes);
+  // ---- v7.47.0: estampas do mesmo produto (nome igual, sem tamanho) ----
+  const est = (sg.j.sugestoes || []).find((g) => g.chave === 'conjunto longo farm');
+  chk('v7.47.0: nomes iguais sem tamanho (estampas) também viram sugestão, sem rótulo', est && est.membros.length === 2 && est.membros.every((m) => m.rotulo === '') && est.nome === 'Conjunto longo Farm', est);
+  chk('v7.47.0: "Blusa única peça" sozinha continua sem sugestão (grupo de 1)', !(sg.j.sugestoes || []).some((g) => g.chave.startsWith('blusa')));
+  const le = await A(IARA, 'POST', '/familias/ligar', { produtos: ['71', '70'] });
+  chk('v7.47.0: ligar estampas sem nome nem rótulo: nome vem da peça, nada é inventado', le.j.ok && le.j.familia.nome.toLowerCase() === 'conjunto longo farm' && le.j.familia.membros.every((m) => m.rotulo === '') && le.j.familia.membros.length === 2, le.j);
   chk('rota desconhecida responde 404 em português', /não existe/.test((await A(IARA, 'GET', '/familias/xyz')).j.erro));
 
   // ---- erro do D1 vira mensagem legível ----

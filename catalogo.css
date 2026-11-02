@@ -162,9 +162,12 @@
   /* v7.44.0: família de tamanhos na peça aberta */
   .outros-tamanhos { display: grid; gap: 6px; margin: 4px 0 10px; font-size: 0.84rem; color: #333; }
   .outros-tamanhos .ot-lista { display: flex; flex-wrap: wrap; gap: 8px; }
-  .outros-tamanhos .ot-tam { min-width: 48px; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid #d8d1c4; background: #fff; color: #0d0d0d; font-weight: 700; font-size: 0.9rem; font-family: inherit; cursor: pointer; }
-  .outros-tamanhos .ot-tam[aria-current="true"] { background: #0d0d0d; color: #fff; border-color: #0d0d0d; cursor: default; opacity: 1; }
-  .outros-tamanhos .ot-tam.esgotado { color: #6b6b6b; text-decoration: line-through; }
+  /* v7.47.0: cada opção é a foto da peça (estampa) e, se houver, o tamanho embaixo */
+  .outros-tamanhos .ot-tam { width: 64px; min-height: 44px; padding: 3px; display: grid; gap: 2px; justify-items: center; border-radius: 10px; border: 2px solid #e4ddd0; background: #fff; color: #0d0d0d; font-weight: 700; font-size: 0.82rem; font-family: inherit; cursor: pointer; }
+  .outros-tamanhos .ot-tam img { width: 54px; height: 68px; object-fit: cover; border-radius: 7px; display: block; background: #f1ede6; }
+  .outros-tamanhos .ot-tam[aria-current="true"] { border-color: #0d0d0d; cursor: default; opacity: 1; }
+  .outros-tamanhos .ot-tam.esgotado img { opacity: .45; filter: grayscale(1); }
+  .outros-tamanhos .ot-tam.esgotado span { color: #6b6b6b; text-decoration: line-through; }
   .outros-tamanhos .ot-tam:focus-visible { outline: 3px solid #E67E22; outline-offset: 2px; }
   .modal-conteudo .desc { font-size: 0.88rem; color: #444; line-height: 1.45; margin-top: 10px; background: #f9f9f9; padding: 10px; border-radius: 8px; }
 

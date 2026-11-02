@@ -6360,7 +6360,7 @@ async function estReativar_(env, paradas, cfg, agoraIso) {
   const ops = []; let criadas = 0;
   for (const x of paradas) {
     const i = info[x.produto] || {}, feito = i.reat_base === x.base ? Number(i.reat_degrau) || 0 : 0;
-    const fam = x.familia ? ' Vale para a família inteira (' + x.ids.length + ' tamanhos).' : '';
+    const fam = x.familia ? ' Vale para a família inteira (' + x.ids.length + ' peças).' : '';
     const nova = (titulo, tipo, instr) => { if (abertas.has(x.produto + '|' + titulo)) return; abertas.add(x.produto + '|' + titulo); criadas++; ops.push(env.DB.prepare("INSERT INTO est_tarefa (produto, tipo, titulo, instrucao, funcao, status, origem, criada_em, criada_por) VALUES (?, ?, ?, ?, ?, 'pendente', 'reativacao', ?, 'sistema')").bind(x.produto, tipo, titulo, instr + fam, funcao, agoraIso)); };
     if (x.degrau >= 1 && feito < 1) nova('Foto nova', 'foto', 'Peça sem venda há ' + x.dias + ' dias. Faça uma foto nova (outro ângulo, vestida ou com combinação) para dar vida a ela.');
     if (x.degrau >= 2 && feito < 2) nova('Vídeo curto', 'outro', 'Peça sem venda há ' + x.dias + ' dias. Grave um vídeo curto (até 15 segundos) mostrando caimento e detalhes.');
@@ -6872,7 +6872,7 @@ async function rotasEsteira_(env, req, url, J, perms) {
     const linhas = (await env.DB.prepare('SELECT whats, produto, pos, familia, feito_em FROM est_lista WHERE data=? AND whats=?').bind(data, W).all()).results || [];
     const unidade = () => { const l = linhas.find((r) => r.produto === produto); if (!l) return null; return l.familia ? linhas.filter((r) => r.familia === l.familia) : [l]; };
     const maxPos = async (quem) => { const r = await env.DB.prepare('SELECT MAX(pos) AS m FROM est_lista WHERE data=? AND whats=?').bind(data, quem).first(); return r && r.m != null ? Number(r.m) + 1 : 0; };
-    const travada = (u) => (u.some((r) => r.feito_em) ? (u.length > 1 ? 'Esta família já tem tamanho conferido hoje e não pode sair da lista.' : 'Esta peça já foi conferida hoje e não pode sair da lista.') : '');
+    const travada = (u) => (u.some((r) => r.feito_em) ? (u.length > 1 ? 'Esta família já tem peça conferida hoje e não pode sair da lista.' : 'Esta peça já foi conferida hoje e não pode sair da lista.') : '');
     if (acao === 'tirar' || acao === 'mover') {
       const u = unidade(); if (!u) return J({ ok: false, erro: 'Esta peça não está na lista de ' + pessoa.nome + ' hoje. Atualize o painel.' }, 404);
       const tr = travada(u); if (tr) return J({ ok: false, erro: tr }, 400);
@@ -6892,7 +6892,7 @@ async function rotasEsteira_(env, req, url, J, perms) {
       const fi = await estFamInfo_(env), f = fi.mapa[produto];
       const ids = f ? Object.keys(fi.mapa).filter((id) => fi.mapa[id].familia === f.familia && porId.has(id)).sort((a, b) => fi.mapa[a].ordem - fi.mapa[b].ordem || a.localeCompare(b)) : [produto];
       const ja = (await env.DB.prepare('SELECT whats, produto FROM est_lista WHERE data=? AND produto IN (' + ids.map(() => '?').join(',') + ')').bind(data, ...ids).all()).results || [];
-      if (ja.length) { const quem = ja[0].whats === W ? 'dela' : 'de ' + (nomeDe(ja[0].whats) || 'outra pessoa'); return J({ ok: false, erro: (ids.length > 1 ? 'Um tamanho desta família já está na lista ' : 'Esta peça já está na lista ') + quem + ' hoje.' + (ja[0].whats === W ? '' : ' Use “Mover” na lista dessa pessoa.') }, 400); }
+      if (ja.length) { const quem = ja[0].whats === W ? 'dela' : 'de ' + (nomeDe(ja[0].whats) || 'outra pessoa'); return J({ ok: false, erro: (ids.length > 1 ? 'Uma peça desta família já está na lista ' : 'Esta peça já está na lista ') + quem + ' hoje.' + (ja[0].whats === W ? '' : ' Use “Mover” na lista dessa pessoa.') }, 400); }
       const base = await maxPos(W);
       await env.DB.batch(ids.map((id, k) => { const y = porId.get(id); return env.DB.prepare('INSERT OR IGNORE INTO est_lista (data, whats, produto, pos, grupo, familia) VALUES (?, ?, ?, ?, ?, ?)').bind(data, W, id, base + k, (y.categoria || 'Outros') + (y.genero ? ' · ' + y.genero : ''), f ? String(f.familia) : ''); }));
       return J({ ok: true, colocadas: ids.length });
@@ -6998,6 +6998,9 @@ async function rotaFamiliasPublica_(env, req, h) {
   return new Response(corpo, { status: 200, headers: x });
 }
 const FAM_UPSERT_ = 'INSERT INTO fam_membro (produto, familia, ordem, rotulo) VALUES (?, ?, ?, ?) ON CONFLICT(produto) DO UPDATE SET familia=excluded.familia, ordem=excluded.ordem, rotulo=excluded.rotulo';
+/* v7.47.0: família = o mesmo produto, que pode variar por estampa ou por tamanho. Ligar só reconhece as peças:
+ * ninguém digita nome, tamanho ou cor. O nome da família e o rótulo de cada peça saem do nome já cadastrado
+ * (rótulo vazio quando o nome não termina em tamanho/idade — é o caso das estampas). */
 async function rotasFamilias_(env, req, url, J, perms) {
   if (!perms.includes('gerir_acessos') && !perms.includes('catalogo_cadastrar')) return J({ ok: false, erro: 'Você não tem permissão para organizar famílias de peças.' }, 403);
   await iniciar(env); await famIniciar_(env);
@@ -7088,7 +7091,7 @@ async function rotasFamilias_(env, req, url, J, perms) {
     const grupos = new Map();
     cat.forEach((x) => {
       if (ligados.has(x.id)) return;
-      const s = famSepararNome_(x.nome); if (!s.rotulo || !s.base) return;
+      const s = famSepararNome_(x.nome); if (!s.base) return;   // v7.47.0: nome igual (só muda a estampa) também sugere; o tamanho do fim do nome é opcional
       const g = grupos.get(s.base) || { chave: s.base, nome: s.baseOriginal, membros: [] };
       g.membros.push({ produto: x.id, nome: x.nome, rotulo: s.rotulo, foto: x.foto || '', codigo: x.codigo || '' });
       grupos.set(s.base, g);

@@ -448,9 +448,13 @@
   .fam-form { border: 1px solid #e6dccb; border-left: 4px solid var(--laranja); border-radius: 12px; background: #fff; padding: 12px; margin: 8px 0 12px; display: grid; gap: 8px; }
   .fam-form .fam-tit { font-size: .95rem; }
   .fam-sub { margin: 0; font-size: .85rem; color: #5c5650; }
-  .fam-tams { display: flex; flex-wrap: wrap; gap: 6px; }
-  .fam-tam { min-width: 40px; padding: 4px 10px; border-radius: 999px; border: 1px solid #d8d1c4; background: var(--cinza); font-weight: 700; font-size: .85rem; text-align: center; }
-  .fam-tam.atual { background: var(--preto); color: #fff; border-color: var(--preto); }
+  .fam-tams { display: flex; flex-wrap: wrap; gap: 8px; }
+  /* v7.47.0: cada peça da família aparece pela foto (estampas) e, se o nome tiver, pelo tamanho */
+  .fam-tam { margin: 0; width: 56px; display: grid; gap: 2px; text-align: center; font-weight: 700; font-size: .78rem; color: #5c5650; }
+  .fam-tam img, .fam-tam .fam-semfoto { width: 56px; height: 70px; border-radius: 8px; object-fit: cover; display: block; background: #eee; border: 2px solid transparent; }
+  .fam-tam.atual img, .fam-tam.atual .fam-semfoto { border-color: var(--preto); }
+  .fam-tam.atual { color: var(--preto); }
+  .fam-info { display: block; color: #5c5650; font-size: .82rem; margin-top: 2px; }
   .fam-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
   .fam-acoes button, .fam-pe button, .fam-sugs > button { width: auto; min-height: 44px; padding: 0 16px; border-radius: 999px; font-weight: 700; font-size: .9rem; }
   .fam-novo, .fam-prim { background: var(--laranja); color: #141414; border: 0; }
@@ -458,10 +462,6 @@
   .fam-st { margin: 0; font-size: .85rem; color: #5c5650; } .fam-st:empty { display: none; }
   .fam-st.erro, .fam-prev.erro { color: var(--vermelho); }
   .fam-alerta { margin: 0; padding: 8px 10px; border-radius: 10px; background: #fdf0dc; color: #8a4b00; font-size: .85rem; }
-  .fam-rotulo-box { display: grid; gap: 6px; margin-top: 10px; padding: 10px; border-radius: 10px; background: #fff9f2; border: 1px solid #f1d2ad; }
-  .fam-rot-l { font-weight: 700; font-size: .88rem; }
-  .fam-rotulo-box input { min-height: 46px; font-size: 1rem; width: 100%; max-width: 320px; }
-  .fam-prev { margin: 0; font-size: .85rem; color: #5c5650; }
   .fam-sheet { gap: 8px; }
   .fam-h2 { margin: 0; font-size: 1.05rem; }
   .fam-corpo { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 10px; align-content: start; padding-bottom: 8px; }
@@ -4097,7 +4097,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
       // A conferência (recarregar a lista e ver se fotos/vídeos voltaram) acontece UMA vez no fim da fila, não a cada peça.
       it.estado = 'ok'; it.respSalvo = resultado.resp; if (!it.arquivadaDepois) conferir_.push(it);
       if (esteiraMudouNaLoja_(it)) window.tkEsteiraToque(it.dados.id);
-      if (it.familia && !it.ehEdicao && window.tkFamiliaDepoisDeSalvar) window.tkFamiliaDepoisDeSalvar(it, resultado.resp.id);   // v7.44.0: liga o tamanho novo à família
+      if (it.familia && !it.ehEdicao && window.tkFamiliaDepoisDeSalvar) window.tkFamiliaDepoisDeSalvar(it, resultado.resp.id);   // v7.44.0: liga a variação nova à família
       if (it.rascunhoId) { try { window.dispatchEvent(new CustomEvent('tk:peca-salva', { detail: { rascunhoId: it.rascunhoId, id: resultado.resp.id, codigo: resultado.resp.codigo } })); } catch (e) {} }   // o importador marca o rascunho como aceito
       window.logDebug_('════ "' + it.titulo + '": salvo ════');
     } else if (!resultado.ok && resultado.enfileirado) {
@@ -4223,7 +4223,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     e.preventDefault();
     const faltas = faltasDoForm_();
     if (faltas.length) { mostrarFaltas_(faltas); return; } // sem foto/nome/preço/gênero/categoria a peça não é salva
-    const famNova = modoFormulario === 'duplicando' && window.tkFamiliaAoSalvar ? window.tkFamiliaAoSalvar() : null;   // v7.44.0: "+ Novo tamanho desta família"
+    const famNova = modoFormulario === 'duplicando' && window.tkFamiliaAoSalvar ? window.tkFamiliaAoSalvar() : null;   // v7.44.0/v7.47.0: "+ Nova variação desta família"
     if (famNova === false) return;
     const idParaEditar = document.getElementById('produto-id').value;
     const ehEdicao = modoFormulario === 'editando' && idParaEditar;
@@ -4286,7 +4286,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
     if (ehEdicao && !videosMulti_ && !videosNovos.length && videosRemovidos.length && !videosSalvos.length) dados.removerVideo = true;   // backend antigo: 1 vídeo só
     if (!ehEdicao && !videosNovos.length && videosSalvos.length) { dados.videoUrlExistente = videosSalvos[0]; if (videosSalvos.length > 1 && videosMulti_) dados.videos = videosSalvos.slice(1); }   // v3.6: peça aceita do Instagram já traz o vídeo (R2)
     if (ehEdicao) dados.id = idParaEditar;
-    if (famNova && !ehEdicao) dados.nome = famNova.nomeFinal;   // nome base + tamanho/idade
+    if (famNova && !ehEdicao) dados.nome = famNova.nomeFinal;   // o nome que está no campo (a pessoa só muda se quiser)
     if (!ehEdicao && dados.novidade) dados.notificarPush = document.getElementById('notificarPush').checked;
 
     const capaNovaB64 = capaItem && capaItem.b64 ? capaItem.b64 : null;
@@ -6215,7 +6215,7 @@ document.querySelectorAll('[data-ico]').forEach(function (el) { var s = window.T
 <script src="mensagens-acessos.js?v=7.40.19"></script>
 <link rel="stylesheet" href="admin-disponibilidade.css?v=7.40.28">
 <script src="admin-disponibilidade.js?v=7.41.0"></script>
-<script src="admin-familias.js?v=7.44.0"></script>
+<script src="admin-familias.js?v=7.47.0"></script>
 <script src="mensagens-eventos.js?v=7.40.30"></script>
 <link rel="stylesheet" href="mensagens-gestor.css?v=7.40.45">
 <script src="mensagens-presenca.js?v=7.40.43"></script>

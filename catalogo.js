@@ -483,7 +483,7 @@ try { tkSelExpirar_(); } catch (e) {}
   }
   document.getElementById('ordem').addEventListener('change', () => aplicarFiltros());
 
-  /* v7.44.0: família de produtos — cada tamanho continua um card, mas os da mesma família ficam juntos, na ordem da família,
+  /* v7.44.0: família de produtos — cada peça (estampa ou tamanho) continua um card, mas as da mesma família ficam juntas, na ordem da família,
    * na posição do primeiro membro que aparece. Filtro/busca valem por produto. Sem a lista de famílias (erro, lentidão
    * acima de 2,5 s, offline) a vitrine fica exatamente como antes. A lista vem do Worker (pública, pequena) com cache curto. */
   const FAM_CHAVE_ = 'tk_familias_v1', FAM_VALIDADE_ = 10 * 60 * 1000;
@@ -1189,20 +1189,25 @@ try { tkSelExpirar_(); } catch (e) {}
     if (slideValido) mostrarSlide(slideInicial); // veio de um link de uma foto específica (?f=<n>)
   }
 
-  /** v7.44.0: "Outros tamanhos: P · M · G" na peça aberta, levando aos irmãos da família (montado com nós, sem HTML com dados). */
+  /** v7.44.0 / v7.47.0: "Outras opções" na peça aberta — as outras peças da mesma família (estampa ou tamanho diferente).
+   * Cada opção é a foto da peça e, se o nome dela terminar em tamanho/idade, esse rótulo embaixo. Montado com nós, sem HTML com dados. */
   function pintarOutrosTamanhos_(p) {
     const box = document.getElementById('outros-tamanhos'); if (!box) return;
     const irmaos = irmaosDe_(p.ID);
     box.textContent = '';
     if (irmaos.length < 2) { box.hidden = true; return; }
-    const rot = document.createElement('strong'); rot.textContent = 'Outros tamanhos:'; box.appendChild(rot);
+    const rot = document.createElement('strong'); rot.textContent = 'Outras opções:'; box.appendChild(rot);
     const lista = document.createElement('div'); lista.className = 'ot-lista'; lista.setAttribute('role', 'list');
-    irmaos.forEach(({ m, p: q }) => {
-      const atual = String(q.ID) === String(p.ID), nome = m.rotulo || q.Nome;
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'ot-tam' + (estaEsgotado(q) ? ' esgotado' : ''); b.setAttribute('role', 'listitem');
-      b.textContent = nome; b.dataset.irmao = q.ID;
-      if (atual) { b.setAttribute('aria-current', 'true'); b.setAttribute('aria-label', nome + ': tamanho aberto agora'); b.disabled = true; }
-      else { b.setAttribute('aria-label', 'Ver o tamanho ' + nome + (estaEsgotado(q) ? ' (esgotado)' : '')); b.addEventListener('click', () => { (window.abrirDetalhe || abrirDetalhe)(q.ID); const mc = document.getElementById('modal-conteudo'); if (mc) mc.scrollTop = 0; }); }
+    irmaos.forEach(({ m, p: q }, k) => {
+      const atual = String(q.ID) === String(p.ID), esg = estaEsgotado(q);
+      const desc = (m.rotulo ? m.rotulo : 'opção ' + (k + 1)) + (esg ? ' (esgotada)' : '');
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'ot-tam' + (esg ? ' esgotado' : ''); b.setAttribute('role', 'listitem'); b.dataset.irmao = q.ID;
+      const img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.referrerPolicy = 'no-referrer';
+      img.src = fotoMini(q.Foto_URL, 160); img.onerror = () => { img.remove(); };
+      b.appendChild(img);
+      if (m.rotulo) { const sp = document.createElement('span'); sp.textContent = m.rotulo; b.appendChild(sp); }
+      if (atual) { b.setAttribute('aria-current', 'true'); b.setAttribute('aria-label', desc + ': aberta agora'); b.disabled = true; }
+      else { b.setAttribute('aria-label', 'Ver ' + desc); b.addEventListener('click', () => { (window.abrirDetalhe || abrirDetalhe)(q.ID); const mc = document.getElementById('modal-conteudo'); if (mc) mc.scrollTop = 0; }); }
       lista.appendChild(b);
     });
     box.appendChild(lista); box.hidden = false;

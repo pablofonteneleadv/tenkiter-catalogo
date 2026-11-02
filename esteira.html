@@ -41,7 +41,7 @@
   .peca .t { flex:1; min-width:0; }
   .peca .t b { display:block; overflow-wrap:anywhere; }
   .peca.feita { opacity:.62; }
-  /* v7.44.0: família de tamanhos — um cartão com os tamanhos dentro; cada tamanho continua sendo conferido sozinho */
+  /* v7.44.0/v7.47.0: família (mesmo produto, estampa ou tamanho diferente) — um cartão com as peças dentro; cada peça continua sendo conferida sozinha */
   .fam { background:var(--branco); border:1px solid var(--linha); border-left:4px solid var(--laranja); border-radius:12px; padding:10px; display:grid; gap:8px; }
   .fam.feita { border-left-color:var(--verde); }
   .fam-cab { display:flex; align-items:center; gap:12px; }
@@ -49,6 +49,7 @@
   .fam-cab .t { flex:1; min-width:0; } .fam-cab .t b { display:block; overflow-wrap:anywhere; }
   .fam .peca.tam { min-height:56px; padding:8px 10px; background:var(--areia); border-color:transparent; }
   .fam .peca.tam .rot { min-width:44px; text-align:center; font-weight:800; font-size:1.05rem; }
+  .fam .peca.tam .vfoto { display:grid; justify-items:center; gap:2px; flex:none; } .fam .peca.tam .vfoto img, .fam .peca.tam .vfoto .semfoto { width:40px; height:50px; border-radius:6px; object-fit:cover; background:var(--linha); } .fam .peca.tam .vfoto .rot { min-width:0; font-size:.85rem; }
   .chip { display:inline-flex; align-items:center; border-radius:999px; padding:3px 10px; font-size:.78rem; font-weight:600; white-space:nowrap; border:1px solid var(--linha); background:var(--areia); }
   .chip.ok { background:var(--verde-fundo); color:var(--verde); border-color:transparent; }
   .chip.al { background:var(--alerta-fundo); color:var(--alerta); border-color:transparent; }
@@ -239,7 +240,7 @@
     const prog = el('div', 'card'); prog.append(el('h2', '', 'Minha conferência'));
     if (!r.total) prog.append(el('p', 'muted', EU.confere ? 'Nenhuma peça para conferir hoje: tudo foi conferido ou atualizado nos últimos dias.' : 'Você não está marcada para conferir peças. O administrador muda isso em Configurações.'));
     else {
-      const pl = el('div', 'progresso'); pl.append(el('b', 'num', r.feitas + '/' + r.total), el('span', 'muted', r.feitas >= r.total ? 'Tudo conferido hoje. Obrigada!' : (r.pecas && r.pecas > r.total ? 'itens ao longo do dia · família de tamanhos conta como 1' : 'peças ao longo do dia, em qualquer ordem')));
+      const pl = el('div', 'progresso'); pl.append(el('b', 'num', r.feitas + '/' + r.total), el('span', 'muted', r.feitas >= r.total ? 'Tudo conferido hoje. Obrigada!' : (r.pecas && r.pecas > r.total ? 'itens ao longo do dia · família conta como 1' : 'peças ao longo do dia, em qualquer ordem')));
       const bar = el('div', 'barra'); const i = el('i'); i.style.width = Math.round((r.feitas / r.total) * 100) + '%'; bar.append(i);
       const grupos = [...new Set(r.lista.map((x) => String(x.grupo || '').split(' · ')[0]).filter(Boolean))].slice(0, 3);
       prog.append(pl, bar);
@@ -257,23 +258,24 @@
     let grupoAtual = null;
     const chipDe = (p) => { const dConf = haDias(p.conferido_em); return p.feito ? el('span', 'chip ok', '✓ conferida') : p.sumiu ? el('span', 'chip er', 'fora do site') : dConf == null ? el('span', 'chip er', 'nunca conferida') : el('span', 'chip al', 'conferir'); };
     const estoqueTxt = (p) => p.estoque !== '' && p.estoque != null ? p.estoque + ' un.' : '';
-    // v7.44.0: tamanhos da mesma família chegam juntos do servidor; aqui viram um cartão só
+    // v7.44.0: peças da mesma família chegam juntas do servidor; aqui viram um cartão só
     const blocos = []; r.lista.forEach((p) => { const ult = blocos[blocos.length - 1]; if (p.familia && ult && ult.familia === p.familia) ult.itens.push(p); else blocos.push({ familia: p.familia || '', itens: [p] }); });
     blocos.forEach((bl) => {
       const p0 = bl.itens[0];
       if (p0.grupo && p0.grupo !== grupoAtual) { grupoAtual = p0.grupo; app.append(el('p', 'grupo-tit', p0.grupo)); }
       if (bl.familia && bl.itens.length > 1) {
         const n = bl.itens.length, feitos = bl.itens.filter((x) => x.feito).length, nome = p0.familiaNome || p0.nome;
-        const c = el('section', 'fam' + (feitos === n ? ' feita' : '')); c.dataset.familia = bl.familia; c.setAttribute('aria-label', 'Família ' + nome + ', ' + n + ' tamanhos');
+        const c = el('section', 'fam' + (feitos === n ? ' feita' : '')); c.dataset.familia = bl.familia; c.setAttribute('aria-label', 'Família ' + nome + ', ' + n + ' peças');
         const cab = el('div', 'fam-cab'), t = el('div', 't');
-        t.append(el('b', '', nome), el('small', 'muted', n + ' tamanhos · ' + (feitos === n ? 'todos conferidos' : feitos + ' de ' + n + ' conferidos')));
+        t.append(el('b', '', nome), el('small', 'muted', n + ' peças · ' + (feitos === n ? 'todas conferidas' : feitos + ' de ' + n + ' conferidas')));
         cab.append(foto((bl.itens.find((x) => x.foto) || p0).foto), t); if (feitos === n) cab.append(el('span', 'chip ok', '✓ família feita'));
         c.append(cab);
         bl.itens.forEach((p) => {
           const b = el('button', 'peca tam' + (p.feito ? ' feita' : '')); b.type = 'button'; b.dataset.produto = p.id;
-          const t2 = el('div', 't'); t2.append(el('small', 'muted', [p.rotulo ? '' : p.nome, p.codigo, estoqueTxt(p)].filter(Boolean).join(' · ')));
-          b.append(el('span', 'rot', p.rotulo || '—'), t2, chipDe(p));
-          b.setAttribute('aria-label', 'Tamanho ' + (p.rotulo || p.nome) + (p.feito ? ', já conferido' : ', abrir conferência'));
+          const t2 = el('div', 't'); t2.append(el('small', 'muted', [p.codigo, estoqueTxt(p)].filter(Boolean).join(' · ') || p.nome));
+          const vf = el('span', 'vfoto'); vf.append(foto(p.foto)); if (p.rotulo) vf.append(el('span', 'rot', p.rotulo));   // v7.47.0: a foto mostra a estampa; o tamanho só se o nome trouxer
+          b.append(vf, t2, chipDe(p));
+          b.setAttribute('aria-label', 'Peça ' + [p.rotulo, p.codigo].filter(Boolean).join(' ') + (p.feito ? ', já conferida' : ', abrir conferência'));
           if (!p.sumiu) b.onclick = () => abrirConferencia(p); else b.disabled = true;
           c.append(b);
         });
@@ -290,7 +292,7 @@
       app.append(b);
     });
   }
-  /** v7.44.0: progresso por item — peça solta conta 1; família conta 1 e só fica feita com todos os tamanhos conferidos (igual ao servidor). */
+  /** v7.44.0: progresso por item — peça solta conta 1; família conta 1 e só fica feita com todas as peças conferidas (igual ao servidor). */
   function progressoHoje(lista) {
     const u = new Map();
     lista.forEach((x) => { const k = x.familia ? 'f:' + x.familia : 'p:' + x.id; const v = u.get(k); u.set(k, v === undefined ? !!x.feito : v && !!x.feito); });
@@ -1064,7 +1066,7 @@
       ra.tarefas.slice(0, 8).forEach((t) => c3.append(linhaPeca({ nome: t.produtoNome }, t.titulo + ' · para Fotos')));
       if (ra.tarefas.length > 8) c3.append(el('p', 'muted', 'e mais ' + (ra.tarefas.length - 8) + ' na aba Preparação (Outras tarefas).'));
       const dispensar = (x, lugar) => { const b = bt('Dispensar por 30 dias', 'discreto', async () => { b.disabled = true; const y = await srv('/esteira/reativacao/dispensar', { ids: x.ids }); if (!y.ok) { b.disabled = false; lugar.diga(y.erro || 'Não consegui dispensar agora.', 'erro'); return; } telaPainel(); }); b.setAttribute('aria-label', 'Dispensar ' + x.nome + ' das sugestões por 30 dias'); return b; };
-      const sugestoes = (card, itens, vazio) => { const st = linhaStatus(); if (!itens.length) card.append(el('p', 'muted', vazio)); itens.forEach((x) => card.append(linhaPeca(x, [x.codigo, 'sem venda há ' + x.dias + ' dias', x.estoque + ' un.', x.familia ? x.ids.length + ' tamanhos' : ''].filter(Boolean).join(' · '), acoes(dispensar(x, st))))); card.append(st); };
+      const sugestoes = (card, itens, vazio) => { const st = linhaStatus(); if (!itens.length) card.append(el('p', 'muted', vazio)); itens.forEach((x) => card.append(linhaPeca(x, [x.codigo, 'sem venda há ' + x.dias + ' dias', x.estoque + ' un.', x.familia ? x.ids.length + ' peças' : ''].filter(Boolean).join(' · '), acoes(dispensar(x, st))))); card.append(st); };
       c4.append(el('p', 'muted', 'Mais de ' + ra.degraus[1] + ' dias sem venda. Use a foto ou o vídeo novo e agende pelo painel, em Postagens. A Esteira não posta sozinha.'));
       sugestoes(c4, ra.postagens, 'Nenhuma peça para sugerir agora.');
       c5.append(el('p', 'muted', 'Mais de ' + ra.degraus[2] + ' dias sem venda. O sistema nunca muda preço: decida uma promoção, um combo ou um look com outra peça.'));
@@ -1116,7 +1118,7 @@
           const achados = [...cat.values()].filter((p) => !ehInativo(p) && (semAcento(p.Nome).includes(q) || semAcento(p.Codigo).includes(q) || String(p.ID) === q)).slice(0, 8);
           if (!achados.length) res.append(el('p', 'muted', 'Nenhuma peça do site com esse nome ou código.'));
           achados.forEach((p) => { const b = el('button', 'peca'); b.type = 'button'; const t = el('div', 't'); t.append(el('b', '', p.Nome || 'Peça ' + p.ID), el('small', 'muted', [p.Codigo, p.Categoria].filter(Boolean).join(' · '))); b.append(foto(p.Foto_URL), t, el('span', 'chip al', 'Colocar')); b.setAttribute('aria-label', 'Colocar ' + (p.Nome || 'peça') + ' na lista');
-            b.onclick = async () => { const y = await acao('colocar', { produto: String(p.ID) }, b); if (y) { inp.value = ''; recarregar(y.colocadas > 1 ? 'Família colocada: ' + y.colocadas + ' tamanhos.' : 'Peça colocada no fim da lista.'); } }; res.append(b); });
+            b.onclick = async () => { const y = await acao('colocar', { produto: String(p.ID) }, b); if (y) { inp.value = ''; recarregar(y.colocadas > 1 ? 'Família colocada: ' + y.colocadas + ' peças.' : 'Peça colocada no fim da lista.'); } }; res.append(b); });
         }, 250); };
         corpo.append(lb, res, st);
         // itens (família = um item)
@@ -1129,7 +1131,7 @@
           const nome = fam ? (p0.familiaNome || p0.nome) : p0.nome + (p0.rotulo && !String(p0.nome).endsWith(p0.rotulo) ? ' · ' + p0.rotulo : '');
           const det = [fam ? u.itens.map((i) => i.rotulo || i.codigo).join(', ') : p0.codigo, p0.categoria, tudo ? 'conferida' : feito ? 'parte conferida' : 'pendente'].filter(Boolean).join(' · ');
           let ac = null;
-          if (feito) ac = el('p', 'muted', tudo ? '✓ Já conferida: não sai da lista.' : 'Um tamanho já foi conferido: a família não sai da lista.');
+          if (feito) ac = el('p', 'muted', tudo ? '✓ Já conferida: não sai da lista.' : 'Uma peça já foi conferida: a família não sai da lista.');
           else {
             const bTirar = bt('Tirar', '', async () => { if (!bTirar.dataset.confirma) { bTirar.dataset.confirma = '1'; bTirar.textContent = 'Toque de novo para tirar'; return; } const y = await acao('tirar', { produto: p0.id }, bTirar); if (y) recarregar(fam ? 'Família tirada da lista.' : 'Peça tirada da lista.'); });
             bTirar.setAttribute('aria-label', 'Tirar ' + nome + ' da lista');
