@@ -35,10 +35,14 @@ with tempfile.TemporaryDirectory() as temp:
    pg.locator('#po-abas [data-aba=fila]').click();pg.wait_for_timeout(350)
    assert pg.locator('[data-fila-modo=midia]').get_attribute('aria-pressed')=='true'
    assert pg.locator('.po-midia-grupo').count()==4,'As partes/canais devem resultar em 3 vídeos +1 foto'
+   # v7.48.2: cada mídia começa recolhida; tocar no card mostra destinos e ações.
+   assert pg.locator('.po-midia-grupo').first.locator('.po-midia-canal').count()==0
+   pg.locator('.po-midia-grupo').first.locator('.po-midia-topo').click()
    assert pg.locator('.po-midia-grupo').first.locator('.po-midia-canal').count()==4
    assert '2 partes' in pg.locator('.po-midia-topo').first.inner_text()
    # Opções manuais e de cada canal continuam vinculadas ao ID correto.
    manual=pg.locator('.po-midia-grupo').first.locator('[data-midia-canal=story]');manual.locator('summary').click();assert manual.locator('[data-a=feito]').count()==2;assert manual.locator('[data-a=copiar-link]').count()==2
+   pg.locator('.po-midia-grupo').nth(1).locator('.po-midia-topo').click()
    canal=pg.locator('.po-midia-grupo').nth(1).locator('[data-midia-canal=status]');canal.locator('summary').click();canal.get_by_role('button',name='Horário do vídeo',exact=True).click();assert 'Novo horário' in canal.inner_text();assert canal.locator('[data-a=hora-ok]').get_attribute('data-id')=='11'
    pg.locator('[data-fila-modo=canal]').click();assert pg.locator('.po-fg-h').count()==4
    pg.locator('[data-fg=status]').click();assert pg.locator('[data-fg-sec=status] .po-item').count()==7

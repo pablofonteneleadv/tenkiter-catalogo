@@ -6,6 +6,11 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.48.2 — 02/11/2026
+- **Postagens → Fila → Por mídia em cards recolhidos** (pedido do Pablo). Cada mídia original começa fechada num card compacto com miniatura, tipo (foto, vídeo, carrossel com nº de fotos, vídeo com nº de partes), ordem na fila, próximo horário, autoria e um chip por destino com o estado em texto e ícone (horário agendado, Enviando, Publicado, Erro, Falta postar, Fila de conversão/Convertendo). Tocar no card (ou Enter/Espaço) mostra os destinos completos, as opções do canal e as ações de sempre. Aberto/fechado é preservado quando a fila se atualiza sozinha e ao alternar com "Por canal", sem pular a rolagem.
+- **Miniatura vazia corrigida:** a imagem do card era criada sem `src` e preenchida com `atribSrc(img, url)`, mas `atribSrc` só devolve o texto `src="…"` para HTML — nada era aplicado e sobrava um quadrado branco. Agora a miniatura sai com `atribSrc` no próprio HTML. Vídeo usa o pôster `.jpg` do mesmo nome; se ele não existir (vídeos de Postagens no Worker de mídia não têm pôster), mostra o primeiro quadro do vídeo. Vídeo ainda em conversão mostra "Em processo" com ícone; mídia sem prévia mostra "Sem prévia" — nunca um quadrado vazio. O mesmo plano B vale para as miniaturas da visão "Por canal".
+- Teste novo `tests/postagens_fila_midia_cards.py` (390 e 1440); `tests/postagens_fila_midia.py` abre o card antes de usar as ações. Evidência em `docs/ux/postagens-fila-midia-20261102.md`.
+
 ## 7.48.1 — 02/11/2026
 - **Só o Admin total cria ou escreve nomes de categorias, tamanhos, cores e tecidos** (pedido do Pablo). Quem cadastra sem ser Admin total só escolhe o que já existe:
   - **Tecido (cadastro):** o campo não aceita escrever; toca-se num tecido cadastrado (toque de novo tira). O Admin total continua escrevendo e gerenciando nomes.
