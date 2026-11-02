@@ -6056,11 +6056,25 @@ export default {
   }
 };
 
-/* ==================== v7.41.0: Esteira de Produtos (entrega 1: Hoje, conferência diária, escala, configurações) ====================
+/* ==================== v7.41.0: Esteira de Produtos (entrega 1: Hoje, conferência diária, escala, configurações; 7.42.0: preparação) ====================
  * Produtos continuam na planilha do catálogo (lista pública action=list). Aqui ficam só equipe, escala, datas de conferência/atualização
  * e a lista diária de cada funcionária. Configurações: só Admin total (gerir_acessos). */
 const EST_FUNCOES_PADRAO_ = ['Limpeza', 'Caixa', 'Fotos', 'Atendimento online'];
-const EST_CFG_PADRAO_ = { porPessoa: 20, diasSemRepetir: 21, pesos: { nunca: 40, diaConf: 1, diaCadastro: 0.5, diaSemEdicao: 0.3, estoqueBaixo: 15, divergiu: 20 }, funcoes: EST_FUNCOES_PADRAO_, instrucoes: {} };
+/* v7.42.0 (entrega 2): tarefas de preparação. Peça nova passa por estas tarefas e só vai ao site quando alguém autorizado aceita. Editável em Configurações. */
+const EST_TIPOS_TAREFA_ = ['cadastro', 'foto', 'cores_tamanhos', 'outro'];
+const EST_MODELOS_PADRAO_ = [
+  { tipo: 'cadastro', titulo: 'Cadastro conferido', instrucao: 'Confira nome, preço, categoria, público e descrição.', funcao: 'Fotos' },
+  { tipo: 'foto', titulo: '1ª foto', instrucao: 'Peça inteira, de frente. Se a peça ainda não tem foto, esta vira a capa.', funcao: 'Fotos' },
+  { tipo: 'foto', titulo: 'Fotos de detalhe', instrucao: 'Tecido, estampa, botões e acabamento.', funcao: 'Fotos' },
+  { tipo: 'foto', titulo: 'Foto no manequim', instrucao: 'Peça vestida no manequim.', funcao: 'Fotos' },
+  { tipo: 'cores_tamanhos', titulo: 'Conferir cores e tamanhos', instrucao: 'Confira na peça se as cores e os tamanhos do cadastro estão certos.', funcao: 'Fotos' },
+];
+const EST_CFG_PADRAO_ = { porPessoa: 20, diasSemRepetir: 21, pesos: { nunca: 40, diaConf: 1, diaCadastro: 0.5, diaSemEdicao: 0.3, estoqueBaixo: 15, divergiu: 20 }, funcoes: EST_FUNCOES_PADRAO_, instrucoes: {}, modelosPreparacao: EST_MODELOS_PADRAO_ };
+function estModelos_(lista) {                                          // limpa a lista de modelos; inválida ou vazia → null
+  if (!Array.isArray(lista)) return null;
+  const out = lista.map((m) => ({ tipo: EST_TIPOS_TAREFA_.includes(m && m.tipo) ? m.tipo : 'outro', titulo: String((m && m.titulo) || '').trim().slice(0, 60), instrucao: String((m && m.instrucao) || '').trim().slice(0, 500), funcao: String((m && m.funcao) || '').trim().slice(0, 40) })).filter((m) => m.titulo).slice(0, 12);
+  return out.length ? out : null;
+}
 const estHoje_ = (ms) => new Date((ms || Date.now()) - 3 * 3600e3).toISOString().slice(0, 10);                 // America/Fortaleza (UTC-3)
 const estDiaSemana_ = (data) => new Date(data + 'T12:00:00Z').getUTCDay();
 const estDias_ = (iso, agoraMs) => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? Math.max(0, ((agoraMs || Date.now()) - t) / 864e5) : null; };
@@ -6076,7 +6090,13 @@ async function estIniciar_(env) {
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_conf (id INTEGER PRIMARY KEY AUTOINCREMENT, produto TEXT NOT NULL, data TEXT NOT NULL, por TEXT NOT NULL, achou INTEGER NOT NULL, estoque_antes TEXT, estoque_depois TEXT, divergiu INTEGER NOT NULL DEFAULT 0, foto_nova INTEGER NOT NULL DEFAULT 0, obs TEXT DEFAULT '', em TEXT NOT NULL)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_conf_data ON est_conf (data, por)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS est_lista (data TEXT NOT NULL, whats TEXT NOT NULL, produto TEXT NOT NULL, pos INTEGER NOT NULL, grupo TEXT DEFAULT '', feito_em TEXT, PRIMARY KEY (data, whats, produto))"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS est_tarefa (id INTEGER PRIMARY KEY AUTOINCREMENT, produto TEXT NOT NULL, tipo TEXT NOT NULL DEFAULT 'outro', titulo TEXT NOT NULL, instrucao TEXT DEFAULT '', funcao TEXT DEFAULT '', status TEXT NOT NULL DEFAULT 'pendente', origem TEXT DEFAULT '', criada_em TEXT, criada_por TEXT, feita_em TEXT, feita_por TEXT, obs TEXT DEFAULT '')"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS ix_est_tarefa_prod ON est_tarefa (produto, status)"),
   ]);
+  // v7.42.0: colunas novas da preparação. ALTER falha quando a coluna já existe — por isso um por um, sem derrubar nada.
+  for (const col of ["etapa TEXT DEFAULT ''", 'aceito_em TEXT', 'aceito_por TEXT', 'preparado_em TEXT', 'preparado_por TEXT', "ref_nome TEXT DEFAULT ''", "ref_codigo TEXT DEFAULT ''", "ref_foto TEXT DEFAULT ''"]) {
+    try { await env.DB.prepare('ALTER TABLE est_produto ADD COLUMN ' + col).run(); } catch (e) { /* já existe */ }
+  }
   estIniciado_ = env.DB;
 }
 async function estCfg_(env) {
@@ -6085,6 +6105,7 @@ async function estCfg_(env) {
   out.funcoes = Array.isArray(c.funcoes) && c.funcoes.length ? c.funcoes.map((f) => String(f).trim().slice(0, 40)).filter(Boolean).slice(0, 12) : EST_FUNCOES_PADRAO_.slice();
   out.instrucoes = c.instrucoes && typeof c.instrucoes === 'object' ? c.instrucoes : {};
   out.porPessoa = Math.min(60, Math.max(1, Number(out.porPessoa) || 20)); out.diasSemRepetir = Math.min(120, Math.max(0, Number(out.diasSemRepetir) || 0));
+  out.modelosPreparacao = estModelos_(c.modelosPreparacao) || EST_MODELOS_PADRAO_.map((m) => Object.assign({}, m));
   return out;
 }
 async function estCatalogo_(env) {                                     // lista pública do catálogo (cache 10 min no KV)
@@ -6153,6 +6174,19 @@ async function estGarantirListas_(env, data, cfg) {
     for (let k = 0; k < ins.length; k += 50) await env.DB.batch(ins.slice(k, k + 50));
   } finally { await env.CACHE.delete(trava); }
 }
+/** Acrescenta à tarefa quem está na função hoje e se esta pessoa pode marcá-la (função do dia, ou quem aceita/Admin total; sem função: qualquer um da equipe). */
+function estVestirTarefa_(t, escala, eu, podeAceitar, nomeDe) {
+  const resp = t.funcao && escala[t.funcao] ? estFone_(escala[t.funcao].whats) : '';
+  const posso = podeAceitar || !t.funcao || (!!resp && resp === eu);
+  return { id: t.id, produto: t.produto, tipo: t.tipo, titulo: t.titulo, instrucao: t.instrucao || '', funcao: t.funcao || '', status: t.status, origem: t.origem || '', obs: t.obs || '', feita_em: t.feita_em || '', feita_por: nomeDe(t.feita_por || '') || '', quem: resp ? nomeDe(resp) : '', posso };
+}
+/** Tarefas pendentes das funções desta pessoa hoje (aba Hoje). Nome e foto vêm do catálogo; peça fora do site usa o nome guardado na preparação. */
+async function estTarefasPendentes_(env, funcoes, porId) {
+  if (!funcoes.length) return [];
+  const marcas = funcoes.map(() => '?').join(',');
+  const rows = (await env.DB.prepare("SELECT t.*, p.ref_nome, p.ref_codigo, p.ref_foto, p.etapa FROM est_tarefa t LEFT JOIN est_produto p ON p.id=t.produto WHERE t.status='pendente' AND t.funcao IN (" + marcas + ') ORDER BY t.id LIMIT 60').bind(...funcoes).all()).results || [];
+  return rows.map((t) => { const c = porId.get(t.produto) || {}; return { id: t.id, produto: t.produto, tipo: t.tipo, titulo: t.titulo, instrucao: t.instrucao || '', funcao: t.funcao, status: t.status, origem: t.origem || '', obs: t.obs || '', posso: true, produtoNome: c.nome || t.ref_nome || 'Peça ' + t.produto, produtoCodigo: c.codigo || t.ref_codigo || '', produtoFoto: c.foto || t.ref_foto || '', emPreparacao: t.etapa === 'preparacao' }; });
+}
 async function rotasEsteira_(env, req, url, J, perms) {
   await iniciar(env); await estIniciar_(env);
   const p = url.pathname, admin = perms.includes('gerir_acessos'), eu = estFone_(req.headers.get('X-TK-Whats')), agora = new Date().toISOString(), data = estHoje_();
@@ -6160,6 +6194,8 @@ async function rotasEsteira_(env, req, url, J, perms) {
   const nomeDe = (w) => { const e = equipe.find((x) => estFone_(x.whats) === estFone_(w)); return e ? e.nome : ''; };
   const quemSou = () => ({ whats: eu, nome: membro ? membro.nome : (perms.msgNome || ''), admin, membro: !!membro, confere: !!(membro && membro.confere), aceitar: admin || !!(membro && membro.aceitar) });
   if (!admin && !membro) return J({ ok: false, erro: 'Seu nome ainda não está na equipe da Esteira. Peça ao administrador para incluir você em Configurações.' }, 403);
+  const podeAceitar = admin || !!(membro && membro.aceitar);
+  let escalaHojeCache = null; const escalaHoje = async () => (escalaHojeCache = escalaHojeCache || await estEscalaDoDia_(env, data, cfg));
 
   if (p === '/esteira/hoje' && req.method === 'GET') {
     try { await estGarantirListas_(env, data, cfg); } catch (e) { return J({ ok: false, erro: e.message || 'Não consegui montar a lista de hoje. Tente de novo.' }, 503); }
@@ -6169,7 +6205,8 @@ async function rotasEsteira_(env, req, url, J, perms) {
     const lista = linhas.map((l) => { const x = porId.get(l.produto); const i = info[l.produto] || {}; return x ? Object.assign({}, x, { grupo: l.grupo, feito: !!l.feito_em, feito_em: l.feito_em || '', atualizado_em: i.atualizado_em || '', conferido_em: i.conferido_em || '' }) : { id: l.produto, nome: 'Peça arquivada ou fora do site', grupo: l.grupo, feito: !!l.feito_em, sumiu: true }; });
     const escala = await estEscalaDoDia_(env, data, cfg);
     const minhas = Object.keys(escala).filter((f) => estFone_(escala[f].whats) === eu).map((f) => ({ funcao: f, instrucoes: String(cfg.instrucoes[f] || '') }));
-    return J({ ok: true, data, eu: quemSou(), lista, feitas: lista.filter((x) => x.feito).length, total: lista.length, funcoes: minhas, escala: Object.keys(escala).map((f) => ({ funcao: f, whats: escala[f].whats, nome: nomeDe(escala[f].whats), alterado: escala[f].alterado })) });
+    const tarefas = await estTarefasPendentes_(env, minhas.map((f) => f.funcao), porId);
+    return J({ ok: true, data, eu: quemSou(), lista, feitas: lista.filter((x) => x.feito).length, total: lista.length, funcoes: minhas, tarefas, escala: Object.keys(escala).map((f) => ({ funcao: f, whats: escala[f].whats, nome: nomeDe(escala[f].whats), alterado: escala[f].alterado })) });
   }
   if (p === '/esteira/conferir' && req.method === 'POST') {
     const d = await req.json().catch(() => ({})), id = String(d.id || '').slice(0, 40);
@@ -6181,13 +6218,83 @@ async function rotasEsteira_(env, req, url, J, perms) {
       env.DB.prepare('INSERT INTO est_produto (id, conferido_em, conferido_por, divergiu) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET conferido_em=excluded.conferido_em, conferido_por=excluded.conferido_por, divergiu=excluded.divergiu').bind(id, agora, eu, divergiu),
       env.DB.prepare('UPDATE est_lista SET feito_em=? WHERE data=? AND whats=? AND produto=?').bind(agora, data, eu, id),
     ]);
-    return J({ ok: true, divergiu: !!divergiu });
+    let tarefaFoto = null;
+    if (d.fotoNova === true) {                                             // v7.42.0: "Pedir foto nova" vira tarefa para quem está em Fotos
+      const ja = await env.DB.prepare("SELECT id FROM est_tarefa WHERE produto=? AND status='pendente' AND origem='conferencia' AND tipo='foto'").bind(id).first();
+      if (ja) tarefaFoto = ja.id;
+      else {
+        const funcao = cfg.funcoes.includes('Fotos') ? 'Fotos' : ((cfg.modelosPreparacao.find((m) => m.tipo === 'foto') || {}).funcao || '');
+        const obs = String(d.obs || '').trim().slice(0, 300);
+        const r = await env.DB.prepare("INSERT INTO est_tarefa (produto, tipo, titulo, instrucao, funcao, status, origem, criada_em, criada_por) VALUES (?, 'foto', 'Foto nova', ?, ?, 'pendente', 'conferencia', ?, ?)").bind(id, 'Pedida na conferência por ' + (nomeDe(eu) || 'alguém da equipe') + (obs ? ': ' + obs : '.'), funcao, agora, eu).run();
+        tarefaFoto = r.meta.last_row_id;
+      }
+    }
+    return J({ ok: true, divergiu: !!divergiu, tarefaFoto });
   }
   if (p === '/esteira/toque' && req.method === 'POST') {                  // Gestão/Disponibilidade: fotos, tamanhos, cores ou estoque mudados à mão
     const d = await req.json().catch(() => ({})), ids = [...new Set((Array.isArray(d.ids) ? d.ids : [d.id]).map((x) => String(x || '').slice(0, 40)).filter(Boolean))].slice(0, 100);
     if (!ids.length) return J({ ok: false, erro: 'Nenhuma peça informada.' }, 400);
     await env.DB.batch(ids.map((id) => env.DB.prepare('INSERT INTO est_produto (id, atualizado_em, atualizado_por) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET atualizado_em=excluded.atualizado_em, atualizado_por=excluded.atualizado_por').bind(id, agora, eu)));
     return J({ ok: true, registradas: ids.length });
+  }
+  // ---- v7.42.0: preparação (tarefas e "Aceitar para o site") ----
+  if (p === '/esteira/preparacao' && req.method === 'GET') {
+    let porId = new Map(); try { porId = new Map((await estCatalogo_(env)).map((x) => [x.id, x])); } catch (e) { /* mostra o nome guardado */ }
+    const escala = await escalaHoje();
+    const prods = (await env.DB.prepare("SELECT * FROM est_produto WHERE etapa='preparacao' ORDER BY preparado_em, id").all()).results || [];
+    const ids = new Set(prods.map((x) => x.id));
+    const todas = (await env.DB.prepare("SELECT * FROM est_tarefa WHERE status='pendente' OR (status='feita' AND produto IN (SELECT id FROM est_produto WHERE etapa='preparacao')) ORDER BY id").all()).results || [];
+    const vestir = (t) => estVestirTarefa_(t, escala, eu, podeAceitar, nomeDe);
+    const produtos = prods.map((x) => { const c = porId.get(x.id) || {}; const tarefas = todas.filter((t) => t.produto === x.id).map(vestir); return { id: x.id, nome: c.nome || x.ref_nome || 'Peça ' + x.id, codigo: c.codigo || x.ref_codigo || '', foto: c.foto || x.ref_foto || '', noSite: !!c.id, preparado_em: x.preparado_em || '', preparado_por: nomeDe(x.preparado_por), tarefas, feitas: tarefas.filter((t) => t.status === 'feita').length, total: tarefas.length }; });
+    const outras = todas.filter((t) => !ids.has(t.produto) && t.status === 'pendente').map((t) => { const c = porId.get(t.produto) || {}; return Object.assign(vestir(t), { produtoNome: c.nome || 'Peça ' + t.produto, produtoCodigo: c.codigo || '', produtoFoto: c.foto || '' }); });
+    return J({ ok: true, data, eu: quemSou(), podeAceitar, funcoes: cfg.funcoes, produtos, outras });
+  }
+  if (p === '/esteira/tarefa' && req.method === 'POST') {
+    const d = await req.json().catch(() => ({})), id = Number(d.id);
+    const t = id > 0 ? await env.DB.prepare('SELECT * FROM est_tarefa WHERE id=?').bind(id).first() : null;
+    if (!t) return J({ ok: false, erro: 'Esta tarefa não existe mais. Atualize a tela.' }, 404);
+    if (t.status === 'dispensada') return J({ ok: false, erro: 'Esta tarefa foi dispensada quando a peça foi aceita para o site.' }, 400);
+    const v = estVestirTarefa_(t, await escalaHoje(), eu, podeAceitar, nomeDe);
+    if (!v.posso) return J({ ok: false, erro: 'Esta tarefa é de quem está em ' + t.funcao + ' hoje' + (v.quem ? ' (' + v.quem + ')' : '') + '.' }, 403);
+    const obs = d.obs == null ? String(t.obs || '') : String(d.obs).trim().slice(0, 300);
+    if (d.feita === false) await env.DB.prepare("UPDATE est_tarefa SET status='pendente', feita_em=NULL, feita_por=NULL, obs=? WHERE id=?").bind(obs, id).run();
+    else await env.DB.prepare("UPDATE est_tarefa SET status='feita', feita_em=?, feita_por=?, obs=? WHERE id=?").bind(agora, eu, obs, id).run();
+    const nova = await env.DB.prepare('SELECT * FROM est_tarefa WHERE id=?').bind(id).first();
+    return J({ ok: true, tarefa: estVestirTarefa_(nova, await escalaHoje(), eu, podeAceitar, nomeDe) });
+  }
+  if (p === '/esteira/preparar' && req.method === 'POST') {
+    if (!podeAceitar) return J({ ok: false, erro: 'Só o administrador total ou quem aceita peças para o site coloca peça em preparação.' }, 403);
+    const d = await req.json().catch(() => ({})), id = String(d.id || '').trim().slice(0, 40);
+    if (!id) return J({ ok: false, erro: 'Escolha a peça que vai para a preparação.' }, 400);
+    const atual = await env.DB.prepare('SELECT etapa FROM est_produto WHERE id=?').bind(id).first();
+    if (atual && atual.etapa === 'preparacao') return J({ ok: true, jaEstava: true, criadas: 0 });
+    const nome = String(d.nome || '').slice(0, 120), codigo = String(d.codigo || '').slice(0, 40), foto = /^https:\/\//.test(String(d.foto || '')) ? String(d.foto).slice(0, 500) : '';
+    const ops = [env.DB.prepare("INSERT INTO est_produto (id, etapa, preparado_em, preparado_por, ref_nome, ref_codigo, ref_foto) VALUES (?, 'preparacao', ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET etapa='preparacao', aceito_em=NULL, aceito_por=NULL, preparado_em=excluded.preparado_em, preparado_por=excluded.preparado_por, ref_nome=excluded.ref_nome, ref_codigo=excluded.ref_codigo, ref_foto=excluded.ref_foto").bind(id, agora, eu, nome, codigo, foto)];
+    cfg.modelosPreparacao.forEach((m) => ops.push(env.DB.prepare("INSERT INTO est_tarefa (produto, tipo, titulo, instrucao, funcao, status, origem, criada_em, criada_por) VALUES (?, ?, ?, ?, ?, 'pendente', 'preparacao', ?, ?)").bind(id, m.tipo, m.titulo, m.instrucao, m.funcao, agora, eu)));
+    await env.DB.batch(ops);
+    return J({ ok: true, criadas: cfg.modelosPreparacao.length });
+  }
+  if (p === '/esteira/tarefa-nova' && req.method === 'POST') {
+    if (!podeAceitar) return J({ ok: false, erro: 'Só o administrador total ou quem aceita peças para o site cria tarefa.' }, 403);
+    const d = await req.json().catch(() => ({})), produto = String(d.produto || '').trim().slice(0, 40), titulo = String(d.titulo || '').trim().slice(0, 60), funcao = String(d.funcao || '').trim().slice(0, 40);
+    if (!produto) return J({ ok: false, erro: 'Escolha a peça da tarefa.' }, 400);
+    if (!titulo) return J({ ok: false, erro: 'Escreva o que precisa ser feito.' }, 400);
+    if (funcao && !cfg.funcoes.includes(funcao)) return J({ ok: false, erro: 'Essa função não está no rodízio. Confira em Configurações.' }, 400);
+    const tipo = EST_TIPOS_TAREFA_.includes(d.tipo) ? d.tipo : 'outro';
+    const r = await env.DB.prepare("INSERT INTO est_tarefa (produto, tipo, titulo, instrucao, funcao, status, origem, criada_em, criada_por) VALUES (?, ?, ?, ?, ?, 'pendente', 'avulsa', ?, ?)").bind(produto, tipo, titulo, String(d.instrucao || '').trim().slice(0, 500), funcao, agora, eu).run();
+    return J({ ok: true, id: r.meta.last_row_id });
+  }
+  if (p === '/esteira/aceitar' && req.method === 'POST') {             // o navegador já reativou a peça no catálogo; aqui só registra
+    if (!podeAceitar) return J({ ok: false, erro: 'Só o administrador total ou quem tem a marca "Aceita para o site" aceita peças.' }, 403);
+    const d = await req.json().catch(() => ({})), id = String(d.id || '').trim().slice(0, 40);
+    const atual = id ? await env.DB.prepare('SELECT etapa FROM est_produto WHERE id=?').bind(id).first() : null;
+    if (!atual || atual.etapa !== 'preparacao') return J({ ok: false, erro: 'Esta peça não está em preparação. Atualize a tela.' }, 400);
+    const r = await env.DB.batch([
+      env.DB.prepare("UPDATE est_produto SET etapa='no_site', aceito_em=?, aceito_por=? WHERE id=?").bind(agora, eu, id),
+      env.DB.prepare("UPDATE est_tarefa SET status='dispensada', obs=CASE WHEN obs IS NULL OR obs='' THEN 'Peça aceita para o site sem esta tarefa.' ELSE obs END WHERE produto=? AND status='pendente' AND origem IN ('preparacao', 'avulsa')").bind(id),
+    ]);
+    try { await env.CACHE.delete('est:catalogo:v1'); } catch (e) { /* a lista se renova em 10 min */ }   // a peça reativada passa a contar já
+    return J({ ok: true, dispensadas: (r[1] && r[1].meta && r[1].meta.changes) || 0, aceito_em: agora });
   }
   // ---- daqui para baixo: só Admin total ----
   if (!admin) return J({ ok: false, erro: 'Só o administrador total acessa esta parte da Esteira.' }, 403);
@@ -6197,9 +6304,11 @@ async function rotasEsteira_(env, req, url, J, perms) {
   }
   if (p === '/esteira/config' && req.method === 'POST') {
     const d = await req.json().catch(() => ({})), c = d.config || {};
-    const novo = { porPessoa: Number(c.porPessoa), diasSemRepetir: Number(c.diasSemRepetir), pesos: {}, funcoes: Array.isArray(c.funcoes) ? c.funcoes : cfg.funcoes, instrucoes: {} };
-    for (const k of Object.keys(EST_CFG_PADRAO_.pesos)) { const v = Number((c.pesos || {})[k]); novo.pesos[k] = Number.isFinite(v) ? Math.max(0, Math.min(500, v)) : EST_CFG_PADRAO_.pesos[k]; }
-    for (const [f, t] of Object.entries(c.instrucoes || {})) novo.instrucoes[String(f).slice(0, 40)] = String(t || '').slice(0, 1500);
+    // v7.42.0: salvamento parcial — o que não veio (ex.: só os modelos da preparação) fica como estava
+    const novo = { porPessoa: Number(c.porPessoa === undefined ? cfg.porPessoa : c.porPessoa), diasSemRepetir: Number(c.diasSemRepetir === undefined ? cfg.diasSemRepetir : c.diasSemRepetir), pesos: {}, funcoes: Array.isArray(c.funcoes) ? c.funcoes : cfg.funcoes, instrucoes: {}, modelosPreparacao: cfg.modelosPreparacao };
+    for (const k of Object.keys(EST_CFG_PADRAO_.pesos)) { const v = Number((c.pesos || cfg.pesos)[k]); novo.pesos[k] = Number.isFinite(v) ? Math.max(0, Math.min(500, v)) : EST_CFG_PADRAO_.pesos[k]; }
+    for (const [f, t] of Object.entries(c.instrucoes || cfg.instrucoes || {})) novo.instrucoes[String(f).slice(0, 40)] = String(t || '').slice(0, 1500);
+    if (c.modelosPreparacao !== undefined) { const m = estModelos_(c.modelosPreparacao); if (!m) return J({ ok: false, erro: 'Deixe pelo menos uma tarefa de preparação com título.' }, 400); novo.modelosPreparacao = m; }
     if (!(novo.porPessoa >= 1 && novo.porPessoa <= 60)) return J({ ok: false, erro: 'Peças por pessoa: escolha de 1 a 60.' }, 400);
     if (!(novo.diasSemRepetir >= 0 && novo.diasSemRepetir <= 120)) return J({ ok: false, erro: 'Dias sem repetir: escolha de 0 a 120.' }, 400);
     novo.funcoes = novo.funcoes.map((f) => String(f || '').trim().slice(0, 40)).filter(Boolean).slice(0, 12);

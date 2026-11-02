@@ -6,6 +6,15 @@ versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
 <!-- novas versões entram logo abaixo desta linha -->
 
+## 7.42.0 — Esteira de Produtos (entrega 2: Preparação) — 01/11/2026
+- Nova aba **Preparação** na esteira.html (toda a equipe vê): cada peça em preparação mostra foto, nome, progresso e o checklist de tarefas com "Feito", observação curta e "Desfazer".
+- Tarefas padrão (editáveis em Configurações → Tarefas da preparação): Cadastro conferido, 1ª foto, Fotos de detalhe, Foto no manequim, Conferir cores e tamanhos — cada uma com a função que faz. Quem está na função do dia marca; Admin total e quem tem "Aceita para o site" marcam qualquer uma.
+- Tarefa de foto: "Adicionar fotos" (câmera ou galeria) sobe pelo mesmo servidor de fotos do painel (`tenkiter-midia` /u) e acrescenta à galeria da peça pelo pacote completo do `update` (peça sem foto: a primeira vira capa).
+- **Aceitar para o site** (Admin total ou marca "aceita"), com confirmação no próprio botão: peça arquivada é reativada no catálogo (`bulkUpdate` reativar) antes de registrar; peça já ativa só é marcada. O que faltava fica dispensado.
+- "Colocar peça em preparação" com busca por nome/código no catálogo; tarefa avulsa por peça.
+- Aba **Hoje** ganha "Tarefas da sua função". "Pedir foto nova" na conferência cria a tarefa "Foto nova" para quem está em Fotos.
+- Servidor: tabela `est_tarefa`, colunas novas em `est_produto` (`etapa`, `aceito_em`, `aceito_por` e referência do nome/foto) por ALTER seguro; rotas `/esteira/preparacao`, `/preparar`, `/tarefa`, `/tarefa-nova`, `/aceitar`; Configurações aceitam salvamento parcial (`modelosPreparacao`).
+
 ## [7.41.1] - 2026-11-01
 
 - Individuais/Grupos fixos em Em atendimento e Todos; grupos internos entram direto em atendimento e não são encerrados nem contam nas regras de clientes.
