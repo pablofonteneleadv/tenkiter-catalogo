@@ -385,7 +385,7 @@ try { tkSelExpirar_(); } catch (e) {}
         if (alt.length) { porBusca = alt; buscaPorSinonimo_ = busca; }
       }
     }
-    listaFiltradaAtual = ordenarLista_(porBusca.filter(p => passaFiltros(p)));
+    listaFiltradaAtual = agruparFamilias_(ordenarLista_(porBusca.filter(p => passaFiltros(p))));
     // v6.7: opções AO VIVO — cada menu só oferece o que existe (peça ativa) combinado com os OUTROS filtros marcados.
     try {
       const F = { cat: ['chips-categoria', filtroCategorias, p => listaDeTags(p.Categoria), 'details-categoria'], gen: ['chips-genero', filtroGeneros, p => listaDeTags(p.Genero), 'details-genero'], cor: ['chips-cor', filtroCores, p => listaDeTags(textoPlano(p.Cores)), 'details-cor'], tam: ['chips-tamanho', filtroTamanhos, p => tagsTamanhoCliente_(p), 'details-tamanho'], tec: ['chips-tecido', filtroTecidos, p => { const t=window.TKTecido&&TKTecido.ler(p);return t?[t]:[]; }, 'details-tecido'] };
@@ -407,7 +407,7 @@ try { tkSelExpirar_(); } catch (e) {}
     } catch (e) {}
     // Busca nunca pode "sumir" por causa de um filtro escondido na gaveta: se com os filtros deu zero, mostra o resultado da loja toda.
     buscaIgnorouFiltros = !!(termos.length && filtrosAtivos && !listaFiltradaAtual.length && porBusca.length);
-    if (buscaIgnorouFiltros) listaFiltradaAtual = ordenarLista_(porBusca);
+    if (buscaIgnorouFiltros) listaFiltradaAtual = agruparFamilias_(ordenarLista_(porBusca));
     itensVisiveis = POR_PAGINA;
     renderEtiquetasAtivas_();
     renderizarGrid();
@@ -482,6 +482,63 @@ try { tkSelExpirar_(); } catch (e) {}
     return lista;                                   // "mais recentes": a ordem que o servidor mandou
   }
   document.getElementById('ordem').addEventListener('change', () => aplicarFiltros());
+
+  /* v7.44.0: família de produtos — cada tamanho continua um card, mas os da mesma família ficam juntos, na ordem da família,
+   * na posição do primeiro membro que aparece. Filtro/busca valem por produto. Sem a lista de famílias (erro, lentidão
+   * acima de 2,5 s, offline) a vitrine fica exatamente como antes. A lista vem do Worker (pública, pequena) com cache curto. */
+  const FAM_CHAVE_ = 'tk_familias_v1', FAM_VALIDADE_ = 10 * 60 * 1000;
+  let familiaDe_ = new Map();          // ID do produto → { familia, ordem, rotulo }
+  let membrosFamilia_ = new Map();     // id da família → [{ produto, rotulo, ordem }]
+  function usarFamilias_(lista) {
+    const de = new Map(), mem = new Map();
+    (Array.isArray(lista) ? lista : []).forEach(f => {
+      if (!f || !f.id || !Array.isArray(f.membros) || f.membros.length < 2) return;
+      const ms = f.membros.filter(m => m && m.produto != null).map(m => ({ produto: String(m.produto), rotulo: String(m.rotulo || ''), ordem: Number(m.ordem) || 0 })).sort((a, b) => a.ordem - b.ordem);
+      mem.set(String(f.id), ms); ms.forEach(m => de.set(m.produto, { familia: String(f.id), ordem: m.ordem, rotulo: m.rotulo }));
+    });
+    const mudou = JSON.stringify([...mem]) !== JSON.stringify([...membrosFamilia_]);
+    familiaDe_ = de; membrosFamilia_ = mem;
+    return mudou;
+  }
+  /** Junta os membros de cada família que passaram no filtro na posição do primeiro deles, na ordem da família. */
+  function agruparFamilias_(lista) {
+    if (!familiaDe_.size || !lista || lista.length < 2) return lista;
+    const porFam = new Map();
+    lista.forEach(p => { const f = familiaDe_.get(String(p.ID)); if (f) { const l = porFam.get(f.familia) || []; l.push(p); porFam.set(f.familia, l); } });
+    if (!porFam.size) return lista;
+    const feitas = new Set(), out = [];
+    lista.forEach(p => {
+      const f = familiaDe_.get(String(p.ID));
+      if (!f) { out.push(p); return; }
+      if (feitas.has(f.familia)) return;
+      feitas.add(f.familia);
+      porFam.get(f.familia).slice().sort((a, b) => familiaDe_.get(String(a.ID)).ordem - familiaDe_.get(String(b.ID)).ordem).forEach(x => out.push(x));
+    });
+    return out;
+  }
+  window.tkAgruparFamilias = agruparFamilias_;
+  function irmaosDe_(id) {
+    const f = familiaDe_.get(String(id)); if (!f) return [];
+    return (membrosFamilia_.get(f.familia) || []).map(m => ({ m, p: produtos.find(x => String(x.ID) === m.produto) })).filter(x => x.p);
+  }
+  (function carregarFamilias_() {
+    let cache = null;
+    try { cache = JSON.parse(localStorage.getItem(FAM_CHAVE_) || 'null'); } catch (e) { cache = null; }
+    if (cache && Array.isArray(cache.familias) && Date.now() - (Number(cache.em) || 0) < FAM_VALIDADE_) usarFamilias_(cache.familias);   // pinta já agrupado
+    if (typeof INSTAGRAM_URL === 'undefined' || typeof fetch !== 'function') return;
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const limite = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 2500);
+    fetch(INSTAGRAM_URL + '/familias', ctl ? { signal: ctl.signal } : undefined).then(r => r.ok ? r.json() : null).then(j => {
+      clearTimeout(limite);
+      if (!j || !j.ok || !Array.isArray(j.familias)) return;
+      try { localStorage.setItem(FAM_CHAVE_, JSON.stringify({ em: Date.now(), familias: j.familias })); } catch (e) {}
+      if (!usarFamilias_(j.familias) || !produtos.length) return;
+      // Já pintou sem famílias: só reorganiza agora se a pessoa ainda está no topo e nada está aberto (sem pulo de tela);
+      // senão, o agrupamento entra na próxima vez que a grade for desenhada (filtro, busca, ordem ou lista nova).
+      const aberto = document.querySelector('#overlay.aberto') || (window.TKCamadas && TKCamadas.total && TKCamadas.total() > 0);
+      if ((window.scrollY || 0) < 120 && !aberto) { listaFiltradaAtual = agruparFamilias_(listaFiltradaAtual); renderizarGrid(); }
+    }).catch(() => { clearTimeout(limite); });
+  })();
   const semAcentoBusca = (v) => String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const indiceBusca = new Map(); // ID -> { texto, palavras } (não grava nada no produto)
   function indiceDe(p) {
@@ -993,6 +1050,7 @@ try { tkSelExpirar_(); } catch (e) {}
         </div>
         <div class="tags">${escaparHtml(p.Categoria)} · ${escaparHtml(p.Genero)}</div>
         ${linhaTamanhoCliente_(p)}
+        <div class="outros-tamanhos" id="outros-tamanhos" hidden></div>
         ${p.Cores ? `<div class="extra"><strong>Cores:</strong> ${escaparHtml(textoPlano(p.Cores))}</div>` : ''}
         ${TKTecido.semDescricao(p.Descricao) ? `<div class="desc">${escaparHtml(TKTecido.semDescricao(p.Descricao))}</div>` : ''}
         ${disp ? `<div class="disponibilidade ${disp.classe}" style="margin-top:10px;font-size:0.8rem;">${disp.texto}</div>` : ''}
@@ -1019,7 +1077,10 @@ try { tkSelExpirar_(); } catch (e) {}
     urlAbertura.searchParams.delete('id'); urlAbertura.searchParams.delete('c'); urlAbertura.searchParams.delete('f');
     if (p.Codigo) urlAbertura.searchParams.set('c', p.Codigo); else urlAbertura.searchParams.set('id', p.ID);
     if (slideValido) urlAbertura.searchParams.set('f', String(slideInicial + 1));
+    const jaAberto = document.getElementById('overlay').classList.contains('aberto');
     abrirComHistorico_('overlay', urlAbertura);
+    if (jaAberto) { try { window.history.replaceState(window.history.state, '', urlAbertura); } catch (e) {} }   // v7.44.0: trocar de tamanho com a peça aberta
+    pintarOutrosTamanhos_(p);
     habilitarArrastarParaFechar(document.getElementById('modal-conteudo'), fecharDetalhe);
     document.getElementById('btn-fechar-modal').addEventListener('click', fecharDetalhe);
     // favoritar/sacola mudam só o botão (antes a folha era redesenhada: voltava à 1ª foto, ao topo, e contava outra visualização)
@@ -1126,6 +1187,25 @@ try { tkSelExpirar_(); } catch (e) {}
       window.__navSlide = (d) => mostrarSlide(atual + d);
     } else { window.__navSlide = null; }
     if (slideValido) mostrarSlide(slideInicial); // veio de um link de uma foto específica (?f=<n>)
+  }
+
+  /** v7.44.0: "Outros tamanhos: P · M · G" na peça aberta, levando aos irmãos da família (montado com nós, sem HTML com dados). */
+  function pintarOutrosTamanhos_(p) {
+    const box = document.getElementById('outros-tamanhos'); if (!box) return;
+    const irmaos = irmaosDe_(p.ID);
+    box.textContent = '';
+    if (irmaos.length < 2) { box.hidden = true; return; }
+    const rot = document.createElement('strong'); rot.textContent = 'Outros tamanhos:'; box.appendChild(rot);
+    const lista = document.createElement('div'); lista.className = 'ot-lista'; lista.setAttribute('role', 'list');
+    irmaos.forEach(({ m, p: q }) => {
+      const atual = String(q.ID) === String(p.ID), nome = m.rotulo || q.Nome;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'ot-tam' + (estaEsgotado(q) ? ' esgotado' : ''); b.setAttribute('role', 'listitem');
+      b.textContent = nome; b.dataset.irmao = q.ID;
+      if (atual) { b.setAttribute('aria-current', 'true'); b.setAttribute('aria-label', nome + ': tamanho aberto agora'); b.disabled = true; }
+      else { b.setAttribute('aria-label', 'Ver o tamanho ' + nome + (estaEsgotado(q) ? ' (esgotado)' : '')); b.addEventListener('click', () => { (window.abrirDetalhe || abrirDetalhe)(q.ID); const mc = document.getElementById('modal-conteudo'); if (mc) mc.scrollTop = 0; }); }
+      lista.appendChild(b);
+    });
+    box.appendChild(lista); box.hidden = false;
   }
 
   // Reconhece tanto vídeo antigo (Drive, tocado num <iframe>) quanto vídeo novo (Cloudinary,
