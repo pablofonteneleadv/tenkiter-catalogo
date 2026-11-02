@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@700;800&display=swap">
 <title>Esteira — TENKiTER Modas</title>
 <style>
-  /* v7.41.0 — Esteira de Produtos: celular primeiro, mesma identidade do painel (preto, laranja, areia) */
+  /* v7.41.0 — Esteira de Produtos (7.42.0 preparação; 7.43.0 pedidos): celular primeiro, mesma identidade do painel (preto, laranja, areia) */
   :root { --preto:#0d0d0d; --laranja:#E67E22; --laranja-txt:#A85200; --areia:#F5F1E8; --branco:#fff; --linha:#e5dfd3; --suave:#5c5650; --verde:#198754; --verde-fundo:#e6f4ec; --alerta:#8a4b00; --alerta-fundo:#fdf0dc; --vermelho:#c62828; --vermelho-fundo:#fdecea; }
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
@@ -25,6 +25,7 @@
   nav.abas { display:flex; gap:4px; overflow-x:auto; padding:8px 0 0; }
   nav.abas button { flex:none; min-height:44px; padding:0 11px; border:0; border-radius:10px 10px 0 0; background:transparent; color:#d9d2c5; font:600 .95rem "Inter",sans-serif; cursor:pointer; }
   nav.abas button[aria-selected="true"] { background:var(--areia); color:var(--preto); }
+  nav.abas.curto { gap:2px; } nav.abas.curto button { padding:0 7px; }   /* v7.43.0: 5 abas no celular do Admin */
   main { max-width:760px; margin:0 auto; padding:16px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px)); display:grid; gap:14px; }
   .card { background:var(--branco); border:1px solid var(--linha); border-radius:14px; padding:14px; display:grid; gap:10px; min-width:0; }
   .card h2, .card h3 { margin:0; font-size:1.05rem; }
@@ -53,7 +54,7 @@
   button.bt:disabled { opacity:.55; cursor:default; }
   .dois { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   label.campo { display:grid; gap:4px; font-size:.88rem; font-weight:600; }
-  input[type=text], input[type=tel], input[type=number], input[type=password], select, textarea { min-height:46px; border:1px solid #cfc6b6; border-radius:10px; padding:8px 12px; font:inherit; background:#fff; color:var(--preto); width:100%; }
+  input[type=text], input[type=tel], input[type=number], input[type=password], input[type=date], select, textarea { min-height:46px; border:1px solid #cfc6b6; border-radius:10px; padding:8px 12px; font:inherit; background:#fff; color:var(--preto); width:100%; }
   textarea { min-height:90px; resize:vertical; }
   .erro { color:var(--vermelho); font-size:.9rem; }
   .ok { color:var(--verde); font-size:.9rem; }
@@ -108,6 +109,25 @@
   p[role=status]:empty { display:none; }
   .busca-res { display:grid; gap:8px; }
   .nova-t { display:grid; gap:8px; background:var(--areia); border-radius:12px; padding:10px; }
+  /* v7.43.0 — pedidos ao fornecedor, chegada com contagem cega e aprovação */
+  .bt.discreto { min-height:44px; background:transparent; border-color:transparent; text-decoration:underline; padding:0 8px; font-weight:600; color:var(--suave); }
+  .bt.voltar { justify-self:start; padding-left:2px; }
+  .aviso.ok { background:var(--verde-fundo); color:var(--verde); }
+  p.aviso { margin:0; }
+  .itens-ped { display:grid; gap:14px; }
+  .item-ped { display:grid; gap:8px; border-top:1px solid var(--linha); padding-top:12px; }
+  .item-ped:first-child { border-top:0; padding-top:0; }
+  .prep-topo .bt.discreto { flex:none; }
+  .minis { display:flex; flex-wrap:wrap; gap:10px; }
+  .mini { position:relative; }
+  .mini-img { width:56px; height:70px; border-radius:8px; object-fit:cover; background:var(--linha); display:block; }
+  .mini .tirar { position:absolute; top:-12px; right:-14px; width:44px; height:44px; border:0; background:none; padding:0; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .mini .tirar span { width:24px; height:24px; border-radius:50%; background:var(--preto); color:#fff; font-size:1rem; line-height:24px; text-align:center; }
+  .campo-fotos { display:grid; gap:8px; justify-items:start; }
+  .bt.decisao { padding:0 10px; }
+  .aviso-ped .bt { justify-self:start; }
+  .prep-topo .t > b, .prep-topo .t > small { display:block; overflow-wrap:anywhere; }
+  main[data-tela=pedidos] .card p { margin:0; }
   @media (min-width:700px) { .fundo { align-items:center; } .folha { border-radius:18px; } .acoes-t { justify-content:flex-end; } .acoes-t .bt:not(.discreto) { flex:0 0 200px; } .tarefa .acoes-t:has(.discreto) { justify-content:flex-start; } }
   @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
 </style>
@@ -119,7 +139,7 @@
 </header>
 <main id="app" aria-live="polite"><div class="card">Carregando…</div></main>
 
-<script src="common.js?v=7.41.0"></script>
+<script src="common.js?v=7.43.0"></script>
 <script src="conta.js"></script>
 <script>
 (function () {
@@ -170,17 +190,25 @@
   /* ---------- abas ---------- */
   function desenharAbas() {
     const nav = $('abas'); nav.replaceChildren();
-    const abas = [['hoje', 'Hoje'], ['prep', 'Preparação']].concat(EU && EU.admin ? [['painel', 'Painel'], ['config', 'Configurações']] : []);
+    const abas = [['hoje', 'Hoje', 'Hoje'], ['prep', 'Preparação', 'Preparo'], ['pedidos', 'Pedidos', 'Pedidos']].concat(EU && EU.admin ? [['painel', 'Painel', 'Painel'], ['config', 'Configurações', 'Ajustes']] : []);
     nav.hidden = abas.length < 2;
-    abas.forEach(([id, rot]) => { const b = el('button', '', rot); b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(ABA === id)); b.onclick = () => { ABA = id; desenharAbas(); abrirAba(); }; nav.append(b); });
+    const curto = abas.length > 4 && window.matchMedia('(max-width: 560px)').matches;   // v7.43.0: 5 abas cabem em 390 px sem rolar
+    nav.classList.toggle('curto', curto);
+    abas.forEach(([id, rot, rc]) => { const b = el('button', '', curto ? rc : rot); b.type = 'button'; b.dataset.aba = id; if (curto && rc !== rot) b.setAttribute('aria-label', rot); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(ABA === id)); b.onclick = () => { ABA = id; desenharAbas(); abrirAba(); }; nav.append(b); });
   }
-  function abrirAba() { if (ABA === 'prep') return telaPrep(); if (ABA === 'painel') return telaPainel(); if (ABA === 'config') return telaConfig(); return telaHoje(); }
+  function abrirAba() { app.dataset.tela = ABA; if (ABA === 'prep') return telaPrep(); if (ABA === 'pedidos') return telaPedidos(); if (ABA === 'painel') return telaPainel(); if (ABA === 'config') return telaConfig(); return telaHoje(); }
 
   /* ---------- Hoje ---------- */
   async function telaHoje(recarregar) {
     if (!HOJE || recarregar !== false) { app.replaceChildren(el('div', 'card', 'Montando a sua lista de hoje…')); const r = await srv('/esteira/hoje'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, () => telaHoje()); HOJE = r; EU = r.eu; $('quem').textContent = EU.nome || ''; desenharAbas(); }
     app.replaceChildren();
     const r = HOJE;
+    const pd = r.pedidos || {}, irPedidos = () => { ABA = 'pedidos'; desenharAbas(); telaPedidos(); };   // v7.43.0: pendências de pedido
+    const avisoPed = (tit, txt, rot) => { const c = el('div', 'card funcao aviso-ped'); c.append(el('h3', '', tit), el('p', 'muted', txt), bt(rot, 'prim', irPedidos)); app.append(c); };
+    if (EU.admin) {
+      if (pd.aprovar) avisoPed('Chegada esperando aprovação', pd.aprovar === 1 ? 'A equipe conferiu 1 pedido. Veja as diferenças e aprove.' : 'A equipe conferiu ' + pd.aprovar + ' pedidos. Veja as diferenças e aprove.', 'Ver pedidos');
+      if (pd.aplicar) avisoPed('Pedido aprovado com itens fora do catálogo', 'Falta levar ao catálogo parte do que foi aprovado. Abra o pedido e toque em “Tentar de novo”.', 'Ver pedidos');
+    } else if (pd.conferir) avisoPed('Chegou pedido para conferir', pd.conferir === 1 ? '1 pedido do fornecedor está para chegar ou já chegou. Conte as peças quando ele estiver na loja.' : pd.conferir + ' pedidos do fornecedor estão para chegar ou já chegaram. Conte as peças quando estiverem na loja.', 'Conferir chegada');
     const prog = el('div', 'card'); prog.append(el('h2', '', 'Minha conferência'));
     if (!r.total) prog.append(el('p', 'muted', EU.confere ? 'Nenhuma peça para conferir hoje: tudo foi conferido ou atualizado nos últimos dias.' : 'Você não está marcada para conferir peças. O administrador muda isso em Configurações.'));
     else {
@@ -458,6 +486,467 @@
     return c;
   }
 
+  /* ---------- v7.43.0: Pedidos ao fornecedor (Admin total), chegada com contagem cega (equipe) e aprovação ----------
+   * Custo e quantidade pedida só chegam ao navegador do Admin total (o servidor filtra). A tela de contagem nunca os mostra, nem para o Admin. */
+  const diaBR = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(2, 4) : '');
+  const numBR = (v) => { const t = String(v == null ? '' : v).replace(/\s/g, '').replace(',', '.'); return t === '' ? NaN : Number(t); };
+  const reais = (n) => (n == null || n === '' || !Number.isFinite(Number(n)) ? '' : 'R$ ' + Number(n).toFixed(2).replace('.', ','));
+  const pecas = (n) => n + (Number(n) === 1 ? ' peça' : ' peças');
+  const bt = (txt, cls, fn) => { const b = el('button', 'bt' + (cls ? ' ' + cls : ''), txt); b.type = 'button'; if (fn) b.onclick = fn; return b; };
+  const acoes = (...bs) => { const a = el('div', 'acoes-t'); a.append(...bs); return a; };
+  const linhaStatus = () => { const p = el('p', 'muted'); p.setAttribute('role', 'status'); p.diga = (t, c) => { p.className = c || 'muted'; p.textContent = t || ''; }; return p; };
+  const voltar = () => bt('← Pedidos', 'discreto voltar', () => telaPedidos());
+  const campoTexto = (rot, valor, o) => { o = o || {}; const lb = el('label', 'campo'); lb.append(document.createTextNode(rot)); const i = el(o.area ? 'textarea' : 'input'); if (!o.area) i.type = o.tipo || 'text'; if (o.id) i.id = o.id; if (o.max) i.maxLength = o.max; if (o.ph) i.placeholder = o.ph; if (o.modo) i.inputMode = o.modo; if (o.lista) i.setAttribute('list', o.lista); if (o.min != null) i.min = String(o.min); i.value = valor == null ? '' : String(valor); lb.append(i); return [lb, i]; };
+  function listasDoCatalogo(cat) {                     // categorias e públicos que já existem no catálogo (nada inventado)
+    const frag = document.createDocumentFragment();
+    [['dl-cat', 'Categoria'], ['dl-gen', 'Genero']].forEach(([id, k]) => { const dl = el('datalist'); dl.id = id; const vs = new Set(); if (cat) cat.forEach((p) => String(p[k] || '').split(',').map((x) => x.trim()).filter(Boolean).forEach((x) => vs.add(x))); [...vs].sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach((v) => { const o = el('option'); o.value = v; dl.append(o); }); frag.append(dl); });
+    return frag;
+  }
+  function abrirFolha(chave, titulo, montar) {
+    const ant = document.activeElement;
+    const fundo = el('div', 'fundo'), folha = el('div', 'folha'); folha.setAttribute('role', 'dialog'); folha.setAttribute('aria-modal', 'true'); folha.setAttribute('aria-label', titulo);
+    const topo = el('div', 'topo'), x = el('button', 'fechar', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Fechar');
+    topo.append(el('b', '', titulo), x);
+    const corpo = el('div', 'corpo'), pe = el('div', 'pe'); folha.append(topo, corpo, pe); fundo.append(folha);
+    const fechar = () => { fundo.remove(); if (window.TKCamadas && TKCamadas.aberta(chave)) TKCamadas.desempilhar(chave); if (ant && ant.isConnected) ant.focus({ preventScroll: true }); };
+    x.onclick = fechar; fundo.onclick = (e) => { if (e.target === fundo) fechar(); };
+    fundo.onkeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); fechar(); } };
+    montar({ corpo, pe, fechar }); pe.hidden = !pe.childNodes.length;
+    document.body.append(fundo); if (window.TKCamadas) TKCamadas.empilhar(chave, () => fundo.remove());
+    const f = corpo.querySelector('input:not([type=file]), select, textarea'); if (f) f.focus({ preventScroll: true });
+    return fechar;
+  }
+  function miniFotos(urls, aoTirar) {
+    const box = el('div', 'minis');
+    urls.forEach((u, k) => { const m = el('div', 'mini'); m.append(foto(u, 'mini-img')); if (aoTirar) { const t = el('button', 'tirar'); t.type = 'button'; t.setAttribute('aria-label', 'Tirar a foto ' + (k + 1)); t.append(el('span', '', '×')); t.onclick = () => aoTirar(k); m.append(t); } box.append(m); });
+    return box;
+  }
+  /** Fotos pela câmera ou galeria: mesmo envio da preparação (reduz e sobe ao servidor de fotos); o endereço entra em `urls`. */
+  function campoFotos(urls, rotulo, max) {
+    const box = el('div', 'campo-fotos'), st = linhaStatus(), lim = max || 8;
+    const arq = el('input'); arq.type = 'file'; arq.accept = 'image/*'; arq.multiple = true; arq.hidden = true; arq.className = 'arq-foto';
+    const b = bt(rotulo || 'Adicionar fotos', '', () => arq.click()); b.title = 'Câmera ou galeria';
+    const pintar = () => { box.replaceChildren(miniFotos(urls, (k) => { urls.splice(k, 1); pintar(); }), b, arq, st); b.hidden = urls.length >= lim; };
+    arq.onchange = async () => {
+      const fs = [...arq.files].slice(0, lim - urls.length); arq.value = ''; if (!fs.length) return;
+      b.disabled = true; box.dataset.enviando = '1';
+      try { for (let k = 0; k < fs.length; k++) { st.diga('Enviando foto ' + (k + 1) + ' de ' + fs.length + '…'); urls.push(await enviarFoto(await reduzirFoto(fs[k]))); pintar(); } st.diga(fs.length === 1 ? 'Foto enviada.' : fs.length + ' fotos enviadas.', 'ok'); }
+      catch (e) { st.diga(e.message || 'Não consegui enviar a foto. Tente de novo.', 'erro'); }
+      b.disabled = false; delete box.dataset.enviando; pintar();
+    };
+    pintar(); return box;
+  }
+  const enviandoFoto = (raiz) => !!raiz.querySelector('.campo-fotos[data-enviando]');
+
+  async function telaPedidos() {
+    app.dataset.tela = 'pedidos';
+    app.replaceChildren(el('div', 'card', 'Carregando os pedidos…'));
+    const r = await srv('/esteira/pedidos'); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
+    app.replaceChildren();
+    if (!r.admin) {
+      const c = el('div', 'card'); c.append(el('h2', '', 'Chegou mercadoria'), el('p', 'muted', 'Escolha o pedido que chegou e conte cada modelo. A quantidade pedida não aparece: conte com calma.'));
+      app.append(c);
+      if (!r.pedidos.length) app.append(el('div', 'card vazio', 'Nenhum pedido a caminho agora.'));
+      r.pedidos.forEach((x) => app.append(linhaPedido(x, () => telaContagem(x.id))));
+      return;
+    }
+    const topo = el('div', 'card'); topo.append(el('h2', '', 'Pedidos ao fornecedor'), el('p', 'muted', 'Custo e quantidade pedida aparecem só para você. A equipe confere a chegada sem ver esses números.'), bt('Novo pedido', 'prim', () => telaEditor(0)));
+    app.append(topo);
+    if (!r.pedidos.length) app.append(el('div', 'card vazio', 'Nenhum pedido ainda. Toque em “Novo pedido” para começar.'));
+    [['Esperando sua aprovação', (x) => x.status === 'conferido'], ['Falta levar ao catálogo', (x) => x.status === 'aprovado' && x.faltaAplicar > 0], ['Rascunhos', (x) => x.status === 'rascunho'], ['A caminho', (x) => x.status === 'a_caminho'], ['Aprovados', (x) => x.status === 'aprovado' && !x.faltaAplicar], ['Cancelados', (x) => x.status === 'cancelado']].forEach(([tit, f]) => {
+      const l = r.pedidos.filter(f); if (!l.length) return;
+      app.append(el('p', 'grupo-tit', tit));
+      l.forEach((x) => app.append(linhaPedido(x, x.status === 'conferido' ? () => telaAprovacao(x.id) : x.status === 'aprovado' ? () => telaAplicacao(x.id) : x.status === 'cancelado' ? null : () => telaEditor(x.id))));
+    });
+  }
+  function linhaPedido(x, abrir) {
+    const b = el('button', 'peca pedido'); b.type = 'button'; b.dataset.pedido = String(x.id);
+    const t = el('div', 't'); t.append(el('b', '', x.fornecedor || 'Pedido ' + x.id), el('small', 'muted', ['Pedido nº ' + x.id, x.previsao ? 'chega ' + diaBR(x.previsao) : '', x.itens === 1 ? '1 item' : x.itens + ' itens'].filter(Boolean).join(' · ')));
+    const chip = x.status === 'conferido' ? el('span', 'chip al', 'aprovar') : x.status === 'aprovado' ? (x.faltaAplicar ? el('span', 'chip er', 'falta catálogo') : el('span', 'chip ok', 'aprovado')) : x.status === 'a_caminho' ? el('span', 'chip' + (x.contados ? ' al' : ''), x.contados ? x.contados + '/' + x.itens + ' contados' : 'a caminho') : el('span', 'chip', x.status === 'rascunho' ? 'rascunho' : 'cancelado');
+    b.append(t, chip);
+    if (abrir) b.onclick = abrir; else b.disabled = true;
+    return b;
+  }
+
+  /* ----- chegada: contagem cega (equipe; o Admin também pode contar por aqui) ----- */
+  async function telaContagem(id) {
+    app.replaceChildren(el('div', 'card', 'Abrindo o pedido…'));
+    const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
+    const ped = r.pedido; if (ped.status !== 'a_caminho') return telaPedidos();
+    const itens = ped.itens.map((x) => ({ id: x.id, tipo: x.tipo, nome: x.nome, tamanhos: x.tamanhos, cores: x.cores, fotos: x.fotos || [], qtd: x.qtd_contada, naoVeio: !!x.nao_veio, bateu: 'bateu' in x ? x.bateu : (x.tipo === 'extra' || x.qtd_contada == null || x.nao_veio ? null : x.situacao === 'bateu'), confirmado: false, recontar: false }));
+    const normais = itens.filter((x) => x.tipo !== 'extra'), cartoes = new Map();
+    app.replaceChildren();
+    const cab = el('div', 'card'), prog = el('div', 'progresso'), barra = el('div', 'barra'), bi = el('i'); barra.append(bi);
+    cab.append(voltar(), el('h2', '', 'Chegada: ' + (ped.fornecedor || 'pedido ' + ped.id)), el('p', 'muted', ['Pedido nº ' + ped.id, ped.previsao ? 'previsto para ' + diaBR(ped.previsao) : ''].filter(Boolean).join(' · ') + '. Conte cada modelo e digite o total: o sistema diz na hora se bateu com o pedido.'), prog, barra);
+    app.append(cab);
+    const atualizar = () => { const n = normais.filter((x) => x.qtd != null || x.naoVeio).length; prog.replaceChildren(el('b', 'num', n + '/' + normais.length), el('span', 'muted', n >= normais.length ? 'tudo contado' : 'itens contados')); bi.style.width = (normais.length ? Math.round(n / normais.length * 100) : 0) + '%'; };
+    const focarNo = (it, sel) => { const c = cartoes.get(it.id), a = c && c.querySelector(sel); if (a) a.focus({ preventScroll: true }); };
+    const pintar = (it) => {
+      const c = cartoes.get(it.id); c.replaceChildren();
+      const topo = el('div', 'prep-topo'), t = el('div', 't');
+      t.append(el('h3', '', it.nome), el('small', 'muted', [it.tipo === 'novo' ? 'Peça nova' : 'Reposição', it.tamanhos, it.cores].filter(Boolean).join(' · ')));
+      topo.append(foto(it.fotos[0]), t); c.append(topo);
+      if (it.fotos.length > 1) c.append(miniFotos(it.fotos.slice(1)));
+      const st = linhaStatus(), contado = (it.qtd != null || it.naoVeio) && !it.recontar;
+      if (contado && it.naoVeio) c.append(el('div', 'aviso al', 'Marcado: não veio.'), acoes(bt('Desfazer “não veio”', 'discreto', () => naoVeio(it, false, st))));
+      else if (contado && it.bateu) c.append(el('div', 'aviso ok', '✓ Bateu com o pedido (' + pecas(it.qtd) + ').'), acoes(bt('Recontar', 'discreto', () => recontar(it))));
+      else if (contado && !it.confirmado) c.append(el('div', 'aviso al', 'Não bateu com o pedido. Você contou ' + it.qtd + '. Reconte ou confirme.'), acoes(bt('Recontar', '', () => recontar(it)), bt('Confirmar ' + it.qtd, 'prim', () => { it.confirmado = true; pintar(it); focarNo(it, 'button'); })));
+      else if (contado) c.append(el('p', 'muted', 'Contagem confirmada: ' + it.qtd + ' (não bateu com o pedido).'), acoes(bt('Recontar', 'discreto', () => recontar(it))));
+      else {
+        const [lb, inp] = campoTexto(it.recontar ? 'Conte de novo: quantas chegaram?' : 'Quantas chegaram?', '', { tipo: 'number', modo: 'numeric', min: 0, ph: 'Digite o que contou' }); inp.className = 'qtd-contada';
+        const bOk = bt('Conferir', 'prim', () => contar(it, inp.value, st, bOk)); inp.onkeydown = (e) => { if (e.key === 'Enter') bOk.click(); };
+        c.append(lb, acoes(bt('Não veio', '', () => naoVeio(it, true, st)), bOk));
+        if (it.recontar) c.append(acoes(bt('Manter a contagem anterior', 'discreto', () => { it.recontar = false; pintar(it); })));
+      }
+      c.append(st);
+    };
+    const contar = async (it, v, st, b) => {
+      if (String(v).trim() === '' || !(Number(v) >= 0)) return st.diga('Digite quantas peças você contou (pode ser 0).', 'erro');
+      b.disabled = true; st.diga('Conferindo…');
+      const y = await srv('/esteira/pedidos/contar', { id: ped.id, item: it.id, qtd: Math.floor(Number(v)) });
+      if (!y.ok) { b.disabled = false; return st.diga(y.erro || 'Não consegui registrar a contagem. Tente de novo.', 'erro'); }
+      Object.assign(it, { qtd: Math.floor(Number(v)), naoVeio: false, bateu: y.bateu, confirmado: false, recontar: false });
+      pintar(it); atualizar(); focarNo(it, 'button');
+    };
+    const recontar = (it) => { it.recontar = true; pintar(it); focarNo(it, 'input'); };
+    const naoVeio = async (it, v, st) => {
+      st.diga('Salvando…');
+      const y = await srv('/esteira/pedidos/nao-veio', { id: ped.id, item: it.id, naoVeio: v });
+      if (!y.ok) return st.diga(y.erro || 'Não consegui salvar. Tente de novo.', 'erro');
+      Object.assign(it, { naoVeio: v, qtd: v ? 0 : null, bateu: null, recontar: false, confirmado: false }); pintar(it); atualizar(); focarNo(it, 'button, input');
+    };
+    normais.forEach((it) => { const c = el('div', 'card item-cont'); c.dataset.item = String(it.id); cartoes.set(it.id, c); pintar(it); app.append(c); });
+    // veio a mais
+    const cEx = el('div', 'card'), stE = linhaStatus(); cEx.id = 'extras';
+    const pintarExtras = () => {
+      cEx.replaceChildren(el('h3', '', 'Veio a mais'));
+      const ex = itens.filter((x) => x.tipo === 'extra');
+      if (!ex.length) cEx.append(el('p', 'muted', 'Chegou algum modelo que não está na lista? Inclua aqui com foto e quantidade.'));
+      ex.forEach((it) => {
+        const l = el('div', 'prep-topo extra'); l.dataset.item = String(it.id); const t = el('div', 't'); t.append(el('b', '', it.nome), el('small', 'muted', pecas(it.qtd)));
+        const tirar = bt('Tirar', 'discreto', async () => {
+          if (!tirar.dataset.confirma) { tirar.dataset.confirma = '1'; tirar.textContent = 'Tirar mesmo?'; return; }
+          tirar.disabled = true; const y = await srv('/esteira/pedidos/extra-remover', { id: ped.id, item: it.id });
+          if (!y.ok) { tirar.disabled = false; return stE.diga(y.erro || 'Não consegui tirar. Tente de novo.', 'erro'); }
+          itens.splice(itens.indexOf(it), 1); pintarExtras();
+        });
+        l.append(foto(it.fotos[0]), t, tirar); cEx.append(l);
+      });
+      cEx.append(bt('+ Veio um modelo que não está aqui', '', folhaExtra), stE);
+    };
+    const folhaExtra = () => abrirFolha('esteira-extra', 'Modelo que não está no pedido', ({ corpo, pe, fechar }) => {
+      const fotos = [], [lN, iN] = campoTexto('Nome ou descrição curta', '', { id: 'extra-nome', max: 120, ph: 'Ex.: blusa listrada azul' }), [lQ, iQ] = campoTexto('Quantas peças vieram?', '', { id: 'extra-qtd', tipo: 'number', modo: 'numeric', min: 1 });
+      const st = linhaStatus();
+      corpo.append(lN, lQ, el('h3', '', 'Foto do modelo'), campoFotos(fotos, 'Tirar ou escolher foto', 4), st);
+      const salvar = bt('Incluir na chegada', 'laranja', async () => {
+        if (!iN.value.trim()) { st.diga('Escreva o nome ou uma descrição curta.', 'erro'); return iN.focus(); }
+        if (!(Number(iQ.value) >= 1)) { st.diga('Digite quantas peças vieram (1 ou mais).', 'erro'); return iQ.focus(); }
+        if (enviandoFoto(corpo)) return st.diga('Espere a foto terminar de enviar.', 'erro');
+        salvar.disabled = true; st.diga('Salvando…');
+        const y = await srv('/esteira/pedidos/extra', { id: ped.id, nome: iN.value, qtd: Math.floor(Number(iQ.value)), fotos });
+        if (!y.ok) { salvar.disabled = false; return st.diga(y.erro || 'Não consegui incluir. Tente de novo.', 'erro'); }
+        itens.push({ id: y.item, tipo: 'extra', nome: iN.value.trim(), fotos: fotos.slice(), qtd: Math.floor(Number(iQ.value)) });
+        fechar(); pintarExtras();
+      });
+      pe.append(salvar);
+    });
+    app.append(cEx); pintarExtras();
+    const cFim = el('div', 'card'), stF = linhaStatus();
+    const bEnv = bt('Enviar para a Karla aprovar', 'laranja', async () => {
+      const falta = normais.filter((x) => x.qtd == null && !x.naoVeio);
+      if (falta.length) { stF.diga(falta.length === 1 ? 'Falta contar 1 item (ou marcar “Não veio”).' : 'Faltam contar ' + falta.length + ' itens (ou marcar “Não veio”).', 'erro'); cartoes.get(falta[0].id).scrollIntoView({ block: 'center' }); return; }
+      const semConf = normais.filter((x) => !x.naoVeio && x.bateu === false && !x.confirmado);
+      if (semConf.length) { stF.diga(semConf.length === 1 ? 'Reconte ou confirme o item que não bateu: ' + semConf[0].nome + '.' : 'Reconte ou confirme os ' + semConf.length + ' itens que não bateram.', 'erro'); cartoes.get(semConf[0].id).scrollIntoView({ block: 'center' }); return; }
+      bEnv.disabled = true; stF.diga('Enviando…');
+      const y = await srv('/esteira/pedidos/concluir', { id: ped.id });
+      if (!y.ok) { bEnv.disabled = false; return stF.diga(y.erro || 'Não consegui enviar. Tente de novo.', 'erro'); }
+      HOJE = null; app.replaceChildren();
+      const ok = el('div', 'card'); ok.id = 'chegada-enviada'; ok.append(el('h2', '', 'Chegada enviada'), el('p', '', 'A Karla vai ver as diferenças e aprovar. Obrigada pela contagem!'), bt('Voltar aos pedidos', 'prim', telaPedidos)); app.append(ok);
+    });
+    cFim.append(el('p', 'muted', 'Quando terminar de contar tudo, envie. Depois disso a contagem não muda mais.'), stF, bEnv); app.append(cFim);
+    atualizar();
+  }
+
+  /* ----- Admin total: montar o pedido ----- */
+  async function telaEditor(id) {
+    app.replaceChildren(el('div', 'card', 'Abrindo o pedido…'));
+    let ped = { id: 0, fornecedor: '', previsao: '', obs: '', fotos: [], itens: [], status: 'rascunho' };
+    if (id) { const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos); ped = r.pedido; }
+    if (ped.status === 'conferido') return telaAprovacao(ped.id);
+    if (ped.status === 'aprovado') return telaAplicacao(ped.id);
+    let cat = null; try { cat = await catalogoCompleto(); } catch (e) { cat = null; }
+    desenharEditor(ped, cat);
+  }
+  function desenharEditor(ped, cat, aviso) {
+    const itens = ped.itens.filter((x) => x.tipo !== 'extra').map((x) => Object.assign({}, x, { fotos: (x.fotos || []).slice(), custo: x.custo == null ? '' : String(x.custo).replace('.', ','), qtd_pedida: x.qtd_pedida || '' }));
+    const fotosPed = (ped.fotos || []).slice();
+    app.replaceChildren(listasDoCatalogo(cat));
+    const c1 = el('div', 'card'); c1.id = 'ped-editor';
+    const [lF, iF] = campoTexto('Fornecedor', ped.fornecedor, { id: 'ped-fornecedor', max: 80, ph: 'Nome do fornecedor' });
+    const [lP, iP] = campoTexto('Previsão de chegada', ped.previsao, { id: 'ped-previsao', tipo: 'date' });
+    const [lO, iO] = campoTexto('Observação (opcional)', ped.obs, { id: 'ped-obs', area: true, max: 500 }); iO.style.minHeight = '64px';
+    c1.append(voltar(), el('h2', '', ped.id ? 'Pedido nº ' + ped.id : 'Novo pedido'));
+    if (ped.status === 'a_caminho') c1.append(el('p', 'aviso al', 'A caminho: a equipe já vê este pedido em “Chegou mercadoria” (sem custo e sem quantidade).'));
+    c1.append(lF, lP, lO, el('h3', '', 'Fotos do pedido'), el('p', 'muted', 'Só você vê estas fotos (nota, conversa com o fornecedor).'), campoFotos(fotosPed, 'Adicionar fotos do pedido', 6));
+    const c2 = el('div', 'card'), caixa = el('div', 'itens-ped'), total = el('p', 'num');
+    c2.append(el('h2', '', 'Itens'), caixa, total);
+    const somar = () => { let pc = 0, cu = 0, sem = 0; itens.forEach((x) => { const q = Number(x.qtd_pedida) || 0, v = numBR(x.custo); pc += q; if (!Number.isFinite(v)) sem++; else cu += q * v; }); total.textContent = itens.length ? 'Total: ' + pecas(pc) + ' · custo ' + reais(cu) + (sem ? ' (' + sem + (sem === 1 ? ' item' : ' itens') + ' sem custo)' : '') : 'Nenhum item ainda. Inclua peças do catálogo (reposição) ou produtos novos.'; };
+    const focarQtd = (k) => setTimeout(() => { const i = caixa.querySelectorAll('input.qtd-ped')[k]; if (i) i.focus(); }, 60);
+    const linhaItem = (it) => {
+      const l = el('div', 'item-ped'); if (it.id) l.dataset.item = String(it.id);
+      const topo = el('div', 'prep-topo'), t = el('div', 't'), ref = it.tipo === 'reposicao' && cat ? cat.get(String(it.produto)) : null;
+      t.append(el('b', '', it.nome || 'Sem nome'), el('small', 'muted', it.tipo === 'novo' ? ['Produto novo', it.categoria, it.genero, Number.isFinite(numBR(it.preco)) ? reais(numBR(it.preco)) : 'consultar valor', it.tamanhos].filter(Boolean).join(' · ') : ['Reposição', ref && ref.Codigo, ref && ref.Estoque !== '' && ref.Estoque != null ? 'estoque hoje: ' + ref.Estoque : ''].filter(Boolean).join(' · ')));
+      topo.append(foto(it.fotos[0]), t); l.append(topo);
+      const d = el('div', 'dois');
+      const [lQ, iQ] = campoTexto('Quantidade', it.qtd_pedida, { tipo: 'number', modo: 'numeric', min: 1 }); iQ.className = 'qtd-ped'; iQ.oninput = () => { it.qtd_pedida = iQ.value; somar(); };
+      const [lC, iC] = campoTexto('Custo unitário (R$)', it.custo, { modo: 'decimal', ph: '0,00', max: 12 }); iC.className = 'custo-ped'; iC.oninput = () => { it.custo = iC.value; somar(); };
+      d.append(lQ, lC); l.append(d);
+      const ac = el('div', 'acoes-t');
+      if (it.tipo === 'novo') ac.append(bt('Editar produto', '', () => folhaNovo(it)));
+      if (!(it.qtd_contada != null || it.nao_veio)) ac.append(bt('Tirar do pedido', 'discreto', () => { itens.splice(itens.indexOf(it), 1); desenharItens(); }));
+      l.append(ac);
+      return l;
+    };
+    const desenharItens = () => { caixa.replaceChildren(...itens.map(linhaItem)); somar(); };
+    const folhaCatalogo = () => abrirFolha('esteira-busca-catalogo', 'Peça do catálogo (reposição)', ({ corpo, fechar }) => {
+      const [lb, inp] = campoTexto('Buscar no catálogo', '', { id: 'ped-busca', ph: 'Nome ou código da peça' }); inp.autocomplete = 'off';
+      const st = linhaStatus(), res = el('div', 'busca-res'); corpo.append(lb, st, res);
+      let espera = null;
+      const buscar = async () => {
+        const q = semAcento(inp.value.trim()); res.replaceChildren(); st.diga('');
+        if (q.length < 2) return st.diga(q ? 'Digite pelo menos 2 letras.' : '');
+        if (!cat) { try { st.diga('Buscando…'); cat = await catalogoCompleto(); } catch (e) { return st.diga(e.message, 'erro'); } }
+        if (semAcento(inp.value.trim()) !== q) return;
+        const ja = new Set(itens.filter((y) => y.tipo === 'reposicao').map((y) => String(y.produto)));
+        const achados = [...cat.values()].filter((y) => semAcento(y.Nome).includes(q) || semAcento(y.Codigo).includes(q) || String(y.ID) === q).slice(0, 12);
+        st.diga(achados.length ? '' : 'Nenhuma peça com esse nome ou código.');
+        achados.forEach((y) => {
+          const b = el('button', 'peca'); b.type = 'button'; const t = el('div', 't'), tem = ja.has(String(y.ID));
+          t.append(el('b', '', y.Nome || 'Peça ' + y.ID), el('small', 'muted', [y.Codigo, y.Estoque !== '' && y.Estoque != null ? 'estoque ' + y.Estoque : '', ehInativo(y) ? 'arquivada' : ''].filter(Boolean).join(' · ')));
+          b.append(foto(y.Foto_URL), t, el('span', 'chip ' + (tem ? 'ok' : 'al'), tem ? 'já no pedido' : 'Incluir'));
+          b.onclick = () => { if (tem) return st.diga('Esta peça já está no pedido: mude a quantidade nela.'); itens.push({ tipo: 'reposicao', produto: String(y.ID), nome: y.Nome || 'Peça ' + y.ID, fotos: y.Foto_URL ? [String(y.Foto_URL)] : [], qtd_pedida: '', custo: '' }); fechar(); desenharItens(); focarQtd(itens.length - 1); };
+          res.append(b);
+        });
+      };
+      inp.oninput = () => { clearTimeout(espera); espera = setTimeout(buscar, 250); };
+    });
+    const folhaNovo = (it) => abrirFolha('esteira-produto-novo', it ? 'Editar produto novo' : 'Produto novo', ({ corpo, pe, fechar }) => {
+      const x = it ? Object.assign({}, it, { fotos: it.fotos.slice() }) : { tipo: 'novo', nome: '', categoria: '', genero: '', preco: '', tamanhos: '', cores: '', fotos: [], qtd_pedida: '', custo: '' };
+      const [lN, iN] = campoTexto('Nome', x.nome, { id: 'novo-nome', max: 120, ph: 'Como vai aparecer no site' });
+      const [lC, iC] = campoTexto('Categoria', x.categoria, { id: 'novo-categoria', max: 120, lista: 'dl-cat', ph: 'Ex.: Vestidos' });
+      const [lG, iG] = campoTexto('Público / gênero', x.genero, { id: 'novo-genero', max: 80, lista: 'dl-gen', ph: 'Ex.: Feminino Adulto' });
+      const [lP, iP] = campoTexto('Preço de venda (R$)', x.preco ? String(x.preco).replace('.', ',') : '', { id: 'novo-preco', modo: 'decimal', max: 12, ph: 'Vazio = consultar valor' });
+      const [lT, iT] = campoTexto('Tamanhos', x.tamanhos, { id: 'novo-tamanhos', max: 200, ph: 'Ex.: P, M, G' });
+      const [lK, iK] = campoTexto('Cores', x.cores, { id: 'novo-cores', max: 200, ph: 'Ex.: Preto, Areia' });
+      const st = linhaStatus(), dois = el('div', 'dois'); dois.append(lT, lK);
+      corpo.append(lN, lC, lG, lP, dois, el('h3', '', 'Fotos do fornecedor'), el('p', 'muted', 'A primeira vira a capa no catálogo. A equipe usa as fotos para reconhecer a peça na chegada.'), campoFotos(x.fotos, 'Adicionar fotos do fornecedor', 8), st);
+      const ok = bt(it ? 'Salvar produto' : 'Incluir no pedido', 'laranja', () => {
+        Object.assign(x, { nome: iN.value.trim(), categoria: iC.value.trim(), genero: iG.value.trim(), preco: iP.value.trim(), tamanhos: iT.value.trim(), cores: iK.value.trim() });
+        if (!x.nome) { st.diga('Informe o nome do produto.', 'erro'); return iN.focus(); }
+        if (!x.categoria || !x.genero) { st.diga('Informe a categoria e o público: são necessários para criar a peça no catálogo.', 'erro'); return (x.categoria ? iG : iC).focus(); }
+        if (x.preco && !(numBR(x.preco) > 0)) { st.diga('Preço de venda inválido. Use só números, como 159,90 (ou deixe vazio para “consultar valor”).', 'erro'); return iP.focus(); }
+        if (enviandoFoto(corpo)) return st.diga('Espere as fotos terminarem de enviar.', 'erro');
+        if (it) Object.assign(it, x); else itens.push(x);
+        fechar(); desenharItens(); focarQtd(itens.indexOf(it || x));
+      });
+      pe.append(ok);
+    });
+    const novos = el('div', 'dois'); novos.append(bt('+ Peça do catálogo', '', folhaCatalogo), bt('+ Produto novo', '', () => folhaNovo(null)));
+    c2.append(novos);
+    const c3 = el('div', 'card'), stF = linhaStatus();
+    const pacote = () => ({ id: ped.id || undefined, fornecedor: iF.value, previsao: iP.value, obs: iO.value, fotos: fotosPed, itens: itens.map((x) => ({ id: x.id || undefined, tipo: x.tipo, produto: x.produto || '', nome: x.nome, categoria: x.categoria || '', genero: x.genero || '', preco: x.preco || '', tamanhos: x.tamanhos || '', cores: x.cores || '', fotos: x.fotos, qtd_pedida: x.qtd_pedida, custo: x.custo })) });
+    const salvar = async () => {
+      if (enviandoFoto(app)) { stF.diga('Espere as fotos terminarem de enviar.', 'erro'); return null; }
+      stF.diga('Salvando…'); const y = await srv('/esteira/pedidos/salvar', pacote());
+      if (!y.ok) { stF.diga(y.erro || 'Não consegui salvar. Tente de novo.', 'erro'); return null; }
+      return y.pedido;
+    };
+    const bSal = bt(ped.status === 'a_caminho' ? 'Salvar mudanças' : 'Salvar rascunho', '', async () => { bSal.disabled = true; const n = await salvar(); bSal.disabled = false; if (n) desenharEditor(n, cat, ['Salvo.', 'ok']); });
+    bSal.id = 'ped-salvar';
+    c3.append(stF);
+    if (ped.status === 'rascunho') {
+      const bEnv = bt('Salvar e marcar como enviado', 'laranja', async () => {
+        if (!itens.length) return stF.diga('Inclua pelo menos um item antes de enviar.', 'erro');
+        bEnv.disabled = true; const n = await salvar(); if (!n) { bEnv.disabled = false; return; }
+        const y = await srv('/esteira/pedidos/enviar', { id: n.id });
+        if (!y.ok) return desenharEditor(n, cat, [y.erro || 'Salvei, mas não consegui marcar como enviado. Tente de novo.', 'erro']);
+        HOJE = null; telaPedidos();
+      });
+      bEnv.id = 'ped-enviar';
+      c3.append(el('p', 'muted', 'Ao marcar como enviado, a equipe passa a ver o pedido em “Chegou mercadoria”, sem custo e sem quantidade.'), acoes(bSal, bEnv));
+    } else c3.append(acoes(bSal, bt('Conferir chegada (contagem cega)', '', () => telaContagem(ped.id))));
+    if (ped.id) {
+      const bCan = bt('Cancelar pedido', 'discreto', async () => {
+        if (!bCan.dataset.confirma) { bCan.dataset.confirma = '1'; bCan.textContent = 'Toque de novo para cancelar o pedido'; return; }
+        bCan.disabled = true; const y = await srv('/esteira/pedidos/cancelar', { id: ped.id });
+        if (!y.ok) { bCan.disabled = false; return stF.diga(y.erro || 'Não consegui cancelar.', 'erro'); }
+        HOJE = null; telaPedidos();
+      });
+      c3.append(acoes(bCan));
+    }
+    app.append(c1, c2, c3); desenharItens();
+    if (aviso) stF.diga(aviso[0], aviso[1]);
+  }
+
+  /* ----- Admin total: aprovar a chegada (só as diferenças) ----- */
+  async function telaAprovacao(id) {
+    app.replaceChildren(el('div', 'card', 'Abrindo a chegada…'));
+    const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
+    const ped = r.pedido; if (ped.status === 'aprovado') return telaAplicacao(id); if (ped.status !== 'conferido') return telaEditor(id);
+    let cat = null; try { cat = await catalogoCompleto(); } catch (e) { cat = null; }
+    const certos = ped.itens.filter((x) => x.situacao === 'bateu'), difs = ped.itens.filter((x) => x.situacao !== 'bateu'), cartoes = new Map();
+    app.replaceChildren(listasDoCatalogo(cat));
+    const cab = el('div', 'card'); cab.id = 'aprovar-cab';
+    cab.append(voltar(), el('h2', '', 'Aprovar chegada'), el('p', 'muted', [ped.fornecedor, 'pedido nº ' + ped.id, ped.conferido_por ? 'conferido por ' + ped.conferido_por : '', ped.conferido_em ? 'em ' + dataBR(ped.conferido_em) : ''].filter(Boolean).join(' · ')));
+    cab.append(el('div', 'aviso ok', certos.length ? (certos.length === 1 ? '✓ 1 item veio certo.' : '✓ ' + certos.length + ' itens vieram certos.') : 'Nenhum item bateu exatamente com o pedido.'));
+    cab.append(el('p', difs.length ? '' : 'muted', difs.length ? (difs.length === 1 ? '1 diferença para decidir:' : difs.length + ' diferenças para decidir:') : 'Sem diferenças: é só aprovar.'));
+    app.append(cab);
+    const ROT = { faltou: (x) => 'Faltou ' + (x.qtd_pedida - x.qtd_contada), sobrou: (x) => 'Sobrou ' + (x.qtd_contada - x.qtd_pedida), nao_veio: () => 'Não veio', extra: () => 'Veio a mais' };
+    const OPC = { faltou: [['aceitar', 'Aceitar o que veio'], ['cobrar', 'Cobrar fornecedor']], nao_veio: [['aceitar', 'Tudo bem, sem cobrar'], ['cobrar', 'Cobrar fornecedor']], sobrou: [['aceitar', 'Ficar com tudo'], ['devolver', 'Devolver a sobra']], extra: [['incluir', 'Incluir no estoque'], ['devolver', 'Devolver']] };
+    const decidir = async (x, corpo, st, b) => {
+      if (b) b.disabled = true; st.diga('Salvando…');
+      const y = await srv('/esteira/pedidos/decidir', Object.assign({ id: ped.id, item: x.id }, corpo));
+      if (!y.ok) { if (b) b.disabled = false; return st.diga(y.erro || 'Não consegui salvar a decisão. Tente de novo.', 'erro'); }
+      Object.assign(x, y.item, { editando: false }); pintar(x, 'Decisão salva.');
+    };
+    const formExtra = (x, st) => {
+      const box = el('div', 'nova-t');
+      const [lCu, iCu] = campoTexto('Custo unitário (R$)', x.custo == null ? '' : String(x.custo).replace('.', ','), { modo: 'decimal', max: 12, ph: '0,00' }); iCu.className = 'custo-extra';
+      const [lN, iN] = campoTexto('Nome no catálogo', x.nome, { max: 120 });
+      const [lC, iC] = campoTexto('Categoria', x.categoria, { max: 120, lista: 'dl-cat' }); iC.className = 'cat-extra';
+      const [lG, iG] = campoTexto('Público / gênero', x.genero, { max: 80, lista: 'dl-gen' }); iG.className = 'gen-extra';
+      const [lP, iP] = campoTexto('Preço de venda (R$)', x.preco ? String(x.preco).replace('.', ',') : '', { modo: 'decimal', max: 12, ph: 'Vazio = consultar valor' });
+      const [lT, iT] = campoTexto('Tamanhos', x.tamanhos, { max: 200 }), [lK, iK] = campoTexto('Cores', x.cores, { max: 200 });
+      const b = bt(x.decisao === 'incluir' ? 'Salvar dados' : 'Incluir com estes dados', 'prim', () => {
+        if (!Number.isFinite(numBR(iCu.value))) { st.diga('Informe o custo unitário do que veio a mais.', 'erro'); return iCu.focus(); }
+        if (!iC.value.trim() || !iG.value.trim()) { st.diga('Informe categoria e público: a peça vai ser criada no catálogo.', 'erro'); return (iC.value.trim() ? iG : iC).focus(); }
+        decidir(x, { decisao: 'incluir', custo: iCu.value, nome: iN.value, categoria: iC.value, genero: iG.value, preco: iP.value, tamanhos: iT.value, cores: iK.value }, st, b);
+      });
+      const dois = el('div', 'dois'); dois.append(lT, lK);
+      box.append(lCu, lN, lC, lG, lP, dois, b); return box;
+    };
+    const pintar = (x, msg) => {
+      const c = cartoes.get(x.id); c.replaceChildren();
+      const topo = el('div', 'prep-topo'), t = el('div', 't');
+      t.append(el('h3', '', x.nome), el('small', 'muted', x.tipo === 'extra' ? 'Contado: ' + x.qtd_contada + ' · não estava no pedido' : 'Pedido: ' + x.qtd_pedida + ' · Contado: ' + (x.nao_veio ? 0 : x.qtd_contada) + (x.custo != null ? ' · custo ' + reais(x.custo) : '')));
+      topo.append(foto(x.fotos[0]), t, el('span', 'chip ' + (x.situacao === 'extra' ? 'al' : 'er'), ROT[x.situacao](x))); c.append(topo);
+      if (x.fotos.length > 1) c.append(miniFotos(x.fotos.slice(1)));
+      const st = linhaStatus(), grupo = el('div', 'dois'); grupo.setAttribute('role', 'group'); grupo.setAttribute('aria-label', 'Decisão para ' + x.nome);
+      OPC[x.situacao].forEach(([v, rot]) => {
+        const marcado = x.decisao === v || (v === 'incluir' && x.editando && !x.decisao);
+        const b = bt((marcado ? '✓ ' : '') + rot, 'decisao', () => { if (v === 'incluir') { x.editando = true; pintar(x); return; } decidir(x, { decisao: v }, st, b); });
+        b.dataset.decisao = v; b.setAttribute('aria-pressed', String(marcado)); grupo.append(b);
+      });
+      c.append(grupo);
+      if (x.situacao === 'extra' && (x.editando || x.decisao === 'incluir')) c.append(formExtra(x, st));
+      c.append(st); if (msg) st.diga(msg, 'ok');
+    };
+    difs.forEach((x) => { const c = el('div', 'card dif'); c.dataset.item = String(x.id); cartoes.set(x.id, c); app.append(c); pintar(x); });
+    const cFim = el('div', 'card'), stF = linhaStatus();
+    const bAp = bt('Aprovar e liberar para preparação', 'laranja', async () => {
+      const falta = difs.filter((x) => !x.decisao);
+      if (falta.length) { stF.diga(falta.length === 1 ? 'Decida o item “' + falta[0].nome + '” antes de aprovar.' : 'Decida os ' + falta.length + ' itens com diferença antes de aprovar.', 'erro'); cartoes.get(falta[0].id).scrollIntoView({ block: 'center' }); return; }
+      bAp.disabled = true; stF.diga('Aprovando…');
+      const y = await srv('/esteira/pedidos/aprovar', { id: ped.id });
+      if (!y.ok) { bAp.disabled = false; return stF.diga(y.erro || 'Não consegui aprovar. Tente de novo.', 'erro'); }
+      HOJE = null; telaAplicacao(ped.id, true);
+    });
+    bAp.id = 'ped-aprovar';
+    cFim.append(el('p', 'muted', 'Ao aprovar: reposição soma ao estoque da peça; produto novo é criado no catálogo, fica fora do site e entra em Preparação.'), stF, bAp);
+    app.append(cFim);
+  }
+
+  /* ----- Admin total: levar ao catálogo, item a item (cada passo registrado no servidor: tentar de novo nunca duplica) ----- */
+  function pacoteNovo(ped, x) {
+    const preco = numBR(x.preco), temPreco = preco > 0;
+    const d = { action: 'create', nome: x.nome, categoria: x.categoria, genero: x.genero, preco: temPreco ? preco.toFixed(2) : '', estoque: String(x.qtd_aceita), tamanhos: x.tamanhos || '', cores: x.cores || '', descricao: '', novidade: false, fotoUrlExistente: (x.fotos || [])[0] || '', fotosGaleriaExistentes: (x.fotos || []).slice(1).join(','), opId: 'est' + ped.id + 'x' + x.id };
+    if (!temPreco) d.consultarValor = true;
+    return Object.assign(autenticacao(), d);           // o custo NUNCA vai para o catálogo
+  }
+  async function aplicarItem(ped, x, aviso) {
+    const nome = '“' + x.nome + '”';
+    if (x.tipo === 'reposicao') {
+      aviso('Lendo o estoque atual…'); CATALOGO = null;
+      const p = (await catalogoCompleto()).get(String(x.produto));
+      if (!p) throw new Error(nome + ' não está mais no catálogo (pode ter sido excluída). Nada foi somado.');
+      const atual = Number(p.Estoque) || 0;
+      const ini = await srv('/esteira/pedidos/aplicado', { id: ped.id, item: x.id, fase: 'inicio', antes: atual, refazer: x.refazer === true });
+      if (!ini.ok) throw new Error(ini.erro || 'Não consegui começar. Nada foi somado; tente de novo.');
+      if (ini.jaAplicado) return;
+      const antes = ini.aplic.antes, depois = ini.aplic.depois;
+      if (atual !== depois) {
+        if (atual !== antes) { const e = new Error('O estoque de ' + nome + ' mudou desde a tentativa anterior (era ' + antes + ', agora ' + atual + '). Confira na Gestão se a soma já entrou. Se não entrou, toque em “Somar ' + x.qtd_aceita + ' ao estoque atual”.'); e.refazer = true; throw e; }
+        aviso('Somando ' + x.qtd_aceita + ' ao estoque (' + antes + ' → ' + depois + ')…');
+        const y = await apiPost(pacoteUpdate(p, { estoque: String(depois) }));
+        if (!y || !y.ok) throw new Error(legivel(y && y.erro, 'O catálogo não aceitou somar o estoque de ' + nome + '. Nada mudou; tente de novo.'));
+        p.Estoque = String(depois);
+      }
+      const fim = await srv('/esteira/pedidos/aplicado', { id: ped.id, item: x.id });
+      if (!fim.ok) throw new Error('O estoque de ' + nome + ' já está em ' + depois + ', mas não consegui registrar aqui. Toque em “Tentar de novo”: não soma duas vezes.');
+      srv('/esteira/toque', { ids: [String(p.ID)] });
+      return;
+    }
+    let novoId = x.produto_criado, codigo = '';
+    if (!novoId) {
+      aviso('Criando ' + nome + ' no catálogo…');
+      const r = await apiPost(pacoteNovo(ped, x));
+      if (!r || !r.ok || !r.id) throw new Error(legivel(r && r.erro, 'O catálogo não aceitou criar ' + nome + '. Tente de novo.'));
+      novoId = String(r.id); codigo = String(r.codigo || '');
+      const c = await srv('/esteira/pedidos/aplicado', { id: ped.id, item: x.id, fase: 'criado', produtoCriado: novoId, codigo });
+      if (!c.ok) throw new Error(nome + ' foi criado no catálogo (ID ' + novoId + '), mas não consegui registrar aqui. Toque em “Tentar de novo”: o catálogo reconhece este pedido e não cria outro.');
+      novoId = String(c.produtoCriado || novoId); x.produto_criado = novoId;
+    }
+    aviso('Tirando do site (arquivando)…');
+    const a = await apiPost(Object.assign(autenticacao(), { action: 'bulkUpdate', ids: [novoId], tipoAcao: 'arquivar', valor: true }));
+    if (!a || !a.ok) throw new Error('Atenção: ' + nome + ' foi criado (ID ' + novoId + ') e pode estar aparecendo no site: o catálogo não aceitou arquivar (' + legivel(a && a.erro, 'sem resposta') + '). Toque em “Tentar de novo” ou arquive em Gestão.');
+    aviso('Colocando em Preparação…');
+    const z = await srv('/esteira/preparar', { id: novoId, nome: x.nome, codigo, foto: (x.fotos || [])[0] || '' });
+    if (!z.ok) throw new Error(nome + ' foi criado e está fora do site, mas não entrou em Preparação: ' + (z.erro || 'tente de novo') + '.');
+    const fim = await srv('/esteira/pedidos/aplicado', { id: ped.id, item: x.id });
+    if (!fim.ok) throw new Error(nome + ' já está no catálogo e em Preparação, mas não consegui registrar aqui. Toque em “Tentar de novo”.');
+    CATALOGO = null;
+  }
+  async function telaAplicacao(id, auto) {
+    app.replaceChildren(el('div', 'card', 'Abrindo o pedido…'));
+    const r = await srv('/esteira/pedidos/abrir?id=' + id); if (r.exigeLogin) return telaLogin(''); if (!r.ok) return falha(r.erro, telaPedidos);
+    const ped = r.pedido; if (ped.status !== 'aprovado') return ped.status === 'conferido' ? telaAprovacao(id) : telaEditor(id);
+    const levar = ped.itens.filter((x) => x.qtd_aceita > 0), cartoes = new Map();
+    app.replaceChildren();
+    const cab = el('div', 'card'), prog = el('div', 'progresso'), barra = el('div', 'barra'), bi = el('i'), stG = linhaStatus(); barra.append(bi); cab.id = 'aplicar-cab';
+    const bTudo = bt('Levar ao catálogo o que falta', 'laranja', () => levarTudo()); bTudo.id = 'ped-levar';
+    cab.append(voltar(), el('h2', '', 'Pedido aprovado'), el('p', 'muted', [ped.fornecedor, 'pedido nº ' + ped.id, ped.aprovado_em ? 'aprovado em ' + dataBR(ped.aprovado_em) : ''].filter(Boolean).join(' · ')), prog, barra, stG, bTudo);
+    app.append(cab);
+    const atualizar = () => { const f = levar.filter((x) => x.aplicado_em).length; prog.replaceChildren(el('b', 'num', f + '/' + levar.length), el('span', 'muted', 'itens no catálogo')); bi.style.width = (levar.length ? Math.round(f / levar.length * 100) : 100) + '%'; bTudo.hidden = f >= levar.length; if (f >= levar.length) stG.diga(levar.length ? 'Tudo no catálogo. Os produtos novos estão em Preparação, fora do site até “Aceitar para o site”.' : 'Nada para levar ao catálogo.', 'ok'); };
+    const pintar = (x, erro) => {
+      const c = cartoes.get(x.id); c.replaceChildren();
+      const topo = el('div', 'prep-topo'), t = el('div', 't');
+      t.append(el('h3', '', x.nome), el('small', 'muted', x.tipo === 'reposicao' ? 'Somar ' + x.qtd_aceita + ' ao estoque da peça' : 'Criar com ' + pecas(x.qtd_aceita) + ', fora do site, e pôr em Preparação'));
+      topo.append(foto(x.fotos[0]), t, x.aplicado_em ? el('span', 'chip ok', '✓ feito') : el('span', 'chip al', 'falta')); c.append(topo);
+      if (x.aplicado_em) c.append(el('p', 'muted', x.tipo === 'reposicao' ? 'Estoque somado no catálogo.' : 'Criado no catálogo (ID ' + x.produto_criado + '), arquivado e em Preparação.'));
+      else if (x.produto_criado) c.append(el('p', 'muted', 'Já criado no catálogo (ID ' + x.produto_criado + '). Falta terminar.'));
+      const st = linhaStatus(); c.append(st); if (erro) st.diga(erro.message || 'Não consegui agora. Tente de novo.', 'erro');
+      if (!x.aplicado_em) { const ac = acoes(bt(erro ? 'Tentar de novo' : 'Levar este item', '', () => um(x))); if (erro && erro.refazer) ac.append(bt('Somar ' + x.qtd_aceita + ' ao estoque atual', '', () => { x.refazer = true; um(x); })); c.append(ac); }
+    };
+    const um = async (x) => {
+      const c = cartoes.get(x.id); c.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+      const st = c.querySelector('[role=status]');
+      try { await aplicarItem(ped, x, (m) => st.diga(m)); x.aplicado_em = x.aplicado_em || new Date().toISOString(); x.refazer = false; pintar(x); atualizar(); return true; }
+      catch (e) { x.refazer = false; pintar(x, e); atualizar(); return false; }
+    };
+    const levarTudo = async () => {
+      bTudo.disabled = true; let falhou = 0;
+      for (const x of levar.filter((y) => !y.aplicado_em)) { stG.diga('Levando ao catálogo: ' + x.nome + '…'); if (!(await um(x))) falhou++; }
+      bTudo.disabled = false; atualizar();
+      if (falhou) stG.diga((falhou === 1 ? 'Ficou 1 item com aviso' : 'Ficaram ' + falhou + ' itens com aviso') + '. O que deu certo já está no catálogo; veja abaixo e toque em “Tentar de novo”.', 'erro');
+    };
+    levar.forEach((x) => { const c = el('div', 'card aplicar'); c.dataset.item = String(x.id); cartoes.set(x.id, c); app.append(c); pintar(x); });
+    const cobrar = ped.itens.filter((x) => x.decisao === 'cobrar'), devolver = ped.itens.filter((x) => x.decisao === 'devolver');
+    if (cobrar.length) { const c = el('div', 'card'); c.append(el('h3', '', 'Cobrar do fornecedor')); cobrar.forEach((x) => { const f = x.qtd_pedida - (x.nao_veio ? 0 : x.qtd_contada); c.append(el('p', '', x.nome + ': ' + (f === 1 ? 'faltou 1 peça' : 'faltaram ' + f + ' peças') + (x.custo != null ? ' (' + reais(x.custo) + ' cada, ' + reais(f * x.custo) + ')' : ''))); }); app.append(c); }
+    if (devolver.length) { const c = el('div', 'card'); c.append(el('h3', '', 'Devolver ao fornecedor')); devolver.forEach((x) => c.append(el('p', '', x.nome + ': ' + pecas(x.tipo === 'extra' ? x.qtd_contada : x.qtd_contada - x.qtd_pedida)))); app.append(c); }
+    atualizar();
+    if (auto && levar.some((x) => !x.aplicado_em)) levarTudo();
+  }
+
   /* ---------- Painel (Admin total) ---------- */
   async function telaPainel() {
     app.replaceChildren(el('div', 'card', 'Carregando o painel…'));
@@ -559,6 +1048,7 @@
     await telaHoje();
   }
   window.addEventListener('pageshow', () => {});
+  let larguraAbas = window.innerWidth; window.addEventListener('resize', () => { if ((window.innerWidth > 560) !== (larguraAbas > 560) && EU) desenharAbas(); larguraAbas = window.innerWidth; });
   iniciar();
 })();
 </script>
